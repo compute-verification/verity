@@ -51,10 +51,10 @@ plus `KSLin2On`'s bound at that prover (`lin2Rhs`) and `2 · k(x) · δ₁`. -/
 def KSLin2OnC [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Flock.Deploy Coin Col' T') (Cp : Caps Coin) (G : Msg → Prop) (δ₁ : ℝ≥0∞) : Prop :=
   δ₁ ≠ ⊤ → ∀ decI, decOK Bd.deploy decI → ∀ decO, decOK DO decO → ∀ (x : Msg), G x →
-    ∀ (B Y C T₀ : Type) [AddGroup B] [Fintype B] [Fintype Y] [Nonempty Y] [Fintype T₀] [Nonempty T₀]
-      (Tr : Bridge.Hm96Tree Coin B Y C T₀ ((D.record Bd.IVStar).V.k x)), Hm96Hiding Tr.My Tr.cs δ₁ →
+    ∀ (B Lf Cm T₀ : Type) [AddGroup B] [Fintype B] [Fintype Lf] [Nonempty Lf] [Fintype T₀] [Nonempty T₀]
+      (Tr : Bridge.Hm96Tree Coin B Lf Cm T₀ ((D.record Bd.IVStar).V.k x)), Hm96Hiding Tr.My Tr.cs δ₁ →
     ∃ S : Bridge.OnlineSim, ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Bridge.CProver Ω) (M R : ℕ),
-      Pr (fun p : Ω × (Fin ((D.record Bd.IVStar).V.k x) → Coin) × (Fin ((D.record Bd.IVStar).V.k x) → Y) × T₀ =>
+      Pr (fun p : Ω × (Fin ((D.record Bd.IVStar).V.k x) → Coin) × (Fin ((D.record Bd.IVStar).V.k x) → Lf) × T₀ =>
           (Bridge.runCM H P (D.record Bd.IVStar).V x Tr.tree p.1 p.2.1 p.2.2).out = .acc) ≤
         Pr (fun s : (Ω × S.Tape) × (Fin ((D.record Bd.IVStar).V.k x) → Coin) ×
               (E H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO).C x =>
@@ -72,7 +72,7 @@ theorem ksLin2OnC_of_ksLin2On [Zero Col] [Zero Col'] {H : Msg → Msg} {D : RecA
     (ans : Coin → Msg) (hans : Function.Injective ans)
     (hV : ∀ x, Bridge.AnswersCoinOrNil H (D.record Bd.IVStar).V x ans) (δ₁ : ℝ≥0∞) :
     KSLin2OnC H D Bd DO Cp G δ₁ := by
-  intro hδ decI hdI decO hdO x hx B Y C T₀ _ _ _ _ _ _ Tr hH
+  intro hδ decI hdI decO hdO x hx B Lf Cm T₀ _ _ _ _ _ _ Tr hH
   obtain ⟨S, hS⟩ := Bridge.Pr_acc_runCM_le H (D.record Bd.IVStar).V
     (Recursion.R (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI))
     (E H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO) x Tr hH hδ ans hans (hV x)

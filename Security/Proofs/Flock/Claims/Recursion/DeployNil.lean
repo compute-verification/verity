@@ -111,11 +111,10 @@ theorem answersCoinOrNil_V (IV : Claims.Verifier Coin) (st : Stage) (H : Claims.
     | msg m' =>
       rw [ho] at h
       have hm : m' = m := by simpa [sessOut] using h
-      obtain ⟨c', hc', rfl⟩ := nextO_msg H ho
+      obtain ⟨c', hc', hmc⟩ := nextO_msg H ho
       obtain ⟨off, hoff⟩ := ract_sess_drop hr
       rw [hoff] at hc'
-      refine .inl ?_
-      rw [← hm, getLast?_drop_concat hc']
+      exact .inl (hm.symm.trans (hmc.trans (congrArg FlockDeploy.Coin.bytes (getLast?_drop_concat hc'))))
     | acc =>
       rw [ho] at h
       refine .inr ?_
