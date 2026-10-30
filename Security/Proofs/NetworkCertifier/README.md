@@ -242,8 +242,7 @@ and an abstract compiler; the
 warden's over the warden's code as `Definitions` states it, which no compiled program implements yet; the sampled charge
 over the sequences the circuit's Program accepts with a possible faulty set, and the period's over both), not over the network check's code, and an
 accepted run reaches the first 25 and advice v1's nine leak bounds through `AcceptedRunsAreProgramRuns`. Four are the
-theorems whose bounds the calibration reports (`verity.core.protocols.certifier.calibration`; the
-certifier's README has the table):
+theorems whose bounds the calibration reports (`verity.core.protocols.certifier.calibration`):
 
 - egress, for the shipped schedule (`NetTiming.SecurityProofs.Schedule`, `NetTiming.SecurityProofs.PerWindow`):
   `EncardDecodableLeConstantRate` and `EncardDecodableLeConstantRatePerWindow`;
