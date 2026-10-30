@@ -27,7 +27,7 @@ witnesses; `Witnesses` has the negation `notStmt` and its accepting verifier `le
   the wire or the record, so at `acceptAll` every secret is decoded (`fxLeak_not_le`, `fxLeakObs_not_le`).
 * `inI`: a certifier recording one frame a bucket in the first of two slots, every status complete, meeting W2, W4 at
   one frame a bucket and J (`statusComplete_inI`, `oneRow_packed`, `oneRow_count`).
-* `sampProg`: two inputs and the negation of the first, the first the ingress (`notLay`), one replay unit `{0, 1, 2}`
+* `sampProg`: two inputs and the negation of the first, the first the ingress (`notLay`), one proof block `{0, 1, 2}`
   drawn Bernoulli at rate `1/2` (`sampDesign`). At `δ = 1/4` both `∅` and `{0}` are possible faulty sets
   (`single_mem_sampFaulty`), each committing at most its three gates' bits (`sampBits`), and one input is free
   (`sampFree`). The step `obs1`, the empty frame the negation of `false` holds, is accepted (`obs1_sampAcc`).
@@ -230,11 +230,11 @@ theorem statusComplete_inI (n : ℕ) : StatusComplete n (inI.obsRun () n) := by
 /-- Two inputs and the negation of the first, the negation returned. -/
 def sampProg : Claims.Sampling.Prog := ⟨[.input, .not 0, .input], [1]⟩
 
-/-- One class of one stratum of one replay unit, the proof unit `{0, 1, 2}`. -/
-def sampPart : Claims.Sampling.Partition := ⟨[[[[[0, 1, 2]]]]]⟩
+/-- One class of one stratum of one proof block, `{0, 1, 2}`. -/
+def sampPart : Claims.Sampling.Partition := ⟨[[[[0, 1, 2]]]]⟩
 
-/-- The one class drawn Bernoulli at rate `1/2`, every proof unit of a drawn replay unit checked. -/
-def sampDesign : Claims.Sampling.Design := ⟨[⟨.bernoulli 1 2, none⟩]⟩
+/-- The one class drawn Bernoulli at rate `1/2`. -/
+def sampDesign : Claims.Sampling.Design := ⟨[.bernoulli 1 2]⟩
 
 theorem sampLay_fits : notLay.Fits sampProg 1 := by
   refine ⟨fun t _ ℓ σ g hg => ?_, fun t _ g hg => ?_, fun t _ t' _ htt' => absurd htt' (by omega)⟩
@@ -260,7 +260,7 @@ theorem sampPa (B : Finset ℕ) :
       (((2 - 1 : ℕ) : ℝ) / ((2 : ℕ) : ℝ)) ^ (Claims.Sampling.window 0 1 B).card * 1 := by
   first
     | rfl
-    | simp [Design.Pa, classesPa, Rule.Pa, OneStage.Pa, sampDesign, sampPart, strataSizes, ruSizes]
+    | simp [Design.Pa, classesPa, OneStage.Pa, sampDesign, sampPart, strataSizes]
 
 theorem sampAllSlots : allSlots sampDesign sampPart = ∅ := by
   first | rfl | decide | simp [allSlots, allSlotsFrom, sampDesign, sampPart]
@@ -274,14 +274,14 @@ theorem sampFaulty_mem {F : Finset ℕ} (hsub : F ⊆ Finset.range 1) (hPa : (1 
 theorem empty_mem_sampFaulty : (∅ : Finset ℕ) ∈ faultySets sampDesign sampPart (1 / 4) :=
   sampFaulty_mem (Finset.empty_subset _) (by rw [sampPa]; norm_num [Claims.Sampling.window])
 
-/-- **The one replay unit is a possible faulty set** at `δ = 1/4`: the design misses it with probability `1/2`. -/
+/-- **The one proof block is a possible faulty set** at `δ = 1/4`: the design misses it with probability `1/2`. -/
 theorem single_mem_sampFaulty : ({0} : Finset ℕ) ∈ faultySets sampDesign sampPart (1 / 4) :=
   sampFaulty_mem (by decide) (by
     rw [sampPa, show (Claims.Sampling.window 0 1 ({0} : Finset ℕ)).card = 1 by
       first | decide | rfl | simp [Claims.Sampling.window]]
     norm_num)
 
-/-- Each possible faulty set at `δ = 1/4` commits at most the replay unit's three gates' bits. -/
+/-- Each possible faulty set at `δ = 1/4` commits at most the proof block's three gates' bits. -/
 theorem sampBits : ∀ F ∈ faultySets sampDesign sampPart (1 / 4), faultyBits sampProg sampPart F ≤ 3 := by
   intro F hF
   classical
@@ -293,7 +293,7 @@ theorem sampBits : ∀ F ∈ faultySets sampDesign sampPart (1 / 4), faultyBits 
     first
       | decide
       | rfl
-      | simp [faultyBits, Claims.Sampling.committed, Prog.Boundary, sampProg, sampPart, Partition.rus, RU.gates]
+      | simp [faultyBits, Claims.Sampling.committed, Prog.Boundary, sampProg, sampPart, Partition.blocks]
   omega
 
 /-- The second input is the one free input over one step. -/
