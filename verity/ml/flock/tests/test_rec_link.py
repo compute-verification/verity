@@ -3,6 +3,7 @@ table row (a link, or a filler) climbs to the two roots the verifier registers, 
 or whose link does not hold gives zero roots; the M0 unit and the Definition agree with the reference on all of them."""
 from __future__ import annotations
 
+import json
 import random
 import struct
 
@@ -153,3 +154,45 @@ def test_the_definition_computes_the_reference():
     for t, (ports, _) in enumerate(cases):
         rin, rout = R.link_ref(UB, PB, *ports)
         assert [word(w) for w in res[t]] == rin + rout
+
+
+@pytest.mark.parametrize("ub, pb", [(0, 0), (2, 1), (12, 3), (16, 16)])
+def test_the_unit_commits_its_ports_as_five_rows_of_whole_sha512_blocks(ub, pb):
+    """`row_words` (`VStar.linkRows`) regroups `port_words` without moving a word: the digest and salt of each side are one
+    row, and every row is whole 128-byte blocks, as ``sha512/row/v1`` (`circuit.compose`, `VStar.checkRow`) requires. The
+    composed part's ports are these rows (the link part's test below)."""
+    rows, ports = R.row_words(ub, pb), R.port_words(ub, pb)
+    assert R.ROWS == ("trow", "xyr", "raux", "xyw", "waux")
+    assert rows == (ports[0], ports[1] + ports[2], ports[3], ports[4] + ports[5], ports[6])
+    assert all(2 * w % 128 == 0 for w in rows)
+
+
+@pytest.mark.slow
+def test_the_link_part_stages_over_the_inner_rows_and_a_forged_row_does_not_hold(tmp_path, monkeypatch):
+    """`rec_vstage.link_part` over a drawn population (`rec_vstage.drawn_rows`) of three units, unit u + 1's input row u
+    reading unit u's output: the part composes (its rows whole blocks), its table is the registered value ``rec-links`` its
+    statement names (``rec-links.txt``), every row's openings climb to the verifier's roots and the unit gives them, and the
+    forgery's first row names a writer whose output is not its reader's row. About a minute: only `circuit.compose`, after
+    `RecLink{2, 1}`'s lowering, refuses a row that is not whole blocks."""
+    from verity_flock import rec_vstage as VS
+
+    monkeypatch.setenv("REC_CIRCUIT_CACHE", str(tmp_path / "circuits"))
+    links = [RL.LinkEntry(1, 0, 0, 0), RL.LinkEntry(2, 1, 1, 0)]
+    rows = VS.drawn_rows(3, 3, 2, 1, links)
+    honest = VS.link_part(rows, links, tmp_path / "v")
+    assert honest["holds"] == honest["unit_agrees"] == [True, True]
+    assert (honest["UB"], honest["PB"], honest["name"], honest["instances"]) == (2, 1, R.unit_name(2, 1), 2)
+    part = tmp_path / "v" / VS.LINKS_DIR
+    root, n = (part / "rec-links.txt").read_text().split()[0].split(":")
+    reads = json.loads((part / "registered.json").read_text())["ports"]
+    assert (reads["trow"]["value"], reads["trow"]["root"], int(n)) == (RL.VALUE, root, 2)
+    assert (reads["rin"]["value"], reads["rout"]["value"]) == (R.IN_VALUE, R.OUT_VALUE)
+    assert [p[0] for p in VS.meta(part / "circuit.txt")["ports"]] == [*R.ROWS, "rin", "rout"]
+
+    forged = VS.link_part(rows, links, tmp_path / "v", forge="link")
+    assert forged["forged_link"] == {"row": 0, "writer": 0, "forged_writer": 1}
+    assert forged["holds"] == [False, True] and forged["circuit_kept"]
+    assert (forged["in_root"], forged["out_root"]) == (honest["in_root"], honest["out_root"])
+    assert (tmp_path / "v" / "forged-link" / VS.LINKS_DIR / "rec-links.txt").read_text().split(":")[0] != root
+    with pytest.raises(ValueError, match="not the writer's"):
+        VS.link_part(rows, [RL.LinkEntry(1, 0, 1, 0)], tmp_path / "bad")

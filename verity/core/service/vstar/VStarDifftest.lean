@@ -247,12 +247,26 @@ def pair (j : Json) (ctx : String) : Except String (Json × Json) := do
   pure (a[0]!, a[1]!)
 
 /-- `VStar.In.Src` as the test writes it: F elements and bytes as hex (`{hi:016x}{lo:016x}` an element), a message row and
-a top node as `[words, salt]` and `[node, salt]`, the fresh salts as `{dir: {port: [salt, ...]}}`. -/
+a top node as `[words, salt]` and `[node, salt]`, the fresh salts as `{dir: {port: [salt, ...]}}`; with `links`, the link
+table's rows (`{"trow": [words, salt], "xr", "yr", "rsibs": [..], "xw", "yw", "wsibs": [..]}` each) and `link_roots`, the
+input and output rows' trees' roots `[in, out]`. -/
 def srcOf (j : Json) : Except String In.Src := do
-  let o ← jObj j ["msgs", "openings", "tops", "acc_salts", "kappa", "eq_a", "vs", "fresh"] "src"
+  let base := ["msgs", "openings", "tops", "acc_salts", "kappa", "eq_a", "vs", "fresh"]
+  let linked := (j.getObjVal? "links").toOption.isSome
+  let o ← jObj j (if linked then base ++ ["links", "link_roots"] else base) "src"
   let row : Json → String → Except String In.Row := fun x ctx => do
     let (w, s) ← pair x ctx
     pure { words := ← arrOf jNat w ctx, salt := ← hexB s ctx }
+  let linkRow : Json → String → Except String In.LinkRow := fun x ctx => do
+    let l ← jObj x ["trow", "xr", "yr", "rsibs", "xw", "yw", "wsibs"] ctx
+    pure { trow := ← row (l "trow") ctx, xr := ← hexB (l "xr") ctx, yr := ← hexB (l "yr") ctx,
+           rsibs := ← arrOf hexB (l "rsibs") ctx, xw := ← hexB (l "xw") ctx, yw := ← hexB (l "yw") ctx,
+           wsibs := ← arrOf hexB (l "wsibs") ctx }
+  let links ← if linked then arrOf linkRow (o "links") "links" else pure #[]
+  let linkRoots ← if linked then do
+      let (a, b) ← pair (o "link_roots") "link_roots"
+      pure (← hexB a "link_roots", ← hexB b "link_roots")
+    else pure (ByteArray.empty, ByteArray.empty)
   let opening : Json → String → Except String In.Query := fun x ctx => do
     let q ← jObj x ["rep", "level", "j", "pos", "row", "sibs"] ctx
     pure { rep := ← jNatAt q "rep" ctx, level := ← jNatAt q "level" ctx, j := ← jNatAt q "j" ctx,
@@ -269,7 +283,8 @@ def srcOf (j : Json) : Except String In.Src := do
   pure { msgs := ← arrOf (arrOf row) (o "msgs") "msgs", openings := ← arrOf opening (o "openings") "openings",
          tops := ← arrOf (arrOf (arrOf node)) (o "tops") "tops", accSalts := ← arrOf hexB (o "acc_salts") "acc_salts",
          kappa := ← arrOf (arrOf (arrOf (arrOf f128))) (o "kappa") "kappa",
-         eqA := ← arrOf (arrOf (arrOf f128)) (o "eq_a") "eq_a", vs := ← arrOf (arrOf f128) (o "vs") "vs", fresh }
+         eqA := ← arrOf (arrOf (arrOf f128)) (o "eq_a") "eq_a", vs := ← arrOf (arrOf f128) (o "vs") "vs", fresh, links,
+         linkRoots }
 
 /-- Bytes' SHA-512, its first 8 bytes as hex: one row's or one salt's fingerprint. -/
 def short (b : ByteArray) : Json := Flock.hexOf ((Flock.Sha512.hash b).extract 0 8)
@@ -277,9 +292,10 @@ def short (b : ByteArray) : Json := Flock.hexOf ((Flock.Sha512.hash b).extract 0
 def u16le (ws : Array Nat) : ByteArray := ws.foldl (fun b w => (b.push (w % 256).toUInt8).push (w / 256 % 256).toUInt8) .empty
 
 /-- One V* part's port inputs (`VStar.In`) on the stager's inputs `src`: `stmt` a level's statement (`{"kind": "level",
-"level", "LANES", "H", "n"}`), a part of the algebra's (`{"kind": "inner", "ports": [[name, n], ..], "v": [..]}`) or a
-cap's (`{"kind": "cap", "level", "N"}`), `prog` its program's SHA-512 hex. Each port, in the circuit's order, as its table
-rows' and salts' fingerprints (`short` of a row's u16 little-endian words, of a salt) and its refs. -/
+"level", "LANES", "H", "n"}`), a part of the algebra's (`{"kind": "inner", "ports": [[name, n], ..], "v": [..]}`), a
+cap's (`{"kind": "cap", "level", "N"}`) or the link table's (`{"kind": "link", "UB", "PB", "N"}`), `prog` its program's
+SHA-512 hex. Each port, in the circuit's order, as its table rows' and salts' fingerprints (`short` of a row's u16
+little-endian words, of a salt) and its refs. -/
 def partInFn (j : Json) : Except String Json := do
   let o ← input' j ["src", "prog", "stmt"]
   let src ← srcOf (o "src")
@@ -298,7 +314,10 @@ def partInFn (j : Json) : Except String Json := do
     | "cap" => do
       let q ← jObj st ["kind", "level", "N"] "stmt"
       In.capIn src (← jNatAt q "level" "stmt") (← jNatAt q "N" "stmt")
-    | k => throw s!"stmt.kind: level, inner or cap, not {k}"
+    | "link" => do
+      let q ← jObj st ["kind", "UB", "PB", "N"] "stmt"
+      pure (In.linkIn src prog (← jNatAt q "UB" "stmt") (← jNatAt q "PB" "stmt") (← jNatAt q "N" "stmt"))
+    | k => throw s!"stmt.kind: level, inner, cap or link, not {k}"
   let port : String × In.PortIn → Json := fun (nm, q) => Json.arr #[(nm : Json), Json.mkObj [
     ("rows", Json.arr (q.rows.map fun (r : In.Row) => short (u16le r.words))),
     ("salts", Json.arr (q.rows.map fun (r : In.Row) => short r.salt)), ("refs", natsJson q.refs.toList)]]
