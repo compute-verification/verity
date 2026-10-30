@@ -46,7 +46,7 @@ Build, evaluate and query a circuit from the primitive library:
 
 ~~~python
 from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits import Program, query
+from verity.ml.circuits import Program, query_ast
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.codec import program_digest
 from verity.ml.circuits.ops.gemm import GEMM_AMPERE, Gemm
@@ -56,5 +56,5 @@ x, W = [0x3F80] * 64, [0x3F80] * (8 * 64)     # BF16 encodings of 1.0, with W fl
 evaluate(gemm, x, W)                          # eight BF16 words 0x4280, that is 64.0
 program = Program(gemm)
 program_digest(program)                       # the circuit's name: its SHA-512 digest
-query(program.circuit, "//GemmCoordinate")    # its 8 output coordinates, each with its interval of gates
+query_ast.evaluate(program, "//GemmCoordinate")  # its 8 output coordinates, each a set of gates (`intervals()`)
 ~~~
