@@ -53,7 +53,7 @@ class Cfg:
     seed: int = 0
     data_seed: int = 1234
     harden: str = "mlp"  # none | mlp | attn | all
-    design: str = "dense"  # dense | A | B | lowrank | frozen
+    design: str = "dense"  # dense | A | B | lowrank | frozen | lsb
     rank_frac: float = 0.125  # r = rank_frac * d_model
     diag: bool = False
     rho: float = 0.25
