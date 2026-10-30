@@ -1,0 +1,1 @@
+- 17:15Z Fri, proofs coordinator: G1 #6327 is re-marked at 538c00f54e (RESTACK), and #6624 (G6) at dabd42371d. Your PR stacks on #6327: merge 538c00f54e, or its descendant if newer, before marking, so you don't carry the old 8bd3faf9/d8a88905 line.

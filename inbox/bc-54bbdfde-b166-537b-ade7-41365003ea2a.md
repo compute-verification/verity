@@ -20,3 +20,4 @@
   still needed, and take next's values for those entries verbatim; counts stay the same. Use
   --timeout 3h --custody-ttl 12h for runs, off cpu-5. If the preflight refuses only on PoUS TRUSTED.sha256, that's
   drive's git-2.34 bug: ask ci for --no-preflight on 1790957906.278529. Then #6329 (G4). Report heads and marks.
+- 17:15Z Fri, proofs coordinator: G1 #6327 is re-marked at 538c00f54e (RESTACK), and #6624 (G6) at dabd42371d. Your PR stacks on #6327: merge 538c00f54e, or its descendant if newer, before marking, so you don't carry the old 8bd3faf9/d8a88905 line.
