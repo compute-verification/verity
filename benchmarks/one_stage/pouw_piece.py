@@ -7,7 +7,7 @@
 
 ``v1`` is remote's PoUW (`verity/pouw/v1`, `pouw-check`, `PouwCheck/Protocol.lean`): its params the verifier's
 `Params` (``--params``), its commitment the window's registration, one-stage's record (``--registration``, written as
-canonical JSON, whose digest the proof service's answer cites), its evidence the service's answer for it (``--answer``).
+canonical JSON, whose digest the proof system's answer cites), its evidence the service's answer for it (``--answer``).
 ``period`` is onsite's (`verity/pouw/period/v1`, `pouw-period`, `PouwCheck/Period.lean`): its params ``{key, main,
 name}`` (the challenger key it pins, ``--key``, as `ChallengerKey.to_json` writes it or as the deployment's key file
 holds it; its copy of main's first-parent history, ``--main``, one commit a line; the period, ``--name``), its
@@ -124,7 +124,7 @@ def _window(serve_dir: Path, k: int) -> dict:
 
 
 def v1_missing(serve_dir: Path, k: int) -> str:
-    """Why served window `k` has no `verity/pouw/v1` case: v1 checks a tile window the proof service registered and
+    """Why served window `k` has no `verity/pouw/v1` case: v1 checks a tile window the proof system registered and
     answered, and a served vLLM window is H1's, or serves no PoUW."""
     try:
         h1 = _window(serve_dir, k).get("pouw_h1")
@@ -134,7 +134,7 @@ def v1_missing(serve_dir: Path, k: int) -> str:
         return f"window {k} served no PoUW (its line has no pouw_h1: served without --protocols)"
     return (f"window {k}'s PoUW is H1's per-call credit ({h1.get('entry')}), which {V1} doesn't check: {V1} is the tile "
             "window's check, over a one-stage registration of tiles PouwCheck.tiles pins (the Pearl-C tiles at sm120, "
-            "PouwH1Tile_v1 at K = 64) and the proof service's answer to it, and an H1 window has neither; an H1 window's "
+            "PouwH1Tile_v1 at K = 64) and the proof system's answer to it, and an H1 window has neither; an H1 window's "
             f"Lean check is {PERIOD}, onsite's")
 
 
@@ -178,7 +178,8 @@ def _claimed(public: Path, session: str) -> tuple[int, ...]:
     outcome names; none when its files don't say."""
     try:
         return PF.proved_units(public, Path(session))
-    except (OSError, ValueError, KeyError, IndexError, TypeError):
+    except (OSError, ValueError, KeyError, IndexError, TypeError) as e:
+        print(f"pouw_piece: {session}: its files name no units ({type(e).__name__}: {e})", file=sys.stderr)
         return ()
 
 
