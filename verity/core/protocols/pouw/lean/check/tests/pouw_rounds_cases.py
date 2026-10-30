@@ -54,7 +54,7 @@ _LEFT = {"early"}
 PARAMS = lms.Params(64, 4, 6)
 RECORD_LEAF = 8
 DRAW_LEAF = 40
-HOST = "vy-challenger-test"
+HOST = "challenger-test"
 LANE = "pouw"
 #: the verifier's copy of main's first-parent history, newest first
 MAIN = [hashlib.sha1(b"main %d" % i).hexdigest() for i in range(6)]
