@@ -19,7 +19,8 @@ at `eps = δ + 2^eps_log2` = 1/100 + 2^-128 when a certificate covers the point 
 `run.DEPLOYED`, a 1 GiB `C*`, else P2's proved family `p2.family_certificate`, any `2^8` to `2^23` blocks at the
 registered width and prime, else the per-period guarantee `p2.wide_certificate`, `periodHeldAt`, to `2^27` blocks, which
 holds Demo B's `C*` of 1038 segments, 1,060,008,348,186 bits), else 0 and 0 with the profile naming each gap. At
-`k ≥ 320` challenges and `2^19` to `2^27` blocks it is `2^-20` (`p2.wide320_certificate`, `ObligationWide320`).
+`k ≥ 320` challenges and `2^19` to `2^27` blocks it is `2^-20 + 2^-127` (`p2.wide320_certificate`: `ObligationWide320`
+at uniform indices, and `ε_prf` at the memory challenger's SHA-512 indices, `Hash.Assumptions.Sha512Prf`).
 `point_for` gives the smallest such point holding a store, 256 blocks (526 KB) at least; the small point
 (`point_for(size, W, C0)`, 1,024-bit blocks) certifies nothing.
 
@@ -139,7 +140,7 @@ def point_of(doc: Mapping[str, Any]) -> R.Point:
 
 
 def case(point: R.Point, session_id: bytes, trusted: Sequence[bytes], published: R.Setup, digests: bytes,
-         session: R.Session, setup_of: Mapping[str, Any]) -> dict[str, Any]:
+         session: R.ChallengerRecord, setup_of: Mapping[str, Any]) -> dict[str, Any]:
     """The run protocol's case, `{"commitment": hex, "evidence": hex, "params": JSON}` (`PousCheck.RunProtocol`): its
     evidence carries the setup's own commitment and evidence, from `setup_of`, the setup protocol's case."""
     params = {"point": point_json(point), "session_id": session_id.hex(), "trusted": [t.hex() for t in trusted]}
@@ -169,7 +170,7 @@ def tie(point: R.Point, published: R.Setup, inputs: SetupInputs) -> None:
 
 
 def answer(point: R.Point, schemes: Mapping[str, mc.Verify], trusted: Collection[bytes], published: R.Setup,
-           digests: bytes, session: R.Session, session_id: bytes, protocol: str = PROTOCOL, *,
+           digests: bytes, session: R.ChallengerRecord, session_id: bytes, protocol: str = PROTOCOL, *,
            setup_inputs: SetupInputs) -> dict[str, Any]:
     """The run protocol's answer (`Core.Answer.canonical`) on decoded inputs: `tie` on the setup's own inputs, then
     `run.check_at`, then `certify`."""
@@ -342,12 +343,12 @@ def audit(node: str, held: Store, coins: bytes, *, signer: mc.Signer | None = No
         challenger = mc.MemoryChallenger(tree, signer, log=log, limit_ns=point.limit_ns, block_bytes=q.block_bytes,
                                          binding=published.root, clock=clock)
         signed = challenger.run(prover(held.blocks))
-        session, key = R.Session(signed, challenger.commitment, challenger.openings()), signer.public_key
+        session, key = R.ChallengerRecord(signed, challenger.commitment, challenger.openings()), signer.public_key
     else:
         got = challenger_party.session(party, challenger_party.request_of(node, point, published.root),
                                        prover(held.blocks))
         session_id, key = bytes.fromhex(got["session_id"]), bytes.fromhex(got["public_key"])
-        session = R.Session.from_json(got["session"])
+        session = R.ChallengerRecord.from_json(got["session"])
     trusted = (key,) if trusted is None else tuple(trusted)
     return Run(answer(point, schemes, trusted, published, held.digests, session, session_id, protocol,
                       setup_inputs=setup_inputs(held.setup_case)),
@@ -370,9 +371,10 @@ def run(node: str, store: bytes, coins: bytes, *, signer: mc.Signer | None = Non
 
 
 def serve(exe: str | os.PathLike, cases: Sequence[Mapping[str, Any]], *args: str) -> list[dict[str, Any]]:
-    """`EXE [ARGS] serve` on `cases`, one canonical JSON line each: the Lean's answers (`Core.Protocol` CLI)."""
-    lines = "".join(canonical_json_bytes(dict(c)).decode() + "\n" for c in cases)
-    p = subprocess.run([str(exe), *args, "serve"], input=lines, capture_output=True, text=True, check=True)
+    """`EXE [ARGS] serve` on `cases`, one canonical JSON line each: the Lean's answers (`Core.Protocol` CLI). The lines go
+    as bytes, so a served case (gigabytes) is held once beside its own JSON, not again as text."""
+    lines = b"".join(canonical_json_bytes(dict(c)) + b"\n" for c in cases)
+    p = subprocess.run([str(exe), *args, "serve"], input=lines, capture_output=True, check=True)
     return [json.loads(x) for x in p.stdout.splitlines()]
 
 

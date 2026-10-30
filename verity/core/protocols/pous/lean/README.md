@@ -111,6 +111,10 @@ and the lemmas' statements in `Proofs/Pous/Statements.lean` that grade.sh grades
 Lean's kernel; the Mathlib pin; the grader and its sandbox. Everything else is checked by machine. Docstring paths such
 as `lean/submissions/…` and `docs/…` name the POUS Project store, where the provers' drafts and reviews live.
 
+`ObligationWide320` is stated at uniform indices. The 320-read certificate (`p2.wide320_certificate`, and
+`PousCheck.RunProtocol.wide320Certificate` in Lean) adds `ε_prf = 2^-127` for the memory challenger's SHA-512
+indices (`Hash.Assumptions.Sha512Prf`, claim `prf/sha-512`).
+
 **The audit.** `tools/verity/lean/check.py` audits every declaration of PoUS's modules: allowed axioms, named assumptions,
 escapes, orphan files, import layers (Definitions imports no assumption, guarantee or proof; Assumptions only
 Definitions; Guarantees no proof), a kernel replay, and the guarantees' records. `Security/lean-audit.json` lists

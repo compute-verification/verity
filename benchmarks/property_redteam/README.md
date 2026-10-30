@@ -3,7 +3,8 @@
 Attacks on the stacking property (property/v1) and on the gate model's unit counts that the encode bound of the
 bandwidth audit (PoUB, `verity/core/protocols/remote_bandwidth`) rests on. `cases.py` is the refusal suite: Programs
 property/v1 must refuse or fully budget, and the honest shapes it must pass (`cases.json` is their metadata as data).
-`run.py` grades any check against them. `bitwise_codec.py` builds any number of codec words for 8 units a key byte,
+`run.py` grades any check against them. `gates.py` is the gate model (`Security/Definitions/Accounting/Gates/Model.lean`)
+on the canonical circuit, which the attacks build in. `bitwise_codec.py` builds any number of codec words for 8 units a key byte,
 which falsified `EncodeChainHardness`, and `free_codec.py` is the construction before it. `squaring.py` attacks
 `SquaringFloor` in the gate model at p1024, `renorm.py` searches toy fields for counterexamples to the re-normalization
 conjecture N_L, `products_pass.py` counts data products on property/v1's pass, and `demo.py` evaluates a registry.

@@ -9,9 +9,9 @@ to a value longer than its position's width. The verifier derives each position'
 refuses an opening of another length before it reads it, so what it can learn of a slot is a value of the slot's width,
 or that the slot has none. This file is the vocabulary for that view.
 
-* `OptCorrect`, `optWrong`: a slot holds `Option V`, `none` (⊥) when it has no opening of its width. Unit `u` is correct
+* `OptCorrect`, `optIncorrect`: a slot holds `Option V`, `none` (⊥) when it has no opening of its width. Unit `u` is correct
   when every slot it reads holds a value and its written slots hold its function of those values, so a unit that reads
-  or writes ⊥ is wrong. `OptHolds`, `optEgress`, `optEgressAt` and `OptSkipsLucky` are `Dataflow`'s over `Option V`.
+  or writes ⊥ is incorrect. `OptHolds`, `optEgress`, `optEgressAt` and `OptSkipsLucky` are `Dataflow`'s over `Option V`.
 * `fill d σ`: the assignment of short values that puts `d s` wherever `σ` has ⊥.
 * `Openings`: what the verifier sees of one run's commitments: each slot's width, how it decodes a string of that width,
   the strings that climb to the published root at the slot's position, and the strings the run hashes. `Accepts` is the
@@ -33,13 +33,13 @@ namespace Dataflow
 variable {U S : Type} (P : Dataflow U S)
 
 /-- Unit `u` is correct in `σ : S → Option V`: every slot it reads holds a value, and its written slots hold its
-function of those values. A unit that reads or writes ⊥ is wrong. -/
+function of those values. A unit that reads or writes ⊥ is incorrect. -/
 def OptCorrect {V : Type} (f : P.Fns V) (σ : S → Option V) (u : U) : Prop :=
   ∃ x : P.reads u → V, (∀ r : P.reads u, σ r = some (x r)) ∧ ∀ s : P.writes u, σ s = some (f u x s)
 
 open Classical in
-/-- The wrong units of an assignment over `Option V`. -/
-noncomputable def optWrong [Fintype U] {V : Type} (f : P.Fns V) (σ : S → Option V) : Finset U :=
+/-- The incorrect units of an assignment over `Option V`. -/
+noncomputable def optIncorrect [Fintype U] {V : Type} (f : P.Fns V) (σ : S → Option V) : Finset U :=
   univ.filter fun u => ¬ P.OptCorrect f σ u
 
 /-- `σ` holds the inputs `a`, as values, on every input slot outside `X`. -/
@@ -47,17 +47,17 @@ def OptHolds {V : Type} (a : S → V) (X : Finset S) (σ : S → Option V) : Pro
   ∀ s ∈ P.input, s ∉ X → σ s = some (a s)
 
 open Classical in
-/-- **The egress over `Option V`** at the wrong set `B`: what the assignments over `Option V` that hold the inputs `a`
-off the secret slots `X`, and whose wrong units lie in `B`, show on the egress slots `O`, ⊥ included. -/
+/-- **The egress over `Option V`** at the incorrect set `B`: what the assignments over `Option V` that hold the inputs `a`
+off the secret slots `X`, and whose incorrect units lie in `B`, show on the egress slots `O`, ⊥ included. -/
 noncomputable def optEgress [Fintype U] [Fintype S] {V : Type} [Fintype V] (f : P.Fns V) (a : S → V)
     (X O : Finset S) (B : Finset U) : Finset (O → Option V) :=
-  (univ.filter fun σ : S → Option V => P.OptHolds a X σ ∧ P.optWrong f σ ⊆ B).image fun σ o => σ o
+  (univ.filter fun σ : S → Option V => P.OptHolds a X σ ∧ P.optIncorrect f σ ⊆ B).image fun σ o => σ o
 
 open Classical in
-/-- **The egress over `Option V` with at most `m` wrong units**. -/
+/-- **The egress over `Option V` with at most `m` incorrect units**. -/
 noncomputable def optEgressAt [Fintype U] [Fintype S] {V : Type} [Fintype V] (f : P.Fns V) (a : S → V)
     (X O : Finset S) (m : ℕ) : Finset (O → Option V) :=
-  (univ.filter fun σ : S → Option V => P.OptHolds a X σ ∧ (P.optWrong f σ).card ≤ m).image fun σ o => σ o
+  (univ.filter fun σ : S → Option V => P.OptHolds a X σ ∧ (P.optIncorrect f σ).card ≤ m).image fun σ o => σ o
 
 /-- **Work accounting's per-unit premise over `Option V`**: a unit the run skipped, if it reads the honest values and is
 correct, is in the lucky set `L`. -/

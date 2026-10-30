@@ -184,18 +184,34 @@ theorem ObligationDemoWide : Pous.Guarantees.ObligationDemoWide := by
 
 /-- **A 320-read window at `2^-20`, from the widened per-round floor** (`Pous.Guarantees.ObligationWide320`). -/
 theorem ObligationWide320 : Pous.Guarantees.ObligationWide320 := by
-  intro p ε₀ D Q L hnum h N _ h1 h2 T _ _ tag htag Sz hSz W A₁ A₂
-  have hb := ObligationOfRoundSecureWide p ε₀ D Q L h N h1 h2 T tag htag Sz 320 W A₁ A₂
-  rw [lowBoundaries_of_le hSz] at hb
+  intro p ε₀ D Q L hnum h N _ hN T _ _ tag htag Sz hSz W A₁ A₂
+  have hN' : 2 ^ 19 ≤ N ∧ N ≤ 2 ^ 27 := hN
+  have htag' : Function.Injective tag := htag
+  have hSz' : ∀ j < 320, Sz j ≤ (p2ring N 16448 (2 ^ 16448 - 21065) 16432).stateBound Params.ρ := hSz
+  have hb := ObligationOfRoundSecureWide p ε₀ D Q L h N hN'.1 hN'.2 T tag htag' Sz 320 W A₁ A₂
+  rw [lowBoundaries_of_le hSz'] at hb
   exact hb.trans hnum
 
-/-- **`ObligationWide320`'s premise holds at P2's floor**: `p = 0.043` and `ε₀ = 2^-137` meet `RoundsBound` at 320
-rounds and `2^-20` (`PousP2Rounds.floor_043_eps_320`). -/
+/-- **`ObligationWide320`'s premises hold at P2's floor and the registered point**: `p = 0.043` and `ε₀ = 2^-137` meet
+`RoundsBound` at 320 rounds and `2^-20` (`PousP2Rounds.floor_043_eps_320`), and at `2^19` blocks the block count is in
+the widened range, the identity tags are distinct, and a schedule at `S₀` at each of the 320 challenge times is within
+`S₀`. -/
 theorem ObligationWide320_honest :
-    Pous.Guarantees.RoundsBound (43 / 1000) ((2⁻¹ : ℝ≥0∞) ^ 137) 320 ((2⁻¹ : ℝ≥0∞) ^ 20) := by
-  unfold Pous.Guarantees.RoundsBound
-  rw [Nat.cast_ofNat]
-  exact PousP2Rounds.floor_043_eps_320
+    Pous.Guarantees.RoundsBound (43 / 1000) ((2⁻¹ : ℝ≥0∞) ^ 137) 320 ((2⁻¹ : ℝ≥0∞) ^ 20) ∧
+      Pous.Guarantees.WideBlockCount (2 ^ 19) ∧
+      Pous.Guarantees.TagsInjective (id : Fin (2 ^ 19) → Fin (2 ^ 19)) ∧
+      Pous.Guarantees.StateWithin (fun _ => (p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).stateBound Params.ρ) 320
+        ((p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).stateBound Params.ρ) := by
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · unfold Pous.Guarantees.RoundsBound
+    rw [Nat.cast_ofNat]
+    exact PousP2Rounds.floor_043_eps_320
+  · unfold Pous.Guarantees.WideBlockCount
+    exact ⟨le_rfl, by norm_num⟩
+  · unfold Pous.Guarantees.TagsInjective
+    exact Function.injective_id
+  · unfold Pous.Guarantees.StateWithin
+    exact fun _ _ => le_rfl
 
 /-- **`ObligationWide320`'s bound says something**: at the registered point's `2^19` blocks and 320 reads, the event a
 verifier that accepts everything passes has probability 1, above `2^-20`. -/
@@ -222,12 +238,31 @@ set_option exponentiation.threshold 20000
 /-- **PoUS's per-window obligation guarantee** (`Pous.Period.ObligationHeld`): `PeriodHeld` at the snapshot, at every
 value of the other tags' keys, averaged over them. -/
 theorem obligationHeld : ObligationHeld := by
-  intro hH D Q L hP ι α ΩW ΩQ T _ _ _ _ tag htag d r P τ round S hdev hinst hS o
+  intro D Q L hP ι α ΩW ΩQ T _ _ _ _ tag htag d r P τ round S hdev hinst hS o
   exact Pous.Mutable.SecurityProofs.pr_snap_le_real tag htag
     (fun e x => P.Accepts (o.1, (o.2, e), x) ∧ ¬ P.Break (o.1, (o.2, e), x) ∧
       (r.held (o.1, (o.2, e), x) : ℝ) < S * (r.win .capacity).len) _
     (add_nonneg δ_nonneg ENNReal.toReal_nonneg)
-    fun e => periodHeld hH D Q L hP ι α ΩW (ΩQ × Mutable.RestKeys tag 16448 (2 ^ 16448 - 21065)) d r P τ round S
+    fun e => periodHeld D Q L hP ι α ΩW (ΩQ × Mutable.RestKeys tag 16448 (2 ^ 16448 - 21065)) d r P τ round S
       hdev hinst hS (o.1, (o.2, e))
+
+/-- **`obligationHeld` holds at the honest instance**: its device premises, `periodHeld_honest`, with the other tags'
+keys among the other audits' coins. -/
+theorem obligationHeld_honest {ι : Type} [Fintype ι] {d : Accounting.Device ι} {α ΩW ΩQ : Type} [Fintype α]
+    (r : Accounting.Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+    (P : Audits ΩW ΩQ) (D Q L round : ℕ) (hs : P.sid.size = 32)
+    (hfull : ∀ ω, ∃ t ∈ (r.win .capacity).ticks, FULL ≤ (r.schedule ω t).mem (r.acct .capacity)) :
+    DeviceModel r P (lookup ΩW ΩQ) D Q L round ∧ Instantiates P (lookup ΩW ΩQ) :=
+  periodHeld_honest r P D Q L round hs hfull
+
+/-- **`obligationHeld` is nontrivial**: at a store of `2^19` tags, an event that holds on every oracle and coin
+exceeds its bound `δ + ε_max`. -/
+theorem obligationHeld_nontrivial :
+    ¬ Pouw.pr (fun _ : Mutable.Oracle 16448 (2 ^ 16448 - 21065) (Fin (2 ^ 19)) × HmCoins × Streams => True) ≤
+      (Params.δ : ℝ) + Params.εMax.toReal := by
+  have : Nonempty (Mutable.Oracle 16448 (2 ^ 16448 - 21065) (Fin (2 ^ 19))) :=
+    inferInstanceAs (Nonempty (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω)
+  rw [Pouw.pr_eq_one fun _ => trivial]
+  exact not_le.2 bound_toReal_lt_one
 
 end Pous.Period.SecurityProofs
