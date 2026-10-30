@@ -72,7 +72,8 @@
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
-  "Proofs.Flock.Claims.ZkColsSession": "the masked reader on recorded `--zk` sessions (the `zk-sessions` fixture), run by hand (`lake env lean --run`): a probe, not a proof"
+  "Proofs.Flock.Claims.ZkColsSession": "the masked reader on recorded `--zk` sessions (the `zk-sessions` fixture), run by hand (`lake env lean --run`): a probe, not a proof",
+  "Proofs.Flock.Claims.Recursion.IrDepSession": "IrDep at a deployed inner session (art:886efa1d), the Lean side of test_irdep_difftest.py, run by hand (`lake env lean --run`, or `lean_changed.py --try` with VERITY_IRDEP_ARGS): a probe, not a proof"
  },
  "runs": {
   "Proofs.Pouw.Bulk": {
@@ -111,6 +112,10 @@
   "Proofs.Flock.Claims.Recursion.CallsTop": {
    "why": "cl_step, dec_step and ret_step, macros that expand to first over refine/exact of the module's CL/Ret bind, pure and throw lemmas, and cl_bind_of and cl_head, elabs that only read the goal and fail unless its program's head is the named constant. They run only inside the elaborator, read no files and do no IO, and the kernel replays every proof they build.",
    "digest": "b79afd58b999bf109956c0ce64b53f15e9ca536e0072ebb8218438d6c4b303f0"
+  },
+  "Proofs.Flock.Claims.Recursion.IrDepSession": {
+   "why": "its one #eval runs IrDepSession.main only when VERITY_IRDEP_ARGS is set (the Lean side of test_irdep_difftest.py): it reads the run tree that variable names and prints one IRDEP line of JSON, writing nothing; unset, as in every build, it does nothing. The module declares no guarantee and nothing a guarantee reads.",
+   "digest": "c932f5745f1dfbfd12723073acb5b0b9b1c3a287ed642623a84c6610deef2e6c"
   },
   "Proofs.Flock.Claims.Recursion.LogWalk": {
    "why": "retl_walk, the tactic (an elab) that walks RetL goals at elaboration, step by step on the logged computation's head (retlStep, in Recursion/DecodeLog.lean's proofs and the module's own). It reads no files and does no IO, and the kernel replays every proof it builds.",
