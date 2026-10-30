@@ -3,7 +3,7 @@ does, on the real collector, window ring and kernels: each step's root is ``step
 stream ``commit_block_offline`` hashes under vllm-v1) with the step's recorded salt key, on a learning run (each window hashed to
 its rows' h in place, the leaves from them once the step's length is known; re-hashed from host when it keeps bytes), a hit run
 (hashed in place, pad-only windows absorbed after the data windows), with and without the levels, and under bounded staging.
-Past ``rows_hold_bytes`` (what a step holds on the device: a learning step's h, a levelless step's leaves) the trees are the same
+Past ``rows_hold_bytes`` (what a step holds on the device: a learning step's h, a step's leaves) the trees are the same
 as within it.  Openings of a run that kept no levels come from a replay that took its keys, and verify against its 64-byte roots, as
 the replay's range openings verify against its own; a tampered row, salt or path does not.  ``test_windowed_retain_levels`` holds
 vllm-v1's roots, unchanged.
@@ -89,13 +89,14 @@ H_WINDOW = 64 * int(float(WR.WINDOW_MB) * (1 << 20)) // R.ROW_BYTES     # a full
 
 
 @pytest.mark.parametrize("retain_levels", [True, False], ids=["levels", "no-levels"])
-@pytest.mark.parametrize("hold", [0, 3 * H_WINDOW], ids=["hold-0", "hold-3-windows"])
+@pytest.mark.parametrize("hold", [0, 4 * H_WINDOW], ids=["hold-0", "hold-4-windows"])
 def test_steps_past_the_device_hold_commit_the_same_trees(monkeypatch, retain_levels, hold):
     """`rows_hold_bytes` bounds what a step holds on the device whatever its length (each step here is about seven windows): a learning
-    step keeps its windows' h until the next would pass the hold, and re-hashes that window and the rest from host; a step that keeps
-    no levels folds its held leaves into their windows' top nodes whenever the next window's would pass it.  Each run, learning then
-    hit, commits the trees the default hold commits with the same keys (a replay that took them): the roots, and with the levels kept
-    every level, leaves included."""
+    step keeps its windows' h until the next would pass the hold, and re-hashes that window and the rest from host; a step folds its
+    held leaves into their windows' top nodes whenever the next window's would pass the hold, or half of it when the step keeps levels
+    (two windows a fold at four windows' hold).  Each run, learning then hit, commits the trees the default hold commits with the same
+    keys (a replay that took them, folding each step's windows at once): the roots, and with the levels kept every level, leaves
+    included."""
     com = committer(monkeypatch, retain_levels=retain_levels)
     ref = committer(monkeypatch, retain_levels=retain_levels)
     com.rows_hold_bytes = hold
@@ -113,7 +114,7 @@ def test_steps_past_the_device_hold_commit_the_same_trees(monkeypatch, retain_le
                 assert len(got) == len(ref_lv) and all(torch.equal(a.cpu(), b.cpu()) for a, b in zip(got, ref_lv)), (run, s)
             w, wr = rc.extra["windows"], want.extra["windows"]
             assert w["rows_hold_bytes"] == hold and wr["leaf_folds"] == 0
-            assert (w["leaf_folds"] > 0) is not retain_levels, "a levelless step folds its held leaves past the hold"
+            assert w["leaf_folds"] > 0, "a step folds its held leaves past the hold"
             if run == "learn":
                 assert w["hfirst_steps"] == (len(SCHED) if hold else 0) and wr["hfirst_steps"] == len(SCHED)
                 assert w["reupload_bytes"] > 0 and wr["reupload_bytes"] == 0, "the windows past the hold re-hash from host"

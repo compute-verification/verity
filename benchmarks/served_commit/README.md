@@ -28,6 +28,9 @@ labeled run, `served.py` the served arm's runs).
   `granularity.py` lists, from a Build's request Programs, the Call boundaries a per-block or per-layer proof block would
   keep, with their bytes and hashing time, and `layout_bytes.py` a run's committed bytes by buffer category (estimates; no
   scheme).
+- `hash_prof.py` and `hash_prof.sh`: one step's rows-sha512 hashing as the windowed worker calls it, at T tokens a step, in
+  the worker's form (held leaves folded many windows at once, levels copied on a copy stream) and the per-window form before
+  it, with the kernels' knobs, under nsys and ncu.
 - The specs: the served arm's, `benchmarks/specs/*-rtx-served-arm*.toml` (one RTX PRO 6000 each, on the width sweep).
   `run.sh` and `prof.sh` take any served spec as `SPEC`, with its arms, sweep and reps unless their arguments name others.
 
