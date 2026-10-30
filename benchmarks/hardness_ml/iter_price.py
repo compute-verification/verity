@@ -1,5 +1,7 @@
-"""Forced work of E·Rᵀ per MAC, in W1 units (one dense int8/FP8 MAC = 1), over the known exact routes, for E and R
-uniform on n_E and n_R consecutive integers. Estimates on recalled instruction rates, not measurements.
+"""Forced work of E·Rᵀ per MAC, in W1 units (one dense int8/FP8 MAC = 1), over the exact plane and format routes, for
+E and R uniform on n_E and n_R consecutive integers. Estimates on recalled instruction rates, not measurements. Fast
+bilinear routes (exact Strassen in s8) are iter_strassen.py's; `--strassen` folds them in, and without them every
+`forced` here is only a ceiling.
 
 H200 (sm_90a): b1 BGMMA at 8× s8 (AND-popc; XOR emulated), so P_E·P_R/8 with P = ⌈log₂ n⌉ binary planes a side
 (offsets are row and column sums); 2:4 sparse int8/FP8 at 2× logical has no b1 form and costs more than a b1 plane
@@ -101,17 +103,28 @@ def sm120_mod(ne, b):
     return 0.5 * side_factor(ne) * mod_side(b)
 
 
-def row(ne, nr):
+def row(ne, nr, strassen=None):
+    """`strassen`: iter_strassen.py's JSON. Its `attack` (exact Strassen in s8, both chips' s8 MMA) joins the plane
+    routes in `credit_attack`, what an A = 0 cheater pays; `credit_floor` is what the average-case premise on the
+    uniform mod-2^b law proves for every A, at most the attack (the same trees over Z/2^b count the same)."""
     b = mod_bits(nr)
-    return {"n_e": ne, "n_r": nr, "bits_e": round(math.log2(ne), 2), "bits_r": round(math.log2(nr), 2),
-            "var_e": var(ne), "var_r": var(nr), "planes_b1": [planes(ne), planes(nr)],
-            "h200_units": h200(ne, nr), "h200_b1_raw": planes(ne) * planes(nr) / 8,
-            "sm120_fp4": [round(side_factor(ne), 3), round(side_factor(nr), 3)],
-            "sm120_units": round(sm120(ne, nr), 3), "sm120_raw": round(0.5 * side_factor(ne) * side_factor(nr), 3),
-            "forced": round(min(h200(ne, nr), sm120(ne, nr)), 3),
-            # every-A bound from the low b bits alone (average-case premise, no smoothing)
-            "mod_b": b, "h200_mod_raw": h200_mod(ne, b), "sm120_mod_raw": round(sm120_mod(ne, b), 3),
-            "forced_mod": round(min(1.0, h200_mod(ne, b), sm120_mod(ne, b)), 3)}
+    forced = min(h200(ne, nr), sm120(ne, nr))
+    forced_mod = min(1.0, h200_mod(ne, b), sm120_mod(ne, b))
+    out = {"n_e": ne, "n_r": nr, "bits_e": round(math.log2(ne), 2), "bits_r": round(math.log2(nr), 2),
+           "var_e": var(ne), "var_r": var(nr), "planes_b1": [planes(ne), planes(nr)],
+           "h200_units": h200(ne, nr), "h200_b1_raw": planes(ne) * planes(nr) / 8,
+           "sm120_fp4": [round(side_factor(ne), 3), round(side_factor(nr), 3)],
+           "sm120_units": round(sm120(ne, nr), 3), "sm120_raw": round(0.5 * side_factor(ne) * side_factor(nr), 3),
+           "forced": round(forced, 3),
+           # every-A bound from the low b bits alone (average-case premise, no smoothing)
+           "mod_b": b, "h200_mod_raw": h200_mod(ne, b), "sm120_mod_raw": round(sm120_mod(ne, b), 3),
+           "forced_mod": round(forced_mod, 3)}
+    att = (strassen or {}).get(f"e{ne}r{nr}_attack")
+    if att is not None:
+        out["strassen"] = {k: round(v, 3) for k, v in att.items()}
+        out["credit_attack"] = round(min(forced, att["fast"]), 3)
+        out["credit_floor"] = round(min(forced_mod, att["fast"]) if b else 0.0, 3)
+    return out
 
 
 def rounding_rho(n, grid):
@@ -147,15 +160,17 @@ def ball(ne, nr):
 
 
 PAIRS = [(2, 2), (2, 4), (2, 16), (3, 3), (3, 9), (3, 10), (4, 16), (3, 16), (3, 17), (3, 19), (3, 22), (3, 32),
-         (3, 64), (5, 19), (5, 32), (10, 10), (19, 3), (17, 3), (2, 129), (2, 256)]
+         (3, 64), (5, 16), (5, 19), (5, 32), (10, 10), (10, 16), (19, 3), (17, 3), (2, 129), (2, 256)]
 BALL_PAIRS = [(3, 19), (3, 32), (10, 16), (2, 256)]
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--json", default=None)
+    ap.add_argument("--strassen", default=None, help="iter_strassen.py's JSON")
     a = ap.parse_args()
-    rows = [row(*p) for p in PAIRS]
+    st = json.load(open(a.strassen)) if a.strassen else None
+    rows = [row(*p, strassen=st) for p in PAIRS]
     for r in rows:
         print(json.dumps(r))
     balls = {f"{ne},{nr}": ball(ne, nr) for ne, nr in BALL_PAIRS}

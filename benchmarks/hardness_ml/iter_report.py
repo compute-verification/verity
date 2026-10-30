@@ -21,7 +21,7 @@ def load(out: Path):
     return runs
 
 
-def arm(name, r, ref, base):
+def arm(name, r, ref, base, strassen=None):
     c = r["cfg"]
     ne, nr = c["n_e"], c["n_r"]
     draws = r.get("val_d0_draws") or []
@@ -39,11 +39,13 @@ def arm(name, r, ref, base):
     if c["regime"] == "designA":
         row.update({"r_norm_share": r.get("r_norm_share"), "d1_rms": r.get("d1_rms"), "rank_frac": c["rank_frac"]})
     if ne > 1 or nr > 1:
-        pr = P.row(max(ne, 2), max(nr, 2)) if ne > 1 and nr > 1 else None
+        pr = P.row(max(ne, 2), max(nr, 2), strassen) if ne > 1 and nr > 1 else None
         row["forced"] = pr["forced"] if pr else 0.0
         row["forced_mod"] = pr["forced_mod"] if pr else 0.0
         row["h200_raw"] = pr["h200_b1_raw"] if pr else 0.0
         row["sm120_raw"] = pr["sm120_raw"] if pr else 0.0
+        if pr and "credit_attack" in pr:
+            row["credit_attack"], row["credit_floor"] = pr["credit_attack"], pr["credit_floor"]
     return row
 
 
@@ -51,12 +53,14 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("out")
     ap.add_argument("--json", default=None)
+    ap.add_argument("--strassen", default=None, help="iter_strassen.py's JSON")
     a = ap.parse_args()
+    st = json.loads(Path(a.strassen).read_text()) if a.strassen else None
     runs = load(Path(a.out))
     base_json = Path(a.out) / "base.json"
     base = json.loads(base_json.read_text())["val_clean"] if base_json.exists() else None
     refs = {s: runs[n]["val_d0"] for n, s in (("clean", 0), ("clean-s1", 1)) if n in runs}
-    rows = [arm(n, r, refs.get(r["cfg"]["seed"], refs.get(0)), base) for n, r in runs.items()]
+    rows = [arm(n, r, refs.get(r["cfg"]["seed"], refs.get(0)), base, st) for n, r in runs.items()]
     post = {}
     for n, r in runs.items():
         if "post" in r:
@@ -66,7 +70,7 @@ def main():
             post[n]["before"] = before
     rep = {"base": base, "refs": refs, "arms": rows, "post": post}
     cols = ["name", "val_d0", "gap", "oneshot_gap", "oneshot_e", "oneshot_r", "sigma_draws", "forced", "forced_mod",
-            "h200_raw", "sm120_raw", "coin_bits", "code_rms", "r_norm_share"]
+            "credit_attack", "credit_floor", "h200_raw", "sm120_raw", "coin_bits", "code_rms", "r_norm_share"]
     print("| " + " | ".join(cols) + " |")
     print("|" + "---|" * len(cols))
     for row in sorted(rows, key=lambda x: x["name"]):
