@@ -33,6 +33,10 @@ SIZES = {  # d_model, n_layer, n_head
     "s256": (256, 6, 4),
     "m384": (384, 8, 6),
     "l512": (512, 8, 8),
+    "w128": (128, 4, 2),
+    "w256": (256, 4, 4),
+    "w384": (384, 4, 6),
+    "w512": (512, 4, 8),
 }
 INT8_STD = math.sqrt((255 ** 2 - 1) / 12)  # uniform on the integers in [-127, 127]
 
@@ -67,7 +71,23 @@ class Cfg:
 
 
 class Noise:
-    gen: torch.Generator | None = None
+    """Live noise, drawn as random windows of a pool of 2^25 uniform integers per k (fresh per-call RNG over the whole
+    tensor is several times slower than the step on CPU). Eval reseeds the window draws."""
+
+    POOL = 1 << 25
+    pools: dict = {}
+    rng = np.random.default_rng(0)
+
+    @classmethod
+    def draw(cls, k, shape):
+        if k not in cls.pools:
+            g = torch.Generator().manual_seed(4242 + k)
+            cls.pools[k] = torch.randint(-k, k + 1, (cls.POOL,), generator=g, dtype=torch.int8)
+        n = math.prod(shape)
+        if n > cls.POOL // 2:
+            raise ValueError(f"noise tensor of {n} elements exceeds half the pool")
+        off = int(cls.rng.integers(0, cls.POOL - n))
+        return cls.pools[k][off:off + n].view(shape)
 
 
 def hlinear_kind(cfg: Cfg, where: str) -> bool:
@@ -131,8 +151,7 @@ class HLinear(nn.Module):
         else:
             s = x.detach().abs().amax(-1, keepdim=True).clamp_min(1e-6) / 127
         if self.k:
-            e = torch.randint(-self.k, self.k + 1, x.shape, generator=Noise.gen, dtype=torch.int16)
-            x = x + e.to(x.dtype) * s
+            x = x + Noise.draw(self.k, x.shape).to(x.dtype) * s
         return x
 
     def forward(self, x, record=False):
@@ -266,7 +285,7 @@ def batches(arr, cfg: Cfg, rng: np.random.Generator):
 @torch.no_grad()
 def evaluate(model, val, cfg: Cfg, n_batches: int, record=False):
     model.eval()
-    Noise.gen = torch.Generator().manual_seed(777)
+    train_rng, Noise.rng = Noise.rng, np.random.default_rng(777)
     stride = (len(val) - cfg.ctx - 1) // (n_batches * cfg.batch)
     tot, cnt = 0.0, 0
     for b in range(n_batches):
@@ -277,7 +296,7 @@ def evaluate(model, val, cfg: Cfg, n_batches: int, record=False):
         tot += F.cross_entropy(logits.float().flatten(0, 1), x[:, 1:].flatten(), reduction="sum").item()
         cnt += x[:, 1:].numel()
     model.train()
-    Noise.gen = None
+    Noise.rng = train_rng
     return tot / cnt
 
 
@@ -341,6 +360,7 @@ def param_groups(model: GPT, cfg: Cfg):
 def train(cfg: Cfg, data: Path):
     torch.set_num_threads(cfg.threads)
     torch.manual_seed(cfg.seed)
+    Noise.rng = np.random.default_rng(cfg.seed + 99)
     meta = json.loads((data / "meta.json").read_text())
     vocab = meta["vocab"]
     tr = np.memmap(data / "train.bin", dtype=np.uint16, mode="r")

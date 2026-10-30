@@ -30,7 +30,34 @@ def bench():
     ]
 
 
-PRESETS = {"bench": bench}
+def grid(size, tokens, lr=2e-3, tag=None):
+    """The first-signal grid at one size: baseline token ladder and lr check, design A by r/n with and without
+    D₁RD₂, design B by ρ, controls, and the int8 noise sweep. MLP matrices hardened unless the name says `all`."""
+    tag = tag or size
+    b = {"size": size, "tokens": tokens, "lr": lr}
+    A8 = {**b, "design": "A", "rank_frac": 1 / 8, "diag": True}
+    cfgs = [{**b, "name": f"{tag}-base-D{tokens // f}", "tokens": tokens // f} for f in (1, 2, 4, 8, 16, 32)]
+    cfgs += [{**b, "name": f"{tag}-base-lr{x:g}", "lr": x} for x in (lr / 2, lr * 2)]
+    for inv in (32, 16, 8, 4):
+        for diag in (False, True):
+            cfgs.append({**b, "name": f"{tag}-A{inv}{'-diag' if diag else ''}", "design": "A", "rank_frac": 1 / inv,
+                         "diag": diag})
+    cfgs += [
+        {**A8, "name": f"{tag}-A8-diag-uvlr4", "uv_lr_mult": 4.0},
+        {**A8, "name": f"{tag}-A8-diag-lr{lr * 2:g}", "lr": lr * 2},
+        {**A8, "name": f"{tag}-A8-diag-all", "harden": "all"},
+        {**b, "name": f"{tag}-lowrank8", "design": "lowrank", "rank_frac": 1 / 8},
+        {**b, "name": f"{tag}-frozen-diag", "design": "frozen", "diag": True},
+    ]
+    cfgs += [{**b, "name": f"{tag}-B{rho:g}", "design": "B", "rho": rho} for rho in (0.1, 0.25, 0.5, 1.0)]
+    cfgs += [{**b, "name": f"{tag}-B0.5-all", "design": "B", "rho": 0.5, "harden": "all"}]
+    cfgs += [{**b, "name": f"{tag}-int8-k{k}", "int8": True, "noise_k": k} for k in (0, 16, 64)]
+    cfgs += [{**A8, "name": f"{tag}-A8-diag-int8-k{k}", "int8": True, "noise_k": k, "r_dist": "int8"}
+             for k in (0, 1, 16, 64, 96)]
+    return cfgs
+
+
+PRESETS = {"bench": bench, "w256": lambda: grid("w256", 20_000_000)}
 
 
 def run_one(cfg, data, out, threads):
