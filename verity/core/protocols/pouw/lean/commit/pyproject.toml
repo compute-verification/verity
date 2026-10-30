@@ -4,5 +4,5 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# the difftest's draws are the clear audit's, a reference tool's
+# the difftest's samples are the clear audit's, a reference tool's
 inputs = ["verity", "benchmarks/pouw/clear"]

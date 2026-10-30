@@ -8,7 +8,7 @@
 #     rows-sha512 row dir, and the seal opens each one's replay bundle (`deferred_rows.of_record`). Once it listens, before
 #     the first request, the committer registers its weights (`prove_path.py weights-registration`: each weight parameter of
 #     the checkpoint CKPT, REPO's snapshot at REV under HF_HOME, and the rotary table at the words the engine serves,
-#     $D/private/cos_sin_cache.npy, once within the analytic table's bound, committed under salts drawn from the committer's
+#     $D/private/cos_sin_cache.npy, once within the analytic table's bound, committed under salts sampled from the committer's
 #     key $D/private/weights.key, 0600, neither of which a record copies); WEIGHTS says how many it roots and which it leaves unrooted, and
 #     why, or NO WEIGHTS REGISTRATION why not, and then every weight read counts free.
 #  2. requests: REQUESTS greedy requests (default SLOTS) from the certifier's traffic generator (`examples/vllm/serve_load.py --varied`:

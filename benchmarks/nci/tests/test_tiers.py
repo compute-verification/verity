@@ -180,7 +180,7 @@ def test_the_cheating_pool_does_not_grow_with_the_fleet():
 
 
 def test_luck_multiplies_skipped_work_but_not_injected_bits():
-    """A block that injects a chosen output fails whenever it is drawn, so ln(1/delta) (1/q + floor_steps) blocks inject
+    """A block that injects a chosen output fails whenever it is sampled, so ln(1/delta) (1/q + floor_steps) blocks inject
     step_bits each, whatever the luck factor."""
     p = T.DEFAULTS | {"floor_steps": 1e9}
     lucky, unlucky = T.evaluate(p, T.TIERS["T5"]), T.evaluate(p | {"luck": 1.0}, T.TIERS["T5"])
