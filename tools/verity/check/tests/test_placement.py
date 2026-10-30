@@ -97,6 +97,16 @@ def test_otherwise_the_fewest_waiters_ahead_and_with_priority_only_the_priority_
         CHECK.placement(machine([{**slot("d"), "trains": True}]))
 
 
+def test_a_train_that_needs_a_train_slots_memory_skips_a_machine_of_smaller_slots_even_with_one_free():
+    small = machine([{**slot("c"), "mem": 64}, {**slot("d", HOLDER), "mem": 64}])     # cpu-3's lane slots
+    big = machine([{**slot("b", HOLDER), "mem": 300, "trains": True}])                 # a train slot, held
+    got, why, skipped = CHECK.choose([N1, N2], {N1: small, N2: big}, priority=True, min_mem=CHECK.TRAIN_GB)
+    assert got == N2 and "b held" in why and skipped == [f"{N1}: no slot in /workspace/research/locks/slots holds this check's "
+                                                         "300 GB (c 64 GB, d 64 GB): it takes a train slot"]
+    assert CHECK.choose([N1, N2], {N1: small, N2: big}, priority=True)[0] == N1         # a Lean check takes the free small one
+    assert CHECK.placement(machine([{**slot("a"), "mem": None}]), True, CHECK.TRAIN_GB)[0] is True   # no mem=: any size
+
+
 def test_a_machine_whose_slots_can_t_be_read_is_skipped_by_name():
     free = machine([slot("d")])
     docs = {N1: "exit 255: ssh: connect to host 81.85.2.165 port 22: Connection timed out", N2: free}

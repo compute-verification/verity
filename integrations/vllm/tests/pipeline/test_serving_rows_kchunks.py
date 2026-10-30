@@ -2,7 +2,7 @@
 the first, middle and last ``MoeExpertFp8CoordinateChunk`` templates at every chunk width, and a window of the three:
 
 * reads each unit's operands off the row and its ``acc`` off the twin's chain, so the chunk Definition on each chunk's rows, parsed
-  as C-Flock's stager parses them, is its committed output, and the last chunk's is the row's served word;
+  as Flock's stager parses them, is its committed output, and the last chunk's is the row's served word;
 * wires every ``acc`` row to the output row of the chunk before it (chunk c - 1 of the same row and coordinate), commits it under
   that row's salt, so the verifier's check on the public bodies holds, and refuses a wire to another unit, an ``acc`` row that is
   not its writer's output, and a partition that leaves out a writer's template.

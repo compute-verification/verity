@@ -421,7 +421,7 @@ def _splits_of(word: int) -> int | None:
 
 def topp_keep(x_f32, p: float, splits: int):
     """The keep bits of `TopPMaskWordx{V}` for every i32 `splits`: `topp_split.topp_keep_row(x, p, S)` at a split count, and no lane
-    at any other value.  The one statement of the keep word's semantics (the primitive, `sampling_rows.topp_mask_row`, C-Flock's
+    at any other value.  The one statement of the keep word's semantics (the primitive, `sampling_rows.topp_mask_row`, Flock's
     native twin in `verity_flock.ir_sampling`).
 
     Defined on every row.  The split kernels hold the row's scalars per warp half, and on a row where the two halves disagree on

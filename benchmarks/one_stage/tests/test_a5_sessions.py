@@ -1,4 +1,4 @@
-"""a5's drawn members' sessions run one at a time: outer proofs go through the firewall one at a time (AGENTS.md), so
+"""a5's drawn members' sessions run one at a time: outer proofs go through the ZK server one at a time (AGENTS.md), so
 ``--session-jobs`` takes only 1, kept so the commands that pass it still run."""
 
 from __future__ import annotations
