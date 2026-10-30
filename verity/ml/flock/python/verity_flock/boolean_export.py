@@ -786,12 +786,12 @@ class Commitments:
         self.openings = walker.openings
 
     def of(self, fn) -> str:
-        from verity.ml.circuits.codec import _spec_id
+        from verity.ml.circuits.codec import descriptor_id
         from verity.ml.circuits.cut import separable
         from verity.ml.circuits.defs import PrimitiveDefinition
         import verity.ml.definitions.word as WQ
 
-        fid = _spec_id(fn)
+        fid = descriptor_id(fn)
         if fid in self.records:
             return fid
         if isinstance(fn, PrimitiveDefinition):
@@ -867,7 +867,7 @@ class Commitments:
         from collections import Counter
 
         import numpy as np
-        from verity.ml.circuits.codec import _spec_id
+        from verity.ml.circuits.codec import descriptor_id
         from verity.ml.circuits.layout import WIDE_FAN_IN
 
         G = WQ.Graph(fn)
@@ -907,7 +907,7 @@ class Commitments:
             g = c.gate(lo + int(G.keep[i]))
             s = g.scope
             if id(s.spec) not in sid:
-                sid[id(s.spec)] = scopes.setdefault(_spec_id(s.spec), len(scopes))
+                sid[id(s.spec)] = scopes.setdefault(descriptor_id(s.spec), len(scopes))
             return sid[id(s.spec)], int(s.spec.body.node_at(g.index - s.offset)), g
 
         kind_ix = np.array([("output", "committed", "dead").index(k) for k in kinds], np.int64)
@@ -1532,7 +1532,7 @@ def _roles(g: dict, into: list[dict], tpl: dict[str, str], store: DefStore) -> d
     return {"params": params, "inputs": inputs, "param_roles_complete": pin is not None or not inputs,
             "param_roles": "exact (edges' ports and param_inputs)" if pin is not None else
                            "activations exact from edges' ports; which parameter reads each of `inputs` is not in this program graph "
-                           "(param_inputs, verity PR #94), so input roles are not assigned to parameters"}
+                           "(param_inputs), so input roles are not assigned to parameters"}
 
 
 def _library_digest() -> str:

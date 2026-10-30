@@ -61,7 +61,7 @@ theorem climbInputs_length (dom : ByteArray) :
 theorem opensInputs_length (reg : _root_.Flock.Registered.Port) (bc : ByteArray) (pos : ℕ) (path : ByteArray) :
     (_root_.Flock.Registered.opensInputs reg bc pos path).length = 2 + _root_.Flock.log2ceil reg.leaves := by
   simp only [_root_.Flock.Registered.opensInputs, _root_.Flock.Registered.leafInputs, List.length_cons,
-    climbInputs_length, _root_.Flock.Registered.sibs, List.length_map, List.length_range]
+    climbInputs_length, _root_.Flock.FV3.Sha512.sibs, List.length_map, List.length_range]
   omega
 
 /-- A port lists at most one opening per instance. -/

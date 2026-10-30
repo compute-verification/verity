@@ -43,15 +43,20 @@ On a committed record it reads the status in the clear, which the digest binds. 
 digest from, it can't catch a published status that disagrees with the digest, as the egress check does. A certified
 ingress record's status is the signed head's, and its grid parameters and parameters digest must be `params`'s, or it
 is a `mismatch`.
+
+A client holds its copy of one window's certificates, as a reveal endpoint served them, to the key and the session
+(`certificate_refusals`, whose Lean is `NetworkCheck.LinkWindow.refusals`): it refuses a certificate of another key or
+link-window, a clock certificate that isn't egress, one whose signature doesn't verify (`Certificate.verify`), a second
+of its direction, and a clock certificate signing a digest that an earlier kept one signs, whose salt was reused.
 """
 
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass, field
 
-from verity.core.protocols.certifier.certificate import (CertifiedRecord, Direction, PublicKey,
+from verity.core.protocols.certifier.certificate import (Certificate, CertifiedRecord, Direction, PublicKey,
                                                                           parameters_digest, record_head)
 from verity.core.protocols.certifier.commitment import CommittedRecord, record_digest
 from verity.core.protocols.certifier.grid import COMPLETE, GridParams, Record
@@ -192,3 +197,29 @@ def _status_violation(found: Sequence[Published], key: PublicKey | None, session
     if not record.status.complete:
         return f"status:{record.status.reason.value}"
     return None
+
+
+def certificate_refusals(key: PublicKey, session: bytes, link: str, window: int, certificates: Sequence[Certificate],
+                         clocks: Sequence[Certificate], seen: Collection[bytes] = ()
+                         ) -> tuple[list[str | None], list[str | None]]:
+    """Each certificate's refusal in one window's answer, then each clock certificate's, None where the client keeps
+    it, each read against those kept before it: another key's (``key``), another link-window's than `link`'s window
+    `window` (``link-window``), a clock certificate that isn't egress (``clock``), a signature that doesn't verify under
+    `key` in certifier session `session` (``signature``), a second of its direction (``second``), or a clock certificate
+    signing a digest that a kept one signs, earlier in the window or among `seen`'s (``reused``)."""
+
+    def refusals(xs: Sequence[Certificate], clock: bool) -> list[str | None]:
+        kept, signed, out = set(), set(seen), []
+        for c in xs:
+            why = ("key" if c.key_id != key.key_id else "link-window" if (c.link, c.window) != (link, window)
+                   else "clock" if clock and c.direction is not Direction.EGRESS
+                   else "signature" if not c.verify(key, session) else "second" if c.direction in kept
+                   else "reused" if clock and c.digest in signed else None)
+            out.append(why)
+            if why is None:
+                kept.add(c.direction)
+                if clock:
+                    signed.add(c.digest)
+        return out
+
+    return refusals(certificates, False), refusals(clocks, True)

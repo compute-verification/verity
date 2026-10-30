@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .logical import Registration
+from .logical import RegisteredInputs
 from .memory import BLOCK_BITS, Append, Challenge, ReadWindow, Rekey, Release, StoreEntry, Wipe
 from .time import Interval
 
@@ -41,9 +41,9 @@ class Plan:
     registration: int | None = None
 
     def __init__(self, epoch: Interval, wipes=(), challenges=(), reads=(), maintenance=(),
-                 profiles: Registration | None = None, changes=(), lifetime: int | None = None, deferred: bool = False,
+                 profiles: RegisteredInputs | None = None, changes=(), lifetime: int | None = None, deferred: bool = False,
                  registration: int | None = None):
-        if not (profiles is None or isinstance(profiles, Registration)):
+        if not (profiles is None or isinstance(profiles, RegisteredInputs)):
             raise TypeError("a Plan reads its number of occupancy profiles from the registration that commits them: "
                             "register them, register(program, values, profiles=[...]), and pass that registration")
         for name, value in (("epoch", epoch), ("wipes", tuple(wipes)), ("challenges", tuple(challenges)),
