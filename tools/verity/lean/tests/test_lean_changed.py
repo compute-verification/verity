@@ -449,3 +449,17 @@ def test_module_of_reads_the_packages_src_dir(trying):
     assert LC.module_of("Sec", "Sec/src/A/B.lean") == "A.B"
     (root / "Plain").mkdir()
     assert LC.module_of("Plain", "Plain/A/B.lean") == "A.B"
+
+
+def test_records_runs_take_the_pool_lean_records_pool_names(monkeypatch):
+    """A lane with a pool of its own on a node (proofs' recursion push on cpu-2) keeps its records trees warm for itself;
+    unset, `--records` takes `build` as before."""
+    def pool():
+        s = importlib.util.spec_from_file_location("lean_changed_pool", HERE.parent / "lean_changed.py")
+        m = importlib.util.module_from_spec(s)
+        s.loader.exec_module(m)
+        return m.FAST_POOL
+    monkeypatch.delenv("LEAN_RECORDS_POOL", raising=False)
+    assert pool() == "build"
+    monkeypatch.setenv("LEAN_RECORDS_POOL", "proofs")
+    assert pool() == "proofs"
