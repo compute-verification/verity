@@ -254,7 +254,7 @@ tree leaf = leaf(domain, rank, position, "hm96-sha512/row/v1", hm96.SHA512.tree_
 
 The schema string names the rule that produced the 64 bytes, so a statement is explicit about it. Over a bit row's digest it is
 `hm96-sha512/row/v2` (`BitRowLeaf.hiding_schema`). `rowleaf.row_leaf` accepts each at its width. The SHA-256 frame has no hiding
-row schema: every commitment is hm96 rows in `frame-v3-sha512` trees (Daniel's one-hash ruling).
+row schema: every commitment is hm96 rows or keyed leaves in `frame-v3-sha512` trees (Daniel's one-hash ruling).
 
 **Openings and multiproofs.**
 - Paths carry 64-byte siblings.

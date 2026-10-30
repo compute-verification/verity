@@ -196,7 +196,9 @@ Protocols and claims:
 - The end goal is sampled proofs through recursion with hidden unit circuits and a hidden partition; the auditor
   checks only padded counts. One key per protecting party, sampled once at setup from the OS before anything else, public
   and a constant in V\*; hm96's pinned key stays only where a key is wired into a circuit, as a named exception. Salts
-  are sampled from the OS, not expanded by a PRG.
+  are sampled from the OS, not expanded by a PRG, but for PoUW's lead: each instance is a keyed leaf, SHA-512(ks_w ‖
+  salt_w ‖ M_top), under one OS-sampled window key ks_w whose hm96 key leaf is recorded before salt_w; it hides under
+  `prf/sha-512` (`Pouw.Guarantees.KeyedLeaf.Hides`).
 - A circuit restatement of a verifier (VBridge's V\*) is proved in one direction, that the circuit accepting
   implies the verifier accepts; completeness stays a test.
 - `hash-derived-key` (`Hm96Hiding` at the pinned key) stays a named assumption, and nobody works on proving the
