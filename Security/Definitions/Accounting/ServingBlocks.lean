@@ -27,9 +27,8 @@ circuit. Blocks here have at most `c` gates. Padding a block to exactly `c` gate
 only registered gates that read registered gates, so it adds no unregistered input bit and no counted operation: a cap
 at exactly `c` gates, read on the padded circuit, gives the cap at most `c` on the circuit at hand.
 
-The named premises are `ServingSizes` (each serving block's gates and unregistered input bits), `WeightsAtMost`,
-`PerBlockCap`, `UncertifiedCap`, `OperationBodies` (an operation's gates are unregistered and lead to its representative)
-and `Overlap` (a gate is in at most `μ` operations' bodies). The last two bound the operations
+The named premises are `PerBlockCap`, `UncertifiedCap`, `OperationBodies` (an operation's gates are unregistered and lead
+to its representative) and `Overlap` (a gate is in at most `μ` operations' bodies). The last two bound the operations
 assigned to a serving block but not computed wholly inside it: each has a gate outside the block that a gate of the
 block reads, an unregistered input of the block, so at most `ω_max μ k_S` of `Ω_S` escapes the per-block cap.
 -/
@@ -99,14 +98,5 @@ def OperationBodies (d : Declaration) (J : Counted d.D) : Prop :=
 a gate). -/
 def Overlap {C : Circuit} (J : Counted C) (μ : ℕ) : Prop :=
   ∀ g, (J.V.filter fun v => g ∈ J.body v).card ≤ μ
-
-/-- **Serving-block sizes** `(c_S, k_S)`: each serving block `u ∈ S` of `P` has at most `cS u` gates and reads at most
-`kS u` unregistered input bits, `Verity.Guarantees.Padding`'s premise. -/
-def ServingSizes (d : Declaration) {B : ℕ} (P : Partition d.D B) (S : Finset (Fin B)) (cS kS : Fin B → ℕ) : Prop :=
-  ∀ u ∈ S, (P.gates u).card ≤ cS u ∧ (d.unregistered (P.gates u)).card ≤ kS u
-
-/-- **Weights at most** `ω_max`: every counted operation weighs at most `ωmax`. -/
-def WeightsAtMost {C : Circuit} (J : Counted C) (ωmax : ℝ) : Prop :=
-  ∀ v ∈ J.V, J.ω v ≤ ωmax
 
 end Accounting.ServingBlocks
