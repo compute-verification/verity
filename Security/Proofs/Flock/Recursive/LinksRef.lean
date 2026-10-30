@@ -63,8 +63,8 @@ def LinkRefStaged : Prop :=
     ∀ {i : RecIns} {spec : SessionSpec} {sts : Array Stmt}, setupO xO = some (i, spec, sts) →
     ∀ (h0 : 0 < sts.size) {own : Array Registered.Port}, i.base.registered = some own →
     Registered.unitIndices sts[0].pub = .ok (Array.range sts[0].pub.n) → N ≤ sts[0].n → sts[0].n = sts[0].pub.n →
-    ∀ {X Y : List ((ℕ × ℕ) × ByteArray)} {R W : ByteArray}, RecLinkTree.rowsRoot UB PB X = .ok R →
-      RecLinkTree.rowsRoot UB PB Y = .ok W →
+    ∀ {rowsR rowsW : List ((ℕ × ℕ) × ByteArray)} {R W : ByteArray}, RecLinkTree.rowsRoot UB PB rowsR = .ok R →
+      RecLinkTree.rowsRoot UB PB rowsW = .ok W →
     ∀ {wi wo : ℕ → String}, RecCoins.checkValue sts[0].c sts[0].pub own "rin" RecLinkPart.IN_VALUE
         (Array.replicate N (RecLinkRef.expected R).toArray) wi = .ok () →
       RecCoins.checkValue sts[0].c sts[0].pub own "rout" RecLinkPart.OUT_VALUE
