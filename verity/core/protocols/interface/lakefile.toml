@@ -4,7 +4,7 @@
 # ticks, spans and monitoring period (`CoreProtocol.Period`), whose difftest port `core-periods-difftest` serves through
 # the difftest harness's Lean.
 name = "core_protocol"
-defaultTargets = ["CoreProtocol", "core-protocol-example"]
+defaultTargets = ["CoreProtocol", "core-protocol-example", "core-registration"]
 
 [leanOptions]
 autoImplicit = false
@@ -29,3 +29,8 @@ root = "CoreProtocol.PeriodDifftestMain"
 [[lean_exe]]
 name = "core-protocol-example"
 root = "CoreProtocol.ExampleMain"
+
+# The registration log's check as a core protocol (`verity/registration/log/v1`), the executable its difftest drives.
+[[lean_exe]]
+name = "core-registration"
+root = "CoreProtocol.RegistrationMain"
