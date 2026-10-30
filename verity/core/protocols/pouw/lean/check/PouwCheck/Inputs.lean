@@ -4,6 +4,7 @@ import Flock.Hash
 import PouwCheck.Json
 import PouwCheck.Tile
 import PouwWindow.Length
+import Identity.Domains
 
 /-!
 # The check's three inputs (`core_check.py`, "the three inputs")
@@ -315,5 +316,9 @@ def evidenceOf (b : ByteArray) : V Evidence := do
     | .reject => pure (Said.reject (a.reason.getD ""), none)
     | .undecided => pure (Said.undecided (a.reason.getD ""), none)
   pure ⟨a.protocol, a.digest.map Flock.hexOf, said, salt⟩
+
+/-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
+written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+example : formats = [Domains.REGISTRATION_V1, Domains.REGISTRATION] := rfl
 
 end PouwCheck
