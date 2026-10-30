@@ -12,7 +12,8 @@
   a record that declares registered reads counts those of a parameter the verifier pinned registered and the rest free
   (`declared_count`);
 * a circuit reading registered values is audited against the entries the verifier pinned, each under its own domain
-  (`pinned`), and refused before any draw without them;
+  (`pinned`), and refused before any draw without them, a record that lists its members (a served window's) as one that
+  states them;
 * `source` and the negatives refuse what the records don't bind, and `fixed_before_draw` refuses advice re-committed after
   the coins;
 * the gate's coins (``--challenger gate:USER@HOST``) reach the challenger's session with the peer and the key record;
@@ -406,15 +407,20 @@ def test_the_window_circuit_command_writes_i2s_circuit_whose_count_is_the_charge
     assert "prove_path.py window-circuit: I2's window circuit refuses the advice" in capsys.readouterr().err
 
 
-def _registered(d: Path, n: int = 8, cap: int = 4) -> SimpleNamespace:
+def _registered(d: Path, n: int = 8, cap: int = 4, listed: bool = False) -> SimpleNamespace:
     """A window of ``n`` coordinates each reading its ``wrow`` from a registered value of 4 rows (unit u row u % 4), committed
-    by core's registered rows, and the verifier's pin of it."""
+    by core's registered rows, and the verifier's pin of it; ``listed``: its record lists its members and declares the read
+    beside them, a served window's form."""
     rng = np.random.default_rng(1)
     rows = rng.integers(0, 1 << 16, (4, K // 2), dtype=np.uint16)
     value = REG.Registered.commit("test/model", "w", rows.tolist(), schema=REG.SCHEMA_V2)
     read = IF.Read(TID, "wrow", "w", 0, (n // 4, 4), 0, (0, K // 2))
     win = IF.Window(IF.Circuit("test", ((COORD, n),), registered=IF.Registered({"w": 4 * K // 2}, reads=(read,))), RUN,
                     D.parse_law(LAW), cap, registered={"w": value})
+    if listed:
+        stated = win.circuit_record()
+        win.circuit_record = lambda: IF.circuit_record(win.window, stated["name"], stated["templates"], stated["statements"],
+                                                       declared={"registered": stated["registered"]})
     x = rng.integers(-128, 128, (n, K)).astype(np.int8)
     sx, sw = ((np.abs(rng.standard_normal(n)) / 127).astype(np.float32) for _ in range(2))
     ins = [x.view(np.uint8), sx.view(np.uint32), rows[np.arange(n) % 4].view(np.uint8), sw.view(np.uint32)]
@@ -450,6 +456,40 @@ def test_registered_reads_are_audited_against_the_pinned_entries_and_leave_the_f
     assert RA.main(["count", "--circuit", str(tmp_path / "circuit.json"), "--bits", "0", "--pin", f"w={pin['w']}",
                     "--registration", str(got.dir / "registration.json")]) == 0
     assert json.loads(capsys.readouterr().out.splitlines()[-1])["free"] == count["free"]
+
+
+def test_a_listed_records_registered_weight_reads_are_audited_and_counted_as_a_stated_records(tmp_path, capsys):
+    """A record that lists its members (a served window's form) declares its registered reads beside them, as a served
+    window reads its model's weights: the verifier's window takes it, each member's ``--registered`` file is the one the
+    stated record of the same window makes, and its count is the stated record's, the reads registered where the verifier
+    pinned the parameter at the root the window's registration records. Without a pin the audit refuses the window before
+    any draw; the count names the parameter ``unpinned`` and counts its reads free, as it does for a pin of another root
+    or a registration that records none."""
+    law = D.parse_law(LAW)
+    stated, listed = _registered(tmp_path / "s"), _registered(tmp_path / "l", listed=True)
+    (ms, sdoc, _), (ml, ldoc, _) = (RA.verifier_window(g.dir, law, None) for g in (stated, listed))
+    assert "cap" in sdoc and "members" in ldoc and "cap" not in ldoc and ldoc["registered"] == sdoc["registered"]
+    assert ml.members == ms.members and all(dict(m.tables)["wrow"] == 4 for m in ml.members)
+    pins = RA.pinned(listed.pin)
+    files = IF.registered_reads(ldoc, ml, pins, registered=REG)
+    assert files == IF.registered_reads(sdoc, ms, pins, registered=REG) and len(files) == 2
+    pin = RA.pin_roots(pins)
+    roots = RA.registration_roots(json.loads((listed.dir / "registration.json").read_text()))
+    count = RA.declared_count(ldoc, 0, pins=pin, roots=roots)
+    assert roots == pin and count == RA.declared_count(sdoc, 0, pins=pin, roots=roots)
+    assert count["registered"] == 8 * 8 * K and "unpinned" not in count
+    for p, r in ((None, roots), ({"w": "cd" * 64}, roots), (pin, {})):
+        free = RA.declared_count(ldoc, 0, pins=p, roots=r)
+        assert (free["registered"], free["free"], free["unpinned"]) == (0, count["free"] + 8 * 8 * K, ["w"])
+    base = ["audit", "--window", str(listed.dir), "--law", LAW, "--circuit", "00" * 64, "--run", RUN, "--m0-pythonpath",
+            ".", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "o")]
+    assert RA.main(base) == 1
+    assert "didn't pin" in json.loads((tmp_path / "o" / "summary.json").read_text())["refused"]["records"]
+    for pins_, want in (([f"--pin=w={pin['w']}"], count), ([], RA.declared_count(ldoc, 0))):
+        capsys.readouterr()
+        assert RA.main(["count", "--circuit", str(listed.dir / "circuit.json"), "--bits", "0", *pins_,
+                        "--registration", str(listed.dir / "registration.json")]) == 0
+        assert json.loads(capsys.readouterr().out.splitlines()[-1]) == want
 
 
 def test_a_windows_committed_activations_are_held_to_domains_binding_its_run():
