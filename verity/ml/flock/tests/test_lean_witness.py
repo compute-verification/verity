@@ -11,13 +11,13 @@ change that closes it has to say so here. Two recorded sets, both fetched fixtur
   registered (no staging runs `inner_registered register`). V*'s sessions hide their outputs, as `ZkOuterR.hTags`
   (`TagsOkZHJ`) takes them, and their shared-row public file passes `ScopeZR`, `Typable`'s statement check; the
   public-output one-table checks, `TagsOk` and `ScopeZ`, refuse them.
-* `f1-gate`, the F1 gate (`PublicAudit`, the recursive audit at public units): 85 at K = 4096, N = 2,
-  built, proved and verified at b795ecbde by `r20261010-210008-003d` through `r20261010-214046-3e44` (the custody), V*'s
-  statements staged with the inner program; the fixture holds the files these tests read, the circuits and V*'s
-  programs xz-compressed, the inner transcript is tracked beside it (`f1-gate-transcript`), and each is checked against
-  the art's own listing once decompressed; RecCap's statement and session were staged and proved over the gate's inner
-  session after it (`85-rec-reprice.sh` STEP=vcap and STEP=oprove LEVELS=cap). Lean's verifier
-  builds the inner statement from its own partition object and program (`AcceptsPublic`), V*'s seven staged statements
+* `f1-gate`, the F1 gate (`PublicAudit`, the recursive audit at public units): 85 at K = 4096, N = 2, one firewalled
+  run of `benchmarks/recursion_e2e` (MODES=firewall) built, proved and verified it, its inner session on the
+  challenger's coin tree and V*'s statements staged with the inner program, RecCap's included (`85-rec-reprice.sh`
+  STEP=vcap and STEP=oprove); the fixture holds the files these tests read, the circuits and V*'s large programs
+  xz-compressed, the inner transcript is tracked beside it (`f1-gate-transcript`), and each is checked against the run's
+  own listing (`prover.sha256`) once decompressed. Lean's verifier
+  builds the inner statement from its own partition object and program (`AcceptsPublic`), V*'s ten staged statements
   are the ones `outerStatementsAt` lists, each session is one of them byte for byte (`RecVStar.checkStmt`) and draws every unit,
   and the rate is below 1 at `k = 2^23` (at `2^21` for these sessions). The sessions were proved with the OS masks
   in `verity/flock-circuit`'s `--zk` identity, and the verifier of record accepts them as `verity/flock-circuit`: the
@@ -46,6 +46,7 @@ import keyed
 import numpy as np
 import pytest
 from test_lean_rec_coins import built, forged  # noqa: F401
+from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluate import evaluate_call
 from verity.ml.circuits.ops import gemm as G
@@ -72,10 +73,10 @@ CIRCUIT_SHA512 = ("27aded67e57a39ba5ccc3dbfff854d0de705cd2fd858261e281749a0fe580
                   "b5e13cdb010ccd")
 
 #: the gate run's files these tests read, a file `f` stored as `f.xz` when large, and `prover.sha256`: their lines of
-#: the art's own listing (`out/data.sha256`)
+#: the run's own listing
 F1 = HERE / "fixtures" / "f1-gate"
-#: the gate's inner transcript, the coin server's record of its inner session (the gate run's `inner/s1/public.json`,
-#: xz-compressed, and its line of the art's listing), tracked: a check's pod fetches a registered fixture only once `main`
+#: the gate's inner transcript, the coin server's record of its inner session (the gate run's `inner/s0/public.json`,
+#: xz-compressed, and its line of the run's listing), tracked: a check's pod fetches a registered fixture only once `main`
 #: registers it
 F1_TRANSCRIPT = HERE / "fixtures" / "f1-gate-transcript"
 #: V*'s statements at the gate, each staged under `v/` with its outer session under `v-sess/`, in `RecVStar.statements`' order
@@ -299,7 +300,14 @@ def f1_inner(f1_gate, once) -> dict[str, dict]:
     _build()
     g = f1_gate
     return _kept(once, "witness-f1-inner", functools.partial(
-        _f1_inner, g, g / "stage" / "pub-2.bin", "--record", str(g / "inner" / "s1" / "session" / "session.json")))
+        _f1_inner, g, g / "stage" / "pub-2.bin", "--record", str(g / "inner" / "s0" / "session" / "session.json")))
+
+
+def _f1_draw() -> dict:
+    """The verifier's sample of the gate's inner session (`rec_live.full_draw`, as `rec_reprice.py partition` writes it):
+    the stratified law at K = the population over its own population program and template query, every unit."""
+    t = bind(G.GemmCoordinate, K=4096, **G.GEMM_HOPPER)
+    return RL.full_draw(P.population_program(t, 2), P.template_instance_query(t))
 
 
 class _Runs(dict):
@@ -321,7 +329,7 @@ def f1(f1_gate, f1_inner, once):
 
     def inputs(d):
         (d / "inner.json").write_text(json.dumps(f1_inner["accepts_stmt"]["shape"]))
-        (d / "draw.json").write_text(json.dumps({"law": "subset", "population": 2, "k": 2, "units": [0, 1]}))
+        (d / "draw.json").write_text(json.dumps(_f1_draw()))
         tops = [g / "v" / p for p in F1_PARTS if not p.startswith("alg/")]
         (d / "rows.json").write_text(json.dumps(S.shared_rows([g / "v" / p for p in F1_PARTS if p.startswith("alg/")], (),
                                                               tops)))
@@ -352,7 +360,7 @@ def f1(f1_gate, f1_inner, once):
 def test_f1_lean_builds_the_inner_statement_from_its_own_partition_object_and_program(f1_inner):
     """`AcceptsPublic obj prog st` (`acceptsPublic_of_check`): with the verifier's own partition object and program the
     inner statement sets up as one table whose units the verifier derives (`Q_word` v1), and `Zk.schedule` takes its m;
-    s1, the gate's inner session, is a session of it."""
+    s0, the gate's inner session, is a session of it."""
     c = f1_inner["accepts_stmt"]
     assert c["ok"], c.get("why")
     assert c["m"] == 27
@@ -385,7 +393,6 @@ def test_f1_the_session_meets(f1, part):
     assert w["full_draw"]["population"] == F1_STATEMENTS[j][1]
 
 
-@pytest.mark.skip(reason=STALE_FIXTURE)
 @pytest.mark.parametrize("part", F1_PARTS)
 def test_f1_the_session_is_accepted_as_the_verifiers_statement(f1, part):
     """`AcceptsZKR`, and so `AcceptsZKV`, accepts every gate session as `verity/flock-circuit`, the verifier of record's
@@ -395,27 +402,22 @@ def test_f1_the_session_is_accepted_as_the_verifiers_statement(f1, part):
         assert w[check]["ok"], (check, w[check].get("why"))
 
 
-@pytest.mark.skip(reason=STALE_FIXTURE)
 @pytest.mark.parametrize("part", ["L3", "cap"])
-def test_f1_verify_refuses_the_session_only_for_its_undrawn_inner_session(built, f1_gate, f1, once, part):  # noqa: F811
-    """`flock-verify verify --zk`, the verifier of record, passes level 3 (`rec-open/l16-h4`, 106 units, the smallest
+def test_f1_verify_accepts_the_session(built, f1_gate, f1, once, part):  # noqa: F811
+    """`flock-verify verify --zk`, the verifier of record, accepts level 3 (`rec-open/l16-h4`, 106 units, the smallest
     level) and RecCap (`rec-cap/n128`, `RecCoins.checkCap`) with the verifier's own V* inputs, the inner statement and
-    session its coefficients are checked against, and the coin server's inner transcript (`inner/s1/public.json`), whose
-    link points, level-3 tops and `root_B` the unit is held to (`RecVStar.checkTopRows`, `RecCoins.checkLink`), as
-    `85-rec-reprice.sh`'s STEP=lean runs it, through every check and every refusal the verdict runs last (the form's, a
-    draw-less session's, and a V* session's short of every unit, `RecSetup.fullDraw`) but the one after them: the gate's
-    inner session ran before the coin server drew it, so its record holds no draw, and a session over it is refused
-    (`RecSetup.innerDrawn`), with that reason alone, and not as a private circuit's. The checks above are the model's
-    predicates; this is the shipped verdict, so a refusal added to it that an honest V* session meets fails here and nowhere
-    else. About two minutes, beside the gate's witness runs."""
+    session its coefficients are checked against, the verifier's full draw of that session (`_f1_draw`), and the coin
+    server's inner transcript (`inner/s0/public.json`), whose link points, level-3 tops and `root_B` the unit is held to
+    (`RecVStar.checkTopRows`, `RecCoins.checkLink`), as `85-rec-reprice.sh`'s STEP=lean runs it: through every check and
+    every refusal the verdict runs last (the form's, a draw-less session's, a V* session's short of every unit,
+    `RecSetup.fullDraw`, and one over an inner session whose record holds no draw, `RecSetup.innerDrawn`), and not as a
+    private circuit's. The checks above are the model's predicates; this is the shipped verdict, so a refusal added to it
+    that an honest V* session meets fails here and nowhere else. About two minutes, beside the gate's witness runs."""
     g, d = f1_gate, f1["inputs"]
     v, st = g / "v" / part, g / "stage"
     names = [nm for nm, _ in F1_STATEMENTS]
 
     def run():
-        # the gate's record predates `rec_live.record_bytes`, the format the verifier reads (`RecSetup.checkReads`)
-        transcript = d / f"transcript-{part}.json"
-        transcript.write_text(RL.record_bytes(json.loads((g / "inner" / "s1" / "public.json").read_text())))
         p = keyed.run([str(LEAN / ".lake" / "build" / "bin" / "flock-verify"), "verify", "--zk", "--statement", STATEMENT,
                        "--circuit", str(v / "circuit.txt"), "--public", str(v / "pub.bin"), "--partition",
                        str(v / "partition.json"), "--program", str(v / "program.json"), "--registered",
@@ -425,13 +427,13 @@ def test_f1_verify_refuses_the_session_only_for_its_undrawn_inner_session(built,
                        str(st / "pub-2.bin"), "--rec-inner-partition", str(st / "partition.json"),
                        "--rec-inner-statement", "verity/flock-circuit+plain-leaves",
                        "--rec-inner-draw", str(d / "draw.json"), "--rec-inner-session",
-                       str(g / "inner" / "s1" / "session"), "--rec-inner-transcript", str(transcript), "--session",
-                       str(g / "v-sess" / part)])
+                       str(g / "inner" / "s0" / "session"), "--rec-inner-transcript", str(g / "inner" / "s0" / "public.json"),
+                       "--session", str(g / "v-sess" / part)])
         return {"rc": p.returncode, "verdicts": [json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT ")]}
 
     r = _kept(once, f"verify-f1-{part}", run)
-    assert r["rc"] == 1 and [(x["accepted"], x["why"], x["private_circuit"]) for x in r["verdicts"]] == [
-        (False, RL.NO_INNER_DRAW, False)], r
+    assert r["rc"] == 0 and [(x["accepted"], x["why"], x["private_circuit"]) for x in r["verdicts"]] == [
+        (True, "", False)], r
 
 
 def test_f1_the_sessions_fail_the_public_output_checks(f1):
@@ -461,7 +463,7 @@ def test_f1_the_rate_is_below_one_at_k_2_21(f1):
 
 
 def test_f1_the_honest_outputs_are_the_circuits(f1_gate):
-    """The event's `¬ holds`, executably, at the honest s1: every output row is the inner unit's Definition on its
+    """The event's `¬ holds`, executably, at the honest s0: every output row is the inner unit's Definition on its
     instance's input rows (the IR oracle), and every row's `b || c` under its salt and the trees' roots are the verifier's
     file's, `pub-2.bin` byte for byte."""
     st = f1_gate / "stage"
