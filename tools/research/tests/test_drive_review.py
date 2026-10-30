@@ -60,8 +60,8 @@ def test_main_waits_for_the_steps_on_the_gate_of_the_commits_own_ci_toml(world, 
 
 def test_a_git_without_merge_tree_attr_source_refuses_the_tick_and_rings_ci_and_infra_hourly(world, monkeypatch):
     """A git before 2.40 has no `merge-tree --attr-source`, and a sync without it left out every PR whose only conflict is a pin,
-    ringing no one.  Drive refuses the tick on it (no sync, nothing pushed) and rings @ci and @infra with the version and the
-    fix, again an hour later while it stays; on a git that has it the same tick syncs and lands."""
+    ringing no one.  Drive refuses the tick on it (no sync, nothing pushed) and rings the lander's and the machines' handles
+    with the version and the fix, again an hour later while it stays; on a git that has it the same tick syncs and lands."""
     h = Review(world, monkeypatch)
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     h.review(1)
