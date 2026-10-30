@@ -18,7 +18,7 @@ primitive, under `Hash.Assumptions.Sha512Prf` at the derivation's two tests. So 
   derivation; `PousRingFree`: the audit's session and device record don't read the primitive.
 * `spaceOfPeriodHeldSha512`: `PeriodRun.Sound` for `.pous` at `δ + ε_max + ε(t, 1) + ε(t, 6720)` at a period realizing
   its PoUS audit over the source and the hm96 coins, from `Pous.Period.SecurityProofs.periodHeldSha512`, under its
-  premises (`CoinCommitHides`, `P2RingAuditSecure`, `DeviceModel`, `Instantiates`, the certificate's fit and the two
+  premises (`P2RingAuditSecure`, `DeviceModel`, `Instantiates`, the certificate's fit and the two
   `Sha512Prf` tests, `PrfTests`), read at any one primitive `ω₀`.
 * `pous_atCode_sha512`, `Vocab.pousSound_of_sha512`: through `Vocab.Coupling` (`pousSound_of_coupling`), `PousSound k`
   conditional on a coupling at each `θ F c σ` whose run realizes its PoUS audit over the source and the hm96 coins
@@ -101,7 +101,7 @@ theorem sha512Bound_ne_top {ε : ℕ → ℕ → ℝ≥0∞} (hε : ∀ t n, ε 
 `PeriodRun.Sound` for `.pous` at `δ + ε_max + ε(t, 1) + ε(t, 6720)`, from `periodHeldSha512` at the other coins the
 realization reads and the primitive `ω₀`. -/
 theorem spaceOfPeriodHeldSha512 [Fintype ι]
-    (hH : P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131)) {D Q L : ℕ}
+    {D Q L : ℕ}
     (hP : P2.Assumptions.P2RingAuditSecure D Q L) {C : Verity.Circuit} {I : Type} [DecidableEq I] {Ω : I → Type}
     [∀ i, Fintype (Ω i)] {r : PeriodRun d α C Ω} {run : Run d α ΩW ΩQ (HmCoins × Streams)} {P : Audits ΩW ΩQ}
     {τ : Pous.Period.Strategy ΩW ΩQ} {round : ℕ} {c : Certificates} {p : Price}
@@ -113,9 +113,9 @@ theorem spaceOfPeriodHeldSha512 [Fintype ι]
     (hB : ENNReal.ofReal Params.δ + Params.εMax + ε t 1 + ε t (105 * 64) ≠ ⊤) :
     r.Sound c p .pous (ENNReal.ofReal Params.δ + Params.εMax + ε t 1 + ε t (105 * 64)).toReal := by
   intro ξ
-  have h := Pous.Period.SecurityProofs.periodHeldSha512 hH D Q L hP ι α ΩW ΩQ d run.withRing P τ round c.S hdev
-    hinst hS (R.other ξ) (fun ω ω' y => ⟨(hfree _ ω ω' y).1, (hfree _ ω ω' y).2, rfl⟩) ω₀ ε t
-    (hprf (R.other ξ)).1 (hprf (R.other ξ)).2
+  have h := Pous.Period.SecurityProofs.periodHeldSha512 D Q L hP ι α ΩW ΩQ d run.withRing P τ round c.S hdev
+    hinst hS (R.other ξ) (fun ω ω' y => (hfree _ ω ω' y).1) (fun ω ω' y => (hfree _ ω ω' y).2)
+    (fun _ _ _ => rfl) ω₀ ε t (hprf (R.other ξ)).1 (hprf (R.other ξ)).2
   rw [prCoin_eq_ofReal_pr] at h
   refine le_trans ?_ ((Pouw.pr_equiv R.coins _).trans_le ((ENNReal.ofReal_le_iff_le_toReal hB).1 h))
   refine Pouw.pr_mono fun x hx => ?_
@@ -132,7 +132,7 @@ theorem spaceOfPeriodHeldSha512 [Fintype ι]
 /-- **PoUS at the code, over the challenger's source and hm96 coins**: `spaceOfPeriodHeldSha512` at `atCode r A`, from
 a realization at `r` (its own `accepts` not read) and what `A .pous` gives at the joint run's coins (`PousAtCode`). -/
 theorem pous_atCode_sha512 [Fintype ι]
-    (hH : P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131)) {D Q L : ℕ}
+    {D Q L : ℕ}
     (hP : P2.Assumptions.P2RingAuditSecure D Q L) {C : Verity.Circuit} {I : Type} [DecidableEq I] {Ω : I → Type}
     [∀ i, Fintype (Ω i)] {r : PeriodRun d α C Ω} {run : Run d α ΩW ΩQ (HmCoins × Streams)} {P : Audits ΩW ΩQ}
     {τ : Pous.Period.Strategy ΩW ΩQ} {round : ℕ} {c : Certificates} {p : Price}
@@ -144,7 +144,7 @@ theorem pous_atCode_sha512 [Fintype ι]
     (hB : ENNReal.ofReal Params.δ + Params.εMax + ε t 1 + ε t (105 * 64) ≠ ⊤)
     {A : Audit → ((i : I) → Ω i) → Prop} (hA : PousAtCode R A (sourceVerdict P ω₀)) :
     (atCode r A).Sound c p .pous (ENNReal.ofReal Params.δ + Params.εMax + ε t 1 + ε t (105 * 64)).toReal :=
-  spaceOfPeriodHeldSha512 hH hP ω₀ (R.atCode A hA) hfree hdev hinst hS hprf hB
+  spaceOfPeriodHeldSha512 hP ω₀ (R.atCode A hA) hfree hdev hinst hS hprf hB
 
 end Space
 
@@ -190,14 +190,14 @@ structure PousCoins [Fintype ι] {θ F c : ByteArray} {σ : Game.Strategy (V.gam
 
 /-- **The coupling's run at the verdict at the code has PoUS's per-period guarantee** at
 `δ + ε_max + ε(t, 1) + ε(t, 6720)`, given `Sha512Prf` at the challenger's two tests. -/
-theorem PousCoins.sound [Fintype ι] (hH : P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131))
-    {D Q L : ℕ} (hP : P2.Assumptions.P2RingAuditSecure D Q L) {θ F c : ByteArray} {σ : Game.Strategy (V.game θ F c)}
+theorem PousCoins.sound [Fintype ι] {D Q L : ℕ} (hP : P2.Assumptions.P2RingAuditSecure D Q L)
+    {θ F c : ByteArray} {σ : Game.Strategy (V.game θ F c)}
     {q : V.Coupling k .pous θ F c σ} (w : V.PousCoins q D Q L) {ε : ℕ → ℕ → ℝ≥0∞}
     (hprf : PrfTests w.run w.P (V.certOf θ).S w.ω₀ ε w.t)
     (hB : ENNReal.ofReal Params.δ + Params.εMax + ε w.t 1 + ε w.t (105 * 64) ≠ ⊤) :
     q.atCode.Sound (V.certOf θ) q.price .pous
       (ENNReal.ofReal Params.δ + Params.εMax + ε w.t 1 + ε w.t (105 * 64)).toReal :=
-  pous_atCode_sha512 hH hP w.ω₀ w.real w.free w.device w.inst w.fit hprf hB fun ξ
+  pous_atCode_sha512 hP w.ω₀ w.real w.free w.device w.inst w.fit hprf hB fun ξ
     (hx : ComponentAccepts k .pous (V.outcome θ F c σ q.coins ξ).sent ∧
       V.Logged (q.pos .pous) .pous (V.outcome θ F c σ q.coins ξ) ∧ ¬ q.brk ξ) =>
     And.intro (w.accepts ξ hx.1 hx.2.1) fun hb => hx.2.2 (w.brk ξ hb)
@@ -207,16 +207,16 @@ theorem PousCoins.sound [Fintype ι] (hH : P2.Assumptions.CoinCommitHides coinVi
 `Sha512Prf` at its two tests with a finite advantage `ε`, PoUS's published `δ` at least
 `δ + ε_max + ε(t, 1) + ε(t, 6720)` (`1% + 2^-128` plus the PRF terms) at the strategy's calls, and its break and
 out-of-place releases answered for by the forger and finder terms where the finder meets `FinderCR`
-(`Coupling.BreakBound`), under `CoinCommitHides` and `P2RingAuditSecure` at `(D, Q, L)`. -/
-theorem pousSound_of_sha512 [Fintype ι] (hH : P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131))
-    {D Q L : ℕ} (hP : P2.Assumptions.P2RingAuditSecure D Q L) (q : ∀ θ F c σ, V.Coupling k .pous θ F c σ)
+(`Coupling.BreakBound`), under `P2RingAuditSecure` at `(D, Q, L)`. -/
+theorem pousSound_of_sha512 [Fintype ι] {D Q L : ℕ} (hP : P2.Assumptions.P2RingAuditSecure D Q L)
+    (q : ∀ θ F c σ, V.Coupling k .pous θ F c σ)
     (w : ∀ θ F c σ, V.PousCoins (q θ F c σ) D Q L) (ε : ℕ → ℕ → ℝ≥0∞) (hε : ∀ t n, ε t n ≠ ⊤)
     (hprf : ∀ θ F c σ, PrfTests (w θ F c σ).run (w θ F c σ).P (V.certOf θ).S (w θ F c σ).ω₀ ε (w θ F c σ).t)
     (hδ : ∀ θ F c σ, ENNReal.ofReal Params.δ + Params.εMax + ε (w θ F c σ).t 1 + ε (w θ F c σ).t (105 * 64) ≤
       V.delta θ .pous (V.cost θ F c σ))
     (hb : ∀ θ F c σ, V.FinderCR .pous θ F c σ → (q θ F c σ).BreakBound) : V.PousSound k :=
   V.pousSound_of_coupling q (fun θ F c σ =>
-    ⟨_, PousCoins.sound V hH hP (w θ F c σ) (hprf θ F c σ) (sha512Bound_ne_top hε _), by
+    ⟨_, PousCoins.sound V hP (w θ F c σ) (hprf θ F c σ) (sha512Bound_ne_top hε _), by
       rw [ENNReal.ofReal_toReal (sha512Bound_ne_top hε _)]; exact hδ θ F c σ⟩) hb
 
 end Vocab
