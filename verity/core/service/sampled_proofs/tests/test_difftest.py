@@ -64,7 +64,7 @@ from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program, input_id, is_input
 from verity.ml.circuits.refs import tuple_of
-from verity.ml.circuits.types import Array, Record, Tuple, Value
+from verity.ml.circuits.types import Array, RecordType, Tuple, Value
 
 from test_challenger_difftest import DRAW_MUTATIONS, Drawn, _flip, _mutated, lms_verify
 
@@ -262,7 +262,7 @@ REGISTERED_SETUPS = [
         ("W", Array(6, Value(16))), ("D", Array(4, Value(12))), ("E", Array(0, Value(16))), ("M", Tuple(Value(8), Value(16))),
         ("V", Value(40))), ("W", "D")), [{"W": 2}, {"D": 1, "W": 3}, {"D": 4}, {"W": 6, "x": 2}]),
     RegisteredSetup(_registered_program("CoreSampledProofsRegistered32", 2, (
-        ("T", Array(4, Value(32))), ("U", Record(("a", Array(3, Value(20))),))), ("T", "U")),
+        ("T", Array(4, Value(32))), ("U", RecordType(("a", Array(3, Value(20))),))), ("T", "U")),
         [{"T": 2}, {"T": 1, "U": 3}, {"U": 1}, {"T": 4, "x": 1}]),
     RegisteredSetup(_registered_program("CoreSampledProofsRegisteredBits", 2, (
         ("A", Array(8, Value(8))), ("B", Array(4, Value(16)))), ("A", "B")),
@@ -424,7 +424,7 @@ def _type(j):
     if (tag == "Record" and len(j) == 2 and isinstance(j[1], list)
             and all(isinstance(f, list) and len(f) == 2 and isinstance(f[0], str) for f in j[1])
             and len({k for k, _ in j[1]}) == len(j[1])):
-        return Record(*[(k, _type(t)) for k, t in j[1]])
+        return RecordType(*[(k, _type(t)) for k, t in j[1]])
     raise D.Reject(f"type {j!r}")
 
 
@@ -433,7 +433,7 @@ def _lower(t) -> list[tuple[int, int]]:
     w = t.homogeneous_width()
     if w is not None:
         return [(w, t.leaves)]
-    fields = [t.elem] * t.n if isinstance(t, Array) else [f[1] if isinstance(t, Record) else f for f in t.fields]
+    fields = [t.elem] * t.n if isinstance(t, Array) else [f[1] if isinstance(t, RecordType) else f for f in t.fields]
     return [node for f in fields for node in _lower(f)]
 
 
@@ -1096,7 +1096,7 @@ REGISTRATION_KEYS = ("anchors", "law", "partition", "population", "program", "pr
 
 
 def _record_input(j) -> Fraction:
-    """`Record.inputOf`'s domain, where `audit_record` reads its inputs as the Lean does; δ."""
+    """`RecordType.inputOf`'s domain, where `audit_record` reads its inputs as the Lean does; δ."""
     ints = lambda x: isinstance(x, list) and all(map(_int, x))  # noqa: E731
     _exactly(j, RECORD_INPUT_KEYS, "the record's input")
     reg, draw_ = j["registration"], j["draw"]
