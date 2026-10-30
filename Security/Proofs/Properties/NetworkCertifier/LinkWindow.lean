@@ -88,18 +88,19 @@ theorem opened_spec {c : Case} {row : Option ByteArray} {w : Nat} (h : opened c 
       · cases h
     · cases h
 
-theorem verifies_spec {c : Case} {x : Cert} (h : verifies c x = true) :
-    x.keyId = c.key.extract 0 16 ∧ ∃ m sig,
-      certificateMessage x.keyId c.session x.link x.direction x.window x.digest = .ok m ∧
-      Lms.Signature.decode c.lms x.signature = .ok sig ∧ Lms.verify c.lms c.key m sig = .ok true := by
-  unfold verifies at h
+theorem signs_spec {lms : Lms.Params} {key session : ByteArray} {x : NetworkCheck.Check.Certificate}
+    (h : x.signs lms key session = true) :
+    x.keyId = key.extract 0 16 ∧ ∃ m sig,
+      certificateMessage x.keyId session x.link x.direction x.window x.digest = .ok m ∧
+      Lms.Signature.decode lms x.signature = .ok sig ∧ Lms.verify lms key m sig = .ok true := by
+  unfold NetworkCheck.Check.Certificate.signs at h
   simp only [Bool.and_eq_true, beq_iff_eq] at h
   refine ⟨h.1, ?_⟩
   obtain ⟨-, h⟩ := h
   split at h
   · rename_i m sig hm hs
     refine ⟨m, sig, hm, hs, ?_⟩
-    cases hv : Lms.verify c.lms c.key m sig with
+    cases hv : Lms.verify lms key m sig with
     | error e => rw [hv] at h; cases h
     | ok b => rw [hv] at h; cases b <;> first | rfl | cases h
   · cases h
@@ -116,7 +117,7 @@ theorem certified_spec {c : Case} (h : certified c = true) : WindowCertified c :
   · rename_i x hcx
     simp only [Bool.and_eq_true, beq_iff_eq] at hx
     obtain ⟨⟨⟨hl, hdir⟩, hw⟩, hv⟩ := hx
-    exact ⟨x, by rw [Array.getElem?_eq_getElem hd', hcx], hl, hdir, hw, verifies_spec hv⟩
+    exact ⟨x, by rw [Array.getElem?_eq_getElem hd', hcx], hl, hdir, hw, signs_spec hv⟩
   · cases hx
 
 theorem synced_spec {c : Case} (h : synced c = true) : WindowSynced c := by
@@ -173,11 +174,12 @@ theorem opened_of {c : Case} (h : WindowOpened c) :
   refine ⟨row, hr, ?_⟩
   simp [opened, hf, hu, hb, hw, opens_of h1, opens_of h2]
 
-theorem verifies_of {c : Case} {x : Cert} {m : ByteArray} {sig : Lms.Signature} (hk : x.keyId = c.key.extract 0 16)
-    (hm : certificateMessage x.keyId c.session x.link x.direction x.window x.digest = .ok m)
-    (hs : Lms.Signature.decode c.lms x.signature = .ok sig) (hv : Lms.verify c.lms c.key m sig = .ok true) :
-    verifies c x = true := by
-  unfold verifies
+theorem signs_of {lms : Lms.Params} {key session : ByteArray} {x : NetworkCheck.Check.Certificate} {m : ByteArray}
+    {sig : Lms.Signature} (hk : x.keyId = key.extract 0 16)
+    (hm : certificateMessage x.keyId session x.link x.direction x.window x.digest = .ok m)
+    (hs : Lms.Signature.decode lms x.signature = .ok sig) (hv : Lms.verify lms key m sig = .ok true) :
+    x.signs lms key session = true := by
+  unfold NetworkCheck.Check.Certificate.signs
   rw [hm, hs]
   simp [hk, hv, Except.toOption]
 
@@ -191,7 +193,7 @@ theorem certified_of {c : Case} (h : WindowCertified c) : certified c = true := 
   have hcx : c.certificates[d] = some x := by simpa [Array.getElem?_eq_getElem hd'] using hx
   rw [getElem!_pos c.certificates d hd', hcx]
   simp only [Bool.and_eq_true, beq_iff_eq]
-  exact ⟨⟨⟨hl, hdir⟩, hw⟩, verifies_of hk hm hsig hv⟩
+  exact ⟨⟨⟨hl, hdir⟩, hw⟩, signs_of hk hm hsig hv⟩
 
 theorem synced_of {c : Case} (h : WindowSynced c) : synced c = true := by
   cases hk : c.kind with

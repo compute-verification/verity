@@ -719,10 +719,7 @@ class ProverSide:
     def session(self, head: dict, mode: str, fraction: float) -> dict:
         k, W, cap = head["k"], head["windows"], head.get("pace") or math.inf
         one = head.get("in_flight") == 1
-        commitment = wire.commitment_of(head["commitment"])
-        why = coins.layout_reason(commitment, k, W, head.get("groups_per_coin", 1))
-        if why is not None:
-            raise ValueError(f"the session's coins are not session {k}'s: {why}")
+        groups_per_coin = head.get("groups_per_coin", 1)
         N = self.backend.blocks
         getattr(self.backend, "begin_session", lambda: None)()
         trace = serving = None
@@ -763,11 +760,14 @@ class ProverSide:
         self.conn.send({"type": "armed", "k": k})
         coin0, _, first = self.expect("coin")
         t = 0
+        received: dict[int, coins.Released] = {}
 
-        def take(coin) -> bytes:
-            reason = coins.coin_reason(commitment, coin, coins.CHALLENGE, t)
-            if reason is not None:
-                raise ValueError(reason)
+        def take(coin: coins.Released) -> bytes:
+            if (coin.epoch, coin.label, coin.index) != (k, coins.CHALLENGE, t):
+                raise ValueError(f"window {t}'s challenge was sent as session {coin.epoch}'s {coin.label} "
+                                 f"{coin.index}")
+            if received.setdefault(t, coin) != coin:
+                raise ValueError(f"window {t}'s challenge was sent again, another coin")
             return coins.coin(coin)
 
         backend, clock = self.backend, self.conn.clock
@@ -963,6 +963,7 @@ class ProverSide:
         with self.lock:
             self.kept.clear()
         self.conn.send({"type": "ended", "k": k})
+        self._coins(k, W, groups_per_coin, received)
         per_window = defaultdict(int)
         for tt, *_ in passes:
             per_window[tt] += 1
@@ -991,6 +992,24 @@ class ProverSide:
         out["failure_on_misread"] = (self.block(failure["t"], *at) in self.misread.get((failure["t"], at[0]), ())
                                      if at else None)
         return out
+
+    def _coins(self, k: int, windows: int, groups_per_coin: int, received: dict) -> None:
+        """Session k's coin commitment and every coin it released, opened, which the verifier sends once the prover has
+        `ended` and no root of the session can follow: each challenge the prover was sent (`received`, by window) is
+        to be its opening's, under a commitment of session k's layout (`coins.received_reason`)."""
+        while True:
+            head, body, _ = self.inbox.get()
+            if head["type"] in ("lost", "bye"):
+                raise wire.Closed(head.get("why", "bye"))
+            if head["type"] == "session":
+                raise ValueError(f"session {head['k']} began before session {k}'s coins were opened")
+            if head["type"] == "coins" and head["k"] == k:
+                break
+        commitment = wire.commitment_of(head["commitment"])
+        why = coins.layout_reason(commitment, k, windows, groups_per_coin) or coins.received_reason(
+            commitment, [received[t] for t in sorted(received)], wire.openings_of(body))
+        if why is not None:
+            raise ValueError(f"session {k}'s coins are not the ones it was sent: {why}")
 
     def _appended(self, pending: deque) -> dict:
         """The verifier's reply to the append just sent, `appended`, or the session's `end` if it came first; the
