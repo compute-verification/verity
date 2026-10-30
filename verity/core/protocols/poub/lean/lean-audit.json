@@ -12,6 +12,7 @@
    "why": "the verifier is code: Lean core, C-Flock's hashes, bytes and hm96, core's randomness, the core protocol interface its session is a component through (PoubCheck.Protocol), and PoUS's leaf and path check (PousCheck.Merkle, on which a P2 store's openings are checked, PoubCheck.P2); no Mathlib and nothing of Security. The difftest's table (PoubCheck.Difftest) also imports the difftest server"
   }
  },
+ "guarantees": {},
  "dependencies": {
   "toolchain": "7e5e738e4840d9266989ec372ac6a921cc3efa7fc3158d3d06f480b0b3ea0029"
  }
