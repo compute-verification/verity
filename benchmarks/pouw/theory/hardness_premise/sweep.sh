@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The HT-PREMISE v2 sweep: `search.py` jobs in parallel, results under $OUT (one JSON and log a job, trees in trees/).
-# Usage: sweep.sh exact|lsb|margin|kcap PARALLEL
+# Usage: sweep.sh exact|lsb|margin|kcap|deep PARALLEL
 set -euo pipefail
 group=$1
 par=$2
@@ -31,6 +31,13 @@ elif [ "$group" = kcap ]; then
       echo "--chips $chip --cases $a,256,16 --shapes $s --depths '5 6' --grids down"
     done
   done; done >> "$jobs"
+elif [ "$group" = deep ]; then
+  # depth 7 under the K cap, where the margin falls from depth 5 to 6
+  for chip in h200 sm120; do
+    for s in 8192,8192,8192 8192,8192,57344 8192,8192,106496 8192,4096,57344 8192,4096,106496; do
+      echo "--chips $chip --cases 4,256,16 --shapes $s --depths 7 --grids down"
+    done
+  done >> "$jobs"
 else
   # A-LSB and D0: L (or small R) over 2^b values, b = 2..5; output mod 2^b (the congruence) and mod 2^16 (W = L)
   for chip in h200 sm120 h200+s4; do for a in 4 8; do for b in 4 8 16 32; do
