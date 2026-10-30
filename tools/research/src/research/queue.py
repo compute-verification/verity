@@ -35,7 +35,10 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    --collect-only` in a suite
                                                    whose inputs its change touches, or breaks the build of a Lean module that
                                                    is or imports what it changes (on a warm Lean tree: here on a node, else
-                                                   with --on on vy-nebius-cpu-3), naming the PR on `next` that owns it;
+                                                   with --on on vy-nebius-cpu-3), naming the PR on `next` that owns it, or
+                                                   drops from a Lean lock it changes a shape.inline premise or shape.frozen
+                                                   key `next`'s statements still need (naming each; the sync leaves such a
+                                                   head off `next` too);
                                                    --no-preflight skips it (the lander's)
     research queue drive [--on MACHINE] [--config PATH [--config-from-tree]] [--marked-after TS] [--first N,...]
                          [--[no-]regenerate-locks] [--[no-]after-landing-no-cache] [--dry-run]
@@ -116,7 +119,10 @@ a row another queued PR refits away (an error at collection), one lane's unlande
 `tests/test_repository.py` (a Markdown cap, a report-genre name), which the preflight runs too, as it runs the landing gates the
 sync would (on the head; the sync, on its merge onto `next`).  A Lean change can pass its own Lean check and break a module
 another PR on `next` owns (a changed signature, dropped premises, a dropped import), which drive's Lean check of the stack finds
-only an hour later; the preflight builds those modules (`LakeBuild`).  So `ready` runs `Preflight` before the mark and before any quick tier: a refusal names what it found and the fix, a
+only an hour later; the preflight builds those modules (`LakeBuild`).  A head whose lock, merged onto `next` by
+`tools/verity/lean/merge.py`, drops a `shape.inline` premise or a `shape.frozen` key that `next`'s unchanged statements still need
+(a lock regenerated on an older tree) fails that Lean check too; the preflight names each such entry (`lock_drops`), and the sync
+leaves such a head off `next` with the same refusal.  So `ready` runs `Preflight` before the mark and before any quick tier: a refusal names what it found and the fix, a
 failure `next` has too refuses nothing, and what keeps a check from running is said and refuses nothing (the after-landing run
 checks it).  `--no-preflight` skips it, for the lander.
 
@@ -158,7 +164,8 @@ member it moves, so it cancels no check below a held member.  A PR that doesn't 
 which files conflict and which queued PRs touched them; while its head stays, later syncs try it, and the PRs that contain it,
 above everything else, whatever `--first` or non-Lean first would say, so a sync with nothing new keeps `next`.  So is a PR a landing gate refuses (drive.toml's `landing_gates` at
 `main`, `gate_refusal`) on its merge onto `next` (`tools/verity/check/gates/markdown_caps.py`: one it puts over a cap),
-with the gate's fix: each PR the sync merges is judged, a new one or one merged again above a
+with the gate's fix, and a PR whose lock merge drops an entry `next`'s statements still need (`lock_drops`), naming each:
+each PR the sync merges is judged, a new one or one merged again above a
 dropped or moved member, never one in the prefix it keeps, so a refusal never takes a running check's commit off `next`; a merge
 with the message, tree and parent tree of one judged under the same `main` takes that verdict (`Queue._gated`).  A PR
 that contains one left out waits, recorded (the state's `waiting`) and named in that one's notice; `status` shows it waiting and
@@ -1526,6 +1533,8 @@ class Queue:
                     self.log(f"research queue: #{n} at {e.pr.head[:8]} waits off `{self.branch}`: {e.why}")
                 continue
             (commit, why), merged = self._merge(tip, e.pr, members), True
+            if commit not in (None, tip) and (drops := lock_drops(self.workdir, tip, e.pr.head, commit)):
+                commit, why = None, lock_drop_refusal(drops, self.branch)
             if commit is not None and gates:
                 refused, unjudged = self._gated(main, gates, tip, commit, e.pr, before, verdicts)
                 if refused or unjudged:
@@ -2669,6 +2678,109 @@ class LakeBuild:
         return (None if rc == waitcap.STILL_GOING else rc), text, where
 
 
+#: the fix `lock_drop_refusal` names for each entry a lock merge drops
+LOCK_DROP_FIX = "restore it verbatim from `{onto}` in a lock-only commit (`git show origin/{onto}:PATH`) and mark that head"
+#: how much of a dropped premise's text `lock_drops` shows
+LOCK_DROP_SHOWN = 60
+
+
+def _unowned(rec):
+    return {k: v for k, v in rec.items() if k != "owner"} if isinstance(rec, dict) else rec
+
+
+def _texts(section: str, entries: dict, g: str) -> list[str]:
+    """The texts of ``g``'s entry in a lock's `shape` ``section``: its premises (`inline`), or its reason (`frozen`)."""
+    if g not in entries:
+        return []
+    v = entries[g]
+    if section == "inline":
+        return list(v) if isinstance(v, dict) else []
+    return [v if isinstance(v, str) else json.dumps(v, sort_keys=True)]
+
+
+def _read_by(lock: dict) -> dict[str, dict[str, str]]:
+    """{guarantee: {definition: its hash}} of what each guarantee reads, from the lock's `reads`."""
+    out: dict[str, dict[str, str]] = {}
+    for group in (lock.get("reads") or {}).values():
+        if isinstance(group, dict) and isinstance(defs := group.get("definitions"), dict):
+            for g in group.get("guarantees") or []:
+                out.setdefault(g, {}).update(defs)
+    return out
+
+
+def dropped_entries(base: dict, merged: dict) -> list[str]:
+    """Each entry of the lock ``base`` (`next`'s) that ``merged`` (the head's lock merged onto it) drops though `next`'s
+    statements still need it: a premise of `shape.inline` ({guarantee: {premise as printed: why}}), as `shape.inline[G]:
+    PREMISE`, and a key of `shape.frozen`, as `shape.frozen[G]`.  ``merged`` may drop a guarantee's entry when it no longer
+    lists the guarantee under `guarantees` (removed), or restated it: it records the guarantee otherwise than ``base`` does,
+    its owner aside, or a definition both say it reads has another hash (`check.py --update` keeps a premise only while the
+    statement prints it, and the head's records run checked its lock).  It may drop an entry whose text (a premise, a frozen
+    entry's reason) it holds under a key of the section ``base`` lacks (renamed), and a guarantee's premises while it adds as
+    many others under that guarantee (re-keyed at a restated statement, as `check.py`'s `paired` keys them)."""
+    listed, was = merged.get("guarantees") or {}, base.get("guarantees") or {}
+    reads, read = _read_by(base), _read_by(merged)
+
+    def restated(g: str) -> bool:
+        return _unowned(listed[g]) != _unowned(was.get(g)) or any(
+            read[g][d] != h for d, h in reads.get(g, {}).items() if d in read.get(g, {}))
+
+    out = []
+    for section in ("inline", "frozen"):
+        b, m = ((d.get("shape") or {}).get(section) or {} for d in (base, merged))
+        if not isinstance(b, dict) or not isinstance(m, dict):
+            continue
+        moved = {t for g in m if g not in b for t in _texts(section, m, g)}
+        for g in b:
+            if g not in listed or restated(g):
+                continue
+            had, kept = _texts(section, b, g), _texts(section, m, g)
+            gone = [t for t in had if t not in kept and t not in moved]
+            if section == "frozen":
+                out += [f"shape.frozen[{g}]" for _ in gone]
+            elif len(gone) > len([t for t in kept if t not in had]):
+                out += [f"shape.inline[{g}]: " + (t if len(t) <= LOCK_DROP_SHOWN else t[:LOCK_DROP_SHOWN] + "…") for t in gone]
+    return out
+
+
+def lock_drops(repo: Path, base: str, head: str, merged: str | None = None) -> list[str]:
+    """`dropped_entries` of each lock (`lean-audit.json`, `LEAN_FIXTURES` aside) that ``head``'s change from its merge base with
+    ``base`` touches, from ``base`` to ``merged`` (a commit or tree; by default ``head`` merged onto ``base`` as the sync merges
+    it, with ``base``'s merge drivers, so `tools/verity/lean/merge.py` merges the locks), each prefixed by the lock's path.  A
+    lock either side lacks is the head's to add or remove, one that doesn't parse is named, and a diff or merge git can't make
+    finds nothing: the train's Lean check still fails on a dropped premise."""
+    r = _git(repo, "diff", "--name-only", "--no-renames", f"{base}...{head}", check=False)
+    locks = [f for f in r.stdout.splitlines() if posixpath.basename(f) == LEAN_LOCK and not f.startswith(LEAN_FIXTURES)]
+    if r.returncode or not locks:
+        return []
+    if merged is None:
+        argv = ("merge-tree", "--write-tree", "--name-only", "--no-messages", base, head)
+        m = _git(repo, f"--attr-source={base}", *argv, check=False)
+        if m.returncode == 129 and "attr-source" in m.stderr:
+            m = _git(repo, *argv, check=False)
+        if m.returncode not in (0, 1) or not m.stdout.split():
+            return []
+        merged = m.stdout.split()[0]
+    blobs = _blobs(repo, [f"{c}:{f}" for f in locks for c in (base, merged)])
+    out = []
+    for f in locks:
+        if f"{base}:{f}" not in blobs or f"{merged}:{f}" not in blobs:
+            continue
+        try:
+            was, now = (json.loads(blobs[f"{c}:{f}"]) for c in (base, merged))
+        except ValueError as e:
+            out.append(f"{f}: not JSON on `{BRANCH}` or merged ({e}), so what it drops can't be told")
+            continue
+        if isinstance(was, dict) and isinstance(now, dict):
+            out += [f"{f}: {d}" for d in dropped_entries(was, now)]
+    return out
+
+
+def lock_drop_refusal(drops: list[str], onto: str = BRANCH) -> str:
+    """The refusal of a head whose lock merge onto ``onto`` drops ``drops`` (`lock_drops`), one string naming each and the fix."""
+    return (f"its lock merge onto `{onto}` drops {len(drops)} entr{'y' if len(drops) == 1 else 'ies'} `{onto}`'s statements still "
+            f"need: {'; '.join(drops)}: {LOCK_DROP_FIX.format(onto=onto)}")
+
+
 class Preflight:
     """`ready`'s preflight, before the mark (and before the quick tier): refused, each refusal naming its fix, when the head
     (a) conflicts with `next` (`conflicting_files`, no worktree), naming the paths and the PRs on `next` that touched them;
@@ -2680,7 +2792,9 @@ class Preflight:
     onto `next`, breaks the build of a Lean module that is or imports, transitively, a module it changes, in that module's package
     or one requiring it by path (`lean_graph`), built by ``lean`` (`LakeBuild`, on a warm Lean tree) within `lean_s`, naming the
     module, its first error and the PR on `next` that owns it (`touched_by`), or for a module of its own, those that changed what it
-    imports.  A train most often breaks on one of (a) to (c), and a Lean break is most often one of (e).
+    imports; or (f) merged onto `next` as the sync merges it (`lock_drops`), drops from a lock it changes a `shape.inline` premise or
+    a `shape.frozen` key `next`'s statements still need (`dropped_entries`), naming each and the fix (`LOCK_DROP_FIX`).  A train
+    most often breaks on one of (a) to (c), and a Lean break is most often one of (e) or (f).
 
     `next` is fetched fresh; a PR already on it is merged onto the commit below its old head, as drive's next sync would rebuild
     it.  The checks of (b) and (e) run in a temporary worktree of the caller's repository at the merge (`merged_worktree`), (e)
@@ -2723,6 +2837,8 @@ class Preflight:
                          + ": merge `main` once those land, or settle it with their owners; never merge `next` into the branch "
                            "(it carries unlanded PRs)")
         else:
+            if drops := lock_drops(self.repo, base, pr.head):
+                found.append(lock_drop_refusal(drops, onto.split("`")[1]))
             try:
                 found += self._merged(pr, base, onto, notes, members)
             except QueueError as e:
