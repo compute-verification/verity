@@ -472,8 +472,8 @@ commitment binds them (`Properties.Composition`, proved), and only when all thre
 
 - **Guarantees:** the table's sampled-proofs and PoUW rows, both proved. The composed statement, `Verity.Soundness`, is
   not in Lean yet (above), so the two compose by hand. Remote's sampled-proofs subprotocol is one-stage v1, which takes
-  the sessions' verdicts as evidence; v2, which runs `flock-verify --zk` on the sessions' files itself, joins once its
-  check reads the challenger's signed coins.
+  the sessions' verdicts as evidence; v2, which runs `flock-verify --zk` on the sessions' files itself, joins once
+  onsite and remote move to it: each reads the challenger's signed coins, and then the composite switches.
 - **Assumptions:** those rows' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJ`, `TableCRZAt`, `LinkCRZC`,
   `ServiceSound`, `DrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`,
   `ReceiptLuckAt` and `GuessLuckAt`. Trust model: nothing the prover runs or hosts is trusted, and every coin is live,
