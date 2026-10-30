@@ -807,7 +807,8 @@ def partition(fn: Any, opts: Options, F: Findings, memo: dict, applies: bool = T
     P = F if applies else Findings()
     v2 = applies and q_word == 2
     across_rule = 0
-    rule = W.unit_rule(fn, opts.X, opts.W, opts.extras, memo=memo, max_gates=opts.partition_max_gates)
+    graphs: dict = {}
+    rule = W.unit_rule(fn, opts.X, opts.W, opts.extras, memo=memo, max_gates=opts.partition_max_gates, graphs=graphs)
     rec: dict[str, Any] = {"applies": applies, "query": rule["query"], "units_per_call": rule["units_per_call"], "by_kind": rule["by_kind"],
                            "committed_interior_words": rule["committed_interior_words"], "max_out_bits": rule["max_out_bits"],
                            "free_gates": rule.get("free_gates")}
@@ -832,8 +833,11 @@ def partition(fn: Any, opts: Options, F: Findings, memo: dict, applies: bool = T
     if fn.gates <= opts.partition_max_gates:
         # `unit_rule` partitions a body whose nodes read only its parameters node by node, so it never compares two nodes;
         # the whole Definition's own cut does (a value two nodes compute is a recompute across proof blocks)
-        G = W.Graph(fn)
-        R = W.units(G, opts.X, opts.W, opts.extras)
+        if (got := graphs.get(fn.id)) is not None:
+            G, R = got
+        else:
+            G = W.Graph(fn)
+            R = W.units(G, opts.X, opts.W, opts.extras)
         cut = R["cut"]
         seen = {f["code"] for f in P.failures if f["check"] == "partition" and f["definition"] == fn.id}
         for code in cut.codes:

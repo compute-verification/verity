@@ -439,13 +439,15 @@ def _cache_rule(fn: Any, X: int, W: int, extras: int, limits: dict[str, int], ru
     os.replace(tmp, path)
 
 
-def unit_rule(fn: Any, X: int = 16, W: int = 32, extras: int = 0, *, memo: dict | None = None, max_gates: Limits = None) -> dict[str, Any]:
+def unit_rule(fn: Any, X: int = 16, W: int = 32, extras: int = 0, *, memo: dict | None = None, max_gates: Limits = None,
+              graphs: dict | None = None) -> dict[str, Any]:
     """One Definition specialization under `Q_word_v1{X,W}`: {"definition", "query", "gates", "units_per_call", "by_kind",
     "committed_interior_words", "max_out_bits", "classes", "violations"}.  A class groups units by kind, the primitive and the
     activation of their first boundary gate, gates per unit and |out(S)|; `count` is units per Call, `nodes` the primitives of one
     unit.  `committed_interior` lists the committed interior values by (activation, primitive): what a tap must acquire.  A
     Definition over its gate limit (`gate_limit` of `max_gates`) is not cut: a `too-large` violation.  One `memo` per `max_gates`;
-    under `use_rule_cache` the rule is read from, or written to, the shared directory."""
+    under `use_rule_cache` the rule is read from, or written to, the shared directory.  ``graphs`` gets ``(Graph(fn), units(...))``
+    under ``fn.id`` when this call cut ``fn`` whole (not member by member, and not from ``memo`` or the cache)."""
     memo = {} if memo is None else memo
     key = (fn.id, X, W, extras)
     if key in memo:
@@ -479,6 +481,8 @@ def unit_rule(fn: Any, X: int = 16, W: int = 32, extras: int = 0, *, memo: dict 
     else:
         G = Graph(fn)
         R = units(G, X, W, extras)
+        if graphs is not None:
+            graphs[fn.id] = (G, R)
         cut = R["cut"]
         kinds = np.array([_KINDS.index(k) for k in R["kinds"]], np.int64)
         cols = np.stack([kinds, R["head_prim"], R["head_scope"], R["gates"], R["out_bits"], R["out_gates"]], 1)
