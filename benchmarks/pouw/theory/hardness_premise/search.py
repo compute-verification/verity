@@ -114,13 +114,13 @@ class Search:
             best = min(best, (cost, name))
         return best
 
-    def _F(self, lvl: int, a: int, b: int, w: int):
+    def _F(self, lvl: int, a: int, b: int, w: int, plain: bool = True):
         """((cost, choice) any schedule, (cost, choice) one whose result can chain), W1 a MAC at level lvl."""
         if w <= 0:
             return (0.0, ("zero",)), (0.0, ("zero",))
         a, b = min(a, 2**w), min(b, 2**w)
         K, n = self.K / 2**lvl, self.n / 2**lvl
-        c, name = self.atom(lvl, a, b)
+        c, name = self.atom(lvl, a, b) if plain else (INF, None)
         best_any = best_ch = (c, ("atom", name, a, b, w))
         for side in "ab":
             v = a if side == "a" else b
@@ -178,6 +178,12 @@ class Search:
     def root(self, a: int, b: int, w: int):
         (cost, _), _ = self.F(0, a, b, w)
         return cost
+
+    def alt(self, a: int, b: int, w: int):
+        """The cheapest schedule whose root is not a single atom: when the optimum is the plain kernel, the margin."""
+        if w > 0:
+            a, b = min(a, 2**w), min(b, 2**w)
+        return self._F(0, _grid(a, self.grid), _grid(b, self.grid), w, plain=False)[0][0]
 
 
 def stats(node, lvl=0, acc=None):
@@ -303,7 +309,7 @@ def main(argv=None) -> int:
                             tensor = sum(CHIPS[chip][f][1] * x for f, x in st["mix"].items())
                             row = {"chip": chip, "a": a, "b": b, "w": w, "m": m, "K": K, "n": n, "reading": reading,
                                    "depth_cap": L, "grid": grid, "w1": cost, "depth_used": st["depth"], "tensor": tensor,
-                                   "mix": st["mix"], "states": len(s.memo)}
+                                   "mix": st["mix"], "states": len(s.memo), "alt": s.alt(a, b, w)}
                             if grid != "down":
                                 row["exact"] = check(t, a, b, w, chip, seeds=1 if st["depth"] >= 5 else 2)
                                 ok &= row["exact"]
