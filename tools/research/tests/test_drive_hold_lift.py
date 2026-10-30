@@ -9,7 +9,7 @@ import pytest
 
 from research.drive import LEAN_STEP
 from test_drive_review import Review, _main, _subject
-from test_queue import World
+from test_queue import World, _git
 from test_queue_drive import _steps_run, _tip
 
 
@@ -150,6 +150,63 @@ def test_a_lean_check_stacked_above_a_running_one_stops_below_a_held_member(worl
     chain = h.q.chain()
     assert [m.pr for m in chain] == [1, 2, 3]
     assert h.launched == [(one, "m1", False), (chain[1].commit, "m1", False)] and h.cancelled == [], world.logs
+
+
+def _lean_prefix(world: World, monkeypatch) -> tuple[Review, str, list[str]]:
+    """`next` = #1 (a lock change), #2 (a Lean change, branched from ``side``), #3, all reviewed, one Lean check at #3's commit
+    running; (the drive, that commit, the prefix's commits)."""
+    h = Review(world, monkeypatch, nonlean_first=False)
+    h.d.max_lean_checks = 1
+    world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
+    world.gh.put(2, world.change({"pkg/T.lean": "theorem T : True := trivial\n"}, base=world.change({"x.txt": "side\n"})))
+    world.gh.put(3, world.change({"c.txt": "3\n"}))
+    for n in (1, 2, 3):
+        h.review(n)
+    assert not h.tick().startswith("landed"), world.logs
+    chain = h.q.chain()
+    assert [m.pr for m in chain] == [1, 2, 3] and h.launched == [(chain[2].commit, "m1", False)], world.logs
+    return h, chain[2].commit, [m.commit for m in chain]
+
+
+def test_first_and_new_prs_go_above_a_running_lean_checks_prefix_even_one_it_contains(world, monkeypatch):
+    """A `--first` change while a Lean check runs keeps that check's commit in `next`'s chain and doesn't launch it again: a
+    new PR goes above its prefix, and so does a PR at a commit a prefix member contains (one a stacked member was branched
+    from), which sorted below that member, rebuilding `next` under the check on every such admission."""
+    h, check, prefix = _lean_prefix(world, monkeypatch)
+    world.gh.put(5, world.change({"e.txt": "5\n"}))
+    world.gh.put(6, _git(world.dev, "rev-parse", f"{world.gh.prs[2].head}^"))     # the commit #2 was branched from
+    h.q.first = (6, 5)
+    h.tick()
+    chain = h.q.chain()
+    assert [m.commit for m in chain[:3]] == prefix and [m.pr for m in chain] == [1, 2, 3, 5], world.logs
+    assert h.launched == [(check, "m1", False)] and h.cancelled == [], world.logs
+    assert not any("is rebuilt from" in x for x in world.logs), world.logs
+    (rid,) = h.lean_ids()
+    h.run_state[rid] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, rid, {"lean-build": "passed", LEAN_STEP: "passed"})]
+    assert h.tick().startswith("landed #3"), world.logs
+    assert _landed(world, 3) == [3, 2, 1] and len(h.launched) == 1
+
+
+def test_an_ejection_from_a_running_lean_checks_prefix_rebuilds_it_once_its_check_ends_and_says_why(world, monkeypatch):
+    """An ejection of a member the check holds is what rebuilds `next` below it: once that check ends (`_review`'s wait), the
+    sync rebuilds without the ejected member, logs why, and the Lean change left launches one check of the new prefix."""
+    h, check, _ = _lean_prefix(world, monkeypatch)
+    h.q.eject(1, "breaks the lock", "ci")
+    world.gh.ready.discard((1, world.gh.prs[1].head))      # the store's `ready = false`, as drive's `ready` reads it
+    h.tick()
+    assert h.q.chain()[2].commit == check and len(h.launched) == 1, world.logs
+    (rid,) = h.lean_ids()
+    h.run_state[rid] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, rid, {"lean-build": "passed", LEAN_STEP: "passed"})]
+    h.tick()
+    h.tick()
+    chain = h.q.chain()
+    assert [m.pr for m in chain] == [2, 3] and h.launched == [(check, "m1", False), (chain[1].commit, "m1", False)], world.logs
+    (why,) = [x for x in world.logs if "is rebuilt from" in x]
+    assert "rebuilt from #1, below the 3 member(s) a Lean check holds" in why and "ejected at" in why and "breaks the lock" in why
+    h.tick()
+    assert len(h.launched) == 2, world.logs
 
 
 @pytest.mark.parametrize("how", ["label", "eject"])
