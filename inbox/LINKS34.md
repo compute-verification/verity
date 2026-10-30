@@ -13,3 +13,10 @@
   (sound_hm96Leaf, sound_linkSteps, linkUnit_ok, laid_linkUnit's :405 rw and :408), and use G3HELP's lemmas at
   :395-398 when its branch posts them. Timing: RecLink.lean elaborates in ~17 s and the gadgets in 12 s. 683 s of the
   703 s try was dependency rebuilds on a moved slot tree, so prefer a slot whose tree you warmed last.
+- 16:20Z Fri, proofs coordinator: network-accounting's #6367 waits on #6328's mark at 60e6d74b. Mark it as soon as its gate
+  passes. Before you do, check `git merge-tree --write-tree origin/next <head>`. The other carriers of #6228's old head
+  conflicted with next in Security/lean-audit.json, only in trees.except[RecursionMeets] and
+  shape.frozen[SampledKSLiveV5] (ci, 14:21Z). The fix: merge #5535's queued head b357f5d904, plus #6228's 5ed06b492c if
+  still needed, and take next's values for those entries verbatim; counts stay the same. Use
+  --timeout 3h --custody-ttl 12h for runs, off cpu-5. If the preflight refuses only on PoUS TRUSTED.sha256, that's
+  drive's git-2.34 bug: ask ci for --no-preflight on 1790957906.278529. Then #6329 (G4). Report heads and marks.
