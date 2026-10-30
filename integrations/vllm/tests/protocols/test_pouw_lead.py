@@ -1,10 +1,12 @@
 """`protocols.pouw.lead`: the lead as a PoUW scheme on the int8 plain arm.
 
-- Each engine step's forward is one pass and one window. Its salt is sampled after its key's leaf, the weights' root and
-  its call count.
-- Each linear call's rows are committed (root(A_j)) before its coins are released, and the backend serves the call's y
-  on them.
-- The forward's one words root comes at the step's end, and then the pass's `PassCommitment` is published.
+- Each engine step's forward is one pass and one window, keyed by the committer (`lead_rows.WindowKeying`). Its salt is
+  sampled after keyLeaf, the weights' root and its call count.
+- Each linear call's rows are committed (root(A_j), the keyed digest of its rows) before its coins are released, and the
+  backend serves the call's y on them.
+- The forward's one words root comes at the step's end: the calls' shapes fix the words instance's domain, the backend
+  hashes its committed words to the subtree's top under it, and the keying keys that top. Then the pass's
+  `PassCommitment` is published.
 - The option is refused where it can't be what it says: no backend, other schemes' settings, or beside sampled proofs or
   PoUS. It uninstalls to the plain arm."""
 from __future__ import annotations
@@ -19,9 +21,11 @@ torch = pytest.importorskip("torch")
 from verity.core.protocols.pouw.coins import Challenger  # noqa: E402
 from verity.core.protocols.pouw.serving import PassCommitment  # noqa: E402
 from verity_vllm import protocols as PO  # noqa: E402
+from verity_vllm.commit import lead_rows as L  # noqa: E402
 from verity_vllm.engine import hooks  # noqa: E402
 from verity_vllm.engine import int8_exact as E  # noqa: E402
 from verity_vllm.engine import int8_experts as X  # noqa: E402
+from verity_vllm.errors import Refused  # noqa: E402
 from verity_vllm.protocols import pouw  # noqa: E402
 from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402
 from verity_vllm.protocols.pouw import lead as PL  # noqa: E402
@@ -60,43 +64,71 @@ def _plain(layer, xq, s_a):
     return E.dequantize(E.int_mm(xq, layer.weight), s_a, layer.weight_scale)
 
 
-def a_root(call, xq, window):
-    return hashlib.sha512(R.header(call) + xq.numpy().tobytes() + window.key + window.salt).digest()
+def _label(what: bytes, i: int, size: int) -> bytes:
+    return hashlib.shake_256(what + i.to_bytes(8, "big")).digest(size)
 
 
-def key_leaf(key):
-    return hashlib.sha512(b"leaf" + key).digest()
+class Keys:
+    """The run's window keyings, from fixed bytes: window i's ks_w and y0 are labels of i, so its twin keys the same
+    digests."""
+
+    def __init__(self):
+        self.made = 0
+
+    def __call__(self, calls):
+        self.made += 1
+        return self.twin(self.made - 1, calls)
+
+    @staticmethod
+    def twin(i, calls, salt=None):
+        """Window i's keying, registered under ``W`` and opened under ``salt`` when given."""
+        k = L.WindowKeying(calls, ks_w=_label(b"ks_w", i, 64), y0=_label(b"y0", i, L.KEY_SALT_BYTES))
+        if salt is not None:
+            k.register(W)
+            k.open(salt)
+        return k
+
+
+def top(dom, streams) -> bytes:
+    """The words instance's subtree top as `lead_rows.DeviceWords.top` hands it, computed on the host: the root's two
+    children, or the one chunk; refused, as the device refuses it, unless the streams hold the domain's leaves."""
+    values = L.words_values(streams)
+    if len(values) != dom.count:
+        raise Refused(f"a words instance of {dom.count} leaves got {len(values)}")
+    sub = L.subtree(dom, L.WORDS_LEAF_TAG, values)
+    return b"".join(sub.levels[-2]) if len(sub.levels) > 1 else sub.values[0]
 
 
 class Backend:
-    """The lead's kernel and committer, standing in: the plain product as y, the key's leaf a hash of the key, root(A_j)
-    a hash of the call, its rows and the window, and the words root a hash of the window and its calls' rows and coins."""
+    """The lead's kernel, standing in: the plain product as y, each call's committed stream a hash of its rows and coins
+    of the stream's length, and the words instance's top hashed on the host under the domain each call was handed
+    (``doms``, one a call)."""
 
     variant = "stand-in"
 
     def __init__(self, log: list | None = None):
-        self.loaded, self.log, self.words = [], [] if log is None else log, []
+        self.loaded, self.log, self.streams, self.handed, self.doms = [], [] if log is None else log, [], [], []
 
     def load(self, w, layer):
         self.loaded.append(w)
 
-    def key_leaf(self, key):
-        self.log.append(("key_leaf", key))
-        return key_leaf(key)
-
-    def a_root(self, w, call, xq, window):
-        self.log.append(("a_root", w, call, window))
-        return a_root(call, xq, window)
-
-    def call(self, w, layer, xq, s_a, feed):
+    def call(self, w, layer, xq, s_a, feed, dom):
         self.log.append(("backend", w, feed.call))
-        self.words.append(xq.numpy().tobytes() + feed.head().tobytes())
+        c = feed.call
+        size = 4 * L.pad_rows(c.m) * L.pad_cols(c.n) * c.shape.S
+        self.streams.append(hashlib.shake_256(xq.numpy().tobytes() + feed.head().tobytes()).digest(size))
+        self.doms.append(dom)
         return _plain(layer, xq, s_a)
 
-    def words_root(self, window):
-        self.log.append(("words_root", window))
-        words, self.words = self.words, []
-        return hashlib.sha512(window.key + window.salt + b"".join(words)).digest()
+    def words(self):
+        self.log.append(("words",))
+        out, self.streams = self.streams, []
+        self.handed.append(out)
+        return top(self.doms[-1], out)
+
+
+def _linears(*ns: int) -> list[tuple[int, int]]:
+    return [(n, K) for n in ns]
 
 
 class Link(F.InProcessCertifier):
@@ -132,11 +164,6 @@ def _x(m: int, seed: int) -> torch.Tensor:
     return torch.randn(m, K, generator=g).to(torch.bfloat16)
 
 
-def _keys():
-    n = iter(range(1 << 30))
-    return lambda size: hashlib.sha512(next(n).to_bytes(8, "big")).digest()[:size]
-
-
 def test_the_lead_is_a_scheme_that_executes_and_keeps_its_weights():
     assert PL.SCHEME in pouw.schemes() and PL.SCHEME in pouw.EXECUTED
     assert pouw.executes(PL.SCHEME) == pouw.EXECUTES
@@ -145,7 +172,7 @@ def test_the_lead_is_a_scheme_that_executes_and_keeps_its_weights():
 
 def test_the_lead_refuses_what_it_cannot_be():
     assert PO.refusals(_ctx(backend=Backend())) == ()
-    assert any("'backend' is the lead's kernel and committer" in r for r in PO.refusals(_ctx()))
+    assert any("'backend' is the lead's kernel (`LeadBackend`: load, call, words)" in r for r in PO.refusals(_ctx()))
     taken = PO.refusals(_ctx(backend=Backend(), coins=Challenger(0, np.random.default_rng(0).bytes), retain_steps=2,
                              transcript_dir="/tmp/x"))
     assert any("pouw settings coins, transcript_dir, retain_steps are other schemes'" in r for r in taken)
@@ -154,7 +181,7 @@ def test_the_lead_refuses_what_it_cannot_be():
     other = PO.refusals(_ctx(enabled=("pouw:ncp-v1",), backend=Backend(),
                              coins=Challenger(0, np.random.default_rng(0).bytes)))
     assert any(f"'backend' is the lead's ({PL.SCHEME})" in r for r in other)
-    with pytest.raises(ValueError, match="'backend' is the lead's kernel and committer"):
+    with pytest.raises(ValueError, match="'backend' is the lead's kernel"):
         pouw.Settings.of({"backend": object()})
     eager = PO.Context(stage="serve", enabled=(ENTRY,), settings={"pouw": {"backend": Backend()}}, enforce_eager=False)
     assert any("graph-capturable" in r for r in PO.refusals(eager))
@@ -175,66 +202,141 @@ def test_own_auditor_coins_are_not_added_under_the_lead():
 
 
 def test_a_window_opens_at_its_first_call_and_each_call_commits_its_rows_before_its_coins():
-    """C3's order: the key's leaf, then the link's salt, sampled once it holds that leaf, the weights' root and the
-    window's call count; then each call's root(A_j) under the window, its coins and its kernel."""
+    """C3's order: the window keying's registration, then the link's salt, sampled once it holds keyLeaf, the weights'
+    root and the window's call count; then the words instance's domain, of each linear's chunks at the first call's m;
+    then each call's root(A_j), the keying's digest of its rows at its position, its coins and its kernel, which gets
+    the window's one domain."""
     log = []
-    backend, layer = Backend(log), Linear(24, 1)
-    run = PL.LeadRun(ENTRY, backend, Link(log), W, 4, key=_keys())
-    assert run.window is None and run.record is None
+    backend, layer, link = Backend(log), Linear(24, 1), Link(log)
+    linears = _linears(16, 8, 8, 24)
+    run = PL.LeadRun(ENTRY, backend, link, W, linears, keying=Keys())
+    assert run.window is None and run.record is None and run.calls == 4
     x = _x(5, 2)
     xq, s_a = E.quantize_rows(x)
     y = run.call(3, layer, xq, s_a)
     assert torch.equal(y.view(torch.int16), _plain(layer, xq, s_a).view(torch.int16))
     window, record = run.window, run.record
-    assert (window.index, window.calls, len(window.key)) == (0, 4, PL.KEY_BYTES) and window.salt == record.salt
-    assert (record.weights_root, record.key_leaf, record.window_calls) == (W, key_leaf(window.key), 4)
+    leaf = Keys.twin(0, 4).key_leaf
+    assert (window.calls, window.key_leaf, record.pass_index, record.salt) == (4, leaf, 0, link.windows[0].salt)
+    assert (record.weights_root, record.key_leaf, record.window_calls) == (W, leaf, 4)
     call = F.Call(0, 0, 3, 5, K, 24)
-    root = a_root(call, xq, window)
-    assert log == [("key_leaf", window.key), ("open", 0, key_leaf(window.key), W, 4), ("a_root", 3, call, window),
-                   ("release", call, root), ("backend", 3, call)]
+    twin = Keys.twin(0, 4, record.salt)
+    root = twin.a_root(PL.FORWARD, 0, xq.numpy().tobytes())
+    assert log == [("open", 0, leaf, W, 4), ("release", call, root), ("backend", 3, call)]
     assert record.a_roots == [root] and record.words_root is None
-    run.call(0, Linear(16, 4), *E.quantize_rows(_x(1, 5)))
+    assert (run.m, run.leaves) == (5, 4) == (5, PL.words_leaves(5, linears))
+    assert run.dom.domain_id == twin.words_domain(PL.FORWARD, 4).domain_id and backend.doms == [run.dom]
+    xq1, s_a1 = E.quantize_rows(_x(5, 5))
+    run.call(0, Linear(16, 4), xq1, s_a1)
+    assert record.a_roots[1] == twin.a_root(PL.FORWARD, 1, xq1.numpy().tobytes())
     assert [c.index for c in record.calls] == [0, 1] and run.details["calls"] == 2
-    assert [e[0] for e in log].count("open") == 1
+    assert [e[0] for e in log].count("open") == 1 and backend.doms == [run.dom] * 2
 
 
 def test_a_step_is_a_pass_published_at_its_end_with_one_words_root():
     log = []
     link = Link(log)
-    run = PL.LeadRun(ENTRY, Backend(log), link, W, 2, key=_keys(), rank=1, world=2)
+    backend = Backend(log)
+    run = PL.LeadRun(ENTRY, backend, link, W, _linears(24, 40), keying=Keys(), rank=1, world=2)
     assert run.end_pass() is None
     layers = [Linear(24, 1), Linear(40, 2)]
     for w, layer in enumerate(layers):
-        run.call(w, layer, *E.quantize_rows(_x(3 + w, w)))
+        run.call(w, layer, *E.quantize_rows(_x(3, w)))
     record, window = run.record, run.window
     out = run.end_pass(step=True)
     assert isinstance(out, PassCommitment) and out is record.published and run.passes == [out]
-    assert [e[0] for e in log][-1] == "words_root" and [e[0] for e in log].count("words_root") == 1
+    assert [e[0] for e in log][-1] == "words" and [e[0] for e in log].count("words") == 1
+    twin = Keys.twin(0, 2, record.salt)
+    assert record.words_root == twin.words_root(PL.FORWARD, backend.handed[0]) and len(backend.handed[0]) == 2
     sha = lambda parts: hashlib.sha512(b"".join(parts)).digest()  # noqa: E731
     assert (out.scheme, out.rank, out.world, out.pass_index, out.salt, out.kernel) == \
         (PL.SCHEME, 1, 2, 0, link.windows[0].salt, "stand-in")
     assert out.units == 2 and out.tiles == sum(R.tiles(c.shape) for c in record.calls)
     assert out.activation_roots == sha(record.a_roots) and out.transcript_root == record.words_root
-    assert out.records_root == sha([key_leaf(window.key), (2).to_bytes(8, "big"), *map(R.header, record.calls)])
+    assert out.records_root == sha([window.key_leaf, (2).to_bytes(8, "big"), *map(R.header, record.calls)])
     assert run.commits["passes"] == [out.to_json()] and run.commits["calls"] == 2 and run.details["passes"] == 1
-    assert run.end_pass() is out and run.window is None
-    run.call(0, layers[0], *E.quantize_rows(_x(2, 9)))
-    assert run.window.index == run.record.pass_index == 1 and run.window.key != window.key
-    assert run.window.salt == link.windows[1].salt != link.windows[0].salt
+    assert run.end_pass() is out and run.window is None and run.dom is None
+    for w, layer in enumerate(layers):
+        run.call(w, layer, *E.quantize_rows(_x(2, 9 + w)))
+    assert run.m == 2 and run.dom.domain_id != backend.doms[0].domain_id
+    assert run.record.pass_index == 1 and run.window.key_leaf == Keys.twin(1, 2).key_leaf != window.key_leaf
+    assert run.record.salt == link.windows[1].salt != link.windows[0].salt
     with pytest.raises(R.RecordError, match="no sample before"):
         run.record.commitment()
     run.finish()
     assert [p.pass_index for p in run.passes] == [0, 1]
 
 
+@pytest.mark.parametrize("m,ns,count", [(5, (24,), 1), (64, (512,), 2), (64, (512, 40), 3), (64, (1024, 8, 512), 6)])
+def test_the_words_root_keys_the_backends_top_over_its_linears_chunks_at_the_windows_m(m, ns, count):
+    """The first call's m fixes the words instance's leaves, `chunk_count` of each linear at m rows (one chunk; a call of
+    two, the last short; pads after a ragged call), before the backend hashes any; each call gets that one domain, and
+    the top the backend hands at the end is keyed to the CPU's words root of its calls' streams."""
+    backend = Backend()
+    run = PL.LeadRun(ENTRY, backend, Link([]), W, _linears(*ns), keying=Keys())
+    run.call(0, Linear(ns[0], 0), *E.quantize_rows(_x(m, 0)))
+    dom = run.dom
+    assert dom.count == count == run.leaves and not backend.handed
+    for w, n in enumerate(ns[1:], 1):
+        run.call(w, Linear(n, w), *E.quantize_rows(_x(m, w)))
+    record = run.record
+    run.end_pass()
+    twin = Keys.twin(0, len(ns), record.salt)
+    assert backend.doms == [dom] * len(ns) and len(L.words_values(backend.handed[0])) == count
+    assert dom.domain_id == twin.words_domain(PL.FORWARD, count).domain_id
+    assert record.words_root == twin.words_root(PL.FORWARD, backend.handed[0]) == run.passes[0].transcript_root
+
+
+@pytest.mark.parametrize("calls,cut,why", [(1, lambda t: b"", "one-chunk words instance holds 1 to"),
+                                           (2, lambda t: t[:64], "root's two 64-byte children, not 64 bytes"),
+                                           (2, lambda t: t + bytes(64), "not 192 bytes")])
+def test_a_top_of_the_wrong_size_is_refused_and_its_pass_never_published(calls, cut, why):
+    class Cut(Backend):
+        def words(self):
+            return cut(super().words())
+    run = PL.LeadRun(ENTRY, Cut(), Link([]), W, _linears(*[16] * calls), keying=Keys())
+    for w in range(calls):
+        run.call(w, Linear(16, w), *E.quantize_rows(_x(1, w)))
+    with pytest.raises(Refused, match=why):
+        run.end_pass()
+    assert not run.passes and run.record.words_root is None
+
+
+@pytest.mark.parametrize("second,why", [
+    ((1, 24, 4), r"pass 0: call 1 \(linear 1\) has 4 rows, and the window's words were counted at its first call's 3"),
+    ((1, 32, 3), "pass 0: call 1 is 32 x 64 on linear 1, not one of the 2 linears the window's words were counted for"),
+    ((2, 24, 3), "pass 0: call 1 is 24 x 64 on linear 2, not one of the 2 linears")])
+def test_a_call_on_another_m_or_off_its_linear_is_refused_by_name_and_its_window_never_published(second, why):
+    """A window's words are counted at its first call's m for one call of each linear's n x k: a call on another m (a MoE
+    expert's ragged rows) or off its linear is refused before its root(A_j), coins or kernel, never recounted."""
+    log = []
+    run = PL.LeadRun(ENTRY, Backend(log), Link(log), W, _linears(16, 24), keying=Keys())
+    run.call(0, Linear(16, 0), *E.quantize_rows(_x(3, 0)))
+    w, n, m = second
+    with pytest.raises(Refused, match=why):
+        run.call(w, Linear(n, 1), *E.quantize_rows(_x(m, 1)))
+    assert [e[0] for e in log] == ["open", "release", "backend"] and len(run.record.calls) == 1
+    with pytest.raises(R.RecordError, match="call 1 raised before its kernel served it"):
+        run.end_pass()
+    assert not run.passes
+
+
+def test_a_window_short_of_its_linears_calls_is_refused_at_its_end():
+    run = PL.LeadRun(ENTRY, Backend(), Link([]), W, _linears(16, 24), keying=Keys())
+    run.call(0, Linear(16, 0), *E.quantize_rows(_x(3, 0)))
+    with pytest.raises(Refused, match="a words instance of 2 leaves got 1"):
+        run.end_pass()
+    assert not run.passes and run.record.words_root is None
+
+
 def test_a_window_past_its_call_count_is_refused_and_never_published():
     log = []
-    run = PL.LeadRun(ENTRY, Backend(log), Link(log), W, 2, key=_keys())
+    run = PL.LeadRun(ENTRY, Backend(log), Link(log), W, _linears(16, 16), keying=Keys())
     for w in range(2):
         run.call(w, Linear(16, w), *E.quantize_rows(_x(1, w)))
-    with pytest.raises(R.RecordError, match="past the window's 2 calls, fixed before its salt"):
-        run.call(2, Linear(16, 2), *E.quantize_rows(_x(1, 2)))
-    assert [e[0] for e in log][-2:] == ["backend", "a_root"]
+    with pytest.raises(Refused, match="call 2 of 2 in forward 0"):
+        run.call(0, Linear(16, 2), *E.quantize_rows(_x(1, 2)))
+    assert [e[0] for e in log][-1] == "backend" and [e[0] for e in log].count("release") == 2 and len(run.record.calls) == 2
     with pytest.raises(R.RecordError, match="call 2 raised before its kernel served it"):
         run.end_pass()
     assert not run.passes
@@ -246,10 +348,10 @@ def test_a_window_the_link_refuses_commits_no_call():
             super().open(*a)
             raise F.FeedError("no salt")
     log = []
-    run = PL.LeadRun(ENTRY, Backend(log), Closed(log), W, 2, key=_keys())
+    run = PL.LeadRun(ENTRY, Backend(log), Closed(log), W, _linears(16, 16), keying=Keys())
     with pytest.raises(F.FeedError, match="no salt"):
         run.call(0, Linear(16, 1), *E.quantize_rows(_x(1, 1)))
-    assert [e[0] for e in log] == ["key_leaf", "open"] and run.window is None
+    assert [e[0] for e in log] == ["open"] and run.window is None
     assert run.end_pass() is None
 
 
@@ -258,7 +360,7 @@ def test_a_failed_call_leaves_its_pass_unpublishable():
     class Broken(Backend):
         def call(self, *a):
             raise RuntimeError("kernel fault")
-    run = PL.LeadRun(ENTRY, Broken(), Link([]), W, 2, key=_keys())
+    run = PL.LeadRun(ENTRY, Broken(), Link([]), W, _linears(16, 16), keying=Keys())
     with pytest.raises(RuntimeError, match="kernel fault"):
         run.call(0, Linear(16, 1), *E.quantize_rows(_x(1, 1)))
     with pytest.raises(R.RecordError, match="call 0 raised before its kernel served it"):
@@ -271,10 +373,10 @@ def test_a_call_the_link_refuses_gets_no_kernel():
             super().release(call, root)
             raise F.FeedError("refused")
     log = []
-    run = PL.LeadRun(ENTRY, Backend(log), Refusing(log), W, 2, key=_keys())
+    run = PL.LeadRun(ENTRY, Backend(log), Refusing(log), W, _linears(16, 16), keying=Keys())
     with pytest.raises(F.FeedError, match="refused"):
         run.call(0, Linear(16, 1), *E.quantize_rows(_x(1, 1)))
-    assert [e[0] for e in log] == ["key_leaf", "open", "a_root", "release"]
+    assert [e[0] for e in log] == ["open", "release"]
     with pytest.raises(R.RecordError, match="call 0 raised before its kernel served it"):
         run.end_pass()
 
@@ -305,7 +407,7 @@ def test_install_serves_each_call_through_the_lead_and_uninstalls_to_the_plain_a
     runner = Runner(model)
     served = runner.execute_model(x)
     assert torch.equal(served.view(torch.int16), plain.view(torch.int16))
-    assert [e[0] for e in log] == ["key_leaf", "open", *["a_root", "release", "backend"] * 3, "words_root"]
+    assert [e[0] for e in log] == ["open", *["release", "backend"] * 3, "words"]
     assert [e[2].linear for e in log if e[0] == "backend"] == [0, 1, 2]
     assert [e[4] for e in log if e[0] == "open"] == [3] and option.commits["calls"] == 3
     assert len(option.commits["passes"]) == 1 and option.commits["passes"][0]["units"] == 3
