@@ -2,8 +2,9 @@
 the coin feed the lead's kernel reads, and counts and refuses each forward's egress.
 
 A **call** is one matmul of the lead (`Pouw.Lead.lead`), call j of forward f. The prover registers each call's A root
-with its shape, `rows` rows of A, `cols` output columns and inner dimension `K`, and once a forward the root of the
-forward's committed words. A forward is **open** from its first call's A root to its words root.
+with its shape, `rows` rows of A, `cols` output columns, inner dimension `K` and the column tile `bn` (128 or 256) the
+kernel runs it at, which orders its committed words, and once a forward the root of the forward's committed words. A
+forward is **open** from its first call's A root to its words root.
 
 * **The coins** (`Pouw.Lead.Coins`). Once the certifier holds a call's A root, and not before, it flips the call's coins
   from its own entropy and releases them once, as its reply to that registration: the release follows the registration,
@@ -16,8 +17,10 @@ forward's committed words. A forward is **open** from its first call's A root to
   - then a coin tile at a time, the tile's lane-coin words, one a step and column: bytes 0–2 its coin lanes s = 2u − 127
     as int8, u the low 7 bits of a byte of entropy, and byte 3 public, the column code's top digit C[3, j]
     (`Pouw.Lead.colCode`) at step 0 and 1 at a later step; and the tile's column sources, one a row class (i mod 2) and
-    column, 0x4B400000 − σ with σ the class's weights (`Pouw.Lead.rotWeight`) against the tile's coin lanes summed over
-    its steps. They are no coins but a public function of them, which the kernel's epilogue folds out.
+    column, β_j − σ mod 2³² with β_j the column's public bias (`bias`, from its code and S) and σ the class's weights
+    (`Pouw.Lead.rotWeight`) against the tile's coin lanes summed over its steps. They are no coins but a public
+    function of them, which the kernel's epilogue folds out; the fold's 0x4B400000 and each row's walk are in the row
+    word the serving side builds, so the certifier needs neither.
 * **The count, per forward.** Every bucket a boundary link ticks while a forward is open counts once against it:
   ⌈log2(r + 1)⌉ timing bits at allocation r, and each real frame's content bits. The forwards are serial: a forward's
   A root is refused while another forward is open, so no bucket is inside two spans. What the node's release at the
@@ -27,8 +30,8 @@ forward's committed words. A forward is **open** from its first call's A root to
   is a forward still open when the window closes. A refusal is the forward's verdict in the record, never a dropped
   frame.
 
-The record (`Calls.summary`) carries each forward's calls, with their shapes, A roots and releases' digests, and its
-words root and verdict; the counts are witness.
+The record (`Calls.summary`) carries each forward's calls, with their shapes (`bn` included, so the verifier rebuilds
+the committed words' order), A roots and releases' digests, and its words root and verdict; the counts are witness.
 
 **On the node** (`NodeCalls`), one window's forwards are PoUW window p's, from p's first tick on any of the node's
 links, and every link's proxy counts each of its buckets against the open forward as it ticks
@@ -69,8 +72,8 @@ G_BOUND = 7**4 * (2**32 // 7**4)
 ADMITTED_TILES = 2**40
 #: A row class's weights on the three coin lanes (`Pouw.Lead.rotWeight`): even rows (127, 1, 1), odd rows (1, 127, 1).
 ROT_W = ((127, 1, 1), (1, 127, 1))
-#: A column source's offset, 1.5 · 2²³ as an fp32's bits.
-SOURCE_BIAS = 0x4B400000
+#: The column tiles the lead's kernel runs a call at.
+BNS = (128, 256)
 #: The tag of the release's digest in the record.
 RELEASE_TAG = "verity-network-certifier/call-release/v1"
 
@@ -98,17 +101,20 @@ class ForwardVerdict(enum.Enum):
 @dataclass(frozen=True, slots=True)
 class CallShape:
     """A call's registered shape: `rows` rows of A, `cols` output columns, inner dimension `K`, one the verifier admits
-    (`ADMITTED_TILES`)."""
+    (`ADMITTED_TILES`), and the column tile `bn` the kernel runs it at, one of `BNS`."""
 
     rows: int
     cols: int
     K: int
+    bn: int
 
     def __post_init__(self) -> None:
         for name in ("rows", "cols", "K"):
             v = getattr(self, name)
             if type(v) is not int or v < 1:
                 raise CallRefusal(f"a call's {name} is a positive integer, not {v!r}")
+        if type(self.bn) is not int or self.bn not in BNS:
+            raise CallRefusal(f"a call's column tile bn is {' or '.join(map(str, BNS))}, not {self.bn!r}")
         if self.m // 16 * (self.n // 8) * self.S > ADMITTED_TILES:
             raise CallRefusal(f"a call of {self.rows} rows, {self.cols} columns and K {self.K} spans more than 2^40 MMA "
                               "tiles, which the verifier doesn't admit")
@@ -157,6 +163,12 @@ class CallShape:
 def col_code(j: int, q: int) -> int:
     """Digit q of column j's code C[:, j], in [−6, 6]: the balanced base-13 digits of j + 1 (`Pouw.Lead.colCode`)."""
     return (j + 14281) // 13**q % 13 - 6
+
+
+def bias(S: int, j: int) -> int:
+    """Column j's bias β_j at S steps, ⌊(Σ_q C[q, j] + 3(S − 1) + 1)/2⌋ (`Pouw.Lead.bias`): public, from the column and
+    the call's steps alone. The call's committed words start from −β_j, which its column sources give back."""
+    return (sum(col_code(j, q) for q in range(4)) + 3 * (S - 1) + 1) // 2
 
 
 def _row_mask(shape: CallShape) -> int:
@@ -231,10 +243,11 @@ def flip(shape: CallShape, entropy: Entropy = os.urandom) -> CallCoins:
     return CallCoins(shape, rows, g, u)
 
 
-def _sources(u: bytes, S: int, n: int) -> bytes:
-    """A tile's column sources from its coin lanes' u: class c's word for column j is 0x4B400000 − σ mod 2³², with
-    σ = Σ_t Σ_ℓ ROT_W[c][ℓ] · s_t[ℓ, j]. The steps' u are added in 64-bit fields of one integer, which no admitted
-    call's S values below 2⁷ carry out of."""
+def _sources(u: bytes, S: int, betas: Sequence[int]) -> bytes:
+    """A tile's column sources from its coin lanes' u: class c's word for column j is β_j − σ mod 2³², with
+    σ = Σ_t Σ_ℓ ROT_W[c][ℓ] · s_t[ℓ, j] and β_j = `betas[j]`. The steps' u are added in 64-bit fields of one integer,
+    which no admitted call's S values below 2⁷ carry out of."""
+    n = len(betas)
     wide, total = bytearray(24 * n), 0
     for t in range(S):
         wide[0::8] = u[3 * n * t:3 * n * (t + 1)]
@@ -242,19 +255,20 @@ def _sources(u: bytes, S: int, n: int) -> bytes:
     U = struct.unpack(f"<{3 * n}Q", total.to_bytes(24 * n, "little"))
     out = []
     for w0, w1, w2 in ROT_W:
-        base = SOURCE_BIAS + 127 * S * (w0 + w1 + w2)
-        out.append(struct.pack(f"<{n}I", *((base - 2 * (w0 * a + w1 * b + w2 * c)) % 2**32
-                                           for a, b, c in zip(U[0::3], U[1::3], U[2::3]))))
+        lanes = 127 * S * (w0 + w1 + w2)
+        out.append(struct.pack(f"<{n}I", *((beta + lanes - 2 * (w0 * a + w1 * b + w2 * c)) % 2**32
+                                           for beta, a, b, c in zip(betas, U[0::3], U[1::3], U[2::3]))))
     return b"".join(out)
 
 
 def release(coins: CallCoins) -> bytes:
     """The call's release: its row words and G words, then a coin tile at a time the tile's lane-coin words (word t·n + j
     of the tile: bytes 0–2 its lanes s_t[ℓ, k, j] as int8, byte 3 C[3, j] at step 0 and 1 later) and its column sources
-    (word c·n + j for row class c)."""
+    (word c·n + j for row class c, β_j − σ)."""
     sh = coins.shape
     S, n = sh.S, sh.n
     top = bytes(col_code(j, 3) % 256 for j in range(n)) + b"\x01" * ((S - 1) * n)
+    betas = [bias(S, j) for j in range(n)]
     out: list[bytes | bytearray] = [coins.rows, coins.g]
     span = 3 * S * n
     for k in range(sh.tiles):
@@ -262,7 +276,7 @@ def release(coins: CallCoins) -> bytes:
         s = u.translate(_S8)
         lanes = bytearray(4 * S * n)
         lanes[0::4], lanes[1::4], lanes[2::4], lanes[3::4] = s[0::3], s[1::3], s[2::3], top
-        out += [lanes, _sources(u, S, n)]
+        out += [lanes, _sources(u, S, betas)]
     return b"".join(out)
 
 
@@ -438,7 +452,7 @@ class Calls:
         """The record's forwards, in id order: each one's calls (in id order, each its shape, A root and release's
         digest), its words root and its verdict (None while it is open). The counts are witness and stay out."""
         return [{"forward": k,
-                 "calls": [{"call": j, "rows": c.shape.rows, "cols": c.shape.cols, "K": c.shape.K,
+                 "calls": [{"call": j, "rows": c.shape.rows, "cols": c.shape.cols, "K": c.shape.K, "bn": c.shape.bn,
                             "a_root": c.a_root.hex(), "release": c.release.hex() or None}
                            for j, c in sorted(f.calls.items())],
                  "words_root": f.words_root.hex() if f.words_root else None,
@@ -601,8 +615,8 @@ class NodeCalls:
 
 #: The longest request or answer line on the control channel. A release's bytes follow its answer line.
 CALLS_LINE_BYTES = 1024
-_REQUEST = ("a request is a JSON object of forward, call, a_root (hex), rows, cols and K, or of forward and words_root "
-            "(hex)")
+_REQUEST = ("a request is a JSON object of forward, call, a_root (hex), rows, cols, K and bn, or of forward and "
+            "words_root (hex)")
 _IDS = ("forward", "call")
 
 
@@ -615,8 +629,8 @@ def _call_answer(node: NodeCalls, line: bytes) -> tuple[dict, bytes]:
     try:
         req = json.loads(line)
         ids = {k: req[k] for k in _IDS if k in req}
-        if set(req) == {*_IDS, "a_root", "rows", "cols", "K"}:
-            root, shape = bytes.fromhex(req["a_root"]), CallShape(req["rows"], req["cols"], req["K"])
+        if set(req) == {*_IDS, "a_root", "rows", "cols", "K", "bn"}:
+            root, shape = bytes.fromhex(req["a_root"]), CallShape(req["rows"], req["cols"], req["K"], req["bn"])
         elif set(req) == {"forward", "words_root"}:
             root, shape = bytes.fromhex(req["words_root"]), None
         else:
@@ -639,7 +653,7 @@ def _call_answer(node: NodeCalls, line: bytes) -> tuple[dict, bytes]:
 async def serve_calls(node: NodeCalls, host: str, port: int) -> asyncio.Server:
     """The certifier's control channel for the node's calls, on the loop of its links' proxies (`active.Proxy.run`). It
     answers each JSON line a connection sends, in order, with one JSON line: `{"forward", "call", "a_root", "rows",
-    "cols", "K"}` (the root in hex) with `{"forward", "call", "release": length}` and then the release's `length` bytes,
+    "cols", "K", "bn"}` (the root in hex) with `{"forward", "call", "release": length}` and then the release's `length` bytes,
     `{"forward", "words_root"}` with `{"forward", "verdict"}`, and what `NodeCalls` refuses, or a line that isn't a
     request, with the request's ids and `"refused": reason` (without ids for a line that names none). Each request runs
     off the loop, so no tick waits for a flip or for an A root the hold holds. The channel ends at the certifier: none
@@ -680,7 +694,7 @@ class CallsClient:
 
     def a_root(self, forward: int, call: int, root: bytes, shape: CallShape) -> bytes:
         answer = self._ask({"forward": forward, "call": call, "a_root": bytes(root).hex(), "rows": shape.rows,
-                            "cols": shape.cols, "K": shape.K})
+                            "cols": shape.cols, "K": shape.K, "bn": shape.bn})
         if answer.get("release") != shape.release_bytes:
             raise ValueError(f"call {call} of forward {forward}'s answer isn't a release of {shape.release_bytes} "
                              f"bytes: {answer}")

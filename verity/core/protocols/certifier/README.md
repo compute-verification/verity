@@ -286,8 +286,10 @@ A spec-level reference for network accounting's timing channel:
   before, it flips the call's coins (`Pouw.Lead.Coins`: the tag bits b from step 1, the step-1 bits a₁, the tag weights
   G, taken by rejection so they are exactly uniform, and the coin lanes) from its own entropy and releases them once,
   as its reply to that registration, in the words the lead's kernel reads: each row's bits, each column's G, then a
-  coin tile at a time its lane-coin words (three coins and a public byte each) and its column sources, which are no
-  coins but a public function of them. Every length is fixed by the call's shape. The count is per forward: a forward
+  coin tile at a time its lane-coin words (three coins and a public byte each) and its column sources, β_j − σ (the
+  column's public bias less the row class's weighted coin lanes), which are no coins but a public function of them.
+  Every length is fixed by the call's shape, which also names the column tile `bn` (128 or 256) the kernel runs it
+  at, and the record carries each call's shape, `bn` included. The count is per forward: a forward
   is open from its first call's A root to its words root, the forwards are serial, and every bucket of every boundary
   link while one is open counts once against it, ⌈log2(r + 1)⌉ timing bits and each real frame's content bits, with
   its release at the boundary (`release_bits`) once when its words root closes it. A forward is refused when its count

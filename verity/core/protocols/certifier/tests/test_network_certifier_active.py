@@ -823,9 +823,9 @@ def test_a_proxys_ticks_count_each_bucket_against_the_forward_its_hold_opened(ho
         return out
 
     assert bits(3) + bits(4) + bits(5) > 1
-    one, root = calls.CallShape(1, 8, 1), bytes(64)
-    short = calls.CallShape(1, 8, bits(T + 1) + bits(T + 2) - 1)
-    exact = calls.CallShape(1, 8, bits(T + 4) + bits(T + 5))
+    one, root = calls.CallShape(1, 8, 1, 256), bytes(64)
+    short = calls.CallShape(1, 8, bits(T + 1) + bits(T + 2) - 1, 256)
+    exact = calls.CallShape(1, 8, bits(T + 4) + bits(T + 5), 256)
     node = calls.NodeCalls(calls.EgressCap(1, 8))
     opens = {2: (0, one, 5), 5: (1, short, T), T + 2: (2, exact, T + 3), T + 5: (3, exact, T + 6)}
     closes = {5: 0, T + 2: 1, T + 5: 2}

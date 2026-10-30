@@ -16,17 +16,17 @@ import threading
 import pytest
 
 from verity.core.protocols.certifier.calls import (
-    ADMITTED_TILES, CALLS_LINE_BYTES, G_BOUND, RELEASE_TAG, ROT_W, CallCoins, CallRefusal, Calls, CallsClient, CallShape,
-    EgressCap, ForwardVerdict, NodeCalls, col_code, flip, release, serve_calls, timing_bits,
+    ADMITTED_TILES, BNS, CALLS_LINE_BYTES, G_BOUND, RELEASE_TAG, ROT_W, CallCoins, CallRefusal, Calls, CallsClient,
+    CallShape, EgressCap, ForwardVerdict, NodeCalls, bias, col_code, flip, release, serve_calls, timing_bits,
 )
 from verity.ml.commitments.identity import tagged_sha512
 
 ROOT_A, ROOT_W = bytes(range(64)), bytes(range(64, 128))
 #: m 16, n 8, S 1, H 1, one tile: 64 bytes of row words, 32 of G (no rejection) and 24 of lanes.
-SMALL = CallShape(1, 8, 1)
+SMALL = CallShape(1, 8, 1, 128)
 SMALL_ENTROPY = 64 + 32 + 24
 #: rows · n · K = 8192 MACs, so a cap of 32 bits over 8192 gives it exactly 32 bits.
-TIGHT = CallShape(16, 8, 64)
+TIGHT = CallShape(16, 8, 64, 256)
 #: The lead's cap and its forward's MACs a token.
 LEAD = EgressCap(32, 973_078_528)
 #: Llama-3.2-1B's linears, (K, n): qkv, o, gate_up and down.
@@ -60,11 +60,25 @@ def words(data: bytes) -> list[int]:
     return list(struct.unpack(f"<{len(data) // 4}I", data))
 
 
+def bal13(z: int) -> list[int]:
+    """z's four balanced base-13 digits, each in [−6, 6], by repeated division (layout.h's `tag_of`)."""
+    out = []
+    for _ in range(4):
+        out.append((z % 13 + 6) % 13 - 6)
+        z = (z - out[-1]) // 13
+    return out
+
+
+def beta(S: int, j: int) -> int:
+    """β_j as layout.h's `beta_of` has it under the lead's tag layout: ⌊(Σ_e C[e, j] + 3(S − 1) + 1)/2⌋."""
+    return math.floor((sum(bal13(j + 1)) + 3 * (S - 1) + 1) / 2)
+
+
 def kernel_feed(coins: CallCoins) -> list[int]:
     """The release as the lead's kernel lays it out, built a word at a time from the coins' values: row i's words with
     a₁[i, e] at bit e and b_t[i] at bit t + 3; column j's G word, byte e the int8 G[e, j]; then each tile's lane-coin
     words, (t·n + j), bytes 0–2 the int8 s_t[e, k, j] and byte 3 C[3, j] at step 0 and 1 later; and its column sources,
-    (c·n + j), 0x4B400000 − σ."""
+    (c·n + j), β_j − σ."""
     sh = coins.shape
     out = []
     for i in range(sh.m):
@@ -83,33 +97,43 @@ def kernel_feed(coins: CallCoins) -> list[int]:
         for c in range(2):
             for j in range(sh.n):
                 sigma = sum(ROT_W[c][e] * coins.s(t, k, e, j) for t in range(sh.S) for e in range(3))
-                out.append((0x4B400000 - sigma) % 2**32)
+                out.append((beta(sh.S, j) - sigma) % 2**32)
     return out
 
 
 def test_shape_pads_to_mma_tiles_and_counts_k32_steps():
-    assert [(s.m, s.n, s.S, s.H, s.tiles) for s in (CallShape(1, 2048, 2048), CallShape(100, 1000, 4096),
-                                                    CallShape(17, 13, 64), CallShape(1, 8, 8192))] == [
+    assert [(s.m, s.n, s.S, s.H, s.tiles) for s in (CallShape(1, 2048, 2048, 256), CallShape(100, 1000, 4096, 256),
+                                                    CallShape(17, 13, 64, 256), CallShape(1, 8, 8192, 256))] == [
         (16, 2048, 74, 3, 1), (112, 1000, 147, 5, 2), (32, 16, 3, 1, 1), (16, 8, 293, 10, 1)]
-    assert [CallShape(1, 8, K).S for K in (1, 21, 22, 49, 50)] == [1, 1, 2, 2, 3]
-    assert [CallShape(1, 8, 21 + 28 * (S - 1)).H for S in (1, 29, 30, 61, 62)] == [1, 1, 2, 2, 3]
+    assert [CallShape(1, 8, K, 256).S for K in (1, 21, 22, 49, 50)] == [1, 1, 2, 2, 3]
+    assert [CallShape(1, 8, 21 + 28 * (S - 1), 256).H for S in (1, 29, 30, 61, 62)] == [1, 1, 2, 2, 3]
 
 
 @pytest.mark.parametrize("bad", [(0, 8, 8), (1, 0, 8), (1, 8, 0), (-1, 8, 8), (True, 8, 8), (1.0, 8, 8)])
 def test_shape_refuses_a_dimension_that_isnt_a_positive_integer(bad):
-    with pytest.raises(CallRefusal):
-        CallShape(*bad)
+    with pytest.raises(CallRefusal, match="positive integer"):
+        CallShape(*bad, 256)
+
+
+@pytest.mark.parametrize("bn", [0, 64, 192, 512, -128, 128.0, True, "256", None])
+def test_shape_refuses_a_column_tile_the_kernel_doesnt_run(bn):
+    with pytest.raises(CallRefusal, match="column tile"):
+        CallShape(1, 8, 8, bn)
+
+
+def test_shape_takes_the_kernels_two_column_tiles():
+    assert [CallShape(1, 8, 8, bn).bn for bn in BNS] == [128, 256]
 
 
 def test_shape_refuses_a_call_the_verifier_doesnt_admit():
     """`Layout.Admits`: rowBlocks · colBlocks · S ≤ 2⁴⁰."""
     K = 21 + 28 * (ADMITTED_TILES - 1)
-    assert CallShape(16, 8, K).S == ADMITTED_TILES
+    assert CallShape(16, 8, K, 256).S == ADMITTED_TILES
     with pytest.raises(CallRefusal, match="admit"):
-        CallShape(16, 8, K + 1)
+        CallShape(16, 8, K + 1, 256)
     with pytest.raises(CallRefusal, match="admit"):
-        CallShape(17, 8, K)
-    assert CallShape(16, 16, 21 + 28 * (ADMITTED_TILES // 2 - 1)).S == ADMITTED_TILES // 2
+        CallShape(17, 8, K, 256)
+    assert CallShape(16, 16, 21 + 28 * (ADMITTED_TILES // 2 - 1), 256).S == ADMITTED_TILES // 2
 
 
 def test_the_release_has_the_feeds_sizes_at_llama_3_2_1b():
@@ -118,29 +142,29 @@ def test_the_release_has_the_feeds_sizes_at_llama_3_2_1b():
     def parts(sh):
         return 4 * sh.m * sh.H, 4 * sh.n, 4 * sh.tiles * sh.S * sh.n, 8 * sh.tiles * sh.n
 
-    decode = [CallShape(1, n, K) for K, n in LLAMA]
+    decode = [CallShape(1, n, K, 256) for K, n in LLAMA]
     assert [parts(sh) for sh in decode] == [(192, 12_288, 909_312, 24_576), (192, 8_192, 606_208, 16_384),
                                            (192, 65_536, 4_849_664, 131_072), (640, 8_192, 2_400_256, 16_384)]
     assert all(sum(parts(sh)) == sh.release_bytes for sh in decode)
-    assert [parts(CallShape(64, n, K))[0] for K, n in LLAMA] == [768, 768, 768, 2_560]
+    assert [parts(CallShape(64, n, K, 256))[0] for K, n in LLAMA] == [768, 768, 768, 2_560]
     assert 16 * sum(sh.release_bytes for sh in decode) == 144_788_480
 
 
 def test_a_decode_call_takes_464080_coins_and_releases_its_feed():
-    decode = CallShape(1, 2048, 2048)
+    decode = CallShape(1, 2048, 2048, 256)
     assert decode.coins == 16 * (74 + 3) + 4 * 2048 + 3 * 74 * 2048 == 464_080
     assert len(release(flip(decode))) == decode.release_bytes == 630_976
 
 
 def test_flip_reads_the_entropy_in_the_releases_order():
-    shape = CallShape(70, 24, 120)
+    shape = CallShape(70, 24, 120, 256)
     feed = Feed(bytes(4 * 80 * 1 + 4 * 24 + 3 * 5 * 2 * 24))
     flip(shape, feed)
     assert feed.reads == [4 * shape.m * shape.H, 4 * shape.n, 3 * shape.S * shape.tiles * shape.n]
 
 
 def test_row_words_hold_a1_then_the_tag_bits_from_step_1():
-    shape = CallShape(1, 8, 64)
+    shape = CallShape(1, 8, 64, 256)
     coins = flip(shape, Feed(bytes([0b1010_0110, 0xFF, 0xFF, 0xFF]) + bytes(4 * 15 + 32 + 3 * 3 * 8)))
     assert words(coins.rows)[:2] == [0b10_0110, 0]
     assert [coins.a1(0, e) for e in range(4)] == [0, 1, 1, 0] and [coins.b(0, t) for t in (1, 2)] == [0, 1]
@@ -148,7 +172,7 @@ def test_row_words_hold_a1_then_the_tag_bits_from_step_1():
         coins.b(0, 0)
     with pytest.raises(IndexError):
         coins.b(0, 3)
-    wide = CallShape(1, 8, 2048)
+    wide = CallShape(1, 8, 2048, 256)
     full = flip(wide, Feed(b"\xff" * (4 * 16 * 3) + bytes(32 + 3 * 74 * 8)))
     assert words(full.rows) == [0xFFFF_FFFF, 0xFFFF_FFFF, 0x1FFF] * 16
     assert all(full.b(i, t) == 1 for i in range(16) for t in range(1, 74))
@@ -173,7 +197,7 @@ def test_g_is_exactly_uniform():
     """The accepted words are G_BOUND / 2401 for each residue mod 2401, and `flip` takes the 2401 residues one to one onto
     [−3, 3]⁴."""
     assert G_BOUND % 7**4 == 0 and 2**32 - G_BOUND == 872 < 7**4
-    wide = CallShape(1, 2401, 1)
+    wide = CallShape(1, 2401, 1, 256)
     n = wide.n
     coins = flip(wide, Feed(bytes(64) + b"".join(w.to_bytes(4, "little") for w in [*range(7**4), *[0] * (n - 7**4)])
                             + bytes(3 * n)))
@@ -181,7 +205,7 @@ def test_g_is_exactly_uniform():
 
 
 def test_a_lane_is_its_bytes_low_7_bits_odd_and_each_value_from_two_bytes():
-    shape = CallShape(1, 88, 1)
+    shape = CallShape(1, 88, 1, 256)
     coins = flip(shape, Feed(bytes(64 + 4 * 88) + bytes(range(256)) + bytes(8)))
     s = [coins.s(0, 0, lane, j) for j in range(88) for lane in range(3)][:256]
     assert s == [2 * (x % 128) - 127 for x in range(256)]
@@ -195,8 +219,18 @@ def test_col_code_is_balanced_base_13_of_j_plus_1():
         assert sum(c * 13**q for q, c in enumerate(C)) == j + 1 and all(-6 <= c <= 6 for c in C)
 
 
-@pytest.mark.parametrize("shape", [CallShape(70, 24, 120), CallShape(1, 8, 1), CallShape(17, 13, 2048),
-                                   CallShape(129, 16, 50)])
+def test_bias_is_the_lead_layouts_beta_and_floors_below_zero():
+    """β_j for every column a call of up to 2¹⁴ columns has, at 1, 2 and 74 steps, against `beta`; and the columns whose
+    codes sum low enough that β_j is negative, where ⌊·/2⌋ floors (column 6, code (−6, 1, 0, 0): ⌊−4/2⌋ at S = 1,
+    ⌊−1/2⌋ at S = 2)."""
+    for S in (1, 2, 74):
+        assert [bias(S, j) for j in range(2**14)] == [beta(S, j) for j in range(2**14)]
+    assert (bias(1, 5), bias(1, 6), bias(2, 6)) == (3, -2, -1)
+    assert min(bias(1, j) for j in range(2**14)) < -2
+
+
+@pytest.mark.parametrize("shape", [CallShape(70, 24, 120, 256), CallShape(1, 8, 1, 128), CallShape(17, 13, 2048, 256),
+                                   CallShape(129, 16, 50, 128)])
 def test_the_release_is_the_kernels_feed_word_for_word(shape):
     coins = flip(shape)
     out = release(coins)
@@ -204,22 +238,33 @@ def test_the_release_is_the_kernels_feed_word_for_word(shape):
     assert out.startswith(coins.rows + coins.g)
 
 
-def test_a_column_source_read_as_fp32_is_the_bias_less_sigma():
-    """0x4B400000 is 1.5 · 2²³, so its word less σ, read as an fp32, is 12,582,912 − σ exactly while |σ| < 2²²: what the
-    epilogue adds to fold the lanes out."""
-    shape = CallShape(64, 8, 8192)
+def test_the_column_sources_fold_the_bias_and_coin_terms_out():
+    """The lead's fold (layout.h's `fold_word`) on the release: row i's final word at column j is −β_j + p plus its
+    coin terms over the steps (its class's σ, its walk Σ_{t ≥ 1} (1 + b_t[i]), a₁[i]·C[:, j] and T(i)·G[:, j]). Adding
+    the row source 0x4B400000 − walk, which the serving side builds, and the release's column source, then taking
+    a₁[i]·C[:, j] and T(i)·G[:, j] out, leaves 0x4B400000 + p, which read as an fp32 less 1.5 · 2²³ is p exactly while
+    |p| ≤ 2²²."""
+    shape = CallShape(70, 24, 120, 256)
     coins = flip(shape)
     w = words(release(coins))
-    sources = w[shape.m * shape.H + shape.n + shape.S * shape.n:]
-    assert len(sources) == 2 * shape.n
-    for c, j in itertools.product(range(2), range(shape.n)):
-        sigma = sum(ROT_W[c][e] * coins.s(t, 0, e, j) for t in range(shape.S) for e in range(3))
-        assert abs(sigma) < 2**22
-        assert struct.unpack("<f", struct.pack("<I", sources[c * shape.n + j]))[0] == 12_582_912 - sigma
+    head, span = shape.m * shape.H + shape.n, (shape.S + 2) * shape.n
+    rng = random.Random(0)
+    for cell, (i, j) in enumerate(itertools.product(range(shape.m), range(shape.n))):
+        k, c = i // 64, i % 2
+        source = w[head + k * span + (shape.S + c) * shape.n + j]
+        sigma = sum(ROT_W[c][e] * coins.s(t, k, e, j) for t in range(shape.S) for e in range(3))
+        walk = sum(1 + coins.b(i, t) for t in range(1, shape.S))
+        tag = bal13((i // 2 + 1) * (-1) ** i)
+        cross = sum(coins.a1(i, q) * col_code(j, q) + tag[q] * coins.G(q, j) for q in range(4))
+        p = (-2**22, 2**22, 0)[cell] if cell < 3 else rng.randint(-2**22, 2**22)
+        d = (-beta(shape.S, j) + p + sigma + walk + cross) % 2**32
+        q = (d + 0x4B400000 - walk + source - cross) % 2**32
+        assert q == 0x4B400000 + p
+        assert struct.unpack("<f", struct.pack("<I", q))[0] - 12_582_912 == p
 
 
 def test_coins_hold_their_sizes_and_ranges():
-    shape = CallShape(1, 8, 64)
+    shape = CallShape(1, 8, 64, 256)
     good = flip(shape, Feed(bytes(4 * 16 + 32 + 3 * 3 * 8)))
     for bad in ({"rows": bytes([0b100_0000]) + good.rows[1:]}, {"rows": good.rows[:-1]}, {"g": bytes([4]) + good.g[1:]},
                 {"g": bytes([0xFC]) + good.g[1:]}, {"u": good.u[:-1]}, {"u": bytes([128]) + good.u[1:]},
@@ -278,7 +323,7 @@ def test_once_the_entropy_fails_the_window_flips_nothing_more():
     feed = Feed(bytes(SMALL_ENTROPY))
     calls = Calls(LEAD, feed)
     with pytest.raises(RuntimeError, match="ran out"):
-        calls.a_root(0, 0, ROOT_A, CallShape(64, 64, 64))
+        calls.a_root(0, 0, ROOT_A, CallShape(64, 64, 64, 256))
     assert calls.words_root(0, ROOT_W) is ForwardVerdict.NO_COINS
     read = feed.read
     with pytest.raises(ValueError, match="failed earlier"):
@@ -327,7 +372,7 @@ def test_a_share_that_isnt_an_integer_compares_exactly(count, verdict):
 def test_the_lead_gives_a_forward_32_bits_a_row():
     """Llama-3.2-1B's 16 layers of linears are the lead's fwdMacs at one row, so a decode forward has 32 bits and a
     forward of 64 rows 2048. A forward the certifier holds at r = 0 counts nothing; one bucket a call at r = 1 passes."""
-    decode = [CallShape(1, n, K) for K, n in LLAMA] * 16
+    decode = [CallShape(1, n, K, 256) for K, n in LLAMA] * 16
     macs = sum(sh.macs for sh in decode)
     assert macs == LEAD.fwd_macs
     assert not LEAD.passed(macs, 32) and LEAD.passed(macs, 33)
@@ -419,14 +464,15 @@ def test_a_forward_open_when_the_window_closes_is_refused_and_the_window_takes_n
 
 
 def test_the_record_carries_each_forwards_calls_words_root_and_verdict_and_no_count():
+    """Each call with its shape, its column tile included, so the verifier rebuilds its committed words' order."""
     calls = Calls(EgressCap(32, TIGHT.macs))
     out1 = calls.a_root(3, 1, ROOT_A, TIGHT)
     out0 = calls.a_root(3, 0, ROOT_W, SMALL)
     calls.bucket(1, [7])
     want = {"forward": 3,
-            "calls": [{"call": 0, "rows": 1, "cols": 8, "K": 1, "a_root": ROOT_W.hex(),
+            "calls": [{"call": 0, "rows": 1, "cols": 8, "K": 1, "bn": 128, "a_root": ROOT_W.hex(),
                        "release": tagged_sha512(RELEASE_TAG, out0).hex()},
-                      {"call": 1, "rows": 16, "cols": 8, "K": 64, "a_root": ROOT_A.hex(),
+                      {"call": 1, "rows": 16, "cols": 8, "K": 64, "bn": 256, "a_root": ROOT_A.hex(),
                        "release": tagged_sha512(RELEASE_TAG, out1).hex()}],
             "words_root": None, "verdict": None}
     assert calls.summary() == [want]
@@ -655,7 +701,7 @@ def test_the_control_channel_answers_an_a_root_with_its_release_and_a_words_root
             with pytest.raises(CallRefusal, match="not open"):
                 client.words_root(1, ROOT_W)
             with pytest.raises(CallRefusal, match="call 0 of forward 2's coins weren't flipped: the feed ran out"):
-                client.a_root(2, 0, ROOT_A, CallShape(512, 64, 64))
+                client.a_root(2, 0, ROOT_A, CallShape(512, 64, 64, 256))
         return out, verdict
 
     out, verdict = control_channel(node, prover)
@@ -666,16 +712,19 @@ def test_the_control_channel_answers_an_a_root_with_its_release_and_a_words_root
     digests = [tagged_sha512(RELEASE_TAG, o).hex() for o in out]
     assert [([c["release"] for c in f["calls"]], f["verdict"]) for f in node.records[0]] == [
         ([digests[0]], "accepted"), ([digests[1]], "past its bits"), ([None], "a call's coins were not flipped")]
+    assert [c["bn"] for f in node.records[0] for c in f["calls"]] == [128, 256, 256]
 
 
 def test_the_control_channel_refuses_a_line_that_isnt_a_request():
     node = NodeCalls(LEAD)
     a, w = ROOT_A.hex().encode(), ROOT_W.hex().encode()
     lines = [b"not json", b"[0]", b"5", b'{"forward": 0}',
-             b'{"forward": 0, "call": 0, "a_root": "zz", "rows": 1, "cols": 8, "K": 1}',
+             b'{"forward": 0, "call": 0, "a_root": "zz", "rows": 1, "cols": 8, "K": 1, "bn": 128}',
              b'{"forward": 0, "words_root": "%s", "extra": 1}' % w, b'{"forward": 0, "call": 0, "words_root": "%s"}' % w,
-             b'{"forward": 0, "call": 5, "a_root": "%s", "rows": 0, "cols": 8, "K": 1}' % a,
-             b'{"forward": 0, "call": 6, "a_root": "%s", "rows": 1, "cols": 8, "K": 1}' % a,
+             b'{"forward": 0, "call": 4, "a_root": "%s", "rows": 1, "cols": 8, "K": 1}' % a,
+             b'{"forward": 0, "call": 5, "a_root": "%s", "rows": 0, "cols": 8, "K": 1, "bn": 128}' % a,
+             b'{"forward": 0, "call": 6, "a_root": "%s", "rows": 1, "cols": 8, "K": 1, "bn": 64}' % a,
+             b'{"forward": 0, "call": 7, "a_root": "%s", "rows": 1, "cols": 8, "K": 1, "bn": 256}' % a,
              b"x" * (CALLS_LINE_BYTES + 1)]
 
     def prover(host: str, port: int):
@@ -686,10 +735,11 @@ def test_the_control_channel_refuses_a_line_that_isnt_a_request():
             return [json.loads(line) for line in stream.read().splitlines()]
 
     answers = control_channel(node, prover)
-    generic = {"refused": "a request is a JSON object of forward, call, a_root (hex), rows, cols and K, or of forward "
-                          "and words_root (hex)"}
-    assert answers[:7] == [generic] * 7
-    assert answers[7] == {"forward": 0, "call": 5, "refused": "a call's rows is a positive integer, not 0"}
-    assert answers[8] == {"forward": 0, "call": 6,
-                          "refused": "no PoUW window has begun: a window begins at its first tick"}
-    assert answers[9:] == [{"refused": f"a request is one line of at most {CALLS_LINE_BYTES} bytes"}]
+    generic = {"refused": "a request is a JSON object of forward, call, a_root (hex), rows, cols, K and bn, or of "
+                          "forward and words_root (hex)"}
+    assert answers[:8] == [generic] * 8
+    assert answers[8] == {"forward": 0, "call": 5, "refused": "a call's rows is a positive integer, not 0"}
+    assert answers[9] == {"forward": 0, "call": 6, "refused": "a call's column tile bn is 128 or 256, not 64"}
+    assert answers[10] == {"forward": 0, "call": 7,
+                           "refused": "no PoUW window has begun: a window begins at its first tick"}
+    assert answers[11:] == [{"refused": f"a request is one line of at most {CALLS_LINE_BYTES} bytes"}]
