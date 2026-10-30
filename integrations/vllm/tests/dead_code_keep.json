@@ -16,7 +16,6 @@
   "verity.ml.definitions.numerics.torch_blocks": "numpy models of the training step's blocks (registry.torch_attention, torch_loss, torch_embedding, torch_clip), which verity/ml/definitions/tests/test_torch_*.py hold each block to word for word and program_walk calls by family on the GPU dump; live once TrainStep_v1's check reads them",
   "verity.ml.definitions.numerics.torch_step": "numpy models of TrainStep_v1's own nodes (F.linear's GEMMs, the transpose, RMS norm, SiLU, the master grad, AdamW and the bf16 copy-back), which verity/ml/definitions/tests/test_torch_step.py holds to bits and program_walk calls by family on the GPU dump; live once TrainStep_v1's check reads them",
   "verity_vllm.engine.collectives.collective_record": "TP path (lane/vllm-tp-n); test_tp_collective.py",
-  "verity_vllm.errors": "the one Refused; its only importer is verity_vllm.protocols.linear.api: see verity_vllm.protocols.linear",
   "verity_vllm.protocols.linear": "the linear-site interface, ahead of its first consumer (the MVP's install, migration step 3 of the research store's docs/pouw/vllm-integration-api.md); tests/linear",
   "verity_vllm.protocols.linear.api": "see verity_vllm.protocols.linear",
   "verity_vllm.protocols.linear.vllm_site": "see verity_vllm.protocols.linear; benchmarks/pouw's e2e.py, profile_decode.py and vllm_bench.py attach through it",

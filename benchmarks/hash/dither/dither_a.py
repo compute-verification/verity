@@ -1,6 +1,6 @@
 """The `dither-a` arm: option A of the credit form, the provisional credit form.
-Under it the noised work is credited on the operands A, B of a served product that is value-checked (on every drawn
-unit z_u = A_u B_u^T, proved and committed before the draw, y from the committed z), so the served product may come from
+Under it the noised work is credited on the operands A, B of a served product that is value-checked (on every sampled
+proof block z_u = A_u B_u^T, proved and committed before the sample, y from the committed z), so the served product may come from
 a plain GEMM beside the receipted one.  Every run is labelled by `forms.form_of` (`Side.label`): form=`forms.FORM_A`
 only for -so<D> with -zy (`dither_so`) on a ruled-in form, whose served epilogue commits the per-unit
 z/y records under round s's root before coin s (the receipts need no z of their own); form=beside (unadopted arm) for
@@ -30,7 +30,7 @@ is committed as the per-unit z/y leaves instead of the window's row z tables: th
 then its y = dequant(z); a slot past m is zero codes under s_a = +0, so its z is 0 and its y h1zy's dq(0, +0, s_w), as
 `scaled_mm_zy`'s) and the window builds every call's leaf table between steps in the row z tables'
 place, beside the receipt trees, each root the call's leaf of the z-step tree, so the round over them still comes before
-the draw (every leaf in its registered root before the draw coin, nothing written after it).  With ao="a" (the arms' -ao) the
+the sample (every leaf in its registered root before the sampling coin, nothing written after it).  With ao="a" (the arms' -ao) the
 A tables run on a third stream above the units' priority: A_w waits on its quantizer and the units of call w on
 A_w, so each call's A table still precedes its seeds and units, and A_(w+1) runs beside call w's units (the same
 launches; only the streams they wait on change); with ao="as" (-aos; kh and hbk, whose seeds are a launch of their own)

@@ -1,4 +1,4 @@
-"""C-Flock lowering of ``rmsnorm-fused-cuda-vec8`` (RMSNormFusedCudaVector8_v1, vLLM's served width-8
+"""Flock lowering of ``rmsnorm-fused-cuda-vec8`` (RMSNormFusedCudaVector8_v1, vLLM's served width-8
 ``fused_add_rms_norm_kernel``; GLM-5.3's hidden 6144): the IR graph cut at its reduction boundary
 (``verity_flock.ir_lower.reduction_cut``) into identical units of whole CUDA warps of the kernel's cub BlockReduce. A warp is
 its threads' residual adds, square partials and shfl-down tree (its aggregate is a cut word) and the epilogue of its elements,

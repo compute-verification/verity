@@ -169,7 +169,7 @@ def expand(j):
 
 
 def reference_drawn(j):
-    """The drawn units' wired rows (`wires_drawn`): each is its writer's when both public strings are given and equal."""
+    """The sampled proof blocks' wired rows (`wires_drawn`): each is its writer's when both public strings are given and equal."""
     if set(_obj(j, "an instance")) != {"templates", "cuts", "wires", "drawn", "reads", "writes"}:
         raise D.Reject("an instance is {templates, cuts, wires, drawn, reads, writes}")
     drawn, reads, writes = set(), {}, {}
