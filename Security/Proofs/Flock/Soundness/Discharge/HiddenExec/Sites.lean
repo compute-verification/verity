@@ -9,10 +9,13 @@ session's statement circuit `c` (`HmOut.parseStmt`, a templated file's committed
 acceptance (`TableH.accS`) is its `Stmt.setupHidden` run, with the layout `Hidden.SpecC.unpinLayout` gives of its
 statement without Δ's pinned copies, its unit slots' rows its flat twin's (`unitRowsFlatC_unpin`, at rows that fit),
 and the table's statement `stmtOf` of it, whose twin without the pinned copies (`TableH.twinA`, `twinB`) is the layout's
-block R1CS (`Hidden.SpecC.model_eq_unpin`) and holds at every witness (`TableH.satS`).
+block R1CS (`Hidden.SpecC.model_eq_unpin`) and holds at every witness (`TableH.satS`), which is 0 at every pinned bit
+(`TableH.pinS`: one output row per output port pins none).
 
 `sitesAtHS` holds each drawn unit's acceptance, template instance and block; every acceptance's statement circuit is the
-session's (`sitesAtHS_parse`). `TableH.acc`, `sitesAtH` and `sitesAtH_parse` are them at a flat session's `HmOut.parse`.
+session's (`sitesAtHS_parse`). `TableH.acc`, `sitesAtH` and `sitesAtH_parse` are them at a flat session's `HmOut.parse`,
+at rows that fit with pinned outputs or not (`Hidden.Any.RowsFitP`): there every pinned bit is a linear row
+(`pinned_linear`), so a witness satisfies the twin (`TableH.sat`) and is 0 at the pinned bits (`TableH.pin`).
 So `ppH`, `hConstH` and `hZeroH` are `ProgPlaces`, `hConst` and `hZero` for `Placed.keyProg` at the hidden tables.
 -/
 
@@ -26,7 +29,7 @@ open FlockSoundness.Discharge.Exec (Inputs)
 variable {n : ℕ} {I : Inputs} {mPts : ℕ}
   (ht : I.tags.typed = false) {c : Flock.Circuit} (hcS : HmOut.parseStmt I.tags I.circuitFile I.tables = .ok c)
   (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c)
-  (hv1 : Hidden.Any.RowsFitS c)
+  (hv1 : Hidden.Any.RowsFitS c) (hvP : Hidden.Any.RowsFitP c)
 
 include hc in
 /-- A flat session's circuit is its statement circuit (`HmOut.parse` refuses templated tags). -/
@@ -37,6 +40,14 @@ theorem parseStmt_of_parseH : HmOut.parseStmt I.tags I.circuitFile I.tables = .o
 theorem outRowsS_of_unrolled {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {cs : Flock.Circuit}
     (hty : tags.typed = false) (h : Hidden.Committed tags cf tables cs) (hr : Hidden.Any.OutRowsS (HmOut.unrolled cs)) :
     Hidden.Any.OutRowsS cs := by
+  obtain ⟨_nets, he⟩ := h.unrolled_eq hty
+  rw [he] at hr
+  exact hr
+
+/-- A committed circuit's output rows are its statement circuit's, pinned outputs or not (`outRowsS_of_unrolled`). -/
+theorem outRowsP_of_unrolled {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {cs : Flock.Circuit}
+    (hty : tags.typed = false) (h : Hidden.Committed tags cf tables cs) (hr : Hidden.Any.OutRowsP (HmOut.unrolled cs)) :
+    Hidden.Any.OutRowsP cs := by
   obtain ⟨_nets, he⟩ := h.unrolled_eq hty
   rw [he] at hr
   exact hr
@@ -62,6 +73,17 @@ theorem twin_sat_of_linear {tags : Tags} {T : Model.Statement} {st : Stmt} {hwf 
   subst hT
   exact sat_pinned L F hW hleaf hda hdb hwf hlin regs hz
 
+/-- **With every pinned bit a linear row, a witness of a statement equal to `stmtOf st` is 0 at every pinned bit**
+(`sat_pinnedZ`). -/
+theorem twin_zero_of_linear {tags : Tags} {T : Model.Statement} {st : Stmt} {hwf : StmtWF st}
+    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} (hT : T = stmtOf st hwf regs)
+    (L : FlockSoundness.Layout (Hidden.unpin st)) (F : Aliased.UnitFacts tags (Hidden.flatTwin st))
+    (hW : Integrate.NetWidths st.c) (hleaf : st.leaf = default) (hda : st.da = (HmOut.delta st.c st.pin).1)
+    (hdb : st.db = (HmOut.delta st.c st.pin).2) (hlin : ∀ y ∈ Hidden.pinnedCols st.c, LinearBit st.c y)
+    {z : Model.Witness T.m} (hz : T.Satisfies z) : ∀ o (r : Fin (2 ^ T.kLog)), PinBit st.c r.val → T.block z o r = 0 := by
+  subst hT
+  exact (sat_pinnedZ L F hW hleaf hda hdb hwf hlin regs hz).2
+
 namespace TableH
 
 variable {S : Finset (Fin n)} (x : TableH I mPts S)
@@ -69,6 +91,12 @@ variable {S : Finset (Fin n)} (x : TableH I mPts S)
 include hc in
 /-- A drawn table's statement is on the session's one circuit. -/
 theorem c_eq : x.st.c = c := setupHidden_c_of_parse hc x.h
+
+include hc in
+/-- A sampled table's statement circuit is what a flat session's circuit file parses to. -/
+theorem parse_eq : HmOut.parse I.tags I.circuitFile I.tables = .ok x.st.c := by
+  rw [x.c_eq hc]
+  exact hc
 
 include ht hcS in
 /-- **A drawn table's statement circuit is the session's**: its committed circuit unrolls to `c`. -/
@@ -83,7 +111,8 @@ noncomputable def twinB : Matrix (Fin (2 ^ x.T.S.kLog)) (Fin (2 ^ x.T.S.kLog)) (
   fun r j => matB (Hidden.unpin x.st) r.val j.val
 
 /-- **A drawn table's acceptance**, at the session's statement circuit `c` (`HmOut.parseStmt`): its `Stmt.setupHidden`
-run, with the layout `Hidden.SpecC.unpinLayout` gives and its unit slots' rows its flat twin's (`unitRowsFlatC_unpin`);
+run, with the layout `Hidden.SpecC.unpinLayout` gives and its unit slots' rows its flat twin's (`unitRowsFlatC_unpin`, at
+rows that fit, `hvP`);
 the table's statement without Δ's pinned copies is the layout's block R1CS at the table's regions
 (`Hidden.SpecC.model_eq_unpin`, and `TableH.hT`). -/
 noncomputable def accS : AcceptedH (twin x.T.S x.twinA x.twinB) where
@@ -100,7 +129,7 @@ noncomputable def accS : AcceptedH (twin x.T.S x.twinA x.twinB) where
   h := Hidden.setupHidden_specCC x.h
   L := (Hidden.setupHidden_specCC x.h).unpinLayout ht
   hR := unitRowsFlatC_unpin ht (Hidden.setupHidden_specCC x.h)
-    (outRowsS_of_unrolled ht (Hidden.setupHidden_specCC x.h).committed (by rw [x.unrolled_eq ht hcS]; exact hv1.1)).toP
+    (outRowsP_of_unrolled ht (Hidden.setupHidden_specCC x.h).committed (by rw [x.unrolled_eq ht hcS]; exact hvP.1))
   regs := x.regs
   hT := ((Hidden.setupHidden_specCC x.h).model_eq_unpin ht _ (Hidden.unpin_wf x.hwf) x.regs).trans (twin_of_eq x.hT)
 
@@ -116,20 +145,47 @@ theorem satS (z : Model.Witness x.T.S.m) (hz : x.T.S.Satisfies z) : (twin x.T.S 
     sc.self.db
     (fun y hy => by rw [Hidden.pinnedCols_nil hpin] at hy; cases hy) hz
 
-/-- **A drawn table's acceptance** at a flat session's circuit (`accS` at `HmOut.parse`'s). -/
-noncomputable abbrev acc : AcceptedH (twin x.T.S x.twinA x.twinB) := x.accS ht (parseStmt_of_parseH hc) hv1
+include ht hcS hv1 in
+/-- **A witness of a sampled table is 0 at every pinned output's bit**: one output row per output port pins no output
+(`Hidden.Committed.unpinned_of_rep`), so there is no pinned bit. -/
+theorem pinS (z : Model.Witness x.T.S.m) (_hz : x.T.S.Satisfies z) :
+    ∀ o (r : Fin (2 ^ x.T.S.kLog)), PinBit x.st.c r.val → x.T.S.block z o r = 0 := fun _ _ hr => by
+  have sc := Hidden.setupHidden_specCC x.h
+  have hpin := sc.committed.unpinned_of_rep ht
+    (outRowsS_of_unrolled ht sc.committed (by rw [x.unrolled_eq ht hcS]; exact hv1.1)).1
+  unfold PinBit at hr
+  rw [Hidden.pinnedCols_nil hpin, List.count_nil, Nat.cast_zero] at hr
+  exact absurd hr zero_ne_one
 
-include ht hc hv1 in
-/-- **A witness of a drawn table satisfies its statement without Δ's pinned copies**, at a flat session's circuit
-(`satS`). -/
+/-- **A drawn table's acceptance** at a flat session's circuit (`accS` at `HmOut.parse`'s). -/
+noncomputable abbrev acc : AcceptedH (twin x.T.S x.twinA x.twinB) := x.accS ht (parseStmt_of_parseH hc) hvP
+
+include ht hc in
+/-- **A witness of a sampled table satisfies its statement without Δ's pinned copies**, at a flat session's circuit:
+every pinned bit is a linear row (`pinned_linear`, at the flat parse), so `twin_sat_of_linear`. -/
 theorem sat (z : Model.Witness x.T.S.m) (hz : x.T.S.Satisfies z) : (twin x.T.S x.twinA x.twinB).Satisfies z :=
-  x.satS ht (parseStmt_of_parseH hc) hv1 z hz
+  have sc := Hidden.setupHidden_specCC x.h
+  have hp := Hidden.parse_untyped ht (x.parse_eq hc)
+  have P := parse_facts hp.1
+  twin_sat_of_linear x.hT (sc.unpinLayout ht) (sc.unitFacts ht) (sc.committed.netWidths ht) sc.self.leaf sc.self.da
+    sc.self.db (pinned_linear (Hidden.checkPinned_of_checkRows hp.2) P.typed P.nets) hz
+
+include ht hc in
+/-- **A witness of a sampled table is 0 at every pinned output's bit**, at a flat session's circuit
+(`twin_zero_of_linear`, as `sat`). -/
+theorem pin (z : Model.Witness x.T.S.m) (hz : x.T.S.Satisfies z) :
+    ∀ o (r : Fin (2 ^ x.T.S.kLog)), PinBit x.st.c r.val → x.T.S.block z o r = 0 :=
+  have sc := Hidden.setupHidden_specCC x.h
+  have hp := Hidden.parse_untyped ht (x.parse_eq hc)
+  have P := parse_facts hp.1
+  twin_zero_of_linear x.hT (sc.unpinLayout ht) (sc.unitFacts ht) (sc.committed.netWidths ht) sc.self.leaf sc.self.da
+    sc.self.db (pinned_linear (Hidden.checkPinned_of_checkRows hp.2) P.typed P.nets) hz
 
 /-- **A drawn table's statement circuit is the session's**: `unrolled_eq` at its acceptance. -/
-theorem accS_unrolled : HmOut.unrolled (x.accS ht hcS hv1).st.c = c := x.unrolled_eq ht hcS
+theorem accS_unrolled : HmOut.unrolled (x.accS ht hcS hvP).st.c = c := x.unrolled_eq ht hcS
 
 /-- **A drawn table's statement circuit is the session's one circuit**, at a flat session's (`accS_unrolled`). -/
-theorem acc_unrolled : HmOut.unrolled (x.acc ht hc hv1).st.c = c := x.unrolled_eq ht (parseStmt_of_parseH hc)
+theorem acc_unrolled : HmOut.unrolled (x.acc ht hc hvP).st.c = c := x.unrolled_eq ht (parseStmt_of_parseH hc)
 
 end TableH
 
@@ -141,6 +197,7 @@ noncomputable def sitesAtHS : SitesH (planAtH (Reg := Reg) dj x₀) (tabAtH dj x
   A S _ _ _ := (tableAtH dj x₀ S).twinA
   B S _ _ _ := (tableAtH dj x₀ S).twinB
   sat S _ _ _ := (tableAtH dj x₀ S).satS ht hcS hv1
+  pin S _ _ _ := (tableAtH dj x₀ S).pinS ht hcS hv1
   acc S _ _ _ := (tableAtH dj x₀ S).accS ht hcS hv1
   vu S _ u h := (tableAtH dj x₀ S).vu u h
   hvu S _ u h := (tableAtH dj x₀ S).hvu u h
@@ -152,19 +209,27 @@ theorem sitesAtHS_parse :
       HmOut.unrolled ((sitesAtHS ht hcS hv1 dj x₀).acc S R u h).st.c = c :=
   fun S _ _ _ => (tableAtH dj x₀ S).unrolled_eq ht hcS
 
-/-- **The sites of the one-table hidden plan** at a flat session's circuit (`sitesAtHS` at `HmOut.parse`'s). -/
-noncomputable abbrev sitesAtH : SitesH (planAtH (Reg := Reg) dj x₀) (tabAtH dj x₀) :=
-  sitesAtHS ht (parseStmt_of_parseH hc) hv1 dj x₀
+/-- **The sites of the one-table hidden plan** at a flat session's circuit (`TableH.acc`, `TableH.sat` and `TableH.pin`
+at `HmOut.parse`'s), at rows that fit with pinned outputs or not. -/
+noncomputable def sitesAtH : SitesH (planAtH (Reg := Reg) dj x₀) (tabAtH dj x₀) where
+  A S _ _ _ := (tableAtH dj x₀ S).twinA
+  B S _ _ _ := (tableAtH dj x₀ S).twinB
+  sat S _ _ _ := (tableAtH dj x₀ S).sat ht hc
+  pin S _ _ _ := (tableAtH dj x₀ S).pin ht hc
+  acc S _ _ _ := (tableAtH dj x₀ S).acc ht hc hvP
+  vu S _ u h := (tableAtH dj x₀ S).vu u h
+  hvu S _ u h := (tableAtH dj x₀ S).hvu u h
+  o S _ u h := (tableAtH dj x₀ S).o u h
 
-/-- **One circuit per session**, at a flat session's circuit (`sitesAtHS_parse`). -/
+/-- **One circuit per session**, at a flat session's circuit (`TableH.acc_unrolled`). -/
 theorem sitesAtH_parse :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
-      HmOut.unrolled ((sitesAtH ht hc hv1 dj x₀).acc S R u h).st.c = c :=
-  sitesAtHS_parse ht (parseStmt_of_parseH hc) hv1 dj x₀
+      HmOut.unrolled ((sitesAtH ht hc hvP dj x₀).acc S R u h).st.c = c :=
+  fun S _ _ _ => (tableAtH dj x₀ S).acc_unrolled ht hc hvP
 
 /-- Every site's committed circuit is the session's one circuit `c` (the flat-only `instProg` path). -/
 theorem sitesAtH_c :
-    ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S), ((sitesAtH ht hc hv1 dj x₀).acc S R u h).st.c = c :=
+    ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S), ((sitesAtH ht hc hvP dj x₀).acc S R u h).st.c = c :=
   fun S _ _ _ => (tableAtH dj x₀ S).c_eq hc
 
 variable (hU : Built c.unit)
@@ -172,21 +237,21 @@ variable (hU : Built c.unit)
 
 /-- **`pp` at the hidden tables**: `SitesH.progPlaces_keyProg` at `sitesAtH`. -/
 noncomputable abbrev ppH : ProgPlaces (Placed.keyProg c hU n) outs (planAtH (Reg := Reg) dj x₀) (tabAtH dj x₀) :=
-  SitesH.progPlaces_keyProg hU (sitesAtH_parse ht hc hv1 dj x₀) outs
+  SitesH.progPlaces_keyProg hU (sitesAtH_parse ht hc hvP dj x₀) outs
 
 /-- **`hConst` at the hidden tables** (`constCols_keyProgH`): only a unit's constant column sits on the one gate. -/
 theorem hConstH :
     ((Placed.keyProg c hU n).partition outs).ConstCols (planAtH (Reg := Reg) dj x₀) (tabAtH dj x₀)
-      (ppH ht hc hv1 dj x₀ hU outs).derived.place
+      (ppH ht hc hvP dj x₀ hU outs).derived.place
       {Fin.castLE (Placed.le_gates _ _ n) (Placed.oneGate n (Placed.circuitRows c hU).nIn)} :=
-  constCols_keyProgH hU (sitesAtH_parse ht hc hv1 dj x₀) outs
+  constCols_keyProgH hU (sitesAtH_parse ht hc hvP dj x₀) outs
 
 /-- **`hZero` at the hidden tables** (`zeroCols_keyProgH`): every column on the zero gate carries 0 in every satisfying
 witness. -/
 theorem hZeroH :
     ((Placed.keyProg c hU n).partition outs).ZeroCols (planAtH (Reg := Reg) dj x₀) (tabAtH dj x₀)
-      (ppH ht hc hv1 dj x₀ hU outs).derived.place
+      (ppH ht hc hvP dj x₀ hU outs).derived.place
       {Fin.castLE (Placed.le_gates _ _ n) (Placed.zeroGate n (Placed.circuitRows c hU).nIn)} :=
-  zeroCols_keyProgH hU (sitesAtH_parse ht hc hv1 dj x₀) outs
+  zeroCols_keyProgH hU (sitesAtH_parse ht hc hvP dj x₀) outs
 
 end FlockSoundness.Discharge.HiddenExec
