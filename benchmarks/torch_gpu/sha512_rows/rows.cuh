@@ -4,7 +4,7 @@
 // contract, C::kw(st, kw) sx::compress_kw's. SXR_COUNT_CHACHA(), if defined, runs once a ChaCha20 block (the host twin's
 // count).
 #pragma once
-#include "sha512x.cuh"
+#include "../../../verity/ml/kernels/sha512.cuh"
 
 #ifndef SXR_COUNT_CHACHA
 #define SXR_COUNT_CHACHA()
