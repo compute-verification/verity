@@ -40,6 +40,7 @@ from decimal import ROUND_CEILING, Decimal, localcontext
 from typing import Mapping, Protocol, Sequence
 
 from verity.core.protocols.profile import Stratified, Stratum
+from verity.ml.commitments import domains
 from verity.ml.randomness import Key
 
 from ..protocol import DomainError
@@ -47,7 +48,7 @@ from ..schemes.ncp import FORM_UNITS
 from .ncp2 import D, Shape, rfc6962
 from .partition import Unit, units
 
-DRAW_DOMAIN = "verity/pouw/closure-draw/v1"
+DRAW_DOMAIN = domains.POUW_CLOSURE_SAMPLING
 
 
 @dataclass(frozen=True)
