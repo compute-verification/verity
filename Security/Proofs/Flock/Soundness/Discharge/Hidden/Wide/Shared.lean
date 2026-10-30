@@ -84,7 +84,7 @@ theorem outputs_committed_wide' : OutputsCommittedWide := by
         (bytesOf (blockBit (L.model regs) z o) 192 (saltCol st.c g (HmOut.nIn st.c + j))) := by
     have h2 : 2 * (st.c.ports.getD (HmOut.nIn st.c + j) default).words + 17 ≤
         128 * ((st.c.ports.getD (HmOut.nIn st.c + j) default).chunks + 1) := by omega
-    have := row_bc_tgt L0 F0 rfl hupv hz0 o hg hpl (by rw [getElem!_eq_getD']; exact hb)
+    have := row_bc_tgt L0 F0 rfl hupv (hz0.ex _) o hg hpl (by rw [getElem!_eq_getD']; exact hb)
       (by rw [getElem!_eq_getD']; exact hw.ge) (by rw [getElem!_eq_getD']; exact h2) hu
     rw [getElem!_eq_getD'] at this
     exact this
