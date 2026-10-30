@@ -2886,7 +2886,8 @@ FAST_KIND, LEAN_AUDIT_STEP = "lean-fast/v1", "lean-audit"
 #: the fast path's command, which `RecordsGate` names for each package it can't vouch for
 RECORDS_COMMAND = ("research run --on vy-nebius-cpu-1 --pool research --project verity --source . --cwd clone --declared-output "
                    "'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records {pkg} --update")
-#: where a records run keeps, under its `--out`, the record `--update` wrote when it differs from the commit's lock
+#: where a records run keeps, under its `--out`, PKG's record `--update` wrote when it differs from the commit's lock (each
+#: package's, PKG's and a requirer's, is also under `record/<path>/`)
 RECORD_KEPT = "record/" + LEAN_LOCK
 #: a requirer's report in a records run's files (`lean_changed.reports`: `requirer-<path, each run of other characters `_`>/`)
 REQUIRER_AUDIT = re.compile(r"(?:^|/)requirer-([^/]+)/audit\.json$")
@@ -2908,7 +2909,8 @@ RECORDS_SHARED = ("lean-toolchain", "tools/verity/lean", "tools/verity/check/com
 #: won't serve stand alone, in `RECORDS_FETCH_CALLS` fetches at most; one that can't be read vouches for nothing
 RECORDS_FETCH, RECORDS_FETCH_CHUNK, RECORDS_FETCH_CALLS = 5000, 200, 48
 #: the files of a package that a records run doesn't read, and so leaves out of its inputs (`RecordsGate._differs`): those in a
-#: `tests/` or `test/` directory of it, Markdown and READMEs; everything else stays, as a build may read any file
+#: `tests/` or `test/` directory of it, Markdown and READMEs, but never a `.lean` file, a lakefile, `lake-manifest.json` or a
+#: lock, wherever it sits (the audit walks every `.lean` file of the package); everything else stays, as a build may read any file
 RECORDS_UNREAD_DIRS = frozenset({"tests", "test"})
 _SHA = re.compile(r"[0-9a-f]{40}")
 
@@ -2926,8 +2928,9 @@ def _blob(repo: Path, commit: str, path: str) -> bytes | None:
 class RecordsRun:
     """A records run (`lean_changed.py --records PKG`) of one commit, as `research run` published it: its result (`FAST_KIND`:
     PKG, `validation.status`, `path`: `slot`, `dev-cache` or `reused`) and its run files ({path: sha256}), which hold check.py's
-    `audit.json` for PKG and for each requirer (`requirer-<path>/`) and, when `--update` wrote a record that differs from the
-    commit's lock, `record/lean-audit.json`."""
+    `audit.json` for PKG and for each requirer (`requirer-<path>/`) and, for each package whose record `--update` wrote differs
+    from the commit's lock (PKG, or a requirer whose every failure was a record difference), `record/<path>/lean-audit.json`,
+    PKG's also as `record/lean-audit.json`."""
     id: str
     pkg: str
     passed: bool
@@ -2935,9 +2938,12 @@ class RecordsRun:
     files: dict[str, str]
     art: str | None
 
-    def kept_record(self) -> str | None:
-        """The sha256 of the record `--update` wrote that differs from the commit's lock, or None when there's none."""
-        return next((s for p, s in sorted(self.files.items()) if (p == RECORD_KEPT or p.endswith("/" + RECORD_KEPT))
+    def kept_record(self, pkg: str | None = None) -> str | None:
+        """The sha256 of the record `--update` wrote for ``pkg`` (PKG by default) that differs from the commit's lock, or None
+        when there's none."""
+        pkg = self.pkg if pkg is None else pkg
+        want = [f"record/{pkg}/{LEAN_LOCK}", *([RECORD_KEPT] if pkg == self.pkg else [])]
+        return next((s for p, s in sorted(self.files.items()) if any(p == w or p.endswith("/" + w) for w in want)
                      and "requirer-" not in p), None)
 
     def audits(self) -> list[str]:
@@ -2961,11 +2967,15 @@ class RecordsGate:
     `AUDIT: FAIL` still writes a record, which reads as a pass, and a head marked on it fails a train's Lean check, about 50
     minutes later.
 
-    Two heads are vouched for by the commit below them, followed `RECORDS_WALK` commits at most: one that commits exactly the
-    record a records run of its one parent regenerated for a package that passed there (`--update`'s `record/lean-audit.json`),
-    changing nothing but locks; and one that only merged `main` into a vouched commit, every file it changed being main's whole
-    but a lock, which is main's or `tools/verity/lean/merge.py`'s merge of the two sides (the fast path reports `path: reused`
-    for it: a candidate, which the train's Lean check rebuilds and regenerates where it differs).
+    Four heads are vouched for by the commit below them, followed `RECORDS_WALK` commits at most: one whose tree is a parent's
+    byte for byte (a merge that resolved to its own side, the parent vouched); one whose one parent is vouched and has the
+    package's inputs (`_inputs`, non-Lean tests and docs aside: a tests-only fix above a record commit); one that commits
+    exactly the record a records run of its one parent regenerated for a package that passed there (`--update`'s
+    `record/<path>/lean-audit.json`, PKG's or a requirer's), changing nothing but locks, or of a commit below a chain of such
+    commits (Security's record on top of Security/Proofs'), each lock each of them changes being a record a records run that
+    passed its package regenerated below it in the chain; and one that only merged `main` into a vouched commit, every file it
+    changed being main's whole but a lock, which is main's or `tools/verity/lean/merge.py`'s merge of the two sides (the fast
+    path reports `path: reused` for it: a candidate, which the train's Lean check rebuilds and regenerates where it differs).
 
     A package is also vouched for by such a pass at any other commit whose inputs for it are the head's (`_inputs`): every file of
     the package's directory, lock included, and of each in-repo Lake package it requires by path (its `lake-manifest.json`'s and
@@ -3028,8 +3038,8 @@ class RecordsGate:
         for pkg in missing:
             lines += self._failures(pr.head, pkg)
             lines.append(f"start `{RECORDS_COMMAND.format(pkg=pkg)}` and mark once it passed; when its run files hold "
-                         f"`lean-audit/{RECORD_KEPT}`, commit exactly that over {pkg}/{LEAN_LOCK} and mark that commit, which "
-                         f"needs no run of its own")
+                         f"records under `lean-audit/record/` (`lean-audit/record/{pkg}/{LEAN_LOCK}`, a requirer's beside it), "
+                         f"commit exactly each over the lock of its path and mark that commit, which needs no run of its own")
         notes = f" ({'; '.join(self.notes[:3])})" if self.notes else ""
         return (f"it changes the Lean lock of {', '.join(missing)} against `main`, and the store holds no records run of "
                 f"{pr.head[:12]} in which {'it' if len(missing) == 1 else 'each'} passed on the head's own lock, nor a Lean check of "
@@ -3148,7 +3158,7 @@ class RecordsGate:
 
     def _differs(self, head: str, commits: list[str], inputs: list[str]) -> set[str]:
         """The ``commits`` whose ``inputs`` aren't the head's, by one `git diff-tree --stdin`: a file of `RECORDS_SHARED` that
-        differs, or one of a package that a records run reads (`RECORDS_UNREAD_DIRS`, Markdown and READMEs aside)."""
+        differs, or one of a package that a records run reads (`RECORDS_UNREAD_DIRS`, Markdown and READMEs aside, never Lean)."""
         if not commits:
             return set()
         r = subprocess.run(["git", "diff-tree", "--stdin", "--always", "-r", "-z", "--name-only", "--no-renames", "--", *inputs],
@@ -3173,7 +3183,9 @@ class RecordsGate:
             p = next((p for p in pkgs if p == "." or tok.startswith(p + "/")), None)
             rel = tok if p in (None, ".") else tok[len(p) + 1:]
             name = posixpath.basename(rel)
-            if not (RECORDS_UNREAD_DIRS & set(rel.split("/")[:-1]) or name.lower().endswith(".md") or name.startswith("README")):
+            lean = name.endswith(".lean") or name.startswith("lakefile.") or name in ("lake-manifest.json", LEAN_LOCK)
+            if lean or not (RECORDS_UNREAD_DIRS & set(rel.split("/")[:-1]) or name.lower().endswith(".md")
+                            or name.startswith("README")):
                 out.add(at)
         if n != len(commits):                                    # a pair it skipped (an object it couldn't read) is no match
             raise QueueError(f"git diff-tree --stdin compared {n} of {len(commits)} commits")
@@ -3258,6 +3270,10 @@ class RecordsGate:
         if depth >= RECORDS_WALK:
             return None
         parents = _out(self.repo, "rev-list", "--parents", "-n", "1", commit).split()[1:]
+        tree = _out(self.repo, "rev-parse", f"{commit}^{{tree}}").strip()
+        for p in parents:
+            if _out(self.repo, "rev-parse", f"{p}^{{tree}}").strip() == tree and (how := self._vouch(p, pkg, depth + 1)):
+                return f"{commit[:12]} has {p[:12]}'s tree byte for byte, where {how}"
         if len(parents) == 2 and self._main_merge(commit, *parents):
             if how := self._vouch(parents[0], pkg, depth + 1):
                 return f"{commit[:12]} only merges `main`'s {parents[1][:12]} into {parents[0][:12]}, where {how}"
@@ -3265,6 +3281,14 @@ class RecordsGate:
         if len(parents) != 1:
             return None
         below = parents[0]
+        try:
+            same = below not in self._differs(commit, [below], self._inputs(commit, pkg))
+        except (QueueError, ValueError, TypeError, AttributeError) as e:
+            self.notes.append(f"{pkg}'s inputs at {commit[:12]} can't be compared with {below[:12]}'s ({type(e).__name__}: {e})")
+            same = False
+        if same:
+            how = self._vouch(below, pkg, depth + 1)
+            return how and f"{commit[:12]} changes none of {pkg}'s records inputs over {below[:12]}, where {how}"
         files = _out(self.repo, "diff", "--name-only", "--no-renames", below, commit).splitlines()
         if not files or any(posixpath.basename(f) != LEAN_LOCK for f in files):
             return None
@@ -3273,17 +3297,36 @@ class RecordsGate:
             how = self._vouch(below, pkg, depth + 1)
             return how and f"{commit[:12]} changes only other packages' locks over {below[:12]}, where {how}"
         sha = hashlib.sha256(_blob(self.repo, commit, lock) or b"").hexdigest()
-        for run in self._at(below)[0]:
-            if run.pkg == pkg and run.kept_record() == sha and self._audited(run, pkg)[0]:
-                return f"{commit[:12]} commits the record records run {run.id} of {below[:12]} regenerated, where {pkg} passed"
-        return None
+        chain, steps = [below], []        # steps[i]: {lock: its sha} of each lock chain[i] changes over chain[i + 1]
+        while True:
+            base = chain[-1]
+            if all(self._kept(chain[i + 1:], f, s) for i, step in enumerate(steps) for f, s in step.items()):
+                for run in self._at(base)[0]:
+                    if run.kept_record(pkg) == sha and self._audited(run, pkg)[0]:
+                        via = f", over {len(steps)} commit(s) of records runs' records," if steps else ""
+                        return (f"{commit[:12]} commits the record records run {run.id} of {base[:12]}{via} regenerated, "
+                                f"where {pkg} passed")
+            if depth + len(chain) >= RECORDS_WALK:
+                return None
+            parents = _out(self.repo, "rev-list", "--parents", "-n", "1", base).split()[1:]
+            files = _out(self.repo, "diff", "--name-only", "--no-renames", parents[0], base).splitlines() if len(parents) == 1 else []
+            if not files or any(posixpath.basename(f) != LEAN_LOCK for f in files):
+                return None
+            steps.append({f: hashlib.sha256(_blob(self.repo, base, f) or b"").hexdigest() for f in files})
+            chain.append(parents[0])
+
+    def _kept(self, commits: list[str], lock: str, sha: str) -> bool:
+        """Whether a records run at one of ``commits`` passed ``lock``'s package and kept ``sha`` as the record `--update` wrote."""
+        pkg = posixpath.dirname(lock) or "."
+        return any(run.kept_record(pkg) == sha and self._audited(run, pkg)[0]
+                   for c in commits for run in self._at(c)[0])
 
     def _passed(self, commit: str, pkg: str) -> tuple[str, str, str] | None:
         """(`records run` or `Lean check`, its id, a records run's `path`) of the first run of ``commit`` that passed ``pkg`` on
         the commit's own lock, or None."""
         runs, checks = self._at(commit)
         for run in runs:
-            if self._audited(run, pkg)[0] and not (run.pkg == pkg and run.kept_record()):
+            if self._audited(run, pkg)[0] and not run.kept_record(pkg):
                 return "records run", run.id, run.path
         for rid in checks:
             if self._checked(rid, pkg):
@@ -3340,9 +3383,10 @@ class RecordsGate:
         out = []
         for run in self._at(head)[0]:
             ok, line = self._audited(run, pkg)
-            if ok and run.pkg == pkg and run.kept_record():
+            if ok and run.kept_record(pkg):
                 out.append(f"records run {run.id} of {head[:12]} passed {pkg} only with the record its `--update` wrote, which "
-                           f"differs from the head's lock: commit its `{RECORD_KEPT}`")
+                           f"differs from the head's lock: commit its "
+                           f"`{RECORD_KEPT if pkg == run.pkg else f'record/{pkg}/{LEAN_LOCK}'}`")
                 break
             if line:
                 out.append(line)
