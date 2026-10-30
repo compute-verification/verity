@@ -609,7 +609,7 @@ def _opened(delivered: Delivered, unit: int, public: bytes | None, bits: int) ->
 
 
 @dataclass(frozen=True)
-class Opening:
+class Hidden:
     """The firewall's side of one link-window's commitment, all witness: the egress and the ingress certified records,
     in leaf order, and one salt per leaf (`rows`'s order: the two records', then the two heads')."""
 
@@ -840,15 +840,15 @@ class LinkWindows:
     # the firewall
 
     def commit(self, window: int, egress: CertifiedRecord, ingress: CertifiedRecord,
-               salts: Sequence[bytes] | None = None) -> Opening:
+               salts: Sequence[bytes] | None = None) -> Hidden:
         """The link-window's opening. `salts`: four distinct salts, one per leaf, drawn once (default: fresh from the
         operating system)."""
         salts = tuple(salts) if salts is not None else tuple(_INST.fresh_salt() for _ in range(LEAVES))
         if len(salts) != LEAVES or len(set(salts)) != LEAVES or any(len(s) != _INST.salt_bytes for s in salts):
             raise ValueError(f"{LEAVES} distinct {_INST.salt_bytes}-byte salts")
-        return Opening(window, (egress, ingress), tuple(bytes(s) for s in salts))  # type: ignore[arg-type]
+        return Hidden(window, (egress, ingress), tuple(bytes(s) for s in salts))  # type: ignore[arg-type]
 
-    def leaves(self, opening: Opening) -> list[bytes]:
+    def leaves(self, opening: Hidden) -> list[bytes]:
         """The salted leaves, which hide the records and their heads: `hm96-sha512/row/v2` over each of `rows`."""
         dom, key = self.domain(opening.window), _INST.default_key
         out = []
@@ -857,10 +857,10 @@ class LinkWindows:
             out.append(row_leaf(dom, i, _INST.tree_leaf(key, bc), SCHEMA))
         return out
 
-    def root(self, opening: Opening) -> str:
+    def root(self, opening: Hidden) -> str:
         return tree_levels(self.domain(opening.window), self.leaves(opening))[-1][0].hex()
 
-    def registration(self, opening: Opening, previous: str | None = None) -> dict[str, Any]:
+    def registration(self, opening: Hidden, previous: str | None = None) -> dict[str, Any]:
         """One-stage's record of the link-window: its salted root and nothing of the certificates. `previous`: the
         digest of the stream's previous registration."""
         w = opening.window
@@ -868,7 +868,7 @@ class LinkWindows:
         return R.record(self._program, self.query, {"law": "subset", "k": 1}, S.SCHEME, roots, self.provenance(w),
                         previous=previous)
 
-    def session(self, opening: Opening, draw: S.Draw) -> str:
+    def session(self, opening: Hidden, draw: S.Draw) -> str:
         """The delivered session's SHA-512: the registration, the draw and the salted leaves the opening reproduces."""
         return _sha512({"format": SESSION, "registration": draw.registration.digest, "draw": _sha512(dict(draw.draw)),
                         "leaves": [x.hex() for x in self.leaves(opening)]})
@@ -898,7 +898,7 @@ class LinkWindows:
 
     # the prover's side: the unit's arguments and outputs on the opening
 
-    def head_checks(self, opening: Opening, root: bytes) -> list[HC.Instance | None]:
+    def head_checks(self, opening: Hidden, root: bytes) -> list[HC.Instance | None]:
         """Each end's head check on the opening under `root`, the registered root: the link-window's public inputs with
         the end's grid, its profile's row and its certificate's signed digest, and as witness the head, its salt, its
         two siblings and the certifier's salt for the record. None where the unit takes no instance: a window past the
@@ -982,7 +982,7 @@ class LinkWindows:
         """Whether the unit's input holds the window's declared sync on a served link and its view on an advised one."""
         return (self.served is None or sync is not None) and (self.advised is None or view is not None)
 
-    def arguments(self, opening: Opening, root: bytes, syncs: Sequence[ClockSync] = (),
+    def arguments(self, opening: Hidden, root: bytes, syncs: Sequence[ClockSync] = (),
                   advice: Any = None) -> dict[str, list[int]] | None:
         """The unit's arguments on the opening under `root`, the registered root, by parameter, each its leaves' bits
         (each end's `head_check.arguments`, on a served link the window's declared sync, and on an advised link the
@@ -1022,7 +1022,7 @@ class LinkWindows:
         bits = [b for n in self.layout[row] for b in args[n]]
         return bytes(sum(b << j for j, b in enumerate(bits[k:k + 8])) for k in range(0, len(bits), 8))
 
-    def outputs(self, opening: Opening, root: bytes, syncs: Sequence[ClockSync] = (), advice: Any = None) -> int:
+    def outputs(self, opening: Hidden, root: bytes, syncs: Sequence[ClockSync] = (), advice: Any = None) -> int:
         """The unit's output word on the opening under `root` by each gate's reference (`head_check.reference`, on a
         served link `served_check`, and on an advised link `advised_check` on `advice`), which the tests hold to the
         circuits: bit 0 the verdict, bit 1 the deadline. What the prover claims, and the debug comparison's."""
@@ -1031,7 +1031,7 @@ class LinkWindows:
         verdict = verdict and (self.advised is None or self.advised_check(opening, syncs, advice))
         return int(verdict) | int(all(r.head.deadline for r in opening.records)) << 1
 
-    def _audit(self, audit: Any, opening: Opening, syncs: Sequence[ClockSync],
+    def _audit(self, audit: Any, opening: Hidden, syncs: Sequence[ClockSync],
                frames: Sequence[LogicalFrame] | None = None) -> tuple[list[Any], list[Any]]:
         """The audit of both records; the egress grid compared with the Program's only when `frames` are given."""
         w, (egress, ingress) = opening.window, opening.records
@@ -1041,7 +1041,7 @@ class LinkWindows:
                                        session=self.certifier_session)
         return out, inn
 
-    def _registered(self, opening: Opening, draw: S.Draw) -> str:
+    def _registered(self, opening: Hidden, draw: S.Draw) -> str:
         reg = draw.registration.record
         if opening.window != reg["window"]["window"] or len(opening.records) != 2:
             raise ValueError("the opening is not the registered link-window's")
@@ -1193,7 +1193,7 @@ class LinkWindows:
         return {"accepted": out["accepted"], "digest": out["digest"], "public": out["public"]}
 
     def verify(self, draw: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
-               delivered: Delivered, *, circuit_sha512: str, opening: Opening | None = None,
+               delivered: Delivered, *, circuit_sha512: str, opening: Hidden | None = None,
                advice: Any = None) -> dict[str, Any]:
         """The verdict of record on the link-window's delivered proof, from public inputs and the proof alone: accepted
         when
@@ -1232,7 +1232,7 @@ class LinkWindows:
             verdict["clear"] = {"accepted": self.clear(opening, draw, syncs, advice)["accepted"]}
         return verdict
 
-    def clear(self, opening: Opening, draw: S.Draw, syncs: Sequence[ClockSync], advice: Any = None) -> dict[str, Any]:
+    def clear(self, opening: Hidden, draw: S.Draw, syncs: Sequence[ClockSync], advice: Any = None) -> dict[str, Any]:
         """The in-the-clear check on the opening, the witness: the debug comparison `verify` makes on request and the
         tests' reference, never a verdict of record. Accepted when the opening reproduces the registered root under the
         link-window's domain, both head checks accept, and the audit accepts both records, comparing no grid (the module
@@ -1263,7 +1263,7 @@ class LinkWindows:
                                       and _accepts(reference[:len(out)], reference[len(out):], w)}}
         return verdict
 
-    def served_check(self, opening: Opening, syncs: Sequence[ClockSync]) -> bool:
+    def served_check(self, opening: Hidden, syncs: Sequence[ClockSync]) -> bool:
         """The served counts' check on the link-window (`served.reference`, which the tests hold to the circuit): the
         egress head's counts are those its ingress head's derive under the window's declared sync. False for a window
         with no declared sync, or one the unit's input can't hold."""
@@ -1276,7 +1276,7 @@ class LinkWindows:
             return False
         return SV.reference(*self.served_key(), ingress.head.counts, egress.head.counts, sync)
 
-    def advised_check(self, opening: Opening, syncs: Sequence[ClockSync], advice: Any) -> bool:
+    def advised_check(self, opening: Hidden, syncs: Sequence[ClockSync], advice: Any) -> bool:
         """The advised counts' check on the link-window (`advised.reference`, which the tests hold to the circuit): the
         egress head's counts are the advice's releases in the window's buckets (`advised.view`), and the ingress head's
         counts release the request frames that view needs by each bucket, under the syncs the clock source says the
@@ -1293,7 +1293,7 @@ class LinkWindows:
         return AD.reference(*self.advised_key(), ingress.head.counts, egress.head.counts, v.released, v.floor,
                             v.received)
 
-    def stand_in(self, opening: Opening, draw: S.Draw, frames: Sequence[LogicalFrame],
+    def stand_in(self, opening: Hidden, draw: S.Draw, frames: Sequence[LogicalFrame],
                  syncs: Sequence[ClockSync]) -> bool:
         """The in-the-clear accept bit, the tests' oracle: the opening reproduces the registered root, the host audit
         (`audit.Audit`) accepts both records with the egress grid compared with the Program's, from its logical
@@ -1309,7 +1309,7 @@ class LinkWindows:
                 "window": reg["window"]["window"], "root": reg["roots"][0]["root"]}
 
     def outcome(self, stream: S.Stream, draw: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
-                delivered: Delivered, *, circuit_sha512: str, opening: Opening | None = None,
+                delivered: Delivered, *, circuit_sha512: str, opening: Hidden | None = None,
                 advice: Any = None) -> S.Outcome:
         """`stream.outcome` on the verifier of record's verdict (`verify`, with an advised link's `advice`), with the
         registered root as the session's: the root the proof's public row names, which it opens only to the verifier's
@@ -1319,7 +1319,7 @@ class LinkWindows:
         return stream.outcome(draw, {VERIFIER: verdict}, self.statement(draw),
                               session_roots={VALUE: draw.registration.record["roots"][0]["root"]})
 
-    def unproved_outcome(self, stream: S.Stream, draw: S.Draw, opening: Opening,
+    def unproved_outcome(self, stream: S.Stream, draw: S.Draw, opening: Hidden,
                          syncs: Sequence[ClockSync], advice: Any = None) -> S.Outcome:
         """`stream.outcome` for a run that proves nothing (a rehearsal, the simulator): on the in-the-clear check
         (`clear`, with an advised link's `advice`), which reads the opening, so it is never zero-knowledge, and its
@@ -1500,5 +1500,5 @@ class LinkWindows:
 
 
 __all__ = ["ADVICE", "BC_BYTES", "Delivered", "HEADS", "LEAVES", "LinkWindows", "OUTPUTS", "OUTPUTS_ADVISED",
-           "OUT_BITS", "Opening", "PORTS", "PUBLIC", "PUBLIC_ADVISED", "PUBLIC_SERVED", "ROWS", "SCHEMA", "VALUE",
+           "OUT_BITS", "Hidden", "PORTS", "PUBLIC", "PUBLIC_ADVISED", "PUBLIC_SERVED", "ROWS", "SCHEMA", "VALUE",
            "encode", "output_row", "rows", "unit"]
