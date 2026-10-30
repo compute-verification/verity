@@ -7,7 +7,7 @@ relaxedAutoImplicit = false
 
 [[require]]
 name = "flock_verifier"
-path = "../../../service/flock"
+path = "../../../proof_system/flock"
 
 # The check is a core protocol, reads the Program's grid from the certifier program (`expectedRow`, Σ_sync) and verifies
 # certificates with the LMS port.

@@ -23,8 +23,8 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/sampled_proofs/__init__.py", "verity/core/protocols/sampled_proofs/challenger.py",
           "verity/core/protocols/sampled_proofs/remote.py", "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto",
           "verity/ml/randomness", "verity/core/difftest/python",
-          "verity/core/service/flock/Flock", "verity/core/service/flock/lakefile.toml",
-          "verity/core/service/flock/lake-manifest.json", "verity/core/service/flock/lean-toolchain",
+          "verity/core/proof_system/flock/Flock", "verity/core/proof_system/flock/lakefile.toml",
+          "verity/core/proof_system/flock/lake-manifest.json", "verity/core/proof_system/flock/lean-toolchain",
           "verity/core/primitives/randomness", "verity/core/difftest/lean",
           # the P2 store (`p2.py`, `RemoteAudit.P2`): PoUS's setup, P2 and vk, whose Lean leaf and path check
           # (`pous/check`'s `PousCheck.Merkle`) `lake` builds; the configurations of pous_check's other requires, which

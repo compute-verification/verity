@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from verity_flock import rec_sparse as RS
 
-BIN = Path(__file__).resolve().parents[4] / "verity/core/service/flock" / ".lake" / "build" / "bin" / "flock-verify"
+BIN = Path(__file__).resolve().parents[4] / "verity/core/proof_system/flock" / ".lake" / "build" / "bin" / "flock-verify"
 
 
 def _statement(d: Path, circuit: Path):

@@ -128,7 +128,7 @@ timeout_s = 7200
 # Build outputs the served challenger's checks of record run or skip on (`check` runs this suite after its Lean steps).
 artifacts = ["verity/core/protocols/pouw/lean/check/.lake/build/bin/pouw-check",
              "verity/core/protocols/pouw/lean/check/.lake/build/bin/pouw-check-difftest",
-             "verity/core/service/sampled_proofs/.lake/build/bin/sampled-proofs-difftest"]
+             "verity/core/proof_system/sampled_proofs/.lake/build/bin/sampled-proofs-difftest"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

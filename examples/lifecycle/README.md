@@ -19,7 +19,7 @@ uv run --directory examples/lifecycle pytest tests/test_lifecycle.py     # hones
 **The proofs are a stand-in.** `prove(statement, witness) -> proof` returns the sampled proof block's openings, and
 `verify(statement, proof) -> verdict` checks them against the commitments and re-evaluates the unit's circuit in the clear.
 It is sound for the example and not zero-knowledge; Flock behind the ZK server replaces it (`verity/ml/flock/`,
-`verity/core/service/flock/`). Everything else is the repository's own code, as (b) says.
+`verity/core/proof_system/flock/`). Everything else is the repository's own code, as (b) says.
 
 ## Terms
 

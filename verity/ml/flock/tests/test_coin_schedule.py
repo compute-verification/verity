@@ -9,7 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
 PROVER = ROOT / "verity/ml/flock/live/src/bin/flock-circuit.rs"
-VERIFIER = ROOT / "verity/core/service/flock/Flock/Zk.lean"
+VERIFIER = ROOT / "verity/core/proof_system/flock/Flock/Zk.lean"
 
 ROUNDS_LOG, BLOCK = 9, 512
 

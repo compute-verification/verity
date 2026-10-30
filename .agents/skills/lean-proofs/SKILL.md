@@ -7,7 +7,7 @@ description: >
   lean-audit.json, moving them without a landing DM (--moved), the shape of a property, watching dependencies for
   proofs of what we assume (tools/verity/lean/upstream.py), keeping parallel Lean lanes out of each other's files and
   build directories, and the standing Lean rulings. Use when adding or changing Lean proofs, definitions or
-  packages (verity/core/service/flock, Security and its Proofs and Properties, a protocol's lean/), when a Lean build
+  packages (verity/core/proof_system/flock, Security and its Proofs and Properties, a protocol's lean/), when a Lean build
   or proof is slow or runs out of memory, editing a lean-audit.json or an ASSUMPTIONS.md ledger, bumping a Lean
   dependency, or preparing a Lean PR.
 ---

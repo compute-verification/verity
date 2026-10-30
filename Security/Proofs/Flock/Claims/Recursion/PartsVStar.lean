@@ -8,7 +8,7 @@ import Proofs.Flock.Claims.Recursion.DeployMargin
 file is V\*'s byte for byte under the verifier's own bindings (`RecVStar.checkFile`), and the circuit the setup parses
 off it carries V\*'s row ports and part (`checkParsed`, `checkPart`), V\*'s unit name (`RecVStar.check`) and V\*'s
 META holo (`checkHolo`). The deployed verifier makes the same check in
-each part's session: `RecIns.setup` runs `RecSetup.checks` (`verity/core/service/flock/Flock/RecSetup.lean`), which runs
+each part's session: `RecIns.setup` runs `RecSetup.checks` (`verity/core/proof_system/flock/Flock/RecSetup.lean`), which runs
 `RecVStar.checkStmt` on every table, which runs `RecVStar.checkCircuit` (`Flock/RecVStar.lean`) on the table's circuit
 and the session's `--circuit` file as `--rec-part s` under `--rec-bindings`.
 

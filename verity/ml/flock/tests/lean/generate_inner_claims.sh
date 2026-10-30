@@ -2,13 +2,13 @@
 # Regenerate tests/fixtures/inner_claims.json: what the inner verifier's algebra reads from the statement, per rep of the
 # flat GEMM selftest's honest session (the fetched fixture hidden-outputs/flat/gemm-coordinate), from the Lean verifier of
 # record (tests/lean/InnerClaims.lean, interpreted: about half an hour). PACKAGE_DIR defaults to this checkout's
-# verity/core/service/flock; pass another checkout's to keep its Lake build directory apart. The fixture records the sha256 of each file
+# verity/core/proof_system/flock; pass another checkout's to keep its Lake build directory apart. The fixture records the sha256 of each file
 # the dump depends on, which the tests compare with the tree.
 #   bash tests/lean/generate_inner_claims.sh [PACKAGE_DIR]
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../../../../.." && pwd)
-package=$root/verity/core/service/flock
+package=$root/verity/core/proof_system/flock
 pkg=$(cd "${1:-$package}" && pwd)
 set_dir="$here/../fixtures/hidden-outputs/flat/gemm-coordinate"
 work=$(mktemp -d)

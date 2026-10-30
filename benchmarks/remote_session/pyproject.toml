@@ -27,8 +27,8 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           # the Lean verifier the sessions run beside audit.Session, which computes auditor_line.py's line
           # (lean_verifier.py): what `lake build remote-audit-verifier` reads, the remote audit's package and its
           # path requires
-          "verity/core/service/flock/Flock", "verity/core/service/flock/lakefile.toml",
-          "verity/core/service/flock/lake-manifest.json", "verity/core/service/flock/lean-toolchain",
+          "verity/core/proof_system/flock/Flock", "verity/core/proof_system/flock/lakefile.toml",
+          "verity/core/proof_system/flock/lake-manifest.json", "verity/core/proof_system/flock/lean-toolchain",
           "verity/core/primitives/randomness", "verity/core/difftest/lean",
           # a transcript replayed through both verifiers (the remote audit's lean/tests/replay.py, over the difftest)
           "verity/core/difftest/python",

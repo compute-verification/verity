@@ -15,14 +15,14 @@ nproc; free -g | head -2; lscpu | grep -E 'Model name|^CPU\(s\)' | tee $O/host.t
 
 KEY=$(cat verity/ml/flock/pod/20-gpu-link.sh verity/ml/flock/pod/60-circuit.sh verity/ml/flock/*.patch verity/ml/flock/cuda_*_patch.py \
   $(find verity/ml/flock/cuda verity/ml/flock/live -type f | LC_ALL=C sort) | sha256sum | cut -c1-16)
-LKEY=$(cd verity/core/service/flock && find . -path ./.lake -prune -o -type f -print | LC_ALL=C sort | xargs cat | sha256sum | cut -c1-16)
+LKEY=$(cd verity/core/proof_system/flock && find . -path ./.lake -prune -o -type f -print | LC_ALL=C sort | xargs cat | sha256sum | cut -c1-16)
 B=$W/bin/flock-circuit-$KEY; L=$W/bin/flock-verify-$LKEY
 exec 8>$W/build.lock; flock 8
 (
   export PATH=$HOME/.elan/bin:$PATH
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
   if [ ! -x $L ]; then
-    rm -rf $W/lean && cp -r verity/core/service/flock $W/lean && rm -rf $W/lean/.lake
+    rm -rf $W/lean && cp -r verity/core/proof_system/flock $W/lean && rm -rf $W/lean/.lake
     cd $W/lean && lake build flock-verify && cp .lake/build/bin/flock-verify $L
   fi
 ) > $O/build-lean.log 2>&1 &

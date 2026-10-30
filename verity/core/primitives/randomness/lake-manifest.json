@@ -6,7 +6,7 @@
    "name": "flock_verifier",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
-   "dir": "../../service/flock",
+   "dir": "../../proof_system/flock",
    "configFile": "lakefile.toml"}],
  "name": "core_randomness",
  "lakeDir": ".lake",

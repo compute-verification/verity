@@ -600,7 +600,7 @@ def test_lists_of_names_merge_where_both_sides_append_one():
     assert why and "x" in why[0], "a value both sides changed still refuses"
 
 
-SEC, PROPS, FLOCK, POUS = "Security", "Security/Properties", "verity/core/service/flock", "verity/core/protocols/pous"
+SEC, PROPS, FLOCK, POUS = "Security", "Security/Properties", "verity/core/proof_system/flock", "verity/core/protocols/pous"
 
 
 def packages(unwitnessed: dict[str, int], inline: dict[str, int], doc: str = "never grows",
