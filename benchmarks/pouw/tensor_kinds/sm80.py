@@ -1,4 +1,4 @@
-"""EPS1 AMPERE: sm_80's tensor table, joint issue coefficients, scalar pipes and duo, from a run_sm80.sh run.
+"""sm_80's tensor table, joint issue coefficients, scalar pipes and duo, from a run_sm80.sh run.
 
     python sm80.py gate OUT BIN...   # gpu_kit's timing gate on every timed kernel -> OUT/gate.json, OUT/loops.json
     python sm80.py analyze OUT       # OUT/g*.jsonl with the gate's records -> OUT/sm80.json, OUT/sm80.md
@@ -14,10 +14,9 @@ lease, and records each timed loop's opcode counts. `analyze` reports no number 
 Per SMSP, over the timed window of T cycles: a case's MMAs are its MMA warps a SMSP x iterations x PTX MMAs an
 iteration, its other instructions every non-MMA SASS instruction its loops issue. On the issue facet a.#MMA + #other <=
 T, each case bounds a <= (T - #other)/#MMA; a form's coefficient `a` is the least bound over every program that holds
-its MMA, whatever runs beside it, since a facet holds on every program (TENSOR's M1, note:20261017T0321Z-draft-eps1-tensor
-§2.1). `a_mix` and `a_iadd3` are the least over the IADD3+FFMA and the IADD3 programs. The IADD3 lane binds on its pipe
-(half the issue rate on sm_80), so its programs also bound the pipe facet a' + #IADD3/x_IADD3 <= T, x_IADD3 its rate
-alone.
+its MMA, whatever runs beside it, since a facet holds on every program. `a_mix` and `a_iadd3` are the least over the
+IADD3+FFMA and the IADD3 programs. The IADD3 lane binds on its pipe (half the issue rate on sm_80), so its programs also
+bound the pipe facet a' + #IADD3/x_IADD3 <= T, x_IADD3 its rate alone.
 """
 from __future__ import annotations
 
@@ -461,9 +460,9 @@ def census(outs: list[Path], ext: list[Path] = ()) -> tuple[str, str]:
     """sm_80's census (machine_model/data/devices/sm_80/'s rows.csv and census.csv: one epoch, no since or until) from
     analyzed runs: every kind at one warp instruction a SMSP-cycle on `issue`, each MMA kind's least alone cycles as a
     rate, each scalar class's fastest rate, both at the 2% noise margin, and each kind's least joint coefficient; a run
-    whose lane gate failed gives no joint coefficient and doesn't stand for the issue row. The joint
-    row takes decision 76's margin: `ext` are the runs of the search's latest extension, and the row is divided by 1 + m,
-    m the most they moved a kind's least below the other runs'. Past the noise the search hasn't converged, and the census
+    whose lane gate failed gives no joint coefficient and doesn't stand for the issue row. The joint row takes a
+    convergence margin: `ext` are the runs of the search's latest extension, and the row is divided by 1 + m, m the most
+    they moved a kind's least below the other runs'. Past the noise the search hasn't converged, and the census
     refuses."""
     alone: dict[str, tuple[float, set]] = {}
     joint: dict[str, tuple[float, set]] = {}

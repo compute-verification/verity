@@ -28,7 +28,7 @@ A record may also come certified (`certificate`): the record head, the certifier
 certificate, which signs the head's digest under that salt; the head and the salt are witness. The audit checks that
 the certificate names the head's link-window and signs the head's salted digest (`certificate_digest`), and its
 signature against the network certifier's public key (`key`) over its message in the certifier session (`session`,
-the id the challenger drew for it); a certificate that fails, one from another session included, is a `signature`
+the id the challenger sampled for it); a certificate that fails, one from another session included, is a `signature`
 violation. A head settled after the verdict deadline is a `no-verdict`. The status is the head's, which the signed
 digest binds. On egress the grid check compares the head's record digest with the digest of the Program's grid's head,
 under the parameters digest of `params` and Σ_sync, which is exact up to a SHA-512 collision. With an honest certifier
