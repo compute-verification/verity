@@ -3,7 +3,7 @@ output rows from its slots' values. Pinned on `test_window_circuit`'s TINY class
 positions a Program) at its grain, TINY's bf16 checkpoint on the H200 (FA3's `Attention_v4`, the class 4,32,4's
 attention; its exact-int8 window waits on its norm's reader, `test_window_circuit_int8`), with random weights registered
 under a committer's key and a scan state whose row at bucket 0 carries the two slots' requests; and the network
-certifier's scan of warden traffic (`scan_state`), which starts each request in the slot its anchor and lane give, at
+certifier's scan of its own traffic (`scan_state`), which starts each request in the slot its anchor and lane give, at
 TINY's slots and the class of record's.
 """
 from __future__ import annotations
@@ -223,8 +223,8 @@ def test_a_standin_scan_state_gives_each_slot_its_row_and_max_tokens(window):
 
 
 def _traffic(cls: WC.WindowClass, prompts, arrivals) -> tuple[list[bytes], dict[int, tuple[int, ...]]]:
-    """Warden-form id requests (`active.id_request`, ``max_tokens`` 2) of ``prompts`` arriving at buckets ``arrivals``,
-    request i answered ids 100 + i and 200 + i, through the warden at ``cls``'s scan schedule for 3 link-windows of its
+    """Id requests (`active.id_request`, ``max_tokens`` 2) of ``prompts`` arriving at buckets ``arrivals``, request i
+    answered ids 100 + i and 200 + i, through the network certifier at ``cls``'s scan schedule for 3 link-windows of its
     buckets (`scan_traffic.serve`, the certifier tests' driver): its registered ingress rows and each request's outputs by
     ordinal."""
     import importlib.util
@@ -245,14 +245,14 @@ def _traffic(cls: WC.WindowClass, prompts, arrivals) -> tuple[list[bytes], dict[
 
 
 def test_the_scans_state_starts_each_request_at_its_anchor_in_its_lane():
-    """`scan_state` on warden traffic at the class of record's slots (`SLOTS_CLASS`: 4 lanes, boundaries at buckets 0 and 16
-    of a 32-bucket window, TINY's caps): three requests admitted at bucket 0 are anchored at bucket 16 (WITHIN 12 on), in
-    lanes 0, 1 and 2, so window 0's class Programs 1, 3 and 5 start them (slot nb·j + b); a fourth admitted at 5 is
-    anchored at 32 (`scan_anchors`), window 1's first boundary, in lane 3: window 1's Program 6. Each started slot's lane
-    of the row at its anchor holds its prompt and every other none; the rows are the scan's, from the empty state's, and
-    carry what the scan does past the slots' rows, so a stand-in (`standin_state`) giving the same slots the same rows
-    is another value. A prompt past the class's prompt cap (the scan's KI) and rows short of the window's last are
-    refused."""
+    """`scan_state` on the network certifier's traffic at the class of record's slots (`SLOTS_CLASS`: 4 lanes, boundaries
+    at buckets 0 and 16 of a 32-bucket window, TINY's caps): three requests admitted at bucket 0 are anchored at bucket 16
+    (WITHIN 12 on), in lanes 0, 1 and 2, so window 0's class Programs 1, 3 and 5 start them (slot nb·j + b); a fourth
+    admitted at 5 is anchored at 32 (`scan_anchors`), window 1's first boundary, in lane 3: window 1's Program 6. Each
+    started slot's lane of the row at its anchor holds its prompt and every other none; the rows are the scan's, from the
+    empty state's, and carry what the scan does past the slots' rows, so a stand-in (`standin_state`) giving the same
+    slots the same rows is another value. A prompt past the class's prompt cap (the scan's KI) and rows short of the
+    window's last are refused."""
     prompts = ((17, 3, 250, 9), (5, 77, 42), (1, 2), (9, 8, 7, 6))
     ingress, outputs = _traffic(SLOTS_CLASS, prompts, (0, 0, 0, 5))
     scan = SLOTS_CLASS.scan
@@ -271,7 +271,7 @@ def test_the_scans_state_starts_each_request_at_its_anchor_in_its_lane():
         assert got.rows != standin.rows and (got.leaves, got.words) == (standin.leaves, standin.words)
     assert rows[0] != IS.encode(scan, IS.empty(scan))
     assert SS.scan_state(SLOTS_CLASS, ingress, outputs, 0)[0][0] == IS.encode(scan, IS.empty(scan))
-    with pytest.raises(ValueError, match="refuses the warden's ingress rows"):
+    with pytest.raises(ValueError, match="refuses the network certifier's ingress rows"):
         SS.scan_state(WC.WindowClass(8, 3, 2, lanes=4, every=16), ingress, outputs)
     with pytest.raises(ValueError, match="give the ingress rows to it, 63, not 40"):
         SS.scan_state(SLOTS_CLASS, ingress[:40], outputs, SLOTS_CLASS.buckets)

@@ -10,7 +10,7 @@ slot it carries on. The window's registered `SCAN_STATE` is the rows
 scan's rows t0 − 1 … t0 + buckets − 2, its row a S_{t0 + a − 1}, the one the Programs anchored at the window's bucket a
 read, and window 0's row 0 the empty state's, a constant rather than a scan unit's. The scan's prompt cap ``KI`` changes
 no field: a slot's ``ids`` are its C cells' whatever the cap. `scan_state` gives a window those rows off the scan of the
-warden's ingress rows, with the request each slot's Program starts.
+network certifier's ingress rows, with the request each slot's Program starts.
 """
 from __future__ import annotations
 
@@ -52,9 +52,9 @@ def bridge(cls: IS.Class, prompt: int) -> Any:
 def _scan(scan: IS.Class, ingress: Sequence[bytes], outputs: Mapping[int, Sequence[int]]) -> list[IS.State]:
     got = IS.scan(scan, list(ingress), {int(q): tuple(v) for q, v in outputs.items()})
     if got is None:
-        raise ValueError(f"the scan at {scan} refuses the warden's ingress rows to bucket {len(ingress) - 1}: a request it "
-                         f"can't hold (more than {scan.KI} prompt ids or {scan.KO} outputs) or rows that aren't the "
-                         "warden's")
+        raise ValueError(f"the scan at {scan} refuses the network certifier's ingress rows to bucket {len(ingress) - 1}: "
+                         f"a request it can't hold (more than {scan.KI} prompt ids or {scan.KO} outputs) or rows that "
+                         "aren't the network certifier's")
     return got[0]
 
 
@@ -76,9 +76,10 @@ def scan_state(cls: Any, ingress: Sequence[bytes], outputs: Mapping[int, Sequenc
     it: its state rows
     (`window_rows.state_value`'s ``rows``, `ingress_scan.window_state`'s) and the request each class Program starts,
     slot k's the ordinal q of the request whose Program starts at its anchor in its lane (``occ``'s bit 0 set in the row
-    there, `ingress_scan.programs`' read), None for a slot no request starts. The scan is of the warden's registered
-    ingress rows ``ingress`` (a row a bucket, `warden_rows.window_rows`) from the empty state at bucket 0 to the window's
-    last row, each request's Program giving its output ids ``outputs[q]``. ValueError where the scan refuses the rows."""
+    there, `ingress_scan.programs`' read), None for a slot no request starts. The scan is of the network certifier's
+    registered ingress rows ``ingress`` (a row a bucket, `warden_rows.window_rows`) from the empty state at bucket 0 to
+    the window's last row, each request's Program giving its output ids ``outputs[q]``. ValueError where the scan refuses
+    the rows."""
     scan, n = cls.scan, t0 + cls.buckets - 1
     if len(ingress) < n:
         raise ValueError(f"the window from scan bucket {t0} reads the scan's states to bucket {n - 1}: give the ingress "

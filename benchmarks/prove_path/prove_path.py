@@ -118,10 +118,11 @@ Two kinds of committed run:
   **weights-registration** committed them under it before the first window's coins (``--registration``, which the
   verifier pins: ``records_audit.py audit --registered``), so a weight served as registered has its registered root and
   any other's reads are free; the scan's state rows (`window_rows.state_value`), or without a kept run a stand-in's
-  (`window_rows.standin_state`), a per-window value under the run root. Where the certifier front kept a warden run under
-  the serve dir, slot k is instead the request whose Program the network certifier's scan of it starts there
-  (`kept_scan`), its row the scan's. ``--out`` is the window's records for ``records_audit.py audit --circuit``: the circuit is the
-  class's, a function of the class alone, so the verifier's own ``window-circuit`` record is the circuit it holds it to.
+  (`window_rows.standin_state`), a per-window value under the run root. Where the certifier front kept the network
+  certifier's run under the serve dir, slot k is instead the request whose Program the network certifier's scan of that
+  run starts there (`kept_scan`), its row the scan's. ``--out`` is the window's records for
+  ``records_audit.py audit --circuit``: the circuit is the class's, a function of the class alone, so the verifier's own
+  ``window-circuit`` record is the circuit it holds it to.
 
 `Capped` adds the public cap ℓ on the advice's length to the compiler's registered digest, and `compile_advice` is total on
 every byte string: the requests, or a `ValueError` naming why, the same one on every run.
@@ -1344,13 +1345,13 @@ def network_traces() -> Iterator[None]:
 
 
 def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> tuple[list[list[int]], list[str | None]] | None:
-    """The network certifier's scan of the warden run the certifier front kept under ``serve_dir``
+    """The network certifier's scan of its run the certifier front kept under ``serve_dir``
     (`certifier_piece.PRIVATE`), as a window of class ``cls`` holding the requests of I1 ids ``users`` reads it: the scan's
-    state rows and slot k's request, the I1 id (its warden-form request's ``user``) of the one whose Program starts there,
+    state rows and slot k's request, the I1 id (its id request's ``user``) of the one whose Program starts there,
     None for a slot no request starts (`scan_state.scan_state`). The window is the link-window, of the class's
-    buckets, whose Programs start its requests (their anchors, `scan_state.scan_anchors`); the scan reads the warden's
-    certified ingress rows from link-window 0 and the outputs its egress cells carry (`warden_chain.io`). None where the
-    front kept no run; ValueError, naming why, where the kept run doesn't give the window's scan."""
+    buckets, whose Programs start its requests (their anchors, `scan_state.scan_anchors`); the scan reads the network
+    certifier's certified ingress rows from link-window 0 and the outputs its egress cells carry (`warden_chain.io`).
+    None where the front kept no run; ValueError, naming why, where the kept run doesn't give the window's scan."""
     from verity.core.protocols.certifier import warden_rows as WRW
     from verity_vllm.program.predict import scan_state as SS
 
@@ -1364,31 +1365,31 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> tuple[list[lis
     unpacked = None
     try:
         run = CP.kept_run(serve_dir)
-        unpacked, warden = CP.unpack(serve_dir / CP.PRIVATE / run / "fetch.tar.gz")
-        _, params = WCH.deployment(warden)
-        io = WCH.io(warden)
-        records = WSV.read_records(WCH.witness(warden), params)
+        unpacked, kept = CP.unpack(serve_dir / CP.PRIVATE / run / "fetch.tar.gz")
+        _, params = WCH.deployment(kept)
+        io = WCH.io(kept)
+        records = WSV.read_records(WCH.witness(kept), params)
     except (SystemExit, CP.NotRun) as e:
-        raise ValueError(f"the certifier front's kept warden run: {e}") from None
+        raise ValueError(f"the certifier front's kept run: {e}") from None
     finally:
         if unpacked is not None:
             CP.rm(unpacked)
     T = params.window
     cls.scan.serves(params)
     if T != cls.buckets:
-        raise ValueError(f"the kept warden run's link-windows are {T} buckets, not a window of class {cls}'s "
+        raise ValueError(f"the kept run's link-windows are {T} buckets, not a window of class {cls}'s "
                          f"{cls.buckets}: serve at the class's scan schedule")
     if not io["accepted"]:
-        raise ValueError(f"the kept warden run's certified I/O doesn't read whole off its cells: {io['violations'][:3]}")
+        raise ValueError(f"the kept run's certified I/O doesn't read whole off its cells: {io['violations'][:3]}")
     by = {r["user"]: r for r in io["records"]}
     if missing := [u for u in users if u not in by]:
         raise ValueError(f"{len(missing)} of the window's {len(users)} requests are no certified request: the window "
-                         "served traffic the warden didn't see")
+                         "served traffic the network certifier didn't see")
     if None in (release := [by[u]["release"] for u in users]):
-        raise ValueError("a request of the window has no END in the kept warden run's ingress")
+        raise ValueError("a request of the window has no END in the kept run's ingress")
     windows = sorted(r.window for r in records[WSV.INGRESS])
     if windows != list(range(len(windows))):
-        raise ValueError(f"the kept warden run's ingress records are link-windows {windows[:8]}, not 0, 1, …")
+        raise ValueError(f"the kept run's ingress records are link-windows {windows[:8]}, not 0, 1, …")
     ingress = [x for r in sorted(records[WSV.INGRESS], key=lambda r: r.window) for x in WRW.window_rows(r, params)]
     outputs = {r["stream"]: r["output"] for r in io["records"]}
     anchors = SS.scan_anchors(cls, ingress[:max(release, default=0) + cls.scan.D + 1], outputs)
@@ -1399,18 +1400,18 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> tuple[list[lis
     rows, starts = SS.scan_state(cls, ingress, outputs, w * T)
     user = {r["stream"]: r["user"] for r in io["records"]}
     if bad := [q for q in starts if q is not None and q not in user]:
-        raise ValueError(f"the scan starts connections {bad[:4]}, whose requests the warden's certified I/O doesn't hold")
+        raise ValueError(f"the scan starts connections {bad[:4]}, whose requests the kept run's certified I/O doesn't hold")
     return rows, [None if q is None else user[q] for q in starts]
 
 
 def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     """A served window committed as its window class's one Circuit (V3c, module docstring): the class lowered
     (`window_circuit.lower`, refused where the class's slots don't take the window), each slot's values (`window_rows.Slot`,
-    its request's served values its sealed record's), every unit's rows (`window_rows.Rows`) recorded into a `Window`
+    its request's served values its sealed record's), the circuit's output rows (`window_rows.Rows`) recorded into a `Window`
     under the record's run root, the weights it serves committed under the committer's key ``--key`` as the registration
     ``--registration`` (`weights-registration`, before the first window's coins) committed them, and the scan state the
-    window's own value. Where the certifier front kept a warden run under the serve dir, the scan state is the network
-    certifier's scan of it (`kept_scan`), whose state rows the scan's state ports open, and slot k holds the request whose
+    window's own value. Where the certifier front kept the network certifier's run under the serve dir, the scan state is
+    its scan of that run (`kept_scan`), whose state rows the scan's state ports open, and slot k holds the request whose
     Program the scan starts there, its row the scan's (refused where a served request isn't started in the window, one
     started isn't served, or the scan's prompt or ``max_tokens`` isn't the served one); else slot k holds the advice's
     k-th request and the scan state is a stand-in, the rows its slots' rows and ``max_tokens`` give

@@ -1,12 +1,12 @@
-"""`prove_path.kept_scan`: a served window's scan state and slots off the warden run the certifier front kept under the
-serve dir (`certifier_piece.PRIVATE`), on a synthetic warden run at the scan schedule of the class 8,32,4,4,16 (4 lanes,
+"""`prove_path.kept_scan`: a served window's scan state and slots off the network certifier's run the certifier front kept
+under the serve dir (`certifier_piece.PRIVATE`), on a synthetic run at the scan schedule of the class 8,32,4,4,16 (4 lanes,
 boundaries at buckets 0 and 16 of a 32-bucket link-window), published as `warden_serve.Publisher` publishes a served one
 and kept as the front keeps its fetch. Three requests admitted at bucket 0 are anchored at bucket 16 in lanes 0, 1 and
 2, so link-window 0's class Programs 1, 3 and 5 start them (slot nb·j + b), each one's row at its anchor its prompt; a
 fourth, admitted at bucket 5 and released in link-window 0, is anchored at 32, so link-window 1's Program 6 starts it.
 Each window's state rows are the scan's state tree's for its link-window. A window whose requests start in two
-link-windows, a request the warden didn't certify, a class whose window isn't the warden's link-window or whose scan
-doesn't serve the warden, and a prompt past the class's prompt cap are refused by name; a serve dir with no kept run
+link-windows, a request the network certifier didn't certify, a class whose window isn't its link-window or whose scan
+doesn't serve it, and a prompt past the class's prompt cap are refused by name; a serve dir with no kept run
 gives None, and the unpacked fetch is removed. Reading the run leaves ``sys.path`` and the module ``replay`` as they
 were (`prove_path.network_traces`), so a5's ``import replay`` still finds one_stage's where it did before."""
 from __future__ import annotations
@@ -49,8 +49,8 @@ SESSION = bytes(range(32))
 
 
 def _served() -> ST.Served:
-    """`PROMPTS`' warden-form id requests (``user-i``) arriving at `ARRIVALS` and answered `RESPONSES`, served through
-    the warden over 2 link-windows at `CLASS`'s scan schedule."""
+    """`PROMPTS`' id requests (``user-i``) arriving at `ARRIVALS` and answered `RESPONSES`, served through the network
+    certifier over 2 link-windows at `CLASS`'s scan schedule."""
     scan = CLASS.scan
     params = W.WardenParams(cell_bytes=scan.B, slots=scan.r, bucket_ms=100, delay=scan.D, lanes=scan.lanes,
                             queue=scan.lanes, window=CLASS.buckets, ingress_cells=scan.C, ingress_buckets=scan.WITHIN,
@@ -62,7 +62,7 @@ def _served() -> ST.Served:
 
 @pytest.fixture(scope="module")
 def serve_dir(tmp_path_factory) -> Path:
-    """A serve dir whose certifier front kept the warden run of `_served`."""
+    """A serve dir whose certifier front kept the network certifier's run of `_served`."""
     d, served = tmp_path_factory.mktemp("kept"), _served()
     params = served.params
     run = d / "run"
@@ -105,9 +105,9 @@ def test_a_windows_slots_are_the_requests_the_scan_starts_there(serve_dir):
 
 def test_a_windows_state_rows_are_the_rows_of_the_scans_state_tree(serve_dir):
     """The rows window-commit registers as the window's `SCAN_STATE` are the ones the network certifier's scan puts in
-    its state tree for the link-window (`scan_traffic.chain` over the warden's own rows, then
-    `ingress_scan.window_state`, as scan_zk's `link` builds it), in link-window 0 and in link-window 1: what a period's
-    stateTied needs before it can hold the two at one root."""
+    its state tree for the link-window (`scan_traffic.chain` over its own rows, then `ingress_scan.window_state`, as
+    scan_zk's `link` builds it), in link-window 0 and in link-window 1: what a period's check needs before it can tie
+    the two to one root."""
     served, T = _served(), CLASS.buckets
     states = ST.chain(CLASS.scan, *served.rows(), served.outputs).states[1:]
     for w, users in ((0, USERS[:3]), (1, USERS[3:])):
@@ -124,6 +124,6 @@ def test_a_window_the_kept_run_doesnt_give_is_refused_by_name(serve_dir, tmp_pat
         PP.kept_scan(serve_dir, WindowClass(4, 32, 4, lanes=4, every=16), USERS[:3])
     with pytest.raises(ValueError, match="doesn't serve the warden at these parameters"):
         PP.kept_scan(serve_dir, WindowClass(8, 32, 2, lanes=4, every=16), USERS[:3])
-    with pytest.raises(ValueError, match="refuses the warden's ingress rows"):
+    with pytest.raises(ValueError, match="refuses the network certifier's ingress rows"):
         PP.kept_scan(serve_dir, WindowClass(8, 4, 4, lanes=4, every=16), USERS[:3])
     assert PP.kept_scan(tmp_path, CLASS, USERS) is None
