@@ -109,3 +109,30 @@ injected by the randomness." The coordinator's answer, for HT-CLAIM to confirm o
     relative norm of roughly 0.35–0.45, unchecked).
   - It's still about the ball, not about the training.
 - **What A costs instead: quality,** since training only gets rank-r freedom. That's HT-ML's question.
+
+## Addendum: iterated injection (Daniel, 1:04 PM PDT), design D
+
+Daniel: "many rounds of injecting noise and then a little training; perhaps a better balance of security and usability,
+and easier to tune." The coordinator's reading, which lane HT-ITER tests:
+
+- **Only the last injection, and what happens after it, carries security.** Everything before the final public draw is
+  absorbed into the developer's matrix A, whatever it is.
+- **Earlier rounds buy usability:** robustness to the injection. They can even use the developer's own simulated draws
+  from the same distribution.
+- **Three regimes for the last round:**
+  - **D0: commit A, draw R publicly after, serve W = A + R with no training after.**
+    - Premise: *smoothed* hardness. For every A fixed before R is drawn, multiplying exactly by A + R costs about a full
+      unit. No assumption about training, and no structural constraint on A at all.
+    - A counting argument suggests most of any shifted cube is hard, but that's in a circuit model. Pricing it on real
+      MMA hardware is HT-PREMISE's work.
+    - R can be small in magnitude (e.g. a few bits on int8 weights, with headroom reserved), so a robustly trained A may
+      lose little quality.
+  - **D1: a little training after the last draw.** The ball premise of design B, with ρ the post-draw movement.
+  - **D2: constrained training after the last draw.** Design A's low-rank reduction.
+- **The catch: alphabets.**
+  - The cheater can make x and A cheap, so the forced work is about E·Rᵀ.
+  - E's and R's alphabets must not fit a cheaper exact route than the int8/FP8 unit: b1 bit-slicing at 8×, FP4 on
+    sm_120, IDP4A. ±1 × ±1 is cheap; ±1 × int8 costs about 1 unit with b1 at 8×.
+  - Pricing that is HT-PREMISE's work. Magnitude against quality is HT-ITER's and HT-ML's.
+- **Redraws:** drawing R again after a bad draw lets the developer pick the best of k. That costs log k bits, which is
+  negligible for counting, but it's a rule question. Prefer no redraw.
