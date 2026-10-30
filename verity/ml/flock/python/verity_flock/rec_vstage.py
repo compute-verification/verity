@@ -452,15 +452,40 @@ def inner_rows(meta_: dict, inst: Path) -> SimpleNamespace:
     return SimpleNamespace(n=n, n_in=int(meta_["input_ports"]), ports=[p.name for p in ports], x=x, y=y, bc=bc)
 
 
+def drawn_rows(seed: int, units: int, n_in: int, n_out: int, links: list) -> SimpleNamespace:
+    """A drawn population in `inner_rows`' form, for the link part's tests: ``units`` units of ``n_in`` input and ``n_out``
+    output rows, each row a drawn digest under a drawn salt with its ``b || c``, and each link's (`rec_links.LinkEntry`)
+    reader row its writer's digest under its own salt."""
+    import random
+
+    from verity.ml.commitments import hm96
+
+    g, H = random.Random(seed), hm96.SHA512
+    x = [[g.randbytes(H.digest_bytes) for _ in range(n_in + n_out)] for _ in range(units)]
+    for lk in links:
+        x[lk.reader][lk.port] = x[lk.writer][n_in + lk.out]
+    y = [[g.randbytes(H.salt_bytes) for _ in range(n_in + n_out)] for _ in range(units)]
+    bc = [[H.commit_string(H.default_key, a, b) for a, b in zip(xs, ys)] for xs, ys in zip(x, y)]
+    return SimpleNamespace(n=units, n_in=n_in, ports=[f"in{p}" for p in range(n_in)] + [f"out{o}" for o in range(n_out)],
+                           x=x, y=y, bc=bc)
+
+
 LINKS_DIR = "links"
 LINK_FORGERIES = ("link",)
 
 
-@_without_gc
 def stage_links(circuit: Path, inst: Path, links: list, out: Path, forge: str | None = None, evaluate: bool = True,
                 salts: list[bytes] | None = None) -> dict:
+    """The link table's V* part over the inner statement ``circuit`` and its prover's file ``inst``: `link_part` at their
+    rows (`inner_rows`)."""
+    return link_part(inner_rows(meta(circuit), inst), links, out, forge, evaluate, salts)
+
+
+@_without_gc
+def link_part(rows: SimpleNamespace, links: list, out: Path, forge: str | None = None, evaluate: bool = True,
+              salts: list[bytes] | None = None) -> dict:
     """The link table's V* part (`VStar.Stmt.link`: ``RecLink{UB, PB}`` over the table's ``N = grid(L)`` rows, instance
-    ``i`` checking row ``i``) over the inner statement ``circuit`` and its prover's file ``inst``, under ``out/links`` (with
+    ``i`` checking row ``i``) over the inner statement's rows ``rows`` (`inner_rows`' form), under ``out/links`` (with
     ``forge``, under ``out/forged-<forge>/links``): ``circuit.txt``, the prover's ``inst.bin``, the verifier's ``pub.bin``,
     ``program.json``, ``partition.json``, ``registered.json`` and ``rec-links.txt``, the statement's ``--rec-links ROOT:N``.
 
@@ -469,10 +494,11 @@ def stage_links(circuit: Path, inst: Path, links: list, out: Path, forge: str | 
     statement's instances, and of the larger of its input and output rows' counts. The table (`rec_links.table`) is
     registered as ``rec-links`` at the part's program (`rec_links.register`, ``salts`` its rows', default fresh), which
     ``trow`` reads; each row's reader and writer rows are opened in the input and output rows' trees (`rec_link.Tree` over
-    `inner_rows`' ``b || c``), a filler's at unit 0's row 0 of each; ``rin`` and ``rout`` are the verifier's own rows,
-    the two roots (`rec_link.expected`), as `Flock.RecLinkPart.check` holds them. With `rec_circuits`' cache the circuit
-    text is built once per ``(UB, PB, N)``, and ``evaluate`` (the unit's replay against `rec_link.link_ref`) runs only when
-    it is built.
+    the rows' ``b || c``), a filler's at unit 0's row 0 of each; ``rin`` and ``rout`` are the verifier's own rows, the two
+    roots (`rec_link.expected`), as `Flock.RecLinkPart.check` holds them. ``xyr``, ``raux``, ``xyw`` and ``waux`` are under
+    fresh salts, drawn port by port in that order, row by row. These are `VStar.In.linkIn`'s port inputs, which the V*
+    difftest (``part_in``) holds to this ``inst.bin``. With `rec_circuits`' cache the circuit text is built once per
+    ``(UB, PB, N)``, and ``evaluate`` (the unit's replay against `rec_link.link_ref`) runs only when it is built.
 
     ``forge`` ``link``: the table's first link names as its writer the first unit whose output row is not its reader's
     row, its openings honest. The prover keeps the outputs the verifier registers, which the unit's row then does not
@@ -489,7 +515,6 @@ def stage_links(circuit: Path, inst: Path, links: list, out: Path, forge: str | 
     from . import rec_link as LK
     from . import rec_links as RLK
 
-    rows = inner_rows(meta(circuit), inst)
     n_out = len(rows.ports) - rows.n_in
     UB, PB = LK.bits_for(rows.n), LK.bits_for(max(rows.n_in, n_out))
     D = LK.depth(UB, PB)
