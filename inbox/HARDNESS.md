@@ -113,6 +113,24 @@ Everything else is engineering on parts we have.
   - h ≈ 0.88 (against 127.5); T1 ≈ 0.24%; T2 ≈ 1.2–2.5×.
   - It recommends b = 2 for the noise, since 1-bit noise only ties bit-slicing.
 
+- **HT-CLAIM** (note:compute-research/20261030T2055Z-report-hardness-claim, CPU-checked route searches,
+  art:65c8850b…):
+  - Design A as worded can't be claimed. It needs four circuit rules (= HT-REDML's C1–C4):
+    - commit x before E;
+    - commit the R-product *alone*: with the summed output, rank r cancels r columns of R, 3.1% over-credit at
+      r = 64 (the reduction's slack);
+    - add E exactly, right before R;
+    - draw R once, after the architecture is registered, with no redraw.
+  - With these (A′), training needs no trust.
+  - P1 is the one new premise (rank 4bU, per entry, unbounded preprocessing). P2 is a special case of it.
+  - B's premise is false at small ρ: 12.5% over-credit at ρ = 0.96% with 1-bit E. With 2-bit E the H200 holds to
+    ρ ≈ 14.6%, but Blackwell breaks at ρ ≈ 6.3%.
+  - A-LSB (W = 2^q·H + L, with L public random low bits) preserves hardness for every H, at credit c_q < 1 (≈ 0.875
+    at q = 4, b = 2).
+  - Use 2-bit E: at 1-bit, P1 has zero margin.
+  - Coverage κ is 11–85% of forward MACs at 32K. There's no HBM or network claim, and the work is certified, not its
+    usefulness.
+
 ## Lanes (notes: `lanes/compute-research/<ts>-report-hardness-<lane>.md`)
 
 | lane | modules | first deliverable |
