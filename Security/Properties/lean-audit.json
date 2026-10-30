@@ -239,6 +239,10 @@
    "owner": "@memory-accounting",
    "digest": "87d161476d0c030f0ea03d2e74a6000290492c6e3d8e415189de12b6d5537ce7"
   },
+  "Properties.NetworkCertifier.HonestWindowProved": {
+   "owner": "@network-accounting",
+   "digest": "df1259c692fb01347468eb242d13bc0aa27f115e2ad5dca76f5311830d497c4f"
+  },
   "Properties.Pouw.Period.DrawIsCoin": {
    "owner": "@compute-accounting",
    "digest": "f80df2c5f11cf37bad8e1410b455c5c011a86a3f6cf2d332c1a29daf9974be77"
@@ -278,10 +282,6 @@
   "Properties.RemoteAudit.ScheduleLayoutGap": {
    "owner": "@memory-accounting",
    "digest": "7a9fc4b287459b57492b22f04af9961b0fea507e9e20f7d07ece852e1050d80b"
-  },
-  "Properties.NetworkCertifier.HonestWindowProved": {
-   "owner": "@network-accounting",
-   "digest": "df1259c692fb01347468eb242d13bc0aa27f115e2ad5dca76f5311830d497c4f"
   }
  },
  "meaning": [
@@ -1839,6 +1839,44 @@
    "assumptions": [],
    "type_hash": "610d10605450ee5a7692a41365797df1a88df14c95600e19330475dd2335d953"
   },
+  "Properties.NetworkCertifier.periodAcceptMeans": {
+   "owner": "@network-accounting",
+   "signature": ["Properties.NetworkCertifier.periodAcceptMeans : Properties.NetworkCertifier.PeriodAcceptMeans"],
+   "assumptions": [],
+   "type_hash": "a03ac9ceefb2566c1415183a6ffc0ad1af4e0b29b14d1582d485d9ca52daa2b3"
+  },
+  "Properties.NetworkCertifier.periodAcceptMeans_honest": {
+   "owner": "@network-accounting",
+   "signature": [
+    "Properties.NetworkCertifier.periodAcceptMeans_honest (hv : Properties.NetworkCertifier.HonestWindowProved) :",
+    "  Exists fun l =>",
+    "    Exists fun prog =>",
+    "      Exists fun reg =>",
+    "        Exists fun de =>",
+    "          Exists fun di =>",
+    "            Exists fun s =>",
+    "              Exists fun ev =>",
+    "                Exists fun bs =>",
+    "                  Eq",
+    "                    (NetworkCheck.Period.check (Properties.NetworkCertifier.honestParams l prog)",
+    "                      (Properties.NetworkCertifier.honestCommitment reg)",
+    "                      (Properties.NetworkCertifier.honestEvidence de di s ev) bs)",
+    "                    (Core.Outcome.accept",
+    "                      (NetworkCheck.Period.terms List.nil.toArray List.nil.toArray List.nil.toArray 0 1 1)",
+    "                      { link := \"link\", windows := 1 })"
+   ],
+   "assumptions": ["Properties.NetworkCertifier.HonestWindowProved"],
+   "type_hash": "294a6f99276808d7191704840fb12a26d9b85ac90f32474fbcaa6b08d8c0d372"
+  },
+  "Properties.NetworkCertifier.periodAcceptMeans_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [
+    "Properties.NetworkCertifier.periodAcceptMeans_nontrivial :",
+    "  Not (Properties.NetworkCertifier.PeriodAcceptMeansOf Properties.NetworkCertifier.acceptAllPeriod)"
+   ],
+   "assumptions": [],
+   "type_hash": "366dda7544176736db2b6bcd31647f2ab3af422f219a1f809eb89aa1d6c9a0c2"
+  },
   "Properties.NetworkCertifier.undecidedPending": {
    "owner": "@network-accounting",
    "signature": ["Properties.NetworkCertifier.undecidedPending : Properties.NetworkCertifier.UndecidedPending"],
@@ -3028,44 +3066,6 @@
    ],
    "assumptions": [],
    "type_hash": "5331eb5f08954cebb0c4dda27e710eeab5c3ec3baba428f68d214b1f2d74f91d"
-  },
-  "Properties.NetworkCertifier.periodAcceptMeans": {
-   "owner": "@network-accounting",
-   "signature": ["Properties.NetworkCertifier.periodAcceptMeans : Properties.NetworkCertifier.PeriodAcceptMeans"],
-   "assumptions": [],
-   "type_hash": "a03ac9ceefb2566c1415183a6ffc0ad1af4e0b29b14d1582d485d9ca52daa2b3"
-  },
-  "Properties.NetworkCertifier.periodAcceptMeans_honest": {
-   "owner": "@network-accounting",
-   "signature": [
-    "Properties.NetworkCertifier.periodAcceptMeans_honest (hv : Properties.NetworkCertifier.HonestWindowProved) :",
-    "  Exists fun l =>",
-    "    Exists fun prog =>",
-    "      Exists fun reg =>",
-    "        Exists fun de =>",
-    "          Exists fun di =>",
-    "            Exists fun s =>",
-    "              Exists fun ev =>",
-    "                Exists fun bs =>",
-    "                  Eq",
-    "                    (NetworkCheck.Period.check (Properties.NetworkCertifier.honestParams l prog)",
-    "                      (Properties.NetworkCertifier.honestCommitment reg)",
-    "                      (Properties.NetworkCertifier.honestEvidence de di s ev) bs)",
-    "                    (Core.Outcome.accept",
-    "                      (NetworkCheck.Period.terms List.nil.toArray List.nil.toArray List.nil.toArray 0 1 1)",
-    "                      { link := \"link\", windows := 1 })"
-   ],
-   "assumptions": ["Properties.NetworkCertifier.HonestWindowProved"],
-   "type_hash": "294a6f99276808d7191704840fb12a26d9b85ac90f32474fbcaa6b08d8c0d372"
-  },
-  "Properties.NetworkCertifier.periodAcceptMeans_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "Properties.NetworkCertifier.periodAcceptMeans_nontrivial :",
-    "  Not (Properties.NetworkCertifier.PeriodAcceptMeansOf Properties.NetworkCertifier.acceptAllPeriod)"
-   ],
-   "assumptions": [],
-   "type_hash": "366dda7544176736db2b6bcd31647f2ab3af422f219a1f809eb89aa1d6c9a0c2"
   }
  },
  "shape": {
