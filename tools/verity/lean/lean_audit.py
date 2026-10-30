@@ -32,7 +32,8 @@ moved: a `..` left (after the paths above) in its lakefile, manifest, toolchain 
 puts the package's path back into its key.
 
 When one package misses, the audit runs on a scratch tree holding only the missed packages' inputs, from that tree's own copy of
-`tools/verity/lean` (named by its creator's pid; an audit first removes every scratch tree no audit holds, `sweep`). So a read of anything outside a key finds nothing, and the audit fails there instead of a stale pass being kept
+`tools/verity/lean` (named by its creator's pid; an audit first removes every scratch tree no audit holds, `sweep`), on the machine's
+big volume rather than its root disk (`scratch_base`), and only while that has `SCRATCH_MIN_FREE_GB` free. So a read of anything outside a key finds nothing, and the audit fails there instead of a stale pass being kept
 (the counterpart of `suites.py`'s read guard). Only the missed packages are audited. A package one of them requires by path is
 in the tree and built as far as it imports it, but not audited again: what vouches for its modules is its own pass, under its
 own key, and the run passes only when every package has one. The dependent's axiom walk follows its declarations into those
@@ -960,6 +961,37 @@ def scratch_tree(dest: Path, files: list[str]) -> None:
 SCRATCH = "lean-audit-scratch-"
 #: how long a scratch tree without its creator's pid in its name is kept unheld: an older check's, which may be filling it
 SCRATCH_GRACE_S = 3600
+#: the free space, in GB, a scratch tree's volume must have before an audit starts: about the largest package's build with its
+#: dependencies (Security/Proofs'); `LEAN_AUDIT_MIN_FREE_GB` overrides it
+SCRATCH_MIN_FREE_GB = 40
+#: a node's big volume; its root disk, which holds `~/.cache`, is a few hundred GB
+WORKSPACE = Path("/workspace")
+
+
+def _device(p: Path) -> int:
+    return p.stat().st_dev
+
+
+def scratch_base(home: Path, env=os.environ) -> Path:
+    """The directory an audit makes its scratch tree in: the first of `$LEAN_AUDIT_SCRATCH`, a `research run`'s `$TMPDIR` and
+    `WORKSPACE`'s `tmp/` that is a directory outside this checkout (whose files the tree's keys list), else ``home``, where the
+    dependencies are kept (`~/.cache/verity-check`). ``home`` also when it is on that directory's filesystem, so the kept
+    dependencies and builds move into the tree by rename rather than by copy."""
+    home = home.resolve()
+    for c in (env.get("LEAN_AUDIT_SCRATCH"), env.get("RESEARCH_RUN_DIR") and env.get("TMPDIR"), str(WORKSPACE / "tmp")):
+        if not c or not (p := Path(c).resolve()).is_dir() or p == ROOT or ROOT in p.parents:
+            continue
+        return home if home.is_dir() and _device(home) == _device(p) else p
+    return home
+
+
+def short_of_room(base: Path, env=os.environ) -> str | None:
+    """Why an audit can't make its scratch tree in ``base``, or None: its volume has less free than `SCRATCH_MIN_FREE_GB`."""
+    need = float(env.get("LEAN_AUDIT_MIN_FREE_GB") or SCRATCH_MIN_FREE_GB)
+    if (free := shutil.disk_usage(base).free / 1e9) >= need:
+        return None
+    return (f"{base} has {free:.1f} GB free, less than the {need:g} GB an audit's scratch tree may fill "
+            "(LEAN_AUDIT_MIN_FREE_GB); free space there, or name a directory on a bigger volume in LEAN_AUDIT_SCRATCH")
 
 
 def _links(proc: Path) -> tuple[list[str], bool]:
@@ -1026,17 +1058,20 @@ def transient(rep: dict) -> bool:
 
 def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: Path, cache: Path, deps: Path, fresh: bool,
            log, urls: dict[str, str] | None = None, comps: dict | None = None,
-           regenerate: bool = False, bundle: bool = False) -> tuple[list[str], list[str]]:
-    """Audit ``missed`` on a scratch tree of their inputs (the packages they require by path included), and store each pass.
+           regenerate: bool = False, bundle: bool = False, scratch: Path | None = None) -> tuple[list[str], list[str]]:
+    """Audit ``missed`` on a scratch tree of their inputs (the packages they require by path included), made in ``scratch``
+    (`scratch_base`; beside the dependencies when None), and store each pass.
     ``regenerate`` (`check.py --regenerate`, a train's check) passes a package whose every failure is a record difference;
     such a pass is never stored, since its lock changes when the train commits the record.  ``bundle`` (a recorded check)
     writes the module versions new in the artifact cache to ``out`` for other nodes (`LakeArtifacts.bundle`).  Returns (the
     failed, the audited)."""
     deps.mkdir(parents=True, exist_ok=True)
-    # beside the dependencies: moves, not copies. Resolved, because check.py names each package by its resolved path, and a
-    # cache reached through a symlink would otherwise match no report to its package
-    sweep(deps.parent, log)
-    work = Path(tempfile.mkdtemp(prefix=f"{SCRATCH}{os.getpid()}-", dir=deps.parent)).resolve()
+    scratch = scratch or deps.parent
+    for base in dict.fromkeys((deps.parent.resolve(), scratch.resolve())):
+        sweep(base, log)
+    # resolved, because check.py names each package by its resolved path, and a scratch tree reached through a symlink would
+    # otherwise match no report to its package
+    work = Path(tempfile.mkdtemp(prefix=f"{SCRATCH}{os.getpid()}-", dir=scratch)).resolve()
     warm = WarmDeps(deps, urls)
     builds = WarmBuilds(deps.parent / "lean-builds")
     artifacts = LakeArtifacts(deps.parent / "lean-artifacts")
@@ -1133,10 +1168,16 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
             cached[p] = k
             log(f"lean-audit: {p}: PASS reused ({k[:12]}): every file its audit reads is unchanged")
     todo, failed = [p for p in pkgs if p not in cached], []
+    if todo:
+        deps.mkdir(parents=True, exist_ok=True)
+        if why := short_of_room(scratch := scratch_base(deps.parent)):
+            log(f"lean-audit: FAIL: {why}")
+            return 1
+        log(f"lean-audit: scratch trees in {scratch}")
     for attempt in range(len(RETRIES) + 1):
         if not todo:
             break
-        now, audited = _audit(todo, files, keys, reports, out, cache, deps, fresh, log, urls, comps, regenerate, bundle)
+        now, audited = _audit(todo, files, keys, reports, out, cache, deps, fresh, log, urls, comps, regenerate, bundle, scratch)
         failed = [f for f in failed if f not in audited] + now
         retry = [p for p in audited if p in now and transient(reports.get(p, {}))]
         if not retry or attempt == len(RETRIES):
