@@ -15405,9 +15405,6 @@
    "Verity.SecurityProofs.RefineWrong": {
     "∀ (g : Fin C.N), SetLike.instMembership.mem Pc.committed g → Eq (Y g) (X g)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Verity.SecurityProofs.RegisteredMeets": {
-    "Eq (Verity.Advice.Registration.root H F A r) root": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
    "Verity.SecurityProofs.ServingBlockSum": {
     "Finset.instPartialOrder.le V C.computed": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (u : Fin B), SetLike.instMembership.mem S u → Real.instLE.le ((Finset.instInter.inter V (P.gates u)).sum fun v => ω v) (qS u)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
