@@ -38,7 +38,7 @@ def roomy_disk(monkeypatch, tmp_path):
 
 
 def test_a_disk_short_of_inodes_or_bytes_blocks_every_slot(monkeypatch, tmp_path):
-    """27 Oct: checks that started on cpu-2, -4, -5 and -6 at 97-99% inodes died mid-build with ENOSPC."""
+    """A check that starts on a disk at 97-99% of its inodes dies mid-build with ENOSPC, so no slot starts one there."""
     slot = SLOT.parse("a 0-1")[0]
     monkeypatch.setattr(SLOT, "DISK", tmp_path)
     assert SLOT.blocked(slot, NOW) is None
@@ -73,7 +73,7 @@ def outside_a_slot(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def no_host_memory(monkeypatch):
-    """A slot with mem= waits on this machine's free memory (`memory_gb()`), which no two hosts share (CI-182): a test that takes
+    """A slot with mem= waits on this machine's free memory (`memory_gb()`), which no two hosts share: a test that takes
     such a slot stubs it, and one that would read the host's fails. `memory_gb(root)` over a fake tree still reads that tree."""
     real = SLOT.memory_gb
     monkeypatch.setattr(SLOT, "memory_gb", lambda root=None: real(root) if root is not None else pytest.fail(
@@ -81,8 +81,8 @@ def no_host_memory(monkeypatch):
 
 
 def test_a_slot_py_inside_a_held_slot_runs_its_command_there_and_a_stale_check_slot_waits_its_turn(tmp_path, monkeypatch):
-    """19 Oct: a `research run --pool` job whose command was itself `slot.py ... --`: the inner slot.py queued behind its own outer
-    lock, and vy-nebius-cpu-1's research pool stood still until it was cancelled."""
+    """A `research run --pool` job whose command is itself `slot.py ... --`: an inner slot.py that queued behind its own outer
+    lock would hold the machine's research pool still until it was cancelled."""
     (tmp_path / "slots").write_text("a 0\nb 1\n")
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
     ran = {}
@@ -164,8 +164,8 @@ def test_with_every_slot_busy_it_waits_then_runs_in_the_slot_that_frees(tmp_path
 
 
 def test_a_scope_slot_runs_its_check_in_a_scope_of_its_own_and_others_run_it_as_it_is(tmp_path, monkeypatch):
-    """23 Oct: train-slot sizing rested on summed RSS (shared pages counted over and over), since a check shared its session
-    scope with other runs; `scope=1` gives it a cgroup of its own, whose memory.peak spans.py records."""
+    """Summed RSS counts shared pages over and over, and a check that shares its session scope with other runs has no peak
+    of its own; `scope=1` gives it a cgroup of its own, whose memory.peak spans.py records."""
     assert SLOT.parse("b 0 mem=300 scope=1")[0]["scope"] is True and SLOT.parse("b 0 mem=300")[0]["scope"] is False
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
     monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
@@ -193,7 +193,7 @@ def test_a_scope_slot_runs_its_check_in_a_scope_of_its_own_and_others_run_it_as_
 
 
 def test_a_scoped_check_on_a_node_that_caps_login_sessions_gets_the_same_memory_cap(tmp_path, monkeypatch):
-    """26 Oct: the research suite's local `research run` tests exited 75 inside a scoped check on vy-nebius-cpu-5, since
+    """The research suite's local `research run` tests would exit 75 inside an uncapped scoped check, since
     `research run` refuses an uncapped cgroup on a node whose login sessions have a MemoryMax."""
     dropins = tmp_path / "session-.scope.d"
     dropins.mkdir()
@@ -208,7 +208,7 @@ def test_a_scoped_check_on_a_node_that_caps_login_sessions_gets_the_same_memory_
 
 
 def test_a_scope_slot_where_systemd_run_cant_run_runs_its_check_unscoped(tmp_path, monkeypatch, capsys):
-    """Fail open (ci's review of #3336): a run with no user manager or bus would otherwise fail every train check the slot
+    """Fail open: a run with no user manager or bus would otherwise fail every train check the slot
     takes, which drive reads as the train failing."""
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
     monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
@@ -241,7 +241,8 @@ def test_a_scope_slot_where_systemd_run_cant_run_runs_its_check_unscoped(tmp_pat
 
 
 def test_a_slot_added_while_a_check_waits_is_one_it_takes(tmp_path, monkeypatch):
-    """Node 1's slot d (2 Oct 06:58Z) sat free behind the head of the line, a check that had read the slots file before d was in it."""
+    """A slot added to the slots file is taken by the waiters, the head of the line among them, though it read the file before
+    the slot was in it."""
     slots = tmp_path / "slots"
     slots.write_text("a 0\n")
     monkeypatch.setattr(SLOT, "SLOTS", slots)
@@ -322,7 +323,8 @@ def test_a_waiter_goes_after_the_live_ones_that_came_before_it_and_a_dead_ones_t
 
 
 def test_a_waiter_names_the_slots_holders_and_the_waiters_ahead_of_it_each_time_its_reason_changes(tmp_path, monkeypatch, capsys):
-    """A check's log says whom it waits behind, not only how many (proofs, 2 Oct: "3-4 check(s) ahead in line" for 45 min)."""
+    """A check's log says whom it waits behind, not only how many (a count alone, "3-4 check(s) ahead in line", says
+    nothing to act on)."""
     (tmp_path / "slots").write_text("a 0\n")
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
     held = _hold(tmp_path / "check-a.lock")
@@ -395,7 +397,7 @@ def test_a_pool_the_machine_lacks_is_refused_naming_the_pools_it_has(tmp_path, m
 
 
 def test_a_waiter_past_its_wait_max_leaves_the_line_and_exits_not_started(tmp_path, monkeypatch, capsys):
-    """Quick tiers sat 3 h in node 1's line and their run's timeout reported them failed (#1344, 6 Oct): --wait-max ends the
+    """A check that waits in the line until its run's timeout is reported failed: --wait-max ends the
     wait first, with an exit that says nothing ran."""
     (tmp_path / "slots").write_text("a 0\n")
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
@@ -438,8 +440,31 @@ def test_run_max_counts_from_the_slot_taken_through_the_runs_timeout_control(tmp
             SLOT.main([*bad, "--", "true"])
 
 
+def test_a_wait_with_no_limit_moves_the_run_s_timeout_from_where_it_stands(tmp_path):
+    """`defer_run` adds the wait to the run's timeout as it stands: the control file's (a slot's --run-max, a bare number too) over
+    status.json's launch value; nothing to move outside a run, without a wait or without a timeout; a control file the job can't
+    write (a --job-user run) leaves the timeout as it was and says so."""
+    run = tmp_path / "run"
+    run.mkdir()
+    assert SLOT.defer_run(60, "line", None) is None and SLOT.defer_run(0, "line", str(run)) is None
+    assert SLOT.defer_run(60, "line", str(run)) is None
+    (run / "status.json").write_text(json.dumps({"timeout_s": None}))
+    assert SLOT.defer_run(60, "line", str(run)) is None and not (run / SLOT.RUN_TIMEOUT).exists()
+    (run / "status.json").write_text(json.dumps({"timeout_s": 3600}))
+    assert SLOT.defer_run(60, "line", str(run)).startswith("line: the run's timeout is now 3660 s from its start")
+    assert json.loads((run / SLOT.RUN_TIMEOUT).read_text())["timeout_s"] == 3660
+    (run / SLOT.RUN_TIMEOUT).write_text("9000")
+    SLOT.defer_run(1000, "line", str(run))
+    assert json.loads((run / SLOT.RUN_TIMEOUT).read_text())["timeout_s"] == 10000
+    (run / SLOT.RUN_TIMEOUT).unlink()
+    (run / SLOT.RUN_TIMEOUT).parent.rmdir()
+    (run / SLOT.RUN_TIMEOUT.parent).write_text("not a directory")
+    said = SLOT.defer_run(60, "line", str(run))
+    assert said.startswith("line: the run's timeout stays 3600 s from its start, counting this 60 s wait")
+
+
 def test_a_run_s_slot_record_says_it_waits_until_it_takes_a_slot_or_leaves_the_line(tmp_path, monkeypatch):
-    """af2d (10 Oct) waited 95 min in node 1's line and was reported running since its launch: its run's slot.json says waiting,
+    """A check waiting in the line is not reported running since its launch: its run's slot.json says waiting,
     and why, until the slot is taken, then which slot and when; a waiter that gives up says it left, and why."""
     run = tmp_path / "run"
     run.mkdir()
@@ -493,7 +518,7 @@ def test_the_command_holds_the_slots_lock_on_the_slots_cores(tmp_path):
 
 
 def test_status_names_each_slots_holder_or_free(tmp_path, monkeypatch):
-    """Who holds check-a/b/c and since when, without `fuser` on the lock files (old-circuits-and-proofs, 1 Oct)."""
+    """Who holds check-a/b/c and since when, without `fuser` on the lock files."""
     w = tmp_path / "windows"
     w.write_text("2026-10-01T09:20Z 30\n")
     slots = SLOT.parse(f"a 32-63\nb 64-95\nd 0-47 windows={w}\n")
@@ -512,7 +537,7 @@ def test_status_names_each_slots_holder_or_free(tmp_path, monkeypatch):
 
 
 def test_status_lists_a_windowed_slots_windows_open_now_or_within_six_hours(tmp_path):
-    """A check slot paused for a timed window nobody saw coming (node 2, 3 Oct: a PR sat about 20 min on the 18:05Z window)."""
+    """A check slot paused for a timed window is visible before it pauses: the windows open now or within six hours."""
     w = tmp_path / "windows"
     w.write_text("# start UTC, minutes\n"
                  "2026-10-01T15:01Z 30 # beyond six hours\n"
@@ -567,7 +592,7 @@ def test_status_json_is_the_same_state_as_one_object(tmp_path, monkeypatch, caps
 
 
 def test_status_names_who_asked_for_each_held_slot_and_each_live_waiter(tmp_path):
-    """Which run, tree and agent hold or wait for a slot, without asking around (old-circuits-and-proofs, 2 Oct)."""
+    """Which run, tree and agent hold or wait for a slot, without asking around."""
     slots = SLOT.parse("a 0\nb 1\n")
     held = _hold(tmp_path / "check-a.lock")
     me = {"pid": os.getpid(), "run": "r20261002-040109-a7ed", "tree": "/workspace/research/src/6a1d0bf19", "by": "proofs"}
@@ -691,7 +716,7 @@ def test_agreement_sends_the_upstream_build_whatever_the_commit_changes(monkeypa
 
 
 def test_a_priority_waiter_goes_ahead_of_waiting_lane_checks_and_behind_older_priority_ones(tmp_path):
-    """Merges unblock everyone (root, 2 Oct): the lander's train check takes the next slot that frees ahead of lane checks
+    """Merges unblock everyone: the lander's train check takes the next slot that frees ahead of lane checks
     already waiting, never one a check is running in, and priority waiters keep their own arrival order."""
     line = tmp_path / SLOT.LINE
     line.mkdir()
@@ -748,7 +773,7 @@ def test_drive_s_rank_reaches_slot_py_from_record(monkeypatch):
 
 
 def test_a_trains_slot_is_taken_only_by_a_priority_waiter(tmp_path, monkeypatch, capsys):
-    """Node 2, 6 Oct 02:31Z: the lander's train check waited 36 min with priority while quick tiers held both slots; priority
+    """A train check with priority still waits while quick tiers hold every slot, so a trains slot keeps one for it: priority
     orders the line but never frees a slot a lane check is running in."""
     (tmp_path / "slots").write_text("d 0 only=trains\ne 1\n")
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
@@ -899,7 +924,7 @@ def test_memory_gb_is_the_least_of_memavailable_and_each_cgroup_limits_headroom(
 
 
 def test_memory_gb_counts_a_cgroups_page_cache_as_left(tmp_path):
-    """vy-nebius-cpu-1, 9 Oct 20:50Z: 273 GB of page cache in the user slice held slot a (mem=560) shut with 677 GB available."""
+    """Page cache in the user slice, counted as used, would hold a mem= slot shut with far more than its mem= available."""
     (tmp_path / "proc").mkdir()
     (tmp_path / "proc/meminfo").write_text(f"MemAvailable: {677 << 20} kB\n")
     (tmp_path / "proc/self").mkdir()
@@ -915,7 +940,7 @@ def test_memory_gb_counts_a_cgroups_page_cache_as_left(tmp_path):
 
 
 def test_a_slot_with_mem_is_taken_only_while_that_much_memory_is_free(tmp_path, monkeypatch, capsys):
-    """Node 1, 8 Oct 02:00Z: OOM kills at 1,605 of 1,716 GB across ~8 runs under the user slice; a check whose peak doesn't fit
+    """Checks that start regardless of memory are OOM-killed together under the user slice; a check whose peak doesn't fit
     waits in line instead of starting and being killed with the others."""
     (tmp_path / "slots").write_text("a 0 mem=560\n")
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
@@ -954,7 +979,7 @@ def _twin_ssh(monkeypatch, here: Path, home: Path, sent: list):
 
 
 def test_a_twin_runs_only_if_it_claims_its_pair_first_and_its_twins_then_leave_their_lines(tmp_path, monkeypatch, capsys):
-    """9 Oct: four checks waited up to 54 min in node 1's line while a node 2 slot was free, until each was moved by hand. Twins
+    """A check waiting in one machine's line while another machine's slot is free would wait until moved by hand. Twins
     wait in both lines; the first to hold a slot claims the pair on HOME and runs, and the other leaves its line (75)."""
     n1, n2 = tmp_path / "n1", tmp_path / "n2"
     for d in (n1, n2):
@@ -1022,8 +1047,8 @@ def test_twin_is_parsed_and_shown_and_a_bad_pair_is_refused(tmp_path, capsys):
 
 
 def test_a_slot_with_mem_holds_a_research_mem_reservation_that_research_mem_counts_while_the_check_runs(tmp_path, monkeypatch):
-    """Node 1, 8:21Z on 10 Oct: a check slot checked free memory once, at its start, and reserved nothing, so research.mem
-    admitted work beside two full checks until the node ran out of memory. A slot with mem=GB writes `check-NAME.json` in
+    """A check slot that checked free memory once, at its start, and reserved nothing would let research.mem admit work
+    beside two full checks until the node ran out of memory. A slot with mem=GB writes `check-NAME.json` in
     research.mem's format, naming the check's own pid (CMD's, after the exec) and run; research.mem counts it as live, the GB in
     its 10^9-byte units less what the process tree holds, and not once the run has ended. A slot without mem= reserves nothing."""
     from research import mem
@@ -1054,8 +1079,8 @@ def test_a_slot_with_mem_holds_a_research_mem_reservation_that_research_mem_coun
 
 
 def test_a_run_that_asks_for_more_than_its_slots_mem_waits_for_and_reserves_that(tmp_path, monkeypatch):
-    """24 Oct (proofs): a `research run --pool proofs --mem-gb 450` in the 193 GB slot p5 reserved 193, and the ledger under-reported
-    it. The run's --mem-gb reaches slot.py as CHECK_RUN_MEM_GB; the slot waits for and reserves the larger."""
+    """A `research run --pool proofs --mem-gb 450` in a 193 GB slot that reserved only 193 would under-report it in the
+    ledger. The run's --mem-gb reaches slot.py as CHECK_RUN_MEM_GB; the slot waits for and reserves the larger."""
     slot = SLOT.parse("p5 0 mem=180")[0]
     monkeypatch.delenv(SLOT.RUN_MEM_ENV, raising=False)
     assert SLOT.asking([slot]) == [slot]
@@ -1074,8 +1099,8 @@ def test_a_run_that_asks_for_more_than_its_slots_mem_waits_for_and_reserves_that
 
 
 def test_a_slot_with_mem_counts_what_live_reservations_hold_but_dont_use_yet(tmp_path, monkeypatch):
-    """23 Oct 23:16Z (top): when a check ended on cpu-4, proofs' waiting 345 GB shares and a train's twins raced for the freed
-    memory, and a twin admitted beside a lowering share read well over 560 GB free: that share's reservation wasn't counted."""
+    """When a check ends, waiting pool shares and a train's twins race for the freed memory, and a twin admitted beside a
+    lowering share would read far more free than there is unless that share's reservation is counted."""
     proc = tmp_path / "proc"
     for pid, ppid, kb in ((100, 1, 50 << 20), (101, 100, 20 << 20), (200, 1, 1 << 20)):
         (proc / str(pid)).mkdir(parents=True)
@@ -1101,8 +1126,8 @@ def test_a_slot_with_mem_counts_what_live_reservations_hold_but_dont_use_yet(tmp
 
 
 def test_a_train_check_counts_only_other_train_checks_reservations_and_a_lane_check_counts_every_one(tmp_path, monkeypatch, capsys):
-    """24 Oct, vy-nebius-cpu-1: train slot b (mem=300) was free but read -91 GB net, behind proofs' pool checks p0 and p1 (279 GB
-    reserved each, 25 and 5 GB used) and network-accounting's 43-69 GB slots, until infra shrank two reservations by hand. A
+    """A free train slot (mem=300) would read a negative net behind pool checks that reserve 279 GB each and use 25 and 5,
+    and wait until someone shrank their reservations by hand. A
     `--priority` waiter (a train's check, drive's post-landing run) counts another job at what it holds, already out of
     memory_gb, and another priority check's reservation in full; a lane's check still counts every reservation. Each check's own
     reservation is its slot's whole mem= in research.mem's GB: the post-landing run's 601.3 GB on n2 was slot a's mem=560."""
