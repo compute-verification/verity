@@ -750,10 +750,11 @@ def ledger_message(I: bytes, entry: dict) -> bytes:
     tag = LEDGER_TAGS.get(entry.get("schema"))
     if tag is None:
         raise ValueError(f"schema {entry.get('schema')!r} is none of {sorted(LEDGER_TAGS)}")
-    unsigned = core_record.unsigned(entry)
-    canonical_json_text(_hexed(unsigned))
-    text = json.dumps(unsigned, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":"))
-    return core_record.message(LEDGER_ROLE, I, tagged_sha512(tag, text.encode()))
+    body = {k: v for k, v in entry.items() if k != "sig"}
+    canonical_json_text(_hexed(body))
+    text = json.dumps(body, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":"))
+    digest = tagged_sha512(tag, text.encode())
+    return hashlib.sha512(_field(LEDGER_ROLE.encode()) + I + _field(digest)).digest()
 
 
 def leaf_of(sig: Any) -> int:
@@ -1006,7 +1007,6 @@ def _ledger_entry(line: Any) -> dict | None:
         if e is None or ledger_text(e) != line or any(f"\\ud{c}" in line for c in "89abcdef"):
             return None
         canonical_json_text(_hexed(e))
-        core_record.of_json(e)
     except (ValueError, TypeError, RecursionError):
         return None
     if not (isinstance(e, dict) and sorted(e) == ["body", "kind", "prev", "schema", "seq", "session", "sig"]
