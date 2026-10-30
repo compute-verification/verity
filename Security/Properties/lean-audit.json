@@ -55,6 +55,7 @@
   "Properties.Composition",
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
   "Properties.Accounting.JointBridge.WorkOfCreditedWords",
+  "Properties.Flock.Circuit",
   "Properties.Challenger"
  ],
  "proved_in": ["../Proofs"],
@@ -624,6 +625,11 @@
    "imports": ["Definitions.Accounting.Wipe", "MemoryChallenger.WipeProtocol"],
    "except": [],
    "why": "an accepted wipe's survivor bound is stated against the wipe protocol's check (`MemoryChallenger.WipeProtocol`) and core's device and its wipe (`Definitions.Core.Blocks`), through the streamed wipe's prover strategy and observed event on that device (`Definitions.Accounting.Wipe`), never a proof"
+  },
+  "Properties.Flock": {
+   "imports": ["Mathlib", "Definitions.Flock", "Flock", "Properties.Flock"],
+   "except": [],
+   "why": "the circuit a parsed C-Flock circuit file is built into (`Placed.keyProg`, `Layout.outsOf`, `Built`) is defined over the verifier's own types and checks (`Flock.Circuit`, `Flock.Net`) and C-Flock's circuit vocabulary (`Definitions.Flock.Circuit`), never a proof"
   }
  },
  "reads_exempt": {
