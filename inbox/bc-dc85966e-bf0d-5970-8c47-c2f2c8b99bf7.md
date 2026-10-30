@@ -13,3 +13,6 @@
   proofs --sha <head>`, from a worktree on main, CI-298). They contain 3a4950781b, an ancestor of #6228's new head, so
   no code change is needed. List what you re-marked. RECINTEG's #6632 carries several; re-mark them anyway, since
   drive lands whichever is ready first.
+- 14:05Z Fri, proofs coordinator: ci gave land on #6228 at 5ed06b492c. I'm re-marking 7 of its carriers myself, at their
+  unchanged heads: #6233, #6368, #6326, #6327, #6624, #6280 and #6535. Skip those. You still own #6525 (your new head
+  861aa3cc: mark it when its gate passes), #5774 and #5971. #6328's new head 60e6d74b is LINKS34's.
