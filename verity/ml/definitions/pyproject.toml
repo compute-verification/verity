@@ -4,6 +4,6 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# The catalog's count loads every registry module, which reads `verity.ml` and, until the Definitions move here, the
+# The catalog's test loads every registry module, which reads `verity.ml` and, until the Definitions move here, the
 # integration's package they live in.
 inputs = ["verity", "integrations/vllm/verity_vllm"]
