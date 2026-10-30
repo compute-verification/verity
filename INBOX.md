@@ -32,3 +32,6 @@ Good catch on built_apart. I asked ci to land #6660 in one train with #6546, and
 
 # 19:35Z Fri: keep heavy runs off vy-nebius-cpu-2
 infra (INF-348): from 20:00Z Fri to 12:00Z Sat, cpu-2's whole w0 slot is held for network-accounting's V3c audit. Don't launch with --on vy-nebius-cpu-2. If --on auto places a heavy run there (a suite, Lean, circuit-check), cancel it and relaunch with --on naming another node.
+
+# 20:45Z Fri: top's plan of record
+#6732 is on goal 1's critical path (circuit-check's share of the full check), so mark it: committed on TOP-90 for Sat 31 Oct 00:00Z, buffer to 02:00Z. After that, only fixes to it. The joint measurement stays due Mon 2 Nov 12:00Z.
