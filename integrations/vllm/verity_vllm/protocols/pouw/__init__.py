@@ -107,7 +107,7 @@ QUANT_PARAMS = ("weight_scale", "weight_scale_inv", "input_scale", "weight_zero_
 #: The pinned int7 quantizer of the FP8 lane's reference (docs/pouw-fp8/reference.md), applied without a basis rotation.
 QUANTIZER = "verity.pouw.symmetric-int7-rowmax-rne-f32/v1"
 KEYS = ("coins", "retain_steps", "transcript_dir", "draws", "tamper", "device", "kernel", "cubin", "schedule", "start_forward",
-        "rows", "steps", "runner", "rounds", "challenger", "session", "admission", "gate", "served", "graphs", "period",
+        "rows", "steps", "runner", "rounds", "challenger", "session", "admission", "gate", "served", "graphs", "period", "unit", "ks",
         "backend")
 #: ``ncp-v2``'s negative controls (`Settings.tamper`): a prover that commits and opens one value wrong
 TAMPERS = ("tile", "bias")
@@ -197,6 +197,9 @@ class Settings:
     graphs: tuple[int, ...] = ()
     #: Pearl-C's: the lane's open period before ``session``'s reserve, or None (`pouw_h1_window.reserve_salt`, `period_reason`)
     period: Mapping[str, Any] | None = None
+    #: H1's window Program's tile unit (`pouw_h1_settings.UNITS`; None is v1's) and the K's it records (`pouw_h1_hooks.layers`)
+    unit: str | None = None
+    ks: tuple[int, ...] | None = None
     #: the lead's kernel and committer (`lead.LeadBackend`: ``load``, ``key_leaf``, ``a_root``, ``call``, ``words_root``)
     backend: Any = None
 
@@ -664,11 +667,10 @@ def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
     """The composition's first phase, with the model untouched and no coin opened: every linear layer's int7 weight rows
     committed (`verity.core.protocols.pouw.audit.commit_rows`), as ``{"weight_roots": {id: hex}, "shapes": {id: [n, k]}}``.
     Under H1 and the lead, the int8_exact arm's int8 weight rows as they are served, once a process
-    (`pouw_h1_hooks.weight_roots`)."""
+    (`pouw_h1_hooks.committed`)."""
     if scheme in (PH.SCHEME, PL.SCHEME):
-        layers = PHK.layers(target.model, linear_types(), scheme=scheme)
-        return {"weight_roots": {str(w): r.hex() for w, r in PHK.weight_roots(layers).items()},
-                "shapes": {str(w): list(m.weight.shape) for w, m in enumerate(layers)}}
+        ks = Settings.of(target.context.settings_of(NAME)).ks
+        return PHK.committed(PHK.layers(target.model, linear_types(), ks, scheme=scheme))
     _, layers, shapes = _layers(scheme, target)
     if scheme in PPD.SCHEMES:
         settings = Settings.of(target.context.settings_of(NAME))
@@ -777,8 +779,8 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     registers no ``b/<K>`` and so credits nothing. ``admission`` is the run's (`pouw_h1_requests.ADMISSIONS`, round 0
     only by default). On an arm that serves z/y records (``zy_rows``, `engine.int8_vllm.Int8PlainLinearMethod`) each
     committed layer whose N is whole 32-column units serves through ``scaled_mm_zy`` over T slots, the records its z. The
-    served values are the arm's, untouched."""
-    layers = PHK.layers(target.model, linear_types())
+    served values are the arm's, untouched. A linear at a K outside ``ks`` serves unhooked (`pouw_h1_hooks.wire`)."""
+    layers = PHK.layers(target.model, linear_types(), settings.ks)
     committed = target.weight_commitments.get(entry) or commit_weights(PH.SCHEME, target)
     roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}
     declared = Workload(tuple(Matmul(int(w), Shape(16, k, n), int(w)) for w, (n, k) in committed["shapes"].items()))
@@ -811,7 +813,7 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
             run.commits["round_coins"] = rounds.challenger.commitment.to_json()
     _H1_RUNS[entry] = run
     h = target.hooks(entry)
-    PHK.wire(run, h, layers, settings.runner, settings.rows)
+    PHK.wire(run, h, layers, settings.runner, settings.rows, settings.ks)
     return Option(name=entry, hooks=h, commits=run.commits, details=run.details, release=lambda: PHW.finish(run, session))
 
 
