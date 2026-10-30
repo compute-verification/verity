@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import random
 import shutil
 import threading
 import time
@@ -150,13 +151,23 @@ class FsRemote:
         return sorted(out)
 
 
+def _retry_after(value: str | None) -> float | None:
+    """A `Retry-After` header's seconds, or None for none or an HTTP date (the backoff stands in)."""
+    try:
+        return max(0.0, float(value)) if value else None
+    except ValueError:
+        return None
+
+
 class HttpRemote:
     """The public export read over anonymous HTTP(S): `<base_url>/<key>` for `manifests/<hex>.json` and `objects/sha256/<hex>`.
     Redirects are followed (a front end may answer with a presigned URL). 404 and 403 read as absent, since a read-only front end
-    that refuses unknown keys may answer either; 5xx and network errors are retried. Nothing here is trusted: every caller checks
-    the bytes against the sha256 it asked for."""
+    that refuses unknown keys may answer either; 5xx, 429 and network errors are retried. A 429 waits its `Retry-After` (at most
+    `RETRY_AFTER_MAX_S`) or the backoff, with jitter, so a fetch's parallel threads don't all come back at once. Nothing here is
+    trusted: every caller checks the bytes against the sha256 it asked for."""
 
-    RETRIES = 3
+    RETRIES = 5
+    RETRY_AFTER_MAX_S = 60.0
     TIMEOUT_S = 60.0
 
     def __init__(self, base_url: str):
@@ -170,17 +181,20 @@ class HttpRemote:
             raise ValueError(f"bad remote key {key!r}")
         req = urllib.request.Request(f"{self.base}/{key}", method=method, headers={"User-Agent": "research-store-fetch"})
         for attempt in range(self.RETRIES + 1):
+            wait = 0.5 * 2**attempt
             try:
                 return urllib.request.urlopen(req, timeout=self.TIMEOUT_S)
             except urllib.error.HTTPError as e:
                 if e.code in (403, 404):
                     raise KeyError(key) from None
-                if e.code < 500 or attempt == self.RETRIES:
+                if (e.code < 500 and e.code != 429) or attempt == self.RETRIES:
                     raise
+                if e.code == 429:
+                    wait = min(self.RETRY_AFTER_MAX_S, _retry_after(e.headers.get("Retry-After")) or wait)
             except (urllib.error.URLError, TimeoutError, ConnectionError):
                 if attempt == self.RETRIES:
                     raise
-            time.sleep(0.5 * 2**attempt)
+            time.sleep(wait * random.uniform(1.0, 1.5))
 
     def get(self, key: str, path: Path) -> None:
         path = Path(path)
