@@ -4,8 +4,6 @@ import Proofs.Flock.Claims.Scope.Setup
 import Proofs.Flock.Claims.Scope.InScope
 import Proofs.Flock.Claims.Scope.Sizes
 import Proofs.Flock.Claims.Scope.Matches
-import Proofs.Flock.Claims.Scope.Wires
-import Proofs.Flock.Claims.Scope.Block
 import Proofs.Flock.Claims.Scope.System
 import Proofs.Flock.Claims.Scope.Tables
 import Proofs.Flock.Claims.Scope.Fit
@@ -17,8 +15,8 @@ import Proofs.Flock.Claims.Scope.Split
 `ProvedScope.check` both ways (`Check`), what the setup gives the scope (`Setup`), the readable scope against the check
 for every statement the verifier parses (`InScope`), the tables' `m` bound (`Sizes`: `ProvedScope.sizesOk`, which with
 the check is `InScope`, and which no session `verify` accepts fails), and `Claims.Flock.ScopeMatches` at the verifier's
-parser and scope check (`Matches`). The relation's fields: block R1CS over GF(2) as one AND/XOR block circuit (`Wires`, `Block`,
-`System`), with `RelS` exactly the system's rows, pins and fixed bits in every block (`Sys.relS_iff`), and the deployed
+parser and scope check (`Matches`). The relation's fields: block R1CS over GF(2) as one Boolean block circuit
+(`System`), with `RelS` exactly the system's rows, pins and fixed bits in every block (`Sys.relS_iff`), and the deployed
 relation (`Tables`: `relation`), the verifier's tables as that system, whose `RelS` is every table's model statement
 (`Layout.model` at `regionsOf`) satisfied by its share of the hidden values (`relS_relation`); at every statement the
 verifier parses, every table fits the first's blocks and has the verifier's layout (`Fit`: `tables_fit`,
