@@ -583,7 +583,7 @@ theorem descAgrees_of (hG : GatesLocated) (hN : NovelExact) : Properties.DescAgr
   intro j out hev
   obtain ⟨i, P, reads, mask, own, hpar, hdp, hov, hlo, hin, hwk, han, hθ, hos, hof, hn, hused, rfl⟩ :=
     descEvaluate_ok j out hev
-  have hdec := ((decodeProgram_ok _ _).1 hdp).1
+  have hdec := (decodeProgram_ok _ _).1 hdp
   have hi : Parses j i := (parse_ok j i).1 hpar
   have hgl := hG _ P hdec hov hlo hin hwk ⟨reads, han⟩
   obtain ⟨c, hc⟩ := (circuitOf_isOk P).2 hgl
