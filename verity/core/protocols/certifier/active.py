@@ -71,7 +71,7 @@ its stream's server connection.
 
 **The salt** (`Proxy(salt=…)`, off by default) is `salt_bits` bits (512 by default) per PoUW window from the
 certifier's own randomness (`fresh_salt`), released into the block only. PoUW window p is the `pouw_window` = k
-certifier windows p·k … p·k + k − 1 (k = 1 by default). At p's first ingress tick, t_s, the certifier draws p's salt
+certifier windows p·k … p·k + k − 1 (k = 1 by default). At p's first ingress tick, t_s, the certifier samples p's salt
 and enqueues its own salt frame at the head of the queue, ahead of that bucket's arrivals and of any queue carried
 from the window before (`Bucketer(first=…)`), so it leaves in that bucket's slot 0: kind `SALT` on `SALT_STREAM`,
 its payload u64be p followed by `PLACEHOLDER`, 64 zero bytes. The frame and its slot are fixed by the window and the
@@ -100,16 +100,16 @@ ingress record holds exactly one salt frame of p, the placeholder's, and the rev
 the link, off the prover's node, and the auditor's challenger on an auditor host. With the keys, `reveal` and
 `committed` take the challenger's `request`: its LMS signature under `challenger_key`, the key the auditor's
 deployment record (never the prover's configuration) registered for it, over `reveal_request_message(signer.key_id,
-run_id, ingress link, p, registration.digest, SALT_KIND or WEIGHTS_KIND)`, where `run_id` is the 32 bytes the proxy drew
-at construction (`Proxy.run_id`). They refuse one that doesn't verify before reading anything else, so no one else
-spends p's one reveal, nor does a request for another certifier or another run, and a registration counts only if the
-challenger signed its digest, which binds its record. They answer a `Revealed`: the value, the certifier's key id and
-run id, and its own signature (`signer`, the network certifier's key) over `reveal_response_message`, which binds the
+run_id, ingress link, p, registration.digest, SALT_KIND or WEIGHTS_KIND)`, where `run_id` is the 32 bytes the proxy
+sampled at construction (`Proxy.run_id`). They refuse one that doesn't verify before reading anything else, so no one
+else spends p's one reveal, nor does a request for another certifier or another run, and a registration counts only if
+the challenger signed its digest, which binds its record. They answer a `Revealed`: the value, the certifier's key id
+and run id, and its own signature (`signer`, the network certifier's key) over `reveal_response_message`, which binds the
 value too, so a consumer can key p on the certifier run, (key id, run id, link) (`Proxy.certifier_run`, the same on a
-`RemoteCertifier`), where two proxies on one link name don't collide. The
+`CertifierClient`), where two proxies on one link name don't collide. The
 salt needs authenticity, not confidentiality: after t_d the block's server already holds it, and the verifier fills
 `pouw.salt` as a public input, so nothing is encrypted. `serve_reveals(proxy, host, port)` serves both calls beside
-`run`, one JSON line per request and per answer, and `RemoteCertifier` is the challenger's client, which takes the
+`run`, one JSON line per request and per answer, and `CertifierClient` is the challenger's client, which takes the
 certifier's key and run id from the deployment record and returns the value it verified, as a keyless proxy does in
 process. A refusal is unsigned: forged on the path, it costs the window as dropping the answer would. Given
 `certificates`, the endpoint also serves each certifier window's certificates' public part to any caller, unsigned: each
@@ -250,7 +250,7 @@ REVEAL_RESPONSE_TAG = "verity-network-certifier/reveal-response/v1"
 SALT_KIND, WEIGHTS_KIND = b"salt", b"weights"
 #: a proxy's run id, sampled at its construction (`Proxy.run_id`)
 RUN_ID_BYTES = 32
-#: the longest request or answer line `serve_reveals` and `RemoteCertifier` read: a deployed LMS signature is 34,756
+#: the longest request or answer line `serve_reveals` and `CertifierClient` read: a deployed LMS signature is 34,756
 #: bytes, twice that in hex, beside a registration
 REVEAL_LINE_BYTES = 1 << 20
 #: the longest a ticker waits at once. Linux lets an epoll wait end late by 0.1 % of its timeout, 0.5 % in a niced
@@ -303,7 +303,7 @@ def reveal_response_message(key_id: bytes, run_id: bytes, link: str, window: int
 class Revealed:
     """The certifier's signed answer to a reveal request: PoUW window `window`'s salt or weights' root, `value`, its
     `signature` over `reveal_response_message`, and the certifier's `key_id` and `run_id` that it binds. With the link
-    it verifies for, they are the certifier run (`Proxy.certifier_run`, `RemoteCertifier.certifier_run`). Keyed on the
+    it verifies for, they are the certifier run (`Proxy.certifier_run`, `CertifierClient.certifier_run`). Keyed on the
     certifier run and the window, two proxies on one link name, or two runs of one, don't collide."""
 
     window: int
@@ -548,8 +548,8 @@ def id_request(*, model: str, user: str, prompt: Sequence[int], max_tokens: int,
     eight (six decimals), `model` and `user` each in `ID_NAME_BYTES`, and each prompt id in its own `ID_FIELD_BYTES`.
     No field straddles a frame: spaces (JSON's whitespace) before one that would move it, with its key, to the next.
     At 4096-byte frames every field but the prompt's is in the first frame. `offset` is the request's first byte's
-    place in its first frame's payload: LENGTH's 4 bytes on the active certifier's link, 0 in the warden's cells
-    (`warden.cells`, which carry the bytes alone)."""
+    place in its first frame's payload: LENGTH's 4 bytes on the active certifier's link, 0 in the network certifier's
+    cells (`warden.cells`, which carry the bytes alone)."""
     if offset not in (0, LENGTH.size):
         raise ValueError(f"an id request starts its first frame's payload at 0 or {LENGTH.size}, not {offset!r}")
     if not prompt or isinstance(prompt, (str, bytes)):
@@ -1128,10 +1128,10 @@ class Proxy:
     - with `challenger_key` and `signer`, both or neither, `reveal(p, registration, request)` and `committed(p,
       registration, request)` take only a request the auditor's challenger signed under `challenger_key`
       (`reveal_request_message`) and answer a `Revealed` that `signer`, the network certifier's own key, signed
-      (`reveal_response_message`), which `serve_reveals` serves to a `RemoteCertifier`; without them they are the
+      (`reveal_response_message`), which `serve_reveals` serves to a `CertifierClient`; without them they are the
       in-process calls, which take no request and return the value. `challenger_key` comes from the auditor's
       deployment record, never from the prover's configuration, and `trusted-host` covers that record's custody.
-      Both messages bind the signer's `key_id` and `run_id`, 32 bytes (`RUN_ID_BYTES`) the proxy draws from
+      Both messages bind the signer's `key_id` and `run_id`, 32 bytes (`RUN_ID_BYTES`) the proxy samples from
       `run_nonce` at construction (the certifier's own randomness by default), so a request or an answer of one run,
       or of another proxy on the same link name, is never taken in another;
     - with `start` and `position`, it is back from maintenance: it serves windows `start` … `windows` − 1, its first
@@ -1365,12 +1365,14 @@ class Proxy:
 
     def _report(self, report: Report) -> None:
         """A bucket's release or its writes as the pacer reports them. A bucket that reached the pacer after its time,
-        or whose release started more than `slack` after it, faults its window `monitor-unavailable`, and one the link
-        refused, `delivery-refused`: the open window's certifier, or the record held for a closed one. A window's record
-        is published once the writes of every bucket of it that was handed are reported."""
+        whose release started more than `slack` after it, or released unwritten (its link isn't the pacer's), faults
+        its window `monitor-unavailable`, and one the link refused, `delivery-refused`: the open window's certifier, or
+        the record held for a closed one. A window's record is published once the writes of every bucket of it that
+        was handed are reported."""
         w = report.t // self.egress.buckets
         if report.end is None:
-            reason = Reason.MONITOR_UNAVAILABLE if report.arrived > 0 or report.start > self.slack else None
+            faulted = report.arrived > 0 or report.start > self.slack or not report.written
+            reason = Reason.MONITOR_UNAVAILABLE if faulted else None
         else:
             self.releases.append(report)
             reason = None if report.written else Reason.DELIVERY_REFUSED
@@ -1480,7 +1482,7 @@ class Proxy:
     def certifier_run(self) -> tuple[bytes, bytes, str]:
         """This certifier run's identity, (key id, run id, link): the signer's key id, `run_id` and the ingress link
         name, the one the reveal messages bind. Every signed answer binds it, and consumers key PoUW windows on it: a
-        `Revealed`'s `key_id` and `run_id`, with the link it verifies for, are it, and a `RemoteCertifier` of this proxy
+        `Revealed`'s `key_id` and `run_id`, with the link it verifies for, are it, and a `CertifierClient` of this proxy
         gives the same. A proxy without a signer has no key id, so it raises `ValueError`."""
         if self.signer is None:
             raise ValueError("a proxy without a signer has no key id, so no certifier run")
@@ -1491,9 +1493,9 @@ class Proxy:
         """PoUW window `window`'s salt, for the verifier, given the window's registration as the proof system returned
         it, once. It fails closed (`RuntimeError`): without a registration whose receipt is its own and off which
         `registered` reads `window`, while the window's last ingress record is unpublished (t_d), once the certifier's
-        clock is more than `reveal_deadline` past the window's end, for a window whose salt wasn't drawn (one this proxy
-        was down for at its start), and for a window whose salt it has revealed already. So a registration made after
-        the window's work, or a second one naming the same window, gets no salt.
+        clock is more than `reveal_deadline` past the window's end, for a window whose salt wasn't sampled (one this
+        proxy was down for at its start), and for a window whose salt it has revealed already. So a registration made
+        after the window's work, or a second one naming the same window, gets no salt.
 
         With a challenger key it first refuses a `request` that isn't the registered challenger's signature over
         `reveal_request_message(signer.key_id, run_id, ingress link, window, registration.digest, SALT_KIND)`, so no
@@ -1757,7 +1759,7 @@ async def serve_reveals(proxy: Proxy, host: str, port: int, *,
     return await asyncio.start_server(handle, host, port, limit=REVEAL_LINE_BYTES)
 
 
-class RemoteCertifier:
+class CertifierClient:
     """The auditor challenger's handle on a network certifier's reveal endpoint (`serve_reveals`) at `host`:`port`, in
     place of the `Proxy` an in-process caller holds. `run_id` is that proxy's `Proxy.run_id`, which the auditor's
     deployment record gives beside `certifier_key`, as it gives the certifier `challenger_key` (not a signed hello,

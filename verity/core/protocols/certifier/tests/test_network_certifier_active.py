@@ -1,5 +1,5 @@
 """The active certifier (`active`): its shaper is `run_shaper`'s rule on frames that arrive, its faults fail closed, and
-over real localhost sockets, on an injected clock, an honest run is accepted raw and committed on every link-window
+over real localhost sockets, on an injected clock, an honest run is accepted raw and committed on every execution phase
 while a sender that times its writes to signal either leaves the wire byte-identical or is rejected by the audit."""
 
 import asyncio
@@ -25,7 +25,7 @@ from verity.core.protocols.certifier.active import (
     Bucketer,
     Events,
     Proxy,
-    RemoteCertifier,
+    CertifierClient,
     Revealed,
     Shaper,
     VirtualClock,
@@ -749,7 +749,7 @@ async def replay(write_buckets: dict[int, int], prover=None, executor=None, salt
 
 
 def audit(proxy, frames, syncs, egress=EGRESS):
-    """The audit of the proxy's records, raw then committed: every egress and ingress link-window's verdict."""
+    """The audit of the proxy's records, raw then committed: every egress and ingress execution phase's verdict."""
     out = []
     for committed in (False, True):
         records = [commit(r, egress if r.link == "responses" else INGRESS) if committed else r for r in proxy.records]
@@ -775,7 +775,7 @@ def honest_run():
 
 
 def test_an_honest_run_over_sockets_is_accepted_raw_and_committed(honest_run):
-    """Every link-window is accepted, raw and committed; the records and hand times are `run_shaper`'s; the anchors
+    """Every execution phase is accepted, raw and committed; the records and hand times are `run_shaper`'s; the anchors
     are the ingress releases; and the peer reads exactly the Program's grids, r frames of B bytes per bucket."""
     proxy, wire = honest_run
     raw, committed = audit(proxy, FRAMES, SYNCS)
@@ -818,7 +818,7 @@ def compact_write(session: str, index: int, n: int, position: int) -> bytes:
 @pytest.mark.parametrize("cell", [8, 16])
 def test_compact_records_over_sockets_are_b_byte_cells_and_the_run_is_accepted(cell, honest_run):
     """Under `compact` the server writes each output as a (position, record) unit after its HTTP head, and the proxy
-    frames each record as its cell of B = 8 or 16 bytes: every link-window is accepted raw and committed against the
+    frames each record as its cell of B = 8 or 16 bytes: every execution phase is accepted raw and committed against the
     Program's cells, the records and hand times are `run_shaper`'s and the event-framed run's, the ingress records are
     unchanged, and the wire is B/512 of the event-framed run's, the same frames a bucket."""
     egress = dataclasses.replace(EGRESS, frame_bytes=cell)
@@ -1328,7 +1328,7 @@ def test_the_salt_reaches_only_the_blocks_side_and_no_record_depends_on_it(hones
 
 
 def test_one_salt_per_pouw_window_of_its_width(honest_run):
-    """With PoUW windows of two certifier windows and 256-bit salts, the proxy draws one 256-bit salt per PoUW window,
+    """With PoUW windows of two certifier windows and 256-bit salts, the proxy samples one 256-bit salt per PoUW window,
     at its first bucket: PoUW window 0's at certifier window 0, 1's at window 2. Window 1's ingress record is the
     unsalted run's, and the server receives each salt once. `reveal` gives PoUW window 0's salt at the tick windows 0 and
     1 are published (t_d), and only then, and never PoUW window 1's, whose window 3 the run doesn't reach. `check_salts` reads the salt
@@ -1554,7 +1554,7 @@ def test_a_signed_reveal_takes_only_the_challengers_request_and_answers_under_th
     it. They answer a `Revealed` that names the certifier's key id and run and verifies under the certifier's key over
     `reveal_response_message`, and under no other key, run, window, value, kind, registration or link. The once rule
     and the published condition are `reveal`'s. A signer that refuses spends the reveal and gives nothing. A proxy
-    takes both keys or neither; a keyless one takes no request and serves no endpoint. Each proxy draws its own
+    takes both keys or neither; a keyless one takes no request and serves no endpoint. Each proxy samples its own
     32-byte run id unless given a source. A deployed signature (`lms.DEPLOYED`), in hex, fits a request line with room
     for the registration."""
     challenger_key, sign = prover_signer(b"challenger")
@@ -1651,7 +1651,7 @@ def test_a_signed_reveal_takes_only_the_challengers_request_and_answers_under_th
 
 def test_reveals_over_the_endpoint_beside_a_run_are_signed_both_ways_and_given_once(tmp_path):
     """The endpoint (`serve_reveals`) beside a salted proxy's run, on its loop, over real localhost sockets on the
-    injected clock, with the challenger's `RemoteCertifier` in a thread: at each PoUW window's t_d the client gets the
+    injected clock, with the challenger's `CertifierClient` in a thread: at each PoUW window's t_d the client gets the
     window's salt and the weights' root the prover recorded, each verified under the certifier's key, as plain bytes;
     one tick before, the certifier refuses (unpublished) and the client raises its reason. A second reveal of the
     window is refused, the once rule over the network; a request by anyone but the registered challenger is refused
@@ -1676,7 +1676,7 @@ def test_reveals_over_the_endpoint_beside_a_run_are_signed_both_ways_and_given_o
     got: dict[int, list] = defaultdict(list)
     endpoint: dict = {}
 
-    async def ask(client: RemoteCertifier, call: str, w: int) -> tuple[str, bytes | str]:
+    async def ask(client: CertifierClient, call: str, w: int) -> tuple[str, bytes | str]:
         try:
             return "gave", await asyncio.to_thread(getattr(client, call), w, registration(w))
         except RuntimeError as e:
@@ -1695,10 +1695,10 @@ def test_reveals_over_the_endpoint_beside_a_run_are_signed_both_ways_and_given_o
             endpoint["server"] = await active.serve_reveals(proxy, "127.0.0.1", 0)
             at = endpoint["at"] = endpoint["server"].sockets[0].getsockname()[:2]
             key, run = certifier.public_key(), proxy.run_id
-            endpoint["challenger"] = RemoteCertifier(*at, key, challenger, "requests", run)
-            endpoint["forger"] = RemoteCertifier(*at, key, forger, "requests", run)
-            endpoint["misled"] = RemoteCertifier(*at, lms_key(b"someone else"), challenger, "requests", run)
-            endpoint["stale"] = RemoteCertifier(*at, key, challenger, "requests", OTHER_RUN)
+            endpoint["challenger"] = CertifierClient(*at, key, challenger, "requests", run)
+            endpoint["forger"] = CertifierClient(*at, key, forger, "requests", run)
+            endpoint["misled"] = CertifierClient(*at, lms_key(b"someone else"), challenger, "requests", run)
+            endpoint["stale"] = CertifierClient(*at, key, challenger, "requests", OTHER_RUN)
             endpoint["raw"] = [await raw(line) for line in (b"not json\n", b'{"window": 0, "kind": "salt"}\n', b"[1]\n",
                                                              b"x" * (active.REVEAL_LINE_BYTES + 1))]
         for w in range(WINDOWS):
@@ -1746,7 +1746,7 @@ def test_two_runs_on_one_link_name_neither_take_nor_give_each_others_reveals(tmp
     holds it) and PoUW window, in runs `RUN` and `OTHER_RUN` (their p's collide): a request the challenger
     signed for one run is refused by the other and spends nothing there, and each answer names its own run and
     verifies for it and not for the other, so a consumer keying on (key id, run id, p) never takes one for the other.
-    A `RemoteCertifier` refuses another run's answer that an endpoint replays whole, or relabels with its run, and
+    A `CertifierClient` refuses another run's answer that an endpoint replays whole, or relabels with its run, and
     takes the same answer for its own run."""
     (tmp_path / "challenger").mkdir()
     certifier = signers.signer(tmp_path)
@@ -1794,7 +1794,7 @@ def test_two_runs_on_one_link_name_neither_take_nor_give_each_others_reveals(tmp
         at, out = server.sockets[0].getsockname()[:2], []
         for run in client_runs:
             try:
-                out.append(await asyncio.to_thread(RemoteCertifier(*at, key, challenger, "requests", run).reveal, 0,
+                out.append(await asyncio.to_thread(CertifierClient(*at, key, challenger, "requests", run).reveal, 0,
                                                    reg))
             except RuntimeError as e:
                 out.append(str(e))
@@ -1808,12 +1808,12 @@ def test_two_runs_on_one_link_name_neither_take_nor_give_each_others_reveals(tmp
     assert asyncio.run(replaying(dataclasses.replace(answers[RUN], run_id=OTHER_RUN), (OTHER_RUN,))) == [
         "the answer for window 0's salt isn't signed by the certifier's key"]
     with pytest.raises(ValueError, match="run id is 32 bytes"):
-        RemoteCertifier("127.0.0.1", 9, key, challenger, "requests", RUN[1:])
+        CertifierClient("127.0.0.1", 9, key, challenger, "requests", RUN[1:])
 
 
 def test_a_proxy_and_its_client_name_one_certifier_run_which_its_answers_bind(tmp_path):
     """`certifier_run`, (key id, run id, link), is one identity on both sides: a proxy's (its signer's key id, `run_id`
-    and the ingress link the reveal messages bind, not the egress one) equals a `RemoteCertifier` client's of it, and
+    and the ingress link the reveal messages bind, not the egress one) equals a `CertifierClient` client's of it, and
     a `Revealed` answer's key id and run id, with the link it verifies for, are it. A proxy without a signer has
     none."""
     (tmp_path / "challenger").mkdir()
@@ -1825,7 +1825,7 @@ def test_a_proxy_and_its_client_name_one_certifier_run_which_its_answers_bind(tm
               challenger_key=challenger.public_key(), signer=certifier)
     for _ in range(2 * INGRESS.buckets):
         p.bucketer.tick()
-    client = RemoteCertifier("127.0.0.1", 9, key, challenger, "in-7", p.run_id)
+    client = CertifierClient("127.0.0.1", 9, key, challenger, "in-7", p.run_id)
     assert p.certifier_run == client.certifier_run == (key.key_id, p.run_id, "in-7")
     assert client.key_id == key.key_id
     key_id, run_id, link = client.certifier_run
@@ -1889,7 +1889,7 @@ class Held(Executor):
 def test_a_choice_not_ready_at_its_window_declares_the_envelope():
     """Window 1's choice never finishes. Its tick doesn't wait: no tick is late, window 1 declares the envelope and
     logs it unready, and window 2's choice, started at its tick less the lag, reads that declaration. The audit
-    accepts every link-window, raw and committed, since the envelope is in Σ_sync. The proxy refuses a prover that
+    accepts every execution phase, raw and committed, since the envelope is in Σ_sync. The proxy refuses a prover that
     would choose at its tick (lag 0)."""
     lag = 2
     held = Held({1})

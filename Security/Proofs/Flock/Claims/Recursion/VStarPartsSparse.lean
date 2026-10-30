@@ -436,7 +436,7 @@ and the messages, or the fallback (`PartColl`). -/
 def PartLinksTo (H : Msg → Msg) (D : Deploy Coin) (decode : Msg → Option Flock.Readable.Read) (L : Layout)
     (shape : Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop)
     (G : Msg → (ℕ → Coin) → Flock.Wit → List Msg → Prop) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (c : ℕ → Coin), shows s x xO c →
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (c : ℕ → Coin), shows s x xO c →
     PartAt decode L s x xO fun w ms => G x c w ms ∨ PartColl H D L s x xO w
 
 /-- **Part `s`'s links** toward its inner check `chk s` (`PartLinksTo`). -/
@@ -481,7 +481,7 @@ theorem goal_of_links {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coi
     {decode : Msg → Option Flock.Readable.Read} {L : Layout} {shape : Form → Prop}
     {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {G : Msg → (ℕ → Coin) → Flock.Wit → List Msg → Prop} {s : ℕ}
     (hDO : DO.parse = Flock.Readable.parseOf Flock.Readable.relation decode)
-    (h : PartLinksTo H D decode L shape shows G s) (x : Msg) (st : Stmt) (hst : D.parse x = some st)
+    (h : PartLinksTo H D decode L shape shows G s) (x : Msg) (st : CompiledStatement) (hst : D.parse x = some st)
     (hf : shape st.form) (xO : Msg) (w : Flock.Wit) (hck : Flock.check DO.parse xO w = true) :
     (∀ (c : ℕ → Coin), shows s x xO c → ∀ ms : List Msg,
       (∀ i < L.rounds x, ∀ m, L.held x s w i = some m → ms.getD i [] = m) → G x c w ms) ∨

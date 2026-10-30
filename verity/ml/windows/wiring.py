@@ -3,7 +3,7 @@ one ``(port, out, writers)`` per wire) reads, unit by unit, other units' output 
 ``writers[i]``'s ``out`` row, committed under that row's salt, so the two rows' ``b || c`` are one string.  Lean's links hold
 inside one statement; these join statements (one coordinate's K-chunks, chunk c's ``acc`` chunk c - 1's output; split partials,
 a combine unit's ``in<j>.s`` split s's), so the verifier holds them on the public bodies the leaf layer binds, and a sampled proof block's input is the committed output of
-the unit that wrote it.  A unit whose wired row is not its writer's row is faulty in the wired flattening (its outputs
+the unit that wrote it.  A unit whose wired row is not its writer's row is incorrect in the wired flattening (its outputs
 are not its Definition's on its writers' committed outputs), so the verifier holds the wires of the units it samples
 (`check_drawn`, `SampledProofs.Wires.Summary.drawnOk` in Lean, whose `drawnOk_iff` makes it the expanded check on the
 sampled proof blocks); `check`, every unit's, is the reference.  A member may be wired and read registered rows (a GEMM slice: its
@@ -88,6 +88,23 @@ def _strings(publics: Mapping[str, bytes], m: Any, port: str) -> np.ndarray | No
     table = np.frombuffer(body, dtype=np.uint8, count=counts[j] * BC_BYTES, offset=BC_BYTES * sum(counts[:j]))
     refs = np.frombuffer(body, dtype="<u4", offset=at).reshape(m.n, len(names))[:, j]
     return None if (refs >= counts[j]).any() else table.reshape(counts[j], BC_BYTES)[refs]
+
+
+def string_at(m: Any, body: bytes, port: str, unit: int) -> int | None:
+    """Where member ``m``'s unit ``unit``'s ``b || c`` of its row ``port`` starts in its public body ``body``, as `_strings`
+    reads it: a shared-row member's, the row of the port's table its ref names. None where `_strings` reads none."""
+    names = [q for q, _ in m.all_rows]
+    if port not in names:
+        return None
+    j = names.index(port)
+    if not m.tables:
+        return (unit * len(names) + j) * BC_BYTES if len(body) == m.n * len(names) * BC_BYTES else None
+    counts = [dict(m.tables).get(q, m.n) for q in names]
+    at = BC_BYTES * sum(counts)
+    if len(body) != at + 4 * m.n * len(names):
+        return None
+    ref = int(np.frombuffer(body, dtype="<u4", count=1, offset=at + 4 * (unit * len(names) + j))[0])
+    return None if ref >= counts[j] else BC_BYTES * (sum(counts[:j]) + ref)
 
 
 def check(members: Sequence[Any], publics: Mapping[str, bytes]) -> dict[str, str]:

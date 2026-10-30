@@ -105,12 +105,12 @@ Two kinds of committed run:
   values}``, never a root computed from a checkpoint; a registered read counts registered only where the window's
   registration, `verity-vllm advice`'s, records the pinned root for its parameter, and any other is free), which
   ``records_audit.py count`` recounts from the record alone. A5 audits it once the committer writes each
-  unit's rows as the record's members (V3c).
+  unit's rows as the record's members.
 * **class-size**: that Circuit's padded size at ``--class``, too large to lower there (`class_size_of_advice`): one class
   Program of the window's registration lowered at the small class ``--probe`` and projected with v19's heads
   (`class_size.project`), its units, ANDs and m a Program and at the class's slots (the window's circuit, whatever its
   requests).
-* **window-commit** (the prover, V3c): the served window committed as that Circuit's units (`window_commit_of_advice`):
+* **window-commit** (the prover): the served window committed as that Circuit's units (`window_commit_of_advice`):
   slot k is the advice's k-th request, its row (occupancy, prompt length, ids) its ingress prompt, its values its sealed
   record's (`window_rows.Served`) and the class Program's where the engine computed none; the weights, composed from the
   checkpoint ``--checkpoint-dir`` (its shards checked against ``--checkpoints`` where given) and opened against the committed weights
@@ -1037,8 +1037,8 @@ def template_bits(mine: Any, sets: Mapping[str, tuple]) -> dict[str, int]:
 
 def charge_terms(record: Mapping[str, Any], bits: Mapping[str, int], advice_bits: int, delta: float) -> dict[str, Any] | None:
     """The terms of the leak bound an accepted audit gives (README, "What an accepted audit means"): c, the advice's bits
-    (``advice_bits``); δ (``delta``); ``wrong_units``, the profile's bounds at δ; λ_δ, which units are faulty
-    (``location_bits``, `consumers.location_bits`); β_δ, the faulty proof blocks' committed bits (``harm_bound``: the profile's
+    (``advice_bits``); δ (``delta``); ``wrong_units``, the profile's bounds at δ; λ_δ, which units are incorrect
+    (``location_bits``, `consumers.location_bits`); β_δ, the incorrect proof blocks' committed bits (``harm_bound``: the profile's
     `harm_bound`, each template's units weighing its committed ``bits``, the most of them where the law's strata aren't the
     templates); and ``exfiltration_bound`` = β_δ + λ_δ (`consumers.exfiltration_bound`). ``record`` is the audit record
     (a5's ``audit.json``); None where it isn't accepted, which bounds nothing."""
@@ -1255,9 +1255,10 @@ def circuit_of_advice(a: argparse.Namespace) -> dict[str, int]:
         a.builds = builds
         compiler = compiler_of_args(a)
         p = compiler.load(0, 1, compile_advice(compiler, data))
-        window, _rows = SRW.population(p.progs, json.loads(Path(a.partition).read_text()), "", p.dirs, arrivals=p.arrivals,
-                                       transfer_gates=compiler.transfer_gates)
-    Path(a.out).write_bytes(IF.circuit_bytes(SRW.circuit_record(window)))
+        window, rows = SRW.population(p.progs, json.loads(Path(a.partition).read_text()), "", p.dirs, arrivals=p.arrivals,
+                                      transfer_gates=compiler.transfer_gates)
+        record = SRW.circuit_record(window, rows, p.arrivals)
+    Path(a.out).write_bytes(IF.circuit_bytes(record))
     c = AW.codec_of()
     return {"bits": int(c.total_bits(c.decode(data)))}
 
@@ -1326,7 +1327,7 @@ def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
 
 
 def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
-    """A served window committed as its window class's one Circuit (V3c, module docstring): the class lowered
+    """A served window committed as its window class's one Circuit (module docstring): the class lowered
     (`window_circuit.lower`, refused where the class's slots don't take the window), each slot's values (`window_rows.Slot`,
     the k-th request's served values its sealed record's), every unit's rows (`window_rows.Rows`) recorded into a `Window`
     under the record's run root, the weights it serves committed under the committer's key ``--key`` as the registration
@@ -1413,16 +1414,15 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     lap("weights")
     filled = WRS.Rows(low, slots, values)
     lap("rows")
-    win = IF.Window(low.circuit, run, DR.parse_law(a.law), a.cap, registered=values)
+    win = IF.Window(low.circuit, run, DR.parse_law(a.law), a.cap, registered=values, forms=WRS.FORMS)
     win.supply(CR)
     filled.record(win)
     lap("record")
     c = win.close(workers=a.workers or min(16, os.cpu_count() or 1))
     lap("close")
-    prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "window": int(a.window),
-                               "requests": [u.id for u in units]},
+    prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "window": int(a.window)},
             "activations": {"program": WC.NAME, "values": {SS.SCAN_STATE: values[SS.SCAN_STATE].entry()}}}
-    win.write(c, a.out, prov, registrar=R)
+    win.write(c, a.out, prov, registrar=R, index_salt=WRS.index_salt(key, int(a.window)))
     lap("write")
     sources = {s: int(sum((x == i).sum() for x in filled.source.values())) for i, s in enumerate(WRS.SOURCES)}
     return {"run": run, "circuit": hashlib.sha512((Path(a.out) / "circuit.json").read_bytes()).hexdigest(),
@@ -1584,7 +1584,7 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument(flag, required=True)
     p.add_argument("--window", type=int, required=True)
     p.add_argument("--probe", default="1,2,2", help="the class SLOTS,PROMPT,OUTPUTS one Program is lowered at exactly")
-    p = sub.add_parser("window-commit", help="a served window committed as its window class's one Circuit's units (V3c)")
+    p = sub.add_parser("window-commit", help="a served window committed as its window class's one Circuit's units")
     for flag in ("--serve-run", "--row-dir", "--advice", "--out"):
         p.add_argument(flag, required=True)
     p.add_argument("--window", type=int, required=True)

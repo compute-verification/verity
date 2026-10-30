@@ -1,4 +1,0 @@
-order = 170
-path = "`fp4_nobits/`"
-runs_on = "RTX PRO 6000"
-what = "The measurement of premise NB (NOBITS): a `kind::mxf4nvf4` MMA's FP32 accumulator holds the exact integer but, for a nonzero word, never the committed s32 word's bits, whether it starts at 0 or at the binade constant; and the cheapest exact extraction is one F2I or one IADD3 a word (SASS-counted), against the int8 IMMA whose accumulator is the word; `run.sh` under `gpu-lease 1`, clocks read"
