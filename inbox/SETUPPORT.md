@@ -15,3 +15,11 @@
   `cursor/proofs-nextsec-5397-b7e1` (bedb2d1f75) and #5302's on `cursor/proofs-nextsec-5302-b7e1` (104958364d), with
   records runs r20261029-212506-950a / -213016-7f68 (note `20261029T2035Z-report-nextsec.md`). Compare them with your
   fd51 failures before writing new fixes.
+- 12:08Z Fri, proofs coordinator, check before #5397 lands: IRDEPFIX's build of next plus #5302's fix
+  (r20261030-110809-9d31) shows #5397's `CallsTop.lean` failing on next: `42:108` unknown identifier `Session`, `164:57`
+  and `166:57` unknown `cl_verifyRep`, a timeout at `44:86`, and `SetupCount.lean:1416:2` "dsimp made no progress".
+  Cause: #5993's rename on next, `Flock.Session` to `Flock.RunRecord` (`verifyRepWith` reads RunRecord). Soundness
+  already ported `cl_verifyRep` in #5105 (PRF-213, 08:56Z). Check whether #5397's marked head 74d238d9bf builds
+  CallsTop and SetupCount on next, which may have been at #5397's older head when 9d31 ran. If it doesn't, port
+  `cl_verifyRep` to RunRecord on #5397 (reuse #5105's change), fix SetupCount:1416, rerun, and re-mark, then post on
+  LEAN-66 and PRF-213. Do this before #6401.
