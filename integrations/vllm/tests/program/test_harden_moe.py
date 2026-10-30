@@ -1,4 +1,4 @@
-"""MoE routing independence of the Bet A circuit builder.
+"""MoE routing independence of the Bet A registered compiler.
 
 The property: the Program Bet A produces for a mixture-of-experts block must be INDEPENDENT of the routing decisions taken on
 the example input used at export time; the per-token expert selection must appear as a VALUE of the Program, never as its

@@ -16,6 +16,7 @@
    "why": "the trace assigner's difftest side: reads a staged part and prints VStar.Trace's digests"
   }
  },
+ "guarantees": {},
  "dependencies": {
   "toolchain": "27511a72ecc19f2a3ce5d7dc8dd5400d2c5ba32555d12a4f390d1806b92e6e15"
  }

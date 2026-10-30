@@ -18,7 +18,7 @@ Parts:
 - G. Per unit (one output coordinate), the noise bits a cheat must match per unit of work it saves (h, GRIND),
   from how units share an operand row's noise: matching one side's noise leaves a unit's words
   affine in the other side's coins, which have no floor (`crossRankLe_dClean`'s case). Then the SHA-512 compressions
-  a drawn unit spends deriving its noise in its proof on the deployed NS 1 patch layout (4 rows × 128
+  a sampled proof block spends deriving its noise in its proof on the deployed NS 1 patch layout (4 rows × 128
   columns a compression; V's over Vᵀ) and on a layout with each unit's operand noise contiguous, and GRIND's
   bound a seed at prefill and at decode.
 
@@ -46,7 +46,7 @@ INSTANCES = ("zero", "P = 0", "V = 0", "one-hot P", "uniform P", "random")
 SHA_BITS = 512
 #: The NS 1 patch: 4 rows × 128 columns of 1-bit noise a compression (sha_noise.cuh, cgemm_ref.patch_bits).
 PATCH_ROWS, PATCH_COLS = 4, 128
-#: A drawn unit's seed: 2 compressions (SHA-512 of the window coin and the two roots).
+#: A sampled proof block's seed: 2 compressions (SHA-512 of the window coin and the two roots).
 SEED = 2
 
 
@@ -101,7 +101,7 @@ def grind_eps(L, delta_log2=40, t_log2=128, d=128):
 
 
 def unit_compressions(k, d=128):
-    """SHA-512 compressions a drawn unit spends on its noise: (deployed patch layout, contiguous layout). QKᵀ's unit
+    """SHA-512 compressions a sampled proof block spends on its noise: (deployed patch layout, contiguous layout). QKᵀ's unit
     reads Q's row (c in one patch, U from its tag-11 digest) and K's row (one patch); P·V's reads P's row's U (one
     digest a row pair) and V's column of b over k keys, which the patch layout over Vᵀ serves 128 keys a compression."""
     qk = (SEED + 1 + 1 + 1, SEED + math.ceil((d + 64 * 5 + d) / SHA_BITS))
