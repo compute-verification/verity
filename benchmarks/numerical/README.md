@@ -38,7 +38,7 @@ The target names three executable columns of the finite-domain step: Python `ver
 casts). Reading them against Hawkeye's pinned simulator (`verity/ml/circuits/silicon/hawkeye/PIN.json`, `src/Ampere_simulator.cpp::group_sum`,
 `utils/utils.cpp::multiply_bfloat16_to_gfloat`, `src/gfloat.cpp::Gfloat::operator float`):
 
-- `silicon.py` states it is "a bit-exact pure-Python port of the reference simulator" at that commit. `silicon.group_sum` is the
+- `models.py` states its body is "a bit-exact pure-Python port of" the reference simulator at that commit. `models.group_sum` is the
   C++ `group_sum` statement for statement -- scan for the maximum exponent from the floor, align each term by
   `(magnitude << rescale) >> (max - exponent)`, sum with signs, `bit_length`, `exponent = max + width - W`, shift to `W` bits,
   denormalise below `-126`, shift back by `rescale`, the two zero rules -- generalised by the `width`, `zero_exponent` and
