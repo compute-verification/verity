@@ -342,7 +342,7 @@ def load_required_manifest(path: str, program_digest: str, *, requests: list[str
         raise ValueError(f"required manifest {path}: program_digest must be one string (got {type(doc.get('program_digest')).__name__}): refused")
     recomputed = MF.manifest_digest(rows)
     if recomputed != doc.get("manifest_digest"):
-        raise ValueError(f"required manifest {path}: manifest_digest {str(doc.get('manifest_digest'))[:16]} != digest of its rows {recomputed[:16]}: edited after digesting, refused")
+        raise ValueError(f"required manifest {path}: manifest_digest {str(doc.get('manifest_digest'))[:16]} != digest of its rows {recomputed[:16]}: " + ("a 64-hex SHA-256 digest: a manifest from before manifest digests became SHA-512, so rebuild it (`verity-vllm manifest build`), refused" if len(str(doc.get("manifest_digest"))) == 64 else "edited after digesting, refused"))
     hdr["manifest_digest_verified"] = True
     for r in rows:
         ident = r.get("identity") or r
@@ -454,7 +454,7 @@ def load_required_manifest(path: str, program_digest: str, *, requests: list[str
 
 
 def population_digest(pop: Iterable[tuple]) -> tuple[str, int]:
-    h = hashlib.sha256()
+    h = hashlib.sha512()
     n = 0
     for ident in pop:
         h.update(json.dumps(identity_dict(ident), sort_keys=True, separators=(",", ":")).encode())
