@@ -201,6 +201,7 @@ import contextlib
 import dataclasses
 import difflib
 import fcntl
+import fnmatch
 import hashlib
 import importlib.util
 import json
@@ -217,7 +218,7 @@ import tempfile
 import time
 import tomllib
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Callable, Iterable
 
 from . import quick_tier, waitcap
@@ -391,6 +392,8 @@ class Rules:
 LANDINGS = ("review",)
 #: a landing gate's path (`DriveFlags.landing_gates`)
 GATE_PATH_RE = re.compile(r"[\w.-]+(?:/[\w.-]+)*\.py")
+#: an entry of `DriveFlags.lowrisk_excludes`: a directory from the repository's root ending in `/`, or a file name glob
+LOWRISK_EXCLUDE_RE = re.compile(r"(?:[\w.-]+/)+|[\w.*?\[\]-]+")
 #: the keys a flag of drive's command line can set (`DriveFlags.override`), each as `--KEY` with `_` as `-`
 COMMAND_LINE = ("on", "marked_after", "regenerate_locks", "first", "after_landing_no_cache")
 
@@ -437,6 +440,13 @@ class DriveFlags:
     after_landing_shards: int = 1
     #: the keys drive's command line may override (`override`), of `COMMAND_LINE`; any other flag given there refuses the tick
     command_line: tuple[str, ...] = ("on", "first")
+    #: each tick, after the reviewed prefix, land up to `lowrisk_per_tick` members of `next` whose change is `lowrisk` on their
+    #: ready mark alone (`drive.Driver.land_lowrisk`); off: drive lands only on review
+    lowrisk_lane: bool = True
+    lowrisk_per_tick: int = 20
+    #: what keeps a change off the low-risk lane (`lowrisk`): a directory from the root (ending in `/`), or a file name glob;
+    #: none, the lane lands nothing
+    lowrisk_excludes: tuple[str, ...] = ()
 
     @classmethod
     def parse(cls, text: str, source: str = "drive.toml", strict: bool = False) -> "DriveFlags":
@@ -484,7 +494,18 @@ class DriveFlags:
             if not (isinstance(doc["marked_after"], str) and MARK_TIME_RE.fullmatch(doc["marked_after"])):
                 raise bad("marked_after", "a UTC time as YYYY-MM-DDTHH:MM:SSZ, as labels record it")
             got["marked_after"] = doc["marked_after"]
-        for k in ("regenerate_locks", "nonlean_first", "reviewed_first", "verdict_first"):
+        if "lowrisk_per_tick" in doc:
+            if type(doc["lowrisk_per_tick"]) is not int or doc["lowrisk_per_tick"] < 1:
+                raise bad("lowrisk_per_tick", "a whole number, 1 or more (`lowrisk_lane = false` turns the lane off)")
+            got["lowrisk_per_tick"] = doc["lowrisk_per_tick"]
+        if "lowrisk_excludes" in doc:
+            v = doc["lowrisk_excludes"]
+            if not (isinstance(v, list) and v and all(isinstance(x, str) and LOWRISK_EXCLUDE_RE.fullmatch(x)
+                                                         and ".." not in x.split("/") for x in v)):
+                raise bad("lowrisk_excludes", "a non-empty list of directories from the repository's root, each ending in `/`, "
+                                              "and file name globs, as [\"*.lean\", \"verity/core/\"]")
+            got["lowrisk_excludes"] = tuple(v)
+        for k in ("regenerate_locks", "nonlean_first", "reviewed_first", "verdict_first", "lowrisk_lane"):
             if k in doc:
                 if not isinstance(doc[k], bool):
                     raise bad(k, "true or false")
@@ -808,6 +829,21 @@ def lean_change(repo: Path, commit: str, base: str | None = None) -> bool:
         return False
     pkgs = {str(Path(f).parent) for f in _out(repo, "ls-tree", "-r", "--name-only", commit).splitlines() if Path(f).name == LEAN_LOCK}
     return any(p == "." or f.startswith(p + "/") for f in lean for p in pkgs)
+
+
+def lowrisk(files: Iterable[str], excludes: Iterable[str]) -> bool:
+    """Whether a change to ``files`` is low-risk, so drive lands it on its ready mark alone, with no land verdict, no Lean check
+    and no wait in `next` (drive.toml's `lowrisk_lane`, `drive.Driver.land_lowrisk`): no file is under an ``excludes`` entry
+    that ends in `/` (a directory from the repository's root: the verifiers under `verity/core/` and the soundness-path Python
+    in `verity/ml/`) and no file's name matches an entry without one as a glob (`*.lean`, every `lean-audit.json`, the Lake
+    files, `TRUSTED.sha256`).  ``files`` are what the PR's merge onto the landing branch's tip changes against that tip, not
+    its own diff.  No excludes, nothing is low-risk; no file, nothing to land."""
+    dirs, names = [], []
+    for x in excludes:
+        (dirs if x.endswith("/") else names).append(x)
+    files = list(files)
+    return bool(files and (dirs or names)) and not any(
+        f.startswith(tuple(dirs)) or any(fnmatch.fnmatchcase(PurePosixPath(f).name, n) for n in names) for f in files)
 
 
 #: the listings and GETs `StoreLabels.prefetch` makes at once: a fresh VM's store lacks every label of `next`'s ~500 members
@@ -4206,7 +4242,9 @@ def main(argv: list[str]) -> int:
             Driver(q, on=flags.on, regenerate_locks=flags.regenerate_locks, after_landing_no_cache=flags.after_landing_no_cache,
                    reviews=labels.reviews, ready_by=labels.ready_by, max_lean_checks=flags.max_lean_checks,
                    stale_days=flags.stale_days, stale_close_days=flags.stale_close_days,
-                   stale_keep=flags.stale_keep, after_landing_shards=flags.after_landing_shards).tick(dry_run=a.dry_run)
+                   stale_keep=flags.stale_keep, after_landing_shards=flags.after_landing_shards,
+                   lowrisk_lane=flags.lowrisk_lane, lowrisk_per_tick=flags.lowrisk_per_tick,
+                   lowrisk_excludes=flags.lowrisk_excludes).tick(dry_run=a.dry_run)
             return 0
         if a.pr is None or not a.reason:
             ap.error("eject needs a PR number and --reason")
