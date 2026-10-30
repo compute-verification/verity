@@ -43,7 +43,7 @@ from verity.core.protocols.pous import wipe_period as WP
 ID = WP.PROTOCOL
 TEST_ID = mc.TEST_PREFIX + ID
 ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
-SERVER = b"vy-nebius-cpu-4"
+SERVER = b"server-4"
 REMOTE_READS = 5231
 """The reads of `StreamedWipeMeets141GB5`, the H200's wipe at 5 GB (`r = 59`)."""
 
@@ -111,11 +111,11 @@ def wipe(params: sw.WipeParams, signer: M.AtLeaf, *, prover: Callable[[sw.WipePa
          spends: Callable[[int], int] = lambda b: 1, stop_after: int | None = None, egress_bits: int = 1234,
          coins: bytes = b"coins", session_id: bytes = bytes(32), server: bytes = SERVER,
          start: int = 1_000) -> tuple[sw.WipeCommitment, sw.SignedWipe | None]:
-    """One wipe of `Challenger` against `prover(params)` on an injected clock: read `b` takes `spends(b)` ns, and with
-    `stop_after` the prover leaves after that many reads, so the session is never signed."""
+    """One wipe of `WipeMemoryChallenger` against `prover(params)` on an injected clock: read `b` takes `spends(b)` ns,
+    and with `stop_after` the prover leaves after that many reads, so the session is never signed."""
     clock = M.Clock(start)
-    c = sw.Challenger(WC.SECRET, server, session_id, params, signer, log=M.ts.session_log(), clock=clock,
-                      coin_secret=coins)
+    c = sw.WipeMemoryChallenger(WC.SECRET, server, session_id, params, signer, log=M.ts.session_log(), clock=clock,
+                                coin_secret=coins)
     p = prover(params)
     for first, data in c.fill(max(1, params.labels // 3)):
         p.receive(first, data)

@@ -11,6 +11,7 @@ import os
 from fractions import Fraction
 
 import pytest
+from pous_fakes import Clock
 from pous_test_signer import SCHEMES, TestSigner, session_log
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import period
@@ -18,15 +19,11 @@ from verity.core.protocols.pous import run as R
 from verity.core.protocols.pous.schemes import p2 as P2
 from verity.core.protocols.pous.schemes.p2 import P2Params
 from verity.core.protocols.pous.verifier import VerifierKey
+from verity.ml.circuits import requirement
 
 TEST_ID = mc.TEST_PREFIX + period.PROTOCOL
 SALT = hashlib.sha512(b"the setup's salt").digest()[:R.SALT_BYTES]
 EPS = Fraction(1, 100) + Fraction(1, 2 ** 128)
-
-
-class Clock:
-    def __call__(self) -> int:
-        return 10 ** 9
 
 
 def test_the_default_point_is_the_smallest_the_family_certifies():
@@ -76,6 +73,28 @@ def test_demo_bs_store_is_certified_by_period_held_at():
     assert period.gaps(past)[1] == [f"P2 has no certificate at (w, c0, blocks) = (16448, 21065, {(1 << 27) + (1 << 16)})"]
 
 
+def test_320_reads_certify_at_two_to_the_minus_20():
+    """At `k ≥ 320` challenges the run takes `ObligationWide320` (`p2.wide320_certificate`) for `2^19` to `2^27`
+    blocks: the registered point and Demo B's store certify their `⌊ρ·blocks·w⌋` at exactly `2^-20` under
+    `WIDE_CLAIMS`; below `2^19` blocks, or at 319 challenges, the 105-read certificates stand at `1% + 2^-128`."""
+    def at(bps: int, segments: int, k: int) -> R.Point:
+        return R.Point(P2Params(16448, 21065, bps, segments), k, R.DEPLOYED.limit_ns)
+
+    two20 = str(Fraction(1, 1 << 20))
+    for bps, segments in ((1 << 16, 8), (1 << 16, 1038), (1 << 16, 1 << 11)):
+        for k in (320, 321):
+            pt = at(bps, segments, k)
+            assert period.certify(pt) == {"certified": True, "eps": two20, "s_bits": bps * segments * 16448 * 18 // 19}
+            prof = period.profile(pt)
+            assert prof["gaps"] == [] and prof["certificate"]["theorem"] == "Pous.SecurityProofs.ObligationWide320"
+            assert prof["certificate"]["k"] == 320 and prof["certificate"]["claims"] == list(P2.WIDE_CLAIMS)
+    assert period.certify(at(1 << 16, 8, 320))["s_bits"] == 8_169_621_180
+    assert period.certificate(R.DEPLOYED.params, 319) == P2.P2(R.DEPLOYED.params).certificate
+    assert period.certify(at(1 << 16, 8, 319))["eps"] == str(EPS)
+    assert period.certify(at(256, 1, 320)) == {"certified": True, "eps": str(EPS), "s_bits": 256 * 16448 * 18 // 19}
+    assert period.certify(at(1 << 16, (1 << 11) + 1, 320))["certified"] is False
+
+
 def test_encode_in_processes_is_the_serial_encode():
     q = P2Params(128, 173, 8, 2)
     w = hashlib.shake_256(b"W").digest(q.w_bytes)
@@ -85,21 +104,21 @@ def test_encode_in_processes_is_the_serial_encode():
 
 
 def test_a_kept_store_is_audited_again(tmp_path):
-    """A store set up once and saved (`Store.save`) loads as it was, and each audit of it is a fresh session: two
+    """A store set up once and saved (`EncodedStore.save`) loads as it was, and each audit of it is a fresh session: two
     periods, each accepted, under session ids of their own."""
     held = period.setup_store(b"a period's records", hashlib.sha512(b"setup coins").digest(),
                               period.point_for(18, period.W, period.C0))
     held.save(tmp_path / "pous-store")
-    again = period.Store.load(tmp_path / "pous-store")
+    again = period.EncodedStore.load(tmp_path / "pous-store")
     assert again == held and len(again.blocks) == held.point.params.blocks
     signer, log = TestSigner(b"period", 3), session_log()
     got = [period.audit("n0", again, hashlib.sha512(b"coins %d" % i).digest(), signer=signer, log=log, schemes=SCHEMES,
-                        protocol=TEST_ID, clock=Clock()) for i in range(2)]
+                        protocol=TEST_ID, clock=Clock(10 ** 9)) for i in range(2)]
     assert [p.verdict for p in got] == ["accept", "accept"] and got[0].case["params"] != got[1].case["params"]
-    assert {p.s_bits for p in got} == {0}
+    assert {p.public("s_bits") for p in got} == {0}
 
 
-def _certified_store() -> period.Store:
+def _certified_store() -> period.EncodedStore:
     """A `C*` of uniformly random canonical blocks at the certified point, with a setup case of its own: what the run
     checks of it (the table, its root and the session) doesn't read how it was encoded, and a 256-block encode is 16
     core-minutes. No setup accepts it (a random block is no codeword), so the tie refuses its audits."""
@@ -109,8 +128,17 @@ def _certified_store() -> period.Store:
     digests = b"".join(mc.block_digest(b) for b in blocks)
     rows = [digests[64 * i:64 * (i + 1)] for i in range(q.blocks)]
     root, commitment = VerifierKey.from_row_digests(q, SALT, rows).root, hashlib.sha512(b"W").digest()
-    return period.Store(pt, R.Setup(q.blocks, commitment, root, SALT), blocks, digests,
-                        period.setup_case(q, commitment, SALT, [list(blocks)]))
+    return period.EncodedStore(pt, R.Setup(q.blocks, commitment, root, SALT), blocks, digests,
+                               period.setup_case(q, commitment, SALT, [list(blocks)]))
+
+
+def test_an_encoded_store_reads_as_the_audits_store():
+    """`EncodedStore.store` is `C*` as `requirement.Store`: every block registered and resident at every step, since
+    nothing is written or freed after setup, and no payloads."""
+    held = _certified_store()
+    n = held.point.params.blocks
+    assert held.store == requirement.Store(n, {}, {}, {})
+    assert held.store.resident(0) == held.store.resident(n) == frozenset(range(len(held.blocks)))
 
 
 def _run_of(case: dict) -> tuple:
@@ -127,7 +155,7 @@ def test_an_audit_at_the_certified_point_checks_its_run():
     `1% + 2^-128`, with no gap, under `P2SlackFamilyUncond`. This `C*` is no setup's, so the answer is the tie's refusal;
     an accepted, certified audit through the tie is `check/tests/test_run_protocol.py`'s (slow: a 256-block encode)."""
     held, signer = _certified_store(), TestSigner(b"certified", 3)
-    kw = dict(signer=signer, log=session_log(), schemes=SCHEMES, protocol=TEST_ID, clock=Clock())
+    kw = dict(signer=signer, log=session_log(), schemes=SCHEMES, protocol=TEST_ID, clock=Clock(10 ** 9))
     honest = period.audit("n0", held, hashlib.sha512(b"coins").digest(), **kw)
     assert honest.verdict == "reject" and honest.answer["reason"].startswith("setup: "), honest.answer
     R.check_at(*_run_of(honest.case))
@@ -136,7 +164,7 @@ def test_an_audit_at_the_certified_point_checks_its_run():
     assert prof["gaps"] == [] and prof["certificate"]["theorem"] == "Pous.SecurityProofs.P2SlackFamilyUncond"
     zeros = period.audit("n0", held, hashlib.sha512(b"coins 2").digest(),
                          prover=lambda blocks: lambda i: bytes(len(blocks[i])) if i % 2 else blocks[i], **kw)
-    assert zeros.verdict == "reject" and (zeros.s_bits, zeros.eps) == (0, 0)
+    assert zeros.verdict == "reject" and (zeros.public("s_bits"), zeros.eps) == (0, 0)
     with pytest.raises(R.Refused):
         R.check_at(*_run_of(zeros.case))
 
@@ -268,7 +296,7 @@ def test_pous_accepts_the_cut_records_as_it_does_the_whole(tmp_path):
     for name, store in (("whole", _whole(files)), ("cut", period.records(tmp_path))):
         got = period.run("n0", store, hashlib.sha512(b"coins " + name.encode()).digest(), signer=signer, log=log,
                          point=period.point_for(len(store), period.W, period.C0), schemes=SCHEMES, protocol=TEST_ID,
-                         clock=Clock())
+                         clock=Clock(10 ** 9))
         assert got.verdict == "accept", got.answer
         point[name] = period.point_of(got.case["params"]["point"]).params.blocks
     assert point["cut"] < point["whole"]

@@ -41,7 +41,7 @@ Encoding costs k square roots a word (n − 3 squarings each), decoding k squari
 default a chunk is 96 roots of 1,021 squarings to encode and 96 squarings of 1,024 bits to decode.  A bound chunk
 adds d_j (34 SHA-512 compressions over the payload, which its payload leaf hashes anyway) and b_j (2) to its encode,
 and b_j to its decode unless b_j is kept in d_j's place.  `rounds` below 2 is refused: at k = 1 a word can be partly
-kept and completed for less than an encode (red team F27).  ρ and σ_K permute the canonical words, so `decode` under
+kept and completed for less than an encode.  ρ and σ_K permute the canonical words, so `decode` under
 the seed's key is a bijection from canonical chunks to payload chunks, and a payload commitment with the codec seed
 fixes the encoded store; under a bound key, a chunk and a digest decode to the payload only if it has that digest.  A
 payload word at or above p is refused: c is below 2^16, so its top 16 bits are all ones, a NaN under bf16 (and its top
@@ -206,7 +206,7 @@ P2_LAYOUT = "p2-unit4/v0"
 @dataclass(frozen=True, slots=True)
 class P2Codec:
     """PoUS's P2 (`verity.core.protocols.pous.schemes.p2`, `p2-16448/v4`) as a P2 registration names it
-    (`p2.Registration`): the registered point's `w` and `c0`, keys by counter-mode SHA-512, and the store's
+    (`p2.Public`): the registered point's `w` and `c0`, keys by counter-mode SHA-512, and the store's
     segments.  A P2 store's labels are PoUS's 2,056-byte codewords, opened on PoUS's `vk` and never decoded by this
     protocol, and its receipts are of units under `P2_LAYOUT`.  Nothing of the Sloth codec above takes it, and
     `audit.Rebuild` refuses it: μ_rebuild over a P2 store waits on the squaring ceiling at P2's encode

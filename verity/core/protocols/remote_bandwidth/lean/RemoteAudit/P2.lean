@@ -1,3 +1,4 @@
+import CoreProtocol.Registration
 import PousCheck.Merkle
 import RemoteAudit.Window
 
@@ -38,9 +39,10 @@ def UNIT_BYTES : Nat := UNIT_BLOCKS * BLOCK_BYTES
 /-- PoUS's salt (`pous.params.SALT_BITS`), what vk's leaves are under. -/
 def POUS_SALT_BYTES : Nat := 24
 
-/-- What the store is (`p2.Registration`): the node, P2's geometry at the registered point, and PoUS's setup's
-commitment to W, salt and vk root, with sketch-sha512's rows k_s. -/
-structure Registration where
+/-- A P2 store's public values (`p2.Public`): the node the registration log registers it under, P2's geometry at the
+registered point, PoUS's setup's commitment to W and vk root, the salt (the verifier's coin, drawn after the
+commitment), and sketch-sha512's rows k_s. -/
+structure Public where
   node : ByteArray
   blocksPerSegment : Nat
   segments : Nat
@@ -49,11 +51,11 @@ structure Registration where
   root : ByteArray
   rows : Nat
 
-/-- A registration `p2.Registration` (with its `codec.P2Codec`) accepts: a node of 1 to 64 bytes, the registered point
+/-- A store's public values `p2.Public` (with its `codec.P2Codec`) accepts: a node of 1 to 64 bytes, the registered point
 and expander, `1 ≤ blocks_per_segment ≤ 2^16` and `1 ≤ segments < 2^32` with at least one unit, a 64-byte
 commitment and root, PoUS's 24-byte salt, and 16 or 64 rows. -/
-def Registration.make? (node : ByteArray) (w c0 : Nat) (expander : String) (blocksPerSegment segments : Nat)
-    (commitment salt root : ByteArray) (rows : Nat) : Except String Registration := do
+def Public.make? (node : ByteArray) (w c0 : Nat) (expander : String) (blocksPerSegment segments : Nat)
+    (commitment salt root : ByteArray) (rows : Nat) : Except String Public := do
   if !(1 ≤ node.size && node.size ≤ 64) then throw "a node's id is 1 to 64 bytes"
   if w ≠ W || c0 ≠ C0 || expander ≠ EXPANDER then throw "a P2 store is at PoUS's registered point"
   if blocksPerSegment = 0 || segments = 0 then throw "a P2 store's geometry is positive"
@@ -66,21 +68,33 @@ def Registration.make? (node : ByteArray) (w c0 : Nat) (expander : String) (bloc
   if !Kind.sketch.rowsOk rows then throw "sketch-sha512's rows are 16 or 64"
   pure { node, blocksPerSegment, segments, commitment, salt, root, rows }
 
+/-- `p2.stored`: the node whose P2 store of `blocks` blocks the registration log registers as `store`, read from an
+accepted log's view: the store's hardware, the memory leaf of that id, in a host, whose id is the node, holding the
+blocks' bytes. -/
+def stored? (v : Core.Registration.View) (store : String) (blocks : Nat) : Except String ByteArray := do
+  let some x := (v.site.loc? store).filter (·.kind == .memory)
+    | throw s!"the registration log registers no memory leaf {store}"
+  let some host := v.site.host? x | throw s!"the store {store} is in no host"
+  if x.bytes ≠ blocks * BLOCK_BYTES then throw s!"the store {store} is not {blocks} blocks of {BLOCK_BYTES} bytes"
+  let node := host.toUTF8
+  if !(1 ≤ node.size && node.size ≤ 64) then throw "a node's id is 1 to 64 bytes"
+  pure node
+
 /-- N, the store's blocks. -/
-def Registration.blocks (r : Registration) : Nat := r.blocksPerSegment * r.segments
+def Public.blocks (r : Public) : Nat := r.blocksPerSegment * r.segments
 
 /-- U, the store's units: what its plans range over. -/
-def Registration.units (r : Registration) : Nat := r.blocks / UNIT_BLOCKS
+def Public.units (r : Public) : Nat := r.blocks / UNIT_BLOCKS
 
-/-- `p2.Registration.digest`. -/
-def Registration.digest (r : Registration) : ByteArray :=
+/-- `p2.Public.digest`. -/
+def Public.digest (r : Public) : ByteArray :=
   sha512 (REGISTRATION_DOMAIN ++ frameBytes r.node ++ be 4 W ++ be 4 C0 ++ be 4 r.blocksPerSegment ++ be 8 r.segments
     ++ frameStr EXPANDER ++ r.commitment ++ r.salt ++ r.root ++ frameStr LAYOUT ++ frameStr Kind.sketch.name
     ++ be 4 r.rows)
 
 /-- `VerifierKey.check_path(j, block, path)` on the registration's root-only vk: PoUS's leaf of block j under its
 salt, on the root of N leaves. -/
-def Registration.checkPath (r : Registration) (j : Nat) (block : ByteArray) (path : Array ByteArray) : Bool :=
+def Public.checkPath (r : Public) (j : Nat) (block : ByteArray) (path : Array ByteArray) : Bool :=
   block.size == BLOCK_BYTES && PousCheck.Merkle.verifyPath r.root r.blocks j
     (PousCheck.Merkle.packageLeaf r.salt (j / r.blocksPerSegment) (j % r.blocksPerSegment) block) path
 
@@ -131,10 +145,10 @@ structure Opening where
   receiptPath : Array ByteArray
 deriving Inhabited
 
-/-- `p2.check`: receipt (i, p)'s opening `o`, position p of pass i under `seed` and `plan`, whose receipt tree's root
-is `root`, for `p` a position of the plan: `none` if it checks, else its first failure. -/
-def checkOpening (reg : Registration) (seed : ByteArray) (plan : Plan) (root : ByteArray) (i p : Nat) (o : Opening) :
-    Option Failure := Id.run do
+/-- `checkOpening` with S_i given (`signs`, `unitSigns seed reg.rows`): a window's check derives each pass's rows once,
+as `p2.Session._check` keeps a pass's `Sketcher`. -/
+def checkOpeningWith (signs : Array ByteArray) (reg : Public) (seed : ByteArray) (plan : Plan) (root : ByteArray)
+    (i p : Nat) (o : Opening) : Option Failure := Id.run do
   if o.pass ≠ i || o.position ≠ p || o.blocks.size ≠ UNIT_BLOCKS || o.blocks.any (·.size ≠ BLOCK_BYTES)
       || o.paths.size ≠ UNIT_BLOCKS || o.paths.any (·.any (·.size ≠ DIGEST_BYTES)) || o.leafSalt.size ≠ SALT_BYTES
       || o.receiptPath.any (·.size ≠ DIGEST_BYTES) then
@@ -145,7 +159,13 @@ def checkOpening (reg : Registration) (seed : ByteArray) (plan : Plan) (root : B
   for b in [0:UNIT_BLOCKS] do
     if !reg.checkPath (UNIT_BLOCKS * g + b) o.blocks[b]! o.paths[b]! then return some .payloadPath
   let unit := o.blocks.foldl (· ++ ·) ByteArray.empty
-  if unitReceipt seed g (int32s (unitSketch (unitSigns seed reg.rows) unit)) != y then return some .receipt
+  if unitReceipt seed g (int32s (unitSketch signs unit)) != y then return some .receipt
   return none
+
+/-- `p2.check`: receipt (i, p)'s opening `o`, position p of pass i under `seed` and `plan`, whose receipt tree's root
+is `root`, for `p` a position of the plan: `none` if it checks, else its first failure. -/
+def checkOpening (reg : Public) (seed : ByteArray) (plan : Plan) (root : ByteArray) (i p : Nat) (o : Opening) :
+    Option Failure :=
+  checkOpeningWith (unitSigns seed reg.rows) reg seed plan root i p o
 
 end RemoteAudit.P2

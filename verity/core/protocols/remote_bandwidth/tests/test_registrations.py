@@ -1,6 +1,5 @@
-"""One live registration a node, the red team's KB-4: each
-registration draws a fresh codec seed, so a prover that registered R times and kept the key that suits it would choose
-log₂ R bits of it, a retry that redraws.  The verifier's `Registry` refuses a second registration while one is live,
+"""One live registration a node: each registration draws a fresh codec seed, so a prover that registered R times and
+kept the key that suits it would choose log₂ R bits of it, a retry that redraws.  The verifier's `Registry` refuses a second registration while one is live,
 and a registration ends only when the verifier closes it, counting its sessions, a failed or unended one as failed."""
 
 from __future__ import annotations
@@ -10,14 +9,18 @@ import json
 import pytest
 
 from test_appends import N, NODE, P512, SOURCE, Run, payload, salts
+from verity.core import site as S
+from verity.core.protocols import registration as log
 from verity.core.protocols.remote_bandwidth import audit
+from verity.core.protocols.remote_bandwidth.codec import BLOCK_BYTES
 
 
 def registered_in(registry: audit.Registry, nonce: bytes = bytes(32), node: bytes = NODE) -> audit.Store:
     payloads = [payload(b"weights %d" % j) for j in range(N)]
     ys = salts(b"payload salts", N)
     root = audit.payload_tree(node, payloads, ys).commitment.root
-    return audit.Store(registry.register(SOURCE, node, N, root, P512, nonce=nonce), payloads, ys)
+    return audit.Store(registry.register(SOURCE, audit.site_log(node, N, root), audit.STORE, P512,
+                                         nonce=nonce), payloads, ys)
 
 
 def accepted(store: audit.Store, registry: audit.Registry) -> Run:
@@ -43,13 +46,13 @@ def unended(store: audit.Store, registry: audit.Registry) -> Run:
 
 
 def test_a_second_registration_of_a_live_node_is_refused_and_draws_nothing(monkeypatch) -> None:
-    draws, draw = [], audit.register
+    draws, draw = [], audit._draw
 
     def counted(*args, **kw):
         draws.append(args[1])
         return draw(*args, **kw)
 
-    monkeypatch.setattr(audit, "register", counted)
+    monkeypatch.setattr(audit, "_draw", counted)
     registry = audit.Registry()
     st = registered_in(registry)
     assert draws == [NODE] and registry.live(NODE) == st.registration.digest and registry.drawn(NODE) == 1
@@ -135,3 +138,36 @@ def test_the_registry_outlives_the_verifier_s_process_without_its_secret() -> No
                 {**good, "refused": {NODE.hex(): 0}}):
         with pytest.raises(ValueError):
             audit.Registry.from_json(bad)
+
+
+def logged(node: bytes, root: bytes, item: dict | None = None, store_bytes: int = N * BLOCK_BYTES,
+           device: bool = False) -> log.View:
+    """The view of a remote site's registration log holding the node's store, `store`: a memory leaf in the node (or
+    in a device of it), and θ's value for its payload (`audit.payload_item`, or `item`)."""
+    n, sheet = node.decode(), S.Sheet(S.DeviceFigures("a card", 1, (1, 1, 1, 1, 1)), 1, 1, 1 << 40)
+    parent = [S.Loc("gpu", "device", n, sheet=sheet.digest())] if device else []
+    site = log.site(sheets=(sheet,), locs=(S.Loc("site", "site"), S.Loc(n, "host", "site"), *parent,
+                                           S.Loc("store", "memory", "gpu" if device else n, tier="hbm" if device else
+                                                 "dram", bytes=store_bytes)))
+    theta = log.Information((audit.payload_item("store", node, N, root) if item is None else item,))
+    return log.check(log.Auditor(sheets=(sheet,)), "remote", log.chain("remote", [site, theta])).view()
+
+
+def test_a_store_drawn_from_the_registration_log_is_the_registration_of_its_node_size_and_payload() -> None:
+    """`register` reads the node, N and the payload root from the log, and the registration it draws is the one
+    `_draw` draws of them, byte for byte, so its digest, the root a session's first pass follows, is unchanged.  A
+    log that doesn't register the store so draws nothing: no such leaf, a leaf not whole blocks, or θ's value for it of
+    other leaves, words or node."""
+    root = audit.payload_tree(NODE, [payload(b"weights %d" % j) for j in range(N)], salts(b"y", N)).commitment.root
+    registry = audit.Registry()
+    reg = registry.register(SOURCE, logged(NODE, root), "store", P512, nonce=bytes(32))
+    assert reg == audit._draw(SOURCE, NODE, N, root, P512, nonce=bytes(32)) and registry.live(NODE) == reg.digest
+    assert audit.stored(logged(NODE, root, device=True), "store") == (NODE, N, root)
+    good = audit.payload_item("store", NODE, N, root)
+    for view, store in ((logged(NODE, root), "elsewhere"), (logged(NODE, root), "site"),
+                        (logged(NODE, root, store_bytes=N * BLOCK_BYTES + 2), "store"),
+                        (logged(NODE, root, good | {"leaves": N + 1}), "store"),
+                        (logged(NODE, root, good | {"words": BLOCK_BYTES // 4, "word_bits": 32}), "store"),
+                        (logged(NODE, root, audit.payload_item("store", b"another node", N, root)), "store")):
+        with pytest.raises(ValueError):
+            audit.Registry().register(SOURCE, view, store, P512, nonce=bytes(32))

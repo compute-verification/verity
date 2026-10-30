@@ -483,7 +483,7 @@ and the Python's alike, rejects such a session however it ran (`batch size B is 
 
 **What is public.** The commitment (protocol structure, with the server's declared tiers: the model's size), the
 verdict and the certified egress in whole MiB, rounded up and saturating at `2^15 − 1` (`Verdict.public()`, the
-protocol's outputs, 16 bits in all), and the coins once the session is signed (`Challenger.coins()`, the verifier's draws). The
+protocol's outputs, 16 bits in all), and the coins once the session is signed (`WipeMemoryChallenger.coins()`, the verifier's draws). The
 signed session (its times, its batch records and the exact egress) is witness, as a memory-challenger session is: the
 prover proves `verdict` of it through the proof system, and only the verdict is published. The labels and `K` are the
 auditor's; nothing of the prover's is committed, opened or read.
@@ -574,12 +574,12 @@ probe in Tuesday's window on vy-dc-h200-2 is to measure it, and the 8×H200 rows
 
 Each of `StreamedWipeMeetsReadsTight`, `StreamedWipeMeetsServer`, `StreamedWipeMeetsServer5GB` and
 `StreamedWipeMeetsServerH200` is its claim (`Security/Definitions/Pous/Claims/StreamedWipeServer.lean`) at the wipe's
-verdict, with two lemmas beside it (`Security/Proofs/Pous/StreamedWipe/Witnesses.lean`). The honest one
-(`Pous.Claims.<name>_meets`): its numeric premises, `M_s = 512·N + R`, `0 < N`, `(r − 1)^k · 2^129 ≤ r^k` and the
-5 GB point, hold at the measured H200 at `k = 5500`. The nontrivial one (`Pous.Claims.<name>_fails`): against a verdict
-that accepts everything, a prover that writes its prior content into its memory and reads it back is accepted and
-keeps it with probability 1, while the PRF's advantage against the distinguisher built from it
-(`wipeDistinguisher P`) is 0. A prover that keeps nothing stays within `2^-q` (`Pous.Claims.keepNothing_within`).
+acceptance rule (`Pous.StreamedWipe.Acceptance`), with two lemmas beside it
+(`Security/Proofs/Pous/StreamedWipe/Witnesses.lean`). The honest one (`Pous.Claims.<name>_meets`): its numeric
+premises, `M_s = 512·N + R`, `0 < N`, `(r − 1)^k · 2^129 ≤ r^k` and the 5 GB point, hold at the measured H200 at
+`k = 5500`. The nontrivial one (`Pous.Claims.<name>_fails`): against an acceptance rule that accepts everything, a
+prover that writes its prior content into its memory and reads it back is accepted and keeps it with probability 1,
+while the PRF's advantage against the distinguisher built from it (`wipeDistinguisher P`) is 0. A prover that keeps nothing stays within `2^-q` (`Pous.Claims.keepNothing_within`).
 
 **Measured** (`r20261019-061002-ee6b`, one RTX PRO 6000 Blackwell Server Edition with 188 SMs;
 `benchmarks/pous/streamed_wipe/run.sh`; every gate passed, 76 vectors against `streamed_wipe.label`):
@@ -627,7 +627,7 @@ which was not measured. The node's load average was about 930 during the run, wh
 | `band` | `BandParams(blocks_per_segment, m, d, segments)`, `SECURE_FIRST`; `codec_for(d)`, `BAND12`; `reference`, `ideal`; `effective_rounds`, `check_deployment` (the cliff) |
 | `dense` | `DenseParams(blocks_per_segment, m, segments)`, `POINT_64K`; `encode_segment` and `decode_segment` on bytes (reading each row's parents from the parameters, so the band shares them); `DENSE`, the two as a codec; `DenseChain` (the chain `H` of both), `reference`, `ideal`; the `*_prog` oracle programs |
 | `scheme` | P3's `encode_segment(params, prims, salt, s, w_seg) -> blocks` and `decode_segment(params, prims, salt, s, blocks) -> w_seg` on bytes; `P3`, the two as a codec; `encode` and `decode` over all of `W`, segment by segment; the `*_prog` oracle programs |
-| `layout` | `Layout.of(params, [(name, size)], align)`, `Layout.of_ranges(params, [(name, offset, size)])`, `pack`, `decode_tensor(..., codec=params.codec)` |
+| `layout` | `TensorLayout.of(params, [(name, size)], align)`, `TensorLayout.of_ranges(params, [(name, offset, size)])`, `pack`, `decode_tensor(..., codec=params.codec)` |
 | `setup` | `commit` (streamed over segments), `draw_salt`; `verifier_setup(params, prims, commitment, salt, encoded=C*, w=None, public_encoder=PUBLIC_ENCODER)`, which picks `verifier_key_from_encoding(params, prims, commitment, salt, C*, codec=params.codec)` (public encoder, the default) or `verifier_key(params, prims, W or its segments, commitment, salt, encoded=None, codec=params.codec)` (the verifier encodes); `server_root`, `check_server_root` |
 | `verifier` | `VerifierKey` (`root` and leaf digests; `build`, `from_leaves`, `from_segments`, `from_row_digests`), `leaf_hash` (whole or chunked blocks), `row_leaf` (from a block's row digest), `segment_leaves`, `MerkleTree` (audit paths), `verify_path` |
 | `audit` | `challenge_key`, `HonestResponder`, `UnsignedRounds` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `Answer.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 241.5 µs); `UnsignedRounds` refuses a band deadline past the cliff |
@@ -729,7 +729,7 @@ column storage, whole lower labels as separators, meet in the middle through `P�
   `chainBand` and `chainDense`), encode-after-decode on arbitrary `C`, negative controls, and the flag;
 - the two-labels-from-one-item attacks (`test_pous_two_for_one.py`), bit-exact on real labels: they succeed on the XOR
   sponge and on Miyaguchi–Preneel over band rows, and fail on the overwrite chain. The designer's state game
-  (`pous_state_game.py`, from `internal/p3-instantiation/overwrite-state-game.py`) agrees on dense and band rows;
+  (`pous_state_game.py`) agrees on dense and band rows;
 - the continuous audit's memory challengers against the Lean model (`test_pous_continuous_difftest.py`).
   `pous_continuous_model.py` transcribes the memory challenger of
   `Security/Definitions/Pous/Model/Continuous.lean` definition by definition (a test finds each one word for word
@@ -888,7 +888,7 @@ not reach; it is re-pinned at `k = 111`, four challenges more.
 The frozen statements (claims about a model, an ideal primitive or the model's memory challenger, which no Lean function
 computes) are in `Security/Definitions/Pous/Guarantees.lean` and its `Guarantees/` modules, each docstring ending with its
 category. The lemmas (`KFloor`, Theorem 1, Track A, the pebbling and sampled-audit results, the tagged keying's
-transfer, the column game's rows, the secure-erasure digest, `PerAnswer`, `ContinuousTimeAverage`, and the falsified
+transfer, the column game's rows, `PerAnswer`, `ContinuousTimeAverage`, and the falsified
 `InvExPostFactoTwoLayer` beside `N10Refuted`) are stated under the same `Pous.Guarantees` names in
 `Security/Proofs/Pous/Statements.lean`, and `ContinuousComplete`, the memory challenger's completeness, with them.
 The properties of the Lean verdicts `PousCheck.TimedAudit` and `MemoryChallenger.verdict`, and of the composed check
@@ -1009,7 +1009,12 @@ Two gaps stood between these statements and the deployed verifier:
   host never restores its earlier state". This log is part of that state, as is the LMS leaf state.
   Under one secret a reused id would also replay the coins, which `CoinTree.draw` derives from the secret and the id.
   The composed check accepts a session only under the id the auditor designated (`run.check`'s `session_id`), so an
-  audit has at most one session it can accept. The Lean states the check's side (`RunCheckAccepts`: an accepted session
+  audit has at most one session it can accept. On the served piece (`benchmarks/pous/served_piece.py`) the id is
+  derived, not drawn: the memory challenger draws the setup's salt after the commitment to `W` and logs it under the
+  window's binding (`memory_challenger.SaltLog`, one salt an audit), derives the id from the binding, the commitment
+  and the salt (`challenger_party.session_id`), and refuses a session whose setup doesn't publish exactly that
+  commitment and salt. The verifier computes the same id from the binding and what setup published, never from the
+  report. The salt is in the id because the signed header binds only the root of `C*`. The Lean states the check's side (`RunCheckAccepts`: an accepted session
   carries the designated id); the device's refusal is its code and log, which the Lean does not model.
 - G-2, the composed setup-to-challenger check, fixed: `run.check` (`PousCheck.Run.check`, `pous-run TRUSTED.json
   SETUP.json DIGESTS.bin SESSION.json SESSION_ID`) refuses a run unless the setup published `2^19` blocks under a

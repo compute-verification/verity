@@ -124,19 +124,14 @@ def sessionMessage (s : SignedSession) : Option ByteArray :=
 
 /-! ### The strings a run hashes -/
 
-/-- What `FV3.hash tag parts` hashes. -/
-def frameInput (tag : String) (parts : List ByteArray) : ByteArray :=
-  parts.foldl (fun acc p => acc ++ Flock.be64 p.size.toUInt64 ++ p)
-    (Flock.FV3.FRAME ++ Flock.be32 tag.toUTF8.size.toUInt32 ++ tag.toUTF8)
-
 /-- What SHA-512 hashes for the records tree over `values` under the domain `d`: each leaf, and each node of each
 level below the root. -/
-def treeStrings (d : FrameV3Sha512.Domain) (values : Array ByteArray) : List ByteArray :=
-  let levels := FrameV3Sha512.levels d ((Array.range values.size).map fun r => d.leaf r r RECORD_SCHEMA values[r]!)
+def treeStrings (d : Flock.FV3.Sha512.Domain) (values : Array ByteArray) : List ByteArray :=
+  let levels := d.levels ((Array.range values.size).map fun r => d.leaf r r RECORD_SCHEMA values[r]!)
   (List.range values.size).map (fun r =>
-      frameInput "leaf" [d.id, FrameV3Sha512.uint r, FrameV3Sha512.uint r, RECORD_SCHEMA.toUTF8, values[r]!]) ++
+      Flock.FV3.input "leaf" [d.id, Flock.FV3.uint r, Flock.FV3.uint r, RECORD_SCHEMA.toUTF8, values[r]!]) ++
     (List.range (levels.size - 1)).flatMap fun l => (List.range (levels[l]!.size / 2)).map fun i =>
-      frameInput "node" [d.id, FrameV3Sha512.uint l, FrameV3Sha512.uint i, levels[l]![2 * i]!, levels[l]![2 * i + 1]!]
+      Flock.FV3.input "node" [d.id, Flock.FV3.uint l, Flock.FV3.uint i, levels[l]![2 * i]!, levels[l]![2 * i + 1]!]
 
 /-- What SHA-512 hashes for a session `(c, ended, rounds)` signed under the key `pk`: the coin key (the header holds
 its digest), the records tree, the input of the session's `message`, and that of `memoryChallengerMessage`. -/

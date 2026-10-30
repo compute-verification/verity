@@ -1,4 +1,4 @@
-"""The remote bandwidth audit's pinned vectors (`vectors.json`): `python remote_bandwidth_vectors.py` rewrites them, and
+"""PoUB's pinned vectors (`vectors.json`): `python remote_bandwidth_vectors.py` rewrites them, and
 `test_remote_bandwidth_vectors.py` holds the code to them.
 
 Payload blocks are generated, not stored: payload `j` is 64 pieces of 64 bytes, piece u the first 64 bytes of
@@ -34,6 +34,7 @@ import hashlib
 import json
 from pathlib import Path
 
+from remote_bandwidth_fakes import Entropy
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts
 from verity.core.protocols.sampled_proofs.challenger import live_domain, live_leaf
 from verity.ml.commitments.rowleaf import sha512_row_v2_digest
@@ -63,18 +64,6 @@ def name(kind: str, bind: bool, rows: int) -> str:
     return kind + ("/bind" if bind else "") + ("" if rows == receipts.sketch_rows(kind) else f"/rows{rows}")
 
 
-class Entropy:
-    def __init__(self, label: bytes) -> None:
-        self.label, self.count = label, 0
-
-    def __call__(self, n: int) -> bytes:
-        out = b""
-        while len(out) < n:
-            out += hashlib.sha512(self.label + self.count.to_bytes(8, "big")).digest()
-            self.count += 1
-        return out[:n]
-
-
 def payload(j: int) -> bytes:
     if j == 0:
         return bytes(codec.BLOCK_BYTES)
@@ -97,7 +86,8 @@ def store() -> audit.Store:
     """The vectors' store, encoded once a process: its 21 blocks take about 6 s under the default codec."""
     payloads, salts = [payload(j) for j in range(BLOCKS)], payload_salts()
     root = audit.payload_tree(NODE, payloads, salts).commitment.root
-    return audit.Store(audit.register(SOURCE, NODE, BLOCKS, root, nonce=NONCE), payloads, salts)
+    return audit.Store(audit.register(SOURCE, audit.site_log(NODE, BLOCKS, root), audit.STORE,
+                                      nonce=NONCE), payloads, salts)
 
 
 @functools.cache
@@ -105,15 +95,15 @@ def registered(receipt: str, bind: bool, rows: int) -> audit.Store:
     """`store()` registered under `receipt`, `bind` and `rows` with the same nonce: its codec seed, so its blocks, are
     `store()`'s."""
     st = store()
-    reg = audit.register(SOURCE, NODE, BLOCKS, st.registration.payload_root, st.registration.codec, receipt, bind=bind,
-                         rows=rows, nonce=NONCE)
+    reg = audit.register(SOURCE, audit.site_log(NODE, BLOCKS, st.registration.payload_root), audit.STORE,
+                         st.registration.codec, receipt, bind=bind, rows=rows, nonce=NONCE)
     assert reg.codec_seed == st.registration.codec_seed
     out = copy.copy(st)
     out.registration = reg
     return out
 
 
-def chain(st: audit.Store) -> tuple[coins.LiveOpening, list[dict], coins.LiveOpening, coins.Coins]:
+def chain(st: audit.Store) -> tuple[coins.LiveOpening, list[dict], coins.LiveOpening, coins.SessionCoins]:
     """Window 0's challenge, opened after R, its three passes under the registration's receipt kind and `bind` (the
     stub tiles' z when it binds them), its openings coin, opened after the last pass's root, and the session's coins."""
     reg, blocks = st.registration, st.blocks

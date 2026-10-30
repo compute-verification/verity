@@ -5,8 +5,9 @@ with the memory challenger a party of its own on the challenger host (`verity.co
 * **W** is the weight of every ``LinearBase`` layer as the engine holds it (int8 [N, K] on the ``int8_exact`` target),
   deduplicated by storage, in module order and named by its first holder, in the store's frozen layout
   (`benchmarks/pous/p2_v1/store.py`): each tensor from a block boundary over ⌈size / payload⌉ blocks, its last block zero
-  past its end, and ``W`` zero to whole segments of the point's ``2^16`` blocks (`Layout.of_ranges`).  Scales, embeddings
-  and norms are not in ``W``.  These are the tensors the Commit registers, read through `weights_view` while released.
+  past its end, and ``W`` zero to whole segments of the point's ``2^16`` blocks (`TensorLayout.of_ranges`).  Scales,
+  embeddings and norms are not in ``W``.  These are the tensors the Commit registers, read through `weights_view` while
+  released.
 * **Commit** (`commit_weights`, the composition's first phase, model untouched): ``setup.commit(params, W)`` before any
   salt exists, recorded in the composition record's ``weights``.
 * **Install**, in order: the same commitment recomputed, refused if the weights changed since; the salt
@@ -24,7 +25,7 @@ with the memory challenger a party of its own on the challenger host (`verity.co
   each index from ``C*`` where it is held, and the verifier's answer: setup's own inputs tied to the run (`period.tie`,
   the public-encoder check of ``C*``), the run's check, and the bits an accepted run certifies (`period.certify`: 0 at a
   point no certificate covers).  In `PousOption.leg` the memory challenger runs at ``period.json``'s ``challenger_host``
-  (`challenger_party.Party.of`) and the Lean answers where the period's tools name it.
+  (`challenger_party.side_of`) and the Lean answers where the period's tools name it.
 * **Composition:** installed after PoUW and around it, so PoUW's GEMM consumes the decoded weight.  An option that
   keeps a weight-derived copy resident across forwards is the selector's to refuse (``keeps_weight_copy``); POUS keeps
   only ``C*``.
@@ -191,7 +192,7 @@ def _flat(t: Any) -> Any:
 
 def _layout(scheme: str, tensors: Mapping[str, Any]) -> Any:
     """The store's frozen layout over ``tensors``: each from a block boundary, in order (`p2_v1/store.py`'s ``build``)."""
-    from verity.core.protocols.pous.layout import Layout
+    from verity.core.protocols.pous.layout import TensorLayout
 
     base = _base(scheme)
     pb, block, ranges = base.payload_bytes, 0, []
@@ -199,7 +200,7 @@ def _layout(scheme: str, tensors: Mapping[str, Any]) -> Any:
         size = t.numel() * t.element_size()
         ranges.append((name, block * pb, size))
         block += -(-size // pb)
-    return Layout.of_ranges(base, ranges)
+    return TensorLayout.of_ranges(base, ranges)
 
 
 def _segment(layout: Any, flats: Mapping[str, Any], s: int) -> bytes:
@@ -288,10 +289,10 @@ class _Store:
         return [[host[s * n + v].tobytes() for v in range(n)] for s in range(self.params.segments)]
 
     def held(self) -> Any:
-        """`period.Store` of what this setup left: the setup case is built from ``C*`` as held now."""
+        """`period.EncodedStore` of what this setup left: the setup case is built from ``C*`` as held now."""
         from verity.core.protocols.pous import period
-        return period.Store(self.point, self.published(), _Blocks(self), self.digests,
-                            period.setup_case(self.params, self.commitment, self.salt, self.segments()))
+        return period.EncodedStore(self.point, self.published(), _Blocks(self), self.digests,
+                                   period.setup_case(self.params, self.commitment, self.salt, self.segments()))
 
     def decode_cpu(self, offset: int, size: int) -> bytes:
         """``W`` bytes ``[offset, offset + size)`` by the scheme's codec, from the segments they fall in; refused when a
@@ -314,7 +315,7 @@ class _Store:
 
 
 class _Blocks:
-    """``C*``'s blocks as `period.Store` reads them, from where they are held."""
+    """``C*``'s blocks as `period.EncodedStore` reads them, from where they are held."""
 
     def __init__(self, store: _Store) -> None:
         self.store = store
@@ -436,7 +437,7 @@ class PousOption(Option):
     def leg(self, period_dir: str | Path, node: str, out: str | Path, *, schemes: Mapping[str, Any] | None = None,
             protocol: str | None = None) -> dict[str, Any]:
         """One period's PoUS of what this option holds, as `period.leg` runs it for a node's records: the memory
-        challenger at ``period.json``'s ``challenger_host`` (`challenger_party.Party.of`, its side's key and session log
+        challenger at ``period.json``'s ``challenger_host`` (`challenger_party.side_of`, its side's key and session log
         in ``pous-challenger`` beside the periods when it is this node), fresh coins, and the Lean's answer where the
         period's tools name ``pous-run-protocol`` (and, at the first period, ``pous-setup``), which must agree with the
         Python's.  Writes ``out/pous.case.json``, ``out/pous.json`` and, at the first period, ``out/pous-setup.case.json``;
@@ -448,7 +449,7 @@ class PousOption(Option):
 
         doc = json.loads((Path(period_dir) / "period.json").read_text())
         tools = doc.get("tools", {})
-        party = CP.Party.of(doc, node, Path(period_dir).parent / "pous-challenger")
+        party = CP.side_of(doc, node, Path(period_dir).parent / "pous-challenger")
         where = CP.placement(node, party.host)
         fresh, answered = self.periods == 0, self.answered
         t = time.monotonic()
@@ -476,7 +477,7 @@ class PousOption(Option):
         q = self.store.params
         (out / "pous.json").write_text(json.dumps({
             "answer": answer, "blocks": q.blocks, "eps": str(got.eps), "lean": lean, "placement": where,
-            "rounds_answered": self.answered - answered, "s_bits": got.s_bits, "seconds": seconds,
+            "rounds_answered": self.answered - answered, "s_bits": got.public("s_bits"), "seconds": seconds,
             "setup": {"fresh": fresh, "encode": self.store.encode if fresh else None}, "w_bytes": q.w_bytes},
             sort_keys=True, indent=1))
         return answer

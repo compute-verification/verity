@@ -15,6 +15,8 @@ statement `Stmt.setupH` sets up, so the hidden case is a different `RunsZC` inst
   `tablesAtZK`, `opnAtZ`, `TablesAtZKLive`, `TagsOk` and `DrawOkZK`, and `TablesAtZKHLive`'s hypotheses on the circuit
   (`HmOut.parse` accepts it at the `--zk` tags; its unit returns the outputs). The decoder `decAtZ`, the empty tail and
   `capOfRoot` are the public case's.
+* `RunsZCLiveHSt`, `RunsZCLiveHISt`: `RunsZCLiveH` and `RunsZCLiveHI` at the statement circuit (`HmOut.parseStmt`, a
+  templated file's template unrolled), from `TablesAtZKHLiveSt` and `TablesAtZKHLiveISt`.
 -/
 
 namespace FlockSoundness.Discharge.ZkHidden
@@ -63,6 +65,31 @@ def RunsZCLiveHI : Prop :=
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))
     (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (L : Audit.Law n),
     TablesAtZKHLiveI (n := n) (mPts := mPts) (Reg := Reg) → HiddenDec.TagsOkH I → ZkLink.RecordsLiveZK I dj wr →
+    (∀ ω, DrawOkZKH I dj mPts (L.draw ω)) →
+    RunsOnZC (K := 𝕂) execArith hs512 (tablesAtZKH (Reg := Reg) dj y₀) I wr
+      (opnAtZH (tablesAtZKH dj y₀) I dj) (decAtZ (tablesAtZKH dj y₀)) (fun _ _ _ _ => [])
+      (fun _ _ b _ => capOfRoot b) L
+
+/-- **`RunsZCLiveH` at the statement circuit**: on every circuit `HmOut.parseStmt` reads at the `--zk` tags (a templated
+file's template unrolled) whose unit returns the outputs, from `TablesAtZKHLiveSt`. -/
+def RunsZCLiveHSt : Prop :=
+  ∀ {n mPts : ℕ} {Reg : Type} (I : Inputs) (_ht : I.tags.typed = false) {c : Flock.Circuit}
+    (_hc : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c) (_ho : c.outNet = c.unitNet)
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))
+    (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (L : Audit.Law n),
+    TablesAtZKHLiveSt (n := n) (mPts := mPts) (Reg := Reg) → HiddenDec.TagsOkH I → ZkLink.RecordsLiveZK I dj wr →
+    (∀ ω, DrawOkZKH I dj mPts (L.draw ω)) →
+    RunsOnZC (K := 𝕂) execArith hs512 (tablesAtZKH (Reg := Reg) dj y₀) I wr
+      (opnAtZH (tablesAtZKH dj y₀) I dj) (decAtZ (tablesAtZKH dj y₀)) (fun _ _ _ _ => [])
+      (fun _ _ b _ => capOfRoot b) L
+
+/-- **`RunsZCLiveHI` at the statement circuit**, from `TablesAtZKHLiveISt`. -/
+def RunsZCLiveHISt : Prop :=
+  ∀ {n mPts : ℕ} {Reg : Type} (I : Inputs) (_ht : I.tags.typed = false) {c : Flock.Circuit}
+    (_hc : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c)
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))
+    (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (L : Audit.Law n),
+    TablesAtZKHLiveISt (n := n) (mPts := mPts) (Reg := Reg) → HiddenDec.TagsOkH I → ZkLink.RecordsLiveZK I dj wr →
     (∀ ω, DrawOkZKH I dj mPts (L.draw ω)) →
     RunsOnZC (K := 𝕂) execArith hs512 (tablesAtZKH (Reg := Reg) dj y₀) I wr
       (opnAtZH (tablesAtZKH dj y₀) I dj) (decAtZ (tablesAtZKH dj y₀)) (fun _ _ _ _ => [])

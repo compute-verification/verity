@@ -1,9 +1,13 @@
-"""`p2.py`, the remote audit over PoUS's P2 store, held to its Lean (`RemoteAudit.P2`, through `remote-audit-difftest`) on
-drawn inputs that include what both sides must refuse: a registration's digest (`p2.Registration.digest`, with
+"""`p2.py`, PoUB over PoUS's P2 store, held to its Lean (`RemoteAudit.P2`, through `remote-audit-difftest`) on
+drawn inputs that include what both sides must refuse: a registration's digest (`p2.Public.digest`, with
 `codec.P2Codec`'s refusals), a unit's sketch from its blocks' partials (`p2.Sketcher`: π a block, σ their sum, and y
 from σ against y of the unit's bytes) and an opening's check (`p2.check`) on stores of drawn blocks under PoUS's leaf
-and vk tree, honest or with one field changed; and the committed C* (`tests/fixtures/p2-c-star.bin`, PoUS's setup's
-prover bytes): its registration's digest and an honest opening of each of its units."""
+and vk tree, honest or with one field changed; a whole session of record (`RemoteAudit.P2Session`, which `p2_party.py`
+runs) against `p2_party.Books` on the bytes the verifier reads, the registration file, the request and each root and
+openings line, under the auditor's session parameters, recorded from a prover over a drawn store, honest or with one
+deviation; and the committed C* (`tests/fixtures/p2-c-star.bin`, PoUS's setup's prover bytes): its registration's
+digest, an honest opening of each of its units, an honest session over it, one of `SESSION`'s (the Lean's pinned
+`P2Session.SESSION`), and a request off `SESSION` in each of its values refused in `p2_party.params_of`'s words."""
 
 from __future__ import annotations
 
@@ -17,9 +21,12 @@ import pytest
 from hypothesis import strategies as st
 
 import ra_cases as M
+from ra_cases import Entropy
 import verity_difftest as D
+from verity.core import site as S
+from verity.core.protocols import registration as log
 from verity.core.protocols.pous.verifier import MerkleTree, leaf_hash
-from verity.core.protocols.remote_bandwidth import p2, receipts
+from verity.core.protocols.remote_bandwidth import coins, p2, p2_party, receipts
 from verity.core.protocols.remote_bandwidth.codec import P2_EXPANDER, P2_POINT, P2Codec
 from verity.core.protocols.remote_bandwidth.receipts import Plan
 
@@ -54,15 +61,15 @@ def p2_blocks() -> st.SearchStrategy:
 
 # --- decoding, as `RemoteAudit.Difftest` decodes ----------------------------------------------------------------------
 
-def registration_of(v) -> p2.Registration:
+def registration_of(v) -> p2.Public:
     c = M._get(v, "codec")
     codec = P2Codec(M.nat(c, "blocks_per_segment"), M.nat(c, "segments"), M.nat(c, "w"), M.nat(c, "c0"),
                     M._str(c, "expander"))
-    return p2.Registration(M.hex_(v, "node"), codec, M.hex_(v, "commitment"), M.hex_(v, "salt"), M.hex_(v, "root"),
+    return p2.Public(M.hex_(v, "node"), codec, M.hex_(v, "commitment"), M.hex_(v, "salt"), M.hex_(v, "root"),
                            M.nat(v, "rows"))
 
 
-def registration_json(r: p2.Registration) -> dict:
+def registration_json(r: p2.Public) -> dict:
     return {"node": r.node.hex(), "codec": r.codec.to_json(), "commitment": r.commitment.hex(), "salt": r.salt.hex(),
             "root": r.root.hex(), "rows": r.rows}
 
@@ -139,6 +146,32 @@ def test_p2_registration_digest(server) -> None:
     assert stats.outputs > 80, stats
 
 
+def stored(v) -> str:
+    """`p2StoredFn`: the node whose P2 store of `blocks` blocks the registration log registers as `store`."""
+    with M.decoding():
+        view, store, blocks = M.logged_view(v), M._str(v, "store"), M.nat(v, "blocks")
+    return p2.stored(view, store, blocks).hex()
+
+
+@st.composite
+def stored_inputs(draw) -> dict:
+    """A log of a host and a memory leaf in it, and a store of some blocks: now and then a leaf of other bytes, a node
+    id past 64 bytes, a store the log doesn't name or that is the host, or a log another composite's."""
+    node = draw(st.sampled_from(["p2-node", "p2-node", "n", "x" * 64, "x" * 65]))
+    blocks = draw(st.sampled_from([1, 4, 12]))
+    size = blocks * p2.BLOCK_BYTES + draw(st.sampled_from([0] * 6 + [p2.BLOCK_BYTES, 1]))
+    site = log.site(locs=(S.Loc("site", "site"), S.Loc(node, "host", "site"),
+                          S.Loc("c-star", "memory", node, tier="disk", bytes=size)))
+    return {"params": log.params("onsite" if fault(draw, 6) == 1 else "remote", log.Auditor()),
+            "log": {"composite": "remote", "entries": [e.to_json() for e in log.chain("remote", [site])]},
+            "store": draw(st.sampled_from(["c-star"] * 8 + [node, "other"])), "blocks": blocks}
+
+
+def test_p2_stored(server) -> None:
+    stats = D.run(port("p2_stored", stored, stored_inputs()), examples=150, server=server)
+    assert stats.outputs > 50, stats
+
+
 # --- a unit's sketch ---------------------------------------------------------------------------------------------------
 
 def sketch(v) -> dict:
@@ -202,15 +235,6 @@ def opening(v) -> str | None:
 GEOMETRIES = ((4, 1), (2, 3), (3, 3), (5, 3), (17, 4))
 
 
-class Entropy:
-    def __init__(self, label: bytes) -> None:
-        self.label, self.count = label, 0
-
-    def __call__(self, n: int) -> bytes:
-        self.count += 1
-        return expand(self.label + self.count.to_bytes(8, "big"), n)
-
-
 @functools.cache
 def drawn_store(k: int, rows: int) -> p2.Store:
     """A store of sampled proof blocks (P2's check never decodes, so they needn't be codewords) under geometry `k`, with
@@ -221,7 +245,7 @@ def drawn_store(k: int, rows: int) -> p2.Store:
     blocks[-1] = b"\x7f" * p2.BLOCK_BYTES
     codec, salt = P2Codec(bps, segments), expand(b"salt %d" % k, 24)
     root = MerkleTree([leaf_hash(p2.pous_params(codec), salt, j, b) for j, b in enumerate(blocks)]).root
-    reg = p2.Registration(b"node %d" % k, codec, expand(b"commitment %d" % k, 64), salt, root, rows)
+    reg = p2.Public(b"node %d" % k, codec, expand(b"commitment %d" % k, 64), salt, root, rows)
     return p2.Store(reg, blocks)
 
 
@@ -252,7 +276,7 @@ def opening_inputs(draw) -> dict:
     order = draw(st.permutations(range(reg.blocks)))[:draw(st.integers(1, reg.blocks))]
     plan = Plan([tuple(r) for r in canonical_runs(order)], reg.blocks)
     seed, i, p = expand(draw(st.binary(max_size=8)), 64), draw(st.integers(0, 3)), draw(st.integers(0, plan.length - 1))
-    prover = p2.Prover(store, None, entropy=Entropy(b"salts %d" % k))
+    prover = p2.Prover(store, entropy=Entropy(b"salts %d" % k))
     edit = fault(draw, 16)
     if edit == 1:
         sk, unit = p2.Sketcher(seed, rows), store.unit(plan.block(p))
@@ -311,6 +335,312 @@ def test_p2_opening(server) -> None:
     assert stats.outputs > 300, stats
 
 
+# --- a session of record ----------------------------------------------------------------------------------------------
+
+def p2_event_of(v) -> tuple:
+    """`p2SessionFn`'s events: `start` and `boundary` `{"now"}`, `close` `{"t", "now"}`, `root` `{"t", "i", "now",
+    "line"}`, `openings` `{"t", "line"}` (each line its bytes in hex) and `fail`."""
+    kind = M._str(v, "kind")
+    if kind in ("start", "boundary"):
+        return kind, M.nat(v, "now")
+    if kind == "close":
+        return kind, M.int_(v, "t"), M.nat(v, "now")
+    if kind == "root":
+        return kind, M.int_(v, "t"), M.int_(v, "i"), M.hex_(v, "line"), M.nat(v, "now")
+    if kind == "openings":
+        return kind, M.int_(v, "t"), M.hex_(v, "line")
+    if kind == "fail":
+        return (kind,)
+    raise D.Reject(f"no P2 event kind {kind}")
+
+
+def p2_apply(b: p2_party.Books, e: tuple) -> dict:
+    kind, *a = e
+    return {"start": b.start, "boundary": b.boundary, "close": b.close, "root": b.root, "openings": b.openings,
+            "fail": b.fail}[kind](*a)
+
+
+def p2_session(v) -> dict:
+    """`p2SessionFn`: the registration file's bytes and the prover's request line read as `p2_party` reads them
+    (`registration_of`, `plan_of`, `message`, `params_of`) under the auditor's session parameters (`auditor_of`), a
+    request out of form refused as such and one off the auditor's with `params_of`'s reason, and the events through
+    `p2_party.Books` on a challenger replaying the case's 2W coins: the held store, every event's result and the
+    answer, less its reason."""
+    with M.decoding():
+        data = M.hex_(v, "registration")
+    try:
+        doc = json.loads(data.decode())
+        reg = p2_party.registration_of(doc)
+        plan = p2_party.plan_of(doc, reg)
+    except (ValueError, KeyError, TypeError, RecursionError):
+        return {"refused": "registration"}
+    with M.decoding():
+        auditor = auditor_of(v)
+        line = M.hex_(v, "request")
+    try:
+        request = asked(reg, line)
+    except (ConnectionError, ValueError, KeyError, TypeError):
+        return {"refused": "request"}
+    try:
+        params = p2_party.params_of(reg, request, auditor)
+    except ValueError as e:
+        return {"refused": "request", "reason": str(e)}
+    with M.decoding():
+        committed = M.hexes(v, "coins")
+        if len(committed) != 2 * params.windows or any(len(c) != coins.COIN_BYTES for c in committed):
+            raise D.Reject("2W coins of 32 bytes")
+        M.nat(v, "chunk")
+        not_before = M.nat(v, "not_before_ns")
+        events = [p2_event_of(e) for e in M._list(v, "events")]
+    b = p2_party.Books(params, reg, M.replayed(reg, 0, params.windows, committed, []), plan, not_before)
+    results = [p2_apply(b, e) for e in events]
+    answer = json.loads(json.dumps(p2_party.answer(b.s, plan=plan)))
+    del answer["reason"]
+    return {"held": p2_party.held_json(reg, plan), "results": results, "answer": answer}
+
+
+P2_STEP_NS = 400
+
+
+def auditor_of(v) -> dict:
+    """`p2SessionFn`'s `session`, the auditor's session parameters (`Auditor.ofJson`): `p2_party.SESSION` for null,
+    else an object of its keys, each a positive integer."""
+    s = M._get(v, "session")
+    if s is None:
+        return dict(p2_party.SESSION)
+    if not isinstance(s, dict) or sorted(s) != sorted(p2_party.SESSION):
+        raise D.Reject(f"a session is {sorted(p2_party.SESSION)}")
+    return {k: M._positive(s, k) for k in p2_party.SESSION}
+
+
+def asked(reg: p2.Public, line: bytes) -> dict:
+    """The request `line` carries, refused as `P2Session.askedOn` refuses it: out of form, for another node, or with a
+    value that isn't a positive integer (`p2_party.params_of` against its own values)."""
+    request = p2_party.message(line, "request")
+    p2_party.params_of(reg, request, request)
+    return request
+
+
+def p2_line(key: str, value) -> bytes:
+    return json.dumps({key: value}, sort_keys=True).encode() + b"\n"
+
+
+def p2_bad_root(root: str, pick: int) -> bytes:
+    """A root's line near its form, from `pick`: unended, not JSON, another key or two, a root not 64 bytes of
+    lowercase hex, not an object or not UTF-8, or ended CRLF, which is in form."""
+    lines = (p2_line("root", root)[:-1], b"not json\n", b"\n", p2_line("roots", root),
+             json.dumps({"root": root, "t": 0}).encode() + b"\n", p2_line("root", root.upper()),
+             p2_line("root", root[:-2]), p2_line("root", root + "00"), p2_line("root", 7), p2_line("root", None),
+             b"[" + p2_line("root", root)[:-1] + b"]\n", b'{"root": "\xff"}\n', p2_line("root", root)[:-1] + b"\r\n")
+    return lines[pick % len(lines)]
+
+
+def p2_bad_openings(os: list[dict], pick: int) -> bytes:
+    """A window's openings line near its form, from `pick`: unended, another key, an opening fewer, more or out of
+    order, not a list, or one opening changed: each of `p2.check`'s failures and `opening_of`'s refusals, or a key
+    nothing reads, which is in form."""
+    k, n = pick % len(os), pick // len(os)
+    o = os[k]
+    edits = (lambda: o | {"leaf_salt": o["leaf_salt"][:-2]}, lambda: o | {"pass": str(o["pass"])},
+             lambda: o | {"blocks": [flip(o["blocks"][0])] + o["blocks"][1:]}, lambda: o | {"leaf": flip(o["leaf"])},
+             lambda: o | {"position": o["position"] + 1}, lambda: {x: y for x, y in o.items() if x != "paths"},
+             lambda: o | {"blocks": o["blocks"][:3]}, lambda: o | {"unread": 1})
+    lines = (lambda: p2_line("openings", os)[:-1], lambda: p2_line("opening", os),
+             lambda: p2_line("openings", os[:-1]), lambda: p2_line("openings", os + os[:1]),
+             lambda: p2_line("openings", os[::-1]), lambda: p2_line("openings", {"0": os}),
+             *(lambda e=e: p2_line("openings", os[:k] + [e()] + os[k + 1:]) for e in edits))
+    return lines[n % len(lines)]()
+
+
+def p2_events(store: p2.Store, plan: Plan, params, committed: list[bytes], not_before: int, edit: int = 0,
+              at: tuple[int, int] = (0, 0), pick: int = 0) -> list[dict]:
+    """A session's events as `p2_party.session` drives it, the prover's lines an honest prover's over `store`
+    (`p2.Prover`), each step `P2_STEP_NS`, but for deviation `edit` at pass `at` = (t, i), its variant from `pick`:
+    3 a unit's reads skipped (its receipt from zeros), 4 window t's openings line near its form (`p2_bad_openings`), 5
+    window t's last pass missing, 6 the pass's root line near its form (`p2_bad_root`) and 7 the pass's root after
+    window t's deadline. The events end once the session has its outcome."""
+    b = p2_party.Books(params, store.registration, M.replayed(store.registration, 0, params.windows, committed, []),
+                       plan, not_before)
+    prover = p2.Prover(store, entropy=Entropy(b"p2 session"))
+    events: list[dict] = []
+    passes: dict[tuple[int, int], object] = {}
+
+    def push(e: dict) -> dict:
+        """`e` sent and the books' answer, until the session has its outcome; after it, nothing is sent."""
+        if b.s.outcome is not None:
+            return {}
+        events.append(e)
+        return p2_apply(b, p2_event_of(e))
+
+    def opened(t: int, now: int) -> None:
+        got = push({"kind": "close", "t": t, "now": now})
+        if "draws" in got:
+            os = [p2_party.opening_json(prover.open(passes[t, i], p)) for i, p in got["draws"]]
+            line = p2_bad_openings(os, pick) if edit == 4 and t == at[0] else p2_line("openings", os)
+            push({"kind": "openings", "t": t, "line": line.hex()})
+
+    now, previous = not_before, store.registration.digest
+    push({"kind": "start", "now": now})
+    for t in range(params.windows):
+        if t >= len(b.s.windows) or b.s.outcome is not None:
+            break
+        w = b.s.windows[t]
+        for i in range(params.min_passes):
+            if edit == 5 and (t, i) == (at[0], params.min_passes - 1):
+                continue
+            seed = receipts.seed(w.challenge, i, previous)
+            if edit == 3 and (t, i) == at:
+                sk = p2.Sketcher(seed, store.registration.rows)
+                ys = [sk(g, bytes(p2.UNIT_BYTES) if p == pick % plan.length else store.unit(g))
+                      for p, g in enumerate(plan)]
+                ps = prover.commit(t, i, seed, plan, ys)
+            else:
+                ps = prover.pass_under(t, i, seed, plan)
+            passes[t, i], previous = ps, ps.root
+            now += P2_STEP_NS
+            if edit == 7 and (t, i) == at:
+                push({"kind": "boundary", "now": max(now, w.released_ns + params.window_ns)})
+                now = (b.s.deadline(t) or now) + 1
+            root = ps.root.hex()
+            line = p2_bad_root(root, pick) if edit == 6 and (t, i) == at else p2_line("root", root)
+            push({"kind": "root", "t": t, "i": i, "now": now, "line": line.hex()})
+            if i == 0 and t > 0:
+                opened(t - 1, now)
+        now = max(now, w.released_ns + params.window_ns)
+        push({"kind": "boundary", "now": now})
+    if b.s.outcome is None:
+        opened(params.windows - 1, b.s.deadline(params.windows - 1) + 1)
+    return events
+
+
+def p2_held(reg: p2.Public, data: bytes, line: bytes, auditor: dict):
+    """The plan and parameters the books hold from the registration file `data` and the request `line` under the
+    auditor's session parameters `auditor`, else the error they refuse them with (a session with no events after the
+    request)."""
+    try:
+        doc = json.loads(data)
+        plan = p2_party.plan_of(doc, p2_party.registration_of(doc))
+        return plan, p2_party.params_of(reg, asked(reg, line), auditor)
+    except (ConnectionError, ValueError, KeyError, TypeError) as e:
+        return e
+
+
+@st.composite
+def p2_session_inputs(draw) -> dict:
+    """A session over a drawn store under every unit or a drawn plan, held to drawn session parameters, recorded from
+    the prover (`p2_events`), honest or with one deviation: the registration or the request refused or near its form
+    (1, 2), one of `p2_events`'s (3 … 7), or its events changed after: a fail inserted, the events cut short, one
+    repeated, dropped or swapped with the next, one's clock changed, a field missing or out of form, or a start too
+    early first (8 … 15); or the request off the auditor's session, in a drawn set of its values (16), or the drawn
+    session's request under `SESSION` (17)."""
+    k, rows = draw(st.integers(0, len(GEOMETRIES) - 1)), draw(st.sampled_from([16, 64]))
+    store = drawn_store(k, rows)
+    reg = store.registration
+    stated = None
+    if draw(st.booleans()):
+        order = draw(st.permutations(range(reg.blocks)))[:draw(st.integers(1, reg.blocks))]
+        stated = Plan([tuple(r) for r in canonical_runs(order)], reg.blocks)
+    doc = p2_party.registration_json(reg, stated)
+    windows, passes, samples = draw(st.integers(1, 3)), draw(st.integers(1, 2)), draw(st.integers(1, 3))
+    window_ns, deadline_ns = draw(st.sampled_from([(2 * P2_STEP_NS, P2_STEP_NS), (P2_STEP_NS, 3 * P2_STEP_NS)]))
+    session = {"deadline_ns": deadline_ns, "passes": passes, "samples": samples, "window_ns": window_ns,
+               "windows": windows}
+    req = p2_party.request_of(reg.node, **session)
+    committed = [expand(b"coin %d " % j + draw(st.binary(max_size=4)), coins.COIN_BYTES) for j in range(2 * windows)]
+    not_before = draw(st.sampled_from([0, 0, 10 ** 6]))
+    edit, pick = fault(draw, 17), draw(st.integers(0, 1 << 16))
+    at = (draw(st.integers(0, windows - 1)), draw(st.integers(0, passes - 1)))
+    data, line = None, None
+    if edit == 16:
+        for key in draw(st.lists(st.sampled_from(sorted(session)), min_size=1, unique=True)):
+            req[key] = draw(st.sampled_from([x for x in (session[key] - 1, session[key] + 1, 2 * session[key] + 1)
+                                             if x >= 1]))
+    if edit == 1:
+        f = pick % 8
+        if f == 0:
+            doc["digest"] = flip(doc["digest"])
+        elif f == 1:
+            del doc[sorted(doc)[pick % len(doc)]]
+        elif f == 2:
+            doc["plan"] = [[[0, reg.blocks + 1]], [], [[0, 1], [1, 1]], "0,1", [[0]], [[0, True]]][pick % 6]
+        elif f == 3:
+            doc["rows"] = 80 - rows
+        elif f == 4:
+            doc["plan"] = None
+        elif f == 5:
+            data = b'{"node": "\xff"}'
+        elif f == 6:
+            data = b"[]"
+        else:
+            doc["w"] = float(doc["w"])
+    elif edit == 2:
+        f = pick % 9
+        key = sorted(req)[pick % len(req)]
+        if f == 0:
+            req["node"] = b"another node".hex()
+        elif f == 1:
+            req["unread"] = 1
+        elif f == 2 and key != "node":
+            req[key] = 0
+        elif f == 3:
+            req[key] = True
+        elif f == 4 and key != "node":
+            req[key] = float(req[key])
+        elif f == 5:
+            del req[key]
+        elif f == 6:
+            line = p2_line("request", req)[:-1]
+        elif f == 7:
+            line = json.dumps({"request": req, "t": 0}).encode() + b"\n"
+        else:
+            req["node"] = req["node"].upper()
+    data = json.dumps(doc).encode() if data is None else data
+    line = p2_line("request", req) if line is None else line
+    v = {"registration": data.hex(), "request": line.hex(), "session": None if edit == 17 else session,
+         "coins": [c.hex() for c in committed], "chunk": draw(st.sampled_from([1, 2, 3, 64])),
+         "not_before_ns": not_before, "events": []}
+    held = p2_held(reg, data, line, p2_party.SESSION if edit == 17 else session)
+    if isinstance(held, Exception):
+        return v
+    plan, params = held
+    ev = v["events"] = p2_events(store, plan, params, committed, not_before, edit, at, pick)
+    j = pick % (len(ev) + 1)
+    if edit == 8:
+        ev.insert(j, {"kind": "fail"})
+    elif edit == 9:
+        del ev[j:]
+    elif edit == 10:
+        ev.insert(j, dict(ev[min(j, len(ev) - 1)]))
+    elif edit == 11:
+        del ev[min(j, len(ev) - 1)]
+    elif edit == 12 and len(ev) > 1:
+        j = pick % (len(ev) - 1)
+        ev[j], ev[j + 1] = ev[j + 1], ev[j]
+    elif edit == 13 and "now" in ev[min(j, len(ev) - 1)]:
+        e = ev[min(j, len(ev) - 1)]
+        e["now"] = [0, e["now"] + 10 ** 6, max(0, e["now"] - P2_STEP_NS)][pick % 3]
+    elif edit == 14:
+        f = pick % 5
+        if f == 0:
+            v["coins"] = v["coins"][:-1]
+        elif f == 1:
+            del v[sorted(v)[pick % len(v)]]
+        elif f == 2:
+            ev.append({"kind": "append", "now": 0})
+        elif f == 3:
+            ev.append({"kind": "root", "t": 0, "i": 0, "now": 0, "line": "0"})
+        else:
+            v["coins"][0] = v["coins"][0][:-2]
+    elif edit == 15:
+        ev.insert(0, {"kind": "start", "now": max(0, not_before - 1)})
+    return v
+
+
+def test_p2_session(server) -> None:
+    stats = D.run(port("p2_session", p2_session, p2_session_inputs()), examples=150, server=server)
+    assert stats.outputs > 110, stats
+
+
 # --- the committed C* ---------------------------------------------------------------------------------------------------
 
 @pytest.fixture(scope="module")
@@ -320,7 +650,7 @@ def committed() -> p2.Store:
     data = (FIXTURES / "p2-c-star.bin").read_bytes()
     assert hashlib.sha512(data).hexdigest() == meta["c_star_sha512"]
     m = meta["params"]
-    reg = p2.Registration(b"p2-node-under-test", P2Codec(m["blocks_per_segment"], m["segments"]),
+    reg = p2.Public(b"p2-node-under-test", P2Codec(m["blocks_per_segment"], m["segments"]),
                           bytes.fromhex(meta["commitment"]), bytes.fromhex(meta["salt"]), bytes.fromhex(meta["root"]))
     return p2.Store(reg, [data[p2.BLOCK_BYTES * j:p2.BLOCK_BYTES * (j + 1)] for j in range(len(data) // p2.BLOCK_BYTES)])
 
@@ -334,10 +664,63 @@ def test_the_committed_store_s_registration_digest_is_the_leans(server, committe
 def test_an_honest_opening_of_each_committed_unit_checks_in_lean(server, committed) -> None:
     reg = committed.registration
     plan, seed = Plan.whole(reg.blocks), hashlib.sha512(b"a pass seed").digest()
-    prover = p2.Prover(committed, None, entropy=Entropy(b"committed"))
+    prover = p2.Prover(committed, entropy=Entropy(b"committed"))
     ps = prover.pass_under(0, 0, seed, plan)
     for p in range(plan.length):
         v = {"registration": registration_json(reg), "seed": seed.hex(), "runs": [list(r) for r in plan.runs],
              "root": ps.tree.commitment.root.hex(), "i": 0, "p": p, "opening": opening_json(prover.open(ps, p))}
         assert opening(v) is None
         assert D.replay(port("p2_opening", opening, st.nothing()), v, server) == ("output", "null")
+
+
+def test_an_honest_session_over_the_committed_store_is_accepted_in_lean(server, committed) -> None:
+    """Every unit a pass, two windows of two passes, three of each window's four receipts opened, checked two at a
+    time: the Lean's answer is the books', an acceptance crediting every receipt the pooled bound leaves."""
+    reg = committed.registration
+    session = {"deadline_ns": P2_STEP_NS, "passes": 2, "samples": 3, "window_ns": 2 * P2_STEP_NS, "windows": 2}
+    answer = json.loads(committed_session(server, committed, session, session)[1])["answer"]
+    assert answer["verdict"] == "accept", answer
+    assert reg.blocks == 2 and answer["receipts"] == 2 * 2 * reg.blocks and answer["draws"] == [3, 3]
+
+
+def committed_session(server, committed, session: dict | None, asked: dict) -> D.Outcome:
+    """The Lean's outcome, held to the books', of an honest session over the committed store, every unit a pass,
+    checked two draws at a time: the request `asked`, held to the auditor's `session` (`SESSION` for None)."""
+    reg = committed.registration
+    req = p2_party.request_of(reg.node, **asked)
+    held = p2_party.SESSION if session is None else session
+    coins_ = [expand(b"committed coin %d" % j, coins.COIN_BYTES) for j in range(2 * held["windows"])]
+    events = [] if any(asked[k] != held[k] for k in p2_party.SESSION) else p2_events(
+        committed, Plan.whole(reg.blocks), p2_party.params_of(reg, req, held), coins_, 0)
+    v = {"registration": json.dumps(p2_party.registration_json(reg)).encode().hex(),
+         "request": p2_line("request", req).hex(), "session": session, "coins": [c.hex() for c in coins_], "chunk": 2,
+         "not_before_ns": 0, "events": events}
+    kind, out = D.replay(port("p2_session", p2_session, st.nothing()), v, server)
+    assert kind == "output", out
+    return kind, out
+
+
+def test_an_honest_session_of_the_auditors_session_over_the_committed_store_is_accepted_in_lean(server,
+                                                                                                committed) -> None:
+    """`SESSION` itself (a null session, the Lean's pinned `P2Session.SESSION`): six windows of four passes, 1,024
+    samples drawing each of a window's eight receipts; the Lean's answer is the books', an acceptance."""
+    reg = committed.registration
+    answer = json.loads(committed_session(server, committed, None, p2_party.SESSION)[1])["answer"]
+    assert answer["verdict"] == "accept", answer
+    assert answer["receipts"] == 6 * 4 * reg.blocks and answer["draws"] == [4 * reg.blocks] * 6
+
+
+OFF = [{"deadline_ns": 2 * 10 ** 9}, {"passes": 3}, {"samples": 1023}, {"window_ns": 10 ** 9}, {"windows": 7},
+       {"deadline_ns": 5 * 10 ** 9, "samples": 16}]
+
+
+@pytest.mark.parametrize("off", OFF, ids=lambda off: "+".join(off))
+def test_a_request_off_the_auditors_session_is_refused_in_lean_by_name(server, committed, off) -> None:
+    """A request off `SESSION` (a null session) in each of its values, and in two: the Lean refuses it naming each value
+    in `p2_party.params_of`'s words, before any event, and a request of the toy's under the toy's is held."""
+    _, out = committed_session(server, committed, None, p2_party.SESSION | off)
+    why = "; ".join(f"the request's {k} is not the auditor's ({off[k]}, not {v})" for k, v in p2_party.SESSION.items()
+                    if k in off)
+    assert json.loads(out) == {"refused": "request", "reason": why}
+    toy = p2_party.SESSION | off
+    assert "answer" in json.loads(committed_session(server, committed, toy, toy)[1])

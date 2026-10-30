@@ -1,11 +1,12 @@
 import Std.Sync.Mutex
 import RemoteAudit.Difftest
+import RemoteAudit.P2Session
 import RemoteAudit.Wire
 
 /-!
 # The verifier's process: `remote-audit-verifier`
 
-The remote audit's verifier of record as a process the driver (`benchmarks/remote_session/verifier.py`) runs beside its
+The remote audit's Lean verifier as a process the driver (`benchmarks/remote_session/verifier.py`) runs beside its
 Python: it holds the verifier's registry (`Registry`) and every session's state (`Session.State`) and takes the events
 as they happen, one request a line on stdin, each answered by one line on stdout, `{"answer": JSON}` or
 `{"error": MESSAGE}`, in canonical JSON (`Flock.canon`). Requests (byte strings lowercase hex, an event as the
@@ -20,9 +21,10 @@ difftest's `session` reads one, `Difftest.eventOf`):
 * `{"op": "hold", "node", "blocks", "payload_root", "key", "layout"}`: a hello's store held to that binding
   (`Store.Binding.hold`, its payload root's subtrees on `workers` threads), `{"regions", "expected_root"}` or
   `{"refused": why, "expected_root"}` (`Difftest.heldJ`), the decision of record on the hello's `bound`;
-* `{"op": "register", "node", "blocks", "payload_root", "codec", "receipt", "bind", "rows", "layout", "nonce"}`:
-  `Registry.register`'s draw, `{"codec_seed", "digest"}`, or `{"refused": true}` (an error for a node with none live
-  whose registration would bind PoUW's tile outputs: receipts here are of a block alone);
+* `{"op": "register", "params", "log", "store", "codec", "receipt", "bind", "rows", "layout", "nonce"}`:
+  `Registry.register`'s draw of the store an accepted registration log (`Difftest.loggedView`) registers as `store`,
+  `{"codec_seed", "digest"}`, or `{"refused": true}` (an error for a node with none live whose registration would bind
+  PoUW's tile outputs, or for a store the log doesn't register: receipts here are of a block alone);
 * `{"op": "session", "node", "params", "coins", "append_coins", "not_before_ns", "index"}`: the next session over the
   node's live registration drawn here (`Registry.session`), `{"session": k}`, or `{"refused": true}`, its windows in
   flight and the windows a draw's openings coin covers (`groups_per_coin` g, `Shared`) its parameters', and an error
@@ -58,6 +60,28 @@ difftest's `session` reads one, `Difftest.eventOf`):
   record (`benchmarks/remote_session/auditor_line.py`) is this answer, held equal to `line.py`'s;
 * `{"op": "line", "groups", "per", "blocks", "block_bytes", "chip_bytes", "node_bytes", "windows", "delta", "rates"}`:
   the same line of groups and windows given (`Line.line`, `Difftest.lineFn`).
+
+A session over PoUS's P2 store is of record here too (`P2Session`), as `p2_party.py` runs it beside `p2.Session`, which
+can only veto: the process holds one P2 store and its sessions, each read from the bytes the verifier holds and the
+prover sends.
+
+* `{"op": "p2_hold", "bytes": n, "chunk", "session"}` and then n bytes, the auditor's registration file
+  (`p2_party.registration_json`'s): the store held (`P2Session.heldOf`), the draws a thread checks, and the session
+  parameters every request must restate, `session` (`P2Session.Auditor.ofJson`, a toy party's) or, without one,
+  `P2Session.SESSION`; `{"digest", "plan", "plan_units", "session", "units"}`;
+* `{"op": "p2_session", "bytes": n, "not_before_ns"}` and then the prover's request line: `{"session": k}`, its coins
+  released one an event as `event`'s are (`withCoin`), or `{"refused": why}` (`P2Session.paramsOf` under the held
+  session parameters);
+* `{"op": "p2_event", "session", "event", "coin"}`: a start, a boundary or a close through P2 session k at two windows
+  in flight and one window a coin (`eventOn 2 1`), `Difftest.resultJ`'s result;
+* `{"op": "p2_root", "session", "t", "i", "now", "bytes": n}` and then root i of window t's line as the prover sent it
+  (`P2Session.receive`), and `{"op": "p2_openings", "session", "t", "bytes": n}` and then window t's openings line
+  (`P2Session.verify`, checked on threads of their own), each `Difftest.resultJ`'s result;
+* `{"op": "p2_fail", "session"}`: the session rejected `malformed`, the prover gone (`P2Session.fail`);
+* `{"op": "p2_answer", "session"}`: the session's answer (`P2Session.answer`).
+
+No property states yet what this loop accepts of a P2 session; `remote-audit-difftest`'s `p2_session` holds it to
+`p2.Session` on recorded sessions.
 
 A window's verdict is `checkWindowChunked`'s, which is `checkWindow`'s, on the window's openings as `Wire.openingsOf`
 reads its frames: any frame that doesn't decode leaves it none, and the transcript records the frames so. A window
@@ -101,6 +125,10 @@ structure Server where
   checks : Array Check := #[]
   binding : Option Store.Binding := none
   workers : Nat := 1
+  p2 : Option P2Session.Held := none
+  p2Auditor : P2Session.Auditor := P2Session.SESSION
+  p2Chunk : Nat := 64
+  p2Sessions : Array Session.State := #[]
 
 private def doneLine (id : Nat) (v : Verdict) : String :=
   "{\"accepted\":" ++ (if v == .accept then "true" else "false") ++ ",\"done\":" ++ toString id ++ "}"
@@ -187,6 +215,12 @@ def readBytes (stdin : IO.FS.Stream) (n : Nat) : IO ByteArray := do
     buf := buf ++ got
   return buf
 
+/-- The P2 store the server holds and its session `k`. -/
+private def p2At (srv : Server) (k : Nat) : V (P2Session.Held × Session.State) := do
+  let some held := srv.p2 | throw "no P2 store: p2_hold holds one first"
+  let some s := srv.p2Sessions[k]? | throw s!"no P2 session {k}"
+  pure (held, s)
+
 /-- One request's answer and the server after it. -/
 def handle (srv : Server) (req : Json) (stdin : IO.FS.Stream) (emit : String → IO Unit) :
     IO (Except String (Json × Server)) := ExceptT.run do
@@ -214,8 +248,8 @@ def handle (srv : Server) (req : Json) (stdin : IO.FS.Stream) (emit : String →
   | "register" =>
     let some kind := Kind.ofName? (← ofV (J.str req "receipt" "request"))
       | throwThe String "a receipt kind is sketch-sha512 or block-sha512"
-    let (reg?, r) ← ofV (srv.registry.register srv.source (← ofV (bytesOf req "node")) (← ofV (nat req "blocks"))
-      (← ofV (bytesOf req "payload_root")) (← ofV (Difftest.codecOf (← ofV (J.get req "codec" "request")))) kind
+    let (reg?, r) ← ofV (srv.registry.register srv.source (← ofV (Difftest.loggedView req))
+      (← ofV (J.str req "store" "request")) (← ofV (Difftest.codecOf (← ofV (J.get req "codec" "request")))) kind
       (← ofV (J.bool req "bind" "request")) (← ofV (J.str req "layout" "request")) (← ofV (nat req "rows"))
       (← ofV (bytesOf req "nonce")))
     let out := match reg? with
@@ -316,6 +350,61 @@ def handle (srv : Server) (req : Json) (stdin : IO.FS.Stream) (emit : String →
   | "registry" => pure (srv.registry.toJson, srv)
   | "line" => pure (← ofV (Difftest.lineFn req), srv)
   | "line_record" => pure (← ofV (Difftest.lineRecordFn req), srv)
+  | "p2_hold" =>
+    let bytes ← readBytes stdin (← ofV (nat req "bytes"))
+    if srv.p2.isSome then throwThe String "the verifier holds one P2 store"
+    let held ← ofV (P2Session.heldOf bytes)
+    let chunk ← ofV (nat req "chunk")
+    let auditor ← match req.getObjValD "session" with
+      | .null => pure P2Session.SESSION
+      | v => ofV (P2Session.Auditor.ofJson v)
+    pure (merge held.json [("session", auditor.json)],
+      { srv with p2 := some held, p2Auditor := auditor, p2Chunk := max 1 chunk })
+  | "p2_session" =>
+    let line ← readBytes stdin (← ofV (nat req "bytes"))
+    let notBeforeNs ← ofV (nat req "not_before_ns")
+    let some held := srv.p2 | throwThe String "no P2 store: p2_hold holds one first"
+    match P2Session.paramsOf held srv.p2Auditor line with
+    | .error why => pure (Json.mkObj [("refused", .str why)], srv)
+    | .ok params =>
+      let s := P2Session.init held params (Array.replicate (2 * params.windows) ByteArray.empty) notBeforeNs
+      pure (Json.mkObj [("session", toJson srv.p2Sessions.size)], { srv with p2Sessions := srv.p2Sessions.push s })
+  | "p2_event" =>
+    let k ← ofV (nat req "session")
+    let e ← ofV (Difftest.eventOf (← ofV (J.get req "event" "request")))
+    let coin ← match ← ofV (J.get req "coin" "request") with
+      | .null => pure none
+      | c => some <$> ofV (unhex (← ofV (J.asStr c "coin")))
+    let (_, s) ← ofV (p2At srv k)
+    match e with
+    | .start _ | .boundary _ | .close .. =>
+      let (res, s) ← ofV (eventOn 2 1 s e coin)
+      pure (Difftest.resultJ res, { srv with p2Sessions := srv.p2Sessions.set! k s })
+    | _ => throwThe String "a P2 session's events are a start, a boundary or a close: a root or openings is a line"
+  | "p2_root" =>
+    let line ← readBytes stdin (← ofV (nat req "bytes"))
+    let k ← ofV (nat req "session")
+    let t ← ofV (J.asInt (← ofV (J.get req "t" "request")) "t")
+    let i ← ofV (J.asInt (← ofV (J.get req "i" "request")) "i")
+    let now ← ofV (nat req "now")
+    let (held, s) ← ofV (p2At srv k)
+    let (res, s) := P2Session.receive held s t i line now
+    pure (Difftest.resultJ res, { srv with p2Sessions := srv.p2Sessions.set! k s })
+  | "p2_openings" =>
+    let line ← readBytes stdin (← ofV (nat req "bytes"))
+    let k ← ofV (nat req "session")
+    let t ← ofV (J.asInt (← ofV (J.get req "t" "request")) "t")
+    let (held, s) ← ofV (p2At srv k)
+    let (res, s) := P2Session.verify srv.p2Chunk held s t line
+    pure (Difftest.resultJ res, { srv with p2Sessions := srv.p2Sessions.set! k s })
+  | "p2_fail" =>
+    let k ← ofV (nat req "session")
+    let (_, s) ← ofV (p2At srv k)
+    let (res, s) := P2Session.fail s
+    pure (Difftest.resultJ res, { srv with p2Sessions := srv.p2Sessions.set! k s })
+  | "p2_answer" =>
+    let (held, s) ← ofV (p2At srv (← ofV (nat req "session")))
+    pure (P2Session.answer held s, srv)
   | op => throwThe String s!"no op {op}"
 
 private def line (key : String) (value : String) : String := "{" ++ Flock.canonStr key ++ ":" ++ value ++ "}"
