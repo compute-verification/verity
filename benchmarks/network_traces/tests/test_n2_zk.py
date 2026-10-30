@@ -1,10 +1,10 @@
-"""n2_zk's link-windows on certifier-serve's runs on an injected clock (`n2_zk.virtual`, a stub endpoint): every honest
-link-window's output word is verdict 1 and deadline 1; window 0's egress head one count off, committed by the prover,
-fails on its counts and its signed digest; the extra run's egress heads fail on their counts alone, the late run's on
-their fields and counts. The verifier's own ``pub`` row, from public fields and the certificates alone, is the prover's,
-in whole u16 words. The scan of what the verifier received leaves out exactly the witness pieces the public circuit holds.
-``--jobs`` is 1 unless given and 2 is refused, naming the rule (`n2_zk.ONE_SESSION`). Nothing here lowers or proves
-(`n2_zk.prove` does, on a node)."""
+"""n2_zk's execution phases on certifier-serve's runs on an injected clock (`n2_zk.virtual`, a stub endpoint): every
+honest execution phase's output word is verdict 1 and deadline 1; window 0's egress head one count off, committed by the
+prover, fails on its counts and its signed digest; the extra run's egress heads fail on their counts alone, the late
+run's on their fields and counts. The verifier's own ``pub`` row, from public fields and the certificates alone, is the
+prover's, in whole u16 words. The scan of what the verifier received leaves out exactly the witness pieces the public
+circuit holds. ``--jobs`` is 1 unless given and 2 is refused, naming the rule (`n2_zk.ONE_SESSION`). Nothing here lowers
+or proves (`n2_zk.prove` does, on a node)."""
 
 from __future__ import annotations
 

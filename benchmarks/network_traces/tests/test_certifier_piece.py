@@ -1,7 +1,7 @@
 """certifier_piece: the front sends one group of the window circuit's class through the gate's scan rehearsal and keeps
 the gate's fetch, witness and all, 0700 under the serve dir's private/certifier, publishing only the bundle less witness/
-and its outcome. The piece, on a serve dir whose window was the warden's synthetic run's certified requests (the run
-`test_warden_chain.gate_run` publishes in the gate's layout), runs as `served_verdicts.py pieces` runs it and writes
+and its outcome. The piece, on a serve dir whose window was the network certifier's synthetic run's certified requests
+(the run `test_warden_chain.gate_run` publishes in the gate's layout), runs as `served_verdicts.py pieces` runs it and writes
 `network-period`'s answer only when the chain accepted and the window's requests are certified ones in the scan's
 link-window: the period mirror's certifier/v0 accept (`period_case`), its profile with the placement (the certifier on
 the kept gate's host, each draw's coins the challenger's host's, the checks on the prover's node), then goes through
@@ -55,7 +55,8 @@ from verity_e2e_demo import block_record as BR  # noqa: E402
 PERIOD_CASE = ROOT / "verity" / "core" / "protocols" / "network" / "tests" / "period_case.py"
 SCHEMA = json.loads((Path(BR.__file__).parent / "schemas" / "block-record.v1.schema.json").read_text())
 K = 3
-#: the gate's end of a rehearsal its check passed, and of one whose every request was late past the warden's D·τ
+#: the gate's end of a rehearsal its check passed, and of one whose every request was late past the network certifier's
+#: D·τ
 PASSED = {"run": RUN, "rc": 0, "ended": "the rehearsal ended", "verdict": {"accepted": True, "problems": 0}}
 LATE = {"run": RUN, "rc": 1, "ended": "the rehearsal exited 1",
         "verdict": {"accepted": False, "problems": 8, "requests": 4, "ended": 0, "failed": ["fail"]}}
@@ -78,8 +79,8 @@ def period():
 
 @pytest.fixture(scope="module")
 def warden(tmp_path_factory):
-    """The synthetic warden run, its fetch (``late``: the same run, its rehearsal failed late), and the link-window
-    holding the most whole certified requests."""
+    """The synthetic network certifier run, its fetch (``late``: the same run, its rehearsal failed late), and the
+    execution phase holding the most whole certified requests."""
     d = tmp_path_factory.mktemp("warden")
     run = gate_run(d)
     io, T = WC.io(run), WC.deployment(run)[1].window
@@ -105,8 +106,8 @@ def _write(path: Path, rows: list[dict]) -> None:
 
 def _serve_dir(d: Path, warden: dict, records: list[dict] | None = None, kept: bool = True,
                fetch: str = "fetch") -> Path:
-    """A serve dir whose window K served ``records`` (the warden's, by default those of its link-window) and whose
-    gate fetch (``warden[fetch]``) the front kept."""
+    """A serve dir whose window K served ``records`` (the network certifier's, by default those of its execution phase)
+    and whose gate fetch (``warden[fetch]``) the front kept."""
     records = warden["records"] if records is None else records
     d.mkdir(parents=True)
     reqs = [{"engine_id": f"e{i}", "user": r["user"], "prompt_ids": r["prompt"], "streamed_ids": r["output"],
@@ -417,7 +418,7 @@ def test_a_chain_file_holding_a_witness_value_is_moved_out_of_dir(tmp_path, ward
 
 def test_a_rehearsal_the_gates_check_failed_late_leaves_the_certifier_missing_not_rejected(tmp_path, warden, capsys,
                                                                                           monkeypatch):
-    """Each request late past the warden's D·τ: the gate's check fails the rehearsal, and the served answers, longer
+    """Each request late past the network certifier's D·τ: the gate's check fails the rehearsal, and the served answers, longer
     than what the warden passed, don't bind to its certified ones. That is the endpoint's lateness, not the protocol
     rejecting a served answer, so the piece refuses before any chain and the certifier is missing, as for a busy gate;
     the same window on a rehearsal the check passed is a reject."""
@@ -590,7 +591,7 @@ def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve
     assert CP.main(["front", "18190", str(serve), str(out), "--key", str(tmp_path / "key")]) == 0
     assert (tmp_path / "request").read_text() == (
         "warden-rehearse --peer vy-dc-h200 --port 18190 --minutes 7 --requests 4 --height 10 --scan --prompts "
-        "--tokens 4 --window-per-group")
+        "--tokens 4 --scan-class w63k4 --window-per-group")
     prompts = json.loads((tmp_path / "prompts.json").read_text())
     assert [len(p) for p in prompts] == [CP.PROMPT_IDS] * CP.PROMPTS and all(t < 128000 for p in prompts for t in p)
     kept = serve / CP.PRIVATE / RUN / "fetch.tar.gz"
@@ -602,6 +603,11 @@ def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve
     assert json.loads((out / "session.json").read_text())["gate"] == CP.SS.GATE
     assert CP.main(["front", "18190", str(serve), str(out), "--tokens", "64"]) == 2
     assert "past one link-window" in json.loads((out / "session.json").read_text())["refused"]
+    assert CP.main(["front", "18190", str(serve), str(out), "--tokens", "5"]) == 2
+    assert "1 to KO = 4 ids" in json.loads((out / "session.json").read_text())["refused"]
+    assert CP.main(["front", "18190", str(tmp_path / "serve-w63"), str(tmp_path / "out-w63"), "--key",
+                    str(tmp_path / "key"), "--scan-class", "w63"]) == 0
+    assert (tmp_path / "request").read_text().endswith("--tokens 4 --scan-class w63 --window-per-group")
 
 
 def test_a_fronts_rehearsal_at_4000_ms_reaches_the_gate_with_its_tick_and_the_scans_schedule_there(tmp_path,
@@ -634,11 +640,12 @@ def test_a_fronts_rehearsal_at_4000_ms_reaches_the_gate_with_its_tick_and_the_sc
     relay, warden = ran
     assert relay[-5:] == ["relay", "--listen", "1", "--to", "18190"]
     at = warden.index("--ids")
-    assert warden[at:at + 1 + len(CP.SS.A.SCAN_SCHEDULE)] == ["--ids", *CP.SS.A.scan_schedule(4000)]
+    assert warden[at:at + 1 + len(CP.SS.A.SCAN_SCHEDULE)] == ["--ids", *CP.SS.A.scan_schedule(4000, CP.V3C_SCAN_CLASS)]
     assert CP.SS.A.scan_schedule(4000) != CP.SS.A.SCAN_SCHEDULE
     doc = json.loads((out / "session.json").read_text())
     assert doc["request"] == (f"warden-rehearse --peer vy-dc-h200 --port 18190 --minutes {minutes} --requests 4 "
-                              "--height 10 --scan --bucket-ms 4000 --prompts --tokens 4 --window-per-group")
+                              "--height 10 --scan --bucket-ms 4000 --prompts --tokens 4 --scan-class w63k4 "
+                              "--window-per-group")
     assert (doc["rc"], doc["verdict"]["accepted"]) == (0, True)
 
 
@@ -736,7 +743,7 @@ def test_the_front_warms_the_endpoint_up_a_window_at_a_time_before_it_asks_the_g
     assert len(set(users)) == 2 and all(u.startswith("warmup-") for u in users)
     assert (tmp_path / "request").read_text() == (
         f"warden-rehearse --peer vy-dc-h200 --port {port} --minutes 7 --requests 4 --height 10 --scan --prompts "
-        "--tokens 4 --window-per-group")
+        "--tokens 4 --scan-class w63k4 --window-per-group")
     warm = json.loads((out / "warmup.json").read_text())["requests"]
     assert [(w["user"], w["finish_reason"]) for w in warm] == [(u, "length") for u in users]
     assert sorted(p.name for p in out.iterdir()) == ["bundle.tgz", "leak-guard.json", "session.json", "status.json",
