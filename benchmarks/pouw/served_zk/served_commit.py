@@ -62,7 +62,7 @@ judged through the proof system (`sampled_proofs.service`, P1: a `Stream`'s `reg
   Python's.
 - **The coins** are the epoch's (`pouw.coins`): the challenger process that holds the Streams holds the epoch's coin
   challenger.  When the process starts, before it reads a request, that challenger draws the epoch's salt and draw coins
-  and their hm96 salts from the Lean verifier of record (`pouw.verifier.coins`: `pouw-check-difftest`'s ``coins``,
+  and their hm96 salts from the Lean verifier (`pouw.verifier.coins`: `pouw-check-difftest`'s ``coins``,
   `IO.getRandomBytes`, A3) and commits to them, and the process publishes the commitment (``LOG/coins.json``) before
   any request; with ``--state`` the entropy is instead the file the serving controller wrote from the same Lean coins
   before it served the pass (`e2e.state_entropy`), so the pass's salt coin is one it opens.  No coin is read from
@@ -702,7 +702,7 @@ def lean_verdict(path_: Path) -> dict:
 
 
 def rust_verdict(path_: Path | None) -> dict | None:
-    """The Rust prover-side verifier's verdict of the --zk session (`LIVE\\t{…}` lines), beside the verifier of record."""
+    """The Rust prover-side verifier's verdict of the --zk session (`LIVE\\t{…}` lines), beside the Lean verifier."""
     if path_ is None:
         return None
     try:
@@ -1431,7 +1431,7 @@ def answer(ch: Challenger, line: str) -> str | None:
 
 
 def cmd_challenger(a) -> int:
-    """The challenger's process: the epoch's coins, drawn now from the Lean verifier of record (`pouw.verifier.coins`) or
+    """The challenger's process: the epoch's coins, drawn now from the Lean verifier (`pouw.verifier.coins`) or
     read from ``--state``, their commitment published to LOG/coins.json before any request; then
     one JSON request a line on stdin (`handle`), one ``WORD {json}`` reply a line on stdout, each also appended to
     LOG/requests.jsonl, each coin it opened to LOG/openings.jsonl, and each request's verdicts of record, Lean's and
