@@ -986,7 +986,7 @@ def test_iii_identity_is_recomputable_from_its_published_definition(builds):
     assert len(ordered) == 4, f"components found: {ordered} (expected construction version, target profile, applicability, program digest)"
 
     def recompute(parts_by_key, sep, endian, prefixed):
-        h = hashlib.sha256()
+        h = hashlib.sha512()
         for k in ordered:
             v = parts_by_key[k]
             b = v.encode() if isinstance(v, str) else json.dumps(v, sort_keys=True, separators=sep).encode()
@@ -1004,7 +1004,7 @@ def test_iii_identity_is_recomputable_from_its_published_definition(builds):
     print(f"\n[cb-test] identity reproduced: canonical json separators={hit[0]!r}, len8 {hit[1]}-endian={hit[2]}; definition: {doc.get('identity_definition')}")
     for k in ordered:  # each component is load-bearing
         forged = dict(doc)
-        forged[k] = ("00" * 32) if isinstance(doc[k], str) else {**doc[k], "__cbtest__": 1}
+        forged[k] = ("00" * 64) if isinstance(doc[k], str) else {**doc[k], "__cbtest__": 1}
         assert recompute(forged, *hit) != doc["identity"], f"identity does not depend on component {k}"
 
 
@@ -1112,7 +1112,7 @@ def _identity_recomputer(doc: dict):
 
     def make(sep, endian, prefixed):
         def f(d):
-            h = hashlib.sha256()
+            h = hashlib.sha512()
             for k in ordered:
                 v = d[k]
                 b = v.encode() if isinstance(v, str) else json.dumps(v, sort_keys=True, separators=sep).encode()

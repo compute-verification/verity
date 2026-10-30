@@ -691,7 +691,7 @@ class ArtifactIdentity:
     @staticmethod
     def compute(construction_version: dict, target_profile: TargetProfile | dict, applicability: dict, program_digest: str) -> str:
         tp = target_profile.to_json() if isinstance(target_profile, TargetProfile) else target_profile
-        h = hashlib.sha256()
+        h = hashlib.sha512()
         for part in (canonical_bytes(construction_version), canonical_bytes(tp), canonical_bytes(applicability), program_digest.encode()):
             h.update(len(part).to_bytes(8, "big"))  # length-prefixed: no component can absorb its neighbour
             h.update(part)
@@ -706,7 +706,7 @@ class ArtifactIdentity:
     def to_json(self) -> dict:
         return {"schema": SCHEMA, "identity": self.identity, "construction_version": self.construction_version, "target_profile": self.target_profile,
                 "applicability": self.applicability, "program_digest": self.program_digest,
-                "identity_definition": "sha256(len8||canonical(construction_version) || len8||canonical(target_profile) || len8||canonical(applicability) || len8||program_digest)"}
+                "identity_definition": "sha512(len8||canonical(construction_version) || len8||canonical(target_profile) || len8||canonical(applicability) || len8||program_digest)"}
 
     @classmethod
     def from_json(cls, d: dict) -> "ArtifactIdentity":
@@ -731,7 +731,9 @@ def reuse_mismatches(artifact: ArtifactIdentity, profile: TargetProfile, applica
     """Every reason `artifact` may NOT be reused by a requester declaring `profile` under `applicability_now` (the facts read back from
     the requester's environment; None = not provided = every condition unverifiable = refused)."""
     bad: list[str] = []
-    if artifact.recomputed() != artifact.identity:
+    if len(artifact.identity) == 64:
+        bad.append(f"identity {artifact.identity[:16]} is a 64-hex SHA-256 digest, from before artifact identities became SHA-512: rebuild the artifact")
+    elif artifact.recomputed() != artifact.identity:
         bad.append(f"identity {artifact.identity} does not match its components (recomputed {artifact.recomputed()})")
     want, have = profile.to_json(), dict(artifact.target_profile)
     for k in sorted(set(want) | set(have)):

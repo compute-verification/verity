@@ -25,7 +25,7 @@ def test_construction_version_hashes_the_integration_sources():
     assert [f["file"] for f in cv["files"]] == list(ds._CONSTRUCTION_SOURCES)
     for f in cv["files"]:
         with open(_source(f["file"]), "rb") as fh:
-            assert f["sha256"] == hashlib.sha256(fh.read()).hexdigest(), f["file"]
+            assert f["sha512"] == hashlib.sha512(fh.read()).hexdigest(), f["file"]
 
 
 def test_construction_version_changes_with_a_listed_source_and_refuses_a_missing_one(tmp_path):
@@ -36,7 +36,7 @@ def test_construction_version_changes_with_a_listed_source_and_refuses_a_missing
     assert a == ds.construction_version([])
     edited = tmp_path / ds._CONSTRUCTION_SOURCES[-1]
     edited.write_bytes(edited.read_bytes() + b"\n# edited\n")
-    assert ds.construction_version([], root=str(tmp_path))["sources_sha256"] != a["sources_sha256"]
+    assert ds.construction_version([], root=str(tmp_path))["sources_sha512"] != a["sources_sha512"]
     edited.unlink()
     with pytest.raises(FileNotFoundError, match=ds._CONSTRUCTION_SOURCES[-1]):
         ds.construction_version([], root=str(tmp_path))

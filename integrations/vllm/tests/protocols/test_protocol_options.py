@@ -51,7 +51,7 @@ def test_a_declared_set_is_in_the_profile_and_its_digest():
     p = TargetProfile(protocols=ALL[1:])
     assert p.to_json()["protocols"] == list(ALL[1:]) and p.digest() != DEFAULT_DIGEST
     assert TargetProfile.from_json(p.to_json()) == p
-    art = ArtifactIdentity.build({"v": 1}, TargetProfile(), {}, "ab" * 32)
+    art = ArtifactIdentity.build({"v": 1}, TargetProfile(), {}, "ab" * 64)
     with pytest.raises(ApplicabilityError, match="target_profile.protocols"):
         check_reuse(art, p, {})
 
