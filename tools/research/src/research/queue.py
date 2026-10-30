@@ -990,26 +990,21 @@ class Queue:
                     _git(self.workdir, "update-ref", "-d", f"refs/queue/pr/{p.number}", check=False)
                     self.log(f"research queue: #{p.number}'s pull ref can't be fetched, so it waits this sync: "
                              f"{(r.stderr or r.stdout).strip()[-200:]}")
-        into = self.into
-        branches = [*([f"+refs/heads/{into}:{self.base}"] if into != "main" else []),
-                    f"+refs/heads/{self.branch}:refs/remotes/origin/{self.branch}"]
-        # both at once while both exist (two round trips, not four); else each alone, as below
-        if self._remote(self.workdir, "fetch", "-q", "origin", *branches, ok=None).returncode:
-            if into != "main":
-                # a landing branch the remote doesn't have yet starts at `main`: drive's first landing pushes it
-                if self._remote(self.workdir, "ls-remote", "--exit-code", "origin", f"refs/heads/{into}", ok=(0, 2)).returncode == 0:
-                    self._remote(self.workdir, "fetch", "-q", "origin", f"+refs/heads/{into}:{self.base}")
-                else:
-                    _git(self.workdir, "update-ref", self.base, "refs/remotes/origin/main")
-            # exit 2: no such branch; any other failure is the remote's, never an empty queue
-            if self._remote(self.workdir, "ls-remote", "--exit-code", "origin", f"refs/heads/{self.branch}", ok=(0, 2)).returncode == 0:
-                self._remote(self.workdir, "fetch", "-q", "origin", f"+refs/heads/{self.branch}:refs/remotes/origin/{self.branch}")
+        if (into := self.into) != "main":
+            # a landing branch the remote doesn't have yet starts at `main`: drive's first landing pushes it
+            if self._remote(self.workdir, "ls-remote", "--exit-code", "origin", f"refs/heads/{into}", ok=(0, 2)).returncode == 0:
+                self._remote(self.workdir, "fetch", "-q", "origin", f"+refs/heads/{into}:{self.base}")
             else:
-                _git(self.workdir, "update-ref", "-d", f"refs/remotes/origin/{self.branch}", check=False)
+                _git(self.workdir, "update-ref", self.base, "refs/remotes/origin/main")
         # the merge drivers (`clone.RECORD_DRIVER`) run from this checkout, so one that `main` has moved past judges merges with old
         # drivers (an old clone refuses a lean-audit.json conflict main's merge.py resolves).  Drive's checkout, `next`'s tip, contains `main` and stays
         if _git(self.workdir, "merge-base", "--is-ancestor", self.base, "HEAD", check=False).returncode:
             _git(self.workdir, "checkout", "-q", "--detach", "--force", self.base)
+        # exit 2: no such branch; any other failure is the remote's, never an empty queue
+        if self._remote(self.workdir, "ls-remote", "--exit-code", "origin", f"refs/heads/{self.branch}", ok=(0, 2)).returncode == 0:
+            self._remote(self.workdir, "fetch", "-q", "origin", f"+refs/heads/{self.branch}:refs/remotes/origin/{self.branch}")
+        else:
+            _git(self.workdir, "update-ref", "-d", f"refs/remotes/origin/{self.branch}", check=False)
         if not prs:
             return {}
         refs = dict(line.split() for line in _out(self.workdir, "for-each-ref", "--format=%(refname) %(objectname)",
