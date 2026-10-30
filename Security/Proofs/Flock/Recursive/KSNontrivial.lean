@@ -6,9 +6,9 @@ import Proofs.Flock.Claims.Witnesses.RecursionLin2
 import Proofs.Flock.Claims.Recursion.Assumptions.KSFixture
 
 /-!
-# `RecursiveKS` at the verifier that accepts everything (LEAN-66's `nontrivial`)
+# `RecursiveKS` at the verifier that accepts everything (the Lean check's `nontrivial`)
 
-LEAN-66 asks of each guarantee that states what an acceptance means a lemma that its conclusion is false at the
+The Lean check asks of each guarantee that states what an acceptance means a lemma that its conclusion is false at the
 verifier that accepts everything. For `RecursiveKS` that verifier is the compiled recursive verifier of the compiled
 record, `(D.record IV).V`, whose acceptance `PrBad` reads, replaced by one that keeps its rounds and accepts at its first
 round with no SHA-512 call; it computes nothing, so its record holds no call and stages no V\* statement
@@ -428,7 +428,7 @@ theorem plainIn_of_parses {x : Msg} (h : RecDeploy.DeployedParses x) :
     obtain ⟨a, b, c, d, e⟩ := ht st hst
     exact ⟨a, b, show st.c.kLog ≤ 27 ∧ st.regions.size ≤ 1026 ∧ spec.mPts ≤ 64 from ⟨c, d, e⟩⟩
 
-/-- **`RecursiveKS`'s nontrivial lemma** (LEAN-66): `RecursiveKS`'s conclusion, `RecursiveKSAtRec` at the deployed
+/-- **`RecursiveKS`'s nontrivial lemma**: `RecursiveKS`'s conclusion, `RecursiveKSAtRec` at the deployed
 values, is false at the verifier that accepts everything (`RecAt.acceptAll` of the deployment's compiled record), at
 every brings, from the named assumption
 `RecDeploy.KSFixture`: some bytes the deployed readers read as a dense compiled statement with a V\* session whose

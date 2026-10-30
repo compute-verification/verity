@@ -3,7 +3,7 @@ protocol (M1) on the keyed coin tree (M2). The sessions are the live build's on 
 verdict its server reached: a `selftest --zk --record-dir` run (`selftest_records.py`), and `serve`/`prove --zk` sessions of
 two tables, of one m = 26 table and of a drawn one. Tampered copies come from `zk_mutants.py`; `agree.py --zk` compares all of
 them with upstream's offline verdict (§18). None is accepted: the circuit is no Program's, so the drawn session is refused for
-want of the verifier's program (`NO_PROGRAM`) once every check has passed, and the others have no draw, which `verify` refuses
+want of the verifier's program (`NO_PROGRAM`) once every check has passed, and the others have no sample, which `verify` refuses
 first (§16.15, D12), so a session the server accepted gets that refusal (`DRAWLESS`) and every other session its own reason."""
 from __future__ import annotations
 
@@ -21,12 +21,12 @@ VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: RoPE d64 staged by verity_flock.circuit with hidden outputs (circuit_sha512 d12a2420…) with the live build's --zk sessions:
 #: sessions/selftest (one table, m = 25, each case's live verdict in case.json), sessions/j2 (two tables of 16 instances),
-#: sessions/m26 (one table of 32) and sessions/drawn (a subset draw of 16 of 32), each with its server's index.jsonl (all
+#: sessions/m26 (one table of 32) and sessions/drawn (a subset sample of 16 of 32), each with its server's index.jsonl (all
 #: accepted), at the coin schedule of 2^9 rounds (`verity/ml/flock/pod/92-zk-sessions.sh`, run r20261027-022105-c4fb); a fetched
 #: fixture (`fixtures/artifacts.json`), which `suites.py` fetches before the suite runs: `art:b9cc903c`
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "zk-sessions"
 STATEMENT = "verity/flock-circuit+seed-injection"
-#: the refusal of a session without a draw, which `verify` reaches only when every check has passed
+#: the refusal of a session without a sample, which `verify` reaches only when every check has passed
 DRAWLESS = "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
 #: a session verified without the verifier's program, refused once every check has passed (`ProvedScope.NO_PROGRAM`)
 NO_PROGRAM = ("refused: a session without the verifier's program (--program): a verifier that cannot read the Program "
@@ -60,7 +60,7 @@ def _verify(root: Path, *sessions: Path, **kw) -> list[dict]:
 
 
 def _passes(v: dict) -> bool:
-    """A session without a draw passed every check: it is refused for that alone."""
+    """A session without a sample passed every check: it is refused for that alone."""
     assert not v["accepted"], v
     return v["why"] == DRAWLESS
 
@@ -140,7 +140,7 @@ def test_zk_takes_no_coins_flag(zk):
 @pytest.mark.slow
 def test_a_draw_is_accepted_and_two_tables_and_m26_pass_every_check(zk):
     """The drawn session passes every check and, verified without the verifier's program (the fixture's circuit is no
-    Program's), is refused for that alone; the sessions of two tables and of one m = 26 table, which have no draw, pass
+    Program's), is refused for that alone; the sessions of two tables and of one m = 26 table, which have no sample, pass
     every check and are refused for that alone."""
     [j2] = _verify(zk, _one(zk, "j2"), public="pub-32.bin", tables=2)
     m26, drawn = _verify(zk, _one(zk, "m26"), _one(zk, "drawn"), public="pub-32.bin")
@@ -171,7 +171,7 @@ TAMPERED = ["zk-zc-final-a", "zk-lig-lane-message", "zk-l0-ybar", "zk-l0-missing
 @pytest.mark.slow
 def test_tampered_sessions_meet_their_checks(zk, tmp_path):
     """A tampered copy keeps its original's key, so each runs alone; each gets the verdict and the reason `zk_mutants.py`
-    expects of the Lean verifier, a copy it expects accepted passing every check (the honest session has no draw)."""
+    expects of the Lean verifier, a copy it expects accepted passing every check (the honest session has no sample)."""
     sys.path.insert(0, str(VERIFIER))
     import zk_mutants
 

@@ -433,7 +433,7 @@ theorem verifierRows_comb (sh : Shape) (rounds : Array (Array F128)) (extras : A
     verifierRows sh rounds extras comb =
       (fun t => (t.1 ++ comb, t.2.1, t.2.2)) <$> verifierRows sh rounds extras #[] := by
   unfold verifierRows
-  cases residualLins sh (Coins.ofRounds rounds) extras with
+  cases residualLins sh (CoinSource.ofRounds rounds) extras with
   | error e => rfl
   | ok p =>
     obtain ⟨lins, info⟩ := p

@@ -1,5 +1,5 @@
 """stage.py FORM K N INST OUT: INST token rows of ``ScaledMmFp8Block_v2{K,N,128}`` (one x row, N weight columns per
-instance) staged for C-Flock as `verity_flock.multi_unit`'s statements, from synthetic values drawn as ``served_units``'
+instance) staged for Flock as `verity_flock.multi_unit`'s statements, from synthetic values drawn as ``served_units``'
 ``fp8-coord`` draws them (x = Fp8GroupQuant of a seeded N(0, 1) bf16 row; each weight column N(0, 0.02) quantized per 128, a
 weight block's scale its first column's).
 
