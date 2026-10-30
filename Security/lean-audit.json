@@ -2432,12 +2432,6 @@
    "Claims.Recursion.opensAtI": "`FCI`'s loop condition (does a draw's opened inner view accept and open an inner cap position), a finder's internal test that `KSLin2` and `BitsLin2` read through `FCI`, no claim"
   }
  },
- "witnesses": {
-  "Flock.SecurityProofs.RecursiveKS": {
-   "honest": ["RecDeploy.HonestHalfFixture.honest_half_fixture"],
-   "nontrivial": "Flock.Guarantees.recursiveKS_nontrivial"
-  }
- },
  "layers": {
   "Definitions.Core": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.Accounting.Device"],
@@ -59602,5 +59596,11 @@
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
   "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
+ },
+ "witnesses": {
+  "Flock.SecurityProofs.RecursiveKS": {
+   "honest": ["RecDeploy.HonestHalfFixture.honest_half_fixture"],
+   "nontrivial": "Flock.Guarantees.recursiveKS_nontrivial"
+  }
  }
 }

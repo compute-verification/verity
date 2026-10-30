@@ -4600,6 +4600,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
@@ -11425,6 +11426,7 @@
     "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
