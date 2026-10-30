@@ -2,8 +2,8 @@
 (`ingress_scan.IngressScanBucket`; bucket 0's `IngressScanFirst`, from the empty state) reads the warden's ingress row
 t, the scan's state S_{t−1} and its boundary's slot entries, and computes S_t and its egress view; egress bucket t
 (`egress.EgressBucket`) reads that view and computes the warden's egress row t. A group of link-windows is one
-registration, every row of every unit, input or output, a registered read, proved by C-Flock `prove --zk` behind the
-Lean firewall and held by Lean `verify --zk --registered`. Standalone: in no Spec, except the honest round on the
+registration, every row of every unit, input or output, a registered read, proved by Flock `prove --zk` behind the
+Lean ZK server and held by Lean `verify --zk --registered`. Standalone: in no Spec, except the honest round on the
 challenger's coins (``--challenger``), a `service.Stream`'s.
 
     python benchmarks/network_traces/scan_zk.py prove --bin flock-circuit --lean flock-verify --out DIR [--dry]
@@ -37,7 +37,7 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   window circuit of the group reads as its `SCAN_STATE` (`ingress_scan.window_state` from bucket 0), so S_{G·T−1},
   which no bucket of the group reads, has no leaf; ``prog``, the slot entries (`slot_entries`),
   NR·nb leaves for the group's nb = G·T / EVERY boundaries, leaf j·nb + b slot j's entry at boundary b (the outputs of
-  the Program anchored there, read and its response ids, as `SlotEntry_v1` writes them once it carries the read bit),
+  the Program anchored there, read and its response ids, as `SlotEntry_v1` writes them),
   the block round's o0 rows; and ``view``, G·T leaves, leaf t S_t's egress view.
 * **The block round** (`BLOCK`): the slot entries' stand-in (`SlotEntry{KO, IDB}`, whose Definition id,
   ``SlotEntry_v1``, is the one `NetworkCheck.Period`'s `wired` reads: o0 its `entry_bits` input ``x`` through two
@@ -101,11 +101,11 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   outputs passes here, since the stand-in's entries are the prover's; an anchored Program's entry is its outputs on the
   `SCAN_STATE` it reads, which the period check holds to the scan's state tree (`stateTied`).
 * **A sampled draw** (``--draw K``): Lean ``draw --stratified K`` on the verifier's own coins (its OS randomness, the
-  rehearsal's live coins), each template's stratum its share and at least one unit; only the drawn units are proved
+  rehearsal's live coins), each template's stratum its share and at least one unit; only the sampled proof blocks are proved
   and opened, and an accepted audit carries ε at δ (``wrong_units``: at most ``bound`` of ``of`` units wrong, except
-  with probability δ), its charge terms (`charge_terms`) and each member's cost per drawn unit (`per_unit`). The chain
+  with probability δ), its charge terms (`charge_terms`) and each member's cost per sampled proof block (`per_unit`). The chain
   and tampered rounds draw too and are refused all the same: Lean holds every table row of a registered port, drawn or
-  not, an output port's table its instances' rows. A member none of whose units is drawn (G > 1) runs no session.
+  not, an output port's table its instances' rows. A member none of whose units is sampled (G > 1) runs no session.
 * **The challenger's coins** (``--challenger local|gate:USER@HOST --main FILE``, with ``--draw K``): the honest round's
   K drawn as prove_path's records audit draws (`a5_coins`): one session of the auditor's challenger on the group's root
   (`window_root`: the warden's session and the group's signed registrations), and the round's `service.Stream`
@@ -1001,7 +1001,7 @@ def staged_wires(members: list[dict]) -> list[str]:
 def window_root(at: SimpleNamespace) -> str:
     """The root the challenger's session opens on (128 hex digits): the SHA-512 of the warden's session and the group's
     registrations, each link's in link-window order, whose heads the warden signed. The gate opens a root once, ever,
-    so a warden run's group is drawn once."""
+    so a warden run's group is sampled once."""
     return hashlib.sha512(canonical_json({"format": WINDOW_ROOT, "session": at.session.hex(),
                                           "registrations": {s: [x.registration for x in ws]
                                                             for s, ws in sorted(at.sides.items())}})).hexdigest()
@@ -1009,9 +1009,9 @@ def window_root(at: SimpleNamespace) -> str:
 
 @contextmanager
 def challenger(a, at: SimpleNamespace, out: Path):
-    """The challenger's session for the honest round's draw (``--challenger``, as prove_path's `records_audit.audit`
+    """The challenger's session for the honest round's sample (``--challenger``, as prove_path's `records_audit.audit`
     starts it): `a5_coins.start` on `window_root` for one rank, its evidence copied to ``out / "challenger"``; once the
-    rounds are done the rank's turn ends whether or not it drew (`Draws.skip`) and the session's evidence is published,
+    rounds are done the rank's turn ends whether or not it sampled (`Draws.skip`) and the session's evidence is published,
     which the yielded namespace's ``published`` then holds. None without ``--challenger``. Needs `WZ._one_stage`'s path
     (a5_coins is one-stage's)."""
     if not a.challenger:
@@ -1332,7 +1332,7 @@ def charge_terms(M, result: dict, members: list[dict], delta: float) -> dict | N
 
 
 def per_unit(members: list[dict], statement: dict) -> dict[str, dict]:
-    """Each member's session per drawn unit (prove_path's `per_unit`): C-Flock's ``prove_total_s``, the session's wall
+    """Each member's session per sampled proof block (prove_path's `per_unit`): Flock's ``prove_total_s``, the session's wall
     and Lean's verify, over the units the session proved; and a unit's ANDs and m."""
     out = {}
     for m in members:
@@ -1350,8 +1350,9 @@ def per_unit(members: list[dict], statement: dict) -> dict[str, dict]:
 def window_answer(reg: dict, record: dict | None, delta: Fraction, reason: str) -> dict:
     """One-stage's answer for the group's registration ``reg`` as a period check reads a link-window's scan answer
     (`NetworkCheck.Period`'s rows form, `pouw.core_check.answer_of`): from an accepted audit record (``record``,
-    `audit`'s ``audit.json``), its draw and proved units with one-stage's profile and bound on wrong units at
-    ``delta`` (`audit.profile`, `audit.wrong_units`: every unit drawn, the bound 0); else a reject naming ``reason``."""
+    `audit`'s ``audit.json``), its sample and proved units with one-stage's profile and bound on incorrect proof
+    blocks at ``delta`` (`audit.profile`, `audit.wrong_units`: every unit drawn, the bound 0); else a reject naming
+    ``reason``."""
     commitment = RG.digest(reg)
     if record is None:
         return {"commitment": commitment, "profile": None, "protocol": RG.PROTOCOL, "public": None, "reason": reason,
@@ -1438,11 +1439,35 @@ def blobs_of(members: list[dict]) -> tuple[dict[str, bytes], set[str]]:
 
 
 def known(members: list[dict], at: SimpleNamespace) -> bytes:
-    """What the scan leaves out: the circuits, zeros, and the window's pads and ENDs (fixed by the ordinals)."""
+    """What the scan leaves out: the circuits, zeros, the window's pads and ENDs (fixed by the ordinals), and each
+    member's refs (`refs_of`)."""
     B = at.setup.cls.B
     cells = [IT.pad_cell(B, q) + IT.end_cell(q, B) for q in [0, *at.ordinals]]
     circuits = {m["pin"]: m["dir"] / "circuit.txt" for m in members}
-    return b"".join(f.read_bytes() for f in circuits.values()) + bytes(WR.SALT_BYTES) + b"".join(cells)
+    return (b"".join(f.read_bytes() for f in circuits.values()) + bytes(WR.SALT_BYTES) + b"".join(cells)
+            + b"".join(refs_of(m) for m in members))
+
+
+def refs_of(m: dict) -> bytes:
+    """Member m's refs in its public file (`shared_bcs`' format): each instance's table row of each port, u32
+    little-endian, instance-major, which the statement fixes before any witness (a unit's own row, or its boundary's
+    slot entry in first-read order, `registered.table`). They are small integers, which a witness row's small fields
+    can equal (S_0's ``now``, ``phase`` and an empty slot). Its header and b‖c stay scanned: its roots, paths and
+    commitments are computed from the witness. Refused unless each port's refs are its table's rows in first-read
+    order: each at most one past the largest before it, ending at its last row."""
+    head, body = (m["dir"] / f"pub-{m['n']}.bin").read_bytes().split(b"\n", 1)
+    h = json.loads(head)
+    rows = [int(h["shared_rows"][p.name]) for p in m["ports"]]
+    at, n = 128 * sum(rows), int(h["instances"])
+    refs = body[at:at + 4 * n * len(rows)]
+    top, ok = [-1] * len(rows), len(refs) == 4 * n * len(rows)
+    for k in range(n * len(rows) if ok else 0):
+        x, q = int.from_bytes(refs[4 * k:4 * k + 4], "little"), k % len(rows)
+        ok = ok and x <= top[q] + 1
+        top[q] = max(top[q], x)
+    if not ok or n and top != [r - 1 for r in rows]:
+        raise SystemExit(f"{m['name']}: its public file's refs aren't each port's table rows in first-read order")
+    return refs
 
 
 def sparse(pieces: dict[str, bytes], held: set[str]) -> tuple[dict[str, bytes], set[str], int]:
@@ -1582,7 +1607,7 @@ def main(argv=None) -> int:
                    help="a warden_serve run's directory (rehearse --ids at the class's schedule): its group's "
                         "link-windows, verified under its deployment's key, in place of the synthetic run")
     p.add_argument("--draw", type=int,
-                   help="K: Lean draw --stratified K on the verifier's own coins, only the drawn units proved; default "
+                   help="K: Lean draw --stratified K on the verifier's own coins, only the sampled proof blocks proved; default "
                         "every unit")
     p.add_argument("--challenger", help="with --draw: the honest round's K drawn on the auditor's challenger's coins "
                    "(a5_coins, the round's service.Stream), not the verifier's: local, or gate:USER@HOST "

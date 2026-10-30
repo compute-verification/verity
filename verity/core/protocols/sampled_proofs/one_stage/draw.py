@@ -1,4 +1,4 @@
-"""The draw: the verifier's own coins pick the proof blocks to prove, sent in the clear after registration and before the session.
+"""The sample: the verifier's own coins pick the proof blocks to prove, sent in the clear after registration and before the session.
 
     {"law": "subset", "population": N, "k": K, "units": [<ascending proof block indices>]}
     {"law": "bernoulli", "population": N, "p": "NUM/DEN", "units": [...]}
@@ -6,29 +6,29 @@
     {"law": "work", "population": N, "k": K, "strata": [<work stratum>, ...], "units": [...], ["closure": [...]]}
 
 This is the Lean verifier's `Flock.Draw` object and `flock-circuit`'s `unit_draw`. The verifier samples it from the operating system's
-randomness (Lean `flock-verify draw`, or `flock-circuit serve --draw`, live); nothing here samples, and no draw is derived from a
-commitment. `check_draw` holds a draw to the registration and to the verifier's own sampling design, and `check_proved` holds the
-proved statement's proof blocks to the draw.
+randomness (Lean `flock-verify draw`, or `flock-circuit serve --draw`, live); nothing here samples, and no sample is derived from a
+commitment. `check_draw` holds a sample to the registration and to the verifier's own sampling design, and `check_proved` holds the
+proved statement's proof blocks to the sample.
 
 **The stratified sampling design**: one stratum per template, a uniform k_s-subset drawn
 without replacement inside each, independently.
 * **Strata** are derived by each verifier from its own program and query (`partition.strata`): one per template descriptor
   id, its proof blocks as ascending, disjoint half-open ranges `[lo, hi)`, the strata in the order of their first proof block. Defined for
   `Q_template_instance` and `Q_template_instances`; another query refuses it.
-* **Sizes**: k_s = max(1, round(k n_s / n)), rounding half up in integers (`stratum_k`), so every template has a draw.
+* **Sizes**: k_s = max(1, round(k n_s / n)), rounding half up in integers (`stratum_k`), so every template has a sample.
 * **The sampling design object** is `{"law": "stratified", "k": K, "strata": [{"template": <descriptor id>, "units": [[lo, hi], ...],
   "k": k_s}, ...]}`: the agreement's rule `stratified:K` expanded by `derive`. R1 holds the registered sampling design to the verifier's
-  own expansion, and the draw carries the sampling design's keys plus `population` and `units`.
+  own expansion, and the sample carries the sampling design's keys plus `population` and `units`.
 
 **The work sampling design** (the Lean verifier's `Flock.Draw.Law.work`, its bound
-`FlockSoundness.Audit.Work.work_escape_le`): the stratified sampling design's strata and sampler, with each stratum's draw sized by the
+`FlockSoundness.Audit.Work.work_escape_le`): the stratified sampling design's strata and sampler, with each stratum's sample sized by the
 PoUW work its proof blocks do. The verifier's work table gives each template's work per proof block, a natural number in any fixed unit,
 and its floor f_s >= 1 (`work_table`). With W = sum_s w_s n_s >= 1, stratum s draws
 k_s = min(n_s, max(f_s, ceil(K w_s n_s / W))) (`work_k`), and a work stratum is `{"template", "units", "work", "floor",
 "k"}`. A work draw may carry a `closure`: proof blocks proved with the drawn ones, none of them drawn.
 * **What the table credits.** A proof block's work is what it is credited for, counted on the rows the Program declares, never on
   rows a kernel pads it with (the Pearl-C statement review, item 5). Filler is credited nothing: a proof block of filler only, or
-  one the prover declares uncredited before the draw, does work 0 (its floor still draws it for integrity, and missing it
+  one the prover declares uncredited before the sample, does work 0 (its floor still draws it for integrity, and missing it
   costs no work), and a proof block mixing real and filler rows is credited its real cells only. The sampling design weights by template, so
   every proof block of a template must be credited the same work: a template whose proof blocks are padded differently is split before
   the sampling design is derived, or credited 0. The acceptance-probability bound needs each proof block's inclusion probability to be at least K w_u / W
@@ -36,12 +36,12 @@ k_s = min(n_s, max(f_s, ceil(K w_s n_s / W))) (`work_k`), and a work stratum is 
 
 **The rate sampling design** (`parse_rate`, the Lean's `Select.parseRate`): a selection rule's `rate:NUM/DEN` or `rate:NUM/DEN:T` has no
 sampling design object of its own. Over a registration's N proof blocks it is `subset:K` at K = `rate_count`, ceil(q N) for q = NUM/DEN
-rounded up to a multiple of the T tables, so its draw object is a subset's. Under a fixed `subset:K` a proof block's inclusion
+rounded up to a multiple of the T tables, so its sample object is a subset's. Under a fixed `subset:K` a proof block's inclusion
 K/N falls as the prover pads N; under a rate it stays at least q.
 
-**Several tables** (`--session-tables J`) prove one draw split into J equal consecutive parts, so the draw's count must be
-fixed and a multiple of J (`tables_problem`, Lean `Draw.tablesWhy`): a subset draw's k, or a stratified draw's sum of
-k_s. A stratified draw is held to the verifier's sampling design once, for the whole session, before the split.
+**Several tables** (`--session-tables J`) prove one sample split into J equal consecutive parts, so the sample's count must be
+fixed and a multiple of J (`tables_problem`, Lean `Draw.tablesWhy`): a subset sample's k, or a stratified sample's sum of
+k_s. A stratified sample is held to the verifier's sampling design once, for the whole session, before the split.
 """
 from __future__ import annotations
 
@@ -101,14 +101,14 @@ def parse_rate(text: Any) -> tuple[int, int, int] | None:
 
 
 def rate_count(num: int, den: int, tables: int, n: int) -> int:
-    """The rate sampling design's draw over n proof blocks: ceil(NUM n / DEN) rounded up to a multiple of `tables`, so each of the session's
-    tables proves the same count and every proof block is drawn with probability K/n >= NUM/DEN, whatever n the prover registers.
+    """The rate sampling design's sample over n proof blocks: ceil(NUM n / DEN) rounded up to a multiple of `tables`, so each of the session's
+    tables proves the same count and every proof block is sampled with probability K/n >= NUM/DEN, whatever n the prover registers.
     The Lean's `SampledProofs.Rate.count` is this."""
     return tables * -(-(num * n) // (den * tables))
 
 
 def stratum_k(k: int, size: int, population: int) -> int:
-    """A stratum's draw under the stratified rule: max(1, round(k * size / population)), rounding half up."""
+    """A stratum's sample under the stratified rule: max(1, round(k * size / population)), rounding half up."""
     return max(1, (2 * k * size + population) // (2 * population))
 
 
@@ -258,7 +258,7 @@ def _ranges_ok(rs: Any) -> bool:
 
 
 def fixed_count(law: Mapping[str, Any]) -> int | None:
-    """The proof blocks every draw under `law` has, when that count is fixed: `k` for `subset` and the strata's sum of k_s for
+    """The proof blocks every sample under `law` has, when that count is fixed: `k` for `subset` and the strata's sum of k_s for
     `stratified`; None for `bernoulli` (its count is random) and `work` (its closure varies). Lean `Draw.Law.fixedCount`."""
     if law.get("law") == "subset":
         return law.get("k")
@@ -273,8 +273,8 @@ TABLES_LAW = ("tables: several tables need a subset or stratified draw, whose un
 
 
 def tables_problem(law: Mapping[str, Any], tables: int) -> str | None:
-    """Why one draw under `law` can't be split into `tables` equal tables, as the Lean verifier's `Stmt.setupTables`
-    splits a session's draw, or None: one table takes any sampling design; several take a sampling design of fixed count (`fixed_count`) that is
+    """Why one sample under `law` can't be split into `tables` equal tables, as the Lean verifier's `Stmt.setupTables`
+    splits a session's sample, or None: one table takes any sampling design; several take a sampling design of fixed count (`fixed_count`) that is
     positive and a multiple of `tables`. Lean `Draw.tablesWhy`, which `flock-verify draw --tables J` refuses by before
     any coin."""
     if tables <= 1:
@@ -288,12 +288,12 @@ def tables_problem(law: Mapping[str, Any], tables: int) -> str | None:
 
 
 def proved(draw: Mapping[str, Any]) -> list[int]:
-    """The proof blocks a draw proves: the drawn proof blocks and a work draw's closure, ascending (Lean `UnitDraw.proved`)."""
+    """The proof blocks a sample proves: the sampled proof blocks and a work sample's closure, ascending (Lean `UnitDraw.proved`)."""
     return sorted([*draw["units"], *draw.get("closure", ())])
 
 
 def check_draw(draw: Any, registration: Mapping[str, Any], law: Mapping[str, Any], tables: int = 1) -> Verdict:
-    """The draw is well formed, over the registered population, under the verifier's sampling design (for `stratified` and `work`,
+    """The sample is well formed, over the registered population, under the verifier's sampling design (for `stratified` and `work`,
     the expanded sampling design of `derive`), and a session of `tables` tables can split it (`tables_problem`)."""
     c = _Collect()
     if not isinstance(draw, Mapping) or draw.get("law") not in ("subset", "bernoulli", "stratified", "work"):
@@ -347,8 +347,8 @@ def check_draw(draw: Any, registration: Mapping[str, Any], law: Mapping[str, Any
 
 
 def check_proved(draw: Mapping[str, Any], proved_units: Sequence[int], instances: int) -> Verdict:
-    """The proved statement's instances are exactly the proof blocks the draw proves (`proved`: the drawn proof blocks, and a work
-    draw's closure), in ascending order."""
+    """The proved statement's instances are exactly the proof blocks the sample proves (`proved`: the sampled proof blocks, and a work
+    sample's closure), in ascending order."""
     c = _Collect()
     want = proved(draw)
     if instances != len(want):

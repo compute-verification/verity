@@ -8,7 +8,7 @@
 //! public. The verifier checks those public chunk values against the leaf digests natively (the keyed parent
 //! compressions), so no middle block, counter, flag, length or key is free.
 //!
-//! The link (L1, L2): after `Commit(root_F, root_B, public words)` the verifier draws two GF(2^128) points over the
+//! The link (L1, L2): after `Commit(root_F, root_B, public words)` the verifier samples two GF(2^128) points over the
 //! linked positions, the prover sends `y_k = z^(r_k)`, and both reps open `z^(r_k) = y_k` in their merged opening
 //! (a ring-switched claim with eq weights), so each rep's reduction is a fresh round-by-round bound on live coins.
 //!
@@ -867,7 +867,7 @@ enum L3Case {
 
 /// Two chain tables in ONE session (L3): the second table's root is computed first (its prove runs up to the
 /// binding, where the hook stops it: the commit is deterministic), so the single `Commit` carries both roots before
-/// the link points are drawn; each table opens its own y at the shared points in both reps.
+/// the link points are sampled; each table opens its own y at the shared points in both reps.
 fn session_l3(ch: &Arc<Chain>, case: L3Case) -> Value {
     let names = ["chain0", "chain1"];
     let data: Vec<Vec<u8>> = (0..2).map(|i| words(0xA + 0x100 * i as u64, ch.leaves * ch.k * 2)).collect();

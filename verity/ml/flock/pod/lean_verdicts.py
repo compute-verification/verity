@@ -7,9 +7,9 @@ refusal, with a VERDICT and none accepting, and every other part of it has a VER
 honest one is accepted). ``flock-verify statement``'s line is its part's VERDICT: accepted when Lean derived the units from
 the verifier's program (``partition_check``'s ``units`` ``derived``), refused as ``setup: …``. A part that never ran has
 neither file and fails. A forgery's part the verifier never checked is "no proof produced (not exercised)", never a
-refusal: one whose session Lean found missing its files (``session files: …``), and one the firewall held back (its
+refusal: one whose session Lean found missing its files (``session files: …``), and one the ZK server held back (its
 prover's ``LIVE`` lines, ``PART.live``, the session verdicts oprove kept, stop at ``FIREWALL-REFUSED: …``, and no session
-reached Lean), since the firewall is the prover's own check, which a dishonest prover doesn't run. A forgery no part of
+reached Lean), since the ZK server is the prover's own check, which a dishonest prover doesn't run. A forgery no part of
 which Lean refused, one of them not exercised, fails the step as not exercised. A forged inner session
 (``forged-inner-W-PART``, 85's NEG_INNER) is read only by the parts ``COVERS`` names for it: without one of them among the
 parts run, nothing could refuse it, and it is "not covered by the parts run", which fails the step like a forgery no part
@@ -76,7 +76,7 @@ def verdicts(log: Path) -> list[dict]:
 
 
 def firewall_refusal(live: Path) -> str | None:
-    """The firewall's refusal among the prover's ``LIVE`` verdicts (one JSON per line), if one stopped at it."""
+    """The ZK server's refusal among the prover's ``LIVE`` verdicts (one JSON per line), if one stopped at it."""
     if not live.exists():
         return None
     for line in live.read_text(errors="replace").splitlines():
@@ -97,8 +97,8 @@ def no_proof(v: dict) -> bool:
 
 def check(d: Path, part: str, kind: str | None = None) -> tuple[bool, bool, bool, str]:
     """``part``'s (passes, refused, not exercised, line); a forgery's part (``kind``) passes when it has a VERDICT or the
-    firewall held it back, and is refused when it exited 1 with none accepting and Lean checked a session of it. A part
-    whose every session is missing its files, or that the firewall held back, is not exercised, never refused."""
+    ZK server held it back, and is refused when it exited 1 with none accepting and Lean checked a session of it. A part
+    whose every session is missing its files, or that the ZK server held back, is not exercised, never refused."""
     rc, vs = exit_status(d / f"time-{part}.txt"), verdicts(d / f"{part}.log")
     fw = None if vs or rc is not None else firewall_refusal(d / f"{part}.live")
     if fw:
