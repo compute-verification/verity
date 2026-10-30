@@ -9,7 +9,7 @@ marked_after = "2026-10-12T06:00:00Z"
 # land a prefix whose Lean check passed by committing the lock records it regenerated on top
 regenerate_locks = true
 # ready PRs to put at the bottom of `next`, in this order, ahead of members that keep their place (a fix `main` needs)
-first = [4888, 6498, 6547, 6552, 6508, 6546, 5915, 5334, 6248, 6037, 6241]
+first = []
 # scripts each PR passes, run from `main` as `python3 PATH MAIN TOP --json`: TOP is its head at the ready mark's preflight, and
 # its merge onto `next` at the sync, which leaves out what they refuse (a Markdown file over its cap); the
 # vLLM integration's lint ratchets don't grow, and a change to a lint is judged like source. A sync's TOP holds every PR
