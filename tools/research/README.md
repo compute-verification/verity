@@ -160,8 +160,7 @@ names its owner (a `Lane {name}` line, else its Cursor agent id), has no hold la
 owner (`research queue ready PR --mark --by LANE`, or `--on auto` to run the quick tier first, or a `ready` label on
 `pr:{n}@{head}`). No PR waits on a person's approval or on a per-head grant. The branch holds the queue's state (each
 merge commit's `PR:`, `Head:` and `Owner:` trailers); a sync keeps the prefix that still matches and merges the rest again, and one post per
-root cause names each PR it leaves out. A PR enters `next` only once drive's sync preflighted its merge there (once per head
-and base tree); a refused one stays out, told. `--shadow` builds `queue-shadow`, never moves `main` and tells no one.
+root cause names each PR it leaves out. `--shadow` builds `queue-shadow`, never moves `main` and tells no one.
 
 The mark and sync refuse a lock merge dropping an entry `next` needs (`lock_drops`).
 
