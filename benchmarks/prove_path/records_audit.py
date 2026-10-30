@@ -56,8 +56,10 @@ them out of an audit (its summary says so), for a run of several audits of one c
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--skip-negatives]
     records_audit.py count --circuit FILE --bits N [--catalog MODULE ...] [--pin NAME=ROOT ...] [--pins FILE ...] [--registration FILE]
 
-``count``: a stated record that declares its inputs (cuts, registered reads, ingress: `interface.Circuit.declared`) counted
-from its description alone (`declared_count`), before the committer writes its members' rows. A registered read counts as
+``count``: a record that declares its inputs, counted before the committer writes its members' rows (`declared_count`): a
+stated one (cuts, registered reads, ingress: `interface.Circuit.declared`) from its description alone, and one that lists
+its members from them and its window's ingress (`interface.listed_ingress`), the window figure printed beside the run
+figure with its premise. A registered read counts as
 registered only at a parameter ``--pin`` or ``--pins`` names (`pins_of`), with the root the verifier fixed before the run,
 and only where the window's registration (``--registration``) records that root for it (`registration_roots`,
 `interface.held_params`), any other free. A pin names its parameter alone: for vLLM's window circuit, each weight's
@@ -818,7 +820,9 @@ def main(argv: list[str] | None = None) -> int:
                    "values} (`pinned`), for a circuit that reads them")
     p.add_argument("--skip-negatives", action="store_true", help="no negatives in this audit (module docstring): a run of "
                    "several audits runs them in its first")
-    p = sub.add_parser("count", help="a stated circuit record's leak count from its description alone (declared_count)")
+    p = sub.add_parser("count", help="a circuit record's leak count (declared_count): a stated record's from its description "
+                       "alone, a listed one's from its members and its window's ingress; the run figure, and beside it, where "
+                       "the record declares window ingress, the window figure with its premise")
     p.add_argument("--circuit", required=True, help="the circuit record (circuit.json), or its description")
     p.add_argument("--bits", type=int, required=True, help="the advice's registered length in bits, the charge")
     p.add_argument("--catalog", action="append", default=[], help="a module whose Definitions the record's templates name, "
