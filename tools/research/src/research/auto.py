@@ -15,7 +15,7 @@ then takes, in order:
     24 Oct 02:10Z its GPUs sat at 0% under a load of 235 on 120 cores from CPU work while cpu-5 ran at 8 of 192 (top).
 
 A GPU job, a run naming its own node, or one asking more than a pool slot gives stays on node 2's queue. A machine that can't
-be read is skipped, and so, without asking, is one fleet.py has marked `unreachable_since` in its registry entry; with node 2 unread and no pool fitting, the job is refused (`Unplaceable`) with where to run it. A pool
+be read is skipped; with node 2 unread and no pool fitting, the job is refused (`Unplaceable`) with where to run it. A pool
 run waits up to an hour in its line (slot_only.POOL_WAIT_S) and then exits 75 without running; its --timeout counts from
 taking the slot.
 """
@@ -133,10 +133,7 @@ def payload(source: Path, cpus: int, share: str | None, pools: list[str]) -> byt
 def _reach(name: str) -> list[str]:
     from . import remote
 
-    m = remote.resolve_machine(name, AUTO_PROJECT)
-    if m.get("unreachable_since"):
-        raise RuntimeError(f"unreachable since {m['unreachable_since']} (fleet.py's mark in its registry entry)")
-    t = remote.pod_target(m)
+    t = remote.pod_target(remote.resolve_machine(name, AUTO_PROJECT))
     return [*remote.ssh_argv(t["host"], t["port"], user=t["user"]), "python3 -"]
 
 

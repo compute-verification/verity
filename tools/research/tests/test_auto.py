@@ -201,16 +201,3 @@ def test_the_share_comes_from_the_trees_description(tmp_path):
     (tmp_path / auto.DESCRIPTION).write_text(f'[[shares]]\nproject = "pous"\nnode = "{N2}"\ncpus = "0-7"\n'
                                              f'[[shares]]\nproject = "verity"\nnode = "{N2}"\ncpus = "48-95"\n')
     assert auto.share_cpus(tmp_path) == "48-95"
-
-
-def test_a_machine_fleet_marked_unreachable_is_skipped_without_asking_it(monkeypatch):
-    """The conftest stubs `_reach`; a fresh copy of the module has the real one, which raises before any ssh."""
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location("research._auto_unstubbed", auto.__file__)
-    real = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(real)
-    monkeypatch.setattr(remote, "resolve_machine", lambda name, project: {
-        "name": name, "host": "203.0.113.9", "unreachable_since": "2026-10-29T19:10:00Z"})
-    with pytest.raises(RuntimeError, match="unreachable since 2026-10-29T19:10:00Z"):
-        real._reach("vy-nebius-cpu-9")
