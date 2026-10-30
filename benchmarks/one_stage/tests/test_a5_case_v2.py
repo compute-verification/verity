@@ -1,6 +1,6 @@
-"""a5's case for onsite's integrity component, `SampledProofs.OneStageZk`'s: v1's case with the evidence's verdicts
-replaced by the proofs' files named by SHA-512, the params naming the auditor's circuit digest, and blobs the paths of
-those files and the pinned tables; and the audits v2 can't verify say why."""
+"""a5's case for the audit on the proofs themselves, `SampledProofs.OneStageZk`'s: v1's case with the evidence's
+verdicts replaced by the proofs' files named by SHA-512, the params naming the auditor's circuit digest, and blobs the
+paths of those files and the pinned tables; and the audits v2 can't verify say why."""
 
 from __future__ import annotations
 
