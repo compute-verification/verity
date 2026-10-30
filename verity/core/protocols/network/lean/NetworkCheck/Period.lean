@@ -248,7 +248,7 @@ structure Audit where
   bits : Nat
   entries : Array (String × Nat × String)
 
-/-- The network certifier's schedule when it functions as an active warden (`warden.WardenParams`). -/
+/-- The network certifier's schedule when it functions as an active network certifier (`warden.WardenParams`). -/
 structure Schedule where
   bucketMs : Nat
   cellBytes : Nat

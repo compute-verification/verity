@@ -48,6 +48,8 @@ DOC_TERMS = {
     "draw, drawn, redraw": "the sample, sampled proof block (verb: sample; coins are flipped)",
     "components, the composite's product": "subprotocols, composition",
     "firewall": "ZK server",
+    "warden, network warden": "the network certifier (`warden.py`, `WardenParams` and the `warden_*` modules stay in backticks "
+                              "until renamed)",
     "flock-verify, remote check, naming the verifier": "verity verify proof, verity verify remote (a command someone runs today "
                                                       "stays in backticks)",
     "builder, advice compiler, circuit builder": "registered compiler",
@@ -73,6 +75,7 @@ DOC_TERMS = {
 }
 _SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
 _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}units?|(?:physical|thread|KV){_SPACE}blocks?"
+                       rf"|wardens?"
                        rf"|legs?|(?:re)?(?:draws?|drawn|drawing|drew)|components?|firewall(?:s|ed)?|flock-verify"
                        rf"|remote{_SPACE}check|builders?|advice{_SPACE}compilers?|declared{_SPACE}(?:advice|circuits?|work(?:loads?)?)"
                        rf"|declar(?:es|ed|ing){_SPACE}(?:its|their|the){_SPACE}advice|sampled{_SPACE}units?"
@@ -155,6 +158,7 @@ PENDING: dict[str, str] = {
     "verity/core/protocols/pouw/lean/check/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "verity/ml/circuits/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
     "verity/ml/definitions/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
+    ".agents/skills/friction/SKILL.md": "queued PRs on next add the warden here; the network certifier's rename follows them",
     "AGENTS.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "ARCHITECTURE.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
@@ -338,12 +342,15 @@ def test_the_doc_scan_reads_each_form():
 def test_the_doc_scan_reads_the_protocol_terms():
     """The protocol's vocabulary (`ARCHITECTURE.md`, "How an audit works"), on toy files: hm96 rows keep their name in the commitments' own docs."""
     docs = {
+        "NETWORK.md": "The warden, a network warden's cells, two Wardens.\n"
+                      "`warden.py`, `--warden-run`, WardenParams and warden_rows stay.\n",
         "a.md": "The draw, a drawn unit, nothing redraws; the firewall and a sampling\nblock; the declared circuit.\n"
                 "Committed as hm96 rows before that period's coins; rejection dominates. A Commit period stays.\n"
                 "The commit period, `flock-verify verify`, then flock-verify.\n",
         "verity/ml/commitments/x/PROTOCOL.md": "hm96 rows in frame-v3-sha512 trees, before the draw.\n",
     }
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
+        ("NETWORK.md", 1, "warden"), ("NETWORK.md", 1, "warden"), ("NETWORK.md", 1, "Wardens"),
         ("a.md", 1, "draw"), ("a.md", 1, "drawn"), ("a.md", 1, "redraws"), ("a.md", 1, "firewall"),
         ("a.md", 1, "sampling block"), ("a.md", 2, "declared circuit"), ("a.md", 3, "hm96 rows"),
         ("a.md", 3, "period's coins"), ("a.md", 3, "rejection dominates"), ("a.md", 4, "commit period"),

@@ -24,8 +24,8 @@ the rows are what the server sent, which the prover holds.
 
 Its certificate is `Issuer.sign`'s of the out digest for the egress execution phase, in the certifier's session
 (`certificate.certificate_message`). D is the same in every window, so the certificate is what keeps one window's root
-out of another's: `check_out` takes the window it expects. A record's, a clock's and the warden cells' digests are
-under other tags, so none verifies as another.
+out of another's: `check_out` takes the window it expects. A record's, a clock's and the network certifier cells'
+digests are under other tags, so none verifies as another.
 
 **The record** (`CertifiedOut.public`) is the head and its certificate as one public JSON object, what the auditor
 receives:
