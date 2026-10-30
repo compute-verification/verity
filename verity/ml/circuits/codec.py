@@ -30,7 +30,7 @@ import json
 import re
 from typing import Callable, Any, Iterator
 
-from .defs import (Body, Builder, CompositeDefinition, FunctionDefinition, IdentityConflict, Node, PrimitiveDefinition, Registry,
+from .defs import (Body, Builder, CompositeDefinition, FunctionDefinition, IdentityConflict, BodyNode, PrimitiveDefinition, DefinitionTable,
                    SpecializedDefinition, _static_key, bind)
 from . import ports as P
 from .program import input_id, input_prim, is_input
@@ -200,7 +200,7 @@ class _BodyEncoder:
         return out[0] if len(out) == 1 else {"concat": out}
 
 
-def _encode_node(n: Node, enc: _BodyEncoder | None = None, k: int = 0) -> dict:
+def _encode_node(n: BodyNode, enc: _BodyEncoder | None = None, k: int = 0) -> dict:
     enc = enc or _BodyEncoder()
     d: dict[str, Any] = {
         "form": n.form,
@@ -624,7 +624,7 @@ def _record_function_ids(fid: str) -> list[str]:
     return out
 
 
-def lookup_primitive(registry: Registry, fid: str) -> PrimitiveDefinition:
+def lookup_primitive(registry: DefinitionTable, fid: str) -> PrimitiveDefinition:
     """`registry[fid]`, materialising the on-demand families (`Input<w>`, `Const<w>[bits]`, `GatherBf16x<V>`)
     when a descriptor is decoded in a process that has not built the program (their evaluators are total
     functions of the id).  Public so a semantics package's lazy-family makers (`register_lazy_family`) can
@@ -632,7 +632,7 @@ def lookup_primitive(registry: Registry, fid: str) -> PrimitiveDefinition:
     return _lookup_primitive(registry, fid)
 
 
-def _lookup_primitive(registry: Registry, fid: str) -> PrimitiveDefinition:
+def _lookup_primitive(registry: DefinitionTable, fid: str) -> PrimitiveDefinition:
     m = input_id(fid)
     if m:
         return input_prim(m[1], m[0])
@@ -667,7 +667,7 @@ class DecodedProgram:
         return self.root.gates
 
 
-def _decode_refs(j, nodes: list[Node], schema: str, leaves: Callable[[str, int], int | None] | None = None) -> Refs:
+def _decode_refs(j, nodes: list[BodyNode], schema: str, leaves: Callable[[str, int], int | None] | None = None) -> Refs:
     """v0: `refs_from_json`. v1: also resolves `{"alias": [k, a]}` to the reference sequence node `k` passed as
     argument `a` (already decoded — aliases point backwards), splicing a concatenation's alias parts in flat so
     the decoded representation does not depend on how the writer nested it.  Given `leaves`, every part read is `_checked_refs`."""
@@ -801,7 +801,7 @@ def _record_value(v: Any, fn: Callable[[str], Any]) -> Any:
     return v
 
 
-def definition_decoder(desc: dict, registry: Registry, built: dict[str, Any] | None = None) -> Callable[[str], Any]:
+def definition_decoder(desc: dict, registry: DefinitionTable, built: dict[str, Any] | None = None) -> Callable[[str], Any]:
     """The per-definition reader `decode_program` uses: each definition of ``desc`` by its id, decoded into ``built``."""
     schema = desc.get("schema")
     if schema not in SCHEMAS:
@@ -905,7 +905,7 @@ def definition_decoder(desc: dict, registry: Registry, built: dict[str, Any] | N
     return get
 
 
-def decode_program(desc: dict, registry: Registry) -> DecodedProgram:
+def decode_program(desc: dict, registry: DefinitionTable) -> DecodedProgram:
     built: dict[str, Any] = {}
     get = definition_decoder(desc, registry, built)
     root = get(desc["root"])
