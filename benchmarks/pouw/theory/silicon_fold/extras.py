@@ -332,7 +332,7 @@ def e7_energy(rng: np.random.Generator, scratch: Path, m: int = 8, n: int = 8, K
             Bn = B + u[:, None] * w[None, :] if noised else B
             widths = (9,) if noised else (8, 9)
             for wd in widths:
-                a_cyc, b_cyc, cell_of = [], [], []
+                a_cyc, b_cyc = [], []
                 for i in range(m):
                     for j in range(n):
                         a_cyc.append(An[i].reshape(-1, 4))
