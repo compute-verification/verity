@@ -142,11 +142,11 @@ theorem run_simProverM {Coin : Type} [Inhabited Coin] (H : Msg → Msg) (V : Ver
   · rw [if_pos hk, dif_pos hk]
     refine hS σ _ _ (by simp; omega) ?_
     rw [List.getLast?_eq_getElem?, List.getLast?_eq_getElem?]
-    simp only [List.length_map, List.length_take, List.length_range, Function.comp]
+    simp only [List.length_map, List.length_take, List.length_range]
     have e1 : min (i + 1) hist.length - 1 = i := by omega
-    rw [e1, List.getElem?_map, List.getElem?_take_of_lt (by omega), List.getElem?_eq_getElem hi', ha,
-      List.getElem?_map, List.getElem?_range (by omega)]
-    simp [coinSeq, hk]
+    rw [e1, List.getElem?_map, List.getElem?_take_of_lt (by omega), List.getElem?_eq_getElem hi',
+      show i + 1 - 1 = i by omega, List.getElem?_map, List.getElem?_range (show i < i + 1 by omega)]
+    simp [ha]
   · rw [if_neg hk, dif_neg hk]
 
 /-! ## Masked committed coins against fresh ones -/
