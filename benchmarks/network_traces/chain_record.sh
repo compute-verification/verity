@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The network chain's run of record (chain_record.py) on a CPU machine, from the gate's fetched tarballs, on hidden_zk's
-# builds (its job.sh, sourced: C-Flock's flock-circuit and the Lean flock-verify, the verifier of record) with the
+# builds (its job.sh, sourced: Flock's flock-circuit and the Lean flock-verify, the verifier of record) with the
 # firewall's Lean frame, N2's network-records and the sampled-proofs verifier built in the tree. From a clone, in one of
 # the network slots, as a job of at most 240 minutes on a CPU node whose input is the gate's tarball GATE.tgz:
 #   env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py --by LANE -- \
@@ -10,7 +10,7 @@
 #   certs    the client's kept certificates.jsonl (or certified.jsonl) and clocks.jsonl, verified (chain_record.py certs)
 #   endpoint with CR_ENDPOINT, the endpoint's own advice bound to the run and the I/O tie on it, both in the clear
 #            (network-e2e's e2e.py --no-prove: chain.served_advice and chain.tie)
-#   n2       N2's units proved by C-Flock --zk and decided by its verifier of record, Lean included: CR_N2_CMD
+#   n2       N2's units proved by Flock --zk and decided by its verifier of record, Lean included: CR_N2_CMD
 #            (a sampled draw on signed clocks); else on the advice profile n2_advised_zk.py --e2e on the bound
 #            advice and the certifier's clock certificates, and on the others n2_zk.py prove
 #   scan     the scan's chained units, --zk, held by Lean verify --zk --registered (scan_zk.py prove, with
@@ -53,7 +53,7 @@
 #      in jobs of its own)  CR_CACHE (the build cache; hidden_zk's by default)
 #      CR_QUARANTINE (where what the record mustn't hold goes, 0700 and outside the run dir: by default quarantine/RUN
 #      beside the runs root, /workspace/research/quarantine/RUN on a node, kept until its owner removes it)
-# n2 runs, then (on the warden path) the tie, then scan: outer proofs go through the firewall one at a time
+# n2 runs, then (on the warden path) the tie, then scan: outer proofs go through the ZK server one at a time
 # (n2_zk.ONE_SESSION), so no two of their provers' firewalled sessions overlap.
 # Kept in $OUT: the steps' records and logs, the public files and everything each verifier received; never a prover's
 # file (inst-*, prover-instances.bin, instances.bin) nor a circuit (its pin is kept), a session's archive, a signer's
