@@ -70,8 +70,8 @@ def route_fp8_digits(E, R):
     lo = Ri & 15
     hi = (Ri - lo) // 16
     assert lo.min() >= 0 and lo.max() <= 15 and hi.min() >= -8 and hi.max() <= 7
-    f = lambda x: x.astype(np.float32)
-    y = f(E) @ f(lo).T + np.float32(16) * (f(E) @ f(hi).T)  # every partial sum is an integer below 2^24
+    e32, lo32, hi32 = (x.astype(np.float32) for x in (E, lo, hi))
+    y = e32 @ lo32.T + np.float32(16) * (e32 @ hi32.T)  # every partial sum is an integer below 2^24
     return y.astype(np.int64)
 
 
