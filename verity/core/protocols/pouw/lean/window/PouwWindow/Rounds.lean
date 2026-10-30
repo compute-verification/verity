@@ -4,7 +4,7 @@ import SampledProofs.Challenger
 /-!
 # A live window's round coins (`window.py`, "Live windows")
 
-PoUW's live window is the proof service's challenger's first client (`SampledProofs.Challenger`). The check item's
+PoUW's live window is the proof system's challenger's first client (`SampledProofs.Challenger`). The check item's
 optional `coins` is the window's coin mode (`mode`, Compose's `CoinMode`), seeded when the item names none. A live
 epoch's coins are the layout `liveFamilies R` under `LIVE_SCHEME`: its salt coin, its draw coin and `R` round coins
 (`pouw/round`, rounds numbered from 0), all committed before the epoch. Round `r`'s coin opens once, after the verifier

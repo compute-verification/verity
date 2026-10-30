@@ -13,7 +13,7 @@ import PouwWindow.Length
   that template's tile work and query; and the rows' fixed length: stop mode `fixed` and each slot's max_tokens.
 * `Registration`: one-stage's record of the window (`registration.record`), canonical JSON, with what PoUW's rule reads;
   its digest is the record's own, `registration.digest`.
-* `Evidence`: the proof service's answer for a registration, read by `Core.Answer.ofJson`: the protocol, the
+* `Evidence`: the proof system's answer for a registration, read by `Core.Answer.ofJson`: the protocol, the
   registration it is for, and what it said (on acceptance, the integrity profile and the verifier's draw as one-stage's
   `draw.py` writes it).
 
