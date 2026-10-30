@@ -184,7 +184,8 @@ def test_each_shard_of_the_after_landing_run_gets_machines_no_other_shard_has(wo
 def test_a_run_ci_adds_to_a_shard_counts_as_its_twin(world, monkeypatch):
     """A shard whose twin waits behind another shard: ci launches its run elsewhere and `drive-shard-add TIP K RUN_ID` makes it
     one of that shard's twins, so its pass passes the shard.  Refused for another tip, a shard out of range, a run already
-    counted, a run still launching, and off the control pod."""
+    counted, a run still launching, off the control pod, and for a run whose own record isn't that shard of that commit (another
+    commit, shard or steps, no check.py, or no readable record), so a passing run of a mistyped id verifies nothing."""
     from research.merge import DRIVE_ENV
 
     h = Review(world, monkeypatch)
@@ -193,6 +194,16 @@ def test_a_run_ci_adds_to_a_shard_counts_as_its_twin(world, monkeypatch):
     h.review(1)
     assert h.tick().startswith("landed #1"), world.logs
     main = _main(world)
+    check = ["uv", "run", "python", "tools/verity/check/check.py", "--keep-going"]
+    steps = ["--deferred", ",".join(AFTER_LANDING)]
+    records = {"r-hand": (main, [*check, *steps, "--shard", "2/2"]),
+               "r-other-commit": (_git(world.origin, "rev-parse", "main^1"), [*check, *steps, "--shard", "2/2"]),
+               "r-other-shard": (main, [*check, *steps, "--shard", "1/2"]),
+               "r-unsharded": (main, [*check, *steps]),
+               "r-other-steps": (main, [*check, "--deferred", "lean-audit", "--shard", "2/2"]),
+               "r-no-check": (main, ["bash", "-lc", "true"])}
+    monkeypatch.setattr(merge, "fetch_run", lambda rid, names, cwd=None, refresh=False: (
+        (world.tmp, {"tree_sha": records[rid][0], "command": records[rid][1]}) if rid in records else None))
     argv = ["drive-shard-add", main[:12], "2", "r-hand", "--workdir", str(h.q.workdir), "--remote", str(world.origin), "--repo",
             "o/r", "--store", str(world.tmp / "store"), "--rules", str(world.dev / "ci" / "queue.toml")]
     with pytest.raises(QueueError, match="still launching"):
@@ -206,7 +217,12 @@ def test_a_run_ci_adds_to_a_shard_counts_as_its_twin(world, monkeypatch):
     monkeypatch.setenv(DRIVE_ENV, "1")
     for tip, k, rid, why in ((_git(world.origin, "rev-parse", "main^1"), 2, "r-hand", "is not the tip"),
                              (main[:6], 2, "r-hand", "is not the tip"), (main, 3, "r-hand", "shard 3 is not one of the run's 2"),
-                             (main, 0, "r-hand", "shard 0 is not one"), (main, 2, "r-post-0", "already a run")):
+                             (main, 0, "r-hand", "shard 0 is not one"), (main, 2, "r-post-0", "already a run"),
+                             (main, 2, "r-other-commit", f"r-other-commit checked {records['r-other-commit'][0][:12]}, not"),
+                             (main, 2, "r-other-shard", "r-other-shard is shard 1/2, not shard 2/2"),
+                             (main, 2, "r-unsharded", "r-unsharded is no shard, not shard 2/2"),
+                             (main, 2, "r-other-steps", "ran --deferred lean-audit, not"),
+                             (main, 2, "r-no-check", "is no check.py run"), (main, 2, "r-typo", "can't be read")):
         with pytest.raises(QueueError, match=why):
             Q.drive_shard_add(h.q, tip, k, rid)
     with pytest.raises(SystemExit):
