@@ -24,7 +24,8 @@ advice was fixed before the sample (`fixed_before_draw`), and advice re-committe
 Units whose outputs are served out (``--outputs`` and the circuit's registered reads of output ports, `output_class`) are
 proved whole beside the sample, under a work law: every sample's closure (a5's `output_closure`).
 The summary reports the leak bound's count beside the advice's charge, ``vacuous`` while the circuit's other inputs exceed
-it (`leak_count`; a record that declares its inputs, `declared_count`). An integration's labels are never read.
+it (`leak_count`; a record that declares its inputs, `declared_count`): the run figure, and for a record that declares
+its window's ingress the window figure beside it, with the premise it rests on named. An integration's labels are never read.
 
 A circuit that reads registered values at public positions (`interface.Read`) is audited against the entries the verifier
 pinned before the run (``--registered FILE``: ``{"program", "values": {param: entry}}`` or a list of them, each entry core's
@@ -49,14 +50,22 @@ have theirs pinned through ``--registered``, from the window's entries.
 The negatives (`negatives` before the sample, a5's after it) cost Lean verifies of their own; ``--skip-negatives`` leaves
 them out of an audit (its summary says so), for a run of several audits of one circuit, which runs them in its first.
 
+``warm``: a window's templates and binding are public, so every template its composers make is composed into a5's compose
+cache before the timed audit (`warm`, `a5.warm`), under the tree and ``FLOCK_*`` environment the audit then runs in, since
+the cache's key covers both; the audit with ``--compose-cache`` then composes none. An audit's time quoted with the cache
+quotes the warm's beside it.
+
     records_audit.py audit --window DIR --law L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512) --run HEX \\
         [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
         --out DIR [--delta D] [--port P] [--ports N] [--forged] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
-        [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--skip-negatives]
+        [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--skip-negatives] [--compose-cache DIR]
+    records_audit.py warm --window DIR --law L [--template-sets DIR] --compose-cache DIR [--jobs N]
     records_audit.py count --circuit FILE --bits N [--catalog MODULE ...] [--pin NAME=ROOT ...] [--pins FILE ...] [--registration FILE]
 
-``count``: a stated record that declares its inputs (cuts, registered reads, ingress: `interface.Circuit.declared`) counted
-from its description alone (`declared_count`), before the committer writes its members' rows. A registered read counts as
+``count``: a record that declares its inputs, counted before the committer writes its members' rows (`declared_count`): a
+stated one (cuts, registered reads, ingress: `interface.Circuit.declared`) from its description alone, and one that lists
+its members from them and its window's ingress (`interface.listed_ingress`), the window figure printed beside the run
+figure with its premise. A registered read counts as
 registered only at a parameter ``--pin`` or ``--pins`` names (`pins_of`), with the root the verifier fixed before the run,
 and only where the window's registration (``--registration``) records that root for it (`registration_roots`,
 `interface.held_params`), any other free. A pin names its parameter alone: for vLLM's window circuit, each weight's
@@ -261,16 +270,21 @@ def source(w: Mapping[str, Any] | None, held: Mapping[str, Any]) -> dict[str, An
     return _verdict(ok, {"kind": w.get("kind"), "circuit": w.get("circuit"), "run": w.get("run")})
 
 
+#: what the window figure rests on and the run figure doesn't (`declared_count`), named beside it wherever it is printed
+WINDOW_PREMISE = ("the earlier rows' committed activations the window reads (its window ingress) are its writers' outputs: "
+                  "the link checks bind them (sampled proofs' wiring; the binding error ε_bind)")
+
+
 def leak_count(members: Iterable[Any], external: Iterable[str], bits: int) -> dict[str, Any]:
     """The leak bound's count against the advice's charge (``bits``, the registered length; 0 for a circuit with no compiler).
     ``other_inputs`` is #(otherInputs \\ registered): ``otherInputs`` (``SampledCharge.lean``), the circuit's input
     gates no step lists as ingress, less the inputs the registration fixes. The circuit's input gates are each of the
     verifier's ``members``' parameter rows' bits (16 a u16 word: `interface.layout` refuses a port of part words), once per
     unit, or once per table row for a shared-row port (``tables``), and none for a port wired from other units' outputs
-    (``wired``, which a5's wiring check holds). The records list no steps and register no input (a row table's registered
-    reads are refused, `verifier_window`), so none is ingress or registered yet: the ``external`` ports are reported, not
-    subtracted, until a layout lists the ingress at its steps. ``bound`` is ``vacuous`` while ``other_inputs`` exceeds the
-    charge."""
+    (``wired``, which a5's wiring check holds). A record that declares no input lists no steps and registers no input (a
+    row table's registered reads are refused, `verifier_window`), so none is ingress or registered: the ``external``
+    ports are reported, not subtracted. A record that declares its window's ingress (vLLM's served windows) is counted by
+    `declared_count`. ``bound`` is ``vacuous`` while ``other_inputs`` exceeds the charge."""
     inputs = wired = ext_bits = 0
     ext = set(external)
     for m in members:
@@ -288,11 +302,16 @@ def leak_count(members: Iterable[Any], external: Iterable[str], bits: int) -> di
 def declared_count(doc: Mapping[str, Any], bits: int, resolve: Callable[[str], Any] = IF.resolve,
                    pins: Mapping[str, str] | str | None = None, roots: Mapping[str, str] | None = None,
                    untied: Iterable[str] = ()) -> dict[str, Any]:
-    """The leak bound's count of a stated record that declares its inputs (`interface.input_count`, from its description
-    alone): its input rows less those its wires, registered reads of a parameter whose window root (``roots``, those the
-    registration records: `window_roots`) is the verifier's pin (``pins``, ``{param: root}``) and ingress fill
+    """The leak bound's count of a record that declares its inputs (`interface.input_count`: a stated record's from its
+    description alone, a listed one's from its members and its window's ingress): its input rows less those its wires,
+    registered reads of a parameter whose window root (``roots``, those the registration records: `window_roots`) is the
+    verifier's pin (``pins``, ``{param: root}``) and the run's ingress fill
     leave ``free``, and ``other_inputs`` is those plus the advice's ``bits``, the compile unit's one input, a statement of
-    its own. So ``other_inputs`` equals the charge exactly when the circuit leaves no input free. An ``untied`` value
+    its own. So ``other_inputs`` equals the charge exactly when the circuit leaves no input free. That is the run figure,
+    the one to quote: only Lean's run ingress (the ingress gates ``freeInputs`` reads) counts as ingress. A listed
+    record's window ingress (`interface.listed_ingress`: what its members read from rows before the window) adds the
+    window figure beside it (``window``, those rows subtracted too), which holds only under its ``premise``
+    (`WINDOW_PREMISE`). An ``untied`` value
     (`window_pins`: a per-window value no output port of the circuit writes, whose rows the prover chose) is no pin here,
     though the audit opens its reads against its committed root: its input rows are free, and the count names it."""
     untied = set(untied)
@@ -301,7 +320,12 @@ def declared_count(doc: Mapping[str, Any], bits: int, resolve: Callable[[str], A
     if untied:
         n = {**n, "untied": sorted(untied)}
     other = n["free"] + bits
-    return {**n, "other_inputs": other, "advice_bits": bits, "bound": "vacuous" if other > bits else "within the charge"}
+    out = {**n, "other_inputs": other, "advice_bits": bits, "bound": "vacuous" if other > bits else "within the charge"}
+    if n.get(IF.WINDOW_INGRESS):
+        free = n["free"] - n[IF.WINDOW_INGRESS]
+        out["window"] = {"ingress": n[IF.WINDOW_INGRESS], "free": free, "other_inputs": free + bits,
+                         "bound": "vacuous" if free > 0 else "within the charge", "premise": WINDOW_PREMISE}
+    return out
 
 
 def pin_arg(s: str) -> tuple[str, str]:
@@ -544,6 +568,7 @@ def composer(fn: Any, st: Mapping[str, Any]) -> Callable[[Path, str, str], dict[
         if st["reads"] == "slots":
             FC.IL.write_tables(Path(out).parent / "tables")
         return {"subcircuit": s.meta.get("subcircuit"), "pin": s.pin, "class_sha512": s.class_sha512, "k_log": s.meta["k_log"]}
+    compose.inputs = ["unit/window", st]  # a5's compose cache keys a composer by these (a5.compose_key), else never caches it
     return compose
 
 
@@ -680,7 +705,6 @@ def audit(a: argparse.Namespace) -> int:
     a.ports = a.ports if a.ports is not None else max(1, len(mine.members))
     a.port = a.port if a.port is not None else free_ports(a.ports)
     a.coins, a.verifier_coins, a.window_root, a.rule = None, not a.challenger, mine.run, a.law
-    a.compose_cache = None
     a.outputs = output_class(doc, json.loads(Path(a.outputs).read_text()) if a.outputs else (), own=set(ties) | set(untied))
     if a.forged:
         os.environ["FC_ZK_SELF_CHECK"] = "skip"
@@ -705,7 +729,7 @@ def audit(a: argparse.Namespace) -> int:
     bits = int((held["advice"] or {}).get("bits", 0))
     counted = pin_roots(pins)
     row["leak"] = (declared_count(doc, bits, resolve, counted, roots, untied)
-                   if set(IF.DECLARED) & set(doc) else leak_count(mine.members, doc.get("external") or (), bits))
+                   if {*IF.DECLARED, IF.WINDOW_INGRESS} & set(doc) else leak_count(mine.members, doc.get("external") or (), bits))
     if reads:
         row["registered"] = {"pins": counted, "roots": roots, "members": len(reads)}
     acts = committed_activations(w)
@@ -751,9 +775,26 @@ def audit(a: argparse.Namespace) -> int:
                                      "definitions": row["definitions"], "loaded": row["loaded"],
                                      "activations": None if acts is None else acts["ok"],
                                      "leak": {k: row["leak"][k] for k in ("other_inputs", "free", "registered", "advice_bits",
-                                                                          "bound", "untied") if k in row["leak"]},
+                                                                          "bound", "untied", "window") if k in row["leak"]},
                                      **({"forged": row["forged"]} if a.forged else {})}, sort_keys=True, default=str))
     return 0 if row["ok"] else 1
+
+
+def warm(a: argparse.Namespace) -> int:
+    """Every template of the verifier's window that its composers make, composed into ``a.compose_cache`` bound to the window's
+    partition and program (`a5.warm`), ``a.jobs`` at a time, before the timed audit: an audit with that cache then composes
+    none. One JSON line a template (its seconds, pin and whether the cache held it), then a ``WARM`` line."""
+    import a5 as A5
+
+    t0 = time.time()
+    mine, _doc, sets = verifier_window(Path(a.window), D.parse_law(a.law), Path(a.template_sets) if a.template_sets else None)
+    window_s = round(time.time() - t0, 1)
+    got = A5.warm(a, sets, mine, a.jobs)
+    for g in got:
+        print(json.dumps(g, sort_keys=True))
+    print("WARM " + json.dumps({"templates": len(got), "kept": sum(bool(g["kept"]) for g in got), "verifier_window_s": window_s,
+                                "seconds": round(time.time() - t0, 1)}, sort_keys=True))
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -802,7 +843,18 @@ def main(argv: list[str] | None = None) -> int:
                    "values} (`pinned`), for a circuit that reads them")
     p.add_argument("--skip-negatives", action="store_true", help="no negatives in this audit (module docstring): a run of "
                    "several audits runs them in its first")
-    p = sub.add_parser("count", help="a stated circuit record's leak count from its description alone (declared_count)")
+    p.add_argument("--compose-cache", help="a5's compose cache, which `warm` filled under this tree and FLOCK_* environment: "
+                   "staging links each kept circuit and composes none (default none: every template composed here)")
+    p = sub.add_parser("warm", help="every template of a window composed into a5's compose cache, before its timed audit")
+    p.add_argument("--window", required=True, help="the window's directory, as its audit takes it")
+    p.add_argument("--law", required=True, help="the window's law, as its audit takes it")
+    p.add_argument("--template-sets", help="the verifier's own input sets, as its audit takes them")
+    p.add_argument("--compose-cache", required=True, help="the cache the audit's --compose-cache names")
+    p.add_argument("--jobs", type=int, default=1, help="templates composed at once, each in a forked process: what the "
+                   "machine's memory takes (a5.warm)")
+    p = sub.add_parser("count", help="a circuit record's leak count (declared_count): a stated record's from its description "
+                       "alone, a listed one's from its members and its window's ingress; the run figure, and beside it, where "
+                       "the record declares window ingress, the window figure with its premise")
     p.add_argument("--circuit", required=True, help="the circuit record (circuit.json), or its description")
     p.add_argument("--bits", type=int, required=True, help="the advice's registered length in bits, the charge")
     p.add_argument("--catalog", action="append", default=[], help="a module whose Definitions the record's templates name, "
@@ -827,6 +879,8 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(declared_count(json.loads(Path(a.circuit).read_text()), a.bits, pins=pins, roots=roots),
                          sort_keys=True))
         return 0
+    if a.cmd == "warm":
+        return warm(a)
     if bool(a.opening) == bool(a.circuit) or bool(a.opening) != bool(a.compilers):
         ap.error("a compiled circuit: --opening FILE --compilers FILE; a circuit with no compiler: --circuit SHA512")
     if a.challenger:
