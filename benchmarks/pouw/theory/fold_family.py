@@ -38,7 +38,9 @@ every w-bit k instead, even ones included (a round's K_t is any constant), or on
 F of each: at c = 1, (R + C) ⊕ 1 = (R − 2r_0) + (C − 2c_0 + 1) + 4·r_0·c_0 (r_0, c_0 the low bits), one IMAD of two
 free terms, so with F = 2 the 32-bit word entry has a two-instruction program at every k, and with F = 1 only where
 4k ≡ 0 mod 2^w. A w-bit sweep at a c whose low w bits are 1 certifies nothing a prover with two free terms a side
-can't beat.
+can't beat. `--free=K,R,C` sets the three kinds apart (key, row, column). A two-instruction program reads at most four
+operands besides N and its first instruction, at least one of them row-dependent and one column-dependent when the
+target isn't separable, so `--free=2,3,3` is complete for L = 2 on the zero target.
 
 `--grids=AxBxC,AxBxC` sets the zero target's two grids (rows × columns × entry states). Rows and columns are drawn with
 repeats, the free terms are per drawn row and column, and each cell draws its own entry states, so a sat at any grid
@@ -156,22 +158,24 @@ def carry_program(tag, L, nsrc, w, full):
 def instance(spec):
     """The solver for one member at length L: examples over rows × columns × entry states (zero) or states × words."""
     w, member, target, L = spec["width"], spec["member"], spec["target"], spec["L"]
-    s, mask, F = len(member), (1 << spec["width"]) - 1, spec.get("free") or len(member)
+    s, mask = len(member), (1 << spec["width"]) - 1
+    free = spec.get("free") or len(member)
+    Fk, Fr, Fc = (free,) * 3 if isinstance(free, int) else free
     nr, nc, nn = spec["grid"]
     rng = random.Random(spec["seed"])
     consts = [x for _, p in member for x in (p["k"], p["c"])]
     names = ["N"] + ([f"R{t + 1}" for t in range(s)] + [f"C{t + 1}" for t in range(s)] if target == "zero"
                      else [f"D{t + 1}" for t in range(s)])
-    names += [f"{x}{t + 1}" for t in range(s) for x in "kc"] + [f"keyfun{f}" for f in range(F)]
+    names += [f"{x}{t + 1}" for t in range(s) for x in "kc"] + [f"keyfun{f}" for f in range(Fk)]
     if target == "zero":
-        names += [f"rowfun{f}" for f in range(F)] + [f"colfun{f}" for f in range(F)]
+        names += [f"rowfun{f}" for f in range(Fr)] + [f"colfun{f}" for f in range(Fc)]
     carry = target == "zero" and any(p.get("carry") for _, p in member)
     if carry and [kind for kind, _ in member] not in (["xoradd"], ["addk"]):
         raise SystemExit("a carry-in member is one additive step")
     names += ["cin"] if carry else []
-    kf = [z3.BitVec(f"kf{f}", w) for f in range(F)]
-    rf = [[z3.BitVec(f"rf{f}_{r}", w) for r in range(nr)] for f in range(F)]
-    cf = [[z3.BitVec(f"cf{f}_{c}", w) for c in range(nc)] for f in range(F)]
+    kf = [z3.BitVec(f"kf{f}", w) for f in range(Fk)]
+    rf = [[z3.BitVec(f"rf{f}_{r}", w) for r in range(nr)] for f in range(Fr)]
+    cf = [[z3.BitVec(f"cf{f}_{c}", w) for c in range(nc)] for f in range(Fc)]
     c0 = [[z3.BitVec(f"c0_{r}_{c}", w) for c in range(nc)] for r in range(nr)]
     sol = z3.SolverFor("QF_BV")
     full = spec.get("full", False)
@@ -197,7 +201,7 @@ def instance(spec):
                                  else [V(x) for x in ds])
                 srcs += [V(x) for x in consts] + kf
                 if target == "zero":
-                    srcs += [rf[f][r] for f in range(F)] + [cf[f][c] for f in range(F)]
+                    srcs += [rf[f][r] for f in range(Fr)] + [cf[f][c] for f in range(Fc)]
                 if carry:
                     ex.append(prog.run(srcs + [cin], cin)[-1] == V(want) + cin)
                 else:
@@ -270,7 +274,10 @@ def specs(opt):
         drawn = [[("xoradd", {"k": p["k"], "c": p["c"], "t": 3, "carry": bool(p.get("carry")),
                               "covers": p.get("covers", [])})]
                  for p in json.load(open(opt["--pairs"])) if p.get("width", w) == w]
-    free = int(opt["--free"]) if "--free" in opt else None
+    free = [int(x) for x in str(opt["--free"]).split(",")] if "--free" in opt else None
+    if free and len(free) not in (1, 3):
+        raise SystemExit("--free is F or K,R,C")
+    free = free[0] if free and len(free) == 1 else free
     full = "--full" in opt
     if full and w != 32:
         raise SystemExit("--full needs --width=32: its instructions move high bits down, so no width reduction holds")
@@ -288,7 +295,8 @@ def specs(opt):
                         if L == h and i:
                             continue
                         out.append({"name": f"{fam}-s{s}-m{i}-{target}-L{L}-g{'x'.join(map(str, grid))}"
-                                            + (f"-F{free}" if free else "") + ("-full" if full else ""),
+                                            + (f"-F{'-'.join(map(str, free)) if isinstance(free, list) else free}"
+                                               if free else "") + ("-full" if full else ""),
                                     "family": fam, "s": s, "index": i, "target": target, "member": member,
                                     "honest": h, "L": L, "grid": grid, "width": w, "free": free, "full": full,
                                     "phase": phase, "cegis": "--cegis" in opt,
