@@ -131,8 +131,10 @@ it: its ingress window and every later one fault `malformed`.
 **The lead's calls** (`Proxy(calls=…)`, off by default; `calls`): the proxies of all of a node's boundary links share
 the node's calls (`calls.NodeCalls`), and each egress and ingress tick counts its bucket against the forward open when
 it runs: ⌈log2(r + 1)⌉ timing bits at the grid's allocation r, and 8·B bits a real frame. A forward past its bits is
-refused in the calls' record, and the link is unchanged. The prover registers its calls on the control channel
-(`calls.serve_calls`), which ends at the certifier and is no boundary link.
+refused in the calls' record, and the link is unchanged. Each proxy reports the frames the prover handed it that have
+yet to leave, as it takes each and after each egress tick, and the node holds the next forward's opening on them (the
+calls' hold), never a frame. The prover registers its calls on the control channel (`calls.serve_calls`), which ends at
+the certifier and is no boundary link.
 
 **Back from maintenance** (`Proxy(start=k, position=p)`, off by default): a certifier that was down serves from window k
 of the trusted clock on. Its first tick of each grid is the window's first bucket, its first records are window k's, and
@@ -1168,7 +1170,9 @@ class Proxy:
       links shares: each egress and ingress tick counts its bucket against the forward open when it runs, in the tick's
       PoUW window of `pouw_window` certifier windows, at ⌈log2(r + 1)⌉ timing bits for the grid's allocation r and
       8·B bits a real frame. It changes nothing on the link: a forward past its bits is refused in the calls' record, and
-      no frame is dropped or held for it;
+      no frame is dropped or held for it. The proxy reports to the hold (`NodeCalls.waiting`) the frames the prover
+      handed it that have yet to leave, those the shaper hasn't handed and those still queued, as it takes each and once
+      each egress tick has counted its bucket, and that it has stopped (`NodeCalls.ended`) at its run's end;
     - `until(predicate)` waits until the proxy's state satisfies it, for a caller that drives a `VirtualClock`."""
 
     def __init__(self, upstream: tuple[str, int], egress: GridParams, ingress: GridParams, sync_set: SyncSet,
@@ -1287,6 +1291,8 @@ class Proxy:
             writer.close()
             if self.choices is not None:
                 await asyncio.to_thread(self.choices.executor.shutdown, True, cancel_futures=True)
+            if self.calls is not None:
+                self.calls.ended(self)
             self._changed.set()
 
     def _bucket_ready(self, now: float) -> int:
@@ -1342,6 +1348,7 @@ class Proxy:
             row, record = self.shaper.tick()
             n = row_count(row)
             self._count(t, p, n)
+            self._hold(tick=True)
             if not dropped:
                 if pair is None:
                     cells = [*row[:n], padding[: (p.allocation - n) * p.frame_bytes]]
@@ -1362,6 +1369,7 @@ class Proxy:
                     self.publish(record, p)
             self._changed.set()
 
+        self._hold()
         await self._ticks("egress", p, self.shaper.certifier, tick)
         if pacer is None:
             await writer.drain()
@@ -1455,6 +1463,11 @@ class Proxy:
         """Bucket t of a grid of `params`, holding n real frames, against the node's open forward."""
         if self.calls is not None:
             self.calls.tick(t // params.buckets // self.pouw_window, params.allocation, [8 * params.frame_bytes] * n)
+
+    def _hold(self, tick: bool = False) -> None:
+        """The frames the prover handed this link that have yet to leave, for the node's hold (`NodeCalls.waiting`)."""
+        if self.calls is not None:
+            self.calls.waiting(self, len(self.shaper.pending) + self.shaper.queued, tick)
 
     def _draw_salt(self, window: int) -> bytes | None:
         """At a PoUW window's first certifier window, draw its salt and give the certifier's own frame, the
@@ -1701,6 +1714,7 @@ class Proxy:
         self.frames.append((position, s, st.count, st.anchor, ready))
         st.count += 1
         self.shaper.arrive(position, frame, ready)
+        self._hold()
 
 
 _KINDS = {"salt": SALT_KIND, "weights": WEIGHTS_KIND}

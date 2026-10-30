@@ -801,13 +801,17 @@ def test_a_proxy_with_ordinals_names_each_request_to_its_server_and_changes_noth
     assert proxy.records == honest_run[0].records and wire == honest_run[1]
 
 
-def test_a_proxys_ticks_count_each_bucket_against_the_forward_open_when_it_runs(honest_run):
+def test_a_proxys_ticks_count_each_bucket_against_the_forward_its_hold_opened(honest_run):
     """With `calls`, the node's calls, which the prover registers on the control channel between ticks, each egress
     and ingress tick counts its bucket against the forward open when it runs: ⌈log2(r + 1)⌉ timing bits and 8·B bits a
-    real frame. So a forward open from tick T's end to tick T + 4's counts ticks T + 1 … T + 4 of both grids, and is
-    accepted given exactly that many bits; the next, open over tick T + 5 alone, is refused given one bit fewer than it
-    holds. One still open when the next PoUW window begins is refused then. At a cap of 1 bit over 8 MACs a forward of
-    one call of shape (1, 8, K) has K bits. The records and the wire are the run's without calls."""
+    real frame. The hold opens a forward at the first egress tick after its A root once none of the prover's frames
+    waits: forward 0's A root, sent after tick 2 with frames waiting until tick 5, is held through ticks 3 and 4 and
+    opens at tick 5, so its words root then finds it at 0 bits and it is accepted at 1, where ticks 3 … 5 would pass
+    it. Each later one opens at the next egress tick, nothing waiting, and counts both grids' buckets from the tick
+    after: forward 1, open from tick T to tick T + 2, is refused given one bit fewer than it holds, forward 2, from
+    T + 3 to T + 5, is accepted given exactly that many, and forward 3, open when the run ends, is refused then. At a
+    cap of 1 bit over 8 MACs a forward of one call of shape (1, 8, K) has K bits. The records and the wire are the
+    run's without calls."""
     baseline, honest_wire = honest_run
     T = EGRESS.buckets
 
@@ -818,30 +822,43 @@ def test_a_proxys_ticks_count_each_bucket_against_the_forward_open_when_it_runs(
             out += params.allocation.bit_length() + 8 * params.frame_bytes * row_count(record.grid[t % params.buckets])
         return out
 
-    exact = calls.CallShape(1, 8, sum(bits(t) for t in range(T + 1, T + 5)))
-    short, root = calls.CallShape(1, 8, bits(T + 5) - 1), bytes(64)
+    assert bits(3) + bits(4) + bits(5) > 1
+    one, root = calls.CallShape(1, 8, 1), bytes(64)
+    short = calls.CallShape(1, 8, bits(T + 1) + bits(T + 2) - 1)
+    exact = calls.CallShape(1, 8, bits(T + 4) + bits(T + 5))
     node = calls.NodeCalls(calls.EgressCap(1, 8))
-    plan = {T: [lambda c: c.a_root(0, 0, root, exact)],
-            T + 4: [lambda c: c.words_root(0, root), lambda c: c.a_root(1, 0, root, short)],
-            T + 5: [lambda c: c.words_root(1, root), lambda c: c.a_root(2, 0, root, exact)]}
-    channel = {}
+    opens = {2: (0, one, 5), 5: (1, short, T), T + 2: (2, exact, T + 3), T + 5: (3, exact, T + 6)}
+    closes = {5: 0, T + 2: 1, T + 5: 2}
+    channel, verdicts = {}, []
 
     async def prover(proxy: Proxy, t: int) -> None:
         if not channel:
             channel["server"] = await calls.serve_calls(node, "127.0.0.1", 0)
             channel["client"] = await asyncio.to_thread(calls.CallsClient,
                                                         *channel["server"].sockets[0].getsockname()[:2])
-        for act in plan.get(t, ()):
-            await asyncio.to_thread(act, channel["client"])
+        client, held = channel["client"], channel.get("held")
+        if held is not None:
+            assert node.held == (t < held[1])
+            if t == held[1]:
+                assert len(await held[0]) == held[2]
+                del channel["held"]
+        if t in closes:
+            verdicts.append(await asyncio.to_thread(client.words_root, closes[t], root))
+        if t in opens:
+            forward, shape, at = opens[t]
+            sent = asyncio.create_task(asyncio.to_thread(client.a_root, forward, 0, root, shape))
+            await asyncio.to_thread(node.until, lambda n: n.held == 1)
+            channel["held"] = sent, at, shape.release_bytes
         if t == WINDOWS * T - 1:
-            channel["client"].close()
+            client.close()
             channel["server"].close()
 
     proxy, wire = asyncio.run(replay(honest(), probe=prover, calls=node))
     node.close()
     assert proxy.records == baseline.records and wire == honest_wire
+    assert verdicts == [calls.ForwardVerdict.ACCEPTED, calls.ForwardVerdict.PAST_BITS, calls.ForwardVerdict.ACCEPTED]
     assert {p: [(f["forward"], f["verdict"]) for f in record] for p, record in node.records.items()} == {
-        0: [], 1: [(0, "accepted"), (1, "past its bits"), (2, "open when the window closed")], 2: []}
+        0: [(0, "accepted")], 1: [(1, "past its bits"), (2, "accepted")], 2: [(3, "open when the window closed")]}
 
 
 ORDINAL_OF = {name: stream for name, stream, _, _ in SESSIONS}
