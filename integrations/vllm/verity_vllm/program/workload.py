@@ -447,7 +447,7 @@ class WorkloadProgram:
     def __init__(self, requests: list[WorkloadRequest], shared: str = "weights", manifest_digest: str | None = None,
                  ordering: str = "manifest", *, lag: int, theta_registered: bool = False) -> None:
         """`theta_registered`: bind the model's weights (`theta`) at registration, as `RegisteredInput<w>_v1`, whatever the
-        components bind them as. NCI's baseline reads only registered inputs as θ (nci-check's `theta-not-registered`). Off, the
+        components bind them as. The inference-only check reads only registered inputs as θ (nci-check's `theta-not-registered`). Off, the
         weights are bound as the components bind them, so every workload digest built before it stands."""
         if not requests:
             raise ValueError("a workload needs at least one request")

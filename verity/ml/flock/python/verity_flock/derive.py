@@ -1,5 +1,5 @@
 """`derive`: the rows of a statement's circuit types under their layouts, the prover's mirror of the verifier's Lean
-`Flock.Derive` (the soundness lane's #199 for flat types, S3 for the rest; Project doc `constant-api-public.md` §2.2).
+`Flock.Derive` (for flat types and the rest; Project doc `constant-api-public.md` §2.2).
 The verifier derives every row it folds from the types and layouts, so these rows are never trusted: `check` holds them
 to the Lean derivation byte for byte, and a mismatch can only make an honest proof fail.
 
@@ -10,7 +10,7 @@ to the Lean derivation byte for byte, and a mismatch can only make an honest pro
     `ir_lower.layout`'s v2 rule, so a flat type's rows are `ir_lower.netlist`'s byte for byte;
   - each placed callee's rows at its aligned offset. Its non-exported input rows become binding copies `form · 1`
     (A = the caller's form, B = the callee's constant), and its constant row copies the caller's (`[c] · [c]`).
-- **A read's rows** are `table/v2`'s: `Flock.Lookup.buildV2` (the verifier lane's #202) when placed; inline, the same
+- **A read's rows** are `table/v2`'s: `Flock.Lookup.buildV2` when placed; inline, the same
   decoders over the index forms, the product rows and copies for the low k bits, and the higher (constant) bits as
   constant wires. A product row's B side is the table's, folded table-direct, so it's listed empty and the read's
   `READ` record names it.
@@ -164,7 +164,7 @@ def gen_read(words: Sequence[int], sha: str, n: int, lo: int, bits: int) -> Deri
 
 
 def rows_digest(d: Derived, n: int, lo: int, bits: int) -> str:
-    """``Flock.Lookup.rowsDigest`` of a generated read, the digest #202's vectors pin."""
+    """``Flock.Lookup.rowsDigest`` of a generated read, the digest `lookup_v2_vectors.json` pins."""
     r = d.reads[0]
     unit_log = max(7, (d.size - 1).bit_length())
     h = bytearray(b"flock-lookup-rows/v2\0")
@@ -181,7 +181,7 @@ def rows_digest(d: Derived, n: int, lo: int, bits: int) -> str:
 class Derivation:
     """Every layout of a statement derived once (callees first), and the unit's rows in unit coordinates."""
 
-    def __init__(self, types: Mapping[str, CT.CircuitType], layouts: Sequence[LY.Layout], unit: int,
+    def __init__(self, types: Mapping[str, CT.CircuitType], layouts: Sequence[LY.BlockLayout], unit: int,
                  tables: Mapping[str, Sequence[int]]):
         self.types, self.layouts, self.unit_j, self.tables = types, layouts, unit, tables
         self.info = {sha: LY.table_info(ws) for sha, ws in tables.items()}
@@ -277,7 +277,7 @@ class Derivation:
                 i += n
         return out
 
-    def _placements(self, j: int, t: CT.CircuitType, lay: LY.Layout, unit_level: bool) -> dict:
+    def _placements(self, j: int, t: CT.CircuitType, lay: LY.BlockLayout, unit_level: bool) -> dict:
         """Each placed call and read: its layout, base and the export locations of its caller's wires. In the unit's
         coordinates, placed entries follow its own region in item order, each aligned to its range."""
         insts, export_cols, end = [], {}, 0
@@ -320,7 +320,7 @@ class Derivation:
                 end = max(end, base + (1 << s))
         return dict(insts=insts, export_cols=export_cols, end=end, by_item={x["item"]: x for x in insts})
 
-    def _items(self, t: CT.CircuitType, lay: LY.Layout, B: _Build, wire: dict, placed: dict,
+    def _items(self, t: CT.CircuitType, lay: LY.BlockLayout, B: _Build, wire: dict, placed: dict,
                args: Sequence[Form] | None = None) -> list[Form]:
         """Lay out ``t``'s items under ``lay`` into ``B``'s own region, in item order; ``args`` binds an inlined type's
         inputs. Returns its output forms."""
