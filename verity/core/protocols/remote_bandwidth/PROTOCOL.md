@@ -1622,7 +1622,10 @@ session `malformed` at the window filling. Its bookkeeping is §4–§6's over t
 as above, on the registered vk root. `audit.AuditRun` over the P2 codec runs beside it as a veto: where the two
 differ the session is rejected `disagreement`. The session's parameters (W, the passes a window, s, T and A) are the auditor's
 (`p2_party.SESSION`), never the prover's: the request restates them, and the veto refuses one that carries other
-values, by name, before the first coin; the Lean reads them from the request.
+values, by name, before the first coin, and so does the Lean, naming each in `p2_party.params_of`'s words
+(`P2Session.heldTo`). The process holds its pinned `P2Session.SESSION` unless the auditor's party names a toy's
+(`p2_hold`'s `session`), and the session's core case (`p2_case.py`), whose request no digest binds, is replayed under
+`SESSION` alone (`P2Protocol.replay`), so a toy party's case is refused there.
 
 **What it rests on, and what is open.**
 
