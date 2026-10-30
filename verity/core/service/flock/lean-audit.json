@@ -5,6 +5,7 @@
   "Flock.Test.Full",
   "Flock.Test.Labels",
   "Flock.Test.PortRoots",
+  "Flock.Test.KsScope",
   "Flock.Test.FullDraw",
   "Flock.Test.OneFull",
   "Flock.Test.RegBudget",
@@ -29,10 +30,12 @@
   "Flock.Test.TopReads",
   "Flock.Test.SharedRows",
   "Flock.Test.SharedReads",
+  "Flock.Test.DerivedPos",
   "Flock.Test.RecCompose",
   "Flock.Test.RegFormats",
   "Flock.Test.RegComplete",
   "Flock.Test.RegProgram",
+  "Flock.Test.LinkUnits",
   "Flock.Test.RegCover",
   "Flock.Test.RegKnown",
   "Flock.Test.KnownRead",
@@ -63,6 +66,7 @@
   "Flock.Test.MaskLog",
   "Flock.Test.CoinsTree",
   "Flock.Test.Canon",
+  "Flock.Test.ZkIdentity",
   "Flock.Test.FrameStep",
   "Flock.Test.RegionBytes",
   "Flock.Test.PlainHidden",
@@ -309,11 +313,11 @@
   "VStar": {
    "imports": ["Lean", "Std", "Flock", "VStar"],
    "except": [],
-   "why": "V*'s circuit is code: Lean core and its Std, and C-Flock's verifier (its builder, layout, rows and hashes), no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "V*'s circuit is code: Lean core and its Std, and C-Flock's verifier (its builder, layout, rows and hashes), no Mathlib and nothing of Security (the layout rule: Lean code never requires Security)"
   }
  },
  "reads_exempt": {
-  "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+  "Flock": "C-Flock is excepted until its spec is extracted"
  },
  "guarantees": {
   "Flock.Firewall.Contract.commitLeaf_eq": {

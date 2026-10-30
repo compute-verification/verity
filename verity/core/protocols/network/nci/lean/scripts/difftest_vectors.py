@@ -11,13 +11,13 @@ which pins their SHA-256), and `verity/core/protocols/network/tests/test_nci_lea
 still writes them.
 
 A declaration is a descriptor v1 Program built with `verity.ml.circuits` in one of five shapes: a random DAG, a chain, a
-reduction tree, a chain of matrix-vector products (the NCI draft's updated multiplications: products and their sums),
+reduction tree, a chain of matrix-vector products (the inference-only policy draft's updated multiplications: products and their sums),
 and a nested one whose gates sit in calls, batches (of a primitive and of a composite) and a scan. Its parameters are
 values and arrays of widths from 1 to 32 bits, some bound at registration, and its primitives take one to four values
 or an array. θ is empty, every input (refused, `theta-not-registered`, where one is bound per run), the registered
 inputs, or a random set of them. A division is one IU, one IU per gate, runs of consecutive gates or a random
 assignment, numbered in a random order; `Γ` is at, below or above the division's largest IU, and `α` at, just below or
-just above its largest NCI, written reduced or not. About a third of the instances are malformed, each in one way the
+just above its largest fresh input per gate, written reduced or not. About a third of the instances are malformed, each in one way the
 check refuses (every code of `NciCheck.Check`). Then come `mistyped_vectors.cases()`'s (`mistyped()`): references
 that name leaves of other widths than their types give them, which the codec and the check refuse as `program`, and
 their well-typed neighbours. The data ends with `pinned()`'s two instances on the declaration worked by hand (`hand()`):
