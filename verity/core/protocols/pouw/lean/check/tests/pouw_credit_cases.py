@@ -626,7 +626,7 @@ def _template(k: int, r: int, c: int, unit: dict, receipt: object = None, j10r: 
     ``a_k<K>`` and ``b_k<K>`` (n·R and n·C chunk rows, `row_type` of K/n, n = `weights.chunks` (K): the zy unit's, or at
     n > 1 `h1zy.PouwH1TileZyChunks`'), then the unit's z/y record ``zy``, the salt, its position and the roots (and,
     `j10r`, a J10-R unit's call and blocks); returning ``{receipt, ok}`` with ``receipt`` the type `receipt` when one
-    is given, else a word."""
+    is given, else a word. Its body computes nothing: its nodes and return are `_wired`'s."""
     word, n = ["Value", 16], _n(k)
     params = [[f"a_k{k}", ["Array", n * r, row_type(k // n)]], [f"b_k{k}", ["Array", n * c, row_type(k // n)]],
               ["zy", ["Array", 3 * r * c, word]], ["salt", ["Array", 4, word]], ["position", word],
@@ -635,8 +635,95 @@ def _template(k: int, r: int, c: int, unit: dict, receipt: object = None, j10r: 
         params += [["call", ["Array", 4, word]], ["blocks", ["Array", 2, ["Array", 4, word]]]]
     ret = word if receipt is None else ["Record", [["receipt", receipt], ["ok", ["Value", 1]]]]
     return {"form": "composite", "id": Cr.TILE_FN, "bindings": {"K": k, "UNIT": unit},
-            "body": {"params": params, "ret_type": ret, "nodes": [{"form": "call", "fn": 0, "args": [], "out": 0}],
-                     "ret": {"affine": ["n", 0, 0, 1]}}}
+            "body": {"params": params, "ret_type": ret, "nodes": []}}
+
+
+def _widths(t: list) -> list[list[int]]:
+    """A descriptor type's leaves as runs ``[width, count]`` of one width, in order."""
+    kind = t[0]
+    if kind == "Value":
+        return [[t[1], 1]]
+    if kind == "Array":
+        inner = _widths(t[2])
+        runs = [[w, n * t[1]] for w, n in inner] if len(inner) == 1 else inner * t[1]
+    else:
+        runs = [x for f in t[1] for x in _widths(f if kind == "Tuple" else f[1])]
+    out: list[list[int]] = []
+    for w, n in runs:
+        if n and out and out[-1][0] == w:
+            out[-1][1] += n
+        elif n:
+            out.append([w, n])
+    return out
+
+
+def _stand_in(w: int) -> str:
+    """The primitive a template's body calls for a leaf of width `w` none of its parameters has: no parameters, a
+    `Value<w>`."""
+    return f"PouwH1StandIn{w}_v1"
+
+
+def _wired(desc: dict) -> dict:
+    """`desc` with each node's arguments, a batch's axes, each node's output and each body's return as C-Flock's decoder
+    checks them (`Flock.Program.decode`), over its callees as they stand: each argument of its parameter's type, each
+    leaf naming the first leaf of its own width among the body's parameters and earlier nodes (in the root an input's;
+    a template's return of a width none of its parameters has, a `_stand_in` its body calls), so no word is read at
+    another width (`E_REINTERPRET`); a batch's arguments shared by its members, and the types table theirs. What
+    `credit.layout_of` reads of a node (its form, callee and count) and of a template (its parameters and return type)
+    is unchanged."""
+    types: list = []
+
+    def ty(t: list) -> int:
+        if t not in types:
+            types.append(t)
+        return types.index(t)
+
+    def sig(f: dict) -> tuple[list, list]:
+        return (f["params"], f["ret"]) if f["form"] == "primitive" else (f["body"]["params"], f["body"]["ret_type"])
+
+    def refs(t: list, first: dict) -> dict:
+        parts = [{"strided": [*first[w], 1, 0, 0, n]} for w, n in _widths(t)]
+        return parts[0] if len(parts) == 1 else {"concat": parts}
+
+    defs = desc["definitions"]
+    for key, d in list(defs.items()):
+        if d["form"] != "composite":
+            continue
+        body, first = d["body"], {}
+
+        def source(space: str, i: int, t: list) -> None:
+            at = 0
+            for w, n in _widths(t):
+                first.setdefault(w, [space, i, at])
+                at += n
+
+        for i, (_p, t) in enumerate(body["params"]):
+            source("p", i, t)
+        if key != desc["root"]:
+            for w, _n in _widths(body["ret_type"]):
+                if w not in first and _stand_in(w) not in (desc["callees"][x["fn"]] for x in body["nodes"]):
+                    if _stand_in(w) not in desc["callees"]:
+                        desc["callees"].append(_stand_in(w))
+                    defs[_stand_in(w)] = {"form": "primitive", "id": _stand_in(w), "params": [], "ret": ["Value", w]}
+                    body["nodes"].append({"form": "primitive", "fn": desc["callees"].index(_stand_in(w))})
+        for k, x in enumerate(body["nodes"]):
+            params, ret = sig(defs[desc["callees"][x["fn"]]])
+            x["args"] = [{"type": ty(t), "refs": refs(t, first)} for _p, t in params]
+            if x["form"] == "batch":
+                x["axes"], x["out"] = [None] * len(params), ty(["Array", x["n"], ret])
+            else:
+                x["out"] = ty(ret)
+            source("n", k, types[x["out"]])
+        body["ret"] = refs(body["ret_type"], first)
+    desc["types"] = types
+    return desc
+
+
+def _rekey(desc: dict, old: str, new: str) -> None:
+    """`desc`'s definition `old` keyed `new`, in its callees and its record's ``TILES`` alike."""
+    desc["definitions"][new] = desc["definitions"].pop(old)
+    desc["callees"] = [new if x == old else x for x in desc["callees"]]
+    desc["program_fn"] = desc["program_fn"].replace(_canon(old), _canon(new))
 
 
 def record(tiles: list, lay: dict, prefix: str = "") -> str:
@@ -667,30 +754,31 @@ def window_desc(rng: random.Random, lay: dict, prefix: str = "", receipt: object
     then each call's (m/R)·(n/C) tiles, each a call of K's template or, at random, a run of them one batch; each
     template returning a receipt of type `receipt` (`_template`) when one is given, and over J10-R units when `j10r`.
     At a chunked K (`weights.chunks` n > 1) the unit is `h1zy.PouwH1TileZyChunks_v1` {UNIT, CHUNKS = n} over the tile
-    (v2 over a J10-R one), as `h1window.program` wraps it."""
+    (v2 over a J10-R one), as `h1window.program` wraps it. The root's input batches are each K's A and B rows' bits,
+    then three of words."""
     (r, c), ks = lay["tile"], sorted({k for _name, k, _n in lay["linears"]})
     units = {k: {"fn": _unit_fn(k, r, c, j10r)} for k in ks}
     tids = {k: _template_id(k, units[k]) for k in ks}
-    callees = ["Input16_v1", *(u["fn"] for u in units.values()), *tids.values()]
+    callees = ["Input16_v1", *(u["fn"] for u in units.values()), *tids.values(), "Input1_v1"]
     defs = {u["fn"]: {"form": "primitive", "id": u["fn"], "params": [], "ret": ["Value", 16]} for u in units.values()}
     defs |= {tids[k]: _template(k, r, c, units[k], receipt, j10r) for k in ks}
     defs["Input16_v1"] = {"form": "primitive", "id": "Input16_v1", "params": [], "ret": ["Value", 16]}
-    nodes = [{"form": "batch", "fn": 0, "args": [], "out": 0, "axes": [], "n": rng.randint(1, 64)}
-             for _ in range(2 * len(ks) + 3)]
+    defs["Input1_v1"] = {"form": "primitive", "id": "Input1_v1", "params": [], "ret": ["Value", 1]}
+    nodes = [{"form": "batch", "fn": len(callees) - 1 if i < 2 * len(ks) else 0, "n": rng.randint(1, 64)}
+             for i in range(2 * len(ks) + 3)]
     n_of = {name: (k, n) for name, k, n in lay["linears"]}
     for lin, _blk in lay["calls"]:
         k, n = n_of[lin]
         size, fn = (lay["m"] // r) * (n // c), callees.index(tids[k])
         if rng.random() < 0.3:
-            nodes.append({"form": "batch", "fn": fn, "args": [], "out": 1, "axes": [0], "n": size})
+            nodes.append({"form": "batch", "fn": fn, "n": size})
         else:
-            nodes += [{"form": "call", "fn": fn, "args": [], "out": 1} for _ in range(size)]
+            nodes += [{"form": "call", "fn": fn} for _ in range(size)]
     fn = record([[k, {"fn": tids[k]}] for k in ks], lay, prefix)
     root = f"Root[{fn}]_v1"
     defs[root] = {"form": "composite", "id": root, "bindings": {},
-                  "body": {"params": [], "ret_type": ["Value", 16], "nodes": nodes, "ret": {"concat": []}}}
-    return {"callees": callees, "definitions": defs, "program_fn": fn, "root": root, "schema": Cr.SCHEMA,
-            "types": [["Value", 16]]}
+                  "body": {"params": [], "ret_type": ["Value", 16], "nodes": nodes, "ret": {"affine": ["n", 0, 0, 1]}}}
+    return _wired({"callees": callees, "definitions": defs, "program_fn": fn, "root": root, "schema": Cr.SCHEMA})
 
 
 def desc_bytes(desc: dict) -> bytes:
@@ -718,7 +806,7 @@ def j10r_misformed(rng: random.Random, lay: dict, prefix: str = "") -> str:
         params[-2:] = params[-2:][::-1]
     else:
         del params[-2:]
-    return desc_bytes(desc).hex()
+    return desc_bytes(_wired(desc)).hex()
 
 
 def _alt_layout(rng: random.Random, lay: dict) -> dict:
@@ -776,10 +864,15 @@ def _break_desc(rng: random.Random, lay: dict, name: str) -> str:
             match rng.choice(["k", "id", "form", "params", "rows", "unit", "missing"] + ["rc"] * (len(tiles) > 1)):
                 case "k":
                     t["bindings"]["K"] = k + 1
+                    _rekey(desc, tid, _template_id(k + 1, t["bindings"]["UNIT"]))
                 case "id":
                     t["id"] = "PouwH1WindowTile_v2"
+                    _rekey(desc, tid, t["id"] + tid[len(Cr.TILE_FN):])
                 case "form":
-                    t["form"] = "primitive"
+                    defs[tid] = {"form": "primitive", "id": tid, "params": [], "ret": ["Value", 16]}
+                    for x in root:
+                        if desc["callees"][x["fn"]] == tid and x["form"] == "call":
+                            x["form"] = "primitive"
                 case "params":
                     body["params"] = body["params"][:4]
                 case "rows":
@@ -791,33 +884,31 @@ def _break_desc(rng: random.Random, lay: dict, name: str) -> str:
                         ["Array", rows // n, row_type(k)] if n > 1 else ["Array", rows, row_type(2 * k)],
                         ["Array", rows + 1, row_type(k // n)] if n > 1 else ["Array", rows, ["Value", 16]]])
                 case "unit":
-                    t["bindings"]["UNIT"] = {"fn": "Other_v1"}
+                    _rekey(desc, tid, f"{Cr.TILE_FN}{{K={k},UNIT={_canon(t['bindings']['UNIT'])}}}")
                 case "missing":
                     del defs[tid]
+                    root[:] = [x for x in root if desc["callees"][x["fn"]] != tid]
                 case "rc":
                     body["params"][1][1][1] += 1
         case "tile-ks":
             k = max(k for k, _t in tiles) * 2
             unit = {"fn": f"H1Tile_v1{{K={k}}}"}
             extra = _template_id(k, unit)
+            defs[unit["fn"]] = {"form": "primitive", "id": unit["fn"], "params": [], "ret": ["Value", 16]}
             defs[extra] = _template(k, *lay["tile"], unit)
             desc["program_fn"] = record(tiles + [[k, {"fn": extra}]], lay)
         case "body":
             calls = [i for i, x in enumerate(root) if not desc["callees"][x["fn"]].startswith("Input")]
             i = rng.choice(calls)
-            match rng.choice(["drop", "add", "zero", "scan", "foreign", "fn"]):
+            match rng.choice(["drop", "add", "zero", "foreign"]):
                 case "drop":
                     del root[i]
                 case "add":
                     root.insert(i, dict(root[i]))
                 case "zero":
                     root[i] = {**root[i], "form": "batch", "n": 0}
-                case "scan":
-                    root[i] = {**root[i], "form": "scan", "n": 1}
                 case "foreign":
-                    root[i] = {**root[i], "fn": 1}
-                case "fn":
-                    root[i] = {**root[i], "fn": rng.choice([len(desc["callees"]), -1, "2", None])}
+                    root[i] = {"form": "primitive", "fn": 1}
         case "layout-form":
             lin = lay["linears"]
             desc["program_fn"] = record(tiles, rng.choice([
@@ -832,7 +923,7 @@ def _break_desc(rng: random.Random, lay: dict, name: str) -> str:
             desc = window_desc(rng, _off_k(lay, rng))
         case _:
             raise ValueError(name)
-    return desc_bytes(desc).hex()
+    return desc_bytes(_wired(desc)).hex()
 
 
 #: each way a window's committed descriptor is no H1 window's, or not the one its record says
@@ -1909,7 +2000,7 @@ def registered_file_instance(rng: random.Random, name: str = "honest") -> dict:
         case "receipt-width":
             receipt = rng.choice([None, bit, ["Array", 16 * rng.randint(0, 4) + rng.randint(1, 15), bit],
                                   ["Array", 2, ["Array", 4, bit]], ["Array", rng.randint(1, 3), ["Value", 5]],
-                                  ["Value", 16 * rng.randint(0, 4) + rng.randint(1, 15)], ["Array", 3, ["Value", "16"]]])
+                                  ["Value", 16 * rng.randint(0, 4) + rng.randint(1, 15)]])
         case _:
             raise ValueError(name)
     return {"descriptor": descriptor(rng, lay, prefix, receipt, j10r), "call": call, "roots": roots, "window": _hex(rng),
