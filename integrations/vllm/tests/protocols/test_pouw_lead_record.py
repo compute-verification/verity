@@ -39,7 +39,7 @@ def test_the_record_publishes_its_calls_in_order():
 
 @pytest.mark.parametrize("m, k, n, want", [(1, 2048, 3072, 1 * 384 * 74), (17, 2048, 13, 2 * 2 * 74),
                                            (16, 21, 8, 1 * 1 * 1), (64, 22, 16, 4 * 2 * 2)])
-def test_tiles_are_lean_rowblocks_colblocks_steps(m, k, n, want):
+def test_tiles_are_row_blocks_column_blocks_and_steps(m, k, n, want):
     assert LR.tiles(Call(0, 0, 0, m, k, n).shape) == want
 
 

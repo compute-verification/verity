@@ -5,8 +5,8 @@ Both roots are the committer's (A_j's and the words' frame-v3 leaves, each at it
 recomputes: it fixes their order. A call's A root comes before its words, and calls come in order. `publish` freezes
 the record: activation_roots is the SHA-512 over the A roots in call order, transcript_root over the words roots,
 records_root over the calls' headers (six u64be each: pass, call, linear, m, K, n), units the calls and tiles their
-committed MMA tiles of words (Lean's `rowBlocks · colBlocks · S`). A call after publication, and a sample before it
-(`commitment`), are refused.
+committed MMA tiles of words, (R/16)·(C/8)·S a call. A call after publication, and a sample before it (`commitment`),
+are refused.
 """
 from __future__ import annotations
 
