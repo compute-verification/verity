@@ -3,7 +3,7 @@ refuses an hm96-sha512 statement in which a column shares a 128-bit word with a 
 unless its rows in the combined A and B (the slot type's row plus Δ, summed over GF(2)) are both empty. On the pinned GEMM
 coordinate statement (set 13 of `vectors.json`: its tail stage's `Out` region is 16 bits of a word), the 112 other columns
 of that word are checked and pass; a Δ entry into one is refused and a cancelling pair passes; a computed row there, which
-today's parser accepts, is refused."""
+the current parser accepts, is refused."""
 from __future__ import annotations
 
 import hashlib
