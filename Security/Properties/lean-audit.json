@@ -470,8 +470,6 @@
   "Pous.Period.SecurityProofs.periodHeldDemo": "dd2437050789b0efa4862ef682df951711b976fa9fae90350e72b8884fe4273d",
   "Pous.Period.SecurityProofs.periodHeldDeployed": "8f6e4c37ca2146a19ac93109a1c7eb55d0f39106332e5156b95ea6da8c7df7c2",
   "Pous.Period.SecurityProofs.periodHeldNontrivial": "2cfa1eed4accb530e3f5570ec5d41e4f81c6a09f60324b20fc5d5da711a012e2",
-  "Pous.Period.SecurityProofs.pooledShort_log": "01ed1df6a7418cd95165ee7eaefcf1e5db64510cd249b8c99c6e3b14a6aed75b",
-  "Pous.Period.SecurityProofs.pooledShort_log_nontrivial": "918e7292201b0d4ec19a1ad0f4586c158a191610851dd27f0b67962dda2bbd0f",
   "PousCheck.Properties.SecurityProofs.acceptsDecodes": "147702d45231f61ee43eef6d3a0f8e063948e0d0f874124c5542abf5dfbc8e67",
   "PousCheck.Properties.SecurityProofs.publishesRoot": "9e37b17a2c12a29fe835857c63299bb9b88aff6578a04e0d53da2bb680c0ce16",
   "PousCheck.Properties.SecurityProofs.timedAuditAccepts": "0f53ba049259791adadc5f1d70c663732dd8fd92cf36ccfdd2d5758122d1bbd4",
