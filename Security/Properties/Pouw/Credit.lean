@@ -18,6 +18,9 @@ at least ε of the credited work with probability at most δ.
 * `EstablishedSound`: the same at the ε `established` answers, with `C` the credited calls' served work
   (`creditedWork`) and `δ = DELTA`: `strata` tiles the window's units call by call at their calls' work
   (`Properties.Pouw.Strata.StrataTile`, proved), so its `W` is the strata's.
+* `DrawWithheld`: a credited window's draw coin comes from a session the auditor's ledger opens withheld on the window's
+  draw root, so the challenger released its coin commitment only after the prover's commitment was in, and no
+  statement here takes a hiding premise on that commitment.
 
 The draw is the one `PouwCheck.workUnits` runs: `Flock.Draw.stratified` over the strata `law` gives, stratum `i` drawing
 `Flock.Draw.subset` of its `k_i` units from its own stream of `need` bytes (`drawnOn`). The streams are modelled as
@@ -84,5 +87,16 @@ def EstablishedSound : Prop :=
       PouwCheck.Credit.established layout got served K = some e →
       ∀ B : Finset ℕ, e * creditedWork layout got served ≤ ((∑ u ∈ B, unitWork ss u : ℕ) : ℚ) →
         prob (fun g => ∃ d, drawnOn strata g = some d ∧ ∀ u ∈ B, u ∉ d) ≤ (PouwCheck.Credit.DELTA : ℝ)
+
+/-- **A credited window's draw coin comes from a withheld session on its draw root** (a challenger releases its coin
+commitment only after the prover's commitment is in). Wherever `credited` accepts a window,
+the draw's `root` is a string `r` (the root `draw_root` gives over the window's manifest, Commit record, receipts and
+round log, which `credited` recomputes), and the auditor's ledger opens a session on `r` and marks every open of it
+withheld (`withheldOn`, `remote.open_session(..., withhold=True)`): that session released only its coins' raw bytes
+until it closed, so its commitment came after the prover's draw root. -/
+def DrawWithheld : Prop :=
+  ∀ key ledger pins main salt calls served commit rounds draw got,
+    PouwCheck.Credit.Internal.credited key ledger pins main salt calls served commit rounds draw = .ok got →
+      ∃ r, PouwCheck.get draw "root" = .str r ∧ SampledProofs.Challenger.withheldOn ledger r = true
 
 end Properties.Pouw.Credit

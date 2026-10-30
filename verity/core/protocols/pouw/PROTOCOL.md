@@ -251,8 +251,13 @@ challenger is auditor-trusted, the auditor's device on a machine the prover does
 
 **Live epochs** (`window.live_challenger`, `rounds_reason`, `round_key`; Lean `PouwWindow.Rounds`). A live PoUW epoch's
 coins are the layout `live_families(R)` under `LIVE_SCHEME` (`"verity/pouw/epoch-coins/live/v1"`): its salt coin
-(`"pouw/salt"`), its draw coin (`"pouw/draw"`) and R round coins (`"pouw/round"`, rounds numbered from 0 as Compose's
-`Declared.round` numbers them), R the most rounds a window of the epoch takes, fixed when the challenger commits. The
+(`"pouw/salt"`) and R round coins (`"pouw/round"`, rounds numbered from 0 as Compose's `Declared.round` numbers them),
+R the most rounds a window of the epoch takes, fixed when the challenger commits. Its draw coin (`"pouw/draw"`) is a
+session of its own (`DRAW_FAMILIES`, `draw_epoch_reason`), reserved beside the window's and opened withheld on the
+draw root (`withheld: true` in the ledger's open), so its challenger releases its coin root only after the prover's
+commitment (`credit._credited` refuses a draw session the ledger doesn't open withheld, `challenger.WITHHELD`,
+Lean `Properties.Pouw.DrawWithheld`). The salt and the round coins are the standing exception: each opens after its
+own root, the salt's the window's open root, so a coin root released before them hides no choice the prover makes. The
 salt coin opens once, after the window's open root (`salt.window_open_root`, step 2), and `core_check.salt` (Lean
 `PouwCheck.saltCheck`) is the rule on it, read through the same session as the round coins. A Pearl-C pass's session
 takes its salt coin alone (`SALT_FAMILIES`, `salt_epoch_reason`; `Properties.Pouw.LiveSalt`), opened after its salt
