@@ -104,9 +104,9 @@ A forward of one call the certifier accepts, one past its bits, the first with t
 takes every event and one that forwards every event: what the properties' honest and nontrivial witnesses
 (`Proofs.Properties.NetworkCertifier.Calls`) are stated at. -/
 
-/-- A call of one row, one column and an inner dimension of 1: 16 rows and 8 columns committed in one step, 120 bytes of
-entropy. -/
-def witnessShape : Shape := ⟨1, 1, 1⟩
+/-- A call of one row, one column and an inner dimension of 1 at a column tile of 128: 16 rows and 8 columns committed in
+one step, 120 bytes of entropy. -/
+def witnessShape : Shape := ⟨1, 1, 1, 128⟩
 
 /-- A 64-byte root. -/
 def witnessRoot : List Nat := List.replicate 64 0
