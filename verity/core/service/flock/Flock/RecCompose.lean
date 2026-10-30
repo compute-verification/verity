@@ -464,6 +464,12 @@ theorem checkOne_ok {n : Nat} {rows name : String} {v : PartVerdict} (h : checkO
     exact ⟨by simpa using ha, by simpa using hz, by simpa using hi, by rw [hr, hh], j, hj, by omega⟩
   · cases h
 
+theorem ite_error_ok {c : Prop} [inst : Decidable c] {e : String} {k : Except String Unit}
+    (h : (if c then Except.error e else k) = .ok ()) : ¬ c ∧ k = .ok () := by
+  cases inst with
+  | isTrue _ => cases h
+  | isFalse hc => exact ⟨hc, h⟩
+
 theorem checkForm_ok {name inner : String} {links : Option (String × Nat)} {s : Shared}
     (h : checkForm name inner links s = .ok ()) : s.Complete inner links := by
   have some_of {α : Type} {o : Option α} (h : ¬ o.isNone = true) : o.isSome = true := by
@@ -476,28 +482,17 @@ theorem checkForm_ok {name inner : String} {links : Option (String × Nat)} {s :
   | some r =>
     rw [hr] at h
     dsimp only at h
-    split at h; · cases h
-    rename_i hi
-    split at h; · cases h
-    rename_i h1
-    split at h; · cases h
-    rename_i h2
-    split at h; · cases h
-    rename_i h3
-    split at h; · cases h
-    rename_i h4
-    split at h; · cases h
-    rename_i h5
-    split at h; · cases h
-    rename_i h6
-    split at h; · cases h
-    rename_i h7
-    split at h; · cases h
-    rename_i h8
-    split at h; · cases h
-    rename_i h9
-    split at h; · cases h
-    rename_i h10
+    obtain ⟨hi, h⟩ := ite_error_ok h
+    obtain ⟨h1, h⟩ := ite_error_ok h
+    obtain ⟨h2, h⟩ := ite_error_ok h
+    obtain ⟨h3, h⟩ := ite_error_ok h
+    obtain ⟨h4, h⟩ := ite_error_ok h
+    obtain ⟨h5, h⟩ := ite_error_ok h
+    obtain ⟨h6, h⟩ := ite_error_ok h
+    obtain ⟨h7, h⟩ := ite_error_ok h
+    obtain ⟨h8, h⟩ := ite_error_ok h
+    obtain ⟨h9, h⟩ := ite_error_ok h
+    obtain ⟨h10, -⟩ := ite_error_ok h
     unfold Shared.Complete
     refine ⟨by rw [hr, Decidable.byContradiction hi], some_of h1, some_of h2, some_of h3, ?_, some_of h5, some_of h6,
       some_of h7, some_of h8, some_of h9, Decidable.byContradiction h10⟩
