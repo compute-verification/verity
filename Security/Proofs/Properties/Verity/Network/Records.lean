@@ -52,8 +52,9 @@ open Accounting Accounting.JointBridge Claims Claims.Sampling NetTiming Properti
 
 variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circuit} {I : Type} {Ω : I → Type}
   [DecidableEq I] [∀ i, Fintype (Ω i)] {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
-  [DecidableEq Col] [Zero Col] {H : Msg → Msg} {D : Deploy Coin Col T} {L Kₒ S : ℕ} {lay : Stmt → Layout L S}
-  {k : Stmt → ℕ} {δ : ℝ} {decode : List (ℕ × Col) → List T} {reg : Stmt → Finset ℕ} {Dj n : ℕ}
+  [DecidableEq Col] [Zero Col] {H : Msg → Msg} {D : Deploy Coin Col T} {L Kₒ S : ℕ}
+  {lay : AuditStatement → BoundaryGates L S} {k : AuditStatement → ℕ} {δ : ℝ} {decode : List (ℕ × Col) → List T}
+  {reg : AuditStatement → Finset ℕ} {Dj n : ℕ}
   {r : PeriodRun d α C Ω} {K : ℝ}
 
 variable {R : RealizesCommOfPeriodLeakAccepted r K H D L Kₒ S lay k δ decode reg Dj n}
@@ -254,8 +255,8 @@ theorem networkWindowLe_off {A : Audit → ((i : I) → Ω i) → Prop} {s : ((i
 /-- **The refinement in the game off the break**: the network certifier's refinement at a coupling's verdict at the
 code, S8's coverage read off an event `Brk` that the coupling's break holds, so the verdict's break being absent
 excludes it. -/
-theorem networkWindowLe_verdict_off {V : Vocab d α} {θ F c : ByteArray} {σ : Game.Strategy (V.game θ F c)}
-    (q : V.Coupling .onsite .network θ F c σ) {K : ℝ}
+theorem networkWindowLe_verdict_off {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
+    {σ : Game.Strategy (V.game θ F c)} (q : V.Coupling .onsite .network θ F c σ) {K : ℝ}
     {R : RealizesCommOfPeriodLeakAccepted q.run K H D L Kₒ S lay k δ decode reg Dj n} (W : WindowRuns R)
     (h2 : PeriodRunsV2 W fun ξ => (V.outcome θ F c σ q.coins ξ).sent) (h4 : WindowCoinsLive W)
     (h5 : SessionIsSampledRun W (couplingGuard q))
@@ -314,8 +315,8 @@ theorem windowLe_clock (W : WindowRuns R) {s : ((i : I) → Ω i) → Sent} {G :
 /-- **The refinement in the game at the clock form**: at a coupling whose break holds `CertBreak`, the network
 certifier's refinement at its verdict with S8's coverage not a premise. The ρ gap stays one: the coupling's statement
 is registered as `sw i` only under its guard, so `windowValuesRegistered_of_sw` doesn't apply. -/
-theorem networkWindowLe_verdict_clock {V : Vocab d α} {θ F c : ByteArray} {σ : Game.Strategy (V.game θ F c)}
-    (q : V.Coupling .onsite .network θ F c σ) {K : ℝ}
+theorem networkWindowLe_verdict_clock {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
+    {σ : Game.Strategy (V.game θ F c)} (q : V.Coupling .onsite .network θ F c σ) {K : ℝ}
     {R : RealizesCommOfPeriodLeakAccepted q.run K H D L Kₒ S lay k δ decode reg Dj n} (W : WindowRuns R)
     (h2 : PeriodRunsV2 W fun ξ => (V.outcome θ F c σ q.coins ξ).sent) (h4 : WindowCoinsLive W)
     (h5 : SessionIsSampledRun W (couplingGuard q))
@@ -392,8 +393,8 @@ theorem windowLe_rows (W : WindowRuns R) {s : ((i : I) → Ω i) → Sent} {G : 
 
 /-- **The refinement in the game at the rows form**: at a coupling whose break holds `CertBreak`, the network
 certifier's refinement at its verdict with S8's coverage not a premise; the ρ gap stays one. -/
-theorem networkWindowLe_verdict_rows {V : Vocab d α} {θ F c : ByteArray} {σ : Game.Strategy (V.game θ F c)}
-    (q : V.Coupling .onsite .network θ F c σ) {K : ℝ}
+theorem networkWindowLe_verdict_rows {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
+    {σ : Game.Strategy (V.game θ F c)} (q : V.Coupling .onsite .network θ F c σ) {K : ℝ}
     {R : RealizesCommOfPeriodLeakAccepted q.run K H D L Kₒ S lay k δ decode reg Dj n} (W : WindowRuns R)
     (h2 : PeriodRunsV2 W fun ξ => (V.outcome θ F c σ q.coins ξ).sent) (h4 : WindowCoinsLive W)
     (h5 : SessionIsSampledRun W (couplingGuard q))
