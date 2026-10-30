@@ -73,6 +73,21 @@ theorem PeriodLeakAccepted_nontrivial :
           (fun _ => tapOps) Unit silentP []).Pr shaD :=
   tapD_bound_fails shaD
 
+/-- `TiedIncorrectBlocksLe` at one window whose tied audits draw a uniform `k` of their `n` proof blocks, for a prover
+with no incorrect tied proof block: `tiedIncorrectBlocksLe_of_samples` at `ε = 0`. -/
+theorem tiedIncorrectBlocksLe_uniform_none (n k : ℕ) (hk : k ≤ n) (F : ℕ) (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1)
+    (hq : q * n ≤ k) :
+    TiedIncorrectBlocksLe (Set.univ : Set Unit)
+      (fun (_ : Unit) (_ : Fin 1) (_ : Fin 1 → {S : Finset (Fin n) // S.card = k}) _ => True)
+      (fun _ _ _ => ∅) F ((1 - q) ^ F + ∑ _ : Fin 1, (0 : ℝ)) := by
+  have : Nonempty {S : Finset (Fin n) // S.card = k} := Fintype.card_pos_iff.1 (by
+    rw [Fintype.card_finset_len, Fintype.card_fin]
+    exact Nat.choose_pos hk)
+  exact tiedIncorrectBlocksLe_of_samples Set.univ _ (fun _ => n) (fun _ => k) (fun _ x => x.1)
+    (fun _ => (uniform_draw n k).1) (fun _ => (uniform_draw n k).2) (fun _ _ _ => ∅)
+    (fun _ _ _ _ _ => rfl) _ (fun _ _ _ => (Finset.map_empty _).symm) (fun _ => 0)
+    (fun _ _ i => PooledIncorrectBlocksLe_honest n k 1 (fun _ _ => True) i) q hq0 hq1 (fun _ => hq) F
+
 /-- **`PooledLeakAccepted`'s premises at the deployed instance**, its schedules the fixture `fxQueue`'s alone: each fits
 its rows format (`hfit`), and sends at most 6 cells on each connection (`hcap`); and sampled proofs' pooled bound at the
 tied audits' samples (`hpool`) at the demo's tied sample, a uniform 169 of 7,000,000 proof blocks, at
@@ -89,14 +104,8 @@ theorem PooledLeakAccepted_honest :
     exact fxQueue_fits
   · rw [Set.mem_singleton_iff.1 hs]
     fin_cases c <;> decide
-  · haveI : Nonempty {S : Finset (Fin 7000000) // S.card = 169} := Fintype.card_pos_iff.1 (by
-      rw [Fintype.card_finset_len, Fintype.card_fin]
-      exact Nat.choose_pos (by norm_num))
-    exact tiedIncorrectBlocksLe_of_samples Set.univ _ (fun _ => 7000000) (fun _ => 169) (fun _ x => x.1)
-      (fun _ => (uniform_draw 7000000 169).1) (fun _ => (uniform_draw 7000000 169).2) (fun _ _ _ => ∅)
-      (fun _ _ _ _ _ => rfl) _ (fun _ _ _ => (Finset.map_empty _).symm) (fun _ => 0)
-      (fun _ _ i => PooledIncorrectBlocksLe_honest 7000000 169 1 (fun _ _ => True) i) (169 / 7000000)
-      (by norm_num) (by norm_num) (fun _ => by norm_num) 574205
+  · exact tiedIncorrectBlocksLe_uniform_none 7000000 169 (by norm_num) 574205 (169 / 7000000) (by norm_num)
+      (by norm_num) (by norm_num)
 
 /-- **`PooledLeakAccepted`'s bound fails at an audit that always accepts**, at one window of one step tied to
 `tiedToy`, whose one proof block is incorrect, `Fmax = Ft = 1`, `δ = 1/2`, `ε_t = 0` and `e = e' = 0`
