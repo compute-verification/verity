@@ -80,7 +80,7 @@ def test_with_sampled_proofs_it_adds_tiers_escape_and_cheating_shares():
 def test_with_nothing_else_bounding_the_padded_size_ratio_is_lean_dampener_remote_at_full_capacity():
     """Lean's `DampenerRemote` with no declared products (ν_T = 0) and χ = 0 is `max(1, 1/(s + (1 − s) u / MFU₀))`,
     against an unencumbered trainer at `MFU₀`. The bound counts every gate at capacity against the reference at
-    capacity, so its padded size ratio is `DampenerRemote`'s `ρ` at `MFU₀ = 1` (where at least 1), and the overhead is
+    capacity, so its padded size ratio is `DampenerRemote`'s `ρ` at `MFU₀ = 1` (where at least 1), and the slowdown is
     that `ρ` at the reference's MFU."""
     reg = REG.override({"regime.remote.residual": 0.01, "regime.remote.clock_share": 0.0, "regime.remote.host": 0.0})
     ctx = tiers_context(reg)
@@ -110,7 +110,7 @@ def test_the_remote_overhead_is_lean_remote_dampener_at_the_references_mfu():
     hardwareMultiple MFU₀`, at the reference training algorithm's MFU (0.4): free compute counts at peak. Under it free
     compute counts at `MFU₀`, so `ρ = max(1, 1/(s + x))`, the padded size ratio. Hosts carry no compute, so tiers'
     server and the H200 give the same `x = 0.33`, and `ρ = 3.04` (1.22 without reference efficiency), as
-    `benchmarks/nci`'s compute dampener reads it. Without both assumptions tiers' server (host CPUs 12.6% of the GPUs)
+    `benchmarks/nci`'s slowdown reads it. Without both assumptions tiers' server (host CPUs 12.6% of the GPUs)
     has `x = 0.45`, which outruns that developer, so `ρ = 1`; the H200 (2.9%) has 1.12."""
     lean_dir = ROOT / "Security" / "Definitions" / "Nci"
     assert REMOTE_DAMPENER in (lean_dir / "Remote.lean").read_text()

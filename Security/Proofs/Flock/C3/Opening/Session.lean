@@ -41,7 +41,7 @@ at its `coef` with `acc`'s rows at its chain position before and after (`OpensAt
 (`RecCoins.coefAt` at `o`'s `kappa`), and w's `acc0`, `acc1` are `acc`'s rows at R's ends. -/
 def SessionAt (zs : (s : Fin nS) → (Vs s).Outer Reg') (Lb : (s : Fin nS) → (Vs s).Bits) (sh : Flock.Shape)
     (unit : String) (c3 : Flock.RecCoins.C3) (w : Array F128) (ops : FlockVBridge.AccChain.Openings) : Prop :=
-  ∃ o : Flock.RecCoins.Opening, Flock.RecCoins.opening c3 unit = .ok o ∧ o.sh = sh ∧
+  ∃ o : Flock.RecCoins.RegisteredOpening, Flock.RecCoins.opening c3 unit = .ok o ∧ o.sh = sh ∧
     w.size = Flock.RecOpening.nw sh ∧
     (∃ (S : Flock.RecAlgebra.GfS) (gs : Array (Array ℕ × Array ℕ × Array ℕ)) (sess : ℕ → Fin nS)
         (un : (p : ℕ) → Fin (Vs (sess p)).nv) (cp : ℕ → ℕ),

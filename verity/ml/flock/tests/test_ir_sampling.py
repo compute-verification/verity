@@ -1,4 +1,4 @@
-"""C-Flock's lowering of GumbelTopPTokenSelect_v1 (``verity_flock.ir_sampling``): the pieces against the IR primitives, the lane
+"""Flock's lowering of GumbelTopPTokenSelect_v1 (``verity_flock.ir_sampling``): the pieces against the IR primitives, the lane
 unit against the IR composites it is lowered from, a row's words against the IR evaluator on synthetic sets (a row whose last
 BLAKE3 chunk is short included), the staged file's units, the native words, the pin, and the negatives."""
 from __future__ import annotations
@@ -260,7 +260,7 @@ def test_a_mutated_netlist_is_caught_by_the_ir_comparison():
     ands = list(range(first + 1, first + low.layout.counts["ands"]))
     caught = 0
     for k in ands[::len(ands) // 48][:48]:
-        lay = IL.Layout(list(low.layout.rows_a), list(low.layout.rows_b), low.layout.const, low.layout.in_groups, low.layout.out_groups,
+        lay = IL.LoweredUnit(list(low.layout.rows_a), list(low.layout.rows_b), low.layout.const, low.layout.in_groups, low.layout.out_groups,
                         low.layout.counts)
         lay.rows_b[k] = sorted(set(lay.rows_b[k]) ^ {k - 1})
         outs, _ = IL.evaluate_layout(lay, ports, len(vecs))
