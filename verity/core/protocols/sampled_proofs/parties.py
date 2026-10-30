@@ -57,7 +57,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from verity.core.deploy.manifest import Channel, Manifest, Role
-from verity.core.deploy.party import Finish, Identity, Received, Record, Send
+from verity.core.deploy.party import Finish, Identity, Received, LogEntry, Send
 from verity.core.deploy.runtime import ProtocolDef
 from verity.core.wire import Body, Hex, Int, Message, Schema, Str
 
@@ -237,7 +237,7 @@ class Verifier:
             out += self._finish(None)
         return out
 
-    def _decide(self, i: int) -> list[Record]:
+    def _decide(self, i: int) -> list[LogEntry]:
         """Block ``i``'s line as an output entry, after a private one saying why its audit was unavailable."""
         raw, record = self.registrations[i]
         digest = R.digest(record)
@@ -246,7 +246,7 @@ class Verifier:
             answer, case = self.audit(i, raw, dict(self.challenger), dict(self.firewall))
         except Unavailable as e:
             answer, case = {"verdict": "error"}, None
-            out.append(Record({"block": i, "audit": "unavailable", "error": _why(e)}, "private"))
+            out.append(LogEntry({"block": i, "audit": "unavailable", "error": _why(e)}, "private"))
         if answer.get("verdict") == "accept" and answer.get("commitment") != digest:
             answer, case = {"verdict": "reject", "commitment": answer.get("commitment"),
                             "reason": "the audit's commitment is not the registration the workers sent"}, None
@@ -265,7 +265,7 @@ class Verifier:
             verdict = {"product": None, "verdict": "error", "reason": _why(e)}
         line = {"block": i, "coins": self.params["coins"], "components": status, "registration": digest, **verdict}
         self.lines.append(line)
-        return [*out, Record(line, "output")]
+        return [*out, LogEntry(line, "output")]
 
     def _finish(self, refused: str | None) -> list[Any]:
         out: list[Any] = [] if self.done else [Send(CHALLENGER, Message("Done"))]
