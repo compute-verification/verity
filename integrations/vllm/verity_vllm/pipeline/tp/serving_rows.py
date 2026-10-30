@@ -40,7 +40,7 @@ from typing import Any
 from verity_vllm import config as C
 from verity_vllm.config import option
 from verity_vllm.pipeline.tp import run_root as RT
-from verity_vllm.records import workload as WR
+from verity_vllm.records import workload as RW
 
 SCHEMA = "verity-vllm/tp-serving-rows/v1"
 ROWS_SCHEME = "rows-sha512"
@@ -242,7 +242,7 @@ def window_of_record(commit_dir: str | os.PathLike, rank: int, partition_file: s
     if not 0 <= rank < world:
         raise ValueError(f"rank {rank} is not a rank of the world of {world}")
     doc = json.loads(C.workload_file(workload_file).read_text())
-    WR.served(doc, rec["workload_sha512"], str(workload_file))
+    RW.served(doc, rec["workload_sha512"], str(workload_file))
     reqs = [{"request_id": f"r{i}", "arrive_step": int(q.get("arrive_step") or 0), "prompt_len": len(q["prompt_token_ids"]),
              "max_tokens": int(q["max_tokens"])} for i, q in enumerate(doc["requests"])]
     p = RR.load({"programs": {str(rank): str(Path(build_root) / f"rank{rank}")}, "of_record": rec["of_record"], "requests": reqs}, rank, world,
