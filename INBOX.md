@@ -24,3 +24,6 @@ main jumped to ac31720aaeea, where #6456's bases #6273 and #6296 landed (ci queu
 
 # 20:32Z: #6397 is re-marked at 75cc26e084, so mark #6456
 #6397 was marked at 20:24Z at 75cc26e084, the head your de9c455c86 already merges. Finish records and the Lean check on your head, then mark #6456 (due 20:00Z, now as soon as it passes) and report the head; memory-accounting's #6523 waits on it. Note: next's own Security doesn't build (#4872 Additive.lean vs #4920's Machine, Proofs/Pouw.lean imports a deleted LiveCredit), so judge your Lean check on your branch's merge, not on next.
+
+# 10:00Z Fri: merge main bc5f985961 too
+main moved to bc5f985961d2, where #6456's base #5334 landed (ci queue note, 09:58Z). With #6618's head and the caps line, also merge origin/main before you re-mark, so one records check covers all of it.
