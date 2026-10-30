@@ -15,11 +15,7 @@ import Proofs.Pouw.Dimension.CausalProofs
 import Proofs.Pouw.Dimension.EmbedProofs
 import Proofs.Pouw.Dimension.ForestProofs
 import Proofs.Pouw.Dimension.Fp8MmaProofs
-import Proofs.Pouw.Dimension.H100CiteProofs
-import Proofs.Pouw.Dimension.H100DenseProofs
 import Proofs.Pouw.Dimension.H100FloorProofs
-import Proofs.Pouw.Dimension.H100FragProofs
-import Proofs.Pouw.Dimension.H100LoopFreeProofs
 import Proofs.Pouw.Dimension.H100MeasuredProofs
 import Proofs.Pouw.Dimension.H100PeakTcProofs
 import Proofs.Pouw.Dimension.H100Proofs
@@ -135,7 +131,6 @@ import Proofs.Pouw.PearlC.Row4Words
 import Proofs.Pouw.PearlC.RowPrimChecks
 import Proofs.Pouw.PearlC.RowCapAtGamma
 import Proofs.Pouw.PearlC.RowSeedCode
-import Proofs.Pouw.PearlC.RowSeedFragment
 import Proofs.Pouw.PearlC.RowSeedGamma
 import Proofs.Pouw.PearlC.RowSeedKGamma
 import Proofs.Pouw.PearlC.RowSeedSkip
@@ -186,9 +181,7 @@ import Proofs.Pouw.SteinerRigidity
 import Proofs.Pouw.Theorem1
 import Proofs.Pouw.TileBound.AlignedExact
 import Proofs.Pouw.TileBound.Fp8
-import Proofs.Pouw.TileBound.Fp8Depth
 import Proofs.Pouw.TileBound.Proofs
-import Proofs.Pouw.TileBound.WinogradStrassen
 import Proofs.Pouw.TileBound.Witness
 import Proofs.Pouw.Window
 import Proofs.Pouw.Witness
