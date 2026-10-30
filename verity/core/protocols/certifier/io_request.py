@@ -85,7 +85,7 @@ STATE = 32 + 32 + 1 + 1 + 1
 LANE = 5 * 32
 
 
-class Layout(NamedTuple):
+class FirstCell(NamedTuple):
     """An id request's first-cell layout at cell size B: `room` = P payload bytes a cell, the head's bytes up to the
     first prompt field (`head`, the zero request's), its variable spans (the content-length first), and `start`, the
     first prompt field's offset in the payload."""
@@ -97,8 +97,8 @@ class Layout(NamedTuple):
 
 
 @lru_cache(maxsize=None)
-def layout(B: int) -> Layout:
-    """`Layout` at cell size B. Raises `ValueError` where the head and one prompt field don't fit the first cell
+def layout(B: int) -> FirstCell:
+    """`FirstCell` at cell size B. Raises `ValueError` where the head and one prompt field don't fit the first cell
     unmoved."""
     room = B - HEADER.size
     try:
@@ -117,7 +117,7 @@ def layout(B: int) -> Layout:
     start = zero.index(b',"prompt":') + len(b',"prompt":')
     if start + ID_FIELD_BYTES > room or zero[start:start + 1] != b"[":
         raise ValueError(f"at {B}-byte cells an id request's first prompt field isn't in its first cell")
-    return Layout(room, zero[:start], tuple(spans), start)
+    return FirstCell(room, zero[:start], tuple(spans), start)
 
 
 def _u32(field: bytes) -> bool:
@@ -150,7 +150,7 @@ class Frame(NamedTuple):
     used: int
 
 
-def parse_frame(lay: Layout, payload: bytes, first: bool, left: int) -> Frame | None:
+def parse_frame(lay: FirstCell, payload: bytes, first: bool, left: int) -> Frame | None:
     """The parse of one request cell's payload (P bytes, zero fill past the request's last byte), `left` the request's
     bytes still to come before it (ignored on a first cell, whose content-length says), or None for a payload that
     isn't that cell of a canonical id request."""
@@ -194,7 +194,7 @@ def parse_frame(lay: Layout, payload: bytes, first: bool, left: int) -> Frame | 
 PADDED = "pad"
 
 
-def read(lay: Layout, cell: bytes, q: int, left: int) -> Frame | str | None:
+def read(lay: FirstCell, cell: bytes, q: int, left: int) -> Frame | str | None:
     """A cell in a lane of ordinal q read against its request's bytes left: `PADDED` for a `PAD` on q (B zero bytes for
     q = 0), its `Frame` for a request cell on q (a `DATA` of P bytes that doesn't end the request or its `END` of the
     bytes left), else None."""
@@ -215,7 +215,7 @@ def read(lay: Layout, cell: bytes, q: int, left: int) -> Frame | str | None:
     return p if (kind, n) == ((W.END, before) if before <= lay.room else (DATA, lay.room)) else None
 
 
-def lane_cut(lay: Layout, cells: Sequence[bytes], q: int, left: int, fields: int) -> tuple[int, int] | None:
+def lane_cut(lay: FirstCell, cells: Sequence[bytes], q: int, left: int, fields: int) -> tuple[int, int] | None:
     """A lane's cells read from the carry (left, fields): the carry after them, or None where a cell isn't a pad or a
     request cell on q, or a request cell follows a pad or its request's `END`."""
     padded = False
@@ -354,7 +354,7 @@ def lanes(shape: Shape, prompt_lens: Sequence[int], releases: Sequence[Release],
 
 # --- the fake upstream: the warden's own ingress ---------------------------------------------------------------------
 
-class Link(NamedTuple):
+class ServedIngress(NamedTuple):
     """A link's ingress served through the warden: its rows, a bucket each (a slot no connection holds B zero bytes),
     each connection's release, and the ingress records its grid closed, a window each."""
 
@@ -364,7 +364,7 @@ class Link(NamedTuple):
 
 
 def serve(params: W.WardenParams, requests: Sequence[bytes], arrivals: Sequence[int], rate: Sequence[int],
-          buckets: int, hold: int = 0) -> Link:
+          buckets: int, hold: int = 0) -> ServedIngress:
     """Connection k, ordinal k + 1, arrives at bucket arrivals[k] with request requests[k], and the warden's own ingress
     (`warden.Warden._ingress`) serves it: admitted in arrival order at the first bucket with a free lane, which it
     holds until `hold` buckets after its ingress `END` (standing in for its egress), its client's bytes arriving
@@ -396,7 +396,7 @@ def serve(params: W.WardenParams, requests: Sequence[bytes], arrivals: Sequence[
             records.append(grid.close_window())
     if queue or any(c.ingress_end is None for c in conns):
         raise ValueError("every connection ends its ingress within the link's buckets")
-    return Link(rows, [Release(c.ordinal, c.admitted, tuple(got[c.ordinal])) for c in conns], tuple(records))
+    return ServedIngress(rows, [Release(c.ordinal, c.admitted, tuple(got[c.ordinal])) for c in conns], tuple(records))
 
 
 # --- the circuit -----------------------------------------------------------------------------------------------------
@@ -487,7 +487,7 @@ def _name_ok(C, ch: _Chars, at: int) -> list:
 _SPANS = {"u32": _u32_ok, "ratio": _ratio_ok, "name": _name_ok}
 
 
-def _reading(C, ch: _Chars, zero: Sequence, lay: Layout, first: bool, L: Sequence | None) -> tuple:
+def _reading(C, ch: _Chars, zero: Sequence, lay: FirstCell, first: bool, L: Sequence | None) -> tuple:
     """One reading of a request cell's payload: a first cell's (`first`, L its content-length plus `BODY_AT`) or a
     continuation's (L the bytes left): (ok, ended, the bytes left after it, its prompt fields, L)."""
     room = lay.room
@@ -673,6 +673,6 @@ def arguments(shape: Shape, inst: Instance) -> list[list[int]]:
 
 
 __all__ = ["BODY_AT", "END", "FRAME_OUT", "Frame", "Instance", "IoTieRequest", "IoTieRequestEnd", "IoTieRequestFrame",
-           "IoTieRequestStep", "LANE", "Lane", "Layout", "Link", "PADDED", "PINS", "Release", "STATE", "Shape",
+           "IoTieRequestStep", "LANE", "Lane", "FirstCell", "ServedIngress", "PADDED", "PINS", "Release", "STATE", "Shape",
            "UNHELD", "arguments", "carries", "frame_arguments", "lane_bits", "lane_cut", "lanes", "layout",
            "parse_frame", "read", "reference", "request_bytes", "serve"]
