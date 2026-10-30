@@ -244,7 +244,7 @@ theorem Witnesses : Properties.Witnesses := by
     fun hI => (Reports j out hev i' P d hpar hdec hL hθ hI).2.2.1.1 hc⟩
 
 /-- **The check's rate refines the policy's budgets**, a lemma of `Reports`: when the verdict `out` on `j` has
-`complies` `true`, the owners cover every declaration the Program lays out with the registered information `theta`
+`complies` `true`, the owners cover every registered circuit the Program lays out with the registered information `theta`
 names by inference blocks within the policy's budgets at `c = gamma` and `k = α c`, `α = num / den`. A block of at
 most `c` gates with at most `α` fresh input bits per gate has at most `k`, as `α ≥ 0`, and a partition's blocks hold
 every computed gate. -/
@@ -256,7 +256,7 @@ theorem refines {j out : Json} (hev : evaluate j = .ok out) {i : Instance} {P : 
         (Nci.novelReads d (U.gates u) : ℝ) ≤ (i.num : ℝ) / i.den * i.gamma) ∧
       ∀ g, d.D.isInput g = false → ∃ u, g ∈ U.gates u := by
   refine ⟨fun u => ?_, fun g hg => ?_⟩
-  · obtain ⟨hs, hr⟩ := (Reports j out hev i P d n U hpar hdec hL hθ hU).2.2.1.1 hc u
+  · obtain ⟨hs, hr⟩ := (Reports j out hev i P (.ofPartition d.D d.θ d.θ_input n U) hpar hdec hL hθ hU).2.2.1.1 hc u
     exact ⟨hs, hr.trans (mul_le_mul_of_nonneg_left (by exact_mod_cast hs)
       (div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)))⟩
   · obtain ⟨u, hu⟩ : ∃ u, U.unit g = some u :=
