@@ -30,7 +30,7 @@ export WARM=${WARM:-$(( 2 * SLOTS ))} STEP_TOKENS=$(( SLOTS * PROMPT_IDS )) ARMS
 export AUDIT=${AUDIT:-128} BUDGET_GB=${BUDGET_GB:-8} NBUF=${NBUF:-4} PORT=${PORT:-18191}
 export VENV=${VENV:-/workspace/cp/venv312} CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
 export PY=$VENV/bin/python REPO=verity-int8/Llama-3.2-1B-INT8 REV=15b0976d400d796ee589e7737d03a919526bf800
-export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src
+export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src:$TREE/tools/config
 
 if [ "${1:-}" != leased ]; then
   for arm in $ARMS; do
