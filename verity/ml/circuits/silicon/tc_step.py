@@ -1,4 +1,4 @@
-"""Exact GF(2) circuit of one tensor-core transition (verity.ml.circuits.silicon GroupSum.step) over `forms` (formerly C-Flock's `unit`).
+"""Exact GF(2) circuit of one tensor-core transition (verity.ml.circuits.silicon GroupSum.step) over `forms` (formerly Flock's `unit`).
 
 Exponents are carried in "S-units" (E + 254), so every exponent is a small unsigned integer; the floor is F + 254.
 The group sum follows verity.ml.circuits.silicon.models.group_sum literally, with the normalisation folded into one shift:

@@ -1,4 +1,4 @@
-"""Replaying `pouw:ncp-v2`: each call's closure draw under its window's key, and the model Program's rows at PoUW sites.
+"""Replaying `pouw:ncp-v2`: each call's closure sample under its window's key, and the model Program's rows at PoUW sites.
 
 The verifier reads the commitment (salt, weights root, calls root), every weight side's record (its inputs, their digest,
 its Y unit leaves and their root) and every call's record (its inputs, its inputs' digest, its unit leaves, its units root,
@@ -13,7 +13,7 @@ its served y and its weight side). `replay` checks:
 3. each weight side's Y unit leaves open to its units root and its inputs (the weight's rows as read) to its inputs digest;
    each call's unit leaves open to its units root, its inputs (Y and c₀ as the call read them) to its inputs digest, and its
    served y to its dequantization units' leaves;
-4. the window's draw (`verity.core.protocols.pouw.circuit`): the run's calls are one window, listed with their anchors, shapes and leaves
+4. the window's sample (`verity.core.protocols.pouw.circuit`): the run's calls are one window, listed with their anchors, shapes and leaves
    on its `anchors.Receipt`, sealed before any key exists; `anchors.SaltWindows.open` refuses a call index an earlier window of the salt used, and
    `anchors.Ledger.open` derives the window's key from a fresh
    source, and each call draws its plan (`Traced.draw`) under the work law at its share of the window's budget
@@ -22,7 +22,7 @@ its served y and its weight side). `replay` checks:
    opening must hash to its committed leaf, the unit's template (`ncp2.templates`) must evaluate, by the IR reference,
    from its opened inputs to its opened outputs, and the call's Y and c₀ at each drawn column strip must be its weight
    side's outputs there (`Traced.check_link`). The report records the window's source and receipt digest
-   (`Ledger.record`), from which anyone re-derives the draw (`anchors.replay_key`).
+   (`Ledger.record`), from which anyone re-derives the sample (`anchors.replay_key`).
 
 K is `RECORD_K` (27,713) by default, each call's share capped at its units. At Qwen2.5-0.5B's shapes that proves every
 tile and its closure, about 26 CPU-hours of IR evaluation per forward at 16 rows. A caller may pass a smaller K (the
@@ -132,8 +132,8 @@ def check_call(rec: PC.CallRecord) -> list[str]:
 
 def tamper_tiles(records: Sequence[PC.CallRecord], leaf: int = 7) -> tuple[list[PC.CallRecord], dict[str, Any]]:
     """A negative control: the calls as a prover commits and opens them with word ``leaf`` of every tile of the first call
-    flipped in its low bit. Each call's tile stratum draws at least one tile (`plan.WorkLaw`'s floor), so whatever the
-    window's fresh draw, a wrong tile is proved. Returns the calls and where the tamper is."""
+    flipped in its low bit. Each call's tile stratum samples at least one tile (`plan.WorkLaw`'s floor), so whatever the
+    window's fresh sample, a wrong tile is proved. Returns the calls and where the tamper is."""
     rec = records[0]
     nat = PN.Native(rec.call, rec.scheme)
     tiles = [nat.index("tile", rs, cs) for rs in range(nat.ms) for cs in range(nat.ns)]

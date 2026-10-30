@@ -558,7 +558,7 @@ Definition with a receipt port (`"receipt": true`) declares `"sink": true` on it
 `"transfer": true` is a primitive's only (a composite's `ports` never carries it), and never beside a return `interval`: the
 primitive's return interval follows from its operands' by its *transfer* (`Ports(transfer=f)`), a function its registered
 evaluator comes with, as an exact integer step's sum follows from its operands' ranges. Like a primitive's declared interval it
-is a fact about its evaluator, which circuit-check tests on drawn operand intervals within the declared bounds (its `ports`
+is a fact about its evaluator, which circuit-check tests on sampled operand intervals within the declared bounds (its `ports`
 check), and the decoder takes it from the registry, whose `ports` the entry's must equal.
 
 **Facts.** Every leaf of a Program has a fact: an interval (or none: it spans its width), an origin, whether it is a sink, and
@@ -617,7 +617,7 @@ as declared, so a composite over exact steps declares the intervals its operands
   only an untyped input or constant takes the type its reader's port declares. A limb split of a runtime word is a
   registered `LimbSplit` Definition of its own, which reads the word as its producer's type and computes the limbs and the
   carry into each limb past the first (the stacking property budgets those carries at its nodes). Below word types, a leaf
-  read at another width is the Builder's refusal (`E_REINTERPRET`, §4.4).
+  read at another width is `defs.Builder`'s refusal (`E_REINTERPRET`, §4.4).
 - **`E_COIN_FLOW`** (coin flow): a primitive node reads a leaf of origin `coin` at a port that is not `"kind": "coin"`, or a
   Definition, the root included, returns one. A primitive with a coin port is a *noise primitive* when its return is not all
   sinks (it derives noise, or adds it to an operand it takes) and a *receipt fold* when it is (the coin is its key). A

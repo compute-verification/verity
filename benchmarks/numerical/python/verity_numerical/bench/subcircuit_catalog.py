@@ -24,7 +24,7 @@ the same blob in every build; and ``program-digests/<census id>.json``, an entry
 - ``counts``: ``{record: {report, target, sha512}, variants: {statics: {gates, lowered, units_per_instance, ands, rows,
   reason?}}}``, copied from its circuit-check record and never recomputed: the target's entry in the circuit-check report
   ``report`` (a ``circuit-check-report/v1`` artifact, also ``refs.circuit_check``), whose canonical JSON's SHA-512 is
-  ``sha512``; per statics circuit-check checked, the Definition's word gates, and its C-Flock lowering's units per instance
+  ``sha512``; per statics circuit-check checked, the Definition's word gates, and its Flock lowering's units per instance
   with each unit's ANDs and rows;
 - ``missing``: ``{program_digests?, export?, counts?}``, the reason for each that the entry lacks (a model-only reference has
   no program, so no ``descriptor_id``, digests or export); an entry is never dropped.
