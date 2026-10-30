@@ -30,11 +30,15 @@ are exact rational and real inequalities:
 * so `N_I ≤ 2^40`, `c_Be ≤ 2^57`, `c_S = c_Be + |S(x_I)| + 2(n + v) ≤ 2^59`,
   `k(x) ≤ 2^37`, `κ ≤ 2^{−137}`, `γ ≤ 2^218` and `β₂ ≤ 2^88` (`lamLin2_core`).
 
-The bound is crude: at the same hypotheses `λ₂ ≥ 135.7` (`lamLin2_deployedB_ge_tight`,
-`LamDeployedTight.lean`), where `Fdev`'s term binds at the hypotheses' caps. `KSLin2` at the deployment's dense
-statements (`KSLin2On` at `DenseAt`, at the deployed reader) is `Flock.Guarantees.RecursiveKS`, proved with no
-hypothesis (`Flock.SecurityProofs.RecursiveKS`), Holo statements being candidate 3's own model, and `BitsLin2` there,
-that `Pr[acc ∧ ¬R] ≤ t·2^{−λ₂}` under `StrictBirthday` and `ExpectedCR`, follows from it (`bitsLin2On_of_ksLin2On`).
+The bound is crude (`λ₂` there is about 165.8, `κ` binding: the compiled verifier's evaluations lower each collision
+term by `log₂(1 + 2v/c_S)`, at most about 0.006 bits at the deployed shapes, and the nearest, `Fdev`'s, sits near 178.9);
+it is what the parameters give at every such statement.
+It bounds a number and establishes no security level by itself: `KSLin2` at the deployment's dense statements
+(`KSLin2On` at `DenseAt`) is proved with no hypothesis at the deployed reader's record, the coin server's
+(`Flock.Guarantees.RecursiveKS`), while `ksLin2_deployed_open`, at the earlier `finOpen` layout, still takes
+`PartChecksBV`, `PartOpensB` and `DecompB`. Holo statements are candidate 3's own model. `BitsLin2` at the dense
+statements, that `Pr[acc ∧ ¬R] ≤ t·2^{−λ₂}`, follows from `KSLin2On` (`bitsLin2On_of_ksLin2On`). The proved level at
+the deployment is still `Claims.Recursion.lam`'s, about 65 bits, below the 100-bit floor.
 -/
 
 namespace RecDeploy
@@ -352,8 +356,9 @@ record's inner Flock (`Bound.deploy`), at every statement whose inner statement 
 whose `nS x ≤ 2^16` V* parts sets up within the masked verifier's served shapes at the inner rounds its numbers are
 read at (`hO`), at inner caps `Cp` of at most `2^64` positions (`hW`). The element-level steps, columns and weight of `DE`
 (`nextE`, `colsE`, `wE`), the code side's `join`, `rowIn`, `final` and `γ`'s weight at `IVStar` (`w`) are any: `λ₂`
-reads none of them. `KSLin2` at the deployment's dense statements is proved (`Flock.SecurityProofs.RecursiveKS`), and
-`BitsLin2` there follows from it (`bitsLin2On_of_ksLin2On`). -/
+reads none of them. This bounds a number: `KSLin2` at the deployment's dense statements is proved with no hypothesis at
+the deployed reader's record (`Flock.Guarantees.RecursiveKS`), and `BitsLin2` there follows from it
+(`bitsLin2On_of_ksLin2On`). -/
 theorem lamLin2_deployed_ge (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
@@ -467,9 +472,9 @@ theorem CpDep_width_le (x : Msg) : FlockDeploy.KS.CpDep.width x ≤ 2 ^ 64 := by
     _ ≤ 2 ^ 64 := by norm_num
 
 /-- **Route 2C's bound `λ₂` evaluates to at least `100` at the deployed caps**: `lamLin2_deployed_ge` at `CpDep`, the
-caps `Flock.Guarantees.RecursiveKS` states `KSLin2` at, whose width bound is `CpDep_width_le`. `KSLin2` at the
-deployment's dense statements is proved (`Flock.SecurityProofs.RecursiveKS`), and `BitsLin2` there follows from it
-(`bitsLin2On_of_ksLin2On`). At the same hypotheses `λ₂ ≥ 135.7` (`lamLin2_deployed_ge_dep_tight`).
+caps `ksLin2_deployed_plain` states `KSLin2` at from its premises, whose width bound is `CpDep_width_le`. This bounds a
+number: `KSLin2` at the deployment's dense statements is proved with no hypothesis at the deployed reader's record
+(`Flock.Guarantees.RecursiveKS`), and `BitsLin2` there follows from it (`bitsLin2On_of_ksLin2On`).
 
 `hn`, `hS` and `hO` are deployment-size conditions on public data, and none is a hash premise or says anything about
 the prover's behaviour: `hn` says `x` stages at most `2^16` V\* parts and `hS` that the inner setup `x` names has at
