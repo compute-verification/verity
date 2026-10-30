@@ -309,7 +309,7 @@ The other 22 are the rest of the Capacity table's bounds and the schedule's caus
   `(1 - q)^F ≤ δ` once `F ≥ ln(1/δ)/q`. The draw's law and each window's error are hypotheses, which A3 and
   `Claims.Sampling.KS` discharge where the bound is applied to the sampled verifier.
 - **The leak through the network certifier over a monitoring period** (`PooledLeak.lean`): `PooledLeakAccepted` is
-  the count `K_pooled`, conditional on three inputs taken as plain hypotheses, two per window at the faulty set `W_i`
+  the count `K_pooled`, conditional on three inputs taken as plain hypotheses, two per window at the incorrect set `W_i`
   of the witness computed from window `i`'s registration (read from the earlier windows' coins): the conditional escape
   `hesc`, `Pr[acc_i | earlier coins] ≤ (1 − q)^|W_i| + e_i` with `q` the design's per-window detection probability
   (no sample's form: a uniform `kd_i`-of-`n_i` sample meets it at `q = kd_i/n_i`), and the leak relation at that set
