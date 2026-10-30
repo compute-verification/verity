@@ -94,6 +94,13 @@ def main(argv=None) -> int:
              f"(tensor phases {top['tensor_mhz']:.1f} MHz).")
     L.append(f"The highest clock64 over tensor phases is {tmax['tensor_mhz']:.1f} MHz (clock {tmax['clock']}, "
              f"{tmax['arm']} {tmax['class']}, {at(tmax)}, {tmax['tmacs_per_s']:.2f} T MAC/s).")
+    gap = [r["host_t1"] - r["host_t0"] - r["event_s"] for r in pts]
+    host_top = max(pts, key=lambda r: r["macs"] / (r["host_t1"] - r["host_t0"]))
+    L.append(f"Timers: the host's interval around a launch minus its cudaEvent time is {sum(gap) / len(gap) * 1e3:.3f} ms "
+             f"on average over {len(pts)} points (minimum {min(gap) * 1e3:.3f} ms; the host stamps have 1 ms steps), "
+             f"%globaltimer minus cudaEvent {sum(r['gt_s'] - r['event_s'] for r in pts) / len(pts) * 1e6:.1f} us. "
+             f"Over the host's interval instead, the highest is "
+             f"{host_top['macs'] / (host_top['host_t1'] - host_top['host_t0']) * 1e-12:.2f} T MAC/s.")
     L += ["", "## Maximum by clock, arm and class", ""]
     L.append("| clock | arm | class | max T MAC/s | of bound | MHz-equiv | at fill / burst / duty | duty achieved | "
              "clock64 MHz | tensor-phase MHz | max tensor-phase MHz (class) | smi MHz max | smi W mean | reasons |")
