@@ -1,7 +1,7 @@
-"""The mHC MoE's (DeepSeek-V4's) configuration and weights Record, as `generic.build_profile` derives them for the `mhc-moe` architecture.
+"""The mHC MoE's (DeepSeek-V4's) configuration and weights RecordType, as `generic.build_profile` derives them for the `mhc-moe` architecture.
 
 `C` is the family's facts over the rank's config.json (`analytic.config_of` states the Llama vocabulary, which this architecture does not
-have) with the sizes `MHC_HF_KEYS` names; the weights Record is the family's `params` in their order at the shapes the model allocates
+have) with the sizes `MHC_HF_KEYS` names; the weights RecordType is the family's `params` in their order at the shapes the model allocates
 (`mhc_weight_shapes`), the Build's weights struct.  The routed experts as served are no leaf of their fields (`MARLIN_SERVED`).
 """
 from __future__ import annotations
@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from verity.ml.circuits.types import Array, Record, Type, Value
+from verity.ml.circuits.types import Array, RecordType, Type, Value
 from verity_vllm.engine.profiles import family_facts as FF
 
 #: (config.json key, C key) of the sizes `mhc_config` reads off the rank's config.json; the header check compares the recorded ones
@@ -17,7 +17,7 @@ MHC_HF_KEYS = (("hidden_size", "H"), ("rms_norm_eps", "EPS"), ("num_hidden_layer
                ("vocab_size", "V"), ("intermediate_size", "I"), ("max_position_embeddings", "MAX_POS"),
                ("tie_word_embeddings", "tie_word_embeddings"))
 
-#: the routed experts as served: `process_weights_after_loading` repacks the Record's checkpoint-layout e2m1 codes into Marlin's tile
+#: the routed experts as served: `process_weights_after_loading` repacks the RecordType's checkpoint-layout e2m1 codes into Marlin's tile
 #: layout and permutes their scales, so no served word is a leaf of its field (`program.frontend.marlin_moe_leaf`)
 MARLIN_SERVED = re.compile(r"^model\.layers\.\d+\.ffn\.experts\.routed_experts\.w(13|2)_weight(_scale)?$")
 
@@ -78,8 +78,8 @@ def mhc_weight_shapes(C: dict[str, Any]) -> dict[str, tuple[tuple[int, ...], int
     return out
 
 
-def mhc_weights_type(cfg: dict[str, Any], C: dict[str, Any]) -> Record:
-    """The rank's weights Record: one field per parameter and buffer, named as vLLM names it, in the family's `params` order (`top`,
+def mhc_weights_type(cfg: dict[str, Any], C: dict[str, Any]) -> RecordType:
+    """The rank's weights RecordType: one field per parameter and buffer, named as vLLM names it, in the family's `params` order (`top`,
     each layer's `order`, `tail`, each layer's `buffers`: the order `named_parameters` then `named_buffers` give, the Build's weights
     struct), at `mhc_weight_shapes`; a layer's name the order does not list refuses."""
     P, shapes = FF.facts_for(cfg)["params"], mhc_weight_shapes(C)
@@ -94,4 +94,4 @@ def mhc_weights_type(cfg: dict[str, Any], C: dict[str, Any]) -> Record:
             t = Array(n, t)
         return t
 
-    return Record(*((n, arr(*shapes[n])) for n in names if n in shapes))
+    return RecordType(*((n, arr(*shapes[n])) for n in names if n in shapes))
