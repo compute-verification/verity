@@ -13,7 +13,7 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
     package per protocol: sampled proofs, PoUW, proof of useful space (PoUS), the bandwidth audit, proof of useful
     bandwidth (PoUB) and network certification, each a Python verifier until its Lean verifier (its `lean/`) replaces
     it; the inference-only policy (`network/nci/`) is Lean only. `claims` holds the security claims' ids,
-    `service/flock/` C-Flock's Lean verifier and the ZK server (`Flock.Firewall`), `service/firewall/` the ZK server's
+    `proof_system/flock/` C-Flock's Lean verifier and the ZK server (`Flock.Firewall`), `proof_system/firewall/` the ZK server's
     release side, and `difftest` the Python held to each Lean.
   - `verity/ml/`: Python and CUDA: the provers, and Python that mirrors the Lean for speed. `circuits` (format in
     `circuits/PROTOCOL.md`; `ops`, the primitive circuits' Definitions; `silicon`, the GPUs' exact semantics),
