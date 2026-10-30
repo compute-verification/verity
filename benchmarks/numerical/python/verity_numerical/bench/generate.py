@@ -7,7 +7,7 @@
 
 The key is ``verity.ml.randomness.derive(SOURCE, DOMAIN, {"subcircuit": id, "seed": seed})``; draw ``j`` is
 ``Subcircuit.draw(key, j)`` (``templates``: every port's words from the counter stream at ``(port, j)``), evaluated by
-``verity.ml.circuits.evaluation.evaluate_batch`` on the subcircuit's IR target.  A draw is admitted when its outputs are inside the
+``verity.ml.circuits.evaluation.evaluate_batch`` on the subcircuit's IR target.  A sample is admitted when its outputs are inside the
 subcircuit's domain (``Subcircuit.admitted``: every BF16 output word finite), and instance ``i`` is the ``i``-th admitted draw
 (``index.json`` ``sub.draw``), so a larger set extends a smaller one of the same key: the first ``n`` instances are the same.
 The set is written in the captured sets' layout (``input_sets``, schema ``input-set/v1``) under ``<out>/sets/<name>/``, its
@@ -144,7 +144,7 @@ SUITES: dict[str, list[tuple[str, dict[str, Any], int]]] = {
             for K, sizes in ((2048, (6272, 16384)), (8192, (1920, 8192))) for n in sizes],
     #: NVFP4 on the RTX 5090 at K = 1536 for the two Flock cells (Fp4 <= 32,768 and ShaFp4 <= 16,384 VUs per proof); 8,192 is the prefix.
     "nvfp4": [("gemm-coordinate", {"K": 1536, "semantics": "sm120.mma.m16n8k64.e2m1.nvf4"}, n) for n in (8192, 16384)],
-    #: The registered compiler's dead-free Definitions a served window draws, at Llama-3.2-1B's shapes (N 2048, D 64) and
+    #: The registered compiler's dead-free Definitions a served window samples, at Llama-3.2-1B's shapes (N 2048, D 64) and
     #: Llama-3.1-8B's (N 4096, D 128): RMSNormTriton_v5, AttentionHead_v18, and TokenSelect_v4's two calls at Llama 3's vocabulary.
     "dead-free": [("rmsnorm-triton-v5", {"N": 2048, "EPS": 1e-5}, 256),
                   ("rmsnorm-triton-v5", {"N": 4096, "EPS": 1e-5}, 256),

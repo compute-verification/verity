@@ -62,10 +62,10 @@ Implementations:
   - what re-derives every number: every rep, each audit's challenge source and each answer's time, the clocks, torch,
     CUDA and nvcc versions (`pod.sh` pins torch and records the CPU topology, the NVMe mount and the installed packages).
 
-- `p2-v1-gpu`: P2 v4, the specification (`verity/core/protocols/pous/p2/PROTOCOL.md`), in `p2_v1/`, with
+- `p2-v1-gpu`: P2 v4 (`verity/core/protocols/pous/README.md`, "P2"), in `p2_v1/`, with
   the same steps, controls and metrics as `band-gpu` so the two compare side by side (`side_by_side.py`):
   - `reference.py`: the scheme on the CPU on `verity.ml.randomness` (the counter-mode SHA-512 keys, the maps, the RFC
-    6962 tree over v4 leaves, the mode-0 audit derivation), pinned by `vectors.json` (the file hash in the spec's §7);
+    6962 tree over v4 leaves, the mode-0 audit derivation), pinned by `vectors.json` (`VECTORS_SHA512`);
     `wire.py` is `p2-audit-wire/v4` with its reference verifier, and `vectors.py` regenerates every vector file in one command;
   - `p2v1.cu`: decode with per-block keys on `p2_gpu/p2dec.cu`'s tuned squaring (keys expanded on the device just before
     use), and encode by two roots (an addition chain for `(p + 1)/4` on CGBN's generic squaring, reduced by `2^W ≡ c0`);
@@ -78,7 +78,7 @@ Implementations:
     roots, the fastest of `--reps` on a pseudo-random block, against twice the limit (SeqRoot; the root is untuned, so an upper
     bound on the fastest GPU root).
   The transport is the harness's responder wire, not `p2-audit-wire/v4`'s frames.
-  - `serve.py`: `store.py`'s toy store (below) served under proof of useful bandwidth (PoUB, `remote_bandwidth.p2`), the CPU
+  - `serve.py`: `store.py`'s toy store (below) served under PoUB (`remote_bandwidth.p2`), the CPU
     reference of the serving loop: each engine step decodes the store layer by layer, runs the layer's matmuls on what
     it decoded, sketches each block's bytes as it decodes them, and commits one root, which the next step's seed chains
     from; each window's openings are answered before the next step. `serve.py fixture` writes the decode kernel's
@@ -91,7 +91,7 @@ Implementations:
     C*, negative blocks, and spot vectors at the real store's indices, with W and the staging buffers pinned by digest
     (`store.py toy --plain` writes them). `tests/test_pous_p2_store.py` regenerates both. `store.py commit` is
     `setup.commit` of the real W, regenerated in this layout from the seeded generator (`e2e_h200.served_weights`),
-    with each s8 tensor held to the generator's manifest by SHA-256 as the pass reads it. `store.py encode` draws the
+    with each s8 tensor held to the generator's manifest by SHA-256 as the pass reads it. `store.py encode` samples the
     salt from the auditor's coin and encodes C* on every GPU of a node (`pod.sh IMPL=p2-store ... -- encode ...`), as
     canonical segment files a rerun resumes; `--segments LO:HI --order down` encodes a part and `finish` joins the
     parts. `verify --decode` rereads a store and decodes it into the commitment, `spot` decodes random blocks against W

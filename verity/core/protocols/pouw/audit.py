@@ -10,7 +10,7 @@ path's prover commits and its verifier reads.
 4. **Transcript.**  A Merkle root over every tile's digest (`transcript_domain`), in matmul order and then tile order
    (`tile_refs`).
 
-The clear audit that drew, opened and recomputed tiles in the clear (`Prover`, `Verifier`, `Sampled`, `WorkProfile`) is a
+The clear audit that sampled, opened and recomputed tiles in the clear (`Prover`, `Verifier`, `Sampled`, `WorkProfile`) is a
 reference tool, not a verifier: ``benchmarks/pouw/clear/clear_audit.py``.  Served windows are checked by PoUW's verifier of
 record, the Lean (`lean/check`, `core_check`).
 
@@ -34,6 +34,7 @@ from verity.ml.commitments import CommitmentDomain, MerkleTree, RangeIndexedDoma
 from verity.ml.commitments import domains, hm96
 from verity.ml.commitments.gates import sha512 as sha512_gates
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, sha512_row_seg_digest
+from verity.ml.commitments.scheme import DIGEST_BYTES
 from verity.ml.randomness import derive
 
 from .coins import CoinCommitment, CoinOpening, coin_reason
@@ -53,8 +54,8 @@ _M32 = 0xFFFFFFFF
 
 
 def chacha20_block(key: bytes, counter: int, nonce: int) -> bytes:
-    """ChaCha20's block function, 20 rounds, with a 64-bit counter (words 12, 13) and a 64-bit nonce (words 14, 15): C-Flock's
-    ``chacha20_block`` (``verity/ml/flock/cuda/sha512.cuh``), the stream its hm96 leaf salts are drawn from."""
+    """ChaCha20's block function, 20 rounds, with a 64-bit counter (words 12, 13) and a 64-bit nonce (words 14, 15): Flock's
+    ``chacha20_block`` (``verity/ml/flock/cuda/sha512.cuh``), the stream its hm96 leaf salts are sampled from."""
     s = [0x61707865, 0x3320646E, 0x79622D32, 0x6B206574, *struct.unpack("<8I", key),
          counter & _M32, counter >> 32, nonce & _M32, nonce >> 32]
     x = list(s)
@@ -73,17 +74,18 @@ def chacha20_block(key: bytes, counter: int, nonce: int) -> bytes:
 
 def hm96_salt(key: bytes, nonce: int, i: int) -> bytes:
     """Leaf i's 192-byte salt in the tree with salt nonce `nonce`: ChaCha20 blocks 3i, 3i + 1 and 3i + 2 under the prover's
-    32-byte `key` (C-Flock's ``hm96_salt``)."""
+    32-byte `key` (Flock's ``hm96_salt``)."""
     return b"".join(chacha20_block(key, 3 * i + j, nonce) for j in range(3))
 
 
 @functools.lru_cache(maxsize=1)
 def hm96_kernel_constants() -> bytes:
-    """`HM96`'s constants as a kernel reads them (C-Flock's ``hm96_finish_leaves``, pearl_c's ``hm_leaves``): the midstates
+    """`HM96`'s constants as a kernel reads them (Flock's ``hm96_finish_leaves``, pearl_c's ``hm_leaves``): the midstates
     after the salt prefix and after the leaf prefix (eight u64 little-endian each), then the byte tables, per salt byte position
     and byte value the 64-byte column XOR little-endian (3 MiB)."""
     mids = [sha512_gates.midstate(p) for p in (hm96.SHA512.salt_prefix, hm96.SHA512.leaf_prefix(HM96_KEY))]
-    tables = b"".join(v.to_bytes(64, "little") for table in hm96.SHA512.byte_tables(HM96_KEY) for v in table)
+    tables = b"".join(v.to_bytes(DIGEST_BYTES["sha512"], "little")
+                      for table in hm96.SHA512.byte_tables(HM96_KEY) for v in table)
     return b"".join(struct.pack("<8Q", *m) for m in mids) + tables
 
 
@@ -97,7 +99,7 @@ class Hm96Domain(CommitmentDomain):
     digests: bool = False
 
     def leaf(self, rank: int, position: int, schema: str, value: bytes) -> bytes:
-        if len(value) < HM96_SALT or self.digests and len(value) != 64 + HM96_SALT:
+        if len(value) < HM96_SALT or self.digests and len(value) != DIGEST_BYTES["sha512"] + HM96_SALT:
             raise ProtocolError(f"an {HM96} value is its preimage and a {HM96_SALT}-byte salt")
         pre, y = value[:-HM96_SALT], value[-HM96_SALT:]
         x = pre if self.digests else sha512_row_seg_digest(pre, 8 * len(pre))
@@ -158,8 +160,8 @@ class Workload:
 
 @dataclass(frozen=True, slots=True)
 class Epoch:
-    """The committed weights, the salt drawn after them, and the challenger's coin commitment the epoch's coins open
-    against (None for an `unverified` epoch's salt with no draw coin)."""
+    """The committed weights, the salt sampled after them, and the challenger's coin commitment the epoch's coins open
+    against (None for an `unverified` epoch's salt with no sampling coin)."""
 
     workload: Workload
     weight_roots: Mapping[int, bytes]
@@ -187,7 +189,7 @@ class Epoch:
                    coins: CoinCommitment | None = None) -> Epoch:
         """The epoch whose salt is keyed by bare bytes under ``verity/pouw/salt/v1``, with no coin behind it: test
         instances, replays of recorded runs, and integrations whose salt claims nothing.  `coins`, when given, is the
-        commitment the epoch's draw coin opens against."""
+        commitment the epoch's sampling coin opens against."""
         _check_weights(workload, weight_roots)
         salt = derive(seed, SALT_DOMAIN, {"weights": weights_root(weight_roots)}).stream("salt", 32)
         return cls(workload, dict(weight_roots), salt, coins)
@@ -198,7 +200,7 @@ class Epoch:
         """The epoch of PoUW window p, the network certifier's windows `windows` with k per PoUW window (p·k … p·k + k − 1,
         refused unless whole and aligned at 0: `salt.pouw_window`), registered under `stream` and `prover`, whose salt is
         `salt.pouw_salt(reveal, p, stream, prover)`, 64 bytes: `reveal` is p's certifier salt as `salt.revealed` read it.
-        `coins`, when given, is the commitment the epoch's draw coin opens against."""
+        `coins`, when given, is the commitment the epoch's sampling coin opens against."""
         _check_weights(workload, weight_roots)
         return cls(workload, dict(weight_roots), pouw_salt(reveal, pouw_window(windows, k), stream, prover), coins)
 

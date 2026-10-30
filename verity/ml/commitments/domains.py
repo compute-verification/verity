@@ -263,8 +263,6 @@ FLOCK_ZK_TAU = "verity/flock-zk/tau/v1"
 LAYOUT = "verity/layout/v1"
 REC_COINS = "verity/rec-coins/v1"
 REC_INNER = "verity/rec-inner/v1"
-REC_V0_VERIFIER_SALT = "verity/rec-v0/verifier-salt/v0"
-REC_V0_ZERO_RESIDUAL_SALT = "verity/rec-v0/zero-residual-salt/v0"
 
 # Not yet read from here: PoUS, the wipe and the memory challenger
 CHAIN_DENSE_H = "chain-dense-H/v1"
@@ -311,17 +309,6 @@ POUS_STREAMED_WIPE_LABELS = "verity/pous/streamed-wipe-labels/v1"
 WIPE_MONITORING_PERIOD = "verity/wipe-monitoring-period/v1"
 WIPE_PROTOCOL = "verity/wipe/v0"
 WIPE_EGRESS = "wipe-egress/v1"
-
-# Not yet read from here: the bandwidth audit
-GF31_POLY = "gf31-poly/v1"
-RO_BLAKE3 = "ro-blake3/v1"
-RO_SHA512 = "ro-sha512/v1"
-BANDWIDTH_CHALLENGER_STATE = "verity/bandwidth/challenger-state/v1"
-BANDWIDTH_OPENINGS = "verity/bandwidth/openings/v1"
-BANDWIDTH_SALT = "verity/bandwidth/salt/v2"
-BANDWIDTH_TAG_LEAF = "verity/bandwidth/tag-leaf/v1"
-BANDWIDTH_TAG = "verity/bandwidth/tag/v1"
-BANDWIDTH_PERIOD = "verity/bandwidth/window/v2"
 
 # Not yet read from here: the remote bandwidth audit
 REMOTE_BANDWIDTH_P2_BLOCK4 = "p2-unit4/v0"

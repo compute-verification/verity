@@ -1,4 +1,4 @@
-"""The requirement's two proof blocks (I4): the plan unit, which holds a pass's plan to hold every block the declared
+"""The requirement's two proof blocks (I4): the plan unit, which holds a pass's plan to hold every block the registered
 circuit reads at the pass's step (`Accounting.Requirement`'s `PlanMatches`), and the memory-map unit, which holds the
 blocks a step writes to the circuit's values and every free, of a written block or a registered one, to its values' last
 structural reader (`StoreMatches`' L1, L2 and L4), and each re-key to the lifetime cap. The plan unit is PlanMatch, or
@@ -28,7 +28,7 @@ wrote it (word N + 2 b) and the step that freed it (word N + 2 b + 1), `WORD - 1
 takes effect after f's reads, as `Store.resident` and memory-map/v1 read it. The pass row ``pi`` holds, for each of the
 session's T windows, the step of its last pass (the previous window's for a window without one, 0 before any).
 
-**What is public** is the declared circuit's requirement (the census's schedule: each value's birth, its last structural
+**What is public** is the registered circuit's requirement (the census's schedule: each value's birth, its last structural
 reader, which values each step reads; `requirement.Requirement`), the registered store's layout (which registered block
 holds which registered value), each step's count of written blocks and so its first fresh index, each value's epochs
 (the step each re-key moves it at), the session's windows T and lifetime cap L (`Params`), and each pass's plan length.
@@ -40,7 +40,7 @@ string (`b || c`). So is the stale bound, the store index below which every writ
 derives it from the pass row as a step, the cap, and holds a re-key's old block's write step in the map below it; no
 input names it.
 
-**The appends.** A step's written blocks are the remote audit's append for that step. A payload row's commit string is the
+**The appends.** A step's written blocks are PoUB's append for that step. A payload row's commit string is the
 append leaf's (`hm96-sha512/row/v2` of the same 4,096 bytes under the same salt: the leaf hides ``d_j``), so an append's root
 is a function of its instance's payload rows' ``b || c`` and its public ``first`` and ``count``. The chain over the steps'
 appends is then the record's (remote_bandwidth's `Record.appends`): no dummy append, none out of the map's order, no re-key the
