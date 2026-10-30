@@ -11,7 +11,7 @@ from pathlib import Path
 from verity.ml.circuits.defs import PrimitiveDefinition, bind
 from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.ops import prims as P
-from verity.ml.circuits.silicon.silicon import AMPERE_BF16_M16N8K16
+from verity.ml.circuits.silicon.models import AMPERE_BF16_M16N8K16
 from verity.ml.circuits.silicon.total import tc_dot_total
 from verity_flock import gf2
 from verity_flock import ir_lower as IL

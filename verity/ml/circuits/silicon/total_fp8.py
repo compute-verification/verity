@@ -2,8 +2,8 @@
 
 The instruction is one accumulator coordinate of ``wgmma.mma_async.sync.aligned.m64n{N}k32.f32.e4m3.e4m3``
 (SASS ``QGMMA.64x{N}x32.F32.E4M3.E4M3``), the step vLLM's CUTLASS ``cutlass_scaled_mm`` (sm90 FP8, the
-``--quantization fp8`` linear of port ``b1-fp8``) executes on an H100.  :mod:`verity.ml.circuits.silicon.silicon` carries
-Hawkeye's *finite* H100 FP8 pipeline (:data:`~verity.ml.circuits.silicon.silicon.HOPPER_E4M3_K32`: one group of 32 exact
+``--quantization fp8`` linear of port ``b1-fp8``) executes on an H100.  :mod:`verity.ml.circuits.silicon.models` carries
+Hawkeye's *finite* H100 FP8 pipeline (:data:`~verity.ml.circuits.silicon.models.HOPPER_E4M3_K32`: one group of 32 exact
 E4M3 products plus the accumulator, a 14-bit truncating adder, exponent floor ``-139``), validated by Hawkeye
 with a zero accumulator only.  This module gives the **total function on every encoding** of the gate's
 signature, by the same rules as :mod:`verity.ml.circuits.silicon.total` (L6's R1-R8 for BF16) restricted to what
@@ -12,16 +12,16 @@ E4M3 can encode:
 * an E4M3 byte is a NaN (``0x7F``, ``0xFF``: exponent and mantissa all ones -- OCP E4M3 has *no* infinities),
   a zero (``0x00``, ``0x80``), or a finite value (subnormals ``0x01..0x07`` included);
 * the **product** of two bytes is NaN if either is a NaN, else the exact finite product of
-  :func:`~verity.ml.circuits.silicon.silicon.e4m3_product` (a product never overflows: ``448 * 448 < 2^18``);
+  :func:`~verity.ml.circuits.silicon.term.e4m3_product` (a product never overflows: ``448 * 448 < 2^18``);
 * the **accumulator** word decodes as in the BF16 module (NaN, ``±inf``, or a finite term);
 * one **group step** is :func:`~verity.ml.circuits.silicon.total.group_step_total`: NaN if any term is NaN; the
   accumulator's infinity if it is one (products are finite, so the two-sign NaN rule can only fire through the
-  accumulator); otherwise the finite :func:`~verity.ml.circuits.silicon.silicon.group_sum`, which saturates to an infinity of
+  accumulator); otherwise the finite :func:`~verity.ml.circuits.silicon.models.group_sum`, which saturates to an infinity of
   its sign above the FP32 range;
-* the **result word** is ``0x7FFFFFFF`` for NaN, ``±0x7F800000`` for the infinities, :func:`~verity.ml.circuits.silicon.silicon.pack_fp32`
+* the **result word** is ``0x7FFFFFFF`` for NaN, ``±0x7F800000`` for the infinities, :func:`~verity.ml.circuits.silicon.term.pack_fp32`
   otherwise -- zero is always ``+0``.
 
-On finite operands this is :func:`verity.ml.circuits.silicon.silicon.tc_dot` on the same pipeline.  The special-value rules and
+On finite operands this is :func:`verity.ml.circuits.silicon.models.tc_dot` on the same pipeline.  The special-value rules and
 the *pipeline parameters* (groups, adder width, exponent floor -- in particular the behaviour with a NON-ZERO
 accumulator, which Hawkeye did not validate and which every k32 step after the first of a K=1536..8960 chain
 exercises) are what a hardware campaign measured on the device.  The registry primitive that wraps it
@@ -43,8 +43,8 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from .errors import InvalidArtifact
-from .silicon import HOPPER_E4M3_K32, Pipeline, e4m3_product
-from .term import e5m2_product
+from .models import HOPPER_E4M3_K32, GroupSum
+from .term import e4m3_product, e5m2_product
 from .total import NAN, Inf, Value, fp32_value, group_step_total, pack_value
 
 __all__ = [
@@ -62,7 +62,7 @@ __all__ = [
     "tc_dot_total_e5m2",
 ]
 
-#: Pipeline name -> role -> the run id or dataset its ``validated`` string names by that role.
+#: GroupSum name -> role -> the run id or dataset its ``validated`` string names by that role.
 EVIDENCE_IDS: dict[str, dict] = json.loads(Path(__file__).with_name("total_fp8_evidence.json").read_text())
 
 
@@ -84,7 +84,7 @@ def e4m3_product_total(a: int, b: int) -> Value:
     return e4m3_product(a, b)
 
 
-def tc_dot_total_e4m3(pipeline: Pipeline, acc_bits: int, a: Sequence[int], b: Sequence[int]) -> int:
+def tc_dot_total_e4m3(pipeline: GroupSum, acc_bits: int, a: Sequence[int], b: Sequence[int]) -> int:
     """``D = acc + sum_k a[k] * b[k]`` on every encoding, as ``pipeline``'s FP8 silicon computes it."""
 
     if pipeline.dtype != "e4m3":
@@ -124,7 +124,7 @@ def e5m2_product_total(a: int, b: int) -> Value:
     return e5m2_product(a, b)
 
 
-def tc_dot_total_e5m2(pipeline: Pipeline, acc_bits: int, a: Sequence[int], b: Sequence[int]) -> int:
+def tc_dot_total_e5m2(pipeline: GroupSum, acc_bits: int, a: Sequence[int], b: Sequence[int]) -> int:
     """``D = acc + sum_k a[k] * b[k]`` on every encoding, as ``pipeline``'s E5M2 silicon computes it."""
 
     if pipeline.dtype != "e5m2":
@@ -152,7 +152,7 @@ def tc_dot_total_e5m2(pipeline: Pipeline, acc_bits: int, a: Sequence[int], b: Se
 #: summed in ONE group (no intra-step partial rounding); the accumulator is truncated to the 14-bit adder like a
 #: product (``accid``: 261,900 of 262,144 random finite accumulators do NOT pass through a zero-product step
 #: unchanged -- the "FP8 accumulation precision loss" DeepSeek-V3 reports, here word-exact).
-HOPPER_E4M3_WGMMA_K32 = Pipeline(
+HOPPER_E4M3_WGMMA_K32 = GroupSum(
     name="hopper_e4m3_wgmma_k32",
     arch="sm_90",
     dtype="e4m3",
@@ -190,7 +190,7 @@ MMAV2_E4M3_K_ORDER: tuple[int, ...] = tuple(in_mmav2_e4m3_k_order(range(32)))
 #: ``fused_moe_kernel`` at GLM-5.3's MMAv2 tiles on the H200 (``integrations/vllm/tests/properties/glm53_block_fp8_capture_gpu.py``,
 #: 638,976 words, 0 mismatches, on an operand probe that adder widths 24, 25, 27 and 28 and the other
 #: k orders each miss).
-HOPPER_E4M3_MMAV2_K32 = Pipeline(
+HOPPER_E4M3_MMAV2_K32 = GroupSum(
     name="hopper_e4m3_mmav2_k32",
     arch="sm_90",
     dtype="e4m3",

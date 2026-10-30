@@ -1,12 +1,12 @@
 {
-  "art:4f8e9ff844325c68da26ead9d9f9f85f2859d8a7470829fa2541ada1d9109801": "verity/ml/circuits/silicon/hawkeye/PIN.json",
+  "art:8c365eeb9f120a3c3febf052ee7cfa2a88e4f1e87e7c4d0444552a77da5754ea": "verity/ml/circuits/silicon/hawkeye/PIN.json",
   "art:cf4699436015c096941a361160b5bcb570d02d469ad014988e99aeab0fb022c8": "verity/ml/circuits/ops/tests/fixtures/golden/ada_bf16_m16n8k16.json",
   "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": "verity/ml/circuits/ops/tests/fixtures/gpu-nan-2026-09-28/fp32_ops.json",
   "art:592130d2c1e0d166446c59cb43795e090e99695e2f110523715e93a52746010e": "fixtures/bench-instances/v1/manifest.json",
   "art:c94fae7b8f1c37950b8bb13e76221948057b0bfa4d616ca0a7644ca74a39d3df": "fixtures/bench-instances/v1/vu-k1536.index.json",
   "art:9e977c565a9468b46936120b1d09495786ffaf308963409a350f565426cc9169": "fixtures/bench-instances/v1/vu-k1536-neg.index.json",
   "art:19f80a238753239044f5f850e9907259a53938522512eed40a53ea1f5fd7fd53": "fixtures/bench-instances/v1/tu-k16.index.json",
-  "art:50e42f6254063c4f23662c0fc17ce43a5dae9fbafa489d0266874f6b03296941": "verity/ml/circuits/silicon/discrepancy_log.json",
+  "art:d0727338dc232e17efcb1fac07e0f938bf3db5cf23dc4e9d0a322978a5c54903": "verity/ml/circuits/silicon/discrepancy_log.json",
   "art:ad3eaa3e52972a08384ee2de612b657a52efc4cc8dcc15d37fb94ad78c6cee55": "integrations/vllm/tests/query/fixtures/pouw_row_binding.json.gz",
   "art:712ec77fca7da4c4f72121af05125eb4ac7237ce1a5735eb56b0269565ae0048": "fixtures/lean-vectors",
   "art:cb796395face65cdcb01321729bc5477942b5d33cbe1b65b5f6dab018308a00c": "verity/ml/circuits/silicon/captures/autoproof-probe-vectors.json",
@@ -146,15 +146,6 @@
     "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": [
       "art:d775cc59e5e058b21c9eac5d748fab785ecd6be184782427bead14eb3cc80811"
     ],
-    "art:50e42f6254063c4f23662c0fc17ce43a5dae9fbafa489d0266874f6b03296941": [
-      "art:aac898b703462ecb19c5d7460baf4690980d8e121a8b40e1745a4759a05d8fe6",
-      "art:e960ec04a528595710d77cf274c57edc1a0b9be2d475b64a4a27ef0b93a68a8a",
-      "art:5bf4b57b082bd187fe07849babf4db172843c5c71efd2ffbb0ee65b3bbd9105f",
-      "art:cba3df59a2100c154fcdcf532b86a97adef04e4dbe3690cb751ad39f61f5813d",
-      "art:9ea8114d17bfad729de762a292b304b781a6bc987608193804454a3fb2260238",
-      "art:b238706278bd3f122ae084fbd6d9e01b9369779d4208b67eaab547e102e99364",
-      "art:83365bfa752efa63cdab08b92d144890929cdbc36454945090f0b2979014f887"
-    ],
     "art:84471c45417ce1f0da5e1ebcc7c9e65fc15b833357f4ec654ce12037100d7be3": [
       "art:97537edaf796edb3ec098d64a39283d2c74040bd06be85375304a5263e6bedc9"
     ],
@@ -193,6 +184,17 @@
     ],
     "art:31c671f6ef98b1d361a0a93dbff17bf8261f6dee4f8edbaf0df94a7454134af5": [
       "art:b77622446779b9f9b1e46861300e60973433f96d4edf43322acff35d13502d35"
+    ],
+    "art:d0727338dc232e17efcb1fac07e0f938bf3db5cf23dc4e9d0a322978a5c54903": [
+      "art:aac898b703462ecb19c5d7460baf4690980d8e121a8b40e1745a4759a05d8fe6",
+      "art:e960ec04a528595710d77cf274c57edc1a0b9be2d475b64a4a27ef0b93a68a8a",
+      "art:5bf4b57b082bd187fe07849babf4db172843c5c71efd2ffbb0ee65b3bbd9105f",
+      "art:cba3df59a2100c154fcdcf532b86a97adef04e4dbe3690cb751ad39f61f5813d",
+      "art:9ea8114d17bfad729de762a292b304b781a6bc987608193804454a3fb2260238",
+      "art:b238706278bd3f122ae084fbd6d9e01b9369779d4208b67eaab547e102e99364",
+      "art:83365bfa752efa63cdab08b92d144890929cdbc36454945090f0b2979014f887",
+      "art:50e42f6254063c4f23662c0fc17ce43a5dae9fbafa489d0266874f6b03296941",
+      "art:92fc75530885f63076a7a5770ee5fc0e9d3259e7b8738ca82fd37c7047a8de58"
     ]
   }
 }

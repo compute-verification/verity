@@ -191,7 +191,7 @@ def _e4m3_operands(rng: np.random.Generator, shape) -> np.ndarray:
 
 def _draw(args):
     name, seed, lo, hi = args
-    from verity.ml.circuits.silicon.silicon import tc_dot
+    from verity.ml.circuits.silicon.models import tc_dot
     rel = _relation(name)
     operands = _e4m3_operands if rel.word_dtype == "<u1" else rel.operands
     xs, ws, accs = [], [], []
@@ -502,7 +502,7 @@ def write_synth(path: str | Path, relation: str, K_: int, lo: int, hi: int, leaf
 
 def _chain_rows(args):
     relation, x, w = args
-    from verity.ml.circuits.silicon.silicon import tc_dot
+    from verity.ml.circuits.silicon.models import tc_dot
     from .lowering import _model
     pipe = PIPES[relation]
     model, k = _model(pipe.model), pipe.k
