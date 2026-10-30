@@ -90,12 +90,13 @@ digests) before it is published to ``--out/composite``, and the window's verdict
 (``{protocol, verdict, reason}``, the reason its refusal's name). Cases that make up neither leave the window
 ``undecided``, its reason naming what each product lacks and why.
 The block record (``block-record.json``, `block_record.from_period`, held by `block_record.check`) is built from the
-report, its ``composed.onsite`` the window's verdict, its legs the answers accepted about the record's node and the
-others carried as ``elsewhere`` (an answer that names no server isn't carried), unless the window or a subprotocol's
-answer about this node rejects (``rejected``: a rejection fails the run whether or not a product composed it). Prints
-one ``RECORD`` line, naming each subprotocol's verdict (the development piece's `DEV_VERDICT`), each one not run and
-why, each rejecting or erring one, each one elsewhere, and the window's verdict, and exits 1 when there is no block
-record, a piece erred, the Lean check couldn't answer, or the block record doesn't hold.
+report, its ``composed.answer`` the window's verdict (whose verdict is the record's), its legs the answers accepted
+about the record's node and the others carried as ``elsewhere`` (an answer that names no server isn't carried), unless
+the window or a subprotocol's answer about this node rejects (``rejected``: a rejection fails the run whether or not a
+product composed it). Prints one ``RECORD`` line, naming each subprotocol's verdict (the development piece's
+`DEV_VERDICT`), each one not run and why, each rejecting or erring one, each one elsewhere, and the window's verdict,
+and exits 1 when there is no block record, a piece erred, the Lean check couldn't answer, or the block record doesn't
+hold.
 """
 from __future__ import annotations
 

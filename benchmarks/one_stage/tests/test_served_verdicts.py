@@ -583,8 +583,9 @@ COMPONENTS = ("pouw", "bandwidth", "pous", "certifier", "wipe")
 def test_the_block_record_composes_each_subprotocol_accepted_on_its_node_and_names_each_that_was_not(
         tmp_path, monkeypatch, capsys, case, piece):
     """Every piece's answer accepted on the record's node (each piece's `RAN`, which a `SERVED` naming no server leaves it
-    about, and the wipe's `SERVED`): the block record composes every leg, and the report's ``said`` names each
-    subprotocol's accept; the window, whose pieces left no case, stays undecided. One piece with no answer is undecided,
+    about, and the wipe's `SERVED`): the block record carries every leg, and the report's ``said`` names each
+    subprotocol's accept; the window, whose pieces left no case, stays undecided, and so does the record, whose verdict
+    is its answer's: the window's. One piece with no answer is undecided,
     not run, naming why, with no leg; one that rejects fails the record with no block record; one that accepts with
     outputs that are not its leg's certificate errs, undecided, with no leg; one about another server is carried and
     named as elsewhere."""
@@ -624,15 +625,16 @@ def test_the_block_record_composes_each_subprotocol_accepted_on_its_node_and_nam
     rec = json.loads((tmp_path / "record" / "block-record.json").read_text())
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
     assert line["check"] == {} == BR.check(rec) and line["rejected"] == []
-    assert rec["composed"]["onsite"] == {k: report["verdict"][k] for k in ("protocol", "verdict", "reason")}
+    assert rec["composed"]["answer"] == {k: report["verdict"].get(k) for k in ("protocol", "verdict", "reason", "commitment")}
+    assert rec["composed"]["verdict"] == report["verdict"]["verdict"] == "undecided"
     if case == "accept":
         assert rc == 0 and (line["record_missing"], line["not_run"], line["elsewhere"], line["errors"]) == ([], {}, {}, [])
-        assert rec["composed"]["legs"] == {k: "accept" for k in BR.LEGS} and rec["composed"]["verdict"] == "accept"
+        assert rec["composed"]["legs"] == {k: "accept" for k in BR.LEGS}
         late = {"the network certifier": " (its quantity is not established at δ = 1/1000000: the run established it "
                                          "except with 1/100)"}
         assert report["said"] == "; ".join(f"{n}: accept{late.get(n, '')}" for n in S.NAMES.values())
         return
-    assert rec["composed"]["verdict"] == "pending" and line["record_missing"] == [leg]
+    assert line["record_missing"] == [leg]
     if case == "not run":
         what = S.WIPE[3] if piece == "wipe" else S.PIECES[runner[piece]][3]
         assert rc == 0 and line["not_run"] == {name: f"{piece.upper()}_CMD unset: {what}"}
@@ -713,7 +715,8 @@ def test_a_development_pouw_piece_checks_the_windows_session_and_credits_nothing
     assert line["verdict"] == "undecided" and "pouw" in line["record_missing"] and line["development"] == {"PoUW": "accept"}
     assert line["verdicts"]["PoUW"] == S.DEV_VERDICT == "development run, credits nothing" and "PoUW" not in line["not_run"]
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
-    assert BR.check(rec) == {} and rec["composed"]["onsite"] == {k: report["verdict"][k] for k in ("protocol", "verdict", "reason")}
+    assert BR.check(rec) == {} and rec["composed"]["verdict"] == report["verdict"]["verdict"] == "undecided"
+    assert rec["composed"]["answer"] == {k: report["verdict"].get(k) for k in ("protocol", "verdict", "reason", "commitment")}
     assert report["said"].startswith(f"sampled proofs: accept; PoUW: {why}; ")
     for name, cmd in (("the bandwidth audit", "BANDWIDTH"), ("PoUS", "POUS"), ("the network certifier", "CERTIFIER"),
                       ("the wipe", "WIPE")):
