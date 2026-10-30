@@ -1,5 +1,5 @@
-"""A statement's proof files, verified by C-Flock's Lean verifier of record (`flock-verify verify --zk`, the Lake package
-`verity/core/service/flock`, built with `lake` on first use): the proof service's own run of the verifier, so a protocol
+"""A statement's proof files, verified by C-Flock's Lean verifier (`flock-verify verify --zk`, the Lake package
+`verity/core/service/flock`, built with `lake` on first use): the proof system's own run of the verifier, so a protocol
 reads each session's verdict from that run, never from a verdict record the prover hands in.
 
 `verify` takes a statement's files as the prover delivered them (`Proof`: the circuit file, the public file and the
@@ -14,7 +14,7 @@ values), and one `Finding` a session, in order:
 whether it was accepted and why not, the program its verdict names (`program_sha512`, the digest of the canonical
 descriptor without annotations, which an accepted verdict must give as the partition object's `program`),
 its registered finding (each port's value and opened root) and the proof blocks it proved, the public file's global proof block
-indices of the instances its session drew (`unit_draw`), read only off a session the verifier accepted.
+indices of the instances its session sampled (`unit_draw`), read only off a session the verifier accepted.
 
 `ks_form_why` mirrors `verify --zk`'s refusal of a circuit outside the unit's form the sampled audit's knowledge
 soundness (`SampledKSLiveV4`, and `SampledKSLiveV5` at a shared-row public file) covers, on the circuit file's head
@@ -22,7 +22,7 @@ soundness (`SampledKSLiveV4`, and `SampledKSLiveV5` at a shared-row public file)
 ``form`` refusal, so the mirror can only refuse more.
 
 The verifier reads the whole circuit file once a call, in time and memory linear in it (about six times the file at
-peak), then O(proof) a session: so a protocol verifies one statement a stratum, every drawn proof block of it an instance.
+peak), then O(proof) a session: so a protocol verifies one statement a stratum, every sampled proof block of it an instance.
 
 The one-stage audit's v2 (`V2`, `SampledProofs.OneStageZk`) runs this verifier inside the audit's own Lean, on the files
 as content-addressed blobs: `check_v2` hands it v1's inputs with the verdicts replaced by the files' digests
@@ -48,9 +48,9 @@ from typing import Any, Mapping, Sequence
 from .verifier import BUILD_LOCK, CORE
 from .verifier import PACKAGE as V2_PACKAGE
 
-PACKAGE = CORE / "service" / "flock"
+PACKAGE = CORE.parents[1] / "verity/core/service/flock"
 EXE = "flock-verify"
-#: the statement every drawn proof block's session proves
+#: the statement every sampled proof block's session proves
 STATEMENT = "verity/flock-circuit"
 _DIGEST = re.compile(r"[0-9a-f]{128}")
 #: an input bound at registration (`program.REGISTERED_ID`, Lean's `Program.inputId?`), a descriptor's `definitions` key
@@ -180,7 +180,7 @@ def proved_units(public: Path, session: Path) -> tuple[int, ...]:
 
 def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapping[str, Any],
            registered: Mapping[str, Any] | None = None) -> tuple[list[Finding] | None, tuple[str, str] | None]:
-    """Each of `proof`'s sessions verified by the verifier of record against the verifier's own `program` (its
+    """Each of `proof`'s sessions verified by C-Flock's Lean verifier against the verifier's own `program` (its
     descriptor's bytes), `partition` and `registered` file (None only for a program that reads no registered value, such
     as N2's, whose proof block opens the committed value inside its circuit), on the circuit file the auditor committed as
     `circuit_sha512`; the findings in session order and None, or None and the refusal (``registered``: `registered` is

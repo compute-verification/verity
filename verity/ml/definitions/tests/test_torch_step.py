@@ -199,7 +199,7 @@ def _f32_words(rng, shape, scale: float = 1.0) -> np.ndarray:
 @pytest.mark.slow
 @pytest.mark.parametrize("lerp_fma,bf16", [(0, 1), (1, 0)])
 def test_the_adamw_model_is_the_bits(lerp_fma: int, bf16: int) -> None:
-    """Runs of 4 elements: the recipe's scalars at steps 1 to 3 in most runs, scalar words drawn at random or special in the
+    """Runs of 4 elements: the recipe's scalars at steps 1 to 3 in most runs, scalar words sampled at random or special in the
     rest (the lerp's two branches, c2 at 1.0 and not), on random, raw and special state words."""
     rng = np.random.default_rng(23 + lerp_fma)
     R, N = 512, 4

@@ -1,5 +1,5 @@
 """The pipeline's seeded draws, pinned by digest: the coverage workloads' lengths and prompts, the top-p split fixture's
-cases and manifest, and compiled_merge's bootstrap interval.  Every committed workload and fixture was drawn from these
+cases and manifest, and compiled_merge's bootstrap interval.  Every committed workload and fixture was sampled from these
 streams, so a change to how a generator is built or seeded fails here first."""
 from __future__ import annotations
 
