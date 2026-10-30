@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# The firewall's negative controls through the Lean session loop: one honest firewalled CPU `prove --zk` session (FC_FIREWALL=1
+# The ZK server's negative controls through the Lean session loop: one honest firewalled CPU `prove --zk` session (FC_FIREWALL=1
 # FC_HOST_WITNESS=1), then one session per FC_FIREWALL_TAMPER control (the device dishonest in one named way, live
 # PROTOCOL.md §10.1), each against the same `serve --zk`. The honest session must be accepted, and every control must end in a
 # visible refusal at its `Finish`, never before: the verifier's verdict (its `SESSION` line) does not accept, after as many
 # rounds as the honest session's, and the prover's record carries the control's own refusal (`EXPECT` below:
-# `prover_stopped`'s, the firewall's, and the verdict's `why`, the Lean frame's stop where it stopped a rep). A `cut-MODE` control (a worker that fails) runs at its table's device rounds 2, half way and the last of
+# `prover_stopped`'s, the ZK server's, and the verdict's `why`, the Lean frame's stop where it stopped a rep). A `cut-MODE` control (a worker that fails) runs at its table's device rounds 2, half way and the last of
 # the honest session's (`firewall_device_rounds`). Run from the source tree's root:
 #   research run --on vy-nebius-1 --project verity --source . --cwd source --declared-output 'out/*' --cpus 16 --mem-gb 48 \
 #     -- bash verity/ml/flock/verifier/firewall_controls.sh
@@ -76,7 +76,7 @@ done
 kill $srv 2>/dev/null; wait $srv 2>/dev/null
 "$PY" - "$O/controls.jsonl" "$OUT/controls.json" <<'EOF' | tee -a "$OUT/job.log"
 import json, sys
-# each control's refusal: prover_stopped's prefix (the firewall's own, "" where it caught nothing), and whether the verdict's
+# each control's refusal: prover_stopped's prefix (the ZK server's own, "" where it caught nothing), and whether the verdict's
 # `why` is the Lean frame's stop of a rep
 FW, DEV, FRAME = "FIREWALL-REFUSED: ", "FIREWALL-REFUSED: the device failed: ", "PROVER-STOPPED: the Lean frame stopped table 0 rep "
 EXPECT = {"root": (FW + "level-0 root: the device committed ", True), "witness": (FW + "level-0 root: the device committed ", True),
