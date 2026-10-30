@@ -4,8 +4,7 @@ does the rotated model compute the same function through every consumer of each 
 q_b, kv_b as a linear and as the absorbed W_UK_T / W_UV BMMs, the DSA indexer, the router, the MoE, the MTP layer,
 lm_head), and which of the linears Pearl-C admits at TP8 each registered stack never reaches.
 
-The rotation is rung 3 of the approved-weights lane (research store docs/pouw/approved-weights.md §8j; its code,
-``aw_fold.block_rotation`` on the archived branch ``cursor/approved-weights-gpu-cc03``): an orthogonal Q on the residual
+The rotation is rung 3 of the approved-weights design (``aw_fold.block_rotation``): an orthogonal Q on the residual
 stream's d channels, the |S| <= d/1024 massive channels unmixed at keyed positions off every 8th, the rest in 8 blocks of
 consecutive calibrated activation magnitude, each a keyed Haar rotation onto keyed positions.  Every linear that reads the
 residual stream takes W·diag(γ/γ_keep)·Q, every one that writes it Qᵀ·W, the embedding E·Q, and each RMSNorm keeps γ on S and
