@@ -68,7 +68,8 @@
   "Proofs.Properties.Pous.WipeSigned",
   "Proofs.Properties.Core.Site",
   "Proofs.Properties.Nci.Protocol",
-  "Proofs.Properties.Verity.Soundness"
+  "Proofs.Properties.Verity.Soundness",
+  "Proofs.Properties.Verity.Subprotocols"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",

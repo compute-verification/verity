@@ -68,6 +68,7 @@
   "Properties.Nci.Protocol",
   "Properties.Verity.Soundness",
   "Properties.Verity.Game",
+  "Properties.Verity.Subprotocols",
   "Properties.Verity.Idle"
  ],
  "proved_in": ["../Proofs"],
