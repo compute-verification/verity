@@ -350,6 +350,10 @@ FAKE_RECORDS_AUDIT = '''import json, os, sys
 from pathlib import Path
 a = sys.argv[1:]
 open(os.environ["ORDER"], "a").write(a[0] + "\\n")
+Path(os.environ["ORDER"] + "." + a[0]).write_text(json.dumps(a))
+if a[0] == "warm":
+    print("WARM " + json.dumps({"templates": 2, "kept": 0}))
+    sys.exit(0)
 out = Path(a[a.index("--out") + 1])
 if a[0] == "audit":
     out.mkdir(parents=True)
@@ -363,27 +367,44 @@ if os.environ.get("FAIL_PERIOD"):
 out.write_text(json.dumps({"free": 0}))
 print("PERIOD " + json.dumps({"verdict": "accept"}))
 '''
+FAKE_SERVED_VERDICTS = '''import json, os, sys
+from pathlib import Path
+a = sys.argv[1:]
+open(os.environ["ORDER"], "a").write(a[0] + "\\n")
+Path(os.environ["ORDER"] + "." + a[0]).write_text(json.dumps([*a, "RESEARCH_RUN_ID=" + os.environ.get("RESEARCH_RUN_ID", "")]))
+print("RECORD " + json.dumps({"composed": "accept"}))
+'''
 CHAIN = 'echo chain >> "$ORDER"; printf "%s\\n" "$@" > "$3/chain.args"; echo "chain on window $2"'
 PERIOD = 'echo period-check >> "$ORDER"; cp "$4/period.json" "$3/"; echo \'{"verdict": "accept"}\' > "$3/answer.json"; echo checked'
 
 
-def _v3c(tmp_path: Path, **extra: str) -> tuple[int, list[str], list[str], list[str]]:
-    """`served_verdicts.sh v3c` on window 0 of a toy serve dir, in a toy tree whose prove_path.py and records_audit.py
-    note each step they run, its builds stubbed and the split certifier's two commands set (``extra`` adds to or unsets
-    the environment, an empty value unsetting): the exit status, the verdict lines, the steps in order and the limits."""
+def _v3c(tmp_path: Path, mode: str = "v3c", **extra: str) -> tuple[int, list[str], list[str], list[str]]:
+    """`served_verdicts.sh MODE` (``v3c``, or ``v3c-audit`` on its window committed and a serving run's out dir in
+    TMP/served-out) on window 0 of a toy serve dir, in a toy tree whose prove_path.py, records_audit.py and
+    served_verdicts.py note each step they run (and its argv in TMP/order.STEP), its builds stubbed and the split
+    certifier's two commands set (``extra`` adds to or unsets the environment, an empty value unsetting): the exit status,
+    the verdict lines, the steps in order and the limits."""
     tree, bin_, venv, d = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin", tmp_path / "serve"
-    for p in (tree / "benchmarks" / "prove_path", tree / ".venv" / "bin", tree / "verity" / "core" / "service" / "flock",
-              tree / "verity" / "core" / "service" / "sampled_proofs", tree / "verity" / "ml" / "flock" / "pod", bin_, venv,
-              d / "advice" / "w0" / "private", tmp_path / "row"):
+    for p in (tree / "benchmarks" / "prove_path", tree / "benchmarks" / "one_stage", tree / ".venv" / "bin",
+              tree / "verity" / "core" / "service" / "flock", tree / "verity" / "core" / "service" / "sampled_proofs",
+              tree / "verity" / "ml" / "flock" / "pod", bin_, venv, d / "advice" / "w0" / "private", tmp_path / "row"):
         p.mkdir(parents=True)
     (tree / "benchmarks" / "prove_path" / "prove_path.py").write_text(FAKE_V3C_PROVE_PATH)
     (tree / "benchmarks" / "prove_path" / "records_audit.py").write_text(FAKE_RECORDS_AUDIT)
+    (tree / "benchmarks" / "one_stage" / "served_verdicts.py").write_text(FAKE_SERVED_VERDICTS)
     (tree / "verity" / "ml" / "flock" / "pod" / "60-circuit.sh").write_text("exit 0\n")
     for f in (d / "advice" / "w0" / "private" / "advice.bin", tmp_path / "row" / "manifest.json", tmp_path / "h.so",
               tmp_path / "n.so"):
         f.write_text("")
     (d / "weights_registration.json").write_text("{}")
     _write(d, "windows.jsonl", [{"window": 0, "run_root": "ab" * 64}])
+    if mode == "v3c-audit":
+        (d / "v3c-w0-8-32-4-4-16" / "window").mkdir(parents=True)
+        (d / "v3c-w0-8-32-4-4-16" / "window" / "registration.json").write_text("{}")
+        served = tmp_path / "served-out"
+        (served / "pieces" / "certifier").mkdir(parents=True)
+        (served / "machine.txt").write_text("research\nserving-node\n")
+        (served / "pieces" / "certifier" / "chain.json").write_text(json.dumps({"chain": "accepted"}))
     # the toy tree's verity/ directories, on the PYTHONPATH the script sets and as `python -`'s working directory, would
     # shadow the installed verity
     py = f'unset PYTHONPATH\nexport PYTHONSAFEPATH=1\n[ "$1 $2" = "-m research" ] && exit 0\nexec {sys.executable} "$@"'
@@ -395,9 +416,11 @@ def _v3c(tmp_path: Path, **extra: str) -> tuple[int, list[str], list[str], list[
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "K": "0",
            "OUT": str(tmp_path / "out"), "SERVE_ROOT": str(tmp_path / "root"), "ROW": str(tmp_path / "row"),
            "HIDDEN_SO": str(tmp_path / "h.so"), "NORM_TAP_SO": str(tmp_path / "n.so"), "ORDER": str(tmp_path / "order"),
-           "CERTIFIER_CHAIN_CMD": CHAIN, "CERTIFIER_PERIOD_CMD": PERIOD}
+           "CERTIFIER_CHAIN_CMD": CHAIN, "CERTIFIER_PERIOD_CMD": PERIOD,
+           **({"SERVED_OUT": str(tmp_path / "served-out"), "SERVED_RUN": "serving-run", "RESEARCH_RUN_ID": "audit-run"}
+              if mode == "v3c-audit" else {})}
     env = {k: v for k, v in {**env, **extra}.items() if v}
-    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "v3c"], cwd=tree, env=env, check=False,
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), mode], cwd=tree, env=env, check=False,
                         capture_output=True).returncode
     read = lambda f: (tmp_path / f).read_text().split() if (tmp_path / f).exists() else []  # noqa: E731
     return rc, (tmp_path / "out" / "verdicts.txt").read_text().splitlines(), read("order"), read("limits")
@@ -430,6 +453,50 @@ def test_v3c_with_no_period_json_runs_no_period_check_and_fails(tmp_path):
     assert any("the audit under it wrote no Program" in x for x in lines[-3:-1])
     assert lines[-1] == "CERTIFIER-PERIOD: not run: V3c wrote no period.json"
     assert not (tmp_path / "out" / "pieces" / "certifier" / "answer.json").exists()
+
+
+def test_v3c_audit_elsewhere_commits_and_chains_here_and_runs_no_audit(tmp_path):
+    """V3C_AUDIT=elsewhere, an audit whose composes outgrow this machine's memory: the window commit and the
+    certifier's chain on it run here, and neither V3c's audit, its period.json nor the period check."""
+    rc, lines, order, limits = _v3c(tmp_path, V3C_AUDIT="elsewhere")
+    assert rc == 0, lines
+    assert order == ["window-circuit", "window-commit", "chain"] and limits == ["30m", "120m", "4h"]
+    assert lines[-2].startswith("V3C-AUDIT class 8,32,4,4,16: not run here (V3C_AUDIT=elsewhere)")
+    assert lines[-1].startswith("CERTIFIER-CHAIN (exit 0)")
+    assert not (tmp_path / "out" / "pieces" / "certifier" / "answer.json").exists()
+
+
+def test_v3c_audit_warms_the_compose_cache_then_audits_on_it_and_checks_the_period(tmp_path):
+    """`served_verdicts.sh v3c-audit` on a window committed elsewhere, with none of the serving node's files: the build,
+    the warm into the compose cache, the audit reading that cache, its period.json, the certifier's period check on the
+    serving run's chain, then the window's record from the serving run's rows (its run and node) beside the period
+    check's answer (this run's); no window circuit, commit or chain runs here."""
+    rc, lines, order, limits = _v3c(tmp_path, "v3c-audit", CERTIFIER_CHAIN_CMD="", ROW="", HIDDEN_SO="", NORM_TAP_SO="",
+                                    VENV="", V3C_WARM_JOBS="3")
+    assert rc == 0, lines
+    assert order == ["warm", "audit", "period", "period-check", "record"] and limits == ["10h", "180m", "60m"]
+    cache = str(tmp_path / "serve" / "v3c-w0-8-32-4-4-16" / "compose-cache")
+    warm, audit, rec = (json.loads((tmp_path / f"order.{s}").read_text()) for s in ("warm", "audit", "record"))
+    assert warm[warm.index("--compose-cache") + 1] == audit[audit.index("--compose-cache") + 1] == cache
+    assert warm[warm.index("--jobs") + 1] == "3" and warm[warm.index("--law") + 1] == "subset:1"
+    assert [x.split(" (")[0].split(" {")[0] for x in lines] == [
+        "V3C-WARM class 8,32,4,4,16", "V3C-AUDIT class 8,32,4,4,16", "V3C-PERIOD", "CERTIFIER-PERIOD", "RECORD"]
+    pieces = tmp_path / "out" / "pieces" / "certifier"
+    assert json.loads((pieces / "answer.json").read_text()) == {"verdict": "accept"}
+    assert json.loads((pieces / "chain.json").read_text()) == {"chain": "accepted"}
+    assert json.loads((pieces / "runs.json").read_text()) == ["audit-run"]
+    assert rec[rec.index("--sampled-proofs") + 1] == str(tmp_path / "served-out" / "sampled-proofs" / "served")
+    assert rec[rec.index("--pieces") + 1] == str(tmp_path / "out" / "pieces")
+    assert rec[rec.index("--node") + 1] == "serving-node" and rec[-1] == "RESEARCH_RUN_ID=serving-run"
+
+
+@pytest.mark.parametrize("case", ["no committed window", "no serving run", "a chain command"])
+def test_v3c_audit_refuses_without_a_committed_window_or_its_serving_run_or_with_a_chain_to_run(case, tmp_path):
+    extra = {"no committed window": {"K": "1", "CERTIFIER_CHAIN_CMD": ""},
+             "no serving run": {"SERVED_OUT": "", "CERTIFIER_CHAIN_CMD": ""}, "a chain command": {}}[case]
+    rc, lines, order, _limits = _v3c(tmp_path, "v3c-audit", **extra)
+    assert rc == 3 and order == []
+    assert lines[-1].startswith("PREFLIGHT: v3c-audit runs no chain" if case == "a chain command" else "V3C-AUDIT: set D and K")
 
 
 def test_the_split_certifier_and_its_whole_piece_are_not_both_set(tmp_path):

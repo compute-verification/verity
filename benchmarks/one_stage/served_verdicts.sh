@@ -46,6 +46,13 @@
 #     window-commit, the longer of the chain and V3c's audit, and the period check (at most 120m + 4h + 60m at the
 #     defaults), which the run's --timeout holds beside steps 1, 2 and 4.
 #     `served_verdicts.sh v3c` runs only that step on an existing serve dir (D and its window K set), the build first.
+#     Where the audit's composes outgrow this machine's memory, V3C_AUDIT=elsewhere runs only the window-commit and the
+#     chain here, and `served_verdicts.sh v3c-audit` (D and K set, on a machine they fit, with D's window committed,
+#     SERVED_OUT the serving run's out dir and SERVED_RUN its id) builds, warms the audit's compose cache
+#     (`records_audit.py warm`, V3C_WARM_JOBS templates at a time, default 2, within V3C_WARM_TIMEOUT, default 10h, into
+#     V3C_COMPOSE_CACHE, default $VW/compose-cache), runs V3c's audit on that cache, its period.json and the certifier's
+#     period check on the chain's SERVED_OUT/pieces/certifier, then composes the window's record (step 5) from the
+#     serving run's rows and the period check's answer.
 #  4. PoUW (H1 credit), the bandwidth audit, PoUS and the network certifier: `served_verdicts.py pieces` runs each one's piece
 #     where POUW_CMD, BANDWIDTH_CMD, POUS_CMD or CERTIFIER_CMD names it (the split certifier's, its period check's answer
 #     read where step 3 wrote it), else names it MISSING with its issue. No verdict is
@@ -166,7 +173,8 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
     "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py audit --window "$VW/window" --law "${V3C_LAW:-subset:1}" \
     --circuit "$(sha512sum "$VW/window/circuit.json" | cut -c1-128)" --run "$run" --registered "$WREG" \
     --m0-pythonpath "$m0" --bin "$FW/flock-gpu-link/flock/target/release/flock-circuit" --lean "$leanb/flock-verify" \
-    --firewall "$leanb/flock-firewall" --ports "${V3C_PORTS:-16}" --out "$VW/audit") > "$OUT/v3c-audit/audit.log" 2> "$OUT/v3c-audit/audit.err"
+    --firewall "$leanb/flock-firewall" --ports "${V3C_PORTS:-16}" ${V3C_COMPOSE_CACHE:+--compose-cache "$V3C_COMPOSE_CACHE"} \
+    --out "$VW/audit") > "$OUT/v3c-audit/audit.log" 2> "$OUT/v3c-audit/audit.err"
   rc=$?
   cp "$VW/audit/summary.json" "$OUT/v3c-audit/" 2>/dev/null
   say "V3C-AUDIT class $V3C (records_audit.py exit $rc): $(grep -m1 '^RECORDS' "$OUT/v3c-audit/audit.log" | cut -c1-3000)"
@@ -193,12 +201,28 @@ certifier_step() {  # $1 chain|period: the split network certifier's step on V3c
   say "CERTIFIER-${1^^} (exit $rc): $(tail -1 "$dir/$1.log" | cut -c1-600)"
   return $rc
 }
-v3c_proved() {  # V3c's window committed and the build done: the certifier's chain beside V3c's audit and period.json, then the period check
-  local rc prc chain
-  certifier_step chain & chain=$!
+v3c_warm() {  # every template of V3c's window composed into V3C_COMPOSE_CACHE before the timed audit, which then composes none
+  local rc
+  mkdir -p "$OUT/v3c-audit"
+  (cd "$TREE" && env -u PYTHONPATH RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout "${V3C_WARM_TIMEOUT:-10h}" \
+    "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py warm --window "$VW/window" --law "${V3C_LAW:-subset:1}" \
+    --compose-cache "$V3C_COMPOSE_CACHE" --jobs "${V3C_WARM_JOBS:-2}") > "$OUT/v3c-audit/warm.log" 2> "$OUT/v3c-audit/warm.err"
+  rc=$?
+  say "V3C-WARM class $V3C (records_audit.py warm exit $rc): $(grep -m1 '^WARM' "$OUT/v3c-audit/warm.log" | cut -c1-600)"
+  [ "$rc" = 0 ] || say "V3C-WARM: $(tail -3 "$OUT/v3c-audit/warm.err" | tr '\n' ' ' | cut -c1-800)"
+  return $rc
+}
+v3c_proved() {  # V3c's window committed and the build done: the certifier's chain (unless $1 is chained: it ran where the
+  # window was committed) beside V3c's audit and period.json, then the period check; V3C_AUDIT=elsewhere: the chain alone
+  local rc prc chain=
+  if [ "${V3C_AUDIT:-here}" = elsewhere ]; then
+    say "V3C-AUDIT class $V3C: not run here (V3C_AUDIT=elsewhere): \`served_verdicts.sh v3c-audit\` audits $VW where its composes fit"
+    certifier_step chain; return $?
+  fi
+  [ "${1:-}" = chained ] || { certifier_step chain & chain=$!; }
   v3c_audit; rc=$?
   v3c_period; prc=$?
-  wait "$chain"
+  [ -z "$chain" ] || wait "$chain"
   if [ "$prc" = 0 ]; then certifier_step period
   elif [ -n "${CERTIFIER_PERIOD_CMD:-}" ]; then say "CERTIFIER-PERIOD: not run: V3c wrote no period.json"; fi
   return $((rc ? rc : prc))
@@ -238,7 +262,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   fi
   say "SERVE $(grep -m1 'SERVE-OPENAI listening' "$OUT/serve.log" | cut -c1-300)"
   weights
-  if [ -n "${CERTIFIER_FRONT:-}" ]; then  # the network certifier's warden in front of the endpoint, before the requests
+  if [ -n "${CERTIFIER_FRONT:-}" ]; then  # the network certifier's front before the endpoint, before the requests
     # below: its group closes into the run's earliest window, which `served_verdicts.py window` picks on a tie in requests
     (cd "$TREE" && timeout -k 1m 20m bash -c "$CERTIFIER_FRONT" _ "$PORT" "$D" "$OUT/certifier-front") \
       > "$OUT/certifier-front.log" 2>&1
@@ -299,12 +323,42 @@ measure() {  # in TREE: the class of record, unless CLASSES gates on it; it gate
   return 0
 }
 
+build() {  # what prove_path/run.sh builds, here while the endpoint serves; run.sh's own builds then find them done
+  command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
+  command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
+  uv sync --all-packages --extra torch-cpu || return 5
+  (cd verity/core/service/flock && lake build flock-verify flock-firewall) || return 7
+  (cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) || return 7
+  mkdir -p "$OUT/m0-build"
+  # FW is the node's, every run's: two builds in it at once break each other's crates
+  RESEARCH_RUN_DIR=$OUT/m0-build FLOCK_WORK=$FW MODE=build GPU=0 flock "$FW/.build.lock" bash verity/ml/flock/pod/60-circuit.sh || return 6
+}
 if [ "${1:-}" = serve ]; then serve; exit $?; fi
 if [ "${1:-}" = circuits ]; then K=${2:?served_verdicts.sh circuits WINDOW}; circuits; rc=$?; measure; exit "$rc"; fi
 
 stop() { say "STOP at $1 (exit $2)"; exit "$2"; }
 { id -un; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; nproc; free -g | head -2; nvidia-smi -L; echo "serve dir $D"; } \
   | tee "$OUT/machine.txt"
+if [ "${1:-}" = v3c-audit ]; then  # V3c's committed window audited where its composes fit (V3C_AUDIT=elsewhere's other half)
+  VW=$D/v3c-w${K:-}-$vtag
+  [ -n "${K:-}" ] && [ -f "$VW/window/registration.json" ] && [ -f "$WREG" ] && [ -f "${SERVED_OUT:-}/machine.txt" ] \
+    || { say "V3C-AUDIT: set D and K, a serve dir whose window is committed at $VW/window, beside $WREG, and SERVED_OUT, the serving run's out dir"; exit 3; }
+  [ -z "${CERTIFIER_CHAIN_CMD:-}" ] || { say "PREFLIGHT: v3c-audit runs no chain: unset CERTIFIER_CHAIN_CMD"; exit 3; }
+  mkdir -p "$FW" "$OUT/pieces"
+  cp -a "$SERVED_OUT/pieces/." "$OUT/pieces/"
+  ( unset PYTHONPATH; build ) > "$OUT/build.log" 2>&1; rc=$?
+  [ "$rc" = 0 ] || { tail -30 "$OUT/build.log"; stop build "$rc"; }
+  PY=$TREE/.venv/bin/python V3C_COMPOSE_CACHE=${V3C_COMPOSE_CACHE:-$VW/compose-cache}
+  v3c_warm || exit $?
+  v3c_proved chained; rc=$?
+  # the window's one record: the serving run's rows (SERVED_RUN its id) beside the period check's answer, which this run adds
+  mkdir -p "$OUT/pieces/certifier" && printf '["%s"]\n' "${RESEARCH_RUN_ID:-local}" > "$OUT/pieces/certifier/runs.json"
+  RESEARCH_RUN_ID=${SERVED_RUN:-} "$PY" benchmarks/one_stage/served_verdicts.py record --serve-run "$D" --window "$K" \
+    --sampled-proofs "$SERVED_OUT/sampled-proofs/served" --pieces "$OUT/pieces" --out "$OUT/record" \
+    --node "$(sed -n 2p "$SERVED_OUT/machine.txt")" 2>&1 | tee -a "$OUT/verdicts.txt"
+  rec=${PIPESTATUS[0]}
+  exit $((rc ? rc : rec))
+fi
 for f in "$ROW/manifest.json" "$HIDDEN_SO" "$NORM_TAP_SO" "$PY"; do [ -e "$f" ] || { say "PREFLIGHT: no $f"; exit 3; }; done
 if [ -n "${CERTIFIER_CHAIN_CMD:-}${CERTIFIER_PERIOD_CMD:-}" ]; then  # the split certifier: its period check writes its answer
   [ -z "${CERTIFIER_CMD:-}" ] || { say "PREFLIGHT: CERTIFIER_CMD or the split's CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD, not both"; exit 3; }
@@ -316,16 +370,6 @@ KEEP_WHY="VLLM-33 Wed 28: served_verdicts.sh's serve dirs (sealed row dirs, advi
 { "$PY" -m research keep "$ROOT" --owner @vllm --expires 7d --priority high --why "$KEEP_WHY" \
   || research keep "$ROOT" --owner @vllm --expires 7d --priority high --why "$KEEP_WHY"; } 2>&1 | tail -2
 
-build() {  # what prove_path/run.sh builds, here while the endpoint serves; run.sh's own builds then find them done
-  command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
-  command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
-  uv sync --all-packages --extra torch-cpu || return 5
-  (cd verity/core/service/flock && lake build flock-verify flock-firewall) || return 7
-  (cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) || return 7
-  mkdir -p "$OUT/m0-build"
-  # FW is the node's, every run's: two builds in it at once break each other's crates
-  RESEARCH_RUN_DIR=$OUT/m0-build FLOCK_WORK=$FW MODE=build GPU=0 flock "$FW/.build.lock" bash verity/ml/flock/pod/60-circuit.sh || return 6
-}
 ( unset PYTHONPATH; build ) > "$OUT/build.log" 2>&1 &
 BUILD=$!
 
