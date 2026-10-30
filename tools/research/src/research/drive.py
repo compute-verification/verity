@@ -9,6 +9,9 @@ What only a PR's owner acts on goes to that owner alone (`tell`).  Each tick app
 at `stale_close_days` drive closes it, its branch kept.  After a landing, the owner of each unmarked open PR whose head contains
 a landed PR's head hears once that its base landed and to merge `main` (`_stacked`).
 
+What a sync leaves out of `next` is told once per root cause instead of once per PR and head: the PR that didn't merge or isn't
+admitted, why, and every marked PR it takes out, their owners tagged once, and again only when that changes (`tell_out`).
+
 Review landing, the only landing.  `main` holds only fully checked commits: PRs land on a review onto the
 landing branch, drive.toml's `land_into` (`checked`: `Queue.into`), drive runs the full check on its tip, and `main` is
 fast-forwarded only to a commit of it whose after-landing run passed every step on the merge gate (`_promote`: not
@@ -90,9 +93,9 @@ import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Iterable
 
-from .queue import (IDENTITY, PR, Member, Queue, QueueError, StoreLabels,
+from .queue import (IDENTITY, PR, Entry, Member, Queue, QueueError, StoreLabels,
                     _git, _out, built_on, changed, forces_cold, hold, lean_change, lean_hold, unreviewed)
 
 #: who hears what drive can't settle
@@ -1670,57 +1673,90 @@ class Driver:
     def refuse(self, drive: dict, key: str, text: str, *handles: str | None) -> None:
         """Tell `CI` once per key, and ``handles``, the owning lanes of the PRs it concerns, beside it so each owner hears
         without a relay; with --shadow or --dry-run, only log it."""
-        if key in drive["told"]:
-            return
+        if key not in drive["told"] and self._say(text, handles):
+            drive["told"].append(key)
+
+    def _say(self, text: str, handles: Iterable[str | None]) -> bool:
+        """Post ``text`` to `CI` and ``handles`` (each once) in the merge thread; with --shadow or --dry-run, only log it.
+        Whether it was posted."""
         to = tuple(dict.fromkeys((CI, *(f"@{h}" for h in handles if h))))
         if self.q.shadow or self.dry_run:
             self.q.log(f"research queue drive: would tell {' '.join(to)}: {text} [{'shadow' if self.q.shadow else 'dry run'}]")
-            return
+            return False
         if self.post(f"{' '.join(to)} queue: {text}", to):
-            drive["told"].append(key)
             self.q.log(f"research queue drive: told {' '.join(to)}: {text}")
-        else:
-            self.q.log(f"research queue drive: could not post to the merge thread (the next tick retries): {' '.join(to)}: {text}")
+            return True
+        self.q.log(f"research queue drive: could not post to the merge thread (the next tick retries): {' '.join(to)}: {text}")
+        return False
 
-    def tell_contained(self, drive: dict, entries: dict) -> None:
-        """Tell each PR marked ready that the sync left off `next` because it contains the head, or the commits at an older
-        head, of an open PR that isn't admitted (`Queue.entries`), and that PR, once per pair of heads: else the marked one waits
-        and no one hears.  Both owners are rung, and the notice names the head it holds (`Entry.held`), never a merge base.
-        One unmarked at its head is asked for its mark; one ejected, held, without
-        an owner or waiting itself is named with why, and the fix: admit it, drop its commits, or have it closed.  A PR that
-        isn't marked, or waits for a reason of its own (a hold, a warming check), tells no one; one left out because a PR it
-        contains didn't merge is `_tell_out`'s."""
+    def tell_out(self, drive: dict, entries: dict[int, Entry], state: dict) -> None:
+        """Tell each root cause of what the sync left off `next` in one post, to `CI`, the root's owner and each dependant's
+        owner, once each: the root, a PR left out for a reason of its own, why, every marked PR it takes out (each waits
+        because it contains the root, directly or through another such PR: `Queue.entries`, `Queue.sync`), and the fix.  A
+        root is a PR that didn't merge (the sync's `conflicts`: told with dependants or without), one that isn't admitted
+        (unmarked, held, ejected, ownerless, or waiting itself) that a marked PR contains, or a PR that waits on a contained
+        PR none of which is such a root.  An unmarked root is asked for its mark (or to withdraw it, and its dependants carry
+        it); another is named with what admits it, or its commits dropped from them, or it closed.  A root is told again only
+        when its head, its set of dependants or its reason changes (`drive["out"]`: {PR: [head, dependants, reason]}, a closed
+        PR's record dropped), so one PR that many contain is one post a change, not one per PR and head; `research queue
+        status` still gives each PR its own reason."""
         q = self.q
-        hold = q.rules().hold_label
-        for n, e in entries.items():
-            if e.state != "waiting" or not e.why.endswith("which isn't admitted") or not q.ready(n, e.pr.head):
-                continue
-            for b in (entries[a] for a in e.after if entries[a].state in ("waiting", "refused")):
-                m, h = b.pr.number, b.pr.head
-                marked = q.ready(m, h)
-                if b.state == "waiting" and b.pr.owner is not None and hold not in b.pr.labels and not marked:
-                    if (key := f"unmarked:{n}@{e.pr.head}:{m}@{h}") in drive["told"]:
-                        continue
-                    by = self.ready_by(n, e.pr.head) or q.handle(e.pr) or e.pr.owner
-                    self.refuse(drive, key,
-                                f"#{n} (marked by {by}) waits for your mark of #{m}, which it contains (at {e.held[m][:12]}): "
-                                f"mark #{m} ready at {h[:8]}, or withdraw it (`research queue eject {m} --reason ...`) and "
-                                f"#{n} carries it", q.handle(b.pr), q.handle(e.pr))
-                    continue
-                admit = (f"lift #{m}'s `{hold}` label" if hold in b.pr.labels else
-                         f"clear what #{m} waits for" if marked and b.state == "waiting" else f"mark #{m} ready at {h[:8]}")
-                self.refuse(drive, f"contained:{n}@{e.pr.head}:{m}@{h}",
-                            f"#{n} at {e.pr.head[:8]} is out of `{q.branch}`: it contains {e.holds(m)}, and #{m} at "
-                            f"{h[:8]} isn't admitted ({b.why}). Fix: {admit}, drop #{m}'s commits from #{n}, or ask {TOP} to "
-                            f"close #{m}", q.handle(e.pr), q.handle(b.pr))
+        conflicts = {int(n): c["why"] for n, c in state.get("conflicts", {}).items()
+                     if int(n) in entries and entries[int(n)].pr.head == c["head"]}
 
-    def _tell_out(self, drive: dict, state: dict) -> None:
-        """Tell each PR the last sync left off `next` once per head: one that didn't merge (`conflicts`), and one that contains
-        such a PR (`waiting`)."""
-        for kind, key in (("conflict", "conflicts"), ("waiting", "waiting")):
-            for n, c in state.get(key, {}).items():
-                self.refuse(drive, f"{kind}:{n}@{c['head']}", f"#{n} at {c['head'][:8]} is out of `{self.q.branch}`: {c['why']}",
-                            c.get("handle"))
+        def waits(e: Entry) -> bool:
+            return e.state == "waiting" and e.why.startswith("contains ")
+
+        def roots(n: int, seen: set[int]) -> set[int]:
+            found: set[int] = set()
+            for a in entries[n].after:
+                if a in seen or (b := entries.get(a)) is None or b.state not in ("waiting", "refused"):
+                    continue
+                seen.add(a)
+                found |= roots(a, seen) if waits(b) else {a}
+            return found
+
+        out: dict[int, set[int]] = {n: set() for n in conflicts}
+        for n, e in entries.items():
+            if waits(e):
+                for r in roots(n, {n}) or (n,):
+                    out.setdefault(r, set()).update({n} - {r})
+        told = drive.setdefault("out", {})
+        for gone in [k for k in told if int(k) not in entries]:
+            del told[gone]
+        hold = q.rules().hold_label
+        for m, deps in sorted(out.items()):
+            b = entries[m]
+            h, why = b.pr.head, conflicts.get(m, b.why)
+            own = m in conflicts or waits(b)
+            said = [h, sorted(deps), why]
+            if (not deps and not own) or told.get(str(m)) == said:
+                continue
+            unmarked = (not own and b.state == "waiting" and b.pr.owner is not None and hold not in b.pr.labels
+                        and not q.ready(m, h))
+            text = (f"#{m} at {h[:8]} is out of `{q.branch}`: {why}" if own else
+                    f"#{m} at {h[:8]} isn't marked ready" if unmarked else f"#{m} at {h[:8]} isn't admitted ({why})")
+            if deps:
+                names = []
+                for n in sorted(deps):
+                    d, notes = entries[n], []
+                    if unmarked:
+                        notes.append(f"marked by {self.ready_by(n, d.pr.head) or q.handle(d.pr) or d.pr.owner}")
+                    if m in d.older:
+                        notes.append(f"at #{m}'s older head {d.held[m][:12]}")
+                    names.append(f"#{n}" + (f" ({'; '.join(notes)})" if notes else ""))
+                one = len(deps) == 1
+                text += f". It takes out {', '.join(names)}, which contain{'s' if one else ''} it"
+                if unmarked:
+                    text += (f". Fix: mark #{m} ready at {h[:8]}, or withdraw it (`research queue eject {m} --reason ...`) and "
+                             + (f"#{min(deps)} carries it" if one else "they carry it"))
+                elif not own:
+                    admit = (f"lift #{m}'s `{hold}` label" if hold in b.pr.labels else
+                             f"clear what #{m} waits for" if b.state == "waiting" and q.ready(m, h) else
+                             f"mark #{m} ready at {h[:8]}")
+                    text += f". Fix: {admit}, drop #{m}'s commits from {f'#{min(deps)}' if one else 'them'}, or ask {TOP} to close #{m}"
+            if self._say(text, (q.handle(b.pr), *(q.handle(entries[n].pr) for n in sorted(deps)))):
+                told[str(m)] = said
 
     def _handle(self, pr: int) -> str | None:
         if self._prs is None:
@@ -1832,8 +1868,7 @@ class Driver:
             q.lift = [] if q.hold or running else self._lift(drive, chain)
             entries = q.sync(dry_run)[1]
             state = {**q.load_state(), "drive": drive}
-            self._tell_out(drive, state)
-            self.tell_contained(drive, entries)
+            self.tell_out(drive, entries, state)
         landed, why = None, self._unbaselined(drive)
         if why is None:
             landed, why = self.land_reviewed(drive, dry_run)
