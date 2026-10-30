@@ -1977,7 +1977,8 @@ sealed under an AEAD built from SHA-512 alone.
 - **Keys.** There is one secret S per certifier pair per session: 64 bytes of one certifier host's own randomness
   (`fresh_pair_secret`), drawn again for each new session σ.
   - SHA-512 alone gives no key agreement, so S reaches the pair's other certifier host the way the certifier's keys and
-    run id reach their consumers: through the auditor's deployment channel.
+    run id reach their consumers: through the auditor's deployment channel. ML-KEM-1024, the transport exception to
+    the one-hash rule, never runs on pair links.
   - S and its keys live only in the two certifier processes and on their hosts, never in a record, a log or the
     prover's configuration.
   - They are protocol keys, which seal frames, not access keys.
