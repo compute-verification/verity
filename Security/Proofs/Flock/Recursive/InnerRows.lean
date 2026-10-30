@@ -180,16 +180,13 @@ theorem unit_commit {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
     bytesOf_congr (N := 192) (fun b hb t h8 => Hm.saltCol_lt hR hg hq hb h8) (hf hob)] at key
   exact key
 
-/-- **A unit's rows, read off the inner witness**: at a statement the verifier parsed and kept in scope, with hidden
-outputs, every witness of the deployed relation commits row `q` of unit `i` of table `j` as the public file publishes it:
-the executable's commit string (`Hm96.Default512.commitString`) of the SHA-512 of the bytes the witness's row hash reads,
-under the witness's salt, is the table's `b ‖ c` for the unit's row. -/
-theorem rows_commit {p : Parsed} {w : Claims.Flock.Wit} (hP : Parses p) (hsc : p.scope = .ok ())
+/-- **A unit's rows, read off the inner witness**, at a statement the verifier parsed whose statement check passes
+(`Read.check`, the first half of its scope refusal), with hidden outputs: as `rows_commit`. -/
+theorem rows_commit_check {p : Parsed} {w : Claims.Flock.Wit} (hP : Parses p) (hc : p.check = .ok ())
     (hh : p.tags.hiddenOutputs = true) (hR : Claims.Flock.RelS (toReadable relation p) w)
     {j i q : ℕ} (hj : j < p.sts.size) (hi : i < p.sts[j].pub.n) (hq : q < p.sts[j].c.ports.size) :
     Hm96.Default512.commitString (Sha512.hash ⟨(rowBytes p w j i q).toArray⟩) (salt p w j i q) =
       p.sts[j].pub.digest i q p.sts[j].c.ports.size := by
-  obtain ⟨hc, -⟩ := (scope_ok_iff p).1 hsc
   obtain ⟨hRu, c0, -, hc0, -, -, -, hok⟩ := (check_ok_iff _ _ _ _ _ _ _ _).1 hc
   have hpi : p.publicInputs = none := Option.not_isSome_iff_eq_none.1 (by simp [hRu.2.2.2.2.2])
   have ht : p.tags.typed = false := hRu.2.1
@@ -234,5 +231,16 @@ theorem rows_commit {p : Parsed} {w : Claims.Flock.Wit} (hP : Parses p) (hsc : p
   show FlockSoundness.bit (toZ (w.hid.getD ((i / st.c.g * 2 ^ st.c.kLog + y) * p.sts.size + j) false)) =
     w.hid.getD ((i / st.c.g * 2 ^ p.sts[j]!.c.kLog + y) * p.sts.size + j) false
   rw [bit_toZ, hk]
+
+/-- **A unit's rows, read off the inner witness**: at a statement the verifier parsed and kept in scope, with hidden
+outputs, every witness of the deployed relation commits row `q` of unit `i` of table `j` as the public file publishes it:
+the executable's commit string (`Hm96.Default512.commitString`) of the SHA-512 of the bytes the witness's row hash reads,
+under the witness's salt, is the table's `b ‖ c` for the unit's row. -/
+theorem rows_commit {p : Parsed} {w : Claims.Flock.Wit} (hP : Parses p) (hsc : p.scope = .ok ())
+    (hh : p.tags.hiddenOutputs = true) (hR : Claims.Flock.RelS (toReadable relation p) w)
+    {j i q : ℕ} (hj : j < p.sts.size) (hi : i < p.sts[j].pub.n) (hq : q < p.sts[j].c.ports.size) :
+    Hm96.Default512.commitString (Sha512.hash ⟨(rowBytes p w j i q).toArray⟩) (salt p w j i q) =
+      p.sts[j].pub.digest i q p.sts[j].c.ports.size :=
+  rows_commit_check hP ((scope_ok_iff p).1 hsc).1 hh hR hj hi hq
 
 end Flock.InnerRows
