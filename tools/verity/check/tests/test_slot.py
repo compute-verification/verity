@@ -8,7 +8,7 @@ import os
 import stat
 import subprocess
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
 
 import pytest
@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[4]
 spec = importlib.util.spec_from_file_location("check_slot", ROOT / "tools" / "verity" / "check" / "slot.py")
 SLOT = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(SLOT)
-NOW = datetime(2026, 10, 1, 9, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 10, 1, 9, 0, tzinfo=UTC)
 
 
 class Exec(Exception):
@@ -741,7 +741,7 @@ def test_ranked_priority_waiters_go_by_rank_then_arrival_and_ahead_of_unranked_o
     assert SLOT.ahead(low) == 0 and SLOT.ahead(high) == 1 and SLOT.ahead(unranked) == 2 and SLOT.ahead(lane) == 3
     post, p = SLOT.join(tmp_path, priority=True, rank=0)                    # the post-landing run of `main`
     assert SLOT.ahead(post) == 0 and SLOT.ahead(low) == 1
-    waits = SLOT.waiting(tmp_path / SLOT.LINE, datetime(2026, 10, 19, tzinfo=timezone.utc))
+    waits = SLOT.waiting(tmp_path / SLOT.LINE, datetime(2026, 10, 19, tzinfo=UTC))
     assert [w["priority"] for w in waits] == [True, True, True, True, False]
     assert all(w["since"][:4].isdigit() for w in waits)                  # a ranked ticket's arrival still parses
     for fd in (u, h, lo, la, p):
