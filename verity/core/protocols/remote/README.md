@@ -55,12 +55,12 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `window
 
 | Subprotocol | What it establishes | Lean check | id |
 |---|---|---|---|
-| Sampled proofs ([README](../sampled_proofs/README.md)) | the committed values satisfy the registered circuit outside the proof blocks the sample misses, on the proofs themselves, which it reads as blobs | `SampledProofs.OneStageZk.protocol` (`verity/core/service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v2` |
+| Sampled proofs ([README](../sampled_proofs/README.md)) | the committed values satisfy the registered circuit outside the proof blocks the sample misses | `SampledProofs.OneStage.protocol` (`verity/core/service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v1` |
 | PoUW ([README](../pouw/README.md)) | the period's credited work, in live words, is the registered work's | `PouwCheck.protocol` (`verity/core/protocols/pouw/lean/check`) | `verity/pouw/v1` |
 | The inference-only policy ([README](../network/nci/README.md)) | the registered circuit divides into inference blocks within their gate and fresh-input budgets, and θ is registered information | `NciCheck.Protocol.protocol` (`verity/core/protocols/network/nci/lean`) | `verity/inference-only/v0` |
 
 The code is `CoreRemote.lean`, `protocol = sameB "verity/remote/v0" ids components` over `components =
-[NciCheck.Protocol.protocol, PouwCheck.protocol, SampledProofs.OneStageZk.protocol]`. All three commit to the run's
+[NciCheck.Protocol.protocol, PouwCheck.protocol, SampledProofs.OneStage.protocol]`. All three commit to the run's
 record, which names the registered circuit; once the cases fit, two different records reject remote whatever the
 subprotocols answer (`Core.Composition.same`). Its executable is `remote id | check PARAMS COMMITMENT EVIDENCE | serve`
 (`RemoteMain.lean`). The Lake package `core_remote` is code: it has no Mathlib and nothing of `Security/`
