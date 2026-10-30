@@ -26,6 +26,7 @@
   "Flock.Test.Parsed",
   "Flock.Test.Part",
   "Flock.Test.Holo",
+  "Flock.Test.Template",
   "Flock.Test.TopReads",
   "Flock.Test.SharedRows",
   "Flock.Test.SharedReads",
