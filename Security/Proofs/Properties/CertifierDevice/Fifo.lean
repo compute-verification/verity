@@ -7,9 +7,9 @@ The egress certifier is a FIFO queue of the frames the shaper handed. A shaper t
 canonical positions (`handList`), enqueues them, and releases `min(queue, r)` from the queue's front (`fifo_tick`). Over a
 trace (`fifo_inv`), the shaper has handed `handed`'s frames, its `queued` count is the Program's queue (`NetworkCertifier.queue`)
 of the hand counts, and an unfaulted certifier's queue is the last `queued` frames handed. A complete record's window
-never faults (by `FailClosed`), so each of its rows is the FIFO's release, which is `NetworkCertifier.expectedRow` when
-each frame is handed at the bucket `NetworkCertifier.handingBuckets` gives it (`completeRows_honest`). `Complete` drops
-that condition: a frame handed late faults its window.
+never faults (by `FailClosed`), so each of its rows is the FIFO's release at the buckets that handed its frames
+(`Complete`), which is `NetworkCertifier.expectedRow` when each frame is handed at the bucket
+`NetworkCertifier.handingBuckets` gives it (`completeRows_honest`).
 -/
 
 namespace Properties.CertifierDevice.Proofs
