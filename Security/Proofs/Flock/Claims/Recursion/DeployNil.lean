@@ -1,4 +1,4 @@
-import Proofs.Flock.Claims.Recursion.Deploy
+import Proofs.Flock.Claims.Recursion.DeploySessions
 import Proofs.Flock.Claims.Bridge.CommittedNil
 
 /-!
@@ -27,20 +27,6 @@ theorem actO_coin {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {c : 
   split at h
   · cases h
   · exact actAt_coin h
-
-/-- **An outer session's message is its last coin's bytes**: a decision accepts or refuses. -/
-theorem nextO_msg (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
-    {m : Claims.Msg} (h : ((nextO x as cs).eval H).1 = .msg m) : ∃ c, cs.getLast? = some c ∧ m = c.bytes := by
-  cases ha : actO x as cs with
-  | rej =>
-    rw [nextO_rej H ha] at h
-    cases h
-  | coin c =>
-    rw [nextO_coin H ha] at h
-    have h' : Claims.Out.msg c.bytes = .msg m := h
-    exact ⟨c, actO_coin ha, (Claims.Out.msg.inj h').symm⟩
-  | decide s spec sts link c₁ mids f =>
-    rcases nextO_decide_out H ha with ho | ho <;> rw [ho] at h <;> cases h
 
 section Steps
 
@@ -111,7 +97,8 @@ theorem answersCoinOrNil_V (IV : Claims.Verifier Coin) (st : Stage) (H : Claims.
     | msg m' =>
       rw [ho] at h
       have hm : m' = m := by simpa [sessOut] using h
-      obtain ⟨c', hc', hmc⟩ := nextO_msg H ho
+      obtain ⟨c', hac, hmc⟩ := nextO_msg H ho
+      have hc' := actO_coin hac
       obtain ⟨off, hoff⟩ := ract_sess_drop hr
       rw [hoff] at hc'
       exact .inl (hm.symm.trans (hmc.trans (congrArg FlockDeploy.Coin.bytes (getLast?_drop_concat hc'))))
