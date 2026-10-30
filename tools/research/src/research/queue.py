@@ -35,7 +35,8 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    --collect-only` in a suite
                                                    whose inputs its change touches, or breaks the build of a Lean module that
                                                    is or imports what it changes (on a warm Lean tree: here on a node, else
-                                                   with --on on vy-nebius-cpu-3), naming the PR on `next` that owns it, or
+                                                   on vy-nebius-cpu-3, whatever the tier; refused when it can't build them),
+                                                   naming the PR on `next` that owns it, or
                                                    drops from a Lean lock it changes a shape.inline premise or shape.frozen
                                                    key `next`'s statements still need (naming each; the sync leaves such a
                                                    head off `next` too); a check it couldn't run it names under "checks
@@ -115,7 +116,8 @@ a row another queued PR refits away (an error at collection), one lane's unlande
 `tests/test_repository.py` (a Markdown cap, a report-genre name), which the preflight runs too, as it runs the landing gates the
 sync would (on the head; the sync, on its merge onto `next`).  A Lean change can pass its own Lean check and break a module
 another PR on `next` owns (a changed signature, dropped premises, a dropped import), which drive's Lean check of the stack finds
-only an hour later; the preflight builds those modules (`LakeBuild`).  A head whose lock, merged onto `next` by
+only an hour later; the preflight builds those modules (`LakeBuild`), on `PREFLIGHT_LEAN_ON` from a machine without a warm Lean
+tree whatever the tier, and refuses a head whose modules it can't build.  A head whose lock, merged onto `next` by
 `tools/verity/lean/merge.py`, drops a `shape.inline` premise or a `shape.frozen` key that `next`'s unchanged statements still need
 (a lock regenerated on an older tree) fails that Lean check too; the preflight names each such entry (`lock_drops`), and the sync
 leaves such a head off `next` with the same refusal.  So `ready` runs `Preflight` before the mark and before any quick tier: a refusal names what it found and the fix, a
@@ -2205,12 +2207,12 @@ PREFLIGHT_JOBS = 2
 PREFLIGHT_MIN_FREE = 0.25
 #: the Lean step's bounds (`Preflight._lean`): the most modules it builds (those the change touches and every module importing one,
 #: transitively, each rebuilt since an import changed), and the seconds its builds may take, on the merged tree and, for what fails
-#: there, on `next`; past either it notes why and refuses nothing.  With `PREFLIGHT_BUDGET_S` the whole preflight stays within
-#: 5 minutes, and a warm tree rebuilds a few changed modules and their importers in a minute or two
+#: there, on `next`; past either it notes why and refuses nothing (`LeanTimedOut`).  With `PREFLIGHT_BUDGET_S` the whole
+#: preflight stays within 5 minutes, and a warm tree rebuilds a few changed modules and their importers in a minute or two
 PREFLIGHT_LEAN_MODULES = 40
 PREFLIGHT_LEAN_S = 180.0
-#: where the Lean step builds for `ready --on` when this machine keeps no warm Lean tree (cpu-3's `build` Lean slots, its research
-#: pool the least loaded; cpu-1's pool is congested).  The one place to move it
+#: where the Lean step builds, whatever the mark's tier, when this machine keeps no warm Lean tree (cpu-3's `build` Lean slots, its
+#: research pool the least loaded; cpu-1's pool is congested).  The one place to move it
 PREFLIGHT_LEAN_ON = "vy-nebius-cpu-3"
 #: the `research run` pool it takes there: none, as `verity lean try --on vy-nebius-cpu-3` runs, since the node's `build` Lean slots
 #: are the gate; a node without them would take its `research` pool
@@ -2539,6 +2541,15 @@ class LeanBuilt:
     notes: list[str] = field(default_factory=list)
 
 
+class LeanTimedOut(str):
+    """Why the Lean step built nothing within its time: a note under "checks skipped", refusing nothing.  Any other reason it
+    built nothing (a plain string) refuses the mark, naming the fix."""
+
+
+#: the fix a Lean step that couldn't build names, with where it builds
+LEAN_UNBUILT_FIX = "mark again once {on} builds them (its `build` Lean slots are @infra's; `research status` there says why not)"
+
+
 def run_group(argv: list[str], cwd: Path, left: float) -> tuple[int | None, str]:
     """``argv``'s exit status and output (stderr after stdout), in a process group of its own that is killed whole once ``left``
     seconds pass (a `lake build` it started included, which would otherwise go on in a slot's tree), and then None."""
@@ -2563,9 +2574,11 @@ class LakeBuild:
     """The Lean step's builds (`Preflight._lean`): the tree's `LEAN_BUILDER` (`lean_changed.py --build FILE...`), which builds the
     files' modules on the warm tree of a node's `build` Lean slot as `verity lean try` builds one, and ends with one
     `LEAN_BUILD_LINE`.  It runs here when this machine's Lean slot file (``slots``) lists a `build` pool, in a process group
-    killed at the step's deadline; else, given ``on`` (`ready --on`: `PREFLIGHT_LEAN_ON`), as a `research run` of the tree there
-    on its `build` Lean slot, or in ``pool`` (a slot named for ``by``) when one is given, bounded by the same deadline; else not
-    at all, and says so: an agent VM builds nothing (the team skill, "Machines"), and its preflight never starts a run unasked."""
+    killed at the step's deadline; else, given ``on`` (`ready`, whatever its tier: `PREFLIGHT_LEAN_ON`), as a `research run` of the
+    tree there on its `build` Lean slot, or in ``pool`` (a slot named for ``by``) when one is given, bounded by the same deadline
+    (an agent VM builds nothing itself: the team skill, "Machines").  A build that didn't end by the deadline is `LeanTimedOut`;
+    one that couldn't run or built nothing (no warm tree and no ``on``, a run that didn't start or left no result line, every
+    package skipped) is a plain string naming the fix, which refuses the mark."""
     on: str | None = None
     pool: str | None = PREFLIGHT_LEAN_POOL
     by: str | None = None
@@ -2581,34 +2594,36 @@ class LakeBuild:
 
     def __call__(self, wt: Path, files: list[str], left: float) -> LeanBuilt | str:
         if left <= 0:
-            return "the Lean step's budget was spent before it started"
+            return LeanTimedOut("the Lean step's budget was spent before it started")
         if not (wt / LEAN_BUILDER).is_file():
-            return f"the merged tree has no {LEAN_BUILDER}"
+            return f"the merged tree has no {LEAN_BUILDER}, which builds them"
         if self.warm():
             rc, text = self.run([sys.executable, LEAN_BUILDER, "--build", *files], wt, left)
-            where = "here"
+            where, fix = "here", LEAN_UNBUILT_FIX.format(on="this node")
         elif self.on:
             rc, text, where = self._remote(wt, files, left)
+            fix = LEAN_UNBUILT_FIX.format(on=self.on)
         else:
-            return (f"this machine keeps no warm Lean tree (no `build` pool in {self.slots}; an agent VM builds nothing): "
-                    f"`ready --on MACHINE` builds them on {PREFLIGHT_LEAN_ON}")
+            return (f"this machine keeps no warm Lean tree (no `build` pool in {self.slots}; an agent VM builds nothing) and was "
+                    f"given no node to build on: `ready --on MACHINE` builds them on {PREFLIGHT_LEAN_ON}")
         if rc is None:
-            return (f"its build {where} hadn't ended after {left:.0f} s (a wait in its pool's line counts){': ' + text if text else ''}"
-                    if where != "here" else f"its build here was still going after {left:.0f} s{': ' + text if text else ''}")
+            return LeanTimedOut(f"its build {where} hadn't ended after {left:.0f} s (a wait in its pool's line counts)"
+                                f"{': ' + text if text else ''}" if where != "here" else
+                                f"its build here was still going after {left:.0f} s{': ' + text if text else ''}")
         doc = next((ln[len(LEAN_BUILD_LINE):] for ln in reversed(text.splitlines()) if ln.startswith(LEAN_BUILD_LINE)), None)
         try:
             doc = json.loads(doc) if doc is not None else None
         except ValueError:
             doc = None
         if not isinstance(doc, dict):
-            return f"its build {where} exited {rc} without a result line: {text.strip()[-300:]}"
+            return f"its build {where} exited {rc} without a result line: {text.strip()[-300:]}: {fix}"
         built, skipped = doc.get("built") or {}, doc.get("skipped") or {}
         notes = [f"{p} not built: {why}" for p, why in skipped.items()]
         failed = {f: str(e) for f, e in (doc.get("failed") or {}).items()}
         notes += [f"`lake build` in {p} exited {c} with no Lean error in a file" for p, c in built.items()
                   if c and not any(f.startswith(p + "/") for f in failed)]
         if not built and not failed:
-            return "; ".join(notes) or f"its build {where} built nothing (exit {rc})"
+            return f"{'; '.join(notes) or f'its build {where} built nothing (exit {rc})'}: {fix}"
         return LeanBuilt(failed, notes)
 
     def _remote(self, wt: Path, files: list[str], left: float) -> tuple[int | None, str, str]:
@@ -2745,7 +2760,7 @@ class Preflight:
     finds its lock stale; (c) contains another open PR's head that isn't admitted (no ready mark at that head, held, or no
     owner), naming each; (d) fails one of drive.toml's `landing_gates` at `main` (`_gates`), with the gate's fix; or (e) merged
     onto `next`, breaks the build of a Lean module that is or imports, transitively, a module it changes, in that module's package
-    or one requiring it by path (`lean_graph`), built by ``lean`` (`LakeBuild`, on a warm Lean tree) within `lean_s`, naming the
+    or one requiring it by path (`lean_graph`), built by ``lean`` (`LakeBuild`, on a node's warm Lean tree) within `lean_s`, naming the
     module, its first error and the PR on `next` that owns it (`touched_by`), or for a module of its own, those that changed what it
     imports; or (f) merged onto `next` as the sync merges it (`lock_drops`), drops from a lock it changes a `shape.inline` premise or
     a `shape.frozen` key `next`'s statements still need (`dropped_entries`), naming each and the fix (`LOCK_DROP_FIX`).  A train
@@ -2760,8 +2775,10 @@ class Preflight:
     named once and not judged.  A failure that `next` has too (a pin already stale there, a module two PRs on `next` already
     broke) isn't the PR's: each failed check runs again at `next` in the same worktree, within the same budget, and only what
     fails on the merge alone refuses.  What keeps a check from running (no `next` to fetch, the budget spent, labels that can't
-    be pulled, more than `lean_modules` Lean modules, no warm Lean tree) is said under "checks skipped", never as "nothing
-    refused", and refuses nothing: the preflight saves a revert, and the after-landing run still checks the head."""
+    be pulled, more than `lean_modules` Lean modules, a Lean build that didn't end in time) is said under "checks skipped", never
+    as "nothing refused", and refuses nothing: the preflight saves a revert, and the after-landing run still checks the head.  A
+    Lean build that couldn't run or built nothing (no node to build on, a run that didn't start) refuses, naming the fix: the
+    modules it reaches are few enough to build, and an unbuilt one is how a head that breaks `next`'s Lean gets marked."""
 
     def __init__(self, repo: Path, remote: str, store, *, sync: tuple[str, ...] | None = PREFLIGHT_SYNC, python: str | None = None,
                  budget_s: float = PREFLIGHT_BUDGET_S, jobs: int = PREFLIGHT_JOBS, clock: Callable[[], float] = time.monotonic,
@@ -2893,18 +2910,18 @@ class Preflight:
         """(b) and (e), in a temporary worktree at the merge of the head onto ``base``, ``tree`` (`merged_tree`)."""
         commit = _out(self.repo, "commit-tree", tree, "-p", base, "-p", pr.head, "-m", f"preflight: #{pr.number} onto {base[:12]}")
         fixtures: dict[str, list[str]] = {}
+        out: list[str] = []
         with merged_worktree(self.repo, commit, self.root) as wt:
-            graph, lean_failed, lean_deadline = self._lean(wt, base, tree, notes)
+            graph, lean_failed, lean_deadline = self._lean(wt, base, tree, notes, out)
             deadline = self.clock() + self.budget_s
             failed = self._checks(wt, base, tree, None, notes, deadline, fixtures)
             if not any(failed.values()) and not lean_failed:
-                return []
+                return out
             _git(wt, "checkout", "-q", "--detach", "--force", base)
             _git(wt, "clean", "-qffdx", "-e", "/.venv")
             again = (self._checks(wt, base, tree, {k for k, v in failed.items() if v}, [], deadline, fixtures)
                      if any(failed.values()) else {})
             lean_again = self._lean_at_base(wt, lean_failed, lean_deadline) if lean_failed else {}
-        out = []
         for name, fails in failed.items():
             if fails and name not in again:
                 notes.append(f"{name} failed on the merged tree and couldn't run on {onto} to compare: {'; '.join(fails.values())}")
@@ -2920,10 +2937,11 @@ class Preflight:
                     for f, line in sorted(lean_failed.items()) if f not in lean_again]
         return out
 
-    def _lean(self, wt: Path, base: str, tree: str, notes: list[str]) -> tuple[LeanGraph, dict[str, str], float]:
+    def _lean(self, wt: Path, base: str, tree: str, notes: list[str], found: list[str]) -> tuple[LeanGraph, dict[str, str], float]:
         """(e): the modules of the merged tree in ``wt`` that the change from ``base`` touches and every module importing one, transitively
         (`lean_graph`), built by ``lean`` (`LakeBuild`) within `lean_s`: the graph, {file: its first Lean error} of each that failed,
-        and the step's deadline.  Past `lean_modules` modules, or when the build can't run, a note and nothing failed."""
+        and the step's deadline.  Past `lean_modules` modules, or a build that didn't end in time (`LeanTimedOut`), a note and
+        nothing failed; a build that couldn't run or built nothing refuses, into ``found``, naming the fix."""
         deadline = self.clock() + self.lean_s
         if self.lean is None:
             return LeanGraph(), {}, deadline
@@ -2936,8 +2954,11 @@ class Preflight:
                          f"{self.lean_modules} the preflight builds; drive's Lean check of `{BRANCH}` builds them")
             return graph, {}, deadline
         res = self.lean(wt, sorted(graph.targets), deadline - self.clock())
+        if isinstance(res, LeanTimedOut):
+            notes.append(f"lean build timed out ({len(graph.targets)} module(s) not built: {res})")
+            return graph, {}, deadline
         if isinstance(res, str):
-            notes.append(f"Lean: {len(graph.targets)} module(s) not built: {res}")
+            found.append(f"Lean: {len(graph.targets)} module(s) that are or import what it changes couldn't be built: {res}")
             return graph, {}, deadline
         notes += [f"Lean: {n}" for n in res.notes]
         notes.append(Ran(f"Lean: built {len(graph.targets)} module(s), {len(res.failed)} failed"))
@@ -4012,7 +4033,8 @@ def main(argv: list[str]) -> int:
                          "doc paths, pythonpath) and `pytest --collect-only` of the suites its change touches, in a temporary "
                          f"worktree, in about {PREFLIGHT_BUDGET_S:g} s, and build the Lean modules that are or import what it "
                          f"changes (at most {PREFLIGHT_LEAN_MODULES}, in {PREFLIGHT_LEAN_S:g} s, on a warm Lean tree: here on a "
-                         f"node, else with --on on {PREFLIGHT_LEAN_ON}); the records gate (a changed Lean lock needs a records "
+                         f"node, else on {PREFLIGHT_LEAN_ON}, whatever the tier; one it can't build refuses the mark, one not "
+                         "built in time is a skipped check); the records gate (a changed Lean lock needs a records "
                          "run that passed it, of the head or of a commit whose files of its package and the packages it requires "
                          "(tests and docs aside), lean-toolchain and the Lean checker (tools/verity/lean) are the head's) still runs")
     ap.add_argument("--regenerate-locks", action=argparse.BooleanOptionalAction,
@@ -4143,8 +4165,7 @@ def main(argv: list[str]) -> int:
         if a.command == "ready":
             top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
             tier = MarkOnly() if a.mark else RemoteQuickTier(top, remote, a.on, by=a.by) if a.on else QuickTier(top, remote)
-            pre = None if a.no_preflight else Preflight(top, remote, store,
-                                                        lean=LakeBuild(on=PREFLIGHT_LEAN_ON if a.on else None, by=a.by))
+            pre = None if a.no_preflight else Preflight(top, remote, store, lean=LakeBuild(on=PREFLIGHT_LEAN_ON, by=a.by))
             return ready(GitHub(repo), store, a.pr, a.by, tier, again=a.again, preflight=pre, sha=a.sha, as_json=a.json,
                          records=RecordsGate(top, remote, store))
         labels = StoreLabels(store, log=lambda s: print(s, file=sys.stderr), since=a.marked_after)
