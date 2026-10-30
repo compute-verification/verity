@@ -339,126 +339,7 @@ theorem varSlices_linkPorts (UB PB : ℕ) : OfVStar.varSlices 0 (VStar.linkPorts
       vars (3584 + auxBits UB PB) 1536, vars (5120 + auxBits UB PB) (auxBits UB PB)] :=
   varSlices_link (VStar.auxWords (UB + PB))
 
-section Probe
-
-def LinkOkP (UB PB : ℕ) (U : VStar.UnitC) : Prop :=
-  U.st = ((linkRun UB PB).run ⟨linkIn UB PB, []⟩).2 ∧
-    U.outs = (((linkRun UB PB).run ⟨linkIn UB PB, []⟩).1.1 ++ ((linkRun UB PB).run ⟨linkIn UB PB, []⟩).1.2).toArray ∧
-    U.inPorts = VStar.linkPorts UB PB ∧ U.outPorts = [VStar.LINK_OUT_WORDS, VStar.LINK_OUT_WORDS]
-
-theorem probe_link_0 {UB PB : ℕ} {U : VStar.UnitC} (h : VStar.linkUnit UB PB = .ok U) : LinkOkP UB PB U := by
-  unfold LinkOkP
-  sorry
-
-theorem probe_link_u {UB PB : ℕ} {U : VStar.UnitC} (h : VStar.linkUnit UB PB = .ok U) : LinkOkP UB PB U := by
-  unfold LinkOkP
-  unfold VStar.linkUnit at h
-  sorry
-
-theorem probe_link_1 {UB PB : ℕ} {U : VStar.UnitC} (h : VStar.linkUnit UB PB = .ok U) : LinkOkP UB PB U := by
-  unfold LinkOkP
-  unfold VStar.linkUnit at h
-  unfold linkRun linkIn
-  generalize VStar.linkSteps UB PB = S at h ⊢
-  sorry
-
-theorem probe_link_2 {UB PB : ℕ} {U : VStar.UnitC} (h : VStar.linkUnit UB PB = .ok U) : LinkOkP UB PB U := by
-  unfold LinkOkP
-  unfold VStar.linkUnit at h
-  unfold linkRun linkIn
-  generalize VStar.linkSteps UB PB = S at h ⊢
-  cases hc : RecLinkTree.checkShape UB PB with
-  | error e => simp [hc, bind, Except.bind] at h
-  | ok _ => sorry
-
-theorem probe_link_3 {UB PB : ℕ} {U : VStar.UnitC} (h : VStar.linkUnit UB PB = .ok U) : LinkOkP UB PB U := by
-  unfold LinkOkP
-  unfold VStar.linkUnit at h
-  unfold linkRun linkIn
-  generalize VStar.linkSteps UB PB = S at h ⊢
-  cases hc : RecLinkTree.checkShape UB PB with
-  | error e => sorry
-  | ok _ =>
-    simp only [hc, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
-    sorry
-
-theorem probe_link_4 {UB PB : ℕ} {U : VStar.UnitC} (h : VStar.linkUnit UB PB = .ok U) : LinkOkP UB PB U := by
-  unfold LinkOkP
-  unfold VStar.linkUnit at h
-  unfold linkRun linkIn
-  generalize VStar.linkSteps UB PB = S at h ⊢
-  cases hc : RecLinkTree.checkShape UB PB with
-  | error e => sorry
-  | ok _ =>
-    simp only [hc, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
-    subst h
-    sorry
-
-theorem probe_link_5 {UB PB : ℕ} {U : VStar.UnitC} (h : VStar.linkUnit UB PB = .ok U) : LinkOkP UB PB U := by
-  unfold LinkOkP
-  unfold VStar.linkUnit at h
-  unfold linkRun linkIn
-  generalize VStar.linkSteps UB PB = S at h ⊢
-  cases hc : RecLinkTree.checkShape UB PB with
-  | error e => sorry
-  | ok _ =>
-    simp only [hc, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
-    subst h
-    simp only [OfVStar.run_input_bind]
-    sorry
-
-theorem probe_link_hn (UB PB : ℕ) :
-    16 * (VStar.linkPorts UB PB).foldl (· + ·) 0 = 16 * (VStar.linkPorts UB PB).sum + 0 := by
-  simp [VStar.linkPorts]
-  omega
-
-theorem probe_link_6 {UB PB : ℕ} {U : VStar.UnitC} (h : VStar.linkUnit UB PB = .ok U) : LinkOkP UB PB U := by
-  unfold LinkOkP
-  unfold VStar.linkUnit at h
-  unfold linkRun linkIn
-  generalize VStar.linkSteps UB PB = S at h ⊢
-  cases hc : RecLinkTree.checkShape UB PB with
-  | error e => sorry
-  | ok _ =>
-    simp only [hc, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
-    subst h
-    simp only [OfVStar.run_input_bind]
-    rw [probe_link_hn, OfVStar.slices_vars, varSlices_linkPorts, Nat.add_zero]
-    sorry
-
-theorem probe_link_c1 {UB PB : ℕ} {U : VStar.UnitC} (h : VStar.linkUnit UB PB = .ok U) : LinkOkP UB PB U := by
-  unfold LinkOkP
-  unfold VStar.linkUnit at h
-  unfold linkRun linkIn
-  generalize VStar.linkSteps UB PB = S at h ⊢
-  cases hc : RecLinkTree.checkShape UB PB with
-  | error e =>
-    rw [hc] at h
-    exact nomatch h
-  | ok _ =>
-    simp only [hc, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
-    subst h
-    simp only [OfVStar.run_input_bind]
-    rw [probe_link_hn, OfVStar.slices_vars, varSlices_linkPorts, Nat.add_zero]
-    refine ⟨?_, ?_, ?_, ?_⟩ <;> first | rfl | trivial
-
-set_option maxHeartbeats 1000000 in
-theorem probe_link_hb {UB PB : ℕ} {U : VStar.UnitC} (h : VStar.linkUnit UB PB = .ok U) : LinkOkP UB PB U := by
-  unfold LinkOkP
-  unfold VStar.linkUnit at h
-  unfold linkRun linkIn
-  generalize VStar.linkSteps UB PB = S at h ⊢
-  cases hc : RecLinkTree.checkShape UB PB with
-  | error e => simp [hc, bind, Except.bind] at h
-  | ok _ =>
-    simp only [hc, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
-    subst h
-    simp only [OfVStar.run_input_bind]
-    rw [probe_link_hn, OfVStar.slices_vars, varSlices_linkPorts, Nat.add_zero]
-    refine ⟨?_, ?_, ?_, ?_⟩ <;> first | rfl | trivial
-
-end Probe
-
+set_option maxHeartbeats 1000000 in -- the kernel's check of the builder's `run_input_bind` rewrite needs about 5x
 /-- **V*'s unit is `linkRun`**: its builder's state and outputs are `linkRun`'s from its input bits, its input ports
 `VStar.linkPorts` and its output ports `rin`, `rout`. -/
 theorem linkUnit_ok {UB PB : ℕ} {U : VStar.UnitC} (h : VStar.linkUnit UB PB = .ok U) :
@@ -470,18 +351,15 @@ theorem linkUnit_ok {UB PB : ℕ} {U : VStar.UnitC} (h : VStar.linkUnit UB PB = 
   -- Opaque, so that none of the kernel's checks below can evaluate the builder.
   generalize VStar.linkSteps UB PB = S at h ⊢
   cases hc : RecLinkTree.checkShape UB PB with
-  | error e =>
-    rw [hc] at h
-    cases h
-  | ok x =>
-    cases x
-    rw [hc] at h
-    have h' := Except.ok.inj h
-    subst h'
+  | error e => simp [hc, bind, Except.bind] at h
+  | ok _ =>
+    simp only [hc, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
+    subst h
     have hn : 16 * (VStar.linkPorts UB PB).foldl (· + ·) 0 = 16 * (VStar.linkPorts UB PB).sum + 0 := by
       simp [VStar.linkPorts]
       omega
-    rw [OfVStar.run_input_bind, hn, OfVStar.slices_vars, varSlices_linkPorts, Nat.add_zero]
+    simp only [OfVStar.run_input_bind]
+    rw [hn, OfVStar.slices_vars, varSlices_linkPorts, Nat.add_zero]
     refine ⟨?_, ?_, ?_, ?_⟩ <;> first | rfl | trivial
 
 theorem checkShape_ok {UB PB : ℕ} {x : Unit} (h : RecLinkTree.checkShape UB PB = .ok x) : UB ≤ 32 ∧ PB ≤ 32 := by
