@@ -52,7 +52,7 @@ The commit itself (`relay`, which ``relay`` runs end to end with a key of its ow
   their bytes arrive. Each returns its chunk's subtree root, and the main process folds them as `tree_levels` does. A P2
   chunk takes the blocks its bytes fall in, so a block two chunks share is decoded twice.
 * **The salts** are the operating system's, 192 bytes a row, drawn by the worker that commits the row (`os_salts`):
-  every hm96 salt is the operating system's (Daniel, 9 Oct, decisions 4(a) and 4(c); A3 in
+  every hm96 salt is the operating system's (A3 in
   ``Security/Proofs/Flock/Soundness/Assumptions.lean``), so nothing rests on a stream generator. ``--witness`` is
   where they go, every value's in manifest order, its rows in order (each value's `Transfer.witness`): the prover's
   alone, 4.85 GB at H200 (25,284,864 rows). `keyed_salts` is interface 1's prover-side derivation (Flock's
@@ -98,7 +98,7 @@ from verity.ml.commitments.merkle import _FRAME, _LEAF, _NODE, CommitmentDomain,
 from verity.ml.commitments.rowleaf import sha512_row_seg_digest, sha512_row_v2_prefix  # noqa: E402
 from verity.ml.crypto import chacha20  # noqa: E402
 from verity.core.protocols.certifier import transfer_rows as TR  # noqa: E402
-from verity.core.protocols.certifier.certificate import Direction, Issuer  # noqa: E402
+from verity.core.protocols.certifier.certificate import Direction, Issuer, Role  # noqa: E402
 from verity.core.protocols.pous.schemes import p2 as P2  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402
 
@@ -690,7 +690,7 @@ def sign_heads(issuer: Issuer, heads_: Sequence[TR.TransferHead]) -> list[dict[s
     """Each head signed by `issuer` in its session: its registration (`transfer_rows.registration`)."""
     out = []
     for head in heads_:
-        cert = issuer.sign(head.link, head.direction, head.window, head.digest())
+        cert = issuer.sign(Role.TRANSFER, head.link, head.direction, head.window, head.digest())
         if cert is None:
             raise Refused(f"{head.value}: the network certifier's signer refused: {issuer.refused}")
         out.append(TR.registration(head, cert))

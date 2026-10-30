@@ -11,7 +11,7 @@ the two records an honest certifier issues for it, each under a 64-byte salt and
 (`honestAccepted_instance`); the same unit with no records is undecided (`somePending_instance`).
 
 Two hypotheses stay hypotheses, each of a function no proof can evaluate: the parameters digests (`ParamsDigests`),
-since `parametersDigest` reads `Flock.canon`, well-founded recursion the kernel does not evaluate; and, for `answer`,
+since `parametersDigest` reads `Flock.canonUtf8`, well-founded recursion the kernel does not evaluate; and, for `answer`,
 that the bytes decode to the unit, since the parameters' and evidence's decoders read canonical JSON through it too.
 -/
 
@@ -145,7 +145,7 @@ theorem signed (d : Direction) (l : String) {pd : ByteArray} (hpd : pd.size = 64
     {q : Nat} (hq : q < 2) :
     ∃ (h : RecordHead) (dg σ : ByteArray), recordHead l d 0 #[#[none]] none grid pd true = .ok h ∧
       h.digest = .ok dg ∧
-      ∃ m, certificateMessage (params.key.extract 0 16) params.session l d 0 (certificateDigest salt dg) = .ok m ∧
+      ∃ m, certificateMessage (params.key.extract 0 16) params.session .record l d 0 (certificateDigest salt dg) = .ok m ∧
         LmsVerifies params m σ := by
   obtain ⟨h, D, m, hh, hprep⟩ := prepare_of (i := issuer) (r := record l) (d := d) (g := grid) (pd := pd) issuer_I
     session_size salt_size rfl (by

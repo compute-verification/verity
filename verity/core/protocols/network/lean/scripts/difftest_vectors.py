@@ -17,8 +17,8 @@ on each opening and on tampered ones (a byte of the frame, the root or a sibling
 negative, a path one short or one long, a frame of another size), heads as `record_head` gives them and with a field out
 of range (counts, the window, T, τ_b, a digest's length, a link past 2^16 bytes), links with non-ASCII and control
 characters, signed digests (`certificate_digest`) of the record's digest under drawn salts, and of other lengths, and
-certificate messages over the signed digest with every field valid and each made invalid (sessions of 31 and 33 bytes
-among them).
+certificate messages over the signed digest as a drawn role with every field valid and each made invalid (sessions of
+31 and 33 bytes, and roles `Role` doesn't name, among them).
 """
 from __future__ import annotations
 
@@ -30,13 +30,15 @@ from pathlib import Path
 
 import verity.core.protocols.certifier
 from verity.core.protocols.certifier import certificate as cert
-from verity.core.protocols.certifier.certificate import Direction, RecordHead
+from verity.core.protocols.certifier.certificate import Direction, RecordHead, Role
 from verity.core.protocols.certifier.grid import GridParams, Reason, Status
 from verity.core.protocols.certifier.schedule import SyncSet
 from verity.ml.commitments.identity import canonical_json_bytes
 
 COUNT = 2_000
 REASONS = [None] + [r.value for r in Reason]
+#: role strings `Role` doesn't name, which both sides refuse
+NOT_ROLES = ["", "Record", "records", "rows", "record\x00", "clock "]
 LINKS = ["eth0", "", "uplink/0", "é-link", "链路", "🛰️sat", "tab\there", "nul\x00", "q\"uote\\", "x" * 300]
 
 
@@ -215,23 +217,26 @@ def _heads(rng: random.Random, base: dict) -> list[dict]:
 
 def _messages(rng: random.Random, key_id: bytes, session: bytes, link: str, direction: Direction, window: int,
               digest: bytes | None) -> list[list]:
-    """`certificate_message` on the signed digest, and with one field changed, in range or out of it: a session of 31
-    or 33 bytes among them, which Python and Lean must both refuse."""
+    """`certificate_message` on the signed digest as a role drawn from `Role`, and with one field changed, in range or
+    out of it: a session of 31 or 33 bytes and a role `Role` doesn't name among them, which Python and Lean must both
+    refuse."""
     digest = digest if digest is not None else rng.randbytes(64)
-    out = [[key_id, session, link, direction, window, digest]]
+    out = [[key_id, session, rng.choice(list(Role)).value, link, direction, window, digest]]
     for _ in range(rng.randint(0, 2)):
         m = list(out[0])
-        kind = rng.randrange(6)
+        kind = rng.randrange(7)
         if kind == 0:
             m[0] = rng.randbytes(rng.choice([0, 15, 17, 32]))
         elif kind == 1:
-            m[5] = rng.randbytes(rng.choice([0, 32, 63, 65]))
+            m[6] = rng.randbytes(rng.choice([0, 32, 63, 65]))
         elif kind == 2:
-            m[4] = rng.choice([0, 2 ** 64 - 1, 2 ** 64, -1])
+            m[5] = rng.choice([0, 2 ** 64 - 1, 2 ** 64, -1])
         elif kind == 3:
-            m[2] = rng.choice(LINKS)
+            m[3] = rng.choice(LINKS)
         elif kind == 4:
-            m[3] = Direction.INGRESS if m[3] is Direction.EGRESS else Direction.EGRESS
+            m[4] = Direction.INGRESS if m[4] is Direction.EGRESS else Direction.EGRESS
+        elif kind == 5:
+            m[2] = rng.choice([*(r.value for r in Role if r.value != m[2]), *NOT_ROLES])
         else:
             m[1] = rng.randbytes(rng.choice([0, 31, 33, 32, 64]))
         out.append(m)
@@ -288,7 +293,7 @@ def instance(seed: int) -> tuple[dict, dict]:
         "link": link, "direction": direction.value, "window": window, "status": status, "deadline": deadline,
         "opens": ks, "verifies": verifies, "heads": [_head_json(h) for h in heads],
         "digests": [[salt.hex(), r.hex()] for salt, r in digests],
-        "messages": [[i.hex(), s.hex(), l, d.value, w, g.hex()] for i, s, l, d, w, g in messages],
+        "messages": [[i.hex(), s.hex(), r, l, d.value, w, g.hex()] for i, s, r, l, d, w, g in messages],
         "nodes": [[a.hex(), b.hex()] for a, b in nodes]}
     d = cert.depth(p)
     results = {
@@ -301,7 +306,8 @@ def instance(seed: int) -> tuple[dict, dict]:
         "manifest": canonical_json_bytes(manifest).decode(), "parameters": parameters.hex(),
         "record_head": head_result, "heads": [_head_result(h) for h in heads],
         "digests": [cert.certificate_digest(salt, r).hex() for salt, r in digests],
-        "messages": [_hex(_maybe(cert.certificate_message, i, s, l, d_, w, g)) for i, s, l, d_, w, g in messages],
+        "messages": [_hex(_maybe(lambda: cert.certificate_message(i, s, Role(r), l, d_, w, g)))
+                     for i, s, r, l, d_, w, g in messages],
         "nodes": [cert.node(a, b).hex() for a, b in nodes]}
     return inst, results
 

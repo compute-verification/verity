@@ -98,8 +98,8 @@ first `--probes` requests are probed straight to the endpoint at their arrival t
 after its release, with ρ0 = (cap − 1)/m at most the slowest probed response's rate over `--margin` (2) and every probed
 token's latency, times `margin` and plus `extra_s` (0.5 s), covered. Its calibration is that model's at cap frames a
 request, so the envelope it declares in every window meets every modelled frame. The run lasts until every modelled
-frame is handed before its last window. N2's profile is `advice`: no egress profile, N2's advised counts derive the
-counts from the ingress head and the advice, and this check gives no N2 verdict.
+frame is handed before its last window. N2's profile is `advice`: no egress profile, the egress counts derive from
+the ingress head and the advice, which no N2 unit holds, and this check gives no N2 verdict.
 
 **The certified I/O** (`certified_io`, the check on the advice profile), read from the records' frames alone: each
 request's ingress ordinal (its stream on the link), release bucket and id request's fields (`user`, prompt ids,
@@ -108,12 +108,12 @@ that name its ordinal, with each frame's canonical position and egress bucket. A
 request whose `user` (the request's id) no other request has, every egress frame is an id event of a request released
 by its bucket, and every response keeps the finish rule: at most `max_tokens` tokens, ending at its first EOS token
 (the plan's `eos_token_ids`) or at `max_tokens`. `extra`'s token after a response's last breaks it. The check writes
-the I/O to `io.json` for the I/O tie and N2's advised counts, and compares it with the ids the shim wrote and the
+the I/O to `io.json` for the I/O tie, and compares it with the ids the shim wrote and the
 requests the plan sent.
 On the advice profile each link-window is registered by its one-stage registration record (its salted root, chained)
 with the check's own receipt, which no proof stream issues since N2 gives no outcome, and its certified records are
-held to the certifier's key and session (`_certified`). The verdict is `accepted` when every window's records are
-certified, the I/O, the audit and the salt accept.
+held to the certifier's key and session by the Lean's audit (`_certified`). The verdict is `accepted` when every
+window's records are certified, the I/O, the audit and the salt accept.
 
 **Subcommands**, all from the repository root or with `benchmarks/network_traces` on the path:
 
@@ -164,7 +164,7 @@ certified, the I/O, the audit and the salt accept.
 - `check` is the auditor's offline check of a served run (`check`): per link-window, the certifier's audit of the raw
   and committed records, N2's in-the-clear verdict through `LinkWindows` (commit, register, select, deliver,
   `unproved_outcome`: the check proves nothing, so the verdict reads the opening; `n2_zk.py` proves it) on the certified
-  records, each window's salt asked of the certifier through a `RemoteCertifier` signed with the
+  records, each window's salt asked of the certifier through a `CertifierClient` signed with the
   challenger's key (window 0's asked twice: the second is refused), then `network_verdict` and the salt audit
   (`active_replay.audit_salt`: the salt frames, and that the shim received each revealed salt). It must run while
   `serve` serves reveals.
@@ -184,8 +184,8 @@ certified, the I/O, the audit and the salt accept.
 **Outputs** in a run's directory: `plan.json`, `calibration.json`, `deployment.json`, the proxy's records
 (`requests.records`, `responses.records`, `committed.jsonl`) and `certified.jsonl` (each record's head, the
 certifier's salt for it and certificate, or the link-window the signer refused), `clocks.jsonl` (the certifier's
-salted clock certificate of each egress window's sync with its opening, the sync and its salt, which an advised
-link's verifier of record reads: `read_clocks`), `proxy.json.gz`, the shim's `server.json` and `server.events.gz`, the
+salted clock certificate of each egress window's sync with its opening, the sync and its salt, which
+`certificate.SignedClocks` opens: `read_clocks`), `proxy.json.gz`, the shim's `server.json` and `server.events.gz`, the
 client's `peer.json`, `certificates.jsonl` and `clocks.jsonl` (in `client/` in a rehearsal), `serve.json` and
 `check.json`, and with `--out-shape` `out-records.jsonl` (public) and `out-witness.jsonl` (the out value's rows and
 salts, witness). Records, their heads, the syncs the certifier signed, the certifier's salts and the shim's events are
@@ -226,14 +226,15 @@ from pathlib import Path
 
 import active_replay as ar
 from verity.ml.crypto import lms
-from verity.core.protocols.certifier import audit as host_audit, calibration, out_commit
+from verity.core.protocols.certifier import calibration, out_commit
 from verity.core.protocols.certifier.active import COMPACT_RECORD, DATA, HEADER, ID_EVENT_BYTES, REVEAL_LINE_BYTES, \
-    Events, Proxy, RemoteCertifier, Requests, compact_record_data, decode_frame, event_body, event_data, fresh_salt, \
+    Events, Proxy, CertifierClient, Requests, compact_record_data, decode_frame, event_body, event_data, fresh_salt, \
     id_event_data, id_request, id_request_fields, request_frame_count, serve_reveals
 from verity.core.protocols.certifier.certificate import Certificate, CertifiedClock, CertifiedRecord, Direction, \
-    Issuer, LmsKey, LmsSigner, RecordHead, SignerRefused, parameters_digest
+    Issuer, LmsKey, LmsSigner, RecordHead, Role, SignerRefused, parameters_digest
 from verity.core.protocols.certifier.grid import COMPLETE, Reason, Status, occupancy, row_count
-from verity.core.protocols.certifier.lean_audit import Audit
+from verity.core.protocols.certifier.audit import certificate_refusals
+from verity.core.protocols.certifier.lean_audit import DISAGREEMENT, Audit
 from verity.core.protocols.certifier.schedule import ClockSync, expected_grids, handing_buckets
 from verity.core.protocols.certifier.served import Admission, ServedProfile
 from verity.core.protocols.certifier.service import LinkWindows
@@ -263,7 +264,7 @@ TAMPERS = ("late", *ar.LIVE_TAMPERS)
 ACCEPTED = ("honest", "token", "byte")
 PROFILES = ("planned", "served")
 TRAFFIC = ("fixed", "varied")
-#: a varied plan's N2 profile: the egress counts derive from the ingress head and the advice (N2's advised counts)
+#: a varied plan's N2 profile: the egress counts derive from the ingress head and the advice, which no N2 unit holds
 ADVICE = "advice"
 #: a varied plan's first arrival is after this, in window 0's bucket 2 or later
 START_MS = 150.0
@@ -287,8 +288,8 @@ CHALLENGER = "certifier-serve-check"
 #: `--out-shape`'s files in a run: each egress link-window's out record (public, what the auditor receives) and its
 #: witness, the rows and their salts (the prover's alone)
 OUT_RECORDS, OUT_WITNESS = "out-records.jsonl", "out-witness.jsonl"
-NO_N2 = ("no verdict on the advice profile: N2 derives the egress counts from the ingress head and the advice "
-         "(its advised counts), which this check doesn't read")
+NO_N2 = ("no verdict on the advice profile: the egress counts derive from the ingress head and the advice, which no "
+         "N2 unit holds")
 
 
 # Keys.
@@ -406,7 +407,7 @@ def clock_from_json(doc: dict) -> CertifiedClock:
 
 def read_clocks(path: Path) -> list[CertifiedClock]:
     """The certifier's `clocks.jsonl`: its salted clock certificates with their openings, one for each egress window it
-    signed the sync of, witness (a link's clock source of record, `LinkWindows(certified_clocks=…)`); none for a run
+    signed the sync of, witness (opened by `certificate.SignedClocks`); none for a run
     without the file. Raises `ValueError` on a line without its salt: an unsalted clock certificate, or a line of the
     client's `clocks.jsonl`, which holds the certificates alone (`keep_certificates`)."""
     return [clock_from_json(json.loads(line)) for line in path.read_text().splitlines()] if path.exists() else []
@@ -1163,17 +1164,19 @@ def ask_certificates(address: Sequence, window: int, timeout: float | None = 60.
         return json.loads(stream.readline(REVEAL_LINE_BYTES))
 
 
-def check_certificates(deployment: dict, window: int, answer: dict,
-                       seen: dict[bytes, str] | None = None) -> tuple[list, list, list, list[str]]:
+def check_certificates(deployment: dict, window: int, answer: dict, seen: dict[bytes, str] | None = None,
+                       refusals=certificate_refusals) -> tuple[list, list, list, list[str]]:
     """Window `window`'s certificates and clock certificates as the reveal endpoint served them
     (`CertifyingPublisher.public`, each the `Certificate` alone), each held to the deployment's certifier key and
-    session: (certificates, clock certificates, the link-windows the signer refused, refusals). A refusal names the
+    session by `refusals` (`audit.certificate_refusals`; the chain record's `lean_audit.certificate_refusals`):
+    (certificates, clock certificates, the link-windows the signer refused, refusals). A refusal names the
     certificate and what fails: another key's, another link-window's, a clock certificate that isn't egress, a
-    signature that doesn't verify over its fields in the session (forged, or a field altered, the digest it signs
-    among them), a second of its direction, or a clock certificate signing the digest an earlier window's in `seen`
-    (digest to name, which this adds to) signs: its salt was reused, under which two windows of one sync sign one
-    digest. The client holds no sync or salt, so it checks no opening. An answer that is a refusal, another window's
-    or another session's, or not certificates, is refused whole."""
+    signature that doesn't verify over its fields in the session as its role, a record's or a clock's (forged, a field
+    altered, the digest it signs among them, or one served in the other's place), a second of its direction, or a clock
+    certificate signing the digest an earlier window's in `seen` (digest to name, which this adds to) signs: its salt
+    was reused, under which two windows of one sync sign one digest. The client holds no sync or salt, so it checks no opening. An answer that is a refusal, another window's
+    or another session's, or not certificates, is refused whole, as is one `refusals` can't read or, under the
+    Lean, one where it and its reference disagree."""
     key, session, link = read_public(deployment["certifier_key"]), deployment["session"], deployment["links"]["n2"]
     seen = {} if seen is None else seen
     try:
@@ -1185,29 +1188,29 @@ def check_certificates(deployment: dict, window: int, answer: dict,
         certificates = [certificate_from_json(d) for d in answer["certificates"]]
         clocks = [certificate_from_json(d) for d in answer["clocks"]]
         unsigned = [[u[0], Direction(u[1]).value, u[2]] for u in answer["unsigned"]]
+        held, held_clocks = refusals(key, bytes.fromhex(session), link, window, certificates, clocks, list(seen))
     except (KeyError, TypeError, ValueError, IndexError) as e:
         return [], [], [], [f"window {window}'s certificates: {e}"]
-    s, kept, refused = bytes.fromhex(session), {"certificate": [], "clock certificate": []}, []
-    for what, c in [("certificate", c) for c in certificates] + [("clock certificate", k) for k in clocks]:
-        name = f"window {window}'s {c.direction.value} {what} of {c.link} (key {c.key_id.hex()[:16]}…)"
-        clock = what == "clock certificate"
-        if c.key_id != key.key_id:
-            refused.append(f"{name}: another key's, not the deployment's {key.key_id.hex()[:16]}…")
-        elif (c.link, c.window) != (link, window):
-            refused.append(f"{name}: it names {c.link} window {c.window}, not {link} window {window}")
-        elif clock and c.direction is not Direction.EGRESS:
-            refused.append(f"{name}: a clock is an egress window's")
-        elif not c.verify(key, s):
-            refused.append(f"{name}: its signature doesn't verify under the deployment's key in its session")
-        elif any(x.direction is c.direction for x in kept[what]):
-            refused.append(f"{name}: a second one of its direction")
-        elif clock and c.digest in seen:
-            refused.append(f"{name}: its signed digest is also {seen[c.digest]}'s, so its salt was reused, under "
-                           "which two windows of one sync sign one digest")
-        else:
-            if clock:
-                seen[c.digest] = f"window {c.window}'s clock certificate"
-            kept[what].append(c)
+    why = {"key": lambda c: f"another key's, not the deployment's {key.key_id.hex()[:16]}…",
+           "link-window": lambda c: f"it names {c.link} window {c.window}, not {link} window {window}",
+           "clock": lambda c: "a clock is an egress window's",
+           "signature": lambda c: "its signature doesn't verify under the deployment's key in its session as its slot's "
+                                  "role, a record's or a clock's",
+           "second": lambda c: "a second one of its direction",
+           "reused": lambda c: f"its signed digest is also {seen.get(c.digest, 'an earlier one')}'s, so its salt was "
+                               "reused, under which two windows of one sync sign one digest",
+           DISAGREEMENT: lambda c: "the Lean check (NetworkCheck.LinkWindow.refusals) and its reference "
+                                   "(audit.certificate_refusals) disagree on the window's certificates"}
+    kept, refused = {"certificate": [], "clock certificate": []}, []
+    for what, c, no in ([("certificate", c, r) for c, r in zip(certificates, held)]
+                        + [("clock certificate", k, r) for k, r in zip(clocks, held_clocks)]):
+        if no is not None:
+            name = f"window {window}'s {c.direction.value} {what} of {c.link} (key {c.key_id.hex()[:16]}…)"
+            refused.append(f"{name}: {why[no](c)}")
+            continue
+        if what == "clock certificate":
+            seen[c.digest] = f"window {c.window}'s clock certificate"
+        kept[what].append(c)
     return kept["certificate"], kept["clock certificate"], unsigned, refused
 
 
@@ -1357,16 +1360,20 @@ def egress_bytes(setup: ar.Setup, out_records) -> dict:
             "frames_bytes_per_window": {k: round(mean * b, 1) for k, b in sizes.items()}}
 
 
-def _certified(lw: LinkWindows, opening, syncs: Sequence[ClockSync]) -> bool:
-    """The host audit of one link-window's two certified records under the certifier's key and session, comparing no
-    grid: N2's audit (`LinkWindows.verify`) without its head checks, which need a profile."""
+def _certified(lw: LinkWindows, opening, syncs: Sequence[ClockSync]) -> dict:
+    """The audit of one link-window's two certified records under the certifier's key and session, comparing no grid:
+    N2's audit (`LinkWindows.verify`) without its head checks, which need a profile. Its verdict, ``accepted``, is the
+    Lean's (`lean_audit.Audit`: `NetworkCheck.Records`' ``verdicts-no-grid``, ``by`` ``lean``), with `audit.Audit` run
+    beside it as the reference, whose accept bit is ``reference``; a link-window where the two differ is refused."""
     w, (egress, ingress) = opening.window, opening.records
-    a = host_audit.Audit()
+    a = Audit()
     out = a.check_link(lw.link, [egress], (), list(syncs)[:w + 1], lw.sync_set, lw.params, key=lw.key,
                        session=lw.certifier_session, grid=False)
     inn = a.check_ingress_link(lw.link, [ingress], w + 1, key=lw.key, params=lw.ingress_params,
                                session=lw.certifier_session)
-    return len(out) > w and out[w].accepted and inn[w].accepted
+    ref = a.reference
+    return {"accepted": len(out) > w and out[w].accepted and inn[w].accepted, "by": "lean",
+            "reference": len(out) > w and ref[w].accepted and ref[len(out) + w].accepted}
 
 
 def _no_coins(n: int) -> bytes:
@@ -1394,7 +1401,7 @@ def check(run: Path, challenger: LmsSigner, *, clock=time.monotonic, timeout: fl
     lw = LinkWindows(deployment["links"]["n2"], setup.egress_params, setup.sync_set, key, deployment["run_id"],
                      bytes.fromhex(deployment["session"]), ingress=setup.ingress_params, proof_deadline=proof_deadline,
                      occupancy=(profile.get("egress"), profile.get("ingress")), served=served)
-    remote = RemoteCertifier(*deployment["reveal"], key, challenger, deployment["links"]["ingress"],
+    remote = CertifierClient(*deployment["reveal"], key, challenger, deployment["links"]["ingress"],
                              bytes.fromhex(deployment["run_id"]), timeout=timeout)
     stream = lw.stream(budget=windows, delta=DELTA, challenger=CHALLENGER, coins=_no_coins, clock=clock)
     certified, refused = read_certified(run / "certified.jsonl")
@@ -1426,7 +1433,7 @@ def check(run: Path, challenger: LmsSigner, *, clock=time.monotonic, timeout: fl
                 again = _refusal(err)
         row["salt_fingerprint"] = ar.fingerprint(salts[w]) if w in salts else None
         if advice:
-            row["certified"] = _certified(lw, opening, syncs)
+            row["certified"] = _certified(lw, opening, syncs)["accepted"]
             row["n2"] = NO_N2
             continue
         if served is not None:

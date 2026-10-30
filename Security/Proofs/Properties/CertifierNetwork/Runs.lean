@@ -47,6 +47,8 @@ theorem certify_some {i i' : Issuer} {salt : ByteArray} {leaf : Except String Na
   obtain ⟨⟨head, digest, message⟩, hprep, h⟩ := except_bind_ok h
   obtain ⟨-, -, -, -, ⟨R, hR, hdg⟩, -⟩ := prepare_spec hprep
   have hh := prepare_head hprep
+  split at h
+  · simp [pure, Except.pure] at h
   unfold Issuer.finish at h
   cases leaf with
   | error _ => simp [pure, Except.pure] at h
@@ -142,7 +144,7 @@ theorem mem_run_salted {x : DeviceInput} {out : DeviceOutput} {c : Commitment} {
 
 theorem mem_run_message {x : DeviceInput} {out : DeviceOutput} {c : Commitment} {e : Evidence}
     {cr : CertifiedRecord} (hcr : cr ∈ out.certificates) {y : ByteArray}
-    (h : messageInput cr.certificate.keyId x.issuer.session cr.certificate.link cr.certificate.direction
+    (h : messageInput cr.certificate.keyId x.issuer.session .record cr.certificate.link cr.certificate.direction
       cr.certificate.window cr.certificate.digest = .ok y) : y ∈ runStrings x out c e := by
   refine List.mem_append_right _ (List.mem_append_left _ (List.mem_flatMap.mpr ⟨cr, hcr, List.mem_append_right _ ?_⟩))
   rw [h]
@@ -177,7 +179,7 @@ theorem device_record {x : DeviceInput} {c : Commitment} {e : Evidence}
     issued_spec (deviceCode_certificates hcrm)
   obtain ⟨y, hy, rfl⟩ := certificateMessage_ok hm
   obtain ⟨y', hy', hyy⟩ := certificateMessage_ok (toOption_eq_some.mp hcm)
-  change messageInput cr.certificate.keyId x.issuer.session cr.certificate.link cr.certificate.direction
+  change messageInput cr.certificate.keyId x.issuer.session .record cr.certificate.link cr.certificate.direction
     cr.certificate.window cr.certificate.digest = .ok y' at hy'
   have hY : y ∈ runStrings x (deviceCode x) c e :=
     mem_run_check (Or.inl ⟨r, hr, Or.inr (Or.inr (by rw [hk, hcl, hcd, hcw, hcdg]; exact hy))⟩)
@@ -186,7 +188,7 @@ theorem device_record {x : DeviceInput} {c : Commitment} {e : Evidence}
   subst this
   have hrl : r.head.link = l := (recordsOf_mem hmem).2.1
   have hcrhl : cr.head.link = rec.link := (recordHead_head hhead).1
-  obtain ⟨-, -, hl, hd, hw, hg⟩ := messageInput_inj hy hy' (by rw [← hrl]; exact link_short hdig)
+  obtain ⟨-, -, -, hl, hd, hw, hg⟩ := messageInput_inj hy hy' (by rw [← hrl]; exact link_short hdig)
     (by rw [hcrl, ← hcrhl]; exact link_short hcrR)
   have hdR : dg = R := certificateDigest_inj hcr (fun z hz => mem_run_check (Or.inl ⟨r, hr, Or.inr (Or.inl hz)⟩))
     (fun z hz => mem_run_salted hcrm hz) hdig hcrR (hg.trans hcrd)

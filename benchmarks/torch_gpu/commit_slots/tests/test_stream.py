@@ -54,7 +54,7 @@ def matrix_commit(plan: G.Plan, step: int, salt_key: bytes, outputs: list[list[A
     return S.StepCommit(G.E.digests(root)[0], tuple(G.E.digests(slot_roots)))
 
 
-def odd_layout(n: int, seed: int) -> S.Layout:
+def odd_layout(n: int, seed: int) -> S.CommitShape:
     """``n`` units in up to four groups cut at random, each unit one to three rows of one or two parts of 1 to 40 bytes."""
     rng = random.Random(seed)
     cuts = sorted(rng.sample(range(1, n), min(n - 1, rng.randint(0, 3)))) if n > 1 else []
@@ -72,7 +72,7 @@ def odd_layout(n: int, seed: int) -> S.Layout:
                 rows.append(S.Row(tuple(parts)))
             units.append(tuple(rows))
         groups.append(S.Group((max(off[0], 1), max(off[1], 1)), tuple(units)))
-    return S.Layout(f"odd/{n}/{seed}", tuple(groups))
+    return S.CommitShape(f"odd/{n}/{seed}", tuple(groups))
 
 
 COUNTS = [1, 2, 3, 4, 5, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65, 255, 256, 257]
@@ -146,7 +146,7 @@ def _traced(fn: Callable[[], Any]) -> tuple[Any, int]:
 SMALL = S.Group((8,), tuple((S.Row((S.Part(0, 2 * i, 2),)),) for i in range(4)))
 
 
-def _first_add(layout: S.Layout, slots: int) -> tuple[G.StepCommitter, int]:
+def _first_add(layout: S.CommitShape, slots: int) -> tuple[G.StepCommitter, int]:
     """A step of ``slots`` slots over ``layout`` (whose first group is SMALL) with that group added: the committer and the
     bytes it held at most."""
     plan = G.Plan(CTX, layout, "host")
@@ -173,7 +173,7 @@ def test_a_step_holds_slots_times_log_units() -> None:
     slots = 4096
     held = {}
     for layers in (5, 10):
-        layout = S.Layout(f"small-then-{layers}", (SMALL, *(_coords(1000),) * layers))
+        layout = S.CommitShape(f"small-then-{layers}", (SMALL, *(_coords(1000),) * layers))
         sc, peak = _first_add(layout, slots)
         depth = G.merkle_depth(layout.unit_count)
         assert sc.frontier.shape == (slots, depth + 1, 8) and sc.frontier.nbytes == slots * (depth + 1) * 64
@@ -192,7 +192,7 @@ def test_a_step_of_4096_slots_over_six_million_units_holds_its_frontier() -> Non
     units = [(S.Row((S.Part(0, 2 * i, 2),)),) for i in range(117_000)]
     units += [(S.Row((S.Part(1, 64 * i, 64),)), S.Row((S.Part(2, 0, 4),))) for i in range(400)]
     layer = S.Group((2 * 117_000, 64 * 400, 4), tuple(units))
-    layout = S.Layout("small-then-families-like", (SMALL, *(layer,) * 52))
+    layout = S.CommitShape("small-then-families-like", (SMALL, *(layer,) * 52))
     assert layout.unit_count == 6_104_804
     sc, peak = _first_add(layout, 4096)
     assert sc.plan.depth == 23 and sc.frontier.nbytes == 4096 * 24 * 64

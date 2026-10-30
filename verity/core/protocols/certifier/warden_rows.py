@@ -97,8 +97,8 @@ from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest
 from verity.core.protocols.certifier.active import HEADER
-from verity.core.protocols.certifier.certificate import (DIGEST_BYTES, Certificate, Direction, Issuer, PublicKey, _text,
-                                                         _u)
+from verity.core.protocols.certifier.certificate import (DIGEST_BYTES, Certificate, Direction, Issuer, PublicKey, Role,
+                                                         _text, _u)
 from verity.core.protocols.certifier.grid import Record
 from verity.core.protocols.certifier.warden import WardenParams
 from verity.core.protocols.sampled_proofs.one_stage import produced
@@ -419,9 +419,10 @@ def read_witness(blob: bytes) -> tuple[list[bytes], bytes]:
 
 def attest(issuer: Issuer, record: Record, params: WardenParams, direction: Direction,
            salts: Sequence[bytes] | None = None, wiring_salt: bytes | None = None) -> tuple[Cells, Certificate | None]:
-    """The link-window's rows and wiring committed and their head signed by `issuer` (None when its signer refuses)."""
+    """The link-window's rows and wiring committed and their head signed by `issuer` as cells (None when its signer
+    refuses)."""
     cells = Cells.of(record.link, direction, record, params, issuer.session, salts, wiring_salt)
-    return cells, issuer.sign(record.link, direction, record.window, cells.head.digest())
+    return cells, issuer.sign(Role.CELLS, record.link, direction, record.window, cells.head.digest())
 
 
 def _layout(params: WardenParams, window: int) -> dict[str, int]:
@@ -466,8 +467,8 @@ def check_registration(doc: Mapping[str, Any], key: PublicKey, session: bytes, p
         raise ValueError(f"the registration's wiring, root or certificate doesn't read: {e}") from None
     if cert.digest != head.digest():
         raise ValueError("the registration's certificate doesn't sign its head")
-    if not cert.verify(key, session):
-        raise ValueError("the registration's certificate doesn't verify under the warden's key in the session")
+    if not cert.verify(key, session, Role.CELLS):
+        raise ValueError("the registration's certificate doesn't verify under the warden's key in the session as cells")
     return head, dom
 
 

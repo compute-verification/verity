@@ -6,7 +6,9 @@ The reference decodes the protocol's formats (`NetworkCheck/Check.lean`'s module
 session. The cases are generated spatial units: an honest network certifier (`grid.Certifier` driven by
 `schedule.run_shaper` on the egress links, fed directly on the ingress links) whose records `certificate.Issuer` signs with
 a small LMS key in a drawn certifier session, then one change
-(`MUTATIONS`), each aimed at one path of the audit, and malformed parameters, commitments and evidence."""
+(`MUTATIONS`), each aimed at one path of the audit, and malformed parameters, commitments and evidence. The issuer
+certifies no incomplete record, so the `status` change either leaves its faulted window uncertified or signs its head
+anyway (`_signed_anyway`), as only a forger could, which is what keeps the check's status path reachable."""
 
 from __future__ import annotations
 
@@ -27,10 +29,10 @@ from verity_difftest import protocol as P
 from verity.ml.commitments.identity import tagged_sha512
 from verity.ml.crypto import lms
 from verity.core.protocols.certifier.audit import Audit
-from verity.core.protocols.certifier.certificate import (STATUS_CODES, Certificate, CertifiedRecord, Direction,
-                                                                Issuer, LmsKey, RecordHead, SignerRefused,
-                                                                certificate_digest, certificate_message,
-                                                                parameters_digest)
+from verity.core.protocols.certifier.certificate import (SALT_BYTES, STATUS_CODES, Certificate, CertifiedRecord,
+                                                                Direction, Issuer, LmsKey, RecordHead, Role,
+                                                                SignerRefused, certificate_digest, parameters_digest,
+                                                                record_head)
 from verity.core.protocols.certifier.grid import COMPLETE, Certifier, GridParams, Reason, Record, Status
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids, run_shaper
 from verity.core.protocols.certifier.service import encode
@@ -288,7 +290,7 @@ EXPECT = {
     "missing": "no-verdict", "refused": "no-verdict", "deadline": "no-verdict",
     "status": "status", "duplicate": "duplicate",
     "replay-window": "signature", "replay-link": "signature", "replay-direction": "signature", "other-key": "signature",
-    "other-session": "signature", "forged": "signature", "tampered": "signature",
+    "other-session": "signature", "other-role": "signature", "forged": "signature", "tampered": "signature",
     "advice-outside": "advice", "advice-unit": "advice",
     "late": "mismatch", "frames": "mismatch", "parameters": "mismatch", "ingress-grid": "mismatch",
     "params": "params", "commitment": "commitment", "evidence": "evidence", "case": "case",
@@ -297,6 +299,16 @@ MUTATIONS = list(EXPECT)
 #: The generator's tag for each case it made, by its canonical text, so the reference can count outcomes per path.
 TAGS: dict[str, str] = {}
 SEEN: Counter = Counter()
+
+
+def _signed_anyway(issuer: Issuer, record: Record, direction: Direction, g: GridParams, parameters: bytes,
+                   deadline: bool) -> CertifiedRecord | None:
+    """A certificate of a faulted record, which `Issuer.certify` refuses: its head signed under the issuer's key."""
+    head = record_head(record.link, direction, record.window, record.grid, record.status, g, parameters,
+                       deadline=deadline)
+    salt = issuer.coins(SALT_BYTES)
+    c = issuer.sign(Role.RECORD, record.link, direction, record.window, certificate_digest(salt, head.digest()))
+    return None if c is None else CertifiedRecord(head, salt, c)
 
 
 def _flip(b: bytes, i: int) -> bytes:
@@ -371,6 +383,7 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
     egress_parameters, ingress_parameters = parameters_digest(grid, ss), parameters_digest(ingress_grid)
     certified_grid = ingress_grid
     refuse, unsettled = set(), set()
+    forge_status = False
     targets = [("egress", l, w) for l in egress for w in range(W)] + [("ingress", l, w) for l in ingress for w in range(W)]
     target = targets[n % len(targets)]
     if m == "replay-link":
@@ -388,6 +401,7 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
         T_d = grid.buckets if d == "egress" else ingress_grid.buckets
         bucket = tw * T_d + n % T_d
         faults[(d, tl)] = {bucket: draw(st.sampled_from(list(Reason)))}
+        forge_status = draw(st.sampled_from([True, False]))
     elif m == "advice-outside":
         l, w = egress_target
         s = syncs[l][w]
@@ -429,6 +443,8 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
         raws[lw] = (record, g)
         signer.refuse = lw in refuse
         r = issuer.certify(record, direction, g, parameters, deadline=lw not in unsettled)
+        if r is None and forge_status and not record.status.complete:
+            r = _signed_anyway(issuer, record, direction, g, parameters, lw not in unsettled)
         if r is not None:
             records.append(r)
 
@@ -469,7 +485,8 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
         k2 = _key(ki, 1, same_id)
         c = dataclasses.replace(r.certificate, key_id=k2.I)
         records[at] = CertifiedRecord(r.head, r.salt,
-                                      dataclasses.replace(c, signature=lms.sign_at(k2, 0, c.message(session)).encode()))
+                                      dataclasses.replace(c, signature=lms.sign_at(k2, 0, c.message(session, Role.RECORD))
+                                                          .encode()))
     elif m == "other-session" and at is not None:
         # the same key's certificate of the same record in another of the certifier's sessions
         r = records[at]
@@ -477,7 +494,14 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
         other = draw(st.sampled_from([_flip(session, n), bytes(lms.SESSION_BYTES), bytes(range(lms.SESSION_BYTES))])
                      .filter(lambda s: s != session))
         records[at] = CertifiedRecord(r.head, r.salt, dataclasses.replace(
-            c, signature=lms.sign_at(key, n % 2 ** key.params.H, c.message(other)).encode()))
+            c, signature=lms.sign_at(key, n % 2 ** key.params.H, c.message(other, Role.RECORD)).encode()))
+    elif m == "other-role" and at is not None:
+        # the certifier's key signed the record's salted digest at its link-window, in the session, as another role
+        r = records[at]
+        c = r.certificate
+        role = draw(st.sampled_from([x for x in Role if x is not Role.RECORD]))
+        records[at] = CertifiedRecord(r.head, r.salt, dataclasses.replace(
+            c, signature=lms.sign_at(key, n % 2 ** key.params.H, c.message(session, role)).encode()))
     elif m == "forged" and at is not None:
         r = records[at]
         sig = r.certificate.signature
@@ -504,7 +528,7 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
     elif m == "duplicate" and at is not None:
         r = records[at]
         records.append(draw(st.sampled_from([r, CertifiedRecord(r.head, r.salt, dataclasses.replace(
-            r.certificate, signature=lms.sign_at(key, 1, r.certificate.message(session)).encode()))])))
+            r.certificate, signature=lms.sign_at(key, 1, r.certificate.message(session, Role.RECORD)).encode()))])))
     elif m == "extra":
         empty = tuple((None,) * grid.allocation for _ in range(grid.buckets))
         extra = draw(st.sampled_from([Record("zz", 0, empty, COMPLETE), Record(tl, W, empty, COMPLETE)]))

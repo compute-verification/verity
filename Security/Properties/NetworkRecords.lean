@@ -52,12 +52,12 @@ def Complete : Records.Published → Prop
 
 /-- `r`'s certificate is the key's (its identifier `I`), names `(d, l, w)`, signs the head's digest `dg` under the
 record's salt (`certificateDigest`), and its LMS signature verifies under the key over `certificateMessage` of them in
-the parameters' certifier session. -/
+the parameters' certifier session as a record's (`Role.record`). -/
 def CertificateVerifies (p : Params) (d : Direction) (l : String) (w : Nat) (r : Certified) (dg : ByteArray) : Prop :=
   r.head.digest = .ok dg ∧ r.certificate.digest = certificateDigest r.salt dg ∧
     r.certificate.keyId = p.key.extract 0 16 ∧ r.certificate.link = l ∧ r.certificate.direction = d ∧
     r.certificate.window = w ∧
-    ∃ m, certificateMessage (p.key.extract 0 16) p.session l d w (certificateDigest r.salt dg) = .ok m ∧
+    ∃ m, certificateMessage (p.key.extract 0 16) p.session .record l d w (certificateDigest r.salt dg) = .ok m ∧
       LmsVerifies p m r.certificate.signature
 
 /-! ## What a committed record's digest hashes (`commitment.py`) -/
@@ -73,9 +73,10 @@ def rowInput (row : Array (Option ByteArray)) : ByteArray :=
   taggedInput "verity-network-warden/row/v1"
     ((row.filterMap id).foldl (· ++ ·) (Flock.be32 (row.filterMap id).size.toUInt32))
 
-/-- The canonical JSON header `record_digest` hashes for link-window `(l, w)` of a complete record under `g`. -/
+/-- The header `record_digest` hashes for link-window `(l, w)` of a complete record under `g`, in the identity form
+(`Flock.canonUtf8`). -/
 def header (l : String) (w : Nat) (g : Grid) : Flock.V String :=
-  Flock.canon (Lean.Json.mkObj [
+  Flock.canonUtf8 (Lean.Json.mkObj [
     ("link", .str l), ("window", Lean.toJson w), ("buckets", Lean.toJson g.buckets),
     ("allocation", Lean.toJson g.allocation), ("frame_bytes", Lean.toJson g.frameBytes),
     ("bucket_ms", Lean.toJson g.bucketMs), ("status", .str "complete")])

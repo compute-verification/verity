@@ -50,10 +50,10 @@ def WindowOpened (c : Case) : Prop :=
 
 /-- Certificate `x` is the certifier's for end `d` (its code: egress 0, ingress 1) of the link-window: it names the
 link, the end and the window, carries the key's identifier, and its signature decodes and verifies under the key over
-`certificateMessage` of its fields in the certifier session. -/
-def WindowCertificate (c : Case) (d : Nat) (x : Cert) : Prop :=
+`certificateMessage` of its fields in the certifier session as a record's (`Role.record`). -/
+def WindowCertificate (c : Case) (d : Nat) (x : NetworkCheck.Check.Certificate) : Prop :=
   x.link = c.link ∧ x.direction.code = d ∧ x.window = c.window ∧ x.keyId = c.key.extract 0 16 ∧
-    ∃ m sig, certificateMessage x.keyId c.session x.link x.direction x.window x.digest = .ok m ∧
+    ∃ m sig, certificateMessage x.keyId c.session .record x.link x.direction x.window x.digest = .ok m ∧
       Lms.Signature.decode c.lms x.signature = .ok sig ∧ Lms.verify c.lms c.key m sig = .ok true
 
 /-- There are two certificates, egress first, each the certifier's for its end of the link-window. -/
@@ -106,11 +106,11 @@ def AcceptsAll (v : Case → Flock.V Verdict) : Prop :=
 /-- The link-window's two certificates as the certifier's device issues them under its key `k` (on a warden link, where
 it functions as an active warden): the link's key is `k`'s public key, and each end's certificate (egress first) names
 the link, the end and the window, carries `k`'s identifier, and its signature is the encoding of the one `Lms.signAt`
-gives, at a leaf of `k`, over the certificate's message in the session. -/
+gives, at a leaf of `k`, over the certificate's message in the session as a record's. -/
 def CertifierSigned (c : Case) (k : Lms.PrivateKey) : Prop :=
   c.key = k.publicKey ∧ c.certificates.size = 2 ∧ ∀ d < 2, ∃ x m q sig, c.certificates[d]? = some (some x) ∧
     x.link = c.link ∧ x.direction.code = d ∧ x.window = c.window ∧ x.keyId = k.I ∧
-    certificateMessage x.keyId c.session x.link x.direction x.window x.digest = .ok m ∧
+    certificateMessage x.keyId c.session .record x.link x.direction x.window x.digest = .ok m ∧
     Lms.signAt k q m = .ok sig ∧ x.signature = sig.encode
 
 end Properties.NetworkCertifier

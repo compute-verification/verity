@@ -12,7 +12,7 @@ import pytest
 from verity.ml.crypto import lms
 from verity.core.protocols.certifier import transfer_rows as TR
 from verity.core.protocols.certifier import warden_rows as WR
-from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsKey
+from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsKey, Role
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
 import signers
@@ -121,8 +121,18 @@ def test_check_registration_refuses_a_certificate_for_another_link_window_or_dir
     t, _cert, issuer = attested(tmp_path)
     at = {"link": LINK, "direction": Direction.EGRESS, "window": 3}
     at[other] = {"link": "s1/uplink", "window": 2, "direction": Direction.INGRESS}[other]
-    cert = issuer.sign(at["link"], at["direction"], at["window"], t.head.digest())
+    cert = issuer.sign(Role.TRANSFER, at["link"], at["direction"], at["window"], t.head.digest())
     with pytest.raises(ValueError, match="doesn't verify under the network certifier's key"):
+        TR.check_registration(TR.registration(t.head, cert), public(), signers.SESSION, **expect(t))
+
+
+@pytest.mark.parametrize("role", [r for r in Role if r is not Role.TRANSFER])
+def test_check_registration_refuses_the_head_signed_as_another_role(tmp_path, role):
+    """The head of the transfer rows, at their own link-window, signed by the certifier's key as anything but a
+    transfer (a record's, a clock's, cells' or out rows'), isn't a transfer registration."""
+    t, _cert, issuer = attested(tmp_path)
+    cert = issuer.sign(role, LINK, Direction.EGRESS, 3, t.head.digest())
+    with pytest.raises(ValueError, match="in its session as a transfer"):
         TR.check_registration(TR.registration(t.head, cert), public(), signers.SESSION, **expect(t))
 
 

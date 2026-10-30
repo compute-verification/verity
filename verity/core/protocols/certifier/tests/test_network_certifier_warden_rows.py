@@ -16,7 +16,7 @@ from verity.ml.commitments import hm96
 from verity.ml.crypto import lms
 from verity.core.protocols.certifier import warden_rows as W
 from verity.core.protocols.certifier.active import DATA
-from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsKey
+from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsKey, Role
 from verity.core.protocols.certifier.grid import Reason, Record, Status
 from verity.core.protocols.certifier.tests.test_network_certifier_warden import (B, EOF, P, PARAMS, cells, records,
                                                                                  request, run)
@@ -149,8 +149,9 @@ def test_salts_are_fresh_and_never_shared_and_the_witness_reads_back():
 
 def test_the_registration_reads_back_and_refuses_anything_but_its_own(traffic, tmp_path):
     """The verifier's read takes the link-window it expects and the schedule's parameters; any other field, an extra
-    key, a root or wiring the certificate doesn't sign, another key, session or link-window, or the wire record's
-    certificate of the same link-window, is refused."""
+    key, a root or wiring the certificate doesn't sign, another key, session or link-window, the wire record's
+    certificate of the same link-window, or a certificate of the head the key signed as any role but cells', is
+    refused."""
     warden, _ = traffic
     record = records(warden)[1][1]
     issuer, cells_, cert = _attest(tmp_path / "a", record)
@@ -178,8 +179,17 @@ def test_the_registration_reads_back_and_refuses_anything_but_its_own(traffic, t
         W.check_registration(doc, other, signers.SESSION, *args)
     with pytest.raises(ValueError):
         W.check_registration(doc, key, signers.SESSION, PARAMS, "responses", Direction.EGRESS, 2)
+    for role in Role:
+        x = issuer.sign(role, "responses", Direction.EGRESS, 1, cells_.head.digest())
+        signed = {**doc, "certificate": {"key": x.key_id.hex(), "digest": x.digest.hex(),
+                                         "signature": x.signature.hex()}}
+        if role is Role.CELLS:
+            assert W.check_registration(signed, key, signers.SESSION, *args)[0] == cells_.head
+            continue
+        with pytest.raises(ValueError, match="doesn't verify"):
+            W.check_registration(signed, key, signers.SESSION, *args)
     wire = issuer.certify(record, Direction.EGRESS, PARAMS.grid, PARAMS.digest)
-    assert wire.certificate.verify(key, signers.SESSION) and wire.certificate.digest != cert.digest
+    assert wire.certificate.verify(key, signers.SESSION, Role.RECORD) and wire.certificate.digest != cert.digest
     swapped = {**doc, "certificate": {"key": wire.certificate.key_id.hex(), "digest": wire.certificate.digest.hex(),
                                       "signature": wire.certificate.signature.hex()}}
     with pytest.raises(ValueError, match="doesn't sign its head"):
@@ -312,9 +322,9 @@ def test_the_issuers_sign_is_certifys_signature(tmp_path):
     wire = issuer.certify(record, Direction.EGRESS, PARAMS.grid, PARAMS.digest)
     cells_, cert = W.attest(issuer, record, PARAMS, Direction.EGRESS)
     key = issuer.signer.public_key()
-    assert wire.verify(key, signers.SESSION) and cert.verify(key, signers.SESSION)
+    assert wire.verify(key, signers.SESSION) and cert.verify(key, signers.SESSION, Role.CELLS)
     assert signers.used(issuer.signer) == [0, 1]
-    assert dataclasses.replace(cert, digest=wire.certificate.digest).verify(key, signers.SESSION) is False
+    assert dataclasses.replace(cert, digest=wire.certificate.digest).verify(key, signers.SESSION, Role.CELLS) is False
 
 
 def test_a_faulted_window_still_has_its_rows_and_its_wiring():

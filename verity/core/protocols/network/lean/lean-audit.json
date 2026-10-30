@@ -4,15 +4,15 @@
   "NetworkCheck.DifftestMain": "the difftest against certificate.py, under `runs`: compiled evaluation of NetworkCheck.Difftest.main, audited under NetworkCheck, a test and not a proof",
   "NetworkCheck.Main": "the network-check executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Check.protocol, audited under NetworkCheck",
   "NetworkCheck.PeriodMain": "the network-period executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Period.protocol, audited under NetworkCheck",
-  "NetworkCheck.RecordsMain": "the network-records executable's entry point: Core.Protocol.main of NetworkCheck.Records.protocol, or Difftest.serve of its verdicts with the grid compared (verdicts) or not (verdicts-no-grid) and of N2's link-window verdict of record (link-window, NetworkCheck.LinkWindow.linkWindowFn), audited under NetworkCheck"
+  "NetworkCheck.RecordsMain": "the network-records executable's entry point: Core.Protocol.main of NetworkCheck.Records.protocol, or Difftest.serve of its verdicts with the grid compared (verdicts) or not (verdicts-no-grid) of N2's link-window verdict of record (link-window, NetworkCheck.LinkWindow.linkWindowFn), of the client's check of a window's served certificates (certificates, NetworkCheck.LinkWindow.certificatesFn) and of the syncs the certifier signed for a link, read through its clock certificates' openings (clocks, NetworkCheck.Period.clocksFn), audited under NetworkCheck"
  },
  "runs": {
   "NetworkCheck.DifftestMain": {
    "why": "2,000 random instances on which NetworkCheck.Certificate gives what verity/core/protocols/certifier/certificate.py gives, byte for byte: depth, E_0 … E_D, real_frames, frame_leaf, frames_root, open_frame, verify_frame on openings and tampered ones, parameters_digest and its canonical JSON, record_head and RecordHead's encoding and digest, certificate_digest (the record's digest under a 64-byte salt, and other lengths), certificate_message over the signed digest (with session ids of 32 bytes, and of 0, 31, 33 and 64, refused) and node, with each ValueError a refusal",
    "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "2000"],
    "data": {
-    "difftest/instances.jsonl": "4842750ee211fc220e9b96bb8fb664bfdc4edbaa16d55b7da4a9c27d17ab1a34",
-    "difftest/python.jsonl": "40d5effc5ee16c70a096a1f477a1a62f546b5c7fc47144bf1a1be7d8998411a2"
+    "difftest/instances.jsonl": "4f893050e1353153a1770b22ce4a8886dfb6b7756e37e16164819190688344d2",
+    "difftest/python.jsonl": "ab8773843b60589641709c677d0967cd9edb210d367f2471a180eb8df7f7439d"
    },
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
   }
@@ -30,9 +30,16 @@
    "why": "the check is code: the record's encodings, the certifier program's Program grid and Σ_sync, the LMS verifier and the core protocol interface, no Mathlib and nothing of Security"
   },
   "NetworkCheck.Period": {
-   "imports": ["NetworkCheck.Check", "CoreProtocol.Profile", "Flock.Program", "Flock.Public"],
+   "imports": [
+    "NetworkCheck.Check",
+    "CoreProtocol.Profile",
+    "Flock.Program",
+    "Flock.Public",
+    "NciCheck.Desc",
+    "Flock.WindowRecord"
+   ],
    "except": [],
-   "why": "the period's check is code: v4's certificate and sync decoders, the LMS verifier, the core interface with its integrity profile (to read one-stage's answers), C-Flock's program decoder (the scan's Program, whose templates give its terms) and C-Flock's frame-v3 hash (the rows' domain), no Mathlib and nothing of Security"
+   "why": "the period's check is code: v4's certificate and sync decoders, the LMS verifier, the core interface with its integrity profile (to read one-stage's answers), C-Flock's program decoder (the scan's Program, whose templates give its terms), C-Flock's frame-v3 hash (the rows' domain) and NCI's description-sized layout checks (the scan's layout read off its description), no Mathlib and nothing of Security; the period's check is code: v4's certificate and sync decoders, the LMS verifier, the core interface with its integrity profile (to read one-stage's answers), C-Flock's program decoder (the scan's Program, whose templates give its terms), C-Flock's frame-v3 hash (the rows' domain) and the window record's digest, no Mathlib and nothing of Security"
   },
   "NetworkCheck.Records": {
    "imports": ["NetworkCheck.Check", "Difftest"],
@@ -40,13 +47,13 @@
    "why": "the check over raw, committed and certified records is code: v2's check, and the difftest server's line protocol for its verdicts, no Mathlib and nothing of Security"
   },
   "NetworkCheck.LinkWindow": {
-   "imports": ["NetworkCheck.Certificate", "Lms.Verify", "Flock.Hm96", "Flock.Canon", "Identity.Tagged"],
+   "imports": ["NetworkCheck.Check", "Lms.Verify", "Flock.Hm96", "Flock.Canon", "Flock.FV3", "Identity.Tagged"],
    "except": [],
-   "why": "N2's link-window verdict of record is code: the certificate's encodings, the LMS verifier, C-Flock's hm96 row commitment and canonical JSON, and core's identity hash, no Mathlib and nothing of Security"
+   "why": "N2's link-window verdict of record is code: v4's certificate, its one LMS check and its encodings, the LMS verifier, C-Flock's hm96 row commitment, canonical JSON and frame-v3-sha512 domain, and core's identity hash, no Mathlib and nothing of Security"
   }
  },
  "reads_exempt": {
-  "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT): the records check's evidence bridge reads C-Flock's `V`, JSON accessors and `unhex`, on both sides of its equation"
+  "Flock": "C-Flock is excepted until its spec is extracted: the records check's evidence bridge reads C-Flock's `V`, JSON accessors and `unhex`, on both sides of its equation"
  },
  "guarantees": {
   "NetworkCheck.RecordsBytes.evidenceOf_toEvidence": {

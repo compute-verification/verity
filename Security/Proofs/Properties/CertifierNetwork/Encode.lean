@@ -265,8 +265,9 @@ theorem digest_of {h : RecordHead} {x : ByteArray} (he : h.encode = .ok x) :
   rw [he]
   exact hy
 
-theorem messageInput_of {k s : ByteArray} {l : String} {d : Direction} {w : Int} {g : ByteArray} (hg : g.size = 64)
-    (hs : s.size = 32) (hk : k.size = 16) (hw : 0 ≤ w ∧ w < 2 ^ (8 * 8)) : ∃ x, messageInput k s l d w g = .ok x := by
+theorem messageInput_of {k s : ByteArray} {ro : NetworkCheck.Role} {l : String} {d : Direction} {w : Int}
+    {g : ByteArray} (hg : g.size = 64) (hs : s.size = 32) (hk : k.size = 16) (hw : 0 ≤ w ∧ w < 2 ^ (8 * 8)) :
+    ∃ x, messageInput k s ro l d w g = .ok x := by
   refine ok_of fun e he => ?_
   obtain ⟨wb, hwb, -⟩ := uBE_of "window" hw.1 hw.2
   unfold messageInput at he
@@ -277,10 +278,10 @@ theorem messageInput_of {k s : ByteArray} {l : String} {d : Direction} {w : Int}
   rw [ite_eq_right (by simp [hk])] at he
   cases he
 
-theorem certificateMessage_of {k s : ByteArray} {l : String} {d : Direction} {w : Int} {g : ByteArray}
-    (hg : g.size = 64) (hs : s.size = 32) (hk : k.size = 16) (hw : 0 ≤ w ∧ w < 2 ^ (8 * 8)) :
-    ∃ m, certificateMessage k s l d w g = .ok m := by
-  obtain ⟨x, hx⟩ := messageInput_of (l := l) (d := d) hg hs hk hw
+theorem certificateMessage_of {k s : ByteArray} {ro : NetworkCheck.Role} {l : String} {d : Direction} {w : Int}
+    {g : ByteArray} (hg : g.size = 64) (hs : s.size = 32) (hk : k.size = 16) (hw : 0 ≤ w ∧ w < 2 ^ (8 * 8)) :
+    ∃ m, certificateMessage k s ro l d w g = .ok m := by
+  obtain ⟨x, hx⟩ := messageInput_of (ro := ro) (l := l) (d := d) hg hs hk hw
   refine ⟨Flock.Sha512.hash x, ?_⟩
   unfold certificateMessage
   rw [hx]
@@ -289,7 +290,7 @@ theorem certificateMessage_of {k s : ByteArray} {l : String} {d : Direction} {w 
 theorem parameters_size {g : Params} {ss : Option _root_.NetworkCertifier.SyncSet} {pd : ByteArray}
     (h : parameters g ss = .ok pd) : pd.size = 64 := by
   unfold parameters NetworkCheck.parametersDigest at h
-  cases hc : Flock.canon (NetworkCheck.parametersManifest g (ss.map checkSyncSet)) with
+  cases hc : Flock.canonUtf8 (NetworkCheck.parametersManifest g (ss.map checkSyncSet)) with
   | error e => rw [hc] at h; cases h
   | ok j =>
     rw [hc] at h
@@ -305,7 +306,7 @@ theorem prepare_eq {i : Issuer} {salt : ByteArray} (hsalt : salt.size = saltByte
     {g : Params} {pd : ByteArray} {dl : Bool} {head : RecordHead} {dg m : ByteArray}
     (hh : recordHead r.link d r.window r.grid ((Status.reason? r.status).map reasonValue) g pd dl = .ok head)
     (hdg : head.digest = .ok dg)
-    (hm : certificateMessage i.key.I i.session r.link d r.window (certificateDigest salt dg) = .ok m) :
+    (hm : certificateMessage i.key.I i.session .record r.link d r.window (certificateDigest salt dg) = .ok m) :
     i.prepare salt r d g pd dl = .ok (head, certificateDigest salt dg, m) := by
   unfold Issuer.prepare
   simp only [hsalt, ne_eq, not_true_eq_false, ↓reduceIte]
@@ -340,7 +341,8 @@ theorem prepare_of {i : Issuer} (hk : i.key.I.size = 16) (hss : i.session.size =
     (by rw [hr']; exact ⟨by omega, cast_lt (w := 4) hr⟩) (by rw [hB']; exact ⟨by omega, cast_lt (w := 4) hB⟩)
     (by rw [hτ']; exact ⟨by omega, cast_lt (w := 4) hτ⟩) hst'
   obtain ⟨dg, hdg, -⟩ := digest_of hx
-  obtain ⟨m, hm⟩ := certificateMessage_of (l := r.link) (d := d) (w := r.window) (certificateDigest_size salt dg) hss
+  obtain ⟨m, hm⟩ := certificateMessage_of (ro := .record) (l := r.link) (d := d) (w := r.window)
+    (certificateDigest_size salt dg) hss
     hk ⟨by omega, cast_lt (w := 8) hw⟩
   refine ⟨head, certificateDigest salt dg, m, hh, ?_⟩
   have hn : (Status.reason? r.status).map reasonValue = none := by rw [hst]; rfl

@@ -8,7 +8,7 @@ import Identity.Tagged
 
 Executable forms of `verity/core/protocols/certifier/certificate.py`, whose module docstring is the spec: the
 frame tree (`frameLeaf`, `node`, `empty`, `depth`, `framesRoot`, `openFrame`, `verifyFrame`) over a window's real frames
-(`realFrames`), the parameters digest (`parametersDigest`, canonical JSON through `Flock.canon`), the record head's
+(`realFrames`), the parameters digest (`parametersDigest`, the manifest's identity bytes through `Flock.canonUtf8`), the record head's
 encoding and digest (`RecordHead.encode`, `RecordHead.digest`, `recordHead`), the digest a certificate signs, the record
 digest under the certifier's salt (`certificateDigest`), and the message it signs over it (`certificateMessage`,
 `verity.ml.crypto.lms.certificate_message`). A Python `ValueError` is an `Except.error` here.
@@ -176,7 +176,7 @@ def parametersManifest (p : Params) (ss : Option SyncSet) : Lean.Json :=
 
 /-- `parameters_digest`: `tagged_sha512(PARAMETERS_TAG, canonical_json_bytes(manifest))`. -/
 def parametersDigest (p : Params) (ss : Option SyncSet) : E ByteArray := do
-  Identity.taggedSha512 parametersTag (← canon (parametersManifest p ss)).toUTF8
+  Identity.taggedSha512 parametersTag (← Flock.canonUtf8 (parametersManifest p ss)).toUTF8
 
 /-- `Direction`, by its value; its code is 0 for egress and 1 for ingress. -/
 inductive Direction where
@@ -196,6 +196,33 @@ def Direction.ofValue : String → E Direction
   | "egress" => pure .egress
   | "ingress" => pure .ingress
   | s => throw s!"not a direction: {s}"
+
+/-- `Role`, by its value (`lms.CERTIFICATE_ROLES`): what a certificate signs, which its message names. A record's salted
+digest, a window's salted clock, or the head of the cell, transfer or out rows the certifier registers. The signer names
+it and each check supplies the one its slot holds, so a certificate signed as one role fails the signature check as any
+other. -/
+inductive Role where
+  | record
+  | clock
+  | cells
+  | transfer
+  | out
+  deriving DecidableEq, Inhabited
+
+def Role.value : Role → String
+  | .record => "record"
+  | .clock => "clock"
+  | .cells => "cells"
+  | .transfer => "transfer"
+  | .out => "out"
+
+def Role.ofValue : String → E Role
+  | "record" => pure .record
+  | "clock" => pure .clock
+  | "cells" => pure .cells
+  | "transfer" => pure .transfer
+  | "out" => pure .out
+  | s => throw s!"not a certificate's role: {s}"
 
 /-- `STATUS_CODES`: complete (`none`) is 0, then each `Reason` by its value. -/
 def statusCode : Option String → E Nat
@@ -267,31 +294,31 @@ def field (b : ByteArray) : ByteArray := be64 b.size.toUInt64 ++ b
 
 /-- The message's domain-separation tag, LMS's network-certificate role tag (`lms.ROLES`): the message's own, distinct
 from the ids of the checks that read it (`verity/network-certificate/v4`, `verity/network-records/v3`). -/
-def messageTag : String := "verity/network-certificate-message/v2"
+def messageTag : String := "verity/network-certificate-message/v3"
 
 /-- The length of a certifier session id (`lms.SESSION_BYTES`). -/
 def sessionBytes : Nat := 32
 
 /-- What `certificate_message` hashes:
-`[tag] ‖ I ‖ [[session] ‖ [link] ‖ [direction] ‖ u64be window] ‖ [signed digest]`, the tag `messageTag`
-(`verity/network-certificate-message/v2`, LMS's network-certificate role tag, the message's own and distinct from the ids
+`[tag] ‖ I ‖ [[session] ‖ [role] ‖ [link] ‖ [direction] ‖ u64be window] ‖ [signed digest]`, the tag `messageTag`
+(`verity/network-certificate-message/v3`, LMS's network-certificate role tag, the message's own and distinct from the ids
 of the checks that read it, `verity/network-certificate/v4` and `verity/network-records/v3`); refused unless the digest
 is 64 bytes, the window a u64, the session 32 bytes and I 16. -/
-def messageInput (keyId session : ByteArray) (link : String) (direction : Direction) (window : Int)
+def messageInput (keyId session : ByteArray) (role : Role) (link : String) (direction : Direction) (window : Int)
     (digest : ByteArray) : E ByteArray := do
   if digest.size ≠ digestBytes then throw "a signed digest is 64 bytes"
   let w ← uBE 8 window "window"
   if session.size ≠ sessionBytes then throw s!"a certifier session id is 32 bytes, not {session.size}"
   if keyId.size ≠ 16 then throw s!"an LMS identifier is 16 bytes, not {keyId.size}"
-  let context := field session ++ field link.toUTF8 ++ field direction.value.toUTF8 ++ w
+  let context := field session ++ field role.value.toUTF8 ++ field link.toUTF8 ++ field direction.value.toUTF8 ++ w
   pure (field messageTag.toUTF8 ++ keyId ++ field context ++ field digest)
 
 /-- `certificate_message` (`certificate.py` and `verity.ml.crypto.lms`): SHA-512 of `messageInput`,
-`[tag] ‖ I ‖ [[session] ‖ [link] ‖ [direction] ‖ u64be window] ‖ [signed digest]` with the tag
-`verity/network-certificate-message/v2`; refused unless the digest is 64 bytes, the window a u64, the session 32 bytes
+`[tag] ‖ I ‖ [[session] ‖ [role] ‖ [link] ‖ [direction] ‖ u64be window] ‖ [signed digest]` with the tag
+`verity/network-certificate-message/v3`; refused unless the digest is 64 bytes, the window a u64, the session 32 bytes
 and I 16. -/
-def certificateMessage (keyId session : ByteArray) (link : String) (direction : Direction) (window : Int)
-    (digest : ByteArray) : E ByteArray :=
-  Sha512.hash <$> messageInput keyId session link direction window digest
+def certificateMessage (keyId session : ByteArray) (role : Role) (link : String) (direction : Direction)
+    (window : Int) (digest : ByteArray) : E ByteArray :=
+  Sha512.hash <$> messageInput keyId session role link direction window digest
 
 end NetworkCheck
