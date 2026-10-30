@@ -59,7 +59,7 @@ two gate verbs on the auditor's machine:
   `warden-rehearse`'s flags) is `warden-rehearse` with the load first. The store goes over 4 TCP streams, an SSH
   tunnel each, to `load_relay.py sink` on the H200's loopback; each value is held to its digest and committed under the
   reading program's domain as it crosses. The certifier's one signer on that link then signs the load's heads before
-  its first sampling block, so one LMS key and one attachment carry the load and the sampling blocks. `load.json` (the
+  its first execution phase, so one LMS key and one attachment carry the load and the execution phases. `load.json` (the
   registrations the server-time block's record pins) and `load-relay.json` are public in the run's `out/`.
 - The witness, every row's salts, is the sink's `--witness` file (0600) on the prover's host. The certifier's host
   never writes a salt.
@@ -71,9 +71,9 @@ its period [t0, t1) comes after, from a relay run that spans it: `wipe_gate.sh` 
 (`warden-rehearse --scan --prompts` against the toy, `demo_stub.py serve`, on the peer's loopback), at a given UTC time
 when asked, and fetches the run's bundle: with `witness/` into a 0700 directory outside the run dir, and to the run's
 `$OUT` only the bundle less `witness/`. `wipe_egress.py BUNDLE --t0-ns T0 --t1-ns T1` then writes the `wipe-egress/v1`
-record from what the gate published. Each sampling block whose sampling period meets [t0 − 1 s, t1 + 1 s) counts at the
-schedule's capacity, 2,621,440 bits a sampling block, with K that count and δ 0. The record is covered only when every
-one of those sampling blocks is certified. The wipe's reader takes `wipe_period.certify(p, egress_mib)` from a covered
+record from what the gate published. Each execution phase whose sampling period meets [t0 − 1 s, t1 + 1 s) counts at the
+schedule's capacity, 2,621,440 bits an execution phase, with K that count and δ 0. The record is covered only when every
+one of those execution phases is certified. The wipe's reader takes `wipe_period.certify(p, egress_mib)` from a covered
 record and keeps the wipe uncounted otherwise.
 
 ## The served session
@@ -87,14 +87,15 @@ id 128001. It runs at a given UTC time when asked. The endpoint is started by ha
 `examples/vllm/serve.sh`'s serve-openai line, not serve.sh), sealed without the attention interiors, with bounded
 staging at its default, which that exclusion needs. Its `requests.jsonl` and `advice_trace.jsonl` hold request values
 (prompt and streamed ids; prompt lengths, sampling, rows and emitted ids) and stay on the served node, so the chain's
-endpoint step runs there: `io` writes the kept warden run's certified I/O to a 0600 file in the kept fetch's directory,
-and `endpoint`, a run on the served node given that file over a private route, checks the endpoint's trace against it
-in a 0700 copy whose `requests.jsonl` is rebuilt from `request_users.jsonl` (each engine request's `engine_id` and its
-warden user) and the certified I/O. Its art is the step's report, `windows.jsonl` and `serve.json`; it writes nothing
-unless `serve.json` shows the endpoint's flags and no published file holds a prompt's ids, a trace's arrive, step or
-finish record, or a request-valued field. `chain` reads that report as the served node's. The session's fetch, with
-`witness/`, stays in a 0700 directory outside the run dir, and `$OUT` gets only the bundle less `witness/` and the
-session's outcome. `chain` runs the chain's warden path on the kept fetch, and only from a tree with the record's leak
+endpoint step runs there: `io` writes the kept network certifier run's certified I/O to a 0600 file in the kept fetch's
+directory, and `endpoint`, a run on the served node given that file over a private route, checks the endpoint's trace
+against it in a 0700 copy whose `requests.jsonl` is rebuilt from `request_users.jsonl` (each engine request's
+`engine_id` and its network certifier user) and the certified I/O. Its art is the step's report, `windows.jsonl` and
+`serve.json`; it writes nothing unless `serve.json` shows the endpoint's flags and no published file holds a prompt's
+ids, a trace's arrive, step or finish record, or a request-valued field. `chain` reads that report as the served node's.
+The session's fetch, with `witness/`, stays in a 0700 directory outside the run dir, and `$OUT` gets only the bundle
+less `witness/` and the session's outcome. `chain` runs the chain's network certifier path on the kept fetch, and only
+from a tree with the record's leak
 guard. `session --gate local` is the dry rehearsal: this tree's gate on a scratch host, with `demo_stub.py serve` as
 the endpoint. `chain --coins gate` draws the scan's units on the gate's coins on the auditor's side, the node the chain
 runs on, which the challenger's coin link reaches through that node's own line of
@@ -104,25 +105,34 @@ warden run's witness never go on the prover's machine. Without the gate's coins 
 
 `certifier_piece.py` is the network certifier's piece of `benchmarks/one_stage/served_verdicts.sh`. Its `front`
 (`CERTIFIER_FRONT`) runs before that run's requests: the gate's scan rehearsal sends one group of the window circuit's
-class (4 prompts of 24 ids, 4 ids out, `--window-per-group`) to serve-openai, all of it in link-window 0, so the engine
-closes it into the run's earliest window, the one the run audits, and the gate's fetch is kept in the serve dir's
-`private/certifier`. Its `piece` (`CERTIFIER_CMD`) runs the chain's warden path on that fetch with the serve dir's
-endpoint records, run dir and quarantine private beside the fetch, and answers with `network-period check` on the rows
-form of the scan's link-window (`scan_period.rows_case`). The answer is accept only when the chain accepted, every request
+class (4 prompts of 24 ids, 4 ids out, `--window-per-group`) to serve-openai, all of it in execution phase 0, the
+network certifier at the schedule of that class's scan (`--scan-class w63k4`, 5 egress cells, the one the chain's
+`scan_zk.py prove --class w63k4` takes), so the engine closes it into the run's earliest window, the one the run audits,
+and the gate's fetch is kept in the serve dir's `private/certifier`. A request's answer must be whole D·τ after its
+admission, 2.7 s at the scan's 100 ms tick; for a slower endpoint `--bucket-ms` runs the scan at a longer tick, up to
+4000 ms (108 s). Its `piece` (`CERTIFIER_CMD`) runs the chain's warden path on that fetch with the serve dir's endpoint
+records, run dir and quarantine private beside the fetch, and answers with `network-period check` on the rows form of
+the scan's link-window (`scan_period.rows_case`). The answer is accept only when the chain accepted, every request
 of the audited window is a certified one inside that link-window, and the Lean check accepts; beside that answer goes
 its case, `case.json`, as `composite.py` reads a piece's (inline, about 83 MB on a served window). Only the protocol
 rejecting the served window is a reject: with no fetch kept, a rehearsal the gate's check didn't pass (each request
-late, say) or a step that can't run, the piece refuses (`refused.txt`), which leaves the certifier missing.
+late, say) or a step that can't run, the piece refuses (`refused.txt`), which leaves the certifier missing. An accept's
+profile names its placement: the certifier on the gate's host, and the chain, the period check and their proofs' coins
+on the prover's node, so `trusted-host` is assumed with the auditor's devices not placed. The chain's endpoint report,
+whose rows count each Commit window's requests, steps and outputs and its advice's bits, stays beside the fetch, and so
+does the rest of the chain's out/ but what `PUBLIC` names (the report's verdicts and ε at δ, and the scan's answers):
+report.md, the report's other keys and the steps' summaries count the window's requests and outputs and the advice's
+bits. The leak guard (`--public`) moves any file the piece doesn't declare out of its directory.
 
 ## The chain's run of record
 
 The run of record takes the network chain end to end on the gate's machines:
 
 1. The network certifier signs every record with its LMS key, on an auditor machine, never on the prover's node.
-2. It certifies each sampling block's records and signs each sampling period's clock sync (a clock certificate).
+2. It certifies each execution phase's records and signs each sampling period's clock sync (a clock certificate).
 3. The client receives the certificates and keeps them (`certificates.jsonl`, `clocks.jsonl`).
 4. The consistency proof blocks are proved by sampled C-Flock `--zk` and decided by the Lean verifier of record: N2's
-   (each sampling block's head checks and counts), and the scan's ingress and egress proof blocks chained by registered
+   (each execution phase's head checks and counts), and the scan's ingress and egress proof blocks chained by registered
    reads.
 5. The verdict is the per-sampling-block acceptance that the certification period's leak bound reads.
 
@@ -143,7 +153,7 @@ directory, `CR_ENDPOINT`). The job runs `chain_record.py`'s steps, network-e2e's
 | custody | each gate run's files against the SHA-512s in its `end.json` | none: a check of files | the files' digests |
 | certificates | each sampling block's two certified records and its clock certificate, at the client, under the certifier's key and attachment; with `CR_DEPLOYED=1`, a key that isn't LMS at H = 20 is refused | none: signatures | every LMS signature, and the host audit of the client's own heads |
 | endpoint | the endpoint's own advice bound to the run (each Commit window opened to its registered root, rebuilt from the certified I/O) and the I/O tie on the honest run (`e2e.py --no-prove`); required on the advice profile | none: in the clear | all of it |
-| N2 | each sampling block's N2 proof block, proved `--zk` and decided by N2's verifier of record: the advised proof block on the bound advice and the certifier's clock certificates on the advice profile (`n2_advised_zk.py --e2e`), the plain one on the others (`n2_zk.py`) | Selection All: no sampling block undrawn; a sampled draw of k of n sampling blocks hides at most b faulty ones except with probability δ (the report's `wrong_units_at_delta`, the integrity profile's count bound) | the registration, the draw, the certificates' public fields, the syncs, the pub row opened to the verifier's copy, the output word |
+| N2 | each sampling block's N2 proof block, proved `--zk` and decided by N2's verifier of record: the advised proof block on the bound advice and the certifier's clock certificates on the advice profile (`n2_advised_zk.py --e2e`), the plain one on the others (`n2_zk.py`) | Selection All: no sampling block undrawn; a sampled draw of k of n sampling blocks hides at most b faulty ones except with probability δ (the report's `wrong_units_at_delta`) | the registration, the draw, the certificates' public fields, the syncs, the pub row opened to the verifier's copy, the output word |
 | scan | the scan's ingress and egress proof blocks of a sampling block, one registration, `verify --zk --registered` | the audit's `wrong_units` at the draw's sampling design | each proof block's output bit; the I/O tie stays outside the proofs |
 | Lean | every proof of both steps is the verifier's own `flock-verify verify --zk` run | per proof, ε_ks + ε_bind | nothing |
 
@@ -155,15 +165,19 @@ synthetic run, or N2 on `CR_N2_STANDIN=simulated`) never makes the report accept
 says why.
 
 **The record's leak guard** (`leak_guard.py`). Custody publishes the whole run dir, `inputs/` with it, so the job moves
-each gate sent under `inputs/` to the quarantine once it is unpacked, and on every exit runs the guard on the run dir.
-The guard moves to the quarantine (`CR_QUARANTINE`, by default `quarantine/RUN` beside the runs root, 0700) every file
-that holds a gate run's witness: one under a `witness/` directory or named as `leak_guard.json` declares, one holding an
-aligned witness piece raw or as hex at any offset, an archive member that does, or an archive it can't read through.
-The run then fails (exit 3), and `out/leak-guard.json` names each find by its path alone. A piece the gate's public
-files hold, as they are or with their JSON written again, is no find. The false positives are declared data,
-`leak_guard.json`'s `allow`, each entry written only after its find was read by counts and digests; the one there
-excuses the stall probe's cgroup counters in the runner's own `resources.jsonl`. A signal before the guard runs, or a
-guard that can't run, withholds `out/`, `inputs/` and the logs whole.
+each gate sent under `inputs/` to the quarantine once it is unpacked, writes every output (its own stdout and stderr
+too) to a hold outside the run dir (`$Q/held`), and on every exit runs the guard on the run dir and the hold. The guard
+moves to the quarantine (`CR_QUARANTINE`, by default `quarantine/RUN` beside the runs root, 0700) every file that holds
+a gate run's witness: one under a `witness/` directory or named as `leak_guard.json` declares, one holding an aligned
+witness piece raw or as hex at any offset, an archive member that does, or an archive it can't read through. Only then
+does it release the rest of the hold to `out/`. A find fails the run (exit 3), and `out/leak-guard.json` names each find
+by its path alone. A file equal to one of the gate's public files (by sha256, so a gate's published bundle and its
+members aren't scanned) is no find, nor is a piece those files hold, as they are or with their JSON written again. The
+false positives are declared data, `leak_guard.json`'s `allow`, each entry written only after its find was read by
+counts and digests; the one there excuses the stall probe's cgroup counters in the runner's own `resources.jsonl`. The
+guard's cost is linear in the bytes it reads, and past its budget (`--budget-s`) it stops. A signal (before or during
+the guard), a guard past its budget, or one that can't run releases nothing and withholds `out/`, `inputs/` and the logs
+whole; a SIGKILL leaves the hold where it is, out of the record.
 
 **The relay path** (`CR_PATH=warden`, `chain_record.WARDEN`). Every step reads the relay's own run (the gate's
 `warden-rehearse`, its witness under `witness/`; `warden_chain.py`), and a proxy rehearsal's run, whose records come
@@ -201,6 +215,8 @@ unit drawn and accepted. K uses:
   T = 32 buckets of 100 ms, and egress_cells = 65;
 - its traffic: 100 requests over 75 link-windows, 1.33 a link-window;
 - the scan's class: B = 512, r = 4, lanes = 4, C = 47, IDB = 17 and KO = 64;
+- the scan's registered form at this head, its slot entries (the scan above registered a Programs' row a bucket,
+  143,360 bits a link-window);
 - every unit drawn.
 
 The terms, in the generator reading of the scan's statement (each unit's registered rows its boundary values):
@@ -214,6 +230,24 @@ The terms, in the generator reading of the scan's statement (each unit's registe
   not met at D_j = 1 until a run shows the warden's written buckets tell a receiver no more than an idle one. The
   warden hands each bucket to a pacer that releases it at a time fixed before the bucket is made
   (`warden.Warden(paced=…)`, `warden_serve.py --paced-ms`).
+
+Each entry carries a read bit (`ingress_scan.entry_layout`: an occupied slot no Program reads is refused). Bucket t
+reads slot j's entry at row j·nb + ⌊t / EVERY⌋ of the entries (`NetworkCheck.Period`'s `readsEntries`) and ignores it
+outside due and occupied slots, so a link-window's entries are its NR·nb boundaries'. Unless the scan's `prog` is a
+compute audit's `SlotEntry_v1` template's entries (`<descriptor id>/c0/o0`, one member a slot), the read bit is the
+prover's word (an entry of read 1 and no outputs passes the scan), so `NetworkCheck.Period` refuses the link-window by
+name (`wired`). `wired` pins the template's whole body by its closure digest (`slotEntryPins`, `io_shell.SlotEntry_v1`
+at its circuit-check rows), so the block round's `prog`, the o0 of scan_zk's `SlotEntry_v1` stand-in, whose entries,
+read bit included, are the prover's, is refused there (scan_period.py). A slot's Program reads the requests from its
+own registered `SCAN_STATE`, and the check refuses, last, by name, a link-window whose scan's state isn't a wired
+audit's `SCAN_STATE` by root and domain (`stateTied`). scan_zk's state tree is the window state
+(`ingress_scan.window_state`: leaf 0 the empty state, leaf t S_{t−1}), each leaf but the first the o1 of the unit that
+computes it and the sin of the next, both registered reads, so a state tree that skips or alters a transition is
+refused at that unit's o1; the block round's registration names it as `scan/state`.
+Tied (`NetworkCheck.Period`'s `progTied`, scan_zk's block round), the entries are a compute audit's outputs
+and the scan's own free term is 0: the bits are that audit's free inputs (the stand-in's `x`), which the rows form's
+K charges to the link-window's term (`tiedAudits`). The egress tie moves the free term from the scan's `prog` to the
+tied audit's inputs; K is unchanged in what it bounds, 9,088 bits a link-window at w63.
 
 The two forms:
 - The pooled form (`HorizonLeakAccepted`) adds Fmax = ⌈ln(1/δ)⌉ units of b = NS + NV = 154,480 bits, and
@@ -232,12 +266,12 @@ The scale:
 
 | period | machines | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | a link-window |
 |---|---|---|---|---|---|
-| week | 1 | 2.71·10^10 (1.37×) | 2.71·10^10 (1.37×) | 2.71·10^10 (1.37×) | 143,368 |
-| week | 1,000 | 2.71·10^13 (1,370×) | 2.71·10^13 (1,370×) | 2.71·10^13 (1,370×) | 143,368 |
-| month | 1 | 1.16·10^11 (5.87×) | 1.16·10^11 (5.87×) | 1.16·10^11 (5.87×) | 143,368 |
-| month | 1,000 | 1.16·10^14 (5,873×) | 1.16·10^14 (5,873×) | 1.16·10^14 (5,873×) | 143,368 |
-| year | 1 | 1.41·10^12 (71.5×) | 1.41·10^12 (71.5×) | 1.41·10^12 (71.5×) | 143,368 |
-| year | 1,000 | 1.41·10^15 (71,456×) | 1.41·10^15 (71,456×) | 1.41·10^15 (71,456×) | 143,368 |
+| week | 1 | 1.72·10^9 (8.7%) | 1.72·10^9 (8.71%) | 1.72·10^9 (8.69%) | 9,096 |
+| week | 1,000 | 1.72·10^12 (86.9×) | 1.72·10^12 (86.9×) | 1.72·10^12 (86.9×) | 9,096 |
+| month | 1 | 7.37·10^9 (37.3%) | 7.37·10^9 (37.3%) | 7.37·10^9 (37.3%) | 9,096 |
+| month | 1,000 | 7.37·10^12 (373×) | 7.37·10^12 (373×) | 7.37·10^12 (373×) | 9,096 |
+| year | 1 | 8.96·10^10 (4.53×) | 8.96·10^10 (4.53×) | 8.96·10^10 (4.53×) | 9,096 |
+| year | 1,000 | 8.96·10^13 (4,534×) | 8.96·10^13 (4,534×) | 8.96·10^13 (4,534×) | 9,096 |
 
 As registered, K passes the size of the weights within one machine-week, so the record's K is vacuous for every
 monitoring period.
@@ -247,12 +281,12 @@ the weights (the jitter term 0, assumed (J)):
 
 | period | machines | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | a link-window |
 |---|---|---|---|---|---|
-| week | 1 | 2.85·10^8 (1.44%) | 2.86·10^8 (1.45%) | 2.84·10^8 (1.44%) | 1,501 |
-| week | 1,000 | 2.84·10^11 (14.4×) | 2.84·10^11 (14.4×) | 2.84·10^11 (14.4×) | 1,501 |
-| month | 1 | 1.22·10^9 (6.15%) | 1.22·10^9 (6.16%) | 1.22·10^9 (6.15%) | 1,501 |
-| month | 1,000 | 1.22·10^12 (61.5×) | 1.22·10^12 (61.5×) | 1.22·10^12 (61.5×) | 1,501 |
-| year | 1 | 1.48·10^10 (74.8%) | 1.48·10^10 (74.8%) | 1.48·10^10 (74.8%) | 1,501 |
-| year | 1,000 | 1.48·10^13 (748×) | 1.48·10^13 (748×) | 1.48·10^13 (748×) | 1,501 |
+| week | 1 | 2.85·10^8 (1.44%) | 2.86·10^8 (1.45%) | 2.84·10^8 (1.44%) | 1,503 |
+| week | 1,000 | 2.84·10^11 (14.4×) | 2.84·10^11 (14.4×) | 2.84·10^11 (14.4×) | 1,503 |
+| month | 1 | 1.22·10^9 (6.16%) | 1.22·10^9 (6.17%) | 1.22·10^9 (6.16%) | 1,503 |
+| month | 1,000 | 1.22·10^12 (61.6×) | 1.22·10^12 (61.6×) | 1.22·10^12 (61.6×) | 1,503 |
+| year | 1 | 1.48·10^10 (74.9%) | 1.48·10^10 (74.9%) | 1.48·10^10 (74.9%) | 1,503 |
+| year | 1,000 | 1.48·10^13 (749×) | 1.48·10^13 (749×) | 1.48·10^13 (749×) | 1,503 |
 
 This second table is what the generator-form lowering would give if it registers `prog` everywhere but its anchors.
 It is not the record's number.
@@ -268,7 +302,8 @@ K also rests on these conditions:
 - At light traffic (40 requests over 43 link-windows, 0.93 a link-window, its scan's every unit drawn) the
   anchored table's machine-week is 1.01% of the weights and its machine-year 52.2%; as registered it is 1.37×
   a machine-week either way.
-- The compute audit's free inputs don't enter K: its δ goes into JointPeriodLive's sum.
+- An untied compute audit's (the loop's) free inputs don't enter K: its δ goes into JointPeriodLive's sum. The tied
+  audit's (the `SlotEntry_v1` stand-in's) are the link-window's free inputs above.
 
 The report names what it stands on beyond the theorem (`chain_record.STUBBED`, `WARDEN_STUBBED` and
 `HORIZON_CONDITION`) and what the theorem doesn't cover (its `uncovered`).
