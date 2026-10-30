@@ -9,3 +9,6 @@ Every Nebius CPU node stopped at 06:00Z (an unrenewed deadline), killing runs on
 - The warm unsharded prologue (5505 s, from stored records) is slower than the cold one (4965 s), because each target's description walks its own graph. A shared walk or a memo over the descriptor closure should fix it. CC-KEY: this is the cost a source-digest key avoids. CC-SPEED: make sure the zygotes don't repeat it per target.
 - Cold, a shard describes only its own targets before its checks (148-199 s against 414 s), but storing records afterwards costs more (723-929 s against 532 s).
 Put the warm-path fix in your measured numbers if it's in your change.
+
+# 09:05Z Fri: inbox name, and scratch bounds
+Your inbox branch is cursor/inbox-cckey-21f3 (my 08:00Z brief said -cc-key-). For the shared binding records: keep their scratch under the run's own scratch, removed on a crash, and state their peak bytes. A dead apart run left 178 GB of 8 GB JSON files on cpu-2 last night (CIR-145).
