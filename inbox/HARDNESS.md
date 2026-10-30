@@ -157,3 +157,32 @@ the total injected entropy:
   training after it. Iteration buys robustness, plus whatever survives constrained rounds.
 
 HT-ITER should model this: the surviving min-entropy against T, ρ_t and the alphabet.
+
+## Addendum: public training (Daniel, 1:38 PM PDT), design E
+
+Daniel: "the training process would be public, including public data ... what if the training doesn't provide any
+choice? Or a bounded amount of choice." This changes the question in a useful way:
+
+- **The served W is no longer chosen by the developer.** It is W = Train(public data, public code and hyperparameters;
+  beacon seed): one fixed, public process.
+- **The premise becomes nothing-up-my-sleeve:** "W from this distribution has no exact fast multiply w.h.p." It is a
+  statement about one public process, not about adversaries. Anyone can falsify it with an attack, as in cryptanalysis.
+- **Bounded choice, quantified in bits:**
+  - **Selection** (seeds, hyperparameters, orderings, retraining until lucky) costs exactly C bits of the counting
+    bound by the union bound, where C = log₂ of the number of outcomes the developer can pick between. Committing
+    everything before the beacon draws the seed removes it.
+  - **Steering** (a continuous influence, e.g. private distillation data) is harder to bound. Data poisoning shows that
+    steering exists.
+  - So: public data, or data committed before the seed. Even then, the premise must hold for every fixed dataset.
+- **Process knobs that matter:**
+  - Weight decay shrinks the init's randomness, which then rounds to 0 in int8.
+  - Without it, W = W₀ + Σ updates, and W₀ survives in the directions the data doesn't touch.
+- **Verification:** the served W must be shown to come from the process. Options are sampled re-execution of committed
+  checkpoints, which needs bit-exact deterministic training (we have the kernels), and the proof-of-learning
+  literature, including its spoofing attacks.
+- **The cheapest first experiment** (CPU): how hard are *existing* open trained weights?
+  - Take int8 Llama- or Qwen-class matrices and find their best "low-rank + small-alphabet or sparse residual" split.
+  - Price its exact multiply on the H200 and sm_120.
+  - If natural weights are already far from cheap, E is plausible from the start.
+
+Lane HT-PUBLIC takes E.
