@@ -285,7 +285,7 @@ variable {β Hs : Type} [Fintype β] {P : ℕ} {G : Fin P → ℕ}
 and store (`SketchHashRandom A ε`), an event of the model's coins is at most `ε` likelier at the outcome's model coins
 than over the model's coins: average the premise over the prover's coins and the store. -/
 theorem pr_coins_le [Fintype Hs] (A : Session β Hs P N m h S L q ks G) {ε : ℝ}
-    (hH : Accounting.Assumptions.SketchHashRandom A ε) (E : Coins β P N m h ks G → Prop) :
+    (hH : Accounting.Assumptions.SketchHashRandom A ε) (E : ModelCoins β P N m h ks G → Prop) :
     pr (fun ω : Outcome β Hs N m => E (A.coins ω)) ≤ pr E + ENNReal.ofReal ε := by
   refine pr_le_add_of_fst (fun ω : β × (Data N m 0 Sector × Hs) => E (A.coins ω)) E _ fun b => ?_
   refine pr_le_add_of_fst (fun y : Data N m 0 Sector × Hs => E (A.coins (b, y))) (fun z => E (b, z)) _
@@ -297,7 +297,7 @@ the earlier passes' keys select: pass `j`'s keys and the store are a uniform fib
 theorem pr_pass_le (A : Session β Hs P N m h S L q ks G) (j : Fin P) (δ : ℝ≥0∞)
     (hδ : ∀ b η, pr (fun y : Data N m 0 Sector × (Fin (G j) → Key N m h ks) =>
       ∃ c, Miss (A.device b j η c) (y.2 c) y.1) ≤ δ) :
-    pr (fun ω : Coins β P N m h ks G => ∃ c, Miss (A.devAt ω j c) (ω.2.2 j c) ω.2.1) ≤ δ := by
+    pr (fun ω : ModelCoins β P N m h ks G => ∃ c, Miss (A.devAt ω j c) (ω.2.2 j c) ω.2.1) ≤ δ := by
   classical
   let sp := Equiv.piSplitAt j (fun i : Fin P => Fin (G i) → Key N m h ks)
   let shuffle : β × (Data N m 0 Sector × ((Fin (G j) → Key N m h ks) ×
@@ -308,7 +308,7 @@ theorem pr_pass_le (A : Session β Hs P N m h S L q ks G) (j : Fin P) (δ : ℝ�
       invFun := fun y => (y.2.1, (y.1.1, (y.1.2, y.2.2)))
       left_inv := fun _ => rfl
       right_inv := fun _ => rfl }
-  let e : Coins β P N m h ks G ≃ (Data N m 0 Sector × (Fin (G j) → Key N m h ks)) ×
+  let e : ModelCoins β P N m h ks G ≃ (Data N m 0 Sector × (Fin (G j) → Key N m h ks)) ×
         (β × ((i : {i : Fin P // i ≠ j}) → Fin (G i) → Key N m h ks)) :=
     ((Equiv.refl β).prodCongr ((Equiv.refl _).prodCongr sp)).trans shuffle
   rw [Accounting.Rate.pr_equiv e]
@@ -375,9 +375,9 @@ theorem SketchBoundSession : Accounting.Guarantees.Remote.SketchBoundSession := 
   classical
   let δ : ℝ≥0∞ := ((∑ j, G j : ℕ) : ℝ≥0∞) * (ENNReal.ofReal ε + (N : ℝ≥0∞) / 2 ^ h) +
     ((∑ j, qtot j : ℕ) : ℝ≥0∞) / 2 ^ (8 * r)
-  have hsum : pr (fun x : Coins β P N m h ks G => ∃ j : Fin P, ∃ c, Miss (A.devAt x j c) (x.2.2 j c) x.2.1) ≤ δ := by
+  have hsum : pr (fun x : ModelCoins β P N m h ks G => ∃ j : Fin P, ∃ c, Miss (A.devAt x j c) (x.2.2 j c) x.2.1) ≤ δ := by
     refine (pr_exists_le _).trans ?_
-    calc ∑ j : Fin P, pr (fun x : Coins β P N m h ks G => ∃ c, Miss (A.devAt x j c) (x.2.2 j c) x.2.1)
+    calc ∑ j : Fin P, pr (fun x : ModelCoins β P N m h ks G => ∃ c, Miss (A.devAt x j c) (x.2.2 j c) x.2.1)
         ≤ ∑ j : Fin P, ((G j : ℝ≥0∞) * (ENNReal.ofReal ε + (N : ℝ≥0∞) / 2 ^ h) +
             (qtot j : ℝ≥0∞) / 2 ^ (8 * r)) :=
           Finset.sum_le_sum fun j _ => Session.pr_pass_le A j _ fun b η =>
@@ -389,7 +389,7 @@ theorem SketchBoundSession : Accounting.Guarantees.Remote.SketchBoundSession := 
       ∃ j : Fin P, ∃ c, Miss (A.devAt (A.coins ω) j c) ((A.coins ω).2.2 j c) (A.coins ω).2.1) ≤
       δ + ENNReal.ofReal εro :=
     (Session.pr_coins_le A hH
-      (fun x : Coins β P N m h ks G => ∃ j : Fin P, ∃ c, Miss (A.devAt x j c) (x.2.2 j c) x.2.1)).trans
+      (fun x : ModelCoins β P N m h ks G => ∃ j : Fin P, ∃ c, Miss (A.devAt x j c) (x.2.2 j c) x.2.1)).trans
       (add_le_add hsum le_rfl)
   have hfin : δ ≠ ⊤ := by
     simp only [δ]
