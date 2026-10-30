@@ -2499,6 +2499,32 @@
    "Claims.Sampling.PrivateCircuit.Fits": "a helper the claims read: a private circuit of a size class"
   }
  },
+ "witnesses": {
+  "Flock.SecurityProofs.RecursiveKS": {
+   "honest": ["RecDeploy.HonestHalfFixture.honest_half_fixture"],
+   "nontrivial": "Flock.Guarantees.recursiveKS_nontrivial"
+  },
+  "Pouw.SecurityProofs.Dither.FleetSound": {
+   "honest": ["Pouw.SecurityProofs.Dither.FleetSound_honest"],
+   "nontrivial": "Pouw.SecurityProofs.Dither.FleetSound_nontrivial"
+  },
+  "Pouw.SecurityProofs.Dither.WorkMoment": {
+   "honest": ["Pouw.SecurityProofs.Dither.WorkMoment_honest"],
+   "nontrivial": "Pouw.SecurityProofs.Dither.WorkMoment_nontrivial"
+  },
+  "Pouw.SecurityProofs.Dither.WorkSound": {
+   "honest": ["Pouw.SecurityProofs.Dither.WorkSound_honest"],
+   "nontrivial": "Pouw.SecurityProofs.Dither.WorkSound_nontrivial"
+  },
+  "Pouw.SecurityProofs.OnsiteFreed": {
+   "honest": ["Pouw.SecurityProofs.OnsiteFreed_honest"],
+   "nontrivial": "Pouw.SecurityProofs.OnsiteFreed_nontrivial"
+  },
+  "Pous.SecurityProofs.ObligationWide320": {
+   "honest": ["Pous.SecurityProofs.ObligationWide320_honest"],
+   "nontrivial": "Pous.SecurityProofs.ObligationWide320_nontrivial"
+  }
+ },
  "layers": {
   "Definitions.Core": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.Accounting.Device"],
@@ -18788,12 +18814,11 @@
    ]
   },
   "Definitions.Core.Accel.H200": {
-   "digest": "e9f93314a12af777f8f51a6c624279e39ebee73fc0fe099440a72944ba621fca",
+   "digest": "d7e26a863651648637515780781eecec807d9297f9f57c8afafd068ba1032c3a",
    "definitions": {
-    "Verity.Accel.H200.card": "4c9e1956a34fbc0d9933f5b00c909030e831ec26376d3425bbeda6bcd58e454f",
+    "Verity.Accel.H200.card": "9a7c11c13ea92af34baf8681502c011111e4720f5e4b26b81f0d1cff97269df5",
     "Verity.Accel.H200.card._sparseCasesOn_5": "f3b8cbb5aea664b89814a5e2e7eb685aef9d36a7b784d679f43414ceddd2f7e9",
-    "Verity.Accel.H200.clock": "501f6feb0a520614b6f64770735030e6007eb3359cdf54a22ef361980cafa987",
-    "Verity.Accel.H200.tensorClock": "fbc75b01473fb6f71e38d9540ed163e3336bec47e6bebaa7c70f6e731903ea99"
+    "Verity.Accel.H200.clock": "501f6feb0a520614b6f64770735030e6007eb3359cdf54a22ef361980cafa987"
    },
    "guarantees": [
     "Pouw.SecurityProofs.DitherInstance.WorkSoundH200",
@@ -60641,31 +60666,5 @@
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
   "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
- },
- "witnesses": {
-  "Flock.SecurityProofs.RecursiveKS": {
-   "honest": ["RecDeploy.HonestHalfFixture.honest_half_fixture"],
-   "nontrivial": "Flock.Guarantees.recursiveKS_nontrivial"
-  },
-  "Pouw.SecurityProofs.Dither.FleetSound": {
-   "honest": ["Pouw.SecurityProofs.Dither.FleetSound_honest"],
-   "nontrivial": "Pouw.SecurityProofs.Dither.FleetSound_nontrivial"
-  },
-  "Pouw.SecurityProofs.Dither.WorkMoment": {
-   "honest": ["Pouw.SecurityProofs.Dither.WorkMoment_honest"],
-   "nontrivial": "Pouw.SecurityProofs.Dither.WorkMoment_nontrivial"
-  },
-  "Pouw.SecurityProofs.Dither.WorkSound": {
-   "honest": ["Pouw.SecurityProofs.Dither.WorkSound_honest"],
-   "nontrivial": "Pouw.SecurityProofs.Dither.WorkSound_nontrivial"
-  },
-  "Pouw.SecurityProofs.OnsiteFreed": {
-   "honest": ["Pouw.SecurityProofs.OnsiteFreed_honest"],
-   "nontrivial": "Pouw.SecurityProofs.OnsiteFreed_nontrivial"
-  },
-  "Pous.SecurityProofs.ObligationWide320": {
-   "honest": ["Pous.SecurityProofs.ObligationWide320_honest"],
-   "nontrivial": "Pous.SecurityProofs.ObligationWide320_nontrivial"
-  }
  }
 }
