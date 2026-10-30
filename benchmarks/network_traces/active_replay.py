@@ -29,7 +29,7 @@ proxy saw, that its hand times are the rule's, and that the peer's digest of eac
 ingress record holds the salt frame, which carries the placeholder and never the salt, and the server receives the salt
 on a connection of its own, logging each window's SHA-512 of it (`fingerprint`), never the salt. Once the run's
 records are published the proxy answers the verifier's "reveal" call with every window's salt (`salts.json`), each
-revealed on a stand-in for the window's registration (`stand_in`: the replay registers nothing with a proof service),
+revealed on a stand-in for the window's registration (`stand_in`: the replay registers nothing with a proof system),
 and the audit's `salt` section reads the salt frames against them (`active.check_salts`, on the raw ingress records),
 counts the salt frames in each ingress record and in the egress records, and checks that no egress frame holds a salt
 and that the server received each salt.
@@ -1253,7 +1253,7 @@ def proxy_log(proxies: Sequence[Proxy]) -> dict:
 
 
 def stand_in(window: int) -> Registration:
-    """A stand-in for the proof service's registration of `window`, which the replay has none of: a record whose
+    """A stand-in for the proof system's registration of `window`, which the replay has none of: a record whose
     provenance names the window (`active.served_window`), with its receipt."""
     record = {"window": {"kind": "served", "window": window}}
     return Registration(record, R.receipt(record, "active-replay", received=str(window)), R.digest(record), window)

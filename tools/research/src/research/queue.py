@@ -610,8 +610,8 @@ def lean_running(state: dict, pr: int) -> str | None:
 
 def lean_hold(state: dict, chain: list[Member]) -> int:
     """How many members at the bottom of ``chain`` drive's Lean checks keep in place: up to the highest commit of one in drive's
-    state (`drive["lean"]`) that runs, launches or passed, as drive's review tick holds them (`Driver._running_lean`,
-    `_landable`).  A passed one holds whether or not its prefix lands yet; drive's next tick decides that."""
+    state (`drive["lean"]`) that runs, launches or passed, as drive's review tick holds them (`Driver._review`).  A passed one
+    holds whether or not its prefix lands yet; drive's next tick decides that."""
     lean = (state.get("drive") or {}).get("lean") or {}
     held = {c for c, rec in lean.items() if rec.get("state") in (None, "passed")}
     return max((i + 1 for i, m in enumerate(chain) if m.commit in held), default=0)
@@ -826,8 +826,8 @@ class Queue:
         self.workdir, self.remote, self.github, self.ready, self.store = Path(workdir), remote, github, ready, store
         self.shadow, self.log, self._rules, self.auth, self.first = shadow, log, rules, auth, tuple(first)
         self.before_cutoff, self.marked_by, self.marked_at, self.prefetch = before_cutoff, marked_by, marked_at, prefetch
-        #: how many members at the bottom of `next` a running check covers, or a passed Lean check drive is to land
-        #: (`Driver._landable`): `first` goes above them, so no reorder takes that check's commit off `next`
+        #: how many members at the bottom of `next` a running check covers, or a passed Lean check of drive's (`lean_hold`;
+        #: `Driver._landable`, one drive is to land): `first` goes above them, so no reorder takes that check's commit off `next`
         self.hold = 0
         #: whether a sync merges non-Lean changes first (`_nonlean_order`); None: drive.toml's `nonlean_first` at `main`
         self.nonlean_first = nonlean_first
@@ -836,7 +836,7 @@ class Queue:
         self.reviewed_first = reviewed_first
         #: each (head, base)'s `lean_change`
         self._lean_of: dict[tuple[str, str], bool] = {}
-        #: members a running check (or a `hold`ing passed one) covers that keep their place at the head it checks though their PR's head has moved
+        #: members a running check (or a passed one drive lands this tick) covers that keep their place at the head it checks though their PR's head has moved
         #: (`Driver`: a new head doesn't cancel a running check, and its PR rejoins above once that check ends)
         self.frozen: set[int] = set()
         #: members `next` keeps that this sync moves below the rest, in this order, at the heads it holds (`Driver._lift`: those
@@ -1071,7 +1071,7 @@ class Queue:
         """Members that keep their head, or move it to a descendant (`_same_or_fixed`), keep their order; the rest follow by PR
         number, each after the PRs it contains.  The PRs
         in `first` (`--first`) that are ready go below all of them, in the order given, so they land first; but
-        above the bottom `hold` members, which a running check covers.  With no `hold`, the members of ``lift`` at the heads
+        above the bottom `hold` members, which a running or passed check covers.  With no `hold`, the members of ``lift`` at the heads
         `next` holds go above `first` and below the rest, each only after the PRs it contains (`_lifted`)."""
         ready = {n for n, e in entries.items() if e.state == "ready"}
         kept = [m.pr for m in chain
