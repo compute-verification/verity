@@ -4,16 +4,17 @@ import Proofs.Flock.C3.RegLevels.TopHold
 /-!
 # When the stager accepts a part (`VStar.In.partIn`)
 
-`partIn` builds a level's port inputs (`levelIn`), an algebra part's (`algebraIn`) or a cap's (`capIn`), and refuses
-every other statement. `StmtFits src st` is what each builder checks of the stager's inputs `src`, written out, and
-`partIn_ok` is that `partIn` accepts wherever it holds:
+`partIn` builds a level's port inputs (`levelIn`), an algebra part's (`algebraIn`), a cap's (`capIn`) or the link
+table's (`linkIn`), and refuses every other statement. `StmtFits src st` is what each builder checks of the stager's
+inputs `src`, written out, and `partIn_ok` is that `partIn` accepts wherever it holds:
 
 * **a level** (`LevelInFits`): its openings number `n`, each of `LANES` lanes and `H` siblings, the level's tops are
   read (`topsAt`), and each opening's top node is among them. That every opening is in the chain (`at?`) is proved:
   `Array.qsort` keeps its elements (`qsort_mem`, through `TopHold.sort_spec`);
 * **an algebra part** (`AlgInFits`): each rep has an opening (`repEnds`), and each port is `acc0`, `acc1` or an `m<i>`
   whose message round holds two rows;
-* **a cap**: `capIn` accepts (`VStarPorts.capIn_ok`).
+* **a cap**: `capIn` accepts (`VStarPorts.capIn_ok`);
+* **the link table's part**: always, as `linkIn` refuses nothing.
 
 At the honest source (`srcOf`) the message rounds are `msgsOf`'s, each of two rows, so an algebra part's `m<i>` fits
 wherever `i` is one of the schedule's message rounds (`algFits_srcOf`). The openings are the inner prover's `rest`.
@@ -128,12 +129,13 @@ def AlgInFits (src : _root_.VStar.In.Src) (ports : List (String × ℕ)) : Prop 
     ∀ nm ∈ ports.map Prod.fst, nm = "acc0" ∨ nm = "acc1" ∨
       ∃ i rs, RecVStar.mIndex nm = some i ∧ src.msgs[i]? = some rs ∧ rs.size = 2
 
-/-- **What the stager checks of its inputs at statement `st`**: a level's, an algebra part's or a cap's; it has no
-builder for any other statement. -/
+/-- **What the stager checks of its inputs at statement `st`**: a level's, an algebra part's or a cap's, and nothing at
+the link table's part; it has no builder for any other statement. -/
 def StmtFits (src : _root_.VStar.In.Src) : _root_.VStar.Stmt → Prop
   | .recOpen level LANES H n => LevelInFits src level LANES H n
   | .inner _ _ p => AlgInFits src p.S.ports
   | .cap level N => ∃ pin, _root_.VStar.In.capIn src level N = .ok pin
+  | .link .. => True
   | _ => False
 
 /-- **A level's builder accepts** where its checks hold. -/
@@ -225,7 +227,7 @@ theorem partIn_ok {src : _root_.VStar.In.Src} {prog : String} {st : _root_.VStar
   | recOpenStacked _ _ _ _ => exact False.elim h
   | sparse _ _ => exact False.elim h
   | opening _ _ _ _ _ _ => exact False.elim h
-  | link _ _ _ => exact False.elim h
+  | link _ _ _ => exact ⟨_, rfl⟩
 
 /-- **The honest source's message rounds** (`msgsOf`): each of the schedule's message rounds holds two rows. -/
 theorem msgsOf_getElem? (rs : Array RecVStar.SchedRound) (rr : ℕ → List _root_.VStar.In.Row) {i : ℕ}
