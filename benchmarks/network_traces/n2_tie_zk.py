@@ -72,7 +72,7 @@ import round_coins as RC  # noqa: E402
 import certifier_serve as cs  # noqa: E402
 import leak_scan as LS  # noqa: E402
 import n2_zk as Z  # noqa: E402
-from verity.core.protocols.certifier import advice as ADV, head_check as HC  # noqa: E402
+from verity.core.protocols.certifier import advice as ADV, advised as AD, head_check as HC  # noqa: E402
 from verity.core.protocols.certifier import io_request as Q, service as SVC  # noqa: E402
 from verity.core.protocols.certifier import tie_service as TS, warden as W, warden_rows as WR  # noqa: E402
 from verity.core.protocols.certifier.active import DATA, HEADER, ID_DIGITS, id_request  # noqa: E402
@@ -93,7 +93,7 @@ FORGED = (5, 45, 5)
 SPLIT, SPLIT_ARRIVALS, SPLIT_RATES = (40, 5), (0, 0), (600, 10 ** 6)
 #: what the carried member adds to bucket 4's lane 0 carry-in fields and carry-out fields
 CARRIED = 5
-PROFILE = TS.AdvisedProfile(2, TS.framing(B, 64), 0)
+PROFILE = AD.AdvisedProfile(2, TS.framing(B, 64), 0)
 MEMBERS = ("honest", "carried", "forged", "split")
 #: each member's windows' outcomes of record, which are its tie's
 EXPECT = {"honest": (True, True), "carried": (True, False), "forged": (False, False), "split": (False, False)}
@@ -137,7 +137,7 @@ def use(name: str, run: Path | None = None, windows: int = 1) -> None:
         c, REAL = CLASSES[name], None
         B, PARAMS, WINDOWS, EXPECT = c["B"], c["params"], c["windows"], dict(c["expect"])
     T, MEMBERS = PARAMS.window, tuple(EXPECT)
-    PROFILE = TS.AdvisedProfile(WINDOWS, TS.framing(B, max((64, *(REAL.prompt_lens if REAL else ())))), 0)
+    PROFILE = AD.AdvisedProfile(WINDOWS, TS.framing(B, max((64, *(REAL.prompt_lens if REAL else ())))), 0)
     RECEIVED = _received(T)
 
 
@@ -153,11 +153,11 @@ def requests(prompt_lens) -> list[bytes]:
             for i, n in enumerate(prompt_lens)]
 
 
-def advice(prompt_lens, got) -> TS.LinkAdvice:
+def advice(prompt_lens, got) -> AD.LinkAdvice:
     """An advice v0 of one prefill step, each request one kept output, with the link's `received`."""
     reqs = tuple(ADV.RequestAdvice(f"u{j}", n, 1, "eos") for j, n in enumerate(prompt_lens))
     steps = (ADV.StepAdvice(tuple(ADV.Row(j, "prefill", 0, n) for j, n in enumerate(prompt_lens))),)
-    return TS.LinkAdvice(ADV.Advice(reqs, steps, tuple(range(len(prompt_lens)))), tuple(got))
+    return AD.LinkAdvice(ADV.Advice(reqs, steps, tuple(range(len(prompt_lens)))), tuple(got))
 
 
 def served(prompt_lens, arrivals, rates) -> Q.Link:
@@ -315,7 +315,7 @@ def members() -> dict[str, tuple]:
     return {name: plan[name] for name in MEMBERS}
 
 
-def link_windows(tie: TS.IngressTie, link: Q.ServedIngress, adv: TS.LinkAdvice, edit=None) -> SimpleNamespace:
+def link_windows(tie: TS.IngressTie, link: Q.Link, adv: AD.LinkAdvice, edit=None) -> SimpleNamespace:
     """Every link-window of the member as the warden and the prover hold it before it registers: the warden's cells
     (`warden_rows.Cells`: a warden run's own, else fresh salts) and its head, the verifier's lanes of `adv` (``own``,
     None where the release isn't its schedule) and the prover's (``lanes``: `edit` of the verifier's, or, a tuple, the
@@ -459,7 +459,7 @@ def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleN
     av = SimpleNamespace(bin=a.bin, lease=[], gpu=a.gpu)
     vdir = out / "verifier"
     vdir.mkdir(parents=True, exist_ok=True)
-    digest = TS.digest(rd.advice)
+    digest = AD.digest(rd.advice)
     (vdir / "advice.json").write_text(json.dumps({"advice": ADV.to_json(rd.advice.advice),
                                                   "received": list(rd.advice.received), "digest": digest,
                                                   "releases": [list(r) for r in rd.releases]}, sort_keys=True))
@@ -568,7 +568,7 @@ def _member_ok(name: str, res: dict, rd) -> bool:
     verifier received, and the control holding every held cell."""
     rec = res["received"]
     return (all(r["as_expected"] for r in res["windows"]) and tuple(res["tie"]["accepted"]) == EXPECT[name]
-            and res["tie"]["advice"] == TS.digest(rd.advice) and res["tie"]["link"] == LINK
+            and res["tie"]["advice"] == AD.digest(rd.advice) and res["tie"]["link"] == LINK
             and len(res["tie"]["registrations"]) == len(rd.windows)
             and not rec["leaked"] and rec["control"]["holds_all"])
 
@@ -589,7 +589,7 @@ def prove(a) -> int:
                               "gates": [g.id for g in tie.gates()], "pinned": all(HC.pinned(g) for g in tie.gates()),
                               "bits": {p: tie.bits(p) for p in TS.PORTS}},
                      "changed": {name: what for name, (_, _, _, what) in plan.items()},
-                     "advice": {name: TS.digest(rd.advice) for name, rd in rounds.items()},
+                     "advice": {name: AD.digest(rd.advice) for name, rd in rounds.items()},
                      "debug_clear": a.debug_clear, "received": RECEIVED}
     summary["instances_s"] = round(time.time() - t, 1)
     summary["coins"] = {"draw": Z.NO_COIN["draw"], "flock": RC.FLOCK}
