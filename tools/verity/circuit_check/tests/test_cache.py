@@ -1090,7 +1090,8 @@ def test_each_enumerator_only_imports_what_it_lists():
 def test_the_task_list_is_reused_only_while_nothing_its_build_could_depend_on_changed(tmp_path):
     """A circuit-check that reuses every target would still spend most of its time building the catalog to find them: the
     task list is reused whole when every target is as recorded.  An edit no target read (a registry module none resolves, a new
-    binding entry) still rebuilds the list, which it may change, and every target is reused as before."""
+    binding entry, a new pin, which keeps its target: `targets.pinned`) still rebuilds the list, which it may change, and every
+    target is reused as before."""
     root = _tree(tmp_path)
     assert "task_list" not in _run(root)["stats"]
     again = _run(root)
@@ -1105,6 +1106,10 @@ def test_the_task_list_is_reused_only_while_nothing_its_build_could_depend_on_ch
     _edit(root, "syn/sub.py", "B.call(SynAdd, a, b)", "B.call(SynAdd, b, a)")
     out = _run(root)
     assert out["hits"] == ["SynOther_v1"] and "task_list" not in out["stats"] and out["stats"]["stored"] == 1
+    assert _run(root)["stats"]["task_list"]
+    _set_pin(root, "SynNew_v1", {"and": 1})
+    out = _run(root)
+    assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and "task_list" not in out["stats"]
     assert _run(root)["stats"]["task_list"]
 
 
@@ -1149,14 +1154,14 @@ def test_a_target_named_on_the_command_line_reruns_when_its_descriptor_changes_w
 
 def _shimmed(harness: str) -> str:
     """``harness`` with the synthetic package imported through a link outside the tree (``shim/syn -> tree/syn``) first on the
-    import path, as `research run` puts its shim (``pyshim/<key>/verity -> <tree>/verity``)."""
+    import path, as a remote run puts its shim (``pyshim/<key>/verity -> <tree>/verity``)."""
     return harness.replace("sys.path.insert(0, str(root))",
                            "sys.path.insert(0, str(root))\nsys.path.insert(0, str(root.parent / 'shim'))")
 
 
 @pytest.mark.parametrize("named", [False, True], ids=["all", "named"])
 def test_a_module_imported_through_a_link_into_the_tree_is_held(tmp_path, named):
-    """Under `research run` every module of `verity` has its file in the shim, outside the root, so a file through a link into
+    """In a remote run every module of `verity` has its file in the shim, outside the root, so a file through a link into
     the tree is the tree's (`cache._LINKS`): else no entry would hold one, and an edit to a primitive's evaluator, which
     changes no descriptor, would be reused."""
     root, shim = _tree(tmp_path / "tree"), tmp_path / "shim"

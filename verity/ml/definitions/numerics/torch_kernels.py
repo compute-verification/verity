@@ -1,5 +1,6 @@
 """numpy models of the torch 2.13/2.14 CUDA kernels behind the training Definitions (`registry.torch_attention`,
-`registry.torch_loss`, `registry.torch_embedding`), in each kernel's own order, on rows of f32 (u32) and bf16 (u16) words.
+`registry.torch_loss`, `registry.torch_embedding`, `registry.torch_clip`), in each kernel's own order, on rows of f32 (u32) and
+bf16 (u16) words.
 Every f32 result's NaN is the GPU's 0x7FFFFFFF and every rounding to bf16 is F2FP's (`derived_rows.f2fp_bf16`, NaN 0x7FFF);
 nothing is flushed.
 
@@ -387,3 +388,141 @@ def embedding_dense_backward(t, g, entries) -> np.ndarray:
     else the sort path."""
     f = embedding_backward_feature if np.size(t) <= EMBEDDING_FEATURE_MAX else embedding_backward_sort
     return f(t, g, entries)
+
+
+CHUNK, NORM_THREADS, ILP = 65536, 512, 4
+NORM_LANES = NORM_THREADS * ILP
+F32_ONE, BF16_ONE = 0x3F800000, 0x3F80
+#: f32(1e-6), clip_grad's ``total_norm + 1e-6``
+EPS_1E6 = 0x358637BD
+#: the largest L `vector_norm` reduces in one CTA without a global reduce (values per thread below 256)
+VECTOR_NORM_MAX = 255 * 512
+
+
+def sqrt(a) -> np.ndarray:
+    """sqrt.rn.f32."""
+    return _op(np.sqrt, a)
+
+
+def block_reduce_sum(v) -> np.ndarray:
+    """``cuda_utils::BlockReduceSum``'s value at thread 0 over the last axis of 512 threads: each warp's WarpReduceSum, then
+    warp 0's over the 16 warp sums and 16 zeros."""
+    v = np.asarray(v, U32)
+    w = warp_reduce(v.reshape(*v.shape[:-1], -1, LANES), add)
+    return warp_reduce(np.concatenate([w, np.zeros_like(w)], axis=-1), add)
+
+
+def lpnorm_lane(c: int, aligned: bool) -> tuple[int, int]:
+    """(thread, accumulator) of a chunk's lane c, its elements 2048j + c: (c // 4, c % 4) on LpNormFunctor's 4-vector path,
+    else (c % 512, c // 512)."""
+    return (c // ILP, c % ILP) if aligned else (c % NORM_THREADS, c // NORM_THREADS)
+
+
+def lpnorm_chunks(x, aligned: bool | None = None) -> np.ndarray:
+    """`LpNormFunctor<BFloat16, L2>`'s f32 partial of each 65536-element chunk of one tensor's bf16 words x. Chunk element
+    2048j + c is lane c's j-th; each lane's ``acc = fma(x, x, acc)`` from +0 in j's order is accumulator `lpnorm_lane` of its
+    thread, on the 4-vector path when numel % 4 == 0 and the pointer is 8-byte aligned (``aligned``, by default numel % 4 == 0:
+    the caching allocator's pointers are aligned); each thread's ((((0 + a0) + a1) + a2) + a3), then `block_reduce_sum`.
+    Elements past the end are +0: every partial is +0, positive, +inf or NaN, to which adding +0 changes nothing."""
+    x = np.asarray(x, np.uint16).reshape(-1)
+    n = x.size
+    if aligned is None:
+        aligned = n % ILP == 0
+    C = -(-n // CHUNK)
+    xp = np.zeros(C * CHUNK, np.uint16)
+    xp[:n] = x
+    lanes = f32(xp).reshape(C, CHUNK // NORM_LANES, NORM_LANES)
+    s = np.zeros((C, NORM_LANES), U32)
+    for j in range(lanes.shape[1]):
+        s = fma(lanes[:, j], lanes[:, j], s)
+    by = s.reshape(C, NORM_THREADS, ILP) if aligned else s.reshape(C, ILP, NORM_THREADS).transpose(0, 2, 1)
+    val = np.zeros((C, NORM_THREADS), U32)
+    for i in range(ILP):
+        val = add(val, by[..., i])
+    return block_reduce_sum(val)
+
+
+def lpnorm_cleanup(partials) -> int:
+    """`lpnorm_cleanup<BFloat16, L2>`'s f32 norm of one tensor from its chunks' partials: thread t's ``0 + o[t] + o[t + 512]
+    + ...``, `block_reduce_sum`, sqrt.rn. The list's other tensors' slots are +0 and change nothing."""
+    p = np.asarray(partials, U32).reshape(-1)
+    o = np.zeros(max(1, -(-p.size // NORM_THREADS)) * NORM_THREADS, U32)
+    o[:p.size] = p
+    val = np.zeros(NORM_THREADS, U32)
+    for k in range(o.size // NORM_THREADS):
+        val = add(val, o[k * NORM_THREADS:(k + 1) * NORM_THREADS])
+    return int(sqrt(block_reduce_sum(val)).reshape(-1)[0])
+
+
+def foreach_norm(xs) -> tuple[np.ndarray, np.ndarray]:
+    """``torch._foreach_norm(xs, 2)`` on a list of bf16 tensors on its fast route (one dtype and device, dense): (the f32
+    norms, ``dtype=torch.float32``'s, and the bf16 norms, F2FP's)."""
+    f = np.array([lpnorm_cleanup(lpnorm_chunks(x)) for x in xs], U32)
+    return f, bf16(f)
+
+
+def _last_pow2(n: int) -> int:
+    return 1 << (n.bit_length() - 1)
+
+
+def vector_norm_config(L: int) -> tuple[bool, int]:
+    """Reduce.cuh's ``setReduceConfig`` for one output of L contiguous inputs: (vectorize_input, block_width): vectorized when
+    L >= 128, block_width the last power of two of L // 4 (vectorized) or L, at most 512; one row of threads."""
+    vec = L >= 128
+    return vec, min(_last_pow2(L // 4 if vec else L), 512)
+
+
+def vector_norm(h) -> tuple[int, int]:
+    """``torch.linalg.vector_norm(h, 2)`` of L contiguous bf16 words at an aligned pointer, 1 <= L <= VECTOR_NORM_MAX:
+    `reduce_kernel` with ``NormTwoOps<BFloat16, float, BFloat16>``, ``acc = fma(d, d, acc)``. Thread x's four accumulators
+    from +0: vectorized, its 4-vectors x + bw r while their last element is below L, element i into accumulator i, then the
+    tail element L - L % 4 + x into accumulator 0; else its elements x + bw m into accumulator m % 4. Each thread's
+    ((a0 + a1) + a2) + a3, the tree over the bw threads (`block_x_reduce`, halves added), sqrt.rn: (the f32, its bf16)."""
+    x = f32(np.asarray(h, np.uint16).reshape(-1))
+    L = x.size
+    if not 1 <= L <= VECTOR_NORM_MAX:
+        raise ValueError(f"vector_norm models 1 <= L <= {VECTOR_NORM_MAX}, not {L}")
+    vec, bw = vector_norm_config(L)
+    t = np.arange(bw)
+    acc = np.zeros((ILP, bw), U32)
+
+    def step(a, e):
+        d = x[np.minimum(e, L - 1)]
+        return np.where(e < L, fma(d, d, a), a)
+
+    if vec:
+        for r in range(-(-(L // ILP) // bw)):
+            v = t + bw * r
+            for i in range(ILP):
+                acc[i] = np.where(v < L // ILP, step(acc[i], ILP * v + i), acc[i])
+        acc[0] = step(acc[0], L - L % ILP + t)
+    else:
+        for m in range(-(-L // bw)):
+            acc[m % ILP] = step(acc[m % ILP], t + bw * m)
+    s = add(add(add(acc[0], acc[1]), acc[2]), acc[3])
+    while s.size > 1:
+        s = add(s[:s.size // 2], s[s.size // 2:])
+    f = sqrt(s).reshape(-1)
+    return int(f[0]), int(bf16(f)[0])
+
+
+def clip_coef(t, max_norm: float = 1.0) -> np.ndarray:
+    """clip_grad's ``torch.clamp(max_norm / (t + 1e-6), max=1.0)`` on bf16 words t: a = bf16(f32(t) + f32(1e-6)),
+    r = bf16(1 / f32(a)) (``reciprocal``), m = bf16(f32(r) * f32(max_norm)) (the CPU double scalar's cast to float), then the
+    clamp: 1.0 where f32(m) > 1, else m (a NaN kept)."""
+    a = bf16(add(f32(t), U32(EPS_1E6)))
+    r = bf16(div(U32(F32_ONE), f32(a)))
+    with np.errstate(over="ignore"):
+        k = np.array([max_norm], np.float64).astype(np.float32).view(U32)[0]
+    m = bf16(mul(f32(r), k))
+    return np.where(gt(f32(m), U32(F32_ONE)), np.uint16(BF16_ONE), m).astype(np.uint16)
+
+
+def clip_grad_norm(grads, max_norm: float = 1.0) -> tuple[int, list[np.ndarray]]:
+    """``torch.nn.utils.clip_grad_norm_(params, max_norm, foreach=True)`` on bf16 grads on one device: `foreach_norm`,
+    `vector_norm` of their stack, `clip_coef`, then ``_foreach_mul_`` by it, bf16(f32(g) * f32(coef)): (the total, the
+    clipped grads)."""
+    _, norms = foreach_norm(grads)
+    _, total = vector_norm(norms)
+    c = clip_coef(np.array([total], np.uint16), max_norm)
+    return total, [bf16_mul(np.asarray(g, np.uint16), c) for g in grads]

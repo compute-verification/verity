@@ -537,8 +537,7 @@ class Pause:
 def prefer_l1() -> int:
     """The current context's L1/shared-memory split preference set to L1 (`cuCtxSetCacheConfig`), CUDA's return code.  A
     kernel with no preference of its own keeps the split the last kernel left: after torch's kernels the tag pass ran at
-    1.1–1.4 ms against 0.84 from a fresh context, and at 0.83 with this set, the GEMMs' time unchanged (`probe.py steps`,
-    run r20261012-055226-416b)."""
+    1.1–1.4 ms against 0.84 from a fresh context, and at 0.83 with this set, the GEMMs' time unchanged (`probe.py steps`)."""
     import ctypes
     return ctypes.CDLL("libcuda.so.1").cuCtxSetCacheConfig(CU_FUNC_CACHE_PREFER_L1)
 

@@ -5,7 +5,7 @@ import Definitions.Pouw.Fp8Atom.Atom
 
 `BLACKWELL_SM120_NVF4` and `BLACKWELL_SM120_MXF4` in `verity.ml.tc.models` (`BlockScaledAlignAdd`, verity `main` at
 `29f691bec`): one accumulator coordinate of `mma.sync.aligned.kind::mxf4nvf4.block_scale.m16n8k64` on sm_120 (SASS
-`OMMA.SF.16864.F32.E2M1.E2M1.UE4M3.4X` and `OMMA.SF.16864.F32.E2M1.E2M1.E8`). Lane fp4-re fitted them on the RTX 5090 with
+`OMMA.SF.16864.F32.E2M1.E2M1.UE4M3.4X` and `OMMA.SF.16864.F32.E2M1.E2M1.E8`). They were fitted on the RTX 5090 with
 0 mismatches over 8,339,456 NVFP4 and 7,389,184 MXFP4 elements, and the RTX PRO 6000 reproduces them (2,269,184 and
 2,056,192 elements, 0 mismatches). Transcribed function by function:
 
@@ -17,7 +17,7 @@ import Definitions.Pouw.Fp8Atom.Atom
   `mant·2^exp`.
   - UE4M3 (NVFP4, blocks of 16) is the low 7 bits read as an E4M3 code with the sign bit clear, as `Fp8Atom.Code`'s
     `(sig, lsbExp)`: subnormals (field 0) are `(m, −9)`, and `0x00` is the zero scale. sm_120 ignores bit 7 (all 256
-    bytes, `r20260930-093120-b2f2`), so `0x80` is also a zero scale and `0x7F` and `0xFF` are NaN (invalid).
+    bytes), so `0x80` is also a zero scale and `0x7F` and `0xFF` are NaN (invalid).
   - UE8M0 (MXFP4, blocks of 32) is `2^(code − 127)`, written `(8, code − 130)` like UE4M3's 4-bit mantissa. `0xFF`
     (NaN) is invalid.
 * **The block-scaled product** (`blockProduct`): an E2M1 product times its two blocks' scales, as a `Term`.

@@ -376,7 +376,7 @@ theorem ksA_deployed (rel relO : Flock.Readable.Parsed → Flock.Readable.Relati
 /-- **`KSFlock` at `deployRec`**: the recursion's KS over the deployed plain inner record (trimmed), its V* sessions at
 the masked outer record (`deployZkRec`), at every inner decoder that meets the spec: `ksA_deployed`, as `KSA` is `KS`.
 Its level (`Claims.Recursion.lam`) is about 65 bits per SHA-512 call at the deployed shape (one inner table at `m = 35`,
-`γ`'s weight at `IVStar` at `coverW`), below the 100-bit floor and the `2^-128` target under every weight (ASK-73).
+`γ`'s weight at `IVStar` at `coverW`), below the 100-bit floor and the `2^-128` target under every weight.
 Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`),
 but `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from premises still
 open (`RecDeploy.ksLin2_deployed_open`), Holo statements being candidate 3's own model, and `BitsLin2` at those

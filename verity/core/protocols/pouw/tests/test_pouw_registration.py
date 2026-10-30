@@ -1,5 +1,5 @@
 """Registered weights (`registration`): one rule for Pearl-C4 and served FP8's Pearl-C, and the keyed transforms' key,
-drawn from the epoch's salt coin after the weights' root is recorded and refused for any other salt."""
+sampled from the epoch's salt coin after the weights' root is recorded and refused for any other salt."""
 
 from __future__ import annotations
 
