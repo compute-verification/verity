@@ -3,7 +3,8 @@ reason, on an honest part set at a real inner shape and on that set with one thi
 (another file, or none where the compiled verifier reads one), an inner shape or rows file other than the composition's,
 a session without `--zk`, with an identifier or refused, a reused or missing coin key, a part missing, repeated, out
 of range or in a log with two `VERDICT`s or none, and parts at a link table the composition doesn't hold (one part, or
-every part); and, against the challenger's interactive-run record (written by
+every part); with the composition's own `--rec-links ROOT:N`, parts that every one name it, at that table and at another
+root or row count, and parts of which one or none name it; and, against the challenger's interactive-run record (written by
 `challenger.RunRecord`), a part retried, a part whose session the record lacks, an opened session that is not the composed
 one, a session for a part V* lacks, a staging after the first Hello or a second one, other rows or another shared set
 staged, a record not closed or going on past its close, and a record that is none, of another kind or with an event out
@@ -110,9 +111,8 @@ def _cases(n: int, inner: bytes) -> dict[str, list[tuple[str, str]]]:
     cases["two-verdicts"] = _set(h, 1, f"{v(1)}\n{v(1, key=key(9001))}")
     cases["no-verdict"] = _set(h, 1, "setup: refused")
     cases["no-parts"] = []
-    table = (bytes(range(64)), 18)
-    cases["rec_links-one-part"] = _set(h, 1, v(1, shared=_shared(inner, rec_links=table)))
-    cases["rec_links-every-part"] = [(name, f"{v(j, shared=_shared(inner, rec_links=table))}\n")
+    cases["rec_links-one-part"] = _set(h, 1, v(1, shared=_shared(inner, rec_links=TABLE)))
+    cases["rec_links-every-part"] = [(name, f"{v(j, shared=_shared(inner, rec_links=TABLE))}\n")
                                      for j, (name, _) in enumerate(h)]
     cases["inner_program-one-part"] = _set(h, 1, v(1, shared=_shared(inner, **PROGRAM)))
     cases["inner_program-every-part"] = [(name, f"{v(j, shared=_shared(inner, **PROGRAM))}\n")
@@ -160,18 +160,22 @@ OPTIONAL = {"inner_registration-none", "inner_draw-none"}
 #: the verifier's program of the inner statement, which a part holds where the inner statement links: one in every part
 #: composes
 PROGRAM = {"inner_program": b"program"}
+#: a link table (its root, its row count, a grid(L)) that `rec_links-one-part` and `rec_links-every-part` name
+TABLE = (bytes(range(64)), 18)
 
 
-def _compose(d: Path, tmp_path: Path, n: int, inner: bytes, parts: list[tuple[str, str]], run: str) -> tuple[bool, str]:
+def _compose(d: Path, tmp_path: Path, n: int, inner: bytes, parts: list[tuple[str, str]], run: str,
+             links: tuple[bytes, int] | None = None) -> tuple[bool, str]:
     logs = []
     for name, text in parts:
         (tmp_path / f"{name}.log").write_text(text)
         logs.append(str(tmp_path / f"{name}.log"))
     (tmp_path / "run.json").write_text(run)
+    flag = [] if links is None else ["--rec-links", f"{links[0].hex()}:{links[1]}"]
     p = subprocess.run([str(BIN), "rec-compose", "--rec-inner", str(d / "inner.json"), "--rec-rows", str(d / "rows.json"),
-                        "--rec-run", str(tmp_path / "run.json"), *logs], capture_output=True, text=True)
+                        "--rec-run", str(tmp_path / "run.json"), *flag, *logs], capture_output=True, text=True)
     [line] = [json.loads(ln[12:]) for ln in p.stdout.splitlines() if ln.startswith("REC-COMPOSE ")]
-    want = RC.check(n, RC.digest(ROWS), RC.digest(inner), run, [(lg, t) for lg, (_, t) in zip(logs, parts)])
+    want = RC.check(n, RC.digest(ROWS), RC.digest(inner), run, [(lg, t) for lg, (_, t) in zip(logs, parts)], links)
     assert (line["accepted"], line["why"]) == want, line
     assert p.returncode == (0 if want[0] else 1)
     return want
@@ -197,6 +201,22 @@ def test_rec_compose_holds_the_parts_to_one_run(setup, tmp_path, case):
     d, n, inner = setup
     want = _compose(d, tmp_path, n, inner, _honest(n, inner), _runs(n, inner)[case])
     assert not want[0] and want[1], (case, want)
+
+
+@pytest.mark.parametrize("case,links,accepted", [
+    ("rec_links-every-part", TABLE, True),
+    ("rec_links-every-part", (bytes(range(1, 65)), TABLE[1]), False),
+    ("rec_links-every-part", (TABLE[0], 16), False),
+    ("rec_links-one-part", TABLE, False),
+    ("honest", TABLE, False),
+], ids=["its-table", "other-root", "other-rows", "one-part", "no-part"])
+def test_rec_compose_holds_the_parts_to_its_link_table(setup, tmp_path, case, links, accepted):
+    """With `--rec-links ROOT:N` the composition accepts parts that every one name that table, and refuses them at
+    another root or row count, and parts of which one or none name it: by the binary and its mirror alike."""
+    d, n, inner = setup
+    run = _text(_record(n, inner, shared=_shared(inner, rec_links=TABLE)))
+    want = _compose(d, tmp_path, n, inner, _cases(n, inner)[case], run, links)
+    assert want[0] == accepted and (accepted or "--rec-links" in want[1]), (case, want)
 
 
 def test_rec_compose_needs_the_run_record(setup, tmp_path):
