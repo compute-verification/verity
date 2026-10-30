@@ -14,8 +14,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import shape as S
 
 import fixtures as F
-from verity.core.protocols.pouw.circuit import h1tile as HT
-from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import h1tile as HT
+from verity.ml.protocols.pouw.circuit import seeds as SD
 
 #: per linear: B's row 0 [:4], its last row [-4:], and its first and last channel scales' f32 words, from the generator's
 #: weights module at the frozen shape

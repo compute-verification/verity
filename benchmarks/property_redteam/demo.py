@@ -66,7 +66,7 @@ def classify(pid: str) -> str:
 
 def load_registry() -> dict[str, PrimitiveDefinition]:
     import verity.ml.circuits.ops as ops
-    import verity.core.protocols.pouw.circuit.words  # noqa: F401  (PoUW word primitives register on import)
+    import verity.ml.protocols.pouw.circuit.words  # noqa: F401  (PoUW word primitives register on import)
     import verity.ml.definitions.registry as reg
     for pkg, prefix in ((ops, "verity.ml.circuits.ops."), (reg, "verity.ml.definitions.registry.")):
         for m in pkgutil.walk_packages(pkg.__path__, prefix):

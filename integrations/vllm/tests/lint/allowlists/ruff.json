@@ -219,7 +219,7 @@
     {"file": "tests/protocols/test_pouw_h1.py", "kind": "B008", "symbol": "_host", "detail": "Do not perform function call `CH.session_id` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable"},
     {"file": "tests/protocols/test_pouw_h1_commit.py", "kind": "B008", "symbol": "_window", "detail": "Do not perform function call `hashlib.sha512` in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable"},
     {"file": "tests/protocols/test_pouw_h1_commit.py", "kind": "B008", "symbol": "_window", "detail": "Do not perform function call in argument defaults; instead, perform the call within the function, or read the default from a module-level singleton variable"},
-    {"file": "tests/protocols/test_pouw_h1_live.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.core.protocols.pouw.circuit.live` imported but unused"},
+    {"file": "tests/protocols/test_pouw_h1_live.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.ml.protocols.pouw.circuit.live` imported but unused"},
     {"file": "tests/query/test_contested_members.py", "kind": "E731", "symbol": "_program", "detail": "Do not assign a `lambda` expression, use a `def`"},
     {"file": "tests/query/test_glm53_manifest_names.py", "kind": "F841", "symbol": "_Build.parts", "detail": "Local variable `k` is assigned to but never used"},
     {"file": "tests/query/test_module_body.py", "kind": "F541", "symbol": "test_module_bodies_and_boundary", "detail": "f-string without any placeholders"},

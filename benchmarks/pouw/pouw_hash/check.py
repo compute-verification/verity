@@ -94,8 +94,8 @@ def expected() -> dict[tuple, str]:
     import blake3 as blake3_pkg
     from verity.ml.crypto import blake3 as B3
     from verity.ml.crypto.turboshake import turboshake128
-    from verity.core.protocols.pouw.schemes import pearl_c as C
-    from verity.core.protocols.pouw.schemes import pearl_kw as P
+    from verity.ml.protocols.pouw.schemes import pearl_c as C
+    from verity.ml.protocols.pouw.schemes import pearl_kw as P
 
     out: dict[tuple, str] = {}
     for n, d, olen in ((0, 0x1F, 32), (0, 0x1F, 200), (1, 0x1F, 32), (17, 0x01, 32), (167, 0x06, 32), (168, 0x1F, 32),

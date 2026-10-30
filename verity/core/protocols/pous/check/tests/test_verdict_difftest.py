@@ -30,7 +30,7 @@ from hypothesis import strategies as st
 
 import verity_difftest as D
 from verity.core.protocols.pous import memory_challenger as mc
-from verity.core.protocols.pous import verdict_circuit as V
+from verity.ml.protocols.pous import verdict_circuit as V
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import bits as EB

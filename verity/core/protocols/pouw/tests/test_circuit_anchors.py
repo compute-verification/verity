@@ -1,4 +1,4 @@
-"""The anchored inputs' anchors (`verity.core.protocols.pouw.circuit.anchors`): the verifier builds them, refuses a prover's that differ,
+"""The anchored inputs' anchors (`verity.ml.protocols.pouw.circuit.anchors`): the verifier builds them, refuses a prover's that differ,
 and refuses a repeated call index in a window or across a salt's windows; a tile check's are public input regions, their
 values unpacked into whole words."""
 from __future__ import annotations
@@ -12,9 +12,9 @@ import pytest
 import circuit_fixtures as F
 import pouw_regions_vectors as RV
 from verity.ml.crypto.blake3 import blake3, keyed
-from verity.core.protocols.pouw.circuit import ncp2, pc4, pc8, traced_as
-from verity.core.protocols.pouw.circuit import reference as R
-from verity.core.protocols.pouw.circuit.anchors import (ANCHORED, Anchors, Ledger, Receipt, SaltWindows, public_ports, region_bytes,
+from verity.ml.protocols.pouw.circuit import ncp2, pc4, pc8, traced_as
+from verity.ml.protocols.pouw.circuit import reference as R
+from verity.ml.protocols.pouw.circuit.anchors import (ANCHORED, Anchors, Ledger, Receipt, SaltWindows, public_ports, region_bytes,
                                                         region_words)
 from verity.core.protocols.pouw.protocol import DomainError
 

@@ -1,6 +1,6 @@
 """ovl.cu's edited arms' receipts judged by EGEMM's reference: sampled tiles of each dumped call (EG_DUMP; X, W' and the
 receipts of chunk 0's layer-31 call of a linear) recomputed by ``segment.PouwSegCheck_v2{S, duo}``'s own fold
-(``fold_keys``, ``fold_absorb``, ``fold_final`` of `verity.core.protocols.pouw.circuit.segment`, as hashed_gemm's
+(``fold_keys``, ``fold_absorb``, ``fold_final`` of `verity.ml.protocols.pouw.circuit.segment`, as hashed_gemm's
 hgref.py reads it) from the running sums of X W'^T, every word of
 those tiles compared; another seed's fold must differ (the control).
 
@@ -20,7 +20,7 @@ from pathlib import Path
 
 import numpy as np
 
-from verity.core.protocols.pouw.circuit import segment as SG
+from verity.ml.protocols.pouw.circuit import segment as SG
 
 NCT = 512
 

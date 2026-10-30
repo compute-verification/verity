@@ -41,8 +41,8 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 import receipts as RC  # noqa: E402
 
-from verity.core.protocols.pouw.circuit import h1tile as HT  # noqa: E402
-from verity.core.protocols.pouw.circuit import seeds as SD  # noqa: E402
+from verity.ml.protocols.pouw.circuit import h1tile as HT  # noqa: E402
+from verity.ml.protocols.pouw.circuit import seeds as SD  # noqa: E402
 
 LANES = RC.LANES
 

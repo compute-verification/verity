@@ -12,7 +12,7 @@ import json
 import sys
 from concurrent.futures import ProcessPoolExecutor
 
-from verity.core.protocols.pouw.circuit import banded as BD
+from verity.ml.protocols.pouw.circuit import banded as BD
 
 
 def one(u: dict) -> dict:

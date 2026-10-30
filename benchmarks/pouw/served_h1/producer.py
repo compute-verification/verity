@@ -64,9 +64,9 @@ _ws_spec.loader.exec_module(WS)
 
 from verity.core.protocols.pouw import core_check as CC  # noqa: E402
 from verity.core.protocols.pouw import credit as CR  # noqa: E402
-from verity.core.protocols.pouw.circuit import h1tile as HT  # noqa: E402
-from verity.core.protocols.pouw.circuit import h1window as HW  # noqa: E402
-from verity.core.protocols.pouw.circuit import seeds as SD  # noqa: E402
+from verity.ml.protocols.pouw.circuit import h1tile as HT  # noqa: E402
+from verity.ml.protocols.pouw.circuit import h1window as HW  # noqa: E402
+from verity.ml.protocols.pouw.circuit import seeds as SD  # noqa: E402
 from verity_config.settings import of  # noqa: E402
 
 settings = of(__file__)

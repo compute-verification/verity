@@ -18,9 +18,9 @@ from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll, concat
 from verity.ml.circuits.types import Array
-from verity.core.protocols.pouw.circuit import compile as C
-from verity.core.protocols.pouw.circuit import h1tile as H
-from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import compile as C
+from verity.ml.protocols.pouw.circuit import h1tile as H
+from verity.ml.protocols.pouw.circuit import seeds as SD
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G, registration as R
 
 pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.segment, E2E-120) are not on this tree")

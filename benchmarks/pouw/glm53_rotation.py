@@ -70,9 +70,9 @@ import run_result  # noqa: E402
 from verity.core.protocols.pouw import registration as REG  # noqa: E402
 from verity.core.protocols.pouw.audit import Epoch, Workload, weights_root  # noqa: E402
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape  # noqa: E402
-from verity.core.protocols.pouw.schemes import pearl_c as C  # noqa: E402
-from verity.core.protocols.pouw.schemes.pearl_c_device import SM120  # noqa: E402
-from verity.core.protocols.pouw.schemes.pearl_c_work import Split, UnitRecord, pad_weight  # noqa: E402
+from verity.ml.protocols.pouw.schemes import pearl_c as C  # noqa: E402
+from verity.ml.protocols.pouw.schemes.pearl_c_device import SM120  # noqa: E402
+from verity.ml.protocols.pouw.schemes.pearl_c_work import Split, UnitRecord, pad_weight  # noqa: E402
 
 SNAP = "/workspace/hf/hub/models--zai-org--GLM-5.3/snapshots/aca966e4e02791568aa6a4ced368624b3d897f42"
 TP = 8

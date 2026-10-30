@@ -73,7 +73,7 @@ FMAX_MHZ = {"sm_120": 2430}
 #: PoUW's headline ε at the data sheet, H1 + fx1 on DS-120: `Accounting.SecurityProofs.TS.Sm120SheetHeadline`
 SHEET_EPS = 5860 / 100000
 KINDS = tuple(f"mac:{p}" for p in PRODUCTS)
-#: PoUW's compile pass for H1 + fx1 on sm_120 (`verity.core.protocols.pouw.circuit.h1tile.SCHEME`)
+#: PoUW's compile pass for H1 + fx1 on sm_120 (`verity.ml.protocols.pouw.circuit.h1tile.SCHEME`)
 SCHEME = "eps1-sm120-h1fx1"
 #: its one-stream form, whose units are `PouwH1Tile_v3` (`h1tile.SCHEME_V3`)
 SCHEME_V3 = "eps1-sm120-h1fx1-os"
@@ -137,7 +137,7 @@ class Tile:
         """Every int8 product census/v1 counts in the tile (none served, no tail): the lanes' segment dots', r·c·(K + 32m)
         (`PouwSegDot_v2` and `PouwSegDot0_v2`), and on v1 `z`'s own (Lean's `h1Rows` dotMacs). v3 has none of its own:
         its z is recombined from the lanes' folded words, so its products are the segment dots' alone."""
-        from verity.core.protocols.pouw.circuit import h1tile
+        from verity.ml.protocols.pouw.circuit import h1tile
         lanes = self.r * self.c * (self.k + 32 * h1tile.Layout(self.r, self.c, self.k).m)
         return lanes + (self.linears if self.version == 1 else 0)
 
@@ -145,7 +145,7 @@ class Tile:
 def tiles(program, calls: Collection[int] | None = None) -> Counter:
     """The H1 tile units a Program `SCHEME` or `SCHEME_V3` compiled runs in its root Calls `calls` (all of them by default), by shape,
     each once per activation (a batch or scan multiplies its callee's, as `logical.work` counts)."""
-    from verity.core.protocols.pouw.circuit import h1tile
+    from verity.ml.protocols.pouw.circuit import h1tile
     from verity.ml.circuits.program import is_input
     versions = {id(h1tile.PouwH1Tile): 1, id(h1tile.PouwH1Tile3): 3}
     memo: dict[int, Counter] = {}

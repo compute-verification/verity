@@ -38,7 +38,7 @@ from typing import Any
 import numpy as np
 import torch
 
-from verity.core.protocols.pouw.circuit import h1tile as HT
+from verity.ml.protocols.pouw.circuit import h1tile as HT
 
 from .commit import _slots
 from .shape import Shape

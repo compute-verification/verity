@@ -16,7 +16,7 @@ from pathlib import Path
 from verity.core.protocols.pouw import identifier as I
 from verity.core.protocols.pouw.audit import Epoch, Workload
 from verity.core.protocols.pouw.protocol import Matmul, Shape
-from verity.core.protocols.pouw.schemes import get
+from verity.ml.protocols.pouw.schemes import get
 
 OUT = Path(__file__).with_name("vectors") / "identifier_v1.json"
 U64_MAX = (1 << 64) - 1

@@ -75,7 +75,7 @@ REFERENCE_THREADED = (10.0, 37248.0)
 #: the clock's ceiling 2430 MHz), pinned from Security/Definitions/Core/Accel/Sm120.lean;
 #: tests/test_tiers.py holds the pin to the file
 CARD = {"sms": 188, "tensor": 1024, "clock_hz": 2430e6}
-#: the clock PoUW credits on sm_120 (H1's SM120 record, verity/core/protocols/pouw/circuit/h1device.py: 2430 MHz)
+#: the clock PoUW credits on sm_120 (H1's SM120 record, verity/ml/protocols/pouw/circuit/h1device.py: 2430 MHz)
 CREDITED_CLOCK_HZ = 2430e6
 #: a server's GPUs at the table's FP8 dense peak, 2 FLOP a MAC
 GPU_FLOPS = 2 * CARD["sms"] * CARD["tensor"] * CARD["clock_hz"]

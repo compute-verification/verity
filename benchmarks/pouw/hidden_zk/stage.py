@@ -37,11 +37,11 @@ from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
 from verity_flock import ir_lower as IL
-from verity.core.protocols.pouw.circuit import leaves as L
-from verity.core.protocols.pouw.circuit import pc4
-from verity.core.protocols.pouw.circuit.anchors import TileAnchors, public_ports
+from verity.ml.protocols.pouw.circuit import leaves as L
+from verity.ml.protocols.pouw.circuit import pc4
+from verity.ml.protocols.pouw.circuit.anchors import TileAnchors, public_ports
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
-from verity.core.protocols.pouw.schemes import pearl_c4 as F
+from verity.ml.protocols.pouw.schemes import pearl_c4 as F
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]

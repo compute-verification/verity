@@ -1,7 +1,7 @@
 """Pearl-C's work law and its clear audit: what the verifier credits, draws and checks, all recomputed by the verifier
 (statement review item 5; red team F1, F2 and F5–F8).  It is a reference tool, not a verifier: PoUW's served path is the
 served-ZK window, and its verifier of record is the Lean (`verity/core/protocols/pouw/lean/check`).  It runs the records
-core keeps (`verity.core.protocols.pouw.schemes.pearl_c_work`: `Split`, `UnitRecord`, `records_root`), which vLLM's
+core keeps (`verity.ml.protocols.pouw.schemes.pearl_c_work`: `Split`, `UnitRecord`, `records_root`), which vLLM's
 Pearl-C prover writes, through the clear audit (`clear_audit`).  This directory is not a package: callers put it on
 ``sys.path``.
 
@@ -66,11 +66,11 @@ from clear_audit import Audit, Prover, TileOpening, Transcript, Verdict, Verifie
 from verity.core.protocols.pouw.audit import Epoch, opened_value
 from verity.core.protocols.pouw.coins import Challenger
 from verity.core.protocols.pouw.protocol import Context, Shape, Tile, tagged
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c_debit as D
-from verity.core.protocols.pouw.schemes import pearl_kw as P
-from verity.core.protocols.pouw.schemes.pearl_c_device import SM120, Prices
-from verity.core.protocols.pouw.schemes.pearl_c_work import ALIGN, Split, UnitRecord, records_root
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_c_debit as D
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
+from verity.ml.protocols.pouw.schemes.pearl_c_device import SM120, Prices
+from verity.ml.protocols.pouw.schemes.pearl_c_work import ALIGN, Split, UnitRecord, records_root
 from verity.core.protocols.pouw.serving import HASH_FORMATS
 from verity.ml.randomness import Key, derive
 

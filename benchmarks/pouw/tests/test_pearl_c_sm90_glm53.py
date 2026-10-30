@@ -69,8 +69,8 @@ def test_expert_parallel_brings_the_experts_into_the_domain():
 def test_gamma_is_the_lean_twins():
     """`Pouw.PearlC.pearlCGammaSm120v1Cast32Rev1_8192`: v1 under rev1 (cap 1/400) at the sm_120 record, 8192³, the honest cast
     at 32 (24 over the credited 8), γ = 173561/22302500."""
-    from verity.core.protocols.pouw.schemes import pearl_c as C
-    from verity.core.protocols.pouw.schemes.pearl_c_device import SM120
+    from verity.ml.protocols.pouw.schemes import pearl_c as C
+    from verity.ml.protocols.pouw.schemes.pearl_c_device import SM120
 
     s = C.PearlC(forming="v1", device=replace(SM120, cap=Fraction(1, 400)), hashing="h3")
     assert G.gamma(s, 8192, 8192, Fraction(24)) == Fraction(173561, 22302500)
@@ -416,7 +416,7 @@ def retained(tmp_path_factory):
     )
     from verity.core.protocols.pouw.coins import Challenger
     from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, Tile
-    from verity.core.protocols.pouw.schemes import pearl_c_work as PW
+    from verity.ml.protocols.pouw.schemes import pearl_c_work as PW
     from verity.ml.commitments.merkle import tree_levels
 
     scheme = "pearl-c-h100-v1-h3"

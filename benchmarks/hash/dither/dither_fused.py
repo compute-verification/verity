@@ -194,7 +194,7 @@ class DitherState:
             x.view(torch.uint8).fill_(POISON)
 
     def _coins(self) -> None:
-        from verity.core.protocols.pouw.circuit import h1tile as HT
+        from verity.ml.protocols.pouw.circuit import h1tile as HT
         self.HT = HT
         self.coins = CO.open_coins(CO.session(), 1, ROUNDS)
         self.rounds = self.coins.rounds

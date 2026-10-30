@@ -34,10 +34,10 @@ from verity_flock import class_statement as CS
 
 from verity.core.protocols.pouw import leaf_lanes as LL
 from verity.core.protocols.pouw import weights as W
-from verity.core.protocols.pouw.circuit import h1tile as H
-from verity.core.protocols.pouw.circuit import h1zy as Z
-from verity.core.protocols.pouw.circuit import seeds as SD
-from verity.core.protocols.pouw.circuit import segment as SG
+from verity.ml.protocols.pouw.circuit import h1tile as H
+from verity.ml.protocols.pouw.circuit import h1zy as Z
+from verity.ml.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import segment as SG
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2

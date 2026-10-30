@@ -50,7 +50,7 @@ mod 2^16. The operand rows A[i], B[j] are taken in the clear (their commitments 
     python3 v31.py fill-table BENCH.jsonl ... [--bar B]   the no-fold call's gamma over cuBLASLt and CUTLASS, where its
                                                 time goes, and the commit's compressions a SM-cycle over the ruler (and B)
 
-Dither's no-fold call (verity/core/protocols/pouw/circuit/dither.py), served or the filler's, is `Fill` below: its
+Dither's no-fold call (verity/ml/protocols/pouw/circuit/dither.py), served or the filler's, is `Fill` below: its
 reference and verifier here, its GPU prover v31.cu's Fill, and its per-call binding v31lib.py.
 
 Run from the source tree's root with ``PYTHONPATH=.``.
@@ -73,7 +73,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "commit_gpu"))
 import reference as cref
 
-from verity.core.protocols.pouw.circuit import dither
+from verity.ml.protocols.pouw.circuit import dither
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.limits import VerificationLimits

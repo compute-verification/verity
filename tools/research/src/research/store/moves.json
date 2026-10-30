@@ -1516,6 +1516,52 @@
         "benchmarks/e2e_h200/": "examples/h200/",
         "benchmarks/e2e_demo/": "examples/h200/interfaces/"
       }
+    },
+    {
+      "paths": {
+        "verity/core/protocols/pouw/circuit/live_reads.py": "verity/core/protocols/pouw/live_reads.py",
+        "verity/core/protocols/pouw/circuit/": "verity/ml/protocols/pouw/circuit/",
+        "verity/core/protocols/pouw/schemes/": "verity/ml/protocols/pouw/schemes/",
+        "verity/core/protocols/pous/circuit.py": "verity/ml/protocols/pous/circuit.py",
+        "verity/core/protocols/pous/circuit.circuit-check.py": "verity/ml/protocols/pous/circuit.circuit-check.py",
+        "verity/core/protocols/pous/circuit.circuit-check.json": "verity/ml/protocols/pous/circuit.circuit-check.json",
+        "verity/core/protocols/pous/answer_circuit.py": "verity/ml/protocols/pous/answer_circuit.py",
+        "verity/core/protocols/pous/answer_circuit.circuit-check.py": "verity/ml/protocols/pous/answer_circuit.circuit-check.py",
+        "verity/core/protocols/pous/decode_circuit.py": "verity/ml/protocols/pous/decode_circuit.py",
+        "verity/core/protocols/pous/decode_circuit.circuit-check.py": "verity/ml/protocols/pous/decode_circuit.circuit-check.py",
+        "verity/core/protocols/pous/verdict_circuit.py": "verity/ml/protocols/pous/verdict_circuit.py",
+        "verity/core/protocols/pous/verdict_circuit.circuit-check.py": "verity/ml/protocols/pous/verdict_circuit.circuit-check.py",
+        "verity/core/protocols/certifier/advice_check.py": "verity/ml/protocols/certifier/advice_check.py",
+        "verity/core/protocols/certifier/advice_check.circuit-check.py": "verity/ml/protocols/certifier/advice_check.circuit-check.py",
+        "verity/core/protocols/certifier/advice_check.circuit-check.json": "verity/ml/protocols/certifier/advice_check.circuit-check.json",
+        "verity/core/protocols/certifier/cache_step_v2.py": "verity/ml/protocols/certifier/cache_step_v2.py",
+        "verity/core/protocols/certifier/cache_step_v2.circuit-check.py": "verity/ml/protocols/certifier/cache_step_v2.circuit-check.py",
+        "verity/core/protocols/certifier/cache_step_v2.circuit-check.json": "verity/ml/protocols/certifier/cache_step_v2.circuit-check.json",
+        "verity/core/protocols/certifier/compile_slice_v2.py": "verity/ml/protocols/certifier/compile_slice_v2.py",
+        "verity/core/protocols/certifier/compile_slice_v2.circuit-check.py": "verity/ml/protocols/certifier/compile_slice_v2.circuit-check.py",
+        "verity/core/protocols/certifier/compile_slice_v2.circuit-check.json": "verity/ml/protocols/certifier/compile_slice_v2.circuit-check.json",
+        "verity/core/protocols/certifier/compile_slice_v3.py": "verity/ml/protocols/certifier/compile_slice_v3.py",
+        "verity/core/protocols/certifier/compile_slice_v3.circuit-check.py": "verity/ml/protocols/certifier/compile_slice_v3.circuit-check.py",
+        "verity/core/protocols/certifier/compile_slice_v3.circuit-check.json": "verity/ml/protocols/certifier/compile_slice_v3.circuit-check.json",
+        "verity/core/protocols/certifier/egress.py": "verity/ml/protocols/certifier/egress.py",
+        "verity/core/protocols/certifier/egress.circuit-check.py": "verity/ml/protocols/certifier/egress.circuit-check.py",
+        "verity/core/protocols/certifier/egress.circuit-check.json": "verity/ml/protocols/certifier/egress.circuit-check.json",
+        "verity/core/protocols/certifier/ingress_scan.py": "verity/ml/protocols/certifier/ingress_scan.py",
+        "verity/core/protocols/certifier/ingress_scan.circuit-check.py": "verity/ml/protocols/certifier/ingress_scan.circuit-check.py",
+        "verity/core/protocols/certifier/ingress_scan.circuit-check.json": "verity/ml/protocols/certifier/ingress_scan.circuit-check.json",
+        "verity/core/protocols/certifier/io_ids.py": "verity/ml/protocols/certifier/io_ids.py",
+        "verity/core/protocols/certifier/io_ids.circuit-check.py": "verity/ml/protocols/certifier/io_ids.circuit-check.py",
+        "verity/core/protocols/certifier/io_ids.circuit-check.json": "verity/ml/protocols/certifier/io_ids.circuit-check.json",
+        "verity/core/protocols/certifier/served_statics.py": "verity/ml/protocols/certifier/served_statics.py",
+        "verity/core/protocols/certifier/served_statics.circuit-check.py": "verity/ml/protocols/certifier/served_statics.circuit-check.py",
+        "verity/core/protocols/certifier/served_statics.circuit-check.json": "verity/ml/protocols/certifier/served_statics.circuit-check.json",
+        "verity/core/protocols/certifier/served_tie.py": "verity/ml/protocols/certifier/served_tie.py",
+        "verity/core/protocols/certifier/served_tie.circuit-check.py": "verity/ml/protocols/certifier/served_tie.circuit-check.py",
+        "verity/core/protocols/certifier/served_tie.circuit-check.json": "verity/ml/protocols/certifier/served_tie.circuit-check.json",
+        "verity/core/protocols/certifier/window_charge.py": "verity/ml/protocols/certifier/window_charge.py",
+        "verity/core/protocols/certifier/window_charge.circuit-check.py": "verity/ml/protocols/certifier/window_charge.circuit-check.py",
+        "verity/core/protocols/certifier/window_charge.circuit-check.json": "verity/ml/protocols/certifier/window_charge.circuit-check.json"
+      }
     }
   ]
 }

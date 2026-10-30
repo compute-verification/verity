@@ -10,7 +10,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "accel_v31"))
 import compressions as C
 
-from verity.core.protocols.pouw.circuit import dither
+from verity.ml.protocols.pouw.circuit import dither
 
 
 def test_the_reference_hashes_what_the_model_counts_past_the_device_midstates():

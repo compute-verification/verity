@@ -130,8 +130,8 @@ def clear_work():
 
 
 def scheme():
-    from verity.core.protocols.pouw.schemes import pearl_c as C
-    from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES
+    from verity.ml.protocols.pouw.schemes import pearl_c as C
+    from verity.ml.protocols.pouw.schemes.pearl_c_device import DEVICES
     from verity.core.protocols.pouw.serving import SchemeId
     sid = SchemeId.parse(SCHEME)
     s = C.PearlC(forming=sid.forming, device=DEVICES[sid.device], hashing=sid.hashing)
@@ -154,7 +154,7 @@ def priced_path(s) -> str:
 def gamma(n: int | None, k: int | None, layout: str | None = None) -> dict:
     """γ for Pearl-C at (n, k), or of a served `layout` (`LAYOUT`): `price_twins.lookup`'s record (both prices, the larger
     published, what's missing), with the statement's cap held to the scheme's and K to ε_s and δ."""
-    from verity.core.protocols.pouw.circuit import plan
+    from verity.ml.protocols.pouw.circuit import plan
     P, s = price_twins(), scheme()
     stmt = P.statement(LINE, VERSION)
     if P.CAPS[stmt] != s.cap or clear_work().draw_wref(s).cap != s.cap:
@@ -169,7 +169,7 @@ def gamma(n: int | None, k: int | None, layout: str | None = None) -> dict:
 def wref_cell(n: int, k: int) -> Fraction:
     """One credited cell's reference work at (n, k), every channel kept: the drawn statement's (`ticket_cell`)."""
     from verity.core.protocols.pouw.protocol import Matmul, Shape
-    from verity.core.protocols.pouw.schemes import pearl_c_work as PW
+    from verity.ml.protocols.pouw.schemes import pearl_c_work as PW
     return clear_work().ticket_cell(scheme(), PW.UnitRecord(Matmul(0, Shape(16, k, n), 0), 1, k))
 
 

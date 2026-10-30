@@ -1,5 +1,5 @@
 """A CPU model of J10's banded noise as read from SharedNoise.lean (a band of g column tiles a row block).
-Credit's banded reference (verity/core/protocols/pouw/circuit/banded.py's banded_reference, at `CA_SHA`) equals
+Credit's banded reference (verity/ml/protocols/pouw/circuit/banded.py's banded_reference, at `CA_SHA`) equals
 this model on its pinned vectors and on leader and non-leader receipts; a banded gate holds the kernels to that code
 itself (`ca_reference`, j10ca_ref.py under the tree `ca_tree` finds) and is labelled `CA_LABEL`, and a run
 without that tree is labelled `LABEL`.
@@ -29,8 +29,8 @@ import numpy as np
 import h1v3_ca as V3
 import j10r_ca as J10
 
-from verity.core.protocols.pouw.circuit import h1tile as HT
-from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import h1tile as HT
+from verity.ml.protocols.pouw.circuit import seeds as SD
 from verity_config.settings import of
 
 settings = of(__file__)
@@ -52,7 +52,7 @@ def ca_tree() -> str | None:
             tree = tempfile.mkdtemp(prefix="j10ca-")
             with tarfile.open(arc) as t:
                 t.extractall(tree, filter="data")
-        ok = tree and (Path(tree) / "verity/core/protocols/pouw/circuit/banded.py").is_file()
+        ok = tree and (Path(tree) / "verity/ml/protocols/pouw/circuit/banded.py").is_file()
         _CA["tree"] = tree if ok else None
     return _CA["tree"]
 

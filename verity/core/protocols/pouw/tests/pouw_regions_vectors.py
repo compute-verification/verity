@@ -16,12 +16,12 @@ import hashlib
 import json
 from pathlib import Path
 
-from verity.core.protocols.pouw.circuit import pc4, pc8, rowk
-from verity.core.protocols.pouw.circuit.anchors import TileAnchors, region_bytes
+from verity.ml.protocols.pouw.circuit import pc4, pc8, rowk
+from verity.ml.protocols.pouw.circuit.anchors import TileAnchors, region_bytes
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c4 as F
-from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_c4 as F
+from verity.ml.protocols.pouw.schemes.pearl_c_device import DEVICES
 
 OUT = Path(__file__).with_name("vectors") / "pouw_regions.json"
 ROWS, COLS = (7, 300), (2, 41)

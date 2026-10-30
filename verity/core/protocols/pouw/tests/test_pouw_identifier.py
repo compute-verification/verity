@@ -14,7 +14,7 @@ import identifier_vectors as V
 from verity.core.protocols.pouw import identifier as I
 from verity.core.protocols.pouw.audit import Epoch, Workload
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
-from verity.core.protocols.pouw.schemes import SCHEMES, get
+from verity.ml.protocols.pouw.schemes import SCHEMES, get
 
 PINNED = json.loads(V.OUT.read_text())
 BY_CASE = {c["case"]: c for c in PINNED["cases"]}

@@ -3,7 +3,7 @@
 `libvc.so` (`vc.h`, a C ABI; `vclib.py`, its ctypes binding) is the one CUDA code base every served-path committer calls:
 hm96-sha512 hiding leaves in frame-v3-sha512 trees, byte for byte the formats of `verity.ml.commitments`
 (`verity/ml/commitments/hm96/PROTOCOL.md`, `verity/ml/commitments/frame_v3/PROTOCOL.md` §6, `rowleaf`) and Pearl-C -h3's
-pieces (`verity.core.protocols.pouw.schemes.pearl_c`). It is prover-side code: nothing a verifier runs reads it, so it stays
+pieces (`verity.ml.protocols.pouw.schemes.pearl_c`). It is prover-side code: nothing a verifier runs reads it, so it stays
 here and never in `verity/ml/kernels`. The protocol leads own what is committed and its CPU reference; this library only makes
 it fast, and `conformance.py` holds it to those references.
 

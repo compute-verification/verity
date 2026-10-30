@@ -1,5 +1,5 @@
 // Pearl-C4 on sm_120a (RTX PRO 6000, RTX 5090): the kernels of `pearl-c-nvfp4-v0` and `pearl-c-mxfp4-v0`
-// (verity/core/protocols/pouw/schemes/pearl_c4.py), for dev.py.  Every kernel takes one Args by value: 16 pointers p[] and
+// (verity/ml/protocols/pouw/schemes/pearl_c4.py), for dev.py.  Every kernel takes one Args by value: 16 pointers p[] and
 // 16 ints i[].  FMT 0 is NVFP4 (E2M1, UE4M3 per 16 along k), FMT 1 MXFP4 (E2M1, UE8M0 per 32).  Hashing is GPU 2's
 // pouw_hash.cuh (TurboSHAKE128, SHA-256), included from the pinned commit build.sh names, and the seeds' and noise lines'
 // SHA-512 is pearl_c/sha512.cuh's (Pearl-C's -h3 compression).

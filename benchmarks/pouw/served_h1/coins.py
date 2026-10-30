@@ -491,7 +491,7 @@ def check(directory: str | os.PathLike, coins: dict, heads: Sequence[str | os.Pa
     opened after the window's root; the challenger received exactly `rounds`, and round r's coin opened once after round
     r's root (`rounds_reason` over the challenger's roots); each salt is `h1tile.live_salt` of the opened coin; the draw
     coin opened after `draw_after`, or none opened.  ``ok`` only when all hold."""
-    from verity.core.protocols.pouw.circuit import h1tile as HT
+    from verity.ml.protocols.pouw.circuit import h1tile as HT
     d = published(directory)
     sid, window = coins.get("session"), coins.get("window") or {}
     out: dict[str, Any] = {"ok": False, "coins": "refused", "challenger_out": str(d), "session": sid}

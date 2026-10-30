@@ -30,9 +30,9 @@ from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll, array_of, concat
 from verity.ml.circuits.types import Array, Record, Tuple, Value
 from verity.core.protocols.pouw import grind as GR
-from verity.core.protocols.pouw.circuit import compile as C
-from verity.core.protocols.pouw.circuit import hashes as H
-from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import compile as C
+from verity.ml.protocols.pouw.circuit import hashes as H
+from verity.ml.protocols.pouw.circuit import seeds as SD
 from verity.core.protocols.pouw.protocol import DomainError
 from verity.core.protocols.sampled_proofs.one_stage import partition as OP
 

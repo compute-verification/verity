@@ -23,8 +23,8 @@ from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.circuit import h1window as HW
-from verity.core.protocols.pouw.circuit import plan
+from verity.ml.protocols.pouw.circuit import h1window as HW
+from verity.ml.protocols.pouw.circuit import plan
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
@@ -789,7 +789,7 @@ def test_the_live_program_is_read_from_its_compiled_descriptor():
     without annotations, the bytes its program digest hashes), its unit the one template its query draws, unit s round
     s's; the cases' stand-in descriptor (`live_program`) reads the same. The v1 Program, whose units don't bind each
     request's cap to its public max_tokens, is no live Program credit reads."""
-    from verity.core.protocols.pouw.circuit import live as LV
+    from verity.ml.protocols.pouw.circuit import live as LV
 
     def raw(prog):
         return codec.canonical_json({k: v for k, v in codec.encode_program(prog).items() if k != "annotations"})

@@ -46,7 +46,7 @@ SEG_SHA256 = "4aff8b61dcacf1cf32f11c8ec4e4bd19573fc84e68267a34ac69e8f6f10f28f7"
 
 
 def _segment():
-    name = "verity.core.protocols.pouw.circuit.segment_e2e"
+    name = "verity.ml.protocols.pouw.circuit.segment_e2e"
     if name not in sys.modules:
         if hashlib.sha256(SEG_PATH.read_bytes()).hexdigest() != SEG_SHA256:
             raise RuntimeError(f"{SEG_PATH} is not segment.py of cursor/e2e-slice-ea24@3341b0f46: restore it, don't edit it")

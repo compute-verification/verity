@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import random
 
-from verity.core.protocols.pouw.circuit import h1tile, segment as SG, seeds as SD
-from verity.core.protocols.pouw.circuit.h1tile import Layout, fold_keys, noise, reference
+from verity.ml.protocols.pouw.circuit import h1tile, segment as SG, seeds as SD
+from verity.ml.protocols.pouw.circuit.h1tile import Layout, fold_keys, noise, reference
 
 M32 = (1 << 32) - 1
 #: (r, c, K, adversarial) tiles the check runs; adversarial forces the s8 wrap on both operands.

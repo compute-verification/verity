@@ -1,7 +1,7 @@
 # J10-R's proof blocks on the H200: fixtures, check, bench and an exact fallback
 
 J10-R's per-call-noise PoUW proof block (`PouwH1Tile_v5` / `_v6`, `h1tile.j10r_reference` in
-`verity/core/protocols/pouw/circuit/h1tile.py`) at the frozen shape's linears on one H200 (sm_90a): the values any build
+`verity/ml/protocols/pouw/circuit/h1tile.py`) at the frozen shape's linears on one H200 (sm_90a): the values any build
 of its kernel must reproduce, a check that holds a build to them bit for bit, a bench that times it against plain exact
 INT8, and a slow but exact CUDA kernel to fall back on. The fast kernels are `benchmarks/hash/dither/h1u.cu`'s
 (`kh_seeds_j10r`, `kh_units_multi_j10r` and `_sm`), built for sm_90a.

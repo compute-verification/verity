@@ -139,7 +139,7 @@ from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.circuit import live_reads as LR
+from verity.core.protocols.pouw import live_reads as LR
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.commitments.indexed import RangeIndexedDomain

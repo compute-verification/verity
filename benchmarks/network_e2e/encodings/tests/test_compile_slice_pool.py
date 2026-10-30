@@ -1,4 +1,4 @@
-"""CompileSlice_v2's pool calls (`verity.core.protocols.certifier.compile_slice_v2.pool_step`) against the replay over
+"""CompileSlice_v2's pool calls (`verity.ml.protocols.certifier.compile_slice_v2.pool_step`) against the replay over
 whole traces, through `compile_slice_pool.check_trace`: at every unit each hit, evictable count and return the calls
 derive is `_KV`'s, the state's free count is the pool's hashless free count plus its queued copies, the tapped wires
 are ReplayStep_v1's rows, and the calls the slice checks rebuild the prover's pool."""

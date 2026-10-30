@@ -18,7 +18,7 @@ from verity.ml.circuits import Program
 from verity.ml.circuits.codec import program_digest
 from verity.ml.circuits.cut import CallGraph, call_scope
 
-pc8 = pytest.importorskip("verity.core.protocols.pouw.circuit.pc8", reason="the Program is `verity.core.protocols.pouw.circuit.pc8`'s")
+pc8 = pytest.importorskip("verity.ml.protocols.pouw.circuit.pc8", reason="the Program is `verity.ml.protocols.pouw.circuit.pc8`'s")
 
 #: `program_digest` of the `Pc8Check` Programs the Lean layout was checked against; a change to any needs the Lean re-read
 DIGESTS = {

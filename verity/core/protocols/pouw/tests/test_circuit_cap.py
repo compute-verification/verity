@@ -1,4 +1,4 @@
-"""Pearl-C's per-tile cap on a circuit (`verity.core.protocols.pouw.circuit.cap`) against the scheme's replay: a word's flags and later
+"""Pearl-C's per-tile cap on a circuit (`verity.ml.protocols.pouw.circuit.cap`) against the scheme's replay: a word's flags and later
 +0 promotions are `pearl_c_debit.word_debit`'s, its C̃ `pearl_c.chain`'s, and only the exact certificates pass; a tile's
 verdict is rev1's capOK (`pearlCTilesDevRev1`) on `chain_debit` and `debit_units` against the device's `cap` times
 `credit_of`, on random tiles and adversarial ones (zero rows, absorbed groups, a total cancelled to zero, refused rows,
@@ -29,13 +29,13 @@ from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.silicon import fp32
 from verity.ml.randomness import derive
-from verity.core.protocols.pouw.circuit import cap, pc8, plan
-from verity.core.protocols.pouw.circuit import leaves as L
+from verity.ml.protocols.pouw.circuit import cap, pc8, plan
+from verity.ml.protocols.pouw.circuit import leaves as L
 from verity.core.protocols.pouw.protocol import DomainError, Shape
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c_debit as D
-from verity.core.protocols.pouw.schemes import pearl_kw as P
-from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_c_debit as D
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
+from verity.ml.protocols.pouw.schemes.pearl_c_device import DEVICES
 
 FINITE = [c for c in range(256) if c not in (0x7F, 0xFF)]
 SMALL = [c for c in FINITE if c & 0x7F < 0x10]                     # E4M3 subnormals and the smallest normals

@@ -189,7 +189,7 @@ def install(model, mode: str, committer=None):
             st["Wt"] = Wq.contiguous()
             if mode == "ncp":
                 if k not in perms:
-                    from verity.core.protocols.pouw.schemes.ncp import word_perm
+                    from verity.ml.protocols.pouw.schemes.ncp import word_perm
                     perms[k] = torch.tensor(word_perm(k)[0], device="cuda", dtype=torch.long)
                 st["pi"] = perms[k]
             layer.weight.data = torch.empty(0, dtype=W.dtype, device=W.device)

@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.core.protocols.pouw.schemes.ncp import D, admissible_perm, perm_digest, word_perm
+from verity.ml.protocols.pouw.schemes.ncp import D, admissible_perm, perm_digest, word_perm
 
 # An independent generator's vectors; k = 4096 and 11008 are v1 unchanged.
 DIGESTS = {

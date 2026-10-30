@@ -27,7 +27,7 @@ _spec.loader.exec_module(R)
 from verity.ml.commitments.merkle import tree_levels  # noqa: E402
 from verity.core.protocols.pouw import audit  # noqa: E402
 from verity.core.protocols.pouw.audit import ROW_SCHEMA, activation_binding, rows_domain  # noqa: E402
-from verity.core.protocols.pouw.schemes import pearl_c as C  # noqa: E402
+from verity.ml.protocols.pouw.schemes import pearl_c as C  # noqa: E402
 
 
 class Host:
