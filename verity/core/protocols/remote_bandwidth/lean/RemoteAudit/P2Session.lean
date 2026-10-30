@@ -161,7 +161,7 @@ def checkOpeningsChunked (size : Nat) (reg : P2.Registration) (w : WindowRecord)
     Task.spawn (prio := .dedicated) fun _ =>
       checkOpenings reg w (drawn.extract (c * size) ((c + 1) * size)) (openings.extract (c * size) ((c + 1) * size))
   for t in tasks do
-    if let .reject f at? := t.get then return .reject f at?
+    if t.get ≠ .accept then return t.get
   return .accept
 
 /-- A line out of form, or a prover gone: the session rejected `malformed` at the window filling, as `p2_party`
@@ -254,8 +254,8 @@ def answer (held : Held) (s : Session.State) : Json :=
   let windows := s.windows.map fun w => Json.mkObj [("passes", toJson w.roots.size),
     ("draws", match w.drawn with | some d => toJson d.size | none => .null),
     ("verdict", match w.verdict with
-      | some .accept => Json.mkObj [("accepted", .bool true), ("at", .null), ("failure", .null)]
-      | some (.reject f at?) => Json.mkObj [("accepted", .bool false), ("at", atJ at?), ("failure", .str f.name)]
+      | some v => Json.mkObj [("accepted", .bool (v == .accept)), ("at", atJ (v.1.bind (·.at?))),
+          ("failure", match v.1 with | some r => .str r.failure.name | none => .null)]
       | none => .null)]
   let base := [("protocol", Json.str PROTOCOL), ("registration", .str (hexOf held.reg.digest)),
     ("unit_bytes", toJson P2.UNIT_BYTES), ("units", toJson held.reg.units), ("plan_units", toJson held.plan.length),
