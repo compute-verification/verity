@@ -2,10 +2,12 @@
 accepts a call's committed words and rejects a changed word, a tag weight outside [-3, 3], an even lane coin and a served
 word past 2^22, the fold reads back A_i · B_j and serves verity_int8's bf16 bit for bit, a ragged call's padding rows and
 columns carry their coins, a unit's ANDs are `unit_ands`, its output is one bit, and a binding past the calls the verifier
-admits is refused."""
+admits is refused; the window's record, positions, domains and stream order are the served committer's, a unit's opening
+reads back its words, and the verifier refuses each window the Definition refuses."""
 from __future__ import annotations
 
 import copy
+import hashlib
 import random
 import struct
 
@@ -327,3 +329,180 @@ def test_the_largest_admitted_bindings_bind(shape):
     shape = {"K": 21, "R0": 0, "C0": 0, "ROWS": 16, "COLS": 8, "BLK": 0, **shape}
     assert L.Unit(**shape).refuse() is None
     assert bind(L.PouwLeadTile, **shape).signature()[1].leaves == 1
+
+
+# -- the window ---------------------------------------------------------------------------------------------------------------
+
+SALT = hashlib.sha512(b"lead test salt").digest()
+#: the served committer's (`verity_vllm.commit.lead_rows`, at c0cf0bdec76) instance domains' ids and its leaf at rank 1 mod
+#: count of b"\x01\x02\x03" under the words schema, at salt SALT
+COMMITTER_DOMAINS = {
+    (5, 3): ("5e67997b97e08262931bfaf3a58681ba00be1f7f58fecfee134fef4bd054a2fa432802e7ebfebf35c4099f6344c842a8c3ada4b55d8d77ba08256589075a9778",
+             "23c7c503d1967b46612de07e48495b64ef14d35aa7527c6ee2ec93265d9b52c26a154d50c3738b98fa7b9007c50631a432ca9f56a77206ddea1aa1859805bc32"),
+    ((1 << 63) + 2, 7): ("ab7974576b72383f85b53b481ff43ea2be712c2179bd23c062266419e6ebbf388af6050fd8c098598ad538a7d4813c35280b142a166d7db1d5085d6e14071cd8",
+                         "f5b05afba1ad03dc9473943b1ef8491d085beb8fb8f005a4e607c3be8779be9335c971abe5108e131c27a4656c76e3abaf3bcf62ad0b561de6d91e97a16ebd9d"),
+    (0, 1): ("a271f286fc6b5fcfc9164dab183c373428358d37e0ff3167545d9e6c11b5b670c1b9265a565d8dc2d639a2e98b759e255a1ed6b51d6d162cf6021bc64f909f84",
+             "2d3e8274c04dc6962216f533bf00d13304d9da80145526e1cd6b81357faf9bd48b375ef5d31848fc43c33fe02864babc195de6211315b3dab171eaac2112d37e"),
+}
+#: SHA-256 (first 16 bytes) of the committer's `committed_tiles(rows, cols, S, bn)`, each committed tile's export word
+#: offset in stream order as little-endian int64s
+COMMITTER_TILES = {(17, 13, 3, 128): "15e3e310e4fb5c57a4556fef03784728", (70, 300, 2, 128): "c9328da82b6c6adf8b23e11836e143b6",
+                   (130, 520, 2, 256): "c56fa2b02c8206640070ac654821715d", (1, 8, 4, 256): "07530363844e4b4415f2c1ad6be283ad",
+                   (64, 256, 1, 256): "73c8193684a8bac478729d82c3349374"}
+
+
+def _shape_at(rows: int, cols: int, S: int, bn: int) -> L.Shape:
+    K = 1 if S == 1 else L.LANES0 + L.LANES * (S - 1)
+    sh = L.Shape(rows, cols, K, bn)
+    assert sh.S == S
+    return sh
+
+
+def test_the_record_is_the_tagged_preimage():
+    root, leaf = hashlib.sha512(b"weights").digest(), hashlib.sha512(b"key leaf").digest()
+    assert L.lead_record(root, leaf, 7) == hashlib.sha512(b"pouw/lead/register/v1" + root + leaf + bytes(7) + b"\x07").digest()
+    assert len({L.lead_record(root, leaf, c) for c in (1, 2, 1 << 62)} | {L.lead_record(leaf, root, 1)}) == 4
+    for bad in ((root[:63], leaf, 1), (root, leaf + b"\0", 1), (root, leaf, 0), (root, leaf, 1 << 63)):
+        with pytest.raises(ValueError):
+            L.lead_record(*bad)
+
+
+def test_positions_are_injective_and_the_domains_are_the_committers():
+    calls = 5
+    seen = {L.a_position(f, calls, j) for f in range(20) for j in range(calls)} | {L.words_position(f) for f in range(20)}
+    assert len(seen) == 120 and max(L.a_position(f, calls, j) for f in range(20) for j in range(calls)) < L.WORDS_POSITION
+    assert L.position_refusal(0, calls, calls) and L.position_refusal(-1, calls, 0)
+    assert L.position_refusal((L.WORDS_POSITION - 1) // calls, calls, calls - 1)
+    assert L.position_refusal((L.WORDS_POSITION - 1) // calls - 1, calls, calls - 1) is None
+    for (pos, count), (dom, leaf) in COMMITTER_DOMAINS.items():
+        d = L.instance_domain(SALT, pos, count)
+        assert d.domain_id.hex() == dom
+        assert d.leaf(1 % count, 1 % count, L.WORDS_SCHEMA, b"\x01\x02\x03").hex() == leaf
+
+
+@pytest.mark.parametrize("key", list(COMMITTER_TILES))
+def test_the_stream_order_is_the_committers(key):
+    """Each committed tile's stream index (`Shape.tile`) placed at its export word offset gives the committer's
+    `committed_tiles`, every index once."""
+    rows, cols, S, bn = key
+    sh = _shape_at(*key)
+    nct = -(-cols // bn)
+    offsets = {}
+    for R0 in range(0, sh.m, 16):
+        for C0 in range(0, sh.n, 8):
+            rt, w, ct, ni = R0 // 64, R0 % 64 // 16, C0 // bn, C0 % bn // 8
+            for t in range(S):
+                offsets[sh.tile(R0, C0, t)] = ((rt * nct + ct) * S + t) * 64 * bn + (ni * 4 + w) * 128
+    assert sorted(offsets) == list(range(sh.m // 16 * sh.n // 8 * S))
+    got = np.array([offsets[k] for k in range(len(offsets))], dtype="<i8").tobytes()
+    assert hashlib.sha256(got).hexdigest()[:32] == COMMITTER_TILES[key]
+
+
+def test_fragment_order_is_wgmmas():
+    assert sorted(L.fragment(r, c) for r in range(16) for c in range(8)) == list(range(128))
+    assert [L.fragment(r, c) for r, c in [(0, 0), (0, 1), (8, 0), (0, 2), (1, 0), (15, 7)]] == [0, 1, 2, 4, 16, 127]
+
+
+def _stream(W: list, sh: L.Shape) -> list[int]:
+    """A call's committed words W in stream order, as the committer lays them out."""
+    out = [0] * (sh.m * sh.n * sh.S)
+    for R0 in range(0, sh.m, 16):
+        for C0 in range(0, sh.n, 8):
+            for t in range(sh.S):
+                base = sh.tile(R0, C0, t) * 128
+                for r in range(16):
+                    for col in range(8):
+                        out[base + L.fragment(r, col)] = W[t][R0 + r][C0 + col] & L.M32
+    return out
+
+
+def test_a_units_opening_reads_back_its_words_and_rows():
+    """A forward of three calls, the second's chunks after the first's: every unit's words, read from the forward's words
+    leaves where `unit_opening` says, are the unit's committed words, and its A runs are its rows' bytes at the block."""
+    rng = random.Random(11)
+    calls = [L.Call.draw(rng, 17, 13, 917), L.Call.draw(rng, 70, 300, 120), L.Call.draw(rng, 3, 8, 21)]
+    shapes = [L.Shape(c.rows, c.cols, c.K, bn) for c, bn in zip(calls, (128, 128, 256))]
+    words = [c.words() for c in calls]
+    leaves = []
+    for c, sh, W in zip(calls, shapes, words):
+        s = _stream(W, sh)
+        leaves += [s[k:k + L.CHUNK_WORDS] for k in range(0, len(s), L.CHUNK_WORDS)]
+        assert -(-len(s) // L.CHUNK_WORDS) == sh.chunks
+    assert len(leaves) == sum(sh.chunks for sh in shapes) == 4
+    for j, (c, sh, W) in enumerate(zip(calls, shapes, words)):
+        a = bytes(x & 0xFF for row in c.A for x in row)
+        for R0, C0, BLK in [(0, 0, 0), (16, 8, 0), (0, 0, 1), (64, 296, 0), (48, 128, 1)]:
+            if R0 >= sh.m or C0 >= sh.n or 32 * BLK >= sh.S:
+                continue
+            u, op = c.unit(R0, C0, BLK), L.unit_opening(shapes, j, R0, C0, BLK)
+            assert [t for t, _r, _w in op["words"]] == list(range(u.t0 - (1 if BLK else 0), u.t1))
+            for t, rank, word in op["words"]:
+                assert all(leaves[rank][word + L.fragment(r, col)] == W[t][R0 + r][C0 + col] & L.M32
+                           for r in range(16) for col in range(8))
+            assert [a[lo:hi] for lo, hi in op["a"]] == [bytes(x & 0xFF for x in c.A[i][u.k0:u.k0 + u.kb])
+                                                        for i in range(R0, R0 + u.ROWS)]
+            assert op["segments"] == sorted({k // L.A_SEGMENT for lo, hi in op["a"] for k in range(lo, hi)})
+    with pytest.raises(ValueError, match="column tile"):
+        L.unit_opening([L.Shape(16, 8, 21, 64)], 0, 0, 0, 0)
+    with pytest.raises(ValueError, match="call 1: K = 0"):
+        L.unit_opening([shapes[0], L.Shape(16, 8, 0, 128)], 0, 0, 0, 0)
+    for call in (-1, 3):
+        with pytest.raises(ValueError, match="not one of the forward's 3"):
+            L.unit_opening(shapes, call, 0, 0, 0)
+    with pytest.raises(ValueError, match="holds"):
+        L.unit_opening(shapes, 0, 32, 0, 0)
+
+
+def test_egress_is_bounded_per_forward_under_the_hold():
+    """A forward's bits are cap · Σ rows · n · K / fwdMacs: 32 · rows at cap 32 for a whole forward. Under the hold its
+    span's buckets are at r = 0 and count nothing, and the boundary's release counts ⌈log2(r + 1)⌉ once."""
+    shapes = [L.Shape(5, 4096, 2048, 128), L.Shape(5, 2048, 4096, 128)]
+    fwd = sum(s.macs for s in shapes) // 5
+    assert not L.egress_refused(32 * 5, shapes, 32, fwd) and L.egress_refused(32 * 5 + 1, shapes, 32, fwd)
+    assert L.forward_count([(0, [])] * 1000, 0) == 0
+    assert L.forward_count([(0, [])] * 1000, 255) == 8
+    assert L.forward_count([(3, [1, 2]), (1, [7])], 3) == 2 + 3 + 1 + 7 + 2
+
+
+def _window(calls: int, events: list[dict], record: bytes | None = None) -> str | None:
+    root, leaf = hashlib.sha512(b"weights").digest(), hashlib.sha512(b"key leaf").digest()
+    return L.window_refusal(L.lead_record(root, leaf, calls) if record is None else record, root, leaf, calls, events)
+
+
+def _a(f: int, j: int, rows: int = 5, cols: int = 64, K: int = 128, bn: int = 128) -> dict:
+    return {"kind": "a_root", "forward": f, "call": j, "rows": rows, "cols": cols, "K": K, "bn": bn}
+
+
+def _w(f: int, verdict: str = L.ACCEPTED) -> dict:
+    return {"kind": "words_root", "forward": f, "verdict": verdict}
+
+
+SALTED = {"kind": "salt"}
+
+
+@pytest.mark.parametrize("calls, events, record, why", [
+    (2, [SALTED, _a(0, 0), _a(0, 1), _w(0), _a(1, 1), _a(1, 0), _w(1)], None, None),
+    (2, [SALTED], None, None),
+    (2, [SALTED, _a(0, 0), _w(0)], b"\0" * 64, "does not open"),
+    (3, [SALTED, _a(0, 0), _w(0)], L.lead_record(hashlib.sha512(b"weights").digest(), hashlib.sha512(b"key leaf").digest(),
+                                                 2), "does not open"),
+    (2, [_a(0, 0), SALTED, _w(0)], None, "before salt_w"),
+    (2, [SALTED, SALTED], None, "second salt_w"),
+    (2, [SALTED, _a(0, 0), _a(1, 0), _w(1), _w(0)], None, "overlap"),
+    (2, [SALTED, _a(0, 0), _w(0), _a(0, 1), _w(0)], None, "closed"),
+    (2, [SALTED, _a(0, 0), _a(0, 0), _w(0)], None, "already"),
+    (2, [SALTED, _a(0, 2), _w(0)], None, "no A position"),
+    (2, [SALTED, _a(0, 0, K=0), _w(0)], None, "inner dimensions"),
+    (2, [SALTED, _a(0, 0, bn=64), _w(0)], None, "column tile"),
+    (2, [SALTED, _w(0)], None, "not open"),
+    (2, [SALTED, _a(0, 0), _w(0, "past its bits")], None, "past its bits"),
+    (2, [SALTED, _a(0, 0)], None, "open when the record ends"),
+    (2, [SALTED, {"kind": "tick"}], None, "not a salt"),
+    (2, [SALTED, "salt"], None, "not a salt"),
+    (2, [SALTED, {**_a(0, 0), "K": "128"}, _w(0)], None, "a_root event's fields are malformed"),
+    (2, [SALTED, _a(0, 0), {"kind": "words_root", "forward": 0}], None, "words_root event's fields are malformed"),
+    (0, [], b"\0" * 64, "calls a forward"),
+])
+def test_the_window_refusals(calls, events, record, why):
+    got = _window(calls, events, record)
+    assert got is None if why is None else why in got

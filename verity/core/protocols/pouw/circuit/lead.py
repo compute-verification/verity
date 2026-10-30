@@ -1,6 +1,7 @@
 """The lead's sampled unit (`verity/pouw/v2`): one 16 × 8 MMA tile of one call over one block of at most 32 k32 steps, its
 committed words checked against the call's data and the certifier's coins, and on the call's last block the served fold,
-at the layout of `Security/Definitions/Pouw/Lead/Layout.lean` (`Pouw.Lead`).
+at the layout of `Security/Definitions/Pouw/Lead/Layout.lean` (`Pouw.Lead`); and its window, what the verifier reads
+around the units.
 
 The lead is `tag-blc4a-t64-rot/served/s8/k32/w/l1w/l1a/min`. A call of ``rows`` × K × ``cols`` commits its words over
 ``m = pad_rows(rows)`` rows and ``n = pad_cols(cols)`` columns (Lean's `padRows`, `padCols`), at S = `steps_for`(K) k32
@@ -65,14 +66,35 @@ and a unit's are `unit_ands`.
 `MAX_ROWS` or columns past `MAX_COLS`; a tile off the 16 × 8 grid; ROWS outside [1, 16] or COLS outside [1, 8]; and a
 block past the call's steps. `Call` is the reference: a call's data and coins, its words, its served bf16s, and a unit's
 inputs and verdict.
+
+**The window.** A window registers, before the certifier draws salt_w (its existing 512-bit window salt), one 64-byte
+record in the certifier's `commit_weights` slot, signed by the prover: `lead_record`, SHA-512(``pouw/lead/register/v1`` ‖
+root(weights) ‖ keyLeaf ‖ u64be(calls)), keyLeaf the hm96-sha512 leaf of the window's key ks_w and calls the calls a
+forward. Each call j of forward f then commits A_j, its rows · K bytes row-major in `A_SEGMENT`-byte leaves, at instance
+position f · calls + j (`a_position`), and each forward its calls' committed words in `CHUNK_WORDS`-word leaves, each
+call's chunks after the call before's, at 2^63 + f (`words_position`). An instance's tree is frame-v3-sha512 over
+`instance_domain` (its binding SHA-512(``pouw/lead/instance/v1`` ‖ salt_w ‖ u64be(position)), leaf r at rank and
+position r, schemas `A_SCHEMA` and `WORDS_SCHEMA`), and its public digest the keyed root SHA-512(ks_w ‖ salt_w ‖ M_top)
+(`verity.ml.commitments.keyed`). A call's committed words are the kernel's export in (rt, ct, t, ni, w) tile order at its
+column tile `Shape.bn`, the tiles past m and n skipped, each tile's 128 s32 little-endian in wgmma's fragment order
+(`Shape.tile`, `fragment`), and `unit_opening` says which leaves and bytes a unit reads. The certifier opens a forward
+at its first A root and closes it at its words root, one forward open at a time, and counts against it every bucket a
+boundary link ticks while it is open, holding the node's links at r = 0 and counting the boundary's release once
+(`forward_count`); it refuses a forward whose count passes its calls' bits (`egress_refused`, R17's per-forward bound).
+The verifier refuses the window (`window_refusal`) unless its record opens to its weights' root, keyLeaf and call count,
+every A root follows salt_w, the forwards are serial, and the certifier accepted every forward's egress. Its Lean reader
+is `PouwCheck.Lead` (`lean/check/PouwCheck/Opening.lean`), which the package's difftest holds to these functions.
 """
 from __future__ import annotations
 
+import hashlib
 import random
 import struct
 from dataclasses import dataclass
 from typing import Any
 
+from verity.ml.commitments.indexed import RangeIndexedDomain
+from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean.forms import NOT, ZERO, add, compress_columns, const_bits, or_reduce, sub
 from verity.ml.circuits.boolean.trace import definition
@@ -87,6 +109,9 @@ __all__ = [
     "PouwLeadStep0", "PouwLeadStep", "PouwLeadPad0", "PouwLeadPad", "PouwLeadWeigh", "PouwLeadTagWeight", "PouwLeadPairS8",
     "PouwLeadPair32", "PouwLeadPop", "PouwLeadSub32", "PouwLeadFold", "PouwLeadStep0Row", "PouwLeadStep0Mma",
     "PouwLeadStepRow", "PouwLeadStepMma", "PouwLeadTile",
+    "RECORD_TAG", "INSTANCE_TAG", "WORDS_SCHEMA", "A_SCHEMA", "WORDS_POSITION", "CHUNK_WORDS", "A_SEGMENT", "BNS",
+    "ACCEPTED", "lead_record", "position_refusal", "a_position", "words_position", "instance_binding", "instance_domain",
+    "Shape", "fragment", "unit_opening", "egress_refused", "forward_count", "window_refusal",
 ]
 
 BIT = BL.BIT
@@ -926,3 +951,224 @@ class Call:
         u = self.unit(R0, C0, BLK)
         fn = bind(PouwLeadTile, K=u.K, R0=R0, C0=C0, ROWS=u.ROWS, COLS=u.COLS, BLK=BLK)
         return int(evaluate_words(fn, *self.unit_args(R0, C0, BLK, words)).reshape(-1)[0])
+
+
+# -- the window ---------------------------------------------------------------------------------------------------------------
+
+#: the lead's registration record's tag: the record is SHA-512(RECORD_TAG ‖ root(weights) ‖ keyLeaf ‖ u64be(calls))
+RECORD_TAG = b"pouw/lead/register/v1"
+#: an instance's tree binding's tag, and its leaves' schemas
+INSTANCE_TAG, WORDS_SCHEMA, A_SCHEMA = b"pouw/lead/instance/v1", "pouw/lead/words/v1", "pouw/lead/a/v1"
+#: the first words instance's position: A_j's instances are below it, a forward's words at it and above
+WORDS_POSITION = 1 << 63
+#: a words leaf's words (256 KiB, 512 MMA tiles) and an A leaf's bytes
+CHUNK_WORDS, A_SEGMENT = 1 << 16, 1 << 10
+#: the rows of the kernel's row tile, and the column tiles BN it runs a call at
+ROW_TILE, BNS = 64, (128, 256)
+#: the certifier's verdict on a forward within its egress bits; any other is a refusal
+ACCEPTED = "accepted"
+DIGEST = 64
+
+
+def lead_record(weights_root: bytes, key_leaf: bytes, calls: int) -> bytes:
+    """The window's registration record, the 64 bytes the prover signs into the certifier's `commit_weights` slot before
+    salt_w is drawn: SHA-512(RECORD_TAG ‖ root(weights) ‖ keyLeaf ‖ u64be(calls)), each root 64 bytes."""
+    if len(weights_root) != DIGEST or len(key_leaf) != DIGEST or not 1 <= calls < WORDS_POSITION:
+        raise ValueError("a record binds a 64-byte weights root, a 64-byte keyLeaf and 1 .. 2^63 - 1 calls a forward")
+    return hashlib.sha512(RECORD_TAG + bytes(weights_root) + bytes(key_leaf) + calls.to_bytes(8, "big")).digest()
+
+
+def position_refusal(forward: int, calls: int, call: int) -> str | None:
+    """Why call ``call`` of forward ``forward`` has no instance position in a window of ``calls`` calls a forward."""
+    if not (0 <= call < calls and 0 <= forward and forward * calls + call < WORDS_POSITION):
+        return f"call {call} of forward {forward} has no A position in a window of {calls} calls a forward"
+    return None
+
+
+def a_position(forward: int, calls: int, call: int) -> int:
+    """A_j's instance position, f · calls + j: injective over the window's calls and below every words position."""
+    if (why := position_refusal(forward, calls, call)) is not None:
+        raise ValueError(why)
+    return forward * calls + call
+
+
+def words_position(forward: int) -> int:
+    """The forward's words instance's position, 2^63 + f."""
+    if not 0 <= forward < WORDS_POSITION:
+        raise ValueError(f"forward {forward} has no words position")
+    return WORDS_POSITION + forward
+
+
+def instance_binding(salt_w: bytes, position: int) -> bytes:
+    """An instance's tree binding, SHA-512(INSTANCE_TAG ‖ salt_w ‖ u64be(position)): bound to the window's live salt and
+    the instance's position."""
+    if len(salt_w) != DIGEST or not 0 <= position < 1 << 64:
+        raise ValueError("a 64-byte salt_w and a u64 position")
+    return hashlib.sha512(INSTANCE_TAG + bytes(salt_w) + position.to_bytes(8, "big")).digest()
+
+
+def instance_domain(salt_w: bytes, position: int, count: int) -> CommitmentDomain:
+    """An instance's tree domain over ``count`` leaves, leaf r at rank and position r (``dom.leaf(r, r, schema, value)``)."""
+    return CommitmentDomain(instance_binding(salt_w, position), -1, RangeIndexedDomain(0, count), hash="sha512")
+
+
+@dataclass(frozen=True)
+class Shape:
+    """A call's public shape: ``rows`` rows of A, ``cols`` output columns, inner dimension K, and the column tile ``bn`` the
+    kernel ran it at, which orders its committed words."""
+
+    rows: int
+    cols: int
+    K: int
+    bn: int
+
+    @property
+    def m(self) -> int:
+        return pad_rows(self.rows)
+
+    @property
+    def n(self) -> int:
+        return pad_cols(self.cols)
+
+    @property
+    def S(self) -> int:
+        return steps_for(self.K)
+
+    @property
+    def chunks(self) -> int:
+        """Its committed words' leaves: ⌈m n S / CHUNK_WORDS⌉, the last short."""
+        return -(-self.m * self.n * self.S // CHUNK_WORDS)
+
+    @property
+    def segments(self) -> int:
+        """A_j's leaves: its rows · K bytes, row-major, in ⌈rows K / A_SEGMENT⌉ segments, the last short."""
+        return -(-self.rows * self.K // A_SEGMENT)
+
+    @property
+    def macs(self) -> int:
+        """Its MACs a token, its share of its forward's egress bits: rows · n · K (`Layout.callBits`)."""
+        return self.rows * self.n * self.K
+
+    def refuse(self) -> str | None:
+        """Why the verifier doesn't admit the call: K outside [1, `MAX_K`], rows outside [1, `MAX_ROWS`], columns outside
+        [1, `MAX_COLS`] (`Statement.admits_of_caps`, within `Layout.Admits`' 2^40 tiles), or a column tile not in `BNS`."""
+        if not 1 <= self.K <= MAX_K:
+            return f"K = {self.K} is outside [1, {MAX_K}], the inner dimensions the verifier admits"
+        if not (1 <= self.rows <= MAX_ROWS and 1 <= self.cols <= MAX_COLS):
+            return f"a call of {self.rows} rows and {self.cols} columns is outside the [1, {MAX_ROWS}] rows and " \
+                   f"[1, {MAX_COLS}] columns the verifier admits"
+        if self.bn not in BNS:
+            return f"the kernel runs a call at a column tile of {' or '.join(map(str, BNS))}, not {self.bn}"
+        return None
+
+    def tile(self, R0: int, C0: int, t: int) -> int:
+        """The index in the call's committed stream of the MMA tile at row R0, column C0 and step t: the kernel's export
+        in (rt, ct, t, ni, w) order, row tile rt of 64 rows, column tile ct of ``bn`` columns, ni its 8-column and w its
+        16-row MMA tiles, every tile past m or n skipped."""
+        R, Cn, nni = self.m // TM, self.n // TN, self.bn // TN
+        rt, w = divmod(R0 // TM, ROW_TILE // TM)
+        ct, ni = divmod(C0 // TN, nni)
+        rw, cw = min(ROW_TILE // TM, R - rt * ROW_TILE // TM), min(nni, Cn - ct * nni)
+        return rt * ROW_TILE // TM * Cn * self.S + rw * (nni * ct * self.S + cw * t + ni) + w
+
+
+def fragment(r: int, c: int) -> int:
+    """Word (r, c) of an MMA tile's 128 committed words, in wgmma's fragment order: 16 g + 4 q + 2 eh + el, with
+    r = 8 eh + g and c = 2 q + el."""
+    return 16 * (r % 8) + 4 * (c // 2) + 2 * (r // 8) + c % 2
+
+
+def unit_opening(shapes: list[Shape], call: int, R0: int, C0: int, BLK: int) -> dict:
+    """Where call ``call`` of a forward of ``shapes`` keeps what its unit at row R0, column C0 and block BLK reads:
+    ``words``, each step it reads (the step before the block on a block after the first, then the block's) as
+    (step, rank, word) of its tile's first word in the forward's words instance, its word (r, c) at word + `fragment`(r, c)
+    of that leaf; and ``a``, A_j's bytes [lo, hi) of each of the unit's rows at the block's K entries, and the ``segments``
+    holding them. Refused: a forward holding a shape the verifier doesn't admit, a call not in it, or a unit the verifier
+    doesn't have."""
+    for k, s in enumerate(shapes):
+        if (why := s.refuse()) is not None:
+            raise ValueError(f"call {k}: {why}")
+    if not 0 <= call < len(shapes):
+        raise ValueError(f"call {call} is not one of the forward's {len(shapes)}")
+    sh = shapes[call]
+    u = Unit(sh.K, R0, C0, min(sh.rows - R0, TM), min(sh.cols - C0, TN), BLK)
+    if (why := u.refuse()) is not None:
+        raise ValueError(why)
+    base = sum(s.chunks for s in shapes[:call])
+    tiles = CHUNK_WORDS // TILE_WORDS
+    words = [(t, base + sh.tile(R0, C0, t) // tiles, sh.tile(R0, C0, t) % tiles * TILE_WORDS)
+             for t in range(u.t0 - (1 if BLK else 0), u.t1)]
+    a = [(i * sh.K + u.k0, i * sh.K + u.k0 + u.kb) for i in range(R0, R0 + u.ROWS)]
+    segments = sorted({k for lo, hi in a for k in range(lo // A_SEGMENT, (hi - 1) // A_SEGMENT + 1)})
+    return {"words": words, "a": a, "segments": segments}
+
+
+def egress_refused(count: int, shapes: list[Shape], cap: int, fwd_macs: int) -> bool:
+    """Whether a forward's egress count passes its bits, the sum of its calls' cap · rows · n · K / fwdMacs
+    (`Layout.callBits`), compared in integers: R17's per-forward bound, which the certifier applies when the forward's
+    words root closes it."""
+    return count * fwd_macs > cap * sum(s.macs for s in shapes)
+
+
+def forward_count(buckets: list[tuple[int, list[int]]], release: int) -> int:
+    """A forward's egress count as the certifier keeps it: each bucket a boundary link ticks while the forward is open, at
+    allocation r with its real frames' content bits, counts ⌈log2(r + 1)⌉ timing bits and those bits; the certifier holds
+    the node's links at r = 0 through the forward, so a held bucket counts nothing; and the release at the boundary, at
+    allocation ``release``, counts its ⌈log2(r + 1)⌉ once, when the words root closes the forward."""
+    return sum(r.bit_length() + sum(frames) for r, frames in buckets) + release.bit_length()
+
+
+def window_refusal(record: bytes, weights_root: bytes, key_leaf: bytes, calls: int, events: list[dict]) -> str | None:
+    """Why the verifier refuses the lead's window from the certifier's record, else None. ``record`` is the window's
+    signed `commit_weights` record, which must be `lead_record` of its weights' root, keyLeaf and call count; ``events``
+    is the certifier's record in its order, each ``{"kind": "salt"}`` (salt_w drawn, once), ``{"kind": "a_root",
+    "forward", "call", "rows", "cols", "K", "bn"}`` (a call's A root and shape, which opens its forward) or
+    ``{"kind": "words_root", "forward", "verdict"}`` (the forward's words root, which closes it, and the certifier's
+    verdict on its egress). Refused: a record that doesn't open; an event of none of these kinds, or with a field that
+    isn't an integer (the verdict a string); an A root recorded before salt_w; a call with no position, a shape the
+    verifier doesn't admit, or a second A root of a call; an A root while another forward is open, so forwards overlap, or
+    of a closed forward; a words root of a forward not open; a forward whose verdict isn't `ACCEPTED`; and a forward still
+    open when the record ends. `PouwCheck.Lead.windowRefusal` is its Lean."""
+    if not (type(calls) is int and 1 <= calls < WORDS_POSITION):
+        return f"a window of {calls} calls a forward"
+    if len(weights_root) != DIGEST or len(key_leaf) != DIGEST or len(record) != DIGEST:
+        return "the record, the weights' root and keyLeaf are 64-byte SHA-512 digests"
+    if record != lead_record(weights_root, key_leaf, calls):
+        return "the window's record does not open to its weights' root, keyLeaf and call count"
+    salted, open_, seen, closed = False, None, set(), set()
+    for k, e in enumerate(events):
+        kind = e.get("kind") if isinstance(e, dict) else None
+        if kind not in ("salt", "a_root", "words_root"):
+            return f"event {k}: not a salt, an A root or a words root"
+        ints = {"salt": (), "a_root": ("forward", "call", "rows", "cols", "K", "bn"), "words_root": ("forward",)}[kind]
+        if not all(type(e.get(x)) is int for x in ints) or kind == "words_root" and type(e.get("verdict")) is not str:
+            return f"event {k}: the {kind} event's fields are malformed"
+        if kind == "salt":
+            if salted:
+                return f"event {k}: a second salt_w"
+            salted = True
+        elif kind == "a_root":
+            f, j = e["forward"], e["call"]
+            if not salted:
+                return f"event {k}: forward {f}'s call {j} has an A root recorded before salt_w"
+            if (why := position_refusal(f, calls, j) or Shape(e["rows"], e["cols"], e["K"], e["bn"]).refuse()) is not None:
+                return f"event {k}: {why}"
+            if open_ is not None and open_ != f:
+                return f"event {k}: forward {f}'s A root while forward {open_} is open: the forwards overlap"
+            if f in closed:
+                return f"event {k}: forward {f} is closed"
+            if (f, j) in seen:
+                return f"event {k}: call {j} of forward {f} has an A root already"
+            seen.add((f, j))
+            open_ = f
+        elif kind == "words_root":
+            f = e["forward"]
+            if open_ != f:
+                return f"event {k}: a words root of forward {f}, which is not open"
+            if e["verdict"] != ACCEPTED:
+                return f"event {k}: the certifier refused forward {f}'s egress: {e['verdict']}"
+            closed.add(f)
+            open_ = None
+    if open_ is not None:
+        return f"forward {open_} is open when the record ends"
+    return None
