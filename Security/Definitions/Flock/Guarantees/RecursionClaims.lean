@@ -10,14 +10,12 @@ compiled verifier. A claim leaves it when a guarantee states that claim at the d
 guarantee's own record holds the text from then on.
 
 The recursion's KS (`KS`, `Bits`, `KSFlock`, `KSBound`, and the private variant's) is at its level
-`Claims.Recursion.lam`, about 65 bits per SHA-512 call at the deployed shape (one inner table at `m = 35`, the deployed
-bound record's weight at `IVStar` at `coverW`), below the 100-bit floor and the `2^-128` target under every
-weight. `BitsLin2`'s level λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
-(`RecDeploy.lamLin2_deployed_ge_dep`, about 165.8), but `KSLin2` at the deployment's dense statements (`KSLin2On` at
-`RecDeploy.DenseAt`) only follows from premises still open: `PartChecksBV`, `PartOpensB` and `DecompB`
-(`RecDeploy.ksLin2_deployed_full`, at the coin server's record, which reads back, and the last round's pieces
-at the parts that commit the earlier rounds). Holo statements have a model of their own, and `BitsLin2` at the dense
-statements follows from it (`bitsLin2On_of_ksLin2On`).
+`Claims.Recursion.lam`, which no theorem evaluates at the deployment. `BitsLin2`'s level λ₂ (`lamLin2`) evaluates to
+at least 135.7 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep_tight`; at least 100,
+`RecDeploy.lamLin2_deployed_ge_dep`), and `KSLin2` at the deployment's dense statements (`KSLin2On` at
+`RecDeploy.DenseAt`, at the deployed reader) is proved with no hypothesis (`Flock.Guarantees.RecursiveKS`,
+`Flock.SecurityProofs.RecursiveKS`). Holo statements have a model of their own, and `BitsLin2` at the dense
+statements follows from `KSLin2` there (`bitsLin2On_of_ksLin2On`).
 -/
 
 namespace Flock.Guarantees
