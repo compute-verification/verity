@@ -29,7 +29,7 @@ from typing import Any, Callable, Mapping, Sequence
 import numpy as np
 
 from verity.core.protocols.sampled_proofs.one_stage import registration as REG
-from verity.ml.circuits.types import Array, Record, Tuple, Type
+from verity.ml.circuits.types import Array, RecordType, Tuple, Type
 from verity_vllm.commit import registered_rows as RR
 
 
@@ -43,7 +43,7 @@ def lower(t: Type) -> list[tuple[int, int]]:
         return lower(t.elem) * t.n
     if isinstance(t, Tuple):
         return [x for f in t.fields for x in lower(f)]
-    if isinstance(t, Record):
+    if isinstance(t, RecordType):
         return [x for _, f in t.fields for x in lower(f)]
     raise ValueError(f"a parameter of type {t!r} lowers to no input nodes")
 

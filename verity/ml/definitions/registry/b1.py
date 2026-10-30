@@ -20,7 +20,7 @@ import numpy as np
 
 from verity.ml.circuits.defs import Coll, CompositeDefinition, PrimitiveDefinition, bind, composite
 from verity.ml.circuits.refs import Affine, Coll as _Coll, Explicit, array_of, concat, strided_view, tuple_of
-from verity.ml.circuits.types import Array, Record, Tuple
+from verity.ml.circuits.types import Array, RecordType, Tuple
 from verity.ml.circuits.ops.gemm import DotBf16 as DotBf16V2, Gemm as GemmV2, GemmCoordinate as GemmCoordinateV2
 from verity.ml.circuits.ops.prims import ZERO32, const
 from verity.ml.circuits.ops.scalar import BitNot
@@ -585,17 +585,17 @@ def TokenSelectCombine(B, S, x0, best, idx):
 # ---------------------------------------------------------------------------------------------------------
 
 
-def layer_weights_type(C: dict) -> Record:
+def layer_weights_type(C: dict) -> RecordType:
     H, QKV, GU, I = C["H"], C["QKV"], C["GU"], C["I"]
     fields = [("ln1", Array(H, BF16)), ("qkv_w", Array(QKV, Array(H, BF16)))]
     if C.get("BIAS", True):
         fields.append(("qkv_b", Array(QKV, BF16)))
     fields += [("o_w", Array(H, Array(C["NH"] * C["D"], BF16))),
                ("ln2", Array(H, BF16)), ("gate_up_w", Array(GU, Array(H, BF16))), ("down_w", Array(H, Array(I, BF16)))]
-    return Record(*fields)
+    return RecordType(*fields)
 
 
-def weights_type(C: dict) -> Record:
+def weights_type(C: dict) -> RecordType:
     fields = [("embed", Array(C["V"], Array(C["H"], BF16))),
               ("layers", Array(C["NL"], layer_weights_type(C))),
               ("norm", Array(C["H"], BF16)),
@@ -603,9 +603,9 @@ def weights_type(C: dict) -> Record:
     if not C.get("tie_word_embeddings", True):
         # [PROPOSED GEN dense2] an untied LM head (Phi-3-mini: `lm_head.weight` is its own checkpoint tensor) is one more
         # `[V][H]` field after the base ones; every existing path is unchanged and tied configs (no key, or True) see the
-        # identical Record.  `ServeV4` binds it for the logits GEMM below.
+        # identical RecordType.  `ServeV4` binds it for the logits GEMM below.
         fields.append(("lm_head", Array(C["V"], Array(C["H"], BF16))))
-    return Record(*fields)
+    return RecordType(*fields)
 
 
 def lm_head_of(C: dict, weights):
