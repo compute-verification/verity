@@ -2,7 +2,7 @@
 # Protocol 2's universal unit end to end on a CPU node (universal.py):
 #   research run --on vy-nebius-1 --cwd source --project verity --declared-output 'out/*' -- \
 #     bash benchmarks/private_circuit/pod.sh CLS="16,16,8 64,64,32" N=64 CPUS=128-159
-# Builds C-Flock's circuit prover (CPU, 60-circuit.sh MODE=build: the proving build, `--zk` included) and the Lean verifier
+# Builds Flock's circuit prover (CPU, 60-circuit.sh MODE=build: the proving build, `--zk` included) and the Lean verifier
 # (`lake build flock-verify`) once per FLOCK_WORK, each cached under a key of its sources, then runs universal.py per class.
 # env: CLS (space-separated G,N_IN,N_OUT)  N=64 (instances per class)  WARM=1 RUNS=3  SEED=0  WIRED (non-empty: universal.py --wired)
 #      CPUS (a taskset CPU list the whole job runs on; nproc, the build's -j and the prover's threads follow it)
