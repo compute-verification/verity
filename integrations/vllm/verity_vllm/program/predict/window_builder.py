@@ -16,18 +16,11 @@ from typing import Any
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.windows import interface as IF
 from verity_vllm.check import weights_of_record as WR
+from verity_vllm.check.weights_of_record import weight_param
 
 from .build import Unexpressible
 
 WEIGHTS = WR.PARAM
-
-
-def weight_param(label: str, words: int) -> str:
-    """The registered parameter of weight ``label`` (its name in the weights record) read in rows of ``words`` u16 words:
-    one registration a weight and row width, so every read's base and steps are whole rows of it (`interface._reads_of`)
-    and its pin is a root over the weight's own rows (`interface.registered_reads`), the committer's hiding root for it
-    (`window_weights.weights_registration`); a pin of `WEIGHTS` pins none of them (`interface.input_count`)."""
-    return f"{WEIGHTS}/{label}@{words}"
 
 
 def table_param(label: str, words: int) -> str:
