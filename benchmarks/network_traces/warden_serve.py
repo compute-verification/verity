@@ -129,7 +129,7 @@ import stall_probe
 from verity.core.protocols.certifier import io_tie as IT, warden_rows as WR
 from verity.core.protocols.certifier.active import DATA, PAD, id_request
 from verity.core.protocols.certifier.certificate import CertifiedRecord, Direction, Issuer, LmsKey, record_head
-from verity.core.protocols.certifier.grid import GridParams, Record, Status, row_count
+from verity.core.protocols.certifier.grid import GridParams, BlockGrid, Status, row_count
 from verity.core.protocols.certifier.warden import END, FAIL, REFUSED, Shim, Warden, WardenParams, audit, cells
 
 HERE = Path(__file__).resolve().parent
@@ -456,15 +456,15 @@ class Publisher:
     def __init__(self, out: Path, issuer: Issuer, params: WardenParams, commit=WR.Cells.of) -> None:
         self.out, self.issuer, self.params, self.commit = out, issuer, params, commit
 
-    def __call__(self, record: Record, grid: GridParams) -> None:
+    def __call__(self, record: BlockGrid, grid: GridParams) -> None:
         self.keep(record, grid)
 
-    def withhold(self, record: Record, grid: GridParams) -> None:
+    def withhold(self, record: BlockGrid, grid: GridParams) -> None:
         """The warden's `withhold`: a record of a window in which it refused a connection, kept and committed as
         `keep` does but neither certified nor signed, its link-window under `refused` with ``"withheld": true``."""
         self.keep(record, grid, withheld=True)
 
-    def keep(self, record: Record, grid: GridParams, withheld: bool = False) -> None:
+    def keep(self, record: BlockGrid, grid: GridParams, withheld: bool = False) -> None:
         ar.write_blobs(self.out / f"{record.link}.records", ar.pack_record(record))
         link, direction = CERTIFIED[record.link]
         certified = None if withheld else \
@@ -476,7 +476,7 @@ class Publisher:
         if record.link != FAILS:
             self.attest(record, link, direction, withheld)
 
-    def attest(self, record: Record, link: str, direction: Direction, withheld: bool = False) -> None:
+    def attest(self, record: BlockGrid, link: str, direction: Direction, withheld: bool = False) -> None:
         """The link-window's cells as rows and its wiring (`warden_rows`), their head signed (never `withheld`'s): one
         line of `cells.jsonl` (the registration, or the link-window under `refused`, and the cost), the salts to
         `cells.salts` (witness)."""
@@ -556,7 +556,7 @@ def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params:
                 raise ValueError(f"{link} window {window} closed after {len(got)} rows, not {grid.buckets}")
             if grid_digest(got) != digest:
                 raise ValueError(f"{link} window {window}: the rows rebuilt aren't the grid the warden closed")
-            publisher.keep(Record(link, window, got, Status(reason)), grid, withheld=withheld)
+            publisher.keep(BlockGrid(link, window, got, Status(reason)), grid, withheld=withheld)
             filling[link] = []
         results.send(("done", {"refused": publisher.close(), "usage": ar._usage()}))
         own.close()
@@ -626,7 +626,7 @@ class PublisherProcess:
         _hash_row(self._digests.setdefault(link, hashlib.sha512()), row)
         self.rows.put((link, n, b"".join(row[:n])))
 
-    def __call__(self, record: Record, grid: GridParams, withheld: bool = False) -> None:
+    def __call__(self, record: BlockGrid, grid: GridParams, withheld: bool = False) -> None:
         if not self.process.is_alive():
             self._end()
         released, digest = self._released.pop(record.link, []), self._digests.pop(record.link, hashlib.sha512())
@@ -634,7 +634,7 @@ class PublisherProcess:
             raise RuntimeError(f"{record.link} window {record.window}: the record's grid isn't the rows released")
         self.rows.put((record.link, None, (record.window, record.status.reason, digest.digest(), withheld)))
 
-    def withhold(self, record: Record, grid: GridParams) -> None:
+    def withhold(self, record: BlockGrid, grid: GridParams) -> None:
         """The warden's `withhold`: the record's close, kept as `Publisher.withhold` keeps it."""
         self(record, grid, withheld=True)
 
@@ -834,7 +834,7 @@ async def client(deployment: dict, traffic: list[dict], out: Path, clock=time.ti
 
 # The offline check.
 
-def read_records(run: Path, params: WardenParams) -> dict[str, list[Record]]:
+def read_records(run: Path, params: WardenParams) -> dict[str, list[BlockGrid]]:
     return {name: [ar.unpack_record(b, params.cell_bytes) for b in ar.read_blobs(run / f"{name}.records")]
             for name in CERTIFIED}
 
@@ -865,7 +865,7 @@ def read_cells(run: Path) -> list[tuple[dict, list[bytes], bytes]]:
     return [(doc, *WR.read_witness(s)) for doc, s in zip(lines, salts)]
 
 
-def check_cells(run: Path, dep: dict, params: WardenParams, records: dict[str, list[Record]]) -> tuple[dict, list]:
+def check_cells(run: Path, dep: dict, params: WardenParams, records: dict[str, list[BlockGrid]]) -> tuple[dict, list]:
     """Every link-window of the wire's two records has a registration that `warden_rows.check_registration` accepts
     under the warden's key and session, whose head is the record's rows and wiring under their salts; the per-window
     cost."""
@@ -899,7 +899,7 @@ def check_cells(run: Path, dep: dict, params: WardenParams, records: dict[str, l
     return summary, problems
 
 
-def egress_cells(records: list[Record], params: WardenParams) -> dict[int, list[tuple[int, int]]]:
+def egress_cells(records: list[BlockGrid], params: WardenParams) -> dict[int, list[tuple[int, int]]]:
     """Each connection's egress cells as (bucket, kind), in the records' order."""
     out: dict[int, list[tuple[int, int]]] = {}
     for record in sorted(records, key=lambda r: r.window):

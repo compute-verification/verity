@@ -282,7 +282,7 @@ class Plan:
     gave), and the leaf kernel's persistent grid fills those alone: the commit then shares the device with work on the
     other SMs instead of taking turns with it for all of them. The bytes are the same at every ``sms``."""
 
-    def __init__(self, context: bytes, layout: S.Layout, device: Any = "cuda", arch: str | None = None,
+    def __init__(self, context: bytes, layout: S.CommitShape, device: Any = "cuda", arch: str | None = None,
                  temp_bytes: int = TEMP_BYTES, leaf_minb: int = 0, sms: int = 0) -> None:
         self.context, self.layout, self.temp_bytes, self.leaf_minb = context, layout, temp_bytes, leaf_minb
         self.engine = _Engine(device, arch)
@@ -755,7 +755,7 @@ def commit(plan: Plan, step: int, salt_key: bytes, outputs: Sequence[Sequence[An
     return sc.finish().result()
 
 
-def regroup(layout: S.Layout, k: int) -> S.Layout:
+def regroup(layout: S.CommitShape, k: int) -> S.CommitShape:
     """``layout`` with every ``k`` consecutive groups as one, its tensors theirs in order: the same units and rows in the same
     order, so the same digest and roots, in a fewer launches."""
     if k < 1:
@@ -770,4 +770,4 @@ def regroup(layout: S.Layout, k: int) -> S.Layout:
             units += [tuple(S.Row(tuple(S.Part(base + p.source, p.offset, p.nbytes) for p in r.parts)) for r in u)
                       for u in g.units]
         groups.append(S.Group(tuple(sources), tuple(units)))
-    return S.Layout(layout.name, tuple(groups))
+    return S.CommitShape(layout.name, tuple(groups))

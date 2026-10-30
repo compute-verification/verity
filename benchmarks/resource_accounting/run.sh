@@ -21,19 +21,14 @@
 # off the memory challenger's and responder's CPUs (VCPU, RCPU: the third and fourth physical cores, of HOST_CPUS when given).
 # The harness's outputs go to $OUT/pous. POUS_WS, POUS_AUDITS and POUS_SEGMENTS pick its weight set, audits and segments;
 # POUS_IDLE=1 is the control, the chain idle through the audit's window.
-# JOINT=<rounds> (one shape, native arms only, --cwd clone; chain.py --rounds: separate, inproc, joint, joint-v1) runs the
-# chain in the PoUS harness's process instead: before the lease, pod.sh PREPARE=1 and, for the joint and joint-v1 rounds, the
-# bandwidth tagger's libbwtag.so (benchmarks/bandwidth/tagger.cu, refused on a register spill) into scratch; under it, pod.sh
-# IMPL=p2-v3-mc-gpu BENCH_HOST='chain.py ...' BANDWIDTH_SALT=<the GPU> (the store under the bandwidth audit's device-bound
-# salt, which its verifier checks), which measures the shape's points alone in the harness's venv and then runs each round
-# with the chain as the honest audit's load. POUS_AUDITS (default 100 here), POUS_WS and POUS_SEGMENTS as for POUS=1; the
+# JOINT=<rounds> (one shape, native arms only, --cwd clone; chain.py --rounds: separate, inproc) runs the chain in the PoUS
+# harness's process instead: before the lease, pod.sh PREPARE=1; under it, pod.sh IMPL=p2-v3-mc-gpu BENCH_HOST='chain.py ...',
+# which measures the shape's points alone in the harness's venv and then runs each round with the chain as the honest audit's
+# load. POUS_AUDITS (default 100 here), POUS_WS and POUS_SEGMENTS as for POUS=1; the
 # outputs go to $OUT/pous, each round's harness under $OUT/pous/bench/<round>. PROBE=1 adds chain.py --probe, in either mode,
 # and SIDECAR=1 chain.py --sidecar (an idle CUDA context in a second process through the run; not with PROBE).
 # SMI_MS=<ms> (JOINT) samples the leased GPU's clocks, power, temperatures and clock event reasons every <ms> through the
-# lease into $OUT/smi.csv (nvidia-smi, no CUDA context), on the wall time joint.py's anchor maps its passes to.
-# DECAY=1 runs probe.py decay instead (the tag pass before and after GEMM, copy and L2 bursts, no PoUS), DECAY=steps probe.py
-# steps (the tag pass after each step, the L1/shared split's preferences among them): the tagger into scratch before the
-# lease, the probe under it into $OUT/decay.json or $OUT/steps.json, and $OUT/smi.csv.
+# lease into $OUT/smi.csv (nvidia-smi, no CUDA context).
 # TUNED=<build dir|art:id> (ARMS with native-bf16-tuned or native-fp8-tuned) is the PoUW harness's library for the tuned
 # arms (tuned.py), a build.sh output such as `pouw-harness-build/v1`: its jobs/env.sh gives the cuBLASLt and CUDA runtime
 # 12.9 wheels it links (sonames .so.12, which torch's .so.13 never resolve to) on LD_LIBRARY_PATH, and POUW_HARNESS_LIB, for
@@ -103,41 +98,6 @@ pous_prepare() {
   touch "$S/pous-prepared"
 }
 prepared() { [ -e "$1" ] || { stamp "RUN_FAIL_PHASE: no $1: PHASE=prepare first, over the same SCRATCH"; exit 2; }; }
-# the bandwidth tagger's libbwtag.so once per scratch, refused on a register spill; its build log goes to $OUT
-build_tagger() {
-  if [ ! -f "$S/libbwtag.so" ]; then
-    stamp "tagger build"
-    { "$CUDA/bin/nvcc" --version; "$CUDA/bin/nvcc" -O3 -std=c++17 -arch=sm_120 -Xptxas -v -Xcompiler -fPIC -shared \
-        benchmarks/bandwidth/tagger.cu -o "$S/libbwtag.so.part"; } > "$S/tagger-build.log" 2>&1 \
-      || { cp "$S/tagger-build.log" "$OUT/"; stamp "RUN_FAIL_TAGGER_BUILD"; tail -20 "$S/tagger-build.log"; exit 14; }
-    if grep -E "[1-9][0-9]* bytes spill" "$S/tagger-build.log"; then
-      cp "$S/tagger-build.log" "$OUT/"; stamp "RUN_FAIL_TAGGER_BUILD: a kernel spills"; exit 14
-    fi
-    sha256sum benchmarks/bandwidth/tagger.cu "$S/libbwtag.so.part" >> "$S/tagger-build.log"
-    mv "$S/libbwtag.so.part" "$S/libbwtag.so"
-  fi
-  cp "$S/tagger-build.log" "$OUT/tagger-build.log"
-}
-
-if [ -n "${DECAY:-}" ]; then
-  if on prepare; then build_tagger; fi
-  on gpu || exit 0
-  prepared "$S/libbwtag.so"
-  stamp "the decay probe under gpu-lease $LEASE (at most $LEASE_MIN min)"
-  export OUT PY S DECAY
-  set +e
-  lease bash -c '
-    set -euo pipefail
-    eval "$PICK"
-    MODE=decay; [ "$DECAY" != steps ] || MODE=steps
-    exec timeout $((LEASE_MIN * 60 - 30)) "$PY" benchmarks/resource_accounting/probe.py "$MODE" --lib "$S/libbwtag.so" \
-      --out "$OUT/$MODE.json" --smi-csv "$OUT/smi.csv"
-  ' 2>&1 | tee "$OUT/chain.log"
-  rc=${PIPESTATUS[0]}
-  set -e
-  stamp "lease ended, the probe exited $rc"
-  exit "$rc"
-fi
 
 if [ -n "${JOINT:-}" ]; then
   [ -z "${POUS:-}" ] || { stamp "RUN_FAIL_JOINT: JOINT and POUS are two modes"; exit 2; }
@@ -147,17 +107,12 @@ if [ -n "${JOINT:-}" ]; then
   POUS_WORK=${POUS_WORK:-/workspace/pouw/fill-out/pous/work}; POUS_WS=${POUS_WS:-llama3.1-8b/layer0+head}
   POUS_AUDITS=${POUS_AUDITS:-100}; POUS_SEGMENTS=${POUS_SEGMENTS:-8}
   mkdir -p "$OUT/pous"
-  TAGGER=
-  case ",$JOINT," in *,joint,*|*,joint-v1,*) TAGGER="--tagger $S/libbwtag.so" ;; esac
-  if on prepare; then
-    pous_prepare
-    [ -z "$TAGGER" ] || build_tagger
-  fi
+  if on prepare; then pous_prepare; fi
   on gpu || exit 0
-  prepared "$S/pous-prepared"; [ -z "$TAGGER" ] || prepared "$S/libbwtag.so"
+  prepared "$S/pous-prepared"
   HOST="benchmarks/resource_accounting/chain.py --out $OUT/chain.json --shapes $SHAPES --batches $BATCHES --lengths $LENGTHS"
   HOST+=" --arms $ARMS --reps $REPS --budget-min $((LEASE_MIN - 3)) --rounds $JOINT ${ROUND_MIN:+--round-min $ROUND_MIN}"
-  HOST+=" $TAGGER ${PROBE:+--probe}"
+  HOST+=" ${PROBE:+--probe}"
   HOST+=" ${SIDECAR:+--sidecar} --host-bench"
   stamp "the chain hosting the PoUS harness under gpu-lease $LEASE (at most $LEASE_MIN min), VCPU $VCPU RCPU $RCPU"
   SMI_MS=${SMI_MS:-}
@@ -175,7 +130,7 @@ if [ -n "${JOINT:-}" ]; then
     rc=0
     timeout $((LEASE_MIN * 60 - 30)) bash benchmarks/pous/pod.sh RESEARCH_RUN_DIR="$OUT/pous" IMPL=p2-v3-mc-gpu \
       WORK="$POUS_WORK" WS="$POUS_WS" AUDITS="$POUS_AUDITS" MAX_SEGMENTS="$POUS_SEGMENTS" LOAD_TOKENS=0 TOKENS=1 WORKERS=8 \
-      VCPU="$VCPU" RCPU="$RCPU" BANDWIDTH_SALT="$UUID" BENCH_HOST="$HOST" || rc=$?
+      VCPU="$VCPU" RCPU="$RCPU" BENCH_HOST="$HOST" || rc=$?
     [ -z "$SMI" ] || kill "$SMI"
     exit "$rc"
   ' 2>&1 | tee "$OUT/chain.log"

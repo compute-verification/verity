@@ -17,7 +17,7 @@ from verity.ml.crypto import lms
 from verity.core.protocols.certifier import warden_rows as W
 from verity.core.protocols.certifier.active import DATA
 from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsKey
-from verity.core.protocols.certifier.grid import Reason, Record, Status
+from verity.core.protocols.certifier.grid import Reason, BlockGrid, Status
 from verity.core.protocols.certifier.tests.test_network_certifier_warden import (B, EOF, P, PARAMS, cells, records,
                                                                                  request, run)
 from verity.core.protocols.certifier.warden import cell
@@ -322,6 +322,6 @@ def test_a_faulted_window_still_has_its_rows_and_its_wiring():
     cells before the fault, still the schedule's."""
     live = tuple(cell(DATA, q, bytes(P), B) for q in (0, 1) for _ in range(R))
     grid = (live,) * 3 + ((None,) * S,) * (T - 3)
-    record = Record("responses", 0, grid, Status(Reason.MONITOR_UNAVAILABLE))
+    record = BlockGrid("responses", 0, grid, Status(Reason.MONITOR_UNAVAILABLE))
     assert W.wiring(record, PARAMS).connections == ((0, 0, 3 * R), (1, 0, 3 * R))
     assert len(W.window_rows(record, PARAMS)) == T

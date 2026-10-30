@@ -1,9 +1,10 @@
 import CoreProtocol.Protocol
 import CoreProtocol.Profile
-import Flock.Hash
+import Flock.WindowRecord
 import PouwCheck.Json
 import PouwCheck.Tile
 import PouwWindow.Length
+import Identity.Domains
 
 /-!
 # The check's three inputs (`core_check.py`, "the three inputs")
@@ -192,9 +193,9 @@ def registrationOf (b : ByteArray) : V Registration := do
         "and registered")
   pure { bytes := b, format, program, query, partition, scheme, population, law, roots, window }
 
-/-- `registration.digest`: SHA-512(format ‖ 0 ‖ the canonical record). -/
-def Registration.digest (c : Registration) : ByteArray :=
-  Flock.Sha512.hash (c.format.toUTF8 ++ ByteArray.mk #[0] ++ c.bytes)
+/-- `registration.digest`: the window record's digest (`Flock.WindowRecord.digestOf`) of its format and the canonical
+bytes it was read from. -/
+def Registration.digest (c : Registration) : ByteArray := Flock.WindowRecord.digestOf c.format c.bytes
 
 /-! The service's draw, as one-stage's `draw.py` writes it. -/
 
@@ -315,5 +316,9 @@ def evidenceOf (b : ByteArray) : V Evidence := do
     | .reject => pure (Said.reject (a.reason.getD ""), none)
     | .undecided => pure (Said.undecided (a.reason.getD ""), none)
   pure ⟨a.protocol, a.digest.map Flock.hexOf, said, salt⟩
+
+/-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
+written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+example : formats = [Domains.REGISTRATION_V1, Domains.REGISTRATION] := rfl
 
 end PouwCheck
