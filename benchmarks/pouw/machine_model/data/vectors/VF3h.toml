@@ -27,9 +27,8 @@ credits = [
     ["REDAS64", 2048], ["SURED", 1024],
 ]
 
-[published]  # as the legacy scripts printed them: τ, τ at 600 W and U/F_low to 4 places, the margin to 3
+[published]  # as the legacy scripts printed them: τ and U/F_low to 4 places, the margin to 3
 tau = 0.1246
-tau_600w = 0.0975
 uf_low = 1.0938
 margin = 1.935
 
