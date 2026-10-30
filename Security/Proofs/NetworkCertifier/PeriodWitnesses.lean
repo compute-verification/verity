@@ -83,7 +83,7 @@ theorem tiedIncorrectBlocksLe_uniform_none (n k : ℕ) (hk : k ≤ n) (F : ℕ) 
   have : Nonempty {S : Finset (Fin n) // S.card = k} := Fintype.card_pos_iff.1 (by
     rw [Fintype.card_finset_len, Fintype.card_fin]
     exact Nat.choose_pos hk)
-  exact tiedIncorrectBlocksLe_of_samples (m := 1) (Ω := {S : Finset (Fin n) // S.card = k}) (Z := Unit) Set.univ
+  exact tiedIncorrectBlocksLe_of_samples (m := 1) (Ω := {S : Finset (Fin n) // S.card = k}) (Set.univ : Set Unit)
     (fun _ _ _ _ => True) (fun _ => n) (fun _ => k) (fun _ x => x.1) (fun _ => (uniform_draw n k).1)
     (fun _ => (uniform_draw n k).2) (fun _ _ _ => ∅) (fun _ _ _ _ _ => rfl) (fun _ _ _ => ∅)
     (fun _ _ _ => (Finset.map_empty _).symm) (fun _ => 0) (fun _ _ _ => by simp [Pr]) q hq0 hq1 (fun _ => hq) F
