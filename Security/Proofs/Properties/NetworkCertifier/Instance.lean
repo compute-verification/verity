@@ -11,7 +11,7 @@ the two records an honest certifier issues for it, each under a 64-byte salt and
 (`honestAccepted_instance`); the same unit with no records is undecided (`somePending_instance`).
 
 Two hypotheses stay hypotheses, each of a function no proof can evaluate: the parameters digests (`ParamsDigests`),
-since `parametersDigest` reads `Flock.canon`, well-founded recursion the kernel does not evaluate; and, for `answer`,
+since `parametersDigest` reads `Flock.canonUtf8`, well-founded recursion the kernel does not evaluate; and, for `answer`,
 that the bytes decode to the unit, since the parameters' and evidence's decoders read canonical JSON through it too.
 -/
 
@@ -102,7 +102,7 @@ def params : NetworkCheck.Check.Params where
   session := session
 
 /-- The egress link opens no frames and declares `sync`. -/
-def link : NetworkCheck.Check.Link := ⟨[], #[sync]⟩
+def link : NetworkCheck.Check.LinkOpening := ⟨[], #[sync]⟩
 
 def evidence : Evidence := ⟨#[link]⟩
 
@@ -117,7 +117,7 @@ theorem declares : Declares (W := params.windows) link fun _ => sync := by
 theorem programGrid_eq : programGrid params (fun _ => sync) link.frames 0 = #[#[none]] := by decide +kernel
 
 /-- An empty one-bucket record: its one slot is padding. -/
-def record (l : String) : Record := ⟨l, 0, #[#[none]], .complete⟩
+def record (l : String) : BlockGrid := ⟨l, 0, #[#[none]], .complete⟩
 
 /-- What a record's head copies of its grid. -/
 theorem recordHead_grid {l : String} {d : Direction} {w : Int} {gr : Array (Array (Option ByteArray))}

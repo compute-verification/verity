@@ -27,7 +27,7 @@ and it then publishes the drawn and proved units with the exact bounds at δ (`p
 evidence is completeness, `Properties.SampledProofs.acceptMeans_complete`.
 
 The digest the receipt is held to is the commitment's own (`Commitment.digest`), which `OneStage.commitmentOf` computes
-as `Registration.digest` of the record it decodes (`DigestIsRecord's`). A Bernoulli law is accepted as the code accepts
+as the window record's digest of the record it decodes (`Flock.WindowRecord.digest`, `DigestIsRecord's`). A Bernoulli law is accepted as the code accepts
 it: its draw is checked as any other, its profile's draw is `bernoulli p`, and it publishes the largest `M` of the
 profile's units with `(1 − p)^M ≥ δ` (`BernoulliBounds`, `Bound.bernoulliBound`).
 -/
@@ -314,7 +314,7 @@ def drawnNats (draw : Json) : Array Nat :=
 /-- The public outputs at δ, for the law `law` with its profile's draw `d` over `n` units: the drawn units, the proved
 ones, the exact bound on wrong units (`Bound.boundOf`: `Bound.countBound` over the draw's strata, `Bound.bernoulliBound`
 for a Bernoulli draw), and for a stratified or work law each template's own (`Bound.stratumBound`). -/
-def publicOf (p : Params) (e : Evidence) (law : Json) (d : Core.Draw) (n : Nat) : Public :=
+def publicOf (p : Params) (e : Evidence) (law : Json) (d : Core.SamplingDesign) (n : Nat) : Public :=
   { drawn := drawnNats e.draw,
     proved := (Draw.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
     bound := Bound.boundOf n d p.delta,
@@ -323,7 +323,7 @@ def publicOf (p : Params) (e : Evidence) (law : Json) (d : Core.Draw) (n : Nat) 
 
 /-- The integrity profile at δ: the record's program; one level `unit`, the record's partition, of `n` units, drawn by
 `d`; and the number of units drawn. -/
-def profileOf (p : Params) (c : Commitment) (e : Evidence) (d : Core.Draw) (n : Nat) : Core.Integrity :=
+def profileOf (p : Params) (c : Commitment) (e : Evidence) (d : Core.SamplingDesign) (n : Nat) : Core.Integrity :=
   let str := fun (k : String) => match getD c.record k with | .str s => s | _ => ""
   { programs := #[str "program"], prescribed := #[], linked := false, covered := #[],
     levels := #[{ name := Record.LEVEL, query := some (str "partition"), size := n, draw := some d }],
@@ -342,10 +342,10 @@ def AcceptMeans : Prop :=
         Record.profileDraw law = some d ∧ nat? (getD c.record "population") = some n ∧
         pub = publicOf p e law d n ∧ prof = profileOf p c e d n
 
-/-- The commitment's digest, which the receipt is held to, is the registration digest of the record it decodes:
+/-- The commitment's digest, which the receipt is held to, is the window record's digest of the record it decodes:
 `SHA-512(format || 0 || canon(record))`, the record's own format (v1 or v2) as the tag. -/
 def DigestIsRecord's : Prop :=
-  ∀ (b : ByteArray) (c : Commitment), OneStage.commitmentOf b = .ok c → Registration.digest c.record = .ok c.digest
+  ∀ (b : ByteArray) (c : Commitment), OneStage.commitmentOf b = .ok c → Flock.WindowRecord.digest c.record = .ok c.digest
 
 /-- An acceptance whose profile draws a level by a Bernoulli law at `r` bounds wrong units by `Bound.bernoulliBound` over
 the level's units at δ: the largest `M` of them with `(1 − r)^M ≥ δ`. -/
