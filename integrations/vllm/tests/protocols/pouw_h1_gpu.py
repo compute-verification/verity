@@ -43,7 +43,7 @@ rev-list --first-parent origin/main`` (without them every window is refused). Wi
 (``{root}``, the window's open root) DIR is the challenger run's own ``out/``: the window's coins against the challenge phase
 the auditor's signed ledger (the longest of the heads, each extending the others) opens and ends for the window
 (`pouw_h1_challenger.trusted_rounds_reason`). Without it the ledger is read as the newest that the others extend
-(`pouw_h1_challenger.Ledger.load`, core's check), and DIR the challenge phase's tree as the gate's ``fetch`` gives it: the window held to the
+(core's check, `challenger.ledger_of`), and DIR the challenge phase's tree as the gate's ``fetch`` gives it: the window held to the
 challenge phase the ledger opened for its Commit's root (`pouw_h1_challenger.session_reason`). Either way the record is held to
 its coins as one manifest (`pouw_h1_challenger.manifest_reason`), and with ``--period NAME`` the ledger must credit the lane's period
 with the window accepted and presented as its close's windows, its open committing ``draw_k``
@@ -1381,7 +1381,7 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     it). With `window_file` (the window's ``{root}``) `directory` is
     the challenger run's ``out/``, fetched whole, as the challenge phase the longest of the heads, each extending
     the others, opens and ends for the window (`trusted_rounds_reason`); without it the ledger is read as the newest that
-    the others extend (`Ledger.load`, core's check), the window held to the challenge phase it opened for its Commit's root
+    the others extend (`challenger.ledger_of`, core's check), the window held to the challenge phase it opened for its Commit's root
     (`session_reason`), `directory` being that challenge phase's tree as the gate's ``fetch SESSION`` gives it (its ``out/``
     within). The record is held to its coins as one manifest (`pouw_h1_challenger.manifest_reason`), and with `period` the ledger
     must credit the lane's period with the window accepted and presented as its close's windows, its open committing
@@ -1390,7 +1390,11 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     (`pouw_h1_served.descriptor`; none refuses it)."""
     from verity.core.protocols.sampled_proofs import remote
     from verity_vllm.protocols.pouw import h1 as PH
+    from verity.core.protocols.sampled_proofs import challenger as Ch
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
+
+    def newest():
+        return Ch.ledger_of([remote.ledger_lines(p) for p in ledger], key, PHC.lms_verify)
 
     rec, tree = json.loads(Path(calls_file).read_text()), Path(directory)
     d = tree if window_file is not None else tree / "out"
@@ -1408,8 +1412,8 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
             doc["reason"] = PHC.trusted_rounds_reason(rec["commitment"], d, ledger, doc["window"], key, pins=pins,
                                                       main=main)
         else:
-            newest = PHC.Ledger.load(ledger, key, pins=pins, main=main)
-            doc["reason"] = PHC.session_reason(rec["commitment"], newest, lambda s: tree if s == sid else None)
+            doc["reason"] = PHC.session_reason(rec["commitment"], newest(), lambda s: tree if s == sid else None,
+                                               key=key, pins=PHC.pins_head(pins), main=main)
     except Exception as e:  # noqa: BLE001
         doc["reason"] = f"{type(e).__name__}: {e}"
     doc["manifest"] = PHC.manifest_reason(rec)
@@ -1420,10 +1424,9 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
         try:
             if key is None:
                 raise ValueError("no key the pin names, so the auditor's ledger is unread")
-            newest = PHC.Ledger.load(ledger, key, pins=pins, main=main)
             root = (doc.get("window") or {}).get("root") or (rec["commitment"].get("session") or {}).get("root")
             accepted = [sid] if doc["reason"] is None else []
-            doc["period"] = {"name": period, "reasons": PHC.period_reason(newest, period, accepted, [root])}
+            doc["period"] = {"name": period, "reasons": PHC.period_reason(newest(), period, accepted, [root], key=key)}
         except Exception as e:  # noqa: BLE001
             doc["period"] = {"name": period, "reasons": [f"{type(e).__name__}: {e}"]}
     for name in (remote.RECORD, remote.CLOSE):

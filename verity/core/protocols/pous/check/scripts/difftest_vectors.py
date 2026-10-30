@@ -24,9 +24,10 @@ or outside index, a wrong nonce, round, epoch or audit id, a replayed challenge 
 answer, a flipped, truncated or extended frame, a dropped tail or an extra frame, a wrong verifier secret, a seen pair, a
 bad AUDIT_OPEN field or length, a missing or wrong beacon, a non-canonical or invalid manifest, a broken setup frame, a
 wrong or missing private root, a wrong, short or missing held `W` under flag bit 1, an elapsed time past u64);
-deployment-width audits (B = 2^19, k = 105) over one private store; the spec's audit vectors (§7), each checked here
-against its pinned FINAL; and named sessions at edges the two once read apart (`redteam_audits`). The `sha512` instance is §7's pins of the audit files and frames, its answer the pins as the spec
-states them.
+deployment-width audits (B = 2^19, k = 105) over one private store; the audit vectors (`audit-vectors.json`,
+`audit-negative-vectors.json`), each checked here against its pinned FINAL; and named sessions at edges the two once read
+apart (`redteam_audits`). The `sha512` instance is the pins of the audit files and frames, its answer the pins as
+`reference.py` and `audit-vectors.json` hold them.
 """
 from __future__ import annotations
 
@@ -34,7 +35,6 @@ import argparse
 import hashlib
 import json
 import random
-import re
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -583,12 +583,12 @@ def _full_audit(py, rng: random.Random, name: str) -> dict:
 
 
 def _vector_audits(py) -> list[dict]:
-    """The spec's audit vectors (§7): the 31 negative and boundary transcripts and the two-round end-to-end one, and a
+    """The spec's audit vectors: the 31 negative and boundary transcripts and the two-round end-to-end one, and a
     deployment-width session around `full_width_response` (its encoded block, decoded on flag bit 0)."""
     R, Wi = py[0], py[1]
     for path, pin in ((R.AUDIT_VECTORS, R.AUDIT_VECTORS_SHA512), (R.NEGATIVE_VECTORS, R.NEGATIVE_VECTORS_SHA512)):
         if hashlib.sha512(path.read_bytes()).hexdigest() != pin:
-            raise SystemExit(f"{path.name} is not the file the spec pins")
+            raise SystemExit(f"{path.name} is not the file `reference.py` pins")
     out = []
     for case in json.loads(R.NEGATIVE_VECTORS.read_bytes())["cases"]:
         frames = [bytes.fromhex(f) for f in case["frames"]]
@@ -699,11 +699,8 @@ def redteam_audits(py) -> list[dict]:
     return out
 
 
-SPEC = "verity/core/protocols/pous/p2/PROTOCOL.md"
-
-
 def _pins(py) -> dict:
-    """§7's SHA-512 pins of the audit files and frames, which `PousCheck` recomputes from the bytes."""
+    """The SHA-512 pins of the audit files and frames, which `PousCheck` recomputes from the bytes."""
     R = py[0]
     av = json.loads(R.AUDIT_VECTORS.read_bytes())
     small, full = av["small_end_to_end"], av["full_width_response"]
@@ -712,20 +709,21 @@ def _pins(py) -> dict:
              ["w=64 audit-open frame", small["audit_open"]], ["w=64 round-0 challenge", small["exchanges"][0]["challenge"]],
              ["w=64 round-0 response", small["exchanges"][0]["response"]], ["w=64 final frame", small["final"]],
              ["w=16,448 response frame", full["response"]]]
-    return {"kind": "sha512", "spec": SPEC, "items": items}
+    return {"kind": "sha512", "items": items}
 
 
 def _pins_answers(py, inst: dict) -> dict:
-    """The pins as §7 of the spec states them."""
-    text = (Path(py[0].__file__).resolve().parents[3] / inst["spec"]).read_text()
-    out = {}
-    for label, _ in inst["items"]:
-        found = re.findall(r"^- (?:`([^`]+)`|([^:`]+)) ?(SHA-512)?: `([0-9a-f]{128})`$", text, re.M)
-        wanted = [h for file, plain, sha, h in found if (f"{file} SHA-512" if file else plain.strip()) == label]
-        if len(wanted) != 1:
-            raise SystemExit(f"§7 has {len(wanted)} pins for {label}")
-        out[label] = wanted[0]
-    return out
+    """The pins as `reference.py` holds the files' and `audit-vectors.json`, which its pin fixes, the frames'."""
+    R = py[0]
+    av = json.loads(R.AUDIT_VECTORS.read_bytes())
+    small, full = av["small_end_to_end"], av["full_width_response"]
+    pins = {"audit-vectors.json SHA-512": R.AUDIT_VECTORS_SHA512,
+            "audit-negative-vectors.json SHA-512": R.NEGATIVE_VECTORS_SHA512,
+            "w=64 audit-open frame": small["audit_open_sha512"],
+            "w=64 round-0 challenge": small["exchanges"][0]["challenge_sha512"],
+            "w=64 round-0 response": small["exchanges"][0]["response_sha512"], "w=64 final frame": small["final_sha512"],
+            "w=16,448 response frame": full["response_sha512"]}
+    return {label: pins[label] for label, _ in inst["items"]}
 
 
 def _storage(w: int, c0: int, bps: int, segments: int, k: int, delta: int, rtt: int) -> dict | None:

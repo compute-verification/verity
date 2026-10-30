@@ -24,7 +24,7 @@ rule: it is the service's own, a salted root of a declared Value, or an item the
   `words:<value>` and `word_bits:<value>` for a registered value.
 
 One-stage's record always shows N, each root's leaf count and domain, and the window's provenance, so a Spec over it
-declares them; the joint note's §6 step 0 allows that on test prompts, and hiding them is the hidden layout (step 8).
+declares them; hiding them waits on the hidden layout (`one_stage.hidden_draw`).
 The `Stream` runs `check_public` by the verifier of record before one-stage's R1 to R7, reading an entry's fields in key
 order; its codes are `keys`, `roots`, `unsalted`, `query` and `undeclared`.
 
@@ -273,7 +273,7 @@ class Sequential:
 
 Selection = All | Law | Sequential
 
-RETIRED_TWO_STAGE = ("two-stage sampling is retired (ASK-25: everything is committed at serve time); a selection rule is "
+RETIRED_TWO_STAGE = ("two-stage sampling is retired (everything is committed at serve time); a selection rule is "
                      "all or a law")
 """The refusal of a selection rule that names two-stage sampling, here and in the Lean verifier (`Select.retiredTwoStage`)."""
 
@@ -389,7 +389,7 @@ class Exhaustive:
 @dataclass(frozen=True)
 class Terms:
     """The outcome's named error terms: `sampling`, the profile's delta (None for an exhaustive selection). The proof's and
-    binding's terms come with the soundness composition (the joint note's §6 step 13)."""
+    binding's terms are not here: the soundness composition states them."""
 
     sampling: float | None
 

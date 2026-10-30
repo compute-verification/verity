@@ -50,7 +50,7 @@ class Ledger:
             at[f"reserve {s}"] = self.add("reserve", s, reserve)
             at[f"open {s}"] = self.add("open", s, {
                 **reserve, "reserve": at[f"reserve {s}"], "opened_by": LANE, "window": {"root": root(s)},
-                "host": "vy-challenger-1", "pinned": "ab" * 20, "key_sha512": self.key_sha512})
+                "host": "challenger-host", "pinned": "ab" * 20, "key_sha512": self.key_sha512})
             self.leaf += 1
             at[f"end {s}"] = self.add("end", s, {
                 "closed": True, "complete": True, "files": {f: "00" * 64 for f in C.SEALED_FILES},
