@@ -182,7 +182,7 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
     if weight_registration:
         entries.append({"identity": identity_dict(identity(program_digest, "*", -1, 0, "weights", "registered", 0, 0, rank)), "kind": "registered-input",
                         "digest": weight_registration.get("root") or weight_registration.get("digest") or json.dumps(weight_registration, sort_keys=True, default=str)[:128]})
-    digest = JC.sha256_hex(JC.list_pieces(entries, sort_keys=True, separators=(",", ":"), default=str))   # sha256 of json.dumps(entries, <same>)
+    digest = JC.sha512_hex(JC.list_pieces(entries, sort_keys=True, separators=(",", ":"), default=str))   # SHA-512 of json.dumps(entries, <same>)
     return {"schema": MAP_SCHEMA, "rules_version": RULES_VERSION, "program_digest": program_digest, "run_root": run_root.hex(), "rank": rank,
             "layout": layout_version, "collector": collector or {}, "entries_n": len(entries), "digest": digest, "entries": entries}
 

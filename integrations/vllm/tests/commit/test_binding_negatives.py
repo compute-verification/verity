@@ -119,7 +119,7 @@ def test_honest_run_covers_population_and_openings_correspond():
     vc = correspondence(ops, bound, reference(stream))
     assert vc["ok"] and vc["checked"] == len(ops), vc
     # the map is fixed before the challenge: its digest is over the entries, and the challenge changes with it
-    assert bmap["digest"] == hashlib.sha256(__import__("json").dumps(bmap["entries"], sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
+    assert bmap["digest"] == hashlib.sha512(__import__("json").dumps(bmap["entries"], sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
     other = dict(bmap, digest="00" * 32)
     assert B.challenge_identities(pop, other, run.run_root, 16, salt=b"t") != picks
     # registered inputs (weights): required by the population when registered, covered by the map's registered-input entry, never drawn as a leaf

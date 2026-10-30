@@ -45,9 +45,9 @@ def dict_pieces(doc: Mapping[str, Any], key: str, *, chunk: int | None = None, *
     yield "}"
 
 
-def sha256_hex(pieces: Iterable[str]) -> str:
-    """The sha256 of the pieces' UTF-8 bytes, back to back."""
-    h = hashlib.sha256()
+def sha512_hex(pieces: Iterable[str]) -> str:
+    """The SHA-512 of the pieces' UTF-8 bytes, back to back."""
+    h = hashlib.sha512()
     for p in pieces:
         h.update(p.encode())
     return h.hexdigest()

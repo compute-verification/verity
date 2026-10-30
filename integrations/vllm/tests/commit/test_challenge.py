@@ -54,9 +54,11 @@ def test_legacy_stratified_sample_is_byte_identical(case):
 def test_legacy_identities_are_byte_identical():
     c, run, bmap = T.commit(T.produce())
     pop = list(B.expected_population(T.structure(), T.workload()))
+    assert len(bmap["digest"]) == 128, "a binding map digest is a whole SHA-512 digest"
     for case in V["identities"]:
-        assert (run.run_root.hex(), bmap["digest"]) == (case["run_root"], case["map_digest"]), "the fixture commit changed, not the challenge"
-        picks = B.challenge_identities(pop, bmap, run.run_root, case["k"], salt=bytes.fromhex(case["salt"]))
+        assert run.run_root.hex() == case["run_root"], "the fixture commit changed, not the challenge"
+        recorded = {**bmap, "digest": case["map_digest"]}
+        picks = B.challenge_identities(pop, recorded, run.run_root, case["k"], salt=bytes.fromhex(case["salt"]))
         assert [[ident, leaf] for ident, _e, leaf in picks] == [[_ident(i), leaf] for i, leaf in case["picks"]]
 
 

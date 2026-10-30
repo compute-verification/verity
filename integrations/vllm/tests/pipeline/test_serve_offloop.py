@@ -733,7 +733,7 @@ def test_a_seal_writes_its_binding_map_in_pieces_to_the_bytes_and_digest_one_dum
     one = json.dumps({k: v for k, v in bmap.items() if k != "entries"} | {"entries": bmap["entries"]}, separators=(",", ":"), default=str)
     assert (tmp_path / "w5" / "commit" / "binding_map_p0.json").read_text() == one
     canon = json.dumps(bmap["entries"], sort_keys=True, separators=(",", ":"), default=str).encode()
-    assert got["binding_map_digest"] == bmap["digest"] == hashlib.sha256(canon).hexdigest()
+    assert got["binding_map_digest"] == bmap["digest"] == hashlib.sha512(canon).hexdigest()
     assert got["binding_map_entries"] == bmap["entries_n"] and set(got["phases_s"]) == {"binding_map", "store", "bundle"}
 
 

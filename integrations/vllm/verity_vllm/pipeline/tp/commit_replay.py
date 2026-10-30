@@ -112,7 +112,10 @@ def _of_record(out: Path, dd: dict[str, Any], b: dict[str, Any], pair: int, rank
     bmap = json.loads((bdir / "binding_map.json").read_text())
     canon = json.dumps(bmap.get("entries"), sort_keys=True, separators=(",", ":"), default=str).encode()     # `binding.build_binding_map`'s digest
     want = (c.get("binding") or {}).get("map_digest")
-    if not want or {bmap.get("digest"), hashlib.sha256(canon).hexdigest()} != {want} or (bmap.get("run_root"), int(bmap.get("rank") or 0)) != (c.get("run_root"), rank):
+    if want and len(str(want)) == 64:
+        raise Refused(f"rank {rank}: the binding map of record {str(want)[:16]} is a 64-hex SHA-256 digest, from before binding map digests "
+                      "became SHA-512: re-commit the run")
+    if not want or {bmap.get("digest"), hashlib.sha512(canon).hexdigest()} != {want} or (bmap.get("run_root"), int(bmap.get("rank") or 0)) != (c.get("run_root"), rank):
         raise Refused(f"rank {rank}: the bundle's binding map {str(bmap.get('digest'))[:16]} is not the rank's map of record {str(want)[:16]}")
     run.weight_registration = c.get("weight_registration")
     return row, c, store, run, bmap
