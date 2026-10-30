@@ -2603,19 +2603,76 @@
    "type_hash": "00e2f065edf6e116f146ffde18cb1f3059766d17bf24b38880c6ca480be91680"
   },
   "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol :",
+    "  Properties.RemoteAudit.P2Subprotocol.LineHeldAtSubprotocol Properties.RemoteAudit.P2Subprotocol.Plays",
+    "    Properties.RemoteAudit.P2Line.Verified Properties.RemoteAudit.P2Line.Replay.summary"
+   ],
+   "assumptions": [],
+   "type_hash": "ac418277d5d2a3d4165b7030bc811139e157b94599cfbae9af7d55b9d158deda"
   },
   "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified : Properties.RemoteAudit.P2Subprotocol.AcceptIsVerified"
+   ],
+   "assumptions": [],
+   "type_hash": "7f90fc927da8505ecd2e76684535a508537c9a989cbaeadf94c3a40c131f1adf"
   },
   "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_honest :",
+    "  And",
+    "    (Eq",
+    "      (RemoteAudit.P2Session.requestOf Properties.RemoteAudit.P2Subprotocol.honestHeld",
+    "        Properties.RemoteAudit.P2Subprotocol.honestRequest)",
+    "      (Except.ok Properties.RemoteAudit.P2Subprotocol.honestSessionParams))",
+    "    (Eq",
+    "      (RemoteAudit.P2Protocol.check Properties.RemoteAudit.P2Subprotocol.honestParams",
+    "        Properties.RemoteAudit.P2Subprotocol.honestCommitment Properties.RemoteAudit.P2Subprotocol.honestEvidence)",
+    "      (Core.Outcome.undecided \"the session has a window not yet verified\"))"
+   ],
+   "assumptions": [],
+   "type_hash": "ce317fe5c9dcbe334372fd321938a887d10bb5f898ecea511d431646e63dbd49"
   },
   "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_nontrivial (params : RemoteAudit.Session.Params)",
+    "  (s : RemoteAudit.Session.State) (sm : RemoteAudit.Session.Summary) :",
+    "  Not",
+    "    (And",
+    "      (Eq",
+    "        (RemoteAudit.P2Session.requestOf Properties.RemoteAudit.P2Subprotocol.honestCommitment.held",
+    "          { notBeforeNs := 0, request := Lean.Json.null }.request)",
+    "        (Except.ok params))",
+    "      (And",
+    "        (Eq",
+    "          (RemoteAudit.P2Protocol.replay { notBeforeNs := 0, request := Lean.Json.null }",
+    "            Properties.RemoteAudit.P2Subprotocol.honestCommitment Properties.RemoteAudit.P2Subprotocol.honestEvidence)",
+    "          (Except.ok s))",
+    "        (And (Eq s.failed Option.none)",
+    "          (And (Eq s.outcome (Option.some \"accepted\"))",
+    "            (And (Eq s.summary (Option.some sm))",
+    "              (Eq { eps := { num := 0, den := 1 }, qBytes := 0, spanNs := 0 }",
+    "                (RemoteAudit.P2Protocol.certify Properties.RemoteAudit.P2Subprotocol.honestCommitment.held sm).fst))))))"
+   ],
+   "assumptions": [],
+   "type_hash": "5a1098d8750181451352dc44c7a3b1022c4752c50d5fdaba67e7b1199c9ac701"
   },
   "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial :",
+    "  Exists fun sm =>",
+    "    Not",
+    "      (Properties.RemoteAudit.P2Subprotocol.LineHeldAtSubprotocol (fun x x_1 x_2 x_3 x_4 => True) (fun x x_1 => True)",
+    "        fun x x_1 => Option.some sm)"
+   ],
+   "assumptions": [],
+   "type_hash": "ef9e9291fe2f7b17b0fb5aee3f078ddb2fda82663fcd385c89abd17c12d11cd6"
   },
   "Properties.RemoteAudit.Shared.acceptDrawsOpenable": {
    "owner": "@memory-accounting",
@@ -5393,6 +5450,9 @@
     "Properties.RemoteAudit.Component.acceptIsVerified_nontrivial",
     "Properties.RemoteAudit.Component.publishedEps",
     "Properties.RemoteAudit.Component.publishedEps_nontrivial",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_honest",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
     "Properties.SampledProofs.digestIsRecord's",
@@ -5452,6 +5512,10 @@
     "Properties.RemoteAudit.Component.acceptIsVerified_nontrivial",
     "Properties.RemoteAudit.Component.publishedEps",
     "Properties.RemoteAudit.Component.publishedEps_nontrivial",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_honest",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_nontrivial",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
     "Verity.remote_soundness_of_subprotocols",
@@ -5506,6 +5570,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.Served.SecurityProofs.servedFreed",
+    "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
@@ -5712,7 +5778,12 @@
    },
    "guarantees": [
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld"
+    "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
+    "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
+    "Properties.RemoteAudit.Component.lineHeld_nontrivial",
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial"
    ]
   },
   "Definitions.Accounting.Assumptions.Compose": {
@@ -5801,7 +5872,9 @@
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
     "Properties.RemoteAudit.Component.lineHeld_nontrivial",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld"
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial"
    ]
   },
   "Definitions.Accounting.Assumptions.RemoteHeld": {
@@ -5815,7 +5888,9 @@
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
     "Properties.RemoteAudit.Component.lineHeld_nontrivial",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld"
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial"
    ]
   },
   "Definitions.Accounting.Assumptions.RemoteOutside": {
@@ -5830,7 +5905,9 @@
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
     "Properties.RemoteAudit.Component.lineHeld_nontrivial",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld"
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial"
    ]
   },
   "Definitions.Accounting.Assumptions.SquaringChain": {
@@ -6643,6 +6720,8 @@
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
     "Properties.RemoteAudit.Component.lineHeld_nontrivial",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial",
     "Properties.RemoteAudit.lineCoversSession",
     "Properties.RemoteAudit.pooledCovers",
     "Properties.RemoteAudit.pooledCoversSession"
@@ -6687,7 +6766,9 @@
     "Properties.RemoteAudit.Component.lineHeld_honest",
     "Properties.RemoteAudit.Component.lineHeld_nontrivial",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.stretchBound"
+    "Properties.RemoteAudit.Line.stretchBound",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial"
    ]
   },
   "Definitions.Accounting.Remote.Outside": {
@@ -6707,7 +6788,9 @@
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
     "Properties.RemoteAudit.Component.lineHeld_honest",
     "Properties.RemoteAudit.Component.lineHeld_nontrivial",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld"
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial"
    ]
   },
   "Definitions.Accounting.Requirement": {
@@ -6848,7 +6931,9 @@
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
     "Properties.RemoteAudit.Component.lineHeld_nontrivial",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld"
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial"
    ]
   },
   "Definitions.Accounting.TS.J10R": {
@@ -7326,6 +7411,8 @@
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
     "Properties.RemoteAudit.Component.lineHeld_nontrivial",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -7927,6 +8014,8 @@
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
     "Properties.RemoteAudit.Component.lineHeld_nontrivial",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -7956,6 +8045,8 @@
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
     "Properties.RemoteAudit.Component.lineHeld_nontrivial",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -7994,6 +8085,8 @@
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
     "Properties.RemoteAudit.Component.lineHeld_nontrivial",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -8027,6 +8120,8 @@
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
     "Properties.RemoteAudit.Component.lineHeld_nontrivial",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -8051,6 +8146,8 @@
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
     "Properties.RemoteAudit.Component.lineHeld_nontrivial",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -8083,6 +8180,8 @@
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
     "Properties.RemoteAudit.Component.lineHeld_nontrivial",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -8474,6 +8573,8 @@
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
     "Properties.RemoteAudit.Component.lineHeld_nontrivial",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial",
     "Properties.RemoteAudit.lineCoversSession",
     "Properties.RemoteAudit.pooledCoversSession",
     "Properties.RemoteAudit.steered_of_checked"
@@ -8563,7 +8664,9 @@
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
     "Properties.RemoteAudit.Component.lineHeld_nontrivial",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld"
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial"
    ]
   },
   "Definitions.Pous.Model.Scheme": {
@@ -8613,7 +8716,9 @@
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
     "Properties.RemoteAudit.Component.lineHeld_nontrivial",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld"
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial"
    ]
   },
   "Definitions.Pous.P2.Clip": {
@@ -8753,7 +8858,9 @@
     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
     "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
     "Properties.RemoteAudit.Component.lineHeld_nontrivial",
-    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld"
+    "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial"
    ]
   },
   "Definitions.Pouw.Dither": {
@@ -9367,6 +9474,11 @@
     "Properties.RemoteAudit.Component.publishedEps",
     "Properties.RemoteAudit.Component.publishedEps_nontrivial",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_honest",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_nontrivial",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial",
     "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.acceptedDrawsOpenable",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
@@ -9510,6 +9622,10 @@
     "Properties.RemoteAudit.Component.acceptIsVerified_nontrivial",
     "Properties.RemoteAudit.Component.publishedEps",
     "Properties.RemoteAudit.Component.publishedEps_nontrivial",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_honest",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_nontrivial",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
@@ -10255,6 +10371,11 @@
     "Properties.RemoteAudit.Component.publishedEps",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.lineRegistered",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_honest",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_nontrivial",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial",
     "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.acceptedDrawsOpenable",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
@@ -10390,6 +10511,11 @@
     "Properties.RemoteAudit.Component.lineHeld_nontrivial",
     "Properties.RemoteAudit.Component.publishedEps",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_honest",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_nontrivial",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial",
     "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.acceptedDrawsOpenable",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
@@ -10542,7 +10668,7 @@
    ]
   },
   "Flock.HmRow": {
-   "digest": "c9c53d0f30388d881f6284902844e8a45400653f157bda3273a964ad0b620739",
+   "digest": "db7373a1d9a48b7ed12d3de2911672b9b728bf05602db2b1b2621bcf42723398",
    "definitions": {
     "Flock.HmOut.checkPinned": "be695fb6208f54d0549abc4562a07a5a6a0e9141cdbfec833fc24bcee6fc732b",
     "Flock.HmOut.checkRows": "098f24c4033c2c7f98461e63d948ae97698a038872521e9bb334da3a4d1926a0",
@@ -10588,7 +10714,6 @@
     "Flock.HmRow.classOf": "b8f51fb77db04529e65c5fca0e1b2a34e9ce207127237429b83ff7414a3e07c2",
     "Flock.HmRow.classOf._sparseCasesOn_1": "d2860e4ced1127f5e5bde67ba6d17ef7a999b320c5da1dc21c5ee4371705b79e",
     "Flock.HmRow.classOf._sparseCasesOn_4": "7527a195dcbd853e48f368caa72976ad86037dcda062478acf755a6261afb6e4",
-    "Flock.HmRow.classOf.match_1": "ce7fc272801e50552046fb1d7fc3377303e2ad76cb0993faf8e7ea8872d4e3aa",
     "Flock.HmRow.drawn.match_1": "d53732ad9f7687c14a93fe77fe8536e81480bcdd632e6dd5655c2ebf3bcc2565",
     "Flock.HmRow.hex16": "12dc3acaacbb3091b3932a4959ee233f484701d4445c54e9deb5a1cfb15eed6f",
     "Flock.HmRow.isSha512Hex": "d45224822965131f484b3ab4bdf9ab5e2cb311cdb0ff5a8566ff840b77b65734",
@@ -10648,6 +10773,11 @@
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_honest",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_nontrivial",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
@@ -12172,6 +12302,8 @@
     "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.Served.SecurityProofs.servedFreed",
+    "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
@@ -14553,6 +14685,11 @@
     "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.publishesRoot",
     "PousCheck.Properties.SecurityProofs.timedAuditAccepts",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_honest",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_nontrivial",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -15004,7 +15141,7 @@
    ]
   },
   "PouwCheck.Credit": {
-   "digest": "aae22bbb3c1c2648f2c42ad5c467dd14ae3515b647c3b4369fadfba270c33887",
+   "digest": "3b714d0f1128c58cb6fecff0c4917d3690bdd9b0263bff8bc8ec6a5f799cadb2",
    "definitions": {
     "PouwCheck.Credit.BODY": "071fefb97f3971bcd352e1c3b07d11024a6f9c774c6fb6c3b46931a10dfb376c",
     "PouwCheck.Credit.CALLS_FORM": "d6bf6cb3768f79c8900ee97cb118d0b475d4456410e4d0a86afbe35047c0da92",
@@ -15143,7 +15280,6 @@
     "PouwCheck.Credit.committedRows": "b61563b721094cb6bfc92642d823529bf400d4f6ee14a99c96e1e2b487281796",
     "PouwCheck.Credit.committedWeights": "a1e3d5bf1d83402aae50ed33bf5bd7167abb1c53309ded491d28ae4ec0df4c2e",
     "PouwCheck.Credit.creditedWork": "f656e6139a00e30a3d5fbecdd52bc84db5915d5331abeeb7db311ef354a159dc",
-    "PouwCheck.Credit.creditedWork.match_1": "5eb3a80be149e9bc1ea896cb18f11a58e19ef3878b7b30db6a905c7645496159",
     "PouwCheck.Credit.defn?": "cc922bbc75f76dfa45516ca76490ac33d7771ee9b20c526bd9a21f1b8440c2e1",
     "PouwCheck.Credit.descriptorDrawn": "2f3bfbe210ca8325a1c3abf6072ee2d6de9f94e3fa02a494a5fa581b88089823",
     "PouwCheck.Credit.digest?": "ea819b7766c2e032d006d9105885cecea69a1320e40e6db6bbd4ef0fef769c99",
@@ -15230,7 +15366,6 @@
     "PouwCheck.Credit.tileK": "e4ad183d940b4dda0d3fb50dd2bf0180ab46dc9b2405024859549925720afb59",
     "PouwCheck.Credit.tileOf": "ef888a2a964b35057888c226dbe84eaba8f51698704b4e58977db1b50ce25ffb",
     "PouwCheck.Credit.tileOf._sparseCasesOn_1": "abca97894aa5722346397160457c251915279b9013ba1976af3a05cecc562871",
-    "PouwCheck.Credit.tileOf._sparseCasesOn_7": "78239315ebcb5d9480bca09597c7a6d7a33e58fa9009337d79979ffc7484fc6b",
     "PouwCheck.Credit.treeAt": "1eff78f60fa733c562db3ceed944136346192685f89d767420c77eb2c4c33c82",
     "PouwCheck.Credit.treeRoot": "a6bb8f3a8a58b3166ed9ade9510247e8956599715e5016a640a9131140b8c17c",
     "PouwCheck.Credit.unpinnedModel": "95d773802cfe2bff29dede79e9cb709b91106fb18209d33851579cfd161b8942",
@@ -18041,7 +18176,9 @@
     "Properties.RemoteAudit.Component.publishedEps",
     "Properties.RemoteAudit.Component.publishedEps_nontrivial",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
-    "Properties.RemoteAudit.Line.stretchBound"
+    "Properties.RemoteAudit.Line.stretchBound",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial"
    ]
   },
   "Properties.RemoteAudit.Live": {
@@ -18076,6 +18213,66 @@
     "Properties.RemoteAudit.LiveIsRun": "7c461d83419e495b28695a928669ebb995762cc62307e17ea5e676854f7cdf07"
    },
    "guarantees": ["Properties.RemoteAudit.liveIsRun"]
+  },
+  "Properties.RemoteAudit.P2Line": {
+   "digest": "de25ebee26d6cc6ff3c38bc3f51156efeb7aba16f2b8f8b1779addf29fa16513",
+   "definitions": {
+    "Properties.RemoteAudit.P2Line.Audited": "8591ce0a5599534f01d747fc57f3c94b4f68052625dca433a6bdeed15c9a44ed",
+    "Properties.RemoteAudit.P2Line.Audited.blocks": "88bcf7b92960730356510d06f3096cd05e625e23451d130d16b3225303719f77",
+    "Properties.RemoteAudit.P2Line.Audited.draws": "b94e773eca5d4454ce8b3bdf754fbf4ed5c80b63aa18a9731918ca23632dadbf",
+    "Properties.RemoteAudit.P2Line.Audited.held": "a9c4267292427a63d3993dc75880d5b55f13694fcdbee011e38e2e23dbec3af1",
+    "Properties.RemoteAudit.P2Line.Audited.params": "f91ba465d986b2a707706b06ea9192687882d2902f7197498eba338e24fa71d9",
+    "Properties.RemoteAudit.P2Line.Audited.windows": "1c8200a321ca3dd2a8ddd42f6df1f73efa9ea02fda415bd1ec6e4dc8946ee36a",
+    "Properties.RemoteAudit.P2Line.Replay": "0323b228e55969a002592958626c2c1892ed9bb0dc93c5efc2981ed218ca2fe5",
+    "Properties.RemoteAudit.P2Line.Replay.init": "a1bf2eff74918c5c65ad76e0e1054cf38717bee6d1a1ebe5970bb9011145b7c5",
+    "Properties.RemoteAudit.P2Line.Replay.log": "577282dbcdec220d436f5d9e18dd805b56cb011b1d7753bd0e145641b1c24d6c",
+    "Properties.RemoteAudit.P2Line.Replay.notBeforeNs": "fa4e690b92c369da8f5980e60c10f3c9316d8b50c56f9e3c64d8fde4b96d4c9d",
+    "Properties.RemoteAudit.P2Line.Replay.reached": "829d5aa0a54d1b48d65fbf0ba31818a0cb9276aa6953e92055df1e5c5d555a85",
+    "Properties.RemoteAudit.P2Line.Replay.receiptsAt": "b3137221a9caa50604b127c002d947d7fb15a3daf565cd196766c9c30eeb452f",
+    "Properties.RemoteAudit.P2Line.Replay.request": "4871bf85c263e76e05c4da702d23f78dce9318af8c0eb91d63f2ac8601437798",
+    "Properties.RemoteAudit.P2Line.Replay.run": "81220ab592d400fef1a46cd6f41508f6db2ead281ad5d48131ceb722ac001d3c",
+    "Properties.RemoteAudit.P2Line.Replay.summary": "5e76b8d97a81fdc2d734b80b466586132cde8052b3de48552b3ce43d15806edd",
+    "Properties.RemoteAudit.P2Line.Verified": "d304386ad712fe1489d89c87bf31131523710ed4deab7fdd2d4525d89ef3bcc3",
+    "Properties.RemoteAudit.P2Line.ended": "391052c1b0812dc287897fc99e894bf841bf0926313c70f6a93491be0132b9d2",
+    "Properties.RemoteAudit.P2Line.lastNs": "b2cb19ffdb13622485c3e3da27d134374e685b0710f589f58a6f3864976a9145",
+    "Properties.RemoteAudit.P2Line.passes": "0a46e0f1854db36808ccd618a51cd32203943488914fe271c2d1be888a807696",
+    "Properties.RemoteAudit.P2Line.passesBefore": "6ac82f76d31b5d05b212e321cf0d31c9ee71a6bfce10648eda3f6a493d282853",
+    "Properties.RemoteAudit.P2Line.played": "826f909a35c45ad51b721cb511f8461732fcecbd0f276192c25144871b64e8fb",
+    "Properties.RemoteAudit.P2Line.reachStep": "9a722a2d54ec4862d11d2c4929e1633f6db4115c7492813b6e952681db2696ae",
+    "Properties.RemoteAudit.P2Line.recordCommitted": "86ff8324ea1362d265d11502a7554e20ea2cff729b9387c574befc9f6798ac23",
+    "Properties.RemoteAudit.P2Line.recordDraw": "ae890e33dd099e8e529bf50acb882a9a120364b104d42ca475dbcdcb954a8a3b"
+   },
+   "guarantees": [
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial"
+   ]
+  },
+  "Properties.RemoteAudit.P2Subprotocol": {
+   "digest": "43399ec658127c8c57af090785d177c38bb741a2042fd88db390f2d4d6618f6c",
+   "definitions": {
+    "Properties.RemoteAudit.P2Subprotocol.AcceptIsVerified": "b22bfe8c9ac8f5d680dddda1a7902b6ed71b43265b319945afa9536d7967e963",
+    "Properties.RemoteAudit.P2Subprotocol.LineHeldAtSubprotocol": "c36fcb32e8d8cd46b05a35e622273f046203e535af26552697ca65084fae2652",
+    "Properties.RemoteAudit.P2Subprotocol.Plays": "05edb1ce0090a597e26df30c0e509785ebbf24b96325788997f998c320ebd875",
+    "Properties.RemoteAudit.P2Subprotocol.ReadBy": "7f521cd2215a6e7af02dde9f5bb4fe5d919df0f5d899baa60f86a8c9a7c53665",
+    "Properties.RemoteAudit.P2Subprotocol.honestCommitment": "9d9c3d3888c2712966cc3fed79347bf6731dec97d00817dd733fde8a8714ec42",
+    "Properties.RemoteAudit.P2Subprotocol.honestEvidence": "00dd0b29b2ce0f58e52fc7f38f5d3b035e7ae78344452c5f7cb2cc75c16f73b9",
+    "Properties.RemoteAudit.P2Subprotocol.honestHeld": "351fa2a3418b4a2a2ebf7ccde547ba155929c2873e883b21e917025c1185a937",
+    "Properties.RemoteAudit.P2Subprotocol.honestNode": "374f23514518bd185e9b3eb74e80fd25b11f1fccc96c35a3c720d0e64240af31",
+    "Properties.RemoteAudit.P2Subprotocol.honestParams": "bc0efae625cba5596df0b987eb3b1be2d33bab2da49b73f11d8776e98d4b7b49",
+    "Properties.RemoteAudit.P2Subprotocol.honestReg": "c520417617bb799216a05f41e2b67043e50409555ac7c607a7f33d7b5f91de02",
+    "Properties.RemoteAudit.P2Subprotocol.honestRequest": "2ad29851b93bf48cd3eb30653ac38a37f7bb1eecaf16cfec5c07c65528511f46",
+    "Properties.RemoteAudit.P2Subprotocol.honestSessionParams": "022ebd41d91bf0458dc3d877290bc47387f99b993d8429264b6bd12fb5f0bf14",
+    "Properties.RemoteAudit.P2Subprotocol.paceBy": "a26ad891c98733048b5783d7d4b79287f75ca9ac124e411202b2b554f672529a",
+    "Properties.RemoteAudit.P2Subprotocol.traceBy": "86849f0f10a12d6034276a16a5d34fb8b4c7a392e88c429938c1b35bc3a41825",
+    "Properties.RemoteAudit.P2Subprotocol.windowsBy": "df5357d0974cf95cfa70006b0e34f8e41a319f74085bff1345ced13ca4cb035a"
+   },
+   "guarantees": [
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_honest",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_nontrivial",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial"
+   ]
   },
   "Properties.RemoteAudit.Pooled": {
    "digest": "2ff8e161aea738736c43e118f8112d6bcc0faef30c03ac217ff5e1a51f130fe9",
@@ -18439,6 +18636,11 @@
     "Properties.RemoteAudit.Component.publishedEps",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.lineRegistered",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_honest",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_nontrivial",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial",
     "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.acceptedDrawsOpenable",
     "Properties.RemoteAudit.Shared.drawIsSubset",
@@ -18537,6 +18739,11 @@
     "Properties.RemoteAudit.Component.publishedEps_nontrivial",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.lineRegistered",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_honest",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_nontrivial",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial",
     "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.acceptedDrawsOpenable",
     "Properties.RemoteAudit.Shared.drawIsSubset",
@@ -18598,6 +18805,7 @@
     "Properties.RemoteAudit.Component.acceptIsVerified_nontrivial",
     "Properties.RemoteAudit.Component.publishedEps",
     "Properties.RemoteAudit.Component.publishedEps_nontrivial",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -18619,6 +18827,11 @@
     "RemoteAudit.Flight.step._sparseCasesOn_1": "d683ef459a69656e31ffc489d40e3cc272eb4dc9fa400f7cd7a48fc9bb68cfa4"
    },
    "guarantees": [
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_honest",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_nontrivial",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial",
     "Properties.RemoteAudit.liveIsRun",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
@@ -18718,6 +18931,8 @@
     "Properties.RemoteAudit.Line.lineChecked",
     "Properties.RemoteAudit.Line.lineRegistered",
     "Properties.RemoteAudit.Line.stretchBound",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial",
     "Properties.RemoteAudit.lineCoversSession"
    ]
   },
@@ -18766,6 +18981,11 @@
     "_private.RemoteAudit.P2.0.RemoteAudit.P2.int8": "a6b7564df0f15c7f0c5d4d3fe55faae184b031782c4c38de9208cffb9e1173ef"
    },
    "guarantees": [
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_honest",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_nontrivial",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -18823,6 +19043,11 @@
     "_private.RemoteAudit.P2Protocol.0.RemoteAudit.P2Protocol.natJ": "def047347af92b8cc88eec3d330a4adcf828503521dc63685d31cda30c109653"
    },
    "guarantees": [
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_honest",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_nontrivial",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -18880,6 +19105,11 @@
     "_private.RemoteAudit.P2Session.0.RemoteAudit.P2Session.runsOf": "45ff15b529c6c4174ec67ece1f910069ed661e19dc6207577b7553574cb7a636"
    },
    "guarantees": [
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_honest",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_nontrivial",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -18926,6 +19156,11 @@
     "Properties.RemoteAudit.Component.lineHeld_nontrivial",
     "Properties.RemoteAudit.Component.publishedEps",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_honest",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_nontrivial",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial",
     "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.acceptedDrawsOpenable",
     "Properties.RemoteAudit.Shared.drawIsSubset",
@@ -18999,6 +19234,11 @@
     "Properties.RemoteAudit.Line.lineChecked",
     "Properties.RemoteAudit.Line.lineRegistered",
     "Properties.RemoteAudit.Line.stretchBound",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_honest",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_nontrivial",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial",
     "Properties.RemoteAudit.lineCoversSession",
     "Properties.RemoteAudit.pooledCovers",
     "Properties.RemoteAudit.pooledCoversSession",
@@ -19111,6 +19351,11 @@
     "Properties.RemoteAudit.Component.publishedEps_nontrivial",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.lineRegistered",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_honest",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_nontrivial",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial",
     "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.acceptedDrawsOpenable",
     "Properties.RemoteAudit.Shared.drawIsSubset",
@@ -19305,6 +19550,11 @@
     "Properties.RemoteAudit.Component.publishedEps_nontrivial",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.lineRegistered",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_honest",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_nontrivial",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial",
     "Properties.RemoteAudit.Shared.acceptedDrawsOpenable",
     "Properties.RemoteAudit.Shared.drawIsSubset",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
@@ -19353,6 +19603,11 @@
     "Properties.RemoteAudit.Component.lineHeld_nontrivial",
     "Properties.RemoteAudit.Component.publishedEps",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_honest",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_nontrivial",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial",
     "Properties.RemoteAudit.Shared.acceptedDrawsOpenable",
     "Properties.RemoteAudit.Shared.drawIsSubset",
     "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
@@ -19384,6 +19639,11 @@
     "RemoteAudit.Verifier.withCoin._sparseCasesOn_3": "7e5672aa5433d6c08663db95ca83fb768425748418e7dde938f69e4f6b3edfef"
    },
    "guarantees": [
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_honest",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_nontrivial",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial",
     "Properties.RemoteAudit.liveIsRun",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
@@ -19397,7 +19657,7 @@
    ]
   },
   "RemoteAudit.Window": {
-   "digest": "3fdb09bb91dc7d82a98c2d7a7fca19c5a1e2608b04cab2a862ab6be2ed5ce20c",
+   "digest": "46aebd8de557fdf910b06da998e40781095fd1f09b8040a14125886847e809fa",
    "definitions": {
     "RemoteAudit.APPEND_DOMAIN": "a6604c74aef32ccdec542c5fecc103a1660e0ff141fb68613846fb35472b3103",
     "RemoteAudit.Append": "ccd67ec7f7f0426061b78ed18c4d6500de3ff3ad539add283f9f43bf3f3ae9c6",
@@ -19488,8 +19748,6 @@
     "RemoteAudit.instInhabitedPassRecord": "2f9f7f261b12a41ba2ef8454383169e835f7e5627e91f9c34bf42aa15478d82f",
     "RemoteAudit.instInhabitedPassRecord.default": "4aa3bab51a1782112304eb69e11d681f3c53af6ebbcfcd6f290e69e8e674b292",
     "RemoteAudit.instReprFailure.repr.match_1": "9c370c8a7072abbfa9228173fcd4096587ee5988bae95c6ecefa8484d83c332b",
-    "RemoteAudit.subsetExact": "207f3f825371442339a4f7c2b72d902a179047c00c4ee715dd5453c811f4d934",
-    "RemoteAudit.subsetExact._sparseCasesOn_1": "9e57c6d3a974f71465c3160d5a8a945af5da7ccdf38a0dbacd4ed00b6a27d502",
     "RemoteAudit.verifyWindow": "8f212324e329f2b7a48bb2295d9e3fd277360d56b1eea0f2f2d7cfe9cacfa55f"
    },
    "guarantees": [
@@ -19507,6 +19765,11 @@
     "Properties.RemoteAudit.Component.publishedEps_nontrivial",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.lineRegistered",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_honest",
+    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_nontrivial",
+    "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial",
     "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
     "Properties.RemoteAudit.Shared.acceptedDrawsOpenable",
     "Properties.RemoteAudit.Shared.drawIsSubset",
@@ -19562,6 +19825,7 @@
     "Properties.RemoteAudit.Component.acceptIsVerified_nontrivial",
     "Properties.RemoteAudit.Component.publishedEps",
     "Properties.RemoteAudit.Component.publishedEps_nontrivial",
+    "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol",
     "Properties.RemoteAudit.liveIsRun",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
@@ -19786,7 +20050,7 @@
    ]
   },
   "SampledProofs.ChallengerSession": {
-   "digest": "ba0fe54def89fda688bf3e5215e04456a814b014b0b9789de467733597d357e9",
+   "digest": "4fac7311c9c36e3213e09782af50d3b6f81c6f9abc35bbcd954102bc4f514ade",
    "definitions": {
     "SampledProofs.Challenger.Audited": "159b77cf065dee90e23af320bf78c6c962956fb8dafae7711c47bf9b416a91e0",
     "SampledProofs.Challenger.Audited.circuit": "322482c0ce5792be8e392fd5470dd756d5e44c3af242df1d9f634e383c868c95",
@@ -19850,13 +20114,6 @@
     "SampledProofs.Challenger.NO_MAIN": "890770b3c31168ab379dc80eaa66784849e7f7d6402e360e4912d02eea1aa1b2",
     "SampledProofs.Challenger.NO_PINS": "fbcc969e9a95c01229806609181d5d5014758c97d08fc7683600a6b3c95cb15b",
     "SampledProofs.Challenger.PINS_FORM": "0856ff128adf4d02e0cc9a4a4b0125411b71e67502580551c7775fbea4855b19",
-    "SampledProofs.Challenger.Period": "d94c84ab6e651d546ad3096b9da8c30e391be81dbec935fa49c475f5590e66e5",
-    "SampledProofs.Challenger.Period.cap": "22ecd839f85f56953dc70adab22293fe2acd4e93784bd74795c7372ac92f72b7",
-    "SampledProofs.Challenger.Period.circuit": "86f2d2f3e1d075b2d3faf58c08f57bf961db7092f1c734a5eeb9a709d79c8aa2",
-    "SampledProofs.Challenger.Period.closed": "09c847a874faf7bd62b51adc1731828d81018cda3c641700a1c3f900cd3ea78f",
-    "SampledProofs.Challenger.Period.lane": "199a2acfc4214d9ab18ca97fc20c980987f3c02754ce36608ed25085afc1c7ed",
-    "SampledProofs.Challenger.Period.name": "62033cdcc48a96f7c218ee5ed31ee7e26f8d3a45c4bf0aca6d7ff33e6a931991",
-    "SampledProofs.Challenger.Period.windows": "022a38030f0ce02a0b6633cd581e30b9b10be3ca4346fb350810f1aa7f38ac55",
     "SampledProofs.Challenger.RECORD_FILE": "f4329e2bb6cf54fdd62465ab4ea3e60c735f91214149dbb6da675c9637739e25",
     "SampledProofs.Challenger.RESERVED": "c220171ba3a3fb898f8ec97fc04868d5d3876adcae3c4ddfaa41d28cf6f1d96e",
     "SampledProofs.Challenger.Reserve": "48ce0f2d849e3fb1661a3c6042c7c0345368e68ddf574855a6a841133aef7c44",
@@ -19887,8 +20144,6 @@
     "SampledProofs.Challenger.instInhabitedLedgerEntry.default": "3848285ea2ab9d7a4e425a5fee117e2d67980ed4dea9b413c5dda27b2c750c8b",
     "SampledProofs.Challenger.instInhabitedMonitoringPeriod": "f42253387f191b308802f848057d7783dff969cdf170d2295cd20b95ce5addc0",
     "SampledProofs.Challenger.instInhabitedMonitoringPeriod.default": "b511d6be04fced5574b74a3f60c01e674e394d533b8e62ca28db4c3fe344827e",
-    "SampledProofs.Challenger.instInhabitedPeriod": "9d370f097ca12d5c8267395580a8065f6026c2113f4611c2e128d388cda68cc5",
-    "SampledProofs.Challenger.instInhabitedPeriod.default": "e5fe0f883570995063bc5da57aeec6f12f55a7bf810b5a120520d03e96d394d9",
     "SampledProofs.Challenger.instInhabitedWin": "69571b68c7814bbaf694f545cdc57f124c9c726250baeb07d52d8c47bac01d54",
     "SampledProofs.Challenger.instInhabitedWin.default": "e6a6f3962a2688c40ce9ef55c6d823564ad16a62e6ddb29186ad165c42ca5435",
     "SampledProofs.Challenger.isCap": "360903cb2a8b9b54b86115ff48886f0ee4ea99008c9fbb776663e91c298adbd0",
@@ -20342,7 +20597,7 @@
    ]
   },
   "SampledProofs.Registered": {
-   "digest": "1f0d6a3994ad0cdcc7e190761d5eee25508546992a19e0e04bbaae3397dc19d7",
+   "digest": "7fcc7ff1a46076c04fa0465e85c7243a4071cd775281adb6629fdf34abe52706",
    "definitions": {
     "SampledProofs.Registered.ENTRY_KEYS": "6f05cfc6ff6b3b0ad56f59e907efb5d41a6629417e1a64c1ee1a7bad7c6d0c8f",
     "SampledProofs.Registered.Entry": "d192f6101537cf4f508aabe2a21685f00c2fec96b01038378df81c20bd174894",
@@ -20371,7 +20626,6 @@
     "SampledProofs.Registered.lower": "a1307e0811a2a14704325d4992e8b520825f43fcc7d30a6e11c562947956d7e8",
     "SampledProofs.Registered.lower._sparseCasesOn_7": "8caf14c561d7e6f2974be20c93dc8d0bb4cbfe82ffbadffcc798e7f06ba5a4a5",
     "SampledProofs.Registered.lower._sparseCasesOn_8": "5401eb3b65d398f63dadef707efb4a6a535ec7b3827ec4c6e803e67d210b4552",
-    "SampledProofs.Registered.lower.match_7": "79a30032d604e9fe28d974adc26cbd289d2e162a424f2521d54b01ef785c28cb",
     "SampledProofs.Registered.params": "2855b33044ec8ed83f8ec5737fbd04baac5e63de690e7604353e1ba4bcb61083",
     "SampledProofs.Registered.params._sparseCasesOn_1": "349dec11d9a6682cfd49b31d4c28c4c855582dc886464a5275670866c8f305bd",
     "SampledProofs.Registered.params._sparseCasesOn_2": "b46d84c5ba27a91069caf9475b222eb280733e884c2754827e3899b4da5d711c",
