@@ -1,5 +1,5 @@
-"""The repository's `verity/annotations/v0` files (`verity.ml.circuits.annotations`): core's `verity/ml/circuits/ops/annotations.json` and the vLLM
-registry's `annotations.json`. Every entry is well formed; every Definition key resolves, and no guard is stale, in a program
+"""The repository's `verity/metadata/v0` files (`verity.ml.circuits.metadata`): core's `verity/ml/circuits/ops/metadata.json` and the vLLM
+registry's `metadata.json`. Every entry is well formed; every Definition key resolves, and no guard is stale, in a program
 calling each specialization the circuit-check catalog reaches of that Definition; and each entry sits in its owner's file.
 
 A key names a Definition by its stem (``RoPE_v1``): a full descriptor id holds only for served statics the catalog doesn't
@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.ml.circuits import annotations as A
+from verity.ml.circuits import metadata as A
 from verity.ml.circuits import codec
 from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
@@ -21,8 +21,8 @@ from verity.ml.circuits.program import Program
 
 ROOT = Path(__file__).resolve().parents[4]
 FILES = {
-    "core": ROOT / "verity" / "ml" / "circuits" / "ops" / "annotations.json",
-    "vllm": ROOT / "verity" / "ml" / "definitions" / "registry" / "annotations.json",
+    "core": ROOT / "verity" / "ml" / "circuits" / "ops" / "metadata.json",
+    "vllm": ROOT / "verity" / "ml" / "definitions" / "registry" / "metadata.json",
 }
 _TARGET = re.compile(r"^(def|node|wire|port):([^/]+)")
 #: specializations of one Definition validated against, smallest first
@@ -54,7 +54,7 @@ def _signature(fn):
 def _calling(fn) -> dict:
     """The descriptor of a program whose root calls ``fn`` once: ``Program(fn)`` would inline fn's body as its root."""
     params, ret = _signature(fn)
-    call = CompositeDefinition("AnnotationsCall", 1, (), lambda S: (params, ret), lambda B, S, *xs: B.call(fn, *xs), register=False)
+    call = CompositeDefinition("MetadataCall", 1, (), lambda S: (params, ret), lambda B, S, *xs: B.call(fn, *xs), register=False)
     return codec.encode_program(Program(bind(call)))
 
 
@@ -72,7 +72,7 @@ def _files():
 
 @pytest.mark.slow
 @pytest.mark.parametrize("owner,path", _files())
-def test_annotation_file(owner, path, families, catalog):
+def test_metadata_file(owner, path, families, catalog):
     ann = json.loads(path.read_text())
     assert ann.get("format") == A.FORMAT, f"{path.name}: not {A.FORMAT}"
     entries = ann["entries"]
