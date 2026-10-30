@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The HT-PREMISE v2 sweep: `search.py` jobs in parallel, results under $OUT (one JSON and log a job, trees in trees/).
-# Usage: sweep.sh exact|lsb|margin PARALLEL
+# Usage: sweep.sh exact|lsb|margin|kcap PARALLEL
 set -euo pipefail
 group=$1
 par=$2
