@@ -3,25 +3,27 @@
 predicate). What a recorded honest session meets is asserted; what none meets yet is asserted refused by name, so the
 change that closes it has to say so here. Two recorded sets, both fetched fixtures:
 
-* `rec-coins/16-16-8-n64` (`r20261009-111638-6720`'s inner statement and honest inner session, and level 3's `pub.bin`,
-  `registered.json` and outer session, proved again at the current leaf scheme by `r20261010-040650-84a9`), with level
-  3's statement restaged by `rec_vstage.stage` as `test_lean_rec_coins` restages it, and checked as
-  `verity/flock-circuit`; its outer session was proved before #1677 (art:225370f8… is the level proved again with
-  #1677's OS masks, by `r20261010-212517-4f68`, and accepted by today's verifier). The inner description is not
+* `rec-coins/16-16-8-n64` (a recorded inner statement and its honest inner session on the challenger's coin tree,
+  level 3's `pub.bin` and `registered.json` as staging recorded them, and an earlier recording's level-3 outer session),
+  with level 3's statement restaged by `rec_vstage.stage` as `test_lean_rec_coins` restages it, and checked as
+  `verity/flock-circuit`; the outer session was proved before the OS masks and the current coin schedule, over the level
+  of an earlier inner session of the same population, so only its draw is this level's, every identity refuses it at
+  its Hello, and only the checks that don't read the Hello are asserted on it. The inner description is not
   registered (no staging runs `inner_registered register`). V*'s sessions hide their outputs, as `ZkOuterR.hTags`
   (`TagsOkZHJ`) takes them, and their shared-row public file passes `ScopeZR`, `Typable`'s statement check; the
   public-output one-table checks, `TagsOk` and `ScopeZ`, refuse them.
-* `f1-gate`, the F1 gate (`PublicAudit`, the recursive audit at public units): art:df3af922…, 85 at K = 4096, N = 2,
-  built, proved and verified at b795ecbde by `r20261010-210008-003d` through `r20261010-214046-3e44` (the custody), V*'s
-  statements staged with the inner program; the fixture holds the files these tests read, the circuits and V*'s
-  programs xz-compressed, the inner transcript is tracked beside it (`f1-gate-transcript`), and each is checked against
-  the art's own listing once decompressed; RecCap's statement and session were staged and proved over the gate's inner
-  session after it (`r20261020-002938-635a`, `85-rec-reprice.sh` STEP=vcap and STEP=oprove LEVELS=cap). Lean's verifier
-  builds the inner statement from its own partition object and program (`AcceptsPublic`), V*'s seven staged statements
+* `f1-gate`, the F1 gate (`PublicAudit`, the recursive audit at public units): 85 at K = 4096, N = 2, one firewalled
+  run of `benchmarks/recursion_e2e` (MODES=firewall) built, proved and verified it, its inner statement staged with
+  every instance's own rows under `Q_template_instance` (`85-rec-reprice.sh`'s `stage_inner`), its inner session on the
+  challenger's coin tree and V*'s statements staged with the inner program, RecCap's included (`85-rec-reprice.sh`
+  STEP=vcap and STEP=oprove); the fixture holds the files these tests read, the circuits and V*'s large programs
+  xz-compressed, the inner transcript is tracked beside it (`f1-gate-transcript`), and each is checked against the run's
+  own listing (`prover.sha256`) once decompressed. Lean's verifier
+  builds the inner statement from its own partition object and program (`AcceptsPublic`), V*'s ten staged statements
   are the ones `outerStatementsAt` lists, each session is one of them byte for byte (`RecVStar.checkStmt`) and draws every unit,
-  and the rate is below 1 at `k = 2^23` (at `2^21` for these sessions). The sessions were proved with #1677's OS masks
+  and the rate is below 1 at `k = 2^23` (at `2^21` for these sessions). The sessions were proved with the OS masks
   in `verity/flock-circuit`'s `--zk` identity, and the verifier of record accepts them as `verity/flock-circuit`: the
-  gate is witnessed under today's identity. The event's last conjunct is shown in its executable form only: the honest
+  gate is witnessed under the current identity. The event's last conjunct is shown in its executable form only: the honest
   outputs are the circuit's, and a public file whose one output row is committed one bit off still sets up. That is
   the executable fact `¬ holds` is about, not that Lean's `holds` flips there: no Lean lemma links execution to
   `holds`, and the cheater's row not being the circuit's output is up to a SHA-512 second preimage for that row.
@@ -46,6 +48,7 @@ import keyed
 import numpy as np
 import pytest
 from test_lean_rec_coins import built, forged  # noqa: F401
+from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluate import evaluate_call
 from verity.ml.circuits.ops import gemm as G
@@ -61,21 +64,17 @@ BIN = LEAN / ".lake" / "build" / "bin" / "flock-witness"
 SET = HERE / "fixtures" / "rec-coins" / "16-16-8-n64"
 LEVEL = 3
 STATEMENT = "verity/flock-circuit"
-#: the statement rec-coins' level-3 session was proved as: `verity/flock-circuit` before #1677 put the OS's masks in its
-#: identity
-PROVED = "verity/flock-circuit@cec3e347"
 #: `CoinTree.checkHello`'s refusal of a session whose Hello is not the verifier's own
 S2_R7 = "S2/R7: the session parameters are not the verifier's"
-PRF208 = "PRF-208: fixtures are re-proved after F1 (#5181) lands; this skip goes with that re-proof"
-#: the recorded level's circuit (`v/L3/circuit.txt`), which its outer session proves (`test_lean_rec_coins`)
-CIRCUIT_SHA512 = ("885c04a867b23838a460033b3cfcbd8cad28bc5f994dd10e907724d293479cf7a525e331ed7152ab5e451bb27f39905f695af6295408db"
-                  "459a42e2dda3e07463")
+#: level 3's circuit (`v/L3/circuit.txt`) at the inner statement's shape (`test_lean_rec_coins`)
+CIRCUIT_SHA512 = ("27aded67e57a39ba5ccc3dbfff854d0de705cd2fd858261e281749a0fe5805c48fc9bdddb013219e4deed491c1a717006bf70bc3cce6a9e7d9"
+                  "b5e13cdb010ccd")
 
-#: art:df3af922…'s files the gate's tests read, a file `f` stored as `f.xz` when large, and `prover.sha256`: their lines of
-#: the art's own listing (`out/data.sha256`)
+#: the gate run's files these tests read, a file `f` stored as `f.xz` when large, and `prover.sha256`: their lines of
+#: the run's own listing
 F1 = HERE / "fixtures" / "f1-gate"
-#: the gate's inner transcript, the coin server's record of its inner session (art:df3af922…'s `inner/s1/public.json`,
-#: xz-compressed, and its line of the art's listing), tracked: a check's pod fetches a registered fixture only once `main`
+#: the gate's inner transcript, the coin server's record of its inner session (the gate run's `inner/s0/public.json`,
+#: xz-compressed, and its line of the run's listing), tracked: a check's pod fetches a registered fixture only once `main`
 #: registers it
 F1_TRANSCRIPT = HERE / "fixtures" / "f1-gate-transcript"
 #: V*'s statements at the gate, each staged under `v/` with its outer session under `v-sess/`, in `RecVStar.statements`' order
@@ -161,14 +160,10 @@ def test_the_recorded_level_meets(outer, check):
     assert outer[check]["ok"], outer[check].get("why")
 
 
-@pytest.mark.skip(reason=PRF208)
-def test_the_recorded_level_was_proved_before_the_os_masks(outer, level):
-    """`AcceptsZKR` refuses the level's session as `verity/flock-circuit` at its Hello (its re-record's prover,
-    505b9bfb1, lacked #1677's `osMasks`) and accepts it as `PROVED`. Holds as `verity/flock-circuit` once the fixture
-    takes the level proved again with the OS-masks prover (art:225370f8…)."""
+def test_the_recorded_level_is_refused_at_its_hello(outer):
+    """`AcceptsZKR` refuses the level's session as `verity/flock-circuit` at its Hello: its prover (505b9bfb1) lacked
+    the OS masks (`osMasks`) and drew its coins at an earlier schedule."""
     assert (outer["accepts_zkr"]["ok"], outer["accepts_zkr"].get("why")) == (False, S2_R7)
-    c = _witness("session", "--statement", PROVED, *level)["accepts_zkr"]
-    assert c["ok"], c.get("why")
 
 
 def test_the_recorded_level_fails_scope_z(outer):
@@ -235,38 +230,41 @@ def _unit(g: Path, part: str) -> str:
 
 
 def _f1_inst(g: Path) -> tuple[dict, list, dict, dict, bytes]:
-    """`stage/inst-2.bin` in `circuit.write`'s shared-row layout: its header, META's ports, every table's rows and salts
-    (port-major), and what follows them, which is the verifier's file's body (every row's `b || c`, then the refs)."""
+    """`stage/inst-2.bin` in `circuit.write`'s own-row layout (`stage_inner`'s `FLOCK_OWN_ROWS`): its header, META's ports,
+    every instance's rows (the ports side by side) and salts (instance-major, ports in order), and what follows them,
+    which is the verifier's file's body (every row's `b || c`, instance-major)."""
     raw = (g / "stage" / "inst-2.bin").read_bytes()
     at = raw.index(b"\n") + 1
     head = json.loads(raw[:at])
+    assert "shared_rows" not in head, "the gate's inner statement is staged with every instance's own rows"
     with (g / "stage" / "circuit.txt").open() as f:
         f.readline()
         ports = C._meta_ports(json.loads(f.readline()[len("META "):]))
-    n = head["shared_rows"]
-    rows, salts = {}, {}
+    n, words = head["instances"], sum(p.words for p in ports)
+    flat = np.frombuffer(raw[at:at + 2 * n * words], dtype="<u2").reshape(n, words)
+    at += 2 * n * words
+    rows, col = {}, 0
     for p in ports:
-        k = 2 * n[p.name] * p.words
-        rows[p.name] = np.frombuffer(raw[at:at + k], dtype="<u2").reshape(n[p.name], p.words)
-        at += k
-    for p in ports:
-        salts[p.name] = [raw[at + C.SALT_BYTES * i:at + C.SALT_BYTES * (i + 1)] for i in range(n[p.name])]
-        at += C.SALT_BYTES * n[p.name]
+        rows[p.name] = np.ascontiguousarray(flat[:, col:col + p.words])
+        col += p.words
+    salts = {p.name: [] for p in ports}
+    for _ in range(n):
+        for p in ports:
+            salts[p.name].append(raw[at:at + C.SALT_BYTES])
+            at += C.SALT_BYTES
     return head, ports, rows, salts, raw[at:]
 
 
 def _committed(head: dict, ports: list, rows: dict, salts: dict) -> tuple[dict, bytes]:
-    """The header's `frame_v3` and every row's `b || c` (port-major), recomputed from the rows and salts."""
+    """The header's `frame_v3` and every row's `b || c` (instance-major, ports in order), recomputed from the rows and
+    salts."""
     fv, bcs = C.statement(ports, SimpleNamespace(name=head["set"]), *head["range"], rows, salts)
-    return fv, b"".join(bc for p in ports for bc in bcs[p.name])
+    return fv, b"".join(bcs[p.name][i] for i in range(head["instances"]) for p in ports)
 
 
-def _inputs(head: dict, ports: list, rows: dict, public: bytes, i: int) -> tuple:
-    """Instance `i`'s rows `p0`, `p1` and `out`, through its refs (u32 LE, instance-major, after every row's `b || c`)."""
-    names = [p.name for p in ports]
-    at = C.BC_BYTES * sum(head["shared_rows"].values()) + 4 * len(names) * i
-    refs = np.frombuffer(public[at:at + 4 * len(names)], dtype="<u4")
-    return tuple(rows[nm][refs[names.index(nm)]] for nm in ("p0", "p1", "out"))
+def _inputs(rows: dict, i: int) -> tuple:
+    """Instance `i`'s rows `p0`, `p1` and `out`."""
+    return tuple(rows[nm][i] for nm in ("p0", "p1", "out"))
 
 
 @functools.cache
@@ -290,7 +288,7 @@ def _f1_cheat(g: Path, dst: Path) -> Path:
     rows["out"][0, 0] ^= 1
     fv, bc = _committed(head, ports, rows, salts)
     f = dst / "pub-2.bin"
-    f.write_bytes(json.dumps(dict(head, rows=False, frame_v3=fv), sort_keys=True).encode() + b"\n" + bc + public[len(bc):])
+    f.write_bytes(C.public_file(dict(head, frame_v3=fv), bc + public[len(bc):]))
     return f
 
 
@@ -299,7 +297,14 @@ def f1_inner(f1_gate, once) -> dict[str, dict]:
     _build()
     g = f1_gate
     return _kept(once, "witness-f1-inner", functools.partial(
-        _f1_inner, g, g / "stage" / "pub-2.bin", "--record", str(g / "inner" / "s1" / "session" / "session.json")))
+        _f1_inner, g, g / "stage" / "pub-2.bin", "--record", str(g / "inner" / "s0" / "session" / "session.json")))
+
+
+def _f1_draw() -> dict:
+    """The verifier's sample of the gate's inner session (`rec_live.full_draw`, as `rec_reprice.py partition` writes it):
+    the stratified law at K = the population over its own population program and template query, every unit."""
+    t = bind(G.GemmCoordinate, K=4096, **G.GEMM_HOPPER)
+    return RL.full_draw(P.population_program(t, 2), P.template_instance_query(t))
 
 
 class _Runs(dict):
@@ -321,7 +326,7 @@ def f1(f1_gate, f1_inner, once):
 
     def inputs(d):
         (d / "inner.json").write_text(json.dumps(f1_inner["accepts_stmt"]["shape"]))
-        (d / "draw.json").write_text(json.dumps({"law": "subset", "population": 2, "k": 2, "units": [0, 1]}))
+        (d / "draw.json").write_text(json.dumps(_f1_draw()))
         tops = [g / "v" / p for p in F1_PARTS if not p.startswith("alg/")]
         (d / "rows.json").write_text(json.dumps(S.shared_rows([g / "v" / p for p in F1_PARTS if p.startswith("alg/")], (),
                                                               tops)))
@@ -351,12 +356,12 @@ def f1(f1_gate, f1_inner, once):
 
 def test_f1_lean_builds_the_inner_statement_from_its_own_partition_object_and_program(f1_inner):
     """`AcceptsPublic obj prog st` (`acceptsPublic_of_check`): with the verifier's own partition object and program the
-    inner statement sets up as one table whose units the verifier derives (`Q_word` v1), and `Zk.schedule` takes its m;
-    s1, the gate's inner session, is a session of it."""
+    inner statement sets up as one table whose units the verifier derives (`Q_template_instance` v0, the population
+    program's template query), and `Zk.schedule` takes its m; s0, the gate's inner session, is a session of it."""
     c = f1_inner["accepts_stmt"]
     assert c["ok"], c.get("why")
     assert c["m"] == 27
-    assert (c["partition_check"]["units"], c["partition_check"]["query"]) == ("derived", "Q_word v1")
+    assert (c["partition_check"]["units"], c["partition_check"]["query"]) == ("derived", "Q_template_instance v0")
     assert f1_inner["record_sigma"]["ok"], f1_inner["record_sigma"].get("why")
 
 
@@ -366,7 +371,7 @@ def test_f1_vstars_statements_are_outer_statements_at(f1_gate, f1_inner):
     units of the gate's ten staged statements, the last four RecCaps over levels 1 to 3's tops and level 0's 128 nodes,
     which `outerParts` counts (levels + groups + levels)."""
     c = f1_inner["accepts_stmt"]
-    assert c["shape"] == {"format": "verity/rec-inner/v1", "m": 27, "k_log": 24, "claims": 8, "regions": 3}
+    assert c["shape"] == {"format": "verity/rec-inner/v2", "m": 27, "k_log": 24, "claims": 8, "regions": 3}
     assert c["outer_parts"] == len(c["statements"]) == len(F1_PARTS)
     assert c["statements"] == [nm for nm, _ in F1_STATEMENTS] == [_unit(f1_gate, p) for p in F1_PARTS]
 
@@ -385,37 +390,31 @@ def test_f1_the_session_meets(f1, part):
     assert w["full_draw"]["population"] == F1_STATEMENTS[j][1]
 
 
-@pytest.mark.skip(reason=PRF208)
 @pytest.mark.parametrize("part", F1_PARTS)
 def test_f1_the_session_is_accepted_as_the_verifiers_statement(f1, part):
     """`AcceptsZKR`, and so `AcceptsZKV`, accepts every gate session as `verity/flock-circuit`, the verifier of record's
-    `--zk` identity with #1677's OS masks, which the gate's prover had."""
+    `--zk` identity with the OS masks, which the gate's prover had."""
     w = f1[part, STATEMENT]
     for check in ("accepts_zkr", "accepts_zkv"):
         assert w[check]["ok"], (check, w[check].get("why"))
 
 
-@pytest.mark.skip(reason=PRF208)
 @pytest.mark.parametrize("part", ["L3", "cap"])
-def test_f1_verify_refuses_the_session_only_for_its_undrawn_inner_session(built, f1_gate, f1, once, part):  # noqa: F811
-    """`flock-verify verify --zk`, the verifier of record, passes level 3 (`rec-open/l16-h4`, 106 units, the smallest
+def test_f1_verify_accepts_the_session(built, f1_gate, f1, once, part):  # noqa: F811
+    """`flock-verify verify --zk`, the verifier of record, accepts level 3 (`rec-open/l16-h4`, 106 units, the smallest
     level) and RecCap (`rec-cap/n128`, `RecCoins.checkCap`) with the verifier's own V* inputs, the inner statement and
-    session its coefficients are checked against, and the coin server's inner transcript (`inner/s1/public.json`), whose
-    link points, level-3 tops and `root_B` the unit is held to (`RecVStar.checkTopRows`, `RecCoins.checkLink`), as
-    `85-rec-reprice.sh`'s STEP=lean runs it, through every check and every refusal the verdict runs last (the form's, a
-    draw-less session's, and a V* session's short of every unit, `RecSetup.fullDraw`) but the one after them: the gate's
-    inner session ran before the coin server drew it (#2468), so its record holds no draw, and a session over it is refused
-    (`RecSetup.innerDrawn`), with that reason alone, and not as a private circuit's. The checks above are the model's
-    predicates; this is the shipped verdict, so a refusal added to it that an honest V* session meets fails here and nowhere
-    else. About two minutes, beside the gate's witness runs."""
+    session its coefficients are checked against, the verifier's full draw of that session (`_f1_draw`), and the coin
+    server's inner transcript (`inner/s0/public.json`), whose link points, level-3 tops and `root_B` the unit is held to
+    (`RecVStar.checkTopRows`, `RecCoins.checkLink`), as `85-rec-reprice.sh`'s STEP=lean runs it: through every check and
+    every refusal the verdict runs last (the form's, a draw-less session's, a V* session's short of every unit,
+    `RecSetup.fullDraw`, and one over an inner session whose record holds no draw, `RecSetup.innerDrawn`), and not as a
+    private circuit's. The checks above are the model's predicates; this is the shipped verdict, so a refusal added to it
+    that an honest V* session meets fails here and nowhere else. About two minutes, beside the gate's witness runs."""
     g, d = f1_gate, f1["inputs"]
     v, st = g / "v" / part, g / "stage"
     names = [nm for nm, _ in F1_STATEMENTS]
 
     def run():
-        # the gate's record predates `rec_live.record_bytes`, the format the verifier reads (`RecSetup.checkReads`)
-        transcript = d / f"transcript-{part}.json"
-        transcript.write_text(RL.record_bytes(json.loads((g / "inner" / "s1" / "public.json").read_text())))
         p = keyed.run([str(LEAN / ".lake" / "build" / "bin" / "flock-verify"), "verify", "--zk", "--statement", STATEMENT,
                        "--circuit", str(v / "circuit.txt"), "--public", str(v / "pub.bin"), "--partition",
                        str(v / "partition.json"), "--program", str(v / "program.json"), "--registered",
@@ -423,15 +422,15 @@ def test_f1_verify_refuses_the_session_only_for_its_undrawn_inner_session(built,
                        str(names.index(_unit(g, part))), "--rec-bindings", str(d / f"bindings-{part}.json"), "--rec-rows",
                        str(d / "rows.json"), "--rec-inner-circuit", str(st / "circuit.txt"), "--rec-inner-public",
                        str(st / "pub-2.bin"), "--rec-inner-partition", str(st / "partition.json"),
-                       "--rec-inner-statement", "verity/flock-circuit+plain-leaves", "--rec-inner-statement-coins", "os",
+                       "--rec-inner-statement", "verity/flock-circuit+plain-leaves",
                        "--rec-inner-draw", str(d / "draw.json"), "--rec-inner-session",
-                       str(g / "inner" / "s1" / "session"), "--rec-inner-transcript", str(transcript), "--session",
-                       str(g / "v-sess" / part)])
+                       str(g / "inner" / "s0" / "session"), "--rec-inner-transcript", str(g / "inner" / "s0" / "public.json"),
+                       "--session", str(g / "v-sess" / part)])
         return {"rc": p.returncode, "verdicts": [json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT ")]}
 
     r = _kept(once, f"verify-f1-{part}", run)
-    assert r["rc"] == 1 and [(x["accepted"], x["why"], x["private_circuit"]) for x in r["verdicts"]] == [
-        (False, RL.NO_INNER_DRAW, False)], r
+    assert r["rc"] == 0 and [(x["accepted"], x["why"], x["private_circuit"]) for x in r["verdicts"]] == [
+        (True, "", False)], r
 
 
 def test_f1_the_sessions_fail_the_public_output_checks(f1):
@@ -461,7 +460,7 @@ def test_f1_the_rate_is_below_one_at_k_2_21(f1):
 
 
 def test_f1_the_honest_outputs_are_the_circuits(f1_gate):
-    """The event's `¬ holds`, executably, at the honest s1: every output row is the inner unit's Definition on its
+    """The event's `¬ holds`, executably, at the honest s0: every output row is the inner unit's Definition on its
     instance's input rows (the IR oracle), and every row's `b || c` under its salt and the trees' roots are the verifier's
     file's, `pub-2.bin` byte for byte."""
     st = f1_gate / "stage"
@@ -470,9 +469,9 @@ def test_f1_the_honest_outputs_are_the_circuits(f1_gate):
     fv, bc = _committed(head, ports, rows, salts)
     assert fv == head["frame_v3"]
     assert public[:len(bc)] == bc
-    assert (st / "pub-2.bin").read_bytes() == json.dumps(dict(head, rows=False), sort_keys=True).encode() + b"\n" + public
+    assert (st / "pub-2.bin").read_bytes() == C.public_file(head, public)
     for i in range(head["instances"]):
-        x, w, out = _inputs(head, ports, rows, public, i)
+        x, w, out = _inputs(rows, i)
         assert int(out[0]) == _gemm(x, w) and not out[1:].any(), i
 
 
@@ -480,12 +479,12 @@ def test_f1_a_wrong_output_still_sets_up(f1_gate, f1_inner, f1):
     """The cheater: instance 0's output row one bit off, committed under its salt. Lean's verifier still builds the inner
     statement from its own partition object and program (`AcceptsPublic` holds), at another Σ, while the committed output
     is not the circuit's. This is the executable fact `¬ holds` is about, not that Lean's `holds` flips."""
-    head, ports, rows, _, public = _f1_inst(f1_gate)
+    head, _, rows, _, _ = _f1_inst(f1_gate)
     c = f1["cheat"]["accepts_stmt"]
     assert c["ok"], c.get("why")
     assert c["sigma"] != f1_inner["accepts_stmt"]["sigma"]
     assert (c["m"], c["partition_check"]["units"]) == (27, "derived")
     roots = json.loads(f1["cheat-file"].read_bytes().split(b"\n", 1)[0])["frame_v3"]["roots"]
     assert {nm for nm, r in roots.items() if r != head["frame_v3"]["roots"][nm]} == {"out"}
-    x, w, out = _inputs(head, ports, rows, public, 0)
+    x, w, out = _inputs(rows, 0)
     assert int(out[0]) == _gemm(x, w) != int(out[0]) ^ 1

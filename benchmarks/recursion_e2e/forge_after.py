@@ -154,7 +154,8 @@ def frame_root(text: str, fv: dict, port: str, bcs: list[bytes]) -> str:
 
 
 def own_flags(binary: Path, dd: Path, n: str, stmts: dict[str, Path], o: Path) -> dict[str, list[str]]:
-    """85's STEP=lean flags for each statement (its python block), derived with `binary`."""
+    """85's own flags for each statement (STEP=oprove's python block, which STEP=lean verifies with), derived with
+    `binary`."""
     from verity_flock import rec_bindings as RB
     from verity_flock import rec_vstage as VS
 
@@ -220,7 +221,7 @@ def main() -> int:
     (n,) = [p.name[4:-4] for p in (dd / "stage").glob("pub-*.bin")]
     inner_flags = ["--rec-inner-circuit", str(dd / "stage/circuit.txt"), "--rec-inner-public", str(dd / f"stage/pub-{n}.bin"),
                    "--rec-inner-partition", str(dd / "stage/partition.json"), "--rec-inner-statement",
-                   "verity/flock-circuit+plain-leaves", "--rec-inner-statement-coins", "os", "--rec-inner-draw",
+                   "verity/flock-circuit+plain-leaves", "--rec-inner-draw",
                    str(dd / "stage/draw.json"), "--rec-inner-session", str(inner / "session"), "--rec-inner-transcript",
                    str(inner / "public.json")]
     sess = {s: dd / "v-sess" / s for s in sorted({CASES[k][0] for k in kinds})}

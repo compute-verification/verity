@@ -56,11 +56,11 @@ def ClassOk (st : Flock.Stmt) : Prop :=
 /-- **Lean's verifier accepts `st` as the inner statement**, set up as `RecVStar.innerOf` and `RecCoins.Inner.load` set
 it up: from some circuit and public files, partition object and program (`innerOf` passes the verifier's own, and
 `Stmt.setupHidden` refuses a statement whose META has `links` without one; `Inner.load` passes none),
-`Flock.Stmt.setupTables` at the inner tags (`RecVStar.innerTags`) and the coin server's coins returns one table, `st`,
-and `Flock.Zk.schedule` accepts its `m`. -/
+`Flock.Stmt.setupTables` at the inner tags (`RecVStar.innerTags`) and the challenger's coin tree (`RecVStar.innerTree`)
+returns one table, `st`, and `Flock.Zk.schedule` accepts its `m`. -/
 def AcceptsStmt (st : Flock.Stmt) : Prop :=
   (∃ (cf pf : ByteArray) (partition : Option Lean.Json) (program : Option ByteArray) (spec : Flock.SessionSpec),
-    Flock.Stmt.setupTables Flock.RecVStar.innerTags cf pf Flock.Coins.os 1 (partition := partition)
+    Flock.Stmt.setupTables Flock.RecVStar.innerTags cf pf Flock.RecVStar.innerTree 1 (partition := partition)
       (program := program) = .ok (spec, #[st])) ∧
   ∃ p, Flock.Zk.schedule st.m = .ok p
 
@@ -79,7 +79,7 @@ theorem acceptsStmt_merkle {st : Flock.Stmt} (h : AcceptsStmt st) :
   · obtain rfl : st = st' := by simpa using hsts
     have s := Hidden.setupHidden_spec' hst
     have hf := s.merkle
-    rw [Hidden.parse_leafScheme s.parse, innerTags_merkleLeaf,
+    rw [Hidden.parse_leafScheme (s.parseF (by decide)), innerTags_merkleLeaf,
       show Flock.MerkleScheme.find? "flock-leaf/sha512-unsalted" =
         some (Flock.MerkleScheme.sha512 "flock-leaf/sha512-unsalted") from rfl] at hf
     exact (Option.some.inj hf).symm

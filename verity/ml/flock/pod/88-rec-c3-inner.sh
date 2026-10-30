@@ -1,24 +1,32 @@
 #!/usr/bin/env bash
 # Candidate 3's inner session (hiding model architectures, milestone A; verity_flock.rec_session): RoPE d64 staged as M0's
 # statement with plain SHA-512 leaves (rec_inner.py stage --plain-leaves), proved on the CPU by the unmodified prover
-# (FC_COINS=os, non-zk) through the relay, which gives the verifier h, the hidden circuit `unit`'s share of the lincheck's fold,
-# in a round of its own after z_partial's, on the rep's one coin stream. Then: the schedule serve held the session to against
-# rec_live --schedule-for --holo's; upstream's replay of the session as the prover ran it (inner/prover); V*'s hashing reference
-# (rec_vstar) over the verifier's record; the verifier's fold points (rec_vstage points) and InnerFold.lean --hide unit (an
-# executable, cached by its sources): each rep's public comb and Lean's full fold; rec_session --check-fold (comb + the
-# session's h is the full fold, h nonzero); rec_vstage stage --levels none (the holo algebra's InnerRepCheck parts, h read from
-# the session's rows, each holding); and Lean's flock-verify on the prover's session (verity/flock-circuit+plain-leaves,
-# without --zk, holding the session's sample to its own law: --stratified N --program --partition). The coin server answers
-# Register with the verifier's full draw (stage/draw.json, rec_live.full_draw: every unit), which both records keep. Then
-# three controls on copies of the prover's record, each of which Lean must refuse: rep 0's first challenge flipped, the
-# draw removed, and the sample's last unit dropped (rec_inner.py forge --record prover). Run from the verity tree (research run
-# --cwd source). Outputs under out/: host.txt, stage.json, statement.txt, schedule.json, session.log, time-prove.txt,
-# prove.txt/.err, inner/ (schedule.json, public.json, private.json, session/, prover/), replay.txt, vstar.json, points.json,
-# fold.json, check-fold.json, vstage.json, lean.log, forged-*-lean.txt, summary.json. Exits 1 unless the session, replay,
-# rec_vstar, the fold check, the staging and Lean's verdicts (the honest session accepted, every control refused) all pass.
+# (non-zk, under INNER_COINS) through the relay, which gives the verifier h, the hidden circuit `unit`'s share of the
+# lincheck's fold, in a round of its own after z_partial's, on the rep's one coin stream. Every coin of the session, the
+# relay's sparse and stacked phases' too, is the challenger's coin tree, drawn at Hello and opened round by round
+# (rec_session --coin-tree, from TREE_FROM). Then: the schedule serve held the session to against rec_live --schedule-for
+# --holo's; upstream's replay of the session as the prover ran it (inner/prover); V*'s hashing reference (rec_vstar) over the
+# verifier's record; the verifier's fold points (rec_vstage points) and InnerFold.lean --hide unit on the tree (an executable,
+# cached by its sources): each rep's public comb and Lean's full fold; rec_session --check-fold (comb + the session's h is the
+# full fold, h nonzero); rec_vstage stage --levels none (the holo algebra's InnerRepCheck parts, h read from the session's
+# rows, each holding); and Lean's reading of the session (flock-verify rec-transcript: every stream of the verifier's record,
+# held to the schedule and to the prover's record, R's top to its registration with STACKED), which test_lean_rec_inner_streams
+# runs on the fixture. Lean's plain verify reads seeded or per-round OS coins, not the tree, so the prover's session is not
+# verified on its own here (pod 85's INNER_LEAN likewise), nor are the controls on its sample and challenges. The coin server
+# answers Register with the verifier's full draw (stage/draw.json, rec_live.full_draw: every unit), which both records keep.
+# Run from the verity tree (research run --cwd source). Outputs under out/: host.txt, stage.json, statement.txt,
+# schedule.json, tree-source.txt, session.log, time-prove.txt, prove.txt/.err, inner/ (schedule.json, public.json,
+# private.json, session/, prover/), replay.txt, vstar.json, points.json, fold.json, check-fold.json, vstage.json, lean.log,
+# summary.json, and rec-c3-inner/ (the fixture test_lean_rec_inner_streams and test_lean_rec_record read: public.json,
+# private.json, session/ and prover/'s session.json, points.json, fold.json, circuit-meta.txt, the staged circuit's header,
+# and with STACKED circuit-registration.json). Exits 1 unless the session, replay, rec_vstar, the fold check, the staging and
+# Lean's reading all pass.
 # Launch it through a check slot, which pins it to the slot's cores and holds the slot:
 #   research run --on vy-cpu-1 --source . --cwd source -- python3 tools/verity/check/slot.py --by NAME -- bash $0 [N=16]
 # env: N=16 (RoPE heads, one VU each: Shape(25,22,8))  FLOCK_WORK (as 80-rec-inner.sh)
+#   TREE_FROM= (the challenger's device, HOST:PORT, the session's coin tree drawn and opened there, rec_session --tree-from;
+#   TREE_SECRET_FILE= its session secret, hex; empty: this host's OS draws it, rec_session --tree-test-os, a test's coins,
+#   never the challenger's, out/tree-source.txt says which)
 #   SPARSE=NU,ELL,S_LOG,T_LOG (18,13,6,0 at N=16): the relay also runs each rep's sparse phase (rec_sparse.prove) after both
 #   reps, on the coin server's coins, and rec_vstage stages it as RecSparse (summary.json's sparse; required to hold)
 #   STACKED=1 (with SPARSE): the relay also commits the stacked table R ($B stacked --root-out) and opens it at both reps'
@@ -36,6 +44,12 @@ export RI_PINNED=$(python3 -c 'import os; print(",".join(map(str, sorted(os.sche
 export RAYON_NUM_THREADS=$(echo $RI_PINNED | tr ',' '\n' | wc -l)
 export FC_COINS=os
 . verity/ml/flock/pod/rec-env.sh
+# the inner statement's prover, statement and replay: on the challenger's coin tree (rec_live.INNER_COIN_SPEC: the prover's
+# own streams, then the relay's sparse and stacked ones), as pod 85's
+INNER_COINS="FC_COINS=tree FC_COIN_STREAMS=sparse/rep0,sparse/rep1,stacked/rep0"
+TREE=(--tree-test-os)
+[ -z "${TREE_FROM:-}" ] || TREE=(--tree-from $TREE_FROM ${TREE_SECRET_FILE:+--tree-secret-file $TREE_SECRET_FILE})
+echo "${TREE_FROM:-test-os}" > $O/tree-source.txt
 
 N=${N:-16}; D=$S/stage; V=$S/v; SPA=${SPARSE:+--sparse $SPARSE}; STK=; MR=; REG=
 if [ -n "${STACKED:-}" ]; then
@@ -60,21 +74,21 @@ python3 verity/ml/flock/pod/rec_inner.py stage --n $N --sets $S/sets --out $D --
 cat $O/stage.json
 [ -n "${STACKED:-}" ] && cp $D/circuit-registration.json $O/
 
-$B statement --instances $D/pub-$N.bin --circuit $D/circuit.txt > $O/statement.txt 2>&1 || { tail -5 $O/statement.txt; exit 1; }
+env $INNER_COINS $B statement --instances $D/pub-$N.bin --circuit $D/circuit.txt > $O/statement.txt 2>&1 || { tail -5 $O/statement.txt; exit 1; }
 python3 -m verity_flock.rec_live --schedule-for $O/statement.txt --holo $SPA ${MR:+--stacked $MR} > $O/schedule.json || exit 1
 python3 -m verity_flock.rec_session --listen 127.0.0.1:0 --out $O/inner --statement $O/statement.txt --circuit $D/circuit.txt \
-  --draw $D/draw.json $SPA $STK > $O/session.log 2>&1 &
+  --draw $D/draw.json $SPA $STK --coin-tree "${TREE[@]}" > $O/session.log 2>&1 &
 PP=$!
 ADDR=
 for i in $(seq 600); do ADDR=$(awk '/^SERVING/ {print $2}' $O/session.log); [ -n "$ADDR" ] && break; kill -0 $PP 2>/dev/null || break; sleep 0.5; done
 [ -n "$ADDR" ] || { cat $O/session.log; exit 1; }
-/usr/bin/time -v -o $O/time-prove.txt $B prove --verifier $ADDR --instances $D/inst-$N.bin --circuit $D/circuit.txt \
+/usr/bin/time -v -o $O/time-prove.txt env $INNER_COINS $B prove --verifier $ADDR --instances $D/inst-$N.bin --circuit $D/circuit.txt \
   --runs 1 --warm 0 > $O/prove.txt 2> $O/prove.err
 echo "prove exit $?"
 wait $PP; echo "session exit $?"
 grep -h panicked $O/prove.err | head -3
 [ -f $O/inner/prover/session.json ] || { tail -20 $O/session.log $O/prove.err; exit 1; }
-$B replay --instances $D/pub-$N.bin --circuit $D/circuit.txt --sessions $O/inner/prover > $O/replay.txt 2>&1
+env $INNER_COINS $B replay --instances $D/pub-$N.bin --circuit $D/circuit.txt --sessions $O/inner/prover > $O/replay.txt 2>&1
 echo "replay exit $?"
 python3 -m verity_flock.rec_vstar $O/inner --circuit $D/circuit.txt > $O/vstar.json 2> $O/vstar.err; echo "vstar exit $?"
 
@@ -83,7 +97,7 @@ python3 -m verity_flock.rec_vstage points $O/inner $D/circuit.txt $D/pub-$N.bin 
   || { tail -20 $O/points.err; exit 1; }
 wait $FP || { tail -30 $O/build-fold.log; exit 1; }
 /usr/bin/time -v -o $O/time-fold.txt $FOLD_BIN --plain-leaves --partition $D/partition.json --hide unit verity/flock-circuit $D/circuit.txt $D/pub-$N.bin \
-  $O/points.json os > $O/fold.json 2> $O/fold.err
+  $O/points.json tree > $O/fold.json 2> $O/fold.err
 echo "fold exit $?"
 python3 -m verity_flock.rec_session --check-fold $O/fold.json --inner $O/inner > $O/check-fold.json; echo "check-fold exit $?"
 /usr/bin/time -v -o $O/time-vstage.txt python3 -m verity_flock.rec_vstage stage $O/inner $O/fold.json $V --points $O/points.json \
@@ -91,17 +105,16 @@ python3 -m verity_flock.rec_session --check-fold $O/fold.json --inner $O/inner >
 echo "vstage exit $?"
 (cd $V && du -sb $(find . -name '*.bin' -o -name circuit.txt | LC_ALL=C sort)) > $O/vstage-sizes.txt 2>&1
 
+# the fixture, laid out as its readers take it, and Lean's reading of it (test_lean_rec_inner_streams' _read)
+X=$O/rec-c3-inner; rm -rf $X; mkdir -p $X/session $X/prover
+cp $O/inner/public.json $O/inner/private.json $O/points.json $O/fold.json $X/
+cp $O/inner/session/session.json $X/session/; cp $O/inner/prover/session.json $X/prover/
+head -2 $D/circuit.txt > $X/circuit-meta.txt
+[ -n "${STACKED:-}" ] && cp $D/circuit-registration.json $X/
 wait $LP
-LEAN=($LEAN_BIN verify --statement verity/flock-circuit+plain-leaves --circuit $D/circuit.txt --public $D/pub-$N.bin
-  --partition $D/partition.json --program $D/program.json --stratified $N --coins os)
-"${LEAN[@]}" --session $O/inner/prover > $O/lean.log 2>&1
+$LEAN_BIN rec-transcript --rec-inner-transcript $X/public.json --rec-inner-session $X/prover \
+  ${STACKED:+--rec-inner-circuit $X/circuit-meta.txt --rec-inner-registration $X/circuit-registration.json} > $O/lean.log 2>&1
 echo "lean exit $?" | tee $O/lean-exit.txt
-for F in challenge nodraw partial; do
-  FS=$S/forged-$F; rm -rf $FS; cp -r $O/inner $FS
-  python3 verity/ml/flock/pod/rec_inner.py forge --what $F --inner $FS --record prover > $O/forged-$F.json
-  "${LEAN[@]}" --session $FS/prover > $O/forged-$F-lean.txt 2>&1
-  echo "forged $F lean exit $?"
-done
 
 python3 - $O <<'EOF'
 import json, os, re, sys
@@ -122,9 +135,10 @@ for r in pub["rounds"]:
     if r["stream"].startswith(f"{RL.TABLE}/rep") and r["k"] in (zp, zp + 1):
         reps.setdefault(r["stream"], {})["z_partial" if r["k"] == zp else "h"] = {"k": r["k"], "n": r["n"], "commits": len(r["commits"])}
 vs = js("vstage.json") or {}
-verdict = lambda f: next((json.loads(l[len("VERDICT "):]) for l in text(f).splitlines() if l.startswith("VERDICT ")), None)
-forged = {f: verdict(f"forged-{f}-lean.txt") for f in ("challenge", "nodraw", "partial")}
-s = {"stage": stage, "served": served[0] if served else text("session.log")[-1500:],
+read = next((json.loads(l[len("RECTRANSCRIPT "):]) for l in text("lean.log").splitlines() if l.startswith("RECTRANSCRIPT ")), None)
+tree = json.loads(text("inner/session/session.json") or "{}").get("coin_tree")
+s = {"stage": stage, "tree_source": text("tree-source.txt").strip(), "coin_tree": tree and {k: tree[k] for k in ("root", "spec")},
+     "served": served[0] if served else text("session.log")[-1500:],
      "schedule_is_the_statements": json.loads(text("schedule.json")) == json.loads(text("inner/schedule.json") or "null"),
      "replay": up["verdict"] if up else text("replay.txt")[-600:], "vstar": js("vstar.json") or text("vstar.err")[-600:],
      "record": {"rounds": len(pub["rounds"]), "message_rows": pub["message_rows"], "coins": sum(r["n"] for r in pub["rounds"]),
@@ -141,19 +155,16 @@ s = {"stage": stage, "served": served[0] if served else text("session.log")[-150
                                            "opening": [{x: p.get(x) for x in ("part", "holds", "nonzero_residuals", "unit_agrees", "unit_rows")}
                                                        for p in vs["stacked"]["opening"]], "stage_s": vs["stacked"].get("stage_s")}}
      if vs else text("vstage.err")[-1500:], "vstage_sizes": text("vstage-sizes.txt"),
-     "lean": {"exit": text("lean-exit.txt").strip(), "verdict": verdict("lean.log"), "tail": text("lean.log")[-400:]},
-     "forged": {f: {"accepted": v and v.get("accepted"), "why": v and str(v.get("why"))[:300]} if v else text(f"forged-{f}-lean.txt")[-300:]
-                for f, v in forged.items()},
+     "lean": {"exit": text("lean-exit.txt").strip(), "transcript": read, "tail": text("lean.log")[-400:]},
      "prover_peak_gb": int(re.search(r"Maximum resident set size \(kbytes\): (\d+)", t).group(1)) / 2**20 if t else None,
      "prove_wall": (re.search(r"Elapsed \(wall clock\) time.*: (\S+)", t) or [None, None])[1] if t else None,
      "fold_wall": (re.search(r"Elapsed \(wall clock\) time.*: (\S+)", text("time-fold.txt")) or [None, None])[1],
      "live": {k: live[0].get(k) for k in ("prove_s", "prove_total_s", "e2e_s", "proof_bytes", "k_log", "dense_m")} if live else None}
-ok = {"session": bool(served) and bool(served[0].get("session")), "schedule": s["schedule_is_the_statements"],
+ok = {"session": bool(served) and bool(served[0].get("session")), "tree": bool(tree), "schedule": s["schedule_is_the_statements"],
       "replay": bool(up) and up["verdict"].get("accepted") is True, "vstar": isinstance(s["vstar"], dict) and s["vstar"].get("accepted") is True,
       "check_fold": bool(s["check_fold"]) and all(s["check_fold"]["comb_plus_h_is_full"]) and all(s["check_fold"]["h_nonzero"]),
       "vstage": bool(vs) and vs.get("holo") is True and bool(vs.get("algebra")) and all(all(p["holds"]) for p in vs["algebra"]),
-      "lean": (verdict("lean.log") or {}).get("accepted") is True,
-      "controls": all(v is not None and v.get("accepted") is False for v in forged.values())}
+      "lean": text("lean-exit.txt").strip() == "lean exit 0" and read is not None}
 st = vs.get("stacked") if vs else None
 if os.environ.get("STACKED"):
     ok["vstar"] = ok["vstar"] and s["vstar"].get("stacked", {}).get("accepted") is True

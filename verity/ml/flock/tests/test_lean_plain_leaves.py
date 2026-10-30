@@ -102,15 +102,17 @@ def test_verify_refuses_the_plain_leaf_statement_under_zk(tmp_path):
 
 @pytest.mark.slow
 def test_verify_checks_a_plain_leaf_session_without_zk():
-    """Without `--zk`, `verify` checks rec-coins' inner session (`fixtures/rec-coins`: a plain-leaf statement staged with a
-    shared-row public file) through every check. Its refusal is the shared-row file's (`ProvedScope.sharedRowsOk`, a form
-    the proof covers only under `--zk`), which `verify` gives only once every check has passed, not the leaves'."""
+    """Without `--zk`, `verify` checks rec-coins' inner statement's session on per-round OS coins (`fixtures/rec-coins`'
+    `inner-os`: a plain-leaf statement staged with a shared-row public file) through every check. Its refusal is the
+    shared-row file's (`ProvedScope.sharedRowsOk`, a form the proof covers only under `--zk`), which `verify` gives only
+    once every check has passed, not the leaves'. The plain `verify` reads seeded or OS coins, not the coin tree that
+    `inner-honest` is on."""
     d = Path(__file__).resolve().parent / "fixtures" / "rec-coins" / "16-16-8-n64"
-    assert (d / "inner-honest" / "session").is_dir(), (
+    assert (d / "inner-os" / "session").is_dir(), (
         f"{d} is not fetched: `uv run research data fetch-fixtures verity/ml/flock/tests/fixtures/rec-coins`")
     p = _verify("--circuit", str(d / "u" / "stage" / "circuit.txt"), "--public", str(d / "u" / "stage" / "pub-64.bin"),
                 "--partition", str(d / "u" / "stage" / "partition.json"), "--coins", "os",
-                "--session", str(d / "inner-honest" / "session"))
+                "--session", str(d / "inner-os" / "session"))
     verdicts = [json.loads(line[len("VERDICT "):]) for line in p.stdout.splitlines() if line.startswith("VERDICT ")]
     assert p.returncode == 1 and len(verdicts) == 1, p.stdout + p.stderr
     assert not verdicts[0]["accepted"]

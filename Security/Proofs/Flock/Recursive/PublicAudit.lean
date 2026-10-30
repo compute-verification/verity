@@ -35,7 +35,7 @@ What it takes, against `RecursiveAudit`:
   `RecursiveFirewallPrivate` takes.
 
 Its proof is `Flock.SecurityProofs.PublicAudit` (`Proofs.Flock.Recursive.PublicAuditProof`). Its non-vacuity is to be
-shown at one recorded recursive run with a public inner unit (the F1 gate).
+shown at one recorded recursive run with a public inner unit (`test_lean_witness.py`).
 -/
 
 namespace Flock.Guarantees
@@ -49,11 +49,11 @@ set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
 /-- **Lean's verifier builds the inner statement from its own partition object and program**: `setupTables` at the inner
-tags, the coin server's coins and one table, given the circuit and public files and the verifier's own `obj` and `prog`,
-returns `st`, and `Flock.Zk.schedule` accepts its `m`. -/
+tags, the challenger's coin tree (`RecVStar.innerTree`) and one table, given the circuit and public files and the
+verifier's own `obj` and `prog`, returns `st`, and `Flock.Zk.schedule` accepts its `m`. -/
 def AcceptsPublic (obj : Lean.Json) (prog : ByteArray) (st : Flock.Stmt) : Prop :=
   (∃ (cf pf : ByteArray) (spec : Flock.SessionSpec),
-    Flock.Stmt.setupTables Flock.RecVStar.innerTags cf pf Flock.Coins.os 1 (partition := some obj)
+    Flock.Stmt.setupTables Flock.RecVStar.innerTags cf pf Flock.RecVStar.innerTree 1 (partition := some obj)
       (program := some prog) = .ok (spec, #[st])) ∧
   ∃ p, Flock.Zk.schedule st.m = .ok p
 

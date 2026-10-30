@@ -52,6 +52,9 @@ REGISTRY = Registry("benchmarks/recursion_e2e/settings.py", "recursion-e2e/setti
     S("OPROVE_MEM_GB", int, None, VALUE, "the estimated peak GB the statements 85 proves at once may sum to; unset, 85's 48"),
     S("GPU_MAX_MIN", int, 75, WHERE, "each prove's GPU lease in minutes: a bound on how long it may hold the GPU"),
     S("GPU_PREEMPTIBLE", str, "", WHERE, "85's leases are preemptible unless empty (the job's default): how a lease is held"),
+    S("TREE_FROM", str, None, VALUE, "where the inner sessions' coin trees come from: the challenger's device, HOST:PORT (85's "
+      "TREE_FROM); unset, this host's OS draws them (rec_live --tree-test-os), a test's coins"),
+    S("TREE_SECRET_FILE", str, None, WHERE, "TREE_FROM's session secret, a file of hex (85's TREE_SECRET_FILE)"),
     S("TAG", str, None, WHERE, "85's data/TAG directory; unset, rb-<run id>"),
     S("FLOCK_WORK", str, "/workspace/jobs/rec-bench", WHERE, "85's work tree: its caches and data"),
     S("CUDA_TK", str, None, WHERE, "the CUDA toolkit 85 builds the prover with, a path; the build records the binary's sha256"),

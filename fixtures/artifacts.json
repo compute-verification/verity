@@ -34,8 +34,8 @@
   "art:f9bfe23d58c7a10a6d8c26f24bceefe826594182a1a4e2841be1ca5b3a6f45c7": "verity/ml/flock/tests/fixtures/honest-plain",
   "art:4274bdf17e6fe0cbb00d0605644a955182a0f4fbe4c84d2f0263d0e26f838260": "verity/ml/flock/tests/fixtures/public-inputs",
   "art:73260dcd0a485e06024b588ddc499bbe904c599cae142960e980148f13ebcdeb": "verity/ml/flock/tests/fixtures/public-inputs-blocks",
-  "art:bb558d7a1288f1a1f7cc0bb62ce699e36e711928ab4db6b403cd5ac2859dc2bd": "verity/ml/flock/tests/fixtures/rec-c3-inner",
-  "art:84471c45417ce1f0da5e1ebcc7c9e65fc15b833357f4ec654ce12037100d7be3": "verity/ml/flock/tests/fixtures/rec-coins",
+  "art:8ccb6fba94b8f22fddad3d904283343edf2db06b593dc91b5aed98f6e6a57b1b": "verity/ml/flock/tests/fixtures/rec-c3-inner",
+  "art:7d947140aaee50e3bb2dc6ea031450acc703fa02ca4d2f209d0d9ea222bf5ceb": "verity/ml/flock/tests/fixtures/rec-coins",
   "art:a093dd5b2963d1ad15ac8fe580d5240acee3aa157791b2e4d0131a4a013e67c4": "benchmarks/nci/sources",
   "art:c1170d49b98fb7ece129c26db47d316e359f5d79067f35e2035f6100e7153d60": "integrations/vllm/tests/regression/expected/llama32-1b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager.json",
   "art:5ccc6114ed48964f5b74b4766f80afa61a6e3c987482a6bf6390468ad38bb489": "integrations/vllm/tests/regression/expected/mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json",
@@ -44,7 +44,7 @@
   "art:c301c7f124485ef41dda34186ac6846bccf7fcab99ad752bedac997b4d5bc0f4": "integrations/vllm/tests/regression/expected/qwen25-15b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager.json",
   "art:4f366f8dc159047d337d29e0069db6af2b428eaba50830cf1fd8b8c8de886be3": "integrations/vllm/tests/regression/expected/qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager.json",
   "art:67f611682f489222d26ee0af3be4eb026fe57860f622f24be20af0667cef1379": "integrations/vllm/tests/protocols/fixtures/challenger_periods",
-  "art:b0d3050963bdd8f3ba1a9cf5587f4a6328f703251e4bd90c2f9fdbea0a471d25": "verity/ml/flock/tests/fixtures/f1-gate",
+  "art:22fbef314a3ba3e417b9e49bfa30fe460a364913f1dbcc926768c7a254c5b50c": "verity/ml/flock/tests/fixtures/f1-gate",
   "art:31c671f6ef98b1d361a0a93dbff17bf8261f6dee4f8edbaf0df94a7454134af5": "verity/ml/flock/tests/fixtures/forged-proofs",
   "art:b9cc903cef2f33e1034814e305ebb8bb96ca47cb27038d32c4ca0e783195d8c2": "verity/ml/flock/tests/fixtures/zk-sessions",
   "art:0278327a962ffc33ccb55d29447bacc30616287a509490caf71215b3e24c63e8": "verity/ml/commitments/tests/fixtures/layouts",
@@ -155,10 +155,12 @@
       "art:b238706278bd3f122ae084fbd6d9e01b9369779d4208b67eaab547e102e99364",
       "art:83365bfa752efa63cdab08b92d144890929cdbc36454945090f0b2979014f887"
     ],
-    "art:84471c45417ce1f0da5e1ebcc7c9e65fc15b833357f4ec654ce12037100d7be3": [
+    "art:7d947140aaee50e3bb2dc6ea031450acc703fa02ca4d2f209d0d9ea222bf5ceb": [
+      "art:84471c45417ce1f0da5e1ebcc7c9e65fc15b833357f4ec654ce12037100d7be3",
       "art:97537edaf796edb3ec098d64a39283d2c74040bd06be85375304a5263e6bedc9"
     ],
-    "art:bb558d7a1288f1a1f7cc0bb62ce699e36e711928ab4db6b403cd5ac2859dc2bd": [
+    "art:8ccb6fba94b8f22fddad3d904283343edf2db06b593dc91b5aed98f6e6a57b1b": [
+      "art:bb558d7a1288f1a1f7cc0bb62ce699e36e711928ab4db6b403cd5ac2859dc2bd",
       "art:07b423d36b18d2687c95d8bd95f8fccd8de46848c355a2a1a2b993db1e5354ea",
       "art:542a0ada5b70b0f8197d75a5e8c3962ff44b82a3139e95a6a14be718b4accb1a",
       "art:7bdc5f20216f10610a833f35c501fb3f09f558adcdb80010dfe35f13c4a91b1a",
@@ -186,7 +188,9 @@
       "art:44aca97047b4caa2a39334546d40877f48ef64dd70f67f4bd3b941b11abf9f75",
       "art:3fb2a43cd8bdd9e9fb7b99b5442730cf24cf35fa384ac85a0b561da554640555"
     ],
-    "art:b0d3050963bdd8f3ba1a9cf5587f4a6328f703251e4bd90c2f9fdbea0a471d25": [
+    "art:22fbef314a3ba3e417b9e49bfa30fe460a364913f1dbcc926768c7a254c5b50c": [
+      "art:7a85c5c4238b971371cf46c2153b94548a11988891cc4018b196535c3cb92bbb",
+      "art:b0d3050963bdd8f3ba1a9cf5587f4a6328f703251e4bd90c2f9fdbea0a471d25",
       "art:c85c00f43f3a827974a253d6998b4ebc76db6edfce4c9b0ed07bce4e98fcbfea",
       "art:cd6a7a1b0c579c5b4ae3553689e9918cc459822bca72ec74144ba2e79a1410ee",
       "art:d0158e94e1964b37d698d880ee8c6944f7271b3dcc48bda55ea0741e3e557073"

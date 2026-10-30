@@ -229,7 +229,7 @@ theorem repFrames_hds {st : Setup} {sch : Flock.Schedule} {nExtra : ℕ} {p p' :
 /-- **Two reps accepted on one stream have one rep's frames**: two proof files that `verifyRep` accepts as rep `r` of
 table `i` of one session, where the rep's stream retained every round's bytes, decode at one shape to proofs whose
 frames are the same. -/
-theorem rep_frames_bind (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (sess : Session) (i r : ℕ)
+theorem rep_frames_bind (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (sess : RunRecord) (i r : ℕ)
     (bytes bytes' cap cap' : ByteArray) (hm : 14 ≤ st.m) (hdim : DimSeam sch)
     (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
     (h : verifyRep spec st sch sess i r bytes = .ok cap) (h' : verifyRep spec st sch sess i r bytes' = .ok cap')

@@ -93,7 +93,7 @@ theorem find_name_arr {a : Array StreamRec} {name : String} {k : ℕ} (hk : k < 
 substituted, the decoder reads stream `k` at the `k`-th rep stream's name, and its rounds at the reader's counts and
 messages. -/
 theorem decoded_streams {hs : Hashes Flock.V} {H : Claims.Msg → Claims.Msg} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {f : FinalP} {link : List ByteArray × List ByteArray} {sess : Session}
+    {mids : List (Claims.Msg × Coin)} {f : FinalP} {link : List ByteArray × List ByteArray} {sess : RunRecord}
     (hj : f.j = recJ spec sts link c₁ ms cs f.ps)
     (h : Record.decodeJWith hs spec (jAt H spec sts c₁ mids f) = .ok sess) :
     sess.streams.size = min spec.repStreams.size (recStreams spec sts ms cs).size ∧
@@ -160,7 +160,7 @@ variable {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {ms : List Claims.
   (D : DecAt rd x ms cs) (cls : HClass) (acc : ℕ → Array F128)
 
 /-- **A dense decision's rep streams have distinct names**: its statement sets up with no public inputs. -/
-theorem names_nodup_dense {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+theorem names_nodup_dense {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) :
     (D.spec.repStreams.toList.map (·.2.2)).Nodup := by
   obtain ⟨s, spec, st, sch, hset, -, hpi, -⟩ := dense_inner hst hf
@@ -357,7 +357,7 @@ theorem framed (hG : D.RowG cls acc i) (hi : i < D.sts.size) (hnd : (D.spec.repS
 
 /-- **Row B's `framed` at a dense inner statement** (`TargetB`): rep `r` of table `i`'s rounds in the decoded session
 hold the rep's frames at `w`'s `T`, at every decision and every `acc`. -/
-theorem framed_dense {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+theorem framed_dense {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) (hi : i < D.sts.size) :
     FramedAt ((D.files cls i).stream r).rounds 0 (repFrames (D.files cls i).st (D.files cls i).sch
       ((D.files cls i).spec.domain (D.files cls i).spec.tables[(D.files cls i).i]! r).toUTF8

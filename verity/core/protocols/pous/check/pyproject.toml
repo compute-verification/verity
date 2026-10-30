@@ -36,4 +36,4 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "benchmarks/pous/p2_v1/audit-vectors.json", "benchmarks/pous/p2_v1/audit-negative-vectors.json",
           "verity/core/protocols/pous/p2/PROTOCOL.md", "benchmarks/pous/band_gpu/__init__.py",
           "benchmarks/pous/band_gpu/memory_challenger.py", "benchmarks/pous/band_gpu/harness.py",
-          "verity/core/devices/memory_challenger/lean", "verity/core/primitives/lms/lean"]
+          "verity/core/devices/memory_challenger/lean", "verity/core/attest/lean", "verity/core/primitives/lms/lean"]

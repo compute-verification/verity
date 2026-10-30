@@ -5,9 +5,11 @@ circuit's META), candidate 3's check 5 inputs (`c3`), candidate 3's checks befor
 (`checkInner`), and the V* checks both run on every statement (`checks`). Both call sites call these, so a statement
 about them is one about what either accepts. `verify`'s setup also refuses a V* session that is not one table holding
 its whole population (`oneFull`). `verify` also refuses, last in each verdict, a recursive session without
-the verifier's inner shape, a V* session whose draw is not every unit of its population (`fullDraw`), and a session over
-an inner session whose record holds no draw (`innerDrawn`).
+the verifier's inner shape, a V* session whose draw is not every unit of its population (`fullDraw`), a session over
+an inner session whose record holds no draw (`innerDrawn`), and a session at a holo or sparse inner shape or a
+recursive one without `--zk`, neither of which `RecursiveKS` covers (`denseOnly`, `zkOnly`).
 -/
+import Flock.RecBudget
 import Flock.RecCoins
 import Flock.RecRecord
 import Flock.Witness
@@ -142,17 +144,19 @@ def checkMeta (cf : ByteArray) (bound : V (Option String × Option RecVStar.Stac
 
 /-- **The inner statement is set up as its files set it up**: how Flock's plain verifier is told to set the inner
 statement up (`form`) is how `RecCoins.Files.stmt` sets it up from its files, `st`: as a
-`Tags.circuitPlainLeaves` statement (`--rec-inner-statement`) on the coin server's coins
-(`--rec-inner-statement-coins os`), with no lookup table (`--rec-inner-tables`), at a draw (`--rec-inner-draw`) that
-proves every one of `st`'s units in order, so its `m` and regions are `st`'s. A session without `form` is refused. -/
+`Tags.circuitPlainLeaves` statement (`--rec-inner-statement`) whose tags name no per-round OS coins (no
+`--rec-inner-statement-coins os`: the files set it up on the challenger's coin tree, `RecVStar.innerTree`), with no
+lookup table (`--rec-inner-tables`), at a draw (`--rec-inner-draw`) that proves every one of `st`'s units in order, so
+its `m` and regions are `st`'s. A session without `form` is refused. -/
 def checkForm (form : Option RecCoins.InnerForm) (st : Stmt) : V Unit := do
   let some fm := form
     | throw ("rec-inner: the verifier holds no setup of the inner statement (--rec-inner-statement, " ++
         "--rec-inner-statement-coins, --rec-inner-draw) to hold to its files' setup")
   if fm.statement != Tags.circuitPlainLeaves.name then
     throw s!"rec-inner: the inner statement is a {fm.statement} statement, not {Tags.circuitPlainLeaves.name}, as its files set it up"
-  if !fm.os then
-    throw "rec-inner: the inner statement's coins are not the coin server's (--rec-inner-statement-coins os), as its files set it up"
+  if fm.os then
+    throw ("rec-inner: the inner statement names per-round OS coins (--rec-inner-statement-coins os), and its files set " ++
+      "it up on the challenger's coin tree")
   if !fm.tables.isEmpty then
     throw "rec-inner: the inner statement names lookup tables (--rec-inner-tables), and its files set it up with none"
   let some b := fm.draw | throw "rec-inner: the inner statement has no draw (--rec-inner-draw)"
@@ -165,8 +169,8 @@ def checkForm (form : Option RecCoins.InnerForm) (st : Stmt) : V Unit := do
 /-- **The verifier's inner shape is the inner statement's**: where it holds the inner statement's files, the `m`,
 `k_log`, regions and claims of its inner shape (`--rec-inner`) are the ones the inner statement sets up at from them
 (`RecCoins.Files.stmt`; claims two and the session's points per region, as `RecVStar.innerOf` writes them), so the V*
-list and the rep schedule the shape fixes are the inner session's; and the inner statement is set up as its files set
-it up (`checkForm`). -/
+list and the rep schedule the shape fixes are the inner session's; its public file's shared-row tables are within
+`RecBudget.innerRows`; and the inner statement is set up as its files set it up (`checkForm`). -/
 def checkShape (inner : Option RecVStar.Inner) (src : Option RecCoins.Source) : V Unit := do
   let (some i, some (.files f)) := (inner, src) | return
   let (spec, st) ← f.stmt "the inner session"
@@ -175,6 +179,7 @@ def checkShape (inner : Option RecVStar.Inner) (src : Option RecCoins.Source) : 
     throw (s!"rec-inner: the verifier's inner shape (m {i.m}, k_log {i.kLog}, regions {i.regions}, claims {i.claims}) " ++
       s!"is not the inner statement's (m {st.m}, k_log {st.c.kLog}, regions {st.regions.size}, claims {claims}), " ++
       "which its files (--rec-inner-circuit, --rec-inner-public, --rec-inner-partition) set up")
+  RecBudget.innerRows st
   checkForm f.form st
 
 /-- **Candidate 3's checks before the session's own setup**, on the inner statement's files `src`: check 5's sparse
@@ -251,6 +256,34 @@ source: `--rec-inner-session` with the inner statement's files), the record hold
 def innerDrawn (src : Option RecCoins.Source) : V Unit := do
   let some s := src | return
   if (RecCoins.recordDraw s.record).isNone then throw noInnerDraw
+
+/-- The refusal of an inner shape of the form `form`, one the recursion's proof doesn't cover. -/
+def notDense (form : String) : String :=
+  s!"refused: the verifier's inner shape (--rec-inner) is {form}: RecursiveKS covers the dense form only (no holo, " ++
+    "no sparse phase), and the verifier refuses every form its proof doesn't cover"
+
+/-- **The recursion's inner shape is dense**: `RecursiveKS` is proved at the dense inner form only (`Form.Dense`: not
+holo, no sparse phase), so under a holo inner shape (`rec-inner --hide`) or a sparse one (candidate 3's RecSparse phase)
+the session is refused, until a proof covers that form. Without an inner shape it passes. -/
+def denseOnly : Option RecVStar.Inner → V Unit
+  | some i =>
+    if i.holo then throw (notDense "holo (\"holo\": true)")
+    else if i.sparse.isSome then throw (notDense "sparse (\"sparse\", candidate 3's RecSparse phase)")
+    else pure ()
+  | none => pure ()
+
+/-- The refusal of a recursive session verified without `--zk`. -/
+def notZk : String :=
+  "refused: a recursive session (a --rec-* flag) without --zk: RecursiveKS covers the masked verifier (verify --zk) " ++
+    "only, and the verifier refuses every form its proof doesn't cover"
+
+/-- **A recursive session is masked**: the recursion's proof reads the masked verifier only (`verify --zk`; its model
+reads no statement without it), so a session verified with a recursive flag (`rec`) but without `--zk` is refused. -/
+def zkOnly (zk rec : Bool) : V Unit := if rec && !zk then throw notZk else pure ()
+
+theorem denseOnly_some {i : RecVStar.Inner} (h : denseOnly (some i) = .ok ()) : i.holo = false ∧ i.sparse = none := by
+  cases hh : i.holo <;> cases hs : i.sparse <;>
+    simp [denseOnly, hh, hs, throw, throwThe, MonadExceptOf.throw] at h ⊢
 
 end RecSetup
 end Flock

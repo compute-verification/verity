@@ -29,7 +29,7 @@ state. Each check passing is the model's predicate holding, at `toExec I`, the m
 * `hr_inv_exp`, `inv_exp_lt_one`: `PublicAudit`'s rate premise `_hr` at `k = 2^23` and `ρ = 1/e < 1`, for every `zr`
   (`_hr := hr_inv_exp zr`).
 
-On the F1 gate (`test_lean_witness.py`) the checks pass with V*'s sessions verified as `verity/flock-circuit`, the
+On `test_lean_witness.py`'s run the checks pass with V*'s sessions verified as `verity/flock-circuit`, the
 verifier of record's `--zk` identity with the OS's masks in it, which the gate's sessions were proved with. So
 the gate is witnessed under today's identity.
 -/
@@ -186,8 +186,8 @@ theorem one_ok {sts : Array Flock.Stmt} {st : Flock.Stmt} (h : Flock.Witness.one
 accepts its `m`. -/
 theorem acceptsStmt_setup {cf pf : ByteArray} {p : Option Lean.Json} {g : Option ByteArray} {st : Flock.Stmt}
     (h : Flock.Witness.acceptsStmt cf pf p g = .ok st) :
-    (∃ spec, Flock.Stmt.setupTables Flock.RecVStar.innerTags cf pf Flock.Coins.os 1 (partition := p) (program := g) =
-      .ok (spec, #[st])) ∧ ∃ q, Flock.Zk.schedule st.m = .ok q := by
+    (∃ spec, Flock.Stmt.setupTables Flock.RecVStar.innerTags cf pf Flock.RecVStar.innerTree 1 (partition := p)
+      (program := g) = .ok (spec, #[st])) ∧ ∃ q, Flock.Zk.schedule st.m = .ok q := by
   unfold Flock.Witness.acceptsStmt Flock.Witness.acceptsStmtAt Flock.Witness.innerSetup at h
   obtain ⟨⟨spec, sts⟩, h1, h⟩ := bind_ok h
   obtain ⟨st', h2, h⟩ := bind_ok h
