@@ -2,8 +2,8 @@
 (`prove_units`) that stages each member's units, registers them, takes the verifier's draw, proves each drawn member's
 units in one `--zk` session, verifies it with Lean `flock-verify verify --zk` (with `--registered` when the units read
 registered values), opens the rows the verifier holds its own copy of, and records every verdict in the one-stage audit
-record. Network-accounting's I5 for the arbitrary-vLLM goal (thread 1792816009.557169): the compiled per-step units, N2's
-head-check units and the I/O tie's units all ride it.
+record. The compiled per-step units of an arbitrary vLLM model, its head-check units and the I/O tie's units all ride
+it.
 
     python benchmarks/one_stage/prove_leg.py standin --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
       --out DIR [--n 4] [--negatives] [--registered]

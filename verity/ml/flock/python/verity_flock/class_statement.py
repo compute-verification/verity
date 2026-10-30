@@ -771,7 +771,7 @@ def _check_bit_rows(uc: UnitCircuit, ins: Sequence[Sequence[int]], groups: list[
 
 #: FLOCK_GEMM_TILE=PxC: a GemmCoordinate class whose tile fits a block (K = 2048 at 4x4) is staged as P x C tiles, one tile a VU:
 #: C rows of the unit's port 0 and P of its port 1, and P * C units, unit (a, b) reading row b and row C + a, so each row is
-#: hashed once per tile rather than once per coordinate (internal/gemm-column-batch-tiles-layout-scope.md)
+#: hashed once per tile rather than once per coordinate
 GEMM_TILE = tuple(int(x) for x in os.environ["FLOCK_GEMM_TILE"].split("x")) if os.environ.get("FLOCK_GEMM_TILE") else None
 
 
@@ -1861,7 +1861,7 @@ def _device(gpu: bool) -> str | None:
 
 
 def write_result(results: Path, a) -> None:
-    """``$RESEARCH_RUN_DIR/result.json`` (research/result/v0.1) when run under ``research run``: the settings as the fingerprint, the
+    """``$RESEARCH_RUN_DIR/result.json`` (research/result/v0.1) when run as a recorded run: the settings as the fingerprint, the
     shapes' counts and summed timings as measurements, and every shape's record (keyed by shape digest) in ``results.jsonl``, copied
     beside it as the measurement file."""
     run_dir = os.environ.get("RESEARCH_RUN_DIR")

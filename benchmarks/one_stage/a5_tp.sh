@@ -38,7 +38,8 @@
 #   verifier's window, ~5 min staging its 768 chunks' public files and ~2.5 min to the draw (a drawn chunk's prover file is
 #   staged after it), then each drawn chunk's session ~8 min and ~32 GB, which a loaded machine
 #   stretched past an hour; a5's --session-timeout, A5_SESSION_TIMEOUT, is each prover's limit and each compose's).
-#   research run --on M --project verity --cwd clone --mem-gb 64 -- bash benchmarks/one_stage/a5_tp.sh
+#   bash benchmarks/one_stage/a5_tp.sh
+#   (a job run from a clone of the tree, 64 GB)
 # Kept in $OUT: a5's records and logs, the public files, the sessions (their proofs and records), the binaries' sha256 and the
 # circuits' pins; never a prover's file (inst-*, m*-inst-*, *-private.bin: the rows and their salts) nor a circuit (its pin is).
 # Stored: each session's circuit.txt files and lookup tables, by SHA-512 (sha512/<hex>, the Lean verifier's --archive layout), as one
@@ -50,7 +51,7 @@
 # A5_CHALLENGER=local|gate:USER@HOST: each rank draws by its partition file's rule (stratified:K among them) from the auditor's
 #   challenger's coins through its own service.Stream, the proof service's path of record, its outcome held to the Lean's run;
 #   one session on the TP run root (a5.py --challenger, a5_coins.py): local, a development session on this
-#   machine; gate:USER@HOST, vy-challenger-1 through infra's gate, with A5_PEER (this machine in its /etc/vy/peers),
+#   machine; gate:USER@HOST, the challenger host through infra's gate, with A5_PEER (this machine in its /etc/vy/peers),
 #   A5_CHALLENGER_KEY (the challenger's key record) and A5_GATE_KEY (the lane's gate key). The step's ranks draw from the one
 #   session, so A5_JOBS covers every audited rank. It opens once every rank has passed its checks before the draw, with
 #   coins sized from every rank's draw, and not at all if one hasn't. The session's files, the ledger and the host's pins log are kept in
