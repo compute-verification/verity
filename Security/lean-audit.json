@@ -32,11 +32,11 @@
   },
   "Accounting.Assumptions.Compose.SeedLuckAt": {
    "owner": "@compute-accounting",
-   "digest": "f2e8f15be5f07ccda653d5c8bd0e96b14dfd418cfad9c5e829b3def0862bb9f8"
+   "digest": "c1290032fe673d2e1771de42ffb5c94e8f3199456bb1c1692b9932cf4b9de576"
   },
   "Accounting.Assumptions.Compose.WholeEntropyAt": {
    "owner": "@compute-accounting",
-   "digest": "0506b11a4a3f1738de9dabb70892c42e45fc8838e62bf1820606b0ffe0c242d5"
+   "digest": "9d8ebbb5a87c7f6095094a062b611ccf136e5ad21ce82b42710cf78dd368ce26"
   },
   "Accounting.Assumptions.EncodeChainHardness": {
    "owner": "@memory-accounting",
@@ -15916,12 +15916,12 @@
    ]
   },
   "Definitions.Accounting.Assumptions.Compose": {
-   "digest": "f877cd444d2c9b5ff22043805110e73fcd44382af61a45bfb2376b2ce24449b3",
+   "digest": "92174b9279ae651025b5472d0fb208a506f3957b2df520e2820d63c3d352f86a",
    "definitions": {
     "Accounting.Assumptions.Compose.GuessLuckAt": "0793432daba184ac1d9937071bc9342335f5fc5d700b8a6ec6f21e1f51cbf5ae",
     "Accounting.Assumptions.Compose.SeedExtractedAt": "0227aa9584d74d8b7759a40ae34facb0f0f97979caaefbcd8608c4d8a33ce0e8",
-    "Accounting.Assumptions.Compose.SeedLuckAt": "f2e8f15be5f07ccda653d5c8bd0e96b14dfd418cfad9c5e829b3def0862bb9f8",
-    "Accounting.Assumptions.Compose.WholeEntropyAt": "0506b11a4a3f1738de9dabb70892c42e45fc8838e62bf1820606b0ffe0c242d5"
+    "Accounting.Assumptions.Compose.SeedLuckAt": "c1290032fe673d2e1771de42ffb5c94e8f3199456bb1c1692b9932cf4b9de576",
+    "Accounting.Assumptions.Compose.WholeEntropyAt": "9d8ebbb5a87c7f6095094a062b611ccf136e5ad21ce82b42710cf78dd368ce26"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Compose.CircuitCredit",
@@ -16543,7 +16543,7 @@
    ]
   },
   "Definitions.Accounting.Compose": {
-   "digest": "f31a4368641f613ee4d5b847f8c41ba56bc62007728b57be95560b1525e3872f",
+   "digest": "6223ea365c3f6237419afbeac04b0826f3c6a9aec0addc6d67d09b622f298d38",
    "definitions": {
     "Accounting.Compose.CoinMode": "9ec656e568e719e9703d5a190c652794acbcbe559148d41adf8cc7687254f945",
     "Accounting.Compose.CoinMode.live": "2a68d126173b167c465fa76c5b175f40be66fdcb462dfd4ffec8a79e3df05a54",
@@ -16670,7 +16670,7 @@
     "Accounting.Compose.premiumOf": "1a94e22c14032f0315aba1594818c28214b6cf3b98e0b3e8ca280ec9544baaba",
     "Accounting.Compose.rOf": "c8f6f0b30e575d38d1ab9f084f981d5d1bdc1ffa1f29af4d9a0b00a2880dc1a6",
     "Accounting.Compose.rOfSeeded": "a342d46667b112ee1fd0d0d4b7662255e69fed49ef73e19de2f6a29f61ef6d4c",
-    "Accounting.Compose.redraw": "35f2d1dd5dbdac57dae91945da7a5bf135741a305d1a796f9fb0a3057463159a",
+    "Accounting.Compose.resample": "868647faecf5e56f08afc30c23da4fbbbd3843e6b25ed422d661fd812fee020f",
     "Accounting.Compose.roundCone": "e7759aa03240f5e1d2b33f1935b49ad84fd205ece9948c9feb69ea73d9094b0c",
     "Accounting.Compose.roundGain": "3db82ed7afbdee9007b38729e7e42599676094059b62de92550724e332bb99b5",
     "Accounting.Compose.roundPremium": "a7c2c94c4041da3b9cf4280f8cfc1a94dcb3aa5cbae65894c2588d0b1840d912",
