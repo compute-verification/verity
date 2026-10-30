@@ -80,6 +80,10 @@ def shared_of_args(args: list[str]) -> dict:
         d = arg("--rec-inner-tables")
         tables = [] if d is None else [(t, (Path(d) / f"{t}.u32").read_bytes()) for t in MUFU_TABLES
                                        if (Path(d) / f"{t}.u32").exists()]
+    links = arg("--rec-links")
+    if links is not None:
+        root, _, rows = links.partition(":")
+        links = (bytes.fromhex(root), int(rows))
     return shared(rec_inner=read("--rec-inner"), inner_circuit=read("--rec-inner-circuit"),
                   inner_public=read("--rec-inner-public"), inner_partition=read("--rec-inner-partition"),
                   inner_coins=read("--rec-inner-coins"), inner_session=read("--rec-inner-session", "/session.json"),
@@ -87,7 +91,8 @@ def shared_of_args(args: list[str]) -> dict:
                   inner_statement=statement,
                   inner_statement_coins=None if statement is None else
                   "os" if arg("--rec-inner-statement-coins") == "os" else "seed",
-                  inner_tables=tables, inner_draw=read("--rec-inner-draw"))
+                  inner_tables=tables, inner_draw=read("--rec-inner-draw"), rec_links=links,
+                  inner_program=read("--rec-inner-program"))
 
 
 def run_record(rows: str, rec_shared: dict, opens: list[tuple[str, int, str]]) -> str:
