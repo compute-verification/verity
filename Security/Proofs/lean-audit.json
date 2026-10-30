@@ -67,6 +67,8 @@
   "Proofs.Properties.Nci.BodiesOk.ReadsDecoded",
   "Proofs.Properties.Composition",
   "Proofs.Properties.Core.Site",
+  "Proofs.Properties.Nci.Protocol",
+  "Proofs.Properties.Verity.Soundness",
   "Proofs.Properties.Pous.WipeSigned",
   "Proofs.Properties.Challenger"
  ],

@@ -14,6 +14,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # whose imports span PoUS and core's periods; a statement's cap (`inputs.cap`) reads C-Flock's composer's sizes
 # (verity.ml.windows.interface).
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+          "verity/core/deploy", "verity/core/wire",  # what pous/challenger_party imports for Demo A's wipe
           "verity/core/protocols/profile.py", "verity/core/protocols/sampled_proofs", "verity/core/claims",
           "verity/core/protocols/pouw/__init__.py", "verity/core/protocols/pouw/window.py",
           "verity/core/periods/__init__.py",

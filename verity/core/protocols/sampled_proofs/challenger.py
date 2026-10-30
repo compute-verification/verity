@@ -89,8 +89,9 @@ more entries, its `period-open` and `period-close`, which name the prover in the
               null for a reserve never opened
     message = SHA-512([LEDGER_ROLE] || I || [identity_digest_sha512(LEDGER_TAGS[schema], entry without sig)])
 
-each line as the auditor writes it (`ledger_text`, every character past ASCII escaped), and each signature over the entry's
-canonical JSON in UTF-8 (`ledger_message`).  The window is `{root}`, the served Commit's root, its prover the
+each line as the auditor writes it
+(`ledger_text`, every character past ASCII escaped), and each signature over the entry's canonical JSON in UTF-8
+(`ledger_message`).  The window is `{root}`, the served Commit's root, its prover the
 open's `for`, else its `by` (`lane_of`).  The verifier pins the challenger key from outside the ledger (the window's
 deployment; `key_of_record` reads the operator's published pin), and refuses any open or period-open naming another
 key's

@@ -7,8 +7,8 @@ ba6e2d2d4005ac70cb22cbb7924a68e547150694de7c1f883a57556a30593a96  grade.sh
 8733782dc070a99b312039cda424f601b80f3be6f6f512627da5ba25adc27632  ../../../../../Security/lean-toolchain
 7f635cbaebed26f11d2673c27e952f2a19281528b5bd0b1f20ef10dcfa6d11fb  ../../../../../Security/lakefile.toml
 519a4aef7e29047739fa3a52bedfe931e32c4b37528dce19f4ff10491522dc6f  ../../../../../Security/lake-manifest.json
-129895fa41d0955e9a1b2db23ea76cc87e13678bd25673e1311c22380f22f630  ../../../../../Security/Proofs/lakefile.toml
-4cc519754e1baa2eaaf8e58866cee7719cfa7fe3f5fa4de51ca49f66733b0dfb  ../../../../../Security/Proofs/lake-manifest.json
+85bb3f9d104fe7c955ab1af31af478e1537f29d9470abb2d7d0ff5056dc55f07  ../../../../../Security/Proofs/lakefile.toml
+333f5cf114a9b210af856945e1d4d4eab4d1b7a234ca6977f2bdf4480418edff  ../../../../../Security/Proofs/lake-manifest.json
 cf73810f89eabf60ad473f398e59b153aebbd3f9d0a59743587dfd88ba8867e1  ../../../../../Security/Definitions/Pous.lean
 1336702913a7634936c8f4872b3616bc1980605cfa4aa51feb27dd84b58e0ac3  ../../../../../Security/Proofs/Pous/Statements.lean
 19e78ba6f1a79da92a8939dd34c324914283b6fddca0fd540a28578550f824a2  ../../../../../Security/Proofs/Pous/Sanity.lean
@@ -30,6 +30,7 @@ a93f12373c9d4b980ae1bf4f38a5f3e88f645b135ca4ec134f0384d914e69885  ../../../../..
 f2d7434f6a7db6c365999b18a3415bc1fc7ab37939cc7aa15250e7a8237da7e4  ../../../../../Security/Definitions/Pous/Guarantees/StreamedWipe.lean
 d8a4934b89fd2387e51255d2d1f4bd3dcaa0dfc541e7678a77d0fec401b53134  ../../../../../Security/Definitions/Pous/Guarantees/StreamedWipeDisk.lean
 2062ab1f060a0ce92f006f2deb4fcd7313fb294cebbd42caa57d60d8a43b70d3  ../../../../../Security/Definitions/Pous/Guarantees/StreamedWipeFamily.lean
+c7ad7427575299488d32dee98e0d83944d5c8a255645ecbde696f481058baf43  ../../../../../Security/Definitions/Pous/Guarantees/StreamedWipeInfo.lean
 4f3cd7fb7aa0963f1a943a594ca43d3be679b9b399ea9edf06b801265bad9aaa  ../../../../../Security/Definitions/Pous/Guarantees/StreamedWipeReads.lean
 0952009f47b11e17569eaa2ae223ee682aa2d1aa2dd734dc2928d402ca402e7f  ../../../../../Security/Definitions/Pous/Guarantees/StreamedWipeServer.lean
 52447cc45f2fe2a367f08e2c423ef150e7c93ca5bc9ada47183e7456c45207ce  ../../../../../Security/Definitions/Pous/Model/Audit.lean
@@ -54,10 +55,9 @@ a8742a4a816f812e808fd52187497102ec0c1bd4c02d425005d07fa6d9d753e0  ../../../../..
 57e605cac56a8976de264946d3e0e7573efd583318d01ead07b1731fca0a248d  ../../../../../Security/Definitions/Pous/Model/SegLift.lean
 f5671be4b98bfe70d0cafff562ed2c79f5ac500482a652ac3c6d669e0fc836c1  ../../../../../Security/Definitions/Pous/Model/StreamedWipe.lean
 bbe4f722c18f224c7e95aeecc3ce4804df6fe1b7a5675518d5dbd3705fb33e17  ../../../../../Security/Definitions/Pous/Model/StreamedWipeDisk.lean
+2da796936b69e597f43f413823aea1dd2b2719f966235a0521f95f69f6de569a  ../../../../../Security/Definitions/Pous/Model/StreamedWipeInfo.lean
 e1fb520ecdc1fc9fc6679ec5d4d95ff31e7160060529fb3dd6f5ce9f3c7c9d4c  ../../../../../Security/Definitions/Pous/Model/StreamedWipeServer.lean
+29c5af84c86a00e44be53c21442c93983986206d4f416a12040e01bb41f3ce97  ../../../../../Security/Definitions/Pous/P2/Clip.lean
 be0d7b9d26d794a862cf9ee792396b7c2ebf2b826d1ed833b463b4253736a284  ../../../../../Security/Definitions/Pous/P2/Cost.lean
 820e3315c31eafa922a98a3e9ce18dd085f66a9a2948d8f35b08f8f3e2576c79  ../../../../../Security/Definitions/Pous/P2/Mutable.lean
 a2fca2b84483418fe8d3ba9474653344c56c73bb9543066f8a7d547e7185ec40  ../../../../../Security/Definitions/Pous/P2/Rounds.lean
-c7ad7427575299488d32dee98e0d83944d5c8a255645ecbde696f481058baf43  ../../../../../Security/Definitions/Pous/Guarantees/StreamedWipeInfo.lean
-2da796936b69e597f43f413823aea1dd2b2719f966235a0521f95f69f6de569a  ../../../../../Security/Definitions/Pous/Model/StreamedWipeInfo.lean
-29c5af84c86a00e44be53c21442c93983986206d4f416a12040e01bb41f3ce97  ../../../../../Security/Definitions/Pous/P2/Clip.lean
