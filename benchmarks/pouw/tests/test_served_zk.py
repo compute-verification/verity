@@ -323,7 +323,7 @@ def test_the_challenger_on_the_serving_controllers_state_holds_its_coins(served,
 
 
 def test_a_served_challenger_refuses_coins_no_claim_instance_names(tmp_path, monkeypatch):
-    """CMP-52: the serving controller's coins (e2e.py's `Coins`) and `served_commit.py challenger`'s are named by a claim
+    """The serving controller's coins (e2e.py's `Coins`) and `served_commit.py challenger`'s are named by a claim
     instance, the Lean verifier of record's (`pouw.verifier.CLAIM`) or its state file's, which an earlier start drew from
     it; a source no claim instance names, `os.urandom` among them, is refused before any coin is drawn or published."""
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c_vllm"))
@@ -500,7 +500,7 @@ def test_a_window_without_a_registration_deadline_is_refused(served, tmp_path):
 def test_a_pass_registered_again_on_another_stream_is_refused(served):
     """Windows credited together hold each call index of their salt once (`credit.passes_distinct`): the same pass
     registered again on another stream would credit every call twice under the same seeds and tickets, so it is refused
-    (``repeated-call``) and not held, while the first stays (CMP-84)."""
+    (``repeated-call``) and not held, while the first stays."""
     *_, words = served
     params, public, _, _ = _window(words)
     rec = _register(params, public)
@@ -597,10 +597,10 @@ def _certifier(sid: bytes, key, sign, record: bytes, keys, seed: bytes = b"", cl
     return c, drawn
 
 
-def _client(c: Proxy, at: tuple[str, int], keys) -> active.RemoteCertifier:
+def _client(c: Proxy, at: tuple[str, int], keys) -> active.CertifierClient:
     """The challenger's client of certifier `c` served at `at` (the `reveals` fixture), for its key, run and link."""
     _, run_id, link = c.certifier_run
-    return active.RemoteCertifier(*at, c.signer.public_key(), keys[1], link, run_id)
+    return active.CertifierClient(*at, c.signer.public_key(), keys[1], link, run_id)
 
 
 def _sid(run: str, keys, stream: str = "window", link: str = "requests", run_id: bytes = RUN_ID) -> bytes:
@@ -628,16 +628,16 @@ def _certified_window(words, run: str, reveal: bytes, sid: bytes, prover: bytes,
 
 
 def _live(path: Path, entropy: str | None = None) -> tuple[Ch.LiveChallenger, Ch.ChallengerKey]:
-    """A live epoch's challenger on its host, its record signed and written to `path`, and the verifier's key for that
+    """A live window's draw session's challenger on its host, its record signed and written to `path`, and the verifier's key for that
     record (`challenger.ChallengerKey`); `entropy` names another challenger's coins, whose record isn't the one written."""
     k = lms.keygen(lms.Params(64, 4, 2), hashlib.sha512(str(path).encode()).digest())
-    live = Wd.live_challenger(0, 1, random.Random(str(path)).randbytes)
+    live = Wd.draw_challenger(0, random.Random(str(path)).randbytes)
     Ch.write_record(path, live.sign_record("vy-nebius-cpu-1", lms.public_key(k), lambda m: lms.sign_at(k, 0, m).encode()))
-    return (live if entropy is None else Wd.live_challenger(0, 1, random.Random(entropy).randbytes)), \
+    return (live if entropy is None else Wd.draw_challenger(0, random.Random(entropy).randbytes)), \
         Ch.ChallengerKey(4, 2, lms.public_key(k))
 
 
-def _deployment(client: active.RemoteCertifier, ck: Ch.ChallengerKey) -> SC.Deployment:
+def _deployment(client: active.CertifierClient, ck: Ch.ChallengerKey) -> SC.Deployment:
     """What the verifier pins of the deployment: `client`'s certifier key and run id, and its challenger's key `ck`."""
     return SC.Deployment(client.certifier_key, client.run_id, ck)
 
@@ -651,7 +651,7 @@ def _unasked(monkeypatch) -> list[str]:
 
 
 def test_rows_formed_before_any_salt_are_refused_in_every_certified_window(served, tmp_path, monkeypatch, reveals):
-    """RT4-INT-1's witness, refused.  The fixture's rows are formed once, under SHA-256(b"salt"), which is no certifier
+    """A pre-salt witness, refused.  The fixture's rows are formed once, under SHA-256(b"salt"), which is no certifier
     window's salt, and committed twice (matmuls 5 and 9) in PoUW windows 0 and 1, each window's pass salted by its own
     certifier reveal under the recorded stream and prover.  A certified window credits only units that read its salt
     (`salt.unit_reason`), and the window's sampled proof block, `Pc8TileSide`, reads two committed rows and no salt, so both are
@@ -663,7 +663,7 @@ def test_rows_formed_before_any_salt_are_refused_in_every_certified_window(serve
     prover, sid = PS.prover_id(key.public), _sid(run, keys)
     c, salts = _certifier(sid, key, sign, PS.pouw_record(weights_root(_pass(run)[1]), sid, prover), keys, windows=2)
     client = _client(c, reveals(c), keys)
-    asked, ledger = _unasked(monkeypatch), PS.Registrations()
+    asked, ledger = _unasked(monkeypatch), PS.WindowOpens()
     unread = PS.unit_reason(SC.template(K))
     assert unread is not None and SC.template(K).id in unread
     for p in (0, 1):
@@ -671,7 +671,7 @@ def test_rows_formed_before_any_salt_are_refused_in_every_certified_window(serve
         live, ck = _live(tmp_path / f"w{p}.json")
         ch = SC.Challenger(params, live, clock=lambda: 0.0, record=OR.Record(lean=False), certifier=client,
                            prover=prover, coin_record=tmp_path / f"w{p}.json", deployment=_deployment(client, ck),
-                           registrations=ledger)
+                           opens=ledger)
         with pytest.raises(S.Refused) as e:
             ch.register(f"w{p}", rec, manifest=raw)
         assert _codes(e) == {"unsalted"} and e.value.verdict.detail["unsalted"] == unread
@@ -680,14 +680,14 @@ def test_rows_formed_before_any_salt_are_refused_in_every_certified_window(serve
 
 
 def test_one_windows_rows_are_refused_under_two_streams(served, tmp_path, monkeypatch, reveals):
-    """RT4-INT-9's witness, refused.  One prover registers streams "a" and "b", each behind its own certifier link, and
+    """A two-stream witness, refused.  One prover registers streams "a" and "b", each behind its own certifier link, and
     commits the same rows, formed before any salt, in PoUW window 0 of both: their stream ids differ (each names its
     stream and its certifier run, whose link differs, `stream_id`), and each window is refused (``unsalted``) before it
     is received, so no product is registered once, let alone once per stream."""
     *_, words = served
     run, keys = "r-certified", _keys(tmp_path)
     key, sign = _prover(b"the prover")
-    prover, asked, ledger = PS.prover_id(key.public), _unasked(monkeypatch), PS.Registrations()
+    prover, asked, ledger = PS.prover_id(key.public), _unasked(monkeypatch), PS.WindowOpens()
     sids = {s: _sid(run, keys, s, f"requests-{s}") for s in "ab"}
     for s, sid in sids.items():
         c, salts = _certifier(sid, key, sign, PS.pouw_record(weights_root(_pass(run)[1]), sid, prover), keys,
@@ -698,7 +698,7 @@ def test_one_windows_rows_are_refused_under_two_streams(served, tmp_path, monkey
         live, ck = _live(tmp_path / f"{s}.json")
         ch = SC.Challenger(params, live, clock=lambda: 0.0, record=OR.Record(lean=False), certifier=client,
                            prover=prover, coin_record=tmp_path / f"{s}.json", deployment=_deployment(client, ck),
-                           registrations=ledger)
+                           opens=ledger)
         with pytest.raises(S.Refused) as e:
             ch.register(s, rec, stream=s, manifest=raw)
         assert _codes(e) == {"unsalted"} and not ch.streams and not ch.regs
@@ -709,20 +709,20 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_drawn_under_
         served, tmp_path, monkeypatch, reveals):
     """What a certified window of salted units runs through after `salt.unit_reason`, which no served-zk window passes
     today (the two tests above): this test lifts that one rule (monkeypatched to accept) and holds the rest end to end
-    against the network certifier, which the challenger asks through its client (`RemoteCertifier`, a signed request
+    against the network certifier, which the challenger asks through its client (`CertifierClient`, a signed request
     and a signed answer it verifies, over localhost to `serve_reveals`).  The prover records its pass's weights, the
     window's stream (`stream_id`, naming the certifier's run, (key id, run id, ingress link), which the proxy and its
     client give alike) and its prover id (`salt.prover_id`) with the certifier for PoUW window 0 before its salt is
     sampled, signed, and salts its pass from the salt it receives in-band.  `register` reads that record on the window's
     registration and only then has the certifier reveal window 0's salt, so a challenger whose stream or prover isn't
     the recorded one is refused (``coin``) and takes no reveal: the honest one after it passes (``certifier``), holds
-    the salt its pass was checked against, and its sample is the live epoch's ``pouw/draw`` coin 0 opened after the
+    the salt its pass was checked against, and its sample is its sampling session's ``pouw/draw`` coin 0 opened after the
     registration, under the commitment the challenger read itself from its challenger's signed record, which the sample's
     check of record verifies again under the challenger key the deployment pins (`Deployment`), and refuses under any
-    other pin (``coin-key``).  Its drawn units are opened under that salt (`Challenger.check`, SALT-BIND-1),
+    other pin (``coin-key``).  Its drawn units are opened under that salt (`Challenger.check`),
     where `check` alone passes none.  The certifier reveals window 0 once and within its reveal deadline on its own
     clock, so a second registration, or one past the deadline, is refused (``certifier``).  A second proxy of the same
-    run (its key, run id and link) gives the same stream id, and the deployment's shared `Registrations` refuse its
+    run (its key, run id and link) gives the same stream id, and the deployment's shared `WindowOpens` refuse its
     window 0 (``reregistered``); another run (another run id) is another stream, so a record naming the first run's
     stream is refused (``coin``) and one naming its own registers, though coins that aren't its signed record's
     challenger's are refused at the sample.  A certified challenger opens no salt coin, and is refused parameters with a
@@ -746,13 +746,13 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_drawn_under_
     with pytest.raises(TypeError, match="ingress_link"):
         Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SyncSet((0, 1), (1, 2)), [ClockSync(0, 1)] * 4, origin=0.0)
     params, raw, rec, advice, priv = _certified_window(words, run, salts[0], sid, prover)
-    ledger = PS.Registrations()
+    ledger = PS.WindowOpens()
 
     def challenger(name: str, certifier=client, prover=prover, p=params, entropy=None) -> SC.Challenger:
         live, ck = _live(tmp_path / f"{name}.json", entropy)
         return SC.Challenger(p, live, clock=lambda: 0.0, record=OR.Record(lean=False), certifier=certifier,
                              prover=prover, coin_record=tmp_path / f"{name}.json",
-                             deployment=_deployment(certifier, ck), registrations=ledger)
+                             deployment=_deployment(certifier, ck), opens=ledger)
 
     def refused(ch: SC.Challenger, code: str, r=rec, m=raw, **kw) -> str:
         with pytest.raises(S.Refused) as e:
@@ -860,7 +860,7 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_drawn_under_
 def test_a_deployments_challenger_key_is_infras_published_pin(tmp_path):
     """`Deployment.pinned` takes the challenger key from infra's published pin (`CHALLENGER_KEY_PIN`; the fixture is its
     payload's bytes): vy-challenger-1's LMS key at W = 1, H = 20, whose SHA-512 is `CHALLENGER_KEY_SHA512`, stated whole.
-    A record of any other key is refused even when it names its own key's SHA-512: the key infra retired (RT4-INT-18), a
+    A record of any other key is refused even when it names its own key's SHA-512: the key infra retired, a
     tampered public key, or the pinned key under another named SHA-512; so is a record of another schema or form."""
     pin = Path(__file__).parent / "fixtures" / "challenger-key.json"
     assert hashlib.sha256(pin.read_bytes()).hexdigest() == \

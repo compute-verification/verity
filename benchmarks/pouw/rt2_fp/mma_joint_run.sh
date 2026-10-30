@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# RT2-FP-12 and -13's sm_120 joints (mma_joint120.cu): build and gate, then time on one GPU and read (M)'s sum
+# The sm_120 MMA joints (mma_joint120.cu): build and gate, then time on one GPU and read (M)'s sum
 # (mma_joint.py). Through the queue, whose wrapper already holds the GPU (GPU_LEASE_UUID set):
 #
 #   research run --queue --source <tree> --project verity --gpus 1 --mem-gb 4 --max-min 30 \

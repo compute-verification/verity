@@ -1,4 +1,4 @@
-"""FPX-G1H: g1 on H1 (co32c-u16, decision 82; `dither-c-peel-fx1`, the RTX PRO 6000's record) on the machine model:
+"""g1 on H1 (co32c-u16; `dither-c-peel-fx1`, the RTX PRO 6000's record) on the machine model:
 its ε, with g1's served correction priced as the record prices co32c's recombination, and its γ against plain FP8 and
 plain NVFP4.
 
@@ -9,13 +9,13 @@ g1 serves (R_x + b - 1/2)(R_w + c - 1/2): H1's word O = (R_w + c) X less its ran
 4 O - 2 ΣX - 2 ΣP^ + k (W4A8's dithered activations: 2 served = 2 O - ΣX). ΣX is H1's residue sums summed; ΣP^ is the
 row's committed levels plus a popcount of its live coins c, k/32 popcounts and adds a row, shared by the call's
 tokens. No check reads the correction, so on H1's kernel unchanged it is vector work only the served output needs:
-a skip term, priced like co32c's recombination in CHECKED-STRIP's tensor-scalar model (`eps_budget.TS_EPS`, from
+a skip term, priced like co32c's recombination in checked_strip's tensor-scalar model (`eps_budget.TS_EPS`, from
 `checked_strip.ts_tile`), at one lane instruction a cell (an FFMA beside the dequantizing FMULs) or two (an IMAD and an
 IADD3 on the integer word), plus ΣP^'s popcounts at 2K's tokens (k / (4 * 2048) warp instructions a 128-cell tile, the
 most over the contexts). The record's TS_EPS prices co32c with O committed (the cheater recombines O); main's
 `cgemm_ref.py` receipts are over T, O' and D, so each case is also priced with O free. ε_skip is `eps_budget.design_skip`
 (the most over Llama-3.1 8B and 70B, 2K to 32K, prefill and decode) with TS_EPS's co32c entries replaced; the other
-terms are `machine-model eps dither-c-peel-fx1` at FPX-DESIGN's readings (`fpx_eps.py`: credit floor, operands free,
+terms are `machine-model eps dither-c-peel-fx1` at fpx_design's readings (`fpx_eps.py`: credit floor, operands free,
 the sheet at q* = 1/2, measured at 1.22 and at the proved 1/2). If g1's centred word is the committed served word in
 O's place (the check recomputing it from the transcript), the correction is charged and ε is H1's.
 

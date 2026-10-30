@@ -145,8 +145,9 @@ def test_a_served_challengers_coins_are_named_by_a_claim_instance():
 
 
 def test_a_served_window_draws_every_coin_from_its_entropy_and_none_from_the_os(monkeypatch):
-    """The epoch's salt and flip coins and a live window's salt, round and flip coins, and every hm96 salt beside them,
-    come from the challenger's named entropy alone: with the operating system's generators refusing, they are sampled,
+    """The epoch's salt and flip coins, a live window's salt and round coins and its sampling session's flip coin, and
+    every hm96 salt beside them, come from the challenger's named entropy alone: with the operating system's generators
+    refusing, they are sampled,
     opened and checked against their commitments."""
     def refuse(*_a, **_k):
         raise AssertionError("a served coin read the operating system's randomness")
@@ -157,12 +158,14 @@ def test_a_served_window_draws_every_coin_from_its_entropy_and_none_from_the_os(
     for label, after in (("salt", b"w" * 64), ("draw", b"t" * 64)):
         assert EC.coin_reason(epoch.commitment, epoch.open(label, after), label, after) is None
     live = Wd.live_challenger(0, 2, Ch.named(verifier.CLAIM, random.Random(4).randbytes))
-    for label, count in Wd.live_families(2):
-        rec = Ch.LiveRecord(live, label, clock=lambda: 0.0)
-        roots = [bytes([i]) * 64 for i in range(count)]
-        for root in roots:
-            rec.record(root)
-        assert Ch.order_reason(live.commitment, label, roots, rec.openings) is None
+    drawn = Wd.draw_challenger(0, Ch.named(verifier.CLAIM, random.Random(5).randbytes))
+    for ch in (live, drawn):
+        for label, count in ch.commitment.families:
+            rec = Ch.LiveRecord(ch, label, clock=lambda: 0.0)
+            roots = [bytes([i]) * 64 for i in range(count)]
+            for root in roots:
+                rec.record(root)
+            assert Ch.order_reason(ch.commitment, label, roots, rec.openings) is None
 
 
 #: The PoUW and proof-system modules that read the operating system's randomness, each with why it isn't a coin, or

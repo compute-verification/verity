@@ -21,7 +21,7 @@ published, once, and only until its reveal deadline on its own clock after p's e
 * `pouw_salt(reveal, p, stream, prover)` is the salt PoUW applies in window p, the one function that states its form,
   `pouw_record(weights_root, stream, prover)` what PoUW records for p before the salt, and `prover_id(public_key)` the
   64-byte id of the prover whose key the certifier verifies records under.
-* `Registrations` is the certified windows' once-only registration ledger: one registration per PoUW window, stream and
+* `WindowOpens` is the certified windows' once-only ledger of opens: one open per PoUW window, stream and
   prover, taken when the challenger receives the window, before its draw and any proof. It is not the window's credit,
   which is its outcome's verdict.
 * `unit_reason(unit)` is why a certified window can't credit a sampled proof block: it credits only units that read its salt.
@@ -39,6 +39,7 @@ from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
 from verity.ml.circuits import ports as _ports
+from verity.ml.commitments import domains
 
 from .protocol import U64, DomainError
 
@@ -48,11 +49,11 @@ if TYPE_CHECKING:
 #: the certifier's salt, and the salt PoUW applies: SHA-512 digests
 SALT_BYTES = 64
 #: `pouw_salt`'s domain tag, which keeps its input apart from `window_salt`'s
-SALT_TAG = b"verity/pouw-salt/v1"
+SALT_TAG = domains.POUW_PERIOD_SALT.encode()
 #: `pouw_record`'s domain tag
-RECORD_TAG = b"verity/pouw-record/v1"
+RECORD_TAG = domains.POUW_RECORD.encode()
 #: `prover_id`'s domain tag
-PROVER_TAG = b"verity/pouw-prover/v1"
+PROVER_TAG = domains.POUW_PROVER.encode()
 #: a weights' root, a SHA-512 `tagged`: an H1 window's `weights.weights_root` (`window_open_root`), an epoch's
 #: `audit.weights_root` (`pouw_record`)
 WEIGHTS_ROOT_BYTES = 64
@@ -61,11 +62,11 @@ STREAM_BYTES = 64
 PROVER_BYTES = 64
 WINDOW_SEGMENT = "pouw-window"
 #: `window_open_root`'s domain tag
-WINDOW_OPEN_TAG = b"verity/pouw-window-open/v1"
+WINDOW_OPEN_TAG = domains.POUW_PERIOD_OPEN.encode()
 #: `epoch_open_root`'s domain tag
-EPOCH_OPEN_TAG = b"verity/pouw-epoch-open/v1"
+EPOCH_OPEN_TAG = domains.POUW_EPOCH_OPEN.encode()
 #: `anchored_epoch_root`'s domain tag: `EPOCH_OPEN_TAG`'s, its version bumped for the anchors' root in its preimage
-ANCHORED_EPOCH_TAG = b"verity/pouw-epoch-open/v2"
+ANCHORED_EPOCH_TAG = domains.POUW_ANCHORED_EPOCH_OPEN.encode()
 #: an H1 window's anchors' root X (`core_check.values_root` of its committed activations)
 ANCHORS_ROOT_BYTES = 64
 #: a live window's round-0 request table's root, a frame-v3-sha512 root
@@ -80,8 +81,8 @@ class Unrevealed(DomainError):
     early, missing or uncommitted."""
 
 
-class Reregistered(DomainError):
-    """A PoUW window already registered under its stream and prover."""
+class Reopened(DomainError):
+    """A PoUW window already opened under its stream and prover."""
 
 
 def _window(window: Any) -> int:
@@ -210,32 +211,32 @@ def unit_reason(unit: Any) -> str | None:
 
 # TODO: a window's credit is its outcome's verdict within a period: the period's cap and circuit recorded before
 # window 0's first coin, each window's first coin after the previous window's draw, closed at the first refused window.
-# `Registrations` is none of that.
-class Registrations:
-    """The certified windows' once-only registration ledger: a PoUW window registers once per stream and prover, when
+# `WindowOpens` is none of that.
+class WindowOpens:
+    """The certified windows' once-only ledger of opens: a PoUW window opens once per stream and prover, when
     the challenger receives it, before its draw and before any proof, so a window whose units are never proved, or are
     refused, keeps its entry. A window's tiles are private, so (window, stream, prover) is the finest public key there
-    is. Two registrations of one window under one stream and prover have one salt and so one seed per tile, and `admit`
-    refuses the second (`Reregistered`). Under another stream or prover the salts differ (`pouw_salt`)."""
+    is. Two opens of one window under one stream and prover have one salt and so one seed per tile, and `admit`
+    refuses the second (`Reopened`). Under another stream or prover the salts differ (`pouw_salt`)."""
 
     def __init__(self) -> None:
-        self._registered: dict[tuple[int, bytes], str] = {}
+        self._opened: dict[tuple[int, bytes], str] = {}
 
-    def admit(self, window: int, stream: bytes, prover: bytes, registration: str) -> None:
-        """Record PoUW window `window`'s registration `registration` (its digest) under `stream` and `prover`, or refuse
-        (`Reregistered`) a window already registered under them."""
+    def admit(self, window: int, stream: bytes, prover: bytes, record: str) -> None:
+        """Record PoUW window `window`'s open, its window record's digest `record`, under `stream` and `prover`, or
+        refuse (`Reopened`) a window already opened under them."""
         key = (_window(window), _bound(stream, prover))
-        if key in self._registered:
-            raise Reregistered(f"PoUW window {window} is already registered ({self._registered[key][:16]}) under its "
-                               "stream and prover: a window registers once")
-        self._registered[key] = registration
+        if key in self._opened:
+            raise Reopened(f"PoUW window {window} is already registered ({self._opened[key][:16]}) under its "
+                           "stream and prover: a window registers once")
+        self._opened[key] = record
 
     def __contains__(self, key: tuple[int, bytes, bytes]) -> bool:
         window, stream, prover = key
-        return (_window(window), _bound(stream, prover)) in self._registered
+        return (_window(window), _bound(stream, prover)) in self._opened
 
     def __len__(self) -> int:
-        return len(self._registered)
+        return len(self._opened)
 
 
 def context(prefix: str, window: int, manifest: str) -> str:
@@ -313,7 +314,7 @@ def pouw_window(windows: Sequence[int], k: int) -> int:
 
 
 __all__ = ["ANCHORED_EPOCH_TAG", "ANCHORS_ROOT_BYTES", "EPOCH_OPEN_TAG", "PROVER_BYTES", "PROVER_TAG", "RECORD_TAG",
-           "REQUESTS_ROOT_BYTES", "Registrations", "Reregistered", "SALT_BYTES", "SALT_TAG", "SESSION", "STREAM_BYTES",
-           "Unrevealed", "WEIGHTS_ROOT_BYTES", "WINDOW_OPEN_TAG", "WINDOW_SEGMENT", "anchored_epoch_root", "committed",
+           "REQUESTS_ROOT_BYTES", "Reopened", "SALT_BYTES", "SALT_TAG", "SESSION", "STREAM_BYTES",
+           "Unrevealed", "WEIGHTS_ROOT_BYTES", "WINDOW_OPEN_TAG", "WINDOW_SEGMENT", "WindowOpens", "anchored_epoch_root", "committed",
            "context", "epoch_open_root", "pouw_record", "pouw_salt", "pouw_window", "prover_id", "registered",
            "revealed", "unit_reason", "window_of", "window_open_root"]

@@ -38,7 +38,7 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   every K's template in one form.
 * **A unit's ok is the verifier's** (`registered_file`'s ``o1``): the statement's output row ``ok`` reads the window's
   ok rows ``<prefix>ok``, row u unit u's, the one word 1 under its public `core_check.ok_salt` (h1_prove's
-  registration, #3124), which credit registers itself and names at that known content. A unit that computed 0 opens no
+  registration), which credit registers itself and names at that known content. A unit that computed 0 opens no
   row of it, and a session that opened ok at another root is refused.
 
 * **The credited set is fixed before the draw** (`_credited`). Each row of the window's manifest (the serving process's
@@ -46,10 +46,13 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   carries its z table's root (``tables.z``). `calls_root` hashes the rows (and the served trees' digest when the window
   has them) and the window's Commit record's digest (`commit_of`), and `draw_root` hashes that, the last round's
   receipts and every round's root and coin. The challenger's draw coin must have followed that one root, as its signed
-  log shows, read through the session the auditor's ledger opens for the window, run from a commit the host's pins log
-  records on main's first-parent line (`challenger.trusted_session_of`, over `challenger.pinned_session`), never a
-  commitment the prover hands in. So a credit bit changed after the draw coin changes the draw root and is refused, and
-  the credited set is the rows whose bit is true.
+  log shows, read through the draw's own session (``draw``'s ``session``, `window.DRAW_FAMILIES`), the one the
+  auditor's ledger opens on the draw root, run from a commit the host's pins log records on main's first-parent line
+  (`challenger.trusted_session_of`, over `challenger.pinned_session`), never a commitment the prover hands in. The
+  ledger opens it withheld (`challenger.withheld_on`, else `challenger.WITHHELD`; Lean
+  `Properties.Pouw.Credit.DrawWithheld`): its challenger released its coin root only after the prover's draw root, so
+  the draw rests on no hiding of that root. So a credit bit changed after the draw coin
+  changes the draw root and is refused, and the credited set is the rows whose bit is true.
 * **The drawn units are the draw coin's** (`drawn`): `core_check.draw`'s rule under the law ``work:k``
   (`core_check.work_units`), over the window's own units. The window's layout is its Program's,
   ``h1window.program(linears, calls, m, tile)``, and its units are in that Program's order: call by call, each call's
@@ -100,8 +103,9 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
 * **The round log is the challenger's** (`core_check.rounds`): the round roots `window` reads are the ones the
   challenger's signed log shows it received, in order, each round's coin opened once after its root. A log the
   challenger never received is refused, however its draw root and A trees agree with it.
-* **A period counts only closed and complete** (`period`, RT4-INT-42): its windows are exactly those the auditor's
-  ledger lists in the period's close, in that order, each opened and ended complete. A period with no close, or with
+* **A period counts only closed and complete** (`period`): its windows are exactly those the auditor's
+  ledger lists in the period's close, in that order, each window's session and then its draw's opened and ended
+  complete. A period with no close, or with
   a window missing, out of order or not its own, earns nothing, so no window is chosen after the fact. Under
   `period_credit` each window's session must have run main's code and the window must prove the circuit the period's
   open committed (`challenger.credited_session`, the pin first, then the circuit: the SHA-512 of the descriptor its
@@ -197,13 +201,14 @@ from verity.core.protocols.pouw.weights import CHUNK_ALIGN, CHUNK_MAX, chunks, l
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.ml.commitments import domains
 
 #: the verifier of record over a statement's proof files (`proofs.verify`)
 Run = Callable[..., tuple[list | None, tuple[str, str] | None]]
 
-CALLS_TAG = b"verity/pouw/h1/calls/v2\0"
-DRAW_TAG = "verity/pouw/h1/draw/v1"
-ROUND_TAG = "verity/pouw/h1/round-a/v1"
+CALLS_TAG = domains.POUW_H1_CALLS.encode() + b"\0"
+DRAW_TAG = domains.POUW_H1_SAMPLING
+ROUND_TAG = domains.POUW_H1_ROUND_A
 #: each manifest row's credit bit
 CREDIT = "credit"
 #: each manifest row's served rows m_s: its step's rows in slots 0 .. m_s - 1 of its call's M, the rest empty
@@ -222,7 +227,7 @@ _DIGEST = re.compile(r"[0-9a-f]{128}")
 _DIGITS = re.compile(r"[1-9][0-9]*")
 _A = re.compile(r"([1-9][0-9]*)(?:@([0-9]+))?")
 _HEX = re.compile(r"(?:[0-9a-f]{2})+")
-_FRAME = b"veritor/protocol/merkle/frame/v3\0"
+_FRAME = domains.FRAME_V3.encode() + b"\0"
 
 SALT_FORM = "the window's Program salt is not a SHA-512 digest (128 lowercase hex)"
 CALLS_FORM = "the window's manifest is not a list of call rows"
@@ -263,12 +268,12 @@ MODEL_FIX = ("open the period with the gate's --model, which signs the auditor's
              "pins (models.json)")
 #: the period-open's field holding the commit it opened under (40 lowercase hex on main's first-parent line): every
 #: window of the period must be pinned within the freshness floor (`STALE_FIELD`) of it, counted in first-parent commits
-#: from this pin and never from main's head (`committed_pin`, `_pin_hygiene`, CMP74-FOLLOW). Optional: a period-open that
+#: from this pin and never from main's head (`committed_pin`, `_pin_hygiene`). Optional: a period-open that
 #: records none isn't held to it
 PERIOD_PIN_FIELD = "pinned"
 #: the period-open's field holding the freshness floor (a nonnegative integer): a window counts only when its pin is at
 #: most this many first-parent commits behind the period's open pin on main's line (`_pin_hygiene`, measured from that
-#: pin, never from main's head, so main moving on never refuses a window fresh at its open, CMP74-FOLLOW). Optional,
+#: pin, never from main's head, so main moving on never refuses a window fresh at its open). Optional,
 #: default 0 when the open pins but records no floor; infra sets it generously, about a day of first-parent commits
 STALE_FIELD = "pin_floor"
 #: the period-open's field holding the rows of record's fixed length: ``{max_tokens, stop}``,
@@ -312,7 +317,7 @@ _TEMPLATE = re.compile(r"k[1-9][0-9]*|live")
 DESCRIPTOR_HEX = ("the window's descriptor is not the bytes of the circuit its proofs were verified against in "
                   "lowercase hex (its canonical JSON without annotations, the bytes program_digest hashes)")
 #: the descriptor schema `layout_of` reads
-SCHEMA = "verity-ir/descriptor/v1"
+SCHEMA = domains.IR_DESCRIPTOR
 #: h1window's Program function, `h1window.PouwH1Window`, and its record's bindings in order
 WINDOW_FN = "PouwH1Window_v3"
 RECORD = ("TILES", "LINEARS", "CALLS", "M", "PREFIX")
@@ -345,9 +350,9 @@ LOG_FORM = "the round log is not a nonempty list"
 ENTRIES_FORM = "the window's registered entries are not a list of objects"
 NO_A = ("the window registers no A value (…/a/<K>, or a round's …/a/<K>@<s>), so nothing ties its units' A rows to "
         "the round roots: register the window's A values")
-COMMIT_TAG = b"verity/pouw/h1/commit/v1\0"
+COMMIT_TAG = domains.POUW_H1_COMMIT.encode() + b"\0"
 #: the served Commit's record: one-stage's registration record with registered values
-COMMIT_FORMAT = "verity/registration/v2"
+COMMIT_FORMAT = domains.REGISTRATION
 COMMIT_FORM = ("the window's Commit record is not the bytes in lowercase hex of a verity/registration/v2 record in "
                "canonical JSON whose registered values are a list of objects: the served Commit runs in the window's "
                "engine, and its record is bound under the window's calls_root before the draw coin")
@@ -365,7 +370,7 @@ PUB_PORT = "pub"
 OK_PORT, OK_VALUE = "o1", "ok"
 #: round 0's request root (``requests``, the one the window's open root binds): its request table's root with round 0's
 #: input-ids table's root inside (`requests_root`)
-REQUESTS_IDS_TAG = "verity/pouw/h1/requests/ids/v1"
+REQUESTS_IDS_TAG = domains.POUW_H1_REQUEST_IDS
 IDS_OUTSIDE = ("round 0's request root (requests, the one the window's open root binds) is not requests_root of its "
                "request table's root (request_table) and its input-ids table's root, so round 0's input ids are not "
                "fixed before the salt: commit round 0's input-ids table inside round 0's request table, under the "
@@ -566,27 +571,24 @@ def other_served(i: int, first: int, s: int, got: int, want: int) -> str:
             "serves the step's m_s rows, so its calls state one m_s")
 
 
-def _credited(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, salt: Any, calls: Any, served: Any,
-              commit: Any, rounds: Any, draw: Any, verify: Ch.Verify) -> tuple[list[int] | None, tuple[str, str] | None]:
+def _credited(key: Any, ledger: Any, pins: Any, main: Any, salt: Any, calls: Any, served: Any, commit: Any, rounds: Any,
+              draw: Any, verify: Ch.Verify) -> tuple[list[int] | None, tuple[str, str] | None]:
     """The credited calls (their indices) of a window whose manifest `calls` (its rows, `served` the served trees'
     digest or None, under the window's Program salt `salt`, and its Commit record `commit`, `commit_of`'s) fixed every
     call's credit bit and the Commit record before the draw coin, and None; or None and the refusal (``coin``,
-    ``manifest``, ``credit``, ``commit``, ``rounds`` or ``draw``, and why). The draw coin is read through the session the
-    auditor's signed ledger `ledger` opens for `window` under the pinned challenger key `key`, run from a commit the
-    host's pins log `pins` records and the verifier's copy of main's first-parent history `main` holds, from that
-    session's files `session` (`challenger.trusted_session_of`, its signatures checked with `verify`): its log must show
-    `draw_root` over the manifest and the Commit record's digest (`calls_root`), ``draw``'s ``receipts`` and the round
-    log `rounds` (each round's ``root`` and ``coin``) as the one root the draw coin followed, ``draw``'s ``root`` must be
-    it, and ``draw``'s ``coin`` must be the challenger's draw coin 0 opened after it. A step of `window`: its indices are
-    no credit until every other step accepts."""
+    ``manifest``, ``credit``, ``commit``, ``rounds`` or ``draw``, and why). ``draw``'s ``root`` must be `draw_root` over
+    the manifest and the Commit record's digest (`calls_root`), ``draw``'s ``receipts`` and the round log `rounds` (each
+    round's ``root`` and ``coin``). The draw coin is read through the draw's own session, the one the auditor's signed
+    ledger `ledger` opens on that root under the pinned challenger key `key`, run from a commit the host's pins log
+    `pins` records and the verifier's copy of main's first-parent history `main` holds, from that session's files
+    ``draw``'s ``session`` (`challenger.trusted_session_of`, its signatures checked with `verify`). The ledger must open
+    it withheld (`challenger.withheld_on`, `challenger.WITHHELD`), so its challenger released no coin root before the
+    prover's draw root; its log must show that root as the one its draw coin followed, and ``draw``'s ``coin`` must be
+    its draw coin 0 opened after it. A step of `window`: its indices are no credit until every other step accepts."""
     try:
         k = Ch.ChallengerKey.from_json(key)
     except Ch.CoinError as e:
         return None, ("coin", f"the verifier's challenger key is malformed: {e}")
-    try:
-        c, received = Ch.trusted_session_of(ledger, window, k, pins, main, session, verify)
-    except Ch.CoinError as e:
-        return None, ("coin", f"the challenger's session is not trusted: {e}")
     s = _digest(salt)
     if s is None:
         return None, ("manifest", SALT_FORM)
@@ -630,6 +632,12 @@ def _credited(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session:
     root = tagged(DRAW_TAG, calls_root(s, calls, _digest(served), got[0]), receipts, *parts)
     if draw.get("root") != root.hex():
         return None, ("draw", DRAW_ROOT)
+    try:
+        c, received = Ch.trusted_session_of(ledger, {"root": root.hex()}, k, pins, main, draw.get("session"), verify)
+    except Ch.CoinError as e:
+        return None, ("coin", f"the draw's session is not trusted: {e}")
+    if not Ch.withheld_on(ledger, root.hex()):
+        return None, ("coin", Ch.WITHHELD)
     got = tuple(received.get(Wd.DRAW, ()))
     if not got:
         return None, ("draw", NO_DRAW)
@@ -942,7 +950,7 @@ def _receipt_words(ret: Any) -> int:
 
 
 #: the partition object a window's statements are verified under: every instance of each K's template one unit
-PARTITION_FORMAT = "verity/partition/v1"
+PARTITION_FORMAT = domains.PARTITION
 QUERY = ("Q_template_instances", 0)
 
 
@@ -1907,7 +1915,7 @@ def _window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: A
             commit: Any, rounds: Any, draw: Any, descriptor: Any, entries: Any, proved: Proved, live: Any, lived: Lived,
             keys: tuple[str, ...], k: Any, t: Any, verify: Ch.Verify
             ) -> tuple[tuple[list[int], dict, list[int]] | None, tuple[str, str] | None]:
-    got, why = _credited(key, ledger, pins, main, window, session, salt, calls, served, commit, rounds, draw, verify)
+    got, why = _credited(key, ledger, pins, main, salt, calls, served, commit, rounds, draw, verify)
     if why is not None:
         return None, why
     why = CC.rounds(key, ledger, pins, main, window, session, [x["root"] for x in rounds], [x["coin"] for x in rounds],
@@ -2160,11 +2168,12 @@ def _window_outcomes(key: Any, ledger: Any, pins: Any, main: Any, window: Any, s
 
 
 def period(key: Any, ledger: Any, name: Any, roots: Any, verify: Ch.Verify) -> tuple[str, str] | None:
-    """None when `roots` are exactly the windows the auditor's ledger `ledger` lists in period `name`'s close, in its
-    order, and that close is complete: every window between the period's open and its close, each opened and ended
-    complete (`challenger.verify_periods`, under the pinned challenger key `key`). Else the refusal (``coin``,
-    ``period``, ``missing`` or ``order``, and why): a period with no close, closed incomplete, or with a window missing,
-    out of order or not its own earns nothing, so no window is chosen after the fact."""
+    """None when `roots` are exactly the sessions the auditor's ledger `ledger` lists in period `name`'s close, by their
+    open roots in its order (a served window's session, then its draw session's: `_period_of`), and that close is complete: every session
+    between the period's open and its close, each opened and ended complete (`challenger.verify_periods`, under the
+    pinned challenger key `key`). Else the refusal (``coin``, ``period``, ``missing`` or ``order``, and why): a period
+    with no close, closed incomplete, or with a session missing, out of order or not its own earns nothing, so no window
+    is chosen after the fact."""
     try:
         k = Ch.ChallengerKey.from_json(key)
     except Ch.CoinError as e:
@@ -2190,22 +2199,22 @@ def period(key: Any, ledger: Any, name: Any, roots: Any, verify: Ch.Verify) -> t
                           f"period {name} closed incomplete: its window {i} (session {ws[i]['session']}) never opened "
                           "or didn't end complete before the close, so the period earns nothing")
     if not (type(roots) is list and all(_digest(r) is not None for r in roots)):
-        return "period", "the period's windows are not a list of window roots (SHA-512 digests)"
+        return "period", "the period's sessions are not a list of open roots (SHA-512 digests)"
     want = [w["root"] for w in ws]
     wanted, presented = set(want), set(roots)
     for i in range(max(len(want), len(roots))):
         if i >= len(want):
-            return "period", (f"the windows presented run past the {len(want)} that period {name}'s close lists: only "
-                              "its close's windows count, each once")
+            return "period", (f"the sessions presented run past the {len(want)} that period {name}'s close lists: only "
+                              "its close's sessions count, each once")
         if i >= len(roots) or (roots[i] != want[i] and want[i] not in presented):
-            return "missing", (f"window {i} of period {name} ({want[i][:16]}...) is missing: every window between the "
-                               "period's open and its close counts, so present them all, in the close's order")
+            return "missing", (f"session {i} of period {name} ({want[i][:16]}...) is missing: every session between "
+                               "the period's open and its close counts, so present them all, in the close's order")
         if roots[i] != want[i]:
             if roots[i] not in wanted:
-                return "period", (f"window {roots[i][:16]}... is not one of period {name}'s windows: only the windows "
-                                  "its close lists count")
-            return "order", (f"window {i} of period {name} is {roots[i][:16]}..., not {want[i][:16]}..., the close's "
-                             f"window {i}: present the period's windows in the order its close lists them")
+                return "period", (f"session {roots[i][:16]}... is not one of period {name}'s sessions: only the "
+                                  "sessions its close lists count")
+            return "order", (f"session {i} of period {name} is {roots[i][:16]}..., not {want[i][:16]}..., the close's "
+                             f"session {i}: present the period's sessions in the order its close lists them")
     return None
 
 
@@ -2318,7 +2327,7 @@ def _pin_hygiene(name: str, i: int, main: Any, pinned: str, period_pin: str | No
     open recorded (`period_pin`, `committed_pin`; `floor`, `committed_floor`, default 0 when the open pins but records no
     floor), measured from that pin and never from main's head, so main moving on never refuses a window fresh at its open;
     None when it is recent enough or the open records no pin.  The per-window pin and circuit are
-    `challenger.credited_session`'s; this is the period-level hygiene on top (CMP74-FOLLOW).  `unit` names what `i`
+    `challenger.credited_session`'s; this is the period-level hygiene on top.  `unit` names what `i`
     counts (``pass`` in a Pearl-C period, `pearl_c_period_credit`)."""
     if period_pin is None:
         return None
@@ -2339,6 +2348,8 @@ def _pin_hygiene(name: str, i: int, main: Any, pinned: str, period_pin: str | No
     return None
 
 
+#: what `_pin_hygiene` names a window's draw session by
+DRAW_UNIT = "the draw session of window"
 CALL_RANGE_CODE, REPEATED_CALL = "call-range", "repeated-call"
 
 
@@ -2509,8 +2520,8 @@ def _period_outcomes(key: Any, ledger: Any, pins: Any, main: Any, name: Any, win
     first, then its ``descriptor``, the bytes in hex of the circuit its proofs were verified against, hashing to it,
     `challenger.credited_session`), and each window's evidence (``{window, session, salt, calls, commit, descriptor,
     entries, served, rounds, draw, proofs}``, as `_window_outcomes` reads it, under the same ledger) is credited by it,
-    every step of it, drawn at K over the layout of that same descriptor. Each window's session is also pinned within the
-    period's freshness floor (`committed_floor`, first-parent commits, default 0) of the commit the period's open
+    every step of it, drawn at K over the layout of that same descriptor. Each window's session and its draw session,
+    each held to the pins log, main and the circuit alike, are also pinned within the period's freshness floor (`committed_floor`, first-parent commits, default 0) of the commit the period's open
     recorded (`committed_pin`), counted from that pin and never from main's head, both optional and refused with ``pin``;
     a refused window refuses the whole period (``circuit``, ``pin`` or ``window``), so a period earns only when every
     window in it does."""
@@ -2522,7 +2533,8 @@ def _period_of(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: 
     keys, form = (PROVED_KEYS, WINDOWS_FORM) if run is None else (PERIOD_KEYS, PERIOD_FORM)
     if not (type(windows) is list and all(isinstance(w, dict) and sorted(w) == list(keys) for w in windows)):
         return None, ("period", form)
-    roots = [w["window"].get("root") if isinstance(w["window"], dict) else None for w in windows]
+    roots = [r for w in windows for r in (w["window"].get("root") if isinstance(w["window"], dict) else None,
+                                          w["draw"].get("root") if isinstance(w["draw"], dict) else None)]
     why = period(key, ledger, name, roots, verify)
     if why is not None:
         return None, why
@@ -2550,6 +2562,15 @@ def _period_of(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: 
             return None, ("circuit", f"window {i} of period {name} doesn't count toward it, so the period earns "
                                      f"nothing: {e}")
         why = _pin_hygiene(name, i, main, audited.pinned, period_pin, floor)
+        if why is not None:
+            return None, why
+        try:
+            drawn = Ch.credited_session(ledger, {"root": w["draw"]["root"]}, k, pins, main,
+                                        bytes.fromhex(w["descriptor"]), verify)
+        except Ch.CoinError as e:
+            return None, ("circuit", f"window {i}'s draw session of period {name} doesn't count toward it, so the "
+                                     f"period earns nothing: {e}")
+        why = _pin_hygiene(name, i, main, drawn.pinned, period_pin, floor, DRAW_UNIT)
         if why is not None:
             return None, why
         proved = ((lambda *_, p=w["proofs"]: (p, None)) if run is None

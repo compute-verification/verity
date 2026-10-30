@@ -1,23 +1,25 @@
-"""served_h1's side computation (`served_h1/receipts.py`) is `h1tile.reference`'s receipt, unit by unit: on random s8 calls at
-K = 64 and 128 (a partial row block left uncovered), and saturated operands at K = 64; and each receipt reads the unit's
-position, salt and roots and every operand byte of its tile.  A call's receipt tree (`served_h1/commit.py`) is the same built in
-pool tasks or leaf by leaf, opens a unit's leaf, and refuses a flipped bit or another call's salt label.  Under a call's admit
-bits (`served_h1/credit.py`), from the committed request queue, a dead unit's receipt is the canonical empty receipt and a live
-unit's the reference's (`PouwH1Tile_v4`), an admitted block of zero-byte rows is computed, receipt-checked and credited (RT4-LOGIC-4, RT4-LOGIC-20), a tile's admit bits open from the admit tree and a flipped one is refused, a junk row in a slot the queue leaves unassigned is refused and credits nothing, so is the canonical
-empty row in a slot the queue selects (RT-ALGO-4), and the tally's limbs are 16-bit.  A call's A table is AROW's row table, a tile's rows open against it and the step's A root, and
-A' = -b is refused (CMP-38).  A linear's B table is the same format over its weight rows, under the weights' root; the
-scheduler's record gives the request queue and its commitment.  A window's live coins (`served_h1/coins.py`) come from a
-challenger session off the node over its stream (a fake auditor host on loopback, its ledger and the challenger's record
-and close signed with a test key), which refuses a session of another layout; the session is reserved at infra's gate
-for the window's layout and then opened on the root the caller gives (one quoted argument each), its secret kept from
-every output and carried in the hello, which the challenger refuses without it.  The verifier checks the coins from the
-session as the gate publishes it and the auditor's ledger alone, through core's check of both (`remote.trusted_session`),
-under the key its key.json holds, ``(checked)`` only against the key's deployment record, the window's root and its
-period, and refuses a record under another key, a ledger core refuses, a session the manifest doesn't name, outside the
-window's period or opened for another layout, a round root the challenger didn't receive, a salt that isn't its round's
-coin's, and a draw after another root; an address without its session id is refused, and with neither the coins are
-in-process and labelled not certified; serve.py refuses ``--gate``, naming vllm's H1 path as the gated served window of
-record."""
+"""served_h1's side computation (`served_h1/receipts.py`) is `h1tile.reference`'s receipt, unit by unit: on random s8
+calls at K = 64 and 128 (a partial row block left uncovered), and saturated operands at K = 64; and each receipt reads
+the unit's position, salt and roots and every operand byte of its tile.  A call's receipt tree (`served_h1/commit.py`)
+is the same built in pool tasks or leaf by leaf, opens a unit's leaf, and refuses a flipped bit or another call's salt
+label.  Under a call's admit bits (`served_h1/credit.py`), from the committed request queue, a dead unit's receipt is
+the canonical empty receipt and a live unit's the reference's (`PouwH1Tile_v4`), an admitted block of zero-byte rows is
+computed, receipt-checked and credited, a tile's admit bits open from the admit tree and a flipped one is refused, a
+junk row in a slot the queue leaves unassigned is refused and credits nothing, so is the canonical empty row in a slot
+the queue selects, and the tally's limbs are 16-bit.  A call's A table is AROW's row table, a tile's rows open against
+it and the step's A root, and A' = -b is refused.  A linear's B table is the same format over its weight rows, under the
+weights' root; the scheduler's record gives the request queue and its commitment.  A window's live coins
+(`served_h1/coins.py`) come from a challenger session off the node over its stream (a fake auditor host on loopback, its
+ledger and the challenger's record and close signed with a test key), which refuses a session of another layout; the
+session is reserved at the gate for the window's layout and then opened on the root the caller gives (one quoted
+argument each), its secret kept from every output and carried in the hello, which the challenger refuses without it. The
+verifier checks the coins from the session as the gate publishes it and the auditor's ledger alone, through core's check
+of both (`remote.trusted_session`), under the key its key.json holds, ``(checked)`` only against the key's deployment
+record, the window's root and its period, and refuses a record under another key, a ledger core refuses, a session the
+manifest doesn't name, outside the window's period or opened for another layout, a round root the challenger didn't
+receive, a salt that isn't its round's coin's, and a draw after another root; an address without its session id is
+refused, and with neither the coins are in-process and labelled not certified; serve.py refuses ``--gate``, naming
+vllm's H1 path as the gated served window of record."""
 from __future__ import annotations
 
 import dataclasses
@@ -129,7 +131,7 @@ def test_dead_units_skip_noise_and_receipt():
 
 
 def test_an_admitted_zero_byte_block_is_computed_and_credited_and_a_non_admitted_block_is_not():
-    """RT4-LOGIC-4 and RT4-LOGIC-20 under `PouwH1Tile_v4`: the admit unit reads no row byte, so a selected block of
+    """Under `PouwH1Tile_v4`, the admit unit reads no row byte, so a selected block of
     zero-byte rows under nonzero scales is admitted; a tile's live bit is the OR of its admit bits, the bits the tally
     reads, so that block is computed and receipt-checked (the ungated unit's receipt) and credited, as is a selected block
     of nonzero bytes; the block the queue leaves unselected is dead: the zero receipt, its noise never derived, and no
@@ -179,7 +181,7 @@ def test_a_tiles_admit_input_opens_from_the_admit_tree_and_a_flipped_bit_is_refu
 
 
 def test_a_opens_against_the_step_root_and_refuses_neg_b():
-    """CMP-38 on PoUW's side: a call's A table is AROW's row table (`row_table.commit` over `s8_row`s gives the root `leaf` and
+    """On PoUW's side, a call's A table is AROW's row table (`row_table.commit` over `s8_row`s gives the root `leaf` and
     `levels` give), a tile's 32 A rows open against it and the step's A root, A' = -b (the tile's B rows negated) is refused
     against the committed root, and re-committing A' moves both roots."""
     from verity.ml.commitments import row_table as RT
@@ -267,7 +269,7 @@ def test_junk_row_in_an_unassigned_slot_is_refused_and_credits_nothing():
 
 
 def test_canonical_empty_rows_in_selected_slots_are_refused_and_credit_nothing():
-    """RT-ALGO-4 (note:20261019T0618Z-draft-rt-algo-r2): a block whose 32 slots the queue selects but whose rows are all the
+    """A block whose 32 slots the queue selects but whose rows are all the
     canonical empty row is dead to the tile, which zeroes its receipt.  The admit unit admits none of its slots, so the
     block is dead to credit too and the tally counts none of its rows, and it refuses every one of them (`hollow`).  A
     selected row of zero bytes under a nonzero scale is admitted (`scale_only`: the admit unit reads no byte), and a
@@ -397,6 +399,7 @@ def test_schedule_tap_records_the_queue_and_commits_it():
 EPOCH, ROUNDS = 1, 3
 ROOT = hashlib.sha512(b"the window's root").digest()
 SID, LANE, PERIOD, CIRCUIT, PIN = "s20261020T120000Z-0a1b", "kernels", "test-period", "ab" * 64, "0" * 40
+DRAW_SID = "s20261020T120100Z-0d2a"
 WINDOW = {"root": ROOT.hex(), "period": PERIOD}
 #: the host's pins log as infra publishes it, recording `PIN`, which the session's open seals, and the verifier's own
 #: first-parent history of main, which holds `PIN`
@@ -412,43 +415,54 @@ def _host_key():
 
 
 class _Host:
-    """The challenger on its auditor host over loopback, as infra's gate runs a window's session (`auditor.py`): the
+    """The challenger on its auditor host over loopback, as the gate runs a window's session (`auditor.py`): the
     lane's period opened and the session reserved and opened on `root` in the auditor's signed ledger (`ledger`, v2), a
     live window's coins (`coins.layout`, or `rounds` rounds at `epoch`) with its record signed and written to
     `directory` (`remote.open_session`) beside an empty hellos.jsonl, serving one session (`remote.serve`, its hello
     carrying `secret`) on its own clock, and once it has ended (`ended`) its end entry sealing out/'s files.  The
     ledger's entries, the record and the close are signed with one test key at its next leaf each.  Published as the
-    gate does: request.json and open.json beside the challenger's out/ (`directory`)."""
+    gate does: request.json and open.json beside the challenger's out/ (`directory`).  A draw session (`rounds` None,
+    `open_draw`) is opened withheld (`withhold`) on the draw root, in its `parent`'s ledger and period."""
 
-    def __init__(self, tmp_path, epoch: int = EPOCH, rounds: int = ROUNDS, host: str = "vy-challenger-1",
-                 root: bytes = ROOT, secret: bytes = bytes([5]) * 32) -> None:
+    def __init__(self, tmp_path, epoch: int = EPOCH, rounds: int | None = ROUNDS, host: str = "vy-challenger-1",
+                 root: bytes = ROOT, secret: bytes = bytes([5]) * 32, sid: str = SID, withhold: bool = False,
+                 parent: _Host | None = None) -> None:
         from verity.core.protocols.sampled_proofs import remote as R
         from verity.ml.crypto import lms
-        self.R, self.directory, self.secret = R, tmp_path / "session" / "out", secret
+        self.tmp_path, self.epoch, self.host, self.sid, self.draw = tmp_path, epoch, host, sid, None
+        self.R, self.directory, self.secret = R, tmp_path / ("session" if parent is None else "draw") / "out", secret
         self.directory.mkdir(parents=True)
-        self.private = _host_key()
-        self.public = lms.public_key(self.private)
-        self.key = CO.Ch.ChallengerKey(4, 4, self.public)
-        self.leaves, self.lines, self.ledger = itertools.count(), [], tmp_path / "ledger.jsonl"
+        if parent is None:
+            self.private = _host_key()
+            self.public = lms.public_key(self.private)
+            self.key = CO.Ch.ChallengerKey(4, 4, self.public)
+            self.leaves, self.lines, self.ledger = itertools.count(), [], tmp_path / "ledger.jsonl"
+        else:
+            self.private, self.public, self.key = parent.private, parent.public, parent.key
+            self.leaves, self.lines, self.ledger = parent.leaves, parent.lines, parent.ledger
         lay, pin = CO.layout(epoch, rounds), hashlib.sha512(self.public).hexdigest()
         req = {"by": LANE, "peer": "vy-nebius-2", **lay, "minutes": 5}
-        self.append("period-open", None, {"period": PERIOD, "lane": LANE, "by": LANE, "cap": 2, "circuit": CIRCUIT,
-                                          "pinned": PIN, "key_sha512": pin, "opened_utc": "2026-10-20T11:59:00Z"})
-        reserve = self.append("reserve", SID, {**req, "pinned": PIN, "key_sha512": pin, "host": f"{host}.{SID}",
-                                               "started_utc": "2026-10-20T12:00:00Z", "expires_utc": "2026-10-20T12:05:00Z"})
-        self.append("open", SID, {"window": {"root": root.hex()}, "reserve": reserve, **req, "opened_by": LANE,
+        if parent is None:
+            self.append("period-open", None, {"period": PERIOD, "lane": LANE, "by": LANE, "cap": 2, "circuit": CIRCUIT,
+                                              "pinned": PIN, "key_sha512": pin, "opened_utc": "2026-10-20T11:59:00Z"})
+        reserve = self.append("reserve", sid, {**req, "pinned": PIN, "key_sha512": pin, "host": f"{host}.{sid}",
+                                               "started_utc": "2026-10-20T12:00:00Z", "expires_utc": "2026-10-20T12:05:00Z",
+                                               **({"withheld": True} if withhold else {})})
+        self.append("open", sid, {"window": {"root": root.hex()}, "reserve": reserve, **req, "opened_by": LANE,
                                   "pinned": PIN, "pins": CO.Ch.pins_seal(PINS), "key_sha512": pin,
-                                  "host": f"{host}.{SID}", "port": 7811,
+                                  "host": f"{host}.{sid}", "port": 7811,
                                   "secret_sha512": hashlib.sha512(secret).hexdigest(),
-                                  "started_utc": "2026-10-20T12:01:00Z"})
-        (self.directory.parent / "request.json").write_text(json.dumps({**req, "session": SID}))
-        (self.directory.parent / "open.json").write_text(json.dumps({"session": SID, "root": root.hex(), "by": LANE}))
-        self.challenger = CO.Ch.LiveChallenger(lay["scheme"], lay["epoch"], lay["families"], random.Random("host").randbytes)
-        self._session = R.open_session(self.challenger, self.key, f"{host}.{SID}", self.sign, self.directory, SID)
+                                  "started_utc": "2026-10-20T12:01:00Z", **({"withheld": True} if withhold else {})})
+        (self.directory.parent / "request.json").write_text(json.dumps({**req, "session": sid}))
+        (self.directory.parent / "open.json").write_text(json.dumps({"session": sid, "root": root.hex(), "by": LANE}))
+        self.challenger = CO.Ch.LiveChallenger(lay["scheme"], lay["epoch"], lay["families"],
+                                               random.Random("host" if parent is None else f"host {sid}").randbytes)
+        self._session = R.open_session(self.challenger, self.key, f"{host}.{sid}", self.sign, self.directory, sid,
+                                       withhold)
         (self.directory / R.HELLOS).write_text("")
         self.listener = socket.create_server(("127.0.0.1", 0))
         self.address = f"127.0.0.1:{self.listener.getsockname()[1]}"
-        self.session = CO.Session(SID, self.address, secret)
+        self.session = CO.Endpoint(sid, self.address, secret)
         self.reason: str | None = None
         self._ended = False
         self._thread = threading.Thread(target=self._run)
@@ -457,6 +471,12 @@ class _Host:
     def sign(self, message: bytes) -> bytes:
         from verity.ml.crypto import lms
         return lms.sign_at(self.private, next(self.leaves), message).encode()
+
+    def open_draw(self, root: bytes, withhold: bool = True) -> CO.Endpoint:
+        """The window's draw session, reserved and opened (withheld unless `withhold` is False) on the draw root `root`
+        in this host's ledger, as `coins.gate_draw` asks the gate for it: its client's session (no commitment)."""
+        self.draw = _Host(self.tmp_path, self.epoch, None, self.host, root, bytes([6]) * 32, DRAW_SID, withhold, self)
+        return CO.Endpoint(DRAW_SID, self.draw.address, self.draw.secret)
 
     def append(self, kind: str, session: str | None, body: dict) -> int:
         """The ledger's next entry, signed at the key's next leaf: its seq."""
@@ -479,7 +499,7 @@ class _Host:
             record = CO.Ch.ChallengerRecord.from_json(json.loads((d / R.RECORD).read_text()))
             released = {k: len(r) for k, r in R.released_roots(d / R.RELEASES, record.commitment).items()}
             closed = self.reason is None
-            self.append("end", SID, {
+            self.append("end", self.sid, {
                 "rc": 0 if closed else 1, "closed": closed, "ended": "closed by the client" if closed else self.reason,
                 "files": {p.name: hashlib.sha512(p.read_bytes()).hexdigest() for p in sorted(d.iterdir())},
                 "released": released, "complete": all(released[k] == n for k, n in record.commitment.families),
@@ -535,11 +555,12 @@ def test_off_node_coins_are_checked_from_the_published_session_and_its_ledger_an
     from verity.ml.crypto import lms
     SV = _load("serve")
     host = _Host(tmp_path)
-    cs = CO.open_coins(host.session, EPOCH, ROUNDS)
+    cs = CO.open_coins(host.session, EPOCH, ROUNDS, open_draw=host.open_draw)
     assert (cs.source, cs.label) == ("off-node", f"off-node session {SID} at {host.address} (unchecked)")
     assert cs.record()["session"] == SID
     m = _serve_window(cs, SV, _calls(ROUNDS), ROOT)
-    assert host.ended() is None
+    assert host.draw.ended() is None and host.ended() is None
+    assert m["coins"]["draw_session"] == DRAW_SID and cs.draw_commitment.families == CO.Wd.DRAW_FAMILIES
     (tmp_path / "manifest.json").write_text(json.dumps(m))
     session, heads, key = host.directory.parent, [host.ledger], host.key
     early = tmp_path / "early.jsonl"
@@ -552,17 +573,17 @@ def test_off_node_coins_are_checked_from_the_published_session_and_its_ledger_an
     assert CO.main(["check", "--challenger-out", str(session), "--ledger", str(early), "--ledger", str(host.ledger),
                     "--pins", str(tmp_path / "pins.jsonl"), "--main", str(tmp_path / "main.txt"),
                     "--manifest", str(tmp_path / "manifest.json"), "--key-record", str(tmp_path / "key-record.json"),
-                    "--period", PERIOD, "--root", ROOT.hex()]) == 0
+                    "--period", PERIOD, "--root", ROOT.hex(), "--draw-out", str(host.draw.directory.parent)]) == 0
     for bad, why in (({"pubkey_sha512": "00" * 64}, "not the one whose SHA-512 it names"),
                      ({"schema": "challenger-key/v2"}, "a challenger key record is challenger-key/v1")):
         (tmp_path / "bad-record.json").write_text(json.dumps({**record, **bad}))
         with pytest.raises(CO.Ch.CoinError, match=why):
             CO.key_record(tmp_path / "bad-record.json")
-    e = SV.coins_expect(m)
+    e = {**SV.coins_expect(m), "draw_out": host.draw.directory.parent}
     got = CO.check(session, m["coins"], heads, PINS, MAIN, **e, key=key, period=PERIOD, root=ROOT)
     assert got["ok"] and got["coins"] == f"off-node vy-challenger-1.{SID} (checked)"
     assert (got["rounds"], got["draws"], got["window"], got["root"]) == (ROUNDS, 1, WINDOW, ROOT.hex())
-    assert got["ledger"] == {"session": SID, "prover": LANE, "reserve": 1, "open": 2, "end": 3, "end_complete": True,
+    assert got["ledger"] == {"session": SID, "prover": LANE, "reserve": 1, "open": 2, "end": 6, "end_complete": True,
                              "refused_hellos": 0, "period": PERIOD, "cap": 2, "circuit": CIRCUIT}
     loose = CO.check(host.directory, m["coins"], heads, PINS, MAIN, **e)
     assert loose["ok"] and loose["coins"] == f"off-node vy-challenger-1.{SID} (checked; key, root, period unanchored)"
@@ -595,7 +616,7 @@ def test_off_node_coins_are_checked_from_the_published_session_and_its_ledger_an
         """The ledger with its entries edited by `edit` and each signed again at its own leaf (a new one at the next)."""
         entries = [json.loads(line) for line in host.lines]
         edit(entries)
-        lines, leaves = [], itertools.count(len(host.lines) + 3)
+        lines, leaves = [], itertools.count(int(json.loads(host.lines[-1])["sig"][:8], 16) + 1)
         for x in entries:
             q = int(x["sig"][:8], 16) if "sig" in x else next(leaves)
             lines.append(CO.Ch.ledger_line(lines, x["kind"], x["session"], x["body"], host.public[:16],
@@ -624,7 +645,7 @@ def test_off_node_coins_are_checked_from_the_published_session_and_its_ledger_an
     assert "a second open" in core(heads=resigned("reopens", lambda x: x.append({k: v for k, v in x[2].items() if k != "sig"})))
     assert "names host" in core(heads=resigned("rehosted", lambda x: [x[i]["body"].update(host=f"vy-challenger-2.{SID}")
                                                                       for i in (1, 2)]))
-    assert "unclosed" in core(heads=resigned("unclosed", lambda x: x[3]["body"].update(closed=False)))
+    assert "unclosed" in core(heads=resigned("unclosed", lambda x: x[6]["body"].update(closed=False)))
     assert core(pins=None) == f"CoinError: {CO.Ch.NO_PINS}"
     assert core(main=None) == f"CoinError: {CO.Ch.NO_MAIN}"
     assert core(main=MAIN[:1]) == f"CoinError: {CO.Ch.first_parent_reason(SID, PIN, MAIN[:1])}"
@@ -643,8 +664,31 @@ def test_off_node_coins_are_checked_from_the_published_session_and_its_ledger_an
     assert refused(salts={**e["salts"], 2: e["salts"][1]}) == {"salts"}
     assert refused(draw_after=other) == {"draw"}
     assert refused(draw_after=None) == {"draw"}
+    assert refused(draw_out=None) == {"draw"}
+    assert refused(draw_out=session) == {"draw"}
+    assert refused(heads=resigned("unwithheld", lambda x: x[4]["body"].pop("withheld"))) == {"draw"}
     alone = CO.open_coins(None, EPOCH, ROUNDS, random.Random("prover").randbytes)
     assert refused(coins={**m["coins"], "commitment": alone.commitment.to_json()}) == {"commitment"}
+
+
+def test_an_off_node_draw_coin_comes_only_from_a_withheld_draw_session(tmp_path, monkeypatch):
+    """Off the node the draw coin (`Coins.draw`) is its own draw session's, opened withheld on the draw root: with no gate
+    to open one at, the draw is refused before any coin opens, and so is a draw session whose challenger answers its
+    hello with a commitment (one the gate opened plain, so its root was out before the prover's)."""
+    after = hashlib.sha512(b"the draw root").digest()
+    for env in (CO.GATE_ENV, CO.PEER_ENV):
+        monkeypatch.delenv(env, raising=False)
+    gateless = CO.Coins(CO.Wd.live_challenger(EPOCH, ROUNDS, random.Random("prover").randbytes), "off-node",
+                        CO.Endpoint("s", "127.0.0.1:1"), EPOCH)
+    with pytest.raises(CO.Ch.CoinError, match="names no gate to open it at"):
+        gateless.draw(after)
+    host = _Host(tmp_path)
+    cs = CO.open_coins(host.session, EPOCH, ROUNDS, open_draw=lambda root: host.open_draw(root, withhold=False))
+    with pytest.raises(CO.Ch.CoinError, match="answered its hello with a commitment"):
+        cs.draw(after)
+    cs.close()
+    assert host.draw.ended() is None and host.ended() is None
+    assert cs.draw_commitment is None and not CO.Ch.withheld_on(host.lines, after.hex())
 
 
 def test_round_coins_pipelined_off_node_open_each_after_its_root_in_order(tmp_path):
@@ -686,15 +730,14 @@ def test_the_draw_coin_and_its_time_are_read_under_the_lock_round_roots_are_sent
     roots = [hashlib.sha512(b"round %d" % i).digest() for i in range(4)]
     cs.rounds.record(roots[0])
     pipe = CO.RoundPipe(cs, lambda: float(next(ticks)))
-    open_, held = cs.challenger.open, []
+    draw_, held = cs.draw, []
 
-    def spy(label, index, after):
-        if label == CO.Wd.DRAW:
-            t = threading.Thread(target=lambda: held.append(pipe._cv.acquire(blocking=False)))
-            t.start()
-            t.join()
-        return open_(label, index, after)
-    cs.challenger.open = spy
+    def spy(after):
+        t = threading.Thread(target=lambda: held.append(pipe._cv.acquire(blocking=False)))
+        t.start()
+        t.join()
+        return draw_(after)
+    cs.draw = spy
     assert [pipe.send(r) for r in roots[1:3]] == [1, 2]
     after = hashlib.sha512(b"manifest").digest()
     draw, at = pipe.draw(after)
@@ -732,7 +775,7 @@ def test_round_coins_pipelined_refuse_every_later_round_after_a_refusal_or_a_bad
     a, b = socket.socketpair()
     t = threading.Thread(target=_pipe_server, args=(b, ch, ["ok", answer]))
     t.start()
-    cs = CO.Coins(R.RemoteChallenger(a), "off-node", CO.Session("s", "127.0.0.1:1"))
+    cs = CO.Coins(R.RemoteChallenger(a), "off-node", CO.Endpoint("s", "127.0.0.1:1"))
     pipe = CO.RoundPipe(cs)
     roots = [hashlib.sha512(b"round %d" % i).digest() for i in range(3)]
     assert [pipe.send(r) for r in roots[:2]] == [0, 1]
@@ -780,7 +823,7 @@ def test_a_window_is_reserved_then_opened_on_the_callers_root_and_its_secret_is_
               "secret": secret.hex(), "commitment": "cd" * 64}
     at, answer = CO.open_window("research@gate", sid, root, run=_gate(sent, opened))
     assert sent[-1][1] == ["open", "--session", sid, "--root", root.hex()]
-    assert at == CO.Session(sid, "127.0.0.1:7811", secret, "cd" * 64)
+    assert at == CO.Endpoint(sid, "127.0.0.1:7811", secret, "cd" * 64)
     assert answer == {k: v for k, v in opened.items() if k != "secret"}
     assert secret.hex() not in repr(at) + json.dumps(answer)
     with pytest.raises(CO.Ch.CoinError, match="refused reserve: period dev-kernels holds its cap"):
@@ -798,6 +841,37 @@ def test_a_window_is_reserved_then_opened_on_the_callers_root_and_its_secret_is_
     for unsigned in (None, "cd" * 32):
         with pytest.raises(CO.Ch.CoinError, match="signed no coin commitment") as refusal:
             CO.open_window("research@gate", sid, root, run=_gate(sent, {**opened, "commitment": unsigned}))
+        assert secret.hex() not in str(refusal.value)
+
+
+def test_a_draw_session_is_reserved_withheld_and_an_open_that_answers_its_root_is_refused():
+    """`coins.gate_draw` reserves the draw session ``--withhold`` and opens it on the draw root with no flag of its own
+    (the gate withholds what its reserve marked): the session holds no commitment, and its secret is the session's
+    alone. A reserve the gate answers plain is refused before any open, and so is an open answer that hands out the
+    session's coin commitment root before its end, that isn't marked withheld, or whose challenger signed no record."""
+    root, secret, sid = hashlib.sha512(b"the draw root").digest(), bytes(range(32)), "s20261020T130100Z-0a1c"
+    lay = CO.layout(EPOCH, None)
+    reserved = {"session": sid, "seq": 6, "peer": "vy-nebius-2", "by": LANE, "expires_utc": "2026-10-20T13:06:00Z",
+                "period": PERIOD, "withheld": True}
+    opened = {"session": sid, "port": 7812, "peer": "vy-nebius-2", "host": f"vy-challenger-1.{sid}", "seq": 7,
+              "reserve": 6, "root": root.hex(), "by": LANE, "opened_by": LANE, "secret": secret.hex(),
+              "commitment": None, "withheld": True, "signed": True}
+    sent: list = []
+    at = CO.gate_draw("research@gate", "vy-nebius-2", EPOCH, run=_gate(sent, reserved, opened))(root)
+    assert sent[0][1] == ["reserve", "--peer", "vy-nebius-2", "--scheme", lay["scheme"], "--families",
+                          json.dumps(lay["families"], separators=(",", ":")), "--epoch", str(EPOCH), "--withhold"]
+    assert sent[1][1] == ["open", "--session", sid, "--root", root.hex()]
+    assert at == CO.Endpoint(sid, "127.0.0.1:7812", secret) and at.commitment is None
+    with pytest.raises(CO.Ch.CoinError, match=f"reserved {sid} plain: a draw session is withheld"):
+        CO.gate_draw("research@gate", "vy-nebius-2", EPOCH,
+                     run=_gate(sent := [], {k: v for k, v in reserved.items() if k != "withheld"}, opened))(root)
+    assert [w[1][0] for w in sent] == ["reserve"], "no open after a plain reserve"
+    for bad, why in (({"commitment": "cd" * 64}, "handed out the session's coin commitment root before its end"),
+                     ({"withheld": None, "signed": None, "commitment": "cd" * 64}, "opened the session plain"),
+                     ({"signed": False}, "signed no record")):
+        with pytest.raises(CO.Ch.CoinError, match=why) as refusal:
+            CO.gate_draw("research@gate", "vy-nebius-2", EPOCH,
+                         run=_gate([], reserved, {k: v for k, v in {**opened, **bad}.items() if v is not None}))(root)
         assert secret.hex() not in str(refusal.value)
 
 
@@ -870,7 +944,7 @@ def test_a_sessions_secret_is_its_hello_and_a_hello_without_it_is_refused(tmp_pa
             CO.open_coins(session(other.session), EPOCH, ROUNDS)
         other.ended()
         assert [json.loads(x)["event"] for x in (other.directory / "releases.jsonl").read_text().splitlines()] == ["commitment"]
-    assert CO.session(host.address, SID, commitment=signed) == CO.Session(SID, host.address, None, signed)
+    assert CO.session(host.address, SID, commitment=signed) == CO.Endpoint(SID, host.address, None, signed)
     for bad in ({"commitment": signed}, {"address": host.address, "sid": "s", "commitment": signed[:64]}):
         with pytest.raises(CO.Ch.CoinError, match="an id and an address|128 lowercase hex"):
             CO.session(**bad)
@@ -897,7 +971,7 @@ def test_a_challenger_of_another_layout_is_refused_before_any_coin_and_its_sessi
 def test_open_coins_waits_out_a_refused_connect_until_its_deadline_and_raises_any_other_error_at_once():
     """An onsite window's client retries a refused connect (no hello, no coin) until the session's tunnel listens, every
     half second up to `wait_s` on the injected clock; past it `CoinError` refuses it, and any other error raises at once."""
-    at = CO.Session(SID, "127.0.0.1:7811", b"\x01" * 32)
+    at = CO.Endpoint(SID, "127.0.0.1:7811", b"\x01" * 32)
     challenger = CO.Wd.live_challenger(EPOCH, ROUNDS, random.Random("challenger").randbytes)
 
     def run(outcomes, wait_s=CO.R.TUNNEL_WAIT_S):
@@ -933,7 +1007,7 @@ def test_open_coins_waits_out_a_refused_connect_until_its_deadline_and_raises_an
 def test_without_a_session_the_coins_are_in_process_and_labelled_not_certified_and_half_a_session_is_refused(monkeypatch):
     for name in (CO.CHALLENGER_ENV, CO.SESSION_ENV, CO.SECRET_ENV, CO.COMMITMENT_ENV):
         monkeypatch.delenv(name, raising=False)
-    assert CO.session() is None and CO.session("h:1", "s1") == CO.Session("s1", "h:1")
+    assert CO.session() is None and CO.session("h:1", "s1") == CO.Endpoint("s1", "h:1")
     for half in (("h:1", None), (None, "s1")):
         with pytest.raises(CO.Ch.CoinError, match="an id and an address"):
             CO.session(*half)
@@ -941,7 +1015,7 @@ def test_without_a_session_the_coins_are_in_process_and_labelled_not_certified_a
     with pytest.raises(CO.Ch.CoinError, match="an id and an address"):
         CO.session()
     monkeypatch.setenv(CO.SESSION_ENV, "s2")
-    assert CO.session() == CO.Session("s2", "127.0.0.1:7811")
+    assert CO.session() == CO.Endpoint("s2", "127.0.0.1:7811")
     cs = CO.open_coins(None, EPOCH, ROUNDS, random.Random("prover").randbytes)
     assert (cs.source, cs.label, cs.record()["label"]) == ("in-process", "in-process (not certified)", CO.IN_PROCESS)
     assert CO.layout_reason(cs.commitment, EPOCH, ROUNDS) is None and CO.layout_reason(cs.commitment, EPOCH, 2) is not None
