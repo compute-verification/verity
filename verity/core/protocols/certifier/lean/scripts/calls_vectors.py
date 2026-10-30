@@ -15,9 +15,10 @@ writes them.
 
 A window is an egress cap, the node's release bits and up to 31 events: A roots of calls 0 … 7 of forwards 0 … 5, mostly
 of the open forward or, with none open, of a new one, buckets and words roots, and in nine windows of ten the close,
-which a quarter of them follow with more events. Shapes are small (most at most 40 rows, 16 columns and K 150; some up to
-200 rows, four coin tiles; some K 806 … 900, two row words a row), and now and then one the certifier refuses (a
-dimension 0, or past 2^40 MMA tiles) or one at exactly 2^40 tiles, which it admits and whose flip the entropy can't hold.
+which a quarter of them follow with more events. Shapes are small (most at most 40 rows, 16 columns and K 150, so many
+columns' bias is negative at one step; some up to 200 rows, four coin tiles; some K 806 … 900, two row words a row), each
+at a column tile of 128 or 256, and now and then one the certifier refuses (a dimension 0, a column tile it doesn't take,
+or past 2^40 MMA tiles) or one at exactly 2^40 tiles, which it admits and whose flip the entropy can't hold.
 The certifier's entropy is the calls' flips in order: random row bytes, G words below `G_BOUND` (now and then 0 or
 `G_BOUND − 1`) with rejected words planted before them (now and then `G_BOUND` or 2^32 − 1), and random lane bytes;
 now and then it ends inside a flip, after which no call's coins are flipped, and otherwise it may run on past the last.
@@ -35,13 +36,15 @@ import struct
 from pathlib import Path
 
 import verity.core.protocols.certifier
-from verity.core.protocols.certifier.calls import G_BOUND, CallRefusal, CallShape, Calls, EgressCap
+from verity.core.protocols.certifier.calls import BNS, G_BOUND, CallRefusal, CallShape, Calls, EgressCap
 
 COUNT = 1_000
 #: Shapes at the verifier's bound, each with whether the certifier admits it: exactly 2^40 MMA tiles (admitted) and one
 #: past (refused) at S = 2^40 and 2^40 + 1, and one past at 2^29 tiles a step over 2^11 + 1 steps.
-EDGES = (((16, 8, 21 + 28 * (2**40 - 1)), True), ((16, 8, 21 + 28 * 2**40), False),
-         ((17, 8, 21 + 28 * (2**40 - 1)), False), ((2**20, 2**16, 21 + 28 * 2**11), False))
+EDGES = (((16, 8, 21 + 28 * (2**40 - 1), 256), True), ((16, 8, 21 + 28 * 2**40, 128), False),
+         ((17, 8, 21 + 28 * (2**40 - 1), 256), False), ((2**20, 2**16, 21 + 28 * 2**11, 128), False))
+#: Column tiles the certifier refuses.
+OFF_TILES = (0, 1, 64, 127, 129, 192, 255, 257, 512)
 
 
 class Entropy:
@@ -56,22 +59,24 @@ class Entropy:
         return out
 
 
-def _shape(rng: random.Random) -> tuple[tuple[int, int, int], bool]:
-    """A call's rows, columns and K, and whether the certifier admits them: it refuses only the ones drawn to be refused,
-    with a dimension 0 or past the bound (`EDGES`)."""
-    r = rng.random()
+def _shape(rng: random.Random) -> tuple[tuple[int, int, int, int], bool]:
+    """A call's rows, columns, K and column tile, and whether the certifier admits them: it refuses only the ones drawn
+    to be refused, with a dimension 0, a tile not in `BNS` or past the bound (`EDGES`)."""
+    r, bn = rng.random(), rng.choice(BNS)
     if r < 0.04:
-        dims = [rng.randint(1, 40), rng.randint(1, 16), rng.randint(1, 150)]
+        dims = [rng.randint(1, 40), rng.randint(1, 16), rng.randint(1, 150), bn]
         dims[rng.randrange(3)] = 0
         return tuple(dims), False
-    if r < 0.075:
+    if r < 0.065:
+        return (rng.randint(1, 40), rng.randint(1, 16), rng.randint(1, 150), rng.choice(OFF_TILES)), False
+    if r < 0.09:
         return rng.choice(EDGES)
-    if r < 0.16:
-        return (rng.choice([64, 65, 128, 129, rng.randint(41, 200)]), rng.randint(1, 9), rng.randint(1, 60)), True
-    if r < 0.26:
-        return (rng.randint(1, 20), rng.randint(1, 8), rng.choice([806, 834, 835, rng.randint(806, 900)])), True
+    if r < 0.17:
+        return (rng.choice([64, 65, 128, 129, rng.randint(41, 200)]), rng.randint(1, 9), rng.randint(1, 60), bn), True
+    if r < 0.27:
+        return (rng.randint(1, 20), rng.randint(1, 8), rng.choice([806, 834, 835, rng.randint(806, 900)]), bn), True
     return ((rng.choice([1, 15, 16, 17, rng.randint(1, 40)]), rng.choice([1, 7, 8, 9, rng.randint(1, 16)]),
-             rng.choice([1, 21, 22, 49, 50, rng.randint(1, 150)])), True)
+             rng.choice([1, 21, 22, 49, 50, rng.randint(1, 150)]), bn), True)
 
 
 def _g_words(rng: random.Random, n: int) -> bytes:
@@ -130,13 +135,13 @@ class _Window:
         unused = [c for c in range(8) if c not in held]
         call = rng.choice(sorted(held)) if held and (not unused or rng.random() < 0.06) else rng.choice(unused or [0])
         root = rng.randbytes(rng.choice([64] * 30 + [0, 63, 65]))
-        (rows, cols, K), admitted = _shape(rng)
-        self.events.append(["a", forward, call, root.hex(), rows, cols, K])
+        dims, admitted = _shape(rng)
+        self.events.append(["a", forward, call, root.hex(), *dims])
         if self.closed or len(root) != 64 or call in held or not admitted:
             return
         if self.open != forward and (self.open is not None or forward in self.calls):
             return
-        shape = CallShape(rows, cols, K)
+        shape = CallShape(*dims)
         if self.open is None:
             self.open, self.limit, self.count, self.refused = forward, 0, 0, False
         self.calls.setdefault(forward, set()).add(call)
@@ -205,9 +210,9 @@ def lean_input(inst: dict) -> dict:
 def _answer(calls: Calls, event: list) -> dict | str:
     try:
         match event:
-            case ["a", forward, call, root, rows, cols, K]:
+            case ["a", forward, call, root, *dims]:
                 try:
-                    return {"release": calls.a_root(forward, call, bytes.fromhex(root), CallShape(rows, cols, K)).hex()}
+                    return {"release": calls.a_root(forward, call, bytes.fromhex(root), CallShape(*dims)).hex()}
                 except CallRefusal:
                     raise
                 except ValueError:

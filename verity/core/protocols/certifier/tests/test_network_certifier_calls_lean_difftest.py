@@ -31,6 +31,7 @@ RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["NetworkCertifi
 #: What a `CallRefusal` refuses, by a part of its message.
 REFUSALS = {"the window is closed": "after the close", "is registered already": "a second A root",
             "is a 64-byte SHA-512 root": "a root not of 64 bytes", "is a positive integer": "a dimension 0",
+            "column tile": "a column tile not 128 or 256",
             "more than 2^40 MMA tiles": "past 2^40 tiles", "holds at most": "frames past the allocation",
             "is not open": "a words root of a forward not open", "the forwards are serial": "another forward open",
             " is closed": "a closed forward"}
@@ -103,6 +104,9 @@ def test_the_generator_covers_what_it_says(monkeypatch):
         seen["a flip of two row words a row"] += any(s.H == 2 for s, o in flips if o == "a: answered")
         seen["a flip of three or four coin tiles"] += any(s.tiles >= 3 for s, o in flips if o == "a: answered")
         seen["a flip of one step"] += any(s.S == 1 for s, o in flips if o == "a: answered")
+        seen.update(f"a flip at a column tile of {s.bn}" for s, o in flips if o == "a: answered")
+        seen["a flip with a negative bias"] += any(C.bias(s.S, j) < 0 for s, o in flips if o == "a: answered"
+                                                   for j in range(s.n))
         seen["no coins at 2^40 tiles"] += any(s.S > 2**39 for s, o in flips if o == "a: no coins")
         seen["no coins after the entropy ended"] += outcomes.count("a: no coins") > 1
         seen.update(f"verdict: {f['verdict']}" for f in summary)
@@ -112,7 +116,8 @@ def test_the_generator_covers_what_it_says(monkeypatch):
         seen["entropy left over"] += left
     for case in ("a: answered", "b: answered", "w: answered", "c: answered", "a: no coins", "verdict: accepted",
                  "verdict: past its bits", "verdict: open when the window closed",
-                 "verdict: a call's coins were not flipped", "a forward of two calls or more", "release bits"):
+                 "verdict: a call's coins were not flipped", "a forward of two calls or more", "release bits",
+                 "a flip at a column tile of 128", "a flip at a column tile of 256", "a flip with a negative bias"):
         assert seen[case] > 150, (case, seen)
     for case in (*REFUSALS.values(), "a flip of two row words a row", "a flip of three or four coin tiles",
                  "a flip of one step", "no coins at 2^40 tiles", "no coins after the entropy ended", "verdict: None",
