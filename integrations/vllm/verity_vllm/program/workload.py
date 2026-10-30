@@ -132,7 +132,7 @@ class RequestComponent:
     input_gates: int          # gates of the request Program's own root that are Input gates (all params)
     body_gates: int           # gates of the request body (= request root gates - input_gates)
     n_nodes: int              # X-09 instance count (body nodes)
-    local_offsets_sha256: str  # sha256 of the request body's node offsets (the request-local instance -> gate rule)
+    local_offsets_sha512: str  # SHA-512 of the request body's node offsets (the request-local instance -> gate rule)
     groups: tuple[str, ...] = ()  # original request-wrapper parameter each component parameter (Input batch) belongs to
     step_nodes: tuple[tuple[int, int], ...] = ()  # request-relative step s -> body node range [lo, hi) (segments ending at TokenSelect_v1, X-09's unit)
     step_gates: tuple[tuple[int, int], ...] = ()  # the same in component-local gates
@@ -142,7 +142,7 @@ class RequestComponent:
         return {"specialization": _spec_id(self.fn), "program_digest": self.program_digest, "program_fn": self.program_fn,
                 "n_params": len(self.params), "param_groups": {g: self.groups.count(g) for g in dict.fromkeys(self.groups)},
                 "input_gates": self.input_gates, "body_gates": self.body_gates,
-                "n_nodes": self.n_nodes, "local_offsets_sha256": self.local_offsets_sha256, "steps": len(self.step_nodes),
+                "n_nodes": self.n_nodes, "local_offsets_sha512": self.local_offsets_sha512, "steps": len(self.step_nodes),
                 "step_nodes": [list(x) for x in self.step_nodes], "step_gates": [list(x) for x in self.step_gates]}
 
 
@@ -311,7 +311,7 @@ def request_component(desc: dict, registry, wrapper_params: list[tuple[str, str]
         bounds.append((lo, len(nodes)))  # trailing instances after the last TokenSelect (none for the request wrapper; kept, never dropped)
     step_gates = tuple((offsets[a], offsets[b]) for a, b in bounds)
     return RequestComponent(sp, digest, desc["program_fn"], params, input_gates, offsets[-1], len(nodes),
-                            hashlib.sha256(json.dumps(offsets).encode()).hexdigest(), tuple(groups), tuple(bounds), step_gates,
+                            hashlib.sha512(json.dumps(offsets).encode()).hexdigest(), tuple(groups), tuple(bounds), step_gates,
                             tuple(body.nodes[j].fn.binding for j in range(K)))
 
 
@@ -549,7 +549,7 @@ class WorkloadProgram:
                     pi += 1
             reqs.append({"request_id": r.request_id, "index": r.index, "root_node": k, "specialization": _spec_id(c.fn),
                          "program_digest": c.program_digest, "gates": [G, G + c.body_gates], "local_input_gates": c.input_gates,
-                         "n_instances": c.n_nodes, "local_offsets_sha256": c.local_offsets_sha256,
+                         "n_instances": c.n_nodes, "local_offsets_sha512": c.local_offsets_sha512,
                          "rule": {"body_gate": f"global = {G} + (local_root_gate - {c.input_gates})",
                                   "instance": f"path (root/node[{k}], i); gate base = {G} + local_offsets[i]",
                                   "shared_inputs": f"local params {list(sh_r)} ({self.shared_group}) -> root nodes 0..{S - 1}, gates {shared_gates}"},
