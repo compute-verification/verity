@@ -1,7 +1,7 @@
 """The keyed coin tree, ``coin-tree/hm96-sha512/v2`` (``verity/ml/flock/live/src/coin_tree.rs``, which this mirrors byte
 for byte): the challenger's commitment, at ``Hello``, to every coin of a session, and the check of each round's opening
-against it. The challenger's device draws and opens it (`verity.core.protocols.sampled_proofs.challenger`,
-`LiveChallenger.draw_tree` and `open_tree`), and a prover's side checks each opening (`check`).
+against it. The challenger's device samples and opens it (`verity.core.protocols.sampled_proofs.challenger`,
+`LiveChallenger.sample_tree` and `open_tree`), and a prover's side checks each opening (`check`).
 
 At ``Hello`` the challenger samples a fresh hm96 key ``K`` and every coin of the session, a block of ``block`` coins for
 each (stream, round), and commits to all of them under one SHA-512 Merkle root: one keyed hm96 leaf a (stream, round), each
@@ -12,7 +12,8 @@ M(K)·y ‖ H(SALT_PREFIX ‖ y))`` for the leaf's salt ``y``. ``Hello``'s answe
 opening of a round's first ``n`` coins is the coins, ``T_n``, the salt, then the path (the stream's subtree, then the
 streams' tree), as GF(2^128) words. A word is an int, ``lo | hi << 64``, 16 bytes little-endian on the wire.
 
-The draw reads ``rand`` in Rust's order: the key (its bit 2047 cleared), then per stream and round its block, then its salt.
+Sampling reads ``rand`` in Rust's order: the key (its bit 2047 cleared), then per stream and round its block, then its
+salt.
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ from typing import Callable
 
 SCHEME = "coin-tree/hm96-sha512/v2"
 SALT_BYTES, KEY_BYTES, NONCE_BYTES = 192, 256, 32
-#: the session's own stream: round 0 is the link points drawn at ``Commit``
+#: the session's own stream: round 0 is the link points sampled at ``Commit``
 SESSION = "session"
 SALT_TAG = b"verity/hm96-sha512/salt/v1\0"
 LEAF_TAG = b"verity/hm96-sha512/leaf/v1\0"
@@ -168,16 +169,16 @@ def _path(levels: list[list[bytes]], j: int) -> list[bytes]:
 
 
 class CoinTree:
-    """The challenger's side: every coin of the session, their commitment, and the openings. Each block is kept as drawn;
-    an opening's ``T_n`` is recomputed from it."""
+    """The challenger's side: every coin of the session, their commitment, and the openings. Each block is kept as
+    sampled; an opening's ``T_n`` is recomputed from it."""
 
     def __init__(self, spec: Spec, rules: Rules, blocks: list[list[bytes]], salts: list[list[bytes]],
                  trees: list[list[list[bytes]]], top: list[list[bytes]]):
         self.spec, self.rules, self.blocks, self.salts, self.trees, self.top = spec, rules, blocks, salts, trees, top
 
     @classmethod
-    def draw(cls, spec: Spec, nonce: bytes, rand: Callable[[int], bytes]) -> CoinTree:
-        """Draw the session key, then every coin and salt, from ``rand``, and commit under ``nonce``."""
+    def sample(cls, spec: Spec, nonce: bytes, rand: Callable[[int], bytes]) -> CoinTree:
+        """Sample the session key, then every coin and salt, from ``rand``, and commit under ``nonce``."""
         key = bytearray(rand(KEY_BYTES))
         key[-1] &= 0x7F
         rules = Rules(nonce, bytes(key))
