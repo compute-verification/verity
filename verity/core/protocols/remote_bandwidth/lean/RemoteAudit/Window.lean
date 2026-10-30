@@ -1,9 +1,8 @@
 import Std.Data.HashMap
-import CoreProtocol.Protocol
 import RemoteAudit.Receipts
 
 /-!
-# A window's receipt checks: `audit.py`'s `AuditRun.close` draw and `AuditRun.verify`
+# A window's receipt checks: `audit.py`'s `Session.close` draw and `Session.verify`
 
 `verifyWindow` takes what the verifier holds of window t once its roots are final (its challenge, each pass's root,
 plan and the appends' head received before it, the root before its first pass, the session's appends with their coins)
@@ -93,10 +92,8 @@ def Registration.digest (r : Registration) : ByteArray :=
     ++ frameStr r.codec.name ++ frameStr r.receipt.name ++ be 1 0 ++ frameStr LAYOUT ++ be 4 r.rows)
 
 /-- `payload_domain(node, N)`. -/
-def payloadDomain (node : ByteArray) (blocks : Nat) : Flock.FV3.Sha512.Domain :=
-  .make (sha512 (PAYLOAD_DOMAIN ++ frameBytes node)) 0 0 blocks
-
-def Registration.payloadDomain (r : Registration) : Flock.FV3.Sha512.Domain := RemoteAudit.payloadDomain r.node r.blocks
+def Registration.payloadDomain (r : Registration) : FrameV3.Domain :=
+  FrameV3.Domain.make (sha512 (PAYLOAD_DOMAIN ++ frameBytes r.node)) 0 0 r.blocks
 
 /-- An append the verifier received: store indices `first … first + count − 1`, its payload tree's root, and the coin
 `c_a` it answered with. -/
@@ -108,8 +105,8 @@ structure Append where
 deriving Inhabited
 
 /-- `append_domain(registration digest, first, count)`. -/
-def appendDomain (registration : ByteArray) (first count : Nat) : Flock.FV3.Sha512.Domain :=
-  .make (sha512 (APPEND_DOMAIN ++ registration)) 0 first count
+def appendDomain (registration : ByteArray) (first count : Nat) : FrameV3.Domain :=
+  FrameV3.Domain.make (sha512 (APPEND_DOMAIN ++ registration)) 0 first count
 
 /-- A pass of a window as the verifier received it: its root, its plan, and the chain over the appends received before
 it (`none` without one). -/
@@ -148,27 +145,11 @@ structure Opening where
   digest : ByteArray
 deriving Inhabited
 
-/-- What rejected a window: its failure and the draw it failed at, `none` for the window as a whole. -/
-structure Rejection where
-  failure : Failure
-  at? : Option (Nat × Nat)
-deriving BEq, Repr, DecidableEq
-
-/-- What a window's check found besides its verdict, all witness: what rejected it, `none` when it accepts. -/
-abbrev Findings := Option Rejection
-
-/-- A window's outcome as `Core.Verdict`, with its findings (`audit.Verdict`): `accept` with none (`Verdict.accept`), or
-`reject` with the failure and the draw it failed at (`Verdict.reject`); never `undecided`. -/
-abbrev Verdict := Findings × Core.Verdict
-
-def Verdict.accept : Verdict := (none, Core.Verdict.accept)
-
-def Verdict.reject (failure : Failure) (at? : Option (Nat × Nat)) : Verdict :=
-  (some ⟨failure, at?⟩, Core.Verdict.reject)
-
-/-- What rejected the window, for a verdict other than `accept`: its findings' rejection, `malformed` when they hold
-none, which no check here gives. -/
-def Verdict.rejection (v : Verdict) : Rejection := v.1.getD ⟨.malformed, none⟩
+/-- A window's outcome: accepted, or the failure and the draw it failed at (`audit.Verdict`). -/
+inductive Verdict
+  | accept
+  | reject (failure : Failure) (at? : Option (Nat × Nat))
+deriving BEq, Repr
 
 /-- `Session.close`'s draws: `min(s, U)` distinct receipts (pass, position) uniform over the window's U receipts, from
 its openings coin, in order. -/
@@ -205,7 +186,7 @@ def checkOpening (reg : Registration) (digest : ByteArray) (appends : Array Appe
       | some a => (Codec.decode o.block j reg.key (some (o.digest, some a.coin)), appendDomain digest a.first a.count, a.root)
       | none => (.error "no append holds the block", reg.payloadDomain, reg.payloadRoot)
   let .ok (some payload) := decoded | return some .codec
-  if !dom.verifyOpening root dom.count j (hidden payload o.payloadSalt) SCHEMA o.payloadPath then return some .payloadPath
+  if !FrameV3.verifyOpening dom root j (hidden payload o.payloadSalt) SCHEMA o.payloadPath then return some .payloadPath
   if receipter.receipt j o.block != y then return some .receipt
   return none
 
@@ -237,7 +218,7 @@ def checkWindowChunked (size : Nat) (reg : Registration) (digest : ByteArray) (a
       checkWindow reg digest appends w (drawn.extract (c * size) ((c + 1) * size))
         (openings.extract (c * size) ((c + 1) * size))
   for t in tasks do
-    if t.get ≠ .accept then return t.get
+    if let .reject f at? := t.get then return .reject f at?
   return .accept
 
 /-- Window t's verdict: its draws from the openings coin, then each opening checked in the order drawn. `none` only if

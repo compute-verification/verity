@@ -110,7 +110,7 @@ theorem rounds_inj {rounds rounds' : Array Round} {vs : Array ByteArray} (h : ro
 
 theorem recordsRoot_ok {session root : ByteArray} {rounds : Array Round} (h : recordsRoot session rounds = .ok root) :
     ∃ vs, rounds.mapM Round.value = .ok vs ∧
-      root = (domain RECORD_BINDING session rounds.size).root
+      root = FrameV3Sha512.root (domain RECORD_BINDING session rounds.size)
         (Tree.leavesOf (domain RECORD_BINDING session rounds.size) vs) := by
   unfold recordsRoot at h
   cases hv : rounds.mapM Round.value with

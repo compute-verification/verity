@@ -1,9 +1,8 @@
 """A scenario: one choice from every layer, and what overhead it gives.
 
-A scenario names a fleet (with its location and dark share), a regime, the NCI policy, a monitoring period (its
-`horizon`), a run (the target and its model), the algorithm families the adversary may use, and the bounds and attacks
-to apply (all of them unless it lists some). Every choice is a registry key (`scenario.<name>.<choice>`), so a sweep
-can vary a choice like any number.
+A scenario names a fleet (with its location and dark share), a regime, the NCI policy, a horizon, a run (the target and
+its model), the algorithm families the adversary may use, and the bounds and attacks to apply (all of them unless it
+lists some). Every choice is a registry key (`scenario.<name>.<choice>`), so a sweep can vary a choice like any number.
 
 `evaluate` gives, for each family, the overhead under each bound alone and under every bound it meets at once (`lo`,
 the lower bound: each block gets the least of the caps whose premises aren't refuted at its bits, under the union of
@@ -103,7 +102,7 @@ def build(registry: Registry, name: str) -> Scenario:
     t = f"scenario.{name}"
     fl = hardware.fleet(registry, registry[f"{t}.fleet"])
     ctx = Context(fl, hardware.location(registry, fl.location), envelopes.policy(registry, registry[f"{t}.policy"]),
-                  hardware.monitoring_period(registry, registry[f"{t}.horizon"]), hardware.units(registry))
+                  hardware.horizon(registry, registry[f"{t}.horizon"]), hardware.units(registry))
     run = instances.run(registry, registry[f"{t}.run"])
     return Scenario(
         name, envelopes.regime(registry, registry[f"{t}.regime"]), ctx, instances.model(registry, run.model), run,

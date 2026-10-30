@@ -20,19 +20,20 @@ import argparse
 import json
 import sys
 from dataclasses import replace
-from math import ceil, log
+from math import ceil, log, log2
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from inputs import (EPILOGUE, I, KEY, MODELS, S8_STEP, SCHEMES, Model, cap, leaf_chain,  # noqa: E402
-                    observations, s8_coord_ands, serve_rows, tree_chain)
+from inputs import (EPILOGUE, I, KEY, MODELS, S8_STEP, SCHEMES, SHA512, Model, leaf_chain, observations,  # noqa: E402
+                    s8_coord_ands, serve_rows, tree_chain)
 
 from verity.core.protocols.sampled_proofs.candidates import Shape, cuts, pressure  # noqa: E402
 from verity.core.protocols.sampled_proofs.costfit import Fitted, fit  # noqa: E402
-from verity.core.protocols.sampled_proofs.optimize import (SHA512_ROWS, Candidate, TensorCommit, CostModel,  # noqa: E402
-                                                           Objective, ReplayDomain, for_budget, for_target, frontier,
-                                                           needs_benchmark, overlaps, perturb, structure, weigh)
+from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
+                                                           ReplayDomain, for_budget, for_target, frontier,
+                                                           needs_benchmark, overlaps, perturb, row_ands, structure,
+                                                           weigh)
 
 DELTA = 2.0 ** -40
 CHUNKS = (2048, 1024, 512, 256, 128, 64, 32)
@@ -53,12 +54,19 @@ def fitted(v: dict) -> Fitted:
                   fit(obs, "stage", ["one", "ands", "ands*staged"]), v["cpu"], KEY)
 
 
+def cap(ands: int) -> int:
+    """A statement's units under m = k_log + nbl <= 35, k_log = ceil(log2 ands) + 1 (the sweep's 25 at 14.8M ANDs and
+    A6's 23 at K = 2048; A6's K = 8192 cap is twice this)."""
+    return 1 << max(0, 35 - (ceil(log2(ands)) + 1))
+
+
 def s8_unit(name: str, length: int, out_bits: int, *, extra_rows: tuple[int, ...], commit_bits: int, bits: int,
             ways=()) -> Shape:
     noise = 2 + 2 * ceil(length * bits / 512)
     rows = (length, length) + extra_rows
-    ands = (length // 32) * S8_STEP + noise * SHA512_ROWS + (EPILOGUE if out_bits == 16 else 0)
-    return Shape(name, ands, length, out_bits, 1, rows, commit_bits, 0.0, cap=cap(ands, rows), ways=ways)
+    ands = (length // 32) * S8_STEP + noise * SHA512 + (EPILOGUE if out_bits == 16 else 0)
+    total = ands + sum(row_ands(r) for r in rows)
+    return Shape(name, ands, length, out_bits, 1, rows, commit_bits, 0.0, cap=min(cap(total), 1 << 20), ways=ways)
 
 
 def linear(k: int, bits: int, chunks=CHUNKS, tiles=((2, 1), (16, 16))) -> Shape:
@@ -71,10 +79,10 @@ def linear(k: int, bits: int, chunks=CHUNKS, tiles=((2, 1), (16, 16))) -> Shape:
     shape = coord
     for r, c in sorted(tiles, key=lambda t: t[0] * t[1]):
         n = r * c
-        tile_ands = n * (coord.ands - (2 + 2 * ceil(k * bits / 512)) * SHA512_ROWS) \
-            + (2 + (r + c) * ceil(k * bits / 512)) * SHA512_ROWS
-        rows = (k,) * (r + c) + (2 * n, 4 * r, 4 * c)
-        shape = Shape(f"S8Tile{{K={k},{r}x{c}}}", tile_ands, n * k, 16 * n, n, rows, 0, 0.0, cap=cap(tile_ands, rows),
+        tile_ands = n * (coord.ands - (2 + 2 * ceil(k * bits / 512)) * SHA512) \
+            + (2 + (r + c) * ceil(k * bits / 512)) * SHA512
+        shape = Shape(f"S8Tile{{K={k},{r}x{c}}}", tile_ands, n * k, 16 * n, n, (k,) * (r + c) + (2 * n, 4 * r, 4 * c),
+                      0, 0.0, cap=min(cap(tile_ands + sum(row_ands(x) for x in (k,) * (r + c))), 1 << 20),
                       parts=((shape, n // (shape.work // k)),))
     return shape
 
@@ -121,7 +129,7 @@ def workload(v: dict, window_rounds: float, m: Model) -> dict:
             "window_gpu_s": v["round"] * window_rounds}
 
 
-def serve(v: dict, m: Model, scheme: str | None, w: dict, *, kv: bool = False) -> tuple[TensorCommit, ...]:
+def serve(v: dict, m: Model, scheme: str | None, w: dict, *, kv: bool = False) -> tuple[Commitment, ...]:
     """The window's serve-time commitments under `scheme` (None: none, a plan's sampling spend alone), each priced at
     `commit_per_byte` (`floor`: its measured B), with its decode bytes and gating chain at a B32 step: one tree a call over
     its leaves, or a tile leaf a call."""
@@ -129,7 +137,7 @@ def serve(v: dict, m: Model, scheme: str | None, w: dict, *, kv: bool = False) -
         return ()
     if scheme == "floor":
         a = (m.hidden + m.heads * m.head_dim + m.hidden + m.intermediate) * w["tokens"] * m.layers
-        return (TensorCommit("floor", "s8 A operands, R = 128 leaves (measured)", a,
+        return (Commitment("floor", "s8 A operands, R = 128 leaves (measured)", a,
                            cost=v["commit_floor"] * w["window_gpu_s"]),)
     rate, step = v["commit_per_byte"], int(v["decode_tokens"])
     out = []
@@ -137,14 +145,14 @@ def serve(v: dict, m: Model, scheme: str | None, w: dict, *, kv: bool = False) -
         per_call = (r.decode or r.nbytes) * step
         chain = CALLS * leaf_chain(r.leaf, r.fmt) if r.tile else leaf_chain(r.leaf, r.fmt) + tree_chain(per_call / r.leaf)
         nbytes = r.nbytes * w["tokens"] * m.layers
-        out.append(TensorCommit(r.scale, r.tensor, nbytes, cost=nbytes * rate, decode_bytes=per_call * m.layers,
+        out.append(Commitment(r.scale, r.tensor, nbytes, cost=nbytes * rate, decode_bytes=per_call * m.layers,
                               chain=chain * m.layers, gates=r.gates))
     receipts = v["remote_receipts"] * v["passes_per_s"] * w["window_gpu_s"]
-    out.append(TensorCommit("remote", "store-block receipts", receipts, cost=receipts * rate))
+    out.append(Commitment("remote", "store-block receipts", receipts, cost=receipts * rate))
     return tuple(out)
 
 
-def model(v: dict, fit_: Fitted, replay_units: int, *, commitments: tuple[TensorCommit, ...] = (), commit: float = 1.0,
+def model(v: dict, fit_: Fitted, replay_units: int, *, commitments: tuple[Commitment, ...] = (), commit: float = 1.0,
           statement: float = 1.0) -> CostModel:
     m = fit_.model()
     m = replace(m, commit_per_bit=v["commit_per_byte"] / 8 * commit, serve=commitments,

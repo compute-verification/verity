@@ -66,7 +66,7 @@ theorem partsChecked_spec {done : Array D} {unit : Nat} (h : partsChecked done u
   obtain ⟨⟨⟨⟨⟨⟨⟨hp, hz⟩, hd⟩, he⟩, ho⟩, hc⟩, hord⟩, hrd⟩ := h
   exact ⟨hp, hz, (distinctFrom_spec _ _ hd).2, he, ho, hc, hord, hrd⟩
 
-variable {types : String → Option CircuitType} {ls : Array BlockLayout} {info : String → Option TableInfo}
+variable {types : String → Option CircuitType} {ls : Array Layout} {info : String → Option TableInfo}
   {words : String → Option (Array Nat)} {unit : Nat} {done : Array D}
 
 /-- **1. A part's region.** Part `(j, b)`'s callee is an earlier layout whose rows are its size; the part holds the rows

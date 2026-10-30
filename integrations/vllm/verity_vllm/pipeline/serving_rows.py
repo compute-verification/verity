@@ -5,7 +5,7 @@ through an opened reader, registered weights for weight slices), committed in M0
 * **In the Commit** (opt-in, ``commit --serving-rows``): the row stage writes a request ``{"dir", "partition", "run",
   "committer"}``, and the in-process C2 replay commits the window after the Commit's roots are final and before its seed (``readers``);
   a Commit whose replay is deferred to its bundle (``--replay-deferred``, not slim) commits it at its C2 site, before the bundle is
-  sealed and before sampling (`c2_replay.serving_rows`). The window is ``served``: its roots are serving's own commitment, made before sampling.  The profile makes no claim that they
+  sealed and any draw (`c2_replay.serving_rows`). The window is ``served``: its roots are serving's own commitment, made before any draw.  The profile makes no claim that they
   hold the values under the Commit's roots.
 * **In a TP Commit** (``tp-commit --serving-rows``, `pipeline.tp.serving_rows`): one ``served`` window per rank, committed in the
   rank's process once every rank's root is final and the TP run root fixed, before the challenge; its run is the TP run root and
@@ -17,9 +17,9 @@ through an opened reader, registered weights for weight slices), committed in M0
 
 The partition file is the verifier's: ``{"templates": [<descriptor id>, ...], "law": "subset:K" | "stratified:K" | "work:K" | {...},
 "query"?: "Q_template_instance" | "Q_template_instances", "scope"?: {"op_path_prefix", "steps"}, "chunk_cap"?: {<descriptor id>:
-cap}, "row_tables"?: true, "partition_digest"?}``.  A ``work:K`` window samples by the work table `work_table_of` derives from the
+cap}, "row_tables"?: true, "partition_digest"?}``.  A ``work:K`` window draws by the work table `work_table_of` derives from the
 registered compiler's transfer-gate templates (`pipeline.advice_windows`): every unit of those is proved (an All stratum), the rest
-sampled as the stratified law samples it.  The members are its templates in order, each instance count read off the Build's
+drawn as the stratified law draws it.  The members are its templates in order, each instance count read off the Build's
 Programs; the population program over them (``ml.windows.population.population_program``: ``TemplatePopulations`` for several
 templates, or for one when the file names ``Q_template_instances``) is the one the verifier builds from the same Programs, and a
 ``partition_digest`` in the file that is not that program's partition is refused, as is any other query (a word partition,
@@ -273,7 +273,8 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
             if counts is not None and counts[k] != n:
                 raise ValueError(f"{t}: {n} units read off the rows, {counts[k]} in their Definitions")
             in_rows, _outs = CR.unit_rows(template(t))
-            outs = (("o0", 1),) if layout == "s8" else IF.layout(template(t).fn).outs
+            outs = (("o0", 1),) if layout == "s8" else tuple((f"o{j}", -(-sum(f.leaf_widths()) // 16))
+                                                             for j, f in enumerate(CR.fields(template(t))))
             schemas = tuple((p, s) for p, s, _b, _ps in in_rows) + tuple((p, CS.SCHEMA_HM96_SHA512_ROW_V2) for p, _w in outs)
             out += [CS.Member(t, tuple((p, b // 16) for p, _s, b, _ps in in_rows), outs, min(cap, n - lo), base + lo, name=f"{t}/c{j}",
                               schemas=schemas)
@@ -381,10 +382,10 @@ def law_of(law: str | Mapping[str, Any]) -> dict[str, Any]:
 def work_table_of(law: Mapping[str, Any], counts: Mapping[str, int], transfer_gates: Sequence[str] = ()) -> dict[str, Any] | None:
     """The verifier's work table (`draw.work_table`) for a window of ``counts`` (template -> its units, in the partition's order)
     under ``law``: under ``work:K``, each transfer-gate template (the units holding transfer gates, which the registered compiler
-    lists) works 0 with its floor all its units, so every one of them is in the sample (`draw.work_k`: selection All, never
-    sampled), and every other template works 1 with floor 1, its sample the stratified law's share of K; None for any other law.
+    lists) works 0 with its floor all its units, so its stratum draws every one of them (`draw.work_k`: selection All, never
+    sampled), and every other template works 1 with floor 1, its draw the stratified law's share of K; None for any other law.
     Refused when the compiler lists transfer gates under another law, when one of its transfer-gate templates is not among the
-    window's (its units would be left out of the proved set), or when every template is one (nothing is sampled: that window's
+    window's (its units would be left out of the proved set), or when every template is one (nothing is drawn: that window's
     selection is all)."""
     tg = list(dict.fromkeys(transfer_gates))
     if law.get("law") != "work":
@@ -396,7 +397,7 @@ def work_table_of(law: Mapping[str, Any], counts: Mapping[str, int], transfer_ga
         raise ValueError(f"the compiler's transfer-gate template {missing[0]} is not among the partition's templates {list(counts)}: "
                          "its units would be left out of the proved set")
     if all(t in tg for t in counts):
-        raise ValueError(f"every template of the window ({list(counts)}) holds transfer gates: nothing is sampled, so its selection is "
+        raise ValueError(f"every template of the window ({list(counts)}) holds transfer gates: nothing is drawn, so its selection is "
                          "all, not a work law")
     return {t: {"work": 0, "floor": int(n)} if t in tg else {"work": 1, "floor": 1} for t, n in counts.items()}
 
@@ -404,7 +405,7 @@ def work_table_of(law: Mapping[str, Any], counts: Mapping[str, int], transfer_ga
 def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any], run_root: str,
                program_dirs: dict[str, str] | None = None, index: Mapping[str, Any] | None = None,
                arrivals: Mapping[str, int] | None = None, context: str = "",
-               reuse: Sequence[ProgramIndex] = (), transfer_gates: Sequence[str] = ()) -> tuple[CS.Binding, list[list[Row]]]:
+               reuse: Sequence[ProgramIndex] = (), transfer_gates: Sequence[str] = ()) -> tuple[CS.Window, list[list[Row]]]:
     """The verifier's window over the run's Programs (``partition``: the partition file's ``templates``, ``law`` and ``scope``) and
     each template's rows; refused when the file names a ``partition_digest`` that is not the window's, or a ``query`` other than the
     template queries.  ``row_tables: true`` in the file: the ``ScaledMmS8Coordinate`` chunks in the row-table layout
@@ -430,7 +431,7 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
     table = work_table_of(law, n_of, transfer_gates)
     if table is not None:
         table = {P.template_id(fn): table[t] for fn, t in zip(defs, tmpls, strict=True)}
-    window = CS.Binding(program, query, law, run_root, tuple(ms), tables, context, table)
+    window = CS.Window(program, query, law, run_root, tuple(ms), tables, context, table)
     want = partition.get("partition_digest")
     if want and want != window.partition_digest:
         raise ValueError(f"the run's population ({', '.join(f'{t} x {n}' for t, n in n_of.items())}) is partition "
@@ -438,7 +439,7 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
     return window, rows
 
 
-def partition_doc(window: CS.Binding, partition: Mapping[str, Any]) -> dict[str, Any]:
+def partition_doc(window: CS.Window, partition: Mapping[str, Any]) -> dict[str, Any]:
     """The partition file as derived: the verifier's templates, law and scope, with the members, the partition object and digest."""
     return {"format": PARTITION_FORMAT, "templates": list(dict.fromkeys(m.template for m in window.members)), "law": window.law,
             "query": window.query["name"], "scope": partition.get("scope"), "members": [[m.key, m.n] for m in window.members],
@@ -448,7 +449,7 @@ def partition_doc(window: CS.Binding, partition: Mapping[str, Any]) -> dict[str,
             "partition_digest": window.partition_digest, "population": window.population}
 
 
-def circuit_record(window: CS.Binding) -> dict[str, Any]:
+def circuit_record(window: CS.Window) -> dict[str, Any]:
     """The window's ``circuit.json`` (`interface.circuit_record`): each chunked template's statement its `chunk_rows.unit_rows`
     and `chunk_rows.reads`, as ``compose_circuit.py --template`` composes it; a template of word rows has none (the verifier's
     input set lowers it)."""

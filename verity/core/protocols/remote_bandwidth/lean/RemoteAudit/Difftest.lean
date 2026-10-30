@@ -348,8 +348,8 @@ def verifyOpeningFn (j : Json) : V Json := do
   if !(binding.size == 32 || binding.size == 64) || owner < -2 || !(root.size == 32 || root.size == 64)
       || path.any fun x => !(x.size == 32 || x.size == 64) then
     throw "not a domain, commitment and opening"
-  let d := FV3.Sha512.Domain.make binding owner (← nat j "start") (← nat j "count")
-  pure (.bool (d.verifyOpening root d.count (← nat j "position") (← hex j "value") (← J.str j "schema" "input") path))
+  let d := FrameV3.Domain.make binding owner (← nat j "start") (← nat j "count")
+  pure (.bool (FrameV3.verifyOpening d root (← nat j "position") (← hex j "value") (← J.str j "schema" "input") path))
 
 def leafReceiptFn (j : Json) : V Json := do
   match leafReceipt (← hex j "leaf") (← nat j "p") (← nat j "positions") with
@@ -658,7 +658,7 @@ private def natsOfN (j : Json) (n : Nat) (ctx : String) : V (Array Nat) := do
   if xs.size ≠ n then throw s!"{ctx}: {n} integers"
   xs.mapM (J.asNat · ctx)
 
-private def blockOf (j : Json) : V Schedule.Chunk := do
+private def blockOf (j : Json) : V Schedule.Block := do
   match j with
   | .null => pure none
   | v =>
@@ -750,23 +750,15 @@ def p2OpeningFn (j : Json) : V Json := do
     | some f => .str f.name
     | none => .null)
 
-/-- A P2 session of record (`P2Session`) on the bytes the verifier reads: `{"registration", "request", "session",
-"not_before_ns", "coins", "chunk", "events"}`, the registration file's bytes and the prover's request line (lowercase
-hex), the auditor's session parameters (`P2Session.Auditor.ofJson`, or `P2Session.SESSION` for null), the session's
+/-- A P2 session of record (`P2Session`) on the bytes the verifier reads: `{"registration", "request", "not_before_ns",
+"coins", "chunk", "events"}`, the registration file's bytes and the prover's request line (lowercase hex), the session's
 2W coins, the draws a thread checks, and its events: `start` and `boundary` `{"now"}`, `close` `{"t", "now"}`, `root`
 `{"t", "i", "now", "line"}` and `openings` `{"t", "line"}` (each line lowercase hex, as the prover sent it), and `fail`.
 The held store (`Held.json`), every event's result (`resultJ`) and the answer (`P2Session.answer`); a registration
-or a request refused is `{"refused": "registration"}` or `{"refused": "request"}`, and a request off the auditor's
-session `{"refused": "request", "reason": why}` (`P2Session.heldTo`'s, `p2_party.params_of`'s words). -/
+or a request refused is `{"refused": "registration"}` or `{"refused": "request"}`. -/
 def p2SessionFn (j : Json) : V Json := do
   let .ok held := P2Session.heldOf (← hex j "registration") | pure (Json.mkObj [("refused", .str "registration")])
-  let auditor ← match ← J.get j "session" "input" with
-    | .null => pure P2Session.SESSION
-    | v => P2Session.Auditor.ofJson v
-  let .ok asked := P2Session.askedOn held (← hex j "request") | pure (Json.mkObj [("refused", .str "request")])
-  let params ← match P2Session.heldTo auditor asked with
-    | .ok p => pure p
-    | .error why => return Json.mkObj [("refused", .str "request"), ("reason", .str why)]
+  let .ok params := P2Session.paramsOf held (← hex j "request") | pure (Json.mkObj [("refused", .str "request")])
   let coins ← hexes j "coins"
   if coins.size ≠ 2 * params.windows || coins.any (·.size ≠ Codec.COIN_BYTES) then throw "2W coins of 32 bytes"
   let chunk ← nat j "chunk"

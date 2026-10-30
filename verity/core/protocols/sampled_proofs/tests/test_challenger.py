@@ -18,7 +18,7 @@ from verity.core.protocols.sampled_proofs import challenger as C
 from verity.ml.crypto import lms
 
 LABEL = "commit"
-HOST = "auditor-1"
+HOST = "vy-nebius-cpu-1"
 
 
 def entropy(seed: str):
@@ -290,7 +290,7 @@ def test_a_commitment_the_prover_supplies_is_refused(tmp_path):
     assert forged.commitment == prover.commitment
     assert C.trusted_reason(key, forged.to_json(), prover.commitment, lms_verify) == unsigned
     assert C.trusted_reason(verifier_key(1), doc, ch.commitment, lms_verify) == unsigned
-    for bad in ({**doc, "host": "auditor-2"}, {**doc, "signature": doc["signature"][:-2]},
+    for bad in ({**doc, "host": "vy-nebius-2"}, {**doc, "signature": doc["signature"][:-2]},
                 {**doc, "commitment": {**doc["commitment"], "epoch": 8}}):
         assert C.record_reason(key, bad, lms_verify) == unsigned
     rewritten_path = tmp_path / "rewritten.json"
@@ -352,76 +352,3 @@ def test_the_key_and_record_forms_round_trip_and_refuse_what_they_dont_read(tmp_
         C.ChallengerRecord.from_json({**rd, "commitment": {}})
     with pytest.raises(C.CoinError, match="an LMS identifier is 16 bytes"):
         C.record_message(b"\x00" * 15, HOST, ch.commitment)
-
-
-# A recursive run's interactive-run record (`RunRecord`), which `flock-verify rec-compose --rec-run` reads: the staging
-# first, every session opened for the run's parts, the close last.  Its reading is the Lean's (`Flock.RecCompose.checkRun`,
-# whose #guards are `Flock/Test/RecCompose.lean`), held to this writer by `verity/ml/flock/tests/test_lean_rec_compose.py`.
-ROWS = "ab" * 64
-SHARED = {"rec_inner": "11" * 64, "inner_draw": None}
-
-
-def key(i: int) -> str:
-    return f"{i:02x}" * 256
-
-
-def run(parts: int = 3) -> C.RunRecord:
-    r = C.RunRecord()
-    r.stage(ROWS, SHARED)
-    for j in range(parts):
-        r.open(f"s{j}", j, key(j))
-    return r
-
-
-def test_a_run_record_is_its_staging_its_sessions_and_its_close(tmp_path):
-    r = run()
-    doc = r.close()
-    assert doc == {"kind": C.RUN_KIND, "events": [
-        {"event": "stage", "rec_rows_sha512": ROWS, "rec_shared": SHARED},
-        *({"event": "open", "session": f"s{j}", "rec_part": j, "coin_key": key(j)} for j in range(3)),
-        {"event": "close"}]}
-    r.write(tmp_path / "run.json")
-    assert json.loads((tmp_path / "run.json").read_text()) == doc
-
-
-def test_a_retried_part_is_logged_never_hidden():
-    """The challenger logs every session it opens for the run's parts, a retry's as any other's: a part with two
-    sessions is in the record twice, for `rec-compose` to refuse."""
-    r = run(2)
-    r.open("s1-retry", 1, key(9))
-    assert [e.get("rec_part") for e in r.close()["events"]] == [None, 0, 1, 1, None]
-
-
-def test_a_run_record_refuses_what_would_not_be_one_run(tmp_path):
-    with pytest.raises(C.CoinError, match="only after the run's statements are staged"):
-        C.RunRecord().open("s0", 0, key(0))
-    with pytest.raises(C.CoinError, match="closes after its staging"):
-        C.RunRecord().close()
-    r = run(1)
-    with pytest.raises(C.CoinError, match="staged once, before its first session's Hello"):
-        r.stage(ROWS, SHARED)
-    with pytest.raises(C.CoinError, match="already in the run's record"):
-        r.open("s0", 1, key(1))
-    with pytest.raises(C.CoinError, match="never reused"):
-        r.open("s1", 1, key(0))
-    with pytest.raises(C.CoinError, match="written once it is closed"):
-        r.write(tmp_path / "run.json")
-    r.close()
-    with pytest.raises(C.CoinError, match="no session opens after it"):
-        r.open("s1", 1, key(1))
-    with pytest.raises(C.CoinError, match="closed once"):
-        r.close()
-
-
-@pytest.mark.parametrize("session, part, coin_key", [("", 0, key(0)), ("a/b", 0, key(0)), ("s", -1, key(0)),
-                                                      ("s", True, key(0)), ("s", 0, key(0)[:-2]),
-                                                      ("s", 0, key(10).upper())])
-def test_a_session_out_of_its_form_is_refused(session, part, coin_key):
-    with pytest.raises(C.CoinError):
-        run(0).open(session, part, coin_key)
-
-
-@pytest.mark.parametrize("rows, shared", [(ROWS[:-2], SHARED), (ROWS.upper(), SHARED), (ROWS, [SHARED])])
-def test_a_staging_out_of_its_form_is_refused(rows, shared):
-    with pytest.raises(C.CoinError, match="^a staging is"):
-        C.RunRecord().stage(rows, shared)

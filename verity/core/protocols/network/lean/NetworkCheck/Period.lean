@@ -2,7 +2,6 @@ import NetworkCheck.Check
 import CoreProtocol.Profile
 import Flock.Program
 import Flock.Public
-import Flock.WindowRecord
 import NciCheck.Desc
 
 /-!
@@ -15,15 +14,12 @@ workload). Its link-windows come in one of two forms, which the parameters name:
 * **the clock form**: N2's link-windows (`service.LinkWindows`, Selection `All`), each proved, both its ends certified
   and its clock certified;
 * **the rows form**: the network certifier's own run, where it functions as an active warden (`warden_serve`): each
-  execution phase's cells committed as rows (`warden_rows`), one registration a direction under one fixed schedule, its
+  link-window's cells committed as rows (`warden_rows`), one registration a direction under one fixed schedule, its
   three records certified, and the scan's one-stage answer for the window (`scan_zk --warden-run`).
 
-It accepts when every execution phase passes its form's check and every compute audit accepted; it then publishes `K`, the
+It accepts when every link-window passes its form's check and every compute audit accepted; it then publishes `K`, the
 bits a covert sender in the server can move through the network certifier in the period, as
-`NetTiming.Guarantees.PeriodLeakAccepted` counts them. In the rows form each link-window's scan's Programs' row must be a
-compute audit's slot entries (`wired`, below), and the state that audit's Programs read (its `SCAN_STATE`) the scan's
-state, by root and domain (`stateTied`), so a slot's entry is the one its Program computed on the requests the scan
-read.
+`NetTiming.Guarantees.PeriodLeakAccepted` counts them.
 
 **Params**, JSON with exactly these keys (and each nested object exactly its own), in the clock form
 
@@ -33,8 +29,8 @@ read.
 
 each compute audit's layout terms (`free`, the free inputs it doesn't register, `#(freeInputs \ reg)`; `steps`, its
 monitoring period `k`) and its Program, the descriptor (`verity-ir/descriptor/v1`) of the window's population program,
-which must decode (`Flock.Program.decode`) with a template in its root: the audit's proof blocks are the root's template
-instances, and each commits its template's return, the outputs it computes that other proof blocks or the client read, which
+which must decode (`Flock.Program.decode`) with a template in its root: the audit's units are the root's template
+instances, and each commits its template's return, the outputs it computes that other units or the client read, which
 can be wider than a proof unit's 16-bit public output; each network certifier connection's cell cap over the period
 (`cap_c`), the session's window
 the period starts at (`w₀`: its link-windows are the session's `w₀ … w₀ + m − 1`, so one certifier session spans many
@@ -50,7 +46,7 @@ The rows form has, in place of `sync_set`,
 
 the scan's Program, its descriptor (`verity-ir/descriptor/v1`, `scan_zk`'s `program.json`), and the network
 certifier's one fixed schedule (`warden.WardenParams`: each a positive integer, B = `cell_bytes` past a cell's 9-byte
-header, B, S = `lanes` · `slots` and T = `window` u32s, and `every`, a slot stride's buckets, dividing T, so each
+header, B, S = `lanes` · `slots` and T = `window` u32s, and `every`, a timestep's buckets, dividing T, so each
 link-window is T / `every` timesteps of `lanes` Program slots, `Schedule.programSlots` and `Schedule.windowPrograms`),
 whose digest `WardenParams.digest` every registration binds; its `program` is the scan's registered Program, the
 descriptor's SHA-512 (`partition_object.program_sha512`), and its `link` the run's (`warden_serve.LINK`), whose fails record is certified under the link `<link>-fails`. The
@@ -64,12 +60,11 @@ egress gate is an input (`NetTiming.Layout.Fits`), so `K` counts only what a Pro
 leaves free. The rest of what `NetTiming.Layout.Fits` asks is read off the description (`scanOf`): the Program laid out
 as the decoder lays one out and within its resolution's walk (`NciCheck.Desc`), every egress leaf returned by the root
 and computed by the egress template, and every template's argument one input node's leaves, no egress template's an
-ingress row's. In the rows form a compute audit's free inputs are in the term of each link-window whose scan's `prog`
-is its output (`tiedAudits`), and its other layout terms and its units' bits are in no term; their Programs are checked
-as in the clock form.
+ingress row's. In the rows form the compute audits' layout terms and their units' bits are in no term; their Programs
+are checked as in the clock form.
 
 **Commitment**, canonical JSON `{"audits": [registration, …], "windows": [registration, …]}`: one-stage's registration
-record of each compute audit and of each execution phase, in order, each of format `verity/registration/v1` or `v2`. Its
+record of each compute audit and of each link-window, in order, each of format `verity/registration/v1` or `v2`. Its
 digest is `tagged_sha512("verity-network-certifier/period/v0", the commitment's bytes)`, and each registration's is
 one-stage's, SHA-512(format ‖ 0 ‖ canonical record) (`registration.digest`).
 
@@ -88,8 +83,8 @@ in the clock form, and in the rows form each link-window
             "row_schema", "rows", "value", "window", "wiring", "word_bits", "words"}
 
 the requests', responses' and fails' records' certificates (`certified.jsonl`'s), and the ingress and the egress rows'
-registrations (`warden_rows.registration`, `cells.jsonl`'s); an execution phase of the other form than the parameters'
-is refused.
+registrations (`warden_rows.registration`, `cells.jsonl`'s); a link-window of the other form than the parameters' is
+refused.
 
 In the clock form: each audit's and each link-window's one-stage answer (`Core.Answer.ofJson`), and per link-window
 the two certificates (`certificate.Certificate`, egress first) and the clock certificate the certifier, the auditor's
@@ -119,39 +114,16 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   certificate is refused, and the network certifier certifies no record of a link-window in which it refused a
   connection (traffic past the window's Program slots, `warden`'s "Admission"), so such a link-window is refused; its two registrations, ingress then egress, are what `warden_rows.check_registration` reads:
   the link-window's value, link, end and window, the schedule's digest (a registration under another schedule is
-  refused), the schedule's rows, words, word bits, row format and layout, the execution phase's domain in the session
+  refused), the schedule's rows, words, word bits, row format and layout, the link-window's domain in the session
   (`warden_rows.domain`), and a certificate that is the key's, signs the head (`CellsHead.digest`) and verifies in the
   session (a registration not under the deployment key is refused); the scan's registration holds both, an entry of its
   `roots` or `registered` naming each one's root and domain, which bind the session, link, end and window (an answer
-  for another window's rows is refused); its Programs' row is a compute audit's output (`progTied`): its `scan/prog`
-  entry names the root and domain of an output port's entry (`<unit>/o<j>`, j ≥ 1) or a `SlotEntry_v1` template's
-  entries port's (`<descriptor id>/c0/o0`, `entriesPortName`) in the `roots` of an audit's registration, so a scan
-  whose `prog` the prover committed alone is refused; and the answer is one-stage's for that
-  registration's digest, accepted with one level of the scan's 2T units drawn `subset:k` or stratified, and its
-  `bound`;
+  for another window's rows is refused); and the answer is one-stage's for that registration's digest, accepted with
+  one level of the scan's 2T units drawn `subset:k` or stratified, and its `bound`;
 * in the rows form, every accepted link-window's scan is at one δ, `PeriodLeakAccepted`'s;
 * audit `i`: its registration names its Program (the descriptor's SHA-512), and the answer is one-stage's for its
   registration's digest, accepted with one level of its Program's units drawn `subset:k` or stratified (a work law's
-  draw is stratified), and its `bound`; in the rows form, an audit tied to a link-window's scan (`tiedIn`: some
-  link-window's `prog` is its output) is refused unless every unit is drawn (`Σ k = N`), as `K` charges no faulty term
-  for it;
-* in the rows form, link-window `w`'s scan's Programs' row is a compute audit's slot entries (`wired`): its `scan/prog`
-  entry names the root and domain of the entries port `<descriptor id>/c0/o0` in the `roots` of an audit's
-  registration, where the descriptor id is a template node's of that audit's own Program calling `SlotEntry_v1`, a
-  Definition the check pins by closure digest (`slotEntryPins`: a template under that name with another body is
-  refused), with one member a slot of the window (T / `every` · `lanes`), so each due, occupied slot's entry, read bit
-  included, is
-  the one its Program computed, not the prover's word, which with read 1 and no outputs would pass for a request no
-  Program reads (`Properties.NetworkPeriod.RowsProgWired`);
-* in the rows form, link-window `w`'s scan's state is the `SCAN_STATE` of an audit its `prog` is wired to
-  (`stateTied`): the scan's registration has an entry of its `roots` whose port is `scan/state` or of its `registered`
-  whose value is `verity/certifier/scan-state/v1`, every such entry at one root and domain, and so has a `wired`
-  audit's registration, every such entry at that root and domain. The scan's ingress unit t reads `sin` as that root's
-  row t and registers its `o1` as row t + 1, so each row past row 0 is the state the scan's transition computed from
-  the row before it, the prover's word for none; row 0 is the empty state, which no unit reads, and only the Programs
-  anchored at bucket 0 read it, whose entries the scan reads for no slot, since its state before bucket 0 has none
-  occupied. A slot's Program anchored at bucket a reads row a, the scan's state before a, so it computes its entry on
-  the requests the scan read, not on a state the prover chose (`Properties.NetworkPeriod.RowsStateTied`).
+  draw is stratified), and its `bound`.
 
 **Public**, on acceptance: `K` and its terms, each a ceiling of `log2` of `PeriodLeakAccepted`'s factor:
 
@@ -159,24 +131,18 @@ against that salted digest is a later change to its circuit (the certifier PROTO
                          "wrong_units": b}, …],
      "cells": Σ_c ⌈log2 (cap_c + 1)⌉, "eps": Σ_i δ_i, "schedules": ⌈log2 #Σ_sync^m⌉, "windows": m}
 
-with `b` the audit's bound on faulty proof blocks at its δ (one-stage's `bound`, `Bound.boundOf`), `faulty_sets` =
-`⌈log2 Σ_{j ≤ b} C(N, j)⌉` (every set of at most `b` proof blocks, which holds the sets a `subset:k` or a stratified
-sample leaves possible; `drawn` is the sample's `k`, or its `Σ k` stratified),
-`faulty_bits` = `b · bits`, with `bits` the most one of its Program's proof blocks commits (its template's return,
-`bitsOf`: the committed values `faultyBits` counts, the outputs a faulty proof block computes and other proof blocks or
-the client read), `jitter` = `⌈log2 Dj^steps⌉`, and `K` the sum of the terms. The schedules term counts every assignment
-of a sync of Σ_sync to the `m` execution phases, so it is the same whichever syncs the certifier ran them under, and
-needs none of them. `eps` is the probability that `K` fails to bound the period's leak, the union of its audits' `δ`:
-their exact sum in lowest terms (`Core.Ratio.toString`, `"0"` with no audits), as PoUS's and remote bandwidth's publics
-carry theirs.
+with `b` the audit's bound on wrong units at its δ (one-stage's `bound`, `Bound.boundOf`), `faulty_sets` =
+`⌈log2 Σ_{j ≤ b} C(N, j)⌉` (every set of at most `b` units, which holds the sets a `subset:k` or a stratified draw leaves
+possible; `drawn` is the draw's `k`, or its `Σ k` stratified),
+`faulty_bits` = `b · bits`, with `bits` the most one of its Program's units commits (its template's return, `bitsOf`:
+the committed values `faultyBits` counts, the outputs a wrong unit computes and other units or the client read),
+`jitter` = `⌈log2 Dj^steps⌉`, and `K` the sum of the terms. The schedules term counts every assignment of a sync of
+Σ_sync to the `m` link-windows, so it is the same whichever syncs the certifier ran them under, and needs none of them.
+`eps` is the probability that `K` fails to bound the period's leak, the union of its audits' `δ`: their exact sum in
+lowest terms (`Core.Ratio.toString`, `"0"` with no audits), as PoUS's and remote bandwidth's publics carry theirs.
 
 In the rows form the terms are `PeriodLeakAccepted`'s over its windows, the link-windows' scans, whose statements read
-the network certifier's rows. A compute audit reads none, so its own terms are in none (it is an acceptance condition),
-but the free inputs of each audit a scan's `prog` is an output of are in that scan's link-window's term: the egress
-renders the audit's outputs, so the bits the prover chose of its inputs are the egress's to leak. A wrong unit of such
-an audit would leak through the egress too, and no term charges one: the check refuses a tied audit with any unit
-undrawn (`Properties.NetworkPeriod.RowsTiedDrawn`), and a tied audit's `faulty_bits` and the audit's δ in `eps` come
-with the change that ties a compute audit drawn in part and lifts that refusal:
+the network certifier's rows; the compute audits read none, so they are in no term (they are acceptance conditions):
 
     {"K": K, "audits": [{"delta", "drawn", "units", "wrong_units"}, …], "cells": c, "eps": m · δ,
      "scans": [terms, …], "schedules": c, "windows": m}
@@ -187,17 +153,15 @@ with the change that ties a compute audit drawn in part and lifts that refusal:
   admits a queued connection at the first lane that frees, in the clients' arrival order, so the admissions are a
   function of the lengths, and `#Ss ≤ ∏_c (cap_c + 1)`. The second factor is the fail cell's position (`failCell`). A
   failed lane ends at its fail cell, so in a run the two coincide; `K` charges the product as the statement states it.
-* each scan's terms, from the scan's Program and its tied audits: `free` the parameters' `free` of the audits its
-  `prog` is an output of, summed (`tiedAudits`, each once; the scan's own is 0, as it registers the rows, its `prog` is
-  those audits' output, and bucket 0 starts from the empty state, constants of `IngressScanFirst`: the egress tie
-  moves the free term from the scan's `prog` to the tied audit's inputs), `steps` T, `faulty_bits`
+* each scan's terms, from the scan's Program: `free` T times the ingress templates' `prog` bits (the scan registers
+  the rows, and bucket 0 starts from the empty state, constants of `IngressScanFirst`), `steps` T, `faulty_bits`
   `b · max(b_ing, b_eg)` with `b_ing` an ingress instance's return bits (its verdict u16, state and view) and `b_eg` an
   egress instance's (its u16 and row): each instance's committed values (`faultyBits`), the outputs it computes and
-  other proof blocks or the client read. `b` is its answer's `bound` (over its sample's strata, `countBound`), 0 when every
+  other units or the client read. `b` is its answer's `bound` (over its draw's strata, `countBound`), 0 when every
   unit is drawn, `drawn` its draw's `Σ k`, and `faulty_sets` every set of at most `b` of its 2T units, which holds the
   sets a stratified draw leaves possible too.
 * `eps` is the scans' δ summed, `m · δ`: the δ part of the union over the monitoring period's windows that
-  `CommOfPeriodLeakAccepted` states, each window at δ plus its knowledge error and its collision errors.
+  `CommOfPeriodLeakAccepted` states, `n · (δ + ε_ks + ε_bind)`.
 
 **Profile**: the link and `m`.
 
@@ -208,11 +172,6 @@ rows (each signs its salted record, witness) and the scan's statements against i
 verifier of record checks inside the answer, and each connection's cap against its lane (the parameters' `cells`; the
 network certifier holds a lane to `egress_cells`); and that the audits' answers are the sampled-proofs component's own,
 which the composition's theorem is to bind.
-
-**The clock openings**, apart from the period's check: `clocksFn`, `network-records verdicts`' `clocks`, reads the
-syncs the certifier signed for a link through its salted clock certificates' openings, each sync and salt against the
-digest its certificate signs (`certificate.SignedClocks`, `signedSyncs`). The certifier chain's record takes each
-window's sync from it, with `certificate.SignedClocks` beside it as the reference (`lean_audit.signed_clocks`).
 -/
 
 namespace NetworkCheck.Period
@@ -242,18 +201,15 @@ def failReasons : List String := ["late", "limit", "upstream", "ingress", "malfo
 def cellHeader : Nat := 9
 
 /-- A compute audit's layout terms, its free inputs it doesn't register and its monitoring period, and what its Program
-gives: its SHA-512, its units (its root's template instances), the most bits one of them commits, and its slot entries'
-templates (`entries`: each root template node calling a `SlotEntry_v1` Definition, by its descriptor id, members and
-closure digest, `slotEntryDigest`). -/
+gives: its SHA-512, its units (its root's template instances) and the most bits one of them commits. -/
 structure Audit where
   free : Nat
   steps : Nat
   program : String
   units : Nat
   bits : Nat
-  entries : Array (String × Nat × String)
 
-/-- The network certifier's schedule when it functions as an active network certifier (`warden.WardenParams`). -/
+/-- The network certifier's schedule when it functions as an active warden (`warden.WardenParams`). -/
 structure Schedule where
   bucketMs : Nat
   cellBytes : Nat
@@ -270,15 +226,14 @@ structure Schedule where
 /-- S = lanes · r, a row's slots. -/
 def Schedule.allocation (s : Schedule) : Nat := s.lanes * s.slots
 
-/-- A slot stride's Program slots, one a lane (`WardenParams.program_slots`). -/
+/-- A timestep's Program slots, one a lane (`WardenParams.program_slots`). -/
 def Schedule.programSlots (s : Schedule) : Nat := s.lanes
 
-/-- A window's Program slots: T / `every` slot strides of `programSlots` (`WardenParams.window_programs`). -/
+/-- A window's Program slots: T / `every` timesteps of `programSlots` (`WardenParams.window_programs`). -/
 def Schedule.windowPrograms (s : Schedule) : Nat := s.window / s.every * s.programSlots
 
-/-- The scan's terms, read off its Program: its monitoring period (`T`, the window's buckets), its own free inputs
-(none: it registers the rows, and its `prog` is a compute audit's output, `progTied`, whose free inputs a link-window's
-term counts, `tiedAudits`), and the bits one ingress and one egress instance commit (its return: the outputs other
+/-- The scan's terms, read off its Program: its monitoring period (`T`, the window's buckets), its free inputs (`T`
+ingress instances' `prog`), and the bits one ingress and one egress instance commit (its return: the outputs other
 units read or the client receives, and its verdict). -/
 structure Scan where
   steps : Nat
@@ -315,14 +270,14 @@ structure Commitment where
   windows : Array Registration
   bytes : ByteArray
 
-structure BucketSchedule where
+structure Layout where
   buckets : Nat
   slots : Nat
   connectionSlots : Nat
   firstBucket : Nat
   deriving BEq
 
-/-- An execution phase's rows in one direction, as `warden_rows.registration` writes them. -/
+/-- A link-window's rows in one direction, as `warden_rows.registration` writes them. -/
 structure Rows where
   format : String
   value : String
@@ -338,7 +293,7 @@ structure Rows where
   domain : String
   wiring : ByteArray
   root : ByteArray
-  layout : BucketSchedule
+  layout : Layout
   key : ByteArray
   digest : ByteArray
   signature : ByteArray
@@ -363,7 +318,7 @@ structure Evidence where
   audits : Array Core.Answer
   windows : Array Window
 
-/-- What an accepted audit establishes: its proof blocks, its sample, its δ, and its bound on faulty proof blocks. -/
+/-- What an accepted audit establishes: its units, its draw, its δ, and its bound on wrong units. -/
 structure Facts where
   units : Nat
   drawn : Nat
@@ -426,10 +381,9 @@ def Schedule.digest (s : Schedule) : V ByteArray :=
 
 /-- The scan's templates' parameters in the generator form: bucket 0's (`ingress_scan.IngressScanFirst`, from the empty
 state), each later ingress bucket's (`ingress_scan.IngressScanBucket`) and the egress bucket's (`egress.EgressBucket`),
-which computes its row and returns it. An ingress bucket's `prog<j>` is lane `j`'s slot entry, one a lane. -/
-def progParams (lanes : Nat) : Array String := (Array.range lanes).map (s!"prog{·}")
-def firstParams (lanes : Nat) : Array String := #["row"] ++ progParams lanes
-def ingressParams (lanes : Nat) : Array String := #["row", "sin"] ++ progParams lanes
+which computes its row and returns it. -/
+def firstParams : Array String := #["row", "prog"]
+def ingressParams : Array String := #["row", "sin", "prog"]
 def egressParams : Array String := #["state"]
 
 /-- A type's bits: its leaves' widths summed. -/
@@ -489,86 +443,12 @@ def ingressTemplates : List (Flock.Program.Node × Flock.Program.Defn) →
   | _ => throw "scan: not the generator form's templates: bucket 0's, the later ingress buckets' and the egress \
     bucket's"
 
-/-- The slot entry's Definition (`io_shell.SlotEntry_v1`): one unit a due, occupied slot's Program, committing the
-entry the scan's ingress reads at that slot (its `o0`). -/
-def slotEntryId : String := "SlotEntry_v1"
-
-/-- A Definition's descriptor entry `e` with the descriptor's interning resolved (`callees`, `types`): each node's
-callee id (`fn`), output type (`out`) and argument types inline, as `annotations.definition_digest` hashes it, so one
-Definition has one entry in any Program. -/
-def resolvedEntry (callees types : Array Json) (e : Json) : Json :=
-  let set := fun (j : Json) (k : String) (v : Json) => match j with
-    | .obj kvs => Json.obj (kvs.insert k v)
-    | j => j
-  let at_ := fun (xs : Array Json) (i : Json) => match i.getNat? with
-    | .ok i => xs.getD i .null
-    | .error _ => .null
-  match e.getObjValD "form", e.getObjValD "body" with
-  | .str "composite", body => match body.getObjValD "nodes" with
-    | .arr nodes => set e "body" (set body "nodes" (.arr (nodes.map fun n =>
-        let args := match n.getObjValD "args" with
-          | .arr xs => Json.arr (xs.map fun a => set a "type" (at_ types (a.getObjValD "type")))
-          | x => x
-        set (set (set n "fn" (at_ callees (n.getObjValD "fn"))) "out" (at_ types (n.getObjValD "out"))) "args" args)))
-    | _ => e
-  | _, _ => e
-
-/-- `annotations.definition_digest`: the SHA-512, in hex, of a Definition's canonical `resolvedEntry`. -/
-def definitionDigest (callees types : Array Json) (e : Json) : V String := do
-  pure (Flock.hexOf (Flock.Sha512.hash (← Flock.canon (resolvedEntry callees types e)).toUTF8))
-
-/-- The closure digest of Definition `key` of the Program whose descriptor is `j`: the SHA-512, in hex, of the
-canonical JSON object that maps each Definition `key` reaches (itself, its nodes' callees, theirs, …), by descriptor
-id, to its `definitionDigest`. It digests the template's whole body, so another Definition under its id has another
-digest. -/
-def slotEntryDigest (j : Json) (key : String) : V String := do
-  let defs := j.getObjValD "definitions"
-  let tab := fun (k : String) => match j.getObjValD k with | .arr xs => xs | _ => #[]
-  let (callees, types) := (tab "callees", tab "types")
-  let nodesOf := fun (e : Json) => match (e.getObjValD "body").getObjValD "nodes" with | .arr xs => xs | _ => #[]
-  let fuel := match defs with
-    | .obj kvs => kvs.foldl (fun n _ e => n + (nodesOf e).size) 1
-    | _ => 1
-  let mut seen : Array (String × Json) := #[]
-  let mut todo : List String := [key]
-  for _ in [0:fuel] do
-    match todo with
-    | [] => break
-    | k :: rest =>
-      todo := rest
-      if seen.any (·.1 == k) then continue
-      let e := defs.getObjValD k
-      if let .null := e then throw s!"program: {key} reaches {k}, no Definition of its descriptor"
-      seen := seen.push (k, .str (← definitionDigest callees types e))
-      if e.getObjValD "form" == .str "composite" then
-        for n in nodesOf e do
-          match (n.getObjValD "fn").getNat?.toOption.bind (callees[·]?) with
-          | some (.str c) => todo := c :: todo
-          | _ => throw s!"program: {k}: a node's callee is outside callees"
-  unless todo.isEmpty do throw s!"program: {key}'s callees outrun its descriptor's nodes"
-  pure (Flock.hexOf (Flock.Sha512.hash (← Flock.canon (Json.mkObj seen.toList)).toUTF8))
-
-/-- The slot entry's Definitions the check takes, by closure digest (`slotEntryDigest`): `io_shell.SlotEntry_v1` at
-its circuit-check rows, `SlotEntry_v1{KO=2,IDB=17,NP=4,STOP=[]}` and `SlotEntry_v1{KO=64,IDB=17,NP=1024,STOP=[128001]}`
-(a Llama-3 tokenizer's 17-bit ids and end-of-text id), in that order. A template under `SlotEntry_v1`'s name with
-another body has neither digest, so its entries are no slot entries (`wired`); a new binding or body of `SlotEntry_v1`
-is pinned here. -/
-def slotEntryPins : List String :=
-  ["8c8a033047ec49110114023204a9c265720ae9d1b63963c51a98e14f0314ebd3\
-    7b741b90d6a374aeb681a1a5fe364580b68ff60cf5514fdf57fdaff88b36de30",
-   "2559f1c8e260aac6e8755c317cde07f990fcd3619dd394010d367a3b78156c2f\
-    24b44567891a9ea2efb2f8a6830c9f9c957c14dc65041f8dd77bfd8d50c5b7ff"]
-
-#guard slotEntryPins.all (·.length == 128)
-
 /-- A compute audit's layout terms and its Program, from the Program's descriptor (`Flock.Program.decode` of its
 canonical bytes): its units are its root's template instances, each committing its template's return; a root with no
-template is refused. Its slot entries' templates are its root's template nodes whose Definition is `SlotEntry_v1`, each
-with its closure digest (`slotEntryDigest`). -/
+template is refused. -/
 def auditOf (a : Json) (ctx : String) : V Audit := do
   exactly a ["free", "program", "steps"] ctx
-  let pj ← Flock.J.get a "program" ctx
-  let prog ← match Flock.Program.decode (← Flock.canon pj).toUTF8 with
+  let prog ← match Flock.Program.decode (← Flock.canon (← Flock.J.get a "program" ctx)).toUTF8 with
     | .ok prog => pure prog
     | .error e => throw s!"{ctx}: program: {e}"
   let some root := prog.defs[prog.root]? | throw s!"{ctx}: program: no root"
@@ -576,38 +456,14 @@ def auditOf (a : Json) (ctx : String) : V Audit := do
     | some d => if d.prim then none else some (x.members, bitsOf d.ret)
     | none => none
   if templates.isEmpty then throw s!"{ctx}: program: no template"
-  let slots := root.body.nodes.filterMap fun x => match prog.defs[x.fn]? with
-    | some d => if !d.prim && d.id == slotEntryId then some (d.key, x.members) else none
-    | none => none
-  let entries ← slots.mapM fun (k, n) => do
-    pure (k, n, ← (slotEntryDigest pj k).mapError (s!"{ctx}: " ++ ·))
   pure { free := ← Flock.J.nat a "free" ctx, steps := ← Flock.J.nat a "steps" ctx, program := Flock.hexOf prog.sha512,
-         units := templates.foldl (· + ·.1) 0, bits := templates.foldl (fun b t => max b t.2) 0, entries }
-
-/-- Whether a batch node of ingress buckets `t0, t0 + 1, …` reads the slot entries at their slots: for each lane `j`
-and member `m` (bucket `t0 + m`), its argument `o + j` (`prog<j>`) is row `j · nb + ⌊(t0 + m) / every⌋` of input node
-`k`, `E` leaves a row, leaf by leaf (`Flock.Program.Arg.memberRef`). That row is lane `j`'s slot of the boundary whose
-Programs bucket `t0 + m` reads (`io_shell.SlotEntry_v1`'s row k is slot k, lane-major). -/
-def readsEntries (x : Flock.Program.Node) (o t0 lanes nb every E k : Nat) : Bool :=
-  (List.range lanes).all fun j => match x.args[o + j]? with
-    | some a => (List.range x.n).all fun m => (List.range E).all fun l =>
-        a.memberRef m l == { p := false, i := k, j := (j * nb + (t0 + m) / every) * E + l }
-    | none => false
-
-/-- A batch of 3 members whose argument 1 reads leaf `rows[m]` of node 7 at member `m`, one leaf a member. -/
-def entriesProbe (rows : List Nat) : Flock.Program.Node :=
-  let arg := fun (rs : List Nat) => Flock.Program.Arg.mk (.value 1)
-    (.ofParts (rs.toArray.map fun r => Flock.Program.Part.affine false 7 r 1)) (some (rs.length, 1))
-  Flock.Program.Node.mk .batch 0 #[arg [0, 0, 0], arg rows] (.value 1) #[] 3 0
-
-#guard readsEntries (entriesProbe [0, 1, 1]) 1 1 1 2 2 1 7 && !readsEntries (entriesProbe [0, 1, 0]) 1 1 1 2 2 1 7 &&
-  !readsEntries (entriesProbe [0, 1, 1]) 1 1 2 2 2 1 7 && !readsEntries (entriesProbe [0, 1, 1]) 1 1 1 2 2 1 6
+         units := templates.foldl (· + ·.1) 0, bits := templates.foldl (fun b t => max b t.2) 0 }
 
 /-- The scan's terms from its Program's descriptor (`Flock.Program.decode` of its canonical bytes), which must be the
-registered Program (`program`, its SHA-512) and the generator form of the schedule's execution phase: its root batches
-one instance of bucket 0's template, `T - 1` of the later ingress buckets' (no such template when `T = 1`), both
-returning the same and each one's `row` the schedule's row (`S · B` bytes), then `T` of the egress template, which
-returns a u16 and the schedule's row, and every input gate is a template's parameter. The types are the Boolean profile's, as the
+registered Program (`program`, its SHA-512) and the generator form of the schedule's link-window: its root batches one
+instance of bucket 0's template, `T - 1` of the later ingress buckets' (no such template when `T = 1`), both returning
+the same and each one's `row` the schedule's row (`S · B` bytes), then `T` of the egress template, which returns a u16
+and the schedule's row, and every input gate is a template's parameter. The types are the Boolean profile's, as the
 scan's Definitions have them: a byte 8 bits, a u16 16. An egress template with a row among its parameters, the checker
 form, is refused first, by name: there the egress row is an input gate, which `NetTiming.Layout.Fits` refuses, and `K`
 would count the free inputs of a Program that only compares its egress rows.
@@ -617,15 +473,10 @@ the description, at the cost of its nodes and returns: the Program is laid out a
 within what its resolution walks (`NciCheck.Desc`'s `rootLaidOut`, `inputsAtRoot` and `walkable`); the root returns
 every egress leaf (one affine run from the egress node's first leaf over all `T` instances'); the egress template
 returns only gates it computes (`ownReturns`: no parameter's leaf passed through, so no egress gate is an input); each
-ingress template's row, and every template's row, state and egress argument, is one input node's leaves (`inputArg`),
-so each ingress gate is an input and a template reads only input gates outside its own; no egress template's argument
-is an ingress row's input node, so no egress gate depends on an ingress gate; and the Program is topological
-(`Prog.orderViolation`, as `NciCheck.Desc.evaluate` checks it), so a gate reads only gates before it.
-
-The ingress templates' entry ports `prog<j>` all have one type, a slot entry's, and read one input node of their own,
-the slot entries (`lanes · T / every` rows, counted once among the input gates): bucket `t`'s `prog<j>` is its row
-`j · T / every + ⌊t / every⌋` (`readsEntries`), the row the period check's `wired` holds to an audit's
-`SlotEntry_v1` entries port. -/
+ingress template's row, and every template's argument, is one input node's leaves (`inputArg`), so each ingress gate is
+an input and a template reads only input gates outside its own; no egress template's argument is an ingress row's
+input node, so no egress gate depends on an ingress gate; and the Program is topological (`Prog.orderViolation`, as
+`NciCheck.Desc.evaluate` checks it), so a gate reads only gates before it. -/
 def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
   let prog ← (Flock.Program.decode (← Flock.canon j).toUTF8).mapError fun e => s!"scan: {e}"
   need (Flock.hexOf prog.sha512 == program) "scan: its SHA-512 is not the registered Program's (program)"
@@ -637,9 +488,9 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
   need (!de.params.any (fun p => p.1 == "row" || p.2 == row)) "scan: the egress template takes its row as an input \
     (the checker form): no egress gate is an input (NetTiming.Layout.Fits)"
   let ((xf, df), later) ← ingressTemplates templates.pop.toList
-  need (df.params.map (·.1) == firstParams s.lanes && later.all (·.2.params.map (·.1) == ingressParams s.lanes) &&
+  need (df.params.map (·.1) == firstParams && later.all (·.2.params.map (·.1) == ingressParams) &&
       de.params.map (·.1) == egressParams)
-    s!"scan: the templates' parameters are not {firstParams s.lanes}, {ingressParams s.lanes} and {egressParams}"
+    s!"scan: the templates' parameters are not {firstParams}, {ingressParams} and {egressParams}"
   let laterN := match later with
     | some (x, _) => if x.form == .batch && 1 ≤ x.n then some x.n else none
     | none => some 0
@@ -647,20 +498,16 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
     s!"scan: not bucket 0, {T - 1} later ingress buckets and {T} egress buckets, the link-window's"
   need (df.params[0]!.2 == row && later.all (·.2.params[0]!.2 == row))
     "scan: an ingress template's row is not the schedule's"
-  let ety := df.params[1]!.2
-  need ((df.params.toList.drop 1).all (·.2 == ety) &&
-      later.all fun (_, d) => (d.params.toList.drop 2).all (·.2 == ety) && d.ret == df.ret)
-    "scan: the ingress templates' entry ports' types or returns differ"
+  need (later.all fun (_, d) => d.params[2]!.2 == df.params[1]!.2 && d.ret == df.ret)
+    "scan: the ingress templates' prog or return differ"
   need (de.ret == .tuple #[.array outBits (.value 1), row])
     "scan: the egress template doesn't return a u16 and the schedule's row"
   let inputs := root.body.nodes.foldl (fun n x => n + match prog.defs[x.fn]? with
     | some d => ((Flock.Program.inputWidth? d.key).map (· * x.members)).getD 0
     | none => 0) 0
-  let nb := T / s.every
-  let laterBits := (later.map fun (_, d) => paramBits (d.params.extract 0 2)).getD 0
-  need (inputs == paramBits (df.params.extract 0 1) + (T - 1) * laterBits + T * paramBits de.params +
-      s.lanes * nb * bitsOf ety)
-    "scan: an input gate that is no template's row, state or egress parameter, nor one of the slot entries"
+  let laterBits := (later.map (paramBits ·.2.params)).getD 0
+  need (inputs == paramBits df.params + (T - 1) * laterBits + T * paramBits de.params)
+    "scan: an input gate that is no template's parameter"
   need (NciCheck.Desc.rootLaidOut prog && NciCheck.Desc.inputsAtRoot prog && NciCheck.Desc.walkable prog)
     "scan: not laid out as C-Flock's decoder lays a Program out, or past what its resolution walks \
       (NciCheck.Desc.rootLaidOut, inputsAtRoot and walkable)"
@@ -676,26 +523,13 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
   let rows := ingress.map fun x => x.args[0]?.bind (inputArg prog)
   need (rows.all (·.isSome)) "scan: an ingress template's row is not one input node's leaves, so an ingress gate \
     would be no input (NetTiming.Layout.Fits)"
-  need (xf.args.size == 1 + s.lanes && (later.all fun (x, _) => x.args.size == 2 + s.lanes) &&
-      (xf.args.extract 0 1).all (fun a => (inputArg prog a).isSome) &&
-      (later.all fun (x, _) => (x.args.extract 0 2).all fun a => (inputArg prog a).isSome) &&
-      xe.args.all fun a => (inputArg prog a).isSome)
-    "scan: a template's row, state or egress argument is not one input node's leaves"
+  need ((ingress.push xe).all fun x => x.args.all fun a => (inputArg prog a).isSome)
+    "scan: a template's argument is not one input node's leaves"
   need (xe.args.all fun a => !rows.contains (inputArg prog a)) "scan: an egress template's argument is an ingress \
     row's input node, so an egress gate would depend on the ingress (NetTiming.Layout.Fits)"
-  let a0 ← needSome xf.args[1]? "scan: bucket 0 has no entry port"
-  let pk := (a0.memberRef 0 0).i
-  need (!(a0.memberRef 0 0).p && !rows.contains (some pk) && match root.body.nodes[pk]? with
-      | some n => NciCheck.Desc.isInputNode prog n
-      | none => false)
-    "scan: bucket 0's prog0 reads no input node of its own, the slot entries'"
-  need (readsEntries xf 1 0 s.lanes nb s.every ety.leaves pk &&
-      later.all fun (x, _) => readsEntries x 2 1 s.lanes nb s.every ety.leaves pk)
-    s!"scan: bucket t's prog<j> is not row j · {nb} + ⌊t / {s.every}⌋ of the slot entries' input node, lane j's \
-      slot of the boundary bucket t reads (NetworkCheck.Period.readsEntries)"
   need prog.orderViolation.isNone "scan: a body names a later node (Flock.Program.Prog.orderViolation): the Program \
     is not topological, so a gate's operands could be gates after it"
-  pure { steps := T, free := 0, ingress := bitsOf df.ret, egress := bitsOf de.ret }
+  pure { steps := T, free := T * bitsOf df.params[1]!.2, ingress := bitsOf df.ret, egress := bitsOf de.ret }
 
 def paramsOf (j : Json) : V Params := do
   match j with
@@ -728,13 +562,12 @@ def paramsOf (j : Json) : V Params := do
   unless 1 ≤ windows do throw "windows: a period has at least one link-window"
   pure { audits, cells, first, jitter, link, lms, key, session, program, form, windows }
 
-/-- A record of one of `formats` and its digest, the window record's (`Flock.WindowRecord.digestOf` of its format and
-canonical JSON, `registration.digest`). -/
+/-- `registration.digest`: SHA-512(format ‖ 0 ‖ the canonical record), the record's own format the tag. -/
 def registrationOf (j : Json) (ctx : String) : V Registration := do
   let format ← Flock.J.str j "format" ctx
   unless formats.contains format do throw s!"{ctx}: format is not {" or ".intercalate formats}"
   let body ← Flock.canon j
-  pure ⟨j, Flock.WindowRecord.digestOf format body.toUTF8⟩
+  pure ⟨j, Flock.Sha512.hash (format.toUTF8 ++ ByteArray.mk #[0] ++ body.toUTF8)⟩
 
 def commitmentOf (b : ByteArray) : V Commitment := do
   let j ← Core.canonicalJson b
@@ -789,6 +622,16 @@ def evidenceOf (b : ByteArray) : V Evidence := do
 
 /-! ## The check -/
 
+/-- `Certificate.verify` under the parameters' key in their session: the certificate is the key's (its I) and its LMS
+signature verifies over `certificate_message` of its fields; a message that can't be formed or a signature that doesn't
+decode is false. -/
+def signs (p : Params) (c : Certificate) : Bool :=
+  c.keyId == p.key.extract 0 16 &&
+    match certificateMessage c.keyId p.session c.link c.direction c.window c.digest,
+        Lms.Signature.decode p.lms c.signature with
+    | .ok m, .ok sig => (Lms.verify p.lms p.key m sig).toOption == some true
+    | _, _ => false
+
 /-- `clock_digest`: `tagged_sha512("verity-network-certifier/clock/v1", u64be δ ‖ u64be p ‖ u64be q)` of the sync, ρ = p/q
 in lowest terms; `none` past a u64. -/
 def clockDigest (s : ClockSync) : Option ByteArray :=
@@ -803,10 +646,9 @@ def clockDigest (s : ClockSync) : Option ByteArray :=
 def clearClocks (ss : NetworkCertifier.SyncSet) : List ByteArray :=
   ss.deltas.flatMap fun d => ss.rhos.attach.filterMap fun ρ => clockDigest ⟨d, ρ.1, ss.rhos_pos ρ.1 ρ.2⟩
 
-/-- A certificate of `link`'s end `d` at window `w`, the key's and verifying in the parameters' session
-(`Certificate.signs`). -/
+/-- A certificate of `link`'s end `d` at window `w`, the key's and verifying. -/
 def certifiesOn (p : Params) (link : String) (d : Direction) (w : Nat) (c : Certificate) : Bool :=
-  c.direction == d && c.link == link && c.window == w && c.signs p.lms p.key p.session
+  c.direction == d && c.link == link && c.window == w && signs p c
 
 /-- A certificate of the link's end `d` at window `w`, the key's and verifying. -/
 def certifies (p : Params) (d : Direction) (w : Nat) (c : Certificate) : Bool := certifiesOn p p.link d w c
@@ -850,18 +692,20 @@ def windowCheck (p : Params) (clear : List ByteArray) (earlier : Array ByteArray
   if clear.contains clock.digest then refuse s!"{what}: clock: a sync's clock digest unsalted"
   if earlier.contains clock.digest then refuse s!"{what}: clock: an earlier link-window's digest, its salt reused"
   let (prof, _) ← answered what reg x.answer
-  unless prof.levels.map (fun l => (l.name, l.size, l.draw)) == #[(unitLevel, 1, some (Core.SamplingDesign.subset 1))] &&
+  unless prof.levels.map (fun l => (l.name, l.size, l.draw)) == #[(unitLevel, 1, some (Core.Draw.subset 1))] &&
       prof.drawn == #[(unitLevel, 1)] do
     refuse s!"{what}: profile: not the link-window's one unit proved"
 
-/-- `warden_rows.domain`'s id: the frame-v3-sha512 domain of execution phase `w`'s rows in direction `d`, in the
-session, under the schedule whose digest is `sd`. -/
+/-- `warden_rows.domain`'s id: the frame-v3-sha512 domain of link-window `w`'s rows in direction `d`, in the session,
+under the schedule whose digest is `sd`. -/
 def rowsDomain (s : Schedule) (sd session : ByteArray) (link : String) (d : Direction) (w : Nat) : V ByteArray := do
   let binding ← Identity.identityDigestSha512 domainTag (Json.mkObj [
     ("parameters", .str (Flock.hexOf sd)), ("session", .str (Flock.hexOf session)), ("link", .str link),
     ("direction", .str d.value), ("window", toJson w), ("cell_bytes", toJson s.cellBytes),
     ("slots", toJson s.allocation), ("rows", toJson s.window), ("row_schema", .str rowSchema)])
-  pure (Flock.FV3.Sha512.Domain.make binding (-1) 0 s.window).id
+  let positions ← Identity.identityDigestSha512 "veritor/indexed-domain/range/v1"
+    (Json.mkObj [("start", toJson (0 : Nat)), ("step", toJson (1 : Nat)), ("stop", toJson s.window)])
+  pure (Flock.FV3.hash "domain" [binding, Flock.FV3.uint 1, positions, Flock.FV3.uint s.window] Flock.Sha512.hash)
 
 /-- `CellsHead.digest`: `tagged_sha512(CELLS_TAG, H)` of the head the network certifier signs for the rows. -/
 def headDigest (link : String) (d : Direction) (w : Nat) (sd : ByteArray) (s : Schedule) (wiring dom root : ByteArray) :
@@ -879,7 +723,7 @@ def rowsCheck (p : Params) (s : Schedule) (sd : ByteArray) (w : Nat) (d : Direct
     refuse s!"{what}: not the link's {d.value} rows at window {w}"
   unless r.parameters == Flock.hexOf sd do refuse s!"{what}: another schedule's digest than the bound one"
   unless r.cellBytes == B && r.rows == T && r.words == S * B / 2 && r.wordBits == outBits && r.rowSchema == rowSchema &&
-      r.layout == ({ buckets := T, slots := S, connectionSlots := s.slots, firstBucket := w * T } : BucketSchedule) do
+      r.layout == ({ buckets := T, slots := S, connectionSlots := s.slots, firstBucket := w * T } : Layout) do
     refuse s!"{what}: not the schedule's rows"
   let .ok dom := rowsDomain s sd p.session p.link d w | refuse s!"{what}: no domain"
   unless r.domain == Flock.hexOf dom do refuse s!"{what}: not the link-window's domain"
@@ -895,110 +739,12 @@ def holds (reg : Registration) (r : Rows) : Bool :=
   (entries "roots" ++ entries "registered").any fun e =>
     e.getObjValD "root" == .str (Flock.hexOf r.root) && e.getObjValD "domain" == .str r.domain
 
-/-- The scan's Programs' row in its registration: the entry of its `roots` whose port, or of its `registered` whose
-value, is `scan/prog`. -/
-def progName : String := "scan/prog"
-
-/-- A unit's committed output port, `<unit>/o<j>` with j ≥ 1: an output a unit computes past its public word `o0`. Read
-over the port's characters, which the kernel evaluates (`String.splitOn` it doesn't). -/
-def outputPort (port : String) : Bool :=
-  let cs := port.toList
-  cs.contains '/' && match (cs.reverse.takeWhile (· != '/')).reverse with
-    | 'o' :: d :: ds => (d :: ds).all Char.isDigit && d != '0'
-    | _ => false
-
-/-- A `SlotEntry_v1` template's entry rows, the public word of its first chunk's members (one-stage names a template's
-members `<descriptor id>/c<j>`): `<descriptor id>/c0/o0`. -/
-def entriesPort (key : String) : String := key ++ "/c0/o0"
-
-/-- Whether a port is some `SlotEntry_v1` template's entries port (`entriesPort`), read over its characters: its `o0`
-is the entry the slot's Program computes, so it ties its audit as an output port does. -/
-def entriesPortName (port : String) : Bool :=
-  let cs := port.toList
-  (slotEntryId ++ "{").toList.isPrefixOf cs && "}/c0/o0".toList.isSuffixOf cs
-
-/-- The audits the scan's Programs' row is an output of, by index: those whose registration's `roots` has an output
-port's or an entries port's entry (`outputPort`, `entriesPortName`) at the root and domain of the scan's registration's
-`scan/prog` entry (`progName`), so the rows its ingress units read as `prog` are the ones that audit's units
-computed. -/
-def tiedAudits (audits : Array Registration) (reg : Registration) : Array Nat :=
-  let entries := fun (j : Json) (k : String) => match j.getObjValD k with | .arr xs => xs | _ => #[]
-  let named := fun (k n : String) (e : Json) => match e.getObjValD k with | .str s => s == n | _ => false
-  let prog := (entries reg.record "roots").filter (named "port" progName) ++
-    (entries reg.record "registered").filter (named "value" progName)
-  (Array.range audits.size).filter fun i => prog.any fun e => match e.getObjValD "root", e.getObjValD "domain" with
-    | .str root, .str dom => ((audits[i]?.map (entries ·.record "roots")).getD #[]).any fun o =>
-        (match o.getObjValD "port" with | .str q => outputPort q || entriesPortName q | _ => false) &&
-          named "root" root o &&
-          named "domain" dom o
-    | _, _ => false
-
-/-- The scan's Programs' row is a compute audit's output: some audit is tied to it (`tiedAudits`). -/
-def progTied (audits : Array Registration) (reg : Registration) : Bool := !(tiedAudits audits reg).isEmpty
-
-/-- The scan's Programs' row is a compute audit's slot entries: the root and domain of the scan's registration's
-`scan/prog` entry (`progName`) are those of an audit's entries port (`entriesPort`) of a `SlotEntry_v1` template of
-that audit's own Program (`Audit.entries`) that is a pinned Definition (its closure digest one of `slotEntryPins`, so
-its whole body is `io_shell.SlotEntry_v1`'s), with one member a slot of the window (`Schedule.windowPrograms`), so
-bucket `t`'s port `prog<j>`, which reads slot `j · (T / every) + ⌊t / every⌋`'s entry (`scanOf`), reads the entry that
-slot's Program computed, read bit included. One-stage binds the rest: a reused value is its port's leaves, one chunk's,
-and an audit's roots are the ports its Program's layout derives. -/
-def wired (audits : Array Audit) (s : Schedule) (regs : Array Registration) (reg : Registration) : Bool :=
-  let entries := fun (j : Json) (k : String) => match j.getObjValD k with | .arr xs => xs | _ => #[]
-  let named := fun (k n : String) (e : Json) => match e.getObjValD k with | .str x => x == n | _ => false
-  let prog := (entries reg.record "roots").filter (named "port" progName) ++
-    (entries reg.record "registered").filter (named "value" progName)
-  (audits.zip regs).any fun (a, r) => a.entries.any fun (k, n, d) => n == s.windowPrograms &&
-    slotEntryPins.contains d &&
-    prog.any fun e => match e.getObjValD "root", e.getObjValD "domain" with
-      | .str root, .str dom => (entries r.record "roots").any fun o =>
-          named "port" (entriesPort k) o && named "root" root o && named "domain" dom o
-      | _, _ => false
-
-/-- The scan's state in a registration: the entry of its `roots` whose port is `scan/state`. -/
-def stateName : String := "scan/state"
-
-/-- The value a window circuit registers the scan's state rows as (`ingress_scan`'s `SCAN_STATE`), row a the state
-before bucket a: the entry of an audit's `registered`, or of the scan's, whose value it is. -/
-def stateValue : String := "verity/certifier/scan-state/v1"
-
-/-- A registration's state entries: those of its `roots` whose port is `stateName` and of its `registered` whose value
-is `stateValue`. -/
-def stateEntries (reg : Registration) : Array Json :=
-  let entries := fun (k : String) => match reg.record.getObjValD k with | .arr xs => xs | _ => #[]
-  let named := fun (k n : String) (e : Json) => match e.getObjValD k with | .str x => x == n | _ => false
-  (entries "roots").filter (named "port" stateName) ++ (entries "registered").filter (named "value" stateValue)
-
-/-- The scan's state is the state its slots' Programs read: the scan's registration has a state entry (`stateEntries`),
-every one at one root and domain, and an audit `wired` to the scan's `prog` has one, every one at that root and domain.
-The scan's units read and register their states at that root (`sin` row t, `o1` row t + 1), so the `SCAN_STATE` that
-audit's Programs read is the chain of the scan's transitions. -/
-def stateTied (audits : Array Audit) (s : Schedule) (regs : Array Registration) (reg : Registration) : Bool :=
-  let named := fun (k n : String) (e : Json) => match e.getObjValD k with | .str x => x == n | _ => false
-  match (stateEntries reg)[0]? with
-  | some e => match e.getObjValD "root", e.getObjValD "domain" with
-    | .str root, .str dom =>
-      let atRoot := fun (o : Json) => named "root" root o && named "domain" dom o
-      (stateEntries reg).all atRoot && (audits.zip regs).any fun (a, r) =>
-        wired #[a] s #[r] reg && !(stateEntries r).isEmpty && (stateEntries r).all atRoot
-    | _, _ => false
-  | none => false
-
-/-- Audit `i` is tied to a link-window's scan: some link-window's registration's `prog` is its output (`tiedAudits`). -/
-def tiedIn (audits windows : Array Registration) (i : Nat) : Bool :=
-  windows.any fun reg => (tiedAudits audits reg).contains i
-
-/-- The audits the form ties to a link-window's scan: the rows form's `tiedIn`, and none in the clock form. -/
-def tiedOf : Form → Commitment → Nat → Bool
-  | .clock _, _ => fun _ => false
-  | .rows .., c => tiedIn c.audits c.windows
-
 /-- The certified records of the rows form's link-window: the requests' (ingress), responses' (egress) and fails'. -/
 def records (link : String) : Array (String × Direction) :=
   #[(link, .ingress), (link, .egress), (link ++ "-fails", .egress)]
 
-/-- An accepted scan's or audit's facts: one level sampled `subset:k` or stratified (a work sample's profile is
-stratified, its `Σ k_s` sampled), and its bound. -/
+/-- An accepted scan's or audit's facts: one level drawn `subset:k` or stratified (a work draw's profile is stratified,
+its `Σ k_s` drawn), and its bound. -/
 def factsOf (what : String) (prof : Core.Integrity) (pub : Json) : Found Facts := do
   let #[l] := prof.levels | refuse s!"{what}: profile: not one level"
   let drawn ← match l.draw with
@@ -1010,10 +756,9 @@ def factsOf (what : String) (prof : Core.Integrity) (pub : Json) : Found Facts :
   | .error e => refuse s!"{what}: {e}"
 
 /-- Link-window `w`'s findings in the rows form, in the order the module docstring gives, and on acceptance its scan's
-facts and its tied audits' free inputs (`tiedAudits`: the parameters' `free` of each audit whose output the scan's
-`prog` is, each once). -/
-def rowsWindowCheck (p : Params) (s : Schedule) (sd : ByteArray) (audits : Array Registration) (w : Nat)
-    (reg : Registration) (x : Window) : Found (Facts × Nat) := do
+facts. -/
+def rowsWindowCheck (p : Params) (s : Schedule) (sd : ByteArray) (w : Nat) (reg : Registration) (x : Window) :
+    Found Facts := do
   let what := s!"window {w}"
   let .rows rs := x.shown | refuse s!"{what}: a clock certificate, not registrations: the clock form's"
   unless reg.record.getObjValD "program" == .str p.program do refuse s!"{what}: registration: not the scan's Program"
@@ -1024,62 +769,20 @@ def rowsWindowCheck (p : Params) (s : Schedule) (sd : ByteArray) (audits : Array
   unless rs.size == 2 do refuse s!"{what}: registrations: the ingress rows, then the egress rows"
   for (r, d) in rs.zip #[Direction.ingress, .egress] do rowsCheck p s sd w d r
   unless rs.all (holds reg) do refuse s!"{what}: the scan's registration doesn't hold the rows: another window's answer"
-  unless progTied audits reg do
-    refuse s!"{what}: the scan's prog is no compute audit's output: its {progName} entry's root and domain are no \
-      output port's of an audit's registration"
   let (prof, pub) ← answered what reg x.answer
   let f ← factsOf what prof pub
   unless f.units == 2 * s.window do refuse s!"{what}: profile: {f.units} units, not the scan's 2T = {2 * s.window}"
-  pure (f, (tiedAudits audits reg).foldl (fun n i => n + ((p.audits[i]?.map (·.free)).getD 0)) 0)
+  pure f
 
-/-- Audit `i`'s findings, and on acceptance its facts: its registration names its Program, the answer's units are the
-Program's, and one tied to a link-window's scan (`tied`: `tiedIn`, in the rows form) has every unit drawn, since its
-link-window's term charges its free inputs and no faulty term for it. -/
-def auditCheck (i : Nat) (a : Audit) (reg : Registration) (x : Core.Answer) (tied : Bool := false) : Found Facts := do
+/-- Audit `i`'s findings, and on acceptance its facts: its registration names its Program, and the answer's units are
+the Program's. -/
+def auditCheck (i : Nat) (a : Audit) (reg : Registration) (x : Core.Answer) : Found Facts := do
   let what := s!"audit {i}"
   unless reg.record.getObjValD "program" == .str a.program do refuse s!"{what}: registration: not its Program"
   let (prof, pub) ← answered what reg x
   let f ← factsOf what prof pub
   unless f.units == a.units do refuse s!"{what}: profile: {f.units} units, not its Program's {a.units}"
-  if tied && f.drawn != f.units then
-    refuse s!"{what}: tied to a link-window's scan with {f.drawn} of its {f.units} units drawn: K charges a tied audit \
-      no faulty term (its wrong units' outputs are the egress's), so draw all {f.units}"
   pure f
-
-/-- The audits' findings, in order, each tied as the period's form ties it (`tiedOf`). -/
-def auditChecks (p : Params) (c : Commitment) (e : Evidence) : Array (Found Facts) :=
-  ((p.audits.zip c.audits).zip e.audits).zipIdx.map fun (((a, reg), x), i) => auditCheck i a reg x (tiedOf p.form c i)
-
-/-- Link-window `w`'s wiring finding in the rows form: a refusal unless its scan's Programs' row is a compute audit's
-slot entries (`wired`). -/
-def wiredCheck (p : Params) (s : Schedule) (audits : Array Registration) (w : Nat) (reg : Registration) :
-    Option (Core.Verdict × String) :=
-  if wired p.audits s audits reg then none else
-    some (.reject, s!"window {w}: the scan's prog is no compute audit's slot entries: its {progName} entry's root and \
-      domain are no audit's {slotEntryId} entries port (<descriptor id>/c0/o0) of {s.windowPrograms} members, one a \
-      slot, whose template is a pinned {slotEntryId} (its closure digest one of slotEntryPins), so a due, occupied \
-      slot's read bit is the prover's word: reuse that port of the pinned template as the scan's prog")
-
-/-- The rows form's wiring findings, one a link-window, in order (`wiredCheck`); none in the clock form. -/
-def wiredChecks (p : Params) (c : Commitment) : Array (Option (Core.Verdict × String)) := match p.form with
-  | .rows s .. => c.windows.zipIdx.map fun (reg, i) => wiredCheck p s c.audits (p.first + i) reg
-  | .clock _ => #[]
-
-/-- Link-window `w`'s state finding in the rows form: a refusal unless its scan's state is the `SCAN_STATE` of an audit
-its `prog` is wired to (`stateTied`). With the `prog` wired, each slot's entry is the one its Program computed, and a
-Program reads the requests from its own registered `SCAN_STATE`; unless that is the scan's state, it computes its entry
-on a state the prover chose. -/
-def stateCheck (p : Params) (s : Schedule) (audits : Array Registration) (w : Nat) (reg : Registration) :
-    Option (Core.Verdict × String) :=
-  if stateTied p.audits s audits reg then none else
-    some (.reject, s!"window {w}: the scan's state is no wired audit's SCAN_STATE: its {stateName} entries' root and \
-      domain are not every {stateValue} entry's of an audit whose slot entries are its prog, so a slot's Program can \
-      compute its entry on a state the prover chose: register the scan's state tree as that audit's SCAN_STATE")
-
-/-- The rows form's state findings, one a link-window, in order (`stateCheck`); none in the clock form. -/
-def stateChecks (p : Params) (c : Commitment) : Array (Option (Core.Verdict × String)) := match p.form with
-  | .rows s .. => c.windows.zipIdx.map fun (reg, i) => stateCheck p s c.audits (p.first + i) reg
-  | .clock _ => #[]
 
 def findingOf {α : Type} : Found α → Option (Core.Verdict × String)
   | .error x => some x
@@ -1096,7 +799,7 @@ def firstFinding (fs : List (Option (Core.Verdict × String))) : Option (Core.Ve
 /-- `⌈log2 x⌉`, 0 for x ≤ 1. -/
 def clog2 (x : Nat) : Nat := if x ≤ 1 then 0 else Nat.log2 (x - 1) + 1
 
-/-- `Σ_{j ≤ b} C(n, j)`: the sets of at most `b` of `n` proof blocks. -/
+/-- `Σ_{j ≤ b} C(n, j)`: the sets of at most `b` of `n` units. -/
 def atMost (n b : Nat) : Nat := Id.run do
   let mut c := 1
   let mut s := 1
@@ -1115,16 +818,15 @@ structure AuditTerms where
 def AuditTerms.bits (t : AuditTerms) : Nat := t.free + t.faultySets + t.faultyBits + t.jitter
 
 /-- A compute audit's terms in the clock form, from its layout terms, its facts and the jitter bound: each of its at
-most `b` faulty proof blocks commits at most its Program's widest proof block's bits. -/
+most `b` wrong units commits at most its Program's widest unit's bits. -/
 def AuditTerms.of (a : Audit) (f : Facts) (jitter : Nat) : AuditTerms :=
   { facts := f, free := a.free, faultySets := clog2 (atMost f.units f.wrong), faultyBits := f.wrong * a.bits,
     jitter := clog2 (jitter ^ a.steps) }
 
-/-- A link-window's scan's terms in the rows form, from the scan's terms, its facts, its tied audits' free inputs
-(`tied`: the egress renders their outputs, so the bits the prover chose of them are the link-window's free inputs) and
-the jitter bound: each of its at most `b` wrong units commits at most the wider instance's bits. -/
-def Scan.terms (s : Scan) (f : Facts) (tied jitter : Nat) : AuditTerms :=
-  { facts := f, free := s.free + tied, faultySets := clog2 (atMost f.units f.wrong),
+/-- A link-window's scan's terms in the rows form, from the scan's terms, its facts and the jitter bound: each of its at
+most `b` wrong units commits at most the wider instance's bits. -/
+def Scan.terms (s : Scan) (f : Facts) (jitter : Nat) : AuditTerms :=
+  { facts := f, free := s.free, faultySets := clog2 (atMost f.units f.wrong),
     faultyBits := f.wrong * max s.ingress s.egress, jitter := clog2 (jitter ^ s.steps) }
 
 structure Public where
@@ -1132,9 +834,9 @@ structure Public where
   audits : Array Facts
   cells : Nat
   /-- The terms of `PeriodLeakAccepted`'s windows: the clock form's compute audits', the rows form's scans', one a
-  execution phase. -/
+  link-window. -/
   units : Array AuditTerms
-  /-- The rows form, whose proof blocks are its scans. -/
+  /-- The rows form, whose units are its scans. -/
   rows : Bool := false
   schedules : Nat
   windows : Nat
@@ -1151,7 +853,7 @@ def Public.eps (x : Public) : Core.Ratio :=
 def capsTerm (cells : Array Nat) : Nat := (cells.map fun cap => clog2 (cap + 1)).foldl (· + ·) 0
 
 /-- The bound's terms from the audits' layout terms, Programs' bits and facts, the cells' caps, the jitter bound,
-`#Σ_sync` and the execution phases. -/
+`#Σ_sync` and the link-windows. -/
 def terms (audits : Array Audit) (facts : Array Facts) (cells : Array Nat) (jitter syncs windows : Nat) : Public :=
   { audits := facts
     cells := capsTerm cells
@@ -1161,11 +863,10 @@ def terms (audits : Array Audit) (facts : Array Facts) (cells : Array Nat) (jitt
 
 /-- The rows form's terms: the cells' as the clock form's, the schedules' the same count (each connection's lane
 length, one of `cap_c + 1`, fixes its admission and the lanes it frees), and each link-window's scan's from the scan's
-terms, its facts and its tied audits' free inputs (`scans`, a pair a link-window). The compute audits' own terms are in
-none: a tied audit's free inputs are in its link-window's. -/
-def rowsTerms (facts : Array Facts) (scan : Scan) (scans : Array (Facts × Nat)) (cells : Array Nat)
-    (jitter windows : Nat) : Public :=
-  { audits := facts, cells := capsTerm cells, units := scans.map fun (f, t) => scan.terms f t jitter, rows := true,
+terms. The compute audits are in no term. -/
+def rowsTerms (facts : Array Facts) (scan : Scan) (scans : Array Facts) (cells : Array Nat) (jitter windows : Nat) :
+    Public :=
+  { audits := facts, cells := capsTerm cells, units := scans.map (scan.terms · jitter), rows := true,
     schedules := capsTerm cells, windows }
 
 structure Profile where
@@ -1183,19 +884,18 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Pro
     .reject s!"evidence: {e.audits.size} audits' answers for {c.audits.size} registered"
   else
     let pairs := (c.windows.zip e.windows).zipIdx
-    let ws : Array (Found (Option (Facts × Nat))) := match p.form with
+    let ws : Array (Found (Option Facts)) := match p.form with
       | .clock ss =>
         let clear := clearClocks ss
         pairs.map fun ((reg, x), i) => (fun () => none) <$>
           windowCheck p clear ((e.windows.extract 0 i).filterMap (·.clockDigest?)) (p.first + i) reg x
-      | .rows s sd _ => pairs.map fun ((reg, x), i) => some <$> rowsWindowCheck p s sd c.audits (p.first + i) reg x
+      | .rows s sd _ => pairs.map fun ((reg, x), i) => some <$> rowsWindowCheck p s sd (p.first + i) reg x
     let scans := ws.filterMap (·.toOption.join)
-    let oneDelta : Option (Core.Verdict × String) := scans[0]?.bind fun (f0, _) =>
-      (scans.find? (·.1.delta != f0.delta)).map fun (f, _) =>
+    let oneDelta : Option (Core.Verdict × String) := scans[0]?.bind fun f0 =>
+      (scans.find? (·.delta != f0.delta)).map fun f =>
         (.reject, s!"a scan's δ {f.delta.toString} is not the period's, {f0.delta.toString}")
-    let as := auditChecks p c e
-    match firstFinding (ws.toList.map findingOf ++ [oneDelta] ++ as.toList.map findingOf ++ (wiredChecks p c).toList ++
-        (stateChecks p c).toList) with
+    let as := ((p.audits.zip c.audits).zip e.audits).zipIdx.map fun (((a, reg), x), i) => auditCheck i a reg x
+    match firstFinding (ws.toList.map findingOf ++ [oneDelta] ++ as.toList.map findingOf) with
     | some (.reject, r) => .reject r
     | some (_, r) => .undecided r
     | none =>
@@ -1239,164 +939,34 @@ def protocol : Core.Protocol where
   publicJson := publicJson
   profileJson := profileJson
 
-/-! ## The clock openings -/
-
-/-- A salted clock certificate's opening (`certificate.CertifiedClock`): the sync the certifier ran the window under and
-its salt `salt_c`, both witness, and the certificate, which signs the sync's clock digest salted by it. -/
-structure ClockOpening where
-  sync : ClockSync
-  salt : ByteArray
-  certificate : Certificate
-
-/-- Two openings are one: the same sync, salt and certificate, field by field. -/
-def ClockOpening.same (a b : ClockOpening) : Bool :=
-  let x := a.certificate
-  let y := b.certificate
-  a.sync.delta == b.sync.delta && a.sync.rho == b.sync.rho && a.salt == b.salt && x.keyId == y.keyId &&
-    x.link == y.link && x.direction == y.direction && x.window == y.window && x.digest == y.digest &&
-    x.signature == y.signature
-
-/-- One certifier session's clock openings (`certificate.SignedClocks`): its LMS key and session, the openings, and the
-link whose syncs are read. -/
-structure Openings where
-  lms : Lms.Params
-  key : ByteArray
-  session : ByteArray
-  link : String
-  openings : Array ClockOpening
-
-/-- `{"key", "link", "lms", "openings", "session"}`, each opening `{"certificate", "salt", "sync"}`, its certificate as
-the evidence's and its sync `[δ, num, den]`. -/
-def openingsOf (j : Json) : V Openings := do
-  exactly j ["key", "link", "lms", "openings", "session"] "the object"
-  let l ← Flock.J.get j "lms" "the object"
-  exactly l ["H", "N", "W", "toy"] "lms"
-  let lms ← Lms.Params.make (← Flock.J.nat l "N" "lms") (← Flock.J.nat l "W" "lms") (← Flock.J.nat l "H" "lms")
-    (← Flock.J.bool l "toy" "lms")
-  let key ← Flock.unhex (← Flock.J.str j "key" "the object")
-  unless key.size = 16 + lms.N do throw s!"an LMS public key is {16 + lms.N} bytes, not {key.size}"
-  let openings ← (← Flock.J.arr j "openings" "the object").mapM fun o => do
-    exactly o ["certificate", "salt", "sync"] "an opening"
-    pure { sync := ← Check.syncOf (← Flock.J.get o "sync" "an opening"), salt := ← hexAt o "salt" "an opening",
-           certificate := ← certificateOf (← Flock.J.get o "certificate" "an opening") "an opening's certificate" }
-  pure { lms, key, session := ← hexAt j "session" "the object", link := ← Flock.J.str j "link" "the object",
-         openings }
-
-/-- Why an opening gives no sync (`CertifiedClock.refusal`), or none when it holds: its certificate isn't an egress one
-(`egress`), isn't the key's (`key`), signs another digest than its sync's clock digest salted by its 64-byte salt
-(`clock_commitment`, `opening`), or its signature doesn't verify in the session (`Certificate.signs`: `signature`). -/
-def openingRefusal (s : Openings) (o : ClockOpening) : Option String :=
-  let c := o.certificate
-  if c.direction != .egress then some "egress"
-  else if c.keyId != s.key.extract 0 16 then some "key"
-  else if !(o.salt.size == saltBytes && (clockDigest o.sync).any (c.digest == certificateDigest o.salt ·)) then
-    some "opening"
-  else if !c.signs s.lms s.key s.session then some "signature"
-  else none
-
-/-- The openings that hold by `first` (none), by salt: the first of each salt, and whether another of that salt isn't
-it. -/
-def bySalt (s : Openings) (first : Array (Option String)) : Std.TreeMap.Raw (Array UInt8) (ClockOpening × Bool) :=
-  (s.openings.zip first).foldl (init := ∅) fun m (o, r) =>
-    if r.isSome then m
-    else m.alter o.salt.data fun
-      | some (x, another) => some (x, another || !x.same o)
-      | none => some (o, false)
-
-/-- Each opening's refusal: `openingRefusal`'s, else `salt` where another opening that holds, not this one, has its
-salt, under which two windows of one sync would sign one digest; none where it holds. The openings are keyed by salt
-once (`bySalt`), so past their signatures this takes n log n steps in the openings. -/
-def openingRefusals (s : Openings) : Array (Option String) :=
-  let first := s.openings.map (openingRefusal s)
-  let salts := bySalt s first
-  (s.openings.zip first).map fun (o, r) =>
-    if r.isSome then r else if (salts.get? o.salt.data).any (·.2) then some "salt" else none
-
-/-- Link-windows in order: by link, then by window. -/
-def linkWindowOrder (a b : String × Nat) : Ordering := (compare a.1 b.1).then (compare a.2 b.2)
-
-/-- What the openings that hold sign, by link-window: the first one's sync, and whether another signs another sync. -/
-abbrev Signed := Std.TreeMap.Raw (String × Nat) (ClockSync × Bool) linkWindowOrder
-
-/-- The openings that hold (`codes` none), keyed by link-window once, so that `signedSyncs` and `split` take n log n
-steps in the openings. -/
-def signedBy (s : Openings) (codes : Array (Option String)) : Signed :=
-  (s.openings.zip codes).foldl (init := ∅) fun m (o, r) =>
-    if r.isSome then m
-    else m.alter (o.certificate.link, o.certificate.window) fun
-      | some (x, two) => some (x, two || !(x.delta == o.sync.delta && x.rho == o.sync.rho))
-      | none => some (o.sync, false)
-
-/-- `SignedClocks.syncs(link)`: window 0's sync on, each the one sync the holding openings sign for the window, up to
-the first window without exactly one. -/
-def signedSyncs (s : Openings) (signed : Signed) : Array ClockSync := Id.run do
-  let mut out := #[]
-  for w in [0:s.openings.size] do
-    match signed.get? (s.link, w) with
-    | some (x, false) => out := out.push x
-    | _ => break
-  return out
-
-/-- The link-windows, of any link, that the holding openings sign two or more syncs for, which have none, in
-`linkWindowOrder`. -/
-def split (signed : Signed) : Array (String × Nat) :=
-  signed.foldl (init := #[]) fun acc k (_, two) => if two then acc.push k else acc
-
-/-- `network-records verdicts`' `clocks`: on `openingsOf`'s object, each opening's refusal (`openingRefusals`, null
-where it holds), the link-windows with two or more signed syncs (`split`, each `[link, window]`), and the link's signed
-syncs (`signedSyncs`, each `[δ, num, den]`), which `lean_audit.signed_clocks` reads with `certificate.SignedClocks`
-beside it as the reference, each refusal and each such link-window by identity. -/
-def clocksFn (j : Json) : Except String Json := do
-  let s ← openingsOf j
-  let codes := openingRefusals s
-  let signed := signedBy s codes
-  let sync (x : ClockSync) : Json := .arr #[toJson x.delta, toJson x.rho.num, toJson x.rho.den]
-  return Json.mkObj [("refused", .arr (codes.map fun | some r => .str r | none => .null)),
-    ("split", .arr ((split signed).map fun (l, w) => .arr #[.str l, toJson w])),
-    ("syncs", .arr ((signedSyncs s signed).map sync))]
-
 #guard clog2 0 == 0 && clog2 1 == 0 && clog2 2 == 1 && clog2 3 == 2 && clog2 4 == 2 && clog2 5 == 3
 #guard atMost 10 0 == 1 && atMost 10 1 == 11 && atMost 10 2 == 56 && atMost 4 9 == 16 && atMost 0 3 == 1
--- an audit of 10 proof blocks, each committing 16 bits, sampled subset:3 at δ = 1/10 (at most 4 wrong), 7 cells on one
+-- an audit of 10 units, each committing 16 bits, drawn subset:3 at δ = 1/10 (at most 4 wrong), 7 cells on one
 -- connection and none on another, 2 syncs over 3 link-windows, and jitter below 2 over 3 steps
-#guard (terms #[⟨0, 3, "", 10, 16, #[]⟩] #[{ units := 10, drawn := 3, delta := ⟨1, 10⟩, wrong := 4 }] #[7, 0] 2 2 3).K ==
+#guard (terms #[⟨0, 3, "", 10, 16⟩] #[{ units := 10, drawn := 3, delta := ⟨1, 10⟩, wrong := 4 }] #[7, 0] 2 2 3).K ==
   3 + 3 + (0 + 9 + 64 + 3)
 -- the same audit with a unit committing 40 bits: its 4 wrong units carry 160 bits, not 16 · 4
-#guard (terms #[⟨0, 3, "", 10, 40, #[]⟩] #[{ units := 10, drawn := 3, delta := ⟨1, 10⟩, wrong := 4 }] #[7, 0] 2 2 3).K ==
+#guard (terms #[⟨0, 3, "", 10, 40⟩] #[{ units := 10, drawn := 3, delta := ⟨1, 10⟩, wrong := 4 }] #[7, 0] 2 2 3).K ==
   3 + 3 + (0 + 9 + 160 + 3)
 -- two audits at δ = 1/100 and 1/10^6: ε = 10001/1000000
-#guard (terms #[⟨0, 1, "", 4, 16, #[]⟩, ⟨0, 1, "", 4, 16, #[]⟩] #[{ units := 4, drawn := 1, delta := ⟨1, 100⟩, wrong := 0 },
+#guard (terms #[⟨0, 1, "", 4, 16⟩, ⟨0, 1, "", 4, 16⟩] #[{ units := 4, drawn := 1, delta := ⟨1, 100⟩, wrong := 0 },
   { units := 4, drawn := 1, delta := ⟨1, 1000000⟩, wrong := 0 }] #[] 1 1 1).eps.toString == "10001/1000000"
 -- eps over audits at δ = 1/10, 1/15 and 1/6 is 1/3; over none it is 0
-#guard (terms #[⟨0, 0, "", 1, 16, #[]⟩, ⟨0, 0, "", 1, 16, #[]⟩, ⟨0, 0, "", 1, 16, #[]⟩]
+#guard (terms #[⟨0, 0, "", 1, 16⟩, ⟨0, 0, "", 1, 16⟩, ⟨0, 0, "", 1, 16⟩]
   #[⟨1, 1, ⟨1, 10⟩, 0⟩, ⟨1, 1, ⟨1, 15⟩, 0⟩, ⟨1, 1, ⟨1, 6⟩, 0⟩] #[] 1 1 1).eps.toString == "1/3"
 #guard (terms #[] #[] #[] 1 1 1).eps.toString == "0"
 -- the rows form over 1 link-window: 7 cells on one connection and 2 on another (3 + 2 bits, for the schedules and
--- again for the fail cells), an audit whose own terms are in none, and one scan of 20 units (T = 10) drawn at
--- δ = 1/15 with at most 3 wrong, 1,120 free inputs, ingress and egress instances committing 300 and 512 bits, and
--- jitter below 2 over its 10 steps: 1351 sets of at most 3 of 20 units
+-- again for the fail cells), an audit in no term, and one scan of 20 units (T = 10) drawn at δ = 1/15 with at most 3
+-- wrong, 1,120 free inputs, ingress and egress instances committing 300 and 512 bits, and jitter below 2 over its 10
+-- steps: 1351 sets of at most 3 of 20 units
 #guard atMost 20 3 == 1351 && clog2 1351 == 11
 #guard (rowsTerms #[{ units := 10, drawn := 3, delta := ⟨1, 10⟩, wrong := 4 }] ⟨10, 1120, 300, 512⟩
-  #[({ units := 20, drawn := 5, delta := ⟨1, 15⟩, wrong := 3 }, 0)] #[7, 2] 2 1).K ==
+  #[{ units := 20, drawn := 5, delta := ⟨1, 15⟩, wrong := 3 }] #[7, 2] 2 1).K ==
   (3 + 2) + (3 + 2) + (1120 + 11 + 3 * 512 + 10)
 -- every unit drawn: no wrong unit, so no faulty set and no faulty bits
-#guard (rowsTerms #[] ⟨4, 0, 300, 512⟩ #[({ units := 8, drawn := 8, delta := ⟨1, 100⟩, wrong := 0 }, 0)] #[] 1 1).K ==
-  0
--- w63's class with the egress tie: T = 32, the scan's own free inputs none, every unit drawn, and its tied audit (the
--- slot entries' `SlotEntry_v1` template) of 8 units, a slot at each of the 2 boundaries, whose free inputs are their
--- entries, 1,136 bits each: K is the tied audit's 9,088
-#guard (rowsTerms #[{ units := 8, drawn := 8, delta := ⟨1, 100⟩, wrong := 0 }] ⟨32, 0, 300, 512⟩
-  #[({ units := 64, drawn := 64, delta := ⟨1, 100⟩, wrong := 0 }, 8 * 1136)] #[] 1 1).K == 9088
+#guard (rowsTerms #[] ⟨4, 0, 300, 512⟩ #[{ units := 8, drawn := 8, delta := ⟨1, 100⟩, wrong := 0 }] #[] 1 1).K == 0
 -- eps over the scans' δ = 1/15 and 1/15 is 2/15; the audit's 1/10 is in it no more
-#guard (rowsTerms #[⟨1, 1, ⟨1, 10⟩, 0⟩] ⟨0, 0, 0, 0⟩ #[(⟨1, 1, ⟨1, 15⟩, 0⟩, 0), (⟨1, 1, ⟨1, 15⟩, 0⟩, 0)] #[] 1 2
+#guard (rowsTerms #[⟨1, 1, ⟨1, 10⟩, 0⟩] ⟨0, 0, 0, 0⟩ #[⟨1, 1, ⟨1, 15⟩, 0⟩, ⟨1, 1, ⟨1, 15⟩, 0⟩] #[] 1 2
   ).eps.toString == "2/15"
--- a unit's output port past o0, its index in ASCII digits without a leading zero; never o0, an input, or no unit's
-#guard outputPort "block-3/o1" && outputPort "a/b/o10" && outputPort "/o2"
-#guard !(outputPort "o1" || outputPort "u/o0" || outputPort "u/o01" || outputPort "u/o" || outputPort "u/O1" ||
-  outputPort "u/o1x" || outputPort "u/o٣" || outputPort "u/prog" || outputPort "")
--- a SlotEntry_v1 template's entries port, its first chunk's o0; never another Definition's, chunk's or port's
-#guard entriesPortName (entriesPort "SlotEntry_v1{IDB=8,KO=2,NP=4,STOP=1}") && entriesPortName "SlotEntry_v1{}/c0/o0"
-#guard !(entriesPortName "SlotEntry_v2{KO=2}/c0/o0" || entriesPortName "SlotEntry_v1{KO=2}/c1/o0" ||
-  entriesPortName "SlotEntry_v1{KO=2}/c0/o1" || entriesPortName "SlotEntry_v1/c0/o0" || entriesPortName "")
 
 end NetworkCheck.Period

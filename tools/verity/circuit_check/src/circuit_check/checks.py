@@ -109,8 +109,6 @@ class Options:
     dead_ids: int = 1 << 17
     struct_max_gates: int = 0
 
-DEFAULTS = Options()
-
 
 @dataclass
 class Findings:
@@ -887,7 +885,7 @@ def q_call(fn: Any, opts: Options, F: Findings, memo: dict) -> dict:
 
 # --- one Definition ---------------------------------------------------------------------------------------------------------
 
-def check_definition(fn: Any, opts: Options = DEFAULTS, *, memo: dict | None = None, pins: dict | None = None,
+def check_definition(fn: Any, opts: Options = Options(), *, memo: dict | None = None, pins: dict | None = None,
                      lower_whole: bool = True, as_call: bool | None = None) -> dict:
     """Every check on one Definition (a primitive, a bound composite) or `ScalarReference`: its entry, with its failures and
     warnings.  ``memo`` shares the word query's `word.unit_rule` results and the entries across calls;
@@ -967,7 +965,7 @@ def check_definition(fn: Any, opts: Options = DEFAULTS, *, memo: dict | None = N
             entry["digest"] = circuit_digest_pin(t, pins, F)
     if kind != "reference":
         with spent("block"):
-            entry["block"] = unit_block(t, F, lower_whole)
+            entry["block"] = block_range(t, F, applies=lower_whole and (SC.owner(t) or "").startswith(UNIT_OWNERS))
     entry["failures"], entry["warnings"] = F.failures, F.warnings
     done[(t.id, lower_whole, as_call)] = entry
     return entry
@@ -977,12 +975,6 @@ def check_definition(fn: Any, opts: Options = DEFAULTS, *, memo: dict | None = N
 #: `block_range` fails one past the range: PoUW's.  A served Program's Call is proved as its partition's proof blocks
 #: (`partition`), so a Call's whole count bounds none of them and is recorded, not failed.
 UNIT_OWNERS = ("verity.core.protocols.pouw.",)
-
-
-def unit_block(t: Any, F: Findings, lower_whole: bool = True) -> dict:
-    """`block_range` of ``t``, failed past the range where ``t`` is staged whole as one unit: checked whole (``lower_whole``) and
-    owned under `UNIT_OWNERS` (`sidecars.owner`)."""
-    return block_range(t, F, applies=lower_whole and (SC.owner(t) or "").startswith(UNIT_OWNERS))
 
 
 def block_range(t: Any, F: Findings, applies: bool = True) -> dict:
@@ -1123,7 +1115,7 @@ def template_lowering(sub: Any, st: dict, d: Any, opts: Options, F: Findings, pi
     return rec
 
 
-def check_subcircuit(sub: Any, opts: Options = DEFAULTS, *, instance_statics: Sequence[dict] = ({},), memo: dict | None = None,
+def check_subcircuit(sub: Any, opts: Options = Options(), *, instance_statics: Sequence[dict] = ({},), memo: dict | None = None,
                      pins: dict | None = None) -> dict:
     """Every check on a subcircuit: its Definition (and its evaluated target where that is another Definition) at each binding of
     its instance statics, and its C-Flock lowering."""
@@ -1149,7 +1141,7 @@ def check_subcircuit(sub: Any, opts: Options = DEFAULTS, *, instance_statics: Se
 
 # --- one served workload ------------------------------------------------------------------------------------------------------
 
-def check_row(path: str | Path, opts: Options = DEFAULTS, *, memo: dict | None = None, pins: dict | None = None) -> dict:
+def check_row(path: str | Path, opts: Options = Options(), *, memo: dict | None = None, pins: dict | None = None) -> dict:
     """A served workload's request Program (a Build's ``instances.json.gz``, or its directory): `word.check_query` over its Calls (the
     cross-Call conditions: every Value a Call reads or returns is committed) and every check on each distinct Definition."""
     from types import SimpleNamespace
@@ -1262,5 +1254,5 @@ def report(targets: list[dict], opts: Options) -> dict:
 
 __all__ = ["Findings", "Options", "SCHEMA", "UNIT_OWNERS", "block_range", "check_definition", "check_row", "check_subcircuit",
            "correspondence", "dead_gates", "is_commit", "load_pins", "partition", "redundant_ands", "redundant_gates", "report",
-           "summarize", "target_equivalence", "template_lowering", "unit_block",
+           "summarize", "target_equivalence", "template_lowering",
            "whole_lowering"]

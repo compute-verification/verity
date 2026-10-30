@@ -40,7 +40,6 @@ from typing import Any, Mapping, Sequence
 
 import numpy as np
 from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.sampled_proofs.one_stage import registration as REG
 from verity.ml.circuits.codec import canonical_json
 from verity_vllm.commit import step_rows
@@ -88,20 +87,6 @@ def _same(a: Mapping[str, Any], b: Mapping[str, Any]) -> bool:
     return all(a.get(k) == b.get(k) for k in ("root", "domain", "leaves"))
 
 
-def _theirs(served: Any, call: Any, held: Sequence[tuple[np.ndarray, np.ndarray]], words: np.ndarray) -> bool:
-    """Whether the Commit's rows ``held`` of a step's calls of K (each call's codes and s_a, in call order) are the
-    window's step A table ``words``, i.e. ``words`` is their `Served.a_words` call after call, without building the
-    padding: each call's block is its rows' words, then zero words, which are `chunk_words`'s zero codes of scale 0."""
-    block = Wt.chunks(call.k) * served.m
-    if len(words) != block * len(held):
-        return False
-    for i, (codes, scales) in enumerate(held):
-        mine, theirs = served.a_words(call, codes, scales, slots=len(codes)), words[i * block:(i + 1) * block]
-        if not np.array_equal(mine, theirs[:len(mine)]) or np.count_nonzero(theirs[len(mine):]):
-            return False
-    return True
-
-
 @dataclass
 class CommitTap:
     """What the Commit acquired, kept for H1 (`tap` on a committer, `attach`), and the Commit's values built from it.
@@ -126,8 +111,8 @@ class CommitTap:
     _x: dict[str, list[Any]] = field(default_factory=dict)
     _ids: dict[int, np.ndarray] = field(default_factory=dict)
     _steps: dict[int, int | None] = field(default_factory=dict)
-    #: each open step A table's rows as the Commit acquired them so far (by call: its codes and s_a) and where
-    _rows: dict[str, dict[int, tuple[np.ndarray, np.ndarray]]] = field(default_factory=dict)
+    #: each open step A table's rows as the Commit acquired them so far (one block a call, by call) and where
+    _rows: dict[str, dict[int, np.ndarray]] = field(default_factory=dict)
     _at: dict[str, dict[int, tuple[int, int | None, str, int]]] = field(default_factory=dict)
     _last: int = -1
     _com: Any = None
@@ -205,15 +190,14 @@ class CommitTap:
             self.refused.append(f"call {call.index}: the Commit's {len(codes)} rows are past its {served.m} slots")
             codes, scales = codes[:served.m], scales[:served.m]
         rows, cs = self._rows.setdefault(value, {}), served.step_calls(call.index)
-        rows[call.index] = (codes, scales)
+        rows[call.index] = served.a_words(call, codes, scales)
         self._at.setdefault(value, {})[call.index] = (call.index, j, s, len(codes))
         if len(rows) < len(cs):
             return
         rows, got = self._rows.pop(value), self._at.pop(value)
-        held, at = [rows[c] for c in cs], [got[c] for c in cs]
-        same = words is not None and value in served.registered and _theirs(served, call, held, words)
-        reg = served.registered[value] if same else served.a_tree(
-            run, call, np.concatenate([served.a_words(call, cc, sc) for cc, sc in held]))
+        mine, at = np.concatenate([rows[c] for c in cs]), [got[c] for c in cs]
+        same = words is not None and np.array_equal(mine, words) and value in served.registered
+        reg = served.registered[value] if same else served.a_tree(run, call, mine)
         self._put(CR.commit_rows(call.step, call.k), reg, same,
                   {"round": call.step, **{f: [x[i] for x in at] for i, f in enumerate(("calls", "steps", "sites", "rows"))}})
 

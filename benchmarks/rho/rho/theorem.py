@@ -17,9 +17,9 @@ of its cuts (the local minimum), and the dark leaves `q_U(|A[L_dark]|)`:
 
 With `aggregate=True` the minimum is of the global sums instead (each cut name summed over every serving block), the
 bound to use where only aggregate bounds exist. Remote has no wipe or certifier, so its serving blocks are a server over
-the monitoring period with only the inference cut. An attack is a construction, so it is evaluated on a serving block's
-*layout* (what a protocol-abiding strategy gets), at the share `mfu` of the gates a construction uses, and the dark
-leaves at theirs.
+the horizon with only the inference cut. An attack is a construction, so it is evaluated on a serving block's *layout*
+(what a protocol-abiding strategy gets), at the share `mfu` of the gates a construction uses, and the dark leaves at
+theirs.
 
 The padded size ratio is `|A| / T_0` for the actual circuit `A` that reaches the target, each serving block padded to
 its capacity: the bound's weight per gate of the inventory, against the reference's `w` per gate (its counted weight
@@ -92,8 +92,8 @@ class Cut:
 
 @dataclass(frozen=True)
 class ServingBlock:
-    """`count` serving blocks of one kind over the monitoring period, each of `gates` (`c_S`, at capacity): its cuts
-    (the arguments of the bound's minimum) and its layout (what a protocol-abiding strategy gets, for attacks; None:
+    """`count` serving blocks of one kind over the horizon, each of `gates` (`c_S`, at capacity): its cuts (the
+    arguments of the bound's minimum) and its layout (what a protocol-abiding strategy gets, for attacks; None:
     unconstrained), and `mfu`, the share of its gates a construction uses."""
 
     name: str

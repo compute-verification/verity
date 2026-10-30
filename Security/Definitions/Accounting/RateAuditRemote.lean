@@ -12,10 +12,10 @@ into tiers by a map `tier : ℕ → Fin τ` from addresses (each GPU's HBM, host
 on the node that computes (its GPUs and its host CPUs together), so a receipt the node computed is the chip's wherever
 on the node it was computed, and a read of any tier is a read of device memory: host DRAM read over PCIe is not side
 traffic. `IChip.tierBits` counts one tier's reads. A tier's read capacity over the window, `cap t = R_t·T` in bits,
-bounds the chip's reads of it in every world (`InteractiveProver.TierCapped`). The side link `L` is then what crosses
+bounds the chip's reads of it in every world (`InteractiveDevice.TierCapped`). The side link `L` is then what crosses
 the node's boundary (its NIC) in the window and a round trip, and the side sources are everything beyond it.
 
-**Correct receipts.** A receipt is `RateAudit.lean`'s tag. `InteractiveProver.correct` is the set of words whose
+**Correct receipts.** A receipt is `RateAudit.lean`'s tag. `InteractiveDevice.correct` is the set of words whose
 committed receipt is the oracle's, `H(σ, R, j, E_j)`, however it was produced: queried by the chip, relayed in by a side
 source that sees the oracle, or guessed. The verifier never sees this count; the guarantees bound it directly, with no
 sample.
@@ -59,29 +59,29 @@ def tierBits {τ : ℕ} (tier : ℕ → Fin τ) (t : Fin τ) (w : IWorld N b h �
 
 end IChip
 
-namespace InteractiveProver
+namespace InteractiveDevice
 
 variable {N b h ρ S L q : ℕ}
 
 /-- The device's reads of tier `t` in the window, in bits. -/
-def tierReads {τ : ℕ} (A : InteractiveProver N b h ρ S L q) (tier : ℕ → Fin τ) (t : Fin τ) (E : Store N b)
+def tierReads {τ : ℕ} (A : InteractiveDevice N b h ρ S L q) (tier : ℕ → Fin τ) (t : Fin τ) (E : Store N b)
     (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
   (A.chip (A.state E)).tierBits tier t (A.world E R O) []
 
 /-- The words rebuilt in the window, each at `c_enc` of compute. -/
-def rebuilt (A : InteractiveProver N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
+def rebuilt (A : InteractiveDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : ℕ :=
   (A.chip (A.state E)).rebuilds (A.world E R O) []
 
 /-- The words whose committed receipt is the oracle's under the stream, however the device came by it. -/
-def correct (A : InteractiveProver N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
+def correct (A : InteractiveDevice N b h ρ S L q) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :
     Finset (Fin N) :=
   Finset.univ.filter (fun j => A.tags E R O j = O (R, j, E j))
 
 /-- Each tier's read capacity over the window bounds the chip's reads of it, from every state and in every world. -/
-def TierCapped {τ : ℕ} (A : InteractiveProver N b h ρ S L q) (tier : ℕ → Fin τ) (cap : Fin τ → ℕ) : Prop :=
+def TierCapped {τ : ℕ} (A : InteractiveDevice N b h ρ S L q) (tier : ℕ → Fin τ) (cap : Fin τ → ℕ) : Prop :=
   ∀ (st : Bits S) (w : IWorld N b h ρ) (t : Fin τ), (A.chip st).tierBits tier t w [] ≤ cap t
 
-end InteractiveProver
+end InteractiveDevice
 
 /-- A pass's coins in a chained window: its certified stream, its oracle family `H(σ_t, j, ·, ·)` at every root of `r`
 bits, and its sample. -/
@@ -95,7 +95,7 @@ instance instFintypePassCoins (N b h ρ r s : ℕ) : Fintype (PassCoins N b h ρ
 class, and the root its seed is drawn at, each any function of the earlier passes' coins (the root also of the
 store). -/
 structure Chain (P N b h ρ S L q r s : ℕ) where
-  device : (j : Fin P) → ({i : Fin P // i < j} → PassCoins N b h ρ r s) → InteractiveProver N b h ρ S L q
+  device : (j : Fin P) → ({i : Fin P // i < j} → PassCoins N b h ρ r s) → InteractiveDevice N b h ρ S L q
   root : (j : Fin P) → ({i : Fin P // i < j} → PassCoins N b h ρ r s) → Store N b → Bits r
 
 namespace Chain
@@ -104,7 +104,7 @@ variable {P N b h ρ S L q r s : ℕ}
 
 /-- Pass `j`'s device at the window's coins `ω`: it reads the earlier passes' coins. -/
 def dev (A : Chain P N b h ρ S L q r s) (j : Fin P) (ω : Fin P → PassCoins N b h ρ r s) :
-    InteractiveProver N b h ρ S L q :=
+    InteractiveDevice N b h ρ S L q :=
   A.device j (fun i => ω i.1)
 
 /-- Pass `j`'s oracle: its family at the root its seed is drawn at, `H(σ_t, j, root_{j−1}, ·)`. -/
@@ -118,7 +118,7 @@ end Chain
 and the store fix, picked as any function of pass `j`'s whole oracle family; pass `j`'s device may depend on the pick
 too. -/
 structure GrindChain (P N b h ρ S L q r s G : ℕ) where
-  device : (j : Fin P) → ({i : Fin P // i < j} → PassCoins N b h ρ r s) → Fin G → InteractiveProver N b h ρ S L q
+  device : (j : Fin P) → ({i : Fin P // i < j} → PassCoins N b h ρ r s) → Fin G → InteractiveDevice N b h ρ S L q
   cand : (j : Fin P) → ({i : Fin P // i < j} → PassCoins N b h ρ r s) → Store N b → Fin G → Bits r
   pick : (j : Fin P) → ({i : Fin P // i < j} → PassCoins N b h ρ r s) → Store N b → (Bits r → Oracle N b h ρ) →
     Fin G
@@ -134,7 +134,7 @@ def kept (A : GrindChain P N b h ρ S L q r s G) (j : Fin P) (E : Store N b) (ω
 
 /-- Pass `j`'s device at the window's coins `ω`, at the candidate it kept. -/
 def dev (A : GrindChain P N b h ρ S L q r s G) (j : Fin P) (E : Store N b) (ω : Fin P → PassCoins N b h ρ r s) :
-    InteractiveProver N b h ρ S L q :=
+    InteractiveDevice N b h ρ S L q :=
   A.device j (fun i => ω i.1) (A.kept j E ω)
 
 /-- Pass `j`'s oracle: its family at the kept candidate root. -/

@@ -22,7 +22,6 @@
 #include <cuda_bf16.h>
 
 #include <cstdint>
-#include <type_traits>
 
 #include "../../torch_gpu/s8_linear/s8_acc.h"
 
@@ -52,11 +51,6 @@ constexpr int BK = 128, TM = 128, SMEM_BUDGET = 220 * 1024, MAX_STAGES = 8, TW =
 //         served call's prefix sums alone, whose hash warps hash its tiles' rows, the prefix-sum rows as they're posted).
 //         TST: the consumers store O and T_s through shared memory, a box at a time into two slots a warpgroup (TSLOT
 //         bytes each, SWIZZLE_128B, the stages' 4 kept), and warp 9 stores the boxes with TMA (store_tiles), so 6 warps hash.
-//   RP 6  ping-pong (CUTLASS's sm_90 KernelTmaWarpSpecializedPingpong; body_pp): RP 0's registers, but each consumer
-//         warpgroup owns a whole 128 x 128 tile (two m64n128k32 atoms a k32 step, 128 accumulators a thread) and the CTA's
-//         tiles go to the two in turn, so while one runs a tile's mainloop on the tensor pipe the other stores its last
-//         tile and hashes O rows (H) on the ALU, in the accumulators' registers. Mode 0 only (a served call's D)
-//   RP 7  RP 6 with warps 9 to 11 hashing too, at RP 4's 104 (the consumers at 200)
 // (384 threads at 136 can't be built: wgmma n256 needs a launch budget of 154, ptxas C7602, whatever setmaxnreg raises it
 // to. 288 threads at 168, one producer warp, puts 3 warps and 16,128 registers on sub-partition 0, and the commit's CTAs
 // never land beside it.)
@@ -105,7 +99,6 @@ struct alignas(128) Args {
   int M, N, K, L, S, lp, dz, dy, TT, group, mode, diag, KQ;
   int hall;                   // RP 4, 5: 1, the hash warps hash every row, past the consumers' end (timing their own rate);
                               // -1, none (timing the GEMM alone in the plan's CTA)
-  int ppm;                    // RP 6, 7: a consumer starts no SHA-512 chunk once the other's mainloop has ppm k-tiles left
 };
 
 WGD uint32_t smem_at(const void* p) { return (uint32_t)__cvta_generic_to_shared(p); }
@@ -160,8 +153,6 @@ WGD uint32_t ld_acq(const uint32_t* p) {
 WGD void red_rel(uint32_t* p, uint32_t v) {
   asm volatile("red.release.cta.shared::cta.add.u32 [%0], %1;" ::"r"(smem_at(p)), "r"(v) : "memory");
 }
-WGD uint32_t ld_vol(const uint32_t* p) { return *reinterpret_cast<const volatile uint32_t*>(p); }
-WGD void st_vol(uint32_t* p, uint32_t v) { *reinterpret_cast<volatile uint32_t*>(p) = v; }
 #define WGP_FENCE asm volatile("wgmma.fence.sync.aligned;" ::: "memory")
 #define WGP_COMMIT asm volatile("wgmma.commit_group.sync.aligned;" ::: "memory")
 #define WGP_WAIT(n) asm volatile("wgmma.wait_group.sync.aligned " #n ";" ::: "memory")
@@ -684,159 +675,6 @@ __device__ void body(const Args& p, const H& h = H{}) {
   }
 }
 
-// RP 6 and 7's hashing: the CTA's O rows in batches of 32 (a row a lane) in its tiles' order, Lg = h.lpt() a 128 x 128
-// tile, a batch claimed (ctl[2], the next one) by whichever warp comes first once every tile it reads is posted (ctl[w]:
-// warpgroup w's warps' posts; tile i is warpgroup i % 2's (i / 2)-th). A warp keeps its batch until it's hashed whole,
-// on from its rows' chaining values (H's flags) across its own mainloops; it starts no SHA-512 chunk once stop() holds,
-// and when every batch posted is taken it leaves (wait: waits for more, until stop()).
-template <class H, class Stop>
-WGD void pp_hash(const Args& p, const H& h, uint32_t* ctl, int& cur, int ntile, int tiles_m, int tiles_n, const Stop& stop,
-                 bool wait) {
-  const unsigned lane = threadIdx.x % 32, Lg = h.lpt(), nq = (unsigned)ntile * Lg, nb = (nq + 31) / 32;
-  auto posted = [&](unsigned i) { return ld_acq(ctl + (i & 1)) >= 4 * (i / 2 + 1); };
-  auto claim = [&]() {
-    int got = -1;
-    if (lane == 0)
-      for (unsigned b = ld_vol(ctl + 2); b < nb;) {
-        const unsigned i1 = min(32 * b + 31, nq - 1) / Lg;   // the tiles below i1 of both parities are posted with i1, i1 - 1
-        if (!posted(i1) || (i1 && !posted(i1 - 1))) break;
-        const unsigned seen = atomicCAS(ctl + 2, b, b + 1);
-        if (seen == b) { got = (int)b; break; }
-        b = seen;
-      }
-    got = __shfl_sync(~0u, got, 0);
-    if (got >= 0) { (void)ld_acq(ctl); (void)ld_acq(ctl + 1); }   // each lane's own acquire of the posts its rows follow
-    return got;
-  };
-  for (;;) {
-    if (__shfl_sync(~0u, (int)stop(), 0)) return;
-    if (cur < 0 && (cur = claim()) < 0) {
-      if (!wait || ld_vol(ctl + 2) >= nb) return;
-      __nanosleep(256);
-      continue;
-    }
-    const unsigned q = 32 * (unsigned)cur + lane;
-    bool whole = true;
-    if (q < nq) {
-      int tm, tn;
-      raster((int)(blockIdx.x + q / Lg * gridDim.x), tiles_m, tiles_n, p.group, tm, tn);
-      whole = h((unsigned long long)tm * (p.N / TW) + (unsigned long long)tn, q % Lg, stop, ~0u);
-    }
-    if (__all_sync(~0u, whole)) cur = -1;
-  }
-}
-
-// RP 6 and 7 (above): 128 x 128 tiles, the CTA's i-th (static schedule) warpgroup i % 2's, the ring's k-tiles in the
-// tiles' order (k-tile g = i KT + k is stage g % STAGES's (g / STAGES)-th fill, its empty barrier one warpgroup's 4 warps).
-// ctl[3 + w]: the k-tiles warpgroup w has issued (g + 1), so a consumer whose next tile starts at g0 hashes until the two
-// have issued g0 - ppm and starts its mainloop at g0 (with no tile left, the CTA's last: the tensor pipe is never kept
-// waiting past a chunk), and RP 7's hash warps until both mainloops end. H NoHash: the ping-pong GEMM alone.
-template <int RP, class H> __device__ void body_pp(const Args& p, const H& h) {
-  static_assert(RP == 6 || RP == 7, "the ping-pong plans");
-  using T = Tile<128>;
-  constexpr int BN = 128, STAGES = T::STAGES;
-  constexpr bool HASH = !std::is_same<H, NoHash>::value;
-  extern __shared__ __align__(1024) uint8_t smem[];
-  const uint32_t base = (smem_at(smem) + 1023) & ~1023u, bars = base + STAGES * T::STAGE;
-  uint32_t* const ctl = reinterpret_cast<uint32_t*>(smem + (base - smem_at(smem)) + STAGES * T::STAGE + 16 * STAGES);
-  const int KT = p.K / BK, tiles_m = p.M / TM, tiles_n = p.N / BN, tiles = tiles_m * tiles_n;
-  const int tid = threadIdx.x, wg = tid / 128;
-  const int ntile = (int)blockIdx.x < tiles ? (tiles - 1 - (int)blockIdx.x) / (int)gridDim.x + 1 : 0;
-  const uint32_t gend = (uint32_t)(ntile * KT);
-  auto issued = [&]() { return max(ld_vol(ctl + 3), ld_vol(ctl + 4)); };
-  if (tid == 0) {
-    for (int s = 0; s < STAGES; s++) { mbar_init(bars + 8 * s, 1); mbar_init(bars + 8 * (STAGES + s), 4); }
-    for (int c = 0; c < 5; c++) ctl[c] = 0;
-    asm volatile("fence.mbarrier_init.release.cluster;" ::: "memory");
-  }
-  __syncthreads();
-
-  if (wg == 2) {
-    if constexpr (RP == 7) regs_dec<104>();
-    else regs_dec<40>();
-    if (tid == 256) {
-      wgp::tma_prefetch(&p.a);
-      wgp::tma_prefetch(&p.b);
-      int s = 0;
-      uint32_t ph = 0;
-      for (int i = 0; i < ntile; i++) {
-        int tm, tn;
-        raster((int)blockIdx.x + i * (int)gridDim.x, tiles_m, tiles_n, p.group, tm, tn);
-        for (int k = 0; k < KT; k++) {
-          const uint32_t st = base + s * T::STAGE, full = bars + 8 * s;
-          mbar_wait(bars + 8 * (STAGES + s), ph ^ 1);
-          mbar_expect_tx(full, T::STAGE);
-          wgp::tma_load(st, &p.a, full, k * BK, tm * TM);
-          wgp::tma_load(st + T::A_BYTES, &p.b, full, k * BK, tn * BN);
-          if (++s == STAGES) { s = 0; ph ^= 1; }
-        }
-      }
-    } else if constexpr (RP == 7 && HASH) {
-      if (tid >= 256 + 32) {
-        int cur = -1;
-        pp_hash(p, h, ctl, cur, ntile, tiles_m, tiles_n, [&]() { return issued() >= gend; }, true);
-      }
-    }
-    asm volatile("exit;");
-  }
-  if constexpr (RP == 7) regs_inc<200>();
-  else regs_inc<232>();
-  const int w = wg, x = tid % 128, lane = tid % 32;
-  int32_t d[128];
-  int cur = -1;
-  for (int i = w;; i += 2) {
-    const uint32_t g0 = (uint32_t)(min(i, ntile) * KT);
-    if constexpr (HASH)
-      pp_hash(p, h, ctl, cur, ntile, tiles_m, tiles_n, [&]() { return issued() + (uint32_t)p.ppm >= g0; }, i >= ntile);
-    if (i >= ntile) break;
-    // the mainloops take turns (CUTLASS's order barrier): until the other warpgroup has issued k-tile g0 - 1, this tile's
-    // first stages' full barriers can sit a phase behind, and a parity wait passes on the other tile's fill. The poll
-    // sleeps: a tight loop of shared loads takes the shared memory pipe the other warpgroup's wgmma reads its operands on
-    while (issued() < g0) __nanosleep(20);
-    __syncwarp();
-    int tm, tn;
-    raster((int)blockIdx.x + i * (int)gridDim.x, tiles_m, tiles_n, p.group, tm, tn);
-    int s = (int)(g0 % STAGES), pend = -1;
-    uint32_t ph = (g0 / STAGES) & 1;
-    // imma's operands are "+r", so without this the last tile's accumulators would be live through pp_hash
-#pragma unroll
-    for (int j = 0; j < 128; j++) d[j] = 0;
-    for (int k = 0; k < KT; k++) {
-      mbar_wait_warp(bars + 8 * s, ph);
-      const uint32_t a0 = base + s * T::STAGE, b0 = a0 + T::A_BYTES;
-      WGP_FENCE;
-#pragma unroll
-      for (int q = 0; q < 4; q++) {
-        imma<128>(d, desc_sw128(a0 + 32 * q), desc_sw128(b0 + 32 * q), k > 0 || q > 0);
-        imma<128>(d + 64, desc_sw128(a0 + 64 * BK + 32 * q), desc_sw128(b0 + 32 * q), k > 0 || q > 0);
-      }
-      WGP_COMMIT;
-      if (x == 0) st_vol(ctl + 3 + w, g0 + k + 1);
-      WGP_WAIT(1);
-      if (pend >= 0 && lane == 0) mbar_arrive(bars + 8 * (STAGES + pend));
-      pend = s;
-      if (++s == STAGES) { s = 0; ph ^= 1; }
-    }
-    WGP_WAIT(0);
-    acc_fence<128>(d);
-    if (lane == 0) mbar_arrive(bars + 8 * (STAGES + pend));
-    const int col0 = tn * BN + 2 * (x % 4);
-#pragma unroll
-    for (int hh = 0; hh < 2; hh++) {
-      int* const o0 = p.O + (size_t)(tm * TM + 64 * hh + 16 * (x / 32) + (x % 32) / 4) * p.N + col0;
-      int* const o1 = o0 + (size_t)8 * p.N;
-#pragma unroll
-      for (int j = 0; j < 16; j++) {
-        *reinterpret_cast<int2*>(o0 + 8 * j) = make_int2(d[64 * hh + 4 * j], d[64 * hh + 4 * j + 1]);
-        *reinterpret_cast<int2*>(o1 + 8 * j) = make_int2(d[64 * hh + 4 * j + 2], d[64 * hh + 4 * j + 3]);
-        if (j % 8 == 7) ld_fence();
-      }
-    }
-    __syncwarp();   // the warp's stores before lane 0's release
-    if (lane == 0) red_rel(ctl + w, 1);
-  }
-}
-
 template <int BN, int CM>
 __global__ void __launch_bounds__(threads<0>(), 1) gemm(const __grid_constant__ Args p) {
 #if defined(__CUDA_ARCH_FEAT_SM90_ALL)
@@ -863,13 +701,6 @@ template <int BN, class H, int HR, bool TST = false>
 __global__ void __launch_bounds__(threads<5>(), 1) gemm_r5(const __grid_constant__ Args p, const __grid_constant__ H h) {
 #if defined(__CUDA_ARCH_FEAT_SM90_ALL)
   body<BN, 1, 5, H, HR, TST>(p, h);
-#endif
-}
-// RP 6, 7: the ping-pong GEMM (mode 0), 128 x 128 tiles, hashing O rows with h between its warpgroups' mainloops
-template <int RP, class H>
-__global__ void __launch_bounds__(threads<6>(), 1) gemm_pp(const __grid_constant__ Args p, const __grid_constant__ H h) {
-#if defined(__CUDA_ARCH_FEAT_SM90_ALL)
-  body_pp<RP, H>(p, h);
 #endif
 }
 

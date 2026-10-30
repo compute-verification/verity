@@ -11,8 +11,8 @@ import Definitions.Population.Partition
   `Checked`, and every theorem of `Determinacy`, `Necessity`, `Egress` and `Work` applies to it.
 * `ordered_of_inLayoutOrder`: units that are intervals of gates numbered in layout order, as `Q_call` v1 cuts them, are
   ordered.
-* `incorrect_eq`, **the bridge**: with every value carried in `W` bits, a unit is incorrect in the population exactly when it is
-  incorrect in the partition (`correct_iff`), so the population's hypothesis `|incorrect| ≤ m` is sampled proofs' guarantee.
+* `wrong_eq`, **the bridge**: with every value carried in `W` bits, a unit is wrong in the population exactly when it is
+  wrong in the partition (`correct_iff`), so the population's hypothesis `|wrong| ≤ m` is sampled proofs' guarantee.
 * `not_acyclic_of_sandwich`, **what fails**: a unit holding a gate before and a gate after a gate of another unit, on
   one path of wires, makes a cycle. `Q_word` v1 cuts such units: it packs a Call's returned gates into output units in
   return order, so a chain `g₁ → g₂ → g₃` returned as `[g₁, g₃, g₂]` at 8 bits a gate and `X = 16` puts `g₁` and `g₃` in
@@ -116,11 +116,11 @@ theorem correct_iff {W : ℕ} (hW : ∀ g, C.w g ≤ W) (X : C.Transcript) (u : 
     rw [P.fns_encode hW X u]
     exact congrArg (BitVec.setWidth W) (h s.1.1 s.1.2 ((P.mem_writes).1 s.2))
 
-/-- **The bridge**: the population's incorrect units are the partition's. -/
-theorem incorrect_eq {W : ℕ} (hW : ∀ g, C.w g ≤ W) (X : C.Transcript) :
-    P.toDataflow.incorrect (P.fns W) (P.encode W X) = P.wrong X := by
+/-- **The bridge**: the population's wrong units are the partition's. -/
+theorem wrong_eq {W : ℕ} (hW : ∀ g, C.w g ≤ W) (X : C.Transcript) :
+    P.toDataflow.wrong (P.fns W) (P.encode W X) = P.wrong X := by
   ext u
-  simp only [Population.Dataflow.incorrect, mem_filter, mem_univ, true_and, P.mem_wrong, P.correct_iff hW X u]
+  simp only [Population.Dataflow.wrong, mem_filter, mem_univ, true_and, P.mem_wrong, P.correct_iff hW X u]
 
 /-- **A sandwich is a cycle**: if a unit `u` holds gates `g` and `k`, another unit `v` holds `h`, and `g` is read by
 `h`, which `k` reads, the population is not acyclic. -/

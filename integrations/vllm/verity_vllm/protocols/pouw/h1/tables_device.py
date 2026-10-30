@@ -13,17 +13,10 @@ f32 scale; a z table's leaf is a ``ZY_BYTES`` record, its first ``ZY_BYTES - 4``
 stream has enqueued, nothing waiting on the host, and hands back a `Pending` whose `roots` waits for them: `H1Run` reads a
 step's roots at its round's close, so a call's tables hash beside the forward rather than in it. `device_roots` waits at once.
 `host_roots` runs the same functions on the CPU (`row_table_host.cpp`), the twin the CPU tests hold to `hiding_rows` on
-machines without a GPU. Builds share the Commit's row-table builds (`row_tables_device._build`) and its per-device state
-(`row_tables_device.DeviceLibrary`); nvcc is `pouw_device`'s.
+machines without a GPU. Builds share the Commit's row-table builds (`row_tables_device._build`); nvcc is `pouw_device`'s.
 
 `commit_tables` is `H1Run`'s commit of a call's tables, by `hiding_rows` (the reference) or by these kernels where `path`
 says, and `settle` records the roots of the calls the GPU has finished hashing, in call order.
-
-A served call's z/y records are also its registered ``zy@<c>`` (`pouw_h1_served.Served.commit`). Where both hash on the GPU
-(`FUSE`), the call's z table waits for that registration (`take_z`), which commits it from the same read of each record
-(`pouw_h1_registered_device.device_hash`'s ``also``) and puts its root in the call's roots when it settles; a z table it
-doesn't take (its rows not the records' own bytes, or the window refused) hashes here once the call is registered
-(`flush`).
 """
 from __future__ import annotations
 
@@ -44,8 +37,8 @@ from verity_vllm.protocols.pouw.h1 import records as ZR
 from verity_vllm.protocols.pouw.h1 import requests as RQ
 from verity_vllm.protocols.pouw.h1.requests import TABLE_NONCES, TABLE_TAGS, table_leaves
 
-__all__ = ["FUSE", "MODE", "Pending", "STREAMS", "available", "commit_tables", "device_hash", "device_lib", "device_roots",
-           "flush", "host_roots", "layout", "path", "record_rows", "row_words", "settle", "take_z"]
+__all__ = ["MODE", "Pending", "STREAMS", "available", "commit_tables", "device_hash", "device_lib", "device_roots",
+           "host_roots", "layout", "path", "record_rows", "row_words", "settle"]
 
 #: where `pouw_h1.H1Run` hashes a call's tables: ``"auto"`` (the GPU when the call's tensors are CUDA tensors and the kernels
 #: build for their device, else ``hiding_rows``), ``"gpu"``, ``"host"`` (the kernels' functions on the CPU, the twin) or
@@ -54,8 +47,6 @@ MODE = "auto"
 MODES = ("auto", "gpu", "host", "python")
 #: the side streams a device's calls hash on, one call's tables each in turn
 STREAMS = 4
-#: whether a served call's z table is committed with its registered ``zy@<c>`` where both hash on the GPU (`take_z`)
-FUSE = True
 _M32 = 0xFFFFFFFF
 
 
@@ -139,8 +130,40 @@ def device_lib(arch: str) -> ctypes.CDLL:
     return dll
 
 
-def _device(torch: Any, device: Any) -> RTD.DeviceLibrary:
-    return RTD.DeviceLibrary.of(torch, device.index, device_lib, "rt_midstates", STREAMS)
+class _Device:
+    """One CUDA device's build, its copies of the byte tables and midstates, the identity rank order tables share, and the
+    side streams tables hash on."""
+
+    def __init__(self, torch: Any, device: Any) -> None:
+        major, minor = torch.cuda.get_device_capability(device)
+        self.lib = device_lib(f"{major}{minor}")
+        self.hm = torch.from_numpy(RTD._hm().view(np.int64)).to(device)
+        pre = torch.from_numpy(RTD._prefixes().view(np.int64)).to(device)
+        self.ms = torch.empty(16, dtype=torch.int64, device=device)
+        rc = self.lib.rt_midstates(torch.cuda.current_stream(device).cuda_stream, pre.data_ptr(), self.ms.data_ptr())
+        if rc:
+            raise RuntimeError(f"rt_midstates: CUDA error {rc}")
+        torch.cuda.current_stream(device).synchronize()
+        self.perm = torch.arange(0, dtype=torch.int32, device=device)
+        self.streams, self.turn = [torch.cuda.Stream(device) for _ in range(STREAMS)], 0
+
+    def ranks(self, torch: Any, n: int) -> Any:
+        if len(self.perm) < n:
+            self.perm = torch.arange(max(n, 2 * len(self.perm)), dtype=torch.int32, device=self.perm.device)
+        return self.perm
+
+    def stream(self) -> Any:
+        self.turn = (self.turn + 1) % len(self.streams)
+        return self.streams[self.turn]
+
+
+_DEVICES: dict[int, _Device] = {}
+
+
+def _device(torch: Any, device: Any) -> _Device:
+    if device.index not in _DEVICES:
+        _DEVICES[device.index] = _Device(torch, device)
+    return _DEVICES[device.index]
 
 
 @cache
@@ -171,12 +194,12 @@ def path(*tensors: Any) -> str:
 
 
 class Pending:
-    """Tables launched on a side stream (`device_hash`): ``ready()`` without blocking, ``roots()`` their roots in order,
-    ``names`` the call's tables they are. It holds their inputs and scratch until the roots are read; each is also recorded
-    on the side stream, so dropping it early gives the allocator nothing back that the side stream still uses."""
+    """Tables launched on a side stream (`device_hash`): ``ready()`` without blocking, ``roots()`` their roots in order. It
+    holds their inputs and scratch until the roots are read; each is also recorded on the side stream, so dropping it
+    early gives the allocator nothing back that the side stream still uses."""
 
-    def __init__(self, done: Any, host: Any, held: tuple[Any, ...], names: tuple[str, ...] = ("a", "z")) -> None:
-        self.done, self.host, self.held, self.names = done, host, held, names
+    def __init__(self, done: Any, host: Any, held: tuple[Any, ...]) -> None:
+        self.done, self.host, self.held = done, host, held
 
     def ready(self) -> bool:
         return bool(self.done.query())
@@ -188,10 +211,9 @@ class Pending:
         return [_root(host[i, 8:]) for i in range(len(host))]
 
 
-def device_hash(tables: Sequence[tuple[bytes, int, Any, Any]], key: bytes, names: tuple[str, ...] = ("a", "z")) -> Pending:
+def device_hash(tables: Sequence[tuple[bytes, int, Any, Any]], key: bytes) -> Pending:
     """`host_roots` hashed on the next side stream of the tables' device, after everything its current stream has enqueued
-    so far, every codes and words a contiguous CUDA tensor there, nothing waiting on the host; ``names`` the call's tables
-    they are (`Pending.names`)."""
+    so far, every codes and words a contiguous CUDA tensor there, nothing waiting on the host."""
     import torch
 
     dev = tables[0][2].device
@@ -214,7 +236,7 @@ def device_hash(tables: Sequence[tuple[bytes, int, Any, Any]], key: bytes, names
     perm = d.ranks(torch, max(int(c.shape[0]) for _did, _nonce, c, _w in tables))
     written = torch.cuda.Event()
     written.record(torch.cuda.current_stream(dev))
-    side = d.next_stream()
+    side = d.stream()
     side.wait_event(written)
     inputs = (meta, perm, *(x for _did, _nonce, c, w in tables for x in (c, w)))
     for x in inputs:
@@ -234,7 +256,7 @@ def device_hash(tables: Sequence[tuple[bytes, int, Any, Any]], key: bytes, names
         host.copy_(outs, non_blocking=True)
         done = torch.cuda.Event()
         done.record(side)
-    return Pending(done, host, (staged, scratch, *inputs), names)
+    return Pending(done, host, (staged, scratch, *inputs))
 
 
 def device_roots(tables: Sequence[tuple[bytes, int, Any, Any]], key: bytes) -> list[bytes]:
@@ -252,49 +274,11 @@ def row_words(t: Any, m: int, dtype: str) -> np.ndarray:
 
 
 def settle(run: Any, wait: bool) -> None:
-    """Record the roots of ``run``'s calls whose tables the GPU has hashed, in call order: all of them with ``wait`` (a z
-    table still waiting for its registration, `flush`ed first), else the leading ones already done."""
-    if wait:
-        flush(run)
+    """Record the roots of ``run``'s calls whose tables the GPU has hashed, in call order: all of them with ``wait``, else
+    the leading ones already done."""
     while run._hashing and (wait or run._hashing[0][1].ready()):
         index, pending = run._hashing.popleft()
-        run._roots[index].update(zip(pending.names, (r.hex() for r in pending.roots())))
-
-
-def _fuses(run: Any, records: Any) -> bool:
-    """Whether the call's z table, over ``records`` (on the GPU), waits for its registered ``zy@<c>`` (`take_z`)."""
-    from verity_vllm.protocols.pouw.h1 import registered as NR
-    from verity_vllm.protocols.pouw.h1 import registered_device as D
-
-    return (FUSE and getattr(run, "served", None) is not None and records.dim() == 2 and records.is_contiguous()
-            and records.data_ptr() % 16 == 0 and D.zy_fits(*(int(d) for d in records.shape)) and NR.path() == "gpu"
-            and D.zy_available())
-
-
-def take_z(run: Any, call: Any, words: Any) -> tuple[bytes, int] | None:
-    """The call's z table for its registered ``zy@<c>`` to commit (`pouw_h1_registered.commit`'s ``also``), when it waits
-    for it and ``words``, the value's rows, are its records' own bytes: its ``(domain id, nonce)``, after which the
-    registration puts its root in ``run``'s roots. Else None, and `flush` hashes it."""
-    held = getattr(run, "_zy", None)
-    if held is None or held[0] != call.index:
-        return None
-    _index, records, did, nonce = held
-    if not (getattr(words, "is_cuda", False) and str(words.dtype) == "torch.uint16" and words.is_contiguous()
-            and words.data_ptr() == records.data_ptr() and tuple(words.shape) == (records.shape[0], records.shape[1] // 2)):
-        return None
-    run._zy = None
-    return did, nonce
-
-
-def flush(run: Any) -> None:
-    """Hash the z table still waiting for its call's registration (`take_z`) on a side stream, as `commit_tables` would
-    have."""
-    held = getattr(run, "_zy", None)
-    if held is None:
-        return
-    run._zy = None
-    index, records, did, nonce = held
-    run._hashing.append((index, device_hash([(did, nonce, *record_rows(records))], run._key, ("z",))))
+        run._roots[index].update(zip(("a", "z"), (r.hex() for r in pending.roots())))
 
 
 def _binding(run: Any, call: Any, name: str) -> tuple[bytes, int]:
@@ -310,10 +294,9 @@ def _table(run: Any, call: Any, name: str, leaves: list[bytes]) -> str:
 def _kernel_tables(run: Any, call: Any, a: Any, s_a: Any, zy: Any, where: str) -> None:
     """`commit_tables`' roots by the row-table kernels, on ``a``'s device's side streams (``"gpu"``, recorded once hashed:
     ``run.tables`` waits for them) or the CPU (``"host"``): the A table's T rows of K codes and f32 scale, the z table's
-    records split as the kernels take them, or on the GPU left for the call's registration to commit (`take_z`)."""
+    records split as the kernels take them."""
     import torch
 
-    flush(run)
     m, t, k = call.m, run.rows, call.k
     dev = a.device if where == "gpu" else torch.device("cpu")
     codes, scales = torch.zeros((t, k), dtype=torch.int8, device=dev), torch.zeros(t, dtype=torch.float32, device=dev)
@@ -324,37 +307,17 @@ def _kernel_tables(run: Any, call: Any, a: Any, s_a: Any, zy: Any, where: str) -
         tables.append(("z", torch.zeros((call.units, ZR.ZY_BYTES - 4), dtype=torch.uint8, device=dev),
                        torch.zeros(call.units, dtype=torch.int32, device=dev)))
     elif zy is not None:
-        records = torch.as_tensor(zy).to(dev)
-        if where == "gpu" and _fuses(run, records):
-            binding, nonce = _binding(run, call, "z")
-            run._zy = (call.index, records, rows_domain(binding, call.index, len(records), HM96).domain_id, nonce)
-        else:
-            tables.append(("z", *record_rows(records)))
+        tables.append(("z", *record_rows(torch.as_tensor(zy).to(dev))))
     laid = []
     for name, c, w in tables:
         binding, nonce = _binding(run, call, name)
         laid.append((rows_domain(binding, call.index, len(c), HM96).domain_id, nonce, c, w))
     run._roots[call.index] = {"a": None, "z": None}
     if where == "gpu":
-        run._hashing.append((call.index, device_hash(laid, run._key, tuple(name for name, _c, _w in tables))))
+        run._hashing.append((call.index, device_hash(laid, run._key)))
         settle(run, wait=False)
     else:
         run._roots[call.index].update(zip(("a", "z"), (r.hex() for r in host_roots(laid, run._key))))
-
-
-def _dtype(x: Any) -> str:
-    return str(x.dtype).removeprefix("torch.")
-
-
-def _keep(run: Any, call: Any, a: Any, s_a: Any, records: Any) -> None:
-    """The served call's prover state (`pouw_h1_prover.keep_call`): by the `pouw_h1_prover.Writer` its directory is open
-    on, off this thread, when its rows, scales and records are the int8, f32 and uint8 the file keeps; else here."""
-    writer = PV.writer_of(run.prover)
-    if writer is not None and _dtype(a) == "int8" and _dtype(s_a) == "float32" and \
-            (records is None or _dtype(records) == "uint8"):
-        writer.keep(run.prover, call.index, a.reshape(call.m, -1), s_a, records)
-        return
-    PV.keep_call(run.prover, call.index, row_words(a, call.m, "i1"), row_words(s_a, call.m, "<f4"), ZR.host(records))
 
 
 def commit_tables(run: Any, call: Any, a: Any, s_a: Any, records: np.ndarray | None, zy: Any = None) -> None:
@@ -370,7 +333,7 @@ def commit_tables(run: Any, call: Any, a: Any, s_a: Any, records: np.ndarray | N
     if where != "python":
         _kernel_tables(run, call, a, s_a, zy if m and records is not None else None, where)
         if run.prover is not None and m:
-            _keep(run, call, a, s_a, records)
+            PV.keep_call(run.prover, call.index, row_words(a, m, "i1"), row_words(s_a, m, "<f4"), ZR.host(records))
         return
     if a is not None and m:
         av, sv = row_words(a, m, "i1"), row_words(s_a, m, "<f4")
@@ -382,4 +345,4 @@ def commit_tables(run: Any, call: Any, a: Any, s_a: Any, records: np.ndarray | N
     out["z"] = None if leaves is None else _table(run, call, "z", leaves)
     run._roots[call.index] = out
     if run.prover is not None and m:
-        _keep(run, call, av, sv, held)
+        PV.keep_call(run.prover, call.index, av, sv, held)

@@ -16,8 +16,6 @@
 * `source` and the negatives refuse what the records don't bind, and `fixed_before_draw` refuses advice re-committed after
   the coins;
 * the gate's coins (``--challenger gate:USER@HOST``) reach the challenger's session with the peer and the key record;
-* ``warm`` fills a5's compose cache from the verifier's window, its composers keyed by what they compose from, and the
-  audit takes that cache;
 * none of it imports `verity_vllm`, and the served compiler's command (``prove_path.py circuit``) refuses advice it can't
   compile and charges the length the registration does;
 * that command compiles over its own trace of each Program, never the prover's row dir, so a row dir whose names make
@@ -115,24 +113,6 @@ def test_the_verifiers_window_is_the_circuit_record_under_verity_s_catalog(writt
     (written.dir / "circuit.json").write_text(json.dumps({**doc, "name": "other"}))
     with pytest.raises(ValueError, match="not the circuit record the registration binds"):
         RA.verifier_window(written.dir, D.parse_law(LAW), None)
-
-
-def test_a_registry_template_resolves_in_a_fresh_audit_process():
-    """A window's io shell (`ScanSlots_v2`) is a registry Definition, which `interface.resolve`'s own walk doesn't import: in a
-    fresh process, which has loaded nothing else, `catalog_resolve` resolves its id to itself."""
-    from verity.ml.definitions.registry import boolean_io_shell as BX
-
-    occ, lp, mx, ids = (tuple(f + 36333 * j for j in range(2)) for f in (376, 168, 200, 474))
-    tid = descriptor_id(bind(BX.ScanSlotsV2, NS=4548, NP=4, IDB=17, K0=12, K=45, OCC=occ, LP=lp, MAX=mx, IDS=ids))
-    code = f"""
-import sys
-sys.path.insert(0, {str(HERE.parent)!r})
-import records_audit as RA
-from verity.ml.circuits.codec import descriptor_id
-assert descriptor_id(RA.catalog_resolve(sys.argv[1])) == sys.argv[1]
-"""
-    p = subprocess.run([sys.executable, "-c", code, tid], capture_output=True, text=True)
-    assert p.returncode == 0, p.stderr[-3000:]
 
 
 def test_the_compile_check_runs_the_registered_compiler_on_the_opened_advice(written, tmp_path):
@@ -640,45 +620,6 @@ def test_the_audit_reserves_a_port_for_every_session_its_draw_can_open(tmp_path,
         with pytest.raises(Opened):
             RA.main([*args, *extra])
         assert seen == want
-
-
-def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, monkeypatch, capsys):
-    """``warm`` hands `a5.warm` the verifier's window and its composers, each saying what it composes from (the record's
-    statement under the stager's label, which a5's cache keys), with ``--compose-cache`` and ``--jobs``; the audit hands a5
-    that cache, and none without ``--compose-cache``."""
-    import a5 as A5
-
-    seen = {}
-
-    def warm(a, sets, mine, jobs=1):
-        seen.update(cache=a.compose_cache, jobs=jobs, members=[m.template for m in mine.members],
-                    inputs={t: c.inputs for t, (c, _fn) in sets.items()})
-        return [{"template": TID, "seconds": 1.0, "kept": False, "pin": "ab", "k_log": 3}]
-
-    monkeypatch.setattr(A5, "warm", warm)
-    cache = str(tmp_path / "cache")
-    assert RA.main(["warm", "--window", str(written.dir), "--law", LAW, "--compose-cache", cache, "--jobs", "2"]) == 0
-    assert seen == {"cache": cache, "jobs": 2, "members": [TID, TID],
-                    "inputs": {TID: ["unit/window", written.doc["statements"][TID]]}}
-    lines = capsys.readouterr().out.splitlines()
-    assert json.loads(lines[0])["template"] == TID and json.loads(lines[-1].removeprefix("WARM "))["templates"] == 1
-
-    class Opened(Exception):
-        pass
-
-    def audit(a, *args, **kw):
-        seen["audit"] = a.compose_cache
-        raise Opened
-
-    monkeypatch.setattr(A5, "audit", audit)
-    monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
-    args = ["audit", "--window", str(written.dir), "--law", LAW, "--circuit", written.rec["window"]["circuit"], "--run", RUN,
-            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out"),
-            "--skip-negatives"]
-    for extra, want in ((["--compose-cache", cache], cache), ([], None)):
-        with pytest.raises(Opened):
-            RA.main([*args, *extra])
-        assert seen["audit"] == want
 
 
 def test_the_audit_from_the_records_imports_no_vllm(written, tmp_path):

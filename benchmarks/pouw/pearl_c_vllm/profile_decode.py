@@ -1,4 +1,4 @@
-"""An untimed profile of Pearl-C mode on the smoke's chat prompts (`e2e.serve`'s ``chat``: `e2e.PROMPTS`, 48 greedy
+"""An untimed profile of Pearl-C mode on the smoke's chat prompts (`e2e.serve`'s ``chat``: vllm_bench's 16 prompts, 48 greedy
 tokens), split into first use against steady state, prefill against decode, and GEMM, forming, hashing and other.
 
   python benchmarks/pouw/pearl_c_vllm/profile_decode.py --model DIR --kernel K --cubin C --out RUN_DIR/profile.json
@@ -199,11 +199,12 @@ def run(args) -> dict:
     import e2e
     import torch
     from vllm import SamplingParams
+    from vllm_bench import PROMPTS, find_model
 
     prof = Profile()
     instrument(prof)
     llm = e2e.engine(args, "arm")
-    model = e2e.find_model(llm)
+    model = find_model(llm)
     t0 = time.perf_counter()
     run_, weights, stack = e2e.install(model, args, e2e.Coins(0))
     install_s = time.perf_counter() - t0
@@ -215,7 +216,7 @@ def run(args) -> dict:
         prof.forward(int(ids.shape[0]) if ids is not None else -1)
     model.register_forward_pre_hook(hook, with_kwargs=True)
     tok = llm.get_tokenizer()
-    chat = [tok.apply_chat_template([{"role": "user", "content": p}], tokenize=False, add_generation_prompt=True) for p in e2e.PROMPTS]
+    chat = [tok.apply_chat_template([{"role": "user", "content": p}], tokenize=False, add_generation_prompt=True) for p in PROMPTS]
     sp = SamplingParams(temperature=0.0, max_tokens=48)
     walls = {}
 

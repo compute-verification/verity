@@ -11,7 +11,7 @@ both torch-free so the laptop and the pod CPU gate test them:
   * `binding_names(cpp)` / `missing_bindings(module, cpp)`   every pybind `.def*("name"` of the source must be an attribute of the loaded
     module or of one of its classes; the pod readiness FAILS on a missing one (a stale .so is no longer canary-blind).
 
-`jit_load()` is how every torch JIT extension of the Commit loads (the collector, `hidden_gpu_tree`), safe for several
+`jit_load()` is how every torch JIT extension of the Commit loads (the collector, `hidden_gpu_tree`, `verity_leafhash`), safe for several
 jobs on one host at once: the source set keys the build dir, and builders serialise on an fcntl lock beside it (`build_lock`).  The kernel
 drops that lock however its holder exits, so under it a torch FileBaton `lock` left in the dir can only be a killed build's, and it is
 removed -- never guessed from its age (a build on a loaded host can outlast any age limit).
@@ -27,12 +27,8 @@ import sys
 from collections.abc import Callable, Sequence
 from typing import Any
 
-from verity.ml.kernels import ROW_COMMIT, SHA512
-
 HERE = os.path.dirname(os.path.abspath(__file__))
 SOURCES = ("native_collect.cpp", "native_gather.cu", "native_tree.cu", "native_rows.cu")
-#: headers a source includes by name from outside the sources' directory: the GPU's one SHA-512 and its one row commit
-SHARED = {"sha512.cuh": str(SHA512), "row_commit.cuh": str(ROW_COMMIT)}
 CFLAGS = ("-O3",)
 CUDA_CFLAGS = ("-O3", "--use_fast_math")
 
@@ -47,18 +43,15 @@ def source_paths(here: str = HERE) -> list[str]:
     return [os.path.join(here, s) for s in SOURCES]
 
 
-def local_headers(sources: Sequence[str], shared: dict[str, str] = SHARED) -> list[tuple[str, str]]:
+def local_headers(sources: Sequence[str]) -> list[tuple[str, str]]:
     """(path relative to the sources' directory, absolute path) of every header the sources include by a quoted path that exists beside
-    the including file, transitively, sorted.  A name of `shared` that a file in the sources' directory includes and finds nowhere
-    beside it is that header, staged at that name; a shared header's quoted include of a shared name is that header too.  Any other
-    quoted include found nowhere beside it is the compiler's (-I) business and is skipped.  Refused: sources with one basename twice,
-    sources in different directories that include headers, a header outside the sources' directory, and a shared header's include of
-    an unshared header beside it -- a staged copy (`<build_dir>/src/`) could not hold any of them faithfully."""
+    the including file, transitively, sorted.  A quoted include found nowhere beside it is the compiler's (-I) business and is skipped.
+    Refused: sources with one basename twice, sources in different directories that include headers, and a header outside the
+    sources' directory -- a staged copy (`<build_dir>/src/`) could not hold either faithfully."""
     names = [os.path.basename(p) for p in sources]
     dup = sorted({n for n in names if names.count(n) > 1})
     if dup:
         raise ValueError(f"JIT sources share basenames {dup}: their staged copies in one src/ would overwrite each other")
-    staged = {os.path.abspath(v) for v in shared.values()}
     found: dict[str, str] = {}
     todo = [os.path.abspath(p) for p in sources]
     roots = {os.path.dirname(p) for p in todo}
@@ -71,28 +64,16 @@ def local_headers(sources: Sequence[str], shared: dict[str, str] = SHARED) -> li
         with open(p, "rb") as f:
             body = f.read()
         for inc in _INCLUDE.findall(body):
-            name = inc.decode()
-            h = os.path.normpath(os.path.join(os.path.dirname(p), name))
-            rel = None
-            if p in staged:
-                if name in shared:
-                    rel, h = name, shared[name]
-                elif os.path.isfile(h):
-                    raise ValueError(f"shared header {p} includes {h}, which is not shared: its staged copy could not resolve it")
-                else:
-                    continue
-            elif not os.path.isfile(h):
-                if name not in shared or os.path.dirname(p) not in roots:
-                    continue
-                rel, h = name, shared[name]
+            h = os.path.normpath(os.path.join(os.path.dirname(p), inc.decode()))
+            if not os.path.isfile(h):
+                continue
             if len(roots) > 1:
                 raise ValueError(f"JIT sources in several directories {sorted(roots)} include local header {h}: cannot stage one src/ for them")
-            if rel is None:
-                rel = os.path.relpath(h, next(iter(roots)))
-                if rel.startswith(os.pardir + os.sep):
-                    raise ValueError(f"JIT source {p} includes {h}, outside the sources' directory: its staged copy could not resolve it")
+            rel = os.path.relpath(h, next(iter(roots)))
+            if rel.startswith(os.pardir + os.sep):
+                raise ValueError(f"JIT source {p} includes {h}, outside the sources' directory: its staged copy could not resolve it")
             found[rel] = h
-            todo.append(os.path.abspath(h))
+            todo.append(h)
     return sorted(found.items())
 
 

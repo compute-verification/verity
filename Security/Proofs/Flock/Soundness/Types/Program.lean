@@ -233,7 +233,7 @@ end Types.Flatten
 and the depth and read split its gates are flattened at. -/
 structure UnitSpec where
   types : String → Option CircuitType
-  ls : Array BlockLayout
+  ls : Array Layout
   info : String → Option TableInfo
   words : String → Option (Array ℕ)
   idx : ℕ

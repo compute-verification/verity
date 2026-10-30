@@ -150,6 +150,7 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_GATHER_DESC_DEV", flag, True, VALUE, "the gather kernel reads its descriptors from device memory (native_collect.cpp)"),
     S("VERITY_HI_PRIO", one, True, VALUE, "1: native hooks stage on a high-priority stream (empty: off)", empty=True),
     S("VERITY_INLINE_D2H", one, False, VALUE, "1: the host committer copies device to host inline, not on its worker"),
+    S("VERITY_LEAFHASH_BUILD", str, None, WHERE, "the leaf-hash extension's build directory (default: torch's)"),
     S("VERITY_LEARN_HOST_BUDGET_MB", float, 4096.0, VALUE, "the host budget in MiB the windowed collector learns its ring in"),
     S("VERITY_MEMTRACE", present, False, DEBUG, "the host committer prints its memory trace (any value, 0 included)"),
     S("VERITY_PIN", one, False, VALUE, "1: the host committer's worker pins its CPU affinity"),
@@ -178,21 +179,17 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_ADMIT_OVER_BOUND", one, False, VALUE, "admission: 1 runs a Commit whose plan is over its bound (recorded as an override)"),
     S("VERITY_ADMIT_SLACK_GIB", float, 6.0, VALUE, "admission: GiB of host memory kept free"),
     S("VERITY_CENSUS_GPU_UTIL", float, None, VALUE, "the kernel census engine's gpu_memory_utilization"),
-    S("VERITY_DRAWS_POLL_S", float, 0.2, WHERE, "seconds between scans of serve-openai's --draws-dir (`serve_release.DrawDir`)"),
     S("VERITY_DUMP_STEP", str, None, DEBUG, "the Commit dumps this step's values"),
     S("VERITY_HOT_RESTART_REASON", str, None, WHERE, "why the hot worker restarted (it sets it for its child)"),
     S("VERITY_HOT_SUBMIT", one, False, WHERE, "1: the Commit submits itself to the pod's hot worker"),
+    S("VERITY_SOURCE_IDENTITY_DIR", str, None, WHERE, "where the source identity is written (the Commit sets it)"),
     S("VERITY_SWITCH", float, None, DEBUG, "the interpreter's switch interval in seconds (a GIL-interference experiment)"),
     S("VERITY_TRACEDUMP", float, None, DEBUG, "every so many seconds, dump every thread's traceback"),
     S("VERITY_VU_EXPORT_DIR", str, None, WHERE, "where pair 0's replay exports its VU sample (`commit --vu-export-dir`)"),
     # ---- the engine (engine/)
     S("VERITY_INDUCTOR_DIR_PER_PROCESS", flag, False, WHERE, "TORCHINDUCTOR_CACHE_DIR is this process's own (`engine.env.INDUCTOR_DIR_MARK`)"),
     S("VERITY_INT8_CREDITED_READ", str, None, VALUE, "MODE:PAGED_SO, the int8 attention's credited read every engine installs"),
-    S("VERITY_INT8_FUSED_PRODUCERS", flag, True, VALUE, "the int8 linears' norms and silu-and-mul quantize their outputs in the "
-      "same launch (`engine.int8_producers`)"),
     S("VERITY_INT8_PARTS", csv, (), VALUE, "the int8 parts a rank registers when it starts (`engine.int8_ranks`)"),
-    S("VERITY_ROPE_CACHE_FUSED", flag, True, VALUE, "the rope and the KV-cache write run as one launch a layer "
-      "(`engine.rope_cache`)"),
     S("VERITY_SPARSE_MLA_NUM_SPLITS", stripped, "0", VALUE, "FA3's sparse MLA splits: 1 pins one split, 0 leaves vLLM's heuristic; "
       "empty is refused", empty=True),
     # ---- Build, Match and the row (pipeline/, check/, query/)

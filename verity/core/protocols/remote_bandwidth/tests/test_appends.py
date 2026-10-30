@@ -11,7 +11,6 @@ import hashlib
 
 import pytest
 
-from remote_bandwidth_fakes import Clock, Entropy
 from verity.core.protocols.profile import IntegrityProfile, Subset
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts, schedule
 from verity.core.protocols.remote_bandwidth.audit import AuditRun, Params
@@ -24,6 +23,28 @@ CAP = 256
 NODE = b"node-under-test"
 SOURCE = b"the verifier's secret"
 P512 = codec.Codec(codec.P512, 2, False)
+
+
+class Clock:
+    def __init__(self) -> None:
+        self.now = 0
+
+    def __call__(self) -> int:
+        return self.now
+
+
+class Entropy:
+    """SHA-512 in counter mode under `label`, in place of the operating system's generator."""
+
+    def __init__(self, label: bytes) -> None:
+        self.label, self.count = label, 0
+
+    def __call__(self, n: int) -> bytes:
+        out = b""
+        while len(out) < n:
+            out += hashlib.sha512(self.label + self.count.to_bytes(8, "big")).digest()
+            self.count += 1
+        return out[:n]
 
 
 def payload(label: bytes) -> bytes:
@@ -369,11 +390,11 @@ def test_a_registered_session_with_filler_planned_is_credited_the_circuit_s_read
                          {v: steps - 1 for v in width},
                          {t: frozenset((*weights, 100 + tokens[t], *(200 + u for u in range(t)))) for t in range(steps)},
                          steps, {})
-    layout = RQ.Store.Packing({**{v: v // 4 for v in weights}, **{v: 4 + (v - 100) // 8 for v in rows},
-                                 **{v: 100 + t for v, t in kv.items()}},
-                                {**{v: v % 4 * 8192 for v in weights}, **{v: (v - 100) % 8 * 4096 for v in rows},
-                                 **{v: 0 for v in kv}},
-                                {100 + t: audit.STEP_LIMIT for t in kv.values()})
+    layout = RQ.Layout({**{v: v // 4 for v in weights}, **{v: 4 + (v - 100) // 8 for v in rows},
+                        **{v: 100 + t for v, t in kv.items()}},
+                       {**{v: v % 4 * 8192 for v in weights}, **{v: (v - 100) % 8 * 4096 for v in rows},
+                        **{v: 0 for v in kv}},
+                       {100 + t: audit.STEP_LIMIT for t in kv.values()})
     r = Run(store())
     for s in range(steps):
         assert r.run() is None

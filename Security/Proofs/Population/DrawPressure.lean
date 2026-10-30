@@ -6,14 +6,14 @@ import Proofs.Population.Exfiltration
 # Detection pressure of the deployed draw
 
 The audit draws `k` of the `n` units uniformly without replacement (`Definitions.Population.DrawPressure`), so a window
-whose incorrect set has `K` units escapes with probability `C(n - K, k) / C(n, k)`.
+whose wrong set has `K` units escapes with probability `C(n - K, k) / C(n, k)`.
 
 * `choose_ratio_le_pow`, `choose_ratio_le_exp`: for `K ≤ n` and `k ≤ n`,
   `C(n - K, k) / C(n, k) ≤ (1 - k/n)^K ≤ exp (-k K / n)`. A draw without replacement escapes no more often than `K`
   independent draws at rate `k/n`.
-* `uniformDraw_isDist`, `sum_missing_uniformDraw`: the uniform draw is a distribution, and it misses an incorrect set
-  `B` with probability `C(n - |B|, k) / C(n, k)`.
-* `drawPressure`: a window that has the incorrect set `B h`, escapes only on the draws that miss it and leaks at most
+* `uniformDraw_isDist`, `sum_missing_uniformDraw`: the uniform draw is a distribution, and it misses a wrong set `B`
+  with probability `C(n - |B|, k) / C(n, k)`.
+* `drawPressure`: a window that has the wrong set `B h`, escapes only on the draws that miss it and leaks at most
   `Σ_{u ∈ B h} w u`, each `w u ≤ 1`, is under detection pressure `k/n`.
 * `draw_tail_cum`: so through `tail_cum`, with probability at least `1 - δ` what leaves up to and including the first
   detection is below `ℓ + (n/k) ln (1/δ)`, for every adaptive strategy and every horizon.
@@ -66,7 +66,7 @@ theorem choose_ratio_le_pow {K : ℕ} (hK : K ≤ n) (hk : k ≤ n) :
 
 /-- `K` independent draws at rate `k/n` all miss with probability `(1 - k/n)^K ≤ exp (-k K / n)`. -/
 theorem one_sub_div_pow_le_exp (hk : k ≤ n) (K : ℕ) : (1 - k / n : ℝ) ^ K ≤ Real.exp (-(k * K / n)) := by
-  have := pow_acceptProb_le_exp (cast_div_le_one hk) K
+  have := pow_escape_le_exp (cast_div_le_one hk) K
   rwa [show (K : ℝ) * (k / n) = k * K / n by ring] at this
 
 /-- **The deployed draw's escape bound**: for `K ≤ n` and `k ≤ n`, `C(n - K, k) / C(n, k) ≤ exp (-k K / n)`. -/
@@ -87,12 +87,12 @@ theorem card_missing (B : Finset (Fin n)) : (missing n k B).card = (n - B.card).
       exact ⟨⟨t, hc⟩, hd, rfl⟩
   rw [← card_map (Function.Embedding.subtype _), e, card_powersetCard, card_compl, Fintype.card_fin]
 
-/-- The uniform draw misses the incorrect set `B` with probability `C(n - |B|, k) / C(n, k)`. -/
+/-- The uniform draw misses the wrong set `B` with probability `C(n - |B|, k) / C(n, k)`. -/
 theorem sum_missing_uniformDraw (B : Finset (Fin n)) :
     ∑ s ∈ missing n k B, uniformDraw n k s = ((n - B.card).choose k : ℝ) / n.choose k := by
   simp only [uniformDraw, sum_const, card_missing, nsmul_eq_mul, mul_one_div]
 
-theorem uniformDraw_nonneg (s : Verity.Draw.Subset n k) : 0 ≤ uniformDraw n k s := by
+theorem uniformDraw_nonneg (s : Draw n k) : 0 ≤ uniformDraw n k s := by
   unfold uniformDraw
   positivity
 
@@ -104,12 +104,11 @@ theorem uniformDraw_isDist (hk : k ≤ n) : IsDist (uniformDraw n k) := by
   rw [Fintype.card_finset_len, Fintype.card_fin, mul_one_div, div_self hC]
 
 /-- **The deployed draw gives detection pressure `k/n`.** At the window after the history `h` the commitment fixes the
-incorrect set `B h`; the window escapes only on the draws that miss `B h` and leaks at most `Σ_{u ∈ B h} w u`, with each
+wrong set `B h`; the window escapes only on the draws that miss `B h` and leaks at most `Σ_{u ∈ B h} w u`, with each
 unit's weight `w u ≤ 1`. Then a window that leaks `ℓ` escapes with probability at most `exp (-(k/n) ℓ)`. With `k > n`
 there is no draw, and the bound holds vacuously. -/
-theorem drawPressure {A : Strategy (Verity.Draw.Subset n k)} (B : List (Verity.Draw.Subset n k) → Finset (Fin n))
-    (w : Fin n → ℝ) (hw : ∀ u, w u ≤ 1) (hesc : ∀ h, A.esc h ⊆ missing n k (B h))
-    (hleak : ∀ h, A.leak h ≤ ∑ u ∈ B h, w u) :
+theorem drawPressure {A : Strategy (Draw n k)} (B : List (Draw n k) → Finset (Fin n)) (w : Fin n → ℝ)
+    (hw : ∀ u, w u ≤ 1) (hesc : ∀ h, A.esc h ⊆ missing n k (B h)) (hleak : ∀ h, A.leak h ≤ ∑ u ∈ B h, w u) :
     DetectionPressure (uniformDraw n k) (k / n) A := by
   intro h
   rcases le_or_gt k n with hk | hk
@@ -141,10 +140,10 @@ theorem prob_not {Ω : Type} [Fintype Ω] {μ : Ω → ℝ} (hμ : IsDist μ) (N
 /-- **Harm through the first detection under the deployed draw**: with `0 < k ≤ n`, each window as in `drawPressure`
 and leaking at most `ℓ`, with probability at least `1 - δ` what leaves up to and including the first detection is below
 `ℓ + (n/k) ln (1/δ)`, for every adaptive strategy, every horizon `N` and every history `h`. -/
-theorem draw_tail_cum (hk : 0 < k) (hkn : k ≤ n) {A : Strategy (Verity.Draw.Subset n k)}
-    (B : List (Verity.Draw.Subset n k) → Finset (Fin n)) (w : Fin n → ℝ) (hw : ∀ u, w u ≤ 1)
-    (hesc : ∀ h, A.esc h ⊆ missing n k (B h)) (hleak : ∀ h, A.leak h ≤ ∑ u ∈ B h, w u) {ℓ : ℝ} (hL : LeakBounded ℓ A)
-    {δ : ℝ} (hδ : 0 < δ) (N : ℕ) (h : List (Verity.Draw.Subset n k)) :
+theorem draw_tail_cum (hk : 0 < k) (hkn : k ≤ n) {A : Strategy (Draw n k)} (B : List (Draw n k) → Finset (Fin n))
+    (w : Fin n → ℝ) (hw : ∀ u, w u ≤ 1) (hesc : ∀ h, A.esc h ⊆ missing n k (B h))
+    (hleak : ∀ h, A.leak h ≤ ∑ u ∈ B h, w u) {ℓ : ℝ} (hL : LeakBounded ℓ A) {δ : ℝ} (hδ : 0 < δ) (N : ℕ)
+    (h : List (Draw n k)) :
     1 - δ ≤ prob (uniformDraw n k) N (fun cs => A.cum N h cs < ℓ + n / k * Real.log (1 / δ)) := by
   have hμ := uniformDraw_isDist hkn
   have hkR : (0 : ℝ) < k := by exact_mod_cast hk

@@ -108,26 +108,25 @@ def roleStrings (tag : String) (I : ByteArray) (context : Lms.E ByteArray) (reco
 /-- What the period tree over `records` hashes: each leaf, and each node of each level below the root. -/
 def treeStrings (records : Array ByteArray) : List ByteArray :=
   let d := Attest.periodDomain records.size
-  let levels := d.levels (Attest.leaves records)
+  let levels := FrameV3Sha512.levels d (Attest.leaves records)
   (List.range records.size).map (fun r =>
-      FV3.input "leaf" [d.id, FV3.uint r, FV3.uint r, Attest.PERIOD_SCHEMA.toUTF8, records[r]!]) ++
+      MemoryChallenger.Properties.frameInput "leaf" [d.id, FrameV3Sha512.uint r, FrameV3Sha512.uint r, Attest.PERIOD_SCHEMA.toUTF8, records[r]!]) ++
     (List.range (levels.size - 1)).flatMap fun l => (List.range (levels[l]!.size / 2)).map fun i =>
-      FV3.input "node" [d.id, FV3.uint l, FV3.uint i, (levels[l]!)[2 * i]!, (levels[l]!)[2 * i + 1]!]
+      MemoryChallenger.Properties.frameInput "node" [d.id, FrameV3Sha512.uint l, FrameV3Sha512.uint i, (levels[l]!)[2 * i]!, (levels[l]!)[2 * i + 1]!]
 
 /-- What SHA-512 hashes as a climb goes up from `digest` at `level`, at `cursor`, along the siblings `path`. -/
-def climbInputs (d : FV3.Sha512.Domain) : Nat → Nat → ByteArray → List ByteArray → List ByteArray
+def climbInputs (d : FrameV3Sha512.Domain) : Nat → Nat → ByteArray → List ByteArray → List ByteArray
   | _, _, _, [] => []
   | level, cursor, digest, sib :: rest =>
     let input := if cursor % 2 = 0 then
-        FV3.input "node" [d.id, FV3.uint level, FV3.uint (cursor >>> 1), digest, sib]
-      else FV3.input "node" [d.id, FV3.uint level, FV3.uint (cursor >>> 1), sib, digest]
+        MemoryChallenger.Properties.frameInput "node" [d.id, FrameV3Sha512.uint level, FrameV3Sha512.uint (cursor >>> 1), digest, sib]
+      else MemoryChallenger.Properties.frameInput "node" [d.id, FrameV3Sha512.uint level, FrameV3Sha512.uint (cursor >>> 1), sib, digest]
     input :: climbInputs d (level + 1) (cursor >>> 1) (Sha512.hash input) rest
 
-/-- What `FV3.Domain.climb d position schema value path` hashes at a domain starting at 0: the leaf, then each node up
-to the root. -/
-def climbStrings (d : FV3.Sha512.Domain) (position : Nat) (schema : String) (value : ByteArray)
+/-- What `FrameV3Sha512.climb d position schema value path` hashes: the leaf, then each node up to the root. -/
+def climbStrings (d : FrameV3Sha512.Domain) (position : Nat) (schema : String) (value : ByteArray)
     (path : Array ByteArray) : List ByteArray :=
-  let leaf := FV3.input "leaf" [d.id, FV3.uint position, FV3.uint position, schema.toUTF8, value]
+  let leaf := MemoryChallenger.Properties.frameInput "leaf" [d.id, FrameV3Sha512.uint position, FrameV3Sha512.uint position, schema.toUTF8, value]
   leaf :: climbInputs d 0 position (Sha512.hash leaf) path.toList
 
 /-- What the devices hash for what they sign under the key `pk`: each signed message's input, and each closed period's
@@ -324,62 +323,5 @@ def ProverSeesMessages : Prop :=
     (r : Parties.Run Ω (Ω × Nat × List ByteArray) Step Ch ByteArray Wi A),
     Parties.Faithful (code deployment party I hss) r → Parties.Secret r → Parties.Confined dest wire r →
       Parties.proverView r = (((code deployment party I hss).messages r.coins r.truth).map wire, [])
-
-/-! ## The honest period and the empty run
-
-The instances `PeriodSigned`'s and `PeriodSound`'s lemmas read (`Proofs.Properties.Pous.MemoryChallenger.Attest`).
-Their honest lemmas: the verifier accepts the honest one-record period at the deployed LMS parameters, and it is the
-device's. Their nontrivial lemmas: the empty run, which no device signed, carries no break, so `PeriodSigned`'s
-conclusion fails there; and a verifier that accepts everything (`acceptAll`) puts probability 1 on `PeriodSound`'s
-event there, where its bound is 0. -/
-
-/-- The honest period's deployment hash, 64 bytes. -/
-def HONEST_DEPLOYMENT : ByteArray := ⟨Array.replicate 64 0⟩
-
-/-- The honest period's party, the memory challenger, as `test_pous_period_reports` has it. -/
-def HONEST_PARTY : String := "memory-challenger"
-
-/-- The honest period's link, as `test_pous_period_reports` has it. -/
-def HONEST_LINK : String := "server-3"
-
-/-- The honest period's attachment, 32 bytes. -/
-def HONEST_ATTACHMENT : ByteArray := ⟨Array.replicate 32 0⟩
-
-/-- The honest period's one record, one byte. -/
-def HONEST_RECORD : ByteArray := ⟨#[0]⟩
-
-/-- The honest party's public key: the lower key `lower` with its certificate `cert`. -/
-def honestKey (lower : ByteArray) (cert : Lms.Signature) : Attest.PartyKey := ⟨lower, cert⟩
-
-/-- The honest one-record period whose record is `v`, with the root's signature `σ`: the honest attachment and link,
-period 0. -/
-def honestRoot (σ : Lms.Signature) (v : ByteArray) : Attest.SignedRoot :=
-  ⟨HONEST_ATTACHMENT, HONEST_LINK, 0, 1, Attest.root #[v], σ⟩
-
-/-- The honest period's one read: its record at position 0, with no siblings. -/
-def honestRead (v : ByteArray) : Attest.Read := ⟨0, v, #[]⟩
-
-/-- The device that signed the honest period: the identity `identity` certified `lower` for the memory challenger in
-the honest deployment, and `lower` closed the one-record period of `v`. -/
-def honestDevice (identity lower v : ByteArray) : Device where
-  issued pk := if pk = identity then [⟨HONEST_DEPLOYMENT, HONEST_PARTY, lower⟩] else []
-  closed pk := if pk = lower then [⟨HONEST_DEPLOYMENT, HONEST_PARTY, HONEST_ATTACHMENT, HONEST_LINK, 0, #[v]⟩] else []
-  live _ := []
-
-/-- The empty party key: no lower key, no certificate bytes. -/
-def emptyKey : Attest.PartyKey := ⟨.empty, ⟨0, .empty, #[], #[]⟩⟩
-
-/-- The empty signed root: no signature bytes, no records. -/
-def emptyRoot : Attest.SignedRoot := ⟨.empty, "", 0, 0, .empty, ⟨0, .empty, #[], #[]⟩⟩
-
-/-- The device that signed nothing. -/
-def emptyDevice : Device := ⟨fun _ => [], fun _ => [], fun _ => []⟩
-
-/-- The empty run, on one coin. -/
-def emptyRun : Unit → PeriodRun := fun _ => ⟨emptyDevice, .empty, .empty, "", emptyKey, emptyRoot, #[]⟩
-
-/-- The acceptance of a verifier that accepts everything. -/
-def acceptAll : ByteArray → ByteArray → String → Attest.PartyKey → Attest.SignedRoot → Array Attest.Read → Lms.E Bool :=
-  fun _ _ _ _ _ _ => .ok true
 
 end MemoryChallenger.Attest.Properties

@@ -76,6 +76,10 @@ def Bound.decAt (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) (ms : List M
   (Bd.IVStar.next x ((List.range (Bd.DE.V.k x)).map fun i => ms.getD i [])
     ((List.range (Bd.DE.V.k x)).map (coinSeq r))).eval H
 
+theorem Bound.decAt_ne_msg (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) (ms : List Msg)
+    (r : Fin (Bd.IVStar.k x) → Coin) (m : Msg) : (Bd.decAt H x ms r).1 ≠ .msg m :=
+  Bd.ivstar_eval_ne_msg H x _ _ (by simp) m
+
 theorem Bound.stepWith_ivstar (Bd : Bound Coin Col T) (H : Msg → Msg) (x : Msg) (ms : List Msg)
     (r : Fin (Bd.IVStar.k x) → Coin) :
     ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace), hist.length = t.msgs.length →

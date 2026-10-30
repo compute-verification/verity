@@ -1,6 +1,6 @@
 """The difftest of θ's provenance check (`NciCheck.Baseline`): the Python half.
 
-`verity/core/protocols/network/nci/lean/scripts/baseline_difftest_vectors.py` writes 1,218 declarations with θ, θ's
+`verity/core/protocols/network/nci/lean/scripts/baseline_difftest_vectors.py` writes 1,213 declarations with θ, θ's
 provenance and the service's trusted input (the deployment's registration log, the run and its parameters), each expanded
 gate by gate where the policy check gives a verdict, and `scripts/nci_reference.py`'s `check_baseline` on each. `check`
 runs the Lean half in its Lean audit (`runs` in that package's `lean-audit.json`): `NciCheck/BaselineDifftestMain.lean`
@@ -8,15 +8,13 @@ fails unless `NciCheck.Baseline.check` gives Python's result on every case and `
 on every expansion. As for the inference-only check's other two difftests, the audit checks the data against the record's SHA-256 and caches
 its pass on the Lean package's files alone, so the first test is what says the data is still what the generator and the
 reference write. The second checks that the random cases reach every refusal code and an acceptance, the third that each
-pinned case gets the code it was built for, gate by gate as well, the fourth that a run's own record binds the Program
-checked with θ empty (two served windows), the fifth that an entry of the `output` kind is refused as any unknown
-kind is, and the sixth that θ cites the log's first record, from the first run and from a later one, and never a record
-registered mid-deployment.
+pinned case gets the code it was built for, gate by gate as well, the fourth that an entry of the `output` kind is
+refused as any unknown kind is, and the fifth that θ cites the log's first record, from the first run and from a later
+one, and never a record registered mid-deployment.
 """
 
 from __future__ import annotations
 
-import copy
 import hashlib
 import importlib.util
 import json
@@ -24,8 +22,6 @@ from collections import Counter
 from pathlib import Path
 
 import pytest
-
-from verity.ml.circuits import codec
 
 LEAN = Path(__file__).resolve().parents[1] / "nci" / "lean"
 
@@ -44,7 +40,7 @@ RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["NciCheck.Basel
 
 @pytest.mark.slow
 def test_the_data_is_what_the_audit_pins(tmp_path):
-    """All 1,218 cases, their expansions and the reference's results, byte for byte as the record pins them."""
+    """All 1,213 cases, their expansions and the reference's results, byte for byte as the record pins them."""
     made = {n: hashlib.sha256(p.read_bytes()).hexdigest() for n, p in vectors.write(tmp_path).items()}
     assert made == RUN["data"]
     assert RUN["args"] == ["{baseline_difftest/cases.jsonl}", "{baseline_difftest/expanded.jsonl}",
@@ -64,53 +60,17 @@ def test_the_random_cases_reach_every_code():
 
 def test_the_pinned_cases_get_their_codes():
     """Two accepted, one per refusal code, an entry of the `output` kind, θ holding an input bound per run
-    (`theta-not-registered`), a field of another JSON type than the string or null the check compares it with (`TYPED`),
-    then two served windows, two accepted and two `run-program`; the unrolled check on each expansion gives the
-    same."""
+    (`theta-not-registered`), then a field of another JSON type than the string or null the check compares it with
+    (`TYPED`); the unrolled check on each expansion gives the same."""
     pinned = vectors.pinned()
     assert [p["malformed"] for p in pinned] == [None, None, *vectors.CODES, "theta-provenance", "theta-not-registered",
-                                                *(code for _, code in vectors.TYPED), None, None, "run-program",
-                                                "run-program"]
+                                                *(code for _, code in vectors.TYPED)]
     for p in pinned:
         inst, tr = p["case"]["instance"], p["case"]["trusted"]
         out = reference.check_baseline(inst, tr)
         assert out.get("error") == p["malformed"]
         if (e := vectors.expanded(p["case"])) is not None:
             assert reference.check_baseline_unrolled(e["instance"], e["trusted"]) == out
-
-
-def _relinked(log: list[dict], run: int, program: str) -> dict:
-    """The log with record `run`'s program `program`, its chain and the run's digest recomputed."""
-    log = copy.deepcopy(log)
-    log[run]["program"] = program
-    prev = None
-    for r in log:
-        r["previous"] = prev
-        prev = reference.record_digest(r)
-    return {"log": log, "run": reference.record_digest(log[run])}
-
-
-def test_a_windows_record_binds_its_program_whatever_theta():
-    """Two served windows with θ empty, one serving request 3 for one step and one requests 3 and 7 for two, each
-    accepted on its own log. Each one's log with the other's Program is refused `run-program`, with no θ entry to reach
-    `theta-unbound`. The refusal is the record's program alone: the first window's log with its record naming the
-    second's Program instead is accepted, with the second's verdict."""
-    a, b, ab, ba = vectors.pinned()[-4:]
-    assert [p["window"] for p in (a, b)] == list(vectors.WINDOWS)
-    for p in (a, b):
-        inst, tr = p["case"]["instance"], p["case"]["trusted"]
-        assert inst["theta"] == [] and inst["provenance"] == []
-        assert reference.check_baseline(inst, tr) == reference.check_desc(inst) and reference.check_desc(inst)["complies"]
-    assert a["case"]["instance"]["program"] != b["case"]["instance"]["program"]
-    assert ab["case"] == {"instance": b["case"]["instance"], "trusted": a["case"]["trusted"]}
-    assert ba["case"] == {"instance": a["case"]["instance"], "trusted": b["case"]["trusted"]}
-    for p in (ab, ba):
-        out = reference.check_baseline(p["case"]["instance"], p["case"]["trusted"])
-        assert out["error"] == "run-program", out
-    inst, tr = ab["case"]["instance"], ab["case"]["trusted"]
-    run = [reference.record_digest(r) for r in tr["log"]].index(tr["run"])
-    fixed = tr | _relinked(tr["log"], run, codec.program_digest(json.loads(inst["program"])))
-    assert reference.check_baseline(inst, fixed) == reference.check_desc(inst)
 
 
 def test_an_output_entry_is_refused_as_an_unknown_kind():

@@ -28,7 +28,7 @@ from .types import Array, RecordType, Tuple as TupleT, Type, Value, field_at, fi
 StaticValue = Any  # int | str | tuple[int, ...] | FunctionDefinition
 
 
-class DefinitionTable:
+class Registry:
     """Registered function definitions by id `Name_vN`."""
 
     def __init__(self) -> None:
@@ -48,7 +48,7 @@ class DefinitionTable:
         return fid in self.defs
 
 
-REGISTRY = DefinitionTable()
+REGISTRY = Registry()
 
 
 class FunctionDefinition:
@@ -224,9 +224,7 @@ def _consistent_statics(a, b) -> bool:
 
 def bind(F: "CompositeDefinition | SpecializedDefinition", **kw: StaticValue) -> "SpecializedDefinition":
     """Explicit binding record. Partial binds compose; all statics must be bound before the body is built. A record
-    the composite's `refuse` names a reason for is refused (`ValueError`) before it is cached, and before the cache is
-    read: the key holds a list and a tuple of equal items alike (`_static_key`), so a record refused for its type is
-    refused after an equal-keyed one binds.
+    the composite's `refuse` names a reason for is refused (`ValueError`) before it is cached.
 
     Specializations are shared through a per-definition cache keyed by the binding record. Function-valued
     statics are keyed by id, so a cache hit whose function references are *different* definitions under the
@@ -241,11 +239,11 @@ def bind(F: "CompositeDefinition | SpecializedDefinition", **kw: StaticValue) ->
         if k not in F.statics:
             raise TypeError(f"{F.id} has no static parameter {k!r}")
     key = tuple((k, _static_key(merged[k])) for k in F.statics if k in merged)
-    why = F.refuse(merged) if F.refuse is not None else None
-    if why:
-        raise ValueError(f"{F.id} refuses this binding: {why}")
     sp = F._cache.get(key)
     if sp is None:
+        why = F.refuse(merged) if F.refuse is not None else None
+        if why:
+            raise ValueError(f"{F.id} refuses this binding: {why}")
         sp = SpecializedDefinition(F, merged, key)
         F._cache[key] = sp
     elif not _consistent_statics(sp.bindings, merged):
@@ -255,7 +253,7 @@ def bind(F: "CompositeDefinition | SpecializedDefinition", **kw: StaticValue) ->
 
 
 @dataclass(eq=False)
-class BodyNode:
+class Node:
     """One body node: a primitive call, a composite call, a `batch`, or a `scan`. Each node denotes one
     interval of gates in the canonical layout."""
 
@@ -285,7 +283,7 @@ class BodyNode:
 class Body:
     params: tuple[tuple[str, Type], ...]
     ret_type: Type
-    nodes: list[BodyNode]
+    nodes: list[Node]
     ret: Refs
     offsets: list[int]  # gate offset of node k within this function; len == len(nodes) + 1
 
@@ -511,7 +509,7 @@ class _Widths:
     node `below`'s arguments cannot read in dataflow order: such a descriptor decodes, and the checkers name the defect
     (PROTOCOL.md §4.4)."""
 
-    def __init__(self, params: tuple[tuple[str, Type], ...], nodes: list["BodyNode"]) -> None:
+    def __init__(self, params: tuple[tuple[str, Type], ...], nodes: list["Node"]) -> None:
         self.params, self.nodes = params, nodes
         self.below = len(nodes)
         self.forward = False  # a reference to node `below` or later was passed over: the `PartLog` memo is off from then on
@@ -682,11 +680,11 @@ class Builder:
     def __init__(self, params: tuple[tuple[str, Type], ...], ret_type: Type) -> None:
         self.params = params
         self.ret_type = ret_type
-        self.nodes: list[BodyNode] = []
+        self.nodes: list[Node] = []
         self.offsets: list[int] = [0]
 
     # -- helpers --------------------------------------------------------------------
-    def _emit(self, node: BodyNode) -> Coll:
+    def _emit(self, node: Node) -> Coll:
         k = len(self.nodes)
         self.nodes.append(node)
         self.offsets.append(self.offsets[-1] + node.gates)
@@ -710,7 +708,7 @@ class Builder:
             fn = bind(fn)
         _, ret = self._check_args(fn, args, "call")
         form = "primitive" if isinstance(fn, PrimitiveDefinition) else "call"
-        return self._emit(BodyNode(form, fn, tuple(args), ret, name=name))
+        return self._emit(Node(form, fn, tuple(args), ret, name=name))
 
     def batch(self, fn, *args: Coll, axes: Sequence[int | None], n: int | None = None, name: str | None = None) -> Coll:
         """`batch(F, args, axes)`: `n` independent calls of `F` (dataflow-independent). `axes[i]` is the
@@ -741,7 +739,7 @@ class Builder:
             n = next(iter(lengths))
         if n is None:
             raise TypeError("batch: n is required when no argument is mapped")
-        return self._emit(BodyNode("batch", fn, tuple(args), Array(n, ret), axes=axes, n=n, name=name))
+        return self._emit(Node("batch", fn, tuple(args), Array(n, ret), axes=axes, n=n, name=name))
 
     def scan(self, step, init: Coll, xs: Sequence[Coll] = (), shared: Sequence[Coll] = (), n: int | None = None,
              name: str | None = None) -> Coll:
@@ -779,7 +777,7 @@ class Builder:
         if n is None:
             raise TypeError("scan: n is required when there are no xs")
         out_t = TupleT(carry_t, Array(n, y_t))
-        return self._emit(BodyNode("scan", step, (init,) + xs + shared, out_t, n=n, n_xs=len(xs), name=name))
+        return self._emit(Node("scan", step, (init,) + xs + shared, out_t, n=n, n_xs=len(xs), name=name))
 
     def finish(self, out: Coll) -> Body:
         if not isinstance(out, Coll):
@@ -823,5 +821,5 @@ def composite(name: str, version: int, statics: Sequence[str], signature, doc: s
     return deco
 
 
-__all__ = ["DefinitionTable", "REGISTRY", "FunctionDefinition", "PrimitiveDefinition", "CompositeDefinition", "SpecializedDefinition", "bind", "BodyNode",
+__all__ = ["Registry", "REGISTRY", "FunctionDefinition", "PrimitiveDefinition", "CompositeDefinition", "SpecializedDefinition", "bind", "Node",
            "Body", "Builder", "TABLE_KINDS", "primitive", "composite", "Explicit", "concat"]

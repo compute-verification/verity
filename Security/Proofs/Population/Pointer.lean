@@ -9,11 +9,11 @@ values. Two things are true of it.
 
 * `DynPopulation.card_egress_le_of_timeOrdered`, **the count still holds**: if every step reads, in every assignment,
   only inputs and slots written at earlier steps, then with the inputs fixed the egress takes at most
-  `|V| ^ |writes B|` values at the incorrect set `B`, as for a static population. A program's trace bounds the prover's
+  `|V| ^ |writes B|` values at the wrong set `B`, as for a static population. A program's trace bounds the prover's
   choice of egress as well as a circuit does.
 * `vm_leak`, **the reach does not**: in the pointer machine `vm N`, every assignment's dependency graph is acyclic
   (`vm_acyclicAt`), the writes are single assignment (`vm_singleAssignment`), and in every honest run the egress reads
-  no secret (`vm_honest_up`); yet one incorrect proof block, the pointer step writing one bit, makes the egress copy all
+  no secret (`vm_honest_up`); yet one faulty proof block, the pointer step writing one bit, makes the egress copy all
   `N` secret bits, so over the secrets the egress takes `2 ^ N` values. `vm_count` is the same machine under the count:
   with the secrets fixed (as inputs), at most `2 ^ 1`.
 
@@ -31,15 +31,15 @@ namespace DynPopulation
 
 variable {U S V : Type} (D : DynPopulation U S V)
 
-theorem correct_of_not_mem_incorrect [Fintype U] {σ : S → V} {u : U} (h : u ∉ D.incorrect σ) : D.Correct σ u := by
+theorem correct_of_not_mem_wrong [Fintype U] {σ : S → V} {u : U} (h : u ∉ D.wrong σ) : D.Correct σ u := by
   classical
   by_contra hc
-  exact h (by simp [incorrect, hc])
+  exact h (by simp [wrong, hc])
 
 /-- **Time-ordered determinacy**: an assignment of a time-ordered population is determined by its inputs and the
-writes of a set containing its incorrect proof blocks. -/
+writes of a set containing its faulty proof blocks. -/
 theorem eq_of_timeOrdered [Fintype U] (hc : D.Covered) {step : U → ℕ} (ht : D.TimeOrdered step) {B : Finset U}
-    {σ τ : S → V} (hin : ∀ s ∈ D.input, σ s = τ s) (hσ : D.incorrect σ ⊆ B) (hτ : D.incorrect τ ⊆ B)
+    {σ τ : S → V} (hin : ∀ s ∈ D.input, σ s = τ s) (hσ : D.wrong σ ⊆ B) (hτ : D.wrong τ ⊆ B)
     (hB : ∀ u ∈ B, ∀ s ∈ D.writes u, σ s = τ s) : σ = τ := by
   have key : ∀ u, ∀ s ∈ D.writes u, σ s = τ s := by
     intro u
@@ -48,8 +48,8 @@ theorem eq_of_timeOrdered [Fintype U] (hc : D.Covered) {step : U → ℕ} (ht : 
       by_cases huB : u ∈ B
       · exact hB u huB
       · intro s hs
-        have cσ := D.correct_of_not_mem_incorrect (σ := σ) fun h => huB (hσ h)
-        have cτ := D.correct_of_not_mem_incorrect (σ := τ) fun h => huB (hτ h)
+        have cσ := D.correct_of_not_mem_wrong (σ := σ) fun h => huB (hσ h)
+        have cτ := D.correct_of_not_mem_wrong (σ := τ) fun h => huB (hτ h)
         rw [cσ s hs, cτ s hs]
         refine D.reads_only u σ τ (fun r hr => ?_) s hs
         rcases ht u σ r hr with hri | ⟨v, hv, hlt⟩
@@ -67,7 +67,7 @@ theorem card_egress_le_of_timeOrdered [Fintype U] [Fintype S] [Fintype V] (hc : 
     (D.egress a ∅ O B).card ≤ Fintype.card V ^ (D.writesOf B).card := by
   classical
   have key : ∀ e ∈ D.egress a ∅ O B,
-      ∃ σ : S → V, (D.Holds a ∅ σ ∧ D.incorrect σ ⊆ B) ∧ (fun o : O => σ o) = e := by
+      ∃ σ : S → V, (D.Holds a ∅ σ ∧ D.wrong σ ⊆ B) ∧ (fun o : O => σ o) = e := by
     intro e he
     simpa only [egress, mem_image, mem_filter, mem_univ, true_and] using he
   let g : D.egress a ∅ O B → (D.writesOf B → V) := fun e s => Classical.choose (key e.1 e.2) s
@@ -208,8 +208,8 @@ theorem vm_honest_up (N : ℕ) {σ : Slot N → Bool} (hσ : ∀ u, (vm N).Corre
     | none => simp [vm] at hu
     | some j => simp [vm, src, hp] at hu
 
-/-- **One incorrect one-bit unit reroutes all `N` secret words**: over the secrets, with the public inputs fixed and only
-the pointer step incorrect, the egress takes `2 ^ N` values. -/
+/-- **One wrong one-bit unit reroutes all `N` secret words**: over the secrets, with the public inputs fixed and only
+the pointer step wrong, the egress takes `2 ^ N` values. -/
 theorem vm_leak (N : ℕ) :
     2 ^ N ≤ ((vm N).egress (fun _ => false) (univ.filter fun s => s.isSecret) (univ.filter fun s => s.isOut)
       {none}).card := by
@@ -226,7 +226,7 @@ theorem vm_leak (N : ℕ) :
     simp only [DynPopulation.egress, mem_image, mem_filter, mem_univ, true_and]
     refine ⟨σ x, ⟨fun s hs hsX => ?_, fun u hu => ?_⟩, rfl⟩
     · cases s <;> simp_all [vm, σ]
-    · simp only [DynPopulation.incorrect, mem_filter, mem_univ, true_and] at hu
+    · simp only [DynPopulation.wrong, mem_filter, mem_univ, true_and] at hu
       cases u with
       | none => simp
       | some i =>
@@ -243,7 +243,7 @@ theorem vm_leak (N : ℕ) :
   have := card_le_card_of_injOn _ (s := univ) (fun x _ => hmem x) hinj.injOn
   simpa using this
 
-/-- **The count still holds for the pointer machine**: with the secrets fixed as inputs, the same incorrect proof block
+/-- **The count still holds for the pointer machine**: with the secrets fixed as inputs, the same faulty proof block
 gives at most `2 ^ 1` egress values. -/
 theorem vm_count (N : ℕ) (a : Slot N → Bool) :
     ((vm N).egress a ∅ (univ.filter fun s => s.isOut) {none}).card ≤ 2 ^ 1 := by

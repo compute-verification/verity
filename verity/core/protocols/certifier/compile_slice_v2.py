@@ -131,7 +131,7 @@ def pool_width(S) -> int:
 def encode_pool(S, p: Pool) -> list[int]:
     """A pool row: CacheStep_v2's pool fields (an invalid entry and a dead copy zero), then ``fl``."""
     Y = pool_statics(S)
-    bits = [b for f in C2.arguments(Y, p.pool, C2.CallInputs())[:10] for b in f]
+    bits = [b for f in C2.arguments(Y, p.pool, C2.Op())[:10] for b in f]
     return bits + ([int(x) for x in p.fl] if S.AS else [])
 
 
@@ -344,7 +344,7 @@ def pool_step(S, pool: Pool, st: RS.State, inp: RS.Inputs, out: RS.Out, tokens: 
               "returns of a slot that is neither a victim nor leaving")
         _need(not any(tau[p] for p in range(R) if t.post[p] is None), "a stamp of a slot with no row")
     overstate, made_up = overstate or {}, made_up or {}
-    calls: list[tuple[str, C2.CallInputs]] = []
+    calls: list[tuple[str, C2.Op]] = []
     looked: list[int] = []
     lim = 1 << Z.HW
 
@@ -352,7 +352,7 @@ def pool_step(S, pool: Pool, st: RS.State, inp: RS.Inputs, out: RS.Out, tokens: 
         _need(rid in tokens, f"request {rid}'s tokens aren't in cert")
         return CST.units_of(S, tokens[rid])
 
-    def call(kind: str, op: C2.CallInputs) -> None:
+    def call(kind: str, op: C2.Op) -> None:
         nonlocal cur
         got = C2.reference(Y, cur, op)
         _need(got.ok, f"CacheStep_v2 refuses the {kind} {op}")
@@ -368,7 +368,7 @@ def pool_step(S, pool: Pool, st: RS.State, inp: RS.Inputs, out: RS.Out, tokens: 
         _need(hit[c] < KL and ev[c] < lim, f"candidate {c}'s hit {hit[c]} past KL = {KL} units, or its count past HW")
         K = min(x["ntok"], (1 << Z.LW) - 1)
         looked.append(c)
-        call("take" if take else "lookup", C2.CallInputs(slot=slot, r=x["id"], units=us[:KL], admit=True, take=take, K=K,
+        call("take" if take else "lookup", C2.Op(slot=slot, r=x["id"], units=us[:KL], admit=True, take=take, K=K,
                                                  wh=hit[c], ev=ev[c]))
 
     def compute(slot: int, rid: int, new: int, target: int, window: int, kind: str = "compute") -> None:
@@ -385,7 +385,7 @@ def pool_step(S, pool: Pool, st: RS.State, inp: RS.Inputs, out: RS.Out, tokens: 
         elif kind == "compute" and derive:
             stamp = tau[slot] = _threshold(cur, new)
         window_units = (us + ((0,) * B,) * window)[lvl:lvl + window]
-        call(kind, C2.CallInputs(slot=slot, r=rid, units=window_units, nins=nins, new=new, tau=stamp))
+        call(kind, C2.Op(slot=slot, r=rid, units=window_units, nins=nins, new=new, tau=stamp))
 
     def free(slot: int, p: int, rid: int, held: int, kind: str = "free") -> None:
         held += overstate.get(rid, 0)
@@ -395,7 +395,7 @@ def pool_step(S, pool: Pool, st: RS.State, inp: RS.Inputs, out: RS.Out, tokens: 
             ret[p] = sum(c.mask == bit for c in has) + held - len(has)
             seen.append(("p", p))
         _need(held < lim and ret[p] < lim, f"slot {slot}'s free: {held} held, {ret[p]} returned past HW")
-        call(kind, C2.CallInputs(slot=slot, free=True, held=held, ret=ret[p]))
+        call(kind, C2.Op(slot=slot, free=True, held=held, ret=ret[p]))
 
     def run() -> None:
         events = positions(S, t)
@@ -666,7 +666,7 @@ def _build(C, S, *ins):
     p, a, c, ci, co, w = (split[r] for r in ("pub", "adv", "cert", "cin", "cout", "wit"))
     served = [e for r in CS.srv_names(S) for e in split[r]["rows"]]
     states, win = w["state"], w["window"][0]
-    load_ok = RC._build_load(C, Sc, CS._consts(RC.encode(RC.empty(Sc), Sc)), CS._consts(RC.encode_window(RC.QueueRow(), Sc)),
+    load_ok = RC._build_load(C, Sc, CS._consts(RC.encode(RC.empty(Sc), Sc)), CS._consts(RC.encode_window(RC.Window(), Sc)),
                              RC._flat(c, RC.arrival_fields(Sc)), [e[0] for e in a["dec"]], a["count"][0], a["steps"][0],
                              states[0], win)[0]
     CA, R = S.W + S.A, S.R
@@ -818,7 +818,7 @@ def check(S, rows: dict) -> dict[str, bool | None]:
     dec = [e[0] for e in a["dec"]]
     if count > S.D or any(dec[count:]):
         raise RC.MalformedRow(f"the advice's count {count} with a decision past it")
-    loaded = RC.load(Sc, RC.empty(Sc), RC.QueueRow(), cert, dec[:count], CS._int(a["steps"][0]))
+    loaded = RC.load(Sc, RC.empty(Sc), RC.Window(), cert, dec[:count], CS._int(a["steps"][0]))
     flags: dict[str, bool | None] = {"load": loaded == (states[0], win)}
     ok, length, carried = AE.reference_charge(S.D, CS._book(S, p), CC.carry_of([int(b) for b in rows["cin"]]),
                                               [int(k < count) for k in range(S.D)], dec)
@@ -868,7 +868,7 @@ def scan(S, sl: CS.Slice, *, overstate: dict[int, int] | None = None, made_up: d
     Sc, St = CS.chain(S), CS.step_statics(S)
     arrivals = tuple(map(tuple, sl.arrivals))
     toks = {x[0]: tuple(t) for x, t in zip(arrivals, sl.tokens)}
-    loaded = RC.load(Sc, RC.empty(Sc), RC.QueueRow(), arrivals, sl.decisions, sl.steps)
+    loaded = RC.load(Sc, RC.empty(Sc), RC.Window(), arrivals, sl.decisions, sl.steps)
     if loaded is None:
         raise ValueError("the load refuses the slice")
     cur, win = loaded
@@ -961,7 +961,7 @@ def case(S, sl: CS.Slice, book: dict, *, carry: AE.Carry | None = None, cout: AE
             "adv": CS._pack(S, "adv", {"dec": padded, "count": [len(dec)], "steps": [sl.steps]}),
             **CS.srv_rows(S, served),
             "cin": list(CC.encode(carry)), "cout": list(CC.encode(cout))}
-    cert_bits = RC.load_arguments(Sc, RC.empty(Sc), RC.QueueRow(), sc.arrivals, sl.decisions, len(sl.decisions), sl.steps,
+    cert_bits = RC.load_arguments(Sc, RC.empty(Sc), RC.Window(), sc.arrivals, sl.decisions, len(sl.decisions), sl.steps,
                                   RC.encode(sc.states[0], Sc), RC.encode_window(sc.window, Sc))[2]
     n = S.CU * S.B
     held = [tuple(sc.tokens[x[0]])[:n] for x in sc.arrivals] + [()] * (S.K - len(sc.arrivals))

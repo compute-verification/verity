@@ -526,7 +526,7 @@ end DescAgree
 
 open DescAgree
 open Lean (Json toJson)
-open Flock.Program (Prog GateTable)
+open Flock.Program (Prog)
 
 /-! ## The statements `descAgrees_of` takes -/
 
@@ -545,7 +545,7 @@ IU), `Desc.novelWidth` of what `Desc.intoOf` collects per IU from `Desc.analyze`
 reads. -/
 def NovelExact : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (reads : Array (Array Desc.Seg)) (mask : Array Bool) (own : Array (Option ℕ))
-    (c : GateTable) (dv : Division),
+    (c : Circuit) (dv : Division),
     Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
     Desc.inputsAtRoot P = true → Desc.walkable P = true → Desc.analyze P = .ok reads → circuitOf P = .ok c →
     mask.size = nodeCount P → own.size = nodeCount P → dv.owner.size = gates P →
@@ -573,7 +573,7 @@ theorem iuCount_eq (a b : Array (Option ℕ))
       omega
   omega
 
-theorem ius_fst (c : GateTable) (dv : Division) {u : ℕ} (hu : u < dv.n) : (ius c dv)[u]!.1 = (tally c dv)[u]!.1 := by
+theorem ius_fst (c : Circuit) (dv : Division) {u : ℕ} (hu : u < dv.n) : (ius c dv)[u]!.1 = (tally c dv)[u]!.1 := by
   have hs := (tally_spec c dv).1
   rw [getElem!_pos (ius c dv) u (by simp [ius, hs, hu]), getElem!_pos (tally c dv) u (by rw [hs]; exact hu)]
   simp [ius]
@@ -583,7 +583,7 @@ theorem descAgrees_of (hG : GatesLocated) (hN : NovelExact) : Properties.DescAgr
   intro j out hev
   obtain ⟨i, P, reads, mask, own, hpar, hdp, hov, hlo, hin, hwk, han, hθ, hos, hof, hn, hused, rfl⟩ :=
     descEvaluate_ok j out hev
-  have hdec := (decodeProgram_ok _ _).1 hdp
+  have hdec := ((decodeProgram_ok _ _).1 hdp).1
   have hi : Parses j i := (parse_ok j i).1 hpar
   have hgl := hG _ P hdec hov hlo hin hwk ⟨reads, han⟩
   obtain ⟨c, hc⟩ := (circuitOf_isOk P).2 hgl

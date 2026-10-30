@@ -17,9 +17,7 @@ unit, so it gets its own `audit.Audit` and one clock:
 - **the published records** are the raw network certificates, their commitments (`commitment.commit`) and their network
   certificates (`certificate.Issuer`), signed by `ReplaySigner`;
 - **the verifier** is `Audit.check_link` on egress and `Audit.check_ingress_link` on ingress, once on the raw records,
-  once on the committed ones and once on the certified ones. The three must agree on every link-window, except that
-  the issuer certifies no incomplete status, so the certified audit gives a raw `status:<reason>` as a `no-verdict`
-  (`certified_of`).
+  once on the committed ones and once on the certified ones. The three must agree on every link-window.
 
 `ReplaySigner` is a stand-in: real LMS signatures under a toy key (`REPLAY_LMS`), leaves reused and every configuration
 signed in one certifier session (`REPLAY_SESSION`), as no certifier may.
@@ -42,7 +40,7 @@ release minus hand, and end to end is release minus ready. A frame not released 
 
     python replay.py --calibration REPORT.json --out DIR [--jobs N] [--syncs POLICY [--fresh]] TRACE.json|DIR ...
 
-It writes `verdicts.jsonl`, one line per execution phase, and `summary.json`.
+It writes `verdicts.jsonl`, one line per link-window, and `summary.json`.
 """
 
 from __future__ import annotations
@@ -65,7 +63,7 @@ from verity.core.protocols.certifier.lean_audit import Audit
 from verity.core.protocols.certifier.calibration import choose_syncs
 from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsKey, parameters_digest
 from verity.core.protocols.certifier.commitment import commit
-from verity.core.protocols.certifier.grid import GridParams, BlockGrid, Certifier
+from verity.core.protocols.certifier.grid import GridParams, Record, Certifier
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids, handing_buckets, run_shaper
 
 REPLAY_FRAME_BYTES = 8
@@ -102,16 +100,10 @@ def _replay_key() -> lms.PrivateKey:
     return lms.keygen(REPLAY_LMS, hashlib.sha512(b"verity-network-traces/replay").digest()[:REPLAY_LMS.N])
 
 
-def certify(records: Sequence[BlockGrid], direction: Direction, params: GridParams, parameters: bytes,
+def certify(records: Sequence[Record], direction: Direction, params: GridParams, parameters: bytes,
             signer: ReplaySigner) -> list:
     issuer = Issuer(signer, REPLAY_SESSION)
     return [c for r in records if (c := issuer.certify(r, direction, params, parameters)) is not None]
-
-
-def certified_of(raw: str | None) -> str | None:
-    """The raw audit's verdict of a link-window as the certified audit gives it: a window the raw audit rejects on its
-    status has no certificate, so it is a `no-verdict`."""
-    return "no-verdict" if raw is not None and raw.startswith("status:") else raw
 
 
 class Setup:
@@ -154,7 +146,7 @@ def payload(k: int) -> bytes:
     return k.to_bytes(REPLAY_FRAME_BYTES, "big")
 
 
-def releases(records: Sequence[BlockGrid], buckets: int) -> dict[int, int]:
+def releases(records: Sequence[Record], buckets: int) -> dict[int, int]:
     """Each real frame's release bucket, read from the records' slots."""
     out = {}
     for w, record in enumerate(records):
@@ -166,7 +158,7 @@ def releases(records: Sequence[BlockGrid], buckets: int) -> dict[int, int]:
     return out
 
 
-def padding(record: BlockGrid) -> tuple[int, int]:
+def padding(record: Record) -> tuple[int, int]:
     """Real frames and slots of a record."""
     real = sum(sum(slot is not None for slot in row) for row in record.grid)
     return real, sum(len(row) for row in record.grid)
@@ -181,7 +173,7 @@ def config_windows(cfg: dict, buckets: int) -> int:
 
 
 def diagnose(w: int, buckets: int, own_late: int, deviating: Sequence[tuple[int, int, int]], expected,
-             record: BlockGrid) -> tuple[str, dict]:
+             record: Record) -> tuple[str, dict]:
     """A mismatched egress window's cause, and the first bucket where its grid leaves the Program's. `deviating` holds
     (anchor window, logical hand, actual hand) for every frame handed off its logical bucket. An earlier window's late
     frame handed before this window ends can reach it through the FIFO queue; `carried_late_frames` counts those
@@ -204,8 +196,8 @@ def replay_configuration(cfg: dict, setup: Setup, syncs: str = "hindsight", prio
     """One configuration through prover, shaper, certifier, records and audit, raw, committed and certified. The prover's
     syncs are `syncs` (`parse_sync_policy`), and an online rule starts from `prior` and reads the frames ready by `lag`
     buckets before each window (`online.declare`). The verifier is `audit` (a class with `audit.Audit`'s interface).
-    Returns one row per execution phase, the configuration's tallies and the online prover's history (empty for the
-    other policies)."""
+    Returns one row per link-window, the configuration's tallies and the online prover's history (empty for the other
+    policies)."""
     sync_set = setup.sync_set
     eager = ClockSync(min(sync_set.deltas), max(sync_set.rhos))
     raw, committed, certified = audit(), audit(), audit()
@@ -390,8 +382,8 @@ def summarize(rows: Sequence[dict], tally: dict, setup: Setup) -> dict:
             s["delivery_delay_ms"] = hist_percentiles(t["delivery"])
         summary[side] = s
     summary["committed_agrees"] = all(r["raw"] == r["committed"] for r in rows)
-    summary["certified_agrees"] = all(certified_of(r["raw"]) == r["certified"] for r in rows)
-    summary["disagreements"] = [r for r in rows if r["raw"] != r["committed"] or certified_of(r["raw"]) != r["certified"]]
+    summary["certified_agrees"] = all(r["raw"] == r["certified"] for r in rows)
+    summary["disagreements"] = [r for r in rows if not r["raw"] == r["committed"] == r["certified"]]
     summary["violations"] = [r for r in rows if any(r[k] for k in AUDITS)]
     return summary
 

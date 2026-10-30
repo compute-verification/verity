@@ -23,8 +23,8 @@ from verity.ml.definitions.registry import prims as P
 
 from verity.ml.circuits.silicon.cast import f32_is_nan as is_nan_f32_word, f32_to_bf16_hw_word, f32_to_bf16_word
 
-CAPTURES = Path(__file__).resolve().parents[4] / "verity/ml/circuits/ops/tests/fixtures/tc-total-2026-09-07"
-DEVICES = ("4090", "a100")
+REPO = Path(__file__).resolve().parents[2]
+MEASURED = sorted((REPO / "docs/data/tc-total-2026-09-07").glob("*/cvt_special.json"))
 
 #: `Serve_v1{C=B0,LP=32,STEPS=7}`: its digest under the v0 codec and the earlier builder, which the NaN record was written under (no
 #: bound definition changes it); the builder fix B.1 and the v1 codec (the defaults) give the same program the digest
@@ -53,9 +53,9 @@ def test_the_two_registered_conversions_are_the_two_family_versions():
             assert P.F32ToBf16Rn.evaluate(x) == P.F2fpBf16.evaluate(x), hex(x)
 
 
-@pytest.mark.parametrize("device", DEVICES)
-def test_f2fp_matches_every_measured_cvt_word(device: str):
-    record = json.loads((CAPTURES / device / "cvt_special.json").read_text())
+@pytest.mark.parametrize("path", MEASURED, ids=lambda p: p.parent.name)
+def test_f2fp_matches_every_measured_cvt_word(path: Path):
+    record = json.loads(path.read_text())
     assert record["n_nondeterministic"] == 0 and len(record["words"]) == 4403
     nan = 0
     for entry in record["words"]:
@@ -98,7 +98,7 @@ def test_conformance_record_names_the_evidence():
 
 
 def test_scan_records_match_the_conformance_record():
-    """The two store scans, B0's and B1's (`root`'s `B0.json` and `B1.json`), are what the record states."""
+    """The two store scans (`data/l8-nan-scan-2026-09-07/`) are what the record states."""
     root = Path(__file__).resolve().parents[2] / "data" / "l8-nan-scan-2026-09-07"
     stated = CF.NAN_CANONICALISATION["recorded_traces_finite"]
     for config in ("B0", "B1"):

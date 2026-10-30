@@ -5,11 +5,10 @@
 One entry per registered definition (`Name_vN`): its status (`exact-model-tested` | `model-untested` |
 `not-yet-established` | `superseded`), the free-text qualification attached to the status, and — for the
 definitions with recorded production divergences or derived Inputs — a structured `qualifications` list. The
-Input-gate qualifications (the `cos_sin_cache` table) are recorded here too, so that no
+Input-gate qualifications (the `cos_sin_cache` table, typed-b1.md §5.2) are recorded here too, so that no
 summary of the B1/B0 programs can be produced from this record without them.
 
-`tests/program/test_conformance_record.py` holds the record to the registry, and `tests/program/test_nan_conversion.py`
-holds its NaN entry to the L8 NaN store scan (the data directory that test names) and the measured conversion words.
+The record is what typed-b1.md §3 states in prose; the two must agree (`tests/program/test_conformance_record.py`).
 """
 
 from __future__ import annotations
@@ -36,20 +35,19 @@ INPUT_QUALIFICATIONS = [
      "statement": "the Input gates of this table are 'rebuilt from the registered source' only if that source is the CUDA computation"},
 ]
 
-# Recorded production divergences, keyed by definition id.  The B0 store sweep is `verity-vllm rmsnorm-fused-sweep` over
-# the B0 bundle (`rmsnorm_fused_sweep.BUNDLE`), which neither the tree nor the evidence store keeps.
+# Recorded production divergences (typed-b1.md §5), keyed by definition id.
 DIVERGENCES = {
     "RMSNormFusedCuda_v1": [
         {"where": "B1 t=1/layers.27/post_attention_layernorm.rmsnorm/port=0, word 629 of 1536", "ir": "0x3f04", "captured": "0x3f03",
          "words_compared": 218112, "mismatching_words": 1,
          "cause": "models fused_add_rms_norm_kernel<bf16, 8>; production (VLLM_BATCH_INVARIANT=1) launches the generic kernel "
                   "(different per-thread partials and BlockReduce over 1024 threads) — see RMSNormFusedCuda_v2",
-         "b0_store_sweep": {"rows": 2340, "rows_exact": 2327, "record": "not kept (the B0 bundle is not in the evidence store)"}},
+         "b0_store_sweep": {"rows": 2340, "rows_exact": 2327, "record": "fixtures/verity-ir/rmsnorm-fused-b0/sweep-2026-09-07.json"}},
     ],
     "RMSNormFusedCuda_v2": [
         {"where": "B1 t=1/layers.27/post_attention_layernorm.rmsnorm/port=0, word 629 of 1536",
          "status": "not re-checked locally (the B1 store is on the pod); the B0 store sweep reproduces all 2,340 rows incl. the 13 v1 misses",
-         "b0_store_sweep": {"rows": 2340, "rows_exact": 2340, "record": "not kept (the B0 bundle is not in the evidence store)"}},
+         "b0_store_sweep": {"rows": 2340, "rows_exact": 2340, "record": "fixtures/verity-ir/rmsnorm-fused-b0/sweep-2026-09-07.json"}},
     ],
 }
 
@@ -61,19 +59,19 @@ NAN_CANONICALISATION = {
     "production_conversion": "F2fpBf16_v1",
     "nan_word": "0x7FFF",
     "nan_rule": "every FP32 NaN (either sign, quiet or signalling, any payload) -> 0x7FFF; sign and payload dropped",
-    "source": "measured: verity/ml/circuits/ops/tests/fixtures/tc-total-2026-09-07/{a100,4090}/cvt_special.json -- 84 NaN inputs per device "
+    "source": "measured: docs/data/tc-total-2026-09-07/{a100,4090}/cvt_special.json -- 84 NaN inputs per device "
               "(12 +qNaN, 12 -qNaN, 34 +sNaN, 26 -sNaN), all 0x7FFF on both devices; not an assumption",
     "not_bound": {"F32ToBf16Rn_v1": "NaN -> 0x7FC0 (software canonical); registered, unchanged, not bound by B0/B1"},
     "interface_family": {"F2fpBf16_v1": "veritor.tc-ampere-bf16@2 f32_to_bf16", "F32ToBf16Rn_v1": "veritor.tc-ampere-bf16@1 f32_to_bf16"},
-    "narrow_delta": {"python": "tests/program/test_nan_conversion.py test_the_two_registered_conversions_are_the_two_family_versions "
-                               "(20,024 words: 12 NaN, 12 finite edge words, 20,000 random)",
-                     "not_in_this_repository": "the exhaustive 2^32 sweeps that first showed it (a Lean statement, a Rust check "
-                                               "and the predecessor implementation's Python sweep)"},
+    "narrow_delta": {"lean": ["VeritorSpec.TCBHw.castF32ToBf16Hw_eq_of_not_nan", "VeritorSpec.TCBHw.castF32ToBf16Hw_of_nan",
+                              "VeritorSpec.TCBHw.castF32ToBf16Hw_ne_iff"],
+                     "rust": "archive/sp1/common/src/tc.rs the_two_casts_differ_only_on_nan (all 2^32 words, release build)",
+                     "python": "the predecessor implementation's exhaustive 2^32 sweep (all 2^32 words; not in this repository)"},
     "program_digests_unchanged": {"B0": "03405bbdc7ec2825abd79aad723a2c75a417e8b3084567f89cf3341e31a5ab2d",
                                   "B1": "11f3b7b6092d8020821f2388d91b029b2ad033a925bf2682bd918720d6e61097"},
     "recorded_traces_finite": {"B0": {"bf16_leaves": 14126, "bf16_words": 12568704, "nan_words": 0, "inf_words": 0},
                                "B1": {"bf16_leaves": 271278, "bf16_words": 916168704, "nan_words": 0, "inf_words": 0},
-                               "record": "integrations/vllm/data/l8-nan-scan-2026-09-07/{B0,B1}.json (python -m verity_vllm.check.store_nan_scan)"},
+                               "record": "docs/data/l8-nan-scan-2026-09-07/{B0,B1}.json (python -m verity_vllm.check.store_nan_scan)"},
 }
 
 

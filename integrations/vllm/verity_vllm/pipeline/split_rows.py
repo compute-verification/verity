@@ -9,7 +9,7 @@ Part unit (row, h, s) reads ``in0`` = ``q_nope[h]``, ``in1`` = ``q_rope[h]`` and
 stores: the reader computes every split's with the twin (`sparse_mla_split_twins.part_rows`) and holds the twin's combine of
 them to the row's served output.  Combine unit (row, h) reads ``in0.s`` = split s's ``lse`` and ``in1.s`` = its partial for each
 split s, and returns ``o0`` = the served head h.  The window wires each of those rows to the output row of the part unit that
-wrote it (`wire`, `commit.wiring`), so a sampled combine's inputs are the committed outputs of its parts."""
+wrote it (`wire`, `commit.wiring`), so a drawn combine's inputs are the committed outputs of its parts."""
 from __future__ import annotations
 
 import re
@@ -55,10 +55,18 @@ def units(tp: Template, statics: dict[str, Any]) -> int:
     return int(statics["NH"]) * (1 if combine(tp) else len(positions(tp, statics)))
 
 
-def cuts(tp: Template) -> dict[str, int] | None:
-    """Template ``tp``'s cuts (`interface.Layout.cut`): a combine's every parameter one row per split s (its row s, which the
-    window wires to a part's output row), a part's none."""
-    return {nm: ty.n for nm, ty in tp.fn.signature()[0]} if combine(tp) else None
+def unit_rows(tp: Template) -> tuple[list[tuple[str, str, int, list[str]]], list[tuple[str, tuple[int, ...]]]]:
+    """Template ``tp``'s rows as `UnitStager` stages them: a part's ``in<g>``, one v2 row per parameter, a combine's ``in<g>.<s>``,
+    one v2 row per split s of parameter g (its row s, which the window wires to a part's output row); then one v2 output row
+    ``o<j>`` per return field (with hidden outputs the proved scope takes output rows of one port each)."""
+    from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+
+    params, ret = tp.fn.signature()
+    if combine(tp):
+        ins = [(f"in{g}.{s}", V2, sum(ty.elem.leaf_widths()), [f"{nm}[{s}]"]) for g, (nm, ty) in enumerate(params) for s in range(ty.n)]
+    else:
+        ins = [(f"in{g}", V2, sum(ty.leaf_widths()), [nm]) for g, (nm, ty) in enumerate(params)]
+    return ins, [(V2, (j,)) for j in range(len(getattr(ret, "fields", None) or (ret,)))]
 
 
 def _twins(statics: dict[str, Any], what: str) -> tuple[Callable, Callable, float]:

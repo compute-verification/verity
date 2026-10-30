@@ -204,6 +204,13 @@ def wide_word(store: torch.Tensor, i: int, limbs: int) -> int:
     return sum((x & 0xFFFFFFFF) << (32 * e) for e, x in enumerate(v))
 
 
+def wide_block(store: torch.Tensor, j: int, lane_words: int, limbs: int) -> bytes:
+    """Block j of the bandwidth audit's tag (lane j mod 32's words of task j div 32, each little-endian)."""
+    q, lane = divmod(j, LANES)
+    rec = store[q * LANES * lane_words * limbs:(q + 1) * LANES * lane_words * limbs].view(lane_words * limbs, LANES)
+    return rec[:, lane].contiguous().cpu().numpy().tobytes()
+
+
 TASK_BYTES = TILE_ROWS * TASK_COLS
 
 
@@ -236,5 +243,5 @@ def tensor_limb_word(p: torch.Tensor, i: int, limbs: int) -> int:
 
 __all__ = ["LANES", "LANE_BYTES", "PACKINGS", "TASK_BYTES", "TASK_COLS", "TASK_TILES", "TILE_ROWS", "check_shape",
            "fragment_stream", "lane_words", "pack", "payloads", "plain_fragments", "store_words", "tasks", "tensor_limb_word",
-           "tensor_limbs", "tensor_unlimbs", "tensor_word", "unfragment", "unpack", "unpayload", "unplain",
+           "tensor_limbs", "tensor_unlimbs", "tensor_word", "unfragment", "unpack", "unpayload", "unplain", "wide_block",
            "wide_lane_words", "wide_pack", "wide_payloads", "wide_store_words", "wide_unpack", "wide_unpayload", "wide_word"]

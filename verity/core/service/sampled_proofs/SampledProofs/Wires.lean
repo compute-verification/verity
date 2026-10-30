@@ -63,16 +63,15 @@ structure Wire where
   cuts : Nat
   deriving Repr, BEq
 
-/-- A window circuit's wiring, the dataflow between its proof blocks: the templates by descriptor id, the cuts
-(`{tid: {port: k}}`) and the wires. -/
-structure Wiring where
+/-- The templates by descriptor id, the cuts (`{tid: {port: k}}`) and the wires. -/
+structure Circuit where
   templates : List (String × Template)
   cuts : List (String × List (String × Nat))
   wires : List Wire
   deriving Repr
 
 /-- The number of rows template `tid`'s port `p` is cut into (absent: 1). -/
-def Wiring.cutsOf (c : Wiring) (tid p : String) : Nat := (((c.cuts.lookup tid).getD []).lookup p).getD 1
+def Circuit.cutsOf (c : Circuit) (tid p : String) : Nat := (((c.cuts.lookup tid).getD []).lookup p).getD 1
 
 /-- The digits' radices and steps, the fastest digit first. -/
 def Wire.pairs (w : Wire) : List (Nat × Int) := (w.radix.zip w.step).reverse
@@ -128,7 +127,7 @@ structure Refusal where
 
 /-- The first malformed cut: a template or port it names that isn't one, or `k` that is 0 or doesn't divide the port's outer
 length and words. -/
-def cutsOk (c : Wiring) : Bool :=
+def cutsOk (c : Circuit) : Bool :=
   c.cuts.all fun (tid, kv) => match c.templates.lookup tid with
     | some t => kv.all fun (p, k) => match t.rows.lookup p with
       | some q => 0 < k && q.outer % k == 0 && q.words % k == 0
@@ -137,7 +136,7 @@ def cutsOk (c : Wiring) : Bool :=
 
 /-- The wire's own refusal, before its bounds: its templates, ports, rows and widths. With them, the reader and writer
 templates, the reader row's words and the reader's cut. -/
-def shape (c : Wiring) (w : Wire) : Except Code (Template × Template) :=
+def shape (c : Circuit) (w : Wire) : Except Code (Template × Template) :=
   match c.templates.lookup w.reader, c.templates.lookup w.writer with
   | some rt, some wt =>
     match rt.rows.lookup w.port, wt.outs.lookup w.out with
@@ -172,17 +171,17 @@ structure Summary where
   deriving Repr
 
 /-- The first wire refusal, by index. -/
-def firstWire (c : Wiring) (f : Wire → Option Code) : Option Refusal :=
+def firstWire (c : Circuit) (f : Wire → Option Code) : Option Refusal :=
   (c.wires.zipIdx.find? fun (w, _) => (f w).isSome).bind fun (w, i) => (f w).map fun e => ⟨e, some i⟩
 
 /-- The wire's refusal, with the closed-form bounds. -/
-def wireCode (c : Wiring) (w : Wire) : Option Code :=
+def wireCode (c : Circuit) (w : Wire) : Option Code :=
   match shape c w with
   | .error e => some e
   | .ok (rt, wt) => if boundsOk w rt wt then none else some .bounds
 
 /-- The reader row's words of a wire whose shape passed. -/
-def rowWords (c : Wiring) (w : Wire) : Nat :=
+def rowWords (c : Circuit) (w : Wire) : Nat :=
   match c.templates.lookup w.reader with
   | some rt => match rt.rows.lookup w.port with
     | some p => p.words / c.cutsOf w.reader w.port
@@ -190,7 +189,7 @@ def rowWords (c : Wiring) (w : Wire) : Nat :=
   | none => 0
 
 /-- **The check at the size of the description**: the refusals in the module docstring's order, else the summary. -/
-def check (c : Wiring) : Except Refusal Summary :=
+def check (c : Circuit) : Except Refusal Summary :=
   if !cutsOk c then .error ⟨.cuts, none⟩
   else match firstWire c (wireCode c) with
     | some r => .error r
@@ -229,7 +228,7 @@ def Wire.entries (w : Wire) : List Entry :=
 def boundsRef (w : Wire) (rt wt : Template) : Bool :=
   w.entries.all fun ((_, u, _, _), (_, v, _)) => u < rt.units && 0 ≤ v && v < (wt.units : Int)
 
-def wireCodeRef (c : Wiring) (w : Wire) : Option Code :=
+def wireCodeRef (c : Circuit) (w : Wire) : Option Code :=
   match shape c w with
   | .error e => some e
   | .ok (rt, wt) => if boundsRef w rt wt then none else some .bounds
@@ -238,7 +237,7 @@ def wireCodeRef (c : Wiring) (w : Wire) : Option Code :=
 def distinctRows (es : List Entry) : Bool := decide (es.map (·.1)).Nodup
 
 /-- **The unrolled reference**: `check`'s refusals with the bounds and the overlap taken entry by entry, else every entry. -/
-def checkRef (c : Wiring) : Except Refusal (List Entry) :=
+def checkRef (c : Circuit) : Except Refusal (List Entry) :=
   if !cutsOk c then .error ⟨.cuts, none⟩
   else match firstWire c (wireCodeRef c) with
     | some r => .error r
@@ -346,7 +345,7 @@ def Template.ofJson (j : Json) : Except String Template := do
     pure (o, n)
   return { units, rows, outs }
 
-def Wiring.ofJson (j : Json) : Except String Wiring := do
+def Circuit.ofJson (j : Json) : Except String Circuit := do
   let ts ← (← fields (← field j "templates")).mapM fun (tid, v) => do pure (tid, ← Template.ofJson v)
   let cs ← (← fields (← field j "cuts")).mapM fun (tid, v) => do
     pure (tid, ← (← fields v).mapM fun (p, k) => do pure (p, ← natOf "a cut" k))
@@ -367,9 +366,9 @@ def writerJson : Option (String × Int × String) → Json
   | some (t, v, o) => Json.arr #[toJson t, toJson v, toJson o]
   | none => Json.null
 
-def instanceCheck (sameKeysOk : Json → Except String Unit) (j : Json) : Except String (Wiring × List (String × Nat × String × Nat)) := do
+def instanceCheck (sameKeysOk : Json → Except String Unit) (j : Json) : Except String (Circuit × List (String × Nat × String × Nat)) := do
   sameKeysOk j
-  return (← Wiring.ofJson j, ← queriesOf j)
+  return (← Circuit.ofJson j, ← queriesOf j)
 
 /-- The `wires` piece: `check` on an instance (the section's docstring). -/
 def piece (j : Json) : Except String Json := do

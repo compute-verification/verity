@@ -13,9 +13,8 @@ Words are numpy u16 (bf16) and u32 (f32); everything is evaluated by `evaluation
 one IEEE round to nearest.
 
 `Attention` runs a micro-batch of slots, each at its own position (``lens`` = position + 1 keys), on the tensors' device:
-on CUDA through attn_bf16's reference kernels (`attn.qk` and `attn.pv` with ``path="ref"``, the kind ``attn_ref``: QK^T
-and PV, each word ``GemmCoordinate_v2{K, GEMM_HOPPER}``, PV's K the keys padded to a multiple of 16, which equals the
-K = 32 padding: both pad with +0 codes) and `softmax_t` (SoftmaxRow_v1 in
+on CUDA through kernels' `attn_ref` (QK^T and PV, each word ``GemmCoordinate_v2{K, GEMM_HOPPER}``, PV's K the keys
+padded to a multiple of 16, which equals the K = 32 padding: both pad with +0 codes) and `softmax_t` (SoftmaxRow_v1 in
 torch integer and f32 ops); elsewhere through the numpy kernels above, one call per distinct length. Scores and
 probabilities come out (B, H, C), zero past each slot's length. The step commits a head's probabilities, padded with +0 to 32
 keys, as one ``QkSoftmaxRowPad_v1{T=32, D}`` unit and its PV row as one ``PvRow_v1{T=32}`` (`plan`): the same words.
@@ -107,7 +106,7 @@ def pv(p: np.ndarray, values: np.ndarray) -> np.ndarray:
 
 # --- per-slot lengths, on the tensors' device ----------------------------------------------------------------------------
 
-ATTN = Path(__file__).resolve().parents[3] / "benchmarks" / "torch_gpu" / "attn_bf16" / "attn.py"
+ATTN_REF = Path(__file__).resolve().parents[3] / "benchmarks" / "torch_gpu" / "attn_ref" / "attn_ref.py"
 _ONE, _INF, _NAN = 0x3F800000, 0x7F800000, 0x7FFFFFFF
 
 
@@ -160,16 +159,16 @@ def softmax_t(scores: torch.Tensor, lens: torch.Tensor) -> torch.Tensor:
 
 
 @lru_cache(maxsize=1)
-def attn_bf16() -> Any:
-    """attn_bf16's launches (`benchmarks/torch_gpu/attn_bf16/attn.py`), or None when its file or sm_90a cubin isn't here."""
-    if not ATTN.exists():
+def attn_ref() -> Any:
+    """kernels' `attn_ref` module, or None when its file or cubin isn't here."""
+    if not ATTN_REF.exists():
         return None
-    spec = importlib.util.spec_from_file_location("attn", ATTN)
+    spec = importlib.util.spec_from_file_location("attn_ref", ATTN_REF)
     assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
-    sys.modules["attn"] = mod
+    sys.modules["attn_ref"] = mod
     spec.loader.exec_module(mod)
-    return mod if Path(mod.cubin_path()).exists() else None
+    return mod if mod.cubin_path().exists() else None
 
 
 def _host_words(t: torch.Tensor) -> np.ndarray:
@@ -181,24 +180,23 @@ def _dev(w: np.ndarray, device: Any) -> torch.Tensor:
 
 
 class Attention:
-    """One micro-batch's attention on ``device``: ``kind`` is ``attn_ref`` (CUDA, attn_bf16's reference kernels from its
-    cubin) or ``numpy``."""
+    """One micro-batch's attention on ``device``: ``kind`` is ``attn_ref`` (CUDA with kernels' cubin) or ``numpy``."""
 
     def __init__(self, device: Any, kind: str | None = None) -> None:
         self.device = torch.device(device)
         if kind is None:
-            kind = "attn_ref" if self.device.type == "cuda" and attn_bf16() is not None else "numpy"
-        if kind == "attn_ref" and (self.device.type != "cuda" or attn_bf16() is None):
-            raise ValueError(f"attn_ref runs on CUDA with attn_bf16's cubin ({ATTN.parent}/build.sh, $ATTN_BF16_CUBIN)")
+            kind = "attn_ref" if self.device.type == "cuda" and attn_ref() is not None else "numpy"
+        if kind == "attn_ref" and (self.device.type != "cuda" or attn_ref() is None):
+            raise ValueError(f"attn_ref runs on CUDA with its cubin ({ATTN_REF.parent})")
         self.kind = kind
 
     def __call__(self, q: torch.Tensor, keys: torch.Tensor, values: torch.Tensor, lens: torch.Tensor):
         """q (B, H, d), keys and values (B, C, d) bf16, lens (B,) -> scores, probabilities (B, H, C) and PV (B, H, d)."""
         if self.kind == "attn_ref":
-            ab, ln = attn_bf16(), lens.to(device=q.device, dtype=torch.int32)
-            s = ab.qk(q.contiguous(), keys.contiguous(), ln, fill=0, check_lens=False, path="ref")
+            ar, ln = attn_ref(), lens.to(device=q.device, dtype=torch.int32)
+            s = ar.qk(q.contiguous(), keys.contiguous(), ln, fill=0, check_lens=False)
             p = softmax_t(s, ln)
-            return s, p, ab.pv(p, values.contiguous(), ln, check_lens=False, path="ref")
+            return s, p, ar.pv(p, values.contiguous(), ln, check_lens=False)
         b, h, d = q.shape
         c = keys.shape[1]
         qw, kw, vw, ln = _host_words(q), _host_words(keys), _host_words(values), lens.cpu().numpy()

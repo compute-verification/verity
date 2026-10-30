@@ -315,7 +315,7 @@ def calibrate(trace: dict, *, ingress_bucket_ms: int = 100, n_delta: int = 16, n
               target_k_share: float | None = None, target_span_s: int = 3600,
               ingress_max_delay_ms: int | None = None) -> dict:
     """Size every link of the trace and report the costs and the capacity. The ingress FIFO's p99 delay is at most one
-    ingress bucket, or `ingress_max_delay_ms` when given. With `k_bits` (K, the policy's budget per inference block in
+    ingress bucket, or `ingress_max_delay_ms` when given. With `k_bits` (K, the policy's budget per isolation unit in
     bits) the ingress charge is also reported as a share of K, under the K it was computed with."""
     if target_k_share is not None and k_bits is None:
         raise ValueError("a target share of K needs K (k_bits)")
@@ -442,7 +442,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--headroom", type=float, default=2.0)
     ap.add_argument("--epsilon", type=float, default=1e-4, help="target honest miss rate per window")
     ap.add_argument("--k-bits", type=float, default=None,
-                    help="K, the policy's budget per inference block in bits (the inference-only policy: 9.12e7); "
+                    help="K, the policy's budget per isolation unit in bits (the inference-only policy: 9.12e7); "
                          "without it the ingress charge is reported in bits only")
     ap.add_argument("--target-k-share", type=float, default=None, help="with --k-bits")
     ap.add_argument("--target-span-s", type=int, default=3600)

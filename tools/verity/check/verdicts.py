@@ -37,15 +37,10 @@ import io
 import json
 import lzma
 import os
-import importlib.util
 import sys
 import tarfile
 from pathlib import Path
 
-_spec = importlib.util.spec_from_file_location("verdicts_settings", Path(__file__).resolve().parent / "settings.py")
-#: every environment variable check reads, declared once (`settings.py`), from beside this file: `plan.py --on` sends both
-SETTINGS = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(SETTINGS)
 SKIP = {"check": {"lean-deps", "lean-builds", "lean-changed", "lean-records", "lean-artifacts"}, "tests": {"logs", "durations.json"}}
 SCRATCH = {"check": ("lean-audit-scratch-",), "tests": ()}
 
@@ -56,9 +51,10 @@ def _skipped(prefix: str, top: str) -> bool:
 
 def roots() -> dict[str, Path]:
     """The caches, where `check.py` (`cache_dir()`) and `suites.py` (`CACHE`) keep them; `tests/test_verdicts.py` pins the two."""
-    S, home = SETTINGS, Path.home()
-    return {"check": Path(S.CHECK_CACHE or home / ".cache" / "verity-check"),
-            "tests": Path(S.VERITY_TEST_CACHE or Path(S.XDG_CACHE_HOME or home / ".cache") / "verity" / "tests")}
+    env = os.environ
+    home = Path.home()
+    return {"check": Path(env.get("CHECK_CACHE") or home / ".cache" / "verity-check"),
+            "tests": Path(env.get("VERITY_TEST_CACHE") or Path(env.get("XDG_CACHE_HOME") or home / ".cache") / "verity" / "tests")}
 
 
 def entries() -> dict[str, Path]:
@@ -102,7 +98,7 @@ def _index_load(base: Path) -> dict:
 def _digests(found: dict[str, Path] | None = None) -> dict[str, str]:
     """`{pack path: sha256}` of every entry, reading only the files the root's index doesn't know by (size, mtime_ns).  The
     caches run to hundreds of GB, and re-reading every entry at both ends of a check held a finished run for an hour of disk
-    reads once another job had evicted the page cache.  A stale or garbled index only costs the
+    reads once another job had evicted the page cache (14 Oct, r20261014-032950-9e49).  A stale or garbled index only costs the
     re-read; an entry rewritten in place with its size and mtime_ns unchanged is the one change it would miss, and every writer
     replaces entries atomically."""
     found = entries() if found is None else found
@@ -145,7 +141,7 @@ def snapshot() -> dict[str, str]:
 
 
 #: an xz pack's filter: a dictionary spanning many entries, since one tree's circuit-check entries share most of what they record
-#: (300 of them, 68 MB: 11 MB gzipped, 0.35 MB this way, in less time)
+#: (300 of them, 68 MB: 11 MB gzipped, 0.35 MB this way, in less time; vy-nebius-cpu-1, 19 Oct)
 XZ_FILTERS = [{"id": lzma.FILTER_LZMA2, "preset": 1, "dict_size": 64 << 20}]
 
 

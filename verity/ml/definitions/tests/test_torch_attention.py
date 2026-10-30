@@ -212,6 +212,24 @@ def _tbf16(a):
     return torch.tensor(np.asarray(a, np.float32)).to(torch.bfloat16)
 
 
+def test_rope_matches_torch_word_for_word() -> None:
+    """HF's `apply_rotary_pos_emb` on q at smollm2-135m's D = 64 and rope_theta = 1e5, forward and backward."""
+    torch = _torch()
+    rng = np.random.default_rng(11)
+    D, T = 64, 128
+    inv = 1.0 / (1e5 ** (torch.arange(0, D, 2, dtype=torch.float32) / D))
+    emb = torch.arange(T, dtype=torch.float32)[:, None] * inv[None, :]
+    emb = torch.cat([emb, emb], -1)
+    cos, sin = emb.cos().to(torch.bfloat16), emb.sin().to(torch.bfloat16)
+    x = _tbf16(rng.normal(0, 2, (T, D))).requires_grad_(True)
+    out = x * cos + torch.cat((-x[..., D // 2:], x[..., :D // 2]), -1) * sin
+    g = _tbf16(rng.normal(0, 1, (T, D)))
+    out.backward(g)
+    cs = np.concatenate([_words(cos)[:, :D // 2], _words(sin)[:, :D // 2]], 1)
+    _same(TK.rope_hf(_words(x), cs), _words(out))
+    _same(TK.rope_hf_backward(_words(g), cs), _words(x.grad))
+
+
 def test_repeat_kv_backward_matches_torch_word_for_word() -> None:
     """HF's `repeat_kv` at smollm2-135m's three KV heads of three query heads each."""
     _torch()

@@ -328,7 +328,7 @@ def test_the_slim_keep_is_written_only_for_the_replay_s_own_draw(tmp_path):
 
 
 def test_a_rows_sha512_keep_carries_only_the_salt_keys_of_the_tensors_its_replay_opened_never_the_registrations_key(tmp_path):
-    """``Kw`` opens every weights leaf (each tensor's salt key derives from it), and a keep is read by later replays: no file of a
+    """The slim keep is published, and ``Kw`` opens every weights leaf (each tensor's salt key derives from it): no file of a
     rows-sha512 keep holds ``Kw`` or an unopened tensor's ``tensor_key(Kw, t)``, only those of the tensors the replay opened, with the
     bundle's bytes of those alone.  A replay from the keep opens the same tensors and reports the rest unopened, not mismatched."""
     tree = weights_tree(_served()) | {"extra": {"model.rotary_emb.cos_sin_cache": 2}}
@@ -419,9 +419,9 @@ def test_a_keep_replays_only_under_the_draw_it_was_kept_for(tmp_path, monkeypatc
 
     out, _ = _decided(tmp_path)
     slim = CPU.open_keep(CPU.slim_path(out, 1))["keep"]
-    site = C2.ReplaySources(args=SimpleNamespace(replay_draw="uniform"), out=out, pair=1, com=None, rc=None, row={}, reqs=[], sampling={}, tokens={},
-                            manifest=None, stop_of_record={}, ids_full={}, versions={}, components={}, vc_result=None, weights_of=None,
-                            weights_check=None, tl=None)
+    site = C2.Site(args=SimpleNamespace(replay_draw="uniform"), out=out, pair=1, com=None, rc=None, row={}, reqs=[], sampling={}, tokens={},
+                   manifest=None, stop_of_record={}, ids_full={}, versions={}, components={}, vc_result=None, weights_of=None,
+                   weights_check=None, tl=None)
     drawn = {"picks": [tuple(p) for p in slim["picks"]]}
     monkeypatch.setattr(C2, "plan", lambda s: {"replay": drawn})
     CPU.kept_draw(site, slim)

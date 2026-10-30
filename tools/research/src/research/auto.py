@@ -16,8 +16,8 @@ then takes, in order:
 
 A GPU job, a run naming its own node, or one asking more than a pool slot gives stays on node 2's queue. A machine that can't
 be read is skipped; with node 2 unread and no pool fitting, the job is refused (`Unplaceable`) with where to run it. A pool
-run waits up to slot_only.POOL_WAIT_S (4 h) in its line and then exits 75 without running; its --timeout counts from taking
-the slot, and a wait inside it for a Lean audit slot (lean_slot.py) moves it later by as long.
+run waits up to an hour in its line (slot_only.POOL_WAIT_S) and then exits 75 without running; its --timeout counts from
+taking the slot.
 """
 from __future__ import annotations
 
@@ -29,28 +29,25 @@ from pathlib import Path
 from typing import Any, Callable
 
 AUTO_NODE, AUTO_PROJECT = "vy-nebius-2", "verity"
-#: (machine, pool) where `--on auto` may spill: every CPU node's `research` pool, which is any lane's (slot_only.POOLS on cpu-1).
-#: With only cpu-1, 2, 3, 5 and 6 listed, 89% of 28 Oct's 122,705 waiting run-minutes passed while a slot of the same pool was
-#: free on another node. A node whose registry deadline has passed is skipped (`up`), so a stopped one costs no read.
-SPILL = tuple((f"vy-nebius-cpu-{i}", "research") for i in (1, 5, 3, 2, 6, 4, 7, 8, 9, 10, 11, 12))
+#: (machine, pool) where `--on auto` may spill: the `research` pools of cpu-1, 2, 3, 5 and 6 are any lane's (slot_only.POOLS
+#: on cpu-1). cpu-2's shares the train slot's and proofs' cores, which sat at load 45 of 256 while the other pools had 180 runs
+#: waiting; cpu-4's cores are the train slot's, proofs' and soundness's.
+SPILL = (("vy-nebius-cpu-1", "research"), ("vy-nebius-cpu-5", "research"), ("vy-nebius-cpu-3", "research"),
+         ("vy-nebius-cpu-2", "research"), ("vy-nebius-cpu-6", "research"))
 DESCRIPTION = Path("infra/cluster/descriptions/nebius.toml")
 SLOT_PY = Path("tools/verity/check/slot.py")
 READ_TIMEOUT_S = 30
 #: a machine whose DISK_PATH has fewer free inodes or GB than these takes no `--on auto` job: on 27 Oct cpu-5 and cpu-6 ran out of
 #: inodes with half their bytes free, and every job placed there failed shipping its source or mid-build with ENOSPC
 DISK_PATH, MIN_FREE_INODES, MIN_FREE_GB = "/workspace", 400_000, 50
-#: a node's Lean slot caps (tools/verity/check/lean_slot.py): a records run (`lean_changed.py --records`) waits there for a build
-#: slot after its pool slot, so `choose` ranks such a run by both lines
-LEAN_SLOTS = "/workspace/research/locks/lean-slots"
 
 
 class Unplaceable(Exception):
-    """No pool fits the job and node 2 can't be read, or takes runs only through its pools (remote.RUNS_VIA_SLOT_FILE): its
-    queue would place it where nothing runs it (26 Oct: node 2 stopped, and an `--on auto` job too big for a pool slot was
-    refused there with a stale admission window). A slot-only node 2 offered its share to a 33-CPU job and then refused it."""
+    """No pool fits the job and node 2 can't be read: its queue would place it on a node that isn't up (26 Oct: node 2 stopped,
+    and an `--on auto` job too big for a pool slot was refused there with a stale admission window)."""
 
 PROBE = '''
-import fcntl, json, os, sys, types
+import json, os, sys, types
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -82,30 +79,6 @@ def doc(f):
         return {"error": f"{type(e).__name__}: {e}"}
 
 
-def lean_build():
-    f = Path(LEAN)
-    if not f.is_file():
-        return None
-    n = next((int(w[1]) for w in (l.split("#")[0].split() for l in f.read_text().splitlines()) if len(w) == 2 and w[0] == "build"
-              and w[1].isdigit()), 0)
-    free = 0
-    for i in range(n):
-        p = f.parent / f"lean-build-{i}.lock"
-        if not p.exists():
-            free += 1
-            continue
-        fd = os.open(p, os.O_RDONLY)
-        try:
-            fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
-            free += 1
-        except BlockingIOError:
-            pass
-        finally:
-            os.close(fd)
-    line = f.parent / "lean-line-build"
-    return {"n": n, "free": free, "waiters": len(list(line.iterdir())) if line.is_dir() else 0}
-
-
 def disk_short():
     if not os.path.isdir(DISK):
         return None
@@ -121,11 +94,7 @@ def disk_short():
 out = {}
 if SHARE is not None:
     out["share"] = doc(lambda: share(SHARE, CLAIMS, CPU_ROOT))
-    if os.path.exists(SLOT_ONLY):
-        out["slot_only"] = SLOT_ONLY
 short = disk_short()
-if POOLS:
-    out["lean"] = doc(lean_build)
 for pool, slots in POOLS.items():
     out[pool] = {"error": f"disk: {short}"} if short else \
         doc(lambda: load("auto_slot_" + pool, SLOT_SRC, {"CHECK_SLOTS": slots}).status_doc(datetime.now(timezone.utc)))
@@ -152,13 +121,12 @@ def share_cpus(source: Path) -> str | None:
 
 
 def payload(source: Path, cpus: int, share: str | None, pools: list[str]) -> bytes:
-    from . import cores, remote
+    from . import cores
     from .pods.nebius import slot_only
 
     head = {"CORES_SRC": Path(cores.__file__).read_text(), "SLOT_SRC": (Path(source) / SLOT_PY).read_text() if pools else "",
             "JOB_CPUS": max(cpus, 1), "SHARE": share, "CLAIMS": str(cores.CLAIMS), "CPU_ROOT": str(cores.CPU_ROOT),
-            "POOLS": {p: slot_only.POOLS[p] for p in pools}, "DISK": DISK_PATH, "MIN_INODES": MIN_FREE_INODES, "MIN_GB": MIN_FREE_GB,
-            "SLOT_ONLY": remote.RUNS_VIA_SLOT_FILE, "LEAN": LEAN_SLOTS}
+            "POOLS": {p: slot_only.POOLS[p] for p in pools}, "DISK": DISK_PATH, "MIN_INODES": MIN_FREE_INODES, "MIN_GB": MIN_FREE_GB}
     return ("".join(f"{k} = {v!r}\n" for k, v in head.items()) + PROBE).encode()
 
 
@@ -173,25 +141,9 @@ def _ssh(argv: list[str], data: bytes) -> subprocess.CompletedProcess:
     return subprocess.run(argv, input=data, capture_output=True, timeout=READ_TIMEOUT_S)
 
 
-def up(machine: str, now: float | None = None) -> bool:
-    """Whether the registry gives ``machine`` no deadline or one still ahead (a node past it is stopped or about to be). An
-    unlisted machine (remote.Refused) or an unreadable deadline (ValueError) raises, and `read` records it as the machine's."""
-    import datetime as dt
-
-    from . import remote
-
-    dl = remote.resolve_machine(machine, AUTO_PROJECT).get("deadline")
-    if not dl:
-        return True
-    end = dt.datetime.fromisoformat(str(dl).replace("Z", "+00:00")).timestamp()
-    return end > (dt.datetime.now(dt.UTC).timestamp() if now is None else now)
-
-
-def read(source: Path, cpus: int, *, reach: Callable[[str], list[str]] | None = None, run: Callable | None = None,
-         alive: Callable[[str], bool] | None = None) -> dict[str, dict | str]:
-    """Each machine's documents (node 2's under "share", a pool's under its name, its Lean build slots under "lean"), read at
-    once, or why they couldn't be; a machine past its registry deadline (`up`) isn't asked."""
-    reach, run, alive = reach or _reach, run or _ssh, alive or up
+def read(source: Path, cpus: int, *, reach: Callable[[str], list[str]] | None = None, run: Callable | None = None) -> dict[str, dict | str]:
+    """Each machine's documents (node 2's under "share", a pool's under its name), read at once, or why they couldn't be."""
+    reach, run = reach or _reach, run or _ssh
     share = share_cpus(source)
     asks: dict[str, list[str]] = {AUTO_NODE: []}
     for machine, pool in SPILL:
@@ -200,12 +152,10 @@ def read(source: Path, cpus: int, *, reach: Callable[[str], list[str]] | None = 
     def one(item: tuple[str, list[str]]) -> dict | str:
         name, pools = item
         try:
-            if name != AUTO_NODE and not alive(name):
-                return "past its registry deadline"
             r = run(reach(name), payload(source, cpus, share if name == AUTO_NODE else None, pools))
         except subprocess.TimeoutExpired:
             return f"no answer in {READ_TIMEOUT_S} s"
-        except Exception as e:                    # not listed, not this project's, no source, bad deadline: never chosen
+        except Exception as e:                                       # not listed, not this project's, no source: never chosen
             return str(e) or type(e).__name__
         if r.returncode:
             err = r.stderr.decode(errors="replace").strip().splitlines()
@@ -235,23 +185,13 @@ def _pool(doc: Any, cpus: int, mem_gb: float) -> tuple[int, int, int, str]:
     return len(fit), len(free), waiting, why
 
 
-def _lean(doc: Any) -> tuple[int, int, int] | None:
-    """A node's Lean build slots: (N, free, waiters), or None when it wasn't read or has none."""
-    lean = doc.get("lean") if isinstance(doc, dict) else None
-    if not isinstance(lean, dict) or "error" in lean or not lean.get("n"):
-        return None
-    return int(lean["n"]), int(lean.get("free") or 0), int(lean.get("waiters") or 0)
-
-
-def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float, lean: bool = False) -> tuple[tuple[str, str] | None, str]:
+def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float) -> tuple[tuple[str, str] | None, str]:
     """The pool to spill to ((machine, pool)), or None for node 2's queue, and why (module doc); `Unplaceable` when neither can
-    take it. With ``lean`` (a records run), a node counts only with a Lean build slot, and its line is the longer of the two."""
+    take it."""
     cpus = max(cpus, 1)
     n2 = docs.get(AUTO_NODE)
     share = n2.get("share") if isinstance(n2, dict) else None
-    if isinstance(n2, dict) and n2.get("slot_only"):
-        share, said = None, f"{AUTO_NODE} takes runs only through its pools ({n2['slot_only']}), so not from its share"
-    elif not isinstance(share, dict) or "error" in share:
+    if not isinstance(share, dict) or "error" in share:
         why = share.get("error") if isinstance(share, dict) else n2 if isinstance(n2, str) else "not read"
         share, said = None, f"{AUTO_NODE}'s share wasn't read ({why})"
     else:
@@ -265,30 +205,17 @@ def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float, lean: bool = F
         except (ValueError, KeyError, TypeError) as e:
             notes.append(f"{machine}'s {pool} pool skipped: {e}")
             continue
-        rank = (waiting + 1) / fit
-        if lean:
-            builds = _lean(doc)
-            if builds is None:
-                notes.append(f"{machine}'s {pool} pool skipped: no Lean build slots read there")
-                continue
-            n, bfree, bwait = builds
-            why += f"; Lean builds {bfree} of {n} free, {bwait} waiting"
-            if free > waiting and bfree <= bwait:
-                free = 0
-            rank = max(rank, (bwait + 1) / n)
         notes.append(f"{machine}'s {pool} pool: {why}")
         if free > waiting:
             return (machine, pool), "; ".join(notes) + ": a slot is free there now"
-        ranked.append((rank, i, (machine, pool)))
+        ranked.append(((waiting + 1) / fit, i, (machine, pool)))
     if ranked:
         (_, _, target) = min(ranked)
         return target, "; ".join(notes) + f": the shortest line per run that fits is {target[0]}'s {target[1]} pool"
     if share is None:
-        cant = "takes no run from its share" if isinstance(n2, dict) and n2.get("slot_only") else "can't be reached"
-        raise Unplaceable("; ".join(notes) + f": no pool fits and {AUTO_NODE} {cant}, so nothing would run it. "
+        raise Unplaceable("; ".join(notes) + f": no pool fits and {AUTO_NODE} can't be reached, so nothing would run it. "
                           f"Give it a node yourself: `research run --on MACHINE --mem-gb N`, a CPU node whose free memory fits "
-                          f"it (`research pods list`), or `--on {AUTO_NODE} --pool POOL` where a slot of that pool gives its "
-                          f"CPUs, or shrink --cpus/--mem-gb to a pool slot's")
+                          f"it (`research pods list`), or shrink --cpus/--mem-gb to a pool slot's")
     if share.get("fits") and not share["waiters"]:
         return None, "; ".join(notes) + f": no pool fits, and it starts on {AUTO_NODE} now"
     return None, "; ".join(notes) + f": no pool fits, so {AUTO_NODE}'s line"

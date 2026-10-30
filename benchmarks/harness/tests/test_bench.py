@@ -1051,7 +1051,7 @@ def test_arm_settings_name_a_protocol_arm_of_the_spec_and_a_control_it_runs(tmp_
         spec = load_spec(path)
         assert resolve_arms(spec.arms, spec.arm_modules, spec.arm_settings)[1].control == want
     for old, new, why in (('arms = ["stock-fp8", "pouw:pearl-c-sm120-v1-h3", "stock-fp8@compiled"]',
-                           'arms = ["stock-fp8", "pouw:pearl-c-h100-v1-h3", "stock-fp8@compiled"]', "must name a protocol arm"),
+                           'arms = ["stock-fp8", "pouw:ncp-v1", "stock-fp8@compiled"]', "must name a protocol arm"),
                           ('[arm_settings."pouw:pearl-c-sm120-v1-h3"]\n', '[arm_settings.stock]\n', "must name a protocol arm"),
                           ('precision = "bfloat16"', 'precision = "int4"', "precision is one of"),
                           ('control = "none"', 'control = "stock"', "control must be another arm"),
@@ -1632,14 +1632,14 @@ def test_intervals_use_the_t_quantile_for_n_and_ratios_refuse_a_zero_or_missing_
     """From n = 12 the interval used 1.96 instead of t (11 df: 2.201), too narrow; a zero baseline
     rep was dropped from the ratio, which then averaged the other reps; n = 1 rendered like a measured interval."""
 
-    from verity_bench.vllm.runner import _aggregate, summarize
+    from verity_bench.vllm.runner import _aggregate, _summary
 
-    assert summarize([1.0])["n"] == 1 and "ci95" not in summarize([1.0])
-    assert summarize([1.0, 3.0])["ci95"] == pytest.approx([2 - 12.706, 2 + 12.706])
-    assert summarize([1.0, 2.0, 3.0])["ci95"] == pytest.approx([2 - 4.303 / 3**0.5, 2 + 4.303 / 3**0.5])
+    assert _summary([1.0])["n"] == 1 and "ci95" not in _summary([1.0])
+    assert _summary([1.0, 3.0])["ci95"] == pytest.approx([2 - 12.706, 2 + 12.706])
+    assert _summary([1.0, 2.0, 3.0])["ci95"] == pytest.approx([2 - 4.303 / 3**0.5, 2 + 4.303 / 3**0.5])
     values = [float(i % 2) for i in range(12)]
     half = 2.201 * statistics.stdev(values) / 12**0.5
-    assert summarize(values)["ci95"] == pytest.approx([0.5 - half, 0.5 + half])
+    assert _summary(values)["ci95"] == pytest.approx([0.5 - half, 0.5 + half])
 
     arms = (Arm("stock"), Arm("candidate", control="stock"))
     point = expand_sweep("quick")[0]

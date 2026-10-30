@@ -168,11 +168,10 @@ def SameTree (a b : Flock.Registered.Port) : Prop :=
   a.root = b.root ∧ a.leaves = b.leaves ∧ a.domain = b.domain ∧ a.schema = b.schema
 
 /-- **A leaf's sessions' registrants' rows agree at one tree and position**: wherever registered reads `p` of unit
-`u`'s registrant in session `k` and `p'` of unit `u'`'s in session `k'` (of the leaf's group `ι` of statements: its
-32 lanes and the combine, or any group) name one registered tree (`SameTree`) and one position, the two registrants' rows
-there are one row's bytes, each at its session's encoding. -/
-def RowsAgree {ι : Type} (sess : ι → RowsSession) : Prop :=
-  ∀ (k k' : ι) (u : Fin (sess k).n) (u' : Fin (sess k').n) (p : (sess k).vb.Pos)
+`u`'s registrant in session `k` and `p'` of unit `u'`'s in session `k'` name one registered tree (`SameTree`) and one
+position, the two registrants' rows there are one row's bytes, each at its session's encoding. -/
+def RowsAgree (sess : Option (Fin 32) → RowsSession) : Prop :=
+  ∀ (k k' : Option (Fin 32)) (u : Fin (sess k).n) (u' : Fin (sess k').n) (p : (sess k).vb.Pos)
     (p' : (sess k').vb.Pos), ((sess k).rdU u).isRead p → ((sess k').rdU u').isRead p' →
     SameTree (((sess k).rdU u).port p) (((sess k').rdU u').port p') →
     ((sess k).rdU u).readAt p = ((sess k').rdU u').readAt p' →
@@ -181,8 +180,8 @@ def RowsAgree {ι : Type} (sess : ι → RowsSession) : Prop :=
 /-- **Two of a leaf's sessions' registrants' records clash**: some unit's registrant in session `k` and some unit's in
 session `k'` (the same session or not) have registered reads whose openings, or hm96's leaves over their rows, are two
 different SHA-512 inputs with one digest (`ReadsX.Clash`). -/
-def LeafColl {ι : Type} (sess : ι → RowsSession) : Prop :=
-  ∃ (k k' : ι) (u : Fin (sess k).n) (u' : Fin (sess k').n), ((sess k).rdU u).Clash ((sess k').rdU u')
+def LeafColl (sess : Option (Fin 32) → RowsSession) : Prop :=
+  ∃ (k k' : Option (Fin 32)) (u : Fin (sess k).n) (u' : Fin (sess k').n), ((sess k).rdU u).Clash ((sess k').rdU u')
 
 /-- A registered file's known content (`Registered.KNOWN_KEY`): each port it names, with its rows' u16 words and salts. -/
 abbrev Known := Array (String × Array (Array ℕ × ByteArray))
@@ -195,10 +194,10 @@ def KnownHeld (s : RowsSession) (known : Known) : Prop :=
     (s.rdU u).readAt p < ks.size ∧
       (rsOf s).enc p ((s.rdU u).wv p) = (Flock.Registered.rowBytesV2 ks[(s.rdU u).readAt p]!.1).data.toList
 
-/-- **A leaf's known-content tie collides**: at one of its sessions `k`, at a port `nm` its known content names with
+/-- **A leaf's known-content tie collides**: at one of its 33 sessions `k`, at a port `nm` its known content names with
 rows `ks`, the known-content extractor outputs two different SHA-512 inputs with one digest
 (`Accounting.TS.Held.OkColl` at `nm`, the `ok` tie at any known port). -/
-def LeafKnownColl {ι : Type} (sess : ι → RowsSession) (known : ι → Known) : Prop :=
+def LeafKnownColl (sess : Option (Fin 32) → RowsSession) (known : Option (Fin 32) → Known) : Prop :=
   ∃ k nm ks, (nm, ks) ∈ known k ∧ Accounting.TS.Held.OkColl (sess k) nm ks
 
 /-- **The leaf's proof layer through its 33 sessions**: proof `i` of round `w` is accepted where flock-verify

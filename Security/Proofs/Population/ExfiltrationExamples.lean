@@ -7,12 +7,12 @@ import Proofs.Population.Determinacy
 * `tight_cum`, `tight_exists`: **the stopping-time bound is attained.** A strategy that leaks `ℓ` every window and
   escapes each window with mass exactly `exp (-κ ℓ)` reaches `(j + 1) ℓ` with probability exactly `exp (-κ j ℓ)`, which
   is `tail_cum`'s bound at `x = (j + 1) ℓ`; for every `κ ≥ 0` and `ℓ > 0` there is such a draw.
-* `no_pressure_cum`, `not_pressure_univ`: **without detection pressure** (a leak no draw catches: no incorrect proof
-  block, a draw known before the commitment, or an uncertified link) `n` windows leak `n ℓ` with probability one.
+* `no_pressure_cum`, `not_pressure_univ`: **without detection pressure** (a leak no draw catches: no faulty proof block,
+  a draw known before the commitment, or an uncertified link) `n` windows leak `n ℓ` with probability one.
 * `no_halt_cumUpTo`, `pressure_empty`: **without a halt**, a strategy caught in every window still leaks `n ℓ`, and it
   meets detection pressure at every `κ`.
 * `seedCopy_checked`, `seed_egress`: **without bound inputs**, a checked population whose units copy a prover-chosen
-  seed to the egress shows all `2 ^ k` values with no incorrect proof block, so no draw sees it.
+  seed to the egress shows all `2 ^ k` values with no faulty proof block, so no draw sees it.
 * `not_trustedModel_of_reveal`: **without a trusted model**, an honest model whose outputs determine the target gives it
   to any guesser.
 -/
@@ -193,8 +193,8 @@ theorem seedCopy_checked (k : ℕ) : (seedCopy k).Checked := by
     rw [hsw] at hsr
     cases hsr
 
-/-- **No incorrect proof block, every seed on the egress**: with the seed slots left to the prover (`X` = the inputs),
-the assignments with no incorrect proof block show all `2 ^ k` egress values. -/
+/-- **No faulty proof block, every seed on the egress**: with the seed slots left to the prover (`X` = the inputs), the
+assignments with no faulty proof block show all `2 ^ k` egress values. -/
 theorem seed_egress (k : ℕ) :
     2 ^ k ≤ ((seedCopy k).egress (seedFns k) (fun _ => false) (seedCopy k).input (univ.image Sum.inr) ∅).card := by
   classical
@@ -203,7 +203,7 @@ theorem seed_egress (k : ℕ) :
     intro w
     simp only [Dataflow.egress, mem_image, mem_filter, mem_univ, true_and, subset_empty]
     refine ⟨Sum.elim w w, ⟨fun s hs hsX => absurd hs hsX, ?_⟩, rfl⟩
-    refine (seedCopy k).incorrect_eq_empty fun i s => ?_
+    refine (seedCopy k).wrong_eq_empty fun i s => ?_
     obtain ⟨s, hs⟩ := s
     simp only [seedCopy, mem_singleton] at hs
     subst hs

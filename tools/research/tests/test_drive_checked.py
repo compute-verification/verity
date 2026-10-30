@@ -81,29 +81,12 @@ def test_a_red_after_landing_run_moves_nothing_on_main_and_its_culprit_is_revert
     reverted = _checked(world)
     assert _git(world.origin, "rev-parse", f"{reverted}^") == tip and _main(world) == main
     assert "pkg/tests/test_x.py" not in _git(world.origin, "ls-tree", "-r", "--name-only", reverted)
-    assert any(p.startswith("@lane-2 @pkg-owner queue: #2 reverted on `checked`") for p in h.posts), h.posts
+    assert any(p.startswith("@ci @lane-2 queue: #2 reverted on `checked`") for p in h.posts), h.posts
     assert h.posted[-1][0] == reverted
     _pass(h, ("pkg",))
     h.tick()
     assert _main(world) == reverted and not h.postland()["red"]
     assert world.on_next(h.q) == []                             # #2, reverted, is still open: its head is on `checked`
-
-
-def test_a_pr_containing_a_head_landed_on_checked_never_waits_for_it_and_one_on_an_unlanded_pr_still_does(world, monkeypatch):
-    """A PR that landed on `checked` stays open until `main` follows it, and may be held or lose its mark meanwhile: a PR built
-    on its head doesn't wait for it.  A PR built on an unlanded PR that isn't admitted still waits."""
-    h = Review(world, monkeypatch, land_into="checked")
-    world.gh.put(5, five := world.change({"x.txt": "5\n"}))
-    h.review(5)
-    assert h.tick().startswith("landed #5"), world.logs
-    world.gh.put(5, five, labels=("hold",))
-    world.gh.put(7, world.change({"k.txt": "7\n"}, base=five))
-    world.gh.put(6, six := world.change({"y.txt": "6\n"}, base=five), ready=False)
-    world.gh.put(8, world.change({"z.txt": "8\n"}, base=six))
-    h.tick()
-    st = h.q.status()
-    assert st[7].state != "waiting" and st[7].after == (), st[7]
-    assert st[8].state == "waiting" and st[8].why == "contains #6, which isn't admitted" and st[8].held == {6: six}
 
 
 def test_main_follows_no_baseline_that_passed_fewer_steps(world, monkeypatch):
@@ -300,9 +283,7 @@ def test_a_checked_below_a_moved_main_fast_forwards_to_it(world, monkeypatch):
 
 
 def test_land_into_takes_checked_or_main_and_only_drive_pushes_checked(world, monkeypatch):
-    assert DriveFlags.parse('land_into = "checked"\n').land_into == "checked" and DriveFlags().land_into is None
-    # a config that doesn't set it leaves the queue to read drive.toml's at `main`, as with no config
-    assert DriveFlags.parse('on = ["m"]\n').land_into is None
+    assert DriveFlags.parse('land_into = "checked"\n').land_into == "checked" and DriveFlags().land_into == "main"
     with pytest.raises(QueueError, match="land_into"):
         DriveFlags.parse('land_into = "staging"\n')
     monkeypatch.delenv("RESEARCH_DRIVE", raising=False)

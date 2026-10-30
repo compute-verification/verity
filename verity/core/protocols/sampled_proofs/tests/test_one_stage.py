@@ -14,7 +14,7 @@ import pytest
 import verity.ml.circuits.ops.prims  # noqa: F401  (with verity.ml.circuits.ops.scalar, the primitives partition_vectors.json's descriptor names)
 import verity.ml.circuits.ops.scalar  # noqa: F401
 from verity.ml.circuits import codec, partition_object as PO
-from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, DefinitionTable, bind
+from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, Registry, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
@@ -74,6 +74,12 @@ XOR64 = PrimitiveDefinition("OneStageTestXor64", 1, (("a", Value(64)), ("b", Val
 WIDE = CompositeDefinition("OneStageTestWide", 0, ("N",),
                            lambda S: ((("x", Array(S.N, Value(64))), ("y", Array(S.N, Value(64)))), Array(S.N, Value(64))),
                            lambda B, S, x, y: B.batch(XOR64, x, y, axes=(0, 0)), register=False)
+
+
+def test_the_size_classes_are_the_powers_of_two_from_16_to_the_widest():
+    assert P.UNIT_CLASSES == tuple(16 * 2 ** i for i in range(15)) and P.UNIT_CLASSES[-1] == P.UNIT_CLASS_MAX == 262_144
+    assert [P.unit_class(b) for b in (0, 16, 17, 24, 1024, 1025, 262_144, 262_145)] == \
+        [16, 16, 32, 32, 1024, 2048, 262_144, None]
 
 
 def test_a_unit_wider_than_the_widest_class_or_a_template_of_no_gate_is_refused():
@@ -143,8 +149,8 @@ V1_PAIR_3_XOR3_5 = ("dedeaac905807d8b5da6852a43f4295a99d2930029074edbf330484051a
                     "01af2b4de0207fb2cc295498f99064fe08c39cd46aae77bd532989cbc509f29a")
 
 
-def _xor8_registry() -> DefinitionTable:
-    reg = DefinitionTable()
+def _xor8_registry() -> Registry:
+    reg = Registry()
     reg.add(XOR8)
     return reg
 
@@ -624,7 +630,7 @@ QWORD = json.loads((CORE_VECTORS / "partition_vectors.json").read_text())
 TEMPLATE = json.loads((CORE_VECTORS / "template_instance_vectors.json").read_text())
 V32 = Value(32)
 #: the primitives template_instance_vectors.json's descriptors name (a partition reads their ids and types only)
-TEMPLATE_REG = DefinitionTable()
+TEMPLATE_REG = Registry()
 for _name in ("TAdd32", "TMul32"):
     TEMPLATE_REG.add(PrimitiveDefinition(_name, 1, (("a", V32), ("b", V32)), V32, lambda a, b: (a + b) & 0xFFFFFFFF, register=False))
 

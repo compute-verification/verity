@@ -9,8 +9,7 @@ Each hit is one of:
 
 - **canonical**: ``CANONICAL`` names, per concept, at most three declarations: one under `Security/Definitions/Core/` or
   `Security/Definitions/Hash/`, one in the code-Lean package that owns it, and one Python class. A concept with no
-  canonical yet says so, with an empty entry. A canonical may be declared under another name (a session's is
-  `Verity.Play`, a play over sampling blocks): the scan reads that name at its ``CANONICAL`` key alone.
+  canonical yet says so, with an empty entry.
 - **a mirror**: a Python class that ``MIRRORS`` holds to a Lean declaration through the `verity_difftest` port (a
   `[[lean_exe]]` of a tracked lakefile) that tests them against each other. The pair counts once, as its Lean.
 - **reading the canonical**: an `abbrev` whose body is a canonical declaration, or a list, array or option of it, or a
@@ -86,13 +85,13 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Circuit": (f"{CORE}Circuit.lean::Verity.Circuit", f"{FLOCK}Circuit.lean::Flock.Circuit"),
     "CoinTree": (),
     "Coins": (f"{CORE}Draw.lean::Verity.Coins", f"{FLOCK}Statement.lean::Flock.Coins"),
-    "Collision": ("Security/Definitions/Core/Hash.lean::Hash.Collision",),
+    "Collision": ("Security/Definitions/Hash/Basic.lean::Hash.Collision",),
     "Commitment": ("verity/ml/commitments/merkle.py::Commitment",),
     "Dag": (),
     "Device": (),
     "Digest": (f"{CORE}Digest.lean::Verity.Digest", f"{FLOCK}Hash.lean::Flock.Digest"),
     "Draw": (f"{CORE}Draw.lean::Verity.Draw", "verity/core/protocols/sampled_proofs/service.py::Draw"),
-    "Gate": (f"{FLOCK}Gate.lean::Flock.Program.Gate",),
+    "Gate": (),
     "Hardware": (),
     "Hash": (),
     "InteractiveDevice": (),
@@ -108,29 +107,26 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Op": (f"{CORE}Boolean.lean::FlockSoundness.Audit.Op",),
     "Opening": ("Security/Definitions/Hash/RowLeaf.lean::Hash.RowLeaf.Opening", "verity/ml/commitments/merkle.py::Opening"),
     "Outcome": (f"{PROTOCOL}::Core.Outcome",),
-    "Partition": (f"{CORE}Partition.lean::Verity.Partition", f"{FLOCK}Evaluated.lean::Flock.Extract.Partition"),
+    "Partition": (f"{CORE}Partition.lean::Verity.Partition",),
     "Period": (),
-    "Placement": (f"{CORE}Requirement.lean::Accounting.Requirement.Placement", f"{REQ}::CircuitRequirement.Placement",
-                  f"{REQ_PY}::Placement"),
+    "Placement": (f"{REQ}::CircuitRequirement.Placement", f"{REQ_PY}::Placement"),
     "Prog": (f"{CORE}Accel/Machine.lean::Verity.Accel.Machine.Prog", f"{FLOCK}Program.lean::Flock.Program.Prog"),
     "Program": ("verity/ml/circuits/program.py::Program",),
     "Record": (),
     "Registration": (f"{CORE}Site.lean::Verity.Registration", f"{SITE_LEAN}::Core.Site.Registration",
                      f"{SITE_PY}::Registration"),
     "Registry": (),
-    "Session": (f"{CORE}Period.lean::Verity.Play",),
+    "Session": (),
     "Signature": ("verity/core/primitives/lms/lean/Lms/Verify.lean::Lms.Signature", "verity/ml/crypto/lms.py::Signature"),
     "Site": (f"{CORE}Site.lean::Verity.Site", f"{SITE_LEAN}::Core.Site", f"{SITE_PY}::Site"),
     "Statement": (),
     "Stmt": (f"{FLOCK}Statement.lean::Flock.Stmt",),
-    "Store": (f"{CORE}Requirement.lean::Accounting.Requirement.Store", f"{REQ}::CircuitRequirement.Store",
-              f"{REQ_PY}::Store"),
+    "Store": (f"{REQ}::CircuitRequirement.Store", f"{REQ_PY}::Store"),
     "Transcript": (f"{CORE}Circuit.lean::Verity.Circuit.Transcript", f"{FLOCK}Transcript.lean::Flock.Transcript"),
     "Verdict": (f"{PROTOCOL}::Core.Verdict",),
     "Window": (),
     "Witness": (f"{CORE}TC/Relation.lean::Verity.TC.Relation.Witness",),
 }
-CANONICAL["Ledger"] = ("verity/core/protocols/sampled_proofs/challenger.py::Ledger",)
 
 RA, RA_PY = "verity/core/protocols/remote_bandwidth/lean/RemoteAudit/", "verity/core/protocols/remote_bandwidth/audit.py"
 MC, MC_PY = "verity/core/devices/memory_challenger/lean/MemoryChallenger/", "verity/core/protocols/pous/"
@@ -140,6 +136,9 @@ MIRRORS: dict[str, tuple[str, str, str]] = {
     "verity/core/protocols/certifier/certificate.py::Certificate":
         ("verity/core/protocols/network/lean/NetworkCheck/Check.lean::NetworkCheck.Check.Certificate", "network-check",
          "the network check's protocol port decodes the certificates the Python issues"),
+    "verity/core/protocols/certifier/grid.py::Record":
+        ("verity/core/devices/certifier/lean/CertifierDevice/Certifier.lean::CertifierDevice.Record",
+         "certifier-device-difftest", "the certifier device's port replays the Python grid's records"),
     "verity/core/protocols/sampled_proofs/service.py::Law": (f"{FLOCK}Draw.lean::Flock.Draw.Law", "sampled-proofs-difftest",
                                                              "the service's port parses the Python's laws"),
     "verity/ml/crypto/lms.py::Signature": ("verity/core/primitives/lms/lean/Lms/Verify.lean::Lms.Signature", "lms-difftest",
@@ -162,10 +161,6 @@ MIRRORS: dict[str, tuple[str, str, str]] = {
                                           "memory-challenger-difftest", "the memory challenger's port, for the streamed wipe"),
     f"{MC_PY}run.py::Session": ("verity/core/protocols/pous/check/PousCheck/Run.lean::PousCheck.Run.Session", "pous-run",
                                 "the PoUS run's protocol port reads the sessions the Python records"),
-    "verity/ml/circuits/layout.py::Gate": (f"{FLOCK}Gate.lean::Flock.Program.Gate", "verity-evaluate",
-                                           "the evaluator's `gate` answers each gate of the Python's layout"),
-    "verity/ml/circuits/partition_object.py::Partition": (f"{FLOCK}Evaluated.lean::Flock.Extract.Partition", "verity-evaluate",
-                                                          "the evaluator's `partition` answers the Python's Q_word evaluation"),
 }
 
 
@@ -179,10 +174,7 @@ class Hit:
     opens: tuple = ()
 
 
-#: Each canonical's concept, by key; and the names canonicals are declared under that are no concept's, read only there.
-CONCEPT_OF = {k: c for c, keys in CANONICAL.items() for k in keys}
-OTHER_NAMES = tuple(sorted({k.partition("::")[2].rpartition(".")[2] for k in CONCEPT_OF} - set(CONCEPTS)))
-_ALT = "|".join(sorted(CONCEPTS + OTHER_NAMES, key=len, reverse=True))
+_ALT = "|".join(sorted(CONCEPTS, key=len, reverse=True))
 _NAME = rf"((?:[^\s(\[{{:]*\.)?(?:{_ALT}))(?![\w'.!?])"
 _KEYWORD = r"(structure|class\s+inductive|class|inductive|abbrev|opaque|def)"
 _MODS = r"(?:(?:private|protected|public|noncomputable|partial|unsafe|nonrec|meta)\s+)*"
@@ -298,7 +290,7 @@ def python_definitions(text: str) -> list[tuple[str, Hit]]:
         indent, keyword, name = len(m.group(1).expandtabs()), m.group(2), m.group(3)
         while stack and stack[-1][0] >= indent:
             stack.pop()
-        if keyword == "class" and name in CONCEPTS + OTHER_NAMES and all(k == "class" for _, k, _ in stack):
+        if keyword == "class" and name in CONCEPTS and all(k == "class" for _, k, _ in stack):
             out.append((name, Hit(".".join([n for _, _, n in stack] + [name]), text.count("\n", 0, m.start()) + 1, "class")))
         stack.append((indent, keyword, name))
     return out
@@ -331,8 +323,7 @@ class Scan:
 
 
 def scan(texts: dict[str, str] | None = None) -> Scan:
-    """The hits and protocol fields of `texts` (path: source), or of every file the guard reads. A declaration under one of
-    ``OTHER_NAMES`` is a hit only at its ``CANONICAL`` key, of that canonical's concept."""
+    """The hits and protocol fields of `texts` (path: source), or of every file the guard reads."""
     hits, fields = defaultdict(list), []
     if texts is None:
         texts = {path: (ROOT / path).read_text(encoding="utf-8") for path in tracked()}
@@ -343,9 +334,7 @@ def scan(texts: dict[str, str] | None = None) -> Scan:
             defs, found = lean_definitions(text)
             fields += [(path, *f) for f in found]
         for concept, h in defs:
-            key = f"{path}::{h.key}"
-            if concept in CONCEPTS or (concept := CONCEPT_OF.get(key)):
-                hits[concept].append(Hit(key, h.line, h.keyword, h.body, h.scopes, h.opens))
+            hits[concept].append(Hit(f"{path}::{h.key}", h.line, h.keyword, h.body, h.scopes, h.opens))
     return Scan(dict(hits), fields)
 
 
@@ -389,7 +378,7 @@ def slots(s: Scan) -> set[str]:
 
 
 #: The most lines ``KNOWN`` may hold. Raising it, for a new line, needs lean's review; `--prune` lowers it to the count.
-KNOWN_MAX = 418
+KNOWN_MAX = 414
 
 #: Every hit that is not a canonical, a mirror, a reading of the canonical or a protocol's slot, with its reason and owner.
 #: For new code, read the canonical or rename; `--prune` deletes the lines whose declarations went.
@@ -407,6 +396,8 @@ KNOWN: dict[str, str] = {
         "duplicate of the Site (`Verity.Site`): becomes a reading of it (memory-accounting)",
     "Security/Definitions/Accounting/CoinFlow.lean::Accounting.CoinFlow.Program":
         "homonym, a Program's dataflow over coins and values: rename (compute-accounting)",
+    "Security/Definitions/Accounting/Compose.lean::Accounting.Compose.Certificate":
+        "homonym, a credit certificate: rename (lean)",
     "Security/Definitions/Accounting/ComposePeriod.lean::Accounting.Compose.Period":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it (lean)",
     "Security/Definitions/Accounting/Device.lean::Accounting.Device":
@@ -433,10 +424,10 @@ KNOWN: dict[str, str] = {
         "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes it (deleted) (memory-accounting)",
     "Security/Definitions/Accounting/RateAudit.lean::Accounting.Rate.Store":
         "duplicate of `CircuitRequirement.Store`: becomes a reading of it (memory-accounting)",
+    "Security/Definitions/Accounting/RateAuditHorizon.lean::Accounting.Rate.Session":
+        "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it: a run over sampling periods (memory-accounting)",
     "Security/Definitions/Accounting/RateAuditInteractive.lean::Accounting.Rate.InteractiveDevice":
         "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes its interactive case (deleted) (memory-accounting)",
-    "Security/Definitions/Accounting/RateAuditPooled.lean::Accounting.Rate.Session":
-        "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it: a run over sampling periods (memory-accounting)",
     "Security/Definitions/Accounting/RateAuditSketch.lean::Accounting.RateSketch.Coins":
         "duplicate of the live coins (`Verity.Coins`; `SampledProofs.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",
     "Security/Definitions/Accounting/RateAuditSketch.lean::Accounting.RateSketch.Device":
@@ -469,17 +460,28 @@ KNOWN: dict[str, str] = {
         "homonym, a tile shape: rename (compute-accounting)",
     "Security/Definitions/Accounting/TS/Machine.lean::Accounting.TS.Machine":
         "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes a reading of it (compute-accounting)",
+    "Security/Definitions/Accounting/Tag/PolyHash.lean::Accounting.Tag.Block":
+        "homonym, a chunk of the store: rename (lean)",
     "Security/Definitions/Claims.lean::Claims.Circuit":
         "duplicate of `Verity.Circuit`: becomes it (the claims layer's AND/XOR wire circuit) (lean)",
     "Security/Definitions/Claims.lean::Claims.Flock.Stmt": "duplicate of `Flock.Stmt`: becomes its spec, in Core (lean)",
     "Security/Definitions/Claims.lean::Claims.Gate":
         "duplicate of `Verity.Circuit`'s gate: becomes it (the AND/XOR gate) (lean)",
+    "Security/Definitions/Claims/Recursion.lean::Claims.Recursion.Draw":
+        "duplicate of `Verity.Draw`: becomes it, as a V* session's record holds it (lean)",
+    "Security/Definitions/Claims/Recursion.lean::Claims.Recursion.Stmt":
+        "homonym, the recursion's statement: rename (lean)",
+    "Security/Definitions/Claims/Sampling.lean::Claims.Sampling.Commitment":
+        "duplicate of `merkle.Commitment`, the claims layer's named primitive: becomes `Hash.RowLeaf`'s root (lean)",
+    "Security/Definitions/Claims/Sampling.lean::Claims.Sampling.Netlist":
+        "duplicate of `universal.Netlist`, stated in Claims: becomes Core's, moved into Security/Definitions/Core/ (lean)",
     "Security/Definitions/Claims/Sampling.lean::Claims.Sampling.Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a reading of it (lean)",
     "Security/Definitions/Claims/Sampling.lean::Claims.Sampling.Partition":
         "duplicate of `Verity.Partition`: becomes it (classes, strata and units) (lean)",
     "Security/Definitions/Claims/Sampling.lean::Claims.Sampling.Prog":
         "duplicate of `Flock.Program.Prog`: becomes its spec, flattened to gates (lean)",
+    "Security/Definitions/Claims/Sampling.lean::Claims.Sampling.Stmt": "homonym, the sampling statement: rename (lean)",
     "Security/Definitions/Core/Accel/Card.lean::Verity.Accel.Store": "homonym, a GPU's memory kinds: rename (proofs)",
     "Security/Definitions/Core/Accel/Isa.lean::Verity.Accel.Op": "homonym, an opcode over stores: rename (proofs)",
     "Security/Definitions/Core/Accel/Isa.lean::Verity.Accel.Store": "homonym, a GPU's memory kinds: rename (proofs)",
@@ -602,14 +604,16 @@ KNOWN: dict[str, str] = {
         "homonym, the old word for a run, here the challenger property's: rename (soundness)",
     "Security/Properties/Challenger.lean::Properties.Challenger.Witness":
         "duplicate of `Verity.TC.Relation.Witness`: becomes it (soundness)",
-    "Security/Properties/Pous/WipeSigned.lean::MemoryChallenger.Properties.Challenger":
-        "homonym, the keys' signing sessions in the wipe-signing property: rename (lean)",
     "Security/Properties/Pous/MemoryChallenger.lean::MemoryChallenger.Properties.Device":
         "homonym, the memory challengers a property ranges over: rename (lean)",
+    "Security/Properties/Pous/WipeSigned.lean::MemoryChallenger.Properties.Challenger":
+        "homonym, the keys' signing sessions in the wipe-signing property: rename (lean)",
     "Security/Properties/RemoteAudit/Line/Record.lean::Properties.RemoteAudit.Line.Node":
         "duplicate of the Site (`Verity.Site`): becomes what `Accounting.Remote.Node` becomes (lean)",
     "Security/Properties/RemoteAudit/Line/Record.lean::Properties.RemoteAudit.Line.Record":
         "duplicate of the auditor's record chain (`SampledProofs.Challenger.LedgerEntry`): becomes what RemoteAudit becomes (lean)",
+    "Security/Properties/RemoteAudit/Live.lean::Properties.RemoteAudit.Live.Answer":
+        "homonym, a live answer: rename (lean)",
     # benchmarks/
     "benchmarks/bandwidth/gpu.py::Commitment":
         "duplicate of `merkle.Commitment`: becomes a client of it (one pass's root) (memory-accounting)",
@@ -633,6 +637,7 @@ KNOWN: dict[str, str] = {
         "duplicate of the Site (`Verity.Site`): becomes its device entry (network-accounting)",
     "benchmarks/datacenter/datacenter/physical.py::Link":
         "duplicate of the Site (`Verity.Site`): becomes its link (network-accounting)",
+    "benchmarks/harness/verity_bench/settings.py::Registry": "homonym, one distribution's settings: rename (benchmarks)",
     "benchmarks/hash/dither/dither_fused.py::Window": "homonym, a Dither kernel's device state: rename (kernels)",
     "benchmarks/hash/dither/dither_one.py::Window": "homonym, a Dither kernel's device state: rename (kernels)",
     "benchmarks/hash/lib/vclib.py::Opening": "homonym, one vc_open_launch record: rename (kernels)",
@@ -646,6 +651,8 @@ KNOWN: dict[str, str] = {
         "homonym, the old word for a run, here a simulated read: rename (network-accounting)",
     "benchmarks/network_sim/workload/placement.py::Placement":
         "duplicate of `CircuitRequirement.Placement`: becomes a client of it (network-accounting)",
+    "benchmarks/network_traces/n2_advised_zk.py::Challenger":
+        "duplicate of `parties.Challenger`: becomes a client of it (network-accounting)",
     "benchmarks/network_traces/transfer_zk.py::Block":
         "homonym, a server block's one template: rename (network-accounting)",
     "benchmarks/numerical/python/verity_numerical/bench/lowerings.py::Registry":
@@ -732,6 +739,7 @@ KNOWN: dict[str, str] = {
     "benchmarks/sampling_plan/transformer.py::Dag": "homonym, a block's Definition DAG for the plan: rename (proofs)",
     "benchmarks/stacked_share/units.py::Window": "homonym, an attention window of S keys: rename (memory-accounting)",
     "benchmarks/tc_probe_fp4/f1_rates.py::Op": "homonym, one CUDA-core multiplier a probe times: rename (circuits)",
+    "benchmarks/tc_probe_fp4/sp_e4m3.py::Device": "homonym, a probe's loaded CUDA module: rename (circuits)",
     "benchmarks/torch_gpu/commit_slots/slots.py::Layout":
         "homonym, a step's public commitment structure: rename (kernels)",
     "benchmarks/torch_gpu/p2_stage/stage.py::Store":
@@ -782,9 +790,34 @@ KNOWN: dict[str, str] = {
     "infra/cluster/src/cluster/route.py::Placement": "homonym, a routed job's node: rename (infra)",
     "infra/ops/verity_ops/deploy.py::Node": "homonym, a deploy target: rename (infra)",
     # integrations/
+    "integrations/vllm/tools/migrate/superseded_quarantine.py::Site":
+        "homonym, a migration step's source site: rename (vllm)",
     "integrations/vllm/verity_vllm/acquire/committer_api.py::Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a client of it (circuits)",
+    "integrations/vllm/verity_vllm/acquire/plan.py::Site": "homonym, a quantisation site: rename (circuits)",
+    "integrations/vllm/verity_vllm/acquire/served_device.py::Device":
+        "homonym, a served build's device: rename (circuits)",
+    "integrations/vllm/verity_vllm/check/batch.py::Verdict": "homonym, a template's check results: rename (vllm)",
+    "integrations/vllm/verity_vllm/check/match/instance_sequence.py::Prog":
+        "homonym, a decoded root body as an instance sequence: rename (vllm)",
+    "integrations/vllm/verity_vllm/check/match/resolve.py::Program":
+        "homonym, the Program side of a match's resolution: rename (vllm)",
+    "integrations/vllm/verity_vllm/check/verdict.py::Verdict":
+        "homonym, a check run's results and outcome: rename (vllm)",
     "integrations/vllm/verity_vllm/commit/memory_map.py::Layout": "homonym, the engine's KV pool map: rename (circuits)",
+    "integrations/vllm/verity_vllm/commit/row_tables_device.py::Device":
+        "homonym, one CUDA device's build of a kernel library: rename (circuits)",
+    "integrations/vllm/verity_vllm/commit/served_record.py::Record":
+        "duplicate of the execution block (no canonical yet: LEAN-93): becomes an execution block's committed values (circuits)",
+    "integrations/vllm/verity_vllm/observe/fold/resolver.py::Witness":
+        "homonym, a request's witness leaves a row consumes: rename (vllm)",
+    "integrations/vllm/verity_vllm/pipeline/c2_replay.py::Site": "homonym, what one C2 replay reads: rename (vllm)",
+    "integrations/vllm/verity_vllm/pipeline/commit_coins.py::Gate":
+        "homonym, infra's challenger gate (an SSH host): rename (vllm)",
+    "integrations/vllm/verity_vllm/pipeline/commit_coins.py::Session":
+        "homonym, the old word for a run, here the commit's challenge phase: rename (vllm)",
+    "integrations/vllm/verity_vllm/pipeline/report.py::Card": "homonym, a report's summary card: rename (vllm)",
+    "integrations/vllm/verity_vllm/pipeline/serve_commit.py::Ledger": "homonym, one request as served: rename (vllm)",
     "integrations/vllm/verity_vllm/program/frontend/registration.py::Registration":
         "homonym, the builder's allocation of registered inputs: rename (circuits)",
     "integrations/vllm/verity_vllm/protocols/pouw/h1/challenger.py::Ledger":
@@ -810,6 +843,7 @@ KNOWN: dict[str, str] = {
     "tools/research/src/research/compare.py::Verdict": "homonym, a run comparison's result: rename (infra)",
     "tools/research/src/research/drive.py::Verdict": "homonym, a queue train's land verdict: rename (ci)",
     "tools/verity/cli/verity_cli/run.py::Registry": "homonym, what `verity run` reads off step 0's table: rename (ci)",
+    "tools/verity/lean/run_daily.py::Node": "homonym, node 1's paths for the daily Lean run: rename (lean)",
     # verity/core/
     "verity/core/attest/__init__.py::Period":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it: a party's certification period (proofs)",
@@ -822,6 +856,8 @@ KNOWN: dict[str, str] = {
         "duplicate of the Site (`Verity.Site`): becomes a reading of it (proofs)",
     "verity/core/deploy/party.py::Record": "homonym, a party's log entry: rename (proofs)",
     "verity/core/deploy/transcript.py::Transcript": "homonym, a party's message log: rename (proofs)",
+    "verity/core/devices/certifier/lean/CertifierDevice/Certifier.lean::CertifierDevice.Record":
+        "duplicate of `NetworkCheck.Check.Certificate`: becomes `grid.Record`'s port beside `RecordHead` (moved) (network-accounting)",
     "verity/core/devices/certifier/lean/CertifierDevice/Issuer.lean::CertifierDevice.Certificate":
         "duplicate of `NetworkCheck.Check.Certificate`: becomes it (deleted; it already requires `network_check`) (network-accounting)",
     "verity/core/devices/certifier/lean/CertifierDevice/Online.lean::CertifierDevice.Link":
@@ -862,10 +898,6 @@ KNOWN: dict[str, str] = {
         "homonym, one sampling block's charge: rename (network-accounting)",
     "verity/core/protocols/certifier/service.py::Opening":
         "homonym, a link-window's witness: rename (network-accounting)",
-    "verity/core/protocols/interface/CoreProtocol/Profile.lean::Core.Draw":
-        "homonym, how a profile level is drawn: rename (proofs)",
-    "verity/core/protocols/interface/CoreProtocol/Record.lean::Core.Record":
-        "duplicate of the auditor's record chain (`SampledProofs.Challenger.LedgerEntry`): becomes a reading of it (proofs)",
     "verity/core/protocols/interface/CoreProtocol/Registration.lean::Core.Registration.Card":
         "duplicate of `Verity.Accel.Card`: becomes a reading of it (soundness)",
     "verity/core/protocols/interface/CoreProtocol/Registration.lean::Core.Registration.Link":
@@ -967,7 +999,7 @@ KNOWN: dict[str, str] = {
     "verity/core/protocols/remote_bandwidth/lean/RemoteAudit/P2Protocol.lean::RemoteAudit.P2Protocol.Op":
         "homonym, one request of the verifier's process as its log records it: rename (memory-accounting)",
     "verity/core/protocols/remote_bandwidth/lean/RemoteAudit/Registry.lean::RemoteAudit.Registry":
-        "duplicate of the verification loop's record (no canonical yet; proofs holds it): becomes a reading of the verifier's record, its draws `Verity.Draw` on `Verity.Coins` (memory-accounting)",
+        "duplicate of the registration log (`Verity.Registration`, not yet in Core: LEAN-93): becomes the log's fold (deleted) (memory-accounting)",
     "verity/core/protocols/remote_bandwidth/lean/RemoteAudit/Schedule.lean::RemoteAudit.Schedule.Block":
         "homonym, a chunk of the store: rename (memory-accounting)",
     "verity/core/protocols/remote_bandwidth/lean/RemoteAudit/Window.lean::RemoteAudit.Opening":
@@ -1007,14 +1039,16 @@ KNOWN: dict[str, str] = {
         "duplicate of the registration log (`Verity.Registration`): becomes a reading of it: the service's admitted log entry (proofs)",
     "verity/core/protocols/sampled_proofs/service.py::Session":
         "homonym, the old word for a run, kept as one protocol's run type: rename (proofs)",
+    "verity/core/service/flock/Flock/Firewall/Coins.lean::Flock.Firewall.Coins.Session":
+        "homonym, a firewall release: rename (proofs)",
     "verity/core/service/flock/Flock/Firewall/Contract.lean::Flock.Firewall.Contract.Transcript":
         "duplicate of `Flock.Transcript`: becomes a reading of it (proofs)",
-    "verity/core/service/flock/Flock/Annot.lean::Flock.Annot.Verdict":
-        "homonym, the description-level annotation check's verdict: rename (proofs)",
     "verity/core/service/flock/Flock/Firewall/Contract.lean::Flock.Firewall.Contract.Verdict":
         "homonym, the firewall's release decision: rename (proofs)",
     "verity/core/service/flock/Flock/Firewall/Frames.lean::Flock.Firewall.Frames.Registry":
         "homonym, the firewall loop's frames: rename (proofs)",
+    "verity/core/service/flock/Flock/Firewall/Frames.lean::Flock.Firewall.Frames.Session":
+        "homonym, a firewall release: rename (proofs)",
     "verity/core/service/flock/Flock/Firewall/Level0.lean::Flock.Firewall.Level0.Registry":
         "homonym, the firewall loop's tables: rename (proofs)",
     "verity/core/service/flock/Flock/Layout.lean::Flock.Layout": "homonym, C-Flock's block-type layout: rename (proofs)",
@@ -1024,10 +1058,9 @@ KNOWN: dict[str, str] = {
         "homonym, the recursion's coin sources: rename (proofs)",
     "verity/core/service/flock/Flock/RecCoins.lean::Flock.RecCoins.Opening":
         "homonym, a polynomial-commitment opening: rename (proofs)",
-    "verity/core/service/flock/Flock/RecLinks.lean::Flock.RecLinks.Link":
-        "homonym, a recursion link from a reader to a port: rename (proofs)",
     "verity/core/service/flock/Flock/RecRecord.lean::Flock.RecRecord.Record":
         "duplicate of the auditor's record chain (`SampledProofs.Challenger.LedgerEntry`): becomes the challenger's live-coin entries (proofs)",
+    "verity/core/service/flock/Flock/Record.lean::Flock.Session": "homonym, a proof's session record: rename (proofs)",
     "verity/core/service/flock/VStar/In.lean::VStar.In.Opening": "homonym, a Ligerito opening: rename (proofs)",
     "verity/core/service/flock/VStar/Stage.lean::VStar.Stmt": "homonym, one of V*'s statements: rename (proofs)",
     "verity/core/service/sampled_proofs/SampledProofs/Program.lean::SampledProofs.Program":
@@ -1076,8 +1109,6 @@ KNOWN: dict[str, str] = {
         "homonym, the recursion's coin sources in draw order: rename (proofs)",
     "verity/ml/flock/python/verity_flock/rec_algebra.py::Layout":
         "homonym, a GF residual gadget's ports: rename (proofs)",
-    "verity/ml/flock/python/verity_flock/rec_links.py::Link":
-        "homonym, a recursion link from a reader to a port, `Flock.RecLinks.Link`'s pair: rename (proofs)",
     "verity/ml/flock/python/verity_flock/rec_sparse.py::Coins":
         "homonym, a rep's public values the sparse phase reads: rename (proofs)",
     "verity/ml/windows/interface.py::Circuit":
@@ -1144,7 +1175,7 @@ def _read(concept: str) -> str:
 
 def test_every_hit_is_canonical_or_listed():
     found = classify(_scanned())
-    assert len(found) >= 200, f"the scan found only {len(found)} declarations of the concepts: has the tree moved?"
+    assert len(found) >= 300, f"the scan found only {len(found)} declarations of the concepts: has the tree moved?"
     unlisted = [f"{k} (line {h.line}) declares {concept} again: read {_read(concept)}, or rename it if it is another thing"
                 for k, (concept, h, status) in sorted(found.items()) if status == "unlisted"]
     assert not unlisted, (f"declarations of a concept that are not its canonical object ({FIX}):\n  "
@@ -1276,19 +1307,6 @@ def test_readings_and_slots_are_exempt():
     assert reads == {f"{pouw}::Pouw.Coins"}
     assert not reads_canonical(s.hits["Draw"][0], {f"{core}::Verity.Coins"}, s)
     assert slots(s) == {f"{pouw}::Pouw.Registration"}
-
-
-def test_a_canonical_under_another_name():
-    """`Verity.Play` is a hit, the session's canonical, at its key alone, and an abbrev of it reads it."""
-    core, rate, other = f"{CORE}Period.lean", f"{D}Accounting/Rate.lean", f"{D}Accounting/Other.lean"
-    s = scan({core: "namespace Verity\nabbrev Play (n : Nat) (Ω : Type) (X : Fin n → Type) : Type :=\n"
-                    "  (t : Fin n) → ({s : Fin n // s < t} → Ω) → X t\nend Verity\n",
-              rate: "namespace Accounting.Rate\nabbrev Session (n : Nat) : Type :=\n"
-                    "  Verity.Play n Nat (fun _ => Nat)\nend Accounting.Rate\n",
-              other: "namespace Accounting\nstructure Play where\n  x : Nat\nend Accounting\n"})
-    assert [h.key for h in s.hits["Session"]] == [f"{core}::Verity.Play", f"{rate}::Accounting.Rate.Session"]
-    assert "Play" not in s.hits
-    assert reads_canonical(s.hits["Session"][1], set(CANONICAL["Session"]), s)
 
 
 def test_prune_deletes_stale_lines():

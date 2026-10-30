@@ -35,4 +35,7 @@ theorem prob_auditReg {Reg : Type} (L : Reg → Law n) (session : Finset (Fin n)
     (p : Bool × Finset (Fin n) → Prop) (σ : Strategy (auditReg L session)) :
     prob p (auditReg L session) σ = prob p (audit (L σ.1) Reg session) (atReg σ) := rfl
 
+theorem reg_atReg {Reg : Type} {L : Reg → Law n} {session : Finset (Fin n) → Reg → Game Bool}
+    (σ : Strategy (auditReg L session)) : reg (atReg σ) = σ.1 := rfl
+
 end FlockSoundness.Audit

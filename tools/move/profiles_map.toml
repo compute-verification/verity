@@ -1,0 +1,120 @@
+# The fold half of `engine/profiles/` up to `observe/fold/profiles/`: what
+# `tools/move/layout.py --map tools/move/profiles_map.toml` moves and rewrites (the vision's M2 row for `engine/profiles/`,
+# note:20261024T0615Z-draft-verity-vllm-vision, which names `engine/profiles/` fold data).
+#
+# What moves is what builds a fold `Profile`: the derived-profile finder and `profile_for_case` (`__init__.py`),
+# `generic.build_profile`, the architecture pattern libraries (`gen_*`) and the κ base module with its golden-corpus twin.
+# Each imports `observe.fold` and nothing in `engine/` imports it, so above `engine` its `observe.fold` imports point down.
+# The model facts stay in `engine/profiles/` (family facts, HF configs, devices, transport, cases, the data files), since
+# `engine/` reads them (`served`, `int8_fused`, `engine_profile`) and they import nothing from `observe/`.
+# Whole modules move; nothing is split, edited or deleted, and `engine/profiles/` gets a new `__init__.py` ([create]).
+# The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_sp1 = "archive/sp1/python/verity_sp1", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli" }
+new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_sp1 = "archive/sp1/python/verity_sp1", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli" }
+
+[paths]
+"integrations/vllm/verity_vllm/engine/profiles/__init__.py" = "integrations/vllm/verity_vllm/observe/fold/profiles/__init__.py"
+"integrations/vllm/verity_vllm/engine/profiles/generic.py" = "integrations/vllm/verity_vllm/observe/fold/profiles/generic.py"
+"integrations/vllm/verity_vllm/engine/profiles/gen_dense2_patterns.py" = "integrations/vllm/verity_vllm/observe/fold/profiles/gen_dense2_patterns.py"
+"integrations/vllm/verity_vllm/engine/profiles/gen_dense_gemma2_patterns.py" = "integrations/vllm/verity_vllm/observe/fold/profiles/gen_dense_gemma2_patterns.py"
+"integrations/vllm/verity_vllm/engine/profiles/gen_dense_softcap_patterns.py" = "integrations/vllm/verity_vllm/observe/fold/profiles/gen_dense_softcap_patterns.py"
+"integrations/vllm/verity_vllm/engine/profiles/gen_llama_patterns.py" = "integrations/vllm/verity_vllm/observe/fold/profiles/gen_llama_patterns.py"
+"integrations/vllm/verity_vllm/engine/profiles/gen_ln_patterns.py" = "integrations/vllm/verity_vllm/observe/fold/profiles/gen_ln_patterns.py"
+"integrations/vllm/verity_vllm/engine/profiles/gen_marlin_moe_patterns.py" = "integrations/vllm/verity_vllm/observe/fold/profiles/gen_marlin_moe_patterns.py"
+"integrations/vllm/verity_vllm/engine/profiles/gen_mhc_moe.py" = "integrations/vllm/verity_vllm/observe/fold/profiles/gen_mhc_moe.py"
+"integrations/vllm/verity_vllm/engine/profiles/gen_ov_easy_family.py" = "integrations/vllm/verity_vllm/observe/fold/profiles/gen_ov_easy_family.py"
+"integrations/vllm/verity_vllm/engine/profiles/gen_ov_moe_patterns.py" = "integrations/vllm/verity_vllm/observe/fold/profiles/gen_ov_moe_patterns.py"
+"integrations/vllm/verity_vllm/engine/profiles/gen_ov_sampling_patterns.py" = "integrations/vllm/verity_vllm/observe/fold/profiles/gen_ov_sampling_patterns.py"
+"integrations/vllm/verity_vllm/engine/profiles/gen_shared_moe_patterns.py" = "integrations/vllm/verity_vllm/observe/fold/profiles/gen_shared_moe_patterns.py"
+"integrations/vllm/verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager.py" = "integrations/vllm/verity_vllm/observe/fold/profiles/vllm_d9105ea80_sm89_eager.py"
+"integrations/vllm/verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager_qwen15.py" = "integrations/vllm/verity_vllm/observe/fold/profiles/vllm_d9105ea80_sm89_eager_qwen15.py"
+
+# --- the model facts stay: each keeps its name while the package's (`profile_for_case`, the derived names) follows __init__.py
+"integrations/vllm/verity_vllm/engine/profiles/admission_calibration.py" = "integrations/vllm/verity_vllm/engine/profiles/admission_calibration.py"
+"integrations/vllm/verity_vllm/engine/profiles/cases.py" = "integrations/vllm/verity_vllm/engine/profiles/cases.py"
+"integrations/vllm/verity_vllm/engine/profiles/coverage_roles.py" = "integrations/vllm/verity_vllm/engine/profiles/coverage_roles.py"
+"integrations/vllm/verity_vllm/engine/profiles/dense_generic.py" = "integrations/vllm/verity_vllm/engine/profiles/dense_generic.py"
+"integrations/vllm/verity_vllm/engine/profiles/devices.py" = "integrations/vllm/verity_vllm/engine/profiles/devices.py"
+"integrations/vllm/verity_vllm/engine/profiles/family_facts.py" = "integrations/vllm/verity_vllm/engine/profiles/family_facts.py"
+"integrations/vllm/verity_vllm/engine/profiles/int8_gemm_configs.py" = "integrations/vllm/verity_vllm/engine/profiles/int8_gemm_configs.py"
+"integrations/vllm/verity_vllm/engine/profiles/layer_classes.py" = "integrations/vllm/verity_vllm/engine/profiles/layer_classes.py"
+"integrations/vllm/verity_vllm/engine/profiles/transport.py" = "integrations/vllm/verity_vllm/engine/profiles/transport.py"
+
+[retired]
+paths = []
+
+[drop]
+paths = []
+
+[split]
+
+[create]
+"integrations/vllm/verity_vllm/engine/profiles/__init__.py" = '''"""The model facts: the architecture families' declared facts (`family_facts`), the checkpoints' HF configs (`dense_generic`,
+`hf_configs/`), the devices, the transport, the cases, the admission calibration and the data files beside them. They import
+nothing from `observe/`, so `engine/`, `program/`, `check/` and `commit/` read them; what builds a fold `Profile` from them is
+`observe.fold.profiles`."""
+'''
+
+[rewrite]
+# defs_map.toml's: records of what was, and files whose bytes a digest pins, are never rewritten.
+exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**",
+           "benchmarks/numerical/reports/**", "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json",
+           "verity/ml/circuits/silicon/captures/**", "verity/ml/circuits/silicon/hawkeye/**",
+           "integrations/vllm/manifests/**", "integrations/vllm/workloads/**", "integrations/vllm/data/**",
+           "integrations/vllm/verity_vllm/pins/**",
+           "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py",
+           "tools/research/src/research/store/moves.json",
+           "benchmarks/tc_probe_fp4/fp4_emulation_1ad1aaa2.py",
+           "benchmarks/network_e2e/tests/data/**",
+           "integrations/vllm/tools/migrate/superseded_quarantine.py",
+           "integrations/vllm/tests/migrate/test_superseded_quarantine.py"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
+           "integrations/vllm/manifests/definitions.json"]
+
+[modules]
+"verity_vllm.engine.profiles" = "verity_vllm.observe.fold.profiles"
+"verity_vllm.engine.profiles.admission_calibration" = "verity_vllm.engine.profiles.admission_calibration"
+"verity_vllm.engine.profiles.cases" = "verity_vllm.engine.profiles.cases"
+"verity_vllm.engine.profiles.coverage_roles" = "verity_vllm.engine.profiles.coverage_roles"
+"verity_vllm.engine.profiles.dense_generic" = "verity_vllm.engine.profiles.dense_generic"
+"verity_vllm.engine.profiles.devices" = "verity_vllm.engine.profiles.devices"
+"verity_vllm.engine.profiles.family_facts" = "verity_vllm.engine.profiles.family_facts"
+"verity_vllm.engine.profiles.gen_dense2_patterns" = "verity_vllm.observe.fold.profiles.gen_dense2_patterns"
+"verity_vllm.engine.profiles.gen_dense_gemma2_patterns" = "verity_vllm.observe.fold.profiles.gen_dense_gemma2_patterns"
+"verity_vllm.engine.profiles.gen_dense_softcap_patterns" = "verity_vllm.observe.fold.profiles.gen_dense_softcap_patterns"
+"verity_vllm.engine.profiles.gen_llama_patterns" = "verity_vllm.observe.fold.profiles.gen_llama_patterns"
+"verity_vllm.engine.profiles.gen_ln_patterns" = "verity_vllm.observe.fold.profiles.gen_ln_patterns"
+"verity_vllm.engine.profiles.gen_marlin_moe_patterns" = "verity_vllm.observe.fold.profiles.gen_marlin_moe_patterns"
+"verity_vllm.engine.profiles.gen_mhc_moe" = "verity_vllm.observe.fold.profiles.gen_mhc_moe"
+"verity_vllm.engine.profiles.gen_ov_easy_family" = "verity_vllm.observe.fold.profiles.gen_ov_easy_family"
+"verity_vllm.engine.profiles.gen_ov_moe_patterns" = "verity_vllm.observe.fold.profiles.gen_ov_moe_patterns"
+"verity_vllm.engine.profiles.gen_ov_sampling_patterns" = "verity_vllm.observe.fold.profiles.gen_ov_sampling_patterns"
+"verity_vllm.engine.profiles.gen_shared_moe_patterns" = "verity_vllm.observe.fold.profiles.gen_shared_moe_patterns"
+"verity_vllm.engine.profiles.generic" = "verity_vllm.observe.fold.profiles.generic"
+"verity_vllm.engine.profiles.int8_gemm_configs" = "verity_vllm.engine.profiles.int8_gemm_configs"
+"verity_vllm.engine.profiles.layer_classes" = "verity_vllm.engine.profiles.layer_classes"
+"verity_vllm.engine.profiles.transport" = "verity_vllm.engine.profiles.transport"
+"verity_vllm.engine.profiles.vllm_d9105ea80_sm89_eager" = "verity_vllm.observe.fold.profiles.vllm_d9105ea80_sm89_eager"
+"verity_vllm.engine.profiles.vllm_d9105ea80_sm89_eager_qwen15" = "verity_vllm.observe.fold.profiles.vllm_d9105ea80_sm89_eager_qwen15"
+
+[aliases]
+# p09's allowlist names a module below `verity_vllm.` (`_imports.LAYER`'s short form), and docstrings that name a
+# moved module in that form follow it too
+"engine.profiles.generic" = "observe.fold.profiles.generic"
+"engine.profiles.gen_dense2_patterns" = "observe.fold.profiles.gen_dense2_patterns"
+"engine.profiles.gen_dense_gemma2_patterns" = "observe.fold.profiles.gen_dense_gemma2_patterns"
+"engine.profiles.gen_dense_softcap_patterns" = "observe.fold.profiles.gen_dense_softcap_patterns"
+"engine.profiles.gen_llama_patterns" = "observe.fold.profiles.gen_llama_patterns"
+"engine.profiles.gen_ln_patterns" = "observe.fold.profiles.gen_ln_patterns"
+"engine.profiles.gen_marlin_moe_patterns" = "observe.fold.profiles.gen_marlin_moe_patterns"
+"engine.profiles.gen_mhc_moe" = "observe.fold.profiles.gen_mhc_moe"
+"engine.profiles.gen_ov_easy_family" = "observe.fold.profiles.gen_ov_easy_family"
+"engine.profiles.gen_ov_moe_patterns" = "observe.fold.profiles.gen_ov_moe_patterns"
+"engine.profiles.gen_ov_sampling_patterns" = "observe.fold.profiles.gen_ov_sampling_patterns"
+"engine.profiles.gen_shared_moe_patterns" = "observe.fold.profiles.gen_shared_moe_patterns"
+"engine.profiles.vllm_d9105ea80_sm89_eager" = "observe.fold.profiles.vllm_d9105ea80_sm89_eager"
+"engine.profiles.vllm_d9105ea80_sm89_eager_qwen15" = "observe.fold.profiles.vllm_d9105ea80_sm89_eager_qwen15"

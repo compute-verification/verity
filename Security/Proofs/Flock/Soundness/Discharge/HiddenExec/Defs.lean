@@ -1,9 +1,4 @@
-import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
-import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
-import Proofs.Flock.Soundness.Discharge.Exec.Rounds
-import Proofs.Flock.Soundness.Discharge.Exec.Shape
-import Proofs.Flock.Soundness.Discharge.Exec.Verdict
-import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
+import Proofs.Flock.Soundness.Discharge.Exec
 
 /-!
 # The statement flock-verify sets up for one table, under either tag

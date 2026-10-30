@@ -18,7 +18,7 @@
   "verity_vllm.engine.collectives.collective_record": "TP path (lane/vllm-tp-n); test_tp_collective.py",
   "verity_vllm.protocols.linear": "the linear-site interface, ahead of its first consumer (the MVP's install, migration step 3 of the research store's docs/pouw/vllm-integration-api.md); tests/linear",
   "verity_vllm.protocols.linear.api": "see verity_vllm.protocols.linear",
-  "verity_vllm.protocols.linear.vllm_site": "see verity_vllm.protocols.linear; benchmarks/pouw's e2e.py and profile_decode.py attach through it",
+  "verity_vllm.protocols.linear.vllm_site": "see verity_vllm.protocols.linear; benchmarks/pouw's e2e.py, profile_decode.py and vllm_bench.py attach through it",
   "verity_vllm.program.quarantine.collective": "provisional TP AllReduce definitions; test_tp_collective.py",
   "verity_vllm.program.quarantine.collective.allreduce": "see quarantine.collective",
   "verity_vllm.program.quarantine.collective.allreduce_difftest": "see quarantine.collective",

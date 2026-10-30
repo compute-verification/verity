@@ -19,7 +19,7 @@ DIR`` stages from them without the fold, which is most of a run's time on a shar
   `check.weights_of_record.compose` and the Build's load-time ue8m0 rewrite (`check.fp8_ue8m0`, roles from ``--roles``), the
   composition whose per-field digests the Commit's weights pin held equal to the served parameters; the rotary table is the
   capture's ``cos_sin_cache.npy``. A Call reading another rank's values (``peers``) has none here and is not staged.
-* **Units.** The Call is evaluated gate by gate (`circuits.evaluation.reference`) on those operands and held to the capture's output
+* **Units.** The Call is evaluated gate by gate (`circuits.evaluate`) on those operands and held to the capture's output
   snapshot (the twin; for a kernel whose write lands after its own event's snapshot, the first later one before another
   writer that holds it, `call_twin`); its first ``--per-kind`` unit calls (the kind's unit, `a11_kinds.chain`) give each
   unit's arguments and returns. Each is packed into the unit's rows (`a11_kinds.rows_of`, an output row per output port,
@@ -62,7 +62,7 @@ import a11_kinds as K  # noqa: E402
 import r2_population as R2  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.ml.circuits.defs import PrimitiveDefinition  # noqa: E402
-from verity.ml.circuits.evaluation.reference import evaluate_region  # noqa: E402
+from verity.ml.circuits.evaluate import evaluate_region  # noqa: E402
 from verity.ml.circuits.program import Program  # noqa: E402
 from verity.ml.circuits.refs import runs  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402
@@ -886,10 +886,9 @@ def main() -> int:
         print("A11 " + json.dumps({"refused_before_draw": summary["checks_before_draw"]}, default=str))
         return 1
 
-    # the verifier's stratified sample, by its own Lean over its own program and partition object on a development
-    # challenger's coins; each member serves its share
-    p = a0.challenger_draw(a.lean, ["--program", str(out / "program.json"), "--partition", str(out / "partition.json"),
-                                    "--stratified", str(k)], rec["law"], n_all, R.digest(rec), out / "draw.log")
+    # the verifier's stratified sample, by its own Lean over its own program and partition object; each member serves its share
+    p = a0.run([a.lean, "draw", "--program", str(out / "program.json"), "--partition", str(out / "partition.json"),
+                "--stratified", str(k)], out / "draw.log")
     lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     (out / "draw.json").write_text(json.dumps(lean_draw, sort_keys=True))
     served, proved, instances, verdicts, statement, sessions, counts, session_roots = [], [], 0, {}, {}, [], {}, {}

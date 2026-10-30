@@ -4,7 +4,7 @@
         specification    what we intended to run -- known BEFORE execution        spec.json (+ capture/spec_tokens.json)
         execution        what actually happened                                   capture/, control/, census/, nonint/, run.json#realized
         representation   the Verity Program and how it was pinned to the run     program.json, instances.jsonl, accesses.jsonl.gz, wiring,
-                                                                                  provenance, resolution, prescribed inputs, trace values
+                                                                                  provenance, resolution, prescribed inputs, transcript values
         checks           what we tested and what it said                         gates.json, replay_*.json, compare.json, …, stages.json (cost)
 
 Nothing here is a new Verity object and no large file is duplicated: `experiment.json` references the run's files by relative path with
@@ -15,7 +15,7 @@ their byte size, a sha256 for the small ones, and a presence flag.  Two discipli
   instead of touching the spec).  The prompt token ids are the workload loader's, written by the capture process before its first
   engine step (`capture/spec_tokens.json`, `known_before_execution: true`).  Nothing observed from the run goes into either file; the
   realized shape lives in `run.json["realized"]` and `capture/tokens.json` (execution).
-* Trace values are reported with their availability: the snapshot index lists every captured tensor and every tensor skipped for
+* Transcript values are reported with their availability: the snapshot index lists every captured tensor and every tensor skipped for
   size (`skipped: "spanned bytes … > snapshot_max_bytes …"`); `replay_a.json["vu_population"]` counts the VUs whose values are
   available / oversize / zero-mass.  A VU whose values are unavailable is never counted as evidenced -- that is the replay's rule,
   restated here as data.
@@ -33,7 +33,7 @@ import time
 from pathlib import Path
 
 from verity_vllm.config import RowEngine
-from verity_vllm.pipeline.source_identity import TREE, core_dirs
+from verity_vllm.pipeline import research_tools
 
 SPEC_SCHEMA = "verity-gen/spec/v1"
 EXPERIMENT_SCHEMA = "verity-gen/experiment/v1"
@@ -95,7 +95,7 @@ def code_version(repo: Path) -> dict:
                     "untracked": d.get("untracked"), "fallback": d.get("fallback")}
     try:
         sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, timeout=10).stdout.strip()
-        code = [f":/{d}" for d in core_dirs(TREE)]
+        code = [f":/{d}" for d in research_tools.CODE_DIRS]
         dirty = subprocess.run(["git", "status", "--porcelain", "--", "verity_vllm", *code], cwd=repo,
                                capture_output=True, text=True, timeout=20).stdout.strip()
         return {"source": "git", "commit": sha or None, "dirty": bool(dirty)}
@@ -177,7 +177,7 @@ def write_spec(run: Path, spec: dict) -> dict:
 # ----------------------------------------------------------------------------------------------------------------------------------
 
 def _transcript_values(run: Path) -> dict:
-    """Availability of trace values: the snapshot index (captured vs skipped-for-size) and the replay's VU population counts."""
+    """Availability of transcript values: the snapshot index (captured vs skipped-for-size) and the replay's VU population counts."""
     snaps = _load(run, "capture/snapshots.json")
     out: dict = {"snapshot_index": _ref(run, "capture/snapshots.json", sha=False), "values_dir": _ref(run, "capture/values")}
     if isinstance(snaps, dict):

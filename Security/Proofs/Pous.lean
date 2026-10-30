@@ -15,7 +15,6 @@ import Proofs.Pous.Chain.Family
 import Proofs.Pous.Chain.FamilyRounds
 import Proofs.Pous.Continuous
 import Proofs.Pous.StreamedWipe
-import Proofs.Pous.StreamedWipeInfo
 import Proofs.Pous.Graded.Band
 import Proofs.Pous.P2.Margin
 import Proofs.Pous.P2.Bridge
@@ -125,7 +124,7 @@ theorem SampledAuditProd : Pous.Guarantees.SampledAuditProd := @PousAudit.sample
 
 /-- `PousThm1.seqState` is `Pous.Sampled.seqState`, the trusted definition the guarantee reads. -/
 theorem seqState_eq_pinned {M : Pous.IdealModel} {ℓ S B : ℕ} (f : M.Qry → M.Ans)
-    (step : ℕ → Pous.Bits S → Fin B → Pous.OracleAlgorithm M (Pous.Bits ℓ × Pous.Bits S)) :
+    (step : ℕ → Pous.Bits S → Fin B → Pous.Prog M (Pous.Bits ℓ × Pous.Bits S)) :
     ∀ (j : ℕ) (h : List (Fin B)) (σ : Pous.Bits S),
       Pous.Sampled.seqState f step j h σ = PousThm1.seqState f step j h σ
   | _, [], _ => rfl
@@ -190,7 +189,8 @@ theorem StreamedWipeMeetsFamily : Pous.Guarantees.StreamedWipeMeetsFamily :=
 theorem StreamedWipeMeets96GiB : Pous.Guarantees.StreamedWipeMeets96GiB := PousStreamedWipe.streamed_wipe_meets_96GiB
 theorem StreamedWipeMeets141GB : Pous.Guarantees.StreamedWipeMeets141GB := PousStreamedWipe.streamed_wipe_meets_141GB
 theorem StreamedWipeMeetsReads : Pous.Guarantees.StreamedWipeMeetsReads := PousStreamedWipe.streamed_wipe_meets_reads
-theorem StreamedWipeMeetsH200 : Pous.Guarantees.StreamedWipeMeetsH200 := PousStreamedWipe.streamed_wipe_meets_H200
+theorem StreamedWipeMeets141GB5 : Pous.Guarantees.StreamedWipeMeets141GB5 :=
+  PousStreamedWipe.streamed_wipe_meets_141GB5
 theorem StreamedWipeMeetsReadsTight : Pous.Guarantees.StreamedWipeMeetsReadsTight :=
   PousStreamedWipe.streamed_wipe_meets_reads_tight
 theorem StreamedWipeMeetsServer : Pous.Guarantees.StreamedWipeMeetsServer := PousStreamedWipe.streamed_wipe_meets_server

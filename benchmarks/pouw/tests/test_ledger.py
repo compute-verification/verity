@@ -473,7 +473,7 @@ def test_verify_writes_one_record_per_arm_and_shape_with_everything_the_ledger_k
     assert m["gates"] == {"version": L.GATES, "arm_interface": A.VERSION, "verify": V.VERSION, "sass_gate": "sass-gate/v4"}
     assert m["gate"] == {"variant": var["id"], "run": RUN, "gates": L.GATES, "shapes": [[8192, 8192]], "exact": True,
                          "poisoned_accepted": True, "controls_rejected": True, "schedules_equal": True, "sass_ok": True,
-                         "toolkit": "12.9.86", "prices": "cast-8.72", "fold_bound": None}
+                         "toolkit": "12.9.86", "prices": "cast-8.72"}
     assert m["metrics"]["slowdown"] == 1.25 and m["metrics"]["decode_method"] == "dependent-chain"
     assert m["metrics"]["sm_clock"] == {"arm": [2090.0, 2092.0], "base": [2091.0, 2093.0]}
     assert m["steps"]["phases"]["gemm"] == 0.05 and m["steps"]["hashing_ms"] == 0.16

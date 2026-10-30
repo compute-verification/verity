@@ -146,22 +146,22 @@ theorem tmpl_facts {t : Tags} {cf : ByteArray} {tables : List (String × ByteArr
   exact portReadsB_unroll ho hun hlog
 
 /-- **A templated circuit the check passes, unrolled, is a statement the hidden-output headlines cover**: the check's
-form (hidden outputs, `--zk`, at most one table) and a templated statement's
+form (hidden outputs, `--zk`, no registered reads of the verifier's own, at most one table) and a templated statement's
 tags; `HmOut.parseStmt` reads the statement circuit, which carries no template, has a `Built` unit, is in
 `Layout.scopeOkI`, and whose wires feed neither the unit nor the outputs. -/
-theorem unrolled_scope {t : Tags} {zk : Bool} {count : ℕ} {cf : ByteArray} {tables : List (String × ByteArray)}
+theorem unrolled_scope {t : Tags} {zk reg : Bool} {count : ℕ} {cf : ByteArray} {tables : List (String × ByteArray)}
     {c : Circuit} {tu : TmplUnit} (hty : t.typed = false) (hc : ProvedScope.circuitOf t cf tables = .ok c)
-    (ht : c.tmpl = some tu) (hs : ProvedScope.scopeOkT t.hiddenOutputs zk count c tu = true) :
-    t.hiddenOutputs = true ∧ zk = true ∧ count ≤ 1 ∧ t.isTmpl = true ∧
+    (ht : c.tmpl = some tu) (hs : ProvedScope.scopeOkT t.hiddenOutputs zk reg count c tu = true) :
+    t.hiddenOutputs = true ∧ zk = true ∧ reg = false ∧ count ≤ 1 ∧ t.isTmpl = true ∧
       HmOut.parseStmt t cf tables = .ok (HmOut.unrolled c) ∧ (HmOut.unrolled c).tmpl = none ∧
       Built (HmOut.unrolled c).unit ∧ Layout.scopeOkI (HmOut.unrolled c) = true ∧
       ProvedScope.wiresFeed (HmOut.unrolled c) = false := by
   obtain ⟨-, hi, hp, hig, hul, hpr, eo, eu, e1, e2⟩ := tmpl_facts hty hc ht
   unfold ProvedScope.scopeOkT at hs
   simp only [Bool.and_eq_true, Bool.not_eq_true', beq_iff_eq, decide_eq_true_eq] at hs
-  obtain ⟨⟨⟨⟨⟨⟨hh, hz⟩, hn⟩, hig1⟩, hout⟩, hlog⟩, hrows⟩ := hs
+  obtain ⟨⟨⟨⟨⟨⟨⟨hh, hz⟩, hr⟩, hn⟩, hig1⟩, hout⟩, hlog⟩, hrows⟩ := hs
   have hlog' : (HmOut.unrolled c).unit.unitLog ≤ 32 := by rw [hul]; exact hlog
-  refine ⟨hh, hz, hn, hi, parseStmt_of_tmpl hi hp, unrolled_tmpl hp, unrolled_built hp, ?_, ?_⟩
+  refine ⟨hh, hz, hr, hn, hi, parseStmt_of_tmpl hi hp, unrolled_tmpl hp, unrolled_built hp, ?_, ?_⟩
   · unfold Layout.scopeOkI
     rw [e1, e2, hrows, hpr hlog']
     simp [hlog']

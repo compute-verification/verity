@@ -86,21 +86,18 @@ def test_a_failed_fetch_names_the_workload_and_the_fix(tmp_path, monkeypatch):
     (repo / "fixtures").mkdir(parents=True)
     (repo / "fixtures" / "artifacts.json").write_text("{}")
     _stored(repo / "w", {"a.json": {}})
-    monkeypatch.chdir(repo / "w")
     seen = []
 
     def run(argv, **kw):
-        seen.append((argv, kw))
+        seen.append((argv, kw["env"]["PYTHONPATH"].split(os.pathsep)[0]))
         return subprocess.CompletedProcess(argv, 1, "", "no source configured")
     monkeypatch.setattr(C.subprocess, "run", run)
     with pytest.raises(RuntimeError, match=r"w/a\.json: stored workloads, not here, and `research data fetch-fixtures` could not fetch "
                                            r"them \(rc 1: no source configured\)"):
         C.workload_file(repo / "w" / "a.json")
-    (argv, kw), = seen
+    (argv, pythonpath), = seen
     assert argv[2:] == ["research", "data", "fetch-fixtures", "--repo", str(repo.resolve()), "--json", "w/a.json"]
-    # fetch-fixtures reads a relative PATH against its cwd, not --repo
-    assert (Path(kw.get("cwd") or os.getcwd()) / argv[-1]).resolve() == (repo / "w" / "a.json").resolve()
-    assert kw["env"]["PYTHONPATH"].split(os.pathsep)[0] == str(repo.resolve() / "tools" / "research" / "src")
+    assert pythonpath == str(repo.resolve() / "tools" / "research" / "src")
 
 
 def test_row_file_finds_a_stored_row_that_is_not_here(tmp_path, monkeypatch):

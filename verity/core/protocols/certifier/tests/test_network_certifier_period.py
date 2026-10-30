@@ -1,8 +1,8 @@
-"""N2's period sample (`LinkWindows.period_draw`) and the sampled network verdict (`network_verdict(drawn=…)`): the
-period's salted roots committed before any coin is read, K of its execution phases sampled, only those registered and
-proved, the sample of record the Lean verifier's on the coins the sample read (`lean_draw`, stood in here by the sampler
+"""N2's period draw (`LinkWindows.period_draw`) and the sampled network verdict (`network_verdict(drawn=…)`): the
+period's salted roots committed before any coin is read, K of its link-windows drawn, only those registered and proved,
+the sample of record the Lean verifier's on the coins the sample read (`lean_draw`, stood in here by the sampler
 `coins.OwnRandomness` that `test_coins` holds byte for byte to Lean's `Flock.Draw.drawOn`), and what the sample
-established stated as faulty proof blocks at δ."""
+established stated as wrong units at δ."""
 from __future__ import annotations
 
 import itertools
@@ -66,7 +66,7 @@ def roots(run: Run, openings: dict) -> list[str]:
 
 
 def prove(run: Run, drawn: dict, openings: dict, windows=None) -> list[S.Outcome]:
-    """The sampled windows (or `windows`) registered under the period sample, in order, and each decided on a proof."""
+    """The drawn windows (or `windows`) registered under the period draw, in order, and each decided on a proof."""
     out = []
     for w in drawn["units"] if windows is None else windows:
         reg = run.lw.register(run.stream, run.lw.registration(openings[w], run.previous), drawn)
@@ -83,13 +83,15 @@ def test_the_period_draw_commits_every_root_before_it_reads_a_coin(tmp_path):
     assert all(e[0] == "read" for e in coins.events[1:])
     assert drawn["read"] == (bytes([coins.byte]) * sum(e[1] for e in coins.events[1:])).hex()
     assert drawn["commitment"] == S._sha512({"format": PERIOD_DRAW, "stream": run.stream.digest,
-                                             "roots": roots(run, openings)})
+                                             "roots": roots(run, openings), "advice": None})
     assert drawn["format"] == PERIOD_DRAW and drawn["k"] == 2 and drawn["population"] == 3
     assert len(drawn["units"]) == 2 and drawn["units"] == sorted(set(drawn["units"])) <= [0, 1, 2]
     with pytest.raises(ValueError, match="1 <= K <= 3"):
         run.lw.period_draw(run.stream, roots(run, openings), 4, Coins())
     with pytest.raises(ValueError, match="SHA-512 in lowercase hex"):
         run.lw.period_draw(run.stream, ["00"] * 3, 2, Coins())
+    with pytest.raises(ValueError, match="advice's digest"):
+        run.lw.period_draw(run.stream, roots(run, openings), 2, Coins(), advice="00" * 64)
     prove(run, drawn, openings)
     with pytest.raises(ValueError, match="before the stream's first registration"):
         run.lw.period_draw(run.stream, roots(run, openings), 2, Coins())
@@ -138,8 +140,8 @@ def _other(drawn: dict, n: int = 3) -> list[int]:
 @pytest.mark.parametrize("k", [1, 2])
 def test_a_prover_that_proves_another_k_subset_is_refused_by_name(tmp_path, k):
     """The prover registers and proves K windows the sample didn't hold, every one accepted, under a sample object listing
-    them (the period's own coins and commitment, which hold): the verdict samples its own with the Lean on those coins
-    and refuses the link by name, `period-draw`, whether it is handed the prover's object or the challenger's."""
+    them (the period's own coins and commitment, which hold): the verdict draws its own with the Lean on those coins and
+    refuses the link by name, `period-draw`, whether it is handed the prover's object or the challenger's."""
     run = Run(tmp_path)
     openings = committed(run)
     drawn = run.lw.period_draw(run.stream, roots(run, openings), k, Coins())
@@ -248,7 +250,7 @@ def test_the_draw_is_held_to_this_stream_and_the_period_it_committed(tmp_path):
     with pytest.raises(ValueError, match="this stream's"):
         run.lw.network_verdict(another, drawn=drawn)
     swapped = list(reversed(drawn["roots"]))
-    for bad in ({**drawn, "roots": swapped}, {**drawn, "commitment": "00" * 64}, {**drawn, "stream": "00" * 64}):
+    for bad in ({**drawn, "roots": swapped}, {**drawn, "advice": "00" * 64}, {**drawn, "stream": "00" * 64}):
         with pytest.raises(ValueError, match="this stream's"):
             run.lw.network_verdict(run.stream, drawn=bad)
     for bad in ({**drawn, "units": drawn["units"][:1]}, {**drawn, "population": 4}, {**drawn, "units": [2, 0]},

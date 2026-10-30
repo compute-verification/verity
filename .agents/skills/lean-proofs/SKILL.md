@@ -54,11 +54,9 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 
   In cpu-1's research pool the runner takes the check slot: don't wrap it in `slot.py`. On vy-nebius-1 a bare run is
   refused: wrap it in n1's Lean-record pool, `env CHECK_SLOTS=/workspace/research/locks/leanrec/slots python3
-  tools/verity/check/slot.py --by LANE -- python3 tools/verity/lean/lean_changed.py --records PKG --update`. It also
-  audits every package whose guarantees read PKG's build (`lean-audit/requirer-<path>/`), and with `--update` updates one
-  that fails only on record differences. Commit each record it kept, `lean-audit/record/<path>/lean-audit.json` over
-  `<path>/lean-audit.json` (its log names each; each package's `audit-*/review.txt` says what changed); a requirer
-  failing otherwise fails the run.
+  tools/verity/check/slot.py --by LANE -- python3 tools/verity/lean/lean_changed.py --records PKG --update`. Commit the
+  record from `lean-audit/audit-*/` and, when it changed, `lean-audit/record/` (with `review.txt`). It also audits every
+  package whose guarantees read PKG's build (`lean-audit/requirer-<path>/`): run `--records --update` on one that fails.
   Its result, `lean-fast/v1`, no merge check accepts. It repairs a slot tree another run left mid-way, so never delete or
   copy one by hand. A spec's `proved_in: P's build did not pass` points at P's own report.
 - **A full record on a pod**: `research run --on POD --project verity --source . --cwd clone -- python3
@@ -119,7 +117,7 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 - Merge `main` in rather than rebasing, with `python tools/verity/lean/merge.py --install` run once per clone so
   `lean-audit.json` merges without a rebuild; only a conflict it refuses needs `check.py --update` on the merged tree.
 - Record your lock at your own head, then mark (`ready` refuses a changed lock no records run of that head passed); a
-  passing Lean check, a clean merge of `main` over a passing head, or a commit of exactly the records under `record/` a
+  passing Lean check, a clean merge of `main` over a passing head, or a commit of exactly the `record/lean-audit.json` a
   passing run kept needs no new run. A train regenerates records that differ only because another PR moved what yours
   reads; re-record only what it can't (a refused conflict, `shape`, a move's map).
 
@@ -145,9 +143,7 @@ repository.
   commitment); the knowledge form (`EndToEndHidden`, `Claims.KS`) is preferred.
 - Every security guarantee has an honest lemma (its hypotheses hold at the honest deployed instance) and a nontrivial
   one (its conclusion fails for a verifier that accepts everything), in the lock as a claim's `meets` and `fails` are;
-  failing either, it says nothing. `check.py` holds them to it (`witnesses`): both lemmas build their instance, taking
-  only listed assumptions; an exclusion's nontrivial lemma is a circuit where the other premises hold and one named
-  premise and the bound fail.
+  failing either, it says nothing.
 - A property's premises are assumptions about the world the function can't see; what the code can see, it checks. A
   condition picking out what the conclusion talks about goes inside the conclusion. Completeness theorems are not claims:
   they live in `Proofs/` with one concrete instance where the honest case holds.

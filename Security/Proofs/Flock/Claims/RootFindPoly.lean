@@ -185,6 +185,11 @@ theorem toPoly_append [CommSemiring F] (l₁ l₂ : List F) :
   | zero => rfl
   | succ n ih => simp [List.replicate_succ, ih]
 
+theorem degree_toPoly_lt [Semiring F] (l : List F) : (toPoly l).degree < l.length := by
+  rw [degree_lt_iff_coeff_zero]
+  intro m hm
+  rw [coeff_toPoly, List.getD_eq_default _ _ hm]
+
 theorem getD_pred_length [Zero F] {l : List F} (h : l ≠ []) : l.getD (l.length - 1) 0 = l.getLast h := by
   rw [List.getLast_eq_getElem, List.getD_eq_getElem]
 
@@ -207,6 +212,9 @@ theorem Norm.natDegree [Semiring F] {l : List F} (hl : Norm l) (h : l ≠ []) :
 theorem Norm.leadingCoeff [Semiring F] {l : List F} (hl : Norm l) (h : l ≠ []) :
     (toPoly l).leadingCoeff = l.getLast h := by
   rw [Polynomial.leadingCoeff, hl.natDegree h, coeff_toPoly, getD_pred_length h]
+
+theorem Norm.eq_nil_iff [Semiring F] {l : List F} (hl : Norm l) : toPoly l = 0 ↔ l = [] :=
+  ⟨fun h0 => by_contra fun h => hl.toPoly_ne_zero h h0, fun h => by rw [h, toPoly_nil]⟩
 
 theorem Norm.length_eq [Semiring F] {l : List F} (hl : Norm l) (h : toPoly l ≠ 0) :
     l.length = (toPoly l).natDegree + 1 := by

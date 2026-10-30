@@ -26,7 +26,7 @@ namespace TypedRowsPart
 
 /-- META's types, layouts, held tables, unit and the unit's type, checked as `classOf` checks them, given to `k`. -/
 def metaChecked {α : Type} (mj : Json) (tables : List (String × ByteArray))
-    (k : Array (String × CircuitType) × Array BlockLayout × Array Held × Nat × CircuitType → V α) : V α := do
+    (k : Array (String × CircuitType) × Array Layout × Array Held × Nat × CircuitType → V α) : V α := do
   let kvs ← match mj.getObjVal? "types" with
     | .ok (Json.obj kvs) => pure kvs.toArray
     | _ => throw "META: types is not an object"
@@ -39,12 +39,12 @@ def metaChecked {α : Type} (mj : Json) (tables : List (String × ByteArray))
     if let .error e := CircuitType.check (typeIn types) t then throw s!"META: type {d.take 16}… breaks the rule '{e}'"
   let held ← hold types tables
   let ls ← (← J.arr mj "layouts" "typed statement META").mapM fun r => do
-    let l ← BlockLayout.ofJson r
+    let l ← Layout.ofJson r
     if (← J.str r "sha512" "typed statement META") != (← l.digest) then
       throw s!"{"typed statement META"}: a layout's sha512 is not its record's digest"
     pure l
   let unit ← J.nat mj "unit_layout" "typed statement META"
-  if let .error e := BlockLayout.check (typeIn types) ls unit (infoIn held) then throw s!"META: the layouts break the rule '{e}'"
+  if let .error e := Layout.check (typeIn types) ls unit (infoIn held) then throw s!"META: the layouts break the rule '{e}'"
   let some ul := ls[unit]? | throw "META: unit_layout names no layout"
   let some ut := ul.type | throw "META: the unit's layout names no type"
   if (← J.str mj "unit_type" "typed statement META") != ut then throw "META: unit_type is not the unit's layout's type"
@@ -56,7 +56,7 @@ def metaChecked {α : Type} (mj : Json) (tables : List (String × ByteArray))
   k (types, ls, held, unit, t)
 
 /-- What `classOf` does with META once it is checked: `deriveChecked`. -/
-def derived (x : Array (String × CircuitType) × Array BlockLayout × Array Held × Nat × CircuitType) : V (Class × CircuitType) :=
+def derived (x : Array (String × CircuitType) × Array Layout × Array Held × Nat × CircuitType) : V (Class × CircuitType) :=
   let (types, ls, held, unit, t) := x
   match h : deriveChecked (typeIn types) ls (infoIn held) (wordsIn held) unit with
   | .ok done => return (⟨types, ls, held, unit, done, h⟩, t)
@@ -65,7 +65,7 @@ def derived (x : Array (String × CircuitType) × Array BlockLayout × Array Hel
 theorem classOf_eq (mj : Json) (tables : List (String × ByteArray)) : classOf mj tables = metaChecked mj tables derived := rfl
 
 /-- `deriveChecked`'s checks on `deriveAll`'s layouts. -/
-def checks (types : String → Option CircuitType) (ls : Array BlockLayout) (words : String → Option (Array Nat)) (unit : Nat)
+def checks (types : String → Option CircuitType) (ls : Array Layout) (words : String → Option (Array Nat)) (unit : Nat)
     (done : Array D) : Except String (Array D) :=
   match (List.range ls.size).find? fun j => !checkLayout types words ls done unit j with
   | some j => throw s!"derive: layout {j}'s rows fail the check"
@@ -74,7 +74,7 @@ def checks (types : String → Option CircuitType) (ls : Array BlockLayout) (wor
     else if !partsChecked done unit then throw "derive: the unit's parts are not placed as its template reads them"
     else return done
 
-theorem deriveChecked_eq (types : String → Option CircuitType) (ls : Array BlockLayout) (info : String → Option TableInfo)
+theorem deriveChecked_eq (types : String → Option CircuitType) (ls : Array Layout) (info : String → Option TableInfo)
     (words : String → Option (Array Nat)) (unit : Nat) :
     deriveChecked types ls info words unit = (deriveAll types ls info words unit >>= checks types ls words unit) := rfl
 
@@ -109,7 +109,7 @@ theorem orderChecked_eq (words : String → Option (Array Nat)) (done : Array D)
   simp only [orderChecked, before, after, ← orderOk_append, List.take_append_drop]
 
 /-- The files `typed-rows` writes for the unit named `name`, from `deriveChecked`'s layouts. -/
-def files (name : String) (done : Array D) (ls : Array BlockLayout) (unit : Nat) : V (Array (String × String)) := do
+def files (name : String) (done : Array D) (ls : Array Layout) (unit : Nat) : V (Array (String × String)) := do
   let u := done.getD unit default
   let digests ← ls.mapM (·.digest)
   let placed := (List.range ls.size).filter fun j => u.parts.any (·.1 == j)

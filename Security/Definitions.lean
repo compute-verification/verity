@@ -1,14 +1,10 @@
 import Definitions.Core
 import Definitions.Core.Accel
 import Definitions.Core.Assumptions.Accel
-import Definitions.Core.Transport
-import Definitions.Core.Assumptions.DeviceFigures
 import Definitions.Core.Blocks
 import Definitions.Core.DeviceFigures
-import Definitions.Core.Structure
 import Definitions.Core.Site
 import Definitions.Core.Period
-import Definitions.Core.ProofSystem
 import Definitions.Nci
 import Definitions.Nci.Support
 import Definitions.Nci.Reads
@@ -20,7 +16,6 @@ import Definitions.Nci.Capability
 import Definitions.Pous
 import Definitions.Pous.Guarantees.StreamedWipeFamily
 import Definitions.Pous.Guarantees.StreamedWipeReads
-import Definitions.Pous.Guarantees.StreamedWipeInfo
 import Definitions.Pous.Guarantees.StreamedWipeServer
 import Definitions.Pous.Guarantees.StreamedWipeDisk
 import Definitions.Pouw

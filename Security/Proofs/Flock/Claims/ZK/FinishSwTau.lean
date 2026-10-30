@@ -85,6 +85,12 @@ theorem swViewTau_eq (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Clai
         (rowsSwE x c w v τ j r) (Composed.padEquiv _ i) * muE x τ j r i :=
   rfl
 
+/-- The worker's view's `ρ_in`, `σ_in` are the honest view's: they read the pads alone. -/
+theorem swViewE_inner (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
+    (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) :
+    (swViewE x c w v τ j).pre.2.2.2.2.1 r = (viewE x c w τ j).pre.2.2.2.2.1 r :=
+  rfl
+
 /-- The inner proof's three triple rows are the worker's view's rows' last three. -/
 theorem tripleSwE (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) (q : Fin 3)

@@ -17,8 +17,8 @@ def commit_session(opts: Any, out: Any, kv_pages: int | None) -> remote.CommitSe
         backend_of = InPlaceBackend.for_commit(opts.remote_session_lib)
     return remote.CommitSession(opts.remote_verifier, plan=opts.remote_plan, kv_pages=kv_pages,
                                 weight_blocks=opts.remote_weight_blocks, kv_lib=opts.remote_kv_lib, backend_of=backend_of,
-                                out=out, node=opts.remote_node, step_ms=opts.remote_step_ms,
-                                filler_gib=opts.remote_filler_gib, log=lambda m: print(m, flush=True))
+                                out=out, step_ms=opts.remote_step_ms, filler_gib=opts.remote_filler_gib,
+                                log=lambda m: print(m, flush=True))
 
 
 def session_of(args: Any) -> remote.CommitSession | None:

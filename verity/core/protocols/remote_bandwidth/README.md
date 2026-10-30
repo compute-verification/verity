@@ -85,14 +85,12 @@ tree's git hash (`verity/remote-bandwidth/v0 verifier tree
 
 A session over PoUS's P2 store (`p2_party.py`) is decided by the Lean too, since the trusted base is the compiled Lean
 verifier, which parses bytes of untrusted provenance, and Python is never trusted: the verifier's process holds the
-registration file's bytes, recomputes the registration's digest from its fields, reads the prover's request, refused
-unless it restates the auditor's session parameters (its pinned `P2Session.SESSION`, `p2_party.SESSION`, unless the
-auditor's party names a toy's), and every root and openings line as sent, and checks each opened unit's four blocks
-on the registered vk root
+registration file's bytes, recomputes the registration's digest from its fields, reads the prover's request and every
+root and openings line as sent, and checks each opened unit's four blocks on the registered vk root
 (`lean/RemoteAudit/P2Session.lean`); C* is too large to read whole, and an opening is what is checked of it.
-`audit.AuditRun` over the P2 codec keeps the books beside it and can only veto: an event, a held store or an answer on
-which the two differ rejects the session `disagreement`. What the Lean takes as given is the clock's readings and the
-coins the challenger releases. `lean/tests/test_p2.py`'s `p2_session` difftest holds the books to it on recorded sessions.
+`p2.Session` keeps the books beside it and can only veto: an event, a held store or an answer on which the two differ
+rejects the session `disagreement`. What the Lean takes as given is the clock's readings and the coins the challenger
+releases. `lean/tests/test_p2.py`'s `p2_session` difftest holds the books to it on recorded sessions.
 
 The memory line held over time is the line of record a gate run publishes (`auditor_line.py`, from `verifier.py`'s
 `recorded_inputs`; `paced_line` is the verifier's diagnostic): `HeldOverTime`'s and `HeldOverTimeLinks`' conclusions
@@ -153,7 +151,7 @@ A transcript that doesn't name its session's pace replays only with the pace its
   store's padding past them, which is PoUS's: MEM-72), holds each session to the auditor's parameters (`SESSION`,
   the served bandwidth piece's: a request carrying other values is refused by name before any coin), drives the
   session on its own clock and coins, and answers
-  the verdict with the credited reads (`q_bytes`), the Lean's (`Twin`), with `audit.AuditRun`'s books (`Books`) as its
+  the verdict with the credited reads (`q_bytes`), the Lean's (`Twin`), with `p2.Session`'s books (`Books`) as its
   veto. `prove` is the prover's side of the channel.
 - `p2_lean.py`: the Lean verifier of a P2 session, the process `remote-audit-verifier`, as `p2_party.py` runs
   it: built in `lean/` unless `--lean-exe` names a built one (without lake on the PATH, the one built there), a fresh

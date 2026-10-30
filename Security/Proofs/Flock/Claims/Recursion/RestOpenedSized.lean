@@ -41,6 +41,8 @@ open VStar.Algebra
 
 theorem msgNames_size (n : Nat) : (msgNames n).size = 4 := rfl
 
+theorem oodMsg_size (o n : Nat) : (#[Name.ood o] ++ msgNames n).size = 5 := rfl
+
 theorem fp_sizes (g : Nat → Array Name) : ∀ (l : List Nat) (init : Array (Array Name)),
     (l.foldl (fun b a => b.push (g a)) init).toList.map Array.size =
       init.toList.map Array.size ++ l.map fun a => (g a).size
@@ -56,6 +58,14 @@ theorem f1_fst : ∀ (l : List Nat) (init : Array (Array Name) × Nat),
   | a :: l, init => by
     rw [List.foldl_cons, f1_fst l]
     simp [msgNames_size, List.replicate_succ]
+
+theorem f1_snd : ∀ (l : List Nat) (init : Array (Array Name) × Nat),
+    (l.foldl (fun b _ => (b.fst.push (msgNames b.snd), b.snd + 1)) init).snd = init.snd + l.length
+  | [], init => by simp
+  | a :: l, init => by
+    rw [List.foldl_cons, f1_snd l]
+    simp
+    omega
 
 theorem f2_fst : ∀ (l : List Nat) (init : Array (Array Name) × Nat × Nat),
     (l.foldl (fun b _ => (b.fst.push (#[Name.ood b.snd.snd] ++ msgNames b.snd.fst), b.snd.fst + 1, b.snd.snd + 1))

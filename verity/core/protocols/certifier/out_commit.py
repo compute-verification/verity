@@ -1,20 +1,20 @@
 """The network certifier's output value: the output it relayed, committed by the certifier as a registered value
 (`one_stage.registered`) and its head signed with its key, never by the prover. The verifier pins the value's root from
-that certificate alone (`check_out`), so every output proof block's row is a registered read of it, opened against
+that certificate alone (`check_out`), so every output unit's row is a registered read of it, opened against
 the certifier's signed root by the Lean verifier's registered reads (`flock-verify --registered`), not compared in the
 clear.
 
 **The commitment** is the reading program's registered value `value` (``out`` by default), as the prover would commit
 it, under the certifier's salts: `rows` rows of `words` leaves of `word_bits` bits in the row format `schema` (by
-default `hm96-sha512/row/v2`, a proof block's bit-row port), committed as `Registered.commit` commits them, under
+default `hm96-sha512/row/v2`, a unit's bit-row port), committed as `Registered.commit` commits them, under
 
     D = registered.domain(program, value, words, rows, word_bits)
 
 the domain `registered_entries` derives for a value the verifier pins: `registration.check` holds its pinned values
 across windows, so D leaves the window's open root out. `program` is the reading program's digest
-(`partition.program_digest`), public. salt_r is 192 bytes the certifier samples from the operating system for row r and
-no other row. The salts are witness, which the certifier hands to the prover alone (`CertifiedOut.salts`, `witness`);
-the rows are what the server sent, which the prover holds.
+(`partition.program_digest`), public. salt_r is 192 bytes the certifier draws from the operating system for row r and no
+other row. The salts are witness, which the certifier hands to the prover alone (`CertifiedOut.salts`, `witness`); the
+rows are what the server sent, which the prover holds.
 
 **The signed head** (`OutHead`) is public, as a hiding root is:
 
@@ -22,10 +22,10 @@ the rows are what the server sent, which the prover holds.
       ‖ u16be len(schema) ‖ schema ‖ domain (64 bytes) ‖ root (64 bytes)
     out digest = tagged_sha512(OUT_TAG, H)
 
-Its certificate is `Issuer.sign`'s of the out digest for the egress execution phase, in the certifier's session
+Its certificate is `Issuer.sign`'s of the out digest for the egress link-window, in the certifier's session
 (`certificate.certificate_message`). D is the same in every window, so the certificate is what keeps one window's root
-out of another's: `check_out` takes the window it expects. A record's, a clock's and the network certifier cells'
-digests are under other tags, so none verifies as another.
+out of another's: `check_out` takes the window it expects. A record's, a clock's and the warden cells' digests are
+under other tags, so none verifies as another.
 
 **The record** (`CertifiedOut.public`) is the head and its certificate as one public JSON object, what the auditor
 receives:
@@ -220,8 +220,8 @@ def read_witness(blob: bytes) -> list[bytes]:
 def commit_out(rows: Sequence[Sequence[int]], *, shape: OutShape, key: Signer | Issuer, session: bytes, window: int,
                link: str = LINK, salts: Sequence[bytes] | None = None) -> CertifiedOut:
     """The output value the certifier relayed, committed at the registration's `shape` under the domain the verifier
-    derives for the reading program's pinned value, and its head signed for the egress execution phase `(link, window)`
-    in certifier session `session`.
+    derives for the reading program's pinned value, and its head signed for the egress link-window `(link, window)` in
+    certifier session `session`.
 
     `rows`: the value's rows, exactly `shape.rows` of `shape.words` leaves of `shape.word_bits` bits. `key`: the
     certifier's signer (which starts `session` at its first signature and refuses any other session), or its running
@@ -281,7 +281,7 @@ def _read(doc: Any) -> tuple[OutHead, Certificate, bytes]:
 
 def check_out(certificate: Any, key: PublicKey, session: bytes, shape: OutShape, *, window: int,
               link: str = LINK) -> str:
-    """The verifier's read of the out record `certificate` (`CertifiedOut.public`) for the egress execution phase
+    """The verifier's read of the out record `certificate` (`CertifiedOut.public`) for the egress link-window
     `(link, window)` it expects, under the network certifier's `key` in certifier session `session`: the root to pin
     (lowercase hex, `registration.check`'s `pinned` form), or `OutRefused` naming the first check that fails. `shape`
     is the verifier's own, from its registration of the reading program (module docstring, "The shape"), whose

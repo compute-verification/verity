@@ -20,7 +20,7 @@ open Claims Claims.Sampling
 open FlockSoundness.Refine FlockSoundness.Binding
 open FlockSoundness.Discharge.Layout (BitVal RowShaped)
 
-/-- **The verifier's leaf map at public inputs holds every proof block's row** (`ref_lt_cnt` at `HmIn.loadPublic`, through
+/-- **The verifier's leaf map at public inputs holds every unit's row** (`ref_lt_cnt` at `HmIn.loadPublic`, through
 `Hidden.loadPublic_inRows`: `inRows` changes only the output ports). -/
 theorem ref_lt_cntP {tags : Flock.Tags} {c : Flock.Circuit} {pi : Flock.HmIn.Ports} {file : ByteArray}
     {pub : Flock.Public} (h : Flock.HmIn.loadPublic tags c pi file = .ok pub) {nl u q : ℕ} (hu : u < nl)
@@ -56,7 +56,7 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
 
 variable {n mPts : ℕ} {Reg : Type} {I : Inputs} {own : Option ByteArray} (dj : Finset (Fin n) → Lean.Json)
   {S₀ : Finset (Fin n)} {d₀ : Lean.Json} (y₀ : DrawSetupZHJP (inputsJ I 0) own mPts S₀ d₀) (ht : I.tags.typed = false)
-  {c : Flock.Circuit} (hc : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c)
+  {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
   (hscope : Discharge.Layout.scopeOkH c = true) (hU : Built c.unit) {pi : Flock.HmIn.Ports}
   (hpi : Flock.HmIn.parse c = .ok pi) {pub : Flock.Public}
   (hpub : Flock.HmIn.loadPublic (zkTags I) c pi I.publicFile = .ok pub)
@@ -65,7 +65,7 @@ variable {n mPts : ℕ} {Reg : Type} {I : Inputs} {own : Option ByteArray} (dj :
 noncomputable abbrev vbP := (rsZHJP (Reg := Reg) dj y₀ ht hc hscope hU hpi hpub).bindingZ
   (rsZHJP_computes dj y₀ ht hc hscope hU hpi hpub)
 
-/-- The session's commit strings at public inputs: proof block `u`'s row of port `q`, or a single gate. -/
+/-- The session's commit strings at public inputs: unit `u`'s row of port `q`, or a single gate. -/
 abbrev PosHP (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ) (pi : Flock.HmIn.Ports) : Type :=
   (Fin n × Fin c.ports.size) ⊕ Fin ((keyProgP c pi hU n).circuit (Discharge.Layout.outsOfP c hU n pi)).N
 
@@ -145,7 +145,7 @@ theorem vbP_leaf_row (h : HiddenExec.rowOfHP c hU n pi (Discharge.Layout.outsOfP
     cases h1
 
 /-- **The deployed layout's rows at a leaf map at public inputs**: `TransportsLiveV5`'s `rows`, the game's row map with
-each row at its proof block's leaf `L.ref`. -/
+each row at its unit's leaf `L.ref`. -/
 noncomputable def rowsOfLP (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ) (pi : Flock.HmIn.Ports) (L : LeafMap) :
     Fin ((keyProgP c pi hU n).circuit (Discharge.Layout.outsOfP c hU n pi)).N → Option RowAt := fun g =>
   (HiddenExec.rowOfHP c hU n pi (Discharge.Layout.outsOfP c hU n pi) g).map fun r =>
@@ -194,13 +194,13 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
 /-- **`Bridge.TransportsLiveV5` holds** (`transports_shapedP`): `dupName` and `RootFixesDomainL` give distinct roots,
-and the verifier's public-file check every proof block's ref below its port's count (`ref_lt_cntP`). -/
+and the verifier's public-file check every unit's ref below its port's count (`ref_lt_cntP`). -/
 theorem _root_.Flock.Bridge.transportsLiveV5 : Bridge.TransportsLiveV5 := by
   intro n Reg I own ht D hD hU pi hpi pub hpub hscope hrows hdup hroots kd _ hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hTags
     hCust τ P vb σ Cc Lm rows κ roots Cd u g _ _ o he hcan
   obtain ⟨⟨r, hr, hv, hvw⟩, hy⟩ := hcan
   obtain ⟨p, v, y⟩ := o
-  exact Bridge.transports_shapedP (dj := dj) (y₀ := y₀) (ht := ht) (hc := Flock.Desc.parseStmt_stmt hD)
+  exact Bridge.transports_shapedP (dj := dj) (y₀ := y₀) (ht := ht) (hc := Flock.Desc.parse_flat hD)
     (hscope := hscope) (hU := hU) (hpi := hpi) (hpub := hpub) _ hrows (Bridge.rootsDistinctL_of_fixes hdup hroots)
     (fun u q => Bridge.ref_lt_cntP hpub u.isLt q.isLt) hr p v y hv hvw hy he
 

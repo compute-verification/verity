@@ -50,7 +50,7 @@ counters from its rule over its statics instead: that is how a matmul family sta
 its served MACs (m·n·k) apart from its tail atoms (k-steps appended to the same product) and a fold Definition its receipt folds; the
 class's ancestors add up what the rule says. A class of a family `RULED` names is refused while `FAMILY_COUNTS` has no rule for it
 (the family's module registers it when imported, which decoding a Program never does), and so is a Definition carrying a rule
-(`.counts`) that `FAMILY_COUNTS` lacks: neither is counted by `PRODUCTS`.  The s8 family's served MACs (`ops.s8`) are those whose
+(`.counts`) that `FAMILY_COUNTS` lacks: neither is counted by `PRODUCTS`.  The s8 family's served MACs are S8-PORT's, whose
 roles Lean's `Accounting.Gates.roleOf` states: a served product's main chain toward its committed words, which only an `S8Dot`
 or `S8Matmul` has.  `GemmAccumulatorS8` and PoUW's segment dots (`PouwSegDot_v2`, `PouwSegDot0_v2`: an H1 tile's lanes) perform
 their products and serve none (`serves_none`).  `served_macs_by_precision` splits the served MACs by the
@@ -112,7 +112,7 @@ from typing import Any, Callable, Iterable, Iterator
 from . import boolean as BL
 from . import ports
 from .codec import MAX_SAFE_INT, _static_json, canonical_json, descriptor_id, jcs_domain_error
-from .defs import CompositeDefinition, BodyNode, PrimitiveDefinition, bind
+from .defs import CompositeDefinition, Node, PrimitiveDefinition, bind
 from .intervals import Intervals, contains, full, norm, ref_intervals, total
 from .layout import resolve
 from .liveness import _MEMBER_LIMIT
@@ -135,12 +135,11 @@ PRODUCTS: dict[str, int] = {
     "HopperE4m3QgmmaDot32_v1": 32, "HopperE4m3MmaV2Dot32_v1": 32, "BlackwellE4m3QmmaDot32_v1": 32,
     "BlackwellE5m2QmmaDot32_v1": 32, "BlackwellNvf4OmmaDot64_v1": 64, "BlackwellMxf4OmmaDot64_v1": 64,
     "PouwDot16U8S8_v1": 16, "NcpDot16I7_v1": 16,
-    "AmpereBF16TcDot16_v3": 16, "HopperBF16WgmmaDot16_v2": 16, "HopperBF16WgmmaDot16_v3": 16, "HopperE4m3QgmmaDot32_v2": 32, "HopperE4m3MmaV2Dot32_v2": 32,
+    "AmpereBF16TcDot16_v3": 16, "HopperBF16WgmmaDot16_v2": 16, "HopperE4m3QgmmaDot32_v2": 32, "HopperE4m3MmaV2Dot32_v2": 32,
     "BlackwellE4m3QmmaDot32_v2": 32, "BlackwellE5m2QmmaDot32_v2": 32, "BlackwellNvf4OmmaDot64_v2": 64,
     "BlackwellMxf4OmmaDot64_v2": 64,
     "BlackwellS8ImmaDot32_v1": 32, "BlackwellU8S8ImmaDot32_v1": 32, "BlackwellS8ImmaDot32_v2": 32, "BlackwellU8S8ImmaDot32_v2": 32,
     "HopperBf16Dot16StepFirst_v1": 16, "HopperBf16Dot16Step_v1": 16, "HopperBf16Dot16StepFirstX_v1": 0, "HopperBf16Dot16StepX_v1": 0,
-    "HopperBf16Dot16StepFirst_v2": 16, "HopperBf16Dot16Step_v2": 16, "HopperBf16Dot16StepFirstX_v2": 0, "HopperBf16Dot16StepX_v2": 0,
     "PouwSegDot_v2": 32, "PouwSegDot0_v2": 32,
 }
 
@@ -149,9 +148,8 @@ PRODUCTS: dict[str, int] = {
 #: NCP's i7 step
 PRECISION: dict[str, str] = {
     **dict.fromkeys(("AmpereBF16TcDot16_v1", "AmpereBF16TcDot16_v2", "AmpereBF16TcDot16_v3", "HopperBF16WgmmaDot16_v1",
-                     "HopperBF16WgmmaDot16_v2", "HopperBF16WgmmaDot16_v3", "HopperBf16Dot16StepFirst_v1", "HopperBf16Dot16Step_v1",
-                     "HopperBf16Dot16StepFirstX_v1", "HopperBf16Dot16StepX_v1", "HopperBf16Dot16StepFirst_v2",
-                     "HopperBf16Dot16Step_v2", "HopperBf16Dot16StepFirstX_v2", "HopperBf16Dot16StepX_v2"), "bf16"),
+                     "HopperBF16WgmmaDot16_v2", "HopperBf16Dot16StepFirst_v1", "HopperBf16Dot16Step_v1",
+                     "HopperBf16Dot16StepFirstX_v1", "HopperBf16Dot16StepX_v1"), "bf16"),
     "HopperTf32WgmmaDot8_v1": "tf32", "HopperTf32WgmmaDot8_v2": "tf32",
     **dict.fromkeys(("HopperE4m3QgmmaDot32_v1", "HopperE4m3QgmmaDot32_v2", "HopperE4m3MmaV2Dot32_v1", "HopperE4m3MmaV2Dot32_v2",
                      "BlackwellE4m3QmmaDot32_v1", "BlackwellE4m3QmmaDot32_v2", "BlackwellE5m2QmmaDot32_v1",
@@ -190,7 +188,7 @@ RULED: dict[str, str] = {"S8Dot_v1": "verity.ml.circuits.ops.s8", "S8Matmul_v1":
 
 def serves_none(bindings: dict) -> dict[str, int]:
     """The rule of an s8-family Definition whose products are no served product's main chain (Lean's `roleOf` at
-    `Place.other`): it performs them, and serves none."""
+    `Site.other`): it performs them, and serves none."""
     return {"served_macs": 0}
 
 
@@ -474,7 +472,7 @@ class _Aliases:
         return runs
 
     def resolved(self, k: int) -> tuple[list[int], list[tuple[int, int, Refs, bool]]]:
-        """BodyNode `k`'s runs (`node`) with every pass-through followed, as runs `[lo, hi)` of its output leaves with what they
+        """Node `k`'s runs (`node`) with every pass-through followed, as runs `[lo, hi)` of its output leaves with what they
         resolve to and whether that is the body's parameters (`resolve`'s pieces at their leaves), by `lo`, and their `lo`s."""
         todo = [k]
         while todo:  # a node's sources are earlier nodes: resolve them first, without recursing down a chain
@@ -610,7 +608,7 @@ class _Analysis:
         self._reads[id(fn)] = (fn, r)
         return r
 
-    def node(self, node: BodyNode, m: _Marks) -> None:
+    def node(self, node: Node, m: _Marks) -> None:
         r = self.reads(node.fn)
         n = node.n if node.form in ("batch", "scan") else 1
         m.select_gates += n * r.select_gates
@@ -697,7 +695,7 @@ class NoBooleanWork(ValueError):
 Work = dict[str, tuple[int, int]]
 
 
-class BooleanWork:
+class _Work:
     """Each Definition's Boolean work per instance, by `id(fn)`: its two-input gates and ANDs by facet, or the id of the first
     primitive it reaches that is not a Boolean gate, a constant bit or an input."""
 
@@ -774,7 +772,7 @@ def _work_json(work: Work | dict[str, list[int]]) -> dict[str, dict[str, int]]:
 def _calls_work(post: list, ids: dict[int, str], calls: Iterable[Any], boolean: Any) -> tuple[dict[str, Work], dict[str, str]]:
     """The Boolean work of each class it counts and the Boolean version each root Call class counted through, by descriptor id;
     refused (`NoBooleanWork`) for every root Call it cannot count."""
-    W = BooleanWork()
+    W = _Work()
     per: dict[str, Work] = {}
     for fn in post:
         if id(fn) in ids and not isinstance(got := W.of(fn), str):
@@ -1180,5 +1178,5 @@ def step_of(doc: dict) -> Callable[[int], int]:
     return lambda k: -1 if k < I else bisect.bisect_right(ends, k)
 
 
-__all__ = ["SCHEMA", "PRODUCTS", "PRECISION", "DTYPE_PRECISION", "SILICON", "COUNTERS", "FAMILY_COUNTS", "RULED", "CUDA", "BooleanWork",
-           "NoBooleanWork", "census", "family", "seal", "serves_none", "silicon_step", "step_ends", "step_of"]
+__all__ = ["SCHEMA", "PRODUCTS", "PRECISION", "DTYPE_PRECISION", "SILICON", "COUNTERS", "FAMILY_COUNTS", "RULED", "CUDA", "NoBooleanWork",
+           "census", "family", "seal", "serves_none", "silicon_step", "step_ends", "step_of"]

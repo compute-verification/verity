@@ -1,7 +1,7 @@
 """The published form of a network certificate: committed by hash, with padding elided.
 
-A raw record is the whole grid, T·r slots of B bytes: 2.3 GiB per execution phase at r = 1,024, B = 4 KiB and T = 600.
-The certifier publishes instead one digest and the untimed status per execution phase.
+A raw record is the whole grid, T·r slots of B bytes: 2.3 GiB per link-window at r = 1,024, B = 4 KiB and T = 600.
+The certifier publishes instead one digest and the untimed status per link-window.
 
 **Padding is elided.** The certifier is left-packed (W4), so a row is fixed by its count n and its n real frames: slots
 n … r − 1 are padding. A row's digest covers only those:
@@ -17,9 +17,9 @@ The frames all have the fixed size B, so the encoding is unambiguous. A row that
 Here `h` is the canonical JSON of {link, window, buckets, allocation, frame_bytes, bucket_ms, status}.
 
 **The check.** The verifier recomputes the digest from the Program's grid, with a complete status. It accepts the
-execution phase only if the digests are equal. Under the collision resistance of SHA-256 (`cr/sha-256`), equal digests
-mean equal records, so the audit stays exact. It never needs the certifier's raw grid, since the Program fixes every
-egress frame's content. The capacity bounds on accepted runs then hold up to a SHA-256 collision.
+link-window only if the digests are equal. Under the collision resistance of SHA-256 (`cr/sha-256`), equal digests mean
+equal records, so the audit stays exact. It never needs the certifier's raw grid, since the Program fixes every egress
+frame's content. The capacity bounds on accepted runs then hold up to a SHA-256 collision.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from verity.ml.commitments.identity import Digest, canonical_json_bytes, tagged_sha256
-from verity.core.protocols.certifier.grid import Grid, GridParams, BlockGrid, Row, Status, row_count, row_left_packed
+from verity.core.protocols.certifier.grid import Grid, GridParams, Record, Row, Status, row_count, row_left_packed
 
 ROW_TAG = "verity-network-warden/row/v1"
 RECORD_TAG = "verity-network-warden/record/v1"
@@ -60,8 +60,8 @@ def record_digest(link: str, window: int, grid: Grid, status: Status, params: Gr
 
 @dataclass(frozen=True, slots=True)
 class CommittedRecord:
-    """What the certifier publishes per execution phase: the record digest, and the status in the clear so a violation
-    can be classified. The digest binds the status too, so a status that disagrees with it is a mismatch."""
+    """What the certifier publishes per link-window: the record digest, and the status in the clear so a violation can be
+    classified. The digest binds the status too, so a status that disagrees with it is a mismatch."""
 
     link: str
     window: int
@@ -69,6 +69,6 @@ class CommittedRecord:
     status: Status
 
 
-def commit(record: BlockGrid, params: GridParams) -> CommittedRecord:
+def commit(record: Record, params: GridParams) -> CommittedRecord:
     return CommittedRecord(record.link, record.window,
                            record_digest(record.link, record.window, record.grid, record.status, params), record.status)

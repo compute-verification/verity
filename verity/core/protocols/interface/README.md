@@ -1,9 +1,8 @@
 # core_protocol: the interface every core protocol implements
 
 This is a Lake package (`CoreProtocol`, namespace `Core`). It requires Flock's verifier by path for canonical JSON,
-bytes and hashes, and the difftest harness's Lean for its periods' port, and nothing else: no Mathlib. A protocol's port
-is its own package. It requires this one by path, defines one `Core.Protocol` value, and makes its executable
-`def main (args) := myProtocol.main args`.
+bytes and hashes, and nothing else: no Mathlib. A protocol's port is its own package. It requires this one by path,
+defines one `Core.Protocol` value, and makes its executable `def main (args) := myProtocol.main args`.
 
 ## The interface (`CoreProtocol/Protocol.lean`)
 
@@ -51,13 +50,6 @@ profile's types derive `DecidableEq`.
 - `<exe> serve` reads one case per stdin line, `{"commitment":"<hex>","evidence":"<hex>","params":<JSON>}` in canonical
   JSON, and writes one flushed outcome line per case. This is the mode the difftest harness drives.
 - A usage error exits 64, and an outcome that can't be written canonically exits 70.
-
-A case is read in place by `Core.Canonical` (`CoreProtocol/Protocol/Canonical.lean`), which gives `canonicalJson`'s and
-`Flock.unhex`'s answers at any size, and a protocol's decoder reads evidence that can be gigabytes with it too (PoUS's,
-a composition's). Those two go through `String.toList`, whose runtime counts characters in 32 bits and spends about 30
-bytes on each: they refuse a canonical text holding a string of `2^32` characters or more, or read a prefix of it.
-`Canonical` imports only what `Protocol` does, so it sits in `Protocol`'s layer. `serve` frees a case's line before it
-decodes the evidence, and its peak memory is about 2.6 times the line.
 
 ## Blobs (`CoreProtocol/Blobs.lean`)
 
@@ -133,15 +125,3 @@ port, are what makes a verifier proven. All protocols share one Lake package for
 
 `CoreProtocol/Example.lean` is a toy protocol whose `#guard`s pin every path of `answer` and `case`, and the decoders'
 round trips and refusals; `core-protocol-example` runs it.
-
-## Periods (`CoreProtocol/Period.lean`)
-
-The code's copy of the spec's ticks, spans and monitoring period (`Security/Definitions/Core/Period.lean`), so a
-verifier reads them without requiring `Security/`. A `Core.TickSpan` is the ticks `[start, start + len)` on the one
-clock (`OneClock`). A `Core.MonitoringPeriod` is a span with the boundaries that cut it into its execution blocks'
-spans, and for each execution block the boundaries that cut its span into its sampling blocks' spans; `valid` holds
-when each is a cut. The codec reads and writes `{"len":n,"start":t}` and
-`{"execution":[t,...],"sampling":[[t,...],...],"span":{...}}`, refuses any other key, and refuses a monitoring period
-that isn't valid. `Properties.Core.Period` states that the copy is the spec's. `verity.core.periods` mirrors it in
-Python, and `core-periods-difftest` (`CoreProtocol/PeriodDifftest.lean`) holds the two together through the difftest
-harness, which builds it by name.

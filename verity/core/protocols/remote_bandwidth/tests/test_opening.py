@@ -1,7 +1,7 @@
 """`remote_bandwidth.opening`: check 3 by the opening unit's reference on a small p512/k2 store. An honest window is
 accepted; the same window over a store that lost its first drawn block is rejected on codec at that draw; an uncertified
 plan row fails the plan link and a public row not the verifier's own is malformed. A plan row's ``b || c`` is the proof
-system's (pinned from C-Flock's commit strings), and an appended block's payload in the witness is its block decoded."""
+system's (pinned from C-Flock's commit strings)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from remote_bandwidth_fakes import Clock, Entropy
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, opening as O, receipts
 from verity.core.protocols.remote_bandwidth.receipts import Plan
 
@@ -25,28 +24,50 @@ PLAN_BC = ("12f7869e085f13e475ea68ff04f83289655b686aa1c56da778cc299af82f355882e4
 SALT = hashlib.shake_256(b"verity/remote-bandwidth/opening/test plan salt").digest(receipts.SALT_BYTES)
 
 
+class Clock:
+    def __init__(self) -> None:
+        self.now = 0
+
+    def __call__(self) -> int:
+        return self.now
+
+
+class Entropy:
+    """A deterministic stand-in for the operating system's generator: SHA-512 in counter mode under `label`."""
+
+    def __init__(self, label: bytes) -> None:
+        self.label, self.count = label, 0
+
+    def __call__(self, n: int) -> bytes:
+        out = b""
+        while len(out) < n:
+            out += hashlib.sha512(self.label + self.count.to_bytes(8, "big")).digest()
+            self.count += 1
+        return out[:n]
+
+
 def payload(j: int) -> bytes:
     """64-byte words with their top byte cleared, so every word is below p512's p."""
     return b"".join(hashlib.sha512(b"%d/%d" % (j, u)).digest()[:63] + b"\0" for u in range(codec.BLOCK_BYTES // 64))
 
 
 @pytest.fixture(scope="module")
-def store() -> audit.Store:
+def store() -> O.Store:
     payloads = [payload(j) for j in range(N)]
     salt = Entropy(b"payload salts")
     ys = [salt(receipts.SALT_BYTES) for _ in range(N)]
     root = audit.payload_tree(NODE, payloads, ys).commitment.root
-    return audit.Store(audit.register(SOURCE, NODE, N, root, P512, nonce=bytes(32)), payloads, ys)
+    return O.Store(audit.register(SOURCE, NODE, N, root, P512, nonce=bytes(32)), payloads, ys)
 
 
-def window(store: audit.Store) -> SimpleNamespace:
+def window(store: O.Store) -> SimpleNamespace:
     """One window of N / L passes, pass i the stripe of L blocks from L i, closed and drawn; the same coins every call, so
     the same draws over any store of the same registration."""
     reg = store.registration
     p = audit.Params(blocks=N, deadline_ns=10**6, windows=1, samples=4, delta=1e-3, window_ns=10, codec=P512)
     clock = Clock()
-    s = audit.AuditRun(p, reg, None, coins.local(reg.digest, 0, p.windows, Entropy(b"coins"), appends=1),
-                       not_before_ns=0, clock=clock)
+    s = O.Session(p, reg, None, coins.local(reg.digest, 0, p.windows, Entropy(b"coins"), appends=1), not_before_ns=0,
+                  clock=clock)
     prover = audit.Prover(store, None, entropy=Entropy(b"receipt salts"))
     challenge, previous, passes = s.start(), reg.digest, {}
     for i in range(N // L):
@@ -89,20 +110,6 @@ def test_a_lost_block_fails_on_codec_at_its_draw(store) -> None:
     w = window(lost)
     assert w.session.drawn(0)[0].block == d0.block
     assert O.reference(w.session, lost, w.passes, w.c3) == [audit.Verdict(0, False, "codec", (d0.index, d0.position))]
-
-
-def test_an_appended_blocks_payload_is_its_block_decoded(store) -> None:
-    """The witness's payload of an appended block (`audit.Store.payload`) is its append's while it awaits its coin, then
-    its block decoded under its digest and that coin: the store keeps no second copy."""
-    st = audit.Store(store.registration, store.payloads, store.salts)
-    m = [payload(N + u) for u in range(2)]
-    a = st.append(m, [Entropy(b"append salts")(receipts.SALT_BYTES) for _ in m])
-    assert [st.payload(a.first + u) for u in range(2)] == m
-    st.encode(a.first, hashlib.sha512(b"an append's coin").digest()[:coins.COIN_BYTES])
-    assert not st.pending and [st.payload(a.first + u) for u in range(2)] == m
-    st.blocks[a.first] = hashlib.shake_256(b"a lost appended block").digest(codec.BLOCK_BYTES)
-    with pytest.raises(ValueError, match=f"block {a.first} decodes to no payload"):
-        st.payload(a.first)
 
 
 def test_a_window_with_no_draws_is_malformed(store) -> None:

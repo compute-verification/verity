@@ -47,6 +47,8 @@
     {"file": "verity_vllm/pipeline/release_json.py", "kind": "cwd", "symbol": "main", "detail": "os.getcwd"},
     {"file": "verity_vllm/pipeline/release_json.py", "kind": "machine-path", "symbol": "<module>", "detail": "/workspace", "count": 2},
     {"file": "verity_vllm/pipeline/release_json.py", "kind": "machine-path", "symbol": "main", "detail": "/workspace"},
+    {"file": "verity_vllm/pipeline/research_tools.py", "kind": "environ", "symbol": "_probe_pins", "detail": "PY"},
+    {"file": "verity_vllm/pipeline/research_tools.py", "kind": "machine-path", "symbol": "<module>", "detail": "/workspace"},
     {"file": "verity_vllm/pipeline/match.py", "kind": "broad-except", "symbol": "_hf_config_of", "detail": "except Exception"},
     {"file": "verity_vllm/pipeline/match.py", "kind": "broad-except", "symbol": "_workload_doc", "detail": "except Exception"},
     {"file": "verity_vllm/pipeline/match.py", "kind": "broad-except", "symbol": "profile_config", "detail": "except Exception"},

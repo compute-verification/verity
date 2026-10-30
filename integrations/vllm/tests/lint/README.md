@@ -33,8 +33,6 @@ failure message carries its fix.
  the record), never dropped with `pass`, `continue` or a default. A guard never fails open: a handler that skips what it
  can't read, or puts a default where a value was, shrinks the evidence a verdict is decided on and leaves no trace of it.
  `tests/lint/test_repo_silent_excepts.py` holds every other area to the same rule (below).
-- **No `research` imports** (`test_no_research_imports.py`, exact, no allowlist): no Python file under `integrations/vllm`
- imports the ops tool `research`, which lives outside this repository; the integration runs it only as a command.
 - **By-name rules** (`tests/test_no_by_name_rules.py`, allowlist `tests/by_name_allowlist.json`): no verification
  answer comes from a model name, a module path or a family string.
 - **Ruff** (`test_ruff.py`, allowlist `allowlists/ruff.json`): `ruff check` under `integrations/vllm/ruff.toml`, which

@@ -11,8 +11,7 @@ session its RecSparse (`rec-sparse/n<NU>-e<ELL>-s<S_LOG>-t<T_LOG>` over the two 
 (`rec-cap/n<N>`, last; `checkCapListed`). A circuit whose unit is one
 of V*'s is refused unless the verifier names which of these statements the session is (`--rec-part J`) and its unit is that
 statement's, its population is that statement's instance count, the verifier's own bindings (`--rec-bindings F`) are its
-partition object's and program's and name V*'s template of that statement (`checkTemplate`), META binds exactly those, and
-the circuit file is byte for byte the one `vstar stage`
+partition object's and program's, META binds exactly those, and the circuit file is byte for byte the one `vstar stage`
 writes for that statement under the verifier's bindings (`circuitFile`).
 
 The inner shape is the verifier's own (`rec-inner`): `Stmt.setupTables` on the inner statement, as `InnerFold.lean` sets it
@@ -23,7 +22,6 @@ import Flock.HmRow
 import Flock.ProvedScope
 import Flock.RecOpening
 import Flock.Registered
-import Flock.WindowRecord
 import VStar.Cli
 import VStar.Compose
 import VStar.Stage
@@ -77,17 +75,12 @@ def innerOf (circuitB pubB : ByteArray) (partition : Option Json) (program : Opt
   let some st := sts[0]? | throw "rec-inner: the inner statement has no table"
   pure { m := st.m, kLog := st.c.kLog, claims := 2 + spec.points * st.regions.size, regions := st.regions.size, holo }
 
-/-- The recursion's statement version: V*'s statements whose verifier-registered values are under SHA-512 salts
-(`RecCoins.saltOf`). -/
-def FORMAT : String := "verity/rec-inner/v2"
+def FORMAT : String := "verity/rec-inner/v1"
 
-/-- The version before `FORMAT`, whose V* statements registered those values under SHAKE256 salts: refused. -/
-def FORMAT_V1 : String := "verity/rec-inner/v1"
-
-/-- `verity/rec-inner/v2`'s key for `Inner.holo`, written only when true; absent means false. -/
+/-- `verity/rec-inner/v1`'s key for `Inner.holo`, written only when true; absent means false. -/
 def HOLO_KEY : String := "holo"
 
-/-- `verity/rec-inner/v2`'s key for `Inner.sparse`, `[NU, ELL, S_LOG, T_LOG]`, written only when present; `Inner.stacked`
+/-- `verity/rec-inner/v1`'s key for `Inner.sparse`, `[NU, ELL, S_LOG, T_LOG]`, written only when present; `Inner.stacked`
 is under META's own key (`STACKED_SHAPE_KEY`), `{"m", "claims"}`, written only when present. -/
 def SPARSE_KEY : String := "sparse"
 
@@ -98,10 +91,7 @@ def Inner.toJson (i : Inner) : Json :=
     (i.stacked.map fun r => (STACKED_SHAPE_KEY, Json.mkObj [("m", Lean.toJson r.m), ("claims", Lean.toJson r.claims)])).toList)
 
 def Inner.ofJson (j : Json) : Except String Inner := do
-  let fmt := (j.getObjValAs? String "format").toOption
-  if fmt == some FORMAT_V1 then
-    throw s!"rec-inner: {FORMAT_V1} is refused: its V* statements' verifier-registered values are under SHAKE256 salts, {FORMAT}'s under SHA-512"
-  if fmt != some FORMAT then throw s!"rec-inner: not a {FORMAT} object"
+  if (j.getObjValAs? String "format").toOption != some FORMAT then throw s!"rec-inner: not a {FORMAT} object"
   let holo ← match j.getObjVal? HOLO_KEY with
     | .error _ => pure false
     | .ok (.bool b) => pure b
@@ -593,75 +583,11 @@ program (`verity_flock.rec_bindings`), never from the prover's circuit file. -/
 def ownBindingsOfJson (j : Json) : Except String VStar.Bindings :=
   (VStar.Cli.bindingsOf j).mapError (s!"rec-bindings: " ++ ·)
 
-/-- A static value as core's codec writes it into a descriptor id (`codec._spec_id`: `json.dumps(_static_json(v),
-sort_keys=True, separators=(",", ":"))`): an object is `{"dict": {..}}` at every depth, keys sorted, and a list, a natural
-or a string as `VStar.pyDumps` writes it; at nesting depth at most `fuel`. -/
-def staticDumpsAt : Nat → Json → Except String String
-  | 0, _ => throw "a static value nested too deeply"
-  | k + 1, .obj kvs => do
-    let items := kvs.toArray.qsort (fun a b => a.1 < b.1)
-    let parts ← items.mapM fun (key, v) => do pure (VStar.pyStr key ++ ":" ++ (← staticDumpsAt k v))
-    pure ("{\"dict\":{" ++ ",".intercalate parts.toList ++ "}}")
-  | k + 1, .arr a => do
-    let parts ← a.mapM (staticDumpsAt k)
-    pure ("[" ++ ",".intercalate parts.toList ++ "]")
-  | _ + 1, j => VStar.pyDumpsAt 1 j
-
-/-- R's opening part's S as V*'s `RepS` (`rec_residuals.parts` at the opening-only shape): its row ports' elements are its
-`nw`, its v elements its `nv`. -/
-def openingRepS (S : RecOpen.GfS) (ports : List (String × Nat)) (nv : Nat) : VStar.RepS :=
-  let term : RecOpen.Term → VStar.Term
-    | .w i => .w i
-    | .v i => .v i
-    | .wt i u => .wt i u
-  { gf := { nw := (ports.map (·.2)).foldl (· + ·) 0, nv, ops := S.ops.map (·.map term),
-            res := S.res.map fun r => { mul := r.mul, add := r.add.map term } },
-    ports }
-
-/-- **V*'s template of a statement**: the descriptor id core's codec names the statement's Definition by
-(`codec.descriptor_id`), the key of its `program_digests` and its partition's template. A level's (of the table or of R)
-`RecOpen_v4{LANES=…,H=…}` (`rec_open.definition`), a part's (of the algebra or of R's opening)
-`InnerRepCheck_v2{S=…}` at the part's S (`rec_residuals.definition`), RecSparse's `RecSparse_v1{NU=…,ELL=…,S_LOG=…,T_LOG=…}`
-(`rec_sparse.definition`) and a cap's `RecCap_v1` (`rec_cap.definition`). -/
-def templateId : VStar.Stmt → Except String String
-  | .recOpen _ L H _ | .recOpenStacked _ L H _ => pure ("RecOpen_v4{LANES=" ++ toString L ++ ",H=" ++ toString H ++ "}")
-  | .inner _ _ p => do pure ("InnerRepCheck_v2{S=" ++ (← staticDumpsAt 64 p.S.toJson) ++ "}")
-  | .opening _ _ _ S ports nv => do
-    pure ("InnerRepCheck_v2{S=" ++ (← staticDumpsAt 64 (openingRepS S ports nv).toJson) ++ "}")
-  | .sparse sh _ => pure ("RecSparse_v1{NU=" ++ toString sh.nu ++ ",ELL=" ++ toString sh.ell ++ ",S_LOG=" ++
-      toString sh.sLog ++ ",T_LOG=" ++ toString sh.tLog ++ "}")
-  | .cap .. => pure "RecCap_v1"
-
-/-- A descriptor id as an error shows it: whole up to 160 characters, else its first 120 and its length (a part's S runs
-to tens of kB). -/
-def briefId (t : String) : String :=
-  if t.length ≤ 160 then t else s!"{String.ofList (t.toList.take 120)}… ({t.length} characters)"
-
-/-- **The verifier's bindings name V*'s Definition**: `f`'s `program_digests` names one Definition, V*'s template of the
-statement `s` (`templateId`). With `checkOwnBindings` (that one key is the template the verifier's partition object's
-query names) the partition's template is V*'s too, so a part relabelled under another Definition's name is refused,
-however consistently its partition object, program, bindings and META carry the label. The digest the key maps to is the
-auditor's (`verity_flock.rec_bindings` with V*'s Definition, `vstar_definition`), which META must carry (`checkMeta`):
-core's codec's digest of the one-Definition program, which this verifier does not encode. -/
-def checkTemplate (s : VStar.Stmt) (f : VStar.Bindings) : V Unit := do
-  let t ← match templateId s with
-    | .ok t => pure t
-    | .error e => throw s!"{s.name}: V*'s template: {e}"
-  match f.programDigests with
-  | .obj kvs =>
-    match kvs.toArray.map (·.1) with
-    | #[k] =>
-      if k != t then
-        throw s!"{s.name}: the verifier's bindings' program_digests names {briefId k}, not V*'s template of the statement {briefId t}"
-    | ks => throw s!"{s.name}: the verifier's bindings' program_digests names {ks.size} Definitions, not V*'s template {briefId t} alone"
-  | _ => throw s!"{s.name}: the verifier's bindings' program_digests is not an object"
-
 /-- The verifier's own bindings `f` are its own partition object's and program's: `f`'s partition digest is the object's
 (`HmRow.partitionDigest`), `f`'s program and the object's `program` are the program's digest (the SHA-512 of its canonical
 descriptor without `annotations`, `TemplateQuery.Desc.parse`), and `f`'s `program_digests` names one Definition, the
-template the object's query names, which `checkCircuit` holds to V*'s template of the statement (`checkTemplate`). Its
-digest is not recomputed: that is core's codec's digest of the one-Definition program, which this verifier does not
-encode; the auditor's `verity_flock.rec_bindings` computes it from V*'s own Definition of the statement. -/
+template the object's query names. Its digest is not recomputed: that is core's codec's digest of the one-Definition
+program, which this verifier does not encode; the auditor's `verity_flock.rec_bindings` computes it from the same files. -/
 def checkOwnBindings (name : String) (f : VStar.Bindings) (obj : Json) (prog : ByteArray) : V Unit := do
   let own := hexOf (← HmRow.partitionDigest obj)
   if f.partition != own then throw s!"{name}: the verifier's bindings' partition digest {f.partition}, its partition object's {own}"
@@ -702,8 +628,7 @@ def checkHolo (s : VStar.Stmt) (c : Circuit) (holo : Bool) : V Unit := do
 
 /-- `checkMeta` of the circuit `c`, parsed from the circuit file `circuitB`, against the verifier's own bindings `f`, then
 `check` on its unit over `n` instances at the inner shape `i` as V*'s statement `part`, `checkFile` on `circuitB` under
-`f` at `i`'s holo flag, `checkParsed` and `checkPart` on `c`, `checkHolo` on `c` at `i`'s holo flag, and `checkTemplate`
-on `f`: its `program_digests` names V*'s template of the statement. -/
+`f` at `i`'s holo flag, `checkParsed` and `checkPart` on `c`, and `checkHolo` on `c` at `i`'s holo flag. -/
 def checkCircuit (i : Inner) (part : Nat) (c : Circuit) (n : Nat) (circuitB : ByteArray) (f : VStar.Bindings) :
     V VStar.Stmt := do
   checkMeta c f
@@ -712,7 +637,6 @@ def checkCircuit (i : Inner) (part : Nat) (c : Circuit) (n : Nat) (circuitB : By
   checkParsed s c
   checkPart s c
   checkHolo s c i.holo
-  checkTemplate s f
   pure s
 
 /-- A statement's message ports that `ownPorts` leaves out: RecSparse's messages but `h` and `claim`, each `<p>` under
@@ -1016,10 +940,18 @@ def repCoins (s : String) (rs : Array Json) (srec : Json) : V (Array (Option (Ar
     return (Array.range n).map fun k => if k == j then none else rr[if k < j then k else k - 1]?.map coinsOf
   | js => throw s!"rec inner transcript: {s} has rounds of no coins at {js}, and only z_partial's round is split"
 
+def REGISTRATION_FORMAT : String := "verity/registration/v2"
 /-- A registered top's row: a 64-byte node as 32 u16 words, zero-padded to one SHA-512 block (`rec_live.ROW_WORDS`). -/
 def TOP_ROW_WORDS : Nat := 64
 
 def refused (what : String) : String := s!"FIREWALL-REFUSED: {what}"
+
+/-- One-stage `registration.digest` (`SampledProofs.Registration.digest`): `SHA-512(format ‖ 0 ‖ canon(record))`, the
+record's own format (v1 or v2) as the tag; hex, as META's `registration` names it. -/
+def registrationDigest (rec : Json) : V String := do
+  let tag := if (rec.getObjValAs? String "format").toOption == some REGISTRATION_FORMAT then REGISTRATION_FORMAT
+    else "verity/registration/v1"
+  return hexOf (Sha512.hash (tag.toUTF8.push 0 ++ (← canon rec).toUTF8))
 
 /-- The registered entry of R whose rows' `b ‖ c` are `bcs` (`rec_live.top_entry`, `rec_residuals.commits_entry`): one row
 of `TOP_ROW_WORDS` 16-bit words a node, its domain `Registered.domain` under the registration's `program`, and the
@@ -1055,10 +987,10 @@ def registration (reg : Option Json) (bound : Option String) : V (Option (String
     throw (refused s!"registration: META binds the circuit registration {d}, and the verifier holds none (--rec-inner-registration)")
   | some _, none => throw (refused "registration: the record is not the circuit registration META binds (META binds none)")
   | some j, some d =>
-    if (← WindowRecord.digestHex j) != d then throw (refused s!"registration: the record is not the circuit registration META binds ({d})")
+    if (← registrationDigest j) != d then throw (refused s!"registration: the record is not the circuit registration META binds ({d})")
     let none_ := refused s!"registration: {STACKED} has no root at Commit and no registered top"
     let (.ok program, .ok es) := (j.getObjValAs? String "program", j.getObjValAs? (Array Json) "registered") | throw none_
-    if (j.getObjValAs? String "format").toOption != some WindowRecord.FORMAT_V2 then throw none_
+    if (j.getObjValAs? String "format").toOption != some REGISTRATION_FORMAT then throw none_
     match es.filter fun e => (e.getObjValAs? String "value").toOption == some STACKED with
     | #[] => return some (program, none)
     | #[e] => return some (program, some e)

@@ -1,5 +1,5 @@
-"""N2's head check (`head_check`) on the service's own execution phases: its AND counts, each part against its reference
-on honest heads and on heads wrong in one input, and the whole Definition against its reference."""
+"""N2's head check (`head_check`) on the service's own link-windows: its AND counts, each part against its reference on
+honest heads and on heads wrong in one input, and the whole Definition against its reference."""
 
 from dataclasses import replace
 
@@ -22,8 +22,8 @@ def _checks(lw, opening):
 
 @pytest.fixture(scope="module")
 def cases(tmp_path_factory):
-    """Head checks of the service's execution phases under the honest profile, by name: (instance, the part that refuses
-    it or None). The honest heads of both ends in each window, and heads each wrong in one input; an edited head is
+    """Head checks of the service's link-windows under the honest profile, by name: (instance, the part that refuses it
+    or None). The honest heads of both ends in each window, and heads each wrong in one input; an edited head is
     committed under its own root and its certificate's signed digest is its own, so only the edit can refuse it."""
     run = Run(tmp_path_factory.mktemp("heads"), occupancy=honest_occupancy())
     lw, honest = run.lw, [run.honest(w) for w in range(3)]

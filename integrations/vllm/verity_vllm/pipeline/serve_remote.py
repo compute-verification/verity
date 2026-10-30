@@ -42,9 +42,6 @@ class RemoteOptions:
                                               "build, and the store proved to it in lockstep with the server's engine steps "
                                               "from its first, a pass a step (serve_remote); a rejected session fails the exit")
     remote_plan: str = option("--remote-plan", default="serve", help="the session's mode: serve")
-    remote_node: str | None = option("--remote-node", default=None, metavar="HOST",
-                                     help="the session's node, the id the verifier registers the store under (against a "
-                                          "verifier holding a Site, this machine's host id there); default verity-vllm/<hostname>")
     remote_filler_gib: float = option("--remote-filler-gib", type=float, default=0.0,
                                       help="GiB of zeros on the engine's GPU registered after the build as the session's filler")
     remote_weight_blocks: int | None = option("--remote-weight-blocks", type=int, default=None,

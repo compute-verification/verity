@@ -20,7 +20,7 @@ The rehearsal's own outputs are under
 
 **With `--secret-bit`** the stub times its writes by a secret bit per egress bucket, which is J's question
 (`NetTiming.JitterBounded`): does an offset within a bucket that the prover chooses reach a receiver outside?
-The stub samples a secret of its own, never written, and bucket t's bit and lead (0 … `LEAD_MS` ms) are SHA-512's of it
+The stub draws a secret of its own, never written, and bucket t's bit and lead (0 … `LEAD_MS` ms) are SHA-512's of it
 and t (`SecretBits`). Once `serve` has written the honest run's `deployment.json` (the plan's probes before it are paced
 as without), each token waits from its pacing to the first slot after it: bucket t's is its lead before t's boundary
 when t's bit is 1, and half a bucket more when 0, so both bits write the same tokens a bucket, and they differ only in
@@ -58,7 +58,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 
-#: the secret-bit stub's lead before its slot's boundary, sampled per bucket from [0, LEAD_MS) ms: the stub's write
+#: the secret-bit stub's lead before its slot's boundary, drawn per bucket from [0, LEAD_MS) ms: the stub's write
 #: reaches the proxy through the shim's process, a hop whose latency the stub doesn't know, so the leads span it
 LEAD_MS = 2.0
 #: how long before its slot the stub stops sleeping on its loop and spins: a loop's sleep ends up to 1 ms late, since
@@ -85,8 +85,7 @@ class SecretBits:
 
     def ready(self) -> bool:
         """Whether the grid is known: the origin on this host's monotonic clock as the client takes it, from the
-        deployment's `origin_unix`, and the egress bucket in seconds (a network certifier's, from its own
-        `deployment.json`)."""
+        deployment's `origin_unix`, and the egress bucket in seconds (a warden's, from its own `deployment.json`)."""
         if self.grid is None and self.warden and (path := self.rehearsal / "deployment.json").exists():
             try:
                 d = json.loads(path.read_text())
@@ -266,9 +265,9 @@ def _paced(paced: dict, buckets: int, slack: float) -> dict:
 
 
 def warden_summary(run: Path) -> dict:
-    """A network certifier rehearsal's (`--warden`) tick lateness (`warden.json`), its pacer's reports (`paced`), and
-    from `check.json` its verdict, each refused window's records with their status (`uncertified` for a record without
-    its certificate) and its connections that didn't end."""
+    """A warden rehearsal's (`--warden`) tick lateness (`warden.json`), its pacer's reports (`paced`), and from
+    `check.json` its verdict, each refused window's records with their status (`uncertified` for a record without its
+    certificate) and its connections that didn't end."""
     log = json.loads((run / "warden.json").read_text())
     dep = json.loads((run / "deployment.json").read_text())
     buckets, slack, ticks = dep["params"]["window"], dep["slack_ms"], log["ticks_ms"]
@@ -379,9 +378,8 @@ def jitter(run: Path, bits: SecretBits) -> dict:
 
 
 def warden_lags(run: Path) -> list[float | None]:
-    """Per bucket of a network certifier rehearsal `run`, when its first cell reached a client after its boundary, in ms
-    (None: no connection's): each cell's bucket is the egress record's (`warden_serve.egress_cells`), its arrival the
-    client's."""
+    """Per bucket of a warden rehearsal `run`, when its first cell reached a client after its boundary, in ms (None: no
+    connection's): each cell's bucket is the egress record's (`warden_serve.egress_cells`), its arrival the client's."""
     import warden_serve as ws
 
     dep = json.loads((run / "deployment.json").read_text())
@@ -399,9 +397,9 @@ def warden_lags(run: Path) -> list[float | None]:
 
 
 def warden_jitter(run: Path, bits: SecretBits) -> dict:
-    """`jitter.json` of a network certifier rehearsal (`--warden`): `jitter`'s, with each bucket's client offset the
-    first of its cells to reach a client (`warden_lags`), the buckets no connection had cells in left out, and each
-    tick's lateness and the pacer's release starts from `warden.json`."""
+    """`jitter.json` of a warden rehearsal (`--warden`): `jitter`'s, with each bucket's client offset the first of its
+    cells to reach a client (`warden_lags`), the buckets no connection had cells in left out, and each tick's lateness
+    and the pacer's release starts from `warden.json`."""
     log = json.loads((run / "warden.json").read_text())
     return _jitter(warden_lags(run), log["ticks_ms"], log.get("paced"), bits)
 
@@ -452,14 +450,13 @@ def main(argv=None) -> int:
     ap.add_argument("--secret-bit", action="store_true",
                     help="time the stub's writes by a secret bit per egress bucket and write jitter.json")
     ap.add_argument("--paced-ms", type=float, help="the rehearsal's --paced-ms (certifier_serve.py's or "
-                                                   "warden_serve.py's default if not given; 0: the proxy writes each "
-                                                   "bucket on its loop, and the warden, which always paces, refuses "
-                                                   "it)")
+                                                   "warden_serve.py's default if not given; 0: each bucket is written "
+                                                   "on the certifier's loop)")
     ap.add_argument("--warden", action="store_true",
-                    help="rehearse the network certifier (warden_serve.py rehearse) instead of the proxy: --requests at --rate a "
+                    help="rehearse the warden (warden_serve.py rehearse) instead of the proxy: --requests at --rate a "
                          "second, each of at most --tokens, windows of --window buckets")
     ap.add_argument("--rate", type=float, default=1.0, help="with --warden: the requests' Poisson arrivals a second")
-    ap.add_argument("--window", type=int, default=60, help="with --warden: the network certifier's window, in buckets")
+    ap.add_argument("--window", type=int, default=60, help="with --warden: the warden's window, in buckets")
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
     cpus = sorted(os.sched_getaffinity(0))

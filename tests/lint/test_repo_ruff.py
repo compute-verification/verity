@@ -3,8 +3,7 @@
 
 The integration's lint (``integrations/vllm/tests/lint/test_ruff.py``) holds ``integrations/vllm`` and ``verity/ml/definitions``
 to its own list, and ``archive/`` is kept but not developed (``archive/AGENTS.md``), so neither is held here (``LEFT_OUT``); this
-lint holds the rest of ``git ls-files``' ``*.py`` and ``*.pyi``, ``tools/verity`` among them, under the root's configuration
-alone: a nearer one would replace it for ``ruff check`` there, so there is none.  Findings are counted per ``(file, rule)``: the file relative
+lint holds the rest of ``git ls-files``' ``*.py`` and ``*.pyi``.  Findings are counted per ``(file, rule)``: the file relative
 to the repository and the rule's code, the key the ratchet gate counts by too, so a refactor that moves a finding within its
 file changes nothing here.  An entry ``{"file", "rule", "count"}`` allows ``count`` findings of its pair.  A pair found more
 times than its entry allows, or found with no entry, fails.  An entry that allows more than is found doesn't: the list can run
@@ -71,17 +70,6 @@ def allowed() -> Counter:
         assert k not in out, f"{LIST.name}: duplicate entry {e}"
         out[k] = e["count"]
     return out
-
-
-def test_the_repository_has_two_ruff_configurations() -> None:
-    """A ruff configuration nearer a file than these replaces them for it, so `ruff check` there and this lint would disagree."""
-    out = subprocess.run(["git", "ls-files", "-z", "--", "*ruff.toml", "*pyproject.toml"], cwd=ROOT, capture_output=True,
-                         check=True).stdout
-    configs = sorted(p for p in out.decode().split("\0") if p and (Path(p).name in ("ruff.toml", ".ruff.toml") or
-                                                                    "[tool.ruff" in (ROOT / p).read_text(encoding="utf-8")))
-    assert configs == ["integrations/vllm/ruff.toml", "ruff.toml"], (
-        f"ruff configurations {configs}: the root's `ruff.toml` holds every package but the vLLM integration, which extends it. "
-        "Put a rule or a per-file exception in the root's, under `[lint.per-file-ignores]` for one path")
 
 
 def test_no_new_findings() -> None:

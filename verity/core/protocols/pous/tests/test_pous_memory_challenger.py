@@ -1,5 +1,4 @@
-"""The memory challenger (`memory_challenger`): the coin tree, released with its openings only once the session is
-signed, the signed session record, the
+"""The memory challenger (`memory_challenger`): the coin tree's commit and openings, the signed session record, the
 verdict that fails closed, the whole block hashed under `sha512/row/v2`, a late round that ends the session with no retry,
 no garbage collection inside the rounds, and the session log that refuses a used id.  Every clock is injected."""
 from __future__ import annotations
@@ -13,7 +12,6 @@ import tempfile
 import pytest
 
 import pous_test_signer as ts
-from pous_fakes import Clock
 from verity.ml.commitments import rowleaf
 from verity.ml.crypto import lms
 from verity.core.protocols.pous import memory_challenger as mc
@@ -34,12 +32,22 @@ def expected(i: int) -> bytes:
     return hashlib.sha512(rowleaf.sha512_row_v2_prefix(8 * BLOCK_BYTES) + block(i)).digest()
 
 
+class Clock:
+    """Time advances only when a responder spends it."""
+
+    def __init__(self) -> None:
+        self.now = 1_000_000
+
+    def __call__(self) -> int:
+        return self.now
+
+
 def coins(session: bytes = SESSION) -> mc.CoinTree:
     return mc.CoinTree.draw(SOURCE, session, BLOCKS, K, key=KEY, salts=SALTS)
 
 
 def session(respond=None, *, signer=None, clock=None, spend=lambda j: 20_000):
-    clock = clock or Clock(1_000_000)
+    clock = clock or Clock()
     signer = signer or ts.TestSigner(b"challenger key", height=2)
     c = mc.MemoryChallenger(coins(), signer, log=ts.session_log(), limit_ns=LIMIT, block_bytes=BLOCK_BYTES, binding=ROOT,
                             clock=clock)
@@ -60,25 +68,15 @@ def judge(c, signed, signer, *, schemes_=ts.SCHEMES, openings=None):
                       trusted={signer.public_key}, schemes=schemes_)
 
 
-def test_coin_tree_is_released_after_the_last_answer():
+def test_coin_tree_commits_before_and_opens_after():
     tree = coins()
     want = mc.derive(SOURCE, mc.COIN_DOMAIN, {"session": SESSION, "blocks": BLOCKS, "k": K})
     assert tree.indices == tuple(want.uniform(BLOCKS, j) for j in range(K))
     c = mc.MemoryChallenger(tree, ts.TestSigner(b"k", height=1), log=ts.session_log(), limit_ns=LIMIT,
                             block_bytes=BLOCK_BYTES, binding=ROOT, clock=Clock())
-    for j in range(K):
-        with pytest.raises(RuntimeError, match="released after the session"):
-            _ = c.commitment
-        with pytest.raises(RuntimeError, match="opened after the session"):
-            c.openings()
-        assert c.challenge() == tree.indices[j]
-        c.receive(block(tree.indices[j]))
-    assert c.done
-    with pytest.raises(RuntimeError, match="released after the session"):
-        _ = c.commitment
-    signed = c.close()
-    assert c.commitment == signed.commitment and c.commitment.coin_root == tree.root and len(tree.root) == 64
-    assert c.openings() == tuple(tree.opening(j) for j in range(K))
+    assert c.commitment.coin_root == tree.root and len(tree.root) == 64
+    with pytest.raises(RuntimeError, match="opened after the session"):
+        c.openings()
     for j in range(K):
         assert mc.verify_coin(c.commitment, tree.opening(j))
     o = tree.opening(3)
@@ -161,7 +159,7 @@ def test_receipt_time_is_read_before_hashing(monkeypatch):
         return real(data)
 
     c = mc.MemoryChallenger(coins(), ts.TestSigner(b"k", height=1), log=ts.session_log(), limit_ns=LIMIT,
-                            block_bytes=BLOCK_BYTES, binding=ROOT, clock=Seen(1_000_000))
+                            block_bytes=BLOCK_BYTES, binding=ROOT, clock=Seen())
     i = c.challenge()
     monkeypatch.setattr(mc, "block_digest", digest)
     events.clear()
@@ -180,7 +178,7 @@ def test_a_rounds_digest_is_the_blocks_sha512_row_v2_digest_in_a_92_byte_record(
     assert mc.RECORD_SCHEMA == "pous/round-record/v2"
     assert all(len(r.value()) == 92 and r.value()[-64:] == expected(r.index) for r in signed.rounds)
     plain = mc.MemoryChallenger(coins(), signer, log=ts.session_log(), limit_ns=LIMIT, block_bytes=BLOCK_BYTES,
-                                binding=ROOT, clock=Clock(1_000_000))
+                                binding=ROOT, clock=Clock())
     while not plain.done:
         i = plain.challenge()
         plain.receive(block(i))
@@ -231,7 +229,7 @@ def test_openings_must_match_the_revealed_indices():
 def test_refusals():
     def open_(**kw):
         return mc.MemoryChallenger(coins(), ts.TestSigner(b"k", height=1), log=ts.session_log(), limit_ns=LIMIT,
-                                   block_bytes=BLOCK_BYTES, clock=Clock(1_000_000), **kw)
+                                   block_bytes=BLOCK_BYTES, clock=Clock(), **kw)
 
     with pytest.raises(ValueError, match="coarser than 1000 ns"):
         open_(binding=ROOT, resolution_ns=10_000)
@@ -251,7 +249,7 @@ def test_refusals():
     with pytest.raises(lms.StateError, match="all 2\\^1 leaves are used"):
         signer.sign(SESSION, b"c")
     with pytest.raises(TypeError, match="log"):
-        mc.MemoryChallenger(coins(), signer, limit_ns=LIMIT, block_bytes=BLOCK_BYTES, binding=ROOT, clock=Clock(1_000_000))
+        mc.MemoryChallenger(coins(), signer, limit_ns=LIMIT, block_bytes=BLOCK_BYTES, binding=ROOT, clock=Clock())
 
 
 def test_a_session_id_is_used_once_and_on_disk_before_the_first_challenge(tmp_path, monkeypatch):
@@ -273,7 +271,7 @@ def test_a_session_id_is_used_once_and_on_disk_before_the_first_challenge(tmp_pa
 
     def open_(log: mc.SessionLog, session: bytes = SESSION) -> mc.MemoryChallenger:
         return mc.MemoryChallenger(coins(session), signer, log=log, limit_ns=LIMIT, block_bytes=BLOCK_BYTES,
-                                   binding=ROOT, clock=Seen(1_000_000))
+                                   binding=ROOT, clock=Seen())
 
     events.clear()
     c = open_(log)

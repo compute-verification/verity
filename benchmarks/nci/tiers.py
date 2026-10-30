@@ -152,7 +152,7 @@ SPEC = [
     {"key": "intake_x", "label": "Declared novel intake, as a multiple of alpha F (1 once the count check is in the ZK flow; line rate is about 1.3e6)", "unit": "x", "min": 1, "max": 1e7, "log": True},
     {"key": "m", "label": "Recipe multiplier m: frontier progress per counted multiplication of the developer's best recipe under the mechanisms, against the unconstrained recipe (central 1, adversarial 3)", "unit": "x", "min": 0.1, "max": 10, "log": True},
     {"key": "mfu", "label": "Model-FLOP utilization of an unconstrained frontier run (Llama 3 405B: 38-43%)", "unit": "", "min": 0.1, "max": 1, "log": False},
-    {"key": "lag_s", "label": "Verdict lag: from a first incorrect proof block to the halt, a window plus the verdict delay (1 hour assumed)", "unit": "s", "min": 1, "max": 1e7, "log": True, "zero": True},
+    {"key": "lag_s", "label": "Verdict lag: from a first faulty proof block to the halt, a window plus the verdict delay (1 hour assumed)", "unit": "s", "min": 1, "max": 1e7, "log": True, "zero": True},
     {"key": "identities", "label": "Sampled proofs: identities a detection doesn't end", "unit": "", "min": 1, "max": 1e6, "log": True},
     {"key": "floor_steps", "label": "Sampled proofs: steps in a class drawn at a floor of one", "unit": "", "min": 1, "max": 1e17, "log": True},
     {"key": "K", "label": "NCI: novel bits per inference block", "unit": "bit", "min": 1e5, "max": 1e10, "log": True},
@@ -210,7 +210,7 @@ STATUS = [
      "during a wipe; the helper term is an attack."),
     ("Exhaustion", "Lemma M is proved and locked per audit, and Held for snapshots; nothing bounds memory at every "
      "instant, which the memory cap needs."),
-    ("Cheating share", "The bound on accepted incorrect proof blocks over the deployment is proved "
+    ("Cheating share", "The bound on accepted faulty proof blocks over the deployment is proved "
      "(Population.Exfil.tail_cumPrev, open #2687; the cumulative harm budget over adaptive rounds on a branch, PRF-86). "
      "Each injected bit is worth at most the chord of one inference block's thread bound, 5.76e7 counted "
      "multiplications, with (1, 0)-threading above thread_bits. chi grows with the identities a detection doesn't end and "

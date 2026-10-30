@@ -5,7 +5,7 @@ chunk of it, one decode token a step, a recompute from position 0 after a preemp
 under async scheduling, a row past the token that finished it (an EOS, a stop token or string the scheduler hadn't seen
 yet). None of that is a rule here; each is a fact the record states. A `NativeHostCommitter` with a `SamplerInputsSource`
 attached keeps each step's rows (`Row`: the runner's request id, its token rows [lo, hi) of the step, its first position and
-its prefill length) and binds, beside the sampled ids, the seed and the position each row's draw read (`SAMPLER_INPUTS`). `BlockValues.absorb`
+its prefill length) and binds, beside the sampled ids, the seed and the position each row's draw read (`SAMPLER_INPUTS`). `Record.absorb`
 reads a finished window back from the committed bytes into one `RequestRecord` per request:
 
 - ``inputs``: position p -> the committed input id at p (the step-input port's ``step.input/ids``, else ``c00.input/ids`` on
@@ -26,7 +26,7 @@ prefix can be its first turn's prompt and its previous turn's suffix). Rows past
 committed sample. Given the request's finish, the stream must also end where it says (`finish_problems`), so a stream
 cut short can't pass with its missing ids taken for an overrun; a client's abort ends it anywhere short of ``max_tokens``,
 and then at most one committed sample runs past it (the step in flight when the abort was applied, under async scheduling).
-A request aborted before it was ever scheduled streamed nothing and has no committed row, and `BlockValues.check` passes it.
+A request aborted before it was ever scheduled streamed nothing and has no committed row, and `Record.check` passes it.
 
 Stdlib only, but `committed_ints`, which reads a committer's retained bytes with numpy (and torch for a GPU block).
 """
@@ -214,13 +214,9 @@ def ints_of(raw: bytes, dtype: str) -> list[int]:
 
 def committed_raw(committer: Any, step: int, name: str) -> tuple[bytes, str] | None:
     """`committed_ints`' bytes of ``name`` at ``step`` and its dtype. A plan's metas (`plan_cache.PlanMetas`) are read from its
-    columns, so no `TensorMeta` is built for the read. A window whose draw-gated release dropped the bytes answers from what was
-    read just before it (``read_before_release``, `serve_release.Draws.release`), which no bundle holds."""
+    columns, so no `TensorMeta` is built for the read."""
     from verity_vllm.commit.committer.plan_cache import PlanMetas
 
-    before = getattr(committer, "read_before_release", None)
-    if before is not None and (step, name) in before:
-        return before[step, name]
     metas = committer._layouts.get(step, ())
     if isinstance(metas, PlanMetas):
         if name not in metas.names:
@@ -383,10 +379,9 @@ class RequestRecord:
                 "discarded": [[p, v] for p, v in sorted(self.discarded.items())], "seeds": sorted(self.seeds)}
 
 
-class BlockValues:
-    """The committed values of one committing engine's execution blocks (its windows), by request: each request's
-    `RequestRecord`. ``known`` maps a request id to anything (the admitted requests); a runner id is matched to it by
-    `base_id`."""
+class Record:
+    """Every request's `RequestRecord` over the windows of one committing engine. ``known`` maps a request id to anything
+    (the admitted requests); a runner id is matched to it by `base_id`."""
 
     def __init__(self, known: Mapping[str, Any] | None = None) -> None:
         self.known = known

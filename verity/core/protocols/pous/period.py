@@ -55,10 +55,8 @@ from pathlib import Path
 from typing import Any
 
 from verity.core.deploy.stream import Side
-from verity.ml.circuits import requirement
 from verity.ml.commitments.identity import canonical_json_bytes
 from verity.ml.crypto import lms
-from verity.core.protocols import record as core_record
 from verity.ml.randomness import derive
 
 from . import challenger_party
@@ -142,7 +140,7 @@ def point_of(doc: Mapping[str, Any]) -> R.Point:
 
 
 def case(point: R.Point, session_id: bytes, trusted: Sequence[bytes], published: R.Setup, digests: bytes,
-         session: R.ChallengerRecord, setup_of: Mapping[str, Any]) -> dict[str, Any]:
+         session: R.Session, setup_of: Mapping[str, Any]) -> dict[str, Any]:
     """The run protocol's case, `{"commitment": hex, "evidence": hex, "params": JSON}` (`PousCheck.RunProtocol`): its
     evidence carries the setup's own commitment and evidence, from `setup_of`, the setup protocol's case."""
     params = {"point": point_json(point), "session_id": session_id.hex(), "trusted": [t.hex() for t in trusted]}
@@ -172,7 +170,7 @@ def tie(point: R.Point, published: R.Setup, inputs: SetupInputs) -> None:
 
 
 def answer(point: R.Point, schemes: Mapping[str, mc.Verify], trusted: Collection[bytes], published: R.Setup,
-           digests: bytes, session: R.ChallengerRecord, session_id: bytes, protocol: str = PROTOCOL, *,
+           digests: bytes, session: R.Session, session_id: bytes, protocol: str = PROTOCOL, *,
            setup_inputs: SetupInputs) -> dict[str, Any]:
     """The run protocol's answer (`Core.Answer.canonical`) on decoded inputs: `tie` on the setup's own inputs, then
     `run.check_at`, then `certify`."""
@@ -259,21 +257,15 @@ Period = Run
 
 
 @dataclass(frozen=True)
-class EncodedStore:
+class Store:
     """What a node's setup leaves: the point, what setup published, `C*` (which the prover keeps), the memory challenger's
-    table of it, and the setup protocol's case. The store itself is `store`."""
+    table of it, and the setup protocol's case."""
 
     point: R.Point
     published: R.Setup
     blocks: tuple[bytes, ...]
     digests: bytes
     setup_case: dict[str, Any]
-
-    @property
-    def store(self) -> requirement.Store:
-        """PoUS's view of the store (`requirement.Store`): `C*`'s blocks registered from store index 0, none written or
-        freed after setup, and no payloads, since a block of `C*` holds `W`'s bytes only through decoding."""
-        return requirement.Store(len(self.blocks), {}, {}, {})
 
     def save(self, directory: str | os.PathLike) -> None:
         d = Path(directory)
@@ -285,7 +277,7 @@ class EncodedStore:
                                                  sort_keys=True))
 
     @classmethod
-    def load(cls, directory: str | os.PathLike) -> EncodedStore:
+    def load(cls, directory: str | os.PathLike) -> Store:
         d = Path(directory)
         doc = json.loads((d / "store.json").read_text())
         point, data = point_of(doc["point"]), (d / "c-star.bin").read_bytes()
@@ -315,7 +307,7 @@ def encode(q: P2.P2Params, salt: bytes, w: bytes, workers: int = 1) -> list[list
     return out
 
 
-def setup_store(store: bytes, coins: bytes, point: R.Point | None = None, *, workers: int = 1) -> EncodedStore:
+def setup_store(store: bytes, coins: bytes, point: R.Point | None = None, *, workers: int = 1) -> Store:
     """Setup on the node (module docstring, steps 1 to 3): `W` is `store` padded to the point's payload, the salt drawn
     from the verifier's `coins` after the commitment, `C*` encoded in `workers` processes, and the public-encoder check of
     it (`setup.verifier_key_from_encoding`), which raises `ValueError` on a setup it refuses."""
@@ -329,11 +321,11 @@ def setup_store(store: bytes, coins: bytes, point: R.Point | None = None, *, wor
     encoded = encode(q, salt, w, workers)
     root = setup.verifier_key_from_encoding(q, None, commitment, salt, encoded).root
     blocks = tuple(b for seg in encoded for b in seg)
-    return EncodedStore(point, R.Setup(q.blocks, commitment, root, salt), blocks,
-                        b"".join(mc.block_digest(b) for b in blocks), setup_case(q, commitment, salt, encoded))
+    return Store(point, R.Setup(q.blocks, commitment, root, salt), blocks, b"".join(mc.block_digest(b) for b in blocks),
+                 setup_case(q, commitment, salt, encoded))
 
 
-def audit(node: str, held: EncodedStore, coins: bytes, *, signer: mc.Signer | None = None, log: mc.SessionLog | None = None,
+def audit(node: str, held: Store, coins: bytes, *, signer: mc.Signer | None = None, log: mc.SessionLog | None = None,
           trusted: Collection[bytes] | None = None, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
           protocol: str = PROTOCOL, prover: Prover = honest, clock: Callable[[], int] = time.perf_counter_ns,
           party: Side | None = None) -> Period:
@@ -351,12 +343,12 @@ def audit(node: str, held: EncodedStore, coins: bytes, *, signer: mc.Signer | No
         challenger = mc.MemoryChallenger(tree, signer, log=log, limit_ns=point.limit_ns, block_bytes=q.block_bytes,
                                          binding=published.root, clock=clock)
         signed = challenger.run(prover(held.blocks))
-        session, key = R.ChallengerRecord(signed, challenger.commitment, challenger.openings()), signer.public_key
+        session, key = R.Session(signed, challenger.commitment, challenger.openings()), signer.public_key
     else:
         got = challenger_party.session(party, challenger_party.request_of(node, point, published.root),
                                        prover(held.blocks))
         session_id, key = bytes.fromhex(got["session_id"]), bytes.fromhex(got["public_key"])
-        session = R.ChallengerRecord.from_json(got["session"])
+        session = R.Session.from_json(got["session"])
     trusted = (key,) if trusted is None else tuple(trusted)
     return Run(answer(point, schemes, trusted, published, held.digests, session, session_id, protocol,
                       setup_inputs=setup_inputs(held.setup_case)),
@@ -379,10 +371,9 @@ def run(node: str, store: bytes, coins: bytes, *, signer: mc.Signer | None = Non
 
 
 def serve(exe: str | os.PathLike, cases: Sequence[Mapping[str, Any]], *args: str) -> list[dict[str, Any]]:
-    """`EXE [ARGS] serve` on `cases`, one canonical JSON line each: the Lean's answers (`Core.Protocol` CLI). The lines go
-    as bytes, so a served case (gigabytes) is held once beside its own JSON, not again as text."""
-    lines = b"".join(canonical_json_bytes(dict(c)) + b"\n" for c in cases)
-    p = subprocess.run([str(exe), *args, "serve"], input=lines, capture_output=True, check=True)
+    """`EXE [ARGS] serve` on `cases`, one canonical JSON line each: the Lean's answers (`Core.Protocol` CLI)."""
+    lines = "".join(canonical_json_bytes(dict(c)).decode() + "\n" for c in cases)
+    p = subprocess.run([str(exe), *args, "serve"], input=lines, capture_output=True, text=True, check=True)
     return [json.loads(x) for x in p.stdout.splitlines()]
 
 
@@ -417,6 +408,7 @@ def challenger(directory: str | os.PathLike, *, workers: int | None = None) -> m
 
 LEDGER_SCHEMAS = ("verity/challenger-auditor/v1", "verity/challenger-auditor/v2")
 """The schemas of the auditor's ledger entries (`sampled_proofs.challenger.LEDGER_TAGS`), whose copies `cite` cuts."""
+_ENTRY = ["body", "kind", "prev", "schema", "seq", "session", "sig"]
 _CLOSE = ["chain", "ended", "lines", "session", "signature"]
 
 
@@ -429,12 +421,11 @@ def _json(data: str | bytes) -> Any:
 
 
 def _entry(line: Any) -> dict | None:
-    """`line` as an entry of the auditor's ledger (`sampled_proofs.challenger.ledger_text`'s form): a record entry
-    (`record.is_entry`) under one of its schemas, else None."""
+    """`line` as an entry of the auditor's ledger (`sampled_proofs.challenger.ledger_text`'s form), else None."""
     if type(line) is not str or not line.startswith('{"body":'):
         return None
     e = _json(line)
-    return e if core_record.is_entry(e) and e["schema"] in LEDGER_SCHEMAS else None
+    return e if isinstance(e, dict) and sorted(e) == _ENTRY and e["schema"] in LEDGER_SCHEMAS else None
 
 
 def _ledger(lines: Sequence[Any]) -> list[dict] | None:
@@ -578,7 +569,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
             held.save(kept)
         fresh = True
     else:
-        held, fresh = EncodedStore.load(kept), False
+        held, fresh = Store.load(kept), False
     setup_s = round(time.monotonic() - t, 2)
     t = time.monotonic()
     period = audit(node, held, secrets.token_bytes(64), party=party)
@@ -607,7 +598,6 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     return answer
 
 
-__all__ = ["LEDGER_SCHEMAS", "PROTOCOL", "SETUP_WORKERS", "EncodedStore", "Period", "Prover", "Run", "SetupInputs",
-           "answer", "audit", "case", "certificate", "certify", "challenger", "cite", "cited", "encode", "gaps",
-           "honest", "leg", "point_for", "point_of", "profile", "records", "run", "serve", "setup_case", "setup_inputs",
-           "setup_store", "tie"]
+__all__ = ["LEDGER_SCHEMAS", "PROTOCOL", "SETUP_WORKERS", "Period", "Prover", "Run", "SetupInputs", "Store", "answer",
+           "audit", "case", "certificate", "certify", "challenger", "cite", "cited", "encode", "gaps", "honest", "leg",
+           "point_for", "point_of", "profile", "records", "run", "serve", "setup_case", "setup_inputs", "setup_store", "tie"]

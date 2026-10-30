@@ -19,9 +19,7 @@ rest on, and every input has one length, so length extension doesn't arise. Coun
 nonce repeats under a key (Bellare, Desai, Jokipii, Rogaway 1997); HMAC-SHA512 is a PRF under the same assumption
 (Bellare 2006), so a strongly unforgeable MAC; encrypt-then-MAC with the nonce under the tag is IND-CCA and INT-CTXT
 (Bellare, Namprempre 2000; scheme N2 of Namprempre, Rogaway, Shrimpton 2014). The caller never seals two frames at one
-nonce under one key. N has one length, so N ‖ C needs no length field and frames of different lengths may share a key;
-the certifier gives every frame of one key the same length, which hides lengths, and `transport` pads each frame to its
-declared size.
+nonce under one key, and gives every frame of one key the same length, so N ‖ C needs no length field.
 
 Standard library only.
 """

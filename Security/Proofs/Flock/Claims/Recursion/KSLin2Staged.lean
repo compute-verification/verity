@@ -5,15 +5,15 @@ import Proofs.Flock.Claims.Recursion.VStarBDeploy
 /-!
 # `KSLin2` with V*'s staging read off the run
 
-`ksLin2_route` takes V*'s staging as `KSBoundRouteCols` does: `VstarShowsB`, the staging shown at every list of pairs, and
+`ksLin2_route` takes V*'s staging as `KSBoundRoute` does: `VstarShowsB`, the staging shown at every list of pairs, and
 `RunPairs`. `VstarShowsB` is false at `deployRec` (`vstarShowsB_deployed_rejects`: with `HeldB`, it leaves the compiled
 verifier no accepted run at any statement with a part). What the route reads of it is `StagedB`, the staging at an
 accepted run's pairs, which holds at the coin server's transcript read by a reader wherever that reader reads it back
 at an accepted run (`ReadsBackB`, `stagedB_deployRec_part`), and `RunPairs` holds at `decCoin` (`runPairs_deployRec`).
 
 * `ksLin2_route_staged`: `ksLin2_route` with `StagedB` for `VstarShowsB`, no `RunPairs` and, at a layout whose held
-  rounds have no pieces (`HeldWhole`), no `ReadersRunPlayed` (`vstarAcceptsV_boundW` for `vstarAccepts_bound`, the
-  forks through `pick`), each part's check off a collision with
+  rounds have no pieces (`HeldWhole`), no `ReadersRunPlayed`, as `ksBoundRoute_heldWhole` is `ksBoundRoute_of_bridge`
+  (`vstarAcceptsV_boundW` for `vstarAccepts_bound`, the forks through `pick`), each part's check off a collision with
   the compiled verifier's own evaluations too (`PartChecksBV`).
 * `ksLin2_deployed_parts`: at the intended choice (`ksLin2_deployed`'s), with the staging at `showsPart`, `cmtTr` of a
   reader `untr`: the parts' facts only at the V\* statements staged as V\* stages them (`StagedPart`).

@@ -23,6 +23,7 @@ REGISTRY: dict[str, str] = {
     "native_peak": "benchmarks.native_peak.tool:NATIVE_PEAK",
     "commit_cost": "benchmarks.commitments.tool:COMMIT_COST",
     "hiding_leaf_cost": "benchmarks.commitments.tool:HIDING_LEAF_COST",
+    "pouw_vllm": "benchmarks.pouw.tool:POUW_VLLM",
     "serving_commit_cost": "benchmarks.commitments.tool:SERVING_COMMIT_COST",
     "flock_pure": "verity.ml.flock.tool:FLOCK_PURE",
     "flock_agreement": "verity.ml.flock.verifier.tool:FLOCK_AGREEMENT",
@@ -30,12 +31,12 @@ REGISTRY: dict[str, str] = {
     "check": "tools.verity.check.tool:CHECK",
     "lean_audit": "tools.verity.lean.tool:LEAN_AUDIT",
     "lean_upstream": "tools.verity.lean.tool:LEAN_UPSTREAM",
-    # the vLLM integration's row stages
-    "vllm.build": "tools.research.src.research.store.vllm_tools:VLLM_BUILD",
-    "vllm.plan": "tools.research.src.research.store.vllm_tools:VLLM_PLAN",
-    "vllm.match": "tools.research.src.research.store.vllm_tools:VLLM_MATCH",
-    "vllm.commit": "tools.research.src.research.store.vllm_tools:VLLM_COMMIT",
-    "vllm.replay": "tools.research.src.research.store.vllm_tools:VLLM_REPLAY",
+    # vLLM integration sweep stages (integration-owned declarations).
+    "vllm.build": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_BUILD",
+    "vllm.plan": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_PLAN",
+    "vllm.match": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_MATCH",
+    "vllm.commit": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_COMMIT",
+    "vllm.replay": "integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_REPLAY",
 }
 
 

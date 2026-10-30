@@ -8,8 +8,6 @@ sweeps and tornados span), `source` (a datasheet, a measurement, a Lean name, a 
     [location.h200-hgx]
     phi = { value = 1.583e16, unit = "FLOP/s", source = "census h100-sxm5-80gb/e4m3 x 8", status = "datasheet" }
 
-The monitoring periods are core's (`PERIODS`), not a layer's: each is the registry's `horizon.<name>.seconds`.
-
 A table becomes an object through its layer's `build`, which takes its fields by name (`Registry.fields`). Every
 parameter of every layer is then one key, so a sweep is `registry.override({key: value})` and a rebuild, whatever the
 layer.
@@ -23,14 +21,9 @@ from dataclasses import dataclass, fields, replace
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.pous import wipe_monitoring
-
 DATA = Path(__file__).resolve().parent.parent / "data"
 
 STATUSES = frozenset({"datasheet", "measured", "declared", "assumed", "ruled", "conjecture", "derived"})
-
-#: core's monitoring periods (`wipe_monitoring`), seconds by name
-PERIODS = dict(wipe_monitoring.PERIODS)
 
 
 @dataclass(frozen=True)
@@ -67,10 +60,7 @@ class Registry:
 
     @classmethod
     def load(cls, paths: Iterable[Path] | None = None) -> Registry:
-        params = {f"horizon.{name}.seconds": Param(f"horizon.{name}.seconds", s, "s",
-                                                   source="verity.core.protocols.pous.wipe_monitoring PERIODS",
-                                                   status="declared")
-                  for name, s in PERIODS.items()}
+        params: dict[str, Param] = {}
         for path in sorted(paths if paths is not None else DATA.glob("*.toml")):
             with open(path, "rb") as f:
                 for key, p in _flatten(tomllib.load(f)):

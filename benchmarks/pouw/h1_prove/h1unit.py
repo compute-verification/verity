@@ -123,9 +123,9 @@ def layout() -> str | None:
     """The statement's form: ``H1_TMPL`` unset, empty or ``flat``, None: the flat statement (``flock-circuit``, the unit's
     netlist in the file), the one the Lean verifier accepts; ``structural``, the templated statement at `LAYOUT`
     (``flock-circuit/tmpl``, `circuit.compose`'s ``layout``), the unit as `struct_lower`'s template (`stager`); another
-    layout mode (`verity_flock.tmpl.mode_of`), the templated statement at it. The statement check covers H1's templated
-    statement with its ``--registered`` reads (`ProvedScope.scopeOkT`), but the knowledge-soundness form reads a flat
-    circuit (`KsScope`, `HmOut.parse`), so the Lean verifier refuses it after every other check, and it stays opt-in."""
+    layout mode (`verity_flock.tmpl.mode_of`), the templated statement at it. The soundness proof covers a templated
+    statement only without the verifier's registered reads (`ProvedScope.scopeOkT`), so the Lean verifier refuses H1's,
+    which read ``--registered``, after every other check, and it stays opt-in."""
     import os
     from verity_flock import tmpl as TM
     m = os.environ.get("H1_TMPL") or FLAT
@@ -442,15 +442,11 @@ def statement_tables(z: dict, in_ports: list[str], out_ports: list[str]) -> dict
 
 @dataclass(frozen=True)
 class Shape:
-    """One H1 tile unit's shape: R A rows and C B rows at contraction K. With ``j10r`` the unit is J10-R's
-    (`h1tile.PouwH1Tile5` under `h1window.tile_unit`, chunked as `h1window.program` declares it), whose public row also
-    holds its call and blocks (`core_check.PUBLIC_ROW_J10R_BITS`), and its statement's rows are named by
-    `h1window.window_ports` (``a_k<K>_<i>``, ``b_k<K>_<j>``), the ports core's `credit.registered_file` reads."""
+    """One H1 tile unit's shape: R A rows and C B rows at contraction K."""
 
     k: int
     r: int = TILE[0]
     c: int = TILE[1]
-    j10r: bool = False
 
     @cached_property
     def layout(self):
@@ -468,34 +464,23 @@ class Shape:
 
     @property
     def receipt_words(self) -> int:
-        if self.j10r:
-            return sum(dict(self.definition().signature()[1].fields)[HW.OUTPUTS[0]].leaf_widths()) // 16
         return 4 * self.layout.sets
 
     @property
     def in_rows(self) -> list[str]:
-        if self.j10r:
-            return [p for p, *_ in HW.statement_rows(self.definition())][:-1]
         return [f"a{i}" for i in range(self.r)] + [f"b{j}" for j in range(self.c)] + ["zy"]
-
-    @property
-    def pub_bits(self) -> int:
-        return CC.PUBLIC_ROW_J10R_BITS if self.j10r else PUB_BITS
 
     def ports(self) -> list:
         """The statement's rows as Flock's ports: the A and B rows, the record, the public row, then the receipt's and
         ok's output rows."""
         from verity_flock import circuit as FC
         return ([FC._port(n, self.ab_words, 16 * self.ab_words) for n in self.in_rows[:-1]]
-                + [FC._port("zy", self.record_words, 16 * self.record_words),
-                   FC._port("pub", self.pub_bits // 16, self.pub_bits)]
+                + [FC._port("zy", self.record_words, 16 * self.record_words), FC._port("pub", PUB_BITS // 16, PUB_BITS)]
                 + [FC._port("o0", self.receipt_words, 16 * self.receipt_words), FC._port("o1", len(OK), 16 * len(OK))])
 
     def unit(self):
-        """The tile unit (`h1window.tile_unit`, over the v1 or v3 H1 tile by `tile`; J10-R's with ``j10r``)."""
+        """The tile unit (`h1window.tile_unit`, over the v1 or v3 H1 tile by `tile`)."""
         from verity.core.protocols.pouw.circuit import h1tile as H
-        if self.j10r:
-            return HW._chunked(self.k, HW.tile_unit(self.k, (self.r, self.c), H.PouwH1Tile5))
         return HW.tile_unit(self.k, (self.r, self.c), H.PouwH1Tile3 if tile() == "v3" else None)
 
     def definition(self):
@@ -514,11 +499,10 @@ class Shape:
         """The unit's `UnitStager` on K's statement rows (`h1window.statement_rows`, under this harness's ports): its circuit,
         built once and written to ``circuit``, bound to ``bind`` (``{"partition", "program"}``: the window's partition and
         Program, `Shape.window`), templated from struct_lower or flat as `layout` says (`stager`), or with ``flat`` the
-        flat statement whatever ``H1_TMPL`` says. A J10-R statement's rows are `h1window.statement_rows`' own
-        (`h1window.window_ports`' names, credit's)."""
+        flat statement whatever ``H1_TMPL`` says."""
         template = self.definition()
-        rows = HW.statement_rows(template) if self.j10r else HW.statement_rows(template, ports(template))
-        return stager(template, name, rows, HW.STATEMENT_OUT_ROWS, None if flat else layout(), circuit=circuit, bind=bind)
+        return stager(template, name, HW.statement_rows(template, ports(template)), HW.STATEMENT_OUT_ROWS,
+                      None if flat else layout(), circuit=circuit, bind=bind)
 
 
 # -- words ------------------------------------------------------------------------------------------------------------------

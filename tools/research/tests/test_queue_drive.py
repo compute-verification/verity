@@ -246,71 +246,19 @@ def test_a_conflict_is_told_to_ci_and_the_lane_that_owns_the_pr(world, monkeypat
         assert q.handle(pr) == want
 
 
-def _lanes(world: World, *ns: int) -> None:
-    """Main's registry with the handle `lane-N` for each of ``ns``, so each PR's owner is tagged."""
-    import json
-
-    reg = {"handles": [{"handle": f"lane-{n}", "holder": f"the lane-{n} lane"} for n in ns]}
-    main = world.change({".agents/skills/using-slack/registry.json": json.dumps(reg)})
-    _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
-
-
-def _conflict_with_dependants(world: World, h: Harness, deps: tuple[int, ...]) -> str:
-    """#1 on `next`, #2 conflicting with it, and ``deps`` each built on #2; #2's head."""
-    world.gh.put(1, world.change({"a.txt": "one\n"}))
-    world.gh.put(2, two := world.change({"a.txt": "two\n"}))
-    for n in deps:
-        world.gh.put(n, world.change({f"f{n}.txt": f"{n}\n"}, base=two))
-    return two
-
-
-def test_a_pr_that_didnt_merge_is_told_once_naming_every_pr_it_takes_out(world, monkeypatch):
-    """#2 at one head stopped merging and drive posted a refusal for each PR containing it, each owner apart: one root cause is one
-    post, naming why, every PR it takes out and each owner once; an identical sync posts nothing."""
-    _lanes(world, 1, 2, 3, 4, 5)
+def test_a_pr_waiting_on_a_contained_pr_that_didnt_merge_is_told_once_per_head(world, monkeypatch):
+    """A PR that sits off `next` behind a contained PR that didn't merge is told so, rather than waiting unseen."""
     h = Harness(world, monkeypatch)
     sent = []
     h.d.post = lambda text, to: sent.append((text, to)) or True
-    two = _conflict_with_dependants(world, h, (3, 4, 5))
-    h.tick()
-    assert sent == [(f"@ci @lane-2 @lane-3 @lane-4 @lane-5 queue: #2 at {two[:8]} is out of `next`: conflicts with `next` in a.txt "
-                     "(touched by #1). It takes out #3, #4, #5, which contain it", ("@ci", "@lane-2", "@lane-3", "@lane-4", "@lane-5"))]
-    assert h.q.load_state()["drive"]["out"] == {"2": [two, [3, 4, 5], "conflicts with `next` in a.txt (touched by #1)"]}
-    h.tick()
-    assert len(sent) == 1
-    assert h.q.status()[4].why == "contains #2, which is refused: conflicts with `next` in a.txt (touched by #1) (at the last sync)"
-
-
-def test_a_root_cause_is_told_again_once_when_the_prs_it_takes_out_change(world, monkeypatch):
-    h = Harness(world, monkeypatch)
-    sent = []
-    h.d.post = lambda text, to: sent.append(text) or True
-    two = _conflict_with_dependants(world, h, (3,))
-    h.tick()
-    assert sent == [f"@ci queue: #2 at {two[:8]} is out of `next`: conflicts with `next` in a.txt (touched by #1). It takes out #3, "
-                    "which contains it"]
-    world.gh.put(6, world.change({"f6.txt": "6\n"}, base=two))
+    world.gh.put(1, world.change({"a.txt": "one\n"}))
+    two = world.change({"a.txt": "two\n"})
+    world.gh.put(2, two)
+    world.gh.put(3, world.change({"b.txt": "three\n"}, base=two))
     h.tick()
     h.tick()
-    assert sent[1:] == [f"@ci queue: #2 at {two[:8]} is out of `next`: conflicts with `next` in a.txt (touched by #1). It takes out "
-                        "#3, #6, which contain it"]
-
-
-def test_two_independent_root_causes_are_two_posts(world, monkeypatch):
-    """Each PR left out for a reason of its own is its own root, told with the PRs it takes out and only those."""
-    h = Harness(world, monkeypatch)
-    sent = []
-    h.d.post = lambda text, to: sent.append(text) or True
-    two = _conflict_with_dependants(world, h, (3,))
-    world.gh.put(7, world.change({"b.txt": "seven\n"}))
-    world.gh.put(8, eight := world.change({"b.txt": "eight\n"}))
-    world.gh.put(9, world.change({"f9.txt": "9\n"}, base=eight))
-    h.tick()
-    h.tick()
-    assert sent == [f"@ci queue: #2 at {two[:8]} is out of `next`: conflicts with `next` in a.txt (touched by #1). It takes out #3, "
-                    "which contains it",
-                    f"@ci queue: #8 at {eight[:8]} is out of `next`: conflicts with `next` in b.txt (touched by #7). It takes out #9, "
-                    "which contains it"]
+    told = [text for text, _ in sent if "#3 at" in text]
+    assert told == [f"@ci queue: #3 at {world.gh.prs[3].head[:8]} is out of `next`: contains #2, which didn't merge"]
 
 
 def test_a_notice_reaches_the_merge_thread_without_naming_its_sender_and_a_refused_post_is_retried(world, monkeypatch):

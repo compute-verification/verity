@@ -2,10 +2,9 @@ import Definitions.Pouw.Assumptions.PearlC.TTOut
 import Definitions.Pouw.PearlC.DeviceFp4
 
 /-!
-# TT_OUT for Pearl-C4 on sm_120 (trusted; staged)
+# TT_OUT for Pearl-C4 on sm_120 (trusted; staged, nothing pinned)
 
-`Prop`s taken as hypotheses by the statements that use them, never `axiom`s. No guarantee states them: the Pearl-C4
-guarantees state the `W1` forms (`TTOutFp4W1`), and their proofs reduce to the forms here.
+`Prop`s taken as hypotheses by the statements that use them, never `axiom`s.
 -/
 
 namespace Pouw.PearlC.Assumptions

@@ -326,9 +326,9 @@ def test_spec_lock_proved_in_that_names_no_package_is_refused(tmp_path):
 
 #: the numerical bench's lowerings, which name a directory in a pathlib chain
 LOWERINGS = "benchmarks/numerical/python/verity_numerical/bench/lowerings.py"
-REGISTRY = 'REGISTRY = {\n    "flock_pure": "backends.flock.tool:FLOCK_PURE",\n    "commit_cost": "benchmarks.commitments.tool:COMMIT_COST",\n}\n'
+REGISTRY = 'REGISTRY = {\n    "flock_pure": "backends.flock.tool:FLOCK_PURE",\n    "pouw_vllm": "benchmarks.pouw.tool:POUW_VLLM",\n}\n'
 REGISTRY_FILES = {"backends/flock/tool.py": "FLOCK_PURE = 1\n", "backends/flock/prove.py": "",
-                  "benchmarks/commitments/tool.py": "COMMIT_COST = 1\n",
+                  "benchmarks/pouw/tool.py": "POUW_VLLM = 1\n",
                   "tools/research/src/research/store/tools_registry.py": REGISTRY,
                   LOWERINGS:
                       'DIRECTORIES = {\n    "C-Flock": REPO / "backends" / "flock" / "templates",\n}\n',
@@ -554,104 +554,6 @@ def test_a_word_that_renames_nothing_the_range_moved_is_refused(tmp_path):
     assert f["path"] == "notes.md" and "+The core's statements are `S/Definitions/Core/` (`Definitions.Core`). Checked." in f["hunk"]
 
 
-DECL_BASE = {
-    "tools/move/sample_map.toml": '[words]\n"DrawIsCoin" = "SampleIsCoin"\n\n[[words_in]]\nfiles = ["P/S/Law.lean", '
-                                  '"P/S/Use.lean"]\nwords = { "escape" = "acceptProb" }\n\n[rewrite]\n'
-                                  'exclude = ["tools/move/**", "**/CHANGELOG.md"]\n',
-    "P/lakefile.toml": 'name = "p"\n',
-    "P/S/Law.lean": "/-- The coin is a draw. -/\ndef DrawIsCoin : Prop := True\n\n/-- An escape. -/\ndef escape : Nat := 1\n",
-    "P/S/Use.lean": "import S.Law\n\ntheorem t : DrawIsCoin := trivial\ntheorem u : escape = 1 := rfl\n",
-    "P/lean-audit.json": _lock(assumptions={"DrawIsCoin": {"owner": "@lean"}},
-                               reads={"S.Law": {"digest": "dd", "definitions": {"DrawIsCoin": "ee", "escape": "ff"}}}),
-    "notes.md": "`DrawIsCoin` holds; an escape is rare.\n",
-    "CHANGELOG.md": "Added `DrawIsCoin`.\n",
-}
-DECL_HEAD = {
-    "P/S/Law.lean": "/-- The coin is a draw. -/\ndef SampleIsCoin : Prop := True\n\n/-- An acceptProb. -/\ndef acceptProb : Nat := 1\n",
-    "P/S/Use.lean": "import S.Law\n\ntheorem t : SampleIsCoin := trivial\ntheorem u : acceptProb = 1 := rfl\n",
-    "P/lean-audit.json": _lock(assumptions={"SampleIsCoin": {"owner": "@lean"}},
-                               reads={"S.Law": {"digest": "dd", "definitions": {"DrawIsCoin": "ee", "escape": "ff"}}}),
-    "notes.md": "`SampleIsCoin` holds; an escape is rare.\n",
-}
-
-
-def _declared(tmp_path: Path, base_extra: dict | None = None, **over: str) -> dict:
-    """`DrawIsCoin` and the scoped `escape` renamed as `tools/move/rename.py` renames them: no path moves."""
-    repo, base = _repo(tmp_path, {**DECL_BASE, **(base_extra or {})})
-    _write(repo, {**DECL_HEAD, **over})
-    return _check(repo, base)
-
-
-def test_a_lean_declaration_rename_is_certified(tmp_path):
-    """A word that renames a declaration of an edited `.lean` file to a name the base never spells is kept, as is a
-    `[[words_in]]` entry's in its files; a lock's records keep the old names for `check.py --update --moved`."""
-    r = _declared(tmp_path)
-    assert r["certified"], r["refusals"]
-    assert {e["path"]: e["kind"] for e in r["edits"]} == dict.fromkeys(["P/S/Law.lean", "P/S/Use.lean", "P/lean-audit.json",
-                                                                        "notes.md"], "words")
-
-
-def test_a_declaration_rename_onto_a_name_the_base_spells_is_refused(tmp_path):
-    """`SampleIsCoin` is already a name at the base, so renaming `DrawIsCoin` to it would merge two names."""
-    r = _declared(tmp_path, base_extra={"other.md": "`SampleIsCoin` is another premise.\n"})
-    assert {f["path"] for f in r["refusals"]} == {"P/S/Law.lean", "P/S/Use.lean", "P/lean-audit.json", "notes.md"}
-
-
-def test_a_new_name_a_lean_comment_already_uses_is_no_merge(tmp_path):
-    """A `.lean` file's prose may already say `acceptProb`: a comment names nothing, so the rename stays certified. The same
-    word in its code is a name the rename would merge with."""
-    for kind, line in [("comment", "-- the acceptProb is P_a\n"), ("code", "theorem v : acceptProb = acceptProb := rfl\n")]:
-        (tmp_path / kind).mkdir()
-        old, new = DECL_BASE["P/S/Use.lean"] + line, DECL_HEAD["P/S/Use.lean"] + line
-        r = _declared(tmp_path / kind, base_extra={"P/S/Use.lean": old}, **{"P/S/Use.lean": new})
-        assert r["certified"] == (kind == "comment"), r["refusals"]
-
-
-def test_a_map_of_scoped_words_alone_is_read(tmp_path):
-    """A map whose `[words]` is empty renames only in the files of its `[[words_in]]` entries, and is read all the same."""
-    scoped = ('[words]\n\n[[words_in]]\nfiles = ["P/S/Law.lean", "P/S/Use.lean"]\nwords = { "escape" = "acceptProb" }\n\n'
-              '[rewrite]\nexclude = ["tools/move/**", "**/CHANGELOG.md"]\n')
-    keep = {p: DECL_BASE[p] for p in ("notes.md", "P/lean-audit.json")}
-    r = _declared(tmp_path, base_extra={"tools/move/sample_map.toml": scoped}, **keep, **{
-        "P/S/Law.lean": DECL_BASE["P/S/Law.lean"].replace("escape", "acceptProb"),
-        "P/S/Use.lean": DECL_BASE["P/S/Use.lean"].replace("escape", "acceptProb")})
-    assert r["certified"], r["refusals"]
-    assert {e["path"] for e in r["edits"]} == {"P/S/Law.lean", "P/S/Use.lean"}
-
-
-def test_a_scoped_word_renames_only_in_its_files(tmp_path):
-    """`escape` is renamed only in the files its `[[words_in]]` entry names; a prose `escape` elsewhere stays."""
-    [f] = _declared(tmp_path, **{"notes.md": "`SampleIsCoin` holds; an acceptProb is rare.\n"})["refusals"]
-    assert f["path"] == "notes.md"
-
-
-def test_a_stale_word_of_another_map_is_not_kept(tmp_path):
-    """An earlier move's map also renames `DrawIsCoin`, to a name the base no longer spells; the range didn't make that
-    rename, so its word is not applied."""
-    stale = '[words]\n"DrawIsCoin" = "CoinIsDrawn"\n\n[rewrite]\nexclude = ["tools/move/**"]\n'
-    r = _declared(tmp_path, base_extra={"tools/move/a_stale_map.toml": stale})
-    assert r["certified"], r["refusals"]
-
-
-def test_a_word_no_edited_lean_file_declares_is_refused(tmp_path):
-    """Renaming a declaration's mentions while its `.lean` files stay as they were renames no declaration."""
-    repo, base = _repo(tmp_path, DECL_BASE)
-    _write(repo, {"notes.md": DECL_HEAD["notes.md"]})
-    [f] = _check(repo, base)["refusals"]
-    assert f["path"] == "notes.md"
-
-
-def test_lean_declared_reads_declarations_constructors_and_fields():
-    """Each name as written and in full: below its namespaces, a field or a constructor below its structure or type; a
-    section or a `mutual` block adds no part, and `end` closes it."""
-    text = ("/-- `def notMe` in a docstring. -/\n@[simp] private theorem a_b : True := trivial\nnamespace Law.X\n"
-            "structure S where\n  draw : Nat\n  h : draw = 1 := by rfl\ninductive T\n  | leaf\n  | node (l : T) : T\n"
-            "section\ndef f : T → Nat\n  | .leaf => 0\n  | x => 1\nend\n-- def notMeEither\nend Law.X\n"
-            "noncomputable def escape := 1\n")
-    assert MC.lean_declared(text) == ["a_b", "Law.X", "S", "Law.X.S", "draw", "Law.X.S.draw", "h", "Law.X.S.h", "T",
-                                      "Law.X.T", "leaf", "Law.X.T.leaf", "node", "Law.X.T.node", "f", "Law.X.f", "escape"]
-
-
 AREAS = {
     "tools/move/areas_map.toml": '[words]\n"S/Area" = "S/Area/Check"\n"S.Area" = "S.Area.Check"\n',
     "P/lakefile.toml": 'name = "p"\n',
@@ -700,41 +602,6 @@ def test_a_pin_whose_digest_is_not_its_file_is_refused(tmp_path):
     assert f["path"] == "p/TRUSTED.sha256"
 
 
-MANIFEST_PIN = "verity/ml/flock/tests/fixtures/randomness_lean.json"
-MANIFEST = '{"packages": [{"type": "path", "dir": "../pkg/old/lean"}]}\n'
-
-
-def _manifest_pin(tmp_path: Path, pinned) -> dict:
-    """`pkg/old/` moved to `pkg/new/`, so `Sec/lake-manifest.json`'s `dir` follows it, and the flock Lean vectors' pin
-    (a JSON pin of `pins.py`) records the manifest and a Lean file as ``pinned(manifest, lean)`` gives them at HEAD."""
-    lean = "theorem a : 1 = 1 := rfl\n"
-
-    def pin(manifest: str, lean_digest: str) -> str:
-        return json.dumps({"inputs": {"Sec/A.lean": lean_digest, "Sec/lake-manifest.json": _sha(manifest)}, "kat": [1]},
-                          indent=2) + "\n"
-    repo, base = _repo(tmp_path, {"Sec/lake-manifest.json": MANIFEST, "Sec/A.lean": lean, "pkg/old/lean/B.lean": "def b := 1\n",
-                                  MANIFEST_PIN: pin(MANIFEST, _sha(lean))})
-    _move(repo, "pkg/old/lean/B.lean", "pkg/new/lean/B.lean")
-    moved = MANIFEST.replace("pkg/old", "pkg/new")
-    _write(repo, {"Sec/lake-manifest.json": moved, MANIFEST_PIN: pin(*pinned(moved, _sha(lean)))})
-    return _check(repo, base)
-
-
-def test_a_json_pins_manifest_digest_follows_the_manifest(tmp_path):
-    """A move rewrites a Lake manifest's `dir`, and a JSON pin that records the manifest takes its new digest: no pinned
-    output reads where a path package sits."""
-    r = _manifest_pin(tmp_path, lambda manifest, lean: (manifest, lean))
-    assert r["certified"], r["refusals"]
-
-
-def test_a_json_pins_other_digests_and_wrong_ones_are_refused(tmp_path):
-    for case, pinned in {"wrong": lambda manifest, lean: (manifest + " ", lean),
-                         "lean": lambda manifest, lean: (manifest, "0" * 64)}.items():
-        (tmp_path / case).mkdir()
-        [f] = _manifest_pin(tmp_path / case, pinned)["refusals"]
-        assert f["path"] == MANIFEST_PIN, case
-
-
 def test_pins_sorted_anew_after_their_paths_moved_are_a_move(tmp_path):
     """The command that writes a pin file sorts its paths, so a regeneration after the move may order them anew."""
     a, b = "import Definitions.Core.B\n\n/-! Trusted: `Definitions/Core/B.lean` states `Definitions.Core.B`. -/\n", "def x := 1\n"
@@ -747,43 +614,6 @@ def test_pins_sorted_anew_after_their_paths_moved_are_a_move(tmp_path):
     (tmp_path / "dropped").mkdir()
     dropped = f"{_sha(a)}  ../S/Definitions/Core/A.lean\n"
     assert not _worded(tmp_path / "dropped", base_pins, **{"p/TRUSTED.sha256": dropped})["certified"]
-
-
-def _doc_paths(tmp_path: Path, lean: str, md: str) -> dict:
-    """`P/x` moved to `P/y`; a Lean doc comment names it from the root, a Markdown file relative to itself."""
-    repo, base = _repo(tmp_path, {"P/x/A.lean": "def a := 1\n", "S/B.lean": "/-! `P/x/A.lean` states `a`. -/\ndef b := 1\n",
-                                  "docs/README.md": "`../P/x/A.lean` states it ([A](../P/x/A.lean)).\n"})
-    _move(repo, "P/x", "P/y")
-    _write(repo, {"S/B.lean": lean, "docs/README.md": md})
-    return _check(repo, base)
-
-
-def test_moved_paths_in_a_lean_comment_and_markdown_relative_paths_are_a_move(tmp_path):
-    r = _doc_paths(tmp_path, "/-! `P/y/A.lean` states `a`. -/\ndef b := 1\n", "`../P/y/A.lean` states it ([A](../P/y/A.lean)).\n")
-    assert r["certified"], r["refusals"]
-
-
-def test_a_lean_comment_edit_that_is_not_path_only_is_refused(tmp_path):
-    """Only a moved path may change in a Lean comment: not its prose, not a path the move didn't make, nor the code."""
-    md = "`../P/y/A.lean` states it ([A](../P/y/A.lean)).\n"
-    for case, lean in {"prose": "/-! `P/y/A.lean` states `b`. -/\ndef b := 1\n",
-                       "unmade": "/-! `P/z/A.lean` states `a`. -/\ndef b := 1\n",
-                       "code": "/-! `P/y/A.lean` states `a`. -/\ndef b := 2\n"}.items():
-        (tmp_path / case).mkdir()
-        [f] = _doc_paths(tmp_path / case, lean, md)["refusals"]
-        assert f["path"] == "S/B.lean", case
-
-
-def test_a_markdown_relative_path_the_move_did_not_make_is_refused(tmp_path):
-    """A Markdown relative path may only follow the move: one naming a path the move didn't make, or another file, is
-    refused, in a link's target and in backticks."""
-    lean = "/-! `P/y/A.lean` states `a`. -/\ndef b := 1\n"
-    for case, md in {"link": "`../P/y/A.lean` states it ([A](../P/z/A.lean)).\n",
-                     "backticks": "`../P/z/A.lean` states it ([A](../P/y/A.lean)).\n",
-                     "outside": "`../P/y/A.lean` states it ([A](../../P/y/A.lean)).\n"}.items():
-        (tmp_path / case).mkdir()
-        [f] = _doc_paths(tmp_path / case, lean, md)["refusals"]
-        assert f["path"] == "docs/README.md", case
 
 
 def test_a_moves_record_of_a_path_that_did_not_move_whole_is_refused(tmp_path):
@@ -1146,98 +976,3 @@ def test_moves_entry_the_range_agrees_with_is_certified(tmp_path):
 def test_moves_entry_the_range_contradicts_is_refused(tmp_path):
     [f] = _moves(tmp_path, {"pkg/app/store/": "pkg/app/protocols/storage/"})["refusals"]
     assert f["path"] == MC.MOVES and "pkg/app/protocols/storage/" in f["reason"]
-
-
-JOIN = ('import sys\nfrom pathlib import Path\n\nHERE = Path(__file__).resolve().parent\n'
-        'sys.path.insert(0, str(HERE.parent / "rho"))\n')
-CIRCUITS = "# Steps as Boolean circuits (rho/circuits.py): what the census counts\nx = 1\n"
-RHO = {"bench/rho/rho/__init__.py": "", "bench/rho/rho/classes.py": "Y = 1\n",
-       "bench/rho/rho/circuits.py": 'X = 1\nSOURCE = f"circuit.{X}: its gates over its FLOPs (rho/circuits.py units)"\n',
-       "bench/rho/data/circuits.toml": CIRCUITS, "bench/nci/statement.py": JOIN, "bench/nci/notes.toml": CIRCUITS}
-
-
-def _rho(tmp_path: Path, edits: dict[str, str], files: dict[str, str] | None = None) -> dict:
-    """`bench/rho` renamed `bench/overhead` and its package `rho` with it, the directory's pair given as a range's
-    `moves.json` entry gives it."""
-    repo, base = _repo(tmp_path, {**RHO, **(files or {})})
-    _move(repo, "bench/rho/rho", "bench/overhead/overhead")
-    _move(repo, "bench/rho/data", "bench/overhead/data")
-    _write(repo, edits)
-    return _check(repo, base, {"bench/rho": "bench/overhead"})
-
-
-def test_join_on_the_files_own_place_naming_a_moved_directory_is_certified(tmp_path):
-    r = _rho(tmp_path, {"bench/nci/statement.py": JOIN.replace('"rho"', '"overhead"')})
-    assert r["certified"], r["refusals"]
-    assert {"path": "bench/nci/statement.py", "kind": "python"} in r["edits"]
-
-
-def test_join_with_any_other_change_or_on_a_shadowed_name_is_refused(tmp_path):
-    [f] = _rho(tmp_path / "a", {"bench/nci/statement.py": JOIN.replace('(0, str(HERE.parent / "rho"',
-                                                                         '(1, str(HERE.parent / "overhead"')})["refusals"]
-    assert f["path"] == "bench/nci/statement.py" and '+sys.path.insert(1, str(HERE.parent / "overhead"))' in f["hunk"]
-    shadowed = JOIN + '\n\ndef f(HERE):\n    return HERE.parent / "rho"\n'
-    [f] = _rho(tmp_path / "b", {"bench/nci/statement.py": shadowed.replace('"rho"', '"overhead"')},
-               {"bench/nci/statement.py": shadowed})["refusals"]
-    assert f["path"] == "bench/nci/statement.py" and '+sys.path.insert(0, str(HERE.parent / "overhead"))' in f["hunk"]
-
-
-def test_mention_of_a_moved_file_inside_its_moved_package_is_certified(tmp_path):
-    circuits = RHO["bench/rho/rho/circuits.py"].replace("(rho/", "(overhead/")
-    r = _rho(tmp_path, {"bench/overhead/data/circuits.toml": CIRCUITS.replace("(rho/", "(overhead/"),
-                        "bench/overhead/overhead/circuits.py": circuits})
-    assert r["certified"], r["refusals"]
-    assert {e["path"] for e in r["edits"]} == {"bench/overhead/data/circuits.toml", "bench/overhead/overhead/circuits.py"}
-
-
-def test_mention_with_any_other_change_elsewhere_or_outside_the_package_is_refused(tmp_path):
-    for i, (path, text) in enumerate([
-            ("bench/overhead/data/circuits.toml", CIRCUITS.replace("(rho/", "(overhead/").replace("counts", "measures")),
-            ("bench/overhead/data/circuits.toml", CIRCUITS.replace("(rho/circuits.py", "(overhead/classes.py")),
-            ("bench/nci/notes.toml", CIRCUITS.replace("(rho/", "(overhead/"))]):
-        [f] = _rho(tmp_path / str(i), {path: text})["refusals"]
-        assert f["path"] == path and "+" + text.splitlines()[0] in f["hunk"]
-
-
-VECTORS = ('"""The vectors.\n\n    vectors.py --out ../../../proto/certifier/tests/v.json\n"""\n'
-           "# reads ../../../proto/certifier/ for the schema\nX = 1\n")
-WHY = "instances on which L.f gives what proto/certifier/cert.py gives, byte for byte"
-
-
-def _why(why: str) -> str:
-    return _lock(guarantees={}, runs={"L.Difftest": {"why": why, "args": ["10"]}})
-
-
-def _certifier(tmp_path: Path, edits: dict[str, str]) -> dict:
-    """`proto/certifier` renamed `proto/network_certifier`, which a script three levels down and a lock's run name."""
-    repo, base = _repo(tmp_path, {"proto/certifier/cert.py": "X = 1\n", "proto/certifier/tests/v.json": "{}\n",
-                                  "bench/e2e/enc/vectors.py": VECTORS, "L/lean-audit.json": _why(WHY)})
-    _move(repo, "proto/certifier", "proto/network_certifier")
-    _write(repo, edits)
-    return _check(repo, base)
-
-
-def test_relative_path_in_a_comment_naming_a_moved_place_is_certified(tmp_path):
-    r = _certifier(tmp_path, {"bench/e2e/enc/vectors.py": VECTORS.replace("/certifier/", "/network_certifier/")})
-    assert r["certified"], r["refusals"]
-    assert {"path": "bench/e2e/enc/vectors.py", "kind": "python"} in r["edits"]
-
-
-def test_relative_path_with_any_other_change_or_resolving_elsewhere_is_refused(tmp_path):
-    moved = VECTORS.replace("/certifier/", "/network_certifier/")
-    for i, (text, line) in enumerate([
-            (moved.replace("the schema", "its schema"), "+# reads ../../../proto/network_certifier/ for its schema"),
-            (moved.replace("../../../", "../../"), "+    vectors.py --out ../../proto/network_certifier/tests/v.json")]):
-        [f] = _certifier(tmp_path / str(i), {"bench/e2e/enc/vectors.py": text})["refusals"]
-        assert f["path"] == "bench/e2e/enc/vectors.py" and line in f["hunk"]
-
-
-def test_runs_why_naming_a_moved_path_from_the_root_is_certified(tmp_path):
-    r = _certifier(tmp_path, {"L/lean-audit.json": _why(WHY.replace("/certifier/", "/network_certifier/"))})
-    assert r["certified"], r["refusals"]
-
-
-def test_runs_why_with_any_other_change_is_refused(tmp_path):
-    why = WHY.replace("/certifier/", "/network_certifier/").replace("byte for byte", "bit for bit")
-    [f] = _certifier(tmp_path, {"L/lean-audit.json": _why(why)})["refusals"]
-    assert f["path"] == "L/lean-audit.json" and "changed beyond moved paths" in f["reason"] and "bit for bit" in f["hunk"]

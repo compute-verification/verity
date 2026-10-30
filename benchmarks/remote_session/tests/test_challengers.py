@@ -40,7 +40,7 @@ import wire  # noqa: E402
 from test_remote_bandwidth import SCHEDULE, drive, finish, params, store  # noqa: E402,F401
 from test_session import run as run_sessions  # noqa: E402
 from verity.core.protocols.certifier import certificate as cert  # noqa: E402
-from verity.core.protocols.certifier.grid import COMPLETE, GridParams, BlockGrid, fill  # noqa: E402
+from verity.core.protocols.certifier.grid import COMPLETE, GridParams, Record, fill  # noqa: E402
 from verity.core.protocols.remote_bandwidth import coins  # noqa: E402
 from verity.core.protocols.sampled_proofs.challenger import NO_MAIN, NO_PINS, CoinError, pin_line, pins_seal  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
@@ -209,7 +209,7 @@ def test_a_gate_session_is_refused_as_coins_unless_the_hosts_pins_log_and_the_ve
                        f"{PIN}, which the host's pins log records but which is not on main's first-parent line in the "
                        "verifier's copy (`git rev-list --first-parent origin/main`): a branch commit merged into main "
                        "is in main's history but no tree main's check ran on; repin the challenger host to a commit "
-                       "on main's first-parent line (with its pin command) and rerun the window there"),
+                       "on main's first-parent line (vy-challenger-pin) and rerun the window there"),
         "no-pins": ("the auditor's session is not readable: the challenger gate answered pins with exit 3: "
                     '{"refused": "usage"}')}[case]
 
@@ -540,15 +540,15 @@ def test_a_session_whose_pin_isnt_a_logged_commit_on_mains_first_parent_line_ear
                "window on a host whose gate seals its pins log in each open")
     elif sealed != PINS:
         why = (f"session {sid} ran commit {PIN}, which the host's pins log doesn't record as a commit of main's "
-               "history: repin the challenger host to a commit origin/main contains (with its pin command) and "
-               "rerun the window there")
+               "history: repin the challenger host to a commit origin/main contains (vy-challenger-pin) and rerun the "
+               "window there")
     elif main is None:
         why = NO_MAIN
     else:
         why = (f"session {sid} ran commit {PIN}, which the host's pins log records but which is not on main's "
                "first-parent line in the verifier's copy (`git rev-list --first-parent origin/main`): a branch commit "
                "merged into main is in main's history but no tree main's check ran on; repin the challenger host to a "
-               "commit on main's first-parent line (with its pin command) and rerun the window there")
+               "commit on main's first-parent line (vy-challenger-pin) and rerun the window there")
     assert s["credit"]["complete"]["ok"]
     assert s["credit"]["credited"]["ok"] is False and s["credit"]["credited"]["reason"] == why
     assert s["credit"]["pinned"] == {"commit": PIN, "seal": None if sealed is None else pins_seal(sealed), "ok": False,
@@ -669,9 +669,8 @@ def boundary(d: Path, let_in: dict[str, list[bytes]], *, links: tuple[str, ...] 
     key = certifier_key()
     issuer = cert.Issuer(cert.LmsSigner.create(key, d / "signer.json"), CERTIFIER_SESSION, coins=lambda n: b"\x07" * n)
     T, r = BOUNDARY_GRID.buckets, BOUNDARY_GRID.allocation
-    records = [issuer.certify(BlockGrid(link, 0,
-                                        fill(frames, [max(0, min(r, len(frames) - r * t)) for t in range(T)], r),
-                                        COMPLETE), cert.Direction.INGRESS, BOUNDARY_GRID,
+    records = [issuer.certify(Record(link, 0, fill(frames, [max(0, min(r, len(frames) - r * t)) for t in range(T)], r),
+                                     COMPLETE), cert.Direction.INGRESS, BOUNDARY_GRID,
                               cert.parameters_digest(BOUNDARY_GRID)) for link, frames in let_in.items()]
     public = lms.public_key(key)
     (d / "boundary.json").write_text(json.dumps({

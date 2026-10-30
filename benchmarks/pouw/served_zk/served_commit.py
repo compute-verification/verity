@@ -86,10 +86,10 @@ judged through the proof system (`sampled_proofs.service`, P1: a `Stream`'s `reg
   `register` refuses every certified window first (``unsalted``), before the stream receives it or the certifier is
   asked anything.  Past that rule, `register` has the stream receive the window, reads the certifier's `committed` on
   that registration, refuses a pass whose weights, stream or prover it doesn't bind, and only then calls `reveal`,
-  failing closed (``certifier``), each through the certifier's client (`CertifierClient`: a signed request, a signed
+  failing closed (``certifier``), each through the certifier's client (`RemoteCertifier`: a signed request, a signed
   answer it verifies): the certifier gives p's salt once, within its reveal deadline on its own clock, so its
   parameters carry no ``registration_deadline``.  The window registers once per PoUW window, stream and prover
-  (`salt.WindowOpens`, ``reregistered``), and its draw coin is a live epoch's ``pouw/draw`` coin 0, checked against
+  (`salt.Registrations`, ``reregistered``), and its draw coin is a live epoch's ``pouw/draw`` coin 0, checked against
   the commitment the challenger reads from its challenger's signed record (`challenger.trusted_commitment`), which the
   sample's check of record verifies again, both under the challenger key the window's deployment pins (`Deployment`,
   beside the certifier's key and run id; `Deployment.pinned` reads it from infra's published pin, `CHALLENGER_KEY_PIN`,
@@ -282,7 +282,7 @@ def certified(params: Mapping[str, Any]) -> bool:
 
 def certifier_run(certifier: Any) -> dict[str, str]:
     """The network certifier's run as a certified window's stream names it: its `certifier_run`, (key id, run id, ingress
-    link), the identity every signed `Revealed` binds, which a `Proxy` and its `CertifierClient` give alike (key id and
+    link), the identity every signed `Revealed` binds, which a `Proxy` and its `RemoteCertifier` give alike (key id and
     run id as hex). A proxy started again draws another run id, and a second link has another name; a proxy without a
     signer has no key id, so no run."""
     try:
@@ -336,7 +336,7 @@ def pinned_challenger_key(record: Path | None = None) -> Ch.ChallengerKey:
 @dataclass(frozen=True, slots=True)
 class Deployment:
     """What a certified window's verifier pins of its deployment: the network certifier's public key and its run's id,
-    the only ones whose answers the challenger takes (its client, `certifier.active.CertifierClient`, must be for them,
+    the only ones whose answers the challenger takes (its client, `certifier.active.RemoteCertifier`, must be for them,
     and refuses any other), and the key of the verifier's own challenger, under which the challenger reads the window's
     coin record and the sample's check of record verifies it (`core_check.draw`, ``coin-key``), so no record a prover
     signs over coins it holds is read.  `pinned` takes the challenger key from infra's published pin."""
@@ -363,7 +363,7 @@ class Deployment:
 def stream_id(params: dict, stream: str, certifier: Mapping[str, str]) -> bytes:
     """A certified window's stream as the PoUW salt binds it (`salt.pouw_salt`), 64 bytes: the tagged SHA-512 of the
     deployment, the stream's challenger name and the certifier's run (`certifier_run`), so one stream behind two
-    certifier links, or two runs of one, is two streams, and the once-only ledger (`salt.WindowOpens`), keyed on it,
+    certifier links, or two runs of one, is two streams, and the once-only ledger (`salt.Registrations`), keyed on it,
     is keyed on the certifier run. `Stream.digest` can't be the one bound: its Spec reads the window's context, which
     names the pass's manifest and so its salt, and the registered level, which the traffic fixes."""
     return tagged_sha512(STREAM_ID, canonical_json({"certifier": dict(certifier), "challenger": f"{CHALLENGER}/{stream}",
@@ -763,7 +763,7 @@ def _all(units: list[dict], name: str) -> dict[str, Any]:
 Sampler = Callable[[Mapping[str, Any], int, bytes], list[int]]
 
 
-def draw_key(coin: bytes, stream: S.Stream, reg: S.WindowCommitmentRecord) -> Key:
+def draw_key(coin: bytes, stream: S.Stream, reg: S.Registration) -> Key:
     """The window draw's key: the epoch's draw coin, under the stream and the registration and receipt it was opened after."""
     return derive(coin, DRAW_DOMAIN, CC.draw_key_context(stream.digest, reg.digest, dict(reg.receipt)))
 
@@ -844,7 +844,7 @@ class Challenger:
     challenger's reads of it unless `clock` is given.
 
     With `certifier` the window is certified (module docstring): `certifier` is the network certifier's client
-    (`certifier.active.CertifierClient`), whose `certifier_run` names the stream (`stream_id`) and whose `committed` and
+    (`certifier.active.RemoteCertifier`), whose `certifier_run` names the stream (`stream_id`) and whose `committed` and
     `reveal` are the certifier's signed answers to the challenger's signed requests, verified; `prover` is its 64-byte
     id (`salt.prover_id`), `coins` the live epoch's challenger (`window.live_challenger`) whose ``pouw/draw`` coin 0 the
     sample opens, `coin_record` the path of the record that challenger signed and wrote on its own host
@@ -852,7 +852,7 @@ class Challenger:
     certifier's key and run id, which `certifier` must be the client for, and its challenger's key, under which the
     challenger reads its trusted commitment itself (`challenger.trusted_commitment`).  Every opening is checked against
     it, and the draw's check of record verifies the record again under the key the deployment pins, not the one the
-    record's coins name (``coin-key``).  `opens` is the deployment's `salt.WindowOpens`,
+    record's coins name (``coin-key``).  `registrations` is the deployment's `salt.Registrations`,
     shared by its challengers.  Each registered window's salt, the one its pass was checked against, is held
     (`salts`), and `check` opens its sampled proof blocks under it."""
 
@@ -860,7 +860,7 @@ class Challenger:
                  clock: Callable[[], float] | None = None, record: OR.Record | None = None,
                  predates_deadline: bool = False, certifier: Any = None, prover: bytes | None = None,
                  coin_record: str | os.PathLike | None = None, deployment: Deployment | None = None,
-                 opens: PS.WindowOpens | None = None) -> None:
+                 registrations: PS.Registrations | None = None) -> None:
         self.trusted: Ch.LiveCommitment | None = None
         self.signed: dict | None = None
         self.deployment: Deployment | None = None
@@ -891,7 +891,7 @@ class Challenger:
                              "without one")
         self.predates_deadline = predates_deadline
         self.certifier, self.prover = certifier, prover
-        self.opens = PS.WindowOpens() if opens is None else opens
+        self.registrations = PS.Registrations() if registrations is None else registrations
         self.salts: dict[str, bytes] = {}
         self.params, self.coins, self.sampler, self.budget = params, coins, sampler, budget
         self.record = OR.Record() if record is None else record
@@ -901,7 +901,7 @@ class Challenger:
         ticks = itertools.count()
         self.clock = clock or (lambda: float(next(ticks)))
         self.streams: dict[tuple[str, int], S.Stream] = {}
-        self.regs: dict[str, tuple[S.Stream, S.WindowCommitmentRecord]] = {}
+        self.regs: dict[str, tuple[S.Stream, S.Registration]] = {}
         self.replays: dict[str, str] = {}
         self.passes: dict[str, str] = {}
         self.manifests: dict[str, Any] = {}   # each registered window's pass manifest, read (`_distinct`)
@@ -1010,7 +1010,7 @@ class Challenger:
                                                clock=self.clock, sampler=sampler)
         return self.streams[name, ell]
 
-    def _held(self, name: str) -> tuple[S.Stream, S.WindowCommitmentRecord]:
+    def _held(self, name: str) -> tuple[S.Stream, S.Registration]:
         if name not in self.regs:
             raise _refused("unknown", name)
         return self.regs[name]
@@ -1021,7 +1021,7 @@ class Challenger:
         return self.draws[name]
 
     def register(self, name: str, rec: Mapping[str, Any], stream: str = "window", replay: str | None = None,
-                 manifest: bytes | None = None, recorded: bool = False) -> S.WindowCommitmentRecord:
+                 manifest: bytes | None = None, recorded: bool = False) -> S.Registration:
         """Receive window `rec` from the pass whose manifest is `manifest` (`pass_epoch`), or a control's (`replay`).  A
         window received after the epoch's sampling coin was released is refused (`late-registration`)."""
         self.witness[name] = []
@@ -1054,7 +1054,7 @@ class Challenger:
         return reg
 
     def _certified(self, name: str, rec: Mapping[str, Any], stream: str, replay: str | None, manifest: bytes | None,
-                   recorded: bool) -> S.WindowCommitmentRecord:
+                   recorded: bool) -> S.Registration:
         """A certified window's registration (`register`).  First the window's drawn unit must read its salt
         (`salt.unit_reason`, ``unsalted``), which this window's `Pc8TileSide` doesn't, so today every certified window is
         refused here, before its stream receives it and before the certifier is asked for anything.  Past that, the
@@ -1092,8 +1092,8 @@ class Challenger:
         salt = CC.certified_salt(manifest, self.params["context"], reveal, committed, sid, self.prover)
         self._distinct(name, manifest)
         try:
-            self.opens.admit(p, sid, self.prover, reg.digest)
-        except PS.Reopened as e:
+            self.registrations.admit(p, sid, self.prover, reg.digest)
+        except PS.Reregistered as e:
             raise _refused("reregistered", str(e)) from None
         self.regs[name] = (st, reg)
         self.recorded[name] = False

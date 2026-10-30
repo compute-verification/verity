@@ -468,7 +468,7 @@ class WindowLocate:
     ``Registered(value, row, offset, nbytes)`` (bytes of a registered weight). A port of one Registered piece is a registered
     read: its position is the piece's byte offset in the value, ``row * stride(value) + offset``, over the registered row's
     bytes, which the piece must be exactly (``stride`` defaults to one registered row: ``row`` is the registered row, as
-    circuits' `Locator.locate` names the weights registration's rows). ``Run("token")`` is ingress, which no commitment holds: refused. Coordinates
+    circuits' `Window.locate` names the weights registration's rows). ``Run("token")`` is ingress, which no commitment holds: refused. Coordinates
     are ``{step, slot, op: the family, unit: the block's index in it}``."""
 
     def __init__(self, window: Any, layout: S.CommitShape, weights: Mapping[str, Any] | None = None,
@@ -834,7 +834,7 @@ def _bits_of(row: bytes, n: int) -> np.ndarray:
     return np.unpackbits(np.frombuffer(row, np.uint8), bitorder="little")[:n].reshape(1, n)
 
 
-def _replay_bits(fn: Any, params: Sequence[Any], ret: Any, lay: IF.RowLayout, rows: Mapping[str, bytes]) -> bool:
+def _replay_bits(fn: Any, params: Sequence[Any], ret: Any, lay: IF.Layout, rows: Mapping[str, bytes]) -> bool:
     """`replay` of a Boolean-profile template: each row is its port's bits in order, packed little-endian into its u16
     words (`IF.layout`), and an output field of fewer than 16 bits is its bits low in one zero-padded word, which must be
     zero."""

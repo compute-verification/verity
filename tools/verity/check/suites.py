@@ -18,8 +18,8 @@ tests read a little of a large dependency), the build outputs it lists under `ar
 resolves to in `uv.lock` (the lock's entry for each distribution it depends on, transitively, with the workspace's dependency
 groups, which bring pytest) and the installed version of each, and the environment: Python, the platform, the base image (the
 os-release `ID` and `VERSION_ID` and the C library: `base_image`), whether `lake`, `cargo` and `nvidia-smi` are on the PATH,
-and the `VERITY_*` and `FLOCK_*` variables tests switch on (all but the `where` ones `settings.py` declares), and the code that
-runs the suites (`RUNNER`: this runner, its settings and its guard, not the rest of check, so an edit to `check.py` reruns its own suite alone). The cache key hashes all
+and the `VERITY_*` and `FLOCK_*` variables tests switch on, and the code that runs the suites (`RUNNER`: this runner and its guard,
+not the rest of check, so an edit to `check.py` reruns its own suite alone). The cache key hashes all
 of them, read from git's view of the working tree, so uncommitted edits count. The tree must be a git checkout: `research run
 --source` ships one, so a machine keys a commit as a laptop does. So a change to the lockfile or to another package's
 `pyproject.toml` re-runs only the suites whose resolved dependencies it changed. A pass is kept under its key in
@@ -108,14 +108,14 @@ kept passes took longest (`longest`), so the run doesn't wait on a long test tha
 time, beside the others, which run side by side on as few of the processes as let them finish about when the longest of them
 does (`serial_slots`, from each suite's last duration); each lane goes longest first. Without pytest-xdist installed, a parallel
 suite runs in one process. Each test process's thread pools (OpenMP, so torch's, MKL, OpenBLAS, numexpr) get the CPUs divided by
-`--jobs` (`threads_per_process`) unless the environment already sets them: sized to the whole node, every xdist worker of every
-lane would run a thread per core, and the node's load would reach several times its cores.
+`--jobs` (`threads_per_process`) unless the environment already sets them: sized to the whole node, every xdist worker of ten
+lane runs at once ran 159-191 threads each (24 Oct, load 522 on cpu-5's 192 cores).
 
 Known red on main. With `--changed REV` (a PR's quick tier, a lane's pre-mark run; never check's own run), a failure is judged
-against what is already red on `main`: the failed tests in the suite reports of the ended after-landing runs or recorded
+against what is already red on `main` (CI-173): the failed tests in the suite reports of the ended after-landing runs or recorded
 checks of REV's newest first-parent commit that has one in the evidence store, merged over all of that commit's parts (`known_red`,
 read in a process of its own that alone gets a recorded run's store key, `$CHECK_STORE_CUSTODY` or the run's own custody dir:
-`known_red_on_main`). A failed suite whose every failed test is on that list, and that failed for nothing else, is
+`known_red_on_main`, CI-211). A failed suite whose every failed test is on that list, and that failed for nothing else, is
 `known-red` and fails nothing; one with other failures still fails, and says which of them are red on `main` too. The output names
 the runs and commit the list came from, or why none was found (no store remote here, a failed refresh, none in the walk), and then
 every failure counts. `--known-red REV` prints the list.
@@ -159,24 +159,22 @@ HERE = Path(__file__).resolve().parent
 GUARD = HERE / "guard"
 #: on the tests' PYTHONPATH: its `sitecustomize` makes every Python a test starts trace what it reads
 CHILD = GUARD / "child"
-_spec = importlib.util.spec_from_file_location("suites_settings", HERE / "settings.py")
-#: every environment variable the runner reads, declared once (`settings.py`)
-SETTINGS = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(SETTINGS)
-CACHE = Path(SETTINGS.VERITY_TEST_CACHE or Path(SETTINGS.XDG_CACHE_HOME or Path.home() / ".cache") / "verity" / "tests")
-#: Files every key includes: the code that decides a suite's verdict, the runner, its settings, its guard and tracer. Not
+CACHE = Path(os.environ.get("VERITY_TEST_CACHE") or Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "verity" / "tests")
+#: Files every key includes: the code that decides a suite's verdict, the runner and its guard and tracer. Not
 #: check.py: what it hands the runner that can change a verdict is keyed as such (the pytest arguments, `environment()`'s
 #: variables, the tools on the PATH), and its own suite (verity-check) keys it as its own file.
-RUNNER = ("tools/verity/check/suites.py", "tools/verity/check/settings.py", "tools/verity/check/guard/verity_suite_guard.py",
+RUNNER = ("tools/verity/check/suites.py", "tools/verity/check/guard/verity_suite_guard.py",
           "tools/verity/check/guard/child/sitecustomize.py", "tools/verity/check/guard/child/verity_suite_reads.py")
 XDIST = importlib.util.find_spec("xdist") is not None
 TOOLS = ("lake", "cargo", "nvidia-smi")
-#: the variables a pass is keyed on: those of these prefixes whose role isn't `where` (`settings.py`: not where results are kept,
-#: which are kept, or the runner's own `VERITY_SUITE_*` it sets for the tests)
 ENV_PREFIXES = ("VERITY_", "FLOCK_")
+#: variables of those prefixes that say where results are kept or which are kept, not what a test computes
+UNKEYED = frozenset({"VERITY_TEST_CACHE", "VERITY_TEST_CACHE_MIN_S"})
+#: and the runner's own, which it sets for the tests (`VERITY_SUITE_ROOT`, `..._MODULE`, `..._READS`, ...)
+UNKEYED_PREFIX = "VERITY_SUITE_"
 #: what a machine's runner gives a run's workload and check's steps never get (check.py's `ENV_PASS`): the run's `RESEARCH_*` and
 #: the machine's PYTHONPYCACHEPREFIX. Tests that start runs of their own would inherit them, so a suite run inside a `research
-#: run` would reach another verdict than inside check (test_remote_cwd's)
+#: run` would reach another verdict than inside check (test_remote_cwd, r20261008-010104-2b69)
 RUNNER_PREFIX, RUNNER_ENV = "RESEARCH_", ("PYTHONPYCACHEPREFIX",)
 #: check.py's: what its steps get inside a recorded run in place of the RESEARCH_* that named the machine's store (`store_custody`)
 CUSTODY_ENV, STORE_REQUIRED_ENV = "CHECK_STORE_CUSTODY", "VERITY_STORE_REQUIRED"
@@ -187,7 +185,7 @@ CUSTODY_ENV, STORE_REQUIRED_ENV = "CHECK_STORE_CUSTODY", "VERITY_STORE_REQUIRED"
 #: step). A suite that builds or runs a Lake package lists its lakefile under `inputs` (what `lake` reads, which no tracer
 #: sees), and tests/test_after_lean.py holds every suite that is a Lake package or declares one's lakefile or `.lake` here.
 AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-check", "core-identity", "verity-core-composition",
-              "verity-core-periods", "verity-core-evaluate", "verity-core-firewall",
+              "verity-core-evaluate", "verity-core-firewall",
               "verity/core/service/vstar", "verity/core/service/sigma", "verity-core-sampled-proofs",
               "verity/core/protocols/remote_bandwidth/lean",
               "verity/core/protocols/network", "verity-pouw-window-difftest",
@@ -200,8 +198,8 @@ ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/n
         'https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null; }; '
         'export PATH="$HOME/.elan/bin:$PATH"; ')
 #: `lake build` in the verifier, one at a time per tree: on a node every run of a commit shares its source tree, and a train's
-#: check and its touched-suites run would otherwise build `.lake` there at once, and one's link could find its output gone: a
-#: failure no PR caused
+#: check and its touched-suites run built `.lake` there at once (21 Oct: 4430e936c3d8's link of flock-verify found its output
+#: gone, and drive bisected a failure no PR caused)
 LAKE_BUILD = ELAN + "mkdir -p .lake && exec flock .lake/verity-build.lock lake build"
 QUICK = ["-m", "not slow"]
 REGISTRY = "fixtures/artifacts.json"
@@ -240,8 +238,8 @@ TEST_PROCESS_GB = 9
 def default_jobs(meminfo: Path = Path("/proc/meminfo"), limit_gb: float | None = None) -> int:
     """The default `--jobs`: the CPUs this process may use (`cpus`), or fewer where the memory available holds fewer test
     processes at `TEST_PROCESS_GB` each. The memory is the machine's MemAvailable or this run's own limit (``limit_gb``, by
-    default `slot_mem_gb`: the check slot's, else the cgroup's `memory.max`), whichever is less (sized to
-    the machine's memory, a 16 GiB agent-test scope on a node with terabytes free starts more test processes than it holds)."""
+    default `slot_mem_gb`: the check slot's, else the cgroup's `memory.max`), whichever is less (19 Oct, r20261019-045749-398f:
+    an `--on auto` agent-test's 16 GiB scope on a node with 1.5 TB free started 32 test processes and was OOM-killed)."""
     n = cpus()
     limit_gb = slot_mem_gb() if limit_gb is None else limit_gb
     limits = [] if limit_gb is None else [limit_gb]
@@ -324,7 +322,7 @@ def shipped(path: str) -> list[str]:
 def tests_pythonpath() -> str:
     """The tests' PYTHONPATH: the tracer's directory (`CHILD`), then the caller's entries inside this tree. An entry naming another
     checkout, such as an `export PYTHONPATH=...` left in a shell, would run this tree's tests against that checkout's code."""
-    return os.pathsep.join([str(CHILD), *(p for p in SETTINGS.PYTHONPATH.split(os.pathsep)
+    return os.pathsep.join([str(CHILD), *(p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep)
                                           if p and Path(p).resolve().is_relative_to(ROOT))])
 
 
@@ -467,12 +465,6 @@ def closure(suite: Suite, pkgs: dict[str, str]) -> list[str]:
     return sorted(s for p in seen.values() if p != suite.path for s in shipped(p))
 
 
-#: what `git add -A` says of a path another check step changes while git reads the tree: a file deleted between git listing and
-#: opening it, and a repository whose clone hasn't checked out a commit yet. Either is left out of the tree; any other error is git's.
-_IN_FLIGHT = re.compile(r"^error: (open\(\".*\"\): No such file or directory|unable to index file '.*'|'.*' does not have a commit "
-                        r"checked out)$")
-
-
 def worktree() -> str:
     """The tree git would commit now: tracked files as they are on disk, plus untracked files that aren't ignored."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -481,11 +473,7 @@ def worktree() -> str:
         if real.exists():
             shutil.copy2(real, index)          # its mtime too: git re-reads an entry as recent as the index (racy git)
         env = dict(os.environ, GIT_INDEX_FILE=str(index))
-        add = subprocess.run(["git", "add", "-A", "--ignore-errors"], cwd=ROOT, env=env, capture_output=True, text=True,
-                             errors="surrogateescape")
-        errors = [line for line in add.stderr.splitlines() if not line.startswith(("warning:", "hint:"))]
-        if add.returncode and not (errors and all(_IN_FLIGHT.match(line) for line in errors)):
-            raise RuntimeError(f"`git add -A` into a scratch index failed ({add.returncode}):\n{add.stderr.strip()}")
+        _git("add", "-A", env=env)
         return _git("write-tree", env=env).strip()
 
 
@@ -637,7 +625,7 @@ def lean_on_path() -> None:
     p = subprocess.run(["bash", "-c", ELAN + "command -v lake"], capture_output=True, text=True)
     lake = p.stdout.strip().splitlines()[-1] if p.returncode == 0 and p.stdout.strip() else ""
     if lake and shutil.which("lake") is None:
-        os.environ["PATH"] = os.pathsep.join([str(Path(lake).parent), SETTINGS.PATH])
+        os.environ["PATH"] = os.pathsep.join([str(Path(lake).parent), os.environ.get("PATH", "")])
 
 
 def lean_build(log: Path) -> str | None:
@@ -663,8 +651,8 @@ def base_image() -> dict:
 def environment() -> dict:
     return {"python": platform.python_version(), "system": platform.system(), "machine": platform.machine(), "image": base_image(),
             "tools": {t: shutil.which(t) is not None for t in TOOLS},
-            "variables": {k: v for k, v in sorted(SETTINGS.environ().items())
-                          if k.startswith(ENV_PREFIXES) and SETTINGS.role_of(k) != SETTINGS.WHERE}}
+            "variables": {k: v for k, v in sorted(os.environ.items())
+                          if k.startswith(ENV_PREFIXES) and k not in UNKEYED and not k.startswith(UNKEYED_PREFIX)}}
 
 
 def inputs_of(suite: Suite, pkgs: dict[str, str]) -> list[str]:
@@ -1447,7 +1435,7 @@ def _durations() -> dict[str, float]:
 
 #: how many of a suite's longest tests the guard gets, of which it starts the longest it collected at the heads of the workers'
 #: shares: a run of some of a suite's files, or one that reuses passes, collects few of the suite's longest
-#: (one that collects none of the suite's longest can run its own longest two back to back on one worker)
+#: (r20261025-202541-cb5f collected none of verity-vllm's 4 longest, and ran its own longest two back to back on one worker)
 HEAVY_CANDIDATES = 1000
 
 
@@ -1508,14 +1496,14 @@ _PYTEST = "import sys, pytest; sys.path.append(sys.argv.pop(1)); sys.exit(pytest
 #: xdist's scheduling: an idle worker takes queued tests from a busy one, which evens out suites whose tests differ in length.
 DIST = ["--dist", "worksteal"]
 #: `--timeouts`: a suite's run is bounded by its `timeout_s`, else this. The longest passes on vy-nebius-1 took about an hour
-#: (verity-circuit-check, which declares its own); a suite that hangs holds its check slot until the run's own timeout (a test
-#: blocked on a FIFO nobody writes holds it until it is killed by hand).
+#: (verity-circuit-check, which declares its own); a suite that hangs holds its check slot until the run's own timeout (45fe hung
+#: 82 min in test_suites.py on a FIFO until it was killed by hand, 7 Oct).
 SUITE_TIMEOUT_S = 3600.0
 #: what `run` arms the bound with (a test injects one that fires at once)
 Timer = threading.Timer
 #: each suite's pytest `--basetemp` is `b` in `<tmp>/<BASETEMP>-<suites.py's pid>m*`, which holds its `OWNER` marker beside it
 #: (pytest empties the `--basetemp` it is given) and is removed when the suite ends: pytest's own keeps its last three runs, and a
-#: flock suite's is ~45 GB, and a few of them left behind fill a machine's disk. Keep the path short: a test's AF_UNIX
+#: flock suite's is ~45 GB, which filled vy-cpu-1 and vy-cpu-2 three times on 11 Oct. Keep the path short: a test's AF_UNIX
 #: socket under tmp_path has at most 107 bytes of path. The `m` after the pid: an older suites.py's sweep removes
 #: `<BASETEMP>-<pid>-*` whose pid it can't see, and skips these
 BASETEMP = "verity-suite"
@@ -1567,8 +1555,8 @@ def sweep_basetemps(tmp: Path | None = None, proc: Path = Path("/proc"), now: fl
     """Remove the basetemps no suite uses any more (its suites.py killed before it could remove them); returns them.
 
     One is in use while its marker shows this boot and pid namespace and an owner alive with its start time, or a process left
-    in pytest's session (pytest outlives a suites.py killed by SIGKILL, and a sweep that ignored it would take running suites'
-    basetemps). One without such a marker (an older suites.py's, the guard's
+    in pytest's session (pytest outlives a suites.py killed by SIGKILL: on vy-nebius-1, 18 Oct, the next suites.py's sweep took
+    two running flock suites' basetemps). One without such a marker (an older suites.py's, the guard's
     `verity-suite-host-*`, another namespace's or boot's) is removed only once nothing in it changed for `UNOWNED_AGE_S`."""
     now = time.time() if now is None else now
     try:
@@ -1619,10 +1607,10 @@ def store_custody() -> None:
     """Inside a `research run` whose custody key is staged, the tests reach the evidence store through it and require it, as check's
     steps do (check.py's `env()`, "The evidence store"). `run` drops RESEARCH_*, the machine's store among them, so without this a
     test that fetches a fixture skipped as "the evidence store is not reachable" under this runner and passed under a bare pytest
-    (test_lean_session.py's ZK server wire-tamper negatives among them). Set here, before
+    (r20261024-030225-1ea6: 13 of test_lean_session.py's 39, the ZK server's wire-tamper negatives among them). Set here, before
     `environment()`, so the requirement keys the pass and a pass earned with those skips is never reused for one without."""
-    run_dir, run_id = SETTINGS.RESEARCH_RUN_DIR, SETTINGS.RESEARCH_RUN_ID
-    if SETTINGS.is_set(CUSTODY_ENV) or not run_dir or not run_id:
+    run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
+    if CUSTODY_ENV in os.environ or not run_dir or not run_id:
         return
     d = Path(run_dir).resolve().parent.parent / "requests" / run_id / "custody"
     if (d / "store.toml").is_file() and (d / "cred.json").is_file():
@@ -1827,7 +1815,7 @@ def slot_mem_gb() -> float | None:
     """The memory this run may use: its check slot's, else its `research run --mem-gb` reservation's, else its cgroup's cap: a
     suite sized to the whole node outgrows a slot or a reservation that nothing else caps."""
     for env in (SLOT_MEM_ENV, RUN_MEM_ENV):
-        v = SETTINGS.get(env) or ""
+        v = os.environ.get(env, "")
         if v.replace(".", "", 1).isdigit():
             return float(v)
     return cgroup_mem_gb()
@@ -1835,7 +1823,7 @@ def slot_mem_gb() -> float | None:
 
 def cgroup_mem_gb(root: Path = Path("/")) -> float | None:
     """The tightest cgroup v2 `memory.max` over this process, in GiB, or None when none is set: a job outside a check slot
-    (the cluster queue's scope) sizes itself to it."""
+    (the cluster queue's scope, 17 Oct: two `suites.py verity-flock --fresh` runs OOM-killed there) sizes itself to it."""
     try:
         rel = next(line[3:].strip() for line in (root / "proc/self/cgroup").read_text().splitlines() if line.startswith("0::"))
     except (OSError, StopIteration):
@@ -1853,7 +1841,7 @@ def cgroup_mem_gb(root: Path = Path("/")) -> float | None:
 
 def wide_workers(s: Suite, n: int, mem_gb: float | None) -> int:
     """A parallel suite's xdist workers on a lane of ``n`` processes: fewer where ``mem_gb`` holds fewer at its `worker_gb`, else
-    at `TEST_PROCESS_GB` (a suite's undeclared workers can reach several GB each)."""
+    at `TEST_PROCESS_GB` (16 Oct: verity_core_protocols_pous_check's undeclared workers reached 11 GB each)."""
     if mem_gb is None:
         return n
     return max(1, min(n, int(mem_gb // worker_gb(s))))
@@ -1876,8 +1864,8 @@ def serial_slots(seconds: list[float | None], parallel: int, jobs: int, mem_gb: 
     none is recorded), the rest going to the ``parallel`` suites, which run one at a time over all of theirs. The fewest that let
     the one-process suites, longest first, finish about when their longest does, plus a slot for each with no recorded duration
     up to a quarter of the jobs (a fresh test cache, as the lander's `--fresh` runs have, times none): the parallel suites keep
-    every slot the others couldn't use.  With ``mem_gb``, no more than it holds at `TEST_PROCESS_GB` each (a job sized
-    to its CPUs alone can run more test processes than its scope holds, and the OOM killer takes the whole scope)."""
+    every slot the others couldn't use.  With ``mem_gb``, no more than it holds at `TEST_PROCESS_GB` each (18 Oct: a 16 GiB
+    agent-test job on 48 CPUs ran 44 test processes and the OOM killer took the whole scope)."""
     if not parallel:
         r = jobs
     elif not seconds:
@@ -1930,15 +1918,15 @@ def failing(out: Path, results: list[Result]) -> None:
 
 
 #: how many of `main`'s first-parent commits `known_red` looks down for one a check reported its suites at: drive's after-landing
-#: run checks `main`'s tip about every 4 h, and dozens of landings can come between two (hundreds in a day and a half)
+#: run checks `main`'s tip about every 4 h, and dozens of landings can come between two (25-26 Oct: 467 in a day and a half)
 KNOWN_RED_WALK = 200
 #: a check's suite reports among its run files (`check.py`'s `write_result` lists them), which drive reads a red suite from too
 KNOWN_RED_REPORTS = ("suites.json", "suites-lean.json")
 #: what `known_red_on_main` may take: a refresh of the store's attempts and one run's reports
 KNOWN_RED_S = 300
 #: the windows `known_red` refreshes the store's attempts over first, in hours before `main`'s tip landed, before the walk's whole
-#: span: a cold catalog fetches every attempt in its window (a few thousand in half a day take minutes), and drive's
-#: after-landing run of `main` is rarely more than a few hours old
+#: span: a cold catalog fetches every attempt in its window (3,349 for 27 Oct's first 11 h took 188 s), and drive's after-landing
+#: run of `main` is rarely more than a few hours old
 KNOWN_RED_WINDOWS_H = (6, 24)
 #: how far before a window its refresh starts: a run's id is its start on its own machine's clock, which may trail git's
 KNOWN_RED_SKEW_S = 3600
@@ -2087,7 +2075,7 @@ def _first_sigterm_stops(signum: int, frame: object) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     # a manual stop (`research cancel`) sends SIGTERM to the run's process group, which the suites' own groups aren't in: as
-    # SIGINT, it stops them and removes their `--basetemp`s (a cancelled check's can hold tens of GB)
+    # SIGINT, it stops them and removes their `--basetemp`s (a cancelled check left a 42 GB one on vy-cpu-2, 11 Oct)
     signal.signal(signal.SIGTERM, _first_sigterm_stops)
     argv = sys.argv[1:] if argv is None else argv
     extra = argv[argv.index("--") + 1:] if "--" in argv else []
@@ -2124,9 +2112,6 @@ def main(argv: list[str] | None = None) -> int:
                     "none was found) and run nothing; with --changed, a suite whose every failed test is on that list fails nothing")
     a = ap.parse_args(argv)
     sys.stdout.reconfigure(line_buffering=True)
-    if why := SETTINGS.refusals(of_record=False):
-        print("\n".join(f"suites: {w}" for w in why), file=sys.stderr)
-        return 2
     if not in_git():
         print(f"suites: {ROOT} is not a git checkout, and suites are keyed from git's view of the tree: run them in a checkout "
               f"(`research run --on` ships one; a tree the archive stream or an older launcher shipped isn't)", file=sys.stderr)
@@ -2245,7 +2230,7 @@ def main(argv: list[str] | None = None) -> int:
     memory = Slots(int(shared_gb)) if shared_gb is not None else None
     if wide and one:
         print(f"suites: {len(wide)} parallel suites one at a time on {jobs - r} processes, beside {len(one)} others on {r}")
-    min_s = a.per_test_min_s if a.per_test_min_s is not None else float(SETTINGS.get(MIN_S_ENV) or 0)
+    min_s = a.per_test_min_s if a.per_test_min_s is not None else float(os.environ.get(MIN_S_ENV) or 0)
     per = {s: pt for s, pt in per.items() if any(t[0] is s for t in todo)}
     reuse = {s: [] if a.fresh or not s.parallel else sorted(pt.reusable(lock, provided)) for s, pt in per.items()}
     hit_of = {s: hit for s, _paths, _keys, hit, _deps in plan}
@@ -2344,7 +2329,7 @@ def main(argv: list[str] | None = None) -> int:
                     kill_group(g, signal.SIGINT)
 
             def kill_rest() -> None:                        # a pytest that ignores SIGINT (a node short of memory) would hold
-                with _GROUPS_LOCK:                          # the stop until its run ended
+                with _GROUPS_LOCK:                          # the stop until its run ended (17 Oct, cpu-2: 94 workers)
                     for g in list(_GROUPS):
                         kill_group(g, signal.SIGKILL)
 

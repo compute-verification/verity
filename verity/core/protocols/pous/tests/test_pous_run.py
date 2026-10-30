@@ -10,7 +10,6 @@ import hashlib
 import pytest
 
 import pous_test_signer as ts
-from pous_fakes import Clock
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import run
 from verity.core.protocols.pous.schemes import p2 as P2
@@ -37,13 +36,21 @@ TRUSTED = (ts.public_key(b"run challenger", height=1),)
 """The verifier's list of memory-challenger keys: the default signer's."""
 
 
+class Clock:
+    def __init__(self) -> None:
+        self.now = 1_000_000
+
+    def __call__(self) -> int:
+        return self.now
+
+
 def session(*, blocks: int = Q.blocks, k: int = POINT.k, limit_ns: int = POINT.limit_ns, block_bytes: int = Q.block_bytes,
             binding: bytes = ROOT, sid: bytes = SID, spend: int = 10, respond=None, signer=None,
-            log: mc.SessionLog | None = None) -> run.ChallengerRecord:
+            log: mc.SessionLog | None = None) -> run.Session:
     signer = signer or ts.TestSigner(b"run challenger", height=1)
     tree = mc.CoinTree.draw(b"source", sid, blocks, k, key=KEY,
                             salts=[hashlib.sha512(b"salt%d" % j).digest() * 3 for j in range(k)])
-    clock = Clock(1_000_000)
+    clock = Clock()
     c = mc.MemoryChallenger(tree, signer, log=log or ts.session_log(), limit_ns=limit_ns, block_bytes=block_bytes,
                             binding=binding, clock=clock)
 
@@ -52,12 +59,11 @@ def session(*, blocks: int = Q.blocks, k: int = POINT.k, limit_ns: int = POINT.l
         return (respond or (lambda i: block(i, block_bytes)))(i)
 
     signed = c.run(answer)
-    return run.ChallengerRecord(signed, c.commitment, c.openings())
+    return run.Session(signed, c.commitment, c.openings())
 
 
-def outcome(setup: run.Setup = SETUP, digests: bytes = DIGESTS, s: run.ChallengerRecord | None = None,
-            point: run.Point = POINT, schemes=ts.SCHEMES, session_id: bytes = SID,
-            trusted: tuple[bytes, ...] = TRUSTED) -> str | None:
+def outcome(setup: run.Setup = SETUP, digests: bytes = DIGESTS, s: run.Session | None = None, point: run.Point = POINT,
+            schemes=ts.SCHEMES, session_id: bytes = SID, trusted: tuple[bytes, ...] = TRUSTED) -> str | None:
     try:
         run.check_at(point, schemes, trusted, setup, digests, s or session(), session_id)
     except run.Refused as e:
@@ -65,7 +71,7 @@ def outcome(setup: run.Setup = SETUP, digests: bytes = DIGESTS, s: run.Challenge
     return None
 
 
-def verdict_reasons(s: run.ChallengerRecord, trusted: tuple[bytes, ...] = TRUSTED) -> str:
+def verdict_reasons(s: run.Session, trusted: tuple[bytes, ...] = TRUSTED) -> str:
     v = mc.verdict(s.signed, s.commitment, s.openings, lambda i: ROWS[i] if i < Q.blocks else None,
                    trusted=frozenset(trusted), schemes=ts.SCHEMES)
     assert not v.accepted
@@ -140,7 +146,7 @@ def test_the_trusted_keys_are_the_verifiers_never_the_records():
 def test_the_formats_round_trip():
     s = session()
     assert run.Setup.from_json(SETUP.to_json()) == SETUP
-    assert run.ChallengerRecord.from_json(s.to_json()) == s
+    assert run.Session.from_json(s.to_json()) == s
     assert sorted(SETUP.to_json()) == ["blocks", "commitment", "root", "salt"]
     assert sorted(s.to_json()) == ["commitment", "openings", "signed"]
 
@@ -163,7 +169,7 @@ def test_check_is_the_deployed_point_under_s1s_lms():
         rows[i] = mc.block_digest(block(i, q.block_bytes))
     root = VerifierKey.from_row_digests(q, SALT, rows).root
     setup = run.Setup(q.blocks, SETUP.commitment, root, SALT)
-    signer, clock = ts.TestSigner(b"deployed challenger", height=1), Clock(1_000_000)
+    signer, clock = ts.TestSigner(b"deployed challenger", height=1), Clock()
     c = mc.MemoryChallenger(tree, signer, log=ts.session_log(), limit_ns=d.limit_ns, block_bytes=q.block_bytes, binding=root,
                             clock=clock)
 
@@ -171,7 +177,7 @@ def test_check_is_the_deployed_point_under_s1s_lms():
         clock.now += 20_000
         return block(i, q.block_bytes)
 
-    s = run.ChallengerRecord(c.run(answer), c.commitment, c.openings())
+    s = run.Session(c.run(answer), c.commitment, c.openings())
     table, trusted = b"".join(rows), (signer.public_key,)
     run.check_at(d, ts.SCHEMES, trusted, setup, table, s, tree_session)
     with pytest.raises(run.Refused, match=f"^signature scheme {ts.scheme(1)!r} is not accepted$"):

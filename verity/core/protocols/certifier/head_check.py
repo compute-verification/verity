@@ -1,11 +1,11 @@
 """N2's check of one certified record head, zero-knowledge: the head committed at leaf 2 + direction of N2's root
-(`service.LinkWindows`) is the execution phase's, complete, under the declared grid, and, where its end has an occupancy
+(`service.LinkWindows`) is the link-window's, complete, under the declared grid, and, where its end has an occupancy
 profile, its counts are the profile's; and the certificate's signed digest is the head's record digest salted by the
 certifier. A Boolean Definition, the gated part of N2's proof block (`service`'s `NetworkLinkWindow` v5, one per end),
-which runs on every execution phase; its one output is the ok bit. That proof block's Program holds it as one gate that
-names its circuit digest (`gate`), pinned in this module's sidecar and held to the Definition by circuit-check; N2's
-verifier of record reads its output from the proof block's proof, and the in-the-clear check (`LinkWindows.clear`) runs
-its `reference`, which the tests hold to the circuit.
+which runs on every link-window; its one output is the ok bit. That unit's Program holds it as one gate that names its
+circuit digest (`gate`), pinned in this module's sidecar and held to the Definition by circuit-check; N2's verifier of
+record reads its output from the unit's proof, and the in-the-clear check (`LinkWindows.clear`) runs its `reference`,
+which the tests hold to the circuit.
 
     NetworkHeadCheck_v2{L, T, COUNTS}
         (record, record_domain: Digest, link: Array<L, Byte>, direction: Array<1>, window: Array<64>,
@@ -18,7 +18,7 @@ its `reference`, which the tests hold to the circuit.
 the end has an occupancy profile (`LinkWindows.occupancy`), so `profile` is a parameter. All three are public: the
 link's name and its grids are, and so is whether an end has a profile.
 
-**Public inputs.** `record` is the root of N2's commitment to the execution phase, `record_domain` its domain id
+**Public inputs.** `record` is the root of N2's commitment to the link-window, `record_domain` its domain id
 (`LinkWindows.domain`), `link` the link's name, `direction` the end (0 egress, 1 ingress), `window` the window's index
 (u64, least significant bit first), `grid` the declared grid as the head encodes it (`grid_bytes`: T, r, B and τ_b as
 u32 big-endian, then the parameters digest), `profile` the profile's row for the window: T counts, each u32, least
@@ -26,7 +26,7 @@ significant bit first, and `signed` the digest the end's certificate signs (`cer
 record digest under the certifier's salt and is all of the head the host's signature check reads.
 
 **Witness.** The head's bytes (`RecordHead.encode`, its frames root included), its leaf's hiding salt and its two
-siblings in N2's tree, and `salt_c`, the 64 bytes the certifier sampled for the record and handed over with its head.
+siblings in N2's tree, and `salt_c`, the 64 bytes the certifier drew for the record and handed over with its head.
 
 **What 1 means.** (1) The head opens at leaf 2 + direction of N2's commitment (`NetworkHidingRead`: its sha512/row/v2
 digest, hm96's hiding leaf, the frame-v3-sha512 read at depth 2). (2) Its fields are the ones the public inputs give
@@ -35,8 +35,8 @@ digest, hm96's hiding leaf, the frame-v3-sha512 read at depth 2). (2) Its fields
 (`NetworkHeadCounts`). (4) The certificate signs this head: R, the record digest of the head (`NetworkRecordDigest`,
 `tagged_sha512` of the record tag and the head), salted by `salt_c` is `signed`,
 SHA-512("verity/net-cert/v1" ‖ salt_c ‖ R) (`NetworkSignedDigest`). Two fields are free: the deadline byte, which N2's
-proof block reads beside the head check for its public deadline bit (`service.OUTPUTS`), and the frames root, which
-nothing in N2 reads.
+unit reads beside the head check for its public deadline bit (`service.OUTPUTS`), and the frames root, which nothing
+in N2 reads.
 
 `salt_c` is not committed: (4) holds it, up to a SHA-512 collision, to the one the certifier signed under, so the
 certificate binds the head the check opens, and the head leaf stays the head's bytes alone.
@@ -64,7 +64,6 @@ from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import and_reduce
 from verity.ml.circuits.boolean.trace import part as _part
-from verity.ml.circuits.census import BooleanWork, NoBooleanWork
 from verity.ml.circuits.codec import program_digest
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
@@ -384,9 +383,9 @@ def gate_of(d, digest: str | None, what: str) -> PrimitiveDefinition:
 def gate(L: int, T: int, counts: bool) -> PrimitiveDefinition:
     """`unit(L, T, counts)` as one gate of N2's proof block (`service.LinkWindows.unit`), whose id names the Definition and
     its pinned circuit digest (`pinned_digest`): `Gate[NetworkHeadCheck_v2{L=..,T=..,COUNTS=..}@<digest>]_v2`. So the
-    proof block's Program digest, which the spec's check and each registration bind, binds the head check's circuit, and
-    a proof of another circuit of the same interface names another Program. A size class no sidecar pins names no digest
-    (`@unpinned`), and no proof of its proof block is accepted: give it a root in the sidecar's bindings and pin it with
+    unit's Program digest, which the spec's check and each registration bind, binds the head check's circuit, and a
+    proof of another circuit of the same interface names another Program. A size class no sidecar pins names no digest
+    (`@unpinned`), and no proof of its unit is accepted: give it a root in the sidecar's bindings and pin it with
     `circuit-check --update-pins`. The Program holds the gate rather than the Definition's body because the commitment
     gadgets' Boolean bodies (`Hm96Sha512Leaf`, `FrameV3Node`, `FrameV3Leaf`, `Sha512Compress`) encode to about 140 MB,
     and the proof system encodes the Program on every registration."""
@@ -491,7 +490,7 @@ def _bytes_bits(data: bytes) -> list[int]:
 
 
 def arguments(inst: Instance) -> list[list[int]]:
-    """The proof block's arguments for one instance in its signature's order, each its leaves' bits, 0 or 1."""
+    """The unit's arguments for one instance in its signature's order, each its leaves' bits, 0 or 1."""
     flat = {"record": _digest_bits(inst.record), "record_domain": _digest_bits(inst.record_domain),
             "link": _bytes_bits(inst.link), "direction": [inst.direction], "window": _int_bits(inst.window, 64),
             "grid": _bytes_bits(inst.grid), "profile": [b for n in inst.profile or () for b in _int_bits(n, 32)],
@@ -507,37 +506,40 @@ def arguments(inst: Instance) -> list[list[int]]:
 
 
 def evaluate(*insts: Instance) -> list[int]:
-    """The proof block's output on each instance, all of one proof block, in one evaluation."""
+    """The unit's output on each instance, all of one unit, in one evaluation."""
     if len({i.key for i in insts}) != 1:
         raise ValueError("the instances are of one unit")
     args = [list(rows) for rows in zip(*(arguments(i) for i in insts))]
     return [int(b) for b in evaluate_bits(insts[0].unit, *args).reshape(-1).tolist()]
 
 
-def _ands(work: BooleanWork, fn) -> int:
-    got = work.of(fn)
-    if isinstance(got, str):
-        raise NoBooleanWork({fn.id: f"it reaches {got}, which is not a Boolean gate, a constant bit or an input"})
-    return sum(a for _g, a in got.values())
+def _times(nd) -> int:
+    return 1 if nd.form in ("primitive", "call") else nd.n
 
 
-def ands(fn) -> int:
-    """A Boolean Definition's AND gates: the ANDs of its Boolean work as its census counts it (`census.BooleanWork`),
-    every facet's."""
-    return _ands(BooleanWork(), fn)
+def ands(fn, memo: dict | None = None) -> int:
+    """A Boolean Definition's AND gates, an n-input AND counted as n − 1."""
+    memo = {} if memo is None else memo
+    if fn.id not in memo:
+        if isinstance(fn, PrimitiveDefinition):
+            kind = BL.gate_kind(fn)
+            memo[fn.id] = kind[1] - 1 if kind is not None and kind[0] == "and" else 0
+        else:
+            memo[fn.id] = sum(_times(nd) * ands(nd.fn, memo) for nd in fn.body.nodes)
+    return memo[fn.id]
 
 
 _GROUPS = {"NetworkHidingRead": "opening", "NetworkHeadFields": "fields", "NetworkHeadCounts": "counts",
            "NetworkRecordDigest": "signed", "NetworkSignedDigest": "signed"}
 
 
-def size(target) -> dict:
+def size(target, memo: dict | None = None) -> dict:
     """The head check's ANDs, in total and by part: the opening, the fields, the counts, the signed digest (the record
     digest and its salted digest) and the rest (the final AND)."""
-    work = BooleanWork()
+    memo = {} if memo is None else memo
     out = dict.fromkeys(("opening", "fields", "counts", "signed", "other"), 0)
     for nd in target.body.nodes:
-        out[_GROUPS.get(getattr(nd.fn, "name", ""), "other")] += nd.n * _ands(work, nd.fn)
+        out[_GROUPS.get(getattr(nd.fn, "name", ""), "other")] += _times(nd) * ands(nd.fn, memo)
     out["ands"] = sum(out.values())
     return out
 

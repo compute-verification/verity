@@ -25,7 +25,6 @@ namespace CertifierDevice.IssuerDifftest
 open Lean Flock
 open NetworkCertifier (Reason Status)
 open NetworkCheck (Direction)
-open NetworkCheck.Check (Certificate)
 open CertifierDevice.Difftest (hexJson bytesOf arrOf paramsOf syncSetOf syncOf syncJson)
 
 def reasons : List Reason :=
@@ -43,7 +42,7 @@ def slotOf : Json → Except String (Option ByteArray)
   | .null => pure none
   | j => some <$> bytesOf j
 
-def recordOf (j : Json) : Except String BlockGrid := do
+def recordOf (j : Json) : Except String Record := do
   let grid ← (← j.getObjValAs? (Array Json) "grid").mapM fun row => do (← arrOf row).mapM slotOf
   pure { link := ← j.getObjValAs? String "link", window := ← j.getObjValAs? Nat "window", grid,
          status := ← statusOf (← j.getObjVal? "status") }
@@ -194,7 +193,7 @@ def evaluate (j : Json) : Except String (Json × List String) := do
     | .ok (i, none) =>
       issuer := i
       certify := Json.mkObj [("certified", .null)]
-      outcomes := (if (Status.reason? record.status).isSome then "refused status" else "refused leaf") :: outcomes
+      outcomes := "refused leaf" :: outcomes
     | .ok (i, some cr) =>
       issuer := i
       let verified := cr.verify p pub session

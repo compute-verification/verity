@@ -1,23 +1,22 @@
-"""warden-chain: the network chain's reads of an active network certifier's run (`warden_serve.py`'s directory, or the
-gate's ``warden-rehearse``'s: its witness under ``witness/``, its public files under ``out/``), in place of a certifier
+"""warden-chain: the network chain's reads of an active warden's run (`warden_serve.py`'s directory, or the gate's
+``warden-rehearse``'s: its witness under ``witness/``, its public files under ``out/``), in place of a certifier
 rehearsal's. A certifier rehearsal's run (`certifier_serve.py`, whose records come through `active.Proxy` in front of
-the endpoint, under a certifier key with salted clock certificates) is refused by name (`PROXY`): on the network
-certifier path none of its records enters the chain.
+the endpoint, under a certifier key with salted clock certificates) is refused by name (`PROXY`): on the warden path
+none of its records enters the chain.
 
-* `deployment`: ``deployment.json``, a network certifier's (its link, its schedule and their digest, its key and
-  session), never a certifier's (``certifier_key``, ``links``), in a run holding no certifier rehearsal's file
-  (`CERTIFIER_FILES`).
-* `link`: N2's link on the run (`service.LinkWindows` with its `service.WardenProfile`): the network certifier's link
-  name, its one grid both ends', its key and session, its windows and parameters digest, and no sync (the network
-  certifier runs no shaper clock and signs none, so no clock certificate enters N2 here).
-* `pairs`: each execution phase's certified (egress, ingress) records, ``certified.jsonl``'s, from window 0 until the
-  first window missing one.
-* `certificates`: the network certifier's own offline check (`warden_serve.check`: every execution phase of the three
-  records certified under the network certifier's key and session with its head the record's, its rows' registration,
-  the audit, and the client's view) rerun on the witness, and the public ``certificates.jsonl`` (the gate's,
-  `auditor.warden_outcome`) exactly the certified lines' certificates and refusals, in order.
+* `deployment`: ``deployment.json``, a warden's (its link, its schedule and their digest, its key and session), never a
+  certifier's (``certifier_key``, ``links``), in a run holding no certifier rehearsal's file (`CERTIFIER_FILES`).
+* `link`: N2's link on the run (`service.LinkWindows` with its `service.WardenProfile`): the warden's link name, its
+  one grid both ends', its key and session, its windows and parameters digest, and no sync (the warden runs no shaper
+  clock and signs none, so no clock certificate enters N2 here).
+* `pairs`: each link-window's certified (egress, ingress) records, ``certified.jsonl``'s, from window 0 until the first
+  window missing one.
+* `certificates`: the warden's own offline check (`warden_serve.check`: every link-window of the three records
+  certified under the warden's key and session with its head the record's, its rows' registration, the audit, and the
+  client's view) rerun on the witness, and the public ``certificates.jsonl`` (the gate's, `auditor.warden_outcome`)
+  exactly the certified lines' certificates and refusals, in order.
 * `io`: the certified I/O, read off the records' cells alone, in `certifier_serve.certified_io`'s keys: each
-  connection's request (its ordinal's `DATA` and `END` payloads in bucket order), a network-certifier-form id request
+  connection's request (its ordinal's `DATA` and `END` payloads in bucket order), a warden-form id request
   (`active.id_request`, offset 0), released in its `END`'s bucket, and its response's ids and buckets
   (`io_tie.parse_cell` of each egress `DATA` cell on its ordinal, none before the release).
 """
@@ -49,13 +48,13 @@ PROXY = ("a certifier rehearsal's run (certifier_serve.py, its records through a
 CERTIFIER_FILES = ("plan.json", "calibration.json", "proxy.json.gz")
 #: an id request's fields (`active.id_request`'s keywords but the frame's)
 FIELDS = ("model", "user", "prompt", "max_tokens", "temperature", "top_p", "seed")
-#: a network certifier link declares no sync, so its Σ_sync is never read (`service.LinkWindows`'s ``warden``); one
-#: value for the field
+#: a warden link declares no sync, so its Σ_sync is never read (`service.LinkWindows`'s ``warden``); one value for the
+#: field
 UNREAD_SYNCS = SyncSet((0,), (Fraction(1),))
 
 
 def found(run: Path, name: str, required: bool = True) -> Path | None:
-    """A network certifier run's file: in its directory, its ``witness/`` or its ``out/`` (the gate's layout)."""
+    """A warden run's file: in its directory, its ``witness/`` or its ``out/`` (the gate's layout)."""
     for d in (run, run / "witness", run / "out"):
         if (d / name).is_file():
             return d / name
@@ -70,7 +69,7 @@ def witness(run: Path) -> Path:
 
 
 def deployment(run: Path) -> tuple[dict, W.WardenParams]:
-    """The run's ``deployment.json`` and the network certifier's schedule, refused by name where the run is a certifier
+    """The run's ``deployment.json`` and the warden's schedule, refused by name where the run is a certifier
     rehearsal's (`PROXY`) or its digest isn't its parameters'."""
     for d in (run, run / "witness", run / "out", run / "out" / "honest", run / "honest"):
         if hit := next((d / f for f in CERTIFIER_FILES if (d / f).is_file()), None):
@@ -87,7 +86,7 @@ def deployment(run: Path) -> tuple[dict, W.WardenParams]:
 
 
 def link(run: Path) -> tuple[SVC.LinkWindows, dict, W.WardenParams]:
-    """N2's link on the run (the module docstring's `link`), its deployment and the network certifier's schedule."""
+    """N2's link on the run (the module docstring's `link`), its deployment and the warden's schedule."""
     dep, params = deployment(run)
     lw = SVC.LinkWindows(dep["link"], params.grid, UNREAD_SYNCS, cs.read_public(dep["key"]), dep["run_id"],
                          bytes.fromhex(dep["session"]), ingress=params.grid, proof_deadline=cs.PROOF_DEADLINE_S,
@@ -96,8 +95,8 @@ def link(run: Path) -> tuple[SVC.LinkWindows, dict, W.WardenParams]:
 
 
 def pairs(run: Path, dep: dict) -> tuple[list[tuple], list]:
-    """Each execution phase's certified (egress, ingress) records, from window 0 until the first missing one, and the
-    execution phases the signer refused."""
+    """Each link-window's certified (egress, ingress) records, from window 0 until the first missing one, and the
+    link-windows the signer refused."""
     certified, refused = WS.read_certified(witness(run) / "certified.jsonl")
     out = []
     for w in range(dep["windows"]):
@@ -109,7 +108,7 @@ def pairs(run: Path, dep: dict) -> tuple[list[tuple], list]:
 
 
 def certificates(run: Path, deployed: bool = False) -> dict:
-    """The certificates' check on the run (the module docstring's `certificates`), one row an execution phase: certified
+    """The certificates' check on the run (the module docstring's `certificates`), one row a link-window: certified
     when each of its three records is, complete. ``deployed`` refuses a key that isn't LMS at `lms.DEPLOYED`."""
     dep, _ = deployment(run)
     wit = witness(run)
@@ -143,8 +142,8 @@ def certificates(run: Path, deployed: bool = False) -> dict:
 
 def io(run: Path) -> dict:
     """The certified I/O (the module docstring's `io`): ``records`` in ingress order, `accepted` when every connection's
-    request is a network-certifier-form id request of a user no other names and every egress `DATA` cell an id-form cell
-    of a connection released by its bucket."""
+    request is a warden-form id request of a user no other names and every egress `DATA` cell an id-form cell of a
+    connection released by its bucket."""
     _, params = deployment(run)
     B, T = params.cell_bytes, params.window
     recs = WS.read_records(witness(run), params)

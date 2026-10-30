@@ -53,7 +53,7 @@ theorem PeriodBudget : Accounting.Guarantees.ComposePeriod.PeriodBudget := by
   induction Wp with
   | done => simp only [periodGame, RoundGame.BudgetAt]
   | window live W next ih =>
-    simp only [WindowPlay.EveryWindow] at h
+    simp only [Period.EveryWindow] at h
     simp only [periodGame]
     exact budgetAt_consGame _ _ h.1 fun ω => ih ω (h.2 ω)
 
@@ -310,7 +310,7 @@ theorem budget_period {ι K C Ξ : Type} [Fintype C] [Fintype Ξ] (Sc : Scheme K
     (hwmax : ∀ j, stageShare (tileStage Cd Np) (shareCone Sc Cd Np) j ≤ wmax)
     (hlk : ∀ t : Fin Np, 0 < shareCone Sc Cd Np t → tileLuck Sc Cd Np t ≤ p ∧ tileLuck0 Sc Cd Np t ≤ p0)
     (ha : 0 ≤ a) (hb : 0 ≤ b) (hSR : SplitRate Kd ρ p p0 a b wmax Λ)
-    (Wp : WindowPlay C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
+    (Wp : Period C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
     (hMu : Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G)))
     (hRB : Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G)))
     (hGs : Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k _ G0 => GuessLuckAt (Sc.guess k) G0))) :
@@ -318,7 +318,7 @@ theorem budget_period {ι K C Ξ : Type} [Fintype C] [Fintype Ξ] (Sc : Scheme K
   induction Wp with
   | done => simp only [periodGame, RoundGame.BudgetAt]
   | window live W next ih =>
-    simp only [WindowPlay.EveryWindow] at hMu hRB hGs
+    simp only [Period.EveryWindow] at hMu hRB hGs
     simp only [periodGame]
     exact budgetAt_consGame _ _
       (budget_window Sc Cd hLP live W hρ hρN hwmax hlk ha hb hSR hMu.1 hRB.1 hGs.1)
@@ -328,7 +328,7 @@ theorem budget_period {ι K C Ξ : Type} [Fintype C] [Fintype Ξ] (Sc : Scheme K
 
 /-- `P` of every window gives `P` of the window played at each window along every path. -/
 theorem everyWindow_at {C Ω V : Type} {M : ℕ} {P : (V → Bool) → SplitStages C V M → Prop} :
-    ∀ {n : ℕ} (Wp : WindowPlay C Ω V M n), Wp.EveryWindow P → ∀ x w, P (Wp.liveAt x w) (Wp.windowAt x w)
+    ∀ {n : ℕ} (Wp : Period C Ω V M n), Wp.EveryWindow P → ∀ x w, P (Wp.liveAt x w) (Wp.windowAt x w)
   | _, .done, _, _, w => w.elim0
   | _, .window _ _ next, hP, x, w => by
     refine Fin.cases ?_ (fun w' => ?_) w
@@ -336,15 +336,14 @@ theorem everyWindow_at {C Ω V : Type} {M : ℕ} {P : (V → Bool) → SplitStag
     · exact everyWindow_at (next x.1) (hP.2 x.1) x.2 w'
 
 /-- **Window `w`'s modes** along the period's coins: the run of the window played there, at its rounds' coins. -/
-def windowMode {C B : Type} {Np M n : ℕ} (stg : Fin Np → ℕ) (Wp : WindowPlay C (Paths C M × B) (Fin Np) M n)
+def windowMode {C B : Type} {Np M n : ℕ} (stg : Fin Np → ℕ) (Wp : Period C (Paths C M × B) (Fin Np) M n)
     (x : Paths (Paths C M × B) n) (w : Fin n) (u : Fin Np) : Mode :=
   (Wp.windowAt x w).modeAt stg (coinAt x w).1 u
 
 /-- **The period game's checks don't read its weights or costs**: its first `j` rounds pass at one set of weights
 and costs when they pass at another. -/
 theorem acceptsUpTo_periodGame {C Ξ : Type} {N M : ℕ} (stg : Fin N → ℕ) (wt wt' : (Fin N → Bool) → Fin N → ℝ)
-    (a b a' b' : ℝ) (K : ℕ) :
-    ∀ {n : ℕ} (Wp : WindowPlay C (Paths C M × (Equiv.Perm (Fin N) × Ξ)) (Fin N) M n) (j : ℕ)
+    (a b a' b' : ℝ) (K : ℕ) : ∀ {n : ℕ} (Wp : Period C (Paths C M × (Equiv.Perm (Fin N) × Ξ)) (Fin N) M n) (j : ℕ)
     (x : Paths (Paths C M × (Equiv.Perm (Fin N) × Ξ)) n),
     RoundGame.acceptsUpTo (periodGame stg wt a b K Wp) j x → RoundGame.acceptsUpTo (periodGame stg wt' a' b' K Wp) j x
   | _, .done, _, _, _ => trivial
@@ -356,8 +355,7 @@ open Classical in
 /-- **The period game's first `j` rounds' shares**: window `w`'s round's, `a` per unit of folded and `b` per unit of
 whole work of its run at its live weights, summed over the windows before `j`. -/
 theorem deficiencyUpTo_periodGame {C Ξ : Type} {N M : ℕ} (stg : Fin N → ℕ) (wt : (Fin N → Bool) → Fin N → ℝ)
-    (a b : ℝ) (K : ℕ) :
-    ∀ {n : ℕ} (Wp : WindowPlay C (Paths C M × (Equiv.Perm (Fin N) × Ξ)) (Fin N) M n) (j : ℕ)
+    (a b : ℝ) (K : ℕ) : ∀ {n : ℕ} (Wp : Period C (Paths C M × (Equiv.Perm (Fin N) × Ξ)) (Fin N) M n) (j : ℕ)
     (x : Paths (Paths C M × (Equiv.Perm (Fin N) × Ξ)) n),
     RoundGame.deficiencyUpTo (periodGame stg wt a b K Wp) j x =
       ∑ w : Fin n, if w.val < j then
@@ -382,15 +380,15 @@ theorem deficiencyUpTo_periodGame {C Ξ : Type} {N M : ℕ} (stg : Fin N → ℕ
 
 /-! ## The accepted prefix -/
 
-theorem credited_mono {C B V : Type} {m s Np n : ℕ} (pr : Outcomes C B m s Np n V) {x : Paths (Paths C m × B) n}
+theorem credited_mono {C B V : Type} {m s Np n : ℕ} (pr : PeriodRun C B m s Np n V) {x : Paths (Paths C m × B) n}
     {w w' : Fin n} (h : pr.Credited x w) (hw : w' ≤ w) : pr.Credited x w' :=
   fun w'' h'' i => h w'' (h''.trans hw) i
 
 /-- **The credited windows are the first `prefixLen`**: being credited is closed downward. -/
-theorem credited_iff {C B V : Type} {m s Np n : ℕ} (pr : Outcomes C B m s Np n V) (x : Paths (Paths C m × B) n)
+theorem credited_iff {C B V : Type} {m s Np n : ℕ} (pr : PeriodRun C B m s Np n V) (x : Paths (Paths C m × B) n)
     (w : Fin n) : pr.Credited x w ↔ w.val < pr.prefixLen x := by
   classical
-  unfold Outcomes.prefixLen
+  unfold PeriodRun.prefixLen
   constructor
   · intro h
     have hsub : Finset.Iic w ⊆ Finset.univ.filter fun w : Fin n => pr.Credited x w := fun w' hw' =>
@@ -562,8 +560,8 @@ open Classical in
 sums and the zero-word cones, summed over the accepted prefix, whose budget game's shares are below `Λl`. -/
 theorem work_step {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) {n Np Kd : ℕ} (hn : 0 < n)
     (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
-    (Wp : WindowPlay C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
-    (pr : Outcomes C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V)
+    (Wp : Period C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
+    (pr : PeriodRun C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V)
     (x : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n) {a b Λl fixed fd : ℝ} (ha : 0 ≤ a) (hb : 0 ≤ b)
     (hDD : ∀ w, DeadConeDead Sc Cd Np (Wp.liveAt x w))
     (hcov : ∀ w, pr.Credited x w →

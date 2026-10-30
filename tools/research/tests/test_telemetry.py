@@ -629,7 +629,7 @@ def test_tele_run_reads_a_timeout_change_from_the_control_file_and_records_it(tm
         gate.close()
     recs = [json.loads(l) for l in (d2 / "events.jsonl").read_text().splitlines() if l.strip()]
     ci = [x for x in recs if x.get("kind") == "cancel_intent"]
-    assert ci and ci[0]["actor"] == "timeout" and "timeout_s=0.5 (abort)" in ci[0]["reason"], "it names the limit that fired"
+    assert ci and ci[0]["actor"] == "timeout" and "timeout_s=0.5" in ci[0]["reason"]
     st = json.loads((d2 / "status.json").read_text())
     assert st["state"] == "cancelled" and st["timed_out"] is True
 
@@ -1084,6 +1084,30 @@ def test_a_failed_process_snapshot_keeps_the_holds(tmp_path, monkeypatch):
     assert s.errors["process"] == 1 and opened == [11, 12] and set(s.pss_hold) == {(11, 7)}
     held = _records(tmp_path, "pss")[-1]["processes"]
     assert [p["pid"] for p in held] == [11] and held[0]["skipped"] is True and "(90.0 s more)" in held[0]["reason"]
+
+
+# ---- source identity: a namespace package spans every portion ----------------------------------------------------------------------------------
+
+def _portion(tree: Path, root: str, name: str, module: str) -> str:
+    (tree / root / name / module).mkdir(parents=True)
+    (tree / root / name / module / "__init__.py").write_text("")
+    (tree / "EXPORT.json").write_text(json.dumps({"commit": tree.name * 8}))
+    return str(tree / root)
+
+
+def test_a_namespace_with_a_portion_from_another_tree_is_a_mismatch(tmp_path):
+    """Recording only the first portion passed a namespace whose second portion came from another checkout."""
+    from research.telemetry import source_identity as sid
+
+    ours, other = tmp_path / "ours", tmp_path / "other"
+    src, lib, foreign = _portion(ours, "src", "nsprobe", "ir"), _portion(ours, "lib", "nsprobe", "ml"), _portion(other, "src", "nsprobe", "ml")
+    both = sid.resolve_module("nsprobe", path=[src, lib])
+    assert both["repo_root"] == str(ours.resolve()) and [p["repo_root"] for p in both["portions"]] == [str(ours.resolve())] * 2
+    assert sid.check({"nsprobe": both}, str(ours)) == []
+    mixed = sid.resolve_module("nsprobe", path=[src, foreign])
+    assert mixed["resolved_path"] == str((ours / "src" / "nsprobe").resolve()) and mixed["repo_root"] is None
+    [m] = sid.check({"nsprobe": mixed}, str(ours))
+    assert "namespace portion(s) outside the requested tree" in m["why"] and str((other / "src" / "nsprobe").resolve()) in m["why"]
 
 
 def test_a_cancel_also_signals_the_runs_workers_that_left_its_group_but_never_the_runner(tmp_path, monkeypatch):

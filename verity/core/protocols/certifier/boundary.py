@@ -1,12 +1,12 @@
-"""The run's boundary in a window's circuit: which units' rows hold each step's egress and ingress
-(`NetTiming.BoundaryGates`, `Security/Definitions/NetworkCertifier/SampledAudit.lean`), as a window's circuit record
-declares them, and the verifier's check, before it draws, that the layout fits the circuit
-(`NetTiming.BoundaryGates.Fits`, the half of the sampled audit's scope `NetTiming.ScopeAcc` that isn't sampling's). The
-record is ``circuit.json``, `verity/window-circuit/v1` (`verity.ml.windows.interface.circuit_record`), whose SHA-512 the
-registration binds, so the layout is public and fixed before any coin.
+"""The run's boundary in a window's circuit: which units' rows hold each step's egress and ingress (`NetTiming.Layout`,
+`Security/Definitions/NetworkCertifier/SampledAudit.lean`), as a window's circuit record declares them, and the
+verifier's check, before it draws, that the layout fits the circuit (`NetTiming.Layout.Fits`, the half of the sampled
+audit's scope `NetTiming.ScopeAcc` that isn't sampling's). The record is ``circuit.json``, `verity/window-circuit/v1`
+(`verity.ml.windows.interface.circuit_record`), whose SHA-512 the registration binds, so the layout is public and fixed
+before any coin.
 
-**The record's ``boundary``**, one template a side (and the ingress side's first bucket's), whose proof blocks are its
-execution phases' buckets:
+**The record's ``boundary``**, one template a side (and the ingress side's first bucket's), whose units are its
+link-windows' buckets:
 
     {"format": "verity/boundary/v3",
      "egress":  {"template": "<id>", "frame": "<output>", "verdict": "<output>", "links": L, "buckets": T, "slots": R,
@@ -14,50 +14,46 @@ execution phases' buckets:
      "ingress": {"template": "<id>", "frame": "<parameter>", "links": LI, "buckets": T, "slots": RI, "frame_bytes": BI,
                  "first": "<id>"}}
 
-Proof block ℓ·T + t of a side's template, in its proof blocks' order (the partition's), is bucket t of link ℓ: the
-template has exactly links·T proof blocks. With ``first`` (optional, ingress only, T ≥ 2), proof block ℓ of that
-template is bucket 0 of link ℓ and proof block ℓ·(T − 1) + t − 1 of ``template`` is bucket t ≥ 1, so the two have links
-and links·(T − 1) proof blocks, and both read the frame row. Step t is bucket t of the window on both sides, so the
-sides share T, the horizon k. An integration writes the field with `Boundary.record`, and the verifier reads it with
-`parse`.
+Unit ℓ·T + t of a side's template, in its units' order (the partition's), is bucket t of link ℓ: the template has exactly
+links·T units. With ``first`` (optional, ingress only, T ≥ 2), unit ℓ of that template is bucket 0 of link ℓ and unit
+ℓ·(T − 1) + t − 1 of ``template`` is bucket t ≥ 1, so the two have links and links·(T − 1) units, and both read the
+frame row. Step t is bucket t of the window on both sides, so the sides share T, the horizon k. An integration writes
+the field with `Boundary.record`, and the verifier reads it with `parse`.
 
 * **Egress** (`egress.EgressBucket`, the scan's egress side, in generator form): ``frame`` is an output row of R·B
-  bytes, the row the proof block computes from its state, slot σ's cell at bytes σ·B … (σ + 1)·B − 1, row bit 8k + i bit
-  i of byte k, which the proof block's statement commits under the salt of the network certifier's egress row t of link
-  ℓ and registers as a read of it (`warden_rows.bucket_port`), so the proof opens only when the row the proof block
-  computes is the network certifier's. ``verdict`` is an output row of one u16 word whose bit 0 is every slot's presence
-  gate: 1 (`egress.ACCEPT`) exactly when the state renders a row. So `Layout.egress t ℓ σ` is (bit 0 of proof block ℓ·T
-  + t's verdict row, bits 8σB … 8(σ + 1)B − 1 of its frame row), gates the proof block computes and returns, none an
-    input.
-  Only the verdict is public: a proof block's public output is at most 16 bits, and the frame is a committed output.
-  v2's checked row, whose frame was a parameter row (an input) its verdict held to the cells the proof block rendered,
-  is retired with v2.
+  bytes, the row the unit computes from its state, slot σ's cell at bytes σ·B … (σ + 1)·B − 1, row bit 8k + i bit i of
+  byte k, which the unit's statement commits under the salt of the warden's egress row t of link ℓ and registers as a
+  read of it (`warden_rows.bucket_port`), so the proof opens only when the row the unit computes is the warden's.
+  ``verdict`` is an output row of one u16 word whose bit 0 is every slot's presence gate: 1 (`egress.ACCEPT`) exactly
+  when the state renders a row. So `Layout.egress t ℓ σ` is (bit 0 of unit ℓ·T + t's verdict row, bits 8σB …
+  8(σ + 1)B − 1 of its frame row), gates the unit computes and returns, none an input. Only the verdict is public: a
+  unit's public output is at most 16 bits, and the frame is a committed output. v2's checked row, whose frame was a
+  parameter row (an input) its verdict held to the cells the unit rendered, is retired with v2.
 * **Ingress** (`ingress_scan.IngressScanBucket`, and `IngressScanFirst` its ``first``): ``frame`` is a parameter row of
-  RI·BI bytes, the network certifier's ingress row t of link ℓ, which the proof block reads as its registered input
-  port. `Layout.ingress t` is the ingress links' frame rows at bucket t, in link order, each in row order.
+  RI·BI bytes, the warden's ingress row t of link ℓ, which the unit reads as its registered input port.
+  `Layout.ingress t` is the ingress links' frame rows at bucket t, in link order, each in row order.
 
 Every bucket's gates are the same whatever the load, so no arrival step, prompt length or occupancy is public: a
-request's token ids are values the window's proof blocks parse from the cells, like every other value (arrival steps and
+request's token ids are values the window's units parse from the cells, like every other value (arrival steps and
 prompt lengths stay private: the certifiers' observations are witness). The I/O tie reads row t of
-link ℓ at proof block `Boundary.unit` (``reads_from`` of a member's `warden_rows.bucket_port` is its proof block of
-bucket t, less t).
+link ℓ at unit `Boundary.unit` (``reads_from`` of a member's `warden_rows.bucket_port` is its unit of bucket t, less t).
 
-**The check** (`refusal`, the verifier's), by `BoundaryGates.Fits`' conjuncts over the horizon: every egress gate is one
-`C` returns (`C.outs`) and not an input (the verdict and the frame are output rows of the egress template, and every
-unit's output rows are returned and committed; a frame that is a parameter row is an input, which the circuit's Program
-reads from the advice, so it would accept any rows the trace carries and bound nothing); every ingress gate is an input
-of the circuit (the frame is a parameter row of the ingress templates that no wire and no row table fills); and no
-egress gate of a step depends on an ingress gate of a later step. Dependence is taken at the record's grain: each output
-row of a unit depends on each of its input rows, a wired input row is its writer's output row (`Member.wired`), and a
-row table's rows are inputs, which no unit of the record writes. That dependence contains `Depends`, so a record the
-check accepts fits (`prog_fits` is `BoundaryGates.Fits` itself on a flattened program, and the tests hold `refusal` to
-it); a record that fits only at the gate grain is refused. In the scan, ingress unit t's state output is ingress unit t
-+ 1's state input and its view output egress unit t's state input: each chain is one registered leaf, written by one
-unit and read by the other under one `b ‖ c`, so the record declares it a wire.
+**The check** (`refusal`, the verifier's), by `Layout.Fits`' conjuncts over the horizon: every egress gate is one `C`
+returns (`C.outs`) and not an input (the verdict and the frame are output rows of the egress template, and every unit's
+output rows are returned and committed; a frame that is a parameter row is an input, which the circuit's Program reads
+from the advice, so it would accept any rows the trace carries and bound nothing); every ingress gate is an input of
+the circuit (the frame is a parameter row of the ingress templates that no wire and no row table fills); and no egress
+gate of a step depends on an ingress gate of a later step. Dependence is taken at the record's grain: each output row
+of a unit depends on each of its input rows, a wired input row is its writer's output row (`Member.wired`), and a row
+table's rows are inputs, which no unit of the record writes. That dependence contains `Depends`, so a record the check
+accepts fits (`prog_fits` is `Layout.Fits` itself on a flattened program, and the tests hold `refusal` to it); a record
+that fits only at the gate grain is refused. In the scan, ingress unit t's state output is ingress unit t + 1's state
+input and its view output egress unit t's state input: each chain is one registered leaf, written by one unit and read
+by the other under one `b ‖ c`, so the record declares it a wire.
 
 `Fits` is structural, never semantic: a served window fits in the step-indexed scan's form (`ingress_scan`), whose
-bucket t proof block reads bucket t's ingress row and the state bucket t − 1 carries (bucket 0's, `IngressScanFirst`'s,
-the empty state, constants of its circuit), and whose Programs start at fixed boundaries and read their slots there, so
+bucket t unit reads bucket t's ingress row and the state bucket t − 1 carries (bucket 0's, `IngressScanFirst`'s, the
+empty state, constants of its circuit), and whose Programs start at fixed boundaries and read their slots there, so
 an egress bucket reaches ingress only through earlier buckets' state, whatever the arrival steps and prompt lengths. A
 window in any other form, such as an egress bucket that reads every request's ids, is refused: the verifier gains no
 form ahead of its proof. The record must also name the boundary's rows, and no
@@ -99,14 +95,13 @@ class Side:
         return self.slots * self.frame_bytes // 2
 
     def counts(self) -> dict[str, int]:
-        """Each of its templates' proof blocks: links·T, or with ``first`` links and links·(T − 1)."""
+        """Each of its templates' units: links·T, or with ``first`` links and links·(T − 1)."""
         if self.first is None:
             return {self.template: self.links * self.buckets}
         return {self.first: self.links, self.template: self.links * (self.buckets - 1)}
 
     def at(self, link: int, t: int) -> tuple[str, int]:
-        """The template that holds bucket t of link ``link`` and its proof block there, in the template's proof blocks'
-        order."""
+        """The template that holds bucket t of link ``link`` and its unit there, in the template's units' order."""
         if self.first is None:
             return self.template, link * self.buckets + t
         return (self.first, link) if t == 0 else (self.template, link * (self.buckets - 1) + t - 1)
@@ -139,7 +134,7 @@ class Boundary:
                                             if getattr(s, k) is not None} for name, s in self.sides()}}
 
     def unit(self, doc: Mapping[str, Any], side: str, link: int, t: int) -> int:
-        """The global proof block (the population's index) that holds bucket t of link ``link`` of ``side``."""
+        """The global unit (the population's index) that holds bucket t of link ``link`` of ``side``."""
         s = dict(self.sides())[side]
         if not (0 <= link < s.links and 0 <= t < s.buckets):
             raise ValueError(f"{side} has links [0, {s.links}) and buckets [0, {s.buckets}), not ({link}, {t})")
@@ -173,14 +168,14 @@ def parse(doc: Mapping[str, Any]) -> Boundary | None:
         raise ValueError(f"a boundary is {FORMAT} with an egress side and optionally an ingress side, not {b!r}")
     out = Boundary(_side("egress", b["egress"]), _side("ingress", b["ingress"]) if "ingress" in b else None)
     if out.ingress and out.ingress.buckets != out.egress.buckets:
-        raise ValueError(f"boundary: one step a bucket on both sides, so one T, not egress {out.egress.buckets} and "
-                         f"ingress {out.ingress.buckets}")
+        raise ValueError(f"boundary: one step a bucket on both sides, so one T, not egress {out.egress.buckets} and ingress "
+                         f"{out.ingress.buckets}")
     return out
 
 
 def _template_units(doc: Mapping[str, Any]) -> dict[str, tuple[int, int]]:
-    """Each template's global proof blocks ``[lo, lo + n)``: the templates' proof blocks consecutive from 0 in the
-    record's order, each template's its members' consecutive chunks."""
+    """Each template's global units ``[lo, lo + n)``: the templates' units consecutive from 0 in the record's order, each
+    template's its members' consecutive chunks."""
     out, at = {}, 0
     for tid, n in doc["templates"]:
         lo = at
@@ -196,8 +191,7 @@ def _template_units(doc: Mapping[str, Any]) -> dict[str, tuple[int, int]]:
 
 
 def _readers(doc: Mapping[str, Any], total: int) -> list[list[int]]:
-    """Each global proof block's readers: the proof blocks one of whose input rows is a wire from that proof block's
-    output row."""
+    """Each global unit's readers: the units one of whose input rows is a wire from that unit's output row."""
     readers: list[list[int]] = [[] for _ in range(total)]
     for m in doc["members"]:
         for _port, _out, writers in m["wired"]:
@@ -233,43 +227,40 @@ def _global(units: Mapping[str, tuple[int, int]], s: Side, link: int, t: int) ->
 
 def _own_row(s: Side, tid: str, m: Mapping[str, Any]) -> str | None:
     """None when member ``m`` of ingress template ``tid`` reads side ``s``'s frame as a parameter row of its R·B bytes
-    that no wire and no row table fills, so its gates are the proof block's own inputs; else why not."""
+    that no wire and no row table fills, so its gates are the unit's own inputs; else why not."""
     who = m["name"] or tid
     rows = dict(map(tuple, m["rows"]))
     if rows.get(s.frame) != s.words:
-        return (f"BoundaryGates.Fits, ingress gates are inputs: {tid}'s {s.frame!r} is not a parameter row of "
-                f"{s.words} words (R·B = {s.slots}·{s.frame_bytes} bytes); its rows are {rows}")
+        return (f"Layout.Fits, ingress gates are inputs: {tid}'s {s.frame!r} is not a parameter row of {s.words} words "
+                f"(R·B = {s.slots}·{s.frame_bytes} bytes); its rows are {rows}")
     if m["tables"] or m["links"]:
-        return (f"BoundaryGates.Fits, ingress gates are inputs: {who} reads row tables, and an ingress frame is its "
-                "own unit's row")
+        return f"Layout.Fits, ingress gates are inputs: {who} reads row tables, and an ingress frame is its own unit's row"
     if s.frame in {p for p, _o, _w in m["wired"]}:
-        return (f"BoundaryGates.Fits, ingress gates are inputs: {who}'s {s.frame!r} is wired from another unit's "
-                "output, so its gates are that unit's, not inputs")
+        return (f"Layout.Fits, ingress gates are inputs: {who}'s {s.frame!r} is wired from another unit's output, so its "
+                "gates are that unit's, not inputs")
     return None
 
 
 def _returned(e: Side, m: Mapping[str, Any]) -> str | None:
     """None when member ``m`` of the egress template returns its verdict, an output row of one u16 word, and its frame,
-    an output row of its R·B bytes, so every egress gate is one the proof block computes and returns; else why not."""
+    an output row of its R·B bytes, so every egress gate is one the unit computes and returns; else why not."""
     rows, outs = dict(map(tuple, m["rows"])), dict(map(tuple, m["outs"]))
     if outs.get(e.verdict) != 1:
-        return (f"BoundaryGates.Fits, egress gates are returned: {e.template}'s verdict {e.verdict!r} is not an output "
-                f"row of one u16 word (a unit's public output is at most 16 bits); its outputs are {outs}")
+        return (f"Layout.Fits, egress gates are returned: {e.template}'s verdict {e.verdict!r} is not an output row of "
+                f"one u16 word (a unit's public output is at most 16 bits); its outputs are {outs}")
     if e.frame in rows:
-        return (f"BoundaryGates.Fits, egress gates are returned: {e.template}'s frame {e.frame!r} is a parameter row, "
-                "an input, which the Program reads from the advice and so bounds nothing: NetTiming.BoundaryGates.Fits "
-                "takes every slot gate to be one C returns (C.outs) and not an input, a frame the unit computes "
-                "(prog_fits)")
+        return (f"Layout.Fits, egress gates are returned: {e.template}'s frame {e.frame!r} is a parameter row, an input, "
+                "which the Program reads from the advice and so bounds nothing: NetTiming.Layout.Fits takes every slot "
+                "gate to be one C returns (C.outs) and not an input, a frame the unit computes (prog_fits)")
     if outs.get(e.frame) != e.words:
-        return (f"BoundaryGates.Fits, egress gates are returned: {e.template}'s frame {e.frame!r} is not an output row "
-                f"of {e.words} words (R·B = {e.slots}·{e.frame_bytes} bytes); its outputs are {outs}")
+        return (f"Layout.Fits, egress gates are returned: {e.template}'s frame {e.frame!r} is not an output row of "
+                f"{e.words} words (R·B = {e.slots}·{e.frame_bytes} bytes); its outputs are {outs}")
     return None
 
 
 def refusal(doc: Mapping[str, Any]) -> str | None:
     """The verifier's check: None when the circuit record's boundary fits its circuit over its horizon
-    (`NetTiming.BoundaryGates.Fits`, at the record's grain: module docstring), else why not, by the conjunct it
-    fails."""
+    (`NetTiming.Layout.Fits`, at the record's grain: module docstring), else why not, by the conjunct it fails."""
     if doc.get("format") != CIRCUIT:
         return f"boundary: a circuit record is {CIRCUIT}, not {doc.get('format')!r}"
     try:
@@ -278,8 +269,7 @@ def refusal(doc: Mapping[str, Any]) -> str | None:
     except (ValueError, KeyError, TypeError) as e:
         return f"boundary: {e}"
     if b is None:
-        return ("boundary: the circuit record declares none (NetTiming.BoundaryGates), so the network audit has no "
-                "layout to read")
+        return "boundary: the circuit record declares none (NetTiming.Layout), so the network audit has no layout to read"
     if set(doc.get("external", ())) != b.ports():
         return (f"boundary: the record's external ports {sorted(doc.get('external', ()))} are not the boundary's rows "
                 f"{sorted(b.ports())}: I/O the layout doesn't hold is I/O no audit reads")
@@ -319,21 +309,21 @@ def refusal(doc: Mapping[str, Any]) -> str | None:
         for t in range(T):
             u = _global(units, b.egress, ell, t)
             if latest[u] > t:
-                return (f"BoundaryGates.Fits, causal: egress bucket {t} of link {ell} (unit {u}) depends on ingress "
-                        f"bucket {latest[u]} of link {link_of[src[u]]} (unit {src[u]}), a later step, through the "
-                        "record's wires; a window fits in the scan's form, its egress reading ingress through earlier "
-                        "buckets' state (ingress_scan)")
+                return (f"Layout.Fits, causal: egress bucket {t} of link {ell} (unit {u}) depends on ingress bucket "
+                        f"{latest[u]} of link {link_of[src[u]]} (unit {src[u]}), a later step, through the record's "
+                        "wires; a window fits in the scan's form, its egress reading ingress through earlier buckets' "
+                        "state (ingress_scan)")
     return None
 
 
 def prog_fits(gates: Sequence[tuple[str, Sequence[int]]], outs: Sequence[int],
               egress: Callable[[int, int, int], tuple[int, Sequence[int]]], ingress: Callable[[int], Sequence[int]],
               L: int, S: int, k: int) -> bool:
-    """`NetTiming.BoundaryGates.Fits lay C k` itself on a flattened program `C` (`Claims.Sampling.Prog`: ``gates`` each
-    ``(kind, reads)``, kind one of ``input``, ``const``, ``not``, ``and``, ``xor``; ``outs`` its returned gates) and a
-    layout (``egress(t, ℓ, σ)``, a slot's presence gate and frame gates, and ``ingress(t)``): before ``k``, every slot
-    gate is in ``outs`` and not an input, every ingress gate is an input, and no slot gate of a step reaches (`Depends`,
-    reflexive) an ingress gate of a later step."""
+    """`NetTiming.Layout.Fits lay C k` itself on a flattened program `C` (`Claims.Sampling.Prog`: ``gates`` each ``(kind,
+    reads)``, kind one of ``input``, ``const``, ``not``, ``and``, ``xor``; ``outs`` its returned gates) and a layout
+    (``egress(t, ℓ, σ)``, a slot's presence gate and frame gates, and ``ingress(t)``): before ``k``, every slot gate is in
+    ``outs`` and not an input, every ingress gate is an input, and no slot gate of a step reaches (`Depends`, reflexive)
+    an ingress gate of a later step."""
     returned = set(outs)
     pairs = [(t, egress(t, ell, s)) for t in range(k) for ell in range(L) for s in range(S)]
     slot = {t: [g for u, (p, frame) in pairs if u == t for g in (p, *frame)] for t in range(k)}

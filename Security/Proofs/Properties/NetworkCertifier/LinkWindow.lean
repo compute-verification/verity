@@ -48,7 +48,7 @@ the opened word, and its digest of them. -/
 theorem verdict_shape {c : Case} {v : Verdict} (hv : verdict c = .ok v) :
     ∃ row, pubRow c = .ok row ∧
       v.accepted = acceptedOf (proved c) (if proved c then opened c row else none) (certified c) (synced c) ∧
-      v.outputs = outputsOf v.accepted ((if proved c then opened c row else none).getD 0) ∧
+      v.outputs = outputsOf c v.accepted ((if proved c then opened c row else none).getD 0) ∧
       verdictDigest c v.accepted v.outputs = .ok v.digest := by
   unfold verdict at hv
   cases hr : pubRow c with
@@ -88,19 +88,18 @@ theorem opened_spec {c : Case} {row : Option ByteArray} {w : Nat} (h : opened c 
       · cases h
     · cases h
 
-theorem signs_spec {lms : Lms.Params} {key session : ByteArray} {x : NetworkCheck.Check.Certificate}
-    (h : x.signs lms key session = true) :
-    x.keyId = key.extract 0 16 ∧ ∃ m sig,
-      certificateMessage x.keyId session x.link x.direction x.window x.digest = .ok m ∧
-      Lms.Signature.decode lms x.signature = .ok sig ∧ Lms.verify lms key m sig = .ok true := by
-  unfold NetworkCheck.Check.Certificate.signs at h
+theorem verifies_spec {c : Case} {x : Cert} (h : verifies c x = true) :
+    x.keyId = c.key.extract 0 16 ∧ ∃ m sig,
+      certificateMessage x.keyId c.session x.link x.direction x.window x.digest = .ok m ∧
+      Lms.Signature.decode c.lms x.signature = .ok sig ∧ Lms.verify c.lms c.key m sig = .ok true := by
+  unfold verifies at h
   simp only [Bool.and_eq_true, beq_iff_eq] at h
   refine ⟨h.1, ?_⟩
   obtain ⟨-, h⟩ := h
   split at h
   · rename_i m sig hm hs
     refine ⟨m, sig, hm, hs, ?_⟩
-    cases hv : Lms.verify lms key m sig with
+    cases hv : Lms.verify c.lms c.key m sig with
     | error e => rw [hv] at h; cases h
     | ok b => rw [hv] at h; cases b <;> first | rfl | cases h
   · cases h
@@ -117,13 +116,13 @@ theorem certified_spec {c : Case} (h : certified c = true) : WindowCertified c :
   · rename_i x hcx
     simp only [Bool.and_eq_true, beq_iff_eq] at hx
     obtain ⟨⟨⟨hl, hdir⟩, hw⟩, hv⟩ := hx
-    exact ⟨x, by rw [Array.getElem?_eq_getElem hd', hcx], hl, hdir, hw, signs_spec hv⟩
+    exact ⟨x, by rw [Array.getElem?_eq_getElem hd', hcx], hl, hdir, hw, verifies_spec hv⟩
   · cases hx
 
 theorem synced_spec {c : Case} (h : synced c = true) : WindowSynced c := by
   cases hk : c.kind with
   | warden => simp only [WindowSynced, hk]
-  | plain | served =>
+  | plain | served | advised =>
     simp only [synced, hk] at h
     simp only [WindowSynced, hk]
     split at h
@@ -174,12 +173,11 @@ theorem opened_of {c : Case} (h : WindowOpened c) :
   refine ⟨row, hr, ?_⟩
   simp [opened, hf, hu, hb, hw, opens_of h1, opens_of h2]
 
-theorem signs_of {lms : Lms.Params} {key session : ByteArray} {x : NetworkCheck.Check.Certificate} {m : ByteArray}
-    {sig : Lms.Signature} (hk : x.keyId = key.extract 0 16)
-    (hm : certificateMessage x.keyId session x.link x.direction x.window x.digest = .ok m)
-    (hs : Lms.Signature.decode lms x.signature = .ok sig) (hv : Lms.verify lms key m sig = .ok true) :
-    x.signs lms key session = true := by
-  unfold NetworkCheck.Check.Certificate.signs
+theorem verifies_of {c : Case} {x : Cert} {m : ByteArray} {sig : Lms.Signature} (hk : x.keyId = c.key.extract 0 16)
+    (hm : certificateMessage x.keyId c.session x.link x.direction x.window x.digest = .ok m)
+    (hs : Lms.Signature.decode c.lms x.signature = .ok sig) (hv : Lms.verify c.lms c.key m sig = .ok true) :
+    verifies c x = true := by
+  unfold verifies
   rw [hm, hs]
   simp [hk, hv, Except.toOption]
 
@@ -193,12 +191,12 @@ theorem certified_of {c : Case} (h : WindowCertified c) : certified c = true := 
   have hcx : c.certificates[d] = some x := by simpa [Array.getElem?_eq_getElem hd'] using hx
   rw [getElem!_pos c.certificates d hd', hcx]
   simp only [Bool.and_eq_true, beq_iff_eq]
-  exact ⟨⟨⟨hl, hdir⟩, hw⟩, signs_of hk hm hsig hv⟩
+  exact ⟨⟨⟨hl, hdir⟩, hw⟩, verifies_of hk hm hsig hv⟩
 
 theorem synced_of {c : Case} (h : WindowSynced c) : synced c = true := by
   cases hk : c.kind with
   | warden => simp only [synced, hk]
-  | plain | served =>
+  | plain | served | advised =>
     simp only [WindowSynced, hk] at h
     obtain ⟨s, hs, hd, r, hr, he⟩ := h
     simp only [synced, hk, hs, Bool.and_eq_true, Array.contains_iff_mem, Array.any_eq_true', beq_iff_eq]
@@ -268,18 +266,28 @@ theorem canon_mkObj {l : List (String × Json)} (h : ∀ p ∈ l, ∃ t, Flock.c
   rw [hps]
   exact ⟨_, rfl⟩
 
-theorem acceptedOutputs_canon : ∃ t, Flock.canon acceptedOutputs = .ok t := by
+theorem acceptedOutputs_canon (c : Case) : ∃ t, Flock.canon (acceptedOutputs c) = .ok t := by
   unfold acceptedOutputs
   apply canon_mkObj
   intro p hp
-  simp only [List.mem_cons, List.not_mem_nil, or_false] at hp
-  rcases hp with rfl | rfl
-  · exact canon_nat 1
-  · exact canon_nat 1
+  cases hk : c.kind with
+  | advised view advice =>
+    simp only [hk, List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at hp
+    rcases hp with (rfl | rfl) | rfl
+    · exact canon_nat 1
+    · exact canon_nat 1
+    · cases advice with
+      | some a => exact canon_str a
+      | none => simp only [Flock.canon]; exact ⟨_, rfl⟩
+  | plain | served | warden =>
+    simp only [hk, List.append_nil, List.mem_cons, List.not_mem_nil, or_false] at hp
+    rcases hp with rfl | rfl
+    · exact canon_nat 1
+    · exact canon_nat 1
 
-theorem verdictDigest_ok (c : Case) : ∃ d, verdictDigest c true acceptedOutputs = .ok d := by
+theorem verdictDigest_ok (c : Case) : ∃ d, verdictDigest c true (acceptedOutputs c) = .ok d := by
   obtain ⟨t, ht⟩ : ∃ t, Flock.canon (Json.mkObj [("format", .str verdictFormat), ("registration", .str c.registration),
-      ("sessions", .arr (c.sessions.map Json.str)), ("accepted", .bool true), ("public", acceptedOutputs)]) =
+      ("sessions", .arr (c.sessions.map Json.str)), ("accepted", .bool true), ("public", acceptedOutputs c)]) =
       .ok t := by
     apply canon_mkObj
     intro p hp
@@ -291,7 +299,7 @@ theorem verdictDigest_ok (c : Case) : ∃ d, verdictDigest c true acceptedOutput
         obtain ⟨s, -, rfl⟩ := Array.mem_map.1 hx
         exact canon_str s
     · exact canon_bool true
-    · exact acceptedOutputs_canon
+    · exact acceptedOutputs_canon c
   unfold verdictDigest
   simp only [ht, bind, Except.bind, pure, Except.pure]
   exact ⟨_, rfl⟩
@@ -303,8 +311,8 @@ theorem linkWindowAcceptMeans_honest :
   intro c ⟨hp, ho, hc, hs⟩
   obtain ⟨row, hr, hrow⟩ := opened_of ho
   obtain ⟨d, hd⟩ := verdictDigest_ok c
-  have hout : outputsOf true 3 = acceptedOutputs := rfl
-  have hv : verdict c = .ok ⟨true, acceptedOutputs, d, true, some 3, true, true⟩ := by
+  have hout : outputsOf c true 3 = acceptedOutputs c := rfl
+  have hv : verdict c = .ok ⟨true, acceptedOutputs c, d, true, some 3, true, true⟩ := by
     unfold verdict
     simp only [hr, proved_of hp, ↓reduceIte, hrow, certified_of hc, synced_of hs, acceptedOf, beq_self_eq_true,
       Bool.and_self, Option.getD_some, hout, hd, bind, Except.bind, pure, Except.pure]

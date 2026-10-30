@@ -1,5 +1,4 @@
-"""One vLLM v1 scheduler step as a Boolean Definition: the compile slice's proof block's core, between advice validity
-and the Programs.
+"""One vLLM v1 scheduler step as a Boolean Definition: the compile unit's core, between advice validity and the Programs.
 
     ReplayStep_v1{R, W, A, M, T, L, B, H, CH, WM, FULL, PC, NB, IW, AS, EW} (state, arrivals, bits, prefix[, row_pfx])
         -> (ok, taken, used[, looked], rows, state')
@@ -80,12 +79,11 @@ this circuit bounds but doesn't derive: `compile_slice_v3` derives them, in vLLM
 `_build`'s ``derive`` hooks. Also priority scheduling, speculative decoding, LoRA, structured output, encoder inputs
 and KV connectors.
 
-**Composition** (the compile slice's proof block, all inside one ZK proof under the advice's hiding root; the
-certifier's PROTOCOL.md, "Advice v1"):
+**Composition** (the compile unit, all inside one ZK proof under the advice's hiding root; the certifier's PROTOCOL.md,
+"Advice v1"):
 1. the committed advice is the decision bits themselves, one per open-step ask in the scan's order, read directly;
 2. a scan of this step over the session's steps, from the empty engine, the arrivals' cursor moving by `taken` and
-   the decisions' by `used`; the certified request records (P, O) are the arrivals, in the network certifier's release
-   order;
+   the decisions' by `used`; the certified request records (P, O) are the arrivals, in the warden's release order;
 3. the charge: advice v1's arithmetic code run forward over the same decisions (`arith_encode`), each window's coded
    length at most its declared charge, so no decoder runs in the circuit;
 4. `compile_steps` (`integrations/vllm/verity_vllm/program/predict/steps.py`): each row (request, start, n) becomes a `RowRef`
@@ -123,7 +121,7 @@ from verity.ml.circuits.boolean.forms import ONE, ZERO, Circuit, add, and_reduce
 from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.types import Array, Tuple
-from verity.core.protocols.certifier.head_check import BIT, _part
+from verity.core.protocols.certifier.head_check import BIT, _part, ands
 
 STATICS = ("R", "W", "A", "M", "T", "L", "B", "H", "CH", "WM", "FULL", "PC", "NB", "IW", "AS", "EW")
 
@@ -837,7 +835,7 @@ def _bits(v: int, w: int) -> list[int]:
 
 
 def arguments(S, st: State, inp: Inputs) -> list[list[int]]:
-    """The proof block's arguments (each a flat list of bits, as `evaluate_bits` takes one instance)."""
+    """The unit's arguments (each a flat list of bits, as `evaluate_bits` takes one instance)."""
     Z = widths(S)
     vals: dict[str, list[int]] = {}
 
@@ -858,7 +856,7 @@ def arguments(S, st: State, inp: Inputs) -> list[list[int]]:
 
 
 def decode(S, flat: Sequence[int]) -> Out:
-    """The proof block's output bits as an `Out` (rows by slot, the states' valid slots)."""
+    """The unit's output bits as an `Out` (rows by slot, the states' valid slots)."""
     at, f = 0, {}
     for name, n, w in _out_fields(S):
         f[name] = [sum(int(flat[at + e * w + j]) << j for j in range(w)) for e in range(n)]
@@ -879,7 +877,7 @@ def decode(S, flat: Sequence[int]) -> Out:
 
 
 def evaluate(st_: dict, cases: Sequence[tuple[State, Inputs]]) -> list[Out]:
-    """The proof block at statics `st_` on each (state, inputs), in one evaluation."""
+    """The unit at statics `st_` on each (state, inputs), in one evaluation."""
     S = SimpleNamespace(**st_)
     args = [list(rows) for rows in zip(*(arguments(S, s, i) for s, i in cases))]
     out = evaluate_bits(unit(**st_), *args)
@@ -944,7 +942,7 @@ def _staged(key: tuple) -> dict[str, int]:
 
 
 def size(**st_) -> dict[str, int]:
-    """The proof block's ANDs by stage at statics `st_` (traced on a counting circuit, no gates written)."""
+    """The unit's ANDs by stage at statics `st_` (traced on a counting circuit, no gates written)."""
     out = dict(_staged(tuple(st_[k] for k in STATICS)))
     out["ands"] = sum(out.values())
     return out

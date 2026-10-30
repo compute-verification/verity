@@ -2,12 +2,12 @@
   "version": 1,
   "hooks": {
     "beforeShellExecution": [
-      {"command": "sh -c 'h=tools/agent-guard/hook.sh; [ -f \"$h\" ] && exec sh \"$h\" \"$1\"; d=$(ls -td \"${AGENT_GUARD_CACHE:-${HOME:-/tmp}/.cache/agent-guard}\"/*/ 2>/dev/null | head -1); [ -f \"$d$1\" ] || d=/opt/agent-guard/; exec python3 \"$d$1\"' guard shell_hook.py", "timeout": 10, "failClosed": true}
+      {"command": "sh tools/agent-guard/hook.sh shell_hook.py", "timeout": 10, "failClosed": true}
     ],
     "preToolUse": [
-      {"command": "sh -c 'h=tools/agent-guard/hook.sh; [ -f \"$h\" ] && exec sh \"$h\" \"$1\"; d=$(ls -td \"${AGENT_GUARD_CACHE:-${HOME:-/tmp}/.cache/agent-guard}\"/*/ 2>/dev/null | head -1); [ -f \"$d$1\" ] || d=/opt/agent-guard/; exec python3 \"$d$1\"' guard task_hook.py", "matcher": "Task", "timeout": 10},
-      {"command": "sh -c 'h=tools/agent-guard/hook.sh; [ -f \"$h\" ] && exec sh \"$h\" \"$1\"; d=$(ls -td \"${AGENT_GUARD_CACHE:-${HOME:-/tmp}/.cache/agent-guard}\"/*/ 2>/dev/null | head -1); [ -f \"$d$1\" ] || d=/opt/agent-guard/; exec python3 \"$d$1\"' guard task_hook.py", "matcher": "CallDynamicTool", "timeout": 10},
-      {"command": "sh -c 'h=tools/agent-guard/hook.sh; [ -f \"$h\" ] && exec sh \"$h\" \"$1\"; d=$(ls -td \"${AGENT_GUARD_CACHE:-${HOME:-/tmp}/.cache/agent-guard}\"/*/ 2>/dev/null | head -1); [ -f \"$d$1\" ] || d=/opt/agent-guard/; exec python3 \"$d$1\"' guard task_hook.py", "matcher": "^MCP:", "timeout": 10}
+      {"command": "sh tools/agent-guard/hook.sh task_hook.py", "matcher": "Task", "timeout": 10},
+      {"command": "sh tools/agent-guard/hook.sh task_hook.py", "matcher": "CallDynamicTool", "timeout": 10},
+      {"command": "sh tools/agent-guard/hook.sh task_hook.py", "matcher": "^MCP:", "timeout": 10}
     ]
   }
 }

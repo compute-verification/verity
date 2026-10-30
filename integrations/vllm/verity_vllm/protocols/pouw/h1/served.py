@@ -26,7 +26,7 @@
   table ``pub@<c>`` holds its statement's public row ``pub`` (`h1window.PUBS`): row t proof block u0 + t's,
   `core_check.public_words` of the window's Program salt, u0 + t and (root(``a/<K>@<s>``), root(``b/<K>``)), salted
   `core_check.public_row_salt` of the open root and u0 + t, so anyone rebuilds it, as credit's `registered_file` and
-  Lean's ``registeredFile`` do, and the window does on read (`PublicRows`). Those are the salt, position and roots the proof block's receipt is seeded
+  Lean's ``registeredFile`` do; its rows are kept. Those are the salt, position and roots the proof block's receipt is seeded
   from. At `close` the window commits its ok rows ``ok`` (`Served.ok`, the statement's output row o1): row u
   `core_check.OK_ROW` under `core_check.ok_salt` of the open root and u, in no entry, since credit registers them itself
   and refuses a window that does.
@@ -53,14 +53,13 @@
 * **When.** `Served.commit` registers call c's z table as `H1Run` records the call, step s's A table of K at its last
   call of K (salted from its first call's nonce), and puts the period's ``b/<K>`` in the call that completes K's weights
   (the last of K's linears in step 0), then, once both roots exist, each of the step's calls of K's ``pub@<c>``
-  (`Served._pubs`) and, with ``receipts``, its receipt table. A z or public table hashed on the GPU hashes there while the step's
+  (`Served._pubs`) and, with ``receipts``, its receipt table. A z table hashed on the GPU hashes there while the step's
   later calls run, its place in `registered` taken when it's recorded and its tree and root put in once hashed
   (`Served.settle`, at the latest when `H1Run.tables` reads the step's roots at its round's close). Each root goes into
   that call's manifest row (``tables.registered``), so its
   round's root commits it before the round's coin, and round s's root also lists step s's A tables whole
   (`Served.segments`, `credit.round_root`). A weight is taken once, and one that changes within the window
-  is refused. Its host codes are copied once a process (`host_weight`), and the period's `Weights` holds them to its rows
-  once (`Weights.matches`). Without the period's `Weights` (an in-process window, which credits nothing) the window registers its own
+  is refused. Without the period's `Weights` (an in-process window, which credits nothing) the window registers its own
   ``b/<K>`` there, under the run's key.
 * **The Commit** (ROOTS1): with ``tap`` (`pouw_h1_commit.CommitTap`, the Commit in the serving engine) its
   AROW of each step's calls of K is that step's A table's value (`credit.commit_rows`), and the window also registers each round's input-ids table ``ids@<s>`` (`ids_words`: its M slots' token ids, two words each),
@@ -87,9 +86,8 @@
 from __future__ import annotations
 
 import collections
-import contextlib
+import functools
 import hashlib
-import weakref
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Sequence
 
@@ -99,26 +97,24 @@ from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import weights as Wt
+from verity.core.protocols.pouw.circuit import h1device as HD
 from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G
-from verity.ml.circuits.codec import canonical_json
+from verity.ml.circuits.codec import canonical_json, encode_program
 from verity.ml.circuits.program import Program
 
 from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import live as LV
-from verity_vllm.protocols.pouw.h1.public_rows import PublicRows
 from verity_vllm.protocols.pouw.h1 import registered as NR
 from verity_vllm.protocols.pouw.h1 import requests as RQ
-from verity_vllm.protocols.pouw.h1 import tables_device as TD
-from verity_vllm.protocols.pouw.h1.model_key import ModelKey, model_key
 from verity_vllm.protocols.pouw.h1.served_files import FILE, WindowCommitmentEntries, file_name, reads_file, register, trees
-from verity_vllm.protocols.pouw.h1.served_program import (PREFIX, card_arch, declared, declared_layout, descriptor, layout,
-                                                          unit_of, write_program)
 from verity_vllm.protocols.pouw.h1.words import (EMPTY_ID, chunk_words, ids_words, receipt_words, record_words,
                                                          row_words, zy_words)
 
 #: the rows' format: the tile's port rows
 V2 = G.SCHEMA_V2
+#: the window Program's parameter prefix, the same for every window of a period
+PREFIX = "h1/"
 #: the hm96 salt stream's first nonce of the window's registered tables, past every round's and call's tables
 NONCE = RQ.REQUESTS_NONCE + (1 << 42)
 #: ``b/<K>``'s nonces, past every call's two tables: the auditor's registration's (`weights.B_NONCE`)
@@ -141,40 +137,69 @@ def nonce(call: int, table: str) -> int:
     return NONCE + 2 * int(call) + HW.TABLES.index(table)
 
 
+def layout(shapes: Sequence[tuple[int, int]], calls: Sequence[tuple[int, int]],
+           blocks: Sequence[int] | None = None) -> list[int]:
+    """Each call's A block of its K, ``calls`` each call's (step, linear) and ``blocks`` each linear's input block within a
+    step (`Served`'s): call (s, w) reads block s·B_K + i, i the place of ``blocks[w]`` among the blocks K's linears read."""
+    per = list(blocks) if blocks is not None else list(range(len(shapes)))
+    if len(per) != len(shapes):
+        raise ValueError(f"blocks {per} are not one input block for each of the window's {len(shapes)} linears")
+    of_k: dict[int, list[int]] = {}
+    for w, (_n, k) in enumerate(shapes):
+        of_k.setdefault(k, [])
+        if per[w] not in of_k[k]:
+            of_k[k].append(per[w])
+    of_k = {k: sorted(b) for k, b in of_k.items()}
+    return [s * len(of_k[shapes[w][1]]) + of_k[shapes[w][1]].index(per[w]) for s, w in calls]
+
+
+def card_arch(device: Any = None) -> str:
+    """The architecture of the CUDA card ``device`` (the current one when None) as H1's device records name it
+    (`h1device.DEVICES`): an H100 or H200's, compute capability 9.0, or the RTX PRO 6000's, 12.0. ValueError on a card
+    with no record."""
+    import torch
+
+    major, minor = torch.cuda.get_device_capability(device)
+    return HD.device(f"sm_{major}{minor}").arch
+
+
+def declared(shapes: Sequence[tuple[int, int]], modules: Mapping[int, str], rows: int, steps: int,
+             tile: tuple[int, int] = PH.TILE, blocks: Sequence[int] | None = None, prefix: str = PREFIX,
+             unit: Callable[[int], Any] | None = None, arch: str | None = None) -> Program:
+    """The window Program a static window declares before it serves: ``steps`` steps, each calling every linear (``shapes``,
+    each ``(n, K)``, named by ``modules``) in order, laid out by `layout`, its A slot for ``rows`` token rows, its
+    parameters under ``prefix`` (`PREFIX`, which names no window): one Program for every window of the declaration, the
+    period's ``--circuit`` (its `program_digest`) and each window's `Served.program`. Without ``unit``, each K's tile
+    unit is `h1window.tile_unit`'s on ``arch`` (`card_arch`; sm_120 when None), which refuses a K outside that card's
+    record's domain (ValueError); sm_90's Program is sm_120's byte for byte."""
+    lay = declared_layout(shapes, modules, rows, steps, tile, blocks)
+    if unit is None and arch is not None:
+        unit = functools.partial(HW.tile_unit, tile=tuple(tile), arch=arch)
+    return HW.program([tuple(x) for x in lay["linears"]], [tuple(x) for x in lay["calls"]], lay["m"], tile, prefix, unit)
+
+
+def descriptor(program: Program) -> bytes:
+    """`program`'s descriptor as the period commits it: its canonical JSON without annotations, the bytes whose SHA-512
+    is its `codec.program_digest` (the period-open's ``circuit``) and from which core's credit reads the window's
+    layout (`credit.layout_of`)."""
+    return canonical_json({k: v for k, v in encode_program(program).items() if k != "annotations"})
+
+
+def declared_layout(shapes: Sequence[tuple[int, int]], modules: Mapping[int, str], rows: int, steps: int,
+                    tile: tuple[int, int] = PH.TILE, blocks: Sequence[int] | None = None) -> dict[str, Any]:
+    """`declared`'s arguments to `h1window.program` as the window's layout, ``{calls: [[linear, A block], ...],
+    linears: [[name, K, n], ...], m, tile}``: what core's `credit.layout_of` reads from `declared`'s `descriptor`, built
+    without the Program (the proof system sizes the period's K from it, `pouw_h1_challenger.draw_k`)."""
+    mods = [modules.get(w, str(w)) for w in range(len(shapes))]
+    calls = [(s, w) for s in range(steps) for w in range(len(shapes))]
+    return {"calls": [[mods[w], b] for (_s, w), b in zip(calls, layout(shapes, calls, blocks))],
+            "linears": [[mods[w], k, n] for w, (n, k) in enumerate(shapes)], "m": HW.slot(rows, tile), "tile": list(tile)}
+
+
 def weights_of(layers: Sequence[Any]) -> dict[int, tuple[np.ndarray, np.ndarray]]:
     """Each served linear's B as the period registers it, by its index among `layers` (the int8 arm's linear layers, as
-    `H1Run` numbers them): its int8 codes ``(n, K)`` and its f32 s_w ``(n,)`` (`host_weight`)."""
-    return {w: host_weight(m.weight, m.weight_scale) for w, m in enumerate(layers)}
-
-
-#: the copies `host_weight` made, by the weight's id: the weight and its scale (weak references), their `_tensor_key`s, and
-#: the codes and s_w
-_HOST: dict[int, tuple[Any, Any, tuple, np.ndarray, np.ndarray]] = {}
-
-
-def host_weight(weight: Any, scale: Any) -> tuple[np.ndarray, np.ndarray]:
-    """A served linear's int8 codes and its s_w as f32 ``(n,)`` on the host, read-only, copied once a process: the weights
-    are fixed after install, so each window reuses the copy while ``weight`` and ``scale`` are the tensors it was made from,
-    with the same storage, shape, dtype and version. Anything else (a weight replaced or written in place, or an array that
-    isn't a tensor) is copied again."""
-    key, hit = (_tensor_key(weight), _tensor_key(scale)), _HOST.get(id(weight))
-    if None not in key and hit is not None and hit[0]() is weight and hit[1]() is scale and hit[2] == key:
-        return hit[3], hit[4]
-    w = weight.detach().to("cpu", copy=True).numpy() if hasattr(weight, "detach") else np.array(weight)
-    s = PH.numpy_of(scale).astype("<f4").reshape(-1)
-    w.flags.writeable = s.flags.writeable = False
-    if None not in key:
-        i = id(weight)
-        _HOST[i] = (weakref.ref(weight, lambda _r: _HOST.pop(i, None)), weakref.ref(scale), key, w, s)
-    return w, s
-
-
-def _tensor_key(t: Any) -> tuple | None:
-    """What a write to or a move of tensor ``t`` changes (its version counts in-place writes through any view), or None
-    when ``t`` isn't a tensor."""
-    if not (hasattr(t, "data_ptr") and hasattr(t, "_version")):
-        return None
-    return t.data_ptr(), tuple(t.shape), tuple(t.stride()), str(t.dtype), str(t.device), t._version
+    `H1Run` numbers them): its int8 codes ``(n, K)`` and its f32 s_w ``(n,)``."""
+    return {w: (PH.numpy_of(m.weight), PH.numpy_of(m.weight_scale).astype("<f4").reshape(-1)) for w, m in enumerate(layers)}
 
 
 @dataclass(frozen=True)
@@ -190,8 +215,6 @@ class Weights:
     circuit: str
     registered: dict[int, G.Registered]
     at: dict[int, tuple[int, int]]
-    #: each linear's read-only codes and s_w known to be its rows (`matches`), as arrays, not copies
-    held: dict[int, tuple[np.ndarray, np.ndarray]] = field(default_factory=dict, compare=False, repr=False)
 
     def root(self) -> bytes:
         return CR.weights_root({k: r.root for k, r in self.registered.items()})
@@ -200,17 +223,11 @@ class Weights:
         return [self.registered[k].entry() for k in sorted(self.registered)]
 
     def matches(self, w: int, codes: np.ndarray, scales: np.ndarray) -> bool:
-        """Whether linear `w`'s served codes and s_w are its registered rows: its n leaves a row from leaf n·lo. Read-only
-        arrays it registered or found to match (`host_weight`'s, the same every window) aren't compared again."""
-        if (hit := self.held.get(w)) is not None and hit[0] is codes and hit[1] is scales:
-            return True
+        """Whether linear `w`'s served codes and s_w are its registered rows: its n leaves a row from leaf n·lo."""
         k, lo = self.at[w]
         n, reg = Wt.chunks(k), self.registered[k]
         got = chunk_words(codes, scales, n)
-        ok = np.array_equal(got, np.asarray(reg.rows[n * lo:n * lo + len(got)], np.uint16))
-        if ok and not (codes.flags.writeable or scales.flags.writeable):
-            self.held[w] = (codes, scales)
-        return ok
+        return np.array_equal(got, np.asarray(reg.rows[n * lo:n * lo + len(got)], np.uint16))
 
 
 def register_weights(circuit: str, shapes: Sequence[tuple[int, int]], weights: Mapping[int, tuple[Any, Any]], key: bytes,
@@ -222,7 +239,7 @@ def register_weights(circuit: str, shapes: Sequence[tuple[int, int]], weights: M
     `audit.hm96_salt` of the period's key ``key`` at ``B_NONCE`` plus K's place, its rows kept (`Weights.matches`).
     Committed once, before the period's first window's salt. ValueError on an odd K, a K `weights.chunks` refuses, or a
     weight that isn't its linear's n × K int8 codes and n scales."""
-    ks, reg, at, held = sorted({int(k) for _n, k in shapes}), {}, {}, {}
+    ks, reg, at = sorted({int(k) for _n, k in shapes}), {}, {}
     for i, k in enumerate(ks):
         if k % 2:
             raise ValueError(f"K = {k}: a row's codes are whole u16 words")
@@ -235,11 +252,41 @@ def register_weights(circuit: str, shapes: Sequence[tuple[int, int]], weights: M
                 raise ValueError(f"linear {w}'s weight is not its {n} × {k} int8 codes and {n} scales")
             rows.append(chunk_words(codes, scales.astype("<f4").reshape(-1), x))
             at[w], lo = (k, lo), lo + n
-            if not (codes.flags.writeable or scales.flags.writeable) and scales.dtype == np.dtype("<f4") and scales.ndim == 1:
-                held[w] = (codes, scales)
         words = np.concatenate(rows)
         reg[k] = NR.commit(circuit, f"{prefix}b/{k}", words, key, B_NONCE + i, keep_rows=True)
-    return Weights(circuit, reg, at, held)
+    return Weights(circuit, reg, at)
+
+
+@dataclass(frozen=True)
+class ModelKey:
+    """The auditor's registration of the served model under the period's circuit, as the gate's ``model-key --model M
+    --circuit C`` answers a lane's gate key: its role ``model``, ``circuit``, the weights' root ``weights_root`` (hex) that
+    ``period-open --model M`` signs, and ``key``, the 32-byte salt key its ``b/<K>`` rows were committed under."""
+
+    model: str
+    circuit: str
+    weights_root: str
+    key: bytes = field(repr=False)
+
+
+def _hex512(v: Any) -> bool:
+    return type(v) is str and len(v) == 128 and all(c in "0123456789abcdef" for c in v)
+
+
+def model_key(answer: Mapping[str, Any]) -> ModelKey:
+    """The gate's ``model-key`` answer as a `ModelKey`; ValueError on a refusal, or an answer whose key isn't 32 bytes
+    whose SHA-512 is its ``key_sha512``, or whose circuit or weights' root isn't a SHA-512 digest."""
+    if "refused" in answer:
+        raise ValueError(f"model-key: refused: {answer['refused']}")
+    try:
+        key = bytes.fromhex(answer["key"])
+    except (KeyError, TypeError, ValueError):
+        raise ValueError("model-key: the answer has no key in hex") from None
+    if len(key) != 32 or hashlib.sha512(key).hexdigest() != answer.get("key_sha512"):
+        raise ValueError("model-key: the key is not 32 bytes whose SHA-512 is the answer's key_sha512")
+    if not (type(answer.get("model")) is str and _hex512(answer.get("circuit")) and _hex512(answer.get("weights_root"))):
+        raise ValueError("model-key: the answer names no model, circuit and weights' root (SHA-512 digests in hex)")
+    return ModelKey(answer["model"], answer["circuit"], answer["weights_root"], key)
 
 
 @dataclass
@@ -292,16 +339,13 @@ class Served:
     _ids_words: dict[int, np.ndarray] = field(default_factory=dict)
     #: with the tap, the live proof block's tables by value (`pouw_h1_live`): requests@0, then each round's slots@<s>
     live: dict[str, G.Registered] = field(default_factory=dict)
-    #: each open step A table's words, each call's block written at its place in call order as it's recorded, and the calls
-    #: recorded so far (they may come out of call order)
-    _a: dict[str, tuple[np.ndarray, set[int]]] = field(default_factory=dict)
+    #: each open step A table's words so far, one block a call recorded, by call (they may come out of call order)
+    _a: dict[str, dict[int, np.ndarray]] = field(default_factory=dict)
     #: each linear's weight, the tensor and its codes, taken once, and its scales
     _weights: dict[int, tuple[Any, np.ndarray]] = field(default_factory=dict)
     _scales: dict[int, np.ndarray] = field(default_factory=dict)
     #: the z tables still hashing on the GPU (`_register_later`), in registration order, each with the ``out`` its root goes in
-    #: and the call's table roots its call z table's root goes in, when it commits that too (``also``)
-    _later: collections.deque[tuple[str, dict[str, str | None], dict[str, Any] | None]] = field(
-        default_factory=collections.deque)
+    _later: collections.deque[tuple[str, dict[str, str | None]]] = field(default_factory=collections.deque)
 
     def key(self, commits: Mapping[str, Any]) -> bytes:
         if self.window is not None:
@@ -360,28 +404,23 @@ class Served:
                                 "each K's b/<K> under the period's declared Program")
 
     def _tree(self, run: Any, value: str, words: np.ndarray, first: int, window: str | None,
-              session: str | None = None, row_salts: bytes | NR.PublicSalts | None = None, later: bool = False,
-              rows: Sequence | None = None, also: tuple[bytes, int] | None = None) -> G.Registered | NR.Later:
+              session: str | None = None, row_salts: bytes | None = None, later: bool = False) -> G.Registered | NR.Later:
         return NR.commit(self.program_digest, value, words, run._key, first, row_salts is not None, row_salts,
-                         later=later, rows=rows, also=also, window=window, session=session)
+                         later=later, window=window, session=session)
 
     def _register(self, run: Any, value: str, words: np.ndarray, first: int, window: str | None,
                   row_salts: bytes | None = None) -> str:
         reg = self.registered[value] = self._tree(run, value, words, first, window, row_salts=row_salts)
         return reg.root.hex()
 
-    def _register_later(self, run: Any, value: str, words: Any, first: int, out: dict[str, str | None],
-                        row_salts: NR.PublicSalts | None = None, rows: Sequence | None = None,
-                        also: tuple[bytes, int] | None = None, into: dict[str, Any] | None = None) -> None:
-        """`_register` of a call's z or public table into ``out``, its hash left running on the GPU where it hashes there
+    def _register_later(self, run: Any, value: str, words: Any, first: int, out: dict[str, str | None]) -> None:
+        """`_register` of a call's z table into ``out``, its hash left running on the GPU where it hashes there
         (`pouw_h1_registered.commit`'s ``later``): it takes its place in `registered` now, and `settle` puts its tree there
-        and its root in ``out``. ``also``: a call's z table over the same records (`pouw_h1_tables_device.take_z`),
-        committed from the same read, its root put in ``into["z"]`` (the call's table roots) by `settle`."""
-        got = self.registered[value] = self._tree(run, value, words, first, self.root, row_salts=row_salts, later=True,
-                                                  rows=rows, also=also)
+        and its root in ``out``."""
+        got = self.registered[value] = self._tree(run, value, words, first, self.root, later=True)
         if isinstance(got, NR.Later):
             out[value] = None
-            self._later.append((value, out, into if also is not None else None))
+            self._later.append((value, out))
         else:
             out[value] = got.root.hex()
 
@@ -389,35 +428,16 @@ class Served:
         """Record the z tables the GPU has hashed (`_register_later`), in registration order: all of them with ``wait``,
         else the leading ones already done."""
         while self._later and (wait or self.registered[self._later[0][0]].ready()):
-            value, out, into = self._later.popleft()
-            later = self.registered[value]
-            reg = self.registered[value] = later.result()
+            value, out = self._later.popleft()
+            reg = self.registered[value] = self.registered[value].result()
             out[value] = reg.root.hex()
-            if into is not None:
-                into["z"] = later.also().hex()
 
-    def a_words(self, call: Any, codes: np.ndarray, scales: np.ndarray, out: np.ndarray | None = None,
-                slots: int | None = None) -> np.ndarray:
-        """Call ``call``'s A table's words over the Program's M slots (or the first ``slots``): its rows' int8 ``codes``
-        [m, K] and f32 ``scales`` [m], then zero codes of scale 0, each row `weights.chunks` (K) = n leaves (`chunk_words`,
-        n·M leaves), written into ``out`` when given."""
-        return chunk_words(codes, scales, Wt.chunks(call.k), self.m if slots is None else slots, out)
-
-    def _a_rows(self, call: Any, value: str, mine: Sequence[int], codes: np.ndarray, scales: np.ndarray
-                ) -> np.ndarray | None:
-        """Write call ``call``'s `a_words` into its step's A table of K ``value`` at its place among ``mine``, the step's
-        calls of K in call order: the whole table once they are all in, else None. The table starts zero, which is
-        `chunk_words`' padding, so each call writes only its rows."""
-        n = Wt.chunks(call.k)
-        block = n * self.m
-        table, done = self._a.setdefault(value, (np.zeros((len(mine) * block, call.k // (2 * n) + 2), "<u2"), set()))
-        j = mine.index(call.index)
-        self.a_words(call, codes, scales, table[j * block:j * block + n * len(codes)], len(codes))
-        done.add(call.index)
-        if len(done) < len(mine):
-            return None
-        del self._a[value]
-        return table
+    def a_words(self, call: Any, codes: np.ndarray, scales: np.ndarray) -> np.ndarray:
+        """Call ``call``'s A table's words over the Program's M slots: its rows' int8 ``codes`` [m, K] and f32 ``scales``
+        [m], then zero codes of scale 0, each row `weights.chunks` (K) = n leaves (`chunk_words`, n·M leaves)."""
+        full, sc = np.zeros((self.m, call.k), np.int8), np.zeros(self.m, "<f4")
+        full[:len(codes)], sc[:len(codes)] = codes, scales
+        return chunk_words(full, sc, Wt.chunks(call.k))
 
     @property
     def steps(self) -> int:
@@ -514,7 +534,7 @@ class Served:
         held = self._weights.get(call.layer)
         if weight is None or (held is not None and held[0] is weight):
             return
-        w, s = (PH.numpy_of(weight), None) if scale is None else host_weight(weight, scale)
+        w, s = PH.numpy_of(weight), None if scale is None else PH.numpy_of(scale).astype("<f4").reshape(-1)
         if w.dtype != np.int8 or w.shape != (call.n, call.k) or s is None or s.shape != (call.n,):
             self.refused.append(f"call {call.index}: its weight is not its {call.n} × {call.k} int8 codes and {call.n} scales")
         elif held is None:
@@ -531,8 +551,7 @@ class Served:
         whichever order its forward ran them: its last call of K), and take ``b/<K>`` once K's linears' weights are all
         held (`_take_b`); with ``receipts``, at the step's last call of K, each of the step's calls of K's receipt
         table, in call order (`_receipts` of the call's own codes and s_a): ``{value: root}``, what the call's manifest
-        row commits under its round's root, the z and public tables' once `settle` has them. Nothing once the window is
-        refused."""
+        row commits under its round's root, the z table's once `settle` has it. Nothing once the window is refused."""
         self.settle(wait=False)
         if self.root is None and not self.refused:
             self.open(run)
@@ -558,21 +577,22 @@ class Served:
             codes, scales = PH.numpy_of(a).reshape(call.m, call.k), PH.numpy_of(s_a).reshape(-1)
             zy_rows = zy_words(records, call.rows, call.n, self.m, self.tile)
         else:
-            zy_rows = self._empty_zy(call.n)
+            zy_rows = record_words(np.zeros((0, call.n), "<i4"), np.zeros((0, call.n), np.int16), self.m, self.tile)
         out, value, mine = {}, self.a_table(call.index), self.step_calls(call.index)
-        whole = self._a_rows(call, value, mine, codes, scales)
-        if whole is not None:
+        rows = self._a.setdefault(value, {})
+        rows[call.index] = self.a_words(call, codes, scales)
+        whole = None
+        if len(rows) == len(mine):
+            whole = np.concatenate([b for _c, b in sorted(self._a.pop(value).items())])
             out[value] = self._register(run, value, whole, nonce(mine[0], "a"), self.root)
-        also = TD.take_z(run, call, zy_rows)
-        self._register_later(run, HW.table(self.program, "zy", call.index), zy_rows, nonce(call.index, "zy"), out,
-                             also=also, into=run._roots[call.index] if also is not None else None)
+        self._register_later(run, HW.table(self.program, "zy", call.index), zy_rows, nonce(call.index, "zy"), out)
         if self.tap is not None:
             self.tap.arow(run, self, call, value, whole)
         b = self.program.fn.bindings["PREFIX"] + f"b/{call.k}"
         if b not in self.registered and not self._take_b(run, call, b, out):
             return {}
         if whole is not None and b in self.registered:
-            self._pubs(run, mine, value, b, out)
+            out.update(self._pubs(run, mine, value, b))
         if self.receipts is not None:
             self._held.setdefault(value, []).append((call, codes, scales))
             if whole is not None:
@@ -586,19 +606,6 @@ class Served:
                     rc = self.receipt_table(c.index)
                     out[rc] = self._register(run, rc, got, RECEIPT_NONCE + c.index, self.root)
         return out
-
-    def _empty_zy(self, n: int) -> Any:
-        """An empty call's z table, `record_words` of no rows: ``(units, 3 R C)`` u16, every word zero. Where H1 hashes on
-        the GPU it is made on the hash's stream, so nothing is built on the host or copied up."""
-        shape = ((self.m // self.tile[0]) * (n // self.tile[1]), 3 * self.tile[0] * self.tile[1])
-        if NR.path() != "gpu":
-            return np.zeros(shape, np.uint16)
-        import torch
-
-        from verity_vllm.protocols.pouw.h1 import registered_device as D
-
-        with D.hashing() as device:
-            return torch.zeros((shape[0], 2 * shape[1]), dtype=torch.uint8, device=device).view(torch.uint16)
 
     def _take_b(self, run: Any, call: Any, b: str, out: dict[str, str]) -> bool:
         """Put ``b/<K>`` in ``out`` once K's linears' weights are all held, the period's or the window's own; False when
@@ -618,26 +625,29 @@ class Served:
             out[b] = self.registered[b].root.hex()
         return True
 
-    def _pubs(self, run: Any, calls: Sequence[int], a: str, b: str, out: dict[str, str | None]) -> None:
+    def _pubs(self, run: Any, calls: Sequence[int], a: str, b: str) -> dict[str, str]:
         """Each of ``calls``' (a step's calls of one K) public table ``pub@<c>`` (`pub_table`), registered once its step's
         A table ``a`` and the weights' ``b`` are: row t proof block u0 + t's public row, `core_check.public_words` of the
         window's Program salt, u0 + t and (root(a), root(b)), and in a J10-R window (`h1window.is_j10r`) u0 and the proof block's
         blocks (`h1window.call_blocks`), salted `core_check.public_row_salt` of the open root and u0 + t, as credit's
-        `registered_file` builds it (`h1window.public_table`). Its rows and salts are built again on read (`PublicRows`,
-        `pouw_h1_registered.PublicSalts`); on the GPU its rows are built on the hash's stream and hashed there, its root
-        put in ``out`` by `settle` (`_register_later`)."""
-        from verity_vllm.protocols.pouw.h1 import registered_device as D
-
-        units, ks, j10r = HW.call_units(self.program), {name: (k, n) for name, k, n in self.linears}, HW.is_j10r(self.program)
+        `registered_file` builds it (`h1window.public_table`); its rows kept, as they are public."""
+        units, out, j10r = HW.call_units(self.program), {}, HW.is_j10r(self.program)
         ctx = self.root.encode()
         head = CC.PUBLIC_ROW_SALT_DOMAIN + len(ctx).to_bytes(8, "big") + ctx
-        roots = (self.registered[a].root, self.registered[b].root)
-        with D.hashing() if NR.path() == "gpu" else contextlib.nullcontext() as device:
-            for c in calls:
-                (u0, n), (k, cols) = units[c], ks[self.calls[c][0]]
-                rows = PublicRows(run._salt, roots, u0, n, (self.m, k, self.tile, cols // self.tile[1]) if j10r else None)
-                words = rows.words(np.arange(n)) if device is None else rows.tensor(device)
-                self._register_later(run, self.pub_table(c), words, 0, out, NR.PublicSalts(head, u0, n), rows)
+        x = np.frombuffer(run._salt + bytes(8) + self.registered[a].root + self.registered[b].root, np.uint8)
+        for c in calls:
+            u0, n = units[c]
+            rows = np.tile(x, (n, 1))
+            rows[:, len(run._salt):len(run._salt) + 8] = (
+                np.arange(u0, u0 + n, dtype=">u8").view(np.uint8).reshape(n, 8))
+            if j10r:
+                tail = np.array([(u0, b0, b1) for b0, b1 in HW.call_blocks(self.program, c)], dtype=">u8")
+                rows = np.concatenate([rows, tail.view(np.uint8).reshape(n, 24)], axis=1)
+            words = np.ascontiguousarray(rows.reshape(n, -1, 4)[:, :, ::-1]).reshape(n, -1).view("<u2")
+            salts = NR.public_salts(head, u0, n)
+            v = self.pub_table(c)
+            out[v] = self._register(run, v, words, 0, self.root, salts)
+        return out
 
     def _weight_args(self, call: Any) -> tuple[np.ndarray | None, np.ndarray | None]:
         w = self._weights.get(call.layer)
@@ -693,8 +703,7 @@ class Served:
     def close(self, run: Any) -> None:
         """After the run's last round: refuse a window that isn't static, or that left a table its Program reads
         unregistered; else commit its ok rows (`ok`): row u proof block u's, `core_check.OK_ROW` under `core_check.ok_salt` of
-        the open root and u, as credit's `registered_file` and Lean's ``registeredFile`` build them (`h1window.ok_table`),
-        the salts a `pouw_h1_registered.PublicSalts` derived where the rows are hashed."""
+        the open root and u, as credit's `registered_file` and Lean's ``registeredFile`` build them (`h1window.ok_table`)."""
         self.settle()
         if self.refused:
             return
@@ -709,7 +718,7 @@ class Served:
             n = sum(k for _u0, k in HW.call_units(self.program))
             self.ok = self._tree(run, self.program.fn.bindings["PREFIX"] + HW.OUTPUTS[1],
                                  np.tile(np.array(CC.OK_ROW, np.uint16), (n, 1)), 0, self.root,
-                                 row_salts=NR.PublicSalts(CC.OK_SALT_TAG + self.root.encode() + b"\0", 0, n, shake=True))
+                                 row_salts=b"".join(CC.ok_salt(self.root, u) for u in range(n)))
 
     def tables(self) -> list[str]:
         """Every value the Program's proof blocks open at: each K's ``b/<K>``, then each step's A tables, then each call's z
@@ -754,8 +763,7 @@ def digest_of(entries: Sequence[Mapping[str, Any]], refused: Sequence[str]) -> b
     return hashlib.sha512(DIGEST_TAG + canonical_json({"entries": list(entries), "refused": list(refused)})).digest()
 
 
-__all__ = ["B_NONCE", "EMPTY_ID", "FILE", "IDS_NONCE", "LOCAL_SESSION", "ModelKey", "NONCE", "PREFIX", "PublicRows", "Served",
-           "unit_of",
-           "V2", "Weights", "WindowCommitmentEntries", "card_arch", "chunk_words", "declared", "declared_layout", "descriptor", "digest_of", "file_name", "host_weight", "ids_words", "layout",
+__all__ = ["B_NONCE", "EMPTY_ID", "FILE", "IDS_NONCE", "LOCAL_SESSION", "ModelKey", "NONCE", "PREFIX", "Served",
+           "V2", "Weights", "WindowCommitmentEntries", "chunk_words", "declared", "declared_layout", "descriptor", "digest_of", "file_name", "ids_words", "layout",
            "model_key", "nonce", "RECEIPT_NONCE", "reads_file", "receipt_words", "record_words", "register", "register_weights", "row_words", "trees",
-           "weights_of", "write_program"]
+           "weights_of"]

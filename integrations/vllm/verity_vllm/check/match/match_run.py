@@ -39,7 +39,7 @@ class MatchRun:
     tokens_optional: bool
     rec: dict
     res: dict
-    fold: SEQ.RootView
+    fold: SEQ.Prog
     declared: dict[str, dict]
 
     @property

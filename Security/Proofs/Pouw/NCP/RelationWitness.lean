@@ -83,6 +83,24 @@ theorem probe3 {k s : ℕ} (hk : 1024 ≤ k) (hs : 16 * s + 24 < k) (τ : ℕ) :
   · intro l h1 h2
     simp only [tm, xval k _ ha, yval k _ hb, shiftBy]; split_ifs <;> omega
 
+/-- A fresh entry at every non-final checkpoint makes `R` relation-free. -/
+theorem of_fresh {k : ℕ} {R : Mat}
+    (h : ∀ p, 16 * (p + 1) < 3 * k → ∃ a < k, ∃ b < k,
+      ckMat k R (16 * (p + 1)) a b ≠ 0 ∧ ∀ q < p, ckMat k R (16 * (q + 1)) a b = 0) :
+    RelationFree k 16 R := by
+  intro p hp α β q q' _ _ hαq hβq hall
+  obtain ⟨a, ha, b, hb, hne, hz⟩ := h p hp
+  apply hne
+  have e1 : α * ckMat k R (16 * (q + 1)) a b = 0 := by
+    by_cases h0 : α = 0
+    · rw [h0, zero_mul]
+    · rw [hz q (hαq h0), mul_zero]
+  have e2 : β * ckMat k R (16 * (q' + 1)) a b = 0 := by
+    by_cases h0 : β = 0
+    · rw [h0, zero_mul]
+    · rw [hz q' (hβq h0), mul_zero]
+  rw [hall a ha b hb, e1, e2, add_zero]
+
 theorem fresh {k : ℕ} (hk : 1024 ≤ k) (h16 : 16 ∣ k) (p : ℕ) (hp : 16 * (p + 1) < 3 * k) :
     ∃ a < k, ∃ b < k, ckMat k (shiftBy 24 k) (16 * (p + 1)) a b ≠ 0 ∧
       ∀ q < p, ckMat k (shiftBy 24 k) (16 * (q + 1)) a b = 0 := by
@@ -106,6 +124,9 @@ theorem fresh {k : ℕ} (hk : 1024 ≤ k) (h16 : 16 ∣ k) (p : ℕ) (hp : 16 * 
     · refine ⟨16 * (p - 2 * c) + 24, by omega, 16 * (p - 2 * c), by omega, ?_, fun q hq => ?_⟩
       · rw [probe3 hk (by omega)]; split_ifs <;> omega
       · rw [probe3 hk (by omega)]; split_ifs <;> omega
+
+theorem relationFreeWitness : RelationFreeWitness := fun k hk h16 =>
+  ⟨shiftBy 24 k, shiftBy24_admissible hk h16, of_fresh (fresh hk h16)⟩
 
 theorem independentRelationFree : IndependentRelationFree := by
   intro k R hI p hp α β q q' _ _ hαq hβq hall
@@ -161,5 +182,11 @@ theorem indep_of_fresh {k : ℕ} {R : Mat}
 
 theorem independentWitness : Pouw.Guarantees.NCP.IndependentWitness := fun k hk h16 =>
   ⟨shiftBy 24 k, shiftBy24_admissible hk h16, indep_of_fresh (fresh hk h16)⟩
+
+theorem ncpFinalOnlyInd : NCPFinalOnlyInd := fun k m n N R A B adv h16 hI =>
+  ncpFinalOnly k m n N R A B adv h16 (independentRelationFree k R hI)
+
+theorem ncpWordFloorInd : NCPWordFloorInd := fun k m n N R A B adv γ₀ h16 hI =>
+  ncpWordFloor k m n N R A B adv γ₀ h16 (independentRelationFree k R hI)
 
 end Pouw.NCP.RelationWitness

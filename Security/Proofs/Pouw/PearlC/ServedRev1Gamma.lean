@@ -172,6 +172,18 @@ theorem pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096
   pearlCGammaDevRev1KNK CM _ sem _ _ _ _ (2266417 / 2265828 / (1 - 1 / 1000)) _ (by norm_num)
     (fun m => by rw [wrefDevRev1K_sm120v1LoopCast8p72_n6144k4096 m]; field_simp) (by norm_num) hTT
 
+/-- **v1 under rev1 at the cap 1/1,000 from rev1 at 1/400, `m × 6144 × 4096` at any `m` (Llama-3.1-8B's and Qwen3-8B's
+qkv)**, FP32 at 8.376, the honest cast at 8.72: `γ = 851373343/226641700000` (0.37565%). -/
+theorem pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096_of_cap400
+    (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
+    Gγ CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCDomainDevNK (devSm120v1 Prices.sm120Loop) 6144 4096) ((851373343 / 226641700000 : ℚ) : ℝ) εPearlC :=
+  pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_n6144k4096 CM sem
+    (ttOutPearlCDevRev1_cap_anti CM _ sem (1 / 400) (1 / 1000)
+      (by rw [show (devSm120v1 Prices.sm120Loop).prices = Prices.sm120Loop from rfl]; norm_num [Prices.sm120Loop])
+      (by rw [show (devSm120v1 Prices.sm120Loop).prices = Prices.sm120Loop from rfl]; norm_num [Prices.sm120Loop])
+      (by norm_num) (by norm_num) hTT)
+
 /-- **v1 under rev1 per audit tile at the cap 1/1,000, `m × 6144 × 4096` at any `m` (Llama-3.1-8B's and Qwen3-8B's
 qkv)**, FP32 at 8.376, the honest cast at 8.72: `γ = 851373343/226641700000` (0.37565%). -/
 theorem pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096
@@ -181,6 +193,21 @@ theorem pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096
       (pearlCDomainDevNK (devSm120v1 Prices.sm120Loop) 6144 4096) ((851373343 / 226641700000 : ℚ) : ℝ) εPearlC :=
   pearlCSampledDevRev1KNK CM _ sem _ _ _ _ (2266417 / 2265828 / (1 - 1 / 1000)) _ (by norm_num)
     wrefDevRev1K_sm120v1LoopCast8p72_n6144k4096_nonneg
+    (fun m => by rw [wrefDevRev1K_sm120v1LoopCast8p72_n6144k4096 m]; field_simp) (by norm_num) hTT
+
+/-- **v1 under rev1 per audit tile at the cap 1/1,000 from rev1 per tile at 1/400, `m × 6144 × 4096` at any `m`
+(Llama-3.1-8B's and Qwen3-8B's qkv)**, FP32 at 8.376, the honest cast at 8.72: `γ = 476159143/90656680000` (0.52523%),
+the γ at 1/400. -/
+theorem pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_n6144k4096_of_cap400
+    (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
+    GγSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCTilesDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCDomainDevNK (devSm120v1 Prices.sm120Loop) 6144 4096) ((476159143 / 90656680000 : ℚ) : ℝ) εPearlC :=
+  pearlCSampledDevRev1KNK_of_cap CM _ sem (1 / 400) (1 / 1000) _ _ _
+    (2266417 / 2265828 / (1 - 1 / 400)) _
+    (by rw [show (devSm120v1 Prices.sm120Loop).prices = Prices.sm120Loop from rfl]; norm_num [Prices.sm120Loop])
+    (by rw [show (devSm120v1 Prices.sm120Loop).prices = Prices.sm120Loop from rfl]; norm_num [Prices.sm120Loop])
+    (by norm_num) (by norm_num) (by norm_num) wrefDevRev1K_sm120v1LoopCast8p72_n6144k4096_nonneg
     (fun m => by rw [wrefDevRev1K_sm120v1LoopCast8p72_n6144k4096 m]; field_simp) (by norm_num) hTT
 
 theorem wrefDevRev1K_sm120v1LoopCast8p72_n4096k4096 (m : ℕ) :
@@ -209,6 +236,18 @@ theorem pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_n4096k4096
   pearlCGammaDevRev1KNK CM _ sem _ _ _ _ (1519141 / 1518552 / (1 - 1 / 1000)) _ (by norm_num)
     (fun m => by rw [wrefDevRev1K_sm120v1LoopCast8p72_n4096k4096 m]; field_simp) (by norm_num) hTT
 
+/-- **v1 under rev1 at the cap 1/1,000 from rev1 at 1/400, `m × 4096 × 4096` at any `m` (Llama-3.1-8B's and Qwen3-8B's
+o)**, FP32 at 8.376, the honest cast at 8.72: `γ = 295006781/75957050000` (0.38839%). -/
+theorem pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_n4096k4096_of_cap400
+    (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
+    Gγ CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCDomainDevNK (devSm120v1 Prices.sm120Loop) 4096 4096) ((295006781 / 75957050000 : ℚ) : ℝ) εPearlC :=
+  pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_n4096k4096 CM sem
+    (ttOutPearlCDevRev1_cap_anti CM _ sem (1 / 400) (1 / 1000)
+      (by rw [show (devSm120v1 Prices.sm120Loop).prices = Prices.sm120Loop from rfl]; norm_num [Prices.sm120Loop])
+      (by rw [show (devSm120v1 Prices.sm120Loop).prices = Prices.sm120Loop from rfl]; norm_num [Prices.sm120Loop])
+      (by norm_num) (by norm_num) hTT)
+
 /-- **v1 under rev1 per audit tile at the cap 1/1,000, `m × 4096 × 4096` at any `m` (Llama-3.1-8B's and Qwen3-8B's o)**,
 FP32 at 8.376, the honest cast at 8.72: `γ = 295006781/75957050000` (0.38839%). -/
 theorem pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096
@@ -218,6 +257,21 @@ theorem pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096
       (pearlCDomainDevNK (devSm120v1 Prices.sm120Loop) 4096 4096) ((295006781 / 75957050000 : ℚ) : ℝ) εPearlC :=
   pearlCSampledDevRev1KNK CM _ sem _ _ _ _ (1519141 / 1518552 / (1 - 1 / 1000)) _ (by norm_num)
     wrefDevRev1K_sm120v1LoopCast8p72_n4096k4096_nonneg
+    (fun m => by rw [wrefDevRev1K_sm120v1LoopCast8p72_n4096k4096 m]; field_simp) (by norm_num) hTT
+
+/-- **v1 under rev1 per audit tile at the cap 1/1,000 from rev1 per tile at 1/400, `m × 4096 × 4096` at any `m`
+(Llama-3.1-8B's and Qwen3-8B's o)**, FP32 at 8.376, the honest cast at 8.72: `γ = 163445381/30382820000` (0.53795%), the
+γ at 1/400. -/
+theorem pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_n4096k4096_of_cap400
+    (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
+    GγSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCTilesDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCDomainDevNK (devSm120v1 Prices.sm120Loop) 4096 4096) ((163445381 / 30382820000 : ℚ) : ℝ) εPearlC :=
+  pearlCSampledDevRev1KNK_of_cap CM _ sem (1 / 400) (1 / 1000) _ _ _
+    (1519141 / 1518552 / (1 - 1 / 400)) _
+    (by rw [show (devSm120v1 Prices.sm120Loop).prices = Prices.sm120Loop from rfl]; norm_num [Prices.sm120Loop])
+    (by rw [show (devSm120v1 Prices.sm120Loop).prices = Prices.sm120Loop from rfl]; norm_num [Prices.sm120Loop])
+    (by norm_num) (by norm_num) (by norm_num) wrefDevRev1K_sm120v1LoopCast8p72_n4096k4096_nonneg
     (fun m => by rw [wrefDevRev1K_sm120v1LoopCast8p72_n4096k4096 m]; field_simp) (by norm_num) hTT
 
 theorem wrefDevRev1K_sm120v1LoopCast8p72_n28672k4096 (m : ℕ) :
@@ -246,6 +300,18 @@ theorem pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_n28672k4096
   pearlCGammaDevRev1KNK CM _ sem _ _ _ _ (10486453 / 10485864 / (1 - 1 / 1000)) _ (by norm_num)
     (fun m => by rw [wrefDevRev1K_sm120v1LoopCast8p72_n28672k4096 m]; field_simp) (by norm_num) hTT
 
+/-- **v1 under rev1 at the cap 1/1,000 from rev1 at 1/400, `m × 28672 × 4096` at any `m` (Llama-3.1-8B's gate_up)**,
+FP32 at 8.376, the honest cast at 8.72: `γ = 1863165467/524322650000` (0.35535%). -/
+theorem pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_n28672k4096_of_cap400
+    (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
+    Gγ CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCDomainDevNK (devSm120v1 Prices.sm120Loop) 28672 4096) ((1863165467 / 524322650000 : ℚ) : ℝ) εPearlC :=
+  pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_n28672k4096 CM sem
+    (ttOutPearlCDevRev1_cap_anti CM _ sem (1 / 400) (1 / 1000)
+      (by rw [show (devSm120v1 Prices.sm120Loop).prices = Prices.sm120Loop from rfl]; norm_num [Prices.sm120Loop])
+      (by rw [show (devSm120v1 Prices.sm120Loop).prices = Prices.sm120Loop from rfl]; norm_num [Prices.sm120Loop])
+      (by norm_num) (by norm_num) hTT)
+
 /-- **v1 under rev1 per audit tile at the cap 1/1,000, `m × 28672 × 4096` at any `m` (Llama-3.1-8B's gate_up)**, FP32 at
 8.376, the honest cast at 8.72: `γ = 1863165467/524322650000` (0.35535%). -/
 theorem pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096
@@ -255,6 +321,21 @@ theorem pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096
       (pearlCDomainDevNK (devSm120v1 Prices.sm120Loop) 28672 4096) ((1863165467 / 524322650000 : ℚ) : ℝ) εPearlC :=
   pearlCSampledDevRev1KNK CM _ sem _ _ _ _ (10486453 / 10485864 / (1 - 1 / 1000)) _ (by norm_num)
     wrefDevRev1K_sm120v1LoopCast8p72_n28672k4096_nonneg
+    (fun m => by rw [wrefDevRev1K_sm120v1LoopCast8p72_n28672k4096 m]; field_simp) (by norm_num) hTT
+
+/-- **v1 under rev1 per audit tile at the cap 1/1,000 from rev1 per tile at 1/400, `m × 28672 × 4096` at any `m`
+(Llama-3.1-8B's gate_up)**, FP32 at 8.376, the honest cast at 8.72: `γ = 1059055667/209729060000` (0.50496%), the γ at
+1/400. -/
+theorem pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_n28672k4096_of_cap400
+    (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
+    GγSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCTilesDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCDomainDevNK (devSm120v1 Prices.sm120Loop) 28672 4096) ((1059055667 / 209729060000 : ℚ) : ℝ) εPearlC :=
+  pearlCSampledDevRev1KNK_of_cap CM _ sem (1 / 400) (1 / 1000) _ _ _
+    (10486453 / 10485864 / (1 - 1 / 400)) _
+    (by rw [show (devSm120v1 Prices.sm120Loop).prices = Prices.sm120Loop from rfl]; norm_num [Prices.sm120Loop])
+    (by rw [show (devSm120v1 Prices.sm120Loop).prices = Prices.sm120Loop from rfl]; norm_num [Prices.sm120Loop])
+    (by norm_num) (by norm_num) (by norm_num) wrefDevRev1K_sm120v1LoopCast8p72_n28672k4096_nonneg
     (fun m => by rw [wrefDevRev1K_sm120v1LoopCast8p72_n28672k4096 m]; field_simp) (by norm_num) hTT
 
 theorem wrefDevRev1K_sm120v1LoopCast8p72_n4096k14336 (m : ℕ) :
@@ -283,6 +364,18 @@ theorem pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_n4096k14336
   pearlCGammaDevRev1KNK CM _ sem _ _ _ _ (31303841 / 31291472 / (1 - 1 / 1000)) _ (by norm_num)
     (fun m => by rw [wrefDevRev1K_sm120v1LoopCast8p72_n4096k14336 m]; field_simp) (by norm_num) hTT
 
+/-- **v1 under rev1 at the cap 1/1,000 from rev1 at 1/400, `m × 4096 × 14336` at any `m` (Llama-3.1-8B's down)**, FP32
+at 8.376, the honest cast at 8.72: `γ = 3045273083/782596025000` (0.38912%). -/
+theorem pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_n4096k14336_of_cap400
+    (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
+    Gγ CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCDomainDevNK (devSm120v1 Prices.sm120Loop) 4096 14336) ((3045273083 / 782596025000 : ℚ) : ℝ) εPearlC :=
+  pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_n4096k14336 CM sem
+    (ttOutPearlCDevRev1_cap_anti CM _ sem (1 / 400) (1 / 1000)
+      (by rw [show (devSm120v1 Prices.sm120Loop).prices = Prices.sm120Loop from rfl]; norm_num [Prices.sm120Loop])
+      (by rw [show (devSm120v1 Prices.sm120Loop).prices = Prices.sm120Loop from rfl]; norm_num [Prices.sm120Loop])
+      (by norm_num) (by norm_num) hTT)
+
 /-- **v1 under rev1 per audit tile at the cap 1/1,000, `m × 4096 × 14336` at any `m` (Llama-3.1-8B's down)**, FP32 at
 8.376, the honest cast at 8.72: `γ = 3045273083/782596025000` (0.38912%). -/
 theorem pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336
@@ -292,6 +385,21 @@ theorem pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336
       (pearlCDomainDevNK (devSm120v1 Prices.sm120Loop) 4096 14336) ((3045273083 / 782596025000 : ℚ) : ℝ) εPearlC :=
   pearlCSampledDevRev1KNK CM _ sem _ _ _ _ (31303841 / 31291472 / (1 - 1 / 1000)) _ (by norm_num)
     wrefDevRev1K_sm120v1LoopCast8p72_n4096k14336_nonneg
+    (fun m => by rw [wrefDevRev1K_sm120v1LoopCast8p72_n4096k14336 m]; field_simp) (by norm_num) hTT
+
+/-- **v1 under rev1 per audit tile at the cap 1/1,000 from rev1 per tile at 1/400, `m × 4096 × 14336` at any `m`
+(Llama-3.1-8B's down)**, FP32 at 8.376, the honest cast at 8.72: `γ = 1686307883/313038410000` (0.53869%), the γ at
+1/400. -/
+theorem pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_n4096k14336_of_cap400
+    (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
+    GγSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCTilesDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCDomainDevNK (devSm120v1 Prices.sm120Loop) 4096 14336) ((1686307883 / 313038410000 : ℚ) : ℝ) εPearlC :=
+  pearlCSampledDevRev1KNK_of_cap CM _ sem (1 / 400) (1 / 1000) _ _ _
+    (31303841 / 31291472 / (1 - 1 / 400)) _
+    (by rw [show (devSm120v1 Prices.sm120Loop).prices = Prices.sm120Loop from rfl]; norm_num [Prices.sm120Loop])
+    (by rw [show (devSm120v1 Prices.sm120Loop).prices = Prices.sm120Loop from rfl]; norm_num [Prices.sm120Loop])
+    (by norm_num) (by norm_num) (by norm_num) wrefDevRev1K_sm120v1LoopCast8p72_n4096k14336_nonneg
     (fun m => by rw [wrefDevRev1K_sm120v1LoopCast8p72_n4096k14336 m]; field_simp) (by norm_num) hTT
 
 theorem wrefDevRev1K_sm120v1LoopCast8p72_n24576k4096 (m : ℕ) :
@@ -311,6 +419,53 @@ theorem wrefDevRev1K_sm120v1LoopCast8p72_n24576k4096_nonneg (m : ℕ) :
   · rw [show (devSm120v1 Prices.sm120Loop).prices = Prices.sm120Loop from rfl]; norm_num [Prices.sm120Loop]
   · rw [show (devSm120v1 Prices.sm120Loop).G = 4 from rfl]; norm_num
 
+/-- **v1 under rev1 at the cap 1/1,000, `m × 24576 × 4096` at any `m` (Qwen3-8B's gate_up)**, FP32 at 8.376, the honest
+cast at 8.72: `γ = 800902843/224797525000` (0.35628%). -/
+theorem pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_n24576k4096
+    (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000)) :
+    Gγ CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCDomainDevNK (devSm120v1 Prices.sm120Loop) 24576 4096) ((800902843 / 224797525000 : ℚ) : ℝ) εPearlC :=
+  pearlCGammaDevRev1KNK CM _ sem _ _ _ _ (8991901 / 8991312 / (1 - 1 / 1000)) _ (by norm_num)
+    (fun m => by rw [wrefDevRev1K_sm120v1LoopCast8p72_n24576k4096 m]; field_simp) (by norm_num) hTT
+
+/-- **v1 under rev1 at the cap 1/1,000 from rev1 at 1/400, `m × 24576 × 4096` at any `m` (Qwen3-8B's gate_up)**, FP32 at
+8.376, the honest cast at 8.72: `γ = 800902843/224797525000` (0.35628%). -/
+theorem pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_n24576k4096_of_cap400
+    (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
+    Gγ CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCDomainDevNK (devSm120v1 Prices.sm120Loop) 24576 4096) ((800902843 / 224797525000 : ℚ) : ℝ) εPearlC :=
+  pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_n24576k4096 CM sem
+    (ttOutPearlCDevRev1_cap_anti CM _ sem (1 / 400) (1 / 1000)
+      (by rw [show (devSm120v1 Prices.sm120Loop).prices = Prices.sm120Loop from rfl]; norm_num [Prices.sm120Loop])
+      (by rw [show (devSm120v1 Prices.sm120Loop).prices = Prices.sm120Loop from rfl]; norm_num [Prices.sm120Loop])
+      (by norm_num) (by norm_num) hTT)
+
+/-- **v1 under rev1 per audit tile at the cap 1/1,000, `m × 24576 × 4096` at any `m` (Qwen3-8B's gate_up)**, FP32 at
+8.376, the honest cast at 8.72: `γ = 800902843/224797525000` (0.35628%). -/
+theorem pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_n24576k4096
+    (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000)) :
+    GγSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCTilesDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCDomainDevNK (devSm120v1 Prices.sm120Loop) 24576 4096) ((800902843 / 224797525000 : ℚ) : ℝ) εPearlC :=
+  pearlCSampledDevRev1KNK CM _ sem _ _ _ _ (8991901 / 8991312 / (1 - 1 / 1000)) _ (by norm_num)
+    wrefDevRev1K_sm120v1LoopCast8p72_n24576k4096_nonneg
+    (fun m => by rw [wrefDevRev1K_sm120v1LoopCast8p72_n24576k4096 m]; field_simp) (by norm_num) hTT
+
+/-- **v1 under rev1 per audit tile at the cap 1/1,000 from rev1 per tile at 1/400, `m × 24576 × 4096` at any `m`
+(Qwen3-8B's gate_up)**, FP32 at 8.376, the honest cast at 8.72: `γ = 454893643/89919010000` (0.50589%), the γ at 1/400.
+-/
+theorem pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_n24576k4096_of_cap400
+    (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
+    GγSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCTilesDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCDomainDevNK (devSm120v1 Prices.sm120Loop) 24576 4096) ((454893643 / 89919010000 : ℚ) : ℝ) εPearlC :=
+  pearlCSampledDevRev1KNK_of_cap CM _ sem (1 / 400) (1 / 1000) _ _ _
+    (8991901 / 8991312 / (1 - 1 / 400)) _
+    (by rw [show (devSm120v1 Prices.sm120Loop).prices = Prices.sm120Loop from rfl]; norm_num [Prices.sm120Loop])
+    (by rw [show (devSm120v1 Prices.sm120Loop).prices = Prices.sm120Loop from rfl]; norm_num [Prices.sm120Loop])
+    (by norm_num) (by norm_num) (by norm_num) wrefDevRev1K_sm120v1LoopCast8p72_n24576k4096_nonneg
+    (fun m => by rw [wrefDevRev1K_sm120v1LoopCast8p72_n24576k4096 m]; field_simp) (by norm_num) hTT
+
 theorem wrefDevRev1K_sm120v1LoopCast8p72_n4096k12288 (m : ℕ) :
     wrefDevRev1K (devSm120v1 Prices.sm120Loop) (218 / 25 - 8953 / 1000) ⟨m, 4096, 12288⟩ =
       13433021 / 13427720 * creditDevRev1 (devSm120v1 Prices.sm120Loop) ⟨m, 4096, 12288⟩ := by
@@ -327,6 +482,52 @@ theorem wrefDevRev1K_sm120v1LoopCast8p72_n4096k12288_nonneg (m : ℕ) :
   · rw [show (devSm120v1 Prices.sm120Loop).prices = Prices.sm120Loop from rfl]; norm_num [Prices.sm120Loop]
   · rw [show (devSm120v1 Prices.sm120Loop).prices = Prices.sm120Loop from rfl]; norm_num [Prices.sm120Loop]
   · rw [show (devSm120v1 Prices.sm120Loop).G = 4 from rfl]; norm_num
+
+/-- **v1 under rev1 at the cap 1/1,000, `m × 4096 × 12288` at any `m` (Qwen3-8B's down)**, FP32 at 8.376, the honest
+cast at 8.72: `γ = 74663501/19190030000` (0.38907%). -/
+theorem pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_n4096k12288
+    (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000)) :
+    Gγ CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCDomainDevNK (devSm120v1 Prices.sm120Loop) 4096 12288) ((74663501 / 19190030000 : ℚ) : ℝ) εPearlC :=
+  pearlCGammaDevRev1KNK CM _ sem _ _ _ _ (13433021 / 13427720 / (1 - 1 / 1000)) _ (by norm_num)
+    (fun m => by rw [wrefDevRev1K_sm120v1LoopCast8p72_n4096k12288 m]; field_simp) (by norm_num) hTT
+
+/-- **v1 under rev1 at the cap 1/1,000 from rev1 at 1/400, `m × 4096 × 12288` at any `m` (Qwen3-8B's down)**, FP32 at
+8.376, the honest cast at 8.72: `γ = 74663501/19190030000` (0.38907%). -/
+theorem pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_n4096k12288_of_cap400
+    (hTT : TTOutPearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
+    Gγ CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCDomainDevNK (devSm120v1 Prices.sm120Loop) 4096 12288) ((74663501 / 19190030000 : ℚ) : ℝ) εPearlC :=
+  pearlCGammaSm120v1LoopCast8p72Rev1Cap1000_n4096k12288 CM sem
+    (ttOutPearlCDevRev1_cap_anti CM _ sem (1 / 400) (1 / 1000)
+      (by rw [show (devSm120v1 Prices.sm120Loop).prices = Prices.sm120Loop from rfl]; norm_num [Prices.sm120Loop])
+      (by rw [show (devSm120v1 Prices.sm120Loop).prices = Prices.sm120Loop from rfl]; norm_num [Prices.sm120Loop])
+      (by norm_num) (by norm_num) hTT)
+
+/-- **v1 under rev1 per audit tile at the cap 1/1,000, `m × 4096 × 12288` at any `m` (Qwen3-8B's down)**, FP32 at 8.376,
+the honest cast at 8.72: `γ = 74663501/19190030000` (0.38907%). -/
+theorem pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_n4096k12288
+    (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000)) :
+    GγSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCTilesDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCDomainDevNK (devSm120v1 Prices.sm120Loop) 4096 12288) ((74663501 / 19190030000 : ℚ) : ℝ) εPearlC :=
+  pearlCSampledDevRev1KNK CM _ sem _ _ _ _ (13433021 / 13427720 / (1 - 1 / 1000)) _ (by norm_num)
+    wrefDevRev1K_sm120v1LoopCast8p72_n4096k12288_nonneg
+    (fun m => by rw [wrefDevRev1K_sm120v1LoopCast8p72_n4096k12288 m]; field_simp) (by norm_num) hTT
+
+/-- **v1 under rev1 per audit tile at the cap 1/1,000 from rev1 per tile at 1/400, `m × 4096 × 12288` at any `m`
+(Qwen3-8B's down)**, FP32 at 8.376, the honest cast at 8.72: `γ = 41346101/7676012000` (0.53864%), the γ at 1/400. -/
+theorem pearlCSampledSm120v1LoopCast8p72Rev1Cap1000_n4096k12288_of_cap400
+    (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 400)) :
+    GγSampled CM (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCTilesDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCDomainDevNK (devSm120v1 Prices.sm120Loop) 4096 12288) ((41346101 / 7676012000 : ℚ) : ℝ) εPearlC :=
+  pearlCSampledDevRev1KNK_of_cap CM _ sem (1 / 400) (1 / 1000) _ _ _
+    (13433021 / 13427720 / (1 - 1 / 400)) _
+    (by rw [show (devSm120v1 Prices.sm120Loop).prices = Prices.sm120Loop from rfl]; norm_num [Prices.sm120Loop])
+    (by rw [show (devSm120v1 Prices.sm120Loop).prices = Prices.sm120Loop from rfl]; norm_num [Prices.sm120Loop])
+    (by norm_num) (by norm_num) (by norm_num) wrefDevRev1K_sm120v1LoopCast8p72_n4096k12288_nonneg
+    (fun m => by rw [wrefDevRev1K_sm120v1LoopCast8p72_n4096k12288 m]; field_simp) (by norm_num) hTT
 
 end Served
 

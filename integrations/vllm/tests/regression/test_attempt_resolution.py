@@ -2,9 +2,8 @@
 `attempt_outputs` / `fetch_attempt`, `resolver.Row.candidate_root()` as the union of the attempts' typed output trees, and the
 `attempt_provenance` check (the re-run cites the fixture row's configuration; Match cites the Build artifact, Commit cites both).
 
-Self-contained: three fake stage Attempts are published into a temporary store with the store CLI (`research data attempt
-publish`, as `store_io` runs it; skipped without `tools/research/src` and its run fixture), so it needs neither VERITY_REGRESSION=1,
-a GPU, nor R2.  Run from integrations/vllm:
+Self-contained: three fake stage Attempts are published into a temporary LocalStore (the `research` package of this checkout,
+`tools/research/src`; skipped when absent), so it needs neither VERITY_REGRESSION=1, a GPU, nor R2.  Run from integrations/vllm:
     python -m pytest tests/regression/test_attempt_resolution.py -q
 """
 from __future__ import annotations
@@ -12,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import sys
 from pathlib import Path
 
 import pytest
@@ -21,7 +21,6 @@ from .checks import attempt_provenance as AP
 
 RESEARCH_SRC = store_io.REPO_ROOT / "tools" / "research" / "src"
 RUN_FIXTURE = store_io.REPO_ROOT / "tools" / "research" / "tests" / "fixtures" / "run_v0.2"
-OUTPUTS_SCHEMA = "research/outputs/v0.1"
 ROW = "llama32-1b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager"
 IDS = {"build": "r20260923-060930-553f", "match": "r20260923-071000-0a1b", "commit": "r20260923-072000-0c2d"}
 PD = "9ce48951f04eb440501c4e829e3a492a58ca963997ca707d47fb129fe73cf590"
@@ -35,15 +34,18 @@ pytestmark = pytest.mark.skipif(not (RESEARCH_SRC / "research" / "store").is_dir
                                 reason="needs tools/research/src (research.store) and its run_v0.2 fixture in this checkout")
 
 
-def _publish(run_dir: Path) -> dict:
-    """`research data attempt publish RUN_DIR`: the run's Attempt and its outputs, into `$RESEARCH_STORE`."""
-    [out] = json.loads(store_io._cli("attempt", "publish", str(run_dir), "--json", check=False).stdout)
-    return out
+def _research():
+    if str(RESEARCH_SRC) not in sys.path:
+        sys.path.insert(0, str(RESEARCH_SRC))
+    from research.store import attempt as A
+    from research.store.local import LocalStore
+    return A, LocalStore
 
 
 def _stage_run(tmp: Path, stage: str, *, params: dict, inputs: dict, files: dict[str, str], kind: str, meta: dict,
                evidence: str = '{"stage": "%s"}\n') -> Path:
     """A run dir for one stage: the v0.2 fixture re-identified as IDS[stage], with `outputs.json` declaring the stage's typed outputs."""
+    A, _ = _research()
     rid = IDS[stage]
     d = tmp / "runs" / rid
     shutil.copytree(RUN_FIXTURE, d)
@@ -51,7 +53,7 @@ def _stage_run(tmp: Path, stage: str, *, params: dict, inputs: dict, files: dict
     job = json.loads((d / "job.json").read_text())
     job["run"]["id"] = rid
     job["ownership"]["job"] = rid
-    job["store"] = {"tool": {"name": f"vllm.{stage}", "version": "1", "spec": f"tools.research.src.research.store.vllm_tools:VLLM_{stage.upper()}"},
+    job["store"] = {"tool": {"name": f"vllm.{stage}", "version": "1", "spec": f"integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_{stage.upper()}"},
                     "key_params": KEY_PARAMS + (["pairs"] if stage == "commit" else []), "key_conditions": ["hw.family"],
                     "params": params, "key_params_resolved": {k: params.get(k) for k in KEY_PARAMS}, "inputs": inputs, "closure": {},
                     "campaign": "test"}
@@ -62,11 +64,11 @@ def _stage_run(tmp: Path, stage: str, *, params: dict, inputs: dict, files: dict
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(text)
     (d / "evidence").mkdir()
-    (d / "evidence" / "stages.txt").write_text(evidence % stage)
-    doc = {"schema": OUTPUTS_SCHEMA, "outputs": [
+    (d / "evidence" / "timeline.jsonl").write_text(evidence % stage)
+    doc = {"schema": A.OUTPUTS_SCHEMA, "outputs": [
         {"name": {"build": "build", "match": "match", "commit": "verdict"}[stage], "kind": kind, "meta": meta, "tree": f"outputs/{stage}",
          "refs": {k: v for k, v in inputs.items()}},
-        {"name": "evidence", "kind": "execution-evidence/v1", "meta": {"row": ROW, "stage": stage}, "file": "evidence/stages.txt"},
+        {"name": "evidence", "kind": "execution-evidence/v1", "meta": {"row": ROW, "stage": stage}, "file": "evidence/timeline.jsonl"},
     ]}
     (d / "outputs.json").write_text(json.dumps(doc))
     return d
@@ -74,31 +76,33 @@ def _stage_run(tmp: Path, stage: str, *, params: dict, inputs: dict, files: dict
 
 @pytest.fixture
 def store(tmp_path, monkeypatch):
-    """Three published stage Attempts (build -> match -> commit) of ROW in a temporary store; returns {stage: attempt manifest}."""
+    """Three published stage Attempts (build -> match -> commit) of ROW in a temporary LocalStore; returns {stage: attempt manifest}."""
+    A, LocalStore = _research()
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "store"))
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "store.toml"))
     (tmp_path / "store.toml").write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
     monkeypatch.delenv(resolver.ROWS_ROOT_ENV, raising=False)
     monkeypatch.setenv(resolver.CANDIDATE_CACHE_ENV, str(tmp_path / "cache"))
     monkeypatch.setattr(resolver, "_ATTEMPT_DOCS", {})
+    st = LocalStore()
     p_build = {**CONFIG, "stage": "build", "retain": "host", "build_jobs": "auto"}
-    b = _publish(_stage_run(tmp_path, "build", params=p_build, inputs={}, kind="vllm-build/v1", meta={"row": ROW, "program_digest": PD},
-                             files={"build_summary.json": json.dumps({"program_digest": PD}), "build_request/required_values.json": "{}"}))
+    b = A.publish(_stage_run(tmp_path, "build", params=p_build, inputs={}, kind="vllm-build/v1", meta={"row": ROW, "program_digest": PD},
+                             files={"build_summary.json": json.dumps({"program_digest": PD}), "build_request/required_values.json": "{}"}), store=st)
     assert b["published"], b
     build_art = b["outputs"]["build"]
     p_match = {**CONFIG, "stage": "match", "retain": "none", "snapshot_steps": "0,1", "within_step": "dag"}
-    m = _publish(_stage_run(tmp_path, "match", params=p_match, inputs={"build": build_art}, kind="vllm-match-record/v1",
+    m = A.publish(_stage_run(tmp_path, "match", params=p_match, inputs={"build": build_art}, kind="vllm-match-record/v1",
                              meta={"row": ROW, "program_digest": PD, "match_ok": True},
                              files={"global_match.json": json.dumps({"ok": True, "checks": {"tokens": "PASS"}}),
-                                    "match/instances.jsonl": "{}\n", "match/versions.json": "{}"}))
+                                    "match/instances.jsonl": "{}\n", "match/versions.json": "{}"}), store=st)
     assert m["published"], m
     match_art = m["outputs"]["match"]
     p_commit = {**CONFIG, "stage": "commit", "pairs": "3", "retain": "none"}
-    c = _publish(_stage_run(tmp_path, "commit", params=p_commit, inputs={"build": build_art, "match": match_art}, kind="vllm-verdict/v1",
+    c = A.publish(_stage_run(tmp_path, "commit", params=p_commit, inputs={"build": build_art, "match": match_art}, kind="vllm-verdict/v1",
                              meta={"row": ROW, "verdict": "PASS"},
-                             files={"commit/commit_verdict.json": json.dumps({"verdict": "PASS"}), "commit/commit_summary.json": "{}"}))
+                             files={"commit/commit_verdict.json": json.dumps({"verdict": "PASS"}), "commit/commit_summary.json": "{}"}), store=st)
     assert c["published"], c
-    return {"build": store_io.attempt(IDS["build"]), "match": store_io.attempt(IDS["match"]), "commit": store_io.attempt(IDS["commit"]),
+    return {"build": st.get_attempt(IDS["build"]), "match": st.get_attempt(IDS["match"]), "commit": st.get_attempt(IDS["commit"]),
             "arts": {"build": build_art, "match": match_art, "verdict": c["outputs"]["verdict"]}, "tmp": tmp_path}
 
 
@@ -117,7 +121,7 @@ def test_store_io_reads_attempts_and_their_outputs_by_kind(store):
     outs = store_io.attempt_outputs(IDS["match"])
     assert outs["match"]["id"] == store["arts"]["match"] and outs["match"]["kind"] == "vllm-match-record/v1"
     assert outs["match"]["payload"] == {"type": "tree", "name": None} and outs["match"]["meta"]["program_digest"] == PD
-    assert outs["evidence"]["kind"] == "execution-evidence/v1" and outs["evidence"]["payload"] == {"type": "file", "name": "stages.txt"}
+    assert outs["evidence"]["kind"] == "execution-evidence/v1" and outs["evidence"]["payload"] == {"type": "file", "name": "timeline.jsonl"}
     assert set(outs) >= {"match", "evidence"}
     only = store_io.attempt_outputs(IDS["match"], ("vllm-match-record/v1",))
     assert list(only) == ["match"]
@@ -128,18 +132,20 @@ def test_fetch_attempt_unions_the_stage_trees_like_a_row_dir(store, tmp_path):
     to = store_io.fetch_attempt([IDS["build"], IDS["match"], IDS["commit"]], tmp_path / "union")
     rels = sorted(str(p.relative_to(to)) for p in to.rglob("*") if p.is_file())
     assert rels == ["ATTEMPTS.json", "build_request/required_values.json", "build_summary.json", "commit/commit_summary.json",
-                    "commit/commit_verdict.json", "evidence/build/stages.txt", "evidence/commit/stages.txt",
-                    "evidence/match/stages.txt", "global_match.json", "match/instances.jsonl", "match/versions.json"], rels
-    assert (to / "evidence" / "match" / "stages.txt").read_text() == '{"stage": "match"}\n', "each stage's evidence, by stage"
+                    "commit/commit_verdict.json", "evidence/build/timeline.jsonl", "evidence/commit/timeline.jsonl",
+                    "evidence/match/timeline.jsonl", "global_match.json", "match/instances.jsonl", "match/versions.json"], rels
+    assert (to / "evidence" / "match" / "timeline.jsonl").read_text() == '{"stage": "match"}\n', "each stage's evidence, by stage"
     rec = json.loads((to / "ATTEMPTS.json").read_text())
     assert set(rec["attempts"]) == set(IDS.values()) and rec["conflicts"] == []
     # an account file two attempts carry with different bytes is a conflict, named -- never a silent overwrite
+    A, LocalStore = _research()
+    st = LocalStore()
     d = _stage_run(store["tmp"] / "again", "match", params={**CONFIG, "stage": "match"}, inputs={}, kind="vllm-match-record/v1",
                    meta={"row": ROW}, files={"global_match.json": json.dumps({"ok": False}), "match/versions.json": "{}"})
     job = json.loads((d / "job.json").read_text())
     job["run"]["id"] = job["ownership"]["job"] = "r20260923-080000-ffff"
     (d / "job.json").write_text(json.dumps(job))
-    assert _publish(d)["published"]
+    assert A.publish(d, store=st)["published"]
     with pytest.raises(store_io.StoreUnavailable, match="differ between attempts"):
         store_io.fetch_attempt([IDS["match"], "r20260923-080000-ffff"], tmp_path / "conflict")
     rec = json.loads((tmp_path / "conflict" / "ATTEMPTS.json").read_text())
@@ -240,13 +246,13 @@ def test_attempt_provenance_does_not_apply_without_attempt_ids(monkeypatch, tmp_
     assert "no candidate Attempt ids" in AP.applies(_row())
 
 
-def test_the_harness_parses_row_ids_as_the_stage_tools_do():
-    """The harness's copy of the row-id grammar, which the stage Tools' `row_config` parses into the key params an Attempt carries."""
-    assert AP.row_config(ROW) == {k: CONFIG[k] for k in AP.ROW_FIELDS}
-    assert AP.row_config("gemma2-2b__bf16__h100__tpx__b1__i512__o64__burst__stochastic__bi-graph") == {
-        "model_tag": "gemma2-2b", "dtype": "bf16", "hw": "h100", "tp": "tpx", "batch": 1, "input": 512, "output": 64, "arrivals": "burst",
-        "sampling": "stochastic", "exec": "bi-graph"}
-    assert AP.row_config("bad") == {**{k: None for k in AP.ROW_FIELDS}, "model_tag": "bad"}
+def test_row_config_grammar_matches_the_tool_declaration():
+    """The harness's copy of the row-id grammar agrees with research_tools.row_config (which key params the Attempt carries)."""
+    sys.path.insert(0, str(RESEARCH_SRC))
+    sys.path.insert(0, str(store_io.REPO_ROOT))
+    from integrations.vllm.verity_vllm.pipeline import research_tools as RT
+    for rid in (ROW, "mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager", "gemma2-2b__bf16__h100__tp1__b1__i512__o64__burst__stochastic__bi-graph", "bad"):
+        assert AP.row_config(rid) == RT.row_config(rid), rid
     assert AP.CONFIG_KEYS == ("row", "model", "revision", "query", *AP.ROW_FIELDS)
-    assert set(AP.CONFIG_KEYS) <= set(KEY_PARAMS)
-    assert AP.DEFAULT_QUERY == CONFIG["query"]
+    assert set(AP.CONFIG_KEYS) <= set(RT.ROW_KEY_PARAMS)
+    assert AP.DEFAULT_QUERY == RT.DEFAULT_QUERY

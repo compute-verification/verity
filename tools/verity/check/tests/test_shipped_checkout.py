@@ -21,10 +21,9 @@ def _git(root: Path, *args: str) -> None:
 
 
 def _repo(root: Path) -> Path:
-    """A checkout with this runner, its settings and one package suite whose test passes."""
+    """A checkout with this runner and one package suite whose test passes."""
     (root / "tools" / "verity" / "check").mkdir(parents=True)
-    for f in ("suites.py", "settings.py"):
-        shutil.copy(HERE / f, root / "tools" / "verity" / "check" / f)
+    shutil.copy(HERE / "suites.py", root / "tools" / "verity" / "check" / "suites.py")
     shutil.copytree(HERE / "guard", root / "tools" / "verity" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
     (root / ".gitignore").write_text("__pycache__/\n")
     (root / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg"]\n')

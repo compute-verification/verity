@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# The network certifier's bucket rows read by the proof system (warden_zk.py) on a CPU machine, on hidden_zk's builds
-# (its job.sh, sourced: C-Flock's flock-circuit and the Lean flock-verify) with the firewall's Lean frame. From a clone:
+# The warden's bucket rows read by the proof system (warden_zk.py) on a CPU machine, on hidden_zk's builds (its job.sh,
+# sourced: C-Flock's flock-circuit and the Lean flock-verify) with the firewall's Lean frame. From a clone:
 #   env WZ_MEM_GB=64 CHECK_SLOTS=SLOTS python3 tools/verity/check/slot.py --by LANE -- \
 #     bash benchmarks/network_traces/warden_zk.sh
 #   as a job of at most 180 minutes on 16 CPUs and 64 GB.
-# The run: a warden-serve rehearsal against the fake endpoint (`warden_serve.py rehearse --fake`), whose network
-# certifier commits and signs each window's bucket rows while serving; then `warden_zk.py prove` on it.
+# The run: a warden-serve rehearsal against the fake endpoint (`warden_serve.py rehearse --fake`), whose warden commits
+# and signs each window's bucket rows while serving; then `warden_zk.py prove` on it.
 # env: WZ_MEM_GB (what job.sh's stages may take, within the slot's)  WZ_REQUESTS (rehearse's --requests, 6)
 #      WZ_UNITS (warden_zk.py's --units, 16)  WZ_CACHE (the build cache, kept across runs where
 #      writable; hidden_zk's by default)  WZ_DRY=1

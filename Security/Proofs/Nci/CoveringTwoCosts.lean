@@ -24,6 +24,9 @@ variable {d : Declaration} (B : MulBlocks d)
 theorem parameterHard_iff (s : ℕ) (r b : ℝ) :
     Assumptions.ParameterHard d B s r b ↔ Assumptions.ParameterHardAt d B s (r * b) := Iff.rfl
 
+theorem activationChained_iff (D : ℕ) (r b : ℝ) (p : Fin B.nw × Fin B.nt) :
+    Assumptions.ActivationChained d B D r b p ↔ Assumptions.ActivationChainedAt d B D (r * b) p := Iff.rfl
+
 theorem chainedBlocks_eq (D : ℕ) (r b : ℝ) :
     Assumptions.chainedBlocks d B D r b = Assumptions.chainedBlocksAt d B D (r * b) := rfl
 

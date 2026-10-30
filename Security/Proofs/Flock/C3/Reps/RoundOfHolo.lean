@@ -1,5 +1,4 @@
-import Proofs.Flock.C3.Compose.HoloStreamSizes
-import Proofs.Flock.C3.Reps.RoundReads
+import Proofs.Flock.C3.Reps.RoundSel
 
 /-!
 # A rep's message rounds along `holoRepShape`

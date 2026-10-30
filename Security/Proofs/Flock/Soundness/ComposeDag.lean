@@ -85,7 +85,7 @@ open Compose
 
 section unit
 
-variable {types : String → Option CircuitType} {ls : Array BlockLayout} {info : String → Option TableInfo}
+variable {types : String → Option CircuitType} {ls : Array Layout} {info : String → Option TableInfo}
   {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
 
 /-- **The unit's composed rows read only earlier columns**, or `one`. -/

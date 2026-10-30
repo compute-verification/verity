@@ -6,9 +6,7 @@ The reference decodes the protocol's formats (`NetworkCheck/Check.lean`'s module
 session. The cases are generated spatial units: an honest network certifier (`grid.Certifier` driven by
 `schedule.run_shaper` on the egress links, fed directly on the ingress links) whose records `certificate.Issuer` signs with
 a small LMS key in a drawn certifier session, then one change
-(`MUTATIONS`), each aimed at one path of the audit, and malformed parameters, commitments and evidence. The issuer
-certifies no incomplete record, so the `status` change either leaves its faulted window uncertified or signs its head
-anyway (`_signed_anyway`), as only a forger could, which is what keeps the check's status path reachable."""
+(`MUTATIONS`), each aimed at one path of the audit, and malformed parameters, commitments and evidence."""
 
 from __future__ import annotations
 
@@ -29,10 +27,11 @@ from verity_difftest import protocol as P
 from verity.ml.commitments.identity import tagged_sha512
 from verity.ml.crypto import lms
 from verity.core.protocols.certifier.audit import Audit
-from verity.core.protocols.certifier.certificate import (SALT_BYTES, STATUS_CODES, Certificate, CertifiedRecord,
-                                                                Direction, Issuer, LmsKey, RecordHead, SignerRefused,
-                                                                certificate_digest, parameters_digest, record_head)
-from verity.core.protocols.certifier.grid import COMPLETE, Certifier, GridParams, Reason, BlockGrid, Status
+from verity.core.protocols.certifier.certificate import (STATUS_CODES, Certificate, CertifiedRecord, Direction,
+                                                                Issuer, LmsKey, RecordHead, SignerRefused,
+                                                                certificate_digest, certificate_message,
+                                                                parameters_digest)
+from verity.core.protocols.certifier.grid import COMPLETE, Certifier, GridParams, Reason, Record, Status
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids, run_shaper
 from verity.core.protocols.certifier.service import encode
 
@@ -300,16 +299,6 @@ TAGS: dict[str, str] = {}
 SEEN: Counter = Counter()
 
 
-def _signed_anyway(issuer: Issuer, record: BlockGrid, direction: Direction, g: GridParams, parameters: bytes,
-                   deadline: bool) -> CertifiedRecord | None:
-    """A certificate of a faulted record, which `Issuer.certify` refuses: its head signed under the issuer's key."""
-    head = record_head(record.link, direction, record.window, record.grid, record.status, g, parameters,
-                       deadline=deadline)
-    salt = issuer.coins(SALT_BYTES)
-    c = issuer.sign(record.link, direction, record.window, certificate_digest(salt, head.digest()))
-    return None if c is None else CertifiedRecord(head, salt, c)
-
-
 def _flip(b: bytes, i: int) -> bytes:
     i %= len(b)
     return b[:i] + bytes([b[i] ^ 1]) + b[i + 1:]
@@ -326,16 +315,15 @@ def _grid_json(g: GridParams) -> dict:
 
 @dataclasses.dataclass
 class Drawn:
-    """A generated spatial unit before it is encoded: the change `m` (sampled with `n`), its parameters as JSON, the
-    certified records, each execution phase's raw record and grid by `(direction, link, window)`, the egress links'
-    frames and syncs, and the execution phase the change aims at (`target`, and an egress one, `egress_target`, when
-    there is one)."""
+    """A generated spatial unit before it is encoded: the change `m` (drawn with `n`), its parameters as JSON, the
+    certified records, each link-window's raw record and grid by `(direction, link, window)`, the egress links' frames and
+    syncs, and the link-window the change aims at (`target`, and an egress one, `egress_target`, when there is one)."""
 
     m: str
     n: int
     params: dict
     records: list[CertifiedRecord]
-    raws: dict[tuple[str, str, int], tuple[BlockGrid, GridParams]]
+    raws: dict[tuple[str, str, int], tuple[Record, GridParams]]
     egress: list[str]
     frames: dict[str, list[LogicalFrame]]
     syncs: dict[str, list[ClockSync]]
@@ -383,7 +371,6 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
     egress_parameters, ingress_parameters = parameters_digest(grid, ss), parameters_digest(ingress_grid)
     certified_grid = ingress_grid
     refuse, unsettled = set(), set()
-    forge_status = False
     targets = [("egress", l, w) for l in egress for w in range(W)] + [("ingress", l, w) for l in ingress for w in range(W)]
     target = targets[n % len(targets)]
     if m == "replay-link":
@@ -401,7 +388,6 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
         T_d = grid.buckets if d == "egress" else ingress_grid.buckets
         bucket = tw * T_d + n % T_d
         faults[(d, tl)] = {bucket: draw(st.sampled_from(list(Reason)))}
-        forge_status = draw(st.sampled_from([True, False]))
     elif m == "advice-outside":
         l, w = egress_target
         s = syncs[l][w]
@@ -436,15 +422,13 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
     issuer = Issuer(signer, session,
                     coins=lambda k: hashlib.shake_256(session + next(drawn_salts).to_bytes(8, "big")).digest(k))
     records: list[CertifiedRecord] = []
-    raws: dict[tuple[str, str, int], tuple[BlockGrid, GridParams]] = {}
+    raws: dict[tuple[str, str, int], tuple[Record, GridParams]] = {}
 
     def certify(record, direction, g, parameters):
         lw = (direction.value, record.link, record.window)
         raws[lw] = (record, g)
         signer.refuse = lw in refuse
         r = issuer.certify(record, direction, g, parameters, deadline=lw not in unsettled)
-        if r is None and forge_status and not record.status.complete:
-            r = _signed_anyway(issuer, record, direction, g, parameters, lw not in unsettled)
         if r is not None:
             records.append(r)
 
@@ -523,7 +507,7 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
             r.certificate, signature=lms.sign_at(key, 1, r.certificate.message(session)).encode()))])))
     elif m == "extra":
         empty = tuple((None,) * grid.allocation for _ in range(grid.buckets))
-        extra = draw(st.sampled_from([BlockGrid("zz", 0, empty, COMPLETE), BlockGrid(tl, W, empty, COMPLETE)]))
+        extra = draw(st.sampled_from([Record("zz", 0, empty, COMPLETE), Record(tl, W, empty, COMPLETE)]))
         r = issuer.certify(extra, draw(st.sampled_from([EGRESS, INGRESS])), grid, parameters_digest(grid, ss))
         raws[(r.direction.value, extra.link, extra.window)] = (extra, grid)
         records.insert(n % (len(records) + 1), r)

@@ -121,6 +121,11 @@ def committed_zero_word(R: int, C: int) -> int:
     return bin(R & C & M32).count("1")
 
 
+def committed_general_word(Rbits: list[int], U: list[int]) -> int:
+    """A general-instance Dither word: sum_p R[p] * U[p] over 32 entries, R in {0,1}, U in [-63, 62], exact s32."""
+    return sum(r * u for r, u in zip(Rbits, U)) & M32
+
+
 def hash_of_inputs(R: int, C: int) -> int:
     """A first-mixed hash of the operands (mixed on every fiber): it depends on R and C but is not their dot product."""
     return mix32(R ^ mix32(C))

@@ -192,23 +192,24 @@ theorem boundary_posOf {κ : Fin C.N → Option Bool} {n : ℕ} {P : FlockSoundn
     · rw [hgx]
       simpa using hr
 
-/-- **A unit that is not faulty is correct on its openings**: when its lowered proof block is correct in
+/-- **A unit that is not faulty is correct on its openings**: when its one lowered proof unit is correct in
 `progOf C κ` on its committed values `val` (and any interior `ι`), each committed wire of the unit holds, in the wire
 values `val` opens, what the unit computes from them. -/
 theorem correct_of_progCorrect {κ : Fin C.N → Option Bool} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
     (u : Fin n) (val : ℕ → Option Bool) (ι : ℕ → Bool)
-    (h : (progOf C κ).Correct ((progOf C κ).refIn (unitGates P u) val ι) (unitGates P u)) :
+    (h : (progOf C κ).Correct (RU.ref (progOf C κ) [unitGates P u] val ι) (unitGates P u)) :
     P.Correct (openedOf C κ val) u := by
+  have hgates : RU.gates [unitGates P u] = unitGates P u := by simp [RU.gates]
   have hrefB : ∀ p, (progOf C κ).Boundary (unitGates P u) p = true →
-      (progOf C κ).refIn (unitGates P u) val ι p = val p := by
+      RU.ref (progOf C κ) [unitGates P u] val ι p = val p := by
     intro p hp
-    simp [Claims.Sampling.Prog.refIn, hp]
-  have hrefO : ∀ p, p ∉ unitGates P u → (progOf C κ).refIn (unitGates P u) val ι p = val p := by
+    simp [RU.ref, hgates, hp]
+  have hrefO : ∀ p, p ∉ unitGates P u → RU.ref (progOf C κ) [unitGates P u] val ι p = val p := by
     intro p hp
-    simp [Claims.Sampling.Prog.refIn, hp]
+    simp [RU.ref, hgates, hp]
   have hread : ∀ p ∈ unitGates P u, ∀ x, (progOf C κ).gates[p]? = some x → ∀ a : Fin C.N, posOf C a ∈ x.reads →
       posOf C a ∉ unitGates P u →
-      (progOf C κ).read ((progOf C κ).refIn (unitGates P u) val ι) (posOf C a) =
+      (progOf C κ).read (RU.ref (progOf C κ) [unitGates P u] val ι) (posOf C a) =
         some (P.localEval (openedOf C κ val) u a) := by
     intro p hp x hx a ha hna
     have hua : P.unit a ≠ some u := fun h' => hna (posOf_mem_unitGates.2 h')
@@ -239,25 +240,23 @@ theorem correct_of_progCorrect {κ : Fin C.N → Option Bool} {n : ℕ} (P : Flo
 
 /-- **A unit wrong in the wire values a witness opens is faulty** in the sampling statement of `progOf C κ`. -/
 theorem wrong_subset_faulty {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool) (kd : ℕ)
-    (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool)
+    (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool)
     (w : Wit) {u : Fin n} (hu : u ∈ P.wrong (openedOf C κ (w.val H Cm (stmtOf P κ kd desc q roots)))) :
-    u.val ∈ faulty H Cm (stmtOf P κ kd desc q roots) (partOf P κ) w := by
+    u.val ∈ faulty H Cm (stmtOf P κ kd desc q roots) (partOf P) w := by
   classical
   rw [FlockSoundness.Audit.Partition.mem_wrong] at hu
   have hlt := u.isLt
-  refine Finset.mem_filter.2 ⟨Finset.mem_range.2 (by rw [blocks_length_partOf]; omega), ?_⟩
-  rintro ⟨b, hb, ι, hι⟩
-  rw [blocks_partOf_getElem? P u] at hb
-  cases Option.some.inj hb
-  change (progOf C κ).Correct ((progOf C κ).refIn (blockOf P κ u) _ ι) (blockOf P κ u) at hι
-  rw [ref_blockOf, correct_blockOf] at hι
-  exact hu (correct_of_progCorrect P u _ ι hι.1)
+  refine Finset.mem_filter.2 ⟨Finset.mem_range.2 (by rw [rus_length_partOf]; omega), ?_⟩
+  rintro ⟨r, hr, ι, hι⟩
+  rw [rus_partOf_getElem? P u] at hr
+  cases Option.some.inj hr
+  exact hu (correct_of_progCorrect P u _ ι (hι _ (List.mem_singleton_self _)))
 
 theorem card_wrong_le_faulty {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool) (kd : ℕ)
-    (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool)
+    (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool)
     (w : Wit) :
     (P.wrong (openedOf C κ (w.val H Cm (stmtOf P κ kd desc q roots)))).card ≤
-      ((faulty H Cm (stmtOf P κ kd desc q roots) (partOf P κ) w).filter (· < n)).card :=
+      ((faulty H Cm (stmtOf P κ kd desc q roots) (partOf P) w).filter (· < n)).card :=
   Finset.card_le_card_of_injOn Fin.val
     (by intro u hu; exact Finset.mem_filter.2 ⟨wrong_subset_faulty P κ kd desc q roots H Cm w hu, u.isLt⟩)
     (by intro a _ b _ h; exact Fin.ext h)
@@ -266,14 +265,14 @@ theorem card_wrong_le_faulty {n : ℕ} (P : FlockSoundness.Audit.Partition C n) 
 than `K₀` of the circuit's units wrong in the wire values it opens. -/
 theorem card_wrong_lt_of_relS {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
     (kd K₀ : ℕ) (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg)
-    (Cm : CommitmentScheme Bool) (w : Wit)
-    (h : RelS H Cm (((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)) (stmtOf P κ kd desc q roots) (partOf P κ) w) :
+    (Cm : Commitment Bool) (w : Wit)
+    (h : RelS H Cm (((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)) (stmtOf P κ kd desc q roots) (partOf P) w) :
     (P.wrong (openedOf C κ (w.val H Cm (stmtOf P κ kd desc q roots)))).card < K₀ := by
   have hle := card_wrong_le_faulty P κ kd desc q roots H Cm w
   have hpa : ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ) <
-      (designOf kd).Pa (partOf P κ) (faulty H Cm (stmtOf P κ kd desc q roots) (partOf P κ) w) := h
+      (designOf kd).Pa (partOf P) (faulty H Cm (stmtOf P κ kd desc q roots) (partOf P) w) := h
   rw [pa_partOf_window, window_zero_filter] at hpa
-  generalize (faulty H Cm (stmtOf P κ kd desc q roots) (partOf P κ) w).filter (· < n) = S at hpa hle
+  generalize (faulty H Cm (stmtOf P κ kd desc q roots) (partOf P) w).filter (· < n) = S at hpa hle
   by_contra hK
   have hc : (n - S.card).choose kd ≤ (n - K₀).choose kd := Nat.choose_le_choose _ (by omega)
   have hdiv : ((n - S.card).choose kd : ℝ) / (n.choose kd : ℝ) ≤ ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ) := by
@@ -311,9 +310,9 @@ theorem partsOf_wrong (xs : Fin (keyCircuit D hU n).N → Bool) :
 the sampling statement of the key program at constants `κ`, leaves fewer than `K₀` of `partsOf`'s units wrong in the
 transcript it opens. -/
 theorem card_wrong_partsOf_lt (κ : Fin (keyCircuit D hU n).N → Option Bool) (kd K₀ : ℕ) (desc : Claims.Msg)
-    (q : Query) (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool) (w : Wit)
+    (q : Query) (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool) (w : Wit)
     (h : RelS H Cm (((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)) (stmtOf (keyPartition D hU n) κ kd desc q roots)
-      (partOf (keyPartition D hU n) κ) w) :
+      (partOf (keyPartition D hU n)) w) :
     ((partsOf D hU n).wrong
       (transcriptOf D hU n κ (w.val H Cm (stmtOf (keyPartition D hU n) κ kd desc q roots)))).card < K₀ := by
   rw [transcriptOf, partsOf_wrong]

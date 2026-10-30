@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from verity.ml.circuits import codec, partition_object as PO
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, DefinitionTable, bind
+from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, Registry, bind
 from verity.ml.circuits.population import population_program
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import tuple_of
@@ -31,7 +31,7 @@ def _comp(name, version, statics, sig, body):
 
 TAdd = _prim("TAdd32", [("a", V32), ("b", V32)])
 TMul = _prim("TMul32", [("a", V32), ("b", V32)])
-REG = DefinitionTable()
+REG = Registry()
 for _p in (TAdd, TMul):
     REG.add(_p)
 

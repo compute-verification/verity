@@ -1,4 +1,4 @@
-"""Canonical operand forms shared by the comparator's record and progression mappings (`instance_sequence.RootView`)."""
+"""Canonical operand forms shared by the comparator's record and progression mappings (`instance_sequence.Prog`)."""
 
 from __future__ import annotations
 

@@ -25,7 +25,7 @@ namespace CertifierDevice
 open Core (Conn)
 
 /-- What the device publishes: a closed window's record, with its grid's parameters. -/
-abbrev Out := BlockGrid × Params
+abbrev Out := Record × Params
 
 /-- An event from a task, with the connection it opened. -/
 abbrev Message := Event × Option Conn

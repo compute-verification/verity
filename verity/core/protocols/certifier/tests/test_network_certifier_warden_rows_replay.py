@@ -1,14 +1,13 @@
-"""Regressions on the network certifier's bucket rows (`warden_rows`): replays of real network-certifier-signed roots
-and certificates across windows and directions, and a certificate the network certifier signed over another digest, stay
-refused. Two gaps are closed:
+"""Regressions on the warden's bucket rows (`warden_rows`): replays of real warden-signed roots and certificates across
+windows and directions, and a certificate the warden signed over another digest, stay refused. Two gaps are closed:
 - the layout is bound: the signed head carries S, T and the wiring's digest, and the domain S and T, so a head of
   another layout is another digest, which the certificate doesn't sign;
-- the reads aren't the prover's: a read is (connection, cell), and the verifier places it with the network certifier's
-  signed wiring, so a crossed, duplicate or padding read, and a wiring the network certifier didn't sign, are refused,
-  and no read carries log2 N bits.
+- the reads aren't the prover's: a read is (connection, cell), and the verifier places it with the warden's signed
+  wiring, so a crossed, duplicate or padding read, and a wiring the warden didn't sign, are refused, and no read carries
+  log2 N bits.
 
-The execution phase is synthetic: connection A (ordinal 0) holds rows 0 and 1, connection B (ordinal 1) row 0, so row
-1's last r slots are padding (empty: cells no connection sent)."""
+The link-window is synthetic: connection A (ordinal 0) holds rows 0 and 1, connection B (ordinal 1) row 0, so row 1's
+last r slots are padding (empty: cells no connection sent)."""
 from __future__ import annotations
 
 import dataclasses
@@ -19,7 +18,7 @@ import signers
 from verity.core.protocols.certifier import warden_rows as W
 from verity.core.protocols.certifier.active import DATA
 from verity.core.protocols.certifier.certificate import Direction, Issuer, certificate_digest
-from verity.core.protocols.certifier.grid import BlockGrid, Status
+from verity.core.protocols.certifier.grid import Record, Status
 from verity.core.protocols.certifier.tests.test_network_certifier_warden import PARAMS
 from verity.core.protocols.certifier.warden import cell
 
@@ -33,10 +32,10 @@ def _cell(q: int, k: int) -> bytes:
     return cell(DATA, q, bytes([0xAA if q == QA else 0xBB, k]) * ((B - 9) // 2) + bytes((B - 9) % 2), B)
 
 
-def _record(window: int) -> BlockGrid:
+def _record(window: int) -> Record:
     rows = [tuple(_cell(QA, k) for k in range(R)) + tuple(_cell(QB, k) for k in range(R)),
             tuple(_cell(QA, k) for k in range(R, 2 * R)) + (None,) * (S - R)]
-    return BlockGrid(LINK, window, tuple(rows) + ((None,) * S,) * (T - 2), Status())
+    return Record(LINK, window, tuple(rows) + ((None,) * S,) * (T - 2), Status())
 
 
 def _issuer(tmp_path, seed=b"certifier") -> Issuer:
@@ -62,9 +61,9 @@ def test_the_honest_registration_reads_back(tmp_path):
 
 
 def test_a_real_cross_window_root_and_certificate_replay_is_refused(tmp_path):
-    """A REAL network-certifier-signed window-0 root and certificate can't be presented for window 1: the window-0
-    document is refused by the field check, and relabelling it to window 1 with the window-0 root and certificate is
-    refused because the certificate signs the window-0 head."""
+    """A REAL warden-signed window-0 root and certificate can't be presented for window 1: the window-0 document is
+    refused by the field check, and relabelling it to window 1 with the window-0 root and certificate is refused because
+    the certificate signs the window-0 head."""
     issuer = _issuer(tmp_path)
     c0, c1 = _commit(0, Direction.EGRESS), _commit(1, Direction.EGRESS)
     cert0 = _attest(issuer, c0)
@@ -90,9 +89,8 @@ def test_a_real_cross_direction_replay_is_refused(tmp_path):
 
 
 def test_a_warden_certificate_over_another_digest_is_not_a_cells_certificate(tmp_path):
-    """The wire record's certificate signs `certificate_digest(salt, record_digest)`. A certificate the network
-    certifier really signed over such a digest verifies on its own, but is refused here: `cert.digest` must be
-    `head.digest()`."""
+    """The wire record's certificate signs `certificate_digest(salt, record_digest)`. A certificate the warden really
+    signed over such a digest verifies on its own, but is refused here: `cert.digest` must be `head.digest()`."""
     issuer = _issuer(tmp_path)
     c0 = _commit(0, Direction.EGRESS)
     cert = _attest(issuer, c0)
@@ -110,7 +108,7 @@ def test_a_warden_certificate_over_another_digest_is_not_a_cells_certificate(tmp
 def test_the_layout_is_bound_by_the_signed_head(tmp_path):
     """Was `test_the_layout_is_schedule_checked_but_not_bound_by_the_root`. A disagreeing layout is refused by the field
     check, and the head's signed bytes now carry the layout: B, S, T and the wiring's digest. A head of another slot
-    count, row count or wiring is another digest, which the network certifier's certificate doesn't sign."""
+    count, row count or wiring is another digest, which the warden's certificate doesn't sign."""
     issuer = _issuer(tmp_path)
     c0 = _commit(0, Direction.EGRESS)
     cert = _attest(issuer, c0)
@@ -133,10 +131,9 @@ def test_the_layout_is_bound_by_the_signed_head(tmp_path):
 
 def test_the_wiring_reads_are_tied_to_the_wardens_layout(tmp_path):
     """Was `test_the_wiring_reads_are_unconstrained_prover_witness`, the main finding. A read is (connection, cell),
-    and the verifier places it with the wiring the network certifier signed: the honest reads open A's cells at their
-    row and slot; a duplicate, a read of a cell no connection sent (past B's cells, or of a connection that isn't there)
-    and a crossed or padded wiring are refused. So no read opens a foreign connection's cell, a cell twice or an empty
-    slot."""
+    and the verifier places it with the wiring the warden signed: the honest reads open A's cells at their row and
+    slot; a duplicate, a read of a cell no connection sent (past B's cells, or of a connection that isn't there) and a
+    crossed or padded wiring are refused. So no read opens a foreign connection's cell, a cell twice or an empty slot."""
     issuer = _issuer(tmp_path)
     c0 = _commit(0, Direction.EGRESS)
     cert = _attest(issuer, c0)

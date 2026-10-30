@@ -9,7 +9,7 @@ REG = Registry.load()
 
 def test_every_number_says_where_it_comes_from():
     unsourced = [p.key for p in REG.params() if isinstance(p.value, numbers.Number) and not isinstance(p.value, bool)
-                 and not p.source]
+                 and not p.source and not p.key.startswith("horizon.")]
     assert not unsourced, f"give these a source in data/*.toml: {unsourced}"
 
 

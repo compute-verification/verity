@@ -61,7 +61,7 @@ def test_a_bf16_program_is_refused_for_its_tensor_core_steps(model, wrapper, kw,
     value lives 2 steps."""
     r, c, a = _analysis(model, wrapper, **kw)
     assert r.digest.startswith(digest)
-    v = P.judge(a, c=dict.fromkeys(P.BUDGETED, 0), windows=[P.CertifiedReads(range(steps), 1, 1)])
+    v = P.judge(a, c=dict.fromkeys(P.BUDGETED, 0), windows=[P.Window(range(steps), 1, 1)])
     assert (a.affine, v.numbers["units"]) == (affine, units), (a.affine, v.numbers["units"])
     g = a.gates[WGMMA]
     assert a.refused == {} and (g["class"], g["operand_bits"]) == ("roundings", 32 + 2 * 16 * 16)

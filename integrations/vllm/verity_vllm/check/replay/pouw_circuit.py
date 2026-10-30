@@ -18,9 +18,9 @@ its served y and its weight side). `replay` checks:
    `anchors.Ledger.open` derives the window's key from a fresh
    source, and each call draws its plan (`Traced.draw`) under the work law at its share of the window's budget
    (`plan.window_laws`). Every proved unit of a call is opened by the prover (`CallRecord.opening`, regenerated natively),
-   and so is every unit it reads; so is each Y unit its sampled tiles read, in its weight side (once per replay). Each
+   and so is every unit it reads; so is each Y unit its drawn tiles read, in its weight side (once per replay). Each
    opening must hash to its committed leaf, the unit's template (`ncp2.templates`) must evaluate, by the IR reference,
-   from its opened inputs to its opened outputs, and the call's Y and c₀ at each sampled column strip must be its weight
+   from its opened inputs to its opened outputs, and the call's Y and c₀ at each drawn column strip must be its weight
    side's outputs there (`Traced.check_link`). The report records the window's source and receipt digest
    (`Ledger.record`), from which anyone re-derives the sample (`anchors.replay_key`).
 

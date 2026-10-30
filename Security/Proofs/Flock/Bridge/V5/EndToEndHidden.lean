@@ -6,7 +6,7 @@ import Proofs.Flock.Bridge.EndToEndHiddenC
 
 `EndToEndHiddenC.lean` at the verifier's public inputs:
 
-* `Layout.keyProgP_readsOwn`: `keyProgP`'s proof blocks read only their own gates and input gates (`keyProgP_reads`);
+* `Layout.keyProgP_readsOwn`: `keyProgP`'s units read only their own gates and input gates (`keyProgP_reads`);
 * `zk_session_soundHJ_custody_regCP`: `zk_session_soundHJ_custody_regC` at flock-verify `--zk --public-inputs`'s
   acceptance (`zk_headline_exec_tablesA` at `AcceptsZKP I own`, through `decodesZCJH_custodyP`), at `keyProgP` and the
   binding `rsZHJP`;
@@ -18,7 +18,7 @@ namespace FlockSoundness.Discharge.Layout
 
 open Flock FlockLevel3 Audit Placed
 
-/-- **`keyProgP`'s proof blocks read only their own gates and input gates** (`keyProg_readsOwn`). -/
+/-- **`keyProgP`'s units read only their own gates and input gates** (`keyProg_readsOwn`). -/
 theorem keyProgP_readsOwn (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ) (pi : HmIn.Ports)
     (outs : Finset (Fin (keyN c hU n))) (u : Fin n) : ((keyProgP c pi hU n).partition outs).ReadsOwn u :=
   readsOwn_of_rows (fun u => Const.Prog.instC (keyProgP c pi hU n) outs u)
@@ -39,7 +39,7 @@ variable {n : ℕ} {Reg : Type}
 registration with canonical openings** (`zk_session_soundHJ_custody_regC` at `own`). -/
 theorem zk_session_soundHJ_custody_regCP
     (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)
-    {c : Flock.Circuit} (hc : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
+    {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pi : HmIn.Ports} (hpi : HmIn.parse c = .ok pi)
     {pub : Public} (hpub : HmIn.loadPublic (zkTags I) c pi I.publicFile = .ok pub)
     (hscope : Layout.scopeOkH c = true)
@@ -105,7 +105,7 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
 theorem endToEndHiddenV5_of (hOC : OpeningsCanonTargetV5) : EndToEndHiddenV5 := by
   intro n Reg I own ht D hD hU pi hpi pub hpub hscope kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags hCust k Rw
     M hk hRw hM ρ hρ hr t' ht' K₀ hK₀ τ qF qS L P vb σ Cc Lm rows κ hCR hA2
-  have h := Discharge.ZkHidden.zk_session_soundHJ_custody_regCP I own ht (Flock.Desc.parseStmt_stmt hD) hU hpi hpub hscope
+  have h := Discharge.ZkHidden.zk_session_soundHJ_custody_regCP I own ht (Flock.Desc.parse_flat hD) hU hpi hpub hscope
     kd hkd hdiv dj y₀ wr dg N Lb src hA3 hTags hCust hk hRw hM hρ hr ht' K₀
     (fun g o => canonAt rows κ g (vb.bit (vb.val o) g) (vb.val o) o.2.2)
     (hOC n Reg I own ht D hD hU pi hpi pub hpub hscope kd dj S₀ d₀ y₀) τ

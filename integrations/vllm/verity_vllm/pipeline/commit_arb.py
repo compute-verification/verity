@@ -1,14 +1,13 @@
 """`verity-vllm commit-arb`: the served Commit under arbitrary traffic, its records held to the streamed I/O.
 
     VERITY_RETAIN=host verity-vllm commit-arb --out DIR --model REPO --revision SHA [--precision int8_exact|verity_int8|pin]
-        --required-manifest PREDICTED/manifest.json [--hidden-so SO] [--norm-tap-so SO] [--tap-cap-mb N]
+        --required-manifest ROW/manifest.json [--hidden-so SO] [--norm-tap-so SO] [--tap-cap-mb N]
         [--requests 32] [--seed 0] [--prompt-range 16:1024] [--tokens 64] [--rate 0.5]
         [--max-num-seqs 8] [--max-num-batched-tokens 2048] [--no-chunked-prefill] [--kv-cache-mb N] [--window-steps 64]
         [--prefix-caching] [--system-prompts N] [--system-tokens 384] [--turns N]
 
 The engine is serve-openai's (`verity_vllm.LLM`, in-process engine core, Model Runner V2) and so is its Commit: rows-sha512
-(`serve_seal.committer`, built from the row's ``--required-manifest``, its Build of record's, `serve_row.row_refusal`, and
-taps, with serve-openai's step-input port)
+(`serve_seal.committer`, built from the bench row's ``--required-manifest`` and taps, with serve-openai's step-input port)
 committing every step, values retained on host, with a `served_record.SamplerInputsSource` attached and the served default seed (`engine.served_seed`). It is
 stepped here, without HTTP, under seeded varied traffic: CERT-VARLEN's (``varied_requests`` in
 `benchmarks/network_traces/certifier_serve.py`: chat-turn prompts cut to a length log-uniform in ``--prompt-range``,
@@ -27,7 +26,7 @@ requests that committed those ids (`RequestRecord.prefix_cover`), and the run th
 prefix in its records and requires both requests' checks to fail (`prefix_negative`); with the cache on, a run with no
 hit fails.
 
-A Commit window closes after ``--window-steps`` committed steps or when the engine is idle; `served_record.BlockValues` reads it
+A Commit window closes after ``--window-steps`` committed steps or when the engine is idle; `served_record.Record` reads it
 back. Each finished request is checked (`RequestRecord.check`) against what the engine streamed for it (the
 ``RequestOutput`` deltas an HTTP server sends), with the seed it carried. Under ``--out``: ``run.json`` (the engine, the
 traffic's parameters, the scheduler's resolved configuration), ``windows.jsonl`` (each window's Commit verdict and
@@ -47,8 +46,6 @@ from typing import Any
 
 from verity_vllm.commit.challenge import stream
 from verity_vllm.config import UsageError, option
-from verity_vllm.pipeline import serve_release as SL
-from verity_vllm.pipeline import serve_row as RW
 from verity_vllm.pipeline import serve_seal as SS
 
 PRECISIONS = ("int8_exact", "verity_int8", "pin")
@@ -107,9 +104,10 @@ class Options:
     window_steps: int = option("--window-steps", type=int, default=64, help="committed steps a Commit window holds at most")
     run_id: str = option("--run-id", env="RESEARCH_RUN_ID", default="local", help="the committer's run id (default $RESEARCH_RUN_ID)")
     required_manifest: str | None = option("--required-manifest", default=None,
-                                           help="the row's required manifest, DIR/manifest.json of its Build of record (`verity-vllm "
-                                                "predict row --out DIR`), which serve-openai's rows-sha512 Commit's parts are built from "
-                                                "(serve_seal.committer)")
+                                           help="the bench row's required manifest (its manifest.json), which serve-openai's rows-sha512 "
+                                                "Commit's parts are built from (serve_seal.committer)")
+    programs_root: str | None = option("--programs-root", default=None,
+                                       help="the Build's row dir of the manifest's partition and attention record (default: the manifest's dir)")
     hidden_so: str | None = option("--hidden-so", default=None, help="the attention hidden tap (as serve-openai's --hidden-so)")
     hidden_ns: str | None = option("--hidden-ns", default=None, help="its op namespace (default: the .so's stem)")
     tap_cap_mb: int | None = option("--tap-cap-mb", type=int, default=None, help="the hidden tap's bounded device buffer, MiB")
@@ -117,19 +115,19 @@ class Options:
 
 
 def committer_opts(opts: Options) -> SimpleNamespace:
-    """What `serve_seal.committer` reads to build serve-openai's rows-sha512 Commit over ``opts``'s engine and bench row."""
-    return SimpleNamespace(**{k: getattr(opts, k) for k in opts.__dataclass_fields__}, scheme=SS.ROWS, commit=True, seal=False,
-                           retention=SL.RetentionOptions())
+    """What `serve_seal.committer` reads to build serve-openai's rows-sha512 Commit over ``opts``'s engine and bench row: the
+    vllm-v1 committer's own knobs are unset, since commit-arb serves no recorded vllm-v1 run again."""
+    return SimpleNamespace(**{k: getattr(opts, k) for k in opts.__dataclass_fields__}, scheme=SS.ROWS, of_record=None, commit=True,
+                           seal=False, gpu_tree=True, chunk=None, hash_threads=None, cudart_copy=False, retention=SS.RetentionOptions())
 
 
 def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which) -> None:
     """What the committer would refuse after the model has loaded, refused before it."""
     if not opts.required_manifest:
-        raise UsageError(f"commit-arb commits as serve-openai does, under {SS.ROWS} with the Commit of record's parts, which its "
-                         "row's manifest names: pass --required-manifest DIR/manifest.json, DIR the row's Build of record (`verity-vllm "
-                         "predict row --row ROW --out DIR`), and the row's --hidden-so, --norm-tap-so")
-    if why := RW.row_refusal(opts.required_manifest):
-        raise UsageError(why)
+        raise UsageError(f"commit-arb commits as serve-openai does, under {SS.ROWS} with the Commit of record's parts, which its bench "
+                         "row's manifest names: pass --required-manifest ROW_DIR/manifest.json (and the row's --hidden-so, --norm-tap-so)")
+    if not Path(opts.required_manifest).is_file():
+        raise UsageError(f"--required-manifest {opts.required_manifest}: no such file")
     if which("ninja") is None:
         raise UsageError("the rows-sha512 committer JIT-builds its kernels with ninja, which is not on PATH: put the environment's "
                          "bin (where its ninja is) on PATH")
@@ -262,7 +260,7 @@ def build(opts: Options) -> tuple[Any, Any]:
 
 
 class Windows:
-    """The committer's windows over the stepped engine, each read back into one `served_record.BlockValues`."""
+    """The committer's windows over the stepped engine, each read back into one `served_record.Record`."""
 
     def __init__(self, com: Any, record: Any, out: Path, window_steps: int) -> None:
         self.com, self.record, self.out, self.window_steps = com, record, out, int(window_steps)
@@ -335,13 +333,13 @@ def run(llm: Any, com: Any, requests: list[dict[str, Any]], out: Path, window_st
     from vllm import SamplingParams
     from vllm.sampling_params import RequestOutputKind
 
-    from verity_vllm.commit.served_record import BlockValues
+    from verity_vllm.commit.served_record import Record
     from verity_vllm.engine import served_seed
 
     engine = llm.vllm.llm_engine
     seed_hooks = served_seed.install(engine)
     by_id = {q["request_id"]: q for q in requests}
-    record = BlockValues(known=by_id)
+    record = Record(known=by_id)
     windows = Windows(com, record, out, window_steps)
     streamed: dict[str, list[int]] = {rid: [] for rid in by_id}
     finish: dict[str, dict[str, Any]] = {}

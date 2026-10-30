@@ -235,7 +235,7 @@ variable {N b h ρ S L q : ℕ}
 
 /-- The interactive device that simulates a pass device on its own link: its device memory also answers the completed
 bits from the store. -/
-noncomputable def toInteractiveMem (A : PIDevice N b h ρ S L q) : InteractiveProver N b h ρ S L q where
+noncomputable def toInteractiveMem (A : PIDevice N b h ρ S L q) : InteractiveDevice N b h ρ S L q where
   state := A.state
   mem E := PIChip.memOf E (A.mem E)
   side := A.side
@@ -255,7 +255,7 @@ theorem toInteractiveMem_eq {τ : ℕ} (A : PIDevice N b h ρ S L q) (tier : ℕ
     hb.1 hb.2
   refine ⟨?_, h₂, h₃⟩
   have ht : A.toInteractiveMem.tags E R O = A.tags E R O := h₁
-  simp only [InteractiveProver.correct, PIDevice.correct, ht]
+  simp only [InteractiveDevice.correct, PIDevice.correct, ht]
 
 /-- **A pass device's correct receipts are paid for, with any side sources**: `RatePaid` at the simulating device. -/
 theorem pr_unpaid_relay_le {τ : ℕ} (A : PIDevice N b h ρ S L q) (tier : ℕ → Fin τ) (m lam : ℕ) :
@@ -461,7 +461,7 @@ theorem session_relay_of_unpaid {Ω : Type} [Fintype Ω] (store : Ω → Store N
     rw [e1, e2]
     refine add_le_add (add_le_add ?_ ?_) le_rfl
     · rw [show ((n : ℝ≥0∞) * P * N) = ((n * P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
-      exact Deployed.pooled_le dbar (n * P * N) (d * n) (by positivity)
+      exact Deployed.horizon_le dbar (n * P * N) (d * n) (by positivity)
     · rw [show ((n : ℝ≥0∞) * P * N) = (n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
       exact Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
 

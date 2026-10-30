@@ -68,8 +68,8 @@ skill).
 | Todo | taken on and dated, not started |
 | In Progress | someone is working on it now |
 | In Review | every piece is in a ready PR or waits on a named verdict, and a comment says whose |
-| Done | the done-condition holds: the outcome exists. The owner closes it with one line and its evidence |
-| Canceled | dropped, with a one-line reason; a person's ask only with their yes, quoted, and `asker-ok` |
+| Done | the done-condition holds. The owner closes it with one line and its evidence |
+| Canceled | dropped, with a one-line reason |
 
 - **PRs.** A PR names its issue in its body (`Part of CMP-<n>`), which attaches it in Linear. Merging a PR doesn't close
   the issue; the owner does.
@@ -80,15 +80,6 @@ skill).
   issue in the owner's team, under the deliverable it serves (so in that project and milestone), and rings the owner.
   The owner dates it and moves it out of Backlog within the hour, or declines it (`research msg close --declined`). A
   question that needs no issue is `research msg send --kind question` in its thread.
-- **A person's ask is answered by its outcome, never by its issue.** Whoever relays Daniel's ask files it with
-  `--asker daniel` (an existing issue: `research msg linear edit ISSUE --label asker:daniel`). Within the hour it is In Progress
-  with a comment naming its worker (a `bc-` id, or the lead) and the date its outcome lands; filing, dating,
-  planning and starting it answer nothing, and a reply to him names the worker and that date, not the issue. Only he
-  parks or cancels it: quote his yes on the issue and add `asker-ok`. When he asks again, comment `asked again: <his
-  words>` on the issue, never a new one, and `postmortem:` that day (why it wasn't delivered, and the change that stops
-  that recurring). Once its date has moved later twice, each move gets a `slip:` comment: what missed the date and what
-  holds the next. The audit finds each break (`parked`, `unstaffed`, `slipped`, `repeated`); `research msg linear audit
-  --asks` is the ledger, and a report to Daniel counts delivered, never filed.
 - **Write through the app, not the Linear connector.** The connector acts as Daniel, so its comments and state changes
   show as his. Use these commands:
   - `research msg linear comment ISSUE 'TEXT' --as ME`, which rings the team's handle and any names the text starts with;
@@ -134,5 +125,4 @@ skill).
 - **On a launch:** file the sub-issue first, then launch the worker named after it.
 
 top's hourly sweep (`infra/control/top_watch.py`) runs the same audit. It rings a lane with findings once every 12
-hours, a person's ask off track every hour (and @top) until it holds, and records the counts in `linear-audit.jsonl`.
-top reads the campaign's state from Linear, not from Slack.
+hours and records the counts in `linear-audit.jsonl`. top reads the campaign's state from Linear, not from Slack.

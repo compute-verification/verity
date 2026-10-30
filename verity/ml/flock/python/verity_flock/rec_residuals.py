@@ -1,4 +1,4 @@
-"""V*'s algebra statement (hiding model architectures): the inner verifier's algebraic checks on each rep of the
+"""V*'s algebra statement (hiding model architectures, lane rec-v0): the inner verifier's algebraic checks on each rep of the
 inner session (`verity_flock.rec_algebra`) as ``InnerRepCheck_v2{S}``, one instance a rep, one C-Flock statement.
 
     U16 = Array<16, Value<1>>
@@ -76,8 +76,8 @@ OUT_WORDS = 128
 F_WORDS = 8
 ROW_BLOCK = 64
 LEAVES = 3 ** 7
-ZERO_SALT = b"verity/rec-v1/zero-residual-salt/v1"
-VERIFIER_SALT = b"verity/rec-v1/verifier-salt/v1"
+ZERO_SALT = b"verity/rec-v0/zero-residual-salt/v0"
+VERIFIER_SALT = b"verity/rec-v0/verifier-salt/v0"
 ZERO_VALUE = "rec-residuals-zero"
 V_VALUE = "rec-v"
 # the META key that says the statement is over a holo shape's parts (`rec_algebra.Shape.holo`), written only when true: the
@@ -403,14 +403,9 @@ def subcircuit(S: dict, name: str) -> SimpleNamespace:
 
 # --- the statement ----------------------------------------------------------------------------------------------------------
 
-def salt_of(msg: bytes) -> bytes:
-    """A salt from ``msg`` (`Flock.RecCoins.saltOf`): SHA-512 in counter mode, ``SHA-512(msg || u32be c)`` for each of the
-    salt's 64-byte blocks, each output whole."""
-    return b"".join(hashlib.sha512(msg + c.to_bytes(4, "big")).digest() for c in range(hm96.SHA512.salt_bytes // 64))
-
-
 def zero_salts(value: str, n: int) -> list[bytes]:
-    return [salt_of(ZERO_SALT + value.encode() + b"\0" + i.to_bytes(4, "little")) for i in range(n)]
+    return [hashlib.shake_256(ZERO_SALT + value.encode() + b"\0" + i.to_bytes(4, "little")).digest(hm96.SHA512.salt_bytes)
+            for i in range(n)]
 
 
 def verifier_salts(program: str, value: str, n: int) -> list[bytes]:
@@ -418,7 +413,7 @@ def verifier_salts(program: str, value: str, n: int) -> list[bytes]:
     i alone. They are public, as the rows are: the commitment's binding (cr/sha-512) is what the reads need, and it hides
     nothing the verifier does not publish."""
     head = VERIFIER_SALT + b"\0" + program.encode() + b"\0" + value.encode() + b"\0"
-    return [salt_of(head + i.to_bytes(4, "little")) for i in range(n)]
+    return [hashlib.shake_256(head + i.to_bytes(4, "little")).digest(hm96.SHA512.salt_bytes) for i in range(n)]
 
 
 def verifier_value(program: str, value: str, rows: list[list[int]]):

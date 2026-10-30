@@ -20,6 +20,10 @@ open Finset Pouw.NCP Pouw.NCP.Relation Pouw.Dimension Pouw.Dimension.Assumptions
 
 variable {N m n k : ℕ}
 
+/-- **`H32` is satisfiable.** -/
+theorem h32Sat : H32Sat :=
+  ⟨fun s => by cases s <;> decide, by decide, by decide, by decide, by decide, by decide⟩
+
 /-! ## Registers and the priced model -/
 
 theorem mem_regs100_of_mem {G : Type} (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) :
@@ -28,6 +32,18 @@ theorem mem_regs100_of_mem {G : Type} (fpSem : ℕ → ℚ → ℚ → ℚ → �
   induction P with
   | nil => intro L r hr; exact hr
   | cons o P ih => intro L r hr; exact ih _ r (List.mem_append_left _ hr)
+
+theorem mem_regs100_of_wgmma {G : Type} (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) :
+    ∀ (P : List (Op100 G)) (L : List (G → ℚ)) (s : Shape100) (outs : List (G → ℚ)) (f : G → ℚ),
+      Op100.wgmma s outs ∈ P → f ∈ outs → f ∈ regs100 fpSem P L := by
+  intro P
+  induction P with
+  | nil => intro L s outs f h; simp at h
+  | cons o P ih =>
+    intro L s outs f h hf
+    rcases List.mem_cons.1 h with rfl | h
+    · exact mem_regs100_of_mem fpSem P _ f (List.mem_append_right _ (by simpa [Op100.outs] using hf))
+    · exact ih _ s outs f h hf
 
 theorem hc_cost {G : Type} {c : ℕ} {P : List (Instr G)} (h : Hc c P) : c * nPriced P ≤ cost P := by
   induction P with
@@ -188,12 +204,18 @@ theorem embedFloor (c : ℕ) (pr : Prices100) (hpr : Floor c pr) (G : Type) (V :
   · exact Or.inl h
   · exact Or.inr (mem_slots_of_vals (gok_nofree (Cc c) _ _ h1) (by simpa using h) L)
 
+/-- **The embedding theorem for `MH100`.** -/
+theorem embedMH100 : EmbedMH100 := fun pr hpr => embedFloor 32 pr hpr
+
 theorem span1_le {G : Type} {V : Submodule ℚ (G → ℚ)} {L : List (G → ℚ)} (h1 : (1 : G → ℚ) ∈ V)
     (hL : ∀ f ∈ L, f ∈ V) : span1 L ≤ V := by
   refine Submodule.span_le.2 fun f hf => ?_
   rcases hf with rfl | hf
   · exact h1
   · exact hL f hf
+
+theorem one_V0 : (1 : Noise N m n k → ℚ) ∈ V0 N m n k :=
+  Submodule.mem_sup_left (Submodule.subset_span (Set.mem_insert _ _))
 
 theorem nmem_of_indep {G : Type} {V : Submodule ℚ (G → ℚ)} {ι : Type} [Fintype ι] {t : ι → G → ℚ}
     (hind : IndepMod V t) (i : ι) : t i ∉ V := by
@@ -213,12 +235,105 @@ theorem perWordMH100Floor : PerWordMH100Floor := by
 /-- **The per-word cost in `MH100`.** -/
 theorem perWordMH100 : PerWordMH100 := fun pr hpr => perWordMH100Floor 32 pr hpr
 
+theorem indep_words_sub {k m n N : ℕ} {R : Mat} (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat)
+    {U : Finset ℕ} (hind : CheckpointIndependent k 16 R) (hU : U ⊆ range N) {S : Finset (ℕ × ℕ)}
+    (hS : S ⊆ U ×ˢ range (nonFinal k m n)) :
+    IndepMod (V0 N m n k) (fun x : ↥S => word k m n N R A B x.1.1 x.1.2) := by
+  classical
+  intro c hc
+  let c' : ℕ × ℕ → ℚ := fun y => if h : y ∈ S then c ⟨y, h⟩ else 0
+  have e : ∑ y : ↥(U ×ˢ range (nonFinal k m n)), c' y.1 • word k m n N R A B y.1.1 y.1.2 =
+      ∑ x : ↥S, c x • word k m n N R A B x.1.1 x.1.2 := by
+    rw [Finset.sum_coe_sort (U ×ˢ range (nonFinal k m n)) (fun y => c' y • word k m n N R A B y.1 y.2),
+      ← Finset.sum_subset hS (fun y _ hy => by simp [c', hy]),
+      ← Finset.sum_coe_sort S (fun y => c' y • word k m n N R A B y.1 y.2)]
+    refine Finset.sum_congr rfl fun x _ => ?_
+    simp [c', x.2]
+  rintro ⟨x, hx⟩
+  have := indep_sub A B hind hU (fun y => c' y.1) (e ▸ hc) ⟨x, hS hx⟩
+  simpa [c', hx] using this
+
+/-- **The per-word cost in `MH100` on the checked words.** -/
+theorem perWordMH100Words : PerWordMH100Words := by
+  intro pr hpr k m n N R A B U fpSem L P hind hU hL hwf S hS hSw
+  have h := perWordMH100 pr hpr (Noise N m n k) (V0 N m n k) one_V0 fpSem ↥S
+    (fun x => word k m n N R A B x.1.1 x.1.2) L P (indep_words_sub A B hind hU hS) hL hwf (fun x => hSw x.1 x.2)
+  rwa [Fintype.card_coe] at h
+
+/-- **The bound is attained** at the nominal prices. -/
+theorem mh100Attains : MH100Attains := by
+  intro G V fpSem ι _ t L
+  let P : List (Op100 G) :=
+    (Finset.univ : Finset ι).toList.map fun i => Op100.wgmma Shape100.e4m3F32 [t i]
+  have hcost : ∀ l : List ι,
+      cost100 h100Nominal (l.map fun i => Op100.wgmma Shape100.e4m3F32 [t i]) = 32 * l.length := by
+    intro l
+    induction l with
+    | nil => rfl
+    | cons i l ih =>
+      simp only [cost100, List.map_cons, List.sum_cons, List.length_cons] at ih ⊢
+      rw [ih]
+      simp only [Op100.price, Shape100.regPrice, h100Nominal, nominalMac, Shape100.k, Shape100.elems,
+        List.length_singleton]
+      ring
+  refine ⟨P, fun o ho => ?_, fun i => ?_, ?_⟩
+  · obtain ⟨i, -, rfl⟩ := List.mem_map.1 ho
+    trivial
+  · exact mem_regs100_of_wgmma fpSem P _ _ _ _ (List.mem_map.2 ⟨i, mem_toList.2 (mem_univ i), rfl⟩)
+      (List.mem_singleton_self _)
+  · rw [hcost, length_toList, card_univ]
+
 /-! ## The honest split-K schedule -/
 
 /-- The registers `splitK` appends: `R 0`, then `I τ` and `R (τ + 1)` for each step. -/
 def hist {G : Type} (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (κ : ℕ) (I : ℕ → G → ℚ) : ℕ → List (G → ℚ)
   | 0 => [0]
   | τ + 1 => hist fpSem κ I τ ++ [I τ, runWords fpSem κ I (τ + 1)]
+
+theorem hist_length {G : Type} (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (κ : ℕ) (I : ℕ → G → ℚ) :
+    ∀ τ, (hist fpSem κ I τ).length = 2 * τ + 1
+  | 0 => rfl
+  | τ + 1 => by
+    simp only [hist, List.length_append, hist_length fpSem κ I τ, List.length_cons, List.length_nil]
+    ring
+
+theorem getD_app_left {α : Type} {l l' : List α} {i : ℕ} (d : α) (h : i < l.length) :
+    (l ++ l').getD i d = l.getD i d := by
+  simp [List.getD_eq_getElem?_getD, List.getElem?_append_left h]
+
+theorem getD_app_right {α : Type} (l l' : List α) (i : ℕ) (d : α) :
+    (l ++ l').getD (l.length + i) d = l'.getD i d := by
+  simp [List.getD_eq_getElem?_getD, List.getElem?_append_right]
+
+theorem hist_last {G : Type} (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (κ : ℕ) (I : ℕ → G → ℚ) :
+    ∀ τ, (hist fpSem κ I τ).getD (2 * τ) 0 = runWords fpSem κ I τ
+  | 0 => rfl
+  | τ + 1 => by
+    rw [hist, show 2 * (τ + 1) = (hist fpSem κ I τ).length + 1 by rw [hist_length]; ring, getD_app_right]
+    rfl
+
+theorem regs100_append {G : Type} (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (P Q : List (Op100 G)) (L : List (G → ℚ)) :
+    regs100 fpSem (P ++ Q) L = regs100 fpSem Q (regs100 fpSem P L) :=
+  List.foldl_append
+
+theorem regs_splitK {G : Type} (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (κ : ℕ) (I : ℕ → G → ℚ) (L : List (G → ℚ)) :
+    ∀ τ, regs100 fpSem (splitK κ I L.length τ) L = L ++ hist fpSem κ I τ
+  | 0 => rfl
+  | τ + 1 => by
+    rw [splitK, regs100_append, regs_splitK fpSem κ I L τ]
+    simp only [regs100, List.foldl_cons, List.foldl_nil, Op100.outs]
+    have hR : (L ++ hist fpSem κ I τ ++ [I τ]).getD (L.length + 2 * τ) 0 = runWords fpSem κ I τ := by
+      rw [List.append_assoc, getD_app_right, getD_app_left _ (by rw [hist_length]; omega), hist_last]
+    have hI : (L ++ hist fpSem κ I τ ++ [I τ]).getD (L.length + 2 * τ + 1) 0 = I τ := by
+      rw [List.append_assoc, show L.length + 2 * τ + 1 = L.length + ((hist fpSem κ I τ).length + 0) by
+        rw [hist_length]; ring, getD_app_right, getD_app_right]
+      rfl
+    have hv : fpVal fpSem κ (L.length + 2 * τ) (L.length + 2 * τ + 1) (L.length + 2 * τ)
+        (L ++ hist fpSem κ I τ ++ [I τ]) = runWords fpSem κ I (τ + 1) := by
+      funext g
+      simp only [fpVal, hR, hI, runWords]
+    rw [hv, hist]
+    simp [List.append_assoc]
 
 theorem mem_hist {G : Type} (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (κ : ℕ) (I : ℕ → G → ℚ) :
     ∀ T, ∀ τ < T, I τ ∈ hist fpSem κ I T ∧ runWords fpSem κ I (τ + 1) ∈ hist fpSem κ I T
@@ -229,5 +344,45 @@ theorem mem_hist {G : Type} (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (κ : 
     · obtain ⟨h1, h2⟩ := mem_hist fpSem κ I T τ h
       exact ⟨List.mem_append_left _ h1, List.mem_append_left _ h2⟩
     · exact ⟨List.mem_append_right _ (by simp), List.mem_append_right _ (by simp)⟩
+
+theorem cost100_append {G : Type} (pr : Prices100) (P Q : List (Op100 G)) :
+    cost100 pr (P ++ Q) = cost100 pr P + cost100 pr Q := by
+  simp [cost100]
+
+theorem cost_splitK {G : Type} (κ : ℕ) (I : ℕ → G → ℚ) (b : ℕ) :
+    ∀ τ, cost100 h100Nominal (splitK κ I b τ) = 32 * (2 * τ)
+  | 0 => rfl
+  | τ + 1 => by
+    rw [splitK, cost100_append, cost_splitK κ I b τ]
+    simp only [cost100, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Op100.price, Shape100.regPrice,
+      h100Nominal, nominalMac, Shape100.k, Shape100.elems, List.length_singleton]
+    ring
+
+theorem wf_splitK {G : Type} (V : Submodule ℚ (G → ℚ)) (κ : ℕ) (I : ℕ → G → ℚ) (b : ℕ) :
+    ∀ τ, ∀ o ∈ splitK κ I b τ, o.WF h100Nominal V
+  | 0 => fun o ho => by
+    rw [splitK, List.mem_singleton] at ho
+    subst ho
+    exact Submodule.zero_mem _
+  | τ + 1 => fun o ho => by
+    rw [splitK] at ho
+    rcases List.mem_append.1 ho with h | h
+    · exact wf_splitK V κ I b τ o h
+    · simp only [List.mem_cons, List.not_mem_nil, or_false] at h
+      rcases h with rfl | rfl <;> trivial
+
+/-- **The honest split-K schedule costs 32 per checked word.** -/
+theorem honestSplitK100 : HonestSplitK100 := by
+  intro G V fpSem κ I T L
+  refine ⟨wf_splitK V κ I L.length T, fun τ hτ => ?_, cost_splitK κ I L.length T⟩
+  rw [regs_splitK]
+  obtain ⟨h1, h2⟩ := mem_hist fpSem κ I T τ hτ
+  exact ⟨List.mem_append_right _ h1, List.mem_append_right _ h2⟩
+
+/-- **`PerWordMH100Words`'s hypotheses hold.** -/
+theorem mh100WordsConsistent : MH100WordsConsistent := by
+  intro k hk h16 m n N A B U hU
+  obtain ⟨R, -, hind⟩ := Pouw.NCP.RelationWitness.independentWitness k hk h16
+  exact ⟨R, hind, fun c hc => indep_sub A B hind hU c hc⟩
 
 end Pouw.Dimension.H100

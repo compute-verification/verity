@@ -1,7 +1,7 @@
 """The rows-sha512 floor on one GPU: the windowed worker's kernels (native_rows.cu, built here with nvcc and the JIT's CUDA flags into
 one shared library per leaf-kernel __launch_bounds__ form) over one window of rows (the leaves and the window's whole tree), alone and
 beside a busy stream (bf16 GEMM loops, a square one and decode's skinny one, a device copy loop; at default and at the highest stream
-priority, and in launches capped at a number of CTAs), and commit_gpu's raw SHA-512 compression rate on the same device.  Each form's
+priority, and in launches capped at a number of CTAs), and COMMIT-GPU's raw SHA-512 compression rate on the same device.  Each form's
 root of a small padded domain is checked against step_rows before it is timed.  Measurement only; JSON to $OUT/rows_floor.json.
 
     bash benchmarks/served_commit/rows_floor.sh     (ROWS: row bytes, default 256 1024 4096; WINDOW_MB, default 256; REPS, default 9;
@@ -24,14 +24,11 @@ from pathlib import Path
 from typing import Any
 
 import torch
-from verity.ml.kernels import ROW_COMMIT
 from verity_vllm.commit import step_rows
 from verity_vllm.commit.committer.native_jit import CUDA_CFLAGS
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "integrations/vllm/verity_vllm/commit/committer/native_rows.cu"
-#: the directory of the headers SRC includes by name (the JIT stages them beside it)
-KERNELS = ROW_COMMIT.parent
 COMMIT_GPU = ROOT / "benchmarks/pouw/commit_gpu/commit_gpu.cu"
 c_p, c_u64 = ctypes.c_void_p, ctypes.c_uint64
 
@@ -151,7 +148,7 @@ def beside(hash_fn: Callable, busy_fn: Callable, n_busy: int, hs: torch.cuda.Str
 
 
 def raw_rate(tmp: Path, arch: str) -> dict:
-    """`commit_gpu.cu`'s `sha` mode (each thread chains compressions) built for this device."""
+    """COMMIT-GPU's `sha` mode (each thread chains compressions) built for this device."""
     exe = tmp / "commit_gpu"
     stubs = [f"-L{os.environ['CUDA_HOME']}/lib64/stubs"] if os.environ.get("CUDA_HOME") else []
     rc, log = nvcc(["-O3", "-std=c++17", f"-gencode=arch=compute_{arch},code=sm_{arch}", "-o", str(exe), str(COMMIT_GPU), *stubs,
@@ -200,7 +197,7 @@ def main() -> None:
     for minb in forms:
         so = tmp / f"rows_minb{minb}.so"
         rc, log = nvcc([*CUDA_CFLAGS, "-std=c++17", "-shared", "-Xcompiler", "-fPIC", f"-gencode=arch=compute_{arch},code=sm_{arch}",
-                        "-Xptxas", "-v", f"-DVERITY_ROWS_MIN_BLOCKS={minb}", f"-I{KERNELS}", str(SRC), "-o", str(so)])
+                        "-Xptxas", "-v", f"-DVERITY_ROWS_MIN_BLOCKS={minb}", str(SRC), "-o", str(so)])
         form: dict[str, Any] = {"build_rc": rc, "ptxas": ptxas(log)}
         res["forms"][f"minb{minb}"] = form
         if rc:

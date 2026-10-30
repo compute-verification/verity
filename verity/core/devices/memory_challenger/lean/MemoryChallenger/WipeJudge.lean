@@ -74,17 +74,17 @@ def Signed.ofJson (j : Json) : V Signed := do
          signature := ← hexField j "signature" ctx }
 
 /-- `verdict`'s inputs, decoded. -/
-structure JudgeInputs where
+structure Record where
   signed : Signed
   commitment : Commitment
   trusted : Array ByteArray
   schemes : Array String
 
-def JudgeInputs.toJson (r : JudgeInputs) : Json :=
+def Record.toJson (r : Record) : Json :=
   Json.mkObj [("commitment", r.commitment.toJson), ("schemes", .arr (r.schemes.map Json.str)), ("signed", r.signed.toJson),
     ("trusted", .arr (r.trusted.map hexJ))]
 
-def JudgeInputs.ofJson (j : Json) : V JudgeInputs := do
+def Record.ofJson (j : Json) : V Record := do
   let ctx := "record"
   pure { signed := ← Signed.ofJson (← J.get j "signed" ctx), commitment := ← Commitment.ofJson (← J.get j "commitment" ctx),
          trusted := ← hexArr j "trusted" ctx,
@@ -94,10 +94,10 @@ def Verdict.toJson (v : Verdict) : Json :=
   Json.mkObj [("accepted", .bool v.accepted), ("egress_mib", intJ v.egressMib), ("reasons", .arr (v.reasons.map Json.str))]
 
 /-- The verdict on a record. -/
-def judge (r : JudgeInputs) : V Verdict := do
+def judge (r : Record) : V Verdict := do
   pure (verdict (← Judge.schemesOf r.schemes) r.trusted.toList r.signed r.commitment)
 
 def verdictFn (j : Json) : V Json := do
-  pure (Verdict.toJson (← judge (← exactly JudgeInputs.ofJson JudgeInputs.toJson j)))
+  pure (Verdict.toJson (← judge (← exactly Record.ofJson Record.toJson j)))
 
 end MemoryChallenger.StreamedWipe

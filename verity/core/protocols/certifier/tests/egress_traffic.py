@@ -1,6 +1,6 @@
-"""A fake upstream's egress served through the network certifier, and the slot state each egress bucket reads: the
-egress tests' traffic (`test_network_certifier_egress.py`) and `benchmarks/network_traces/egress_zk.py`'s. It imports no
-test framework, so a node's bare venv runs it."""
+"""A fake upstream's egress served through the warden, and the slot state each egress bucket reads: the egress tests'
+traffic (`test_network_certifier_egress.py`) and `benchmarks/network_traces/egress_zk.py`'s. It imports no test
+framework, so a node's bare venv runs it."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from types import SimpleNamespace
 from typing import Sequence
 
 from verity.core.protocols.certifier import egress as EG, io_tie as IT, warden as W, warden_rows as WR
-from verity.core.protocols.certifier.grid import Certifier, BlockGrid
+from verity.core.protocols.certifier.grid import Certifier, Record
 
 #: the token ids' range (GLM's vocabulary), and the bits an id takes
 V = 151_329
@@ -20,12 +20,12 @@ IB = (V - 1).bit_length()
 
 @dataclass(frozen=True)
 class Served:
-    """A link served through the network certifier's own egress (`warden.Warden._egress`): its schedule, the egress
-    records its grid closed (one an execution phase), each connection's request (ordinal q = k + 1, its admission
-    bucket, its n outputs) and response ids, and the network certifier's `fails` frames."""
+    """A link served through the warden's own egress (`warden.Warden._egress`): its schedule, the egress records its
+    grid closed (one a link-window), each connection's request (ordinal q = k + 1, its admission bucket, its n
+    outputs) and response ids, and the warden's `fails` frames."""
 
     params: W.WardenParams
-    records: tuple[BlockGrid, ...]
+    records: tuple[Record, ...]
     requests: tuple[EG.Request, ...]
     responses: tuple[tuple[int, ...], ...]
     fails: tuple[bytes, ...]
@@ -33,8 +33,8 @@ class Served:
 
 def serve(params: W.WardenParams, arrivals: Sequence[int], responses: Sequence[Sequence[int]], windows: int) -> Served:
     """Connection k, ordinal k + 1, arrives at bucket arrivals[k] with response responses[k] (its ids, each one id
-    event of P bytes, then `TRAILER`, all there by their deadlines), and the network certifier serves the link for
-    `windows` execution phases: admitted at the first bucket with a free lane in arrival order."""
+    event of P bytes, then `TRAILER`, all there by their deadlines), and the warden serves the link for `windows`
+    link-windows: admitted at the first bucket with a free lane in arrival order."""
     P = params.payload
     fails: list[bytes] = []
     warden = SimpleNamespace(params=params, fails=SimpleNamespace(enqueue=fails.append))
@@ -100,5 +100,5 @@ def states(served: Served, NR: int, K: int) -> list[EG.State]:
 
 
 def rows(served: Served) -> list[bytes]:
-    """The network certifier's registered egress rows of the link, bucket by bucket (`warden_rows.window_rows`)."""
+    """The warden's registered egress rows of the link, bucket by bucket (`warden_rows.window_rows`)."""
     return [x for record in served.records for x in WR.window_rows(record, served.params)]

@@ -13,14 +13,14 @@ cryptography's advantage:
   Its δ is `p / ε'` with `p = δ_s + δ_bind + δ_ks` per window, by Markov over every window at once: `ε'` is the share
   whose certificates may be wrong, and `δ` the chance more are.
 * `Detection`, sampled proofs with terminal detection: their slack is `break` (the verdict lag `JΔ/H` and, sampled,
-  the incorrect blocks accepted before detection `θ`) and `exfil.incorrect`, Lean's `χ` (the compute that bits injected by
+  the incorrect blocks accepted before detection `θ`) and `exfil.faulty`, Lean's `χ` (the compute that bits injected by
   accepted incorrect blocks buy, at `chord` products a bit; not double counting, §8 "Channels"). Its δ is the escape
   bound's.
 * `Wipe`: at each wipe a server keeps at most `k_wipe` bits of the earlier content of its whole memory `M_s` (`per =
   "server"`, the ruled operating point), or, the per-device sensitivity, each device
   `residual_bits` and each host `host_residual_bits` (`per = "device"`); a boot disk the wipe doesn't reach keeps
   `boot_disk_bits` more a server (today's wipe, `regime.onsite-today`). Its δ is `2⁻¹²⁸ + Adv_PRF` per game,
-  one game per server (or device) per wipe, summed over the monitoring period.
+  one game per server (or device) per wipe, summed over the horizon.
 * `Certifier`: a serving block behind certifiers reads at most `(r_in + r_side) Δ_wipe` unregistered bits from outside,
   `r_in` the certified prompt ingress and `r_side` the timing and side channels no certifier reads. `r_in` is
   `intake · α Φ`, at most `α Φ` since a server's ingress carries only its inference blocks' declared inputs;
@@ -30,11 +30,11 @@ cryptography's advantage:
   blocks (`Policy`), registered once.
 
 A **regime** is the envelopes that run: `Remote` (PoUW, detection and the NCI check; no wipe or certifier, so its
-serving block is a server over the monitoring period and only the inference cut bounds it) and `Onsite` (with the wipe
-and the certifier, whose serving block between two wipes gets the serving cut too). `Regime.partition` gives the serving
-blocks (`theorem`), each with the cuts the envelopes make valid, and `Regime.delta` their δ summed over envelopes and
-serving blocks. Its `layout` is what a protocol-abiding attack gets: the inference blocks and the uncertified gates a
-strategy that never cheats can use (`ABIDING`), at the training MFU.
+serving block is a server over the horizon and only the inference cut bounds it) and `Onsite` (with the wipe and the
+certifier, whose serving block between two wipes gets the serving cut too). `Regime.partition` gives the serving blocks
+(`theorem`), each with the cuts the envelopes make valid, and `Regime.delta` their δ summed over envelopes and serving
+blocks. Its `layout` is what a protocol-abiding attack gets: the inference blocks and the uncertified gates a strategy
+that never cheats can use (`ABIDING`), at the training MFU.
 
 A regime's table is flat: each key is a field of one of its envelopes (or the regime's own `form`), and a table may name
 a `base` table and override only what differs (`regime`).
@@ -47,7 +47,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, fields
 from typing import Any, Protocol
 
-from rho.hardware import Fleet, Location, MonitoringPeriod, Units
+from rho.hardware import Fleet, Horizon, Location, Units
 from rho.params import Registry
 from rho.theorem import Blocks, Budget, Cut, Partition, ServingBlock
 
@@ -74,7 +74,7 @@ class Context:
     fleet: Fleet
     location: Location
     policy: Policy
-    period: MonitoringPeriod
+    horizon: Horizon
     units: Units
 
     @property
@@ -84,8 +84,8 @@ class Context:
 
     @property
     def capacity(self) -> float:
-        """The monitored fleet's gates over the monitoring period at capacity."""
-        return self.fleet.count * self.location.phi * self.period.seconds
+        """The monitored fleet's gates over the horizon at capacity."""
+        return self.fleet.count * self.location.phi * self.horizon.seconds
 
 
 @dataclass(frozen=True)
@@ -192,14 +192,14 @@ class Detection:
 
     def slack(self, ctx: Context) -> dict[str, float]:
         u, c = ctx.units, ctx.capacity
-        out = {"break.lag": min(1.0, self.identities * self.lag_s / ctx.period.seconds)}
+        out = {"break.lag": min(1.0, self.identities * self.lag_s / ctx.horizon.seconds)}
         if self.sampled:
             steps = self.luck * self.identities * math.log(1 / self.p_evade) / self.q()
             out["break.escape"] = steps * u.gates(self.step_flop) / c
         cheat = self.cheat if self.cheat is not None else (
             u.gates(2 * self.chord * self.injected() / self.chord_kappa) / c if self.sampled else 0.0)
         if cheat:
-            out["exfil.incorrect"] = min(1.0, cheat)
+            out["exfil.faulty"] = min(1.0, cheat)
         return out
 
     def delta(self, ctx: Context) -> tuple[float, float]:
@@ -246,9 +246,9 @@ class Wipe:
         return loc.devices * self.residual_bits + loc.hosts * self.host_residual_bits + disks
 
     def games(self, ctx: Context) -> float:
-        """Wipe games over the monitoring period: one per server (or device) per wipe."""
+        """Wipe games over the horizon: one per server (or device) per wipe."""
         loc = ctx.location
-        return ctx.fleet.count * (loc.hosts if self.per == "server" else loc.devices) * ctx.period.seconds / self.wipe_s
+        return ctx.fleet.count * (loc.hosts if self.per == "server" else loc.devices) * ctx.horizon.seconds / self.wipe_s
 
     def delta(self, ctx: Context) -> tuple[float, float]:
         n = self.games(ctx)
@@ -458,7 +458,7 @@ class Unmonitored:
     name: str
 
     def partition(self, ctx: Context) -> Partition:
-        f, loc, h = ctx.fleet, ctx.location, ctx.period
+        f, loc, h = ctx.fleet, ctx.location, ctx.horizon
         return Partition((ServingBlock("server", loc.phi * h.seconds, f.count, (), mfu=f.mfu_train),), **_dark(ctx))
 
     def delta(self, ctx: Context) -> Delta:
@@ -468,7 +468,7 @@ class Unmonitored:
 @dataclass(frozen=True)
 class Remote:
     """The remote audit: PoUW, detection, and the NCI check's registration. No certifier sees a server's links, so its
-    serving block is a server over the monitoring period, and the inference cut is the only one."""
+    serving block is a server over the horizon, and the inference cut is the only one."""
 
     name: str
     pouw: Pouw
@@ -512,7 +512,7 @@ class Remote:
         return Delta({name: e.delta(ctx) for name, e in self.envelopes().items()})
 
     def partition(self, ctx: Context) -> Partition:
-        gates = ctx.location.phi * ctx.period.seconds
+        gates = ctx.location.phi * ctx.horizon.seconds
         layout = Cut("layout", (self.blocks(ctx, gates),), self.abiding(ctx, gates), self.CITES)
         block = ServingBlock("server", gates, ctx.fleet.count, (self.inference(ctx, gates),), layout,
                              ctx.fleet.mfu_train)
@@ -579,7 +579,7 @@ class Onsite(Remote):
         uncertified = Budget(math.fsum(self.abiding(ctx, budget.gates).values()), budget.inputs)
         layout = Cut("layout", (self.blocks(ctx, budget.gates), Blocks("uncertified", uncertified, 1.0)), {},
                      self.cites())
-        count = ctx.fleet.count * ctx.period.seconds / self.wipe.wipe_s
+        count = ctx.fleet.count * ctx.horizon.seconds / self.wipe.wipe_s
         block = ServingBlock("serving-block", budget.gates, count, (self.inference(ctx, budget.gates), serving),
                              layout, ctx.fleet.mfu_train)
         return Partition((block,), **_dark(ctx))

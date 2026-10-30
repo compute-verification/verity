@@ -125,6 +125,17 @@ theorem get_keeps (B : ℕ) : (keepS B).R (get : TMW PS Transcript) get := by
   obtain ⟨⟨-, rfl⟩, rfl⟩ := h
   exact Keeps.same rfl
 
+theorem liftV_keeps (B : ℕ) {α : Type} (v : V α) :
+    (keepS B).R (StateT.lift (monadLift v : PS α) : TMW PS α) (StateT.lift (monadLift v : PS α)) := by
+  intro t l a t' l' e
+  change ((monadLift v : PS _) >>= fun a => Pure.pure (a, t)).go l = _ at e
+  obtain ⟨b, l₁, e1, e2⟩ := go_bind_ok e
+  rw [monadLift_go] at e1
+  simp only [Prod.mk.injEq] at e1
+  obtain ⟨-, rfl⟩ := e1
+  cases e2
+  exact Keeps.same rfl
+
 /-- A computation of the pure session, lifted to the transcript, keeps its rounds. -/
 theorem liftPS_keeps (B : ℕ) {α : Type} (y : PS α) : (keepS B).R (StateT.lift y : TMW PS α) (StateT.lift y) := by
   intro t l a t' l' e
@@ -146,6 +157,14 @@ theorem sampleKP_keeps (resp : ℕ → Claims.Msg) {B : ℕ} (h2 : 2 ≤ B) :
     (keepS B).R (sampleKP (asksS resp)) (sampleKP (asksS resp)) := by
   unfold sampleKP
   sim_walk [squeezeP_keeps resp _ _ h2]
+
+theorem zerocheckPZk_keeps (resp : ℕ → Claims.Msg) (m : ℕ) (digest cap root : ByteArray) (lay : Zk.PadLayout)
+    (h : Array F128) (tr : Trace) {B : ℕ} (h6 : 6 ≤ B) (hm : m - 13 ≤ B) :
+    (keepS B).R (zerocheckPZk (asksS resp) m digest cap root lay h tr)
+      (zerocheckPZk (asksS resp) m digest cap root lay h tr) := by
+  unfold zerocheckPZk sampleVecP
+  sim_walk [squeezeP_keeps resp _ _ h6, squeezeP_keeps resp _ _ hm, sampleP_keeps resp (by omega : 1 ≤ B),
+    label_keeps, absorbBytes_keeps, absorbSlice_keeps, absorbF_keeps]
 
 theorem lincheckPZk_keeps (resp : ℕ → Claims.Msg) (c : CircuitFold) (m : ℕ) (lay : Zk.PadLayout) (h : Array F128)
     (tr : Trace) (zc : ZcOut) {B : ℕ} (h1 : 1 ≤ B) :

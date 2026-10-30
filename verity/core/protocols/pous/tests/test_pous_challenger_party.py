@@ -8,7 +8,6 @@ challenger host, and `placement` says whether `trusted-host`'s premise holds."""
 
 from __future__ import annotations
 
-import functools
 import gc
 import hashlib
 import json
@@ -18,7 +17,6 @@ import threading
 
 import pytest
 
-import pous_fakes
 import pous_test_signer as ts
 from verity.core.deploy import sources as S
 from verity.core.deploy.party import Send
@@ -27,13 +25,20 @@ from verity.core.deploy.stream import Side
 from verity.core.protocols.pous import challenger_party as CP
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import period, run
-from verity.core.protocols.pous.schemes.p2 import P2Params
 from verity.core.wire import Message
 
 STORE = hashlib.shake_256(b"a tiny MLP's weights").digest(600)
 COINS = hashlib.sha512(b"the period's live coins").digest()
 TEST_ID = mc.TEST_PREFIX + period.PROTOCOL
-Clock = functools.partial(pous_fakes.Clock, 10 ** 9, 1_000)
+
+
+class Clock:
+    def __init__(self) -> None:
+        self.now = 10 ** 9
+
+    def __call__(self) -> int:
+        self.now += 1_000
+        return self.now
 
 
 def _in_process() -> tuple[period.Run, run.Point, run.Setup, list[bytes], bytes]:
@@ -49,7 +54,7 @@ def _in_process() -> tuple[period.Run, run.Point, run.Setup, list[bytes], bytes]
 
 
 def _split(point: run.Point, root: bytes, respond, signer: mc.Signer, warmups: int = CP.WARMUPS,
-           draw=os.urandom) -> tuple[bytes, run.ChallengerRecord, int]:
+           draw=os.urandom) -> tuple[bytes, run.Session, int]:
     """One session with the challenger's side in a thread and the prover's here, over a socket pair."""
     a, b = socket.socketpair()
     got: dict = {}
@@ -72,7 +77,7 @@ def test_the_split_session_is_the_periods() -> None:
     p, point, published, blocks, digests = _in_process()
     signer = ts.TestSigner(b"challenger host", 2)
     sid, session, rounds = _split(point, published.root, lambda i: blocks[i], signer)
-    mine = run.ChallengerRecord.from_json(json.loads(bytes.fromhex(p.case["evidence"]))["session"])
+    mine = run.Session.from_json(json.loads(bytes.fromhex(p.case["evidence"]))["session"])
     assert sid.hex() == p.case["params"]["session_id"]
     assert [r.index for r in session.signed.rounds] == [r.index for r in mine.signed.rounds]
     assert rounds == CP.WARMUPS + len(session.signed.rounds) == CP.WARMUPS + point.k
@@ -174,7 +179,7 @@ def _salt_log(tmp_path) -> mc.SaltLog:
 
 
 def _audit_session(point: run.Point, published: run.Setup, respond, signer: mc.Signer, salts: mc.SaltLog,
-                   log: mc.SessionLog) -> tuple[bytes, run.ChallengerRecord]:
+                   log: mc.SessionLog) -> tuple[bytes, run.Session]:
     """One session of the audit `AUDIT` on `published`, the challenger's side in a thread, the prover's here."""
     a, b = socket.socketpair()
     got: dict = {}
@@ -322,32 +327,3 @@ def test_the_party_follows_period_json(tmp_path) -> None:
     assert CP.placement("n0", "auditor-host") == {
         "parties": {"memory_challenger": "auditor-host", "prover": "n0", "verifier": "n0"},
         CP.PREMISE: "holds: the memory challenger ran on auditor-host, not the prover's n0"}
-
-
-def test_a_request_carries_its_setup_and_the_challenger_keeps_each_completed_session_privately(tmp_path) -> None:
-    """A request naming its audit carries setup's published outputs and the point's parameters, its setup refused unless
-    its root is the binding, its blocks and parameters the session's and its salt PoUS's; the kept record is the request
-    and the id the challenger designated, 0600 in a 0700 directory, written once."""
-    _, point, published, _, _ = _in_process()
-    req = CP.request_of("n0", point, published.root, audit=AUDIT, published=published)
-    assert CP.setup_of(req) == req["published"] | {"params": req["params"]}
-    assert run.Setup.from_json(req["published"]) == published
-    assert P2Params(**req["params"]) == point.params and CP.setup_of(CP.request_of("n0", point, published.root)) is None
-    q = point.params
-    for bad, why in (({"root": "11" * 64}, "not the session's binding"), ({"blocks": q.blocks + 1}, "blocks"),
-                     ({"salt": "00"}, "salt PoUS's"), ({"extra": 1}, "a request's published outputs are")):
-        with pytest.raises(ValueError, match=why):
-            CP.setup_of(req | {"published": req["published"] | bad})
-    for params, why in ((req["params"] | {"segments": q.segments + 1}, "not the session's blocks"),
-                        ({k: v for k, v in req["params"].items() if k != "w"}, "a setup's params are")):
-        with pytest.raises(ValueError, match=why):
-            CP.setup_of(req | {"params": params})
-    with pytest.raises(ValueError, match="a request's published outputs are"):
-        CP.setup_of({k: v for k, v in req.items() if k != "published"})
-    sid = bytes(range(32))
-    path = CP.keep(tmp_path, sid, req)
-    assert path == tmp_path / CP.SETUPS / f"{sid.hex()}.json"
-    assert json.loads(path.read_text()) == {"request": req, "session_id": sid.hex()}
-    assert [p.stat().st_mode & 0o777 for p in (path.parent, path)] == [0o700, 0o600]
-    with pytest.raises(FileExistsError):
-        CP.keep(tmp_path, sid, req | {"node": "another"})

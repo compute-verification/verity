@@ -44,7 +44,7 @@ class Property:
 
 @dataclass(frozen=True, slots=True)
 class Instance:
-    """A primitive a property is assumed of; ``algebraic``: an algebraic primitive (Poseidon2, Ajtai digests, ML-KEM)."""
+    """A primitive a property is assumed of; ``algebraic``: an algebraic hash (Poseidon2, Ajtai digests)."""
 
     id: str
     name: str
@@ -66,8 +66,6 @@ PROPERTIES: dict[str, Property] = {p.id: p for p in (
     Property("prf", "Pseudorandom function", "PRF"),
     # of a signature scheme: no forgery on a new message after chosen-message queries, each one-time key used once
     Property("euf-cma", "Existential unforgeability under chosen-message attack", "EUF-CMA"),
-    # of a KEM: the shared secret is pseudorandom given its ciphertext, under decapsulation queries on other ciphertexts
-    Property("ind-cca", "Indistinguishability under chosen-ciphertext attack", "IND-CCA"),
 )}
 
 INSTANCES: dict[str, Instance] = {i.id: i for i in (
@@ -91,10 +89,6 @@ INSTANCES: dict[str, Instance] = {i.id: i for i in (
     # memory challenger's signatures; its EUF-CMA rests on SHA-512 itself: multi-target second-preimage resistance under RFC
     # 8554's prefixes (its §9) and, for keys derived from a seed (its Appendix A), SHA-512 as a PRF keyed by the seed
     Instance("lms-sha512-n64", "LMS over SHA-512"),
-    # FIPS 203's ML-KEM at its 1024 parameters (Module-LWE with the Fujisaki-Okamoto transform), through the `cryptography`
-    # package: the one-hash rule's transport exception (AGENTS.md), only for a remote party's sessions,
-    # whose key is the XOR of its PRF output with the chain key's (verity.ml.crypto.transport), never on pair links
-    Instance("ml-kem-1024", "ML-KEM-1024", algebraic=True),
 )}
 
 ENTRIES: dict[str, Entry] = {e.id: e for e in (
@@ -239,34 +233,16 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "Confined p: the auditor party p's only outputs are the messages of its declared channels (toward the auditor, "
           "its manifest's public messages, such as one liveness record per sampling block): no other channel, timing "
           "included, carries its state out", "Confined party", "standard"),
-    # Its two Lean forms: per party, `Accounting.Assumptions.Parties.WitnessPathPrivate` (nothing overheard on the
-    # party's path to the prover), and per channel, `Verity.Assumptions.WitnessPathPrivate c`
-    # (Security/Definitions/Core/Assumptions/Transport.lean), which Verity.Guarantees.TransportPassiveZk reads with
-    # `ChannelHides` as its keyed alternative
     Entry("witness-path-private", "assumption",
-          "Witness path private: every node that can read an auditor party's private messages (its signed roots and "
-          "records, the prover's witness) in transit, over the channel's life, is its auditor end, one of the prover's "
-          "own machines, or an auditor party under Confined p; per party, its path to the prover carries no observer but "
-          "its two endpoints", "Witness path private", "standard"),
+          "Witness path private: the path between an auditor party and the prover carries no observer but its two "
+          "endpoints, so the party's private messages (its signed roots and records, the prover's witness) reach nobody "
+          "else; they travel unencrypted for now", "Witness path private", "standard"),
     # `Accounting.Covered` (Security/Definitions/Accounting/Physical.lean) is its Lean form: every boundary link of the
     # location is certified (uncertifiedCapacity = 0). The auditor's placement in the onsite protocol; nothing proves it
     Entry("certifier-coverage", "assumption",
           "Every uplink of the spatial unit passes through a network certifier the auditor trusts, with its parameters "
           "fixed before the run: every boundary link is certified, and nothing leaves the unit another way",
           "Certifier coverage", "standard"),
-    # the transport's other premises (Security/Definitions/Core/Assumptions/Transport.lean), beside `witness-path-private`
-    Entry("imprint-path-private", "assumption",
-          "Imprint path private: every node that can read the bytes of the channel's one imprint exchange, over the "
-          "cable between an onsite auditor device and its server, is its auditor end, one of the prover's own machines, "
-          "or an auditor party under Confined p", "Imprint path private", "standard"),
-    Entry("channel-hides", "assumption",
-          "Channel hides: to a reader outside the channel's ends, the sealed units of its private traffic are within eta "
-          "of the units of blank traffic of the same declared sizes, from prf/sha-512 under a secret chain key, and for "
-          "a remote party's session from ind-cca/ml-kem-1024 in its place", "Channel hides", "standard"),
-    Entry("channel-authentic", "assumption",
-          "Channel authentic: the units a receiver accepts are a prefix of those its peer sent, or the run holds a "
-          "forgery (an LMS signature on a new handshake message, or a tag under the session's keys on a new unit), from "
-          "euf-cma/lms-sha512-n64 and prf/sha-512", "Channel authentic", "standard"),
     # `Accounting.Placed.LatencyAtMost` (Security/Definitions/Accounting/Physical.lean) is its Lean form. Falsified by a
     # delivery slower than the ceiling, measured on the server's certified egress links
     Entry("latency-ceiling", "assumption",
@@ -309,9 +285,9 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "each word it first fetches at the fetch price): for every adversary within q oracle calls, the probability "
           "that its online cost is at most T and the honest work of its correct units exceeds T / (1 − γ) is at most "
           "η(q, N)", "PoUW γ-gap per coin", "conjectured"),
-    # `Pouw.Assumptions.HonestClock`, stated once for both PoUW games: the premise by which the deadline guarantees
-    # (Pouw.Guarantees.WorkBetweenSaltAndDeadline, SpareCapacityAtDeadline, PearlCSampledByDeadline and its sm_120
-    # instances) read the verifier's clock in the cost model
+    # `Pouw.Assumptions.HonestClock` and its Pearl-C form `Pouw.PearlC.Assumptions.HonestClock`: the premise by which the
+    # deadline guarantees (Pouw.Guarantees.WorkBetweenSaltAndDeadline, SpareCapacityAtDeadline, PearlCSampledByDeadline
+    # and its sm_120 instances) read the verifier's clock in the cost model
     Entry("honest-clock", "assumption",
           "Honest clock: the cost behind a transcript the verifier receives by the deadline is spent after the salt's "
           "release and by the deadline, so the prover's computation stopped at the deadline outputs every transcript "
@@ -496,15 +472,6 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "32 cells have z = A·Bᵀ and y = dq(z), or for the combine that the rows' XOR is the receipt. That every port "
           "is registered and opens at its registered root is proved from flock-verify's complete check, not assumed",
           "TS leaf checks", "conjectured"),
-    Entry("accounting-ts-group-realizes", "assumption",
-          "A leaf's group of statements (its lanes, each in n chunks along K, and its combine) realizes the leaf's "
-          "relation at the rows its sessions open: past the leaf verifier's check of the tile and its chunks, where "
-          "each session's complete, known-read and file checks pass, every served root is registered, each session "
-          "has a unit, the sessions' registrants' rows agree at one tree and position, the known rows hold, and each "
-          "session's committed rows are the port rows of a wire assignment its circuit's evaluation agrees with, the "
-          "relation holds of the leaf the layer opens. Proved at the 32 × 32 leaf with one chunk a lane from the "
-          "circuits' lowerings; at another shape no Lean states the shape's Definitions yet, and circuit-check and "
-          "h1zy's tests back it", "TS group realizes", "conjectured"),
     Entry("accounting-ts-ok-realizes", "assumption",
           "The checked unit's Flock circuit is its declared unit's: on any wire assignment the key program's "
           "evaluation agrees with at a unit, whose ok wires carry the ok row (the word 1), every check the declared "
@@ -549,13 +516,6 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "paddings and level-0 salts; for each rep, its pads, its pads tree's salts and its salts for levels 1 and up. "
           "The loop runs on the auditor-trusted host (trusted-host), whose operating system's random bytes are the "
           "uniform draws the tape models", "Firewall OS source", "standard"),
-    # `FlockSoundness.Assumptions.PinnedWindowDraws` (Security/Proofs/Flock/Soundness/Assumptions/WindowDraws.lean) is its
-    # Lean form, the premise of Flock.Guarantees.WindowBound_honest; falsified by hashing and parsing the recorded draw files
-    Entry("flock-window-draws-pinned", "assumption",
-          "The deployed sampling window's draw file and its three sessions' draw files, named by their SHA-512 digests, "
-          "read as recorded: the window's stratified draw of one unit from each of its three strata (units 421, 2824 "
-          "and 3270 of 3744), and the sessions' subset draws of one unit each (165 of 256, 328 of 512, 150 of 624)",
-          "Window draws pinned", "measured"),
 )}
 
 

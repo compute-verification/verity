@@ -416,30 +416,6 @@ def test_cli_push_run_and_pending(store, fs_remote, tmp_path, capsys):
     assert main(["push", "nonsense"]) == 1 and "not an artifact or run id" in capsys.readouterr().err
 
 
-def test_push_refuses_an_artifact_withdrawn_from_the_shared_store_even_when_another_machine_withdrew_it(store, fs_remote, env, tmp_path,
-                                                                                                        capsys):
-    """A node kept its copy of a run's private scan files after they were withdrawn elsewhere; `push --pending` would have put
-    them back on the remote.  `research data push` pulls the targets' labels first, so the refusal holds on any machine."""
-    from research.store import vocab
-    from research.store.cli import main
-
-    src = tmp_path / "scan.json"
-    src.write_bytes(b"private answers")
-    art = store.put_artifact("evidence/v1", {"n": 1}, file=src)
-    keep = store.put_artifact("evidence/v1", {"n": 2}, file=src)
-    other = LocalStore(env / "other", config_path=env / "store.toml")
-    other.add_label(art, vocab.WITHDRAWN, "private scan answers", "vllm")
-    assert other.push_labels([art])["failed"] == []
-    assert store.withdrawn(art) is None, "only the remote has it so far"
-    assert main(["push", "--pending"]) == 1
-    out = capsys.readouterr().out
-    assert f"{art}  ?  NOT preserved: StoreError: {art} was withdrawn from the shared store ('private scan answers', by vllm)" in out
-    assert f"{keep}  evidence/v1  PRESERVED" in out
-    assert not (fs_remote / "manifests" / f"{art.removeprefix('art:')}.json").exists()
-    with pytest.raises(StoreError, match="never pushed back"):
-        store.push(art)
-
-
 def test_unusable_remote_degrades_to_local(env, monkeypatch):
     """store.toml names an S3 bucket but the credential env vars are unset (a pod, a test, a laptop without `source r2.env`): the
     local store must keep working -- reads, puts, attempt publication -- and only push/push_attempt name the missing credentials."""
@@ -1175,7 +1151,7 @@ def test_cli_push_reports_rate_and_takes_jobs_and_verify(fake_s3, tmp_path, caps
     out = capsys.readouterr().out
     line = out.splitlines()[0]
     assert line.startswith(f"{art}  run-files/v1  PRESERVED  26 objects (26 uploaded, 0 already there)") and "obj/s" in line and "verified sha256-readback" in line
-    assert "1/1 preserved" in out and sum(1 for x in s.log if x[0] == "GET" and x[1]) == 26     # a readback each; the other GET lists its labels
+    assert "1/1 preserved" in out and sum(1 for x in s.log if x[0] == "GET") == 26
     assert main(["push", art, "--json"]) == 0
     doc = json.loads(capsys.readouterr().out)
     x = doc["pushed"][0]

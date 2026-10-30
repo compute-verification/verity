@@ -118,10 +118,10 @@ theorem ex_cumUpToLag [Fintype Ω] [DecidableEq Ω] {μ : Ω → ℝ} (hμ : IsD
 `ℓ`, and the halt `Δ` windows after the first caught window's commitment. With probability at least `1 - δ` the harm
 through the halt is below `(1 + Δ) ℓ + (n/k) ln (1/δ)`, for every adaptive strategy, every horizon `N` and every
 history `h`. -/
-theorem draw_tail_cumLag {n k : ℕ} (hk : 0 < k) (hkn : k ≤ n) {A : Strategy (Verity.Draw.Subset n k)}
-    (B : List (Verity.Draw.Subset n k) → Finset (Fin n)) (w : Fin n → ℝ) (hw : ∀ u, w u ≤ 1)
+theorem draw_tail_cumLag {n k : ℕ} (hk : 0 < k) (hkn : k ≤ n) {A : Strategy (Draw n k)}
+    (B : List (Draw n k) → Finset (Fin n)) (w : Fin n → ℝ) (hw : ∀ u, w u ≤ 1)
     (hesc : ∀ h, A.esc h ⊆ missing n k (B h)) (hleak : ∀ h, A.leak h ≤ ∑ u ∈ B h, w u) {ℓ : ℝ}
-    (hL : LeakBounded ℓ A) {δ : ℝ} (hδ : 0 < δ) (Δ N : ℕ) (h : List (Verity.Draw.Subset n k)) :
+    (hL : LeakBounded ℓ A) {δ : ℝ} (hδ : 0 < δ) (Δ N : ℕ) (h : List (Draw n k)) :
     1 - δ ≤ prob (uniformDraw n k) N (fun cs => A.cumLag Δ N h cs < (1 + Δ) * ℓ + n / k * Real.log (1 / δ)) := by
   have hμ := uniformDraw_isDist hkn
   have hkR : (0 : ℝ) < k := by exact_mod_cast hk
@@ -136,10 +136,10 @@ theorem draw_tail_cumLag {n k : ℕ} (hk : 0 < k) (hkn : k ≤ n) {A : Strategy 
 
 /-- **The rate form under the deployed draw**: through the halt the `j`-th detection triggers, `Δ` windows after it, at
 most `j (ℓ + n/k) + Δ ℓ` leaves on average. -/
-theorem draw_ex_cumUpToLag {n k : ℕ} (hk : 0 < k) (hkn : k ≤ n) {A : Strategy (Verity.Draw.Subset n k)}
-    (B : List (Verity.Draw.Subset n k) → Finset (Fin n)) (w : Fin n → ℝ) (hw : ∀ u, w u ≤ 1)
+theorem draw_ex_cumUpToLag {n k : ℕ} (hk : 0 < k) (hkn : k ≤ n) {A : Strategy (Draw n k)}
+    (B : List (Draw n k) → Finset (Fin n)) (w : Fin n → ℝ) (hw : ∀ u, w u ≤ 1)
     (hesc : ∀ h, A.esc h ⊆ missing n k (B h)) (hleak : ∀ h, A.leak h ≤ ∑ u ∈ B h, w u) {ℓ : ℝ}
-    (hL : LeakBounded ℓ A) (Δ N j : ℕ) (h : List (Verity.Draw.Subset n k)) :
+    (hL : LeakBounded ℓ A) (Δ N j : ℕ) (h : List (Draw n k)) :
     ex (uniformDraw n k) N (A.cumUpToLag Δ N j h) ≤ j * (ℓ + n / k) + Δ * ℓ := by
   have hkR : (0 : ℝ) < k := by exact_mod_cast hk
   have hnR : (0 : ℝ) < n := by exact_mod_cast hk.trans_le hkn

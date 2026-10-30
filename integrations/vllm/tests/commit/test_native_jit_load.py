@@ -150,44 +150,6 @@ def test_a_header_free_source_set_keeps_its_digest(tmp_path):
     assert nj.source_set_digest(paths, cflags=(), cuda_cflags=(), **VERSIONS) == h.hexdigest()
 
 
-def test_the_committer_stages_the_gpus_sha512_header_and_its_bytes_key_the_digest(tmp_path, monkeypatch):
-    from verity.ml.kernels import SHA512
-
-    paths = nj.source_paths()
-    assert ("sha512.cuh", str(SHA512)) in nj.local_headers(paths)
-    digest = nj.source_set_digest(paths, **VERSIONS)
-    moved = tmp_path / "sha512.cuh"
-    moved.write_bytes(SHA512.read_bytes() + b"\n")
-    monkeypatch.setitem(nj.SHARED, "sha512.cuh", str(moved))
-    assert nj.source_set_digest(paths, **VERSIONS) != digest, "a byte of the shared header moves the digest"
-
-
-def test_the_committer_stages_the_row_commit_header_and_the_sha512_header_it_includes(tmp_path, monkeypatch):
-    from verity.ml.kernels import ROW_COMMIT, SHA512
-
-    paths = nj.source_paths()
-    assert {("row_commit.cuh", str(ROW_COMMIT)), ("sha512.cuh", str(SHA512))} <= set(nj.local_headers(paths))
-    digest = nj.source_set_digest(paths, **VERSIONS)
-    moved = tmp_path / "row_commit.cuh"
-    moved.write_bytes(ROW_COMMIT.read_bytes() + b"\n")
-    monkeypatch.setitem(nj.SHARED, "row_commit.cuh", str(moved))
-    assert ("sha512.cuh", str(SHA512)) in nj.local_headers(paths), "the moved header's sha512.cuh is still the shared one"
-    assert nj.source_set_digest(paths, **VERSIONS) != digest, "a byte of the shared header moves the digest"
-
-
-def test_a_shared_header_that_includes_an_unshared_header_beside_it_is_refused(tmp_path):
-    for d in ("src", "lib"):
-        (tmp_path / d).mkdir()
-    (tmp_path / "lib" / "one.cuh").write_bytes(b'#include "two.cuh"\n#include "absent.cuh"\n')
-    (tmp_path / "lib" / "two.cuh").write_bytes(b"")
-    (tmp_path / "src" / "ext.cu").write_bytes(b'#include "one.cuh"\n')
-    with pytest.raises(ValueError, match="not shared"):
-        nj.local_headers([str(tmp_path / "src" / "ext.cu")], {"one.cuh": str(tmp_path / "lib" / "one.cuh")})
-    (tmp_path / "lib" / "two.cuh").unlink()
-    assert nj.local_headers([str(tmp_path / "src" / "ext.cu")], {"one.cuh": str(tmp_path / "lib" / "one.cuh")}) == \
-        [("one.cuh", str(tmp_path / "lib" / "one.cuh"))]
-
-
 def test_a_header_outside_the_sources_directory_is_refused(tmp_path):
     (tmp_path / "src").mkdir()
     (tmp_path / "up.h").write_bytes(b"")
@@ -252,9 +214,9 @@ def test_a_killed_holder_leaves_no_lock_behind(tmp_path):
     assert p.exitcode == -signal.SIGKILL and not _held(bd), "the kernel drops the lock with its holder"
 
 
-@pytest.mark.parametrize("module", ["native_ext", "hidden_gpu"])
+@pytest.mark.parametrize("module", ["native_ext", "leafhash", "hidden_gpu"])
 def test_every_torch_jit_extension_of_the_commit_loads_through_jit_load(module):
     here = os.path.dirname(os.path.abspath(nj.__file__))
-    path = {"native_ext": "native_ext.py", "hidden_gpu": os.path.join("hidden_gpu_src", "hidden_gpu.py")}[module]
+    path = {"native_ext": "native_ext.py", "leafhash": "leafhash.py", "hidden_gpu": os.path.join("hidden_gpu_src", "hidden_gpu.py")}[module]
     src = open(os.path.join(here, path)).read()
     assert "native_jit.jit_load(" in src and "cpp_extension import load" not in src

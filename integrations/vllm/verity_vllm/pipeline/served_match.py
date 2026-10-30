@@ -90,13 +90,10 @@ def facts_of(eng: Any) -> dict[str, Any]:
 
 
 def device_of(facts: dict[str, Any]) -> Any:
-    """The served Build's device (`served_device.device_of`) from the engine's facts, held to the card its name is registered on
-    (`served_device.card_of`); `Unmodelled` names an unregistered name, each field that is not the card's, else every binding it
-    lacks."""
+    """The served Build's device (`served_device.device_of`) from the engine's facts; `Unmodelled` names every binding it lacks."""
     from verity_vllm.acquire import served_device as SD
 
-    return SD.device_of(facts["cc"], facts["sms"], card=SD.card_of(facts["device"]), attention=facts["attention"],
-                        max_model_len=facts["max_model_len"])
+    return SD.device_of(facts["cc"], facts["sms"], attention=facts["attention"], max_model_len=facts["max_model_len"])
 
 
 def moe_facts(model: Any) -> dict[str, dict[str, Any]]:
@@ -216,7 +213,7 @@ class ServedCommit:
     """The served row in a Commit's treatment process (`pipeline.commit --compiled-taps served`): the source's hooks before vLLM
     compiles, the Build of record's value modules once the engine is up, this process's own Build after the warm-ups
     (build_rebuilt.json, which `compiled verify` holds the Build of record to), and each run's C2: the Build's Program on the
-    committed values, each request's rows a sample under the seed of a challenge drawn after the run root is fixed (the Commit is its
+    committed values, each request's rows a draw of the seed of a challenge drawn after the run root is fixed (the Commit is its
     run's own auditor), and the linkage that is the check's input rule (the prompt at a request's first step, then its previous
     step's sampled id)."""
 

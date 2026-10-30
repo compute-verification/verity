@@ -1,8 +1,7 @@
 // H1's registered values (`pouw_h1_registered.commit`, core's `registered.Registered.commit` under ``hm96-sha512/row/v2``) as
 // functions that compile for the host (g++, `registered_rows_host.cpp`, the twin the CPU tests hold to the Python reference) and
 // the device (nvcc, `registered_rows.cu`). One thread computes one row's leaf, one pad or one tree node; SHA-512, ChaCha20, the
-// hm96 commit string and the frame-v3-sha512 leaf, pad and node come through `row_table.cuh` (the last two are the GPU's one
-// row commitment, `row_commit.cuh`).
+// hm96 commit string and the frame-v3-sha512 messages are `row_table.cuh`'s.
 //
 // Row j of a value of W u16 words is its 2 W bytes as they sit in memory (the words little-endian). Its leaf:
 //   x    = SHA-512(P(16 W) || row)                                   P = "verity/sha512-row/v2\0" || u64be n_bits, one block
@@ -92,8 +91,7 @@ HD void row_leaf(const Table& t, uint32_t j, const uint8_t* row, const uint64_t*
 }
 
 // A public table's salt head as the host lays it out (`pouw_h1_registered_device.Pub`): `core_check.public_row_salt`'s
-// domain, u64be context length and context, or `core_check.ok_salt`'s tag, context and 0, as big-endian words, the bytes
-// past ``len`` zero.
+// domain, u64be context length and context, as big-endian words, the bytes past ``len`` zero.
 constexpr int PUB_WORDS = 40;
 struct Pub {
   uint64_t w[PUB_WORDS];
@@ -105,27 +103,14 @@ static_assert(sizeof(Pub) == 8 * PUB_WORDS + 16, "Pub is 42 words");
 // Position ``pos``'s public salt, SHA-512(head || u64be pos || u8 i) for i = 0, 1, 2, into ``out`` as its 192 bytes.
 HD void public_salt(const Pub& p, uint64_t pos, uint64_t out[24]) {
   for (int c = 0; c < 3; ++c) {
-    uint8_t m[8 * PUB_WORDS + 64] = {};  // the head, pos and i, with room for their padding
-    for (uint32_t i = 0; i < p.len; ++i) m[i] = (uint8_t)(p.w[i >> 3] >> (56 - 8 * (i & 7)));
-    rc::be_put(m + p.len, pos, 8);
-    m[p.len + 8] = (uint8_t)c;
+    Frame f;
+    for (int i = 0; i < FRAME_WORDS; ++i) f.w[i] = i < PUB_WORDS ? p.w[i] : 0;
+    f.p = p.len;
+    frame_be(f, pos, 8);
+    frame_be(f, (uint64_t)c, 1);
     uint64_t h[8];
-    rc::digest_padded(m, (int)p.len + 9, h);
+    frame_hash(f, h);
     for (int i = 0; i < 8; ++i) out[8 * c + i] = bswap64(h[i]);
-  }
-}
-
-// Position ``pos``'s ok salt, the first 192 bytes of SHAKE-256(head || u64be pos), into ``out`` as those bytes.
-HD void shake_salt(const Pub& p, uint64_t pos, uint64_t out[24]) {
-  ncp2::Shake256 x;
-  x.init();
-  for (uint32_t i = 0; i < p.len; ++i) x.byte((uint8_t)(p.w[i / 8] >> (56 - 8 * (i % 8))));
-  for (int k = 56; k >= 0; k -= 8) x.byte((uint8_t)(pos >> k));
-  x.pad(ncp2::SHAKE_DS);
-  for (int i = 0; i < 24; ++i) {
-    uint64_t v = 0;
-    for (int k = 0; k < 8; ++k) v |= (uint64_t)x.squeeze() << (8 * k);
-    out[i] = v;
   }
 }
 

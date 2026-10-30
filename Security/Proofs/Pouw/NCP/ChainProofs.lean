@@ -14,6 +14,64 @@ theorem paramsYLink : ParamsYLink := by
   simp only [Params.Y, mmW, Params.opX, Params.opY, accW_eq]
   rfl
 
+theorem leadDepth : LeadDepth := by
+  intro k m n p h16 hp
+  have hmn : 0 < m * n := by
+    rcases Nat.eq_zero_or_pos (m * n) with h | h
+    · simp [positions, h] at hp
+    · exact h
+  have hlt : p / (m * n) < 3 * k / 16 := (Nat.div_lt_iff_lt_mul hmn).2 hp
+  simp only [D1.blockEnd]
+  obtain ⟨c, rfl⟩ := h16
+  generalize p / (m * n) = q at hlt ⊢
+  omega
+
+theorem wrapIdentity : WrapIdentity := by
+  intro k m n N R A B adv u p hV hp hr
+  have heq : ∀ ω q, q ≤ p → wrapped k m n N R A B ω u q = checked k m n N R A B ω u q :=
+    fun ω q hq => wrap32_of_mem (hr ω q hq)
+  have ht : ∀ ω, (adv.rule u p).target (wrapped k m n N R A B ω u) =
+      (adv.rule u p).target (checked k m n N R A B ω u) :=
+    fun ω => WordProofs.target_congr _ p (hV u p hp) _ _ fun q hq => heq ω q hq.le
+  constructor
+  · rintro ⟨hne, h⟩
+    exact ⟨hne, fun ω => by rw [← heq ω p le_rfl, ← ht ω]; exact h ω⟩
+  · rintro ⟨hne, h⟩
+    exact ⟨hne, fun ω => by rw [heq ω p le_rfl, ht ω]; exact h ω⟩
+
+theorem identCount_wrapped {k m n N : ℕ} {R : Mat} {A B : ℕ → Mat} {adv : Word.Adversary}
+    (hV : Word.Valid (fun _ => positions k m n) adv)
+    (hr : ∀ (ω : Noise N m n k) (u p : ℕ), u < N → p < positions k m n → InInt32 (checked k m n N R A B ω u p))
+    {u : ℕ} (hu : u < N) :
+    Word.identCount (fun _ => positions k m n) (wrapped k m n N R A B) adv u =
+      Word.identCount (fun _ => positions k m n) (checked k m n N R A B) adv u := by
+  classical
+  unfold Word.identCount
+  rw [filter_congr fun p hp => wrapIdentity k m n N R A B adv u p hV (mem_range.1 hp)
+    fun ω q hq => hr ω u q hu (lt_of_le_of_lt hq (mem_range.1 hp))]
+
+theorem wrapFinalOnlyInd : WrapFinalOnlyInd := by
+  intro k m n N R A B adv h16 hI hV hr u hu
+  rw [identCount_wrapped hV hr hu]
+  exact ncpFinalOnlyInd k m n N R A B adv h16 hI hV u hu
+
+theorem wrapWordFloorInd : WrapWordFloorInd := by
+  intro k m n N R A B adv γ₀ h16 hI hγ0 hγ1 hV hr hNz
+  refine (WordProofs.wordBound (Noise N m n k) (fun _ => positions k m n) (wrapped k m n N R A B) N adv γ₀
+    hγ0 hγ1 hV hNz).trans ?_
+  calc ∑ u ∈ range N, (2 : ℝ) ^ (-(γ₀ * ((fun _ => positions k m n) u : ℕ) -
+        Word.identCount (fun _ => positions k m n) (wrapped k m n N R A B) adv u))
+      ≤ ∑ _u ∈ range N, (2 : ℝ) ^ (-((m * n : ℕ) * (γ₀ * (3 * k / 16 : ℕ) - 1))) := sum_le_sum fun u hu => by
+        apply Real.rpow_le_rpow_of_exponent_le (by norm_num)
+        have h1 : (Word.identCount (fun _ => positions k m n) (wrapped k m n N R A B) adv u : ℝ) ≤ (m * n : ℕ) := by
+          exact_mod_cast wrapFinalOnlyInd k m n N R A B adv h16 hI hV hr u (mem_range.1 hu)
+        generalize Word.identCount (fun _ => positions k m n) (wrapped k m n N R A B) adv u = ic at h1 ⊢
+        simp only [positions]
+        push_cast at h1 ⊢
+        nlinarith
+    _ = N * (2 : ℝ) ^ (-((m * n : ℕ) * (γ₀ * (3 * k / 16 : ℕ) - 1))) := by
+        rw [sum_const, card_range, nsmul_eq_mul]
+
 theorem e1Of_noise {N m n k : ℕ} (ω : Noise N m n k) (u i l : ℕ) : InNoise6 (e1Of ω u i l) := by
   unfold e1Of InNoise6
   split_ifs with h
@@ -38,6 +96,11 @@ theorem depth_le {k m n p : ℕ} (hp : p < positions k m n) : 16 * (p / (m * n) 
   have hlt : p / (m * n) < 3 * k / 16 := (Nat.div_lt_iff_lt_mul hmn).2 hp
   generalize p / (m * n) = q at hlt ⊢
   omega
+
+theorem zeroInputInt32 : ZeroInputInt32 := by
+  intro k m n N R ω u p hR hk hp
+  exact zero_int32 hR (fun l _ => abs32 (e1Of_noise ω u _ l)) (fun l _ => abs32 (f1Of_noise ω l _)) hk
+    (depth_le hp)
 
 theorem abs_int7 {a : ℤ} (h : InInt7 a) : |a| ≤ 64 := abs_le.2 ⟨h.1, by linarith [h.2]⟩
 

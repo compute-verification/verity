@@ -37,6 +37,8 @@ def roundU (w : Array UInt64) (s : U8) (i : ℕ) : U8 :=
         Sha512.k[i]! + w[i]!),
     s.2.2.2.2.1, s.2.2.2.2.2.1, s.2.2.2.2.2.2.1)
 
+theorem wordBE_eq (data : ByteArray) (off i : ℕ) : wordBE data off i = Sha512.word data (off + 8 * i) := rfl
+
 theorem schedU_eq (w : Array UInt64) (i : ℕ) :
     schedU w i = w.push (Sha512.sched w[i - 16]! w[i - 15]! w[i - 7]! w[i - 2]!) := rfl
 

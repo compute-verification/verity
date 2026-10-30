@@ -185,7 +185,7 @@ def test_a_shard_skips_circuit_check_which_its_plan_names_and_the_shards_cover_e
 
 def test_a_shard_without_the_other_half_gets_every_core(tmp_path, monkeypatch):
     """circuit-check gets its cores whatever the memory: its own admission by measured peaks bounds the memory, and a flat 160 GB
-    per worker would hold a cold `--all` in a 560 GB slot to 5 workers for over 2 h."""
+    per worker held a cold `--all` in a 560 GB slot to 5 workers for over 2 h (f7b5, 10 Oct)."""
     monkeypatch.setattr(CHECK, "memory_gb", lambda: 160)
 
     def jobs(n, k):

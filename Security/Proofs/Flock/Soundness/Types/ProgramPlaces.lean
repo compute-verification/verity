@@ -53,7 +53,7 @@ witness carries, at each slot input, what it carries at the input's copy positio
 forced-zero row (`zeros`, whose `A₀` and `B₀` rows are 0). -/
 structure TableClass (St : Statement) where
   types : String → Option CircuitType
-  ls : Array BlockLayout
+  ls : Array Layout
   info : String → Option TableInfo
   words : String → Option (Array ℕ)
   unit : ℕ

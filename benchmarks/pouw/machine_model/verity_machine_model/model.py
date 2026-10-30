@@ -29,6 +29,7 @@ STATUSES = ("measured", "ASSUMED", "provisional", "joint", "datasheet")
 class Model:
     cycle_u: float                      # u in one SMSP-cycle (R*)
     honest_real: float                  # u of real time a MAC for the honest kernel
+    honest_real_600w: float             # the same at the 600 W cap
     cuda: tuple[str, ...]               # the CUDA lane kinds ρ binds, in constraint order
     honest: dict[str, float]            # the honest GEMM's program a MMA
     adopted: str                        # the design whose cheapest attack is the margin
@@ -79,7 +80,7 @@ class Floor:
 
 
 CLAIMS = {"pi32": "(π₃₂): every root-writing kind at ≥ 32 MACs a word",
-          "loads16": "(π₃₂)'s load half: every load into registers at ≥ 16 MACs a word",
+          "loads16": "PRICES-32's load half: every load into registers at ≥ 16 MACs a word",
           "copy16": "π_c ≥ 16: every copy route (every kind that writes registers, a UR word at the 32 lanes it serves) "
                     "at ≥ 16 MACs a word"}
 COPIES = "copy16"   # the claim whose kinds `solve` lists with their prices: the copy routes
@@ -118,7 +119,8 @@ def model(data: Path = DATA) -> Model:
     honest kernel's u a MAC, the price LP's `[lp]`, `[honest]` and `adopted` (NaN and empty here)."""
     t = tomllib.loads((data / "model.toml").read_text())
     c, lp = t["constants"], t.get("lp", {})
-    return Model(cycle_u=c["cycle_u"], honest_real=c.get("honest_real", math.nan), cuda=tuple(t["cuda"]),
+    return Model(cycle_u=c["cycle_u"], honest_real=c.get("honest_real", math.nan),
+                 honest_real_600w=c.get("honest_real_600w", math.nan), cuda=tuple(t["cuda"]),
                  honest=dict(t.get("honest", {})), adopted=t.get("adopted", ""), rho=lp.get("rho", math.nan),
                  tie=lp.get("tie", math.nan), x_min=lp.get("x_min", math.nan), epochs=tuple(t["epochs"]),
                  current=t["current"],
@@ -171,19 +173,19 @@ def census_files(m: Model, data: Path = DATA) -> list[Path]:
 
 
 def citations() -> dict[str, str]:
-    """`data/citations.toml`: the notes and run records many lines cite, in `data/` and every device directory, each
-    cited in a line's `runs` or a TOML string as `@NAME`."""
+    """`data/citations.toml`: the notes many lines cite, in `data/` and every device directory, each cited in a line's
+    `runs` as `@NAME`."""
     return tomllib.loads((DATA / "citations.toml").read_text())
 
 
 def run_lists(data: Path = DATA) -> dict[str, tuple[str, ...]]:
     """`data/census/runs.toml`: the run lists many census lines share (a refit's every line cites every run its fit read),
-    each cited in a line's `runs` as `@NAME`; and `citations`, each a list of its one note or run record."""
+    each cited in a line's `runs` as `@NAME`; and `citations`, each a list of its one note."""
     p = data / "census" / "runs.toml"
     own = {k: tuple(v) for k, v in tomllib.loads(p.read_text()).items()} if p.is_file() else {}
     shared = {k: (v,) for k, v in citations().items()}
     if both := set(own) & set(shared):
-        raise SystemExit(f"{p}: {sorted(both)} also name a citation in {DATA / 'citations.toml'}; give the run list its "
+        raise SystemExit(f"{p}: {sorted(both)} also name a note in {DATA / 'citations.toml'}; give the run list its "
                          f"own name")
     return own | shared
 
@@ -233,8 +235,8 @@ def measured_cost(c: Census) -> dict[str, float]:
 
 
 def floors(data: Path = DATA) -> list[Floor]:
-    """The per-word price floors the claims read (`data/floors.csv`): (π₃₂) for root-writing kinds, its load half
-    for loads into registers, and π_c ≥ 16 (per-row keys' premise) for every copy route."""
+    """The per-word price floors the claims read (`data/floors.csv`): PRICES-32 is (π₃₂) and its load half together, and
+    π_c ≥ 16 (r12's copy price, per-row keys' premise) is every copy route's."""
     with open(data / "floors.csv", newline="") as f:
         return [Floor(d["kind"], int(d["words"]), float(d["floor"]), d["claim"], d["what"]) for d in csv.DictReader(f)]
 

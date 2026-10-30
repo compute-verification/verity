@@ -10,8 +10,8 @@ Findings, each confirmed executably below:
 2. The table's and the row's token ids (`units`) are a FREE WITNESS in this piece: nothing ties them to the certified
    prompt/output. A prover fabricates a trie of invented tokens and a matching `units` window to manufacture an
    arbitrarily long "hit" that charges nothing, with canonical sources naming invented owners. The hit channel is
-   closed only once the compile slice's proof block binds `units` (and the chained table) to the certified I/O and wires
-   `wh` into `ReplayStep_v1`'s `hit`.
+   closed only once the compile unit binds `units` (and the chained table) to the certified I/O and wires `wh` into
+   `ReplayStep_v1`'s `hit`.
 3. Past the pool bound (`sent` = 1, where eviction may have shortened the real hit) the hit is advice v1's charged
    field and is checked only to be a cached prefix: a claim LONGER than the table is refused (can't exceed the cache),
    a SHORTER one is accepted (it over-charges). So eviction is a charged residual here, not a free channel.
@@ -61,8 +61,8 @@ def test_a_fabricated_table_and_units_manufacture_a_free_hit():
     assert CS.evaluate(SMALL, [(table, replace(row, wh=wh))]) == [out]
     # the hit's canonical sources name the invented owner for all 7 units, from invented tokens.
     assert CS.sources(S, table, out.trail, wh) == ((3, 7 * S.U),)
-    # 7 of the window's 8 units are "free" hits here: the charge the compile slice's proof block must impose is the
-    # binding of `units` to the certified tokens, absent in this piece.
+    # 7 of the window's 8 units are "free" hits here: the charge the compile unit must impose is the binding of
+    # `units` to the certified tokens, absent in this piece.
     print(f"\n[cache-step] fabricated hit: {wh} of {KU} units ({wh * S.U} tokens) hit on invented tokens, "
           f"sources {CS.sources(S, table, out.trail, wh)}")
 

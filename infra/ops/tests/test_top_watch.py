@@ -97,40 +97,6 @@ def test_choose_takes_that_options_heading_and_a_tick_on_a_lanes_decision_endors
     assert any("--choice B" in body for _, body, _ in ring.rings)
 
 
-def test_a_lanes_own_choice_stays_the_lanes_when_its_page_reopens_and_only_a_new_letter_is_daniels():
-    lanes = page("p1", Status="Decided by lane", Choose="A", Decision="Lane took A.")
-    n, ring = Notion(lanes), Ring()
-    n.body("p1")
-    state = {}
-    T.asks_pass(state, n, ring, "ds", NOW, False)
-    lanes["properties"]["Status"]["status"]["name"] = "Revising"
-    T.asks_pass(state, n, ring, "ds", NOW + 900, False)
-    assert n.patches == [] and ring.rings == []
-    lanes["properties"]["Choose"]["select"]["name"] = "B"
-    T.asks_pass(state, n, ring, "ds", NOW + 1800, False)
-    assert n.patches == [("p1", "Decided otherwise", "Daniel chose B: Drop it")]
-
-
-def test_the_first_pass_records_each_choice_and_still_relays_one_on_an_open_page():
-    n, ring = Notion(page("p1", Choose="B"), page("p2", Status="Decided by lane", Choose="A")), Ring()
-    n.body("p1")
-    n.body("p2")
-    state = {}
-    T.asks_pass(state, n, ring, "ds", NOW, False)
-    assert n.patches == [("p1", "Decided otherwise", "Daniel chose B: Drop it")]
-    assert state["chosen"] == {"p1": "B", "p2": "A"}
-
-
-def test_a_seed_leaves_a_pending_choice_for_the_next_pass_to_relay():
-    n, ring = Notion(page("p1", Choose="B")), Ring()
-    n.body("p1")
-    state = {}
-    T.asks_pass(state, n, None, "ds", NOW, False)
-    assert n.patches == [] and "p1" not in state["chosen"]
-    T.asks_pass(state, n, ring, "ds", NOW + 900, False)
-    assert n.patches == [("p1", "Decided otherwise", "Daniel chose B: Drop it")]
-
-
 def test_a_default_page_past_its_deadline_gets_its_default_and_one_before_it_waits():
     late = page("p1", Kind="Default", Deadline="2026-10-19T19:00:00.000+00:00", **{"If no answer": "A applies at noon"})
     early = page("p2", Kind="Default", Deadline="2026-10-21T16:00:00.000+00:00")
@@ -305,28 +271,6 @@ def test_the_linear_audit_rings_each_lane_once_a_window_and_issues_with_no_lane_
     assert [to for to, _, _ in ring.rings[4:]] == ["top", "infra", "proofs"]
 
 
-def test_a_persons_ask_off_track_rings_its_lane_and_top_every_hour_until_it_holds(tmp_path):
-    asks = [finding("CI-285", "unstaffed", "ci"), finding("CI-285", "slipped", "ci"), finding("CMP-9", "parked", "compute-accounting"),
-            finding("VLLM-3", "slipped", "vllm")]
-    state, ring, log = {}, Ring(), tmp_path / T.AUDIT_LOG
-    T.linear_audit(state, ring, at(19, 12, 10), lambda: FOUND + asks, lambda: VOLUME, log)
-    rung = {to: body for to, body, _ in ring.rings if "a person's ask" in body or "people's asks" in body}
-    assert rung["ci"] == ("ci: a person's ask is off track on CI-285 (unstaffed 1, slipped 1): `research msg linear audit --lane "
-                          "ci` gives each fix; this rings every hour until it holds.")
-    assert rung["vllm"].startswith("vllm: a person's ask is off track on VLLM-3 (slipped 1)")
-    assert rung["top"] == ("top: people's asks off track: ci 2, compute-accounting 1, vllm 1 (`research msg linear audit --asks` "
-                           "is the ledger)")
-    n = len(ring.rings)
-    T.linear_audit(state, ring, at(19, 12, 50), lambda: FOUND + asks, lambda: VOLUME, log)        # the same hour: nothing new
-    assert len(ring.rings) == n
-    T.linear_audit(state, ring, at(19, 13, 10), lambda: FOUND + asks[:3], lambda: VOLUME, log)    # the next hour, with the last
-    again = {to: body for to, body, _ in ring.rings[n:]}                                          # slip explained: the rest again
-    assert sorted(again) == ["ci", "compute-accounting", "top"] and "(unstaffed 1, slipped 1)" in again["ci"]
-    n = len(ring.rings)
-    T.linear_audit(state, ring, at(19, 14, 10), lambda: FOUND, lambda: VOLUME, log)               # held: the 12 h ring is done
-    assert ring.rings[n:] == []
-
-
 def test_a_clean_audit_rings_nobody_and_tops_daily_line_gives_the_change_from_the_line_24_h_earlier(tmp_path):
     state, ring, log = {}, Ring(), tmp_path / T.AUDIT_LOG
     T.linear_audit(state, ring, at(19, 20), lambda: FOUND, lambda: VOLUME, log)
@@ -358,7 +302,7 @@ def test_each_audit_pass_appends_its_line_with_the_volume_null_when_unread_and_a
     first, second = [T.json.loads(x) for x in log.read_text().splitlines()]
     assert first == {"t": "2026-10-19T20:00:00Z", "findings": 5,
                      "kinds": {"orphan": 1, "milestone": 0, "undated": 1, "overdue": 0, "quiet": 2, "stale": 0, "title": 0,
-                               "landed": 0, "lane": 1, "parked": 0, "unstaffed": 0, "slipped": 0, "repeated": 0},
+                               "landed": 0, "lane": 1},
                      "lanes": {"-": {"lane": 1}, "infra": {"orphan": 1, "quiet": 2}, "proofs": {"undated": 1}},
                      "volume": {"posts": 1758, "words": 197955, "over": 997}, "unread": []}
     assert second["findings"] == 1 and second["lanes"] == {"infra": {"orphan": 1}} and second["volume"] is None

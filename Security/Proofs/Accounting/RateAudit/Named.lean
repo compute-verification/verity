@@ -1,7 +1,7 @@
 import Mathlib
 import Definitions.Accounting.Guarantees.RateAuditNamed
 import Proofs.Accounting.RateAudit.Conservation
-import Proofs.Accounting.RateAudit.Pooled
+import Proofs.Accounting.RateAudit.Horizon
 
 /-!
 # Conservation over tiers with named words: the proof
@@ -18,7 +18,7 @@ A run with at least `k` correct receipts falls in one of three events:
   code is the state, the trace and `k` of the `N` words: `C(N, k)/2^λ` (`card_compress_named_le`).
 
 At every count at once (`RatePaidNamedRO`), the compression is taken at each `k ≤ N` and `∑ₖ C(N, k) = 2^N`
-(`RelayDevice.pr_compress_any_named_le`); the route `Sampled` with it (`RateChainSampledNamedRO`) is `RatePooled` and
+(`RelayDevice.pr_compress_any_named_le`); the route `Sampled` with it (`RateChainSampledNamedRO`) is `RateHorizon` and
 that bound at each pass (`Chain.pr_unpaid_le`).
 -/
 
@@ -442,7 +442,7 @@ theorem RateConservationNamedRO : Accounting.Guarantees.RateConservationNamedRO 
   rcases Nat.eq_zero_or_pos k with rfl | hk
   · refine (pr_le_of_card _ 1 0 one_ne_zero ?_).trans (by simp)
     rw [Finset.filter_false_of_mem (fun x _ hx => by simp at hx), Finset.card_empty, zero_mul, zero_mul]
-  have hA' := InteractiveProver.toRelay_side A hA
+  have hA' := InteractiveDevice.toRelay_side A hA
   have h₁ := A.toRelay.pr_guess_le hA'
   have h₂ := A.toRelay.pr_collides_le hA'
   have h₃ := A.toRelay.pr_compress_named_le k lam hk
@@ -458,16 +458,16 @@ theorem RateConservationNamedRO : Accounting.Guarantees.RateConservationNamedRO 
     by_contra hq
     exact hg ⟨j, hq, (Finset.mem_filter.1 hj).2⟩
   have hk' : k ≤ (A.toRelay.correct x.1 x.2.1 x.2.2 ∩ queried A.toRelay x.1 x.2.1 x.2.2).card := by
-    rw [Finset.inter_eq_left.2 hsub, InteractiveProver.toRelay_correct]
+    rw [Finset.inter_eq_left.2 hsub, InteractiveDevice.toRelay_correct]
     exact hc
-  have := InteractiveProver.taken_le A tier x.1 x.2.1 x.2.2
+  have := InteractiveDevice.taken_le A tier x.1 x.2.1 x.2.2
   exact Or.inr ⟨hk', by omega, hcol⟩
 
 /-- **Correct receipts are paid for, at every count, with named words** (`Accounting.Guarantees.RatePaidNamedRO`). -/
 theorem RatePaidNamedRO : Accounting.Guarantees.RatePaidNamedRO := by
   classical
   intro N b h ρ S L q lam τ tier A hA
-  have hA' := InteractiveProver.toRelay_side A hA
+  have hA' := InteractiveDevice.toRelay_side A hA
   refine (pr_mono (fun x hx => ?_)).trans ((pr_or_le _ _).trans (add_le_add
     ((pr_or_le _ _).trans (add_le_add (A.toRelay.pr_guess_le hA') (A.toRelay.pr_collides_le hA')))
     (A.toRelay.pr_compress_any_named_le lam)))
@@ -481,9 +481,9 @@ theorem RatePaidNamedRO : Accounting.Guarantees.RatePaidNamedRO := by
     exact hg ⟨j, hq, (Finset.mem_filter.1 hj).2⟩
   have hk' : (A.toRelay.correct x.1 x.2.1 x.2.2 ∩ queried A.toRelay x.1 x.2.1 x.2.2).card =
       (A.correct x.1 x.2.1 x.2.2).card := by
-    rw [Finset.inter_eq_left.2 hsub, InteractiveProver.toRelay_correct]
+    rw [Finset.inter_eq_left.2 hsub, InteractiveDevice.toRelay_correct]
   have hN : (A.correct x.1 x.2.1 x.2.2).card ≤ N := (Finset.card_le_univ _).trans (by simp)
-  have ht := InteractiveProver.taken_le A tier x.1 x.2.1 x.2.2
+  have ht := InteractiveDevice.taken_le A tier x.1 x.2.1 x.2.2
   have hk : 0 < (A.correct x.1 x.2.1 x.2.2).card :=
     Nat.pos_of_ne_zero (fun h0 => by rw [h0, zero_mul] at hx; omega)
   refine Or.inr ⟨⟨(A.correct x.1 x.2.1 x.2.2).card, by omega⟩, hk, hk'.ge, ?_, hcol⟩
@@ -494,7 +494,7 @@ theorem RatePaidNamedRO : Accounting.Guarantees.RatePaidNamedRO := by
 (`Accounting.Guarantees.RateChainSampledNamedRO`). -/
 theorem RateChainSampledNamedRO : Accounting.Guarantees.RateChainSampledNamedRO := by
   intro P N b h ρ S L q r s K lam τ tier A hA
-  have h₁ := Chain.pr_pooled_le A K
+  have h₁ := Chain.pr_horizon_le A K
   have h₂ := Chain.pr_unpaid_le A tier (S + (L - ρ) + lam) _ (fun j η =>
     (pr_mono (fun _ hx => by omega)).trans (RatePaidNamedRO N b h ρ S L q lam τ tier (A.device j η) (hA j η)))
   refine (pr_mono (fun x hx => ?_)).trans ((pr_or_le _ _).trans (add_le_add h₁ h₂))

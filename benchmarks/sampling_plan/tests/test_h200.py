@@ -11,6 +11,7 @@ from math import ceil, log
 import pytest
 
 import h200 as H
+import transformer as X
 
 M = H.Shape()
 
@@ -32,9 +33,8 @@ def test_the_units_are_circuits_partition():
 
 def test_windows_draw_k_split_evenly_under_the_cap(plan):
     k = ceil(log(len(plan["windows"]) / H.DELTAS[0]) / H.SHARE)
-    caps = {t.id: t.cap for t in H.templates(M)}
     for w in plan["windows"]:
-        cap = caps[w["template"]]
+        cap = X._cap(w["proved_ands"])
         assert w["k"] >= min(k, w["units"]) and w["k"] % w["tables"] == 0 and w["k"] // w["tables"] <= cap
         assert w["tables"] == ceil(min(k, w["units"]) / cap)
 

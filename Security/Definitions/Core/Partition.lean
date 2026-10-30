@@ -43,7 +43,7 @@ def Correct (X : C.Transcript) (u : Fin n) : Prop :=
   ∀ g ∈ P.committed, P.unit g = some u → X g = P.localEval X u g
 
 open Classical in
-/-- The incorrect proof blocks of a trace. -/
+/-- The faulty proof blocks of a trace. -/
 noncomputable def wrong (X : C.Transcript) : Finset (Fin n) :=
   univ.filter fun u => ¬ P.Correct X u
 

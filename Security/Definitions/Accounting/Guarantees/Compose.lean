@@ -6,7 +6,7 @@ import Definitions.Accounting.Assumptions.Compose
 # PoUW's credit on an arbitrary declared circuit (trusted)
 
 THEOREM's composed statement. Each `def G : Prop` is proved as `Accounting.SecurityProofs.Compose.G` in
-`Proofs.Accounting.Compose`, whose module doc gives each proof's steps. The circuit is any `Declared` one, a `Gates.IntDag`
+`Proofs.Accounting.Compose`, whose module doc gives each proof's steps. The circuit is any `Declared` one, a `Gates.Dag`
 with its call sites, its rounds, their coin modes, the service's commit coins and its proof units, its words, kinds,
 cuts and late cones read off the IR.
 Nothing about its form is a hypothesis beyond `Declared.Wf` (call sites, rounds and units in range; one unit's gates in
@@ -17,7 +17,7 @@ committing by the IR's cuts, a computed value only its own unit reads (a receipt
 `Declared.Live` and `LayerCommitted`), and describe the designed protocol.
 PoUW's code today has one salt a window and derives every noise in the scheme, so every window it runs is seeded, and
 its credit is the seeded statements' (`CircuitWorkSeeded`, `CircuitCreditSeeded`), over the same circuit, at the
-grinding premium per seed group. The certificate records which (`CreditCertificate.coins`). Nothing yet builds a
+grinding premium per seed group. The certificate records which (`Certificate.coins`). Nothing yet builds a
 `Declared` from a compiled Program, and `Properties.Compose.UnitsOfLayout`, which would tie its units, its commit
 coins and its draw to the service's, is unproved: until both exist, these speak of the declared circuit, not of a
 served workload.

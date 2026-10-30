@@ -112,7 +112,7 @@ PRODUCED_KEY = "produced"
 #: the domain binding's key a value committed inside its window's open root adds in the window's place: the session the
 #: auditor's ledger opened for the window (PoUW's round-0 input-ids table, `credit.domain_of`)
 SESSION_KEY = "session"
-SUPPLIED_SALT = "verity/one-stage/supplied-salt/v1"
+SUPPLIED_SALT = "verity/one-stage/supplied-salt/v0"
 WINDOW_SALT = "verity/one-stage/window-salt/v1"
 #: a supplied row's source kinds: a served port's root, a registered value's root, the verifier's own bytes, a position
 #: after the log's, the verifier's coin bound to the record's window
@@ -438,12 +438,11 @@ def registered_entries(program: Program, values: Mapping[str, int], schemas: Map
 
 
 def supplied_salts(program: str, value: str, n: int) -> list[bytes]:
-    """Row i's public salt of a supplied value: 192 bytes of SHA-512 in counter mode (`SHA-512(m ‖ u32be c)` for c < 3, each
-    output whole) over `SUPPLIED_SALT`, the program's SHA-512 hex, the value's name and i (u32 little-endian), NUL between
-    them. They hide nothing the record doesn't show: the reads need only the commitment's binding."""
+    """Row i's public salt of a supplied value: SHAKE256 of `SUPPLIED_SALT`, the program's SHA-512 hex, the value's name and
+    i (u32 little-endian), NUL between them, 192 bytes. They hide nothing the record doesn't show: the reads need only the
+    commitment's binding."""
     head = SUPPLIED_SALT.encode() + b"\0" + program.encode() + b"\0" + value.encode() + b"\0"
-    return [b"".join(hashlib.sha512(head + i.to_bytes(4, "little") + c.to_bytes(4, "big")).digest()
-                     for c in range(_INST.salt_bytes // 64)) for i in range(n)]
+    return [hashlib.shake_256(head + i.to_bytes(4, "little")).digest(_INST.salt_bytes) for i in range(n)]
 
 
 def sources(supplied: Any) -> dict[str, list[list[tuple[str, str]]]]:

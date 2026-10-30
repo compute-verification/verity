@@ -98,12 +98,27 @@ theorem encard_accSeqs_le_advice {Adv : Type} [Fintype Adv] (P : Program L S In 
     _ = ((Fintype.card Adv * D ^ n : ℕ) : ℕ∞) := by
         rw [card_product, Fintype.card_piFinset]; simp
 
-/-- **Theorem 3, the fixed advice budget.** With the advice `E` strings of exactly `k` bits, one per execution block,
-the accepted sequences number at most `2^(E·k) · D^n`. -/
-theorem encard_accSeqs_le_adviceBits (E k : ℕ) (P : Program L S In (Fin E → Fin k → Bool))
-    (op : ℕ → List (Obs L K S) → In) (n D : ℕ) :
-    (AccSeqs P op n D).encard ≤ ((2 ^ (E * k) * D ^ n : ℕ) : ℕ∞) := by
+/-- **Theorem 3, the clock-sync form.** This is the `2^A` cap with the advice type `Ac × (Fin W → Sync)`: one
+clock-sync value per window from `Sync`, for example an offset δ and a rate ρ, 16 × 8 values. Over `W` windows the
+accepted sequences number at most `#Ac · #Sync^W · D^n`, that is `A_c + W·log2 #Sync` bits plus jitter.
+
+Instantiated for constant-rate release, this bounds the timing channel when the Program's only timing advice is the
+clock sync. The shipped schedule is such a Program by its definition (`constantRate`), and
+`EncardAccSeqsLeConstantRate` states this bound for it. A sync alphabet that varies by window is covered by
+`encard_accSeqs_le_advice` directly. -/
+theorem encard_accSeqs_le_sync {Ac Sync : Type} [Fintype Ac] [Fintype Sync] (W : ℕ)
+    (P : Program L S In (Ac × (Fin W → Sync))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ) :
+    (AccSeqs P op n D).encard ≤ ((Fintype.card Ac * Fintype.card Sync ^ W * D ^ n : ℕ) : ℕ∞) := by
   have := encard_accSeqs_le_advice P op n D
-  rwa [Fintype.card_fun, Fintype.card_fun, Fintype.card_bool, Fintype.card_fin, Fintype.card_fin, ← pow_mul'] at this
+  rwa [Fintype.card_prod, Fintype.card_fun, Fintype.card_fin] at this
+
+/-- **A fixed clock.** With the clock-sync value fixed (`Sync = Unit`), the accepted sequences number at most
+`#Ac · D^n`. Instantiated for constant-rate release under a fixed logical schedule, timing carries nothing beyond the
+jitter, and nothing at all under J (`D = 1`): the zero-capacity theorem, with content advice. -/
+theorem encard_accSeqs_le_fixedClock {Ac : Type} [Fintype Ac] (W : ℕ)
+    (P : Program L S In (Ac × (Fin W → Unit))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ) :
+    (AccSeqs P op n D).encard ≤ ((Fintype.card Ac * D ^ n : ℕ) : ℕ∞) := by
+  have := encard_accSeqs_le_sync W P op n D
+  simpa using this
 
 end NetTiming

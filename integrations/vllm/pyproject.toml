@@ -46,29 +46,24 @@ markers = [
 
 [tool.verity.tests]
 # In place of its dependencies' directories (`inputs_only`): `verity` whole, since the code identity (`source_identity.code_identity`,
-# the hot Commit worker's key, which tests/pipeline computes over this tree) hashes every file of it; of `research`, which no
-# module here imports, the store CLI that `store_io` starts for a fetch and a publish and `records.data` starts as
-# `python -m research` (its `__main__`), and the run fixture tests/regression/test_attempt_resolution.py publishes.
-# Test-only: tests/pipeline checks the fixtures
-# this package registers, the example's stored workload (examples/vllm/workloads/SHA256SUMS) and what the example's Commit publishes
-# (examples/vllm/commit.sh); tests/program/test_fp8_moe.py replays the Hopper e4m3 k32 step's pinned vectors (under `verity`);
+# the hot Commit worker's key, which tests/pipeline computes over this tree) hashes every file of it; of `research`, what the
+# package imports (`research.store.tool`, `research.telemetry.source_identity`) and the store CLI that `store_io` starts for a
+# fetch and `records.data` starts as `python -m research` (its `__main__`), and the run fixture
+# tests/regression/test_attempt_resolution.py resolves. Test-only: tests/pipeline checks the fixtures
+# this package registers and the example's stored workload (examples/vllm/workloads/SHA256SUMS); tests/program/test_fp8_moe.py replays the Hopper e4m3 k32 step's pinned vectors (under `verity`);
 # tests/engine's int8 tests run benchmarks/ppl's int8 steps as their oracle;
 # tests/store/test_remote_session.py runs the remote session's prover and verifier (`store.remote`), and the verifier
 # imports lean_verifier.py, challengers.py and store_layout.py; tests/protocol_options/test_pouw_h1_circuits.py parses a
 # period-open's --circuit-files with infra's gate (benchmarks/live_challenger/auditor.py), and the in-process gate
 # (tests/protocol_options/challenger_host.py) runs infra's model registry (benchmarks/live_challenger/models.py);
-# tests/pipeline/test_served_unit_rows.py pins the statements of the served GLM-5.3 partitions' chunked templates
-# (benchmarks/one_stage/glm53_*.json);
 # tests/protocols/test_pous_option.py encodes and spot-checks C* with P2's store (benchmarks/pous/p2_v1/store.py and the
 # reference decode it imports); tests/tools/test_ratchet_gate.py commits the repository's lints (tests/lint/test_repo_env_reads.py,
 # test_repo_ruff.py, test_repo_silent_excepts.py and test_repo_lane_text.py) into the repositories it gates.
 # The tests build and run the Lake packages whose lakefiles they list: tests/pipeline/test_row_tables_stream.py
 # `sampled-proofs-verifier`, tests/protocol_options/test_pouw_h1.py `pouw-check-difftest` and test_remote_session.py
 # `remote-audit-verifier`.
-# tests/protocols/pouw_h1_circuits.py lowers K's circuit file with h1_prove's h1unit.py under hidden_zk's fast_stage.py
-# (test_pouw_h1_drawn.py builds one), and reads the live Program from h1_prove's live.py (test_pouw_h1_circuits.py).
 inputs_only = true
-inputs = ["verity", "verity/README.md", "tools/config/verity_config", "fixtures/artifacts.json", "examples/vllm/workloads/SHA256SUMS", "examples/vllm/commit.sh", ".gitignore",
+inputs = ["verity", "verity/README.md", "tools/config/verity_config", "fixtures/artifacts.json", "examples/vllm/workloads/SHA256SUMS", ".gitignore",
           "verity/core/service/sampled_proofs/lakefile.toml", "verity/core/protocols/pouw/lean/check/lakefile.toml",
           "verity/core/protocols/remote_bandwidth/lean/lakefile.toml",
           "benchmarks/ppl/steps.py", "benchmarks/ppl/matmul.py", "benchmarks/ppl/gates.py", "benchmarks/ppl/spec.py", "benchmarks/ppl/methodology.py", "benchmarks/ppl/model.py",
@@ -78,8 +73,6 @@ inputs = ["verity", "verity/README.md", "tools/config/verity_config", "fixtures/
           "benchmarks/remote_session/store_layout.py", "benchmarks/live_challenger/auditor.py", "benchmarks/live_challenger/host.json",
           "benchmarks/live_challenger/models.py", "benchmarks/pouw/harness/sass_gate.py",
           "benchmarks/pous/p2_v1/__init__.py", "benchmarks/pous/p2_v1/store.py", "benchmarks/pous/p2_v1/reference.py",
-          "benchmarks/one_stage/glm53_all_families_tp8_step16.json", "benchmarks/one_stage/glm53_sparse_mla_tp8_step16.json",
-          "benchmarks/one_stage/glm53_prefill_tp8_step0.json",
           "tests/lint/test_repo_env_reads.py", "tests/lint/test_repo_ruff.py", "tests/lint/test_repo_silent_excepts.py",
           "tests/lint/test_repo_lane_text.py",
           "tools/research/src/research/__init__.py", "tools/research/src/research/cli.py", "tools/research/src/research/clone.py",
@@ -88,9 +81,7 @@ inputs = ["verity", "verity/README.md", "tools/config/verity_config", "fixtures/
           "tools/research/src/research/runs.py", "tools/research/src/research/secret_hint.py", "tools/research/src/research/timefmt.py", "tools/research/src/research/waitcap.py",
           "tools/research/src/research/store", "tools/research/src/research/telemetry", "tools/research/tests/fixtures/run_v0.2",
           "tools/research/src/research/withdraw.py",
-          "tools/research/src/research/__main__.py",
-          "benchmarks/pouw/h1_prove/h1unit.py", "benchmarks/pouw/h1_prove/live.py",
-          "benchmarks/pouw/hidden_zk/fast_stage.py"]
+          "tools/research/src/research/__main__.py"]
 parallel = true
 # benchmarks/pouw/edited_gemm/fattn_ref.py is the int8 attention tests' oracle (tests/engine), beside benchmarks/ppl's linears;
 # tests/engine/int8_attention_sass.py reads the int8 attention kernels' SASS with the PoUW SASS gate's nvdisasm parser

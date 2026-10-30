@@ -56,8 +56,7 @@ PROMPTS = {"a": [5, 6, 7], "b": [8, 9]}
 
 class Arm:
     """`engine.int8_vllm.Int8PlainLinearMethod`'s apply under H1 (``zy_rows`` set): ``int8_ops.linear_zy``, whose
-    ``row_quant`` the Commit acquires, then ``observe``, handed the codes ``edit`` makes of them (call order, codes). A
-    linear H1 leaves out (``zy_rows`` None) serves through ``int8_ops.linear``, as the plain arm does."""
+    ``row_quant`` the Commit acquires, then ``observe``, handed the codes ``edit`` makes of them (call order, codes)."""
 
     int8_arm = E.ARM
     zy_rows: int | None = None
@@ -66,10 +65,7 @@ class Arm:
         self.edit, self.calls = edit, calls if calls is not None else [0]
 
     def apply(self, layer, x, bias=None):
-        if self.zy_rows is None:
-            (xq, s_a, y), zy = int8_ops.linear(x, layer.weight, layer.weight_scale), None
-        else:
-            xq, s_a, y, zy = int8_ops.linear_zy(x, layer.weight, layer.weight_scale, self.zy_rows)
+        xq, s_a, y, zy = int8_ops.linear_zy(x, layer.weight, layer.weight_scale, self.zy_rows)
         served = xq if self.edit is None else self.edit(self.calls[0], xq.clone())
         self.calls[0] += 1
         self.observe(layer, served, s_a, y, zy)
@@ -217,16 +213,16 @@ def _ids(run, s):
     return out
 
 
-def _laid(served, lay):
-    """``served``'s step tables of K (`Served._a_rows`, each call's block in call order) laid out by ``lay`` when one is
+class _Laid(dict):
+    """`Served`'s open step tables (``_a``, each call's block by call) laid out by ``lay`` when a step's table of K is
     taken whole: the rows the window registers and hands the tap as its table, the Commit's own rows untouched."""
-    whole = served._a_rows
 
-    def laid(call, value, mine, codes, scales):
-        table = whole(call, value, mine, codes, scales)
-        return None if table is None else np.concatenate(lay(np.split(table, len(mine))))
+    def __init__(self, lay):
+        super().__init__()
+        self.lay = lay
 
-    served._a_rows = laid
+    def pop(self, key, *default):
+        return dict(enumerate(self.lay([b for _c, b in sorted(super().pop(key, *default).items())])))
 
 
 #: the server's step-input port's T (`served_record.StepInputPort`: whole 4096-byte chunks of i64 ids)
@@ -278,7 +274,7 @@ def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None, mode
         port = next(s for s in com.sources if isinstance(s, StepInputPort))
     served = SV.Served(PH.TILE, _unit(), window=key, tap=tap)
     if lay is not None:
-        _laid(served, lay)
+        served._a = _Laid(lay)
     kw = {"transcript_dir": str(tmp_path / "w"), "served": served}
     settings = (_remote(rows=ROWS, steps=STEPS, **kw) if coins is None
                 else coins(SimpleNamespace(runner=Runner()), {**kw, "admission": "round-0"}))
@@ -434,51 +430,6 @@ def test_a_step_table_with_a_calls_rows_shifted_by_a_call_is_refused_by_core(tmp
     a_link, arow = _core(record, run)
     refused = a_link if at == "a-link" else arow
     assert (at == "a-link" or a_link is None) and refused[0] == at and refused[1].startswith(why), (a_link, arow)
-
-
-@pytest.mark.parametrize("k", [64, 8192])
-def test_the_taps_check_of_a_step_table_is_the_whole_tables_comparison(k):
-    """`commit._theirs`, which builds each call's words only to its own rows and requires zero words past them, decides as
-    comparing the whole table of the Commit's rows (each block padded to M) does, over Commit rows fewer or more than the
-    window's, rows of zero codes and scale 0 standing for padding, an edited scale or padding word, empty calls, blocks
-    swapped and a table a block short."""
-    served, call = SimpleNamespace(m=8), SimpleNamespace(k=k)
-    served.a_words = lambda call, codes, scales, out=None, slots=None: SV.Served.a_words(served, call, codes, scales, out,
-                                                                                          slots)
-    rng = np.random.default_rng(k)
-
-    def rows(m, zero=0):
-        codes, scales = rng.integers(-127, 128, (m, k), dtype=np.int8), (rng.random(m) + 0.5).astype("<f4")
-        codes[m - zero:], scales[m - zero:] = 0, 0
-        return codes, scales
-
-    def table(held):
-        return np.concatenate([served.a_words(call, c, s) for c, s in held])
-
-    def poke(t, at):
-        t = t.copy()
-        t[at] += 1
-        return t
-
-    a, b, three = rows(5), rows(4), rows(3)
-    n = Wt.chunks(k)
-    cases = {
-        "honest": ([a, b], table([a, b]), True),
-        "window-more": ([(a[0][:3], a[1][:3]), b], table([a, b]), False),
-        "window-more-zero": ([three, b], table([(np.concatenate([three[0], np.zeros((2, k), np.int8)]),
-                                                 np.concatenate([three[1], np.zeros(2, "<f4")])), b]), True),
-        "commit-more": ([a, b], table([(a[0][:3], a[1][:3]), b]), False),
-        "commit-more-zero": ([rows(5, zero=2), b], None, True),
-        "scale": ([a, b], poke(table([a, b]), (8 * n + 2 * n - 1, -1)), False),
-        "padding": ([a, b], poke(table([a, b]), (8 * n - 1, 0)), False),
-        "empty": ([rows(0), rows(0)], table([rows(0), rows(0)]), True),
-        "swapped": ([a, b], table([b, a]), False),
-        "short": ([a, b], table([a]), False),
-    }
-    for name, (held, words, want) in cases.items():
-        words = table([(c[:len(c) - 2], s[:len(s) - 2]) for c, s in held[:1]] + held[1:]) if words is None else words
-        whole = np.array_equal(table(held), words)
-        assert CT._theirs(served, call, held, words) == whole == want, name
 
 
 def test_input_ids_off_the_prompts_credit_nothing(tmp_path, monkeypatch):

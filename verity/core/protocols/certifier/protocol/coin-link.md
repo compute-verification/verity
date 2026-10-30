@@ -20,8 +20,8 @@ runs the server's network certifier (`trusted-host`). A window's session takes t
    port of the host's loopback, L. Only then does it open `ssh -N -R 127.0.0.1:P:127.0.0.1:L` to the server's own sshd.
 4. The prover's client connects to the server's 127.0.0.1:P. Each connection reaches the link through the tunnel, and
    the link opens one to `serve.py` for it, one connection at a time.
-5. Once `serve.py` exits, `run` stops the link (SIGTERM). The link runs to the end of its execution phase, cuts whatever
-   is still open, closes the tunnel and writes `coin-link.json` to the session's `out/`. The `end` entry's `files` seals
+5. Once `serve.py` exits, `run` stops the link (SIGTERM). The link runs to the end of its link-window, cuts whatever is
+   still open, closes the tunnel and writes `coin-link.json` to the session's `out/`. The `end` entry's `files` seals
    that file and `coin-link.log`.
 
 A link that refuses to start ends the session at once, and the `end` entry says why. The link refuses when the record
@@ -56,13 +56,13 @@ and so does a link that ends while `serve.py` still serves, because its tunnel e
   `grid.Certifier`: constant-rate, left-packed and FIFO.
 
   A cell leaves only at its bucket's tick, and so do a direction's end and a connection's close. What either side sees
-  of the other's timing is therefore the grid's occupancy, T·log2(r + 1) bits an execution phase. Arrival jitter within
-  a bucket reaches neither side: the tests run the same session under different arrival times and get the same writes
+  of the other's timing is therefore the grid's occupancy, T·log2(r + 1) bits a link-window. Arrival jitter within a
+  bucket reaches neither side: the tests run the same session under different arrival times and get the same writes
   and the same record. Flow control carries nothing from inside either. A side that leaves more than `BACKLOG` bytes
   untaken fails the link closed (`delivery-refused`), as does a queue past Q (`overflow`) or cells still queued when
-  their connection ends (`dropped`). Each fault cuts the connection at that tick and is its execution phase's status.
+  their connection ends (`dropped`). Each fault cuts the connection at that tick and is its link-window's status.
 - **One clock (RP8).** The ticks read the host's monotonic clock from one origin, and `serve.py`'s release log reads
-  the same clock. A tick later than `slack` (25 ms) faults both grids for the rest of the execution phase
+  the same clock. A tick later than `slack` (25 ms) faults both grids for the rest of the link-window
   (`monitor-unavailable`). It never shifts the grid.
 - **Release order.** A challenger device releases its coin-commitment root only
   after the prover's commitment is in. The open entry, which binds the prover's root, comes before `serve.py` starts.
@@ -84,7 +84,7 @@ releases them, and the link's ticks read the host's monotonic clock, which the c
 ### Parameters and record
 
 `CoinLinkParams` are public and fixed before the window, and `digest` binds them together with `COUNTED`. The defaults
-are D7's, under which each grid's timing charge is 600 bits an execution phase:
+are D7's, under which each grid's timing charge is 600 bits a link-window:
 
 | B | r_coin | requests' r | τ | T | Q |
 |---|---|---|---|---|---|
@@ -92,7 +92,7 @@ are D7's, under which each grid's timing charge is 600 bits an execution phase:
 
 `coin-link.json` (`CoinLink.summary`) holds counts only:
 - the parameters and their digest;
-- each execution phase's status on both grids;
+- each link-window's status on both grids;
 - the coins' frames and bytes, and each counted name's frames and bytes;
 - the requests' frames and bytes, and the cells each grid released;
 - each connection's end, with the error type, if any, that ended either side's stream;

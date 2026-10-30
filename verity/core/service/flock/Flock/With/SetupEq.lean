@@ -17,14 +17,14 @@ theorem hmClassOfWith_std (bytes : ByteArray) (head : String) (mj : Json) :
 
 theorem typeDigestWith_std (t : CircuitType) : t.digestWith std = t.digest := rfl
 
-theorem layoutDigestWith_std (l : BlockLayout) : l.digestWith std = l.digest := rfl
+theorem layoutDigestWith_std (l : Layout) : l.digestWith std = l.digest := rfl
 
 set_option maxRecDepth 20000 in
 theorem classOfWith_std (mj : Json) (tables : List (String × ByteArray)) :
     Typed.classOfWith std mj tables = Typed.classOf mj tables := rfl
 
 set_option maxRecDepth 20000 in
-theorem templateOfWith_std (name : String) (done : Array DeriveAll.D) (ls : Array BlockLayout) (unit : Nat)
+theorem templateOfWith_std (name : String) (done : Array DeriveAll.D) (ls : Array Layout) (unit : Nat)
     (t : CircuitType) (held : Array Typed.Held) :
     Typed.templateOfWith std name done ls unit t held = Typed.templateOf name done ls unit t held := by
   unfold Typed.templateOfWith Typed.templateOf
@@ -38,8 +38,9 @@ theorem readWith_std (tags : Tags) (bytes : ByteArray) (tables : List (String ×
   simp only [classOfWith_std, templateOfWith_std]
   try rfl
 
+set_option maxRecDepth 20000 in
 theorem descParseWith_std (bytes : ByteArray) :
-    TemplateQuery.Desc.parseWith std.sha512 bytes = TemplateQuery.Desc.parse bytes := rfl
+    TemplateQuery.Desc.parseWith std bytes = TemplateQuery.Desc.parse bytes := rfl
 
 set_option maxRecDepth 20000 in
 theorem programDecodeWith_std (bytes : ByteArray) : Program.decodeWith std.sha512 bytes = Program.decode bytes := rfl
@@ -138,7 +139,7 @@ theorem fv3LeafWith_std (dom : ByteArray) (i : Nat) (schema : String) (payload :
 
 theorem rootWith_std (dom : ByteArray) (leaves : Array ByteArray) :
     FV3.rootWith std dom leaves = pure (FV3.root dom leaves Sha512.hash) := by
-  unfold FV3.rootWith FV3.rootM FV3.root
+  unfold FV3.rootWith FV3.root
   simp only [hashWith_std, Array.mapM_pure, pure_bind, Std.Legacy.Range.forIn_eq_forIn_range',
     List.forIn_pure_yield_eq_foldl]
   rfl
@@ -197,8 +198,8 @@ theorem inDrawnWith_std (c : Circuit) (pi : HmIn.Ports) (pub : Public) (draw : J
   exact drawnWith_std _ _ _
 
 set_option maxRecDepth 20000 in
-theorem linksCheckWith_std (c : Circuit) (pop : Public) (readers : Option (Array Nat)) (program : ByteArray) :
-    HmLinks.checkWith std c pop readers program = HmLinks.check c pop readers program := by
+theorem linksCheckWith_std (c : Circuit) (pop : Public) (program : ByteArray) :
+    HmLinks.checkWith std c pop program = HmLinks.check c pop program := by
   unfold HmLinks.checkWith HmLinks.check
   simp -zeta only [programDecodeWith_std]
   try rfl

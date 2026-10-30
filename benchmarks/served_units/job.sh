@@ -9,12 +9,9 @@
 #      --zk run sampling all N (subset:N) with the proving build, the selftest build's recorded controls drawn the same way,
 #      and the Lean verifier on all of them:
 #        honest-own   the honest run                                                                         ACCEPT
-#        st-<case>    the selftest build's records under verity/flock-circuit+seed-injection, a statement flock-verify
-#                     refuses once every check has passed (`ProvedScope.servedForm`): honest passes every check;
+#        st-<case>    the selftest build's records under verity/flock-circuit+seed-injection: honest ACCEPT;
 #                     output_row_committed_false (a forged output word, committed and proved), output_claim_false and
 #                     unit_internal_bit_flipped REJECT
-#      the verifier holds no program for a proof block (no --program; stage.py says why), so once every check before it has
-#      passed it refuses each session for that (NO_PROGRAM): summarize.py passes an honest check only with that refusal
 #   3. summarize.py: out/<tag>/summary.json and out/summary.json
 # env: SU_UNITS="fp8-coord:K=6144"  SU_N=4  SU_MEM_GB (the job's --mem-gb)  SU_RUNS=1  SU_WARM=0  SU_CASES (selftest cases)
 #      SU_CACHE  FLOCK_PROVE / FLOCK_SELFTEST / FLOCK_VERIFY / HZ_PYTHON (prebuilt)  SU_STAGE_ONLY=1 (stage, nothing else)

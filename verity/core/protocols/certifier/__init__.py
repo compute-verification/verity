@@ -4,6 +4,6 @@ Modules: `grid` (the certifier), `schedule` (the Program's logical schedule and 
 check, record and reject), `capacity` (the counts the Lean package proves), `calibration` (sizing from honest runs),
 `online` (the honest prover's sync declared window by window), `advice` (advice v0: vLLM's serving decisions as one
 canonical bit string, the committed form of the content advice), `advice_check` (advice v0's validity as a
-Boolean Definition, the compile slice's proof block's first part) and `replay_chain` (the replay's state between its
-step proof blocks, under hiding commitments).
+Boolean Definition, the compile unit's first part) and `replay_chain` (the replay's state between its step units,
+under hiding commitments).
 """

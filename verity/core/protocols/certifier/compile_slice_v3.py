@@ -356,7 +356,7 @@ def _build(C, S, adv, ing, req, srv_in, cout_in):
     arrivals = {**g, "a_O": w["a_O"], **({"a_cap": w["a_cap"]} if S.AS else {})}
     dec = [e[0] for e in a["dec"]] + [ZERO] * (S.D - S.DA)
     checks, cur, win = RC._load_rows(C, Sc, CS._consts(RC.encode(RC.empty(Sc), Sc)),
-                                     CS._consts(RC.encode_window(RC.QueueRow(), Sc)),
+                                     CS._consts(RC.encode_window(RC.Window(), Sc)),
                                      RC._flat(arrivals, RC.arrival_fields(Sc)), dec, const_bits(S.DA, Z.DW),
                                      a["steps"][0])
     tok = w["tok"]

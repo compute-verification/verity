@@ -212,6 +212,8 @@ abbrev LMS_I : String := "verity/lms/v0/I"
 -- Not yet read from here: sampled proofs and the proof service's challenger
 abbrev CHALLENGER_KEY : String := "challenger-key/v1"
 abbrev COIN_TREE_HM96_SHA512 : String := "coin-tree/hm96-sha512/v2"
+abbrev IR_OBLIGATION : String := "verity-ir/obligation/v0"
+abbrev SAMPLED_PROOFS_VERIFICATION_PLAN : String := "verity-sampled-proofs/verification-plan/v3"
 abbrev CHALLENGER_AUDITOR_RECORD : String := "verity/challenger-auditor-record/v1"
 abbrev CHALLENGER_AUDITOR_ENTRY_V1 : String := "verity/challenger-auditor/entry/v1"
 abbrev CHALLENGER_AUDITOR_ENTRY_V2 : String := "verity/challenger-auditor/entry/v2"
@@ -256,6 +258,8 @@ abbrev FLOCK_ZK_TAU : String := "verity/flock-zk/tau/v1"
 abbrev LAYOUT : String := "verity/layout/v1"
 abbrev REC_COINS : String := "verity/rec-coins/v1"
 abbrev REC_INNER : String := "verity/rec-inner/v1"
+abbrev REC_V0_VERIFIER_SALT : String := "verity/rec-v0/verifier-salt/v0"
+abbrev REC_V0_ZERO_RESIDUAL_SALT : String := "verity/rec-v0/zero-residual-salt/v0"
 
 -- Not yet read from here: PoUS, the wipe and the memory challenger
 abbrev CHAIN_DENSE_H : String := "chain-dense-H/v1"
@@ -331,7 +335,7 @@ abbrev REMOTE_BANDWIDTH_TIMING_JITTER : String := "verity/remote-bandwidth/timin
 abbrev REMOTE_BANDWIDTH_PROTOCOL : String := "verity/remote-bandwidth/v0"
 abbrev REMOTE_BANDWIDTH_PERIOD : String := "verity/remote-bandwidth/window/v1"
 abbrev REMOTE_SESSION_PAYLOAD_SALTS : String := "verity/remote-session/payload-salts/v0"
-abbrev STORE_SALT : String := "verity/store/salt/v1"
+abbrev STORE_SALT : String := "verity/store/salt/v0"
 
 -- Not yet read from here: the network certifier and network accounting
 abbrev CERTIFIER_ADVISED_ADVICE : String := "verity-network-certifier/advised-advice/v2"

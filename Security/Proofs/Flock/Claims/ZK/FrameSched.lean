@@ -120,6 +120,11 @@ theorem sim_ite {α β : Type} {S : α → β → Prop} (c : Prop) [Decidable c]
   · rw [if_pos hc, if_pos hc]; exact h1 hc
   · rw [if_neg hc, if_neg hc]; exact h2 hc
 
+theorem sim_mono {α β : Type} {S S' : α → β → Prop} {p : TMW M α} {q : TMW M β} (h : Sim L S p q)
+    (hS : ∀ a b, S a b → S' a b) (hp : p >>= pure = p) (hq : q >>= pure = q) : Sim L S' p q := by
+  rw [← hp, ← hq]
+  exact sim_bind h fun a b hab => sim_pure (hS a b hab)
+
 /-- **A loop over `[0:n]` alike**: if step `i` from values related by `I i` yields values related by `I (i + 1)`,
 the loops end related by `I n`. -/
 theorem sim_forIn {σ τ : Type} (n : ℕ) (body : ℕ → σ → TMW M (ForInStep σ)) (body' : ℕ → τ → TMW M (ForInStep τ))

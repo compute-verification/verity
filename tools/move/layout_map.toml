@@ -1,4 +1,5 @@
-# The repository's layout move: what `tools/move/layout.py` moves, renames and rewrites (the platform layout).
+# The repository's layout move: what `tools/move/layout.py` moves, renames and rewrites (the platform layout, Notion hub
+# 'Verity repository', draft of 7 Oct 2026).
 #
 # [paths] maps an old path prefix (a file, or a directory ending in "/") to its new one; the longest prefix that matches a
 # tracked file decides where it goes, and a row that maps a directory to itself keeps it where it is. Python module names follow from the paths and [roots] (`layout.py` derives every rename);
@@ -61,7 +62,7 @@ new = { verity = "verity", verity_flock = "verity/ml/flock/python/verity_flock",
 "tools/check/" = "tools/verity/check/"
 "tools/circuit_check/" = "tools/verity/circuit_check/"
 "tools/lean/" = "tools/verity/lean/"
-# the Lean check's entry point takes the check's name; `lean-audit.json` keeps its name until it retires
+# the Lean check's entry point takes the check's name (ruling of 06:42Z); `lean-audit.json` keeps its name until it retires
 "tools/lean/audit.py" = "tools/verity/lean/check.py"
 
 # --- infra/: our machines, cluster, deploys and messaging
@@ -101,9 +102,9 @@ paths = ["catalog/", "kernels/", "experimental/", "backends/flock/", "verity/pri
 "backends/flock/pod/70-class-sweep.sh: backends/flock" = "the prover's own files (its patches, the live crate, its pod scripts), all under ml/flock"
 "backends/flock/pod/76-read-gadget.sh: backends/flock" = "the prover's own files (its patches, the live crate, its pod scripts), all under ml/flock"
 "backends/flock/pod/86-zk-cpu-steps.sh: backends/flock" = "the prover's own files (its patches, the live crate, its pod scripts), all under ml/flock"
-"backends/flock/tool.py: backends/flock" = "the Lean verifier's package is named beside it (`backends/flock/verifier/lean/`)"
+"backends/flock/tool.py: backends/flock" = "the Lean verifier's package is named beside it (`backends/flock/verifier/lean/`, ci's #1457)"
 "backends/flock/verifier/ci-bundle.sh: backends/flock/verifier" = "the verifier's patches and scripts, which stay with ml/flock"
-"backends/flock/verifier/tool.py: backends/flock/verifier" = "the Lean verifier's package is named beside it (`backends/flock/verifier/lean/`)"
+"backends/flock/verifier/tool.py: backends/flock/verifier" = "the Lean verifier's package is named beside it (`backends/flock/verifier/lean/`, ci's #1457)"
 "benchmarks/numerical/pyproject.toml: backends/flock" = "a suite's inputs, members or test paths: a suite that reads outside its inputs fails"
 "benchmarks/numerical/tests/bench/test_views.py: backends/flock" = "a toy rule, tree or record inside a test, rewritten the same way on both sides of its assertions"
 "benchmarks/pouw/hidden_zk/job.sh: backends/flock" = "the prover's own files (its patches, the live crate, its pod scripts), all under ml/flock"
@@ -119,13 +120,13 @@ paths = ["catalog/", "kernels/", "experimental/", "backends/flock/", "verity/pri
 "tests/test_gate_paths.py: backends/flock" = "a toy rule, tree or record inside a test, rewritten the same way on both sides of its assertions"
 "tools/check/check.py: backends/flock" = "docstrings, and the Rust tests' inputs (the build script, patches and live crate, all under ml/flock)"
 "tools/check/check.py: backends/flock/verifier" = "FLOCK_VERIFIER, the agreement's scripts; the Lean package is FLOCK_LEAN, which agreement_closure reads too"
-"tools/check/ci.toml: backends/flock" = "the Lean verifier's package is named beside it (`backends/flock/verifier/lean/`)"
-"tools/check/pyproject.toml: backends/flock/verifier" = "the Lean verifier's package is named beside it (`backends/flock/verifier/lean/`)"
-"tools/check/queue.toml: backends/flock" = "the Lean verifier's package is named beside it (`backends/flock/verifier/lean/`)"
+"tools/check/ci.toml: backends/flock" = "the Lean verifier's package is named beside it (`backends/flock/verifier/lean/`, ci's #1457)"
+"tools/check/pyproject.toml: backends/flock/verifier" = "the Lean verifier's package is named beside it (`backends/flock/verifier/lean/`, ci's #1457)"
+"tools/check/queue.toml: backends/flock" = "the Lean verifier's package is named beside it (`backends/flock/verifier/lean/`, ci's #1457)"
 "tools/check/tests/test_check.py: backends/flock" = "a toy rule, tree or record inside a test, rewritten the same way on both sides of its assertions"
 "tools/check/tests/test_check.py: backends/flock/verifier" = "a toy rule, tree or record inside a test, rewritten the same way on both sides of its assertions"
 "tools/check/tests/test_slot.py: backends/flock" = "a toy rule, tree or record inside a test, rewritten the same way on both sides of its assertions"
-"tools/check/tool.py: backends/flock" = "the Lean verifier's package is named beside it (`backends/flock/verifier/lean/`)"
+"tools/check/tool.py: backends/flock" = "the Lean verifier's package is named beside it (`backends/flock/verifier/lean/`, ci's #1457)"
 "tools/check/train.sh: backends/flock" = "prose about C-Flock or the catalog as a whole (AGENTS.md and README: the docs worker's)"
 "tools/research/README.md: backends/flock" = "prose about C-Flock or the catalog as a whole (AGENTS.md and README: the docs worker's)"
 "tools/research/pyproject.toml: catalog" = "a suite's inputs, members or test paths: a suite that reads outside its inputs fails"
@@ -317,7 +318,9 @@ exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*
            "verity/ml/circuits/silicon/captures/**", "verity/ml/circuits/silicon/hawkeye/**",
            "tools/check/tests/test_suites.py", "tools/verity/check/tests/test_suites.py",          # synthetic trees borrow old names
            "tools/check/tests/test_move_check.py", "tools/verity/check/tests/test_move_check.py",  # so do its synthetic moves
-           "tools/research/src/research/store/moves.json"]       # each move's old paths, kept as they were
+           "tools/research/src/research/store/moves.json",       # each move's old paths, kept as they were
+           "tools/tc_probe_fp4/fp4_emulation_1ad1aaa2.py",       # verbatim at 1ad1aaa2: t1_merged.emulation_gate pins its bytes
+           "benchmarks/tc_probe_fp4/fp4_emulation_1ad1aaa2.py"]
 # Old paths that are keys outside the tree, never rewritten: the frozen evidence artifact is laid out at its former repository
 # paths (`verity_numerical.bench.frozen`), and labels cite them.
 keep = ["backends/numerical/reports", "backends/numerical/reports/*", "backends/*/results", "backends/*/results/*",

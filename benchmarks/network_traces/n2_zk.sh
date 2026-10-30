@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# N2's verdict of record from zero-knowledge proofs of its registered proof block (n2_zk.py) on a CPU machine, on
-# hidden_zk's builds (its job.sh, sourced: C-Flock's flock-circuit and the Lean flock-verify) with the firewall's Lean
-# frame, N2's network-records and the sampled-proofs verifier built in the tree. From a clone, as a job of 96 GB whose
-# input is the runs' tarball n2-runs.tar.gz:
+# N2's verdict of record from zero-knowledge proofs of its registered unit (n2_zk.py) on a CPU machine, on hidden_zk's
+# builds (its job.sh, sourced: C-Flock's flock-circuit and the Lean flock-verify) with the firewall's Lean frame, N2's
+# network-records and the sampled-proofs verifier built in the tree. From a clone, as a job of 96 GB whose input is the
+# runs' tarball n2-runs.tar.gz:
 #   env N2_MEM_GB=96 N2_RUNS=n2-runs.tar.gz bash benchmarks/network_traces/n2_zk.sh
 # The runs: certifier-serve's honest, extra and late runs, from N2_RUNS (a tarball sent with `--send`, holding honest/,
 # extra/ and late/ as `certifier_serve.py rehearse` writes them) or else made here by `n2_zk.py virtual` (stub
@@ -10,7 +10,7 @@
 # env: N2_MEM_GB (what job.sh's stages may take, within the slot's)  N2_RUNS (the tarball's name under the run's inputs/)
 #      N2_REQUESTS (virtual's --requests)  N2_ROUNDS (n2_zk.py's --rounds, proved one after another: one firewalled
 #      session at a time)  N2_DEBUG_CLEAR=1 (each verdict also carries the in-the-clear comparison)  N2_CACHE (the build cache,
-#      kept across runs where writable)  N2_DRY=1 (the execution phases and their references only)
+#      kept across runs where writable)  N2_DRY=1 (the link-windows and their references only)
 # Kept in $OUT/n2zk: n2_zk's records and logs, the public files and everything the verifier received; never a prover's
 # file (inst-*, prover-instances.bin) nor a circuit (its pin is kept). $OUT/runs: the runs' public files, never their
 # request values (plan.json's and probe.json's requests, io.json's certified I/O).

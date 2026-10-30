@@ -212,10 +212,9 @@ def main() -> int:
         print("A6 " + json.dumps({"refused_before_draw": summary["checks_before_draw"], "checks": checks}, default=str))
         return 1
 
-    # the verifier's stratified sample, by its own Lean over its own program and partition object on a development
-    # challenger's coins; each member serves its stratum
-    p = a0.challenger_draw(a.lean, ["--program", str(out / "program.json"), "--partition", str(out / "partition.json"),
-                                    "--stratified", str(a.k)], rec["law"], n_all, R.digest(rec), out / "draw.log")
+    # the verifier's stratified sample, by its own Lean over its own program and partition object; each member serves its stratum
+    p = a0.run([a.lean, "draw", "--program", str(out / "program.json"), "--partition", str(out / "partition.json"),
+                "--stratified", str(a.k)], out / "draw.log")
     lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     (out / "draw.json").write_text(json.dumps(lean_draw, sort_keys=True))
     served, proved, instances, verdicts, statement, sessions, counts, session_roots = [], [], 0, {}, {}, [], {}, {}

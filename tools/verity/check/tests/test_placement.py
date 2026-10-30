@@ -1,5 +1,5 @@
 """`check.py --slots` and `--record --on auto`: each machine's check slots, windows and Lean audit slots, read over ssh by this
-tree's slot.py and lean_slot.py, and the machine a check is placed on from them."""
+tree's slot.py and lean_slot.py, and the machine a check is placed on from them (the lander placed checks by hand, 3 Oct)."""
 from __future__ import annotations
 
 import fcntl
@@ -8,7 +8,7 @@ import json
 import os
 import subprocess
 import sys
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -17,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[4]
 spec = importlib.util.spec_from_file_location("repo_check_placement", ROOT / "tools" / "verity" / "check" / "check.py")
 CHECK = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(CHECK)
-NOW = datetime(2026, 10, 3, 17, 50, tzinfo=UTC)
+NOW = datetime(2026, 10, 3, 17, 50, tzinfo=timezone.utc)
 #: placement among two machines, whatever AUTO lists today (this module's own copy of check.py)
 N1, N2 = CHECK.AUTO = ("vy-nebius-1", "vy-nebius-2")
 HOLDER = {"pid": 11, "since": "2026-10-03T17:00Z", "minutes": 50, "cmd": "uv run python tools/verity/check/check.py", "run": "r-held",
@@ -123,7 +123,7 @@ def test_a_machine_whose_slots_can_t_be_read_is_skipped_by_name():
 
 
 def test_a_machine_whose_deadline_is_nearer_than_a_full_check_is_skipped_by_name():
-    """A full check placed on a machine that stops before the check would end is cut off, so that machine is skipped."""
+    """The lander's ask (9 Oct): node 2 stops at 05:30Z on 10 Oct, so from 03:00Z a full check placed there would be cut off."""
     n1 = machine([slot("c", HOLDER)], [waiter()], pools=lean())
     n2 = {**machine([slot("d")]), "deadline_in_s": CHECK.FULL_CHECK_S - 60}
     got, _, skipped = CHECK.choose([N1, N2], {N1: n1, N2: n2})
@@ -164,8 +164,8 @@ def test_record_on_auto_or_a_list_launches_on_the_machine_chosen(monkeypatch, ca
 
 
 def test_with_no_slot_free_anywhere_auto_launches_twins_on_every_machine_that_can_run_it(monkeypatch, capsys):
-    """A check placed when no slot is free waits in each line as twins (`slot.py --twin`) and runs in the first slot to free,
-    rather than in one machine's line while another's slot frees."""
+    """9 Oct: four checks waited up to 54 min in node 1's line while a node 2 slot was free, each placed when no slot was free
+    and moved by hand. Now such a check waits in each line as twins (`slot.py --twin`) and runs in the first slot to free."""
     docs = {N1: machine([slot("c", HOLDER)], [waiter()], pools=lean()), N2: machine([slot("d", HOLDER)])}
     monkeypatch.setattr(CHECK, "read_slots", lambda names: {n: docs[n] for n in names})
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
@@ -202,8 +202,8 @@ def test_with_no_slot_free_anywhere_auto_launches_twins_on_every_machine_that_ca
 
 
 def test_a_quick_tier_on_auto_goes_where_a_check_slot_is_free_whatever_its_lean_audit_slots():
-    """A quick tier must not wait past its timeout in one machine's line while another has free check slots. The quick tier
-    takes no Lean audit slot, so a machine whose Lean slots are all held, or can't be read, is no worse for it."""
+    """6 Oct: quick tiers waited past their timeout in node 1's line, 10 deep, while node 2 had free check slots. The quick
+    tier takes no Lean audit slot, so a machine whose Lean slots are all held, or can't be read, is no worse for it."""
     from research import queue as Q
 
     n1 = machine([slot("a", HOLDER), slot("c", HOLDER)], [waiter() for _ in range(10)], pools=lean())
@@ -328,11 +328,10 @@ def test_the_view_shows_each_machine_s_slots_windows_lean_slots_and_waiters_then
 
 
 def test_checks_placed_at_once_go_to_different_machines_until_each_shows_in_its_line(tmp_path):
-    """Parallel launches must not all read one machine's one free slot as theirs and queue there while another machine's
-    slot stands free."""
+    """23 Oct 13:04Z: drive's four parallel launches all read cpu-1's one free slot as theirs, and three queued there for an hour
+    while cpu-4's stood free."""
     docs = {N1: machine([slot("a")]), N2: machine([slot("b")])}
-    def read(names):
-        return json.loads(json.dumps({n: docs[n] for n in names}))
+    read = lambda names: json.loads(json.dumps({n: docs[n] for n in names}))
     path, t = tmp_path / "placed.json", [1000.0]
     first = CHECK.place([N1, N2], "a" * 40, True, read=read, path=path, now=lambda: t[0])[1]
     second = CHECK.place([N1, N2], "b" * 40, True, read=read, path=path, now=lambda: t[0])[1]

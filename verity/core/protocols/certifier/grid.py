@@ -19,7 +19,7 @@ Grid = tuple[Row, ...]
 
 
 class Reason(enum.Enum):
-    """Why an execution phase's coverage was not established (W5)."""
+    """Why a link-window's coverage was not established (W5)."""
 
     MONITOR_UNAVAILABLE = "monitor-unavailable"
     OVERFLOW = "overflow"
@@ -31,8 +31,8 @@ class Reason(enum.Enum):
 
 @dataclass(frozen=True, slots=True)
 class Status:
-    """One untimed coverage status per execution phase: complete when `reason` is None, otherwise not established. It
-    carries no bucket index, time or count, so it never shows when within the window something happened."""
+    """One untimed coverage status per link-window: complete when `reason` is None, otherwise not established. It carries
+    no bucket index, time or count, so it never shows when within the window something happened."""
 
     reason: Reason | None = None
 
@@ -107,7 +107,7 @@ def released(allocation: int, enqueued: Sequence[int], queue: int = 0) -> list[i
 
 
 @dataclass(frozen=True, slots=True)
-class BlockGrid:
+class Record:
     """W5: the network certificate of one link-window is exactly the grid and one status."""
 
     link: str
@@ -176,10 +176,10 @@ class Certifier:
         self._rows.append(row)
         return row
 
-    def close_window(self) -> BlockGrid:
+    def close_window(self) -> Record:
         if len(self._rows) != self.params.buckets:
             raise RuntimeError(f"a window has {self.params.buckets} buckets, not {len(self._rows)}")
-        record = BlockGrid(self.link, self.window, tuple(self._rows), Status(self._fault))
+        record = Record(self.link, self.window, tuple(self._rows), Status(self._fault))
         self._rows, self._fault = [], None
         self.window += 1
         return record

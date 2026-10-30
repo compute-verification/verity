@@ -1,17 +1,18 @@
-"""The integration's one challenge module: every sample over committed values, on `verity.ml.randomness`.
+"""The integration's one challenge module: every draw over committed values, on `verity.ml.randomness`.
 
-Each sample derives through `verity.ml.randomness.derive` from a `source`, the run's live coin (`pipeline.commit_coins`:
-the auditor host's challenger opens it after the run's root), with the run root and the sample's other bindings as
-context.  A sample without its coin is refused by name:
+Today's derivations hash the run root, the prover's own commitment (Fiat-Shamir), and their outputs are recorded in
+verdicts.  They stay byte-identical while `LEGACY` is true; decision 42 retires them at the re-baseline epoch.  The
+non-legacy forms draw through `verity.ml.randomness.derive` from a `source` that is an auditor key, with the run root
+and the draw's other bindings as context:
 
 * opening positions (`challenge_positions`): `verity/vllm-commit/opening-positions/v1`;
 * opening identities from the expected population (`identity_picker`): `verity/vllm-commit/opening-identities/v1`;
 * the replay sample (`replay_key`): `verity/sampled-proofs/vu-sample/v1`, the domain of sampled proofs' former derived
-  proof-block sample, with `per_stratum` units of each stratum sampled uniformly at the stratum's index (`stratum_picks`).
+  proof-block draw, with `per_stratum` units of each stratum drawn uniformly at the stratum's index (`stratum_picks`).
 
 The legacy seeds of the other drivers (replay's tiers, the compiled-kernel check, recompute's reference rows,
 difftest, the relation checkers) are here too (`root_seed` .. `case_seed`), with the only generator constructors
-(`stream`, `generator`): changing one moves every sample taken from it.
+(`stream`, `generator`): changing one moves every sample drawn from it.
 """
 from __future__ import annotations
 
@@ -26,21 +27,26 @@ import numpy as np
 
 from verity.ml.randomness import Key, derive
 
+#: Every derivation's default until the re-baseline epoch (decision 42).
+LEGACY = True
+
 POSITIONS_DOMAIN = "verity/vllm-commit/opening-positions/v1"
 IDENTITIES_DOMAIN = "verity/vllm-commit/opening-identities/v1"
 REPLAY_DOMAIN = "verity/sampled-proofs/vu-sample/v1"
+_LEGACY_POSITIONS_TAG = b"verity/cmt-integ/challenge/v0"
 
 T = TypeVar("T")
 
 
-def _source(source: bytes | None) -> bytes:
-    if not source:
-        raise ValueError("a challenge needs a source: the run's live coin, an auditor key")
-    return source
+def _source(legacy: bool, source: bytes | None) -> None:
+    if legacy and source is not None:
+        raise ValueError("a legacy challenge derives from the run root alone; pass legacy=False with a source")
+    if not legacy and not source:
+        raise ValueError("a non-legacy challenge needs a source: an auditor key")
 
 
 class NoRunRoot(ValueError):
-    """A run whose committer left a step uncommitted has no run root to sample from."""
+    """A run whose committer left a step uncommitted has no run root to draw from."""
 
 
 def run_root_of(run: Any) -> bytes:
@@ -56,12 +62,14 @@ def run_root_of(run: Any) -> bytes:
                     f"{' ...' if len(bad) > 8 else ''}); first error: {errors[0] if errors else 'none recorded'}")
 
 
-def challenge_positions(run_root: bytes, leaves_per_step: list[int], k: int, salt: bytes = b"", *,
-                        source: bytes | None) -> list[tuple[int, int]]:
+def challenge_positions(run_root: bytes, leaves_per_step: list[int], k: int, salt: bytes = b"", *, legacy: bool = LEGACY,
+                        source: bytes | None = None) -> list[tuple[int, int]]:
     """`k` committed leaves as (step, leaf within the step), uniform over all leaves with replacement.  Deterministic, so
-    the harness and a verifier derive the same list from (source, root, layout sizes, k, salt).  The root is vllm-v1's 32
+    the harness and a verifier derive the same list from (root, layout sizes, k, salt) and, off legacy, the source.
+
+    Legacy: 8-byte words of sha256(tag || root || salt || counter), each reduced mod the leaf total.  The root is vllm-v1's 32
     bytes or a SHA-512 root's 64 (rows-sha512, the TP run root)."""
-    _source(source)
+    _source(legacy, source)
     if len(run_root) not in (32, 64):
         raise ValueError(f"a run root is 32 bytes (vllm-v1) or 64 (SHA-512), not {len(run_root)}")
     total = sum(leaves_per_step)
@@ -73,15 +81,32 @@ def challenge_positions(run_root: bytes, leaves_per_step: list[int], k: int, sal
         s = bisect_right(cum, g)
         return s, g - (cum[s - 1] if s else 0)
 
-    key = derive(source, POSITIONS_DOMAIN, {"run_root": run_root, "salt": salt, "layout": ",".join(map(str, leaves_per_step))})
-    return [at(key.uniform(total, i)) for i in range(k)]
+    if not legacy:
+        key = derive(source, POSITIONS_DOMAIN, {"run_root": run_root, "salt": salt, "layout": ",".join(map(str, leaves_per_step))})
+        return [at(key.uniform(total, i)) for i in range(k)]
+    out: list[tuple[int, int]] = []
+    ctr = 0
+    while len(out) < k:
+        d = hashlib.sha256(_LEGACY_POSITIONS_TAG + run_root + salt + ctr.to_bytes(8, "big")).digest()
+        ctr += 1
+        for i in range(0, 32, 8):
+            out.append(at(int.from_bytes(d[i:i + 8], "big") % total))
+            if len(out) >= k:
+                break
+    return out
 
 
-def identity_picker(run_root: bytes, map_digest: str, salt: bytes = b"", *, source: bytes | None) -> Callable[[int, int], int]:
-    """`pick(i, n)`: the i-th sample in [0, n) of an opening-identity challenge bound to (source, root, binding-map digest,
-    salt)."""
-    key = derive(_source(source), IDENTITIES_DOMAIN, {"run_root": run_root, "map_digest": bytes.fromhex(map_digest), "salt": salt})
-    return lambda i, n: key.uniform(n, i)
+def identity_picker(run_root: bytes, map_digest: str, salt: bytes = b"", *, legacy: bool = LEGACY,
+                    source: bytes | None = None) -> Callable[[int, int], int]:
+    """`pick(i, n)`: the i-th draw in [0, n) of an opening-identity challenge bound to (root, binding-map digest, salt).
+
+    Legacy: sha256(sha256(root || map digest || salt) || i as 4 bytes)[:8] mod n."""
+    _source(legacy, source)
+    if not legacy:
+        key = derive(source, IDENTITIES_DOMAIN, {"run_root": run_root, "map_digest": bytes.fromhex(map_digest), "salt": salt})
+        return lambda i, n: key.uniform(n, i)
+    seed = hashlib.sha256(run_root + bytes.fromhex(map_digest) + salt).digest()
+    return lambda i, n: int.from_bytes(hashlib.sha256(seed + i.to_bytes(4, "big")).digest()[:8], "big") % n
 
 
 def legacy_replay_seed(challenge: str, run_root: bytes) -> int:
@@ -91,8 +116,9 @@ def legacy_replay_seed(challenge: str, run_root: bytes) -> int:
 
 
 def replay_key(source: bytes, run_root: bytes) -> Key:
-    """The replay sample's key, derived after the run root."""
-    return derive(_source(source), REPLAY_DOMAIN, {"run_root": bytes(run_root)})
+    """The replay sample's key off legacy, derived after the run root."""
+    _source(False, source)
+    return derive(source, REPLAY_DOMAIN, {"run_root": bytes(run_root)})
 
 
 def stratum_picks(pools: Sequence[Sequence[T]], per_stratum: int, seed: int | None, key: Key | None = None) -> list[list[T]]:

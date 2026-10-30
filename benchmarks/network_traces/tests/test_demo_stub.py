@@ -1,7 +1,6 @@
-"""The demo's stand-in (`demo_stub.py`): a network certifier's id request of the demo's class, as the network certifier
-forwards it, is answered id-form with exactly the class's generated ids below its vocabulary, then the trailer; a
-request off the class, or one that isn't a network certifier's id request, is answered 400; its prompts are the class's
-and the gate takes them."""
+"""The demo's stand-in (`demo_stub.py`): a warden's id request of the demo's class, as the warden forwards it, is
+answered id-form with exactly the class's generated ids below its vocabulary, then the trailer; a request off the
+class, or one that isn't a warden's id request, is answered 400; its prompts are the class's and the gate takes them."""
 
 from __future__ import annotations
 
@@ -77,10 +76,9 @@ def test_the_class_is_eight_byte_ids_in_and_twenty_four_out_and_its_model_says_s
 
 
 def test_a_wardens_id_request_of_the_class_is_answered_id_form_its_ids_below_the_vocabulary_then_the_trailer():
-    """With or without the release headers the network certifier puts on the server's copy, the answer is the prompt's
-    24 ids (`outputs`, fixed by the prompt alone), each an id event of P bytes, then the trailer: whole id-form, as the
-    network certifier's rehearsal reads it (`warden_serve.parse_id_response`), and the scan's cells' payloads cut from
-    it."""
+    """With or without the release headers the warden puts on the server's copy, the answer is the prompt's 24 ids
+    (`outputs`, fixed by the prompt alone), each an id event of P bytes, then the trailer: whole id-form, as the warden's
+    rehearsal reads it (`warden_serve.parse_id_response`), and the scan's cells' payloads cut from it."""
     ids = S.outputs(PROMPT)
     want = b"".join(IT.id_event(t, P) for t in ids) + IT.TRAILER
     assert len(ids) == 24 and all(0 <= t < 256 for t in ids) and len(set(ids)) > 1
@@ -112,8 +110,8 @@ def test_an_id_request_off_the_class_is_refused_over_http(kw, why):
 
 def test_what_isnt_a_wardens_id_request_is_refused_and_the_models_list_is_the_one_model():
     """An id request built for smaller cells (a class request is one scan cell, so a larger cell's is the same bytes), a
-    forwarded copy whose release header isn't where the network certifier puts it, a vLLM-shaped body and another path
-    are none of the network certifier's id requests."""
+    forwarded copy whose release header isn't where the warden puts it, a vLLM-shaped body and another path are none of
+    the warden's id requests."""
     fields = {"model": NAME, "user": "user-0", "prompt": PROMPT, "max_tokens": 24, "seed": 12345}
     assert len(ids_request()) < P and A.id_request(**fields, frame_bytes=4096, offset=0) == ids_request()
     moved = ids_request().replace(b"\r\n\r\n", b"\r\nx-verity-release: 3\r\n\r\n", 1)
@@ -140,8 +138,7 @@ def test_its_prompts_are_the_class_and_the_gate_takes_them_as_its_scan_rehearsal
 
 
 def test_serve_prints_where_it_listens_and_answers_over_loopback(capsys):
-    """`serve` on a free loopback port, reached as the network certifier reaches its upstream: one request a
-    connection."""
+    """`serve` on a free loopback port, reached as the warden reaches its upstream: one request a connection."""
     async def main() -> tuple[bytes, bytes]:
         server = await asyncio.start_server(S.Endpoint(), "127.0.0.1", 0)
         host, port = server.sockets[0].getsockname()[:2]
@@ -169,10 +166,10 @@ RUN = b"\x5a" * A.RUN_ID_BYTES
 
 
 def _served_with_records(out: Path, window_steps: int) -> tuple[dict[int, bytes], S.Endpoint]:
-    """`PLAN`'s class requests, user-j with prompt j and the network certifier's release N = j, through
-    ``serve --out``'s scheduler and HTTP side, stepped here (`Endpoint.step`) on a clock of one second a reading once
-    the connections' handlers have added them (the scheduler's arrivals, which each handler signals on `Endpoint.wake`),
-    in the order their connections opened; each one's answer."""
+    """`PLAN`'s class requests, user-j with prompt j and the warden's release N = j, through ``serve --out``'s
+    scheduler and HTTP side, stepped here (`Endpoint.step`) on a clock of one second a reading once the connections'
+    handlers have added them (the scheduler's arrivals, which each handler signals on `Endpoint.wake`), in the order
+    their connections opened; each one's answer."""
     import demo_endpoint as DE
     a = argparse.Namespace(out=out, host="127.0.0.1", port=0, vocab=S.VOCAB, window_steps=window_steps, run_id="t")
     ticks = itertools.count()
@@ -210,13 +207,12 @@ def _served_with_records(out: Path, window_steps: int) -> tuple[dict[int, bytes]
 @pytest.mark.parametrize("window_steps", [16, 64])
 def test_with_out_its_records_are_the_endpoints_that_the_endpoint_step_binds_and_rebuilds(tmp_path, window_steps):
     """``serve --out``: each class request is answered the same bytes as without it, while the scheduler keeps
-    serve-openai's records; requests.jsonl holds each one's user, the network certifier's release headers, its ids and
-    clock. Then what chain_record's network certifier endpoint step runs on them: `verity-vllm advice` at the network
-    certifier's bucket (its own `main`, a fixed compiler digest in place of the tree's code identity), and network-e2e's
-    `served_advice` with the certified I/O (each user's prompt, max_tokens and the ids it was answered) in ingress order
-    and the toy's EOS id: every Commit window's advice, those joined across a carry too, is bound to the certified
-    requests, each once, and rebuilt from them. At --window-steps 16 the plan's windows are cut with requests running,
-    at 64 only at idle."""
+    serve-openai's records; requests.jsonl holds each one's user, the warden's release headers, its ids and clock. Then
+    what chain_record's warden endpoint step runs on them: `verity-vllm advice` at the warden's bucket (its own
+    `main`, a fixed compiler digest in place of the tree's code identity), and network-e2e's `served_advice` with the
+    certified I/O (each user's prompt, max_tokens and the ids it was answered) in ingress order and the toy's EOS id:
+    every Commit window's advice, those joined across a carry too, is bound to the certified requests, each once, and
+    rebuilt from them. At --window-steps 16 the plan's windows are cut with requests running, at 64 only at idle."""
     sys.path.insert(0, str(HERE.parent / "network_e2e"))
     import chain
     from verity_vllm.pipeline import advice as ADV

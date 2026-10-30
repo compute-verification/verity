@@ -58,10 +58,9 @@ def test_every_registered_definition_is_checked(suite):
     assert not missing, f"registered Definitions no circuit-check binding reaches: {missing}"
 
 
-def test_the_registries_import_every_module_with_a_sidecar_and_key_the_task_list_on_them():
-    """A Definition module is registered by having a sidecar, not by a line in `targets.py`, so the set of them is in the task
-    list's key (`cache.registries`), and a target's holds none of them: it holds whether a module whose import registered what
-    its check read has a sidecar (``registrars``)."""
+def test_the_registries_import_every_module_with_a_sidecar_and_key_every_target_on_them():
+    """A Definition module is registered by having a sidecar, not by a line in `targets.py`, so the set of them is in every
+    target's key (`cache.registries`): a new one reruns every target, as a new import line did."""
     import hashlib
     import sys
 
@@ -70,8 +69,7 @@ def test_the_registries_import_every_module_with_a_sidecar_and_key_the_task_list
 
     assert len(SC.discover()) > 50 and not sorted(set(SC.discover()) - set(sys.modules))
     want = hashlib.sha256("\n".join(sorted(SC.discover())).encode()).hexdigest()
-    assert CC.key({"target": ["task-list", "--all"]})["registries"] == want
-    assert "registries" not in CC.key({"target": ["definition", "F32Mul_v1"]})
+    assert CC.key({})["registries"] == want
 
 
 @pytest.mark.slow

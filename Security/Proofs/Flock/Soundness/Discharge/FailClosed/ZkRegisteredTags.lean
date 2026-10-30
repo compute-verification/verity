@@ -55,7 +55,7 @@ theorem tables_of_acceptsZKR {reg : Bool} (hck : Checks (zkTags I) true I reg) (
           rw [← Except.ok.inj h1]
           exact hck.loadH hh'
         | some tu =>
-          obtain ⟨-, -, hn, -⟩ := hck.templated hf
+          obtain ⟨-, -, -, hn, -⟩ := hck.templated hf
           have h1 := s.parse
           rw [show tagsAt (zkTags I) I.count 0 = zkTags I by simp [tagsAt, hn], hck.parseC hh'] at h1
           rw [← Except.ok.inj h1]

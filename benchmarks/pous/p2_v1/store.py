@@ -53,8 +53,8 @@ regenerated from the seed in the layout. `tie` recomputes the tie with a registr
 `...mlp.up_proj.weight`, `...mlp.down_proj.weight`; then `lm_head.weight` as layer `layers`. Embeddings, norms and
 scales are not in `W`. Each tensor starts on a block: its `W` offset is `first_block · 2054`, it takes `⌈size / 2054⌉`
 blocks, and its last block's payload is zero past the tensor, so no block holds bytes of two tensors. `W` is zero to
-whole segments of `blocks_per_segment` blocks (`TensorLayout.of_ranges`, which `layout.decode_tensor` reads as is).
-`TensorLayout.of` doesn't fit: packed, blocks straddle tensors; `align=True` starts each tensor on a segment, 7 GiB of
+whole segments of `blocks_per_segment` blocks (`Layout.of_ranges`, which `layout.decode_tensor` reads as is).
+`Layout.of` doesn't fit: packed, blocks straddle tensors; `align=True` starts each tensor on a segment, 7 GiB of
 padding at the real shape.
 
 **C*.** Block `i = blocks_per_segment · s + v` is 2,056 bytes, big-endian, at byte `2056 · i` of one buffer in HBM; on
@@ -102,10 +102,9 @@ else:
 
 from verity.core.protocols.pous import setup, verifier
 from verity.core.protocols.pous.labels import salt_value, tag
-from verity.core.protocols.pous.layout import TensorLayout
+from verity.core.protocols.pous.layout import Layout
 from verity.core.protocols.pous.schemes.p2 import (P2, POINT, SHA512_CTR, P2Params, decode_segment, encode_segment,
                                                     expand_prefix, stream)
-from verity.ml.circuits import requirement
 from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha512
 from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
 
@@ -194,23 +193,14 @@ class Tensor:
 
 
 @dataclass(frozen=True)
-class StoreLayout:
-    """The store's layout: the model's `shape`, its tensors in `W` (`layout`) and each tensor's blocks and staging
-    place (`tensors`). The store it lays out is `store`."""
-
+class Store:
     shape: Shape
-    layout: TensorLayout
+    layout: Layout
     tensors: tuple[Tensor, ...]
 
     @property
     def params(self) -> P2Params:
         return self.layout.params
-
-    @property
-    def store(self) -> requirement.Store:
-        """The store as `requirement.Store`: `C*`'s blocks registered from store index 0, none written or freed after
-        setup, and no payloads, since a block of `C*` holds `W`'s bytes only through decoding."""
-        return requirement.Store(self.params.blocks, {}, {}, {})
 
     def layer(self, layer: int) -> tuple[Tensor, ...]:
         out = tuple(t for t in self.tensors if t.layer == layer)
@@ -239,7 +229,7 @@ class StoreLayout:
                 "layer_columns": list(LAYER_COLUMNS), "layers": rows}
 
 
-def build(shape: Shape, blocks_per_segment: int = PER_SEGMENT, w: int = W_BITS, c0: int = C0) -> StoreLayout:
+def build(shape: Shape, blocks_per_segment: int = PER_SEGMENT, w: int = W_BITS, c0: int = C0) -> Store:
     """The store's layout: each tensor from a block boundary, in `shape.tensors()`'s order (`w`, `c0` other than the
     registered point's only in tests)."""
     params = P2Params(w, c0, blocks_per_segment)
@@ -252,11 +242,11 @@ def build(shape: Shape, blocks_per_segment: int = PER_SEGMENT, w: int = W_BITS, 
         tensors.append(Tensor(name, l, n, k, block * pb, block, blocks, staging))
         block += blocks
         staging += -(-n * k // STAGING_ALIGN) * STAGING_ALIGN
-    layout = TensorLayout.of_ranges(params, [(t.name, t.offset, t.size) for t in tensors])
-    return StoreLayout(shape, layout, tuple(tensors))
+    layout = Layout.of_ranges(params, [(t.name, t.offset, t.size) for t in tensors])
+    return Store(shape, layout, tuple(tensors))
 
 
-def toy_store(doc: dict | None = None) -> StoreLayout:
+def toy_store(doc: dict | None = None) -> Store:
     """The store `toy.json` describes (the tracked one by default)."""
     doc = json.loads((TOY_DIR / "toy.json").read_text()) if doc is None else doc
     model = doc["layout"]["model"]
@@ -264,17 +254,21 @@ def toy_store(doc: dict | None = None) -> StoreLayout:
     return build(shape, doc["layout"]["params"]["blocks_per_segment"])
 
 
+def _ref(params: P2Params) -> reference.Params:
+    return reference.Params(params.w, params.c0, params.payload_bytes, params.blocks_per_segment, params.segments)
+
+
 def decode_block(params: P2Params, prefix: bytes, i: int, block: bytes) -> bytes:
     """Block `i`'s payload, `params.payload_bytes` bytes: `reference.decode` under `reference.keys_after(prefix, …)`."""
-    nb, pb = params.block_bytes, params.payload_bytes
+    ref, nb, pb = _ref(params), params.block_bytes, params.payload_bytes
     if len(block) != nb:
         raise ValueError(f"block {i} is {len(block)} bytes, not {nb}")
     c = int.from_bytes(block, "big")
-    if c >= params.p:
+    if c >= ref.p:
         raise ValueError(f"block {i} is not below p: not a codeword (flag bit 2)")
     s, v = divmod(i, params.blocks_per_segment)
-    k, t, _ = reference.keys_after(prefix, params, s, v)
-    m = reference.decode(params, c, k, t)
+    k, t, _ = reference.keys_after(prefix, ref, s, v)
+    m = reference.decode(ref, c, k, t)
     if m >> (8 * pb):
         raise ValueError(f"block {i} decodes to more than {8 * pb} bits: not a codeword (flag bit 2)")
     return m.to_bytes(pb, "big")
@@ -292,7 +286,7 @@ def decode_range(params: P2Params, c_star: bytes | memoryview, first_block: int,
     return bytes(out[:size])
 
 
-def decode_layer(store: StoreLayout, c_star: bytes | memoryview, salt: bytes, layer: int) -> bytes:
+def decode_layer(store: Store, c_star: bytes | memoryview, salt: bytes, layer: int) -> bytes:
     """Layer `layer`'s staging buffer, `store.staging_bytes(layer)` bytes (zero between tensors): what a kernel's
     `decode_layer(c_star, layout, layer, prefix, staging)` writes."""
     prefix = expand_prefix(store.params, salt)
@@ -302,7 +296,7 @@ def decode_layer(store: StoreLayout, c_star: bytes | memoryview, salt: bytes, la
     return bytes(out)
 
 
-def refusal(store: StoreLayout, c_star: bytes, salt: bytes, layer: int) -> int | None:
+def refusal(store: Store, c_star: bytes, salt: bytes, layer: int) -> int | None:
     """The flag bit `decode_layer` refuses layer `layer` with, or None when it decodes."""
     try:
         decode_layer(store, c_star, salt, layer)
@@ -328,7 +322,7 @@ def negative(neg: dict, c_star: bytes, params: P2Params) -> bytes:
     return patch(c_star, i, bytes(c))
 
 
-def staging_of(store: StoreLayout, w: bytes, layer: int) -> bytes:
+def staging_of(store: Store, w: bytes, layer: int) -> bytes:
     """Layer `layer`'s staging buffer from the plaintext `W`: what `decode_layer` must give."""
     out = bytearray(store.staging_bytes(layer))
     for t in store.layer(layer):
@@ -336,12 +330,12 @@ def staging_of(store: StoreLayout, w: bytes, layer: int) -> bytes:
     return bytes(out)
 
 
-def toy_tensors(store: StoreLayout) -> dict[str, bytes]:
+def toy_tensors(store: Store) -> dict[str, bytes]:
     """The toy's weights: each tensor's bytes from a SHA-512 counter stream under its name."""
     return {t.name: stream(TOY_W, t.name.encode(), t.size) for t in store.tensors}
 
 
-def toy_plain(store: StoreLayout) -> dict[str, bytes]:
+def toy_plain(store: Store) -> dict[str, bytes]:
     """The toy's `w.bin` (W) and `staging.bin` (every layer's staging buffer, in layer order), from the generator alone."""
     w = store.layout.pack(toy_tensors(store))
     return {"w.bin": w, "staging.bin": b"".join(staging_of(store, w, l) for l in sorted({t.layer for t in store.tensors}))}
@@ -352,7 +346,7 @@ def spot_payload(i: int, used: int, payload_bytes: int) -> bytes:
     return stream(TOY_W + b"spot", i.to_bytes(8, "big"), used) + bytes(payload_bytes - used)
 
 
-def w_range(store: StoreLayout, tensor: Callable[[str, int, int], bytes], lo: int, hi: int) -> bytes:
+def w_range(store: Store, tensor: Callable[[str, int, int], bytes], lo: int, hi: int) -> bytes:
     """Bytes `[lo, hi)` of `W`: tensor `t`'s bytes `[a, b)`, `tensor(t.name, a, b)`, at `t.offset + a`, zero elsewhere."""
     if not 0 <= lo <= hi <= store.params.w_bytes:
         raise ValueError(f"W has bytes [0, {store.params.w_bytes}), not [{lo}, {hi})")
@@ -488,7 +482,7 @@ def _sha256_pieces(q: queue.Queue, pieces: Sequence[tuple[str, int, int, str]], 
             pass
 
 
-def commit_w(store: StoreLayout, read: Callable[[int, int], bytes], workers: int,
+def commit_w(store: Store, read: Callable[[int, int], bytes], workers: int,
              pieces: Sequence[tuple[str, int, int, str]] = ()) -> bytes:
     """`setup.commit(store.params, W)`, `W`'s segments `read(lo, hi)` by `workers` forked processes (at most `workers + 4`
     held at once), and each of `pieces` (name, `W` offset, bytes, SHA-256 hex, in `W`'s order) held to its digest, hashed
@@ -591,7 +585,7 @@ def point_of(manifest: dict[str, Any]) -> tuple[int, int, int]:
     return manifest["w"], manifest["c0"], manifest["blocks_per_segment"]
 
 
-def layout_sha512(store: StoreLayout) -> str:
+def layout_sha512(store: Store) -> str:
     return _sha(_dump(store.to_json()).encode())
 
 
@@ -668,7 +662,7 @@ def spot_blocks(salt: bytes, s: int, n: int, count: int = SPOTS_PER_SEGMENT) -> 
     return sorted({0, *(rng.randrange(n) for _ in range(count - 1))})
 
 
-def tensor_at(store: StoreLayout, i: int) -> str | None:
+def tensor_at(store: Store, i: int) -> str | None:
     """The tensor block `i` holds bytes of, or None for padding."""
     return next((t.name for t in store.tensors if t.first_block <= i < t.first_block + t.blocks), None)
 
@@ -695,7 +689,7 @@ class GpuEncoder:
 
         torch.cuda.set_device(device)
         self.torch, self.params = torch, params
-        self.K = Kernels(lib, "", reference.Params.of(params), expand_prefix(params, salt))
+        self.K = Kernels(lib, "", _ref(params), expand_prefix(params, salt))
         self.name = torch.cuda.get_device_name(device)
 
     def encode(self, s: int, w_seg: bytes) -> tuple[bytes, dict[str, Any]]:
@@ -931,7 +925,7 @@ def _decoder(params: P2Params, salt: bytes, lib: str | None) -> Any:
 
     from p2_v1.gpu import Kernels
 
-    K = Kernels(lib, "", reference.Params.of(params), expand_prefix(params, salt))
+    K = Kernels(lib, "", _ref(params), expand_prefix(params, salt))
     n, nb, pb, p = params.blocks_per_segment, params.block_bytes, params.payload_bytes, params.p
     p_row = torch.frombuffer(bytearray(p.to_bytes(nb, "big")), dtype=torch.uint8)
 
@@ -1014,7 +1008,7 @@ def spot_cmd(a: argparse.Namespace) -> int:
 
         from p2_v1.gpu import Kernels
 
-        gpu = (torch, Kernels(a.p2_lib, "", reference.Params.of(params), prefix))
+        gpu = (torch, Kernels(a.p2_lib, "", _ref(params), prefix))
     rng = random.SystemRandom()
     rows: list[dict[str, Any]] = []
     for _ in range(a.count):
@@ -1071,10 +1065,11 @@ def _encode_segment(args: tuple[P2Params, bytes, int, bytes]) -> list[bytes]:
 
 
 def _encode_block(args: tuple[P2Params, bytes, int, bytes]) -> bytes:
-    """One block at any index, by the spec's reference encoder (two roots in Python, seconds)."""
+    """One block at any index, by the spec's reference encoder (two roots by Python's `pow`, seconds)."""
     params, prefix, i, m = args
-    k, t, _ = reference.keys_after(prefix, params, *divmod(i, params.blocks_per_segment))
-    return reference.encode(params, int.from_bytes(m, "big"), k, t).to_bytes(params.block_bytes, "big")
+    ref = _ref(params)
+    k, t, _ = reference.keys_after(prefix, ref, *divmod(i, params.blocks_per_segment))
+    return reference.encode(ref, int.from_bytes(m, "big"), k, t).to_bytes(params.block_bytes, "big")
 
 
 def _sha(data: bytes) -> str:
@@ -1150,11 +1145,11 @@ def toy(shape: Shape, blocks_per_segment: int, workers: int | None = None) -> di
             "c-star.bin": c_star} | plain
 
 
-def _spots(real: StoreLayout, salt: bytes) -> list[dict]:
+def _spots(real: Store, salt: bytes) -> list[dict]:
     """Blocks of the real store under the toy's salt: W's first, layer 0's qkv's last (268 bytes used), layer 51's
     down_proj's first, the head's last (36 used) and W's last (all padding, at v = 65,535)."""
     params = real.params
-    prefix, pb = expand_prefix(params, salt), params.payload_bytes
+    prefix, ref, pb = expand_prefix(params, salt), _ref(params), params.payload_bytes
     qkv, down, head = real.layer(0)[0], real.layer(real.shape.layers - 1)[3], real.layer(real.shape.layers)[0]
     picks = [("w-first", qkv, qkv.first_block), ("qkv0-last", qkv, qkv.first_block + qkv.blocks - 1),
              ("down51-first", down, down.first_block), ("head-last", head, head.first_block + head.blocks - 1),
@@ -1163,7 +1158,7 @@ def _spots(real: StoreLayout, salt: bytes) -> list[dict]:
     for name, t, i in picks:
         used = 0 if t is None else min(pb, t.offset + t.size - pb * i)
         s, v = divmod(i, params.blocks_per_segment)
-        k, tw, attempt = reference.keys_after(prefix, params, s, v)
+        k, tw, attempt = reference.keys_after(prefix, ref, s, v)
         out.append({"id": name, "i": i, "s": s, "v": v, "tensor": None if t is None else t.name, "used": used,
                     "K_sha512": _sha(k.to_bytes(nb, "big")), "t_sha512": _sha(tw.to_bytes(nb, "big")),
                     "t_attempt": attempt, "m_sha512": _sha(spot_payload(i, used, pb))})

@@ -1,5 +1,4 @@
 import Proofs.Accounting.TS.Session.Lanes.Assumptions
-import Proofs.Accounting.TS.Session.Group.Premises
 import Proofs.Accounting.TS.Session.Lanes.Lane
 import Definitions.Pouw.H1Zy.Dequant
 import Proofs.Accounting.TS.Session.Lanes.KnownOf
@@ -24,11 +23,10 @@ of its draw (`PouwWindow.Lanes.checkFull`: every unit of a non-empty population)
 `RowsSession.canon` of a session and its registrants' openings (`RowsSession.Openings`): its registered reads are built
 from the verifier's own `own`, every circuit port's row that `own` names read through `own`'s port at its one position,
 and only the rows, salts and paths the registrants committed come from them. It takes `CheckedSessionSound`'s
-hypotheses at each session as named premises, C-Flock's collision bounds and the window's law
-(`Accounting.Premises.TS.SessionsCR`, `WindowLaws`), but port uniqueness and the `ok` port, which that acceptance gives
-(the known-read check's names, at known content naming `o0`), full checking (`kd = n`) and a unit (`0 < n`), which the
-draw check gives, and registered served roots (`RowsSession.ServedRegistered`), which the reads built from `own` and the
-one-read check give, and two named premises: the
+hypotheses at each session, but port uniqueness and the `ok` port, which that acceptance gives (the known-read check's
+names, at known content naming `o0`), full checking (`kd = n`) and a unit (`0 < n`), which the draw check gives, and
+registered served roots (`RowsSession.ServedRegistered`), which the reads built from `own` and the one-read check
+give, and two named premises: the
 lanes' and the combine's circuits compute their pieces' compositions on bits, at their port rows, read through the
 layout's decodes (`Accounting.TS.Lanes.LaneLowers` and `CombineLowers` at `Lanes.decL`, `Lanes.decC`; the lane's dequant
 is its Definition's word view, `Pouw.H1Zy.zyDequant` (`PouwZyDequant_v1`), and its chain words are `h1tile._chain`'s,
@@ -57,10 +55,7 @@ on how the file was built. Each file marks its reads of the A, B and partials ro
 partials row and the combine's `p<l>` are one row, the partials record is the rows the 33 statements read, and nothing
 of it is asked. The leaf is one unit of the declared circuit, and the partials are proof-layer values.
 Each proof is then accepted with a leaf that fails the unit's checks, and no collision in hand, with
-probability at most `33 δ`: `δ` a session from `CheckedSessionSound`, joined by a union bound. It is
-`Accounting.Guarantees.TS.LeafGroupSound`'s argument (`Accounting.TS.Group.group_soundAt`) at the 32 × 32 leaf, one
-chunk a lane, where the group's premise `GroupRealizes` is proved from the two above
-(`Accounting.TS.Lanes.groupRealizes_lanes32`).
+probability at most `33 δ`: `δ` a session from `CheckedSessionSound`, joined by a union bound.
 It sits in the proofs package because the sessions do (`reads_exempt`).
 -/
 
@@ -97,9 +92,8 @@ row as lane `4 (r mod 8)` decodes it, each B row as lane `⌊(j mod 8)/2⌋` doe
 cell it is, at the registrants' commit-time openings), its relation the unit's served checks at the path's public
 inputs `pub` and the receipt the combine's committed row decodes to (`Accounting.TS.Lanes.receiptOf`), or a clash of two
 of the sessions' registrants' records, `LeafColl`, or a collision of a session's known-content tie, `LeafKnownColl`):
-given at every one of the 33 sessions `CheckedSessionSound`'s hypotheses as the named premises
-`Accounting.Premises.TS.SessionsCR` (`RowsSession.CR`) and `Accounting.Premises.TS.WindowLaws` (the window's law
-`Accounting.Assumptions.TS.WindowLaw` at each statement), and
+given at every one of the 33 sessions `CheckedSessionSound`'s hypotheses (`RowsSession.CR`, the
+window's law `Accounting.Assumptions.TS.WindowLaw`, and
 $$n \cdot (\varepsilon_{ks} + \delta_{link} + \delta_{rows} + q_R^2/2^{513}) \le \delta,$$
 `δ ≥ 0`), the 33 circuits computing
 their pieces' compositions on bits, at their port rows through the layout's decodes at
@@ -132,8 +126,8 @@ def LeafLanesSound : Prop :=
     (roots : Paths Ω S → Fin S → Fin nπ → String → _root_.Flock.Registered.Port)
     (place : Paths Ω S → Fin S → Fin nπ → String → String × ℕ)
     (right : Paths Ω S → (Fin S → Fin nπ → Leaf K) → Prop) (δ : ℝ),
-    Accounting.Premises.TS.SessionsCR sess →
-    Accounting.Premises.TS.WindowLaws sess out →
+    (∀ x w i k, (sess x w i k).CR) →
+    (∀ k, Accounting.Assumptions.TS.WindowLaw (fun x w i => sess x w i k) (fun x w i => out x w i k)) →
     (∀ x w i k, ((sess x w i k).n : ℝ≥0∞) * (sess x w i k).bound ≤ ENNReal.ofReal δ) → 0 ≤ δ →
     (∀ x w i, LaneLowers (servedTile K) (laneChain K nw) Pouw.H1Zy.zyDequant (sess x w i)) →
     (∀ x w i, CombineLowers (sess x w i) (decC nw (servedTile K))) →

@@ -425,36 +425,6 @@ def test_a_run_read_that_times_out_skips_its_agent_and_the_sweep_goes_on(tmp_pat
     assert records(tmp_path) == [], "a timeout is not an unreadable run"
 
 
-def test_a_conversation_read_that_times_out_is_short_and_not_retried_for_a_while(tmp_path):
-    """A coordinator's long transcript timed out at the API's 60 s, and a few such reads spent the sweep's read budget."""
-    class SlowConvApi(FakeApi):
-        timeouts: list = []
-
-        def get(self, path, timeout=None, **params):
-            if path.endswith("/conversation"):
-                self.timeouts.append(timeout)
-                self.gets.append(path)
-                raise TimeoutError("The read operation timed out")
-            return super().get(path, **params)
-
-    clock = Clock()
-    api = SlowConvApi([], {})
-    w = W.Watch(api, tmp_path / "events.jsonl", clock)
-    assert w.conversation("bc-big") is None and api.timeouts == [W.CONV_TIMEOUT_S]
-    clock.t += W.CONV_SKIP_S - 1
-    assert w.wake_of("bc-big", clock.t) == {} and len(api.timeouts) == 1, "skipped while it's slow"
-    clock.t += 2
-    assert w.conversation("bc-big") is None and len(api.timeouts) == 2, "read again once the skip ends"
-
-
-def test_api_get_takes_a_shorter_timeout_but_never_a_longer_one(monkeypatch):
-    seen = []
-    monkeypatch.setattr(W.urllib.request, "urlopen", lambda req, timeout=None: seen.append(timeout) or io.BytesIO(b"{}"))
-    api = W.Api("k")
-    api.get("/v1/x"), api.get("/v1/x", timeout=15), api.get("/v1/x", timeout=600)
-    assert seen == [60, 15, 60]
-
-
 def test_a_tool_calls_interaction_update_twin_doesnt_hide_a_held_run(tmp_path):
     """18 Oct, live streams: every `tool_call` completed is followed within milliseconds by an `interaction_update`
     `tool-call-completed` (220 of 240 sampled). The watch took it for the agent's own text, so no run could ever be held."""
@@ -1647,25 +1617,6 @@ def test_a_silent_worker_is_rung_once_then_once_more_a_window_later_then_not_unt
     assert [r["window"] for r in silent(tmp_path)] == [1, 2, 1] and silent(tmp_path)[-1]["since"] == W.iso(p.stat().st_mtime)
 
 
-def test_a_note_naming_an_agent_by_its_short_id_is_its_activity(tmp_path):
-    """Notes often sign with the short id (`ROLE (bc-xxxxxxxx)`): a full-id-only match rang an agent silent though its
-    checkpoint was half an hour old."""
-    notes = tmp_path / "notes"
-    note(notes, "circuits", "a.md", f"circuits worker W3 ({W1_}); code cursor/w3-branch-c7a9", age_s=2 * 3600)
-    sh = FakeSh({"cursor/w3-branch-c7a9": "a" * 40, "main": "m" * 40})
-    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("ACTIVE", W.iso(T0 - 3 * 3600))}, notes=notes,
-                                 git_remote=REMOTE, sh=sh)
-    w.sweep(lambda r: None)
-    sweeps(w, clock, 90)
-    assert [r["window"] for r in silent(tmp_path)] == [1]
-    p = note(notes, "circuits", "b.md", f"circuits worker W3 ({W.short_id(W1_)}), checkpoint", age_s=0)
-    W.os.utime(p, (clock.t, clock.t))
-    sweeps(w, clock, 85)
-    assert len(silent(tmp_path)) == 1, "a note naming the short id is activity"
-    sweeps(w, clock, 5)
-    assert [r["window"] for r in silent(tmp_path)] == [1, 1] and silent(tmp_path)[-1]["since"] == W.iso(p.stat().st_mtime)
-
-
 def test_a_silent_worker_still_showing_nothing_six_hours_on_is_one_no_step_for_top(tmp_path):
     """top, 26 Oct: nine workers sat ACTIVE with no step for 30-64 h, each rung twice as silent and then by no one."""
     notes = tmp_path / "notes"
@@ -1675,14 +1626,12 @@ def test_a_silent_worker_still_showing_nothing_six_hours_on_is_one_no_step_for_t
                                  git_remote=REMOTE, sh=sh)
     w.sweep(lambda r: None)
     sweeps(w, clock, 359)
-    assert [r["kind"] for r in records(tmp_path) if r["kind"] in ("silent", "no_step", "archived")] == ["silent", "silent"]
-    assert not [p for p, _ in api.posts if p.endswith("/archive")]
+    assert [r["kind"] for r in records(tmp_path) if r["kind"] in ("silent", "no_step")] == ["silent", "silent"]
     sweeps(w, clock, 1)
     sweeps(w, clock, 600)
-    got = [r for r in records(tmp_path) if r["kind"] in ("no_step", "archived")]
-    assert [{k: r.get(k) for k in ("kind", "agent", "since", "hours", "handle", "owner", "role")} for r in got] == [
-        {"kind": "archived", "agent": W1_, "since": W.iso(T0), "hours": 6, "handle": "circuits", "owner": None, "role": "worker"}]
-    assert [p for p, _ in api.posts if p.endswith("/archive")] == [f"/v1/agents/{W1_}/archive"]
+    got = [r for r in records(tmp_path) if r["kind"] == "no_step"]
+    assert [{k: r[k] for k in ("agent", "since", "hours", "handle", "owner", "role")} for r in got] == [
+        {"agent": W1_, "since": W.iso(T0), "hours": 6, "handle": "circuits", "owner": "top", "role": "worker"}]
 
 
 def test_a_coordinator_working_with_no_note_or_push_is_silent_but_never_no_step(tmp_path):
@@ -2685,22 +2634,3 @@ def test_a_holder_whose_worker_went_quiet_is_not_held_unread(tmp_path):
         api._agents[0]["updatedAt"] = W.iso(clock.t)
         w.sweep(lambda r: None)
     assert api.posts == [] and "held_unread" not in [r["kind"] for r in records(tmp_path)]
-
-
-def test_a_silent_worker_the_api_wont_archive_is_a_no_step_for_top_with_why(tmp_path):
-    notes = tmp_path / "notes"
-    note(notes, "circuits", "a.md", f"circuits worker W3 ({W1_}); code cursor/w3-branch-c7a9", age_s=2 * 3600)
-    sh = FakeSh({"cursor/w3-branch-c7a9": "a" * 40})
-    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("ACTIVE", W.iso(T0 - 3 * 3600))}, notes=notes,
-                                 git_remote=REMOTE, sh=sh)
-
-    def refuse(path, body=None):
-        if path.endswith("/archive"):
-            raise W.urllib.error.HTTPError(path, 403, "Forbidden", {}, None)
-        return {}
-    api.post = refuse
-    w.sweep(lambda r: None)
-    sweeps(w, clock, 960)
-    got = [r for r in records(tmp_path) if r["kind"] in ("no_step", "archived")]
-    assert [{k: r.get(k) for k in ("kind", "owner", "role", "archive_failed")} for r in got] == [
-        {"kind": "no_step", "owner": "top", "role": "worker", "archive_failed": "HTTP 403"}]

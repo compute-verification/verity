@@ -597,10 +597,10 @@ def _certifier(sid: bytes, key, sign, record: bytes, keys, seed: bytes = b"", cl
     return c, drawn
 
 
-def _client(c: Proxy, at: tuple[str, int], keys) -> active.CertifierClient:
+def _client(c: Proxy, at: tuple[str, int], keys) -> active.RemoteCertifier:
     """The challenger's client of certifier `c` served at `at` (the `reveals` fixture), for its key, run and link."""
     _, run_id, link = c.certifier_run
-    return active.CertifierClient(*at, c.signer.public_key(), keys[1], link, run_id)
+    return active.RemoteCertifier(*at, c.signer.public_key(), keys[1], link, run_id)
 
 
 def _sid(run: str, keys, stream: str = "window", link: str = "requests", run_id: bytes = RUN_ID) -> bytes:
@@ -637,7 +637,7 @@ def _live(path: Path, entropy: str | None = None) -> tuple[Ch.LiveChallenger, Ch
         Ch.ChallengerKey(4, 2, lms.public_key(k))
 
 
-def _deployment(client: active.CertifierClient, ck: Ch.ChallengerKey) -> SC.Deployment:
+def _deployment(client: active.RemoteCertifier, ck: Ch.ChallengerKey) -> SC.Deployment:
     """What the verifier pins of the deployment: `client`'s certifier key and run id, and its challenger's key `ck`."""
     return SC.Deployment(client.certifier_key, client.run_id, ck)
 
@@ -663,7 +663,7 @@ def test_rows_formed_before_any_salt_are_refused_in_every_certified_window(serve
     prover, sid = PS.prover_id(key.public), _sid(run, keys)
     c, salts = _certifier(sid, key, sign, PS.pouw_record(weights_root(_pass(run)[1]), sid, prover), keys, windows=2)
     client = _client(c, reveals(c), keys)
-    asked, ledger = _unasked(monkeypatch), PS.WindowOpens()
+    asked, ledger = _unasked(monkeypatch), PS.Registrations()
     unread = PS.unit_reason(SC.template(K))
     assert unread is not None and SC.template(K).id in unread
     for p in (0, 1):
@@ -671,7 +671,7 @@ def test_rows_formed_before_any_salt_are_refused_in_every_certified_window(serve
         live, ck = _live(tmp_path / f"w{p}.json")
         ch = SC.Challenger(params, live, clock=lambda: 0.0, record=OR.Record(lean=False), certifier=client,
                            prover=prover, coin_record=tmp_path / f"w{p}.json", deployment=_deployment(client, ck),
-                           opens=ledger)
+                           registrations=ledger)
         with pytest.raises(S.Refused) as e:
             ch.register(f"w{p}", rec, manifest=raw)
         assert _codes(e) == {"unsalted"} and e.value.verdict.detail["unsalted"] == unread
@@ -687,7 +687,7 @@ def test_one_windows_rows_are_refused_under_two_streams(served, tmp_path, monkey
     *_, words = served
     run, keys = "r-certified", _keys(tmp_path)
     key, sign = _prover(b"the prover")
-    prover, asked, ledger = PS.prover_id(key.public), _unasked(monkeypatch), PS.WindowOpens()
+    prover, asked, ledger = PS.prover_id(key.public), _unasked(monkeypatch), PS.Registrations()
     sids = {s: _sid(run, keys, s, f"requests-{s}") for s in "ab"}
     for s, sid in sids.items():
         c, salts = _certifier(sid, key, sign, PS.pouw_record(weights_root(_pass(run)[1]), sid, prover), keys,
@@ -698,7 +698,7 @@ def test_one_windows_rows_are_refused_under_two_streams(served, tmp_path, monkey
         live, ck = _live(tmp_path / f"{s}.json")
         ch = SC.Challenger(params, live, clock=lambda: 0.0, record=OR.Record(lean=False), certifier=client,
                            prover=prover, coin_record=tmp_path / f"{s}.json", deployment=_deployment(client, ck),
-                           opens=ledger)
+                           registrations=ledger)
         with pytest.raises(S.Refused) as e:
             ch.register(s, rec, stream=s, manifest=raw)
         assert _codes(e) == {"unsalted"} and not ch.streams and not ch.regs
@@ -709,7 +709,7 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_drawn_under_
         served, tmp_path, monkeypatch, reveals):
     """What a certified window of salted units runs through after `salt.unit_reason`, which no served-zk window passes
     today (the two tests above): this test lifts that one rule (monkeypatched to accept) and holds the rest end to end
-    against the network certifier, which the challenger asks through its client (`CertifierClient`, a signed request
+    against the network certifier, which the challenger asks through its client (`RemoteCertifier`, a signed request
     and a signed answer it verifies, over localhost to `serve_reveals`).  The prover records its pass's weights, the
     window's stream (`stream_id`, naming the certifier's run, (key id, run id, ingress link), which the proxy and its
     client give alike) and its prover id (`salt.prover_id`) with the certifier for PoUW window 0 before its salt is
@@ -722,7 +722,7 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_drawn_under_
     other pin (``coin-key``).  Its drawn units are opened under that salt (`Challenger.check`),
     where `check` alone passes none.  The certifier reveals window 0 once and within its reveal deadline on its own
     clock, so a second registration, or one past the deadline, is refused (``certifier``).  A second proxy of the same
-    run (its key, run id and link) gives the same stream id, and the deployment's shared `WindowOpens` refuse its
+    run (its key, run id and link) gives the same stream id, and the deployment's shared `Registrations` refuse its
     window 0 (``reregistered``); another run (another run id) is another stream, so a record naming the first run's
     stream is refused (``coin``) and one naming its own registers, though coins that aren't its signed record's
     challenger's are refused at the sample.  A certified challenger opens no salt coin, and is refused parameters with a
@@ -746,13 +746,13 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_drawn_under_
     with pytest.raises(TypeError, match="ingress_link"):
         Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SyncSet((0, 1), (1, 2)), [ClockSync(0, 1)] * 4, origin=0.0)
     params, raw, rec, advice, priv = _certified_window(words, run, salts[0], sid, prover)
-    ledger = PS.WindowOpens()
+    ledger = PS.Registrations()
 
     def challenger(name: str, certifier=client, prover=prover, p=params, entropy=None) -> SC.Challenger:
         live, ck = _live(tmp_path / f"{name}.json", entropy)
         return SC.Challenger(p, live, clock=lambda: 0.0, record=OR.Record(lean=False), certifier=certifier,
                              prover=prover, coin_record=tmp_path / f"{name}.json",
-                             deployment=_deployment(certifier, ck), opens=ledger)
+                             deployment=_deployment(certifier, ck), registrations=ledger)
 
     def refused(ch: SC.Challenger, code: str, r=rec, m=raw, **kw) -> str:
         with pytest.raises(S.Refused) as e:
@@ -944,6 +944,7 @@ def test_a_window_whose_pass_coin_is_foreign_early_mislabelled_or_tampered_is_re
         with pytest.raises(S.Refused) as e:
             ch.register("x", brec, manifest=_raw({**bman, "schema": schema}), recorded=True)
         assert why in e.value.verdict.detail[code]
+    assert (CC.MANIFEST_SCHEMA, CC.MANIFEST_RECORDED) == (PD.MANIFEST_SCHEMA, PD.MANIFEST_SCHEMA_RECORDED)
     ch = _challenger(bparams, coins=_coins())
     ch.register("honest", brec, manifest=braw, recorded=True)
     assert ch.passes == {"honest": "recorded beacon"} and len(ch.select("honest").units) == SC.law_of(bparams, bpublic["level"])["k"]

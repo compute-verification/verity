@@ -129,6 +129,19 @@ noncomputable def rows (enc : BitVal rd.W → List UInt8) (enc_inj : Function.In
     rw [hv]
     simp only [regLeaf, show ¬ rd.isRow (rd.pos g) from hrow, ↓reduceIte]
 
+/-- The layout's commit string of a wire is the readers'. -/
+theorem layout_pos (encO : BitVal rd.W → List UInt8) (hcopy : rd.Copies place) (g : Fin C.N) :
+    (rd.layout place encO hcopy).pos g = rd.pos g := rfl
+
+/-- The layout's registered leaf is the readers'. -/
+theorem layout_regLeaf (encO : BitVal rd.W → List UInt8) (hcopy : rd.Copies place) (R : Reg) (q : rd.Pos) :
+    (rd.layout place encO hcopy).regLeaf R q = rd.regLeaf encO R q := rfl
+
+/-- **The value a message holds at a commit string** is the readers' `valAt`, at the commit string's width. -/
+theorem layout_row (encO : BitVal rd.W → List UInt8) (hcopy : rd.Copies place) (S : Finset (Fin n)) (R : Reg)
+    (u : Fin n) (M : Binding.Msg plan tab S R u) (q : rd.Pos) :
+    (rd.layout place encO hcopy).row S R u M q = (widthOf rd.W (rd.rowBits q), rd.valAt S R u M q) := rfl
+
 end Readers
 
 end FlockSoundness.Discharge.Layout

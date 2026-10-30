@@ -39,6 +39,15 @@ theorem first_identity_nonzero_sum :
 /-- One lane `x`, the others `+0`. -/
 def lane0 (x : Code) : Fin 32 → Code := lanes x 0 0
 
+/-- A group `x0, x1, x2` in which `x1` is not an identity but skipping it leaves the group's word unchanged: the
+words are `1`, `1.5`, `+0`, and with `x1` skipped `1`, `+0` (`x2`'s products `±448²` set the grid to `2^3`). -/
+theorem skippable_not_identity :
+    hopperStep 0 (lane0 0x38) (lane0 0x38) = 0x3F800000 ∧
+      hopperStep 0x3F800000 (lane0 0x30) (lane0 0x38) = 0x3FC00000 ∧
+      hopperStep 0x3FC00000 (lanes 0x7E 0xFE 0) (lanes 0x7E 0x7E 0) = 0 ∧
+      hopperStep 0x3F800000 (lanes 0x7E 0xFE 0) (lanes 0x7E 0x7E 0) = 0 := by
+  decide +kernel
+
 /-! ## (b1) The first atom of a group -/
 
 /-- **(b1)** From `+0`, on finite codes, the atom is an identity exactly when the products truncated to the slice's
@@ -297,6 +306,35 @@ theorem abs_sub_truncTo_lt {g : ℚ} (hg : 0 < g) (y : ℚ) : |y - truncTo g y| 
     simp only [one_mul]
     rw [abs_lt]; constructor <;> linarith
 
+/-- Products whose truncations to `g` sum to zero have an exact sum below `32·g`. -/
+theorem abs_sum_lt_of_truncTo {g : ℚ} (hg : 0 < g) (p : Fin 32 → ℚ) (h : ∑ l, truncTo g (p l) = 0) :
+    |∑ l, p l| < 32 * g := by
+  have e : ∑ l, p l = ∑ l, (p l - truncTo g (p l)) := by rw [Finset.sum_sub_distrib, h, sub_zero]
+  rw [e]
+  calc |∑ l, (p l - truncTo g (p l))| ≤ ∑ l, |p l - truncTo g (p l)| := Finset.abs_sum_le_sum_abs _ _
+    _ < ∑ _l : Fin 32, g :=
+        Finset.sum_lt_sum_of_nonempty Finset.univ_nonempty fun l _ => abs_sub_truncTo_lt hg _
+    _ = 32 * g := by simp
+
+/-- With no product above the accumulator's exponent, the step's grid is the accumulator's own 14-bit cell. -/
+theorem stepExp_eq {tc : Term} (a b : Fin 32 → Code) (hm : tc.mag ≠ 0) (he : -139 ≤ tc.exp)
+    (h : ∀ l, (product (a l) (b l)).mag ≠ 0 → (product (a l) (b l)).exp ≤ tc.exp) : stepExp tc a b = tc.exp := by
+  refine le_antisymm (maxExp_le _ _ _ he fun t ht htm => ?_) (le_maxExp _ _ tc List.mem_cons_self hm)
+  rcases List.mem_cons.1 ht with rfl | ht
+  · exact le_rfl
+  · obtain ⟨l, rfl⟩ := List.mem_ofFn.1 ht
+    exact h l htm
+
+/-- **(a), the cell**: under `identity_needs_domination`'s hypotheses the exact product sum is below `32·g`, and
+`g` is at least the accumulator's cell `2^(e_c − 13)`, with equality when no product exponent exceeds `e_c`. -/
+theorem identity_cell {w : Nat} {tc : Term} (hw : fp32Value w = .fin tc) (hm : 2 ^ 23 ≤ tc.mag)
+    (he : -113 ≤ tc.exp) (a b : Fin 32 → Code) (ha : ∀ l, (a l).isNaN = false) (hb : ∀ l, (b l).isNaN = false)
+    (hid : hopperStep w a b = w) :
+    |∑ l, val (a l) * val (b l)| < 32 * 2 ^ (stepExp tc a b - 13) ∧ tc.exp ≤ stepExp tc a b ∧
+      ((∀ l, (product (a l) (b l)).mag ≠ 0 → (product (a l) (b l)).exp ≤ tc.exp) → stepExp tc a b = tc.exp) :=
+  ⟨abs_sum_lt_of_truncTo (two_zpow_pos _) _ (identity_needs_domination hw hm he a b ha hb hid).2,
+    le_maxExp _ _ tc List.mem_cons_self (by omega), stepExp_eq a b (by omega) (by omega)⟩
+
 /-! ## (c) Promotion -/
 
 /-- `rn` writes a representable value. -/
@@ -435,6 +473,10 @@ theorem rnAdd_identity {t x : ℚ} (hr : Representable t) (h0 : t ≠ 0) (h : rn
     by_contra hc
     exact moves_tie_pos hr hp he (fun ⟨m, hm⟩ => hc ⟨m, by rw [abs_of_pos hp]; exact hm⟩) h
 
+/-- **(c) at a zero total**: the promotion of a finite group word `x` into `0` is an identity only if `x = 0`. -/
+theorem rnAdd_zero_identity {x : ℚ} (hx : Representable x) : rnAdd 0 x = 0 ↔ x = 0 := by
+  rw [rnAdd, zero_add, rn_exact hx]
+
 /-- (c) on `promote`: a promotion identity on a nonzero total pins the group word below half an ulp of the total. -/
 theorem promote_identity {t : ℚ} {w : Nat} {x : ℚ} (hr : Representable t) (h0 : t ≠ 0) (hw : wordQ w = some x)
     (h : promote (some t) w = some t) :
@@ -520,6 +562,30 @@ def absorbedAt (g : List AtomIn) (t : Option ℚ) (ws : List Nat) (j : Nat) : Bo
 def absorbed (gs : List (List AtomIn)) (i j : Nat) : Bool :=
   absorbedAt (gs.getD i []) (inTotal gs i) (laterWords gs i) j
 
+/-- `F`'s flags in group `i`: every atom if the group's promotion is an identity, else its identity atoms. -/
+def frozenFlags (gs : List (List AtomIn)) (i : Nat) : List Bool :=
+  if (promFlags gs).getD i false then List.replicate (gs.getD i []).length true else idFlags (gs.getD i [])
+
+/-- The absorbed flags of group `i`. -/
+def absorbedFlags (gs : List (List AtomIn)) (i : Nat) : List Bool :=
+  (List.range (gs.getD i []).length).map (absorbed gs i)
+
+/-- **Debit (A)'s flags** of one output word, atom by atom: the joint flags of its groups of `G`. -/
+def flagsA (G : Nat) (atoms : List AtomIn) : List Bool :=
+  let gs := atoms.toChunks G
+  ((List.range gs.length).map (jointFlags gs)).flatten
+
+/-- **Debit (B)'s flags** of one output word, atom by atom: `F` or absorbed. -/
+def flagsB (G : Nat) (atoms : List AtomIn) : List Bool :=
+  let gs := atoms.toChunks G
+  ((List.range gs.length).map fun i => List.zipWith (· || ·) (frozenFlags gs i) (absorbedFlags gs i)).flatten
+
+/-- Debit (A) of one output word, in atoms. -/
+def debitA (G : Nat) (atoms : List AtomIn) : Nat := (flagsA G atoms).count true
+
+/-- Debit (B) of one output word, in atoms. -/
+def debitB (G : Nat) (atoms : List AtomIn) : Nat := (flagsB G atoms).count true
+
 theorem total_eq_foldl (gs : List (List AtomIn)) : total gs = gs.foldl promoteGroup (some 0) := by
   rw [total, List.foldl_map]; rfl
 
@@ -527,9 +593,49 @@ theorem total_eq_foldl (gs : List (List AtomIn)) : total gs = gs.foldl promoteGr
 def totalSkip (gs : List (List AtomIn)) (am : List (List Bool)) (gm : List Bool) : Option ℚ :=
   foldMask (fun t p => promote t (foldMask step 0 p.1 p.2)) (some 0) (gs.zip am) gm
 
+theorem totalSkip_aux (t : Option ℚ) (gs : List (List AtomIn)) (am : List (List Bool)) (gm : List Bool)
+    (ha : List.Forall₂ (fun m g => SubMask m (idFlags g)) am gs) (hg : SubMask gm (fixFlags promoteGroup t gs)) :
+    foldMask (fun t p => promote t (foldMask step 0 p.1 p.2)) t (gs.zip am) gm = gs.foldl promoteGroup t := by
+  induction gs generalizing t am gm with
+  | nil => cases ha; cases hg; rfl
+  | cons g gs ih =>
+    cases ha with
+    | cons hm ha =>
+      rename_i m am
+      cases hg with
+      | cons hs hg =>
+        rename_i s gm
+        rw [List.zip_cons_cons, foldMask, List.foldl_cons]
+        have hw : foldMask step 0 g m = groupWord g := foldMask_fix step 0 g m hm
+        have : (if s then t else promote t (foldMask step 0 (g, m).1 (g, m).2)) = promoteGroup t g := by
+          rw [hw]
+          cases s
+          · rfl
+          · rw [ite_eq_left rfl]; exact (of_decide_eq_true (hs rfl)).symm
+        rw [this]
+        exact ih _ _ _ ha hg
+
+/-- **(d) The frozen atoms are jointly skippable**: skipping, in place, any set of identity atoms and any set of
+groups whose promotion is an identity (with their atoms) leaves the total unchanged. -/
+theorem totalSkip_eq (gs : List (List AtomIn)) (am : List (List Bool)) (gm : List Bool)
+    (ha : List.Forall₂ (fun m g => SubMask m (idFlags g)) am gs) (hg : SubMask gm (promFlags gs)) :
+    totalSkip gs am gm = total gs := by
+  rw [total_eq_foldl]; exact totalSkip_aux _ gs am gm ha hg
+
 /-- The chain with atoms and groups skipped in place, its groups those of `chain G`. -/
 def chainSkip (G : Nat) (atoms : List AtomIn) (am : List (List Bool)) (gm : List Bool) : Option ℚ :=
   totalSkip (atoms.toChunks G) am gm
+
+/-- **(d) for the chain**: skipping all of `F` at once, every identity atom and every promotion-identity group,
+leaves the chain's output unchanged. -/
+theorem chainSkip_frozen (G : Nat) (atoms : List AtomIn) :
+    chainSkip G atoms ((atoms.toChunks G).map idFlags) (promFlags (atoms.toChunks G)) = chain G atoms := by
+  apply totalSkip_eq
+  · generalize atoms.toChunks G = gs
+    induction gs with
+    | nil => exact List.Forall₂.nil
+    | cons g gs ih => exact List.Forall₂.cons (subMask_refl _) ih
+  · exact subMask_refl _
 
 /-! ## (b) Confinement: the running words of a group -/
 
@@ -661,8 +767,62 @@ theorem identity_confined (g : List AtomIn) (hg : g.length ≤ 7) (hfin : ∀ x 
 
 /-! ## The count -/
 
+/-- A group's first-atom identity (from `+0`: a zero event, `preSum = 0` by `hopperStep_zero_iff`), as `0` or `1`. -/
+def zeroFirst (g : List AtomIn) : Nat := if (idFlags g).head? = some true then 1 else 0
+
 /-- A group's domination event: some atom after the first is an identity, as `0` or `1`. -/
 def event (g : List AtomIn) : Nat := if (idFlags g).tail.any id then 1 else 0
+
+theorem count_le_zeroFirst_event (g : List AtomIn) :
+    (idFlags g).count true ≤ zeroFirst g + (g.length - 1) * event g := by
+  unfold zeroFirst event
+  have hl := length_fixFlags step 0 g
+  rw [← idFlags] at hl
+  generalize idFlags g = fs at hl ⊢
+  cases fs with
+  | nil => simp
+  | cons f fs =>
+    simp only [List.head?_cons, List.tail_cons, List.length_cons] at hl ⊢
+    have hc : fs.count true ≤ fs.length := List.count_le_length
+    rw [List.count_cons]
+    by_cases ha : fs.any id = true
+    · cases f <;> simp [ha] <;> omega
+    · have : fs.count true = 0 := by
+        rw [List.count_eq_zero]
+        intro hm
+        exact ha (List.any_eq_true.2 ⟨true, hm, rfl⟩)
+      cases f <;> simp [ha, this]
+
+/-- **(d) The count**: `e_F ≤ zeroFirst + (G − 1)·events + G·promotionIdentities`, summed over the groups, for groups
+of at most `G` atoms (the chunks of `toChunks G`). -/
+theorem eF_le (G : Nat) (gs : List (List AtomIn)) (hG : ∀ g ∈ gs, g.length ≤ G) :
+    eF gs ≤ (gs.map zeroFirst).sum + (G - 1) * (gs.map event).sum + G * (promFlags gs).count true := by
+  unfold eF
+  generalize promFlags gs = ps
+  induction gs generalizing ps with
+  | nil => simp
+  | cons g gs ih =>
+    cases ps with
+    | nil =>
+      simp only [List.zip_nil_left, List.foldr_nil]
+      exact Nat.zero_le _
+    | cons p ps =>
+      have ih' := ih (fun g' hg' => hG g' (List.mem_cons_of_mem _ hg')) ps
+      have hg := hG g List.mem_cons_self
+      have hc := count_le_zero_event_le G g hg
+      have hf : frozenIn p g ≤ zeroFirst g + (G - 1) * event g + G * (if p = true then 1 else 0) := by
+        cases p
+        · simpa [frozenIn] using hc
+        · simp [frozenIn]; omega
+      have e : List.count true (p :: ps) = List.count true ps + (if p = true then 1 else 0) := by
+        cases p <;> simp
+      simp only [List.zip_cons_cons, List.foldr_cons, List.map_cons, List.sum_cons]
+      rw [e, mul_add, mul_add]
+      linarith
+where
+  count_le_zero_event_le (G : Nat) (g : List AtomIn) (hg : g.length ≤ G) :
+      (idFlags g).count true ≤ zeroFirst g + (G - 1) * event g :=
+    le_trans (count_le_zeroFirst_event g) (Nat.add_le_add_left (Nat.mul_le_mul_right _ (by omega)) _)
 
 
 /-! ## Skipping atoms of one group -/
@@ -678,6 +838,19 @@ theorem mem_allMasks (m : List Bool) : m ∈ allMasks m.length := by
     rw [List.length_cons, allMasks, List.mem_flatMap]
     exact ⟨m, ih, by cases b <;> simp⟩
 
+theorem oneMask_getD (n j : Nat) (hj : j < n) : (oneMask n j).getD j false = true := by
+  induction n generalizing j with
+  | zero => omega
+  | succ n ih =>
+    cases j with
+    | zero => rfl
+    | succ j => rw [oneMask, List.getD_cons_succ]; exact ih j (by omega)
+
+theorem length_oneMask (n j : Nat) : (oneMask n j).length = n := by
+  induction n generalizing j with
+  | zero => rfl
+  | succ n ih => cases j <;> simp [oneMask, ih]
+
 theorem foldMask_nil (f : β → α → β) (w : β) (xs : List α) : foldMask f w xs [] = xs.foldl f w := by
   cases xs <;> rfl
 
@@ -688,6 +861,12 @@ theorem foldMask_replicate (f : β → α → β) (w : β) (xs : List α) :
   | cons x xs ih =>
     rw [List.length_cons, List.replicate_succ, foldMask, List.foldl_cons]
     exact ih _
+
+theorem foldMask_all (f : β → α → β) (w : β) (xs : List α) :
+    foldMask f w xs (List.replicate xs.length true) = w := by
+  induction xs with
+  | nil => rfl
+  | cons x xs ih => rw [List.length_cons, List.replicate_succ, foldMask]; exact ih
 
 theorem foldMask_oneMask (f : β → α → β) (w : β) (xs : List α) (j : Nat) (hj : j < xs.length) :
     foldMask f w xs (oneMask xs.length j) = (xs.drop (j + 1)).foldl f ((xs.take j).foldl f w) := by
@@ -708,6 +887,22 @@ theorem foldl_split (f : β → α → β) (xs : List α) (i : Nat) (hi : i < xs
     xs.foldl f w = (xs.drop (i + 1)).foldl f (f ((xs.take i).foldl f w) xs[i]) := by
   conv_lhs => rw [← List.take_append_drop i xs, List.foldl_append, List.drop_eq_getElem_cons hi, List.foldl_cons]
 
+theorem subMask_replicate (fs : List Bool) : SubMask (List.replicate fs.length false) fs := by
+  induction fs with
+  | nil => exact List.Forall₂.nil
+  | cons f fs ih => exact List.Forall₂.cons (fun h => absurd h Bool.false_ne_true) ih
+
+theorem subMask_oneMask (fs : List Bool) (j : Nat) (hj : ∀ h : j < fs.length, fs[j] = true) :
+    SubMask (oneMask fs.length j) fs := by
+  induction fs generalizing j with
+  | nil => exact List.Forall₂.nil
+  | cons f fs ih =>
+    cases j with
+    | zero => exact List.Forall₂.cons (fun _ => hj (by simp)) (subMask_replicate fs)
+    | succ j =>
+      exact List.Forall₂.cons (fun h => absurd h Bool.false_ne_true)
+        (ih j fun h => hj (Nat.succ_lt_succ h))
+
 theorem subMask_of_getElem (ms fs : List Bool) (hl : ms.length = fs.length)
     (h : ∀ j (h1 : j < ms.length) (h2 : j < fs.length), ms[j] = true → fs[j] = true) : SubMask ms fs := by
   induction ms generalizing fs with
@@ -721,6 +916,18 @@ theorem subMask_of_getElem (ms fs : List Bool) (hl : ms.length = fs.length)
     | cons f fs =>
       exact List.Forall₂.cons (h 0 (by simp) (by simp))
         (ih fs (by simpa using hl) fun j h1 h2 => h (j + 1) (by simpa using h1) (by simpa using h2))
+
+/-- Two runs of `f` over `xs` from different values that end equal merge at a first step `m`. -/
+theorem foldl_merge (f : β → α → β) (xs : List α) (u u' : β) (hne : u ≠ u') (h : xs.foldl f u = xs.foldl f u') :
+    ∃ m, ∃ hm : m < xs.length, (xs.take m).foldl f u ≠ (xs.take m).foldl f u' ∧
+      f ((xs.take m).foldl f u) xs[m] = f ((xs.take m).foldl f u') xs[m] := by
+  induction xs generalizing u u' with
+  | nil => exact absurd h hne
+  | cons x xs ih =>
+    by_cases hx : f u x = f u' x
+    · exact ⟨0, by simp, hne, hx⟩
+    · obtain ⟨m, hm, h1, h2⟩ := ih _ _ hx h
+      exact ⟨m + 1, by simpa using hm, h1, h2⟩
 
 end Masks
 
@@ -792,10 +999,99 @@ theorem skipOne_iff (gs : List (List AtomIn)) (i j : Nat) (hi : i < gs.length) :
     · rw [h]
     · exact h
 
+/-- **Completeness** (the direction soundness of a debit needs), on a chain: an atom whose skip alone leaves the
+chain's output unchanged is absorbed. -/
+theorem absorbed_complete (G : Nat) (atoms : List AtomIn) (i j : Nat) (hi : i < (atoms.toChunks G).length)
+    (h : skipOne (atoms.toChunks G) i j = chain G atoms) : absorbed (atoms.toChunks G) i j = true :=
+  (skipOne_iff _ i j hi).1 h
+
+/-- The identity mechanism: an identity atom's skip leaves its group's word unchanged. -/
+theorem wordIn_of_identity (g : List AtomIn) (j : Nat) (hj : j < g.length)
+    (hid : (idFlags g)[j]'(by rw [idFlags, length_fixFlags]; exact hj) = true) :
+    wordIn g (oneMask g.length j) = groupWord g := by
+  have hl : (fixFlags step 0 g).length = g.length := length_fixFlags step 0 g
+  unfold wordIn
+  rw [foldMask_fix step 0 g _ (by rw [← hl]; exact subMask_oneMask _ j fun _ => hid)]
+  rfl
+
+theorem absorbed_of_identity (gs : List (List AtomIn)) (i j : Nat) (hi : i < gs.length) (hj : j < gs[i].length)
+    (hid : (idFlags gs[i])[j]'(by rw [idFlags, length_fixFlags]; exact hj) = true) : absorbed gs i j = true := by
+  rw [absorbed, absorbedAt, List.getD_eq_getElem _ _ hi, wordIn_of_identity _ j hj hid]
+  simp
+
+/-- **The group mechanism**: when atom `j` is not an identity but its skip alone leaves the group's word unchanged, a
+later atom of the group (`j + 1 + m`) maps the two running words, with atom `j` run and with it skipped, which differ,
+to one word (`skippable_not_identity` is an instance: `x2`'s products `±448²` put both on the grid's `0`). -/
+theorem group_merge (g : List AtomIn) (j : Nat) (hj : j < g.length) (hne : step (inWord g j) g[j] ≠ inWord g j)
+    (h : wordIn g (oneMask g.length j) = groupWord g) :
+    ∃ m, ∃ hm : m < (g.drop (j + 1)).length,
+      ((g.drop (j + 1)).take m).foldl step (step (inWord g j) g[j]) ≠
+        ((g.drop (j + 1)).take m).foldl step (inWord g j) ∧
+      step (((g.drop (j + 1)).take m).foldl step (step (inWord g j) g[j])) (g.drop (j + 1))[m] =
+        step (((g.drop (j + 1)).take m).foldl step (inWord g j)) (g.drop (j + 1))[m] := by
+  have h1 : wordIn g (oneMask g.length j) = (g.drop (j + 1)).foldl step (inWord g j) :=
+    foldMask_oneMask step 0 g j hj
+  have h2 : groupWord g = (g.drop (j + 1)).foldl step (step (inWord g j) g[j]) := foldl_split step g j hj 0
+  rw [h1, h2] at h
+  exact foldl_merge step _ _ _ hne h.symm
+
+/-- **The promotion mechanism**: two group words whose promotions into a total `t` round to one total lie, with `t`,
+within half an ulp of it each: `|x − x'| ≤ ulp(t + x)/2 + ulp(t + x')/2`. -/
+theorem promote_absorbs {t x x' : ℚ} (h : rnAdd t x = rnAdd t x') :
+    |x - x'| ≤ ulp (t + x) / 2 + ulp (t + x') / 2 := by
+  have e1 := abs_le.1 (rn_err (t + x))
+  have e2 := abs_le.1 (rn_err (t + x'))
+  unfold rnAdd at h
+  rw [h] at e1
+  rw [abs_le]; constructor <;> linarith [e1.1, e1.2, e2.1, e2.2]
+
+/-- **The later-promotion mechanism**: when the promoted totals differ but the later promotions end equal, a later
+group's promotion (`m`) rounds the two running totals, which differ, into one. -/
+theorem later_merge (ws : List Nat) (t t' : Option ℚ) (hne : t ≠ t') (h : ws.foldl promote t = ws.foldl promote t') :
+    ∃ m, ∃ hm : m < ws.length, (ws.take m).foldl promote t ≠ (ws.take m).foldl promote t' ∧
+      promote ((ws.take m).foldl promote t) ws[m] = promote ((ws.take m).foldl promote t') ws[m] :=
+  foldl_merge promote ws t t' hne h
+
 theorem foldl_promote_none (ws : List Nat) : ws.foldl promote none = none := by
   induction ws with
   | nil => rfl
   | cons w ws ih => exact ih
+
+/-- The later promotions from two finite totals: both finite or both not (a word decides it), and ordered as the totals
+are (`rn` is monotone). -/
+theorem foldl_promote_mono (ws : List Nat) {t t' : ℚ} (h : t ≤ t') :
+    ((ws.foldl promote (some t)).isSome = (ws.foldl promote (some t')).isSome) ∧
+      ∀ a a', ws.foldl promote (some t) = some a → ws.foldl promote (some t') = some a' → a ≤ a' := by
+  induction ws generalizing t t' with
+  | nil =>
+    refine ⟨rfl, fun a a' ha ha' => ?_⟩
+    cases ha; cases ha'; exact h
+  | cons w ws ih =>
+    simp only [List.foldl_cons, promote]
+    cases hw : wordQ w with
+    | none => simp only [foldl_promote_none]; exact ⟨by simp, fun a a' ha => by cases ha⟩
+    | some x => exact ih (rn_mono (by linarith : t + x ≤ t' + x))
+
+/-- **The later promotions merge on an interval**: if totals `t ≤ t''` end at the same output, so does every total
+between them. The totals before a group that the later promotions carry to the output form an interval of `ℚ`. -/
+theorem later_interval (ws : List Nat) {t t' t'' : ℚ} (h1 : t ≤ t') (h2 : t' ≤ t'')
+    (h : ws.foldl promote (some t) = ws.foldl promote (some t'')) :
+    ws.foldl promote (some t') = ws.foldl promote (some t) := by
+  obtain ⟨s1, m1⟩ := foldl_promote_mono ws h1
+  obtain ⟨s2, m2⟩ := foldl_promote_mono ws h2
+  cases ha : ws.foldl promote (some t) with
+  | none =>
+    rw [ha] at s1; cases hb : ws.foldl promote (some t') with
+    | none => rfl
+    | some b => rw [hb] at s1; cases s1
+  | some a =>
+    rw [ha] at s1 h
+    cases hb : ws.foldl promote (some t') with
+    | none => rw [hb] at s1; cases s1
+    | some b =>
+      have e1 := m1 a b ha hb
+      have e2 := m2 b a hb h.symm
+      rw [le_antisymm e2 e1]
 
 /-! ## Joint skips -/
 
@@ -820,8 +1116,28 @@ theorem joint_complete (gs : List (List AtomIn)) (i : Nat) (hi : i < gs.length) 
   intro j h1 h2 hmj
   exact jointFlags_getElem gs i hi m hm h j h2 (by rw [List.getD_eq_getElem _ _ h1]; exact hmj)
 
+/-- Absorbed atoms are jointly flagged. -/
+theorem joint_of_absorbed (gs : List (List AtomIn)) (i j : Nat) (hi : i < gs.length)
+    (hj : j < (jointFlags gs i).length) (h : absorbed gs i j = true) : (jointFlags gs i)[j] = true := by
+  have hj' : j < gs[i].length := by rwa [length_jointFlags gs i hi] at hj
+  have hs := (skipOne_iff gs i j hi).2 h
+  rw [skipOne, List.getD_eq_getElem _ _ hi] at hs
+  exact jointFlags_getElem gs i hi _ (length_oneMask _ _) hs j hj (oneMask_getD _ _ hj')
+
 theorem wordQ_zero : wordQ 0 = some 0 := by
   simp [wordQ, fp32Value_zero, Value.finite?, Term.value, Term.zero]
+
+theorem promote_rep {t : Option ℚ} {w : Nat} {q : ℚ} (h : promote t w = some q) : Representable q := by
+  unfold promote at h
+  split at h
+  · cases h; exact rn_representable _
+  · cases h
+
+theorem foldl_promoteGroup_rep (gs : List (List AtomIn)) (t : Option ℚ) (ht : ∀ q, t = some q → Representable q) :
+    ∀ q, gs.foldl promoteGroup t = some q → Representable q := by
+  induction gs generalizing t with
+  | nil => exact ht
+  | cons g gs ih => exact ih _ fun q hq => promote_rep hq
 
 theorem promote_zero {t : Option ℚ} (ht : ∀ q, t = some q → Representable q) : promote t 0 = t := by
   cases t with
@@ -829,6 +1145,23 @@ theorem promote_zero {t : Option ℚ} (ht : ∀ q, t = some q → Representable 
   | some q =>
     simp only [promote, wordQ_zero, rnAdd, add_zero]
     rw [rn_exact (ht q rfl)]
+
+/-- **`F` is jointly flagged**: every atom of a group whose promotion is an identity is flagged (the whole group,
+skipped, promotes `+0`, which leaves the total unchanged). With `joint_of_absorbed` and `absorbed_of_identity`,
+`F ∪ absorbed ⊆ joint`. -/
+theorem joint_of_promId (gs : List (List AtomIn)) (i : Nat) (hi : i < gs.length)
+    (hp : (promFlags gs)[i]'(by rw [promFlags, length_fixFlags]; exact hi) = true) (j : Nat)
+    (hj : j < (jointFlags gs i).length) : (jointFlags gs i)[j] = true := by
+  have hj' : j < gs[i].length := by rwa [length_jointFlags gs i hi] at hj
+  have hp' := (getElem_fixFlags promoteGroup (some 0) gs i hi (by rw [length_fixFlags]; exact hi)).symm.trans hp
+  rw [decide_eq_true_iff] at hp'
+  have hrep := foldl_promoteGroup_rep (gs.take i) (some 0) (fun q hq => by
+    cases hq; exact ⟨0, 0, by norm_num, by simp⟩)
+  have hs : skipIn gs i (List.replicate gs[i].length true) = total gs := by
+    rw [skipIn_eq gs i _ hi, total_split gs i hi, wordIn, foldMask_all]
+    rw [inTotal, promote_zero hrep]
+    exact congrArg (fun t => (laterWords gs i).foldl promote t) hp'.symm
+  exact jointFlags_getElem gs i hi _ (by simp) hs j hj (by simp [List.getD_eq_getElem?_getD, hj'])
 
 /-! ## Completeness on a word: atom `t` is group `t / 4`'s atom `t % 4` -/
 
@@ -1045,6 +1378,62 @@ theorem joint_flagsComplete {m n k : ℕ} (Aq : Matrix (Fin m) (Fin k) Code) (Bq
 
 /-! ## The two debits: (B)'s flags are (A)'s -/
 
+theorem subMask_flatten (L M : List (List Bool)) (h : List.Forall₂ SubMask L M) : SubMask L.flatten M.flatten := by
+  induction h with
+  | nil => exact List.Forall₂.nil
+  | cons h _ ih => exact List.rel_append h ih
+
+theorem length_frozenFlags (gs : List (List AtomIn)) (i : Nat) (hi : i < gs.length) :
+    (frozenFlags gs i).length = gs[i].length := by
+  rw [frozenFlags, List.getD_eq_getElem _ _ hi]
+  split <;> simp [idFlags, length_fixFlags]
+
+theorem length_absorbedFlags (gs : List (List AtomIn)) (i : Nat) (hi : i < gs.length) :
+    (absorbedFlags gs i).length = gs[i].length := by
+  rw [absorbedFlags, List.getD_eq_getElem _ _ hi]; simp
+
+/-- In one group, `F` or absorbed is jointly flagged. -/
+theorem groupB_sub (gs : List (List AtomIn)) (i : Nat) (hi : i < gs.length) :
+    SubMask (List.zipWith (· || ·) (frozenFlags gs i) (absorbedFlags gs i)) (jointFlags gs i) := by
+  apply subMask_of_getElem _ _ (by
+    simp [length_frozenFlags gs i hi, length_absorbedFlags gs i hi, length_jointFlags gs i hi])
+  intro j h1 h2 hj
+  have hj' : j < gs[i].length := by rwa [length_jointFlags gs i hi] at h2
+  rw [List.getElem_zipWith, Bool.or_eq_true] at hj
+  rcases hj with hf | ha
+  · by_cases hp : (promFlags gs).getD i false = true
+    · have hl : i < (promFlags gs).length := by rw [promFlags, length_fixFlags]; exact hi
+      rw [List.getD_eq_getElem _ _ hl] at hp
+      exact joint_of_promId gs i hi hp j h2
+    · have e : frozenFlags gs i = idFlags gs[i] := by
+        simp only [frozenFlags, hp, List.getD_eq_getElem _ _ hi]; rfl
+      have hid := (List.getElem_of_eq e _).symm.trans hf
+      exact joint_of_absorbed gs i j hi h2 (absorbed_of_identity gs i j hi hj' hid)
+  · have e : absorbedFlags gs i = (List.range gs[i].length).map (absorbed gs i) := by
+      rw [absorbedFlags, List.getD_eq_getElem _ _ hi]
+    have ha' := (List.getElem_of_eq e _).symm.trans ha
+    simp only [List.getElem_map, List.getElem_range] at ha'
+    exact joint_of_absorbed gs i j hi h2 ha'
+
+/-- **(B) ⊆ (A)**: every atom debit (B) flags, debit (A) flags. -/
+theorem flagsB_sub_flagsA (G : Nat) (atoms : List AtomIn) : SubMask (flagsB G atoms) (flagsA G atoms) := by
+  unfold flagsB flagsA
+  apply subMask_flatten
+  rw [List.forall₂_map_left_iff, List.forall₂_map_right_iff, List.forall₂_same]
+  intro i hi
+  exact groupB_sub _ i (List.mem_range.1 hi)
+
+theorem count_le_of_subMask {ms fs : List Bool} (h : SubMask ms fs) : ms.count true ≤ fs.count true := by
+  induction h with
+  | nil => simp
+  | @cons m f ms' fs' hm _ ih =>
+    cases m
+    · cases f <;> simp only [List.count_cons] <;> simp <;> omega
+    · rw [hm rfl]; simp only [List.count_cons]; simp; omega
+
+theorem debitB_le_debitA (G : Nat) (atoms : List AtomIn) : debitB G atoms ≤ debitA G atoms :=
+  count_le_of_subMask (flagsB_sub_flagsA G atoms)
+
 /-! ## The linear replay: the later promotions by certificates -/
 
 /-- A certificate for the later promotions after one group: totals in `[lo, hi]` reach the output, and totals `≤ c`
@@ -1192,11 +1581,58 @@ theorem jointFlagsFast_eq (gs : List (List AtomIn)) (zs : List Cert) (i : Nat) (
     congr 1; funext j; congr 1; funext m; rw [keepsFast_eq _ _ _ _ _ hz]
   · rfl
 
+/-- Absorbed by the fast test. -/
+def absorbedFast (gs : List (List AtomIn)) (zs : List Cert) (i j : Nat) : Bool :=
+  if h : certChain ((gs.map groupWord).drop 1) zs (total gs) = true ∧ i < zs.length then
+    let g := gs.getD i []
+    decide (wordIn g (oneMask g.length j) = groupWord g) ||
+      decide (promote (inTotal gs i) (wordIn g (oneMask g.length j)) = promote (inTotal gs i) (groupWord g)) ||
+      keepsFast zs[i] g (inTotal gs i) (laterWords gs i) (oneMask g.length j)
+  else absorbed gs i j
+
+/-- **The linear replay computes `absorbed`**, for any certificates. -/
+theorem absorbedFast_eq (gs : List (List AtomIn)) (zs : List Cert) (i j : Nat) (hi : i < gs.length) :
+    absorbedFast gs zs i j = absorbed gs i j := by
+  unfold absorbedFast
+  split
+  · rename_i h
+    have hz := cert_group gs zs i hi h.1 h.2
+    simp only [List.getD_eq_getElem _ _ hi]
+    rw [keepsFast_eq _ _ _ _ _ hz, absorbed, absorbedAt, List.getD_eq_getElem _ _ hi]
+    rfl
+  · rfl
+
 /-! ## Examples: the mechanisms outside the group, and joint skips -/
 
+/-- A zero atom; atoms `+1`, `−1` and `1/16` (lane 0, the other lanes `+0`); and `32·448²` (every lane `448·448`). -/
+def zeroAtom : AtomIn := (fun _ => 0, fun _ => 0)
 def plusOne : AtomIn := (lane0 0x38, lane0 0x38)
 def minusOne : AtomIn := (lane0 0xB8, lane0 0x38)
 def sixteenth : AtomIn := (lane0 0x28, lane0 0x28)
+def bigAtom : AtomIn := (fun _ => 0x7E, fun _ => 0x7E)
+
+/-- The chain `1/16, 0, 0, 0 | 32·448²`. -/
+def laterEx : List AtomIn := [sixteenth, zeroAtom, zeroAtom, zeroAtom, bigAtom]
+
+/-- **No flag local to the group and its promotion is complete**: skipping `laterEx`'s first atom changes its group's
+word (`1/16` to `+0`) and its promoted total (`1/16` to `0`), yet not the output, because the next group's
+promotion rounds `1/16 + 6422528` and `6422528` to one total. -/
+theorem skipOne_later_promotion :
+    skipOne (laterEx.toChunks 4) 0 0 = chain 4 laterEx ∧
+      wordIn ((laterEx.toChunks 4).getD 0 []) (oneMask 4 0) ≠ groupWord ((laterEx.toChunks 4).getD 0 []) ∧
+      promote (some 0) (wordIn ((laterEx.toChunks 4).getD 0 []) (oneMask 4 0)) ≠
+        promote (some 0) (groupWord ((laterEx.toChunks 4).getD 0 [])) := by
+  decide +kernel
+
+/-- The group `+1, −1, +1, 0` (words `1, 0, 1, 1`). -/
+def inGroupEx : List (List AtomIn) := [[plusOne, minusOne, plusOne, zeroAtom]]
+
+/-- **Joint skips inside a group go beyond the individual ones**: skipping `inGroupEx`'s first two atoms together
+leaves the output unchanged, while skipping either alone does not; the joint flags mark all four atoms. -/
+theorem joint_in_group :
+    skipIn inGroupEx 0 [true, true, false, false] = total inGroupEx ∧ absorbed inGroupEx 0 0 = false ∧
+      absorbed inGroupEx 0 1 = false ∧ jointFlags inGroupEx 0 = [true, true, true, true] := by
+  decide +kernel
 
 /-- The chain `+1 ×4 | −1 ×4`, output `0`. -/
 def crossEx : List AtomIn := [plusOne, plusOne, plusOne, plusOne, minusOne, minusOne, minusOne, minusOne]
@@ -1210,6 +1646,24 @@ theorem joint_cross_group :
       jointFlags (crossEx.toChunks 4) 1 = [false, false, false, false] ∧ eF (crossEx.toChunks 4) = 0 := by
   decide +kernel
 
+/-- The debits on the examples: `crossEx` is debited nothing; `laterEx`'s first group is debited whole (its zero atoms
+are identities, and its `1/16` is absorbed by the next promotion), its `32·448²` not. -/
+theorem debit_examples :
+    debitA 4 crossEx = 0 ∧ debitB 4 crossEx = 0 ∧ debitA 4 laterEx = 4 ∧
+      flagsB 4 laterEx = [true, true, true, true, false] := by
+  decide +kernel
+
+/-- A one-word unit, `k = 64`: `A′`'s first 32 entries are `+0` (atom 0 is an identity, flagged), the rest `1`. -/
+def unitA : Matrix (Fin 1) (Fin 64) Code := fun _ l => if l.val < 32 then 0 else 0x38
 def unitB : Matrix (Fin 1) (Fin 64) Code := fun _ _ => 0x38
+
+/-- **The unit's debits on `unitA`**: `needed` reads atom `l / 32`, so the elements of the flagged atom are not needed
+and the others are; the chain debit is one atom at `c = 32`, the word's debit (A). -/
+theorem unit_examples :
+    ¬needed (unitFlags unitA unitB) 0 (0 : Fin 64) ∧ ¬needed (unitFlags unitA unitB) 0 (31 : Fin 64) ∧
+      needed (unitFlags unitA unitB) 0 (32 : Fin 64) ∧ needed (unitFlags unitA unitB) 0 (63 : Fin 64) ∧
+      chainDebit 64 32 (unitFlags unitA unitB) = 32 * debitA 4 (rowAtoms (unitA 0) (unitB 0)) ∧
+      debitA 4 (rowAtoms (unitA 0) (unitB 0)) = 1 := by
+  decide +kernel
 
 end Pouw.PearlC.Freeze

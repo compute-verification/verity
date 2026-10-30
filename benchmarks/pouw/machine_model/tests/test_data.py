@@ -4,7 +4,6 @@ from __future__ import annotations
 import csv
 import json
 import re
-import tomllib
 
 import pytest
 
@@ -14,25 +13,7 @@ from verity_machine_model.model import (CLAIMS, COPIES, DATA, DEVICES, STATUSES,
 
 M = model()
 ROWS = rows()
-CITE = re.compile(r"(r\d{8}-\d{6}-[0-9a-f]{4}|note:\d{8}T\d{4}Z-[a-z0-9-]+|art:[0-9a-f]{64})")
-PROSE_CITE = re.compile(r"@([a-z0-9][a-z0-9-]*[a-z0-9])")
-
-
-def _strings(o):
-    if isinstance(o, dict):
-        for v in o.values():
-            yield from _strings(v)
-    elif isinstance(o, list):
-        for v in o:
-            yield from _strings(v)
-    elif isinstance(o, str):
-        yield o
-
-
-def prose_cites() -> dict[str, set[str]]:
-    """Each TOML file of data/ and the device directories, and the @NAMEs its strings cite."""
-    return {str(p.relative_to(DATA)): {m for s in _strings(tomllib.loads(p.read_text())) for m in PROSE_CITE.findall(s)}
-            for p in sorted(DATA.rglob("*.toml"))}
+CITE = re.compile(r"(r\d{8}-\d{6}-[0-9a-f]{4}|note:\d{8}T\d{4}Z-[a-z0-9-]+)")
 
 
 def test_epochs_are_vectors():
@@ -48,20 +29,16 @@ def test_rows_are_well_formed():
     assert all(r.runs and all(CITE.fullmatch(x) for x in r.runs) for r in ROWS.values())
 
 
-def test_every_citation_is_a_note_or_run_record_some_line_cites():
-    """data/citations.toml names notes and run records, each cited as @NAME by a census or rows.csv line's runs or by a
-    TOML string in data/ or a device directory; every @NAME a TOML string cites is one of them."""
+def test_every_citation_is_a_note_some_line_cites():
+    """data/citations.toml names notes, each cited as @NAME by a census or rows.csv line in data/ or a device directory,
+    and no name is also a run list of census/runs.toml."""
     names = citations()
-    assert names and all(CITE.fullmatch(v) and v.startswith(("note:", "art:")) for v in names.values())
+    assert names and all(CITE.fullmatch(v) and v.startswith("note:") for v in names.values())
     used = set()
     for p in [*DATA.glob("*.csv"), *DATA.glob("census/*.csv"), *DEVICES.glob("sm_*/*.csv"),
               *DEVICES.glob("sm_*/census/*.csv")]:
         with open(p, newline="") as f:
             used |= {c[1:] for d in csv.DictReader(f) for c in d.get("runs", "").split() if c.startswith("@")}
-    prose = prose_cites()
-    unknown = {p: sorted(c - set(names)) for p, c in prose.items() if c - set(names)}
-    assert not unknown, f"cite a run record or note as @NAME only once data/citations.toml names it: {unknown}"
-    used |= set().union(*prose.values())
     assert set(names) <= used, f"citations.toml: {sorted(set(names) - used)} cited by no line"
 
 
@@ -252,8 +229,8 @@ def test_sm89_census_is_well_formed():
                          ids=lambda p: p.name)
 def test_datasheet_vector(d):
     """A device's DS-NN reads its datasheet rows, and where it has one DS_uniform, the measured UP line exactly (no
-    document states the uniform datapath's rate); every kind is on DS_issue at one SMSP-cycle, and no
-    data-sheet line prices a kind above what its measured rate alone does by more than the 2% margin (a peak the chip
+    document states the uniform datapath's rate: RT-MACHINE-4); every kind is on DS_issue at one SMSP-cycle, and no
+    data-sheet line prices a kind above what its measured rate alone does by more than decision 76's 2% (a peak the chip
     beats is a wrong peak, a wrong form's MACs or a wrong pipe)."""
     rs, m = rows(d), model(d)
     v = vector(f"DS-{d.name[3:]}", d)
@@ -297,7 +274,7 @@ def test_datasheet_epoch(name):
 def test_datasheet_vector_sm120():
     """DS-120 reads data/'s datasheet rows alone at its own epoch, whose lines close where they open; every kind there is
     on DS_issue at one SMSP-cycle and every MMA form on DS_tensor, and no data-sheet line prices a kind above its time
-    alone on the current vector's census by more than the 2% margin."""
+    alone on the current vector's census by more than decision 76's 2%."""
     v = vector("DS-120")
     assert {r for r in ROWS if ROWS[r].status == "datasheet"} == set(v.rows) and v.epoch == "DS-120"
     assert all(d["since"] == d["until"] == "DS-120" for d in census_lines(M) if d["row"] in v.rows)
@@ -311,7 +288,7 @@ def test_datasheet_vector_sm120():
 
 
 def test_violated_rows_close():
-    """VF3m-16 closes every joint row the measured frontiers put a point past:
+    """VF3m-16 closes every joint row EPS1's frontiers put a point past:
     R2-R4, the KIMAD, KHFMA2 and KSHFL vertices, and the ASSUMED SHFL; KALU holds and stays."""
     c = census(M, "VF3m-16")
     closed = {"R2", "R3", "R4", *(f"KIMAD{i}" for i in range(4)), *(f"KHFMA2{i}" for i in range(4)),
@@ -323,9 +300,9 @@ def test_violated_rows_close():
 
 
 def test_joint_issue_rows_refit_over_every_mma_form():
-    """VF3n-16 closes JI3e_0..2, which the tensor_kinds probe's M1 programs load past 1 (IMMA m16n8k16 and TF32 k4
-    beside IADD3), for JI3n_0..2: each the refit at the 2% noise margin ÷ 1.07 (the schedule spread between builds),
-    with MMA every form's least and each form its own kind."""
+    """VF3n-16 closes JI3e_0..2, which EPS1 TENSOR's M1 programs load past 1 (IMMA m16n8k16 and TF32 k4 beside IADD3),
+    for JI3n_0..2: each the refit at the 2% noise
+    margin ÷ 1.07 (the schedule spread between builds), with MMA every form's least and each form its own kind."""
     c, old = census(M, "VF3n-16"), census(M, "VF3m-16")
     ji3e, ji3n = [f"JI3e_{i}" for i in range(3)], [f"JI3n_{i}" for i in range(3)]
     assert not set(ji3e) & {r for v in c.values() for r in v}
@@ -339,7 +316,7 @@ def test_joint_issue_rows_refit_over_every_mma_form():
 
 
 def test_joint_issue_rows_take_the_schedule_search():
-    """VF3o-16 closes JI3n_0..2 for JI3o_0..2: the schedule search's 600 schedules (M1c) join M1's programs in the refit
+    """VF3o-16 closes JI3n_0..2 for JI3o_0..2: M1c's 600 schedules join M1's programs in the refit
     at the 2% noise margin, and each row's ÷ 1.07 gives way to its measured margin, the most a searched program loads
     the row fitted to M1 alone (over 0.98). Every kind but the MMA forms keeps VF3e's other coefficient over that margin."""
     c, old = census(M, "VF3o-16"), census(M, "VF3n-16")
@@ -355,7 +332,7 @@ def test_joint_issue_rows_take_the_schedule_search():
 
 
 def test_uniform_takes_the_issue_slot():
-    """VF3p-16: a uniform instruction takes the SMSP's issue slot, 1 on
+    """VF3p-16 (EPS1 P10; decision 73): a uniform instruction takes the SMSP's issue slot, 1 on
     issue and on each joint issue row 0.7416 of a vector instruction's coefficient, the share that holds every uniform.cu
     point at the 2% noise margin over JI3o's coefficients (0.8168 holds them exactly; the honest step beside 32 FFMA sets
     it at JI3o_0); UP refit to the fastest form alone, 0.766 a SMSP-cycle."""

@@ -1,0 +1,114 @@
+# The circuit Definitions' move down from the vLLM integration into `verity.ml`: what
+# `tools/move/layout.py --map tools/move/defs_map.toml` moves, renames and rewrites (the vision's I10 and its rows X1/X2,
+# note:20261024T0615Z-draft-verity-vllm-vision; the map and its evidence are note:20261024T2200Z-report-defs-down-map).
+#
+# Whole packages and modules move; nothing is split, edited or deleted, and no file is added:
+# - `verity.ml.definitions`, a unit off `SOUNDNESS_PATH` (`tests/test_boundaries.py`'s `ALLOWED`), takes the kernel
+#   Definitions (`program/registry/`, with their circuit-check sidecars and pins) and the numerics layer, their row kernels
+#   and twins (`program/kernels/`, as `numerics/`, since `verity.ml.kernels` is the GPU kernels), and the machinery that
+#   reads them: the Boolean versions (`boolean`), the replayer (`replay`),
+#   the dtypes, the Definition encoding and digest (`encoding`), and the query's word, call scope and cross-call check.
+#   Each imports only `verity.ml` and numpy; the machinery stays beside the Definitions, since `boolean` and `call_scope`
+#   load the registry, and `verity.ml.circuits` imports no other unit.
+# - What builds on vLLM, torch or a protocol stays in the integration, out of the two retired directories into `program/`:
+#   `registry/quarantine/` (torch, vLLM), the capture and difftest adapters, and the relation layer and sweeps of
+#   `program/kernels/` that read `verity_vllm`.
+# - The tests stay in `integrations/vllm/tests/`, which imports `verity` (its suite's inputs have all of it).
+# The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_sp1 = "archive/sp1/python/verity_sp1", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli" }
+new = { verity = "verity", verity_difftest = "verity/core/difftest/python/verity_difftest", verity_flock = "verity/ml/flock/python/verity_flock", verity_sp1 = "archive/sp1/python/verity_sp1", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "integrations/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli" }
+
+[paths]
+# --- verity.ml.definitions: the Definitions, their row kernels, and the machinery that reads them
+"integrations/vllm/verity_vllm/program/registry/" = "verity/ml/definitions/registry/"
+"integrations/vllm/verity_vllm/program/kernels/" = "verity/ml/definitions/numerics/"
+"integrations/vllm/verity_vllm/program/boolean.py" = "verity/ml/definitions/boolean.py"
+"integrations/vllm/verity_vllm/program/replay.py" = "verity/ml/definitions/replay.py"
+"integrations/vllm/verity_vllm/program/dtypes.py" = "verity/ml/definitions/dtypes.py"
+"integrations/vllm/verity_vllm/program/encoding.py" = "verity/ml/definitions/encoding.py"
+"integrations/vllm/verity_vllm/query/word.py" = "verity/ml/definitions/word.py"
+"integrations/vllm/verity_vllm/query/call_scope.py" = "verity/ml/definitions/call_scope.py"
+"integrations/vllm/verity_vllm/query/cross_call.py" = "verity/ml/definitions/cross_call.py"
+
+# --- what stays in the integration: out of the retired registry/ and kernels/ into program/
+"integrations/vllm/verity_vllm/program/registry/quarantine/" = "integrations/vllm/verity_vllm/program/quarantine/"
+"integrations/vllm/verity_vllm/program/registry/mla_capture.py" = "integrations/vllm/verity_vllm/program/mla_capture.py"
+"integrations/vllm/verity_vllm/program/registry/moe_difftest.py" = "integrations/vllm/verity_vllm/program/moe_difftest.py"
+"integrations/vllm/verity_vllm/program/registry/layer_norm_difftest.py" = "integrations/vllm/verity_vllm/program/layer_norm_difftest.py"
+"integrations/vllm/verity_vllm/program/kernels/relations.py" = "integrations/vllm/verity_vllm/program/relations.py"
+"integrations/vllm/verity_vllm/program/kernels/sampling_rng.py" = "integrations/vllm/verity_vllm/program/sampling_rng.py"
+"integrations/vllm/verity_vllm/program/kernels/libdevice_sampling.py" = "integrations/vllm/verity_vllm/program/libdevice_sampling.py"
+"integrations/vllm/verity_vllm/program/kernels/rmsnorm_fused_sweep.py" = "integrations/vllm/verity_vllm/program/rmsnorm_fused_sweep.py"
+"integrations/vllm/verity_vllm/program/kernels/gemm_target_correspondence.py" = "integrations/vllm/verity_vllm/program/gemm_target_correspondence.py"
+"integrations/vllm/verity_vllm/program/kernels/compiled_relations.py" = "integrations/vllm/verity_vllm/program/compiled_relations.py"
+"integrations/vllm/verity_vllm/program/kernels/compiled_norm_literal.py" = "integrations/vllm/verity_vllm/program/compiled_norm_literal.py"
+
+[retired]
+paths = ["integrations/vllm/verity_vllm/program/registry/", "integrations/vllm/verity_vllm/program/kernels/"]
+
+[drop]
+paths = []
+
+[split]
+"benchmarks/property_redteam/pyproject.toml: integrations/vllm/verity_vllm/program/kernels" = "the suite's inputs also name each staying kernels module by file, which follows it"
+"benchmarks/property_redteam/pyproject.toml: integrations/vllm/verity_vllm/program/registry" = "the suite's inputs also name each staying registry module and quarantine/, which follow them"
+"verity/core/primitives/evaluate/pyproject.toml: integrations/vllm/verity_vllm/program/registry" = "its tests import registry modules that move (pouw_rows among them), none that stays"
+"integrations/vllm/README.md: integrations/vllm/verity_vllm/program/registry" = "names where the registered Definitions live, which is the larger part"
+"integrations/vllm/tests/lint/test_p03_one_evaluator.py: integrations/vllm/verity_vllm/program/kernels" = "LADDER_HOMES also names each staying kernels module by file"
+"integrations/vllm/verity_vllm/engine/profiles/vllm_d9105ea80_sm89_eager.py: integrations/vllm/verity_vllm/program/kernels" = "a comment naming W11's model, which moves"
+"integrations/vllm/verity_vllm/properties/protected.py: integrations/vllm/verity_vllm/program/registry" = "PRIMITIVE_PATHS is the registered primitives, which move; quarantine/'s patterns have their own row"
+"tools/verity/circuit_check/tests/test_attention_split.py: integrations/vllm/verity_vllm/program/registry" = "names the registry's Definitions, which move"
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`); every module under one follows it unless a longer entry
+# says otherwise
+"verity_vllm.program.boolean" = "verity.ml.definitions.boolean"
+"verity_vllm.program.dtypes" = "verity.ml.definitions.dtypes"
+"verity_vllm.program.encoding" = "verity.ml.definitions.encoding"
+"verity_vllm.program.kernels" = "verity.ml.definitions.numerics"
+"verity_vllm.program.kernels.compiled_norm_literal" = "verity_vllm.program.compiled_norm_literal"
+"verity_vllm.program.kernels.compiled_relations" = "verity_vllm.program.compiled_relations"
+"verity_vllm.program.kernels.gemm_target_correspondence" = "verity_vllm.program.gemm_target_correspondence"
+"verity_vllm.program.kernels.libdevice_sampling" = "verity_vllm.program.libdevice_sampling"
+"verity_vllm.program.kernels.relations" = "verity_vllm.program.relations"
+"verity_vllm.program.kernels.rmsnorm_fused_sweep" = "verity_vllm.program.rmsnorm_fused_sweep"
+"verity_vllm.program.kernels.sampling_rng" = "verity_vllm.program.sampling_rng"
+"verity_vllm.program.registry" = "verity.ml.definitions.registry"
+"verity_vllm.program.registry.layer_norm_difftest" = "verity_vllm.program.layer_norm_difftest"
+"verity_vllm.program.registry.mla_capture" = "verity_vllm.program.mla_capture"
+"verity_vllm.program.registry.moe_difftest" = "verity_vllm.program.moe_difftest"
+"verity_vllm.program.registry.quarantine" = "verity_vllm.program.quarantine"
+"verity_vllm.program.replay" = "verity.ml.definitions.replay"
+"verity_vllm.query.call_scope" = "verity.ml.definitions.call_scope"
+"verity_vllm.query.cross_call" = "verity.ml.definitions.cross_call"
+"verity_vllm.query.word" = "verity.ml.definitions.word"
+
+[aliases]
+# p09's allowlist names a module below `verity_vllm.` (`_imports.LAYER`'s short form), and a moved one in full; docstrings
+# that name these in the short form follow them too
+"program.kernels.relations" = "program.relations"
+"program.kernels.sampling_rng" = "program.sampling_rng"
+"program.registry.sampling" = "verity.ml.definitions.registry.sampling"
+"program.registry.topp_split" = "verity.ml.definitions.registry.topp_split"
+"program.registry.b1_tp2" = "verity.ml.definitions.registry.b1_tp2"
+
+[rewrite]
+# Never rewritten: records of what was, and files whose bytes a digest pins.
+exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "uv.lock", "tools/move/**",
+           "benchmarks/numerical/reports/**", "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json",
+           "verity/ml/circuits/silicon/captures/**", "verity/ml/circuits/silicon/hawkeye/**",
+           "integrations/vllm/manifests/**", "integrations/vllm/workloads/**", "integrations/vllm/data/**",
+           "integrations/vllm/verity_vllm/pins/**",
+           "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py",
+           "tools/research/src/research/store/moves.json",
+           "benchmarks/tc_probe_fp4/fp4_emulation_1ad1aaa2.py",
+           "benchmarks/network_e2e/tests/data/**",
+           # the superseded-quarantine migration and its test, which run on a synthetic tree of the layout they migrated
+           "integrations/vllm/tools/migrate/superseded_quarantine.py",
+           "integrations/vllm/tests/migrate/test_superseded_quarantine.py"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
+           "integrations/vllm/manifests/definitions.json"]

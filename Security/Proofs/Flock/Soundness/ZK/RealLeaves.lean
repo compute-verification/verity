@@ -131,6 +131,12 @@ theorem seedsOf_setSeeds (s : T.Seeds) (u : T.Hid → B × Salt) : T.seedsOf (T.
   funext i
   rcases i with q | ⟨r, k⟩ <;> rfl
 
+omit [AddCommGroup B] in
+theorem setSeeds_seedsOf (s : T.Seeds) : T.setSeeds s (T.seedsOf s) = s := rfl
+
+omit [AddCommGroup B] in
+theorem setSeeds_setSeeds (s : T.Seeds) (u v : T.Hid → B × Salt) : T.setSeeds (T.setSeeds s u) v = T.setSeeds s v := rfl
+
 /-- The prover's randomness with the hidden leaves' seeds replaced. -/
 def withSeeds (ω : T.Rand) (u : T.Hid → B × Salt) : T.Rand :=
   (ω.1, ω.2.1, ω.2.2.1, ω.2.2.2.1, ω.2.2.2.2.1, ω.2.2.2.2.2.1, T.setSeeds ω.2.2.2.2.2.2 u)
@@ -140,6 +146,22 @@ def simWithSeeds (σ : T.SimRand) (u : T.Hid → B × Salt) : T.SimRand :=
   (σ.1, σ.2.1, σ.2.2.1, (σ.2.2.2.1.1, σ.2.2.2.1.2.1, σ.2.2.2.1.2.2.1, T.setSeeds σ.2.2.2.1.2.2.2 u), σ.2.2.2.2)
 
 variable [CharP F 2]
+
+omit [AddCommGroup B] in
+theorem view_eq_viewWith (w : W) (ω : T.Rand) :
+    T.view w ω = T.viewWith w ω (fun i => T.ideal (T.seedsOf ω.2.2.2.2.2.2 i)) := rfl
+
+omit [AddCommGroup B] in
+theorem viewWith_withSeeds (w : W) (ω : T.Rand) (u : T.Hid → B × Salt) (L : T.Hid → D) :
+    T.viewWith w (T.withSeeds ω u) L = T.viewWith w ω L := rfl
+
+omit [AddCommGroup B] in
+theorem sim_eq_simWith (w0 : W) (σ : T.SimRand) :
+    T.sim w0 σ = T.simWith w0 σ (fun i => T.ideal (T.seedsOf σ.2.2.2.1.2.2.2 i)) := rfl
+
+omit [AddCommGroup B] in
+theorem simWith_simWithSeeds (w0 : W) (σ : T.SimRand) (u : T.Hid → B × Salt) (L : T.Hid → D) :
+    T.simWith w0 (T.simWithSeeds σ u) L = T.simWith w0 σ L := rfl
 
 variable [AddCommGroup Salt] [AddCommGroup Hi] [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K]
   [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B] [Fintype Hi] [DecidableEq Hi]

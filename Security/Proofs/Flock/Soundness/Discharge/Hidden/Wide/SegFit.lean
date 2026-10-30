@@ -70,9 +70,6 @@ def OutRowsP (c : Circuit) : Prop :=
 theorem OutRowsS.toP {c : Circuit} (h : OutRowsS c) : OutRowsP c :=
   ⟨by rw [h.size]; exact h.1, fun j hj => h.2 j (by rw [← h.size]; exact hj)⟩
 
-/-- An `OutRowsS` proof where an `OutRowsP` one is asked for (`OutRowsS.toP`). -/
-instance instCoeOutRowsSOutRowsP {c : Circuit} : Coe (OutRowsS c) (OutRowsP c) := ⟨OutRowsS.toP⟩
-
 theorem OutRowsP.toS {c : Circuit} (h : OutRowsP c) (hs : c.outRowPorts.size = c.outPorts.size) : OutRowsS c :=
   ⟨by rw [← hs]; exact h.1, fun j hj => h.2 j (by rw [hs]; exact hj)⟩
 

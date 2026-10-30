@@ -1,6 +1,6 @@
 """serve-openai's seals of its execution blocks in a spawned process of their own (`SealProcess`, ``--seal-process``), so that
 no seal's Python holds the serving process's GIL while the engine loop runs. `sealer_of` is where serve-openai's seals run
-(`SealingOptions`): on the engine loop, on a `seal_stages.Sealer`'s thread, or by default through a `ProcessSealer`'s process.
+(`SealingOptions`): on the engine loop, on a `serve_seal.Sealer`'s thread, or by default through a `ProcessSealer`'s process.
 
 An execution block's seal is `serve_seal.seal_view` either way, its files and its result the ones `serve_seal.seal_window`
 writes in the serving process; here it runs in two parts. The serving process writes the committed store's step files (its
@@ -28,7 +28,6 @@ from types import SimpleNamespace
 from typing import Any
 
 from verity_vllm.config import option
-from verity_vllm.pipeline import seal_stages as ST
 from verity_vllm.pipeline import serve_seal as SS
 
 #: the keys of an execution block's line in windows.jsonl that its seal reads
@@ -40,24 +39,24 @@ class SealingOptions:
     """serve-openai's ``sealing`` group: where each execution block's seal runs (`sealer_of`)."""
     seal_off_loop: bool = option("--seal-off-loop", action="boolean_optional", default=True,
                                  help="finalize and seal each window on a thread of its own while the engine serves the next one "
-                                      "(seal_stages.Sealer; default on); --no-seal-off-loop does both on the engine loop, which "
+                                      "(serve_seal.Sealer; default on); --no-seal-off-loop does both on the engine loop, which "
                                       "stops serving for them")
     seal_process: bool = option("--seal-process", action="boolean_optional", default=True,
                                 help="with --seal-off-loop: seal each execution block in a spawned process (seal_process.SealProcess; "
-                                     "default on), the sealer's second thread writing only its store's files, so no seal's Python takes "
-                                     "the engine's GIL; --no-seal-process seals on that thread")
+                                     "default on), the sealer's thread writing only its store's files, so no seal's Python takes the "
+                                     "engine's GIL; --no-seal-process seals on the sealer's thread")
 
 
-def sealer_of(opts: Any) -> ST.Sealer | None:
+def sealer_of(opts: Any) -> SS.Sealer | None:
     """serve-openai's sealer under ``--seal``: None (the seals run on the engine loop) with ``--no-seal-off-loop``, else a
-    `seal_stages.Sealer` holding ``--seal-hold-gb``, which seals through a `SealProcess` (`ProcessSealer`) unless ``--no-seal-process``."""
+    `serve_seal.Sealer` holding ``--seal-hold-gb``, which seals through a `SealProcess` (`ProcessSealer`) unless ``--no-seal-process``."""
     if not (opts.seal and opts.sealing.seal_off_loop):
         return None
-    return (ProcessSealer if opts.sealing.seal_process else ST.Sealer)(int(opts.seal_hold_gb * SS.GB))
+    return (ProcessSealer if opts.sealing.seal_process else SS.Sealer)(int(opts.seal_hold_gb * SS.GB))
 
 
-class ProcessSealer(ST.Sealer):
-    """A `seal_stages.Sealer` whose thread seals each execution block through ``process``, a `SealProcess` it spawns before its thread
+class ProcessSealer(SS.Sealer):
+    """A `serve_seal.Sealer` whose thread seals each execution block through ``process``, a `SealProcess` it spawns before its thread
     starts and closes after it ends; its summary names the process, and once closed how it ended."""
 
     def __init__(self, hold_bytes: int, clock: Callable[[], float] = time.perf_counter) -> None:
@@ -81,7 +80,7 @@ class _Unstored(Exception):
 
 
 class SealProcess:
-    """One spawned process that seals execution blocks one at a time (`seal`), called from one thread (`seal_stages.Sealer`'s second). A process
+    """One spawned process that seals execution blocks one at a time (`seal`), called from one thread (`serve_seal.Sealer`'s). A process
     that has exited, killed or failed, raises at the next seal by name, and every seal after it fails the same way."""
 
     def __init__(self) -> None:
@@ -144,7 +143,7 @@ class SealProcess:
             msgs.append(("manifest", id(manifest), manifest))
         port, fams = SS.port_of(com), sorted(getattr(com, "retain_exclude", None) or ())
         view = {"program_digest": bytes(com.program_digest), "chunk": com.chunk, "name": com.name,
-                "scheme": com.commit_scheme, "retain": getattr(com, "retain", None),
+                "scheme": getattr(com, "commit_scheme", SS.V1), "retain": getattr(com, "retain", None),
                 "manifest": None if manifest is None else id(manifest), "manifest_path": getattr(com, "required_manifest_path", None),
                 "port": port, "ports": source_ports(sources) if manifest is not None else {},
                 "has_port": any(isinstance(s, StepInputPort) for s in sources), "rows": served_rows(com)}

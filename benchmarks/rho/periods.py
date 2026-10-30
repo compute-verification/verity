@@ -2,8 +2,8 @@
 
 For each scenario (by default the measured H200 ones, `reference-onsite-h200` and `reference-remote-h200`, and today's
 operating point, `reference-onsite-h200-today`) on each fleet (`FLEETS`: one 100k-GPU datacenter, and the world's
-compute, the census's world-inference-2027) and each monitoring period (`PERIODS`, core's, through `rho.params`), with
-the scenario's own `fleet` and `horizon` choices overridden (`scenario.<name>.fleet`, `scenario.<name>.horizon`):
+compute, the census's world-inference-2027) and each monitoring period (`PERIODS`, the registry's horizons), with the
+scenario's own `fleet` and `horizon` choices overridden (`scenario.<name>.fleet`, `scenario.<name>.horizon`):
 
 * **the slowdown's lower bound** and its range: each ranged parameter alone at either end of its plausible range, the
   rest at reference (`analysis.tornado`), and the corner, all of them at their worse ends at once (`analysis.corner`);
@@ -38,7 +38,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 import run
-from rho import analysis, circuits, lean, operating, params
+from rho import analysis, circuits, lean, operating
 from rho.classes import premise_status, premises
 from rho.envelopes import ROUTES
 from rho.params import Registry
@@ -47,8 +47,7 @@ from rho.scenario import Result, _binding_k
 SCENARIOS = ("reference-onsite-h200", "reference-remote-h200", "reference-onsite-h200-today")
 #: (fleet, label): one datacenter, and the world's compute
 FLEETS = (("reference-h200", "one datacenter"), ("world-h200", "the world"))
-#: core's monitoring periods, by name (`params.PERIODS`)
-PERIODS = tuple(params.PERIODS)
+PERIODS = ("week", "month", "year")
 #: `lean.status` as the kinds a part of a bound is
 KINDS = {"proved": "proved in Lean", "assumption": "named premise", "draft": "paper", "absent": "stated, in no lock"}
 #: parameter statuses that are a choice or a measurement rather than an open premise
@@ -145,7 +144,7 @@ def evaluate(reg: Registry, names=SCENARIOS, fleets=FLEETS, periods=PERIODS) -> 
                 f = run.picked(r)
                 rows.append({
                     "scenario": name, "fleet": fleet, "where": label, "period": period,
-                    "servers": r.scenario.context.fleet.count, "period_s": r.scenario.context.period.seconds,
+                    "servers": r.scenario.context.fleet.count, "period_s": r.scenario.context.horizon.seconds,
                     "slowdown": r.lo, **sensitivities(at, name), "padded": run.padded(r), "mfu": r.scenario.mfu,
                     "range": [min(ends), max(ends)], "corner": corner.rho, "seconds": r.scenario.seconds(r.lo),
                     "family": f.family if f else None, "parts": parts(r, at), "scaled": scaled(r),

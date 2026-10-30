@@ -1,0 +1,981 @@
+{
+ "complete": true,
+ "correspondence": {
+  "digest": null,
+  "fallback": "annotations.node_hints / instance names parsed as <module>/<fx>[/<member>][<row>]",
+  "schema": null,
+  "source": "v1_annotations"
+ },
+ "engine_steps": [
+  0,
+  1,
+  2
+ ],
+ "flash_attn_version": null,
+ "identities": [
+  {
+   "boundary": {
+    "crossing_rows": 1,
+    "returned_rows": 1
+   },
+   "dtype": "bf16",
+   "element_range": [
+    0,
+    8
+   ],
+   "engine_step": 0,
+   "family": "instance_outputs",
+   "fx_nodes": 1,
+   "invocation": 0,
+   "op_path": "logits_processor",
+   "output_member": "out",
+   "port": "out",
+   "position": [
+    12,
+    0
+   ],
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "rows": 1,
+   "spec": "Gemm_v1",
+   "step": 0,
+   "width": 8
+  },
+  {
+   "dtype": "i32",
+   "element_range": [
+    0,
+    2
+   ],
+   "engine_step": 0,
+   "family": "input_token_ids",
+   "invocation": 0,
+   "op_path": "model.embed_tokens",
+   "output_member": "in",
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "rows": 2,
+   "step": 0,
+   "width": 1
+  },
+  {
+   "boundary": {
+    "crossing_rows": 2,
+    "returned_rows": 2
+   },
+   "dtype": "bf16",
+   "element_range": [
+    0,
+    32
+   ],
+   "engine_step": 0,
+   "family": "instance_outputs",
+   "fx_nodes": 1,
+   "invocation": 0,
+   "op_path": "model.embed_tokens",
+   "output_member": "out",
+   "port": "out",
+   "position": [
+    0,
+    0
+   ],
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "rows": 2,
+   "spec": "Embedding_v1",
+   "step": 0,
+   "width": 16
+  },
+  {
+   "boundary": {
+    "crossing_rows": 2,
+    "returned_rows": 2
+   },
+   "dtype": "bf16",
+   "element_range": [
+    0,
+    32
+   ],
+   "engine_step": 0,
+   "family": "instance_outputs",
+   "fx_nodes": 1,
+   "invocation": 0,
+   "op_path": "model.layers.0.input_layernorm",
+   "output_member": "out",
+   "port": "out",
+   "position": [
+    1,
+    0
+   ],
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "rows": 2,
+   "spec": "RMSNormTriton_v1",
+   "step": 0,
+   "width": 16
+  },
+  {
+   "boundary": {
+    "crossing_rows": 2,
+    "returned_rows": 2
+   },
+   "dtype": "bf16",
+   "element_range": [
+    0,
+    32
+   ],
+   "engine_step": 0,
+   "family": "instance_outputs",
+   "fx_nodes": 1,
+   "invocation": 0,
+   "op_path": "model.layers.0.mlp.act_fn",
+   "output_member": "out",
+   "port": "out",
+   "position": [
+    3,
+    0
+   ],
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "rows": 2,
+   "spec": "SiluMul_v1",
+   "step": 0,
+   "width": 16
+  },
+  {
+   "boundary": {
+    "crossing_rows": 2,
+    "returned_rows": 2
+   },
+   "dtype": "bf16",
+   "element_range": [
+    0,
+    32
+   ],
+   "engine_step": 0,
+   "family": "instance_outputs",
+   "fx_nodes": 1,
+   "invocation": 0,
+   "op_path": "model.layers.0.mlp.down_proj",
+   "output_member": "out",
+   "port": "out",
+   "position": [
+    4,
+    0
+   ],
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "rows": 2,
+   "spec": "Gemm_v1",
+   "step": 0,
+   "width": 16
+  },
+  {
+   "boundary": {
+    "crossing_rows": 2,
+    "returned_rows": 2
+   },
+   "dtype": "bf16",
+   "element_range": [
+    0,
+    64
+   ],
+   "engine_step": 0,
+   "family": "instance_outputs",
+   "fx_nodes": 1,
+   "invocation": 0,
+   "op_path": "model.layers.0.mlp.gate_up_proj",
+   "output_member": "out",
+   "port": "out",
+   "position": [
+    2,
+    0
+   ],
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "rows": 2,
+   "spec": "Gemm_v1",
+   "step": 0,
+   "width": 32
+  },
+  {
+   "boundary": {
+    "crossing_rows": 1,
+    "returned_rows": 2
+   },
+   "dtype": "bf16",
+   "element_range": [
+    0,
+    32
+   ],
+   "engine_step": 0,
+   "family": "instance_outputs",
+   "fx_nodes": 1,
+   "invocation": 0,
+   "op_path": "model.norm",
+   "output_member": "0",
+   "port": "0",
+   "position": [
+    5,
+    0
+   ],
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "rows": 2,
+   "spec": "RMSNormFusedCuda_v2",
+   "step": 0,
+   "width": 16
+  },
+  {
+   "boundary": {
+    "crossing_rows": 0,
+    "returned_rows": 2
+   },
+   "dtype": "bf16",
+   "element_range": [
+    0,
+    32
+   ],
+   "engine_step": 0,
+   "family": "instance_outputs",
+   "fx_nodes": 1,
+   "invocation": 0,
+   "op_path": "model.norm",
+   "output_member": "1",
+   "port": "1",
+   "position": [
+    5,
+    1
+   ],
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "rows": 2,
+   "spec": "RMSNormFusedCuda_v2",
+   "step": 0,
+   "width": 16
+  },
+  {
+   "dtype": "i64",
+   "element_range": [
+    0,
+    1
+   ],
+   "engine_step": 0,
+   "family": "sampled_token_ids",
+   "invocation": 0,
+   "op_path": "runner.sampler",
+   "output_member": "sampled_token_ids",
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "spec": "TokenSelect_v1",
+   "step": 0
+  },
+  {
+   "boundary": {
+    "crossing_rows": 1,
+    "returned_rows": 1
+   },
+   "dtype": "bf16",
+   "element_range": [
+    0,
+    8
+   ],
+   "engine_step": 1,
+   "family": "instance_outputs",
+   "fx_nodes": 1,
+   "invocation": 0,
+   "op_path": "logits_processor",
+   "output_member": "out",
+   "port": "out",
+   "position": [
+    20,
+    0
+   ],
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "rows": 1,
+   "spec": "Gemm_v1",
+   "step": 1,
+   "width": 8
+  },
+  {
+   "dtype": "i32",
+   "element_range": [
+    0,
+    1
+   ],
+   "engine_step": 1,
+   "family": "input_token_ids",
+   "invocation": 0,
+   "op_path": "model.embed_tokens",
+   "output_member": "in",
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "rows": 1,
+   "step": 1,
+   "width": 1
+  },
+  {
+   "boundary": {
+    "crossing_rows": 1,
+    "returned_rows": 1
+   },
+   "dtype": "bf16",
+   "element_range": [
+    0,
+    16
+   ],
+   "engine_step": 1,
+   "family": "instance_outputs",
+   "fx_nodes": 1,
+   "invocation": 0,
+   "op_path": "model.embed_tokens",
+   "output_member": "out",
+   "port": "out",
+   "position": [
+    14,
+    0
+   ],
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "rows": 1,
+   "spec": "Embedding_v1",
+   "step": 1,
+   "width": 16
+  },
+  {
+   "boundary": {
+    "crossing_rows": 1,
+    "returned_rows": 1
+   },
+   "dtype": "bf16",
+   "element_range": [
+    0,
+    16
+   ],
+   "engine_step": 1,
+   "family": "instance_outputs",
+   "fx_nodes": 1,
+   "invocation": 0,
+   "op_path": "model.layers.0.input_layernorm",
+   "output_member": "out",
+   "port": "out",
+   "position": [
+    15,
+    0
+   ],
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "rows": 1,
+   "spec": "RMSNormTriton_v1",
+   "step": 1,
+   "width": 16
+  },
+  {
+   "boundary": {
+    "crossing_rows": 1,
+    "returned_rows": 1
+   },
+   "dtype": "bf16",
+   "element_range": [
+    0,
+    16
+   ],
+   "engine_step": 1,
+   "family": "instance_outputs",
+   "fx_nodes": 1,
+   "invocation": 0,
+   "op_path": "model.layers.0.mlp.act_fn",
+   "output_member": "out",
+   "port": "out",
+   "position": [
+    17,
+    0
+   ],
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "rows": 1,
+   "spec": "SiluMul_v1",
+   "step": 1,
+   "width": 16
+  },
+  {
+   "boundary": {
+    "crossing_rows": 1,
+    "returned_rows": 1
+   },
+   "dtype": "bf16",
+   "element_range": [
+    0,
+    16
+   ],
+   "engine_step": 1,
+   "family": "instance_outputs",
+   "fx_nodes": 1,
+   "invocation": 0,
+   "op_path": "model.layers.0.mlp.down_proj",
+   "output_member": "out",
+   "port": "out",
+   "position": [
+    18,
+    0
+   ],
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "rows": 1,
+   "spec": "Gemm_v1",
+   "step": 1,
+   "width": 16
+  },
+  {
+   "boundary": {
+    "crossing_rows": 1,
+    "returned_rows": 1
+   },
+   "dtype": "bf16",
+   "element_range": [
+    0,
+    32
+   ],
+   "engine_step": 1,
+   "family": "instance_outputs",
+   "fx_nodes": 1,
+   "invocation": 0,
+   "op_path": "model.layers.0.mlp.gate_up_proj",
+   "output_member": "out",
+   "port": "out",
+   "position": [
+    16,
+    0
+   ],
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "rows": 1,
+   "spec": "Gemm_v1",
+   "step": 1,
+   "width": 32
+  },
+  {
+   "boundary": {
+    "crossing_rows": 1,
+    "returned_rows": 1
+   },
+   "dtype": "bf16",
+   "element_range": [
+    0,
+    16
+   ],
+   "engine_step": 1,
+   "family": "instance_outputs",
+   "fx_nodes": 1,
+   "invocation": 0,
+   "op_path": "model.norm",
+   "output_member": "0",
+   "port": "0",
+   "position": [
+    19,
+    0
+   ],
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "rows": 1,
+   "spec": "RMSNormFusedCuda_v2",
+   "step": 1,
+   "width": 16
+  },
+  {
+   "boundary": {
+    "crossing_rows": 0,
+    "returned_rows": 1
+   },
+   "dtype": "bf16",
+   "element_range": [
+    0,
+    16
+   ],
+   "engine_step": 1,
+   "family": "instance_outputs",
+   "fx_nodes": 1,
+   "invocation": 0,
+   "op_path": "model.norm",
+   "output_member": "1",
+   "port": "1",
+   "position": [
+    19,
+    1
+   ],
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "rows": 1,
+   "spec": "RMSNormFusedCuda_v2",
+   "step": 1,
+   "width": 16
+  },
+  {
+   "dtype": "i64",
+   "element_range": [
+    0,
+    1
+   ],
+   "engine_step": 1,
+   "family": "sampled_token_ids",
+   "invocation": 0,
+   "op_path": "runner.sampler",
+   "output_member": "sampled_token_ids",
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "spec": "TokenSelect_v1",
+   "step": 1
+  },
+  {
+   "boundary": {
+    "crossing_rows": 1,
+    "returned_rows": 1
+   },
+   "dtype": "bf16",
+   "element_range": [
+    0,
+    8
+   ],
+   "engine_step": 2,
+   "family": "instance_outputs",
+   "fx_nodes": 1,
+   "invocation": 0,
+   "op_path": "logits_processor",
+   "output_member": "out",
+   "port": "out",
+   "position": [
+    28,
+    0
+   ],
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "rows": 1,
+   "spec": "Gemm_v1",
+   "step": 2,
+   "width": 8
+  },
+  {
+   "dtype": "i32",
+   "element_range": [
+    0,
+    1
+   ],
+   "engine_step": 2,
+   "family": "input_token_ids",
+   "invocation": 0,
+   "op_path": "model.embed_tokens",
+   "output_member": "in",
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "rows": 1,
+   "step": 2,
+   "width": 1
+  },
+  {
+   "boundary": {
+    "crossing_rows": 1,
+    "returned_rows": 1
+   },
+   "dtype": "bf16",
+   "element_range": [
+    0,
+    16
+   ],
+   "engine_step": 2,
+   "family": "instance_outputs",
+   "fx_nodes": 1,
+   "invocation": 0,
+   "op_path": "model.embed_tokens",
+   "output_member": "out",
+   "port": "out",
+   "position": [
+    22,
+    0
+   ],
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "rows": 1,
+   "spec": "Embedding_v1",
+   "step": 2,
+   "width": 16
+  },
+  {
+   "boundary": {
+    "crossing_rows": 1,
+    "returned_rows": 1
+   },
+   "dtype": "bf16",
+   "element_range": [
+    0,
+    16
+   ],
+   "engine_step": 2,
+   "family": "instance_outputs",
+   "fx_nodes": 1,
+   "invocation": 0,
+   "op_path": "model.layers.0.input_layernorm",
+   "output_member": "out",
+   "port": "out",
+   "position": [
+    23,
+    0
+   ],
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "rows": 1,
+   "spec": "RMSNormTriton_v1",
+   "step": 2,
+   "width": 16
+  },
+  {
+   "boundary": {
+    "crossing_rows": 1,
+    "returned_rows": 1
+   },
+   "dtype": "bf16",
+   "element_range": [
+    0,
+    16
+   ],
+   "engine_step": 2,
+   "family": "instance_outputs",
+   "fx_nodes": 1,
+   "invocation": 0,
+   "op_path": "model.layers.0.mlp.act_fn",
+   "output_member": "out",
+   "port": "out",
+   "position": [
+    25,
+    0
+   ],
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "rows": 1,
+   "spec": "SiluMul_v1",
+   "step": 2,
+   "width": 16
+  },
+  {
+   "boundary": {
+    "crossing_rows": 1,
+    "returned_rows": 1
+   },
+   "dtype": "bf16",
+   "element_range": [
+    0,
+    16
+   ],
+   "engine_step": 2,
+   "family": "instance_outputs",
+   "fx_nodes": 1,
+   "invocation": 0,
+   "op_path": "model.layers.0.mlp.down_proj",
+   "output_member": "out",
+   "port": "out",
+   "position": [
+    26,
+    0
+   ],
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "rows": 1,
+   "spec": "Gemm_v1",
+   "step": 2,
+   "width": 16
+  },
+  {
+   "boundary": {
+    "crossing_rows": 1,
+    "returned_rows": 1
+   },
+   "dtype": "bf16",
+   "element_range": [
+    0,
+    32
+   ],
+   "engine_step": 2,
+   "family": "instance_outputs",
+   "fx_nodes": 1,
+   "invocation": 0,
+   "op_path": "model.layers.0.mlp.gate_up_proj",
+   "output_member": "out",
+   "port": "out",
+   "position": [
+    24,
+    0
+   ],
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "rows": 1,
+   "spec": "Gemm_v1",
+   "step": 2,
+   "width": 32
+  },
+  {
+   "boundary": {
+    "crossing_rows": 1,
+    "returned_rows": 1
+   },
+   "dtype": "bf16",
+   "element_range": [
+    0,
+    16
+   ],
+   "engine_step": 2,
+   "family": "instance_outputs",
+   "fx_nodes": 1,
+   "invocation": 0,
+   "op_path": "model.norm",
+   "output_member": "0",
+   "port": "0",
+   "position": [
+    27,
+    0
+   ],
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "rows": 1,
+   "spec": "RMSNormFusedCuda_v2",
+   "step": 2,
+   "width": 16
+  },
+  {
+   "boundary": {
+    "crossing_rows": 0,
+    "returned_rows": 1
+   },
+   "dtype": "bf16",
+   "element_range": [
+    0,
+    16
+   ],
+   "engine_step": 2,
+   "family": "instance_outputs",
+   "fx_nodes": 1,
+   "invocation": 0,
+   "op_path": "model.norm",
+   "output_member": "1",
+   "port": "1",
+   "position": [
+    27,
+    1
+   ],
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "rows": 1,
+   "spec": "RMSNormFusedCuda_v2",
+   "step": 2,
+   "width": 16
+  },
+  {
+   "dtype": "i64",
+   "element_range": [
+    0,
+    1
+   ],
+   "engine_step": 2,
+   "family": "sampled_token_ids",
+   "invocation": 0,
+   "op_path": "runner.sampler",
+   "output_member": "sampled_token_ids",
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "spec": "TokenSelect_v1",
+   "step": 2
+  },
+  {
+   "dtype": "bf16",
+   "element_range": [
+    0,
+    null
+   ],
+   "family": "weights",
+   "invocation": 0,
+   "op_path": "model.embed_tokens.weight",
+   "output_member": "weight",
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "step": "*"
+  },
+  {
+   "dtype": "bf16",
+   "element_range": [
+    0,
+    null
+   ],
+   "family": "weights",
+   "invocation": 0,
+   "op_path": "model.layers.0.input_layernorm.weight",
+   "output_member": "weight",
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "step": "*"
+  },
+  {
+   "dtype": "bf16",
+   "element_range": [
+    0,
+    null
+   ],
+   "family": "weights",
+   "invocation": 0,
+   "op_path": "model.layers.0.mlp.down_proj.weight",
+   "output_member": "weight",
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "step": "*"
+  },
+  {
+   "dtype": "bf16",
+   "element_range": [
+    0,
+    null
+   ],
+   "family": "weights",
+   "invocation": 0,
+   "op_path": "model.layers.0.mlp.gate_up_proj.weight",
+   "output_member": "weight",
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "step": "*"
+  },
+  {
+   "dtype": "bf16",
+   "element_range": [
+    0,
+    null
+   ],
+   "family": "weights",
+   "invocation": 0,
+   "op_path": "model.norm.weight",
+   "output_member": "weight",
+   "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+   "rank": 0,
+   "request_id": "r0",
+   "step": "*"
+  }
+ ],
+ "identity_key": [
+  "program_digest",
+  "request_id",
+  "step",
+  "invocation",
+  "op_path",
+  "output_member",
+  "element_range",
+  "rank"
+ ],
+ "manifest_digest": "64bab99fb8760bb58771a2670d7258bc97e1094a7986070c5a6e33f03716a71f",
+ "op_path_aliases": {},
+ "populations": {
+  "attention_layers": 0,
+  "boundary_values": 34,
+  "by_family": {
+   "input_token_ids": 3,
+   "instance_outputs": 24,
+   "sampled_token_ids": 3,
+   "weights": 5
+  },
+  "identities": 35,
+  "literal_calls": 0,
+  "required_values": 40,
+  "steps": 3,
+  "units": 8,
+  "unreturned_calls": 0
+ },
+ "program": {
+  "LP": 2,
+  "T": 2,
+  "artifact_identity": null,
+  "dir": null,
+  "function": "Derived[vLLMRequest[Test]]",
+  "instances": 30,
+  "instances_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+  "model_pin": null,
+  "source": "instances",
+  "wrapper": "request"
+ },
+ "program_digest": "tttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttttt",
+ "query": {
+  "attention_hidden_family": null,
+  "boundary": "module-body",
+  "engine": "v2-query",
+  "policy": {
+   "prescribed_inputs": "every field of the Program's record-typed parameters",
+   "protocol_required": [
+    "sampling-event outputs",
+    "recorded return slots (RETURN-SLOT)",
+    "returned tensors: all rows / ports of an fx node's output once one crosses (TENSOR-RETURN)",
+    "neither: a Call lowered to no runtime tensor whose Values no Call reads and the Program does not return"
+   ],
+   "unreturned": "a Call whose Values no Call reads, the Program does not return and no policy requires: not required, skipped by the word check, each output listed under `unreturned` (UNRETURNED)"
+  },
+  "profile": "ampere",
+  "query_id": "Q_module_body_v1",
+  "query_id_digest": "87caebae0306fa1cb7c8913853e07bd738c3ee61b5fd6bef721e60625546cb90",
+  "query_text": "Q_module_body_v1: unit = module body = the maximal set of Calls whose recorded owning module path (correspondence: nn_module_stack-derived) is identical; a non-leaf module's own Calls are their own body; Calls with no module are the root body; boundary values = U_V (in(V) u out(V)) over these units (verity_vllm.query.units.boundary_values) minus the Program's literals (the Values of Calls that read no Value: written in the descriptor, never acquired); policy: prescribed = record-typed inputs (weights); protocol = sampling-event outputs + recorded return slots + returned tensors (every Value of an fx node's output at a step once any of them crosses the module body boundary), neither of which is a Call lowered to no runtime tensor whose Values nothing reads; unreturned = the Calls whose Values nothing reads, the Program does not return and the policy does not require, listed by identity; hidden = none; profile = ampere",
+  "required_families": [
+   "input_token_ids",
+   "instance_outputs",
+   "sampled_token_ids",
+   "weights"
+  ]
+ },
+ "rank": 0,
+ "ranks": 1,
+ "requests": [
+  "r0"
+ ],
+ "schema": "verity-sweep/required-manifest/v1",
+ "steps": [
+  0,
+  1,
+  2
+ ],
+ "target": {
+  "compute_capability": [
+   8,
+   9
+  ]
+ },
+ "unmodelled": {},
+ "unreturned": [],
+ "unreturned_digest": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+ "workload": null,
+ "wrapper_prefix": "model."
+}

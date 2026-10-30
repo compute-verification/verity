@@ -10,7 +10,6 @@ import numpy as np
 import pytest
 
 import pous_test_signer as ts
-from pous_fakes import Clock
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import bits as EB
@@ -112,10 +111,18 @@ def _expected(i: int) -> bytes:
     return hashlib.sha512(rowleaf.sha512_row_v2_prefix(8 * BLOCK_BYTES) + _block(i)).digest()
 
 
+class _Clock:
+    def __init__(self) -> None:
+        self.now = 1_000_000
+
+    def __call__(self) -> int:
+        return self.now
+
+
 @pytest.mark.parametrize("wrong", [(), (2,), (0, 5)])
 def test_m0_is_the_memory_challengers_verdict(wrong):
     """On a signed session, M = 0 accepts exactly when `memory_challenger.verdict` does: every answer its label, on time."""
-    clock = Clock(1_000_000)
+    clock = _Clock()
     signer = ts.TestSigner(b"challenger key", height=2)
     session = hashlib.sha512(b"verdict session %r" % (wrong,)).digest()[:32]
     coins = mc.CoinTree.draw(b"secret", session, BLOCKS, ROUNDS, key=mc.HM96.key_from_label(b"coin key"),

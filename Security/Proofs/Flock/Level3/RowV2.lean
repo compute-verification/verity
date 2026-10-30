@@ -41,6 +41,12 @@ theorem prefix_length (l : ℕ) : (rowPrefixV2 l).data.toList.length = 128 := by
   simp only [List.length_append, Array.length_toList, ByteArray.size_data, tag_size, digits_size, List.length_cons,
     List.length_nil, List.length_replicate]
 
+theorem prefix_size (l : ℕ) : (Flock.HmRow.rowPrefixV2 l).size = 128 := by
+  rw [← ByteArray.size_data, ← Array.length_toList, prefix_length]
+
+theorem packBits_length (bs : List Bool) : (Flock.HmRow.packBits bs).length = (bs.length + 7) / 8 := by
+  simp [packBits]
+
 theorem byte_eq {a b : ℕ} (h : (a % 256).toUInt8 = (b % 256).toUInt8) : a % 256 = b % 256 := by
   have := congrArg UInt8.toNat h
   simpa only [Nat.toUInt8_eq, UInt8.toNat_ofNat', Nat.reducePow, Nat.mod_mod] using this

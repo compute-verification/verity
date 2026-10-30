@@ -1,8 +1,7 @@
 """n2_tie_zk's members at the pinned size class: each bucket's output word by IoTieRequest's reference, and whether the
 prover's ``pub`` row is the verifier's own, give the member's verdicts (`EXPECT`): honest tied; carried, IoTieRequest
-accepting bucket 4 on an added carried field count whose row isn't the verifier's; forged and split, refused. The
-verifier's registered reads name every port, and the prover's ``pub`` and ``o0`` rows have its known roots exactly
-where the reference accepts. Each witness row is whole u16 words, and the scan's blobs are the warden's held cells and the rows' salts, never an empty
+accepting bucket 4 on an added carried field count whose row isn't the verifier's; forged and split, refused. Each
+witness row is whole u16 words, and the scan's blobs are the warden's held cells and the rows' salts, never an empty
 slot. ``--jobs`` is 1 unless given and 2 is refused, naming the rule (`n2_zk.ONE_SESSION`). Nothing here lowers or
 proves (`n2_tie_zk.prove` does, on a node)."""
 
@@ -50,26 +49,6 @@ def test_each_members_references_give_its_verdicts():
     assert all(x.own is not None and 0 in x.words for x in forged.windows)
 
 
-def test_the_provers_known_rows_are_the_verifiers_exactly_where_the_reference_accepts():
-    """Every port of the statement is one of the verifier's registered reads (C-Flock's `Registered.checkComplete`): its
-    file names ``wit`` at the warden's root and ``pub`` and ``o0`` at known content, and the prover's rows of those
-    (`n2_tie_zk.known`) have the verifier's roots exactly where its ``pub`` rows are the verifier's and every output
-    word is 1, so Lean's registered reads refuse each window the reference refuses: carried's window 1 at ``pub``,
-    forged's at ``o0``. The split's verifier has no lanes, so no file, and refuses without a Lean run."""
-    tie = _tie()
-    for name, (link, adv, edit, _) in tz.members().items():
-        for x in tz.link_windows(tie, link, adv, edit).windows:
-            reads, mine = tie.registered(x.head, x.own), tie.known(x.head, x.own)
-            if x.own is None:
-                assert name == "split" and reads is None and mine is None and not x.expect
-                continue
-            assert sorted(reads["ports"]) == sorted(tz.TS.PORTS), name
-            got = {p: v.root for p, v in tz.known(tie, x).items()}
-            same = {p: got[p] == v.root for p, v in mine.items()}
-            assert same == {"pub": all(x.opens), "o0": all(w == 1 for w in x.words)}, (name, x.window)
-            assert all(same.values()) == bool(x.expect), (name, x.window)
-
-
 def test_the_served_class_is_one_window_of_60_buckets_of_one_4096_byte_cell_honest_tied_and_forged_refused():
     sv = _load()
     sv.use("served")
@@ -84,9 +63,9 @@ def test_the_served_class_is_one_window_of_60_buckets_of_one_4096_byte_cell_hone
 
 
 def test_a_warden_runs_release_is_its_cells_and_its_forged_row_is_the_registered_reads_to_refuse():
-    """`warden_link`'s reading of a network certifier's cells (`_released`) gives the release and prompt lengths the
-    network certifier's own ingress served, and `forge`'s row, an id request of the same prompt length, keeps every
-    output word 1 while the registered read refuses it, in its window alone."""
+    """`warden_link`'s reading of a warden's cells (`_released`) gives the release and prompt lengths the warden's own
+    ingress served, and `forge`'s row, an id request of the same prompt length, keeps every output word 1 while the
+    registered read refuses it, in its window alone."""
     tie = _tie()
     link = tz.served(tz.SPAN, tz.ARRIVALS, tz.RATES)
     cells = [tz.WR.Cells.of(tz.LINK, tz.Direction.INGRESS, rec, tz.PARAMS, tz.SESSION) for rec in link.records]
@@ -160,7 +139,7 @@ def test_a_member_fails_on_what_the_scan_reads_as_leaked_not_on_a_find_across_th
     key = next(k for k in sorted(held_pieces) if len(set(pieces[k])) > 2)
     piece = pieces[key]
     res = {"windows": [{"as_expected": True}] * len(rd.windows),
-           "tie": {"accepted": list(tz.EXPECT["honest"]), "advice": tz.TS.digest(rd.advice), "link": tz.LINK,
+           "tie": {"accepted": list(tz.EXPECT["honest"]), "advice": tz.AD.digest(rd.advice), "link": tz.LINK,
                    "registrations": [{}] * len(rd.windows)}}
 
     def member(body: bytes, out):

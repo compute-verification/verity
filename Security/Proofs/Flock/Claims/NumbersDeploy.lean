@@ -439,6 +439,16 @@ structure ZkIn (x : Claims.Msg) (s : Ins) (spec : SessionSpec) (sts : Array Stmt
 theorem size_one_le {sts : Array Stmt} (h : 0 < sts.size) : (1 : ℝ) ≤ sts.size := by
   exact_mod_cast h
 
+theorem PlainIn.tab₀ {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} (h : PlainIn x s spec sts) :
+    22 ≤ (sts[0]'h.size_pos).m ∧ (sts[0]'h.size_pos).m ≤ 35 :=
+  have := h.tab _ (Array.getElem_mem_toList h.size_pos)
+  ⟨this.1, this.2.1⟩
+
+theorem ZkIn.tab₀ {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} (h : ZkIn x s spec sts) :
+    25 ≤ (sts[0]'h.size_pos).m ∧ (sts[0]'h.size_pos).m ≤ 35 :=
+  have := h.tab _ (Array.getElem_mem_toList h.size_pos)
+  ⟨this.1, this.2.1⟩
+
 /-- **`κ ≤ n·2^{−202.98}`** at the deployed plain verifier, `n` its tables. -/
 theorem κ_plain_le (rel : Readable.Parsed → Readable.Relation) {x : Claims.Msg} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} (h : PlainIn x s spec sts) :

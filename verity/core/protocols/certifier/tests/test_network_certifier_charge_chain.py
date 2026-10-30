@@ -84,9 +84,9 @@ def test_a_two_window_charge_is_code_v1s():
 
 
 def test_a_window_charged_over_its_own_decisions_is_code_v1s():
-    """The load proof block's form: each window's decisions in the first slots of `ChargeLink_v1{32}` (the engine
-    class's D), en_i = i < count, are `code_v1`'s charge and carry-out from the same carry-in as its 14 asks, since a
-    slot with en 0 changes nothing."""
+    """The load unit's form: each window's decisions in the first slots of `ChargeLink_v1{32}` (the engine class's D),
+    en_i = i < count, are `code_v1`'s charge and carry-out from the same carry-in as its 14 asks, since a slot with en 0
+    changes nothing."""
     D, windows = 32, 0
     for source, N, book, wins, _lens in _streams():
         cb, _prior = AE.charge_book(book, D)
@@ -101,8 +101,8 @@ def test_a_window_charged_over_its_own_decisions_is_code_v1s():
 
 def test_a_reset_carry_is_refused():
     """A prover restarting the counts before window 1 (to the priors, 20 bits in place of 23, or to counts fitted to
-    the window, 16): window 1's proof block alone accepts any carry-in, so the chain refuses it, whether window 1's
-    carry-in is committed under a fresh salt, under the public start salt, or window 0's carry-out claims the reset."""
+    the window, 16): window 1's unit alone accepts any carry-in, so the chain refuses it, whether window 1's carry-in
+    is committed under a fresh salt, under the public start salt, or window 0's carry-out claims the reset."""
     N, book, wins, _lens = _two_windows()
     (_l0, in0, out0), (_l1, _in1, out1) = CC.session(N, book, wins)
     cb, prior = AE.charge_book(book, N)
@@ -196,7 +196,7 @@ def test_the_circuit_is_the_reference():
 
 
 def test_build_link_inline():
-    """`build_link`, the call a caller's circuit makes, is the proof block: its book split by `book_fields`."""
+    """`build_link`, the call a caller's circuit makes, is the unit: its book split by `book_fields`."""
     from verity.ml.circuits.boolean.forms import Circuit
     N, rng = 3, random.Random(3)
     cases = [_random_link(rng, N) for _ in range(40)]

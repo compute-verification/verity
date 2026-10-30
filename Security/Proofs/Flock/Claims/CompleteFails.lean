@@ -103,11 +103,11 @@ def rejD : Flock.Deploy Unit Unit Unit where
 /-! ## Sampling -/
 
 /-- **The empty sampling statement**: no gates, no outputs, no rules, no roots. -/
-def nilStmt : Sampling.AuditStatement := ⟨[], ⟨[], []⟩, ⟨"", 0, []⟩, ⟨[]⟩, []⟩
+def nilStmt : Sampling.Stmt := ⟨[], ⟨[], []⟩, ⟨"", 0, []⟩, ⟨[]⟩, []⟩
 
 theorem inScope_nilStmt : Sampling.InScope ⟨[]⟩ nilStmt := by
-  refine ⟨⟨fun _ _ h => by simp [nilStmt] at h, fun _ h => by simp [nilStmt] at h⟩, ⟨?_, ?_, ?_, ?_, ?_⟩,
-    ⟨rfl, ?_⟩⟩ <;> simp [Sampling.Partition.blocks, Sampling.Partition.gates, nilStmt]
+  refine ⟨⟨fun _ _ h => by simp [nilStmt] at h, fun _ h => by simp [nilStmt] at h⟩, ⟨?_, ?_, ?_, ?_, ?_, ?_⟩,
+    ⟨rfl, ?_⟩⟩ <;> simp [Sampling.Partition.rus, Sampling.Partition.gates, nilStmt]
 
 /-- **A sampling record of `rejV`**: its parser reads every message as `nilStmt`, its partition is the empty one, its
 sessions are `rejD`'s, its reference prover is `silent`, and its error `0`. -/
@@ -136,7 +136,7 @@ def rejSD : Sampling.Deploy Unit Unit Unit where
 
 theorem rhon_rejSD (H : Msg → Msg) (x : Msg) (w : Sampling.Wit) :
     Sampling.Rhon H rejSD.commit rejSD.parse rejSD.partition x w :=
-  ⟨nilStmt, ⟨[]⟩, rfl, rfl, by simp [Sampling.faulty, Sampling.Partition.blocks]⟩
+  ⟨nilStmt, ⟨[]⟩, rfl, rfl, by simp [Sampling.faulty, Sampling.Partition.rus]⟩
 
 end Claims.CompleteFails
 

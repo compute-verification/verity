@@ -11,7 +11,7 @@ those facts are one proposition, and they are discharged for a flat statement `S
   the pin. `Realizes.placement` is the `Placement` it gives, at `composePlace`.
 - **`Compose.BlockFacts`**: 1e's form of the same facts, over the unit's block rows (`blockRow`, Δ applied), for the
   verifier's own `deriveChecked` run. `BlockFacts.realizes` turns them into `Realizes` for the unit's composed rows
-  (`ofBlock`), and `BlockFacts.placement` is a table class's `placed` at a slot (the soundness model's `TableClass`).
+  (`ofBlock`), and `BlockFacts.placement` is a table class's `placed` at a slot (the soundness lane's `TableClass`).
 - **`Layout.realizes`**: in the model of a statement `setupH` accepted (`Layout`),
   at unit slot `s₀` with positions `slot s₀ + c`, `Realizes` holds for every `Logical` whose rows are the unit net's
   (`Compose.NetRows`). It reads Δ only as `Layout` does, for statements without a typed template.
@@ -96,7 +96,7 @@ theorem count_pin {S : Model.Statement} (j : Fin (2 ^ S.kLog)) :
 
 /-- **1e's facts give the class's placement facts.** For the verifier's own run `deriveChecked … = .ok done`, with `one`
 past every row of the unit, `BlockFacts` at `pos` is `Realizes` for the unit's composed rows (`ofBlock`) at `pos`. -/
-theorem BlockFacts.realizes {types : String → Option CircuitType} {ls : Array Flock.BlockLayout} {info : String → Option TableInfo}
+theorem BlockFacts.realizes {types : String → Option CircuitType} {ls : Array Flock.Layout} {info : String → Option TableInfo}
     {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
     (hd : deriveChecked types ls info words unit = .ok done) {S : Model.Statement} {one : ℕ} {pos : ℕ → ℕ}
     (hone : (done.getD unit default).rows.size ≤ one) (hf : BlockFacts S words done (done.getD unit default) one pos) :
@@ -165,7 +165,7 @@ theorem BlockFacts.realizes {types : String → Option CircuitType} {ls : Array 
 
 /-- **A table class's placement at one slot**, from 1e's facts there: the unit's composed rows, placed at
 `composePlace`. -/
-theorem BlockFacts.placement {types : String → Option CircuitType} {ls : Array Flock.BlockLayout}
+theorem BlockFacts.placement {types : String → Option CircuitType} {ls : Array Flock.Layout}
     {info : String → Option TableInfo} {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
     (hd : deriveChecked types ls info words unit = .ok done) {S : Model.Statement} {one : ℕ} {pos : ℕ → ℕ}
     (hone : (done.getD unit default).rows.size ≤ one) (hf : BlockFacts S words done (done.getD unit default) one pos) :

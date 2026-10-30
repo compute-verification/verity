@@ -1,7 +1,6 @@
-"""Network-certifier-form id requests and their responses served through the network certifier's own ingress and egress,
-both links' rows and the scan of the ingress rows: the joint scan's traffic (`test_network_certifier_ingress_scan.py`'s
-cross-check of the network certifier, and `benchmarks/network_traces/scan_zk.py`'s). It imports no test framework, so a
-node's bare venv runs it."""
+"""Warden-form id requests and their responses served through the warden's own ingress and egress, both links' rows and
+the scan of the ingress rows: the joint scan's traffic (`test_network_certifier_ingress_scan.py`'s cross-check of the
+warden, and `benchmarks/network_traces/scan_zk.py`'s). It imports no test framework, so a node's bare venv runs it."""
 
 from __future__ import annotations
 
@@ -12,29 +11,29 @@ from typing import Sequence
 
 from verity.core.protocols.certifier import egress as EG, ingress_scan as IS, io_tie as IT, warden as W
 from verity.core.protocols.certifier import warden_rows as WR
-from verity.core.protocols.certifier.grid import Certifier, BlockGrid
+from verity.core.protocols.certifier.grid import Certifier, Record
 
 
 @dataclass(frozen=True)
 class Served:
-    """Both links served through the network certifier: the ingress and egress records its grids closed (one an
-    execution phase), each connection's admission bucket and response ids (ordinal q = k + 1), and the network
-    certifier's `fails` frames and the `fails` records its grid closed."""
+    """Both links served through the warden: the ingress and egress records its grids closed (one a link-window),
+    each connection's admission bucket and response ids (ordinal q = k + 1), and the warden's `fails` frames and the
+    `fails` records its grid closed."""
 
     params: W.WardenParams
-    ingress: tuple[BlockGrid, ...]
-    egress: tuple[BlockGrid, ...]
+    ingress: tuple[Record, ...]
+    egress: tuple[Record, ...]
     admitted: tuple[int, ...]
     responses: tuple[tuple[int, ...], ...]
     fails: tuple[bytes, ...]
-    failed: tuple[BlockGrid, ...] = ()
+    failed: tuple[Record, ...] = ()
 
     @property
     def outputs(self) -> dict[int, tuple[int, ...]]:
         return {k + 1: xs for k, xs in enumerate(self.responses)}
 
     def rows(self) -> tuple[list[bytes], list[bytes]]:
-        """The network certifier's registered ingress and egress rows, bucket by bucket (`warden_rows.window_rows`)."""
+        """The warden's registered ingress and egress rows, bucket by bucket (`warden_rows.window_rows`)."""
         return tuple([x for rec in recs for x in WR.window_rows(rec, self.params)]  # type: ignore[return-value]
                      for recs in (self.ingress, self.egress))
 
@@ -43,10 +42,10 @@ def serve(params: W.WardenParams, requests: Sequence[bytes], arrivals: Sequence[
           responses: Sequence[Sequence[int]], windows: int, late: Sequence[int] = ()) -> Served:
     """Connection k, ordinal k + 1, arrives at bucket arrivals[k] with request requests[k], its client's bytes arriving
     rate[k] a bucket from its admission, and response responses[k] (its ids, each one id event, then `TRAILER`, all
-    there by its egress; a connection of `late` gets no byte from its server, so the network certifier fails it late at
-    its first egress cell), and the network certifier ticks both links and `fails` for `windows` execution phases as
-    `Warden._tick` does: admitted in arrival order at the first bucket with a free lane, `_ingress` until its `END`,
-    `_egress` until its own `END` or `FAIL`, its lane free the bucket after."""
+    there by its egress; a connection of `late` gets no byte from its server, so the warden fails it late at its first
+    egress cell), and the warden ticks both links and `fails` for `windows` link-windows as `Warden._tick` does:
+    admitted in arrival order at the first bucket with a free lane, `_ingress` until its `END`, `_egress` until its own
+    `END` or `FAIL`, its lane free the bucket after."""
     B, P = params.cell_bytes, params.payload
     fails: list[bytes] = []
     failed = Certifier("fails", params.fails_grid)
@@ -65,7 +64,7 @@ def serve(params: W.WardenParams, requests: Sequence[bytes], arrivals: Sequence[
         conns.append(c)
     queue, active = deque(conns), []
     grids = (Certifier("requests", params.grid), Certifier("responses", params.grid), failed)
-    records: tuple[list[BlockGrid], list[BlockGrid], list[BlockGrid]] = ([], [], [])
+    records: tuple[list[Record], list[Record], list[Record]] = ([], [], [])
     for t in range(windows * params.window):
         while queue and queue[0].arrived <= t and len(active) < params.lanes:
             c = queue.popleft()
@@ -96,8 +95,8 @@ def serve(params: W.WardenParams, requests: Sequence[bytes], arrivals: Sequence[
 @dataclass(frozen=True)
 class Chain:
     """The scan of a run's ingress rows (`ingress_scan.scan`, the Programs' rows its outputs): the states S_{−1} (the
-    empty state) … S_{T−1} as bit rows, the Programs' rows and the egress views; proof block t reads (ingress[t],
-    states[t], progs[t]), the first proof block no state, and computes (states[t + 1], views[t])."""
+    empty state) … S_{T−1} as bit rows, the Programs' rows and the egress views; unit t reads (ingress[t], states[t],
+    progs[t]), the first unit no state, and computes (states[t + 1], views[t])."""
 
     cls: IS.Class
     ingress: list[bytes]

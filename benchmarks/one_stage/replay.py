@@ -41,8 +41,10 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib
 import json
 import os
+import pkgutil
 import re
 import subprocess
 import sys
@@ -60,7 +62,6 @@ from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.commitments.identity import identity_digest, identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
-from verity.ml.definitions.registry import catalog
 
 import r2_population as R2
 
@@ -89,6 +90,14 @@ class Gap(Exception):
 
 
 # --- programs ----------------------------------------------------------------------------------------------------------
+
+def _registry() -> None:
+    """Every Definition a recorded program may call: the circuit ops and vLLM's program registry."""
+    for name in ("verity.ml.circuits.ops", "verity.ml.definitions.registry"):
+        pkg = importlib.import_module(name)
+        for m in pkgutil.walk_packages(pkg.__path__, pkg.__name__ + "."):
+            importlib.import_module(m.name)
+
 
 def _json(value: Any) -> Any:
     return json.loads(DT.canonical(value))
@@ -2246,9 +2255,7 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--only", nargs="*", default=None, help="run ids (8 hex digits)")
     a = ap.parse_args()
-    _, errors = catalog.load(("ops", "registry"))  # every Definition a recorded program may call
-    if errors:
-        raise ImportError("; ".join(errors))
+    _registry()
     out = Path(a.out)
     (out / "cases").mkdir(parents=True, exist_ok=True)
     runs_root = Path(a.runs)

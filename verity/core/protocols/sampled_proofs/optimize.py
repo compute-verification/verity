@@ -5,81 +5,58 @@ Nothing trusts it.  A plan is a stratified sampling design, `k_s` proof blocks o
 table carrying the credited work and floors equal to the sizes (`work_law`: `one_stage.draw.work_k(1, w, n, W, f)` is
 `min(n, f)`).  Its certificate is recomputed from the sizes alone (`certify`): core's `Stratified.harm_bound` for the
 objective's harm and for credited work, and `density_bound`, the closed form that `work_escape_le`'s proof extends to any
-sizes.
+sizes (the note's gap G1).
 
 **Cuts.**  An op type is cut into proof blocks one of several ways, each a set of subcircuits (`Candidate.cut`): one subcircuit per
 op is a partition of it; a shared piece is either its own subcircuit, committed once and read by the others, or
 recomputed inside each reader (a covering, `recomputed_across` in `Q_word` v2), and the planner picks per density.  A proof block
-whose incorrect output can forfeit downstream work (a noise or form proof block every dot of its row reads) carries that work as
+whose wrong output can forfeit downstream work (a noise or form proof block every dot of its row reads) carries that work as
 `influence`, which its harm counts.
 
 **Cost.**  Per touched statement plus per proved proof block, as Flock does: subcircuit `s` cut into statements of `c` proof blocks costs
 `touched_s(k; c) * (a0 + a1 c) + k * (b + replay)`, a statement being touched when the draw meets it.  Everything is
 committed at serve time whatever the draw: every proof block's outputs (`commit_bits`, `commit_rows`),
-and the fixed serve-time commitments of every scale (`TensorCommit`: the Commit's taps, PoUW's work blocks, the remote audit's
+and the fixed serve-time commitments of every scale (`Commitment`: the Commit's taps, PoUW's work blocks, the remote audit's
 receipts, the bits a work block pins), so a plan's cost is the whole serve-time and proving total.  One tensor committed
 at several scales is counted once per scale, and `overlaps` prices what committing it once would save.  A drawn proof block's
 witness is built by re-executing its replay block from the last committed state (`ReplayDomain`), which commits nothing.
 A subcircuit's costs are measured (`TemplateCost`) or derived from the model's rates and its features: ANDs, and the hm96
 rows a proved proof block opens (`row_ands`).
 
-**Sweep.**  A Lagrangian sweep: one density `lam` on every subcircuit (`k_s = ceil(min(1, lam w_b v_s) n_s)`, `w_b` the
+**Sweep.**  The note's Lagrangian: one density `lam` on every subcircuit (`k_s = ceil(min(1, lam w_b v_s) n_s)`, `w_b` the
 weight of the subcircuit's weight class, 1 unless the plan weighs classes), some subcircuits at their floor only, some proved
 whole, and the cut per op type and the statement size each the cheapest at that `lam`.  With no statement cost and a proof block
 cost proportional to work, the cheapest plan certifying `C` is `Achievability`'s rates, `q_s = min(1, ln(1/delta) w_s / C)`.
 `weigh` chooses the kinds' weights at a target, under the same stratified certificate.
-
-**Modes.**  `CostModel.commit_weight` is the weight w on serving's commitments in a plan's total: at 1 they count as spent,
-and at 0 (`PROVING_ONLY`) the plan prices proving alone, the model of Lean's `GranularityOptimum` (the cheapest law costs
-`c(s) · (F/C) · Λ`).  `Grain` is that model on one uniform partition, with the commitment term beside it: `n · b(s) · h`
-for `n` proof blocks of `b(s)` committed bytes at `h` a hashed byte, paid whether a proof block is drawn or not.
-`grain_costs` prices a ladder of partitions for the free-compute target (`Achievability`'s law, `GranularityOptimum`'s
-cost) or the exfiltration target (`ExfiltrationOptimum`'s law), and `sqrt_grain` is the work target's optimum in closed
-form, `s* = √(w β h C / (o Λ))`, when `c(s) = f + o s` and every proof block commits `β` bytes.
 """
 from __future__ import annotations
 
-import json
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from fractions import Fraction
-from math import ceil, exp, expm1, floor, fsum, inf, lgamma, log, log1p, log2, nextafter, sqrt
-from pathlib import Path
+from math import ceil, exp, expm1, floor, fsum, inf, lgamma, log, log1p, nextafter
 
 from verity.core.protocols.profile import HARM_MARGIN, IntegrityProfile, Stratified, Stratum
 from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound
-from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX, unit_class
+from verity.core.protocols.sampled_proofs.one_stage.partition import UNIT_CLASS_MAX, unit_class
 
-def pinned_ands(definition: str, sidecar: str = "lms") -> int:
-    """`definition`'s ANDs as its circuit-check pin records them (`verity.ml.commitments.gates`' `SIDECAR.circuit-check.json`):
-    the AND rows C-Flock proves, the copies that keep a form short (`forms.commit`) among them."""
-    from verity.ml.commitments import gates
-
-    pins = json.loads(Path(gates.__file__).with_name(f"{sidecar}.circuit-check.json").read_text())
-    return pins["definitions"][definition]["and"]
-
-
-#: ANDs of one SHA-512 compression in hm96 PROTOCOL §5's ripple-carry model, no copies: a gate count to compare hashes
-#: by, not what C-Flock proves
+#: ANDs of one SHA-512 compression in Boolean form (hm96 PROTOCOL §5)
 SHA512_ANDS = 58_120
-#: the AND rows C-Flock proves for one SHA-512 compression, `Sha512Compress_v1`'s pin: `compress_gadget`'s ANDs and the
-#: copies it commits
-SHA512_ROWS = pinned_ands("Sha512Compress_v1")
 #: the hiding part of an hm96-sha512 row in circuit: two private compressions (hm96 PROTOCOL §5)
-HM96_ANDS = 2 * SHA512_ROWS
+HM96_ANDS = 116_240
 
 
 def row_ands(nbytes: int) -> int:
-    """In-circuit AND rows to open one hm96-sha512 row of `nbytes` bytes: its digest's private blocks, the length and
-    padding included, and the hiding part (hm96 PROTOCOL §6's table, at `SHA512_ROWS` a compression)."""
-    return HM96_ANDS + SHA512_ROWS * ceil((nbytes + 17) / 128)
+    """In-circuit ANDs to open one hm96-sha512 row of `nbytes` bytes: its digest's private blocks, the length and padding
+    included, and the hiding part (hm96 PROTOCOL §6's table)."""
+    return HM96_ANDS + SHA512_ANDS * ceil((nbytes + 17) / 128)
 
 
 @dataclass(frozen=True)
 class Candidate:
     """One subcircuit of one way (`cut`, default the subcircuit alone) to cut one op type into proof blocks, derived from the IR,
     never from the prover: `units` instances, each credited `work` (the verifier's work table), with `out_bits` over
-    `out_gates` boundary gates, its committed bits, which fit a public size class (`partition_v2.unit_class`, at
+    `out_gates` boundary gates, its committed bits, which fit a public size class (`one_stage.partition.unit_class`, at
     most `UNIT_CLASS_MAX`, as the one-stage partition refuses a wider proof block), and `influence`, the credited work a wrong
     one can forfeit downstream.  A proved proof block costs `ands` plus opening `rows` (bytes each) in circuit; serving commits
     `commit_bits` in `commit_rows` rows per proof block whatever the sampling design; one statement holds at most `cap` proof blocks
@@ -144,7 +121,7 @@ class ReplayDomain:
 
 
 @dataclass(frozen=True)
-class TensorCommit:
+class Commitment:
     """One tensor committed at serve time by one scale, whatever the draw: `nbytes` hashed over the window, at the model's
     per-byte rate (`CostModel.commit_per_bit`) unless `cost` is measured.  `scale` names who commits it (the Commit's taps,
     PoUW's A rows or tile leaves, the remote audit's receipts, a work block's pin) and `tensor` what; one tensor under two
@@ -175,8 +152,7 @@ class CostModel:
     hidden window: one session, its k drawn proof blocks split evenly over `ceil(k / cap)` statements), so only they are staged;
     otherwise its proof blocks are cut in order into statements and every touched statement is staged whole.  Serving commits each proof block's outputs at `commit_per_bit` and `commit_per_row`, and
     `serve`, every other serve-time commitment, which every plan pays; `replay` names the replay domains that build
-    witnesses; `sigma` is a derived cost's relative uncertainty; `source` is the fit's `art:` id.  A plan's total weighs
-    serving's commitments, the proof blocks' and `serve`, by `commit_weight` (`PROVING_ONLY`, 0, leaves them out)."""
+    witnesses; `sigma` is a derived cost's relative uncertainty; `source` is the fit's `art:` id."""
 
     templates: Mapping[str, TemplateCost] = field(default_factory=dict)
     per_and: float = 0.0
@@ -186,16 +162,11 @@ class CostModel:
     staged_per_unit: float = 0.0
     commit_per_bit: float = 0.0
     commit_per_row: float = 0.0
-    serve: tuple[TensorCommit, ...] = ()
+    serve: tuple[Commitment, ...] = ()
     replay: Mapping[str, ReplayDomain] = field(default_factory=dict)
     sigma: float = 0.0
     source: str = ""
     shared: bool = False
-    commit_weight: float = 1.0
-
-    def __post_init__(self) -> None:
-        if not self.commit_weight >= 0:
-            raise ValueError("the commitments' weight is at least 0 (0 prices proving alone)")
 
     def of(self, c: Candidate) -> TemplateCost:
         if c.template in self.templates:
@@ -225,7 +196,7 @@ class CostModel:
     def commit(self, c: Candidate) -> float:
         return c.units * (self.commit_per_bit * c.commit_bits + self.commit_per_row * c.commit_rows)
 
-    def committed(self, s: TensorCommit) -> float:
+    def committed(self, s: Commitment) -> float:
         return s.cost if s.cost is not None else 8 * self.commit_per_bit * s.nbytes
 
     def serve_cost(self) -> float:
@@ -273,8 +244,7 @@ class PlanBounds:
 class Plan:
     """A cut per op type (`choice`: op -> its alternative), a statement size and a draw size per subcircuit, the subcircuits
     held at their floor and those proved whole, the expected cost by part (`serve` the fixed serve-time commitments,
-    `total` everything, `commit` and `serve` at the model's `commit_weight`), each weight class's weight on the density (1
-    when absent), and the certificate once certified."""
+    `total` everything), each weight class's weight on the density (1 when absent), and the certificate once certified."""
 
     lam: float
     choice: Mapping[str, str]
@@ -609,8 +579,7 @@ def _plan(chosen: Sequence[Candidate], costs: CostModel, objective: Objective, l
         parts["commit"] += costs.commit(c)
     parts["replay"] = replay_cost(sizes, chosen, costs)
     parts["serve"] = costs.serve_cost()
-    parts["total"] = parts["statements"] + parts["units"] + parts["replay"] \
-        + costs.commit_weight * (parts["commit"] + parts["serve"])
+    parts["total"] = parts["statements"] + parts["units"] + parts["commit"] + parts["replay"] + parts["serve"]
     choice = {c.op: c.alternative for c in chosen}
     return Plan(lam, choice, statement, sizes, floor_only, full, parts, weights)
 
@@ -633,7 +602,7 @@ def _plans_at(ops: Mapping[str, Mapping[str, list[Candidate]]], costs: CostModel
         return _k(c, objective, lam, weights.get(c.block, 1.0))
 
     def at(c: Candidate) -> float:
-        return costs.commit_weight * costs.commit(c) + template_cost(c, costs, k(c))[0]
+        return costs.commit(c) + template_cost(c, costs, k(c))[0]
 
     chosen = [c for alts in ops.values()
               for c in min(alts.items(), key=lambda kv: (sum(at(c) for c in kv[1]), kv[0]))[1]]
@@ -651,7 +620,7 @@ def _plans_at(ops: Mapping[str, Mapping[str, list[Candidate]]], costs: CostModel
         plans.append(base)
         whole = frozenset(c.template for c in chosen if c.template not in skip and base.sizes[c.template] < c.units
                           and template_cost(c, costs, c.units)[0] - template_cost(c, costs, base.sizes[c.template])[0]
-                          <= promote * (base.cost["total"] - costs.commit_weight * base.cost["serve"]))
+                          <= promote * (base.cost["total"] - base.cost["serve"]))
         if whole:
             plans.append(_plan(chosen, costs, objective, lam, skip, whole, weights))
     return plans
@@ -707,7 +676,7 @@ def for_budget(plans: Sequence[Plan], budget: float, *, candidates: Sequence[Can
     """The frontier's least-harm plan within `budget`: its costliest affordable plan.  Given the candidates, costs and
     objective, the plans either side of the budget are moved to it by bisection on the density, each holding its cuts,
     floor-only and full subcircuits and weights, and the one certifying less is taken, so the answer doesn't hang on the
-    sweep's grid.  The budget is the total, the serve-time commitments included at the model's `commit_weight`."""
+    sweep's grid.  The budget is the total, the serve-time commitments included."""
     affordable = [p for p in plans if p.cost["total"] <= budget]
     if not affordable:
         return None
@@ -810,7 +779,7 @@ def overlaps(costs: CostModel, *, latency: float = 0.0) -> list[dict]:
     its measured cost), and at decode its bytes, its chain and, when it gates the step, its chain's latency at `latency`
     a dependent compression (latency-bound).  Committed once, the cheapest copy is kept: the saving is the others' bytes
     and prefill cost, and at decode their latency less the kept copy's chain where it has to gate in their place."""
-    by: dict[str, list[TensorCommit]] = {}
+    by: dict[str, list[Commitment]] = {}
     for s in costs.serve:
         by.setdefault(s.tensor, []).append(s)
     rows = []
@@ -916,107 +885,8 @@ def work_law(plan: Plan, candidates: Sequence[Candidate]) -> dict:
     return {"law": "work:1", "table": {c.template: {"work": c.work, "floor": plan.sizes[c.template]} for c in chosen}}
 
 
-#: `CostModel.commit_weight`'s proving-only mode, the model of Lean's `GranularityOptimum`
-PROVING_ONLY = 0.0
-
-
-@dataclass(frozen=True)
-class Grain:
-    """One uniform partition of a window, as `Partitioning.Model` states one: `units` proof blocks (n) of `work` each (s),
-    each `out_bits` wide (b, what a wrong one exports), committing `commit_bytes` at serve time whether drawn or not (b(s),
-    its share of every byte the window commits under this partition), and costing `prove` when drawn (c(s), its
-    statement's share included)."""
-
-    name: str
-    units: int
-    work: float
-    out_bits: float
-    commit_bytes: float
-    prove: float
-
-    def __post_init__(self) -> None:
-        if self.units < 1 or not self.work > 0 or not min(self.out_bits, self.commit_bytes, self.prove) >= 0:
-            raise ValueError(f"grain {self.name!r}: needs units >= 1, work > 0, and non-negative widths and costs")
-
-
-def loc_bits(n: int, k: int) -> float:
-    """At least Lean's `locBits n K`, log2 of sum_{j <= K} C(n, j): 0 at K = 0, n H2(K/n) up to K = n/2 and n past it
-    (`consumers.location_bits`' bound)."""
-    if k <= 0:
-        return 0.0
-    if 2 * k >= n:
-        return float(n)
-    x = k / n
-    return n * (-x * log2(x) - (1 - x) * log2(1 - x))
-
-
-def leak_count(g: Grain, ell: float) -> int:
-    """`ExfiltrationOptimum`'s K: the most wrong proof blocks a leak target of `ell` bits allows, the largest K <= n with
-    b K + locBits(n, K) <= ell, by `loc_bits`, so the K it returns is certified."""
-    if not ell >= 0:
-        raise ValueError("a leak target is at least 0 bits")
-
-    def ok(k: int) -> bool:
-        return g.out_bits * k + loc_bits(g.units, k) <= ell
-
-    lo, hi = 0, g.units
-    if ok(hi):
-        return hi
-    while hi - lo > 1:
-        mid = (lo + hi) // 2
-        lo, hi = (mid, hi) if ok(mid) else (lo, mid)
-    return lo
-
-
-def work_draws(g: Grain, target: float, delta: float) -> float:
-    """`Achievability`'s law on equal proof blocks for the free-compute target C: each drawn with probability
-    min(1, Λ s / C), so (ns/C) Λ draws, `GranularityOptimum`'s cost over c(s), while s Λ <= C, and every one past it."""
-    return g.units * min(1.0, log(1 / delta) * g.work / target)
-
-
-def leak_draws(g: Grain, ell: float, delta: float) -> float:
-    """`ExfiltrationOptimum`'s achieving law for a leak target of `ell` bits: n Λ / (K + 1) draws, at most n, and none once
-    every proof block may be wrong."""
-    k = leak_count(g, ell)
-    return 0.0 if k >= g.units else min(float(g.units), g.units * log(1 / delta) / (k + 1))
-
-
-def grain_costs(grains: Iterable[Grain], delta: float, *, h: float, weight: float = 1.0, work: float | None = None,
-                leak: float | None = None) -> list[dict]:
-    """Each partition's expected cost at one target, the free-compute target `work` (C) or the exfiltration target `leak`
-    (bits), at `delta`, in the grains' order: `prove`, c(s) times the target's draws; `commit`, n b(s) h, paid on every
-    proof block; and `total`, proving plus `weight` times the commitment (`PROVING_ONLY` prices proving alone, Lean's
-    model)."""
-    if (work is None) == (leak is None):
-        raise ValueError("one target: work (C) or leak (bits)")
-    if not 0 < delta < 1 or not weight >= 0 or not h >= 0 or (work is not None and not work > 0):
-        raise ValueError("needs 0 < delta < 1, weight >= 0, h >= 0 and a positive work target")
-    rows = []
-    for g in grains:
-        draws = work_draws(g, work, delta) if work is not None else leak_draws(g, leak, delta)
-        prove, commit = draws * g.prove, g.units * g.commit_bytes * h
-        rows.append({"grain": g.name, "work": g.work, "units": g.units, "draws": draws, "prove": prove,
-                     "commit": commit, "total": prove + weight * commit})
-    return rows
-
-
-def grain_optimum(grains: Iterable[Grain], delta: float, **kw) -> dict:
-    """`grain_costs`' cheapest partition, the first of the grains' order on a tie."""
-    rows = grain_costs(grains, delta, **kw)
-    if not rows:
-        raise ValueError("no partition to choose from")
-    return min(rows, key=lambda r: r["total"])
-
-
-def sqrt_grain(beta: float, h: float, target: float, o: float, delta: float, weight: float = 1.0) -> float:
-    """The free-compute target's optimal proof-block work when c(s) = f + o s and every proof block commits `beta` bytes:
-    the s minimizing (f + o s)(F/C) Λ + w (F/s) β h, which is s* = √(w β h C / (o Λ)), whatever F and f, while s* Λ <= C."""
-    return sqrt(weight * beta * h * target / (o * log(1 / delta)))
-
-
-__all__ = ["Candidate", "TensorCommit", "CostModel", "Grain", "HM96_ANDS", "LN_BITS", "LN_PREC", "LN_TERMS",
-           "Objective", "PROVING_ONLY", "Plan", "PlanBounds", "ReplayDomain", "SHA512_ANDS", "SHA512_ROWS", "TemplateCost", "acceptance_parts",
-           "certify", "density_bound", "density_exact", "fill", "for_budget", "for_target", "frontier", "grain_costs",
-           "grain_optimum", "leak_count", "leak_draws", "ln_bound", "ln_upper", "loc_bits", "max_harm",
-           "max_harm_check", "needs_benchmark", "overlaps", "perturb", "pinned_ands", "replay_cost", "row_ands", "sensitivity",
-           "sqrt_grain", "structure", "template_cost", "touched", "weigh", "work_draws", "work_law"]
+__all__ = ["Candidate", "Commitment", "CostModel", "HM96_ANDS", "LN_BITS", "LN_PREC", "LN_TERMS",
+           "Objective", "Plan", "PlanBounds", "ReplayDomain", "SHA512_ANDS", "TemplateCost", "acceptance_parts", "certify", "density_bound",
+           "density_exact", "fill", "for_budget", "for_target", "frontier", "ln_bound", "ln_upper", "max_harm",
+           "max_harm_check", "needs_benchmark", "overlaps", "perturb", "replay_cost", "row_ands", "sensitivity", "structure",
+           "template_cost", "touched", "weigh", "work_law"]

@@ -19,7 +19,7 @@ from dataclasses import replace
 from functools import cache
 from typing import Any
 
-from verity.ml.circuits.defs import Body, BodyNode, bind
+from verity.ml.circuits.defs import Body, Node, bind
 from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, Refs, Strided
 
 
@@ -196,7 +196,7 @@ def narrowed(body: Body) -> tuple[Body, dict[int, tuple[int, int]]]:
         params, ret = fn.signature()
         args = tuple(Coll(params[i][1], c.refs.slice(a * (c.type.leaves // N), b * (c.type.leaves // N))) if i in COLUMNS[n.fn.base_id]
                      else c for i, c in enumerate(n.args))
-        nodes[k] = BodyNode("call", fn, args, ret, name=n.name)
+        nodes[k] = Node("call", fn, args, ret, name=n.name)
         cols[k], by[k] = (a, b), a * per
     if not cols:
         return body, {}

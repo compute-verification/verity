@@ -1,7 +1,7 @@
-# VF: V-H plus JI2, MOV on the issue row.
+# VF: V-H plus JI2, MOV on the issue row (rs-machine-model §12).
 name = "VF"
 epoch = "VF"
-summary = "V-H plus JI2, MOV on the issue row."
+summary = "V-H plus JI2, MOV on the issue row (rs-machine-model §12)."
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
     "F2FS", "XU", "R6r", "LDSi", "R6w", "LDG", "L2red", "JI2_0",
@@ -16,7 +16,7 @@ credits = [
     ["RED32", 1024.0], ["TMAred512", 4096.0], ["SEL", 32], ["SEL", 512], ["SEL", 1024],
 ]
 
-[published]  # as the legacy scripts printed them: τ and U/F_low to 4 places, the margin to 3
+[published]  # as the legacy scripts printed them: τ, τ at 600 W and U/F_low to 4 places, the margin to 3
 tau = 0.2447
 uf_low = 1.0938
 margin = 1.935

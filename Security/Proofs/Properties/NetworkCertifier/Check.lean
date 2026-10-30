@@ -49,10 +49,10 @@ theorem toOption_true {ε : Type} {x : Except ε Bool} : (x.toOption == some tru
 theorem verifies_iff {p : Params} {c : Commitment} {d : Direction} {l : String} {w : Nat} {r : Certified}
     (hr : recordsOf c d l w = [r]) : verifies p r = true ↔ ∃ dg, Signs p c d l w r dg := by
   obtain ⟨hd, hl, hw⟩ := recordsOf_mem (hr ▸ List.mem_singleton_self r)
-  unfold verifies Signs LmsVerifies NetworkCheck.Check.Certificate.signs
+  unfold verifies Signs LmsVerifies
   simp only [Bool.and_eq_true, beq_iff_eq, ba_beq]
   constructor
-  · rintro ⟨⟨⟨⟨hcl, hcd⟩, hcw⟩, hdg⟩, hk, hsig⟩
+  · rintro ⟨⟨⟨⟨⟨hk, hcl⟩, hcd⟩, hcw⟩, hdg⟩, hsig⟩
     cases hdig : r.head.digest with
     | error _ => rw [hdig] at hdg; cases hdg
     | ok dg =>
@@ -74,7 +74,7 @@ theorem verifies_iff {p : Params} {c : Commitment} {d : Direction} {l : String} 
             rw [← hk, ← hcl.trans hl, ← hcd.trans hd, ← hcw', ← hcdg]
             exact hm
   · rintro ⟨dg, -, hdig, hcdg, hk, hcl, hcd, hcw, m, hm, s, hs, hv⟩
-    refine ⟨⟨⟨⟨hcl.trans hl.symm, hcd.trans hd.symm⟩, ?_⟩, ?_⟩, hk, ?_⟩
+    refine ⟨⟨⟨⟨⟨hk, hcl.trans hl.symm⟩, hcd.trans hd.symm⟩, ?_⟩, ?_⟩, ?_⟩
     · rw [hw, hcw]
     · rw [hdig]; exact ba_beq.mpr hcdg
     · rw [hk, hcl, hcd, hcw, hcdg, hm, hs]
@@ -157,16 +157,16 @@ theorem screen_noVerdict {p : Params} {c : Commitment} {d : Direction} {l : Stri
 
 /-! ## A link-window's verdict -/
 
-theorem declares_declared {W : Nat} {link : LinkOpening} (h : link.syncs.size = W) : Declares link (declared W link) := by
+theorem declares_declared {W : Nat} {link : Link} (h : link.syncs.size = W) : Declares link (declared W link) := by
   intro v
   simp only [declared, Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem (h ▸ v.2 : v.1 < link.syncs.size),
     Option.getD_some]
 
-theorem declares_unique {W : Nat} {link : LinkOpening} {s s' : Fin W → ClockSync} (h : Declares link s)
+theorem declares_unique {W : Nat} {link : Link} {s s' : Fin W → ClockSync} (h : Declares link s)
     (h' : Declares link s') : s = s' :=
   funext fun v => Option.some.inj ((h v).symm.trans (h' v))
 
-theorem expectedGrid_eq {p : Params} {link : LinkOpening} {syncs : Fin p.windows → ClockSync} (h : Declares link syncs)
+theorem expectedGrid_eq {p : Params} {link : Link} {syncs : Fin p.windows → ClockSync} (h : Declares link syncs)
     (w : Nat) : expectedGrid p.grid p.windows link w = programGrid p syncs link.frames w := by
   have e : (fun v : Fin p.windows => link.syncs.getD v.1 noSync) = syncs :=
     funext fun v => by rw [Array.getD_eq_getD_getElem?, h v]; rfl
@@ -179,7 +179,7 @@ theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {
   | error _ => exact (error_ne_ok h).elim
   | ok a => exact ⟨a, rfl, h⟩
 
-theorem first_link {e : Evidence} {link : LinkOpening} (hl : link ∈ e.links.toList) :
+theorem first_link {e : Evidence} {link : Link} (hl : link ∈ e.links.toList) :
     ∃ first, e.links[0]? = some first ∧ first ∈ e.links.toList := by
   have h0 : 0 < e.links.size := by
     rw [← Array.length_toList]
@@ -187,7 +187,7 @@ theorem first_link {e : Evidence} {link : LinkOpening} (hl : link ∈ e.links.to
   exact ⟨e.links[0], Array.getElem?_eq_getElem h0, Array.mem_def.mp (Array.getElem_mem h0)⟩
 
 /-- The check's sync test, `sync in sync_set and sync == unit_sync`, is `SyncAdmitted`. -/
-theorem syncTest_iff {p : Params} {e : Evidence} {link : LinkOpening} {w : Nat} (hfit : EvidenceFits p e)
+theorem syncTest_iff {p : Params} {e : Evidence} {link : Link} {w : Nat} (hfit : EvidenceFits p e)
     (hl : link ∈ e.links.toList) (hw : w < p.windows) :
     (inSyncSet p.syncSet (link.syncs.getD w noSync) &&
       ((link.syncs.getD w noSync).delta == (unitSync e w).delta &&
@@ -217,7 +217,7 @@ theorem not_not_true {b : Bool} (h : ¬ (!b) = true) : b = true := by simpa usin
 theorem not_true {b : Bool} (h : (!b) = true) : b = false := by simpa using h
 
 /-- **An egress link-window has no violation exactly when it is `EgressAccepted`.** -/
-theorem egress_none {p : Params} {c : Commitment} {e : Evidence} {eg : ByteArray} {l : String} {link : LinkOpening}
+theorem egress_none {p : Params} {c : Commitment} {e : Evidence} {eg : ByteArray} {l : String} {link : Link}
     {w : Nat} (hfit : EvidenceFits p e) (hl : link ∈ e.links.toList) (hw : w < p.windows) :
     egressVerdict p c e eg l link w = none ↔ EgressAccepted p c e eg l link w := by
   constructor
@@ -269,7 +269,7 @@ theorem egress_none {p : Params} {c : Commitment} {e : Evidence} {eg : ByteArray
       rw [ite_eq_left (ba_beq.mpr rfl)]
 
 /-- **An egress link-window's violation is `no-verdict` exactly when it is `Pending`.** -/
-theorem egress_noVerdict {p : Params} {c : Commitment} {e : Evidence} {eg : ByteArray} {l : String} {link : LinkOpening}
+theorem egress_noVerdict {p : Params} {c : Commitment} {e : Evidence} {eg : ByteArray} {l : String} {link : Link}
     {w : Nat} : egressVerdict p c e eg l link w = some "no-verdict" ↔ Pending p c .egress l w := by
   constructor
   · intro hv

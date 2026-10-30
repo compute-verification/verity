@@ -89,9 +89,9 @@ def test_two_windows_and_an_idle_tail(x):
 
 
 def test_the_slices_block_rows_are_the_registered_leaves(x):
-    """At G < P (G = 1 on the corpus's P = 7) the slice's ``srv`` rows are the registration's rows of its blocks: proof
-    block w's row ``srv{j}`` is leaf w·(P / G) + j, held there by its b‖c and at no other leaf; the six passes with the
-    registered rows in ``srv0`` … are refused at ``rows``, as at G = P."""
+    """At G < P (G = 1 on the corpus's P = 7) the slice's ``srv`` rows are the registration's rows of its blocks: unit w's
+    row ``srv{j}`` is leaf w·(P / G) + j, held there by its b‖c and at no other leaf; the six passes with the registered
+    rows in ``srv0`` … are refused at ``rows``, as at G = P."""
     G = 1
     st = CS.with_block(x.st, G)
     S = SimpleNamespace(**st)
@@ -111,10 +111,10 @@ def test_the_slices_block_rows_are_the_registered_leaves(x):
 
 @pytest.mark.parametrize("G", [0, 2, 3, 8])
 def test_a_records_g_that_doesnt_divide_p_is_refused(x, G):
-    """The verifier indexes a proof block's rows by the public record's G, which `register` holds to divide
+    """The verifier indexes a unit's rows by the public record's G, which `register` holds to divide
     P; a record whose G doesn't (2 or 3 on P = 7 floors to 3 or 2 blocks a window, 8 to none, 0 divides by zero) is
     refused there too, rather than read as another G's leaves. The tie's statics, which don't hold P, refuse that G
-    too, so no proof block is built for a block the registration never has."""
+    too, so no unit is built for a block the registration never has."""
     with pytest.raises(ValueError, match="dividing P"):
         SR.leaf(x.S, {**x.record, "G": G}, 1, 0)
     with pytest.raises(ValueError, match="dividing P"):

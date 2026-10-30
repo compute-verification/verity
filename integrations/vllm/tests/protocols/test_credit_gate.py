@@ -566,10 +566,8 @@ def test_the_honest_forgery_stand_in_is_credited():
 
 @pytest.mark.parametrize("name", [None, *FORGERIES])
 def test_the_value_check_on_the_device_is_the_hosts(name):
-    """A call's records, scales and served y left on a CUDA device, as the arm leaves them, are judged as their host copies
-    are: `pouw_h1_records.holds_on` there holds exactly when `reason` of the host copies is None (honest records), and
-    `reason` of the device's records is each forgery's own refusal. `reason` takes y as its bf16 bits and the scales as
-    arrays, as `H1Run` hands them over (`numpy_of`, `row_words`)."""
+    """`pouw_h1_records.reason` of a call's records, scales and served y left on a CUDA device, as the arm leaves them, is
+    what it is of their host copies: None for honest records, and each forgery's own refusal."""
     if not torch.cuda.is_available():
         pytest.skip("needs CUDA")
     w = Linear(64, 1, None)
@@ -577,11 +575,9 @@ def test_the_value_check_on_the_device_is_the_hosts(name):
     y, zy = E.scaled_mm_zy(xq, s_a, w.weight, w.weight_scale, ROWS)
     if name is not None:
         y, zy = FORGERIES[name][0](y.clone(), zy.clone(), xq, s_a, w.weight, w.weight_scale)
-    bits, sa, sw = y.contiguous().view(torch.int16).numpy(), PH.numpy_of(s_a), PH.numpy_of(w.weight_scale)
-    host = ZR.reason(zy.numpy(), ROWS, 64, bits, sa, sw)
+    host = ZR.reason(zy.numpy(), ROWS, 64, y, s_a, w.weight_scale)
     assert host == (None if name is None else FORGERIES[name][1])
-    assert ZR.holds_on(zy.cuda(), ROWS, 64, y.cuda(), s_a.cuda(), w.weight_scale.cuda()) == (host is None)
-    assert ZR.reason(zy.cuda(), ROWS, 64, bits, sa, sw) == host
+    assert ZR.reason(zy.cuda(), ROWS, 64, y.cuda(), s_a.cuda(), w.weight_scale.cuda()) == host
 
 
 def test_a_z_written_outside_the_trace_is_refused_as_untraced():
@@ -1007,22 +1003,23 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
     other = _descriptor(((64, K), (32, K)), ("q", "k"))
     assert _credit(auditor, rec, st, descriptor=other, run=_verifier(drawn))["credit"] is None
     auditor.ledger.period_close(PERIOD)
-    ledger, read = _ledger(auditor)
+    ledger = PHC.Ledger.load([auditor.ledger.path], auditor.key, pins=[auditor.ledger.pins_path], main=CH.MAIN)
     evidence = PHC.window_evidence(rec, auditor.directory, auditor.window, st, _descriptor(), live)
-    got, why = PHC.period_credit(ledger, PERIOD, [evidence], run=_verifier(drawn), **read)
+    got, why = PHC.period_credit(ledger, PERIOD, [evidence], run=_verifier(drawn))
     assert why is None and got == {"windows": [[0]], "work": [CR.credited_work(LAYOUT, [0], served)], "k": k,
                                    "delta": str(CR.DELTA), "eps": [out["eps"]]}, why
-    assert PHC.period_credit(ledger, PERIOD, [evidence], run=_verifier(drawn), **{**read, "pins": None})[1] == (
+    unpinned = PHC.Ledger.load([auditor.ledger.path], auditor.key, main=CH.MAIN)
+    assert PHC.period_credit(unpinned, PERIOD, [evidence], run=_verifier(drawn))[1] == (
         "circuit", f"window 0 of period {PERIOD} doesn't count toward it, so the period earns nothing: {LC.NO_PINS}")
-    assert PHC.period_credit(ledger, PERIOD, [evidence], run=_verifier(drawn), **{**read, "main": CH.MAIN[:1]})[1] == (
+    off_main = PHC.Ledger.load([auditor.ledger.path], auditor.key, pins=[auditor.ledger.pins_path], main=CH.MAIN[:1])
+    assert PHC.period_credit(off_main, PERIOD, [evidence], run=_verifier(drawn))[1] == (
         "circuit", f"window 0 of period {PERIOD} doesn't count toward it, so the period earns nothing: "
                    f"{LC.first_parent_reason(auditor.session_id, CH.PINNED, list(CH.MAIN[:1]))}")
-    assert PHC.period_credit(ledger, PERIOD, [{**evidence, "descriptor": other.hex()}], run=_verifier(drawn),
-                             **read)[1][0] == \
+    assert PHC.period_credit(ledger, PERIOD, [{**evidence, "descriptor": other.hex()}], run=_verifier(drawn))[1][0] == \
         "circuit"
     b = SV.register_weights(_circuit(), [(64, K)], {0: _rows("s_w")}, _model_key().key).registered[K].entry()
     forged = {**evidence, "entries": [b if CR.is_held(e["value"]) else e for e in evidence["entries"]]}
-    refused = PHC.period_credit(ledger, PERIOD, [forged], run=_verifier(drawn), **read)[1]
+    refused = PHC.period_credit(ledger, PERIOD, [forged], run=_verifier(drawn))[1]
     assert refused[0] == "window" and refused[1].startswith(f"window 0 of period {PERIOD} is refused, so the period "
                                                             "earns nothing: weights: "), refused
 
@@ -1039,11 +1036,11 @@ def test_a_period_open_without_draw_k_is_refused(periodic):
     assert out["k"] is None and out["credit"] is None
     assert out["window"][0] == "budget" and "commits no draw K" in out["window"][1]
     auditor.ledger.period_close(PERIOD)
-    ledger, read = _ledger(auditor)
-    reasons = PHC.period_reason(ledger, PERIOD, [auditor.session_id], [auditor.window["root"]], key=read["key"])
+    ledger = PHC.Ledger.load([auditor.ledger.path], auditor.key, pins=[auditor.ledger.pins_path], main=CH.MAIN)
+    reasons = PHC.period_reason(ledger, PERIOD, [auditor.session_id], [auditor.window["root"]])
     assert len(reasons) == 1 and reasons[0].startswith(f"budget: period {PERIOD}'s open commits no draw K"), reasons
     evidence = PHC.window_evidence(rec, auditor.directory, auditor.window, [], _descriptor())
-    assert PHC.period_credit(ledger, PERIOD, [evidence], **read)[1][0] == "budget"
+    assert PHC.period_credit(ledger, PERIOD, [evidence])[1][0] == "budget"
     with pytest.raises(ValueError, match="layout"):
         PHC.draw_k(None)
 
@@ -1101,14 +1098,6 @@ def test_the_period_k_is_sized_for_the_expected_credited_share_and_the_verifier_
     assert Wd.eps_at(PHC.draw_k(layout, credited=1), CR.DELTA, work * 8 // 9, work, 1) > PHC.DRAW_EPS
 
 
-def _ledger(auditor):
-    """The auditor's ledger at its published head as core reads it (`challenger.ledger_of`), and what a reading of it
-    holds its sessions to: its key, the host's pins log at its published head (`pouw_h1_challenger.pins_head`) and
-    `CH.MAIN`."""
-    ledger = LC.ledger_of([R.ledger_lines(auditor.ledger.path)], auditor.key, PHC.lms_verify)
-    return ledger, {"key": auditor.key, "pins": PHC.pins_head([auditor.ledger.pins_path]), "main": CH.MAIN}
-
-
 def _two_window_period(tmp_path):
     """Lane vllm's closed period `PERIOD` of two windows, each reserved, opened on its root and ended complete, as the
     auditor's ledger (its record leaves between each open's and end's), and their challenge phases and roots, in order."""
@@ -1128,30 +1117,28 @@ def _two_window_period(tmp_path):
         sessions.append(s)
         roots.append(root)
     ledger.period_close(PERIOD)
-    read = {"key": ledger.key, "pins": CH.PINS, "main": CH.MAIN}
-    return LC.ledger_of([list(ledger.lines)], ledger.key, PHC.lms_verify), read, sessions, roots
+    return PHC.Ledger.of([ledger.lines], ledger.key, pins=[CH.PINS], main=CH.MAIN), sessions, roots
 
 
 def test_a_window_presented_outside_its_periods_close_or_out_of_order_is_refused(tmp_path):
     """A period earns only as its close lists it (`credit.period`): exactly its windows, each once, in the
     close's order. Presented out of order, with one missing, with one past the close, or with a window not its own, the
     period is refused, by `period_reason` and by `period_credit` before any window is read."""
-    ledger, read, sessions, (a, b) = _two_window_period(tmp_path)
+    ledger, sessions, (a, b) = _two_window_period(tmp_path)
     other = hashlib.sha512(b"another window").hexdigest()
-    assert PHC.period_reason(ledger, PERIOD, sessions, [a, b], key=read["key"]) == []
+    assert PHC.period_reason(ledger, PERIOD, sessions, [a, b]) == []
 
     def why(presented):
-        (reason,) = PHC.period_reason(ledger, PERIOD, sessions, presented, key=read["key"])
+        (reason,) = PHC.period_reason(ledger, PERIOD, sessions, presented)
         return reason
     assert why([b, a]).startswith(f"order: window 0 of period {PERIOD} is {b[:16]}...")
     assert why([a]).startswith(f"missing: window 1 of period {PERIOD}")
     assert why([a, b, a]).startswith("period: the windows presented run past the 2")
     assert why([other, a, b]).startswith(f"period: window {other[:16]}... is not one of period {PERIOD}'s windows")
     stub = dict.fromkeys(CR.PERIOD_KEYS)
-    got, refused = PHC.period_credit(ledger, PERIOD, [{**stub, "window": {"root": b}}, {**stub, "window": {"root": a}}],
-                                     **read)
+    got, refused = PHC.period_credit(ledger, PERIOD, [{**stub, "window": {"root": b}}, {**stub, "window": {"root": a}}])
     assert got is None and refused[0] == "order"
-    assert PHC.period_credit(ledger, PERIOD, [{**stub, "window": {"root": a}}], **read)[1][0] == "missing"
+    assert PHC.period_credit(ledger, PERIOD, [{**stub, "window": {"root": a}}])[1][0] == "missing"
 
 
 def test_a_credit_bit_changed_after_the_draw_coin_is_refused(periodic):

@@ -85,9 +85,9 @@ def shape(lib: B.Lib) -> dict:
 
 def rc_shape(lib: B.Lib) -> dict:
     """kv.cu's receipt shape (`kv_rc_shape`); `forms` & 4 where the build runs form 13 (`codec_tensor/step.py`)."""
-    a = (ctypes.c_int * 4)()
+    a = (ctypes.c_int * 7)()
     lib.so.kv_rc_shape(ctypes.cast(a, ctypes.c_void_p))
-    return dict(zip(("mdw", "mt", "rk", "forms"), a))
+    return dict(zip(("rt", "lag", "zw", "mdw", "mt", "steps", "forms"), a))
 
 
 def forms_of(sh: dict, only=None) -> list[int]:
@@ -97,7 +97,7 @@ def forms_of(sh: dict, only=None) -> list[int]:
 
 
 def attn_occ(lib: B.Lib) -> dict:
-    a = (ctypes.c_int * 4)()
+    a = (ctypes.c_int * 5)()
     if lib.so.kv_attn_occ(ctypes.cast(a, ctypes.c_void_p)) != 0:
         return {}
     return {FORMS[5]: {"ctas_per_sm": a[0], "decoder_warps_per_sm": a[0] * a[1]},

@@ -52,7 +52,7 @@ The commit itself (`relay`, which ``relay`` runs end to end with a key of its ow
   their bytes arrive. Each returns its chunk's subtree root, and the main process folds them as `tree_levels` does. A P2
   chunk takes the blocks its bytes fall in, so a block two chunks share is decoded twice.
 * **The salts** are the operating system's, 192 bytes a row, drawn by the worker that commits the row (`os_salts`):
-  every hm96 salt is the operating system's (A3 in
+  every hm96 salt is the operating system's (Daniel, 9 Oct, decisions 4(a) and 4(c); A3 in
   ``Security/Proofs/Flock/Soundness/Assumptions.lean``), so nothing rests on a stream generator. ``--witness`` is
   where they go, every value's in manifest order, its rows in order (each value's `Transfer.witness`): the prover's
   alone, 4.85 GB at H200 (25,284,864 rows). `keyed_salts` is interface 1's prover-side derivation (Flock's
@@ -500,7 +500,7 @@ class Task:
 
 
 def run_task(task: Task, data: bytes) -> tuple[int, int, bytes, int, bytes | None]:
-    """One chunk's subtree root: its bytes decoded first when they are P2 blocks, its salts sampled and written at their
+    """One chunk's subtree root: its bytes decoded first when they are P2 blocks, its salts drawn and written at their
     witness offset, or returned with it when the task's `witness` is none and its `keep` is set."""
     j = task.job
     if j.block is not None:
@@ -681,8 +681,7 @@ def verifier_domain(program: str) -> Callable[[Value], CommitmentDomain]:
 
 def heads(link: str, program: str, values: Sequence[Value], roots: Mapping[str, bytes],
           domain: Callable[[Value], CommitmentDomain]) -> list[TR.TransferHead]:
-    """Each value's head for the load's execution phase (`transfer_rows.TransferHead`: kind ``load``, ingress, window
-    0)."""
+    """Each value's head for the load's link-window (`transfer_rows.TransferHead`: kind ``load``, ingress, window 0)."""
     return [TR.TransferHead(link, Direction.INGRESS, WINDOW, KIND, v.name, bytes.fromhex(program), v.reg_words, v.leaves,
                             domain(v).domain_id, roots[v.name], v.word_bits, v.schema) for v in values]
 
@@ -700,7 +699,7 @@ def sign_heads(issuer: Issuer, heads_: Sequence[TR.TransferHead]) -> list[dict[s
 
 def sign(issuer: Issuer, link: str, program: str, values: Sequence[Value], roots: dict[str, bytes],
          domain: Callable[[Value], CommitmentDomain]) -> list[dict[str, Any]]:
-    """Each value's head signed for the load's execution phase: its registration (`transfer_rows.registration`)."""
+    """Each value's head signed for the load's link-window: its registration (`transfer_rows.registration`)."""
     return sign_heads(issuer, heads(link, program, values, roots, domain))
 
 

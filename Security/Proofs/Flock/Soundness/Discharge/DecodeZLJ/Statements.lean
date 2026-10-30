@@ -1,7 +1,5 @@
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Assemble
-import Proofs.Flock.Soundness.Discharge.DecodeZL.LIG
-import Proofs.Flock.Soundness.Discharge.DecodeZL.OP
-import Proofs.Flock.Soundness.Discharge.Tables.Statements
+import Proofs.Flock.Soundness.Discharge.DecodeZL
+import Proofs.Flock.Soundness.Discharge.Tables
 
 /-!
 # The decoder at `J` tables: statements

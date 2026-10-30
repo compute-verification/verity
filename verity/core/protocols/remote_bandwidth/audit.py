@@ -101,10 +101,9 @@ from dataclasses import dataclass, field, replace
 from fractions import Fraction
 from typing import Any, Protocol
 
-from verity.core.protocols.profile import WINDOW_DELTA, IntegrityProfile, Subset
+from verity.core.protocols.profile import IntegrityProfile, Subset
 from verity.ml.commitments import Commitment, CommitmentDomain, MerkleTree, Opening as MerkleOpening, RangeIndexedDomain
 from verity.ml.commitments import verify_opening
-from verity.ml.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
 from verity.ml.randomness import derive, frame
 
 from . import codec, coins, receipts
@@ -124,7 +123,7 @@ REGISTRATION_DOMAIN = b"verity/remote-bandwidth/registration/v0\0"
 TILE_DOMAIN = b"verity/remote-bandwidth/stub-tile/v0\0"
 PAYLOAD_SCHEMA = receipts.SCHEMA
 NONCE_BYTES = 32
-NODE_BYTES = _DIGEST_BYTES["sha512"]
+NODE_BYTES = 64
 QUERIES_LOG2 = 64
 SLACK_LOG2 = 67
 """AuditRO's slack, the bits a pass is charged beyond `named_bits`: its last term C(q, k)/2^λ is then at most 2^-67 a
@@ -133,7 +132,7 @@ pass, which γ's error and the memory line's δ add once a pass.  Up to 2^17 pas
 (532.6 GB, eight GPUs' 62 GiB shards) at `timing.READ_BYTES_PER_S` is 87,326 passes."""
 WINDOW_NS = 60 * 10**9
 SAMPLES = 33_273
-DELTA = float(WINDOW_DELTA)
+DELTA = 2.0 ** -40
 
 FAILURES = ("late", "order", "step", "plan", "lifetime", "append", "coin", "release", "few", "malformed",
             "receipt-path", "codec", "payload-path", "tile", "receipt")
@@ -197,9 +196,10 @@ class Pace:
 @dataclass(frozen=True, slots=True)
 class Params:
     """A session's parameters: the store's size `N`, the allowance `A` from a window's boundary message to its roots'
-    deadline, the windows `W`, the openings `s` per window at `delta` (`SAMPLES` at `DELTA` by default), the fewest
-    passes a window may certify, the stated window `T` (`window_ns`, 60 s by default: no boundary message leaves sooner
-    after its window's challenge), the store's codec, receipt kind, whether its receipts bind z, its block layout and its sketch rows (None for the kind's default, `receipts.sketch_rows`), the
+    deadline, the windows `W`, the openings `s` per window at `delta` (33,273 at 2^-40 by default, 555 a second of the
+    stated window), the fewest passes a window may certify, the stated window `T` (`window_ns`, 60 s by default: no
+    boundary message leaves sooner after its window's challenge), the store's codec, receipt kind, whether its
+    receipts bind z, its block layout and its sketch rows (None for the kind's default, `receipts.sketch_rows`), the
     registration's, the lifetime cap L on an appended block, in windows (None: `lifetime_windows` of the stated
     window, `LIFETIME_NS`), and whether the prover defers an
     appended block's residency to its encode (`deferred`, memory-map/v1's deferred residency), which needs L ≥ 2: a
@@ -485,8 +485,7 @@ class Store:
     """The prover's encoded store `E` under a registration, with its payload tree and the payloads' salts, and the
     blocks appended after the codec seed (`append`) at the next fresh store indices, each encoded under its bound key
     and its append's coin once the verifier has sent it (`encode`; None until then, its payload `pending`).  A
-    released block is kept, since a window's draws may still open it from a pass before its release.  Each block's
-    payload (`payload`) is the witness check 3's unit takes (`opening.witness`)."""
+    released block is kept, since a window's draws may still open it from a pass before its release."""
 
     def __init__(self, registration: Registration, payloads: Sequence[bytes], salts: Sequence[bytes]) -> None:
         if len(payloads) != registration.blocks:
@@ -500,7 +499,6 @@ class Store:
         self.blocks: list[bytes | None] = [codec.encode(m, j, k) for j, m in enumerate(self.payloads)]
         self.appends: list[Append] = []
         self.pending: dict[int, tuple[bytes, ...]] = {}
-        self.coin_of: dict[int, bytes] = {}
 
     @property
     def extent(self) -> int:
@@ -538,32 +536,15 @@ class Store:
         k = self.registration.key
         encoded = [codec.encode(m, first + u, k, bound=True, coin=coin) for u, m in enumerate(payloads)]
         del self.pending[first]
-        self.coin_of[first] = coin
         self.blocks[first:first + len(encoded)] = encoded
-
-    def _append_of(self, j: int) -> Append:
-        return self.appends[bisect.bisect_right([x.first for x in self.appends], j) - 1]
 
     def committed(self, j: int) -> tuple[bytes, tuple[bytes, ...], bytes]:
         """Block j's payload salt, its path to the payload root or its append's, and its digest `d_j` (empty under
         the seed's key)."""
         if j < self.registration.blocks:
             return self.salts[j], self.payload_tree.open(j).path, b""
-        a = self._append_of(j)
+        a = self.appends[bisect.bisect_right([x.first for x in self.appends], j) - 1]
         return a.salts[j - a.first], a.tree.open(j).path, a.digests[j - a.first]
-
-    def payload(self, j: int) -> bytes:
-        """Block j's payload: registered, or appended, its append's while it awaits its coin and then its block decoded
-        under its digest and that coin, so the store keeps no second copy of what it appends."""
-        if j < self.registration.blocks:
-            return self.payloads[j]
-        a = self._append_of(j)
-        if a.first in self.pending:
-            return self.pending[a.first][j - a.first]
-        m = codec.decode(self.blocks[j], j, self.registration.key, a.digests[j - a.first], self.coin_of[a.first])
-        if m is None:
-            raise ValueError(f"block {j} decodes to no payload of its digest under its append's coin")
-        return m
 
 
 @dataclass(frozen=True, slots=True)
@@ -610,33 +591,6 @@ class Opening:
         return (4 + 8 + len(self.block) + len(self.leaf) + len(self.leaf_salt) + len(self.payload_salt)
                 + DIGEST_BYTES * (len(self.receipt_path) + len(self.payload_path)) + len(self.tile) + len(self.digest)
                 + 4 * 3)
-
-
-@dataclass(frozen=True)
-class PositionSample:
-    """What the verifier knows of one draw (`AuditRun.drawn`): window t, pass i at step s, position p, block j =
-    plan_i[p], the pass's seed, plan and root, and the commitment block j's payload is a leaf of: the registration's
-    payload tree (``coin`` None) or its append's, under the append's coin."""
-
-    window: int
-    index: int
-    position: int
-    block: int
-    step: int
-    seed: bytes
-    plan: Plan
-    root: bytes
-    domain: CommitmentDomain
-    commitment: Commitment
-    coin: bytes | None
-
-    @property
-    def leaf(self) -> int:
-        return self.position // receipts.PER_LEAF
-
-    @property
-    def leaf_size(self) -> int:
-        return min(receipts.PER_LEAF, self.plan.length - receipts.PER_LEAF * self.leaf)
 
 
 class Prover:
@@ -944,21 +898,17 @@ class AuditRun:
     `Record.end_ns` over the same store, less the trusted round-trip floor if there is one, or the clock at
     registration for the store's first session, so that no read serves receipts of two sessions.  `tiles` is PoUW's
     check if the registration binds z, and None if it does not.  Blocks appended after the codec seed (`append`) are
-    the session's: they take indices from N up, and a later session over the store starts again from N.  A window's
-    draws are decided by their openings (`verify`), or by check 3's outcome on each (`drawn`, `decide`).
+    the session's: they take indices from N up, and a later session over the store starts again from N.  A session
+    over PoUS's P2 store is `p2.Session`, whose blocks are units of `block_bytes` (`codecs`, the codec it takes)."""
 
-    The session is one type over either codec.  Over PoUS's P2 store (a `P2Codec`, registered by `p2.register`) its
-    blocks are units of four of C*'s blocks (`block_bytes`, `p2.UNIT_BYTES`), its openings are `p2.Opening`s checked on
-    PoUS's vk (`p2.check`), its receipts bind no z, and it appends nothing: the store is fixed at PoUS's setup."""
+    codecs: tuple[type, ...] = (Codec,)
+    block_bytes: int = BLOCK_BYTES
 
     def __init__(self, params: Params, registration: Registration, tiles: Tiles | None, coins_: coins.SessionCoins, *,
                  not_before_ns: int, clock: Callable[[], int] = time.monotonic_ns) -> None:
-        self.block_bytes = BLOCK_BYTES
-        if type(params.codec) is P2Codec:
-            from . import p2
-            if type(registration) is not p2.Registration:
-                raise ValueError("a session over a P2 store is over a P2 Registration (p2.register)")
-            self.block_bytes = p2.UNIT_BYTES
+        if type(params.codec) not in self.codecs:
+            raise ValueError(f"a {type(self).__name__} is over a store under {[c.__name__ for c in self.codecs]}, not "
+                             f"{type(params.codec).__name__}: a P2 store's session is p2.Session")
         if (registration.blocks != params.blocks or registration.codec != params.codec
                 or registration.receipt != params.receipt or registration.bind != params.bind
                 or registration.layout != params.layout
@@ -1099,10 +1049,6 @@ class AuditRun:
         return max(soonest, w.released_ns + (k - 1) * self.params.deadline_ns, self.deadline(t - 1) if t else 0)
 
     @property
-    def _p2(self) -> bool:
-        return type(self.params.codec) is P2Codec
-
-    @property
     def _one_in_flight(self) -> bool:
         return self.params.pace is not None and self.params.pace.in_flight == 1
 
@@ -1115,11 +1061,8 @@ class AuditRun:
         under which the prover encodes the blocks (`Store.encode`) and an opening decodes them.  Its rejection, `append`,
         if it is malformed or would take the store past its codec's `max_blocks`; `coin`, releasing none, if its root was
         sent before (a retry never redraws), the last window's roots are final, so no root can follow it, or the session's
-        append coins are all released (or it reserved none: `coins.families`).  Over a P2 store, always `append`: the
-        store is fixed at PoUS's setup."""
+        append coins are all released (or it reserved none: `coins.families`)."""
         self._live()
-        if self._p2:
-            return self._fail(self.filling, "append")
         if (type(root) is not bytes or len(root) != DIGEST_BYTES or type(count) is not int or count < 1
                 or self.extent + count > self.params.codec.max_blocks):
             return self._fail(self.filling, "append")
@@ -1297,8 +1240,8 @@ class AuditRun:
         return chained(root, self.windows[t].heads[i])
 
     def verify(self, t: int, openings: Sequence[Opening]) -> Verdict:
-        """Window t's verdict on the prover's openings of its draws (`p2.Opening`s over a P2 store), in the order drawn:
-        `malformed` on a window with no draws, whatever its openings."""
+        """Window t's verdict on the prover's openings of its draws, in the order drawn: `malformed` on a window with
+        no draws, whatever its openings."""
         self._live()
         w = self.windows[t] if 0 <= t < len(self.windows) else None
         if w is None or w.draws is None or w.verdict is not None:
@@ -1314,13 +1257,6 @@ class AuditRun:
         return w.verdict
 
     def _check(self, t: int, i: int, p: int, o: Opening, key: codec.Key, receipters: dict) -> str | None:
-        if self._p2:
-            from . import p2
-            w = self.windows[t]
-            seed = receipts.seed(w.challenge, i, self._previous(t, i))
-            if i not in receipters:
-                receipters[i] = p2.Sketcher(seed, self.registration.rows)
-            return p2.check(self.registration, seed, w.plans[i], w.roots[i], i, p, o, receipters[i])
         N = self.params.blocks
         if (type(o) is not Opening or o.pass_index != i or o.position != p or type(o.block) is not bytes
                 or len(o.block) != BLOCK_BYTES or type(o.leaf) is not bytes or type(o.tile) is not bytes
@@ -1360,43 +1296,6 @@ class AuditRun:
         if receipters[i](j, o.block, z) != y:
             return "receipt"
         return None
-
-    def drawn(self, t: int) -> tuple[PositionSample, ...]:
-        """What the verifier knows of window t's draws, in the order drawn, for check 3 decided by proofs (`opening`)
-        in place of `verify`'s openings: over a store under a `Codec`, whose payloads the unit decodes."""
-        if self._p2:
-            raise SessionError("check 3's unit decodes a Codec store's blocks: a P2 store's openings are checked on "
-                               "PoUS's vk (verify)")
-        w = self.windows[t] if 0 <= t < len(self.windows) else None
-        if w is None or w.draws is None:
-            raise SessionError(f"window {t} has no draws")
-        N, out = self.params.blocks, []
-        for i, p in w.draws:
-            plan = w.plans[i]
-            j = plan.block(p)
-            if j < N:
-                domain, commitment, coin = self._payload_domain, Commitment(self.registration.payload_root, N), None
-            else:
-                _f, domain, commitment, coin = self._appends[bisect.bisect_right(self._appends, j, key=lambda a: a[0]) - 1]
-            out.append(PositionSample(t, i, p, j, w.steps[i], receipts.seed(w.challenge, i, self._previous(t, i)), plan,
-                                      w.roots[i], domain, commitment, coin))
-        return tuple(out)
-
-    def decide(self, t: int, failures: Sequence[str | None]) -> Verdict:
-        """Window t's verdict from check 3's outcome on each of its draws (`drawn`), in the order drawn, in place of
-        `verify`'s openings: the first failure (one of `FAILURES`) rejects it, and a window with no draws is
-        `malformed`, as `verify` has it."""
-        self._live()
-        w = self.windows[t] if 0 <= t < len(self.windows) else None
-        if w is None or w.draws is None or w.verdict is not None:
-            raise SessionError(f"window {t} has no draws awaiting check 3")
-        if not w.draws or len(failures) != len(w.draws):
-            return self._fail(t, "malformed")
-        for at, f in zip(w.draws, failures):
-            if f is not None:
-                return self._fail(t, f if f in FAILURES else "malformed", at)
-        w.verdict = Verdict(t, True)
-        return w.verdict
 
     @property
     def outcome(self) -> str | None:
@@ -1820,12 +1719,12 @@ def floors(record: Record) -> tuple[float, ...]:
 
 
 def pooled(record: Record) -> tuple[float, float]:
-    """The pooled reading of a record's openings: `(wrong, floor)`, at most `wrong` of the session's receipts wrong
+    """The horizon reading of a record's openings: `(wrong, floor)`, at most `wrong` of the session's receipts wrong
     and at most a share `floor` of any window's, both except with probability δ together.
 
     Window t draws s_t distinct receipts of its U_t from its own openings coin, released after its roots, so they all
     land on correct ones with probability at most g_t^(s_t), g_t its correct share, however the prover adapted to the
-    windows before.  Over the session (`Accounting.Guarantees.PooledSampling`, `RateSessionDraw`), every draw lands
+    windows before.  Over the session (`Accounting.Guarantees.HorizonSampling`, `RateSessionDraw`), every draw lands
     on a correct receipt while Σ_t s_t·g_t ≤ (1 − d̄)·S, S = Σ_t s_t, with probability at most (1 − d̄)^S = δ.  So
     except with δ the wrong shares f_t = 1 − g_t have Σ_t s_t·f_t < d̄·S, and each f_t ≤ 1 − s_t/U_t (its s_t draws
     found s_t correct receipts).  `wrong` is the most Σ_t f_t·U_t those allow, and `floor` the most any f_t is:

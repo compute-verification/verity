@@ -888,18 +888,12 @@ def select(j):
     return {"draw": obj, "read": at}
 
 
-def design(j):
-    """`Pieces.design`: the sampling design of `select`'s draw (`audit.design`, Lean `Core.SamplingDesign.ofFlock`), C-Flock's law
-    held to core's `Core.SamplingDesign`, the work sampling design's among them."""
-    return {"design": _json(audit.design(select(j)["draw"]).to_json())}
-
-
 def slots(j):
     """`Slots.select`: the claims' partition over the select piece's program and query, two classes, and its sample's
-    checked proof blocks. The population's strata are `partition.strata`'s, each unit a proof block, its gates
-    (`partition.unit_gates`); the input class is one stratum of every gate of the root's input nodes (`program.is_input`),
-    each its own proof block. A proof block's slot is its index in that order, and the checked proof blocks are
-    `(slot, 0)` of each unit the sample proves (`draw.proved`) and of each input gate, in slot order."""
+    checked proof blocks. The population's strata are `partition.strata`'s, each unit a replay unit of one proof block, its
+    gates (`partition.unit_gates`); the input class is one stratum of every gate of the root's input nodes
+    (`program.is_input`), each its own replay unit. A replay unit's slot is its index in that order, and the checked proof
+    blocks are `(slot, 0)` of each unit the sample proves (`draw.proved`) and of each input gate, in slot order."""
     out = select(j)
     j = _json(j)
     program = PROGRAMS[PO.program_sha512(j["program"])]
@@ -911,8 +905,8 @@ def slots(j):
               for g in range(body.offsets[k], body.offsets[k] + (node.n if node.form in ("batch", "scan") else 1) * node.fn.gates)]
     classes = [pop, [inputs] if inputs else []]
     proved = set(DR.proved(out["draw"]))
-    blocks = [b for c in classes for s in c for b in s]
-    return {"checked": [[v, 0] for v, b in enumerate(blocks) if b["unit"] is None or b["unit"] in proved], "classes": classes}
+    rus = [r for c in classes for s in c for r in s]
+    return {"checked": [[v, 0] for v, r in enumerate(rus) if r["unit"] is None or r["unit"] in proved], "classes": classes}
 
 
 def bound(j):
@@ -2493,8 +2487,6 @@ def changed_selections(draw, most: int = 2) -> dict:
 
 SELECT = D.Port(PIECES, "select", select, st.one_of(selections(), selections(), changed_selections(1),
                                                      changed_selections(2), JSON), package=PACKAGE)
-DESIGN = D.Port(PIECES, "design", design, st.one_of(selections(), selections(), changed_selections(1), JSON),
-                package=PACKAGE)
 SLOTS = D.Port(PIECES, "slots", slots, st.one_of(selections(), selections(), changed_selections(1), JSON), package=PACKAGE)
 STRATA = st.lists(st.builds(lambda name, size, dk: {"k": max(0, size - dk), "name": name, "size": size},
                             st.sampled_from(["a", "b", "c", "unit"]), st.integers(0, 14), st.integers(0, 14)),
@@ -3153,7 +3145,7 @@ pieces = D.server_fixture(DECODE)
 
 PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (PRODUCED, 500), (KNOWN_PORT, 300),
-              (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (DESIGN, 300), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500),
+              (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
               (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400)]
@@ -3229,26 +3221,9 @@ def test_the_select_piece_draws_every_rule(pieces):
         select(case)
 
 
-def test_a_work_draws_design_is_cores(pieces):
-    """C-Flock's work law held to `Core.SamplingDesign`: a work draw's sampling design, Lean's (`Core.SamplingDesign.ofFlock`) the Python's
-    (`audit.design`), is the profile's `work` case with each stratum's works and floor, and its sample's design is the
-    stratified one at its k_s."""
-    desc = json.loads(_population(((0, 2), (1, 3), (0, 4), (2, 1))))
-    case = {"closure": None, "program": desc, "query": _json(P.template_instances_query([t.id for t in TEMPLATES])),
-            "rule": {"law": "work:4", "rule": "law"}, "source": hashlib.shake_256(b"design").hexdigest(1500),
-            "work_table": {PAIR.id: 2, TRIPLE.id: {"floor": 2, "work": 1}, QUAD.id: 0}}
-    out = design(copy.deepcopy(case))
-    assert D.replay(DESIGN, case, pieces) == ("output", D.canonical(out))
-    d = out["design"]
-    assert d["law"] == "work" and d["k"] == 4 and {s["name"] for s in d["strata"]} == {PAIR.id, TRIPLE.id, QUAD.id}
-    assert [s["floor"] for s in d["strata"] if s["name"] == TRIPLE.id] == [2]
-    work = audit.design(select(copy.deepcopy(case))["draw"])
-    assert work.stratified == Stratified(tuple(Stratum(s["name"], s["size"], s["k"]) for s in d["strata"]))
-
-
 def test_the_slots_follow_the_strata(pieces):
     """On the partition whose `PAIR` stratum is two ranges apart, Lean's slots are the Python's whole: the population's
-    slots run through `PAIR`'s units, then `TRIPLE`'s, then `QUAD`'s, so units 2 to 8 move; the proof blocks' gates and
+    slots run through `PAIR`'s units, then `TRIPLE`'s, then `QUAD`'s, so units 2 to 8 move; the replay units' gates and
     the input class's are every gate of the program once; and the checked proof blocks are the sampled proof blocks' slots and
     every input slot, in slot order."""
     desc = json.loads(_population(((0, 2), (1, 3), (0, 4), (2, 1))))
@@ -3258,10 +3233,10 @@ def test_the_slots_follow_the_strata(pieces):
     out = slots(copy.deepcopy(case))
     assert D.replay(SLOTS, case, pieces) == ("output", D.canonical(out))
     assert [[r["unit"] for r in s] for s in out["classes"][0]] == [[0, 1, 5, 6, 7, 8], [2, 3, 4], [9]]
-    blocks = [b for c in out["classes"] for s in c for b in s]
-    gates = sorted(g for b in blocks for lo, hi in b["pus"] for g in range(lo, hi))
+    rus = [r for c in out["classes"] for s in c for r in s]
+    gates = sorted(g for r in rus for lo, hi in r["pus"] for g in range(lo, hi))
     assert gates == list(range(PROGRAMS[PO.program_sha512(desc)].circuit.size))
-    units = [b["unit"] for b in blocks]
+    units = [r["unit"] for r in rus]
     drawn = [units.index(u) for u in select(case)["draw"]["units"]]
     assert out["checked"] == [[v, 0] for v in sorted(drawn + [v for v, u in enumerate(units) if u is None])]
 

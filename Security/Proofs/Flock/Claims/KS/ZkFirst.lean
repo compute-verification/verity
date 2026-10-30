@@ -1,5 +1,5 @@
 import Proofs.Flock.Claims.KS.ZkEvent
-import Proofs.Flock.Claims.KS.PlainFirst
+import Proofs.Flock.Claims.KS.PlainThird
 
 /-!
 # The masked mixture's first and third bounds, from a simulation

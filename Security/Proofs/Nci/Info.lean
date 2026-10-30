@@ -154,6 +154,23 @@ section Threads
 
 variable {c : Declaration} (T : Threading c) (θv : c.D.Transcript) (Γ : ℕ) (S : ℝ) (d e : ℕ)
 
+/-- Threading by information at any cap follows from threading by width at a cap no subcircuit reaches. -/
+theorem threadedInfo_of_threaded (h : T.Threaded Γ (c.D.width univ) d e) : T.ThreadedInfo θv Γ S d e := by
+  intro R hR
+  have hle : novelReads c R ≤ c.D.width univ := by
+    unfold novelReads Circuit.width
+    exact sum_le_sum_of_subset (subset_univ _)
+  exact h R ⟨hR.1, hR.2.1, by exact_mod_cast hle⟩
+
+theorem threaded_of_threadedInfo (h : T.ThreadedInfo θv Γ S d e) : T.Threaded Γ S d e :=
+  fun R hR => h R (smallInfo_of_small θv hR)
+
+/-- **`(1, 0)`-threaded by information from thread closure**, as `threaded_one_zero`. -/
+theorem threadedInfo_one_zero (hθ : ∀ g t, T.thread g = some t → g ∉ c.θ)
+    (hclosed : ∀ h t, c.D.isInput h = false → T.thread h = some t → ∃ g ∈ c.D.reads h, T.thread g = some t) :
+    T.ThreadedInfo θv Γ S 1 0 :=
+  threadedInfo_of_threaded T θv Γ S 1 0 (threaded_one_zero T Γ _ hθ hclosed)
+
 end Threads
 
 /-- **Theorem 1 with reads counted by information.** -/

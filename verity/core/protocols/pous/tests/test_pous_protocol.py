@@ -13,11 +13,10 @@ from pathlib import Path
 
 import pytest
 
-from pous_fakes import Clock
 from verity.core.claims import get as core_claim
 from verity.core.protocols.pous import band, dense, primitives, protocol, schemes
 from verity.core.protocols.pous.codec import Geometry
-from verity.core.protocols.pous.layout import TensorLayout
+from verity.core.protocols.pous.layout import Layout
 from verity.core.protocols.pous.params import Params
 from verity.core.protocols.pous.schemes.p2 import CHACHA8, CHACHA8_NONCONFORMING, EXPERIMENTAL, P2Params
 from verity.core.protocols.pous.schemes.p2 import ROOT_CALL_NS, RTT_ALLOWANCE_CAP_NS
@@ -56,6 +55,11 @@ SMALL["toy"] = lambda segments=2: Stream(dense.DenseParams(4, 64, segments))
 
 def _w(params: Geometry, seed: int) -> bytes:
     return random.Random(seed).randbytes(params.w_bytes)
+
+
+def _ticks(step: int = 1_000):
+    counter = itertools.count(0, step)
+    return lambda: next(counter)
 
 
 def _lifecycle(sch: protocol.Scheme, seed: int = 1):
@@ -100,11 +104,11 @@ def test_audit_through_the_interface(name):
     key = protocol.challenge_key(b"audit secret", vk)
     with pytest.raises(ValueError, match="no certificate"):
         protocol.TimedAudit(sch, vk, key, k=20, experimental=True)
-    v = protocol.TimedAudit(sch, vk, key, k=20, research=True, experimental=True, clock=Clock(step=1_000))
+    v = protocol.TimedAudit(sch, vk, key, k=20, research=True, experimental=True, clock=_ticks())
     assert v.run(protocol.responder(sch, blocks.__getitem__)).accepted
     profile = v.profile()
     assert not profile.certified and profile.state_bound_bits is None and "no certificate" in profile.statement()
-    wrong = protocol.TimedAudit(sch, vk, key, k=20, research=True, experimental=True, clock=Clock(step=1_000))
+    wrong = protocol.TimedAudit(sch, vk, key, k=20, research=True, experimental=True, clock=_ticks())
     assert not wrong.run(lambda i: bytes(len(blocks[i]))).accepted
     with pytest.raises(ValueError, match="accepted"):
         wrong.profile()
@@ -113,7 +117,7 @@ def test_audit_through_the_interface(name):
 @pytest.mark.parametrize("name", ["band", "dense", "p3", "p2", "p2v2"])
 def test_decode_tensor(name):
     base = SMALL[name]()
-    layout = TensorLayout.of(base.params.with_segments(1), [("embed", 150), ("norm", 3), ("proj", 170)])
+    layout = Layout.of(base.params.with_segments(1), [("embed", 150), ("norm", 3), ("proj", 170)])
     sch = type(base)(layout.params)
     tensors = {"embed": random.Random(3).randbytes(150), "norm": b"\x01\x02\x03", "proj": bytes(range(170))}
     w, salt = layout.pack(tensors), SALT
@@ -224,12 +228,12 @@ def test_a_shared_domain_breaks_the_audit(name):
     vk_shared = VerifierKey.from_segments(sch.params, SALT, shared)
     held = shared[0]
     v = protocol.TimedAudit(sch, vk_shared, protocol.challenge_key(b"audit", vk_shared), k=40, research=True,
-                          experimental=True, clock=Clock(step=1_000))
+                          experimental=True, clock=_ticks())
     assert v.run(lambda i: held[i % b]).accepted
     own = protocol.encode(sch, seg * 3, SALT)
     vk = VerifierKey.from_segments(sch.params, SALT, own)
     v = protocol.TimedAudit(sch, vk, protocol.challenge_key(b"audit", vk), k=40, research=True, experimental=True,
-                          clock=Clock(step=1_000))
+                          clock=_ticks())
     assert not v.run(lambda i: own[0][i % b]).accepted
 
 
@@ -280,9 +284,9 @@ def test_certificates_at_their_points():
     assert schemes.Band(band.BandParams(512, 524_288, 5)).certificate.cliff == 5
     assert schemes.Band(band.BandParams(256, 524_288, 12)).certificate is None
     with pytest.raises(ValueError, match="cliff"):
-        protocol.CapacityBound(111, 6, 1 << 20, 483_000, "x", cliff=5)
+        protocol.Certificate(111, 6, 1 << 20, 483_000, "x", cliff=5)
     with pytest.raises(KeyError):
-        protocol.CapacityBound(111, 5, 1 << 20, 483_000, "x", claims=("no-such-claim",))
+        protocol.Certificate(111, 5, 1 << 20, 483_000, "x", claims=("no-such-claim",))
 
 
 def test_certificates_name_proved_guarantees():
@@ -440,7 +444,7 @@ def test_a_two_round_audit_gives_its_profile():
     blocks = [bytes(sch.params.block_bytes)] * sch.params.blocks
     vk = VerifierKey.from_segments(sch.params, SALT, [blocks])
     v = protocol.TimedAudit(sch, vk, protocol.challenge_key(b"audit secret", vk), k=97, rtt_allowance_ns=224_499,
-                          clock=Clock(step=1_000))
+                          clock=_ticks())
     assert v.run(protocol.responder(sch, blocks.__getitem__)).accepted
     p = v.profile()
     assert p.certified and p.k == 97 and p.effective_rounds == 2 and p.state_bound_bits == 254_307_274
@@ -466,7 +470,7 @@ def test_certified_profile_of_one_band12_segment():
     rng = random.Random(7)
     blocks = [rng.randbytes(sch.params.block_bytes) for _ in range(sch.params.blocks)]
     vk = VerifierKey.from_segments(sch.params, SALT, [blocks])
-    v = protocol.TimedAudit(sch, vk, protocol.challenge_key(b"audit secret", vk), rtt_allowance_ns=36_800, clock=Clock(step=1_000))
+    v = protocol.TimedAudit(sch, vk, protocol.challenge_key(b"audit secret", vk), rtt_allowance_ns=36_800, clock=_ticks())
     assert v.run(protocol.responder(sch, blocks.__getitem__)).accepted
     p = v.profile()
     assert p.certified and p.gaps == () and p.effective_rounds == 2
@@ -475,7 +479,7 @@ def test_certified_profile_of_one_band12_segment():
     assert "given" not in p.statement()
     j = p.to_json()
     assert j["schema"] == "verity-pous/storage-profile/v1" and j["certified"] and j["certificate"]["k"] == 111
-    late = protocol.TimedAudit(sch, vk, protocol.challenge_key(b"audit secret", vk), clock=Clock(step=600_000))
+    late = protocol.TimedAudit(sch, vk, protocol.challenge_key(b"audit secret", vk), clock=_ticks(600_000))
     assert not late.run(protocol.responder(sch, blocks.__getitem__)).accepted
 
 
@@ -571,7 +575,7 @@ def test_p2_wide_certificate_is_period_held_at():
 
     fam = family_certificate(P2Params(16448, 21065, 256, 1)).to_json()
     assert CERT_WIDE_BLOCKS == (1 << 19, 1 << 27)
-    assert WIDE_CLAIMS == (*P2_CLAIMS, "p2-ring-round-secure-wide", "pous-ring-device-at")
+    assert WIDE_CLAIMS == (*P2_CLAIMS, "p2-ring-round-secure-wide", "pous-ring-device-at", "statistical-hiding")
     for bps, segments in ((1 << 16, 8), (1 << 12, 128), (1 << 16, 129), (1 << 16, 1038), (1 << 16, 1 << 11)):
         cert = wide_certificate(P2Params(16448, 21065, bps, segments))
         assert cert.to_json() == fam | {"theorem": "Pous.Period.SecurityProofs.periodHeldAt",

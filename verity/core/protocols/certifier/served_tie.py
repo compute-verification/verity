@@ -16,14 +16,13 @@ step's rows-sha512 tree at fixed leaf indices (`geometry`), and the binding map'
 from the same chunks through the same layout (`positions` and `ids`, the shared read).
 
 **The rows** (each zero-padded to whole 16-bit words):
-- ``pub``, public: the proof block's block j of the window (JW = bitlen(P / G − 1) bits, none when G = P), then each of
-  its G steps' token count N (TW bits a step), the binding map's element count of the positions;
+- ``pub``, public: the unit's block j of the window (JW = bitlen(P / G − 1) bits, none when G = P), then each of its G
+  steps' token count N (TW bits a step), the binding map's element count of the positions;
 - ``srv``, the window's served rows, row w of the served-rows registration (`served_rows`: P steps of R slots of (valid,
-  request, kind, start, n), `compile_slice.rows_bits`' packing), whole in every proof block so that its b‖c is the
+  request, kind, start, n), `compile_slice.rows_bits`' packing), whole in every unit so that its b‖c is the
   registration's leaf, checked natively;
-- ``pos_<g>_<k>``, the proof block's step g's k-th positions chunk, a 4096-byte leaf of the step's tree, its b‖c checked
-  natively against that leaf (`chunk_ok`) at its public index, and the tree's root through the step root to the run
-  root;
+- ``pos_<g>_<k>``, the unit's step g's k-th positions chunk, a 4096-byte leaf of the step's tree, its b‖c checked natively
+  against that leaf (`chunk_ok`) at its public index, and the tree's root through the step root to the run root;
 - ``sw_<g>``, witness: the prover's switches of step g's routing (`route`).
 
 **The statement** (`check`). Per step, the slots in batch order cover the step's tokens in turn: slot k's run is [lo_k,
@@ -43,16 +42,16 @@ token t − 1's position plus one, compared on X = max(LW, TW) + 1 bits with the
 t − lo < 2^LW + 2^TW), so with the honest switches (`route`) the verdict is `check`'s, and with any switches it accepts
 only what `check` accepts (`reference` is the circuit in integers).
 
-**Selection: every proof block, always proved** (`Selection` All, as a transfer-gate proof block is). The tie is a
-binding, not a check on work: a step left untied makes that step's served rows the prover's word, and one such step can
-lower a window's charge (the six passes are one). The charge it protects feeds the network verdict, an AND over every
-window with no ε, so a tie sampled at ε would leave each untied step's charge free with probability 1 − ε. A window is
-its P / G proof blocks, block j = 0 … P / G − 1 each once, under one template.
+**Selection: every unit, always proved** (`Selection` All, as a transfer-gate unit is). The tie is a binding, not a check
+on work: a step left untied makes that step's served rows the prover's word, and one such step can lower a window's charge
+(the six passes are one). The charge it protects feeds the network verdict, an AND over every window with no ε, so a tie
+sampled at ε would leave each untied step's charge free with probability 1 − ε. A window is its P / G units, block j = 0 …
+P / G − 1 each once, under one template.
 
 **Cost** (`size`, `step_size`): a step is the routing, about (M / 2)(2D − 1)·(TW + LW) ANDs less the switches a zero record
-folds away, and about 3·TW + 2·X + 8·PB ANDs a token for the scan; a proof block is G steps and, when G < P, P·TB ANDs
-to select its block (TB = R·(1 + LW + TW), the valid, start and n bits a step's tie reads of its served rows; the
-request ids and kinds are wired past). N is public, as the Commit's binding map and leaf counts publish it.
+folds away, and about 3·TW + 2·X + 8·PB ANDs a token for the scan; a unit is G steps and, when G < P, P·TB ANDs to select
+its block (TB = R·(1 + LW + TW), the valid, start and n bits a step's tie reads of its served rows; the request ids and
+kinds are wired past). N is public, as the Commit's binding map and leaf counts publish it.
 """
 from __future__ import annotations
 
@@ -100,8 +99,8 @@ def _step_widths(S) -> SimpleNamespace:
 
 
 def widths(S) -> SimpleNamespace:
-    """The step's widths (`_step_widths`), the proof block's blocks U = P / G and their index's bits JW, a step's
-    served-row bits SB, and the TB of them its tie reads."""
+    """The step's widths (`_step_widths`), the unit's blocks U = P / G and their index's bits JW, a step's served-row bits
+    SB, and the TB of them its tie reads."""
     Z = _step_widths(S)
     if min(S.P, S.G) < 1 or S.P % S.G:
         raise ValueError(f"a unit is G ≥ 1 steps of a window of P, G dividing P, not P={S.P!r}, G={S.G!r}")
@@ -141,7 +140,7 @@ def _words(bits: int) -> int:
 
 
 def rows(S) -> list[tuple[str, int]]:
-    """The proof block's rows and their widths in bits."""
+    """The unit's rows and their widths in bits."""
     Z, G = widths(S), geometry(S)
     return ([("pub", _words(Z.JW + S.G * Z.TW)), ("srv", _words(S.P * Z.SB))]
             + [(f"pos_{g}_{k}", 8 * CHUNK) for g in range(S.G) for k in range(G.K)]
@@ -328,7 +327,7 @@ ServedRowsTie = CompositeDefinition(
 
 def statics(S, IB: int = 8, PB: int = 8, G: int | None = None) -> dict:
     """The tie's statics for a compile slice's statics `S` (its R, P, IW, and ReplayStep_v1's L and T), the port's element
-    bytes IB and PB, and a proof block's G steps (the whole window by default)."""
+    bytes IB and PB, and a unit's G steps (the whole window by default)."""
     return {"R": S.R, "P": S.P, "G": S.P if G is None else G, "IW": S.IW, "L": S.L, "T": S.T, "IB": IB, "PB": PB}
 
 
@@ -357,7 +356,7 @@ def _runs(S, f: dict) -> tuple[list[tuple[int, int, int]], int]:
 
 
 def _steps(S, unit_rows: dict):
-    """Whether the proof block's block is the window's, and each of its steps' fields, N, positions and switches."""
+    """Whether the unit's block is the window's, and each of its steps' fields, N, positions and switches."""
     Z, G = widths(S), geometry(S)
     j, w = _int(unit_rows["pub"][:Z.JW]), S.G * Z.SB
     block = list(unit_rows["srv"][j * w:(j + 1) * w]) if j < Z.U else [0] * w
@@ -370,7 +369,7 @@ def _steps(S, unit_rows: dict):
 
 
 def check(S, unit_rows: dict) -> dict[str, bool]:
-    """The statement's flags on a proof block's rows (bits each), in integers: the switches unread."""
+    """The statement's flags on a unit's rows (bits each), in integers: the switches unread."""
     inside, steps = _steps(S, unit_rows)
     count, pos = inside, True
     for f, N, got, _sw in steps:
@@ -464,8 +463,7 @@ def unit_rows(S, srv_bits: Sequence[int], steps: Sequence[tuple[int, Sequence[by
 
 
 def case(S, srv_bits: Sequence[int], steps: Sequence[tuple[Sequence[int], Sequence[int]] | None], j: int = 0) -> Case:
-    """Block j's proof block for a window: the served rows as registered and each executed step's committed (ids,
-    positions)."""
+    """Block j's unit for a window: the served rows as registered and each executed step's committed (ids, positions)."""
     out = unit_rows(S, srv_bits, [(len(s[1]), port_chunks(S, *s)) if s else None for s in steps], j)
     flags = check(S, out)
     return Case(out, flags, verdict(flags))
@@ -531,7 +529,7 @@ def step_size(**st) -> dict[str, int]:
 
 
 def size(**st) -> dict[str, int]:
-    """A proof block's ANDs: G steps, the block's selection when G < P, and the steps' flags ANDed."""
+    """A unit's ANDs: G steps, the block's selection when G < P, and the steps' flags ANDed."""
     S = SimpleNamespace(**st)
     Z = widths(S)
     Q = SimpleNamespace(P=S.P, G=S.G, SB=Z.TB)
@@ -543,8 +541,8 @@ def size(**st) -> dict[str, int]:
 # --- the verifier's native check ---------------------------------------------------------------------------------------------
 
 def chunk_ok(domain: CommitmentDomain, index: int, bc: bytes, path: Sequence[bytes], tree_root: bytes) -> bool:
-    """Whether a proof block's chunk row, by its b‖c, is leaf ``index`` of the step tree over `domain` (the rows-sha512
-    step's) with root `tree_root`, `path` its siblings leaves first."""
+    """Whether a unit's chunk row, by its b‖c, is leaf ``index`` of the step tree over `domain` (the rows-sha512 step's) with
+    root `tree_root`, `path` its siblings leaves first."""
     if not 0 <= index < domain.count or len(path) != merkle_depth(domain.count):
         return False
     digest, cursor = row_leaf(domain, index, INST.tree_leaf(INST.default_key, bytes(bc)), SCHEMA_HM96_SHA512_ROW_V2), index

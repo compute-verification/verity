@@ -253,8 +253,7 @@ def _gate(result: dict, arm: str, shape: dict, variant: dict | None, verdict: di
     arm at the shape passed (``exact``), the transcript the harness dumped from poisoned buffers verified
     (``poisoned_accepted``: an arm that dumps its own gets False), every control of the arm rejected (the harness's
     known-bad variants and the verifier's negative control), the SASS gate held. ``schedules_equal`` holds trivially for a
-    variant with one schedule; the harness doesn't compare schedules, so it is None otherwise. ``fold_bound`` is None: the
-    harness's exact check holds every output, none left past a fold's bound."""
+    variant with one schedule; the harness doesn't compare schedules, so it is None otherwise."""
     keys = [g for g in result.get("gates") or [] if len(g.get("key", [])) > 2 and g["key"][0] in ("arm", "chain")
             and g["key"][1] == shape["label"] and g["key"][2] == arm]
     negs = [x for x in result.get("negative_controls") or [] if arm in (x.get("key") or [])]
@@ -269,8 +268,7 @@ def _gate(result: dict, arm: str, shape: dict, variant: dict | None, verdict: di
             "poisoned_accepted": bool(verdict.get("accepted")) and poisoned,
             "controls_rejected": bool(negs) and all(x.get("rejected") for x in negs) and bool(verdict.get("negative_control")),
             "schedules_equal": True if len(schedules) <= 1 else None,
-            "sass_ok": bool(sass.get("ok")), "toolkit": ",".join(toolkits) or None, "prices": (variant or {}).get("prices"),
-            "fold_bound": None}
+            "sass_ok": bool(sass.get("ok")), "toolkit": ",".join(toolkits) or None, "prices": (variant or {}).get("prices")}
 
 
 def _metrics(r: dict, p: dict) -> dict:

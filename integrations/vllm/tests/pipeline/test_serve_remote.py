@@ -81,8 +81,6 @@ def test_the_remote_options_parse_into_their_group_and_are_refused_before_the_mo
     opts = parse(*VERIFIER, "--remote-filler-gib", "1.5")
     assert (opts.remote.remote_verifier, opts.remote.remote_plan, opts.remote.remote_filler_gib) == ("127.0.0.1:7781", "serve", 1.5)
     assert refusal(opts) is None and SR.session_of(parse(), "/tmp") is None and SR.accepted(None)
-    assert SR.session_of(parse(*VERIFIER, "--remote-node", "gpu-node"), "/tmp").cs.node == "gpu-node"
-    assert SR.session_of(opts, "/tmp").cs.node.startswith("verity-vllm/")
     assert "HOST:PORT" in refusal(parse("--remote-verifier", "nohost"))
     assert "is serve" in refusal(parse(*VERIFIER, "--remote-plan", "servedrop:1"))
     assert "kv_lib" in refusal(parse(*VERIFIER, "--remote-session-lib", "session.so"))

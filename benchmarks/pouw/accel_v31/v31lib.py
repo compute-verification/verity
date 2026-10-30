@@ -1,5 +1,5 @@
 """The per-call binding of v31.cu's GPU prover for Dither's no-fold call (verity/core/protocols/pouw/circuit/dither.py):
-ctypes over libv31.so (v31.cu built with -DV31_LIB; `build_lib` below, as run.sh builds it), one `Prover` a shape. v31.py's
+ctypes over libv31.so (v31.cu built with -DV31_LIB; `build_lib` below, run.sh's MODE=fill), one `Prover` a shape. v31.py's
 `Fill` is the reference it is checked against and the verifier.
 
     p = Prover(m, n, k, lp=128, L=1024, row=16384, served=True, lib=PATH, device=0)   # its CGP1 params (dither's domain,
@@ -20,9 +20,9 @@ d_B)^T mod 2^32 (u32; T_S is implied by O); a filler's commits T_1 .. T_S of its
 device, each commit beside the next call's compute; `prove` returns before the call is done, and a call's values can be
 opened until the call two after it is issued (`prove` waits for that call's commit first). Several Provers share a process
 (a domain slot each, up to 8; one ROW, one device). The weight side (b', W') is formed again only when the weight-side
-seeds (dB, U, P) or the weights change: weight coins drawn every call form it every call, and coins drawn once a
-monitoring period form it once. The c-th call of a Prover salts its leaf pos prf_salt(Ks, c leaves + pos)
-(dither.salts(Ks, off), off = c leaves), Ks the Prover's own. A served call whose A + d_A (or B + d_B) has a row holding both -128 and 128 has no root: O's int8
+seeds (dB, U, P) or the weights change: per-call weight coins form it every call, v3.2's period coins once a period. The
+c-th call of a Prover salts its leaf pos prf_salt(Ks, c leaves + pos) (dither.salts(Ks, off), off = c leaves), Ks the
+Prover's own. A served call whose A + d_A (or B + d_B) has a row holding both -128 and 128 has no root: O's int8
 decomposition (a' = A + d_A - sigma) can't carry it, and `root` raises. v31.cu's knobs come from the environment when a
 Prover is made: V31_LTW=1 has a filler call at S = 1 (L >= K) take cuBLASLt's int32 X W'^T in place of the protocol GEMM,
 its leaves the same bytes (the low halves); V31_PF, V31_CCTA, V31_SCHED and V31_CPRIO tune the commit beside the next
@@ -53,8 +53,6 @@ from pathlib import Path
 from typing import Self
 
 import numpy as np
-
-from verity.core.protocols.pouw.circuit import dither
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import v31
@@ -92,7 +90,6 @@ class Lib:
             "v31_levels_async": ([vp, u64, vp], i),
             "v31_pad": ([vp, vp], i),
             "v31_sync": ([vp], i),
-            "v31_stream": ([vp, i], vp),
             "v31_destroy": ([vp], None),
             "v31_lt_create": ([i, i, i, vp, vp, vp, vp], vp),
             "v31_lt_run": ([vp] * 5, None),
@@ -110,10 +107,10 @@ class Lib:
 
 
 class Prover:
-    """One shape's GPU prover: m x n output cells at contraction k, noise tiles of lp, segments of L, leaf rows of `row`
+    """One shape's GPU prover: m x n output cells at contraction k, noise period lp, segments of L, leaf rows of `row`
     bytes, served calls or a filler's. `params_dir` keeps its CGP1 file (default a temporary one)."""
 
-    def __init__(self, m: int, n: int, k: int, lp: int = 256, L: int = 4096, row: int = 16384, *, served: bool = False,
+    def __init__(self, m: int, n: int, k: int, lp: int = 256, L: int = 4096, row: int = 1024, *, served: bool = False,
                  lib: str | Lib, device: int = 0, ks: bytes | None = None, params_dir: str | None = None):
         self.f = v31.Fill(m, n, k, lp, L, row, served)
         self.lib = lib if isinstance(lib, Lib) else Lib(lib)
@@ -209,7 +206,7 @@ class Prover:
         self.lib.check(self.lib.open(self.h, c, parr, len(pos), rows, paths))
         off = self.calls[c]["off"]
         r, pa = rows.raw, paths.raw
-        return [(r[x * row:(x + 1) * row], dither.prf_salt(self.ks, off + p),
+        return [(r[x * row:(x + 1) * row], v31.cref.prf_salt(self.ks, off + p),
                  tuple(pa[64 * (x * depth + d):64 * (x * depth + d + 1)] for d in range(depth))) for x, p in enumerate(pos)]
 
     def answer(self, c: int, i: int, j: int, s: int) -> dict:
@@ -243,14 +240,6 @@ class Prover:
     def sync(self) -> None:
         self.lib.check(self.lib.sync(self.h))
 
-    def stream(self, which: int) -> int:
-        """The shared compute (0) or commit (1) stream's handle, for timing events: a call's compute is on the first,
-        and its commit and `levels_async`'s copies follow on the second."""
-        s = self.lib.stream(self.h, which)
-        if not s:
-            raise RuntimeError("v31_stream: called from a thread other than the binding's")
-        return int(s)
-
 
 call_seeds = v31.call_seeds
 served_seeds = v31.served_seeds
@@ -259,9 +248,7 @@ served_seeds = v31.served_seeds
 # ------------------------------------------------------------------------------------------------------------- gate
 # NAME KIND M N K LP L ROW A CHEAT. KIND fill (A pad: the filler's pad; llm/uniform: a served operand through the filler's
 # path) or served (A llm/uniform, through the context's device copy). CHEAT none, a cheat the verifier must refuse, or
-# rootless: an honest served call the prover must refuse at its root (a row of A + d_A spans -128 .. 128). A forge's FRAC
-# makes a proof block land on it with probability at least 1/4 (its tiles' share times the share of segments whose check
-# reads T_S0), so the gate's q = 64 blocks all miss it with probability at most (3/4)^64, about 1e-8
+# rootless: an honest served call the prover must refuse at its root (a row of A + d_A spans -128 .. 128)
 GATES = """
 f-pad-k fill 256 256 4096 512 4096 1024 pad none
 f-pad-768 fill 256 384 3072 256 768 1024 pad none
@@ -274,7 +261,7 @@ f-lp2048 fill 256 256 6144 2048 8192 1024 llm none
 f-row8k fill 128 256 8192 256 2048 8192 pad none
 f-big fill 512 1024 8192 512 4096 1024 llm none
 c-skip fill 256 256 4096 256 1024 1024 pad skip:5
-c-forge fill 256 256 4096 256 1024 1024 llm forge:2:0.5
+c-forge fill 256 256 4096 256 1024 1024 llm forge:2:0.25
 f-k2048 fill 256 384 2048 256 2048 2048 llm none
 c-skip-s1 fill 256 256 2048 256 2048 1024 pad skip:3
 c-forge-s1 fill 256 256 2048 256 2048 1024 llm forge:1:0.25
@@ -287,8 +274,8 @@ s-row1k served 256 512 2048 128 1024 1024 llm none
 s-big served 512 1024 8192 512 4096 16384 llm none
 s-uniform served 256 256 2048 256 2048 16384 uniform rootless
 cs-forgeO served 256 256 4096 512 4096 16384 llm forgeO:0.25
-cs-forgeO-s4 served 256 256 4096 128 1024 16384 llm forge:0:1
-cs-forge-s4 served 256 256 4096 128 1024 16384 llm forge:2:0.5
+cs-forgeO-s4 served 256 256 4096 128 1024 16384 llm forge:0:0.25
+cs-forge-s4 served 256 256 4096 128 1024 16384 llm forge:2:0.25
 cs-skip-s4 served 256 256 4096 128 1024 16384 llm skip:5
 cs-nodither served 256 256 4096 512 4096 16384 llm nodither
 cs-nodither-s4 served 256 256 4096 128 1024 16384 llm nodither
@@ -337,7 +324,7 @@ def gate_case(lib: Lib, name: str, served: bool, m: int, n: int, k: int, lp: int
         if a_kind == "pad":
             A = v31.pad_rows(seeds, range(m), k)
             rep["pad_equal"] = p.pad() == A.tobytes()
-        co = v31.CallNoise.expand(f, seeds)
+        co = v31.Coins.expand(f, seeds)
         if cheat == "nodither":
             co = dataclasses.replace(co, dA=np.zeros_like(co.dA), dB=np.zeros_like(co.dB))
         skip = int(cheat.split(":")[1]) if cheat.startswith("skip:") else None
@@ -353,9 +340,9 @@ def gate_case(lib: Lib, name: str, served: bool, m: int, n: int, k: int, lp: int
                 w[a:a + ln] = g_values[a:a + ln]
             values, rep["forged_tiles_changed"] = bytes(w), changed
         ref = v31.fill_commit(f, values, p.ks, p.calls[c]["off"])
-        rep["values_equal"] = g_values == values
+        rep["values_equal"] = g_values == ref.values
         if not rep["values_equal"]:
-            rep["values_bad_bytes"] = int((np.frombuffer(g_values, np.uint8) != np.frombuffer(values, np.uint8)).sum())
+            rep["values_bad_bytes"] = int((np.frombuffer(g_values, np.uint8) != np.frombuffer(ref.values, np.uint8)).sum())
         rep["levels_equal"] = g_lv == v31.levels_bytes(ref.levels)
         rep["root_gpu"], rep["root_ref"] = root.hex()[:32], ref.root.hex()[:32]
         check = os.urandom(64)
@@ -440,7 +427,7 @@ def gate_point_levels(lib: Lib, rng: np.random.Generator) -> dict:
             p.levels_async(p.prove(seeds[x]), buf.ctypes.data)
         p.sync()
         for x, (sd, buf) in enumerate(zip(seeds, bufs)):
-            values = v31.fill_buffer(f, *v31.fill_values(f, v31.pad_rows(sd, range(m), k), B[x // 2], v31.CallNoise.expand(f, sd)))
+            values = v31.fill_buffer(f, *v31.fill_values(f, v31.pad_rows(sd, range(m), k), B[x // 2], v31.Coins.expand(f, sd)))
             equal.append(buf.byteswap().tobytes() == v31.levels_bytes(v31.fill_commit(f, values, p.ks, x * f.leaves).levels))
         kept = holder.pad() == B[0].tobytes()
         with ThreadPoolExecutor(1) as other:
@@ -453,7 +440,7 @@ def _pipeline_check(p: Prover, ops: tuple, c: int, seeds: dict[str, bytes]) -> d
     f, (A, B, _) = p.f, ops
     if A is None:
         A = v31.pad_rows(seeds, range(f.m), f.k)
-    values = v31.fill_buffer(f, *v31.fill_values(f, A, B, v31.CallNoise.expand(f, seeds)))
+    values = v31.fill_buffer(f, *v31.fill_values(f, A, B, v31.Coins.expand(f, seeds)))
     ref = v31.fill_commit(f, values, p.ks, c * f.leaves)
     return {"shape": f"{'served' if f.o else 'filler'} {f.m}x{f.n}x{f.k} L {f.L}", "call": c, "root_equal": p.root(c) == ref.root}
 

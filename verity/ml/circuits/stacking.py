@@ -64,7 +64,7 @@ A word is read at its own width. A reference to a leaf of another width than the
 word read back as s8 lanes: a limb split no gate computes) is a ``reinterpretation``, refused wherever it occurs, an argument
 or a body's return.
 
-P(c, R_in, L) holds, at B operand bits, when under the audit's windows (`CertifiedReads`: a range of the census's steps, the bytes the
+P(c, R_in, L) holds, at B operand bits, when under the audit's windows (`Window`: a range of the census's steps, the bytes the
 audit certified as read in it and its duration):
 
 1. ``unlisted``: no gate is refused;
@@ -878,7 +878,7 @@ def analyze(program: Any, census: Mapping) -> Analysis:
 
 
 @dataclass(frozen=True)
-class CertifiedReads:
+class Window:
     """A window: a range of the census's steps, the bytes the audit certified as read in it, and its duration in seconds."""
 
     steps: range
@@ -887,7 +887,7 @@ class CertifiedReads:
 
 
 @dataclass(frozen=True)
-class Judgement:
+class Verdict:
     """Whether P holds, why not (``reasons``: each a ``code`` with its numbers) and the numbers it read."""
 
     ok: bool
@@ -898,8 +898,8 @@ class Judgement:
         return {"schema": SCHEMA, "classes": digest(), "ok": self.ok, "reasons": list(self.reasons), "numbers": self.numbers}
 
 
-def check(program: Any, census: Mapping, *, c: Mapping[str, Any], windows: Sequence[CertifiedReads], R_in: Any = R_IN,
-          L: int | None = None, B: int = OPERAND_BITS) -> Judgement:
+def check(program: Any, census: Mapping, *, c: Mapping[str, Any], windows: Sequence[Window], R_in: Any = R_IN,
+          L: int | None = None, B: int = OPERAND_BITS) -> Verdict:
     """P(c, R_in, L) at B operand bits on `program` and its census under the audit's `windows`. c maps each budgeted class to
     its units per certified byte read, R_in is bytes per second, L is steps (None: left to re-keying). c, R_in and a window's
     seconds are exact: an int, a Fraction or a str `Fraction` reads. A window outside the census's steps, a c without every
@@ -917,8 +917,8 @@ def _exact(x: Any, what: str) -> Fraction:
     return Fraction(x)
 
 
-def judge(a: Analysis, *, c: Mapping[str, Any], windows: Sequence[CertifiedReads], R_in: Any = R_IN, L: int | None = None,
-          B: int = OPERAND_BITS) -> Judgement:
+def judge(a: Analysis, *, c: Mapping[str, Any], windows: Sequence[Window], R_in: Any = R_IN, L: int | None = None,
+          B: int = OPERAND_BITS) -> Verdict:
     """P(c, R_in, L) at B operand bits on an `Analysis` (as `check`)."""
     if set(c) != set(BUDGETED):
         raise ValueError(f"c gives units per certified byte for exactly {list(BUDGETED)}, not {sorted(c)}")
@@ -961,10 +961,10 @@ def judge(a: Analysis, *, c: Mapping[str, Any], windows: Sequence[CertifiedReads
     total = {k: sum(s["units"][k] for s in a.steps) for k in BUDGETED}
     numbers = {"c": {k: str(v) for k, v in cq.items()}, "R_in": str(R), "L": L, "B": B, "windows": rows, "units": total,
                "family_steps": a.family, "macs": a.macs, "affine": a.affine, "max_lifetime": a.max_lifetime}
-    return Judgement(not reasons, tuple(reasons), numbers)
+    return Verdict(not reasons, tuple(reasons), numbers)
 
 
 __all__ = ["AFFINE", "Analysis", "BUDGETED", "CLASSES", "CONST_ID", "EXP2_LUT127", "EXP2_LUT127_TABLE", "F32_POS", "FAMILIES",
            "FAMILY", "GATHERS", "LIFTS", "OPERAND_BITS", "RANGES", "REFUSED", "R_IN", "S16", "S32", "S8", "SCHEMA", "Step",
-           "TAG", "Tally", "U8", "VERSION", "Judgement", "CertifiedReads", "analyze", "check", "class_of", "count", "digest", "gather",
+           "TAG", "Tally", "U8", "VERSION", "Verdict", "Window", "analyze", "check", "class_of", "count", "digest", "gather",
            "judge", "spec"]

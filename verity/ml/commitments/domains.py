@@ -217,6 +217,8 @@ LMS_I = "verity/lms/v0/I"
 # Not yet read from here: sampled proofs and the proof service's challenger
 CHALLENGER_KEY = "challenger-key/v1"
 COIN_TREE_HM96_SHA512 = "coin-tree/hm96-sha512/v2"
+IR_OBLIGATION = "verity-ir/obligation/v0"
+SAMPLED_PROOFS_VERIFICATION_PLAN = "verity-sampled-proofs/verification-plan/v3"
 CHALLENGER_AUDITOR_RECORD = "verity/challenger-auditor-record/v1"
 CHALLENGER_AUDITOR_ENTRY_V1 = "verity/challenger-auditor/entry/v1"
 CHALLENGER_AUDITOR_ENTRY_V2 = "verity/challenger-auditor/entry/v2"
@@ -261,6 +263,8 @@ FLOCK_ZK_TAU = "verity/flock-zk/tau/v1"
 LAYOUT = "verity/layout/v1"
 REC_COINS = "verity/rec-coins/v1"
 REC_INNER = "verity/rec-inner/v1"
+REC_V0_VERIFIER_SALT = "verity/rec-v0/verifier-salt/v0"
+REC_V0_ZERO_RESIDUAL_SALT = "verity/rec-v0/zero-residual-salt/v0"
 
 # Not yet read from here: PoUS, the wipe and the memory challenger
 CHAIN_DENSE_H = "chain-dense-H/v1"
@@ -335,7 +339,7 @@ REMOTE_BANDWIDTH_TIMING_JITTER = "verity/remote-bandwidth/timing-jitter/v0"
 REMOTE_BANDWIDTH_PROTOCOL = "verity/remote-bandwidth/v0"
 REMOTE_BANDWIDTH_PERIOD = "verity/remote-bandwidth/window/v1"
 REMOTE_SESSION_PAYLOAD_SALTS = "verity/remote-session/payload-salts/v0"
-STORE_SALT = "verity/store/salt/v1"
+STORE_SALT = "verity/store/salt/v0"
 
 # Not yet read from here: the network certifier and network accounting
 CERTIFIER_ADVISED_ADVICE = "verity-network-certifier/advised-advice/v2"

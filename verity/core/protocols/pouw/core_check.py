@@ -83,10 +83,8 @@ from typing import Any, NamedTuple
 from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
-from verity.core.protocols.profile import Work, WorkStratum
 from verity.core.protocols.pouw.audit import EPOCH_SALT_DOMAIN, SALT_DOMAIN
 from verity.core.protocols.pouw.protocol import U64, tagged
 from verity.ml.commitments import Commitment, Opening, VerificationLimits, domains, verify_opening
@@ -330,8 +328,8 @@ def commitment(b: bytes) -> dict:
 
 
 def digest(c: dict) -> bytes:
-    """`registration.record_digest` over the record's own bytes: SHA-512(format || 0 || the canonical record)."""
-    return R.record_digest(c["format"], c["bytes"])
+    """`registration.digest`: SHA-512(format || 0 || the canonical record)."""
+    return hashlib.sha512(c["format"].encode() + b"\0" + c["bytes"]).digest()
 
 
 # ---- the evidence, as `Core.Answer.ofJson` and `Core.Integrity.ofJson` read it (with `Flock.J`'s messages) ------------
@@ -397,25 +395,17 @@ def _exactly(written: Any, j: Any, ctx: str) -> None:
 
 
 def _core_draw(j: Any, ctx: str) -> dict:
-    """`Core.SamplingDesign.ofJson`, as `SamplingDesign.toJson` writes it."""
+    """`Core.Draw.ofJson`, as `Draw.toJson` writes it."""
     if _has(j, "bernoulli"):
         d: dict = {"bernoulli": str(ratio(_str_at(j, "bernoulli", ctx), f"{ctx}.bernoulli"))}
     elif _has(j, "subset"):
         d = {"subset": _nat_at(j, "subset", ctx)}
-    elif _has(j, "strata") and isinstance(j, dict) and j.get("law") == "work":
-        k, c = _nat_at(j, "k", ctx), f"{ctx}.strata"
-        strata = [WorkStratum(_str_at(s, "name", c), _nat_at(s, "size", c), _nat_at(s, "k", c), _nat_at(s, "work", c),
-                              _nat_at(s, "floor", c)) for s in _arr_at(j, "strata", ctx)]
-        try:
-            d = Work(k, tuple(strata)).to_json()
-        except ValueError as e:
-            raise Refused(f"{ctx}: {e}") from None
     elif _has(j, "strata"):
         c = f"{ctx}.strata"
         d = {"law": "stratified", "strata": [{"name": _str_at(s, "name", c), "size": _nat_at(s, "size", c),
                                               "k": _nat_at(s, "k", c)} for s in _arr_at(j, "strata", ctx)]}
     else:
-        raise Refused(f"{ctx}: not a bernoulli, subset, stratified or work draw")
+        raise Refused(f"{ctx}: not a bernoulli, subset or stratified draw")
     _exactly(d, j, ctx)
     return d
 
@@ -514,14 +504,6 @@ def _strata(work: bool, j: Any, ctx: str) -> list[dict]:
     return out
 
 
-def _num_den(p: str, ctx: str) -> str:
-    """`pOf`: ``num/den``, each a natural number in canonical decimal (`Flock.Draw.Law.bernoulli`'s), kept as written."""
-    parts = p.split("/")
-    if len(parts) == 2 and all(t and all(c in "0123456789" for c in t) and str(int(t)) == t for t in parts):
-        return p
-    raise Refused(f"{ctx}.p: not num/den")
-
-
 def unit_draw(j: Any) -> dict:
     """The public outputs ``{"draw": d}``, `d` one of one-stage's `draw.py` laws with exactly its keys (`check_draw`'s),
     and a live window's ``salt``, an object (`window_salt` reads it)."""
@@ -534,7 +516,7 @@ def unit_draw(j: Any) -> dict:
     _keys_are(d, (["closure"] if law == "work" and "closure" in d else []) + _DRAW_KEYS[law], ctx)
     out: dict[str, Any] = {"law": law, "population": _nat_at(d, "population", ctx)}
     if law == "bernoulli":
-        out["p"] = _num_den(_str_at(d, "p", ctx), ctx)
+        out["p"] = _str_at(d, "p", ctx)
     else:
         out["k"] = _nat_at(d, "k", ctx)
     if law in ("stratified", "work"):

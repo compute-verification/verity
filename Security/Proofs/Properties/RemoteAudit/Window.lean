@@ -55,9 +55,6 @@ theorem forIn_good {α β σ : Type} (Inv : σ → Prop) (Good : α → Prop) (B
       right
       exact ⟨b, rfl, hb⟩
 
-@[simp] theorem reject_ne_accept (f : Failure) (at? : Option (Nat × Nat)) : Verdict.reject f at? ≠ Verdict.accept := by
-  simp [Verdict.reject, Verdict.accept]
-
 /-- The receipters' map holds only each pass's own receipter. -/
 def Cached (reg : Registration) (w : WindowRecord) (m : Std.HashMap Nat Receipter) : Prop :=
   ∀ i r, m.get? i = some r → r = receipterOf reg w i
@@ -70,7 +67,7 @@ theorem checkWindow_accept {reg : Registration} {digest : ByteArray} {appends : 
   unfold checkWindow at h
   simp only [Id.run] at h
   split at h
-  · exact absurd h (reject_ne_accept _ _)
+  · simp at h
   rename_i hsize
   refine ⟨by simpa using hsize, ?_⟩
   rw [Std.Legacy.Range.forIn_eq_forIn_range'] at h
@@ -348,27 +345,29 @@ theorem chunkedIsWhole : ChunkedIsWhole := by
   have hs0 : 0 < s := by omega
   generalize hL : (forIn (m := Id) (List.map _ _) ((none, ()) : Option Verdict × Unit) _ : Id _) = L
   have key := hL ▸ forIn_findSome (fun _ => True)
-    (fun t : Task Verdict => if t.get ≠ Verdict.accept then some t.get else none)
+    (fun t : Task Verdict => match t.get with | .reject f at? => some (Verdict.reject f at?) | .accept => none)
     _ ?_ _ () trivial
   · intro t m _
-    by_cases h : t.get = Verdict.accept
-    · left; simp [h]
-    · right; simp [h]
+    cases h : t.get with
+    | accept => left; simp
+    | reject f at? => right; simp
   · rw [List.findSome?_map] at key
-    have hc : ∀ c, ((fun t : Task Verdict => if t.get ≠ Verdict.accept then some t.get else none) ∘ fun c =>
+    have hc : ∀ c, ((fun t : Task Verdict => match t.get with
+          | .reject f at? => some (Verdict.reject f at?) | .accept => none) ∘ fun c =>
         Task.spawn (fun _ => checkWindow reg digest appends w (drawn.extract (c * s) ((c + 1) * s))
           (openings.extract (c * s) ((c + 1) * s))) Task.Priority.dedicated) c =
         (List.range' (c * s) (min ((c + 1) * s) drawn.size - c * s)).findSome?
           (rejectAt reg digest appends w drawn openings) := by
       intro c
-      simp only [Function.comp, Task.spawn, checkWindow_extract reg digest appends w drawn openings hsize]
+      simp only [Function.comp, Task.spawn]
+      rw [checkWindow_extract reg digest appends w drawn openings hsize]
       cases h : (List.range' (c * s) (min ((c + 1) * s) drawn.size - c * s)).findSome?
           (rejectAt reg digest appends w drawn openings) with
-      | none => simp
+      | none => rfl
       | some v =>
         obtain ⟨k, _, hk⟩ := List.exists_of_findSome?_eq_some h
         obtain ⟨f, at?, rfl⟩ := rejectAt_reject hk
-        simp
+        rfl
     rw [findSome?_congr (fun c _ => hc c), ← findSome?_flatMap, chunks_cover,
       Nat.min_eq_right (le_ceil_mul _ _ hs0)] at key
     rcases L with ⟨o, u⟩

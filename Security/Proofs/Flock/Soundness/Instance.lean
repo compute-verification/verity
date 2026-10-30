@@ -62,4 +62,25 @@ theorem table_sound_exec (S : Statement) (sch : Schedule)
       ENNReal.ofReal (tableError sch (S.shape mPts)) :=
   table_sound execArith execArith_correct S sch hsch hm ptLocal mPts hlay σ
 
+/-- `table_sound_exec` for `m ∈ [22, 33]` under the `fast100` schedule: at most `2^-205`. -/
+theorem table_sound_exec_fast100 (S : Statement) (sch : Schedule)
+    (hsch : fast100 S.m = some sch) (hm1 : 22 ≤ S.m) (hm2 : S.m ≤ 33) (ptLocal mPts : ℕ)
+    (hshape : (S.shape mPts).InRange) (hlay : S.LinkLayout ptLocal mPts)
+    (σ : Game.Strategy (table execArith S sch (by omega) ptLocal mPts)) :
+    Game.prob (fun out => out.1 = true ∧ ¬ Committed execArith S sch out.2)
+        (table execArith S sch (by omega) ptLocal mPts) σ ≤
+      ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ))) :=
+  table_sound_fast100 execArith execArith_correct S sch hsch hm1 hm2 ptLocal mPts hshape hlay σ
+
+/-- `table_sound_exec` for `m ∈ {34, 35}`: at most `2^-205`. -/
+theorem table_sound_exec_fast100_34_35 (S : Statement)
+    (sch : Schedule) (hsch : fast100 S.m = some sch) (hm1 : 34 ≤ S.m) (hm2 : S.m ≤ 35)
+    (ptLocal mPts : ℕ) (hshape : (S.shape mPts).InRange) (hlay : S.LinkLayout ptLocal mPts)
+    (σ : Game.Strategy (table execArith S sch (by omega) ptLocal mPts)) :
+    Game.prob (fun out => out.1 = true ∧ ¬ Committed execArith S sch out.2)
+        (table execArith S sch (by omega) ptLocal mPts) σ ≤
+      ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ))) :=
+  table_sound_fast100_34_35 execArith execArith_correct S sch hsch hm1 hm2 ptLocal mPts hshape
+    hlay σ
+
 end FlockSoundness

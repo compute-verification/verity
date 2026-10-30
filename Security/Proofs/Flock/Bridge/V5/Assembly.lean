@@ -6,7 +6,7 @@ import Proofs.Flock.Bridge.Assembly
 
 `Assembly.lean` at the verifier's public inputs: at `kd = 0` the miss term is `1`; otherwise `EndToEndHiddenV5` at
 `K₁ = min K₀ (n − kd + 1)` bounds the event, since outside `RelS` at least `K₁` slots are faulty population slots
-(`CountTarget`), and each is a proof block faulty on the registration with canonical openings, as a proof block right in that sense is
+(`CountTarget`), and each is a unit wrong on the registration with canonical openings, as a unit right in that sense is
 not faulty (`FaultyRightTargetC`, with its transport from `TransportsLiveV5` at the wires `constsOfP` doesn't fix).
 
 `constsOfP_isInput`: `constsOfP` fixes only input gates, the constant, the zero and the public gates, each below
@@ -22,7 +22,7 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
 /-- **The constants at public inputs are input gates**: `constsOfP` fixes `oneG`, `zeroG` and the public gates, all
-below `2 + n·B`, which are program inputs of `keyProgP` (`Layout.unit_uniform_input`), so no proof block's. -/
+below `2 + n·B`, which are program inputs of `keyProgP` (`Layout.unit_uniform_input`), so no unit's. -/
 theorem _root_.Flock.Bridge.constsOfP_isInput {c : Flock.Circuit} {hU : Built c.unit} {n : ℕ} {pi : HmIn.Ports}
     {pub : Public} (outs : Finset (Fin (Discharge.Layout.keyN c hU n))) {g : Fin (Discharge.Layout.keyN c hU n)}
     {b : Bool} (h : Bridge.constsOfP c hU n pi pub g = some b) :
@@ -62,7 +62,7 @@ theorem _root_.Flock.Bridge.assemblyTargetV5 : Bridge.AssemblyTargetV5 := by
   have hκin : ∀ g b, κ g = some b → (Cc.op g).isInput = true := fun g b h =>
     Bridge.constsOfP_isInput (Discharge.Layout.outsOfP D.unroll hU n pi) h
   have hsub : (Claims.Sampling.faulty Claims.Sampling.sha512Msg Cd (Bridge.stmtOf P κ kd desc q roots)
-      (Bridge.partOf P κ) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr)).filter (· < n) ⊆
+      (Bridge.partOf P) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr)).filter (· < n) ⊆
       (wrongRegZc execArith P (planZHJP dj y₀) (tabZHJP dj y₀) vb
         (fun g o => Bridge.canonAt rows κ g (vb.bit (vb.val o) g) (vb.val o) o.2.2) (reg σ) Xr).map
         Fin.valEmbedding := by
@@ -80,7 +80,7 @@ theorem _root_.Flock.Bridge.assemblyTargetV5 : Bridge.AssemblyTargetV5 := by
     obtain ⟨-, hbit, hcan⟩ := hop g hg
     exact hbit.symm.trans (hcan.1 b hb)
   have hcard : ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots)
-      (Bridge.partOf P κ) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr) →
+      (Bridge.partOf P) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr) →
       min K₀ (n - kd + 1) ≤ (wrongRegZc execArith P (planZHJP dj y₀) (tabZHJP dj y₀) vb
         (fun g o => Bridge.canonAt rows κ g (vb.bit (vb.val o) g) (vb.val o) o.2.2) (reg σ) Xr).card := fun hrel =>
     (hC P kd K₀ hkd1 hkd _ _ κ desc q roots _ hrel).trans

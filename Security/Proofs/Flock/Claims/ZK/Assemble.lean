@@ -40,6 +40,9 @@ open CoinLayer
 
 namespace Masked
 
+theorem liveRunAt_eq (x : Msg) (w : Claims.Flock.Wit) (ω : FlockComplete.TapeZk) (ops : List (Msg × Msg))
+    (spec : _root_.Flock.SessionSpec) : liveRunAt x w ω ops spec = liveRun x w ω ops spec := rfl
+
 /-- **The deployed encoding past the first round is the session's body**: at a stop `n ≠ 0` where `setupOf` gives the
 spec, `encExe`'s round `n` on the session's cut is `0 ::` body `n` of the masked session stopped right after round
 `n`, where it sends one, else `[]` (`SimSession`). -/

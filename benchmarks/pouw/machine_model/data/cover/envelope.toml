@@ -1,6 +1,6 @@
-# The envelope ISA the coverage table (rows.toml) dominates every instruction by: `Accel.Op`
+# The envelope ISA the coverage table (rows.toml) dominates every instruction by: MODEL-MIN's `Accel.Op`
 # (Security/Definitions/Core/Accel/, as drafted when the table was built), its pipes, formats and each card's numbers,
-# plus the entries the table proposes, each marked `proposed` with what it adds. `Card.use`
+# plus the entries MODEL-COVER proposes, each marked `proposed` with the MODEL-MIN item that asks for it. `Card.use`
 # gives an op's units; the table reads them as rates a SM-clock. A row is dominated when its op simulates the card's
 # instruction and the card's rate of it, in the op's units, is at most the resource's ρ: the card pays no fewer units
 # than the envelope charges.
@@ -121,7 +121,7 @@ key = "collective"
 resource = "collective"
 proposed = "the `collective` op's unit"
 
-# `Accel`'s `Fmt`, and the formats the card's MMAs read that it lacks.
+# MODEL-MIN's `Fmt`, and the formats the card's MMAs read that it lacks.
 [[fmt]]
 key = "s8"
 [[fmt]]
@@ -184,6 +184,6 @@ rho = { tensor = 4096, issue = 4, alu = 64, imad = 64, shfl = 32, f64 = 64, sfu 
 dram = 1.2e12
 proposed_rho = { collective = 0.5, tex = 4 }
 rho_source = """H200.lean (CPG 12.9 Table 7 CC 9.0; tensor DS 1,979 TOPS; b1 CALIB; HBM3e 4.8 TB/s); collective: MATCH.ANY \
-and REDUX's unit, 0.4999 and 0.4990 alone, 0.2498 each beside the other (an H200 at 1980 MHz); \
+and REDUX's unit, 0.4999 and 0.4990 alone, 0.2498 each beside the other (vy-dc-h200-2 at 1980 MHz); \
 tex: θ tex"""
 weight = { s8 = 1, u8 = 1, b1 = 0.125, e4m3 = 1, e5m2 = 1, e2m1 = 1, f16 = 2, bf16 = 2, tf32 = 4, nvf4 = 1, mxf4 = 1, f64 = 32, e3m2 = 1, e2m3 = 1, mxf8 = 1, mxf6 = 1 }

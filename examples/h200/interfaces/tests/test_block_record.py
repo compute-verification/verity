@@ -127,28 +127,7 @@ def test_six_accepting_legs_on_one_server_compose_to_accept() -> None:
     assert week["blocks"] == 12500 * 1008 and week["per_block_error_for"]["1/100"] == str(Fraction(1, 100 * 12500 * 1008))
 
 
-def test_a_leg_carries_its_answers_placement_and_no_other_profile() -> None:
-    """The certifier's answer names which host ran each party (``profile.placement``): its leg carries that and the
-    record still fits its schema and checks clean; a leg whose profile names no placement carries no profile."""
-    report, wipe = _accepting_report()
-    placement = {"kind": "not-placed", "parties": {"network_certifier": "gate", "prover": "n0", "verifier": "n0"}}
-    row = report["protocols"][R.RUNNER_KEYS["certifier"]]
-    row["answer"] = {**row["answer"], "profile": {**row["answer"]["profile"], "placement": placement}}
-    rec = R.from_period(report, steps=(4, 6), deployment=R.REFERENCE, extra={"wipe": wipe})
-    jsonschema.Draft202012Validator(SCHEMA).validate(rec)
-    assert R.check(rec) == {}
-    assert rec["legs"]["certifier"]["answer"]["profile"] == {"placement": placement}
-    assert all("profile" not in lg["answer"] for k, lg in rec["legs"].items() if k != "certifier")
-
-
 def test_a_report_of_another_format_is_refused() -> None:
     report, _ = _accepting_report()
     with pytest.raises(ValueError, match="not one of"):
         R.from_period({**report, "format": "verity/all-protocols-window/v0"}, steps=(0, 2), deployment=R.REFERENCE)
-
-
-def test_the_reference_deployment_is_the_census_entry_the_fixtures_carry() -> None:
-    census = [d for d in json.loads(R.CENSUS.read_text()) if d["role"] == "reference"]
-    assert len(census) == 1 and R.REFERENCE == {k: v for k, v in census[0].items() if k != "sources"}
-    for name in (*NAMES, "block-record-b71a-w30"):
-        assert _load(name)["monitoring_period"]["deployment"] == R.REFERENCE

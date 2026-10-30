@@ -138,6 +138,7 @@ def test_wide_limb_index_reads_the_store(bits):
         q, lane, wi = rnd.randrange(len(lanes) // 32), rnd.randrange(32), rnd.randrange(lw)
         i = wide.word_index(q, lane, wi, lw)
         assert layout.wide_word(store, i, f.limbs) == lanes[32 * q + lane][wi]
+    assert layout.wide_block(store, 33, lw, f.limbs) == b"".join(y.to_bytes(4 * f.limbs, "little") for y in lanes[33])
 
 
 _tspec = importlib.util.spec_from_file_location("ct_wide", HERE.parents[1] / "codec_tensor" / "wide.py")

@@ -28,12 +28,23 @@ section Sure
 theorem computeSound_of_perRun [Fintype ΩW] {p : Price} {W ε : ℝ} (h : r.ComputeSoundPerRun p W ε) : r.ComputeSound p W ε :=
   fun o _ _ hT => (pr_mono fun x hx => ⟨hx.1, (hT x).trans_lt hx.2⟩).trans (h o)
 
+theorem bandwidthSound_of_perRun [Fintype ΩQ] {Q ε : ℝ} (h : r.BandwidthSoundPerRun Q ε) : r.BandwidthSound Q ε :=
+  fun x s _ _ hB => (pr_mono fun q hq => ⟨hq.1, (hB q).trans_lt hq.2⟩).trans (h x s)
+
 theorem capacitySound_of_perRun [Fintype ΩS] {S ε : ℝ} (h : r.CapacitySoundPerRun S ε) : r.CapacitySound S ε :=
   fun x q _ _ hB => (pr_mono fun s hs => ⟨hs.1, (hB s).trans_lt hs.2⟩).trans (h x q)
 
 theorem computeSoundPerRun_ideal [Fintype ΩW] {p : Price} {W : ℝ} (h : ∀ ω, r.accepts .compute ω → W ≤ r.work p ω) :
     r.ComputeSoundPerRun p W 0 := fun _ =>
   (pr_eq_zero fun _ hx => absurd (h _ hx.1) (not_le.2 hx.2)).le
+
+theorem bandwidthSoundPerRun_ideal [Fintype ΩQ] {Q : ℝ} (h : ∀ ω, r.accepts .bandwidth ω → Q ≤ r.read ω) :
+    r.BandwidthSoundPerRun Q 0 := fun _ _ =>
+  (pr_eq_zero fun _ hq => absurd (h _ hq.1) (not_le.2 hq.2)).le
+
+theorem capacitySoundPerRun_ideal [Fintype ΩS] {S : ℝ}
+    (h : ∀ ω, r.accepts .capacity ω → S * (r.win .capacity).len ≤ r.held ω) : r.CapacitySoundPerRun S 0 := fun _ _ =>
+  (pr_eq_zero fun _ hs => absurd (h _ hs.1) (not_le.2 hs.2)).le
 
 end Sure
 

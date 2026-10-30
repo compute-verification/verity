@@ -6,7 +6,7 @@ Writes `DIR/difftest/instances.jsonl`, one instance per line as `NetTiming.Difft
 `DIR/difftest/python.jsonl`, the same line's results from the checkout's `verity.core.protocols.certifier`:
 `schedule.expected_grids` of each egress link (`rows`), `Audit.check_link`'s verdicts (`verdicts`) and the first bucket
 of each recorded window whose row differs from the expected one (`diff`), `Audit.check_ingress_link`'s verdict for
-every boundary execution phase (`status`), and whether the audit accepts every execution phase of the first `m` windows
+every boundary link-window (`status`), and whether the audit accepts every link-window of the first `m` windows
 (`accepted`) and every status there (`complete`), for `m = 0 … W`. The Lean audit runs `NetTimingDifftest.lean` on
 both files (`runs` in `lean-audit.json`, which pins their SHA-256), and `verity/core/protocols/certifier/tests/
 test_network_certifier_lean_difftest.py` checks that this script still writes them.
@@ -15,7 +15,7 @@ An instance has one to three egress links and up to two ingress links, varied `T
 fractional or not), anchors (some past the horizon) and indices, sessions out of anchor order, bursts beyond the
 allocation, late frames, a sender on another clock, a malformed frame, grids forged slot by slot, statuses, a sync
 outside `Σ_sync` or other than the unit's, and runs whose records stop at a window boundary. It has no negative index or
-anchor (Lean's are ℕ), no row of another length than the allocation, and exactly one record per execution phase recorded
+anchor (Lean's are ℕ), no row of another length than the allocation, and exactly one record per link-window recorded
 (Lean's observation has one status per link and step): the audit's own tests cover duplicates and missing records.
 """
 from __future__ import annotations
@@ -28,7 +28,7 @@ from pathlib import Path
 
 import verity.core.protocols.certifier
 from verity.core.protocols.certifier.audit import Audit
-from verity.core.protocols.certifier.grid import GridParams, Reason, BlockGrid, Status, Certifier
+from verity.core.protocols.certifier.grid import GridParams, Reason, Record, Status, Certifier
 from verity.core.protocols.certifier.schedule import (ClockSync, LogicalFrame, SyncSet, expected_grids, handing_buckets,
                                             run_shaper)
 
@@ -45,8 +45,8 @@ def _sync_outside(rng: random.Random, ss: SyncSet) -> ClockSync:
 
 
 def _frames(rng: random.Random, horizon: int, buckets: int, allocation: int, size: int) -> list[LogicalFrame]:
-    """Sessions of frames, each at one anchor (some past the horizon), with indices 0, 1, … or sampled, some bursts
-    beyond the allocation, and in anchor order or not."""
+    """Sessions of frames, each at one anchor (some past the horizon), with indices 0, 1, … or drawn, some bursts beyond
+    the allocation, and in anchor order or not."""
     sessions = []
     for _ in range(rng.randrange(0, 2 + horizon)):
         anchor = rng.randrange(horizon) if rng.random() < 0.85 else rng.randrange(horizon, horizon + buckets + 1)
@@ -58,7 +58,7 @@ def _frames(rng: random.Random, horizon: int, buckets: int, allocation: int, siz
     return [LogicalFrame(rng.randbytes(size), a, i) for s in sessions for a, i in s]
 
 
-def _forge(rng: random.Random, record: BlockGrid, payloads: list[bytes], allocation: int) -> BlockGrid:
+def _forge(rng: random.Random, record: Record, payloads: list[bytes], allocation: int) -> Record:
     grid = [list(row) for row in record.grid]
     b, s = rng.randrange(len(grid)), rng.randrange(allocation)
     kind = rng.randrange(4)
@@ -72,7 +72,7 @@ def _forge(rng: random.Random, record: BlockGrid, payloads: list[bytes], allocat
     elif len(grid) > 1:  # two buckets swapped
         c = rng.randrange(len(grid))
         grid[b], grid[c] = grid[c], grid[b]
-    return BlockGrid(record.link, record.window, tuple(tuple(r) for r in grid), record.status)
+    return Record(record.link, record.window, tuple(tuple(r) for r in grid), record.status)
 
 
 def instance(seed: int) -> dict:
@@ -113,7 +113,7 @@ def instance(seed: int) -> dict:
         records += run_shaper(fs, [0] * len(fs), unit, Certifier(link, params))
     recorded = windows if rng.random() < 0.85 else rng.randrange(windows)
     statuses = [Status(rng.choice(list(Reason))) if rng.random() < 0.04 else None for _ in records]
-    records = [BlockGrid(r.link, r.window, r.grid, s or r.status) for r, s in zip(records, statuses, strict=True)
+    records = [Record(r.link, r.window, r.grid, s or r.status) for r, s in zip(records, statuses, strict=True)
                if r.window < recorded]
     return {"params": params, "sync_set": ss, "windows": windows, "egress": egress, "ingress": ingress,
             "frames": frames, "declared": declared, "records": records, "recorded": recorded}

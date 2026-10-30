@@ -83,8 +83,7 @@ def test_a_queue_merge_is_judged_against_the_tip_it_merged_onto(tmp_path):
     passes, the shrink with a note."""
     rep = _repository()
     cap, lines = rep.MD_SIZE_CAP, [f"line {i}\n" for i in range(10)]
-    def doc(at, text):
-        return "".join(text if i == at else line for i, line in enumerate(lines))
+    doc = lambda at, text: "".join(text if i == at else line for i, line in enumerate(lines))
     _git(tmp_path, "init", "-q", "-b", "main")
     main = _commit(tmp_path, {"tests/test_repository.py": CAPS.read_text(), "doc.md": doc(None, ""), "b.md": "b\n"})
     heads = {}

@@ -217,7 +217,7 @@ def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Ter
     unencumbered = operating.human(s.reference / (c.fleet.mfu_train * s.total_phi))
     setting = (f"{s.regime.name} regime, {c.fleet.count:g} × {c.location.name} (Φ = {c.location.phi:.3g} gate/s, "
                f"ε_dark {c.fleet.eps_dark:g}), policy {c.policy.name} (c = {c.c:.3g} gates, k = {c.policy.k:.3g} bit), "
-               f"{c.period.name}, {c.units.gates_per_flop:g} gates a FLOP ({c.units.basis}); target {s.run.name} "
+               f"{c.horizon.name}, {c.units.gates_per_flop:g} gates a FLOP ({c.units.basis}); target {s.run.name} "
                f"(T_0 = {s.reference:.3g} gates; the reference at the training MFU takes {unencumbered}).")
     st = s.structure
     best = picked(r)

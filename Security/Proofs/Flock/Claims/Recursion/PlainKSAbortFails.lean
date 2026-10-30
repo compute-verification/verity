@@ -2,9 +2,9 @@ import Proofs.Flock.Claims.Recursion.BoundDeploy
 import Proofs.Flock.Claims.DeployEfficient
 
 /-!
-# (P1) `Bound.PlainKSAbort` fails at an element-level verifier `KSBoundRouteCols` quantifies over
+# (P1) `Bound.PlainKSAbort` fails at an element-level verifier `KSBoundRoute` quantifies over
 
-`RecDeploy.KSBoundRouteCols` takes (P1), `Bound.PlainKSAbort`, at the deployed bound record
+`RecDeploy.KSBoundRoute` takes (P1), `Bound.PlainKSAbort`, at the deployed bound record
 `bdDeployed rel nextE colsE wE …`, at every choice of the element-level verifier's steps `nextE`. At the steps that
 accept whatever they read (`acceptAllE`), (P1) fails at every false statement in the deployed plain verifier's scope
 (`not_plainKSAbort_acceptAll_in`):
@@ -19,9 +19,9 @@ accept whatever they read (`acceptAllE`), (P1) fails at every false statement in
 * **In scope** (`not_plainKSAbort_acceptAll_in`): at a plain session in scope (`FlockDeploy.PlainIn`, at most `200`
   tables), `κ ≤ 200 · 2^{−202.98} < 1` (`FlockDeploy.κ_plain_le`).
 
-So (P1) at every `nextE`, as `KSBoundRouteCols` quantifies it, is false wherever the deployed plain verifier has a false
+So (P1) at every `nextE`, as `KSBoundRoute` quantifies it, is false wherever the deployed plain verifier has a false
 statement in scope: `deE` leaves the element-level verifier's steps free, while its `κ` is `deployPlain rel`'s, fixed by
-the deployed numbers. That is why (P1) stays a hypothesis of `KSBoundRouteCols`; at the deployed plain verifier's own steps
+the deployed numbers. That is why (P1) stays a hypothesis of `KSBoundRoute`; at the deployed plain verifier's own steps
 it is `RecDeploy.plainKSAbort_bd`'s statement, and at the deployed relation it holds with no premise
 (`RecDeploy.plainKSAbort_deployed`).
 -/

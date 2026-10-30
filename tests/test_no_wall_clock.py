@@ -36,8 +36,6 @@ SLEEP_IN_SOURCE = re.compile(r"\bsleep\(")
 
 ALLOWED: dict[str, str] = {
     "benchmarks/numerical/tests/reference/exhaustive_driver.py": "the WP1 pod driver (a recorded run, not a test) reports its steps' wall time",
-    "infra/ops/tests/test_agent_watch.py::test_api_get_takes_a_shorter_timeout_but_never_a_longer_one":
-        "passes timeout values to a stubbed urlopen and asserts them; nothing waits",
     "integrations/vllm/tests/commit/test_commit_fail_closed.py::_WATCHDOG_PROG":
         "drives the native collector's dead-watchdog, a C++ timer with no injectable clock; CUDA only, never in check",
     "integrations/vllm/tests/engine/int8_decode_split_gpu.py":
@@ -47,8 +45,6 @@ ALLOWED: dict[str, str] = {
     "integrations/vllm/tests/program/beyond_gemm.py": "a GPU probe script (not collected) that reports its own wall time",
     "integrations/vllm/tests/program/crosscheck.py::main": "the cross-check script's summary line reports its wall time; no test runs main",
     "integrations/vllm/tests/program/padded_commit_tiny.py": "records build/commit timings in its row; test_padded_commit_tiny asserts none of them",
-    "integrations/vllm/tests/protocols/h1_zy_gpu.py::wall":
-        "the GPU timing script (not collected) records each arm's seconds from launch to every result on the host; no test reads them",
     "integrations/vllm/tests/protocols/local_gate.py::_now":
         "the by-hand local gate (not collected) gives infra's auditor.py the times its signed entries record, as on vy-challenger-1",
     "integrations/vllm/tests/protocols/pouw_h1_rehearsal.py::_poll_end":

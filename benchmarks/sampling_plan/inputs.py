@@ -4,13 +4,10 @@ the models' shapes; and what every scale commits at serve time, a token a layer,
 table)."""
 from __future__ import annotations
 
-from collections.abc import Sequence
 from dataclasses import dataclass
 from math import ceil, log2
 
-from verity.ml.windows.interface import K_MAX, proof_block_k_log
 from verity.core.protocols.sampled_proofs.costfit import Observation
-from verity.core.protocols.sampled_proofs.optimize import SHA512_ANDS
 
 
 @dataclass(frozen=True)
@@ -55,7 +52,7 @@ I = {
 #: ANDs of the pieces (their pins and hm96 PROTOCOL §5)
 S8_STEP = 4_190
 EPILOGUE = 5_000
-SHA512 = SHA512_ANDS
+SHA512 = 58_120
 HM96 = 116_240
 
 
@@ -169,27 +166,10 @@ def tree_chain(leaves: float) -> int:
 
 
 
-def block_k_log(ands: int, rows: Sequence[int]) -> int:
-    """The ``k_log`` of the C-Flock block that holds one proof block of ``ands`` ANDs opening ``rows`` (bytes each, the
-    output's row last) before the composer packs it: `proof_block_k_log` unpacked. A row's opening is its hm96 and
-    sha512x3 slots, not ANDs in the unit's slot."""
-    return proof_block_k_log(rows[:-1], rows[-1:], ands, packed=False)
-
-
-def cap(ands: int, rows: Sequence[int]) -> int:
-    """A statement's proof blocks of ``ands`` ANDs opening ``rows``: one a C-Flock block of 2^`block_k_log` under
-    m = k_log + nbl <= 35, at most 2^20 (below 2^22 the composer packs several a block, about as many a statement); 0, not a
-    proof block, past C-Flock's 2^`K_MAX`."""
-    k = block_k_log(ands, rows)
-    return 0 if k > K_MAX else min(1 << (35 - k), 1 << 20)
-
-
 def s8_coord_ands(k: int) -> int:
     """One s8 coordinate's ANDs with its rows' openings, as `costfit` counts them: K/32 steps, the epilogue, two K-byte
-    operand rows and three one-block rows (the scales and the output), each at `optimize.row_ands`."""
-    from verity.core.protocols.sampled_proofs.optimize import row_ands
-
-    return k // 32 * S8_STEP + EPILOGUE + 2 * row_ands(k) + 3 * row_ands(1)
+    operand rows and three one-block rows (the scales and the output)."""
+    return k // 32 * S8_STEP + EPILOGUE + 2 * (HM96 + SHA512 * ceil((k + 17) / 128)) + 3 * (HM96 + SHA512)
 
 
 #: the measurements the cost model is fitted from (`costfit`): benchmarks/one_stage/zk_cost.py's sessions of

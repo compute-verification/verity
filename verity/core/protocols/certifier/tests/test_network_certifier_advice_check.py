@@ -192,7 +192,7 @@ def test_the_sort_sorts():
 
 
 def test_size_counts_the_unit():
-    """`size` is the proof block's AND count, and at the 60 s llama8b-shape window (10.6 Mbit, PROTOCOL.md "Advice v0's
+    """`size` is the unit's AND count, and at the 60 s llama8b-shape window (10.6 Mbit, PROTOCOL.md "Advice v0's
     validity") the count PROTOCOL.md cites."""
     for L in (40, 240):
         assert size(L)["ands"] == ands(unit(L)), L

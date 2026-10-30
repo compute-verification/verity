@@ -21,14 +21,24 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from verity.ml.commitments.leaves import fold_path, path_shape
-from verity_vllm.commit import hashing
+from verity.ml.commitments.leaves import fold_path
+from verity.errors import InvalidArtifact
+from verity_vllm.commit import hashing, scheme
 
 __all__ = ["CommitError", "fold_path", "fold_range", "path_shape", "range_path_shape"]
 
 
 class CommitError(ValueError):
     pass
+
+
+def path_shape(leaf_count: int, index: int) -> list[bool]:
+    """For each level from the leaves up: ``True`` when the node at that level has a sibling,
+    ``False`` when it is the odd trailing node that gets lifted."""
+    try:
+        return scheme.path_shape(leaf_count, index)
+    except InvalidArtifact as error:
+        raise CommitError(str(error)) from error
 
 
 def range_path_shape(leaf_count: int, lo: int, hi: int) -> list[tuple[bool, bool]]:

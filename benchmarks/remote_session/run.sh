@@ -64,9 +64,8 @@
 # /workspace/jobs/venv312/bin/python, its `verity-vllm` launcher beside it), this tree's verity_vllm first on its path,
 # against ROLE=verifier with SESSIONS=1 (one session a store). SERVE=tiny runs `serve.py --connect` (the vLLM tests'
 # tiny Llama, PLAN serve or servedrop:K). SERVE=row runs row ROW, `verity-vllm row run ROW CHECKPOINT REPO REV` with
-# the checkpoint `verity-vllm epoch resolve ROW` names, ROW_ARGS (such as --stages commit), REMOTE_VERIFIER at the
-# tunnel and EXTRA_COMMIT_ARGS (such as --remote-node HOST, the session's node, default verity-vllm/<hostname>); its
-# Commit puts the store binder on its engine and proves the store in lockstep with its first instrumented
+# the checkpoint `verity-vllm epoch resolve ROW` names, ROW_ARGS (such as --stages commit) and REMOTE_VERIFIER at the
+# tunnel; its Commit puts the store binder on its engine and proves the store in lockstep with its first instrumented
 # run, a pass an engine step (`verity_vllm.protocols.remote_bandwidth.remote.CommitSession`: one GPU, synchronous scheduling declared in the
 # row's target, its store the weights and --remote-filler-gib of filler, the KV pool outside it). Serving int8
 # Llama-3.1-8B:
@@ -80,11 +79,10 @@
 # (`node.sh` starts them; MODEL, ENGINE_ARGS, ENGINE_CPUS, NODE_ARGS). VERIFIER_ARGS=--host-bytes N puts the serving
 # node's host DRAM (its MemTotal) in the memory line. The north-star run, the verifier on a second node's CPUs:
 #
-#   ROLE=verifier PEER=PROVER_NODE PORT=7799 SESSIONS=2 WINDOWS=7 WINDOW_MS=60000 SAMPLES=<audit.SAMPLES> \
-#     QUANTILE=max JITTER_MS=50 VERIFIER_ARGS='--host-bytes 1843153879040' \
-#     bash benchmarks/remote_session/run.sh                         # 16 CPUs
+#   ROLE=verifier PEER=PROVER_NODE PORT=7799 SESSIONS=2 WINDOWS=7 WINDOW_MS=60000 SAMPLES=33273 QUANTILE=max \
+#     JITTER_MS=50 VERIFIER_ARGS='--host-bytes 1843153879040' bash benchmarks/remote_session/run.sh   # 16 CPUs
 #   ROLE=prover PORT=7799 SERVE=node PLAN=honest,skip:0.0625 ENGINE_CPUS=0-23 PROVER_CPUS=24-47 \
-#     ENGINE_ARGS='--step-hz 2 --align-steps' NODE_ARGS='--decode-s 60 --warm-openings <audit.SAMPLES>' \
+#     ENGINE_ARGS='--step-hz 2 --align-steps' NODE_ARGS='--decode-s 60 --warm-openings 33273' \
 #     bash benchmarks/remote_session/run.sh                         # the whole 8-GPU node, 200 GB of host memory
 #
 # Start the prover first: its lease waits for all 8 GPUs, and once it holds them it waits for the verifier's tunnel;

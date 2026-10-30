@@ -2,7 +2,7 @@
 window per rank in ``<dir>/rank<r>/``, which the rank's own process commits (`rank_rows`, through the collective RPC) from its
 committed store, its registered weight shards and its Programs of record with `pipeline.serving_rows.after_commit`, and ``<dir>/tp.json``
 over the world.  The driver calls `commit` in the first instrumented run once every rank's root is final and the TP run root is fixed,
-and before sampling: the challenge, the population openings and the cross-rank picks all come after it, and every rank's C2 replay is
+and before any draw: the challenge, the population openings and the cross-rank picks all come after it, and every rank's C2 replay is
 deferred (`require`), since an in-process replay draws its seed inside finalize.
 
 Rank ``r``'s window binds ``run = <TP run root hex>/rank<r>`` (`run_of`): the TP run root fixes every rank's rows-sha512 root, and the rank
@@ -17,13 +17,13 @@ workload the record served.  Neither side evaluates a row, so the Definitions th
 one-stage proof is over the verifier's own template.  `source` holds a registration's window to it: ``served``, its run ``<TP run root>/rank<r>`` under a
 SHA-512 TP run root, its ``tp`` the record's and its served Programs the ones the verifier loaded.  A served window names a SHA-512
 commitment, as `deferred_rows.source` holds a deferred Commit's: a TP Commit's run root is SHA-512 (``verity/tp-run-root/v2``), and a
-record under the SHA-256 v1 root (an old record) passes no window as served (``sha512``).
+record under the SHA-256 v1 root (an old record, or ``--commit-scheme vllm-v1``) passes no window as served (``sha512``).
 
 A TP Commit that deferred its ranks' replay to sealed bundles and wrote no window has its windows from those bundles afterwards
 (``verity-vllm tp-serving-rows COMMIT_OUT --partition F --out O``, `from_bundle`): rank ``r``'s bundle opened against the record as
 its CPU replay opens it (`commit_replay._of_record`: pending or passed, a failed rank refused), its Programs of record, its weight
 shards opened against its committed weights root, and the window `pipeline.serving_rows.after_commit` writes under the same run and
-``tp``.  Its rows are a fresh commitment, made after the Commit and before sampling, so the window is a ``stand-in`` whose link to
+``tp``.  Its rows are a fresh commitment, made after the Commit and before any draw, so the window is a ``stand-in`` whose link to
 the rank's rows-sha512 root is provenance (`stand_in`: ``of`` the TP run root, the rank, its root, the bundle's manifest digest and
 this command, and ``link``).  `source` takes a stand-in only for a rank whose bundle the record names (``replay_deferred.json``) and
 whose replay did not fail, with that ``of`` and ``link``."""
@@ -40,7 +40,6 @@ from typing import Any
 
 from verity_vllm import config as C
 from verity_vllm.config import option
-from verity_vllm.pipeline.tp import run_root as RT
 
 SCHEMA = "verity-vllm/tp-serving-rows/v1"
 ROWS_SCHEME = "rows-sha512"
@@ -50,7 +49,7 @@ LINK = ("provenance, not proof: verity-vllm tp-serving-rows opened the rank's se
 
 
 def require(args: Any, replay_cfg: dict[str, Any] | None) -> None:
-    """Refuse a ``--serving-rows`` TP Commit whose windows could not be written before sampling."""
+    """Refuse a ``--serving-rows`` TP Commit whose windows could not be written before every draw."""
     if args.serving_rows and (replay_cfg is None or not args.replay_deferred or args.only_arm == "control"):
         raise SystemExit("--serving-rows on a TP Commit needs --required-manifest with a --build-rank per rank (each rank reads its Programs of "
                          "record from the replay config), --replay-deferred at a world that defers (no rank draws its replay seed before "
@@ -69,11 +68,11 @@ def stand_in(tp: dict[str, Any], bundle_manifest_sha256: str) -> dict[str, Any]:
                    "bundle_manifest_sha256": bundle_manifest_sha256, "rows": ROWS}, "link": LINK}
 
 
-def commit(llm: Any, args: Any, root: bytes, claimed: dict[str, str], world: int) -> dict[str, Any]:
-    """Every rank's window under the SHA-512 TP run root ``root`` of the ranks' roots ``claimed`` (rank -> hex), and
+def commit(llm: Any, args: Any, root: bytes, claimed: dict[str, str], world: int, root_tag: bytes) -> dict[str, Any]:
+    """Every rank's window under the TP run root ``root`` (tagged ``root_tag``) of the ranks' roots ``claimed`` (rank -> hex), and
     ``tp.json``."""
     req = json.loads(Path(args.serving_rows).read_text())
-    tp = {"world": world, "tp_run_root": root.hex(), "roots": {str(r): claimed[str(r)] for r in range(world)}, "root_tag": RT.TP_ROOT_TAG.decode()}
+    tp = {"world": world, "tp_run_root": root.hex(), "roots": {str(r): claimed[str(r)] for r in range(world)}, "root_tag": root_tag.decode()}
     got = llm.collective_rpc(rank_rows, timeout=args.rpc_timeout, args=(dict(req, row=args.label), tp))
     return gather(req["dir"], tp, got)
 
@@ -203,6 +202,7 @@ def record(commit_dir: str | os.PathLike) -> dict[str, Any]:
     v2, or an old record's v1, which `source` refuses as served), and any other tag is refused.  ``bundles``: the manifest sha256 of
     each rank's sealed pair-0 bundle whose replay did not fail (``replay_deferred.json``; none when nothing was deferred)."""
     from verity_vllm.pipeline.tp import c2 as C2
+    from verity_vllm.pipeline.tp import run_root as RT
 
     d = Path(commit_dir)
     rows = [json.loads(x) for x in (d / "runs.jsonl").read_text().splitlines() if x.strip()]

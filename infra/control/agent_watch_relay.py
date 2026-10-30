@@ -79,8 +79,6 @@ SAY = {"held": "was held after a finished tool call or the end of its turn since
        "silent": "has been ACTIVE {active_minutes} min with no note and no push for {minutes} min; check on it",
        "no_step": "has shown nothing (no note, no push, nothing streamed) since {since} ({hours} h) after its two silent rings: "
                   "stop it and archive it, or resume it",
-       "archived": "showed nothing (no note, no push, nothing streamed) since {since} ({hours} h) after its two silent rings, so "
-                   "the watch archived it: relaunch it from its last note, or drop it",
        "run_ended": "ended rc={rc} after {after} on {node}",
        "stalled": "streamed nothing for {minutes} min since {since}, its agent not moving either (a hung call or a suspended "
                   "VM); the watch {action}",
@@ -93,7 +91,7 @@ SAY = {"held": "was held after a finished tool call or the end of its turn since
                       "follow-ups sat unread ({reason}); the watch {action}"}
 TOP = {"erroring", "stuck", "cancel_refused", "held_again", "unreadable", "no_step"}
 WORKER = {"worker_idle", "worker_long"}         # rung to the lane's handle: only its coordinator can resume a worker
-HANDLE = WORKER | {"silent", "run_ended", "workers_failed", "archived"}       # rung to the record's handle
+HANDLE = WORKER | {"silent", "run_ended", "workers_failed"}       # rung to the record's handle
 FAIL = {"held", "stalled", "crashed", "idle_after_run", "relaunch", "held_unread"}  # rung to the record's owner: who follows it up
 UNROUTED = "infra"      # rung for a worker whose lane no handle owns: a worker alert is never posted unrung
 UNSENT_LISTED = 12      # runs of unknown senders one post names; the rest are counted

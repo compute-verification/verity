@@ -1,8 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkBind.BindX
-import Proofs.Flock.Soundness.Discharge.ZkBind.Rate
-import Proofs.Flock.Soundness.Discharge.ZkView.Decode
-import Proofs.Flock.Soundness.Discharge.ZkView.Fixed
-import Proofs.Flock.Soundness.Discharge.ZkView.Prefinal
+import Proofs.Flock.Soundness.Discharge.ZkLink
+import Proofs.Flock.Soundness.Discharge.ZkExec
+import Proofs.Flock.Soundness.Discharge.ZkView
+import Proofs.Flock.Soundness.Discharge.ZkBind
 
 /-!
 # One `--zk` sampled session: the pieces the soundness half reads

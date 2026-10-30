@@ -52,10 +52,6 @@ PUBLIC = {
                                               "the registered value, its class, its words and a slot's bridge",
     "verity_vllm.pipeline.workload_file": "I1: a workload file, fetched from the evidence store when absent and checked against "
                                           "its digest",
-    "verity_vllm.pipeline.serve_h1": "I1: serve-openai's PoUW H1 arm, its --protocols-config (config_of) and the window "
-                                     "Program it declares (H1Windows), which a period's offline Program must equal",
-    "verity_vllm.protocols.pouw.h1.drawn": "I1: a served H1 window's drawn calls staged as C-Flock statements and checked as "
-                                           "credit does (main), which benchmarks/pouw/h1_prove/drawn.py runs",
 }
 
 #: Every other module of the package that outside code imports. Move its importers onto a public interface and delete it.
@@ -151,6 +147,7 @@ KNOWN = frozenset({
     "verity_vllm.protocols.linear.api",
     "verity_vllm.protocols.linear.vllm_site",
     "verity_vllm.protocols.pouw",
+    "verity_vllm.protocols.pouw.device",
     "verity_vllm.protocols.pouw.h1",
     "verity_vllm.protocols.pouw.h1.challenger",
     "verity_vllm.protocols.pouw.h1.handoff",
@@ -159,6 +156,7 @@ KNOWN = frozenset({
     "verity_vllm.protocols.pouw.h1.registered",
     "verity_vllm.protocols.pouw.h1.served",
     "verity_vllm.protocols.pouw.h1.window",
+    "verity_vllm.protocols.pouw.native",
     "verity_vllm.protocols.pouw.pearl_c",
     "verity_vllm.protocols.pouw.pearl_c.graphs",
     "verity_vllm.protocols.pouw.pearl_c.grouped",
@@ -184,6 +182,7 @@ KNOWN_PRIVATE = frozenset({
     ('verity_vllm.check.fold_compare', '_in_place'),
     ('verity_vllm.program.frontend.rules.family', '_field_intervals'),
     ('verity_vllm.protocols.remote_bandwidth.registry', '_page_blocks'),
+    ('verity_vllm.query.program_view', '_registry'),
 })
 
 

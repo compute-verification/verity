@@ -53,32 +53,6 @@ def test_a_tree_is_discovered_and_keyed_from_gits_view_of_it(tmp_path, monkeypat
     assert S.object_ids(S.worktree(), ["pkg"])["pkg"] != before["pkg"]
 
 
-def test_a_clone_another_step_has_not_checked_out_yet_is_left_out_of_the_tree(tmp_path, monkeypatch):
-    (tmp_path / "a.py").write_text("a = 1\n")
-    _git(tmp_path, "init", "-q")
-    S = _suites(monkeypatch, tmp_path)
-    before = S.object_ids(S.worktree(), ["a.py", "clone"])
-    (tmp_path / "clone").mkdir()
-    _git(tmp_path / "clone", "init", "-q")                     # a clone in flight: no commit checked out yet
-    (tmp_path / "a.py").write_text("a = 2\n")
-    after = S.object_ids(S.worktree(), ["a.py", "clone"])
-    assert after["clone"] == "absent" and after["a.py"] != before["a.py"], "the rest of the tree is still read"
-
-
-def test_any_other_error_of_git_add_is_raised_with_its_message(tmp_path, monkeypatch):
-    (tmp_path / "a.py").write_text("a = 1\n")
-    _git(tmp_path, "init", "-q")
-    S = _suites(monkeypatch, tmp_path)
-    (tmp_path / ".git" / "objects").chmod(0o500)
-    try:
-        if os.access(tmp_path / ".git" / "objects", os.W_OK):
-            pytest.skip("this user writes through read-only modes (root)")
-        with pytest.raises(RuntimeError, match=r"git add -A.*\n.*"):
-            S.worktree()
-    finally:
-        (tmp_path / ".git" / "objects").chmod(0o700)
-
-
 def test_a_tree_that_is_not_a_checkout_is_refused(tmp_path, monkeypatch, capsys):
     (tmp_path / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = []\n')
     S = _suites(monkeypatch, tmp_path)
@@ -414,8 +388,8 @@ def test_changed_selects_the_suites_a_change_touches_by_path_runner_or_lock(tmp_
 
 
 def test_changed_from_a_main_the_branch_is_behind_is_the_branchs_own_change(tmp_path, monkeypatch):
-    """`--changed origin/main` on a branch behind main would diff main's own progress too, and select dozens of suites no
-    one changed: the change is measured from the merge-base."""
+    """`--changed origin/main` on a branch behind main diffed main's own progress too (20 Oct: ~50 suites in a run): the change is
+    measured from the merge-base."""
     _workspace(tmp_path)
     _git(tmp_path, "add", "-A")
     _git(tmp_path, "commit", "-q", "-m", "base")
@@ -488,9 +462,8 @@ def test_changed_origin_main_in_a_shipped_tree_without_it_fetches_it_or_names_th
 
 
 def test_markdown_rekeys_and_selects_only_the_suites_that_list_markdown(tmp_path, monkeypatch):
-    """A change to a few `.md` files must not pick every suite whose directory holds them. A directory keys without its
-    `*.md` unless its suite lists a `.md`, whose guard then lets it read Markdown (test_guard.py holds the others to reading
-    none)."""
+    """#1594's 13 `.md` files picked 35 suites. A directory keys without its `*.md` unless its suite lists a `.md`, whose guard
+    then lets it read Markdown (test_guard.py holds the others to reading none)."""
     _workspace(tmp_path)
     (tmp_path / "a" / "README.md").write_text("prose\n")
     _git(tmp_path, "add", "-A")
@@ -520,7 +493,7 @@ def test_markdown_rekeys_and_selects_only_the_suites_that_list_markdown(tmp_path
 
 
 def test_a_nested_suite_leaves_the_key_of_the_suite_around_it_unless_that_one_declares_it(tmp_path, monkeypatch):
-    """benchmarks/pouw's key held exact_kit, a suite of its own under it, so every edit to the kit re-ran pouw's tests.
+    """benchmarks/pouw's key held exact_kit, a suite of its own under it (16 Oct), so every edit to the kit re-ran pouw's tests.
     A suite under another's directory is out of the outer one's key and `--changed` selection until the outer one declares it;
     the repository's own suite, whose tests read the whole tree, keeps it."""
     _workspace(tmp_path)
@@ -730,7 +703,6 @@ def _shipped_workspace(root: Path, *, absent: bool) -> None:
 
     (root / "tools" / "verity" / "check").mkdir(parents=True)
     shutil.copy(HERE / "suites.py", root / "tools" / "verity" / "check" / "suites.py")
-    shutil.copy(HERE / "settings.py", root / "tools" / "verity" / "check" / "settings.py")
     shutil.copytree(HERE / "guard", root / "tools" / "verity" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
     (root / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg"]\n')
     (root / "pkg" / "tests" / "fixtures").mkdir(parents=True)
@@ -806,7 +778,6 @@ def _per_test_workspace(root: Path) -> None:
 
     (root / "tools" / "verity" / "check").mkdir(parents=True)
     shutil.copy(HERE / "suites.py", root / "tools" / "verity" / "check" / "suites.py")
-    shutil.copy(HERE / "settings.py", root / "tools" / "verity" / "check" / "settings.py")
     shutil.copytree(HERE / "guard", root / "tools" / "verity" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
     (root / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg"]\n')
     (root / "pkg" / "tests").mkdir(parents=True)
@@ -839,7 +810,6 @@ def _env_workspace(root: Path, members: dict[str, str]) -> None:
 
     (root / "tools" / "verity" / "check").mkdir(parents=True)
     shutil.copy(HERE / "suites.py", root / "tools" / "verity" / "check" / "suites.py")
-    shutil.copy(HERE / "settings.py", root / "tools" / "verity" / "check" / "settings.py")
     shutil.copytree(HERE / "guard", root / "tools" / "verity" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
     (root / "pyproject.toml").write_text(f'[tool.uv.workspace]\nmembers = {list(members)!r}\n'.replace("'", '"'))
     for path, test in members.items():
@@ -886,7 +856,7 @@ def test_inside_a_research_run_the_tests_get_its_custody_key_and_require_the_sto
 
 
 def test_each_test_process_gets_its_share_of_the_cpus_for_its_thread_pools(tmp_path, monkeypatch):
-    """Sized to the whole node, each xdist worker of every lane run would run a thread per core, overloading the node:
+    """Sized to the whole node, each xdist worker of ten lane runs ran 159-191 threads (24 Oct, load 522 on cpu-5's 192 cores):
     each test process's OpenMP, MKL, OpenBLAS and numexpr pools get the CPUs divided by --jobs, and a size the caller set stays."""
     S = _suites(monkeypatch, tmp_path)
     monkeypatch.setattr(S, "cpus", lambda: 192)
@@ -967,7 +937,7 @@ def _reused(tmp_path: Path) -> list[str]:
 
 
 def test_a_killed_suite_is_reported_by_its_signal_and_what_it_left_in_its_group_is_killed(tmp_path):
-    """A pytest the OOM killer ends wrote no report and left its forkserver running: the
+    """A pytest the OOM killer ends wrote no report and left its forkserver running (network-accounting, #1202's tier): the
     suite's own process group takes what it left with it, and the signal and peak RSS are said."""
     root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
     _per_test_workspace(root)
@@ -990,8 +960,8 @@ def test_a_killed_suite_is_reported_by_its_signal_and_what_it_left_in_its_group_
 
 
 def test_a_suite_past_its_bound_is_killed_and_fails_as_timed_out(tmp_path):
-    """A test that waits on a FIFO nobody writes would hold its suite until it is killed by hand. Here the test blocks that
-    way, so the run ends only by its bound, whenever that fires: its group is killed, it fails timed out, and no pass is
+    """45fe's test_suites.py waited 82 min on a FIFO nobody wrote until it was killed by hand (7 Oct). Here the test blocks the
+    same way, so the run ends only by its bound, whenever that fires: its group is killed, it fails timed out, and no pass is
     kept."""
     root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
     _per_test_workspace(root)
@@ -1123,8 +1093,8 @@ def test_a_fresh_run_that_fails_what_a_kept_pass_answers_for_says_so(tmp_path):
 
 
 def test_each_failed_suite_is_written_beside_the_json_as_it_fails(tmp_path):
-    """Under `--keep-going` a check runs on for many minutes after a suite fails, and drive would know only at its end;
-    `suites.failed.json`, rewritten as each suite fails, is what drive reads of a check still running."""
+    """12 Oct: check cc39's repository suite had failed by 20:25Z, but under `--keep-going` the check ran to 20:55Z, and drive
+    knew only then; `suites.failed.json`, rewritten as each suite fails, is what drive reads of a check still running."""
     import json
 
     root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
@@ -1444,7 +1414,6 @@ def _traced_workspace(root: Path) -> None:
 
     (root / "tools" / "verity" / "check").mkdir(parents=True)
     shutil.copy(HERE / "suites.py", root / "tools" / "verity" / "check" / "suites.py")
-    shutil.copy(HERE / "settings.py", root / "tools" / "verity" / "check" / "settings.py")
     shutil.copytree(HERE / "guard", root / "tools" / "verity" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
     (root / ".gitignore").write_text("__pycache__/\n")
     (root / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg", "lib"]\n')
@@ -1506,7 +1475,6 @@ def test_a_read_through_a_process_wide_cache_counts_for_every_module_that_uses_t
     root, lib = tmp_path / "tree", tmp_path / "tree" / "lib"
     (root / "tools" / "verity" / "check").mkdir(parents=True)
     shutil.copy(HERE / "suites.py", root / "tools" / "verity" / "check" / "suites.py")
-    shutil.copy(HERE / "settings.py", root / "tools" / "verity" / "check" / "settings.py")
     shutil.copytree(HERE / "guard", root / "tools" / "verity" / "check" / "guard", ignore=shutil.ignore_patterns("__pycache__"))
     (root / ".gitignore").write_text("__pycache__/\n")
     (root / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg", "lib"]\n')
@@ -1666,8 +1634,8 @@ def _guard(monkeypatch):
 
 
 def test_a_passed_test_s_seconds_hold_its_setup_so_a_module_fixture_s_first_test_counts_as_heavy(monkeypatch):
-    """Ordering by call alone started `test_lean_witness`'s tests late behind 1,270-1,475 s of their `f1` setup per worker;
-    the teardown is not counted, and a failed phase still drops the test."""
+    """Ordering by call alone started `test_lean_witness`'s tests late behind 1,270-1,475 s of their `f1` setup per worker
+    (proofs, 12 Oct); the teardown is not counted, and a failed phase still drops the test."""
     from types import SimpleNamespace as R
 
     G = _guard(monkeypatch)
@@ -1840,8 +1808,8 @@ def test_the_suites_in_one_process_get_the_fewest_slots_that_finish_them_with_th
 
 
 def test_the_suites_in_one_process_get_no_more_slots_than_the_memory_holds(tmp_path, monkeypatch):
-    """A 16 GiB agent-test job on 48 CPUs would start 44 test processes if only the parallel suites' workers were sized
-    against memory, and the OOM killer took the whole scope."""
+    """18 Oct: a 16 GiB agent-test job on 48 CPUs started 44 test processes, which only the parallel suites' workers were sized
+    against memory for, and the OOM killer took the whole scope."""
     S = _suites(monkeypatch, tmp_path)
     assert S.serial_slots([5.0] * 48, 0, 48, 16) == 1, "16 GiB holds one process at TEST_PROCESS_GB"
     assert S.serial_slots([5.0] * 48, 0, 48, 64) == 64 // S.TEST_PROCESS_GB
@@ -1867,8 +1835,8 @@ def test_a_parallel_suite_runs_beside_the_others_on_the_slots_they_leave(tmp_pat
 
 
 def test_mem_gb_defaults_to_the_check_slots_memory(tmp_path, monkeypatch):
-    """A quick tier in a 480 GB pool slot would run circuit_check's suite on a worker per CPU (784 GB) if only `check`
-    passed `--mem-gb`."""
+    """17 Oct 11:21Z, cpu-2: a quick tier in a 480 GB pool slot ran circuit_check's suite on 94 workers (784 GB), since only
+    `check` passed `--mem-gb`."""
     S = _suites(monkeypatch, tmp_path)
     monkeypatch.setenv(S.SLOT_MEM_ENV, "480")
     assert S.slot_mem_gb() == 480.0
@@ -1878,8 +1846,8 @@ def test_mem_gb_defaults_to_the_check_slots_memory(tmp_path, monkeypatch):
 
 
 def test_mem_gb_falls_back_to_the_jobs_cgroup_limit(tmp_path, monkeypatch):
-    """A queued `suites.py verity-flock --fresh` run in no check slot sizes itself to its queue scope, which would OOM-kill
-    it otherwise."""
+    """17 Oct 13:02Z, vy-nebius-1: two queued `suites.py verity-flock --fresh` runs, in no check slot, were OOM-killed in
+    their queue scopes."""
     S = _suites(monkeypatch, tmp_path)
     root = tmp_path / "fs"
     (root / "proc/self").mkdir(parents=True)
@@ -1965,9 +1933,8 @@ def _red_row(suite: str, *tests: str) -> dict:
 
 
 def test_known_red_is_the_newest_check_of_mains_first_parent_commits_that_reported_its_suites(tmp_path, monkeypatch):
-    """A quick tier that fails on tests already red on `main` must not send its owner to triage them as the PR's. What is
-    red there is read from the newest post-landing run (or recorded check) of `main`'s first-parent commits that published
-    its suite reports."""
+    """CI-173: a quick tier failed on tests already red on `main`, and its owner triaged them as the PR's. What is red there is read
+    from the newest post-landing run (or recorded check) of `main`'s first-parent commits that published its suite reports."""
     from research.store.local import LocalStore
 
     _git(tmp_path, "init", "-q", "-b", "main")
@@ -2061,7 +2028,7 @@ def _vault(tmp_path: Path) -> Path:
 
 
 def test_the_red_list_merges_every_part_of_mains_newest_after_landing_run_found_in_a_cold_store(tmp_path, monkeypatch):
-    """Drive's after-landing run of a commit is one attempt per twin part, and only the part that ran a suite reports it,
+    """CI-211: drive's after-landing run of a commit is one attempt per twin part, and only the part that ran a suite reports it,
     so all the commit's parts are merged and named. A cold catalog refreshes `KNOWN_RED_WINDOWS_H` before the whole walk; a commit
     counts in a window only once it landed inside it, so a newer commit whose run started before the window still wins over an
     older commit's recent run."""
@@ -2096,10 +2063,10 @@ def test_the_red_list_merges_every_part_of_mains_newest_after_landing_run_found_
 
 
 def test_a_recorded_runs_custody_key_reaches_the_lookup_on_a_machine_with_no_store_of_its_own(tmp_path, monkeypatch):
-    """A `research run` job on a node whose `research` user has no store.toml, running `suites.py --known-red origin/main`,
-    has a store with no remote, so the lookup would read an empty catalog and report no check of `main` at all. The run's
-    custody dir (`<root>/requests/<run id>/custody/`, beside its run dir) holds the store's key, as `$CHECK_STORE_CUSTODY`
-    does for check's steps and the quick tier, and the lookup takes it from either."""
+    """CI-211: a `research run` job on a node whose `research` user has no store.toml ran `suites.py --known-red origin/main`; its
+    store had no remote, so the lookup read an empty catalog and reported no check of `main` at all. The run's custody dir
+    (`<root>/requests/<run id>/custody/`, beside its run dir) holds the store's key, as `$CHECK_STORE_CUSTODY` does for check's steps
+    and the quick tier, and the lookup takes it from either."""
     import json
     import shutil
 

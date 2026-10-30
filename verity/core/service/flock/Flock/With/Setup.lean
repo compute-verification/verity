@@ -5,8 +5,7 @@ it is `Stmt.setupTables` (`Flock.With.SetupEq`). The copies keep the originals' 
 verifier's own, lifted.
 
 Through the oracle: the circuit file's digest and its class, the type and layout content digests META names, the partition
-digest, the public file's digest, the program's digest (`Program.decodeWith`, beside `Program.decode` for its decoder state, and
-`TemplateQuery.Desc.parseWith`, of which `Desc.parse` is the instance at SHA-512),
+digest, the public file's digest, the program's digest (`Program.decodeWith`, beside `Program.decode` for its decoder state),
 the frame-v3-sha512 roots of the public `b ‖ c` and outputs with their hm96 tree leaves, each table's statement digest and Σ,
 and the session's Σ.
 
@@ -46,14 +45,23 @@ def Hm96.Default512.treeLeafWith (hs : Hashes M) (bc : ByteArray) : M ByteArray 
 namespace FV3
 
 /-- `FV3.hash` with the oracle's SHA-512. -/
-def hashWith (hs : Hashes M) (tag : String) (parts : List ByteArray) : M ByteArray := hashM hs.sha512 tag parts
+def hashWith (hs : Hashes M) (tag : String) (parts : List ByteArray) : M ByteArray :=
+  let t := tag.toUTF8
+  hs.sha512 (parts.foldl (fun acc p => acc ++ be64 p.size.toUInt64 ++ p) (FRAME ++ be32 t.size.toUInt32 ++ t))
 
 /-- `FV3.leaf` with the oracle's SHA-512. -/
 def leafWith (hs : Hashes M) (dom : ByteArray) (i : Nat) (schema : String) (payload : ByteArray) : M ByteArray :=
-  leafM (hashWith hs) dom i schema payload
+  hashWith hs "leaf" [dom, uint i, uint i, schema.toUTF8, payload]
 
 /-- `FV3.root` with the oracle's SHA-512. -/
-def rootWith (hs : Hashes M) (dom : ByteArray) (leaves : Array ByteArray) : M ByteArray := rootM (hashWith hs) dom leaves
+def rootWith (hs : Hashes M) (dom : ByteArray) (leaves : Array ByteArray) : M ByteArray := do
+  let n := leaves.size
+  let width := nextPow2 n
+  let mut level := leaves ++ (← (Array.range (width - n)).mapM fun k => hashWith hs "pad" [dom, uint (n + k)])
+  for depth in [0:log2ceil width] do
+    level ← (Array.range (level.size / 2)).mapM fun i =>
+      hashWith hs "node" [dom, uint depth, uint i, level[2 * i]!, level[2 * i + 1]!]
+  return level.getD 0 ByteArray.empty
 
 end FV3
 
@@ -62,10 +70,10 @@ def CircuitType.digestWith (hs : Hashes M) (t : CircuitType) : M String := do
   let s ← canon t.toJson
   return hexOf (← hs.sha512 (CircuitType.FORMAT.toUTF8 ++ ByteArray.mk #[0] ++ s.toUTF8))
 
-/-- `BlockLayout.digest` through the oracle. -/
-def BlockLayout.digestWith (hs : Hashes M) (l : BlockLayout) : M String := do
+/-- `Layout.digest` through the oracle. -/
+def Layout.digestWith (hs : Hashes M) (l : Layout) : M String := do
   let s ← canon l.record
-  return hexOf (← hs.sha512 (BlockLayout.FORMAT.toUTF8 ++ ByteArray.mk #[0] ++ s.toUTF8))
+  return hexOf (← hs.sha512 (Layout.FORMAT.toUTF8 ++ ByteArray.mk #[0] ++ s.toUTF8))
 
 namespace Typed
 
@@ -83,7 +91,7 @@ def holdWith (types : Array (String × CircuitType)) (tables : List (String × B
       if bytes.size != 4 * 2 ^ lt.indexBits || Pinned.tableSha bytes != sha then
         throw s!"table {lt.name}: its words are not the table its SHA-512 names"
       let words := (Array.range (bytes.size / 4)).map fun i => rd32 bytes (4 * i)
-      out := out.push ⟨sha, bytes, words, BlockLayout.tableInfo words⟩
+      out := out.push ⟨sha, bytes, words, Layout.tableInfo words⟩
   return out
 
 /-- `classOf` through the oracle. -/
@@ -100,11 +108,11 @@ def classOfWith (hs : Hashes M) (mj : Json) (tables : List (String × ByteArray)
     if let .error e := CircuitType.check (typeIn types) t then throw s!"META: type {d.take 16}… breaks the rule '{e}'"
   let held ← holdWith types tables
   let ls ← (← J.arr mj "layouts" ctx).mapM fun r => do
-    let l ← BlockLayout.ofJson r
+    let l ← Layout.ofJson r
     if (← J.str r "sha512" ctx) != (← l.digestWith hs) then throw s!"{ctx}: a layout's sha512 is not its record's digest"
     pure l
   let unit ← J.nat mj "unit_layout" ctx
-  if let .error e := BlockLayout.check (typeIn types) ls unit (infoIn held) then throw s!"META: the layouts break the rule '{e}'"
+  if let .error e := Layout.check (typeIn types) ls unit (infoIn held) then throw s!"META: the layouts break the rule '{e}'"
   let some ul := ls[unit]? | throw "META: unit_layout names no layout"
   let some ut := ul.type | throw "META: the unit's layout names no type"
   if (← J.str mj "unit_type" ctx) != ut then throw "META: unit_type is not the unit's layout's type"
@@ -118,7 +126,7 @@ def classOfWith (hs : Hashes M) (mj : Json) (tables : List (String × ByteArray)
   | .error e => throw s!"META: the unit's rows: {e}"
 
 /-- `templateOf` through the oracle. -/
-def templateOfWith (hs : Hashes M) (name : String) (done : Array DeriveAll.D) (ls : Array BlockLayout) (unit : Nat)
+def templateOfWith (hs : Hashes M) (name : String) (done : Array DeriveAll.D) (ls : Array Layout) (unit : Nat)
     (t : CircuitType) (held : Array Held) : M Template := do
   let u := done.getD unit default
   if u.reads.any (·.prod0 < u.size) then
@@ -142,6 +150,39 @@ def readWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (S
   return (k, .inr (← templateOfWith hs name k.done k.ls k.unit t k.held))
 
 end Typed
+
+/-- `TemplateQuery.Desc.parse` through the oracle. -/
+def TemplateQuery.Desc.parseWith (hs : Hashes M) (bytes : ByteArray) : M TemplateQuery.Desc := do
+  let some text := String.fromUTF8? bytes | throw "program: not UTF-8"
+  let j ← match Json.parse text with
+    | .ok j => pure j
+    | .error e => throw s!"program: not JSON: {e}"
+  if (j.getObjValAs? String "schema").toOption != some "verity-ir/descriptor/v1" then
+    throw "program: not a verity-ir/descriptor/v1 descriptor"
+  let bare := match j with
+    | .obj kvs => Json.mkObj (kvs.toArray.filter (·.1 != "annotations")).toList
+    | x => x
+  let callees ← match j.getObjVal? "callees" with
+    | .ok (.arr a) => a.mapM fun c => match c.getStr? with | .ok s => pure s | .error _ => throw "program: a callee is not a string"
+    | _ => throw "program: callees"
+  let defs ← match j.getObjVal? "definitions" with
+    | .ok (.obj kvs) => kvs.toArray.mapM fun (id, dj) => do
+      let form := (dj.getObjValAs? String "form").toOption.getD ""
+      if form == "primitive" then pure (id, ({ prim := true, nodes := #[] } : TemplateQuery.DDef))
+      else if form == "composite" then
+        let nodes ← match (dj.getObjVal? "body").toOption.bind (fun b => (b.getObjVal? "nodes").toOption) with
+          | some (.arr ns) => ns.mapM fun nj => do
+            let form := (nj.getObjValAs? String "form").toOption.getD ""
+            let some fn := (nj.getObjValAs? Nat "fn").toOption | throw s!"program: {id}: a node without a callee"
+            if fn ≥ callees.size then throw s!"program: {id}: a node's callee is outside callees"
+            pure ({ form, fn, n := (nj.getObjValAs? Nat "n").toOption.getD 1 } : TemplateQuery.DNode)
+          | _ => throw s!"program: {id}: a composite without body nodes"
+        pure (id, ({ prim := false, nodes } : TemplateQuery.DDef))
+      else throw s!"program: {id}: an unknown definition form {form}"
+    | _ => throw "program: definitions"
+  let some root := (j.getObjValAs? String "root").toOption | throw "program: root"
+  if (defs.find? (·.1 == root)).isNone then throw "program: the root is not a definition"
+  return { callees, defs, root, sha512 := ← hs.sha512 (← canon bare).toUTF8 }
 
 namespace HmRow
 
@@ -350,7 +391,7 @@ def deriveTemplateUnitsWith (hs : Hashes M) (c : Circuit) (obj : Json) (program 
   let some ts := TemplateQuery.templatesOf name version ((q.getObjVal? "params").toOption.getD Json.null)
     | throw s!"partition: {name} v{version} is not a template query"
   let ts ← ts
-  let d ← TemplateQuery.Desc.parseWith hs.sha512 program
+  let d ← TemplateQuery.Desc.parseWith hs program
   if (obj.getObjValAs? String "program").toOption != some (hexOf d.sha512) then
     throw "partition: the verifier's program is not the one the partition object names"
   let rs ← match TemplateQuery.evaluate d ts with
@@ -530,7 +571,7 @@ def templateStrataWith (hs : Hashes M) (law : String) (obj : Json) (program : By
   let some ts := TemplateQuery.templatesOf name version ((q.getObjVal? "params").toOption.getD Json.null)
     | throw s!"{law}: {name} v{version} defines no strata (Q_template_instance v0 and Q_template_instances v0 do)"
   let ts ← ts
-  let d ← TemplateQuery.Desc.parseWith hs.sha512 program
+  let d ← TemplateQuery.Desc.parseWith hs program
   if (obj.getObjValAs? String "program").toOption != some (hexOf d.sha512) then
     throw "partition: the verifier's program is not the one the partition object names"
   let rs ← match TemplateQuery.evaluate d ts with
@@ -750,11 +791,46 @@ namespace HmLinks
 open HmRow
 
 /-- `HmLinks.check` through the oracle. -/
-def checkWith (hs : Hashes M) (c : Circuit) (pop : Public) (readers : Option (Array Nat)) (program : ByteArray) : M Nat := do
+def checkWith (hs : Hashes M) (c : Circuit) (pop : Public) (program : ByteArray) : M Nat := do
   let links ← parse c
   let P ← Program.decodeWith hs.sha512 program
-  let ns := nodes P
-  checkAt c pop P links (unitAt ns) (ownerAt ns) (count ns) readers
+  let us := units P
+  let np := c.ports.size
+  let popIdx ← (← J.arr (← J.get pop.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
+  let inst : Std.HashMap Nat Nat := (Array.range popIdx.size).foldl (fun m i => m.insert popIdx[i]! i) {}
+  let mut outs : Std.HashMap Nat (Array Nat) := {}
+  let mut wires := 0
+  for i in [0:popIdx.size] do
+    let u := popIdx[i]!
+    let some (k, m, _, _) := us[u]? | throw s!"links: unit {u} is outside the program's {us.size} units"
+    let ops ← Program.operands P P.rootScope ((P.defs[P.root]!).body.nodes[k]!) m
+    for t in [0:ops.size] do
+      if let some v := owner us ops[t]! then
+        if !links.any (fun (_, lo, hi) => lo ≤ t && t < hi) then
+          throw s!"links: cut wire: unit {u}'s parameter leaf {t} reads unit {v}'s output (gate {ops[t]!}), and no link row (META links) carries it"
+    for (p, lo, hi) in links do
+      let name := (c.ports.getD p default).name
+      if hi > ops.size then throw s!"links: {name}'s leaves [{lo}, {hi}) are past unit {u}'s {ops.size} parameter leaves"
+      let rd := ops.extract lo hi
+      match owner us rd[0]! with
+      | none =>
+        if rd.any (owner us · |>.isSome) then
+          throw s!"links: unit {u}'s leaves [{lo}, {hi}) (row {name}) read both circuit inputs and a unit's outputs"
+      | some v =>
+        let og ← match outs[v]? with
+          | some og => pure og
+          | none => do
+            let og ← outGates P us v
+            outs := outs.insert v og
+            pure og
+        if og != rd then
+          throw s!"links: unit {u}'s leaves [{lo}, {hi}) (row {name}) are not exactly unit {v}'s {og.size} outputs in order"
+        let some w := inst[v]?
+          | throw s!"links: unit {u}'s row {name} reads unit {v}, which is not a unit of this public file (a link across statements is not checked)"
+        if pop.digest i p np != pop.digest w (np - 1) np then
+          throw s!"links: cut wire [{lo}, {hi}) from unit {v} to unit {u}: the reader's row {name} is not the writer's committed output row (their b ‖ c differ)"
+        wires := wires + 1
+  return wires
 
 end HmLinks
 
@@ -785,9 +861,9 @@ def Stmt.setupHiddenWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
       if (TemplateQuery.templatesOf ((q.getObjValAs? String "name").toOption.getD "") ((q.getObjValAs? Nat "version").toOption.getD 0) Json.null).isSome then
         let indices ← (← J.arr (← J.get pub.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
         let note ← HmRow.deriveTemplateUnitsWith hs c obj prog indices
-        let wires ← HmLinks.checkWith hs c pop (HmLinks.readersOf draw) prog
+        let wires ← HmLinks.checkWith hs c pop prog
         let linking := if wires == 0 && !linked then "; no cut wire between the statement's units"
-          else s!"; Linking checked: {wires} cut wire(s) into the {pub.n} proved units of the population's {pop.n}, each reader's link row the writer's committed output row"
+          else s!"; Linking checked: {wires} cut wire(s) over the {pop.n} units of the population, each reader's link row the writer's committed output row"
         pure (some { f with derived := true, note := note ++ linking })
       else if linked then throw "META links: Linking is checked under a template query (Q_template_instance v0, Q_template_instances v0) only"
       else HmRow.qwordFindingWith hs c pub obj prog f

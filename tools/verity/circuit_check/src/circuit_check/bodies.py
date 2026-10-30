@@ -298,8 +298,7 @@ def _run(body: Body, V: list, off: int) -> None:
                     get = _Wide(V, sa, m).__getitem__
                 else:
                     ws = tuple(c[m] for c in cols) if cols is not None else tuple(_member(sa, m))
-                    def get(j, _ws=ws):
-                        return V[_ws[j]]
+                    get = (lambda j, _ws=ws: V[_ws[j]])
                 try:
                     V[out + m] = lazy(get)
                 except KeyError as e:

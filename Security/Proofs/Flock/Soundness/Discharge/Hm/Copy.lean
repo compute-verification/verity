@@ -614,7 +614,7 @@ theorem flatPairs_count {c : Circuit} {pin x src : ℕ} (hC : ∀ j, (constPairs
 
 section Loc
 
-variable {types : String → Option CircuitType} {ls : Array Flock.BlockLayout} {info : String → Option TableInfo}
+variable {types : String → Option CircuitType} {ls : Array Flock.Layout} {info : String → Option TableInfo}
   {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D} {st : Stmt} {tb : TypedBlock}
 
 set_option hygiene false in

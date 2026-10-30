@@ -13,7 +13,7 @@ import pytest
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import codec
-from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, DefinitionTable, bind
+from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, Registry, bind
 from verity.ml.circuits.evaluation import evaluate_call
 from verity.ml.circuits.ops import prims as P
 from verity.ml.circuits.program import Program
@@ -159,10 +159,10 @@ def test_an_n_input_gate_decodes_by_id():
                                 lambda B, S, x: B.call(BL.and_gate(5), x), register=False)
     outer = CompositeDefinition("ExampleAnd5Program", 1, (), inner.signature, lambda B, S, x: B.call(inner, x), register=False)
     text = codec.canonical_json(codec.encode_program(Program(bind(outer)))).decode()
-    D = codec.decode_program(json.loads(text), DefinitionTable())
+    D = codec.decode_program(json.loads(text), Registry())
     assert [g.prim for g in map(D.circuit.gate, range(D.circuit.size)) if g.prim.id != "Input1_v1"] == [BL.and_gate(5)]
     with pytest.raises(KeyError):
-        codec.decode_program(json.loads(text.replace("And5_v1", "And05_v1")), DefinitionTable())
+        codec.decode_program(json.loads(text.replace("And5_v1", "And05_v1")), Registry())
 
 
 def test_a_family_member_has_one_spelling(pinned):

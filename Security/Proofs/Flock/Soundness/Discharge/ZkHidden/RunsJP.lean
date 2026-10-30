@@ -22,7 +22,8 @@ local notation "𝕂" => FlockLevel3.GF256
 variable {n mPts : ℕ} {Reg : Type}
 
 /-- **`RunsZC` at the live hidden-output `--zk` tables of a session of `J` tables at `own`** (`runsZCJH_liveI`). -/
-theorem runsZCJH_liveIP (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)
+theorem runsZCJH_liveIP (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false) {c : Flock.Circuit}
+    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : DrawSetupZHJP (inputsJ I 0) own mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJP (Reg := Reg) dj y₀ S R).length mPts →
@@ -50,11 +51,13 @@ theorem runsZCJH_liveIP (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed
   have hz' : Zk.schedule sts[j.val].m = .ok (schs[j.val].1, schs[j.val].2) := hz0
   obtain ⟨sch₀, hf⟩ := fast100_of_schedule hz'
   have ht' : (inputsJ I j.val).tags.typed = false := typedJ ht j.val
+  have hcJ : HmOut.parse (inputsJ I j.val).tags (inputsJ I j.val).circuitFile (inputsJ I j.val).tables = .ok c :=
+    (parseH_tagsAt ((zkTags_typed I).trans ht) _ _ _ _).trans hc
   obtain ⟨pi', pop, -, -, hdr⟩ := Hidden.setupHidden_drawnP hst
   obtain ⟨D, hD, -⟩ := Layout.drawn_spec
     (c := { sts[j.val].c with outPorts := if pi'.ports.isEmpty then #[] else #[("public inputs", pi'.words)] }) hdr
   obtain ⟨x, hx⟩ := drawSetupHP_of_setupHiddenI (I := inputsJ I j.val) (own := own)
-    (S := partS I (dj (L.draw ω)) (L.draw ω) ⟨j.val, hjn⟩) (mPts := mPts) ht' hst hf hD
+    (S := partS I (dj (L.draw ω)) (L.draw ω) ⟨j.val, hjn⟩) (mPts := mPts) ht' hcJ hst hf hD
     ((hDraw ω ⟨j.val, hjn⟩).1 D hD) ((hDraw ω ⟨j.val, hjn⟩).2 _ hst)
   obtain ⟨y, hyx, hysch, hytp⟩ := drawSetupZHJP_of x (by rw [hx]; exact array_forM_ok hshape j.val hj)
     (sch := schs[j.val].1) (tPad := schs[j.val].2) (by rw [hx]; exact hz')
@@ -152,7 +155,8 @@ theorem runsZCJH_liveIP (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed
     exact outZC_of_accZ hacc'
 
 /-- **The decoder at the live hidden-output tables at `own`** (`decodesOnZKJA_of_runsOnZCJA` at `runsZCJH_liveIP`). -/
-theorem decodesZCJH_liveIP (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)
+theorem decodesZCJH_liveIP (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false) {c : Flock.Circuit}
+    (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (y₀ : DrawSetupZHJP (inputsJ I 0) own mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJP (Reg := Reg) dj y₀ S R).length mPts →
@@ -165,6 +169,6 @@ theorem decodesZCJH_liveIP (I : Inputs) (own : Option ByteArray) (ht : I.tags.ty
       (opnAtZHJP (planZHJP dj y₀) I own dj) (decAtZJ (planZHJP dj y₀)) (fun _ _ _ _ => true)
       (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) L :=
   decodesOnZKJA_of_runsOnZCJA execArith hs512 _ _ wr _ _ _ _ _
-    (runsZCJH_liveIP I own ht dj y₀ wr L hT hRec hDraw)
+    (runsZCJH_liveIP I own ht hc dj y₀ wr L hT hRec hDraw)
 
 end FlockSoundness.Discharge.ZkHidden

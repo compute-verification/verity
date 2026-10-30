@@ -1,6 +1,6 @@
 # The sampling plans' models and their tests. Not a package: the plans run as scripts (`int8_llama.py`,
-# `transformer.py`, `h200.py`, `demo_a.py`, `served_window.py`), and the transformer's DAG, certificates and hand-off,
-# the H200 plan, Demo A's frontier and the served window's two modes run here as a suite (`uv run tools/verity/check/suites.py benchmarks/sampling_plan`).
+# `transformer.py`, `h200.py`, `demo_a.py`), and the transformer's DAG, certificates and hand-off, the H200 plan and
+# Demo A's frontier run here as a suite (`uv run tools/verity/check/suites.py benchmarks/sampling_plan`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
@@ -11,17 +11,13 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # Definitions and their circuit-check pins (verity.ml.circuits, which reads verity.ml.kernels); the large model's test
 # reads the card's memory from the census; Demo A's tile stratum reads PoUW's `eps_at` (pouw/window.py, with the
 # commitments and randomness it imports); the reporting deltas and monitoring periods are core's `wipe_monitoring`'s,
-# whose imports span PoUS and core's periods; a statement's cap (`inputs.cap`) reads C-Flock's composer's sizes
-# (verity.ml.windows.interface).
+# whose imports span PoUS.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/record.py",
           "verity/core/deploy", "verity/core/wire",  # what pous/challenger_party imports for Demo A's wipe
           "verity/core/protocols/profile.py", "verity/core/protocols/sampled_proofs", "verity/core/claims",
           "verity/core/protocols/pouw/__init__.py", "verity/core/protocols/pouw/window.py",
-          "verity/core/periods/__init__.py",
-          "verity/core/protocols/pous", "verity/ml/__init__.py", "verity/ml/windows",
+          "verity/core/protocols/pous", "verity/ml/__init__.py",
           "verity/core/deploy", "verity/core/wire",  # wipe_monitoring reads pous/wipe_party, which runs on deploy.stream.Side
           "verity/ml/circuits", "verity/ml/kernels", "verity/ml/commitments", "verity/ml/crypto",
-          "verity/ml/randomness", "benchmarks/census/hardware.json",
-          # recursion.py's datacenter (the census) and world fleet (rho's reference)
-          "benchmarks/census/deployments.json", "benchmarks/rho/data/reference.toml"]
+          "verity/ml/randomness", "benchmarks/census/hardware.json"]

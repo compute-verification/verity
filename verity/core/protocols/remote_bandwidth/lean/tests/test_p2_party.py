@@ -2,11 +2,10 @@
 `RemoteAudit.P2Session`) with the Python's books beside it, over a channel to a prover serving the 9-block P2 store of
 `tests/test_p2.py`'s fixture: an honest prover accepted with its credited reads, under every unit or the registration's
 plan, one whose receipts skip a unit's reads, one whose openings are out of form and one that reads every unit when the
-plan is fewer rejected, and a request for another node, or off the auditor's session parameters in any of them, refused
-by the Lean before any coin, the party `main` starts holding its sessions to `SESSION` unless its flags name others; and
-the books' veto: a Lean that accepts a window the books reject, books that accept one the Lean rejects, a Lean whose
-answer isn't the books', one that fails mid-session, and a Lean that holds another store or session, each rejected or
-refused."""
+plan is fewer rejected, and a request for another node, or off the auditor's session parameters, refused before any
+coin, the party `main` starts holding its sessions to `SESSION` unless its flags name others; and the books' veto: a Lean that
+accepts a window the books reject, books that accept one the Lean rejects, a Lean whose answer isn't the books', one
+that fails mid-session, and a Lean that holds another store, each rejected or refused."""
 
 from __future__ import annotations
 
@@ -136,9 +135,9 @@ class Lying:
 
 
 def run(exe: Path, store: p2.Store, prover_of, request: dict, plan: receipts.Plan | None = None,
-        lean_of=lambda lean: lean, auditor: dict = TOY) -> tuple[dict, dict]:
+        lean_of=lambda lean: lean) -> tuple[dict, dict]:
     """One session over a socket pair: the verifier's side in a thread, its Lean (`lean_of` of it) holding the
-    registration file with `plan` and the auditor's session parameters `auditor`, the prover's here; both answers."""
+    registration file with `plan`, the prover's here; both answers."""
     clock = Clock()
     a, b = socket.socketpair()
     data = json.dumps(p2_party.registration_json(store.registration, plan)).encode()
@@ -146,10 +145,10 @@ def run(exe: Path, store: p2.Store, prover_of, request: dict, plan: receipts.Pla
 
     def verifier() -> None:
         with p2_lean.Lean(exe) as lean, b, b.makefile("rb") as r, b.makefile("wb") as w:
-            reg, held = p2_party.hold(lean, data, auditor=auditor)
+            reg, held = p2_party.hold(lean, data)
             got["answer"] = p2_party.session(r, w, reg, coins=b"\x07" * 64, lean=lean_of(lean), plan=held,
                                              clock=clock, sleep_until=clock.sleep_until, host="auditor-under-test",
-                                             auditor=auditor)
+                                             auditor=TOY)
 
     th = threading.Thread(target=verifier)
     th.start()
@@ -160,8 +159,8 @@ def run(exe: Path, store: p2.Store, prover_of, request: dict, plan: receipts.Pla
     return out, got["answer"]
 
 
-def request(store: p2.Store, auditor: dict = TOY, **kw) -> dict:
-    return p2_party.request_of(store.registration.node, **{**auditor, **kw})
+def request(store: p2.Store, **kw) -> dict:
+    return p2_party.request_of(store.registration.node, **{**TOY, **kw})
 
 
 def test_a_plan_of_fewer_units_is_what_each_pass_reads_and_is_credited(exe, store) -> None:
@@ -206,31 +205,28 @@ def test_a_request_for_another_node_is_refused_before_any_coin(exe, store) -> No
     assert answer["verdict"] == "refused" and "node" in answer["reason"]
 
 
-@pytest.mark.parametrize("off", [{"deadline_ns": 2 * STEP_NS}, {"passes": 1}, {"samples": 3}, {"window_ns": STEP_NS},
-                                 {"windows": 3}, {"deadline_ns": 3 * STEP_NS, "samples": 8}],
-                         ids=lambda off: "+".join(off))
+@pytest.mark.parametrize("off", [{"deadline_ns": 2 * STEP_NS}, {"samples": 3}])
 def test_a_request_off_the_auditors_session_is_refused_before_any_coin(exe, store, off) -> None:
-    """A request for a longer allowance, fewer passes or openings, a shorter window or more windows than the auditor's,
-    or off it in two values, is refused by the Lean itself (it holds the auditor's, `hold`), in the books' words, before
-    the registration or any coin is sent, naming each value."""
+    """A request for a longer allowance or fewer openings than the auditor's, which the Lean takes (it reads the
+    request alone), is refused by the books' veto before the registration or any coin is sent, naming the value."""
     provers: list[Prover] = []
 
     def prover_of(clock):
         provers.append(Prover(store, clock))
         return provers[-1]
 
+    (key, value), = off.items()
     proved, answer = run(exe, store, prover_of, request(store, **off))
     assert proved == answer and answer["verdict"] == "refused", answer
-    assert answer["reason"] == "; ".join(f"the request's {k} is not the auditor's ({off[k]}, not {TOY[k]})"
-                                         for k in p2_party.SESSION if k in off)
+    assert f"the request's {key} is not the auditor's ({value}, not {TOY[key]})" in answer["reason"]
     assert provers[0].held is None and provers[0].ended is None
 
 
 def test_the_party_holds_its_sessions_to_the_served_parameters_unless_its_flags_name_others(exe, store,
                                                                                             tmp_path) -> None:
     """`main` as the auditor's gate starts it, with no session flags: the toy's request is refused naming each value
-    off `SESSION`, by the Lean on its own pinned `P2Session.SESSION` (no veto), and a request of `SESSION`'s is held
-    (the registration sent first); with flags naming the toy's values, the toy's request is held."""
+    off `SESSION`, and a request of `SESSION`'s is held (the registration sent first); with flags naming the toy's
+    values, the toy's request is held."""
     path = tmp_path / "registration.json"
     path.write_text(json.dumps(p2_party.registration_json(store.registration)))
 
@@ -242,8 +238,9 @@ def test_the_party_holds_its_sessions_to_the_served_parameters_unless_its_flags_
 
     refused = first(request(store))["answer"]
     assert refused["verdict"] == "refused", refused
-    assert refused["reason"] == "; ".join(f"the request's {k} is not the auditor's ({TOY[k]}, not {v})"
-                                          for k, v in p2_party.SESSION.items())
+    for k in ("deadline_ns", "passes", "samples", "window_ns"):
+        assert f"the request's {k} is not the auditor's ({TOY[k]}, not {p2_party.SESSION[k]})" in refused["reason"]
+    assert "the request's windows" not in refused["reason"]
     assert "hold" in first(p2_party.request_of(store.registration.node, **p2_party.SESSION))
     assert "hold" in first(request(store), *[x for k, v in TOY.items() for x in ("--" + k.replace("_", "-"), str(v))])
 
@@ -286,54 +283,13 @@ def test_a_lean_that_fails_mid_session_rejects_it(exe, store) -> None:
     assert answer["disagreement"]["event"] == "root" and answer["window"] == 0
 
 
-def test_a_lean_that_holds_another_store_or_session_is_refused(exe, store) -> None:
-    """A Lean that holds another store, or holds requests to other session parameters than the Python's (its pinned
-    `P2Session.SESSION` when `hold` sends none, or the toy's it sends), is refused; one holding the same is held, once."""
+def test_a_lean_that_holds_another_store_is_refused(exe, store) -> None:
     data = json.dumps(p2_party.registration_json(store.registration)).encode()
-    for lie in (lambda _req, got: got | {"units": got["units"] + 1},
-                lambda _req, got: got | {"session": got["session"] | {"samples": 1}}):
-        for auditor in (p2_party.SESSION, TOY):
-            with p2_lean.Lean(exe) as lean:
-                with pytest.raises(ValueError, match=p2_party.DISAGREEMENT):
-                    p2_party.hold(Lying(lean, "p2_hold", lie), data, auditor=auditor)
     with p2_lean.Lean(exe) as lean:
-        seen = Lying(lean, "p2_hold", lambda _req, got: got)
-        p2_party.hold(seen, data, auditor=TOY)
-        assert seen.last["session"] == {k: TOY[k] for k in p2_party.SESSION}
-    with p2_lean.Lean(exe) as lean:
-        seen = Lying(lean, "p2_hold", lambda _req, got: got)
-        p2_party.hold(seen, data)
-        assert "session" not in seen.last
+        other = Lying(lean, "p2_hold", lambda _req, got: got | {"units": got["units"] + 1})
+        with pytest.raises(ValueError, match=p2_party.DISAGREEMENT):
+            p2_party.hold(other, data)
     with p2_lean.Lean(exe) as lean:
         assert p2_party.hold(lean, data) == (store.registration, receipts.Plan.whole(store.registration.blocks))
         with pytest.raises(ValueError, match="refuses"):
             p2_party.hold(lean, data)
-
-
-def test_the_registration_is_the_challengers_record_of_the_pous_session_it_names(store, tmp_path) -> None:
-    """`--pous-record DIR --pous-session SID`: the registration of the setup the memory challenger kept for PoUS session
-    SID (`challenger_party.keep`), its whole store the plan; refused for an id out of form, a record of another session,
-    or one without a setup."""
-    from verity.core.protocols.pous import challenger_party as CP
-    from verity.core.protocols.pous import run as R
-
-    reg = store.registration
-    q = reg.params
-    point = R.Point(q, 1, 1)
-    request = CP.request_of(NODE.decode(), point, reg.root, audit=hashlib.sha512(b"a window's binding").digest(),
-                            published=R.Setup(q.blocks, reg.commitment, reg.root, reg.salt))
-    sid = hashlib.sha512(b"a PoUS session").digest()[:32]
-    CP.keep(tmp_path, sid, request)
-    doc = json.loads(p2_party.pous_record(tmp_path, sid.hex()))
-    assert p2_party.registration_of(doc) == reg and p2_party.plan_of(doc, reg) == receipts.Plan.whole(reg.blocks)
-    assert "plan" not in doc
-    with pytest.raises(ValueError, match="64 lowercase hex"):
-        p2_party.pous_record(tmp_path, "../" + sid.hex()[3:])
-    other = bytes(32)
-    (tmp_path / CP.SETUPS / f"{other.hex()}.json").write_text(json.dumps({"request": request, "session_id": sid.hex()}))
-    with pytest.raises(ValueError, match="names the session"):
-        p2_party.pous_record(tmp_path, other.hex())
-    bare = b"\x01" * 32
-    CP.keep(tmp_path, bare, CP.request_of(NODE.decode(), point, reg.root))
-    with pytest.raises(ValueError, match="has no setup"):
-        p2_party.pous_record(tmp_path, bare.hex())

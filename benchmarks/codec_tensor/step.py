@@ -282,7 +282,7 @@ def gate_attention(kv, torch, b: int, ctx: int, ks, sms: int, log, wt=None) -> d
         pos = [torch.from_numpy(p).cuda() for p in heads]
         sk = torch.empty(slots * K.KV_HEADS, 16, dtype=torch.int32, device="cuda")
         tg = torch.empty(slots * layers, 16, dtype=torch.int32, device="cuda")
-        kv.call("kv_rc_buffers", KB.ptr(sk))
+        kv.call("kv_rc_buffers", KB.ptr(sk), None, None)
     for k in ks:
         KB.set_key(kv, KB.lib_key(kv, k))
         kv.call("kv_encode", KB.ptr(plain), KB.ptr(enc), n_words, 0, k, sms * 8, st)
@@ -326,7 +326,7 @@ def gate_attention(kv, torch, b: int, ctx: int, ks, sms: int, log, wt=None) -> d
            f"the shares sum to S · e of the block at {sum(whole.values())}/{len(whole)} k" if rc else "") + ")")
     del plain, enc, q, part, o_p, o_e, kvl
     if rc:
-        kv.call("kv_rc_buffers", None)
+        kv.call("kv_rc_buffers", None, None, None)
         del sk, tg, signs, mid
     torch.cuda.empty_cache()
     return {"ok": ok, "rel_err": rel, "equal": equal, "sketches": sketches, "receipts": receipts,
@@ -413,7 +413,7 @@ class Step:
         self.nkv = self.layers * self.slots if rc else 0
         if rc:
             self.rc_sk = torch.empty(self.slots * K.KV_HEADS, 16, dtype=torch.int32, device="cuda")
-            kv.call("kv_rc_buffers", self.rc_sk.data_ptr())
+            kv.call("kv_rc_buffers", self.rc_sk.data_ptr(), None, None)
         self.new_all = KB.random_words(torch, b * self.layers * self.tlw, f, 21)
         self.new_one = KB.random_words(torch, b * self.tlw, f, 22)
         self.xr = torch.zeros(1, dtype=torch.int64, device="cuda")
@@ -446,7 +446,7 @@ class Step:
                 for var in ("sketch", "untagged"):
                     cfg = tuple(self.picks[name]["k"][k][var])
                     launched = ctypes.c_int(0)
-                    wt.call("wt_fused_sketch", k, None, None, None, self.m, n, kd, 0, 0, cfg[0], cfg[1], 0, None,
+                    wt.call("wt_fused_sketch", k, None, None, None, self.m, n, kd, 0, 0, cfg[0], cfg[1], 0, 0, None,
                             None, 0, cfg[3], None, None, self.T, BW.sketch_warps(cfg), ctypes.byref(launched), st)
                     gr = launched.value // (kd // 512)
                     steps = BW.tsteps(wt, torch, self.keys[k], cfg[0], gr, kd // 512)
@@ -511,7 +511,7 @@ class Step:
         sg = (self.frags if BW.sketch_warps(cfg) else self.signs).data_ptr() if sketch else None
         rc = self.wt.so.wt_fused_sketch(
             k, self.W.data_ptr() + o, self.x[kd].data_ptr(), y.data_ptr(), self.m, n, kd, o // self.wt.s, 0, cfg[0],
-            cfg[1], gr, steps.data_ptr(), self.tags.data_ptr() + self.wt.tag_bytes * to if sketch else None,
+            cfg[1], gr, 0, steps.data_ptr(), self.tags.data_ptr() + self.wt.tag_bytes * to if sketch else None,
             self.wt.jbase + to, self.rows if sketch else 0, sg, None, self.T,
             BW.sketch_warps(cfg), None, BW.stream(self.torch))
         if rc:
@@ -908,7 +908,7 @@ def main() -> int:
         raise SystemExit("the step sketches with a WT_RECEIPT build and sketches 4 KiB vectors (T 8)")
     import reader as RD
     BW.READER = RD.Reader(a.reader_lib, torch)
-    BW.set_receipt_prefix(wt)
+    BW.set_sketch_tag(wt)
     props = torch.cuda.get_device_properties(0)
     sms = props.multi_processor_count
     layers, shapes, lm = model_shapes(a.model)
@@ -937,7 +937,7 @@ def main() -> int:
     res["gate"]["kv_codec"] = KB.gate(kv, torch, ks, 48, a.gate_words, log)
     res["gate"]["append"] = gate_append(kv, torch, ks, log)
     res["gate"]["pass"] = BW.gate_pass(wt, torch, a.sketch_t, log, rows=a.rows)
-    BW.set_receipt_prefix(wt)
+    BW.set_sketch_tag(wt)
     res["ok"] = (res["gate"]["layout"]["ok"] and res["gate"]["wt_prims"]["ok"]
                  and all(g["ok"] for g in res["gate"]["wt_codec"].values())
                  and all(g["ok"] for g in res["gate"]["kv_codec"].values()) and res["gate"]["append"]["ok"]
@@ -1011,7 +1011,7 @@ def main() -> int:
     grid = sms * best[0]
     log(f"pass: {res['stored_bytes'] / best[1] / 1e9:.0f} GB/s at {best[0]} CTAs an SM ({best[1] * 1e3:.2f} ms)")
 
-    BW.set_receipt_prefix(wt)
+    BW.set_sketch_tag(wt)
     S.set_keys(ks[0])
     res["splits"] = choose_splits(S, torch, 2, 40_000_000, log)
     save()

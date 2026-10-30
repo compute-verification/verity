@@ -1,7 +1,7 @@
 """`wipe_monitoring`: one accepted wipe over a week, a month and a year of a deployment. The pooled count is the least M
 with C(T, M)·p^M within δ, against hand counts at small T; an HBM-only wipe's table names its tier and device, every wipe
 meeting its bound except with T·eps; the cadence is a parameter; an uncounted wipe is vacuous until a covered egress
-record counts it; a rejected wipe pools nothing; the periods are the core's `MONITORING_PERIODS`."""
+record counts it; a rejected wipe pools nothing."""
 
 from __future__ import annotations
 
@@ -12,7 +12,6 @@ from fractions import Fraction
 import pytest
 
 import pous_test_signer as ts
-from verity.core.periods import MONITORING_PERIODS
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import streamed_wipe as sw
 from verity.core.protocols.pous import wipe_monitoring as WM
@@ -86,10 +85,6 @@ def test_the_cadence_is_a_parameter(counted):
     assert [half[n]["wipes"] for n in ("week", "month", "year")] == [28, 120, 1460]
     rare = WM.table(counted, 2, 30 * 86400)["periods"]
     assert "doesn't fit a week" in rare["week"]["why"] and rare["month"]["wipes"] == 2
-
-
-def test_the_periods_are_the_cores():
-    assert WM.PERIODS is MONITORING_PERIODS
 
 
 def test_the_table_pools_at_the_answers_eps(counted):

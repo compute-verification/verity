@@ -6,8 +6,8 @@ from __future__ import annotations
 import pytest
 
 from verity.core.protocols.sampled_proofs.candidates import Shape, _lams, _Program, cuts, pressure, shape_of
+from verity.core.protocols.sampled_proofs.one_stage.partition import UNIT_CLASS_MAX
 from verity.core.protocols.sampled_proofs.optimize import CostModel, Objective, frontier
-from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX
 
 STEP = Shape("Step", 4190, 32, 32, rows=(32, 32, 4, 4), commit_bits=32, cap=4096)
 CHUNK = Shape("Dot{K=256}", 8 * 4190, 256, 32, rows=(256, 256, 4, 4), commit_bits=32, cap=4096, parts=((STEP, 8),))
@@ -57,27 +57,14 @@ def test_size_classes_admit_rows_and_tiles_and_prune_past_the_widest():
         cuts("wide", Shape("Wide", 1, 1, UNIT_CLASS_MAX + 1, out_gates=2), N, CostModel(per_and=1.0), OBJECTIVE)
 
 
-def test_a_shape_past_c_flocks_block_is_never_a_proof_block():
-    """A shape of cap 0 (its block past C-Flock's 2^K_MAX) is descended into, never proved whole, and gives no width hint;
-    with nothing to descend into it has no legal cut, which says why."""
-    tile = Shape("Tile2", 2 * 32 * 4190, 2048, 64, out_gates=2, rows=(1024, 1024, 1024, 8), commit_bits=64, cap=0,
-                 parts=((DOT, 2),))
-    costs = CostModel(per_and=1e-10, statement_fixed=1.0)
-    cands, alts, hints = cuts("tile", tile, N, costs, OBJECTIVE, grid=21)
-    assert all(u != "Tile2" for key in alts.values() for u, _ in key) and {c.cap for c in cands} == {4096}
-    assert not [h for h in hints if h.node == "Tile2"]
-    with pytest.raises(ValueError, match=r"^Huge has no legal cut: it is past C-Flock's block \(cap 0\)"):
-        cuts("huge", Shape("Huge", 1, 1, 16, cap=0), N, costs, OBJECTIVE)
-
-
 def test_boundary_pressure_names_the_unit_between_two_definitions():
     """With commitment against proving balanced at sqrt(c0 / (lam alpha)) between 32 and 1024 MACs, and no chunk
-    Definition to bind, proof blocks of a quarter of the dot beat both the dot and its steps."""
+    Definition to bind, proof blocks of an eighth of the dot beat both the dot and its steps."""
     dot = Shape("Dot{K=1024}", 32 * 4190, 1024, 16, rows=(1024, 1024, 2), commit_bits=16, cap=4096, parts=((STEP, 32),))
     _, alts, hints = cuts("dot", dot, N, CostModel(per_and=1e-10, commit_per_bit=1.1e-10), OBJECTIVE, grid=41)
     assert set(alts.values()) == {(("Dot{K=1024}", N),), (("Step", 32 * N),)}
     (h,) = hints
-    assert (h.kind, h.node, h.child, h.split) == ("boundary", "Dot{K=1024}", "Step", 4) and h.saving > 0.2
+    assert (h.kind, h.node, h.child, h.split) == ("boundary", "Dot{K=1024}", "Step", 8) and h.saving > 0.2
     assert pressure("dot", dot, N, CostModel(per_and=1e-10, commit_per_bit=1.1e-10), OBJECTIVE, h.lam) == [h]
     assert pressure("dot", dot, N, CostModel(per_and=1e-10, commit_per_bit=1.1e-10), OBJECTIVE, h.lam * 1e-6) == []
 

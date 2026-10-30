@@ -115,7 +115,7 @@ def SeedExtractedAt {B : Type} [Fintype B] {Tq M : ℕ} (sq : Paths (Fin Tq → 
 oracle query, over the whole window's oracle**: on the window's oracle answers `a` (round `r`'s `T_q` seed queries'
 answers its `r`-th coin, uniform), for a joint run `R` whose modes and checked values may read every answer of every
 round, at every round `r` there are per-query gains `g q` whose exponential moment at rate `θ r` over query `q`'s own
-answer (`resample`), every other answer of the window fixed, is at most `1` (GRIND's per-query moment at `M = 1`), and a
+answer (`redraw`), every other answer of the window fixed, is at most `1` (GRIND's per-query moment at `M = 1`), and a
 binding event `Break` of probability at most `δ_b` (a root opened two ways after its seed), such that off `Break` round
 `r`'s gain in mode `s` (`roundGain` over the tiles of round `rd v = r`: `L − κ·U` at weights `w`) is at most the gain
 `g q` of the query `q = sq a r` its proofs' seed answers (`SeedExtractedAt`, the random-oracle premise, which names
@@ -166,7 +166,7 @@ def SeedLuckAt {B V : Type} [Fintype B] [Fintype V] {Tq M : ℕ} (rd : V → ℕ
     (R : JointRun (Paths (Fin Tq → B) M) V) (w : V → ℝ) (s : Mode) (κ : ℝ) (θ : ℕ → ℝ)
     (sq : Paths (Fin Tq → B) M → Fin M → Option (Fin Tq)) (δb : ℝ) : Prop :=
   ∀ r : Fin M, ∃ (g : Fin Tq → Paths (Fin Tq → B) M → ℝ) (Break : Paths (Fin Tq → B) M → Prop),
-    (∀ q a, ∑ b : B, Real.exp (θ r.val * g q (resample a r q b)) ≤ Fintype.card B) ∧ prob Break ≤ δb ∧
+    (∀ q a, ∑ b : B, Real.exp (θ r.val * g q (redraw a r q b)) ≤ Fintype.card B) ∧ prob Break ≤ δb ∧
       ∀ a q, ¬ Break a → sq a r = some q → roundGain rd r.val R w s κ a ≤ g q a
 
 open Classical in
@@ -201,9 +201,9 @@ def WholeEntropyAt {B V : Type} [Fintype B] [Fintype V] {Tq M : ℕ} (rd : V →
     (R : JointRun (Paths (Fin Tq → B) M) V) (h : V → ℝ)
     (sq : Paths (Fin Tq → B) M → Fin M → Option (Fin Tq)) (δb : ℝ) : Prop :=
   ∀ r : Fin M, ∃ (Wh Lk : Fin Tq → Paths (Fin Tq → B) M → Finset V) (Break : Paths (Fin Tq → B) M → Prop),
-    (∀ q a b, Wh q (resample a r q b) = Wh q a) ∧ (∀ q a v, v ∈ Wh q a → rd v = r.val) ∧
+    (∀ q a b, Wh q (redraw a r q b) = Wh q a) ∧ (∀ q a v, v ∈ Wh q a → rd v = r.val) ∧
     (∀ q a (S : Finset V), S ⊆ Wh q a →
-      ((Finset.univ.filter fun b : B => S ⊆ Lk q (resample a r q b)).card : ℝ) ≤
+      ((Finset.univ.filter fun b : B => S ⊆ Lk q (redraw a r q b)).card : ℝ) ≤
         Fintype.card B * Real.exp (-∑ v ∈ S, h v)) ∧
     prob Break ≤ δb ∧
     ∀ a q, ¬ Break a → sq a r = some q → ∀ v, rd v = r.val →

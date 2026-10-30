@@ -13,14 +13,12 @@ holds before the draw, so the prover never chooses it.
   32-bit half, its `32 / w` leaves least significant first, so a digest is 16 leaves of 32 bits or 512 of one);
 * `root`: the rows, as many as the verifier's own entry's `leaves`, each of its `words` leaves, committed as any registered
   value's rows (`Registered.commit`: `sha512/row/v1` of its u16 words, hm96-sha512 under the default key, the frame-v3-sha512
-  tree under the value's domain) with row `i` salted by `salt`: 192 bytes of SHA-512 in counter mode over
-  `verity/one-stage/supplied-salt/v1`, the program's SHA-512 hex, the value's name and `i` (u32 little-endian), NUL between
-  them.
+  tree under the value's domain) with row `i` salted by `salt`: SHAKE256 of `verity/one-stage/supplied-salt/v0`, the
+  program's SHA-512 hex, the value's name and `i` (u32 little-endian), NUL between them, 192 bytes.
 -/
-import Flock.Bytes
 import Flock.Canon
 import Flock.Firewall
-import Flock.Hash
+import Flock.Keccak
 import Flock.Program
 import Flock.Registered
 import SampledProofs.Registered
@@ -30,7 +28,7 @@ namespace SampledProofs.Supplied
 open Lean (Json)
 open Flock (V)
 
-def SUPPLIED_SALT : String := "verity/one-stage/supplied-salt/v1"
+def SUPPLIED_SALT : String := "verity/one-stage/supplied-salt/v0"
 def WINDOW_SALT : String := "verity/one-stage/window-salt/v1"
 def SOURCES : List String := ["port", "value", "bytes", "position", "window"]
 def SALT_BYTES : Nat := 192
@@ -38,12 +36,10 @@ def SALT_BYTES : Nat := 192
 /-- A supplied value's rows, each its sources `(kind, name)` in order. -/
 abbrev Rows := Array (Array (String × String))
 
-/-- `registered.supplied_salts`' row `i`: SHA-512 in counter mode, `SHA-512(msg ‖ u32be c)` for `c < SALT_BYTES / 64`,
-each output whole. -/
+/-- `registered.supplied_salts`' row `i`. -/
 def salt (program value : String) (i : Nat) : ByteArray :=
-  let msg := (((SUPPLIED_SALT.toUTF8.push 0 ++ program.toUTF8).push 0 ++ value.toUTF8).push 0) ++ Flock.le32 i.toUInt32
-  (List.range (SALT_BYTES / 64)).foldl (fun acc c => acc ++ Flock.Sha512.hash (msg ++ Flock.be32 c.toUInt32))
-    ByteArray.empty
+  Flock.Keccak.shake256
+    ((((SUPPLIED_SALT.toUTF8.push 0 ++ program.toUTF8).push 0 ++ value.toUTF8).push 0) ++ Flock.le32 i.toUInt32) SALT_BYTES
 
 private def source (v : String) : Json → V (String × String)
   | .obj o => match o.toArray with

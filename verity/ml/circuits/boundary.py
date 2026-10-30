@@ -50,7 +50,7 @@ import weakref
 from dataclasses import dataclass
 from typing import Iterator
 
-from .defs import Body, BodyNode, PrimitiveDefinition, SpecializedDefinition
+from .defs import Body, Node, PrimitiveDefinition, SpecializedDefinition
 from .intervals import IntervalLimit, Intervals, contains, full, isect, norm, ref_intervals, total
 from .layout import Scope, resolve_gate
 from .parts import Limits, Part, Unsupported, n_members
@@ -104,13 +104,13 @@ def _leaf_sets(refs_list: list[Refs]) -> dict[Key, Intervals]:
 # ---------------------------------------------------------------------------------------------------------
 
 
-def _scan_shape(node: BodyNode) -> tuple[int, int]:
+def _scan_shape(node: Node) -> tuple[int, int]:
     """(carry leaves c, per-iteration y leaves) of a scan node; output leaves are `[0, c)` = final carry, then
     `c + m*y + r` = leaf `r` of iteration m's y."""
     return node.out.fields[0].leaves, node.out.fields[1].elem.leaves
 
 
-def _member_leaves(node: BodyNode, m: int) -> Intervals:
+def _member_leaves(node: Node, m: int) -> Intervals:
     """Output leaves ("n" space) produced by member `m` of `node` (all of them for primitive / call nodes)."""
     if node.form in ("primitive", "call"):
         return full(node.out_leaves)
@@ -126,7 +126,7 @@ def _member_leaves(node: BodyNode, m: int) -> Intervals:
     return norm(ivs)
 
 
-def _members_leaves(node: BodyNode, ms: set[int]) -> Intervals:
+def _members_leaves(node: Node, ms: set[int]) -> Intervals:
     if node.form in ("primitive", "call") or len(ms) == n_members(node):
         return full(node.out_leaves)
     if node.form == "batch":
@@ -138,7 +138,7 @@ def _members_leaves(node: BodyNode, ms: set[int]) -> Intervals:
     return norm(ivs)
 
 
-def _leaf_member(node: BodyNode, leaf: int) -> int:
+def _leaf_member(node: Node, leaf: int) -> int:
     if node.form in ("primitive", "call"):
         return 0
     if node.form == "batch":
@@ -147,7 +147,7 @@ def _leaf_member(node: BodyNode, leaf: int) -> int:
     return node.n - 1 if leaf < c else (leaf - c) // y
 
 
-def _carry_leaves(node: BodyNode, ms: set[int]) -> Intervals:
+def _carry_leaves(node: Node, ms: set[int]) -> Intervals:
     """"s"-space leaves of the part's iterations of a scan node: `m*c + l` for iterations `m < n-1`."""
     c, _ = _scan_shape(node)
     if not c:
@@ -262,7 +262,7 @@ def _ret_canon(spec: SpecializedDefinition) -> _RetCanon:
     return rc
 
 
-def _is_passthrough_node(node: BodyNode) -> bool:
+def _is_passthrough_node(node: Node) -> bool:
     return not isinstance(node.fn, PrimitiveDefinition) and _ret_canon(node.fn).passthrough
 
 
@@ -273,7 +273,7 @@ def _canon_refs_ordered(body: Body, refs: Refs, depth: int) -> list[tuple[str, i
     return out
 
 
-def _member_arg_refs(node: BodyNode, m: int, pi: int, lo: int, hi: int) -> Refs:
+def _member_arg_refs(node: Node, m: int, pi: int, lo: int, hi: int) -> Refs:
     """Leaves [lo, hi) of parameter `pi` of member `m` of a batch / scan node, as references in the enclosing body."""
     a = node.args[pi]
     if node.form == "batch":
@@ -543,7 +543,7 @@ class ConsumerIndex:
             ix = consumer_index(fn)
             return ix.used, ix.used_exact_params
 
-        def add_inexact(jp: int, node: BodyNode, pi: int) -> None:
+        def add_inexact(jp: int, node: Node, pi: int) -> None:
             """Argument `pi` flows into a callee whose reads of it are not exact: every producer it references is an
             unresolved consumer edge (exact queries on it become `Unsupported`), parameters become inexact here too."""
             for key, ivs in _canon_sets(body, [node.args[pi].refs]).items():
@@ -586,7 +586,7 @@ class ConsumerIndex:
             else:
                 edges.setdefault(key, []).append((jp, d))
 
-        def per_member(jp: int, node: BodyNode, pi: int, used: Intervals, L: int) -> None:
+        def per_member(jp: int, node: Node, pi: int, used: Intervals, L: int) -> None:
             """Axis-0 / xs argument `pi` read member by member (non-affine references)."""
             a = node.args[pi]
             r = a.refs

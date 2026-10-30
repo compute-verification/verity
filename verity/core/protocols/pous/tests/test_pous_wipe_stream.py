@@ -14,7 +14,6 @@ import threading
 import pytest
 
 import pous_test_signer as ts
-from pous_fakes import Clock
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import streamed_wipe as sw
 from verity.core.protocols.pous import wipe_party as WP
@@ -24,6 +23,15 @@ from verity.core.protocols.pous import wipe_stream as WN
 
 KEY = hashlib.sha512(b"wipe stream test").digest()[:32]
 SMALL = sw.WipeParams(1000, W.READS, 1, 1_000, (("gpu", 1000 * sw.LABEL_BYTES),))
+
+
+class Clock:
+    def __init__(self) -> None:
+        self.now = 10 ** 9
+
+    def __call__(self) -> int:
+        self.now += 1
+        return self.now
 
 
 def test_the_streamer_derives_the_labels(wipe_streamer) -> None:
@@ -78,7 +86,7 @@ def test_a_native_fill_is_judged_as_the_python_fill(wipe_streamer, store: str) -
     """The challenger's side streams natively over a socket pair to `streamed_wipe.Prover` or to `wipe_store`'s prover
     on host memory, which reads each frame straight into staging; the signed session is accepted."""
     signer = ts.TestSigner(b"native fill " + store.encode(), 1)
-    prover = sw.Prover(SMALL) if store == "python" else WS.StoreProver(SMALL, WS.HostMemory(), clock=Clock(10 ** 9, 1))
+    prover = sw.Prover(SMALL) if store == "python" else WS.StoreProver(SMALL, WS.HostMemory(), clock=Clock())
     a, b = socket.socketpair()
     got: dict = {}
 
@@ -88,7 +96,7 @@ def test_a_native_fill_is_judged_as_the_python_fill(wipe_streamer, store: str) -
     def side() -> None:
         with a, a.makefile("rwb") as f:
             got["c"] = WP.serve(f, WP.request_of("n0", SMALL), signer=signer, log=ts.session_log(), egress_bits=0,
-                                clock=Clock(10 ** 9, 1), fill=native)
+                                clock=Clock(), fill=native)
 
     t = threading.Thread(target=side)
     t.start()

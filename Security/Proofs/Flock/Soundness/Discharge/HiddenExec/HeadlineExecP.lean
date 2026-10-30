@@ -30,14 +30,14 @@ open scoped ENNReal
 local notation "𝔽" => FlockLevel3.GF128
 
 variable {n : ℕ} {I : Inputs} {own : Option ByteArray} {mPts : ℕ} (ht : I.tags.typed = false) {c : Flock.Circuit}
-  (hcS : HmOut.parseStmt I.tags I.circuitFile I.tables = .ok c) (hscope : Layout.scopeOkH c = true)
+  (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) (hscope : Layout.scopeOkH c = true)
   (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupHP I own mPts S₀ (dj S₀))
   (hU : Built c.unit) {pi : HmIn.Ports} (hpi : HmIn.parse c = .ok pi)
   {pub : Public} (hpub : HmIn.loadPublic I.tags c pi I.publicFile = .ok pub) {Reg : Type}
 
 /-- **The headline at the executable over hidden-output sessions at the verifier's public inputs.** Let `I` be a
-verify command's inputs (one table) under a tag with hidden outputs, whose statement circuit is an untyped circuit `c`
-in `rs`'s scope (`hcS`, `ht`, `hscope`; a templated file's committed circuit unrolled) with public input ports `pi` (`hpi`), whose public file loads to `pub` at them
+verify command's inputs (one table) under a tag with hidden outputs, whose circuit file parses to an untyped circuit `c`
+in `rs`'s scope (`hc`, `ht`, `hscope`) with public input ports `pi` (`hpi`), whose public file loads to `pub` at them
 (`hpub`), and let the verifier pass its own public input words `own`. Let the challenger write draw `S` as the JSON
 `dj S` (`x₀` one draw it sets up with `Stmt.setupHidden … own`), the verifier draw the units with `Flock.Draw.drawOS`'s
 stratified law on a byte source A3 makes uniform, and each draw's session be the live coin server's one table
@@ -60,8 +60,8 @@ theorem flock_headline_exec_hiddenP {Lp : Merkle.Leaf (List FlockLevel3.GF128) (
       (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop))
     (τ : Strategy (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
     (hCR : LinkCRL ((Placed.keyProgP c pi hU n).partition (Layout.outsOfP c hU n pi)) H512 enc512 Lp
-      (planAtHP dj x₀) (tabAtHP dj x₀) ((rsAtHP ht hcS hscope dj x₀ hU hpi hpub (Reg := Reg)).binding
-        (rsAtHP_computes ht hcS hscope dj x₀ hU hpi hpub))
+      (planAtHP dj x₀) (tabAtHP dj x₀) ((rsAtHP ht hc hscope dj x₀ hU hpi hpub (Reg := Reg)).binding
+        (rsAtHP_computes ht hc hscope dj x₀ hU hpi hpub))
       (reg (simAuditOnP H512 enc512 Lp (tablesAtHP dj x₀) I own wr opn dg dec one fin capOf N hdec τ))
       (cont (simAuditOnP H512 enc512 Lp (tablesAtHP dj x₀) I own wr opn dg dec one fin capOf N hdec τ)) k Rw M t')
     {qF qS : ℝ} (hKS : ∀ ω j, TableCRL execArith H512 enc512 Lp
@@ -74,8 +74,8 @@ theorem flock_headline_exec_hiddenP {Lp : Merkle.Leaf (List FlockLevel3.GF128) (
         K ≤ (((Placed.keyProgP c pi hU n).partition (Layout.outsOfP c hU n pi)).wrong
           (Xpub {Layout.oneG} {Layout.zeroG}
             (XplurL ((Placed.keyProgP c pi hU n).partition (Layout.outsOfP c hU n pi)) H512 enc512 Lp
-              (planAtHP dj x₀) (tabAtHP dj x₀) ((rsAtHP ht hcS hscope dj x₀ hU hpi hpub (Reg := Reg)).binding
-                (rsAtHP_computes ht hcS hscope dj x₀ hU hpi hpub))
+              (planAtHP dj x₀) (tabAtHP dj x₀) ((rsAtHP ht hc hscope dj x₀ hU hpi hpub (Reg := Reg)).binding
+                (rsAtHP_computes ht hc hscope dj x₀ hU hpi hpub))
               (reg (simAuditOnP H512 enc512 Lp (tablesAtHP dj x₀) I own wr opn dg dec one fin capOf N hdec τ))
               (cont (simAuditOnP H512 enc512 Lp (tablesAtHP dj x₀) I own wr opn dg dec one fin capOf N hdec τ))
               k Rw))).card)
@@ -85,15 +85,15 @@ theorem flock_headline_exec_hiddenP {Lp : Merkle.Leaf (List FlockLevel3.GF128) (
           (reg (simAuditOnP H512 enc512 Lp (tablesAtHP dj x₀) I own wr opn dg dec one fin capOf N hdec τ)) +
         ((Placed.keyProgP c pi hU n).partition (Layout.outsOfP c hU n pi)).linkBoundE
           (L := Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) (planAtHP dj x₀) (tabAtHP dj x₀)
-          ((rsAtHP ht hcS hscope dj x₀ hU hpi hpub (Reg := Reg)).binding
-            (rsAtHP_computes ht hcS hscope dj x₀ hU hpi hpub)) k Rw M ρ t' :=
+          ((rsAtHP ht hc hscope dj x₀ hU hpi hpub (Reg := Reg)).binding
+            (rsAtHP_computes ht hc hscope dj x₀ hU hpi hpub)) k Rw M ρ t' :=
   (Placed.keyProgP c pi hU n).flock_headline_live_onXP (Layout.outsOfP c hU n pi) σs ks hks St hS Kd pop Lb src hA3
     (tablesAtHP dj x₀) (tabAtHP dj x₀)
-    (ppHP ht hcS (rowsFit_of_stmt ht hcS hscope) dj x₀ hU hpi (Layout.outsOfP c hU n pi))
-    {Layout.oneG} (hConstHP ht hcS (rowsFit_of_stmt ht hcS hscope) dj x₀ hU hpi (Layout.outsOfP c hU n pi))
-    {Layout.zeroG} (hZeroHP ht hcS (rowsFit_of_stmt ht hcS hscope) dj x₀ hU hpi (Layout.outsOfP c hU n pi))
-    (layAtHP ht hcS hscope dj x₀ hU hpi (pop := pub)) (rsAtHP ht hcS hscope dj x₀ hU hpi hpub)
-    (rsAtHP_computes ht hcS hscope dj x₀ hU hpi hpub) hk hRw hM hρ hr ht' K I own wr opn dg dec one fin capOf N hdec τ
+    (ppHP ht hc (rowsFit_of_scopeH ht hc hscope) dj x₀ hU hpi (Layout.outsOfP c hU n pi))
+    {Layout.oneG} (hConstHP ht hc (rowsFit_of_scopeH ht hc hscope) dj x₀ hU hpi (Layout.outsOfP c hU n pi))
+    {Layout.zeroG} (hZeroHP ht hc (rowsFit_of_scopeH ht hc hscope) dj x₀ hU hpi (Layout.outsOfP c hU n pi))
+    (layAtHP ht hc hscope dj x₀ hU hpi (pop := pub)) (rsAtHP ht hc hscope dj x₀ hU hpi hpub)
+    (rsAtHP_computes ht hc hscope dj x₀ hU hpi hpub) hk hRw hM hρ hr ht' K I own wr opn dg dec one fin capOf N hdec τ
     hCR hKS
 
 end FlockSoundness.Discharge.HiddenExec

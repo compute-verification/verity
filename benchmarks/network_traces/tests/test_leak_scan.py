@@ -131,8 +131,8 @@ def test_a_counted_piece_the_statement_fixes_is_public(tmp_path):
 
 
 def test_a_found_piece_the_driver_cant_name_is_leaked(tmp_path):
-    """`rescan` takes a run's ``received`` again with the pieces its driver recomputes: one it can't (a salt the run
-    sampled) is leaked, and the run's own verdict is kept as ``was``."""
+    """`rescan` takes a run's ``received`` again with the pieces its driver recomputes: one it can't (a salt the run drew)
+    is leaked, and the run's own verdict is kept as ``was``."""
     vdir = _streams(tmp_path, {39: (POS[:1], POS[:1]), 40: (bytes(16), bytes(16))})
     got = {**_found(vdir), "leaked": ["pos @0"]}
     got["verifier_found"] = sorted(got["verifier_found"] + ["wit salt 3 @0"])
@@ -144,7 +144,7 @@ def test_a_found_piece_the_driver_cant_name_is_leaked(tmp_path):
 def test_a_rescan_with_a8_searches_the_kept_files_afresh(tmp_path):
     """With `a8`, `rescan` searches the kept files for the pieces as `cut` now cuts them: one the run's cutter didn't cut
     (a row's zero-padded last element) is found, and leaked; a run's find of a row the driver recomputes that the fresh
-    search doesn't repeat is dropped; a salt the run sampled stays, and is leaked."""
+    search doesn't repeat is dropped; a salt the run drew stays, and is leaked."""
     row = bytes(16) + b"\x07\x08\x09"
     pieces = LS.cut({"r 0": row}, 16)
     assert set(pieces) == {"r 0 @0", "r 0 @3", "r 0 @16"}

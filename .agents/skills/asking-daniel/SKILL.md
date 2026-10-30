@@ -28,8 +28,7 @@ An ask that isn't a click only he can make goes on its page decided: Status *Dec
 "Provisionally accepted (standing rule): <option>. Re-check: <why it holds>". Resolve its card with
 that option and `--provisional` (implied by a `--note` starting "Provisionally accepted"), so it says your lane decided,
 and act on it; he reviews these in the "Provisional, to review" view and can reverse any. A page that waits on him leaves
-Choose empty: a Choose reads as his pick. Reopening a decided page, clear its Choose in the same edit; the relay takes only
-a letter it hasn't seen on the page as his, and Approve is his alone to tick.
+Choose empty: a Choose reads as his pick.
 
 ## Write the page
 

@@ -9,6 +9,12 @@ The recursion's claims state `γ` and `γ_e` at the errors `KS_of` proves (`γ =
 
 namespace Claims.Recursion
 
+theorem γA_eq_γ {Coin W : Type} (D : Deploy Coin) (I : Inner Coin W) (x : Msg) : γA D I x = γ D I x :=
+  rfl
+
+theorem γeA_eq_γe {Coin W : Type} (D : Deploy Coin) (I : Inner Coin W) (x : Msg) : γeA D I x = γe D I x :=
+  rfl
+
 theorem KSA_iff_KS {Coin W Col T : Type} [Fintype Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T) :
     KSA H D I DO ↔ KS H D I DO :=

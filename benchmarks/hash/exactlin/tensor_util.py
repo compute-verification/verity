@@ -1,14 +1,13 @@
 """A served step's wall time by kernel class and its tensor utilization, from an Nsight Systems export of a served vLLM run
 (`nsys export --type sqlite`), and the losses ranked against a utilization target.
 
-Steps.  A forward is the 4 L int8 GEMM launches (qkv, o, gate_up and down in each of L layers) after an LM head launch
-and before the next, and its T is the grid of its L rope launches, which run one program a token (vLLM's
-`rotary_embedding_kernel`, or `rope_cache_kernel` with the KV-cache write fused in).  The cut reads no quantizer launch,
-since the norms and the activation may quantize the linears' inputs themselves (`exactlin_add_norm_quant`,
-`exactlin_silu_mul_quant`).  Step i runs from forward i's first int8 GEMM launch to forward i + 1's: a cyclic cut, so
+Steps.  The int8 row quantizer launches one program a token (stock vLLM's `dynamic_scaled_int8_quant`), or one a few
+tokens (`exactlin_quant_rows` at `int8_fused.quant_plan`'s plan), so a forward is 4 L consecutive quantizer launches
+(qkv, o, gate_up and down in each of L layers) whose grids repeat each layer, and its T is a layer's largest grid (a
+linear at one row a program).  Step i runs from forward i's first quantizer launch to forward i + 1's: a cyclic cut, so
 the step holds everything between them (its own layers, the LM head and sampler, the host's scheduling
-and the Commit's work, and the next forward's embedding, first norm and first quantizer).  Only steps of `--tokens` T
-whose next forward is also of that T count, so the warm-up and profile forwards, and a burst's last step, drop out.
+and the Commit's work, and the next forward's embedding and first norm).  Only steps of `--tokens` T whose next forward
+is also of that T count, so the warm-up and profile forwards, and a burst's last step, drop out.
 
 Wall time.  Every kernel, copy and memset on the device is clipped to the step and swept: each instant goes to the
 highest class in CLASSES' order that is running then (the tensor classes first), else to the host gap (nothing on the
@@ -61,9 +60,8 @@ CLASSES = [
                                     r"matmul_kernel_persistent"),
     ("Commit hashing", None, r"rows_leaf|rows_level|chunk_leaves|tree_level|pos_leaves|sha512|hm96"),
     ("Commit gather", None, r"gather_copy|native_collect"),
-    ("H1", None, r"\bkf?_(midstates|leaves|level|pads|public_salts|shake_salts|top|rows|segments|step|trees|tiles|strips|"
-                 r"tree_key|units_level|form_leaves|node_leaves|key_leaf|dequant|x|y|ceiling|f1|fill|hash|row_digests|"
-                 r"tile_leaves)\b"),
+    ("H1", None, r"\bkf?_(midstates|leaves|level|pads|public_salts|top|rows|segments|step|trees|tiles|strips|tree_key|"
+                 r"units_level|form_leaves|node_leaves|key_leaf|dequant|x|y|ceiling|f1|fill|hash|row_digests|tile_leaves)\b"),
     ("quantize", None, r"exactlin_quant_rows|scaled_int8_quant|int8_quant|kv_quant"),
     ("norms", None, r"rms_norm|rmsnorm|layer_norm|add\d?_norm|embed_norm|final_norm|triton_(red|per)_"),
     ("activation", None, r"silu|act_and_mul|gelu|swiglu"),
@@ -75,6 +73,7 @@ CLASSES = [
     ("memset", None, None),
 ]
 TENSOR = {name: kind for name, kind, _ in CLASSES if kind}
+QUANT = re.compile(r"exactlin_quant_rows|dynamic_scaled_int8_quant")
 # GPU metrics (`nsys --gpu-metrics-devices`) read where the report has them: the SM clock and the tensor pipe's active share
 METRICS = {"clock_mhz": re.compile(r"^GPC Clock Frequency"), "tensor_active": re.compile(r"^Tensor Active")}
 _PATTERNS = [(name, re.compile(p, re.IGNORECASE)) for name, _, p in CLASSES if p is not None]
@@ -133,19 +132,17 @@ def load(path: str) -> dict:
 
 
 def forwards(kern: list, layers: int) -> list[tuple[int, int]]:
-    """(start of its first int8 GEMM launch, T) of each forward: 4 L int8 GEMM launches and L rope launches of one grid
-    T between two LM head launches."""
-    out, gemms, rows = [], [], []
-    for s, _, name, grid, _, _ in sorted(kern):
-        c = classify(name)
-        if c == "int8 GEMM":
-            gemms.append(s)
-        elif c == "rope":
-            rows.append(grid)
-        elif c == "bf16 GEMM (LM head)":
-            if len(gemms) == 4 * layers and len(rows) == layers and min(rows) == max(rows):
-                out.append((gemms[0], rows[0]))
-            gemms, rows = [], []
+    """(start of its first quantizer launch, T) of each forward: 4 L consecutive quantizer launches, each of its layer's
+    first launch's grid or less and of the previous layer's same linear's grid, and T a layer's largest grid."""
+    out, run = [], []
+    for s, _, name, grid, _, _ in sorted(k for k in kern if QUANT.search(k[2])):
+        n = len(run)
+        if n and (grid != run[n - 4][1] if n >= 4 else grid > run[0][1]):
+            run = []
+        run.append((s, grid))
+        if len(run) == 4 * layers:
+            out.append((run[0][0], max(g for _, g in run[:4])))
+            run = []
     return out
 
 

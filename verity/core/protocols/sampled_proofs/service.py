@@ -24,7 +24,7 @@ rule: it is the service's own, a salted root of a declared Value, or an item the
   `words:<value>` and `word_bits:<value>` for a registered value.
 
 One-stage's record always shows N, each root's leaf count and domain, and the window's provenance, so a Spec over it
-declares them; hiding them waits on the hidden layout (`one_stage.hidden_draw`).
+declares them; the joint note's §6 step 0 allows that on test prompts, and hiding them is the hidden layout (step 8).
 The `Stream` runs `check_public` by the verifier of record before one-stage's R1 to R7, reading an entry's fields in key
 order; its codes are `keys`, `roots`, `unsalted`, `query` and `undeclared`.
 
@@ -55,8 +55,7 @@ later than the deadline, or before any salt, as `late-registration`, whatever it
 never retried, and it ends the epoch: the stream receives no registration after it (`epoch-ended`) and never reissues
 the salt (`salted`). It is the rule of `Pouw.AcceptsBy` (`Security/Definitions/Pouw/Game/Deadline.lean`), with `ts` =
 `salted_at`, `tr` = `received_at` and `td` = `ts` + the deadline. The readings are the challenger's own: the stream's
-epoch log (`Stream.epoch_log`) and each `WindowCommitmentRecord` carry them, and neither the receipt nor an outcome's
-record does.
+epoch log (`Stream.epoch_log`) and each `Registration` carry them, and neither the receipt nor an outcome's record does.
 `salt(n=64)` is `n` bytes of the challenger's coins, read in order with the draws'. A level's stream created at its
 first registration still measures from the epoch's release. A salt that isn't non-empty bytes, or a release that isn't a
 finite number, raises `ValueError`, and after the epoch ends a salt of either kind is refused (`epoch-ended`). The epoch
@@ -111,7 +110,8 @@ registration to itself and the prover (`registration.check`'s `binding`). An out
 one-stage's audit record (null for `late` and `halted`). A `halted` outcome adds `"halt"`, the halt's cause, and
 its `draw` is null when the registration was not sampled. `Outcome.record` is its SHA-512.
 
-**Not built yet.** A stream refuses a window statement, a timed session and a check with no proof deadline. After R1 to R7, `register` refuses a sampling design whose drawn count varies (`shapes`: `bernoulli`
+**Not built yet.** A stream refuses the `Sequential` rule, a window statement, a timed session and a
+check with no proof deadline. After R1 to R7, `register` refuses a sampling design whose drawn count varies (`shapes`: `bernoulli`
 at `0 < p < 1`); a work draw's closure varies too and is not refused (a planned design).
 """
 from __future__ import annotations
@@ -150,6 +150,7 @@ _RECORD_KEYS = {"format", "protocol", "program", "query", "partition", "populati
                 "anchors", "window", "previous", "registered"}
 _LAYOUT = {"roots": ("leaves", "domain"), "registered": ("leaves", "words", "domain", "word_bits")}
 _DIGEST = re.compile(r"^[0-9a-f]{128}$")
+_UNIFORM = re.compile(r"^uniform:[1-9][0-9]*$")
 
 
 def _sha512(obj: Any) -> str:
@@ -252,7 +253,25 @@ class Law:
         return {"rule": "law", "law": self.text}
 
 
-Selection = All | Law
+@dataclass(frozen=True)
+class Sequential:
+    """A timed session's draw, one index a round (PoUS's audit): `law` is `uniform:k`, over the public item named by
+    `population`. A `Stream` refuses it until the memory challenger's timed mode lands (§6 step 5)."""
+
+    law: str
+    population: str
+
+    def __post_init__(self) -> None:
+        if not _UNIFORM.match(str(self.law)):
+            raise ValueError(f"a sequential rule's law is uniform:k, not {self.law!r}")
+        if not (isinstance(self.population, str) and self.population):
+            raise ValueError("a sequential rule names its population's public item")
+
+    def to_json(self) -> dict[str, Any]:
+        return {"rule": "sequential", "law": self.law, "population": self.population}
+
+
+Selection = All | Law | Sequential
 
 RETIRED_TWO_STAGE = ("two-stage sampling is retired (everything is committed at serve time); a selection rule is "
                      "all or a law")
@@ -330,8 +349,8 @@ class Spec:
             raise ValueError("a spec's values have distinct names")
         if _names_two_stage(self.selection):
             raise ValueError(RETIRED_TWO_STAGE)
-        if not isinstance(self.selection, (All, Law)):
-            raise ValueError(f"a selection rule is All or Law, not {self.selection!r}")
+        if not isinstance(self.selection, (All, Law, Sequential)):
+            raise ValueError(f"a selection rule is All, Law or Sequential, not {self.selection!r}")
         if not isinstance(self.check, Check):
             raise ValueError("a spec's check is a Check")
         if not (isinstance(self.public, tuple) and all(isinstance(p, Public) for p in self.public)):
@@ -347,6 +366,8 @@ class Spec:
         for o in self.check.public_outputs:
             if o not in items or items[o].kind != "output":
                 raise ValueError(f"public output {o!r} needs a public item of kind 'output', with its reason")
+        if isinstance(self.selection, Sequential) and self.selection.population not in items:
+            raise ValueError(f"a sequential rule's population {self.selection.population!r} is a declared public item")
         if not isinstance(self.context, bytes):
             raise ValueError("a spec's context is bytes")
 
@@ -368,7 +389,7 @@ class Exhaustive:
 @dataclass(frozen=True)
 class Terms:
     """The outcome's named error terms: `sampling`, the profile's delta (None for an exhaustive selection). The proof's and
-    binding's terms are not here: the soundness composition states them."""
+    binding's terms come with the soundness composition (the joint note's §6 step 13)."""
 
     sampling: float | None
 
@@ -379,7 +400,7 @@ class Outcome:
     (`reject`, `late`, or `halted`, whose detail is the halt's cause). `profile`: the integrity profile of an accepted
     sampled selection; `exhaustive`: the fact of an accepted `All`. `public`: the check's public outputs, as the verifier
     of record reported them. `record`: the SHA-512 of the outcome's record, which binds the registration, the sample, the
-    delivered sessions, the audit record and, for a sample a `ProofRun` covers, the session's rounds."""
+    delivered sessions, the audit record and, for a sample a `Session` covers, the session's rounds."""
 
     accepted: bool
     verdict: Verdict
@@ -394,10 +415,9 @@ _O = TypeVar("_O", Outcome, tuple[Outcome, ...])
 
 
 @dataclass(frozen=True)
-class WindowCommitmentRecord:
-    """A window's commitment record the challenger admitted: one-stage's `record`, its `receipt` and `digest`, and
-    `order`, its audit's index in the stream. It is Verification's, not an entry of the registration log, which registers
-    only the site, θ and the builder. The receipt's `received` is the record's position in
+class Registration:
+    """A registration the challenger accepted: one-stage's `record`, its `receipt` and `digest`, and `order`, its audit's
+    index in the stream. The receipt's `received` is the record's position in
     the stream's log; the challenger's clock stays its own. Under `Check.registration_deadline`, `salted_at` and
     `received_at` are its readings of the salt's release and of this registration's receipt (None otherwise)."""
 
@@ -414,7 +434,7 @@ class Draw:
     """The challenger's one sample for a registration: `law` (its sampling design, expanded over the challenger's own program) and
     `draw`, one-stage's draw object (with a work sample's `closure`), which goes to the ZK server."""
 
-    registration: WindowCommitmentRecord
+    registration: Registration
     law: Mapping[str, Any]
     draw: Mapping[str, Any]
 
@@ -429,7 +449,7 @@ class Draw:
 
 
 @dataclass(frozen=True)
-class ProofRun:
+class Session:
     """One proof session over the samples of consecutive registrations of the stream `stream` (its digest), in order: each
     covered round's registration is its own tables of the session's statement. The challenger opens it once
     (`Stream.session`), after the last covered draw; the first covered draw's proof deadline spans it."""
@@ -622,7 +642,7 @@ def select_draw(rule: Selection, law: Mapping[str, Any], n: int, coins: Callable
 
 @dataclass
 class _Entry:
-    registration: WindowCommitmentRecord
+    registration: Registration
     law: Mapping[str, Any]
     program: Program
     work_table: Mapping[str, Any] | None = None
@@ -635,7 +655,7 @@ class _Entry:
     drawn_at: float | None = None
     sessions: list[str] | None = None
     outcome: Outcome | None = None
-    session: ProofRun | None = None
+    session: Session | None = None
 
 
 def _reading(x: Any) -> float | None:
@@ -662,11 +682,11 @@ def _token(x: Any, k: str) -> str:
     return x
 
 
-def _order(r: WindowCommitmentRecord) -> int | None:
+def _order(r: Registration) -> int | None:
     return r.order if _nat(r.order) else None
 
 
-def _registration_token(r: WindowCommitmentRecord) -> str:
+def _registration_token(r: Registration) -> str:
     """The token `_Control` and `SampledProofs.Stream` know a registration by: equal exactly when the registrations are."""
     return _sha512({"record": dict(r.record), "receipt": dict(r.receipt), "digest": r.digest, "order": r.order,
                     "salted_at": r.salted_at, "received_at": r.received_at})
@@ -1093,7 +1113,7 @@ class Stream:
     `register` is given, under one sample by the Spec's sampling design (`stratified:K`: a stratum per template, each sampled at least
     once; `work:K`: at least the work table's floor). It is one program and one query, as for one template, so the
     verifier of record's sample and run (`Select.select`, `Run.run`) read it in the same form. `budget` (b), `delta`
-    (the profile's) and `rounds` (R, the most registrations open at once, and so the most one `ProofRun` covers) are
+    (the profile's) and `rounds` (R, the most registrations open at once, and so the most one `Session` covers) are
     public parameters of the stream. `coins` is
     the challenger's randomness (n bytes a call, read in order by `OwnRandomness`): by default the operating system's
     bytes as the Lean verifier reads them (`verifier.coins`, `IO.getRandomBytes`, A3), never the Python's own
@@ -1128,6 +1148,8 @@ class Stream:
     def __init__(self, spec: Spec, unit: SpecializedDefinition | Sequence[SpecializedDefinition], *, budget: int, delta: float, challenger: str,
                  coins: Callable[[int], bytes] = V.coins, clock: Callable[[], float] = time.monotonic,
                  sampler: Sampler | None = None, rounds: int = 1, prover: str | None = None) -> None:
+        if isinstance(spec.selection, Sequential):
+            raise ValueError("the service doesn't run a Sequential selection yet")
         if spec.check.window is not None or spec.check.deadline is not None:
             raise ValueError("the service doesn't prove a window statement or run a timed session yet")
         if spec.check.proof_deadline is None:
@@ -1331,7 +1353,7 @@ class Stream:
                  work_table: Mapping[str, Any] | None = None, supplied: Mapping[str, Any] | None = None,
                  pinned: Mapping[str, str] | None = None, schemas: Mapping[str, str] | None = None,
                  window_root: str | None = None, held: Sequence[str] | None = None,
-                 counts: Mapping[str, int] | None = None) -> WindowCommitmentRecord:
+                 counts: Mapping[str, int] | None = None) -> Registration:
         """Receive a registration: the public-items rule (`check_public`), then one-stage's R1-R7 (`registration.check`),
         each by the verifier (`verifier.check_public`, `verifier.check`), against the challenger's own copies:
         the population program it builds from `unit` and the record's N (a window's: the mixed population of its
@@ -1343,7 +1365,7 @@ class Stream:
         `Check.registration_deadline` the challenger first reads its clock (`received_at`): a registration received more
         than the deadline after the salt's release, or before any salt, is refused (`late-registration`, with both
         readings) whatever it holds, logged, and ends the epoch; an on-time one carries both readings
-        (`WindowCommitmentRecord.salted_at`, `received_at`) and is logged with them. Raises
+        (`Registration.salted_at`, `received_at`) and is logged with them. Raises
         `Refused`: when the stream has stopped or halted (`halted`) or its epoch ended (`epoch-ended`), while it holds as
         many registrations without a final outcome as it may (`open`, `ready`), when it is late, when a window's `counts`
         aren't at least one instance for each of its templates and N in all, or a single proof block's stream is given any
@@ -1431,11 +1453,11 @@ class Stream:
                               [(v.name, v.registered) for v in values], [p.item for p in self.spec.public])
 
     def _registration(self, record: Mapping[str, Any], order: int, salted_at: float | None = None,
-                      received_at: float | None = None) -> WindowCommitmentRecord:
-        return WindowCommitmentRecord(dict(record), R.receipt(record, self.challenger, received=str(len(self._log))),
-                                      R.digest(record), order, salted_at, received_at)
+                      received_at: float | None = None) -> Registration:
+        return Registration(dict(record), R.receipt(record, self.challenger, received=str(len(self._log))), R.digest(record),
+                            order, salted_at, received_at)
 
-    def _append(self, reg: WindowCommitmentRecord) -> None:
+    def _append(self, reg: Registration) -> None:
         at = len(self._log)
         self._log.append(logged := dict(reg.record))
         key = _window_key(logged.get("window"))
@@ -1461,7 +1483,7 @@ class Stream:
             at.add(len(self._log) - 1)
         return [self._log[i] for i in sorted(at)]
 
-    def select(self, registration: WindowCommitmentRecord, *, closure: Mapping[int, Sequence[int]] | None = None) -> Draw:
+    def select(self, registration: Registration, *, closure: Mapping[int, Sequence[int]] | None = None) -> Draw:
         """The draw, once per registration, from the challenger's own randomness after the receipt: indices in [0, N) by
         the selection rule's sampling design (`select_draw`; `All` draws every proof block and reads no coins). `closure` is the challenger's closure map
         (`{unit: [units proved with it]}` over [0, N), from its own layout), for a work sampling design only: the draw carries the
@@ -1505,7 +1527,7 @@ class Stream:
         e.draw, e.drawn_at, e.read, e.closure = got["draw"], got["drawn_at"], got["read"], closure
         return e.draw
 
-    def session(self, draws: Sequence[Draw]) -> ProofRun:
+    def session(self, draws: Sequence[Draw]) -> Session:
         """Open one proof session over `draws`, the samples of 1 to `rounds` consecutive registrations in order, each
         round's registration its own tables of the session's statement: once, after the last covered draw. Its proof
         deadline is the first covered draw's (`Check.proof_deadline` from that sample), for every round it covers. Raises
@@ -1514,12 +1536,12 @@ class Stream:
         another session covers: nothing reopens it) or `order` (not consecutive registrations in order)."""
         draws = tuple(draws)
         self._held(self._decide({"op": "session", "draws": [_covered(d) for d in draws]}))
-        s = ProofRun(self.digest, draws)
+        s = Session(self.digest, draws)
         for d in draws:
             self._entries[d.registration.order].session = s
         return s
 
-    def _deliver_session(self, session: ProofRun, sessions: Sequence[str]) -> tuple[Outcome, ...] | None:
+    def _deliver_session(self, session: Session, sessions: Sequence[str]) -> tuple[Outcome, ...] | None:
         draws = tuple(session.draws) if isinstance(session.draws, Sequence) else ()
         d = self._held(self._decide({"op": "deliver_session",
                                      "stream": session.stream if isinstance(session.stream, str) else "",
@@ -1532,14 +1554,14 @@ class Stream:
             return None
         return self._reported(tuple(self._finish(e, LATE, None, {}) for e in entries))
 
-    def deliver(self, draw: Draw | ProofRun, sessions: Sequence[str]) -> Outcome | tuple[Outcome, ...] | None:
+    def deliver(self, draw: Draw | Session, sessions: Sequence[str]) -> Outcome | tuple[Outcome, ...] | None:
         """The ZK server delivers the sample's proof, once: `sessions` are its session records' SHA-512, which the outcome
         binds. A proof after the proof deadline is a reject (`late`), returned at once; otherwise None, and the outcome waits
-        on the verifier (`outcome`). A `ProofRun`'s proof is delivered as the session, once, for every sample it
+        on the verifier (`outcome`). A `Session`'s proof is delivered as the session, once, for every sample it
         covers (`covered`, delivering one of them alone): each binds the same `sessions`, and past the first covered
         draw's deadline each is `late`, returned in order. Raises `Refused` (`not-session`) for a session the stream
         didn't open."""
-        if isinstance(draw, ProofRun):
+        if isinstance(draw, Session):
             return self._deliver_session(draw, sessions)
         d = self._held(self._decide({"op": "deliver", "order": _order(draw.registration),
                                      "registration": _registration_token(draw.registration), "draw": _draw_token(draw),
@@ -1556,7 +1578,7 @@ class Stream:
         record names the delivered `sessions` and reports the public outputs alike (`check_verdicts`, by the verifier,
         `verifier.check_verdicts`); then one-stage's audit record by the verifier
         (`verifier.audit_record`; `proved_units` and `instances` default to the draw's, `served` and `session_roots` are
-        its, and the registered roots it reads are the verdicts' own) decides accept or reject. A draw a `ProofRun` covers is decided alone, on the session's delivered records and its own
+        its, and the registered roots it reads are the verdicts' own) decides accept or reject. A draw a `Session` covers is decided alone, on the session's delivered records and its own
         audit record: its `proved_units`, `instances`, `served` and `session_roots` are its round's (its own tables'),
         never another round's. On a draw from the coins and an audit record its two verifiers agree on, the whole run is
         held to the verifier's (`verifier.run`, the Lean's `Run.run` from the
@@ -1683,6 +1705,6 @@ def _why(symbol: str, audit: Mapping[str, Any] | None,
 
 
 __all__ = ["ACCEPT", "All", "Check", "Draw", "Exhaustive", "Fleet", "HALTED", "HIDING", "KINDS", "LATE", "Law", "Outcome",
-           "PHASES", "Pending", "Public", "REJECT", "ROOTS", "ROUNDS", "Refused", "SCHEME", "SOURCES", "Selection",
-           "ProofRun", "Spec", "Stream", "Terms", "Value", "WindowCommitmentRecord", "check_public", "check_verdicts",
+           "PHASES", "Pending", "Public", "REJECT", "ROOTS", "ROUNDS", "Refused", "Registration", "SCHEME", "SOURCES", "Selection",
+           "Sequential", "Session", "Spec", "Stream", "Terms", "Value", "check_public", "check_verdicts",
            "select_draw", "selection_law"]

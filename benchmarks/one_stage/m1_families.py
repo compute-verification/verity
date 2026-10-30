@@ -26,10 +26,8 @@ import time
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from verity.ml.windows.interface import K_MAX
-
-#: the statement limit the brief measures against
-LIMIT_LOG = 26
+#: C-Flock's largest block (`circuit.K_MAX`) and the statement limit the brief measures against
+K_MAX, LIMIT_LOG = 27, 26
 
 
 def _leaf_cost(fn, IL) -> dict:

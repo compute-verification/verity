@@ -10,8 +10,7 @@ import dataclasses
 import pytest
 
 from test_ledger import DOWN_NS, PASS_NS, UP_NS, paced
-from remote_bandwidth_fakes import Clock, Entropy
-from test_remote_bandwidth import A, N, challenger, finish, params, store  # noqa: F401
+from test_remote_bandwidth import A, N, Clock, Entropy, challenger, finish, params, store  # noqa: F401
 from verity.core.protocols.remote_bandwidth import audit, coins
 from verity.core.protocols.remote_bandwidth.audit import AuditRun, Pace, SessionError
 

@@ -13,8 +13,8 @@ Every number it reads is a parameter with a public source and a status, so a bou
 parameter, and the package shows how the bound moves with each one.
 
 A scenario is one choice from every part: a fleet (its location and dark share), a regime (the envelopes that run), the
-NCI registration policy, a monitoring period (its `horizon`, one of core's), a run (the target and its model), the
-algorithm families the adversary may use, and the bounds and attacks applied. For each one the package reports:
+NCI registration policy, a monitoring period (the horizon), a run (the target and its model), the algorithm families the
+adversary may use, and the bounds and attacks applied. For each one the package reports:
 
 - **the slowdown's lower bound** (`Result.lo`): every bound met at once, at the family the adversary picks. Under a
   bound it is `max(1, 1/(s + a x))` (`theorem.multiple_bound`), with the dark share `s` training like the reference and
@@ -66,12 +66,11 @@ step's design in place of the FLOP model, after a table of the step beside it (`
 A bound is argued in three parts, as the Notation states it, and each module's docstring says what it implements.
 
 - **The physical model** `𝒜_phys` (`hardware.py`, `data/hardware.toml`): the inventory's locations, each with its
-  capacity `Φ_X` in gates per second and its servers' memory `M_s`, the dark leaves `ε_dark`, and the monitoring
-  period (core's `wipe_monitoring.PERIODS`, through `params.py`). `Units`
+  capacity `Φ_X` in gates per second and its servers' memory `M_s`, the dark leaves `ε_dark`, and the horizon. `Units`
   is the one place a FLOP-model input becomes gates (`units.gates_per_flop`, with its `units.basis`).
 - **Protocol soundness**, the envelopes (`envelopes.py`, `data/envelopes.toml`): each subprotocol (PoUW, detection and
   sampled proofs, the wipe, the certifier) is one envelope `𝒜_a` with its parameters, its slack (the uncertified gates
-  by route: `undecl.*`, `skip.*`, `break.*`, `exfil.incorrect`) and its `δ_a`, split into `δ_coin` and `δ_crypto`. The NCI
+  by route: `undecl.*`, `skip.*`, `break.*`, `exfil.faulty`) and its `δ_a`, split into `δ_coin` and `δ_crypto`. The NCI
   check is the registration (`Policy`). A regime is the envelopes that run, and builds the serving blocks with their
   cuts.
 - **The exclusion bound** (`classes.py`, `attacks.py`, `theorem.py`): the training classes as per-block caps
@@ -87,7 +86,7 @@ A bound is argued in three parts, as the Notation states it, and each module's d
 | serving block `S`, `(c_S, k_S)`, `n_S` | `ServingBlock`, `Onsite.budget`, the inference cut's `Blocks.count` |
 | `q_T(c, k)` | `Cap`, from a class's `Allowance` by `classes.per_block` |
 | `q_U(U) = ω_max U / s_×` | `Structure.weight` (`data/exclusion.toml`) |
-| `ε_undecl`, `ε_skip`, `ε_break` | the routes `undecl.*`, `skip.*`, `break.*`, `exfil.incorrect` (`Cut.uncertified`) |
+| `ε_undecl`, `ε_skip`, `ε_break` | the routes `undecl.*`, `skip.*`, `break.*`, `exfil.faulty` (`Cut.uncertified`) |
 | `𝒜_a`, `δ_a`, `δ_coin`, `δ_crypto` | `Pouw`, `Detection`, `Wipe`, `Certifier`; `Regime.delta → Delta` |
 | `k_wipe`, `r_in`, `r_side` | `Wipe.k_wipe`, `Certifier.rate_in`, `Certifier.timing` and `side` |
 | the padded size ratio `\|A\| / T_0`, the slowdown, the time to the target | `Overhead.padded`, `Overhead.rho`, `Scenario.seconds` |
@@ -118,9 +117,9 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 | `families.py` | `Family.profile(Model, Run) → Profile`, for each algorithm family and any `benchmarks/nci` algorithm by its traits |
 | `instances.py` | `Model`, `Run` (a target and its kind) |
 | `circuits.py` | `Circuit` (a measured training step), `compare → Comparison` with the FLOP model, `in_place` |
-| `hardware.py` | `Units`, `Location`, `Fleet`, `MonitoringPeriod` |
+| `hardware.py` | `Units`, `Location`, `Fleet`, `Horizon` |
 | `envelopes.py` | `Pouw`, `Detection`, `Wipe`, `Certifier`; `Regime.partition`, `Regime.delta`; `Policy` |
-| `params.py` | `Registry`: dotted keys over `data/*.toml` and core's monitoring periods (`PERIODS`), `override`, `fields` |
+| `params.py` | `Registry`: dotted keys over `data/*.toml`, `override`, `fields` |
 | `scenario.py` | `build`, `evaluate → Result`, `seconds` |
 | `analysis.py` | `sweep`, `tornado`, `threshold`, `dangers`, `rescues`, `corner`, `margins`, `phase`, `frontier`, `attribution`, `upto` |
 | `operating.py` | `work`, `exfil`, `points`, `incorrect` |

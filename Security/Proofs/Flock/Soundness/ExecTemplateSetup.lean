@@ -31,7 +31,7 @@ theorem forIn_yield_push {α β : Type} {f : α → Array β → Except String (
     omega
 
 /-- `deriveAll` derives one `D` per layout. -/
-theorem deriveAll_size {types : String → Option CircuitType} {ls : Array Flock.BlockLayout}
+theorem deriveAll_size {types : String → Option CircuitType} {ls : Array Flock.Layout}
     {info : String → Option TableInfo} {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
     (h : deriveAll types ls info words unit = .ok done) : done.size = ls.size := by
   unfold deriveAll at h
@@ -43,7 +43,7 @@ theorem deriveAll_size {types : String → Option CircuitType} {ls : Array Flock
     split at hs <;> (obtain ⟨d, -, hs⟩ := except_bind_ok hs; cases hs; exact ⟨d, rfl⟩)) _ _ _ hr
   simpa [Std.Legacy.Range.size] using this
 
-theorem deriveChecked_deriveAll {types : String → Option CircuitType} {ls : Array Flock.BlockLayout}
+theorem deriveChecked_deriveAll {types : String → Option CircuitType} {ls : Array Flock.Layout}
     {info : String → Option TableInfo} {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
     (h : deriveChecked types ls info words unit = .ok done) : deriveAll types ls info words unit = .ok done := by
   unfold deriveChecked at h
@@ -63,7 +63,7 @@ theorem const_mem_order (done : Array D) (u : D) : u.const ∈ order done u := b
   simp [order, segment]
 
 /-- **The class's unit is one of its layouts**: `deriveChecked`'s order holds the unit's constant, one of its rows. -/
-theorem unit_lt {types : String → Option CircuitType} {ls : Array Flock.BlockLayout} {info : String → Option TableInfo}
+theorem unit_lt {types : String → Option CircuitType} {ls : Array Flock.Layout} {info : String → Option TableInfo}
     {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
     (hd : deriveChecked types ls info words unit = .ok done) : unit < ls.size := by
   have hsz := deriveAll_size (deriveChecked_deriveAll hd)
@@ -75,7 +75,7 @@ theorem unit_lt {types : String → Option CircuitType} {ls : Array Flock.BlockL
   exact absurd this (by decide)
 
 /-- **The unit's inputs are self rows with no Δ entry**: its own check (`checkLayout`, the unit's `Chk.rowIs`). -/
-theorem unit_inputs {types : String → Option CircuitType} {ls : Array Flock.BlockLayout} {info : String → Option TableInfo}
+theorem unit_inputs {types : String → Option CircuitType} {ls : Array Flock.Layout} {info : String → Option TableInfo}
     {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
     (hd : deriveChecked types ls info words unit = .ok done) :
     ∀ x ∈ (done.getD unit default).inCols, (done.getD unit default).rows[x]? = some ([x], [x]) ∧
@@ -99,7 +99,7 @@ theorem unit_inputs {types : String → Option CircuitType} {ls : Array Flock.Bl
   | gen sha n vb lo => exact absurd rfl (genLayout_spec h hown).1
 
 /-- **`UnitShape` with its input field discharged**: the unit's inputs carry no Δ entry by its own check. -/
-theorem unitShape_of {types : String → Option CircuitType} {ls : Array Flock.BlockLayout} {info : String → Option TableInfo}
+theorem unitShape_of {types : String → Option CircuitType} {ls : Array Flock.Layout} {info : String → Option TableInfo}
     {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
     (hd : deriveChecked types ls info words unit = .ok done)
     (hcr : (done.getD unit default).rows.getD (done.getD unit default).const ([], []) =
@@ -429,7 +429,7 @@ theorem tmpl_nets {tags : Tags} {t : Typed.Template} {c : Circuit} (P : ParseFac
 
 /-! ## A placed layout's net -/
 
-theorem placedNet_derive {l : Flock.BlockLayout} {d : D} {nm : String} {held : Array Typed.Held} {n : Net}
+theorem placedNet_derive {l : Flock.Layout} {d : D} {nm : String} {held : Array Typed.Held} {n : Net}
     (h : Typed.placedNet l d nm held = .ok n) (hown : l.own = .derive) : d.reads = #[] := by
   unfold Typed.placedNet at h
   rw [hown] at h
@@ -440,7 +440,7 @@ theorem placedNet_derive {l : Flock.BlockLayout} {d : D} {nm : String} {held : A
     simpa using hr
 
 /-- **A generated layout's net carries its own read and held table**: `placedNet` checks the read is its record's. -/
-theorem placedNet_gen {l : Flock.BlockLayout} {d : D} {nm : String} {held : Array Typed.Held} {n : Net}
+theorem placedNet_gen {l : Flock.Layout} {d : D} {nm : String} {held : Array Typed.Held} {n : Net}
     (h : Typed.placedNet l d nm held = .ok n) {sha : String} {nb vb lo : ℕ} (hown : l.own = .gen sha nb vb lo) :
     ∃ r hd, d.reads.toList = [r] ∧ r.table = sha ∧ r.n = nb ∧ r.lo = lo ∧ held.find? (·.sha512 == sha) = some hd ∧
       n.lookup = some ⟨hd.bytes, r.n, r.lo, r.k, r.prod0, r.loTop⟩ := by
@@ -465,7 +465,7 @@ theorem placedNet_gen {l : Flock.BlockLayout} {d : D} {nm : String} {held : Arra
   · simp at h
 
 /-- **A generated layout's own check**: its table has `2^n` words, `lo < n`, and no read covers its constant. -/
-theorem gen_facts {types : String → Option CircuitType} {ls : Array Flock.BlockLayout} {info : String → Option TableInfo}
+theorem gen_facts {types : String → Option CircuitType} {ls : Array Flock.Layout} {info : String → Option TableInfo}
     {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
     (hd : deriveChecked types ls info words unit = .ok done) {j : ℕ} (hj : j < ls.size) {sha : String} {nb vb lo : ℕ}
     (hown : (ls.getD j default).own = .gen sha nb vb lo) :
@@ -479,7 +479,7 @@ theorem gen_facts {types : String → Option CircuitType} {ls : Array Flock.Bloc
   exact hone.2
 
 /-- **A placed layout's net fits its slot, and its constant row reads itself**, a generated read's lookup included. -/
-theorem placedNet_fit {types : String → Option CircuitType} {ls : Array Flock.BlockLayout} {info : String → Option TableInfo}
+theorem placedNet_fit {types : String → Option CircuitType} {ls : Array Flock.Layout} {info : String → Option TableInfo}
     {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
     (hd : deriveChecked types ls info words unit = .ok done) {j : ℕ} (hj : j < ls.size) {nm : String}
     {held : Array Typed.Held} {n : Net} (h : Typed.placedNet (ls.getD j default) (done.getD j default) nm held = .ok n) :
@@ -506,7 +506,7 @@ theorem placedNet_fit {types : String → Option CircuitType} {ls : Array Flock.
     exact hc3
 
 /-- **No read covers a template unit's own rows**: `templateOf` refuses one in its own region. -/
-theorem templateOf_reads_past {name : String} {done : Array D} {ls : Array Flock.BlockLayout} {unit : ℕ} {ty : CircuitType}
+theorem templateOf_reads_past {name : String} {done : Array D} {ls : Array Flock.Layout} {unit : ℕ} {ty : CircuitType}
     {held : Array Typed.Held} {t : Typed.Template} (h : Typed.templateOf name done ls unit ty held = .ok t) :
     ∀ r ∈ (done.getD unit default).reads.toList, (done.getD unit default).size ≤ r.prod0 := by
   intro r hr
@@ -521,7 +521,7 @@ theorem templateOf_reads_past {name : String} {done : Array D} {ls : Array Flock
 
 section template
 
-variable {name : String} {done : Array D} {ls : Array Flock.BlockLayout} {unit : ℕ} {ty : CircuitType}
+variable {name : String} {done : Array D} {ls : Array Flock.Layout} {unit : ℕ} {ty : CircuitType}
   {held : Array Typed.Held} {t : Typed.Template}
 
 /-- **Placed layout `k`'s circuit is its derivation's net**: its layout is one a part places, at place `k` among them, and
@@ -649,6 +649,17 @@ theorem tmpl_net_facts {tags : Tags} {c : Circuit} (P : ParseFactsT tags t c)
 
 /-! ## An input's message bit is a column of the block -/
 
+theorem nested_getElem! {α : Type} [Inhabited α] (xs : Array (Array α)) (p k : ℕ) :
+    (xs[p]!)[k]! = default ∨ ∃ w ∈ xs.toList, (xs[p]!)[k]! ∈ w.toList := by
+  by_cases hp : p < xs.size
+  · rw [getElem!_pos xs p hp]
+    by_cases hk : k < xs[p].size
+    · exact Or.inr ⟨xs[p], Array.getElem_mem_toList hp, by rw [getElem!_pos _ k hk]; exact Array.getElem_mem_toList hk⟩
+    · exact Or.inl (getElem!_neg _ k hk)
+  · left
+    rw [getElem!_neg xs p hp]
+    exact getElem!_neg _ k (by show ¬ k < (#[] : Array α).size; simp)
+
 /-- **The rows' circuits fit their slots and their input ports lie in their input rows**: they are the file's own text
 nets or lookup slots, past the template's (`CheckFactsT.rows_after`). -/
 theorem rows_netOK {tags : Tags} {t : Typed.Template} {c : Circuit} (P : ParseFactsT tags t c)
@@ -739,7 +750,7 @@ theorem msgCol_lt {tags : Tags} {t : Typed.Template} {c : Circuit} (P : ParseFac
     rw [C.perVu_hm]
     exact lt_of_lt_of_le hp (le_nextPow2 _)
 
-theorem unit_inCols_size {types : String → Option CircuitType} {ls : Array Flock.BlockLayout}
+theorem unit_inCols_size {types : String → Option CircuitType} {ls : Array Flock.Layout}
     {info : String → Option TableInfo} {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
     (hd : deriveChecked types ls info words unit = .ok done) {ty : CircuitType}
     (hty : (ls.getD unit default).type.bind types = some ty) : (done.getD unit default).inCols.size = ty.inBits :=
@@ -932,7 +943,7 @@ theorem filter_range_eq (w : ℕ) : ∀ n, w < n → (List.range n).filter (fun 
 
 namespace TemplateLayout
 
-variable {types : String → Option CircuitType} {ls : Array Flock.BlockLayout} {info : String → Option TableInfo}
+variable {types : String → Option CircuitType} {ls : Array Flock.Layout} {info : String → Option TableInfo}
   {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D} {st : Stmt} {tb : TypedBlock}
 
 set_option hygiene false in

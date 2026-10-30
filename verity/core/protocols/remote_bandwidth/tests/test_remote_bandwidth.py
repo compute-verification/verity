@@ -13,7 +13,6 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from remote_bandwidth_fakes import Clock, Entropy
 from verity.core.protocols.profile import IntegrityProfile, Subset
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts, timing
 from verity.core.protocols.remote_bandwidth.audit import AuditRun, Params, SessionError
@@ -26,6 +25,28 @@ SCHEDULE = timing.honest(1000, 3, 300, gap_ns=10, down_ns=20, up_ns=30, jitter_n
 A = 20 + 30 + 2 * 5 + 300 + 10
 APPENDS = 8
 """The append coins a test session's challenger commits to: these sessions append none, so a few keep it quick."""
+
+
+class Clock:
+    def __init__(self) -> None:
+        self.now = 0
+
+    def __call__(self) -> int:
+        return self.now
+
+
+class Entropy:
+    """A deterministic stand-in for the operating system's generator: SHA-512 in counter mode under `label`."""
+
+    def __init__(self, label: bytes) -> None:
+        self.label, self.count = label, 0
+
+    def __call__(self, n: int) -> bytes:
+        out = b""
+        while len(out) < n:
+            out += hashlib.sha512(self.label + self.count.to_bytes(8, "big")).digest()
+            self.count += 1
+        return out[:n]
 
 
 def payload(j: int) -> bytes:
@@ -1082,7 +1103,7 @@ def test_the_write_ceilings_are_the_sheets_above_every_write_measured() -> None:
 
 
 def test_the_ledgers_count_bounds_auditros_binomial() -> None:
-    """`named_bits`, λ's count a pass (`PROTOCOL.md` §10), against `Accounting.Guarantees.Remote.AuditRO`'s last term
+    """`named_bits`, λ's count a pass (`PROTOCOL.md` §10), against `Bandwidth.Guarantees.AuditRO`'s last term
     C(q, k)/2^λ, λ a natural number: charged `named_bits(k) + SLACK_LOG2`, a pass's term is at most 2^-SLACK_LOG2,
     checked in exact integers against `math.comb`.  It is within 2 bits of log2(q^k/k!) (exact factorials up to 10^5),
     never above k·log2 q, and at q = 2^40 at most the 40·k AuditRO's docstring reads.  At 94 GB of 4 KiB receipts and

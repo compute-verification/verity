@@ -182,16 +182,3 @@ def test_the_declared_capacity_rests_on_the_nodes_inventory() -> None:
     assert all(s in e.name for s in ("every GPU on the node is declared", "the declared board and vBIOS",
                                      "no SM clock exceeds f_max, the top of that vBIOS's clock table",
                                      "MIG and MPS need no clause", "the auditor's inventory of the node"))
-
-
-def test_the_transport_claims() -> None:
-    """ML-KEM-1024 is a lattice KEM, the one-hash rule's transport exception, so its IND-CCA is an algebraic claim; the
-    transport's four premises are bare ids, the per-channel one beside `Confined p`."""
-    e = get("ind-cca/ml-kem-1024")
-    assert (e.kind, e.name, e.label, e.standing) == (
-        "assumption", "Indistinguishability under chosen-ciphertext attack of ML-KEM-1024", "IND-CCA · ML-KEM-1024",
-        "algebraic")
-    for id in ("witness-path-private", "imprint-path-private", "channel-hides", "channel-authentic"):
-        assert (get(id).kind, get(id).standing) == ("assumption", "standard")
-    assert "Confined p" in get("witness-path-private").name and "imprint exchange" in get("imprint-path-private").name
-    assert "ind-cca/ml-kem-1024" in get("channel-hides").name and "euf-cma/lms-sha512-n64" in get("channel-authentic").name

@@ -203,7 +203,6 @@ from verity.core.protocols.pouw.circuit import live_reads as LR
 from verity.core.protocols.pouw.circuit.h1zy import LEAST_K
 from verity.core.protocols.pouw.protocol import CALL_RANGE, tagged
 from verity.core.protocols.pouw.weights import CHUNK_ALIGN, CHUNK_MAX, chunks, leaf_words, weights_root
-from verity.core.protocols.profile import WINDOW_DELTA
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import produced as PR
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
@@ -257,7 +256,7 @@ MAX_K = 1 << 24
 #: slot tables' leaves), committed before any draw; a window's A slot M is `h1window.slot` of it
 ROWS_FIELD = "rows"
 #: the δ the period's ε is reported at
-DELTA = WINDOW_DELTA
+DELTA = Fraction(1, 1 << 40)
 #: the period-open's field holding the weights' root (`weights_root` of each K's registered ``b/<K>``, the gate's
 #: ``--model``), signed before any window's salt
 WEIGHTS_FIELD = "weights_root"
@@ -1814,7 +1813,7 @@ def leaf_registered_file(program: str, layout: dict, shape: dict, u: int, statem
         name = LL.served(prefix, value, u)
         known[port], op = PR.known_port(program, name, words, LL.known_salt(registration, name), registration)
         openings[name] = [op]
-    return ({"format": G.READS, "ports": {**ports, **known}, LL.COMPLETE: True}, openings), None
+    return ({"format": G.READS, "ports": {**ports, **known}}, openings), None
 
 
 def _lanes_record(lanes: dict, layout: dict, shape: dict, program: str, registration: str, draw: str,

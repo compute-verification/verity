@@ -40,14 +40,14 @@ end By
 open Classical in
 /-- **The accepted prefix's live words at verdict `acc`**: `creditLive` with `acc` for `Credit.window`'s verdict. -/
 noncomputable def creditLiveBy {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ}
-    (Wp : WindowPlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n)
+    (Wp : Period C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n)
     (acc : Paths (Paths C Cd.rounds × B) n → Fin n → Prop) (x : Paths (Paths C Cd.rounds × B) n) : ℝ :=
   ∑ w : Fin n, if UpToBy acc x w then ∑ t : Fin Np, (liveWords Sc Cd Np (Wp.liveAt x w) t : ℝ) else 0
 
 /-- **`H1J10RCheckedCreditPeriod`'s conclusion at verdict `acc`**: except with probability `δ`, an accepted period's
 fixed words are at least the credit of `acc`'s accepted prefix, `(1 − ε(j))₊` of its live words. -/
 def CreditBoundBy {ι K T L U C B : Type} [Fintype C] [Fintype B] (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ}
-    (Wp : WindowPlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n)
+    (Wp : Period C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n)
     (acc : Paths (Paths C Cd.rounds × B) n → Fin n → Prop) (Pl : Play (Paths C Cd.rounds × B) n K T L U)
     (Λ δs δ : ℝ) : Prop :=
   prob (fun x => Pl.accepts x ∧
@@ -57,7 +57,7 @@ def CreditBoundBy {ι K T L U C B : Type} [Fintype C] [Fintype B] (Sc : Scheme K
 that credits every window, is the conclusion with that verdict in place of `Credit.window`'s. -/
 theorem creditBound_window {ι K T L U C Ξ : Type} [Fintype C] [Fintype Ξ] (Sc : Scheme K) (Cd : Declared ι)
     {nB mB n : ℕ} (σ : Fin nB → Fin mB) (sT : Fin mB) (ws : CreditWindows (Coin C Ξ Cd.rounds σ sT) n)
-    (Wp : WindowPlay C (Coin C Ξ Cd.rounds σ sT) (Fin (tileCount σ sT)) Cd.rounds n)
+    (Wp : Period C (Coin C Ξ Cd.rounds σ sT) (Fin (tileCount σ sT)) Cd.rounds n)
     (Pl : Play (Coin C Ξ Cd.rounds σ sT) n K T L U) (Λ δs δ : ℝ) :
     prob (fun x => Pl.accepts x ∧ n * (Pl.run x).fixed <
       creditPrefix Sc Cd (tileCount σ sT) (ws.prefixLen x) (creditLive Sc Cd Wp ws x) 1 1 Λ δs) ≤ δ ↔

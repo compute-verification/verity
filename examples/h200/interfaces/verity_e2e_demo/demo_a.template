@@ -28,7 +28,7 @@ With one bit of a drawn unit's committed values flipped, it answered **⟨FLIP_V
 
 **The guarantee, at δ = 1%.** By ⟨BOUND_CITATION⟩: except with probability δ + ε_ks + ε_bind (ε_ks = ⟨EPS_KS⟩,
 ε_bind = ⟨EPS_BIND⟩), at most ⟨H_A⟩ of the block's ⟨BLOCK_ANDS⟩ ANDs (⟨H_A_SHARE⟩) and ⟨H_B⟩ of its
-⟨BLOCK_OUTPUT_BITS⟩ output bits are incorrect. In proof blocks, the draw's own figure: at most ⟨H_UNITS⟩ of its
+⟨BLOCK_OUTPUT_BITS⟩ output bits are faulty. In proof blocks, the draw's own figure: at most ⟨H_UNITS⟩ of its
 ⟨UNITS_TOTAL⟩ units.
 
 - PoUW, on ⟨POUW_TILES⟩, ⟨POUW_TILES_DRAWN⟩ drawn: W_cert = ⟨POUW_W_CERT⟩ (⟨POUW_TILES_CREDITED⟩ tiles credited),
@@ -62,7 +62,7 @@ row-slot) and ⟨STEP_S_B1024⟩ s at batch 1,024 (⟨ROW_SLOT_NS_B1024⟩ ns pe
 ## 3. Computed from the same theorem and the measured costs, not run
 
 Every figure here is circuit size, counted in AND gates. With 1% of compute spent on proving, a deployment of
-D = ⟨D_GPUS⟩ H200s (⟨DEPLOYMENT_ID⟩, `benchmarks/census/`) has at most H incorrect AND gates and B leaked bits per week,
+D = ⟨D_GPUS⟩ H200s (⟨DEPLOYMENT_ID⟩, `benchmarks/census/`) has at most H faulty AND gates and B leaked bits per week,
 month and year, at δ = 1%. The adversary's resources are the world's compute, ⟨WORLD_GATES_YEAR⟩ AND gates a year, so
 each share is stated against the world's AND gates, with the deployment's beside it (the block's ⟨BLOCK_ANDS⟩ AND gates
 per ⟨BLOCK_GPU_S⟩ H200-seconds). Output bits are the block's ⟨BLOCK_OUTPUT_BITS⟩ per ⟨BLOCK_ANDS⟩ AND gates:

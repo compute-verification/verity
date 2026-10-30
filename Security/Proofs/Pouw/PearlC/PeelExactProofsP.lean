@@ -34,6 +34,8 @@ open Pouw.Fp8Atom Pouw.PearlC Pouw.PearlC.PeelExact Matrix
 
 variable {m n k : Nat}
 
+theorem windowWordP?_hopper : windowWordP? hopperE4m3K32 = windowWord? := rfl
+
 /-- Π's chain on words (windows of `Params.pi.G = 4`) is the chain twin at `hopperE4m3K32`. -/
 theorem chainWordP?_hopper : chainWordP? hopperE4m3K32 4 = chainWord? := rfl
 
@@ -64,6 +66,8 @@ def HRangeW (w : Nat) (z : ℤ) (tc : Term) (a b : Fin 32 → Code) : Prop :=
 def epsW (w : Nat) : ℚ := 33 / 2 ^ (w - 1) + (1 + 33 / 2 ^ (w - 1)) / 2 ^ (min w 24 - 1)
 
 theorem epsW_nonneg (w : Nat) : 0 ≤ epsW w := by unfold epsW; positivity
+
+theorem epsW_14 : epsW 14 = eps8 := by unfold epsW eps8; norm_num
 
 /-- On the range, the step's grid is bounded by its terms: `2^E ≤ |c| + Σ_l |a_l·b_l|`. -/
 theorem two_zpow_stepExpW_le {w : Nat} {z : ℤ} (hw2 : 2 ≤ w) (hz : z < (w : ℤ) - 127) {acc : Nat} {tc : Term}
@@ -168,6 +172,10 @@ theorem stepRel_pipe {w : Nat} {z : ℤ} (hw2 : 2 ≤ w) (hz : z < (w : ℤ) - 1
     StepRel ⟨[32], w, z⟩ (fun tc x => HRangeW w z tc x.1 x.2) (epsW w) :=
   fun _ _ _ hw hR => pipeStep_rel hw2 hz hw hR
 
+/-- Π's step has relative error `eps8` on `H8Range` (`hopperStep_rel`). -/
+theorem hopper_stepRel : StepRel hopperE4m3K32 (fun tc x => H8Range tc x.1 x.2) eps8 :=
+  fun _ _ _ hw hR => hopperStep_rel hw hR
+
 /-- One window's step on `P`, the word finite. -/
 def winStepP (P : Pipeline) (w : Nat) (x : AtomIn) : Option Nat := finite? (P.step w (List.ofFn x.1) (List.ofFn x.2))
 
@@ -251,6 +259,8 @@ def chainBoundP (ε : ℚ) (G : Nat) (atoms : List AtomIn) : ℚ :=
     (1 + 1 / 2 ^ 24) ^ (atoms.toChunks G).length *
       (epsCP ε G * (atoms.map atomAbs).sum + (atoms.toChunks G).length * 2 ^ (-150 : ℤ))
 
+theorem chainBoundP_hopper : chainBoundP eps8 4 = chainBound := rfl
+
 /-- **The chain's error in windows of `G ≥ 1`** (`chainWord_err` on any step): `chainWordP? P G`'s word is within
 `chainBoundP ε G` of the exact chain. -/
 theorem chainWordP_err (hS : StepRel P R ε) (hε : 0 ≤ ε) {G : Nat} (hG : 1 ≤ G) {atoms : List AtomIn} {w : Nat}
@@ -289,6 +299,11 @@ def ChainRangeAt (P : Pipeline) (R : Term → AtomIn → Prop) (G : Nat) (atoms 
 /-- **The chain's bound at `G`**: `pureBound ε` at `G = 0`, `chainBoundP ε G` otherwise. -/
 def chainBoundAt (ε : ℚ) (G : Nat) (atoms : List AtomIn) : ℚ :=
   if G = 0 then pureBound ε atoms else chainBoundP ε G atoms
+
+theorem chainBoundAt_zero (ε : ℚ) : chainBoundAt ε 0 = pureBound ε := funext fun _ => ite_eq_left rfl
+
+theorem chainBoundAt_succ (ε : ℚ) (G : Nat) : chainBoundAt ε (G + 1) = chainBoundP ε (G + 1) :=
+  funext fun _ => ite_eq_right (Nat.succ_ne_zero G)
 
 /-- **The chain's error at any `G`**: `chainWordP? P G`'s word is within `chainBoundAt ε G` of the exact chain. -/
 theorem chainWordAt_err (hS : StepRel P R ε) (hε : 0 ≤ ε) (G : Nat) {atoms : List AtomIn} {w : Nat}
@@ -594,6 +609,11 @@ theorem served120_live_zero : wServed120 0 (wNoise 1 1) = some 0 ∧ wServed120 
 /-- The two salts' served entries differ at sm_120 in windows of 4. -/
 theorem served120_salt_dependent_four : wServed120 4 (wNoise 1 1) ≠ wServed120 4 (wNoise 2 (-1)) := by
   rw [served120_live_four.1, served120_live_four.2]
+  decide
+
+/-- The two salts' served entries differ at sm_120 with no promotion. -/
+theorem served120_salt_dependent_zero : wServed120 0 (wNoise 1 1) ≠ wServed120 0 (wNoise 2 (-1)) := by
+  rw [served120_live_zero.1, served120_live_zero.2]
   decide
 
 end Pouw.PearlC.PeelExactProofsP

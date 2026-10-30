@@ -16,8 +16,6 @@ receipt sink and ``ok``) keeps the Program small."""
 from __future__ import annotations
 
 import hashlib
-import io
-import pickle
 from types import SimpleNamespace
 
 import numpy as np
@@ -249,10 +247,9 @@ class _Hashing:
 
 
 def test_a_z_table_hashing_on_the_gpu_is_read_at_its_rounds_close_and_registers_what_a_waited_one_does(monkeypatch):
-    """A z or public table whose hash is left running (`pouw_h1_registered.commit`'s ``later``, the GPU path) keeps its
-    place in the registration order and is read only when its round closes, after its step's later calls were recorded:
-    the window's trees, entries, digest, manifest roots and round roots are the ones it registers when each hash is waited
-    for."""
+    """A z table whose hash is left running (`pouw_h1_registered.commit`'s ``later``, the GPU path) keeps its place in the
+    registration order and is read only when its round closes, after its step's later calls were recorded: the window's
+    trees, entries, digest, manifest roots and round roots are the ones it registers when each hash is waited for."""
     torch.manual_seed(0)
     waited, *_ = _window(W1)
     events, commit = [], NR.commit
@@ -267,9 +264,8 @@ def test_a_z_table_hashing_on_the_gpu_is_read_at_its_rounds_close_and_registers_
     monkeypatch.setattr(NR, "commit", later)
     torch.manual_seed(0)
     run, *_ = _window(W1)
-    zy, pub = ([SV.PREFIX + f"{t}@{c}" for c in range(len(run.calls))] for t in ("zy", "pub"))
-    order = [[zy[3 * s], zy[3 * s + 1], pub[3 * s], pub[3 * s + 1], zy[3 * s + 2], pub[3 * s + 2]] for s in range(STEPS)]
-    assert events == [(e, v) for vs in order for e in ("hashing", "read") for v in vs]
+    zy = [SV.PREFIX + f"zy@{c}" for c in range(len(run.calls))]
+    assert events == [(e, zy[c]) for s in range(STEPS) for e in ("hashing", "read") for c in range(3 * s, 3 * s + 3)]
     assert all(isinstance(r, G.Registered) for r in run.served.registered.values())
     assert list(run.served.registered) == list(waited.served.registered)
     assert run.served.roots() == waited.served.roots() and run.served.entries() == waited.served.entries()
@@ -643,45 +639,6 @@ def test_a_window_serving_other_weights_than_the_periods_is_refused(edit):
         SV.trees(run)
 
 
-def test_a_weight_is_copied_to_the_host_and_held_to_its_periods_rows_once_a_process(monkeypatch):
-    """`host_weight` copies a weight once while it is the same tensor, unwritten: read-only, sharing no memory with it. The
-    period registered from those copies (`weights_of`) never compares them to its rows again, and its windows register
-    what windows of a period registered from fresh arrays do. A weight written in place is copied again and refused."""
-    ws = _weights()
-    got = SV.weights_of([SimpleNamespace(weight=c, weight_scale=s) for c, s in ws])
-    w, s = got[1]
-    assert all(a is b for a, b in zip(SV.host_weight(*ws[1]), got[1]))
-    assert not (w.flags.writeable or s.flags.writeable) and not np.shares_memory(w, ws[1][0].numpy())
-    assert (s.dtype, s.shape) == (np.dtype("<f4"), (32,)) and np.array_equal(s, ws[1][1].numpy().reshape(-1))
-    a = np.zeros((2, 2), np.int8)
-    assert SV.host_weight(a, np.ones(2))[0] is not SV.host_weight(a, np.ones(2))[0] and a.flags.writeable
-    gone = torch.zeros(2, 2, dtype=torch.int8)
-    SV.host_weight(gone, torch.ones(2))
-    i = id(gone)
-    del gone
-    assert i not in SV._HOST
-
-    period, fresh = SV.register_weights(_period(ws).circuit, SHAPES, got, WKEY), _period(ws)
-    assert (period.root(), period.entries()) == (fresh.root(), fresh.entries()) and sorted(period.held) == [0, 1, 2]
-    compared, real = [], SV.chunk_words
-    monkeypatch.setattr(SV, "chunk_words", lambda codes, *x: (compared.append(codes), real(codes, *x))[1])
-    windows, checked = [], []
-    for weights in (period, period, fresh, fresh):
-        compared.clear()
-        torch.manual_seed(0)
-        run, _ws, _got = _window(W1, ws=ws, weights=weights)
-        assert not run.served.refused
-        windows.append((run.served.entries(), run.served.digest(), run.round_log, run.calls_root()))
-        checked.append(sorted(w for w, (h, _s) in got.items() if any(c is h for c in compared)))
-    assert windows[1:] == windows[:-1] and checked == [[], [], [0, 1, 2], []]
-
-    with torch.no_grad():
-        ws[1][0][3, 5] ^= 1
-    assert SV.host_weight(*ws[1])[0] is not w
-    run, _ws, _got = _window(W1, ws=ws, weights=period)
-    assert any("linears [1]' codes or s_w are not their rows of the period's registered" in r for r in run.served.refused)
-
-
 def test_round_r_lists_step_rs_a_tables_whole_under_its_root():
     """Each round's root lists step r's A tables ``a/<K>@<r>``, one a K, whole, as aligned subtrees (`credit.cover`) whose
     tree is the table's registered root, and no other round lists them (`credit.round_root`)."""
@@ -821,7 +778,6 @@ def test_each_calls_public_table_and_the_ok_rows_are_the_ones_credit_builds_and_
                                  SV.V2) for u in range(u0, u0 + n))
     assert served.ok.value == pre + "ok" and served.ok.value not in [e["value"] for e in served.entries()]
     assert [list(row) for row in served.ok.rows] == [list(CC.OK_ROW)] * served.ok.leaves
-    assert served.ok.salts.at(range(served.ok.leaves)) == b"".join(CC.ok_salt(served.root, u) for u in range(served.ok.leaves))
     assert CR.registered_file(program, lay, shape, 0, {**roots, served.ok.value: [served.ok.root.hex()]}, served.root,
                               served.steps, run._salt.hex())[1][0] == "registration"
 
@@ -930,28 +886,6 @@ def test_zy_words_are_record_words_of_the_records_split():
         assert got.dtype == np.uint16 and np.array_equal(got, SV.record_words(*ZR.split(records, rows, n), slots, tile))
 
 
-@pytest.mark.parametrize("mode", ["numpy", "gpu"])
-def test_an_empty_calls_z_table_is_record_words_of_no_rows(monkeypatch, mode):
-    """An empty call's z table (`Served._empty_zy`) is `record_words` of no rows: zeros on the host, and on the GPU a CUDA
-    u16 tensor of the same words, made on the hash's stream; a window whose last step is empty registers it either way."""
-    if mode == "gpu":
-        from verity_vllm.protocols.pouw.h1 import registered_device as D
-
-        if not D.available():
-            pytest.skip("no CUDA device the kernels build for")
-    monkeypatch.setattr(NR, "MODE", mode)
-    run, *_ = _window(W1)
-    served = run.served
-    assert not served.refused and [c.m for c in run.calls][-len(SHAPES):] == [0] * len(SHAPES)
-    for n in sorted({n for n, _k in SHAPES}):
-        want = SV.record_words(np.zeros((0, n), "<i4"), np.zeros((0, n), np.int16), served.m, served.tile)
-        got = served._empty_zy(n)
-        if mode == "gpu":
-            assert got.is_cuda and str(got.dtype) == "torch.uint16"
-            got = got.cpu().view(torch.uint8).numpy().view(np.uint16)
-        assert got.dtype == np.uint16 and got.shape == want.shape and np.array_equal(got, want)
-
-
 def test_a_forward_out_of_module_order_lays_out_each_step_table_and_its_receipts_in_call_order():
     """GLM-5.3's DSA attention runs a step's linears out of module order. Here each step calls k before q, which
     share K = 16, then o: each step's A table of K is still its calls' rows in call order, registered at the call that
@@ -1015,38 +949,6 @@ def test_chunk_words_are_the_specs_leaf_bytes(k, n):
     assert (n == 1) == np.array_equal(got, SV.row_words(codes, scales))
     with pytest.raises(ValueError, match="chunks of whole u16 words"):
         SV.chunk_words(codes, scales, 3 if k % 3 else 7)
-
-
-@pytest.mark.parametrize("k", [64, 5120, 16384])
-def test_a_step_tables_words_are_each_calls_rows_padded_to_m_in_call_order(k):
-    """`chunk_words` over ``slots`` is `row_words` of the rows padded with zero codes of scale 0, and into ``out`` it writes
-    exactly those words, every byte of ``out`` and nothing beside it; `Served`'s step table of K (`_a_rows`), its calls
-    recorded out of call order, is their `a_words` in call order, taken once the last call is in."""
-    rng = np.random.default_rng(k)
-    n, m, k2 = Wt.chunks(k), 5, k // (2 * Wt.chunks(k)) + 2
-    rows = [(rng.integers(-128, 128, (r, k), dtype=np.int8), (rng.random(r) + 0.5).astype("<f4")) for r in (3, 0, 5)]
-
-    def padded(codes, scales):
-        full, sc = np.zeros((m, k), np.int8), np.zeros(m, "<f4")
-        full[:len(codes)], sc[:len(codes)] = codes, scales
-        return SV.row_words(full.reshape(n * m, k // n), np.repeat(sc, n))
-
-    want = [padded(*r) for r in rows]
-    got = SV.chunk_words(*rows[0], n, m)
-    assert got.dtype == np.uint16 and np.array_equal(got, want[0])
-    out = np.full((3 * n * m, k2), 0xABCD, np.uint16)
-    SV.chunk_words(*rows[0], n, m, out[n * m:2 * n * m])
-    assert np.array_equal(out[n * m:2 * n * m], want[0]) and (out[:n * m] == 0xABCD).all() and (out[2 * n * m:] == 0xABCD).all()
-    with pytest.raises(ValueError, match="over 2 slots"):
-        SV.chunk_words(*rows[0], n, 2)
-    with pytest.raises(ValueError, match="contiguous u16 array"):
-        SV.chunk_words(*rows[0], n, m, out[:n * m - 1])
-    served, call = SV.Served(), lambda c: SimpleNamespace(index=c, k=k)
-    served.m = m
-    mine = [4, 7, 9]
-    assert served._a_rows(call(9), "a", mine, *rows[2]) is None and served._a_rows(call(4), "a", mine, *rows[0]) is None
-    table = served._a_rows(call(7), "a", mine, *rows[1])
-    assert table.dtype == np.uint16 and np.array_equal(table, np.concatenate(want)) and not served._a
 
 
 def test_k_up_to_4096_roots_are_unchanged():
@@ -1156,29 +1058,6 @@ def test_a_chunked_llama_window_registers_chunk_leaves_and_core_credit_ties_it()
         "weights", CR.other_weights_entry(pre + "b/14336", 14336, 32))
 
 
-#: one Llama-3.2-1B decoder layer's int8 linears (n, K): qkv, o and gate_up at the hidden size, down_proj at the
-#: intermediate size
-LLAMA_1B = {"qkv_proj": (3072, 2048), "o_proj": (2048, 2048), "gate_up_proj": (16384, 2048), "down_proj": (2048, 8192)}
-
-
-@pytest.mark.slow
-def test_the_pouw_setting_j10r_over_one_k_declares_the_form_a_periods_guarantee_covers():
-    """serve-openai's ``{"pouw": {"unit": "j10r", "ks": [2048]}}`` (`unit_of`, the linears at K = 2048): the Program it
-    declares over a Llama-3.2-1B layer at T 64, S 1 has its units at one K, each J10-R's, as credit reads the descriptor
-    (`credit.shape_of`): the form a PoUW period's guarantee covers. Unset (v1) its unit takes per-unit noise, and J10-R
-    with down_proj's K = 8192 beside it has units at two K's. Its three declarations are real (up to a minute together):
-    the stand-in tests hold the setting's plumbing, and only a real one gives the descriptor credit reads."""
-    def tiles(names, unit):
-        shapes = [LLAMA_1B[n] for n in names]
-        raw = SV.descriptor(SV.declared(shapes, dict(enumerate(names)), 64, 1, unit=SV.unit_of(unit)))
-        return {k: t["j10r"] for k, t in CR.shape_of(raw)["tiles"].items()}
-
-    one_k = [n for n, (_n, k) in LLAMA_1B.items() if k == 2048]
-    assert tiles(one_k, "j10r") == {2048: True}
-    assert tiles(one_k, None) == {2048: False}
-    assert tiles(list(LLAMA_1B), "j10r") == {2048: True, 8192: True}
-
-
 def _last_chunk_code(w):
     codes = w[0].clone()
     codes[3, 14335] ^= 1
@@ -1249,40 +1128,3 @@ def test_a_j10r_llama_window_at_k_14336_is_credited_at_its_whole_k_and_core_ties
              for e in served.entries()]
     assert CR._weights(window, layout, whole, requests.hex(), session, served.program_digest, pre)[1] == (
         "weights", CR.other_weights_entry(pre + "b/14336", 14336, 32))
-
-
-@pytest.mark.parametrize("j10r", [False, True])
-def test_a_public_table_is_built_again_on_read_and_registers_what_its_held_rows_and_salts_do(j10r):
-    """Each call's ``pub@<c>`` holds no rows or salts but how to build them (`PublicRows`, `PublicSalts`, in a window and a
-    J10-R Llama window): read whole, in any order or one at a time, on the host or as a torch tensor, they are its rows
-    and core's salts, and committing them held, as bytes, registers its root, strings and levels; it pickles as it is,
-    with no tensor, so a window's saved state holds it."""
-    from verity_vllm.protocols.pouw.h1 import handoff as HO
-
-    run = _llama(defn=StandInJ10R)[0] if j10r else _window(W1)[0]
-    served, pre = run.served, SV.PREFIX
-    assert not served.refused and HW.is_j10r(served.program) == j10r
-    for c, (u0, n) in enumerate(HW.call_units(served.program)):
-        r = served.registered[pre + f"pub@{c}"]
-        rows, salts = r.rows, r.salts
-        assert isinstance(rows, SV.PublicRows) and isinstance(salts, NR.PublicSalts) and len(rows) == len(salts) == n
-        words = rows.words(np.arange(n))
-        assert words.dtype == np.uint16 and words.shape == (n, r.words)
-        assert np.array_equal(rows.tensor(torch.device("cpu")).numpy(), words)
-        assert np.array_equal(rows.at([n - 1, 0]), words[[n - 1, 0]]) and np.array_equal(rows[1:], words[1:])
-        assert rows[-1] == tuple(int(v) for v in words[-1])
-        assert salts.at(range(n)) == b"".join(salts) == b"".join(CC.public_row_salt(served.root, u0 + t) for t in range(n))
-        held = NR.commit(served.program_digest, r.value, words, run._key, 0, True, b"".join(salts), window=served.root)
-        assert (held.root, held.bcs, held.levels, held.domain) == (r.root, r.bcs, r.levels, r.domain)
-        buf = io.BytesIO()
-        HO._HostOnly(buf, protocol=5).dump(r)
-        again = pickle.loads(buf.getvalue())
-        assert (again.rows, again.salts, again.root) == (rows, salts, r.root)
-        with pytest.raises(IndexError):
-            rows.at([n])
-        with pytest.raises(IndexError):
-            salts.at([n])
-    with pytest.raises(ValueError, match="u64"):
-        NR.PublicSalts(b"h", (1 << 64) - 1, 2)
-    with pytest.raises(ValueError, match="public row"):
-        SV.PublicRows(SALT[:63], (bytes(64), bytes(64)), 0, 1)

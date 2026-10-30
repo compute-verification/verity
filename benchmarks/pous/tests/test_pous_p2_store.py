@@ -25,10 +25,9 @@ from p2_v1 import reference  # noqa: E402
 from p2_v1 import store as S  # noqa: E402
 
 from verity.core.protocols.pous import protocol, setup, verifier  # noqa: E402
-from verity.core.protocols.pous.layout import TensorLayout, decode_tensor  # noqa: E402
+from verity.core.protocols.pous.layout import Layout, decode_tensor  # noqa: E402
 from verity.core.protocols.pous.schemes.p2 import P2, P2Params, decode_segment, encode_segment, expand_prefix  # noqa: E402
 from verity.core.protocols.pous.verifier import VerifierKey  # noqa: E402
-from verity.ml.circuits import requirement  # noqa: E402
 
 TOY = json.loads((S.TOY_DIR / "toy.json").read_text())
 SPOT = json.loads((S.TOY_DIR / "spot.json").read_text())
@@ -68,8 +67,7 @@ def test_real_layout():
         assert qkv.first_block == 1_307_915 * l and store.staging_bytes(l) == 2_686_451_712
     (head,) = store.layer(52)
     assert (head.name, head.first_block, head.blocks) == ("lm_head.weight", 68_011_580, 2_043)
-    aligned = TensorLayout.of(P2Params(S.W_BITS, S.C0, S.PER_SEGMENT), [(t.name, t.size) for t in store.tensors],
-                              align=True)
+    aligned = Layout.of(P2Params(S.W_BITS, S.C0, S.PER_SEGMENT), [(t.name, t.size) for t in store.tensors], align=True)
     assert aligned.params.segments > p.segments + 50
 
 
@@ -104,14 +102,6 @@ def test_toy_decode():
     seg = STORE.params.segment_bytes
     for s, blocks in enumerate(_segments()):
         assert decode_segment(STORE.params, None, SALT, s, blocks) == W[s * seg:(s + 1) * seg]
-
-
-def test_the_layout_reads_as_the_audits_store():
-    """`StoreLayout.store` is the toy's `C*` as `requirement.Store`: every block registered and resident at every step,
-    since nothing is written or freed after setup, and no payloads."""
-    held = STORE.store
-    assert held == requirement.Store(STORE.params.blocks, {}, {}, {})
-    assert held.resident(0) == held.resident(STORE.params.blocks) == frozenset(range(len(C_STAR) // NB))
 
 
 def test_toy_public_setup():
@@ -167,13 +157,14 @@ def test_spot_vectors():
     assert SPOT["params"] == real.manifest() and salt == SALT
     prefix = expand_prefix(real, salt)
     assert prefix.hex() == SPOT["prefix"]
+    ref = reference.Params(real.w, real.c0, real.payload_bytes, real.blocks_per_segment, real.segments)
     sha = lambda b: hashlib.sha512(b).hexdigest()  # noqa: E731
     spot_c = (S.TOY_DIR / "spot-c.bin").read_bytes()
     assert sha(spot_c) == SPOT["c_sha512"] and len(spot_c) == NB * len(SPOT["vectors"])
     assert [v["id"] for v in SPOT["vectors"]] == ["w-first", "qkv0-last", "down51-first", "head-last", "w-last"]
     for j, v in enumerate(SPOT["vectors"]):
         assert divmod(v["i"], real.blocks_per_segment) == (v["s"], v["v"])
-        k, t, attempt = reference.keys_after(prefix, real, v["s"], v["v"])
+        k, t, attempt = reference.keys_after(prefix, ref, v["s"], v["v"])
         assert (sha(k.to_bytes(NB, "big")), sha(t.to_bytes(NB, "big")), attempt) == (v["K_sha512"], v["t_sha512"], v["t_attempt"])
         m = S.decode_block(real, prefix, v["i"], spot_c[NB * j:NB * (j + 1)])
         assert m == S.spot_payload(v["i"], v["used"], real.payload_bytes) and sha(m) == v["m_sha512"]

@@ -16,7 +16,7 @@ def _outside_any_run(monkeypatch):
 def reveals():
     """The network certifier's reveal endpoint for the test's proxies: `reveals(proxy)` serves it (`serve_reveals`) on
     localhost, on a loop of its own thread, and returns its (host, port), so a synchronous challenger asks it through a
-    `CertifierClient`. Every server closes, and the loop stops, when the test ends."""
+    `RemoteCertifier`. Every server closes, and the loop stops, when the test ends."""
     loop = asyncio.new_event_loop()
     thread = threading.Thread(target=loop.run_forever)
     thread.start()

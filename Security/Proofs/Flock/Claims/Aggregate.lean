@@ -60,6 +60,14 @@ theorem sqrt_add_lin {C β p : ℝ} (hC : 0 ≤ C) (hβ : 0 ≤ β) (hp : 0 ≤ 
   rw [Real.sqrt_mul hC, Real.sqrt_mul (sq_nonneg _), Real.sqrt_sq (add_nonneg (Real.sqrt_nonneg _) hβ)]
   nlinarith [mul_le_mul_of_nonneg_left hpp hβ, Real.sqrt_nonneg p, Real.sqrt_nonneg C]
 
+/-- Each finder at most `M`: `Σ_i √(c_i a_i) ≤ (Σ_i √c_i) · √M`. -/
+theorem sum_sqrt_le {I : Type} (s : Finset I) (c a : I → ℝ) (hc : ∀ i ∈ s, 0 ≤ c i) {M : ℝ}
+    (ha : ∀ i ∈ s, a i ≤ M) : ∑ i ∈ s, Real.sqrt (c i * a i) ≤ (∑ i ∈ s, Real.sqrt (c i)) * Real.sqrt M := by
+  rw [Finset.sum_mul]
+  refine Finset.sum_le_sum fun i hi => ?_
+  rw [← Real.sqrt_mul (hc i hi)]
+  exact Real.sqrt_le_sqrt (mul_le_mul_of_nonneg_left (ha i hi) (hc i hi))
+
 /-- **An average of roots is at most the root of the average** (Jensen for `√`, by Cauchy–Schwarz). -/
 theorem Ex_sqrt_le {α : Type} [Fintype α] (f : α → ℝ) (hf : ∀ a, 0 ≤ f a) :
     Ex (fun a => Real.sqrt (f a)) ≤ Real.sqrt (Ex f) := by
