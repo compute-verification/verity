@@ -301,8 +301,9 @@ def call_leaf(rec: CallRecord) -> bytes:
 
 
 def calls_root(salt: bytes, weights_root: bytes, records: Sequence[CallRecord]) -> bytes:
-    """The root over every call's leaf, in call order."""
-    return commit_rows(tagged(CALLS_BINDING, salt, weights_root), -1, [call_leaf(r) for r in records]).commitment.root
+    """The root over every call's leaf, in call order: a plain tree, which the replay recomputes from the records."""
+    return commit_rows(tagged(CALLS_BINDING, salt, weights_root), -1, [call_leaf(r) for r in records], "sha256",
+                       public=True).commitment.root
 
 
 def sides(records: Sequence[CallRecord]) -> list[WeightRecord]:
