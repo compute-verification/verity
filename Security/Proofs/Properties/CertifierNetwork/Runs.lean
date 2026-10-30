@@ -187,9 +187,7 @@ theorem device_record {x : DeviceInput} {c : Commitment} {e : Evidence}
   have := hcr _ _ hY hY' hyy
   subst this
   have hrl : r.head.link = l := (recordsOf_mem hmem).2.1
-  have hcrhl : cr.head.link = rec.link := (recordHead_head hhead).1
   obtain ⟨-, -, hl, hd, hw, hg⟩ := messageInput_inj hy hy' (by rw [← hrl]; exact link_short hdig)
-    (by rw [hcrl, ← hcrhl]; exact link_short hcrR)
   have hdR : dg = R := certificateDigest_inj hcr (fun z hz => mem_run_check (Or.inl ⟨r, hr, Or.inr (Or.inl hz)⟩))
     (fun z hz => mem_run_salted hcrm hz) hdig hcrR (hg.trans hcrd)
   have hh : r.head = cr.head := head_inj hcr (fun z hz => mem_run_check (Or.inl ⟨r, hr, Or.inl hz⟩))
