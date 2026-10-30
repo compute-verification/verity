@@ -239,10 +239,10 @@ def message(commitment: WipeCommitment, ended: str, fill_start_ns: int, fill_end
     return _sha512(SESSION_TAG, len(head).to_bytes(8, "big"), head, records_root(commitment.session, batches))
 
 
-class Challenger:
-    """One streamed-label wipe of `server` under `session`, signed by `signer` (module docstring).  The session id goes
-    into `log` before anything else.  `coin_secret` is drawn from the OS when the fill completes unless a test gives
-    it."""
+class WipeMemoryChallenger:
+    """The memory challenger's side of one streamed-label wipe of `server` under `session`, signed by `signer` (module
+    docstring).  The session id goes into `log` before anything else.  `coin_secret` is drawn from the OS when the fill
+    completes unless a test gives it."""
 
     def __init__(self, secret: bytes, server: bytes, session: bytes, params: WipeParams, signer: Signer, *,
                  log: SessionLog, clock: Callable[[], int] = time.perf_counter_ns, resolution_ns: int | None = None,
@@ -475,7 +475,7 @@ def challenges_for(n: int, slack_labels: int, log2_delta: float) -> int:
 
 __all__ = ["COIN_DOMAIN", "COMPLETE", "DEPLOYED_FILL_BYTES", "DEPLOYED_K", "DEPLOYED_LABELS", "EGRESS_MAX_UNITS",
            "EGRESS_UNIT_BITS", "KEY_DOMAIN", "LABEL_BITS", "LABEL_BYTES", "LABEL_TAG", "LATE", "PROTOCOL",
-           "RECORDS_TREE", "RECORD_SCHEMA", "SESSION_TAG", "WRONG", "BatchRecord", "Challenger", "Prover",
-           "SignedWipe", "Verdict", "WipeCommitment", "WipeParams", "batch_digest", "challenges_for", "draw_indices",
+           "RECORDS_TREE", "RECORD_SCHEMA", "SESSION_TAG", "WRONG", "BatchRecord", "Prover", "SignedWipe", "Verdict",
+           "WipeCommitment", "WipeMemoryChallenger", "WipeParams", "batch_digest", "challenges_for", "draw_indices",
            "egress_units", "label", "labels", "log2_error", "message", "records_root", "retained_bits", "verdict",
            "wipe_key"]
