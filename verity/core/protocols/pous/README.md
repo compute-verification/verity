@@ -1,23 +1,150 @@
-# POUS (`verity.core.protocols.pous`)
+# PoUS (`verity.core.protocols.pous`)
 
-A spec-level reference for POUS, proof of useful space for model weights, with three codecs behind one API:
+Proof of useful space for model weights. A GPU keeps an encoding `C` of the weights `W` in its memory and decodes `W`
+from it on every use, and a timed audit certifies that it still holds more than a `ρ = 18/19` fraction of `C`: in the
+ideal-permutation model, answering a random block within the deadline takes the block itself, because rebuilding it
+from a smaller state takes more sequential calls than the deadline allows. The definitions, the guarantees and their
+proofs are Lean (`Security/Definitions/Pous/`, `Security/Proofs/Pous/`), and so are the verifiers of record: the setup,
+timed-audit, run and `p2-audit-wire/v4` checks (`check/`, the Lake package `pous_check`, library `PousCheck`) and the
+memory challenger's verdicts (`verity/core/devices/memory_challenger/lean/`). This README is the outline, the signposts
+and the Python API. `DISCREPANCIES.md` lists where the Lean model and this code differ.
 
-- **the band scheme** (`verity.core.protocols.pous.band`, the secure-first default): one layer on the band DAG with in-degree 12, `H`
-  an overwrite chain on a double-width permutation (Lean's `chainBand`). Deploy it only while the effective round
-  budget stays at or below 12 calls (the cliff);
-- **the dense scheme** (`verity.core.protocols.pous.dense`, selectable): the same on the complete DAG (Lean's `chainDense`);
-- **P2** (`verity.core.protocols.pous.schemes.p2`, **experimental**): the squaring-based scheme, proved in abstract M1 under the
-  pinned `P2SlackFamilyUncond` (k = 105), with its instantiation assumption not accepted; never the default.
-  `p2-16448/v4` has the spec's (v4) counter-mode SHA-512 keys, `p2-16448/v2` ChaCha8 keys, which the spec does not allow;
-- **P3** (`verity.core.protocols.pous.scheme`, the fast research codec): two layers over the band graph `B(220, 12)` with a transpose
-  connector and a tweakable `P` (Lean's `p3Scheme`).
+The Python here is the reference and the oracle for GPU kernels: pure Python, stdlib plus `verity`, and slow by design
+(a 32 MiB band segment decodes in about 25 s on one core, a dense one in about 8 minutes, and a 14.4 MB P3 segment in
+about 21 s).
 
-It matches the Lean models' definitions and is the oracle for GPU kernels. Pure Python, stdlib plus `verity`. It is
-slow by design: a 32 MiB band segment decodes in about 25 s on one core, a dense one in about 8 minutes, and a
-14.4 MB P3 segment in about 21 s.
+**The main caveat: no result gives security at a concrete hash.** Every guarantee of a chain codec (band, dense, P3)
+holds in the ideal-permutation model, and the reference Feistel-SHAKE256 `Π₂` breaks it: a prover that keeps five
+post-absorb states of each block's pad call (1.53% of `C`) rebuilds any block in 481 sequential Keccak-f, inside every
+deployed deadline. So the `feistel-indifferentiability` claim is refuted, and every conversion of a wall-clock deadline
+into a count of `Π₂` calls (`call_ns`, the effective `D`, the cliff, the duration cap) holds in that model only. A result
+over a monolithic random-oracle `H` holds only in its model too: with SHAKE's narrow state, dense regenerates from about
+20% of `C` and P3 from about 39%, and indifferentiability does not carry over to storage games. The streamed wipe needs
+no permutation, and P2 rests on its own assumptions.
 
-`PROTOCOL.md` describes the lifecycle, the API and the byte formats. `DISCREPANCIES.md` lists where the Lean model,
-the prose spec and this code differ.
+## The protocol, in outline
+
+- **The game.** A trusted encoder `Enc(W) → (pp, C, vk)` runs once; `W` is arbitrary and fixed before any setup coin,
+  `Dec(pp, C) = W` is public and bit-exact, `|C| + |pp| ≤ 1.05·|W|` and `λ = 128`. The adversary preprocesses with no
+  time limit, keeps at most `⌊ρ·|C|⌋` bits, and answers `k` uniform challenges, each a `(D, Q)`-bounded program within
+  the deadline; it must pass with probability at most `δ + ε`, `δ = 1%` and `ε ≤ 2^-128`. That is
+  `Meets sch reveal D Q k ε` (`Security/Definitions/Pous/Accounting/Params.lean`) over the audit game `AuditSecure`, and
+  `k = 86` is the floor `ρ^k ≤ δ` (`KFloor`). The cost of encoded matmuls and of decoding on every use is not modeled.
+- **Help is accounted, not excluded.** No guarantee assumes trusted prover hardware, so nothing attests the prover's
+  machine. The game's "no outside help" is read through the help-accounted row of console's actual-circuit model, cited
+  under the id `perfect-isolation` (kept because certificates pin it): on PoUS's challenge schedule, some challenge tick
+  `t_j` has `mem_X(t_j) + 2^e·h ≥ S` for the audited location `X` and the help `h` it received. An accepted audit bounds
+  what `X` held plus what it was helped, never `X`'s memory alone.
+- **Parties.** The server, the prover, commits to `W`, encodes `C*`, serves from it and answers. The verifier draws the
+  salt after the commitment and builds `vk`. The memory challenger runs the timed rounds: the auditor's device on a
+  machine the prover doesn't control at the prover's site, never a process on the prover's node (`trusted-host`). It
+  commits its indices in a coin tree it keeps on the device, hashes each whole answer after reading its receipt time,
+  signs the session's records once, and only then releases the coin tree's root and openings. For the wipe, a network
+  certifier counts the egress.
+- **Lifecycle.** The server commits to `W` (`setup.commit`, tagged SHA-512 under `verity-pous/w-commitment/v2`). The
+  verifier draws the 24-byte salt (`setup.draw_salt`, through `verity.ml.randomness`; a server-chosen or predictable
+  salt would break "`W` before coins"). The server encodes `C*` segment by segment, and the verifier builds `vk` by
+  decoding `C*` and checking it against the commitment (the public encoder, the default: 6,578 `Π₂` calls, 13 deep, per
+  band segment), or by encoding `W` itself. Serving decodes tensors (`layout.decode_tensor`). The audit reveals `k`
+  indices one at a time from the memory challenger's own secret, never a public beacon, and accepts only if every block
+  matches `vk` within `Δ = 0.5 ms` plus the RTT allowance.
+- **What is public.** The verdict; the salted roots of `W` and of `C`; the salt; the setup draw and its profile; the
+  memory challenger's session commitment (its coin tree's root and key) and its openings, released once the session is
+  signed. The per-round records are witness, in the memory challenger's signed session, so a server can't steer what
+  the auditor sees round by round.
+- **Segment tags are injective.** Segment `s` is keyed by `tag_s = salt ‖ u64 s`. With a shared domain one stored
+  segment answers for every identical one and the audit accepts with probability 1 (`shared_domain_breaks`), so every
+  certificate takes `segDom_inj`, `tests/test_pous_protocol.py` checks it for every scheme, and `benchmarks/pous` gates
+  every implementation's tags over 448 segments.
+
+## Schemes
+
+| Scheme (`schemes.get`) | Module | Lean model | Certificate |
+|---|---|---|---|
+| `band-chain/d12/v1`, the default | `band` | `Pous.BandChain.chainBand` | `BandMultiMeetsFamily`: `k = 111`, `D = 5`, any segment count to `2^64` |
+| `dense-chain/v1` | `dense` | `Pous.Sponge.chainDense` | `ChainDenseMeets64`, one segment |
+| `p3/v1`, research | `scheme`, `params` | `p3SchemeC` (`Model/P3Chain.lean`) | none |
+| `p2-16448/v4`, `p2-16448/v2`, experimental | `schemes.p2` | `Guarantees/P2.lean` | `P2SlackFamilyUncond`, `k = 105` |
+
+- **The band**, the secure-first scheme, has 512 blocks of 64 KiB a segment. Block `v` absorbs its `d = 12` newest
+  parents, newest first, and then the pad through the overwrite chain over `Π₂` (`2m + 512` bits), and costs
+  `min(v, d) + 1` calls: 6,578 a segment. A 64 KiB `Π₂` call is 4,830 sequential Keccak-f, 241.5 µs at 50 ns
+  (`call_ns`), so `D = 5` covers `Δ + RTT < 1.449` ms. **The cliff:** the effective `D` must not exceed `d`, or the gap
+  attack (`band_gap_attack`) holds every block but each `(d + 1)`-th and passes with probability 1, so
+  `band.check_deployment` refuses a deadline past `13 × 241.5 µs ≈ 3.14` ms at `d = 12`. At fewer rounds the band has
+  `BandMultiMeetsFamilyD2` (`k = 97`), `D1` (`k = 93`) and `D0` (`k = 89`).
+- **Dense** is the band with every earlier block a parent, 131,328 calls a segment; over a random-oracle `H` it has
+  `DenseMeets64`, `SegMeets14` and `SegTagMeets14` (`k = 106`).
+- **P3** has no certificate: `P3ConcreteMeets64`, `P3ConcreteMeets14GB` and `P3ConcreteMeets64D12` are proved for Lean's
+  chain start `iv(domP3 tag L v)`, and the code's `h_0` is the instantiation's 48-byte header (`DISCREPANCIES.md` P3
+  item 16).
+- **P2** is the squaring-based scheme, proved in abstract M1 with its instantiation assumption not accepted: "P2" below.
+  `p2-16448/v4` has counter-mode SHA-512 keys, `p2-16448/v2` ChaCha8 keys, which v4 does not allow.
+
+A scheme implements `encode_segment` and `decode_segment`. Its `protocol.Certificate` is the `Meets` it rests on (`k`,
+`rounds`, `work`, `call_ns`, `rho`, `delta`, `eps_log2`, `cliff`, `segments`, the `theorem` `Pous.SecurityProofs.X`
+with its open `hypotheses`, and `claims`). `protocol.TimedAudit` refuses a `k` below it, a deadline whose effective `D`
+exceeds its `rounds`, and a scheme with no certificate; `research=True` runs a refused audit anyway, short of the cliff,
+recording the refusals as the `StorageProfile`'s gaps. An experimental scheme is audited only with `experimental=True`
+and is never the default.
+
+## Where each part is defined
+
+Lean is the verifier of record, and the Python is the reference, held to it by the difftests in `check/tests/` and
+`verity/core/devices/memory_challenger/lean/tests/`. The model paths are under `Security/Definitions/Pous/`.
+
+| Part | Lean | Python |
+|---|---|---|
+| The game, `Meets`, `ρ`, `δ` | `Game/`, `Model/Audit.lean`, `Accounting/Params.lean` | `protocol.Certificate` |
+| The band, dense and P3 blocks | `Model/BandChain.lean`, `Model/Dense.lean`, `Model/P3Chain.lean` | `band`, `dense`, `scheme`, `primitives` |
+| The public-encoder setup | `Model/PubEncoder.lean`; `PousCheck.Setup`, `SetupProtocol` (`pous-setup`) | `setup`, `protocol.verifier_key` |
+| The timed audit's verdict and the certificate gate | `PousCheck.TimedAudit` (`pous-timed-audit`), `PousCheck.Certificate` | `audit.UnsignedRounds`, `protocol.TimedAudit` |
+| The graded audit and its duration cap | `Model/Graded.lean`, `Accounting/GradedMeets.lean`, `Accounting/Rebuild.lean` | `audit.AUDIT_CAP` |
+| The continuous audit | `Model/Continuous.lean` (`contAccepts`) | `continuous` |
+| The memory challenger's session and verdict | `MemoryChallenger.Verdict`, `MemoryChallenger.Records` | `memory_challenger` |
+| The verdict's proof block `PousVerdict_v1{K, M, LIMIT}` | `PousCheck.Verdict` (`verdictProg`'s gates) | `verdict_circuit` |
+| A recorded run, composed | `PousCheck.Run` (`pous-run`), `PousCheck.RunProtocol` | `run.check` |
+| P2's parameters, maps and keys | `PousCheck.Params`, `P2`, `Keys`, `Wire.Codec` | `schemes.p2`, `benchmarks/pous/p2_v1/reference.py` |
+| The `W` commitment and the verification tree | `PousCheck.Commit`, `Merkle` | `setup.commit`, `verifier` |
+| `verity.ml.randomness` v2 and P2's challenges | `PousCheck.Randomness`, `Challenge` | `verity.ml.randomness`, `reference.audit_key` |
+| `p2-audit-wire/v4` and its verifier | `PousCheck.Wire`, `Audit` | `benchmarks/pous/p2_v1/wire.py` |
+| The streamed-label wipe | `Model/StreamedWipe.lean`; `MemoryChallenger.StreamedWipe` (`streamed-wipe-verdict`) | `streamed_wipe` |
+| The period's wipe, `verity/wipe/v0` | `MemoryChallenger.WipeProtocol` (`wipe-protocol`) | `wipe_period`, `wipe_party` |
+
+## Guarantees
+
+The statements are in `Security/Definitions/Pous/Guarantees.lean` and its `Guarantees/` modules, each docstring ending
+with its category, and each proved one is `Pous.SecurityProofs.X` in `Security/Proofs/Pous.lean`. The lemmas (`KFloor`,
+the pebbling and sampled-audit results) have the same names in `Security/Proofs/Pous/Statements.lean`, the properties of
+the Lean code are in `Security/Properties/Pous/`, and `lean/README.md` lists every module. The ones a deployment reads:
+
+- **The band**: the family rows above, with no hypothesis, in the ideal-permutation model; `BandChainMeets64` (one
+  segment) and `BandMultiMeets14` (448 segments) are instances. With an untrusted server's encoding and the exact setup
+  check, `BandPubMeetsFamily`, `BandPubMeetsFamilyD2` and `BandPubMeetsFamilyD1`, through `chainBand_encDec` and
+  `pubMeets_exact`.
+- **The graded audit** (`BandGradedMeetsFamily`): up to `t` late answers at `(t, k) = (0, 111), (1, 160), (2, 203),
+  (3, 243)`, each late round within `(D_late, Q_late)`, `5 ≤ D_late ≤ d` and `D_late ≤ 12`. Its game assumes no
+  pipelining, a hard deadline and every answer past `Δ` counted late, and `BackgroundRebuildExcluded` needs the memory
+  challenger to abort an audit lasting more than `1,505 · call_ns` (≈ 363.5 ms, `audit.AUDIT_CAP`).
+- **The continuous audit** (`ContinuousAudit`): `n` challenges over time, accepted with at most `f₀` misses.
+  `continuous.ContinuousMemoryChallenger` enforces the model's three requirements (no pipelining, a hard deadline,
+  every late answer counted), which `Security/Proofs/Pous/Continuous/Verifier.lean` proves of it; a bare
+  `UnsignedRounds` with a late deadline credits an answer still in flight to the next challenge, and is not that
+  challenger.
+- **The streamed-label wipe** (`StreamedWipe`, with no named assumption): what an accepted sequential wipe leaves of the
+  prior content. `StreamedWipeMeets2600GB`, `StreamedWipeMeetsFamily` (with `StreamedWipeMeets96GiB` and
+  `StreamedWipeMeets141GB`), `StreamedWipeMeetsReads` (`verity/wipe/v0`'s figure) and `StreamedWipeMeets141GB5`; per
+  server against its assumed capacity over every tier, `StreamedWipeMeetsReadsTight`, `StreamedWipeMeetsServer`,
+  `StreamedWipeMeetsServer5GB` and `StreamedWipeMeetsServer8H200` (the streamed-wipe paragraph below has their figures).
+  Its physical premises are the game's shape: no unaccounted tier, the egress certified over the whole wipe, and no side
+  channel.
+- **P2**: "P2" below. End to end (`Security/Properties/Pous/EndToEnd.lean`), `RunCheckAccepts` and `RunCertifies` are
+  about the deployed code, with no assumption: when the composed check accepts, every one of the 105 recorded answers
+  was the challenged block of `C*`, on time on the device's clock, or the run holds a SHA-512 collision or an LMS
+  forgery. `EndToEndRing` bounds a `⌊ρ·|C|⌋`-bit server at `1% + 2^-128` in the ring model.
+- **Named assumptions**: `LemmaA` and `B1Prime` (`Assumptions.lean`); P2's in `Assumptions/P2.lean`.
+
+## Using it
 
 ~~~python
 from verity.core.protocols.pous import audit, band, codec, setup
@@ -105,8 +232,8 @@ fill of a 32 MiB segment or more, the egress plus `⌈M/19⌉` bits at `2^-128` 
 place of `n`, per server against its assumed memory capacity `M_s` over every tier (`StreamedWipeMeetsReadsTight`,
 `StreamedWipeMeetsServer`), and at 5 GB a server (`StreamedWipeMeetsServer5GB`): one H200 as measured at its deployed `k = 5500`, and a whole
 8×H200 server, HBM, 2 TB of RAM and 12 TB of disk, at `k = 1,268,143` with 3.9 GB outside the fill
-(`StreamedWipeMeetsServer8H200`). `PROTOCOL.md` ("The
-streamed-label wipe") has the messages, the bound, the measured fill and round trips, and the holes. The verdict is decided by its Lean port, `MemoryChallenger.StreamedWipe`
+(`StreamedWipeMeetsServer8H200`). The model and its bound are `Security/Definitions/Pous/Model/StreamedWipe.lean` and
+`Guarantees/StreamedWipe.lean`. The verdict is decided by its Lean port, `MemoryChallenger.StreamedWipe`
 (`streamed-wipe-verdict` in `verity/core/devices/memory_challenger/lean/`), through `wipe_verdict.judge` there;
 `streamed_wipe.verdict` is the reference it is difftested against, and runs beside it under `both`.
 
@@ -163,3 +290,130 @@ rest counts in `R`.
 Tests: `uv run pytest verity/core/protocols/pous` (about 8 s). P3's 64 KB-label segment vector runs with `VERITY_POUS_SLOW=1`.
 Regenerate the vectors with `python verity/core/protocols/pous/tests/pous_vectors.py`, and the Lean vectors with
 `tests/lean/generate.sh`.
+
+## Modules
+
+| Module | What it holds |
+|---|---|
+| `params` | `Params(n, wc, k, segments)`, `OPERATING_POINT`, `LEAN_P3_MEETS` |
+| `labels` | the bit layout: Lean's `codeEquiv` (bit `j` of block `i` at `i · width + j`), little-endian bytes; `transpose`; `tag` |
+| `oracle` | queries (`HQuery`, `PQuery`/`PinvQuery` with a `Tweak`, `PiQuery`/`PiInvQuery`), programs (`Prog`), `run` with Lean's depth/work/width, `parallel` |
+| `primitives` | `KeyDerivation` and `TweakablePermutation` interfaces; `OverwriteChain` (the default `H`), `RandomOracleKey`, and the broken `XorSponge` and `MiyaguchiPreneel`; the backends `reference`, `heuristic_arx`, `ideal` |
+| `codec` | `Codec(name, encode_segment, decode_segment)`, the seam every module above the scheme uses; `Geometry`, the sizes they read; `split`, `encode_segments` |
+| `band` | `BandParams(blocks_per_segment, m, d, segments)`, `SECURE_FIRST`; `codec_for(d)`, `BAND12`; `reference`, `ideal`; `effective_rounds`, `check_deployment` (the cliff) |
+| `dense` | `DenseParams(blocks_per_segment, m, segments)`, `POINT_64K`; `encode_segment` and `decode_segment` on bytes (reading each row's parents from the parameters, so the band shares them); `DENSE`, the two as a codec; `DenseChain` (the chain `H` of both), `reference`, `ideal`; the `*_prog` oracle programs |
+| `scheme` | P3's `encode_segment(params, prims, salt, s, w_seg) -> blocks` and `decode_segment(params, prims, salt, s, blocks) -> w_seg` on bytes; `P3`, the two as a codec; `encode` and `decode` over all of `W`, segment by segment; the `*_prog` oracle programs |
+| `layout` | `Layout.of(params, [(name, size)], align)`, `Layout.of_ranges(params, [(name, offset, size)])`, `pack`, `decode_tensor(..., codec=params.codec)` |
+| `setup` | `commit` (streamed over segments), `draw_salt`; `verifier_setup(params, prims, commitment, salt, encoded=C*, w=None, public_encoder=PUBLIC_ENCODER)`, which picks `verifier_key_from_encoding(params, prims, commitment, salt, C*, codec=params.codec)` (public encoder, the default) or `verifier_key(params, prims, W or its segments, commitment, salt, encoded=None, codec=params.codec)` (the verifier encodes); `server_root`, `check_server_root` |
+| `verifier` | `VerifierKey` (`root` and leaf digests; `build`, `from_leaves`, `from_segments`, `from_row_digests`), `leaf_hash` (whole or chunked blocks), `row_leaf` (from a block's row digest), `segment_leaves`, `MerkleTree` (audit paths), `verify_path` |
+| `audit` | `challenge_key`, `HonestResponder`, `UnsignedRounds` and `run_timed` (wall clock; `respond` may return `(block, report)`, kept in `Answer.report`), `simulate` (oracle rounds); `k` and the adversary's call time default to the parameters' own (band and dense: 111 and 241.5 µs); `UnsignedRounds` refuses a band deadline past the cliff |
+| `memory_challenger` | the memory challenger, which signs its rounds and on the deployed path replaces `audit.UnsignedRounds`: `CoinTree` (its `k` indices from its own secret, committed on the device before the session and released after it; `CoinOpening`, `verify_coin`), `MemoryChallenger(coins, signer, log=, limit_ns=, block_bytes=, binding=)` with its `SessionCommitment` (`commitment`, released once the session is signed; `binding` the setup's 64-byte root of `C*`, required; `session` the auditor's id for the audit, which `log`, a `SessionLog`, records as used before the first challenge and refuses again), `challenge()`, `receive(block)` (one `Round` each: index, send and receipt times, `H(block)`; the first late round ends the session), `close()` (one signature, `SignedSession`) and `openings()`; `LmsSigner`, `register`; `verdict` (what the prover will prove of a signed session, checked in the clear; its public output is `Verdict.public`); `covering_certificate` |
+| `streamed_wipe` | the streamed-label wipe (experimental): `wipe_key`, `label`, `labels`, `draw_indices`; `WipeParams(labels, k, batch, limit_ns, tiers)` (`covered`: batch 1, the only size `verdict` accepts), `WipeCommitment`; `Challenger(secret, server, session, params, signer, log=)` with `fill(chunk)`, `challenge()`, `receive(answers)`, `run`, `close(egress_bits)` (one signature, `SignedWipe`) and `coins()`; `Prover`, the honest server; `verdict` (its public output `Verdict.public`: the verdict and `egress_mib`), the reference of the Lean verdict that decides it (`MemoryChallenger.StreamedWipe`, `wipe_verdict.judge`), with `to_json` on the records it reads; the bound, `log2_error`, `retained_bits`, `challenges_for` |
+| `run` | the composed check of a recorded run: `check(trusted, setup, digests, session, session_id)` over the verifier's list of memory-challenger keys (never the run's record), the setup's public outputs (`Setup`), the memory challenger's table of `C*`'s row digests, one `Session` (signed session, commitment, openings) and the id the auditor designated for the session, at P2's deployed point (`DEPLOYED`) under `memory_challenger.SCHEMES`, raising `Refused` with the first reason; `check_at` at another `Point`; `PousCheck.Run.check` (`pous-run`) in Lean |
+| `adversary` | holdings (Lean `ColState`), `schedule`, `answer_prog`, strategies, `measure`; `col_round` is Lean's `colRound` |
+| `protocol` | the generic protocol: `Scheme` (abstract), `Certificate`, `TimedAudit` (refuses what none of its certificates covers), `StorageProfile`, `PRIVATE`/`PUBLIC`, `verifier_key`, `commit`, `draw_salt`, `encode`, `decode`, `decode_tensor`, `challenge_key`, `responder`, `claim`, `LOCAL_CLAIMS` |
+| `schemes` | `band.Band`, `dense.Dense`, `p3.P3`, `p2.P2` (experimental; one module each) as `protocol.Scheme`s with their certificates; `REGISTRY`, `DEFAULT` (`band-chain/d12/v1`), `get(name, segments, params)` |
+
+**Large `W`.** Nothing above the codec holds `W` as one integer: encode each segment with `scheme.encode_segment` (the
+segments are independent, so a process pool works), feed the results to `VerifierKey.from_segments`, or pass them to
+`setup.verifier_key(..., encoded=...)` with `W` as its segments for the commitment check.
+
+**Codecs.** Setup, the layout, `vk` and the audits take `codec=` (default: the parameters' own) and read only the
+geometry: `blocks_per_segment`, `m`, `block_bytes`, `segment_bytes`, `segments`, `blocks`, `w_bytes`, `codec`,
+`with_segments` and `manifest`. Both `dense.DenseParams` and `params.Params` provide it.
+
+## Stable byte formats
+
+These names and values are the wire format a second implementation (the GPU codec) must match. They change only with a
+version bump in the strings they carry.
+
+| Name | Value |
+|---|---|
+| `params.SALT_BITS`, `params.TAG_BITS` | 192, 256: `tag_s = salt ‖ u64(s)` |
+| `primitives.CAPACITY_BITS` | 512: `Π₂` is `2m + 512` bits |
+| `primitives.HEADER` | `b"pous-p3-v1-H"`, the first 12 bytes of `h_0` |
+| `primitives.PI_DOMAIN`, `primitives.P_DOMAIN` | `0x48` (`Π₂`), `0x50` (`P_T`): the first byte of every round-function input |
+| `primitives.EM_KEY_DOMAIN` | `0x4B`: the heuristic ARX `P_T`'s key |
+| `verifier.leaf_hash`, `verifier.node_hash` | prefixes `0x00`, `0x01` |
+| `setup.COMMIT_TAG`, `setup.SALT_DOMAIN` | `"verity-pous/w-commitment/v2"`, `"verity/pous/salt/v1"` |
+| `audit.CHALLENGE_DOMAIN` | `"verity/pous/audit-challenge/v1"` |
+
+The reference backend's `Π₂` is a 10-round Feistel network on `2m + 64` bytes with round functions
+`SHAKE256(0x48 ‖ u8(i) ‖ x)[0 : m + 32]`, and `P_T` one on `m` bytes with `SHAKE256(0x50 ‖ u8(i) ‖ T ‖ x)`,
+`T = tag_s ‖ u8(layer) ‖ u16(v)`. `H` is the overwrite chain over `Π₂`: `h_0` is the 48-byte header (`HEADER`, `tag_s`,
+layer, `v`, the number of parents) zero-filled to `m + 64` bytes; each parent, newest first, and then the pad
+(`0x01 … 0x80`) goes through `(r, h) ← Π₂(B ‖ h)`, dropping the first `m` bytes `r` and chaining the last `m + 64` bytes
+`h`; the key is the pad call's `r`, and a block is its key XOR the payload. `vk` is a SHA-512 Merkle tree over the
+blocks with the shape of RFC 6962: a leaf is `SHA512(0x00 ‖ tag_s ‖ u16(v) ‖ R(c))`, 99 bytes, where
+`R(c) = SHA512(P(8|c|) ‖ c)` is the block's `sha512/row/v2` digest (the digest `answer_circuit`'s `PousRowDigest`
+checks), `tag_s` 32 bytes and `v` 2, little-endian; a node is `SHA512(0x01 ‖ l ‖ r)`. This follows the instantiation's
+byte format rather than `verity.ml.commitments`' frame v3. The known-answer vectors are `tests/fixtures/vectors.json` and
+`tests/fixtures/lean_vectors.json`.
+
+## P2
+
+P2 v4 (`p2/v4`, `schemes/p2.py`) encodes payload `m` into block `j` as `E_j(m) = ρ(σ_K(ρ((m + t_j) mod p)))` and decodes
+it as `D_j(c) = (d(σ_K(d(c))) − t_j) mod p`: `d(z)` is `z² mod p`, negated when `z` is odd, `ρ` its inverse (one root,
+its parity chosen), and `σ_K(r)` is `r ⊕ K` when that is below `p` and `r` otherwise, never reduced. Its point is
+`w = 16,448` bits, `p = 2^16448 − 21065` (`p2-p16448-c21065`, `p ≡ 3 mod 4`), the payload profile `p2-2054B` (2,054
+payload bytes in each 2,056-byte block), `B = 2^19` blocks in 8 segments of `2^16`, `k = 105` challenges revealed one at
+a time, `Δ = 0.5 ms` plus a measured RTT allowance of at most 354 µs, and SHA-512 with its whole output for every digest.
+Every integer is fixed-width, unsigned and big-endian. A block's `K` and `t` are expanded where they are used:
+counter-mode SHA-512 over a prefix that frames the setup salt, drawn after `W` is committed, zero-padded to whole 128-byte
+chunks; `K` is the stream's first `w/8` bytes and `t` its first `w/8`-byte word below `p`. The challenges are
+`verity.ml.randomness` v2, bound to the epoch, the verification root and the salt. P2 is experimental: its
+instantiation assumption, P2–M1-SGI (`P2RingReducesToM1p`), is not accepted.
+
+- **Lean.** The package `pous_check` (`check/`) is P2's verifier: `PousCheck.P2`, `Keys` and `Wire.Codec` (the maps and
+  keys), `Commit`, `Merkle` and `Challenge` (the commitment to `W`, the verification tree in both leaf forms, the
+  challenges), `Wire.verifyAudit` and `Audit.check` (a setup and one timed audit, to its `FINAL` frame byte for byte),
+  `Certificate.gate` and `assess` (the certificate gate, `deadlineRefusals` and the StorageProfile), and
+  `RunProtocol.check` (a recorded run, whole). Its executables are `pous-setup`, `pous-timed-audit`, `pous-run` and
+  `pous-run-protocol`, and the difftests `pous-setup-difftest`, `pous-audit-difftest` and `pous-verdict-difftest`;
+  `check/interop.py --all` holds it to `wire.py` byte for byte on every vector.
+- **Guarantees** (`Security/Definitions/Pous/Guarantees/P2.lean`): `P2SlackFamilyUncond` (abstract M1 on `[0, p)`, the
+  `λ = 128` row at `k = 105` for every block count from `2^8` to `2^23`: the certificate), `P2SlackB19Uncond`,
+  `P2ErrorSplitB19Uncond`, `P2MeetsM1pB19Uncond`, `P2MeetsM1pFamilyUncond`, `P2MeetsM1pW8192Uncond`,
+  `P2SlackFamilyFreeBlocks`, `P2SlackFamilyWide`, `P2SlackFamilyFreeBlocksWide`, and the ring-model forms
+  `P2RingAuditSecureOfReduces`, `P2RingAuditSecureOfRoundSecure` and `P2RingGradedOfRoundSecure`; `P2ContentAbsorbs`
+  (`Guarantees/Obligation.lean`); above `2^23` blocks, `Pous.Period.SecurityProofs.periodHeldAt`. The named
+  assumptions (`Assumptions/P2.lean`): `PrimeP16448`, `P2RingAuditSecure`, `P2RingReducesToM1p`, `P2RingRoundSecure`,
+  and `P2RingRoundSecureWide`. `schemes.p2.P2_CLAIMS` and `WIDE_CLAIMS` are the claims a certificate
+  rests on.
+- **Python.** `schemes.p2`: `P2Params`, the schemes `P2` (`p2-16448/v4`) and `P2ChaCha` (`p2-16448/v2`),
+  `family_certificate`, `wide_certificate`, `expand_prefix`, `stream`, `below`, `sha512_keys`, `encode_segment`,
+  `decode_segment`, and `CERT_K`, `DELTA_NS`, `RTT_ALLOWANCE_CAP_NS` and `ROOT_CALL_NS` (half the fastest cooperating
+  16,448-bit root; the cap is the largest whole µs with `Δ + cap < ROOT_CALL_NS`). `benchmarks/pous/p2_v1/reference.py`
+  is the reference (the maps, keys, salt, tree and derivations), and `wire.py` beside it is `p2-audit-wire/v4`
+  (`envelope`, `setup_messages`, `open_message`, `challenge_message`, `response_message`, `record`, `final_message`,
+  `verify_path`, `parse_envelope`, `verify_audit`, `parse_final`).
+- **The registered scheme and the wire.** `p2-16448/v4` runs the generic protocol's setup, so four things differ from
+  `reference.py` and the wire: its setup salt (24 bytes from `setup.draw_salt`, not 32 from `verity/pous/p2-setup/v4`
+  over the commitment), its key prefix (it frames that salt), its leaf (`0x00 ‖ tag_s ‖ u16le(v) ‖ R`, not
+  `0x00 ‖ salt ‖ u64be(s) ‖ u16be(v) ‖ R`) and its challenges (`verity/pous/audit-challenge/v1`, not
+  `verity/pous/p2-audit-challenge/v4`). `PousCheck.Keys` and `Merkle` hold both forms.
+
+`p2-audit-wire/v4`: a frame is `"P2AU" ‖ 0x04 ‖ type ‖ u32be(len body) ‖ body`. Digests are 64 bytes; the setup salt,
+the audit id and the round nonce are 32; `n = w/8`, and `h` is the block's RFC 9162 path length.
+
+| Type | Code | Body |
+|---|---|---|
+| `SETUP_COMMIT` | `0x01` | `u32be(ml) ‖ manifest[ml ≤ 512] ‖ w_commitment` |
+| `SETUP_SALT` | `0x02` | `w_commitment ‖ setup_salt` (96) |
+| `SETUP_BLOCK` | `0x03` | `w_commitment ‖ setup_salt ‖ u64be(index) ‖ u32be(n) ‖ block[n]` |
+| `SETUP_ROOT` | `0x04` | `w_commitment ‖ setup_salt ‖ u64be(B) ‖ root ‖ setup_mode` (169) |
+| `AUDIT_OPEN` | `0x10` | `epoch_id ‖ audit_id ‖ mode ‖ u16be(k) ‖ u64be(Δ) ‖ u64be(rtt) ‖ flags ‖ u64be(counter)` (124) |
+| `CHALLENGE` | `0x11` | `epoch_id ‖ audit_id ‖ u16be(round) ‖ u64be(index) ‖ nonce` (138) |
+| `RESPONSE` | `0x12` | `epoch_id ‖ audit_id ‖ u16be(round) ‖ u64be(index) ‖ u32be(n) ‖ block[n] ‖ u16be(h) ‖ siblings[64·h]` |
+| `FINAL` | `0x13` | `epoch_id ‖ audit_id ‖ verdict ‖ code ‖ u16be(rounds) ‖ u64be(Δ) ‖ u64be(rtt) ‖ transcript_hash ‖ u16be(r) ‖ records[147·r]` |
+
+A record is `u16be(round) ‖ u64be(index) ‖ u64be(elapsed_ns) ‖ flags ‖ SHA-512(challenge frame) ‖ SHA-512(response
+frame)`, its flags bit 0 authenticated, bit 1 on time, bit 2 decode performed and bit 3 decode valid. The failure codes,
+in the order one is chosen when several apply: 1 malformed, 2 identity, round, index, replay or domain, 3
+authentication, 4 late, 5 decode or payload comparison; 6 is transport and 0 success. The transcript hash is
+`SHA-512("verity/pous/p2/transcript/v4\0" ‖ AUDIT_OPEN ‖ every challenge and response frame)`.
+
+The vectors are `vectors.json` (schema `p2-test-vectors/v4`), `audit-vectors.json` and `audit-negative-vectors.json`
+beside `reference.py`, which pins each file's SHA-512 (`VECTORS_SHA512`, `AUDIT_VECTORS_SHA512`,
+`NEGATIVE_VECTORS_SHA512`) and each entry's by width (`ENTRY_SHA512`, which `PousCheck.SetupDifftest` holds too).
+`cd benchmarks/pous && uv run python -m p2_v1.vectors` regenerates them and rewrites their pins.

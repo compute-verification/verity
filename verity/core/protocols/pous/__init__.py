@@ -9,5 +9,5 @@ Merkle root), `audit` (the challenge key, responders and the unsigned timed roun
 replayed against the real labels).  `protocol` is the generic protocol over any scheme (abstract `Scheme`,
 `Certificate`, `TimedAudit`, `StorageProfile`), and `schemes` the registered schemes behind it (the band first).
 `memory_challenger` is the memory challenger, which signs its rounds (`MemoryChallenger`).
-`PROTOCOL.md` says what is here, and `DISCREPANCIES.md` where the Lean model and the prose spec differ.
+`README.md` says what is here, and `DISCREPANCIES.md` where the Lean model and this code differ.
 """

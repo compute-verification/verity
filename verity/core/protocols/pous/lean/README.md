@@ -2,7 +2,7 @@
 
 This package (`pous_grader`) is code: the grader, its driver `grade.sh`, the trusted-file hashes and the submissions. It
 imports only Lean. PoUS's definitions, guarantees and proofs for the timed POUS audit game, whose responder gets no
-outside help (a deployment accounts for help: `../PROTOCOL.md`, "The problem"), are part of the security analysis,
+outside help (a deployment accounts for help: `../README.md`, "The protocol, in outline"), are part of the security analysis,
 `Security/`, listed below by their paths there. Declarations kept their names
 (`python3 tools/move/lean.py --resolve MODULE` maps a module's old name). Conventions follow the other Lean packages:
 the same toolchain and Mathlib pin, `autoImplicit` off, no `axiom` (an assumption is a named `Prop` hypothesis), and a

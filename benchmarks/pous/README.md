@@ -53,7 +53,7 @@ Implementations:
   - the `Π₂` step floor, the fastest honest kernel for a whole call, with the SM clock sampled while it runs, the floor
     scaled to the maximum clock and a +15% overclock, and one Keccak-f latency beside it, against the certificate's
     `call_ns`: 241.5 µs, the 4,830 sequential Keccak-f of a 64 KiB call in a chain at 50 ns each (the rounds' absorbs
-    stream behind the squeezes; `verity/core/protocols/pous/PROTOCOL.md`), so in the ideal-permutation model `D = 5` covers
+    stream behind the squeezes; `verity/core/protocols/pous/README.md`), so in the ideal-permutation model `D = 5` covers
     `Δ + RTT < 1.449` ms and the band's cliff at `d = 12` is about 3.14 ms. It is not an upper bound on an attacker's
     floor, and neither are the margins derived from it: at the reference Feistel-SHAKE256 `Π₂` an attacker completes no
     call and rebuilds a label from 1.53% of `C` in one round's squeeze, 481 Keccak-f, about a tenth of a call (red team).
@@ -62,10 +62,10 @@ Implementations:
   - what re-derives every number: every rep, each audit's challenge source and each answer's time, the clocks, torch,
     CUDA and nvcc versions (`pod.sh` pins torch and records the CPU topology, the NVMe mount and the installed packages).
 
-- `p2-v1-gpu`: P2 v4, the specification (`verity/core/protocols/pous/p2/PROTOCOL.md`), in `p2_v1/`, with
+- `p2-v1-gpu`: P2 v4 (`verity/core/protocols/pous/README.md`, "P2"), in `p2_v1/`, with
   the same steps, controls and metrics as `band-gpu` so the two compare side by side (`side_by_side.py`):
   - `reference.py`: the scheme on the CPU on `verity.ml.randomness` (the counter-mode SHA-512 keys, the maps, the RFC
-    6962 tree over v4 leaves, the mode-0 audit derivation), pinned by `vectors.json` (the file hash in the spec's §7);
+    6962 tree over v4 leaves, the mode-0 audit derivation), pinned by `vectors.json` (`VECTORS_SHA512`);
     `wire.py` is `p2-audit-wire/v4` with its reference verifier, and `vectors.py` regenerates every vector file in one command;
   - `p2v1.cu`: decode with per-block keys on `p2_gpu/p2dec.cu`'s tuned squaring (keys expanded on the device just before
     use), and encode by two roots (an addition chain for `(p + 1)/4` on CGBN's generic squaring, reduced by `2^W ≡ c0`);
@@ -136,7 +136,7 @@ the synthetic loop (decode overhead and bandwidth) and the step floor (P2 v1's S
 audit or control runs, so there is no certificate gate and no storage profile. `bench-result.json` and `result.json`'s
 fingerprint say `timed: false` and `audits: skipped (untimed placement)`, so no audit or latency number is cited from it.
 
-`streamed_wipe/` times the streamed-label wipe (`verity/core/protocols/pous/PROTOCOL.md`, "The streamed-label wipe")
+`streamed_wipe/` times the streamed-label wipe (`verity/core/protocols/pous/streamed_wipe.py`)
 on one node: the labels one GPU derives (`labels.cu`, gated against `streamed_wipe.label`), what reaches pinned host
 memory, the NIC's line rate and RDMA loopback, and 74,000-challenge round trips at batch sizes from 1 to 74,000, plus one
 whole reference session, judged by the Lean verdict (`--verdict lean|both|python`, `wipe_verdict.py`'s `VERDICT` by
