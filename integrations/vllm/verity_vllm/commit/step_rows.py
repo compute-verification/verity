@@ -20,9 +20,10 @@ chunk index ``pos`` (rank = position):
 ``Ks`` is 64 fresh bytes from the OS generator per step, kept by the committer (a replay of the run takes the same keys) and never
 logged; a leaf's salt ``y`` is derived from it by SHA-512 alone, as COMMIT-GPU derives it.  The step's ``N`` leaves are one tree under
 ``CommitmentDomain(binding, -1, RangeIndexedDomain(0, N), "sha512")`` with ``binding = identity_digest_sha512(DOMAIN_TAG, {program,
-ctx, geo, row_bits})`` over the step's vllm-v1 identity digests, so the domain is known when the step's length is (a hit plan's, or
-the step's end); the tree is core's ``tree_levels`` (padded to a power of two with frame pads).  The step root is ``vllm_v1.step_root``
-over the tree root and the run root ``vllm_v1.run_root``, both under SHA-512: 64-byte roots.  An opening carries the row, its salt
+ctx, geo, row_bits})`` over the step's identity digests, so the domain is known when the step's length is (a hit plan's, or
+the step's end); the tree is core's ``tree_levels`` (padded to a power of two with frame pads).  The step root is :func:`step_root`
+over the tree root and the run root :func:`run_root`: 64-byte roots.  Every identity digest a root binds (program, ctx, geo, layout,
+names) is a whole SHA-512 digest, ``ID_BYTES`` = 64 (:func:`program_field` to :func:`names_digest`).  An opening carries the row, its salt
 and the frame path, from which ``h`` is recomputed and opened under the tree root by core's ``verify_opening``.  A range opening of
 leaves ``[lo, hi)`` carries their rows and salts and, per level, the run's boundary siblings (:func:`range_shape`); :func:`fold_range`
 folds them as core's ``verify_multiproof`` folds those leaves' multiproof, which is the path's siblings in order.
@@ -31,13 +32,14 @@ The registered weights are committed the same way (``NativeHostCommitter.registe
 against): registered tensor ``t``'s bytes are its rows (the last zero-padded), salted from ``Ks_t = SHA-512(WEIGHTS_TAG || Kw ||
 u64be t)`` under the registration's fresh key ``Kw``, in a tree under ``CommitmentDomain(binding_t, -1, RangeIndexedDomain(0, N_t),
 "sha512")`` with ``binding_t = identity_digest_sha512(WEIGHTS_TAG, {geo, tensor: t, entry, row_bits})`` over its names entry
-``[name, dtype, shape, bytes]``; the weights root is ``vllm_v1.weights_root`` over the tensor roots under SHA-512 (:func:`weights_root`).
+``[name, dtype, shape, bytes]``; the weights root is :func:`weights_root` over the tensor roots and the names' :func:`names_digest`.
 The tree (:func:`weights_tree`) keeps ``Kw`` beside the roots, so a replay of the registration reproduces them.  ``Kw`` stays in the
 private bundle: a published slim keep carries ``Ks_t`` of the tensors its replay opened instead (`pipeline.cpu_replay.slim_tree`).
 """
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Sequence
 
 from verity.errors import InvalidArtifact
@@ -49,8 +51,9 @@ from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth, tree_le
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest, sha512_row_v2_prefix
 from verity.ml.commitments.scheme import DIGEST_BYTES
 
-__all__ = ["DOMAIN_TAG", "INST", "KEY", "KEY_BYTES", "NAME", "OWNER", "ROOT_BYTES", "ROW_BYTES", "SALT_BYTES", "SCHEMA", "WEIGHTS_TAG", "binding",
-           "domain", "fold_range", "hiding_leaf", "keyed_tensor_root", "leaf", "levels", "path", "range_shape", "row_prefix", "run_root", "salt",
+__all__ = ["DOMAIN_TAG", "ID_BYTES", "INST", "KEY", "KEY_BYTES", "NAME", "OWNER", "ROOT_BYTES", "ROW_BYTES", "SALT_BYTES", "SCHEMA", "WEIGHTS_TAG",
+           "binding", "ctx_digest", "domain", "fold_range", "geo_digest", "hiding_leaf", "keyed_tensor_root", "layout_digest", "leaf", "levels",
+           "names_digest", "offline_geo_digest", "path", "program_field", "range_shape", "row_prefix", "run_program_digest", "run_root", "salt",
            "step_root", "t_nibbles", "t_table", "tensor_hs", "tensor_key", "tensor_root", "weights_domain", "weights_root", "weights_tree"]
 
 NAME = "rows-sha512"
@@ -64,8 +67,8 @@ ROW_BYTES = 4096
 SALT_BYTES = INST.salt_bytes
 KEY_BYTES = 64
 ROOT_BYTES = DIGEST_BYTES["sha512"]
-#: The program, ctx, geo, layout and names digests a root binds (SHA-256 identity digests).
-ID_BYTES = 32
+#: The program, ctx, geo, layout and names digests a root binds (SHA-512 identity digests, whole).
+ID_BYTES = DIGEST_BYTES["sha512"]
 STEP_ROOT_TAG = b"verity/fa2c/root/v0"
 RUN_ROOT_TAG = b"verity/cmt-integ/run-root/v0"
 WEIGHTS_ROOT_TAG = b"verity/cmt-integ/weights-root/v0"
@@ -179,6 +182,48 @@ def _fold_roots(roots: Sequence[bytes]) -> bytes:
     return level[0]
 
 
+def _id(text: bytes) -> bytes:
+    return hashlib.sha512(text).digest()
+
+
+def program_field(program_digest: str) -> bytes:
+    """The ``program`` digest the roots bind for a Program digest (hex): the whole digest, which is ``ID_BYTES`` long
+    (``codec.program_digest``, or a manifest's labelled fold); any other width is refused."""
+    return _sized(bytes.fromhex(program_digest), "a Program digest", ID_BYTES)
+
+
+def run_program_digest(run_id: str) -> bytes:
+    """The ``program`` digest of a run that names no Program of record."""
+    return _id(b"cmt-integ/no-program-digest/" + run_id.encode())
+
+
+def offline_geo_digest(run_id: str) -> bytes:
+    """The ``geo`` digest of an offline committer, which has no model."""
+    return _id(b"cmt-integ/offline-geo/" + run_id.encode())
+
+
+def geo_digest(doc: dict) -> bytes:
+    """The model's ``geo`` digest: of the sorted-key JSON of its geometry (config fields, repo, revision, chunk)."""
+    return _id(json.dumps(doc, sort_keys=True, default=str).encode())
+
+
+def ctx_digest(run_id: str, step: int) -> bytes:
+    """Step ``step``'s ``ctx`` digest in run ``run_id``."""
+    return _id(f"{run_id}/step={step}".encode())
+
+
+def layout_digest(metas: Sequence) -> bytes:
+    """A step's ``layout`` digest: of the compact JSON of (ordinal, name, dtype, shape, nbytes, chunk, first_leaf, n_leaves,
+    stream_off) per tensor, in order."""
+    doc = [[m.ordinal, m.name, m.dtype, list(m.shape), m.nbytes, m.chunk, m.first_leaf, m.n_leaves, m.stream_off] for m in metas]
+    return _id(json.dumps(doc, separators=(",", ":")).encode())
+
+
+def names_digest(names: Sequence[Sequence]) -> bytes:
+    """The weights root's ``names`` digest: of the compact JSON of ``[name, dtype, shape, nbytes]`` per tensor, in order."""
+    return _id(json.dumps(names, separators=(",", ":")).encode())
+
+
 def step_root(program: bytes, ctx: bytes, geo: bytes, layout: bytes, n: int, tree_root: bytes) -> bytes:
     """``SHA-512(STEP_ROOT_TAG || program || ctx || geo || layout || u64be N || tree_root)``."""
     return hashlib.sha512(STEP_ROOT_TAG + _sized(program, "program", ID_BYTES) + _sized(ctx, "ctx", ID_BYTES)
@@ -243,10 +288,10 @@ def weights_root(geo: bytes, names_digest: bytes, tensor_roots: Sequence[bytes])
                           + _u64be(len(tensor_roots), "T") + _fold_roots(tensor_roots)).digest()
 
 
-def weights_tree(geo: bytes, names: Sequence[Sequence], names_digest: bytes, tensor_roots: Sequence[bytes], wk: bytes) -> dict:
+def weights_tree(geo: bytes, names: Sequence[Sequence], tensor_roots: Sequence[bytes], wk: bytes) -> dict:
     """The registration's tree as the replay bundle carries it (`replay_bundle.weights_extra`), ``Kw`` with it."""
     return {"scheme": NAME, "names": [list(e) for e in names], "tensor_roots": [r.hex() for r in tensor_roots],
-            "root": weights_root(geo, names_digest, tensor_roots).hex(), "chunk": ROW_BYTES, "geo_digest": geo.hex(), "key": wk.hex()}
+            "root": weights_root(geo, names_digest(names), tensor_roots).hex(), "chunk": ROW_BYTES, "geo_digest": geo.hex(), "key": wk.hex()}
 
 
 def t_table(key: bytes = KEY) -> bytes:
