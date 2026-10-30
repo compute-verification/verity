@@ -121,7 +121,7 @@ from verity.ml.circuits.boolean.forms import ONE, ZERO, Circuit, add, and_reduce
 from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.types import Array, Tuple
-from verity.core.protocols.certifier.head_check import BIT, _part, ands
+from verity.core.protocols.certifier.head_check import BIT, _part
 
 STATICS = ("R", "W", "A", "M", "T", "L", "B", "H", "CH", "WM", "FULL", "PC", "NB", "IW", "AS", "EW")
 
