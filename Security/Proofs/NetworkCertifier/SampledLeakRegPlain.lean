@@ -38,10 +38,11 @@ set_option synthInstance.maxSize 1024 in
 /-- **The leak bound at the registration's values, at the deployed plain record**: `sampledLeak_registered` at
 `SamplingDeploy.deployPlain rel c`, its binding `binds_deployOf` and `SampledAuditAccepted` its proof, given the record's
 `KS`. -/
-theorem sampledLeak_registered_plain (H : Msg → Msg) (hks : KS H Dp) (L K S : ℕ) (lay : Stmt → Layout L S)
-    (k : Stmt → ℕ) (δ : ℝ) (decode : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) (hδ : 0 ≤ δ)
-    (hdec : Claims.Flock.ListWithin (Dp).flock.len (Dp).flock.enc (Dp).flock.θ decode) (reg : Stmt → Finset ℕ)
-    (ops : Stmt → List (Opening Bool)) (Dj : ℕ) (x : Msg) (hx : ScopeAcc Dp lay k x)
+theorem sampledLeak_registered_plain (H : Msg → Msg) (hks : KS H Dp) (L K S : ℕ)
+    (lay : AuditStatement → BoundaryGates L S)
+    (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) (hδ : 0 ≤ δ)
+    (hdec : Claims.Flock.ListWithin (Dp).flock.len (Dp).flock.enc (Dp).flock.θ decode) (reg : AuditStatement → Finset ℕ)
+    (ops : AuditStatement → List (Opening Bool)) (Dj : ℕ) (x : Msg) (hx : ScopeAcc Dp lay k x)
     (hreg : ∀ st, (Dp).parse x = some st → RegOpens H (Dp).commit st (reg st) (ops st)) (Ω : Type) [Fintype Ω]
     [Nonempty Ω] (P : Prover Ω) :
     PrBad H (Dp).V
@@ -70,10 +71,10 @@ theorem sampledLeak_registered_plain_sha512
     (hfixed : DrawFixed Dp) (hsessions : SessionRuns shaD Dp) (hnum : SamplingDeploy.SessionsInPlain c)
     (hslots : DrawSlots Dp) (iroots : Msg → Seen → ℕ → List Msg) (hopens : SessionOpens shaD Dp iroots)
     (hfix : InteriorFixed shaD Dp iroots) (hprog : ProgramScope Dp) (hchecks : ChecksScope shaD Dp)
-    (hreveals : SamplingDeploy.RevealsLe c) (hComplete : Complete shaD Dp) (L K S : ℕ) (lay : Stmt → Layout L S)
-    (k : Stmt → ℕ) (δ : ℝ) (decode : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) (hδ : 0 ≤ δ)
-    (hdec : Claims.Flock.ListWithin (Dp).flock.len (Dp).flock.enc (Dp).flock.θ decode) (reg : Stmt → Finset ℕ)
-    (ops : Stmt → List (Opening Bool)) (Dj : ℕ) (x : Msg) (hx : ScopeAcc Dp lay k x)
+    (hreveals : SamplingDeploy.RevealsLe c) (hComplete : Complete shaD Dp) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S)
+    (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) (hδ : 0 ≤ δ)
+    (hdec : Claims.Flock.ListWithin (Dp).flock.len (Dp).flock.enc (Dp).flock.θ decode) (reg : AuditStatement → Finset ℕ)
+    (ops : AuditStatement → List (Opening Bool)) (Dj : ℕ) (x : Msg) (hx : ScopeAcc Dp lay k x)
     (hreg : ∀ st, (Dp).parse x = some st → RegOpens shaD (Dp).commit st (reg st) (ops st)) (Ω : Type) [Fintype Ω]
     [Nonempty Ω] (P : Prover Ω) :
     PrBad shaD (Dp).V
