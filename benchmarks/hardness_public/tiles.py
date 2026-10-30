@@ -17,13 +17,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import natural  # noqa: E402
 from prices import CHIPS, dense_part  # noqa: E402
 
-SHAPES = ((8, 256), (16, 64), (128, 128))
+SHAPES = ((8, 256), (16, 64), (128, 128), (1, None))  # (1, None): a route per output channel over all of K
 ALPHA = (1, 2, 3, 4, 7, 15, 31, 36, 63)
 
 
 def tile_costs(q, shape, chip, b):
-    tr, tk = shape
+    """(1, None) prices each output channel alone: output channels permute for free, so channels that share a route
+    form the MMA's tiles (generous: it ignores the last partial tile of each route)."""
     n, k = q.shape
+    tr, tk = shape[0], shape[1] or k
     nt, kt = n // tr, k // tk
     ab = np.abs(q[: nt * tr, : kt * tk].astype(np.int32)).reshape(nt, tr, kt, tk)
     best = np.ones((nt, kt))
@@ -45,7 +47,7 @@ def work(task):
         for chip in CHIPS:
             for b in (1, 2):
                 best, arg = tile_costs(q, shape, chip, b)
-                rec["routes"][f"{shape[0]}x{shape[1]}_{chip}_b{b}"] = {
+                rec["routes"][f"{shape[0]}x{shape[1] or 'K'}_{chip}_b{b}"] = {
                     "cost": float(best.mean()), "frac_tiles_below_1": float((best < 1).mean()),
                     "alphabets": {str(a): int((arg == a).sum()) for a in (0,) + ALPHA if (arg == a).any()}}
     return rec
