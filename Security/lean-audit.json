@@ -2519,9 +2519,8 @@
    "honest": ["Pous.Claims.StreamedWipeMeetsDisk_meets"],
    "nontrivial": "Pous.Claims.StreamedWipeMeetsDisk_fails"
   },
-  "Accounting.SecurityProofs.TS.LeafGroupSound": {
-   "honest": ["Accounting.TS.Lanes.groupRealizes_lanes32", "Accounting.TS.Lanes.knownOf_okKnown"],
-   "nontrivial": "Accounting.TS.Group.groupLayer_not_soundAt"
+  "Flock.SecurityProofs.JointServed": {
+   "honest": ["Flock.SecurityProofs.JointServed_honest"]
   }
  },
  "unwitnessed": {
@@ -2641,6 +2640,7 @@
   "Accounting.SecurityProofs.TS.DrawnBindingOfFork": "fc4ae1010af73e95ee2ac4299cf6aaaad4d267967b850103ad37b012c3648d86",
   "Accounting.SecurityProofs.TS.DrawnRightOff": "8201b64a7c1751fb3ae112dfce4ae56af89d24390b9572ddc6024aaf4ad10a64",
   "Accounting.SecurityProofs.TS.HeldSessionSound": "2a7a97f97088d84cba544f59a8af31d277ef7a011c9d793f4dd2a945f23b27f6",
+  "Accounting.SecurityProofs.TS.LeafGroupSound": "c5838adef54e7043e01608e725162fec80d4fa1d31294cfd50cf33fa2061efc2",
   "Accounting.SecurityProofs.TS.LeafLanesSound": "7d6f085de620acb57a098c5d2bf42c2f0248b2b5f84aad583eb15a2f5c36aab8",
   "Accounting.SecurityProofs.TS.ProofsSoundOfDrawn": "deab04dfcfe2b047967e13801a426edafa0433d2325d2653dfd7a94dab219841",
   "Accounting.SecurityProofs.TS.ProofsSoundOfPinned": "0d86ac02d35b0a45cdccc1e8ace9d5a097be7b41f6ca5997353812461c532783",
@@ -2675,11 +2675,18 @@
   "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat": "88c47eba72b89cb5a868f2d7e619aa0dcbf84dd413625703e5d758884812fb48",
   "Flock.SecurityProofs.EndToEndRegisteredFlat": "74ac90d3b329af83ebb584e436936ef773a7538c4ccd6a3f49a9a9067b0f81b4",
   "Flock.SecurityProofs.EndToEnd_refSetup": "8c16cab1cb3a82846dac85a5de468d2758e66e0a407507d41a0c262fa17efc20",
+  "Flock.SecurityProofs.IntegrityBlockCarried": "9bfec7bb00d7b2f13e68fcb0efa8c72cbcbeb570f6b2395e2749070aa96cf2a1",
   "Flock.SecurityProofs.IntegrityBlocks": "fb2e861a74fe610166c44a14c65d9cfc6742b80e602e1c1b66a7ce70439f9824",
   "Flock.SecurityProofs.IntegrityHorizon": "1d67559b6d5a8972bf15dd6e9487a9631c08027cfe36527058dd22d76a8c3a0f",
   "Flock.SecurityProofs.IntegrityHorizonCarried": "89fbbeb7e268642019ee085f30b6bfc54063bc0970ba372d4c4a1a79f7e26037",
   "Flock.SecurityProofs.IntegrityPeriod": "320a3ed8346171425b3ea7537f61689dcef36bf45963401c24dbad1a97342ccc",
   "Flock.SecurityProofs.IntegrityPeriodLog": "20a8497e59180c39414fe50e1e41293894b8d2c6b974786bb7b8d58803dd58cc",
+  "Flock.SecurityProofs.JointServed": {
+   "type_hash": "7336cb84d9ce7d76a08b717e7b412bbe3b5fbbf7f79068bb0af0d60ef45c9a79",
+   "missing": "nontrivial",
+   "why": "JointServed_nontrivial negates the probability bound itself (¬ prob … ≤ …) at a check that accepts every output, not StratifiedBlock.Bound, the head JointServed concludes: Bound fixes flock-verify (LiveAcceptsZK) and takes no verifier an accept-all one could stand in for, so the lemma fits once Bound takes its verifier as an argument or the lemma states ¬ Bound at an explicit block"
+  },
+  "Flock.SecurityProofs.JointServed_nontrivial": "3dfd9d37c2f1a836bc2f967261d6545049dcbfde0a0c1fff234dd9fe63a0a947",
   "Flock.SecurityProofs.JointStratified": "8a0d33c3f05e59012d7c2818198770e9a9b1ab6c83d82a51a9acd510ca33da6b",
   "Flock.SecurityProofs.JointStratifiedHorizon": "3e9e80ee60615d188982786bdec4907b7de3104db18d5eb28be48bfb02f945ee",
   "Flock.SecurityProofs.JointStratifiedHorizonMT": "b6e7f9ecc68c0bab5aac13a82c681beb4ba36c38b90508f1952d0b7f2503414d",
@@ -2697,6 +2704,7 @@
   "Flock.SecurityProofs.SampledKSLiveStated": "6eb82e74bf701806a374272925b7f3b54c52a8347a519872322043a05dcb8203",
   "Flock.SecurityProofs.SampledKSLiveV2": "43e16e73206c75e215db6b95d1b2daba857ef90f89f56300e63260c0414d8aa5",
   "Flock.SecurityProofs.SampledKSLiveV3": "363e8e7a18f9b0417428098088fd441f7724d15f39eee5ae5f424e4559e7f84b",
+  "Flock.SecurityProofs.SampledKSLiveV5": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
   "Flock.SecurityProofs.SamplingClaimsStated": "12704b348a183d81be9329792dcc639f4deafa21e0fc0227ff7b0b23ccb3bf9b",
   "Flock.SoundAtBridge.soundAtBridge_nonvacuous": "27f84097c41752634b3c9c05e20a4cb02b0ea09db82bc2a57a574b18975fc05d",
   "FlockSoundness.Discharge.Composed.setupZJ_of_acceptsZK": "08d62e347db1b8265035f49a5c1ab74e0dd45cc0c92f9dd8c298a9963b56851b",
@@ -2782,6 +2790,7 @@
   "Nci.SecurityProofs.Training": "b3e344c8c136829d0a3a4130fa3fc8a8d5bb34e0a0fe3f5673183e5e7cd2cf3a",
   "Nci.SecurityProofs.UpdatedMatMul": "159e7399036e8f45f9a0af577ce7677b603914d42b48a260efc4b24f7b46c55b",
   "Nci.SecurityProofs.UpdatedMatMulReads": "3d44d307610a81a4747f64dcc7d3945c2dcfe9ea92f7a0339d49a79417e45c83",
+  "NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits": "7ccec3c51a3940931ea87fc0b3800d793566789cdc927ea9d9c011bcd1ef9e72",
   "NetTiming.SecurityProofs.EncardAccSeqsLeBlocks": "650045ec93f3bbadeb3f68796211ea24031bfbd9d8e4e0d267e7d5d5728382a6",
   "NetTiming.SecurityProofs.EncardAccSeqsLeBlocksCounts": "823fadfc71bbd70bb7d1b371d8148c6a54e6e63a9a6843d371d743d001f741c8",
   "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRate": "5caed7ee8a100a9d93ca89b56802ab4a910a4db1c88e5e7788023283170da941",
@@ -2823,6 +2832,7 @@
   "Pous.SecurityProofs.StreamedWipeMeets2600GB": "a3671a8a99f4c7b653b5751bd24cb714a5764f731e9563fa3b20b1072228a5e2",
   "Pous.SecurityProofs.StreamedWipeMeets96GiB": "610f906d2a73a8612b035d1cfe33141715f61fda55f081c36162e0dc9afda003",
   "Pous.SecurityProofs.StreamedWipeMeetsFamily": "c26c23adbc15ab18912cbd9a9ff20ad52027001e35dd08dc661c67472b511255",
+  "Pous.SecurityProofs.StreamedWipeMeetsH200": "49f1879512445eac6ccc2bc32c426083fbb60df54d2005bdff69ca69d154ec51",
   "Pous.SecurityProofs.StreamedWipeMeetsInfoStated": "413276f220ff5f0da10702f8a3fc55ad0586acaee0ec41098be683abe4f02df7",
   "Pous.SecurityProofs.StreamedWipeMeetsReads": "a2f5444f8d5e25a0cfbb34ecce8550e64849fff88fd423a419993391aa377856",
   "Pous.SecurityProofs.StreamedWipeMeetsReadsTight": "8a49cf1cd6bc038083f46f503c9d0c48e1783f53288309186a2a45615d02a9c1",
@@ -2870,6 +2880,7 @@
   "RecDeploy.lamLin2_deployed_ge": "b4fd7e214a758b1d725d21f4bd374da8a4ee62ffdb18a7fe42e253ebc720465a",
   "RecDeploy.lamLin2_deployed_ge_dep": "eb376632437aa4a4d256ff9b890ea8f0159fa5593e7c5440ca2b13b27cfee626",
   "Verity.SecurityProofs.BlockDescription": "80baa463fd43086b3ca137b50dc78ace3b4400bfbabdb344ddc3c090d1f6dbeb",
+  "Verity.SecurityProofs.CapacityWithinEstimate": "33f7bf73bd890217a96e1f811c4fa5862df92ccec1ba47b063fff95e97ba8370",
   "Verity.SecurityProofs.Counting": "34e0729bbd40c2fd7311fc30725f7d8bb1f2fb2daed521891c0dada5afd70f77",
   "Verity.SecurityProofs.CountingSum": "1b2f164ab74dfac250ebe357db6363a1d52294716405d3ed10596cb21004e4ef",
   "Verity.SecurityProofs.ExpandAndSize": "03966908eadf7f2df4b6715764c0a881097cb6d8a2ea801f44df28194c7d2e60",
@@ -2877,9 +2888,7 @@
   "Verity.SecurityProofs.InferenceCap": "0035c5e37498f2d808d066ae0a6d0bd50791b4ad147383f0feba37bf8362c9fc",
   "Verity.SecurityProofs.PrivateOutBitsLe": "a595e2305f68fd4b90134f54bc1e597de991458da482ef92bfbc67d7d7a782f3",
   "Verity.SecurityProofs.RefineWrong": "52a2253ccd78c6339acebc6fe4e9ea3afaaff0120bb36457ff76a2a605ce5ad6",
-  "Verity.SecurityProofs.ServingBlockSum": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8",
-  "Flock.SecurityProofs.SampledKSLiveV5": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
-  "Flock.SecurityProofs.IntegrityBlockCarried": "9bfec7bb00d7b2f13e68fcb0efa8c72cbcbeb570f6b2395e2749070aa96cf2a1"
+  "Verity.SecurityProofs.ServingBlockSum": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8"
  },
  "layers": {
   "Definitions.Core": {

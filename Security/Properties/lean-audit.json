@@ -412,6 +412,10 @@
   "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound": {
    "honest": ["MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_honest"],
    "nontrivial": "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound_nontrivial"
+  },
+  "Pous.Period.SecurityProofs.pooledShort_log": {
+   "honest": ["Pous.Period.SecurityProofs.pooledShort_log_honest"],
+   "nontrivial": "Pous.Period.SecurityProofs.pooledShort_log_nontrivial"
   }
  },
  "unwitnessed": {
