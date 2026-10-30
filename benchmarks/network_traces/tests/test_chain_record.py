@@ -294,9 +294,9 @@ def test_report_merges_runs_and_counts_a_negative_that_escaped_the_draw(tmp_path
     n2s = got["steps"]["n2"]
     assert got["verdict"] == "accepted" and got["negatives_refused"] == {"n2/moved": "escaped the draw"}
     assert n2s["members"]["honest"]["structured"] == {"head egress 45 @320": "across"}
-    assert n2s["members"]["moved"]["escaped_the_draw"] == {"faulty_windows": [0], "drawn": [1, 2]}
+    assert n2s["members"]["moved"]["escaped_the_draw"] == {"incorrect_windows": [0], "drawn": [1, 2]}
     assert n2s["eps_at_delta"]["law"] == "subset:2" and (n2s["eps_at_delta"]["units"], n2s["eps_at_delta"]["drawn"]) == (4, 2)
-    assert n2s["eps_at_delta"]["wrong_units_at_delta"]["0.5"] == 1
+    assert n2s["eps_at_delta"]["incorrect_at_delta"]["0.5"] == 1
     steps.n2[1] = run("moved", {"windows": [window] * 2, "network": {"accepted": True}, "reference": reference}, [0, 1])
     got = cr.report(steps)["steps"]["n2"]
     assert got["verdict"] == "failed" and got["why"] == "moved: network accepted"
@@ -530,7 +530,7 @@ def test_subset_bound():
     assert cr.subset_bound(256, 64, 0.5) == 2
     assert cr.subset_bound(256, 2, 0.5) == 74
     assert cr.subset_bound(0, 0, 0.5) is None
-    # one wrong unit of 4 escapes a sample of 2 with C(3, 2)/C(4, 2) = 1/2 exactly: within δ = 1/2
+    # one incorrect proof block of 4 escapes a sample of 2 with C(3, 2)/C(4, 2) = 1/2 exactly: within δ = 1/2
     assert cr.subset_bound(4, 2, 0.5) == 1
 
 

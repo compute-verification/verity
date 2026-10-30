@@ -5367,7 +5367,7 @@
     "  (hat : Eq (c.at_ roots o.pos) (Option.some { fst := root, snd := 0 })) (hπ : Eq (c.π o) List.nil)",
     "  (hroot :",
     "    Eq (Claims.Sampling.bytes root)",
-    "      (Flock.Registered.climb dom",
+    "      (Flock.FV3.Sha512.climb dom",
     "        (Flock.Registered.rowLeaf dom 0",
     "          (Claims.Sampling.bytes",
     "            (FlockSoundness.Binding.digBytes",
@@ -5384,7 +5384,7 @@
     "    Bool.true"
    ],
    "assumptions": [],
-   "type_hash": "d9d2eafbac28ccd0a69ce8be6d0256297d9114209248bab63c7ade90ed10941a"
+   "type_hash": "4a1317dddcb169b5fecb54f61bb61966bc49e4006529e09c5ad4a182bb32d143"
   },
   "Claims.Sampling.BitsLin_fails": {
    "owner": "@proofs",
