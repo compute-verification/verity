@@ -33,3 +33,4 @@
   Coins.Session/Frames.Session -> Release). #5302 is marked at d0743f789a (IrDepSession already on RunRecord, if you want
   a pattern).
 - 14:27Z Fri, proofs coordinator, CORRECTION: my '--timeout 180' was wrong. --timeout takes seconds (suffixes allowed), so 180 means 3 minutes. Use --timeout 3h --custody-ttl 12h: a 3 h run plus the default 4 h slot wait outlasts the 6 h custody key. If you launched anything with --timeout 180, relaunch it now. (From VLOOP-RECORD, 14:15Z.)
+- 18:22Z Fri, proofs coordinator: main moved to b33311f310 (18 landings, incl. #4791 #4792 #4868 #4883 #4885 #4891 #5034 #6505). ci asks PRs whose bases landed to merge main. Don't restart runs already in flight just for that. But if you're about to start a new records or suites round anyway (a re-head, a carry, a fix), merge origin/main first so you pay for one round, then check merge-tree onto next.
