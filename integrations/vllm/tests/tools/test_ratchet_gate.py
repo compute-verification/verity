@@ -1316,3 +1316,49 @@ def test_a_lint_that_comes_to_count_more_records_its_list_at_the_files_it_leaves
     lane_linted.commit("records them with the lint as it is", {REPO_LANE_JSON: _allowlist(DOCS_A, b)})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["fix"]) == ("failed", [f"{REPO_LANE_JSON}: {G.key({'file': 'docs/b.md'})} 0 -> 2"]), c["why"]
+
+
+def test_a_site_a_lint_below_on_next_counts_is_refused_at_the_pr_that_adds_it_and_never_at_a_later_one(lane_linted):
+    """A PR widens the lane-text lint on `next`, a second, from `main`, adds a site only that lint counts, which `main`'s lint
+    passes, and a third touches the list, so the gate runs the lint on the whole tree, which finds the second's line.  A
+    merge onto `next` is counted with the lints the tree below has, so the second is the one refused; and a violation the
+    tree below already holds is named with the PR that added it, and leaves the third in place."""
+    b = {"file": "docs/b.md", "count": 2}
+    lane_linted.git("checkout", "-q", "main")
+    lane_linted.commit("text the lint will count", {"docs/b.md": "# B\n\nTOY1 and TOY2.\n"})
+    main = lane_linted.git("rev-parse", "HEAD")
+    lane = '    ("codename", r"\\[lane ", None),\n'
+    wider = (SCRIPT.parents[3] / REPO_LANE_LINT).read_text().replace(lane, '    ("toy", r"TOY\\d\\b", None),\n' + lane, 1)
+    lane_linted.git("checkout", "-q", "-B", "lint", main)
+    lint = lane_linted.commit("counts TOY ids", {REPO_LANE_LINT: wider, REPO_LANE_JSON: _allowlist(DOCS_A, b)})
+    lane_linted.git("checkout", "-q", "-b", "adds", main)
+    adds = lane_linted.commit("a hook named for TOY9", {"tools/hook.py": '"""Runs as TOY9."""\nX = 1\n'})
+    assert [c["verdict"] for c in G.gate("main", "adds")["changes"]] == ["passed"], "main's lint counts no TOY id"
+    lane_linted.git("checkout", "-q", "-b", "next", main)
+    lane_linted.queue(1, "counts TOY ids", lint)
+    m2 = lane_linted.queue(2, "a hook named for TOY9", adds)
+    doc = G.gate("main", m2)
+    assert _verdicts(doc) == [("#1", "passed"), ("#2", "failed")], doc
+    assert doc["changes"][1]["fix"] == ["tools/hook.py:1 toy: TOY9"] and doc["failures"][0]["pr"] == 2
+
+    lane_linted.git("checkout", "-q", "-b", "prunes", lint)
+    prunes = lane_linted.commit("says what is true now in a.md", {"docs/a.md": "# A\n\nSee the README.\n",
+                                                                  REPO_LANE_JSON: _allowlist(b)})
+    lane_linted.git("checkout", "-q", "next")
+    lane_linted.queue(3, "says what is true now in a.md", prunes)
+    doc = G.gate("main", "next")
+    assert _verdicts(doc)[2] == ("#3", "passed") and not [f for f in doc["failures"] if f["pr"] == 3], doc
+    why = doc["changes"][2]["why"]
+    assert ("the base's lint code (repo_lane_text) finds 2 violation(s) its own tree already holds, which aren't this "
+            "change's: added by #2: repo_lane_text: tools/hook.py:1 toy: TOY9, repo_lane_text: tools/hook.py: 1 found, "
+            "0 allowed") in why, why
+    assert "tools/hook.py: 1 found, 0 allowed" in (_lane_lint(lane_linted) or "")
+
+    lane_linted.git("checkout", "-q", "-b", "drops", lint)
+    drops = lane_linted.commit("drops b.md's entry", {REPO_LANE_JSON: _allowlist(DOCS_A)})
+    lane_linted.git("checkout", "-q", "-B", "next", m2)
+    lane_linted.queue(4, "drops b.md's entry", drops)
+    [*_, c] = G.gate("main", "next")["changes"]
+    assert (c["name"], c["verdict"]) == ("#4", "failed") and "finds 3 violation(s) on its tree" in c["why"], c["why"]
+    assert c["fix"] == ["repo_lane_text: docs/b.md: 2 found, 0 allowed", "repo_lane_text: docs/b.md:3 toy: TOY1",
+                        "repo_lane_text: docs/b.md:3 toy: TOY2"], "the violation the tree below holds is #2's, not #4's"
