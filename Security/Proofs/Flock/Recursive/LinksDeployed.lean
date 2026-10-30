@@ -140,9 +140,7 @@ theorem linksHold_or_coll (hA : LinkRefStaged) {st : Stage} {x : Msg} {ws : List
   obtain ⟨xO, hSl, hck⟩ := hS _ hsl
   obtain ⟨c, hcc⟩ := staged_circuit hSl hr
   have hlc : linkCircuit r = some (ss.size - 2, N, c) := by
-    first
-      | (simp only [linkCircuit, hla, hcc, Option.bind_eq_bind, Option.bind_some, Option.pure_def]; done)
-      | simp [linkCircuit, hla, hcc]
+    simp only [linkCircuit, hla, hcc, Option.bind_eq_bind, Option.bind_some, Option.pure_def]
   have hlb : linkBounds r = some (UB, PB) := by
     simp only [linkBounds, hss, Except.toOption, Option.bind_some, hat]
   obtain ⟨u, hu, hrw⟩ := CapLower.rows_staged hSl hr hss hat hcc
@@ -260,17 +258,10 @@ theorem linkBinds_rec (hA : LinkRefStaged) {I : Claims.Recursion.Inner FlockDepl
 theorem linksBindDeployed_of (hA : LinkRefStaged) :
     _root_.Flock.Guarantees.LinksBindDeployed LinksHold tableRows linkIns := by
   intro b aux nOf hd recRest decI _ decO _ x _
-  first
-    | exact linkBinds_rec hA (I := Claims.Recursion.Inner.ofFlock (bdDeployed Readable.relation
-        (FlockDeploy.nextR DeployedR.rdR) (FlockDeploy.deployPlainTrimR Readable.relation DeployedR.rdR).cols
-        DeployedR.wER FlockDeploy.joinR rowInDeployed DeployedR.finalR DeployedR.wR).deploy decI)
-        (fun _ _ h => h) _ _ decO x
-    | exact linkBinds_rec hA (I := Claims.Recursion.Inner.ofFlock (bdDeployed Readable.relation
-        (FlockDeploy.nextR DeployedR.rdR) (FlockDeploy.deployPlainTrimR Readable.relation DeployedR.rdR).cols
-        DeployedR.wER FlockDeploy.joinR rowInDeployed DeployedR.finalR DeployedR.wR).deploy decI)
-        (fun _ _ h => h) (FlockDeploy.deployPlain Readable.relation).scopeCheck
-        { ({ deployedB b with tr := recTr aux nOf hd recRest } : Brings) with
-          rd := (DeployedR.layR OpenRows.elemR).readers } decO x
+  exact linkBinds_rec hA (I := Claims.Recursion.Inner.ofFlock (bdDeployed Readable.relation
+    (FlockDeploy.nextR DeployedR.rdR) (FlockDeploy.deployPlainTrimR Readable.relation DeployedR.rdR).cols
+    DeployedR.wER FlockDeploy.joinR rowInDeployed DeployedR.finalR DeployedR.wR).deploy decI)
+    (fun _ _ h => h) _ _ decO x
 
 /-- **Knowledge soundness at the linked relation at the deployment, from the link part's reference step**:
 `recursiveKSLink_of` at the link clause `LinksHold`, the rows `tableRows` and the finder's inputs `linkIns`. -/
