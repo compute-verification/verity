@@ -8,12 +8,12 @@ templates) v1's Lean (`sampled-proofs-one-stage check`) accepts an audit of it w
 one whose verdict refused, and names the record's digest either way; the inference-only case is accepted by the policy's
 Lean check (`inference-only check`) at Γ its gates and α its input bits a gate (which ``--from-division`` reads off the
 check's profile at no budget), and refused one gate or one bit under; v2's Lean (`sampled-proofs-one-stage-zk check`)
-names the record's digest as its commitment (it rejects the toy's proofs, which are no proofs). A tampered field is
-refused: by the Lean check (the record naming another Program, an input node in a block, θ on an unregistered input, an
-evidence key, the record repeated in the log) or by the producer before any Lean runs (no v1 case or one holding another
-key, a record that isn't v1's Program's, a previous record with no log, α and Γ not given, a v2 case that isn't the
-audit's), and an answer that isn't the window's record's is written nowhere. The slow test makes the inference-only case
-on the 4,32,4 class's own Program (TINY on the H200)."""
+names the record's digest as its commitment (it rejects the toy's v2 case, which holds no coins and no proofs). A
+tampered field is refused: by the Lean check (the record naming another Program, an input node in a block, θ on an
+unregistered input, an evidence key, the record repeated in the log) or by the producer before any Lean runs (no v1 case
+or one holding another key, a record that isn't v1's Program's, a previous record with no log, α and Γ not given, a v2
+case that isn't the audit's), and an answer that isn't the window's record's is written nowhere, its refusal saying the
+answer's reason. The slow test makes the inference-only case on the 4,32,4 class's own Program (TINY on the H200)."""
 
 from __future__ import annotations
 
@@ -108,7 +108,8 @@ def toy() -> tuple[object, dict]:
 
 def audit_dir(root: Path, v1: dict, *, v2: bool | str = True) -> Path:
     """A records audit's out directory holding v1's case and, with ``v2``, a5's v2 case over two blob files (a string:
-    a5's ``case-v2-error.txt`` instead)."""
+    a5's ``case-v2-error.txt`` instead). The v2 case's params name a challenger (a stand-in key of LMS's form) and its
+    window's root, without which v2's Lean refuses the params before it reads the record."""
     w = root / "audit" / "window"
     w.mkdir(parents=True)
     (w / "case.json").write_text(json.dumps(v1, sort_keys=True))
@@ -124,7 +125,9 @@ def audit_dir(root: Path, v1: dict, *, v2: bool | str = True) -> Path:
         (w / "case-v2.json").write_text(json.dumps({
             "blobs": [str(b) for b in blobs], "commitment": v1["commitment"],
             "evidence": codec.canonical_json(evidence).hex(),
-            "params": {**v1["params"], "proofs": {"circuit": "cc" * 64, "registered": None}}}, sort_keys=True))
+            "params": {**v1["params"], "challenger": {"key": {"H": 5, "W": 4, "public": "00" * 80}, "label": "draw"},
+                       "proofs": {"circuit": "cc" * 64, "registered": None}, "window_root": "0f" * 64}},
+            sort_keys=True))
     return root / "audit"
 
 
@@ -342,8 +345,8 @@ def test_the_lean_check_refuses_a_tampered_inference_only_case(tmp_path, inferen
 @lean
 def test_v2s_lean_names_the_records_digest_so_its_rejection_is_written(tmp_path, capsys, v2_exe):
     """`sampled-proofs-one-stage-zk check` reads the toy's v2 case through its commitment and names the record's digest,
-    the one `registration.digest` computes; the toy's proofs are no proofs, so it rejects, and that rejection is the
-    case's verdict (a failed proof is a visible failure, never a missing case)."""
+    the one `registration.digest` computes; the toy's v2 case holds no coins and no proofs, so it rejects, and that
+    rejection is the case's verdict (a failed proof is a visible failure, never a missing case)."""
     program, query = toy()
     v1 = v1_case(program, query)
     rc, cases, refused, out = run(capsys, "--audit", audit_dir(tmp_path, v1), "--private", tmp_path / "private",
@@ -512,7 +515,7 @@ def test_no_case_is_written_when_a5s_v1_case_is_not_one(tmp_path, capsys, change
 @pytest.mark.parametrize("who", [V1, INF])
 @pytest.mark.parametrize("change, reason", [
     ("other-digest", "'s answer commits to"),
-    ("null-digest", "'s answer commits to None"),
+    ("null-digest", "'s answer commits to None, not the window's registration record's digest: stand-in"),
     ("other-protocol", "the answer is 'verity/pouw/v1''s"),
     ("no-line", "answered no line"),
 ])

@@ -255,10 +255,12 @@ def lean_answer(exe: str | os.PathLike, case: Mapping[str, Any], scratch: Path) 
 
 
 def tie(answer: Mapping[str, Any], id: str, digest: str) -> None:
-    """The answer is ``id``'s and names the record's digest as its commitment."""
+    """The answer is ``id``'s and names the record's digest as its commitment; a refusal says the answer's reason,
+    which for an answer naming none says why its Lean read no commitment."""
     _need(answer.get("protocol") == id, f"the answer is {answer.get('protocol')!r}'s, not {id}'s")
+    why = f": {answer['reason']}" if answer.get("reason") else ""
     _need(answer.get("commitment") == digest, f"{id}'s answer commits to {answer.get('commitment')!r}, not the "
-          "window's registration record's digest")
+          f"window's registration record's digest{why}")
 
 
 def write(d: Path, case: Mapping[str, Any], line: str, also: Mapping[str, Any] | None = None) -> None:
