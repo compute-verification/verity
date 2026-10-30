@@ -652,6 +652,33 @@ def test_the_engines_rotary_table_registers_within_its_bound_and_a_wrong_one_is_
     assert IF.input_count(doc, pins=both, roots={**roots, **SCAN_PIN})["free"] == _alone(doc, ROPE) > 0
 
 
+def test_a_served_windows_weight_reads_register_at_their_widths_beside_the_grains(tmp_path):
+    """A served window's slice units read a GEMM's weight one row of K words a unit (`pipeline.weight_rows`): given those
+    parameters (``served_params``, the record's), the committer registers each weight at that width too, under nonces of
+    all its parameters, the verifier's record states their shapes, and the pins hold them; a window serving the
+    checkpoint's words commits the registered roots, rows held for its reads by reference. A registration without them
+    doesn't hold the record, and a served parameter of a table or of no field is refused by name."""
+    reg, (d, man) = S._registered(), _checkpoint(tmp_path)
+    served = [WB.weight_param("model.layers.0.mlp.gate_up_proj.weight", 64), WB.weight_param("model.layers.1.mlp.down_proj.weight", 128)]
+    base = WW.weights_registration(reg, KEY, d, checkpoints_manifest=man, grain=GRAIN)
+    registration = WW.weights_registration(reg, KEY, d, checkpoints_manifest=man, grain=GRAIN, served_params=served)
+    record = WW.weights_record(reg, d, man, grain=GRAIN, served_params=served)
+    pins = WW.registration_pins(registration, record)
+    assert not set(served) & set(base["values"]) and set(pins) == set(base["values"]) | set(served)
+    assert [{k: record["registered_entries"][p][k] for k in ("leaves", "words")} for p in served] == [
+        {"leaves": 256, "words": 64}, {"leaves": 64, "words": 128}]
+    values = WW.weight_values(reg, WW.record_words(reg, d, man), KEY, GRAIN, keep_rows=True, served_params=served)
+    assert {p: v.root.hex() for p, v in values.items()} == pins
+    ck = WR.CheckpointIndex(d, checkpoints_manifest=man, model="org/m", revision="r")
+    rows = np.concatenate([ck.array(f"model.layers.0.mlp.{n}_proj.weight") for n in ("gate", "up")]).view(np.uint16)
+    assert np.array_equal(np.asarray(values[served[0]].rows, dtype=np.uint16).reshape(256, 64), rows.reshape(256, 64))
+    with pytest.raises(ValueError, match=re.escape(f"registers {sorted(served)} unlike the record")):
+        WW.registration_pins(base, record)
+    for bad, why in [(WB.table_param("model.embed_tokens.weight", 64), "not a table"), ("weights/model.nope@64", "not another field")]:
+        with pytest.raises(ValueError, match=re.escape(f"{bad}: a served read is of rows of a weight of the record, {why}")):
+            WW.weights_record(reg, d, man, grain=GRAIN, served_params=[bad])
+
+
 def _checkpoint(tmp_path, seed: int = 3, flip: str | None = None, quant: dict | None = None) -> tuple[str, str]:
     """TINY's checkpoint as safetensors shards of its HF names (random bf16 weights from ``seed``, the low bit of ``flip``'s
     first element flipped) and a manifest pinning it at `test_steps._registered`'s model and revision: the checkpoint
