@@ -321,4 +321,8 @@ class InProcessCertifier:
         if (why := call.shape.refusal()) is not None:
             raise FeedError(why)
         self.roots[key] = bytes(root)
+        return self.coins(call)
+
+    def coins(self, call: Call) -> Feed:
+        """An admitted call's feed, sampled once its root is held."""
         return Feed.of(call, CallCoins.sample(call.shape, self.rand))
