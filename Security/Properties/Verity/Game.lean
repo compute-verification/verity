@@ -16,7 +16,7 @@ and sampled proofs must commit to one record (`Core.Onsite.tied`). Five of its c
 
 | subprotocol | `Audit` | component |
 | --- | --- | --- |
-| sampled proofs | `.sampled` | `VStar.Recursive.Sampled.protocol`: one-stage v2's audit or the recursive audit, as its params' `form` names it |
+| sampled proofs | `.sampled` | `VStar.Recursive.Sampled.protocol`: one-stage v1's audit or the recursive audit, as its params' `form` names it |
 | PoUW | `.pouw` | `PouwCheck.Period.protocol` |
 | PoUS | `.pous` | `PousCheck.RunProtocol.protocol` |
 | the bandwidth audit | `.poub` | `RemoteAudit.Protocol.protocol` |
