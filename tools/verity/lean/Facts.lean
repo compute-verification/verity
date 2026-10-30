@@ -43,7 +43,11 @@ judgement; `check.py` holds the policy.
 - each pin's `inline`: the `Prop` binders of its statement, with a definition under `meaning` it applies unfolded once
   (`liftOf`), in each conjunct, instance binders aside, each split past its leading `∀` over data and at `∧`
   (`inlineParts`): as printed with those `∀`s, its head as written and past reducible unfolding (`premiseHead`), whether
-  it is a plain range (`plainRange`), whether it is closed, and whether the statement as written binds it (`outer`).
+  it is a plain range (`plainRange`), whether it is closed, whether the statement as written binds it (`outer`), and the
+  constants it uses whose names its text shows (`consts`).
+- `constants`: each name under `names` (what `check.py` asks after: the names in the lock's `shape.inline` texts) and
+  each of the inline parts' `consts` that is a constant here, with its kind; a definition's and a theorem's `readCanon` is
+  a `const:` line, so `check.py` can tell a renamed declaration from another one.
 - `instances`: each constant with a declaration range whose name (a private one's as written) ends in a component
   starting with `inst`, with that component as an identifier (`id`) and where its declaration's name is (`at`: line,
   codepoint column). An anonymous `instance` has its name there as the keyword `instance` itself.
@@ -887,7 +891,8 @@ def plainRange (t : Expr) : Bool :=
 
 /-- The parts of a premise `t` for the inline rule, under the binders `ys` stripped so far: past its leading `∀` over data
 (`∀ ω`), split at `∧`. Each is printed with those binders, with its head as written and past reducible unfolding
-(`premiseHead`, which also passes its antecedents: `A → X` asks less than `X`), and whether it is a plain range. -/
+(`premiseHead`, which also passes its antecedents: `A → X` asks less than `X`), whether it is a plain range, and the
+constants it uses whose names its text shows. -/
 partial def inlineParts (moduleOf : Name → Option Name) (ys : Array Expr) (t : Expr) : MetaM (Array Json) := do
   let t := t.consumeMData
   if let .forallE n d b bi := t then
@@ -897,8 +902,11 @@ partial def inlineParts (moduleOf : Name → Option Name) (ys : Array Expr) (t :
     return (← inlineParts moduleOf ys t.appFn!.appArg!) ++ (← inlineParts moduleOf ys t.appArg!)
   let head := t.getAppFn.constName?
   let unfolded ← premiseHead moduleOf 4 t
-  return #[Json.mkObj [("type", toJson (toString (← ppExpr (← mkForallFVars ys t)))), ("head", toJson (head.map toString)),
-    ("unfolded", toJson (unfolded.map toString)), ("range", toJson (plainRange t))]]
+  let e ← mkForallFVars ys t
+  let text := toString (← ppExpr e)
+  let consts := (e.getUsedConstants.map toString).filter fun c => (text.splitOn c).length > 1
+  return #[Json.mkObj [("type", toJson text), ("head", toJson (head.map toString)),
+    ("unfolded", toJson (unfolded.map toString)), ("range", toJson (plainRange t)), ("consts", toJson (consts.qsort (· < ·)))]]
 
 /-- Each pin's `inline`: the `Prop` binders of the statement `t`, a definition under `meaning` it applies unfolded once
 (`liftOf`), in each of its conjuncts, instance binders aside, split by `inlineParts`, each with its binder's name, whether
@@ -1162,6 +1170,11 @@ unsafe def main (args : List String) : IO UInt32 := do
   let pinned ← tasks.mapM fun t => IO.ofExcept t.get
   lap "pins" pinned.size
   let field (j : Json) (k : String) : Array Json := (j.getObjValD k).getArr?.toOption.getD #[]
+  let asked := names cfg "names" ++ pinned.foldl (init := #[]) fun acc (_, j) =>
+    (field j "inline").foldl (init := acc) fun acc p => acc ++ names p "consts"
+  let constants := (asked.foldl (init := (({} : NameSet), #[])) fun (s, out) n =>
+    if s.contains n then (s, out) else (s.insert n, match env.find? n with | some ci => out.push (n, ci) | none => out)).2
+  lap "constants" constants.size
   let nameAt (j : Json) (k : String) : Option Name := (j.getObjValD k).getStr?.toOption.map String.toName
   let candidates := names cfg "assumptions" ++ pinned.foldl (init := #[]) fun acc (_, j) =>
     acc ++ (field j "premises").filterMap (nameAt · "head") ++ (field j "hypotheses").filterMap (nameAt · "named")
@@ -1218,6 +1231,10 @@ unsafe def main (args : List String) : IO UInt32 := do
         done := done.insert c
         lines := lines.push <| Task.spawn fun _ =>
           (Json.mkObj [("id", toJson s!"read:{c}"), ("canon", toJson (readCanon rci))]).compress
+    for (c, ci) in constants do
+      if ci matches .defnInfo _ | .thmInfo _ then
+        lines := lines.push <| Task.spawn fun _ =>
+          (Json.mkObj [("id", toJson s!"const:{c}"), ("canon", toJson (readCanon ci))]).compress
     let h ← IO.FS.Handle.mk path .write
     for l in lines do
       h.putStrLn l.get
@@ -1241,6 +1258,7 @@ unsafe def main (args : List String) : IO UInt32 := do
     ("axioms", toJson (used.toArray.qsort Name.lt |>.map toString)), ("offenders", toJson offenders),
     ("unreported_errors", toJson unreportedErrors), ("declared_axioms", toJson declared), ("escapes", toJson escapes), ("spec_definitions", toJson specDefs),
     ("instances", toJson instances), ("pins", Json.mkObj pinned.toList),
+    ("constants", Json.mkObj (constants.toList.map fun (c, ci) => (c.toString, Json.mkObj [("kind", toJson (kind ci))]))),
     ("assumption_reads", Json.mkObj (walks.toList.map fun (a, rs) => (a.toString, toJson (rs.map fun (c, m, ci) =>
       Json.mkObj [("name", toJson c.toString), ("module", toJson m.toString), ("kind", toJson (kind ci))])))),
     ("moved_conflicts", toJson conflicts)]
