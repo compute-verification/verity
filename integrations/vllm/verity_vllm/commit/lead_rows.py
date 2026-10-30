@@ -25,7 +25,9 @@ then gets one d, and a forward's A_j come before its words.  It refuses everythi
 
 **On the device.**  A forward's words are hashed where they are served (:class:`DeviceWords`): ``native_rows.cu``'s tile
 gather and inline leaves call by call, then its pads and levels up to the subtree's top, which :meth:`WindowKeying.words_top`
-keys as :meth:`WindowKeying.words_root` keys the CPU's.
+keys as :meth:`WindowKeying.words_root` keys the CPU's.  A_j's are hashed from its bytes on the device (:func:`device_a_top`):
+its segments' inline leaves, then the same pads and levels, up to the top :meth:`WindowKeying.a_top` keys as
+:meth:`WindowKeying.a_root` keys the CPU's.
 """
 from __future__ import annotations
 
@@ -44,8 +46,8 @@ from verity_vllm.errors import Refused
 
 __all__ = ["A_LEAF_TAG", "A_SEGMENT", "BINDING_TAG", "CHUNK_WORDS", "KEY_SALT_BYTES", "ROW_TILE", "TILE_COLS", "TILE_ROWS",
            "TILE_WORDS", "WORDS_LEAF_TAG", "WORDS_POSITION", "DeviceWords", "Subtree", "WindowKeying", "a_position",
-           "a_segments", "chunk_count", "chunks", "committed_tiles", "instance_domain", "key_leaf", "keyed_root", "pad_cols",
-           "pad_rows", "stream", "subtree", "words_position", "words_values"]
+           "a_segments", "chunk_count", "chunks", "committed_tiles", "device_a_top", "instance_domain", "key_leaf", "keyed_root",
+           "pad_cols", "pad_rows", "stream", "subtree", "words_position", "words_values"]
 
 TILE_ROWS, TILE_COLS = 16, 8
 TILE_WORDS = TILE_ROWS * TILE_COLS
@@ -218,10 +220,21 @@ class WindowKeying:
     def a_root(self, forward: int, call: int, a: bytes) -> bytes:
         """root(A_j): the keyed digest of the call's A, in ``A_SEGMENT``-byte segments, at f calls + j, before the forward's
         words are keyed."""
-        position = a_position(forward, self._calls, call)
-        if words_position(forward) in self._digests:
-            raise Refused(f"call {call} of forward {forward} after the forward's words were keyed")
-        return self._keyed(position, A_LEAF_TAG, a_segments(a))
+        return self._keyed(self._a_unkeyed(forward, call), A_LEAF_TAG, a_segments(a))
+
+    def a_domain(self, forward: int, call: int, count: int) -> CommitmentDomain:
+        """The domain of A_j's instance of ``count`` segments, ``ceil(m K / A_SEGMENT)`` for m rows of K, for its leaves on the
+        device (`device_a_top`).  It refuses what :meth:`a_root` refuses."""
+        return instance_domain(self._salt_w, self._a_unkeyed(forward, call), _leaf_count("an A", count))
+
+    def a_top(self, forward: int, call: int, count: int, top: bytes, *, check: bytes | None = None) -> bytes:
+        """root(A_j) from its subtree's top as the device hashed it (`device_a_top`): the root's two children (128 bytes) for
+        ``count`` >= 2 segments, or the one segment of 1 to ``A_SEGMENT`` bytes.  ``check``, A_j's bytes, recomputes the
+        subtree on the CPU and refuses a top that differs.  d is :meth:`a_root`'s for the same A."""
+        dom = self.a_domain(forward, call, count)
+        values = None if check is None else a_segments(bytes(check))
+        return self._top(a_position(forward, self._calls, call), dom, A_LEAF_TAG, top, A_SEGMENT, values,
+                         f"call {call}'s A in forward {forward}")
 
     def words_root(self, forward: int, calls: Sequence[bytes]) -> bytes:
         """The forward's words root: the keyed digest of its calls' committed streams, in call order, at 2^63 + f."""
@@ -230,35 +243,43 @@ class WindowKeying:
     def words_domain(self, forward: int, count: int) -> CommitmentDomain:
         """The domain of the forward's words instance of ``count`` leaves, for its leaves on the device (`DeviceWords`).  Its
         id binds ``count``, so a forward's chunks (`chunk_count` of each call) are fixed before its first leaf."""
-        position = self._unkeyed(words_position(forward))
-        if type(count) is not int or not 1 <= count < 1 << 32:
-            raise Refused(f"a words instance of {count} leaves: 1 to 2^32 - 1, the device's ranks")
-        return instance_domain(self._salt_w, position, count)
+        return instance_domain(self._salt_w, self._unkeyed(words_position(forward)), _leaf_count("a words", count))
 
     def words_top(self, forward: int, count: int, top: bytes, *, check: Sequence[bytes] | None = None) -> bytes:
         """The forward's words root from its subtree's top as the device hashed it (`DeviceWords.top`): the root's two
         children (128 bytes) for ``count`` >= 2 leaves, or the one chunk.  ``check``, the calls' committed streams, recomputes
         the subtree on the CPU and refuses a top that differs."""
         dom = self.words_domain(forward, count)
-        try:
-            m_top = keyed.top_from(dom, WORDS_LEAF_TAG, count, bytes(top))
-        except ProtocolError as e:
-            raise Refused(str(e)) from None
-        if count == 1 and not 0 < len(top) <= 4 * CHUNK_WORDS:
-            raise Refused(f"a one-chunk words instance holds 1 to {4 * CHUNK_WORDS} bytes, not {len(top)}")
-        if check is not None:
-            values = words_values(self._words_calls(check))
-            if len(values) != count:
-                raise Refused(f"the device's words instance has {count} leaves and the CPU's {len(values)}")
-            sub = subtree(dom, WORDS_LEAF_TAG, values)
-            if keyed.top_message(dom, WORDS_LEAF_TAG, sub.values, sub.levels) != m_top:
-                raise Refused(f"forward {forward}'s words top from the device is not the CPU's")
-        return self._store(words_position(forward), keyed.digest(self._ks_w, self._salt_w, m_top))
+        values = None if check is None else words_values(self._words_calls(check))
+        return self._top(words_position(forward), dom, WORDS_LEAF_TAG, top, 4 * CHUNK_WORDS, values, f"forward {forward}'s words")
 
     def _words_calls(self, calls: Sequence[bytes]) -> Sequence[bytes]:
         if len(calls) > self._calls:
             raise Refused(f"{len(calls)} calls' words in a window of {self._calls} calls a forward")
         return calls
+
+    def _a_unkeyed(self, forward: int, call: int) -> int:
+        position = a_position(forward, self._calls, call)
+        if words_position(forward) in self._digests:
+            raise Refused(f"call {call} of forward {forward} after the forward's words were keyed")
+        return self._unkeyed(position)
+
+    def _top(self, position: int, dom: CommitmentDomain, schema: str, top: bytes, value_bytes: int,
+             values: list[bytes] | None, what: str) -> bytes:
+        count = dom.count
+        try:
+            m_top = keyed.top_from(dom, schema, count, bytes(top))
+        except ProtocolError as e:
+            raise Refused(str(e)) from None
+        if count == 1 and not 0 < len(top) <= value_bytes:
+            raise Refused(f"{what}: a one-leaf instance holds 1 to {value_bytes} bytes, not {len(top)}")
+        if values is not None:
+            if len(values) != count:
+                raise Refused(f"{what}: the device's instance has {count} leaves and the CPU's {len(values)}")
+            sub = subtree(dom, schema, values)
+            if keyed.top_message(dom, schema, sub.values, sub.levels) != m_top:
+                raise Refused(f"{what}: the top from the device is not the CPU's")
+        return self._store(position, keyed.digest(self._ks_w, self._salt_w, m_top))
 
     def _unkeyed(self, position: int) -> int:
         if self._salt_w is None:
@@ -275,6 +296,54 @@ class WindowKeying:
     def _store(self, position: int, d: bytes) -> bytes:
         self._digests[position] = d
         return d
+
+
+def _leaf_count(what: str, count: int) -> int:
+    if type(count) is not int or not 1 <= count < 1 << 32:
+        raise Refused(f"{what} instance of {count} leaves: 1 to 2^32 - 1, the device's ranks")
+    return count
+
+
+def _tree_step(ext, dom: CommitmentDomain, schema: str):
+    # pads and nodes read only the domain id; the row-leaf fields are never hashed here
+    return ext.RowStep(dom.domain_id, bytes(64), bytes(128), bytes(128), bytes(128), schema, 64)
+
+
+def _device_top(hasher, rs, leaves, count: int, stream) -> bytes:
+    """The top of an instance of ``count`` >= 2 leaves on the device: its pads (``rows_frame``) and levels (``rows_tree``) up
+    to the root's two children, on ``stream``."""
+    import torch
+
+    width = 1 << (count - 1).bit_length()
+    if width > count:
+        pads = hasher.rows_frame(rs, leaves.new_empty((0, 64)), count, width - count, count, stream.cuda_stream)
+        leaves = torch.cat([leaves, pads])
+    levels, _root, _ms = hasher.rows_tree(rs, leaves.contiguous(), 0, stream.cuda_stream)
+    return levels[-2].cpu().numpy().tobytes()
+
+
+def device_a_top(ext, hasher, dom: CommitmentDomain, a, stream_ptr: int) -> bytes:
+    """A_j's subtree top hashed on the device, from its row-major bytes ``a`` (the call's quantized activations, a CUDA tensor
+    of one-byte elements) under :meth:`WindowKeying.a_domain`'s ``dom``, on the CUDA stream ``stream_ptr``: its segments'
+    inline position-bound leaves (``lead_leaves``), then the pads and levels :meth:`DeviceWords.top` hashes, up to the top
+    :meth:`WindowKeying.a_top` keys."""
+    import torch
+
+    count, size = dom.count, a.numel()
+    if a.element_size() != 1 or not a.is_cuda:
+        raise Refused(f"A_j's device top takes a CUDA tensor of one-byte elements, not {a.dtype} on {a.device}")
+    if -(-size // A_SEGMENT) != count:
+        raise Refused(f"A_j of {size} bytes has {-(-size // A_SEGMENT)} segments, and its instance {count}")
+    if size % 8:
+        raise Refused(f"A_j's device leaves take whole 8-byte words, not {size} bytes")
+    main = torch.cuda.ExternalStream(stream_ptr)
+    with torch.cuda.stream(main):
+        flat = a.reshape(-1).view(torch.uint8)
+        if count == 1:
+            return flat.cpu().numpy().tobytes()
+        leaves = hasher.lead_leaves(ext.LeadStep(dom.domain_id, A_LEAF_TAG), flat, A_SEGMENT, count,
+                                    size - A_SEGMENT * (count - 1), 0, stream_ptr)
+        return _device_top(hasher, _tree_step(ext, dom, A_LEAF_TAG), leaves, count, main)
 
 
 class DeviceWords:
@@ -298,8 +367,7 @@ class DeviceWords:
         self._stream = torch.cuda.ExternalStream(stream_ptr)
         self._lanes = [torch.cuda.Stream(device=self._stream.device) for _ in range(lanes)]
         self._ls = ext.LeadStep(dom.domain_id, WORDS_LEAF_TAG)
-        # pads and nodes read only the domain id; the row-leaf fields are never hashed here
-        self._rs = ext.RowStep(dom.domain_id, bytes(64), bytes(128), bytes(128), bytes(128), WORDS_LEAF_TAG, 64)
+        self._rs = _tree_step(ext, dom, WORDS_LEAF_TAG)
         self._leaves: list = []
         self._next = 0
         self._one = None
@@ -340,9 +408,4 @@ class DeviceWords:
             if count == 1:
                 return self._one.view(torch.uint8).cpu().numpy().tobytes()
             leaves = torch.cat(self._leaves) if len(self._leaves) > 1 else self._leaves[0]
-            width = 1 << (count - 1).bit_length()
-            if width > count:
-                pads = self._hasher.rows_frame(self._rs, leaves.new_empty((0, 64)), count, width - count, count, main.cuda_stream)
-                leaves = torch.cat([leaves, pads])
-            levels, _root, _ms = self._hasher.rows_tree(self._rs, leaves.contiguous(), 0, main.cuda_stream)
-            return levels[-2].cpu().numpy().tobytes()
+            return _device_top(self._hasher, self._rs, leaves, count, main)
