@@ -95,7 +95,7 @@ def test_a_request_that_does_not_queue_takes_a_free_slot_or_is_refused_at_once_a
 
 
 def test_a_waiter_names_each_holder_and_repeats_the_list_every_few_minutes(slots, monkeypatch):
-    """The holders' pid, run, who and since when, so a waiting audit's log says whom it waits behind (the lander, 3 Oct)."""
+    """The holders' pid, run, who and since when, so a waiting audit's log says whom it waits behind."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r-me")
     me = os.getpid()
     held = [_hold(slots / f"lean-audit-{i}.lock", {"pid": me, "run": f"r-{i}", "tree": "/src/740daff33", "by": by,
