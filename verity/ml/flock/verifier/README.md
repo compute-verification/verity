@@ -98,9 +98,12 @@ flock-verify rec-compose --rec-inner F --rec-rows F [--archive DIR] LOG...      
 
 Each session `DIR` holds `session.json` (the `flock-live-session/v1` record) and each table's `<table>.rep0.bin` and
 `<table>.rep1.bin`. `verify` prints one `VERDICT {"accepted", "session", "why", …}` line per session and exits 0 iff all
-are accepted. A recursive statement is one `verify --zk` per V* part, each `VERDICT` naming its part (`rec_part`) and the
-SHA-512 of the shared rows file (`rec_rows_sha512`) and inner shape file (`rec_inner_sha512`) it checked; `rec-compose`
-accepts only when every part is accepted at the one rows file and inner shape file.
+are accepted. A recursive statement is one `verify --zk` per V* part, and no part sees another. Each part's `VERDICT`
+names its part (`rec_part`) and the SHA-512 of the shared rows file it checked (`rec_rows_sha512`), of the inner shape file
+it read (`rec_inner_sha512`), and of the inner session's record and its transcript (`rec_inner_session_sha512`,
+`rec_inner_transcript_sha512`). `rec-compose` (`Flock.RecCompose.check`) accepts only when there is one log per V*
+statement and every part is accepted at the one rows file the prover staged (`acc0`, the tops, the `rec-c<k>` rows), at
+the composition's own inner shape file, and at the one inner session and transcript the first part names.
 
 `ID` names a statement version (`Flock.Tags`): `verity/flock-circuit`, the default, whose rows are `hm96-sha512/row/v1`
 leaves and whose outputs are all hidden rows; `verity/flock-circuit/types`, the typed statement;
