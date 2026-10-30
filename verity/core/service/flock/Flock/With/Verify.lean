@@ -5,6 +5,7 @@ what hashes nothing is the compiled verifier's own, lifted (`liftTM`, `liftLM`).
 -/
 import Flock.With.Transcript
 import Flock.Verify
+import Flock.JsonParse
 
 namespace Flock
 
@@ -266,7 +267,7 @@ def ligeritoWith (hs : Hashes M) (ms : MerkleScheme) (sch : Schedule) (T : F128)
   return ()
 
 /-- `verifyRep` with the oracle's hashes. -/
-def verifyRepWith (hs : Hashes M) (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : Session) (i r : Nat)
+def verifyRepWith (hs : Hashes M) (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : RunRecord) (i r : Nat)
     (bytes : ByteArray) : M ByteArray := do
   let t := spec.tables[i]!
   let name := s!"{t}/rep{r}"
@@ -295,7 +296,7 @@ def repFileShape (st : Setup) (sch : Schedule) (n : Nat) : Shape :=
 /-- **`verifyRepWith` at the decoded proof `p`**: everything after the decode, on the rep's stream with the statement's
 extra claims: the pinned PCS parameters (R7/F2), §9–§14, every recorded round consumed (S15/R2) and the cap the committed
 `root_B` (S16/R1). -/
-def verifyRepPWith (hs : Hashes M) (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : Session) (i r : Nat)
+def verifyRepPWith (hs : Hashes M) (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : RunRecord) (i r : Nat)
     (stream : StreamRec) (extras : Array Claim) (p : Proof) : M ByteArray := do
   let t := spec.tables[i]!
   let name := s!"{t}/rep{r}"
@@ -313,7 +314,7 @@ def verifyRepPWith (hs : Hashes M) (spec : SessionSpec) (st : Setup) (sch : Sche
 
 /-- **`verifyRepWith` splits at the decode**: the rep's stream (S11) and the extra claims, the proof file decoded at
 `repFileShape`, then `verifyRepPWith` at the decoded proof. -/
-theorem verifyRepWith_split (hs : Hashes M) (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : Session)
+theorem verifyRepWith_split (hs : Hashes M) (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : RunRecord)
     (i r : Nat) (bytes : ByteArray) :
     verifyRepWith hs spec st sch sess i r bytes = (do
       let name := s!"{spec.tables[i]!}/rep{r}"
@@ -368,7 +369,7 @@ def verifyJWithM (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup) (j : 
     if c0 != c1 then throw s!"S18/R1: {spec.tables[i]!}: the reps' caps differ"
 
 theorem verifyWithM_of_parse [LawfulMonad M] (hs : Hashes M) (spec : SessionSpec) (tabs : Array Setup)
-    {record : String} {j : Lean.Json} (proofs : Array ByteArray) (h : Lean.Json.parse record = .ok j) :
+    {record : String} {j : Lean.Json} (proofs : Array ByteArray) (h : JsonParse.parse record = .ok j) :
     verifyWithM hs spec tabs record proofs = verifyJWithM hs spec tabs j proofs := by
   simp only [verifyWithM, verifyJWithM, Record.decodeWith_of_parse hs spec h]
 

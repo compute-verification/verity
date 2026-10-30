@@ -454,6 +454,8 @@ def descriptor_chunks(program, schema: str = SCHEMA) -> Iterator[bytes]:
 
 
 def canonical_json(obj: Any) -> bytes:
+    """Canonical JSON, the bytes Lean's `Flock.canon` writes: compact, keys sorted, every character outside printable ASCII
+    a lowercase `\\uXXXX` escape (a surrogate pair above U+FFFF), so no byte is at or above 0x7f."""
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
 
 

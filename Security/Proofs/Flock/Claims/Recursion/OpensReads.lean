@@ -68,7 +68,7 @@ theorem RecRaw.ins_commits {w : RecRaw} {s : RecIns} (h : w.ins = .ok s) :
 
 theorem commits_parse_error {sh : RecVStar.Inner} {tt : String} {e : String} {r : Except String (Option String)}
     {bound : Flock.V (Option String × Option RecVStar.StackedShape)} {record : String} {cs : RecVStar.InnerCommits}
-    (hp : Json.parse tt = .error e) : RecSetup.commits (some sh) (.ok tt) r bound record ≠ .ok cs := by
+    (hp : Flock.JsonParse.parse tt = .error e) : RecSetup.commits (some sh) (.ok tt) r bound record ≠ .ok cs := by
   intro h
   unfold RecSetup.commits at h
   simp only [bind, Except.bind, pure, Except.pure, hp] at h
@@ -90,7 +90,7 @@ theorem commitsOf_reads {w : RecRaw} {src : Option RecCoins.Source}
     {bound : Flock.V (Option String × Option RecVStar.StackedShape)} {sh : RecVStar.Inner}
     {c : Option RecVStar.InnerCommits} {t : ByteArray} (ht : w.transcript = some t)
     (h : commitsOf w src bound (some sh) = .ok c) :
-    ∃ cs tt tr record, c = some cs ∧ String.fromUTF8? t = some tt ∧ Json.parse tt = .ok tr ∧
+    ∃ cs tt tr record, c = some cs ∧ String.fromUTF8? t = some tt ∧ Flock.JsonParse.parse tt = .ok tr ∧
       src.map (·.record) = some record ∧ RecSetup.checkReads sh tt tr record cs = .ok () := by
   unfold commitsOf at h
   rw [ht] at h
@@ -113,7 +113,7 @@ theorem commitsOf_reads {w : RecRaw} {src : Option RecCoins.Source}
         exact absurd hX commits_text_error
       | some tt =>
         rw [textOf, htx] at hX
-        cases hp : Json.parse tt with
+        cases hp : Flock.JsonParse.parse tt with
         | error e => exact absurd hX (commits_parse_error hp)
         | ok tr => exact ⟨cs, tt, tr, record, rfl, rfl, hp, rfl, FlockC3.VStarList.reads_of_commits hp hX⟩
 
@@ -502,9 +502,7 @@ theorem vu_lt_pow2_setupOne {tags : Tags} {cf pf : ByteArray} {coins : Coins} {t
     g < 2 ^ st.c.g.log2 := by
   unfold HiddenExec.setupOne at h
   split at h
-  · have P := FlockSoundness.parse_facts (HiddenExec.parse_untyped ht (HiddenExec.setupHidden_parseC h)).1
-    obtain ⟨ls, hls⟩ := P.check
-    exact Layout.vu_lt_pow2_of (FlockSoundness.check_facts P.typed hls) hg
+  · exact Layout.vu_lt_pow2_of (Hidden.parseCommit_checkFacts ht (Hidden.setupHidden_parseCommit h)) hg
   · exact Layout.vu_lt_pow2_of (Aliased.setupH_unitFacts ht h).check hg
 
 open FlockSoundness.Refine in
@@ -645,7 +643,8 @@ theorem registered_of_coins {st : Stmt} {own : Option (Array Registered.Port)} {
       simp [hv] at h
 
 /-- A statement with an own port under its V\* statement's name is a rec-residuals, rec-sparse or rec-opening unit. -/
-theorem params_of_own {tags : Tags} {c : Circuit} (P : FlockSoundness.ParseFacts tags c) {sv : VStar.Stmt}
+theorem params_of_own {tags : Tags} {pre : Array (String × Net)} {c : Circuit} (P : FlockSoundness.ParseFactsU tags pre c)
+    {sv : VStar.Stmt}
     (hn : c.unit.name = sv.name) (hp : RecVStar.checkPart sv c = .ok ()) {q : String × String × Array (Option ℕ)}
     (hq : q ∈ RecVStar.ownPorts sv) :
     (RecResiduals.params c.unit.name).isSome ∨ (RecSparse.params c.unit.name).isSome ∨
@@ -946,7 +945,7 @@ theorem heldRow_bytes {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit}
   have hpr := Flock.Readable.array_forM_ok (RecIns.setup_pubRows hset) 0 h0'
   have hreg := RecIns.setup_registered hset sts[0] (Array.getElem_mem h0')
   rw [← e0] at hcoin hpr hreg
-  obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi h0
+  obtain ⟨_, _, P⟩ := Flock.Readable.parseFactsU_of_parse hx ht hpi h0
   obtain ⟨hn, hpt, -⟩ := htab 0 h0
   obtain ⟨own, hown⟩ := Option.isSome_iff_exists.1 (registered_of_coins hcoin (params_of_own P hn hpt hq))
   obtain ⟨xr, hxr, hinner, -⟩ := insO_staged hins

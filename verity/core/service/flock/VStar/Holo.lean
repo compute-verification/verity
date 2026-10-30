@@ -1,6 +1,7 @@
 import VStar.Compose
 import VStar.Json
 import VStar.Stage
+import Flock.JsonParse
 
 /-!
 # V*'s statements over a holo inner session (`rec_algebra.Shape.holo`, `rec_residuals.statement(..., holo=True)`)
@@ -92,7 +93,7 @@ def withMeta (u : UnitC) (extra : List (String × Json)) (head : String) : Excep
   let pre := s!"{FORMAT_CIRCUIT} {u.name}\nMETA "
   unless head.startsWith pre && head.endsWith "\n" do throw s!"{u.name}: not a circuit file's head"
   let text := String.ofList ((head.toList.drop pre.length).dropLast)
-  let m ← Json.parse text
+  let m ← Flock.JsonParse.parse text
   unless (← pyDumps m) == text do throw s!"{u.name}: META is not written back as it was read"
   for (k, _) in extra do
     if (m.getObjVal? k).isOk then throw s!"extra META: {k} is META's own key"
