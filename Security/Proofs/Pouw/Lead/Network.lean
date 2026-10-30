@@ -10,8 +10,8 @@ import Proofs.Pouw.Lead.Network.Term
 * `Cells`: every cell of the lead, step 0 included, is a `-rot` cell of the words it is computed from, so it does at
   most `256 / 3` MACs a bit of its message (`lead_cells_macs_le`).
 * `Term`: what `Rot`'s theorems prove of the statement's definitions: the lead's cells carry the three coin lanes at
-  every step, a call's network term at caps 32 and 320 (`networkGap_le`, `networkGap_le320`), a forward's calls' bits
-  (`forward_sum`) and Llama-3.2-1B's forward (`llama_forward`).
+  every step, a forward's network term from its bits (`networkFwd`), a forward's calls' bits (`forward_sum`) and
+  Llama-3.2-1B's forward (`networkLlama`).
 
 Its proofs go in `Lead/Network/`, its declarations in `Pouw.SecurityProofs.Lead.Network`, and each file is imported
 here.

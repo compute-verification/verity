@@ -1,4 +1,4 @@
-import Definitions.Pouw.Lead.Gap
+import Definitions.Pouw.Lead.Forward
 import Definitions.Pouw.Assumptions.Dimension.H100W
 import Definitions.Core.Assumptions
 
@@ -24,14 +24,16 @@ The protocol premises the code can't be checked against yet:
   message with its digest.
 * `CommitL1w`: the honest commitment is the lead's layout, at its credited compressions: every words chunk and every
   row of A is a frame-v3 leaf at its own position.
-* `OutsourceWithinEgressLead`: an exchanged bit replaces at most `β` of priced W1 work (class L). The bits are
-  bounded by the protocol: `Accepted` refuses a call past its share of the cap (`Layout.callBits`).
+* `OutsourceWithinEgressLead`: an exchanged bit replaces at most `β` of priced W1 work (class L). `G` charges `β` a
+  bit, and the bits are bounded per forward (`SerialForwards`, `Pouw.Lead.Forward.Accepted`).
 
-The device premise:
+The device premises:
 * `CertifierCoins` (`trusted-host` at the network certifier): the certifier reads the `A` root a strategy registered
   and releases the coins, a one-to-one decoding of its own entropy, to the node alone. `G` takes it as a hypothesis
   and is stated over the entropy: at each entropy value, the strategy runs at the coins the device releases
   (`released`), so its bound averages over the coins uniformly because the device runs `certCode`.
+* `SerialForwards` (`trusted-host` at the network certifier, with the verifier's refusal of overlapping forwards): the
+  bits a forward's calls exchange are at most what the certifier counted for the forward, its release included.
 -/
 
 namespace Pouw.Assumptions.Lead
@@ -106,7 +108,8 @@ messages it hashes.
 
 Rationale: the measured compression forms on the card, the words at the lead's 256 KiB chunks (a chunk's padding block
 and its first block from a constant midstate are its cheaper compressions, so the figure rises with the chunk); the
-ruling accepts the count as a premise. -/
+ruling accepts the count as a premise, the honest program's count taken as the best. The stock figure assumes the
+count exact to about `1%/h` (0.008% at `h = 127.5`): an error `δ` in it moves the gap by `δ · h` of stock. -/
 def ShaWrites (isA : Hash.Msg → Bool) (Real : Strategy L → Prop) : Prop :=
   ∀ σ, Real σ → ∀ ω, ((σ.exec ω).hashed.map (shaCredit isA)).sum ≤ (σ.exec ω).shaRegs
 
@@ -147,11 +150,11 @@ honest commitment's messages, at priced W1 work at most its own plus `β` a bit 
 
 Rationale: what an outside machine computes for the node, the node can compute itself, the honest commitment's
 hashing included; a coin bit carries at most `n_max` MACs of the coins' work (every step carries the three coin
-lanes), each worth at most the call's honest W1 work a MAC (`betaLead`). The bits are the protocol's: `Accepted`
-bounds them by the call's share of the cap. `A` is fixed before the coins, so its root carries no coin bit: an outside
-machine that holds `A` can return its 512-bit root, and the twin then hashes `A`'s messages on the node at
-`3,449.05` registers a compression, more than `β · 512` once `rows · K` passes about 210,000. On such a call the
-premise is false for a node that some outside machine holding `A` serves. -/
+lanes), each worth at most the call's honest W1 work a MAC (`betaLead`). The bits are the protocol's: the network
+certifier bounds a forward's (`SerialForwards`, `Pouw.Lead.Forward.Accepted`). `A` is fixed before the coins, so its
+root carries no coin bit: an outside machine that holds `A` can return its 512-bit root, and the twin then hashes
+`A`'s messages on the node at `3,449.05` registers a compression, more than `β · 512` once `rows · K` passes about
+210,000. On such a call the premise is false for a node that some outside machine holding `A` serves. -/
 def OutsourceWithinEgressLead (pr : Prices100) (β : ℚ) (H : Hash.Msg → Hash.Digest) (C : Pouw.Lead.Commit L)
     (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (Real : Strategy L → Prop) : Prop :=
   ∀ σ, Real σ → ∃ σ', Real σ' ∧ σ'.pre = σ.pre ∧ σ'.aRoot = σ.aRoot ∧
@@ -182,5 +185,23 @@ def CertifierCoins {Device Ent : Type} (cert : Device) (coinsOf : Ent ≃ Coins 
 def released {Device Ent : Type} (cert : Device) (runC : Device → Hash.Digest × Ent → Hash.Digest × Coins L)
     (σ : Strategy L) (e : Ent) : Coins L :=
   (runC cert (σ.aRoot, e)).2
+
+/-- `pouw-serial-forwards` (proposed; `trusted-host` at the network certifier, with the verifier's refusal of
+overlapping forwards). **A forward's calls exchange at most what the certifier counted for it**: the bits a forward's
+calls' executions exchange (`Exec.egress`), summed, are at most the bits the network certifier counted over the
+forward's span and the bits its release carries.
+
+* Forwards are serial: a forward is open from its first call's `A` root to its words root, and the verifier refuses a
+  forward that opens while another is open. So every bit the node exchanges while a forward is open is counted
+  against that forward, each bucket once.
+* The certifier holds the node's links at rate 0 over the span and releases them at the words root. The release is
+  the one event that carries bits across the boundary, at most `⌈log₂(r + 1)⌉` at the window's rate `r`, counted
+  once (`Forward.release`).
+
+Rationale: `trusted-host`; the certifier is the auditor's hardware on the node's links, and counts what crosses them.
+The hold isn't built yet: a certifier that releases each frame at the window's rate as it is handed lets a frame
+inside a forward's span carry its bytes, far past a decode forward's bits, and the premise is false for it. -/
+def SerialForwards (F : Forward) : Prop :=
+  (F.calls.map FwdCall.egress).sum ≤ F.count + F.release
 
 end Pouw.Assumptions.Lead

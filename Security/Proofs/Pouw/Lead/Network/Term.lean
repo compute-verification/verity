@@ -14,13 +14,14 @@ What `Rot`'s theorems prove of the statement's definitions:
   `-rot`'s weights, `foldEven` on even rows and `foldOdd` on odd rows, of odd coins `2u − 127`; the rest of the step's
   coin term reads no lane; and the data fit 21 lanes on step 0 and 28 on each later step. So the lead's cells meet
   `Cell.Rot`, and `n_max ≤ nMax` (`Cells.lead_cells_macs_le`).
-* `networkGap_le`, `networkGap_le320`: a call's network term, `nMax · wMac · callBits / 32`, is at most 0.0361% of
-  its stock at cap 32 and 0.361% at cap 320 for every call of `n, K ≥ 4,096` (`networkGap_le_of` at the call's
-  `wMac ≤ 128.59`, `betaLead_le_range`, and `rows ≤ m`).
-* `forward_sum`: a forward's calls' bits sum to its cap, `cap · T`, so no call takes another's share.
-* `llama_forward`: over Llama-3.2-1B's own calls (`llamaCalls`), whose `K = 2,048` is below `GapAt`'s range, a
-  forward's network term is at most 0.0363% of its stock at cap 32 and 0.363% at cap 320 (`llama_betaLead_le`: the
-  calls' `wMac ≤ 129.25`, `2,048 × 2,048` the largest).
+* `networkFwd` (`Pouw.Guarantees.Lead.NetworkFwd`): under `SerialForwards`, an accepted forward's network term is at
+  most the largest `β` of its calls times its bits over 32: its calls' exchanged bits are at most what the certifier
+  counted, which is at most its bits.
+* `forward_sum`: a forward's calls' bits sum to its cap, `cap · T`.
+* `networkLlama` (`Pouw.Guarantees.Lead.NetworkLlama`): over Llama-3.2-1B's own calls (`llamaCalls`), a forward's
+  network term is at most `0.0363% · cap / 32` of its calls' served stock (`llama_betaLead_le`: the calls'
+  `wMac ≤ 129.25`, `2,048 × 2,048` the largest; `llama_call`: a call's bits are `32 · cap / fwdMacs` of its served
+  stock, its columns whole MMA tiles).
 
 With words chunks of 65,536 words (`l1w`), `wMac` is at most the words' work a MAC, their compressions' and A's
 (`betaLead_le_of_row`), the padded call's rows bounding A's; a call of no rows has `wMac = 0`.
@@ -145,68 +146,6 @@ theorem betaLead_le_of_row (L : Pouw.Lead.Layout) (C : Pouw.Lead.Commit L) (hC :
     exact hR.trans_eq (mul_comm _ _)
   exact le_of_mul_le_mul_right h (by positivity)
 
-/-- **`W_mac ≤ 128.59` at `n, K ≥ 4,096`**: `β ≤ 256 / 3 · 128.59` for every call with A's rows at most the padded
-rows, words chunks of 65,536 words and `stepsFor K` steps. -/
-theorem betaLead_le_range (L : Pouw.Lead.Layout) (C : Pouw.Lead.Commit L) (hC : Pouw.Guarantees.Lead.ChunksOf L C)
-    (hcw : L.chunkWords = 65536) (hr : L.rows ≤ L.m) (hn : 4096 ≤ L.n) (hK : 4096 ≤ L.K) (hS : L.S = stepsFor L.K) :
-    betaLead L C ≤ 256 / 3 * (12859 / 100) := by
-  refine betaLead_le_of_row L C hC hcw hr (by omega) (by omega) _ (by norm_num) ?_
-  have hS28 : 28 * L.S ≤ L.K + 34 := by
-    rw [hS]
-    unfold stepsFor
-    omega
-  have hS' : (28 : ℚ) * L.S ≤ L.K + 34 := by exact_mod_cast hS28
-  have hn' : (4096 : ℚ) ≤ L.n := by exact_mod_cast hn
-  have hK' : (4096 : ℚ) ≤ L.K := by exact_mod_cast hK
-  have hnS : (L.n : ℚ) * (28 * L.S) ≤ L.n * (L.K + 34) := mul_le_mul_of_nonneg_left hS' (by linarith)
-  have hprod : (0 : ℚ) ≤ (L.n - 4096) * (L.K - 4096) := mul_nonneg (by linarith) (by linarith)
-  unfold shaWordsRegs shaARegs
-  nlinarith [hnS, hprod]
-
-/-- **The network term from `β`**: a call whose `β` is at most `B`, with `B · cap ≤ s · fwdMacs` and A's rows at most
-its padded rows, has a network term of at most `s` of its stock. -/
-theorem networkGap_le_of (L : Pouw.Lead.Layout) (C : Pouw.Lead.Commit L) {B s : ℚ} (hβ : betaLead L C ≤ B)
-    (hr : L.rows ≤ L.m) (hF : 0 < L.fwdMacs) (hs : B * L.cap ≤ s * L.fwdMacs) :
-    networkGap L C ≤ s * stockRegs L := by
-  have hβ0 := betaLead_nonneg L C
-  have hr' : (L.rows : ℚ) ≤ L.m := by exact_mod_cast hr
-  have hF' : (0 : ℚ) < L.fwdMacs := by exact_mod_cast hF
-  have hY : (0 : ℚ) ≤ L.m * L.n * L.K := by positivity
-  have hX : (L.cap : ℚ) * (L.rows * L.n * L.K) ≤ L.cap * (L.m * L.n * L.K) := by
-    refine mul_le_mul_of_nonneg_left ?_ (by positivity)
-    exact mul_le_mul_of_nonneg_right (mul_le_mul_of_nonneg_right hr' (by positivity)) (by positivity)
-  have h1 : betaLead L C * (L.cap * (L.rows * L.n * L.K)) ≤ B * (L.cap * (L.m * L.n * L.K)) :=
-    mul_le_mul hβ hX (by positivity) (hβ0.trans hβ)
-  have h2 : B * (L.cap * (L.m * L.n * L.K)) ≤ s * L.fwdMacs * (L.m * L.n * L.K) :=
-    calc B * (L.cap * (L.m * L.n * L.K)) = B * L.cap * (L.m * L.n * L.K) := by ring
-      _ ≤ s * L.fwdMacs * (L.m * L.n * L.K) := mul_le_mul_of_nonneg_right hs hY
-  unfold networkGap Pouw.Lead.Layout.callBits stockRegs
-  calc betaLead L C * (L.cap * (L.rows * L.n * L.K) / L.fwdMacs) / 32
-      = betaLead L C * (L.cap * (L.rows * L.n * L.K)) / (32 * L.fwdMacs) := by ring
-    _ ≤ s * L.fwdMacs * (L.m * L.n * L.K) / (32 * L.fwdMacs) :=
-        div_le_div_of_nonneg_right (h1.trans h2) (by positivity)
-    _ = s * (L.m * L.n * L.K / 32) := by field_simp
-
-/-- **A call's network term at cap 32**: at most 0.0361% of its stock for every call of
-`n, K ≥ 4,096`. -/
-theorem networkGap_le (T m n K : ℕ) (hn : 4096 ≤ n) (hK : 4096 ≤ K) (C : Pouw.Lead.Commit (lead T m n K))
-    (hC : Pouw.Guarantees.Lead.ChunksOf _ C) :
-    networkGap (lead T m n K) C ≤ 361 / 1000000 * stockRegs (lead T m n K) := by
-  refine networkGap_le_of _ C (betaLead_le_range _ C hC rfl (le_padRows m) (hn.trans (le_padCols n)) hK rfl)
-    (le_padRows m) (by show 0 < 973078528; norm_num) ?_
-  show 256 / 3 * (12859 / 100) * ((32 : ℕ) : ℚ) ≤ 361 / 1000000 * ((973078528 : ℕ) : ℚ)
-  norm_num
-
-/-- **A call's network term at cap 320**: at most 0.361% of its stock for every call of
-`n, K ≥ 4,096`. -/
-theorem networkGap_le320 (T m n K : ℕ) (hn : 4096 ≤ n) (hK : 4096 ≤ K) (C : Pouw.Lead.Commit (lead320 T m n K))
-    (hC : Pouw.Guarantees.Lead.ChunksOf _ C) :
-    networkGap (lead320 T m n K) C ≤ 361 / 100000 * stockRegs (lead320 T m n K) := by
-  refine networkGap_le_of _ C (betaLead_le_range _ C hC rfl (le_padRows m) (hn.trans (le_padCols n)) hK rfl)
-    (le_padRows m) (by show 0 < 973078528; norm_num) ?_
-  show 256 / 3 * (12859 / 100) * ((320 : ℕ) : ℚ) ≤ 361 / 100000 * ((973078528 : ℕ) : ℚ)
-  norm_num
-
 theorem sum_map_mul_cast {α : Type*} (l : List α) (a : ℚ) (f : α → ℕ) :
     (l.map fun x => a * (f x : ℚ)).sum = a * ((l.map f).sum : ℚ) := by
   induction l with
@@ -238,10 +177,6 @@ theorem forward_sum (T : ℕ) (calls : List (ℕ × ℕ × ℕ))
     rw [sum_map_mul_cast, h']
     ring
 
-/-- Llama-3.2-1B's linears a layer, as `(n, K)`: `2048 × 3072`, `2048 × 2048`, `2048 × 16384` and `8192 × 2048`;
-16 layers make its 973,078,528 MACs a token. -/
-def llamaCalls : List (ℕ × ℕ) := [(3072, 2048), (2048, 2048), (16384, 2048), (2048, 8192)]
-
 /-- **`W_mac ≤ 129.25` at Llama-3.2-1B's own calls**, at any number of rows. -/
 theorem llama_betaLead_le (L : Pouw.Lead.Layout) (C : Pouw.Lead.Commit L) (hC : Pouw.Guarantees.Lead.ChunksOf L C)
     (hcw : L.chunkWords = 65536) (hr : L.rows ≤ L.m) (hc : (L.n, L.K) ∈ llamaCalls) (hS : L.S = stepsFor L.K) :
@@ -257,60 +192,64 @@ theorem llama_padCols {c : ℕ × ℕ} (hc : c ∈ llamaCalls) : padCols c.1 = c
   simp only [llamaCalls, List.mem_cons, List.not_mem_nil, or_false] at hc
   rcases hc with rfl | rfl | rfl | rfl <;> rfl
 
-/-- A call of Llama-3.2-1B has a network term of at most `0.0363% · cap / 32` of its stock, at cap 32 or 320. -/
-theorem llama_networkGap_le (T m : ℕ) {c : ℕ × ℕ} (hc : c ∈ llamaCalls) (L : Pouw.Lead.Layout)
-    (hL : L = lead T m c.1 c.2 ∨ L = lead320 T m c.1 c.2) (C : Pouw.Lead.Commit L)
-    (hC : Pouw.Guarantees.Lead.ChunksOf L C) : networkGap L C ≤ 363 / 1000000 * (L.cap / 32 : ℚ) * stockRegs L := by
-  have hmem : ((lead T m c.1 c.2).n, (lead T m c.1 c.2).K) ∈ llamaCalls := by
-    show (padCols c.1, c.2) ∈ llamaCalls
-    rw [llama_padCols hc]
-    exact hc
+/-! ## A forward's network term -/
+
+/-- **A forward's network term** (`Pouw.Guarantees.Lead.NetworkFwd`): each call's `β` is at most `B`, the calls'
+exchanged bits are at most the certifier's count and release (`SerialForwards`), and those are at most the forward's
+bits (`Forward.Accepted`). -/
+theorem networkFwd : Pouw.Guarantees.Lead.NetworkFwd := by
+  intro F B hser hacc hB hβ
+  have h1 : (F.calls.map fun c => betaLead c.L c.C * c.egress).sum ≤
+      (F.calls.map fun c => B * (c.egress : ℚ)).sum :=
+    List.sum_le_sum fun c hc => mul_le_mul_of_nonneg_right (hβ c hc) (Nat.cast_nonneg _)
+  have h2 : (F.calls.map fun c => B * (c.egress : ℚ)).sum = B * ((F.calls.map FwdCall.egress).sum : ℚ) :=
+    sum_map_mul_cast _ _ _
+  have h3 : ((F.calls.map FwdCall.egress).sum : ℚ) ≤ F.bits := by
+    have : ((F.calls.map FwdCall.egress).sum : ℚ) ≤ ((F.count + F.release : ℕ) : ℚ) := Nat.cast_le.2 hser
+    exact this.trans hacc
+  unfold Forward.networkRegs
+  rw [h2] at h1
+  exact div_le_div_of_nonneg_right (h1.trans (mul_le_mul_of_nonneg_left h3 hB)) (by norm_num)
+
+/-- **A call of Llama-3.2-1B**, at the lead or at cap 320, at any number of rows: `β ≤ 256 / 3 · 129.25`, and its bits
+are `1,024 / fwdMacs · cap / 32` of its served stock. -/
+theorem llama_call {L : Pouw.Lead.Layout} (C : Pouw.Lead.Commit L)
+    (hL : ∃ T m : ℕ, ∃ x ∈ llamaCalls, L = lead T m x.1 x.2 ∨ L = lead320 T m x.1 x.2)
+    (hC : Pouw.Guarantees.Lead.ChunksOf L C) :
+    betaLead L C ≤ 256 / 3 * (12925 / 100) ∧
+      L.callBits = 1024 / 973078528 * ((L.cap / 32 : ℚ) * servedRegs L) := by
+  obtain ⟨T, m, x, hx, hL⟩ := hL
+  have hcols : padCols x.1 = x.1 := llama_padCols hx
+  have hmem : ((lead T m x.1 x.2).n, (lead T m x.1 x.2).K) ∈ llamaCalls := by
+    show (padCols x.1, x.2) ∈ llamaCalls
+    rw [hcols]
+    exact hx
   rcases hL with rfl | rfl
-  · refine networkGap_le_of _ C (llama_betaLead_le _ C hC rfl (le_padRows m) hmem rfl) (le_padRows m)
-      (by show 0 < 973078528; norm_num) ?_
-    show 256 / 3 * (12925 / 100) * ((32 : ℕ) : ℚ) ≤ 363 / 1000000 * (((32 : ℕ) : ℚ) / 32) * ((973078528 : ℕ) : ℚ)
-    norm_num
-  · refine networkGap_le_of _ C (llama_betaLead_le _ C hC rfl (le_padRows m) hmem rfl) (le_padRows m)
-      (by show 0 < 973078528; norm_num) ?_
-    show 256 / 3 * (12925 / 100) * ((320 : ℕ) : ℚ) ≤
-      363 / 1000000 * (((320 : ℕ) : ℚ) / 32) * ((973078528 : ℕ) : ℚ)
-    norm_num
+  · refine ⟨llama_betaLead_le _ C hC rfl (le_padRows m) hmem rfl, ?_⟩
+    simp only [Pouw.Lead.Layout.callBits, servedRegs, lead, hcols]
+    push_cast
+    ring
+  · refine ⟨llama_betaLead_le _ C hC rfl (le_padRows m) hmem rfl, ?_⟩
+    simp only [Pouw.Lead.Layout.callBits, servedRegs, lead320, lead, hcols]
+    push_cast
+    ring
 
-theorem attach_sum {f : ℕ × ℕ → ℚ} :
-    (llamaCalls.attach.map fun c => f c.1).sum = (llamaCalls.map f).sum := by
-  rw [List.attach_map_val]
-
-/-- **Llama-3.2-1B's forward**: at `m` rows a call, with each call's commitment at its layout, the
-network terms of its calls are at most 0.0363% of their stock at cap 32 and 0.363% at cap 320. -/
-theorem llama_forward (T m : ℕ) (C : ∀ c ∈ llamaCalls, Pouw.Lead.Commit (lead T m c.1 c.2))
-    (C320 : ∀ c ∈ llamaCalls, Pouw.Lead.Commit (lead320 T m c.1 c.2))
-    (hC : ∀ c hc, Pouw.Guarantees.Lead.ChunksOf _ (C c hc))
-    (hC320 : ∀ c hc, Pouw.Guarantees.Lead.ChunksOf _ (C320 c hc)) :
-    (llamaCalls.attach.map fun c => networkGap _ (C c.1 c.2)).sum ≤
-        363 / 1000000 * (llamaCalls.map fun c => stockRegs (lead T m c.1 c.2)).sum ∧
-      (llamaCalls.attach.map fun c => networkGap _ (C320 c.1 c.2)).sum ≤
-        363 / 100000 * (llamaCalls.map fun c => stockRegs (lead320 T m c.1 c.2)).sum := by
-  constructor
-  · calc (llamaCalls.attach.map fun c => networkGap _ (C c.1 c.2)).sum
-        ≤ (llamaCalls.attach.map fun c => 363 / 1000000 * stockRegs (lead T m c.1.1 c.1.2)).sum :=
-          List.sum_le_sum fun c _ => by
-            have h := llama_networkGap_le T m c.2 _ (Or.inl rfl) (C c.1 c.2) (hC c.1 c.2)
-            have e : ((lead T m c.1.1 c.1.2).cap / 32 : ℚ) = 1 := by
-              show ((32 : ℕ) : ℚ) / 32 = 1
-              norm_num
-            rwa [e, mul_one] at h
-      _ = 363 / 1000000 * (llamaCalls.map fun c => stockRegs (lead T m c.1 c.2)).sum := by
-          rw [attach_sum (f := fun c => 363 / 1000000 * stockRegs (lead T m c.1 c.2)), List.sum_map_mul_left]
-  · calc (llamaCalls.attach.map fun c => networkGap _ (C320 c.1 c.2)).sum
-        ≤ (llamaCalls.attach.map fun c => 363 / 100000 * stockRegs (lead320 T m c.1.1 c.1.2)).sum :=
-          List.sum_le_sum fun c _ => by
-            have h := llama_networkGap_le T m c.2 _ (Or.inr rfl) (C320 c.1 c.2) (hC320 c.1 c.2)
-            have e : ((lead320 T m c.1.1 c.1.2).cap / 32 : ℚ) = 10 := by
-              show ((320 : ℕ) : ℚ) / 32 = 10
-              norm_num
-            rw [e] at h
-            linarith
-      _ = 363 / 100000 * (llamaCalls.map fun c => stockRegs (lead320 T m c.1 c.2)).sum := by
-          rw [attach_sum (f := fun c => 363 / 100000 * stockRegs (lead320 T m c.1 c.2)), List.sum_map_mul_left]
+/-- **Llama-3.2-1B's forward** (`Pouw.Guarantees.Lead.NetworkLlama`): `networkFwd` at `B = 256 / 3 · 129.25`
+(`llama_call`), and `B · 32 / fwdMacs ≤ 0.0363%`. -/
+theorem networkLlama : Pouw.Guarantees.Lead.NetworkLlama := by
+  intro F hser hacc hcalls
+  have h := networkFwd F (256 / 3 * (12925 / 100)) hser hacc (by norm_num) fun c hc =>
+    (llama_call c.C (hcalls c hc).1 (hcalls c hc).2).1
+  have hbits : F.bits = 1024 / 973078528 * (F.calls.map fun c => (c.L.cap / 32 : ℚ) * servedRegs c.L).sum := by
+    unfold Forward.bits
+    rw [List.map_congr_left fun c hc => (llama_call c.C (hcalls c hc).1 (hcalls c hc).2).2,
+      List.sum_map_mul_left]
+  have hs : 0 ≤ (F.calls.map fun c => (c.L.cap / 32 : ℚ) * servedRegs c.L).sum :=
+    List.sum_nonneg fun y hy => by
+      obtain ⟨c, -, rfl⟩ := List.mem_map.1 hy
+      unfold servedRegs
+      positivity
+  rw [hbits] at h
+  linarith
 
 end Pouw.SecurityProofs.Lead.Network

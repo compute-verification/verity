@@ -105,12 +105,7 @@ theorem honestAt (L : Pouw.Lead.Layout) (H : Hash.Msg → Hash.Digest) (κ : Fin
     refine ⟨_, rfl, rfl, rfl, fun ω => ⟨rfl, rfl, fun _ h => Or.inl h, ?_⟩⟩
     have : ((honestStrategy L H C isA κ).exec ω).egress = 0 := rfl
     rw [this, Nat.cast_zero, mul_zero, add_zero]
-  · intro ω
-    refine ⟨hadm, rfl, rfl, ?_⟩
-    show ((0 : ℕ) : ℚ) ≤ _
-    unfold Layout.callBits
-    push_cast
-    positivity
+  · exact fun ω => ⟨hadm, rfl, rfl⟩
 
 /-! ## `CommitL1w` from frame-v3 leaves -/
 

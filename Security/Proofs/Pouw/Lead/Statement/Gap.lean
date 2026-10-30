@@ -1,116 +1,125 @@
 import Definitions.Pouw.Guarantees.Lead
 
 /-!
-# The gap at the three points, and the nontrivial lemma
+# The gap at every admitted call and at the three points, and the nontrivial lemma
 
-`gapAt` and `gapAt320` evaluate `Pouw.Lead.gapShare` at T 512 × 64, T 512 × 512 and T 8,192 for every call of
-`n, K ≥ 4,096`, at caps 32 and 320; the worst call is at `K = 4,110`, the first `K` past 4,096 that adds a step.
-`gapAtDecode` evaluates the gap at decode at both caps, as a share of served compute (`gapServed`) and then of stock.
-`nontrivial` is the guarantee's nontrivial lemma. The network term is `Network.networkGap_le` and
-`Network.networkGap_le320`. `admits_of_caps`: the calls the verifier admits (`Layout.Admits`) include every call of at
-most `2^15` rows, `2^20` columns and an inner dimension from 1 to `2^16`. The cap doesn't enter the gap.
+Every share is of served stock (`Pouw.Lead.servedRegs`, the plain matmul of the call's served shape). `gapAll` bounds
+the gap at every call the verifier admits by the closed form `Pouw.Lead.gapBound`. `gapAt` evaluates it at
+T 512 × 64, T 512 × 512 and T 8,192 for every call of `n ≥ 512` and `K ≥ 2,048`, the served shapes', and
+`gapAtDecode` at decode; the worst call is near `n = 513` and `K = 2,066`, the first `K` past 2,048 that adds a step.
+`nontrivial` is the guarantee's nontrivial lemma. `admits_of_caps`: the calls the verifier admits (`Layout.Admits`)
+include every call of at most `2^15` rows, `2^20` columns and an inner dimension from 1 to `2^16`. The cap doesn't
+enter the gap: the network term is a forward's (`Network.networkFwd`).
 
-The proof writes a call of the lead in its variables (`leadVars`): `16 q` rows, `8 p` columns with `p ≥ 512`, `K`
-with `28 S ≤ K + 34` (`stepsFor`), and `65,536` chunks at most `16 q · 8 p · S + 65,535` (`wordChunks`). The gap is
-then `gapExpr`, linear in `p K`, `p S`, `p`, `K` and the chunks once the point fixes `q`, the unpadded rows and the
-cap, and `linarith` bounds it by the stock `16 q · 8 p · K / 32` from `28 p S ≤ p K + 34 p`, `4,096 p ≤ p K`,
-`512 K ≤ p K` and `2^21 ≤ p K` (`products`).
+The proof writes a call of the lead in its variables (`leadVars`): `16 q` rows, `8 p` columns, `K` with
+`28 S ≤ K + 34` (`stepsFor`), and `65,536` chunks at most `16 q · 8 p · S + 65,535` (`wordChunks`). The gap is then
+`gapExpr`, which `gapExpr_le` bounds at every admitted call by `gapBound` times served stock. At a point, which fixes
+`q` and the served rows `R`, it is linear in `p K`, `p S`, `p`, `K` and the chunks, and `linarith` bounds it by served
+stock `R · u · K / 32` from `28 p S ≤ p K + 34 p`, `2,048 p ≤ p K`, `64 K ≤ p K` and `2^17 ≤ p K` (`products`, at
+`p ≥ 64`) and `(8 p − 7) K ≤ u K`.
 -/
 
 namespace Pouw.SecurityProofs.Lead.Statement
 
 open Pouw.Lead Pouw.Guarantees.Lead Pouw.Dimension.H100
 
-/-- The network term without the call's `n` and `K`: `nMax · honestRegs · cap · rows / (m · fwdMacs)`. -/
-theorem networkGap_eq (L : Pouw.Lead.Layout) (C : Pouw.Lead.Commit L) (hm : (L.m : ℚ) ≠ 0) (hn : (L.n : ℚ) ≠ 0)
-    (hK : (L.K : ℚ) ≠ 0) (hF : (L.fwdMacs : ℚ) ≠ 0) :
-    networkGap L C = nMax * honestRegs L C * L.cap * L.rows / (L.m * L.fwdMacs) := by
-  unfold networkGap betaLead wMac Layout.callBits
-  field_simp
-
-/-- The gap of a call of `16 q` rows, `8 p` columns, `R` unpadded rows, cap `c`, inner dimension `K`, `S` steps and
-`ch` chunks, at the lead's constants. -/
-def gapExpr (q p R c K S ch : ℚ) : ℚ :=
+/-- The gap of a call of `16 q` rows, `8 p` columns, inner dimension `K`, `S` steps and `ch` chunks, at the lead's
+constants. -/
+def gapExpr (q p K S ch : ℚ) : ℚ :=
   23 * ch + 16064 / 1000000 * (8 * p * K / 32) + 84 / 100000 * (16 * q * (8 * p) * K / 32) +
-    35 / 1000000 * (16 * q * (8 * p) * K / 32) +
-    256 / 3 * (16 * q * (8 * p) * S + 353092 / 100 * (4 * (16 * q * (8 * p) * S) / 128 + ch) +
-      344905 / 100 * (R * K / 128)) * c * R / (16 * q * 973078528) +
-    q * p * 128 * (S * (2 * 2 ^ 34 + 1) / 2 ^ 100)
+    35 / 1000000 * (16 * q * (8 * p) * K / 32) + q * p * 128 * (S * (2 * 2 ^ 40 + 1) / 2 ^ 100)
 
 theorem gapRegs_eq {L : Pouw.Lead.Layout} (C : Pouw.Lead.Commit L) (q p : ℕ) (hm : L.m = 16 * q)
-    (hn : L.n = 8 * p) (hF : L.fwdMacs = 973078528) (hmem : L.mem = 2 ^ 34) (hq : 0 < q) (hp : 0 < p)
-    (hK : 0 < L.K) :
-    gapRegs L C = gapExpr q p L.rows L.cap L.K L.S C.chunks := by
+    (hn : L.n = 8 * p) (hmem : L.mem = 2 ^ 40) : gapRegs L C = gapExpr q p L.K L.S C.chunks := by
   have hrb : L.rowBlocks = q := by simp only [Layout.rowBlocks, hm]; omega
   have hcb : L.colBlocks = p := by simp only [Layout.colBlocks, hn]; omega
-  rw [gapRegs, networkGap_eq L C (by rw [hm]; positivity) (by rw [hn]; positivity) (by positivity)
-    (by rw [hF]; norm_num)]
-  simp only [gapExpr, headGap, hidingGap, coinBranchGap, pStarGap, tableGap, honestRegs, wordsRegs, wordsBlocks,
-    aBlocks, shaWordsRegs, shaARegs, nMax, tileWords, stockRegs, hrb, hcb, hm, hn, hF, hmem]
+  simp only [gapExpr, gapRegs, headGap, hidingGap, coinBranchGap, pStarGap, tableGap, stockRegs, tileWords, hrb,
+    hcb, hm, hn, hmem]
   push_cast
   ring
 
-theorem stepsFor_le (K : ℕ) (hK : 21 ≤ K) : 28 * stepsFor K ≤ K + 34 := by
+theorem stepsFor_le (K : ℕ) : 28 * stepsFor K ≤ K + 34 := by
   simp only [stepsFor]; omega
 
-/-- **A call of the lead in its variables**: `16 q` rows, `8 p` columns with `512 ≤ p` and `8 p ≤ n + 7`,
-`28 S ≤ K + 34`, its chunks at most `(16 q · 8 p · S + 65,535) / 65,536`, its gap `gapExpr` and its stock
-`16 q · 8 p · K / 32 > 0`. -/
-theorem leadVars {L : Pouw.Lead.Layout} (C : Pouw.Lead.Commit L) (n q R c : ℕ) (hm : L.m = 16 * q)
-    (hn : L.n = 8 * ((n + 7) / 8)) (hr : L.rows = R) (hc : L.cap = c) (hS : L.S = stepsFor L.K)
-    (hF : L.fwdMacs = 973078528) (hmem : L.mem = 2 ^ 34) (hcw : L.chunkWords = 65536) (hq : 0 < q)
-    (hn4 : 4096 ≤ n) (hK : 4096 ≤ L.K) (hC : ChunksOf L C) :
-    ∃ p S ch : ℚ, 512 ≤ p ∧ 8 * p ≤ n + 7 ∧ 28 * S ≤ L.K + 34 ∧
-      65536 * ch ≤ 16 * q * (8 * p) * S + 65535 ∧ gapRegs L C = gapExpr q p R c L.K S ch ∧
-      stockRegs L = 16 * q * (8 * p) * L.K / 32 ∧ 0 < stockRegs L := by
-  have hp : 512 ≤ (n + 7) / 8 := by omega
+/-- **The gap's bound in its variables**: from `28 S ≤ K + 34` and `65,536 ch ≤ 16 q · 8 p · S + 65,535`, copy-and-patch
+and `p*` over padded stock, the chunks' heads and the tables at `(K + 34) / 28` steps, hiding's row, and one partial
+chunk's head. -/
+theorem gapExpr_le {q p K S ch : ℚ} (hq : 0 ≤ q) (hp : 0 ≤ p) (hS : 28 * S ≤ K + 34)
+    (hch : 65536 * ch ≤ 16 * q * (8 * p) * S + 65535) :
+    gapExpr q p K S ch ≤ 16 * q * (8 * p) * K / 32 * (875 / 1000000) +
+      16 * q * (8 * p) * (K + 34) / 32 * (23 / 57344 + 8 * (2 * 2 ^ 40 + 1) / (7 * 2 ^ 100)) +
+      16064 / 1000000 * (8 * p * K / 32) + 23 := by
+  have h := mul_le_mul_of_nonneg_left hS (mul_nonneg hq hp)
+  simp only [gapExpr]
+  linarith
+
+/-- **The gap at every admitted call** (`Pouw.Guarantees.Lead.GapAll`): `gapExpr_le` at the call's `16 ⌈m / 16⌉` rows
+and `8 ⌈n / 8⌉` columns, and `gapBound` times served stock `m n K / 32` is its right side. -/
+theorem gapAll : GapAll := by
+  intro T m n K hm hn hadm C hC
+  obtain ⟨a, ha⟩ : ∃ a, (m + 15) / 16 = a := ⟨_, rfl⟩
+  obtain ⟨b, hb⟩ : ∃ b, (n + 7) / 8 = b := ⟨_, rfl⟩
+  have hpr : padRows m = 16 * a := by rw [padRows, ha]
+  have hpc : padCols n = 8 * b := by rw [padCols, hb]
+  have hch : 65536 * C.chunks ≤ 16 * a * (8 * b) * stepsFor K + 65535 := by
+    rw [hC]
+    show 65536 * ((padRows m * padCols n * stepsFor K + 65536 - 1) / 65536) ≤ _
+    rw [hpr, hpc]
+    have := Nat.div_mul_le_self (16 * a * (8 * b) * stepsFor K + 65536 - 1) 65536
+    omega
+  have hm' : (0 : ℚ) < m := Nat.cast_pos.2 (by omega)
+  have hn' : (0 : ℚ) < n := Nat.cast_pos.2 (by omega)
+  have hK' : (0 : ℚ) < K := Nat.cast_pos.2 (by have := hadm.1; omega)
+  have hm0 := hm'.ne'
+  have hn0 := hn'.ne'
+  have hK0 := hK'.ne'
+  have hsv : servedRegs (lead T m n K) = (m * n * K : ℚ) / 32 := rfl
+  have hgb : gapBound m n K * ((m * n * K : ℚ) / 32) =
+      16 * a * (8 * b) * K / 32 * (875 / 1000000) +
+        16 * a * (8 * b) * (K + 34) / 32 * (23 / 57344 + 8 * (2 * 2 ^ 40 + 1) / (7 * 2 ^ 100)) +
+        16064 / 1000000 * (8 * b * K / 32) + 23 := by
+    rw [gapBound, hpr, hpc]
+    push_cast
+    field_simp
+    ring
+  rw [gapServed, div_le_iff₀ (by rw [hsv]; positivity), hsv, hgb,
+    gapRegs_eq C a b (show padRows m = 16 * a from hpr) (show padCols n = 8 * b from hpc) rfl]
+  exact gapExpr_le (Nat.cast_nonneg _) (Nat.cast_nonneg _) (by exact_mod_cast stepsFor_le K)
+    (by exact_mod_cast hch)
+
+/-- **A call of the lead in its variables**: `16 q` rows, `8 p` columns with `64 ≤ p` and `8 p ≤ n + 7`,
+`28 S ≤ K + 34`, its chunks at most `(16 q · 8 p · S + 65,535) / 65,536`, and its gap `gapExpr`. -/
+theorem leadVars {L : Pouw.Lead.Layout} (C : Pouw.Lead.Commit L) (n q : ℕ) (hm : L.m = 16 * q)
+    (hn : L.n = 8 * ((n + 7) / 8)) (hS : L.S = stepsFor L.K) (hmem : L.mem = 2 ^ 40) (hcw : L.chunkWords = 65536)
+    (hn5 : 512 ≤ n) (hC : ChunksOf L C) :
+    ∃ p S ch : ℚ, 64 ≤ p ∧ 8 * p ≤ n + 7 ∧ 28 * S ≤ L.K + 34 ∧
+      65536 * ch ≤ 16 * q * (8 * p) * S + 65535 ∧ gapRegs L C = gapExpr q p L.K S ch := by
+  have hp : 64 ≤ (n + 7) / 8 := by omega
   have hch : 65536 * C.chunks ≤ 16 * q * (8 * ((n + 7) / 8)) * L.S + 65535 := by
     rw [hC, wordChunks, hcw, hm, hn]
     have := Nat.div_mul_le_self (16 * q * (8 * ((n + 7) / 8)) * L.S + 65536 - 1) 65536
     omega
-  have hst : stockRegs L = 16 * q * (8 * (((n + 7) / 8 : ℕ) : ℚ)) * L.K / 32 := by
-    simp only [stockRegs, hm, hn]; push_cast; ring
-  refine ⟨((n + 7) / 8 : ℕ), L.S, C.chunks, by exact_mod_cast hp, ?_, ?_, by exact_mod_cast hch, ?_, hst, ?_⟩
+  refine ⟨((n + 7) / 8 : ℕ), L.S, C.chunks, by exact_mod_cast hp, ?_, ?_, by exact_mod_cast hch,
+    gapRegs_eq C q _ hm hn hmem⟩
   · have : 8 * ((n + 7) / 8) ≤ n + 7 := Nat.mul_div_le (n + 7) 8
     exact_mod_cast this
-  · exact_mod_cast hS ▸ stepsFor_le L.K (by omega)
-  · rw [gapRegs_eq C q _ hm hn hF hmem hq (by omega) (by omega), hr, hc]
-  · rw [hst]
-    have : (0 : ℚ) < q := by exact_mod_cast hq
-    have : (0 : ℚ) < ((n + 7) / 8 : ℕ) := by exact_mod_cast (by omega : 0 < (n + 7) / 8)
-    have : (0 : ℚ) < L.K := by exact_mod_cast (by omega : 0 < L.K)
-    positivity
+  · exact_mod_cast hS ▸ stepsFor_le L.K
 
-/-- The products `linarith` reads: `28 p S ≤ p K + 34 p`, `4,096 p ≤ p K`, `512 K ≤ p K` and `2^21 ≤ p K`. -/
-theorem products {p K S : ℚ} (hp : 512 ≤ p) (hK : 4096 ≤ K) (hS : 28 * S ≤ K + 34) :
-    28 * (p * S) ≤ p * K + 34 * p ∧ 4096 * p ≤ p * K ∧ 512 * K ≤ p * K ∧ 512 * 4096 ≤ p * K :=
+/-- The products `linarith` reads: `28 p S ≤ p K + 34 p`, `2,048 p ≤ p K`, `64 K ≤ p K` and `64 · 2,048 ≤ p K`. -/
+theorem products {p K S : ℚ} (hp : 64 ≤ p) (hK : 2048 ≤ K) (hS : 28 * S ≤ K + 34) :
+    28 * (p * S) ≤ p * K + 34 * p ∧ 2048 * p ≤ p * K ∧ 64 * K ≤ p * K ∧ 64 * 2048 ≤ p * K :=
   ⟨by nlinarith, by nlinarith, by nlinarith, by nlinarith⟩
 
-/-- **A share bound at a point**: the gap's share of stock is at most `B` wherever `gapExpr` is at most `B` times
-the stock over the variables' range. -/
-theorem share_le {L : Pouw.Lead.Layout} (C : Pouw.Lead.Commit L) (n q R c : ℕ) (B : ℚ) (hm : L.m = 16 * q)
-    (hn : L.n = 8 * ((n + 7) / 8)) (hr : L.rows = R) (hc : L.cap = c) (hS : L.S = stepsFor L.K)
-    (hF : L.fwdMacs = 973078528) (hmem : L.mem = 2 ^ 34) (hcw : L.chunkWords = 65536) (hq : 0 < q)
-    (hn4 : 4096 ≤ n) (hK : 4096 ≤ L.K) (hC : ChunksOf L C)
-    (h : ∀ p K S ch : ℚ, 512 ≤ p → 4096 ≤ K → 28 * S ≤ K + 34 → 65536 * ch ≤ 16 * q * (8 * p) * S + 65535 →
-      gapExpr q p R c K S ch ≤ B * (16 * q * (8 * p) * K / 32)) :
-    gapShare L C ≤ B := by
-  obtain ⟨p, S, ch, hp, -, hS', hch, hg, hst, hpos⟩ :=
-    leadVars C n q R c hm hn hr hc hS hF hmem hcw hq hn4 hK hC
-  rw [gapShare, div_le_iff₀ hpos, hg, hst]
-  exact h p L.K S ch hp (by exact_mod_cast hK) hS' hch
-
-/-- **A served bound at a point**: the gap's share of served compute `R n K / 32` is at most `X` wherever `gapExpr`
-is at most `X` times it, over the variables' range with `8 p ≤ n + 7`. -/
-theorem served_le {L : Pouw.Lead.Layout} (C : Pouw.Lead.Commit L) (n q R c : ℕ) (X : ℚ) (hm : L.m = 16 * q)
-    (hn : L.n = 8 * ((n + 7) / 8)) (hr : L.rows = R) (hcols : L.cols = n) (hc : L.cap = c)
-    (hS : L.S = stepsFor L.K) (hF : L.fwdMacs = 973078528) (hmem : L.mem = 2 ^ 34) (hcw : L.chunkWords = 65536)
-    (hq : 0 < q) (hR : 0 < R) (hn4 : 4096 ≤ n) (hK : 4096 ≤ L.K) (hC : ChunksOf L C)
-    (h : ∀ p K S ch u : ℚ, 512 ≤ p → 4096 ≤ K → 28 * S ≤ K + 34 → 65536 * ch ≤ 16 * q * (8 * p) * S + 65535 →
-      8 * p ≤ u + 7 → gapExpr q p R c K S ch ≤ X * (R * u * K / 32)) :
+/-- **A bound at a point**: the gap's share of served stock `R n K / 32` is at most `X` wherever `gapExpr` is at most
+`X` times it, over the variables' range with `8 p ≤ n + 7`. -/
+theorem served_le {L : Pouw.Lead.Layout} (C : Pouw.Lead.Commit L) (n q R : ℕ) (X : ℚ) (hm : L.m = 16 * q)
+    (hn : L.n = 8 * ((n + 7) / 8)) (hr : L.rows = R) (hcols : L.cols = n) (hS : L.S = stepsFor L.K)
+    (hmem : L.mem = 2 ^ 40) (hcw : L.chunkWords = 65536) (hR : 0 < R) (hn5 : 512 ≤ n) (hK : 2048 ≤ L.K)
+    (hC : ChunksOf L C)
+    (h : ∀ p K S ch u : ℚ, 64 ≤ p → 2048 ≤ K → 28 * S ≤ K + 34 → 65536 * ch ≤ 16 * q * (8 * p) * S + 65535 →
+      8 * p ≤ u + 7 → gapExpr q p K S ch ≤ X * (R * u * K / 32)) :
     gapServed L C ≤ X := by
-  obtain ⟨p, S, ch, hp, hpn, hS', hch, hg, -, -⟩ :=
-    leadVars C n q R c hm hn hr hc hS hF hmem hcw hq hn4 hK hC
+  obtain ⟨p, S, ch, hp, hpn, hS', hch, hg⟩ := leadVars C n q hm hn hS hmem hcw hn5 hC
   have hsv : servedRegs L = R * n * L.K / 32 := by simp only [servedRegs, hr, hcols]
   have hpos : 0 < servedRegs L := by
     rw [hsv]
@@ -121,55 +130,40 @@ theorem served_le {L : Pouw.Lead.Layout} (C : Pouw.Lead.Commit L) (n q R c : ℕ
   rw [gapServed, div_le_iff₀ hpos, hg, hsv]
   exact h p L.K S ch n hp (by exact_mod_cast hK) hS' hch hpn
 
-/-- The gap's share of stock at the three points, cap 32: rational arithmetic over `n, K ≥ 4,096`, with
-`stepsFor K ≤ (K + 34) / 28` and `wordChunks ≤ m n S / 65,536 + 1`; at each point, over `p ≥ 512` and `K ≥ 4,096`,
-`products`, then `linarith`. -/
+/-- The gap's share of served stock at the three points: rational arithmetic over `n ≥ 512` and `K ≥ 2,048`, with
+`stepsFor K ≤ (K + 34) / 28`, `wordChunks ≤ m n S / 65,536 + 1` and `8 p ≤ n + 7`; at each point `products`, then
+`linarith`. -/
 theorem gapAt : GapAt := fun n K hn hK => by
-  refine ⟨fun C hC => share_le C n 4 64 32 _ rfl rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC ?_,
-    fun C hC => share_le C n 32 512 32 _ rfl rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC ?_,
-    fun C hC => share_le C n 512 8192 32 _ rfl rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC ?_⟩ <;>
-  · intro p K S ch hp hK hS hch
+  refine ⟨fun C hC => served_le C n 4 64 _ rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC ?_,
+    fun C hC => served_le C n 32 512 _ rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC ?_,
+    fun C hC => served_le C n 512 8192 _ rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC ?_⟩ <;>
+  · intro p K S ch u hp hK hS hch hu
     obtain ⟨h₁, h₂, h₃, h₄⟩ := products hp hK hS
+    have h₅ : (8 * p - 7) * K ≤ u * K := by nlinarith
     push_cast at hch ⊢
     simp only [gapExpr]
     linarith
 
-/-- The gap's share of stock at the three points, cap 320. -/
-theorem gapAt320 : GapAt320 := fun n K hn hK => by
-  refine ⟨fun C hC => share_le C n 4 64 320 _ rfl rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC ?_,
-    fun C hC => share_le C n 32 512 320 _ rfl rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC ?_,
-    fun C hC => share_le C n 512 8192 320 _ rfl rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC ?_⟩ <;>
-  · intro p K S ch hp hK hS hch
+/-- The gap at decode, padded to 16 rows, as a share of the one served row's stock, with `(8 p − 7) K ≤ n K`. -/
+theorem gapAtDecode : GapAtDecode := fun T n K hn hK C hC =>
+  served_le C n 1 1 _ rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC fun p K S ch u hp hK hS hch hu => by
     obtain ⟨h₁, h₂, h₃, h₄⟩ := products hp hK hS
+    have h₅ : (8 * p - 7) * K ≤ u * K := by nlinarith
     push_cast at hch ⊢
     simp only [gapExpr]
     linarith
 
-/-- The gap at decode, padded to 16 rows, at caps 32 and 320: its share of served compute, at each point the stock's
-bound with `(8 p − 7) K ≤ n K`, then of the padded stock. -/
-theorem gapAtDecode : GapAtDecode := fun T n K hn hK => by
-  refine ⟨fun C hC => ⟨served_le C n 1 1 32 _ rfl rfl rfl rfl rfl rfl rfl rfl rfl (by norm_num) (by norm_num) hn hK
-        hC ?_, share_le C n 1 1 32 _ rfl rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC ?_⟩,
-    fun C hC => ⟨served_le C n 1 1 320 _ rfl rfl rfl rfl rfl rfl rfl rfl rfl (by norm_num) (by norm_num) hn hK
-        hC ?_, share_le C n 1 1 320 _ rfl rfl rfl rfl rfl rfl rfl rfl (by norm_num) hn hK hC ?_⟩⟩
-  all_goals first
-    | intro p K S ch u hp hK hS hch hu
-      obtain ⟨h₁, h₂, h₃, h₄⟩ := products hp hK hS
-      have h₅ : (8 * p - 7) * K ≤ u * K := by nlinarith
-      push_cast at hch ⊢
-      simp only [gapExpr]
-      linarith
-    | intro p K S ch hp hK hS hch
-      obtain ⟨h₁, h₂, h₃, h₄⟩ := products hp hK hS
-      push_cast at hch ⊢
-      simp only [gapExpr]
-      linarith
-
-/-- The gap is below the honest work where its share of stock is at most 1%: the honest work is at least the words,
-`m n S ≥ m n K / 28`, more than the stock `m n K / 32`. -/
-theorem gap_lt_honest {L : Pouw.Lead.Layout} (C : Pouw.Lead.Commit L) (hshare : gapShare L C ≤ 1 / 100)
-    (hpos : 0 < stockRegs L) (hS : L.K ≤ 28 * L.S) : gapRegs L C < honestRegs L C := by
-  rw [gapShare, div_le_iff₀ hpos] at hshare
+/-- The gap is below the honest work where its share of served stock is at most 1%: the honest work is at least the
+words, `m n S ≥ m n K / 28`, more than served stock `rows · cols · K / 32 ≤ m n K / 32`. -/
+theorem gap_lt_honest {L : Pouw.Lead.Layout} (C : Pouw.Lead.Commit L) (hshare : gapServed L C ≤ 1 / 100)
+    (hpos : 0 < servedRegs L) (hrows : L.rows ≤ L.m) (hcols : L.cols ≤ L.n) (hS : L.K ≤ 28 * L.S) :
+    gapRegs L C < honestRegs L C := by
+  rw [gapServed, div_le_iff₀ hpos] at hshare
+  have hsv : (L.rows * L.cols * L.K : ℚ) ≤ L.m * L.n * L.K := by
+    have h1 : (L.rows : ℚ) ≤ L.m := by exact_mod_cast hrows
+    have h2 : (L.cols : ℚ) ≤ L.n := by exact_mod_cast hcols
+    have h3 : (L.rows * L.cols : ℚ) ≤ L.m * L.n := mul_le_mul h1 h2 (Nat.cast_nonneg _) (Nat.cast_nonneg _)
+    exact mul_le_mul_of_nonneg_right h3 (Nat.cast_nonneg _)
   have hKS : (L.m * L.n * L.K : ℚ) ≤ 28 * (L.m * L.n * L.S) := by
     have : (L.K : ℚ) ≤ 28 * L.S := by exact_mod_cast hS
     have : (0 : ℚ) ≤ L.m * L.n := by positivity
@@ -179,32 +173,37 @@ theorem gap_lt_honest {L : Pouw.Lead.Layout} (C : Pouw.Lead.Commit L) (hshare : 
       unfold shaWordsRegs wordsBlocks wordsRegs; positivity
     have : (0 : ℚ) ≤ shaARegs * aBlocks L := by unfold shaARegs aBlocks; positivity
     unfold honestRegs; linarith
-  unfold stockRegs at hpos hshare
+  unfold servedRegs at hpos hshare
   unfold wordsRegs at hw
   linarith
 
-/-- The nontrivial lemma: the honest work exceeds the gap at the three points, and the empty strategy
-does no work and hashes nothing. -/
+/-- The nontrivial lemma: the honest work exceeds the gap at the three points, and the empty strategy does no work,
+exchanges nothing and hashes nothing. -/
 theorem nontrivial : Nontrivial := by
   intro n K hn hK
   have hS : K ≤ 28 * stepsFor K := by simp only [stepsFor]; omega
-  have pos : ∀ {L : Pouw.Lead.Layout} (C : Pouw.Lead.Commit L) (q R c : ℕ), L.m = 16 * q →
-      L.n = 8 * ((n + 7) / 8) → L.rows = R → L.cap = c → L.S = stepsFor L.K → L.fwdMacs = 973078528 →
-      L.mem = 2 ^ 34 → L.chunkWords = 65536 → 0 < q → L.K = K → ChunksOf L C → 0 < stockRegs L :=
-    fun C q R c hm hn' hr hc hS' hF hmem hcw hq hKL hC => by
-      obtain ⟨-, -, -, -, -, -, -, -, -, hpos⟩ :=
-        leadVars C n q R c hm hn' hr hc hS' hF hmem hcw hq hn (hKL ▸ hK) hC
-      exact hpos
+  have pos : ∀ T m : ℕ, 0 < m → 0 < servedRegs (lead T m n K) := fun T m hm => by
+    show (0 : ℚ) < (m * n * K : ℚ) / 32
+    have : (0 : ℚ) < m := by exact_mod_cast hm
+    have : (0 : ℚ) < n := by exact_mod_cast (by omega : 0 < n)
+    have : (0 : ℚ) < K := by exact_mod_cast (by omega : 0 < K)
+    positivity
+  have rows : ∀ T m : ℕ, (lead T m n K).rows ≤ (lead T m n K).m := fun T m => by
+    show m ≤ padRows m
+    unfold padRows; omega
+  have cols : ∀ T m : ℕ, (lead T m n K).cols ≤ (lead T m n K).n := fun T m => by
+    show n ≤ padCols n
+    unfold padCols; omega
   obtain ⟨h64, h512, h8192⟩ := gapAt n K hn hK
-  refine ⟨fun C hC => gap_lt_honest C ((h64 C hC).trans (by norm_num))
-      (pos C 4 64 32 rfl rfl rfl rfl rfl rfl rfl rfl (by norm_num) rfl hC) hS,
-    fun C hC => gap_lt_honest C ((h512 C hC).trans (by norm_num))
-      (pos C 32 512 32 rfl rfl rfl rfl rfl rfl rfl rfl (by norm_num) rfl hC) hS,
-    fun C hC => gap_lt_honest C ((h8192 C hC).trans (by norm_num))
-      (pos C 512 8192 32 rfl rfl rfl rfl rfl rfl rfl rfl (by norm_num) rfl hC) hS, ?_⟩
+  refine ⟨fun C hC => gap_lt_honest C ((h64 C hC).trans (by norm_num)) (pos 512 64 (by norm_num))
+      (rows 512 64) (cols 512 64) hS,
+    fun C hC => gap_lt_honest C ((h512 C hC).trans (by norm_num)) (pos 512 512 (by norm_num))
+      (rows 512 512) (cols 512 512) hS,
+    fun C hC => gap_lt_honest C ((h8192 C hC).trans (by norm_num)) (pos 8192 8192 (by norm_num))
+      (rows 8192 8192) (cols 8192 8192) hS, ?_⟩
   intro L pr
-  refine ⟨⟨fun _ _ => 0, fun _ _ => rfl, fun _ => 0, fun _ => ⟨[], [], 0, [], 0, fun _ => 0⟩⟩, fun _ => ?_⟩
-  exact ⟨rfl, rfl⟩
+  exact ⟨⟨fun _ _ => 0, fun _ _ => rfl, fun _ => 0, fun _ => ⟨[], [], 0, [], 0, fun _ => 0⟩⟩,
+    fun _ => ⟨rfl, rfl, rfl⟩⟩
 
 /-- **The calls the verifier admits include every call of at most `2^15` rows, `2^20` columns and an inner dimension
 from 1 to `2^16`**, at either cap: at most `2,048 · 131,072 · 2,342 ≤ 2^40` tiles. Llama-3.2-1B's calls, its LM head of

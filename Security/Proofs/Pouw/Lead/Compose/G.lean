@@ -10,8 +10,8 @@ import Proofs.Pouw.Lead.Network.Term
 # The lead's guarantee from its pieces
 
 `G`'s proof, at each accepted coin value with no break, on the egress-free twin (`OutsourceWithinEgressLead`), which
-is accepted where the original is (it registers its roots and exchanges nothing) and hashed no collision where the
-original hashed none (beyond the original's, it hashes only the honest commitment's messages):
+is accepted where the original is (it registers the same roots) and hashed no collision where the original hashed none
+(beyond the original's, it hashes only the honest commitment's messages):
 1. the twin hashes every honest words message (`HonestHashRuled` with no collision), so each committed tile is one of
    its run's whole-tile writes or a tile it starts with (`TileGrain`), and its whole-tile writes are at least the
    distinct committed tiles less the table hits (`CoinBranch.distinct_le_writes`), and the distinct tiles are the
@@ -19,10 +19,10 @@ original hashed none (beyond the original's, it hashes only the honest commitmen
 2. its hashing credit is at least the honest commitment's (`HonestHashRuled` at egress 0, `Commit.hashed_credit_ge`),
    at least the honest compressions' (`CommitL1w`), and its compressions write that many registers (`ShaWrites`);
 3. `OneInstructionMinimal` and `MH100W.cost_ge_regs` (`W1`, `H32`) price those registers at 32 each (`perCoin`);
-4. summed over `O`, the repeats and table hits are at most `|Ω|` times `coinBranchGap` and `tableGap`
-   (`Tags.repeats_le` at the call `Accepted` admits, when `O` is nonempty; `PStar.table_le`); the twin's saving is at
-   most `betaLead` a bit the original exchanged, at most `callBits` at an accepted value (`Accepted`), so `|O|` times
-   `32 · networkGap`; and the head, hiding and `p*` terms are nonnegative.
+4. the twin's work is at most the original's plus `betaLead` a bit the original exchanged, which the conclusion
+   charges; summed over `O`, the repeats and table hits are at most `|Ω|` times `coinBranchGap` and `tableGap`
+   (`Tags.repeats_le` at the call `Accepted` admits, when `O` is nonempty; `PStar.table_le`); and the head, hiding and
+   `p*` terms are nonnegative.
 
 That is `G_coins`, over the coin values. `G` is `G_coins` at the coins the certifier releases: under
 `CertifierCoins` they are `coinsOf` of its entropy, an equivalence, so a set of entropy values maps one to one onto a
@@ -90,7 +90,8 @@ theorem G_coins (pr : Prices100) (H : Hash.Msg → Hash.Digest) (T m n K : ℕ)
     (hout : OutsourceWithinEgressLead pr (betaLead (lead T m n K) C) H C κ Real) (σ : Strategy (lead T m n K))
     (hcan : can σ) (O : Finset (Coins (lead T m n K))) (hacc : ∀ ω ∈ O, Accepted (lead T m n K) H C κ σ ω) :
     32 * ((O.card : ℚ) * honestRegs (lead T m n K) C -
-        (Fintype.card (Coins (lead T m n K)) : ℚ) * gapRegs (lead T m n K) C) ≤ ∑ ω ∈ O, (σ.work pr ω : ℚ) ∨
+        (Fintype.card (Coins (lead T m n K)) : ℚ) * gapRegs (lead T m n K) C) ≤
+        ∑ ω ∈ O, ((σ.work pr ω : ℚ) + betaLead (lead T m n K) C * (σ.exec ω).egress) ∨
       ∃ ω ∈ O, Break (lead T m n K) H C κ σ ω := by
   by_cases hB : ∃ ω ∈ O, Break (lead T m n K) H C κ σ ω
   · exact Or.inr hB
@@ -98,11 +99,9 @@ theorem G_coins (pr : Prices100) (H : Hash.Msg → Hash.Digest) (T m n K : ℕ)
   push Not at hB
   obtain ⟨σ', hσ', -, haroot', htwin⟩ := hout σ (hcard σ hcan)
   have hacc' : ∀ ω ∈ O, Accepted (lead T m n K) H C κ σ' ω := fun ω hω => by
-    obtain ⟨he, hr, -, -⟩ := htwin ω
-    obtain ⟨hadm, haroot, hroot, hbits⟩ := hacc ω hω
-    refine ⟨hadm, haroot'.trans haroot, hr.trans hroot, ?_⟩
-    rw [he]
-    exact (Nat.cast_nonneg _).trans hbits
+    obtain ⟨-, hr, -, -⟩ := htwin ω
+    obtain ⟨hadm, haroot, hroot⟩ := hacc ω hω
+    exact ⟨hadm, haroot'.trans haroot, hr.trans hroot⟩
   have hnb' : ∀ ω ∈ O, ¬ Break (lead T m n K) H C κ σ' ω := fun ω hω hb => by
     unfold Break Hash.CollisionIn at hb
     obtain ⟨x, hx, y, hy, hxy⟩ := hb
@@ -117,22 +116,14 @@ theorem G_coins (pr : Prices100) (H : Hash.Msg → Hash.Digest) (T m n K : ℕ)
     unfold Break Hash.CollisionIn
     exact ⟨x, hsub x hx, y, hsub y hy, hxy⟩
   have htw : (tileWords : ℚ) = 128 := by norm_num [tileWords]
-  have hβ : 0 ≤ betaLead (lead T m n K) C := by
-    unfold betaLead nMax wMac honestRegs wordsBlocks wordsRegs aBlocks shaWordsRegs shaARegs
-    positivity
-  have hbits0 : 0 ≤ (lead T m n K).callBits := by unfold Layout.callBits; positivity
-  have hnet : 32 * networkGap (lead T m n K) C = betaLead (lead T m n K) C * (lead T m n K).callBits := by
-    unfold networkGap
-    ring
   have hstep : ∀ ω ∈ O,
       32 * honestRegs (lead T m n K) C - 32 * (tileWords * repeats (lead T m n K) κ ω : ℚ) -
-          32 * (tileWords * tableHits (lead T m n K) κ σ' stream ω : ℚ) - 32 * networkGap (lead T m n K) C ≤
-        (σ.work pr ω : ℚ) := by
+          32 * (tileWords * tableHits (lead T m n K) κ σ' stream ω : ℚ) ≤
+        (σ.work pr ω : ℚ) + betaLead (lead T m n K) C * (σ.exec ω).egress := by
     intro ω hω
     have h1 := perCoin pr H T m n K κ stream C isA Real hC h32 hw1 htile hone hsha hhon σ' hσ' ω (htwin ω).1
       (hacc' ω hω) (hnb' ω hω)
     have h2 := (htwin ω).2.2.2
-    have h3 := mul_le_mul_of_nonneg_left (hacc ω hω).2.2.2 hβ
     rw [htw] at h1 ⊢
     linarith
   have hsum := Finset.sum_le_sum hstep
@@ -149,12 +140,7 @@ theorem G_coins (pr : Prices100) (H : Hash.Msg → Hash.Digest) (T m n K : ℕ)
     (Finset.sum_le_sum_of_subset_of_nonneg (Finset.subset_univ O) fun _ _ _ => by positivity).trans
       (PStar.table_le T m n K κ σ' stream)
   rw [← Finset.mul_sum] at hrep htab
-  have hO : (O.card : ℚ) ≤ Fintype.card (Coins (lead T m n K)) := by exact_mod_cast Finset.card_le_univ O
   have hN : (0 : ℚ) ≤ Fintype.card (Coins (lead T m n K)) := Nat.cast_nonneg _
-  have hng : 0 ≤ networkGap (lead T m n K) C := by
-    unfold networkGap
-    exact div_nonneg (mul_nonneg hβ hbits0) (by norm_num)
-  have hng' := mul_le_mul_of_nonneg_right hO hng
   have hhead := mul_nonneg hN (show 0 ≤ headGap (lead T m n K) C by unfold headGap; positivity)
   have hhid := mul_nonneg hN (show 0 ≤ hidingGap (lead T m n K) by unfold hidingGap; positivity)
   have hps := mul_nonneg hN (show 0 ≤ pStarGap (lead T m n K) by unfold pStarGap stockRegs; positivity)

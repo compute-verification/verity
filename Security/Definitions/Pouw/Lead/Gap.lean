@@ -5,32 +5,33 @@ import Definitions.Pouw.Lead.Model
 
 Every quantity is in registers; the W1 work is 32 a register (`H32`'s floor).
 
-* **Stock** (`stockRegs`): the call's unmodified FP8 matmul over whole MMA tiles, `m · n · K / 32` k32 `wgmma`
-  registers with `m` and `n` padded. The honest work and the gap are the padded call's.
-* **Served compute** (`servedRegs`): the call's unpadded MACs, `rows · cols · K / 32`, what credit counts. Padding
-  rows and columns are committed and hashed, so they are in the honest work, but they are never served compute. At
-  decode one row is served and 16 are committed, so the gap is reported as a share of served compute (`gapServed`),
-  and its share of stock (`gapShare`) is secondary.
+* **Served stock** (`servedRegs`): the plain matmul of the call's served shape, `rows · cols · K / 32` k32 `wgmma`
+  registers. Every share of the gap is over served stock (`gapServed`, `gapBound`).
+* **Padded stock** (`stockRegs`): the matmul over the committed, padded shape, `m · n · K / 32`. Padding rows and
+  columns are committed and hashed, so they are in the honest work, and the terms that scale with the committed tiles
+  are shares of it; but they serve nothing. At decode one row is served and 16 are committed.
 * **The honest work** (`honestRegs`): the committed words, one register each (`m · n · S`), and the SHA-512
   compressions of the commitment at ShaWrites' registers per form: `3,530.92` a words compression, the lead's 256 KiB
   chunks' figure, and `3,449.05` an A compression (`shaWordsRegs`, `shaARegs`).
-* **The gap** (`gapRegs`) is the sum of six terms, each the bound its piece proves:
+* **The gap** (`gapRegs`) is the sum of five terms, each the bound its piece proves:
   - `headGap`: the words chunks' first-block excess, 23 registers a chunk;
-  - `hidingGap`: hiding L1 + (a), 1.6064% of one row's stock a call;
-  - `coinBranchGap`: what a prover that branches on the coins keeps by copying whole MMA tiles across the call's
-    rows and patching the rest (copy-and-patch at tile grain), 0.084% of stock;
-  - `pStarGap`: the coin lanes' guess at `-rot`'s weights, 0.0035% of stock;
-  - `networkGap`: work outsourced within the call's bits (`Layout.callBits`), `betaLead` a bit: `n_max = 256/3` MACs
-    a coin bit, every step carrying the three coin lanes, at the call's honest W1 work a MAC (`wMac`);
-  - `tableGap`: pre-coin tables and the coin stream holding a committed tile, within the node's memory, from each
+  - `hidingGap`: hiding L1 + (a), 1.6064% of one row's padded stock a call;
+  - `coinBranchGap`: whole-tile repeats, what copying whole tiles saves, averaged over the coins; 0.084% of padded
+    stock, which is slack;
+  - `pStarGap`: the coin lanes' guess at `-rot`'s weights, 0.0035% of padded stock;
+  - `tableGap`: pre-coin tables and the coin stream holding a committed tile, within the node's storage, from each
     step's coin lanes alone.
-* `gapShare` is the gap over stock, which `Pouw.Guarantees.Lead.GapAt` evaluates at the three points; `gapServed` is
-  the gap over served compute, which `GapAtDecode` states at decode.
+* **The network term** is a forward's, not a call's: `Pouw.Guarantees.Lead.G` charges `betaLead` a bit a call's
+  execution exchanged, and the network certifier bounds a forward's bits (`Pouw.Lead.Forward.networkRegs`). `betaLead`
+  is `n_max = 256/3` MACs a coin bit, every step carrying the three coin lanes, at the call's honest W1 work a MAC
+  (`wMac`).
+* `gapServed` is the gap over served stock, which `Pouw.Guarantees.Lead.GapAt` evaluates at the three points and
+  `GapAtDecode` at decode; `gapBound` is a closed form of it at every admitted call (`GapAll`).
 -/
 
 namespace Pouw.Lead
 
-/-- Stock: the call's FP8 matmul in k32 `wgmma` registers, `m · n · K / 32`. -/
+/-- Padded stock: the call's FP8 matmul over its committed, padded shape in k32 `wgmma` registers, `m · n · K / 32`. -/
 def stockRegs (L : Layout) : ℚ := (L.m * L.n * L.K : ℚ) / 32
 
 /-- The committed words, one register each: `m · n · S`. -/
@@ -55,13 +56,17 @@ def honestRegs (L : Layout) (C : Commit L) : ℚ :=
 /-- The words chunks' first-block excess: 23 registers a chunk. -/
 def headGap (L : Layout) (C : Commit L) : ℚ := 23 * C.chunks
 
-/-- Hiding L1 + (a): 1.6064% of one row's stock a call, `0.016064 · n · K / 32`. -/
+/-- Hiding L1 + (a): 1.6064% of one row's padded stock a call, `0.016064 · n · K / 32`. -/
 def hidingGap (L : Layout) : ℚ := 16064 / 1000000 * ((L.n * L.K : ℚ) / 32)
 
-/-- Copy-and-patch across the call's rows at tile grain: 0.084% of stock. -/
+/-- Whole-tile repeats, what copying whole tiles saves: the committed tiles less their distinct values, in words and
+averaged over the coins, are at most this at every admitted call (`Tags.repeats_le`: a tile repeats with chance at
+most `4 · 7^-8 + tiles · 2^-56`, from step 0's tag weights and from pairs of tiles' coin lanes). It is slack: under
+`TileGrain` a patched tile costs the whole tile, so no copy-and-patch saving is left, and the repeats' average is far
+below it. 0.084% of padded stock. -/
 def coinBranchGap (L : Layout) : ℚ := 84 / 100000 * stockRegs L
 
-/-- The coin lanes' guess under `-rot`'s weights: 0.0035% of stock. -/
+/-- The coin lanes' guess under `-rot`'s weights: 0.0035% of padded stock. -/
 def pStarGap (L : Layout) : ℚ := 35 / 1000000 * stockRegs L
 
 /-- MACs a coin bit at most, where every step carries the three coin lanes under `-rot`'s weights: `256/3`. -/
@@ -73,10 +78,7 @@ def wMac (L : Layout) (C : Commit L) : ℚ := 32 * honestRegs L C / (L.m * L.n *
 /-- The priced W1 work an exchanged bit replaces: `n_max · W_mac`. -/
 def betaLead (L : Layout) (C : Commit L) : ℚ := nMax * wMac L C
 
-/-- Work outsourced within the call's bits, in registers: `betaLead · callBits / 32`. -/
-def networkGap (L : Layout) (C : Commit L) : ℚ := betaLead L C * L.callBits / 32
-
-/-- Pre-coin tables and the coin stream holding a committed tile, in a call of whole tiles: a memory's `2 · mem + 1`
+/-- Pre-coin tables and the coin stream holding a committed tile, in a call of whole tiles: a storage's `2 · mem + 1`
 tile values (the tables', zero and the stream's) against each committed tile's words, at every step, step 0
 included, from the tile's coin lanes alone. Each column's even and odd rows fix its three lanes, so a tile is a
 given value with chance at most `2^-168`; at most three of its columns hold the stream's lanes, so it is a streamed
@@ -85,20 +87,27 @@ tile with chance at most `2^-105`; either is within `2^-100`, so a tile and step
 def tableGap (L : Layout) : ℚ :=
   (L.rowBlocks * L.colBlocks * tileWords : ℚ) * (L.S * (2 * L.mem + 1 : ℚ) / 2 ^ 100)
 
-/-- **The gap** in registers: the sum of the six terms. -/
+/-- **The gap** in registers: the sum of the five terms. -/
 def gapRegs (L : Layout) (C : Commit L) : ℚ :=
-  headGap L C + hidingGap L + coinBranchGap L + pStarGap L + networkGap L C + tableGap L
+  headGap L C + hidingGap L + coinBranchGap L + pStarGap L + tableGap L
 
-/-- The gap as a share of stock. -/
-def gapShare (L : Layout) (C : Commit L) : ℚ := gapRegs L C / stockRegs L
-
-/-- **Served compute**: the call's unpadded MACs in k32 `wgmma` registers, `rows · cols · K / 32`. Credit is served
-compute. Stock and the honest work count the padding rows and columns, which are committed and hashed but serve
-nothing. -/
+/-- **Served stock**: the plain matmul of the call's served shape, its unpadded MACs in k32 `wgmma` registers,
+`rows · cols · K / 32`. Padded stock and the honest work count the padding rows and columns, which are committed and
+hashed but serve nothing. -/
 def servedRegs (L : Layout) : ℚ := (L.rows * L.cols * L.K : ℚ) / 32
 
-/-- The gap as a share of served compute. -/
+/-- The gap as a share of served stock. -/
 def gapServed (L : Layout) (C : Commit L) : ℚ := gapRegs L C / servedRegs L
+
+/-- **The gap's bound at the lead's call of `m × K × n`**, a share of served stock: with `ρ` the padding's inflation
+`padRows m · padCols n / (m n)`,
+`ρ · (0.0875% + (1 + 34/K) · (23/57,344 + 8 (2^41 + 1) / (7 · 2^100))) + 1.6064% · padCols n / (m n) + 736 / (m n K)`.
+The terms are copy-and-patch and `p*` over padded stock, the chunks' heads and the tables at `stepsFor K ≤ (K + 34)/28`
+steps, hiding's row, and one partial chunk's head. -/
+def gapBound (m n K : ℕ) : ℚ :=
+  (padRows m * padCols n : ℚ) / (m * n) *
+      (875 / 1000000 + (1 + 34 / (K : ℚ)) * (23 / 57344 + 8 * (2 * 2 ^ 40 + 1) / (7 * 2 ^ 100))) +
+    16064 / 1000000 * padCols n / (m * n) + 736 / (m * n * K)
 
 /-- The words chunks of a call: `⌈m n S / chunkWords⌉`, at most `chunkWords` words a leaf. -/
 def wordChunks (L : Layout) : ℕ := (L.m * L.n * L.S + L.chunkWords - 1) / L.chunkWords
