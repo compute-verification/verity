@@ -21,10 +21,11 @@ quantizes the call's rows as it always does, then
 3. the lead's kernel runs on the rows and the coins (`LeadBackend.call`), giving the served y in the plain arm's place:
    the plain arm's y bit for bit, every coin term folded out of the word exactly.
 
-At the step's end (`LeadRun.end_pass`), the root of the forward's one words instance (`words_root`) is recorded, and the
-pass's `PassCommitment` is published, before any sample. A call made outside a step (an engine's dummy run) joins the
-next step's window, and a window past ``calls`` calls is refused. The coins are this process's (`feed.IN_PROCESS`) until
-the network certifier's coin link replaces them, and they credit nothing.
+At the step's end (`LeadRun.end_pass`), the forward's one words instance is hashed on the device up to its subtree's top
+(`LeadBackend.words`), its keyed root (`words_root`) is recorded, and the pass's `PassCommitment` is published, before any
+sample. A call made outside a step (an engine's dummy run) joins the next step's window, and a window past ``calls`` calls
+is refused. The coins are this process's (`feed.IN_PROCESS`) until the network certifier's coin link replaces them, and
+they credit nothing.
 """
 from __future__ import annotations
 
@@ -32,6 +33,7 @@ from collections.abc import Callable, Sequence
 from typing import Any, Protocol
 
 from verity.core.protocols.pouw.serving import PassCommitment
+from verity.ml.commitments.merkle import CommitmentDomain
 
 from verity_vllm.commit import lead_rows as L
 from verity_vllm.protocols.pouw.lead import feed as F
@@ -61,17 +63,21 @@ class LeadBackend(Protocol):
         [m, N] bf16 in the plain arm's place, the plain arm's y bit for bit (`engine.int8_exact.dequantize` of the exact
         product), whatever the coins. Its committed words join the window's words instance."""
 
-    def words(self) -> Sequence[bytes]:
-        """The committed words of the window's calls, one stream a call in call order (`lead_rows.stream` of the
-        kernel's export), handed over once at the window's end, after which the backend holds none."""
+    def words(self, dom: CommitmentDomain) -> bytes:
+        """The top of the window's words instance under ``dom`` (`lead_rows.WindowKeying.words_domain`), hashed on the
+        device: each call's export added in call order to a `lead_rows.DeviceWords` over ``dom``, then its top, the
+        root's two children or the one chunk. ``dom`` binds the instance's leaf count, which only the window's last call
+        fixes, so the backend holds every call's export until this one call at the window's end, and none after."""
 
 
-def words_root(window: L.WindowKeying, backend: LeadBackend) -> bytes:
-    """The forward's words root, ``window``'s keyed digest of its calls' committed words at the forward's words position:
-    the serving side's one call into the committer for it. Every committed word comes to the host and is hashed there
-    (`lead_rows.WindowKeying.words_root`); a subtree top computed on the device is what replaces that, here and in
-    `LeadBackend.words`."""
-    return window.words_root(FORWARD, backend.words())
+def words_root(window: L.WindowKeying, backend: LeadBackend, calls: Sequence[F.Call]) -> bytes:
+    """The forward's words root, ``window``'s keyed digest of the committed words of its ``calls`` at the forward's words
+    position: the serving side's one call into the committer for it. The calls' shapes fix the instance's leaves
+    (`lead_rows.chunk_count`) and so its domain; the backend hashes the words on the device up to the subtree's top
+    (`LeadBackend.words`), which the keying keys (`lead_rows.WindowKeying.words_top`), refusing a top of the wrong size.
+    No committed word comes to the host."""
+    count = sum(L.chunk_count(c.m, c.n, c.shape.S) for c in calls)
+    return window.words_top(FORWARD, count, backend.words(window.words_domain(FORWARD, count)))
 
 
 def _rows(xq: Any) -> bytes:
@@ -149,7 +155,7 @@ class LeadRun:
         if self.unserved is not None:
             raise R.RecordError(f"pass {self.record.pass_index}: call {self.unserved.index} raised before its kernel "
                                 "served it, so the pass is never published")
-        self.record.words(words_root(self.window, self.backend))
+        self.record.words(words_root(self.window, self.backend, self.record.calls))
         out = self.record.publish()
         self.passes.append(out)
         self.commits["passes"].append(out.to_json())

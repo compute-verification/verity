@@ -4,8 +4,9 @@
   sampled after keyLeaf, the weights' root and its call count.
 - Each linear call's rows are committed (root(A_j), the keyed digest of its rows) before its coins are released, and the
   backend serves the call's y on them.
-- The forward's one words root, the keyed digest of the backend's committed words, comes at the step's end, and then the
-  pass's `PassCommitment` is published.
+- The forward's one words root comes at the step's end: the calls' shapes fix the words instance's domain, the backend
+  hashes its committed words to the subtree's top under it, and the keying keys that top. Then the pass's
+  `PassCommitment` is published.
 - The option is refused where it can't be what it says: no backend, other schemes' settings, or beside sampled proofs or
   PoUS. It uninstalls to the plain arm."""
 from __future__ import annotations
@@ -88,8 +89,16 @@ class Keys:
         return k
 
 
+def top(dom, streams) -> bytes:
+    """The words instance's subtree top as `lead_rows.DeviceWords.top` hands it, computed on the host: the root's two
+    children, or the one chunk."""
+    sub = L.subtree(dom, L.WORDS_LEAF_TAG, L.words_values(streams))
+    return b"".join(sub.levels[-2]) if len(sub.levels) > 1 else sub.values[0]
+
+
 class Backend:
-    """The lead's kernel, standing in: the plain product as y, and each call's committed words its rows and coins."""
+    """The lead's kernel, standing in: the plain product as y, each call's committed stream a hash of its rows and coins
+    of the stream's length, and the words instance's top hashed on the host."""
 
     variant = "stand-in"
 
@@ -101,14 +110,16 @@ class Backend:
 
     def call(self, w, layer, xq, s_a, feed):
         self.log.append(("backend", w, feed.call))
-        self.streams.append(xq.numpy().tobytes() + feed.head().tobytes())
+        c = feed.call
+        size = 4 * L.pad_rows(c.m) * L.pad_cols(c.n) * c.shape.S
+        self.streams.append(hashlib.shake_256(xq.numpy().tobytes() + feed.head().tobytes()).digest(size))
         return _plain(layer, xq, s_a)
 
-    def words(self):
+    def words(self, dom):
         self.log.append(("words",))
         out, self.streams = self.streams, []
         self.handed.append(out)
-        return out
+        return top(dom, out)
 
 
 class Link(F.InProcessCertifier):
@@ -239,6 +250,43 @@ def test_a_step_is_a_pass_published_at_its_end_with_one_words_root():
         run.record.commitment()
     run.finish()
     assert [p.pass_index for p in run.passes] == [0, 1]
+
+
+@pytest.mark.parametrize("shapes,count", [(((5, 24),), 1), (((64, 512),), 2), (((64, 512), (3, 40)), 3),
+                                          (((64, 1024), (1, 8), (64, 512)), 6)])
+def test_the_words_root_keys_the_backends_top_over_its_calls_chunks(shapes, count):
+    """The record's calls fix the words instance's leaves, `chunk_count` of each call's shape (one chunk; a call of two, the
+    last short; pads after a ragged call), before the backend hashes any, and the top it hands under that domain is keyed
+    to the CPU's words root of its calls' streams."""
+    class Seen(Backend):
+        def words(self, dom):
+            self.dom = dom
+            return super().words(dom)
+    backend = Seen()
+    run = PL.LeadRun(ENTRY, backend, Link([]), W, len(shapes), keying=Keys())
+    for w, (m, n) in enumerate(shapes):
+        run.call(w, Linear(n, w), *E.quantize_rows(_x(m, w)))
+    record = run.record
+    run.end_pass()
+    twin = Keys.twin(0, len(shapes), record.salt)
+    assert backend.dom.count == count == len(L.words_values(backend.handed[0]))
+    assert backend.dom.domain_id == twin.words_domain(PL.FORWARD, count).domain_id
+    assert record.words_root == twin.words_root(PL.FORWARD, backend.handed[0]) == run.passes[0].transcript_root
+
+
+@pytest.mark.parametrize("calls,cut,why", [(1, lambda t: b"", "one-chunk words instance holds 1 to"),
+                                           (2, lambda t: t[:64], "root's two 64-byte children, not 64 bytes"),
+                                           (2, lambda t: t + bytes(64), "not 192 bytes")])
+def test_a_top_of_the_wrong_size_is_refused_and_its_pass_never_published(calls, cut, why):
+    class Cut(Backend):
+        def words(self, dom):
+            return cut(super().words(dom))
+    run = PL.LeadRun(ENTRY, Cut(), Link([]), W, calls, keying=Keys())
+    for w in range(calls):
+        run.call(w, Linear(16, w), *E.quantize_rows(_x(1, w)))
+    with pytest.raises(Refused, match=why):
+        run.end_pass()
+    assert not run.passes and run.record.words_root is None
 
 
 def test_a_window_past_its_call_count_is_refused_and_never_published():
