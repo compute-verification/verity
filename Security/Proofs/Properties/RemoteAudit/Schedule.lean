@@ -450,8 +450,8 @@ theorem scheduleLayoutGap_code {Pfx Y : Type} {N T M : ℕ} (blocks : ℕ) (dflt
 
 /-- **The check's acceptance at the committed cap `a` gives `SteeredLayout` at `a + 1` bits, at the verifier's own
 layout** (`sessionLayout`, where `ScheduleLayoutGap` holds by definition, `scheduleLayoutGap_code`). `a` is the cap
-the session's parameters committed before its first coin (`audit.Params.schedule_cap`, `audit.Ledger.steering`), so it
-is the same at every prefix and coin. -/
+the session's parameters committed before its first coin (`audit.Params.schedule_cap`, `audit.GammaTerms.steering`), so
+it is the same at every prefix and coin. -/
 theorem steered_of_checked {Pfx Y : Type} {N T M : ℕ} {blocks a : ℕ} {idx : Pfx → ℕ}
     {dflt : Pfx → Fin N ↪ Fin T × Fin M} {appended sent : Pfx → Y → Array (ℕ × ℕ)}
     (checked : ∀ c y, ∃ sc passes b, Schedule.check sc blocks a passes (appended c y) = .ok b ∧

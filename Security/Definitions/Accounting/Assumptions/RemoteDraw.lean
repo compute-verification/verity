@@ -14,7 +14,7 @@ verifier's opening draw (`Accounting.Remote.Draw`), each a named `Prop` on a ses
   precedes the coin) is: the roots bind the receipts only up to a collision, which is `Refused`'s and the guarantees'
   binding term (`Receipts.binding`), not this premise. The guarantees take it of the session the prover plays: the
   challenger sends each coin as it releases it and its commitment to the session's coins only after the prover's last
-  root, with the outcome (`coins.Released`, `audit.Session.disclose`), so nothing the prover holds before window `t`'s
+  root, with the outcome (`coins.Released`, `audit.AuditRun.disclose`), so nothing the prover holds before window `t`'s
   coin reads that coin. A prover that held the commitment from the start could size a window off its bits, and that
   session is not `Live` (red team RD-12).
 * `Refused`: the verifier refuses a window one of whose opened receipts is wrong as presented
