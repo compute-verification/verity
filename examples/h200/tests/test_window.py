@@ -4,7 +4,7 @@
   shared-row check refuses a layout that isn't one.
 - Every read a proof block's ports make lies in rows its producers wrote, and K and V are read at the steps that wrote them.
 - A linear's weight reads are whole rows of the weights' registration.
-- A run served by continuous batching on the CPU at MINI: for proof blocks of every family drawn at every step, the ports
+- A run served by continuous batching on the CPU at MINI: for proof blocks of every family sampled at every step, the ports
   are assembled from its committed rows (under 1 KiB rows, 64 B rows whose ports span rows, and today's ``families/v1``,
   whose slot roots are the run's own). They must be the inputs replay reads and the outputs it checks, and each row opens
   against its step's root.

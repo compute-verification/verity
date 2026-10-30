@@ -3,7 +3,7 @@
 # on the CPU by the unmodified prover (FC_COINS=os, non-zk) against the rec proxy, whose coin server (the challenger) sees only salted
 # tops, message commitments and the schedule (the statement's public shape's) and answers Register with the verifier's full draw
 # (stage/draw.json, rec_live.full_draw: every unit); then the recorded session replayed by upstream's verifier (flock-circuit
-# replay) and by Lean's flock-verify (--coins os, the draw held to its own law: --stratified N --program --partition), V*'s
+# replay) and by Lean's flock-verify (--coins os, the sample held to its own law: --stratified N --program --partition), V*'s
 # hashing over it (verity_flock.rec_vstar), and two
 # forgeries (a changed challenge, a changed query coin) that every verifier must reject. Run from the verity tree (research run
 # --cwd source). Outputs under out/: host.txt, stage.json, statement.txt, schedule.json, time-prove.txt, prove.txt/.err,

@@ -43,7 +43,8 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
 
 ## Landing
 
-PRs land on an eyeball review, and the full check runs after landing. ci's `research queue drive` lands them
+`main` holds only fully checked commits: reviewed PRs land on `checked`, drive runs the full check on its tip, and
+`main` moves only to a commit whose check passed every step on the merge gate. ci's `research queue drive` lands them
 (`research.drive`'s docstring has the rules; `tools/verity/check/drive.toml` the settings):
 
 - The worker that made a branch opens its PR, `research queue open --head BRANCH --sha SHA --title T --body-file F --by
@@ -56,15 +57,18 @@ PRs land on an eyeball review, and the full check runs after landing. ci's `rese
   You hear back only if yours is held, ejected or reverted.
 - Drive stacks admitted PRs on `next`, non-Lean changes first. Reviewers ci staffs, never the owner, record a verdict at
   the head (`research queue review N --land|--hold REASON --by LANE`); no other per-head grant exists. Drive
-  fast-forwards `main` to the longest reviewed prefix whose merges are clean and whose `.py` files compile; while no Lean
+  fast-forwards `checked` (`land_into`) to the longest reviewed prefix whose merges are clean and whose `.py` files compile; while no Lean
   check runs, it moves reviewed members below those awaiting a verdict, so a PR waiting for review holds only itself (a
   hold still keeps what is above it). A change to a
   `lean-audit.json` lock or to Lean that runs as code (a `.lean` outside `Security/`) also waits for a `lean-audit` that
   passed at or above it; Lean proofs alone land on the verdict.
-- One run checks `main`'s tip after each landing. A red suite's culprit is rung and reverted 60 min later unless a fix is
-  marked. Citations and tables read only commits whose after-landing run passed.
-- A pure move that `verity check move BASE HEAD` certifies lands alone, ahead of the queue, through the lander. Only
-  drive's App pushes `main` and `next`.
+- One run checks `checked`'s tip after each landing; when it passes every step on the merge gate (not circuit-check), drive fast-forwards `main` there. A red
+  suite's culprit is rung and reverted on `checked` 60 min later unless a fix is marked, and `main` doesn't move. A red
+  circuit-check's culprit is reverted at once, and until circuit-check passes on `checked` no PR touching its inputs lands
+  (a PR whose body says `fixes step circuit-check` does).
+  Citations and tables read only commits whose after-landing run passed: `main`'s.
+- A pure move that `verity check move BASE HEAD` certifies lands alone on `main`, ahead of the queue, through the lander;
+  drive merges it into `checked`. Only drive's App pushes `main`, `checked` and `next`.
 - `check.py --record --on M --pool NAME`, from a checkout, records `check` as an Attempt of the clean commit in M's NAME
   pool.
 - When a changed lock record lands on `main`, Daniel gets a DM showing it; that DM is the check, and nothing waits on it.

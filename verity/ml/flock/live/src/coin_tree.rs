@@ -1,7 +1,7 @@
 //! The verifier's per-session coin commitment (lane flock-zk, C-Flock ZK; soundness ASSUMPTIONS.md §2 and §6, DESIGN.md §11.1), keyed
 //! (`coin-tree/hm96-sha512/v2`, docs/coin-tree-v2.md).
 //!
-//! At `Hello`, before the prover's first message, the verifier draws every coin of the session and commits to all of them
+//! At `Hello`, before the prover's first message, the verifier samples every coin of the session and commits to all of them
 //! at once: one SHA-512 Merkle root over Halevi–Micali commitments, one leaf per (stream, round), each stream (a table's
 //! repetition, or the session's own link points) a subtree. Each round's coins are opened with the round's answer, and the
 //! prover checks the opening against the root before it uses a coin ([`Checked`]). No coin is derived from another: no PRF.
@@ -27,7 +27,7 @@ pub const SCHEME: &str = "coin-tree/hm96-sha512/v2";
 pub const SALT_BYTES: usize = 192;
 pub const KEY_BYTES: usize = 256;
 pub const NONCE_BYTES: usize = 32;
-/// The session's own stream: round 0 is the link points drawn at `Commit`.
+/// The session's own stream: round 0 is the link points sampled at `Commit`.
 pub const SESSION: &str = "session";
 // hm96-sha512/v1's prefixes (verity/ml/commitments/hm96/PROTOCOL.md §2), zero-padded to 128 bytes
 const SALT_TAG: &[u8] = b"verity/hm96-sha512/salt/v1\0";
