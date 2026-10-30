@@ -1,5 +1,4 @@
-// What RS-D1E's stage coins and deferred edit cost on one RTX PRO 6000 (sm_120), at Llama-3.1-8B's layer shapes, int8
-// (STAGE-COST, cmp-13; note:20261016T0750Z-draft-rs-d1e-stage-coins).
+// What RS-D1E's stage coins and deferred edit cost on one RTX PRO 6000 (sm_120), at Llama-3.1-8B's layer shapes, int8.
 //
 // The GEMMs are dcap.cu's: cuBLASLt int8 (s8 x s8 -> s32), the fastest of the heuristic's top 16 among those whose output
 // equals the host's on sampled rows. The commitment: a stage's operand rows (k int8 bytes a token) as hm96-sha512/row-seg/v1

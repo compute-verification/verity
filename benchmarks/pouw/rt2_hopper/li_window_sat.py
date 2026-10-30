@@ -1,8 +1,8 @@
-"""RT2-HOPPER task 1: is there a program for li's fold on sm_90a under one issue slot a word? (note:20261019T1140Z-draft-rt2-hopper)
+"""Is there a program for li's fold on sm_90a under one issue slot a word?
 
 li's half step is `y <- (y ^ d0 ^ k) * a + d1` over 32-bit words (`segment._li_absorb`, k = LK[c][h], a = LA[c][h]), one
 LOP3 and one IMAD: 1 instruction a word. DS-90 prices every instruction one issue slot, so a fold under 1 a word needs
-fewer instructions. FOLD-MIN (`theory/fold_routes.py`, #2709) showed that a half step is no single instruction at 32 bits,
+fewer instructions. `theory/fold_routes.py` shows that a half step is no single instruction at 32 bits,
 over a pool of test vectors. That is a bound on one half step alone. This script asks the questions a cheaper whole fold
 would need a yes to, each as an exact synthesis query (CEGIS over z3 bit-vectors):
 
