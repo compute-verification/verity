@@ -20,8 +20,9 @@ record's session (`Properties.RemoteAudit.Line.Verified`). The two properties jo
 * **LineHeldAtComponent**: `Properties.RemoteAudit.Line.LineHeld` with the component's acceptance in the event in place
   of `Verified`. On the same node, trace, records and premises, and the bytes `a ω`, `b ω` and `e ω` the component is
   given at each outcome (the parameters, the commitment and the evidence), the probability that the component accepts
-  bytes that play the record of `ω` on the node (`Plays`) while the record's link-charged line credits a stretch more
-  than the trace held over its span is at most `LineHeld`'s bound, term for term.
+  bytes that play the record of `ω` on the node (`Plays`) while the network certifiers sign nothing but the verifier's
+  messages entering the node and the record's line credits more bits read than the trace's passes read is at most
+  `LineHeld`'s bound, term for term.
 
 `Plays` is the component's acceptance (`DecodedAccepted` unfolded at `RemoteAudit.Protocol.protocol`, whose decoders
 are `decodeParams`, `decodeCommitment` and `decodeEvidence`) with what picks out the record the line reads: the
@@ -33,9 +34,11 @@ Each property is its verifier's instance of a form over the verifier, so that it
 contributes. `AcceptIsVerifiedFor chk` is `AcceptIsVerified` at a check `chk`, and `LineHeldAtComponentBy acc ver sum`
 is `LineHeldAtComponent` at an acceptance `acc` in the event, a verdict `ver` the trace reads and a record `sum` the
 line reads: at `RemoteAudit.Protocol.check`, and at `Plays`, `Verified` and `Record.summary`, they are the two
-properties. The honest instance the witnesses read is the deployed period's parameters with no event yet
-(`honestParams`, `honestEvidence`) and a node that holds its whole store in memory throughout (`honestTrace`), with no
-outside device (`noOutside`), on a schedule that runs each pass inside its window (`HonestSchedule`).
+properties. `LineHeldBy ver sum` is `LineHeld` at a verdict `ver` in the event and the trace and a record `sum`: at
+`Verified` and `Record.summary` it is `LineHeld`. The honest instance the witnesses read is the deployed period's
+parameters with no event yet (`honestParams`, `honestEvidence`) and a node that holds its whole store in memory
+throughout (`honestTrace`), with no outside device (`noOutside`) and nothing but the verifier's messages entering it,
+as its certifiers count (`quietIngress`), on a schedule that runs each pass inside its window (`HonestSchedule`).
 -/
 
 namespace Properties.RemoteAudit.Component
@@ -73,29 +76,28 @@ def Plays (node : Node) (rec : Record) (a b e : ByteArray) : Prop :=
       .ok (node.params, node.groupsPerCoin, rec.coins, rec.appendCoins, rec.notBeforeNs, rec.events) ∧
     ∃ pub prof, RemoteAudit.Protocol.check p node.reg ev = .accept pub prof
 
-/-- **The memory line of record, link-charged, at the bandwidth component.** `LineHeld`'s node, trace, records and
+/-- **The memory line of record, in bits read, at the bandwidth component.** `LineHeld`'s node, trace, records and
 premises verbatim, one coin for each of the session's draws (`Node.draws`), and the bytes the component is given at
 each outcome (`a`, `b`, `e`: the parameters, the commitment and the evidence): the probability that the component
-accepts bytes that play the record of `ω` on the node (`Plays`) while a stretch of the record's link-charged line
-credits more than the trace held over its span is at most `δs + (δ + Σ_c s / 2^64 + Σ_c adv_c + Σ_c hide_c + bind)`,
-`LineHeld`'s bound. -/
+accepts bytes that play the record of `ω` on the node (`Plays`) while the network certifiers sign nothing but the
+verifier's messages entering the node over the credited passes and the record's line credits more bits read than the
+passes read is at most `δs + δnet + (δ + Σ_c s / 2^64 + Σ_c adv_c + Σ_c hide_c + bind)`, `LineHeld`'s bound. -/
 def LineHeldAtComponent : Prop :=
   ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.draws → Pous.Bits κ → Blocks receiptMax)
     (rest : Coins node.draws κ X → Fin node.draws → ℕ → ℕ) (recs : Cm → Coins node.draws κ X → Record)
     (correct : Cm → Fin node.draws → Coins node.draws κ X → Finset ℕ) (com : Coins node.draws κ X → Cm)
-    (T : Trace (Coins node.draws κ X)) (R : Receipts node.draws κ X) (δs : ℝ)
+    (T : Trace (Coins node.draws κ X)) (R : Receipts node.draws κ X) (δs δnet : ℝ)
     (a b e : Coins node.draws κ X → ByteArray),
     let r := played recs com
     let F := recordCommitted node recs correct
-    ∀ O : Outside (ofRecord T node r),
-    Links (ofRecord T node r) node.link node.linkBurst →
-    SquaringCeiling (ofRecord T node r) node.squarings node.encode node.rebuildBurst →
-    Disks (ofRecord T node r) node.disk node.diskBurst → ChipCeiling (ofRecord T node r) node.chipBlocks →
-    Routed (ofRecord T node r) → Paced (ofRecord T node r) (recordPace node r) → Covers (ofRecord T node r) →
-    SketchBoundAt (ofRecord T node r) O δs → NoOutsideCompute (ofRecord T node r) O → (∀ c, Live (F.view c)) →
+    ∀ (O : Outside (ofRecord T node r)) (I : Ingress (Coins node.draws κ X)),
+    Paced (ofRecord T node r) (recordPace node r) → Covers (ofRecord T node r) →
+    SketchBoundAt (ofRecord T node r) O δs → Covered (ofRecord T node r) O I →
+    IngressCounted (ofRecord T node r) I δnet → (∀ c, Live (F.view c)) →
     Refused (F.play com) prf rest (ofRecord T node r) R → Counted (F.play com) (ofRecord T node r) →
-    Pouw.pr (fun ω => Plays node (r ω) (a ω) (b ω) (e ω) ∧ ¬ HeldAt (ofRecord T node r) ω node (r ω) 1) ≤
-      δs + ((node.delta : ℝ) + ((∑ _t : Fin node.draws, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
+    Pouw.pr (fun ω => Plays node (r ω) (a ω) (b ω) (e ω) ∧
+        ¬ (Quiet (ofRecord T node r) I.counted ω → ReadAt (ofRecord T node r) ω node (r ω))) ≤
+      δs + δnet + ((node.delta : ℝ) + ((∑ _t : Fin node.draws, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
           ((F.play (Committed.junk com t)).distinguisher prf (node.delta : ℝ) t)).toReal +
         (∑ t, F.hide com prf (node.delta : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal)
@@ -135,12 +137,14 @@ def lineBy (sum : Node → Record → Option RemoteAudit.Session.Summary) (node 
       node.blockBytes node.chipBytes node.nodeBytes node.delta node.rates
   | none => .error "the Lean verifier gave the session no record"
 
-/-- `HeldAt` of the line a verifier's record `sum` gives: every stretch of form `form`, if the line computes one,
-credits what the trace held at `ω`. `HeldAt` at `sum = Record.summary`. -/
-def HeldBy (sum : Node → Record → Option RemoteAudit.Session.Summary) {Ω : Type} (T : Trace Ω) (ω : Ω) (node : Node)
-    (r : Record) (form : ℕ) : Prop :=
-  ∀ l, lineBy sum node r = .ok l → ∀ f, l.forms[form]? = some f → ∀ x ∈ f.stretches,
-    Credits T ω (groupsBy sum node r) node.per node.blockBytes x
+/-- `ReadAt` of the line a verifier's record `sum` gives: if the line computes, `8·b·(P·N − W)` at its groups' passes
+`P` is at most the bits of the blocks they read on the node at `ω`. `ReadAt` at `sum = Record.summary`. -/
+def ReadBy (sum : Node → Record → Option RemoteAudit.Session.Summary) {Ω : Type} (T : Trace Ω) (ω : Ω) (node : Node)
+    (r : Record) : Prop :=
+  ∀ l, lineBy sum node r = .ok l →
+    (8 * node.blockBytes : ℝ) *
+        (((firstPass (groupsBy sum node r) (groupsBy sum node r).size * node.blocks : ℕ) : ℝ) - l.wrong) ≤
+      (8 * node.blockBytes : ℝ) * T.reads ω (firstPass (groupsBy sum node r) (groupsBy sum node r).size)
 
 /-- `recordPace` of the groups a verifier's record `sum` gives. -/
 def paceBy {Ω : Type} (sum : Node → Record → Option RemoteAudit.Session.Summary) (node : Node) (rec : Ω → Record) :
@@ -150,9 +154,31 @@ def paceBy {Ω : Type} (sum : Node → Record → Option RemoteAudit.Session.Sum
   released ω g := released (groupsBy sum node (rec ω)) node.windows g
   ended ω g := ended (groupsBy sum node (rec ω)) g
 
-/-- `ofRecord` at a verifier's verdict `ver`. -/
+/-- `ofRecord` at a verifier's verdict `ver`: the trace over the registration's blocks, accepting where `ver` does. -/
 def traceBy {Ω : Type} (T : Trace Ω) (node : Node) (ver : Node → Record → Prop) (rec : Ω → Record) : Trace Ω :=
   { overBlocks T node.blocks with accepts := fun ω => ver node (rec ω) }
+
+/-- **`LineHeld` at a verifier**: its node, trace, records, premises and bound verbatim, with `ver` for the verdict in
+the event and the trace (`Verified`) and `sum` for the record the line and its paced session read
+(`Record.summary`). `LineHeld` is it at `Verified` and `Record.summary`. -/
+def LineHeldBy (ver : Node → Record → Prop) (sum : Node → Record → Option RemoteAudit.Session.Summary) : Prop :=
+  ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.draws → Pous.Bits κ → Blocks receiptMax)
+    (rest : Coins node.draws κ X → Fin node.draws → ℕ → ℕ) (recs : Cm → Coins node.draws κ X → Record)
+    (correct : Cm → Fin node.draws → Coins node.draws κ X → Finset ℕ) (com : Coins node.draws κ X → Cm)
+    (T : Trace (Coins node.draws κ X)) (R : Receipts node.draws κ X) (δs δnet : ℝ),
+    let r := played recs com
+    let F := recordCommitted node recs correct
+    ∀ (O : Outside (traceBy T node ver r)) (I : Ingress (Coins node.draws κ X)),
+    Paced (traceBy T node ver r) (paceBy sum node r) → Covers (traceBy T node ver r) →
+    SketchBoundAt (traceBy T node ver r) O δs → Covered (traceBy T node ver r) O I →
+    IngressCounted (traceBy T node ver r) I δnet → (∀ c, Live (F.view c)) →
+    Refused (F.play com) prf rest (traceBy T node ver r) R → Counted (F.play com) (traceBy T node ver r) →
+    Pouw.pr (fun ω => ver node (r ω) ∧
+        ¬ (Quiet (traceBy T node ver r) I.counted ω → ReadBy sum (traceBy T node ver r) ω node (r ω))) ≤
+      δs + δnet + ((node.delta : ℝ) + ((∑ _t : Fin node.draws, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
+        (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
+          ((F.play (Committed.junk com t)).distinguisher prf (node.delta : ℝ) t)).toReal +
+        (∑ t, F.hide com prf (node.delta : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal)
 
 /-- **`LineHeldAtComponent` at a verifier**: its node, trace, records, premises and bound verbatim, with `acc` for the
 component's acceptance in the event (`Plays`), the trace's verdict `ver` (`Verified`) and the record the line and its
@@ -163,20 +189,18 @@ def LineHeldAtComponentBy (acc : Node → Record → ByteArray → ByteArray →
   ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.draws → Pous.Bits κ → Blocks receiptMax)
     (rest : Coins node.draws κ X → Fin node.draws → ℕ → ℕ) (recs : Cm → Coins node.draws κ X → Record)
     (correct : Cm → Fin node.draws → Coins node.draws κ X → Finset ℕ) (com : Coins node.draws κ X → Cm)
-    (T : Trace (Coins node.draws κ X)) (R : Receipts node.draws κ X) (δs : ℝ)
+    (T : Trace (Coins node.draws κ X)) (R : Receipts node.draws κ X) (δs δnet : ℝ)
     (a b e : Coins node.draws κ X → ByteArray),
     let r := played recs com
     let F := recordCommitted node recs correct
-    ∀ O : Outside (traceBy T node ver r),
-    Links (traceBy T node ver r) node.link node.linkBurst →
-    SquaringCeiling (traceBy T node ver r) node.squarings node.encode node.rebuildBurst →
-    Disks (traceBy T node ver r) node.disk node.diskBurst → ChipCeiling (traceBy T node ver r) node.chipBlocks →
-    Routed (traceBy T node ver r) → Paced (traceBy T node ver r) (paceBy sum node r) →
-    Covers (traceBy T node ver r) → SketchBoundAt (traceBy T node ver r) O δs →
-    NoOutsideCompute (traceBy T node ver r) O → (∀ c, Live (F.view c)) →
+    ∀ (O : Outside (traceBy T node ver r)) (I : Ingress (Coins node.draws κ X)),
+    Paced (traceBy T node ver r) (paceBy sum node r) → Covers (traceBy T node ver r) →
+    SketchBoundAt (traceBy T node ver r) O δs → Covered (traceBy T node ver r) O I →
+    IngressCounted (traceBy T node ver r) I δnet → (∀ c, Live (F.view c)) →
     Refused (F.play com) prf rest (traceBy T node ver r) R → Counted (F.play com) (traceBy T node ver r) →
-    Pouw.pr (fun ω => acc node (r ω) (a ω) (b ω) (e ω) ∧ ¬ HeldBy sum (traceBy T node ver r) ω node (r ω) 1) ≤
-      δs + ((node.delta : ℝ) + ((∑ _t : Fin node.draws, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
+    Pouw.pr (fun ω => acc node (r ω) (a ω) (b ω) (e ω) ∧
+        ¬ (Quiet (traceBy T node ver r) I.counted ω → ReadBy sum (traceBy T node ver r) ω node (r ω))) ≤
+      δs + δnet + ((node.delta : ℝ) + ((∑ _t : Fin node.draws, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
           ((F.play (Committed.junk com t)).distinguisher prf (node.delta : ℝ) t)).toReal +
         (∑ t, F.hide com prf (node.delta : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal)
@@ -213,8 +237,11 @@ def honestTrace {Ω : Type} (node : Node) (passes : ℕ) (tick : Ω → ℕ → 
   disk _ _ := 0
   link _ _ := 0
 
-/-- No device outside the node computes on anything. -/
+/-- No device outside the node computes for it. -/
 def noOutside {Ω : Type} (T : Trace Ω) : Outside T := ⟨fun _ _ => ∅, fun _ _ => ∅⟩
+
+/-- Nothing but the verifier's messages enters the node, and the certifiers count nothing else. -/
+def quietIngress (Ω : Type) : Ingress Ω := ⟨fun _ _ => 0, fun _ _ => 0⟩
 
 /-- **An honest node's schedule**: the session has a window; its passes take a tick or more each; each draw's
 receipts are the store's, the same at every commitment and every coin; and wherever the Lean verifier accepts, the
