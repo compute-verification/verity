@@ -11,6 +11,8 @@ and it imports no other unit.
   block its span's cut into its sampling blocks' spans. `MonitoringPeriod.of` builds one from boundaries.
 - `MONITORING_PERIODS`: the monitoring periods a result is presented for (week, month, year), each with its length in
   seconds.
+- `block_count(seconds, block_s, machines)`: the blocks a monitoring period of `seconds` holds over `machines` machines,
+  each audited in whole `block_s`-second blocks: the one count every period table scales a block's figures by.
 
 The JSON is the Lean's: a span is ``{"len": n, "start": n}`` and a monitoring period ``{"execution": [τ, …], "sampling":
 [[τ, …], …], "span": SPAN}``. `from_json` accepts exactly what `to_json` writes. Anything that isn't a span, a cut or a
@@ -29,6 +31,17 @@ MONITORING_PERIODS: tuple[tuple[str, int], ...] = (("week", 7 * 86400), ("month"
 
 class PeriodError(ValueError):
     """A span, cut or monitoring period that isn't one, or JSON that encodes none."""
+
+
+def block_count(seconds: int, block_s: int, machines: int = 1) -> int:
+    """The blocks a monitoring period of `seconds` holds over `machines` machines, each machine's span cut into whole
+    `block_s`-second blocks: ``machines · ⌊seconds / block_s⌋``, the execution blocks of each machine's `MonitoringPeriod`
+    times the machines (a remainder shorter than a block is no block)."""
+    _nat(seconds, "seconds")
+    _nat(machines, "machines")
+    if _nat(block_s, "block_s") == 0:
+        raise PeriodError("block_s: a block lasts at least a second")
+    return machines * (seconds // block_s)
 
 
 def _nat(v: Any, what: str) -> int:
@@ -157,4 +170,4 @@ class MonitoringPeriod:
         return cls.of(span, execution, [_ticks(bs, "monitoring period.sampling") for bs in o["sampling"]])
 
 
-__all__ = ["MONITORING_PERIODS", "Cut", "MonitoringPeriod", "PeriodError", "TickSpan"]
+__all__ = ["MONITORING_PERIODS", "Cut", "MonitoringPeriod", "PeriodError", "TickSpan", "block_count"]
