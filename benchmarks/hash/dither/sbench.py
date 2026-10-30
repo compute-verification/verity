@@ -100,13 +100,13 @@ Arms:
                  of what forward s wrote and step s's units go out as soon as coin s is back; its gate adds that round s
                  covers forward s's values while built once forward s + 1 had started, and fault_ring.  With -we
                  last, each window ends (`SoWindow.end`: the tail's units after their coins, their receipts under a
-                 final round, the manifest root, the draw coin after it): in process at the end of each generate,
+                 final round, the manifest root, the sampling coin after it): in process at the end of each generate,
                  inside its time (the next window's challenger made after it), its gate adds the ended window's
                  checks and two end faults (fault_tail, fault_late_receipt, `dither_so.check_end`); off the node the
                  session's one window ends at its layout's last step (DITHER_CHALLENGERS' "rounds"), served there at
                  the arm's stop, its manifest in OUT (`dither_manifest`) and its checks in stop.json.  Under -we each
                  step's live A rows, scales and z/y records go to pinned host memory as their ring slot retires and
-                 stay until the window's draw (`dither_so.Spill`, about 291 MB a step at T 64, m 32; the pool grown
+                 stay until the window's sample (`dither_so.Spill`, about 291 MB a step at T 64, m 32; the pool grown
                  in the warm-up, bounded by $DITHER_SPILL_MAX_GB), and the ended window's check opens three of its
                  steps from them; -wea (`-so<D>[-ov...]-wea`) holds A and the scales alone (about 27 MB a step), z/y
                  recomputed from them at an opening
@@ -584,7 +584,7 @@ DITHER_A = {f"dither-a{u}{z}{o}{p}{q}": (unit, zm, ao, pt, ls)
             for q, ls in (("", False), ("-ls", True))}
 # -ov: round s and step s's units beside step s + 1's forward, a round ring of 2 steps (-ov1: 1); -ovp: -ov with the
 # engine serving on a stream above the trees' and the units' priority; -we: each window ends (`dither_so.SoWindow.end`),
-# each step's A and z/y records held in pinned host memory until its draw (`dither_so.Spill`), -wea its A alone
+# each step's A and z/y records held in pinned host memory until its sample (`dither_so.Spill`), -wea its A alone
 DITHER_SO = {f"dither-a-{unit}-zy-{o}{p}-so{d}{v}{e}": (unit, ao, pt, d, r, sp, we, spill)
              for unit in ("hbk", "hbr", "hbc") for o, ao in (("aom", "m"), ("aomn", "mn"), ("ab", "b"), ("abn", "bn"))
              for p, pt in (("", False), ("-pt", True)) for d in range(2, 11)

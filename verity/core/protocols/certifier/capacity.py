@@ -43,9 +43,9 @@ def unbound_bits(buckets: int, allocation: int, frame_bits: int) -> float:
 
 def accepted_bound_bits(content_bits: float, sync_bits: float, windows: int, jitter_classes: int = 1,
                         steps: int = 0) -> float:
-    """Lean `SecurityProofs.EncardAccSeqsLeSync`: accepted sequences number at most `#Ac · #Sync^W · D^n`, which is
-    `A_c + W·log2 #Sync + n·log2 D` bits. It is 0 for a fixed clock and J
-    (`SecurityProofs.EncardAccSeqsLeFixedClock`)."""
+    """Lean `Properties.NetworkCertifier.EncardAcceptedObservationsLe`, at `steps = W·T`: the check's accepted
+    sequences number at most `#Ac · #Σ_sync^W · D^n`, which is `A_c + W·log2 #Σ_sync + n·log2 D` bits. With one sync
+    value under J it is the content advice's `A_c` alone."""
     return content_bits + windows * sync_bits + steps * math.log2(jitter_classes)
 
 
@@ -56,6 +56,6 @@ def ingress_rate(allocation: int, bucket_ms: int = 100) -> float:
 
 
 def k_share(bits: float, k_bits: float) -> float:
-    """A charge in bits, as a share of K, the policy's budget per isolation unit in bits. K is the caller's: NCI's
+    """A charge in bits, as a share of K, the policy's budget per isolation unit in bits. K is the caller's: the
     inference-only policy sets α·Γ = 9.6e−11 × 9.5e17 bits, 9.12e7 (about 11 MB)."""
     return bits / k_bits

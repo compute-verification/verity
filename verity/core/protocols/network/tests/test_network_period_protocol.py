@@ -266,10 +266,11 @@ def test_a_tied_audits_free_inputs_are_in_its_link_windows_term(server):
 
 
 def test_only_a_tied_audit_must_draw_every_unit(server, monkeypatch):
-    """K charges an audit a scan's `prog` is tied to its free inputs and no faulty term, so the rows form refuses one
-    with a unit undrawn (`rows-tied-undrawn` above), and only such an audit: over honest rows periods, which the mirror
-    accepts, every tied audit draws all its units and some untied audit fewer, and Lean accepts each such period with
-    the mirror's public; and a mirror that skips the draw's refusal accepts what Lean refuses at the draw."""
+    """K charges an audit a scan's `prog` is tied to its free inputs and no term for incorrect proof blocks, so the
+    rows form refuses one with a unit undrawn (`rows-tied-undrawn` above), and only such an audit: over honest rows
+    periods, which the mirror accepts, every tied audit draws all its units and some untied audit fewer, and Lean
+    accepts each such period with the mirror's public; and a mirror that skips the draw's refusal accepts what Lean
+    refuses at the draw."""
     partial = []
     for n in range(24):
         case = build("rows-honest", n)
@@ -347,7 +348,7 @@ def test_each_fits_check_refuses_its_negative(server):
 def test_a_scan_in_the_checker_form_is_refused_by_name(server):
     """A scan in the checker form, whose egress template takes the row its units compare as an input, is refused at the
     parameters by Lean and the mirror, by name, though its terms would read: no egress gate is an input
-    (`NetTiming.Layout.Fits`), so `K` counts only what a Program that computes its egress rows leaves free."""
+    (`NetTiming.BoundaryGates.Fits`), so `K` counts only what a Program that computes its egress rows leaves free."""
     for n in range(2):
         case = build("rows-honest", n, small=True)
         s = PC.params(case["params"]).schedule
@@ -360,10 +361,10 @@ def test_a_scan_in_the_checker_form_is_refused_by_name(server):
 
 
 def test_a_wide_unit_is_charged_its_committed_bits(server):
-    """A compute audit's faulty bits are its bound times the most bits one of its Program's units commits, read off the
-    Program, not a proof unit's 16-bit public output: over honest clock-form periods whose audits' units commit 8 to
-    320 bits, each audit is charged `b · bits`, some audit of wide units more than `16 · b`, and Lean's public is the
-    mirror's."""
+    """A compute audit's incorrect proof blocks' bits (`faulty_bits`) are its bound times the most bits one of its
+    Program's units commits, read off the Program, not a proof block's 16-bit public output: over honest clock-form
+    periods whose audits' units commit 8 to 320 bits, each audit is charged `b · bits`, some audit of wide units more
+    than `16 · b`, and Lean's public is the mirror's."""
     wide = 0
     for n in range(12):
         case = build("honest", n)
@@ -463,9 +464,9 @@ def test_each_kind_of_case_is_answered_as_lean_answers(server, form):
 
 def test_the_bound_counts_what_it_says():
     """K's terms on a period worked by hand: 10 units, each committing 16 bits, drawn subset:3 at δ = 1/10 with at most
-    4 wrong, 7 cells on one connection and none on another, 2 syncs over 3 link-windows, jitter below 2 over 3 steps;
-    the same audit with units committing 40 bits, its faulty bits 4 · 40; and eps over audits at δ = 1/10, 1/15 and
-    1/6, and over none (Lean's `#guard`s)."""
+    4 incorrect, 7 cells on one connection and none on another, 2 syncs over 3 link-windows, jitter below 2 over 3
+    steps; the same audit with units committing 40 bits, its incorrect proof blocks' bits 4 · 40; and eps over audits at
+    δ = 1/10, 1/15 and 1/6, and over none (Lean's `#guard`s)."""
     p = Params((PC.Audit(0, 3, "", 10, 16),), (7, 0), 0, 2, "a", None, b"", "",
                SyncSet((0,), (Fraction(1), Fraction(2))), 3)
     out = public(p, [Facts(10, 3, Fraction(1, 10), 4)])
@@ -484,10 +485,10 @@ def test_the_bound_counts_what_it_says():
 def test_the_rows_forms_bound_counts_what_it_says():
     """The rows form's K worked by hand (Lean's `rowsTerms` `#guard`s): 7 cells on one connection and 2 on another, 5
     bits for the schedules and 5 again for the fail cells, an audit whose own terms are in none, and over 1 link-window
-    one scan of 20 units (T = 10) drawn at δ = 1/15 with at most 3 wrong (1351 sets), 1,120 free inputs, instances
-    committing 300 and 512 bits, and jitter below 2 over its 10 steps; with every unit drawn, no faulty term; at w63's
-    class with the egress tie (T = 32, every unit drawn), K the tied slot entries' free inputs, 8 · 1,136 = 9,088 bits;
-    and eps over the scans' δ alone."""
+    one scan of 20 units (T = 10) drawn at δ = 1/15 with at most 3 incorrect (1351 sets), 1,120 free inputs, instances
+    committing 300 and 512 bits, and jitter below 2 over its 10 steps; with every unit drawn, no term for incorrect
+    proof blocks; at w63's class with the egress tie (T = 32, every unit drawn), K the tied slot entries' free inputs,
+    8 · 1,136 = 9,088 bits; and eps over the scans' δ alone."""
     p = Params((PC.Audit(0, 3, "", 10, 16),), (7, 2), 0, 2, "a", None, b"", "", None, 1, WardenParams(),
                PC.Scan(10, 1120, 300, 512))
     out = public(p, [Facts(10, 3, Fraction(1, 10), 4)], [(Facts(20, 5, Fraction(1, 15), 3), 0)])

@@ -197,7 +197,7 @@ theorem hholds_rowDPieces (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × �
 /-- **Table `i`'s reps run at the decision** (`runs_assembled`) at the pieces `rowDPieces key x`: their cover is
 `rowDPieces_cover`, and they hold by `hholds_rowDPieces` at the layout and coin ties and the verifier rows' passing
 level checks at every table. -/
-theorem runs_open {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+theorem runs_open {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size)
     (hti : i < D.spec.tables.size)
     (hframed : ∀ r : Fin 2, FramedAt ((D.files cls i).stream r).rounds 0 (repFrames (D.files cls i).st
@@ -353,7 +353,7 @@ theorem rowsRun_of {i : ℕ} (hti : i < D.spec.tables.size) {S : RecAlgebra.GfS}
 /-- **Table `i`'s reps run at the decision** (`runs_assembled`) at table `i`'s pieces, with `runs_assembled`'s own
 `hside` and `hpos`: the cover is `rowDPiecesAt_cover`, and the pieces hold by `hholds_rowDPiecesAt` at the verifier
 rows' run (`verifierRows_rep`) and their passing level checks (`hlev`). -/
-theorem runs_openAt {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto)
+theorem runs_openAt {xo : Claims.Msg} {sto : Claims.Recursion.CompiledStatement} (hst : parse xo = some sto)
     (hf : Claims.Recursion.Form.Dense sto.form) (hx : x = xIOf xo) {i : ℕ} (hi : i < D.sts.size)
     (hti : i < D.spec.tables.size)
     (hframed : ∀ r : Fin 2, FramedAt ((D.files cls i).stream r).rounds 0 (repFrames (D.files cls i).st

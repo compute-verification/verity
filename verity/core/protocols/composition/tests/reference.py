@@ -19,7 +19,7 @@ The trial's rule, onsite's and remote's over their components' statements:
 
 Reduced to answers: a component that accepts records a statement with no reasons, one that rejects a statement with
 reasons, and one that is undecided no statement yet. `trial_verdict` is that reduction, with one change already made:
-every component's reasons fail the product. Of the components' statements the trial's NCI fails the epoch on work's
+every component's reasons fail the product. Of the components' statements the trial's inference-only check fails the epoch on work's
 reasons alone (integrity's reach it through them), and space's or communication's reasons only zero their explained usage
 in the balance. The port follows the composition's rule, `verdict`, which changes the reduction in one place more:
 
@@ -97,7 +97,7 @@ class Ported:
 @dataclass(frozen=True)
 class Recorded:
     """A component on the cases recorded for it: `cases` holds each kind's case and the answer its Python verifier gave
-    it (`periods.build` fills it), and `answer` is that answer. The composition hands a component the case it was drawn,
+    it (`periods.build` fills it), and `answer` is that answer. The composition hands a component the case it was sampled,
     or one whose commitment is no longer JSON (`bad-hex` under a `0`), which both recorded components refuse with no
     digest, as they do params that don't decode; any other case is a difference."""
 

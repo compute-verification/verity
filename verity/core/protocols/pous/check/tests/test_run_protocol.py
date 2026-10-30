@@ -190,12 +190,12 @@ DEMO_B = _certify_line(P2.POINT[:2], 1 << 16, 1038, period.K, period.LIMIT_NS)
 `Δ + RTT`."""
 #: Points about the certificates' edges: mostly the registered width and prime, else the small point's or a width
 #: `P2Params` refuses; labels per segment and segment counts whose products fall at and beside `2^8`, `2^19` (the
-#: registered point's `2^16 × 8`), `2^23` and `2^27` labels; `k` about 105; `Δ + RTT` about one root's time.
+#: registered point's `2^16 × 8`), `2^23` and `2^27` labels; `k` about 105 and 320; `Δ + RTT` about one root's time.
 CERTIFY_POINTS = st.builds(
     _certify_line, st.sampled_from([P2.POINT[:2]] * 6 + [(period.W, period.C0)] + INVALID),
     st.sampled_from([1, 2, 3, 128, 255, 256, 257, 1 << 15, (1 << 16) - 1, 1 << 16, (1 << 16) + 1]),
     st.sampled_from([0, 1, 2, 8, 127, 128, 129, 1038, (1 << 11) - 1, 1 << 11, (1 << 11) + 1]),
-    st.sampled_from([0, 104, 105, 106]),
+    st.sampled_from([0, 104, 105, 106, 319, 320, 321]),
     st.sampled_from([0, period.LIMIT_NS, P2.ROOT_CALL_NS - 1, P2.ROOT_CALL_NS, 2 * P2.ROOT_CALL_NS]))
 CERTIFY = _Port("pous-run", "certify", certify_reference, CERTIFY_POINTS, package=LEAN)
 certify_server = D.server_fixture(CERTIFY)
@@ -343,6 +343,18 @@ def test_demo_bs_certificate_agrees(certify_server) -> None:
     low = json.loads(D.replay(CERTIFY, {"point": DEMO_B["point"] | {"k": 104}}, certify_server)[1])
     assert low["public"] == {"certified": False, "eps": "0", "s_bits": 0}
     assert low["profile"]["gaps"] == ["k = 104 is below the certificate's 105"]
+
+
+def test_320_reads_certify_alike(certify_server) -> None:
+    """At 320 challenges, at the registered point's `2^19` labels and at Demo B's, the Lean and the Python publish
+    `ObligationWide320`'s `⌊ρ·|C|⌋` at exactly `2^-20`, with no gap."""
+    for line, s_bits in ((_certify_line(P2.POINT[:2], 1 << 16, 8, 320, period.LIMIT_NS), 8_169_621_180),
+                         ({"point": DEMO_B["point"] | {"k": 320}}, 1_060_008_348_186)):
+        got = json.loads(D.replay(CERTIFY, line, certify_server)[1])
+        assert got["public"] == {"certified": True, "eps": f"1/{2 ** 20}", "s_bits": s_bits}
+        assert got["profile"]["gaps"] == []
+        assert got["profile"]["certificate"]["theorem"] == "Pous.SecurityProofs.ObligationWide320"
+        assert got["profile"]["certificate"]["delta"] == f"{2 ** 108 - 1}/{2 ** 128}"
 
 
 def test_drawn_points_certify_alike(certify_server) -> None:
