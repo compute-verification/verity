@@ -114,15 +114,15 @@ theorem CoverTrainingAligned_rate :
 /-- **On whole-word activations, training through a compliant declaration pays the width factor**, at `(c, k)`:
 `CoverTrainingAligned_rate` at the rate `k / c`, multiplied out by `c`. -/
 theorem CoverTrainingAligned : Guarantees.CoverTrainingAligned := by
-  intro c k b α₀ r d M J L _ _ Mb Aw s D w₀ f hb hC hB hH hU hk hf hw hs hα₀
+  intro c k b α₀ r d M J L _ _ Mb Aw s D w₀ f hb hC hB hH hU hk hf hw hα₀
   rcases Nat.eq_zero_or_pos c with rfl | hc
   · simp only [Nat.cast_zero, mul_zero, zero_mul]
     exact mul_nonneg (add_nonneg (mul_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _))
       (mul_nonneg (mul_nonneg hb.le (Nat.cast_nonneg _)) (Nat.cast_nonneg _))) (Nat.cast_nonneg _)
   have h := CoverTrainingAligned_rate c (k / c) b α₀ r d M Mb Aw s D w₀ f hb (by positivity)
     (Nci.SecurityProofs.compliesRate_of_complies hC) hB hH hU
-    (by rwa [Nci.SecurityProofs.rate_mul _ hc]) hf hw
-    (by rw [Nci.SecurityProofs.rate_mul _ hc]; exact_mod_cast hs) hα₀
+    (by rw [Nci.SecurityProofs.rate_mul _ hc]; exact hk) hf hw.1
+    (by rw [Nci.SecurityProofs.rate_mul _ hc]; exact_mod_cast hw.2) hα₀
   calc α₀ * b * f * c * r.D.size r.D.computed = α₀ * b * f * r.D.size r.D.computed * c := by ring
     _ ≤ (k / c * (k / c) * c + b * f * (k / c)) * d.D.size d.D.computed * c :=
         mul_le_mul_of_nonneg_right h (Nat.cast_nonneg _)

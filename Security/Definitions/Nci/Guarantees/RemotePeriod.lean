@@ -105,35 +105,22 @@ def DampenerRemotePeriod : Prop :=
     (R : Type) [Fintype R] (r d : R → Declaration) (Th : (i : R) → Threading (r i)) (c : ℕ) (k b_w b_a Λ : ℝ)
     (dd e : ℕ),
     -- PoUW, per window
-    0 ≤ p → 0 < ε → (∀ t, 0 ≤ cap t) → ∑ t, cap t ≤ C →
-    (∀ t (ξ : (t : Fin T) → Ω t),
-      prob (PMF.uniformOfFintype (Ω t)) (fun a => wrong t (Function.update ξ t a)) ≤ p) →
+    0 ≤ p → 0 < ε → (∀ t, 0 ≤ cap t) → Assumptions.WithinCompute cap C → Assumptions.PouwPerWindow wrong p →
     -- sampled proofs, per window: faulty blocks fixed before the window's coins, its draw and verdict read them
-    (∀ t (ξ ξ' : (t : Fin T) → Ω t), (∀ s, s < t → ξ s = ξ' s) → ∀ b, win b = t → (b ∈ bad ξ ↔ b ∈ bad ξ')) →
-    (∀ t (ξ ξ' : (t : Fin T) → Ω t), (∀ s, s ≤ t → ξ s = ξ' s) → ∀ b, win b = t →
-      (b ∈ drawn ξ ↔ b ∈ drawn ξ') ∧ (b ∈ detected ξ ↔ b ∈ detected ξ')) →
-    0 ≤ q → q ≤ 1 →
-    (∀ t (ξ : (t : Fin T) → Ω t),
-      prob (PMF.uniformOfFintype (Ω t)) (fun a => ∀ b ∈ bad ξ, win b = t → b ∉ drawn (Function.update ξ t a)) ≤
-        (1 - q) ^ ((bad ξ).filter fun b => win b = t).card) →
-    (∀ t (ξ : (t : Fin T) → Ω t),
-      prob (PMF.uniformOfFintype (Ω t)) (fun a => (∃ b ∈ bad ξ, win b = t ∧ b ∈ drawn (Function.update ξ t a)) ∧
-          ∀ b ∈ bad ξ, win b = t → b ∉ detected (Function.update ξ t a)) ≤ ks t) →
+    Assumptions.SampledPerWindow bad drawn detected win q ks → 0 ≤ q → q ≤ 1 →
     -- the identities and the halt
-    (∀ t t', idW t = idW t' → t < t' → τw t < τw t') → (∀ ξ, ∀ b ∈ bad ξ, idW (win b) ∈ I) →
-    0 < H → 0 ≤ Δ → Φ * H ≤ C →
+    Assumptions.IdentitySchedule bad win I idW τw w Φ Δ H C B → 0 < H → 0 ≤ Δ →
     (∀ ξ, Assumptions.TerminalDetection (bad ξ) (detected ξ) (fun b => idW (win b)) (fun b => τw (win b)) Δ) →
-    (∀ ξ j s, ∑ b ∈ bad ξ with idW (win b) = j ∧ s ≤ τw (win b) ∧ τw (win b) ≤ s + Δ, w b ≤ Φ * Δ) →
-    (∀ b, 0 ≤ w b) → 0 ≤ B → (∀ ξ, ∀ b ∈ bad ξ, w b ≤ B) →
+    (∀ b, 0 ≤ w b) → 0 ≤ B →
     -- The inference-only policy: each declared run as a verdict of compliance of the check of record carries it
     0 < κ → 0 < C → 0 ≤ U → 0 < mfu → mfu ≤ 1 → 0 ≤ k → 0 < b_a → 0 ≤ Λ →
-    (∀ i, b_a * (Th i).M.card ≤ (k / c : ℝ) * (Th i).bound k b_w dd e * (d i).D.size (d i).D.computed) →
-    (∀ i, (Th i).bound k b_w dd e ≤ Λ) → ∑ i, ((d i).D.size (d i).D.computed : ℝ) ≤ C →
+    Assumptions.RunsThrottled d Th c k b_w b_a dd e Λ →
+    Assumptions.WithinCompute (fun i => ((d i).D.size (d i).D.computed : ℝ)) C →
     -- the counted multiplications
-    (∀ ξ, 0 < M ξ) → (∀ ξ, M ξ ≤ Mu ξ + Mr ξ + ∑ i, (Th i).M.card + Mx ξ) →
-    (∀ ξ, (Mu ξ : ℝ) ≤ mfu * κ * U / 2) →
-    (∀ ξ, (Mr ξ : ℝ) ≤ κ * (C - (1 - εW) * W ξ + wrongCapacity cap (fun t => wrong t ξ) + ∑ b ∈ bad ξ, w b) / 2) →
-    (∀ ξ, (Mx ξ : ℝ) ≤ κ * χ * (C + U) / 2) →
+    (∀ ξ, 0 < M ξ) → (∀ ξ, Assumptions.SourcesCover (M ξ) (Mu ξ) (Mr ξ) (∑ i, (Th i).M.card) (Mx ξ)) →
+    (∀ ξ, Assumptions.UnmonitoredAtMost (Mu ξ) mfu κ U) →
+    (∀ ξ, Assumptions.ResidualAtMost (Mr ξ) κ C εW (W ξ) (wrongCapacity cap (fun t => wrong t ξ)) (∑ b ∈ bad ξ, w b)) →
+    (∀ ξ, Assumptions.CheatingAtMost (Mx ξ) κ χ C U) →
       1 - (p / ε + I.card * (1 - q) ^ (K + 1) + ∑ t, ks t) ≤
         prob (PMF.uniformOfFintype ((t : Fin T) → Ω t)) (fun ξ =>
           efficiency κ (M ξ) C U ≤
@@ -253,45 +240,32 @@ compute efficiency is 1, above the bound `51/100`, and its hardware multiple is 
 every run. -/
 def DampenerRemotePeriod_nontrivial : Prop :=
   -- every other premise: PoUW's capacities
-  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 / 2 ∧ (∀ t, 0 ≤ AcceptAll.cap t) ∧ ∑ t, AcceptAll.cap t ≤ 1 ∧
+  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 / 2 ∧ (∀ t, 0 ≤ AcceptAll.cap t) ∧ Assumptions.WithinCompute AcceptAll.cap 1 ∧
   -- sampled proofs, per window
-  (∀ (t : Fin 1) (ξ ξ' : Fin 1 → Bool), (∀ s, s < t → ξ s = ξ' s) → ∀ b, AcceptAll.win b = t →
-    (b ∈ AcceptAll.bad ξ ↔ b ∈ AcceptAll.bad ξ')) ∧
-  (∀ (t : Fin 1) (ξ ξ' : Fin 1 → Bool), (∀ s, s ≤ t → ξ s = ξ' s) → ∀ b, AcceptAll.win b = t →
-    (b ∈ AcceptAll.drawn ξ ↔ b ∈ AcceptAll.drawn ξ') ∧ (b ∈ AcceptAll.detected ξ ↔ b ∈ AcceptAll.detected ξ')) ∧
+  Assumptions.SampledPerWindow (Ω := fun _ => Bool) AcceptAll.bad AcceptAll.drawn AcceptAll.detected AcceptAll.win 1
+    AcceptAll.ks ∧
   (0 : ℝ) ≤ 1 ∧ (1 : ℝ) ≤ 1 ∧
-  (∀ (t : Fin 1) (ξ : Fin 1 → Bool), prob (PMF.uniformOfFintype Bool)
-      (fun a => ∀ b ∈ AcceptAll.bad ξ, AcceptAll.win b = t → b ∉ AcceptAll.drawn (Function.update ξ t a)) ≤
-    (1 - 1) ^ ((AcceptAll.bad ξ).filter fun b => AcceptAll.win b = t).card) ∧
-  (∀ (t : Fin 1) (ξ : Fin 1 → Bool), prob (PMF.uniformOfFintype Bool)
-      (fun a => (∃ b ∈ AcceptAll.bad ξ, AcceptAll.win b = t ∧ b ∈ AcceptAll.drawn (Function.update ξ t a)) ∧
-        ∀ b ∈ AcceptAll.bad ξ, AcceptAll.win b = t → b ∉ AcceptAll.detected (Function.update ξ t a)) ≤
-    AcceptAll.ks t) ∧
   -- the identities and the halt
-  (∀ t t', AcceptAll.idW t = AcceptAll.idW t' → t < t' → AcceptAll.τw t < AcceptAll.τw t') ∧
-  (∀ ξ, ∀ b ∈ AcceptAll.bad ξ, AcceptAll.idW (AcceptAll.win b) ∈ (∅ : Finset Unit)) ∧
-  (0 : ℝ) < 1 ∧ (0 : ℝ) ≤ 0 ∧ (0 : ℝ) * 1 ≤ 1 ∧
+  Assumptions.IdentitySchedule AcceptAll.bad AcceptAll.win (∅ : Finset Unit) AcceptAll.idW AcceptAll.τw AcceptAll.w 0 0 1
+    1 0 ∧
+  (0 : ℝ) < 1 ∧ (0 : ℝ) ≤ 0 ∧
   (∀ ξ, Assumptions.TerminalDetection (AcceptAll.bad ξ) (AcceptAll.detected ξ)
     (fun b => AcceptAll.idW (AcceptAll.win b)) (fun b => AcceptAll.τw (AcceptAll.win b)) 0) ∧
-  (∀ ξ j s, ∑ b ∈ AcceptAll.bad ξ with AcceptAll.idW (AcceptAll.win b) = j ∧ s ≤ AcceptAll.τw (AcceptAll.win b) ∧
-    AcceptAll.τw (AcceptAll.win b) ≤ s + 0, AcceptAll.w b ≤ 0 * 0) ∧
-  (∀ b, 0 ≤ AcceptAll.w b) ∧ (0 : ℝ) ≤ 0 ∧ (∀ ξ, ∀ b ∈ AcceptAll.bad ξ, AcceptAll.w b ≤ 0) ∧
+  (∀ b, 0 ≤ AcceptAll.w b) ∧ (0 : ℝ) ≤ 0 ∧
   -- the inference-only policy
   (0 : ℝ) < 2 ∧ (0 : ℝ) < 1 ∧ (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 ∧ (1 : ℝ) ≤ 1 ∧ (0 : ℝ) ≤ 1 ∧ (0 : ℝ) < 100 ∧ (0 : ℝ) ≤ 1 ∧
-  (∀ i, 100 * (AcceptAll.Th i).M.card ≤
-    ((1 : ℝ) / ((1 : ℕ) : ℝ)) * (AcceptAll.Th i).bound 1 0 0 0 * (AcceptAll.d i).D.size (AcceptAll.d i).D.computed) ∧
-  (∀ i, (AcceptAll.Th i).bound 1 0 0 0 ≤ 1) ∧
-  ∑ i, ((AcceptAll.d i).D.size (AcceptAll.d i).D.computed : ℝ) ≤ 1 ∧
+  Assumptions.RunsThrottled AcceptAll.d AcceptAll.Th 1 1 0 100 0 0 1 ∧
+  Assumptions.WithinCompute (fun i => ((AcceptAll.d i).D.size (AcceptAll.d i).D.computed : ℝ)) 1 ∧
   -- the counted multiplications
   (∀ ξ, 0 < AcceptAll.M ξ) ∧
-  (∀ ξ, AcceptAll.M ξ ≤ AcceptAll.Mu ξ + AcceptAll.Mr ξ + ∑ i, (AcceptAll.Th i).M.card + AcceptAll.Mx ξ) ∧
-  (∀ ξ, (AcceptAll.Mu ξ : ℝ) ≤ 1 * 2 * 0 / 2) ∧
-  (∀ ξ, (AcceptAll.Mr ξ : ℝ) ≤ 2 * (1 - (1 - 0) * AcceptAll.W ξ +
-    wrongCapacity AcceptAll.cap (fun t => AcceptAll.wrong t ξ) + ∑ b ∈ AcceptAll.bad ξ, AcceptAll.w b) / 2) ∧
-  (∀ ξ, (AcceptAll.Mx ξ : ℝ) ≤ 2 * 0 * (1 + 0) / 2) ∧
+  (∀ ξ, Assumptions.SourcesCover (AcceptAll.M ξ) (AcceptAll.Mu ξ) (AcceptAll.Mr ξ) (∑ i, (AcceptAll.Th i).M.card)
+    (AcceptAll.Mx ξ)) ∧
+  (∀ ξ, Assumptions.UnmonitoredAtMost (AcceptAll.Mu ξ) 1 2 0) ∧
+  (∀ ξ, Assumptions.ResidualAtMost (AcceptAll.Mr ξ) 2 1 0 (AcceptAll.W ξ)
+    (wrongCapacity AcceptAll.cap (fun t => AcceptAll.wrong t ξ)) (∑ b ∈ AcceptAll.bad ξ, AcceptAll.w b)) ∧
+  (∀ ξ, Assumptions.CheatingAtMost (AcceptAll.Mx ξ) 2 0 1 0) ∧
   -- PoUW's per-window bound fails
-  ¬ (∀ (t : Fin 1) (ξ : Fin 1 → Bool),
-      prob (PMF.uniformOfFintype Bool) (fun a => AcceptAll.wrong t (Function.update ξ t a)) ≤ 0) ∧
+  ¬ Assumptions.PouwPerWindow (Ω := fun _ => Bool) AcceptAll.wrong 0 ∧
   -- and so does the conclusion
   ¬ (1 - (0 / (1 / 2) + (∅ : Finset Unit).card * (1 - 1) ^ ((0 : ℕ) + 1) + ∑ t, AcceptAll.ks t) ≤
       prob (PMF.uniformOfFintype (Fin 1 → Bool)) (fun ξ =>

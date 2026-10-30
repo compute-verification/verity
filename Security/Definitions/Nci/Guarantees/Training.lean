@@ -55,7 +55,7 @@ def IncompressibleContainedTraining : Prop :=
     0 < c → 0 < k → 0 < b_w → 0 < b_a → (∀ ℓ, dd ≤ ch.d ℓ) → Complies c k d →
     Assumptions.ThetaRegistered r d (PartialContainment.ofContainment M) →
     Assumptions.TrainingIncompressible r ch T c k b_w b_a →
-    κ * r.D.size r.D.computed ≤ 2 * ch.G →
+    Assumptions.Coverage κ r (2 * ch.G) →
       κ * F (k / c) k b_w b_a dd * r.D.size r.D.computed ≤ d.D.size d.D.computed
 
 /-- **The partial-sum law with dark gates, under training's incompressibility** (`ContainedMatMulOn` with
@@ -71,7 +71,7 @@ def IncompressibleContainedMatMulOn : Prop :=
     (M : PartialContainment r d),
     0 < K → 0 < b_w → 0 < b_a → 0 < dd → 0 < c → (k : ℝ) ≤ K → 0 ≤ μ → μ ≤ 1 →
     (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → Complies c k d → Assumptions.ThetaRegistered r d M →
-    (∀ v ∈ M.dark, (novelReads r {v} : ℝ) ≤ K) →
+    Assumptions.DarkReads M K →
     Assumptions.TrainingIncompressible r ch T c K b_w b_a →
       max (min ((1 + √μ) ^ 2 * (b_w * b_a * dd / K)) (√2 * (1 + √μ) * √(1 - μ) * (b_a * √(b_w / K))))
           (μ * b_a / max (emax : ℝ) (K / (4 * b_w * dd))) *
@@ -88,9 +88,9 @@ def IncompressibleContainedTrainingOn : Prop :=
     (M : PartialContainment r d),
     0 < K → 0 < b_w → 0 < b_a → 0 < dd → 0 < c → (k : ℝ) ≤ K → 0 ≤ μ → μ ≤ 1 →
     (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → Complies c k d → Assumptions.ThetaRegistered r d M →
-    (∀ v ∈ M.dark, (novelReads r {v} : ℝ) ≤ K) →
+    Assumptions.DarkReads M K →
     Assumptions.TrainingIncompressible r ch T c K b_w b_a →
-    κ * r.D.size r.D.computed ≤ 2 * ch.G →
+    Assumptions.Coverage κ r (2 * ch.G) →
       max (min ((1 + √μ) ^ 2 * (b_w * b_a * dd / K)) (√2 * (1 + √μ) * √(1 - μ) * (b_a * √(b_w / K))))
           (μ * b_a / max (emax : ℝ) (K / (4 * b_w * dd))) *
         (κ * r.D.size r.D.computed - 2 * M.dark.card) ≤

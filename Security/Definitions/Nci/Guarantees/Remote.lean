@@ -74,7 +74,7 @@ def DampenerRemote : Prop :=
     (Φ Δ H q B θ εW : ℝ)
     (κ C U W χ mfu : ℝ) (M Mu Mr Mx : Ω → ℕ) (c k : ℕ) (b_w b_a : ℝ) (r d : Declaration) (T : Threading r)
     (dd e : ℕ) (Mc : Containment r.D d.D),
-    0 ≤ p → 0 < ε → (∀ i, 0 ≤ cap i) → ∑ i, cap i ≤ C → Assumptions.PouwSound μ wrong p →
+    0 ≤ p → 0 < ε → (∀ i, 0 ≤ cap i) → Assumptions.WithinCompute cap C → Assumptions.PouwSound μ wrong p →
     0 < H → 0 ≤ Δ → Φ * H ≤ C → (∀ ω, ∀ b ∈ bad ω, ident b ∈ I) →
     (∀ ω, Assumptions.TerminalDetection (bad ω) (detected ω) ident τ Δ) →
     (∀ ω j t, ∑ b ∈ bad ω with ident b = j ∧ t ≤ τ b ∧ τ b ≤ t + Δ, w b ≤ Φ * Δ) →
@@ -86,7 +86,7 @@ def DampenerRemote : Prop :=
     Assumptions.WeightsIncompressible r T c k b_w b_a → (d.D.size d.D.computed : ℝ) ≤ C →
     (∀ ω, 0 < M ω) → (∀ ω, M ω ≤ Mu ω + Mr ω + T.M.card + Mx ω) →
     (∀ ω, (Mu ω : ℝ) ≤ mfu * κ * U / 2) →
-    (∀ ω, (Mr ω : ℝ) ≤ κ * (C - (1 - εW) * W + wrongCapacity cap (wrong ω) + ∑ b ∈ bad ω, w b) / 2) →
+    (∀ ω, Assumptions.ResidualAtMost (Mr ω) κ C εW W (wrongCapacity cap (wrong ω)) (∑ b ∈ bad ω, w b)) →
     (∀ ω, (Mx ω : ℝ) ≤ κ * χ * (C + U) / 2) →
       1 - (p / ε + I.card * ((1 - q) / q * B) / (θ * C)) ≤ prob μ (fun ω => efficiency κ (M ω) C U ≤
           unmonitoredShare C U +

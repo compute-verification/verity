@@ -1,4 +1,5 @@
 import Definitions.Nci.Assumptions
+import Definitions.Nci.Threads
 import Definitions.Core.Circuit
 import Definitions.Core.Declaration
 import Definitions.Core.Partition
@@ -30,8 +31,7 @@ included, each reading from outside itself only registered information and its o
 bits, complies at `(c, k)`, and its slowdown factor is at most 1. -/
 def Inference : Prop :=
   ∀ (c k : ℕ) (d : Declaration) (B : ℕ) (P : Partition d.D B) (prompt : Fin B → Finset (Fin d.D.N)),
-    d.D.Boolean → (∀ u, (P.gates u).card = c) → (∀ u, d.D.into (P.gates u) ⊆ d.θ ∪ prompt u) →
-    (∀ u, d.D.width (prompt u) ≤ k) → Complies c k d ∧ slowdown (Complies c k) d ≤ 1
+    d.D.Boolean → Assumptions.Sessions d P prompt c k → Complies c k d ∧ slowdown (Complies c k) d ≤ 1
 
 /-- **Updated matrix multiplications are throttled** (the draft's theorem, "Throttling updated matrix
 multiplications"): under compute-bounded incompressibility, every declared circuit `D ⊨ 𝒫` that runs updated matrix
@@ -41,7 +41,7 @@ gates: `G` products, and about as many additions. The policy is at `(c, k)`, `k`
 the smallest inner dimension (a smaller `d` gives a smaller `F`). -/
 def UpdatedMatMul : Prop :=
   ∀ (c k : ℕ) (b_w b_a : ℝ) (D : Declaration) (ch : Chain D.D) (d : ℕ),
-    0 < c → 0 < k → 0 < b_w → 0 < b_a → (∀ ℓ, d ≤ ch.d ℓ) → Complies c k D →
+    0 < c → 0 < k → 0 < b_w → 0 < b_a → Assumptions.InnerAtLeast ch d → Complies c k D →
     Assumptions.ActivationsIncompressible D ch c k b_w b_a →
     Assumptions.PartialSumsIncompressible D ch c k b_w b_a →
       F (k / c) k b_w b_a d * (2 * ch.G) ≤ D.D.size D.D.computed
@@ -52,11 +52,7 @@ multiplications, which take up a fraction `κ` of `size(T)` (the coverage `κ(T)
 holds for the multiplications each of them runs, then `ρ_𝒫(T) ≥ κ F`. -/
 def Training : Prop :=
   ∀ (c k : ℕ) (b_w b_a κ : ℝ) (T : Declaration) (d : ℕ),
-    0 < c → 0 < k → 0 < b_w → 0 < b_a → 0 < T.D.size T.D.computed →
-    (∀ D, T.Implements D → Complies c k D → ∃ ch : Chain D.D,
-      (∀ ℓ, d ≤ ch.d ℓ) ∧ κ * T.D.size T.D.computed ≤ 2 * ch.G ∧
-      Assumptions.ActivationsIncompressible D ch c k b_w b_a ∧
-      Assumptions.PartialSumsIncompressible D ch c k b_w b_a) →
+    0 < c → 0 < k → 0 < b_w → 0 < b_a → 0 < T.D.size T.D.computed → Assumptions.InClass T c k b_w b_a κ d →
     ENNReal.ofReal (κ * F (k / c) k b_w b_a d) ≤ slowdown (Complies c k) T
 
 end Nci.Guarantees
@@ -91,7 +87,7 @@ of at most `c` computed gates that reads at most `k` fresh input bits, under `As
 uses, `τ_R` its number of full positions, `Q_R` the number of input entries it uses at positions that are not full, and
 `d` the smallest inner dimension. -/
 def _root_.Nci.Guarantees.IuReads : Prop :=
-  ∀ (D : Declaration) (ch : Chain D.D) (c : ℕ) (k b_w b_a : ℝ) (d : ℕ) (hd : ∀ ℓ, d ≤ ch.d ℓ) (hb_a : 0 ≤ b_a) (hb_w : 0 ≤ b_w) (θv : D.D.Transcript) (h : Assumptions.ActivationsSupport D θv ch (k + b_w + b_a) b_w b_a) (R : Finset (Fin D.D.N)) (hR : R ⊆ D.D.computed) (hc : D.D.size R ≤ c) (hk : (novelReads D R : ℝ) ≤ k),
+  ∀ (D : Declaration) (ch : Chain D.D) (c : ℕ) (k b_w b_a : ℝ) (d : ℕ) (hd : Assumptions.InnerAtLeast ch d) (hb_a : 0 ≤ b_a) (hb_w : 0 ≤ b_w) (θv : D.D.Transcript) (h : Assumptions.ActivationsSupport D θv ch (k + b_w + b_a) b_w b_a) (R : Finset (Fin D.D.N)) (hR : Small D c k R),
     b_w * (ch.weightsUsed R).card +
       b_a * (d * (univ.filter (ch.Full R)).card + ((ch.inputsUsed R).filter fun x => ¬ ch.Full R x.2.1).card) ≤
     novelReads D R

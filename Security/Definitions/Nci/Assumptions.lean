@@ -141,4 +141,40 @@ def PartialSumsSupport (D : Declaration) (θv : D.D.Transcript) (ch : Chain D.D)
       ∑ x : (ℓ : Fin ch.L) × Fin ch.N × Fin (ch.e ℓ), (ch.spread P x.1 x.2.1 x.2.2 - 1) ≤ ∑ u, s u ∧
       ∀ u, (2 : ℝ) ^ (b_w * (ch.weightsUsed (P.gates u)).card + b_a * s u) ≤ support D θv (P.gates u)
 
+/-! The parameters the guarantees are taken at, named: what a chain's shape, a run's coverage and a division's caps must
+be for a guarantee's factor to apply. Each is checkable on the circuit it reads, and none is about the world. -/
+
+/-- **The chain's inner dimensions are at least `d`**: each of `ch`'s multiplications sums at least `d` products into
+every output entry. A factor taken at `d` is taken at the smallest inner dimension or below it. -/
+def InnerAtLeast {D : Circuit} (ch : Chain D) (d : ℕ) : Prop :=
+  ∀ ℓ, d ≤ ch.d ℓ
+
+/-- **Coverage** (the draft's `κ(T)`): the counted work `x` is at least a fraction `κ` of the reference circuit `r`'s
+computed gates, `κ · size(r) ≤ x`. A chain of `G` products counts `x = 2G` (a product and an addition each), a threading's
+counted multiplications `x = 2 |M|`, and the cover theorem's certified products `x = |P|`. A training run whose counted
+work is a small share of its gates is slowed in proportion to that share. -/
+def Coverage (κ : ℝ) (r : Declaration) (x : ℝ) : Prop :=
+  κ * r.D.size r.D.computed ≤ x
+
+/-- **Small inference blocks**: each block of the division `P` of `D` has at most `c` gates and reads at most `k` fresh
+input bits, the caps under which `PartialSumsIncompressible` charges a division. -/
+def SmallBlocks (D : Declaration) {n : ℕ} (P : Partition D.D n) (c : ℕ) (k : ℝ) : Prop :=
+  ∀ u, D.D.size (P.gates u) ≤ c ∧ (novelReads D (P.gates u) : ℝ) ≤ k
+
+/-- **Sessions of exactly `c` gates, each reading its own prompt of at most `k` bits**: each block `u` of the division
+`P` of `d` has exactly `c` gates, padding included, and reads from outside itself only registered information and its
+prompt `prompt u`, at most `k` bits wide. It is the layout an inference deployment declares, a session per block. -/
+def Sessions (d : Declaration) {B : ℕ} (P : Partition d.D B) (prompt : Fin B → Finset (Fin d.D.N)) (c k : ℕ) : Prop :=
+  (∀ u, (P.gates u).card = c) ∧ (∀ u, d.D.into (P.gates u) ⊆ d.θ ∪ prompt u) ∧ (∀ u, d.D.width (prompt u) ≤ k)
+
+/-- **The training circuit `T` is in the class `𝒯`** (the draft, "From updated matrix multiplications to training"):
+every declared circuit `D` that implements `T` and complies at `(c, k)` runs a chain `ch` of updated matrix
+multiplications whose inner dimensions are at least `d` and whose products cover a fraction `κ` of `T`'s size, with
+compute-bounded incompressibility for `ch` on `D`. It carries `ActivationsIncompressible` and
+`PartialSumsIncompressible` on declared circuits, and is false wherever they are. -/
+def InClass (T : Declaration) (c k : ℕ) (b_w b_a κ : ℝ) (d : ℕ) : Prop :=
+  ∀ D, T.Implements D → Complies c k D → ∃ ch : Chain D.D,
+    InnerAtLeast ch d ∧ Coverage κ T (2 * ch.G) ∧
+    ActivationsIncompressible D ch c k b_w b_a ∧ PartialSumsIncompressible D ch c k b_w b_a
+
 end Nci.Assumptions

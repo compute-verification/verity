@@ -1,3 +1,4 @@
+import Definitions.Nci.Assumptions
 import Definitions.Nci.Assumptions.Threads
 import Definitions.Nci.Assumptions.Baseline
 import Definitions.Nci.Dark
@@ -55,7 +56,7 @@ def ThreadedTraining : Prop :=
     0 < c → 0 < b_w → 0 < b_a → 0 < dd → Complies c k d →
     Assumptions.ThetaRegistered r d (PartialContainment.ofContainment M) →
     T.Threaded c k dd e → Assumptions.WeightsIncompressible r T c k b_w b_a →
-    κ * r.D.size r.D.computed ≤ 2 * T.M.card →
+    Assumptions.Coverage κ r (2 * T.M.card) →
       κ * b_a * r.D.size r.D.computed ≤ 2 * (k / c : ℝ) * T.bound k b_w dd e * d.D.size d.D.computed
 
 /-- **Theorem 2 with dark gates**: a declaration `d` that complies at `(c, k)` and contains the reference circuit `r`
@@ -86,7 +87,7 @@ def ThreadedTrainingOn : Prop :=
   ∀ (c k : ℕ) (b_w b_a κ : ℝ) (r d : Declaration) (T : Threading r) (dd e : ℕ) (M : PartialContainment r d),
     0 < c → 0 < b_w → 0 < b_a → 0 < dd → Complies c k d → Assumptions.ThetaRegistered r d M →
     T.Threaded c k dd e → Assumptions.WeightsIncompressible r T c k b_w b_a →
-    κ * r.D.size r.D.computed ≤ 2 * T.M.card →
+    Assumptions.Coverage κ r (2 * T.M.card) →
       κ * b_a * r.D.size r.D.computed ≤
         2 * b_a * M.dark.card + 2 * (k / c : ℝ) * T.bound k b_w dd e * d.D.size d.D.computed
 

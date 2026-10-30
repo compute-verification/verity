@@ -35,9 +35,7 @@ activation computed from counted multiplications is computed from at least `dd` 
 def ActivationsReads : Prop :=
   ∀ (r : Declaration) (T : Threading r) (L : T.Links) (c : ℕ) (k b_w b_a : ℝ) (dd e : ℕ),
     0 < b_w → 0 < b_a → 0 < dd →
-    (∀ a, (T.M.filter fun g => T.act g = a).card ≤ e) →
-    (∀ a, (L.src a).Nonempty →
-      dd ≤ (((L.src a).filter fun g => T.thread (T.act g) = T.thread a).image T.act).card) →
+    Assumptions.EntersAtMost T e → Assumptions.DrawsAtLeast L dd →
     Assumptions.ActivationsIncompressibleAll r T L c k b_w b_a →
     ∀ R, Small r c k R → b_a * (T.mults R).card ≤ novelReads r R * T.bound k b_w dd e
 
@@ -51,9 +49,7 @@ def ActivationsBoundOn : Prop :=
   ∀ (c k : ℕ) (K b_w b_a : ℝ) (r d : Declaration) (T : Threading r) (L : T.Links) (dd e : ℕ)
     (M : PartialContainment r d),
     0 < c → (k : ℝ) ≤ K → 0 < b_w → 0 < b_a → 0 < dd → Complies c k d → Assumptions.ThetaRegistered r d M →
-    (∀ a, (T.M.filter fun g => T.act g = a).card ≤ e) →
-    (∀ a, (L.src a).Nonempty →
-      dd ≤ (((L.src a).filter fun g => T.thread (T.act g) = T.thread a).image T.act).card) →
+    Assumptions.EntersAtMost T e → Assumptions.DrawsAtLeast L dd →
     Assumptions.ActivationsIncompressibleAll r T L c K b_w b_a →
       b_a * (T.M ∩ M.S).card ≤ (k / c : ℝ) * T.bound K b_w dd e * d.D.size d.D.computed
 
@@ -66,11 +62,9 @@ def ActivationsTrainingOn : Prop :=
   ∀ (c k : ℕ) (K b_w b_a κ : ℝ) (r d : Declaration) (T : Threading r) (L : T.Links) (dd e : ℕ)
     (M : PartialContainment r d),
     0 < c → (k : ℝ) ≤ K → 0 < b_w → 0 < b_a → 0 < dd → Complies c k d → Assumptions.ThetaRegistered r d M →
-    (∀ a, (T.M.filter fun g => T.act g = a).card ≤ e) →
-    (∀ a, (L.src a).Nonempty →
-      dd ≤ (((L.src a).filter fun g => T.thread (T.act g) = T.thread a).image T.act).card) →
+    Assumptions.EntersAtMost T e → Assumptions.DrawsAtLeast L dd →
     Assumptions.ActivationsIncompressibleAll r T L c K b_w b_a →
-    κ * r.D.size r.D.computed ≤ 2 * T.M.card →
+    Assumptions.Coverage κ r (2 * T.M.card) →
       κ * b_a * r.D.size r.D.computed ≤
         2 * b_a * M.dark.card + 2 * (k / c : ℝ) * T.bound K b_w dd e * d.D.size d.D.computed
 

@@ -172,7 +172,8 @@ theorem CoverTrainingChained_rate :
 /-- **The cover theorem on a compliant declaration, counting the chained multiplication blocks**, at `(c, k)`:
 `CoverTrainingChained_rate` at the rate `k / c`, its count multiplied out by `c`. -/
 theorem CoverTrainingChained : Guarantees.CoverTrainingChained := by
-  intro c k r d M B s D w₀ cw ca hC hB hH hk hca hw hs
+  intro c k r d M B s D w₀ cw ca hC hB hH hk hca hw
+  have hk' : (k : ℝ) < cw * D := hk
   have hcw : 0 < cw := by
     by_contra h
     nlinarith [not_lt.1 h, (Nat.cast_nonneg D : (0 : ℝ) ≤ D), (Nat.cast_nonneg k : (0 : ℝ) ≤ k)]
@@ -183,8 +184,8 @@ theorem CoverTrainingChained : Guarantees.CoverTrainingChained := by
       div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)⟩
   have h := CoverTrainingChained_rate c (k / c) r d M B s D w₀ cw ca (by positivity)
     (Nci.SecurityProofs.compliesRate_of_complies hC) hB hH
-    (by rwa [Nci.SecurityProofs.rate_mul _ hc]) hca hw
-    (by rw [Nci.SecurityProofs.rate_mul _ hc]; exact_mod_cast hs)
+    (by rw [Nci.SecurityProofs.rate_mul _ hc]; exact hk) hca hw.1
+    (by rw [Nci.SecurityProofs.rate_mul _ hc]; exact_mod_cast hw.2)
   rw [Nci.SecurityProofs.rate_mul _ hc] at h
   refine ⟨?_, h.2⟩
   set m := ((Nci.Assumptions.chainedBlocksAt (bitDecl r) B D ca).card : ℝ)

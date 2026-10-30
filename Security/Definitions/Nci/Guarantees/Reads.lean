@@ -23,8 +23,7 @@ incompressibility at `(c, k)`, the inference blocks together read at least `G ·
 smallest inner dimension. -/
 def UpdatedMatMulReads : Prop :=
   ∀ (c : ℕ) (k b_w b_a : ℝ) (D : Declaration) (ch : Chain D.D) (d n : ℕ) (P : Partition D.D n),
-    0 < b_w → 0 < b_a → (∀ ℓ, d ≤ ch.d ℓ) →
-    (∀ u, D.D.size (P.gates u) ≤ c ∧ (novelReads D (P.gates u) : ℝ) ≤ k) →
+    0 < b_w → 0 < b_a → Assumptions.InnerAtLeast ch d → Assumptions.SmallBlocks D P c k →
     Assumptions.ActivationsIncompressible D ch c k b_w b_a →
     Assumptions.PartialSumsIncompressible D ch c k b_w b_a →
       ch.G * readFactor k b_w b_a d ≤ ∑ u, (novelReads D (P.gates u) : ℝ)

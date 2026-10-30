@@ -45,7 +45,9 @@ theorem threaded_reads_info_fmt2 (c : Declaration) (θv : c.D.Transcript) (T : T
 theorem ThreadedReadsInfoFmt2 : Guarantees.ThreadedReadsInfoFmt2 := threaded_reads_info_fmt2
 
 theorem ThreadedContainedInfoFmt2 : Guarantees.ThreadedContainedInfoFmt2 := by
-  intro c d M θc θv T Src Γ K b_w b_a dd e n k₀ hθ hv hbw hba hdd he hF hk hW W hWc hΓ hK
+  intro c d M θc θv T Src Γ K b_w b_a dd e n k₀ hθv hbw hba hdd he hF hk hW W hS
+  obtain ⟨hθ, hv⟩ := hθv
+  obtain ⟨hWc, hΓ, hK⟩ := hS
   calc b_a * ((T.mults (univ.filter fun g => M.emb g ∈ W)).card : ℝ)
       ≤ novelInfo c θc (univ.filter fun g => M.emb g ∈ W) * T.bound K b_w dd e :=
         threaded_reads_info_fmt2 c θc T Src Γ K b_w b_a dd e n k₀ hbw hba hdd he hF hk hW _
@@ -54,9 +56,9 @@ theorem ThreadedContainedInfoFmt2 : Guarantees.ThreadedContainedInfoFmt2 := by
         mul_le_mul_of_nonneg_right (novelInfo_le_of_containment M hθ hv hWc) (le_max_of_le_left (Nat.cast_nonneg _))
 
 theorem ThreadedOfStateFmt2 : Guarantees.ThreadedOfStateFmt2 := by
-  intro c d M θc θv T Src Γ b_w b_a dd e n k₀ W Sst Sin k f hθ hv hbw hba hdd he hF hk hW hWc hΓ hin hf
-  have hK := (InfoOfState d θv W Sst Sin k f hWc hin hf).2
-  exact (ThreadedContainedInfoFmt2 c d M θc θv T Src Γ _ b_w b_a dd e n k₀ hθ hv hbw hba hdd he hF hk hW W hWc hΓ
-    hK).trans (mul_le_mul_of_nonneg_right hK (le_max_of_le_left (Nat.cast_nonneg _)))
+  intro c d M θc θv T Src Γ b_w b_a dd e n k₀ W Sst Sin k f hθ hbw hba hdd he hF hk hW hWΓ hin hf
+  have hK := (InfoOfState d θv W Sst Sin k f hWΓ.1 hin hf).2
+  exact (ThreadedContainedInfoFmt2 c d M θc θv T Src Γ _ b_w b_a dd e n k₀ hθ hbw hba hdd he hF hk hW W
+    ⟨hWΓ.1, hWΓ.2, hK⟩).trans (mul_le_mul_of_nonneg_right hK (le_max_of_le_left (Nat.cast_nonneg _)))
 
 end Nci.SecurityProofs

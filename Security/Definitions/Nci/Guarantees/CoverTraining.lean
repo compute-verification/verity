@@ -1,7 +1,9 @@
 import Definitions.Nci.BitView
 import Definitions.Nci.Dark
 import Definitions.Nci.Assumptions.Baseline
+import Definitions.Nci.Assumptions
 import Definitions.Nci.Assumptions.Cover
+import Definitions.Nci.Assumptions.CoverTraining
 
 /-!
 # The cover theorem on a declaration that complies with the inference-only policy
@@ -43,9 +45,8 @@ def CoverTraining : Prop :=
     (A : J → Finset (Fin (Circuit.ofDecl r).N)) (s D w₀ : ℕ),
     0 < b → Nci.Complies c k d →
     Nci.Assumptions.ThetaRegistered r d (Nci.PartialContainment.ofContainment M) →
-    Assumptions.UpdateHardness Mb s b → Mb.Upstream A D → (k : ℝ) < b * D →
-    (∀ g, r.D.w g ≤ w₀) → w₀ * c + k + r.D.width r.θ ≤ s →
-    α₀ * r.D.size r.D.computed ≤ Mb.P.card →
+    Assumptions.UpdateHardness Mb s b → Mb.Upstream A D → Assumptions.CapBelowDepth k b D →
+    Assumptions.BlockFits r c k w₀ s → Nci.Assumptions.Coverage α₀ r Mb.P.card →
       α₀ * b * c * r.D.size r.D.computed ≤ (k * k + b * k) * d.D.size d.D.computed
 
 /-- **On whole-word activations, training through a compliant declaration pays the width factor**: `CoverTraining` with
@@ -58,10 +59,9 @@ def CoverTrainingAligned : Prop :=
     (Aw : J → Finset (Fin r.D.N)) (s D w₀ f : ℕ),
     0 < b → Nci.Complies c k d →
     Nci.Assumptions.ThetaRegistered r d (Nci.PartialContainment.ofContainment M) →
-    Assumptions.UpdateHardness Mb s b → Mb.Upstream (fun j => wordBits r (Aw j)) D → (k : ℝ) < b * D →
-    (∀ j ∈ Mb.uses, ∀ a ∈ Aw j, f ≤ r.D.w a) →
-    (∀ g, r.D.w g ≤ w₀) → w₀ * c + k + r.D.width r.θ ≤ s →
-    α₀ * r.D.size r.D.computed ≤ Mb.P.card →
+    Assumptions.UpdateHardness Mb s b → Mb.Upstream (fun j => wordBits r (Aw j)) D → Assumptions.CapBelowDepth k b D →
+    Assumptions.RegionsAtLeast Mb Aw f → Assumptions.BlockFits r c k w₀ s →
+    Nci.Assumptions.Coverage α₀ r Mb.P.card →
       α₀ * b * f * c * r.D.size r.D.computed ≤ (k * k + b * f * k) * d.D.size d.D.computed
 
 end Nci.Cover.Guarantees

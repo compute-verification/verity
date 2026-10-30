@@ -201,6 +201,6 @@ theorem activationsIncompressible_of_support {D : Declaration} {θv : D.D.Transc
 end Nci.SecurityProofs
 
 theorem Nci.SecurityProofs.IuReads : Nci.Guarantees.IuReads :=
-  fun D c Γ K b_w b_a d hd hb_a hb_w _ h R hR hΓ hK =>
+  fun D c Γ K b_w b_a d hd hb_a hb_w _ h R hR =>
     Nci.SecurityProofs.iu_reads D c Γ K b_w b_a d hd hb_a
-      (Nci.SecurityProofs.activationsIncompressible_of_support hb_w hb_a h) R hR hΓ hK
+      (Nci.SecurityProofs.activationsIncompressible_of_support hb_w hb_a h) R hR.1 hR.2.1 hR.2.2

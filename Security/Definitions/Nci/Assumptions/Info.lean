@@ -40,4 +40,17 @@ def WeightsSupport (r : Declaration) (θv : r.D.Transcript) (T : Threading r) (c
     (2 : ℝ) ^ (b_w * (T.weightsUsed R).card + b_a * ∑ t, (T.threadReads R t).card) ≤
       support r θv (r.D.into R \ r.θ)
 
+/-- **`r`'s registered information is `d`'s, at the values `θv` gives it**: through the containment `M`, an input gate of
+`r` whose image `d` registers is registered in `r`, and a registered gate of `r` whose image `d` registers holds there
+the value `θc` commits it to. It is how a bound on `r`'s runs at `θc` reads on `d`'s runs at `θv`. -/
+def RegisteredThrough {r d : Declaration} (M : Containment r.D d.D) (θc : r.D.Transcript) (θv : d.D.Transcript) :
+    Prop :=
+  (∀ g, r.D.isInput g = true → M.emb g ∈ d.θ → g ∈ r.θ) ∧
+    (∀ g ∈ r.θ, M.emb g ∈ d.θ → (θv (M.emb g)).cast (M.emb_w g) = θc g)
+
+/-- **At most `c` computed gates**: `W` is a set of `d`'s computed gates of an inference block's size, whatever it
+reads. -/
+def WithinBlock (d : Declaration) (c : ℕ) (W : Finset (Fin d.D.N)) : Prop :=
+  W ⊆ d.D.computed ∧ d.D.size W ≤ c
+
 end Nci.Assumptions

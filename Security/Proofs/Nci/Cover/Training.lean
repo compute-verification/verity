@@ -115,15 +115,15 @@ theorem CoverTraining_rate :
 /-- **Training through a compliant declaration pays the cover theorem's factor**, at `(c, k)`: `CoverTraining_rate` at
 the rate `k / c`, multiplied out by `c`. -/
 theorem CoverTraining : Guarantees.CoverTraining := by
-  intro c k b α₀ r d M J L _ _ Mb A s D w₀ hb hC hB hH hU hk hw hs hα₀
+  intro c k b α₀ r d M J L _ _ Mb A s D w₀ hb hC hB hH hU hk hw hα₀
   rcases Nat.eq_zero_or_pos c with rfl | hc
   · simp only [Nat.cast_zero, mul_zero, zero_mul]
     exact mul_nonneg (add_nonneg (mul_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _))
       (mul_nonneg hb.le (Nat.cast_nonneg _))) (Nat.cast_nonneg _)
   have h := CoverTraining_rate c (k / c) b α₀ r d M Mb A s D w₀ hb (by positivity)
     (Nci.SecurityProofs.compliesRate_of_complies hC) hB hH hU
-    (by rwa [Nci.SecurityProofs.rate_mul _ hc]) hw
-    (by rw [Nci.SecurityProofs.rate_mul _ hc]; exact_mod_cast hs) hα₀
+    (by rw [Nci.SecurityProofs.rate_mul _ hc]; exact hk) hw.1
+    (by rw [Nci.SecurityProofs.rate_mul _ hc]; exact_mod_cast hw.2) hα₀
   calc α₀ * b * c * r.D.size r.D.computed = α₀ * b * r.D.size r.D.computed * c := by ring
     _ ≤ (k / c * (k / c) * c + b * (k / c)) * d.D.size d.D.computed * c :=
         mul_le_mul_of_nonneg_right h (Nat.cast_nonneg _)

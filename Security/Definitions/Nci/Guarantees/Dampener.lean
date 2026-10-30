@@ -1,5 +1,6 @@
 import Definitions.Nci.Dampener
 import Definitions.Nci.Assumptions.Threads
+import Definitions.Nci.Assumptions.Dampener
 import Definitions.Nci.Assumptions.Baseline
 
 /-!
@@ -83,8 +84,8 @@ def DampenerThreaded : Prop :=
     Assumptions.WeightsIncompressible r T c k b_w b_a → (d.D.size d.D.computed : ℝ) ≤ C →
     M ≤ Mu + Mr + T.M.card + Mx →
     (Mu : ℝ) ≤ κ * U / 2 → (Mr : ℝ) ≤ κ * (C - W) / 2 → (Mx : ℝ) ≤ κ * χ * (C + U) / 2 →
-    n * F * H ≤ C → (k / c : ℝ) * F * L = R → (e : ℝ) ≤ T.reuse * (2 * R) / (4 * dd * b_w) →
-    b_a * ((Mr : ℝ) + T.M.card) ≤ n * ⌈H / L⌉₊ * ((R + (k / c : ℝ) * F * L) * T.bound (R + (k / c : ℝ) * F * L) b_w dd e) →
+    n * F * H ≤ C → Assumptions.WindowLength c k F L R → (e : ℝ) ≤ T.reuse * (2 * R) / (4 * dd * b_w) →
+    Assumptions.WindowsHold T c k Mr n F H L R b_w b_a dd e →
       efficiency κ M C U ≤
         unmonitoredShare C U + min (residualShare W C) (memoryCap T.reuse κ R (k / c : ℝ) dd b_w b_a * (1 + L / H)) +
           declaredShare κ (rhoT (k / c : ℝ) b_a (T.bound k b_w dd e)) C U + χ
@@ -102,8 +103,8 @@ def DampenerThreadedSlots : Prop :=
     Assumptions.WeightsIncompressibleSlots r T σ c k b_w b_a → (d.D.size d.D.computed : ℝ) ≤ C →
     M ≤ Mu + Mr + T.M.card + Mx →
     (Mu : ℝ) ≤ κ * U / 2 → (Mr : ℝ) ≤ κ * (C - W) / 2 → (Mx : ℝ) ≤ κ * χ * (C + U) / 2 →
-    n * F * H ≤ C → (k / c : ℝ) * F * L = R → (e : ℝ) ≤ T.reuse * (2 * R) / (4 * dd * b_w) →
-    b_a * ((Mr : ℝ) + T.M.card) ≤ n * ⌈H / L⌉₊ * ((R + (k / c : ℝ) * F * L) * T.bound (R + (k / c : ℝ) * F * L) b_w dd e) →
+    n * F * H ≤ C → Assumptions.WindowLength c k F L R → (e : ℝ) ≤ T.reuse * (2 * R) / (4 * dd * b_w) →
+    Assumptions.WindowsHold T c k Mr n F H L R b_w b_a dd e →
       efficiency κ M C U ≤
         unmonitoredShare C U + min (residualShare W C) (memoryCap T.reuse κ R (k / c : ℝ) dd b_w b_a * (1 + L / H)) +
           declaredShare κ (rhoT (k / c : ℝ) b_a (T.bound k b_w dd e)) C U + χ

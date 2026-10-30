@@ -41,10 +41,9 @@ most `Λ` of `r`'s counted multiplications per `b_a` bits of information `W`'s f
 def ThreadedContainedInfo : Prop :=
   ∀ (r d : Declaration) (M : Containment r.D d.D) (θc : r.D.Transcript) (θv : d.D.Transcript) (T : Threading r)
     (c : ℕ) (K b_w b_a : ℝ) (dd e : ℕ),
-    (∀ g, r.D.isInput g = true → M.emb g ∈ d.θ → g ∈ r.θ) →
-    (∀ g ∈ r.θ, M.emb g ∈ d.θ → (θv (M.emb g)).cast (M.emb_w g) = θc g) →
+    Assumptions.RegisteredThrough M θc θv →
     0 < b_w → 0 < b_a → 0 < dd → T.ThreadedInfo θc c K dd e → Assumptions.WeightsSupport r θc T c K b_w b_a →
-    ∀ W, W ⊆ d.D.computed → d.D.size W ≤ c → novelInfo d θv W ≤ K →
+    ∀ W, SmallInfo d θv c K W →
       b_a * (T.mults (univ.filter fun g => M.emb g ∈ W)).card ≤ novelInfo d θv W * T.bound K b_w dd e
 
 /-- **The count a memory cap needs**: with `d`, `r` and `M` as in `ThreadedContainedInfo`, a set `W` of `d`'s computed
@@ -54,11 +53,10 @@ def ThreadedOfState : Prop :=
   ∀ (r d : Declaration) (M : Containment r.D d.D) (θc : r.D.Transcript) (θv : d.D.Transcript) (T : Threading r)
     (c : ℕ) (b_w b_a : ℝ) (dd e : ℕ) (W Sst Sin : Finset (Fin d.D.N)) (k : ℕ)
     (f : BitVec k → (g : Sst) → BitVec (d.D.w g)),
-    (∀ g, r.D.isInput g = true → M.emb g ∈ d.θ → g ∈ r.θ) →
-    (∀ g ∈ r.θ, M.emb g ∈ d.θ → (θv (M.emb g)).cast (M.emb_w g) = θc g) →
+    Assumptions.RegisteredThrough M θc θv →
     0 < b_w → 0 < b_a → 0 < dd → T.ThreadedInfo θc c (k + d.D.width Sin) dd e →
     Assumptions.WeightsSupport r θc T c (k + d.D.width Sin) b_w b_a →
-    W ⊆ d.D.computed → d.D.size W ≤ c → d.D.into W \ d.θ ⊆ Sst ∪ Sin →
+    Assumptions.WithinBlock d c W → d.D.into W \ d.θ ⊆ Sst ∪ Sin →
     (∀ a ∈ admissible d θv, ∃ s, values Sst a = f s) →
       b_a * (T.mults (univ.filter fun g => M.emb g ∈ W)).card ≤
         (k + d.D.width Sin) * T.bound (k + d.D.width Sin) b_w dd e

@@ -69,7 +69,8 @@ theorem ReadBound : Guarantees.ReadBound := by
         exact_mod_cast P.sum_card_gates
 
 theorem Inference : Guarantees.Inference := by
-  intro c k d B P prompt hB hcard hreads hprompt
+  intro c k d B P prompt hB hS
+  obtain ⟨hcard, hreads, hprompt⟩ := hS
   have hc : Complies c k d := by
     refine ⟨B, P, ⟨hB, hcard, fun u => ?_⟩⟩
     have hsub : d.unregistered (P.gates u) ⊆ prompt u := fun a ha => by

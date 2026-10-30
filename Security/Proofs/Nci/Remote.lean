@@ -294,7 +294,7 @@ theorem DampenerRemote : Guarantees.DampenerRemote := by
   have hesc : ∑ b ∈ escaped (bad ω) (detected ω) ident τ, w b ≤ θ * C := not_lt.1 fun h => hgood (Or.inr h)
   have hlag := VerdictLag β ι (bad ω) (detected ω) I ident τ w Φ Δ H C hH hΔ hΦ (hI ω) (hT ω) (hcap ω)
   have hr : (Mr ω : ℝ) ≤ κ * (C - ((1 - εW) * W - ε * C - lagShare I.card Δ H * C - θ * C)) / 2 := by
-    have h1 := hres ω
+    have h1 : (Mr ω : ℝ) ≤ κ * (C - (1 - εW) * W + wrongCapacity cap (wrong ω) + ∑ b ∈ bad ω, w b) / 2 := hres ω
     have h2 : κ * (C - (1 - εW) * W + wrongCapacity cap (wrong ω) + ∑ b ∈ bad ω, w b) ≤
         κ * (C - ((1 - εW) * W - ε * C - lagShare I.card Δ H * C - θ * C)) :=
       mul_le_mul_of_nonneg_left (by linarith) hκ.le

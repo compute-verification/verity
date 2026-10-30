@@ -2,6 +2,7 @@ import Definitions.Nci.BitDecl
 import Definitions.Nci.Dark
 import Definitions.Nci.Assumptions.Baseline
 import Definitions.Nci.Assumptions.CoveringTwoCosts
+import Definitions.Nci.Assumptions.CoverTraining
 
 /-!
 # The cover theorem on a compliant declaration, counting the covering bound's chained multiplication blocks
@@ -49,8 +50,8 @@ def CoverTrainingChained : Prop :=
     (B : Nci.Covering.MulBlocks (bitDecl r)) (s D w₀ : ℕ) (cw ca : ℝ),
     Nci.Complies c k d →
     Nci.Assumptions.ThetaRegistered r d (Nci.PartialContainment.ofContainment M) →
-    Nci.Assumptions.ParameterHardAt (bitDecl r) B s cw → (k : ℝ) < cw * D → 0 < ca →
-    (∀ g, r.D.w g ≤ w₀) → w₀ * c + k + r.D.width r.θ ≤ s →
+    Nci.Assumptions.ParameterHardAt (bitDecl r) B s cw → Assumptions.CapBelowDepth k cw D → 0 < ca →
+    Assumptions.BlockFits r c k w₀ s →
       cw * ca * c * (Nci.Assumptions.chainedBlocksAt (bitDecl r) B D ca).card ≤
           (k * k + cw * ca * k) * d.D.size d.D.computed ∧
         ((Nci.Assumptions.chainedBlocksAt (bitDecl r) B D ca).card : ℝ) / r.D.size r.D.computed * c /
