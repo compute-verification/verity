@@ -203,7 +203,7 @@ def test_levels_keep_their_query_ids():
     (("a", "b"), (4, 2), {"b": Subset(1), "z": Bernoulli(1)}),                               # unknown level
     (("a", "a"), (4, 2), {"a": Subset(1)}),                                                  # duplicate names
     (("a", "b"), (4,), {"b": Subset(1)}),                                                    # a size missing
-    (("a", "b"), (4, 2), {"b": 1}),                                                          # not a draw
+    (("a", "b"), (4, 2), {"b": 1}),                                                          # not a sample
     (("a", "t", "b"), (4, 2, 2), {"a": Bernoulli(1), "b": Subset(5)}),                       # k above n = 4
     ((), (), {}),                                                                            # no levels
 ])
@@ -223,7 +223,7 @@ def test_counts_name_known_levels_coarse_to_fine():
 
 def test_a_chain_read_off_a_program_gives_the_profile_its_sizes():
     """GEMM coordinates as the Bernoulli level, the two calls inside each as the checked level, both leaving out
-    the Inputs (checked outside the draws); the IR supplies the counts and the query ids."""
+    the Inputs (checked outside the samples); the IR supplies the counts and the query ids."""
     program = Program(bind(gemm.Gemm, K=32, N=4, **gemm.GEMM_AMPERE))
     coarse_q = G.instances("//GemmCoordinate")
     fine_q = G.each(coarse_q, G.default(32))
@@ -553,7 +553,7 @@ def test_stratified_queries_name_known_strata():
 
 
 def test_a_profile_drawn_by_strata_reads_its_bounds_off_the_law():
-    """A Stratified draw of the checked level: the profile's bound is the law's exact count bound, its stratum bounds each
+    """A Stratified sample of the checked level: the profile's bound is the law's exact count bound, its stratum bounds each
     stratum's own, and its weighted bound the law's.  A one-level Subset is one stratum, and a Bernoulli level has none."""
     for law in SMALL:
         a = IntegrityProfile((Level("unit", "q"),), (law.population,), {"unit": law}, 0.1, drawn={"unit": law.k})
