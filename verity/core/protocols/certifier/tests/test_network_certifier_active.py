@@ -801,12 +801,13 @@ def test_a_proxy_with_ordinals_names_each_request_to_its_server_and_changes_noth
     assert proxy.records == honest_run[0].records and wire == honest_run[1]
 
 
-def test_a_proxys_ticks_count_each_bucket_against_the_calls_open_when_it_runs(honest_run):
+def test_a_proxys_ticks_count_each_bucket_against_the_forward_open_when_it_runs(honest_run):
     """With `calls`, the node's calls, which the prover registers on the control channel between ticks, each egress
-    and ingress tick counts its bucket against the calls open when it runs: ⌈log2(r + 1)⌉ timing bits and 8·B bits a
-    real frame. So calls open from tick T's end to tick T + 4's count ticks T + 1 … T + 4 of both grids: one given
-    exactly that many bits is accepted, and one given fewer is refused. One still open when the next PoUW window
-    begins is refused then. The records and the wire are the run's without calls."""
+    and ingress tick counts its bucket against the forward open when it runs: ⌈log2(r + 1)⌉ timing bits and 8·B bits a
+    real frame. So a forward open from tick T's end to tick T + 4's counts ticks T + 1 … T + 4 of both grids, and is
+    accepted given exactly that many bits; the next, open over tick T + 5 alone, is refused given one bit fewer than it
+    holds. One still open when the next PoUW window begins is refused then. At a cap of 1 bit over 8 MACs a forward of
+    one call of shape (1, 8, K) has K bits. The records and the wire are the run's without calls."""
     baseline, honest_wire = honest_run
     T = EGRESS.buckets
 
@@ -817,12 +818,12 @@ def test_a_proxys_ticks_count_each_bucket_against_the_calls_open_when_it_runs(ho
             out += params.allocation.bit_length() + 8 * params.frame_bytes * row_count(record.grid[t % params.buckets])
         return out
 
-    span = sum(bits(t) for t in range(T + 1, T + 5))
-    exact, short, root = calls.CallShape(16, 8, 64), calls.CallShape(15, 8, 64), bytes(64)
-    node = calls.NodeCalls(calls.EgressCap(span, 16 * 8 * 64))
-    plan = {T: [lambda c: c.a_root(0, root, exact), lambda c: c.a_root(1, root, short)],
-            T + 4: [lambda c: c.words_root(0, root), lambda c: c.words_root(1, root),
-                    lambda c: c.a_root(2, root, exact)]}
+    exact = calls.CallShape(1, 8, sum(bits(t) for t in range(T + 1, T + 5)))
+    short, root = calls.CallShape(1, 8, bits(T + 5) - 1), bytes(64)
+    node = calls.NodeCalls(calls.EgressCap(1, 8))
+    plan = {T: [lambda c: c.a_root(0, 0, root, exact)],
+            T + 4: [lambda c: c.words_root(0, root), lambda c: c.a_root(1, 0, root, short)],
+            T + 5: [lambda c: c.words_root(1, root), lambda c: c.a_root(2, 0, root, exact)]}
     channel = {}
 
     async def prover(proxy: Proxy, t: int) -> None:
@@ -839,7 +840,7 @@ def test_a_proxys_ticks_count_each_bucket_against_the_calls_open_when_it_runs(ho
     proxy, wire = asyncio.run(replay(honest(), probe=prover, calls=node))
     node.close()
     assert proxy.records == baseline.records and wire == honest_wire
-    assert {p: [(c["call"], c["verdict"]) for c in record] for p, record in node.records.items()} == {
+    assert {p: [(f["forward"], f["verdict"]) for f in record] for p, record in node.records.items()} == {
         0: [], 1: [(0, "accepted"), (1, "past its bits"), (2, "open when the window closed")], 2: []}
 
 

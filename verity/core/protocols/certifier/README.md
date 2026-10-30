@@ -287,13 +287,16 @@ A spec-level reference for network accounting's timing channel:
   G, taken by rejection so they are exactly uniform, and the coin lanes) from its own entropy and releases them once,
   as its reply to that registration, in the words the lead's kernel reads: each row's bits, each column's G, then a
   coin tile at a time its lane-coin words (three coins and a public byte each) and its column sources, which are no
-  coins but a public function of them. Every length is fixed by the call's shape. From the A root to the words root
-  every bucket of every boundary link counts against the call, ⌈log2(r + 1)⌉ timing bits and each real frame's content
-  bits, and the call is refused once its count passes its bits, cap · rows · n · K / fwdMacs
-  (`Pouw.Lead.Layout.callBits`), or when the window closes first. The control channel, which carries the registrations
-  in and the releases out, ends at the certifier and is no boundary link. On a node (`NodeCalls`) a window's calls are
-  a PoUW window's, and the proxies of all of the node's links count their buckets against them
-  (`active.Proxy(calls=…)`); the prover registers on the control channel (`serve_calls`, `CallsClient`).
+  coins but a public function of them. Every length is fixed by the call's shape. The count is per forward: a forward
+  is open from its first call's A root to its words root, the forwards are serial, and every bucket of every boundary
+  link while one is open counts once against it, ⌈log2(r + 1)⌉ timing bits and each real frame's content bits, with
+  its release at the boundary (`release_bits`) once when its words root closes it. A forward is refused when its count
+  passes its calls' bits summed,
+  cap · rows · n · K / fwdMacs each (`Pouw.Lead.Layout.callBits`; 32 · rows bits at cap 32), or when the window closes
+  first. The control channel, which carries the registrations in and the releases out, ends at the certifier and is no
+  boundary link. On a node (`NodeCalls`) a window's forwards are a PoUW window's, and the proxies of all of the node's
+  links count their buckets against the open one (`active.Proxy(calls=…)`); the prover registers on the control channel
+  (`serve_calls`, `CallsClient`).
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
 `tagged_sha512` and `canonical_json_bytes`, in `service` the proof system, the hm96 leaves and the check's
