@@ -70,7 +70,7 @@ from collections import Counter, deque
 from contextlib import nullcontext
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, BinaryIO, Callable, Iterable
+from typing import Any, Callable, Iterable
 
 from . import cache as CC
 from . import targets as TG
@@ -482,7 +482,6 @@ def owners(plan: Plan) -> dict[str, str]:
     reads' ``modules``, its record's or its process's), so this process imports none of them, as it builds no body.  Where two
     Definitions of one id are bound, the first owner by name.  `Stale` when one of them doesn't import there."""
     import importlib
-    import tempfile
     import warnings
 
     from . import sidecars as SC
@@ -490,7 +489,8 @@ def owners(plan: Plan) -> dict[str, str]:
     mods = sorted({m for e in plan.entries for m in (e.reads or {}).get("modules", ()) if m.partition(".")[0] in SC.PACKAGES})
     sys.stdout.flush()
     sys.stderr.flush()
-    with CC.internal(), tempfile.TemporaryFile() as out:         # no name, so nothing is left of it however the two end
+    with CC.internal():
+        out = _result()
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)    # an xdist worker's idle threads
             pid = os.fork()
@@ -502,17 +502,14 @@ def owners(plan: Plan) -> dict[str, str]:
                 got: dict[str, str] = {}
                 for v, mod in sorted(SC._index().values(), key=lambda e: e[1]):
                     got.setdefault(v.id, mod)
-                out.write(json.dumps({"owners": got}).encode())
-                out.flush()
+                _put(out, {"owners": got})
             except BaseException as ex:  # noqa: BLE001  (named where this process reads it: the run builds the whole catalog)
-                out.write(json.dumps({"error": f"{type(ex).__name__}: {str(ex)[:200]}"}).encode())
-                out.flush()
+                _put(out, {"error": f"{type(ex).__name__}: {str(ex)[:200]}"})
             finally:
                 os._exit(0)
         _, status = os.waitpid(pid, 0)
-        out.seek(0)
-        data = out.read()
-        got = json.loads(data) if data else {"error": f"its process died ({os.waitstatus_to_exitcode(status)})"}
+        if (got := _taken(out, status)) is None:
+            got = {"error": f"its process died ({os.waitstatus_to_exitcode(status)})"}
     if "error" in got:
         raise Stale(f"the modules the bindings' builds imported, imported in one process for their Definitions' owners: {got['error']}")
     return got["owners"]
@@ -653,13 +650,40 @@ def _words(before: set[str]) -> list[list[str | None]]:
     return [[fid, w, held.get(id(d))] for fid, w, d in new]
 
 
-def _child(e: Entry, out: BinaryIO, described: bool = False, side: list[str] | None = None, untraced: int = 0,
+def _result() -> Any:
+    """A file of no name for what a forked process returns (`_put`, `_taken`): the kernel frees it with the last process that
+    holds it open, so none is left behind however the run ends."""
+    import tempfile
+
+    return tempfile.TemporaryFile()
+
+
+def _put(f: Any, got: dict) -> None:
+    f.seek(0)
+    f.truncate()
+    f.write(json.dumps(got).encode())
+    f.flush()
+
+
+def _taken(f: Any, status: int) -> dict | None:
+    """What the process that ended with ``status`` (`os.waitpid`'s) put in ``f`` (`_put`), which is closed now; None when it
+    didn't exit 0 or put nothing."""
+    with f:
+        if os.waitstatus_to_exitcode(status) != 0:
+            return None
+        f.seek(0)
+        data = f.read()
+    return json.loads(data) if data else None
+
+
+def _child(e: Entry, out: Any, described: bool = False, side: list[str] | None = None, untraced: int = 0,
            pinned: frozenset[str] | None = None) -> None:
-    """In a process forked for ``e``: its nodes or its error to ``out``, and out through `os._exit`, so nothing of the parent's
-    (its atexit, its buffers) runs twice.  With ``side`` (traced: the units of the bindings that make no root): what its build
-    read (`cache.unit_reads`), its share of the task list's reads (`cache.task_list_reads` of its roots) and what it did that
-    the tracer cannot see (`cache.untraced`, past the parent's ``untraced``); and the Boolean Definitions its build registered
-    (`_words`).  ``pinned``: the parent's (`targets.pinned`), so the pins are no read of the binding's build."""
+    """In a process forked for ``e``: its nodes or its error put in ``out`` (`_put`), and out through `os._exit`, so nothing of
+    the parent's (its atexit, its buffers) runs twice.  With ``side`` (traced: the units of the bindings that make no root):
+    what its build read (`cache.unit_reads`), its share of the task list's reads (`cache.task_list_reads` of its roots) and
+    what it did that the tracer cannot see (`cache.untraced`, past the parent's ``untraced``); and the Boolean Definitions its
+    build registered (`_words`).  ``pinned``: the parent's (`targets.pinned`), so the pins are no read of the binding's
+    build."""
     from verity.ml.circuits.defs import REGISTRY
 
     from . import cli
@@ -676,8 +700,7 @@ def _child(e: Entry, out: BinaryIO, described: bool = False, side: list[str] | N
                            listed=CC.task_list_reads(e.roots), untraced=CC.untraced()[untraced:])
         except BaseException as ex:  # noqa: BLE001  (a model's is named, as the catalog names it; any other fails the build)
             got = {"error": f"{type(ex).__name__}: {str(ex)[:200]}", "start": start}
-        out.write(json.dumps(got).encode())
-        out.flush()
+        _put(out, got)
     except BaseException:  # noqa: BLE001
         code = 1
     finally:
@@ -700,11 +723,11 @@ def built_apart(entries: list[Entry], jobs: int, budget: float = float("inf"), w
     raises, or whose process dies (but with ``strict``), is dropped (its units returned beside) and named in
     `targets.ROOT_ERRORS`, as the catalog names it; any other binding's error raises.  With ``side`` (`_child`), each with what
     its process read, and what that process did that the tracer cannot see is this one's too.  Returned with how far each
-    binding's process grew, in GiB: its peak RSS past the RSS it started with, which it shares with this process; and the most
-    bytes its processes' results held on disk at once.  Each result is a file with no name (`tempfile.TemporaryFile`) that this
-    process and that binding's alone hold open, so the system frees it once both are gone, however they end."""
+    binding's process grew, in GiB: its peak RSS past the RSS it started with, which it shares with this process.  Each process
+    puts what it returns in a file of no name made for it (`_result`), which it alone of them holds open and this process reads
+    once it ends: at most ``jobs`` such files at once, and none left behind however the run ends; returned last, the most bytes
+    they held at once."""
     import gc
-    import tempfile
     import warnings
 
     from . import cli
@@ -716,9 +739,8 @@ def built_apart(entries: list[Entry], jobs: int, budget: float = float("inf"), w
     died: set[int] = set()
     peaks: dict[str, float] = {}
     running: dict[int, int] = {}
-    outs: dict[int, BinaryIO] = {}
+    files: dict[int, Any] = {}
     scratch = 0
-    untraced = len(CC.untraced())
     queue = sorted(range(len(entries)), key=lambda i: -weigh(i))
     sys.stdout.flush()
     sys.stderr.flush()
@@ -729,28 +751,25 @@ def built_apart(entries: list[Entry], jobs: int, budget: float = float("inf"), w
             while queue or running:
                 picked = cli.admit([weigh(i) for i in queue], [weigh(i) for i in running.values()], max(1, jobs), budget)
                 for i in [queue[k] for k in picked]:
-                    outs[i] = tempfile.TemporaryFile()
+                    files[i] = _result()
                     with warnings.catch_warnings():
                         warnings.simplefilter("ignore", DeprecationWarning)    # an xdist worker's idle threads
                         pid = os.fork()
                     if pid == 0:
-                        for j, f in outs.items():
+                        for j, f in files.items():
                             if j != i:
-                                f.close()
-                        _child(entries[i], outs[i], described, side, untraced, pinned)
+                                f.close()     # else a sibling's file stays allocated until this process ends too
+                        # what it inherits of the bindings that ended before it is this process's already: passed back
+                        # again, the list would double with each binding that ends
+                        _child(entries[i], files[i], described, side, len(CC._UNTRACED), pinned)
                     running[pid] = i
                 queue = [i for i in queue if i not in running.values()]
                 pid, status, usage = os.wait4(-1, 0)
                 if (i := running.pop(pid, None)) is None:
                     continue
-                scratch = max(scratch, sum(os.fstat(f.fileno()).st_size for f in outs.values()))
-                with outs.pop(i) as out:
-                    out.seek(0)
-                    data = out.read()
-                code = os.waitstatus_to_exitcode(status)
-                if code == 0 and data:
-                    got = json.loads(data)
-                else:
+                scratch = max(scratch, sum(os.fstat(f.fileno()).st_size for f in files.values()))
+                if (got := _taken(files.pop(i), status)) is None:
+                    code = os.waitstatus_to_exitcode(status)
                     how = f"signal {-code}" if code < 0 else f"exit {code}"
                     got = {"error": f"its process died ({how}), its result unwritten"}
                     died.add(i)
@@ -764,7 +783,7 @@ def built_apart(entries: list[Entry], jobs: int, budget: float = float("inf"), w
                     e.seconds = round(usage.ru_utime + usage.ru_stime, 2)
                     CC._UNTRACED.extend(got.get("untraced", ()))
     finally:
-        for f in outs.values():
+        for f in files.values():
             f.close()
         gc.unfreeze()
     for i, err in sorted(failed.items()):
