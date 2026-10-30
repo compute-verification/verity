@@ -24,6 +24,8 @@ from typing import Any
 from verity_vllm import settings
 from verity_vllm.config import UsageError
 
+__all__ = ["main"]
+
 PROG = "verity-vllm"
 
 #: command -> (module, one-line help).  Modules are imported only when their command runs.
