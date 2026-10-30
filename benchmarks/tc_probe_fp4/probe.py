@@ -14,7 +14,7 @@ Instructions (``--instruction``): ``nvf4`` = ``mma.sync.aligned.kind::mxf4nvf4.b
 (``sm120.mma.m16n8k64.e2m1.mxf4``, capture + model5-with-ue8m0-shift as a hypothesis, no hot clip); ``f8f6f4`` = the unscaled
 ``mma.sync.aligned.m16n8k32.row.col.kind::f8f6f4.f32.e2m1.e2m1.f32`` (``sm120.mma.m16n8k32.e2m1.f8f6f4``, autoproof probe2
 replay only); ``bf16`` = ``mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32`` (``sm120.mma.m16n8k16.bf16``), compared with
-``verity.ml.circuits.silicon.silicon.tc_dot`` under BOTH ``AMPERE_BF16_M16N8K16`` and ``HOPPER_BF16_M16N8K16`` -- which agrees is the finding.
+``verity.ml.circuits.silicon.models.tc_dot`` under BOTH ``AMPERE_BF16_M16N8K16`` and ``HOPPER_BF16_M16N8K16`` -- which agrees is the finding.
 
 The kernel (``mma_fp4.cu``) is built with ``-arch=sm_120a``: ptxas refuses ``.block_scale`` / ``.kind::f8f6f4`` on plain
 ``sm_120`` ("not supported on .target sm_120"), the arch-specific target is required.  ``--sass-check`` runs ``cuobjdump -sass``
@@ -98,7 +98,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-_VERITY_SRC = HERE.parents[1]  # the bf16 comparison imports verity.ml.circuits.silicon.silicon (and verity) from the shipped tree
+_VERITY_SRC = HERE.parents[1]  # the bf16 comparison imports verity.ml.circuits.silicon.models (and verity) from the shipped tree
 for _src in (_VERITY_SRC, _VERITY_SRC / "catalog", _VERITY_SRC / "tools" / "config"):
     if _src.is_dir() and str(_src) not in sys.path:
         sys.path.insert(0, str(_src))
@@ -1248,7 +1248,7 @@ def _init(instr: str, group: int):
     _CTX["group"] = group
     try:
         if instr == "bf16":
-            from verity.ml.circuits.silicon import silicon as S
+            from verity.ml.circuits.silicon import models as S
             _CTX["pipes"] = {"ampere_bf16_m16n8k16": S.AMPERE_BF16_M16N8K16, "hopper_bf16_m16n8k16": S.HOPPER_BF16_M16N8K16}
             _CTX["tc_dot"] = S.tc_dot
         else:
@@ -1529,7 +1529,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     primary = args.expect_model or PRIMARY_MODEL[instr]
     if instr == "bf16":
-        model_desc, model_src = "verity.ml.circuits.silicon.silicon.tc_dot", "verity.ml.circuits.silicon.silicon"
+        model_desc, model_src = "verity.ml.circuits.silicon.models.tc_dot", "verity.ml.circuits.silicon.models"
     elif instr in k32.ROWS:
         model_desc = "k32.candidates: " + ", ".join(sorted(verity_models(instr))) + (" (control: autoproof model5)" if instr in MODEL5_ROWS else "")
         model_src = str(HERE / "k32.py") + " + verity.ml.circuits.silicon.models"

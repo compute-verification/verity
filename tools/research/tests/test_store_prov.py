@@ -732,7 +732,7 @@ def test_machine_side_runner_loads_tool_from_shipped_source(tmp_path):
     store = json.loads((root / "runs/r1/job.json").read_text())["store"]
     assert "error" not in store, store.get("error")
     assert store["tool"] == {"name": "tc_probe", "version": "1", "spec": "benchmarks.tc_probe.tool:TC_PROBE"}
-    assert "benchmarks/tc_probe/tc_probe.py" in store["closure"] and "verity/ml/circuits/silicon/silicon.py" in store["closure"]
+    assert "benchmarks/tc_probe/tc_probe.py" in store["closure"] and "verity/ml/circuits/silicon/models.py" in store["closure"]
     assert store["key_params_resolved"]["arch"] == "sm_89" and store["key_params_resolved"]["instruction"] == "mma.x" and "out" not in store["key_params_resolved"]
     c = store["conditions"]
     assert (c["source.commit"], c["source.tree"], c["source.dirty"]) == ("c" * 40, "t" * 40, False), "the control side's hint fills what git cannot say in an archive"

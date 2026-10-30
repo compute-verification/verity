@@ -1,4 +1,4 @@
-"""The finite-domain step (`verity.ml.circuits.silicon.silicon`) against the RTX 4090 golden records and known answers.
+"""The finite-domain step (`verity.ml.circuits.silicon.models`) against the RTX 4090 golden records and known answers.
 
 Ported from veritor ``tests/veritor/core/test_silicon.py`` lines 1-208 (the gate-set and Hawkeye-C++ tests were left behind).
 The golden vectors under ``fixtures/golden/`` were measured on an RTX 4090 (sm_89), one ``mma.sync`` per record.
@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from verity.ml.circuits.silicon.errors import InvalidArtifact
-from verity.ml.circuits.silicon.silicon import (
+from verity.ml.circuits.silicon.models import (
     ADA_BF16_M16N8K16,
     ADA_E4M3_M16N8K32,
     AMPERE_BF16_M16N8K16,
@@ -21,7 +21,7 @@ from verity.ml.circuits.silicon.silicon import (
     HOPPER_BF16_M16N8K16,
     HOPPER_E4M3_K32,
     PIPELINES,
-    Pipeline,
+    GroupSum,
     tc_dot,
     tc_dot_chain,
 )
@@ -29,7 +29,7 @@ from verity.ml.circuits.silicon.silicon import (
 GOLDEN_DIR = Path(__file__).parent / "fixtures" / "golden"
 
 
-def _load_golden(name: str) -> tuple[Pipeline, list[dict[str, str]]]:
+def _load_golden(name: str) -> tuple[GroupSum, list[dict[str, str]]]:
     with open(GOLDEN_DIR / f"{name}.json") as f:
         data = json.load(f)
     return PIPELINES[data["pipeline"]], data["records"]

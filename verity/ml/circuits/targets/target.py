@@ -139,9 +139,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from verity.ml.circuits.silicon.models import (ADA_E4M3_M16N8K32, BLACKWELL_SM120_E4M3_M16N8K32, BLACKWELL_SM120_NVF4, HOPPER_BF16_M16N8K16,
-                                  HOPPER_E4M3_K32, BlockScaledAlignAdd)
-from verity.ml.circuits.silicon.silicon import AMPERE_BF16_M16N8K16, Pipeline
+from verity.ml.circuits.silicon.models import (ADA_E4M3_M16N8K32, AMPERE_BF16_M16N8K16, BLACKWELL_SM120_E4M3_M16N8K32, BLACKWELL_SM120_NVF4,
+                                  HOPPER_BF16_M16N8K16, HOPPER_E4M3_K32, BlockScaledAlignAdd, GroupSum)
 
 __all__ = [
     "BF16_HOPPER",
@@ -211,7 +210,7 @@ class Target:
     name: str
     family: str
     family_digest: str
-    pipeline: Pipeline | BlockScaledAlignAdd
+    pipeline: GroupSum | BlockScaledAlignAdd
     program: str
     transition_unit: str
     statement_format: int

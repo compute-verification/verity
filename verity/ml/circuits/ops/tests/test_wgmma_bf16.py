@@ -11,8 +11,7 @@ from pathlib import Path
 
 from verity.errors import InvalidArtifact
 from verity.ml.circuits.silicon.instructions import INSTRUCTIONS
-from verity.ml.circuits.silicon.models import HOPPER_BF16_M16N8K16, HOPPER_BF16_WGMMA_K16, MODELS, tc_dot_chain
-from verity.ml.circuits.silicon.silicon import AMPERE_BF16_M16N8K16
+from verity.ml.circuits.silicon.models import AMPERE_BF16_M16N8K16, HOPPER_BF16_M16N8K16, HOPPER_BF16_WGMMA_K16, MODELS, tc_dot_chain
 from verity.ml.circuits.silicon.total import tc_dot_total
 
 CAPTURE = Path(__file__).parent / "fixtures" / "tc-hopper-wgmma-bf16-2026-09-26" / "records.json.gz"
