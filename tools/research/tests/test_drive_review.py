@@ -1105,17 +1105,19 @@ def _red_landing(world, monkeypatch, tmp_path) -> tuple[Review, str]:
     return h, tip
 
 
-def test_an_after_landing_failure_rings_its_culprit_and_the_suites_owner_and_reverts_it_an_hour_later(world, monkeypatch,
-                                                                                                       tmp_path):
-    """Without a culprit, PRs keep landing on a `main` whose after-landing runs all fail, each failure going to @ci alone.
-    Drive names the one landing whose change touches the failing test, rings its owner and the suite's with the run and the first
-    error line, and reverts it once `FIX_WINDOW_S` passed with no fix marked."""
+def test_an_after_landing_failure_rings_its_culprits_lane_and_the_suites_owner_and_reverts_it_an_hour_later(world, monkeypatch,
+                                                                                                             tmp_path):
+    """Without a culprit, PRs keep landing on a `main` whose after-landing runs all fail, each failure going to ci alone.
+    Drive names the one landing whose change touches the failing test, rings its lane with the suite's owner in one post
+    (neither ci nor top) with the run and the first error line, and reverts it once `FIX_WINDOW_S` passed with no fix
+    marked, telling the same two."""
     from research.drive import FIX_WINDOW_S
 
     h, tip = _red_landing(world, monkeypatch, tmp_path)
     assert _main(world) == tip
     (ring,) = [p for p in h.posts if "is red on" in p]
-    assert ring.startswith("@ci @pkg-owner @lane-2 queue: suite pkg is red on `main`") and "(run r-post-0)" in ring, ring
+    assert ring.startswith("@lane-2 @pkg-owner queue: suite pkg is red on `main`") and "(run r-post-0)" in ring, ring
+    assert "@ci" not in ring and "@top" not in ring, ring
     assert "failed tests/test_x.py::test_y" in ring and "NameError: name '_once' is not defined" in ring, ring
     assert "Culprit: #2 (its change touches pkg/tests/test_x.py)" in ring and "unless a fix is marked" in ring, ring
     assert h.postland()["red"]["suite pkg"]["culprit"][0] == 2
@@ -1128,7 +1130,8 @@ def test_an_after_landing_failure_rings_its_culprit_and_the_suites_owner_and_rev
     assert _git(world.origin, "rev-parse", f"{main}^") == tip                            # one revert on top of the landing
     assert "pkg/tests/test_x.py" not in _git(world.origin, "ls-tree", "-r", "--name-only", main)
     (post,) = [p for p in h.posts if "reverted" in p]
-    assert post.startswith("@ci @lane-2 queue: #2 reverted on `main`") and "no fix was marked within 60 min" in post, post
+    assert post.startswith("@lane-2 @pkg-owner queue: #2 reverted on `main`") and "no fix was marked within 60 min" in post, post
+    assert "@ci" not in post and "@top" not in post, post
     assert h.posted[-1][0] == main and h.launched == []                                  # the next run checks the new tip
     h.run_state[f"r-post-{len(h.posted) - 1}"] = ("done", 0, None)
     h.evidence = [_steps_run(world.tmp, f"r-post-{len(h.posted) - 1}", {s: "passed" for s in h.posted[-1][1].split(",")})]
@@ -1321,7 +1324,7 @@ def test_a_revert_whose_push_loses_a_race_is_retried_on_the_next_tick(world, mon
     main = _main(world)
     assert _git(world.origin, "rev-parse", f"{main}^") == raced[0] and _reverts(world, tip) == 1
     assert _git(world.origin, "show", f"{main}:c.txt") == "landed in between"
-    assert any(p.startswith("@ci @lane-1 queue: #1 reverted on `main`") for p in h.posts), h.posts
+    assert any(p.startswith("@lane-1 queue: #1 reverted on `main`") for p in h.posts), h.posts
 
 
 def test_a_drive_killed_after_a_revert_pushed_does_not_revert_again_on_restart(world, monkeypatch, tmp_path):
@@ -1424,13 +1427,14 @@ def test_a_read_guard_failure_rings_the_pr_that_added_the_reading_test(world, mo
     h.evidence = [run]
     h.tick()
     (ring,) = [p for p in h.posts if "is red on" in p]
-    assert ring.startswith("@ci @pkg-owner @lane-1 queue: suite pkg is red"), ring
+    assert ring.startswith("@lane-1 @pkg-owner queue: suite pkg is red"), ring
     assert "read outside its declared inputs: data/x.json" in ring and "Culprit: #1" in ring, ring
 
 
-def test_main_far_behind_its_last_verified_commit_rings_ci_and_top_every_hour(world, monkeypatch, tmp_path):
+def test_main_far_behind_its_last_verified_commit_for_a_red_rings_the_culprits_lane_every_hour(world, monkeypatch, tmp_path):
     """A `main` many hours without a verified commit must reach someone.  Once its oldest unverified landing is
-    `BEHIND_S` old, drive rings @ci and @top, again every `BEHIND_EVERY_S` while it stays behind."""
+    `BEHIND_S` old, drive rings who acts on what is red there, the culprit's lane and the suite's owner (not ci and top, which
+    hear only while nothing red explains it), again every `BEHIND_EVERY_S` while it stays behind."""
     from research.drive import BEHIND_EVERY_S, BEHIND_S
 
     h, tip = _red_landing(world, monkeypatch, tmp_path)
@@ -1441,7 +1445,7 @@ def test_main_far_behind_its_last_verified_commit_rings_ci_and_top_every_hour(wo
     h.clock += 20
     h.tick()
     (alarm,) = [p for p in h.posts if "behind its tip" in p]
-    assert alarm.startswith("@ci @top queue: `main`'s last verified commit") and "red: suite pkg (culprit #2)" in alarm, alarm
+    assert alarm.startswith("@lane-2 @pkg-owner queue: `main`'s last verified commit") and "red: suite pkg (culprit #2)" in alarm, alarm
     h.clock += BEHIND_EVERY_S - 30
     h.tick()
     assert len([p for p in h.posts if "behind its tip" in p]) == 1
@@ -1465,7 +1469,7 @@ def test_a_healthy_after_landing_run_under_way_is_not_an_alarm(world, monkeypatc
     h.clock += POSTLAND_RUN_S
     h.tick()
     (alarm,) = [p for p in h.posts if "behind its tip" in p]
-    assert "its run r-post-0" in alarm and "red: nothing named red" in alarm, alarm
+    assert alarm.startswith("@ci @top queue: ") and "its run r-post-0" in alarm and "red: nothing named red" in alarm, alarm
 
 
 def test_an_after_landing_failure_several_prs_touch_is_bisected_to_the_one_that_broke_it(world, monkeypatch, tmp_path):
@@ -1506,7 +1510,7 @@ def test_an_after_landing_failure_several_prs_touch_is_bisected_to_the_one_that_
     h.tick()
     assert "bisect" not in h.postland() and not [p for p in h.posts if "reverted" in p]
     (ring,) = [p for p in h.posts if "Culprit: #2, by bisection" in p]
-    assert ring.startswith("@ci @lane-2 queue: suite pkg is red") and "passes on #1's landing" in ring, ring
+    assert ring.startswith("@lane-2 queue: suite pkg is red") and "passes on #1's landing" in ring, ring
     h.clock += FIX_WINDOW_S + 1
     h.tick()
     main = _main(world)
@@ -1514,7 +1518,7 @@ def test_an_after_landing_failure_several_prs_touch_is_bisected_to_the_one_that_
     assert _subject(world, revert).startswith('Revert "Queue: #2')
     assert _git(world.origin, "show", f"{main}:pkg/tests/test_x.py") == "def test_y():\n    pass"
     (post,) = [p for p in h.posts if "reverted" in p]
-    assert post.startswith("@ci @lane-2 queue: #2 reverted on `main`"), post
+    assert post.startswith("@lane-2 queue: #2 reverted on `main`"), post
 
 
 def _bisecting(world, monkeypatch, tmp_path, revert: bool = False) -> tuple[Review, str]:
@@ -1870,8 +1874,8 @@ def test_a_detached_lean_launch_that_ends_without_run_ids_registered_no_run_and_
     h.printed[str(tmp_path / "launch-1")] = ([], "train: no run launched in the wait; stopped its launcher")
     assert not h.tick().startswith("landed")
     (post,) = [p for p in h.posts if "registered no run" in p]
-    assert f"train.sh {top[:12]} m1 --deferred {LEAN_STEP} registered no run: train: no run launched" in post, post
-    assert f"{tmp_path / 'launch-1'}/log" in post
+    assert post.startswith(f"@ci @top queue: train.sh {top[:12]} m1 --deferred {LEAN_STEP} registered no run 1 time since "), post
+    assert post.endswith(f"(log {tmp_path / 'launch-1'}/log): train: no run launched in the wait; stopped its launcher"), post
     assert starts == [top, top]                                           # dropped, and launched again in the same tick
     rec = h.d.q.load_state()["drive"]["lean"][top]
     assert rec["launch"]["dir"] == str(tmp_path / "launch-2") and rec["state"] is None
@@ -1880,7 +1884,10 @@ def test_a_detached_lean_launch_that_ends_without_run_ids_registered_no_run_and_
     assert starts == [top, top]
     h.clock += 1                                                          # printing nothing past it, it registered no run
     h.tick()
-    assert starts == [top, top, top] and len([p for p in h.posts if "registered no run" in p]) == 1   # told once per commit
+    posts = [p for p in h.posts if "registered no run" in p]
+    assert starts == [top, top, top] and len(posts) == 2, posts           # another reason rings at once
+    assert "registered no run 2 times since" in posts[1] and posts[1].endswith(": no run ids 60 min after its launch: "
+                                                                               "train: abc on m1; log x"), posts[1]
     rec = {"ids": [], "launch": {"dir": "d", "pid": 0}, "at": h.clock - LAUNCH_LOST_S - 1}
     assert h.d._resolve(rec, "x").startswith("no run ids 60 min after its launch") and "launch" not in rec
 
@@ -1947,6 +1954,77 @@ def test_the_after_landing_run_launches_detached_and_one_that_registered_no_run_
     h.evidence = [_steps_run(world.tmp, "r-post", {s: "passed" for s in AFTER_LANDING})]
     assert h.tick().startswith("landed #1"), world.logs
     assert h.postland()["verified"] == main
+    assert "postland" not in h.d.q.load_state()["drive"]["launch_failed"]     # its launch registered a run: the count ends
+
+
+def test_an_after_landing_launch_that_exits_1_rings_ci_and_top_once_an_hour_and_the_behind_ring_names_it(
+        world, monkeypatch, tmp_path):
+    """A train.sh that refuses before any step exits 1 at every launch, and drive launches the run again each tick.  Told once to
+    ci alone, nobody acted for hours while the behind-ring said the run was `(launching)` for 0.0 h.  Each launch that
+    registered no run rings ci and top at once with its reason's last line, the same reason at the same tip again only an hour
+    later, and the behind-ring counts the failures."""
+    from datetime import UTC, datetime
+
+    from research.drive import BEHIND_S, LAUNCH_RING_EVERY_S
+
+    h = Review(world, monkeypatch)
+    starts = _detached(h, tmp_path, lean=False, post=True)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1")
+    main, landed = _main(world), h.clock
+    assert starts == [main]
+    refused = "train.sh: refused: its settings check failed (exit 1)"
+    h.d.launched = lambda launch: ([], f"train: checking settings\n{refused}")
+
+    def rings() -> list[str]:
+        return [p for p in h.posts if "registered no run" in p]
+
+    h.clock += 60
+    h.tick()
+    (ring,) = rings()
+    since = f"{datetime.fromtimestamp(h.clock, UTC):%H:%M}Z"
+    assert ring.startswith(f"@ci @top queue: train.sh {main[:12]} m1 --deferred "), ring
+    assert ring.endswith(f"registered no run 1 time since {since} (log {tmp_path / 'launch-1'}/log): {refused}"), ring
+    assert "checking settings" not in ring and starts == [main, main]
+    h.clock += 600
+    h.tick()                                                              # the same failure within the hour: no ring
+    assert len(rings()) == 1 and starts == [main] * 3
+    assert h.d.q.load_state()["drive"]["launch_failed"]["postland"]["n"] == 2
+    h.clock += LAUNCH_RING_EVERY_S - 600
+    h.tick()
+    assert len(rings()) == 2 and f"registered no run 3 times since {since}" in rings()[1], rings()
+    h.clock = landed + BEHIND_S + 60
+    h.tick()
+    (alarm,) = [p for p in h.posts if "behind its tip" in p]
+    assert alarm.startswith("@ci @top queue: `main`'s last verified commit"), alarm
+    assert f"its launch registered no run 4 times since {since}: {refused}; red: nothing named red" in alarm, alarm
+    assert "(launching)" not in alarm and "has run" not in alarm, alarm
+
+
+def test_a_lean_check_launch_that_exits_1_rings_ci_and_top_and_again_only_an_hour_later(world, monkeypatch, tmp_path):
+    from research.drive import LAUNCH_RING_EVERY_S
+
+    h = Review(world, monkeypatch)
+    starts = _detached(h, tmp_path)
+    world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
+    h.review(1)
+    h.tick()
+    top = _tip(world)
+    h.d.launched = lambda launch: ([], "train.sh: refused: its settings check failed (exit 1)")
+
+    def rings() -> list[str]:
+        return [p for p in h.posts if "registered no run" in p]
+
+    h.tick()
+    (ring,) = rings()
+    assert ring.startswith(f"@ci @top queue: train.sh {top[:12]} m1 --deferred {LEAN_STEP} registered no run 1 time"), ring
+    h.clock += LAUNCH_RING_EVERY_S - 1
+    h.tick()
+    assert len(rings()) == 1 and starts == [top] * 3
+    h.clock += 1
+    h.tick()
+    assert len(rings()) == 2 and "registered no run 3 times since" in rings()[1], rings()
 
 
 def test_detach_returns_before_train_sh_prints_its_run_ids_and_launched_reads_them_or_an_exit_without_them(tmp_path, monkeypatch):
