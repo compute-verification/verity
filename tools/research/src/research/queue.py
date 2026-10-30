@@ -1653,10 +1653,7 @@ class Queue:
 
         path = self.workdir.parent / f"{self.workdir.name}.conflicts.json"
         key = {"main": main, "at": _out(self.workdir, "rev-parse", "HEAD"), "drivers": RECORD_DRIVER}
-        try:
-            doc = json.loads(path.read_text())
-        except (OSError, ValueError):
-            doc = {}
+        doc = json.loads(path.read_text()) if path.is_file() else {}            # written whole, by `replace`
         got = dict(doc.get("of") or {}) if doc.get("key") == key else {}
         if todo := [h for h in dict.fromkeys(heads) if h not in got]:
             with concurrent.futures.ThreadPoolExecutor(os.cpu_count() or 1) as ex:
