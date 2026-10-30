@@ -49,6 +49,7 @@ then gate by gate `owner-entry`: neither `"input"` nor a natural, `input-in-iu`,
 namespace NciCheck
 
 open Lean (Json toJson)
+open Flock.Program (GateTable)
 
 /-- A natural number in JSON: an integer with no exponent, at least 0. -/
 def natOf? : Json → Option Nat
@@ -58,17 +59,6 @@ def natOf? : Json → Option Nat
 /-- Whether a primitive id is an input bound at registration, `RegisteredInput<w>_v1` (`Flock.Program.inputId?`). -/
 def isRegisteredId (id : String) : Bool :=
   (Flock.Program.inputId? id).map (·.1) == some Flock.Program.REGISTRATION
-
-/-- `D` as the definition reads it, gate by gate: the width of its value, whether it is an input gate, and the gates its
-operands name (repeats kept: only the set is read); and, which the definition doesn't read but θ does, whether it is an
-input bound at registration. -/
-structure Circuit where
-  w : Array Nat
-  isInput : Array Bool
-  registered : Array Bool
-  reads : Array (Array Nat)
-
-def Circuit.N (c : Circuit) : Nat := c.w.size
 
 /-- Gate `g` of the Program's canonical circuit: its width, whether it is an input gate, whether it is one bound at
 registration, and its operands. Refused (`program`) where its primitive can't be located, returns more than one value, or
@@ -84,12 +74,10 @@ def gateOf (P : Flock.Program.Prog) (g : Nat) : Except String (Nat × Bool × Bo
   if ops.any (· ≥ g) then throw "not-topological"
   return (w, inp, isRegisteredId defn.key, ops)
 
-def Circuit.push (c : Circuit) : Nat × Bool × Bool × Array Nat → Circuit
-  | (w, inp, reg, ops) =>
-    { w := c.w.push w, isInput := c.isInput.push inp, registered := c.registered.push reg, reads := c.reads.push ops }
-
-/-- The Program's canonical circuit, gate by gate, refused at the first gate `gateOf` refuses. -/
-def circuitOf (P : Flock.Program.Prog) : Except String Circuit :=
+/-- `D` as the definition reads it, gate by gate (`Flock.Program.GateTable`): the width of its value, whether it is an input
+gate, and the gates its operands name (repeats kept: only the set is read); and, which the definition doesn't read but θ
+does, whether it is an input bound at registration. Refused at the first gate `gateOf` refuses. -/
+def circuitOf (P : Flock.Program.Prog) : Except String GateTable :=
   (List.range (P.defs[P.root]!).gates).foldlM (fun c g => c.push <$> gateOf P g) ⟨#[], #[], #[], #[]⟩
 
 /-- θ and the division, checked: θ as a set of gates, each gate's IU (`none` for an input gate), and the number of IUs. -/
@@ -99,7 +87,7 @@ structure Division where
   n : Nat
 
 /-- One entry of θ, added to the entries before it. -/
-def thetaStep (c : Circuit) (s : Std.HashSet Nat) (t : Json) : Except String (Std.HashSet Nat) := do
+def thetaStep (c : GateTable) (s : Std.HashSet Nat) (t : Json) : Except String (Std.HashSet Nat) := do
   let some g := natOf? t | throw "theta-unknown"
   if g ≥ c.N then throw "theta-unknown"
   if !c.isInput[g]! then throw "theta-not-input"
@@ -112,7 +100,7 @@ def isInputTag : Json → Bool
   | _ => false
 
 /-- Gate `g`'s owner entry `j`: `none` for `"input"`, `some u` for IU `u`. -/
-def ownerOf (c : Circuit) (g : Nat) (j : Json) : Except String (Option Nat) := do
+def ownerOf (c : GateTable) (g : Nat) (j : Json) : Except String (Option Nat) := do
   let o ← if isInputTag j then pure none else match natOf? j with
     | some u => pure (some u)
     | none => throw "owner-entry"
@@ -128,7 +116,7 @@ def iuCount (own : Array (Option Nat)) : Nat :=
 def usedOf (own : Array (Option Nat)) : Std.HashSet Nat :=
   own.foldl (fun s o => match o with | some u => s.insert u | none => s) {}
 
-def divisionOf (c : Circuit) (theta owner : Array Json) : Except String Division := do
+def divisionOf (c : GateTable) (theta owner : Array Json) : Except String Division := do
   let mask ← (List.range theta.size).foldlM (fun s t => thetaStep c s theta[t]!) {}
   if owner.size != c.N then throw "owner-length"
   let own ← (List.range c.N).foldlM (fun own g => own.push <$> ownerOf c g owner[g]!) #[]
@@ -141,14 +129,14 @@ def divisionOf (c : Circuit) (theta owner : Array Json) : Except String Division
 
 /-- Per IU `u`, in one pass over the gates: its number of gates, and the gates outside it that a gate of it reads,
 `into(R)`. -/
-def tally (c : Circuit) (d : Division) : Array (Nat × Std.HashSet Nat) :=
+def tally (c : GateTable) (d : Division) : Array (Nat × Std.HashSet Nat) :=
   (List.range c.N).foldl (fun acc g => match d.owner[g]! with
     | some u => acc.modify u fun (s, into) =>
         (s + 1, c.reads[g]!.foldl (fun into a => if d.owner[a]! = some u then into else into.insert a) into)
     | none => acc) (Array.replicate d.n (0, {}))
 
 /-- Per IU `u`, with gates `R`: `(size R, novelReads R)`, `novelReads R` the width of the gates of `into(R)` not in θ. -/
-def ius (c : Circuit) (d : Division) : Array (Nat × Nat) :=
+def ius (c : GateTable) (d : Division) : Array (Nat × Nat) :=
   (tally c d).map fun (s, into) => (s, into.fold (fun x a => if d.theta.contains a then x else x + c.w[a]!) 0)
 
 /-- The first IU that breaks the policy, with the rule: `size` when it has more than `Γ` gates, else `nci` when its
