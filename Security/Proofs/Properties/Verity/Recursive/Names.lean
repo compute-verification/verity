@@ -309,6 +309,7 @@ theorem part_ports {r : XR} {st : Stage} {x : Msg} {ms : List (Msg × Out)} {s :
   refine ⟨vs, sv, sts[0].c, hvs, hsv, hpc, hparsed, ?_⟩
   intro q hq hk
   obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_tablesOf htab hty hpi hpos
+    (FlockSoundness.Discharge.Recursion.checkParsed_flat hparsed)
   have hcoin := Flock.Readable.array_forM_ok (RecIns.setup_coins hs) 0 hpos
   obtain ⟨own, hown⟩ := Option.isSome_iff_exists.1 (registered_of_coins hcoin (params_of_own P hn.symm hpt hq))
   have hC' := checks_stmt (RecIns.setup_checks hs) 0 hpos
