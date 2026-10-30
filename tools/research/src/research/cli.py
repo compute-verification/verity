@@ -1778,6 +1778,10 @@ def hand_to_ops(cmd: str, rest: list[str]) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    if argv is None:
+        from .at_main import reexec
+
+        reexec(sys.argv[1:])
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv or argv[0] in ("-h", "--help"):
         print(__doc__.strip())
