@@ -33,7 +33,7 @@ from rho.profile import Profile
 
 @dataclass(frozen=True)
 class Comply:
-    """Run the declared work as declared and train only on free compute: always available."""
+    """Run the registered work as registered and train only on free compute: always available."""
 
     name: str = "comply"
     side: Literal["bound", "attack"] = "attack"

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# M1c of EPS1 TENSOR on one RTX PRO 6000 (sm_120): the schedule search over the forms that set JI3n_0..2, then the fit.
+# The schedule search on one RTX PRO 6000 (sm_120): the schedule search over the forms that set JI3n_0..2, then the fit.
 #
-#   research run --on vy-nebius-2 --project verity --campaign pouw --source /workspace --cwd clone --custody-ttl 12h \
+#   research run --on MACHINE --project verity --source /workspace --cwd clone --custody-ttl 12h \
 #     --env GPU_LEASE_WHO=tensor -- bash benchmarks/pouw/tensor_kinds/search.sh
 #
 # One binary a (form, R), built in parallel outside the lease with its SASS dumped; the timed work runs under
