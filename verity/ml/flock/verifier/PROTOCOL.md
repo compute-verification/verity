@@ -483,6 +483,7 @@ copying upstream. The deliberate divergences, each refused by Lean and accepted 
 | D19 | a V* cap session that does not read its level's tops at the verifier's shared rows |
 | D20 | a record not in its canonical text (S0) |
 | D21 | a nonzero proof-of-work nonce |
+| D22 | the verifier's own `--program` with a reference that reads a leaf at another width than its type gives that position (`E_REINTERPRET`, `verity/ml/circuits/PROTOCOL.md` §4.4): `Flock.Program.Widths`, which `NciCheck` decodes with too, refuses it at setup with the codec's message; upstream reads no program. `qword_program_agree.py --widths` holds the decoder to the codec on NCI's mistyped descriptors |
 
 ### 17.2 Assumptions
 
