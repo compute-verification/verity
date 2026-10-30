@@ -99,6 +99,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | Directory | What it measures | Status |
 | --- | --- | --- |
 | `ppl/` | the perplexity an intervention on a served model's matmuls or attention costs, against bf16 and plain int8 | maintained |
+| `hardness_public/` | public deterministic training (HARDNESS E): the cheapest exact route through open models' int8 weights and their low bits, seed independence, steering, and late jumps planted into a toy training run | maintained |
 | `numerical/` | the bench spine (`verity_numerical.bench`) that C-Flock and `circuit-check` import, and the per-unit-type cost inventory; the archived proof systems' tables are in the evidence store | frozen |
 
 ## Census data
