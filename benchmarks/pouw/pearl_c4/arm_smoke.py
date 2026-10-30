@@ -7,7 +7,7 @@ the weight side and the call relaunched) into RUN_DIR/transcripts/<arm>/<shape>,
 (<shape>-nowrite: the same buffers poisoned and read back without a launch), and each arm's ``verifier`` (its reference
 replay; arm interface v0.5, `check_verifier` when the harness has it) goes to RUN_DIR/verifiers.json with the shapes and
 controls dumped.  --verify-run RUN_DIR, on the CPU alone, runs them per shape as the harness's verify.py does: the commands
-in order, a transcript replay-verified (development shortcut; the protocol's check is a ZK proof, PouwCheck) only by a
+in order, a transcript replay-verified (development shortcut; the protocol's check is a ZK proof, PROTOCOL.md) only by a
 line starting ACCEPT that names its sha256, with no REJECT naming it and every command exiting 0, and a control passing
 only by a REJECT naming its sha256.  One JSON object per line; exit 4 when any gate, control, check or replay fails.
 
@@ -87,7 +87,7 @@ def main(argv: list[str]) -> int:
                     "RUN_DIR/transcripts and record each arm's reference replay in RUN_DIR/verifiers.json")
     ap.add_argument("--verify-run", type=Path, metavar="RUN_DIR",
                     help="no GPU: run the reference replays a --run-dir pass recorded; an ACCEPT is replay-verified "
-                         "(development shortcut; the protocol's check is a ZK proof, PouwCheck)")
+                         "(development shortcut; the protocol's check is a ZK proof, PROTOCOL.md)")
     ap.add_argument("--run-id", default="arm-smoke")
     ap.add_argument("--commit", default=settings.RESEARCH_SOURCE_SHA or "unknown")
     a = ap.parse_args(argv)

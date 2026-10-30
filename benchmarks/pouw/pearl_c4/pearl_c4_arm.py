@@ -17,7 +17,7 @@ it fills every buffer of the hash call's ``transcript_buffers`` with 0xA5, runs 
 write the no-write control into ``negative/<arm>/<shape>/``.  The build record names the reference replay (``verifier``)
 that proves and checks both after timing: `benchmarks.pouw.pearl_c4.replay`'s ``prove`` and ``verify``, whose ACCEPT
 line names the transcript's sha256, and which must reject the control.  That ACCEPT is replay-verified (development
-shortcut; the protocol's check is a ZK proof, PouwCheck).  The build record's ``binaries`` is the cubin
+shortcut; the protocol's check is a ZK proof, PROTOCOL.md).  The build record's ``binaries`` is the cubin
 (loaded with ``cuModuleLoadData``, so never mapped).
 Flag roles: ``hash`` (all of it), ``nohash`` (no hashing: no commitment, E_A's lines primed once, no digests or leaves) and
 ``plain`` (the forming and the chain alone: y from C̃).  The scheme's domain is m a multiple of 64 (its 64 x 64 tile), so
@@ -215,7 +215,7 @@ class _PearlC4:
     def verifier() -> dict:
         """The reference replay on each shape's dump (arm interface v0.5's ``verifier``): ``prove`` makes the transcript
         from the dump in ``{dir}``, ``verify`` checks it and prints the ACCEPT line naming its sha256, replay-verified
-        (development shortcut; the protocol's check is a ZK proof, PouwCheck).  The harness's dump is under
+        (development shortcut; the protocol's check is a ZK proof, PROTOCOL.md).  The harness's dump is under
         ``transcripts/{arm}/{shape}/``, so verify.py runs the same commands on the no-write control under ``negative/``,
         which they must reject; ``--path`` names whichever of the two it is."""
         r = ["{python}", "-m", "benchmarks.pouw.pearl_c4.replay"]

@@ -1,4 +1,5 @@
-"""PoUW as one pass over a served Program: `compile(program, scheme, groups)`.
+"""PoUW as one pass over a served Program (`PROTOCOL.md` §`compile`):
+`compile(program, scheme, groups)`.
 
 * **Find.** Every Call of a registered matmul family (`MATMULS`: each family's A and B ports, its (m, k, n) and the arm it is
   registered at) is one dot product, or N of them (`S8Matmul_v1`'s rows). Attention's QKᵀ is `DotBf16`'s, a kind like any
