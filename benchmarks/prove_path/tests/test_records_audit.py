@@ -323,7 +323,7 @@ def test_a_declared_records_count_is_its_free_inputs_and_the_advice_against_the_
                 ["--pins", str(tmp_path / "other-domain.json")]):
         with pytest.raises(SystemExit):
             RA.main(["count", "--circuit", str(tmp_path / "c.json"), "--bits", "1687", *bad])
-    with pytest.raises(ValueError, match="counted from its members"):
+    with pytest.raises(ValueError, match="or its listed members"):
         RA.declared_count({"templates": doc["templates"]}, 0)
 
 
