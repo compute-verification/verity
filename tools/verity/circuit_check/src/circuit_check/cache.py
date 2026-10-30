@@ -266,8 +266,13 @@ def visible(root: Path) -> tuple[frozenset[str], frozenset[str]] | None:
             _VISIBLE[root] = None
         else:
             files = frozenset(x.decode() for x in r.stdout.split(b"\0") if x)
-            dirs = frozenset({"."} | {str(Path(f).parents[i]) for f in files for i in range(len(Path(f).parents) - 1)})
-            _VISIBLE[root] = (files, dirs)
+            dirs = {"."}
+            for f in files:
+                i = f.rfind("/")
+                while i > 0 and (d := f[:i]) not in dirs:
+                    dirs.add(d)
+                    i = f.rfind("/", 0, i)
+            _VISIBLE[root] = (files, frozenset(dirs))
     return _VISIBLE[root]
 
 
@@ -278,9 +283,23 @@ def _listing(root: Path, rel: str) -> str:
     return hashlib.sha512("\0".join(names).encode()).hexdigest()
 
 
+#: `_rel` of each absolute path asked, by root: it depends on nothing else but `_LINKS`, which `trace` sets with the root
+_RELS: dict[Path, dict[str, str | None]] = {}
+
+
 def _rel(path: Any) -> str | None:
     if isinstance(path, int) or not _ROOT:
         return None
+    if isinstance(path, str) and path.startswith("/"):
+        if (memo := _RELS.get(_ROOT[0])) is None:
+            memo = _RELS[_ROOT[0]] = {}
+        if (r := memo.get(path, memo)) is memo:
+            r = memo[path] = _rel_of(path)
+        return r
+    return _rel_of(path)
+
+
+def _rel_of(path: Any) -> str | None:
     try:
         p = Path(os.fsdecode(path))
         p = os.path.normpath(p if p.is_absolute() else Path.cwd() / p)
@@ -1024,13 +1043,20 @@ def _parsed_bytes(data: bytes) -> tuple[str, list, bool, bool]:
     return _PARSED[h]
 
 
+_ROOTS: dict[tuple, list[str]] = {}
+
+
 def _roots(root: Path) -> list[str]:
     """The import path's entries inside the tree (``sys.path`` order, relative to ``root``), where module names resolve."""
+    k = (str(root), os.getcwd(), *sys.path)
+    if k in _ROOTS:
+        return _ROOTS[k]
     out: list[str] = []
     for e in sys.path:
         rel = os.path.relpath(os.path.realpath(e or os.getcwd()), root)
         if not rel.startswith("..") and rel.split(os.sep)[0] != ".venv" and rel not in out:
             out.append(rel)
+    _ROOTS[k] = out
     return out
 
 
@@ -1253,6 +1279,8 @@ def _where(fn: Any) -> str | None:
 
 
 _TREES: dict[str, ast.Module | None] = {}
+#: `_defined_at` by the file's content digest and the line
+_DEFINED: dict[tuple[str, int], str] = {}
 
 
 def _defined_at(p: Path, line: int) -> str:
@@ -1260,6 +1288,12 @@ def _defined_at(p: Path, line: int) -> str:
     ``line`` (a decorated one at its first decorator), or the line itself when none does."""
     data = p.read_bytes()
     h = hashlib.sha512(data).hexdigest()
+    if (h, line) not in _DEFINED:
+        _DEFINED[h, line] = _defined_in(h, data, line)
+    return _DEFINED[h, line]
+
+
+def _defined_in(h: str, data: bytes, line: int) -> str:
     if h not in _TREES:
         try:
             _TREES[h] = ast.parse(data)
@@ -1580,27 +1614,73 @@ def _unit_at(spans: list, line: int) -> list[str]:
 # --- a target's reads -------------------------------------------------------------------------------------------------------
 
 _OUTSIDE: set[str] = set()
+_INTERPRETER: list[tuple[str, ...]] = []
 
 
 def _interpreter_dirs() -> tuple[str, ...]:
-    import sysconfig
+    if not _INTERPRETER:
+        import sysconfig
 
-    dirs = {sys.prefix, sys.base_prefix, sys.exec_prefix, sys.base_exec_prefix,
-            *(sysconfig.get_paths().get(k) for k in ("stdlib", "platstdlib", "purelib", "platlib"))}
-    return tuple({os.path.join(f(d), "") for d in dirs if d for f in (os.path.abspath, os.path.realpath)})
+        dirs = {sys.prefix, sys.base_prefix, sys.exec_prefix, sys.base_exec_prefix,
+                *(sysconfig.get_paths().get(k) for k in ("stdlib", "platstdlib", "purelib", "platlib"))}
+        _INTERPRETER.append(tuple({os.path.join(f(d), "") for d in dirs if d for f in (os.path.abspath, os.path.realpath)}))
+    return _INTERPRETER[0]
+
+
+#: the (name, file) of each module `_check_outside` has looked at, by what it counted as inside: a module's file stays put
+_LOOKED: dict[tuple[str, ...], set[tuple[str, str]]] = {}
+
+
+def _outside_modules() -> tuple[set[tuple[str, str]], list[tuple[str, Any]]]:
+    """The loaded modules from outside the tree and the interpreter's own directories, each (name, file) not looked at before,
+    and the set of those looked at, by what counts as inside."""
+    inside = (os.path.join(str(_ROOT[0]), ""), *_interpreter_dirs()) if _ROOT else ()
+    looked = _LOOKED.setdefault(inside, set())
+    out = []
+    for name, m in list(sys.modules.items()):
+        f = getattr(m, "__file__", None)
+        if isinstance(f, str) and (name, f) in looked:
+            continue
+        if not f or _rel(f) is not None or not inside or any(p.startswith(inside) for p in (os.path.abspath(f), os.path.realpath(f))):
+            if isinstance(f, str):
+                looked.add((name, f))
+            continue
+        out.append((name, f))
+    return looked, out
 
 
 def _check_outside() -> None:
     """A module imported from outside the tree and the interpreter's own directories (another tree's copy of a package, say) is a
     read no key can hold: the process's results after it are not stored (`untraced`)."""
-    inside = (os.path.join(str(_ROOT[0]), ""), *_interpreter_dirs()) if _ROOT else ()
-    for name, m in list(sys.modules.items()):
-        f = getattr(m, "__file__", None)
-        if not f or _rel(f) is not None:
-            continue
-        if inside and name not in _OUTSIDE and not any(p.startswith(inside) for p in (os.path.abspath(f), os.path.realpath(f))):
+    looked, out = _outside_modules()
+    for name, f in out:
+        if name not in _OUTSIDE:
             _OUTSIDE.add(name)
             _UNTRACED.append(f"imported {name} from {f}, outside the tree")
+        if isinstance(f, str):
+            looked.add((name, f))
+
+
+def warm() -> None:
+    """What `attributed` and `seen` work out alike in every process forked from this one, worked out here once, before the
+    forks: which loaded modules are inside the tree, their paths, each in-tree one's parse and top-level imports (`_parsed`,
+    `_top_imports`), the import path's entries in the tree and the installed distributions' packages.  Nothing it does is a
+    read, and a module outside the tree is still found, and its process's results not stored, in each process that looks."""
+    _INTERNAL.append(True)
+    try:
+        _outside_modules()
+        own = os.path.join(str(_HERE), "")
+        for name, m in list(sys.modules.items()):
+            if isinstance(f := getattr(m, "__file__", None), str) and _rel(a := _abspath(f)) is not None \
+                    and a.endswith(".py") and not a.startswith(own):
+                if os.path.isfile(a):
+                    _parsed(Path(a))
+                _top_imports(a, name)
+        _outside_tops()
+        if _ROOT:
+            _roots(_ROOT[0])
+    finally:
+        _INTERNAL.pop()
 
 
 _IMPORTS: dict[str, list[str]] = {}
@@ -1669,13 +1749,24 @@ def attributed(fr: Frame, units: Iterable[str] = (), roots: Iterable[Any] = (), 
         _INTERNAL.pop()
 
 
+_ABSPATHS: dict[str, str] = {}
+
+
+def _abspath(f: Any) -> str:
+    if not (isinstance(f, str) and f.startswith("/")):
+        return os.path.abspath(f)
+    if (a := _ABSPATHS.get(f)) is None:
+        a = _ABSPATHS[f] = os.path.abspath(f)
+    return a
+
+
 def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any], sidecars: bool) -> dict[str, list[str]]:
     _check_outside()
     by_file = {}
     for name, m in list(sys.modules.items()):
         f = getattr(m, "__file__", None)
         if f:
-            by_file.setdefault(os.path.abspath(f), name)
+            by_file.setdefault(_abspath(f), name)
     acc = Frame()
     acc.merge(fr)
     if not roots:                                      # a template, or a named target that doesn't resolve: its whole bindings
@@ -1933,15 +2024,20 @@ def key(request: dict) -> dict:
 
 
 _OWN: dict[int, tuple[Any, str]] = {}
+#: each specialization's distinct callees and statics, once: a body calls a few Definitions from many nodes, and every target's
+#: descriptor walks all it reaches
+_NEXT: dict[int, tuple[Any, bool, tuple[Any, ...]]] = {}
 
 
 def descriptor(fn: Any) -> str:
     """The digest of every primitive and specialization ``fn`` reaches (through body nodes and function statics), each by its
-    descriptor id and the digest of its canonical descriptor entry (`verity.ml.circuits.codec`): what the target is, whatever module or
-    path it was written in.  A by-calls root (`targets.is_by_calls`) is its own entry (`by_calls.entry`), without what its body
-    calls.  A body that cannot be built gives the error's type, so no stored entry matches."""
+    descriptor id and the digest of its canonical descriptor entry (`verity.ml.circuits.codec`), and of every reference, by its
+    id and statics: what the target is, whatever module or path it was written in.  A by-calls root (`targets.is_by_calls`) is
+    its own entry (`by_calls.entry`), without what its body calls.  A body that cannot be built gives the error's type, so no
+    stored entry matches."""
     from verity.ml.circuits import codec as C
     from verity.ml.circuits.defs import FunctionDefinition, PrimitiveDefinition, SpecializedDefinition
+    from verity.ml.circuits.evaluation import ScalarReference
 
     from . import by_calls as BC
     from . import targets as TG
@@ -1970,10 +2066,16 @@ def descriptor(fn: Any) -> str:
                         own = BC.entry(f) if by_calls else C.definition_entry(f)
                         e = _OWN[id(f)] = (f, hashlib.sha512(C.canonical_json(own)).hexdigest())
                     parts.append([C.descriptor_id(f), e[1]])
+                elif isinstance(f, ScalarReference):
+                    # one reference bound at two statics is two targets of one id (`targets.reachable` keeps the first)
+                    st = json.dumps(sorted(f.bindings.items()), default=repr)
+                    parts.append([f.id, hashlib.sha512(st.encode()).hexdigest()])
                 if isinstance(f, SpecializedDefinition):
-                    if not by_calls:
-                        stack.extend(n.fn for n in f.body.nodes)
-                    stack.extend(statics(f.bindings))
+                    nxt = _NEXT.get(id(f))
+                    if nxt is None or nxt[0] is not f or nxt[1] != by_calls:
+                        got = {id(g): g for g in [*(() if by_calls else (n.fn for n in f.body.nodes)), *statics(f.bindings)]}
+                        nxt = _NEXT[id(f)] = (f, by_calls, tuple(got.values()))
+                    stack.extend(nxt[2])
         except Exception as e:  # noqa: BLE001  (its check raises too, and an errored check is never stored)
             return f"error:{type(e).__name__}"
     return hashlib.sha512(json.dumps(sorted(parts)).encode()).hexdigest()
@@ -2356,4 +2458,4 @@ def store(cache: Path, k: dict, root: Path, got: dict[str, list[str]], report: d
 
 __all__ = ["PINS", "SCHEMA", "SUFFIX", "TARGETS", "UNTRACEABLE", "Frame", "attributed", "internal", "key", "lookup", "pin_files",
            "produced", "recorded_pins", "recording", "registries", "seen", "seen_all", "store", "task_list_reads", "trace", "tracing",
-           "unit_files", "unit_reads", "untraced", "version"]
+           "unit_files", "unit_reads", "untraced", "version", "warm"]

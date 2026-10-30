@@ -1361,6 +1361,62 @@ def test_a_zygote_forked_once_the_task_list_is_built_records_what_a_check_here_d
     assert out["hits"] == ["SynOther_v1"] and out["stats"]["stored"] == 1
 
 
+#: three members of a constructed family (`cli.CONSTRUCTED`), made by one constructor whose evaluator calls a module of its own,
+#: and a binding that makes them; the synthetic check evaluates a constant on no operand and says which process
+#: checked it
+CONSTS = {
+    "syn/cfam.py": """
+from verity.ml.circuits import Value
+from verity.ml.circuits.defs import PrimitiveDefinition
+
+from syn.cbits import widen
+
+
+def const(bits):
+    p = PrimitiveDefinition(f"SynC[0x{bits:x}]", 1, (), Value(16), lambda _b=bits: widen(_b), conformance="exact-model-tested")
+    p.family = "Const"
+    return p
+""",
+    "syn/cbits.py": "def widen(b):\n    return b & 0xFFFF\n",
+}
+CONST_IDS = [f"SynC[0x{b}]_v1" for b in (1, 2, 3)]
+
+
+def _with_consts(root: Path) -> Path:
+    for rel, text in CONSTS.items():
+        (root / rel).write_text(text.lstrip("\n"))
+    _edit(root, "syn/catalog.py", "BINDINGS = [", "def consts():\n    from syn import cfam\n    return [cfam.const(b) for b in (1, 2, 3)]\n\n\n"
+          'BINDINGS = [(("_model_roots:Spare_v1",), consts), ')
+    _edit(root, "syn/catalog.py", "FAMILIES = [", f"FAMILIES = [{', '.join(map(repr, CONST_IDS))}, ")
+    _edit(root, "syn/check.py", "evaluate(fn, 3, 0x0105)", "evaluate(fn, *(() if getattr(fn, 'family', None) else (3, 0x0105)))")
+    _edit(root, "syn/check.py", '"kind": reg.KINDS.get(fn.id)}', '"kind": reg.KINDS.get(fn.id), "pid": __import__("os").getpid()}')
+    return root
+
+
+def test_a_constructed_family_s_members_share_a_process_and_each_holds_what_it_would_alone(tmp_path):
+    """A `cli.CONSTRUCTED` family's members are checked in one process forked from the zygote (`cli._batched`), one after
+    another, as every target is checked in one process without ``--jobs``: each member's entry holds what it holds checked that
+    way, the constructor's evaluator module among them though only the first member's check imported it, so an edit to that
+    module reruns every member and nothing else."""
+    here, forked = _with_consts(_tree(tmp_path / "here")), _with_consts(_tree(tmp_path / "forked"))
+    assert _run(here)["hits"] == [] and _run(forked, FORKED)["hits"] == []
+
+    def held(root: Path, target: str) -> dict:
+        reads = _entry(root, target)["reads"]
+        return {**reads, "probes": {p: v for p, v in reads["probes"].items() if not p.startswith("cache/")}}
+
+    for target in CONST_IDS:
+        assert held(forked, target) == held(here, target) and {"syn.cfam", "syn.cbits"} <= set(held(forked, target)["modules"])
+        assert _values(forked, target) == _values(here, target) == [[int(target[7], 16)]]
+    pids = {t: _entry(forked, t)["report"]["pid"] for t in [*CONST_IDS, "SynOther_v1", "SynTop_v1"]}
+    assert len({pids[t] for t in CONST_IDS}) == 1 and len(set(pids.values())) == 3
+    assert _run(forked, FORKED)["hits"] == sorted([*CONST_IDS, "SynOther_v1", "SynTop_v1"])
+    _edit(forked, "syn/cbits.py", "b & 0xFFFF", "b & 0xFFFE")
+    out = _run(forked, FORKED)
+    assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["stored"] == 3
+    assert _values(forked, "SynC[0x1]_v1") == [[0], [1]]
+
+
 #: the harness with the checker a copy inside the tree (``checker/circuit_check``), as `src/circuit_check/` is inside the
 #: repository, whose scheduler's peaks the process has read before the checks (`cli.heavy`, as a run of the parallel path does)
 CHECKER = (HARNESS.replace("sys.path.insert(0, str(root))", "sys.path.insert(0, str(root))\nsys.path.insert(0, str(root / 'checker'))")
@@ -1417,3 +1473,57 @@ def test_the_checker_s_version_is_its_code_not_its_prose(tmp_path, monkeypatch):
     assert CC.version() == here
     data.write_text('{"a": 1}')
     assert CC.version() != here
+
+
+def _walked(fn) -> str:
+    """`cache.descriptor` as a walk of every body node and static, with no memo: what its memo must give."""
+    import hashlib
+
+    from verity.ml.circuits import codec as C
+    from verity.ml.circuits.defs import FunctionDefinition, PrimitiveDefinition, SpecializedDefinition
+
+    def statics(v):
+        if isinstance(v, FunctionDefinition):
+            yield v
+        elif isinstance(v, (list, tuple, dict)):
+            for x in v.values() if isinstance(v, dict) else v:
+                yield from statics(x)
+
+    parts, seen, stack = [], set(), [fn]
+    while stack:
+        f = stack.pop()
+        if id(f) in seen:
+            continue
+        seen.add(id(f))
+        if isinstance(f, (PrimitiveDefinition, SpecializedDefinition)):
+            parts.append([C.descriptor_id(f), hashlib.sha512(C.canonical_json(C.definition_entry(f))).hexdigest()])
+        if isinstance(f, SpecializedDefinition):
+            stack.extend(n.fn for n in f.body.nodes)
+            stack.extend(statics(f.bindings))
+    return hashlib.sha512(json.dumps(sorted(parts)).encode()).hexdigest()
+
+
+def test_a_descriptor_is_its_walk_of_every_body_node_however_often_a_body_calls_one_definition():
+    """`cache.descriptor` takes each specialization's distinct callees and statics once (`cache._NEXT`): every digest, first
+    and again, is the one a walk of every node gives, for a body that calls one Definition from many nodes, a function
+    static, and two specializations that share a callee."""
+    from verity.ml.circuits import Array, bind
+    from verity.ml.circuits.defs import CompositeDefinition
+    from verity.ml.circuits.ops.scalar import BIT, F32, F32Eq
+    from verity.ml.circuits.refs import tuple_of
+    from verity.ml.circuits.types import Tuple
+
+    from circuit_check import cache as CC
+
+    same = CompositeDefinition("DescSame", 1, (), lambda S: ((("a", F32), ("b", F32)), BIT),
+                               lambda B, S, a, b: B.call(F32Eq, a, b), register=False)
+    many = CompositeDefinition("DescMany", 1, ("N",), lambda S: ((("x", Array(S.N, F32)), ("y", Array(S.N, F32))),
+                                                                  Tuple(*[BIT] * S.N)),
+                               lambda B, S, x, y: tuple_of(*(B.call(bind(same), x[i], y[i]) for i in range(S.N))),
+                               register=False)
+    via = CompositeDefinition("DescVia", 1, ("OP",), lambda S: ((("a", F32), ("b", F32)), BIT),
+                              lambda B, S, a, b: B.call(S.OP, a, b), register=False)
+    roots = [bind(many, N=5), bind(many, N=2), bind(via, OP=bind(same)), bind(same), F32Eq]
+    first = [CC.descriptor(fn) for fn in roots]
+    assert first == [_walked(fn) for fn in roots] == [CC.descriptor(fn) for fn in roots]
+    assert len(set(first)) == len(roots) and not any(d.startswith("error:") for d in first)
