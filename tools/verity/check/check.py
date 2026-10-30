@@ -284,6 +284,21 @@ cores = COMMON.cores
 _sha256 = COMMON.sha256
 tracked_files = COMMON.tracked_files
 
+#: the room a check needs on its cache's disk: one Security build's trees there reach tens of GB, and a disk that fills fails
+#: the check hours in (`no space left on device`), where this refuses it before it starts
+CACHE_FREE_GB = 60
+
+
+def cache_room(free_gb: float = CACHE_FREE_GB) -> str | None:
+    """Why the check cache's disk can't take a check (under ``free_gb`` GB free), or None."""
+    d = cache_dir()
+    disk = next((p for p in (d, *d.parents) if p.exists()), Path("/"))
+    free = shutil.disk_usage(disk).free / 2**30
+    if free >= free_gb:
+        return None
+    return (f"check: the check cache {d} (on {disk.resolve()}) has {free:.0f} GB free, under {free_gb:.0f} GB: put it on a disk "
+            f"with room (ln -sT /workspace/research/cache/verity-check {d}, as vm_setup.sh does), or set CHECK_CACHE")
+
 
 ELAN = SUITES.ELAN
 
@@ -2262,6 +2277,9 @@ def main(argv: list[str]) -> int:
         return 2
     if argv[:1] == ["--combine"] and len(argv) > 1:
         return combine(argv[1:], Path(os.environ["RESEARCH_RUN_DIR"]) if os.environ.get("RESEARCH_RUN_DIR") else None)
+    if os.environ.get("RESEARCH_RUN_ID") and (short := cache_room()):
+        print(short, file=sys.stderr)
+        return 2
     cache = "--no-cache" not in argv
     circuit_cache = cache or "--circuit-cache" in argv
     keep_going = "--keep-going" in argv
