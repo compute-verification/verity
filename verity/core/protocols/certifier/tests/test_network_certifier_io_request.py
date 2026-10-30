@@ -295,9 +295,9 @@ def test_a_client_that_ends_after_its_last_byte_is_refused():
 
 
 def test_each_buckets_row_is_the_wardens_registered_row(link):
-    """The unit's row is the warden's registration v2 (`warden_rows`): bucket t's row is row t of the ingress record the
-    grid closed, the rows open the warden's root, the verifier's port (`bucket_port`) has unit t read row t, and the
-    host's registered read refuses rows out of place or edited."""
+    """The proof block's row is the warden's registration v2 (`warden_rows`): bucket t's row is row t of the ingress
+    record the grid closed, the rows open the warden's root, the verifier's port (`bucket_port`) has proof block t read
+    row t, and the host's registered read refuses rows out of place or edited."""
     assert len(link.records) == 2
     for w, record in enumerate(link.records):
         cells = WR.Cells.of("requests", Direction.INGRESS, record, PARAMS, hashlib.sha512(b"session").digest())
@@ -380,7 +380,7 @@ def test_redteam_phase6_cells_read_their_prompt_lengths():
     with 16. So the forged split's first request, 16 fields ending in one cell, is not in these cells.
 
     Slow (about 7 s, the served cell's ANDs traced and evaluated): the one test of the circuit on these cells
-    at the served cell size, which the reference's quick test reads in the clear and the unit's test reads at
+    at the served cell size, which the reference's quick test reads in the clear and the proof block's test reads at
     B = 512."""
     long_, short = (W.cells(r, 4096, q) for r, q in zip(_requests((400, 16), 4096), (1, 2)))
     cases = [(long_[:4096], 0, 1), (long_[4096:], Q.carries(400, 4096)[1][0], 1), (short, 0, 2)]

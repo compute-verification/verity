@@ -128,7 +128,7 @@ ADVISED = "NetworkAdvisedCounts_v1"
 TIE = "IoTieWindow"
 REQUEST_TIE = "IoTieRequest"
 #: the verifier's registered read of a warden cell at its position under the warden's signed root (`warden_rows.opens`,
-#: the Lean verifier's check of a unit's registered port)
+#: the Lean verifier's check of a proof block's registered port)
 WARDEN_READ = "Flock.Registered.checkPort"
 #: the part of the I/O tie (`TIE`) that refuses each negative it reads; None: one it must accept while its outputs are
 #: honest's (each one's step, batch row, request, index and bucket), which content refuses once the edit moves them
@@ -157,7 +157,7 @@ def copy_run(src: Path, dst: Path) -> Path:
 
 def write_certified(path: Path, records: dict[tuple[Direction, int], CertifiedRecord], refused: list) -> None:
     """`certified.jsonl` as `certifier_serve.CertifyingPublisher` writes it: one line per record, by window and end,
-    then the link-windows the signer refused."""
+    then the execution phases the signer refused."""
     lines = [cs.certified_json(records[k]) for k in sorted(records, key=lambda k: (k[1], k[0].code))]
     lines += [{"refused": r} for r in refused]
     path.write_text("".join(json.dumps(x) + "\n" for x in lines))
@@ -215,7 +215,7 @@ def cell_reads(WR, cells, k: int, row: bytes) -> bool:
 
 def warden_frame(run: Path, at: int | None = None) -> dict:
     """`frame` on a warden-serve run's own cells (`warden_rows`: `cells.jsonl`'s registrations and the
-    prover's `cells.salts`, the rows' salts and the wiring's): the first egress link-window with a data cell, its
+    prover's `cells.salts`, the rows' salts and the wiring's): the first egress execution phase with a data cell, its
     registration (v2) checked under the warden's key and the schedule, and its record's bucket rows and wiring
     committed under their salts to the registered head; then byte `at` of that cell (its first payload byte by
     default) changed in its bucket's row, and the row opened at its position. The honest row's read climbs to the
@@ -567,7 +567,8 @@ def advice_edit(edit: Callable) -> Callable[[Path, Path, Path], Path]:
 
 def wrong_token(commit: dict, step: int = 0, row: int = 0, vocab: int | None = None) -> dict:
     """The committed sampled id of `row` at `step` changed after the run (+1, mod `vocab` when given), the Commit's
-    registered root kept: its opening no longer reproduces the root, so the tie and the step unit each refuse it."""
+    registered root kept: its opening no longer reproduces the root, so the tie and the step proof block each refuse
+    it."""
     out = json.loads(json.dumps(commit))
     ids = out["steps"][step][SAMPLED]
     ids[row] = (ids[row] + 1) % vocab if vocab else ids[row] + 1
@@ -1123,7 +1124,7 @@ def _ends(advice, schedule) -> list[int]:
 
 def tie_shape(IT, advices, schedule, *, T: int, R: int | None = None, B: int = 256):
     """One shape for the tie of every advice in `advices` (the honest one and its tamperings), so that each reaches the
-    unit's parts: R (unless given) r slots for each of the most connections live in a bucket under the warden's
+    proof block's parts: R (unless given) r slots for each of the most connections live in a bucket under the warden's
     `schedule` (`tie_schedule`; a connection live from its admission to its `END`'s bucket), P its widest step's
     batch, S the most steps a bucket's outputs were sampled in, and DS the depth of a port over the longest session."""
     admitted, r = schedule
@@ -1143,7 +1144,7 @@ def tie_shape(IT, advices, schedule, *, T: int, R: int | None = None, B: int = 2
 
 def tie_port(IT, shape, advice, outputs, ids, seed: bytes = b"negatives"):
     """The Commit's port of the run of `advice`: a row a step of its session, its batch rows' sampled ids (a kept
-    output's id, 0 for a row that keeps none), empty rows to 2^DS steps, under fake salts (a prover draws fresh ones):
+    output's id, 0 for a row that keeps none), empty rows to 2^DS steps, under fake salts (a prover samples fresh ones):
     its rows, salts, tree levels and domain id."""
     got = {(o.step, o.row): x for o, x in zip(outputs, ids)}
     rows = [IT.port_row([got.get((s, j), 0) for j in range(len(advice.steps[s].rows))] if s < len(advice.steps) else [],
@@ -1335,7 +1336,7 @@ TIE_MISSING = {
     "commit": "the Commit's rows: the endpoint's sampled ids of the run's requests, by each id request's user (--ids), "
               "which the run doesn't keep (the shim drops `user` before it forwards a request)",
 }
-#: what the tie on a run takes in place of what the unit reads and the run doesn't keep
+#: what the tie on a run takes in place of what the proof block reads and the run doesn't keep
 TIE_STAND_INS = {
     "cells_root": "each window's frames held to its certified egress head (record v2's frames root, under its "
                   "certificate), then committed under fake salts in place of the warden's bucket rows",
@@ -1534,7 +1535,7 @@ def tie_runs(src: Path, ids: Path | None = None) -> dict:
 
 
 def n2(run: Path, clock=time.monotonic) -> dict:
-    """N2's verdict on every link-window of the run's `certified.jsonl`, through the proof system's stream as
+    """N2's verdict on every execution phase of the run's `certified.jsonl`, through the proof system's stream as
     `certifier_serve.check` takes it (Selection All, the Lean audit, `unproved_outcome`: nothing is proved, so the
     verdict reads the opening) without asking the certifier's salts, and the link's network verdict; each refused
     link-window's codes (`codes`), and their union. The link stops at the first window without both certified records,
@@ -1568,7 +1569,7 @@ def n2(run: Path, clock=time.monotonic) -> dict:
 
 def judge(name: str, verdict: dict) -> dict:
     """Whether `verdict` (`n2`'s on the negative's run) refuses negative `name` by its code: the network verdict
-    rejects and a refused link-window's codes include the code the negative names on the run's profile."""
+    rejects and a refused execution phase's codes include the code the negative names on the run's profile."""
     n = NEGATIVES[name]
     code = n.code_on(verdict.get("profile"))
     return {"negative": name, "code": code, "refused": not verdict["accepted"],
@@ -1581,7 +1582,7 @@ def suite(runs: dict[str, Path], work: Path, *, advice: Path | None = None, comm
     """Every negative's row for the one command's report, from a rehearsal's runs by strategy (`runs`, which must hold
     honest): a shim negative is its own run (`rehearse --strategies`), any other is made from honest's under `work`.
     A row says what the negative tampers, the check and code it names and what it waits on; whether it ran, and if so
-    N2's verdict, its refused link-windows and their codes, and `ok`: refused by its code; for a shim negative whose
+    N2's verdict, its refused execution phases and their codes, and `ok`: refused by its code; for a shim negative whose
     check is pending (token), N2's accepting it, since only that check may refuse it; else None. An advice negative's
     verdict is `advice_run`'s, `advised`'s codes on the heads an honest run of `advice` certifies (`honest_codes`
     theirs on the honest advice), since the certified records don't change with it; `ok` needs the honest advice
@@ -1653,7 +1654,7 @@ def main(argv=None) -> int:
     m.add_argument("--advice", type=Path, help="the run's advice (I1's encode bytes)")
     m.add_argument("--commit", type=Path, help="the run's Commit record (I3)")
     m.add_argument("--out", required=True, type=Path)
-    x = sub.add_parser("n2", help="N2's verdict of record on a run, with the refused link-windows' codes")
+    x = sub.add_parser("n2", help="N2's verdict of record on a run, with the refused execution phases' codes")
     j = sub.add_parser("judge", help="whether N2 refuses a negative's run by the code it names")
     j.add_argument("name", choices=list(NEGATIVES))
     w = sub.add_parser("warden", help="frame on a warden-serve run's own cells, by the verifier's registered read")
