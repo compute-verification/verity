@@ -49,7 +49,7 @@ def _honest(rng, n, fams):
             cut = rng.randrange(Z.KU + 1) * S.U
             toks = fams[rng.randrange(len(fams))][:cut] + [rng.randrange(2) for _ in range(S.L - cut)]
             K = rng.randrange(1, S.L + 1)
-            op = C2.Op(slot=s, r=r, units=tuple(tuple(toks[i * S.U:(i + 1) * S.U]) for i in range(Z.KU)), admit=True,
+            op = C2.CallInputs(slot=s, r=r, units=tuple(tuple(toks[i * S.U:(i + 1) * S.U]) for i in range(Z.KU)), admit=True,
                        take=rng.random() < .8, K=K)
             (wh, ev), = _derived(pool, op)
             op = replace(op, wh=wh, ev=ev)
@@ -64,7 +64,7 @@ def _honest(rng, n, fams):
             want = rng.randrange(done, full + 1) if full >= done else done
             need = max(-(-min(K, want * S.U + rng.randrange(S.U)) // S.U) - blocks, 0)
             new = min(need, pool.hf + len(_queued(pool)))
-            op = C2.Op(slot=s, r=r, units=tuple(tuple(toks[i * S.U:(i + 1) * S.U]) for i in range(done, Z.KU)),
+            op = C2.CallInputs(slot=s, r=r, units=tuple(tuple(toks[i * S.U:(i + 1) * S.U]) for i in range(done, Z.KU)),
                        nins=want - done, new=new, tau=_threshold(pool, new))
             out = C2.reference(S, pool, op)
             calls.append((pool, op))
@@ -74,7 +74,7 @@ def _honest(rng, n, fams):
             s = rng.choice(sorted(held))
             _r, _toks, _K, done, blocks = held[s]
             only = sum(1 for x in pool.table if x for c in x.copies if c.mask == 1 << s)
-            op = C2.Op(slot=s, free=True, held=max(blocks, done), ret=only + max(blocks, done) - done)
+            op = C2.CallInputs(slot=s, free=True, held=max(blocks, done), ret=only + max(blocks, done) - done)
             out = C2.reference(S, pool, op)
             calls.append((pool, op))
             if out.ok:
@@ -140,7 +140,7 @@ def test_a_lookup_derives_its_hit_and_evictable_count() -> None:
     for pool, _ in calls:
         toks = fams[rng.randrange(3)][:rng.randrange(Z.KU + 1) * S.U]
         toks += [rng.randrange(2) for _ in range(S.L - len(toks))]
-        op = C2.Op(slot=rng.randrange(S.R), r=1, units=tuple(tuple(toks[i * S.U:(i + 1) * S.U]) for i in range(Z.KU)),
+        op = C2.CallInputs(slot=rng.randrange(S.R), r=1, units=tuple(tuple(toks[i * S.U:(i + 1) * S.U]) for i in range(Z.KU)),
                    admit=True, K=rng.randrange(1, S.L + 1))
         index = {(x.parent, x.tokens): (i, x) for i, x in enumerate(pool.table) if x}
         pfx, wh, ev = S.N, 0, 0
@@ -200,39 +200,42 @@ def test_refusals() -> None:
                    (KU - 1,) + (N,) * (S.R - 1), 1, 0)
     holed = replace(full, table=full.table[:-1] + (None,))
     orphan = C2.Pool((_entry(N, u[0], 1, (0, 1)), _entry(0, u[1], 2, (0, 2))) + (None,) * (N - 2), (N,) * S.R, 0, 3)
-    look = C2.Op(slot=1, r=1, units=u, admit=True, K=S.L)
+    look = C2.CallInputs(slot=1, r=1, units=u, admit=True, K=S.L)
     pairs = [  # (what, refused (pool, op), accepted (pool, op))
-        ("a take without admit", (e0, C2.Op(take=True)), (e0, C2.Op())),
-        ("an admit that frees", (e0, C2.Op(admit=True, free=True, K=1)), (e0, C2.Op(admit=True, K=1))),
+        ("a take without admit", (e0, C2.CallInputs(take=True)), (e0, C2.CallInputs())),
+        ("an admit that frees", (e0, C2.CallInputs(admit=True, free=True, K=1)), (e0, C2.CallInputs(admit=True, K=1))),
         ("new blocks on a lookup", (e0, replace(look, new=1)), (e0, look)),
         ("blocks held off a free", (e0, replace(look, held=1)), (e0, look)),
         ("returns off a free", (e0, replace(look, ret=1)), (e0, look)),
         ("a hit past the window", (e0, replace(look, wh=KU + 1)), (e0, look)),
-        ("units cached past the window", (e0, C2.Op(units=u, nins=KU + 1)), (e0, C2.Op(units=u, nins=KU))),
+        ("units cached past the window", (e0, C2.CallInputs(units=u, nins=KU + 1)), (e0, C2.CallInputs(units=u, nins=KU))),
         ("a slot past R", (e0, replace(look, slot=S.R)), (e0, look)),
         ("a take on a slot that holds blocks", (chain(1), replace(look, slot=0, take=True, wh=1)),
          (chain(1), replace(look, take=True, wh=1))),
         ("an entry's copy past D", (C2.Pool((_entry(N, u[0], 1, (1, 0), (2, 0)),) + (None,) * (N - 1), (N,) * S.R, 3, 0),
-                                    C2.Op(slot=2, units=u, nins=1, new=1)),
-         (chain(1), C2.Op(slot=2, units=u, nins=1, new=1))),
-        ("a new entry in a full table", (full, C2.Op(slot=2, units=w, nins=1, new=1)),
-         (holed, C2.Op(slot=2, units=w, nins=1, new=1))),
-        ("a new entry past level KU", (holed, C2.Op(slot=0, units=w, nins=1, new=1)),
-         (replace(holed, spfx=(KU - 2,) + full.spfx[1:]), C2.Op(slot=0, units=w, nins=1, new=1))),
-        ("hf past NB − 1", (e0, C2.Op(free=True, held=1, ret=1)), (replace(e0, hf=S.NB - 2), C2.Op(free=True, held=1, ret=1))),
-        ("a clock past its width", (replace(e0, clock=(1 << S.SW) - KU), C2.Op(free=True)),
-         (replace(e0, clock=(1 << S.SW) - KU - 1), C2.Op(free=True))),
-        ("an eviction that orphans an entry", (orphan, C2.Op(slot=2, new=1, tau=1)),
+                                    C2.CallInputs(slot=2, units=u, nins=1, new=1)),
+         (chain(1), C2.CallInputs(slot=2, units=u, nins=1, new=1))),
+        ("a new entry in a full table", (full, C2.CallInputs(slot=2, units=w, nins=1, new=1)),
+         (holed, C2.CallInputs(slot=2, units=w, nins=1, new=1))),
+        ("a new entry past level KU", (holed, C2.CallInputs(slot=0, units=w, nins=1, new=1)),
+         (replace(holed, spfx=(KU - 2,) + full.spfx[1:]), C2.CallInputs(slot=0, units=w, nins=1, new=1))),
+        ("hf past NB − 1", (e0, C2.CallInputs(free=True, held=1, ret=1)),
+         (replace(e0, hf=S.NB - 2), C2.CallInputs(free=True, held=1, ret=1))),
+        ("a clock past its width", (replace(e0, clock=(1 << S.SW) - KU), C2.CallInputs(free=True)),
+         (replace(e0, clock=(1 << S.SW) - KU - 1), C2.CallInputs(free=True))),
+        ("an eviction that orphans an entry", (orphan, C2.CallInputs(slot=2, new=1, tau=1)),
          (replace(orphan, table=(_entry(N, u[0], 1, (0, 2)), _entry(0, u[1], 2, (0, 1))) + orphan.table[2:]),
-          C2.Op(slot=2, new=1, tau=1))),
-        ("more evicted than queued", (two_q, C2.Op(slot=2, new=7, tau=1)), (two_q, C2.Op(slot=2, new=6, tau=1))),
-        ("a threshold with nothing to evict", (two_q, C2.Op(slot=2, new=4, tau=1)), (two_q, C2.Op(slot=2, new=4))),
+          C2.CallInputs(slot=2, new=1, tau=1))),
+        ("more evicted than queued", (two_q, C2.CallInputs(slot=2, new=7, tau=1)),
+         (two_q, C2.CallInputs(slot=2, new=6, tau=1))),
+        ("a threshold with nothing to evict", (two_q, C2.CallInputs(slot=2, new=4, tau=1)),
+         (two_q, C2.CallInputs(slot=2, new=4))),
         ("a hit unit past the lookup's cap", (two_q, replace(look, K=2 * U, wh=2, ev=2)),
          (two_q, replace(look, K=2 * U + 1, wh=2, ev=2))),
         ("a hit shorter than the cached prefix", (two_q, replace(look, wh=1, ev=1)), (two_q, replace(look, wh=2, ev=2))),
         ("a wrong evictable count", (two_q, replace(look, wh=2, ev=1)), (two_q, replace(look, wh=2, ev=2))),
-        ("a free holding fewer blocks than its copies", (chain(2), C2.Op(slot=0, free=True, held=1, ret=1)),
-         (chain(2), C2.Op(slot=0, free=True, held=2, ret=2))),
+        ("a free holding fewer blocks than its copies", (chain(2), C2.CallInputs(slot=0, free=True, held=1, ret=1)),
+         (chain(2), C2.CallInputs(slot=0, free=True, held=2, ret=2))),
     ]
     for what, bad, good in pairs:
         assert not C2.reference(S, *bad).ok, what
@@ -248,10 +251,10 @@ def test_a_free_stamps_its_copies_deepest_first_after_every_queued_one() -> None
     u = tuple((k % 3, 1, 2, k % 2) for k in range(Z.KU))
     pool = C2.Pool(tuple(_entry(N if e == 0 else e - 1, u[e], e + 1, (1, 0)) for e in range(3)) + (None,) * (N - 3),
                    (2,) + (N,) * (S.R - 1), 3, 10)
-    out = C2.reference(S, pool, C2.Op(slot=0, free=True, held=4, ret=4))
+    out = C2.reference(S, pool, C2.CallInputs(slot=0, free=True, held=4, ret=4))
     assert [x.copies[0] for x in out.pool.table[:3]] == [C2.Copy(0, 10 + Z.KU - lv) for lv in (1, 2, 3)]
     assert (out.pool.clock, out.pool.hf, out.pool.spfx[0]) == (10 + Z.KU, 4, N)
-    evict = C2.reference(S, out.pool, C2.Op(slot=1, new=5, tau=10 + Z.KU - 3))
+    evict = C2.reference(S, out.pool, C2.CallInputs(slot=1, new=5, tau=10 + Z.KU - 3))
     assert [x is None for x in evict.pool.table[:3]] == [False, False, True]
 
 
@@ -277,7 +280,7 @@ def test_the_difftest_vectors(name) -> None:
         f = {k: (bool(v) if k in ("admit", "take", "free") else v) for k, v in zip(_FIELDS, row)}
         ts = list(sl["tokens"][str(f["r"])][:known][u0 * T.U:(u0 + KU) * T.U]) if known else []
         ts += [0] * (KU * T.U - len(ts))
-        return C2.Op(**f, units=tuple(tuple(ts[k * T.U:(k + 1) * T.U]) for k in range(KU)) if known else ())
+        return C2.CallInputs(**f, units=tuple(tuple(ts[k * T.U:(k + 1) * T.U]) for k in range(KU)) if known else ())
 
     pool, cases, refused = C2.empty(T), [], set()
     for k, (kind, row, u0, known, bad) in enumerate(sl["calls"]):
