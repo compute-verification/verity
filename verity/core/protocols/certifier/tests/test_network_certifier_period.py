@@ -1,8 +1,8 @@
-"""N2's period draw (`LinkWindows.period_draw`) and the sampled network verdict (`network_verdict(drawn=…)`): the
-period's salted roots committed before any coin is read, K of its link-windows drawn, only those registered and proved,
-the sample of record the Lean verifier's on the coins the sample read (`lean_draw`, stood in here by the sampler
+"""N2's period sample (`LinkWindows.period_draw`) and the sampled network verdict (`network_verdict(drawn=…)`): the
+period's salted roots committed before any coin is read, K of its execution phases sampled, only those registered and
+proved, the sample of record the Lean verifier's on the coins the sample read (`lean_draw`, stood in here by the sampler
 `coins.OwnRandomness` that `test_coins` holds byte for byte to Lean's `Flock.Draw.drawOn`), and what the sample
-established stated as wrong units at δ."""
+established stated as faulty proof blocks at δ."""
 from __future__ import annotations
 
 import itertools
@@ -66,7 +66,7 @@ def roots(run: Run, openings: dict) -> list[str]:
 
 
 def prove(run: Run, drawn: dict, openings: dict, windows=None) -> list[S.Outcome]:
-    """The drawn windows (or `windows`) registered under the period draw, in order, and each decided on a proof."""
+    """The sampled windows (or `windows`) registered under the period sample, in order, and each decided on a proof."""
     out = []
     for w in drawn["units"] if windows is None else windows:
         reg = run.lw.register(run.stream, run.lw.registration(openings[w], run.previous), drawn)
@@ -140,8 +140,8 @@ def _other(drawn: dict, n: int = 3) -> list[int]:
 @pytest.mark.parametrize("k", [1, 2])
 def test_a_prover_that_proves_another_k_subset_is_refused_by_name(tmp_path, k):
     """The prover registers and proves K windows the sample didn't hold, every one accepted, under a sample object listing
-    them (the period's own coins and commitment, which hold): the verdict draws its own with the Lean on those coins and
-    refuses the link by name, `period-draw`, whether it is handed the prover's object or the challenger's."""
+    them (the period's own coins and commitment, which hold): the verdict samples its own with the Lean on those coins
+    and refuses the link by name, `period-draw`, whether it is handed the prover's object or the challenger's."""
     run = Run(tmp_path)
     openings = committed(run)
     drawn = run.lw.period_draw(run.stream, roots(run, openings), k, Coins())
