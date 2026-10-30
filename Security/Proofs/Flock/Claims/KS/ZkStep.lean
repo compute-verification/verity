@@ -204,7 +204,7 @@ theorem zk_check_true {b : Bool} {why : String} {u : Unit} (h : Record.check b w
   · cases h
 
 /-- **The verifier's decoder reads only rounds of `1` to `65536` coins** (S12). -/
-theorem zk_decodeWith_n (hs : Hashes Flock.V) {spec : SessionSpec} {text : String} {sess : Session}
+theorem zk_decodeWith_n (hs : Hashes Flock.V) {spec : SessionSpec} {text : String} {sess : RunRecord}
     (h : Record.decodeWith hs spec text = .ok sess) :
     ∀ x ∈ sess.streams.toList, ∀ rd ∈ x.rounds.toList, 1 ≤ rd.n ∧ rd.n ≤ 65536 := by
   unfold Record.decodeWith Record.decodeJWith at h
