@@ -1,7 +1,7 @@
 # The network certificate check's port (`lean/`, `network-check serve`) against `audit.py`: a suite of `verity`'s tests,
 # run in the workspace's environment against the editable `verity`, after `check`'s Lean steps (`AFTER_LEAN`), since it
 # skips without `lake`. `lake` builds `lean/` and, through its path requires, the core protocol interface, the certifier
-# program, the LMS port and C-Flock's verifier, all under `verity/`.
+# program, the LMS port and Flock's verifier, all under `verity/`.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]

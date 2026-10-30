@@ -45,7 +45,7 @@ rows o' + 8 (c >> 1) + (c & 1) of B's leaf, o' = 32 (wn % 2) + 2 q (8 offsets).
 Each has a Boolean twin (``_v2``, traced from a `forms` builder, word view its ``_v1``). The segment dots' twins
 (`PouwSegDot_v2`, and `PouwSegDot0_v2` from 0 below) are bound to the wrapping s8 IMMA coordinate they compute
 (`census.silicon_step`), so census/v1 counts their gates as `tc:int8`, and serve none of their products (`census.serves_none`:
-Lean's `Accounting.Gates.roleOf` puts an H1 tile's lanes at `Site.other`). The spot check of one thread at segment j is
+Lean's `Accounting.Gates.roleOf` puts an H1 tile's lanes at `Place.other`). The spot check of one thread at segment j is
 
     PouwSegCheck_v2{S, FOLD}  (a: Array<64, Array<32, i8>>, asel: Array<16, bit>, u: Array<4, Array<32, i8>>,
                                b: Array<64, Array<32, i8>>, bsel: Array<8, bit>, f: Array<8, Array<32, bit>>,
@@ -58,7 +58,7 @@ dither's) bits for those rows, the window's S + 1 absorbed prefix-word sets (wit
 the one-hot position of j in its window (its first S bits; JW = `jsel_bits`(S), the rest zero), and whether the window is
 the first. It computes T_j = T_(j-1) + A'_j B'_j^T entry by entry from p's set at j's position, folds the window, and returns 1 exactly when the fold is the leaf's word, T_j is p's next
 set, and in the first window the incoming set is 0. A statement holds ``a``, ``b`` and ``rc`` to the trees committed before
-and after the coin, recomputes ``u``, ``f``, ``st`` and the selections from the coin and the draw, and reads the result
+and after the coin, recomputes ``u``, ``f``, ``st`` and the selections from the coin and the sample, and reads the result
 through a row of known content.
 
     PouwSegCheckDither_v2{S, FOLD}   the same with decision 29's dither on the served side: B' = B + d (`PouwI8AddBit_v2`),
@@ -120,7 +120,7 @@ of rc are the checkpoint after set s for every s < KS + m. The checkpoint is a s
 binding proved without FOLD-R's whole-state assumption is a set's 4 words a chain.
 
 A statement holds the operand leaves and ``rc`` to the trees committed before and after the coin, and recomputes the
-noise, keys and selections from the coin and the draw.
+noise, keys and selections from the coin and the sample.
 """
 from __future__ import annotations
 

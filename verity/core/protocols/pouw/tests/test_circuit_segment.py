@@ -287,7 +287,7 @@ def test_the_served_receipt_is_not_injective_at_a_state():
 
 def test_segment_dots_are_unserved_int8_tensor_core_steps():
     """census/v1 reads the segment dots on bits as the wrapping s8 IMMA coordinate's k32: their gates are `tc:int8`, and they
-    perform their 32 products each and serve none (Lean's `Accounting.Gates.roleOf` puts an H1 tile's lanes at `Site.other`)."""
+    perform their 32 products each and serve none (Lean's `Accounting.Gates.roleOf` puts an H1 tile's lanes at `Place.other`)."""
     A = Array(32, SG.I8)
     lanes = CompositeDefinition("SegTestLanes", 1, (), lambda S: ((("a", A), ("b", A)), SG.U32),
                                 lambda B, S, a, b: B.call(SG.PouwSegDot, B.call(SG.PouwSegDot0, a, b), a, b),
@@ -302,7 +302,7 @@ def test_segment_dots_are_unserved_int8_tensor_core_steps():
 
 
 def test_call_words_take_no_witness():
-    """Every port of the new checks is committed, the coin's or the draw's: none carries a prefix word."""
+    """Every port of the new checks is committed, the coin's or the sample's: none carries a prefix word."""
     committed, coin, draw = {"a", "b", "x", "w", "rc"}, {"u", "f", "c", "z", "st"}, {"asel", "bsel", "xsel", "wsel", "rsel"}
     for d in (bind(SG.PouwSegCheckV3, KS=2, S=1, FOLD="duo"), bind(SG.PouwCallCheck, KS=2, FOLD="fx1", OUT="state"),
               bind(SG.PouwWarpCheck, KS=2, NL=1), bind(SG.PouwWarpCheckV2, KS=2, NL=1, FOLD="duo")):

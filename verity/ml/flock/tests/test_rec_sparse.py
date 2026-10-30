@@ -1,5 +1,5 @@
-"""`verity_flock.rec_sparse`, V*'s sparse phase (F4 candidate 3): an honest prover written from the design note (§1.3 and §5.4
-"10 Oct, 10:00Z") runs a rep of a session of S slots of hidden types over a stacked table of T random templates, from the
+"""`verity_flock.rec_sparse`, V*'s sparse phase (the opening-only candidate): an honest prover written from its design
+runs a rep of a session of S slots of hidden types over a stacked table of T random templates, from the
 hidden matrix's comb to the registered claim, and the reference accepts it; a forged round message, a wrong registered
 claim, a slot's type swapped for another and a type outside the bucket are refused; the Definition computes the reference
 bit for bit, honest and forged; and its ANDs are the products' 2,187 each and the selects'."""
@@ -149,7 +149,7 @@ def session(sh: RS.Shape, seed: int = 0, inner: dict | None = None, tau: list[in
     eqk, eqp = eq_table(r_k), eq_table(zeta_p)
     vt = [RS._dot(eqp, [_xor(e for e, bit in zip(eqk, P[p]) if bit) for p in range(sh.PP)]) for P in tables]
     rho = [g.getrandbits(128) for _ in range(sh.T_LOG)]
-    coins = RS.Coins(alpha, z, tuple(rho_in), tuple(t_top), tuple(zeta_c), tuple(zeta_r), tuple(rounds), tuple(zeta_p),
+    coins = RS.SparsePublics(alpha, z, tuple(rho_in), tuple(t_top), tuple(zeta_c), tuple(zeta_r), tuple(rounds), tuple(zeta_p),
                      tuple(rho), tuple(U))
     msgs = {"h": h, "pre": pre, "v2": v2, "sc": sc, "u": u, "vt": vt, "claim": _mle(vt, rho), "tau": tau}
     if not sh.stacked:
@@ -276,13 +276,13 @@ def test_y_rest_is_the_inner_column_point_in_bit_order():
     sh, inner = RS.Shape(2, 8, 1, 1), A.Shape(22, 10, 2)
     rounds = _inner_rounds(inner)
     pts = RS.inner_points(inner, rounds)
-    info = A.run(inner, A.Coins(rounds), A.symbolic(inner), A._extras_like(inner))[1]
+    info = A.run(inner, A.CoinSource(rounds), A.symbolic(inner), A._extras_like(inner))[1]
     ts = info["fold"]["ts"]
     assert pts["y_rest"] == info["claims"][0].x[:inner.k_log - 6] == tuple(ts[::-1]) != tuple(ts)
     assert pts["x_rest"] == tuple(info["fold"]["rho_in"]) and pts["alpha"] == info["fold"]["alpha"] and pts["z"] == info["z"]
     coins, msgs, _ = session(sh, 0, inner=pts)
     assert _ref(sh, msgs, RS.verifier_row(sh, coins)) == [0] * RS.out_words(sh)
-    rounds_order = RS.Coins(**{**coins.__dict__, "y_rest": tuple(ts)})
+    rounds_order = RS.SparsePublics(**{**coins.__dict__, "y_rest": tuple(ts)})
     assert "h3" in _hits(sh, _ref(sh, msgs, RS.verifier_row(sh, rounds_order)))
 
 
@@ -323,7 +323,7 @@ def test_the_registered_claim_is_a_row_at_the_coins_point_never_a_public_extra_c
     assert (rc.row, rc.port, rc.value) == (1, "claim", None)
     inner = A.Shape(22, 10, 3)
     with pytest.raises(TypeError, match="registered claim"):
-        A.run(inner, A.Coins(_inner_rounds(A.Shape(22, 10, 3))), A.symbolic(inner), [rc])
+        A.run(inner, A.CoinSource(_inner_rounds(A.Shape(22, 10, 3))), A.symbolic(inner), [rc])
 
 
 def test_h_is_the_inner_sessions_h_round_read_at_row_r():
@@ -354,7 +354,7 @@ def _cases(sh: RS.Shape, seed: int = 0) -> list[dict]:
 @pytest.mark.slow
 @pytest.mark.parametrize("sh", [RS.Shape(2, 6, 1, 1), RS.Shape(1, 6, 2, 0), RS.Shape(2, 6, 0, 1)], ids=str)
 def test_the_unit_is_the_definitions_ands_and_computes_the_reference(sh):
-    """The M0 unit (through its layout, what C-Flock proves) on an honest rep, each forgery and random words equals the reference;
+    """The M0 unit (through its layout, what Flock proves) on an honest rep, each forgery and random words equals the reference;
     its inputs are the ports' bits, and its ANDs are the Definition's (`ands`: 2,187 a product and the selects) and
     `copy_rows`' rows of ``B = 1`` (the leaf sums and the committed operands; one stacked slot's all-ones ``w_t`` is one AND)."""
     from verity.ml.circuits.boolean.forms import ONE
@@ -395,7 +395,7 @@ def test_a_sessions_statement_reads_tau_at_row_0_and_every_other_port_at_row_r(t
     at row 0 of its one row in both instances and every other port at row r; ``v`` is the verifier's own and ``out`` its zero
     rows. Both instances hold and the unit agrees with the reference; with rep 1's first H3 round forged (the prover's
     registration of another row), rep 1 alone fails at H3. When Lean is built, its `statement` accepts the honest files, and
-    refuses the forged prover's row against the verifier's own entry of the row the firewall committed (one salt each)."""
+    refuses the forged prover's row against the verifier's own entry of the row the ZK server committed (one salt each)."""
     from verity.ml.commitments import hm96
 
     sh = RS.Shape(2, 6, 1, 1)
@@ -475,7 +475,7 @@ def _draws(seed: int):
 
 
 def test_the_prover_at_t1_is_accepted_and_its_claim_is_rs_value():
-    """On a hidden circuit's entries, h as the relay folds it, and coins drawn a round at a time: the reference accepts the
+    """On a hidden circuit's entries, h as the relay folds it, and coins flipped a round at a time: the reference accepts the
     rep; the rounds are h's 6 coins, H2's 6 pairs, v2 alone (no coins), H3's NU + S_LOG, u's P_LOG and the claim alone (no
     coins), the claim it sends; the registered claim is R's value at the coins' point, with R padded to 2^16 cells and the point with zeros; the entries' cell held in both A and
     B is one entry, the one held twice in A none."""

@@ -15,8 +15,8 @@ then zero words.
   commits them (`rec_live.message_rows`). The verifier registers the round's two ``c_k`` (rep 0's, rep 1's) as the value
   ``rec-c<i>`` from the inner session's public record alone (`commits_entry`: a registered value's tree over the given
   ``b || c``), and instance r reads row r: the prover opens the row it committed in the inner session under its salt, so
-  each message is the one the coins after it were drawn against. A holo shape's h round (`rec_algebra.h_round`) is one of
-  them, absorbed after z_partial and before r′ and ζ_c are drawn: the one registered value both this statement (L4′, h an XOR
+  each message is the one the coins after it were sampled against. A holo shape's h round (`rec_algebra.h_round`) is one of
+  them, absorbed after z_partial and before r′ and ζ_c are sampled: the one registered value both this statement (L4′, h an XOR
   term of the comb's operand, no product of its own) and `rec_sparse.RecSparse`'s ``h`` (H1) read at row r.
 * ``acc0``, ``acc1``: the rep's running sums before its first opening and after its last (two F elements, then the 48 words
   `rec_open` carries): rows of the prover's ``rec-acc`` registration, which the opening statements read too
@@ -96,7 +96,7 @@ MAX_SLOTS = 160
 # grow), so the parts of a shape whose residuals each fit MAX_SLOTS are unchanged, and the bound reaches only residuals
 # MAX_SLOTS refuses. The widest, the batched T, reads 172 slots at 16 claims (llama32-1b/b1/i256's 2^29 bucket), 194 at 18
 # and 215 at 20, beside hm96's 2^23 (32 slots of 2^18), a 2^23 unit (32) and the mask (one): 191 fill a 2^26 block, so past
-# it a lone part's block is 2^27 = circuit.K_MAX, which holds 447 (runs r20261010-212155-f5ab, r20261010-223054-2894: 172 at
+# it a lone part's block is 2^27 = circuit.K_MAX, which holds 447 (172 at
 # k_log 26, 194 to 215 at 27). 21 claims' 226 refuse
 MAX_LONE_SLOTS = 223
 
