@@ -2258,6 +2258,54 @@
    "assumptions": [],
    "type_hash": "64c07fa7fcc1d56eab150448fadaa807e4fa0e131405d72cb77939aa6598c9df"
   },
+  "Properties.NetworkCertifier.forwardsNoControlWhileOpen": {
+   "owner": "@network-accounting",
+   "signature": [
+    "Properties.NetworkCertifier.forwardsNoControlWhileOpen : Properties.NetworkCertifier.ForwardsNoControlWhileOpen"
+   ],
+   "assumptions": [],
+   "type_hash": "cad3e2734cabf21b9dc0f55fddf17b64d2a4a561b3e0c3f09e277d5d94219d55"
+  },
+  "Properties.NetworkCertifier.forwardsNoControlWhileOpen_honest": {
+   "owner": "@network-accounting",
+   "signature": [
+    "Properties.NetworkCertifier.forwardsNoControlWhileOpen_honest :",
+    "  Eq",
+    "    (List.instGetElem?NatLtLength.getElem?",
+    "      (Properties.NetworkCertifier.closedEvents.zip",
+    "        (NetworkCertifier.Calls.run Properties.NetworkCertifier.witnessCap Properties.NetworkCertifier.honestReleaseBits",
+    "            (NetworkCertifier.Calls.State.init Properties.NetworkCertifier.honestEntropy)",
+    "            Properties.NetworkCertifier.closedEvents).fst)",
+    "      3)",
+    "    (Option.some",
+    "      { fst := NetworkCertifier.Calls.Event.close,",
+    "        snd :=",
+    "          NetworkCertifier.Calls.CallAnswer.record",
+    "            (List.cons",
+    "              { id := 0,",
+    "                calls :=",
+    "                  List.cons",
+    "                    { id := 0, shape := Properties.NetworkCertifier.witnessShape,",
+    "                      aRoot := Properties.NetworkCertifier.witnessRoot }",
+    "                    List.nil,",
+    "                wordsRoot := Option.some Properties.NetworkCertifier.witnessRoot,",
+    "                verdict := NetworkCertifier.Calls.ForwardVerdict.accepted }",
+    "              List.nil) })"
+   ],
+   "assumptions": [],
+   "type_hash": "68b0ce987c6c30ef2e81a116a9715ce4babad1fd901460ec18312ac112b56f8f"
+  },
+  "Properties.NetworkCertifier.forwardsNoControlWhileOpen_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [
+    "Properties.NetworkCertifier.forwardsNoControlWhileOpen_nontrivial :",
+    "  Not",
+    "    (Properties.NetworkCertifier.NoControlWhileOpen",
+    "      (Properties.NetworkCertifier.forwardsAll Properties.NetworkCertifier.honestEvents))"
+   ],
+   "assumptions": [],
+   "type_hash": "550687874c242e036d550695086b0277350a534f0ed1066668d1da0e966e5caa"
+  },
   "Properties.NetworkCertifier.linkWindowAcceptMeans": {
    "owner": "@network-accounting",
    "signature": ["Properties.NetworkCertifier.linkWindowAcceptMeans : Properties.NetworkCertifier.LinkWindowAcceptMeans"],
@@ -2271,15 +2319,6 @@
    ],
    "assumptions": [],
    "type_hash": "610d10605450ee5a7692a41365797df1a88df14c95600e19330475dd2335d953"
-  },
-  "Properties.NetworkCertifier.forwardsNoControlWhileOpen": {
-   "owner": "@network-accounting"
-  },
-  "Properties.NetworkCertifier.forwardsNoControlWhileOpen_honest": {
-   "owner": "@network-accounting"
-  },
-  "Properties.NetworkCertifier.forwardsNoControlWhileOpen_nontrivial": {
-   "owner": "@network-accounting"
   },
   "Properties.NetworkCertifier.refusesPastCallBits": {
    "owner": "@network-accounting",
@@ -11673,21 +11712,21 @@
    ]
   },
   "NetworkCertifier.Calls": {
-   "digest": "b0b825684350f679ecd63ec3a6830bd3719e5acac77d93a15759fcf2eb4bb21f",
+   "digest": "e5473013ee63d1b5ea1c8ac918fbe7a976067e22d83c08011e3bdc1744bbdb51",
    "definitions": {
     "NetworkCertifier.Calls.Call": "13736b04448566322ad789abe1884103ae05270605a12c0197e8047ab853406c",
     "NetworkCertifier.Calls.Call.id": "2ae0a6d0e996a665ffea5aee21d66c9ff1d21f7b8b60597fbcf8367c5ec2898e",
     "NetworkCertifier.Calls.Call.shape": "77885d137981ad81f0f5d23c3fce7f76c0e2286420ee20175b8905346a4bb90c",
     "NetworkCertifier.Calls.CallAnswer": "cc4ae1a2277cbf23dcb5936a5936f86e39095a9faa6423d4519490b3adbb8d76",
-    "NetworkCertifier.Calls.CallAnswer.casesOn": "507e4880d7d4425f9da6a790f4c1c6911021700e8db465e64a37dd0ba4a96043",
+    "NetworkCertifier.Calls.CallAnswer.casesOn": "0a4dabf3367da87f796de3e436524a74f60c3d7a8ec33b4eb7db70775d7b709d",
     "NetworkCertifier.Calls.CallAnswer.counted": "2ba45baed5c2cf537c640a32b759a0d3f9b30c253d5874968fcbab27ba470859",
-    "NetworkCertifier.Calls.CallAnswer.ctorIdx": "0de18bb17ca4db23344d76178d13daa9aed94339f8d4373e1e8fa48759d2da3f",
+    "NetworkCertifier.Calls.CallAnswer.ctorIdx": "9a390a713467b604e3eadab735b7f3ef2e8e9b74d3adf62a37461262983280ad",
     "NetworkCertifier.Calls.CallAnswer.noCoins": "2965a74edb32941200b261e8552ae1c034b5ddb217ab8eb520603141212575f9",
-    "NetworkCertifier.Calls.CallAnswer.rec": "2c5d034ab445c6799db33751f717d9e3ceb37eedb05f274aa68ea5a67bc9c736",
+    "NetworkCertifier.Calls.CallAnswer.rec": "7ce8e5d28919a71a2a8908aaa9d171b4f82029ae2a68b44cc5b5011773ab7d34",
+    "NetworkCertifier.Calls.CallAnswer.record": "7912b3ed86fb462fdaf04a39ed22ac7237049b48e064fc68643dc6f11d236d29",
     "NetworkCertifier.Calls.CallAnswer.refusal": "ce941ac4e380d9114b3be09442c5a9bb882f4166c873af26408667fea921680f",
     "NetworkCertifier.Calls.CallAnswer.release": "c578a20f04e7d0996e6d42ee0367fff8fc12c31ccc3607224524b22113d90400",
     "NetworkCertifier.Calls.CallAnswer.verdict": "321a65342c9fb3877745fa5938b1ef7afd4f96ec87a6de9171c583d53cc7a1bf",
-    "NetworkCertifier.Calls.CallAnswer.verdicts": "e5ec6b000d3d916c041672c005240dfeb2e43405af986c30b30942712eb7328b",
     "NetworkCertifier.Calls.CallCoins": "903a619ffff03356f77dc7420391e8ed5a53d1b67addbcdcdc39733d412cd293",
     "NetworkCertifier.Calls.CallCoins.g": "59f116e79f53c85624eeee3d9de4c2d7cc907c6c4ac2bb16b27b25a0e3f490ba",
     "NetworkCertifier.Calls.CallCoins.rows": "b746c0d07e3cadd9cb54da626b6743feddaf3ee02633df95d6b1113c329a97e6",
@@ -11696,6 +11735,7 @@
     "NetworkCertifier.Calls.Cap.cap": "1091f0550e829c3ea1e7c9ef5c47b4f532c868170960c1ce01badb91fb7f5dc5",
     "NetworkCertifier.Calls.Cap.fwdMacs": "90d68e9a86ba295a4e8a04a80a7368b515590f9a6e8ff20292ec61892785e7fd",
     "NetworkCertifier.Calls.Cap.passed": "a3328040fe5d7b5ff9ca28570ecb88614bc0c5787fdd83f8aa086c32aa83087e",
+    "NetworkCertifier.Calls.Entry": "8003186a3e1285cb7efef568d190d7790a28bb3bff75f4e0e956443e94dd075b",
     "NetworkCertifier.Calls.Event": "de358873bf3fd4ff76bb9ffa145a267d3856143a2c123389b9e054386dfe5cab",
     "NetworkCertifier.Calls.Event.aRoot": "d89cf3aff1cd7640f9f0bf43f5829e64a96d600493895ff769f7881acb86e6aa",
     "NetworkCertifier.Calls.Event.bucket": "00645401fd63fb0572512f8fe57600a645a17daea8d4a043b254903ad4ae3156",
@@ -11707,6 +11747,7 @@
     "NetworkCertifier.Calls.Forward": "44527f6e7172cf5b69611f8dc38738394d7756ba855e3329e2f594a84ec8f615",
     "NetworkCertifier.Calls.Forward.calls": "c1cad6810a2816848bed90ca3f2d51648fbf41660312ae94bfd9c2b067311097",
     "NetworkCertifier.Calls.Forward.count": "191aeacdc03086b2ce96fe1404ab6bece8d5699957fd7fdea71feca21888c01a",
+    "NetworkCertifier.Calls.Forward.entry": "a5d1314fb2ff850f1fc72aef86b52abaa4f075897d7ec46c98f7a24d0dd435bc",
     "NetworkCertifier.Calls.Forward.id": "9542dc1850f051731e6ceb0df6af1cccacffbcfcbf2a93d467bf074d9103d47b",
     "NetworkCertifier.Calls.Forward.refuse": "5d8697c8eddf6534a7bd769f293b5bf3399fca8543953e4876dbb3212cc34268",
     "NetworkCertifier.Calls.Forward.verdict": "4cf26502323b6c3aba13a7ddea6dcc423d6a499641da274df31caf9443da12f1",
@@ -11748,7 +11789,7 @@
     "NetworkCertifier.Calls.run": "362460d82398dcfc5c66311a4ee082efdbba05e6f7243d6fc9c95c0c66c94c51",
     "NetworkCertifier.Calls.source": "b61b913030a702118b067d0bd4abb9add6cdab9ff865ded712a7ce72ddd85f63",
     "NetworkCertifier.Calls.sourceBias": "586f4c3181c17b8409111f1e7506bcca9b25c35bce53bd3960ade1094023c782",
-    "NetworkCertifier.Calls.step": "2f16cbd0b80b6d4c6ee83c058d2206cfe414c56bceb827e82838d3652e21b488",
+    "NetworkCertifier.Calls.step": "dff535b896053529f97aafd4e4cfe31e821d80db864f222e324937dd44aca6c3",
     "NetworkCertifier.Calls.take?": "cf4418e8ebf1c87eba26a9875de56f8583e7589bd5793aa6ba492bebd55bd766",
     "NetworkCertifier.Calls.tile": "7052af707a6f6aa0fcc4192c154a654389db7e9e3730b24834800098c1fc7034",
     "NetworkCertifier.Calls.timingBits": "c458de65b5bee15817d06f5421865a4ba99d361e63b9da369e53ab4da1ae8217",
@@ -11757,6 +11798,9 @@
     "NetworkCertifier.Calls.words._sparseCasesOn_1": "c4ecb294231344f64da25440ad4e1258be21c696f416b1cd27066cd4aa617a52"
    },
    "guarantees": [
+    "Properties.NetworkCertifier.forwardsNoControlWhileOpen",
+    "Properties.NetworkCertifier.forwardsNoControlWhileOpen_honest",
+    "Properties.NetworkCertifier.forwardsNoControlWhileOpen_nontrivial",
     "Properties.NetworkCertifier.refusesPastCallBits",
     "Properties.NetworkCertifier.refusesPastCallBits_honest",
     "Properties.NetworkCertifier.refusesPastCallBits_nontrivial"
@@ -14817,27 +14861,38 @@
    ]
   },
   "Properties.NetworkCertifier.Calls": {
-   "digest": "c1d2796fb1a48f9de71500c8fca1bfdea78849df39aada6acf030d3b4a487a7b",
+   "digest": "2682c924abb7c5c1dd02bdf15152e598d49753bb952c097b2c5f70dadc4e0315",
    "definitions": {
+    "Properties.NetworkCertifier.EndsCount": "ab6dd4b86ac482b90b0dd2536485e52ea5ecbeb097c5d54f3b8aaf26fb0aaccc",
+    "Properties.NetworkCertifier.ForwardsNoControlWhileOpen": "214a7235b7046402fb194c14eb9db0657dc56b1cdce301df1c77b73827c5daac",
+    "Properties.NetworkCertifier.NoControlWhileOpen": "3a7edb8d7772b9664a3b1571d73a7df06389ea4a41b20b137e7f19f2e2d42e03",
+    "Properties.NetworkCertifier.OpenAfter": "2d8f6c5d5d853fab647f43ae6f061dec5089a2d8549cd61d9c0e46274aaf2a82",
     "Properties.NetworkCertifier.RefusesPastCallBits": "3e209e7077087e0ac47113cb5bb91ad010279173d7675e82bb80f4fd57555d07",
     "Properties.NetworkCertifier.TookCall": "314b293f6d4c2c6ca728c59c6c82fca3ef5aa1e41295e20f615215cbd252bb98",
     "Properties.NetworkCertifier.WithinBits": "a0958a4cdd40658b2cc6ea900e8738cbff974a4a84653c21e3b3352985b69cb4",
-    "Properties.NetworkCertifier.acceptsAll": "a5bd83b4df342f960cb859ce63c2b51ed9d3d5228616184a5decc101716e84e0",
+    "Properties.NetworkCertifier.acceptsAll": "9c96a4d53cd9db6339a85c51f8d9145429d15c861eb1edd2b4514a0208a712c3",
     "Properties.NetworkCertifier.callMacs": "509492567a680709f26482d84ed03cacad2bb07d4c78df883c1011f66b40ec9f",
     "Properties.NetworkCertifier.callMacs._sparseCasesOn_1": "67b32347000955428d29126059be71bb143ff7d2e66976595be64a424afb438d",
+    "Properties.NetworkCertifier.closedEvents": "80813a7461fcbfc07f176df088943f39abd0163f4ce761bd5e5cfc57dc061c6f",
     "Properties.NetworkCertifier.countedBits": "d43478da0b417a6ce0445aa13d050c71fb56e03d22e7a9752b36ef98a10ce4a8",
     "Properties.NetworkCertifier.countedBits._sparseCasesOn_1": "b01995019a0454b68860f8bab476b7737454b5638a1ca508fcedc2bc7d07bee7",
+    "Properties.NetworkCertifier.forwardsAll": "dd268821e04bfb1b98b13beb4a9ac745b5212d7f58382ab25206eb53935a9cb8",
     "Properties.NetworkCertifier.honestEntropy": "2e6481caee1a6414d2caff02ae849b9312d8416f0a9197f41714f15e1e3f00d2",
     "Properties.NetworkCertifier.honestEvents": "03d2369f418445965b71dfb458cad535df6438592f32150174f974e362e3382c",
     "Properties.NetworkCertifier.honestReleaseBits": "b8eae0c9a41db273e7d7c0cf147be4636a08430917926c55a3020b1eeafc5f4e",
     "Properties.NetworkCertifier.pastEvents": "036048b1bfa2f8481d22e8000efb6c071e480f601e7b3f7f00448b93c1e7aabf",
     "Properties.NetworkCertifier.refused": "81512fa6349727b483ce66b108f7974ca3a3921ce29f2adac40906464ea926a2",
-    "Properties.NetworkCertifier.refused._sparseCasesOn_1": "c32640dcfd90ca2988dfd53e55311c25581d5d6cafb59f5ad24c93f4ad9f42cf",
+    "Properties.NetworkCertifier.refused._sparseCasesOn_1": "69d49ff27785100de0ce630bf870803f67823afce9a119c0849e6133034c63c8",
+    "Properties.NetworkCertifier.sent": "2373d4cba04e113a0692be713e70439ffa1b90bcada2cb00b10e9ea10661b328",
+    "Properties.NetworkCertifier.sent._sparseCasesOn_1": "6ab1b4ccc412e8651c19a6995350f0df5091cd47c6f1d6729e1e639589e39ae4",
     "Properties.NetworkCertifier.witnessCap": "424d5ad133070cd594d6e049cbedb1e3c4b1c2de9586ec7955aa5ddd9b111d0a",
     "Properties.NetworkCertifier.witnessRoot": "89aa9d45ca980a98aad5b0f5476031b03d9c9ea9ff3e91f25790cce0d126bab2",
     "Properties.NetworkCertifier.witnessShape": "7c1e87709ad6c429f8272ab6b845ea81acc4dcedbd127cb7aba6c48307581ed6"
    },
    "guarantees": [
+    "Properties.NetworkCertifier.forwardsNoControlWhileOpen",
+    "Properties.NetworkCertifier.forwardsNoControlWhileOpen_honest",
+    "Properties.NetworkCertifier.forwardsNoControlWhileOpen_nontrivial",
     "Properties.NetworkCertifier.refusesPastCallBits",
     "Properties.NetworkCertifier.refusesPastCallBits_honest",
     "Properties.NetworkCertifier.refusesPastCallBits_nontrivial"
