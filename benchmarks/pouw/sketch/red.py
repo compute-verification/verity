@@ -52,10 +52,12 @@ Run (from this directory, COUNTER's `hash_counter.py` and NOISE's `commit_space.
 """
 from __future__ import annotations
 
+import hashlib
 import itertools
 import json
 import math
 import os
+import struct
 import sys
 from collections import Counter
 
@@ -419,11 +421,12 @@ def keccak_round(A, rc):
 
 
 def d_keccak(W, k):
-    """SI-FOLD's FT: τ ← Keccak-f[1600] round(τ ⊕ 32 words in lanes 0–15), τ starting at the call's coin in lane 24."""
+    """SI-FOLD's FT: τ ← Keccak-f[1600] round(τ ⊕ 32 words in lanes 0–15, the even word low), τ starting at the call's
+    coin in lane 24."""
     A = [k["iv"] if i == 24 else 0 for i in range(25)]
     for r in range(len(W) // 32):
         for i in range(16):
-            w = W[32 * r + 2 * i].cat(W[32 * r + 2 * i + 1])
+            w = W[32 * r + 2 * i + 1].cat(W[32 * r + 2 * i])
             A[i] = w if isinstance(A[i], int) and A[i] == 0 else w ^ A[i]
         A = keccak_round(A, KECCAK_RC[r % 24])
     out = A[0]
@@ -510,10 +513,23 @@ def d_sha512(W, k):
 
 
 def d_sha512x(W, k):
-    """SI-THEORY's hardware fold: half a SHA-512 round a word, W_t = (w_2t ‖ w_2t+1) ⊕ c_t, then the round's add."""
+    """Half a SHA-512 round a word, W_t = (w_2t ‖ w_2t+1) ⊕ c_t, then the round's add (R80X's rate, AddXor entry)."""
     s = tuple(k[f"h{i}"] for i in range(8))
     for t in range(len(W) // 2):
         s = sha512_round(s, W[2 * t].cat(W[2 * t + 1]) ^ k[f"c{t}"], SHA512_K[t % 80])
+    return s[0]
+
+
+CLOSURE_TAG = struct.unpack(">II", hashlib.sha512(b"s8s8s32/m16n8k32").digest()[:8])
+
+
+def d_closure(W, k):
+    """SI-THEORY's closed fold F over one issue: the credited shape's tag (two words), then the words two to a SHA-512
+    round, W = w_2t ‖ w_2t+1 raw with K_t added inside, from the coins' state."""
+    s = tuple(k[f"h{i}"] for i in range(8))
+    s = sha512_round(s, (CLOSURE_TAG[0] << 32) | CLOSURE_TAG[1], SHA512_K[0])
+    for t in range(len(W) // 2):
+        s = sha512_round(s, W[2 * t].cat(W[2 * t + 1]), SHA512_K[(t + 1) % 80])
     return s[0]
 
 
@@ -595,9 +611,8 @@ DESIGNS = {
     "sha512x": dict(fn=d_sha512x, coins={**{f"h{i}": (M64, u64coin) for i in range(8)},
                                          **{f"c{t}": (M64, u64coin) for t in range(32)}}, Ts=(4, 16, 64),
                     what="software: half a SHA-512 round a word, AddXor entry (R80X's rate)"),
-    "hw_sha512x": dict(fn=d_sha512x, hw=True, coins={**{f"h{i}": (M64, u64coin) for i in range(8)},
-                                                     **{f"c{t}": (M64, u64coin) for t in range(32)}}, Ts=(4, 16, 64),
-                       what="MAC: SI-THEORY's fold, half a SHA-512 round a word, AddXor entry, closed"),
+    "hw_closure": dict(fn=d_closure, hw=True, coins={f"h{i}": (M64, u64coin) for i in range(8)}, Ts=(16, 64),
+                       what="MAC: SI-THEORY's closed fold (closure_ref's F), half a SHA-512 round a word, tag first"),
     "brw32x": dict(fn=d_brw32x, coins={"tau": (M32, odd32), **{f"c{t}": (M32, u32coin) for t in range(64)}},
                    Ts=(3, 7, 15, 16, 31), what="BRW_τ over Z/2³², each word XORed with a position constant first"),
     "hw_nh": dict(fn=d_nh, hw=True, coins={}, Ts=(16, 64), what="sketch unit: NH on the accumulator stream"),
@@ -905,7 +920,6 @@ def decomp(design, coins, parts, T, deg, mod, fold_cost, rng, mutate=None):
         nw = Newton(design, coins, rows, mod)
         feats = {}
         level = [()]
-        nz0 = {(): True}
         for a in range(1, deg + 1):
             nxt = []
             for beta in level:
@@ -937,7 +951,7 @@ def decomp(design, coins, parts, T, deg, mod, fold_cost, rng, mutate=None):
             Cuse[:] = Cuse[0]
         xuse = x ^ 1 if mutate == "x" else x
         S_att = np.zeros((m, n), dtype=np.uint64)
-        cell_cost, static_cost, static_once, col_cost, keys_used = 0.0, 0.0, 0.0, 0.0, set()
+        cell_cost, static_cost, col_cost, keys_used = 0.0, 0.0, 0.0, set()
         K_e = {}
         for e in range(deg + 1):
             mine = {beta: v for (ee, beta), v in feats.items() if ee == e}
