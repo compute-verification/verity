@@ -43,7 +43,7 @@ can't beat.
 `--grids=AxBxC,AxBxC` sets the zero target's two grids (rows × columns × entry states). Rows and columns are drawn with
 repeats, the free terms are per drawn row and column, and each cell draws its own entry states, so a sat at any grid
 is a fit to be rechecked and an unsat at any grid holds. `--escalate` solves the second grid only where the first is
-sat.
+sat. `--cegis` gives the same answers from a growing subset of a grid's examples (`cegis`).
 
 `--pairs=PATH` makes the members `xoradd` steps at the listed constants (a JSON list of {"c", "k", "width", "carry",
 "covers"}, `r80x_batch.py --pairs-out`'s), keeping those of the run's width: a round's word-entry certificates. A
@@ -56,7 +56,7 @@ can do; carries split over two predicates and spent in different instructions ar
 
 Run: `uv run --no-project --with z3-solver python -B fold_family.py OUT.json --window=PATH/fold_window.py [--width=8]
 [--members=12] [--steps=1,2] [--families=...] [--targets=zero,words] [--timeout=300] [--jobs=4] [--sweep=KIND]
-[--sweep-c=C] [--ks=K,K] [--free=F] [--pairs=PATH] [--grids=3x3x4,4x4x6] [--escalate] [--full]` (from this directory). PATH is `benchmarks/pouw/hash_sparse/` on N-FLOOR's branch.
+[--sweep-c=C] [--ks=K,K] [--free=F] [--pairs=PATH] [--grids=3x3x4,4x4x6] [--escalate] [--cegis] [--full]` (from this directory). PATH is `benchmarks/pouw/hash_sparse/` on N-FLOOR's branch.
 """
 from __future__ import annotations
 
@@ -179,6 +179,7 @@ def instance(spec):
     V = lambda x: z3.BitVecVal(x & mask, w)  # noqa: E731
     rows = [[rng.randrange(0, 1 << w) for _ in range(s)] for _ in range(nr)]
     cols = [[rng.randrange(0, 1 << w) for _ in range(s)] for _ in range(nc)]
+    ex = []
     for r in range(nr):
         for c in range(nc):
             if carry:
@@ -197,20 +198,52 @@ def instance(spec):
                 if target == "zero":
                     srcs += [rf[f][r] for f in range(F)] + [cf[f][c] for f in range(F)]
                 if carry:
-                    sol.add(prog.run(srcs + [cin], cin)[-1] == V(want) + cin)
+                    ex.append(prog.run(srcs + [cin], cin)[-1] == V(want) + cin)
                 else:
-                    sol.add(prog.run(srcs)[-1] == V(want))
-    return sol, prog, names
+                    ex.append(prog.run(srcs)[-1] == V(want))
+    return sol, prog, names, ex
+
+
+def cegis(sol, ex, deadline, stride, batch=16):
+    """Solve on a growing subset of the examples, from one entry state a cell, adding up to `batch` examples the last
+    model fails: an unsat on a subset is an unsat on all, and a model that satisfies every example is a fit to all.
+    Each round is a fresh solver, since z3 leaves its bit-blasting tactic for the incremental core once a solved
+    solver gains assertions."""
+    base, active = list(sol.assertions()), list(range(0, len(ex), stride))
+    rounds = 0
+    while True:
+        left = deadline - time.time()
+        if left <= 0:
+            return z3.unknown, None, rounds, len(active)
+        s = z3.SolverFor("QF_BV")
+        s.add(base + [ex[i] for i in active])
+        s.set("timeout", int(left * 1000))
+        r = s.check()
+        rounds += 1
+        if r != z3.sat:
+            return r, None, rounds, len(active)
+        m, used = s.model(), set(active)
+        bad = [i for i in range(len(ex)) if i not in used and not z3.is_true(m.eval(ex[i], model_completion=True))]
+        if not bad:
+            return r, m, rounds, len(active)
+        active += bad[:batch]
 
 
 def solve(spec):
     t0 = time.time()
-    sol, prog, names = instance(spec)
-    sol.set("timeout", int(spec["timeout"] * 1000))
-    r = sol.check()
-    out = dict(spec, result=str(r), seconds=round(time.time() - t0, 2), sources=names)
+    sol, prog, names, ex = instance(spec)
+    extra = {}
+    if spec.get("cegis"):
+        r, m, rounds, used = cegis(sol, ex, t0 + spec["timeout"], spec["grid"][2])
+        extra = {"cegis_rounds": rounds, "examples_used": used, "examples": len(ex)}
+    else:
+        sol.add(ex)
+        sol.set("timeout", int(spec["timeout"] * 1000))
+        r = sol.check()
+        m = sol.model() if r == z3.sat else None
+    out = dict(spec, result=str(r), seconds=round(time.time() - t0, 2), sources=names, **extra)
     if r == z3.sat:
-        out["program"] = prog.decode(sol.model())
+        out["program"] = prog.decode(m)
     return out
 
 
@@ -257,7 +290,7 @@ def specs(opt):
                                             + (f"-F{free}" if free else "") + ("-full" if full else ""),
                                     "family": fam, "s": s, "index": i, "target": target, "member": member,
                                     "honest": h, "L": L, "grid": grid, "width": w, "free": free, "full": full,
-                                    "phase": phase,
+                                    "phase": phase, "cegis": "--cegis" in opt,
                                     "timeout": timeout * (3 if L == h else 1),
                                     "seed": zlib.crc32(f"{fam}-{s}-{i}-{target}-{L}-{grid}".encode())})
     return out
