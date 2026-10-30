@@ -421,6 +421,56 @@ def test_a_target_that_misses_through_a_record_that_counts_is_made_where_it_is_c
     assert out["values"] == _fresh(root)["values"]
 
 
+#: `HARNESS`'s setup, then ``circuit-check --all --records-only -j 2`` (`cli.records`) into the tree's cache; prints its report
+RECORDS_ONLY = HARNESS[:HARNESS.index("rep = cli.run(")] + 'print(json.dumps(cli.records(root / "cache", log=None, jobs=2)))\n'
+
+
+def _records_only(root: Path) -> dict:
+    env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+    r = subprocess.run([sys.executable, "-c", RECORDS_ONLY, str(root), str(REPO)], capture_output=True, text=True, cwd=REPO, env=env)
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout.strip().splitlines()[-1])
+
+
+def _copied(root: Path, to: Path) -> Path:
+    """Another tree as ``root`` was made, at ``to``, with a copy of its cache: the records on another machine."""
+    tree = _tree(to)
+    _bindings(tree, *BINDINGS)
+    shutil.copytree(root / "cache", tree / "cache")
+    return tree
+
+
+@pytest.mark.slow
+def test_records_only_stores_every_record_and_a_forked_run_from_a_copy_of_them_builds_no_binding(tmp_path):
+    """``--records-only`` builds each binding apart and stores its record, keying and checking no target; run again, it
+    reuses them all and stores none.  A forked ``--all`` in another tree from a copy of that cache builds no binding and no
+    body in its own process, with the verdicts a full build gives; with a module a binding read edited there, or a record
+    gone, it builds that binding again, as with no records."""
+    root = _tree(tmp_path / "t")
+    _bindings(root, *BINDINGS)
+    first = _records_only(root)
+    assert first["reused"] == 0 and first["stored"] == len(first["rebuilt"]) == 5, first
+    assert len(_records(root)) == len(list((root / "cache").glob("*/*/*.json"))) == 5     # no target's entry, no task list
+    assert _records_only(root) == {"reused": 5, "rebuilt": [], "stored": 0}
+
+    warm = _copied(root, tmp_path / "warm")
+    out = _run(warm, FORKED)
+    assert out["stats"]["units"] == {"reused": 5, "rebuilt": [], "stored": 0} and out["here"] == [] and out["hits"] == []
+    assert out["values"] == _fresh(warm)["values"]
+
+    gone = _copied(root, tmp_path / "gone")
+    (rec,) = _records(gone, ("_sized_roots",))
+    rec.unlink()
+    again = _run(gone, FORKED)
+    assert again["stats"]["units"] == {"reused": 4, "rebuilt": ["_sized_roots"], "stored": 1} and again["values"] == out["values"]
+
+    edited = _copied(root, tmp_path / "edited")
+    _edit(edited, "syn/xdef.py", "B.call(SynXor, a, b)", "B.call(SynXor, b, a)")
+    out = _run(edited, FORKED)
+    assert out["stats"]["units"] == {"reused": 4, "rebuilt": ["_xor_roots"], "stored": 1}, out["stats"]["units"]
+    assert out["values"] == _fresh(edited)["values"]
+
+
 #: a reference two bindings bind at two statics (as `verity.ml.kernels.tc`'s sidecar and the gemm-coordinate template bind
 #: the NVFP4 dot), a word primitive whose Boolean Definition (a ``word`` and a ``build``, as `verity.ml.circuits.boolean.
 #: trace` makes one) only another binding's body build registers (as `boolean_marlin_moe`'s gathers), and one whose Boolean

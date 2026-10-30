@@ -8,6 +8,7 @@
     circuit-check --all                                             every registered Definition and template (the suite's set)
     circuit-check --all --shard 2/4 --shard-dir s2                  only the targets whose id hashes to shard 2 of 4 (`shard`)
     circuit-check --combine s1 s2 s3 s4                             the four shards' records as the unsharded run's report
+    circuit-check --all --records-only --cache DIR -j 64            every catalog binding's record, no target (`records`)
     circuit-check --structural unit.tmpl GemmAccumulatorS8_v2{...}   a flock-ir-tmpl template as the Definition's lowering
     circuit-check --ambient PouwU129_v2 F32Mul_v4                   each lowering one text in a plain and a perturbed interpreter
     circuit-check --batch                                           batch invariance of the v0 registration's templates
@@ -696,7 +697,11 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     heavy ones first; the report is of those alone, unjoined (`shard.unjoined`), with the shard's manifest (`shard.manifest`)
     as ``shard``.  From the bindings' records, no other target is described or made (`_planned`); a full build still builds
     the whole catalog, as the ids come from it (`targets.select`), but describes only shard K's targets before its checks,
-    and its task-list entry is the shard's, under a key that names it."""
+    and its task-list entry is the shard's, under a key that names it.
+
+    The report's ``prologue_s`` is the seconds from the run's start until it hands the task list to `_checked_all`: the list,
+    from the bindings' records or their builds, and the targets' keys, which each shard of a run builds for itself."""
+    started = time.time()
     tracing = cache is not None and CC.tracing()
     isolated = jobs > 1 if isolate is None else isolate
     request = {"specs": list(specs), "all": everything, "as_call": as_call,
@@ -765,11 +770,15 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
             keys = [target_key(t[0], t[1], opts, _info(t).get("as_call", as_call), tuple(_info(t).get("roots", ())))
                     if mine is None or i in mine else None for i, t in enumerate(tasks)]
             _store_listed(cache, listed, tasks, keys, plan)
+        prologue = time.time() - started
+        if log:
+            log(f"circuit-check: the checks start {prologue:.1f}s into the run")
         rep = _checked_all(tasks, specs, opts, everything, as_call, log, jobs, cache, mem_gb, progress, isolated, tracing,
                            zygote, mem_file, keys, hits, plan, only)
     finally:
         for z in zygote or ():
             z.close()
+    rep["prologue_s"] = round(prologue, 1)
     if units and not CC.untraced():
         if planned is not None:
             rep["cache"]["units"] = {**plan.stats(), "stored": UN.store(cache, REPO, plan.entries, only_rebuilt=True)}
@@ -778,6 +787,27 @@ def run(specs: list[str], opts: CK.Options, *, everything: bool = False, as_call
     if shard is not None:
         rep["shard"] = SH.manifest(shard, ids, only, request)
     return rep
+
+
+def records(cache: Path, *, log=print, jobs: int = 1, mem_gb: int | None = None) -> dict:
+    """``--records-only``: every catalog binding's record in ``cache`` (`circuit_check.units`), and no target keyed or checked.
+    Each binding whose record doesn't count is built in a process of its own, up to ``jobs`` at once within `budget_gb`
+    (`units.plan`'s ``apart``), and its record stored as `run` stores it after its checks; one that counts is left as it is.
+    A ``--catalog-units`` run from a copy of ``cache``, on any machine whose tree its reads still match (each shard of one
+    run), then builds no binding: it starts from the records.  Nothing is stored when this process or a binding's did
+    something the tracer cannot see (`cache.untraced`), nor when a record disagrees with what was built (`units.Stale`), and
+    the report says why; a run from the cache builds each binding it misses, as it would with no records.  The report: the
+    bindings reused and built (`units.Plan.stats`), the records stored, and why none were."""
+    if not CC.tracing():
+        raise RuntimeError("records: the tracer is off (`cache.trace`), so a record would hold no read")
+    try:
+        plan = UN.plan(cache, REPO, log, (max(1, jobs), budget_gb(mem_gb), heavy()))
+    except UN.Stale as e:
+        return {"stored": 0, "why": f"a record disagrees with what was built ({e})"}
+    out = plan.stats()
+    if why := CC.untraced():
+        return {**out, "stored": 0, "why": f"the tracer could not see what it did ({'; '.join(why[:3])})"}
+    return {**out, "stored": UN.store(cache, REPO, plan.entries, only_rebuilt=True)}
 
 
 def _owners(plan: UN.Plan, tasks: list[tuple], n: int) -> dict[str, int]:
@@ -915,7 +945,7 @@ def combined(dirs: list[Path]) -> tuple[dict, dict]:
     """``--combine``'s report and the request the shards ran: their records (`shard.read`, which refuses a set that is not
     every shard of one list exactly) in the list's order, made into the report the unsharded run makes of them
     (`checks.report`), with its ``peaks``, the shards' cache counts summed (each shard's under ``shards``) and ``combined``:
-    N, the list's digest and each shard's wall time and jobs."""
+    N, the list's digest and each shard's wall time, prologue (`run`'s ``prologue_s``) and jobs."""
     request, records, manifests = SH.read(dirs)
     rep = CK.report(records, CK.Options(**request["options"]))
     rep["peaks"] = heaviest(rep["targets"])
@@ -925,8 +955,8 @@ def combined(dirs: list[Path]) -> tuple[dict, dict]:
                         "task_list": [c.get("task_list") for c in caches] if all(c.get("task_list") for c in caches) else None,
                         "shards": caches}
     rep["combined"] = {"shards": len(manifests), "list": manifests[0]["list"],
-                       "walls": [{"shard": m["shard"], "targets": len(m["ran"]), "wall_s": m.get("wall_s"), "jobs": m.get("jobs")}
-                                 for m in manifests]}
+                       "walls": [{"shard": m["shard"], "targets": len(m["ran"]), "wall_s": m.get("wall_s"),
+                                  "prologue_s": m.get("prologue_s"), "jobs": m.get("jobs")} for m in manifests]}
     return rep, request
 
 
@@ -1048,15 +1078,17 @@ def default_cache() -> Path:
 
 
 def time_summary(rep: dict, wall: float, jobs: int) -> str:
-    """One line: the run's wall time, the targets checked now and reused, and where the checked ones' time went
-    (their ``seconds_by_check`` summed, heaviest first)."""
+    """One line: the run's wall time (and its ``prologue_s``), the targets checked now and reused, and where the checked ones'
+    time went (their ``seconds_by_check`` summed, heaviest first)."""
     ran = [t for t in rep["targets"] if "cache" not in t]
     by: dict[str, float] = {}
     for t in ran:
         for k, v in (t.get("seconds_by_check") or {}).items():
             by[k] = by.get(k, 0.0) + v
     top = sorted(by.items(), key=lambda kv: -kv[1])[:SHOWN_CHECKS]
-    return (f"circuit-check: {wall:.1f}s wall at -j {jobs}: {len(ran)} target(s) checked in {sum(t.get('seconds', 0) for t in ran):.1f}s"
+    before = f" ({rep['prologue_s']:.1f}s before the first check)" if rep.get("prologue_s") is not None else ""
+    return (f"circuit-check: {wall:.1f}s wall{before} at -j {jobs}: {len(ran)} target(s) checked in "
+            f"{sum(t.get('seconds', 0) for t in ran):.1f}s"
             + (" (" + ", ".join(f"{k} {v:.1f}" for k, v in top) + ")" if top else "")
             + f", {len(rep['targets']) - len(ran)} reused")
 
@@ -1183,6 +1215,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-cache", action="store_true", help="check every target now, and record nothing")
     ap.add_argument("--catalog-units", action="store_true",
                     help="with --all --cache: build only the catalog bindings whose record misses (circuit_check.units)")
+    ap.add_argument("--records-only", action="store_true",
+                    help="with --all --cache DIR: build each catalog binding whose record misses, each in a process of its own "
+                         "up to --jobs at once, store its record and check no target (`records`); a --catalog-units run from a "
+                         "copy of DIR, each shard's on its own machine, then builds no binding")
     ap.add_argument("--shard", metavar="K/N",
                     help="key and check only the targets whose id hashes to shard K of N (circuit_check.shard), no other, and write "
                          "their records and a manifest to --shard-dir; exit 1 on their own new failures")
@@ -1205,8 +1241,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="check batch invariance of every template the request-major compiler emits for the frozen v0 registration "
                          "instead of running the property checks (cli.batch): each verdict held to the declared one")
     a = ap.parse_args(argv)
-    if sum(map(bool, (a.structural, a.ambient, a.batch, a.combine))) > 1:
-        ap.error("--structural, --ambient, --batch and --combine are four modes: give one")
+    if sum(map(bool, (a.structural, a.ambient, a.batch, a.combine, a.records_only))) > 1:
+        ap.error("--structural, --ambient, --batch, --combine and --records-only are five modes: give one")
     if a.structural:
         return _structural_main(a, ap)
     if a.ambient:
@@ -1215,6 +1251,9 @@ def main(argv: list[str] | None = None) -> int:
         return _batch_main(a, ap)
     if a.combine:
         return _combine_main(a, ap)
+    if a.records_only and (a.targets or not a.all or a.cache is None or a.no_cache or a.update_pins or a.shard or a.shard_dir):
+        ap.error("--records-only stores every catalog binding's record in --cache DIR and checks no target: give --all and "
+                 "--cache, and no target, --no-cache, --update-pins, --shard or --shard-dir")
     if not a.targets and not a.all:
         ap.error("give a target or --all")
     shard = None
@@ -1243,6 +1282,8 @@ def main(argv: list[str] | None = None) -> int:
         subprocess.run([sys.executable, "-c", prebuild], cwd=REPO, capture_output=True)
         CC.trace(REPO)
     jobs = default_jobs(a.all) if a.jobs is None else a.jobs or auto_jobs()
+    if a.records_only:
+        return _records_main(a, cache, jobs)
     opts = _options(a)
     t0 = time.time()
     rep = run(a.targets, opts, everything=a.all, as_call=a.as_call,
@@ -1257,11 +1298,26 @@ def main(argv: list[str] | None = None) -> int:
         update_pins(rep)
     if shard is None:
         return verdict(rep, everything=a.all, out=a.out, strict=a.strict, fail_on_warnings=a.fail_on_warnings)
-    SH.write(a.shard_dir, rep, wall_s=round(wall, 1), jobs=jobs)
+    SH.write(a.shard_dir, rep, wall_s=round(wall, 1), prologue_s=rep.get("prologue_s"), jobs=jobs)
     m = rep["shard"]
     print(f"circuit-check: shard {m['shard']}/{m['shards']}'s records and manifest are in {a.shard_dir}")
     return verdict(rep, everything=False, out=a.out, strict=a.strict, fail_on_warnings=a.fail_on_warnings,
                    what=f"shard {m['shard']}/{m['shards']}: {len(rep['targets'])} of the list's {m['list']['targets']} target(s)")
+
+
+def _records_main(a: argparse.Namespace, cache: Path, jobs: int) -> int:
+    """``--records-only`` (`records`): exit 1 unless every binding it built had its record stored."""
+    t0 = time.time()
+    rep = records(cache, log=None if a.quiet else lambda s: print(s, flush=True), jobs=jobs, mem_gb=a.mem_gb)
+    rep["seconds"] = round(time.time() - t0, 1)
+    if "why" not in rep and rep["stored"] < len(rep["rebuilt"]):
+        rep["why"] = f"{len(rep['rebuilt']) - rep['stored']} not stored: the tree changed while they were built"
+    if a.out:
+        a.out.write_text(json.dumps(rep, indent=1) + "\n")
+    print("circuit-check --records-only: "
+          + (f"{len(rep['rebuilt'])} catalog binding(s) built, {rep['reused']} reused, " if "rebuilt" in rep else "")
+          + f"{rep['stored']} record(s) stored in {cache} in {rep['seconds']}s" + (f"; {rep['why']}" if "why" in rep else ""))
+    return 1 if "why" in rep else 0
 
 
 def _combine_main(a: argparse.Namespace, ap: argparse.ArgumentParser) -> int:
@@ -1275,7 +1331,9 @@ def _combine_main(a: argparse.Namespace, ap: argparse.ArgumentParser) -> int:
     if not a.quiet:
         walls = rep["combined"]["walls"]
         print(f"circuit-check: {len(walls)} shards of {rep['combined']['list']['targets']} target(s): "
-              + ", ".join(f"{w['shard']}: {w['targets']} in {w['wall_s']}s at -j {w['jobs']}" for w in walls))
+              + ", ".join(f"{w['shard']}: {w['targets']} in {w['wall_s']}s"
+                          + (f" ({w['prologue_s']}s before the first check)" if w.get("prologue_s") is not None else "")
+                          + f" at -j {w['jobs']}" for w in walls))
     _cache_lines(rep)
     return verdict(rep, everything=request["all"], out=a.out, strict=a.strict, fail_on_warnings=a.fail_on_warnings)
 
