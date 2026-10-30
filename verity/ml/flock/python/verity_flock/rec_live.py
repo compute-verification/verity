@@ -654,7 +654,7 @@ class OsTree:
         self.opened: dict[tuple[bytes, str], int] = {}
 
     def tree(self, spec: dict, nonce: bytes | None = None) -> tuple[bytes, bytes, bytes]:
-        t = CT.CoinTree.draw(CT.Spec.of_json(spec), self.rand(CT.NONCE_BYTES) if nonce is None else nonce, self.rand)
+        t = CT.CoinTree.sample(CT.Spec.of_json(spec), self.rand(CT.NONCE_BYTES) if nonce is None else nonce, self.rand)
         self.trees[t.root()] = t
         return t.nonce, t.root(), t.key
 
@@ -699,7 +699,7 @@ class CoinServer:
         self.rand = rand
         self.tree_spec = tree
         self.source = source
-        #: the session record's ``coin_tree`` (key, nonce, root and spec) of the tree drawn at Hello
+        #: the session record's ``coin_tree`` (key, nonce, root and spec) of the tree sampled at Hello
         self.tree_record: dict | None = None
         #: the opening words sent with each round's coins under the coin tree, by (stream, round)
         self.tree_openings: dict[tuple[str, int], list[int]] = {}

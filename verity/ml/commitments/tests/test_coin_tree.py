@@ -51,7 +51,7 @@ def _tape(seed: int):
 
 
 def test_the_draw_reproduces_the_specs_vectors():
-    t = CT.CoinTree.draw(SPEC9, NONCE, _spec_tape())
+    t = CT.CoinTree.sample(SPEC9, NONCE, _spec_tape())
     r = t.rules
     assert t.key.hex() == (
         "53d43b82d13a8d6cd586807a53763a5864e185bca221ce92e9d427b309dee61dba712538f39a2df44ab848082f9399912409587ef73bec0e93bb890a30618c78"
@@ -99,7 +99,7 @@ def test_the_draw_reproduces_the_specs_vectors():
 
 def test_openings_check_and_forgeries_do_not():
     spec = CT.Spec((CT.SESSION, "t/rep0", "t/rep1"), 4, 32)
-    t = CT.CoinTree.draw(spec, NONCE, _tape(1))
+    t = CT.CoinTree.sample(spec, NONCE, _tape(1))
     root, r = t.root(), t.rules
     for s, k, n in ((0, 0, 27), (1, 3, 1), (2, 15, 32), (1, 0, 0)):
         c, w = t.open(s, k, n)
@@ -116,8 +116,8 @@ def test_openings_check_and_forgeries_do_not():
     assert c5 == c9[:5]
     with pytest.raises(ValueError):
         CT.check(spec, r, root, 1, 2, 5, w9)
-    assert CT.CoinTree.draw(spec, NONCE, _tape(2)).root() != root
-    assert CT.CoinTree.draw(spec, bytes([1]) * CT.NONCE_BYTES, _tape(1)).root() != root
+    assert CT.CoinTree.sample(spec, NONCE, _tape(2)).root() != root
+    assert CT.CoinTree.sample(spec, bytes([1]) * CT.NONCE_BYTES, _tape(1)).root() != root
 
 
 def _frame_words(frame: str) -> list[int]:
