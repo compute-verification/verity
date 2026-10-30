@@ -472,6 +472,15 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "32 cells have z = A·Bᵀ and y = dq(z), or for the combine that the rows' XOR is the receipt. That every port "
           "is registered and opens at its registered root is proved from flock-verify's complete check, not assumed",
           "TS leaf checks", "conjectured"),
+    Entry("accounting-ts-group-realizes", "assumption",
+          "A leaf's group of statements (its lanes, each in n chunks along K, and its combine) realizes the leaf's "
+          "relation at the rows its sessions open: past the leaf verifier's check of the tile and its chunks, where "
+          "each session's complete, known-read and file checks pass, every served root is registered, each session "
+          "has a unit, the sessions' registrants' rows agree at one tree and position, the known rows hold, and each "
+          "session's committed rows are the port rows of a wire assignment its circuit's evaluation agrees with, the "
+          "relation holds of the leaf the layer opens. Proved at the 32 × 32 leaf with one chunk a lane from the "
+          "circuits' lowerings; at another shape no Lean states the shape's Definitions yet, and circuit-check and "
+          "h1zy's tests back it", "TS group realizes", "conjectured"),
     Entry("accounting-ts-ok-realizes", "assumption",
           "The checked unit's C-Flock circuit is its declared unit's: on any wire assignment the key program's "
           "evaluation agrees with at a unit, whose ok wires carry the ok row (the word 1), every check the declared "
