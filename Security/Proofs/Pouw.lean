@@ -182,6 +182,7 @@ import Proofs.Pouw.QTree
 import Proofs.Pouw.Receipt
 import Proofs.Pouw.Reduction
 import Proofs.Pouw.RelativeSecurity
+import Proofs.Pouw.RelativeSecurityFork
 import Proofs.Pouw.RelativeSecurityGuarantees
 import Proofs.Pouw.RelativeSecurityJ10R
 import Proofs.Pouw.SakLb
