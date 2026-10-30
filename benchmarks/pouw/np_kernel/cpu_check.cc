@@ -1,39 +1,44 @@
-// The CPU check of layout.h, the lanes, sources and fold ssn.cu's kernel serves. Two levels need nothing but layout.h:
+// The CPU check of layout.h, the lanes, sources, fold words and fold ssn.cu's kernel serves. Every served output is held
+// to verity_int8's epilogue on A_i . B_j (layout.h's int8_epilogue, int8_exact.dequantize's order) under scales with
+// 24-bit significands. Three levels need nothing but layout.h:
 //   ragged  the lead (blc4a-t64-e7-s1 under ROT=1 and FOLD=1) on calls off the tiles (decode's one row; rows and columns
 //           off them), served as ssn.cu serves them: computed over whole 64-row and BN-column tiles with zero data past
 //           the call, the certifier's feed over pad_rows(m) rows and pad_cols(n) columns. Every committed row past the
 //           call (a padding row) carries its tag, its lane-coin A' and its own coins, read from its feed words as the
 //           forming reads them; every word is the statement's, -beta_j + a1 . C + T . G + sum_t (1 + b_t) + the lane
 //           coins under the row's A' (plus A_i . B_j, 0 on a padding row); a computed row past the committed ones reads
-//           zero coins; and the served output is stock's epilogue on the word less sigma within the bound. A control
-//           forms the padding rows from zero words (padding without coins), which the level must reject.
-//   window  the fold on the integer p it reads back: at and around +-bound and across the window, under 22-bit
-//           significand scales and sigma over twice the lane coins' range, the IADD3 reads back p and the served bf16 is
-//           stock's on p; at bound + 1 and -(bound + 1) it reads back another integer, so the bound is the fold's.
-// Two more levels read the lead's Python fold's own test vectors (fold_vectors.py records them):
-//   fold    each recorded magic_epilogue call (the final word D, rho_i, the column term c, s_j, s_i): bf16(xu_fold(D,
-//           0x4B400000 - rho_i, -c, s_j, -1.5 2^23 s_j, s_i)) equals its outputs bit for bit, out-of-range words included;
-//           where A.B^T is recorded the IADD3 reads it back and the fold serves stock's outputs (expect 1), or, for
-//           fold_extreme's mutation (an output of 2^22 + 1, expect -1), doesn't read it back.
-//   layout  each recorded operands call (A, B, a1, a_t, u, G and the lane coins, odd in [-127, 127] a (step, tile,
-//           column)) on blc4a-t64-e7-s1 under the call's lane-coin weights (ROT=1, or BLC_W=1:127:1), twice:
-//           XU=1   ssn's final word from lane_a and lane_b, plus its row source and its column source for (tile, row
-//                  class i mod 2, column), is 0x4B400000 + A_i . B_j mod 2^32 (the IADD3), and the fold serves stock's bf16
-//                  outputs bit for bit where |A_i . B_j| <= 2^22.
-//           FOLD=1 (the lead, served noisy) the final word plus its column source (row source 0) is 0x4B400000 + A_i . B_j
-//                  + n_ij, n_ij = -beta_j + sum_e a1[i, e] C[e, j] + sum_e T(i)[e] G[e, j] + sum_{t >= 2} (1 + a_t[i])
-//                  from the recorded values, and the fold serves stock's epilogue on A_i . B_j + n_ij where it is within
-//                  2^22 (FOLD's S is the Python's S, or one less at K 8,192, where xu adds a step; the first S steps of
-//                  the recorded coins are used).
-//           The recorded a1, a_t, u and G enter as the certifier feeds them (layout.h's row_words, u word and g_word) and
-//           are read back through the feed's format (rc_bit, u0_of..u2_of, g_of).
-//           ssn's lanes differ from the Python's (their positions; kappa 0; e by its own rule), which changes the
-//           words and not what is served, so the check is on what is served. As a control, the other row
-//           class's column source is also tried, and under ROT=1 it must serve wrong outputs.
+//           zero coins; and the served output, xu_fold on the word with the row's words (fold_row on the words the
+//           forming read), the column source beta_j - sigma and the G and C bytes, is int8_epilogue on A_i . B_j within
+//           the bound. A control forms the padding rows from zero words (padding without coins), which the level must
+//           reject.
+//   window  the fold on p = A_i . B_j at and around +-bound and across the window, each word carrying every coin term
+//           (-beta_j, a1 . C, T . G, the walk and sigma over twice the lane coins' range) of a random row, column, S and
+//           coins: fold_word reads back p and the served bf16 is int8_epilogue on p; at bound + 1 and -(bound + 1) it
+//           reads back another integer, so the bound is the fold's.
 //   draw    G's rejection draw (g_word_of) over all 2^32 words: each of the 2,401 G in [-3, 3]^4 from exactly
 //           floor(2^32 / 2401) words, and the other 872 rejected.
+// served:FILE holds the lead to verity_int8's own y on one call: FILE holds the call as verity_int8 serves it (x, the
+//           activations quantized a row, and s_a; w, the weight quantized a row, and s_w; their int32 product z and the
+//           served y, from int8_exact; the suite's test writes them at Llama-3.2-1B's linears) and a coin seed. A' and B'
+//           are formed from the certifier's coins (drawn from the seed), every final word comes from the lanes, the fold
+//           must read back z, and each served bf16 must be y's bit for bit. Controls, which must serve outputs other
+//           than y: the same words through 83d82109a8's fold (row source 0, column source 0x4B400000 - sigma, so n_ij =
+//           A_i . B_j's word less sigma less A_i . B_j stays in; FFMA(v, s_j, fl(-1.5 2^23 s_j)), then FMUL s_i), and
+//           each of its departures alone: n_ij left in, the FFMA, the weight's scale first.
+// DIR (fold_vectors.py's --out) reads the lead's Python layout's own test vectors:
+//   layout  each recorded operands call (A, B, a1, a_t, u, G and the lane coins, odd in [-127, 127] a (step, tile,
+//           column)) on blc4a-t64-e7-s1 under the call's lane-coin weights (ROT=1, or BLC_W=1:127:1), twice, XU=1 and
+//           FOLD=1: ssn's final word from lane_a and lane_b, with its row's words (XU=1 0x4B400000 - rho_i alone, FOLD=1
+//           fold_row) and its column source for (tile, row class i mod 2, column), folds to 0x4B400000 + A_i . B_j mod
+//           2^32 (fold_word), and the fold serves int8_epilogue on the recorded A . B^T under the recorded scales where
+//           |A_i . B_j| <= 2^22 (FOLD's S is the Python's S, or one less at K 8,192, where xu adds a step; the first S
+//           steps of the recorded coins are used). The recorded a1, a_t, u and G enter as the certifier feeds them
+//           (layout.h's row_words, u word and g_word) and are read back through the feed's format (rc_bit, u0_of..u2_of,
+//           g_of). ssn's lanes differ from the Python's (their positions; kappa 0; e by its own rule), which changes the
+//           words and not what is served, so the check is on what is served. As a control, the other row class's
+//           column source is also tried, and under ROT=1 it must serve wrong outputs.
 // Build: g++ -O2 -std=c++17 -ffp-contract=off cpu_check.cc -o cpu_check.
-// Usage: cpu_check [--bound B] LEVEL...: ragged, window, draw, or DIR (fold_vectors.py's --out: fold and layout); B is the
+// Usage: cpu_check [--bound B] LEVEL...: ragged, window, draw, served:FILE, or DIR (fold_vectors.py's --out); B is the
 // fold's bound, 2^22 unless given (serving.LEAD_FOLD_BOUND, which the suite's test passes). One JSON line a vector or
 // call and a summary line; exit 1 on any mismatch.
 #include <cinttypes>
@@ -106,47 +111,75 @@ static Vec load(const std::string& path) {
   return v;
 }
 
-static uint16_t serve(uint32_t d, uint32_t r, uint32_t c, float sj, float si) {
-  return bf16_rn(xu_fold(d, r, c, sj, -12582912.0f * sj, si));
+static uint64_t mix(uint64_t& x) {
+  uint64_t z = (x += 0x9E3779B97F4A7C15ull);
+  z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ull;
+  z = (z ^ (z >> 27)) * 0x94D049BB133111EBull;
+  return z ^ (z >> 31);
 }
-
-// fold level. With A.B^T recorded, the IADD3's word read as fp32 less 1.5 2^23 is the integer the fold serves: expect 1
-// (every output in the window) it is A.B^T everywhere and the outputs are stock's; expect -1 (the mutation) it isn't
-// somewhere, and the served outputs' differences from stock's are reported (an integer off by one at 2^22 is below bf16's
-// precision, so they can be stock's)
-static bool fold_check(const std::string& label, const Vec& v, int expect) {
-  const Arr &acc = v.at("acc"), &rho = v.at("rho"), &col = v.at("col"), &sc = v.at("s_col"), &sr = v.at("s_row"),
-            &mg = v.at("magic");
-  const Arr* st = v.count("stock") ? &v.at("stock") : nullptr;
-  const Arr* p = v.count("p") ? &v.at("p") : nullptr;
-  const size_t m = acc.dims[0], n = acc.dims[1];
-  size_t bad = 0, vs_stock = 0, past_int32 = 0, misread = 0;
-  for (size_t i = 0; i < m; i++)
-    for (size_t j = 0; j < n; j++) {
-      const int64_t d = acc.i(i * n + j);
-      past_int32 += d < INT32_MIN || d > INT32_MAX;
-      const uint32_t r = XU_MAGIC_BITS - (uint32_t)rho.i(i), c = (uint32_t)-col.i(i * n + j), b = (uint32_t)d + r + c;
-      const uint16_t y = serve((uint32_t)d, r, c, sc.f(j), sr.f(i));
-      bad += y != (uint16_t)mg.i(i * n + j);
-      if (st) vs_stock += y != (uint16_t)st->i(i * n + j);
-      if (p) {
-        float f;
-        memcpy(&f, &b, 4);
-        misread += (double)f - 12582912.0 != (double)p->i(i * n + j);
+// a scale with a 24-bit significand, as quantize_rows' absmax / 127 gives
+static float scale24(uint64_t r, int lo) {
+  return std::ldexp((float)((1u << 23) + (uint32_t)(r & ((1u << 23) - 1))), -23 - lo - (int)((r >> 32) % 4));
+}
+static double read_back(uint32_t q) {
+  float f;
+  memcpy(&f, &q, 4);
+  return (double)f - 12582912.0;
+}
+// G[0..3, j] as B' holds them: step 1's lanes 24-27 of the column's lanes b, where the epilogue reads them
+static uint32_t g_bytes(const int8_t* b) {
+  uint32_t w = 0;
+  for (int e = 0; e < 4; e++) w |= (uint32_t)(uint8_t)b[24 + e] << (8 * e);
+  return w;
+}
+// a final word: -beta_j plus the lanes' dot product over the S steps (int32 a step, as the wgmma's k32 adds)
+static long long word_of(const int8_t* a, const int8_t* b, int S, int beta) {
+  long long w = -beta;
+  for (int t = 0; t < S; t++) {
+    int s = 0;
+    for (int l = 0; l < 32; l++) s += (int)a[32 * t + l] * (int)b[32 * t + l];
+    w += s;
+  }
+  return w;
+}
+// the certifier's row words over R rows (a1 four raw bits, each later step's bit raw) and G words over C columns by
+// rejection
+static std::vector<uint32_t> draw_feed(int R, int S, int C, uint64_t& x, size_t* redraws) {
+  const int H = coin_words(S);
+  std::vector<uint32_t> feed((size_t)R * H);
+  std::vector<int> bits(S);
+  for (int i = 0; i < R; i++) {
+    int a1[4];
+    const uint64_t r = mix(x);
+    for (int e = 0; e < 4; e++) a1[e] = (int)(r >> e) & 1;
+    for (int t = 1; t < S; t++) bits[t] = (int)(mix(x) & 1);
+    row_words(a1, bits.data(), S, &feed[(size_t)i * H]);
+  }
+  for (int j = 0; j < C; j++) {
+    uint32_t w;
+    while (!g_word_of((uint32_t)mix(x), &w)) ++*redraws;
+    feed.push_back(w);
+  }
+  return feed;
+}
+// the lane-coin words of `tiles` row tiles, S steps and n columns: three odd coins in [-127, 127] and coin_word_top
+static std::vector<uint32_t> draw_lane_coins(int tiles, int S, int n, uint64_t& x) {
+  std::vector<uint32_t> lc((size_t)tiles * S * n);
+  for (int q = 0; q < tiles; q++)
+    for (int t = 0; t < S; t++)
+      for (int j = 0; j < n; j++) {
+        const uint64_t r = mix(x);
+        uint32_t w = coin_word_top(t, j);
+        for (int e = 0; e < 3; e++) w |= (uint32_t)(uint8_t)(int8_t)(2 * (int)((r >> (8 * e)) & 127) - 127) << (8 * e);
+        lc[((size_t)q * S + t) * n + j] = w;
       }
-    }
-  const bool ok = !bad && !past_int32 && (expect != 1 || (p && st && !misread && !vs_stock)) && (expect != -1 || (p && misread));
-  printf("{\"level\": \"fold\", \"vector\": \"%s\", \"outputs\": %zu, \"mismatches_vs_python_magic\": %zu, "
-         "\"words_past_int32\": %zu, \"ab_recorded\": %s, \"expect\": %d, \"read_back_not_ab\": %zu, "
-         "\"served_differ_from_stock\": %zu, \"pass\": %s}\n",
-         label.c_str(), m * n, bad, past_int32, p ? "true" : "false", expect, misread, vs_stock, ok ? "true" : "false");
-  return ok;
+  return lc;
 }
 
 static bool layout_check(const std::string& label, const Vec& v, const std::string& wname, bool xu) {
   const Arr &a = v.at("a"), &b = v.at("b"), &a1 = v.at("a1"), &at = v.at("at"), &u0 = v.at("u0"), &u1 = v.at("u1"),
             &u2 = v.at("u2"), &g = v.at("g"), &coins = v.at("coins"), &wts = v.at("weights"), &meta = v.at("meta"),
-            &sc = v.at("s_col"), &sr = v.at("s_row"), &p = v.at("p"), &st = v.at("stock");
+            &sc = v.at("s_col"), &sr = v.at("s_row"), &p = v.at("p");
   const int m = (int)a.dims[0], K = (int)a.dims[1], n = (int)b.dims[1];
   g_tag = true, g_blc = 2, g_xu = xu, g_fold = !xu, g_rot = wname == "rot";
   bool wok = true;
@@ -204,122 +237,81 @@ static bool layout_check(const std::string& label, const Vec& v, const std::stri
     for (int e = 0; e < 3; e++) w |= (uint32_t)(uint8_t)(int8_t)coins.i((((size_t)t * 3 + e) * tiles + q) * n + j) << (8 * e);
     return w;
   };
-  std::vector<int> ap((size_t)m * S * 32), bp((size_t)tiles * n * S * 32);
+  std::vector<int8_t> ap((size_t)m * S * 32), bp((size_t)tiles * n * S * 32);
   for (int i = 0; i < m; i++)
     for (int t = 0; t < S; t++)
-      for (int l = 0; l < 32; l++) ap[((size_t)i * S + t) * 32 + l] = lane_a(i, t, l, K, S, &A[(size_t)i * K], &rc[i]);
+      for (int l = 0; l < 32; l++)
+        ap[((size_t)i * S + t) * 32 + l] = (int8_t)lane_a(i, t, l, K, S, &A[(size_t)i * K], &rc[i]);
   for (int q = 0; q < tiles; q++)
     for (int j = 0; j < n; j++)
       for (int t = 0; t < S; t++)
         for (int l = 0; l < 32; l++)
-          bp[(((size_t)q * n + j) * S + t) * 32 + l] = lane_b(j, t, l, K, S, &Bt[(size_t)j * K], &G[4 * j], true, lw(t, q, j));
-  size_t bad_p = 0, bad_exact = 0, bad_served = 0, past = 0, bad_stock_model = 0, wrong_class = 0, ab_max = 0;
+          bp[(((size_t)q * n + j) * S + t) * 32 + l] =
+              (int8_t)lane_b(j, t, l, K, S, &Bt[(size_t)j * K], &G[4 * j], true, lw(t, q, j));
+  size_t bad_p = 0, bad_exact = 0, bad_served = 0, past = 0, wrong_class = 0, ab_max = 0;
   long long max_word = 0, max_col = 0;
   for (int i = 0; i < m; i++) {
     const int q = i / 64;
-    const uint32_t r = xu ? xu_row_source(rc[i], K, S) : 0u;
-    long long walk = 0;
-    for (int t = 1; t < S; t++) walk += at.i((size_t)i * py_s + t);
+    const FoldRow fr = xu ? FoldRow{xu_row_source(rc[i], K, S), 0u, 0u, 0u} : fold_row(rc[i].h, i, S);
     for (int j = 0; j < n; j++) {
-      long long acc = -beta_of(j, S), ab = 0, nz = walk - beta_of(j, S);
-      for (int e = 0; e < 4; e++) nz += a1.i(4 * i + e) * code_of(j, e) + tag_of(i, e) * G[4 * j + e];
+      const int8_t* y = &bp[((size_t)q * n + j) * S * 32];
+      const long long acc = word_of(&ap[(size_t)i * S * 32], y, S, beta_of(j, S));
+      long long ab = 0;
       for (int k = 0; k < K; k++) ab += (int)A[(size_t)i * K + k] * (int)Bt[(size_t)j * K + k];
-      for (int t = 0; t < S; t++) {
-        const int* x = &ap[((size_t)i * S + t) * 32];
-        const int* y = &bp[(((size_t)q * n + j) * S + t) * 32];
-        for (int l = 0; l < 32; l++) acc += (long long)x[l] * y[l];
-        max_word = std::max(max_word, acc < 0 ? -acc : acc);
-      }
+      max_word = std::max(max_word, acc < 0 ? -acc : acc);
       const int64_t pij = p.i((size_t)i * n + j);
       bad_p += ab != pij;
       int c[2];
-      long long sig[2];
       for (int cls = 0; cls < 2; cls++) {
-        sig[cls] = xu_sigma(cls, S, [&](int t) { return lw(t, q, j); });
-        c[cls] = col_source(beta_of(j, S), (int)sig[cls]);
-        max_col = std::max(max_col, std::abs(xu ? (long long)c[cls] : -sig[cls]));
+        c[cls] = col_source(beta_of(j, S), xu_sigma(cls, S, [&](int t) { return lw(t, q, j); }));
+        max_col = std::max(max_col, std::abs((long long)c[cls]));
       }
-      const uint32_t d = (uint32_t)acc, ci = (uint32_t)c[i & 1];
-      const long long tgt = xu ? pij : pij + nz;
-      bad_exact += (uint32_t)(d + r + ci) != (uint32_t)(XU_MAGIC_BITS + (uint32_t)tgt);
-      ab_max = std::max(ab_max, (size_t)(tgt < 0 ? -tgt : tgt));
+      const uint32_t d = (uint32_t)acc, g4 = g_bytes(y), cj = code_word(j);
+      bad_exact += fold_word(d, fr.r, (uint32_t)c[i & 1], fr.nt, g4, fr.na, cj) != XU_MAGIC_BITS + (uint32_t)pij;
+      ab_max = std::max(ab_max, (size_t)(pij < 0 ? -pij : pij));
       const float sj = sc.f(j), si = sr.f(i);
-      const uint16_t py_stock = (uint16_t)st.i((size_t)i * n + j);
-      bad_stock_model += bf16_rn(stock_fold((int)pij, sj, si)) != py_stock;
-      const uint16_t want = xu ? py_stock : bf16_rn(stock_fold((int)tgt, sj, si));
-      if (tgt < -(1 << 22) || tgt > (1 << 22)) {
+      if (pij < -(1 << 22) || pij > (1 << 22)) {
         past++;
         continue;
       }
-      bad_served += serve(d, r, ci, sj, si) != want;
-      wrong_class += serve(d, r, (uint32_t)c[(i & 1) ^ 1], sj, si) != want;
+      const uint16_t want = bf16_rn(int8_epilogue((int)pij, si, sj));
+      auto serve = [&](int cc) { return bf16_rn(xu_fold(d, fr.r, (uint32_t)cc, fr.nt, g4, fr.na, cj, si, sj)); };
+      bad_served += serve(c[i & 1]) != want;
+      wrong_class += serve(c[(i & 1) ^ 1]) != want;
     }
   }
-  const bool ok = !bad_private && !bad_p && !bad_exact && !bad_served && !bad_stock_model && max_word < (1ll << 31) &&
-                  (!g_rot || wrong_class);
+  const bool ok = !bad_private && !bad_p && !bad_exact && !bad_served && max_word < (1ll << 31) && (!g_rot || wrong_class);
   printf("{\"level\": \"layout\", \"vector\": \"%s\", \"layout\": \"%s\", \"m\": %d, \"n\": %d, \"K\": %d, \"S\": %d, "
          "\"python_S\": %d, \"python_e\": %d, \"xu_lane\": %d, \"xu_e\": %d, \"weights\": [[%d, %d, %d], [%d, %d, %d]], "
-         "\"private_value_errors\": %zu, \"ab_mismatches_vs_python\": %zu, \"served_against\": \"%s\", "
-         "\"max_abs_folded\": %zu, \"max_abs_word\": %lld, \"max_abs_col_term\": %lld, \"inexact_after_iadd3\": %zu, "
-         "\"served_outputs\": %zu, \"served_mismatches\": %zu, \"stock_model_mismatches_vs_python\": %zu, "
-         "\"past_2_22\": %zu, \"other_class_source_mismatches\": %zu, \"pass\": %s}\n",
+         "\"private_value_errors\": %zu, \"ab_mismatches_vs_python\": %zu, \"served_against\": \"int8_epilogue(A.B)\", "
+         "\"max_abs_ab\": %zu, \"max_abs_word\": %lld, \"max_abs_col_source\": %lld, \"inexact_after_fold\": %zu, "
+         "\"served_outputs\": %zu, \"served_mismatches\": %zu, \"past_2_22\": %zu, \"other_class_source_mismatches\": %zu, "
+         "\"pass\": %s}\n",
          label.c_str(), layout_name(), m, n, K, S, py_s, (int)meta.i(2), xu ? xa : -1, xu ? xe : 0, coin_w(0, 0),
-         coin_w(0, 1), coin_w(0, 2), coin_w(1, 0), coin_w(1, 1), coin_w(1, 2), bad_private, bad_p,
-         xu ? "python stock on A.B" : "stock_fold on A.B + noise", ab_max, max_word, max_col, bad_exact,
-         (size_t)m * n - past, bad_served, bad_stock_model, past, wrong_class, ok ? "true" : "false");
+         coin_w(0, 1), coin_w(0, 2), coin_w(1, 0), coin_w(1, 1), coin_w(1, 2), bad_private, bad_p, ab_max, max_word,
+         max_col, bad_exact, (size_t)m * n - past, bad_served, past, wrong_class, ok ? "true" : "false");
   return ok;
 }
 
-static uint64_t mix(uint64_t& x) {
-  uint64_t z = (x += 0x9E3779B97F4A7C15ull);
-  z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ull;
-  z = (z ^ (z >> 27)) * 0x94D049BB133111EBull;
-  return z ^ (z >> 31);
-}
-// a scale with a 22-bit significand, as the fold takes s_j
-static float scale22(uint64_t r, int lo) {
-  return std::ldexp((float)((1u << 21) + (uint32_t)(r & ((1u << 21) - 1))), -21 - lo - (int)((r >> 32) % 4));
-}
+static void lead_layout() { g_tag = true, g_blc = 2, g_rot = true, g_fold = true, g_xu = false; }
 
 // ragged level: one call of cm rows and cn columns on the lead, served over m x n computed (BN-column tiles); with control
 // the forming reads row i's coins only below cm, so the padding rows get zero words
 static bool ragged_check(int cm, int cn, int K, int BN, long long bound, uint64_t seed, bool control) {
-  g_tag = true, g_blc = 2, g_rot = true, g_fold = true, g_xu = false;
+  lead_layout();
   const int m = (cm + 63) / 64 * 64, n = (cn + BN - 1) / BN * BN, S = steps_of(K), H = coin_words(S), tiles = m / 64;
   const int R = pad_rows(cm), C = pad_cols(cn), formed = control ? cm : R;
   uint64_t x = seed;
   // the certifier's feed, every coin drawn raw: row words over the R committed rows, then G words over the C committed
   // columns by rejection
-  std::vector<uint32_t> feed((size_t)R * H);
-  std::vector<int> bits(S);
-  for (int i = 0; i < R; i++) {
-    int a1[4];
-    const uint64_t r = mix(x);
-    for (int e = 0; e < 4; e++) a1[e] = (int)(r >> e) & 1;
-    for (int t = 1; t < S; t++) bits[t] = (int)(mix(x) & 1);
-    row_words(a1, bits.data(), S, &feed[(size_t)i * H]);
-  }
   size_t redraws = 0;
-  for (int j = 0; j < C; j++) {
-    uint32_t w;
-    while (!g_word_of((uint32_t)mix(x), &w)) redraws++;
-    feed.push_back(w);
-  }
+  const std::vector<uint32_t> feed = draw_feed(R, S, C, x, &redraws);
   const bool feed_ok = (long long)feed.size() == feed_words(R, S, C);
   const std::vector<uint32_t> zero(H, 0u);
   // a1[i, e] and b_t[i] as the certifier drew them (0 past the committed rows), G[e, j] (0 past the committed columns)
   auto fbit = [&](int i, int p) { return i < R ? (int)((feed[(size_t)i * H + (p >> 5)] >> (p & 31)) & 1u) : 0; };
   auto gval = [&](int j, int e) { return j < C ? g_of(feed[(size_t)R * H + j], e) : 0; };
-  // the lane-coin words of the computed tiles, steps and columns: three odd coins in [-127, 127] and coin_word_top
-  std::vector<uint32_t> lc((size_t)tiles * S * n);
-  for (int q = 0; q < tiles; q++)
-    for (int t = 0; t < S; t++)
-      for (int j = 0; j < n; j++) {
-        const uint64_t r = mix(x);
-        uint32_t w = coin_word_top(t, j);
-        for (int e = 0; e < 3; e++) w |= (uint32_t)(uint8_t)(int8_t)(2 * (int)((r >> (8 * e)) & 127) - 127) << (8 * e);
-        lc[((size_t)q * S + t) * n + j] = w;
-      }
+  const std::vector<uint32_t> lc = draw_lane_coins(tiles, S, n, x);
   auto lw = [&](int q, int t, int j) { return lc[((size_t)q * S + t) * n + j]; };
   // data: random within the call, zero past it
   std::vector<int8_t> A((size_t)m * K, 0), Bt((size_t)n * K, 0);
@@ -327,12 +319,17 @@ static bool ragged_check(int cm, int cn, int K, int BN, long long bound, uint64_
     for (int k = 0; k < K; k++) A[(size_t)i * K + k] = (int8_t)mix(x);
   for (int j = 0; j < cn; j++)
     for (int k = 0; k < K; k++) Bt[(size_t)j * K + k] = (int8_t)mix(x);
-  // A' as the forming writes it (row i's words from the feed below `formed`, else zero words) and B' per row tile
-  std::vector<int> ap((size_t)m * S * 32), bp((size_t)tiles * n * S * 32);
+  // A' as the forming writes it (row i's words from the feed below `formed`, else zero words), with the row's words the
+  // forming writes from the same feed words, and B' per row tile
+  std::vector<int8_t> ap((size_t)m * S * 32), bp((size_t)tiles * n * S * 32);
+  std::vector<FoldRow> fr(m);
   for (int i = 0; i < m; i++) {
-    const RowCoins rc{i < formed ? &feed[(size_t)i * H] : zero.data(), 0u};
+    const uint32_t* h = i < formed ? &feed[(size_t)i * H] : zero.data();
+    const RowCoins rc{h, 0u};
+    fr[i] = fold_row(h, i, S);
     for (int t = 0; t < S; t++)
-      for (int l = 0; l < 32; l++) ap[((size_t)i * S + t) * 32 + l] = lane_a(i, t, l, K, S, &A[(size_t)i * K], &rc);
+      for (int l = 0; l < 32; l++)
+        ap[((size_t)i * S + t) * 32 + l] = (int8_t)lane_a(i, t, l, K, S, &A[(size_t)i * K], &rc);
   }
   for (int q = 0; q < tiles; q++)
     for (int j = 0; j < n; j++) {
@@ -340,7 +337,7 @@ static bool ragged_check(int cm, int cn, int K, int BN, long long bound, uint64_
       for (int e = 0; e < 4; e++) G[e] = gval(j, e);
       for (int t = 0; t < S; t++)
         for (int l = 0; l < 32; l++)
-          bp[(((size_t)q * n + j) * S + t) * 32 + l] = lane_b(j, t, l, K, S, &Bt[(size_t)j * K], G, true, lw(q, t, j));
+          bp[(((size_t)q * n + j) * S + t) * 32 + l] = (int8_t)lane_b(j, t, l, K, S, &Bt[(size_t)j * K], G, true, lw(q, t, j));
     }
   // every committed row's non-data lanes against its role (padding rows: tag, lane-coin A', its own a1 and step bits); a
   // computed row past R: zero coins
@@ -365,31 +362,27 @@ static bool ragged_check(int cm, int cn, int K, int BN, long long bound, uint64_
   size_t bad_word = 0, served = 0, bad_served = 0, past = 0;
   for (int i = 0; i < m; i++) {
     const int q = i / 64;
-    const float si = scale22(mix(x), 4);
+    const float si = scale24(mix(x), 4);
     for (int j = 0; j < n; j++) {
-      long long word = -beta_of(j, S), want = -beta_of(j, S), sigma = 0;
-      for (int t = 0; t < S; t++) {
-        const int* a = &ap[((size_t)i * S + t) * 32];
-        const int* b = &bp[(((size_t)q * n + j) * S + t) * 32];
-        for (int l = 0; l < 32; l++) word += (long long)a[l] * b[l];
-        const uint32_t w = lw(q, t, j);
-        for (int e = 0; e < 3; e++) sigma += ROT_W[i & 1][e] * (int8_t)(uint8_t)(w >> (8 * e));
-        if (t > 0) want += 1 + fbit(i, t + 3);
-      }
-      for (int k = 0; k < K; k++) want += (long long)A[(size_t)i * K + k] * Bt[(size_t)j * K + k];
+      const int8_t* b = &bp[((size_t)q * n + j) * S * 32];
+      const long long word = word_of(&ap[(size_t)i * S * 32], b, S, beta_of(j, S));
+      long long want = -beta_of(j, S), ab = 0;
+      for (int t = 1; t < S; t++) want += 1 + fbit(i, t + 3);
+      for (int k = 0; k < K; k++) ab += (long long)A[(size_t)i * K + k] * Bt[(size_t)j * K + k];
       for (int e = 0; e < 4; e++) want += fbit(i, e) * code_of(j, e) + tag_of(i, e) * gval(j, e);
-      want += sigma;
+      const int sigma = xu_sigma(i & 1, S, [&](int t) { return lw(q, t, j); });
+      want += ab + sigma;
       bad_word += word != want;
       if (i >= R || j >= C) continue;
-      const long long p = word - sigma;
-      if (p < -bound || p > bound) {
+      if (ab < -bound || ab > bound) {
         past++;
         continue;
       }
       served++;
-      const float sj = scale22(mix(x), 7);
-      const uint32_t c = (uint32_t)col_source(beta_of(j, S), (int)sigma);
-      bad_served += bf16_rn(xu_fold((uint32_t)word, 0u, c, sj, -12582912.0f * sj, si)) != bf16_rn(stock_fold((int)p, sj, si));
+      const float sj = scale24(mix(x), 7);
+      const uint32_t c = (uint32_t)col_source(beta_of(j, S), sigma);
+      bad_served += bf16_rn(xu_fold((uint32_t)word, fr[i].r, c, fr[i].nt, g_bytes(b), fr[i].na, code_word(j), si, sj)) !=
+                    bf16_rn(int8_epilogue((int)ab, si, sj));
     }
   }
   const bool honest = feed_ok && !pad_wrong && !tagless && !past_wrong && !bad_word && !bad_served;
@@ -397,38 +390,155 @@ static bool ragged_check(int cm, int cn, int K, int BN, long long bound, uint64_
   printf("{\"level\": \"ragged\", \"layout\": \"%s\", \"control\": %s, \"call_m\": %d, \"call_n\": %d, \"K\": %d, \"S\": %d, "
          "\"BN\": %d, \"committed_m\": %d, \"committed_n\": %d, \"computed_m\": %d, \"computed_n\": %d, \"feed_words\": %zu, "
          "\"g_redraws\": %zu, \"padding_rows\": %d, \"padding_rows_wrong\": %zu, \"padding_rows_tagless\": %zu, "
-         "\"uncommitted_rows_wrong\": %zu, \"word_mismatches\": %zu, \"served_outputs\": %zu, \"served_mismatches\": %zu, "
-         "\"past_bound\": %zu, \"bound\": %lld, \"pass\": %s}\n",
+         "\"uncommitted_rows_wrong\": %zu, \"word_mismatches\": %zu, \"served_against\": \"int8_epilogue(A.B)\", "
+         "\"served_outputs\": %zu, \"served_mismatches\": %zu, \"past_bound\": %zu, \"bound\": %lld, \"pass\": %s}\n",
          layout_name(), control ? "true" : "false", cm, cn, K, S, BN, R, C, m, n, feed.size(), redraws, R - cm, pad_wrong,
          tagless, past_wrong, bad_word, served, bad_served, past, bound, ok ? "true" : "false");
   fflush(stdout);
   return ok;
 }
 
-// window level: p's word d = p + sigma with column source 0x4B400000 - sigma and row source 0, as FOLD=1 serves it
+// window level: for each p, a random row i, column j, S, row words, G word and sigma; the word d = p + n_ij + sigma with
+// n_ij = -beta_j + a1 . C + T . G + the walk, as the lead's GEMM leaves it, and the fold's words from the same coins
 static bool window_check(long long bound, uint64_t seed) {
+  lead_layout();
   uint64_t x = seed;
   std::vector<long long> ps = {0, 1, -1};
   for (long long k = 0; k < 64; k++) ps.insert(ps.end(), {bound - k, -bound + k});
   for (int r = 0; r < 4096; r++) ps.push_back((long long)(mix(x) % (uint64_t)(2 * bound + 1)) - bound);
-  size_t misread = 0, bad = 0;
-  auto read_back = [](uint32_t b) {
-    float f;
-    memcpy(&f, &b, 4);
-    return (double)f - 12582912.0;
-  };
-  for (const long long p : ps) {
+  long long max_n = 0;
+  auto fold_of = [&](long long p, float si, float sj, uint32_t* q) {
+    const int i = (int)(mix(x) % 28560), j = (int)(mix(x) % 28560), S = 1 + (int)(mix(x) % 300), H = coin_words(S);
+    std::vector<uint32_t> h(H);
+    for (uint32_t& w : h) w = (uint32_t)mix(x);
+    uint32_t g;
+    while (!g_word_of((uint32_t)mix(x), &g)) {
+    }
     const long long sigma = (long long)(mix(x) % (1ull << 24)) - (1ll << 23);
-    const uint32_t d = (uint32_t)(p + sigma), c = (uint32_t)((long long)XU_MAGIC_BITS - sigma);
-    misread += read_back(d + c) != (double)p;
-    const float sj = scale22(mix(x), 7), si = scale22(mix(x), 4);
-    bad += bf16_rn(xu_fold(d, 0u, c, sj, -12582912.0f * sj, si)) != bf16_rn(stock_fold((int)p, sj, si));
+    long long n = -beta_of(j, S) + walk_of(h.data(), S);
+    for (int e = 0; e < 4; e++) n += (int)((h[0] >> e) & 1u) * code_of(j, e) + tag_of(i, e) * g_of(g, e);
+    max_n = std::max(max_n, n < 0 ? -n : n);
+    const FoldRow fr = fold_row(h.data(), i, S);
+    const uint32_t d = (uint32_t)(p + n + sigma), c = (uint32_t)col_source(beta_of(j, S), (int)sigma), cj = code_word(j);
+    *q = fold_word(d, fr.r, c, fr.nt, g, fr.na, cj);
+    return bf16_rn(xu_fold(d, fr.r, c, fr.nt, g, fr.na, cj, si, sj));
+  };
+  size_t misread = 0, bad = 0;
+  for (const long long p : ps) {
+    const float sj = scale24(mix(x), 7), si = scale24(mix(x), 4);
+    uint32_t q;
+    bad += fold_of(p, si, sj, &q) != bf16_rn(int8_epilogue((int)p, si, sj));
+    misread += read_back(q) != (double)p;
   }
-  const double above = read_back(XU_MAGIC_BITS + (uint32_t)(bound + 1)), below = read_back(XU_MAGIC_BITS - (uint32_t)(bound + 1));
+  uint32_t qa, qb;
+  fold_of(bound + 1, 1.0f, 1.0f, &qa);
+  fold_of(-(bound + 1), 1.0f, 1.0f, &qb);
+  const double above = read_back(qa), below = read_back(qb);
   const bool ok = !misread && !bad && above != (double)(bound + 1) && below != (double)-(bound + 1);
-  printf("{\"level\": \"window\", \"bound\": %lld, \"outputs\": %zu, \"read_back_not_p\": %zu, \"served_differ_from_stock\": %zu, "
+  printf("{\"level\": \"window\", \"layout\": \"%s\", \"bound\": %lld, \"outputs\": %zu, \"max_abs_n_ij\": %lld, "
+         "\"read_back_not_p\": %zu, \"served_against\": \"int8_epilogue(A.B)\", \"served_differ_from_int8\": %zu, "
          "\"read_back_at_bound_plus_1\": %.1f, \"read_back_at_minus_bound_minus_1\": %.1f, \"pass\": %s}\n",
-         bound, ps.size(), misread, bad, above, below, ok ? "true" : "false");
+         layout_name(), bound, ps.size(), max_n, misread, bad, above, below, ok ? "true" : "false");
+  fflush(stdout);
+  return ok;
+}
+
+// 83d82109a8's FOLD=1 epilogue on the IADD3's word b: FFMA(v, s_j, fl(-1.5 2^23 s_j)), then FMUL s_i
+static uint16_t fold_83d(uint32_t b, float si, float sj) {
+  float v;
+  memcpy(&v, &b, 4);
+  return bf16_rn(std::fma(v, sj, -12582912.0f * sj) * si);
+}
+// the fold's FADD with the weight's scale first: FADD(v, -1.5 2^23), FMUL s_j, then FMUL s_i
+static uint16_t fold_sj_first(uint32_t b, float si, float sj) {
+  float v;
+  memcpy(&v, &b, 4);
+  const float f = (v - 12582912.0f) * sj;
+  return bf16_rn(f * si);
+}
+
+// served level: verity_int8's call in `path` served by the lead
+static bool served_check(const std::string& path, long long bound) {
+  lead_layout();
+  const Vec v = load(path);
+  const Arr &xa = v.at("x"), &sa = v.at("s_a"), &wa = v.at("w"), &sw = v.at("s_w"), &za = v.at("z"), &ya = v.at("y");
+  const int m = (int)xa.dims[0], K = (int)xa.dims[1], n = (int)wa.dims[0];
+  const bool shape_ok = xa.t == 'b' && wa.t == 'b' && za.t == 'i' && ya.t == 'H' && wa.dims[1] == (uint64_t)K &&
+                        sa.size() == (size_t)m && sw.size() == (size_t)n && za.size() == (size_t)m * n &&
+                        ya.size() == (size_t)m * n;
+  if (!shape_ok) {
+    printf("{\"level\": \"served\", \"file\": \"%s\", \"shapes_match\": false, \"pass\": false}\n", path.c_str());
+    return false;
+  }
+  const int S = steps_of(K), H = coin_words(S), tiles = (m + 63) / 64, R = pad_rows(m), C = pad_cols(n);
+  uint64_t x = (uint64_t)v.at("seed").i(0);
+  size_t redraws = 0;
+  const std::vector<uint32_t> feed = draw_feed(R, S, C, x, &redraws);
+  const std::vector<uint32_t> lc = draw_lane_coins(tiles, S, n, x);
+  const int8_t *A = (const int8_t*)xa.raw.data(), *W = (const int8_t*)wa.raw.data();
+  std::vector<int8_t> ap((size_t)m * S * 32), bp((size_t)n * S * 32);
+  std::vector<FoldRow> fr(m);
+  for (int i = 0; i < m; i++) {
+    const RowCoins rc{&feed[(size_t)i * H], 0u};
+    fr[i] = fold_row(rc.h, i, S);
+    for (int t = 0; t < S; t++)
+      for (int l = 0; l < 32; l++) ap[((size_t)i * S + t) * 32 + l] = (int8_t)lane_a(i, t, l, K, S, &A[(size_t)i * K], &rc);
+  }
+  std::vector<uint32_t> cj(n);
+  std::vector<int> beta(n);
+  for (int j = 0; j < n; j++) cj[j] = code_word(j), beta[j] = beta_of(j, S);
+  size_t bad_read = 0, bad_served = 0, past = 0, c_83d = 0, c_left = 0, c_ffma = 0, c_sj = 0;
+  long long max_word = 0, max_ab = 0, max_n = 0;
+  for (int q = 0; q < tiles; q++) {
+    auto lw = [&](int t, int j) { return lc[((size_t)q * S + t) * n + j]; };
+    for (int j = 0; j < n; j++) {
+      int G[4];
+      for (int e = 0; e < 4; e++) G[e] = g_of(feed[(size_t)R * H + j], e);
+      for (int t = 0; t < S; t++)
+        for (int l = 0; l < 32; l++) bp[((size_t)j * S + t) * 32 + l] = (int8_t)lane_b(j, t, l, K, S, &W[(size_t)j * K], G, true, lw(t, j));
+    }
+    std::vector<int> sigma(2 * (size_t)n);
+    for (int cls = 0; cls < 2; cls++)
+      for (int j = 0; j < n; j++) sigma[(size_t)cls * n + j] = xu_sigma(cls, S, [&](int t) { return lw(t, j); });
+    for (int i = 64 * q; i < std::min(m, 64 * q + 64); i++) {
+      const float si = sa.f(i);
+      for (int j = 0; j < n; j++) {
+        const int8_t* b = &bp[(size_t)j * S * 32];
+        const long long word = word_of(&ap[(size_t)i * S * 32], b, S, beta[j]);
+        const int s = sigma[(size_t)(i & 1) * n + j];
+        const long long z = za.i((size_t)i * n + j), nij = word - s - z;
+        max_word = std::max(max_word, word < 0 ? -word : word);
+        max_ab = std::max(max_ab, z < 0 ? -z : z);
+        max_n = std::max(max_n, nij < 0 ? -nij : nij);
+        const float sj = sw.f(j);
+        const uint32_t d = (uint32_t)word, qv = fold_word(d, fr[i].r, (uint32_t)col_source(beta[j], s), fr[i].nt,
+                                                          g_bytes(b), fr[i].na, cj[j]);
+        bad_read += (int32_t)(qv - XU_MAGIC_BITS) != z;
+        if (z < -bound || z > bound) {
+          past++;
+          continue;
+        }
+        const uint16_t y = (uint16_t)ya.i((size_t)i * n + j);
+        const uint32_t left = d + (XU_MAGIC_BITS - (uint32_t)s);
+        bad_served += bf16_rn(xu_fold(d, fr[i].r, (uint32_t)col_source(beta[j], s), fr[i].nt, g_bytes(b), fr[i].na, cj[j],
+                                      si, sj)) != y;
+        c_83d += fold_83d(left, si, sj) != y;
+        c_left += bf16_rn(xu_fold(left, 0u, 0u, 0u, 0u, 0u, 0u, si, sj)) != y;
+        c_ffma += fold_83d(qv, si, sj) != y;
+        c_sj += fold_sj_first(qv, si, sj) != y;
+      }
+    }
+  }
+  const size_t outputs = (size_t)m * n;
+  const bool ok = !bad_read && !bad_served && !past && max_word < (1ll << 31) && c_83d > 0;
+  printf("{\"level\": \"served\", \"file\": \"%s\", \"layout\": \"%s\", \"m\": %d, \"n\": %d, \"K\": %d, \"S\": %d, "
+         "\"committed_m\": %d, \"g_redraws\": %zu, \"outputs\": %zu, \"served_against\": \"int8_exact y\", "
+         "\"max_abs_ab\": %lld, \"max_abs_n_ij\": %lld, \"max_abs_word\": %lld, \"past_bound\": %zu, \"bound\": %lld, "
+         "\"read_back_not_z\": %zu, \"served_mismatches\": %zu, \"control_83d82109a8_mismatches\": %zu, "
+         "\"control_n_ij_left_mismatches\": %zu, \"control_ffma_mismatches\": %zu, "
+         "\"control_weight_scale_first_mismatches\": %zu, \"pass\": %s}\n",
+         path.c_str(), layout_name(), m, n, K, S, R, redraws, outputs, max_ab, max_n, max_word, past, bound, bad_read,
+         bad_served, c_83d, c_left, c_ffma, c_sj, ok ? "true" : "false");
   fflush(stdout);
   return ok;
 }
@@ -463,7 +573,7 @@ static bool draw_check() {
   return ok;
 }
 
-static int vectors(const std::string& dir, int* fold_n, int* fold_ok, int* lay_n, int* lay_ok) {
+static int vectors(const std::string& dir, int* lay_n, int* lay_ok) {
   std::ifstream idx(dir + "/index.txt");
   if (!idx) {
     fprintf(stderr, "ERR open %s/index.txt\n", dir.c_str());
@@ -474,14 +584,12 @@ static int vectors(const std::string& dir, int* fold_n, int* fold_ok, int* lay_n
     std::istringstream s(line);
     std::string kind, label, file, w;
     int expect = 0;
-    if (!(s >> kind >> label >> file >> w >> expect)) continue;
+    if (!(s >> kind >> label >> file >> w >> expect) || kind != "layout") continue;
     const Vec v = load(dir + "/" + file);
-    if (kind == "fold") ++*fold_n, *fold_ok += fold_check(label, v, expect);
-    else if (kind == "layout")
-      for (const bool xu : {true, false}) ++*lay_n, *lay_ok += layout_check(label, v, w, xu);
+    for (const bool xu : {true, false}) ++*lay_n, *lay_ok += layout_check(label, v, w, xu);
     fflush(stdout);
   }
-  return *fold_n && *lay_n ? 0 : 2;
+  return *lay_n ? 0 : 2;
 }
 
 int main(int argc, char** argv) {
@@ -492,14 +600,15 @@ int main(int argc, char** argv) {
     else levels.push_back(argv[a]);
   }
   if (levels.empty() || bound <= 0) {
-    fprintf(stderr, "usage: cpu_check [--bound B] LEVEL... (ragged, window, draw, or fold_vectors.py's --out DIR)\n");
+    fprintf(stderr, "usage: cpu_check [--bound B] LEVEL... (ragged, window, draw, served:FILE, or fold_vectors.py's --out "
+            "DIR)\n");
     return 2;
   }
   // (call rows, call columns, K, BN): decode's one row, rows and columns off the tiles, a call of whole 16-row groups
   // (no padding rows, its computed rows past them), and rows off 64 with columns off 256
   struct Call { int m, n, K, BN; };
   const Call calls[] = {{1, 256, 2048, 128}, {17, 13, 100, 128}, {16, 256, 100, 128}, {100, 1000, 2048, 256}};
-  int n = 0, passed = 0, fold_n = 0, fold_ok = 0, lay_n = 0, lay_ok = 0;
+  int n = 0, passed = 0, lay_n = 0, lay_ok = 0;
   for (const std::string& level : levels) {
     if (level == "ragged") {
       uint64_t seed = 1;
@@ -509,13 +618,14 @@ int main(int argc, char** argv) {
       n++, passed += window_check(bound, 7);
     } else if (level == "draw") {
       n++, passed += draw_check();
-    } else if (vectors(level, &fold_n, &fold_ok, &lay_n, &lay_ok)) {
+    } else if (level.rfind("served:", 0) == 0) {
+      n++, passed += served_check(level.substr(7), bound);
+    } else if (vectors(level, &lay_n, &lay_ok)) {
       return 2;
     }
   }
-  const bool ok = passed == n && fold_ok == fold_n && lay_ok == lay_n;
-  printf("{\"summary\": true, \"levels\": %zu, \"checks\": %d, \"checks_pass\": %d, \"fold_vectors\": %d, \"fold_pass\": %d, "
-         "\"layout_checks\": %d, \"layout_pass\": %d, \"pass\": %s}\n", levels.size(), n, passed, fold_n, fold_ok, lay_n, lay_ok,
-         ok ? "true" : "false");
+  const bool ok = passed == n && lay_ok == lay_n;
+  printf("{\"summary\": true, \"levels\": %zu, \"checks\": %d, \"checks_pass\": %d, \"layout_checks\": %d, "
+         "\"layout_pass\": %d, \"pass\": %s}\n", levels.size(), n, passed, lay_n, lay_ok, ok ? "true" : "false");
   return ok ? 0 : 1;
 }
