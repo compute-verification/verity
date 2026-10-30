@@ -1,6 +1,6 @@
 """Independent CPU model of vLLM's FlashAttention-3 forward on Hopper (sm_90, BF16, head dims 64, 128 and 256).
 
-The arithmetic is ``fa3_rows`` in ``cpp/fa2_model.cpp``: W11's FA2 per-row recurrence instantiated with the two things
+The arithmetic is ``fa3_rows`` in ``cpp/fa2_model.cpp``: the FA2 per-row recurrence instantiated with the two things
 Hopper computes differently (REPORT §2 W4d) —
 
 * the tensor-core step is ``wgmma.mma_async.sync.aligned.m64nNk16.f32.bf16.bf16`` (``veritor.core.silicon_total
