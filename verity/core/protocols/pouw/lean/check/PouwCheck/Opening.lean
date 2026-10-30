@@ -1,7 +1,9 @@
+import Flock.FV3
 import PouwCheck.Inputs
 import PouwCheck.Pass
 import PouwWindow.Record
 import PouwWindow.Side
+import Identity.Domains
 
 /-!
 # A unit's opening (`core_check.py`, "a unit's opening")
@@ -30,7 +32,7 @@ open Lean (Json)
 open PouwWindow
 open PouwCommit (Domain)
 
-def SERVED_DOMAIN : String := "verity/one-stage/served-domain/v1"
+def SERVED_DOMAIN : String := Domains.ONE_STAGE_SERVED_DOMAIN
 /-- A tile proof's first two rows: its A row and its B row, each side's fp8-p row schema. -/
 def opened : List (Side × String) := [(.a, Flock.HmRow.ROW_SCHEMA_SEG), (.b, Flock.HmRow.ROW_SCHEMA_V2)]
 /-- The ports of those rows, the pinned circuit's first two (`served_zk/stage_tile.py`'s `in_rows`). -/
@@ -94,14 +96,11 @@ def windowDomain? (p : Params) (c : Registration) : Except String Domain := do
     ("partition", c.partition), ("port", PouwWindow.port), ("schema", entrySchema), ("leaves", n), ("run", p.context)])
   Domain.mk? .sha512 binding owner n
 
-/-- `verify_path`: leaf `index` with siblings `sibs`, leaf level first, hashes up to `root`. -/
+/-- `verify_path`: leaf `index` with siblings `sibs`, leaf level first, climbs to `root` (`Flock.FV3.Sha512.climbL`; the
+check's domains are SHA-512). -/
 def verifyPath (dom : Domain) (root : ByteArray) (index : Int) (leaf : ByteArray) (sibs : List ByteArray) : Bool :=
-  if !(0 ≤ index && index < dom.count) || sibs.length != PouwCommit.depth dom.count then false
-  else
-    let (digest, _) := sibs.zipIdx.foldl (fun (acc : ByteArray × Nat) (s, level) =>
-      let (d, i) := acc
-      (if i % 2 == 0 then dom.node level (i / 2) d s else dom.node level (i / 2) s d, i / 2)) (leaf, index.toNat)
-    digest == root
+  if !(0 ≤ index && index < dom.count) || sibs.length != Flock.log2ceil dom.count then false
+  else Flock.FV3.Sha512.climbL dom.id leaf index.toNat 0 sibs == root
 
 /-- `_fromhex`: `bytes.fromhex` of a string of `n` bytes' hex. -/
 def fromHex? (n : Nat) : Json → Option ByteArray
@@ -221,5 +220,9 @@ def opening (p : Params) (c : Registration) (units : Option (List Int)) (unit : 
       publicBc p.context (salt.getD ByteArray.empty) unit.toNat (entry.rootA, entry.rootB) then
     return some s!"the proof's public row is not the window's certified salt, unit {unit}'s position and entry {e}'s side roots"
   return Option.none
+
+/-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
+written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+example : PUBLIC_ROW_SALT_DOMAIN = Domains.POUW_PUBLIC_ROW_SALT.toUTF8.push 0 := rfl
 
 end PouwCheck

@@ -209,7 +209,7 @@ theorem leaf_copy {N g q i : ℕ} (hl : st.c.leavesIn.getD 0 #[] = (Array.range 
   have hsrc : FlockSoundness.flatSrcAt st.c (g * st.c.upv) ((Flock.portCols st.c.unit.inGroups)[x]!.1 + t) =
       FlockSoundness.Typed.msgCol st.c g q (i / 8) (i % 8) := by
     unfold FlockSoundness.flatSrcAt
-    rw [FlockSoundness.portOf_eq (FlockSoundness.Discharge.Aliased.portBits_nodup (L.built_flat F.parse.tmpl)) hxp ht16,
+    rw [FlockSoundness.portOf_eq (FlockSoundness.Discharge.Aliased.unit_nodup L) hxp ht16,
       Nat.add_sub_cancel_left]
     unfold FlockSoundness.Flat.flatSrc FlockSoundness.Flat.leafSrc
     rw [ite_eq_left hxg, Nat.mul_mod_left, hl]
@@ -285,21 +285,19 @@ theorem table_rows {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {tables :
   · rw [hh] at hd
     simp only [↓reduceIte] at hd
     have s := FlockSoundness.Discharge.Hidden.setupHidden_spec' hd
-    obtain ⟨hp, hcr⟩ := FlockSoundness.Discharge.Hidden.parse_untyped ht s.parse
-    have P := FlockSoundness.parse_facts hp
-    have L0 : FlockSoundness.Layout (FlockSoundness.Discharge.Hidden.flatTwin st) :=
-      FlockSoundness.layout_of (st := FlockSoundness.Discharge.Hidden.flatTwin st) P s.pin rfl rfl s.m s.kLog
+    have sc := FlockSoundness.Discharge.Hidden.setupHidden_specCC hd
+    obtain ⟨hty, ⟨ls, hcheck⟩, -⟩ := sc.committed.check ht
+    have L0 : FlockSoundness.Layout (FlockSoundness.Discharge.Hidden.flatTwin st) := sc.flatLayout ht
     have F0 : FlockSoundness.Discharge.Aliased.UnitFacts tags (FlockSoundness.Discharge.Hidden.flatTwin st) :=
-      FlockSoundness.Discharge.Hidden.unitFacts_of_parse (st := FlockSoundness.Discharge.Hidden.flatTwin st) hp rfl
+      sc.unitFacts ht
     have hda : st.da = (Flock.HmRow.delta st.c st.pin).1 ++
         (FlockSoundness.Discharge.Hidden.outPairs st.c).toArray := by
       rw [s.da, FlockSoundness.Discharge.Hidden.hidden_delta_unpinned
-        (FlockSoundness.Discharge.Hidden.unpinned_of_v1 hcr fun p hp => (hv1 p hp).1)]
-    have hrows := FlockSoundness.Discharge.Hidden.out_rows_v1 hp hcr fun p hp => (hv1 p hp).1
+        (sc.committed.unpinned_of_rep ht (sc.committed.outRows ht fun p hp => (hv1 p hp).1).2.1)]
+    have hrows := sc.committed.outRows ht fun p hp => (hv1 p hp).1
     have hz0 := FlockSoundness.Discharge.Hidden.sat_flat L L0 F0 hv1 hda hrows hz
-    obtain ⟨ls, hcheck⟩ := P.check
     refine ⟨FlockSoundness.Discharge.Hm.RowRanges.ofL (st := FlockSoundness.Discharge.Hidden.flatTwin st) L0 F0.parse
-      F0.check, (FlockSoundness.Discharge.Layout.check_cuts P.typed hcheck).2,
+      F0.check, (FlockSoundness.Discharge.Layout.check_cuts hty hcheck).2,
       (FlockSoundness.Discharge.HiddenExec.setupHidden_n hd).2, fun o g p hg hp => ?_,
       fun o N g q i hl hg hq hbw hN hi => ?_⟩
     · exact FlockSoundness.Discharge.Hm.row_bc_flat L0 F0 rfl hupv hv1 hz0 o hg hp
