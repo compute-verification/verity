@@ -373,7 +373,7 @@ def test_row_rules_and_debit(fmt):
     # share; MXFP4 chains hold identity atoms on some draws (about 0.21% of atoms on Gaussian inputs), NVFP4's here none
     assert clean.forming == Fraction(F.FORMING_CREDITED * 3 * clean.counts["unneeded_positions"] * 3, 4096)
     assert clean.total == clean.forming + clean.identity + clean.split and (fmt != "nvfp4" or clean.identity == 0)
-    # the spike saturates its block at code 6 and the block's small codes round to 0 on every draw: salt-dead (x[2] at
+    # the spike saturates its block at code 6 and the block's small codes round to 0 on every sample: salt-dead (x[2] at
     # 3ρ reaches code 0.5 on the extreme draw, so it stays live)
     dead = F.salt_dead(f, one, a.alpha[0], a.ae[0])
     assert dead[1] and sum(dead[:f.block]) >= f.block - 2 and not any(dead[f.block:])
@@ -445,7 +445,7 @@ def test_a_row_whose_screened_blocks_pass_r1_is_rejected_by_f1_prime():
 
 def dead_rows(rows: int, k: int = 1024) -> list[bytes]:
     """Rows salt-dead at every position: ρ from 1.0 at every 8th position, and one element per block at 256ρ, so each
-    block's scale sits on its spike and every other code rounds to 0 at every draw."""
+    block's scale sits on its spike and every other code rounds to 0 at every sample."""
     x = [P.f32_bits(1.0) if p % 8 == 0 else 0 for p in range(k)]
     for b in range(0, k, 16):
         x[b + 1] = P.f32_bits(256.0)
@@ -1099,7 +1099,7 @@ def test_the_work_law_audits_pearl_c4_under_h3():
 
 
 def test_v_ex_a_voluntary_row_that_passes_the_rules_is_accepted():
-    """V-EX: a row given up before the draws may pass the per-row rules and R1,
+    """V-EX: a row given up before the samples may pass the per-row rules and R1,
     earns nothing, opens no exclusion tile, and is committed in `records_root`; declared excluded instead, it fails.  A row
     the rules exclude stays excluded."""
     s = V.scheme("nvfp4", True)

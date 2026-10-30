@@ -1,6 +1,6 @@
 """The prover's GPU backend: an encoded store across the visible GPUs, its payload tree, chained sketch-sha512 passes
 over it with the device reader (`../codec_tensor/reader.cu` in `session.cu`) and the openings of what the verifier
-draws.
+samples.
 
 ~~~text
 segments   the store's N blocks as contiguous segments of whole chunks: first a shard a GPU in its HBM, as even as the
@@ -10,8 +10,8 @@ segments   the store's N blocks as contiguous segments of whole chunks: first a 
            whatever the GPUs and tiers (one GPU and no host tier is the same code)
 payload    N blocks of seeded random bytes, each 128-byte word's top byte below 0x80 (so below p1024 and p512), or a
            buffer a GPU as it is (`hbm`: a serving engine's weights, `node.py`) and then a host tier of zeros (the
-           store `remote_bandwidth.store` lays out), its tree the driver's `audit.payload_tree` with salt_j = SHAKE256(D(store
-           salt) ‖ key ‖ PAYLOAD_LABEL ‖ u64be j), key the verifier's (`set_payload_key`) or else the store's own;
+           store `remote_bandwidth.store` lays out), its tree the driver's `audit.payload_tree` with salt_j =
+           `store_salt(key, PAYLOAD_LABEL, j)`, key the verifier's (`set_payload_key`) or else the store's own;
            built a chunk at a time on the chunk's GPU and retained on the CPU, so it does not displace the store
 store      E = the codec over the payload in place, by kv.cu (`../word_codec/kv.cu`) on each segment's GPU at the
            registration's key and the store's positions
@@ -24,7 +24,7 @@ pass       on each GPU, its seed, signs and constants derived from the previous 
            the pass before it runs, so the passes follow one another on the devices with no host step between them.
            A pass keeps its packed signs (8 KiB), each segment's levels h0 … hc and the levels above, nothing per block,
            in rings allocated with the store and copied to host memory as its part ends, so a pass allocates nothing
-opening    a window's draws at once, segment by segment on its GPU's opening stream: each drawn leaf's subtree of 2^h0
+opening    a window's samples at once, segment by segment on its GPU's opening stream: each drawn leaf's subtree of 2^h0
            leaves recomputed from the segment under its pass's constants by a second copy of the library
            (`rs_subtrees`), then its receipts and its path below hc gathered from those subtrees and the segment's kept
            levels in one launch (`rs_gather64`), the blocks in another; the path above hc comes from the pass's top
@@ -36,7 +36,7 @@ Gates, before anything is timed (`GpuBackend.gates`), over a small store across 
 GPU, and with a host tier one more a GPU in host memory, so its tree has padding on every GPU when there are several):
 the payload root against `audit.payload_tree` and blocks of the store against `codec.encode` (at each segment's first
 block and the store's last), a pass's root against `receipts.tree` over the reference's receipts, and sessions under
-the registration's key, one honest and accepted by `audit.Session`, one with 1/16 of its blocks dropped and rejected at
+the registration's key, one honest and accepted by `audit.AuditRun`, one with 1/16 of its blocks dropped and rejected at
 a receipt, and with a host tier one with only host blocks dropped (every fourth) and rejected at a receipt; then in
 calibration, the chained pass against the plain pass at every kept level over the whole store, and its seed and signs
 against the reference's.
@@ -1351,12 +1351,13 @@ class GpuBackend:
 
     def gate_session(self, small: DeviceStore, reg: audit.Registration, dropped: set[int]) -> dict:
         """Two windows of two passes each over `small` under a clock the gate turns, `gate_samples` draws a window,
-        checked by `audit.Session`."""
+        checked by `audit.AuditRun`."""
         now = [0]
         params = audit.Params(reg.blocks, 1000, 2, self.gate_samples, 2.0 ** -40, window_ns=1, codec=reg.codec,
                               receipt=reg.receipt, rows=reg.rows)
-        session = audit.Session(params, reg, None, coins.local(reg.digest, 0, params.windows, secrets.token_bytes, appends=1),
-                                clock=lambda: now[0], not_before_ns=0)
+        session = audit.AuditRun(params, reg, None,
+                                 coins.local(reg.digest, 0, params.windows, secrets.token_bytes, appends=1),
+                                 clock=lambda: now[0], not_before_ns=0)
         small.arm(dropped)
         coin, prev, kept = session.start(), reg.digest, {}
         for t in range(2):

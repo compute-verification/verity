@@ -1,5 +1,5 @@
-"""The schedule check (`schedule.check`, `Session.scheduled`): a pass's plan is the published schedule's at its step, so
-the layout a credited pass reads is the verifier's function of the schedule and moves only with it, and the ledger
+"""The schedule check (`schedule.check`, `AuditRun.scheduled`): a pass's plan is the published schedule's at its step,
+so the layout a credited pass reads is the verifier's function of the schedule and moves only with it, and the ledger
 credits no appended block without the session's own verdict.  The check refuses the collapse that makes
 `SteeredLayout`'s `a` empty (every layout steered through the coins themselves, `a` = their bits): at a fixed
 schedule every layout but one is refused, whatever the coins.  And it holds the schedule to the cap on its bits the
@@ -154,7 +154,7 @@ def test_a_layout_the_session_accepts_is_refused_credit_unless_the_schedule_give
 
 def test_the_ledger_refuses_a_verdict_on_another_session_or_not_the_check_s(honest) -> None:
     """A verdict names its session by its registration and its coin commitment: another session's (the steered one's
-    coins are the same draw, so its registration is changed here), or a look-alike not made by the check, credits
+    coins are the same flip, so its registration is changed here), or a look-alike not made by the check, credits
     nothing.  Without a property verdict no schedule is needed."""
     r, _ = honest
     rec = r.s.record()

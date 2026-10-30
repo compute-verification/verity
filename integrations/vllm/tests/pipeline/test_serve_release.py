@@ -92,7 +92,7 @@ def test_a_later_draw_or_a_read_of_a_dropped_leaf_is_refused_by_name(cs):
     assert draws.refused(0, [(2, "model.layers.0.mlp.down_proj", 0, 1)], dev) == []
     lost = draws.refused(0, [(1, "runner.sampler", 0, 4), (2, "model.layers.0.mlp.down_proj", 0, 1)], dev)
     assert len(lost) == 1 and lost[0].startswith("runner.sampler [0, 4) at step 1") and DROPPED in lost[0]
-    with pytest.raises(SL.DrawRefused, match="was released"):
+    with pytest.raises(SL.Refused, match="was released"):
         draws.put(0, "sampled_proofs", [(1, "runner.sampler", 0, 4)])
     with pytest.raises(RuntimeError, match="draw-gated release"):
         OpenedReader(dev, rc)(1, "runner.sampler", 0, 4)
@@ -102,9 +102,9 @@ def test_a_draw_is_never_redrawn_names_only_its_protocols_and_reads_only_what_wa
     _host, _rc, dev = committed(cs)
     draws = SL.Draws(PROTOCOLS)
     draws.put(0, "pouw_h1", [])
-    with pytest.raises(SL.DrawRefused, match="drawn by pouw_h1 already"):
+    with pytest.raises(SL.Refused, match="drawn by pouw_h1 already"):
         draws.put(0, "pouw_h1", [])
-    with pytest.raises(SL.DrawRefused, match="not a protocol the release waits for"):
+    with pytest.raises(SL.Refused, match="not a protocol the release waits for"):
         draws.put(0, "pous", [])
     with pytest.raises(ValueError, match="0 <= lo < hi"):
         draws.put(0, "sampled_proofs", [(0, "model.embed_tokens", 4, 4)])
@@ -126,7 +126,7 @@ def test_the_draws_dir_puts_each_file_once_and_a_bad_one_refuses_its_window_by_n
     (d.path / "w0.pouw_h1.json.tmp").write_text("{")
     assert d.scan() == 3 and d.scan() == 0
     assert draws.release(0, dev)["union_leaves"] == 1
-    with pytest.raises(SL.DrawRefused, match="w1.sampled_proofs.json: ValueError: its body names window 0"):
+    with pytest.raises(SL.Refused, match="w1.sampled_proofs.json: ValueError: its body names window 0"):
         draws.release(1, dev)
     assert draws.summary()["refused"] == {1: draws._refused[1]}
 
@@ -135,7 +135,7 @@ def test_a_failed_run_ends_every_waiting_release():
     draws = SL.Draws(PROTOCOLS)
     draws._cv = _Waits()
     got = {}
-    t = threading.Thread(target=lambda: got.update(e=pytest.raises(SL.DrawRefused, draws.wait, 3)))
+    t = threading.Thread(target=lambda: got.update(e=pytest.raises(SL.Refused, draws.wait, 3)))
     t.start()
     draws._cv.entered.acquire()
     draws.fail("the server stopped")

@@ -1,14 +1,14 @@
-"""The Python side of the remote audit's difftests, which hold `audit.py`, `receipts.py` and `codec.py` to the Lean
+"""The Python side of PoUB's difftests, which hold `audit.py`, `receipts.py` and `codec.py` to the Lean
 (`RemoteAudit`, the verifier's definition: `../../README.md`): the Python behind the Lean's JSON formats
 (`RemoteAudit.Difftest`), and the sessions the tests record. Where the two differ, the Python is what is wrong.
 
 The decoders mirror `RemoteAudit.Difftest`'s: byte strings lowercase hex, indices integers, a registration checked as
 `audit.register` checks one, and `bind` refused (the Lean covers receipts of blocks alone), as `audit.Registry.register`
 refuses a registration that would bind (counted, for a node with one live). Past decoding each side is
-the Python's own code on the decoded objects. A session's events run through `audit.Session` itself, on a clock each
+the Python's own code on the decoded objects. A session's events run through `audit.AuditRun` itself, on a clock each
 event sets, its coins those of a challenger that replays the case's (`Replay`).
 
-A recorded session is one `Run` drives through a real `Session`, the prover's side computed by `audit.Prover` from a
+A recorded session is one `Run` drives through a real `AuditRun`, the prover's side computed by `audit.Prover` from a
 `Store`, honest or with one deviation, every call kept as an event with the clock it read. `SCENARIOS` are the recorded
 ones; each names the outcome the definition gives it, which `test_session.py` holds the Lean's answer to, so a scenario
 that stops reaching its failure fails there, not silently in the difftest."""
@@ -27,7 +27,7 @@ from typing import Any
 import verity_difftest as D
 from verity_difftest import protocol as P
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts, wire
-from verity.core.protocols.remote_bandwidth.audit import Params, Session, SessionError
+from verity.core.protocols.remote_bandwidth.audit import AuditRun, Params, SessionError
 from verity.core.protocols.remote_bandwidth.receipts import Plan
 from verity.core.protocols.sampled_proofs.challenger import COIN_BYTES as LIVE_COIN_BYTES, HM96, LiveChallenger
 
@@ -241,8 +241,9 @@ class Replay:
 
 
 def replayed(reg: audit.Registration, k: int, windows: int, committed: list[bytes], appends: list[bytes],
-             per_coin: int = 1) -> coins.Coins:
-    return coins.Coins(Replay(k, windows, committed, appends, per_coin), reg.digest, k, windows, per_coin=per_coin)
+             per_coin: int = 1) -> coins.SessionCoins:
+    return coins.SessionCoins(Replay(k, windows, committed, appends, per_coin), reg.digest, k, windows,
+                              per_coin=per_coin)
 
 
 def verdict_json(v: audit.Verdict) -> dict:
@@ -254,7 +255,7 @@ def _done(out: audit.Verdict | None) -> dict:
     return {"ok": True} if out is None else verdict_json(out)
 
 
-def apply(s: Session, clock: Clock, e: tuple) -> dict:
+def apply(s: AuditRun, clock: Clock, e: tuple) -> dict:
     """One event through the session: what the call returns, or `refused` where it raises `SessionError`."""
     kind = e[0]
     try:
@@ -283,8 +284,8 @@ def apply(s: Session, clock: Clock, e: tuple) -> dict:
         return {"refused": True}
 
 
-def summary(s: Session) -> dict:
-    """`summaryJ`: what `Session.record` gives that the port computes, which is all of it but the coin commitment's
+def summary(s: AuditRun) -> dict:
+    """`summaryJ`: what `AuditRun.record` gives that the port computes, which is all of it but the coin commitment's
     root, the block size and the registration's fields its digest binds, and of each window's profile its draws; and
     `sessionFn`'s `groups_per_coin` when it isn't 1."""
     rec = s.record()
@@ -341,15 +342,15 @@ def params_of(reg: audit.Registration, kw: dict) -> Params:
 
 
 def session(v: Any) -> dict:
-    """`sessionFn`: a case's events through `audit.Session`, every event's result, the outcome and the record."""
+    """`sessionFn`: a case's events through `audit.AuditRun`, every event's result, the outcome and the record."""
     with decoding():
         reg = registration_of(_get(v, "registration"))
         kw, committed, appends, not_before = session_of(v)
         events = [event_of(e) for e in _list(v, "events")]
         params = params_of(reg, kw)
     clock = Clock()
-    s = Session(params, reg, None, replayed(reg, 0, params.windows, committed, appends, params.groups_per_coin),
-                not_before_ns=not_before, clock=clock)
+    s = AuditRun(params, reg, None, replayed(reg, 0, params.windows, committed, appends, params.groups_per_coin),
+                 not_before_ns=not_before, clock=clock)
     results = [apply(s, clock, e) for e in events]
     return {"outcome": s.outcome, "record": summary(s) if s.outcome == "accepted" else None, "results": results}
 
@@ -380,7 +381,7 @@ def registry_of(v: Any) -> audit.Registry:
 
 
 def registry_op(v: Any) -> tuple:
-    """`opOf`: a call on the registry, its kind first. A session names its registration by its place among those drawn
+    """`opOf`: a call on the registry, its kind first. A session names its registration by its place among those sampled
     in the case, or in full."""
     op = _str(v, "op")
     if op == "register":
@@ -416,7 +417,7 @@ def _registry_call(r: audit.Registry, source: bytes, drawn: list[audit.Registrat
         node, k, e = a
         x = r._live.get(audit._node(node))
         s = x.sessions[k] if x is not None and k < len(x.sessions) else None
-        return apply(s, s.clock, e) if isinstance(s, Session) else {"refused": True}
+        return apply(s, s.clock, e) if isinstance(s, AuditRun) else {"refused": True}
     if op == "close":
         return r.close(a[0]).to_json()
     if op == "live":
@@ -428,7 +429,7 @@ def _registry_call(r: audit.Registry, source: bytes, drawn: list[audit.Registrat
 def registry(v: Any) -> dict:
     """`registryFn`: a case's calls on `audit.Registry` under its source, from the registry read back (`registry_of`),
     each call's result (`refused` where it raises `RegistryError`) and the registry after them. A session's events
-    go through the `Session` the registry holds, on the clock it was started with."""
+    go through the `AuditRun` the registry holds, on the clock it was started with."""
     with decoding():
         source = hex_(v, "source")
         r = registry_of(_get(v, "registry"))
@@ -492,7 +493,7 @@ def _encoded(c: codec.Codec, blocks: int) -> audit.Store:
 
 
 def store(world: World) -> audit.Store:
-    """A fresh store of the world's registration with no appends yet. The codec seed is drawn without the receipt kind
+    """A fresh store of the world's registration with no appends yet. The codec seed is sampled without the receipt kind
     (`audit.register`), so worlds of one codec and size share their encoded blocks."""
     base = _encoded(world.codec, world.blocks)
     r = base.registration
@@ -511,9 +512,9 @@ def _runs_json(runs) -> list | None:
 
 
 class Run:
-    """One session over a world's store, the verifier's side (a real `Session`) and the prover's (`audit.Prover`, from
+    """One session over a world's store, the verifier's side (a real `AuditRun`) and the prover's (`audit.Prover`, from
     `cheat` if given, else the store) in step, every call to the session kept as an event with the clock it read. The
-    clock moves one tick an event unless a call needs more. Every receipt is drawn unless `samples` says fewer."""
+    clock moves one tick an event unless a call needs more. Every receipt is sampled unless `samples` says fewer."""
 
     def __init__(self, world: World = World(), *, windows: int = 2, samples: int = 10**6, min_passes: int = 1,
                  lifetime: int | None = None, deferred: bool = False, deadline_ns: int = 100, window_ns: int = 10,
@@ -528,7 +529,7 @@ class Run:
         self.clock.now = not_before_ns
         self.not_before_ns = not_before_ns
         self.coins = coins.local(reg.digest, 0, windows, Entropy(b"coins"), per_coin=groups_per_coin)
-        self.s = Session(self.params, reg, None, self.coins, not_before_ns=not_before_ns, clock=self.clock)
+        self.s = AuditRun(self.params, reg, None, self.coins, not_before_ns=not_before_ns, clock=self.clock)
         self.prover = audit.Prover(cheat(self.store) if cheat else self.store, None, entropy=Entropy(b"receipt salts"))
         self.events: list[dict] = []
         self.append_coins: list[bytes] = []
@@ -612,7 +613,7 @@ class Run:
         return self.receive(**sent)
 
     def close(self, t: int, at: int | None = None) -> Any:
-        """Window t's draws, at the earliest its roots are final unless `at`; each window of its draw keeps its share."""
+        """Window t's samples, at the earliest its roots are final unless `at`; each window of its sample keeps its share."""
         if at is None:
             w = self.s.windows[t] if 0 <= t < len(self.s.windows) else None
             d = self.s.deadline(t) if w is not None else None
@@ -632,7 +633,7 @@ class Run:
                           lambda: self.s.verify(t, opened))
 
     def finish(self, edit: Callable[[int, list[audit.Opening]], list[audit.Opening]] | None = None) -> None:
-        """Every draw not yet drawn closed at its last window and its windows verified in order, their openings
+        """Every sample not yet drawn closed at its last window and its windows verified in order, their openings
         through `edit`, until one fails; a window its close accepted, its share none, isn't verified."""
         for t in range(len(self.s.windows)):
             if t in self.draws:
@@ -736,7 +737,7 @@ def honest_appends(r: Run) -> None:
 
 def honest_by_root(r: Run) -> None:
     """Window 0's last pass arrives after its boundary, in flight; window 0 is final at window 1's first root, and is
-    drawn and verified while window 1 runs."""
+    sampled and verified while window 1 runs."""
     r.start()
     r.run()
     r.boundary()
@@ -1056,8 +1057,8 @@ def honest_paced(r: Run) -> None:
 
 
 def honest_paced_drawn_at_k(r: Run) -> None:
-    """A paced session (k = 2) drawn as each window's k-th root arrives once its boundary has left: a draw after one
-    root, or after k before the boundary, is refused; window 0 is drawn before window 1's first root, and the last
+    """A paced session (k = 2) drawn as each window's k-th root arrives once its boundary has left: a sample after one
+    root, or after k before the boundary, is refused; window 0 is sampled before window 1's first root, and the last
     window before its deadline."""
     r.start()
     r.run()
@@ -1104,8 +1105,8 @@ def boundary_before_root(r: Run) -> None:
 
 
 def honest_shared(r: Run) -> None:
-    """One openings coin over g windows (`Params.groups_per_coin`): every window's passes, then each draw closed at its
-    last window and its windows verified on their shares. A close at a window before its draw's last is refused, and
+    """One openings coin over g windows (`Params.groups_per_coin`): every window's passes, then each sample closed at its
+    last window and its windows verified on their shares. A close at a window before its sample's last is refused, and
     a window whose share is none, accepted at its close, is refused a verify."""
     r.start()
     for t in range(r.params.windows):
@@ -1138,7 +1139,7 @@ def skipper_shared(r: Run) -> None:
 
 
 def few_shared(r: Run) -> None:
-    """Window 0 of a draw over four sees no root: the draw's close at window 3 fails `few` at window 0."""
+    """Window 0 of a sample over four sees no root: the sample's close at window 3 fails `few` at window 0."""
     r.start()
     r.boundary()
     for _ in range(3):

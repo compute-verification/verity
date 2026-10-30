@@ -6,7 +6,7 @@ and window t's boundary message at `(t + 1)·T`; each reaches the prover `down_n
 to back, `pass_ns + gap_ns` apart: the gap is the root's reduction, the next seed and its broadcast to every GPU, which
 the next pass waits on.  The pass in flight when a boundary message arrives is its window's last, and each root reaches
 the verifier `up_ns` plus a jitter after its pass and its reduction end.  Each jitter is in [0, `jitter_ns`], a fixed
-pseudorandom pattern.  The tests replay the schedule against `audit.Session` (`tests/test_remote_bandwidth.py`).
+pseudorandom pattern.  The tests replay the schedule against `audit.AuditRun` (`tests/test_remote_bandwidth.py`).
 
 `deadline` is the least allowance A that never makes the honest prover late: the boundary message's trip down, the pass
 in flight, its root's reduction and its trip up, each trip at its longest.
@@ -218,7 +218,7 @@ def live_best_interval(pass_ns: int, *, gap_ns: int = 0, rtt_ns: int, jitter_ns:
 
 def opening_bytes(blocks: int, tile_bytes: int = 0) -> int:
     """One opening on the wire (`audit.Opening.size`): the block, its receipt leaf and salt, both paths, the payload's
-    salt, the indices, and PoUW's tile evidence, which PoUW's own sampled check already pays for when the draws
+    salt, the indices, and PoUW's tile evidence, which PoUW's own sampled check already pays for when the samples
     coincide."""
     receipt_depth = math.ceil(math.log2(max(1, math.ceil(blocks / PER_LEAF))))
     payload_depth = math.ceil(math.log2(max(1, blocks)))
@@ -298,7 +298,7 @@ def log2(x: Fraction) -> float:
 
 def samples_for(epsilon: float, delta: float) -> int:
     """The fewest openings with `ε_s ≤ epsilon` at `delta`: `C(n − m, s)/C(n, s) ≤ (1 − m/n)^s`, so the bound on wrong
-    receipts is at most `n·(1 − δ^(1/s)) ≤ n·ln(1/δ)/s`.  A draw the prover can grind over `Q` transcripts needs
+    receipts is at most `n·(1 − δ^(1/s)) ≤ n·ln(1/δ)/s`.  A sample the prover can grind over `Q` transcripts needs
     `samples_for(epsilon, delta / Q)`."""
     return math.ceil(math.log(1 / delta) / epsilon)
 
@@ -316,7 +316,7 @@ def spanning(gpu_bytes: int) -> int:
 
 def stated(store_bytes: int, window_ns: int, windows: int, *, rtt_ns: int, samples: int, delta: float = 2.0 ** -40,
            gap_ns: int = 50 * US, jitter_ns: int = 50 * US, read_bytes_per_s: float = READ_BYTES_PER_S,
-           capacity_bytes_per_s: float = READ_BYTES_PER_S) -> audit.Ledger:
+           capacity_bytes_per_s: float = READ_BYTES_PER_S) -> audit.GammaTerms:
     """The ledger of the honest prover's session over a store of `store_bytes` on one node of `capacity_bytes_per_s`
     (R measured; `SPEC_BYTES_PER_S`, the headline): a pass is the store's read at `read_bytes_per_s`, `samples`
     openings a window at `delta` bound its wrong receipts (`wrong_bound`), the node's chips hold `CHIP_BYTES`, and

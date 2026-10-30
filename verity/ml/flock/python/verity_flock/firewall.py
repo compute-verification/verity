@@ -1,4 +1,4 @@
-"""``firewall/v0``: the firewall's release side (live PROTOCOL.md §10.5). It sits between the workers' outer prover
+"""``firewall/v0``: the ZK server's release side (live PROTOCOL.md §10.5). It sits between the workers' outer prover
 (``flock-circuit prove --zk`` with its send check, ``FC_FIREWALL=1``, §10.4) and the challenger, beside the inner phase's
 proxy (`verity_flock.rec_live`, §10.3).
 
@@ -10,7 +10,7 @@ session through ``core-firewall session`` (``Core.Firewall.Loop`` around the Lea
 byte for byte, and the rules below (``live/src/firewall_record_vectors.json``, which both sides' tests run). This module is the inner side's (`rec_live`'s ``serve`` opens and ends recursive sessions
 here) and the tests' relay.
 
-Every process of one firewall shares its state directory: ``record.jsonl``, its events in order (each with its ``seq``),
+Every process of one ZK server shares its state directory: ``record.jsonl``, its events in order (each with its ``seq``),
 appended under ``record.lock``, and ``slot.lock``, the outer slot. Four rules hold through it:
 
 * **A recursive session's statements go in their order, each once, and it ends at its first stop.** The inner phase opens
@@ -33,28 +33,28 @@ appended under ``record.lock``, and ``slot.lock``, the outer slot. Four rules ho
   session that had neither stopped nor released its last statement, on a stream that had not stopped.
 * **Proofs leave at public times.** A recursive session opened with a ``release`` schedule (``start_ms``, and one window a
   statement, ``windows_ms``) releases statement j's proofs at ``start_ms + windows_ms[0] + ... + windows_ms[j]``: proofs
-  ready early wait, and proofs not ready by then are a stop. Only the Lean firewall keeps the times; this module's relay
+  ready early wait, and proofs not ready by then are a stop. Only the Lean ZK server keeps the times; this module's relay
   refuses a scheduled session rather than release it early.
 
 An outer session stops when the worker cuts it, when the worker sends ``Finish`` before all of the session's proofs (the
 send check refused: ``flock-circuit`` then sends ``Finish`` at once), when the challenger's verdict rejects it, or on any
 fault of the relay's. Except for a rejecting verdict, which the challenger reached itself, the relay then cuts the
-challenger's connection without sending ``Finish``. So every stop the firewall makes looks the same to the challenger: a
+challenger's connection without sending ``Finish``. So every stop the ZK server makes looks the same to the challenger: a
 session cut after some message, never why. A refused or stopped session's worker is answered outside the slot, so it
 can't hold up another session's.
 
 What the rules read of the record is kept beside it in ``index-py/`` (`_Index`: each recursive session's open, stop,
 finish and releases, each stream's first open and failures, the last ``slot``, the counts), and a call reads only what
-was appended to the record since the index last read it, by whichever process. The Lean firewall keeps none and reads
+was appended to the record since the index last read it, by whichever process. The Lean ZK server keeps none and reads
 the record whole. The index is rebuilt from the record's start when
 the record was replaced, cut shorter or no longer holds the last bytes the index read, when the machine has booted since
 the index was written, when a writer of it ended mid-write, or when a file of it won't read; an edit further back that
-leaves the record no shorter isn't seen, nor is a file of the index edited by hand that still reads. Since the firewall
+leaves the record no shorter isn't seen, nor is a file of the index edited by hand that still reads. Since the ZK server
 only appends, the verdicts are the ones a read of the whole record gives.
 A record the index can't answer is read whole at every call, as
 before, and each rule's read is a scan of it (`_Scan`): one whose last line has no newline yet, or one holding a line
-the firewall doesn't write or a name over `KEY_MAX` bytes. A torn last line (a writer killed inside its append) fails
-every call, so the firewall serves nothing until the developer repairs the record: it fails closed, never by skipping an
+the ZK server doesn't write or a name over `KEY_MAX` bytes. A torn last line (a writer killed inside its append) fails
+every call, so the ZK server serves nothing until the developer repairs the record: it fails closed, never by skipping an
 event it can't read.
 """
 from __future__ import annotations
@@ -80,11 +80,11 @@ PROOFS = 2
 
 
 class Refused(Exception):
-    """The firewall serves nothing of this outer session (its message is the refusal)."""
+    """The ZK server serves nothing of this outer session (its message is the refusal)."""
 
 
 class Firewall:
-    """The state every process of one firewall shares (``state``, a directory)."""
+    """The state every process of one ZK server shares (``state``, a directory)."""
 
     def __init__(self, state: Path):
         self.state = Path(state)
@@ -178,7 +178,7 @@ class Firewall:
 
     def open(self, stream: str, parts: list[str], budget: int | None = None, release: dict | None = None) -> str:
         """A new recursive session on ``stream``, opened by its inner session, with its V* statements in their order
-        (``parts``, public: the firewall's rule 1): its id. ``budget`` is the stream's failure budget (P1's ``budget``,
+        (``parts``, public: the ZK server's rule 1): its id. ``budget`` is the stream's failure budget (P1's ``budget``,
         b), the same at every open of the stream; once the stream has ``budget`` failures, `Refused`. ``release`` is the
         recursive session's release schedule, public and fixed here, before the session: statement ``j`` is released at the
         end of its window, ``start_ms + sum(windows_ms[:j + 1])`` (rule 3)."""
@@ -224,7 +224,7 @@ class Firewall:
         stopped, has a statement not yet released, its stream has not stopped at its budget, its inner session finished,
         and ``part`` is its next statement. A request for any other statement is the recursive session's stop at the next
         one (never opened), then refused. A refusal is recorded (``refused``). Returns ``part``'s release time (rule 3), or
-        None. Only a ``timed`` caller (one that holds the proofs to that time: the Lean firewall, or a test of its rules)
+        None. Only a ``timed`` caller (one that holds the proofs to that time: the Lean ZK server, or a test of its rules)
         is admitted to a scheduled session; this module's relay is not."""
         with self._locked((session,)) as rec:
             why, at = None, None
@@ -265,7 +265,7 @@ class Firewall:
 
     @contextmanager
     def slot(self, session: str, part: str, waiting: Callable[[], None] | None = None) -> Iterator[None]:
-        """The firewall's one outer slot, held for the block. A session that finds it taken records ``wait``, calls
+        """The ZK server's one outer slot, held for the block. A session that finds it taken records ``wait``, calls
         ``waiting``, and blocks until the holder leaves it. Once it holds the slot, a ``slot`` event whose session has no
         outcome after it (its holder died) is recorded as that session's stop, and then ``slot`` is recorded."""
         with open(self.state / "slot.lock", "a") as f:
@@ -396,7 +396,7 @@ def _key(name: str) -> str | None:
 
 
 def _regular(e: Any) -> bool:
-    """Whether ``e`` is an event as the firewall writes it, one whose reads `_Index` answers as `_Scan` does: an object with
+    """Whether ``e`` is an event as the ZK server writes it, one whose reads `_Index` answers as `_Scan` does: an object with
     a ``seq`` and a string ``session``, and either an ``open`` with a string ``stream``, a list of string ``parts`` and an
     integer ``budget`` or none, or one of the other events with a string ``part``; every name at most `KEY_MAX` bytes."""
     if not (type(e) is dict and "seq" in e and type(e.get("session")) is str and _key(e["session"]) is not None):
@@ -791,9 +791,9 @@ def tcp(addr: str) -> Callable[[], Conn]:
 def relay(fw: Firewall, session: str, part: str, listen: str, to: str, sessions: int = 1,
           ready: Callable[[str], None] | None = None, done: Callable[[dict], None] | None = None, proofs: int = PROOFS) -> list[dict]:
     """Accept ``sessions`` connections from workers on ``listen``, each an outer session of ``session`` at ``part``, relayed to
-    the challenger at ``to`` (`relay_session`), each on its own thread, and the slot orders them. The firewall serves
+    the challenger at ``to`` (`relay_session`), each on its own thread, and the slot orders them. The ZK server serves
     ``part`` once: a connection cut before its first request leaves it to the next, and any after its release is refused.
-    Returns their outcomes in the order accepted; a fault of the firewall's own (its record unreadable, say) is the outcome
+    Returns their outcomes in the order accepted; a fault of the ZK server's own (its record unreadable, say) is the outcome
     ``error``, with nothing served."""
     host, port = listen.rsplit(":", 1)
     res: list[dict | None] = [None] * sessions
@@ -836,7 +836,7 @@ def main(argv=None) -> int:
     r.add_argument("--listen", default="127.0.0.1:0")
     r.add_argument("--sessions", type=int, default=1)
     r.add_argument("--proofs", type=int, default=PROOFS, help="the session's proofs, one a rep: Finish is forwarded only after them")
-    rc = sub.add_parser("record", help="print the firewall's record")
+    rc = sub.add_parser("record", help="print the ZK server's record")
     rc.add_argument("--state", required=True)
     a = ap.parse_args(argv)
     fw = Firewall(Path(a.state))

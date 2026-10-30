@@ -13,10 +13,10 @@ its parts, each ``nbytes`` bytes at ``offset`` of the slot's bytes in the group'
   :data:`UNIT_MAX_BITS`, an empty unit or row, a part outside its tensor. Equal groups become one object, as a layout's
   layers are, so each is checked and indexed once.
 - :func:`to_json` writes it back, ``_layout_json``'s output.
-- :attr:`Layout.json_digest` is what a deployment file binds: ``identity_digest_sha512(JSON_TAG, to_json(layout))``, the
+- :attr:`RowsPerSlot.json_digest` is what a deployment file binds: ``identity_digest_sha512(JSON_TAG, to_json(layout))``, the
   parts included (``slots``' own ``layout_digest`` binds only the rows' sizes, which the unit domains need).
-- :func:`check_shared` refuses a layout that isn't shared-row (CIR-113): a row of more than :data:`MAX_PARTS` parts, a
-  tensor byte in no row or in two, or a producer's output that isn't a window of one row (:meth:`Layout.window`).
+- :func:`check_shared` refuses a layout that isn't shared-row: a row of more than :data:`MAX_PARTS` parts, a
+  tensor byte in no row or in two, or a producer's output that isn't a window of one row (:meth:`RowsPerSlot.window`).
 """
 from __future__ import annotations
 
@@ -30,11 +30,10 @@ from functools import cached_property
 from typing import Any
 
 from verity.errors import InvalidArtifact
-from verity.ml.circuits.codec import canonical_json
 
 from .identity import tagged_sha512_prefix
 
-__all__ = ["JSON_TAG", "MAX_PARTS", "UNIT_MAX_BITS", "Group", "Layout", "Part", "Row", "check_shared", "load", "of_json",
+__all__ = ["JSON_TAG", "MAX_PARTS", "UNIT_MAX_BITS", "Group", "Part", "Row", "RowsPerSlot", "check_shared", "load", "of_json",
            "to_json"]
 
 JSON_TAG = "verity/commitments/layout-json/v1"
@@ -92,7 +91,7 @@ class Group:
 
 
 @dataclass(frozen=True)
-class Layout:
+class RowsPerSlot:
     """A step's rows a slot, the same for every slot: its groups in order (a repeated group one object); ``name`` names it."""
 
     name: str
@@ -101,9 +100,10 @@ class Layout:
     def __post_init__(self) -> None:
         if type(self.name) is not str:
             raise InvalidArtifact("a layout's name is a string")
-        if not self.name.isascii() or "\x7f" in self.name:
-            raise InvalidArtifact(f"a layout's name is ASCII without DEL, as canonical JSON's strings are, not "
-                                  f"{self.name[:40]!r}")
+        try:
+            self.name.encode("utf-8")
+        except UnicodeEncodeError:
+            raise InvalidArtifact("a layout's name is UTF-8 text") from None
 
     @cached_property
     def unit_base(self) -> tuple[int, ...]:
@@ -120,11 +120,11 @@ class Layout:
         text: dict[int, bytes] = {}
         for g in self.groups:
             if id(g) not in text:
-                text[id(g)] = canonical_json(_group_json(g))
+                text[id(g)] = _canonical(_group_json(g))
         pieces = [b'{"groups":[']
         for j, g in enumerate(self.groups):
             pieces += (b",", text[id(g)]) if j else (text[id(g)],)
-        pieces += (b'],"name":', canonical_json(self.name), b"}")
+        pieces += (b'],"name":', json.dumps(self.name, ensure_ascii=False).encode("utf-8"), b"}")
         h = hashlib.sha512(tagged_sha512_prefix(JSON_TAG, sum(map(len, pieces))))
         for p in pieces:
             h.update(p)
@@ -176,7 +176,11 @@ def _group_json(g: Group) -> dict[str, Any]:
     return {"sources": list(g.sources), "units": [[[[p.source, p.offset, p.nbytes] for p in r.parts] for r in u] for u in g.units]}
 
 
-def to_json(layout: Layout) -> dict[str, Any]:
+def _canonical(value: Any) -> bytes:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def to_json(layout: RowsPerSlot) -> dict[str, Any]:
     """``slots._layout_json(layout)``. A repeated group's object is one object: copy it before editing one."""
     memo: dict[int, dict[str, Any]] = {}
     for g in layout.groups:
@@ -209,7 +213,7 @@ def _group(i: int, sources: list[Any], units: list[Any]) -> Group:
         raise InvalidArtifact(f"group {i} {e}") from None
 
 
-def of_json(doc: Any) -> Layout:
+def of_json(doc: Any) -> RowsPerSlot:
     """The layout ``doc`` is (``slots._layout_json``'s form), refusing anything else; equal groups become one object."""
     if type(doc) is not dict or doc.keys() != {"name", "groups"}:
         raise InvalidArtifact('a layout is {"name", "groups"}')
@@ -229,7 +233,7 @@ def of_json(doc: Any) -> Layout:
         if key not in seen:
             seen[key] = _group(i, g["sources"], g["units"])
         groups.append(seen[key])
-    return Layout(doc["name"], tuple(groups))
+    return RowsPerSlot(doc["name"], tuple(groups))
 
 
 def _object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -239,7 +243,7 @@ def _object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return out
 
 
-def load(path: str | os.PathLike[str]) -> Layout:
+def load(path: str | os.PathLike[str]) -> RowsPerSlot:
     """The layout in the Layout JSON file ``path``."""
     with open(path, "rb") as f:
         raw = f.read()
@@ -250,8 +254,8 @@ def load(path: str | os.PathLike[str]) -> Layout:
     return of_json(doc)
 
 
-def check_shared(layout: Layout, outputs: Iterable[tuple[int, int, int, int]] = ()) -> None:
-    """Refuse ``layout`` unless it is shared-row (CIR-113): every row at most :data:`MAX_PARTS` parts; in each group every byte
+def check_shared(layout: RowsPerSlot, outputs: Iterable[tuple[int, int, int, int]] = ()) -> None:
+    """Refuse ``layout`` unless it is shared-row: every row at most :data:`MAX_PARTS` parts; in each group every byte
     of every tensor in exactly one row, except a tensor each row reading it reads whole (a quantizer's f32 scale, beside each
     of its chunks' codes); and each producer output in ``outputs``, (group, tensor, offset, bytes), a window of one row."""
     seen: set[int] = set()

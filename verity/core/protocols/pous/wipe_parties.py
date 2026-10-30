@@ -28,7 +28,7 @@ from collections.abc import Callable
 from typing import Any
 
 from verity.core.deploy.manifest import Channel, Manifest, Role
-from verity.core.deploy.party import Finish, Identity, Received, Record, Send, Timer
+from verity.core.deploy.party import Finish, Identity, Received, LogEntry, Send, Timer
 from verity.core.deploy.runtime import ProtocolDef
 from verity.core.wire import Body, Int, List, Message, Phase, Refused, Schema
 
@@ -108,13 +108,13 @@ class Challenger:
             self.c = sw.Challenger(secret, self.request["node"].encode(), session, self.wp, self.signer, log=self.log,
                                    clock=self._clock)
             self.phase.expect()
-            return [Record({"commitment": self.c.commitment.to_json()}, "structure"),
+            return [LogEntry({"commitment": self.c.commitment.to_json()}, "structure"),
                     *self._after_reading(self._fill_start)]
         if m.type == "FillAck":
             self.phase.expect("Coins")
             return [Send("coins", Message("CoinsDraw", {"n": 32}))]
         if m.type == "Coins":
-            # The coin secret `serve` draws from the OS on revealing the first batch, drawn from this party's coins.
+            # The coin secret `serve` draws from the OS on revealing the first batch, sampled from this party's coins.
             self.c._coin_secret = m.body
             self.phase.expect()
             return self._after_reading(self._challenge)

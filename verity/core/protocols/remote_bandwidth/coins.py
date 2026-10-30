@@ -1,11 +1,11 @@
-"""The remote audit's coins on the proof system's one challenger (`verity/remote-bandwidth/coins/v1`): session k's coins
+"""PoUB's coins on the proof system's one challenger (`verity/remote-bandwidth/coins/v1`): session k's coins
 are one epoch of `sampled_proofs.challenger`'s live coins, drawn and committed by the challenger before the session, on
 its own host when it is remote (`sampled_proofs.remote`), each opened once, after the root the verifier recorded, and
 their commitment released to the prover only at the session's end.
 
 ~~~text
 scheme     verity/remote-bandwidth/coins/v1, epoch k: the session's index over its registration
-families   challenge W, openings ⌈W/g⌉, append A: window t's challenge σ_t, the openings coin of the draw over windows
+families   challenge W, openings ⌈W/g⌉, append A: window t's challenge σ_t, the openings coin of the sample over windows
            cg … (c + 1)g − 1 (g = `groups_per_coin`, 1 by default: window t's own), and append i's coin c_a; no append
            family when the session takes no appends (A = 0)
 coin       the first 32 bytes (COIN_BYTES) of the challenger's 64-byte coin, which its commitment holds whole
@@ -15,7 +15,7 @@ after      σ_0 after R; σ_t (t ≥ 1) after the last root the verifier had rec
            after the last root of its last window, min((c + 1)g, W) − 1; append i's coin after append i's root
 released   (epoch, label, index, after, coin): what the prover is sent when a coin leaves (`Released`), no salt or path
 end        once the session has its outcome, so no root can follow: the commitment and every released coin's opening
-           (`audit.Session.disclose`), against which the prover checks each coin it was sent (`received_reason`)
+           (`audit.AuditRun.disclose`), against which the prover checks each coin it was sent (`received_reason`)
 ~~~
 
 The commitment's root is a function of every coin, the windows' to come among them, and a coin's salt and path give it
@@ -29,13 +29,13 @@ session, logs each root before its coin leaves and signs the log, which the veri
 roots (`receipts.seed`); the openings are drawn from a coin of their own.  An append's coin answers the append's root, a
 commitment the prover has already made: committed before the session like every coin, it opens after that root, once.
 
-`Coins` is the verifier's side: the challenger (a `LiveChallenger`, or a `remote.RemoteChallenger` on the challenger's
+`SessionCoins` is the verifier's side: the challenger (a `LiveChallenger`, or a `remote.RemoteChallenger` on the challenger's
 host) and one `LiveRecord` a family, so each coin is asked for after its root and recorded with it.  What the verifier
 takes from the challenger afterwards, the commitment it signed and the roots its signed release log shows it received
 (`trusted`: `remote.trusted_session` under the auditor's ledger, whose window `{root: R}` opens exactly one session,
 inside the period holding it, read only through `challenger.pinned_session`, so the session ran a tree the host's pins
 log records on main's first-parent line), `released_reason` holds to the session's own record: the same commitment,
-the same roots in the same order, σ_0 after R, and each draw's openings coin after its last window's last root, so a
+the same roots in the same order, σ_0 after R, and each sample's openings coin after its last window's last root, so a
 coin opened before its window's root, or a session whose coins are another challenger session's, is refused.
 """
 
@@ -174,7 +174,7 @@ def coin_reason(commitment: LiveCommitment, opening: Any, label: str, index: int
 def received_reason(commitment: Any, received: Sequence[Released], openings: Sequence[Any]) -> str | None:
     """Why the coins the prover was sent during the session, `received`, are not coins of `commitment` as `openings`
     open them; None when they are.  The prover's check at the session's end, once the verifier has sent it the
-    commitment and every released coin's opening (`audit.Session.disclose`): each coin it was sent is opened, once,
+    commitment and every released coin's opening (`audit.AuditRun.disclose`): each coin it was sent is opened, once,
     with the value and the root it was sent with, against the commitment (`coin_reason`)."""
     if type(commitment) is not LiveCommitment:
         return "a session's coin commitment is a live coin commitment"
@@ -197,7 +197,7 @@ def received_reason(commitment: Any, received: Sequence[Released], openings: Seq
     return None
 
 
-class Coins:
+class SessionCoins:
     """Session `session`'s coins over the registration whose digest is `registration`, `windows` windows drawn
     `per_coin` a coin (`openings_coins`), through `challenger` (a `LiveChallenger` or a `remote.RemoteChallenger`),
     committed before the session.  Each family's coins open in order, each once, after the root recorded for it
@@ -286,13 +286,13 @@ class Coins:
 
 
 def local(registration: bytes, session: int, windows: int, entropy: Callable[[int], bytes], *,
-          appends: int = APPENDS, per_coin: int = 1, clock: Callable[[], float] = time.monotonic) -> Coins:
+          appends: int = APPENDS, per_coin: int = 1, clock: Callable[[], float] = time.monotonic) -> SessionCoins:
     """Session `session`'s coins from a challenger in the verifier's process, drawing from `entropy`."""
-    return Coins(LiveChallenger(SCHEME, session, families(windows, appends, per_coin), entropy), registration, session,
-                 windows, per_coin=per_coin, clock=clock)
+    return SessionCoins(LiveChallenger(SCHEME, session, families(windows, appends, per_coin), entropy), registration,
+                        session, windows, per_coin=per_coin, clock=clock)
 
 
-def released_reason(coins: Coins, windows: Sequence[Sequence[bytes]], appends: Sequence[bytes],
+def released_reason(coins: SessionCoins, windows: Sequence[Sequence[bytes]], appends: Sequence[bytes],
                     signed: LiveCommitment, received: Mapping[str, Sequence[bytes]], in_flight: int = 2) -> str | None:
     """Why the session's coins, `coins`, are not the challenger's as it signed them; None when they are.  `windows` is
     each released window's roots and `appends` each append's root, in the order the session received them; `signed` is
@@ -301,7 +301,7 @@ def released_reason(coins: Coins, windows: Sequence[Sequence[bytes]], appends: S
     coins weren't opened in order, once, each after the root recorded for it, or whose recorded roots aren't the ones
     the challenger received; σ_0 opened after anything but R, or σ_t after a root that isn't R or an earlier window's,
     and at one window in flight (`in_flight` 1, `audit.Pace.in_flight`) after anything but the last root of windows
-    0 … t − 1 (R if they have none), so before a root of window t − 1; a draw's openings coin opened after anything
+    0 … t − 1 (R if they have none), so before a root of window t − 1; a sample's openings coin opened after anything
     but its last window's last root (so before it); an append's coin after anything but its own root."""
     c = coins.commitment
     if signed != c:
@@ -334,7 +334,7 @@ def released_reason(coins: Coins, windows: Sequence[Sequence[bytes]], appends: S
     return None
 
 
-def trusted(coins: Coins, directory: Any, heads: Sequence[Any], key: ChallengerKey, pins: Any, main: Any,
+def trusted(coins: SessionCoins, directory: Any, heads: Sequence[Any], key: ChallengerKey, pins: Any, main: Any,
             verify: Verify, period: str | None = None) -> tuple[LiveCommitment, dict[str, tuple[bytes, ...]]]:
     """What the challenger signed for the session's window, read on the auditor's side: the one challenger session the
     auditor's ledger (the heads infra published at `heads`) opens for ``{root: R}``, R the session's own (`window`),
@@ -354,6 +354,6 @@ def trusted(coins: Coins, directory: Any, heads: Sequence[Any], key: ChallengerK
     return remote.trusted_session(directory, heads, w, key, verify)
 
 
-__all__ = ["APPEND", "APPENDS", "CHALLENGE", "COIN_BYTES", "Coins", "LABELS", "OPENINGS", "RELEASED_FORM", "Released",
-           "SCHEME", "WINDOW_DOMAIN", "coin", "coin_reason", "families", "layout_reason", "local", "openings_coins",
+__all__ = ["APPEND", "APPENDS", "CHALLENGE", "COIN_BYTES", "LABELS", "OPENINGS", "RELEASED_FORM", "Released", "SCHEME",
+           "SessionCoins", "WINDOW_DOMAIN", "coin", "coin_reason", "families", "layout_reason", "local", "openings_coins",
            "received_reason", "released", "released_reason", "trusted", "window", "window_root"]

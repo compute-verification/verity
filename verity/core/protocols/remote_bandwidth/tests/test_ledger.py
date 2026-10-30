@@ -14,7 +14,7 @@ import pytest
 from test_remote_bandwidth import A, N, SCHEDULE, Clock, Entropy, challenger, drive, finish, params, partial, store  # noqa: F401
 from verity.core import claims
 from verity.core.protocols.remote_bandwidth import audit, codec, ledger, line, receipts, timing
-from verity.core.protocols.remote_bandwidth.audit import Pace, Session
+from verity.core.protocols.remote_bandwidth.audit import AuditRun, Pace
 
 PASS_NS, DOWN_NS, UP_NS = 300, 20, 30
 B = codec.BLOCK_BYTES
@@ -34,10 +34,10 @@ def paced(store, p: audit.Params, plan=None):
     """A paced session driven on its own schedule: each pass takes `PASS_NS` from its coin's arrival or the pass before,
     each message `DOWN_NS` to the prover and `UP_NS` back; the prover runs at most k passes under a coin, moves to the
     next coin once it has arrived, and stops at the close; the verifier sends each boundary message at
-    `Session.next_boundary_ns`, recomputed after every root.  Returns the session, prover, passes, clock and each
+    `AuditRun.next_boundary_ns`, recomputed after every root.  Returns the session, prover, passes, clock and each
     root's arrival."""
     clock = Clock()
-    s = Session(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
+    s = AuditRun(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
     prover = audit.Prover(store, None, entropy=Entropy(b"receipt salts"))
     challenges, coin_at, closed_at = {0: s.start()}, {0: DOWN_NS}, None
     passes, arrivals, previous = {}, {}, store.registration.digest
@@ -95,12 +95,12 @@ def test_a_paced_session_releases_a_coin_every_k_passes_and_records_arrivals(sto
 def test_next_boundary_is_the_stated_window_unpaced_and_the_pace_when_paced(store) -> None:
     clock = Clock()
     p = params()
-    s = Session(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
+    s = AuditRun(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
     assert s.next_boundary_ns() is None
     s.start()
     assert s.next_boundary_ns() == p.window_ns
     p = params(windows=3, window_ns=5, pace=Pace(2))
-    s = Session(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
+    s = AuditRun(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
     coin = s.start()
     assert s.next_boundary_ns() == A, "not due before its first root: at the latest one allowance after its coin"
     prover = audit.Prover(store, None, entropy=Entropy(b"receipt salts"))
@@ -234,7 +234,7 @@ def test_the_draws_terms_are_charged_by_name(store) -> None:
     """`ledger.draw` is `PooledDraw`'s terms beyond δ over the record's windows: the rejection Σ_t k_t/2^64 at the
     record's `samples` and the receipts' binding term under `cr/sha-512`, Σ_t √(|L_t|·s)·q_t/2^256.5
     at the session's bounds, not the record's U_t and s'_t: |L_t| the most receipts a window can have (unpaced, fewer
-    than 2^64 passes of the codec's `max_blocks`, since the session reserved append coins), s the draw cap, and
+    than 2^64 passes of the codec's `max_blocks`, since the session reserved append coins), s the sample cap, and
     q_t = 2·F·C + 2·s·69 for the fork finder that runs the prover twice; the PRF advantages are named with their claim
     and in no total.  No hiding term: the prover gets the coin commitment only at the session's end.  γ's errors carry
     the two; the line's δ carries the binding term beside its own."""
@@ -264,9 +264,9 @@ def test_the_draws_terms_are_charged_by_name(store) -> None:
 
 
 def test_delta_charges_the_draws_a_window_requested_where_it_opens_all_its_receipts(store) -> None:
-    """`LineHeld`'s error is E = δs + δ + Σ_t k_t/2^64 + Σ_t hide_t + bind + Σ_t Adv(prf t), k_t the draws window t
+    """`LineHeld`'s error is E = δs + δ + Σ_t k_t/2^64 + Σ_t hide_t + bind + Σ_t Adv(prf t), k_t the samples window t
     requested: a constant, since a window's U_t is the prover's.  A window of U_t ≤ k_t receipts opens them all, so the
-    record's draws there are U_t, and a δ charging them would fall (k_t − U_t)/2^64 short of E less the advantages, far
+    record's samples there are U_t, and a δ charging them would fall (k_t − U_t)/2^64 short of E less the advantages, far
     more than AuditRO's slack covers.  At k = 70, windows of 80, 60 and 60 receipts draw 70, 60 and 60: the ledger
     charges 3·70 at the record's `samples`, so D − (E − Σ Adv) is the slack P·2^-SLACK_LOG2, up to its five additions'
     rounding.  A record whose draws aren't min(samples, U_t) is refused, and one that states no samples has no δ."""

@@ -18,7 +18,7 @@ K          a masked codec's: LE(XOF(DOMAIN ‖ u8 len(name) ‖ name ‖ seed �
 d_j        a bound chunk's digest: sha512/row/v2 of its payload, SHA512(P(32768) ‖ payload_j), its payload leaf's x_j
 b_j        a bound chunk's offset: LE(XOF(DOMAIN ‖ u8 len(name) ‖ name ‖ seed ‖ u32be 2^32 − 3 ‖ u64be j ‖ d_j)[0 : 64])
            mod p; under the seed's key b_j = 0
-c_a        an append's coin: 32 bytes the verifier draws once the append's payload digests are committed
+c_a        an append's coin: 32 bytes the verifier samples once the append's payload digests are committed
 b_j(c_a)   a bound chunk's offset under its append's coin: LE(XOF(DOMAIN ‖ u8 len(name) ‖ name ‖ seed ‖ u32be 2^32 − 4 ‖
            u64be j ‖ d_j ‖ c_a)[0 : 64]) mod p
 encode     x ↦ ρ(x + c_r + t(i) + b_j) for r = 0 … k − 1, from the payload word; masked, x ↦ σ_K(x) before each round
@@ -27,7 +27,7 @@ decode     x ↦ ρ⁻¹(x) − c_r − t(i) − b_j for r = k − 1 … 0; mask
 ~~~
 
 A chunk's key is the seed's (b_j = 0) or its own, bound (`encode(..., bound=True)`, `decode(..., d)`).  The seed's key
-is for chunks whose payloads were committed before the codec seed was drawn (a registration's): such a chunk's
+is for chunks whose payloads were committed before the codec seed was sampled (a registration's): such a chunk's
 encoding costs k roots a word whatever the payload.  A chunk written after the seed (a KV page) takes its bound key,
 with d_j kept beside it, since under the seed's key its writer could pick its encoding E (all zeros, or another
 chunk's) and write the payload `decode(E)`, holding nothing for it; under the bound key a chosen E decodes to a
@@ -41,7 +41,7 @@ Encoding costs k square roots a word (n − 3 squarings each), decoding k squari
 default a chunk is 96 roots of 1,021 squarings to encode and 96 squarings of 1,024 bits to decode.  A bound chunk
 adds d_j (34 SHA-512 compressions over the payload, which its payload leaf hashes anyway) and b_j (2) to its encode,
 and b_j to its decode unless b_j is kept in d_j's place.  `rounds` below 2 is refused: at k = 1 a word can be partly
-kept and completed for less than an encode (red team F27).  ρ and σ_K permute the canonical words, so `decode` under
+kept and completed for less than an encode.  ρ and σ_K permute the canonical words, so `decode` under
 the seed's key is a bijection from canonical chunks to payload chunks, and a payload commitment with the codec seed
 fixes the encoded store; under a bound key, a chunk and a digest decode to the payload only if it has that digest.  A
 payload word at or above p is refused: c is below 2^16, so its top 16 bits are all ones, a NaN under bf16 (and its top
@@ -248,7 +248,8 @@ class P2Codec:
                 "segments": self.segments, "w": self.w}
 
 
-def _xof(message: bytes, length: int) -> bytes:
+def xof(message: bytes, length: int) -> bytes:
+    """`XOF(message)[0 : length]`: SHA-512 in counter mode, each output whole."""
     out = b""
     ctr = 0
     while len(out) < length:
@@ -263,7 +264,7 @@ def _message(f: Field, seed: bytes, r: int, domain: bytes = DOMAIN) -> bytes:
 
 
 def _element(f: Field, seed: bytes, r: int, domain: bytes = DOMAIN) -> int:
-    return int.from_bytes(_xof(_message(f, seed, r, domain), f.word_bytes + 8), "little") % f.p
+    return int.from_bytes(xof(_message(f, seed, r, domain), f.word_bytes + 8), "little") % f.p
 
 
 @dataclass(frozen=True, slots=True)
@@ -304,7 +305,7 @@ def derive(seed: bytes, sloth: Sloth, domain: bytes = DOMAIN) -> Key:
     f = sloth.field
     mask = None
     if sloth.masked:
-        mask = int.from_bytes(_xof(_message(f, seed, MASK_INDEX, domain), f.word_bytes), "little") % (1 << f.n)
+        mask = int.from_bytes(xof(_message(f, seed, MASK_INDEX, domain), f.word_bytes), "little") % (1 << f.n)
     c = tuple(_element(f, seed, r, domain) for r in range(sloth.rounds))
     return Key(sloth, c, _element(f, seed, TWEAK_INDEX, domain) or 1, mask, seed if domain == DOMAIN else None)
 
@@ -339,7 +340,7 @@ def binding(d: bytes, j: int, k: Key, coin: bytes | None = None) -> int:
         raise ValueError(f"an append's coin is {COIN_BYTES} bytes")
     else:
         message = _message(f, k.seed, COIN_INDEX) + at + d + coin
-    return int.from_bytes(_xof(message, DIGEST_BYTES), "little") % f.p
+    return int.from_bytes(xof(message, DIGEST_BYTES), "little") % f.p
 
 
 def rho(a: int, f: Field) -> int:

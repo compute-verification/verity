@@ -1,4 +1,4 @@
-"""The remote bandwidth session's verifier and challenger as a party of their own, so they run on a host the prover
+"""The PoUB session's verifier and challenger as a party of their own, so they run on a host the prover
 doesn't control (the challenger host, `trusted-host`) while the prover stays on its node.
 
 The verifier's side listens and the prover connects; each message is one line of JSON. The prover opens with its
@@ -85,7 +85,7 @@ class Remote:
         return [] if got is None else got
 
     def end(self, commitment: C.LiveCommitment | None = None, openings: Sequence[C.LiveOpening] = ()) -> None:
-        """The session's last message, with its coins disclosed (`audit.Session.disclose`), or without for a session
+        """The session's last message, with its coins disclosed (`audit.AuditRun.disclose`), or without for a session
         left undecided; sent once."""
         if not self.ended:
             _send(self.f, {"end": {} if commitment is None else {"commitment": commitment.to_json(),

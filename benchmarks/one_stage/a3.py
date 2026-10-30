@@ -11,7 +11,7 @@ one integrity profile.
   `Q_template_instances` v0: one unit per instance, no width rule.
 * **One registration** lists every template's roots (ports named `<set>/<port>`), and `leaf_layer` is the SHA-512 of the
   canonical map from set to the SHA-512 of its public file.
-* **One draw, `Subset(k)` over the union.** The verifier's Lean `flock-verify draw` draws k units over the whole population.
+* **One sample, `Subset(k)` over the union.** The verifier's Lean `flock-verify draw` draws k units over the whole population.
   With `--draw-file` (M0 `serve --draw-file`) each template's server serves its share of that very draw, so the audited
   draw is the verifier's; without it, the Lean draw fixes only how many units fall in each template and each server draws
   a uniform subset of that size, which is still exactly `Subset(k)` over the union (conditioned on the counts, a uniform
@@ -114,7 +114,7 @@ def main() -> int:
         assert tid == P.template_id(m["defn"]) and cnt == m["n"]
         m["base"] = base
 
-    # one registration, before the draw
+    # one registration, before the sample
     law = D.parse_law(f"subset:{a.k}")
     want, roots, publics = {}, [], {}
     for m in members:
@@ -147,7 +147,7 @@ def main() -> int:
         print("A3 " + json.dumps({"refused_before_draw": summary["checks_before_draw"]}))
         return 1
 
-    # the draw: the verifier's split over the union, then each template's live draw of its share
+    # the sample: the verifier's split over the union, then each template's live sample of its share
     split = lean_split(a.lean, n, a.k, out)
     counts = {m["name"]: sum(1 for u in split["units"] if m["base"] <= u < m["base"] + m["n"]) for m in members}
     (out / "split.json").write_text(json.dumps({"lean_draw": split, "counts": counts}, indent=1))

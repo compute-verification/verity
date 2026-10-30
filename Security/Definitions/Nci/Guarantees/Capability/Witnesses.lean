@@ -12,29 +12,33 @@ Each local bound has two witnesses at the toy instance (`Nci.Capability.Toy`), l
 * `XNontrivial`: its conclusion fails at the toy where a premise is dropped, so the conclusion is not a tautology.
 
 The structural premises (`HeldPriceAtMost`, `SlotsRead`, the incidence, `Consumers.Upstream`, `OverlapWeights`,
-`RequiresState`) are proved at the toy. So are the information premises, at the toy's decoder `M`, which reads only
-programs of two bits: every description length it gives is `2`, so description and source hardness hold at deficit `0`
-for prices summing to at most two bits; min-entropy hardness holds at deficit `0` for the product's value, a uniform
-bit. The operand caps share one nontrivial witness, since their conclusions are the same.
+`RequiresState`) are proved at the toy. So are the information premises. Description and source hardness hold at
+deficit `1` for the two-bit value `bb` of gates `2` and `3`, the token `b` twice, and the recovery at ambiguity `1`.
+Each honest witness also proves its parameter spent: at deficit or ambiguity `0` the premise fails, because the toy's
+decoder `M` describes `11`, an honest run's value, in one bit, and its recovery program spends one bit picking the
+source. Min-entropy hardness holds at deficit `0` for the product's value, a uniform bit. The operand caps share one
+nontrivial witness, since their conclusions are the same.
 -/
 
 namespace Nci.Guarantees
 
 open Verity Finset Nci.Capability Nci.Capability.Toy
 
-/-- **`HeldBudget`'s premises hold together** at the toy, with `c = 2`, `k = 1`, `aBlk = 1`, `Λ = 0` and the product's
-value priced one bit: every held selection has an evaluator of one bit (its tag), and description hardness holds. -/
+/-- **`HeldBudget`'s premises hold together** at the toy, with `c = 2`, `k = 1`, `aBlk = 3`, `Λ = 1` and the value of
+gates `2` and `3` priced two bits: every held selection has an evaluator of at most three bits, and description hardness
+holds at deficit `1`. The deficit is spent: at `Λ = 0` description hardness fails, since `M` describes `11` in one
+bit. -/
 def HeldBudgetHonest : Prop :=
   R1.P.IsCK R1.d 2 1 ∧
     (∀ (U : Fin R1.B → Finset (Fin 1)) (σ : Fin 1 → Finset (Fin R1.d.D.N)),
-      (∀ u, Selects (Y 1) (U u) σ ∧ ∀ i ∈ U u, σ i ⊆ holds R1.d.D (R1.P.gates u)) →
-      ∃ e : List Bool, e.length ≤ 1 ∧ Evaluates M () 0 R1 e fun u T => selectionBits T (U u) σ) ∧
-    Assumptions.DescriptionHard R1 (Y 1) M () 0 0
+      (∀ u, Selects (Y2 2) (U u) σ ∧ ∀ i ∈ U u, σ i ⊆ holds R1.d.D (R1.P.gates u)) →
+      ∃ e : List Bool, e.length ≤ 3 ∧ Evaluates M () 0 R1 e fun u T => selectionBits T (U u) σ) ∧
+    Assumptions.DescriptionHard R1 (Y2 2) M () 0 1 ∧ ¬ Assumptions.DescriptionHard R1 (Y2 2) M () 0 0
 
-/-- **`HeldBudget`'s conclusion can fail**: with the product's value priced three bits, above every description of
-it, the proof block holds more than `k + ⌈log₂ B⌉ + aBlk + Λ = 2`. -/
+/-- **`HeldBudget`'s conclusion can fail**: with the value of gates `2` and `3` priced six bits, above every
+description of it, the proof block holds more than `k + ⌈log₂ B⌉ + aBlk + Λ = 5`. -/
 def HeldBudgetNontrivial : Prop :=
-  ¬ HeldPriceAtMost R1 (Y 3) (((1 + Nat.clog 2 R1.B + 1 : ℕ) : ℝ) + 0)
+  ¬ HeldPriceAtMost R1 (Y2 6) (((1 + Nat.clog 2 R1.B + 3 : ℕ) : ℝ) + 1)
 
 /-- **`StatHeldBudget`'s premises hold together** at the toy, with `c = 2`, `k = 1`, `Λ = 0`, the token drawn
 uniformly and the product's value priced one bit. -/
@@ -46,17 +50,21 @@ entropy, the proof block holds more than `k + Λ = 1`. -/
 def StatHeldBudgetNontrivial : Prop :=
   ¬ HeldPriceAtMost R1 (Y 3) (((1 : ℕ) : ℝ) + 0)
 
-/-- **`RecoveredBudget`'s premises hold together** at the toy, with `c = 2`, `k = 1`, the evaluator `[true]`
-(`aBlk = 1`), the token's bit as the source (`ℓz = 1`, `δ = 0`) and one eligible output per block recovering it
-(`βv = 1`, `amb = 0`). -/
+/-- **`RecoveredBudget`'s premises hold together** at the toy, with `c = 2`, `k = 1`, the evaluator `[1, 1, 1]`
+(`aBlk = 3`), the value of gates `2` and `3` as the source (`ℓz = 2`, `δ = 1`) and one eligible output per block
+recovering it with a one-bit complement (`βv = 2`, `amb = 1`). Both parameters are spent: at `δ = 0` source hardness
+fails, since `M` describes `11` in one bit, and at `amb = 0` the recovery fails, since it needs its bit picking the
+source. -/
 def RecoveredBudgetHonest : Prop :=
-  R1.P.IsCK R1.d 2 1 ∧ ([true] : List Bool).length ≤ 1 ∧ Assumptions.SourceHard R1 M () 0 z 1 0 ∧
-    Assumptions.Recovers R1 M () 0 [true] z 1 1 0 fun _ => 1
+  R1.P.IsCK R1.d 2 1 ∧ ([true, true, true] : List Bool).length ≤ 3 ∧ Assumptions.SourceHard R1 M () 0 z 2 1 ∧
+    Assumptions.Recovers R1 M () 0 [true, true, true] z 2 2 1 (fun _ => 1) ∧
+    ¬ Assumptions.SourceHard R1 M () 0 z 2 0 ∧
+    ¬ Assumptions.Recovers R1 M () 0 [true, true, true] z 2 2 0 fun _ => 1
 
-/-- **`RecoveredBudget`'s conclusion can fail**: at three bits per eligible output, more than the source holds,
-`βv · J = 3` exceeds `k + ⌈log₂ B⌉ + aBlk + δ + amb = 2`. -/
+/-- **`RecoveredBudget`'s conclusion can fail**: at seven bits per eligible output, more than the source holds,
+`βv · J = 7` exceeds `k + ⌈log₂ B⌉ + aBlk + δ + amb = 6`. -/
 def RecoveredBudgetNontrivial : Prop :=
-  ¬ ((3 : ℝ) * ((1 : ℕ) : ℝ) ≤ ((1 + Nat.clog 2 R1.B + 1 : ℕ) : ℝ) + 0 + 0)
+  ¬ ((7 : ℝ) * ((1 : ℕ) : ℝ) ≤ ((1 + Nat.clog 2 R1.B + 3 : ℕ) : ℝ) + 1 + 1)
 
 /-- **`IncidenceCap`'s premises hold together** at the toy's product: it reads its slot and its operand, with at most
 one product per slot-operand pair (`r = 1`) and per operand (`aout = 1`). -/

@@ -15,7 +15,7 @@ eq(y_hi, u)``, and with the lincheck's α, the row point ``x = (ζ_r, ρ_in)`` a
 
     Φ(q) = (α q_{2 ELL} + q_{2 ELL + 1}) · ∏_{j < ELL} (1 + x_j + q_j) · ∏_{j < ELL} (1 + y_j + q_{ELL + j}).
 
-**The checks** (one rep; a coin is drawn after the message before it, and every sumcheck binds its lowest variable first and
+**The checks** (one rep; a coin is flipped after the message before it, and every sumcheck binds its lowest variable first and
 sends a round's coefficients without ``c_1 = claim + Σ_{i >= 2} c_i``, characteristic 2):
 
 * H1: ``claim = Σ_{s < 64} eq(ζ_c, s) h[s]``, ``h`` the 64 folded hidden comb values the lincheck's L4′ sent.
@@ -31,7 +31,7 @@ sends a round's coefficients without ``c_1 = claim + Σ_{i >= 2} c_i``, characte
 **Ports.** Every port is u16 words, an F element 8 of them (``lo || hi``) as `rec_residuals` has it, and a port of n elements
 ``P(n) = 64 ⌈n / 8⌉`` words (whole M0 rows), its words past the elements unread.
 
-* ``h``, ``pre<j>``, ``v2``, ``sc<j>``, ``u``, ``vt``: the rep's sparse-phase messages, one port each, as the firewall committed
+* ``h``, ``pre<j>``, ``v2``, ``sc<j>``, ``u``, ``vt``: the rep's sparse-phase messages, one port each, as the ZK server committed
   them (each a row the statement reads under the coin server's record, as `rec_residuals`' ``m<i>``). ``h`` is the inner
   session's h round (`rec_algebra.h_round`, absorbed before r′ and ζ_c), which the rep's algebra (`rec_residuals.InnerRepCheck`)
   reads at the same row for its lincheck check L4′.
@@ -49,7 +49,7 @@ phase accepts at a τ inside the bucket.
 **Cost.** One Gf128Mul (2,187 ANDs) for each product with a message or a computed value in it (`products`): 64 (H1), 2 a round
 (H2), 1 (``ŵ · v2``), deg a round (H3), d + 1 (``α u_a``, Φ's 2 ELL factors and ``Ũ(r_s)``), P' and with T > 1 2T (H4), and
 ``128 (T - 1)`` ANDs a slot for the selects (a demultiplexer of ``eq(r_s, σ)`` by τ_σ's bits). Everything that only coins
-decide is the verifier's (`verifier_row`), so no product has two public operands. The firewall commitments of the messages and
+decide is the verifier's (`verifier_row`), so no product has two public operands. The ZK server commitments of the messages and
 the reads of ``claim`` and ``tau`` are the statement's row reads, outside this Definition.
 
 `sparse_ref` is the reference on words. The body computes the products of a message by a verifier value as one
@@ -61,7 +61,7 @@ of u16 words per port, one output row. Its ANDs are ``ands`` and `copy_rows`' (l
 InnerRepCheck's parts (`rec_residuals.write_rows`).
 
 **The prover** (`prove`, T = 1: one hidden circuit, the slots' factor ``Ũ`` its range's layout) runs a rep's phase on coins it
-draws one round at a time (``draw``: the coin server's, through the proxy), from the circuit's `entries`, which `table` lays
+flips one round at a time (``draw``: the coin server's, through the proxy), from the circuit's `entries`, which `table` lays
 out as R's cells (cell ``k + 2^NU p``, byte ``i >> 3``, bit ``i & 7``, zero cells to fast100's least m). It checks every sum it
 sends against the claim before it, and its registered claim is R's value at the coins' point (`table_value`).
 """
@@ -82,7 +82,7 @@ from verity.ml.circuits.ops.boolean.gf2k import mul
 from verity.ml.circuits.boolean.forms import ZERO
 from verity.ml.commitments.gates.sha512 import commit
 
-__all__ = ["Coins", "PAD_TO", "PRE_ROUNDS", "RecSparse", "RegisteredClaim", "Shape", "ands", "copy_rows", "definition", "entries",
+__all__ = ["PAD_TO", "PRE_ROUNDS", "RecSparse", "RegisteredClaim", "Shape", "SparsePublics", "ands", "copy_rows", "definition", "entries",
            "inner_points", "layout_factors", "lowering", "message_ports", "out_words", "port_words", "ports", "products",
            "products_structure", "prove", "reads", "registered_claim", "registrations", "rows", "session_rows", "sparse_ref",
            "stage", "statement", "subcircuit", "table", "table_value", "unit_circuit", "unit_name", "v_layout", "verifier_row"]
@@ -295,7 +295,7 @@ def _dot(a: Sequence[int], b: Sequence[int]) -> int:
 
 
 @dataclass(frozen=True)
-class Coins:
+class SparsePublics:
     """A rep's public values the sparse phase reads: the lincheck's ``alpha``, the zerocheck's skip coin ``z``, the row and column
     points' coordinates past the skip's (``x_rest`` = ρ_in's, ``y_rest`` = the column point in bit order, `rec_algebra`'s
     ``r_in``, the lincheck's coins t reversed; at least ELL - 6 each, beyond which they enter only ``U``; `inner_points`), H1's ``zeta_c`` (6), H2's ``pre`` (6, ζ_r), H3's ``rounds`` (r_k then r_s),
@@ -321,12 +321,12 @@ class Coins:
 
 
 def inner_points(inner, rounds: Sequence[Sequence[int]]) -> dict:
-    """``Coins``' ``alpha``, ``z``, ``x_rest`` and ``y_rest`` from the inner rep's coins by round (an inner
+    """``SparsePublics``' ``alpha``, ``z``, ``x_rest`` and ``y_rest`` from the inner rep's coins by round (an inner
     `rec_algebra.Shape`), through `rec_algebra.run`: the row point's ρ_in and the column point in bit order (``r_in``), the
     points the comb is folded at and the inner claim on z has."""
     from . import rec_algebra as A
 
-    info = A.run(inner, A.Coins(rounds), A.symbolic(inner), [], fold_only=True)[1]
+    info = A.run(inner, A.CoinSource(rounds), A.symbolic(inner), [], fold_only=True)[1]
     return {"alpha": info["fold"]["alpha"], "z": info["z"], "x_rest": tuple(info["fold"]["rho_in"]), "y_rest": tuple(info["r_in"])}
 
 
@@ -346,7 +346,7 @@ class RegisteredClaim:
     value = None
 
 
-def registered_claim(sh: Shape, c: Coins, row: int, pad_to: int = PAD_TO) -> RegisteredClaim:
+def registered_claim(sh: Shape, c: SparsePublics, row: int, pad_to: int = PAD_TO) -> RegisteredClaim:
     """Rep ``row``'s claim at the coins' point. A point of fewer than ``pad_to`` coordinates (the stacked table of fewer than
     fast100's least m variables) is padded with zeros in new high variables, the table with zero rows: ``eq(x || 0, b || c)``
     vanishes off ``c = 0``, so the claim is the table's at the unpadded point. How many is the shape's, never the prover's,
@@ -359,7 +359,7 @@ def registered_claim(sh: Shape, c: Coins, row: int, pad_to: int = PAD_TO) -> Reg
     return RegisteredClaim(row, tuple(eq_table(point[:PRE_ROUNDS])), tuple(point[PRE_ROUNDS:]), pad=pad)
 
 
-def verifier_row(sh: Shape, c: Coins) -> list[int]:
+def verifier_row(sh: Shape, c: SparsePublics) -> list[int]:
     """``v``'s elements (`v_layout`) from the rep's coins and the slots' layout factors."""
     from .rec_algebra import skip_weights
 
@@ -988,7 +988,7 @@ def _entry_rounds(T, alpha, ax, ay, W, claim, draw, workers):
 
 
 def prove(sh: Shape, ents: Sequence[tuple[int, int, int, int]], pts: Mapping, U: Sequence[int], h: Sequence[int],
-          draw: Callable[[list[int], int], list[int]], workers: int = 1) -> tuple[Coins, dict]:
+          draw: Callable[[list[int], int], list[int]], workers: int = 1) -> tuple[SparsePublics, dict]:
     """One rep's sparse phase at T = 1 (the module docstring): ``ents`` the hidden circuit's `entries`, ``pts`` the rep's
     `inner_points` (``alpha``, ``z``, ``x_rest``, ``y_rest``), ``U`` its slots' `layout_factors`, ``h`` the 64 elements of the
     rep's h round. Each round's message goes to ``draw(elements, n)``, which answers its n coins (v2's and the claim's
@@ -1056,5 +1056,5 @@ def prove(sh: Shape, ents: Sequence[tuple[int, int, int, int]], pts: Mapping, U:
     zeta_p = tuple(draw(u, sh.P_LOG))
     claim = _dot(eq_table(zeta_p), u)
     draw([claim], 0)
-    coins = Coins(alpha, pts["z"], x_rest, y_rest, zeta_c, tuple(pre), tuple(rk + rs), zeta_p, (), tuple(U))
+    coins = SparsePublics(alpha, pts["z"], x_rest, y_rest, zeta_c, tuple(pre), tuple(rk + rs), zeta_p, (), tuple(U))
     return coins, {"h": list(h), "pre": pre_msgs, "v2": v2, "sc": sc, "u": u, "claim": claim}

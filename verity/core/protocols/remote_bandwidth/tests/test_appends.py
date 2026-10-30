@@ -13,7 +13,7 @@ import pytest
 
 from verity.core.protocols.profile import IntegrityProfile, Subset
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts, schedule
-from verity.core.protocols.remote_bandwidth.audit import Params, Session
+from verity.core.protocols.remote_bandwidth.audit import AuditRun, Params
 from verity.core.protocols.remote_bandwidth.receipts import Plan
 
 N = 8
@@ -77,7 +77,7 @@ def pages(first: int, count: int) -> list[bytes]:
 
 
 class Run:
-    """One session over `store`, the verifier's side and the prover's in step, every receipt drawn by default.  The
+    """One session over `store`, the verifier's side and the prover's in step, every receipt sampled by default.  The
     prover computes its passes from `prover_store` (`store` by default) and commits `store`'s appends, each encoded
     under the coin the verifier replies with (`coins`, by first index), each pass's seed binding every append it sent
     before the pass's root (`head`).  With a `registry`, the session is its next over the store's registration.  Its
@@ -92,7 +92,7 @@ class Run:
                         schedule_cap=schedule_cap)
         self.clock = Clock()
         if registry is None:
-            self.s = Session(self.p, reg, None, coins.local(reg.digest, 0, self.p.windows, Entropy(b"coins"),
+            self.s = AuditRun(self.p, reg, None, coins.local(reg.digest, 0, self.p.windows, Entropy(b"coins"),
                                                             appends=appends), not_before_ns=0, clock=self.clock)
         else:
             self.s = registry.session(self.p, reg, None, not_before_ns=0, clock=self.clock, entropy=Entropy(b"coins"))
@@ -106,7 +106,7 @@ class Run:
         self.received: list[tuple[int, int, bytes]] = []
 
     def commit(self, root: bytes, count: int) -> int:
-        """An append's root sent (`Session.append`): the index the verifier assigns, its coin kept, the append as the
+        """An append's root sent (`AuditRun.append`): the index the verifier assigns, its coin kept, the append as the
         verifier received it, (first, count, root), kept in `received` and, if the store awaits that append's coin,
         its blocks encoded under it."""
         first, coin = self.s.append(root, count)
@@ -187,7 +187,7 @@ def honest() -> tuple[Run, list[audit.Verdict]]:
 
 
 def test_an_honest_session_over_appended_and_released_pages_is_accepted(honest) -> None:
-    """Every receipt is drawn, the appended pages' among them, each opened with its payload's digest and its path to
+    """Every receipt is sampled, the appended pages' among them, each opened with its payload's digest and its path to
     its append's root, and every window is accepted.  The record counts each pass's post-seed reads, the blocks
     appended and those released."""
     r, verdicts = honest
@@ -421,10 +421,10 @@ def test_a_registered_session_with_filler_planned_is_credited_the_circuit_s_read
 
 
 def test_a_requirement_link_caps_nothing_unless_its_memory_map_unit_makes_the_record_s_appends(honest) -> None:
-    """The red team's KB-2: frees, re-keys and append order chosen after the seed cost no encode, so the advice they
-    give is zero only if W's memory map fixes them, which the memory-map unit proves.  The record carries the chain
-    over the session's appends (public: a hash over hiding roots and their indices), the link's `mapped` is asked
-    about the record, and a link whose unit doesn't make those appends is refused."""
+    """Frees, re-keys and append order chosen after the seed cost no encode, so the advice they give is zero only if
+    W's memory map fixes them, which the memory-map unit proves.  The record carries the chain over the session's
+    appends (public: a hash over hiding roots and their indices), the link's `mapped` is asked about the record, and a
+    link whose unit doesn't make those appends is refused."""
     r, _ = honest
     rec = r.s.record()
     assert r.head is not None and rec.appends == r.head and rec.public()["appends"] == r.head.hex()
@@ -526,7 +526,7 @@ def appended_at_step_one(early: bool) -> Run:
 
 
 def test_mapped_refuses_an_append_sent_before_its_step_s_pass() -> None:
-    """The red team's early append: step 1's append sent before step 1's root binds it into that pass's seed.  The
+    """An early append: step 1's append sent before step 1's root binds it into that pass's seed.  The
     session accepts either order and the chain over the appends is the same, so the chain alone can't tell them
     apart; step 1's head can, and a units link whose map appends at step 1 refuses the early session.  An append the
     map dates at step 0 isn't the honest session's either: the heads pin each append between two passes."""
@@ -702,7 +702,7 @@ def test_an_appended_block_opens_only_with_its_digest(appended, digest, failure)
 
 @pytest.mark.parametrize("opened", [0, 1], ids=["no-openings", "an-opening"])
 def test_a_window_with_no_draws_is_malformed_whatever_its_openings(opened) -> None:
-    """No session draws nothing (`Params` refuses `samples` or `min_passes` under 1), but a window whose draws are
+    """No session samples nothing (`Params` refuses `samples` or `min_passes` under 1), but a window whose draws are
     empty is `malformed` at `verify`, with or without openings, as the Lean `Session.verify` has it: a frame that
     doesn't decode, read as no openings, is refused on every window."""
     r = Run(store(), windows=1)

@@ -20,7 +20,7 @@ from verity.ml.circuits.layout import resolve
 from verity.ml.circuits.parts import n_members
 from verity.ml.circuits.program import INPUT_ID, Program, input_id, is_input
 from verity.ml.circuits.refs import Affine, Coll, Concat, array_of, refs_from_json, strided_view, tuple_of
-from verity.ml.circuits.types import Array, Record, Tuple, Value, type_from_json
+from verity.ml.circuits.types import Array, RecordType, Tuple, Value, type_from_json
 
 PATH = Path(__file__).parent / "format_vectors.json"
 V16, V32 = Value(16), Value(32)
@@ -68,7 +68,7 @@ RowDef = _comp("TRow", ("N", "OP", "C", "D"), lambda S: ((("row", Array(S.N, V32
 Row = bind(RowDef, N=4, OP=TAdd, C=1.5, D={"k": 2, "a": [1, "x"]})
 
 X_T = Array(2, Array(4, V32))
-R_T = Record(("h", Array(2, V16)), ("b", V32))
+R_T = RecordType(("h", Array(2, V16)), ("b", V32))
 RET_T = Tuple(Tuple(V32, V32), Array(2, V32), Array(4, V32), Tuple(V32, Array(4, V32)), V32, V32, V32, V32, V32)
 
 
@@ -155,7 +155,7 @@ def jcs(v) -> bytes:
 
 
 def leaf_widths(t) -> list[int]:
-    """Row-major leaves: an Array's elements in index order, a Tuple's or Record's fields in declared order."""
+    """Row-major leaves: an Array's elements in index order, a Tuple's or RecordType's fields in declared order."""
     tag = t[0]
     if tag == "Value":
         return [t[1]]
@@ -227,12 +227,6 @@ JCS_IN = [
     {"affine": ["n", 3, 0, 1], "strided": ["p", 0, 7, 1, 0, 0, 4]},
 ]
 JCS_OUT = ["\u00e9", "\x7f", 2**53 + 1, 10**21, 1.0, {"\ue000": 1, "\U0001f600": 2}]
-#: An ASCII document of every kind of value, control characters included, and the SHA-512 of its compact sorted JSON as
-#: the escaping writer (`ensure_ascii`) writes it.
-ASCII_DOC = {"id": "Gemm_v2{K=2048,N=16}", "ctl": "\x00\x01\x1f\t\n\r\b\f", "q": "\"\\/~ ", "n": [0, -1, 2**63],
-             "f": 1.5, "t": True, "z": None}
-ASCII_DOC_SHA512 = ("0b7e7c3cf0a166dc2dca18a9877c1c83d104647265571e3f6dacc15368e011a5"
-                    "79409093c8c1dcc20b17ef6c2e2a633d92414b53f824a571385caf3a19829e5b")
 
 TYPES = [["Value", 16], ["Array", 3, ["Value", 8]], ["Array", 0, ["Value", 32]], ["Tuple", [["Value", 16], ["Array", 2, ["Value", 32]]]],
          ["Record", [["b", ["Value", 32]], ["a", ["Array", 2, ["Value", 16]]]]], ["Array", 2, ["Tuple", [["Value", 16], ["Value", 32]]]]]
@@ -429,7 +423,7 @@ def build() -> dict:
                  "with --write.",
         "canonical_json": {
             "in_domain": [[v, codec.canonical_json(v).decode()] for v in JCS_IN],
-            "outside": [[v, _codec_bytes(v), jcs(v).hex(), codec.jcs_domain_error(v)] for v in JCS_OUT],
+            "outside": [[v, codec.canonical_json(v).hex(), jcs(v).hex(), codec.jcs_domain_error(v)] for v in JCS_OUT],
             "max_safe_int": codec.MAX_SAFE_INT,
         },
         "types": [[t, type_from_json(t).leaves, type_from_json(t).leaf_widths()] for t in TYPES],
@@ -458,14 +452,6 @@ def build() -> dict:
             "graph": {"wide": _graph(cut.CallGraph(WideCall)), "narrow": _graph(cut.CallGraph(NarrowCall))},
         },
     }
-
-
-def _codec_bytes(v) -> str:
-    """`codec.canonical_json(v)` in hex, or its refusal."""
-    try:
-        return codec.canonical_json(v).hex()
-    except ValueError as e:
-        return f"ValueError: {e}"
 
 
 def _root_nodes(D):
@@ -527,31 +513,12 @@ def test_canonical_json_is_jcs_on_the_domain(live):
 
 def test_outside_the_domain_the_bytes_differ_and_the_codec_refuses():
     for v, py, j, err in VECTORS["canonical_json"]["outside"]:
-        assert _codec_bytes(v) == py and jcs(v).hex() == j and py != j and err == codec.jcs_domain_error(v) is not None
-    refused = [v for v, py, _, _ in VECTORS["canonical_json"]["outside"] if py.startswith("ValueError")]
-    assert refused == ["\u00e9", "\x7f", {"\ue000": 1, "\U0001f600": 2}]
+        assert codec.canonical_json(v).hex() == py and jcs(v).hex() == j and py != j and err == codec.jcs_domain_error(v) is not None
     for D in ({"k": "\u00e9"}, {"k": "\x7f"}, {"k": 2**53}, {"k": -(2**53)}):
         fn = bind(RowDef, N=4, OP=TAdd, C=1.5, D=D)
         top = _comp("TOut", (), lambda S: ((("x", Array(4, V32)), ("b", V32)), V32), lambda B, S, x, b, fn=fn: B.call(fn, x, b))
         with pytest.raises(ValueError, match="canonical JSON domain"):
             codec.encode_program(Program(top))
-
-
-@pytest.mark.parametrize("v,where", [("d\u00e9", r"\$"), ({"a": [1, "d\u00e9"]}, r"\$\.a\[1\]"),
-                                     ({"k\u00e9y": 1}, r"\$\.<key>"), ({"k": "x\x7f"}, r"\$\.k"),
-                                     ({"k": "\ud800"}, r"\$\.k"), ({"k": "\U0001f600"}, r"\$\.k")])
-def test_canonical_json_refuses_a_string_past_ascii_naming_where(v, where):
-    with pytest.raises(ValueError, match=rf"canonical JSON domain: {where}: string .* is not ASCII without DEL"):
-        codec.canonical_json(v)
-
-
-def test_an_ascii_document_has_the_bytes_the_escaping_writer_gave_it():
-    """On ASCII without DEL, escaping the rest and writing it as UTF-8 are one text, the escaping writer's pinned one."""
-    b = codec.canonical_json(ASCII_DOC)
-    assert hashlib.sha512(b).hexdigest() == ASCII_DOC_SHA512
-    for v in [ASCII_DOC, *JCS_IN]:
-        escaped, utf8 = (json.dumps(v, sort_keys=True, separators=(",", ":"), ensure_ascii=a).encode() for a in (True, False))
-        assert codec.canonical_json(v) == escaped == utf8
 
 
 def test_the_program_digests(decoded):

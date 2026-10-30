@@ -1,4 +1,4 @@
-"""The remote bandwidth audit over a monitoring period: a week, a month and a year of every machine of a
+"""PoUB over a monitoring period: a week, a month and a year of every machine of a
 deployment, at δ = 1% and 10⁻⁶, the pooled total first and the per-window figure beside it, from one accepted session's
 answer as `RemoteAudit.Protocol.certify` publishes it: `q_bytes` certified, except with `eps` = δ₀ + S/2^64 (δ₀ the
 openings' pooled bound's δ, 2^-40, and S the session's draws).
@@ -35,7 +35,7 @@ from verity.core.protocols.pous.wipe_monitoring import DELTAS, PERIODS, short_se
 from . import codec, pooled
 
 FORMAT = "verity/remote-bandwidth-monitoring-period/v1"
-STATEMENT = {"name": "FlockSoundness.Audit.Periods.prCoin_count_le_choose", "pr": 4413,
+STATEMENT = {"name": "FlockSoundness.Audit.Periods.prCoin_count_le_choose",
              "file": "Security/Proofs/Flock/Soundness/Audit/Periods.lean"}
 EXCEPT = "each session's coin PRF advantage (a named assumption) over the period's sessions"
 
@@ -87,7 +87,8 @@ def table(answer: Mapping[str, Any], machines: int, window_s: int, *, deployment
     for name, seconds in PERIODS:
         per_machine = seconds // window_s
         t = machines * per_machine
-        row: dict[str, Any] = {"seconds": seconds, "sessions": t, "sessions_per_machine": per_machine}
+        row: dict[str, Any] = {"seconds": seconds, "sessions": t, "sessions_per_machine": per_machine,
+                               "basis": f"one session scaled up to {t} sessions, not a measured {name}"}
         if t == 0:
             periods[name] = row | {"why": f"a {window_s} s window doesn't fit a {name}"}
             continue
