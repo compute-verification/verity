@@ -1397,10 +1397,10 @@ def listed_ingress(members: Sequence[CS.Member], templates: Sequence[Sequence[An
     units)`` in the program's order, a template's units the members' from its first): each declaration's units times its
     port's row bits. The window's ingress is what its members read whole from rows before the window, committed there: the
     link checks bind it to its writers' outputs (sampled proofs' wiring, ε_bind), so it is not the run's ingress (`Ingress`
-    in a stated record, Lean's ``Layout.ingress``) and leaves the run's count free (`input_count`). Refused (ValueError)
-    where one names no template, reads outside its units or units no member holds, or a port that isn't an input row of
-    every member holding those units, or is one a wire or a shared-row table fills (`CS.Member`'s ``wired`` and
-    ``tables``), or two meet. The work is per declaration and per member it covers, never per unit. `circuit_record`,
+    in a stated record, the ingress gates Lean's ``freeInputs`` reads) and leaves the run's count free (`input_count`).
+    Refused (ValueError) where one names no template, reads outside its units or units no member holds, or a port that
+    isn't an input row of every member holding those units, or is one a wire or a shared-row table fills (`CS.Member`'s
+    ``wired`` and ``tables``), or two meet. The work is per declaration and per member it covers, never per unit. `circuit_record`,
     `window_of_record` and `input_count` each refuse a listed record whose window ingress this refuses."""
     base, at = {}, 0
     for t, n in templates:
