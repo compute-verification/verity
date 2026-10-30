@@ -68,7 +68,8 @@ theorem outputs_committed_wide' : OutputsCommittedWide := by
   have L0 : FlockSoundness.Layout (flatTwin st) := layout_of (st := flatTwin st) P s.pin rfl rfl s.m s.kLog
   have F0 : Aliased.UnitFacts tags (flatTwin st) := unitFacts_of_parse (st := flatTwin st) hp rfl
   have R : RowRanges st.c := RowRanges.ofL (st := flatTwin st) L0 F0.parse F0.check
-  have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (outPairs st.c).toArray := by rw [s.da, hidden_delta']
+  have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (outPairs st.c).toArray := by
+    rw [s.da, hidden_delta_unpinned (unpinned_of_rep hp hcr hor)]
   have hrows : OutRowsW st.c := outRowsW_of hp hcr hu hor h64
   have hz0 := sat_flatAll L L0 F0 hda hrows hz
   have hzero : blockBit (L.model regs) z o (zeroCol st.c) = false :=

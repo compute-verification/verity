@@ -41,7 +41,8 @@ theorem acceptsZK_acceptedH : AcceptsZKAcceptedH := by
   have ht' : (zkTags I).typed = false := (zkTags_typed I).trans ht
   have hcst : st.c = c := Except.ok.inj ((setupHidden_parseC hst).symm.trans hc)
   refine ⟨st, hst, hshape, fun regs => ⟨_, ⟨zkTags I, I.circuitFile, I.publicFile, zkCoins I, I.tables,
-    recordDraw t.record, I.partition, I.program, st, ht', hst, Hidden.hidden_layout ht' hst,
+    recordDraw t.record, I.partition, I.program, st, ht', hst,
+    Hidden.hidden_layout ht' hst (Hidden.setupHidden_unpinned ht' hst (by rw [hcst]; exact hv1.1.1)),
     unitRowsFlat ht' hst (by rw [hcst]; exact hv1.1), regs, rfl⟩, rfl, HEq.rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩⟩
 
 theorem zk_schedOK : ZkSchedOK := zk_schedOK'

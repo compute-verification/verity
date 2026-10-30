@@ -293,7 +293,8 @@ theorem table_rows {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {tables :
       FlockSoundness.Discharge.Hidden.unitFacts_of_parse (st := FlockSoundness.Discharge.Hidden.flatTwin st) hp rfl
     have hda : st.da = (Flock.HmRow.delta st.c st.pin).1 ++
         (FlockSoundness.Discharge.Hidden.outPairs st.c).toArray := by
-      rw [s.da, FlockSoundness.Discharge.Hidden.hidden_delta']
+      rw [s.da, FlockSoundness.Discharge.Hidden.hidden_delta_unpinned
+        (FlockSoundness.Discharge.Hidden.unpinned_of_v1 hcr fun p hp => (hv1 p hp).1)]
     have hrows := FlockSoundness.Discharge.Hidden.out_rows_v1 hp hcr fun p hp => (hv1 p hp).1
     have hz0 := FlockSoundness.Discharge.Hidden.sat_flat L L0 F0 hv1 hda hrows hz
     obtain ⟨ls, hcheck⟩ := P.check
