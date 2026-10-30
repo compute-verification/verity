@@ -15,14 +15,11 @@ warden's ingress rows, with the request each slot's Program starts.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from verity.core.protocols.certifier import ingress_scan as IS
 from verity.ml.circuits.defs import bind
 from verity.ml.definitions.registry import boolean_io_shell as BIO
-
-if TYPE_CHECKING:
-    from .window_circuit import WindowClass
 
 #: the registered value whose rows are the scan's states, one a bucket of the window (`ingress_scan.window_state`'s)
 SCAN_STATE = IS.SCAN_STATE
@@ -61,8 +58,9 @@ def _scan(scan: IS.Class, ingress: Sequence[bytes], outputs: Mapping[int, Sequen
     return got[0]
 
 
-def scan_anchors(cls: WindowClass, ingress: Sequence[bytes], outputs: Mapping[int, Sequence[int]]) -> dict[int, int]:
-    """Each request's anchor in the scan of ``ingress`` (`scan_state`'s): the bucket whose Programs start it (its slot's
+def scan_anchors(cls: Any, ingress: Sequence[bytes], outputs: Mapping[int, Sequence[int]]) -> dict[int, int]:
+    """Each request's anchor in the scan of ``ingress`` by the window class ``cls`` (a `window_circuit.WindowClass`, which
+    imports this module), as `scan_state` scans it: the bucket whose Programs start it (its slot's
     ``occ`` bit 0 set in the state before it), by its ordinal q. ValueError where the scan refuses the rows."""
     out: dict[int, int] = {}
     for t, st in enumerate(_scan(cls.scan, ingress, outputs)):
@@ -72,9 +70,10 @@ def scan_anchors(cls: WindowClass, ingress: Sequence[bytes], outputs: Mapping[in
     return out
 
 
-def scan_state(cls: WindowClass, ingress: Sequence[bytes], outputs: Mapping[int, Sequence[int]],
+def scan_state(cls: Any, ingress: Sequence[bytes], outputs: Mapping[int, Sequence[int]],
                t0: int = 0) -> tuple[list[list[int]], list[int | None]]:
-    """The network certifier's scan as a window of ``cls`` from scan bucket ``t0`` reads it: its state rows
+    """The network certifier's scan as a window of ``cls`` (a `window_circuit.WindowClass`) from scan bucket ``t0`` reads
+    it: its state rows
     (`window_rows.state_value`'s ``rows``, `ingress_scan.window_state`'s) and the request each class Program starts,
     slot k's the ordinal q of the request whose Program starts at its anchor in its lane (``occ``'s bit 0 set in the row
     there, `ingress_scan.programs`' read), None for a slot no request starts. The scan is of the warden's registered
