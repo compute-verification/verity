@@ -44,21 +44,4 @@ theorem b1_indep_set (n Δ : ℕ) (G : SimpleGraph (Fin n)) [DecidableRel G.Adj]
 `construction-paths.md` §4 names the corollary only in prose: "the free fraction under local re-derivation". This is
 one reading of it, for review. -/
 
-/-- The free fraction under local re-derivation. In a loop-free digraph on `n` vertices where every vertex has at
-most `Δ` neighbours (parents and children together), some set `S` of at least `n/(Δ + 1)` vertices spans no edge.
-Every vertex of `S` then has all its parents outside `S`, so an adversary that stores every label outside `S`
-re-derives all of `S` in one parallel round. -/
-theorem b1_free_fraction (n Δ : ℕ) (E : Fin n → Fin n → Prop) [DecidableRel E] (hirr : ∀ v, ¬ E v v)
-    (hΔ : ∀ v, (Finset.univ.filter fun u => E u v ∨ E v u).card ≤ Δ) :
-    ∃ S : Finset (Fin n), (∀ u ∈ S, ∀ v ∈ S, ¬ E u v) ∧ n ≤ (Δ + 1) * S.card := by
-  classical
-  obtain ⟨s, hs, hcard⟩ := b1_indep_set n Δ (SimpleGraph.fromRel E) fun v => by
-    refine le_trans (Finset.card_le_card fun u hu => ?_) (hΔ v)
-    rw [SimpleGraph.mem_neighborFinset, SimpleGraph.fromRel_adj] at hu
-    simpa [or_comm] using hu.2
-  refine ⟨s, fun u hu v hv huv => ?_, hcard⟩
-  by_cases h : u = v
-  · exact hirr u (h ▸ huv)
-  · exact hs hu hv h ((SimpleGraph.fromRel_adj _ _ _).2 ⟨h, Or.inl huv⟩)
-
 end PousPebbling

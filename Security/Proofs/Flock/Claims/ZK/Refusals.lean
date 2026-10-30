@@ -54,13 +54,6 @@ noncomputable def withOuter {P : Composed.LigProver}
     rest := ({ ((cz x c j).rest : Composed.RestOf (zkTab x j).table (stAt x j)) with
       rOuter := fun r i => outerAt c j.val r.val i.val } : Composed.RestOf (zkTab x j).table (stAt x j)) }
 
-theorem outerReads_withOuter {P : Composed.LigProver}
-    (cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (tabC P x j).Rest) :
-    OuterReads (withOuter cz) := by
-  intro x c j r y hy
-  obtain ⟨i, rfl⟩ := List.mem_ofFn.1 hy
-  exact ⟨i.val, i.isLt, rfl⟩
-
 /-- **The coins `refK x` openings open**: opening `k`'s, read as its coin (`rd`); the session's `pad`. -/
 def padOps {x : Msg} (ops : List (Msg × Msg)) : Fin (refK x) → FlockDeploy.Coin :=
   fun k => (ops.map fun p => rd p.2).getD k.val default

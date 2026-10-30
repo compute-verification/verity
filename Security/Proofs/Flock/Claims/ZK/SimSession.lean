@@ -68,16 +68,6 @@ theorem asksCut_round_go (coin : ℕ → ℕ → _root_.Flock.F128) (n : ℕ) (c
   rw [e]
   split_ifs <;> rfl
 
-theorem cutS_link {coin : ℕ → ℕ → _root_.Flock.F128} {n : ℕ} {resp : ℕ → Msg} (hr : ∀ k, coinOf (resp k) = coin k)
-    (a b : Array ByteArray) : cutS.R ((asksCut coin n).link a b) ((asksS resp).link a b) := by
-  intro l v l' e
-  rw [asksCut_link_go] at e
-  by_cases hn : n ≤ l.size
-  · simp only [hn, ↓reduceIte, Prod.mk.injEq, reduceCtorEq, false_and] at e
-  · simp only [hn, ↓reduceIte, Prod.mk.injEq, Except.ok.injEq] at e
-    obtain ⟨rfl, rfl⟩ := e
-    rw [JsonRT.link_go, hr]
-
 theorem cutS_round {coin : ℕ → ℕ → _root_.Flock.F128} {n : ℕ} {resp : ℕ → Msg} (hr : ∀ k, coinOf (resp k) = coin k)
     (c : ByteArray) : cutS.R ((asksCut coin n).round c) ((asksS resp).round c) := by
   intro l v l' e
@@ -263,16 +253,6 @@ theorem both_rfl {α : Type} (x : FlockComplete.PS α) (l : Array Msg) :
   · trivial
   · exact ⟨rfl, rfl⟩
 
-/-- Two runs that end alike are in step, the right one's run recorded. -/
-theorem both_of_eq {α : Type} {x y : Except String α × Array Msg} (h : x = y) :
-    Both (fun a b l' => a = b ∧ y = (.ok b, l')) x y := by
-  subst h
-  refine ⟨rfl, ?_⟩
-  rcases x with ⟨r, l'⟩
-  cases r
-  · trivial
-  · exact ⟨rfl, rfl⟩
-
 /-- Two runs in step, the right one's run recorded. -/
 theorem both_right {α β : Type} {P : α → β → Array Msg → Prop} {x : Except String α × Array Msg}
     {y : Except String β × Array Msg} (h : Both P x y) : Both (fun a b l' => P a b l' ∧ y = (.ok b, l')) x y := by
@@ -337,19 +317,6 @@ theorem both_mapM_array {α β γ : Type} (f : α → FlockComplete.PS β) (g : 
   refine both_map _ _ (both_mapM_list f g e xs.toList (fun a ha => h a (Array.mem_toList_iff.1 ha)) l) ?_
   rintro bs cs _ rfl
   simp
-
-theorem both_mono {α β : Type} {P Q : α → β → Array Msg → Prop} {x : Except String α × Array Msg}
-    {y : Except String β × Array Msg} (h : Both P x y) (hPQ : ∀ a b l', P a b l' → Q a b l') : Both Q x y := by
-  refine ⟨h.1, ?_⟩
-  obtain ⟨hl, hr⟩ := h
-  rcases x with ⟨rx, lx⟩
-  rcases y with ⟨ry, ly⟩
-  dsimp only at hl hr ⊢
-  cases rx <;> cases ry
-  · trivial
-  · exact hr.elim
-  · exact hr.elim
-  · exact hPQ _ _ _ hr
 
 /-- **Two `for` loops in step over one list**, from position `k` of `s`, with an invariant of the position, the two
 loops' states and the bodies; each step sees the element at its position. -/
