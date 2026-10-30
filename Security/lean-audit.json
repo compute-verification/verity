@@ -2212,6 +2212,7 @@
   "Lms",
   "PousCheck",
   "MemoryChallenger",
+  "Attest",
   "PouwCommit.Tagged",
   "PouwCommit.Frame",
   "PouwCommit.Rows",
@@ -2503,28 +2504,6 @@
    "Claims.Recursion.opensAtI": "`FCI`'s loop condition (does a draw's opened inner view accept and open an inner cap position), a finder's internal test that `KSLin2` and `BitsLin2` read through `FCI`, no claim",
    "Claims.Sampling.PrivateCircuit.Fits": "a helper the claims read: a private circuit of a size class",
    "Claims.Json.Ascii": "a helper the claims read: a text of ASCII without DEL, which `JsonSpec` reads"
-  }
- },
- "witnesses": {
-  "Flock.SecurityProofs.RecursiveKS": {
-   "honest": ["RecDeploy.HonestHalfFixture.honest_half_fixture"],
-   "nontrivial": "Flock.Guarantees.recursiveKS_nontrivial"
-  },
-  "Pouw.SecurityProofs.Dither.FleetSound": {
-   "honest": ["Pouw.SecurityProofs.Dither.FleetSound_honest"],
-   "nontrivial": "Pouw.SecurityProofs.Dither.FleetSound_nontrivial"
-  },
-  "Pouw.SecurityProofs.Dither.WorkMoment": {
-   "honest": ["Pouw.SecurityProofs.Dither.WorkMoment_honest"],
-   "nontrivial": "Pouw.SecurityProofs.Dither.WorkMoment_nontrivial"
-  },
-  "Pouw.SecurityProofs.Dither.WorkSound": {
-   "honest": ["Pouw.SecurityProofs.Dither.WorkSound_honest"],
-   "nontrivial": "Pouw.SecurityProofs.Dither.WorkSound_nontrivial"
-  },
-  "Pouw.SecurityProofs.OnsiteFreed": {
-   "honest": ["Pouw.SecurityProofs.OnsiteFreed_honest"],
-   "nontrivial": "Pouw.SecurityProofs.OnsiteFreed_nontrivial"
   }
  },
  "layers": {
@@ -61345,5 +61324,27 @@
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
   "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
+ },
+ "witnesses": {
+  "Flock.SecurityProofs.RecursiveKS": {
+   "honest": ["RecDeploy.HonestHalfFixture.honest_half_fixture"],
+   "nontrivial": "Flock.Guarantees.recursiveKS_nontrivial"
+  },
+  "Pouw.SecurityProofs.Dither.FleetSound": {
+   "honest": ["Pouw.SecurityProofs.Dither.FleetSound_honest"],
+   "nontrivial": "Pouw.SecurityProofs.Dither.FleetSound_nontrivial"
+  },
+  "Pouw.SecurityProofs.Dither.WorkMoment": {
+   "honest": ["Pouw.SecurityProofs.Dither.WorkMoment_honest"],
+   "nontrivial": "Pouw.SecurityProofs.Dither.WorkMoment_nontrivial"
+  },
+  "Pouw.SecurityProofs.Dither.WorkSound": {
+   "honest": ["Pouw.SecurityProofs.Dither.WorkSound_honest"],
+   "nontrivial": "Pouw.SecurityProofs.Dither.WorkSound_nontrivial"
+  },
+  "Pouw.SecurityProofs.OnsiteFreed": {
+   "honest": ["Pouw.SecurityProofs.OnsiteFreed_honest"],
+   "nontrivial": "Pouw.SecurityProofs.OnsiteFreed_nontrivial"
+  }
  }
 }
