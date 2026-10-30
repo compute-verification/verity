@@ -64,11 +64,11 @@ extern "C" int verity_rows_level_launch(const void* params, const uint8_t* in, u
                                         uint64_t max_blocks, cudaStream_t st);
 extern "C" int verity_rows_levels_launch(const void* params, const uint8_t* in, uint8_t* out, uint64_t n_in, int level, uint64_t base,
                                          int n_levels, cudaStream_t st);
-extern "C" int verity_lead_params_bytes();
-extern "C" int verity_lead_build(const uint8_t* domain_id, const char* schema, int schema_len, void* out);
-extern "C" int verity_lead_gather_launch(const uint8_t* ex, uint8_t* out, int m, int n, int S, int bn, cudaStream_t st);
-extern "C" int verity_lead_leaves_launch(const void* params, const uint8_t* values, uint64_t value_bytes, uint64_t n, uint64_t last_bytes,
-                                         uint64_t first, uint8_t* out, cudaStream_t st);
+extern "C" int verity_rows_lead_params_bytes();
+extern "C" int verity_rows_lead_build(const uint8_t* domain_id, const char* schema, int schema_len, void* out);
+extern "C" int verity_rows_lead_gather_launch(const uint8_t* ex, uint8_t* out, int m, int n, int S, int bn, cudaStream_t st);
+extern "C" int verity_rows_lead_leaves_launch(const void* params, const uint8_t* values, uint64_t value_bytes, uint64_t n,
+                                              uint64_t last_bytes, uint64_t first, uint8_t* out, cudaStream_t st);
 
 namespace {
 
@@ -1637,8 +1637,9 @@ struct LeadStep {
   LeadStep(const py::bytes& domain_id, const std::string& schema) {
     const std::string did = domain_id;
     if (did.size() != 64) throw std::runtime_error("LeadStep: the domain id is 64 bytes");
-    params.resize(static_cast<size_t>(verity_lead_params_bytes()));
-    if (verity_lead_build(reinterpret_cast<const uint8_t*>(did.data()), schema.data(), static_cast<int>(schema.size()), params.data()) != 0)
+    params.resize(static_cast<size_t>(verity_rows_lead_params_bytes()));
+    if (verity_rows_lead_build(reinterpret_cast<const uint8_t*>(did.data()), schema.data(), static_cast<int>(schema.size()),
+                               params.data()) != 0)
       throw std::runtime_error("LeadStep: a schema is at most 32 bytes, not " + std::to_string(schema.size()));
   }
 };
@@ -1995,8 +1996,9 @@ struct StepHasher {
     c10::cuda::CUDAStream cs = c10::cuda::getStreamFromExternal(st, exported.device().index());
     c10::cuda::CUDAStreamGuard g(cs);
     at::Tensor out = at::empty({16 * ((m + 15) / 16) * 8 * ((n + 7) / 8) * S}, at::TensorOptions().dtype(at::kInt).device(exported.device()));
-    const int lrc = verity_lead_gather_launch(reinterpret_cast<const uint8_t*>(exported.data_ptr()), reinterpret_cast<uint8_t*>(out.data_ptr()),
-                                              static_cast<int>(m), static_cast<int>(n), static_cast<int>(S), static_cast<int>(bn), st);
+    const int lrc = verity_rows_lead_gather_launch(reinterpret_cast<const uint8_t*>(exported.data_ptr()),
+                                                   reinterpret_cast<uint8_t*>(out.data_ptr()), static_cast<int>(m), static_cast<int>(n),
+                                                   static_cast<int>(S), static_cast<int>(bn), st);
     if (lrc != 0) throw std::runtime_error(std::string("lead_stream: ") + cudaGetErrorString(static_cast<cudaError_t>(lrc)));
     return out;
   }
@@ -2015,9 +2017,10 @@ struct StepHasher {
     c10::cuda::CUDAStream cs = c10::cuda::getStreamFromExternal(st, values.device().index());
     c10::cuda::CUDAStreamGuard g(cs);
     at::Tensor leaves = at::empty({n, 64}, at::TensorOptions().dtype(at::kByte).device(values.device()));
-    const int lrc = verity_lead_leaves_launch(ls.params.data(), reinterpret_cast<const uint8_t*>(values.data_ptr()), static_cast<uint64_t>(value_bytes),
-                                              static_cast<uint64_t>(n), static_cast<uint64_t>(last_bytes), static_cast<uint64_t>(first),
-                                              reinterpret_cast<uint8_t*>(leaves.data_ptr()), st);
+    const int lrc = verity_rows_lead_leaves_launch(ls.params.data(), reinterpret_cast<const uint8_t*>(values.data_ptr()),
+                                                   static_cast<uint64_t>(value_bytes), static_cast<uint64_t>(n),
+                                                   static_cast<uint64_t>(last_bytes), static_cast<uint64_t>(first),
+                                                   reinterpret_cast<uint8_t*>(leaves.data_ptr()), st);
     if (lrc != 0) throw std::runtime_error(std::string("lead_leaves: ") + cudaGetErrorString(static_cast<cudaError_t>(lrc)));
     return leaves;
   }

@@ -664,11 +664,11 @@ extern "C" int verity_rows_levels_launch(const void* params, const uint8_t* in, 
   return static_cast<int>(cudaGetLastError());
 }
 
-extern "C" int verity_lead_params_bytes() { return static_cast<int>(sizeof(lead::Prefix)); }
+extern "C" int verity_rows_lead_params_bytes() { return static_cast<int>(sizeof(lead::Prefix)); }
 
-// An instance's leaf parameters into `out` (verity_lead_params_bytes()): its domain id (64 bytes) and the leaves' schema (at most
+// An instance's leaf parameters into `out` (verity_rows_lead_params_bytes()): its domain id (64 bytes) and the leaves' schema (at most
 // 32 bytes).  0, or -1 for a longer schema.
-extern "C" int verity_lead_build(const uint8_t* domain_id, const char* schema, int schema_len, void* out) {
+extern "C" int verity_rows_lead_build(const uint8_t* domain_id, const char* schema, int schema_len, void* out) {
   if (schema_len < 0 || schema_len > 32) return -1;
   lead::Prefix k{};
   for (int nb = 1; nb <= MAX_NB; ++nb) {
@@ -686,7 +686,7 @@ extern "C" int verity_lead_build(const uint8_t* domain_id, const char* schema, i
 
 // The committed stream of a call of m rows and n columns at S steps from its export over bn-column tiles (64 ceil(m / 64) x
 // bn ceil(n / bn) words a step): pad_rows(m) pad_cols(n) S words to out.  ex and out 16-byte aligned.
-extern "C" int verity_lead_gather_launch(const uint8_t* ex, uint8_t* out, int m, int n, int S, int bn, cudaStream_t st) {
+extern "C" int verity_rows_lead_gather_launch(const uint8_t* ex, uint8_t* out, int m, int n, int S, int bn, cudaStream_t st) {
   if (m <= 0 || n <= 0 || S <= 0 || bn <= 0 || bn % 8 || reinterpret_cast<uintptr_t>(ex) % 16 || reinterpret_cast<uintptr_t>(out) % 16)
     return static_cast<int>(cudaErrorInvalidValue);
   if (const int rc = rows_kernel_attributes()) return rc;
@@ -699,8 +699,8 @@ extern "C" int verity_lead_gather_launch(const uint8_t* ex, uint8_t* out, int m,
 
 // The inline leaves of ranks first .. first + n - 1 over n values at values + i value_bytes, each value_bytes long but the last
 // (last_bytes): 64 bytes a leaf to out.  values 8-byte aligned, both lengths multiples of 8, first + n <= 2^32.
-extern "C" int verity_lead_leaves_launch(const void* params, const uint8_t* values, uint64_t value_bytes, uint64_t n, uint64_t last_bytes,
-                                         uint64_t first, uint8_t* out, cudaStream_t st) {
+extern "C" int verity_rows_lead_leaves_launch(const void* params, const uint8_t* values, uint64_t value_bytes, uint64_t n,
+                                              uint64_t last_bytes, uint64_t first, uint8_t* out, cudaStream_t st) {
   if (!n) return 0;
   if (value_bytes % 8 || last_bytes % 8 || !last_bytes || last_bytes > value_bytes || first + n > (1ull << 32) ||
       reinterpret_cast<uintptr_t>(values) % 8)
