@@ -10,13 +10,13 @@ from the program's definitions (`NetworkCertifier.Calls`), gives every one of th
 `lean-audit.json`): compiled evaluation, a test and not a proof.
 
 An instance is a window: `{"cap", "fwd_macs", "release_bits", "entropy", "events"}`, the certifier's entropy as hex,
-and each event `["a", forward, call, root, rows, cols, K]` (a call's A root and its shape), `["b", r, frames]` (a
+and each event `["a", forward, call, root, rows, cols, K, bn]` (a call's A root and its shape), `["b", r, frames]` (a
 boundary link's bucket at allocation `r`, its real frames' content bits), `["w", forward, root]` (a forward's words
 root) or `["c"]` (the window's close), each root as hex. `evaluate` gives
 * `answers`: each event's answer, `{"release": hex}` (the release's bytes), `"no coins"`, `"counted"`,
   `{"verdict": name}`, `{"record": forwards}` (the close's record, its forwards as `summary` has them) or `"refusal"`;
 * `summary`: the window's forwards in id order, `{"forward", "calls", "words_root", "verdict"}` with each call
-  `{"call", "rows", "cols", "K", "a_root"}`, as `Calls.summary` gives them without the releases' digests, which the
+  `{"call", "rows", "cols", "K", "bn", "a_root"}`, as `Calls.summary` gives them without the releases' digests, which the
   answers hold the bytes of.
 -/
 
@@ -49,9 +49,9 @@ def hexOf (bytes : List Nat) : String :=
 /-- An event as read. -/
 def eventOfJson (j : Json) : Except String Event := do
   match ← fromJson? (α := List Json) j with
-  | [.str "a", forward, call, root, rows, cols, k] =>
+  | [.str "a", forward, call, root, rows, cols, k, bn] =>
     pure (.aRoot (← fromJson? forward) (← fromJson? call) (← bytesOfHex (← fromJson? root))
-      ⟨← fromJson? rows, ← fromJson? cols, ← fromJson? k⟩)
+      ⟨← fromJson? rows, ← fromJson? cols, ← fromJson? k, ← fromJson? bn⟩)
   | [.str "b", r, frames] => pure (.bucket (← fromJson? r) (← fromJson? frames))
   | [.str "w", forward, root] => pure (.wordsRoot (← fromJson? forward) (← bytesOfHex (← fromJson? root)))
   | [.str "c"] => pure .close
@@ -74,7 +74,7 @@ def rawOfJson (j : Json) : Except String Raw := do
 /-- A call as `Calls.summary` gives it, without the release's digest. -/
 def callJson (c : Call) : Json :=
   Json.mkObj [("call", toJson c.id), ("rows", toJson c.shape.rows), ("cols", toJson c.shape.cols),
-    ("K", toJson c.shape.K), ("a_root", Json.str (hexOf c.aRoot))]
+    ("K", toJson c.shape.K), ("bn", toJson c.shape.bn), ("a_root", Json.str (hexOf c.aRoot))]
 
 /-- A forward as `Calls.summary` gives it, without its calls' releases' digests: its id, calls, words root and verdict
 (none while it is open). -/

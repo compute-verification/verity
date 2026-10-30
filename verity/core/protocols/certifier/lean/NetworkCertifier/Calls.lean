@@ -7,8 +7,9 @@ Lean core only.
 
 * **A call's shape** (`Shape`): `rows` rows of A, `cols` output columns and inner dimension `K`, committed over whole MMA
   tiles (`Shape.m`, `Shape.n`) in `Shape.S` k32 steps, with `Shape.H` row words a row and `Shape.tiles` coin tiles, as
-  the lead's `padRows`, `padCols` and `stepsFor` have them. The certifier takes only a shape the verifier admits
-  (`Shape.valid`, the lead's `Layout.Admits`).
+  the lead's `padRows`, `padCols` and `stepsFor` have them, and the column tile `bn` the kernel runs it at, which orders
+  its committed words. The certifier takes only a shape the verifier admits (`Shape.valid`, the lead's `Layout.Admits`)
+  at a tile of `bns`.
 * **The flip** (`flip`): the call's coins from the certifier's entropy, a list of bytes, read in the release's order:
   the row words' bytes, each row's bits from `S + 3` up cleared (`rowBytes`); G's 32-bit little-endian words, each below
   `gBound` taken as its residue mod 7⁴ and each other rejected (`words`); the coin lanes' bytes, each one's low 7 bits a
@@ -17,7 +18,7 @@ Lean core only.
   words (bit `q < 4` of a row's is its step-1 bit a₁, bit `t + 3` its tag bit at a step `t ≥ 1`; step 0 reads none),
   the G words (byte `q` of column `j`'s the int8 `G[q, j]`), then a coin tile at a time its lane-coin words
   (`laneBytes`: three int8 coin lanes, and byte 3 the column code's top digit at step 0 and 1 later) and its column
-  sources (`source`), which are no coins but a public function of them.
+  sources (`source`, `β_j − σ` with `β_j` the column's public `bias`), which are no coins but a public function of them.
 * **The count** (`step`): the window's forwards as the certifier keeps them. A call's A root is answered with the call's
   release, once; a forward's first call opens it, while no other forward is open. A bucket of a boundary link at
   allocation `r` counts `timingBits r` and its real frames' content bits once, against the open forward. A forward's
@@ -40,8 +41,8 @@ def gBound : Nat := 7 ^ 4 * (2 ^ 32 / 7 ^ 4)
 /-- The most MMA tiles a call's committed words may span over its steps for the verifier to admit it. -/
 def admittedTiles : Nat := 2 ^ 40
 
-/-- A column source's offset, `1.5 · 2²³` as an fp32's bits. -/
-def sourceBias : Int := 0x4B400000
+/-- The column tiles the lead's kernel runs a call at. -/
+def bns : List Nat := [128, 256]
 
 /-- Row class `c`'s weight on coin lane `ℓ` (the lead's `rotWeight`): 127 on lane `c` and 1 on the others. -/
 def rotW (c ℓ : Nat) : Int := if ℓ = c then 127 else 1
@@ -51,6 +52,7 @@ structure Shape where
   rows : Nat
   cols : Nat
   K : Nat
+  bn : Nat
   deriving DecidableEq, Repr
 
 namespace Shape
@@ -73,10 +75,10 @@ def tiles (s : Shape) : Nat := (s.m + tile - 1) / tile
 /-- Coins the call takes: `S + 3` bits a row, four tag weights a column and `3·S` coin lanes a tile and column. -/
 def coins (s : Shape) : Nat := s.m * (s.S + 3) + 4 * s.n + 3 * s.S * s.tiles * s.n
 
-/-- A shape the certifier takes: every dimension positive, and its committed words at most `admittedTiles` MMA tiles over
-its steps. -/
+/-- A shape the certifier takes: every dimension positive, its committed words at most `admittedTiles` MMA tiles over
+its steps, and its column tile one of `bns`. -/
 def valid (s : Shape) : Bool :=
-  decide (0 < s.rows ∧ 0 < s.cols ∧ 0 < s.K ∧ s.m / 16 * (s.n / 8) * s.S ≤ admittedTiles)
+  decide (0 < s.rows ∧ 0 < s.cols ∧ 0 < s.K ∧ s.m / 16 * (s.n / 8) * s.S ≤ admittedTiles ∧ s.bn ∈ bns)
 
 /-- Its MACs a token, the share of the egress cap it brings its forward: `rows · n · K` (the lead's `callBits`). -/
 def macs (s : Shape) : Nat := s.rows * s.n * s.K
@@ -130,6 +132,11 @@ def u32 (w : Nat) : List Nat := [w % 256, w / 2 ^ 8 % 256, w / 2 ^ 16 % 256, w /
 /-- Digit `q` of column `j`'s code, in `[−6, 6]`: the balanced base-13 digits of `j + 1` (the lead's `colCode`). -/
 def colCode (j q : Nat) : Int := ((j + 14281) / 13 ^ q % 13 : Nat) - 6
 
+/-- Column `j`'s bias `β_j` at `S` steps, `⌊(Σ_q C[q, j] + 3 (S − 1) + 1) / 2⌋` (the lead's `bias`; `S ≥ 1`): public,
+from the column and the call's steps alone. The call's committed words start from `−β_j`, which its sources give back. -/
+def bias (S j : Nat) : Int :=
+  ((List.range 4).foldl (fun acc q => acc + colCode j q) 0 + ((3 * (S - 1) + 1 : Nat) : Int)) / 2
+
 /-- A tile's lane-coin words' bytes from its `u`, from word `w` on (word `t·n + j` is step `t`, column `j`): bytes 0–2
 the int8 coin lanes `2u − 127`, byte 3 the column code's top digit at step 0 and 1 at a later step. -/
 def laneBytes (n : Nat) : Nat → List Nat → List Nat
@@ -138,12 +145,12 @@ def laneBytes (n : Nat) : Nat → List Nat → List Nat
       if w < n then int8 (colCode w 3) else 1] ++ laneBytes n (w + 1) rest
   | _, _ => []
 
-/-- Column `j`'s source for row class `c` in a tile of `S` steps whose coin lanes' `u` are `u`: `0x4B400000 − σ mod 2³²`,
-with `σ = Σ_t Σ_ℓ rotW c ℓ · (2u − 127)`. -/
+/-- Column `j`'s source for row class `c` in a tile of `S` steps whose coin lanes' `u` are `u`: `β_j − σ mod 2³²`, with
+`β_j = bias S j` and `σ = Σ_t Σ_ℓ rotW c ℓ · (2u − 127)`. -/
 def source (S n : Nat) (u : Array Nat) (c j : Nat) : Nat :=
   let σ := (List.range S).foldl (fun acc t => (List.range 3).foldl (fun acc ℓ =>
     acc + rotW c ℓ * (2 * (u[(t * n + j) * 3 + ℓ]! : Int) - 127)) acc) 0
-  ((sourceBias - σ) % 2 ^ 32).toNat
+  ((bias S j - σ) % 2 ^ 32).toNat
 
 /-- **The release**: the call's row words and G words, then a coin tile at a time its lane-coin words and its column
 sources (class 0's `n`, then class 1's). -/
