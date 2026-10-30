@@ -1194,6 +1194,16 @@ class Proxy:
         return sess
 
 
+def write_stopped(d: Path, coins: CoinServer) -> None:
+    """A stopped session's directory: the coin server's record, ``public.json``, and its coin tree's record,
+    ``coin_tree.json``, when it has one."""
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "public.json").write_text(record_bytes(coins.record()))
+    # the challenger logged this tree; an audit refuses a logged tree no session reports
+    if coins.tree_record is not None:
+        (d / "coin_tree.json").write_text(json.dumps(coins.tree_record, indent=1, sort_keys=True))
+
+
 def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, ready: Callable[[str], None] | None = None,
           sessions: int = 1, done: Callable[[dict], None] | None = None, *, schedule: dict, firewall=None,
           parts: list[str] | None = None, stream: str = "rec", budget: int | None = None, release: dict | None = None,
@@ -1264,11 +1274,7 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
                 print("STOPPED\t" + json.dumps({"session": len(res), "refused": proxy.stopped}), flush=True)
             d = Path(out) / f"s{len(res)}" if sessions > 1 else Path(out)
             if proxy.stopped is not None:
-                d.mkdir(parents=True, exist_ok=True)
-                (d / "public.json").write_text(record_bytes(proxy.coins.record()))
-                # the challenger logged this tree; an audit refuses a logged tree no session reports
-                if proxy.coins.tree_record is not None:
-                    (d / "coin_tree.json").write_text(json.dumps(proxy.coins.tree_record, indent=1, sort_keys=True))
+                write_stopped(d, proxy.coins)
                 res.append({"session": None, "refused": proxy.stopped, "rounds": len(proxy.coins.rounds)})
                 if firewall is not None:
                     firewall.stop(sid, "inner", proxy.stopped)
@@ -1287,6 +1293,36 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
             if done:
                 done(res[-1])
     return res
+
+
+def add_tree_args(ap) -> None:
+    """The coin tree's flags (``--coin-tree`` and where its trees come from), for `tree_source`."""
+    ap.add_argument("--coin-tree", action="store_true",
+                    help="each session's coins the challenger's coin tree (INNER_COIN_SPEC), drawn at its Hello by --tree-from "
+                         "(or, in tests, --tree-test-os): the prover runs under FC_COINS=tree")
+    ap.add_argument("--tree-from", metavar="HOST:PORT",
+                    help="the challenger's session at HOST:PORT, which draws each session's coin tree and opens each round "
+                         "after what it answers, logging both in its signed release log (remote.RemoteChallenger)")
+    ap.add_argument("--tree-secret-file", metavar="FILE", help="with --tree-from: the challenger session's secret, in hex")
+    ap.add_argument("--tree-test-os", action="store_true",
+                    help="tests only: each coin tree drawn on this host from the OS's generator (OsTree), so its coins are "
+                         "this host's, not the challenger's")
+
+
+def tree_source(ap, a) -> TreeSource | None:
+    """The source `add_tree_args`' flags name (None without ``--coin-tree``); the caller closes it."""
+    if a.coin_tree and (a.tree_from is None) == (not a.tree_test_os):
+        ap.error("--coin-tree takes its trees from the challenger (--tree-from HOST:PORT) or, in tests, this host "
+                 "(--tree-test-os)")
+    if not a.coin_tree and (a.tree_from or a.tree_test_os):
+        ap.error("--tree-from and --tree-test-os name where --coin-tree's trees come from")
+    if a.tree_secret_file and not a.tree_from:
+        ap.error("--tree-secret-file is --tree-from's")
+    if a.tree_from:
+        from verity.core.protocols.sampled_proofs import remote
+        secret = bytes.fromhex(Path(a.tree_secret_file).read_text().strip()) if a.tree_secret_file else None
+        return remote.RemoteChallenger.connect(a.tree_from, secret)
+    return OsTree() if a.tree_test_os else None
 
 
 def main(argv=None) -> int:
@@ -1313,16 +1349,7 @@ def main(argv=None) -> int:
     ap.add_argument("--release-windows-ms", metavar="W0,W1,...",
                     help="the release schedule's public window a statement, in ms: statement j leaves at the connection's time "
                          "plus W0 + ... + Wj (--firewall)")
-    ap.add_argument("--coin-tree", action="store_true",
-                    help="each session's coins the challenger's coin tree (INNER_COIN_SPEC), drawn at its Hello by --tree-from "
-                         "(or, in tests, --tree-test-os): the prover runs under FC_COINS=tree")
-    ap.add_argument("--tree-from", metavar="HOST:PORT",
-                    help="the challenger's session at HOST:PORT, which draws each session's coin tree and opens each round "
-                         "after what it answers, logging both in its signed release log (remote.RemoteChallenger)")
-    ap.add_argument("--tree-secret-file", metavar="FILE", help="with --tree-from: the challenger session's secret, in hex")
-    ap.add_argument("--tree-test-os", action="store_true",
-                    help="tests only: each coin tree drawn on this host from the OS's generator (OsTree), so its coins are "
-                         "this host's, not the challenger's")
+    add_tree_args(ap)
     a = ap.parse_args(argv)
     if a.schedule_for:
         sparse = None
@@ -1341,24 +1368,11 @@ def main(argv=None) -> int:
         ap.error("--parts, --budget and --release-windows-ms need --firewall")
     if a.firewall and a.parts is None:
         ap.error("--firewall needs --parts: each recursive session's V* statements in their order (L0–L6,alg at K = 4096)")
-    if a.coin_tree and (a.tree_from is None) == (not a.tree_test_os):
-        ap.error("--coin-tree takes its trees from the challenger (--tree-from HOST:PORT) or, in tests, this host "
-                 "(--tree-test-os)")
-    if not a.coin_tree and (a.tree_from or a.tree_test_os):
-        ap.error("--tree-from and --tree-test-os name where --coin-tree's trees come from")
-    if a.tree_secret_file and not a.tree_from:
-        ap.error("--tree-secret-file is --tree-from's")
     fw = None
     if a.firewall:
         from .firewall import Firewall
         fw = Firewall(Path(a.firewall))
-    source: TreeSource | None = None
-    if a.tree_from:
-        from verity.core.protocols.sampled_proofs import remote
-        secret = bytes.fromhex(Path(a.tree_secret_file).read_text().strip()) if a.tree_secret_file else None
-        source = remote.RemoteChallenger.connect(a.tree_from, secret)
-    elif a.tree_test_os:
-        source = OsTree()
+    source = tree_source(ap, a)
     try:
         serve(a.listen, Path(a.out), ready=lambda addr: print(f"SERVING {addr}", flush=True), sessions=a.sessions,
               done=lambda res: print("REC_INNER\t" + json.dumps(res), flush=True),
