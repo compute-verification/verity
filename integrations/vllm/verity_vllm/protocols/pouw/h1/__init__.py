@@ -289,8 +289,7 @@ class Call:
 #: call, as JSON (its roots and receipt root, hex)
 Listener = Callable[[Call, Any, Any, Any, Any], Mapping[str, Any] | None]
 #: ``opener(requests_root)``: given round 0's request table's root, the window's Program salt, its round coins (a
-#: `LiveRecord`), its draw coin (`pouw_h1_window.DrawSession`) and what its commitment records of the opening
-#: (`H1Run.open_window`)
+#: `LiveRecord`), its draw coin (`pouw_h1_window.DrawSession`) and what its commitment records (`H1Run.open_window`)
 Opener = Callable[[bytes], tuple[bytes, Any, Any, Mapping[str, Any]]]
 
 
@@ -312,9 +311,7 @@ class H1Run:
     over the step's calls, its request table and its slot table, and with ``served`` the step's A table of each K
     ``a/<K>@<s>`` whole (`pouw_h1_served.Served.segments`), is recorded with
     ``rounds`` (a `LiveRecord` over a live challenger's round family), which opens round s's coin only after it, and
-    `finish` opens ``draw``'s coin after the window's `draw_root`: a draw session of its own (`window.DRAW_FAMILIES`;
-    the auditor host's `pouw_h1_window.DrawSession`, opened withheld on that root, whose gate answer the commitment
-    carries as ``draw_session``, or in tests a `LiveRecord` over an in-process draw challenger).
+    `finish` opens ``draw``'s coin (its own withheld session, `pouw_h1_window.DrawSession`) after the window's `draw_root`.
     ``key`` is the prover's hm96 salt key for the request, slot and call tables, drawn for the run (`os.urandom`) unless
     given. ``prover`` (else ``served``'s) is the prover's private directory (`pouw_h1_prover`): it keeps the key and each
     served call's A rows, scales and z/y records, so a sampled proof block opens after the close (DRAWN1); without it their leaves
@@ -785,8 +782,7 @@ class H1Run:
                 self.commits["draw"]["refused"] = str(e)
             else:
                 self.commits["draw"]["coin"] = coin.to_json() if coin else None
-            if getattr(self.draw, "session", None) is not None:
-                self.commits["draw_session"] = self.draw.session
+            self.commits.update({"draw_session": s} if (s := getattr(self.draw, "session", None)) is not None else {})
         if self.transcript_dir:
             d = Path(self.transcript_dir)
             d.mkdir(parents=True, exist_ok=True)
