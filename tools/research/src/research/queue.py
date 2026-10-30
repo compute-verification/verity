@@ -59,6 +59,10 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    follow), which otherwise first runs the after-landing run on `checked` itself,
                                                    and lands nothing until it ends
                                                    (on the control pod: `/data/infra/drive.sh queue baseline SHA --by ci`)
+    research queue drive-shard-add TIP K RUN_ID     count RUN_ID, a run replacing shard K's twin, as one of that shard's in the
+                                                   after-landing run of `checked` at TIP (`drive_shard_add`), refused unless
+                                                   RUN_ID's own record is a check.py run of TIP's commit with --shard K/N
+                                                   (on the control pod: `/data/infra/drive.sh queue drive-shard-add TIP K RUN_ID`)
     research queue lean-check COMMIT [--on MACHINES] [--by LANE] [--again]
                                                    a hand Lean check (`train.sh COMMIT MACHINES --deferred lean-audit`, MACHINES
                                                    default drive.toml's `on`) of a member's commit on `next`, recorded in drive's
@@ -3632,6 +3636,56 @@ def baseline(q: Queue, sha: str, by: str, steps: str | None = None) -> int:
     return 0
 
 
+def drive_shard_add(q: Queue, tip: str, k: int, rid: str) -> int:
+    """`research queue drive-shard-add TIP K RUN_ID`: count RUN_ID among shard K's twins (``groups``) of the after-landing run of
+    `checked` at TIP (``ids`` too, so drive reads its state), a run launched by hand in place of a twin that waits or was lost: the
+    shard passes once one of its twins does (`Driver._every_shard`).  Drive waits while any twin runs or waits, so cancel the
+    twin it replaces after adding it (before, a shard whose every twin was stopped launches the whole run again).  Refused unless TIP (full, or 7+ hex digits of it) is that
+    run's tip with its shards' ids known, for a K outside 1..N (an unsharded run is shard 1/1), for a RUN_ID it already
+    has, and unless RUN_ID's own record says it is that run's shard: a `check.py` run of TIP's commit (`merge._ran_on`: its
+    attempt's clean source, else its run record's), with `--shard K/N` (none for an unsharded run) and, when it names them,
+    `--deferred` the run's steps, so a passing run of a mistyped id never verifies a commit nobody checked."""
+    from . import merge
+
+    pl = ((state := q.load_state()).get("drive") or {}).get("postland") or {}
+    run = pl.get("run")
+    if not run or len(tip) < 7 or not run["tip"].startswith(tip):
+        raise QueueError(f"drive-shard-add: {tip} is not the tip of the after-landing run ("
+                         f"{run['tip'][:12] if run else 'none runs'})")
+    if run.get("shards") or "launch" in run:
+        raise QueueError(f"drive-shard-add: the after-landing run of {run['tip'][:12]} is still launching: add to it once drive "
+                         "has read its run ids")
+    groups = run.get("groups") or [run["ids"]]
+    if not 1 <= k <= len(groups):
+        raise QueueError(f"drive-shard-add: shard {k} is not one of the run's {len(groups)} (1..{len(groups)})")
+    if rid in run["ids"]:
+        raise QueueError(f"drive-shard-add: {rid} is already a run of the after-landing run of {run['tip'][:12]}")
+    if (got := merge.fetch_run(rid, [])) is None:
+        raise QueueError(f"drive-shard-add: {rid}'s run record can't be read (`research status {rid}`): its commit and shard "
+                         "are unknown")
+    cmd = [str(x) for x in got[1].get("command") or ()]
+    if not any(x.endswith("check/check.py") for x in cmd):
+        raise QueueError(f"drive-shard-add: {rid} is no check.py run (its command: {' '.join(cmd)[:200] or 'unrecorded'})")
+    if not merge._ran_on(q.store, rid, run["tip"], merge.fetch_run):
+        raise QueueError(f"drive-shard-add: {rid} checked {(got[1].get('tree_sha') or 'an unrecorded commit')[:12]}, not the "
+                         f"after-landing run's {run['tip'][:12]}")
+    want = f"{k}/{len(groups)}" if "groups" in run else None
+    if (has := cmd[cmd.index("--shard") + 1] if "--shard" in cmd[:-1] else None) != want:
+        raise QueueError(f"drive-shard-add: {rid} is {f'shard {has}' if has else 'no shard'}, not "
+                         f"{f'shard {want}' if want else 'unsharded'} of the after-landing run of {run['tip'][:12]}")
+    steps = pl.get("steps") or []
+    if "--deferred" in cmd[:-1] and (named := cmd[cmd.index("--deferred") + 1].split(",")) != steps:
+        raise QueueError(f"drive-shard-add: {rid} ran --deferred {','.join(named)}, not the after-landing run's "
+                         f"{','.join(steps)}")
+    if "groups" in run:
+        run["groups"][k - 1].append(rid)
+    run["ids"].append(rid)
+    q.save_state(state)
+    print(f"research queue: {rid} counts as a twin of shard {k}/{len(groups)} of the after-landing run of `{q.into}` "
+          f"{run['tip'][:12]}")
+    return 0
+
+
 def broker_gh(top: Path) -> str:
     """The gh to open PRs with: the checkout's broker wrapper (`<git common dir>/verity-auth/bin/gh`, which trades the agent's
     identity for an installation token) when it has one, else gh on PATH."""
@@ -3773,9 +3827,11 @@ def _checked_heads(a: argparse.Namespace) -> int:
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research queue", description=__doc__.split("\n\n")[0])
     ap.add_argument("command", choices=["status", "sync", "eject", "ready", "judge", "drive", "open", "edit", "stats",
-                                            "checked-heads", "review", "baseline", "lean-check"])
+                                            "checked-heads", "review", "baseline", "lean-check", "drive-shard-add"])
     ap.add_argument("pr", nargs="?", help="eject, ready, review, edit: the PR number; judge: the quick tier's run id; baseline: the "
-                    "commit of the landing branch (`checked`, or `main` until `checked` exists) ci knows is green; lean-check: the commit of `next` to Lean-check")
+                    "commit of the landing branch (`checked`, or `main` until `checked` exists) ci knows is green; lean-check: the commit of `next` to Lean-check; "
+                    "drive-shard-add: the after-landing run's tip")
+    ap.add_argument("shard_run", nargs="*", metavar="K RUN_ID", help="drive-shard-add: the shard and the run to count in it")
     ap.add_argument("--reason", help="eject: why, for the owner's notice")
     ap.add_argument("--steps", help="baseline: the after-landing steps green at SHA (default every one): a later failure of "
                     "another step reverts nothing; `main` moves to SHA once they cover every step on the merge gate")
@@ -3920,8 +3976,12 @@ def main(argv: list[str]) -> int:
     if a.command == "lean-check" and not (a.pr and a.by):
         ap.error("lean-check COMMIT launches a Lean check of a commit of `next` through drive: pass the commit and --by <lane> "
                  "(or set $RESEARCH_LANE)")
+    if a.shard_run and a.command != "drive-shard-add":
+        ap.error(f"unrecognized arguments: {' '.join(a.shard_run)}")
+    if a.command == "drive-shard-add" and not (a.pr and len(a.shard_run) == 2 and a.shard_run[0].isdigit()):
+        ap.error("drive-shard-add TIP K RUN_ID: the after-landing run's tip, the shard's number and the run to count in it")
     a.by = a.by or "merge-queue"
-    if a.command not in ("judge", "baseline", "lean-check") and a.pr is not None:
+    if a.command not in ("judge", "baseline", "lean-check", "drive-shard-add") and a.pr is not None:
         if not a.pr.isdigit():
             ap.error(f"{a.command}: {a.pr!r} is not a PR number")
         a.pr = int(a.pr)
@@ -4004,6 +4064,11 @@ def main(argv: list[str]) -> int:
                 raise QueueError(f"baseline: drive's state is the control pod's, and this isn't drive (no {DRIVE_ENV}=1): run "
                                  f"`/data/infra/drive.sh queue baseline {a.pr} --by {a.by}` there")
             return baseline(q, a.pr, a.by, a.steps)
+        if a.command == "drive-shard-add":
+            if not on_drive():
+                raise QueueError(f"drive-shard-add: drive's state is the control pod's, and this isn't drive (no {DRIVE_ENV}=1): "
+                                 f"run `/data/infra/drive.sh queue drive-shard-add {a.pr} {' '.join(a.shard_run)}` there")
+            return drive_shard_add(q, a.pr, int(a.shard_run[0]), a.shard_run[1])
         if a.command == "lean-check":
             if not on_drive():
                 raise QueueError(f"lean-check: drive's state is the control pod's, and this isn't drive (no {DRIVE_ENV}=1): run "
