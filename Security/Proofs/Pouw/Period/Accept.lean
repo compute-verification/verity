@@ -15,7 +15,7 @@ pinned H1 tile's check item with the entries bound 1024 and no coin mode, ε = 1
 `N = 144` drawn `subset:24`) with any service answer citing it that accepted 24 ascending distinct units below 144 at
 the profile the rule fixes (`h1Evidence`), and publishes level 39's work, `K′ = 24` and those units. `numbers_h1`: every
 window the check accepts at those parameters, registered at level 39, publishes `N = 144` and `K′ = 24`, the population
-and draw size `DrawIsCoin` reads at H1's instance.
+and draw size `SampleIsCoin` reads at H1's instance.
 -/
 
 namespace Properties.Pouw.Period.SecurityProofs.Accept
@@ -194,7 +194,7 @@ theorem check_h1 (context format program partition : String) (bytes : ByteArray)
     (keeps_h1 context format program partition bytes)
     ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, hu.1, hu.2.1, hu.2.2⟩ (saltKept_h1 _ _ _ _)
 
-/-- **`DrawIsCoin`'s numbers at the leg's parameters**: every window the check accepts at them, registered at level 39
+/-- **`SampleIsCoin`'s numbers at the leg's parameters**: every window the check accepts at them, registered at level 39
 (the loop's 128 real tiles), publishes the population `N = 144` and the draw size `K′ = 24`. -/
 theorem numbers_h1 (context : String) (c : Registration) (e : Evidence) (pub : Public) (prof : Core.Integrity)
     (hc : protocol.check (h1Params context) c e = .accept pub prof) (hl : levelOf c.window.items = some 39) :

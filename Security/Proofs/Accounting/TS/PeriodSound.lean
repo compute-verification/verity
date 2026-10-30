@@ -98,7 +98,7 @@ theorem CheckProofSystemSound_nontrivial : CheckProofSystemSoundNontrivial := by
     ((Accounting.SecurityProofs.FillerLuck.Cell.prob_all (Ω := Paths Ω1 1)).symm.le.trans
       (prob_mono fun x _ => ?_))))
   obtain ⟨pub, prof, hc⟩ := accepted_all 1 x 0
-  obtain ⟨-, -, hd⟩ := drawIsCoin 1 x 0 pub prof hc
+  obtain ⟨-, -, hd⟩ := sampleIsCoin 1 x 0 pub prof hc
   exact ⟨pub, prof, hc, Accounting.Compose.drawOf hK24 (Accounting.TS.coinAt x 0).2 ⟨0, by decide⟩,
     (hd _).2 ⟨⟨0, by decide⟩, rfl⟩, fun h => h⟩
 

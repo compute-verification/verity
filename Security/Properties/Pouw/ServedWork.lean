@@ -107,7 +107,7 @@ def ServedWork : Prop :=
       (j10rAtCoin hr enc place tile)) Pl.game →
     (∀ w, prob (fun x => (tileLayer Cd hr σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)
       (j10rAtCoin hr enc place tile)).MovedIn x w) ≤ δbind) →
-    RegisteredBeforeDraw ws → TileDrawIsCoin σ k hk sT unitOf ws →
+    RegisteredBeforeSample ws → TileSampleIsCoin σ k hk sT unitOf ws →
     TileServiceSound σ sT unitOf ws opened (pinnedAt (saltOf ws) place tile) δks →
     Properties.Pouw.Period.SaltIsLiveCoin hr (saltOf ws) enc → SharedNoiseLucks Sc Cd Wp →
     UnitFixed Pl (tileLayer Cd hr σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)

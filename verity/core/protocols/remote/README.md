@@ -208,7 +208,7 @@ the whole, and nothing is retried.
 **Assumes.** PoUW's premises:
 
 - the proof system is sound (`Properties.Pouw.Period.ServiceSound`), a named assumption no theorem discharges yet;
-- the published sample is the coin's (`DrawIsCoin`), and registration precedes the sample (`RegisteredBeforeDraw`);
+- the published sample is the coin's (`SampleIsCoin`), and registration precedes the sample (`RegisteredBeforeSample`);
 - the salt is a live coin (`SaltIsLiveCoin`), and the staged statement pins the receipts' tile (`StagedPins`). The
   deployed path meets neither `SaltIsLiveCoin` nor the roots' binding that `H1CheckedCreditPeriod` reads
   (`MovedIn ≤ δ_bind` in the Lean): its registered roots are tags;
@@ -412,7 +412,7 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
   - Today the parts compose by hand.
 - **The verifier's verdicts.** Remote reads one-stage v1, which takes the sessions' verdicts as evidence; v2 runs
   `flock-verify --zk` itself, but remote doesn't read v2 yet.
-- **PoUW's deployed path.** It meets neither `SaltIsLiveCoin`, the roots' binding nor `AcceptedLive`; `DrawIsCoin` and
+- **PoUW's deployed path.** It meets neither `SaltIsLiveCoin`, the roots' binding nor `AcceptedLive`; `SampleIsCoin` and
   `StagedPins` are unproved code facts.
 - **The pooled δ.** δ_ks and δ_bind have no number, so PoUW's failure over a monitoring period has none either.
 - **The inference-only policy's link to the bound** (part 4, links 1, 2, 5 and 6): the policy composed into remote,
@@ -472,9 +472,9 @@ PoUW, as `H1CheckedCreditPeriod` takes them (the general `CheckedCreditPeriod` t
   soundness at each sampled proof block (`Flock.Guarantees.EndToEndRegisteredRows`, at the sampled proof blocks of one
   audit). It is a named assumption: no
   theorem discharges it yet.
-- `Properties.Pouw.Period.DrawIsCoin`: the proof blocks the check publishes as sampled are the model's sample at the phase's live
+- `Properties.Pouw.Period.SampleIsCoin`: the proof blocks the check publishes as sampled are the model's sample at the phase's live
   coin. A protocol-code fact still to prove.
-- `Properties.Pouw.Period.RegisteredBeforeDraw`: each phase's registration is fixed before its sample's coin. It states
+- `Properties.Pouw.Period.RegisteredBeforeSample`: each phase's registration is fixed before its sample's coin. It states
   the order only, and the binding it is used for also needs the rows committed by the registration, which the deployed
   path doesn't do yet: its registered roots are tags, with no row committed (`anchors []`).
 - `Properties.Pouw.Period.SaltIsLiveCoin`: each period's salt is its round's live coin. The deployed path doesn't meet

@@ -22,7 +22,7 @@ salts, the period's live tiles, the play, its folded words and the right words i
 (`ws ξ`, …), and each premise of the source that reads them is taken at every value `ξ` of the coins. The scheme, the
 declared circuit, the number of windows, the check's parameters, the salt's encoding, the staged and flat statements
 and the errors are the protocol's and are fixed. The premises are the source's, unchanged; the gaps it names
-(`RegisteredBeforeDraw` and the binding it reads on today's tags, `SaltIsLiveCoin`, `StagedPins`) stay premises here.
+(`RegisteredBeforeSample` and the binding it reads on today's tags, `SaltIsLiveCoin`, `StagedPins`) stay premises here.
 The bridge adds two: each right word of a unit the device didn't outsource cost `m` multiply-adds of
 priced work on it (`Accounting.Assumptions.WordCostsMacs`, at `n` times the run's fixed words), and it outsourced at
 most `K / b_unit` units (`Accounting.Assumptions.HelpWithinCertifier`).
@@ -76,7 +76,7 @@ def WorkOfH1CheckedCreditPeriodAt (p : Accounting.Price) (macs : Accounting.Comp
     (∀ ξ w, prob (fun x =>
       (checkedLayer Cd hr hK prm (ws ξ) (opened ξ) (stagedAt (salt ξ) staged) (flatAtCoin hr enc flat)).MovedIn x w) ≤
         δbind) →
-    (∀ ξ, RegisteredBeforeDraw (ws ξ)) → (∀ ξ, DrawIsCoin hK prm (ws ξ)) →
+    (∀ ξ, RegisteredBeforeSample (ws ξ)) → (∀ ξ, SampleIsCoin hK prm (ws ξ)) →
     (∀ ξ, ServiceSound prm (ws ξ) (opened ξ) (stagedAt (salt ξ) staged) δks) →
     (∀ ξ, SaltIsLiveCoin hr (salt ξ) enc) → StagedPins staged flat →
     (∀ ξ, (Wp ξ).EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G))) →
