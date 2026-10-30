@@ -449,14 +449,14 @@ theorem designWellFormed : DesignWellFormed := by
     rw [units_eq d query rs he] at hn
     rw [hperm.length_eq, List.length_range']
     exact (Except.ok.inj hn).symm
-  have hns : pop.toList.map (·.size) = S.toList.map fun p => rsSize p.2 := (laysOut_units _ _ hlays).2.2
+  have hns : pop.toList.map (·.size) = S.toList.map fun p => rsSize p.2 := (laysOut_units _ _ hlays).2
   have hsum : strataSize S = n := by rw [hnU, length_popUnits]; rfl
   have hpos : ∀ m ∈ S.toList.map (fun p => rsSize p.2), 1 ≤ m := by
     intro m hm
     obtain ⟨p, hp, rfl⟩ := List.mem_map.1 hm
     exact strataOf_pos _ (partition_covered d query rs he) p hp
   suffices h : ∀ first : OneStage, first.WellFormed (S.toList.map fun p => rsSize p.2) →
-      (⟨[⟨first, none⟩, ⟨.all, none⟩]⟩ : Design).WellFormed (slotPartition { classes := #[pop, inputClass d] }) by
+      (⟨[first, .all]⟩ : Design).WellFormed (slotPartition { classes := #[pop, inputClass d] }) by
     rcases hDc with ⟨-, rfl⟩ | ⟨hne, parsed, hp, rfl⟩
     · exact h .all trivial
     · exact h _ (first_wf rule d query table n named derived parsed S (strata_eq d query rs he) hne hnamed hd hp
@@ -465,10 +465,8 @@ theorem designWellFormed : DesignWellFormed := by
   refine ⟨rfl, fun p hp => ?_⟩
   simp only [slotPartition, List.map_cons, List.map_nil, List.zip_cons_cons, List.zip_nil_left, List.mem_cons,
     List.not_mem_nil, or_false] at hp
-  have hnone : ∀ (st : OneStage) k, (⟨st, none⟩ : Rule).check = some k → 1 ≤ k ∧ ∃ num den, st = .bernoulli num den :=
-    fun _ _ hk => absurd hk (by simp)
   rcases hp with rfl | rfl
-  · exact ⟨by simpa [strataSizes, Function.comp_def, hns] using hf, hnone first⟩
-  · exact ⟨trivial, hnone .all⟩
+  · simpa [strataSizes, Function.comp_def, hns] using hf
+  · trivial
 
 end Properties.SampledProofs.SecurityProofs

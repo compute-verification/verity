@@ -58,7 +58,8 @@ from verity.core.protocols.sampled_proofs import service
 from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as DR, hello as H, hidden_draw as HD,
                                                             partition as P, produced as PD, registered as G,
                                                             registration as R)
-from verity.core.protocols.sampled_proofs.coins import OwnRandomness, coins_reason, draw_first
+from verity.core.protocols.sampled_proofs.challenger import COIN_BYTES, ChallengerKey, CoinError
+from verity.core.protocols.sampled_proofs.coins import OwnRandomness, coins_reason, draw_coins, draw_first
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program, input_id, is_input
@@ -468,7 +469,7 @@ def decode_params(j) -> dict:
     keys = keys | {"supplied"} if isinstance(j, dict) and "supplied" in j else keys
     keys = keys | {"pinned"} if isinstance(j, dict) and "pinned" in j else keys
     keys = keys | {"outputs"} if isinstance(j, dict) and "outputs" in j else keys
-    keys = keys | {k for k in ("row_schemas", "window_root", "held") if isinstance(j, dict) and k in j}
+    keys = keys | {k for k in ("row_schemas", "window_root", "held", "challenger") if isinstance(j, dict) and k in j}
     _exactly(j, keys | {"binding"} if isinstance(j, dict) and "binding" in j else keys, "the parameters")
     desc = _obj(j["program"], "program")
     if not desc:
@@ -540,12 +541,29 @@ def decode_params(j) -> dict:
                                   G.sources(j.get("supplied", {})), j.get("pinned") or {}, j.get("outputs") or {})
     except ValueError as e:
         raise D.Reject(str(e)) from None
+    if "challenger" in j:
+        _challenger(j["challenger"], window)
     delta = ratio(j["delta"])
     if not 0 < delta < 1:
         raise D.Reject("delta is not in (0, 1)")
     if R.unwindowed(PROGRAMS[sha], j["registered"] or {}, j.get("row_schemas"), window, fixed, j["log"]):
         raise D.Reject("a value it doesn't hold across windows that the log registered, and no window root")
     return {**j, "program": PROGRAMS[sha], "delta": delta}
+
+
+def _challenger(ch, window) -> ChallengerKey:
+    """`OneStage.paramsOfJson`'s `challenger`: exactly `{key, label}`, its key `ChallengerKey.ofJson`'s, its label a string,
+    and a window root to read the coins on."""
+    _exactly(ch, {"key", "label"}, "the challenger")
+    if not isinstance(ch["label"], str):
+        raise D.Reject("the challenger's label is not a string")
+    try:
+        key = ChallengerKey.from_json(ch["key"])
+    except (CoinError, ValueError, TypeError, KeyError) as e:
+        raise D.Reject(f"the challenger's key: {e}") from None
+    if window is None:
+        raise D.Reject("a draw from the challenger's coins needs the window's open root (window_root)")
+    return key
 
 
 def decode_commitment(b: bytes) -> tuple[dict, bytes]:
@@ -557,7 +575,7 @@ def decode_commitment(b: bytes) -> tuple[dict, bytes]:
 
 def decode_evidence(b: bytes) -> dict:
     j = PR.canonical_json(b)
-    _exactly(j, EVIDENCE_KEYS, "the evidence")
+    _exactly(j, EVIDENCE_KEYS | {"coins"} if isinstance(j, dict) and "coins" in j else EVIDENCE_KEYS, "the evidence")
     nats = lambda x: isinstance(x, list) and all(map(_nat, x))  # noqa: E731
     if not (_nat(j["instances"]) and isinstance(j["verdicts"], dict) and all(isinstance(v, dict) for v in j["verdicts"].values())
             and isinstance(j["sessions"], list) and all(isinstance(s, str) for s in j["sessions"])
@@ -583,16 +601,56 @@ def _registration(p: dict, rec) -> tuple[str, ...]:
                    p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held")).codes
 
 
+def _coins_of(p: dict, c: tuple[dict, bytes], e: dict) -> bytes | None:
+    """`OneStage.coinsOf`: with the verifier's challenger, the coins `coins.draw_coins` reads from the evidence's `coins`
+    under its key, on the verifier's window, of its family, after the registration's digest; none without one, when the
+    evidence carries no coins. Raises `CoinError`."""
+    ch = p.get("challenger")
+    if ch is None:
+        if e.get("coins") is not None:
+            raise CoinError("the evidence carries coins, and the verifier names no challenger they come from")
+        return None
+    return draw_coins(ChallengerKey.from_json(ch["key"]), p["window_root"], ch["label"], c[1], e.get("coins"), lms_verify)
+
+
+def _coins_problem(rec: dict, mine: dict, draw: dict, src: bytes) -> bool | ValueError:
+    """`OneStage.coinsReason`: the draw's units are not the ones `src` draws under the law (`coins.draw_first` read in
+    order, its refusal the problem), or a coin opened was not read."""
+    n = rec.get("population")
+    if not _nat(n):
+        return True
+    read = 0
+
+    def source(k: int) -> bytes:
+        nonlocal read
+        b = src[read:read + k]
+        read += len(b)
+        return b
+    try:
+        units = draw_first(OwnRandomness(source), mine, n)["units"]
+    except ValueError as refused:
+        return refused
+    drawn = [u for u in draw["units"] if _nat(u)] if isinstance(draw.get("units"), list) else []
+    return list(units) != drawn or -(-read // COIN_BYTES) != len(src) // COIN_BYTES
+
+
 def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
-    """The outcome `OneStage.check` gives, from `one_stage`'s own checks: reject on R1-R7, the draw's checks, the record's
-    checks or a verdict that ran and did not accept; undecided when only the verifier of record is missing or has not run;
-    accept exactly when `audit_record` accepts, with the drawn and proved units, the bounds and the profile."""
+    """The outcome `OneStage.check` gives, from `one_stage`'s own checks: reject when the draw's coins don't read
+    (`_coins_of`), on R1-R7, the draw's checks (with coins, that they draw it: `_coins_problem`), the record's checks or a
+    verdict that ran and did not accept; undecided when only the verifier of record is missing or has not run; accept
+    exactly when `audit_record` accepts, with the drawn and proved units, the bounds and the profile."""
     rec, _ = c
+    try:
+        coins = _coins_of(p, c, e)
+    except CoinError:
+        return "reject", "coins"
     if _registration(p, rec):
         return "reject", "registration"
     mine = DR.derive(p["program"], p["query"], p["law"], p["work_table"])
     if not DR.check_draw(e["draw"], rec, mine).ok:
         return "reject", "draw"
+    if coins is not None and _coins_problem(rec, mine, e["draw"], coins):
+        return "reject", "coins"
     out = audit.audit_record(rec, e["receipt"], e["draw"], mine, e["proved_units"], e["instances"], e["statement"],
                              e["verdicts"], p["delta"], e["sessions"], e["served"], e["session_roots"],
                              audit.session_registered(e["verdicts"], rec))
@@ -832,10 +890,10 @@ def select(j):
 
 def slots(j):
     """`Slots.select`: the claims' partition over the select piece's program and query, two classes, and its sample's
-    checked proof blocks. The population's strata are `partition.strata`'s, each unit a replay unit of one proof block, its
-    gates (`partition.unit_gates`); the input class is one stratum of every gate of the root's input nodes
-    (`program.is_input`), each its own replay unit. A replay unit's slot is its index in that order, and the checked proof
-    blocks are `(slot, 0)` of each unit the sample proves (`draw.proved`) and of each input gate, in slot order."""
+    checked proof blocks. The population's strata are `partition.strata`'s, each unit a proof block, its gates
+    (`partition.unit_gates`); the input class is one stratum of every gate of the root's input nodes (`program.is_input`),
+    each its own proof block. A proof block's slot is its index in that order, and the checked proof blocks are
+    `(slot, 0)` of each unit the sample proves (`draw.proved`) and of each input gate, in slot order."""
     out = select(j)
     j = _json(j)
     program = PROGRAMS[PO.program_sha512(j["program"])]
@@ -847,8 +905,8 @@ def slots(j):
               for g in range(body.offsets[k], body.offsets[k] + (node.n if node.form in ("batch", "scan") else 1) * node.fn.gates)]
     classes = [pop, [inputs] if inputs else []]
     proved = set(DR.proved(out["draw"]))
-    rus = [r for c in classes for s in c for r in s]
-    return {"checked": [[v, 0] for v, r in enumerate(rus) if r["unit"] is None or r["unit"] in proved], "classes": classes}
+    blocks = [b for c in classes for s in c for b in s]
+    return {"checked": [[v, 0] for v, b in enumerate(blocks) if b["unit"] is None or b["unit"] in proved], "classes": classes}
 
 
 def bound(j):
@@ -3031,7 +3089,7 @@ def test_the_select_piece_draws_every_rule(pieces):
 
 def test_the_slots_follow_the_strata(pieces):
     """On the partition whose `PAIR` stratum is two ranges apart, Lean's slots are the Python's whole: the population's
-    slots run through `PAIR`'s units, then `TRIPLE`'s, then `QUAD`'s, so units 2 to 8 move; the replay units' gates and
+    slots run through `PAIR`'s units, then `TRIPLE`'s, then `QUAD`'s, so units 2 to 8 move; the proof blocks' gates and
     the input class's are every gate of the program once; and the checked proof blocks are the sampled proof blocks' slots and
     every input slot, in slot order."""
     desc = json.loads(_population(((0, 2), (1, 3), (0, 4), (2, 1))))
@@ -3041,10 +3099,10 @@ def test_the_slots_follow_the_strata(pieces):
     out = slots(copy.deepcopy(case))
     assert D.replay(SLOTS, case, pieces) == ("output", D.canonical(out))
     assert [[r["unit"] for r in s] for s in out["classes"][0]] == [[0, 1, 5, 6, 7, 8], [2, 3, 4], [9]]
-    rus = [r for c in out["classes"] for s in c for r in s]
-    gates = sorted(g for r in rus for lo, hi in r["pus"] for g in range(lo, hi))
+    blocks = [b for c in out["classes"] for s in c for b in s]
+    gates = sorted(g for b in blocks for lo, hi in b["pus"] for g in range(lo, hi))
     assert gates == list(range(PROGRAMS[PO.program_sha512(desc)].circuit.size))
-    units = [r["unit"] for r in rus]
+    units = [b["unit"] for b in blocks]
     drawn = [units.index(u) for u in select(case)["draw"]["units"]]
     assert out["checked"] == [[v, 0] for v in sorted(drawn + [v for v, u in enumerate(units) if u is None])]
 
@@ -3236,7 +3294,7 @@ def test_a_tile_replayed_across_streams_in_one_window_is_refused(pieces):
 
 
 def test_a_second_window_registers_its_values_afresh_and_a_replay_is_refused(pieces):
-    """PRF-127, Lean and Python agreeing: a verifier naming its window's open root (`WROOT`) and holding W across windows
+    """Lean and Python agreeing: a verifier naming its window's open root (`WROOT`) and holding W across windows
     accepts a record whose D is a fresh commitment under its window's domain after a log that registered D under an
     earlier window's (`EARLIER_WROOT`) at another root, and W under the same root. The earlier window's D, replayed, is
     refused (`R7-domain`), and so is a W under another root (`R7-held`); a verifier that doesn't hold W takes it per
@@ -3472,8 +3530,8 @@ def test_a_windows_run_from_the_challengers_coins(pieces):
     honest run is accepted, each stratum sampled at least its floor. It is refused at its registration for a window of
     other counts (`R2-program`) or the templates in the other order (`query`), and for a record whose law draws a
     stratum short of its floor (`R1-law`); at its select (`coins`) for each mutation of the coins that changes the
-    segment or the bytes, coins opened after another digest, evidence for another window, none or empty, and evidence
-    on a draw from the verifier's own coins."""
+    segment or the bytes, coins opened after another digest, coins of a session the ledger doesn't open withheld,
+    evidence for another window, none or empty, and evidence on a draw from the verifier's own coins."""
     rule, s = service.Law("stratified:3"), SETUPS[3]
     a = _v1_audit("stratified", s)
     rec = a["record"]
@@ -3525,12 +3583,97 @@ def test_a_windows_run_from_the_challengers_coins(pieces):
                    if name not in ("unread", "read-tampered", "other-after")]
         selects.append(case_of(d, d.segment.to_json(), bytes(tampered)))
         elsewhere = Drawn(rng, reads=reads)
+        bare = Drawn(rng, before=True, after=bytes.fromhex(R.digest(rec)), reads=reads, withheld=False)
         selects += [case_of(elsewhere, elsewhere.segment.to_json(), elsewhere.read),
+                    case_of(bare, bare.segment.to_json(), bare.read),
                     {**honest, "params": {**honest["params"], "window_root": d.other_window(rng)}},
                     {**honest, "coins": None}, {**honest, "coins": {}}, {**honest, "coin_source": "verifier"}]
         for c in selects:
             out = ran(c)
             assert (out.get("step"), out.get("codes")) == ("select", ["coins"]), out
+
+
+def test_the_audit_reads_its_draw_from_the_challengers_coins(server):
+    """A one-stage audit whose verifier names the auditor's challenger (`challenger`, with `window_root`) reads its draw's
+    coins through `Challenger.drawCoins` (`coins.draw_coins`): under the verifier's key, on its window, of its family,
+    released after the registration's digest, Lean's the Python's. The draw from those coins is accepted; it is rejected
+    for another draw, the evidence's coins carrying a key (`coins_reason`'s form, where the prover named the key), none,
+    coins under another key, on another window, of another family, opened after another digest, each mutation of the
+    segment, or a session the ledger doesn't open withheld (one whose challenger may have released its root before the
+    prover's commitment), and refused for a challenger without a window. A verifier that names no challenger decides as
+    before, and rejects evidence that carries coins."""
+    s, law = SETUPS[3], {"k": 3, "law": "stratified"}
+    mine = DR.derive(s.program, s.query, law, None)
+    rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+                   WINDOW, leaf_layer=LEAF)
+    after = bytes.fromhex(R.digest(rec))
+
+    def drawn_from(src: bytes) -> dict:
+        at = [0]
+
+        def source(k: int) -> bytes:
+            at[0] += k
+            return src[at[0] - k:at[0]]
+        return draw_first(OwnRandomness(source), mine, s.population)
+
+    def reads(coins) -> bytes:
+        got = bytearray()
+
+        def source(k: int) -> bytes:
+            b = coins(k)
+            got.extend(b)
+            return b
+        draw_first(OwnRandomness(source), mine, s.population)
+        return bytes(got)
+
+    def audit_of(d: Drawn, draw: dict, coins, **params) -> dict:
+        proved = DR.proved(draw)
+        evidence = {"draw": draw, "instances": len(proved), "proved_units": proved,
+                    "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
+                    "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": True, "of_record": True}}}
+        if coins is not None:
+            evidence["coins"] = coins
+        p = {"anchors": [], "challenger": {"key": d.s.key.to_json(), "label": "draw"}, "delta": "1/20", "law": law,
+             "leaf_layer": LEAF, "log": [], "partition": None, "ports": s.ports, "program": s.desc, "query": s.query,
+             "registered": None, "scheme": SCHEME, "window_root": d.ledger.window["root"], "work_table": None}
+        return {"evidence": evidence, "params": {k: v for k, v in (p | params).items() if k not in params or v is not None},
+                "record": rec}
+
+    def verdict(a: dict) -> str:
+        return D.replay(ONE_STAGE, _json(_case(a)), server)[0]
+
+    def accepts(a: dict) -> None:
+        assert verdict(a) == "accept", answer(_json(_case(a)))["reason"]
+
+    for seed in range(3):
+        rng = random.Random(f"one-stage-coins/{seed}")
+        d = Drawn(rng, before=True, after=after, reads=reads)
+        coins = {k: v for k, v in d.evidence(d.segment.to_json()).items() if k != "key"}
+        draw = drawn_from(d.read)
+        accepts(audit_of(d, draw, coins))
+        other = next(x for x in (drawn_from(rng.randbytes(4 * len(d.read) + 256)) for _ in range(64)) if x["units"] != draw["units"])
+        stranger = next(x for x in (Drawn(rng, before=True, after=after, reads=reads) for _ in range(16))
+                        if x.s.key != d.s.key)
+        elsewhere = Drawn(rng, reads=reads)
+        rejected = [audit_of(d, other, coins), audit_of(d, draw, d.evidence(d.segment.to_json())),
+                    audit_of(d, draw, None), audit_of(d, draw, coins, challenger={"key": stranger.s.key.to_json(),
+                                                                                 "label": "draw"}),
+                    audit_of(d, draw, coins, window_root=d.other_window(rng)),
+                    audit_of(d, draw, coins, challenger={"key": d.s.key.to_json(), "label": "other"}),
+                    audit_of(elsewhere, drawn_from(elsewhere.read),
+                             {k: v for k, v in elsewhere.evidence(elsewhere.segment.to_json()).items() if k != "key"}),
+                    audit_of(d, draw, coins, challenger=None)]
+        rejected += [audit_of(d, draw, {**coins, "segment": _mutated(rng, d, name)[0]}) for name in DRAW_MUTATIONS
+                     if name not in ("unread", "read-tampered", "other-after")]
+        bare = Drawn(rng, before=True, after=after, reads=reads, withheld=False)
+        bare_coins = {k: v for k, v in bare.evidence(bare.segment.to_json()).items() if k != "key"}
+        rejected.append(audit_of(bare, drawn_from(bare.read), bare_coins))
+        with pytest.raises(CoinError, match="withhold"):
+            draw_coins(bare.s.key, bare.ledger.window["root"], "draw", after, bare_coins, lms_verify)
+        assert [verdict(a) for a in rejected] == ["reject"] * len(rejected)
+        refused = audit_of(d, draw, coins, window_root=None)
+        assert answer(_json(_case(refused)))["reason"].startswith("params:") and verdict(refused) == "reject"
+        accepts(audit_of(d, draw, None, challenger=None))
 
 
 def test_the_run_refuses_a_count_that_varies(pieces):

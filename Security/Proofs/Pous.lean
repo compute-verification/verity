@@ -14,7 +14,6 @@ import Proofs.Pous.Chain.Flat
 import Proofs.Pous.Chain.Family
 import Proofs.Pous.Chain.FamilyRounds
 import Proofs.Pous.Continuous
-import Proofs.Pous.SecureErasure
 import Proofs.Pous.StreamedWipe
 import Proofs.Pous.Graded.Band
 import Proofs.Pous.P2.Margin
@@ -60,7 +59,7 @@ import Proofs.Pous.Obligation
 # The proved guarantees
 
 `Pous.SecurityProofs.X : Pous.Guarantees.X` for every statement of `Security/Definitions/Pous/Guarantees.lean`,
-`Security/Definitions/Pous/Guarantees/P2.lean`, `Security/Definitions/Pous/Guarantees/SecureErasure.lean`,
+`Security/Definitions/Pous/Guarantees/P2.lean`,
 `Security/Definitions/Pous/Guarantees/StreamedWipe.lean`,
 `Security/Definitions/Pous/Guarantees/StreamedWipeFamily.lean`,
 `Security/Definitions/Pous/Guarantees/StreamedWipeReads.lean`,
@@ -125,7 +124,7 @@ theorem SampledAuditProd : Pous.Guarantees.SampledAuditProd := @PousAudit.sample
 
 /-- `PousThm1.seqState` is `Pous.Sampled.seqState`, the trusted definition the guarantee reads. -/
 theorem seqState_eq_pinned {M : Pous.IdealModel} {ℓ S B : ℕ} (f : M.Qry → M.Ans)
-    (step : ℕ → Pous.Bits S → Fin B → Pous.Prog M (Pous.Bits ℓ × Pous.Bits S)) :
+    (step : ℕ → Pous.Bits S → Fin B → Pous.OracleAlgorithm M (Pous.Bits ℓ × Pous.Bits S)) :
     ∀ (j : ℕ) (h : List (Fin B)) (σ : Pous.Bits S),
       Pous.Sampled.seqState f step j h σ = PousThm1.seqState f step j h σ
   | _, [], _ => rfl
@@ -182,10 +181,6 @@ theorem ContinuousComplete : Pous.Guarantees.ContinuousComplete := PousContinuou
 theorem ContinuousTimeAverage : Pous.Guarantees.ContinuousTimeAverage := PousContinuous.continuous_time_average
 theorem BandFamilyContinuousTimeAverage : Pous.Guarantees.BandFamilyContinuousTimeAverage :=
   PousContinuous.band_family_continuous_time_average
-theorem DigestAU : Pous.Guarantees.DigestAU := PousDigest.digestAU
-theorem SecureErasureMeets : Pous.Guarantees.SecureErasureMeets := PousErase.secure_erasure_meets
-theorem SecureErasureMeetsFamily : Pous.Guarantees.SecureErasureMeetsFamily := PousErase.secure_erasure_meets_family
-theorem SecureErasureMeets96GiB : Pous.Guarantees.SecureErasureMeets96GiB := PousErase.secure_erasure_meets_96GiB
 theorem StreamedWipe : Pous.Guarantees.StreamedWipe := PousStreamedWipe.streamed_wipe
 theorem StreamedWipeMeets2600GB : Pous.Guarantees.StreamedWipeMeets2600GB :=
   PousStreamedWipe.streamed_wipe_meets_2600GB

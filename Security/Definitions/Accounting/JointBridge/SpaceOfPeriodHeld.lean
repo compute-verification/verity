@@ -10,7 +10,7 @@ is that run's capacity coins, whose capacity bit-ticks over its window are that 
 whose PoUS verdict is the source's verdict (`verdict`, the verifier's whole decision outside a break in the period's
 own data, at `Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld`).
 
-PoUS's audit grades the capacity account at the challenge times: `Pous.Period.RingDevice` reads the account's memory at
+PoUS's audit grades the capacity account at the challenge times: `Pous.Period.DeviceModel` reads the account's memory at
 each tick of the capacity window, and `PeriodHeld` bounds the peak by the bit-ticks (`Pous.Period`'s header), so the
 certificate it gives a window of `len` ticks is `S · len ≤ S₀ − S_chip − c` bit-ticks. A certificate graded at every
 round boundary over a longer window is `Pous.Guarantees.ContinuousAudit`'s, which is not yet tied to the deployed

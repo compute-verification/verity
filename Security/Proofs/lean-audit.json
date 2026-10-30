@@ -34,13 +34,17 @@
   "Proofs.Properties.Evaluate",
   "Proofs.Properties.NetworkRecords",
   "Proofs.Properties.NetworkPeriod",
+  "Proofs.Properties.NetworkScan",
   "Proofs.Properties.SampledProofs",
   "Proofs.Properties.SampledProofs.Halt",
   "Proofs.Properties.Pous.TimedAudit",
   "Proofs.Properties.Pous.MemoryChallenger",
+  "Proofs.Properties.Pous.MemoryChallenger.Attest",
   "Proofs.Properties.Pous.Run",
   "Proofs.Properties.Pous.Setup",
   "Proofs.Properties.Pous.RunAt",
+  "Proofs.Properties.Pous.Wipe",
+  "Proofs.Properties.Pous.Component",
   "Proofs.Properties.Accounting.Requirement",
   "Proofs.Properties.RemoteAudit",
   "Proofs.Properties.RemoteAudit.Coins",
@@ -59,7 +63,9 @@
   "Proofs.Properties.Pouw.LiveSalt.Coin",
   "Proofs.Properties.Nci.ReadsExact",
   "Proofs.Properties.Nci.BodiesOk.ReadsDecoded",
-  "Proofs.Properties.Composition"
+  "Proofs.Properties.Composition",
+  "Proofs.Properties.Challenger",
+  "Proofs.Properties.Pous.WipeSigned"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
@@ -104,13 +110,7 @@
    "digest": "01a97925bc0546457b627fff99e05739c3739fe9a1366622621c7d23578e162e"
   }
  },
- "layers": {
-  "Proofs.Pouw.Dimension.Lifting": {
-   "imports": ["Mathlib"],
-   "except": [],
-   "why": "the lifting worker's grid-density and slice lemmas (L2, L3) stand alone on Mathlib"
-  }
- },
+ "layers": {},
  "upstream": {
   "imports": [
    "ArkLib",
