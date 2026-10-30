@@ -130,21 +130,22 @@ def EncardAccSeqsLeConstantRatePerWindow : Prop :=
         o.take (e₀ * (g * T)) = p}.encard ≤ (((2 ^ k * D ^ (g * T)) ^ m : ℕ) : ℕ∞)
 
 /-- **`|a|` bits per execution block through the wire, from any block's start (W2 and J).** Take secrets whose runs
-show the same observations `p` through the first `e₀` execution blocks, each accepted through the `m` blocks after
-them. A decoder of the wire through those blocks recovers at most `(2^k · D^(g·T))^m` of them: whatever the first `e₀`
-blocks showed, a covert sender inside X moves at most `m·(|a| + g·T·log2 D)` more bits through egress timing and
-content advice over the next `m` blocks. At `e₀ = 0` they are the monitoring period's first `m` blocks. -/
+are each accepted through the first `e₀ + m` execution blocks, and a decoder of the wire through those blocks that
+recovers every one. Of them, those whose runs show the observations `p` through the first `e₀` blocks number at most
+`(2^k · D^(g·T))^m`: whatever the first `e₀` blocks showed, a covert sender inside X moves at most
+`m·(|a| + g·T·log2 D)` more bits through egress timing and content advice over the next `m` blocks. At `e₀ = 0` they
+are the monitoring period's first `m` blocks. -/
 def EncardDecodableLeConstantRatePerWindow : Prop :=
   ∀ {L K S : ℕ} {Z In Act Wire : Type}
     (I : Interaction L K S Z In Act Wire) (T g E k : ℕ)
     (frames : List In → Fin E → (Fin k → Bool) → Fin L → List LogicalFrame) (e₀ m D : ℕ)
     (hn : (e₀ + m) * (g * T) ≤ E * (g * T))
     (view : ℕ → Obs L K S → Wire) (hW2 : Regenerates I.certifier view) (hJ : JitterBounded I.certifier D)
-    (Zs : Set Z) (p : List (Obs L K S)) (hpre : ∀ z ∈ Zs, I.obsRun z (e₀ * (g * T)) = p)
+    (Zs : Set Z) (p : List (Obs L K S))
     (hacc : ∀ z ∈ Zs, AcceptedUpTo (constantRate (S := S) T g E frames) I.op ((e₀ + m) * (g * T))
       (I.obsRun z ((e₀ + m) * (g * T))))
     (dec : List Wire → Z) (hdec : ∀ z ∈ Zs, dec (I.wireRun z ((e₀ + m) * (g * T))) = z),
-    Zs.encard ≤ (((2 ^ k * D ^ (g * T)) ^ m : ℕ) : ℕ∞)
+    {z | z ∈ Zs ∧ I.obsRun z (e₀ * (g * T)) = p}.encard ≤ (((2 ^ k * D ^ (g * T)) ^ m : ℕ) : ℕ∞)
 
 /-! ## The ingress bound: what the outside can deliver into X through timing -/
 

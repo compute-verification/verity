@@ -121,33 +121,33 @@ theorem encard_accSeqs_le_constantRate_perWindow (T g E k : ℕ)
       (Nat.le_of_mul_le_mul_right hn hpos) p
     rwa [Fintype.card_fun, Fintype.card_bool, Fintype.card_fin] at this
 
-/-- **`|a|` bits per execution block through the wire, from any block's start (W2 and J).** Secrets whose runs show
-the same `p` through the first `e₀` execution blocks, accepted through the `m` after them and decoded from the wire,
-number at most `(2^k · D^(g·T))^m`. -/
+/-- **`|a|` bits per execution block through the wire, from any block's start (W2 and J).** Of secrets accepted
+through the first `e₀ + m` execution blocks and decoded from the wire, those whose runs show `p` through the first
+`e₀` number at most `(2^k · D^(g·T))^m`. -/
 theorem encard_decodable_le_constantRate_perWindow
     (I : Interaction L K S Z In Act Wire) (T g E k : ℕ)
     (frames : List In → Fin E → (Fin k → Bool) → Fin L → List LogicalFrame) (e₀ m D : ℕ)
     (hn : (e₀ + m) * (g * T) ≤ E * (g * T))
     (view : ℕ → Obs L K S → Wire) (hW2 : Regenerates I.certifier view) (hJ : JitterBounded I.certifier D)
-    (Zs : Set Z) (p : List (Obs L K S)) (hpre : ∀ z ∈ Zs, I.obsRun z (e₀ * (g * T)) = p)
+    (Zs : Set Z) (p : List (Obs L K S))
     (hacc : ∀ z ∈ Zs, AcceptedUpTo (constantRate (S := S) T g E frames) I.op ((e₀ + m) * (g * T))
       (I.obsRun z ((e₀ + m) * (g * T))))
     (dec : List Wire → Z) (hdec : ∀ z ∈ Zs, dec (I.wireRun z ((e₀ + m) * (g * T))) = z) :
-    Zs.encard ≤ (((2 ^ k * D ^ (g * T)) ^ m : ℕ) : ℕ∞) := by
-  have hinj : Set.InjOn (fun z => I.obsRun z ((e₀ + m) * (g * T))) Zs := by
-    intro z hz z' hz' h
+    {z | z ∈ Zs ∧ I.obsRun z (e₀ * (g * T)) = p}.encard ≤ (((2 ^ k * D ^ (g * T)) ^ m : ℕ) : ℕ∞) := by
+  have hinj : Set.InjOn (fun z => I.obsRun z ((e₀ + m) * (g * T))) {z | z ∈ Zs ∧ I.obsRun z (e₀ * (g * T)) = p} := by
+    rintro z ⟨hz, -⟩ z' ⟨hz', -⟩ h
     simp only at h
     rw [← hdec z hz, ← hdec z' hz', I.wireRun_eq view hW2, I.wireRun_eq view hW2, h]
   rw [← hinj.encard_image]
   refine le_trans (Set.encard_le_encard ?_)
     (encard_accSeqs_le_constantRate_perWindow T g E k frames I.op e₀ m D hn p)
-  rintro _ ⟨z, hz, rfl⟩
+  rintro _ ⟨z, ⟨hz, hp⟩, rfl⟩
   refine ⟨⟨I.length_obsRun z _, ?_, hacc z hz⟩, ?_⟩
   · intro x hx
     obtain ⟨t, xs, as, rfl⟩ := I.mem_obsRun z _ x hx
     exact hJ t xs as
   · rw [I.obsRun_take z (Nat.mul_le_mul_right _ (Nat.le_add_right _ _))]
-    exact hpre z hz
+    exact hp
 
 theorem encard_ingress_obsDecodable_le_perWindow (I : Interaction L K S Msg In Act Wire) (T m D : ℕ)
     (r : Fin L → ℕ) (hW4 : Packed I.certifier) (hr : Allocated I.certifier r) (hJ : JitterBounded I.certifier D)
