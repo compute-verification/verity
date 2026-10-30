@@ -95,7 +95,7 @@ def test_the_decode_sketches_each_chunk_before_decoding_it(fx, monkeypatch):
     lay = L.store_layout(doc, L.registered_prefix(bytes.fromhex(doc["salt"])))
     p = fx["passes"][1]
     P = K.Pass(bytes.fromhex(p["seed"]), fx["store"]["units"], "cpu")
-    st = S.Store(lay, toy_rows(), 0, "unused", chunk=3)
+    st = S.EncodedRows(lay, toy_rows(), 0, "unused", chunk=3)
     st.sketch = P
     for layer, _, size, _ in doc["staging"]:
         S.decode_layer(st, layer, torch.empty(size, dtype=torch.uint8))

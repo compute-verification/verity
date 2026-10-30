@@ -17,7 +17,7 @@ with the memory challenger a party of its own on the challenger host (`verity.co
   and the root over that table (`VerifierKey.from_row_digests`).  Then, through the option's tagged `Hooks`: the
   plaintext released (a service whose stop restores ``W`` decoded from ``C*``), each layer's ``quant_method.apply``
   wrapped (the layer's weight decoded from ``C*`` into a fresh buffer, by the staging decode
-  `p2_stage.stage.Store.decode_into` on the GPU, refusing what the reference refuses, or the scheme's codec on the CPU,
+  `p2_stage.stage.EncodedRows.decode_into` on the GPU, refusing what the reference refuses, or the scheme's codec on the CPU,
   and the inner ``apply`` called with a proxy layer holding it), and the prover started last.  Uninstall runs newest
   first: prover, wrappers, then ``W`` restored; ``C*`` is freed after.
 * **The period** (`PousOption.audit`, `PousOption.leg`): `period.audit` of what setup published, the prover answering
@@ -378,7 +378,7 @@ def _decoder(store: _Store, lib: str | None) -> Callable[[Any, Any], None]:
         from verity.core.protocols.pous.schemes.p2 import expand_prefix
 
         St = _p2("stage")
-        store.staged = St.Store(St.L.StoreLayout(store.params, (), expand_prefix(store.params, store.salt)), store.rows, 0,
+        store.staged = St.EncodedRows(St.L.StoreLayout(store.params, (), expand_prefix(store.params, store.salt)), store.rows, 0,
                                 str(lib))
 
         def decode(p: Any, out: Any) -> None:
