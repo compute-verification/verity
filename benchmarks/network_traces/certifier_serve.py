@@ -231,7 +231,7 @@ from verity.core.protocols.certifier.active import COMPACT_RECORD, DATA, HEADER,
     Events, Proxy, CertifierClient, Requests, compact_record_data, decode_frame, event_body, event_data, fresh_salt, \
     id_event_data, id_request, id_request_fields, request_frame_count, serve_reveals
 from verity.core.protocols.certifier.certificate import Certificate, CertifiedClock, CertifiedRecord, Direction, \
-    Issuer, LmsKey, LmsSigner, RecordHead, Role, SignerRefused, parameters_digest
+    Issuer, LmsKey, LmsSigner, RecordHead, SignerRefused, parameters_digest
 from verity.core.protocols.certifier.grid import COMPLETE, Reason, Status, occupancy, row_count
 from verity.core.protocols.certifier.audit import certificate_refusals
 from verity.core.protocols.certifier.lean_audit import DISAGREEMENT, Audit
@@ -1191,22 +1191,22 @@ def check_certificates(deployment: dict, window: int, answer: dict, seen: dict[b
         held, held_clocks = refusals(key, bytes.fromhex(session), link, window, certificates, clocks, list(seen))
     except (KeyError, TypeError, ValueError, IndexError) as e:
         return [], [], [], [f"window {window}'s certificates: {e}"]
-    why = {"key": lambda c: f"another key's, not the deployment's {key.key_id.hex()[:16]}…",
-           "link-window": lambda c: f"it names {c.link} window {c.window}, not {link} window {window}",
-           "clock": lambda c: "a clock is an egress window's",
-           "signature": lambda c: "its signature doesn't verify under the deployment's key in its session as its slot's "
-                                  "role, a record's or a clock's",
-           "second": lambda c: "a second one of its direction",
-           "reused": lambda c: f"its signed digest is also {seen.get(c.digest, 'an earlier one')}'s, so its salt was "
-                               "reused, under which two windows of one sync sign one digest",
-           DISAGREEMENT: lambda c: "the Lean check (NetworkCheck.LinkWindow.refusals) and its reference "
-                                   "(audit.certificate_refusals) disagree on the window's certificates"}
+    why = {"key": lambda c, slot: f"another key's, not the deployment's {key.key_id.hex()[:16]}…",
+           "link-window": lambda c, slot: f"it names {c.link} window {c.window}, not {link} window {window}",
+           "clock": lambda c, slot: "a clock is an egress window's",
+           "signature": lambda c, slot: "its signature doesn't verify under the deployment's key in its session as a "
+                                     + ("clock" if slot == "clock certificate" else "record"),
+           "second": lambda c, slot: "a second one of its direction",
+           "reused": lambda c, slot: f"its signed digest is also {seen.get(c.digest, 'an earlier one')}'s, so its salt "
+                                     "was reused, under which two windows of one sync sign one digest",
+           DISAGREEMENT: lambda c, slot: "the Lean check (NetworkCheck.LinkWindow.refusals) and its reference "
+                                         "(audit.certificate_refusals) disagree on the window's certificates"}
     kept, refused = {"certificate": [], "clock certificate": []}, []
     for what, c, no in ([("certificate", c, r) for c, r in zip(certificates, held)]
                         + [("clock certificate", k, r) for k, r in zip(clocks, held_clocks)]):
         if no is not None:
             name = f"window {window}'s {c.direction.value} {what} of {c.link} (key {c.key_id.hex()[:16]}…)"
-            refused.append(f"{name}: {why[no](c)}")
+            refused.append(f"{name}: {why[no](c, what)}")
             continue
         if what == "clock certificate":
             seen[c.digest] = f"window {c.window}'s clock certificate"
