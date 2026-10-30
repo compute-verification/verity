@@ -141,6 +141,19 @@ theorem setupH_counts (h : Stmt.setupH tags cf pf coins tables draw partition pr
     have hg := g_of_range hc hr hki hcnt
     exact ⟨rfl, rfl, rfl, hk.2, hg.1, hg.2⟩
 
+/-- `hmOut_g` at a circuit `HmOut.parseCommit` returned, flat (`HmOut.parse`'s) or templated (`HmRow.parse`'s with the
+template's unit net first). -/
+theorem hmOutC_g {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
+    (h : HmOut.parseCommit tags cf tables = .ok c) {r} (hr : r ∈ c.ranges.toList) {i : ℕ} (hk : r.kind = .net i)
+    (hcnt : 0 < r.count) : 0 < c.g ∧ c.g * 2 ^ 7 ≤ 2 ^ c.kLog := by
+  cases hi : tags.isTmpl
+  · rw [FlockSoundness.parseCommit_flat hi] at h
+    exact hmOut_g h hr hk hcnt
+  · rw [FlockSoundness.parseCommit_tmpl hi] at h
+    obtain ⟨tu, c₀, hp, -, -, rfl⟩ := FlockSoundness.TmplValue.parseTmpl_cases h
+    obtain ⟨ls, hls⟩ := hm_parse_check_any hp
+    exact g_of_range (c := c₀) hls hr hk hcnt
+
 set_option maxHeartbeats 8000000 in
 /-- **`Stmt.setupHidden`'s statements satisfy `Counts`**, at any public input words. -/
 theorem setupHidden_counts
@@ -152,7 +165,7 @@ theorem setupHidden_counts
     subst h
     have hk := Hidden.klog_of ‹¬ (_ || _) = true›
     obtain ⟨r, hr, i, hki, hcnt, -⟩ := pin_spec (by with_reducible assumption)
-    have hg := hmOut_g (by with_reducible assumption) hr hki hcnt
+    have hg := hmOutC_g (by with_reducible assumption) hr hki hcnt
     exact ⟨rfl, rfl, rfl, hk.2, hg.1, hg.2⟩
 
 set_option maxHeartbeats 8000000 in
@@ -192,11 +205,11 @@ theorem setupTables_counts
       | (intro s hs
          simp at hs
          subst hs
-         exact setupHidden_counts (by assumption))
+         exact setupHidden_counts (ok_of_refuse (by assumption)))
       | (obtain ⟨-, hall⟩ := range_mapM_ok (by assumption)
          intro s hs
          obtain ⟨j, hj, rfl⟩ := Array.mem_iff_getElem.1 (Array.mem_toList_iff.1 hs)
-         exact setupHidden_counts (hall j hj))
+         exact setupHidden_counts (ok_of_refuse (hall j hj)))
   · have hn : ¬ tags.hiddenOutputs = true := by simp [hh]
     simp only [throw_bind', pure_bind, ite_eq_right hn] at h
     repeat' walk_step

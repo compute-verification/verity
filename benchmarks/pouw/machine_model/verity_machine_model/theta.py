@@ -33,7 +33,7 @@ value, and the sheet's where no run has one, which the result lists as filled).
   at its card's highest clock, the lowest per-clock reading it can have; ours over it, at most 1, is c_sha's reading.
   `sha_ceiling`: the most a compression of `[sha512_mix]` (the built kernel's SASS) gets from the card's pipes, an LP
   over ALU, IMAD and issue with RT-UNITS' three exact moves to IMAD (a rotation as IMAD.HI + IMAD + IMAD.WIDE, or as
-  SHF + IMAD + IMAD.WIDE; a 2-input 64-bit add as IMAD.WIDE + IMAD), with and without IMAD.HI: the rate a `ShaSpeed`
+  SHF + IMAD + IMAD.WIDE; a 2-input 64-bit add as IMAD.WIDE + IMAD), with and without IMAD.HI: the rate a `SAKSha`
   premise is stated at, since no schedule built from those moves beats it.
 
 `figures` holds each rate's `figure`, the per-second number its document prints at `clock`, to 2 · sheet · SMs · clock.

@@ -5,11 +5,12 @@ import Proofs.Flock.Soundness.Discharge.Hm.Accept
 /-!
 # A hidden-output statement's layout (`HiddenLayout`)
 
-An untyped statement `Stmt.setupHidden` accepts has `layout_of`'s layout on the statement with `HmRow.delta`'s Δ, and
-`HmOut.delta` only appends `outPairs` to both of its sides (`hidden_delta'`). Every first column of `outPairs` is a
+An untyped statement `Stmt.setupHidden` accepts has `layout_of`'s layout on the statement with `HmRow.delta`'s Δ, and,
+where it pins no output, `HmOut.delta` only appends `outPairs` to both of its sides (`hidden_delta_unpinned`). Every first column of `outPairs` is a
 message bit of an output row's `sha512x3` slot or, past the row's compressions (an exact-length row's last block), of
 its `hm96` slot's `pad` (`deltaMsgCol_rowBit`). Either is an input bit of a net slot (`deltaIn_inBit`), as
-`Layout.delta` asks of every pair past the constant pairs.
+`Layout.delta` asks of every pair past the constant pairs. `Hidden.Commit` proves `HiddenLayout` (`hidden_layout'`) for
+a flat or a templated session.
 -/
 
 open Flock FlockLevel3
@@ -46,39 +47,5 @@ theorem outPairs_inBit {tags : Tags} {cf : ByteArray} {tables : List (String × 
   have hlt := (checkRows_out hc hj).1
   have hs := deltaMsgCol_rowBit hg hlt (byte := 2 * k + t / 8) (Nat.mod_lt t (by norm_num))
   rcases hx with rfl | rfl <;> exact deltaIn_inBit P C (hs.imp id Or.inl)
-
-theorem hidden_layout' : HiddenLayout := by
-  intro tags cf pf coins tables draw partition program st ht h
-  have s := setupHidden_spec' h
-  obtain ⟨hp, hc⟩ := parse_untyped ht s.parse
-  have P := parse_facts hp
-  have L : Layout { st with da := (HmRow.delta st.c st.pin).1, db := (HmRow.delta st.c st.pin).2 } :=
-    layout_of P s.pin rfl rfl s.m s.kLog
-  have hd := hidden_delta' st.c st.pin
-  obtain ⟨rest, h1, h2⟩ := L.delta
-  exact {
-    disj := L.disj
-    bound := L.bound
-    slotLog := L.slotLog
-    fit := L.fit
-    unit_mem := L.unit_mem
-    unit_kind := L.unit_kind
-    unit_count := L.unit_count
-    unit_built := L.unit_built
-    unit_lookup := L.unit_lookup
-    unit_in := L.unit_in
-    unit_const := L.unit_const
-    pin := L.pin
-    delta_b := by rw [s.db, s.da, hd, delta_snd _ _ P.typed]
-    delta := by
-      refine ⟨rest ++ outPairs st.c, ?_, fun x hx => ?_⟩
-      · rw [s.da, hd, Array.toList_append, List.toList_toArray]
-        exact (congrArg (· ++ outPairs st.c) h1).trans (List.append_assoc _ _ _)
-      · rcases List.mem_append.1 hx with hx | hx
-        · exact h2 x hx
-        · exact outPairs_inBit hp hc x hx
-    kLog := L.kLog
-    kLog6 := L.kLog6
-    m := L.m }
 
 end FlockSoundness.Discharge.Hidden

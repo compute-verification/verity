@@ -1,7 +1,7 @@
 import Flock.Hm96
 import Flock.HmRow
 import Randomness
-import MemoryChallenger.FrameV3
+import Attest.FrameV3Sha512
 
 /-!
 # The memory challenger's records and coins
@@ -81,7 +81,7 @@ structure CoinOpening where
   path : Array ByteArray
   deriving BEq, Inhabited
 
-/-- The session's `k` coins over `blocks` blocks, committed before the session. -/
+/-- The session's `k` coins over `blocks` blocks, committed on the device before the session and released after it. -/
 structure CoinTree where
   session : ByteArray
   blocks : Nat

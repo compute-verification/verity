@@ -13,9 +13,6 @@ import Proofs.Pouw.Dimension.OpenPipeProofs
   and an `fp32` value is an `FpStep` over them (`fpVal_step`).
 * **The count** (`perWordM4090`): a checked word is not in `V₀`, so it is a slot of the translation, and `theorem1Open`
   pays 16 per word.
-* **The converse** (`fp_back`, for `a1fpIff`): an FP32-pipe program maps into `M4090` at no greater cost. The inputs
-  become `operand` instructions, a big instruction becomes `int`, and an FP32 step `fpSem κ x y z` becomes one
-  `operand` (for a free operand) or `move` (for an earlier value) per operand, then `fp32 κ` on those registers.
 * **The range gap** (`a1fpOnRangeGap`): a checked word that takes a value `fpSem` never outputs
   cannot be an FP32 step, so each is a distinct instruction at 16 (`count16`); `perWordM4090Gap` composes it with
   `embedFp`.
@@ -29,24 +26,6 @@ open Finset Pouw.NCP Pouw.NCP.Relation Pouw.Dimension Pouw.Dimension.Assumptions
 variable {N m n k : ℕ}
 
 /-! ## Registers -/
-
-theorem mem_regs_of_mem {G : Type} (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) :
-    ∀ (P : List (Op G)) (L : List (G → ℚ)), ∀ r ∈ L, r ∈ regs fpSem P L := by
-  intro P
-  induction P with
-  | nil => intro L r hr; exact hr
-  | cons o P ih => intro L r hr; exact ih _ r (List.mem_append_left _ hr)
-
-theorem mem_regs_of_int {G : Type} (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) :
-    ∀ (P : List (Op G)) (L : List (G → ℚ)) (f : G → ℚ), Op.int f ∈ P → f ∈ regs fpSem P L := by
-  intro P
-  induction P with
-  | nil => intro L f h; simp at h
-  | cons o P ih =>
-    intro L f h
-    rcases List.mem_cons.1 h with rfl | h
-    · exact mem_regs_of_mem fpSem P _ f (List.mem_append_right _ (by simp [Op.outs]))
-    · exact ih _ f h
 
 theorem getD_mem_or {G : Type} (Rs : List (G → ℚ)) (i : ℕ) : Rs.getD i 0 ∈ Rs ∨ Rs.getD i 0 = 0 := by
   by_cases h : i < Rs.length
@@ -170,8 +149,8 @@ theorem cost_append {G : Type} (P Q : List (Instr G)) : cost (P ++ Q) = cost P +
 
 open Classical in
 /-- One instruction's translation; a non-quadratic FP32 instruction is priced `hi`. -/
-noncomputable def Op.tr (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (hi : ℕ) :
-    Op (Noise N m n k) → List (Noise N m n k → ℚ) → List (Instr (Noise N m n k))
+noncomputable def M4090Instr.tr (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (hi : ℕ) :
+    M4090Instr (Noise N m n k) → List (Noise N m n k → ℚ) → List (Instr (Noise N m n k))
   | .mma outs _, _ => outs.map (Instr.priced 16)
   | .fp32 κ i j l, Rs =>
       [Instr.priced (if QuadStep Rs (fpVal fpSem κ i j l Rs) then 8 else hi) (fpVal fpSem κ i j l Rs)]
@@ -184,7 +163,7 @@ noncomputable def Op.tr (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (hi : ℕ)
 
 /-- A program's translation. -/
 noncomputable def tr (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (hi : ℕ) :
-    List (Op (Noise N m n k)) → List (Noise N m n k → ℚ) → List (Instr (Noise N m n k))
+    List (M4090Instr (Noise N m n k)) → List (Noise N m n k → ℚ) → List (Instr (Noise N m n k))
   | [], _ => []
   | o :: P, Rs => o.tr fpSem hi Rs ++ tr fpSem hi P (Rs ++ o.outs fpSem Rs)
 
@@ -199,7 +178,7 @@ variable (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (hi : ℕ)
     C Vs hi (fpVal fpSem κ i j l Rs))
 include hbig hq8 hfp
 
-theorem op_spec (o : Op (Noise N m n k)) (Rs Vs : List (Noise N m n k → ℚ))
+theorem op_spec (o : M4090Instr (Noise N m n k)) (Rs Vs : List (Noise N m n k → ℚ))
     (hinv : ∀ r ∈ Rs, r ∈ V0 N m n k ∨ r ∈ Vs) (hwf : o.WF) :
     GOK C Vs (o.tr fpSem hi Rs) ∧
       (∀ r ∈ o.outs fpSem Rs, r ∈ V0 N m n k ∨ r ∈ Vs ++ vals (o.tr fpSem hi Rs)) ∧
@@ -211,7 +190,8 @@ theorem op_spec (o : Op (Noise N m n k)) (Rs Vs : List (Noise N m n k → ℚ))
     have hvals : vals (outs.map (Instr.priced 16)) = outs := by
       simp only [vals, List.map_map]
       exact List.map_id' _ ▸ rfl
-    refine ⟨?_, fun r hr => Or.inr (List.mem_append_right _ (by simpa [Op.tr, Op.outs, hvals] using hr)), ?_⟩
+    refine ⟨?_, fun r hr => Or.inr (List.mem_append_right _
+      (by simpa [M4090Instr.tr, M4090Instr.outs, hvals] using hr)), ?_⟩
     · have : ∀ (fs : List (Noise N m n k → ℚ)) (Ws : List (Noise N m n k → ℚ)), GOK C Ws (fs.map (Instr.priced 16)) := by
         intro fs
         induction fs with
@@ -222,54 +202,57 @@ theorem op_spec (o : Op (Noise N m n k)) (Rs Vs : List (Noise N m n k → ℚ))
         simp only [cost, List.map_map]
         rw [show (Instr.price ∘ Instr.priced 16 : (Noise N m n k → ℚ) → ℕ) = fun _ => 16 from rfl, List.map_const',
           List.sum_replicate, smul_eq_mul, Nat.mul_comm]
-      simp only [Op.tr, Op.price, Op.nq, Nat.mul_zero, Nat.add_zero, hc]
+      simp only [M4090Instr.tr, M4090Instr.price, M4090Instr.nq, Nat.mul_zero, Nat.add_zero, hc]
       exact hwf
   | fp32 κ i j l =>
     by_cases hq : QuadStep Rs (fpVal fpSem κ i j l Rs)
-    · have htr : Op.tr fpSem hi (Op.fp32 κ i j l) Rs = [Instr.priced 8 (fpVal fpSem κ i j l Rs)] := by
-        simp [Op.tr, hq]
-      have hnq : Op.nq fpSem (Op.fp32 κ i j l) Rs = 0 := by simp [Op.nq, hq]
+    · have htr : M4090Instr.tr fpSem hi (M4090Instr.fp32 κ i j l) Rs = [Instr.priced 8 (fpVal fpSem κ i j l Rs)] := by
+        simp [M4090Instr.tr, hq]
+      have hnq : M4090Instr.nq fpSem (M4090Instr.fp32 κ i j l) Rs = 0 := by simp [M4090Instr.nq, hq]
       rw [htr, hnq]
       refine ⟨one _ _ (hq8 κ i j l Rs Vs hinv hq), fun r hr => ?_,
-        by simp [cost, Op.price, Instr.price]⟩
-      simp only [Op.outs, List.mem_singleton] at hr
+        by simp [cost, M4090Instr.price, Instr.price]⟩
+      simp only [M4090Instr.outs, List.mem_singleton] at hr
       exact Or.inr (hr ▸ self _ _)
-    · have htr : Op.tr fpSem hi (Op.fp32 κ i j l) Rs = [Instr.priced hi (fpVal fpSem κ i j l Rs)] := by
-        simp [Op.tr, hq]
-      have hnq : Op.nq fpSem (Op.fp32 κ i j l) Rs = 1 := by simp [Op.nq, hq]
+    · have htr : M4090Instr.tr fpSem hi (M4090Instr.fp32 κ i j l) Rs = [Instr.priced hi (fpVal fpSem κ i j l Rs)] := by
+        simp [M4090Instr.tr, hq]
+      have hnq : M4090Instr.nq fpSem (M4090Instr.fp32 κ i j l) Rs = 1 := by simp [M4090Instr.nq, hq]
       rw [htr, hnq]
       refine ⟨one _ _ (hfp κ i j l Rs Vs hinv), fun r hr => ?_, ?_⟩
-      · simp only [Op.outs, List.mem_singleton] at hr
+      · simp only [M4090Instr.outs, List.mem_singleton] at hr
         exact Or.inr (hr ▸ self _ _)
-      · simp only [cost, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Instr.price, Op.price]
+      · simp only [cost, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Instr.price, M4090Instr.price]
         omega
   | int f =>
-    refine ⟨one _ _ (hbig _ _ _ le_rfl), fun r hr => ?_, by simp [Op.tr, cost, Op.price, Op.nq, Instr.price]⟩
-    simp only [Op.outs, List.mem_singleton] at hr
+    refine ⟨one _ _ (hbig _ _ _ le_rfl), fun r hr => ?_,
+      by simp [M4090Instr.tr, cost, M4090Instr.price, M4090Instr.nq, Instr.price]⟩
+    simp only [M4090Instr.outs, List.mem_singleton] at hr
     exact Or.inr (hr ▸ self _ _)
   | dd f =>
-    refine ⟨one _ _ (hbig _ _ _ le_rfl), fun r hr => ?_, by simp [Op.tr, cost, Op.price, Op.nq, Instr.price]⟩
-    simp only [Op.outs, List.mem_singleton] at hr
+    refine ⟨one _ _ (hbig _ _ _ le_rfl), fun r hr => ?_,
+      by simp [M4090Instr.tr, cost, M4090Instr.price, M4090Instr.nq, Instr.price]⟩
+    simp only [M4090Instr.outs, List.mem_singleton] at hr
     exact Or.inr (hr ▸ self _ _)
   | subword f =>
-    refine ⟨one _ _ (hbig _ _ _ le_rfl), fun r hr => ?_, by simp [Op.tr, cost, Op.price, Op.nq, Instr.price]⟩
-    simp only [Op.outs, List.mem_singleton] at hr
+    refine ⟨one _ _ (hbig _ _ _ le_rfl), fun r hr => ?_,
+      by simp [M4090Instr.tr, cost, M4090Instr.price, M4090Instr.nq, Instr.price]⟩
+    simp only [M4090Instr.outs, List.mem_singleton] at hr
     exact Or.inr (hr ▸ self _ _)
   | move i =>
-    refine ⟨trivial, fun r hr => ?_, by simp [Op.tr, cost, Op.nq]⟩
-    simp only [Op.outs, List.mem_singleton] at hr
+    refine ⟨trivial, fun r hr => ?_, by simp [M4090Instr.tr, cost, M4090Instr.nq]⟩
+    simp only [M4090Instr.outs, List.mem_singleton] at hr
     subst hr
-    simpa [Op.tr, vals] using getD_inv hinv i
+    simpa [M4090Instr.tr, vals] using getD_inv hinv i
   | presalt f =>
-    refine ⟨trivial, fun r hr => ?_, by simp [Op.tr, cost, Op.nq]⟩
-    simp only [Op.outs, List.mem_singleton] at hr
+    refine ⟨trivial, fun r hr => ?_, by simp [M4090Instr.tr, cost, M4090Instr.nq]⟩
+    simp only [M4090Instr.outs, List.mem_singleton] at hr
     exact Or.inl (hr ▸ hwf)
   | operand f =>
-    refine ⟨trivial, fun r hr => ?_, by simp [Op.tr, cost, Op.nq]⟩
-    simp only [Op.outs, List.mem_singleton] at hr
+    refine ⟨trivial, fun r hr => ?_, by simp [M4090Instr.tr, cost, M4090Instr.nq]⟩
+    simp only [M4090Instr.outs, List.mem_singleton] at hr
     exact Or.inl (hr ▸ hwf)
 
-theorem tr_spec : ∀ (P : List (Op (Noise N m n k))) (Rs Vs : List (Noise N m n k → ℚ)),
+theorem tr_spec : ∀ (P : List (M4090Instr (Noise N m n k))) (Rs Vs : List (Noise N m n k → ℚ)),
     (∀ r ∈ Rs, r ∈ V0 N m n k ∨ r ∈ Vs) → (∀ o ∈ P, o.WF) →
     GOK C Vs (tr fpSem hi P Rs) ∧
       (∀ r ∈ regs fpSem P Rs, r ∈ V0 N m n k ∨ r ∈ Vs ++ vals (tr fpSem hi P Rs)) ∧
@@ -300,7 +283,7 @@ theorem tr_spec : ∀ (P : List (Op (Noise N m n k))) (Rs Vs : List (Noise N m n
       rw [e1, e2, e3, cost_append, Nat.mul_add]
       omega
 
-theorem embed_gen (L : List (Noise N m n k → ℚ)) (P : List (Op (Noise N m n k))) (hL : ∀ f ∈ L, f ∈ V0 N m n k)
+theorem embed_gen (L : List (Noise N m n k → ℚ)) (P : List (M4090Instr (Noise N m n k))) (hL : ∀ f ∈ L, f ∈ V0 N m n k)
     (hwf : ∀ o ∈ P, o.WF) :
     GOK C [] (tr fpSem hi P L) ∧ (∀ r ∈ regs fpSem P L, r ∈ V0 N m n k ∨ r ∈ slots (tr fpSem hi P L) L) ∧
       cost (tr fpSem hi P L) ≤ cost4090 P + (hi - 8) * nonQuad fpSem P L := by
@@ -353,134 +336,6 @@ theorem perWordM4090 : PerWordM4090 := by
   omega
 
 /-! ## The converse: the FP32 pipe inside `M4090` -/
-
-theorem opnd_op (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) {Rs : List (Noise N m n k → ℚ)} {x : Noise N m n k → ℚ}
-    (hx : x ∈ V0 N m n k ∨ x ∈ Rs) :
-    ∃ o : Op (Noise N m n k), o.WF ∧ o.price = 0 ∧ ∀ T, o.outs fpSem (Rs ++ T) = [x] := by
-  by_cases h0 : x ∈ V0 N m n k
-  · exact ⟨.operand x, h0, rfl, fun _ => rfl⟩
-  · obtain ⟨i, hi, rfl⟩ := List.mem_iff_getElem.1 (hx.resolve_left h0)
-    refine ⟨.move i, trivial, rfl, fun T => ?_⟩
-    simp only [Op.outs]
-    rw [List.getD_eq_getElem?_getD, List.getElem?_append_left hi, List.getElem?_eq_getElem hi, Option.getD_some]
-
-theorem regs_append {G : Type} (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (Q₁ Q₂ : List (Op G)) (L : List (G → ℚ)) :
-    regs fpSem (Q₁ ++ Q₂) L = regs fpSem Q₂ (regs fpSem Q₁ L) := by
-  simp [regs, List.foldl_append]
-
-theorem fp_back (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) : ∀ (P : List (Instr (Noise N m n k))) (Vs Rs : List (Noise N m n k → ℚ)),
-    (∀ v ∈ Vs, v ∈ Rs) → FpOK fpSem Vs P →
-    ∃ Q : List (Op (Noise N m n k)), (∀ o ∈ Q, o.WF) ∧ cost4090 Q ≤ cost P ∧ ∀ f ∈ vals P, f ∈ regs fpSem Q Rs := by
-  intro P
-  induction P with
-  | nil => intro _ _ _ _; exact ⟨[], by simp, by simp [cost4090], by simp [vals]⟩
-  | cons ins P ih =>
-    intro Vs Rs hVs hP
-    cases ins with
-    | free c w => exact hP.elim
-    | priced p f =>
-      obtain ⟨Q₁, hwf₁, hc₁, hR₁⟩ : ∃ Q₁ : List (Op (Noise N m n k)), (∀ o ∈ Q₁, o.WF) ∧ cost4090 Q₁ ≤ p ∧
-          ∀ v ∈ Rs ++ [f], v ∈ regs fpSem Q₁ Rs := by
-        rcases hP.1 with h16 | ⟨h8, κ, x, y, z, hx, hy, hz, hf⟩
-        · refine ⟨[.int f], by simp [Op.WF], by simpa [cost4090, Op.price] using h16, fun v hv => ?_⟩
-          simpa [regs, Op.outs] using hv
-        · obtain ⟨ox, wx, px, hox⟩ := opnd_op fpSem (hx.imp id (hVs x))
-          obtain ⟨oy, wy, py, hoy⟩ := opnd_op fpSem (hy.imp id (hVs y))
-          obtain ⟨oz, wz, pz, hoz⟩ := opnd_op fpSem (hz.imp id (hVs z))
-          have ex : ox.outs fpSem Rs = [x] := by simpa using hox []
-          have ez : oz.outs fpSem (Rs ++ [x] ++ [y]) = [z] := by simpa using hoz [x, y]
-          have ev : fpVal fpSem κ Rs.length (Rs.length + 1) (Rs.length + 2) (Rs ++ [x] ++ [y] ++ [z]) = f := by
-            rw [hf]
-            funext ω
-            simp [fpVal, List.getD_eq_getElem?_getD]
-          have e : regs fpSem [ox, oy, oz, .fp32 κ Rs.length (Rs.length + 1) (Rs.length + 2)] Rs =
-              Rs ++ [x] ++ [y] ++ [z] ++ [f] := by
-            simp only [regs, List.foldl_cons, List.foldl_nil]
-            rw [ex, hoy [x], ez]
-            simp only [Op.outs, ev]
-          refine ⟨[ox, oy, oz, .fp32 κ Rs.length (Rs.length + 1) (Rs.length + 2)], ?_, ?_, ?_⟩
-          · intro o ho
-            simp only [List.mem_cons, List.not_mem_nil, or_false] at ho
-            rcases ho with rfl | rfl | rfl | rfl
-            exacts [wx, wy, wz, trivial]
-          · simp only [cost4090, List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, px, py, pz]
-            simp only [Op.price]
-            omega
-          · rw [e]
-            intro v hv
-            simp only [List.mem_append, List.mem_singleton] at hv ⊢
-            tauto
-      have hVs₁ : ∀ v ∈ Vs ++ [f], v ∈ regs fpSem Q₁ Rs := fun v hv => by
-        rcases List.mem_append.1 hv with h | h
-        · exact hR₁ v (List.mem_append_left _ (hVs v h))
-        · exact hR₁ v (List.mem_append_right _ h)
-      obtain ⟨Q₂, hwf₂, hc₂, hR₂⟩ := ih (Vs ++ [f]) (regs fpSem Q₁ Rs) hVs₁ hP.2
-      refine ⟨Q₁ ++ Q₂, fun o ho => (List.mem_append.1 ho).elim (hwf₁ o) (hwf₂ o), ?_, fun v hv => ?_⟩
-      · simp only [cost4090, List.map_append, List.sum_append] at hc₁ hc₂ ⊢
-        simp only [cost, List.map_cons, List.sum_cons, Instr.price] at hc₂ ⊢
-        omega
-      · rw [regs_append]
-        simp only [vals, List.map_cons, OpenPipe.val, List.mem_cons] at hv
-        rcases hv with rfl | hv
-        · exact mem_regs_of_mem fpSem Q₂ _ _ (hR₁ _ (List.mem_append_right _ (List.mem_singleton_self _)))
-        · exact hR₂ v hv
-
-theorem mem_regs_of_operands {G : Type} (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) :
-    ∀ (L Rs : List (G → ℚ)), ∀ f ∈ L, f ∈ regs fpSem (L.map Op.operand) Rs := by
-  intro L
-  induction L with
-  | nil => intro _ f h; simp at h
-  | cons g L ih =>
-    intro Rs f h
-    rcases List.mem_cons.1 h with rfl | h
-    · show f ∈ regs fpSem (L.map Op.operand) (Rs ++ [f])
-      exact mem_regs_of_mem fpSem _ _ f (List.mem_append_right _ (List.mem_singleton_self _))
-    · exact ih _ f h
-
-/-- **`A1_fp` is the per-word cost of `M4090`.** -/
-theorem a1fpIff : A1fpIff := by
-  intro fpSem γ k m n N R A B U hind hMR hU
-  constructor
-  · intro hA q S hS hSw
-    obtain ⟨P', hP', hreg, hcost⟩ := embedFp N m n k fpSem (coords N m n k) q.1 coords_V0 q.2
-    have h := hA (coords N m n k) P' coords_V0 hP' S hS fun x hx =>
-      word_slot A B hind hU (hS hx) (hreg _ (hSw x hx))
-    have hc : (cost P' : ℝ) ≤ (cost4090 q.1 : ℝ) := by exact_mod_cast hcost
-    exact h.trans hc
-  · intro hpw L P hL hP S hS hSw
-    have hnf := gok_nofree _ _ _ ((fpOK_iff fpSem P []).1 hP)
-    obtain ⟨Q, hwf, hc, hR⟩ := fp_back fpSem P [] (regs fpSem (L.map Op.operand) (coords N m n k)) (by simp) hP
-    have hwf₀ : ∀ o ∈ L.map Op.operand, o.WF := fun o ho => by
-      obtain ⟨f, hf, rfl⟩ := List.mem_map.1 ho
-      exact hL f hf
-    let q : (m4090 N m n k fpSem).Prog :=
-      ⟨L.map Op.operand ++ Q, fun o ho => (List.mem_append.1 ho).elim (hwf₀ o) (hwf o)⟩
-    have hout : ∀ x ∈ S, word k m n N R A B x.1 x.2 ∈ (m4090 N m n k fpSem).outputs q := fun x hx => by
-      show _ ∈ regs fpSem (L.map Op.operand ++ Q) (coords N m n k)
-      rw [regs_append]
-      rcases mem_slots_vals P L hnf _ (hSw x hx) with h | h
-      · exact mem_regs_of_mem fpSem Q _ _ (mem_regs_of_operands fpSem L _ _ h)
-      · exact hR _ h
-    have h := hpw q S hS hout
-    have hq : cost4090 q.1 ≤ cost P := by
-      have h0 : cost4090 (L.map (Op.operand (G := Noise N m n k))) = 0 := by
-        simp [cost4090, List.map_map, Function.comp_def, Op.price]
-      simp only [q, cost4090, List.map_append, List.sum_append] at h0 hc ⊢
-      omega
-    have hq' : (cost4090 q.1 : ℝ) ≤ cost P := by exact_mod_cast hq
-    exact h.trans hq'
-
-/-- **`A1_fp` gives the per-word cost of `M4090`.** -/
-theorem perWordOfA1fp : PerWordOfA1fp := by
-  intro fpSem γ hA k m n N R A B U hind hMR hU
-  exact (a1fpIff fpSem γ k m n N R A B U hind hMR hU).1 (hA k m n N R A B U hind hMR hU)
-
-/-- **TT_NCP for `M4090` from `A1_fp`.** -/
-theorem ttNCPM4090OfA1fp : TTNCPM4090OfA1fp := by
-  intro fpSem k m n N R A B U q γ₀ γ₂ hA h16 hk hind hMR hU hout hγ₂ hγ₀ hγ
-  have hpw := perWordOfA1fp fpSem γ₂ hA k m n N R A B U hind hMR hU
-  have hA2 := ((a2WordsIff k m n N R A B U (m4090 N m n k fpSem) γ₂ hind hMR hU hγ₂.le).2).2 hpw
-  exact ttNCPOpenQuadOfA2 k m n N R A B U (m4090 N m n k fpSem) q γ₀ γ₂ h16 hk hind hMR hU hA2 hout hγ₂ hγ₀ hγ
 
 /-- **`A1_fp` at `γ = 1/2` for every FP32 semantics.** -/
 theorem a1fpHalf : A1fpHalf := by
@@ -539,20 +394,6 @@ theorem a1fpFadd : A1fpFadd := by
   have h' : (16 * S.card : ℝ) ≤ cost P := by exact_mod_cast h
   rw [sub_zero, one_mul]
   exact h'
-
-/-- **`TTNCPM4090OfA1fp`'s hypotheses hold together** (at the tight `γ₂ = 0`, `γ₀ = 16/(3k)`). -/
-theorem m4090ChainConsistent : M4090ChainConsistent := by
-  intro k hk h16 m n N A B U hU
-  obtain ⟨R, hind, hMR, -, -, h0, h1, heq⟩ := openQuadChainConsistent k hk h16 m n N A B U hU
-  refine ⟨R, hind, hMR, a1fpFadd, ?_, h0, h1, heq⟩
-  classical
-  let P : List (Op (Noise N m n k)) :=
-    (U ×ˢ range (nonFinal k m n)).toList.map fun x => Op.int (word k m n N R A B x.1 x.2)
-  refine ⟨⟨P, fun o ho => ?_⟩, fun u hu p hp => ?_⟩
-  · obtain ⟨x, -, rfl⟩ := List.mem_map.1 ho
-    trivial
-  · exact mem_regs_of_int faddSem P _ _
-      (List.mem_map.2 ⟨(u, p), mem_toList.2 (mem_product.2 ⟨hu, mem_range.2 hp⟩), rfl⟩)
 
 /-! ## The range gap -/
 
@@ -678,107 +519,5 @@ theorem perWordM4090Gap : PerWordM4090Gap := by
   rw [sub_zero, one_mul] at h
   have h' : 16 * S.card ≤ cost P' := by exact_mod_cast h
   omega
-
-/-- **TT_NCP for `M4090` with no A1.** -/
-theorem ttNCPM4090NanGap : TTNCPM4090NanGap := by
-  intro fpSem hnan k m n N R A B U q γ₀ h16 hk hind hU hneg hout hγ₀ hγ
-  have hgap : ∀ x ∈ U ×ˢ range (nonFinal k m n), ∃ ω : Noise N m n k,
-      ∀ κ a b c, fpSem κ a b c ≠ word k m n N R A B x.1 x.2 ω := fun x hx => by
-    obtain ⟨ω, hω⟩ := hneg x hx
-    exact ⟨ω, fun κ a b c he => hnan κ a b c (he ▸ hω)⟩
-  have hpw := perWordM4090Gap fpSem k m n N R A B U (coords N m n k) q.1 hind hU coords_V0 q.2 hgap
-    (U ×ˢ range (nonFinal k m n)) subset_rfl
-    (fun x hx => hout x.1 (mem_product.1 hx).1 x.2 (mem_range.1 (mem_product.1 hx).2))
-  have hb : 16 * (U.card * (m * n) * (3 * k / 16 - 1)) ≤ cost4090 q.1 := by
-    have e : U.card * (m * n) * (3 * k / 16 - 1) = (U ×ˢ range (nonFinal k m n)).card := by
-      rw [card_product, card_range, nonFinal]
-      ring
-    rw [e]
-    exact hpw
-  refine pipe_ttncp (γ₁ := 0) (γ₂ := 0) (C := (m4090 N m n k fpSem).cost q) h16 hk ?_
-    (by rw [sub_zero, one_mul]) (by norm_num) hγ₀ (by simpa using hγ)
-  rw [sub_zero, mul_one]
-  show _ ≤ ((cost4090 q.1 : ℕ) : ℝ)
-  exact_mod_cast hb
-
-/-! ## The no-A1 route is non-vacuous -/
-
-/-- The witness's left input: `−2` in column 0. -/
-def gapAm : Mat := fun _ l => if l = 0 then -2 else 0
-
-/-- The witness's right input: `1` in row 0. -/
-def gapBm : Mat := fun l _ => if l = 0 then 1 else 0
-
-/-- The witness inputs: `A = gapAm` for every unit (a constant, so a function of `F₁`), `B = gapBm`. -/
-def gapA (k n : ℕ) : (Fin k → Fin n → Fin 64) → ℕ → Mat := fun _ _ => gapAm
-
-/-- See `gapA`. -/
-def gapB : ℕ → Mat := fun _ => gapBm
-
-/-- The zero noise: every entry `31 − 31`. -/
-def gapNoise (N m n k : ℕ) : Noise N m n k := (fun _ _ _ => 31, fun _ _ => 31)
-
-theorem e1Of_gap (u : ℕ) : e1Of (gapNoise N m n k) u = 0 := by
-  funext i l
-  simp [e1Of, gapNoise]
-
-theorem f1Of_gap : f1Of (gapNoise N m n k) = 0 := by
-  funext l j
-  simp [f1Of, gapNoise]
-
-/-- At the zero noise, with `gapAm` and `gapBm`, the checked value at any depth `0 < τ ≤ 3k` is `−2` or `−4`: only
-the columns `0`, `k` and `2k` of the stacked product contribute, `−2`, `−2` and `+2`. -/
-theorem ck_gap (k : ℕ) (hk : 0 < k) (R : Mat) (i j τ : ℕ) (hτ : 0 < τ) (hτ3 : τ ≤ 3 * k) :
-    -4 ≤ ck k gapAm gapBm 0 0 R i j τ ∧ ck k gapAm gapBm 0 0 R i j τ ≤ -2 := by
-  have hterm : ∀ l, stackX k gapAm 0 R i l * stackY k gapBm R 0 l j =
-      (if l = 0 then -2 else 0) + (if l = k then -2 else 0) + (if l = 2 * k then 2 else 0) := by
-    intro l
-    simp only [stackX, stackY, hcat3, vcat3, E3, E2, F3, F2, mm, gapAm, gapBm, Pi.add_apply, Pi.neg_apply,
-      Pi.zero_apply, zero_mul, mul_zero, Finset.sum_const_zero, add_zero, neg_zero]
-    split_ifs <;> omega
-  rw [ck, Finset.sum_congr rfl (fun l _ => hterm l)]
-  simp only [Finset.sum_add_distrib, Finset.sum_ite_eq', Finset.mem_range]
-  split_ifs <;> omega
-
-theorem word_gap (k m n N : ℕ) (hk : 0 < k) (R : Mat) (U : Finset ℕ) :
-    ∀ x ∈ U ×ˢ range (nonFinal k m n), NaNGap (word k m n N R (gapA k n) gapB x.1 x.2 (gapNoise N m n k)) := by
-  intro x hx
-  have hp := mem_range.1 (mem_product.1 hx).2
-  have hmn : 0 < m * n := by
-    rcases Nat.eq_zero_or_pos (m * n) with h | h
-    · simp [nonFinal, h] at hp
-    · exact h
-  have hτ : 16 * (x.2 / (m * n) + 1) ≤ 3 * k := by
-    have ht : x.2 / (m * n) < 3 * k / 16 - 1 := by
-      rw [Nat.div_lt_iff_lt_mul hmn]
-      simpa [nonFinal] using hp
-    generalize x.2 / (m * n) = t at ht ⊢
-    omega
-  obtain ⟨h1, h2⟩ := ck_gap k hk R (x.2 % (m * n) / n) (x.2 % (m * n) % n) (16 * (x.2 / (m * n) + 1))
-    (Nat.mul_pos (by norm_num) (Nat.succ_pos _)) hτ
-  have e : word k m n N R (gapA k n) gapB x.1 x.2 (gapNoise N m n k) =
-      ((ck k gapAm gapBm 0 0 R (x.2 % (m * n) / n) (x.2 % (m * n) % n) (16 * (x.2 / (m * n) + 1)) : ℤ) : ℚ) := by
-    simp only [word, checked, e1Of_gap, f1Of_gap]
-    rfl
-  rw [e]
-  left
-  constructor
-  · exact_mod_cast (show (-8388607 : ℤ) ≤ _ by omega)
-  · exact_mod_cast h2
-
-/-- **The no-A1 route's hypotheses hold together.** -/
-theorem nanGapConsistent : NanGapConsistent := by
-  intro k hk h16 m n N U hU
-  obtain ⟨R, hind, hMR, -, -, -, h1, -⟩ := openQuadChainConsistent k hk h16 m n N (gapA k n) gapB U hU
-  refine ⟨R, gapA k n, gapB, hind, hMR, fun x hx => ⟨gapNoise N m n k, word_gap k m n N (by omega) R U x hx⟩,
-    canonicalNaNSat fpExact, ?_, h1⟩
-  classical
-  let P : List (Op (Noise N m n k)) :=
-    (U ×ˢ range (nonFinal k m n)).toList.map fun x => Op.int (word k m n N R (gapA k n) gapB x.1 x.2)
-  refine ⟨⟨P, fun o ho => ?_⟩, fun u hu p hp => ?_⟩
-  · obtain ⟨x, -, rfl⟩ := List.mem_map.1 ho
-    trivial
-  · exact mem_regs_of_int _ P _ _
-      (List.mem_map.2 ⟨(u, p), mem_toList.2 (mem_product.2 ⟨hu, mem_range.2 hp⟩), rfl⟩)
 
 end Pouw.Dimension.Embed

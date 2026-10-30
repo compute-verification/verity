@@ -28,7 +28,7 @@ from verity.ml.crypto import lms
 
 KEY = lms.keygen(lms.Params(64, 4, 4), bytes([7]) * 64)
 """The challenger key: sixteen leaves, enough for a period's open and two sessions' opens, records, closes and ends."""
-HOST = "vy-test-challenger"
+HOST = "test-challenger"
 LANE = "memory-accounting"
 APPENDS = 8
 CIRCUIT = hashlib.sha512(b"verity/remote-bandwidth/v0").hexdigest()
@@ -37,10 +37,10 @@ MAIN = R.main_lines(Path(__file__).resolve().parents[2] / "sampled_proofs" / "te
 """Main's first-parent history, newest first, from c81c31e6d5 back to 6c2de12715: sampled_proofs' fixture."""
 PIN = MAIN[0]
 PINS = [C.pin_line(PIN, PIN, "2026-10-22T11:07:28Z")]
-"""The host's pins log as infra published it when it repinned vy-challenger-1 to `PIN`; every open seals it unless a
+"""The host's pins log as infra published it when it repinned the challenger's host to `PIN`; every open seals it unless a
 test says otherwise."""
 BRANCH, MERGE = "882770e6009e73bdf015f4069fa77ef698d7f326", "1018753ee5ff8c659fa8e8c5ccbc31b0d2b1a366"
-"""A 20 Oct pin, #2953's head: in main's history through the queue's merge `MERGE`, never on its first-parent line."""
+"""A pin in main's history through the queue's merge `MERGE`, never on its first-parent line."""
 
 
 def key() -> C.ChallengerKey:
@@ -115,7 +115,7 @@ class Ledger:
 
     def open(self, sid: str, root: bytes, pinned: str = PIN, pins: list[str] | None = PINS) -> None:
         """Session `sid`'s open for window `root` on a host pinned to `pinned`, sealing its pins log `pins` (None: no
-        seal, as every gate's open before RT4-INT-40)."""
+        seal, as an older gate's open has)."""
         body = {"window": {"root": root.hex()}, "host": f"{HOST}.{sid}", "pinned": pinned,
                 "key_sha512": self.key_sha512, "port": 7811, "by": LANE}
         self.append("open", sid, body if pins is None else {**body, "pins": C.pins_seal(pins)})
@@ -235,7 +235,7 @@ OFF_MAIN = ("session s-r ran commit {}, which the host's pins log records but wh
 def test_a_session_is_trusted_only_from_a_logged_pin_on_mains_first_parent_line(store, tmp_path, sign, case):
     """`coins.trusted` reads the window's session through `challenger.pinned_session`, so an honest session whose coins
     are the challenger's is refused, with the reason, when the verifier has no pins log; when its open sealed none
-    (every gate before RT4-INT-40); when the log its open sealed doesn't record its pin (c81c31e6d5's parent); when the
+    (as an older gate's); when the log its open sealed doesn't record its pin (c81c31e6d5's parent); when the
     log records a pin in main's history but off its first-parent line (882770e600); when the verifier has no copy of
     main; and when its copy predates the pin, as a verifier host's list infra wrote before it repinned the challenger.
     The pin is read before the period, so the refusal is the same inside the audit's period."""

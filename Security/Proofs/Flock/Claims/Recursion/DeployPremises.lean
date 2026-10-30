@@ -249,7 +249,7 @@ evaluations, give the inner verifier's acceptance of the readers' messages at th
 recorded calls collide. -/
 def ReadersAccept (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (DO : Claims.Flock.Deploy Coin Col T)
     (shape : Claims.Recursion.Form → Prop) : Prop :=
-  ∀ (x : Msg) (s : Claims.Recursion.Stmt), parse x = some s → shape s.form →
+  ∀ (x : Msg) (s : Claims.Recursion.CompiledStatement), parse x = some s → shape s.form →
     ∀ (as : List Msg) (cs : List Coin) (ws : List Claims.Flock.Wit), as.length = IV.k (xIOf x) + kS x →
       cs.length = as.length → (∀ s < nS x, StagedPart b.st s x ((stagedAll b.st x as cs).getD s [])) →
         Claims.Recursion.OuterHolds DO (stagedAll b.st x as cs) (nS x) ws →

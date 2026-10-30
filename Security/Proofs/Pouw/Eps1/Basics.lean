@@ -3,8 +3,8 @@ import Definitions.Pouw.Guarantees.Eps1
 /-!
 # M3's basic lemmas for Dither's lower bounds
 
-Runs exist and are unique, a block's outside slots, the zero instance's fiber and the information count (QSTAR's
-Theorem B; gap list E1–E5).
+The lemmas Theorem B's proof reads: runs exist and are unique, a block's outside slots, the zero instance's fiber and
+the information count.
 -/
 
 namespace Pouw.SecurityProofs.Eps1
@@ -65,7 +65,7 @@ open Classical in
 /-- Theorem B's counting: a block whose live part has `a` instructions, each but the writer an argument of another
 live one, takes at most `2a + 1` of its input slots from outside it (at least `a − 1` are edges inside it). -/
 theorem block_outside_slots {Rd Cd : Type} {m n Lseg : ℕ} {FR FU : Type} {G : ℕ}
-    (P : Prog Rd Cd m n Lseg FR FU G) (blk : Fin G → Tau m n Lseg) (hW : P.WordLocal blk) (τ : Tau m n Lseg)
+    (P : M3Algorithm Rd Cd m n Lseg FR FU G) (blk : Fin G → Tau m n Lseg) (hW : P.WordLocal blk) (τ : Tau m n Lseg)
     (live : Finset (Fin G)) (hlive : ∀ t ∈ live, blk t = τ) (hout : P.out τ ∈ live)
     (hused : ∀ t ∈ live, t ≠ P.out τ → ∃ t' ∈ live, ∃ j s, P.prog.arg t' j = .inr s ∧ M3.earlier t' s = t) :
     ((Finset.univ : Finset (Fin 3)).product live |>.filter fun tj =>

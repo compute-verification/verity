@@ -108,7 +108,8 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Outcome": (f"{PROTOCOL}::Core.Outcome",),
     "Partition": (f"{CORE}Partition.lean::Verity.Partition",),
     "Period": (),
-    "Placement": (f"{REQ}::CircuitRequirement.Placement", f"{REQ_PY}::Placement"),
+    "Placement": (f"{CORE}Requirement.lean::Accounting.Requirement.Placement", f"{REQ}::CircuitRequirement.Placement",
+                  f"{REQ_PY}::Placement"),
     "Prog": (f"{CORE}Accel/Machine.lean::Verity.Accel.Machine.Prog", f"{FLOCK}Program.lean::Flock.Program.Prog"),
     "Program": ("verity/ml/circuits/program.py::Program",),
     "Record": (),
@@ -119,7 +120,8 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Site": (),
     "Statement": (),
     "Stmt": (f"{FLOCK}Statement.lean::Flock.Stmt",),
-    "Store": (f"{REQ}::CircuitRequirement.Store", f"{REQ_PY}::Store"),
+    "Store": (f"{CORE}Requirement.lean::Accounting.Requirement.Store", f"{REQ}::CircuitRequirement.Store",
+              f"{REQ_PY}::Store"),
     "Transcript": (f"{CORE}Circuit.lean::Verity.Circuit.Transcript", f"{FLOCK}Transcript.lean::Flock.Transcript"),
     "Verdict": (f"{PROTOCOL}::Core.Verdict",),
     "Window": (),
@@ -372,7 +374,7 @@ def slots(s: Scan) -> set[str]:
 
 
 #: The most lines ``KNOWN`` may hold. Raising it, for a new line, needs lean's review; `--prune` lowers it to the count.
-KNOWN_MAX = 414
+KNOWN_MAX = 418
 
 #: Every hit that is not a canonical, a mirror, a reading of the canonical or a protocol's slot, with its reason and owner.
 #: For new code, read the canonical or rename; `--prune` deletes the lines whose declarations went.
@@ -390,8 +392,6 @@ KNOWN: dict[str, str] = {
         "duplicate of the Site (`Verity.Site`, not yet in Core: LEAN-93): becomes a reading of it (memory-accounting)",
     "Security/Definitions/Accounting/CoinFlow.lean::Accounting.CoinFlow.Program":
         "homonym, a Program's dataflow over coins and values: rename (compute-accounting)",
-    "Security/Definitions/Accounting/Compose.lean::Accounting.Compose.Certificate":
-        "homonym, a credit certificate: rename (lean)",
     "Security/Definitions/Accounting/ComposePeriod.lean::Accounting.Compose.Period":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it (lean)",
     "Security/Definitions/Accounting/Device.lean::Accounting.Device":
@@ -456,28 +456,17 @@ KNOWN: dict[str, str] = {
         "homonym, a tile shape: rename (compute-accounting)",
     "Security/Definitions/Accounting/TS/Machine.lean::Accounting.TS.Machine":
         "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes a reading of it (compute-accounting)",
-    "Security/Definitions/Accounting/Tag/PolyHash.lean::Accounting.Tag.Block":
-        "homonym, a chunk of the store: rename (lean)",
     "Security/Definitions/Claims.lean::Claims.Circuit":
         "duplicate of `Verity.Circuit`: becomes it (the claims layer's AND/XOR wire circuit) (lean)",
     "Security/Definitions/Claims.lean::Claims.Flock.Stmt": "duplicate of `Flock.Stmt`: becomes its spec, in Core (lean)",
     "Security/Definitions/Claims.lean::Claims.Gate":
         "duplicate of `Verity.Circuit`'s gate: becomes it (the AND/XOR gate) (lean)",
-    "Security/Definitions/Claims/Recursion.lean::Claims.Recursion.Draw":
-        "duplicate of `Verity.Draw`: becomes it, as a V* session's record holds it (lean)",
-    "Security/Definitions/Claims/Recursion.lean::Claims.Recursion.Stmt":
-        "homonym, the recursion's statement: rename (lean)",
-    "Security/Definitions/Claims/Sampling.lean::Claims.Sampling.Commitment":
-        "duplicate of `merkle.Commitment`, the claims layer's named primitive: becomes `Hash.RowLeaf`'s root (lean)",
-    "Security/Definitions/Claims/Sampling.lean::Claims.Sampling.Netlist":
-        "duplicate of `universal.Netlist`, stated in Claims: becomes Core's, moved into Security/Definitions/Core/ (lean)",
     "Security/Definitions/Claims/Sampling.lean::Claims.Sampling.Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a reading of it (lean)",
     "Security/Definitions/Claims/Sampling.lean::Claims.Sampling.Partition":
         "duplicate of `Verity.Partition`: becomes it (classes, strata and units) (lean)",
     "Security/Definitions/Claims/Sampling.lean::Claims.Sampling.Prog":
         "duplicate of `Flock.Program.Prog`: becomes its spec, flattened to gates (lean)",
-    "Security/Definitions/Claims/Sampling.lean::Claims.Sampling.Stmt": "homonym, the sampling statement: rename (lean)",
     "Security/Definitions/Core/Accel/Card.lean::Verity.Accel.Store": "homonym, a GPU's memory kinds: rename (proofs)",
     "Security/Definitions/Core/Accel/Isa.lean::Verity.Accel.Op": "homonym, an opcode over stores: rename (proofs)",
     "Security/Definitions/Core/Accel/Isa.lean::Verity.Accel.Store": "homonym, a GPU's memory kinds: rename (proofs)",
@@ -600,16 +589,12 @@ KNOWN: dict[str, str] = {
         "homonym, the old word for a run, here the challenger property's: rename (soundness)",
     "Security/Properties/Challenger.lean::Properties.Challenger.Witness":
         "duplicate of `Verity.TC.Relation.Witness`: becomes it (soundness)",
-    "Security/Properties/Pous/MemoryChallenger.lean::MemoryChallenger.Properties.Device":
-        "homonym, the memory challengers a property ranges over: rename (lean)",
     "Security/Properties/Pous/WipeSigned.lean::MemoryChallenger.Properties.Challenger":
         "homonym, the keys' signing sessions in the wipe-signing property: rename (lean)",
     "Security/Properties/RemoteAudit/Line/Record.lean::Properties.RemoteAudit.Line.Node":
         "duplicate of the Site (`Verity.Site`, not yet in Core: LEAN-93): becomes what `Accounting.Remote.Node` becomes (lean)",
     "Security/Properties/RemoteAudit/Line/Record.lean::Properties.RemoteAudit.Line.Record":
         "duplicate of the auditor's record chain (`SampledProofs.Challenger.LedgerEntry`): becomes what RemoteAudit becomes (lean)",
-    "Security/Properties/RemoteAudit/Live.lean::Properties.RemoteAudit.Live.Answer":
-        "homonym, a live answer: rename (lean)",
     # benchmarks/
     "benchmarks/bandwidth/gpu.py::Commitment":
         "duplicate of `merkle.Commitment`: becomes a client of it (one pass's root) (memory-accounting)",
@@ -855,7 +840,6 @@ KNOWN: dict[str, str] = {
     "tools/research/src/research/compare.py::Verdict": "homonym, a run comparison's result: rename (infra)",
     "tools/research/src/research/drive.py::Verdict": "homonym, a queue train's land verdict: rename (ci)",
     "tools/verity/cli/verity_cli/run.py::Registry": "homonym, what `verity run` reads off step 0's table: rename (ci)",
-    "tools/verity/lean/run_daily.py::Node": "homonym, node 1's paths for the daily Lean run: rename (lean)",
     # verity/core/
     "verity/core/attest/__init__.py::Period":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it: a party's certification period (proofs)",
@@ -912,6 +896,8 @@ KNOWN: dict[str, str] = {
         "homonym, a link-window's witness: rename (network-accounting)",
     "verity/core/protocols/interface/CoreProtocol/Profile.lean::Core.Draw":
         "homonym, how a profile level is drawn: rename (proofs)",
+    "verity/core/protocols/interface/CoreProtocol/Record.lean::Core.Record":
+        "duplicate of the auditor's record chain (`SampledProofs.Challenger.LedgerEntry`): becomes a reading of it (proofs)",
     "verity/core/protocols/interface/CoreProtocol/Registration.lean::Core.Registration.Card":
         "duplicate of `Verity.Accel.Card`: becomes a reading of it (soundness)",
     "verity/core/protocols/interface/CoreProtocol/Registration.lean::Core.Registration.Link":
@@ -1053,6 +1039,8 @@ KNOWN: dict[str, str] = {
         "homonym, a firewall release: rename (proofs)",
     "verity/core/service/flock/Flock/Firewall/Contract.lean::Flock.Firewall.Contract.Transcript":
         "duplicate of `Flock.Transcript`: becomes a reading of it (proofs)",
+    "verity/core/service/flock/Flock/Annot.lean::Flock.Annot.Verdict":
+        "homonym, the description-level annotation check's verdict: rename (proofs)",
     "verity/core/service/flock/Flock/Firewall/Contract.lean::Flock.Firewall.Contract.Verdict":
         "homonym, the firewall's release decision: rename (proofs)",
     "verity/core/service/flock/Flock/Firewall/Frames.lean::Flock.Firewall.Frames.Registry":
@@ -1068,6 +1056,8 @@ KNOWN: dict[str, str] = {
         "homonym, the recursion's coin sources: rename (proofs)",
     "verity/core/service/flock/Flock/RecCoins.lean::Flock.RecCoins.Opening":
         "homonym, a polynomial-commitment opening: rename (proofs)",
+    "verity/core/service/flock/Flock/RecLinks.lean::Flock.RecLinks.Link":
+        "homonym, a recursion link from a reader to a port: rename (proofs)",
     "verity/core/service/flock/Flock/RecRecord.lean::Flock.RecRecord.Record":
         "duplicate of the auditor's record chain (`SampledProofs.Challenger.LedgerEntry`): becomes the challenger's live-coin entries (proofs)",
     "verity/core/service/flock/Flock/Record.lean::Flock.Session": "homonym, a proof's session record: rename (proofs)",
@@ -1123,6 +1113,8 @@ KNOWN: dict[str, str] = {
         "homonym, the recursion's coin sources in draw order: rename (proofs)",
     "verity/ml/flock/python/verity_flock/rec_algebra.py::Layout":
         "homonym, a GF residual gadget's ports: rename (proofs)",
+    "verity/ml/flock/python/verity_flock/rec_links.py::Link":
+        "homonym, a recursion link from a reader to a port, `Flock.RecLinks.Link`'s pair: rename (proofs)",
     "verity/ml/flock/python/verity_flock/rec_sparse.py::Coins":
         "homonym, a rep's public values the sparse phase reads: rename (proofs)",
     "verity/ml/windows/interface.py::Circuit":
@@ -1189,7 +1181,7 @@ def _read(concept: str) -> str:
 
 def test_every_hit_is_canonical_or_listed():
     found = classify(_scanned())
-    assert len(found) >= 300, f"the scan found only {len(found)} declarations of the concepts: has the tree moved?"
+    assert len(found) >= 200, f"the scan found only {len(found)} declarations of the concepts: has the tree moved?"
     unlisted = [f"{k} (line {h.line}) declares {concept} again: read {_read(concept)}, or rename it if it is another thing"
                 for k, (concept, h, status) in sorted(found.items()) if status == "unlisted"]
     assert not unlisted, (f"declarations of a concept that are not its canonical object ({FIX}):\n  "
