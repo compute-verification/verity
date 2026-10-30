@@ -96,7 +96,7 @@ def RowOpens (dom T : ByteArray) (N n : ℕ) (row : List UInt8) : Prop :=
 
 theorem rowMsgOf_inj {r r' : List UInt8} (h : rowMsgOf r = rowMsgOf r') : r = r' := by
   have h := congrArg (fun b : ByteArray => b.data.toList) h
-  simp only [rowMsgOf, FlockSoundness.Discharge.Hm.rowMsg, Array.toList_toArray] at h
+  simp only [rowMsgOf, FlockSoundness.Discharge.Hm.rowMsg, List.toList_toArray] at h
   exact List.append_cancel_left h
 
 /-- **The table at `T` binds its rows**: two rows that open one position of the registered table at `T` under one
@@ -163,15 +163,21 @@ theorem checkLinks_ok {st : Stmt} {own : Option (Array Registered.Port)} {files 
     obtain ⟨W, h4, h⟩ := FlockSoundness.Refine.ebind_ok h
     obtain ⟨_, h5, h6⟩ := FlockSoundness.Refine.ebind_ok h
     have h3' : RecLinkTree.rowsRoot UB PB (RecLinkPart.innerRows sf.2).1 = .ok R := by
+      change Except.mapError _ (RecLinkTree.rowsRoot UB PB (RecLinkPart.innerRows sf.2).1) = Except.ok R at h3
       cases e : RecLinkTree.rowsRoot UB PB (RecLinkPart.innerRows sf.2).1 with
       | error e' => rw [e] at h3; cases h3
       | ok R' => rw [e] at h3; cases h3; rfl
     have h4' : RecLinkTree.rowsRoot UB PB (RecLinkPart.innerRows sf.2).2 = .ok W := by
+      change Except.mapError _ (RecLinkTree.rowsRoot UB PB (RecLinkPart.innerRows sf.2).2) = Except.ok W at h4
       cases e : RecLinkTree.rowsRoot UB PB (RecLinkPart.innerRows sf.2).2 with
       | error e' => rw [e] at h4; cases h4
       | ok W' => rw [e] at h4; cases h4; rfl
     exact ⟨T, N, own', f, sf, R, W, rfl, rfl, rfl, h1, h2, h3', h4', ⟨_, h5⟩, ⟨_, h6⟩⟩
   · cases h
+
+local instance lawfulBEqByteArrayLinks : LawfulBEq ByteArray where
+  eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
+  rfl {a} := by show (a.data == a.data) = true; exact beq_self_eq_true _
 
 /-- **What `checkTable` accepted**: the verifier's registered port `trow` is the table's: the value `rec-links` at the
 root `T`, `N` `hm96-sha512/row/v1` rows of `LINK_ROW_WORDS` u16 words under the domain the part's program registers
