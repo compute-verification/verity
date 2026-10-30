@@ -48,7 +48,7 @@ roots = ["Proofs.Core", "Proofs.Nci", "Proofs.Pous", "Proofs.Pouw", "Proofs.Netw
   "Proofs.Properties.Nci", "Proofs.Properties.CertifierDevice", "Proofs.Properties.Pous",
   "Proofs.Properties.Pous.TimedAudit", "Proofs.Properties.Pous.MemoryChallenger", "Proofs.Properties.Pous.Run",
   "Proofs.Properties.Pous.Setup", "Proofs.Properties.Pous.RunAt", "Proofs.Properties.Pous.Wipe",
-  "Proofs.Properties.NetworkCertifier", "Proofs.Properties.NetworkCertifier.Period",
+  "Proofs.Properties.Pous.Component", "Proofs.Properties.NetworkCertifier", "Proofs.Properties.NetworkCertifier.Period",
   "Proofs.Properties.CertifierNetwork", "Proofs.Properties.CertifierNetwork.Runs",
   "Proofs.Properties.Identity", "Proofs.Properties.Nci.DescVerdict", "Proofs.Properties.Nci.DescAgree",
   "Proofs.Properties.Nci.Walk", "Proofs.Properties.Nci.Resolve", "Proofs.Properties.Nci.BodiesOk",
@@ -64,4 +64,5 @@ roots = ["Proofs.Core", "Proofs.Nci", "Proofs.Pous", "Proofs.Pouw", "Proofs.Netw
   "Proofs.Properties.RemoteAudit.Component",
   "Proofs.Properties.Pouw.LiveSalt.Ledger", "Proofs.Properties.Nci.ReadsExact",
   "Proofs.Properties.Nci.BodiesOk.ReadsDecoded", "Proofs.Properties.Composition", "Proofs.Properties.Challenger",
-  "Proofs.Properties.Core.Site", "Proofs.Properties.Nci.Protocol", "Proofs.Properties.Verity.Soundness"]
+  "Proofs.Properties.Pous.WipeSigned", "Proofs.Properties.Core.Site", "Proofs.Properties.Nci.Protocol",
+  "Proofs.Properties.Verity.Soundness", "Proofs.Properties.Verity.Subprotocols"]

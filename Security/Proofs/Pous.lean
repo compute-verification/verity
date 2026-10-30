@@ -53,6 +53,7 @@ import Proofs.Pous.Pooled
 import Proofs.Pous.EndToEndAt
 import Proofs.Pous.PeriodAt
 import Proofs.Pous.PeriodDeployed
+import Proofs.Pous.PeriodGame
 import Proofs.Pous.Obligation
 
 /-!

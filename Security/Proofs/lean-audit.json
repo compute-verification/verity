@@ -44,6 +44,7 @@
   "Proofs.Properties.Pous.Setup",
   "Proofs.Properties.Pous.RunAt",
   "Proofs.Properties.Pous.Wipe",
+  "Proofs.Properties.Pous.Component",
   "Proofs.Properties.Accounting.Requirement",
   "Proofs.Properties.RemoteAudit",
   "Proofs.Properties.RemoteAudit.Coins",
@@ -64,9 +65,11 @@
   "Proofs.Properties.Nci.BodiesOk.ReadsDecoded",
   "Proofs.Properties.Composition",
   "Proofs.Properties.Challenger",
+  "Proofs.Properties.Pous.WipeSigned",
   "Proofs.Properties.Core.Site",
   "Proofs.Properties.Nci.Protocol",
   "Proofs.Properties.Verity.Soundness",
+  "Proofs.Properties.Verity.Subprotocols",
   "Proofs.Properties.NetworkCertifier.Period"
  ],
  "exempt": {
