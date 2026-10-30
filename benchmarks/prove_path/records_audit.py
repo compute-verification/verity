@@ -27,7 +27,7 @@ The summary reports the leak bound's count beside the advice's charge, ``vacuous
 it (`leak_count`; a record that declares its inputs, `declared_count`): the run figure, and for a record that declares
 its window's ingress the window figure beside it, with the premise it rests on named. An integration's labels are never read.
 
-A circuit that reads registered values at public positions (`interface.Read`) is audited against the entries the verifier
+A stated circuit that reads registered values at public positions (`interface.Read`) is audited against the entries the verifier
 pinned before the run (``--registered FILE``: ``{"program", "values": {param: entry}}`` or a list of them, each entry core's
 ``registered.Registered.entry()``, its domain held to the one its program, value and rows make, `pinned`): each drawn
 member's ``--registered`` file comes from the record and those entries alone (`interface.registered_reads`), and Lean's
@@ -35,7 +35,9 @@ registered reads open every row of its read ports against the pinned root at the
 (a5's ``registered``, with its negatives: no registered reads, another root, every unit reading another row). The reads
 of a pinned parameter leave the free inputs where the window's root for it is the pinned root: `declared_count` counts
 them registered, its pins the ``--registered`` file's roots and the window's roots those its registration records
-(`window_roots`: its ``registered_roots``, `interface.Window.write`, and its committed values' entries).
+(`window_roots`: its ``registered_roots``, `interface.Window.write`, and its committed values' entries). A record that
+lists its members (a served window's) declares its slice templates' weight reads (`interface.listed_ingress`); they
+count free and the audit opens none of them yet.
 
 A registration whose window commits per-window values (``activations``: ``{program, values: {value: entry}}``, a
 loop's activation rows) has them fixed before the sample with the rest of the registration;
@@ -671,7 +673,8 @@ def audit(a: argparse.Namespace) -> int:
             raise ValueError(f"values {twice} are both pinned and the window's own")
         pins |= ties | untied
         roots = window_roots(own)
-        reads = IF.registered_reads(doc, mine, pins, registered=REG)
+        # a listed record's registered reads count free (`interface.input_count`), so no audit opens them yet
+        reads = IF.registered_reads(doc, mine, pins, registered=REG) if "members" not in doc else {}
     except (ValueError, KeyError, TypeError) as e:
         row = {"ok": False, "refused": {"records": f"{type(e).__name__}: {e}"}, "seconds": round(time.time() - t0, 1)}
         (out / "summary.json").write_text(json.dumps(row, indent=1, sort_keys=True))
