@@ -123,6 +123,114 @@ theorem rowOpens_binding {dom T : ByteArray} {N n : ℕ} {row row' : List UInt8}
       path (Hm96.Default512.leaf (Sha512.hash (rowMsgOf row')) salt') path' (Hm96.Default512.leaf_size _ _)
       (Hm96.Default512.leaf_size _ _) hl ho ho'
 
+/-! ## What the setup checked at the link part -/
+
+/-- The recursive setup runs `RecLinkPart.check` at every table. -/
+theorem RecIns.setup_linkPart {s : RecIns} {spec : SessionSpec} {sts : Array Stmt} (h : s.setup = .ok (spec, sts)) :
+    sts.forM (RecLinkPart.check · s.base.registered s.src s.links) = .ok () := by
+  unfold RecIns.setup at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  repeat' split at h
+  all_goals first | (cases h; done) | skip
+  all_goals
+    obtain ⟨-, h2⟩ := Prod.mk.inj (Except.ok.inj h)
+    subst h2
+    assumption
+
+/-- **What `checkLinks` accepted**: the statement's table `(T, N)`, the verifier's registered reads and the inner
+statement's files; `trow` reads the table (`checkTable`); the inner statement's input and output rows' trees have roots
+`R` and `W`; and `rin` and `rout` are the verifier's rows of `expected R` and `expected W`. -/
+theorem checkLinks_ok {st : Stmt} {own : Option (Array Registered.Port)} {files : Option RecCoins.Source}
+    {links : Option (ByteArray × ℕ)} {UB PB : ℕ} (h : RecLinkPart.checkLinks st own files links UB PB = .ok ()) :
+    ∃ T N own' f sf R W, links = some (T, N) ∧ own = some own' ∧ files = some (.files f) ∧
+      RecLinkPart.checkTable st.c st.pub own' T N = .ok () ∧ f.stmt st.c.unit.name = .ok sf ∧
+      RecLinkTree.rowsRoot UB PB (RecLinkPart.innerRows sf.2).1 = .ok R ∧
+      RecLinkTree.rowsRoot UB PB (RecLinkPart.innerRows sf.2).2 = .ok W ∧
+      (∃ what, RecCoins.checkValue st.c st.pub own' "rin" RecLinkPart.IN_VALUE
+        (Array.replicate N (RecLinkRef.expected R).toArray) what = .ok ()) ∧
+      ∃ what, RecCoins.checkValue st.c st.pub own' "rout" RecLinkPart.OUT_VALUE
+        (Array.replicate N (RecLinkRef.expected W).toArray) what = .ok () := by
+  unfold RecLinkPart.checkLinks at h
+  rcases links with _ | ⟨T, N⟩
+  · cases h
+  rcases own with _ | own'
+  · cases h
+  rcases files with _ | ⟨f⟩ | ⟨j, rec⟩
+  · cases h
+  · obtain ⟨_, h1, h⟩ := FlockSoundness.Refine.ebind_ok h
+    obtain ⟨sf, h2, h⟩ := FlockSoundness.Refine.ebind_ok h
+    obtain ⟨R, h3, h⟩ := FlockSoundness.Refine.ebind_ok h
+    obtain ⟨W, h4, h⟩ := FlockSoundness.Refine.ebind_ok h
+    obtain ⟨_, h5, h6⟩ := FlockSoundness.Refine.ebind_ok h
+    have h3' : RecLinkTree.rowsRoot UB PB (RecLinkPart.innerRows sf.2).1 = .ok R := by
+      cases e : RecLinkTree.rowsRoot UB PB (RecLinkPart.innerRows sf.2).1 with
+      | error e' => rw [e] at h3; cases h3
+      | ok R' => rw [e] at h3; cases h3; rfl
+    have h4' : RecLinkTree.rowsRoot UB PB (RecLinkPart.innerRows sf.2).2 = .ok W := by
+      cases e : RecLinkTree.rowsRoot UB PB (RecLinkPart.innerRows sf.2).2 with
+      | error e' => rw [e] at h4; cases h4
+      | ok W' => rw [e] at h4; cases h4; rfl
+    exact ⟨T, N, own', f, sf, R, W, rfl, rfl, rfl, h1, h2, h3', h4', ⟨_, h5⟩, ⟨_, h6⟩⟩
+  · cases h
+
+/-- **What `checkTable` accepted**: the verifier's registered port `trow` is the table's: the value `rec-links` at the
+root `T`, `N` `hm96-sha512/row/v1` rows of `LINK_ROW_WORDS` u16 words under the domain the part's program registers
+(`tableDomain`), instance `i` reading row `i`, the instances labelled `0` to `n − 1` in order. -/
+theorem checkTable_ok {c : Circuit} {pub : Public} {own : Array Registered.Port} {T : ByteArray} {N : ℕ}
+    (h : RecLinkPart.checkTable c pub own T N = .ok ()) :
+    ∃ reg, own.find? (·.name == "trow") = some reg ∧ reg.value = RecLinkPart.LINKS_VALUE ∧ reg.root = T ∧
+      reg.leaves = N ∧ reg.words = some VStar.LINK_ROW_WORDS ∧ reg.wordBits = 16 ∧
+      reg.schema = HmRow.ROW_SCHEMA ∧ tableDomain c N = some reg.domain ∧
+      reg.reads = (Array.range N).map some ∧ Registered.unitIndices pub = .ok (Array.range pub.n) := by
+  unfold RecLinkPart.checkTable at h
+  cases hf : own.find? (·.name == "trow") with
+  | none => simp only [hf] at h; cases h
+  | some reg =>
+    simp only [hf] at h
+    by_cases hv : (reg.value != RecLinkPart.LINKS_VALUE) = true
+    · simp only [hv, ↓reduceIte] at h; cases h
+    simp only [hv, Bool.false_eq_true, ↓reduceIte] at h
+    by_cases hr : (reg.root != T) = true
+    · simp only [hr, ↓reduceIte] at h; cases h
+    simp only [hr, Bool.false_eq_true, ↓reduceIte] at h
+    by_cases hl : (reg.leaves != N || reg.words != some VStar.LINK_ROW_WORDS || reg.wordBits != 16 ||
+        reg.schema != HmRow.ROW_SCHEMA) = true
+    · simp only [hl, ↓reduceIte] at h; cases h
+    simp only [hl, Bool.false_eq_true, ↓reduceIte] at h
+    cases hp : c.metaJ.getObjValAs? String "program_sha512" with
+    | error e => simp only [hp] at h; cases h
+    | ok prog =>
+      simp only [hp] at h
+      cases hd : Registered.domain prog RecLinkPart.LINKS_VALUE VStar.LINK_ROW_WORDS N 16 with
+      | error e => simp only [hd, bind, Except.bind] at h; cases h
+      | ok dom =>
+        simp only [hd, bind, Except.bind] at h
+        by_cases hdm : (reg.domain != dom) = true
+        · simp only [hdm, ↓reduceIte] at h; cases h
+        simp only [hdm, Bool.false_eq_true, ↓reduceIte] at h
+        by_cases hrd : (reg.reads != (Array.range N).map some) = true
+        · simp only [hrd, ↓reduceIte] at h; cases h
+        simp only [hrd, Bool.false_eq_true, ↓reduceIte] at h
+        cases hi : Registered.unitIndices pub with
+        | error e => simp only [hi] at h; cases h
+        | ok idx =>
+          simp only [hi] at h
+          by_cases hidx : (idx != Array.range pub.n) = true
+          · simp only [hidx, ↓reduceIte] at h; cases h
+          simp only [Bool.not_eq_true, bne_eq_false_iff_eq, Bool.or_eq_false_iff] at hv hr hl hdm hrd hidx
+          obtain ⟨⟨⟨hl1, hl2⟩, hl3⟩, hl4⟩ := hl
+          refine ⟨reg, rfl, hv, hr, hl1, hl2, hl3, hl4, ?_, hrd, by rw [hidx]⟩
+          unfold tableDomain
+          simp [hp, hd, Except.toOption, hdm]
+
+/-- `Registered.opens` reads a port's root, leaves, domain and schema only: at the table's, it is `tablePort`'s. -/
+theorem opens_tablePort {reg : Registered.Port} {dom T : ByteArray} {N : ℕ} (hr : reg.root = T) (hl : reg.leaves = N)
+    (hd : reg.domain = dom) (hs : reg.schema = HmRow.ROW_SCHEMA) (bc : ByteArray) (n : ℕ) (path : ByteArray) :
+    Registered.opens reg bc n path = Registered.opens (tablePort dom T N) bc n path := by
+  unfold Registered.opens Registered.opensLeaf
+  rw [hr, hl, hd, hs]
+  rfl
+
 /-! ## The link clause -/
 
 /-- The inner statement the statement's bytes parse to, as the deployed relation reads it (`FlockDeploy.parse false`:
