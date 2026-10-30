@@ -185,9 +185,7 @@ Protocols and claims:
 - PoUW's guarantees, and only PoUW's, may rest on named random-oracle premises for SHA-512
   (`StraightLineExtraction`, Compose's `SeedExtractedAt`), each a named `Prop` the lock lists. Flock's
   knowledge soundness keeps the collision form.
-- PoUS's held-space bound in the shared coin game rests on SHA-512 as a PRF for the memory challenger's derived
-  streams: the named premise `Hash.Assumptions.Sha512Prf`, its advantage `ε_prf(t, Q)` explicit in the bound
-  (`Pous.Period.PeriodHeldSha512`), and protocol soundness proves `PousSound` from it.
+- PoUS's held-space bound rests on SHA-512 as a PRF: `Hash.Assumptions.Sha512Prf`, its ε_prf in the bound.
 - The deployed recursion's bound record states its inner claim at IVStar at the weight
   `coverW`, the least at which the premise P3 (`Bound.WeightCovers`) holds. Its security level is below the 100-bit floor
   under every weight (`Claims.Recursion.lam`), and every table, README or claim that cites it gives its λ and says so.
