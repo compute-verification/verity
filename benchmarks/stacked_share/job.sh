@@ -4,8 +4,7 @@
 # no GPU: it traces on the meta device at the explicit TARGET, and gives the row's own request Program (digest
 # 8c683b2a...). DESCRIPTOR=PATH skips the Build and reads that one.
 #
-#   research run --queue --cpus 4 --mem-gb 32 --max-min 240 --source . --project verity \
-#     --cwd clone/integrations/vllm -- bash ../../benchmarks/stacked_share/job.sh
+#   (cd integrations/vllm && OUT=DIR bash ../../benchmarks/stacked_share/job.sh)      # from a clone's root
 set -euo pipefail
 export PY=/workspace/jobs/venv312/bin/python3 PYTHONPATH=.:../..:../../tools/research/src HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 \
   TOKENIZERS_PARALLELISM=false
