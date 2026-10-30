@@ -284,7 +284,7 @@ def write_workload(phi: Phi, comps: dict, canon: dict, out: str):
     Path(out, "workload_program.json").write_text(json.dumps(
         {**wl.artifact(), "ok": True, "function": wl.fn.id[:300], "lag": {**lag, "value": wl.lag}, "built_by": ROW_BUILT_BY,
          "applicability": {"engine": {"async_scheduling": bool(lag["async_scheduling"])}},
-         "descriptor": {"bytes": len(cj) if "annotations" not in desc else descriptor_size(desc), "sha256": hashlib.sha256(cj).hexdigest(),
+         "descriptor": {"bytes": len(cj) if "annotations" not in desc else descriptor_size(desc), "sha512": hashlib.sha512(cj).hexdigest(),
                         "n_definitions": len(desc["definitions"])}}, indent=1) + "\n")
     return wl
 
