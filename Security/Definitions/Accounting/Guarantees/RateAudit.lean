@@ -103,7 +103,7 @@ def RateHonest : Prop :=
       A.Accepts E R O I ∧ A.footprint E R O = N * b ∧ A.ingress E R O = N * b ∧ A.compute cTag cEnc E R O = N * cTag
 
 /-- **The rate audit over `n` windows: time-averaged residency.** Over a uniform store and `n` windows, each with its
-own uniform stream, oracle and sample, played by devices of `RateAudit`'s class (`Rate.Windows`: window `i`'s device
+own uniform stream, oracle and sample, played by devices of `RateAudit`'s class (`Rate.Devices`: window `i`'s device
 and its layout any function of the other windows' coins, earlier or later), and for every `m`: `m` times the
 probability that every window is accepted with its compute within `F` while the footprints, summed over the windows,
 fall short of `n + 1 − m` floors,
@@ -121,7 +121,7 @@ coins.
 
 Frozen (no-function, hash): like `RateAudit`, a bound in the random-oracle model over abstract chip programs. -/
 def RateAuditWindows : Prop :=
-  ∀ (n N b h ρ S L q s k F cTag cEnc lam m : ℕ) (A : Windows n N b h ρ S L q s),
+  ∀ (n N b h ρ S L q s k F cTag cEnc lam m : ℕ) (A : Devices n N b h ρ S L q s),
     (m : ℝ≥0∞) * pr (fun x : Store N b × (Fin n → Coins N b h ρ s) =>
         (∀ i, (A.dev i x.2).Accepts x.1 (x.2 i).1 (x.2 i).2.1 (x.2 i).2.2 ∧
           (A.dev i x.2).compute cTag cEnc x.1 (x.2 i).1 (x.2 i).2.1 ≤ F) ∧

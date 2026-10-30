@@ -160,7 +160,7 @@ def test_each_fits_check_refuses_its_negative(server):
 def test_a_scan_in_the_checker_form_is_refused_by_name(server):
     """A scan in the checker form, whose egress template takes the row its units compare as an input, is refused at the
     parameters by Lean and the mirror, by name, though its terms would read: no egress gate is an input
-    (`NetTiming.Layout.Fits`), so `K` counts only what a Program that computes its egress rows leaves free."""
+    (`NetTiming.BoundaryGates.Fits`), so `K` counts only what a Program that computes its egress rows leaves free."""
     for n in range(2):
         case = build("rows-honest", n, small=True)
         s = PC.params(case["params"]).schedule

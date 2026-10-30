@@ -4,7 +4,9 @@ import Proofs.Flock.SamplingBoundary
 # Input slots
 
 The deployed verifier lays an input class after the population (`Slots.layout`): one stratum of a one-gate replay unit
-per input gate, in gate order, and it checks every input slot on every run (`Slots.checked`).
+per input gate, in gate order, which `Slots.checked` lists on every draw. No run opens an input row on its own: the
+session proves the drawn units (`HmRow.drawn`), and registration opens no row, so an input row is opened only through
+a drawn unit that reads it.
 
 * `faulty_input_iff`: at a slot whose replay unit is the one proof unit `[p]` of an input gate `p`, the slot is faulty
   exactly when the witness opens no value at `p`. An input's computed value is its committed value, so an opened input
@@ -22,7 +24,7 @@ namespace Claims.Sampling.InputSlot
 open Claims.Sampling
 
 /-- **An input slot is faulty exactly when its value is unopened.** -/
-theorem faulty_input_iff {H : Msg → Msg} {Cm : Commitment Bool} {s : AuditStatement} {P : Partition} {w : Wit} {v p : ℕ}
+theorem faulty_input_iff {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement} {P : Partition} {w : Wit} {v p : ℕ}
     (hv : P.rus[v]? = some [[p]]) (hp : s.prog.gates[p]? = some .input) :
     Faulty H Cm s P w v ↔ w.val H Cm s p = none := by
   have hcorr : ∀ ι : ℕ → Bool,
@@ -92,7 +94,7 @@ theorem withInputs_getElem?_input (P : Partition) (C : Prog) {i g : ℕ} (hi : (
   simp [hi]
 
 /-- **An input slot of `withInputs P s.prog` is faulty exactly when its gate's value is unopened.** -/
-theorem faulty_withInputs_iff {H : Msg → Msg} {Cm : Commitment Bool} {s : AuditStatement} {P : Partition} {w : Wit} {i g : ℕ}
+theorem faulty_withInputs_iff {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement} {P : Partition} {w : Wit} {i g : ℕ}
     (hi : (inputsAt s.prog)[i]? = some g) :
     Faulty H Cm s (withInputs P s.prog) w (P.rus.length + i) ↔ w.val H Cm s g = none :=
   faulty_input_iff (withInputs_getElem?_input P s.prog hi) (mem_inputsAt.1 (List.mem_of_getElem? hi))

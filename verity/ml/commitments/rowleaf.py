@@ -29,7 +29,7 @@ Five schemas:
                              ``sha512/row/v2``, ``hm96-sha512/row-seg/v1`` over ``sha512/row-seg/v1``.
 ``poseidon2-babybear-w24/row/v2h``  the Poseidon2 row digest. Admissible in a Table 2 cell (``frame-v3/poseidon2-babybear``),
                              but algebraic: its results are reported and flagged as algebraic in the security section,
-                             and never count toward a standard-hash claim (Daniel's standing decision).
+                             and never count toward a standard-hash claim.
 
 ``row_bytes`` are the row's words little-endian, ``word_bits`` 8, 16 or 32 bits each, in row order.  ``nvfp4_row_bytes``
 are the codes packed two per byte (code ``2i`` in the low nibble), then the scale bytes: the code buffer and the scale
