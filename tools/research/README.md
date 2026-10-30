@@ -258,7 +258,9 @@ launcher's archive manifest (`READY.json` `verified:
 git-push+tree+file-sha256`, `transport: git`; job.json
 `run.remote.source_transport`). A machine without git, or any failure of that
 path, prints one line and ships the archive stream as above; nothing is ever
-marked READY by a failed git ship. `RESEARCH_SHIP=stream` skips git. The shipped tree is the runner's source root, not
+marked READY by a failed git ship. `RESEARCH_SHIP=stream` skips git. A `--cwd clone` run of a
+commit whose tree the archive stream shipped makes that tree a checkout in place
+(`transport: stream+git`) rather than refusing. The shipped tree is the runner's source root, not
 the workload's cwd: the workload runs in its own run directory, as locally,
 because every run of one commit shares `<root>/src/<sha>/` and relative outputs
 used to race there. `--cwd source` (or `source/SUB`) runs it in the tree, and
