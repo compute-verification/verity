@@ -4,6 +4,7 @@ from __future__ import annotations
 import csv
 import json
 import re
+import tomllib
 
 import pytest
 
@@ -13,7 +14,25 @@ from verity_machine_model.model import (CLAIMS, COPIES, DATA, DEVICES, STATUSES,
 
 M = model()
 ROWS = rows()
-CITE = re.compile(r"(r\d{8}-\d{6}-[0-9a-f]{4}|note:\d{8}T\d{4}Z-[a-z0-9-]+)")
+CITE = re.compile(r"(r\d{8}-\d{6}-[0-9a-f]{4}|note:\d{8}T\d{4}Z-[a-z0-9-]+|art:[0-9a-f]{64})")
+PROSE_CITE = re.compile(r"@([a-z0-9][a-z0-9-]*[a-z0-9])")
+
+
+def _strings(o):
+    if isinstance(o, dict):
+        for v in o.values():
+            yield from _strings(v)
+    elif isinstance(o, list):
+        for v in o:
+            yield from _strings(v)
+    elif isinstance(o, str):
+        yield o
+
+
+def prose_cites() -> dict[str, set[str]]:
+    """Each TOML file of data/ and the device directories, and the @NAMEs its strings cite."""
+    return {str(p.relative_to(DATA)): {m for s in _strings(tomllib.loads(p.read_text())) for m in PROSE_CITE.findall(s)}
+            for p in sorted(DATA.rglob("*.toml"))}
 
 
 def test_epochs_are_vectors():
@@ -29,16 +48,20 @@ def test_rows_are_well_formed():
     assert all(r.runs and all(CITE.fullmatch(x) for x in r.runs) for r in ROWS.values())
 
 
-def test_every_citation_is_a_note_some_line_cites():
-    """data/citations.toml names notes, each cited as @NAME by a census or rows.csv line in data/ or a device directory,
-    and no name is also a run list of census/runs.toml."""
+def test_every_citation_is_a_note_or_run_record_some_line_cites():
+    """data/citations.toml names notes and run records, each cited as @NAME by a census or rows.csv line's runs or by a
+    TOML string in data/ or a device directory; every @NAME a TOML string cites is one of them."""
     names = citations()
-    assert names and all(CITE.fullmatch(v) and v.startswith("note:") for v in names.values())
+    assert names and all(CITE.fullmatch(v) and v.startswith(("note:", "art:")) for v in names.values())
     used = set()
     for p in [*DATA.glob("*.csv"), *DATA.glob("census/*.csv"), *DEVICES.glob("sm_*/*.csv"),
               *DEVICES.glob("sm_*/census/*.csv")]:
         with open(p, newline="") as f:
             used |= {c[1:] for d in csv.DictReader(f) for c in d.get("runs", "").split() if c.startswith("@")}
+    prose = prose_cites()
+    unknown = {p: sorted(c - set(names)) for p, c in prose.items() if c - set(names)}
+    assert not unknown, f"cite a run record or note as @NAME only once data/citations.toml names it: {unknown}"
+    used |= set().union(*prose.values())
     assert set(names) <= used, f"citations.toml: {sorted(set(names) - used)} cited by no line"
 
 
