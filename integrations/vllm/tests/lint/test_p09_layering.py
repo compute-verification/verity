@@ -69,7 +69,7 @@ LEAF_MODULES = frozenset(p.removesuffix(".py").replace("/", ".") for p in PATCH_
 PACKAGE_OF = {
     "verity_vllm.protocols": "protocol_options",
     "verity_vllm.protocols.linear": "linear",
-    "verity_vllm.protocols.remote_bandwidth": "store",
+    "verity_vllm.protocols.poub": "store",
     "verity_vllm.program.predict": "predict",
     "verity_vllm.engine.collectives": "collectives",
     "verity_vllm.engine.spec": "pipeline",

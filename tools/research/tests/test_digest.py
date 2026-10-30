@@ -223,7 +223,7 @@ def test_health_shows_the_vm_workspace_workers_inboxes_prs_off_the_queue_finishe
                     f"pending   bc-2  90 bytes  since {stamp(NOW - 5 * 60)}\npending   bc-9  40 bytes\n")
     f.rows = [row(10, "queued")]
     f.prs = [{"number": 10, "title": "queued", "baseRefName": "main"},
-             {"number": 2463, "title": "Properties.RemoteAudit", "baseRefName": "cursor/x-93c1", "isDraft": True}]
+             {"number": 2463, "title": "Properties.PoubCheck", "baseRefName": "cursor/x-93c1", "isDraft": True}]
     f.lake_dirs = [{"path": f"/w/wt{i}/Security/.lake", "bytes": i * GIB, "branch": f"cursor/w{i}", "age_h": 6.5 + i}
                    for i in range(1, 7)]
     f.run_rows = [{"id": "r-live", "state": "running", "remote": {"machine": "nebius-1"}, "command": ["bash", "-lc", "uv run x"]},
@@ -243,7 +243,7 @@ def test_health_shows_the_vm_workspace_workers_inboxes_prs_off_the_queue_finishe
     assert h[3] == (f"- worker grader bc-2: no branch cursor/gone-93c1 on origin; inbox: 90 bytes pending since "
                     f"{D.hhmm(NOW - 5 * 60)} (5 min)")
     assert h[4] == "- bc-9 (not in the roster): inbox: 40 bytes pending since an unknown time"
-    assert h[5] == "- WARNING #2463 is not in the queue (base cursor/x-93c1, draft): Properties.RemoteAudit"
+    assert h[5] == "- WARNING #2463 is not in the queue (base cursor/x-93c1, draft): Properties.PoubCheck"
     assert h[6] == "- .lake of finished worktrees, the largest 5 (listed, not deleted):"
     assert h[7:12] == [f"    {i}.0 GiB /w/wt{i}/Security/.lake (cursor/w{i}, tip {6.5 + i:.0f} h old)" for i in range(6, 1, -1)]
     assert h[12:] == ["- run r-live running on nebius-1: bash -lc uv run x", "- run r-wait waiting on local: uv run y"]

@@ -1,4 +1,4 @@
-"""memory-map/v1 from the circuit (`verity.core.protocols.remote_bandwidth.memory_map`): the KV blocks each serving step wrote
+"""memory-map/v1 from the circuit (`verity.core.protocols.poub.memory_map`): the KV blocks each serving step wrote
 and freed, from the Program of record and the engine's page layout, with each block's digest from the values served (the
 Commit's committed words, `pipeline.memory_map`).
 
@@ -26,11 +26,11 @@ page      `block_size` slots in each layer as the engine lays them out (`page_of
 block     4,096 bytes of a plane (`store.registry._page_blocks`), at slot `firsts[layer] + ids[page, c]` (the `Store`'s
           numbering: a KV pool of one region per layer)
 appended  a block whose rows are all born, at the step of the last (its completion), if a later step reads it: a step's
-          record, its frees then its writes, takes effect after the step's reads (remote_bandwidth's convention),
+          record, its frees then its writes, takes effect after the step's reads (poub's convention),
           so a block whose last structural reader is the step that completes it is never read while resident and is in
           no record; nor
           is a block with a row no step writes (it stays dirty).  A step's blocks are one append, by slot
-written   an appended block, in the record of the step its append's encode landed in (deferred residency, remote_bandwidth's
+written   an appended block, in the record of the step its append's encode landed in (deferred residency, poub's
           ``PROTOCOL.md`` §4: the session's `Deferral`; without one, at its completion), uncredited until then.  A line
           writes the appends landed by then in order, and one that would write a slot an earlier one there writes waits a
           line, with every append after it
@@ -59,8 +59,8 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any
 
-from verity.core.protocols.remote_bandwidth import codec
-from verity.core.protocols.remote_bandwidth.memory_map import SLOT_LIMIT, Header, Step, Written
+from verity.core.protocols.poub import codec
+from verity.core.protocols.poub.memory_map import SLOT_LIMIT, Header, Step, Written
 from verity.ml.circuits.census import census, step_ends
 from verity.ml.circuits.defs import PrimitiveDefinition
 from verity.ml.circuits.program import Program, is_input
@@ -68,8 +68,8 @@ from verity.ml.circuits.refs import runs
 from verity.ml.circuits.requirement import from_census
 from verity.ml.circuits.types import Array
 from verity_vllm.query.required import SAMPLING_EVENTS
-from verity_vllm.protocols.remote_bandwidth.interface import PageLayout
-from verity_vllm.protocols.remote_bandwidth.registry import _page_blocks
+from verity_vllm.protocols.poub.interface import PageLayout
+from verity_vllm.protocols.poub.registry import _page_blocks
 
 #: an attention Call's cached K and V parameters
 KV = ("kc", "vc")

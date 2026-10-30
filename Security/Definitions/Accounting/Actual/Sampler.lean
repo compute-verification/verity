@@ -5,7 +5,7 @@ import Definitions.Pous.Model.M1p
 
 `Key.uniform(N, j)` (`verity/ml/randomness`) is exact rejection sampling on the keyed SHA-512 stream at `("u", j)`: it
 reads `w`-bit big-endian words, `w = 8 ⌈(bitlen N + 64) / 8⌉`, and returns the first word below `2^w − (2^w mod N)`, the
-largest multiple of `N` that fits, reduced mod `N`. The remote audit's opening draw (`Accounting.Remote.Draw`) takes
+largest multiple of `N` that fits, reduced mod `N`. PoUB's opening draw (`Accounting.Poub.Draw`) takes
 each step of its partial Fisher–Yates by it.
 
 * `wordIndex`: the sampler on one word `u`: `u mod N` when `u < 2^w − (2^w mod N)`, none when it rejects `u`. The word's

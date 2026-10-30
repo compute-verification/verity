@@ -147,7 +147,7 @@ def serve(v: dict, m: Model, scheme: str | None, w: dict, *, kv: bool = False) -
         nbytes = r.nbytes * w["tokens"] * m.layers
         out.append(Commitment(r.scale, r.tensor, nbytes, cost=nbytes * rate, decode_bytes=per_call * m.layers,
                               chain=chain * m.layers, gates=r.gates))
-    receipts = v["remote_receipts"] * v["passes_per_s"] * w["window_gpu_s"]
+    receipts = v["poub_receipts"] * v["passes_per_s"] * w["window_gpu_s"]
     out.append(Commitment("remote", "store-block receipts", receipts, cost=receipts * rate))
     return tuple(out)
 

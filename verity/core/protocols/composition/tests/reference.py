@@ -6,7 +6,7 @@ mirror over the certifier's certificates and one-stage's answers,
 `verity/core/protocols/network/tests/test_network_period_protocol.py`), for sampled proofs' one-stage audit
 (`verity/sampled-proofs/one-stage/v1`) `one_stage` behind the protocol's decoders, its difftest's `answer`
 (`verity/core/service/sampled_proofs/tests/test_difftest.py`), and for space (`verity/pous/p2/v4/run`) and bandwidth
-(`verity/remote-bandwidth/v0`) their Python verifiers' answers on small periods of their hooks (`Recorded`,
+(`verity/poub/v0`) their Python verifiers' answers on small periods of their hooks (`Recorded`,
 `periods.py`). Each component's own difftest holds its Lean to that Python; this one holds the composition of them.
 
 The trial's rule, onsite's and remote's over their components' statements:
@@ -118,9 +118,9 @@ class Recorded:
 CERTIFIER = Ported("verity/certifier/v0", PERIOD.reference)
 POUW = Ported("verity/pouw/v1", core_check.case)
 SAMPLED_PROOFS = Ported("verity/sampled-proofs/one-stage/v1", ONE_STAGE.answer)
-#: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `RemoteAudit.Protocol.protocol`.
+#: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `PoubCheck.Protocol.protocol`.
 POUS = Recorded("verity/pous/p2/v4/run")
-BANDWIDTH = Recorded("verity/remote-bandwidth/v0")
+BANDWIDTH = Recorded("verity/poub/v0")
 
 
 def bind(id: str, digests: list[tuple[str, bytes]]) -> bytes:
@@ -226,4 +226,4 @@ class Product:
 
 #: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their components in the order of their ids.
 REMOTE = Product("verity/remote/v0", (POUW, SAMPLED_PROOFS))
-ONSITE = Product("verity/onsite/v0", (CERTIFIER, POUS, POUW, BANDWIDTH, SAMPLED_PROOFS))
+ONSITE = Product("verity/onsite/v0", (CERTIFIER, BANDWIDTH, POUS, POUW, SAMPLED_PROOFS))

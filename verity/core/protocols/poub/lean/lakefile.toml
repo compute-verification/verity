@@ -1,0 +1,50 @@
+# PoUB's verifier as executable Lean (`verity/poub/v0`), its definition: a window's
+# receipt checks (`PoubCheck.verifyWindow`), the session's bookkeeping (`PoubCheck.Session`) and the verifier's
+# registrations (`PoubCheck.Registry`), which `audit.py` is held to by the difftest (`poub-check-difftest`), and the
+# verifier's process the driver runs (`poub-check-verifier`, `PoubCheck.Verifier`), the session as a core
+# protocol (`poub-check-protocol`, `PoubCheck.Protocol`, onsite's bandwidth component), and a P2 store's receipts
+# and openings (`PoubCheck.P2`), which `p2.py` is held to by the same difftest. Code: Lean core and the packages
+# below, no Mathlib and nothing of Security.
+name = "poub_check"
+defaultTargets = ["PoubCheck", "poub-check-difftest", "poub-check-verifier", "poub-check-protocol"]
+
+[leanOptions]
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "flock_verifier"
+path = "../../../service/flock"
+
+[[require]]
+name = "core_randomness"
+path = "../../../primitives/randomness"
+
+[[require]]
+name = "verity_difftest"
+path = "../../../difftest/lean"
+
+# A P2 store's openings are checked on PoUS's vk (`PoubCheck.P2`), by PoUS's own leaf and path check
+# (`PousCheck.Merkle`).
+[[require]]
+name = "pous_check"
+path = "../../pous/check"
+
+[[require]]
+name = "core_protocol"
+path = "../../interface"
+
+[[lean_lib]]
+name = "PoubCheck"
+
+[[lean_exe]]
+name = "poub-check-difftest"
+root = "PoubCheck.DifftestMain"
+
+[[lean_exe]]
+name = "poub-check-verifier"
+root = "PoubCheck.VerifierMain"
+
+[[lean_exe]]
+name = "poub-check-protocol"
+root = "PoubCheck.ProtocolMain"

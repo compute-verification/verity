@@ -1,7 +1,7 @@
 # benchmarks/rate_squaring
 
 How fast a node can square modulo the store codec's Sloth primes, which bounds how fast it can rebuild an encoded store:
-the evidence for the bandwidth audit's (PoUB, `verity/core/protocols/remote_bandwidth`) stated squaring ceiling.
+the evidence for the bandwidth audit's (PoUB, `verity/core/protocols/poub`) stated squaring ceiling.
 `sq.cu` (run by `sq.sh`) squares mod 2^512 − 569 (or another width, `BITS` and `C`) on the GPU's CUDA cores in every
 (FOLD, ILP) form, each gated against Python's `pow` by `sq_gate.py` before it is timed, with its SASS opcode mix
 (`sass_mix.py`) and Nsight Compute's counts. `ifma.c` (run by `ifma.sh`) is the host's AVX-512 IFMA rate. `cycle_fit.py`
@@ -18,5 +18,5 @@ gate (with `gcc`), and `gamma.py`, `wide.py` and `cycle_fit.py`. `sq.sh` needs o
 **Reads and writes:** `sq.sh` and `ifma.sh` write `time.jsonl`, the gate outputs, `sass-mix.json`, Nsight Compute's
 CSVs and the build logs into their output directory; `cycle_fit.py` reads `sq.sh`'s outputs. **Backs:** these rates are
 the evidence for `timing.GPU_SQUARINGS_PER_S` and so for the stated ceiling C_sq (`timing.SQUARINGS_PER_S`), the `s` of
-the named assumption `Accounting.Remote.Held.Assumptions.SquaringCeiling`, which `Accounting.Guarantees.Remote.Held`
+the named assumption `Accounting.Poub.Held.Assumptions.SquaringCeiling`, which `Accounting.Guarantees.Poub.Held`
 and `HeldOverTime` take.

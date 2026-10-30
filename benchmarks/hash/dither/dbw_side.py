@@ -1,6 +1,6 @@
 """The remote bandwidth audit beside sbench's served arms on the GPU they share (`sbench.py --bw-passes GIB`, `dbw.py`).
 
-One process stands in for the auditor: the remote audit's own verifier (`benchmarks/remote_session/verifier.py`'s
+One process stands in for the auditor: the remote audit's own verifier (`benchmarks/poub_session/verifier.py`'s
 `Verifier`, its coins from an in-process challenger, the Lean verifier of record deciding) on a loopback socket. Its
 prover is `prover.py`, unmodified, on the GPU sbench leased (CUDA_VISIBLE_DEVICES inherited) and on --prover-cpus,
 over a store of GIB GiB of seeded payload under kv.cu's p1024 masked codec (`device.py`, the store `run.sh` registers on
@@ -29,17 +29,17 @@ import threading
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "remote_session"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "poub_session"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 import verifier as V
 import wire
 
-from verity.core.protocols.remote_bandwidth import audit
+from verity.core.protocols.poub import audit
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-RS = ROOT / "benchmarks" / "remote_session"
+RS = ROOT / "benchmarks" / "poub_session"
 
 EVENTS = os.fdopen(os.dup(1), "w", buffering=1)
 os.dup2(2, 1)
@@ -80,7 +80,7 @@ def main() -> int:
     ap.add_argument("--gib", type=float, default=24.0, help="the store, whole 1 GiB chunks")
     ap.add_argument("--lib", help="session.so (without it the prover's options name its backend: --cpu BLOCKS)")
     ap.add_argument("--kv", help="kv.so (p1024, masked)")
-    ap.add_argument("--lean-exe", type=Path, help="a built remote-audit-verifier (default: the verifier builds it)")
+    ap.add_argument("--lean-exe", type=Path, help="a built poub-check-verifier (default: the verifier builds it)")
     ap.add_argument("--jitter-ms", type=float, default=50.0)
     ap.add_argument("--quantile", default="max", choices=("p50", "p99", "p999", "max"))
     ap.add_argument("--pings", type=int, default=1000)

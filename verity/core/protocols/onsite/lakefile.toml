@@ -1,5 +1,5 @@
 # Onsite Verity as one `Core.Protocol` (`verity/onsite/v0`): the composition of integrity (sampled proofs), work (PoUW),
-# space (PoUS's run check), bandwidth (the remote bandwidth session) and communication (the network certifier over the
+# space (PoUS's run check), bandwidth (the PoUB session) and communication (the network certifier over the
 # period, `verity/certifier/v0`). Its executable is the core CLI (`onsite id | check | serve`), which the difftest
 # drives. Code: no Mathlib.
 name = "core_onsite"
@@ -41,10 +41,10 @@ path = "../network/lean"
 name = "pous_check"
 path = "../pous/check"
 
-# Bandwidth: the remote bandwidth audit's session.
+# Bandwidth: PoUB's session.
 [[require]]
-name = "remote_audit"
-path = "../remote_bandwidth/lean"
+name = "poub_check"
+path = "../poub/lean"
 
 [[lean_lib]]
 name = "CoreOnsite"

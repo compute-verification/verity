@@ -12,7 +12,7 @@
 // its store index j), plus tau (j TLW - store_base - (u layers + l) TLW) mod p when j is not the slot's own block.
 //
 // A token-layer the remote audit appends is written plaintext and encoded in place once its append coin c_a arrives
-// (deferred residency, remote_bandwidth's PROTOCOL.md §4), so an encoded cache may hold plaintext slots: each path takes
+// (deferred residency, poub's PROTOCOL.md §4), so an encoded cache may hold plaintext slots: each path takes
 // the layer's flags plain, [physical slot] bytes (null: none), nonzero for a slot whose token-layer is still plaintext,
 // which it reads as it is and gives no receipt (no record holds it yet). pg_append records in plain how it wrote each
 // slot; pg_encode encodes listed plaintext slots in place under their bound offsets b_j(c_a) and clears their flags.
@@ -769,7 +769,7 @@ int pg_rekey_ctas() {
   return std::max(1, sms * per);
 }
 
-// The lifetime cap's re-key (remote_bandwidth's PROTOCOL.md §4: a block kept past L windows is appended again at a
+// The lifetime cap's re-key (poub's PROTOCOL.md §4: a block kept past L windows is appended again at a
 // fresh index under a fresh coin, in its slot), in place: layers layers' listed slots decoded under their old bound
 // offsets and encoded under their new ones at k rounds, then the new offsets written over the old; a plaintext slot's
 // words and flag are left as they are, its offset moved too. tab (device) holds each layer's PG_REKEY words

@@ -10096,7 +10096,7 @@ theorem norm_sub (xs : Array (Nat × Nat)) (a : Nat) (h : Width.inIvs (Desc.Ivs.
   rcases normFold_sub _ #[] a h with h | ⟨iv, hiv, h⟩
   · obtain ⟨iv, hiv, -⟩ := h; simp at hiv
   · rw [← inIvs_nonempty]
-    exact ⟨iv, (Properties.RemoteAudit.qsort_toList_perm _ _).mem_iff.1 hiv, h⟩
+    exact ⟨iv, (Properties.PoubCheck.qsort_toList_perm _ _).mem_iff.1 hiv, h⟩
 
 /-- **`Desc.Ivs.norm` keeps exactly its intervals' leaves.** -/
 theorem norm_mem (xs : Array (Nat × Nat)) (a : Nat) :
@@ -10106,7 +10106,7 @@ theorem norm_mem (xs : Array (Nat × Nat)) (a : Nat) :
   apply normFold_sup _ #[] (qsort_sorted Prod.fst _) (fun p _ x hx => by simp at hx)
   rw [← inIvs_nonempty] at h
   obtain ⟨iv, hiv, h⟩ := h
-  exact Or.inr ⟨iv, (Properties.RemoteAudit.qsort_toList_perm _ _).mem_iff.2 hiv, h⟩
+  exact Or.inr ⟨iv, (Properties.PoubCheck.qsort_toList_perm _ _).mem_iff.2 hiv, h⟩
 
 /-- **What `Desc.Ivs.covers` checks**: every leaf below `n` is in an interval. -/
 theorem covers_mem (s : Desc.Ivs) (n : Nat) (h : s.covers n = true) (a : Nat) (ha : a < n) :

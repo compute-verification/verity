@@ -43,7 +43,7 @@ never a device tick. The ticks a step spans on each device are the placement's (
   (`j < N`, the weights) or appended by the memory map (`j ≥ N`, KV). Static and dynamic blocks are counted alike: a
   block is in `liveBlocks s` while it holds a live value, whatever wrote it.
 * **Store.** The registered store with the memory map beside it (I3, `memory-map/v1` of
-  `verity/core/protocols/remote_bandwidth/memory_map.py`): `N` registered blocks, the fresh indices each serving step
+  `verity/core/protocols/poub/memory_map.py`): `N` registered blocks, the fresh indices each serving step
   wrote and those it freed, and each block's payload. A block is written once, complete and encoded, so its payload is
   a function of its index. Step `s`'s record takes effect after step `s`'s reads: a block is written in the record of
   the step before its first encoded read (deferred residency: the step that completes it when its append's coin is back

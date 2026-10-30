@@ -45,9 +45,9 @@ def paged_module() -> ModuleType:
     """``benchmarks/vllm_encoded/paged.py``, loaded once as ``paged`` (the module `store.remote.session_module` loads)."""
     if "paged" in sys.modules:
         return sys.modules["paged"]
-    spec = importlib.util.spec_from_file_location("paged", config.REMOTE_SESSION.parent / "vllm_encoded" / "paged.py")
+    spec = importlib.util.spec_from_file_location("paged", config.POUB_SESSION.parent / "vllm_encoded" / "paged.py")
     if spec is None or spec.loader is None:
-        raise ImportError("no paged.py beside benchmarks/remote_session")
+        raise ImportError("no paged.py beside benchmarks/poub_session")
     module = importlib.util.module_from_spec(spec)
     sys.modules["paged"] = module
     try:

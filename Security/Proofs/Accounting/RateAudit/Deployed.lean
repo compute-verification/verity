@@ -3,7 +3,7 @@ import Definitions.Accounting.Guarantees.RateAuditDeployed
 import Proofs.Accounting.RateAudit.Session
 
 /-!
-# The remote bandwidth audit as deployed: the proof
+# PoUB as deployed: the proof
 
 **Completions as side reads.** A pass device with completions is simulated by an interactive device of
 `RatePaidNamedRO`'s class (`PIDevice.toInteractive`): its chip reads a completion's `x` bits from the side sources, at
@@ -777,9 +777,9 @@ open Pous (pr)
 open scoped ENNReal
 open Bandwidth (pr_mono)
 
-/-- **The remote bandwidth audit as deployed: an accepted session conserves its words**
-(`Accounting.Guarantees.RemoteSessionConservation`). -/
-theorem RemoteSessionConservation : Accounting.Guarantees.RemoteSessionConservation := by
+/-- **PoUB as deployed: an accepted session conserves its words**
+(`Accounting.Guarantees.PoubSessionConservation`). -/
+theorem PoubSessionConservation : Accounting.Guarantees.PoubSessionConservation := by
   intro n P N b h ρ S L q r s d G lam τ rounds cRoot F cost tier A dbar dw hn hP hN hb hrc hdw hW hF hA
   have hX : ∀ w η j ι c E R O, ((A.window w η).device j ι c).completed E R O ≤ Deployed.rebuildBits b rounds cRoot F :=
     fun w η j ι c E R O => PIDevice.completed_le _ hrc hW (hF w η j ι c) E R O
@@ -807,11 +807,11 @@ theorem RemoteSessionConservation : Accounting.Guarantees.RemoteSessionConservat
     · rw [show ((n : ℝ≥0∞) * P * N) = (n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
       exact Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
 
-/-- **The remote bandwidth audit at its deployed parameters**
-(`Accounting.Guarantees.RemoteSessionConservationDeployed`). -/
-theorem RemoteSessionConservationDeployed : Accounting.Guarantees.RemoteSessionConservationDeployed := by
+/-- **PoUB at its deployed parameters**
+(`Accounting.Guarantees.PoubSessionConservationDeployed`). -/
+theorem PoubSessionConservationDeployed : Accounting.Guarantees.PoubSessionConservationDeployed := by
   intro n P N ρ S L q r s G lam τ cRoot F cost tier A hn hP hN hc hq hG hW hF hA
-  have h := RemoteSessionConservation n P N 32768 512 ρ S L q r s 2773 G lam τ 3 cRoot F cost tier A 0.0015 0.01
+  have h := PoubSessionConservation n P N 32768 512 ρ S L q r s 2773 G lam τ 3 cRoot F cost tier A 0.0015 0.01
     (by omega) hP hN (by norm_num) (by positivity) (by norm_num) hW hF hA
   refine h.trans (add_le_add ?_ ?_)
   · rw [show (2 : ℝ≥0∞) / 2 ^ 40 = 1 / 2 ^ 40 + 1 / 2 ^ 40 by rw [ENNReal.div_add_div_same]; norm_num]

@@ -1972,7 +1972,7 @@ theorem carrySet (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d)
     have hcovI : ∀ t, 1 ≤ t → t ≤ upto → ∀ w,
         Flock.Program.resolve c.P (c.P.child sc k t) ⟨true, 0, j⟩ = .ok w → ∃ x ∈ segsPos v1, den c.P sc x = .ok w :=
       fun t h1 h2 w hw => hR4 (ch.at t)
-        ((Properties.RemoteAudit.qsort_toList_perm _ _).mem_iff.2
+        ((Properties.PoubCheck.qsort_toList_perm _ _).mem_iff.2
           (Array.mem_toList_iff.2 (Std.HashSet.mem_toArray.2 (hcs t h1 h2)))) w ((hinit t h1 h2 w).1 hw)
     have hfinal : ∀ s', y = .yield s' → CarrySnd c.P sc k node u s' → SegsLe v1 s' →
         (∀ m, e < m → m ≤ T → ch.exit ≠ none → ∀ w,

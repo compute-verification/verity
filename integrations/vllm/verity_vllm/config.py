@@ -46,7 +46,7 @@ CHECKPOINTS = MANIFESTS / "checkpoints.json"
 #: The circuit database's index (`pipeline.config_record`, `verity-vllm records`); the rows it lists are the rows of record.
 RECORDS = MANIFESTS / "records.json"
 #: The remote bandwidth session's processes (not a package), whose prover runs in the Commit's (`store.remote`).
-REMOTE_SESSION = ROOT.parent.parent / "benchmarks" / "remote_session"
+POUB_SESSION = ROOT.parent.parent / "benchmarks" / "poub_session"
 #: kv.cu's launchers over torch (``paged.py``, with ``word_codec/kv_bench.py``), the remote session's device encode.
 VLLM_ENCODED = ROOT.parent.parent / "benchmarks" / "vllm_encoded"
 #: The directory holding ``p2_v1``, P2's encoded weights store (``p2_v1/store.py``) and its CUDA library's wrapper, which
@@ -686,9 +686,9 @@ class CommitConfig:
                                            "deferred Commit (REPLAY_DEFERRED=1; slim refused) commits them at its C2 site, before its "
                                            "bundle is sealed (c2_replay.serving_rows); a TP row's, one window per "
                                            "rank, from tp-commit itself (verity_vllm.pipeline.tp.serving_rows; needs REPLAY_DEFERRED=1)")
-    remote_verifier: str | None = option("--remote-verifier", env="REMOTE_VERIFIER", default=None, metavar="HOST:PORT",
+    poub_verifier: str | None = option("--poub-verifier", env="POUB_VERIFIER", default=None, metavar="HOST:PORT",
                                          help="the remote bandwidth session's verifier: the Commit proves its store to it in lockstep "
-                                              "with its first instrumented run (verity_vllm.protocols.remote_bandwidth.remote; single-GPU rows)")
+                                              "with its first instrumented run (verity_vllm.protocols.poub.remote; single-GPU rows)")
     norm_tap: str = option("--norm-tap", env="NORM_TAP", default="1",
                            help="0 opts out, for A/B only: by default the row commits one scale per norm Call row (verity_vllm.query."
                                 "norm_scales) through the norm-scale tap (acquire.sources.norm_scale_source) when its manifest names norm scales")

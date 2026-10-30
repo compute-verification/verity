@@ -67,7 +67,7 @@ ID = R.PROTOCOL
 VERSION = 1
 CHALLENGER, FIREWALL, WORKERS, VERIFIER = "challenger", "firewall", "workers", "verifier"
 #: a configuration's component names and their protocol ids, the ones `Core.Onsite.components` holds
-IDS = {"bandwidth": "verity/remote-bandwidth/v0", "certifier": "verity/certifier/v0", "pous": "verity/pous/p2/v4/run",
+IDS = {"bandwidth": "verity/poub/v0", "certifier": "verity/certifier/v0", "pous": "verity/pous/p2/v4/run",
        "pouw": "verity/pouw/v1", "sampled-proofs": ID}
 COMPONENT = "sampled-proofs"
 #: what a run's coins are (module docstring)

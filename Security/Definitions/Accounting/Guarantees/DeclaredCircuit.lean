@@ -42,9 +42,9 @@ KV-credited session meets `G` when it is paced. Pass `j` of window `w` certifies
 the layout may follow inputs chosen after those coins: it reads `y` only through the `a`-bit summary `steer c y`
 (`Accounting.Assumptions.SteeredLayout`). That holds of every layout at `a = |Y|`; what makes `a` small is the schedule
 check at a cap fixed before the coins. `SteeredLayout` fixes one `a` at every coin, and
-`Properties.RemoteAudit.steered_of_checked` gives it at `a = a₀ + 1` when, at every prefix and every append coin, the
+`Properties.PoubCheck.steered_of_checked` gives it at `a = a₀ + 1` when, at every prefix and every append coin, the
 check accepts a schedule of at most `a₀` bits holding the plan the pass sent, under the named gap
-`Properties.RemoteAudit.ScheduleLayoutGap` (the model's layout of a pass is the verifier's positions of the session's
+`Properties.PoubCheck.ScheduleLayoutGap` (the model's layout of a pass is the verifier's positions of the session's
 appends and the plan the pass sent). So `a₀` is the steering cap the prover commits before the first coin
 (`audit.Params.schedule_cap`, credited as `audit.Ledger.steering`), over which the check refuses a schedule, not
 the bits of the one schedule a session published: a prover whose schedule is 200 bits on most coins and 300 where it
@@ -52,10 +52,10 @@ steers would meet `SteeredLayout` only at 301 (which the
 committed cap fixes). `Properties.DeclaredCircuit.ScheduledRequirement` is `G` with `SteeredLayout` so discharged, on
 the sessions the check accepts at every pass, with `2^(a + (cap + 1))` in the query term
 (`Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement`). A layout that follows a
-coin at a counted schedule is refused (`Properties.RemoteAudit.coinLayout_not_scheduled`, `ScheduleFixesLayout`), so
+coin at a counted schedule is refused (`Properties.PoubCheck.coinLayout_not_scheduled`, `ScheduleFixesLayout`), so
 `a` does not collapse to `|Y|`. Each append has its own coin, uniform and independent of the others', so a re-key,
 which appends a block again, draws a fresh one. Each append's blocks are read within `L` windows of the window
-`joined x t` it joined (`RateSketch.LifetimeCapped`, the remote audit's `lifetime`). The remote audit's `L` is a life
+`joined x t` it joined (`RateSketch.LifetimeCapped`, PoUB's `lifetime`). PoUB's `L` is a life
 of `D = 30` s in whole windows of length `T_w`, `L = max(L_min, ⌊D/T_w⌋)` (`audit.LIFETIME_NS`, `lifetime_windows`),
 with `L_min` 2 when the prover defers residency and 1 otherwise; a paced session counts its groups at their
 nominal length.
@@ -138,7 +138,7 @@ moved, what the step reads from appended blocks. The shortfall is a share of the
 `W` (the requirement's wiring) are one circuit (requirement.py and census/v1 read one IR), that the memory map and the
 plans hold `W`'s credited blocks (`StoreMatches`, `PlanMatches`: `core_requirement`'s one-sided check, and the
 memory-map and plan units), that the payloads at `addr` are the store's blocks, each at its own append (the appends'
-digests, by `remote_bandwidth`'s Replay), that each pass's plan is its step's, and that the pass ran in its
+digests, by `poub`'s Replay), that each pass's plan is its step's, and that the pass ran in its
 ticks (a certifier stamping step records and pass roots on one clock). A credit across circuits needs their credited blocks
 disjoint, and a device tick credited to a pass here and to another window elsewhere is joint accounting's. Which of the
 node's devices held the tiles, and that the bits taken from outside the store are every bit crossing the node's
@@ -149,7 +149,7 @@ node that registers `R` times pays `δ_G` once a registration.
 threshold is then negative. The carrier term grows with the carrier's life, `128·L·P·c/E` of the store with `P·N·4096`
 bytes certified a window and `c = caps.total`, so `G` is useful only when the life `L·T_w` is short: at caps
 (c = 0.442 for 8B, 0.0918 for 70B TP8, 61 ms passes) `ε` a session is 10% at a life of 35 s for 8B and 171 s for 70B.
-At remote_bandwidth's deployed life of 30 s it is 8.62% for 8B and 2.57% for 70B at 1 s windows (`L = 30`, the same
+At poub's deployed life of 30 s it is 8.62% for 8B and 2.57% for 70B at 1 s windows (`L = 30`, the same
 492 passes as a paced session of 12 groups of `k = 82` a 60 s stretch at `L = 6`). At the stated 60 s window
 `⌊D/T_w⌋ = 0`, so `L = L_min`: 16.25% and 4.16% at `L = 1`, and 31.52% and 7.33% at `L = 2` for a prover that defers
 residency, as the vLLM serving store does (the earlier

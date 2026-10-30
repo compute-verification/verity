@@ -11,7 +11,7 @@
     "NetworkCheck.Period",
     "PousCheck.RunProtocol",
     "PouwCheck.Protocol",
-    "RemoteAudit.Protocol",
+    "PoubCheck.Protocol",
     "SampledProofs.OneStage"
    ],
    "except": [],
@@ -23,6 +23,7 @@
    "why": "the verifier party's product over a deployment's listed components: code over onsite's components, no Mathlib and nothing of Security"
   }
  },
+ "guarantees": {},
  "dependencies": {
   "toolchain": "27511a72ecc19f2a3ce5d7dc8dd5400d2c5ba32555d12a4f390d1806b92e6e15"
  }

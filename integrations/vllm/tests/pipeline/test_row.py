@@ -780,24 +780,24 @@ def test_a_single_and_a_tp_rows_commit_carry_the_serving_rows_request(tmp_path):
     assert "--replay-deferred" in tp.commit_cmd([]) and "--serving-rows" not in _tp_row(tmp_path, TP_DENSE).commit_cmd([])
 
 
-def test_remote_verifier_reaches_the_single_gpu_commit_which_checks_its_session_before_anything_runs(tmp_path):
-    """REMOTE_VERIFIER reaches the single-GPU Commit as ``--remote-verifier``, and a TP row refuses it; the Commit
+def test_poub_verifier_reaches_the_single_gpu_commit_which_checks_its_session_before_anything_runs(tmp_path):
+    """POUB_VERIFIER reaches the single-GPU Commit as ``--poub-verifier``, and a TP row refuses it; the Commit
     refuses a bad address, a session of more than one mode or a Commit with no instrumented run to audit before anything
     runs (`store.remote.CommitSession`)."""
     from verity_vllm.pipeline import commit
 
-    single = _row(tmp_path, environ={"REMOTE_VERIFIER": "10.0.0.7:7781"})
+    single = _row(tmp_path, environ={"POUB_VERIFIER": "10.0.0.7:7781"})
     single.hidden_so, single.B = "/x/verity_fa2_matReqG.so", 1
     cmd = single.commit_cmd([])
-    assert cmd[cmd.index("--remote-verifier") + 1] == "10.0.0.7:7781"
-    assert "--remote-verifier" not in _tp_row(tmp_path, TP_DENSE).commit_cmd([])
-    with pytest.raises(SystemExit, match="REMOTE_VERIFIER"):
-        _tp_row(tmp_path, TP_DENSE, environ={"REMOTE_VERIFIER": "10.0.0.7:7781"}).commit_cmd([])
+    assert cmd[cmd.index("--poub-verifier") + 1] == "10.0.0.7:7781"
+    assert "--poub-verifier" not in _tp_row(tmp_path, TP_DENSE).commit_cmd([])
+    with pytest.raises(SystemExit, match="POUB_VERIFIER"):
+        _tp_row(tmp_path, TP_DENSE, environ={"POUB_VERIFIER": "10.0.0.7:7781"}).commit_cmd([])
     args = cli.parse("commit", cmd[cmd.index("commit") + 1:], {})
     with pytest.raises(ValueError, match="one mode"):
-        commit.main(dataclasses.replace(args, remote_plan="serve,servedrop:1"))
+        commit.main(dataclasses.replace(args, poub_plan="serve,servedrop:1"))
     with pytest.raises(ValueError, match="HOST:PORT"):
-        commit.main(dataclasses.replace(args, remote_verifier="7781"))
+        commit.main(dataclasses.replace(args, poub_verifier="7781"))
     with pytest.raises(SystemExit, match="first instrumented run"):
         commit.main(dataclasses.replace(args, only_arm="control"))
 
