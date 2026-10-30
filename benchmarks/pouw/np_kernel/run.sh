@@ -43,20 +43,21 @@ if [ "${1:-}" != leased ]; then
   trap 'rm -rf "$BUILD_DIR"' EXIT
   CUDA=${CUDA_HOME:-/usr/local/cuda-13.0}
   say "build $(git rev-parse --short=10 HEAD 2>/dev/null) into $BUILD_DIR"
-  COMMITTER=integrations/vllm/verity_vllm/commit/committer
+  COMMITTER=integrations/vllm/verity_vllm/commit/committer KERNELS=verity/ml/kernels
   python3 "$HERE/plain_rows.py" "$COMMITTER/native_rows.cu" "$BUILD_DIR/native_rows_p.cu" || { say "plain_rows.py failed"; exit 3; }
-  SRCS=("$HERE/ssn.cu" "$COMMITTER/native_rows.cu" "$BUILD_DIR/native_rows_p.cu" -I "$COMMITTER")
+  SRCS=("$HERE/ssn.cu" "$COMMITTER/native_rows.cu" "$BUILD_DIR/native_rows_p.cu" -I "$KERNELS")
   if [ -n "${SMALL_THREADS:-}" ]; then
     # the copy keeps the leaf kernels' register cap (128: threads x min blocks = 512) and renames its symbols and sha512.cuh's
     sed -e "s/^constexpr int THREADS = 256;/constexpr int THREADS = $SMALL_THREADS;/" \
       -e 's/^#define VERITY_ROWS_MIN_BLOCKS 2$/#define VERITY_ROWS_MIN_BLOCKS (512 \/ THREADS)/' \
       -e 's/__launch_bounds__(THREADS, 2)/__launch_bounds__(THREADS, 512 \/ THREADS)/' \
-      -e 's/\bverity_rows_/verity_rows_s_/g' -e 's/^#include "sha512.cuh"/#define sha sha_s\n#include "sha512.cuh"/' \
+      -e 's/\bverity_rows_/verity_rows_s_/g' \
+      -e 's/^#include "sha512.cuh"/#define sha sha_s\n#define sx sx_s\n#include "sha512.cuh"/' \
       "$COMMITTER/native_rows.cu" > "$BUILD_DIR/native_rows_s.cu"
     n=$(grep -c -e "THREADS = $SMALL_THREADS;" -e 'MIN_BLOCKS (512 / THREADS)' -e 'THREADS, 512 / THREADS' \
-      -e '^#define sha sha_s' "$BUILD_DIR/native_rows_s.cu")
-    [ "$n" = 4 ] || { say "the small-block copy of native_rows.cu took $n of its 4 edits"; exit 3; }
-    SRCS+=("$BUILD_DIR/native_rows_s.cu" -DSSN_SMALL_ROWS="$SMALL_THREADS" -I "$COMMITTER")
+      -e '^#define sha sha_s' -e '^#define sx sx_s' "$BUILD_DIR/native_rows_s.cu")
+    [ "$n" = 5 ] || { say "the small-block copy of native_rows.cu took $n of its 5 edited lines"; exit 3; }
+    SRCS+=("$BUILD_DIR/native_rows_s.cu" -DSSN_SMALL_ROWS="$SMALL_THREADS" -I "$KERNELS")
   fi
   "$CUDA/bin/nvcc" -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a -Xptxas -v --no-compress "${SRCS[@]}" -lcuda \
     -o "$BUILD_DIR/ssn" > "$OUT/build_ssn.log" 2>&1
@@ -64,7 +65,7 @@ if [ "${1:-}" != leased ]; then
   # the tree's files the build read (nvcc -M of each translation unit, plain_rows.py and this script), sha256sum's format:
   # gate.py names the variant by them
   for f in "$HERE/ssn.cu" "$COMMITTER/native_rows.cu"; do
-    "$CUDA/bin/nvcc" -M -std=c++17 -gencode arch=compute_90a,code=sm_90a -I "$COMMITTER" "$f" || exit 3
+    "$CUDA/bin/nvcc" -M -std=c++17 -gencode arch=compute_90a,code=sm_90a -I "$KERNELS" "$f" || exit 3
   done > "$BUILD_DIR/deps.mk" 2>> "$OUT/build_ssn.log"
   python3 - "$BUILD_DIR/deps.mk" "$HERE/plain_rows.py" "$HERE/run.sh" > "$OUT/sources.sha256" <<'EOF'
 import hashlib, os, sys
