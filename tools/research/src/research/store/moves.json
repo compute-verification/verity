@@ -1535,6 +1535,14 @@
       "paths": {
         "Security/Definitions/Accounting/Remote/Draw.lean": "Security/Definitions/Accounting/Remote/Sample.lean"
       }
+    },
+    {
+      "paths": {
+        "Security/Definitions/Accounting/Guarantees/DeclaredCircuit.lean": "Security/Definitions/Accounting/Guarantees/RegisteredCircuit.lean",
+        "Security/Proofs/Accounting/DeclaredCircuit.lean": "Security/Proofs/Accounting/RegisteredCircuit.lean",
+        "Security/Proofs/Accounting/DeclaredCircuit/": "Security/Proofs/Accounting/RegisteredCircuit/",
+        "Security/Properties/Accounting/DeclaredCircuit.lean": "Security/Properties/Accounting/RegisteredCircuit.lean"
+      }
     }
   ]
 }

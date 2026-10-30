@@ -148,7 +148,7 @@ window it joined (the window of the first root received after its append), L = `
 of T in D, so it leaves the credited store within L windows unless the prover appends it again, which gives it a fresh
 index and a fresh coin, and so a fresh bound key.  A carrier of a declared circuit's may work on a block from its coin
 until it leaves, so what the carriers may hold grows with the passes in L windows
-(`Accounting.Guarantees.DeclaredCircuitRequirement`'s `C`): over 30 s of 61 ms passes it is under 8% of the store at
+(`Accounting.Guarantees.RegisteredCircuitRequirement`'s `C`): over 30 s of 61 ms passes it is under 8% of the store at
 both served models' caps (`PROTOCOL.md` §4, "The lifetime cap"), where 60 windows was an hour at the stated window."""
 
 

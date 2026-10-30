@@ -5,7 +5,7 @@ import Proofs.Accounting.Requirement
 /-!
 # A pass's credit against its tiles of the declared circuit
 
-The piece of `Accounting.SecurityProofs.DeclaredCircuitRequirement` that reads a pass's credit pass by pass. `W`'s owned
+The piece of `Accounting.SecurityProofs.RegisteredCircuitRequirement` that reads a pass's credit pass by pass. `W`'s owned
 blocks at the pass's step are planned, at distinct positions of the pass's store, so the pass's tiles of `W` are as many
 as its owned blocks (`credit_le_tiles`). Its held credit is `W`'s credited live bits in those blocks, packed, so at most a
 block's bits each; its moved credit is the bits it reads from appended blocks, those in owned blocks at most a block's

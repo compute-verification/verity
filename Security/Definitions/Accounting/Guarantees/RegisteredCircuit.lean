@@ -3,7 +3,7 @@ import Definitions.Accounting.Guarantees.Stacking
 /-!
 # A declared circuit's space and bandwidth from an accepted audit (trusted)
 
-The goal in one statement, `DeclaredCircuitRequirement`: for any declared circuit `W` that passes the stacking
+The goal in one statement, `RegisteredCircuitRequirement`: for any declared circuit `W` that passes the stacking
 property, any prover, and an accepted audit at the deployed parameters (sketch receipts, a store per pass, the
 append-coin rule), except with probability `δ_G` the prover system read, from the appended blocks of `W`'s values each
 pass's step reads, `W`'s credited bits there less an explicit share `ε` of the store. It is a layer-1 bound in decision
@@ -16,7 +16,7 @@ requirement (A1's
 `Definitions/Accounting/Requirement.lean`) pass by pass, each pass and window on the devices' clocks. It credits `W`'s
 appended blocks only: a registered block's key is fixed for the registration, so nothing bounds its carriers, and the
 weights and the filler are the registration audit's to count. Its theorem is
-`Accounting.SecurityProofs.DeclaredCircuitRequirement`, in `Security/Proofs/Accounting/DeclaredCircuit/Requirement.lean`
+`Accounting.SecurityProofs.RegisteredCircuitRequirement`, in `Security/Proofs/Accounting/RegisteredCircuit/Requirement.lean`
 with its pieces beside it.
 -/
 
@@ -50,9 +50,9 @@ sent, where the verifier checks each opened block, `Properties.RemoteAudit.CodeL
 (`audit.Params.schedule_cap`, credited as `audit.GammaTerms.steering`), over which the check refuses a schedule, not
 the bits of the one schedule a session published: a prover whose schedule is 200 bits on most coins and 300 where it
 steers would meet `SteeredLayout` only at 301 (which the
-committed cap fixes). `Properties.DeclaredCircuit.ScheduledRequirement` is `G` with `SteeredLayout` so discharged, on
+committed cap fixes). `Properties.RegisteredCircuit.ScheduledRequirement` is `G` with `SteeredLayout` so discharged, on
 the sessions the check accepts at every pass, with `2^(a + (cap + 1))` in the query term
-(`Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement`). A layout that follows a
+(`Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement`). A layout that follows a
 coin at a counted schedule is refused (`Properties.RemoteAudit.coinLayout_not_scheduled`, `ScheduleFixesLayout`), so
 `a` does not collapse to `|Y|`. Each append has its own coin, uniform and independent of the others', so a re-key,
 which appends a block again, draws a fresh one. Each append's blocks are read within `L` windows of the window
@@ -157,13 +157,13 @@ residency, as the vLLM serving store does (the earlier
 60 windows of 60 s put it past 100% for both). These are `G`'s at a paced session whose groups each draw at least
 2,773 openings, which no deployed KV-credited session is yet. An honest run meets every hypothesis but the world's, with
 its credit at least the store's bits, so the bound says something whenever `0.0015 + γ < 1`, at a decode schedule and
-at a prefill. The decode witness (`Accounting.SecurityProofs.DeclaredCircuitWitness`) decodes one token a step a
+at a prefill. The decode witness (`Accounting.SecurityProofs.RegisteredCircuitWitness`) decodes one token a step a
 sequence, each page's coin back two steps after it completes, with page-parity groups. The prefill witness
-(`Accounting.SecurityProofs.DeclaredCircuitWitnessPrefill`) is a chunked prefill and then the first decode step, with a
+(`Accounting.SecurityProofs.RegisteredCircuitWitnessPrefill`) is a chunked prefill and then the first decode step, with a
 group a page, so a chunk may complete several pages while their coins are out; its credit is exactly its tiles' bits,
 and both of `G`'s thresholds are positive at the 30 s life for 8B and for 70B (`life30_8b`, `life30_70b`).
 
-Proof (`Accounting.SecurityProofs.DeclaredCircuitRequirement`): under the lifetime cap each carrier's inputs are at
+Proof (`Accounting.SecurityProofs.RegisteredCircuitRequirement`): under the lifetime cap each carrier's inputs are at
 most `8·R_L` and its encodes at most `L·c·P·N·4096` nonlinear units (`OfCircuit` with the property), so every pass
 rebuilds at
 most `X_r·τ + C` bits of its appended tiles, and its tiles of `W` are appended tiles; the conservation runs on a pass's
@@ -183,7 +183,7 @@ credited reads in appended blocks at the step each pass is bound to, with the me
 credited blocks (one-sided), each pass and window on the devices' clocks, in the random-oracle and ideal encoding
 models, under the per-pass hash budget, `SquaringFloor`, `ChainSum`, `KeyBinding`, `CircuitCarriers` and
 `SteeredLayout`. -/
-def DeclaredCircuitRequirement : Prop :=
+def RegisteredCircuitRequirement : Prop :=
   ∀ (n P N ρ S q G Xr Lr qr τ k a L E es B εnum εden T M : ℕ) (ε δ : ℝ≥0∞) {ιW : Type} (Wc : Gates.IntDag ιW)
     (caps : Gates.Caps) (Aud : Gates.Audit) {Ω Ca Ch : Type} [Fintype Ω] [Fintype Ca]
     (enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → (Fin 128 → RateSketch.Sector))

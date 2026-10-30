@@ -1,22 +1,22 @@
-import Definitions.Accounting.Guarantees.DeclaredCircuit
+import Definitions.Accounting.Guarantees.RegisteredCircuit
 import Properties.RemoteAudit.Schedule
 
 /-!
 # A declared circuit's space and bandwidth at the committed steering cap
 
-`Accounting.Guarantees.DeclaredCircuitRequirement` (`G`) takes `Accounting.Assumptions.SteeredLayout`: each pass's layout
+`Accounting.Guarantees.RegisteredCircuitRequirement` (`G`) takes `Accounting.Assumptions.SteeredLayout`: each pass's layout
 reads the codec and the append coins only through an `a`-bit summary. `ScheduledRequirement` is `G` at the verifier's
 layout (`Properties.RemoteAudit.sessionLayout`: each tile where `checkOpening` checks the block at its position of the
 pass's plan) with that premise replaced by what the verifier checks: the schedule check (`RemoteAudit.Schedule.check`)
 at the steering cap the session committed before its first coin (`audit.Params.schedule_cap`,
 `audit.GammaTerms.steering`) accepts each pass of the session. It is stated here because it reads the verifier's code,
-which the spec doesn't; its theorem, `Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement` in
-`Security/Proofs/Accounting/DeclaredCircuit/Scheduled.lean`, is `G`'s argument on the coins the check accepts, with the
+which the spec doesn't; its theorem, `Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement` in
+`Security/Proofs/Accounting/RegisteredCircuit/Scheduled.lean`, is `G`'s argument on the coins the check accepts, with the
 layout steered there by `Properties.RemoteAudit.steered_of_checked` (`ScheduleLayoutGap` holding of the verifier's
 layout, `Properties.RemoteAudit.scheduleLayoutGap_code`).
 -/
 
-namespace Properties.DeclaredCircuit
+namespace Properties.RegisteredCircuit
 
 open Accounting
 open Pous (pr)
@@ -24,7 +24,7 @@ open scoped ENNReal
 
 /-- **A declared circuit's held and moved bits from an accepted stacked audit, at the committed steering cap.**
 
-`G` (`Accounting.Guarantees.DeclaredCircuitRequirement`: the audit, the prover system, the circuit, the requirement and
+`G` (`Accounting.Guarantees.RegisteredCircuitRequirement`: the audit, the prover system, the circuit, the requirement and
 the bound as it states them) at the verifier's layout, with its premise `SteeredLayout layout steer` replaced by the
 schedule check's acceptance at the cap `cap`, which is the event's first conjunct. `accepted c y`: at the prefix `c` of
 the session's coins before a pass and the codec and append coins `y`, the check at `cap` over `blocks` registered
@@ -121,4 +121,4 @@ def ScheduledRequirement : Prop :=
       ≤ 2 / 2 ^ 40 + (n : ℝ≥0∞) * ε + (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ 512) +
         (n * P : ℝ≥0∞) * (2 ^ (a + (cap + 1)) * (((qr * τ : ℕ) : ℝ≥0∞) / 2 ^ 96) ^ (k + 1) + δ)
 
-end Properties.DeclaredCircuit
+end Properties.RegisteredCircuit
