@@ -14,7 +14,7 @@ from verity_flock import rec_algebra as A
 from verity_flock import rec_residuals as RR
 from verity_flock.rec_outer import CLAIM_VALUE
 
-BIN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock" / ".lake" / "build" / "bin" / "flock-verify"
+BIN = Path(__file__).resolve().parents[4] / "verity/core/service/flock" / ".lake" / "build" / "bin" / "flock-verify"
 
 
 def _statement(d: Path, circuit: Path):

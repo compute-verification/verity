@@ -3,7 +3,7 @@
 # the pin rewrites sass_pins.json):
 #
 #   tar -C BUILD_RUN/out/ship -cf /tmp/ship.tar .
-#   research run --on vy-dc-h200 --project verity --campaign pouw --source . --cwd clone --timeout 240m \
+#   research run --on MACHINE --project verity --source . --cwd clone --timeout 240m \
 #     --env GPU_LEASE_WHO=LANE --send /tmp/ship.tar -- bash benchmarks/pouw/pearl_c_sm90/h200.sh
 #
 # Outside any lease: the ship (build.sh's tree) unpacked into this directory and held to its MANIFEST.sha256, nvcc and the
@@ -15,7 +15,7 @@
 # (PIN=1, the default) harness/jobs/pin_target.sh pins this nvcc for sm_90a as TK (default 13.0.1-sm_90a) on its own lease, and
 # (VERIFY=1, the default) glm53_passes.py verify replays the passes on this machine's CPUs, after every lease is released, and
 # (FULL=1, the default) glm53_passes.py full checks prefill's and decode's outputs in full there (every tile's C~ and U by its
-# leaf, every real row's served y): about 17 CPU-hours of vy-nebius-cpu-4's (13 min at --jobs 96), so FULL=0 leaves it to a
+# leaf, every real row's served y): about 17 CPU-hours (13 min on a CPU pod at --jobs 96), so FULL=0 leaves it to a
 # run elsewhere on the published passes.
 # VERITY_BENCH_VENV names the Python with torch and vLLM (default /workspace/cp/venv312), CUDA the toolkit (default
 # /usr/local/cuda-13.0).  Every step's exit code is in $OUT/rc.txt; exits non-zero if any step failed.

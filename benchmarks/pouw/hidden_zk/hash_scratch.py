@@ -21,10 +21,20 @@ def _rotl(lo, hi, c):
     return [x[(i - r) % 64] for i in range(64)]
 
 
+def _rotl_lo(C, lo, hi, c):
+    return _rotl(lo, hi, c)[:32]
+
+
+def _rotl_hi(C, lo, hi, c):
+    return _rotl(lo, hi, c)[32:]
+
+
+_rotl_lo.ands = _rotl_hi.ands = 0     # `ir_lower._piece_ands` can't lower them on a free count
+
 PIECES = {"PouwXor32_v1": lambda C, a, b: [x ^ y for x, y in zip(a, b)],
           "PouwChi32_v1": lambda C, a, b, c: commit(C, [x ^ C.AND(y.inv(), z) for x, y, z in zip(a, b, c)]),
-          "PouwRotl64Lo_v1": lambda C, lo, hi, c: _rotl(lo, hi, c)[:32],
-          "PouwRotl64Hi_v1": lambda C, lo, hi, c: _rotl(lo, hi, c)[32:]}
+          "PouwRotl64Lo_v1": _rotl_lo,
+          "PouwRotl64Hi_v1": _rotl_hi}
 
 
 def check(n: int = 512, seed: int = 20261003) -> dict:
