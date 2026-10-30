@@ -234,18 +234,17 @@ fn tmpl_unit_log(cols: usize) -> usize {
 }
 
 /// `ProvedScope.scopeWhyT` of a templated circuit outside `scopeOkT`, `None` inside: a `--zk` session of one table at hidden
-/// outputs without the verifier's registered reads, whose unit reads only its leaf group and returns the outputs, of at most
-/// `2^32` rows by its root's columns (the `ORDER` line's), and whose rows `scopeOkI` admits; past those, the refusal is
+/// outputs, with or without the verifier's registered reads (which [`shared_rows_why`] and `Registered.check` hold to the
+/// ports and the public file, as for a flat statement), whose unit reads only its leaf group and returns the outputs, of at
+/// most `2^32` rows by its root's columns (the `ORDER` line's), and whose rows `scopeOkI` admits; past those, the refusal is
 /// `scopeWhy true`'s ([`circuit_why`]'s). A templated statement with pinned outputs is refused as every other is.
-pub fn tmpl_why(c: &Composite, hidden: bool, zk: bool, registered: bool, tables: usize) -> Option<String> {
+pub fn tmpl_why(c: &Composite, hidden: bool, zk: bool, tables: usize) -> Option<String> {
     let unit = c.unit();
     let cols = unit.order.as_ref().map_or(0, Vec::len);
     if !hidden {
         Some("a templated statement without hidden outputs".into())
     } else if !zk {
         Some("a templated statement without --zk".into())
-    } else if registered {
-        Some("a templated statement with the verifier's registered reads (--registered)".into())
     } else if tables > 1 {
         Some(format!("a templated statement in {tables} tables"))
     } else if unit.in_groups.len() != 1 {
@@ -314,7 +313,7 @@ pub fn check(c: &Composite, inst: &Instances, zk: bool, tables: usize) -> Result
         return Err(refusal(why));
     }
     if c.statement() == TMPL_STATEMENT {
-        return tmpl_why(c, true, zk, registered, tables).map_or(Ok(()), |why| Err(refusal(&why)));
+        return tmpl_why(c, true, zk, tables).map_or(Ok(()), |why| Err(refusal(&why)));
     }
     if wires_feed(c) && !wires_acyclic(c) {
         return Err(refusal(WIRES_WHY));
@@ -615,18 +614,17 @@ mod tests {
     fn a_templated_statement_takes_lean_scope_ok_t() {
         // Lean's scopeWhyT, rule for rule and in its order
         let c = templated(flat_unit(), 130);
-        assert_eq!(tmpl_why(&c, true, true, false, 1), None);
-        let why = |hidden, zk, registered, tables| tmpl_why(&c, hidden, zk, registered, tables).unwrap();
-        assert_eq!(why(false, false, true, 2), "a templated statement without hidden outputs");
-        assert_eq!(why(true, false, true, 2), "a templated statement without --zk");
-        assert_eq!(why(true, true, true, 2), "a templated statement with the verifier's registered reads (--registered)");
-        assert_eq!(why(true, true, false, 2), "a templated statement in 2 tables");
-        assert_eq!(refusal(&why(true, false, false, 1)),
+        assert_eq!(tmpl_why(&c, true, true, 1), None);
+        let why = |hidden, zk, tables| tmpl_why(&c, hidden, zk, tables).unwrap();
+        assert_eq!(why(false, false, 2), "a templated statement without hidden outputs");
+        assert_eq!(why(true, false, 2), "a templated statement without --zk");
+        assert_eq!(why(true, true, 2), "a templated statement in 2 tables");
+        assert_eq!(refusal(&why(true, false, 1)),
                    "refused: a templated statement without --zk: a statement form the soundness proof does not cover");
         let two = templated(rms(0), 130);
-        assert_eq!(tmpl_why(&two, true, true, false, 1).as_deref(), Some("a templated unit reading 2 input groups"));
+        assert_eq!(tmpl_why(&two, true, true, 1).as_deref(), Some("a templated unit reading 2 input groups"));
         let tail = templated(tail(), 130);
-        assert_eq!(tmpl_why(&tail, true, true, false, 1).as_deref(),
+        assert_eq!(tmpl_why(&tail, true, true, 1).as_deref(),
                    Some("a templated circuit whose outputs a tail stage computes (META out_net)"));
         assert_eq!((tmpl_unit_log(0), tmpl_unit_log(130), tmpl_unit_log(1 << 32), tmpl_unit_log((1 << 32) + 1)), (7, 8, 32, 33));
     }
@@ -636,14 +634,14 @@ mod tests {
         // the rows scopeOkI admits pass whatever the unit's own size; past them, scopeWhy true's first failure
         let mut c = templated(flat_unit(), 130);
         c.nets[0].1.unit_log = 33;
-        assert_eq!(tmpl_why(&c, true, true, false, 1), None);
+        assert_eq!(tmpl_why(&c, true, true, 1), None);
         c.ports = vec![port(64, 1, 1000, true, None)];
-        assert_eq!(tmpl_why(&c, true, true, false, 1).as_deref(), Some("a unit of 2^33 rows"));
+        assert_eq!(tmpl_why(&c, true, true, 1).as_deref(), Some("a unit of 2^33 rows"));
         c.nets[0].1.unit_log = 9;
-        assert!(tmpl_why(&c, true, true, false, 1).unwrap().starts_with("rows that are neither"));
+        assert!(tmpl_why(&c, true, true, 1).unwrap().starts_with("rows that are neither"));
         c.ports = vec![];
         c.pinned = 1;
-        assert_eq!(tmpl_why(&c, true, true, false, 1).as_deref(), Some(PINNED_WHY));
+        assert_eq!(tmpl_why(&c, true, true, 1).as_deref(), Some(PINNED_WHY));
     }
 
     #[test]
