@@ -13,8 +13,8 @@ implementation, such as the Lean port of `Q_word` (`verity/core/service/sampled_
 - Conformance: `verity/ml/circuits/tests/test_format_spec.py` checks the reference against every vector, and restates
   canonical JSON (as RFC 8785), leaf order, reference sequences and the interning order independently of it. Each section
   names its vector keys. `verity/ml/circuits/tests/partition_vectors.json` pins `Q_word` v1 on top of this format.
-- Scope: schema v1. `verity-ir/descriptor/v0` (every body verbatim, types inline, no alias) still decodes; it is not
-  specified here.
+- Scope: schema v1; §4.7 adds the self-contained definition entry, and schema v0, whose definitions are those entries, and
+  §4.8 the definition digest.
 
 Indices are 0-based, `[a, b)` is half-open, and a *leaf* is one scalar position of a type.
 
@@ -239,24 +239,37 @@ have):
 
 Vectors: `decoder_rejects` (label, the refusal), each a one-field mutation of the descriptor vector (`REJECT` in the test).
 
-### 4.7 The definition digest
+### 4.7 The self-contained entry, and schema v0
 
-A definition's digest is the hex SHA-512 of the canonical bytes (§1) of its *canonical entry*, with no domain prefix. The
-canonical entry of a primitive is its entry (§4.2). That of a composite is its entry with, in each node of its body, `fn`
-replaced by `callees[fn]` and `out` and each argument's `type` by their `types` entries (a v0 entry holds them inline already),
-and every reference sequence of a node argument and of `ret` written flat: its parts, each concat spliced in and each
-`{"alias": [k, a]}` replaced by the flat parts of argument a of node k (§4.5), as `{"concat": [...]}`, or as its only part
-when it has one. Every other key (`id`, `bindings`, `ports`, the body's `params` and `ret_type`, a node's `form`, `axes`, `n`
-and `n_xs`) stays as written.
+A definition's self-contained entry (`codec.definition_entry`) is its §4.2 entry written without the interning tables, so that
+it is read without the descriptor around it:
+
+- a node's `fn` is its callee's descriptor id (§4.3), and its `args[].type` and `out` are types (§2) inline;
+- each reference sequence is §3's JSON of the sequence as the body holds it: a concatenation keeps the parts it was built with,
+  nested concatenations included, and there is no alias (§4.5).
+
+The entry keeps the nesting that v1 flattens, so it is a function of how a body was built and not of its gates alone: decoding
+the v1 descriptor vector changes the root's entry, which nests a concatenation at node 12. A definition's digest is taken over
+the entry's canonical form instead (§4.8).
+
+A `verity-ir/descriptor/v0` descriptor is §4.1's without `callees` and `types`, each definition its self-contained entry. It
+decodes as §4.6 says, with the callee id and the types read in place, and its decode gives back the same entries.
+
+### 4.8 The definition digest
+
+A definition's digest is the hex SHA-512 of the canonical bytes (§1) of its *canonical entry*, with no domain prefix. A
+primitive's canonical entry is its entry. A composite's is its self-contained entry (§4.7) with every reference sequence of a
+node argument and of `ret` written flat: its parts, each concat spliced in, as `{"concat": [...]}`, or as its only part when it
+has one. From a v1 entry a reader builds the same, with the tables read in place and each `{"alias": [k, a]}` replaced by the
+flat parts of argument a of node k (§4.5). Every other key stays as written.
 
 So one definition has one digest in any program, from either schema's bytes, whichever aliases the writer chose and however
-its builder nested its concatenations, and a reader rebuilds it from the bytes of one entry and the tables. Callees enter by
-descriptor id, so the digest covers the definition's own body, not its callees' bodies. Parts compare by form and fields, as
-in §4.5, so two entries that write one reference sequence in different forms have different digests.
+its builder nested its concatenations. Callees enter by descriptor id, so the digest covers the definition's own body, not its
+callees' bodies. Parts compare by form and fields, as in §4.5, so two entries that write one reference sequence in different
+forms have different digests.
 
-Reference: `codec.definition_digest(entry, desc)` (`desc` supplies a v1 entry's tables) and `codec.canonical_entry`; a
-definition outside a descriptor has the entry `codec.definition_entry(fn)`. Vectors: `definition_digest` (descriptor id, digest),
-one per definition of the descriptor vector.
+Reference: `codec.definition_digest(entry, desc)` (`desc` supplies a v1 entry's tables) and `codec.canonical_entry`. Vectors:
+`definition_digest` (descriptor id, digest), one per definition of the descriptor vector.
 
 ## 5. Programs and input nodes
 

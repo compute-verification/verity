@@ -308,7 +308,7 @@ def test_concat_normalises_repeated_references_to_one_value_into_a_zero_stride_s
     assert isinstance(concat([Affine("n", 3, 0, 1), Affine("n", 3, 1, 1)]), Affine)
 
 
-# -- the definition digest: one gate list, one digest (PROTOCOL.md §4.7) --------------------------------------------
+# -- the definition digest: one gate list, one digest (PROTOCOL.md §4.8) --------------------------------------------
 
 A3, A4 = Array(3, V16), Array(4, V16)
 

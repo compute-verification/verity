@@ -590,7 +590,7 @@ def test_the_alias_and_flat_concatenation(live, decoded):
 
 
 def canonical_entry(desc: dict, fid: str) -> dict:
-    """§4.7 restated: the entry with the tables inline and every sequence flat, an alias replaced by the parts it stands for."""
+    """§4.8 restated: the entry with the tables inline and every sequence flat, an alias replaced by the parts it stands for."""
     e = json.loads(json.dumps(desc["definitions"][fid]))
     if e["form"] != "composite":
         return e
@@ -617,9 +617,11 @@ def test_the_definition_digest(live, decoded):
     assert live["definition_digest"] == VECTORS["definition_digest"]
     desc = json.loads(VECTORS["descriptor"])
     assert [fid for fid, _ in VECTORS["definition_digest"]] == sorted(desc["definitions"])
+    v0 = codec.encode_program(Program(PROG), codec.SCHEMA_V0)
     for fid, digest in VECTORS["definition_digest"]:
         assert hashlib.sha512(jcs(canonical_entry(desc, fid))).hexdigest() == digest
         assert codec.definition_digest(codec.definition_entry(decoded.defs[fid])) == digest
+        assert codec.definition_digest(v0["definitions"][fid]) == digest
     root = canonical_entry(desc, desc["root"])["body"]["nodes"][12]["args"][0]["refs"]
     assert "alias" not in json.dumps(root) and expand(root) == VECTORS["alias_reader"]["refs"]
 
@@ -628,6 +630,21 @@ def test_the_definition_digest(live, decoded):
 def test_the_decoder_refuses(live, label, edit, why):
     got = dict(live["decoder_rejects"])[label]
     assert got == dict(VECTORS["decoder_rejects"])[label] and got is not None and why in got
+
+
+def test_the_self_contained_entry_and_v0(decoded):
+    """§4.7: a v0 descriptor's definitions are the self-contained entries, which a v0 decode gives back; a v1 decode flattens
+    node 12's nested concatenation, the same references, so the root's entry, and only it, differs."""
+    program = Program(PROG)
+    v0 = codec.encode_program(program, codec.SCHEMA_V0)
+    assert sorted(v0) == ["annotations", "definitions", "program_fn", "root", "schema"]
+    assert v0["definitions"][v0["root"]] == codec.definition_entry(program.root)
+    assert codec.encode_program(codec.decode_program(v0, REG), codec.SCHEMA_V0)["definitions"] == v0["definitions"]
+    via_v1 = {**v0, "definitions": codec.encode_program(decoded, codec.SCHEMA_V0)["definitions"]}
+    assert [k for k in v0["definitions"] if via_v1["definitions"][k] != v0["definitions"][k]] == [v0["root"]]
+    nested, flat = _node(v0, 12)["args"][0]["refs"], _node(via_v1, 12)["args"][0]["refs"]
+    assert any("concat" in p for p in nested["concat"]) and not any("concat" in p for p in flat["concat"])
+    assert expand(nested) == expand(flat)
 
 
 # -- 5. programs and Input nodes ------------------------------------------------------------------------------------------------

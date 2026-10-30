@@ -660,7 +660,7 @@ def catalog(graph_dir: str | Path) -> dict[str, Any]:
         with gzip.open(root / "definitions" / f"{p2}.json.gz", "wt") as fh:
             json.dump(m, fh, separators=(",", ":"))
     (root / "definitions" / "index.json").write_text(json.dumps({"schema": f"{SCHEMA}/definitions", "shard": "definitions/<digest[:2]>.json.gz",
-                                                                 "digest": "the definition's digest (verity.ml.circuits.codec.definition_digest, PROTOCOL.md 4.7)",
+                                                                 "digest": "the definition's digest (verity.ml.circuits.codec.definition_digest, PROTOCOL.md 4.8)",
                                                                  "definitions": index}, separators=(",", ":")) + "\n")
     return index
 
