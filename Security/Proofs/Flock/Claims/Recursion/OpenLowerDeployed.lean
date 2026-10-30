@@ -65,7 +65,7 @@ def Joint (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin) (L : LayoutB)
 recorded calls is `DecompB`'s own second outcome, so `Joint` may assume none. -/
 theorem decompB_of_joint {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {IV : Claims.Verifier Coin}
     {L : LayoutB} {shape : Claims.Recursion.Form → Prop} {chk chk' : ℕ → Msg → (ℕ → Coin) → List Msg → Prop}
-    (hle : ∀ (x : Msg) (st : Claims.Recursion.Stmt), D.parse x = some st → shape st.form →
+    (hle : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), D.parse x = some st → shape st.form →
       ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit), Joint H D L chk' x c ws →
         ∀ s < D.nS x, chk s x c (L.msgs x ws))
     (hD : DecompB H D IV L shape chk) : DecompB H D IV L shape chk' := by
@@ -91,10 +91,10 @@ theorem decompB_lastSplitP_sharesJ (ownB : Msg → VerdictR → Option ℕ) (own
     (rel' : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings) (L : LayoutB)
     (IV : Claims.Verifier Coin) (shape : Claims.Recursion.Form → Prop) {Col' T' : Type}
     (DO : Claims.Flock.Deploy Coin Col' T') (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg)
-    (hR : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+    (hR : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recBound rel' b L IV).parse x = some st → shape st.form →
       ∀ r ∈ (lastSplitP H rd pieces pholds hpieces).checks (Claims.Recursion.xI (recBound rel' b L IV) x), ∀ s,
         ownP ownB ownQ x r = some s → s < (recBound rel' b L IV).nS x)
-    (hrest : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+    (hrest : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recBound rel' b L IV).parse x = some st → shape st.form →
       ∀ q ∈ ivChecks (bdDeployed rel (nextR rd) colsE wE FlockDeploy.joinR rowIn final w)
           (deploySplit H rel (nextR rd) colsE wE FlockDeploy.joinR rowIn final w (nextR_coin rd H)
             (lastSplitP H rd pieces pholds hpieces).toLast)
@@ -112,7 +112,7 @@ theorem decompB_lastSplitP_sharesJ (ownB : Msg → VerdictR → Option ℕ) (own
         (deploySplit H rel (nextR rd) colsE wE FlockDeploy.joinR rowIn final w (nextR_coin rd H)
           (lastSplitP H rd pieces pholds hpieces).toLast)
         (ownHolders (recBound rel' b L IV) L (ownDeploy (ownJ (recBound rel' b L IV) L (ownP ownB ownQ)))) s x c ms)
-    (hlowP : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+    (hlowP : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), (recBound rel' b L IV).parse x = some st → shape st.form →
       ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
         Joint H (recBound rel' b L IV) L (PartAccepts H (recBound rel' b L IV) DO L shape shows cmt) x c ws →
         ∀ s < (recBound rel' b L IV).nS x,
@@ -319,7 +319,7 @@ theorem recOpen_dense {i : _root_.Flock.RecVStar.Inner} {ss : Array VStar.Stmt}
 /-- **The inner table's `m` is the inner shape's**, at a statement the reader reads: Flock's plain verifier sets the
 inner statement up as one table (`innerSetup_files`), whose `m` the setup's checks hold to the shape's
 (`checkShape_files`). -/
-theorem inner_m {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st) {r : XR} (hr : readX x = some r) :
+theorem inner_m {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st) {r : XR} (hr : readX x = some r) :
     ∃ s spec t, setupOf false (xIOf x) = some (s, spec, #[t]) ∧ t.m = r.shape.m := by
   obtain ⟨r', hr', ha, rfl⟩ := parse_read hst
   rw [hr] at hr'
@@ -339,7 +339,7 @@ theorem inner_m {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st)
 /-- **`OpenCopy`'s level shape at a dense statement**: where the reader reads `x` at the dense form and its V\* list
 has `.recOpen lv LANES HH n` at `s`, the statement is level `s`'s, `LANES`, `HH` are table 0's schedule's (`schAt`)
 level `s`'s lanes and depth, and `n` is its two reps' queries (`recOpen_dense`, `inner_m`). -/
-theorem levelMatch {x : Msg} {st : Claims.Recursion.Stmt} (hst : parse x = some st)
+theorem levelMatch {x : Msg} {st : Claims.Recursion.CompiledStatement} (hst : parse x = some st)
     (hd : Claims.Recursion.Form.Dense st.form) {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt}
     (hss : _root_.Flock.RecVStar.statements r.shape = .ok ss) {s lv LANES HH n : ℕ}
     (hsv : ss[s]? = some (.recOpen lv LANES HH n)) :
@@ -420,7 +420,7 @@ statement and witness, and a piece `ownQR` gives it. `Fact` is asked there, at t
 abbrev AtPieces (pieces : Msg → List OpenPiece)
     (Fact : Msg → (ℕ → Coin) → List Claims.Flock.Wit → ℕ → ℕ → ℕ → (xO : Msg) → Claims.Flock.Wit →
       (p : _root_.Flock.Readable.Parsed) → 0 < p.sts.size → OpenPiece → Prop) : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), D.parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), D.parse x = some st → shape st.form →
     ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
     Joint H D L (PartAccepts H D (deployZkRec _root_.Flock.Readable.relation) L shape (showsPart untr b) cmt) x c ws →
     ∀ (r : XR) (ss : Array VStar.Stmt) (s lv LANES HH n : ℕ), readX x = some r →
@@ -527,7 +527,7 @@ theorem openTieR_of (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin
 `ownQR` gives piece `q` the level part `s` (`.recOpen lv LANES HH n`), the side's schedule's level `q.level` has
 `LANES` lanes and `HH` siblings below its cap (`levelMatch`), wherever the side reads the table's schedule. -/
 theorem sideLevel (hP : ∀ x, D.parse x = parse x) (hS : ∀ f, shape f → Claims.Recursion.Form.Dense f)
-    {x : Msg} {st : Claims.Recursion.Stmt} (hx : D.parse x = some st) (hf : shape st.form) {r : XR}
+    {x : Msg} {st : Claims.Recursion.CompiledStatement} (hx : D.parse x = some st) (hf : shape st.form) {r : XR}
     {ss : Array VStar.Stmt} {s lv LANES HH n : ℕ} (hr : readX x = some r)
     (hss : _root_.Flock.RecVStar.statements r.shape = .ok ss) (hsv : ss[s]? = some (.recOpen lv LANES HH n))
     {q : OpenPiece} (ho : ownQR x q = some s) {ms : List Msg}
@@ -586,7 +586,7 @@ theorem piecesInRangeR_rowDPieces (key : ℕ → ℕ → ℕ → ℕ → ℕ × 
 /-- **The staged level circuit holds its statement's instances** (`StagedFitsR`): at a level part `.recOpen lv LANES
 HH n` and its staged statement, the parsed table has a VU and a copy, and its blocks' VUs hold all `n` instances. -/
 def StagedFitsR : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), D.parse x = some st → shape st.form →
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), D.parse x = some st → shape st.form →
     ∀ (c : ℕ → Coin) (ms : List Msg) (r : XR) (ss : Array VStar.Stmt) (s lv LANES HH n : ℕ), readX x = some r →
       _root_.Flock.RecVStar.statements r.shape = .ok ss → ss[s]? = some (.recOpen lv LANES HH n) →
     ∀ (xO : Msg) (w : Claims.Flock.Wit) (p : _root_.Flock.Readable.Parsed),
@@ -727,6 +727,7 @@ theorem hh_le_staged {st : Stage} {x : Msg} {r : XR} {ss : Array VStar.Stmt} {s 
   rw [hsv] at hsv'
   cases hsv'
   obtain ⟨_, P⟩ := _root_.Flock.Readable.parseFacts_of_parse hxO htyp hpi ht
+    (FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 ht).2.2)
   have hn : p.sts[0].c.unit.name = _root_.Flock.RecOpen.unitName LANES HH := (htab 0 ht).1
   obtain ⟨hv, -⟩ := _root_.Flock.RecOpen.check_ok P.recNet (FlockVBridge.params_of_check P.recNet hn)
   simp only [_root_.Flock.RecOpen.valid, Bool.and_eq_true, decide_eq_true_eq] at hv
@@ -763,7 +764,7 @@ piece `ownQR` gives part `s` holds (`openHolds` at `side` and `posAt`), from `Op
 part that is no level part is given no piece. -/
 theorem openPieces_deployed (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
     (hC : OpenCopyR H D shape untr b cmt L Bd side pieces) (hT : OpenTieR H D shape untr b cmt L Bd side pieces posAt)
-    {x : Msg} {st : Claims.Recursion.Stmt} (hx : D.parse x = some st) (hf : shape st.form) {c : ℕ → Coin}
+    {x : Msg} {st : Claims.Recursion.CompiledStatement} (hx : D.parse x = some st) (hf : shape st.form) {c : ℕ → Coin}
     {ws : List Claims.Flock.Wit}
     (hJ : Joint H D L (PartAccepts H D (deployZkRec _root_.Flock.Readable.relation) L shape (showsPart untr b) cmt)
       x c ws) {s : ℕ} (hs : s < D.nS x) :

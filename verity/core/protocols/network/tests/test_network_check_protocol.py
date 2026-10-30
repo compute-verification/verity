@@ -6,7 +6,9 @@ The reference decodes the protocol's formats (`NetworkCheck/Check.lean`'s module
 session. The cases are generated spatial units: an honest network certifier (`grid.Certifier` driven by
 `schedule.run_shaper` on the egress links, fed directly on the ingress links) whose records `certificate.Issuer` signs with
 a small LMS key in a drawn certifier session, then one change
-(`MUTATIONS`), each aimed at one path of the audit, and malformed parameters, commitments and evidence."""
+(`MUTATIONS`), each aimed at one path of the audit, and malformed parameters, commitments and evidence. The issuer
+certifies no incomplete record, so the `status` change either leaves its faulted window uncertified or signs its head
+anyway (`_signed_anyway`), as only a forger could, which is what keeps the check's status path reachable."""
 
 from __future__ import annotations
 
@@ -27,10 +29,9 @@ from verity_difftest import protocol as P
 from verity.ml.commitments.identity import tagged_sha512
 from verity.ml.crypto import lms
 from verity.core.protocols.certifier.audit import Audit
-from verity.core.protocols.certifier.certificate import (STATUS_CODES, Certificate, CertifiedRecord, Direction,
-                                                                Issuer, LmsKey, RecordHead, SignerRefused,
-                                                                certificate_digest, certificate_message,
-                                                                parameters_digest)
+from verity.core.protocols.certifier.certificate import (SALT_BYTES, STATUS_CODES, Certificate, CertifiedRecord,
+                                                                Direction, Issuer, LmsKey, RecordHead, SignerRefused,
+                                                                certificate_digest, parameters_digest, record_head)
 from verity.core.protocols.certifier.grid import COMPLETE, Certifier, GridParams, Reason, Record, Status
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids, run_shaper
 from verity.core.protocols.certifier.service import encode
@@ -299,6 +300,16 @@ TAGS: dict[str, str] = {}
 SEEN: Counter = Counter()
 
 
+def _signed_anyway(issuer: Issuer, record: Record, direction: Direction, g: GridParams, parameters: bytes,
+                   deadline: bool) -> CertifiedRecord | None:
+    """A certificate of a faulted record, which `Issuer.certify` refuses: its head signed under the issuer's key."""
+    head = record_head(record.link, direction, record.window, record.grid, record.status, g, parameters,
+                       deadline=deadline)
+    salt = issuer.coins(SALT_BYTES)
+    c = issuer.sign(record.link, direction, record.window, certificate_digest(salt, head.digest()))
+    return None if c is None else CertifiedRecord(head, salt, c)
+
+
 def _flip(b: bytes, i: int) -> bytes:
     i %= len(b)
     return b[:i] + bytes([b[i] ^ 1]) + b[i + 1:]
@@ -371,6 +382,7 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
     egress_parameters, ingress_parameters = parameters_digest(grid, ss), parameters_digest(ingress_grid)
     certified_grid = ingress_grid
     refuse, unsettled = set(), set()
+    forge_status = False
     targets = [("egress", l, w) for l in egress for w in range(W)] + [("ingress", l, w) for l in ingress for w in range(W)]
     target = targets[n % len(targets)]
     if m == "replay-link":
@@ -388,6 +400,7 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
         T_d = grid.buckets if d == "egress" else ingress_grid.buckets
         bucket = tw * T_d + n % T_d
         faults[(d, tl)] = {bucket: draw(st.sampled_from(list(Reason)))}
+        forge_status = draw(st.sampled_from([True, False]))
     elif m == "advice-outside":
         l, w = egress_target
         s = syncs[l][w]
@@ -429,6 +442,8 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
         raws[lw] = (record, g)
         signer.refuse = lw in refuse
         r = issuer.certify(record, direction, g, parameters, deadline=lw not in unsettled)
+        if r is None and forge_status and not record.status.complete:
+            r = _signed_anyway(issuer, record, direction, g, parameters, lw not in unsettled)
         if r is not None:
             records.append(r)
 

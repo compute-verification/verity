@@ -8,7 +8,7 @@
     position    (layer, site) from the registered layout: layer << 32 | site                 `position`
     weight id   the registered id of the matrix whose rows B opens under the weights root    `weight`
     row ids     the call's global row indices, distinct                                      `rowids`
-    column ids  the weight's global column indices, shards included (X-SPC-40), distinct     `colids`
+    column ids  the weight's global column indices, shards included, distinct                `colids`
 
 The verifier builds these inputs itself (`Anchors.call_inputs`, `Anchors.weight_inputs`), or compares a prover's
 (`Anchors.check_call`, `Anchors.check_weight`); it never takes them as stated.  A window's `Ledger` refuses a repeated
@@ -42,6 +42,8 @@ import re
 import secrets
 from dataclasses import dataclass
 from typing import Any, Callable, Sequence
+
+from verity.ml.commitments import domains
 
 from ..protocol import DomainError
 from .ncp2 import Shape
@@ -158,7 +160,7 @@ def region_bytes(words: Sequence[int]) -> bytes:
 
 
 #: C-Flock's format of the verifier's own `--public-inputs` file (its PROTOCOL.md §16.10, ``HmIn.checkOwn``)
-PUBLIC_INPUTS_FORMAT = "verity/flock-public-inputs/v1"
+PUBLIC_INPUTS_FORMAT = domains.FLOCK_PUBLIC_INPUTS
 
 
 def public_ports(shape, role: str) -> dict[str, dict[str, str]]:
@@ -294,7 +296,7 @@ def _check(fn, args, want: dict[str, list[int]]) -> None:
             raise DomainError(f"{fn.id}: the anchored input {name!r} is not the verifier's")
 
 
-RECEIPT_TAG = b"verity/pouw/window-receipt/v1\0"
+RECEIPT_TAG = domains.POUW_PERIOD_RECEIPT.encode() + b"\0"
 SOURCE_BYTES = 32
 
 

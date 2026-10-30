@@ -17,8 +17,7 @@ draw at `wrS`.
 * `tags_of_inScope`: the scope gives `verify --zk`'s inputs untyped tags with retained rounds and `hm96-sha512/v1`
   leaves (`Read.form`).
 * `decodesTable_deploy`: the deployed decoders `opnD` and `decD` are right at `zkTabs` (`decodesTable_zkTabs` at
-  public outputs, `decodesTableH_zkTabs` at hidden outputs, whose circuit file `HmOut.parse` accepts as table 0's
-  statement shows).
+  public outputs, `decodesTableH_zkTabs` at hidden outputs, flat or templated).
 -/
 
 namespace FlockDeploy.KS
@@ -120,9 +119,8 @@ theorem tags_of_inScope {x : Claims.Msg} {s : Claims.Flock.Stmt}
 in scope, `Deploy.V` sets it up at the draw `d` and at least one table, at every layout and link layout at the
 session's link points, the openings `opnD` and decoder `decD` are right at `zkTabs` on the outcomes `verify --zk`
 accepts at the setup at `d` at `wrS` (`DecodesTable`, `ZkLiveAccAtJ`'s `hdec` at the verdict `accepted`): at public
-outputs `decodesTable_zkTabs` under `TagsOkZJ`, at hidden outputs `decodesTableH_zkTabs` under `TagsOkZHJ`, the
-circuit file being table 0's circuit under `HmOut.parse` (`setupHidden_spec'`, `parseH_tagsAt`) and every table
-passing the shape check (`setup_shapeOk`). -/
+outputs `decodesTable_zkTabs` under `TagsOkZJ`, at hidden outputs `decodesTableH_zkTabs` under `TagsOkZHJ`, every
+table passing the shape check (`setup_shapeOk`). -/
 theorem decodesTable_deploy {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
@@ -151,10 +149,6 @@ theorem decodesTable_deploy {x : Claims.Msg} {s : Claims.Flock.Stmt}
   cases hh : ins.read.I.tags.hiddenOutputs
   · exact decodesTable_zkTabs ht ⟨hh, hrr, hl⟩ (fun _ : Finset (Fin 0) => d) hsA h0 L hz hk hlay
   · have hshape := Claims.Bridge.Custody.setup_shapeOk (setupOf_some hset).2 hzk
-    obtain ⟨-, hstJ⟩ := setupAt_tableJH hh hsA
-    have hp := (Hidden.setupHidden_spec' (hstJ 0 h0)).parse
-    have hc : HmOut.parse (ZkExec.zkTags ins.read.I) ins.read.I.circuitFile ins.read.I.tables = .ok sts[0].c :=
-      (ZkHidden.parseH_tagsAt ((ZkExec.zkTags_typed _).trans ht) _ _ _ _).symm.trans hp
-    exact decodesTableH_zkTabs ht ⟨hh, hrr, hl⟩ hc (fun _ : Finset (Fin 0) => d) hsA hshape h0 L hz hk hlay
+    exact decodesTableH_zkTabs ht ⟨hh, hrr, hl⟩ (fun _ : Finset (Fin 0) => d) hsA hshape h0 L hz hk hlay
 
 end FlockDeploy.KS
