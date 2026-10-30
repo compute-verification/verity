@@ -49,7 +49,7 @@ def rss_kb() -> tuple[int | None, int | None]:
 class Site:
     """Everything the C2 replay of one instrumented run reads.  `weights_of(prefix)`: the weights provider for the Programs' field
     prefix; `weights_check()`: the proof that the slices it serves are the committed weights ({"equal": bool, ...});
-    `after_replay`: the VU export hook (in-process only), called as VUX.after_replay is.  `reads`: when a dict, the replay's draw is made
+    `after_replay`: the VU export hook (in-process only), called as VUX.after_replay is.  `reads`: when a dict, the replay's sample is taken
     again after it, read only, in this process (`plan`), and its record lands here: a forked evaluator's reads of `com` never reach this
     process, so this is what makes `commit.store_dump.touched` see every pick's."""
     args: Any
@@ -259,7 +259,7 @@ def seed_of(args: Any, rc: Any) -> tuple[int, str, str, str | None]:
 
 
 def draw_of(args: Any) -> str:
-    """The config run's draw (`driver.family_strata`): the record's `replay_draw`, `family` when it names none."""
+    """The config run's sampling design (`driver.family_strata`): the record's `replay_draw`, `family` when it names none."""
     return getattr(args, "replay_draw", None) or "family"
 
 
@@ -341,8 +341,8 @@ def live_only(s: Site) -> str | None:
 
 def plan(s: Site, planner: Any = None) -> dict[str, Any]:
     """The replay's and the linkage's committed reads made against `s.com` without evaluating anything (what a slim replay bundle must
-    hold, `commit.store_dump.touched`): the same Programs, readers and draw as `run`.  With a ``planner`` (`replay_plan.Planner`) the
-    Programs, their population and the draw are its, prepared while the engine ran; only the reads are made here."""
+    hold, `commit.store_dump.touched`): the same Programs, readers and sample as `run`.  With a ``planner`` (`replay_plan.Planner`) the
+    Programs, their population and the sample are its, prepared while the engine ran; only the reads are made here."""
     held: dict[str, Any] = {}
     sr, lk = evaluate(s, held, plan=True, planner=planner)
     held.clear()
@@ -353,7 +353,7 @@ def plan(s: Site, planner: Any = None) -> dict[str, Any]:
 def serving_rows(s: Site) -> None:
     """The in-Commit hook (`serving_rows.readers`) at the C2 site of a run whose replay is deferred to its bundle: the window
     committed from `s.com` over the Programs of record, as `evaluate` commits it in process, once the run's roots are final and
-    before any draw (the deferred replay draws on CPU, after the bundle is sealed).  ``served``, as the in-process replay's is."""
+    before sampling (the deferred replay samples on CPU, after the bundle is sealed).  ``served``, as the in-process replay's is."""
     from verity_vllm.check.replay import driver as SR
     from verity_vllm.pipeline import serving_rows as SRW
 
@@ -369,7 +369,7 @@ def serving_rows(s: Site) -> None:
 
 def evaluate(s: Site, held: dict[str, Any], *, plan: bool = False, planner: Any = None) -> tuple[dict[str, Any], dict[str, Any]]:
     """The replay + linkage records; the Programs and readers they read stay in `held` for `free_programs` to release and measure.
-    ``plan``: the draw's reads only (`plan`), with the Programs and the draw the ``planner``'s when there is one."""
+    ``plan``: the sample's reads only (`plan`), with the Programs and the sample the ``planner``'s when there is one."""
     from verity_vllm.commit import executed_prefix as EPX
     from verity_vllm.check.replay import driver as SR
 
