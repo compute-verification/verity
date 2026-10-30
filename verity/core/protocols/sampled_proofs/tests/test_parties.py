@@ -1,9 +1,10 @@
 """Sampled proofs' parties on the deployment layer (`parties`), every party here on stand-in capabilities: an honest
 run's verifier audits each block once its registration, the ZK server's pin and the challenger's address are in, in
 order, and its composite (remote, over sampled proofs, PoUW and the inference-only policy) accepts; a listed
-subprotocol with no answer is absent and the composite never accepts over it; an accepting audit of another registration rejects; an audit that is
-`Unavailable` is its block's error, and one that raises anything else fails the run (``party-died``, its error
-recorded); workers that can't serve leave the verifier refused ``closed`` with nothing audited; parameters out of their
+subprotocol with no answer is absent and the composite never accepts over it; an accepting audit of another
+registration rejects; an audit that is `Unavailable` is its block's error, and one that raises anything else fails the
+run (``party-died``, its error recorded); workers that can't serve leave the verifier refused ``closed`` with nothing
+audited; parameters out of their
 range, a list of subprotocols that is no composite's among them, are refused by every party; the challenger's host
 stops once the verifier is done, however it finishes; the verifier replays from its own transcript; and the placement
 holds each party's principal to its machine's owner."""
