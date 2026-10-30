@@ -909,8 +909,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--jobs", type=int, default=1, help="templates composed at once, each in a forked process: what the "
                    "machine's memory takes (a5.warm)")
     p = sub.add_parser("count", help="a circuit record's leak count (declared_count): a stated record's from its description "
-                       "alone, a listed one's from its members and its window's ingress; the run figure, and beside it, where "
-                       "the record declares window ingress, the window figure with its premise")
+                       "alone, a listed one's from its members and the registered reads and window ingress it declares; the "
+                       "run figure, and beside it, where the record declares window ingress, the window figure with its premise")
     p.add_argument("--circuit", required=True, help="the circuit record (circuit.json), or its description")
     p.add_argument("--bits", type=int, required=True, help="the advice's registered length in bits, the charge")
     p.add_argument("--catalog", action="append", default=[], help="a module whose Definitions the record's templates name, "
