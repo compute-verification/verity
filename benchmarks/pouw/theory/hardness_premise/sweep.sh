@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The HT-PREMISE v2 sweep: `search.py` jobs in parallel, results under $OUT (one JSON and log a job, trees in trees/).
-# Usage: sweep.sh exact|lsb|margin|kcap|redo|deep PARALLEL
+# Usage: sweep.sh exact|lsb|margin|kcap|redo|deep|deep8 PARALLEL
 set -euo pipefail
 group=$1
 par=$2
@@ -46,7 +46,14 @@ elif [ "$group" = deep ]; then
   # depth 7 under the K cap, where the margin falls from depth 5 to 6
   for chip in h200 sm120; do
     for s in 8192,8192,8192 8192,8192,57344 8192,8192,106496 8192,4096,57344 8192,4096,106496; do
-      echo "--chips $chip --cases 4,256,16 --shapes $s --depths 7 --grids down"
+    echo "--chips $chip --cases 4,256,16 --shapes $s --depths 7 --grids down"
+  done
+  done >> "$jobs"
+elif [ "$group" = deep8 ]; then
+  # depth 8, the last whose leaves keep s8's k32 at K 8,192
+  for chip in h200 sm120; do
+    for s in 8192,8192,8192 8192,8192,57344 8192,8192,106496 8192,4096,57344 8192,4096,106496; do
+      echo "--chips $chip --cases 4,256,16 --shapes $s --depths 8 --grids down"
     done
   done >> "$jobs"
 else
