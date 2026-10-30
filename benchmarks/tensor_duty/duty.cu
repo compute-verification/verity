@@ -167,7 +167,7 @@ __global__ void __launch_bounds__(128, 1) wg_k(int cls, u32 per, int cont, u64 p
   if (threadIdx.x == 0) { s_t0 = gtimer(); s_base = clk(); }
   __syncthreads();
   const u64 t0 = s_t0, base = s_base, tend = t0 + ns;
-  const u64 check = cont ? 1 : std::max<u64>(1, CHECK_CYCLES / period);
+  const u64 check = cont || period >= CHECK_CYCLES ? 1 : CHECK_CYCLES / period;
   u64 ops = 0, tns = 0, tcyc = 0;
   for (u64 k = 1;; ++k) {
     u64 ta = 0, ca = 0;
@@ -243,7 +243,7 @@ __global__ void __launch_bounds__(SW * 32, 1) sync_k(int cls, u32 per, int cont,
   if (threadIdx.x == 0) { s_t0 = gtimer(); s_base = clk(); }
   __syncthreads();
   const u64 t0 = s_t0, base = s_base, tend = t0 + ns;
-  const u64 check = cont ? 1 : std::max<u64>(1, CHECK_CYCLES / period);
+  const u64 check = cont || period >= CHECK_CYCLES ? 1 : CHECK_CYCLES / period;
   u64 ops = 0, tns = 0, tcyc = 0;
   for (u64 k = 1;; ++k) {
     u64 ta = 0, ca = 0;
