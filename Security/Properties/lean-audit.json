@@ -56,6 +56,7 @@
   "Properties.RemoteAudit.Component",
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
   "Properties.Accounting.JointBridge.WorkOfCreditedWords",
+  "Properties.Challenger",
   "Properties.Flock.Circuit",
   "Properties.Composition",
   "Properties.Nci.Protocol",
@@ -700,6 +701,11 @@
    "imports": ["Definitions.Pouw.Dither", "Properties.Pouw.ServedWork"],
    "except": [],
    "why": "the served protocol's onsite freed compute is stated over its remote work guarantee (`Properties.Pouw.ServedWork`) and the accelerator model's period and freed compute (`Definitions.Pouw.Dither`), never a proof"
+  },
+  "Properties.Challenger": {
+   "imports": ["CoreProtocol", "SampledProofs", "Flock", "Lms", "Lean"],
+   "except": [],
+   "why": "the challenger's binding is stated against the code's own functions (the interface's `Live`, the challenger's reader `drawCoins`, its record, close and ledger messages) and a model of the device's log on Lean core: nothing of Mathlib or of `security`, never a proof"
   }
  },
  "reads_exempt": {
@@ -3856,7 +3862,10 @@
    "Properties.NetworkScan.ScanFits": "unstated: NetTiming.Layout.Fits' parts (1) and (2) at an accepted scan's layout are proved from scanOf's acceptance (scanFits_egress_ingress, Proofs.Properties.NetworkScan.Fits); part (3), no egress gate depending on a later step's ingress, is open, and ScanFits gets a guarantee entry with its proof",
    "Properties.NetworkScan.ScanScopeAcc": "unstated: scanScopeAcc_of_scanFits (Proofs.Properties.NetworkScan) proves it from ScanFits, which is unstated until its part (3) is proved (its entry)",
    "Properties.Pouw.Served.SecurityProofs.servedFreed": "frozen (no-function,world-unlisted): ServedFreed, the served PoUW protocol's freed compute in the onsite form: an accepted period whose network certifier counted it in (cert) frees at most eps(x) C + beta K_c of the registered devices' capacity C = sum_r mu_r H_r at the period's dual price mu (Pouw.Dither.FreedWithin at W = 1, Period.DualOpt), with eps(x) = max 0 (C - ServedWork's credit at the period's accepted prefix + beta K_c) / C, except with probability ServedWork's delta_s + n(delta_bind + delta_ks) + n kappa_deg(B) plus the certifier's delta; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. It is ServedWork's premises less the inventory's closure (ext = 0), which OutsourceWithinEgressServed supplies, and adds two premises, each listed under assumptions: OutsourceWithinEgressServed, the price of an exchanged bit over the period's programs together, implied by the per-program Pouw.Assumptions.OutsourceWithinEgress (outsourceServed_of_perProgram); CertifiedExchange, the network certifier's guarantee at the period (its count in, K_c, exceeded with probability at most delta), the form network accounting's certifier is to instantiate, on a trusted-host device whose coins are witness (WitnessPathPrivate discharges CoinsConfidential). DualOpt and the capacity's positivity are the statement's framing. SAKServed makes it non-vacuous only on a model that charges free register reductions, as ServedWork. Its honest and nontrivial lemmas are Proofs.Pouw.ServedFreed.Honest's servedFreed_honest and servedFreed_nontrivial. Proved from servedWork and Pouw.SecurityProofs.Dither.FreedOfFloor (Proofs.Pouw.ServedFreed).",
-   "Properties.Pouw.Served.SecurityProofs.servedWork": "frozen (no-function,world-unlisted): ServedWork, the served PoUW protocol's work in the remote form: H1J10RCheckedCreditPeriod's fixed words priced on the prover's inventory, one machine of the accelerator model (Pouw.Dither.Accel) at its device premises G1, G2, P1 and P2, wherever it ran (no network certifier, wipe or latency check), except with probability delta_s + n(delta_bind + delta_ks) + n kappa_deg(B); not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. Its new premises, each listed under assumptions: Pouw.Assumptions.SAKServed, SakLb.SAKResidual's claim at the served words, proposed, whose truth on the accelerator model as Definitions.Core.Accel writes it is open (it prices register reductions, so the four Russians' method pays at least an alu lane a MAC, but SAKMatmul as written still fails at a dual price that leaves those pipes cheap), so whether the guarantee is non-vacuous there is open; FixedAreRight, the bridge from the play's fixed words to the inventory's right words, to be made provable with UnitFixed's adaptive model; FixedBeforeSalt, a protocol-code fact (each window's instance, advice and program fixed before its salt, which SaltIsLiveCoin's discharge orders). The inventory's closure (ext = 0) and the advice bound are the statement's framing. Its honest and nontrivial lemmas are Proofs.Pouw.ServedWork.Honest's served_honest and served_nontrivial. Proved from h1J10RCheckedCreditPeriod (Proofs.Pouw.ServedWork)."
+   "Properties.Pouw.Served.SecurityProofs.servedWork": "frozen (no-function,world-unlisted): ServedWork, the served PoUW protocol's work in the remote form: H1J10RCheckedCreditPeriod's fixed words priced on the prover's inventory, one machine of the accelerator model (Pouw.Dither.Accel) at its device premises G1, G2, P1 and P2, wherever it ran (no network certifier, wipe or latency check), except with probability delta_s + n(delta_bind + delta_ks) + n kappa_deg(B); not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. Its new premises, each listed under assumptions: Pouw.Assumptions.SAKServed, SakLb.SAKResidual's claim at the served words, proposed, whose truth on the accelerator model as Definitions.Core.Accel writes it is open (it prices register reductions, so the four Russians' method pays at least an alu lane a MAC, but SAKMatmul as written still fails at a dual price that leaves those pipes cheap), so whether the guarantee is non-vacuous there is open; FixedAreRight, the bridge from the play's fixed words to the inventory's right words, to be made provable with UnitFixed's adaptive model; FixedBeforeSalt, a protocol-code fact (each window's instance, advice and program fixed before its salt, which SaltIsLiveCoin's discharge orders). The inventory's closure (ext = 0) and the advice bound are the statement's framing. Its honest and nontrivial lemmas are Proofs.Pouw.ServedWork.Honest's served_honest and served_nontrivial. Proved from h1J10RCheckedCreditPeriod (Proofs.Pouw.ServedWork).",
+   "Properties.Challenger.LiveAnswer": "unstated: a live check's answer at the coins its evidence reads is its answer, proved in security_proofs by Properties.Challenger.liveAnswer; a draft statement, which gets a guarantee entry once the one theorem reads it",
+   "Properties.Challenger.DrawnByDevice": "unstated: Challenger.drawCoins accepts only coins a withheld session of the key's device released for that window and label, or the fixed finder findBreak outputs a break from the run (an LMS forgery or a SHA-512 collision); an open statement, to be proved from euf-cma/lms-sha512-n64 and ecr/sha-512 asked of that finder",
+   "Properties.Challenger.CoinsFromLog": "unstated: an accepted answer is the live answer at the coins the challenger's device released, or a break, proved from DrawnByDevice in security_proofs by Properties.Challenger.coinsFromLog; a draft statement, which gets a guarantee entry once the one theorem reads it"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -11610,7 +11619,7 @@
    "guarantees": ["Verity.soundness_of_subprotocols"]
   },
   "Flock.TemplateQuery": {
-   "digest": "eb9bb280eb393505a4a23bed41806ba307c0f963e8bad7be0db6a52ea7860032",
+   "digest": "106f0e8c3f6cd6de57293334f777fce1b457eff70daf160ad36327aec4e1ff38",
    "definitions": {
     "Flock.TemplateQuery.DDef": "645f008e487ba991572c3d7659e26904c597f4992a45203064a039b8390c5c25",
     "Flock.TemplateQuery.DDef.nodes": "b1e5faa09c8fdd900e35d000003880cda625866e44f4dbade582562d61802677",
@@ -11631,6 +11640,13 @@
     "Flock.TemplateQuery.Desc.parse._sparseCasesOn_5": "623a4ccf9346efe3981dd841d34b179cddbb0cb41e59dce1e52add3107c54936",
     "Flock.TemplateQuery.Desc.parse._sparseCasesOn_6": "c6bcb309e4b63da7133b7cf3fa3023d9ae849629bfafe1e7e642dcc7525bc85c",
     "Flock.TemplateQuery.Desc.parse._sparseCasesOn_9": "bdcdfe1eb88e3c12b05c4768c9d7577710ecf7842962ed4d47c783ccfd6b30e1",
+    "Flock.TemplateQuery.Desc.parseWith._sparseCasesOn_16": "821c18dc4a3b4c5b5fa4cd1b65b3c4464e5e55ec1971a78fc3912b369a757238",
+    "Flock.TemplateQuery.Desc.parseWith._sparseCasesOn_5": "92d43a739fcb8f26375185d8f4792a3c360176763d38954bb1b4e3ad1041f93c",
+    "Flock.TemplateQuery.Desc.parseWith._sparseCasesOn_6": "34fa5698cb6f16d57b2dcca9e9d39937d7490d0358d2b268cc5a449419ee6bb3",
+    "Flock.TemplateQuery.Desc.parseWith._sparseCasesOn_9": "4449e3dc2f3ca3f8ad8bb58cdc81e334f626fe47d88c78a620fc7b120174246f",
+    "Flock.TemplateQuery.Desc.parseWith.match_19": "ac539af4fd7d80554d9902c48e7dbdc2c1ecfd4d291c54adee8599131d0be321",
+    "Flock.TemplateQuery.Desc.parseWith.match_3": "69302a5cb245e0eed04e80d0a1ba8867a7e841d0449d2263cf1b5e620318266f",
+    "Flock.TemplateQuery.Desc.parseWith.match_5": "200fede8425c8b4809c149ddd51bc6bf16aec0c091231c56e91aa2d8161dc113",
     "Flock.TemplateQuery.Desc.root": "45ec5938718e4c35c291f5d8bc1d67e46d8d5f6c2152325db56086c51be508bc",
     "Flock.TemplateQuery.Desc.sha512": "4ff2a3600e98ff2d6049f4989d24d341d2b33203e994355756da0bedcd9db74b",
     "Flock.TemplateQuery.TRange": "fd176f71efa5fc07006ee54773e55f3a6124120a9bee2e4e1bddf50c3e6f7c29",
@@ -11638,14 +11654,14 @@
     "Flock.TemplateQuery.TRange.first": "300a15fc0874f4d021d64b7cb584eeecb7d4e7c004891138fea17c1860cac4af",
     "Flock.TemplateQuery.TRange.node": "5f1b0a67687c76e53492726f0160d1345cf542d428ef2a35fb83ff200d3b7e93",
     "Flock.TemplateQuery.TRange.template": "c97082152447cce908ab19f4a60920ab5762ecbe2fe15762729a512482a742bd",
-    "Flock.TemplateQuery.evaluate": "ef5c9d3372ef509ead267a7f27120b7532de85c172ba4946d79bf60809268bbd",
+    "Flock.TemplateQuery.evaluate": "2943dbe2d24867e5f5ecda46c8a838f4bc04bd14ffc7df8e6a114a8daf97a17b",
     "Flock.TemplateQuery.gates": "b8c2c0b9676750b17b1eed541fff185ec992be123579d75f22620c61fe0a9c72",
     "Flock.TemplateQuery.instInhabitedDNode": "1d2ed3dda22709ce0a00c64c4cb97c5e33bcf5033920f6dc47ae79bcd0570ad5",
     "Flock.TemplateQuery.instInhabitedDNode.default": "94198a736ebb97161ae0924e4fce4e54396152761848cd6e2aea2603ff42b3aa",
     "Flock.TemplateQuery.isInput": "29caeb43e127d913345bc65d15694f773611b983afc9af9f50f1efb06edd37ee",
     "Flock.TemplateQuery.locate": "cbf34d266611b55bf150b9f1e4191ea6a805fc0dbc1821238d7cefd3565649f3",
     "Flock.TemplateQuery.population": "95d5a1b2851487e31ad71ba9b16aa179bd7fd3addcc3f06abfb9b01c15d93fa7",
-    "Flock.TemplateQuery.templatesOf": "a225e5289af1ec6cff84f31bfe36618bef6fc3ebcaa3b14abc8248499fde8a2a",
+    "Flock.TemplateQuery.templatesOf": "9a03ade5fd192fb33fe2e1c51cb0d9e46caa234b0bf8e13d2423df9250994536",
     "_private.Flock.TemplateQuery.0.Flock.TemplateQuery.showList": "d5a3296879e70e5e0cb3eb37f12c4953792cd600933b0f6bef8905084afc58cd"
    },
    "guarantees": [
@@ -12388,6 +12404,8 @@
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
+    "Properties.SampledProofs.acceptMeans",
+    "Properties.SampledProofs.bernoulliBounds",
     "Verity.soundness_of_subprotocols"
    ]
   },
@@ -18293,6 +18311,8 @@
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
+    "Properties.SampledProofs.acceptMeans",
+    "Properties.SampledProofs.bernoulliBounds",
     "Verity.soundness_of_subprotocols"
    ]
   },
@@ -18598,12 +18618,12 @@
    ]
   },
   "SampledProofs.OneStage": {
-   "digest": "7ca30616392d66c0916456abfa48d7d10bb1c676df7b9c6c74800eca4561dd77",
+   "digest": "871e745e9d23e12537399e810ddcf168a887c5bb899ce8982499a381135cc3d5",
    "definitions": {
     "SampledProofs.OneStage.Commitment": "d744e6fb2fdff36157845bc9fb3224434ff1f62fc26396f87b4393a0af67c01b",
     "SampledProofs.OneStage.Commitment.digest": "8f1997edbf41ef170699331a03a0ea01ec0eeefb3a34a36d521c4eb1673c6f01",
     "SampledProofs.OneStage.Commitment.record": "6d1c7df56f375ecb5dbbc08f1650b8575d600d384bea8cd5c2415cc4574dc9e5",
-    "SampledProofs.OneStage.Evidence": "1650abb0f4e3f25e78fbb3e7f29f1fd22f2042cf2811effd8b77a4e4b781a527",
+    "SampledProofs.OneStage.Evidence": "52d0a3bcc8448597fa8b6dd7fd6cc820c22c737fd7f46afeef97bec0b8eb155d",
     "SampledProofs.OneStage.Evidence.draw": "c79ae947b22fb1fe093f74841a2a2b0f704408100f1ac412388db2e19d94ab19",
     "SampledProofs.OneStage.Evidence.instances": "aa63879e2456e9507bc1d49e34a16d5fb4b552c723f4f4027e0559d44aaf6d4c",
     "SampledProofs.OneStage.Evidence.provedUnits": "a224da91926bb06cf743781bfccbc6444942a6645c31fb556c9553f8f6d4797e",
@@ -18614,7 +18634,7 @@
     "SampledProofs.OneStage.Evidence.statement": "f8d0415e867d65b759b8b22b2f34c34d0524637fcfe9f327c3d2abc74859adcb",
     "SampledProofs.OneStage.Evidence.verdicts": "015cd6bead98f4ab91582fd9ff07e43153df5b7536db1039a08fa226a08c725c",
     "SampledProofs.OneStage.PARAM_KEYS": "e6ca47326c443d7d33cdd523aabd781e197717594d7879c26eba1391860dbbb7",
-    "SampledProofs.OneStage.Params": "22825554339a4abd6e712ca108d556455eaafa1e7ab4ead36dcada022e32b453",
+    "SampledProofs.OneStage.Params": "a521d3ff07ff072d5dd988a3894ae53994ba99269e13ff810353ca0d4d9992b6",
     "SampledProofs.OneStage.Params.delta": "aec48d4bb81bf5c81c2309b92d9e805c095f778149cb1fa31fb91c55b80df8b6",
     "SampledProofs.OneStage.Params.verifier": "1774a7ae1000d869c7c34b71d7c55b661a6536f5b29e6f6cc6682ca12e56c9e9",
     "SampledProofs.OneStage.Public": "27240f20d02a2ba4a3fec008798a134ae627f74ae9c61a69d48d83a25a246b41",
@@ -18630,17 +18650,22 @@
     "SampledProofs.OneStage.paramsOfJson._sparseCasesOn_1": "550ca3a6407ae9eddfce113acbbe7f68a39f38515b10ee793b9c6f5cec0e989a",
     "SampledProofs.OneStage.paramsOfJson._sparseCasesOn_19": "53a4a3a89e9004fc47f0e631c4c1b2ee774940e6e49df4d6da383a674c01f536",
     "SampledProofs.OneStage.paramsOfJson._sparseCasesOn_6": "4423fad4c5056c29842f0a79f5d285cd35ac7250ee14baae2282a0fd6b6402f9",
+    "SampledProofs.OneStage.paramsOfJson.match_1": "2be19a82f7a3bd166dee12ae5a355eb0a9deedb27d0d498b7f7da560205c4a5f",
+    "SampledProofs.OneStage.paramsOfJson.match_4": "30c8c08189a370fed3d34bb0604baff0e510d71a54ce7fcbf101adda28b0342f",
     "SampledProofs.OneStage.publicJson": "6135a484607556ea7975c3bfa5a3d67eba1e6d6912ecf927909aa78fe87fbbce",
     "SampledProofs.OneStage.recordChecks": "9f4fc6200367dc5afc56c4102a26ef761e1131c1010ec2a940996ece331013bb",
     "SampledProofs.OneStage.rule": "ed39e7ebb0484e29d69641a966648a7975fb73c5385615ac1db603dae94c5d28",
     "SampledProofs.OneStage.rule._sparseCasesOn_1": "216efcb31cf09d588536b6263a8ee3a1ea7833cb1914acdeea3f9aa4ed948819",
+    "SampledProofs.OneStage.rule.match_1": "ba6245dafae4cb96f7fd37458827dff55b15bc9d8cd4c429ce0f6ec35717bb7a",
     "SampledProofs.OneStage.verdictOf": "79b0561bd45fa6be54904e9bba689c1cd0c7912e0d9deae4ff3e5abe0518c1ec",
     "_private.SampledProofs.OneStage.0.SampledProofs.OneStage.exactly": "9a646a7a1cc9045d688672c166714022565e4ef19b249aee201a98415096e2ff",
     "_private.SampledProofs.OneStage.0.SampledProofs.OneStage.logRecord": "5339c15abcb8b80ab3837ac99300aa3f671a3c6d4ef0cc0eb9dcad6e67ec2858",
     "_private.SampledProofs.OneStage.0.SampledProofs.OneStage.nats": "4a8503d7e44e138eb20f35d7adb22aa02ef0463befa3527554cc211354c78a5b",
     "_private.SampledProofs.OneStage.0.SampledProofs.OneStage.nats._sparseCasesOn_3": "34463fd1b87a91595810594887f47fd421a30d28cbe58c29250a54af0a4d2c99",
+    "_private.SampledProofs.OneStage.0.SampledProofs.OneStage.nats.match_3": "ab678b51c7dd01fa9329a2e88cb3c672fc6781f9540a95b8facd3de3780d2934",
     "_private.SampledProofs.OneStage.0.SampledProofs.OneStage.obj": "d3fc148450a6d76fc673dffc81655919395f1f1a2d7435303f625a1f327b43c0",
-    "_private.SampledProofs.OneStage.0.SampledProofs.OneStage.obj._sparseCasesOn_1": "893435e025be63a152671e93321de616e050561c7399547e3e66a92a5463576f"
+    "_private.SampledProofs.OneStage.0.SampledProofs.OneStage.obj._sparseCasesOn_1": "893435e025be63a152671e93321de616e050561c7399547e3e66a92a5463576f",
+    "_private.SampledProofs.OneStage.0.SampledProofs.OneStage.obj.match_1": "7b45133531dec7cafddef0507a49b644df8116f8d1a37809fe655d2d0df23dc2"
    },
    "guarantees": [
     "Properties.SampledProofs.acceptMeans",

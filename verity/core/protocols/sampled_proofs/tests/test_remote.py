@@ -24,6 +24,7 @@ import pytest
 
 from verity.core.protocols.sampled_proofs import challenger as C
 from verity.core.protocols.sampled_proofs import remote as R
+from verity.core.protocols.sampled_proofs.coins import ChallengerCoins
 from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
@@ -154,19 +155,19 @@ class Host:
     (a new ledger in `tmp_path` unless `ledger`), whose record `open_session` signed with `sign` and wrote to
     `directory` naming the host the ledger opens it on (or `record_host`), serving one session on a loopback port;
     `reason` is how `serve` ended it, and the ledger's end says the session closed when its client closed it (or as
-    `closed` says)."""
+    `closed` says). With `withhold`, the session is a withheld one, and the ledger's open says so."""
 
     def __init__(self, tmp_path, sign, session: str = "s-1", seed: str = "host", ledger: Ledger | None = None,
                  window: dict = WINDOW, closed: bool | None = None, record_host: str | None = None,
-                 secret: bytes | None = None) -> None:
+                 secret: bytes | None = None, withhold: bool = False) -> None:
         self.secret = secret
         self.directory = tmp_path / session
         self.directory.mkdir(parents=True)
         self.ledger, self.closed = ledger or Ledger(tmp_path / "windows.jsonl", sign), closed
-        self.ledger.open(session, window)
+        self.ledger.open(session, window, **({"withheld": True} if withhold else {}))
         self.challenger = C.LiveChallenger(SCHEME, 0, FAMILIES, entropy(seed))
         self.session = R.open_session(self.challenger, pinned_key(), record_host or f"{HOST}.{session}", sign,
-                                      self.directory, session)
+                                      self.directory, session, withhold=withhold)
         (self.directory / R.HELLOS).write_text("")
         self.listener = socket.create_server(("127.0.0.1", 0))
         self.address = "127.0.0.1:%d" % self.listener.getsockname()[1]
@@ -498,6 +499,63 @@ def test_open_many_releases_and_logs_the_coins_as_opening_them_one_at_a_time_doe
     events = [json.loads(line)["event"] for line in many.decode().splitlines()]
     assert events == ["commitment"] + ["root", "release"] * 3
     assert C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("host")).open_many(BATCH) == batched
+
+
+def test_a_withheld_session_releases_only_raw_coins_until_its_signed_close(tmp_path, signer):
+    """A withheld session (`open_session(..., withhold=True)`) answers the hello with the layout alone and each open with
+    the coin's raw bytes alone: no frame before the close carries the root, a salt or a path. Its close, once signed,
+    releases the commitment and every coin's opening, which open against it after the root each followed. The client
+    (`RemoteChallenger`, `ChallengerCoins`) reads the raw coins as it runs and settles the full openings at the close; a
+    session served without `withhold` answers the hello with the commitment, as before."""
+    ch = C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("host"))
+    session = R.open_session(ch, pinned_key(), HOST, signer, tmp_path, "s-1", withhold=True)
+    a, b = socket.socketpair()
+    t = threading.Thread(target=lambda: R.serve(a, session, itertools.count().__next__))
+    t.start()
+    b.sendall(frame({"type": "hello"}))
+    before = [reply(b)]
+    for label, index, after in BATCH:
+        b.sendall(frame({"type": "open", "label": label, "index": index, "after": after.hex()}))
+        before.append(reply(b))
+    b.sendall(frame({"type": "close"}))
+    released = reply(b)
+    b.close()
+    t.join()
+    a.close()
+    assert before[0] == {"type": "layout", "layout": {"epoch": 0, "families": [list(f) for f in FAMILIES], "scheme": SCHEME}}
+    assert [sorted(x["coin"]) for x in before[1:]] == [["after", "coin", "epoch", "index", "label"]] * len(BATCH)
+    assert not any(ch.commitment.root.hex() in json.dumps(x) for x in before)
+    assert released["type"] == "released" and released["released"]["commitment"] == ch.commitment.to_json()
+    openings = [C.LiveOpening.from_json(o) for o in released["released"]["openings"]]
+    assert [o.coin.hex() for o in openings] == [x["coin"]["coin"] for x in before[1:]]
+    assert all(C.live_reason(ch.commitment, o, label, index, after) is None
+               for o, (label, index, after) in zip(openings, BATCH))
+    assert (tmp_path / R.CLOSE).is_file()
+
+    directory = tmp_path / "client"
+    directory.mkdir()
+    ch = C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("host"))
+    session = R.open_session(ch, pinned_key(), HOST, signer, directory, "s-2", withhold=True)
+    a, b = socket.socketpair()
+    t = threading.Thread(target=lambda: R.serve(a, session, itertools.count().__next__))
+    t.start()
+    client = R.RemoteChallenger(b)
+    assert client.withheld and client.commitment is None
+    coins = ChallengerCoins(C.LiveRecord(client, "positions"))
+    coins.commit(root(7))
+    read = coins(100)
+    assert all(o.salt == b"" and o.path == () for o in coins.segments[0].openings)
+    client.close()
+    t.join()
+    a.close()
+    coins.settle()
+    assert client.commitment == ch.commitment
+    assert read == b"".join(o.coin for o in coins.segments[0].openings)[:100]
+    assert all(C.live_reason(ch.commitment, o, "positions", i, root(7)) is None
+               for i, o in enumerate(coins.segments[0].openings))
+    assert coins.record.reason() is None
+    _, got, _ = _served(tmp_path / "plain", signer, lambda c: c.commitment)
+    assert got is not None
 
 
 def _scripted(n: int, answer):
