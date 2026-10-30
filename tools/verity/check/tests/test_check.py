@@ -1555,6 +1555,18 @@ def test_train_sh_refuses_every_flag_but_agreement(tmp_path):
     assert p.returncode == 2 and "train: --base refused without --deferred" in p.stderr, p.stderr
 
 
+def test_train_sh_copied_out_of_the_tree_finds_the_trees_settings(tmp_path):
+    """Drive launches a copy of train.sh from its own directory (`drive.detach`) with the tree as its working directory: the
+    settings check reads the tree's settings.py, so the copy reaches the store-key check rather than refusing every launch."""
+    import shutil
+    import subprocess
+
+    copy = shutil.copy(ROOT / "tools" / "verity" / "check" / "train.sh", tmp_path / "train.sh")
+    p = subprocess.run(["bash", str(copy), "abc", "vy-x", "--deferred", "pytest"], capture_output=True, text=True, cwd=ROOT,
+                       env={"PATH": "/usr/bin:/bin"})
+    assert p.returncode == 1 and "no parent store key" in p.stderr, p.stderr
+
+
 @pytest.mark.parametrize("twins", [False, True])
 def test_train_sh_prints_every_twins_run_id(tmp_path, twins):
     """With `auto` and no free slot, check.py launches one twin per machine and only one of them runs: train.sh prints every

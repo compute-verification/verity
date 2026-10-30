@@ -18,13 +18,17 @@ ties the trace to the Attempt; outside a recorded run it is a local id, and the 
 """
 from __future__ import annotations
 
+import importlib.util
 import json
-import os
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+_spec = importlib.util.spec_from_file_location("spans_settings", Path(__file__).resolve().parent / "settings.py")
+#: every environment variable check reads, declared once (`settings.py`)
+SETTINGS = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(SETTINGS)
 SPANS_LOG = "spans.jsonl"
 
 #: a steps.jsonl status -> a span status (the frozen shape's three values)
@@ -47,7 +51,7 @@ def check_memory(root: Path = Path("/")) -> dict:
     """`mem_peak_gb` (the check's high-water mark so far, memory.peak) and `mem_current_gb` of the cgroup this process runs in,
     when that is the check's own scope (SCOPE_ENV names it); else nothing, since a shared session scope's numbers are other
     runs' too. GB are 10^9 bytes, one decimal."""
-    unit = os.environ.get(SCOPE_ENV)
+    unit = SETTINGS.get(SCOPE_ENV)
     if not unit:
         return {}
     try:
@@ -66,7 +70,7 @@ class SpanLog:
 
     def __init__(self, out: Path, trace_id: str | None = None):
         self.path = out / SPANS_LOG
-        self.trace_id = trace_id or os.environ.get("RESEARCH_RUN_ID") or f"local-{uuid.uuid4().hex[:12]}"
+        self.trace_id = trace_id or SETTINGS.RESEARCH_RUN_ID or f"local-{uuid.uuid4().hex[:12]}"
         self.root_id = uuid.uuid4().hex[:16]
         self.root_start = _now_utc()
         self.closed = False
