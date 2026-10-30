@@ -91,7 +91,9 @@ locked() {
 }
 tick() { locked queue drive --config tools/verity/check/drive.toml $(grep -v '^#' $DIR/args 2>/dev/null) "$@"; }
 case ${1:-} in
-  start) (GH_TOKEN=$(/data/infra/gh_app_token.sh) || exit 1; export GH_TOKEN
+  start) (exec 8> "$TICK"; flock 8; fast_clones) \
+          || { echo "drive: not started: seeding $REPO and the queue's clone from $DIR on the volume failed" >&2; exit 1; }
+         (GH_TOKEN=$(/data/infra/gh_app_token.sh) || exit 1; export GH_TOKEN
           git -C "$REPO" fetch -q origin +refs/heads/next:refs/remotes/origin/next \
             && git -C "$REPO" push -q --dry-run origin refs/remotes/origin/next:refs/heads/next) > /dev/null 2>&1 \
           || { echo "drive: not started: gh_app_token.sh failed or a dry-run push of next with its token was refused;" \
