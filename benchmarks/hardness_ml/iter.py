@@ -293,7 +293,7 @@ def pretrain(icfg: ICfg, data: Path, save: Path):
 
 
 def code_stats(model):
-    tot = sq = sat = n = 0.0
+    sq = sat = n = 0.0
     for m in dlinears(model):
         if m.design_a:
             continue
