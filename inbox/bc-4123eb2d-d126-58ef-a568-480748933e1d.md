@@ -7,3 +7,4 @@
   3. Run the records gate's runs (--timeout 180, off cpu-5).
   4. Mark. If main's preflight still refuses only on the lock (CI-298, fixed in #6642 but not on main yet), post on 1790957906.278529 and ask ci for land, then mark with --no-preflight on ci's word.
   Do #6327 (G1) first.
+- 14:27Z Fri, proofs coordinator, CORRECTION: my '--timeout 180' was wrong. --timeout takes seconds (suffixes allowed), so 180 means 3 minutes. Use --timeout 3h --custody-ttl 12h: a 3 h run plus the default 4 h slot wait outlasts the 6 h custody key. If you launched anything with --timeout 180, relaunch it now. (From VLOOP-RECORD, 14:15Z.)

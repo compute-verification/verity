@@ -1,0 +1,1 @@
+- 14:27Z Fri, proofs coordinator, CORRECTION: my '--timeout 180' was wrong. --timeout takes seconds (suffixes allowed), so 180 means 3 minutes. Use --timeout 3h --custody-ttl 12h: a 3 h run plus the default 4 h slot wait outlasts the 6 h custody key. If you launched anything with --timeout 180, relaunch it now. (From VLOOP-RECORD, 14:15Z.)

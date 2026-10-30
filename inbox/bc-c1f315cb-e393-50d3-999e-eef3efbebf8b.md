@@ -32,3 +32,4 @@
   All four SetupCount errors are likely the same RunRecord/Release rename (#5993: Flock.Session -> RunRecord,
   Coins.Session/Frames.Session -> Release). #5302 is marked at d0743f789a (IrDepSession already on RunRecord, if you want
   a pattern).
+- 14:27Z Fri, proofs coordinator, CORRECTION: my '--timeout 180' was wrong. --timeout takes seconds (suffixes allowed), so 180 means 3 minutes. Use --timeout 3h --custody-ttl 12h: a 3 h run plus the default 4 h slot wait outlasts the 6 h custody key. If you launched anything with --timeout 180, relaunch it now. (From VLOOP-RECORD, 14:15Z.)
