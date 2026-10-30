@@ -1,5 +1,6 @@
 import Definitions.Nci.Guarantees.Witnesses
 import Proofs.Nci.Reads
+import Proofs.Nci.Capability.Witnesses
 import Proofs.Core.Circuit
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Linarith
@@ -271,6 +272,156 @@ theorem smallBlocks_P1 : Assumptions.SmallBlocks D P1 2 1 := by
   have key : ∀ u : Fin 1, D.D.size (P1.gates u) ≤ 2 ∧ novelReads D (P1.gates u) ≤ 1 := by decide
   exact fun u => ⟨(key u).1, by exact_mod_cast (key u).2⟩
 
+theorem dark_M1 : M1.dark = ∅ := Finset.sdiff_self _
+
+theorem dark_Mθ : Mθ.dark = ∅ := Finset.sdiff_self _
+
+theorem darkReads_M1 (K : ℝ) : Assumptions.DarkReads M1 K :=
+  fun v hv => absurd hv (by rw [dark_M1]; exact notMem_empty v)
+
+theorem darkReads_Mθ (K : ℝ) : Assumptions.DarkReads Mθ K :=
+  fun v hv => absurd hv (by rw [dark_Mθ]; exact notMem_empty v)
+
+theorem coverage_ch1 : Assumptions.Coverage 1 D (2 * ch1.G) := by
+  unfold Assumptions.Coverage
+  rw [size_D, ch1_G]
+  norm_num
+
+theorem not_coverage_ch0 : ¬ Assumptions.Coverage 1 D (2 * (ch0 C).G) := by
+  unfold Assumptions.Coverage
+  rw [size_D, ch0_G]
+  norm_num
+
+/-- The toy's run with the token `0`: admissible, the weight at its registered value. -/
+def tokenZero : C.Transcript := fun g => if g = 1 then 0 else 1
+
+theorem support_pos (T : Finset (Fin 4)) : 1 ≤ support D ones T :=
+  card_pos.2 (Finset.Nonempty.image ⟨ones, mem_filter.2 ⟨mem_univ _, fun _ _ => rfl⟩⟩ _)
+
+/-- A set holding gate `2` takes two values over the toy's admissible runs: `2` holds the token. -/
+theorem support_two (T : Finset (Fin 4)) (h : 2 ∈ T) : 2 ≤ support D ones T := by
+  have hones : ones ∈ admissible D ones := mem_filter.2 ⟨mem_univ _, fun _ _ => rfl⟩
+  have hzero : tokenZero ∈ admissible D ones := mem_filter.2 ⟨mem_univ _, by decide⟩
+  have hne : values (D := C) T ones ≠ values (D := C) T tokenZero := fun he => by
+    have h2 := congrArg (fun v => BitVec.getLsbD v 0) (congrFun he ⟨2, h⟩)
+    simp only [values] at h2
+    rw [eval_two, eval_two] at h2
+    exact absurd h2 (by decide)
+  exact one_lt_card.2 ⟨_, mem_image_of_mem _ hones, _, mem_image_of_mem _ hzero, hne⟩
+
+theorem rpow_le_support (T : Finset (Fin 4)) {x : ℝ} (hx : x ≤ 1) (h0 : 2 ∉ T → x ≤ 0) :
+    (2 : ℝ) ^ x ≤ support D ones T := by
+  by_cases h : 2 ∈ T
+  · calc (2 : ℝ) ^ x ≤ 2 ^ (1 : ℝ) := Real.rpow_le_rpow_of_exponent_le (by norm_num) hx
+      _ = 2 := Real.rpow_one 2
+      _ ≤ support D ones T := by exact_mod_cast support_two T h
+  · calc (2 : ℝ) ^ x ≤ 2 ^ (0 : ℝ) := Real.rpow_le_rpow_of_exponent_le (by norm_num) (h0 h)
+      _ = 1 := Real.rpow_zero 2
+      _ ≤ support D ones T := by exact_mod_cast support_pos T
+
+theorem ch1_count : ∀ T : Finset (Fin 4), (ch1.weightsUsed T).card = (if 2 ∈ T then 1 else 0) ∧
+    (ch1.inputsUsed T).card = (if 2 ∈ T then 1 else 0) := by decide
+
+theorem ch1_charge (R T : Finset (Fin 4)) (b_w b_a : ℝ) :
+    ch1.charge R b_w b_a T = (b_w + b_a) * ((if 2 ∈ T then 1 else 0 : ℕ) : ℝ) := by
+  unfold Chain.charge
+  simp only [ch1_notLinked, not_false_eq_true, filter_const, ↓reduceIte]
+  rw [(ch1_count T).1, (ch1_count T).2]
+  ring
+
+theorem ch1_activationsSupport (k : ℝ) : Assumptions.ActivationsSupport D ones ch1 k (1 / 2) (1 / 2) := by
+  intro R _ T _ _
+  rw [ch1_charge]
+  exact rpow_le_support T (by split_ifs <;> norm_num) fun h => by simp [h]
+
+theorem ch1_partialSumsSupport (c : ℕ) (k : ℝ) : Assumptions.PartialSumsSupport D ones ch1 c k (1 / 2) (1 / 2) := by
+  intro n P _
+  refine ⟨fun _ => 0, ?_, fun u => ?_⟩
+  · refine le_trans (Finset.sum_le_sum fun x _ => Nat.sub_le_of_le_add (ch1_spread P x)) ?_
+    simp
+  · simp only [Nat.cast_zero, mul_zero, add_zero]
+    rw [(ch1_count _).1]
+    exact rpow_le_support _ (by split_ifs <;> norm_num) fun h => by simp [h]
+
+theorem ch0_activationsSupport (k b_w b_a : ℝ) : Assumptions.ActivationsSupport D ones (ch0 C) k b_w b_a := by
+  intro R _ T _ _
+  rw [show (ch0 C).charge R b_w b_a T = 0 by simp [Chain.charge, ch0_weightsUsed, ch0_inputsUsed], Real.rpow_zero]
+  exact_mod_cast support_pos T
+
+theorem ch0_partialSumsSupport (c : ℕ) (k b_w b_a : ℝ) :
+    Assumptions.PartialSumsSupport D ones (ch0 C) c k b_w b_a := by
+  intro n P _
+  refine ⟨fun _ => 0, le_trans (le_of_eq (Finset.sum_eq_zero fun x _ => x.1.elim0)) (Nat.zero_le _), fun u => ?_⟩
+  rw [ch0_weightsUsed]
+  simp only [card_empty, Nat.cast_zero, mul_zero, add_zero, Real.rpow_zero]
+  exact_mod_cast support_pos _
+
+theorem ch1_T1_incompressible : Assumptions.TrainingIncompressible D ch1 T1 2 1 (1 / 2) (1 / 2) := by
+  intro n P
+  refine ⟨fun _ => 0, ?_, fun u hu => ⟨?_, T1_weights _ hu⟩⟩
+  · refine le_trans (Finset.sum_le_sum fun x _ => Nat.sub_le_of_le_add (ch1_spread P x)) ?_
+    simp
+  · simp only [ch1_notLinked, not_false_eq_true, filter_const, ↓reduceIte, Nat.max_zero]
+    obtain ⟨hw, hi⟩ := ch1_nat _ hu.1
+    have hw' : ((ch1.weightsUsed (P.gates u)).card : ℝ) ≤ novelReads D (P.gates u) := by exact_mod_cast hw
+    have hi' : ((ch1.inputsUsed (P.gates u)).card : ℝ) ≤ novelReads D (P.gates u) := by exact_mod_cast hi
+    linarith
+
+theorem ch0_T0_incompressible : Assumptions.TrainingIncompressible D (ch0 C) (T0 D) 2 1 1 2 := by
+  intro n P
+  refine ⟨fun _ => 0, le_trans (le_of_eq (Finset.sum_eq_zero fun x _ => x.1.elim0)) (Nat.zero_le _),
+    fun u hu => ⟨?_, T0_weights D 2 1 1 2 _ hu⟩⟩
+  rw [ch0_weightsUsed, ch0_inputsUsed]
+  simp
+
+theorem pch1_notLinked (R : Finset (Fin 4))
+    (x : (ℓ : Fin ch1.toPacked.L) × Fin ch1.toPacked.N × Fin (ch1.toPacked.d ℓ)) :
+    ¬ ch1.toPacked.LinkedWhole R x.1 x.2.1 x.2.2 := by
+  rcases x with ⟨⟨ℓ, hℓ⟩, t, j⟩
+  cases ℓ with
+  | zero => exact id
+  | succ ℓ => exact absurd hℓ (by change ¬ (ℓ + 1 < 1); omega)
+
+theorem pch1_nat : ∀ R : Finset (Fin 4), R ⊆ C.computed →
+    (ch1.toPacked.weightsUsed R).card ≤ novelReads D R ∧ (ch1.toPacked.inputsUsed R).card ≤ novelReads D R := by
+  decide
+
+theorem pch1_spread {n : ℕ} (P : Partition C n)
+    (x : (ℓ : Fin ch1.toPacked.L) × Fin ch1.toPacked.N × Fin (ch1.toPacked.e ℓ)) :
+    ch1.toPacked.spread P x.1 x.2.1 x.2.2 ≤ 1 := by
+  classical
+  unfold PackedChain.spread
+  refine card_le_one.2 fun u hu v hv => ?_
+  simp only [mem_filter, mem_univ, true_and] at hu hv
+  obtain ⟨_, hu⟩ := hu
+  obtain ⟨_, hv⟩ := hv
+  rw [Partition.mem_gates] at hu hv
+  exact Option.some_injective _ (hu.symm.trans hv)
+
+theorem pch1_T1_incompressible :
+    Assumptions.PackedTrainingIncompressible D ch1.toPacked T1 2 1 (1 / 2) (1 / 2) := by
+  intro n P
+  refine ⟨fun _ => 0, ?_, fun u hu => ⟨?_, T1_weights _ hu⟩⟩
+  · refine le_trans (Finset.sum_le_sum fun x _ => Nat.sub_le_of_le_add (pch1_spread P x)) ?_
+    simp
+  · simp only [pch1_notLinked, not_false_eq_true, filter_const, ↓reduceIte, Nat.max_zero]
+    obtain ⟨hw, hi⟩ := pch1_nat _ hu.1
+    have hw' : ((ch1.toPacked.weightsUsed (P.gates u)).card : ℝ) ≤ novelReads D (P.gates u) := by
+      exact_mod_cast hw
+    have hi' : ((ch1.toPacked.inputsUsed (P.gates u)).card : ℝ) ≤ novelReads D (P.gates u) := by
+      exact_mod_cast hi
+    linarith
+
+/-- The factor the contained bounds charge a product at `μ = 1`, `K = 1`, `b_w = b_a = 1/2`, `dd = emax = 1`: its
+second branch, `μ b_a / max(emax, K/(4 b_w dd)) = 1/2`. -/
+theorem factor_half : (1 / 2 : ℝ) ≤
+    max (min ((1 + √1) ^ 2 * (1 / 2 * (1 / 2) * 1 / 1)) (√2 * (1 + √1) * √(1 - 1) * (1 / 2 * √(1 / 2 / 1))))
+      (1 * (1 / 2) / max (1 : ℝ) (1 / (4 * (1 / 2) * 1))) :=
+  le_max_of_le_right (by rw [max_eq_left (by norm_num : (1 / (4 * (1 / 2) * 1) : ℝ) ≤ 1)]; norm_num)
+
+theorem not_bound {m x y : ℝ} (hm : 1 / 2 ≤ m) (hx : 1 ≤ x) (hy : y ≤ 0) : ¬ (m * x ≤ y) :=
+  fun h => by nlinarith
+
 end Nci.Witness
 
 namespace Nci.SecurityProofs
@@ -403,5 +554,86 @@ theorem UpdatedMatMulReads_nontrivial : Guarantees.UpdatedMatMulReads_nontrivial
   rw [ch1_G, Fin.sum_univ_one, show novelReads D (P1.gates 0) = 1 by decide]
   norm_num at hF ⊢
   linarith
+
+theorem ContainedTraining_honest : Guarantees.ContainedTraining_honest :=
+  ⟨complies_D, theta_id D, ch1_activationsSupport _, ch1_partialSumsSupport _ _, coverage_ch1⟩
+
+theorem ContainedTraining_nontrivial : Guarantees.ContainedTraining_nontrivial := by
+  refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, fun ℓ => ℓ.elim0, complies_D, theta_id D,
+    ch0_activationsSupport _ _ _, ch0_partialSumsSupport _ _ _ _, not_coverage_ch0, ?_⟩
+  have hF := F_ge (α := ((1 : ℕ) / (2 : ℕ) : ℝ)) (K := 1) (b_w := 1) (b_a := 2) (d := 1)
+    (by norm_num) (by norm_num) (by norm_num) (by norm_num) (by norm_num)
+  rw [size_D]
+  norm_num at hF ⊢
+  linarith
+
+theorem ContainedMatMulOn_honest : Guarantees.ContainedMatMulOn_honest :=
+  ⟨complies_D, theta_id D, darkReads_M1 _, ch1_activationsSupport _, ch1_partialSumsSupport _ _⟩
+
+theorem ContainedMatMulOn_nontrivial : Guarantees.ContainedMatMulOn_nontrivial :=
+  ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
+    fun _ => le_rfl, fun _ => le_rfl, complies_Dθ, not_theta_Dθ, darkReads_Mθ _, ch1_activationsSupport _,
+    ch1_partialSumsSupport _ _, not_bound factor_half (Nat.one_le_cast.2 (by decide)) (by norm_num)⟩
+
+theorem ContainedTrainingOn_honest : Guarantees.ContainedTrainingOn_honest :=
+  ⟨complies_D, theta_id D, darkReads_M1 _, ch1_activationsSupport _, ch1_partialSumsSupport _ _, coverage_ch1⟩
+
+theorem ContainedTrainingOn_nontrivial : Guarantees.ContainedTrainingOn_nontrivial :=
+  ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
+    fun _ => le_rfl, fun _ => le_rfl, complies_Dθ, not_theta_Dθ, darkReads_Mθ _, ch1_activationsSupport _,
+    ch1_partialSumsSupport _ _, coverage_ch1,
+    not_bound factor_half (by rw [size_D, dark_Mθ]; norm_num) (by norm_num)⟩
+
+theorem IncompressibleContainedTraining_honest : Guarantees.IncompressibleContainedTraining_honest :=
+  ⟨complies_D, theta_id D, ch1_T1_incompressible, coverage_ch1⟩
+
+theorem IncompressibleContainedTraining_nontrivial : Guarantees.IncompressibleContainedTraining_nontrivial := by
+  refine ⟨by norm_num, by norm_num, by norm_num, by norm_num, fun ℓ => ℓ.elim0, complies_D, theta_id D,
+    ch0_T0_incompressible, not_coverage_ch0, ?_⟩
+  have hF := F_ge (α := ((1 : ℕ) / (2 : ℕ) : ℝ)) (K := 1) (b_w := 1) (b_a := 2) (d := 1)
+    (by norm_num) (by norm_num) (by norm_num) (by norm_num) (by norm_num)
+  rw [size_D]
+  norm_num at hF ⊢
+  linarith
+
+theorem IncompressibleContainedMatMulOn_honest : Guarantees.IncompressibleContainedMatMulOn_honest :=
+  ⟨complies_D, theta_id D, darkReads_M1 _, ch1_T1_incompressible⟩
+
+theorem IncompressibleContainedMatMulOn_nontrivial : Guarantees.IncompressibleContainedMatMulOn_nontrivial :=
+  ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
+    fun _ => le_rfl, fun _ => le_rfl, complies_Dθ, not_theta_Dθ, darkReads_Mθ _, ch1_T1_incompressible,
+    not_bound factor_half (Nat.one_le_cast.2 (by decide)) (by norm_num)⟩
+
+theorem IncompressibleContainedTrainingOn_honest : Guarantees.IncompressibleContainedTrainingOn_honest :=
+  ⟨complies_D, theta_id D, darkReads_M1 _, ch1_T1_incompressible, coverage_ch1⟩
+
+theorem IncompressibleContainedTrainingOn_nontrivial : Guarantees.IncompressibleContainedTrainingOn_nontrivial :=
+  ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
+    fun _ => le_rfl, fun _ => le_rfl, complies_Dθ, not_theta_Dθ, darkReads_Mθ _, ch1_T1_incompressible, coverage_ch1,
+    not_bound factor_half (by rw [size_D, dark_Mθ]; norm_num) (by norm_num)⟩
+
+theorem coverage_pch1 : Assumptions.Coverage 1 D (2 * ch1.toPacked.G) := by
+  unfold Assumptions.Coverage
+  rw [size_D, show ch1.toPacked.G = 1 from rfl]
+  norm_num
+
+theorem PackedIncompressibleContainedMatMulOn_honest : Guarantees.PackedIncompressibleContainedMatMulOn_honest :=
+  ⟨complies_D, theta_id D, darkReads_M1 _, pch1_T1_incompressible⟩
+
+theorem PackedIncompressibleContainedMatMulOn_nontrivial :
+    Guarantees.PackedIncompressibleContainedMatMulOn_nontrivial :=
+  ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
+    fun _ => le_rfl, fun _ => le_rfl, complies_Dθ, not_theta_Dθ, darkReads_Mθ _, pch1_T1_incompressible,
+    not_bound factor_half (Nat.one_le_cast.2 (by decide)) (by norm_num)⟩
+
+theorem PackedIncompressibleContainedTrainingOn_honest :
+    Guarantees.PackedIncompressibleContainedTrainingOn_honest :=
+  ⟨complies_D, theta_id D, darkReads_M1 _, pch1_T1_incompressible, coverage_pch1⟩
+
+theorem PackedIncompressibleContainedTrainingOn_nontrivial :
+    Guarantees.PackedIncompressibleContainedTrainingOn_nontrivial :=
+  ⟨by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
+    fun _ => le_rfl, fun _ => le_rfl, complies_Dθ, not_theta_Dθ, darkReads_Mθ _, pch1_T1_incompressible,
+    coverage_pch1, not_bound factor_half (by rw [size_D, dark_Mθ]; norm_num) (by norm_num)⟩
 
 end Nci.SecurityProofs
