@@ -3,7 +3,8 @@
 The design this prices (FT, "fused transcript"):
 - The MAC's linear accumulator is unchanged, so the useful output stays exact and is denoised exactly as today.
 - A separate transcript register beside the accumulator write-back absorbs every instruction's accumulator words through
-  rho. Its initial state is the call's live coin. It never feeds back into the output.
+  rho. Its initial state is the call's live coin and the chain's id (one a tile, refused by the verifier if it repeats
+  under a coin, so tiles with equal words don't share a chain). It never feeds back into the output.
 - Every instruction that can advance the transcript costs at least one credited k-step (the trigger rule), and the
   transcript absorbs the instruction's format and shape tag.
 - At the call's end each transcript state is sealed with one SHA-512 under a hiding leaf.
@@ -366,9 +367,10 @@ def e2_affine_lemma(rng: np.random.Generator, T: int = 24, rows: int = 8, cols: 
     return out
 
 
-def _keccak_transcript(words_by_step: list[list[int]], iv_coin: int) -> list[int]:
+def _keccak_transcript(words_by_step: list[list[int]], iv_coin: int, chain_id: int = 0) -> list[int]:
     """Cross-lane FT-Keccak: each step absorbs up to 32 words (1,024 bits) into lanes 0..15, then one round."""
     lanes = [0] * 25
+    lanes[23] = chain_id & rho.M64
     lanes[24] = iv_coin & rho.M64
     for t, ws in enumerate(words_by_step):
         for q in range(0, len(ws), 32):

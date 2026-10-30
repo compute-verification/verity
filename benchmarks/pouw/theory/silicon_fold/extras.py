@@ -15,6 +15,9 @@
   streams, with and without on-chip rank-1 noise on both operands (a' = a + s_i v_k, b' = b + u_j w_k), counting gate-output
   toggles weighted by cell area, plus the operand and accumulator flops. The noise is removed exactly from the outputs.
 - **W, wiring.** The tap's width and length on each part, as arithmetic on stated parameters [estimate].
+- **E8, copy** (SI-NOISE's finding against FT as first written). With the coin alone as τ's start state, tiles whose absorbed
+  words repeat (zero data, or repeated declared blocks) share one τ, so one software chain serves the call. A chain id in the
+  start state, refused by the verifier on repeat, gives every tile its own τ.
 """
 from __future__ import annotations
 
@@ -31,6 +34,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+import silicon_fold  # noqa: E402
 import synth  # noqa: E402
 
 M32 = 0xFFFFFFFF
@@ -415,6 +419,33 @@ def wiring(unit_ge: dict[str, float], um2_per_ge: float = 0.798, pitch_um: float
     return out
 
 
+# ---------------------------------------------------------------------------------------------------------------- E8: copy
+
+def e8_copy(rng: np.random.Generator, tiles: int = 4, T: int = 8, use_id: bool = True, margin_w1: float = 3.75,
+            call: tuple[int, int] = (2048, 2048), tile: tuple[int, int] = (128, 256)) -> dict:
+    """Distinct τ over `tiles` tiles that absorb the same words, with the coin alone and with a chain id in the start state."""
+    coin = int(rng.integers(0, 1 << 63))
+    repeated = [[int(x) for x in rng.integers(0, 1 << 32, 32, dtype=np.uint64)] for _ in range(T)]
+    out = {}
+    for name, steps in (("zero", [[0] * 32 for _ in range(T)]), ("repeated", repeated)):
+        coin_only = {tuple(silicon_fold._keccak_transcript(steps, coin)) for _ in range(tiles)}
+        with_id = {tuple(silicon_fold._keccak_transcript(steps, coin, i + 1 if use_id else 0)) for i in range(tiles)}
+        out[name] = {"tiles": tiles, "distinct_coin_only": len(coin_only), "distinct_with_id": len(with_id)}
+    n = call[0] * call[1] // (tile[0] * tile[1])
+    out["copy_coin_only"] = {"call": list(call), "tile": list(tile), "tiles_a_call": n, "margin_w1": margin_w1,
+                             "t1": 1 - margin_w1 / n}
+    return out
+
+
+def e8_checks(e8: dict) -> list[tuple[str, bool]]:
+    cases = [e8[k] for k in ("zero", "repeated")]
+    return [
+        ("E8 with the coin alone as start state, tiles absorbing equal words share one τ (the copy)",
+         all(x["distinct_coin_only"] == 1 for x in cases)),
+        ("E8 a chain id in the start state gives every such tile its own τ", all(x["distinct_with_id"] == x["tiles"] for x in cases)),
+    ]
+
+
 # --------------------------------------------------------------------------------------------------------------- report
 
 def closure_checks(c: dict) -> list[tuple[str, bool]]:
@@ -443,7 +474,7 @@ def checks(res: dict) -> list[tuple[str, bool]]:
         ("E7 without noise zero data is cheaper than random by > 50%", e7["gap_no_noise"]["zero_vs_rand"] > 0.5),
         ("E7 with noise no stream is more than 10% cheaper than the noised honest stream",
          e7["gap_noise"]["min_noised_vs_llm_like_noised"] < 0.10),
-    ]
+    ] + e8_checks(res["e8"])
 
 
 def mutations(build: dict, result: dict, scratch: Path) -> list[tuple[str, bool]]:
@@ -467,6 +498,8 @@ def mutations(build: dict, result: dict, scratch: Path) -> list[tuple[str, bool]
     want = (acc.astype(np.int64) + np.sum(a * bb, axis=1)) & M32
     got, _ = nl.run({"a": _pack_lanes(a, 8), "b": _pack_lanes(bb, 8), "acc": acc})
     out.append(("one AND gate turned OR breaks the netlist check", not np.array_equal(got["y"], want.astype(np.uint64))))
+    e8 = e8_copy(np.random.default_rng(2), use_id=False)
+    out.append(("a chain id dropped from the start state is caught", not all(ok for _, ok in e8_checks(e8))))
     return out
 
 
@@ -494,6 +527,14 @@ def table(res: dict) -> str:
           "| stream | logic | flops | total | vs random s8 |", "|---|---:|---:|---:|---:|"]
     for k, x in e7["streams"].items():
         L.append(f"| {k} | {x['logic']:.0f} | {x['flops']:.0f} | {x['total']:.0f} | {x['vs_rand_s8']:.3f} |")
+    e8 = res["e8"]
+    L += ["", "## E8: copy (tiles absorbing equal words)", "", "| words | tiles | distinct τ, coin alone | distinct τ, with chain id |",
+          "|---|---:|---:|---:|"]
+    for k in ("zero", "repeated"):
+        L.append(f"| {k} | {e8[k]['tiles']} | {e8[k]['distinct_coin_only']} | {e8[k]['distinct_with_id']} |")
+    cp = e8["copy_coin_only"]
+    L.append(f"\nWith the coin alone, one software chain serves a {cp['call'][0]}x{cp['call'][1]} call of {cp['tiles_a_call']} "
+             f"tiles: T1 = 1 - {cp['margin_w1']}/{cp['tiles_a_call']} = {100 * cp['t1']:.1f}% (W1).")
     return "\n".join(L) + "\n"
 
 
@@ -514,6 +555,7 @@ def main() -> None:
     res = {"closure": closure(json.loads(Path(a.f1_build).read_text()), json.loads(Path(a.f1_result).read_text()))}
     res["e6"] = e6_separation(rng)
     res["e7"] = e7_energy(rng, scratch)
+    res["e8"] = e8_copy(rng)
     sy = json.loads(Path(a.synth).read_text())["modules"] if a.synth else {}
     if "noise_add9" in sy:
         res["noise_costs"] = noise_costs(sy["mac4_s8"]["ge"], sy["mac4_s9"]["ge"], sy["noise_add9"]["ge"])
