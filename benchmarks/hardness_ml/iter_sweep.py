@@ -39,8 +39,9 @@ def d1(size, tokens, ft_tokens, post_tokens):
 
 
 PRESETS = {
-    "d1": lambda: d1("w256", 20_000_000, 4_000_000, 1_000_000),
-    "smoke": lambda: d1("w128", 200_000, 65_536, 32_768),
+    "d1": lambda a: d1(a.size or "w256", a.tokens or 20_000_000, a.ft_tokens or 4_000_000,
+                       a.post_tokens or 1_000_000),
+    "smoke": lambda a: d1(a.size or "w128", 200_000, 65_536, 32_768),
 }
 
 
@@ -73,11 +74,15 @@ def main():
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("--pre-threads", type=int, default=16)
     ap.add_argument("--only", nargs="*", default=None)
+    ap.add_argument("--size", default=None)
+    ap.add_argument("--tokens", type=int, default=None, help="pretrain tokens")
+    ap.add_argument("--ft-tokens", type=int, default=None)
+    ap.add_argument("--post-tokens", type=int, default=None)
     a = ap.parse_args()
     out = Path(a.out)
     (out / "runs").mkdir(parents=True, exist_ok=True)
     (out / "logs").mkdir(parents=True, exist_ok=True)
-    pre, runs = PRESETS[a.preset]()
+    pre, runs = PRESETS[a.preset](a)
     if a.only:
         runs = [r for r in runs if r["name"] in a.only]
     base = out / "base.pt"
