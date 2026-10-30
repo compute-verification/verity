@@ -1,5 +1,5 @@
 """The attack families at a vector's prices: an attack's X, the cheapest attacks of a design, and the check every vector
-passes (the legacy `rs-price-vhj.py`'s `x_of`, `cheapest` and `check`).
+passes.
 
 An attack is a program of warp instructions a tensor MAC replaced (`data/attacks/<family>.jsonl`); X is its price over
 the MACs it replaces at the vector's MAC price, so X ≥ 1 means it costs at least the honest tensor MACs.
