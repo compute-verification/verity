@@ -1,7 +1,7 @@
 """The lead's kernel off the device (benchmarks/pouw/np_kernel): cpu_check.cc's ragged calls, whose padding rows carry their
 tags, lane-coin A' and coins (and a control whose padding rows have none is rejected), the fold's window, exact at
 `serving.LEAD_FOLD_BOUND` and at no other bound, G's rejection draw, ssn.cu's check holding served outputs within the same
-bound, and gate.py's GateRecord from a run's out directory."""
+bound, gate.py's GateRecord from a run's out directory, and the recorded one (gate.json)."""
 
 from __future__ import annotations
 
@@ -14,7 +14,8 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from verity.core.protocols.pouw.serving import LEAD_FOLD_BOUND, POUW_V2, SERIAL, variant_refusals
+from verity.core.protocols.pouw.serving import (LEAD_FOLD_BOUND, POUW_V2, SERIAL, GateRecord, lead_variant,
+                                                 variant_refusals)
 
 HERE = Path(__file__).resolve().parents[1] / "np_kernel"
 spec = importlib.util.spec_from_file_location("np_kernel_gate", HERE / "gate.py")
@@ -143,6 +144,36 @@ def test_a_run_built_from_other_sources_isnt_gated(tmp_path):
     with pytest.raises(G.GateError, match="k/layout.h differ"):
         G.record(out, "r-test", root)
     assert G.main([str(out), "--run", "r-test"], root) == 2
+
+
+def test_write_records_an_admitting_gate_which_admits_the_lead_only_while_its_sources_are_the_trees(tmp_path, capsys):
+    root, out = out_dir(tmp_path, HONEST + CONTROLS)
+    rec = tmp_path / "gate.json"
+    assert G.main([str(out), "--run", "r-test", "--write"], root, rec) == 0
+    v, g = G.recorded(root, rec)
+    assert g.run == "r-test" and variant_refusals(v, POUW_V2, SERIAL.name, SERVED, g) == []
+    assert json.loads(rec.read_text())["sources"] == {p: hashlib.sha256((root / p).read_bytes()).hexdigest()
+                                                      for p in ("k/layout.h", "k/ssn.cu")}
+    assert G.main(["--recorded"], root, rec) == 0
+    (root / "k" / "ssn.cu").write_text("// another kernel\n")
+    capsys.readouterr()
+    assert G.main(["--recorded"], root, rec) == 1 and f"the gate is {v.id}'s" in capsys.readouterr().out
+
+
+def test_write_records_no_refused_gate(tmp_path):
+    root, out = out_dir(tmp_path, HONEST)
+    rec = tmp_path / "gate.json"
+    assert G.main([str(out), "--run", "r-test", "--write"], root, rec) == 1 and not rec.exists()
+
+
+def test_the_recorded_gate_admits_the_lead_its_digest_names():
+    """gate.json against itself (its sources are other suites' files: `gate.py --recorded` holds it to the tree)."""
+    rec = json.loads(G.RECORD.read_text())
+    v = lead_variant(rec["source_sha256"], rec["binary_sha256"], "np-kernel")
+    g = GateRecord(**{**rec["gate"], "shapes": tuple(tuple(s) for s in rec["gate"]["shapes"])})
+    assert rec["variant"] == v.id == g.variant
+    assert variant_refusals(v, POUW_V2, SERIAL.name, SERVED, g) == [], (
+        "gate.json no longer admits the lead: rerun run.sh (CHECK=1) on an H200, then gate.py OUT --run RUN --write")
 
 
 def test_the_variant_is_named_by_its_sources_under_the_leads_config(tmp_path):

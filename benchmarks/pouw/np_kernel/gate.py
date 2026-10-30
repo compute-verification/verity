@@ -1,6 +1,11 @@
 """The lead's device gate: its `GateRecord` from one run of run.sh (CHECK=1), and whether serving admits it.
 
-  uv run python benchmarks/pouw/np_kernel/gate.py OUT --run RUN [--json]
+  uv run python benchmarks/pouw/np_kernel/gate.py OUT --run RUN [--json] [--write]
+  uv run python benchmarks/pouw/np_kernel/gate.py --recorded [--json]
+
+``--write`` records an admitting gate as the lead's (``gate.json``: the variant, the files it was built from with their
+sha256, and the GateRecord). ``--recorded`` reads that record and names the variant by this tree's copies of those files,
+so a source changed since the run names another variant, which the recorded gate doesn't admit.
 
 OUT is the run's out directory. The variant is named by the tree's files the build read (``sources.sha256``, each still
 this tree's, or the gate refuses: the record would name other sources) under `serving.LEAD_CONFIG`, and the binary by
@@ -37,15 +42,21 @@ SERVED = ((3072, 2048), (2048, 2048), (16384, 2048), (2048, 8192))
 #: the gate's own code: this file, ssn.cu (its check, which the source digest also covers), the SASS gate and its pins
 GATE_CODE = (HERE / "gate.py", HERE / "ssn.cu", ROOT / "benchmarks/pouw/harness/sass_gate.py",
              ROOT / "benchmarks/pouw/harness/sass_pins.json")
+#: the lead's GateRecord of record: the last run that admitted it (``--write``)
+RECORD = HERE / "gate.json"
 
 
 class GateError(Exception):
     pass
 
 
+def _listed(out: Path) -> list[tuple[str, str]]:
+    return [tuple(line.split(None, 1)) for line in (out / "sources.sha256").read_text().splitlines() if line.strip()]
+
+
 def sources(out: Path, root: Path = ROOT) -> list[Path]:
     """The files sources.sha256 names, each checked against the tree at `root`."""
-    listed = [line.split(None, 1) for line in (out / "sources.sha256").read_text().splitlines() if line.strip()]
+    listed = _listed(out)
     if not listed:
         raise GateError(f"{out / 'sources.sha256'} names no file")
     stale = [p for sha, p in listed if not (root / p).is_file() or hashlib.sha256((root / p).read_bytes()).hexdigest() != sha]
@@ -78,14 +89,19 @@ def gate_version() -> str:
     return f"np-kernel-gate/{h.hexdigest()[:12]}"
 
 
-def record(out: Path, run: str, root: Path = ROOT):
-    """The lead's variant and its GateRecord from the run's out directory, its sources checked against the tree at
-    `root`."""
+def _ledger():
     if str(HERE.parent / "harness") not in sys.path:
         sys.path.insert(0, str(HERE.parent / "harness"))
     import ledger
+    return ledger
+
+
+def record(out: Path, run: str, root: Path = ROOT):
+    """The lead's variant and its GateRecord from the run's out directory, its sources checked against the tree at
+    `root`."""
     from verity.core.protocols.pouw.serving import LEAD_CONFIG, GateRecord, lead_variant
 
+    ledger = _ledger()
     files = sources(out, root)
     sha, sass_ok, toolkit = binary(out)
     v = lead_variant(ledger.source_sha256(files, root, dict(LEAD_CONFIG)), sha, "np-kernel")
@@ -104,21 +120,40 @@ def record(out: Path, run: str, root: Path = ROOT):
     return v, g
 
 
-def main(argv: list[str] | None = None, root: Path = ROOT) -> int:
+def recorded(root: Path = ROOT, path: Path = RECORD):
+    """The lead's variant as the tree at `root` names it, from the files `path`'s record lists, and the recorded
+    GateRecord."""
+    from verity.core.protocols.pouw.serving import LEAD_CONFIG, GateRecord, lead_variant
+
+    rec = json.loads(path.read_text())
+    g = GateRecord(**{**rec["gate"], "shapes": tuple(tuple(s) for s in rec["gate"]["shapes"])})
+    v = lead_variant(_ledger().source_sha256([Path(p) for p in rec["sources"]], root, dict(LEAD_CONFIG)),
+                     rec["binary_sha256"], "np-kernel")
+    return v, g
+
+
+def main(argv: list[str] | None = None, root: Path = ROOT, path: Path = RECORD) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("out", type=Path, help="run.sh's out directory")
-    ap.add_argument("--run", required=True, help="the run's id")
+    ap.add_argument("out", type=Path, nargs="?", help="run.sh's out directory")
+    ap.add_argument("--run", help="the run's id")
     ap.add_argument("--json", action="store_true", help="one JSON object in place of the lines")
+    ap.add_argument("--write", action="store_true", help=f"record an admitting gate as the lead's ({RECORD.name})")
+    ap.add_argument("--recorded", action="store_true", help=f"the recorded gate ({RECORD.name}) against this tree")
     a = ap.parse_args(argv)
+    if a.recorded == bool(a.out and a.run) or (a.recorded and a.write):
+        ap.error("give OUT --run RUN [--write], or --recorded")
     from dataclasses import asdict
 
     from verity.core.protocols.pouw.serving import POUW_V2, SERIAL, variant_refusals
     try:
-        v, g = record(a.out, a.run, root)
-    except (GateError, OSError, KeyError, ValueError) as ex:
+        v, g = recorded(root, path) if a.recorded else record(a.out, a.run, root)
+    except (GateError, OSError, KeyError, ValueError, TypeError) as ex:
         print(f"gate: {ex}", file=sys.stderr)
         return 2
     refusals = variant_refusals(v, POUW_V2, SERIAL.name, SERVED, g)
+    if a.write and not refusals:
+        path.write_text(json.dumps({"variant": v.id, "source_sha256": v.source_sha256, "binary_sha256": v.binary_sha256,
+                                    "sources": {p: sha for sha, p in _listed(a.out)}, "gate": asdict(g)}, indent=1) + "\n")
     if a.json:
         print(json.dumps({"variant": v.id, "source_sha256": v.source_sha256, "binary_sha256": v.binary_sha256,
                           "gate": asdict(g), "refusals": refusals}, indent=1))
