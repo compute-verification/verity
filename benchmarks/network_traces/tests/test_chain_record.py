@@ -3,7 +3,7 @@ certifier-serve run's records, clock certificates and the client's kept copies (
 window's declared sync signed), refuses the window of a record whose signature is changed, every window from a clock
 certificate's, a kept certificate whose signature is changed, and a key under `lms.DEPLOYED`'s height with --deployed;
 the report needs the endpoint's step on the advice profile and never accepts a stand-in, merges N2's members proved in
-several runs, and counts a negative that escaped a sampled draw within the draw's bound but never one whose faulty
+several runs, and counts a negative that escaped a sampled draw within the draw's bound but never one whose incorrect
 window was drawn; the draw's bound at δ is the integrity profile's count bound, which counts a miss of exactly δ, as
 Lean's does; leak counts the scan's widths and terms on a warden run's files, and refuses a sampled draw and a warden
 the scan's class doesn't serve; the job's copy of the

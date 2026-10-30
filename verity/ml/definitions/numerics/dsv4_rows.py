@@ -78,9 +78,9 @@ EVALUATORS = {
 _MHC_IDS = EVIDENCE["dsv4_mhc_capture"]
 _MHC_PROVENANCE = {
     "property": "dsv4_mhc_capture (verity-vllm/dsv4-mhc-capture/v1), tests/properties/dsv4_mhc_capture_gpu.py",
-    "run": _MHC_IDS["run"],
+    "run_record": _MHC_IDS["run_record"],
     "art": _MHC_IDS["art"],
-    "step_fit": f"{EVIDENCE['hopper_tf32_k8_step_probe']['run']} (the probe that fitted HopperTf32WgmmaDot8_v1's k8 step alone)",
+    "step_fit": f"{EVIDENCE['hopper_tf32_k8_step_probe']['run_record']} (the probe that fitted HopperTf32WgmmaDot8_v1's k8 step alone)",
     "device": "cc 9.0 with 132 SMs (the capture's gate), vLLM d9105ea80, DeepGEMM on (VLLM_USE_DEEP_GEMM=1, vLLM's default)",
     "captured_utc": _MHC_IDS["captured_utc"],
     "cases": "the fused post + pre at 1, 2, 7, 8, 9, 15 and 16 tokens; the TF32 post + pre at 17, 64, 65, 128 and 129 (MhcPost_v1 "
@@ -94,7 +94,7 @@ _MHC_PROVENANCE = {
 _COMPRESSOR_IDS = EVIDENCE["dsv4_compressor_capture"]
 _COMPRESSOR_PROVENANCE = {
     "property": "dsv4_compressor_capture (verity-vllm/dsv4-compressor-capture/v1), tests/properties/dsv4_compressor_capture_gpu.py",
-    "run": _COMPRESSOR_IDS["run"],
+    "run_record": _COMPRESSOR_IDS["run_record"],
     "art": _COMPRESSOR_IDS["art"],
     "device": "cc 9.0 with 132 SMs (the capture's gate), vLLM d9105ea80, nvidia-cutlass-dsl 4.6.2",
     "captured_utc": _COMPRESSOR_IDS["captured_utc"],
@@ -108,7 +108,7 @@ _COMPRESSOR_PROVENANCE = {
 _FLASHMLA_IDS = EVIDENCE["dsv4_flashmla_capture"]
 _FLASHMLA_PROVENANCE = {
     "property": "dsv4_flashmla_capture (verity-vllm/dsv4-flashmla-capture/v1), tests/properties/dsv4_flashmla_capture_gpu.py",
-    "run": _FLASHMLA_IDS["run"],
+    "run_record": _FLASHMLA_IDS["run_record"],
     "art": _FLASHMLA_IDS["art"],
     "device": "cc 9.0 with 132 SMs (the capture's gate), vLLM d9105ea80 vendoring FlashMLA 6bc49418",
     "captured_utc": _FLASHMLA_IDS["captured_utc"],
@@ -125,7 +125,7 @@ _FLASHMLA_PROVENANCE = {
 _INSERT_IDS = EVIDENCE["dsv4_qnorm_insert_capture"]
 _INSERT_PROVENANCE = {
     "property": "dsv4_qnorm_insert_capture (verity-vllm/dsv4-qnorm-insert-capture/v1), tests/properties/dsv4_qnorm_insert_capture_gpu.py",
-    "run": _INSERT_IDS["run"],
+    "run_record": _INSERT_IDS["run_record"],
     "art": _INSERT_IDS["art"],
     "device": "cc 9.0 with 132 SMs (the capture's gate), vLLM d9105ea80",
     "captured_utc": _INSERT_IDS["captured_utc"],
@@ -141,7 +141,6 @@ _INSERT_PROVENANCE = {
 _MOE_IDS = EVIDENCE["dsv4_moe_capture"]
 _MOE_PROVENANCE = {
     "property": "dsv4_moe_capture (verity-vllm/dsv4-moe-capture/v1), tests/properties/dsv4_moe_capture_gpu.py",
-    "run": _MOE_IDS["run"],
     "run_record": _MOE_IDS["run_record"],
     "art": None,
     "gap": "the capture ran with VLLM_BATCH_INVARIANT=1, where vLLM's default is 0, so the served row's publish job names "
@@ -161,7 +160,7 @@ _MOE_PROVENANCE = {
 _Q_NORM_IDS = EVIDENCE["dsv4_q_norm_commit"]
 _BLOCK_NORM_PROVENANCE = {
     "property": None,
-    "run": _Q_NORM_IDS["run"],
+    "run_record": _Q_NORM_IDS["run_record"],
     "art": None,
     "device": "cc 9.0, the eight devices of the row's attempt-3 Commit (the run above), vLLM d9105ea80, Triton 3.7.1",
     "captured_utc": _Q_NORM_IDS["captured_utc"],
@@ -196,7 +195,7 @@ _INDEXER_DEFINITIONS = ("verity/ml/definitions/registry/dsv4_indexer.py (the ref
 _INDEXER_IDS = EVIDENCE["dsv4_indexer_capture"]
 _INV_ROPE_PROVENANCE = {
     "property": "dsv4_indexer_capture (verity-vllm/dsv4-indexer-capture/v1), tests/properties/dsv4_indexer_capture_gpu.py",
-    "run": _INDEXER_IDS["run"],
+    "run_record": _INDEXER_IDS["run_record"],
     "art": _INDEXER_IDS["art"],
     "device": "cc 9.0 with 132 SMs (the capture's gate), vLLM d9105ea80",
     "captured_utc": _INDEXER_IDS["captured_utc"],
@@ -209,14 +208,14 @@ _INV_ROPE_PROVENANCE = {
 
 _SCORE_PROVENANCE = {
     "property": "dsv4_compressor_capture (verity-vllm/dsv4-compressor-capture/v1), tests/properties/dsv4_compressor_capture_gpu.py",
-    "run": _COMPRESSOR_IDS["run"],
+    "run_record": _COMPRESSOR_IDS["run_record"],
     "art": _COMPRESSOR_IDS["art"],
     "device": "cc 9.0 with 132 SMs (the capture's gate), vLLM d9105ea80",
     "captured_utc": _COMPRESSOR_IDS["captured_utc"],
     "cases": "score/c4 (W 1024, the ratio-4 attention state, the served row's width; 2,308 rows) and score/c128 (W 512; 6,146 "
              "rows): each state row save_partial_states writes, its score half against Dsv4CompressorScore_v1{W} of its score row and "
              "ape[pos % ratio], with zero, infinite and NaN scores, 0 mismatches",
-    "also": {"property": "dsv4_indexer_capture", "run": _INDEXER_IDS["run"],
+    "also": {"property": "dsv4_indexer_capture", "run_record": _INDEXER_IDS["run_record"],
              "art": _INDEXER_IDS["art"],
              "cases": "score/served (W 256, the indexer's state; 4,868 rows): each score half against score_twin and the Definition, "
                       "0 mismatches"},

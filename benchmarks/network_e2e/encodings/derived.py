@@ -2,11 +2,11 @@
 because the certified I/O, the committed values, the registered config or the advice's own history already fix them, and
 the advice that remains.
 
-The advice is public and its length is the leak (`A_c`): LEAK-LEAN's `BitsCount` needs at most 2^c accepted advice
-strings charged ≤ c bits, so the encoding must be injective on everything the audit accepts. A field leaves the string
-only when it is *canonical and checked*: a function of the config, the rest of the string and the certified I/O that the
-unit holding that I/O recomputes and holds the advice to, so for a given I/O no choice hides in it. Any other field is
-sent and charged, a *forced* one (fixed by witness, but by a rule no unit checks yet) included.
+The advice is public and its length is the leak (`A_c`): the sampled leak bound (`hAs`) needs at most 2^c accepted
+advice strings charged ≤ c bits, so the encoding must be injective on everything the audit accepts. A field leaves the
+string only when it is *canonical and checked*: a function of the config, the rest of the string and the certified I/O
+that the unit holding that I/O recomputes and holds the advice to, so for a given I/O no choice hides in it. Any other
+field is sent and charged, a *forced* one (fixed by witness, but by a rule no unit checks yet) included.
 
 **What each checker holds.** In the clear: the residual below and the registered config (`Config`: block size, the KV
 pool's size, the token budget, the stop ids, the scheduler mode). As witness, inside proofs only: the certified ingress

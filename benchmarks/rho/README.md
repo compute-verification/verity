@@ -122,7 +122,7 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 | `params.py` | `Registry`: dotted keys over `data/*.toml`, `override`, `fields` |
 | `scenario.py` | `build`, `evaluate → Result`, `seconds` |
 | `analysis.py` | `sweep`, `tornado`, `threshold`, `dangers`, `rescues`, `corner`, `margins`, `phase`, `frontier`, `attribution`, `upto` |
-| `operating.py` | `work`, `exfil`, `points`, `faulty` |
+| `operating.py` | `work`, `exfil`, `points`, `incorrect` |
 | `figures.py` | `render` |
 | `lean.py` | `status(name)`, `weakest(cites)` |
 
