@@ -129,9 +129,9 @@ unsealed run's; only the link's bytes change. The first unit that doesn't open i
 it: its ingress window and every later one fault `malformed`.
 
 **The lead's calls** (`Proxy(calls=…)`, off by default; `calls`): the proxies of all of a node's boundary links share
-the node's calls (`calls.NodeCalls`), and each egress and ingress tick counts its bucket against the calls open when it
-runs: ⌈log2(r + 1)⌉ timing bits at the grid's allocation r, and 8·B bits a real frame. A call past its bits is refused
-in the calls' record, and the link is unchanged. The prover registers its calls on the control channel
+the node's calls (`calls.NodeCalls`), and each egress and ingress tick counts its bucket against the forward open when
+it runs: ⌈log2(r + 1)⌉ timing bits at the grid's allocation r, and 8·B bits a real frame. A forward past its bits is
+refused in the calls' record, and the link is unchanged. The prover registers its calls on the control channel
 (`calls.serve_calls`), which ends at the certifier and is no boundary link.
 
 **Back from maintenance** (`Proxy(start=k, position=p)`, off by default): a certifier that was down serves from window k
@@ -1165,9 +1165,9 @@ class Proxy:
       clock then; `releases` holds each bucket's `pacer.Report`, and each egress record is published once its last
       bucket's is in;
     - with `calls` (off by default), the node's calls (`calls.NodeCalls`), which every proxy of the node's boundary
-      links shares: each egress and ingress tick counts its bucket against the calls open when it runs, in the tick's
+      links shares: each egress and ingress tick counts its bucket against the forward open when it runs, in the tick's
       PoUW window of `pouw_window` certifier windows, at ⌈log2(r + 1)⌉ timing bits for the grid's allocation r and
-      8·B bits a real frame. It changes nothing on the link: a call past its bits is refused in the calls' record, and
+      8·B bits a real frame. It changes nothing on the link: a forward past its bits is refused in the calls' record, and
       no frame is dropped or held for it;
     - `until(predicate)` waits until the proxy's state satisfies it, for a caller that drives a `VirtualClock`."""
 
@@ -1452,7 +1452,7 @@ class Proxy:
         await self._ticks("ingress", p, self.bucketer.certifier, tick)
 
     def _count(self, t: int, params: GridParams, n: int) -> None:
-        """Bucket t of a grid of `params`, holding n real frames, against the node's open calls."""
+        """Bucket t of a grid of `params`, holding n real frames, against the node's open forward."""
         if self.calls is not None:
             self.calls.tick(t // params.buckets // self.pouw_window, params.allocation, [8 * params.frame_bytes] * n)
 
