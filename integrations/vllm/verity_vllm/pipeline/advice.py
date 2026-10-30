@@ -94,11 +94,10 @@ class Compiler:
 def registered_compiler(name: str = COMPILER, digest: str | None = None, cap_bits: int = CAP_BITS) -> AW.Capped:
     """The compiler the advice is bound to: `advice_windows.Capped` (whose digest names the inner compiler's and ℓ =
     ``cap_bits``) over ``name``, whose digest is ``digest``, else the verifier's `interface.compiler_digest` of ``name`` over
-    the integration's import closure (`research_tools.CLOSURE`) in this git work tree."""
+    the integration's import closure (`source_identity.closure()`) in this git work tree."""
     if digest is None:
-        from verity_vllm.pipeline import research_tools as RT
         from verity_vllm.pipeline import source_identity as SI
-        digest = IF.compiler_digest(name, SI.TREE, [g.removesuffix("/**") for g in RT.CLOSURE])
+        digest = IF.compiler_digest(name, SI.TREE, [g.removesuffix("/**") for g in SI.closure()])
     return AW.Capped(Compiler(name, digest), cap_bits)
 
 
