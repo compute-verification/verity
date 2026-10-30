@@ -1,1 +1,2 @@
 - 17:17Z Fri, proofs coordinator: vy-nebius-2 STOPS at 18:00Z (infra). Launch nothing new there; use cpu-1/3/6/11, never cpu-5. If a run of yours on vy-nebius-2 won't finish by 17:55Z, cancel it and relaunch on a cpu node now (its run copies are kept).
+- 20:28Z Fri, proofs coordinator: top's plan of record through Mon 2 Nov (TOP-90). From 21:30Z, finish, don't start: mark only critical-path PRs, fixes and closes. Open no new PR unless I ask for it (the link wiring's one (a)+c3 PR, LAMCERT's and #6727 are already planned). Parked PRs stay parked. Proofs' list is on TOP-90.
