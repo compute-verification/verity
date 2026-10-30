@@ -2765,11 +2765,76 @@
    "assumptions": [],
    "type_hash": "2d8170bf6c6627424710a8c3e095295f580bdfa1b7934c90a76e0356caa3c517"
   },
+  "Properties.Site.checks_honest": {
+   "owner": "@lean",
+   "signature": [
+    "Properties.Site.checks_honest :",
+    "  And",
+    "    (Eq",
+    "      (Core.Site.Registration.check Properties.Site.witnessDigests Properties.Site.witnessAuditor",
+    "        Core.Site.Registration.Composite.remote Properties.Site.honestLog)",
+    "      (Except.ok (Core.Site.ofLog Properties.Site.honestLog)))",
+    "    (Verity.Registration.Valid (Properties.Site.digests Properties.Site.witnessDigests)",
+    "      (Properties.Site.auditor Properties.Site.witnessAuditor)",
+    "      (Properties.Site.composite Core.Site.Registration.Composite.remote)",
+    "      (Properties.Site.log Properties.Site.honestLog))"
+   ],
+   "assumptions": [],
+   "type_hash": "adca6ff5253544af0d324781a65ce7a8b47069ab3153dd4a456faab8aaa7063c"
+  },
+  "Properties.Site.checks_nontrivial": {
+   "owner": "@lean",
+   "signature": [
+    "Properties.Site.checks_nontrivial :",
+    "  Not",
+    "    (Eq (Option.map Properties.Site.site (Properties.Site.acceptAllCheck Properties.Site.staleLog).toOption)",
+    "      (ite",
+    "        (Verity.Registration.Valid (Properties.Site.digests Properties.Site.witnessDigests)",
+    "          (Properties.Site.auditor Properties.Site.witnessAuditor)",
+    "          (Properties.Site.composite Core.Site.Registration.Composite.remote)",
+    "          (Properties.Site.log Properties.Site.staleLog))",
+    "        (Option.some (Verity.Site.ofLog (Properties.Site.log Properties.Site.staleLog))) Option.none))"
+   ],
+   "assumptions": [],
+   "type_hash": "00140ea54fda7516a0ae67c4aaf7ffc30baed54c6fb298a7ad040725592681ab"
+  },
   "Properties.Site.entryValid": {
    "owner": "@lean",
    "signature": ["Properties.Site.entryValid : Properties.Site.EntryValid"],
    "assumptions": [],
    "type_hash": "8a89c567162cc9fa3f76cdf2e094f88fd657e778e58d1f37f25dd9b1ce78749f"
+  },
+  "Properties.Site.entryValid_honest": {
+   "owner": "@lean",
+   "signature": [
+    "Properties.Site.entryValid_honest :",
+    "  And",
+    "    (Eq",
+    "      (Core.Site.Registration.Entry.refusal Properties.Site.witnessDigests Properties.Site.witnessAuditor",
+    "        Core.Site.Registration.Composite.remote Properties.Site.emptySite \"genesis\" Properties.Site.honestEntry)",
+    "      Option.none)",
+    "    (Verity.Registration.Entry.Valid (Properties.Site.digests Properties.Site.witnessDigests)",
+    "      (Properties.Site.auditor Properties.Site.witnessAuditor)",
+    "      (Properties.Site.composite Core.Site.Registration.Composite.remote)",
+    "      (Properties.Site.site Properties.Site.emptySite) \"genesis\" (Properties.Site.regEntry Properties.Site.honestEntry))"
+   ],
+   "assumptions": [],
+   "type_hash": "98c3c342f109d3c30375ebbd555b968ea8ce4285536799e234ff832f049d4e21"
+  },
+  "Properties.Site.entryValid_nontrivial": {
+   "owner": "@lean",
+   "signature": [
+    "Properties.Site.entryValid_nontrivial :",
+    "  Not",
+    "    (Iff (Eq (Properties.Site.acceptAllRefusal Properties.Site.staleEntry) Option.none)",
+    "      (Verity.Registration.Entry.Valid (Properties.Site.digests Properties.Site.witnessDigests)",
+    "        (Properties.Site.auditor Properties.Site.witnessAuditor)",
+    "        (Properties.Site.composite Core.Site.Registration.Composite.remote)",
+    "        (Properties.Site.site Properties.Site.emptySite) \"genesis\"",
+    "        (Properties.Site.regEntry Properties.Site.staleEntry)))"
+   ],
+   "assumptions": [],
+   "type_hash": "9652f423b69623e86918b46b092a3fb8f6056c8e80e689b1e6e2b18b39c87391"
   },
   "Properties.Site.fold": {
    "owner": "@lean",
@@ -2783,11 +2848,82 @@
    "assumptions": [],
    "type_hash": "bded101a69bef766ebdd41f5169a68b8093d468663cfbc1fe206581d58ac002c"
   },
+  "Properties.Site.refusedAt_honest": {
+   "owner": "@lean",
+   "signature": [
+    "Properties.Site.refusedAt_honest :",
+    "  And",
+    "    (Eq",
+    "      (Core.Site.Registration.check Properties.Site.witnessDigests Properties.Site.witnessAuditor",
+    "        Core.Site.Registration.Composite.remote Properties.Site.honestLog)",
+    "      (Except.ok (Core.Site.ofLog Properties.Site.honestLog)))",
+    "    (Eq",
+    "      (Core.Site.Registration.check Properties.Site.witnessDigests Properties.Site.witnessAuditor",
+    "        Core.Site.Registration.Composite.remote Properties.Site.staleLog)",
+    "      (Except.error { fst := 1, snd := Core.Site.Registration.Refusal.previous }))"
+   ],
+   "assumptions": [],
+   "type_hash": "2a2c817c80c36b43aaf2449ca7973b6da1a1e97bccc464d8aa183aac2783e2b5"
+  },
+  "Properties.Site.refusedAt_nontrivial": {
+   "owner": "@lean",
+   "signature": [
+    "Properties.Site.refusedAt_nontrivial (i : Fin (List.length Properties.Site.honestLog)) :",
+    "  Not",
+    "    (Eq",
+    "      (Verity.Registration.Entry.refusal (Properties.Site.digests Properties.Site.witnessDigests)",
+    "        (Properties.Site.auditor Properties.Site.witnessAuditor)",
+    "        (Properties.Site.composite Core.Site.Registration.Composite.remote)",
+    "        (Verity.Site.ofLog (Properties.Site.log (List.take i.val Properties.Site.honestLog)))",
+    "        (Verity.Registration.head (Properties.Site.digests Properties.Site.witnessDigests)",
+    "          (Properties.Site.composite Core.Site.Registration.Composite.remote)",
+    "          (Properties.Site.log (List.take i.val Properties.Site.honestLog)))",
+    "        (Properties.Site.regEntry (Fin.instGetElemFinVal.getElem Properties.Site.honestLog i ⋯)))",
+    "      (Option.some (Properties.Site.refusal Core.Site.Registration.Refusal.previous)))"
+   ],
+   "assumptions": [],
+   "type_hash": "2e85460be8aae15812eca0923faafa0cd49f467fa60614f8921ccf5f0d62a5e8"
+  },
   "Properties.Site.refuses": {
    "owner": "@lean",
    "signature": ["Properties.Site.refuses : Properties.Site.Refuses"],
    "assumptions": [],
    "type_hash": "cb22f6c9f5a52ccc946173ae7376585926859abd08933bb077686088442d0087"
+  },
+  "Properties.Site.refuses_honest": {
+   "owner": "@lean",
+   "signature": [
+    "Properties.Site.refuses_honest :",
+    "  And",
+    "    (Eq",
+    "      (Core.Site.Registration.Entry.refusal Properties.Site.witnessDigests Properties.Site.witnessAuditor",
+    "        Core.Site.Registration.Composite.remote Properties.Site.emptySite \"genesis\" Properties.Site.honestEntry)",
+    "      Option.none)",
+    "    (Eq",
+    "      (Verity.Registration.Entry.refusal (Properties.Site.digests Properties.Site.witnessDigests)",
+    "        (Properties.Site.auditor Properties.Site.witnessAuditor)",
+    "        (Properties.Site.composite Core.Site.Registration.Composite.remote)",
+    "        (Properties.Site.site Properties.Site.emptySite) \"genesis\"",
+    "        (Properties.Site.regEntry Properties.Site.honestEntry))",
+    "      Option.none)"
+   ],
+   "assumptions": [],
+   "type_hash": "0cfb9aae510c0f167fc6285d189da21d5ee44ab4a164f8dbf571f7b88278ff42"
+  },
+  "Properties.Site.refuses_nontrivial": {
+   "owner": "@lean",
+   "signature": [
+    "Properties.Site.refuses_nontrivial :",
+    "  Not",
+    "    (Eq (Option.map Properties.Site.refusal (Properties.Site.acceptAllRefusal Properties.Site.staleEntry))",
+    "      (Verity.Registration.Entry.refusal (Properties.Site.digests Properties.Site.witnessDigests)",
+    "        (Properties.Site.auditor Properties.Site.witnessAuditor)",
+    "        (Properties.Site.composite Core.Site.Registration.Composite.remote)",
+    "        (Properties.Site.site Properties.Site.emptySite) \"genesis\"",
+    "        (Properties.Site.regEntry Properties.Site.staleEntry)))"
+   ],
+   "assumptions": [],
+   "type_hash": "18aa0be157689c21712bf3aeb5199fb4b9b22378baf5efaf9efb9df44d38cb47"
   },
   "Verity.remote_soundness_of_subprotocols": {
    "owner": "@soundness",
@@ -4109,6 +4245,14 @@
    "Pous.Period.SecurityProofs.periodHeldHonest": "completeness: the honest lemma of periodHeld and periodHeldDeployed: at an honest period on one H200 holding all of C* (honestRun, 2^30 bits on chip, one PCIe Gen 5 x16 side channel of 437,248,000 bits a round) and the honest strategy that keeps all of C and answers by lookup (honestStrategy), the device model DeviceModel holds at the deployed budget and the instantiation Instantiates holds for every audit under a 32-byte session id, the certificate HONEST_S = 63,000,000 bits is positive and fits the state bound, and the budget is the deadline's at the measured floor (DEADLINE_ROUNDS <= RING_D, the 1.995x margin; art:23a323f3, r20260929-060834-0ec4)",
    "Pous.Period.SecurityProofs.periodHeldNontrivial": "completeness: the nontrivial lemma of periodHeld and periodHeldDeployed: at a period whose capacity account holds nothing, an accept-all verdict fails their conclusion wherever the period's data holds no break (a concrete audit with no break needs SHA-512 on each of the table's 2^20 strings, so that is a hypothesis), and their event is false at the honest period",
    "Properties.Pouw.ServedValues.SecurityProofs.rightValues": "frozen (no-function,world-unlisted): H1J10RCheckedCreditPeriod's period and premises, less UnitFixed and the play's folded words, with its bound in AND gates of the registered declaration D under the lowering pinned at registration (Verity.creditSize, Definitions.Core.Formalism): except with probability delta_s + n(delta_bind + delta_ks), delta_coin plus delta_crypto, an accepted period's right blocks (DrawnLayer.Good under periodMode) have total AND count at least (1 - eps_skip)_+ S, S the credited size of the windows before the first refusal, eps_skip = sigma eps(j) N_live / S, and each block's AND count taken outside the ledger of gates another protocol credits; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. A values guarantee, not a compute claim: right values aren't work. Right is the accounting model's DrawnLayer.Good, not yet tied to the committed values Credit.window checks. No premise beyond H1's: TileDrawIsCoin, TileServiceSound, RegisteredBeforeDraw, SaltIsLiveCoin and SharedNoiseLucks, the one computational premise. Proved from H1J10RCheckedCreditPeriod at a play whose fixed words are the right blocks' (Proofs.Pouw.ServedValues), with an honest and a nontrivial witness (Proofs.Pouw.ServedValues.Honest).",
+   "Properties.Site.refuses_honest": "completeness: Refuses's honest lemma: the code accepts honestEntry, a site with one host and its uplink, against the empty Site at the genesis, and so does the spec, each decided by the code's check, so Refuses holds at a concrete log",
+   "Properties.Site.refuses_nontrivial": "lemma: Refuses's nontrivial lemma: an entry check that accepts everything refuses staleEntry, which follows no head, with no refusal, and the spec refuses it, so Refuses says something of the code's check",
+   "Properties.Site.entryValid_honest": "completeness: EntryValid's honest lemma: the code accepts honestEntry against the empty Site at the genesis, and it is valid there, each decided by the code's check, so EntryValid holds at a concrete log",
+   "Properties.Site.entryValid_nontrivial": "lemma: EntryValid's nontrivial lemma: an entry check that accepts everything accepts staleEntry, which is not valid, so EntryValid says something of the code's check",
+   "Properties.Site.checks_honest": "completeness: Checks's honest lemma: the code's check accepts honestLog with the code's Site of it, and the log is valid, each decided by the code's check, so Checks holds at a concrete log",
+   "Properties.Site.checks_nontrivial": "lemma: Checks's nontrivial lemma: a log check that accepts everything accepts staleLog, which is not valid, so Checks says something of the code's check",
+   "Properties.Site.refusedAt_honest": "completeness: RefusedAt's honest lemma: the code's check accepts honestLog and refuses staleLog at its second entry, as not following the head, each decided by the code's check, so RefusedAt holds at a concrete log",
+   "Properties.Site.refusedAt_nontrivial": "lemma: RefusedAt's nontrivial lemma: a log check that refuses everything at its first entry, as not following the head, names a refusal the spec does not give honestLog's first entry, so RefusedAt says something of the code's check",
    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundHonest": "completeness: the honest lemma of wipeSurvivorBound: certify certifies a session of at most MAX_READS reads with no egress, at eps = 2^-128 and foreign_bits the StreamedWipeMeetsReads threshold at r = ratio k, and the honest strategy (the labels written into the store, each read answered from it, no egress) has its fill the labels' n * 512 bits, its egress in a set of 2^0 strings and meets the observed event on every run, so the theorem's event is not empty",
    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundNontrivial": "completeness: the nontrivial lemma of wipeSurvivorBound: at one segment, a strategy that keeps the whole store and answers zeros fails the survivor bound at the published pair under a verdict that accepts every run, with every egress in A, for every PRF: it keeps the published 11,709,069 bits (2^19 labels, 2152 reads, r = 24) with probability 1, while eps is 2^-128 and the PRF advantage and delta_net are 0",
    "Verity.soundness_at_of_targets": "frozen (premise): the union bound at every composite's compiled verifier in the causal game (Verity.SoundnessOf: Verity.Vocab.SoundnessAt from each of the composite's subprotocols' targets, Verity.Vocab.Target), the one statement Verity.soundness_of_subprotocols states at onsite and Verity.remote_soundness_of_subprotocols at remote; each target is a hypothesis until its subprotocol's piece proves it, Vocab's fields are given until each subprotocol defines them, and each subprotocol's error is Accounting.condError on a quantitative collision premise about its fixed finder (Vocab.FinderCR) and a forgery premise about its fixed forger (Vocab.Unforgeable, Hash.Assumptions.LmsUnforgeable at the compiled LMS verifier): its delta plus the published eps_forge at the forger's budget and the device's signatures plus its loss at Pr[B^tau], else top",
@@ -5418,10 +5562,18 @@
    },
    "guarantees": [
     "Properties.Site.checks",
+    "Properties.Site.checks_honest",
+    "Properties.Site.checks_nontrivial",
     "Properties.Site.entryValid",
+    "Properties.Site.entryValid_honest",
+    "Properties.Site.entryValid_nontrivial",
     "Properties.Site.fold",
     "Properties.Site.refusedAt",
-    "Properties.Site.refuses"
+    "Properties.Site.refusedAt_honest",
+    "Properties.Site.refusedAt_nontrivial",
+    "Properties.Site.refuses",
+    "Properties.Site.refuses_honest",
+    "Properties.Site.refuses_nontrivial"
    ]
   },
   "CoreRemote": {
@@ -7003,10 +7155,17 @@
    },
    "guarantees": [
     "Properties.Site.checks",
+    "Properties.Site.checks_honest",
+    "Properties.Site.checks_nontrivial",
     "Properties.Site.entryValid",
+    "Properties.Site.entryValid_honest",
+    "Properties.Site.entryValid_nontrivial",
     "Properties.Site.fold",
     "Properties.Site.refusedAt",
-    "Properties.Site.refuses"
+    "Properties.Site.refusedAt_nontrivial",
+    "Properties.Site.refuses",
+    "Properties.Site.refuses_honest",
+    "Properties.Site.refuses_nontrivial"
    ]
   },
   "Definitions.Core.Digest": {
@@ -7403,10 +7562,17 @@
    },
    "guarantees": [
     "Properties.Site.checks",
+    "Properties.Site.checks_honest",
+    "Properties.Site.checks_nontrivial",
     "Properties.Site.entryValid",
+    "Properties.Site.entryValid_honest",
+    "Properties.Site.entryValid_nontrivial",
     "Properties.Site.fold",
     "Properties.Site.refusedAt",
+    "Properties.Site.refusedAt_nontrivial",
     "Properties.Site.refuses",
+    "Properties.Site.refuses_honest",
+    "Properties.Site.refuses_nontrivial",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -16200,19 +16366,25 @@
    ]
   },
   "Properties.Core.Site": {
-   "digest": "c92aaa8b6da488367e0b87a609676ef3c007ffad57e7df4ed0539ab00f292b7f",
+   "digest": "88e321d83a70708861dea930573615e52552f46f3e2768d333624d81a7ecdd28",
    "definitions": {
     "Properties.Site.Checks": "5c85187526f36ba56b770f4afe24668dd29ba8e1be76f0a2c9805525f46e7ef1",
     "Properties.Site.EntryValid": "1c71e5f970302b6d0e99303656e552e42c79f58cc1a20506b7c3dd32559f4828",
     "Properties.Site.Fold": "3ce6342cf94c0c55b7b67d3a692e2bf1e35bcd4c113d4cd95d23ed34a55ad72a",
     "Properties.Site.RefusedAt": "b37514c9d7fa25933cc7ada2ec4ab9e0917bb35e76ed7888f72c7a3f5ad3a3d4",
     "Properties.Site.Refuses": "557604ef82abca6cd2e034c7d741d3b7df99aae695450de191031e2510d594ec",
+    "Properties.Site.acceptAllCheck": "1d1da3316b1a8b84008be81f29230714002a8e6b9d2c5c5fcfb0dfba06b321c9",
+    "Properties.Site.acceptAllRefusal": "375be3f8729607be48170c4dd925d03df18e1222c7f4ee60c6bd981ba431bb9f",
     "Properties.Site.auditor": "b8ea7c2e7d50896a547e333d95e7c8c804c41c9967ac2b026bb1cb875dff854c",
     "Properties.Site.composite": "ebf4fe7b76177b559c7c276bc42aa28f802b4b6831c068205b50be5186bf8adb",
     "Properties.Site.deviceFigures": "88ea3c9afa057fd7a6a77d00598f0482e51f92624b1beb1a425539c394f81c70",
     "Properties.Site.digests": "ab2c71d0b6b15170fd1e94e15f200b6b034604533e93bb0ff5420a258f0f4e8d",
+    "Properties.Site.emptySite": "1178ae5b718ff1a8b8b1895932930af796635f3155f0ec938aa2dd18656224f0",
     "Properties.Site.entry": "c4fdf0117486c2b8e71fe3b61fe87d5007c6d3b497abebb1adde88fae9f812a9",
     "Properties.Site.figure": "f81ecadafd3788a38388f72a1e3249134f87f331c7643d722c5d6c23f79b962c",
+    "Properties.Site.honestEntry": "bc20d11088ae72c8867bd5368a54d8d1309a1a447563f6650d3ab04de1671537",
+    "Properties.Site.honestLog": "01d2f7c0b042f5f35d214f2fac4da92b5a0165dea118a0e8c1dc83ea0e97d94c",
+    "Properties.Site.hostEntry": "0e1a04c7dbff3a175ab6d6d005d7eab11e94234a5fffcbe1cfe473063c3164e2",
     "Properties.Site.kind": "0d81dcdb2082289e859d54a647497b44d6e27178313cf1cd42f71146472b38a1",
     "Properties.Site.link": "1d7b7f10eb735c2e42f6646e373f087ef4663e653e813754b71130bf0623b319",
     "Properties.Site.loc": "48098101d6716c94578d650d7932782e99908c736d75c1788c719230afe7373f",
@@ -16235,14 +16407,26 @@
     "Properties.Site.regEntry": "d3b7b3409f4a19303c46cfa0eca1976c8f62d19f461bfe666fcb421373689734",
     "Properties.Site.sheet": "7f1bad3c5edf2ea7c7c4c3ea677539b97d466ef8cc9e16599e6f78c7647a21d3",
     "Properties.Site.site": "b207cd0e30c1a3ea670641f60e50e2fc3d0174bc57832e77c51f8f959f6bb264",
-    "Properties.Site.tier": "245862aa8cb413cf9f400a952b74f30d8d9f2ad23cc95d180b5d6f4fb28d04e5"
+    "Properties.Site.staleEntry": "1d1660cc458a23af063e30753ad3b161ca72887cb1856cb54064299c277eed3b",
+    "Properties.Site.staleLog": "777a971cfc5dc06c78de4aad1abdeaa0b5f113f032901c53d1fed9e72a70db2f",
+    "Properties.Site.tier": "245862aa8cb413cf9f400a952b74f30d8d9f2ad23cc95d180b5d6f4fb28d04e5",
+    "Properties.Site.witnessAuditor": "4132460125136c668c10b084dc62e4b030c4a44d6121e58c468c2d787849264f",
+    "Properties.Site.witnessDigests": "5cbecb43ebf6554f1e32a9cc8a7271da83d901dfaecf4cdeffa52722b1ec90a3"
    },
    "guarantees": [
     "Properties.Site.checks",
+    "Properties.Site.checks_honest",
+    "Properties.Site.checks_nontrivial",
     "Properties.Site.entryValid",
+    "Properties.Site.entryValid_honest",
+    "Properties.Site.entryValid_nontrivial",
     "Properties.Site.fold",
     "Properties.Site.refusedAt",
-    "Properties.Site.refuses"
+    "Properties.Site.refusedAt_honest",
+    "Properties.Site.refusedAt_nontrivial",
+    "Properties.Site.refuses",
+    "Properties.Site.refuses_honest",
+    "Properties.Site.refuses_nontrivial"
    ]
   },
   "Properties.Evaluate": {
@@ -20222,6 +20406,22 @@
   "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
  },
  "witnesses": {
+  "Properties.Site.refuses": {
+   "honest": ["Properties.Site.refuses_honest"],
+   "nontrivial": "Properties.Site.refuses_nontrivial"
+  },
+  "Properties.Site.entryValid": {
+   "honest": ["Properties.Site.entryValid_honest"],
+   "nontrivial": "Properties.Site.entryValid_nontrivial"
+  },
+  "Properties.Site.checks": {
+   "honest": ["Properties.Site.checks_honest"],
+   "nontrivial": "Properties.Site.checks_nontrivial"
+  },
+  "Properties.Site.refusedAt": {
+   "honest": ["Properties.Site.refusedAt_honest"],
+   "nontrivial": "Properties.Site.refusedAt_nontrivial"
+  },
   "Verity.soundness_at_of_targets": {
    "honest": ["Verity.soundness_at_of_targets_honest"],
    "nontrivial": "Verity.soundness_at_of_targets_nontrivial"
