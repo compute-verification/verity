@@ -1,4 +1,4 @@
-"""`challengers.Gate` against the auditor host's own gate (`benchmarks/live_challenger/auditor.py`), in this process: its
+"""`challengers.ChallengerGate` against the auditor host's own gate (`benchmarks/live_challenger/auditor.py`), in this process: its
 requests go to `auditor.gate` as the lane key's forced command would pass them, and each opened session is served by
 `auditor.run` through `serve.py` (the Lean's coins stubbed, `stub_serve.py`) on a thread, with the gate's root steps
 (chown, systemctl) and the clock injected. An honest session whose coins the gate's session released is accepted and
@@ -115,9 +115,9 @@ class Host:
             t.join()
 
     def gate(self, out: Path, *, pin: str | None = None, period: str = "p-1", main: list[str] | None = MAIN,
-             call=None, peer: str = "cpu-node") -> challengers.Gate:
-        return challengers.Gate(out, call or self.call, peer, pin or self.pin, period, main, address=self.address,
-                                pause=self.pause, polls=3)
+             call=None, peer: str = "cpu-node") -> challengers.ChallengerGate:
+        return challengers.ChallengerGate(out, call or self.call, peer, pin or self.pin, period, main,
+                                          address=self.address, pause=self.pause, polls=3)
 
     def period(self, name: str = "p-1", circuit: str = CIRCUIT) -> None:
         rc, out = self.call(["period-open", "--name", name, "--cap", "4", "--circuit", circuit])
@@ -150,7 +150,7 @@ def host(tmp_path, monkeypatch) -> Host:
     return Host(tmp_path / "host")
 
 
-def session(store, gate: challengers.Gate):
+def session(store, gate: challengers.ChallengerGate):
     """An honest session over `store` whose coins come from `gate`'s session for window 0: the session and verdicts."""
     p = params()
     client = gate.open(store.registration.digest, 0, p.windows, 8)
@@ -187,8 +187,8 @@ def test_a_session_whose_coins_the_gates_session_released_is_held_to_the_ledger_
 @pytest.mark.parametrize("case", ["no-main", "stale-main", "no-pins"])
 def test_a_gate_session_is_refused_as_coins_unless_the_hosts_pins_log_and_the_verifiers_main_hold_its_pin(
         store, host, tmp_path, case):
-    """`Gate.finish` reads the window's session through `coins.trusted`, so through `challenger.pinned_session`, with
-    the host's pins log as the gate serves it (`pins`, fetched beside the ledger) and the verifier's own first-parent
+    """`ChallengerGate.finish` reads the window's session through `coins.trusted`, so through
+    `challenger.pinned_session`, with the host's pins log as the gate serves it (`pins`, fetched beside the ledger) and the verifier's own first-parent
     list of main. An honest session, its coins the gate's session's and its open sealing the host's log, is refused when the
     verifier holds no copy of main, when its copy predates the host's pin, and when the gate serves no pins log."""
     host.period()
@@ -273,7 +273,7 @@ def test_the_gates_ports_are_the_hosts():
 @pytest.mark.parametrize("kind", ["gate", "serve"])
 def test_an_honest_paced_session_closes_complete_and_a_dropper_does_not(host, tmp_path, kind):
     """The verifier's paced sessions over one registration, an honest one and a 1/16 dropper, their coins from the
-    gate's sessions (`challengers.Gate`) or from serve.py on this machine (`challengers.Serve`), its Lean coins stubbed.
+    gate's sessions (`challengers.ChallengerGate`) or from serve.py on this machine (`challengers.Serve`), its Lean coins stubbed.
     The plan appends nothing (its hello says so), so each reserves W challenges and W openings coins and no append
     family. The honest session's
     challenger released every coin it reserved: its end on the served log is complete. The prover sends each window's
@@ -578,8 +578,8 @@ def test_a_session_whose_pin_isnt_a_logged_commit_on_mains_first_parent_line_ear
 def test_the_gate_sessions_peer_is_the_one_the_runs_record_names_and_a_record_naming_none_is_refused(host, tmp_path,
                                                                                                     peer):
     """The peer each gate session's reserve and open must carry on the ledger is the one the run's record names, with
-    no --peer: verifier.json's gate sessions (`challengers.Gate.finish`) for a verifier on a CPU node, or a host
-    run's request.json beside out/ for one on the verifier host whose verifier.json predates that field (gate run 7's),
+    no --peer: verifier.json's gate sessions (`challengers.ChallengerGate.finish`) for a verifier on a CPU node, or a
+    host run's request.json beside out/ for one on the verifier host whose verifier.json predates that field (gate run 7's),
     the request's own `peer` being the audited node. Either way its session is of record. --peer overrides the record,
     and a session reserved for another peer is then not of record; a record naming two peers, or none, is refused with
     the flag."""
