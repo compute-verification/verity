@@ -14,8 +14,9 @@
 #   --reserve-gib G      device memory left out of the fill (default 1; a fraction too: 0.0625 is 64 MiB);
 #                        the whole device is declared, so what the fill doesn't reach counts in
 #                        full in the published foreign_bits (R)
-#   --reads K            the timed spot reads, which the certificate is computed at (default 2152; 5231 is the H200's
-#                        StreamedWipeMeets141GB5, r = 59): a challenger here is started with it; one on its own host
+#   --reads K            the timed spot reads, which the certificate is computed at (default 2152; 2906 is the H200's
+#                        StreamedWipeMeetsH200, r = 33, at the whole device filled; a fill that leaves memory out
+#                        counts it in R and needs more): a challenger here is started with it; one on its own host
 #                        chooses its own (its --challenger-command's wipe_party --reads K), and the leg refuses a
 #                        session at another count
 #   --challenger HOST --challenger-address H:P --challenger-command 'ARGV'
