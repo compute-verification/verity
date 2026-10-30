@@ -24,7 +24,7 @@ from verity_flock import rec_sparse as RS
 
 from test_rec_sparse import _template, session
 
-BIN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock" / ".lake" / "build" / "bin" / "flock-verify"
+BIN = Path(__file__).resolve().parents[4] / "verity/core/service/flock" / ".lake" / "build" / "bin" / "flock-verify"
 #: a stacked table of 2^22 bits, fast100's smallest m: 2^6 entries, 16 planes (ELL = 7), 2^12 types; two slots
 SPARSE = RS.Shape(6, 7, 1, 12)
 OPEN = A.Shape(22, 6, 2, opening_only=True)
