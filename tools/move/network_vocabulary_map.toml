@@ -41,37 +41,7 @@ files = ["benchmarks/network_traces/tests/test_n2_zk.py", "benchmarks/network_tr
 [words_in.words]
 "test_jobs_is_one_firewalled_session_at_a_time" = "test_jobs_is_one_zk_server_session_at_a_time"
 
-# the advice's checks against the registration the sample followed
-[[words_in]]
-files = ["benchmarks/prove_path/prove_path.py", "benchmarks/prove_path/README.md",
-         "benchmarks/prove_path/tests/test_prove_path.py"]
-[words_in.words]
-"advice_before_draw" = "advice_before_sample"
-"advice_after_draw" = "advice_after_sample"
-
-[[words_in]]
-files = ["benchmarks/prove_path/records_audit.py", "benchmarks/prove_path/tests/test_records_audit.py"]
-[words_in.words]
-"fixed_before_draw" = "fixed_before_sample"
-
 # tests
-[[words_in]]
-files = ["benchmarks/prove_path/tests/test_prove_path.py"]
-[words_in.words]
-"test_the_advice_must_be_in_the_registration_the_draw_followed" = "test_the_advice_must_be_in_the_registration_the_sample_followed"
-"test_on_the_challengers_coins_the_advice_must_be_in_the_registration_the_challengers_stream_drew_after" = "test_on_the_challengers_coins_the_advice_must_be_in_the_registration_the_challengers_stream_sampled_after"
-"test_a_forged_rank_passes_only_when_lean_refuses_its_drawn_forged_unit" = "test_a_forged_rank_passes_only_when_lean_refuses_its_sampled_forged_block"
-"test_advice_committed_after_the_draw_passes_every_check_before_it_and_is_refused" = "test_advice_committed_after_the_sample_passes_every_check_before_it_and_is_refused"
-"test_a_forged_unit_passes_every_check_before_the_draw_and_differs_in_one_bit" = "test_a_forged_block_passes_every_check_before_the_sample_and_differs_in_one_bit"
-"test_a_plain_audit_takes_the_stand_ins_window_only_inside_one_table_under_a_stratified_draw" = "test_a_plain_audit_takes_the_stand_ins_window_only_inside_one_table_under_a_stratified_sample"
-"test_per_unit_timing_is_over_the_members_drawn_units_not_c_flocks_virtual_units" = "test_per_block_timing_is_over_the_members_sampled_blocks_not_flocks_virtual_units"
-
-[[words_in]]
-files = ["benchmarks/prove_path/tests/test_records_audit.py"]
-[words_in.words]
-"test_the_advice_is_fixed_before_the_draw_and_refused_re_committed_after_it" = "test_the_advice_is_fixed_before_the_sample_and_refused_re_committed_after_it"
-"test_the_audit_reserves_a_port_for_every_session_its_draw_can_open" = "test_the_audit_reserves_a_port_for_every_session_its_sample_can_open"
-
 [[words_in]]
 files = ["benchmarks/network_e2e/tests/test_chain.py"]
 [words_in.words]
