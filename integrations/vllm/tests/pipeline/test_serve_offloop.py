@@ -396,7 +396,7 @@ def test_while_a_windows_finalize_blocks_the_loop_opens_the_next_window_and_serv
     wins = records(tmp_path, "windows.jsonl")
     assert [w["window"] for w in wins] == [0, 1] and all(w["passed"] and w["seal"]["off_loop"] for w in wins)
     assert all(list(w["close_phases_s"])[:4] == ["on_loop", "finalize_wait", "finalize", "readback"]
-               and list(w["on_loop_phases_s"]) == ["detach", "uninstall", "ledgers", "seal_wait"]
+               and list(w["on_loop_phases_s"]) == ["detach", "ledgers", "seal_wait"]
                and set(w["seconds"]) == {"open", "close", "on_loop", "finalize_wait", "seal_wait", "queued"} for w in wins)
     reqs = records(tmp_path, "requests.jsonl")
     assert len(reqs) == 2 and all(r["check"]["passed"] for r in reqs) and [r["windows"] for r in reqs] == [[0], [1]]
@@ -535,6 +535,38 @@ def test_a_window_closed_off_the_loop_writes_the_records_one_closed_on_it_writes
                      for f, drop in timing.items()}
     assert len(got["on"]["windows.jsonl"]) > 3 and len(got["on"]["requests.jsonl"]) == 3
     assert got["off"] == got["on"]
+
+
+def test_off_the_loop_the_committer_is_installed_once_and_stays_on_between_windows(tmp_path, monkeypatch):
+    """A window closed off the loop leaves the committer on the engine for the next window, which opens before the next
+    engine step, so the run installs it once and never takes it off between windows; closed on the loop, each window installs
+    it and takes it off."""
+    monkeypatch.setattr(sc, "seal_window", lambda com, rc, d, **kw: {"row_dir": str(d)})
+
+    def spied(cls: Any, calls: list[str]) -> Any:
+        class Spied(cls):
+            def install(self) -> None:
+                calls.append("install")
+                super().install()
+
+            def uninstall(self) -> None:
+                calls.append("uninstall")
+                super().uninstall()
+        return Spied
+
+    for com, off in ((Counted, False), (Detached, True)):
+        calls: list[str] = []
+        out = tmp_path / com.__name__
+        out.mkdir()
+        sealer = st.Sealer(1 << 40)
+        with Sealed(out, sealer=sealer, com=spied(com, calls), window_steps=2) as s:
+            for i in range(3):
+                assert events(s.post("/v1/completions", _body(i))[1])[-1] == "[DONE]"
+        sealer.close()
+        n = len(records(out, "windows.jsonl"))
+        assert n > 2 and s.windows.summary()["passed"] and (s.windows.finalize_on_loop is None) == off
+        assert calls == (["install"] if off else ["install", "uninstall"] * n)
+        assert s.windows.installed == off and ("execute_model" in vars(s.runner)) == off
 
 
 def test_a_detached_windows_late_steps_land_in_its_view_and_its_end_hands_its_blocks_over_in_the_workers_order(host_blocks, monkeypatch):
@@ -842,3 +874,12 @@ def test_a_windows_record_carries_its_collections_and_names_the_long_ones():
     rc = SimpleNamespace(extra={"gc": {"pauses": [(0, 1.0, 0.002, "MainThread"), (2, 5.0, 1.25, "serve-seal")], "freeze_s": [0.3]}})
     assert sc.gc_of(rc) == {"n": 2, "total_s": 1.252, "max_s": 1.25, "long": [[2, 5.0, 1.25, "serve-seal"]], "freeze_s": [0.3]}
     assert sc.gc_of(SimpleNamespace(extra={})) is None and sc.gc_of(None) is None
+
+
+def test_a_windows_record_splits_its_steps_commit_time_by_thread_and_leaves_the_finalize_wait_out():
+    per = {0: {"acquisition": 0.002, "movement": 0.001, "wait": 0.03, "hashing": 0.05, "worker_idle": 0.01},
+           1: {"wait": 0.02, "hashing": 0.04, "device_pool_wait": 0.005, "root_finalisation": 0.001}}
+    rc = SimpleNamespace(spans={"total_s": {"wait": 9.0}, "per_step": per})
+    assert sc.commit_s_of(rc) == {"serving": {"acquisition": 0.002, "movement": 0.001, "wait": 0.05},
+                                  "worker": {"hashing": 0.09, "worker_idle": 0.01, "root_finalisation": 0.001, "device_pool_wait": 0.005}}
+    assert sc.commit_s_of(SimpleNamespace(spans={"per_step": {}})) is None and sc.commit_s_of(None) is None
