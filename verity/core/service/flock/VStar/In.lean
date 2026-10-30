@@ -18,12 +18,12 @@ module computes those tables from what the stager reads of the inner session (`S
   opening and after its last, `v` the verifier's values under `verifierSalt`, `out` zero rows under `zeroSalt`;
 * `capIn`: a level's `RecCap`, `cap` or `cap/L<l>` (`rec_cap.stage`): `top` every node of the level's tops under the
   firewall's salts, `out` zero rows under `zeroSalt`;
-* `linkIn`: the link table's `RecLink{UB, PB}`, `links` (`rec_link`): `trow` the table's rows under their registered
-  salts, `xyr`, `raux`, `xyw` and `waux` the reader's and the writer's rows and openings under the prover's fresh salts,
-  `rin` and `rout` the two trees' roots under `verifierSalt`.
+* `linkIn`: the link table's `RecLink{UB, PB}`, `links` (`rec_vstage.link_part`): `trow` the table's rows under their
+  registered salts, `xyr`, `raux`, `xyw` and `waux` the reader's and the writer's rows and openings under the prover's
+  fresh salts, `rin` and `rout` the two trees' roots under `verifierSalt`.
 
 `partIn` dispatches on the statement (`VStar.Stmt`). The difftest (`core_vstar`'s `vstar-difftest`, `part_in`) holds each
-of the first three to the stager's `inst.bin`; `rec_vstage` stages no link part, so nothing holds `linkIn` to Python.
+to the stager's `inst.bin`.
 -/
 
 namespace VStar.In
