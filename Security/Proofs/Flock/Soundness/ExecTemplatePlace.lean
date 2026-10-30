@@ -602,7 +602,7 @@ theorem size_le_slot {d : D} {nm : String} {n : Net} (h : Typed.netOfD d nm = .o
 
 namespace TemplateLayout
 
-variable {types : String → Option CircuitType} {ls : Array Flock.Layout} {info : String → Option TableInfo}
+variable {types : String → Option CircuitType} {ls : Array Flock.BlockLayout} {info : String → Option TableInfo}
   {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D} {st : Stmt} {tb : TypedBlock}
 
 set_option hygiene false in
@@ -1015,7 +1015,7 @@ theorem bind_sum (y j : ℕ) (l : List ℕ) :
 
 namespace TemplateLayout
 
-variable {types : String → Option CircuitType} {ls : Array Flock.Layout} {info : String → Option TableInfo}
+variable {types : String → Option CircuitType} {ls : Array Flock.BlockLayout} {info : String → Option TableInfo}
   {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D} {st : Stmt} {tb : TypedBlock}
 
 set_option hygiene false in
