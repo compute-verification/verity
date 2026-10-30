@@ -1,10 +1,10 @@
-"""A stand-in for N2's proof of a link-window, and for the ingress tie's of an ingress link-window (`prove_tie`), for
-tests: what Flock's prover behind the ZK server would deliver, and a stand-in for the verifier's own run of Flock's
-Lean verifier (`proofs.verify`), which reads each session's verdict from the session file the stand-in prover writes.
-The proof's output word is the unit's on the prover's opening by each gate's reference (`LinkWindows.outputs`,
-`IngressTie.outputs`), which the tests hold to the circuits: a Lean-accepted proof can't claim another. So the tests
-check everything the verifier of record does around the proof: its run's findings, the public row opened to the
-verifier's own copy, the output row, the certificates and the sync."""
+"""A stand-in for N2's proof of an execution phase, and for the ingress tie's of an ingress execution phase
+(`prove_tie`), for tests: what Flock's prover behind the ZK server would deliver, and a stand-in for the verifier's own
+run of Flock's Lean verifier (`proofs.verify`), which reads each session's verdict from the session file the stand-in
+prover writes. The proof's output word is the proof block's on the prover's opening by each gate's reference
+(`LinkWindows.outputs`, `IngressTie.outputs`), which the tests hold to the circuits: a Lean-accepted proof can't claim
+another. So the tests check everything the verifier of record does around the proof: its run's findings, the public row
+opened to the verifier's own copy, the output row, the certificates and the sync."""
 
 from __future__ import annotations
 
@@ -71,8 +71,9 @@ def prove_tie(tie: Any, cells: Any, draw: S.Draw, lanes: Any, out: Path, *, prog
               accepted: bool = True, words: dict[int, int] | None = None,
               salts: dict[int, dict[str, bytes]] | None = None, units: Sequence[int] | None = None,
               rows: Sequence[bytes] | None = None) -> TS.Delivered:
-    """The delivered proof of the drawn ingress-tie units (`tie_service.IngressTie`) on the warden's opening `cells`
-    (`warden_rows.Cells`) and the prover's `lanes` (each bucket's), as `prove` delivers N2's: unit t's ``wit`` row its
+    """The delivered proof of the sampled ingress-tie proof blocks (`tie_service.IngressTie`) on the warden's opening
+    `cells` (`warden_rows.Cells`) and the prover's `lanes` (each bucket's), as `prove` delivers N2's: proof block t's
+    ``wit`` row its
     bucket row under the warden's salt and its header's registered read of the warden's root (`Cells.statement`), its
     ``pub`` row its lanes and its output bit by IoTieRequest's reference (`io_request.reference`), which the tests
     hold to the circuit. `rows` are the rows the prover proves on instead, under the warden's salts and paths; where a

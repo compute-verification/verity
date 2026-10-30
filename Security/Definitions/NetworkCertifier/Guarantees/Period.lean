@@ -29,8 +29,8 @@ The union of the windows' failures over the monitoring period's live coins is no
 event the first part bounds, plus one condition no proof here gives: the registration's values at the prover's
 registered inputs, which the registration's commitment binds. The network certifier's rows are not pinned: they vary
 with the secret. The first part covers an extracted trace that leaves them outside the faulty units, where every
-transfer gate is opened; the count charges a faulty unit's rows through the Program, from the free inputs, the faulty
-sets, their committed bits and the timing. A unit the draw missed is in the faulty set.
+transfer gate is opened; the count charges a faulty proof block's rows through the Program, from the free inputs, the
+faulty sets, their committed bits and the timing. A proof block the sample missed is in the faulty set.
 -/
 
 namespace NetTiming.Guarantees

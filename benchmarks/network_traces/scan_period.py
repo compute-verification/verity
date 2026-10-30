@@ -1,5 +1,6 @@
-"""scan-period: `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) on a warden run's link-window and the scan's
-answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the period's Python mirror and its Lean.
+"""scan-period: `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) on a warden run's execution phase and the
+scan's answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the period's Python mirror and its
+Lean.
 
     python benchmarks/network_traces/scan_period.py --mirror PERIOD_CASE_PY --lean NETWORK_PERIOD --out DIR \
         NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged] ...
@@ -41,7 +42,7 @@ CERTIFICATE_KEYS = ("digest", "direction", "key_id", "link", "signature", "windo
 
 
 def certificates(run: Path, w: int) -> list[dict]:
-    """Link-window w's three records' certificates in ``certified.jsonl``, in the rows form's order (requests,
+    """Execution phase w's three records' certificates in ``certified.jsonl``, in the rows form's order (requests,
     responses, fails: `warden_serve.CERTIFIED`), each the certificate's own fields."""
     docs = [json.loads(x)["certificate"] for x in SZ._found(run, "certified.jsonl").read_text().splitlines()
             if "certificate" in json.loads(x)]

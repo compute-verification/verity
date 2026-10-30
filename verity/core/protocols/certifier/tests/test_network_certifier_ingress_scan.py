@@ -164,7 +164,7 @@ def test_a_window_circuit_reads_the_scan_s_state_rows_from_t0_minus_one(run):
     for t0, n in ((4, 4), (8, 8), (2, T - 2)):
         rows = IS.window_state(CLS, registered, t0, n)
         assert rows == ch.states[t0:t0 + n]
-        # boundary a's Programs read row a: S_{t0 + a − 1}, the state bucket t0 + a's unit reads
+        # boundary a's Programs read row a: S_{t0 + a − 1}, the state bucket t0 + a's proof block reads
         assert [IS.token_row(CLS, IS.decode(CLS, x)) for x in rows] == \
             [IS.token_row(CLS, run.states[t0 + a]) for a in range(n)]
     for t0, n, fix in ((1, 4, "multiple of EVERY = 2, not t0 = 1"), (0, 3, "not t0 = 0, buckets = 3"),
@@ -352,7 +352,8 @@ def test_the_circuits_are_the_references_on_every_bucket_each_negative_and_rando
         == [(1, True)] * len(other)
     moved = [o1 != ch.outputs(t)[0] for t, (o0, o1, _) in zip(at, got[T + len(negs):]) if o0]
     assert sum(moved) >= 5, moved
-    # the first bucket's unit is the ingress unit at the empty state, its outputs bit for bit where a check fails too
+    # the first bucket's proof block is the ingress proof block at the empty state, its outputs bit for bit where a
+    # check fails too
     starts = [(c[0], c[2]) for c in cases if c[1] == ch.states[0]]
     for _ in range(20):
         row, prog = bytearray(ch.ingress[0]), list(ch.progs[0])

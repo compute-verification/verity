@@ -37,7 +37,7 @@ FIFO = "PHASE10_FIFO"
 
 
 def fixed_commit(link, direction, record, params, session, salts=None, wiring_salt=None):
-    """`Cells.of` under salts fixed by the link-window and the row (and the wiring), so two publishers' files can be
+    """`Cells.of` under salts fixed by the execution phase and the row (and the wiring), so two publishers' files can be
     compared."""
     def salt(name, n):
         return hashlib.shake_256(f"{link}/{record.window}/{name}".encode()).digest(n)
@@ -265,7 +265,7 @@ def test_a_process_killed_mid_window_fails_the_run_and_the_check_refuses_the_win
 def test_a_process_a_window_behind_moves_no_tick_and_keeps_every_record_whole(tmp_path, monkeypatch):
     """The process held at window 0's ingress commit until every tick of both windows has run: no tick is late, at
     most window 0's ingress record is certified by then, and once released the process keeps every record, whole:
-    the check accepts all six link-windows and four registrations."""
+    the check accepts all six execution phases and four registrations."""
     fifo = tmp_path / "fifo"
     os.mkfifo(fifo)
     monkeypatch.setenv(FIFO, str(fifo))

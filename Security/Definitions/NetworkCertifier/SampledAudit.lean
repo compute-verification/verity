@@ -20,19 +20,20 @@ layout doesn't fit, as it refuses one outside the sampling scope.
 
 **The circuit's Program** (`circuitProgram`) is `C` run on the ingress up to step `t` and the declared advice, read off
 at step `t`'s egress gates. The advice is the inputs other than the ingress, plus values held at a set of gates
-(`valOver`). A faulty unit's committed values need not be what its gates compute, so they enter as advice.
+(`valOver`). A faulty proof block's committed values need not be what its gates compute, so they enter as advice.
 
 **The relation** (`RAcc`) has three parts:
 
 * the sampling relation: the faulty set is in `M_δ`;
-* the faulty set holds no unit of a class drawn `all` (which `M_δ` implies at `δ ≥ 0`, since such a class's `P_a` factor
-  is `0` on any set that meets it), so the transfer-gate units and head checks are exact, an error of `0`;
-* some advice, holding values only at the faulty units' committed gates, makes `Accepted` by the circuit's Program every
-  observation sequence and operator that the trace's transfer gates carry (`Carries`) with every status complete
-  (`Covered`).
+* the faulty set holds no proof block of a class sampled `all` (which `M_δ` implies at `δ ≥ 0`, since such a class's
+  `P_a` factor is `0` on any set that meets it), so the transfer-gate proof blocks and head checks are exact, an error
+  of `0`;
+* some advice, holding values only at the faulty proof blocks' committed gates, makes `Accepted` by the circuit's
+  Program every observation sequence and operator that the trace's transfer gates carry (`Carries`) with every status
+  complete (`Covered`).
 
 **What this module does not model.** The certifier's signed rows and the operator's moves are tied to the transfer gates
-by the transfer-gate units and, beyond them, by the certifier's trust (`trusted-host`). That tie is the condition
+by the transfer-gate proof blocks and, beyond them, by the certifier's trust (`trusted-host`). That tie is the condition
 `Carries` picks out, inside the conclusion. The statuses are the certifier's published record, which the network check
 reads (`Covered`).
 -/
@@ -86,7 +87,7 @@ def circuitProgram {L S : ℕ} (C : Prog) (lay : Layout L S) (k : ℕ) :
 def Depends (C : Prog) (i g : ℕ) : Prop :=
   Relation.ReflTransGen (fun a b => a ∈ (C.gates[b]?.map BGate.reads).getD []) i g
 
-/-- **The layout fits the program** over the horizon `k`, which the verifier checks before it draws. Before `k`: every
+/-- **The layout fits the program** over the horizon `k`, which the verifier checks before it samples. Before `k`: every
 egress gate is one `C` returns, so its value is committed, and is not an input, so `C` computes it (the circuit's Program
 would read an input egress gate from the advice, and so accept any rows the trace carries); every ingress gate is an
 input of `C`; and no egress gate of a step depends on an ingress gate of a later step (`C` is causal). -/
@@ -95,8 +96,8 @@ def Layout.Fits {L S : ℕ} (lay : Layout L S) (C : Prog) (k : ℕ) : Prop :=
     (∀ t < k, ∀ g ∈ lay.ingress t, C.gates[g]? = some .input) ∧
     ∀ t < k, ∀ t' < k, t < t' → ∀ ℓ σ, ∀ g ∈ slotGates (lay.egress t ℓ σ), ∀ i ∈ lay.ingress t', ¬ Depends C i g
 
-/-- The trace's value at gate `g`, as a gate outside the gate's unit reads it (`Prog.read`: a constant's own value,
-every other gate's committed value), `false` when unopened. -/
+/-- The trace's value at gate `g`, as a gate outside the gate's proof block reads it (`Prog.read`: a constant's own
+value, every other gate's committed value), `false` when unopened. -/
 def traceVal (C : Prog) (ref : ℕ → Option Bool) (g : ℕ) : Bool := (C.read ref g).getD false
 
 /-- **What the trace's transfer gates carry**: at each step `t < k` the observation `o[t]` exists, its egress rows are
@@ -129,10 +130,10 @@ def allSlotsFrom : List Rule → List (List (List RU)) → ℕ → Finset ℕ
 def allSlots (d : Design) (P : Partition) : Finset ℕ := allSlotsFrom d.rules P.classes 0
 
 /-- **The sampled audit's relation** at `δ`, on the statement's bytes. The statement parses, its query evaluates, and:
-the sampling relation holds (`RelS`: the faulty set is in `M_δ`); the faulty set holds no slot drawn `all`; and the
+the sampling relation holds (`RelS`: the faulty set is in `M_δ`); the faulty set holds no slot sampled `all`; and the
 advice `(traceVal C ref, free)`, its inputs the trace's committed values and `free` holding values exactly at the
-faulty units' committed gates (`FaultyGate`), makes `Accepted` by the circuit's Program, over the horizon, every observation
-sequence and operator the trace's transfer gates carry (`Carries`) with every status complete (`Covered`). The inputs
+faulty proof blocks' committed gates (`FaultyGate`), makes `Accepted` by the circuit's Program, over the horizon, every
+observation sequence and operator the trace's transfer gates carry (`Carries`) with every status complete (`Covered`). The inputs
 are pinned to the trace, so the registered ones are what the registration commits. -/
 def RAcc (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option Stmt) (partition : Stmt → Option Partition)
     (L K S : ℕ) (lay : Stmt → Layout L S) (k : Stmt → ℕ) (δ : ℝ) : Rel Wit :=
@@ -156,7 +157,7 @@ def ScopeAcc {L S : ℕ} (D : Deploy Coin Col T) (lay : Stmt → Layout L S) (k 
 /-- **The sampled audit implies `Accepted`** at the deployment `D`, at the public layout `lay` and horizon `k` of each
 statement. It holds on the statements in its scope (`ScopeAcc`), at every `δ ≥ 0`, at the sampling extractor and every
 decoder that lists every trace within Flock's radius: `Pr[acc ∧ ¬RAcc δ] ≤ δ + ε_ks + ε_bind`, with `KS`'s errors
-(`ε_ks = κ − δ + √(γ·Pr[B])`, Flock's error at the units' sessions; `ε_bind = Pr[B_ext]`). The selection enters only
+(`ε_ks = κ − δ + √(γ·Pr[B])`, Flock's error at the proof blocks' sessions; `ε_bind = Pr[B_ext]`). The selection enters only
 through `M_δ`. -/
 def KSAccepted (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : ℕ) (lay : Stmt → Layout L S) (k : Stmt → ℕ) : Prop :=
   ∀ (δ : ℝ) decode, 0 ≤ δ → Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode →
