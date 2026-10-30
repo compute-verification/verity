@@ -2,7 +2,7 @@
 # On one A100 (sm_80): every native mma.sync form alone and beside a scalar lane, the scalar pipes, duo
 # beside IMMA and the integer forms' exactness, then the gate verdicts and the fit.
 #
-#   research run --on vy-dc-a100 --project verity --campaign cmp-13 --source /workspace --cwd source \
+#   research run --on vy-dc-a100 --project verity --source /workspace --cwd source \
 #     --env GPU_LEASE_WHO=ampere -- bash benchmarks/pouw/tensor_kinds/run_sm80.sh [GROUP...]
 #
 # The binaries (one a GROUP of sm80.cu, built in parallel) and gpu_kit's SASS timing gate run outside the lease; the

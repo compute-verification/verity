@@ -1,7 +1,7 @@
 # opcode_probe: an instruction's rate as a price row, gated first
 
 A probe times one instruction class in one loop on sm_120 and writes its price row in the machine model's census schema
-(RS-W′'s `machine_model`, branch `cursor/machine-model-ea24`). Every probe's SASS passes `../gpu_kit/sass_gate.py`
+(`../machine_model/`). Every probe's SASS passes `../gpu_kit/sass_gate.py`
 before anything is timed, and a probe that doesn't pass writes no row. A probe declared known-invalid must be refused,
 by the check it names, or nothing is timed at all.
 
@@ -16,7 +16,7 @@ by the check it names, or nothing is timed at all.
 | `probes/issue.cu` | IMMA alone, and k_spec/k_mixu: DADD, DFMA or RED.64 beside IMMA (joint points, no census line) |
 | `probes/atom.cu` | ATOMS, ATOMG, REDG and ATOM.E, 32- and 64-bit (ATOME64: generic EXCH.64 and CAS.64 to shared); each global form on 16 SMs (its row) and on every SM (L2red) |
 | `probes/cl.cu` | DSMEM atomics and reductions in a 2-CTA cluster, to the own CTA (ATOME32; ATOME64's EXCH.64 and CAS.64, and the known-invalid red.add.u64) and the peer (joint) |
-| `probes/mma.cu` | IMMA s8, QMMA E4M3, OMMA MXFP4 and NVFP4, dense and 2:4-sparse, at unit scales, and a `_data` probe a format on the sweep's drawn operands and mix scales (a data-dependent-clock check; joint points, no census line; `../fp_exact/` reads them) |
+| `probes/mma.cu` | IMMA s8, QMMA E4M3, OMMA MXFP4 and NVFP4, dense and 2:4-sparse, at unit scales, and a `_data` probe a format on the sweep's drawn operands and mix scales (a data-dependent-clock check; joint points, no census line) |
 | `probes/a2u.cu` | A2u at saturated issue: uniform.cu's uniform chains beside an issue-bound vector stream (2 IMMA with 64 FFMA, 16 LOP3 and 16 IMAD a loop, or with 16, 40 and 40) at 8 warps a SMSP, where ptxas moves one chain pair of three or four to the uniform datapath, each beside a 2-pair control with the same lane instructions and none uniform, up to 128 uniform instructions a loop, more than the stream's idle slots (joint points, no census line) |
 | `probes/mma_types.cu` | `kind::f8f6f4` QMMA at each of E4M3, E5M2, E3M2, E2M3 and E2M1, which `loads.py` prices as one class, and the f64 DMMA, which it doesn't price, each beside the IMMA s8 reference (joint points, no census line) |
 | `probes/frontier.cu` | The joint frontiers: IMMA beside IMAD, HFMA2, LOP3 and SHFL.BFLY at 2 to 128 ops per 8 IMMA in one stream, warp-specialized points, each op alone (joint points, no census line) |
