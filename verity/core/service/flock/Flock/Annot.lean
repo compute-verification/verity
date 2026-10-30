@@ -813,13 +813,13 @@ def Meaning.ofJson (j : Json) : V Meaning := do
   return { tiling, maxGates := ← optNat j "max_gates", maxCount := ← optNat j "max_count" }
 
 /-- The verdict: accepted, or the first failing rule's code; the annotation's label count either way. -/
-structure Verdict where
+structure AnnotVerdict where
   accept : Bool
   code : String := ""
   count : Nat
   deriving BEq, Inhabited
 
-def Verdict.toJson (v : Verdict) : Json :=
+def AnnotVerdict.toJson (v : AnnotVerdict) : Json :=
   Json.mkObj ([("accept", Json.bool v.accept), ("count", Lean.toJson v.count)] ++
     (if v.accept then [] else [("code", Json.str v.code)]))
 
@@ -978,7 +978,7 @@ end
 
 /-- `Annot.check`: meaning `Φ` decided on the description of annotation `D` of program `P`, at the size of the
 description. -/
-def check (Φ : Meaning) (P : Prog) (D : Desc) : V Verdict := do
+def check (Φ : Meaning) (P : Prog) (D : Desc) : V AnnotVerdict := do
   let F ← eval P D
   let top := F.plans[F.top]!
   let (count, sizes) ← match F.map with
@@ -987,7 +987,7 @@ def check (Φ : Meaning) (P : Prog) (D : Desc) : V Verdict := do
     | some (.group byName) => do
       let gs ← groups P F byName
       pure (gs.size, some (gs.foldl (fun m (_, w) => max m w) 0))
-  let refused := fun (code : String) => (pure { accept := false, code, count } : V Verdict)
+  let refused := fun (code : String) => (pure { accept := false, code, count } : V AnnotVerdict)
   if let some t := Φ.tiling then
     match (tiles P F (gateKinds P) (planHolds P F) (t == .partition) Steps.FUEL P.root #[F.top]).run' {} with
     | .error e => throw e
