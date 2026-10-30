@@ -88,7 +88,7 @@ def test_the_scan_leaves_out_only_the_pieces_the_public_circuit_holds(runs):
     assert held_kept == {k for k in kept if k.rsplit(" @", 1)[0] in held} - tails and held_kept
 
 
-def test_jobs_is_one_firewalled_session_at_a_time(monkeypatch):
+def test_jobs_is_one_zk_server_session_at_a_time(monkeypatch):
     monkeypatch.setattr(n2, "prove", lambda a: a.jobs)
     argv = ["prove", "--run", "r", "--out", "o", "--dry"]
     assert n2.main(argv) == 1 and n2.main([*argv, "--jobs", "1"]) == 1

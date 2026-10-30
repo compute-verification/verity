@@ -35,13 +35,13 @@ commitments and never published.
    (`advice_windows.window_of_advice`, reading no committed value), and holds the registration to it
    (`tp.serving_rows.source`: `served_programs`, `compiler` and `advice` among its codes, with R2 against the recompiled
    population). The compile unit below replaces the opening and the recompile. Nothing else in the audit changes.
-4. **The advice is fixed before the coins, and the verifier checks it** (`advice_before_draw`), as `pouw.credit.draw_root`
+4. **The advice is fixed before the coins, and the verifier checks it** (`advice_before_sample`), as `pouw.credit.draw_root`
    checks that the credit bits came before the sampling coin. The digest of the registration the verifier opens the advice under
    covers its `compiler` and `advice` root. That digest must be the one the sample's receipt names: the stream writes the receipt
    when it receives the registration, and its `select` reads the verifier's coins only after that (a5's
    `verifier-coins-before-the-registration`). A registration whose advice root postdates the sample is refused
    (`advice-root-after-the-draw`): the same advice re-committed after the coins, under fresh salts and so a fresh root, passes
-   every check before the sample with its new opening, and `advice_before_draw` refuses it with `after-the-draw`.
+   every check before the sample with its new opening, and `advice_before_sample` refuses it with `after-the-draw`.
 5. **The compiler is total.** `compile_advice` takes any input and returns either the requests or a `ValueError` naming why.
    The refusal depends only on the input, so two runs give the same one. It refuses, in order:
    - not bytes;
@@ -196,7 +196,7 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
   routing over public row programs keeps the advice private. The clear map is a stepping stone.
 - **What it retires:** the opening handed to the verifier (`audit --opening`, `advice_windows.of_opening`), the verifier's
   recompile, and, with the routing form, `served_programs` in the clear.
-- **What stays:** `advice_before_draw`, which still holds ρ to the registration the sample followed.
+- **What stays:** `advice_before_sample`, which still holds ρ to the registration the sample followed.
 
 ## The pieces
 

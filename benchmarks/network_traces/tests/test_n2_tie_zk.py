@@ -92,7 +92,7 @@ def test_the_scan_looks_for_held_cells_and_salts_alone():
     assert held and sum(1 for k in blobs if k.startswith("salt")) == len(rd.windows) * tz.T
 
 
-def test_jobs_is_one_firewalled_session_at_a_time(monkeypatch):
+def test_jobs_is_one_zk_server_session_at_a_time(monkeypatch):
     monkeypatch.setattr(tz, "prove", lambda a: a.jobs)
     argv = ["prove", "--out", "o", "--dry"]
     assert tz.main(argv) == 1 and tz.main([*argv, "--jobs", "1"]) == 1

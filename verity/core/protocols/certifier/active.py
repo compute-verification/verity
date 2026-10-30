@@ -1234,7 +1234,7 @@ class Proxy:
         slowest = ClockSync(max(sync_set.deltas), min(sync_set.rhos))
         admission = None if served is None else Admission(
             served, egress.allocation, lambda w: syncs[w] if prover is None and w < len(syncs) else slowest)
-        self.bucketer = Bucketer(Certifier(ingress_link, ingress), None if salt is None else self._draw_salt, start,
+        self.bucketer = Bucketer(Certifier(ingress_link, ingress), None if salt is None else self._fresh_salt, start,
                                  served=admission)
         self.pair, self.paced = pair, paced
         self.releases: list[Report] = []
@@ -1437,7 +1437,7 @@ class Proxy:
 
         await self._ticks("ingress", p, self.bucketer.certifier, tick)
 
-    def _draw_salt(self, window: int) -> bytes | None:
+    def _fresh_salt(self, window: int) -> bytes | None:
         """At a PoUW window's first certifier window, draw its salt and give the certifier's own frame, the
         placeholder's."""
         if window % self.pouw_window:
