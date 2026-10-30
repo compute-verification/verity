@@ -43,7 +43,8 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
 
 ## Landing
 
-PRs land on an eyeball review, and the full check runs after landing. ci's `research queue drive` lands them
+`main` holds only fully checked commits: reviewed PRs land on `checked`, drive runs the full check on its tip, and
+`main` moves only to a commit whose check passed every step on the merge gate. ci's `research queue drive` lands them
 (`research.drive`'s docstring has the rules; `tools/verity/check/drive.toml` the settings):
 
 - The worker that made a branch opens its PR, `research queue open --head BRANCH --sha SHA --title T --body-file F --by
@@ -56,13 +57,18 @@ PRs land on an eyeball review, and the full check runs after landing. ci's `rese
   You hear back only if yours is held, ejected or reverted.
 - Drive stacks admitted PRs on `next`, non-Lean changes first. Reviewers ci staffs, never the owner, record a verdict at
   the head (`research queue review N --land|--hold REASON --by LANE`); no other per-head grant exists. Drive
-  fast-forwards `main` to the longest reviewed prefix whose merges are clean and whose `.py` files compile. A change to a
+  fast-forwards `checked` (`land_into`) to the longest reviewed prefix whose merges are clean and whose `.py` files compile; while no Lean
+  check runs, it moves reviewed members below those awaiting a verdict, so a PR waiting for review holds only itself (a
+  hold still keeps what is above it). A change to a
   `lean-audit.json` lock or to Lean that runs as code (a `.lean` outside `Security/`) also waits for a `lean-audit` that
   passed at or above it; Lean proofs alone land on the verdict.
-- One run checks `main`'s tip after each landing. A red suite's culprit is rung and reverted 60 min later unless a fix is
-  marked. Citations and tables read only commits whose after-landing run passed.
-- A pure move that `verity check move BASE HEAD` certifies lands alone, ahead of the queue, through the lander. Only
-  drive's App pushes `main` and `next`.
+- One run checks `checked`'s tip after each landing; when it passes every step on the merge gate (not circuit-check), drive fast-forwards `main` there. A red
+  suite's culprit is rung and reverted on `checked` 60 min later unless a fix is marked, and `main` doesn't move. A red
+  circuit-check's culprit is reverted at once, and until circuit-check passes on `checked` no PR touching its inputs lands
+  (a PR whose body says `fixes step circuit-check` does).
+  Citations and tables read only commits whose after-landing run passed: `main`'s.
+- A pure move that `verity check move BASE HEAD` certifies lands alone on `main`, ahead of the queue, through the lander;
+  drive merges it into `checked`. Only drive's App pushes `main`, `checked` and `next`.
 - `check.py --record --on M --pool NAME`, from a checkout, records `check` as an Attempt of the clean commit in M's NAME
   pool.
 - When a changed lock record lands on `main`, Daniel gets a DM showing it; that DM is the check, and nothing waits on it.
@@ -130,8 +136,11 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   fails: fix it at the source, or take it to its owner that day with its numbers (minutes a wait, waits a day). Push
   back the same way, through your coordinator, on a rule that costs velocity, Daniel's included. A slow loop's owner
   fixes it ahead of other work.
-- **Make every decision yourself except keys and claims.** Access, keys, and what a guarantee says or rests on go to
-  Daniel through your coordinator, with your recommendation; spend is its lead's call. A change that crosses owners goes
+- **Make every decision yourself except claims and Daniel's own clicks.** What a guarantee says or rests on, and what
+  only an account he holds can do (the GitHub organization's admin, billing, the Nebius and Cloudflare consoles), go to
+  Daniel through your coordinator, with your recommendation. Keys and access between our own machines and accounts are
+  the lanes' call, set up with the machine's owner and no ask: this is a simulation, so it needn't be perfect. Spend is
+  its lead's call. A change that crosses owners goes
   to the other owner, and the coordinator settles a disagreement. Fix what's in your way at the source when the fix is
   yours, and record each ruling you get (the friction skill).
 - **Each lead owns its areas' size.** top's hourly consolidation reading tracks `main`'s size. A PR that adds code says

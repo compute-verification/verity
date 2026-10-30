@@ -167,7 +167,7 @@ theorem drawTiedB_iff {s : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array St
 
 /-- **Flock's own checks on the inner statement**: Flock's plain verifier sets it up (`FlockDeploy.setupOf false`), its
 statement check passes (`Readable.Read.check`, `ProvedScope.check`), it carries a draw, the inner session's record's
-(`Raw.draw`): the recursion's inner session is drawn (#2468), and the compiled verifier refuses a session over an inner
+(`Raw.draw`): the recursion's inner session is drawn, and the compiled verifier refuses a session over an inner
 session whose record holds none (`RecSetup.innerDrawn`, `noInnerDraw`), and at one table the public file's header
 carries that draw (`drawTiedB`): the deployed verifier refuses a record whose draw is not the session's (`Draw.check`,
 U1, in `Record.check`), and at one table the session's is the header's. -/

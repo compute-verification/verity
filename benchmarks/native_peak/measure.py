@@ -16,7 +16,7 @@ that binary is already on the machine, otherwise it is recorded as "not captured
 
 result.json (`research/result/v0.1`, kind `native-peak/v1`) carries the headline fields at the top level -- device, dtype,
 accumulate, method, flop_per_second, spec_flop_per_second, fraction_of_spec, sass, kernel, driver, cuda, clocks_mhz, power_w,
-sizes -- so `research data select --where meta.dtype=bf16` works, and the same identity in `workload_fingerprint`.  Spec peaks are
+sizes -- so a store query can select on them (`meta.dtype`), and the same identity in `workload_fingerprint`.  Spec peaks are
 datasheet dense (non-sparse) tensor-core numbers with FP32 accumulate; a card the table does not know gets `spec_flop_per_second:
 null`.  Nothing here is a proof; it is the native anchor for `overhead.vs_native_peak`.
 """
@@ -331,7 +331,7 @@ def nvfp4_sass(so: Path) -> dict:
 
 def nvfp4_fragments(nwarps: int, words_per_lane: int, seed: int = 20260922):
     """Random register fragments per lane: E2M1 nibbles for a[4] / b[2] (every code, both signs), UE4M3 scale bytes for sfa / sfb
-    drawn from the finite codes around 1 (0x30..0x47: 2^-3 .. 2^4 x mantissa) -- toggling operand bits, as a GEMM would, and
+    sampled from the finite codes around 1 (0x30..0x47: 2^-3 .. 2^4 x mantissa) -- toggling operand bits, as a GEMM would, and
     accumulators that stay finite over any run length this tool uses."""
     import numpy as np
 

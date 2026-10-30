@@ -107,8 +107,8 @@ print(json.load(open(fs[-1]))['num_hidden_layers']+1) if fs else sys.exit(1)" 2>
 # the same model/target names it).  Named in the compiled manifest as components.weights_struct; the weights-of-record record must be that Program's.
 WEIGHTS_PROGRAM_DIGEST=${WEIGHTS_PROGRAM_DIGEST:-}
 if [ -z "$WEIGHTS_PROGRAM_DIGEST" ] && [ "$TAPS" = kernels ]; then
-  # sources in order: the row dir's eager Build summary (row_pod's build step for this row), then the rows table (a >=16-hex prefix; the
-  # weights pin accepts a prefix of that length -- weights_of_record.check)
+  # sources in order: the workload dir's eager Build summary (row_pod's build step for this workload), then the sweep's `rows/`
+  # table (a >=16-hex prefix; the weights pin accepts a prefix of that length -- weights_of_record.check)
   for cand in "$D/build_summary.json" "out/gen/sweep/rows/${ROW/bi-compiled/bi-eager}.json" out/gen/sweep/rows/"${ROW%%__tp*}"__tp1__b1__*__greedy__bi-eager.json; do
     [ -f "$cand" ] || continue
     WEIGHTS_PROGRAM_DIGEST=$($PY -c "

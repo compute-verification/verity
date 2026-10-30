@@ -13,7 +13,7 @@ steps, every leg in one shape, the composed verdict with the JointHorizonLive er
   ``{symbol, value, unit, ...}`` (integrity bound, W_cert, S_cert, Q_cert, K, the wipe's foreign_bits at its reads ``k``
   and ratio ``r``, ``r`` null in a wipe from before ``verity/wipe/v0`` published it); ``error`` the probability over the leg's
   own coins that it accepts while its claim fails, as the run established it, read from ``error_from``; ``at`` the
-  certificate at δ = 1/100 and 1/10^6 (`DELTAS`): the run's own wherever ``error`` ≤ δ (a claim holding except with
+  certificate at δ = 1/100 and 1/10^6 (core's `DELTAS`): the run's own wherever ``error`` ≤ δ (a claim holding except with
   ``error`` holds except with δ), integrity's recomputed from its draw at δ (`integrity_bound`), else not established.
   A leg whose ``server`` is not the block's is carried but not composed.
 * ``composed``: ``verdict`` (`compose`: reject when a composed leg rejects or errs, accept when every leg ran on the block's
@@ -21,7 +21,7 @@ steps, every leg in one shape, the composed verdict with the JointHorizonLive er
   one, and ``joint_horizon``: `JOINT_HORIZON`'s error over this block, the composed legs' errors summed, and at each δ of
   `DELTAS` that δ times the legs established at it. The statement names five audits; the wipe is ``outside_statement``.
 * ``monitoring_period``: the census deployment (a parameter: ``{id, machines, window_s, ...}``) and, per period of
-  `PERIODS`, its blocks over all compute (machines × blocks a machine) and JointHorizonLive's union bound over them at this
+  core's `PERIODS`, its blocks over all compute (machines × blocks a machine) and JointHorizonLive's union bound over them at this
   block's errors (``error_sum`` × blocks), and the per-block error each δ of `DELTAS` needs over the period (δ / blocks).
 
 `check` recomputes every derived field from the legs. `from_period` builds a record from a runner report and extra legs.
@@ -30,20 +30,20 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import sys
 from collections.abc import Mapping, Sequence
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+from verity.core.protocols.pous.wipe_monitoring import DELTAS, PERIODS
+from verity.core.protocols.profile import Stratified
+
 FORMAT = "verity/block-record/v1"
 EXTENDS = ("verity/all-protocols-period/v1", "verity/all-protocols-window/v1")
 LEGS = ("integrity", "pouw", "pous", "bandwidth", "certifier", "wipe")
 #: the runner's protocol keys, by leg
 RUNNER_KEYS = {"integrity": "integrity", "pouw": "work", "pous": "space", "bandwidth": "bandwidth", "certifier": "communication"}
-DELTAS: tuple[Fraction, ...] = (Fraction(1, 100), Fraction(1, 10**6))
-PERIODS: tuple[tuple[str, int], ...] = (("week", 7 * 86400), ("month", 30 * 86400), ("year", 365 * 86400))
 JOINT_HORIZON = {"name": "Accounting.Guarantees.JointHorizonLive", "proved": True,
                  "file": "Security/Definitions/Accounting/Guarantees/JointLive.lean",
                  "audits": ["integrity", "pouw", "pous", "bandwidth", "certifier"]}
@@ -54,18 +54,10 @@ def frac(x: Any) -> Fraction:
 
 
 def integrity_bound(n: int, kd: int, delta: Fraction) -> int:
-    """The most wrong units of ``n`` an accepted uniform ``kd``-subset draw leaves except with ``δ``: one less than the least
-    ``K₀`` whose sampling term ``C(n − K₀, kd)/C(n, kd)`` is at most ``δ`` (exact; the all-protocols monitoring period's
-    window threshold)."""
-    total = math.comb(n, kd)
-    lo, hi = 0, n + 1
-    while lo < hi:
-        mid = (lo + hi) // 2
-        if mid <= n and math.comb(n - mid, kd) * delta.denominator <= delta.numerator * total:
-            hi = mid
-        else:
-            lo = mid + 1
-    return lo - 1
+    """The most wrong units of ``n`` an accepted uniform sample of ``kd`` leaves except with ``δ``: the integrity profile's
+    count bound (`Stratified.count_bound`), the largest ``K`` whose sampling term ``C(n − K, kd)/C(n, kd)`` is at least
+    ``δ``."""
+    return Stratified.uniform(n, kd).count_bound(delta)
 
 
 def _draw(answer: Mapping[str, Any]) -> tuple[int, int]:
@@ -222,18 +214,18 @@ def check(record: Mapping[str, Any]) -> dict[str, str]:
     return bad
 
 
-# --- tonight's records ---------------------------------------------------------------------------------------------------
+# --- the records from the runs' outputs ----------------------------------------------------------------------------------
 
 #: `benchmarks/census/deployments.json`'s reference deployment as the runs' monitoring reports recorded it
 REFERENCE = {"id": "dc-12500-machines-600s", "machines": 12500, "gpus_per_machine": 8, "window_s": 600, "role": "reference",
              "label": "reference datacenter: 12,500 eight-GPU machines (100,000 GPUs), every machine audited in 10-minute windows"}
 
 
-def tonight(r2: Path, r1: Path, wipe: Path) -> dict[str, dict[str, Any]]:
-    """The fixtures from the runs' outputs: r20261025-210358-993e's period 0 (``r2``: its ``reports.jsonl``),
-    r20261025-203534-186b's window 10 (``r1``) and the wipe run r20261025-224222-91e2 (``wipe``: its ``results.json``, with
-    ``leg/wipe.json`` beside it). Each loop served 2 requests for 2 steps: ``[0, 2)``. The wipe's server is its session
-    report's host, the hostname the runner names its node by (its ``placement`` names the node's alias)."""
+def from_runs(r2: Path, r1: Path, wipe: Path) -> dict[str, dict[str, Any]]:
+    """The fixtures from the runs' outputs: period 0 of one all-protocols run (``r2``: its ``reports.jsonl``), window 10 of
+    another (``r1``) and a wipe run (``wipe``: its ``results.json``, with ``leg/wipe.json`` beside it). Each loop served 2
+    requests for 2 steps: ``[0, 2)``. The wipe's server is its session report's host, the hostname the runner names its
+    node by (its ``placement`` names the node's alias)."""
     p0 = next(json.loads(x) for x in r2.read_text().splitlines() if json.loads(x)["period"] == 0)
     w10 = next(json.loads(x) for x in r1.read_text().splitlines() if json.loads(x)["window"] == 10)
     row = json.loads((wipe.parent / "leg" / "wipe.json").read_text())
@@ -243,11 +235,11 @@ def tonight(r2: Path, r1: Path, wipe: Path) -> dict[str, dict[str, Any]]:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="The block record: check one, or write tonight's from the runs' outputs.")
+    ap = argparse.ArgumentParser(description="The block record: check one, or build the fixture records from the runs' outputs.")
     sub = ap.add_subparsers(dest="cmd", required=True)
     c = sub.add_parser("check")
     c.add_argument("record")
-    t = sub.add_parser("tonight")
+    t = sub.add_parser("from-runs")
     t.add_argument("--r2", required=True, type=Path)
     t.add_argument("--r1", required=True, type=Path)
     t.add_argument("--wipe", required=True, type=Path)
@@ -258,7 +250,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(json.dumps({"ok": not bad, "bad": bad}, sort_keys=True))
         return 0 if not bad else 1
     a.out.mkdir(parents=True, exist_ok=True)
-    for name, rec in tonight(a.r2, a.r1, a.wipe).items():
+    for name, rec in from_runs(a.r2, a.r1, a.wipe).items():
         (a.out / f"{name}.json").write_text(json.dumps(rec, separators=(",", ":"), sort_keys=True, ensure_ascii=False) + "\n")
         print(a.out / f"{name}.json")
     return 0

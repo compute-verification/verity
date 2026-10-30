@@ -4,7 +4,7 @@ import Definitions.Pouw.PearlC.Fp4
 /-!
 # The FP4-tile model (trusted definitions)
 
-`docs/pouw/fp4-tile-model.md` (bc-d9842080). The adversary's only fast multiplier is the tile gate of
+`docs/pouw/fp4-tile-model.md`. The adversary's only fast multiplier is the tile gate of
 `BLACKWELL_SM120_NVF4` (`Pouw.PearlC.Fp4.sm120Nvf4`: `mma.sync ... kind::mxf4nvf4 ... m16n8k64`), priced per slot.
 Every other multiplier runs at its measured price, and elementwise work and data movement are bounded. Outputs are
 bit-exact. A cheaper computation of an exact matrix product in this model is a program in the rewrite class below.
@@ -14,9 +14,8 @@ bit-exact. A cheaper computation of an exact matrix product in this model is a p
   `(i, l, j)`, the product `P[i, l]·Q[l, j]`. The k-index `l` is shared by all 16 rows and all 8 columns.
   - **Per-slot pricing:** `price .fp4 = 1/2` FP8-MAC units per slot, so a firing costs 4,096 units, dense or not.
   - **The exact regime** (`Gate.Exact`): every output word's value is the accumulator plus the exact sum of its 64 slot
-    values. That is the atom's behaviour on in-domain operands, where NVFP4 chains are exact
-    (`internal/pouw/rtx-pro/fp4-cheaper-computation.md` §0.3). Its faithfulness is `tc-model/sm120-fp4`, measured and
-    never proved.
+    values. That is the atom's behaviour on in-domain operands, where NVFP4 chains are exact. Its faithfulness is
+    `tc-model/sm120-fp4`, measured and never proved.
 * **The rewrite class.**
   - A *quadratic program* (`QuadProg`) is a list of products of two linear forms of the inputs, `ℓ t = a t·X + b t·Y`
     and `ℓ' t = a' t·X + b' t·Y`, combined linearly into the outputs: `eval X Y o = Σ_t w t o · ℓ t · ℓ' t`.
@@ -62,12 +61,11 @@ inductive Fmt where
   | dp4a
   deriving DecidableEq, Repr
 
-/-- The price of one slot (one product) in FP8-MAC units, measured at locked clocks (the assessor's
-`r20260930-060338-26b9` and `r20260930-062627-063a`). NVFP4 0.5 (the 2:4-sparse form is 0.25 per nominal MAC, so the
-same 0.5 per nonzero product), FP8 1, int8 1, BF16 2, FP16 2, TF32 4, `dp4a` 4.05 per int8 MAC, FFMA 8.46 (the model's
-value). GPU 4 has since measured the FP32 and F16 CUDA-core multipliers at 8.0–8.15, that is 16.0–16.3 FP4 slots per
-product (F1). Every pin that reads `price .fp32` holds across that range; FFMA's 16-block closure is a
-tie there, not a margin: equality at 8.0, 2% at 8.15 (`fp32_closed_upto`). -/
+/-- The price of one slot (one product) in FP8-MAC units, measured at locked clocks. NVFP4 0.5 (the 2:4-sparse form is
+0.25 per nominal MAC, so the same 0.5 per nonzero product), FP8 1, int8 1, BF16 2, FP16 2, TF32 4, `dp4a` 4.05 per int8
+MAC, FFMA 8.46 (the model's value). GPU 4 has since measured the FP32 and F16 CUDA-core multipliers at 8.0–8.15, that is
+16.0–16.3 FP4 slots per product (F1). Every pin that reads `price .fp32` holds across that range; FFMA's 16-block
+closure is a tie there, not a margin: equality at 8.0, 2% at 8.15 (`fp32_closed_upto`). -/
 def price : Fmt → ℚ
   | .fp4 => 1 / 2
   | .fp8 => 1

@@ -3,10 +3,6 @@
   "entries": [
     {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "core-private", "symbol": "_spec_id_memo", "detail": "verity.ml.circuits.codec._spec_id"},
     {"file": "verity_vllm/pipeline/build.py", "kind": "core-private", "symbol": "_spec_histogram", "detail": "verity.ml.circuits.codec._spec_id"},
-    {"file": "verity_vllm/program/compact.py", "kind": "core-private", "symbol": "lean_root", "detail": "verity.ml.circuits.codec._decode_refs"},
-    {"file": "verity_vllm/program/compact.py", "kind": "core-private", "symbol": "lean_root", "detail": "verity.ml.circuits.codec._lookup_primitive"},
-    {"file": "verity_vllm/program/compact.py", "kind": "core-private", "symbol": "lean_root", "detail": "verity.ml.circuits.codec._spec_id"},
-    {"file": "verity_vllm/program/compact.py", "kind": "core-private", "symbol": "lean_root", "detail": "verity.ml.circuits.codec._statics_order"},
     {"file": "verity_vllm/program/descriptor_equivalence.py", "kind": "core-private", "symbol": "_all_definitions.visit", "detail": "verity.ml.circuits.codec._as_specialized"},
     {"file": "verity_vllm/program/descriptor_equivalence.py", "kind": "core-private", "symbol": "_all_definitions.visit", "detail": "verity.ml.circuits.codec._static_functions"},
     {"file": "verity_vllm/program/descriptor_equivalence.py", "kind": "core-private", "symbol": "_fid", "detail": "verity.ml.circuits.codec._spec_id"},

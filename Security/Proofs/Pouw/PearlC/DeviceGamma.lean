@@ -1,7 +1,7 @@
 import Proofs.Pouw.PearlC.TileGamma
 
 /-!
-# TT_OUT and γ at a device record (the cheap-binding lane's file)
+# TT_OUT and γ at a device record
 
 Staged; nothing pinned.
 * **The H100 record is the granted statement on a narrower domain:** `pearlCProtocolDev_h100` and

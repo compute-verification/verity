@@ -39,17 +39,19 @@ o = attn.pv(p, v, lens, path="ref")              # the same words through the re
   shapes, a no-launch control that must fail, the whole decode step also over its first 4,096 and 16,384 sequences,
   `attn.py`'s functions through both paths on every decode case, and diagnostic timing against SDPA and torch's matmuls
   at the model's decode step for M = 4,096, 16,384 and 20,480.
-- `run.sh`: the card's part as one run from the build's ship (sent as `ship.tar`), `run.py` under `gpu-lease 1`. The
+- `run.sh`: the card's part as one run from the build's ship (`IN/ship.tar`), `run.py` under `gpu-lease 1`. The
   card's canary is `benchmarks/tc_probe`'s own run.
 - `tests/`: on the CPU, the SASS gate's verdicts, `attn.py`'s kernels and the reference grid, and `fixture.py`'s words on
   `kinds_d64` against the Definition's reference evaluator (`GemmCoordinatePad` for PV).
 
 ```text
-research run --on auto --project verity --source . --cwd source --cpus 16 --mem-gb 48 -- \
-  bash -lc 'uv sync -q --all-packages --extra torch-cpu && PROCS=16 bash benchmarks/torch_gpu/attn_bf16/build.sh "$OUT/ship"'
-research fetch BUILD_RUN --all && tar -C ~/.research/runs/BUILD_RUN/out/ship -cf /tmp/ship.tar .
-research run --on vy-dc-h200 --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE --send /tmp/ship.tar -- \
-  bash benchmarks/torch_gpu/attn_bf16/run.sh
+# from the tree's root, on a CPU node with CUDA's nvcc (12.8 or later), 16 CPUs and 48 GB: the cubins, their SASS gates
+# and the fixture
+uv sync --all-packages --extra torch-cpu
+PROCS=16 bash benchmarks/torch_gpu/attn_bf16/build.sh /tmp/attn-bf16-ship
+mkdir -p IN && tar -C /tmp/attn-bf16-ship -cf IN/ship.tar .
+# on an H200 with CUDA torch and `gpu-lease`: run.py's checks and timing
+OUT=DIR IN=IN bash benchmarks/torch_gpu/attn_bf16/run.sh
 uv run tools/verity/check/suites.py benchmarks/torch_gpu/attn_bf16      # the CPU suite
 ```
 

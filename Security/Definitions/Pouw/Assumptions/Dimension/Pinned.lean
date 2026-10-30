@@ -44,7 +44,7 @@ def TTNCPOfA2 : Prop :=
     γ₂ < 1 → γ₀ < 1 → 1 - γ₀ ≤ (1 - γ₂) * (1 - 16 / (3 * k : ℝ)) →
     ¬ (M.cost q / (1 - γ₀) < ∑ _u ∈ U, 3 * ((m * k * n : ℕ) : ℝ))
 
-/-- **Theorem D for the protocol's checked values** (mod `2^32`, which are `Params.Y`'s by `paramsYLink`; TD-2): for a
+/-- **Theorem D for the protocol's checked values** (mod `2^32`, which are `Params.Y`'s by `paramsYLink`): for a
 signed-permutation `R`, `k ≤ 2^16`, `A = g(F₁)` int7 at every `F₁` and `B` int7 on the units in `U`, under checkpoint
 independence and H_16, a program on inputs in `V₀` that outputs the wrapped non-final checked words costs at least
 `16·|U|·m·n·(3k/16 − 1)`. There the wrap is the identity (`int7Int32`). The hypotheses on `R` hold jointly at the
@@ -58,7 +58,7 @@ def AlgBoundWrapped : Prop :=
     (∀ u ∈ U, ∀ p < nonFinal k m n, (fun ω => (Chain.wrapped k m n N R (A ω.2) B ω u p : ℚ)) ∈ slots P L) →
     16 * (U.card * (m * n) * (3 * k / 16 - 1)) ≤ cost P
 
-/-- **A1 implies MinRank ≥ 2** (TD-5; a necessary condition on `R`): if `A1(c, γ₁)` holds with `c·(1 − γ₁) > 1`, then
+/-- **A1 implies MinRank ≥ 2** (a necessary condition on `R`): if `A1(c, γ₁)` holds with `c·(1 − γ₁) > 1`, then
 `MinRank2 k R`. A nonzero rank-1 combination `x·yᵀ` of the non-final checkpoint matrices makes one entry's words a
 single product of free values. So A1 at W1's `c = 2` is stated under MinRank ≥ 2 (`A1_W1`); the survey's proposed
 MinRank rule targets 16. -/

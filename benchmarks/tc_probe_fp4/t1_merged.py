@@ -360,7 +360,7 @@ def main(args) -> int:
     if args.chain != 1:
         raise SystemExit("--chain is not defined for sp_nvf4_t1 (its chains are the whole k)")
     if args.fake_silicon and SHARED.RESEARCH_RUN_ID:
-        raise SystemExit("--fake-silicon is a dry run and never publishes: not under a research run")
+        raise SystemExit("--fake-silicon is a dry run and never publishes: unset RESEARCH_RUN_ID")
     if args.fake_silicon and args.fake_silicon not in FAKES:
         raise SystemExit(f"--fake-silicon for sp_nvf4_t1: one of {FAKES}")
     fams = args.families.split(",") if args.families else list(ROUTES["families"])

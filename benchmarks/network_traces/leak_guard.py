@@ -52,7 +52,7 @@ np = importlib.import_module("numpy") if importlib.util.find_spec("numpy") else 
 DECLARED = Path(__file__).resolve().with_name("leak_guard.json")
 SCHEMA = "network-traces/leak-guard/v1"
 DECLARED_SCHEMA = "network-traces/leak-guard-declared/v1"
-#: A UTF-8 witness file's pieces are 32 bytes, as the guard's first runs cut them (r20261027-012706-3a17's); a binary
+#: A UTF-8 witness file's pieces are 32 bytes, as the guard's first runs cut them; a binary
 #: file's are 16, a salt's size, so one salt copied raw or as hex is found.
 TEXT, BINARY = 32, 16
 #: A piece of fewer distinct bytes isn't searched for: the runs of zeros and padding every record holds.

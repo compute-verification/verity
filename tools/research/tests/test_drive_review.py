@@ -1,4 +1,5 @@
-"""The review landing (`land = "review"`: PRs land on an eyeball review, and the full check runs after landing).  A tick
+"""The review landing (`land = "review"`, here with `land_into = "main"`: PRs land on review, and the full check runs on
+`main` after; `test_drive_checked.py` has `land_into = "checked"`, where `main` moves only to a checked commit).  A tick
 lands `next`'s longest prefix whose every member has a land verdict at its head by a reviewer who isn't its owner, a Lean
 change only once a Lean check passed; the after-landing run checks `main`, and its failure reverts what it implicates once
 `main` passed that step before, bisecting when several PRs are implicated."""
@@ -23,11 +24,37 @@ from test_queue import World, _git
 from test_queue_drive import Harness, _failed_run, _killed_run, _live_run, _steps_run, _tip
 
 EVERY = {s: "passed" for s in AFTER_LANDING if s not in AFTER_LANDING_OPTIONAL}
+#: a ci.toml with a job for each after-landing step, circuit-check off the merge gate as in the tree
+CI_TOML = 'schema = "ci/v0"\n' + "".join(f'[[job]]\nname = "{s}"\nowner = "ci"\ngroup = 1\n'
+                                         + ('gate = false\n' if s == "circuit-check" else "") for s in AFTER_LANDING)
+
+
+def test_the_after_landing_run_runs_circuit_check_which_is_off_the_merge_gate():
+    """circuit-check is off the merge gate (ci.toml's `gate = false`): no recorded check runs it, so the after-landing run must,
+    and must pass it to verify `main` (it is no step the run may skip by name)."""
+    from research.drive import CHECK_STEPS
+
+    assert AFTER_LANDING == tuple(s for s in CHECK_STEPS if not s.startswith("preflight-"))
+    assert "circuit-check" in AFTER_LANDING and "circuit-check" not in AFTER_LANDING_OPTIONAL and "circuit-check" in EVERY
 
 
 @pytest.fixture
 def world(tmp_path):
     return World(tmp_path)
+
+
+def test_main_waits_for_the_steps_on_the_gate_of_the_commits_own_ci_toml(world, monkeypatch):
+    """`_promote` waits at a commit for every after-landing step but those a run skips by name and the jobs that commit's own
+    ci.toml takes off the merge gate (circuit-check); for every such step when that ci.toml can't be read."""
+    h = Review(world, monkeypatch)
+    every = [s for s in AFTER_LANDING if s not in AFTER_LANDING_OPTIONAL]
+    assert h.d._gating(_main(world)) == every
+    _move_main(world, {"tools/verity/check/ci.toml": CI_TOML})
+    h.q.fetch()
+    assert h.d._gating(_main(world)) == [s for s in every if s != "circuit-check"]
+    _move_main(world, {"tools/verity/check/ci.toml": "not toml ["})
+    h.q.fetch()
+    assert h.d._gating(_main(world)) == every
 
 
 def _registry(world: World, *handles: str) -> None:
@@ -89,8 +116,9 @@ def test_a_reviewed_prefix_lands_and_awaits_the_after_landing_run_of_every_step(
     assert _subject(world, "main").startswith("Queue: #2") and _subject(world, "main^1").startswith("Queue: #1")
     assert _subject(world, "next").startswith("Queue: #3") and _git(world.origin, "rev-parse", "next^1") == main
     assert h.launched == []                                     # no Lean check: no Lean changes
+    verified = _git(world.origin, "rev-parse", "main^1^1")
     assert h.posted == [(main, ",".join(AFTER_LANDING), {"agreement": False, "no_cache": True, "circuit_cache": True,
-                                                            "no_regenerate": True})]
+                                                            "no_regenerate": True, "base": verified})]
     assert h.after and h.after[0][1] == {main: "", _git(world.origin, "rev-parse", "main^1"): ""}
     pl = h.postland()
     assert pl["pending"] == [main] and pl["run"]["skip"] == ["lean-agreement", "lean-changed"]
@@ -103,13 +131,61 @@ def test_a_reviewed_prefix_lands_and_awaits_the_after_landing_run_of_every_step(
     assert "lean-agreement" in pl["verified_as"]["steps"]         # ci's baseline passed it, and nothing it checks changed since
 
 
-def test_an_unreviewed_or_held_member_stops_the_prefix_below_it(world, monkeypatch):
+def test_a_sharded_after_landing_run_verifies_main_only_once_every_shard_passed(world, monkeypatch):
+    """`after_landing_shards = N`: the after-landing run is N runs at once, shard K of ci.toml's plan with N shards each, so it
+    takes about its longest shard rather than every step on one slot (2.5 h). `main` is verified once each shard passed; a shard
+    that never started launches the run again, whole."""
+    h = Review(world, monkeypatch)
+    h.d.after_landing_shards = 3
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    main = _main(world)
+    assert [(c, kw.get("shard")) for c, _, kw in h.posted] == [(main, "1/3"), (main, "2/3"), (main, "3/3")]
+    h.run_state.update({"r-post-0": ("done", 0, None), "r-post-1": ("running", None, None), "r-post-2": ("done", 0, None)})
+    h.evidence = [_steps_run(world.tmp, "r-post-0", {s: "passed" for s in AFTER_LANDING})]
+    h.tick()
+    pl = h.postland()
+    assert pl["run"]["groups"] == [["r-post-0"], ["r-post-1"], ["r-post-2"]] and pl["verified"] != main, "one shard runs on"
+    h.run_state["r-post-1"] = ("done", 75, None)
+    h.tick()
+    assert h.postland()["verified"] != main and len(h.posted) == 6, "a shard that never started: the run again, whole"
+    h.run_state.update({f"r-post-{i}": ("done", 0, None) for i in (3, 4, 5)})
+    h.tick()
+    pl = h.postland()
+    assert pl["verified"] == main and pl["run"] is None, world.logs
+
+
+def test_an_after_landing_run_sends_a_base_below_its_tip_so_ratchet_gate_judges_the_landings_above_it(world, monkeypatch):
+    """Against origin/main, its own tip, the after-landing run's ratchet-gate judged no change and could never fail.  Drive
+    sends the last verified `main` as its base (`train.sh --base`), below the tip with every landing since above it; the
+    baseline run, of the verified `main` itself, sends the tip's first parent."""
+    _move_main(world, {"x.txt": "x\n"})
+    h = Review(world, monkeypatch, baseline=False)
+    verified = _main(world)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.review(1)
+    h.review(2)
+    assert h.tick().startswith("nothing lands before an after-landing run of `main`"), world.logs
+    ((tip, _, kw),) = h.posted
+    assert tip == verified and kw["base"] == _git(world.origin, "rev-parse", f"{verified}^1")
+    h.run_state["r-post-0"] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, "r-post-0", {s: "passed" for s in AFTER_LANDING})]
+    assert h.tick().startswith("landed #2"), world.logs
+    tip, _, kw = h.posted[-1]
+    assert tip == _main(world) != verified and kw["base"] == verified == h.postland()["verified"]
+    assert _git(world.origin, "merge-base", kw["base"], tip) == verified                   # below the tip
+    assert [m.pr for m in h.d.landed_since(kw["base"], tip)] == [1, 2]                    # the landings it judges
+
+
+def test_an_unreviewed_member_new_to_next_or_a_held_one_stops_the_prefix_below_it(world, monkeypatch):
     h = Review(world, monkeypatch)
     for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
         world.gh.put(n, world.change({f: f"{n}\n"}))
     h.review(1)
     h.review(3)
-    assert h.tick().startswith("landed #1"), world.logs
+    assert h.tick().startswith("landed #1"), world.logs        # the lift moves only what `next` held before the sync
     assert _subject(world, "main").startswith("Queue: #1")
     h.review(2)
     h.review(2, "hold", by="other", ref="reads a stale fixture")
@@ -643,7 +719,7 @@ def test_members_that_change_no_lean_go_below_a_lean_change_and_land_while_its_l
 def test_reviewed_members_that_change_no_lean_above_a_lean_change_at_the_bottom_go_below_it_before_its_check_runs(
         world, monkeypatch):
     """A Lean change already at the bottom of `next` would hold every reviewed member above it for its Lean check: non-Lean
-    first orders only what a sync merges anyway, and the check launches on the reviewed prefix's top, holding them all.  While no Lean check of `next` runs, they go below it and land that tick, and its check starts on
+    first orders only what a sync adds, and the check launches on the reviewed prefix's top, holding them all.  While no Lean check of `next` runs, they go below it and land that tick, and its check starts on
     what is left.  Once it runs, nothing moves below it: one reviewed after waits above it, and lands on its pass."""
     h = Review(world, monkeypatch)
     world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
@@ -657,7 +733,7 @@ def test_reviewed_members_that_change_no_lean_above_a_lean_change_at_the_bottom_
     assert h.tick().startswith("landed #3"), world.logs
     assert _subject(world, "main").startswith("Queue: #3") and _subject(world, "main^1").startswith("Queue: #2")
     assert [m.pr for m in h.q.chain()] == [1] and h.launched == [(_tip(world), "m1", False)] and h.cancelled == []
-    assert any("#2 #3 (reviewed, no Lean change) go to the bottom" in x for x in world.logs), world.logs
+    assert any("#2 #3 #1 (reviewed) go to the bottom" in x for x in world.logs), world.logs
     world.gh.put(4, world.change({"c.txt": "4\n"}))
     h.review(4)
     assert not h.tick().startswith("landed")
@@ -696,6 +772,88 @@ def test_a_lift_leaves_an_unreviewed_member_a_pr_stacked_on_the_lean_change_and_
     h.review(2)
     h.tick()
     assert [m.pr for m in h.q.chain()] == [1, 2, 3] and len(h.launched) == 1, world.logs
+
+
+def test_an_unreviewed_member_below_reviewed_ones_no_longer_stops_them_landing(world, monkeypatch):
+    """A member with no land verdict held every reviewed member above it, deep in `next`.  The members with a land verdict
+    go below those waiting for one, and land that tick; the one waiting holds only itself."""
+    h = Review(world, monkeypatch)
+    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [1, 2, 3]
+    h.review(2)
+    h.review(3)
+    assert h.tick().startswith("landed #3"), world.logs
+    assert _subject(world, "main").startswith("Queue: #3") and _subject(world, "main^1").startswith("Queue: #2")
+    assert [m.pr for m in h.q.chain()] == [1]
+    assert any("#2 #3 (reviewed) go to the bottom" in x for x in world.logs), world.logs
+    h.review(1)
+    assert h.tick().startswith("landed #1") and _main(world) == _tip(world)
+
+
+def test_a_held_member_still_stops_the_members_above_it_a_hold_is_a_verdict(world, monkeypatch):
+    """Nothing moves past a held member: what is below it lands, past an unreviewed one, and what is above it waits."""
+    h = Review(world, monkeypatch)
+    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt"), (4, "d.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    h.tick()
+    h.review(2)
+    h.review(3, "hold", by="other", ref="reads a stale fixture")
+    h.review(4)
+    assert h.tick().startswith("landed #2"), world.logs
+    assert [m.pr for m in h.q.chain()] == [1, 3, 4]
+    out = h.tick()
+    assert out.startswith("nothing reviewed lands: #1"), out
+    assert [m.pr for m in h.q.chain()] == [1, 3, 4] and _subject(world, "main").startswith("Queue: #2")
+
+
+def test_reviewed_first_keeps_a_stacked_pr_after_the_pr_it_contains(world, monkeypatch):
+    """A reviewed PR stacked on an unreviewed one stays above it; one stacked on a reviewed one goes down after it."""
+    h = Review(world, monkeypatch)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}, base=world.gh.prs[1].head))
+    world.gh.put(3, world.change({"c.txt": "3\n"}))
+    world.gh.put(4, world.change({"d.txt": "4\n"}, base=world.gh.prs[3].head))
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [1, 2, 3, 4]
+    for n in (2, 3, 4):
+        h.review(n)
+    assert h.tick().startswith("landed #4"), world.logs
+    assert _subject(world, "main").startswith("Queue: #4") and _subject(world, "main^1").startswith("Queue: #3")
+    assert [m.pr for m in h.q.chain()] == [1, 2]
+    h.review(1)
+    assert h.tick().startswith("landed #2") and _main(world) == _tip(world)
+
+
+def test_a_member_whose_labels_cant_be_read_stops_the_lift_not_the_tick(world, monkeypatch):
+    h = Review(world, monkeypatch)
+    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    h.tick()
+    h.review(2)
+    h.review(3)
+    reviews = h.d.reviews
+
+    def stale(pr, head):
+        if pr == 3:
+            raise QueueError(f"STALE: the labels of pr:3@{head} weren't pulled from the store's remote")
+        return reviews(pr, head)
+
+    h.d.reviews = stale
+    assert h.tick().startswith("landed #2"), world.logs
+    assert [m.pr for m in h.q.chain()] == [1, 3]
+    assert any("the lift stops below #3: STALE" in x for x in world.logs), world.logs
+
+
+def test_reviewed_first_off_keeps_an_unreviewed_member_where_it_is(world, monkeypatch):
+    h = Review(world, monkeypatch, reviewed_first=False)
+    for n, f in ((1, "a.txt"), (2, "b.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    h.tick()
+    h.review(2)
+    assert h.tick().startswith("nothing reviewed lands: #1"), world.logs
+    assert [m.pr for m in h.q.chain()] == [1, 2]
 
 
 @pytest.mark.parametrize("fault", ["enospc", "after-audit"])
@@ -875,8 +1033,9 @@ def test_nothing_lands_before_the_after_landing_run_of_main_itself_and_a_red_mai
     main = _main(world)
     out = h.tick()
     assert out.startswith("nothing lands before an after-landing run of `main`"), out
+    below = _git(world.origin, "rev-parse", f"{main}^1")
     assert h.posted == [(main, ",".join(AFTER_LANDING), {"agreement": True, "no_cache": False, "circuit_cache": False,
-                                                            "no_regenerate": True})]
+                                                            "no_regenerate": True, "base": below})]
     h.run_state["r-post-0"] = ("done", 1, None)
     h.evidence = [_steps_run(world.tmp, "r-post-0", {**{s: "passed" for s in AFTER_LANDING}, "lean-suites": "failed"})]
     assert h.tick().startswith("landed #2"), world.logs
@@ -976,6 +1135,46 @@ def test_an_after_landing_failure_rings_its_culprit_and_the_suites_owner_and_rev
     (h.evidence[0] / "suites-lean.json").write_text(json.dumps([{"name": "pkg", "suite": "pkg", "status": "passed"}]))
     h.tick()
     assert h.postland()["verified"] == main and not h.postland()["red"] and h.postland()["green"]["suite pkg"] == main
+
+
+def test_a_red_ratchet_gate_names_the_merge_it_fails_as_the_culprit(world, monkeypatch, tmp_path):
+    """The after-landing run's ratchet-gate step runs the vLLM integration's ratchet gate on each landing's merge, and its log
+    names no file of the change, only the PR whose merge grows an allowlist: drive takes that PR as the culprit.  The log
+    here is the gate's own, run on the merges drive landed."""
+    import sys
+
+    p01 = "integrations/vllm/tests/lint/allowlists/p01_core.json"
+
+    def allowlist(*files: str) -> str:
+        return json.dumps({"rule": "p01", "entries": [{"file": f, "kind": "k", "symbol": "s", "detail": "d"} for f in files]})
+
+    _git(world.dev, "push", "-q", "origin", f"{world.change({p01: allowlist('a.py', 'b.py')})}:refs/heads/main")
+    h = Review(world, monkeypatch)
+    base = _main(world)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"c.py": "C = 1\n", p01: allowlist("a.py", "b.py", "c.py")}))
+    world.gh.put(3, world.change({"b.txt": "3\n"}))
+    for n in (1, 2, 3):
+        h.review(n)
+    assert h.tick().startswith("landed #3")
+    tip = _main(world)
+    merge2 = _git(world.origin, "rev-parse", "main^1")
+    assert _subject(world, merge2).startswith("Queue: #2")
+    _git(world.dev, "fetch", "-q", "origin")
+    gate = subprocess.run([sys.executable, str(Path(__file__).resolve().parents[3] / "integrations/vllm/tools/ratchet_gate.py"),
+                           base, tip], cwd=world.dev, capture_output=True, text=True, env={**os.environ, "RATCHET_GATE_CACHE": ""})
+    assert gate.returncode == 1 and f"  #2 ({merge2[:12]}): failed: grows {p01} 2 -> 3 entries" in gate.stdout, gate
+    run = _steps_run(tmp_path, "r-post-0", {s: "passed" for s in EVERY if s != "ratchet-gate"})
+    with open(run / "steps.jsonl", "a") as f:
+        f.write(json.dumps({"step": "ratchet-gate", "status": "failed", "rc": 1, "log": "ratchet-gate.log"}) + "\n")
+    (run / "ratchet-gate.log").write_text(gate.stdout)
+    h.run_state["r-post-0"] = ("done", 1, None)
+    h.evidence = [run]
+    h.tick()
+    (ring,) = [p for p in h.posts if "is red on" in p]
+    assert f"step ratchet-gate is red on `main` {tip[:12]}" in ring and f"`#2 ({merge2[:12]}): failed: grows {p01}" in ring, ring
+    assert "Culprit: #2 (the ratchet gate fails its merge), of the 3 landing(s)" in ring, ring
+    assert h.postland()["red"]["step ratchet-gate"]["culprit"][:1] == [2]
 
 
 @pytest.mark.parametrize("fix", ["names-the-culprit", "fixes-suite", "touches-the-failure", "new-head"])
@@ -1292,7 +1491,7 @@ def test_an_after_landing_failure_several_prs_touch_is_bisected_to_the_one_that_
     out = h.tick()
     assert out.startswith("landed #4"), out
     assert h.posted[1] == (one, "lean-suites", {"agreement": False, "no_cache": False, "circuit_cache": False,
-                                                   "no_regenerate": True})
+                                                   "no_regenerate": True, "base": _git(world.origin, "rev-parse", f"{one}^1")})
     assert h.posted[2][0] == _main(world)                                        # #4's after-landing run
     (ring,) = [p for p in h.posts if "is red on" in p]
     assert "#1 #2 each touch it" in ring and "drive bisects them" in ring, ring
@@ -1551,7 +1750,7 @@ def test_review_without_sha_refuses_a_head_pushed_since_the_sync_and_takes_a_sho
 
 
 def test_the_owner_of_an_unmarked_pr_a_marked_one_waits_for_is_told_once_per_pair_of_heads(world, monkeypatch):
-    """A marked PR can wait on another's unmarked commits, and that one's owner is told.  Its owner hears once per
+    """A marked PR can wait on another's unmarked commits, and that one's owner is told, the marked one's beside it.  They hear once per
     (head of the waiting PR, head of the unmarked one), and nothing once it's admitted or when the waiting PR isn't marked."""
     _registry(world, "lane-5", "lane-7", "lane-8", "lane-9")
     h = Review(world, monkeypatch)
@@ -1570,24 +1769,50 @@ def test_the_owner_of_an_unmarked_pr_a_marked_one_waits_for_is_told_once_per_pai
     h.tick()
     five = world.gh.prs[5].head
     assert told() == [
-        f"@ci @lane-5 queue: #7 (marked by marker7) waits for your mark of #5, which it contains (at {old[:12]}): mark #5 ready at "
+        f"@ci @lane-5 @lane-7 queue: #7 (marked by marker7) waits for your mark of #5, which it contains (at {old[:12]}): mark #5 ready at "
         f"{five[:8]}, or withdraw it (`research queue eject 5 --reason ...`) and #7 carries it",
-        f"@ci @lane-5 queue: #9 (marked by lane-9) waits for your mark of #5, which it contains (at {five[:12]}): mark #5 ready at "
+        f"@ci @lane-5 @lane-9 queue: #9 (marked by lane-9) waits for your mark of #5, which it contains (at {five[:12]}): mark #5 ready at "
         f"{five[:8]}, or withdraw it (`research queue eject 5 --reason ...`) and #9 carries it"], told()
     h.tick()
     assert len(told()) == 2                                     # once per pair of heads
     world.gh.put(7, world.change({"k.txt": "kernels 2\n"}, base=world.gh.prs[7].head))
     h.tick()
-    assert len(told()) == 3 and told()[-1].startswith("@ci @lane-5 queue: #7 (marked by lane-7) waits for your mark of #5")
+    assert len(told()) == 3 and told()[-1].startswith("@ci @lane-5 @lane-7 queue: #7 (marked by lane-7) waits for your mark of #5")
     world.gh.put(5, world.change({"x.txt": "x = 3\n"}, base=five), ready=False)
     h.tick()
     # #9 holds #5's older head now; it only shares `old` with #8, which waits for nothing of #9's or #7's (`Queue.entries`)
     assert [p.split(": mark")[0] for p in told()[3:]] == [
-        f"@ci @lane-5 queue: #7 (marked by lane-7) waits for your mark of #5, which it contains (at {old[:12]})",
-        f"@ci @lane-5 queue: #9 (marked by lane-9) waits for your mark of #5, which it contains (at {five[:12]})"], told()
+        f"@ci @lane-5 @lane-7 queue: #7 (marked by lane-7) waits for your mark of #5, which it contains (at {old[:12]})",
+        f"@ci @lane-5 @lane-9 queue: #9 (marked by lane-9) waits for your mark of #5, which it contains (at {five[:12]})"], told()
     world.gh.ready.add((5, world.gh.prs[5].head))
     h.tick()
     assert len(told()) == 5 and h.q.status()[7].state != "waiting"
+
+
+def test_a_marked_pr_left_out_for_an_ejected_pr_it_holds_an_older_head_of_is_told_once_with_the_fix(world, monkeypatch):
+    """#7 branched from #6, which moved on and was ejected at its new head: #7 holds #6's commits at an older head, so the sync
+    leaves it off `next`.  Both owners hear once per pair of heads, with the fix, and nothing at the same heads after."""
+    _registry(world, "lane-6", "lane-7")
+    h = Review(world, monkeypatch)
+    old = world.change({"x.txt": "x = 1\n"})
+    world.gh.put(6, old, ready=False)
+    h.tick()                                                                    # drive sees #6 at `old`
+    world.gh.put(6, new := world.change({"x.txt": "x = 2\n"}, base=old))
+    world.gh.put(7, seven := world.change({"k.txt": "kernels\n"}, base=old))
+    h.q.eject(6, "breaks circuits", "ci")
+    world.gh.ready.discard((6, new))
+
+    def told() -> list[str]:
+        return [p for p in h.posts if "is out of `next`" in p]
+
+    h.tick()
+    assert told() == [
+        f"@ci @lane-7 @lane-6 queue: #7 at {seven[:8]} is out of `next`: it contains #6's commits (at an older head), and #6 at "
+        f"{new[:8]} isn't admitted (ejected at {new[:8]}: breaks circuits (a new push or ready mark re-admits it)). Fix: mark #6 "
+        f"ready at {new[:8]}, drop #6's commits from #7, or ask @top to close #6"], told()
+    assert h.q.status()[7].state == "waiting"
+    h.tick()
+    assert len(told()) == 1
 
 
 def _detached(h: Review, tmp_path, lean: bool = True, post: bool = False) -> list[str]:
@@ -1923,6 +2148,69 @@ def test_a_passed_lean_check_holds_next_until_it_lands_and_an_ejection_below_it_
     h.tick()
     chain = h.q.chain()
     assert [m.pr for m in chain] == [1, 3] and chain[0].commit == one and top not in {m.commit for m in chain}, world.logs
+
+
+def _two_lean_checks(world, monkeypatch, higher: str) -> tuple[Review, list[str]]:
+    """Five unreviewed members on `next`, a Lean check running at #2's commit and one at #4's in state ``higher`` (running or
+    passed): (the harness, the chain's commits)."""
+    h = Review(world, monkeypatch, nonlean_first=False)
+    for n in range(1, 6):
+        world.gh.put(n, world.change({f"f{n}.txt": f"{n}\n"}))
+    h.tick()
+    commits = [m.commit for m in h.q.chain()]
+    h.d.hand_lean(commits[1], "ci")
+    h.d.hand_lean(commits[3], "ci")
+    if higher == "passed":
+        rid = h.lean_ids()[1]
+        h.run_state[rid] = ("done", 0, None)
+        h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+    h.tick()
+    lean = h.d.q.load_state()["drive"]["lean"]
+    assert lean[commits[1]]["state"] is None and lean[commits[3]]["state"] == (None if higher == "running" else "passed")
+    assert [m.commit for m in h.q.chain()] == commits, world.logs
+    return h, commits
+
+
+@pytest.mark.parametrize("higher", ["running", "passed"])
+def test_next_stays_up_to_the_higher_of_two_lean_checks_and_first_goes_above_it(world, monkeypatch, higher):
+    """A sync that put a `--first` fix and a re-head above the lower check's commit only would take the higher one's commit off
+    `next`, and with it a pass no land verdict yet lands (its prefix unreviewed), or a check mid-audit."""
+    h, commits = _two_lean_checks(world, monkeypatch, higher)
+    world.gh.put(5, world.change({"f5.txt": "five\n"}))                    # above both checks: it moves to the tip
+    world.gh.put(6, world.change({"f6.txt": "6\n"}))
+    h.q.first = (6,)
+    h.tick()
+    chain = h.q.chain()
+    assert [m.commit for m in chain[:4]] == commits[:4], world.logs
+    assert [m.pr for m in chain] == [1, 2, 3, 4, 6, 5] and h.cancelled == [], world.logs
+    assert commits[3] in h.d.q.load_state()["drive"]["lean"]
+
+
+@pytest.mark.parametrize("leaves", ["ejected", "re-headed"])
+def test_a_member_below_the_lower_lean_check_that_leaves_rebuilds_next_from_it(world, monkeypatch, leaves):
+    """The passed checks hold `next` only while every member up to them stays: one ejected, or pushed to a new head, below
+    the lower one leaves, and `next` is rebuilt from it."""
+    h = Review(world, monkeypatch, nonlean_first=False)
+    for n in range(1, 6):
+        world.gh.put(n, world.change({f"f{n}.txt": f"{n}\n"}))
+    h.tick()
+    commits = [m.commit for m in h.q.chain()]
+    for c in (commits[2], commits[3]):
+        h.d.hand_lean(c, "ci")
+        rid = h.lean_ids()[-1]
+        h.run_state[rid] = ("done", 0, None)
+        h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+        h.tick()
+    assert {c: r["state"] for c, r in h.d.q.load_state()["drive"]["lean"].items()} == {commits[2]: "passed", commits[3]: "passed"}
+    if leaves == "ejected":
+        world.gh.ready.discard((2, world.gh.prs[2].head))
+    else:
+        world.gh.put(2, world.change({"f2.txt": "two\n"}))
+    h.tick()
+    chain = h.q.chain()
+    assert chain[0].commit == commits[0] and chain[1].commit != commits[1], world.logs
+    assert [m.pr for m in chain] == ([1, 3, 4, 5] if leaves == "ejected" else [1, 3, 4, 5, 2]), world.logs
+    assert not {commits[2], commits[3]} & {m.commit for m in chain}
 
 
 def test_an_eject_off_drive_leaves_next_under_a_running_lean_check_and_records_the_ejection(world, monkeypatch, capsys):
