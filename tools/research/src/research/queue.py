@@ -121,7 +121,9 @@ only an hour later; the preflight builds those modules (`LakeBuild`).  A head wh
 leaves such a head off `next` with the same refusal.  So `ready` runs `Preflight` before the mark and before any quick tier: a refusal names what it found and the fix, a
 failure `next` has too refuses nothing, and what keeps a check from running is said under "checks skipped" and refuses nothing
 (the after-landing run checks it).  A conflict only in pins is merged as the sync merges it (`merged_tree`), and the checks run
-on that tree.  `--no-preflight` skips it, for the lander.
+on that tree.  The merge runs the merge drivers of the commit it merges onto, as the sync's clone defines them (`base_drivers`):
+a branch's older checkout would run its own `tools/verity/lean/merge.py`, and one from before `--caps` reports a conflict in
+`tests/test_lean_packages.py` the sync never sees.  `--no-preflight` skips it, for the lander.
 
 Records gate.  A head whose own records run printed `AUDIT: FAIL` fails a train's Lean check, about 50 minutes later.
 So `ready` (and `judge`) first refuse a head whose change against `main` touches a `lean-audit.json`
@@ -1612,21 +1614,56 @@ def forces_cold(files: Iterable[str]) -> bool:
     return False
 
 
-def merged_tree(repo: Path, base: str, head: str, *, plain: bool = True) -> tuple[str | None, list[str], subprocess.CompletedProcess]:
-    """``head`` merged onto ``base`` by `git merge-tree` (no worktree touched), with ``base``'s merge drivers (`--attr-source`):
-    (the merged tree, the conflicted files, `git merge-tree`'s result).  A merge whose every conflict is in a pin gives the tree
-    with each pin rebuilt (`repinned`) and those pins; one that doesn't merge gives None.  A git without `--attr-source`
-    (before 2.40) merges without the drivers, or with ``plain`` False gives None and its refusal (exit 129)."""
-    r = _git(repo, f"--attr-source={base}", "merge-tree", "--write-tree", "--name-only", "--no-messages", base, head,
+def merged_tree(repo: Path, base: str, head: str, *, plain: bool = True,
+                config: tuple[str, ...] = ()) -> tuple[str | None, list[str], subprocess.CompletedProcess]:
+    """``head`` merged onto ``base`` by `git merge-tree` (no worktree touched), with ``base``'s merge drivers (`--attr-source`;
+    ``config``, git's `-c` options, from `base_drivers` to run them from ``base``'s tools): (the merged tree, the conflicted
+    files, `git merge-tree`'s result).  A merge whose every conflict is in a pin gives the tree with each pin rebuilt
+    (`repinned`) and those pins; one that doesn't merge gives None.  A git without `--attr-source` (before 2.40) merges
+    without the drivers, or with ``plain`` False gives None and its refusal (exit 129)."""
+    r = _git(repo, *config, f"--attr-source={base}", "merge-tree", "--write-tree", "--name-only", "--no-messages", base, head,
              check=False)
     if r.returncode == 129 and "attr-source" in r.stderr:
         if not plain:
             return None, [], r
-        r = _git(repo, "merge-tree", "--write-tree", "--name-only", "--no-messages", base, head, check=False)
+        r = _git(repo, *config, "merge-tree", "--write-tree", "--name-only", "--no-messages", base, head, check=False)
     if r.returncode == 1:
         files = sorted({f for f in r.stdout.splitlines()[1:] if f})
         return repinned(repo, r.stdout.split()[0], base, head, files), files, r
     return (None if r.returncode else r.stdout.split()[0]), [], r
+
+
+#: a path in a merge driver's command (`tools/verity/lean/merge.py`), relative to the top of the worktree git runs it in
+_DRIVER_PATH = re.compile(r"(?<![\w./-])[\w.-]+(?:/[\w.-]+)+")
+
+
+@contextlib.contextmanager
+def base_drivers(repo: Path, base: str):
+    """`git -c` options that run each merge driver ``base``'s `.gitattributes` names from ``base``'s tools: its command as the
+    sync's clone sets it (`RECORD_DRIVER`), else as ``repo``'s config does, with each path in it that ``base`` holds moved to
+    a temporary directory holding that path's directory as ``base`` has it (a driver loads files beside it), removed on exit.
+    Otherwise git runs a driver from ``repo``'s worktree: a branch's older checkout runs its own `tools/verity/lean/merge.py`,
+    and one from before `--caps` errors, so git reports a conflict in `tests/test_lean_packages.py` that the sync never sees."""
+    from .clone import RECORD_DRIVER
+
+    attrs = _git(repo, "show", f"{base}:.gitattributes", check=False)
+    names = dict.fromkeys(m for ln in attrs.stdout.splitlines() if not ln.lstrip().startswith("#")
+                          for m in re.findall(r"(?:^|\s)merge=(\S+)", ln)) if not attrs.returncode else {}
+    cmds = {k: c for k in (f"merge.{n}.driver" for n in names)
+            if (c := RECORD_DRIVER.get(k) or _git(repo, "config", "--get", k, check=False).stdout.strip())}
+    with tempfile.TemporaryDirectory(prefix="research-drivers-") as tmp:
+        held = {s.split(":", 1)[1] for s in _blobs(repo, [f"{base}:{p}" for c in cmds.values() for p in _DRIVER_PATH.findall(c)])}
+        files = []
+        for d in sorted({posixpath.dirname(p) for p in held}):
+            ls = _git(repo, "ls-tree", "-z", base, "--", f"{d}/").stdout
+            files += [e.split("\t", 1)[1] for e in ls.split("\0") if e and e.split()[1] == "blob"]
+        for spec, data in _blobs(repo, [f"{base}:{f}" for f in files]).items():
+            (out := Path(tmp) / spec.split(":", 1)[1]).parent.mkdir(parents=True, exist_ok=True)
+            out.write_bytes(data)
+        def moved(m: re.Match) -> str:
+            return shlex.quote(str(Path(tmp) / m[0])) if m[0] in held else m[0]
+
+        yield tuple(o for k, c in cmds.items() for o in ("-c", f"{k}={_DRIVER_PATH.sub(moved, c)}"))
 
 
 def conflicting_files(repo: Path, base: str, head: str) -> list[str]:
@@ -2669,8 +2706,8 @@ def lock_drop_refusal(drops: list[str], onto: str = BRANCH) -> str:
 
 class Preflight:
     """`ready`'s preflight, before the mark (and before the quick tier): refused, each refusal naming its fix, when the head
-    (a) conflicts with `next` outside the pins (`merged_tree`, as drive's sync merges, no worktree), naming the paths and the PRs
-    on `next` that touched them;
+    (a) conflicts with `next` outside the pins (`merged_tree`, as drive's sync merges, no worktree, with the merge drivers of the
+    commit it merges onto, `base_drivers`, never the caller's checkout's), naming the paths and the PRs on `next` that touched them;
     (b) merged onto `next`, fails `pins.py --stale`, a test of `PREFLIGHT_TEST_PATHS`, a lint of `PREFLIGHT_LINTS` the change
     reaches, or `pytest --collect-only` in a suite whose inputs
     the change touches (`touched_suites` with `LocalSuites`, from `next` to the merged tree), or the merged tree's `uv sync --locked`
@@ -2719,7 +2756,8 @@ class Preflight:
             return None
         notes: list[str] = []
         found = self._contained(pr, prs) + self._gates(pr, notes)
-        tree, files, r = merged_tree(self.repo, base, pr.head)
+        with base_drivers(self.repo, base) as config:
+            tree, files, r = merged_tree(self.repo, base, pr.head, config=config)
         if tree is None and files:
             by = touched_by(self.repo, members, files)
             found.insert(0, f"it conflicts with {onto} in {', '.join(files)}" + (f" (touched by {', '.join(by)})" if by else "")

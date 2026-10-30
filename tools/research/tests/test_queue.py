@@ -1854,6 +1854,40 @@ def test_the_preflight_runs_its_checks_on_a_merge_whose_only_conflict_is_in_a_pi
         assert StoreLabels(world.store, log=world.logs.append).ready(n, h) is (not broken) and _no_worktree_left(world)
 
 
+def test_the_preflight_merges_with_the_drivers_of_next_not_those_of_the_older_checkout_it_runs_in(world, capsys):
+    """A branch from before `merge.py --caps`, marked from its own checkout, merged onto `next` with that checkout's `merge.py`
+    as the `lean-caps` driver: it errored on `--caps`, and git reported a conflict in `tests/test_lean_packages.py` that the
+    sync, with `next`'s driver, merges as counters.  The preflight runs `next`'s drivers, so the head merges cleanly."""
+    from research.queue import MarkOnly, StoreLabels, base_drivers, merged_tree, ready
+
+    caps = "tests/test_lean_packages.py"
+
+    def counts(sec: int, props: int) -> str:
+        return f'UNWITNESSED = {{"Security": {sec}, "Security/Properties": {props}}}\n'
+
+    lean = Path(__file__).resolve().parents[2] / "verity" / "lean"
+    world.with_store_remote()
+    old = _move_main(world, {**PREFLIGHT_FILES, caps: counts(354, 184), "tools/verity/lean/merge.py":
+                             "import sys\nsys.exit('merge.py: error: unrecognized arguments: --caps')\n"})
+    _move_main(world, {**{f"tools/verity/lean/{f}": (lean / f).read_text() for f in ("merge.py", "check.py")},
+                       ".gitattributes": f"{caps} merge=lean-caps\n"})
+    world.gh.put(1, world.change({caps: counts(355, 184)}))
+    assert [m.pr for m in world.queue().sync()[0]] == [1]
+    world.gh.put(2, h2 := world.change({caps: counts(354, 185)}, base=old), ready=False)    # the checkout stays at #2's head
+    _git(world.dev, "config", "merge.lean-caps.driver", "python3 tools/verity/lean/merge.py --caps %O %A %B %P")
+    next_ = _git(world.origin, "rev-parse", "refs/heads/next")
+    raw = subprocess.run(["git", f"--attr-source={next_}", "merge-tree", "--write-tree", "--name-only", "--no-messages", next_, h2],
+                         cwd=world.dev, capture_output=True, text=True)
+    assert raw.returncode == 1 and raw.stdout.splitlines()[1:] == [caps], raw.stdout + raw.stderr
+    with base_drivers(world.dev, next_) as config:
+        tree, files, _ = merged_tree(world.dev, next_, h2, config=config)
+    assert tree and files == [] and _git(world.dev, "show", f"{tree}:{caps}") == counts(355, 185).strip()
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
+    said = next(s for s in world.logs if "preflight: #2 at" in s)
+    assert "nothing refused" in said and "checks skipped" not in said, said
+    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
+
+
 #: what the head writes -> what the refusal says: each a way a train breaks that the merged tree shows at mark time
 PREFLIGHT_REFUSALS = {
     "stale pin": ({"STALE.txt": "x\n"}, "`pins.py --stale` on the merged tree: pkg/pins.json is stale (pkg/Main.lean)"),
