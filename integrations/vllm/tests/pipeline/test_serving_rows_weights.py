@@ -2,7 +2,8 @@
 row of one weight (`Gemm_v2{N=1}`'s ``w[n]``) as ``row/v2`` bit rows of its width is a read of ``weights/<label>@<words>`` at the
 weight's own leaves, in runs over consecutive units; the circuit record declares the reads beside its listed members and its
 window ingress, and the window's members are cut where the reads begin and end (`weight_rows.cut`), so each covers whole
-members.  The leak count holds them free until an audit opens them against the pinned roots (`interface.input_count`)."""
+members.  The leak count counts a read's rows registered where the window's root for its parameter is the verifier's pin of
+it, and free otherwise (`interface.input_count`, `interface.held_params`)."""
 from __future__ import annotations
 
 import json
@@ -61,7 +62,8 @@ def served(monkeypatch):
 def test_a_slice_unit_reading_a_row_of_a_weight_is_a_registered_read_of_its_rows(served):
     """Each request's three rows are 3 units each, unit n reading ``w[n]``, 32 words: layer 0's weight from leaf 0, layer 1's,
     and the fused weight's second half from leaf 96, each a read of its own parameter with step 32.  The members are cut at the
-    reads' ends, the record lists them, its window ingress is ``in0`` alone, and its registered reads count free."""
+    reads' ends, the record lists them, its window ingress is ``in0`` alone, and its registered reads count free unless the
+    verifier pins their parameters at the window's roots."""
     window, rows, doc = served(PARTITION)
     p0, p1, p2 = (f"weights/{f}@32" for f, *_ in FIELDS)
     assert doc["registered"]["params"] == {p0: 96, p1: 96, p2: 192}
@@ -74,6 +76,10 @@ def test_a_slice_unit_reading_a_row_of_a_weight_is_a_registered_read_of_its_rows
     assert {g["port"] for g in doc[IF.WINDOW_INGRESS]} == {"in0"}
     count = IF.input_count(doc)
     assert count["units"] == 18 and count["registered"] == 0 and count["free"] == count["inputs"] == 18 * 2 * 32 * 16
+    pins = {p: f"{k:02x}" * 64 for k, p in enumerate((p0, p1, p2))}
+    held = IF.input_count(doc, pins=pins, roots=pins)
+    assert held["registered"] == 18 * 32 * 16 and held["free"] == 18 * 32 * 16
+    assert IF.input_count(doc, pins=pins, roots={**pins, p2: "ff" * 64})["registered"] == 12 * 32 * 16
     assert IF.window_of_record(doc, window.law, {T: UNIT}.__getitem__).members == window.members
     assert WT.reads(window.members, rows, SRW.row_units).doc() == doc["registered"]
 
@@ -88,7 +94,7 @@ def test_chunks_are_cut_again_at_the_reads_ends(served):
 def values_and_rows(window, doc, key=bytes(range(32))):
     """The committer's weights committed under ``key`` (`window_weights.weight_value`, rows held), and each member's rows as
     `serving_rows.read_all` reads them: ``in0`` the activations, ``in1`` the weight row each unit reads."""
-    rng, reg = np.random.default_rng(5), IF.listed_registered(doc)
+    rng, reg = np.random.default_rng(5), IF.declarations(doc)[2]
     words = {f: rng.integers(0, 1 << 16, c, dtype=np.uint16) for f, c, _s, _b in FIELDS}
     values = {p: WW.weight_value("cd" * 64, p, words[p.split("/", 1)[1].rpartition("@")[0]], key, WW.WEIGHTS_NONCE + i,
                                  keep_rows=True) for i, p in enumerate(reg.params)}
@@ -107,7 +113,7 @@ def test_the_committer_commits_each_read_by_reference_as_the_lean_verifier_opens
     entries); the window writes them as its members' ``registered`` and ``value_rows`` and records each value's root."""
     window, _rows, doc = served(PARTITION)
     values, data = values_and_rows(window, doc)
-    got, entries, roots = WT.by_reference(window, IF.listed_registered(doc), data, values)
+    got, entries, roots = WT.by_reference(window, IF.declarations(doc)[2], data, values)
     assert roots == {p: v.root.hex() for p, v in values.items()}
     assert {k: e["in1"]["positions"] for k, e in entries.items()} == {f"{T}/c{j}": [3 * (j % 3 == 2) + i for i in range(3)]
                                                                        for j in range(6)}
@@ -127,7 +133,7 @@ def test_the_committer_commits_each_read_by_reference_as_the_lean_verifier_opens
 def test_a_read_whose_rows_are_not_its_values_is_refused_and_no_values_commit_rows_in_full(served):
     window, _rows, doc = served(PARTITION)
     values, data = values_and_rows(window, doc)
-    reg = IF.listed_registered(doc)
+    reg = IF.declarations(doc)[2]
     assert WT.by_reference(window, reg, data, None) == (data, {}, {})
     other, _ = values_and_rows(window, doc, key=bytes(32))
     data[1]["rows"]["in1"] = data[1]["rows"]["in1"] ^ np.uint16(1)

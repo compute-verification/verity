@@ -1,4 +1,4 @@
-"""A served window's registered reads of its weights (`interface.listed_ingress`'s ``registered``), which
+"""A served window's registered reads of its weights (a listed record's ``registered``, `interface.listed_reads`), which
 `serving_rows.circuit_record` declares beside its listed members: each input port of a slice unit whose words are one whole
 row of one weight of the Program's ``weights`` struct (`Gemm_v2{N=1}`'s ``w[n]``), as a read of that weight's registered
 parameter at the port's row width (``weights/<label>@<words>``, `check.weights_of_record.weight_param`), its leaves the
