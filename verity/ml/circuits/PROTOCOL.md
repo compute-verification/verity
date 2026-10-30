@@ -264,7 +264,7 @@ has one. From a v1 entry a reader builds the same, with the tables read in place
 flat parts of argument a of node k (§4.5). Every other key stays as written.
 
 So one definition has one digest in any program, from either schema's bytes, whichever aliases the writer chose and however
-its builder nested its concatenations. Callees enter by descriptor id, so the digest covers the definition's own body, not its
+the body nested its concatenations when it was built. Callees enter by descriptor id, so the digest covers the definition's own body, not its
 callees' bodies. Parts compare by form and fields, as in §4.5, so two entries that write one reference sequence in different
 forms have different digests.
 
