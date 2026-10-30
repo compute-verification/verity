@@ -563,8 +563,9 @@ def test_each_kind_of_case_is_answered_as_lean_answers(server, form):
 
 def test_the_bound_counts_what_it_says():
     """K's terms on a period worked by hand: 10 units, each committing 16 bits, drawn subset:3 at δ = 1/10 with at most
-    4 incorrect, over 3 link-windows, jitter below 2 over 3 steps; the same audit with units committing 40 bits, its incorrect proof blocks' bits 4 · 40; and eps over audits at
-    δ = 1/10, 1/15 and 1/6, and over none (Lean's `#guard`s)."""
+    4 incorrect, over 3 link-windows, jitter below 2 over 3 steps; the same audit with units committing 40 bits, its
+    incorrect proof blocks' bits 4 · 40; and eps over audits at δ = 1/10, 1/15 and 1/6, and over none (Lean's
+    `#guard`s)."""
     p = Params((PC.Audit(0, 3, "", 10, 16),), 0, 2, "a", None, b"", "", SyncSet((0,), (Fraction(1), Fraction(2))), 3)
     out = public(p, [Facts(10, 3, Fraction(1, 10), 4)])
     assert (out["audits"][0]["faulty_sets"], out["audits"][0]["faulty_bits"], out["audits"][0]["jitter"],
@@ -581,12 +582,12 @@ def test_the_bound_counts_what_it_says():
 
 def test_the_rows_forms_bound_counts_what_it_says():
     """The rows form's K worked by hand (Lean's `rowsTerms` `#guard`s): an audit whose own terms are in none, and over 1
-    link-window one scan of 20 units (T = 10) drawn at δ = 1/15 with at most 3 incorrect (1351 sets), 1,120 free inputs, instances
-    committing 300 and 512 bits, and jitter below 2 over its 10 steps; with every unit drawn, no term for incorrect
-    proof blocks; at w63's class with the egress tie (T = 32, every unit drawn), K the tied slot entries' free inputs,
-    8 · 1,136 = 9,088 bits; at w63k4's (8 slot entries of 112 bits) with its tied audit drawn in part with at most 2
-    incorrect, K those and its E_w = 896 bits; and eps over the scans' δ alone, or with a charged audit's beside
-    them."""
+    link-window one scan of 20 units (T = 10) drawn at δ = 1/15 with at most 3 incorrect (1351 sets), 1,120 free
+    inputs, instances committing 300 and 512 bits, and jitter below 2 over its 10 steps; with every unit drawn, no term
+    for incorrect proof blocks; at w63's class with the egress tie (T = 32, every unit drawn), K the tied slot entries'
+    free inputs, 8 · 1,136 = 9,088 bits; at w63k4's (8 slot entries of 112 bits) with its tied audit drawn in part with
+    at most 2 incorrect, K those and its E_w = 896 bits; and eps over the scans' δ alone, or with a charged audit's
+    beside them."""
     p = Params((PC.Audit(0, 3, "", 10, 16),), 0, 2, "a", None, b"", "", None, 1, WardenParams(),
                PC.Scan(10, 1120, 300, 512))
     out = public(p, [Facts(10, 3, Fraction(1, 10), 4)], [(Facts(20, 5, Fraction(1, 15), 3), 0, 0)])
