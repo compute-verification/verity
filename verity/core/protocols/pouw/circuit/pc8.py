@@ -630,7 +630,7 @@ def query(shape: Shape, side: str = "check") -> dict[str, Any]:
     return PO.template_instances_query([t for r in ROLES[side] for t in (tile_templates(shape) if r == "tile" else [tp[r]])])
 
 
-def units(fn: SpecializedDefinition) -> tuple[pc4.Unit, ...]:
+def units(fn: SpecializedDefinition) -> tuple[pc4.ProofBlock, ...]:
     """Every unit of a Program built from the unit templates (`pc4.units`)."""
     return pc4.units(fn, _role_of())
 

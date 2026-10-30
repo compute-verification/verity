@@ -45,7 +45,7 @@ from verity.ml.randomness import Key
 from ..protocol import DomainError
 from ..schemes.ncp import FORM_UNITS
 from .ncp2 import D, Shape, rfc6962
-from .partition import Unit, units
+from .partition import ProofBlock, units
 
 DRAW_DOMAIN = "verity/pouw/closure-draw/v1"
 
@@ -209,7 +209,7 @@ class Layout:
     """The units a plan reads: every unit, the tile and rest strata, and each tile's closure."""
 
     shape: Shape
-    units: tuple[Unit, ...]
+    units: tuple[ProofBlock, ...]
     strata: tuple[StratumSpec, ...]
     closure: Mapping[int, tuple[int, ...]]              # tile unit -> the call's units proved with it (itself first)
     y_strip: Mapping[int, int] = None                   # tile unit -> the weight Program's Y unit it reads (column strip)
@@ -241,7 +241,7 @@ class Layout:
 
 def layout(shape: Shape, kind: str = "shift24") -> Layout:
     us = units(shape, kind)
-    by_role: dict[str, list[Unit]] = {}
+    by_role: dict[str, list[ProofBlock]] = {}
     for u in us:
         by_role.setdefault(u.role, []).append(u)
     # the tree's nodes in emission order, each with the strips beneath it
@@ -309,10 +309,10 @@ def tile_layout(shape, w_ref: int) -> Layout:
     return Layout(shape, us, strata, closure, None, b_rows, w_ref)
 
 
-def template_strata(us: Sequence[Unit], per_tile: int) -> tuple[StratumSpec, ...]:
+def template_strata(us: Sequence[ProofBlock], per_tile: int) -> tuple[StratumSpec, ...]:
     """The verifier's strata (`Draw.strataOf`): one per template, in the order of its first unit, the tile's with W_ref
     ``per_tile`` a unit and every other's with none."""
-    groups: dict[str, list[Unit]] = {}
+    groups: dict[str, list[ProofBlock]] = {}
     for u in us:
         groups.setdefault(u.template, []).append(u)
     return tuple(StratumSpec(t, g[0].role, tuple(u.index for u in g), per_tile * len(g) if g[0].role == "tile" else 0)
