@@ -52,8 +52,8 @@ open Accounting Pouw
 /-- **PoUW's end-to-end guarantee, per run.** Under EndToEnd's hypotheses (TT among them), and when the cost model
 truncates (`BudgetAbort`), for every in-domain workload, oracle bound `q ≤ 2^64` and adversary that makes at most `q`
 oracle calls (with no bound on its cost), the audit with `t` work-weighted samples accepts while the adversary's online
-cost on that run is below `(1 − γ)(1 − ε_s)·W` with probability at most `(1 − ε_s)^t + ε(q, N)`, with
-`γ = 1 − (1 − γ₀)/Ω_max`. -/
+cost on that run is below `(1 − γ)(1 − ε_s)·W` and its run doesn't break SHA-512 with probability at most
+`(1 − ε_s)^t + ε(q, N)`, with `γ = 1 − (1 − γ₀)/Ω_max`. -/
 def PouwEndToEndPerRun : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (γ₀ Ωmax : ℝ) (ε : ℕ → ℕ → ℝ),
@@ -65,14 +65,15 @@ def PouwEndToEndPerRun : Prop :=
     ∀ A : Adversary CM, CallsWithin A U q → ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : (Q → R) × S × (Fin t → Ticket (P.Wref U.layout) U.layout.N) =>
           AuditAccepts (correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
-          onlineCost A U x.1 x.2.1 < (1 - reductionGamma γ₀ Ωmax) * (1 - εs) * totalWref P U.layout)
+          onlineCost A U x.1 x.2.1 < (1 - reductionGamma γ₀ Ωmax) * (1 - εs) * totalWref P U.layout ∧
+          ¬ A.Breaks U x.1 x.2.1)
         ≤ (1 - εs) ^ t + ε q U.layout.N
 
 /-- **PoUW's per-run guarantee is the compute audit's per-run guarantee.** Under `PouwEndToEndPerRun`'s hypotheses, for
 any run on any device whose compute audit realizes PoUW's game at price `p`, with at least one draw of the game's coins
 and the device's oracle queries over the compute window at most `2^64`, the compute audit has its per-run guarantee at
-certificate `(1 − γ)(1 − εs)·W` and error `(1 − εs)^t + ε(q, N)`, where `q` is the device's oracle rate times the compute
-window's length. -/
+certificate `(1 − γ)(1 − εs)·W` and error `(1 − εs)^t + ε(q, N)` unless the device's run breaks SHA-512, where `q` is the
+device's oracle rate times the compute window's length. -/
 def ComputeOfPouwPerRun : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (γ₀ Ωmax : ℝ) (ε : ℕ → ℕ → ℝ),
@@ -83,9 +84,10 @@ def ComputeOfPouwPerRun : Prop :=
     ∀ U : Workload, U.InDomain D → ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 → Nonempty (PouwCoins P U t) →
     ∀ (ι α ΩQ ΩS : Type) [Fintype α] [Fintype ΩQ] [Fintype ΩS] (d : Device ι)
       (r : Run d α (PouwCoins P U t) ΩQ ΩS) (p : Price),
-      d.rate .oracle * (r.win .compute).len ≤ 2 ^ 64 → RealizesPouw CM P U r p →
-      r.ComputeSoundPerRun p ((1 - reductionGamma γ₀ Ωmax) * (1 - εs) * totalWref P U.layout)
+      d.rate .oracle * (r.win .compute).len ≤ 2 ^ 64 → ∀ real : RealizesPouw CM P U r p,
+      r.ComputeSoundPerRunUnless p ((1 - reductionGamma γ₀ Ωmax) * (1 - εs) * totalWref P U.layout)
         ((1 - εs) ^ t + ε (d.rate .oracle * (r.win .compute).len) U.layout.N)
+        (fun x o => (real.adv o).Breaks U x.1 x.2.1)
 
 /-- **The joint guarantee, per run.** On any device and any run of a joint audit on it whose compute, bandwidth and
 capacity audits have their per-run guarantees at certificates `W`, `Q` and `S` with errors `εW`, `εQ` and `εS`, the

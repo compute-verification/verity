@@ -127,6 +127,13 @@ def ComputeSound (p : Price) (W ε : ℝ) : Prop :=
   ∀ (o : ΩQ × ΩS) (T : ℝ), 0 ≤ T → (∀ x : ΩW, (r.work p (x, o) : ℝ) ≤ T) →
     Pouw.pr (fun x : ΩW => r.accepts .compute (x, o) ∧ T < W) ≤ ε
 
+/-- **The compute audit's guarantee unless a break**: `ComputeSound` with the event's compute coins restricted to those
+at which `brk` doesn't hold. PoUW gives it with `brk` the device's run finding a SHA-512 collision among the inputs it
+hashed (`Pouw.Adversary.Breaks`); with `brk` false it is `ComputeSound`. -/
+def ComputeSoundUnless (p : Price) (W ε : ℝ) (brk : ΩW → ΩQ × ΩS → Prop) : Prop :=
+  ∀ (o : ΩQ × ΩS) (T : ℝ), 0 ≤ T → (∀ x : ΩW, (r.work p (x, o) : ℝ) ≤ T) →
+    Pouw.pr (fun x : ΩW => r.accepts .compute (x, o) ∧ T < W ∧ ¬ brk x o) ≤ ε
+
 /-- **The bandwidth audit's guarantee, at certificate `Q` and error `ε`**: at any value of the other audits' coins, if
 the bandwidth account reads at most `B` bits from device memory on every bandwidth coin, the bandwidth audit accepts
 with `B < Q` with probability at most `ε` over the bandwidth coins. -/

@@ -34,9 +34,10 @@ open Pouw.Pinned Finset
 /-- **Work between the salt and the deadline.** Under TT(γ₀), the `Ω_max` bound and an honest clock, for every in-domain
 workload, adversary, timed run, deadline `td` and budget: if the run spends at most `T` after the salt's release `ts` and
 by `td`, and makes at most `q` oracle calls, then the audit with `t` work-weighted samples accepts a transcript received
-by `td` while `T < (1 − γ)(1 − ε_s)·W`, `γ = 1 − (1 − γ₀)/Ω_max`, with probability at most `(1 − ε_s)^t + ε(q, N)`.
-That is, except with that probability, an accepted transcript means at least `(1 − γ)(1 − ε_s)·W` of cost spent between
-the salt and the deadline. -/
+by `td` while `T < (1 − γ)(1 − ε_s)·W`, `γ = 1 − (1 − γ₀)/Ω_max`, and the run doesn't break SHA-512, with probability
+at most `(1 − ε_s)^t + ε(q, N)`. That is, except with that probability, an accepted transcript means at least
+`(1 − γ)(1 − ε_s)·W` of cost spent between the salt and the deadline, or a collision among the run's own SHA-512
+inputs. -/
 def WorkBetweenSaltAndDeadline : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (γ₀ Ωmax : ℝ) (ε : ℕ → ℕ → ℝ),
@@ -49,13 +50,13 @@ def WorkBetweenSaltAndDeadline : Prop :=
     ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → A.BoundedBy U run td T q → ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : (Q → R) × S × (Fin t → Ticket (P.Wref U.layout) U.layout.N) =>
           AcceptsBy run td x.1 x.2.1 (correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
-          T < (1 - reductionGamma γ₀ Ωmax) * (1 - εs) * totalWref P U.layout)
+          T < (1 - reductionGamma γ₀ Ωmax) * (1 - εs) * totalWref P U.layout ∧ ¬ A.Breaks U x.1 x.2.1)
         ≤ (1 - εs) ^ t + ε q U.layout.N
 
 /-- **Remote's exhaustion: the spare capacity at the deadline.** A declared fleet of capacity `C` per unit of time can
 spend `C·(td − ts)` between the salt's release and the deadline. If the run's spending in that window and undeclared
 work `Y` together fit in it on every oracle and salt, then, except with probability `(1 − ε_s)^t + ε(q, N)`, an
-accepted transcript received by `td` leaves `Y ≤ C·(td − ts) − (1 − γ)(1 − ε_s)·W`: the undeclared spare capacity is at
+accepted transcript received by `td` from a run that doesn't break SHA-512 leaves `Y ≤ C·(td − ts) − (1 − γ)(1 − ε_s)·W`: the undeclared spare capacity is at
 most the fleet's capacity less the work the audit certifies. -/
 def SpareCapacityAtDeadline : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
@@ -72,7 +73,8 @@ def SpareCapacityAtDeadline : Prop :=
     ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : (Q → R) × S × (Fin t → Ticket (P.Wref U.layout) U.layout.N) =>
           AcceptsBy run td x.1 x.2.1 (correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
-          C * (td - run.ts) - (1 - reductionGamma γ₀ Ωmax) * (1 - εs) * totalWref P U.layout < Y)
+          C * (td - run.ts) - (1 - reductionGamma γ₀ Ωmax) * (1 - εs) * totalWref P U.layout < Y ∧
+          ¬ A.Breaks U x.1 x.2.1)
         ≤ (1 - εs) ^ t + ε q U.layout.N
 
 /-- **Pearl-C's sampled audit by the deadline.** `GγSampled` and an honest clock give, for every in-domain workload,

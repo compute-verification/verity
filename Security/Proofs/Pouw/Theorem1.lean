@@ -34,11 +34,11 @@ theorem theorem1 : Pouw.Guarantees.Theorem1 := by
   let E1 := fun x : (Q → R) × S × C => accept x.1 x.2.1 x.2.2 ∧
     εs * totalWref P U.layout <
       ∑ u ∈ range U.layout.N \ correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1), (P.Wref U.layout u : ℝ)
-  let E2 := fun y : (Q → R) × S => Wins P U γ T (A.transcript U y.1 y.2) y.1 y.2
+  let E2 := fun y : (Q → R) × S => Wins P U γ T (A.transcript U y.1 y.2) y.1 y.2 ∧ ¬ A.Breaks U y.1 y.2
   calc _ ≤ pr (fun x : (Q → R) × S × C => E1 x ∨ E2 (x.1, x.2.1)) := pr_mono fun x hx => by
         by_cases h1 : E1 x
         · exact Or.inl h1
-        · refine Or.inr (wins_of_accept P U x.1 x.2.1 _ hγ hx.2 ?_)
+        · refine Or.inr ⟨wins_of_accept P U x.1 x.2.1 _ hγ hx.2.1 ?_, hx.2.2⟩
           by_contra h2
           exact h1 ⟨hx.1, lt_of_not_ge h2⟩
     _ ≤ pr E1 + pr (fun x : (Q → R) × S × C => E2 (x.1, x.2.1)) := pr_or_le _ _

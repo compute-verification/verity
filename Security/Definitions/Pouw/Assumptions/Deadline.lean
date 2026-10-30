@@ -19,18 +19,18 @@ deadline `td`.
 The cost that determines the transcript the verifier receives at `tr` is spent by `tr`, and after the salt's release at
 `ts`, since only preprocessing runs before it and preprocessing never reads the salt. In the cost model: an online
 program, run after `A`'s own preprocessing on some activation input, outputs `A`'s transcript on every oracle and salt
-on which the verifier receives it by `td`; on every oracle and salt it costs at most what the run spends in `(ts, td]`
-and makes at most the oracle calls of `A`'s online phase. On a transcript received after `td`, which the verifier
-rejects, its output is unconstrained.
+on which the verifier receives it by `td`, hashing there only inputs `A`'s run hashes; on every oracle and salt it
+costs at most what the run spends in `(ts, td]` and makes at most the oracle calls of `A`'s online phase. On a
+transcript received after `td`, which the verifier rejects, its output is unconstrained.
 
-That program is the prover's computation stopped at `td`. A cost model whose programs can be stopped at a time, and that
+That program is the prover's computation stopped at `td`, which hashes a part of what the whole computation hashes. A cost model whose programs can be stopped at a time, and that
 charges a program the cost it spends by then on the verifier's clock, satisfies it; the reading "by `tr`" gives it for
 a `spent` that never decreases, since `tr ≤ td` on every transcript it constrains. It fails if a transcript computed
 after `td` can be stamped as received by `td` (a clock the prover can slow or a receipt it can backdate), or if the
 cost model charges the computation that produced the received transcript less than the run spent on it. -/
 def HonestClock (CM : CostModel Q R S) (U : Workload) (A : Adversary CM) (run : TimedRun Q R S) (td : ℝ) : Prop :=
   ∃ A' : Adversary CM, A'.pre = A.pre ∧ ∀ (H : Q → R) (s : S),
-    (run.tr H s ≤ td → A'.transcript U H s = A.transcript U H s) ∧
+    (run.tr H s ≤ td → A'.transcript U H s = A.transcript U H s ∧ ∀ m ∈ A'.hashed U H s, m ∈ A.hashed U H s) ∧
     CM.cost A'.online H U A'.act (A'.pre.eval H) s ≤ run.spentIn H s run.ts td ∧
     CM.calls A'.online H U A'.act (A'.pre.eval H) s ≤ CM.calls A.online H U A.act (A.pre.eval H) s
 

@@ -18,7 +18,7 @@ open Finset
 /-- **(a) `G_γ` from TT.** For every cost model, protocol and domain: if `W_ref(u) ≤ Ω_max·W_mm(u)` on the domain
 and TT(γ₀) holds with error `ε(q, N)`, then `G_γ` holds with `γ = 1 − (1 − γ₀)/Ω_max` and `η = ε`. `K ⊆ K'` is
 built into the definitions (`Correct = CheckedOK ∧ OutOK`); no random-oracle term is needed because TT is stated in
-the same game. -/
+the same game, and no collision term because both bound their event with no break (`Adversary.Breaks`). -/
 def GammaFromTT : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (γ₀ Ωmax : ℝ) (ε : ℕ → ℕ → ℝ),
@@ -53,7 +53,8 @@ def MilestoneExhaustion : Prop :=
     ∀ A : Adversary CM, A.Bounded U T q → ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : (D1.M1Q → D1.M1R) × Salt × (Fin t → Ticket (Wref U.layout) U.layout.N) =>
           AuditAccepts (correctSet (D1.m1 Wref).toProtocol U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
-          T < (1 - reductionGamma Params.γ0 Ωmax) * (1 - εs) * totalWref (D1.m1 Wref).toProtocol U.layout)
+          T < (1 - reductionGamma Params.γ0 Ωmax) * (1 - εs) * totalWref (D1.m1 Wref).toProtocol U.layout ∧
+          ¬ A.Breaks U x.1 x.2.1)
         ≤ (1 - εs) ^ t + ε q U.layout.N
 
 /-- **The overhead budget**: under TT(0.5%) the reduction's gap is at most 1% exactly when `Ω_max ≤ 199/198`

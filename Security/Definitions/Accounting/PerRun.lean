@@ -44,14 +44,15 @@ variable {Q R S : Type}
 workload, activation input and budget `b ≥ 0` there is one program, fixed before the oracle, the preprocessed state and
 the salt, that runs the program and stops before its cost would exceed `b`. On every oracle, preprocessed state and salt
 it costs at most `b` and makes at most the program's oracle calls, and wherever the program costs at most `b` it
-commits the program's transcript. -/
+commits the program's transcript and hashes the program's inputs. -/
 def BudgetAbort (CM : CostModel Q R S) : Prop :=
   (∀ (prog : CM.Prog) (H : Q → R) (U : Workload) (act : ℕ → Mat) (σ : State) (s : S),
       0 ≤ CM.cost prog H U act σ s) ∧
     ∀ (prog : CM.Prog) (U : Workload) (act : ℕ → Mat) (b : ℝ), 0 ≤ b → ∃ prog' : CM.Prog,
       ∀ (H : Q → R) (σ : State) (s : S),
         CM.cost prog' H U act σ s ≤ b ∧ CM.calls prog' H U act σ s ≤ CM.calls prog H U act σ s ∧
-          (CM.cost prog H U act σ s ≤ b → CM.run prog' H U act σ s = CM.run prog H U act σ s)
+          (CM.cost prog H U act σ s ≤ b → CM.run prog' H U act σ s = CM.run prog H U act σ s ∧
+            CM.hashed prog' H U act σ s = CM.hashed prog H U act σ s)
 
 /-- The adversary's realized online cost on workload `U`, oracle `H` and salt `s`. -/
 def onlineCost {CM : CostModel Q R S} (A : Adversary CM) (U : Workload) (H : Q → R) (s : S) : ℝ :=
@@ -125,6 +126,11 @@ audits' coins, the probability over the compute coins that the compute audit acc
 that run is below `W` is at most `ε`. -/
 def ComputeSoundPerRun (p : Price) (W ε : ℝ) : Prop :=
   ∀ o : ΩQ × ΩS, Pouw.pr (fun x : ΩW => r.accepts .compute (x, o) ∧ (r.work p (x, o) : ℝ) < W) ≤ ε
+
+/-- **The compute audit's per-run guarantee unless a break**: `ComputeSoundPerRun` with the event's compute coins
+restricted to those at which `brk` doesn't hold (`Accounting.Run.ComputeSoundUnless`'s per-run form). -/
+def ComputeSoundPerRunUnless (p : Price) (W ε : ℝ) (brk : ΩW → ΩQ × ΩS → Prop) : Prop :=
+  ∀ o : ΩQ × ΩS, Pouw.pr (fun x : ΩW => r.accepts .compute (x, o) ∧ (r.work p (x, o) : ℝ) < W ∧ ¬ brk x o) ≤ ε
 
 /-- **The bandwidth audit's per-run guarantee, at certificate `Q` and error `ε`**: at any value of the other audits'
 coins, the probability over the bandwidth coins that the bandwidth audit accepts and the bandwidth account read fewer

@@ -117,13 +117,14 @@ theorem Y_last (P : D1.Params Q R S) (hd : 0 < P.d) (H : Q → R) (s : S) (U : W
 
 /-! ## TT fails in degenerate protocols -/
 
-/-- A cost model in which every constant transcript is a free program with no oracle calls. -/
+/-- A cost model in which every constant transcript is a free program with no oracle calls that hashes nothing. -/
 def FreeConstants (CM : CostModel Q R S) : Prop :=
   ∀ τ : Transcript, ∃ p : CM.Prog, ∀ (H : Q → R) (U : Workload) (act : ℕ → Mat) (σ : State) (s : S),
-    CM.run p H U act σ s = τ ∧ CM.cost p H U act σ s ≤ 0 ∧ CM.calls p H U act σ s = 0
+    CM.run p H U act σ s = τ ∧ CM.cost p H U act σ s ≤ 0 ∧ CM.calls p H U act σ s = 0 ∧
+      CM.hashed p H U act σ s = []
 
 theorem freeModel_freeConstants : FreeConstants (freeModel Q R S) :=
-  fun τ => ⟨fun _ _ _ _ => QTree.done τ, fun _ _ _ _ _ => ⟨rfl, le_rfl, rfl⟩⟩
+  fun τ => ⟨fun _ _ _ _ => QTree.done τ, fun _ _ _ _ _ => ⟨rfl, le_rfl, rfl, rfl⟩⟩
 
 /-- If a constant transcript has every unit's checked values correct for every `H` and `s`, TT fails at `q = 0`
 in every model with free constants, on every workload with positive work. -/
@@ -137,10 +138,13 @@ theorem tt_false_of_const [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] [N
   have hA : A.Bounded U 0 0 := fun H s =>
     ⟨(hp H U _ [] s).2.1, by simp [A, QTree.calls, QTree.eval, (hp H U _ [] s).2.2]⟩
   have h := hTT.2 U hU 0 le_rfl 0 (by norm_num) A hA
-  refine le_of_eq_of_le (pr_eq_one fun x => ?_).symm h
-  show 0 / (1 - γ₀) < ∑ u ∈ checkedSet P U x.1 x.2 (CM.run p x.1 U (fun _ => 0) [] x.2), _
-  rw [(hp x.1 U _ [] x.2).1, hτ, zero_div]
-  exact hpos
+  refine le_of_eq_of_le (pr_eq_one fun x => ⟨?_, ?_⟩).symm h
+  · show 0 / (1 - γ₀) < ∑ u ∈ checkedSet P U x.1 x.2 (CM.run p x.1 U (fun _ => 0) [] x.2), _
+    rw [(hp x.1 U _ [] x.2).1, hτ, zero_div]
+    exact hpos
+  · show ¬ Hash.CollisionIn CM.sha (CM.hashed p x.1 U (fun _ => 0) [] x.2)
+    rw [(hp x.1 U _ [] x.2).2.2.2]
+    exact Proofs.not_collisionIn_nil _
 
 /-- The all-zero commitment on every unit. -/
 def zeroTranscript (U : Workload) : Transcript := fun u => if u < U.layout.N then some ⟨0, 0, 0⟩ else none
@@ -238,10 +242,10 @@ theorem honest_checkedSet (P : Protocol Q R S) (D : Layout → Prop) (U : Worklo
   · rw [← honest_correctSet P D U H s act hP hU hact]
     exact correctSet_subset_checkedSet P U H s _
 
-/-- The honest reference is an adversary of TT's game: if TT holds with `ε(qref) < 1`, the model's `H_ref` costs at
-least `(1 − γ₀)·∑ W_mm`. -/
+/-- The honest reference is an adversary of TT's game: if TT holds with `ε(qref) < 1` in a model that hashes
+nothing, the model's `H_ref` costs at least `(1 − γ₀)·∑ W_mm`. -/
 theorem tt_admitsRef_bound [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] [Nonempty R] [Nonempty S]
-    (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (qref : Workload → ℕ) (hP : P.Complete D)
+    (CM : CostModel Q R S) (hH : CM.Hashless) (P : Protocol Q R S) (D : Layout → Prop) (qref : Workload → ℕ) (hP : P.Complete D)
     (hAdm : AdmitsRef CM P D qref) (U : Workload) (hU : U.InDomain D) (hq : qref U ≤ 2 ^ 64) (γ₀ : ℝ)
     (ε : ℕ → ℕ → ℝ) (hTT : Assumptions.TT CM P D γ₀ ε) (hε : ε (qref U) U.layout.N < 1) :
     ∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ) ≤ totalWref P U.layout / (1 - γ₀) := by
@@ -255,21 +259,22 @@ theorem tt_admitsRef_bound [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] [
   have hT : 0 ≤ totalWref P U.layout := Finset.sum_nonneg fun _ _ => by positivity
   have h := hTT.2 U hU _ hT (qref U) hq A hA
   have h1 : (1 : ℝ) ≤ ε (qref U) U.layout.N := by
-    refine le_of_eq_of_le (pr_eq_one fun x => ?_).symm h
+    refine le_of_eq_of_le (pr_eq_one fun x => ⟨?_, Proofs.not_breaks_of_hashless hH _ _ _ _⟩).symm h
     show totalWref P U.layout / (1 - γ₀) < ∑ u ∈ checkedSet P U x.1 x.2 (CM.run prog x.1 U (fun _ => 0) [] x.2), _
     rw [(hp x.1 x.2).1, honest_checkedSet P D U x.1 x.2 _ hP hU fun _ _ => zero_actOK _]
     exact hlt
   linarith
 
-/-- **`γ₀ ≥ 1`**: TT is unsatisfiable (error below 1) whenever `H_ref` runs in the model on a workload with work. -/
+/-- **`γ₀ ≥ 1`**: TT is unsatisfiable (error below 1) whenever `H_ref` runs in a model that hashes nothing on a
+workload with work. -/
 theorem tt_false_of_gamma0_ge_one [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] [Nonempty R] [Nonempty S]
-    (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (qref : Workload → ℕ) (hP : P.Complete D)
+    (CM : CostModel Q R S) (hH : CM.Hashless) (P : Protocol Q R S) (D : Layout → Prop) (qref : Workload → ℕ) (hP : P.Complete D)
     (hAdm : AdmitsRef CM P D qref) (U : Workload) (hU : U.InDomain D) (hq : qref U ≤ 2 ^ 64)
     (hpos : 0 < ∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ)) (γ₀ : ℝ) (hγ₀ : 1 ≤ γ₀) (ε : ℕ → ℕ → ℝ)
     (hTT : Assumptions.TT CM P D γ₀ ε) : 1 ≤ ε (qref U) U.layout.N := by
   by_contra hε
   push Not at hε
-  have h := tt_admitsRef_bound CM P D qref hP hAdm U hU hq γ₀ ε hTT hε
+  have h := tt_admitsRef_bound CM hH P D qref hP hAdm U hU hq γ₀ ε hTT hε
   have hT : 0 ≤ totalWref P U.layout := Finset.sum_nonneg fun _ _ => by positivity
   have : totalWref P U.layout / (1 - γ₀) ≤ 0 := div_nonpos_of_nonneg_of_nonpos hT (by linarith)
   linarith
@@ -407,16 +412,18 @@ theorem lone_unit_over_budget :
 /-! ## Randomized adversaries -/
 
 /-- **Deterministic adversaries suffice**: an adversary using coins `C` independent of `(H, s)`, within `(T, q)` for
-every coin value, wins with probability at most `η`. -/
+every coin value, wins with no break with probability at most `η`. -/
 theorem randomized_of_deterministic [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
     (P : Protocol Q R S) (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) (hG : Gγ CM P D γ η) (U : Workload)
     (hU : U.InDomain D) (T : ℝ) (hT : 0 ≤ T) (q : ℕ) (hq : q ≤ 2 ^ 64) (C : Type) [Fintype C] [Nonempty C]
     (A : C → Adversary CM) (hA : ∀ c, (A c).Bounded U T q) :
-    pr (fun x : (Q → R) × S × C => Wins P U γ T ((A x.2.2).transcript U x.1 x.2.1) x.1 x.2.1) ≤ η q U.layout.N := by
+    pr (fun x : (Q → R) × S × C => Wins P U γ T ((A x.2.2).transcript U x.1 x.2.1) x.1 x.2.1 ∧
+      ¬ (A x.2.2).Breaks U x.1 x.2.1) ≤ η q U.layout.N := by
   let e : ((Q → R) × S × C) ≃ C × ((Q → R) × S) :=
     { toFun := fun x => (x.2.2, (x.1, x.2.1)), invFun := fun y => (y.2.1, y.2.2, y.1),
       left_inv := fun _ => rfl, right_inv := fun _ => rfl }
-  let W := fun y : C × ((Q → R) × S) => Wins P U γ T ((A y.1).transcript U y.2.1 y.2.2) y.2.1 y.2.2
+  let W := fun y : C × ((Q → R) × S) => Wins P U γ T ((A y.1).transcript U y.2.1 y.2.2) y.2.1 y.2.2 ∧
+    ¬ (A y.1).Breaks U y.2.1 y.2.2
   have hη : 0 ≤ η q U.layout.N := by
     obtain ⟨c⟩ := ‹Nonempty C›
     exact (pr_nonneg _).trans (hG U hU T hT q hq (A c) (hA c))

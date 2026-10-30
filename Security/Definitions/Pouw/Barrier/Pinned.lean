@@ -10,14 +10,15 @@ open Finset
 
 /-- **The generic barrier, in probability.** In every cost model, for every protocol and domain: let `𝒜` be within
 `(c₀, q)` on an in-domain workload `U` with `W = ∑_u W_ref(u) > 0`. Then for every `γ < 1 − c₀/W`, `G_γ` with error
-`η` bounds by `η(q, N)` the probability that `𝒜` commits every unit of `U` correct. -/
+`η` bounds by `η(q, N)` the probability that `𝒜` commits every unit of `U` correct with no break. -/
 def GenericPr : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (U : Workload) (A : Adversary CM) (c₀ : ℝ)
     (q : ℕ),
     U.InDomain D → 0 ≤ c₀ → q ≤ 2 ^ 64 → A.Bounded U c₀ q → 0 < totalWref P U.layout →
     ∀ γ : ℝ, γ < 1 - c₀ / totalWref P U.layout → ∀ η : ℕ → ℕ → ℝ, Gγ CM P D γ η →
-      pr (fun x : (Q → R) × S => correctSet P U x.1 x.2 (A.transcript U x.1 x.2) = range U.layout.N)
+      pr (fun x : (Q → R) × S =>
+          correctSet P U x.1 x.2 (A.transcript U x.1 x.2) = range U.layout.N ∧ ¬ A.Breaks U x.1 x.2)
         ≤ η q U.layout.N
 
 /-- **Class (a) in the abstract model: `γ ≥ 1 − 1/p`.** For every noise source, domain and `W_ref ≥ p·W_mm`

@@ -1,5 +1,6 @@
 import Proofs.Pouw.Milestone
 import Proofs.Pouw.QTree
+import Proofs.Pouw.Break
 
 /-!
 # Satisfiability witnesses and non-vacuity
@@ -70,6 +71,10 @@ theorem outputPriced_queries : (outputPriced Q R S).Queries :=
 theorem freeModel_queries : (freeModel Q R S).Queries :=
   fun prog U act σ s => ⟨prog U act σ s, fun _ => ⟨rfl, rfl⟩⟩
 
+theorem outputPriced_hashless : (outputPriced Q R S).Hashless := fun _ _ _ _ _ _ => rfl
+
+theorem freeModel_hashless : (freeModel Q R S).Hashless := fun _ _ _ _ _ _ => rfl
+
 theorem outputPriced_cost_le (prog : (outputPriced Q R S).Prog) (H : Q → R) (U : Workload) (act : ℕ → Mat)
     (σ : State) (s : S) :
     (outputPriced Q R S).cost prog H U act σ s ≤ ∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ) := by
@@ -96,7 +101,7 @@ theorem tt_outputPriced [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P :
   have h3 : T ≤ T / (1 - Params.γ0) := by
     rw [le_div_iff₀ (by unfold Params.γ0; norm_num)]
     unfold Params.γ0; nlinarith
-  exact absurd hx (not_lt.2 (h1.trans (h2.trans h3)))
+  exact absurd hx.1 (not_lt.2 (h1.trans (h2.trans h3)))
 
 /-- **Satisfiability witness for TT and `AdmitsRef`** in `outputPriced`, for `D1.m1` with `W_ref ≥ W_mm`. -/
 theorem ttWitness : Pinned.TTWitness := by
@@ -202,7 +207,7 @@ theorem lost_free {Q R : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Nonempty
   have := salt_nonempty
   have h := hG M1.sixteen M1.sixteen_inDomain 0 le_rfl (M1.sixteen.layout.N * c) hc64 (freeHonest P)
     (freeHonest_bounded P hc M1.sixteen)
-  refine le_of_eq_of_le (pr_eq_one fun x => ?_).symm h
+  refine le_of_eq_of_le (pr_eq_one fun x => ⟨?_, not_breaks_of_hashless freeModel_hashless _ _ _ _⟩).symm h
   rw [freeHonest_transcript]
   exact honest_wins_sixteen P hN hW x.1 x.2 (by rw [zero_div]; positivity)
 
@@ -217,7 +222,7 @@ theorem lost_priced {Q R : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Nonemp
   rw [sum_Wmm_sixteen] at hB
   have h := hG M1.sixteen M1.sixteen_inDomain (16 * 2 ^ 44) (by positivity) (M1.sixteen.layout.N * c) hc64
     (pricedHonest P) hB
-  refine le_of_eq_of_le (pr_eq_one fun x => ?_).symm h
+  refine le_of_eq_of_le (pr_eq_one fun x => ⟨?_, not_breaks_of_hashless outputPriced_hashless _ _ _ _⟩).symm h
   rw [pricedHonest_transcript]
   refine honest_wins_sixteen P hN hW x.1 x.2 ?_
   have hΩ0 : 0 < Ω := by linarith

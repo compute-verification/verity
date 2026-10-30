@@ -19,7 +19,7 @@ variable {Q R S : Type}
 /-- **Assumption TT_NCP_U(γ₀), tight stacked transcript on route U**, for a bias `β`, a cost model `CM`, NCP's
 parameters `P` (the named assumption is its instance at `β = 128`, `CM = M_4090` and `P` with `IsLead`), a domain
 `D`, a target `γ₀` and an error `ε(q, N)`: `TTNCP` of route U's protocol `P.toProtocolU β` at `P.d`, with every
-checked-correct unit credited `3·m·k·n`, the work of the stacked product. Like `TTNCP`, it is claimed only on a domain
+checked-correct unit credited `3·m·k·n`, the work of the stacked product, and no break (`Adversary.Breaks`). Like `TTNCP`, it is claimed only on a domain
 where `γ₀ ≥ P.d/(3k)` on every unit. -/
 def TTNCP_U (β : ℤ) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Params Q R S)
     (D : Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
@@ -28,7 +28,7 @@ def TTNCP_U (β : ℤ) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM :
   ∀ U : Workload, U.InDomain D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
     pr (fun x : (Q → R) × S =>
       T / (1 - γ₀) < ∑ u ∈ checkedSet (P.toProtocolU β) U x.1 x.2 (A.transcript U x.1 x.2),
-        3 * ((U.layout.shape u).Wmm : ℝ))
+        3 * ((U.layout.shape u).Wmm : ℝ) ∧ ¬ A.Breaks U x.1 x.2)
       ≤ ε q U.layout.N
 
 end Pouw.NCP.Assumptions

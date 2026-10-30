@@ -21,12 +21,13 @@ open Pouw
 variable {Q R S : Type}
 
 /-- **PoUW's adversaries are closed under budget-abort.** When the cost model truncates, every adversary that makes at
-most `q` oracle calls has, for every budget `b ≥ 0`, an adversary within `(b, q)` that commits its transcript wherever
-its realized online cost is at most `b`. -/
+most `q` oracle calls has, for every budget `b ≥ 0`, an adversary within `(b, q)` that commits its transcript and hashes
+its inputs wherever its realized online cost is at most `b`. -/
 theorem Adversary.abort {CM : CostModel Q R S} (hCM : BudgetAbort CM) (A : Adversary CM) (U : Workload) {q : ℕ}
     (hq : CallsWithin A U q) {b : ℝ} (hb : 0 ≤ b) :
     ∃ A' : Adversary CM, A'.Bounded U b q ∧
-      ∀ H s, onlineCost A U H s ≤ b → A'.transcript U H s = A.transcript U H s := by
+      ∀ H s, onlineCost A U H s ≤ b →
+        A'.transcript U H s = A.transcript U H s ∧ A'.hashed U H s = A.hashed U H s := by
   obtain ⟨prog', h⟩ := hCM.2 A.online U A.act b hb
   refine ⟨⟨A.pre, prog', A.act⟩, fun H s => ⟨(h H _ s).1, ?_⟩, fun H s hc => (h H _ s).2.2 hc⟩
   exact (Nat.add_le_add_left (h H _ s).2.1 _).trans (hq H s)
@@ -44,7 +45,7 @@ theorem budgetAbort_of_oblivious (CM : CostModel Q R S)
   refine ⟨hnn, fun prog U act b hb => ?_⟩
   obtain ⟨c, n, hc⟩ := hobl prog U act
   by_cases hcb : c ≤ b
-  · exact ⟨prog, fun H σ s => ⟨(hc H σ s).1 ▸ hcb, le_rfl, fun _ => rfl⟩⟩
+  · exact ⟨prog, fun H σ s => ⟨(hc H σ s).1 ▸ hcb, le_rfl, fun _ => ⟨rfl, rfl⟩⟩⟩
   · refine ⟨null, fun H σ s => ⟨(hnull H U act σ s).1 ▸ hb, (hnull H U act σ s).2 ▸ Nat.zero_le _, fun h => ?_⟩⟩
     exact absurd ((hc H σ s).1 ▸ h) hcb
 
@@ -65,15 +66,22 @@ namespace SecurityProofs
 
 theorem PouwEndToEndPerRun : Accounting.Guarantees.PouwEndToEndPerRun := by
   intro Q R S _ _ _ _ CM P D γ₀ Ωmax ε hγ hΩ hWref hTT hCM U hU q hq A hA t εs hεs
-  refine pr_lt_of_abort
+  refine le_trans (pr_mono fun x hx => ⟨⟨hx.1, hx.2.2⟩, hx.2.1⟩) (pr_lt_of_abort
     (fun (A' : Adversary CM) (x : (Q → R) × S × (Fin t → Ticket (P.Wref U.layout) U.layout.N)) =>
-      AuditAccepts (correctSet P U x.1 x.2.1 (A'.transcript U x.1 x.2.1)) x.2.2)
-    (fun A' T => A'.Bounded U T q) A (fun x => onlineCost A U x.1 x.2.1) _ _ (fun x => hCM.1 _ _ _ _ _ _)
-    (fun A' T hT hA' =>
-      Pouw.SecurityProofs.EndToEnd Q R S CM P D γ₀ Ωmax ε hγ hΩ hWref hTT U hU T hT q hq A' hA' t εs hεs)
-    fun b hb => ?_
+      AuditAccepts (correctSet P U x.1 x.2.1 (A'.transcript U x.1 x.2.1)) x.2.2 ∧ ¬ A'.Breaks U x.1 x.2.1)
+    (fun A' T => A'.Bounded U T q) A (fun x => onlineCost A U x.1 x.2.1)
+    ((1 - reductionGamma γ₀ Ωmax) * (1 - εs) * totalWref P U.layout) ((1 - εs) ^ t + ε q U.layout.N)
+    (fun x => hCM.1 _ _ _ _ _ _)
+    (fun A' T hT hA' => le_trans (pr_mono fun x hx => ⟨hx.1.1, hx.2, hx.1.2⟩)
+      (Pouw.SecurityProofs.EndToEnd Q R S CM P D γ₀ Ωmax ε hγ hΩ hWref hTT U hU T hT q hq A' hA' t εs hεs))
+    fun b hb => ?_)
   obtain ⟨A', hA', htr⟩ := Adversary.abort hCM A U hA hb
-  exact ⟨A', hA', fun x hx hacc => (htr x.1 x.2.1 hx).symm ▸ hacc⟩
+  refine ⟨A', hA', fun x hx hacc => ?_⟩
+  obtain ⟨h1, h2⟩ := htr x.1 x.2.1 hx
+  refine ⟨h1.symm ▸ hacc.1, ?_⟩
+  show ¬ Hash.CollisionIn CM.sha (A'.hashed U x.1 x.2.1)
+  rw [h2]
+  exact hacc.2
 
 theorem ComputeOfPouwPerRun : Accounting.Guarantees.ComputeOfPouwPerRun := by
   intro Q R S _ _ _ _ CM P D γ₀ Ωmax ε hγ hΩ hWref hTT hCM U hU t εs hεs hne ι α ΩQ ΩS _ _ _ d r p hq real o
@@ -82,7 +90,7 @@ theorem ComputeOfPouwPerRun : Accounting.Guarantees.ComputeOfPouwPerRun := by
     (real.calls_le (H, s, tix) o).trans (Schedule.ops_le (r.fits _) _ _ _)
   refine le_trans (pr_mono fun x hx => ?_)
     (PouwEndToEndPerRun Q R S CM P D γ₀ Ωmax ε hγ hΩ hWref hTT hCM U hU _ hq (real.adv o) hA t εs hεs)
-  exact ⟨(real.accepts_iff x o).1 hx.1, (real.cost_le x o).trans_lt hx.2⟩
+  exact ⟨(real.accepts_iff x o).1 hx.1, (real.cost_le x o).trans_lt hx.2.1, hx.2.2⟩
 
 end SecurityProofs
 

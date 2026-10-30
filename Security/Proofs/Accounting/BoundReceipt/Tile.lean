@@ -1,6 +1,7 @@
 import Mathlib
 import Definitions.Accounting.Guarantees.BoundReceipt
 import Proofs.Pouw.Prob
+import Proofs.Pouw.Break
 
 /-!
 # A tile's output is unpredictable below its work: from PoUW's named assumptions
@@ -29,13 +30,15 @@ theorem tileUnpredictable_of_total {Q R S : Type} [Fintype Q] [DecidableEq Q] [F
 
 /-- **`TT` gives `TileUnpredictable` at `m·k·n`** (`Accounting.Guarantees.TileUnpredictableOfTT`). -/
 theorem TileUnpredictableOfTT : Accounting.Guarantees.TileUnpredictableOfTT :=
-  fun _ _ _ _ _ _ _ CM P D γ₀ ε hTT =>
-    tileUnpredictable_of_total CM P _ (fun _ => Nat.cast_nonneg _) D γ₀ ε hTT.2
+  fun _ _ _ _ _ _ _ CM P D γ₀ ε hH hTT =>
+    tileUnpredictable_of_total CM P _ (fun _ => Nat.cast_nonneg _) D γ₀ ε fun U hU T hT q hq A hA =>
+      le_of_eq_of_le (Pouw.Proofs.pr_and_not_breaks hH A U _ _ _).symm (hTT.2 U hU T hT q hq A hA)
 
 /-- **`TT_NCP_U` gives `TileUnpredictable` at `3·m·k·n`** (`Accounting.Guarantees.TileUnpredictableOfNCPU`). -/
 theorem TileUnpredictableOfNCPU : Accounting.Guarantees.TileUnpredictableOfNCPU :=
-  fun β _ _ _ _ _ _ _ CM P D γ₀ ε hside hTT =>
-    tileUnpredictable_of_total CM (P.toProtocolU β) _ (fun _ => by positivity) D γ₀ ε (hTT hside).2
+  fun β _ _ _ _ _ _ _ CM P D γ₀ ε hH hside hTT =>
+    tileUnpredictable_of_total CM (P.toProtocolU β) _ (fun _ => by positivity) D γ₀ ε fun U hU T hT q hq A hA =>
+      le_of_eq_of_le (Pouw.Proofs.pr_and_not_breaks hH A U _ _ _).symm ((hTT hside).2 U hU T hT q hq A hA)
 
 /-- **More compared entries and less credit keep `TileUnpredictable`** (`Accounting.Guarantees.TileUnpredictableMono`):
 a unit whose checked values are right on `P'`'s entries is right on `P`'s. -/
