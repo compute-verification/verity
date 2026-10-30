@@ -1,5 +1,5 @@
 """A served window sealed as a deferred Commit's row dir (`serve_seal.seal_window`) and opened as PROVE-PATH opens it
-(`deferred_rows.of_record`), and the registered advice compiler (`advice_windows.Capped`, PROVE-PATH's, with the cap ℓ).  CPU only."""
+(`deferred_rows.of_record`), and the registered registered compiler (`advice_windows.Capped`, PROVE-PATH's, with the cap ℓ).  CPU only."""
 from __future__ import annotations
 
 import json

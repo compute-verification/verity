@@ -1,5 +1,5 @@
 """The challenger's host process (`serve.py`) over loopback with a test key and the Lean verifier's coins stubbed
-(`stub_serve.py`): it draws every coin and salt from those coins, signs and writes its record before it listens, serves one
+(`stub_serve.py`): it samples every coin and salt from those coins, signs and writes its record before it listens, serves one
 session, signs its release log when it ends and publishes nothing secret; the verifier checks the session from the
 process's `out/` and the auditor's signed ledger alone.  A Lean that can't answer starts no session, a second session
 signs at the key's next leaves, a session id the key has signed for is refused, a key inside `out/` is refused, a refused
@@ -158,7 +158,7 @@ def test_a_lean_that_cannot_answer_starts_no_session(tmp_path):
 
 
 def test_a_source_no_claim_instance_names_starts_no_session(tmp_path):
-    """The host's coins are named by a claim instance (the Lean's, `uniform/io-getrandombytes`), or it draws
+    """The host's coins are named by a claim instance (the Lean's, `uniform/io-getrandombytes`), or it samples
     none: a source without one starts no session and asks it for no byte."""
     proc, out, first = start(tmp_path, env={**os.environ, "COINS_UNNAMED": "1"})
     code, err = finish(proc)

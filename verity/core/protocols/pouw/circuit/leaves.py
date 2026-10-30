@@ -1,4 +1,4 @@
-"""The tile checks' committed rows (`pc4`, `pc8`): each row a unit reads or writes is a C-Flock-committed port, which C-Flock
+"""The tile checks' committed rows (`pc4`, `pc8`): each row a unit reads or writes is a Flock-committed port, which Flock
 commits as an hm96-sha512 row and hashes in the proof (`verity.ml.commitments.hm96`), so the Programs hold no leaf.  What stays
 in gates is the work's own digest:
 
@@ -71,10 +71,10 @@ Every per-call row (role X) but ok, the tile digest, the cap's rows and the row_
 so decode's serial hash chain is a segment's, not the row's.  The cap's per-word and
 per-row-sum rows are at most one SHA-512 block at any k up to 2^14, so a segment's chain is the row's and v2 hashes them
 in fewer blocks.  The cap's strip row and chunk digests are padded with zero words to 64, one whole block, because
-C-Flock's composer refuses a unit none of whose rows hashes a block before its last one (its SHA-512 range would hold no
+Flock's composer refuses a unit none of whose rows hashes a block before its last one (its SHA-512 range would hold no
 slot), and without a whole block the strip (ok rows in, cap-rows out), a row digest (cap-word rows in, cap-chunks out),
 the tile (cap-chunks rows in, the tile digest out) and the tally (cap-sums rows and cap-rows in) would read and write
-only one-block v2 rows; a row tally has one through sd.  They are v2 rather than row-seg rows because C-Flock's widened
+only one-block v2 rows; a row tally has one through sd.  They are v2 rather than row-seg rows because Flock's widened
 proved scope takes a v2 row whose bytes are whole blocks or end in its first block, and a row-seg row only of whole
 blocks: padded, each is two compressions, as its short row-seg row was, where a row-seg row of a block is three.  Every
 other row is a v2 row, the registered ones included, so each (row, role) has one leaf schema in the registered tree and
@@ -99,24 +99,24 @@ session of one row's units (k is the segment's length where the row is a segment
                                           UE4M3 scale bytes two per word
 
 At the deployed row_k (2,048) each of the six is short (one block with SHA-512's padding: at most 55 words) or whole
-blocks (a multiple of 64 words), the v2 rows C-Flock's widened scope takes; pc8-carry's zero words are for that.
+blocks (a multiple of 64 words), the v2 rows Flock's widened scope takes; pc8-carry's zero words are for that.
 
 nvfp4-p's codes and scales are `rowleaf.nvfp4_row_bytes`' bytes, and every row's bytes are `rowleaf.bit_row`'s of its
 elements.
 
 Which unit ports make up each row is `pc4.PORTS`, `pc8.PORTS` and the cap's `cap.PORTS`, `rowk.PORTS4` and
 `rowk.PORTS8` for the cut, and `pc8.SIDE_PORTS` for the audit window's tile (`pc8.Pc8TileSide`), which reads fp8-pi rows:
-its window's side rows, whose index field no unit writes.  `statement_rows` gives a unit's C-Flock rows from these:
+its window's side rows, whose index field no unit writes.  `statement_rows` gives a unit's Flock rows from these:
 META ``row_schemas``, a [schema, bits] per row (the input rows, then the output rows), and ``out_row_ports``, each
 output row's run of output ports.  Every output row is a row of exactly its words, as every input row is: the ok word
 and the tile digest each one port's v2 row, not padded to whole blocks, and a row a unit writes as several outputs (A′_i
 ‖ P_A,i or B̃_j ‖ P_B,j: the codes, the scales and P) one run's row-seg or v2 row, the row its readers commit.
 `words_*` are each row's words from its elements, and `commit` and `tree_leaf` a row's commit string and tree leaf;
-``tests/vectors/pouw_rows.json`` pins them, and C-Flock's tests recompute every row's vector through its ports, commit
+``tests/vectors/pouw_rows.json`` pins them, and Flock's tests recompute every row's vector through its ports, commit
 each output row as its reader does, and compose each unit's statement rows (``verity/ml/flock/tests/test_pouw_rows.py``).
 The anchored inputs are no row: they are public input regions (`anchors.region_words`).
 
-An admission value has one ok leaf only while the word's bits 1-15 are zero, and no row check sees them: C-Flock's and the
+An admission value has one ok leaf only while the word's bits 1-15 are zero, and no row check sees them: Flock's and the
 Lean verifier's hash a hidden row's bits as given.  So the row unit that writes the row returns the word (`OK`), not the bit,
 as a select between the constants 1 and 0, every bit fixed in gates (`pc4.ok_word`), and `ok_of` refuses any other word.
 """
@@ -377,7 +377,7 @@ def row_digest(row: str, role: int, words: Sequence[int]) -> bytes:
 
 def commit(row: str, role: int, words: Sequence[int], salt: bytes) -> bytes:
     """b ‖ c of a ``row`` row of 16-bit ``words`` in a tree of ``role`` under ``salt``: hm96-sha512 over its `row_digest`,
-    as C-Flock commits the row's port."""
+    as Flock commits the row's port."""
     return INST.commit_string(KEY, row_digest(row, role, words), salt)
 
 
@@ -387,7 +387,7 @@ def tree_leaf(bc: bytes) -> bytes:
 
 
 def statement_rows(unit: dict, k: int, reads: dict[str, int] | None = None) -> dict:
-    """A unit's committed rows as its C-Flock statement's META names them, from its ports (``unit``: `pc4.PORTS[role]` or
+    """A unit's committed rows as its Flock statement's META names them, from its ports (``unit``: `pc4.PORTS[role]` or
     `pc8.PORTS[role]`) at depth ``k``: ``row_schemas``, each row's [schema, bits] (`ROW_SCHEMA`, ``16 ROW_WORDS``), the input
     rows in their order (``reads[p]`` rows of a row whose ports a tile reads one row of each of, row r of each port its r-th)
     then the output rows, each a row of exactly its words, and ``out_row_ports``, each output row's run of output ports,

@@ -346,6 +346,9 @@ theorem linkUnit_ok {UB PB : ℕ} {U : VStar.UnitC} (h : VStar.linkUnit UB PB = 
       U.outs = (((linkRun UB PB).run ⟨linkIn UB PB, []⟩).1.1 ++ ((linkRun UB PB).run ⟨linkIn UB PB, []⟩).1.2).toArray ∧
       U.inPorts = VStar.linkPorts UB PB ∧ U.outPorts = [VStar.LINK_OUT_WORDS, VStar.LINK_OUT_WORDS] := by
   unfold VStar.linkUnit at h
+  unfold linkRun linkIn
+  -- Opaque, so that none of the kernel's checks below can evaluate the builder.
+  generalize VStar.linkSteps UB PB = S at h ⊢
   cases hc : RecLinkTree.checkShape UB PB with
   | error e => simp [hc, bind, Except.bind] at h
   | ok _ =>
@@ -356,7 +359,6 @@ theorem linkUnit_ok {UB PB : ℕ} {U : VStar.UnitC} (h : VStar.linkUnit UB PB = 
       omega
     simp only [OfVStar.run_input_bind]
     rw [hn, OfVStar.slices_vars, varSlices_linkPorts, Nat.add_zero]
-    simp only [linkRun, linkIn]
     refine ⟨?_, ?_, ?_, ?_⟩ <;> first | rfl | trivial
 
 theorem checkShape_ok {UB PB : ℕ} {x : Unit} (h : RecLinkTree.checkShape UB PB = .ok x) : UB ≤ 32 ∧ PB ≤ 32 := by
