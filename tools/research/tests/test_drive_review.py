@@ -137,23 +137,61 @@ def test_a_sharded_after_landing_run_verifies_main_only_once_every_shard_passed(
     that never started launches the run again, whole."""
     h = Review(world, monkeypatch)
     h.d.after_landing_shards = 3
+    art = f"art:{'a' * 64}@{'b' * 64}"
+    h.d.records_artifact = lambda rid: art if rid == "r-post-0" else None
     world.gh.put(1, world.change({"a.txt": "1\n"}))
     h.review(1)
     assert h.tick().startswith("landed #1"), world.logs
     main = _main(world)
-    assert [(c, kw.get("shard")) for c, _, kw in h.posted] == [(main, "1/3"), (main, "2/3"), (main, "3/3")]
-    h.run_state.update({"r-post-0": ("done", 0, None), "r-post-1": ("running", None, None), "r-post-2": ("done", 0, None)})
-    h.evidence = [_steps_run(world.tmp, "r-post-0", {s: "passed" for s in AFTER_LANDING})]
+    assert h.posted == [(main, "circuit-check", {"cc_records": True})], "circuit-check's records step first"
+    h.run_state["r-post-0"] = ("done", 0, None)
+    h.tick()
+    assert [(c, kw.get("shard"), kw.get("cc_records_from")) for c, _, kw in h.posted[1:]] == [(main, f"{k}/3", art) for k in (1, 2, 3)]
+    h.run_state.update({"r-post-1": ("done", 0, None), "r-post-2": ("running", None, None), "r-post-3": ("done", 0, None)})
+    h.evidence = [_steps_run(world.tmp, "r-post-1", {s: "passed" for s in AFTER_LANDING})]
     h.tick()
     pl = h.postland()
-    assert pl["run"]["groups"] == [["r-post-0"], ["r-post-1"], ["r-post-2"]] and pl["verified"] != main, "one shard runs on"
-    h.run_state["r-post-1"] = ("done", 75, None)
+    assert pl["run"]["groups"] == [["r-post-1"], ["r-post-2"], ["r-post-3"]] and pl["verified"] != main, "one shard runs on"
+    h.run_state["r-post-2"] = ("done", 75, None)
     h.tick()
-    assert h.postland()["verified"] != main and len(h.posted) == 6, "a shard that never started: the run again, whole"
-    h.run_state.update({f"r-post-{i}": ("done", 0, None) for i in (3, 4, 5)})
+    assert h.postland()["verified"] != main and len(h.posted) == 7, "a shard that never started: the run again, whole"
+    assert [kw.get("cc_records_from") for _, _, kw in h.posted[4:]] == [art] * 3, "on the records it had: no second records step"
+    h.run_state.update({f"r-post-{i}": ("done", 0, None) for i in (4, 5, 6)})
     h.tick()
     pl = h.postland()
     assert pl["verified"] == main and pl["run"] is None, world.logs
+
+
+@pytest.mark.parametrize("ends", ["failed", "no artifact", "lost"])
+def test_a_sharded_run_s_shards_build_the_records_themselves_when_the_records_step_gives_none(world, monkeypatch, ends):
+    """The records step holds the shards only while it may still give its artifact: failed, passed without one by
+    `RECORDS_WAIT_S`, or still running then (cancelled), the shards launch without it and each builds the records itself."""
+    from research.drive import RECORDS_WAIT_S
+
+    h = Review(world, monkeypatch)
+    h.d.after_landing_shards = 3
+    h.d.records_artifact = lambda rid: None
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    h.run_state["r-post-0"] = {"failed": ("failed", 1, None), "no artifact": ("done", 0, None), "lost": ("running", None, None)}[ends]
+    if ends != "failed":
+        h.tick()
+        assert len(h.posted) == 1, "it waits for the artifact"
+        h.clock += RECORDS_WAIT_S + 1
+    h.tick()
+    assert [(kw.get("shard"), "cc_records_from" in kw) for _, _, kw in h.posted[1:]] == [(f"{k}/3", False) for k in (1, 2, 3)]
+    assert h.cancelled == (["r-post-0"] if ends == "lost" else [])
+
+
+def test_an_unsharded_after_landing_run_has_no_records_step(world, monkeypatch):
+    """One run of every step runs circuit-check's `--all` whole, whose prologue builds the records once anyway."""
+    h = Review(world, monkeypatch)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    [(_, steps, kw)] = h.posted
+    assert steps == ",".join(AFTER_LANDING) and "cc_records" not in kw and "shard" not in kw
 
 
 def test_an_after_landing_run_sends_a_base_below_its_tip_so_ratchet_gate_judges_the_landings_above_it(world, monkeypatch):

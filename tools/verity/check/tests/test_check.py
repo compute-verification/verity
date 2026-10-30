@@ -1678,6 +1678,30 @@ def test_train_sh_runs_with_priority_and_posts_a_launch_that_registers_no_run(tm
     assert p.returncode == 1 and "git fetch origin failed" in (tmp_path / "posted").read_text()
 
 
+def test_train_sh_launches_the_records_step_alone_and_hands_a_shard_its_artifact(tmp_path):
+    """Drive's sharded after-landing run: `--cc-records` launches circuit-check's records step alone, in a worktree of its own,
+    and `--cc-records-from ART@SHA256` reaches a shard's check.py; either is refused where it doesn't belong."""
+    git, train, argv = _train_repo(tmp_path)
+    (tmp_path / "repo" / "a").write_text("b\n")
+    git("commit", "-q", "-am", "landing")
+    git("push", "-q", "origin", "HEAD:main")
+    p = train("HEAD", "vy-x", "--cc-records")
+    args = argv.read_text().split()
+    assert p.returncode == 0 and args[args.index("--keep-going"):] == ["--keep-going", "--cc-records"], (p.stderr, args)
+    assert f"train-{git('rev-parse', 'HEAD')[:12]}-records.log" in p.stdout, p.stdout
+    art = f"art:{'a' * 64}@{'b' * 64}"
+    p = train("HEAD", "vy-x", "--deferred", "pytest,circuit-check", "--shard", "1/4", "--cc-records-from", art)
+    args = argv.read_text().split()
+    assert p.returncode == 0 and args[args.index("--cc-records-from"):args.index("--cc-records-from") + 2] == ["--cc-records-from", art]
+    argv.unlink()
+    for flags, why in ((["--cc-records", "--deferred", "pytest"], "--cc-records refused with another flag"),
+                       (["--cc-records", "--agreement"], "--cc-records refused with another flag"),
+                       (["--deferred", "pytest", "--cc-records-from", art], "--cc-records-from refused without --shard"),
+                       (["--deferred", "pytest", "--shard", "1/4", "--cc-records-from", "art:x"], "--cc-records-from needs ART@SHA256")):
+        p = train("HEAD", "vy-x", *flags)
+        assert p.returncode == 2 and f"train: {why}" in p.stderr and not argv.exists(), (flags, p.stderr)
+
+
 def test_train_sh_hands_check_the_base_below_the_tip_that_drive_sends(tmp_path):
     """Drive's after-landing run of `main`'s tip names the last verified `main` (`--base`), so ratchet-gate judges the landings
     above it, not the tip against itself: train.sh resolves it after its fetch and hands check.py that commit, and registers
