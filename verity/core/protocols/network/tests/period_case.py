@@ -569,7 +569,7 @@ def _input_bits(j: dict, ts: list[tuple[str, dict, int]]) -> int:
     return sum(n * sum(bits_of(t) for _p, t in _params_of(j, d)) for _k, d, n in ts)
 
 
-def _layout(j: dict, k: str, d: dict) -> WI.Layout:
+def _layout(j: dict, k: str, d: dict) -> WI.RowLayout:
     """`layoutOf`: each parameter a row of its u16 words, at least one, with its outer length, and each return field an
     output row `o<j>` of its bits in u16 words, rounded up; refused where a parameter is not whole u16 words or is named
     like an output row."""
@@ -582,7 +582,7 @@ def _layout(j: dict, k: str, d: dict) -> WI.Layout:
     rows = tuple((p, bits_of(t) // 16) for p, t in ps)
     if len({p for p, _ in rows + outs}) != len(rows) + len(outs):
         raise D.Reject(f"{k}: a parameter is named like an output row")
-    return WI.Layout(rows, outs, (), tuple(t[1] if t[0] == "Array" else 1 for _p, t in ps))
+    return WI.RowLayout(rows, outs, (), tuple(t[1] if t[0] == "Array" else 1 for _p, t in ps))
 
 
 def _strs(*xs) -> bool:
