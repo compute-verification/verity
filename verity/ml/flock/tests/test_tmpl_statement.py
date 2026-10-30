@@ -206,13 +206,14 @@ def test_the_templated_statement_is_written_without_torch(tmp_path):
 
 def test_a_unit_past_k_max_is_refused_before_its_template_is_written(monkeypatch, tmp_path):
     """A templated unit whose block passes ``K_MAX`` is refused before compose writes its template's text, which for a
-    served lane is gigabytes (the K=14336 lane's 16.5M lines took a refused compose from 12.8 to 15.1 GiB)."""
+    served lane is gigabytes (the K=14336 lane's 16.5M lines took a refused compose from 12.8 to 15.1 GiB). At 19, below
+    every block's 2^20 and above the unit's own slot, the refusal is compose's, not `UnitStager`'s before lowering."""
     def written(_t):
         raise AssertionError("the template was written before the block was checked")
 
-    monkeypatch.setattr(FC, "K_MAX", 10)
+    monkeypatch.setattr(FC, "K_MAX", 19)
     monkeypatch.setattr(T, "write", written)
-    with pytest.raises(ValueError, match="unit/tmpl-no-torch: an instance needs a block of 2\\^\\d+ bits \\(at most 2\\^10\\)"):
+    with pytest.raises(ValueError, match="unit/tmpl-no-torch: an instance needs a block of 2\\^\\d+ bits \\(at most 2\\^19\\)"):
         exec(WRITE, {"OUT": tmp_path / "c.txt", "MODE": MODE})
 
 
