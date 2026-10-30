@@ -56,13 +56,14 @@ class Prog(PeerReads, PX.PrefixInput):
         self.label = label
         self.compact = bool(compact)
         self.digest = desc.get("digest") or program_digest(desc)
+        registry = _registry()
         self.inputs: dict[int, tuple[str, int]] = {}
         self.inst: list[dict] = []  # k, spec, form, args=[runs | progressions], out
         if self.compact:
             # the root body read straight from the descriptor JSON into run progressions: no Node / Coll / Refs objects for
             # the root, no per-row expansion of a Strided (compact.lean_root; the non-root Definitions are decoded as decode_program does)
             from verity_vllm.program.compact import lean_root
-            lr = lean_root(desc, _registry())
+            lr = lean_root(desc, registry)
             for k, fid, form, args6, out, n in lr["nodes"]:
                 if form == "batch" and input_id(fid) is not None:
                     self.inputs[k] = (fid, n)
@@ -74,12 +75,12 @@ class Prog(PeerReads, PX.PrefixInput):
             del lr
         else:
             from verity.ml.circuits.codec import decode_program
-            _spec_id, runs = self._node_functions()
-            dec = decode_program(desc, _registry())
+            descriptor_id, runs = self._node_functions()
+            dec = decode_program(desc, registry)
             root = dec.root
             body = root.body if hasattr(root, "body") else root.defn.body
             for k, n in enumerate(body.nodes):
-                fid = _spec_id(n.fn)
+                fid = descriptor_id(n.fn)
                 if n.form == "batch" and input_id(fid) is not None:
                     self.inputs[k] = (fid, n.n)
                     continue
