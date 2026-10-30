@@ -88,9 +88,35 @@ def replan1(size="w256", tokens=20_000_000, lr=2e-3, threads=4):
     return cfgs
 
 
+def replan2(lr=2e-3):
+    """B with D₁(R+Δ)D₂ by ρ, on all linears and under int8 noise; A 1/4 on all linears; which half of the int8 arm
+    (int8 R or int8 activations) helps A 1/8; whether B's growing gap saturates past compute-optimal tokens (w128 at
+    60M, ~45 tokens per parameter); and B with diagonals at w512."""
+    b = {"size": "w256", "tokens": 20_000_000, "lr": lr, "threads": 3}
+    Bd = {**b, "design": "B", "diag": True}
+    A8 = {**b, "design": "A", "rank_frac": 1 / 8, "diag": True}
+    cfgs = [{**Bd, "name": f"w256-Bd{rho:g}", "rho": rho} for rho in (0.1, 0.25, 0.5)]
+    cfgs += [{**Bd, "name": f"w256-Bd{rho:g}-all", "rho": rho, "harden": "all"} for rho in (0.25, 0.5)]
+    cfgs += [{**Bd, "name": f"w256-Bd0.25-int8-k{k}", "rho": 0.25, "int8": True, "noise_k": k, "r_dist": "int8"}
+             for k in (4, 16)]
+    cfgs += [{**b, "name": "w256-A4-diag-all", "design": "A", "rank_frac": 1 / 4, "diag": True, "harden": "all"},
+             {**A8, "name": "w256-A8-diag-rint8", "r_dist": "int8"},
+             {**A8, "name": "w256-A8-diag-int8-k0-rgauss", "int8": True},
+             {**A8, "name": "w256-A8-diag-int8-k0-s1", "int8": True, "r_dist": "int8", "seed": 1}]
+    lng = {"size": "w128", "tokens": 60_000_000, "lr": lr, "threads": 4}
+    cfgs += [{**lng, "name": f"w128-base-D{t}", "tokens": t} for t in (60_000_000, 40_000_000)]
+    cfgs += [{**lng, "name": "w128-B0.5-D60M", "design": "B", "rho": 0.5},
+             {**lng, "name": "w128-Bd0.5-D60M", "design": "B", "rho": 0.5, "diag": True},
+             {**lng, "name": "w128-A8-diag-D60M", "design": "A", "rank_frac": 1 / 8, "diag": True}]
+    w5 = {"size": "w512", "tokens": 20_000_000, "lr": lr, "threads": 6, "design": "B", "diag": True}
+    cfgs += [{**w5, "name": f"w512-Bd{rho:g}", "rho": rho} for rho in (0.25, 0.5)]
+    return cfgs
+
+
 PRESETS = {
     "bench": bench,
     "replan1": replan1,
+    "replan2": replan2,
     "w256": lambda: grid("w256", 20_000_000),
     "scale1": lambda: lite("w512", 20_000_000, 6) + lite("w128", 20_000_000, 2),
 }

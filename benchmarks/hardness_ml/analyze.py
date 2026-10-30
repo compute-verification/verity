@@ -21,12 +21,27 @@ from collections import defaultdict
 from pathlib import Path
 
 
-def load(dirs):
+def load(dirs, partial=False):
+    """Finished runs from runs/*.json; with ``partial``, also runs still going, from their logs (curve only)."""
     runs = {}
     for d in dirs:
         for p in sorted(Path(d).glob("runs/*.json")):
             r = json.loads(p.read_text())
             runs[r["cfg"]["name"]] = r
+        if not partial:
+            continue
+        for p in sorted(Path(d).glob("logs/*.log")):
+            lines = p.read_text().splitlines()
+            if p.stem in runs or not lines or not lines[0].startswith("{"):
+                continue
+            head = json.loads(lines[0])
+            curve = []
+            for ln in lines[1:]:
+                f = ln.split()
+                if f and f[0] == "step":
+                    curve.append({"step": int(f[1].split("/")[0]), "tokens": int(f[3]), "val": float(f[7])})
+            runs[p.stem] = {"cfg": head["cfg"], "tokens": head["steps"] * head["cfg"]["batch"] * head["cfg"]["ctx"],
+                            "curve": curve, "partial": True}
     return runs
 
 
@@ -130,12 +145,30 @@ def table(res):
     return "\n".join(lines)
 
 
+def curves(runs, partial_dir_logs=()):
+    """Gap to the same-size baseline at each eval step, for runs sharing the baseline's token count and schedule."""
+    out = {}
+    for name, r in runs.items():
+        c = r["cfg"]
+        base = runs.get(f"{c['size']}-base-D{c['tokens']}")
+        if base is None or name == base["cfg"]["name"]:
+            continue
+        bv = {p["step"]: p["val"] for p in base["curve"]}
+        out[name] = [(p["tokens"], round(p["val"] - bv[p["step"]], 4)) for p in r["curve"] if p["step"] in bv]
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("dirs", nargs="+", help="sweep out dirs (each with runs/*.json)")
     ap.add_argument("--baseline-lr", type=float, default=None)
     ap.add_argument("--json", default=None)
+    ap.add_argument("--curves", action="store_true", help="print each run's gap to its baseline at every eval")
     a = ap.parse_args()
+    if a.curves:
+        for name, pts in sorted(curves(load(a.dirs, partial=True)).items()):
+            print(name, " ".join(f"{t / 1e6:.0f}M:{g:+.3f}" for t, g in pts[::2] + pts[-1:]))
+        return
     res = analyze(load(a.dirs), a.baseline_lr)
     if a.json:
         Path(a.json).write_text(json.dumps(res, indent=1))

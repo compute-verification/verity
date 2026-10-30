@@ -120,7 +120,7 @@ class HLinear(nn.Module):
             r = max(1, round(cfg.rank_frac * cfg_d(cfg)))
             self.V = nn.Parameter(torch.randn(r, n_in, generator=g) / math.sqrt(n_in))
             self.U = nn.Parameter(torch.zeros(n_out, r))
-        if self.design in ("A", "frozen") and cfg.diag:
+        if self.design in ("A", "frozen", "B") and cfg.diag:
             self.d1 = nn.Parameter(torch.ones(n_out))
             self.d2 = nn.Parameter(torch.ones(n_in))
         if self.design == "frozen" and not cfg.diag:
@@ -159,7 +159,8 @@ class HLinear(nn.Module):
         if self.design == "dense":
             return F.linear(x, self.weight)
         if self.design == "B":
-            return F.linear(x, self.R + self.delta)
+            y = F.linear(x, self.R + self.delta)
+            return y if self.d1 is None else y * self.d1
         y_r = None
         if self.design in ("A", "frozen"):
             y_r = F.linear(x, self.R)
@@ -320,6 +321,7 @@ def diagnostics(model: GPT):
         if m.d1 is not None:
             rec["d1_rms"] = float(m.d1.pow(2).mean().sqrt())
             rec["d2_rms"] = float(m.d2.pow(2).mean().sqrt())
+            rec["d1_absmin"] = float(m.d1.abs().min())
         if m.last_share is not None:
             rec["r_share_out"] = m.last_share
         out[name] = rec
@@ -328,7 +330,7 @@ def diagnostics(model: GPT):
 
 def summarize_diag(diag):
     keys = ["rel_move_fro", "rel_move_spec", "dw_stable_rank", "delta_over_r_fro", "uv_fro_over_r_fro", "d1_rms",
-            "r_share_out"]
+            "d1_absmin", "r_share_out"]
     res = {}
     for kind in ("qkv", "o", "fc1", "fc2"):
         rows = [v for k, v in diag.items() if k.endswith("." + kind)]
