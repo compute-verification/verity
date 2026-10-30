@@ -27,8 +27,12 @@ import sys
 from collections.abc import Callable, Sequence
 from typing import Any
 
+from verity.ml.kernels import SHA512
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 SOURCES = ("native_collect.cpp", "native_gather.cu", "native_tree.cu", "native_rows.cu")
+#: headers a source includes by name from outside the sources' directory: the GPU's one SHA-512
+SHARED = {"sha512.cuh": str(SHA512)}
 CFLAGS = ("-O3",)
 CUDA_CFLAGS = ("-O3", "--use_fast_math")
 
@@ -43,11 +47,12 @@ def source_paths(here: str = HERE) -> list[str]:
     return [os.path.join(here, s) for s in SOURCES]
 
 
-def local_headers(sources: Sequence[str]) -> list[tuple[str, str]]:
+def local_headers(sources: Sequence[str], shared: dict[str, str] = SHARED) -> list[tuple[str, str]]:
     """(path relative to the sources' directory, absolute path) of every header the sources include by a quoted path that exists beside
-    the including file, transitively, sorted.  A quoted include found nowhere beside it is the compiler's (-I) business and is skipped.
-    Refused: sources with one basename twice, sources in different directories that include headers, and a header outside the
-    sources' directory -- a staged copy (`<build_dir>/src/`) could not hold either faithfully."""
+    the including file, transitively, sorted.  A name of `shared` that a file in the sources' directory includes and finds nowhere
+    beside it is that header, staged at that name.  Any other quoted include found nowhere beside it is the compiler's (-I) business
+    and is skipped.  Refused: sources with one basename twice, sources in different directories that include headers, and a header
+    outside the sources' directory -- a staged copy (`<build_dir>/src/`) could not hold either faithfully."""
     names = [os.path.basename(p) for p in sources]
     dup = sorted({n for n in names if names.count(n) > 1})
     if dup:
@@ -64,14 +69,19 @@ def local_headers(sources: Sequence[str]) -> list[tuple[str, str]]:
         with open(p, "rb") as f:
             body = f.read()
         for inc in _INCLUDE.findall(body):
-            h = os.path.normpath(os.path.join(os.path.dirname(p), inc.decode()))
+            name = inc.decode()
+            h = os.path.normpath(os.path.join(os.path.dirname(p), name))
+            rel = None
             if not os.path.isfile(h):
-                continue
+                if name not in shared or os.path.dirname(p) not in roots:
+                    continue
+                rel, h = name, shared[name]
             if len(roots) > 1:
                 raise ValueError(f"JIT sources in several directories {sorted(roots)} include local header {h}: cannot stage one src/ for them")
-            rel = os.path.relpath(h, next(iter(roots)))
-            if rel.startswith(os.pardir + os.sep):
-                raise ValueError(f"JIT source {p} includes {h}, outside the sources' directory: its staged copy could not resolve it")
+            if rel is None:
+                rel = os.path.relpath(h, next(iter(roots)))
+                if rel.startswith(os.pardir + os.sep):
+                    raise ValueError(f"JIT source {p} includes {h}, outside the sources' directory: its staged copy could not resolve it")
             found[rel] = h
             todo.append(h)
     return sorted(found.items())
