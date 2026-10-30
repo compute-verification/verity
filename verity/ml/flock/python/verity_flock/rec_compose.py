@@ -91,7 +91,8 @@ def shared_of_args(args: list[str]) -> dict:
                   inner_statement=statement,
                   inner_statement_coins=None if statement is None else
                   "os" if arg("--rec-inner-statement-coins") == "os" else "seed",
-                  inner_tables=tables, inner_draw=read("--rec-inner-draw"), rec_links=links)
+                  inner_tables=tables, inner_draw=read("--rec-inner-draw"), rec_links=links,
+                  inner_program=read("--rec-inner-program"))
 
 
 def run_record(rows: str, rec_shared: dict, opens: list[tuple[str, int, str]]) -> str:

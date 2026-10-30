@@ -508,11 +508,12 @@ inner_partition() {
   K=$K N=$N python3 $REPO/verity/ml/flock/pod/rec_reprice.py partition $DD/stage
 }
 
-# V*'s values against the verifier's own coins (verify --rec-inner-*, RecCoins.check): the inner statement and the inner
-# session STEP=vstage staged every statement from, a forgery's too, with the coin server's transcript of it, whose
-# root_B, later tops and link points every statement's tops and check 5 are held to (RecVStar.checkTopRows,
-# RecCoins.checkLink) and whose c_k its rec-c<k> rows are (RecVStar.checkPubRows)
-rec_inner_files() { echo "--rec-inner-circuit $DD/stage/circuit.txt --rec-inner-public $DD/stage/pub-$N.bin --rec-inner-partition $DD/stage/partition.json --rec-inner-statement verity/flock-circuit+plain-leaves --rec-inner-statement-coins os --rec-inner-draw $DD/stage/draw.json --rec-inner-session $1/session"; }
+# V*'s values against the verifier's own coins (verify --rec-inner-*, RecCoins.check): the inner statement, set up under
+# the verifier's own program of it (which a wired inner's Linking needs), and the inner session STEP=vstage staged every
+# statement from, a forgery's too, with the coin server's transcript of it, whose root_B, later tops and link points
+# every statement's tops and check 5 are held to (RecVStar.checkTopRows, RecCoins.checkLink) and whose c_k its rec-c<k>
+# rows are (RecVStar.checkPubRows)
+rec_inner_files() { echo "--rec-inner-circuit $DD/stage/circuit.txt --rec-inner-public $DD/stage/pub-$N.bin --rec-inner-partition $DD/stage/partition.json --rec-inner-program $DD/stage/program.json --rec-inner-statement verity/flock-circuit+plain-leaves --rec-inner-statement-coins os --rec-inner-draw $DD/stage/draw.json --rec-inner-session $1/session"; }
 # REC_COINS=1: the inner statement set up once per inner session (flock-verify rec-coins, into its rec-coins.json), each
 # verify reading that record (--rec-inner-coins) in place of the inner statement's files, which at a served lane's size
 # every verify would otherwise parse again

@@ -365,6 +365,30 @@ def test_a_firewalled_oprove_composes_over_the_record_its_coin_servers_logged(tm
     assert json.loads((tmp_path / "rec-run.json").read_text()) == {"events": evs, "kind": C.RUN_KIND}
 
 
+def test_the_staged_shared_set_names_the_inner_program_and_the_link_table(tmp_path):
+    """85 stages the record's shared set from the parts' own flags (`rec_compose.shared_of_args`, as
+    `FlockVerify.recSharedInput` reads them), the inner statement's program (``--rec-inner-program``) and the link table
+    (``--rec-links``) among them, so a wired run's staging is what its parts read."""
+    names = ("inner", "circuit", "public", "partition", "program", "draw")
+    for k in names:
+        (tmp_path / k).write_bytes(k.encode())
+    (tmp_path / "s").mkdir()
+    (tmp_path / "s" / "session.json").write_bytes(b"session")
+    root = "ab" * 64
+    args = ["--rec-inner", str(tmp_path / "inner"), "--rec-inner-circuit", str(tmp_path / "circuit"),
+            "--rec-inner-public", str(tmp_path / "public"), "--rec-inner-partition", str(tmp_path / "partition"),
+            "--rec-inner-program", str(tmp_path / "program"), "--rec-inner-statement",
+            "verity/flock-circuit+plain-leaves", "--rec-inner-statement-coins", "os", "--rec-inner-draw",
+            str(tmp_path / "draw"), "--rec-inner-session", str(tmp_path / "s"), "--rec-links", f"{root}:3"]
+    want = RC.shared(rec_inner=b"inner", inner_circuit=b"circuit", inner_public=b"public", inner_partition=b"partition",
+                     inner_session=b"session", inner_statement="verity/flock-circuit+plain-leaves",
+                     inner_statement_coins="os", inner_tables=[], inner_draw=b"draw",
+                     rec_links=(bytes.fromhex(root), 3), inner_program=b"program")
+    assert RC.shared_of_args(args) == want and want["inner_program"] == RC.digest(b"program")
+    assert RC.shared_of_args([a for a in args if a not in ("--rec-inner-program", str(tmp_path / "program"))]) == {
+        **want, "inner_program": None}
+
+
 def test_a_second_session_logged_for_a_part_does_not_compose(tmp_path, capsys):
     """A part's coin server that answered two Hellos logged both, and the composition refuses the retry."""
     binary, h = _composer(tmp_path, 2)
