@@ -101,7 +101,9 @@ KINDS: dict[str, str] = {
                        "sampled_replay_p*.json + commit_summary.json (compat); meta {row, verdict, ...}; refs.build, refs.match",
     "vllm-replay-slim/v1": "a decided CPU replay's slim keep (verity_vllm.pipeline.cpu_replay.keep): payload tree = slim.json + the slim "
                            "committed store (only the leaves and Merkle nodes its picks and linkage opened) + weights tree + binding map + "
-                           "context; meta {row, stage, run_root, program_digest, picked, bytes, dump_sha256, commit_pass}",
+                           "context; meta {row, stage, run_root, program_digest, picked, bytes, dump_sha256, commit_pass}. No stage "
+                           "publishes one any more: a keep holds clear values (opened committed values with their salts, the "
+                           "requests and served tokens, opened weights) and stays on the node",
     "execution-evidence/v1": "application evidence of one stage's execution (timeline.jsonl, schedule / arrival facts) — not "
                              "telemetry; meta {row, stage}",
     "advice-encoding/v1": "network accounting's advice coded under registered codebooks, bits per certifier window "
