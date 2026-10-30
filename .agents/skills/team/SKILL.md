@@ -58,8 +58,8 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
 - Drive stacks admitted PRs on `next`, non-Lean changes first. Reviewers ci staffs, never the owner, record a verdict at
   the head (`research queue review N --land|--hold REASON --by LANE`); no other per-head grant exists. Drive
   fast-forwards `checked` (`land_into`) to the longest reviewed prefix whose merges are clean and whose `.py` files compile; while no Lean
-  check runs, it moves reviewed members below those awaiting a verdict, so a PR waiting for review holds only itself (a
-  hold still keeps what is above it). A change to a
+  check runs, it moves reviewed members below those awaiting a verdict, so a PR waiting for review holds only itself; a
+  held PR, and any PR containing it, goes to the top of `next` at each sync, so a hold holds only itself too. A change to a
   `lean-audit.json` lock or to Lean that runs as code (a `.lean` outside `Security/`) also waits for a `lean-audit` that
   passed at or above it; Lean proofs alone land on the verdict.
 - One run checks `checked`'s tip after each landing; when it passes every step on the merge gate (not circuit-check), drive fast-forwards `main` there. A red
@@ -147,5 +147,9 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   in its body what it deletes or unifies, or why nothing can go.
 - **Parked work gets done.** A lead starts each Backlog or Todo issue worth doing on its own worker and closes the rest
   with a reason. Being busy is no reason to park one. Set more goals, not fewer.
+- **An issue tracks an ask; only its outcome answers it.** Daniel's asks carry `asker:daniel`, have a worker within the
+  hour, and only he parks them (the coordinating skill); the Linear audit rings each that breaks this, hourly, with @top.
+  A hand operation done twice, and each incident, gets a class-fix issue filed `--asker daniel` (his standing ask) with
+  a worker that hour: the lead builds or staffs the fix rather than repeating the operation.
 - **A ruling rolls out in the change that records it**, as AGENTS.md says; when code must change first, the ruling's
   relay names the owner and the PR that changes the docs with it.
