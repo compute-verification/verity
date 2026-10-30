@@ -3035,11 +3035,11 @@ class Driver:
             from .merge import SWEEP_LIMIT, sweep_branches
 
             with authed(q.auth):
-                deleted, archived = sweep_branches(self.repo, "origin", log=q.log, keep=drive.get("stale_closed", {}))
+                deleted, archived = sweep_branches(self.repo, "origin", into=q.into, log=q.log, keep=drive.get("stale_closed", {}))
             more = SWEEP_LIMIT in (deleted, archived)
             if not more:
                 drive["branches_swept"] = self.now()
-            q.log(f"research queue drive: branch sweep: {deleted} deleted (on main), {archived} archived (unmerged, idle)"
+            q.log(f"research queue drive: branch sweep: {deleted} deleted (on {q.into}), {archived} archived (unmerged, idle)"
                   + (f"; at its limit of {SWEEP_LIMIT}, so the next tick sweeps again" if more else ""))
 
     # -- what only a PR's owner acts on: a stale PR, a stacked PR whose base landed
