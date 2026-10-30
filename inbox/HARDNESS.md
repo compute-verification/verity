@@ -205,3 +205,10 @@ Everything else is engineering on parts we have.
    under today's egress-only certifier. The lead shares this.
 6. **Fleet format:** int8 is 1.4–3.4% of FP8's rate on B300 and Rubin. A credit in int8 units covers almost nothing of
    those chips, so an FP8 or FP4 analogue of A-LSB is required beyond Hopper.
+
+## Daniel's rulings (30 Oct 4:41 PM PDT)
+
+- **Public randomness:** a public random matrix or set of low bits drawn from a live coin after registration is fine.
+  It is a verifier draw, and so public under "everything zero-knowledge".
+- **GPUs:** "Surely we have GPUs. You can just use them." The node and budget line are asked of infra on INF-393: an
+  8-GPU node for about 48 h, about $700.
