@@ -50,14 +50,14 @@ theorem verify_W (s : State) (c a : Array ByteArray) (t : Int) (o : Array Openin
   unfold verify State.fail
   simp only [Id.run, live_W, record_W]
   repeat' (split <;> try dsimp only)
-  all_goals try rfl
+  all_goals first | rfl | (simp only [*, ↓reduceIte]; rfl)
 
 theorem verifyBy_W (s : State) (c a : Array ByteArray) (t : Int) (f : Array (Nat × Nat) → Verdict) :
     verifyBy (W c a s) t f = ((verifyBy s t f).1, W c a (verifyBy s t f).2) := by
   unfold verifyBy State.fail
   simp only [Id.run, live_W]
   repeat' (split <;> try dsimp only)
-  all_goals try rfl
+  all_goals first | rfl | (simp only [*, ↓reduceIte]; rfl)
 
 theorem release_W (s : State) (c a : Array ByteArray) (runs withdrawn : Array (Int × Int)) :
     release (W c a s) runs withdrawn = ((release s runs withdrawn).1, W c a (release s runs withdrawn).2) := by
