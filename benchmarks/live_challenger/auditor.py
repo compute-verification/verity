@@ -188,10 +188,10 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   token ids each, at most the scan's KI of 1024 and below 2^17, its IDB), writes them to `witness/prompts.json` alone (the request records their
   count and ids), and `rehearse --prompts` sends request j the (j mod n)-th of the n with exactly `--tokens`
   (`WARDEN_PROMPT_TOKENS`, the scan's 64 by default), `--requests` (`WARDEN_PROMPT_REQUESTS`) the prompts' count by
-  default. `--scan-class CLASS` (with `--prompts`, recorded and passed on only when given) runs the warden at that
-  class's schedule instead (`SCAN_CLASSES`, `scan_schedule`: w63k4, the window circuit's 4,32,4, at 5 egress cells),
+  default. `--scan-class CLASS` (with `--prompts`, recorded and passed on only when given) runs the network certifier
+  at that class's schedule instead (`SCAN_CLASSES`, `scan_schedule`: w63k4, the window circuit's 4,32,4, at 5 egress cells),
   with its prompts of at most its KI ids (32) and `--tokens` at most its egress cells less the trailer (4)
-  (`scan_bounds`), the warden run `scan_zk.py prove --class CLASS --warden-run` reads. `--window-per-group` (at most
+  (`scan_bounds`), the network certifier's run `scan_zk.py prove --class CLASS --warden-run` reads. `--window-per-group` (at most
   the scan's 4 lanes of prompts) sends them a group at a time, group g's half a bucket into link-window g·G
   (G = `scan_group_windows` of the tokens), so that group g's cells are exactly windows g·G … (g+1)·G − 1, which
   `out/groups.json` publishes, and `--minutes` must cover `warden_group_minutes` of its groups. The demo's stand-in (`benchmarks/network_traces/demo_stub.py`) serves the demo's class, prompts of exactly 8

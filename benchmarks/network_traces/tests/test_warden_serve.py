@@ -176,7 +176,7 @@ def test_the_gates_scan_rehearsal_is_rehearse_ids_at_scan_zks_schedule_and_its_l
 
 def test_each_scan_class_the_gate_takes_is_scan_zks_setup_of_its_name_at_its_schedule_ki_and_ko(tmp_path, capsys):
     """Each class `warden-rehearse --scan --prompts --scan-class` takes (`auditor.SCAN_CLASSES`, the class of record
-    `scan_zk.W63`'s by default) is `scan_zk.SETUPS`' of its name: the gate's warden runs at its schedule (`scan_zk.py
+    `scan_zk.W63`'s by default) is `scan_zk.SETUPS`' of its name: the gate's network certifier runs at its schedule (`scan_zk.py
     schedule --class`, the one `scan_zk.py prove --class --warden-run` refuses any other of), which its class serves
     and which is the class of record's but for its egress cells, so the gate's group windows hold at it; and the gate
     bounds a prompt by its KI and the tokens by its KO. w63k4's class refuses the class of record's schedule (65
