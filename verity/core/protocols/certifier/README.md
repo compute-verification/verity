@@ -55,7 +55,7 @@ D jitter classes, Σ_sync the public clock-sync set and A_c the content advice:
 | A sampled audit at δ | `c + log2 #(faulty sets) + Σ_{v faulty} committed bits + n·log2 D` bits, except with probability δ + ε_ks + ε_bind | `EncardAccSeqsSampledLe`, for a layout that fits the circuit (`Layout.Fits`); with `SampledAuditAccepted`, `SampledLeakAccepted` |
 | The relay | `log2 #schedules + Σ_c log2(cells_c + 1)` bits besides the data | `WardenViewEqClientView`, `EncardWardenViewsLe`; for a decoder of the client's view under `trusted-host` and `BitsCount`, `EncardWardenDecodableLe` |
 | Ingress | `log2(r_in + 1)` bits a tick per link under J (D = 1), statuses complete; content adds `log2 #Cs` | `EncardIngressDecodableLe`, `EncardIngressObsDecodableLe`, `EncardIngressObsDecodableLePerWindow`; with content, `EncardIngressDecodableLeContents`, `EncardIngressObsDecodableLeContents`, `EncardIngressObsDecodableLeContentsPerWindow` |
-| A certification period | the leak of its accepted execution phases | `PeriodLeakAccepted`; across execution phases, `HorizonWrongUnitsLe` and `HorizonLeakAccepted` |
+| A monitoring period of accepted sampled audits | each execution phase's leak relation fails with probability at most δ + ε_ks + ε_bind + Pr[B_tap], and the secrets a decoder recovers count the schedules, each connection's cells and each execution phase's free inputs, faulty sets, committed bits and jitter; at most ln(1/δ)/q faulty proof blocks pass, except with probability δ + Σ ε | `PeriodLeakAccepted`, `HorizonWrongUnitsLe`; given its two per-execution-phase inputs, not yet discharged, `HorizonLeakAccepted` |
 
 Every bound holds on accepted runs only. A refused execution phase may already have carried up to its unbound capacity,
 about 8·T·r·B bits (`capacity.unbound_bits`); `capacity` computes each bound.
@@ -169,8 +169,9 @@ Servers and their transfers:
   registered value under the network certifier's own salts, its root in a head it signs (`TransferHead`);
   `check_registration` and `port` are the verifier's read of it.
 - **The blocks** (`blocks`, `verity/blocks/v1`): the proof blocks each server runs and its transfer gates. `check`
-  refuses blocks whose servers don't partition the circuit, a boundary row no transfer brings, an unpaired wire, and an
-  inference block on two servers: a server's ingress and egress carry only its inference blocks' inputs and outputs.
+  refuses blocks whose servers don't partition the proof blocks, a boundary row no transfer brings, an unpaired wire,
+  and an inference block on two servers: a server's ingress and egress carry only its inference blocks' inputs and
+  outputs.
   Which server runs which proof blocks is protocol structure, public and checked in the clear.
 
 The proxy:
