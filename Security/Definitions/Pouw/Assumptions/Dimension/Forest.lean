@@ -19,9 +19,8 @@ free values, `F₁`-functions free.
 * **The grid** (`GridTwoAtom`): under checkpoint independence and MinRank ≥ 5, the non-final checked words modulo
   `V₀` (`wordsQ`) contain no nonzero sum of two atoms. The four-point mixed difference of an atom is a rank ≤ 2
   matrix, so two atoms give rank ≤ 4, and MinRank ≥ 5 exhibits a nonsingular 5 × 5 minor.
-* Together: `A1_cost_quad 2 0` for every `k` and `R` (`A1CostQuadHolds`), Theorem D's `16·D` for the quadratic
-  closed pipe at `c_s = 8` (`AlgBoundQuad8`), and TT_NCP from A2 alone into the quadratic pipe (`TTNCPQuadOfA2`).
-  The open part of `A1_cost(2, 0)` is `A1_nonquad` (`A1CostOfNonquad`).
+* Together: `A1_cost_quad 2 0` for every `k` and `R` (`A1CostQuadHolds`) and Theorem D's `16·D` for the quadratic
+  closed pipe at `c_s = 8` (`AlgBoundQuad8`). The open part of `A1_cost(2, 0)` is `A1_nonquad` (`A1CostOfNonquad`).
 -/
 
 namespace Pouw.Dimension.Forest
@@ -96,43 +95,6 @@ def AlgBoundQuad8 : Prop :=
     CheckpointIndependent k 16 R → MinRankGe k R 5 → U ⊆ range N → (∀ f ∈ L, f ∈ V0 N m n k) →
     QuadPipe 8 P → Outputs k m n N R A B U P L →
     16 * (U.card * (m * n) * (3 * k / 16 - 1)) ≤ cost P
-
-/-- **TT_NCP from A2 alone, into the quadratic closed pipe**: `TTNCPOfQuadA2` with its `A1_cost_quad` hypothesis
-discharged (`γ₁ = 0`). If a machine satisfies `A2(γ₂)` into `QuadPipe 8`, `R` is checkpoint independent with
-MinRank ≥ 5, one of the machine's programs outputs the non-final checked words of the units in `U`, and
-`1 − γ₀ ≤ (1 − γ₂)·(1 − 16/(3k))`, then TT_NCP's event fails for that program. For a real machine, A2 into
-`QuadPipe 8` claims two things: its programs cannot beat the closed pipe on the words, and merges do not help, which
-asks `A1_nonquad`'s question in program-matching form. Neither that A2 nor `A1_nonquad` implies the other. -/
-def TTNCPQuadOfA2 : Prop :=
-  ∀ (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ)
-    (M : Machine (Noise N m n k)) (q : M.Prog) (γ₀ γ₂ : ℝ), 16 ∣ k → 0 < k →
-    CheckpointIndependent k 16 R → MinRankGe k R 5 → U ⊆ range N →
-    A2_algebraicSufficiency γ₂ M (QuadPipe 8) (wordSet (word k m n N R A B) U) →
-    (∀ u ∈ U, ∀ p < nonFinal k m n, word k m n N R A B u p ∈ M.outputs q) →
-    γ₂ < 1 → γ₀ < 1 → 1 - γ₀ ≤ (1 - γ₂) * (1 - 16 / (3 * k : ℝ)) →
-    ¬ (M.cost q / (1 - γ₀) < ∑ _u ∈ U, 3 * ((m * k * n : ℕ) : ℝ))
-
-/-- **`TTNCPQuadOfA2`'s hypotheses hold together**: for every `k ≥ 1024` with `16 ∣ k`, every shape, `A = g(F₁)`,
-`B` and unit set, one `R` and one program of `quadMachine` satisfy all of them at `γ₂ = 0` and `γ₀ = 1/2`. -/
-def QuadChainConsistent : Prop :=
-  ∀ k, 1024 ≤ k → 16 ∣ k → ∀ (m n N : ℕ) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ),
-    U ⊆ range N → ∃ R : Mat, CheckpointIndependent k 16 R ∧ MinRankGe k R 5 ∧
-      A2_algebraicSufficiency 0 (quadMachine N m n k 8) (QuadPipe 8) (wordSet (word k m n N R A B) U) ∧
-      (∃ q : (quadMachine N m n k 8).Prog,
-        ∀ u ∈ U, ∀ p < nonFinal k m n, word k m n N R A B u p ∈ (quadMachine N m n k 8).outputs q) ∧
-      1 - (1 / 2 : ℝ) ≤ (1 - 0) * (1 - 16 / (3 * k : ℝ))
-
-/-- **`TTNCPQuadOfA2`'s hypotheses hold together at the tight constant**: `QuadChainConsistent` at
-`γ₂ = 0` and `γ₀ = 16/(3k)`, where the arithmetic hypothesis holds with equality. In the model the chain loses only
-the first checkpoint of each column. -/
-def QuadChainConsistentTight : Prop :=
-  ∀ k, 1024 ≤ k → 16 ∣ k → ∀ (m n N : ℕ) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ),
-    U ⊆ range N → ∃ R : Mat, CheckpointIndependent k 16 R ∧ MinRankGe k R 5 ∧
-      A2_algebraicSufficiency 0 (quadMachine N m n k 8) (QuadPipe 8) (wordSet (word k m n N R A B) U) ∧
-      (∃ q : (quadMachine N m n k 8).Prog,
-        ∀ u ∈ U, ∀ p < nonFinal k m n, word k m n N R A B u p ∈ (quadMachine N m n k 8).outputs q) ∧
-      (0 : ℝ) < 1 ∧ 16 / (3 * k : ℝ) < 1 ∧
-      1 - 16 / (3 * k : ℝ) = (1 - 0) * (1 - 16 / (3 * k : ℝ))
 
 /-! ## Theorem 1 for any word family (route U: `wordU = word + an element of V₀`) -/
 
