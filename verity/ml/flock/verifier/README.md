@@ -103,14 +103,18 @@ names its part (`rec_part`) and the SHA-512 of the shared rows file it checked (
 it read (`rec_inner_sha512`), and of the inner session's record and its transcript (`rec_inner_session_sha512`,
 `rec_inner_transcript_sha512`). `rec-compose` (`Flock.RecCompose.check`) accepts only when there is one log per V*
 statement and every part is accepted at the one rows file the prover staged (`acc0`, the tops, the `rec-c<k>` rows), at
-the composition's own inner shape file, and at the one inner session and transcript the first part names.
+the composition's own inner shape file, and at the one inner session and transcript the first part names. The pod's Lean
+step (`85-rec-reprice.sh`, `lean_verdicts.py --compose`) gives every part those files.
 
 `ID` names a statement version (`Flock.Tags`): `verity/flock-circuit`, the default, whose rows are `hm96-sha512/row/v1`
 leaves and whose outputs are all hidden rows; `verity/flock-circuit/types`, the typed statement;
 `verity/flock-circuit/tmpl`, the templated statement, parsed and refused; `verity/flock-circuit+plain-leaves`, a recursive
 session's inner statement, checked without `--zk`; `+seed-injection` on any of them, as the prover's selftest build pins
 it. The names pinned at older commits (`verity/flock-circuit@<commit>`, back to `verity/flock-netlist/v1`) are still
-parsed, so recorded sessions keep their names, and each one before hm96-sha512 rows is refused for its form.
+parsed, so recorded sessions keep their names, and each one before hm96-sha512 rows is refused for its form. Those with
+keyed-BLAKE3 row leaves and SHA-256 trees (`@19c7269a`, `@fd02e847`, `@631567f7` and `verity/flock-netlist/v1`) need
+`--comp`, the BLAKE3 compression circuit, and the verifier and `hash-test` carry BLAKE3 for them alone. The pure-block and
+IR-frame statements are not in the Lean verifier.
 
 The other `flock-verify` subcommands run one part on its own: `field-test`, `hash-test`, `merkle-test`, `hm96-test` (on
 `verity/ml/commitments/hm96/vectors.json`) and `comp-check` (`Flock.Comp`'s checks); `draw` and `draw-test` (the unit
@@ -137,7 +141,8 @@ python agree.py --lean flock-verify --upstream flock-circuit [--statement ID] --
 ~~~
 
 `agree.py` writes `agreement.tsv` and `result.json`, and exits 1 if the verifiers disagree, or miss an expected verdict,
-on any session. A disagreement is resolved against the paper and the Lean, never by copying upstream. Each version's
+on any session. `--jobs J` deals each public file's sessions into chunks run by `J` process pairs, with the same
+output. A disagreement is resolved against the paper and the Lean, never by copying upstream. Each version's
 vectors patch (`netlist-vectors.patch`, `circuit-vectors*.patch`) applies to the prover commit it names and adds
 `vectors`, `export-comp` and `replay --sessions DIR...` to upstream's binary; build inside upstream `b684b12` with the
 patches applied (`cargo build --release -p flock-live --bin <binary>`). The statements no pinned upstream build has
@@ -152,8 +157,8 @@ sampling design or missing sample alone as accepted.
 |---|---|
 | D1 | `root_F ≠ Σ` |
 | D2 | a stream other than the configured rep streams |
-| D3 | `link.sigma ≠ Σ` |
-| D4 | retained round bytes that don't hash to the round's digest |
+| D3 | `link.sigma ≠ Σ`; upstream refuses it too from `b3baabd8` |
+| D4 | retained round bytes that don't hash to the round's digest; upstream refuses them too from `631567f7` |
 | D5 | a row that doesn't open its registered root, or a port named twice under `--registered` |
 | D6 | a malformed `--zk` `coin_tree` |
 | D7 | `sha512x3` or `hm96` nets other than the verifier's |
