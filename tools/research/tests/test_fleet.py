@@ -183,7 +183,7 @@ def test_a_running_vm_unread_ten_minutes_is_alerted_once_with_its_serial_tail_an
     assert F.watch_unreachable([row], t0 + 600, lambda a, t: sent.append(t), tail) == ["vy-nebius-cpu-9"]
     assert F.watch_unreachable([row], t0 + 900, lambda a, t: sent.append(t), tail) == [], "alerted once"
     (text,) = sent
-    assert "soft lockup - CPU#77" in text and "since " + F.utc(t0) in text and "`--on auto` skips it" in text and tails == ["computeinstance-x"]
+    assert "soft lockup - CPU#77" in text and "since " + F.utc(t0) in text and "marked `unreachable_since`" in text and tails == ["computeinstance-x"]
     assert F.registry()["vy-nebius-cpu-9"]["unreachable_since"] == F.utc(t0)
     F.watch_unreachable([{**row, "read": True}], t0 + 1200, lambda a, t: sent.append(t), tail)
     assert "unreachable_since" not in F.registry()["vy-nebius-cpu-9"] and len(synced) == 2

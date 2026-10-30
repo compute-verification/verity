@@ -22,7 +22,7 @@ Nebius calls go through pods/nebius/common.sh's `nebius_auth`, the way launch.sh
 
 A RUNNING VM that no sample has read for `UNREACH_S` (a soft lockup, a full disk, sshd refusing) is alerted on once in
 #agent-alerts with its serial console's tail, any kernel trouble in it named, and is marked `unreachable_since` in its registry
-entry, which keeps `research run --on auto` off it until a sample reads it again.
+entry until a sample reads it again.
 
 The lane whose budget line pays for a node stops it when its work there ends; infra's idle stop is only a backstop
 (the lane contract, §3c). So the daily post rings each machine's owning lane (its registry entry's `lane`, infra when
@@ -55,7 +55,7 @@ BUSY_PCT, IDLE_LOAD_SHARE, QUOTA_ALERT = 5, 0.1, 0.8
 IDLE_MEM_SHARE = 0.15
 STATUS_THREAD = "1791351683.780959"
 #: a RUNNING VM with a registered host that no sample has read this long is unreachable: one alert with its serial log's tail,
-#: and its registry entry's `unreachable_since` keeps `--on auto` off it (research.auto) until a sample reads it again
+#: and its registry entry's `unreachable_since` until a sample reads it again
 UNREACH_S, SERIAL_LINES = 600, 40
 KERNEL_TROUBLE = re.compile(r"soft lockup|hung_task|blocked for more than|out of memory|oom-kill|watchdog: BUG|"
                             r"rcu_sched self-detected|kernel panic", re.I)
@@ -204,7 +204,7 @@ def watch_unreachable(rows: list[dict], now: float, send: Callable[[list[str], s
             changed.append(name)
         send(["--channel", "agent-alerts", "--kind", "alert"],
              f"{name} is RUNNING in Nebius but hasn't answered ssh since {utc(s['since'])} ({int((now - s['since']) // 60)} min); "
-             "`--on auto` skips it until a sample reads it again. "
+             "it is marked `unreachable_since` in its registry entry until a sample reads it again. "
              + (f"Kernel trouble in its serial log: {' | '.join(trouble[-3:])[:600]}. " if trouble else "")
              + f"If it stays down, restart it (`nb compute instance stop` then `start --id {r['id']}`; fix a passed "
              f"/etc/research/deadline first, or the boot stops it again). Serial log tail:\n```\n"
