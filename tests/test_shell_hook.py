@@ -401,3 +401,30 @@ def test_a_push_that_would_update_main_or_next_and_a_config_that_prints_tokens_a
         assert out["permission"] == "deny" and "url.*.insteadof's name" in out["agent_message"], command
     for command in ("git config user.name", "git config user.name t", "git config --get remote.origin.fetch"):
         assert ask(command)["permission"] == "allow", command
+
+
+def test_a_merge_on_a_vm_that_never_ran_boot_sh_first_gets_the_record_merge_drivers(tmp_path):
+    """A cloud worker's VM never runs boot.sh, so its trial `git merge-tree` of a PR onto `next` merged each lean-audit.json
+    line by line and showed 359 conflicts the queue never saw."""
+    ws = tmp_path / "ws"
+    clone_py = ws / "tools/research/src/research/clone.py"
+    clone_py.parent.mkdir(parents=True)
+    clone_py.write_text('RECORD_DRIVER = {"merge.lean-audit.name": "n", "merge.lean-audit.driver": "python3 m.py %O %A %B %P"}\n')
+    subprocess.run(["git", "init", "-q", str(ws)], check=True, env={**os.environ, **GIT_ENV})
+
+    def ask(command: str) -> str:
+        out = subprocess.run([sys.executable, HOOK], input=json.dumps({"hook_event_name": "beforeShellExecution",
+                                                                         "command": command, "cwd": str(ws)}),
+                             capture_output=True, text=True, env={**os.environ, **GIT_ENV, "AGENT_GUARD_MIN_AVAIL": "0"},
+                             check=True).stdout
+        return json.loads(out)["permission"]
+
+    def driver() -> str:
+        return subprocess.run(["git", "-C", str(ws), "config", "--get", "merge.lean-audit.driver"], capture_output=True,
+                              text=True, env={**os.environ, **GIT_ENV}).stdout.strip()
+
+    assert ask("git status") == "allow" and driver() == "", "only a merge sets them"
+    assert ask("git merge-tree --write-tree --name-only origin/next FETCH_HEAD") == "allow"
+    assert driver() == "python3 m.py %O %A %B %P"
+    subprocess.run(["git", "-C", str(ws), "config", "merge.lean-audit.driver", "mine"], check=True, env={**os.environ, **GIT_ENV})
+    assert ask("git merge origin/main") == "allow" and driver() == "mine", "a driver already set is left as it is"

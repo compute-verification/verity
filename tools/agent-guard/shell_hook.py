@@ -36,6 +36,11 @@ allowed command is refused once, with the message as the refusal's text, which i
 keeps the message queued, and the delivered text is appended to `<conversation_id>.delivered`. Messages pushed from other
 VMs reach the inbox through `inbox.py pull`, which the hook starts in the background, detached, at most every
 $AGENT_INBOX_POLL_S seconds per agent (default 30; `off` stops it), so the hook itself never waits on the network.
+
+Before an allowed `git merge` or `git merge-tree`, it sets the repository's merge drivers (`.gitattributes` names them; git keeps
+them only in a clone's config) from the checkout's own `research.clone.RECORD_DRIVER` when lean-audit's is unset, as boot.sh and
+every run clone do. A VM that never ran boot.sh (a cloud worker's) otherwise merges each lean-audit.json line by line and shows
+conflicts the queue never sees: 359 in one trial merge of a PR onto `next`.
 """
 import json
 import math
@@ -449,6 +454,31 @@ def poll(conversation: str, repo: str) -> bool:
     return True
 
 
+MERGE = re.compile(r"\bgit\b.*\bmerge(-tree)?\b")
+CLONE_PY = "tools/research/src/research/clone.py"
+
+
+def merge_drivers(command: str, cwd: str) -> None:
+    """Set the record merge drivers in ``cwd``'s repository before a merge there, when lean-audit's is unset (module doc)."""
+    if not MERGE.search(command):
+        return
+    import importlib.util
+    import subprocess
+
+    def git(*args: str) -> str:
+        return subprocess.run(["git", "-C", cwd, *args], capture_output=True, text=True, timeout=3).stdout.strip()
+
+    if git("config", "--get", "merge.lean-audit.driver") or not (top := git("rev-parse", "--show-toplevel")):
+        return
+    spec = importlib.util.spec_from_file_location("agent_guard_clone", os.path.join(top, CLONE_PY))
+    if spec is None or spec.loader is None:
+        return
+    clone = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(clone)
+    for k, v in clone.RECORD_DRIVER.items():
+        git("config", k, v)
+
+
 def main() -> int:
     raw = sys.stdin.read()
     try:
@@ -489,6 +519,10 @@ def main() -> int:
             message = delivery(conversation)
         except Exception:                               # an unreadable inbox must not block the agent's command
             message = None
+        try:
+            merge_drivers(command, cwd)
+        except Exception as e:                          # nor a merge driver git couldn't set
+            print(f"shell_hook: merge drivers not set in {cwd}: {type(e).__name__}: {e}", file=sys.stderr)
         if message:
             note = ("MESSAGE FROM YOUR COORDINATOR, delivered by the shell hook (tools/agent-guard/inbox.py). This command was "
                     "refused only to deliver it: nothing is wrong with it, so re-run it exactly as it was, then act on the "
