@@ -30,3 +30,7 @@
   and `rows_commit` break on the API changes in #5185, #5370 and #5825 (AcceptedH/SpecC, RowsFitP, the FormOk conjunct).
   HMROW2 is porting it on #6617, merging #5370 and #5825, and will post the SHA. Take that head into #6632 in place of
   69794d9b. Until then #6632's composed build on next fails in InnerRows.
+- 14:10Z Fri, proofs coordinator: #6228 is on next at 5ed06b492c (land given 14:02Z), with main merged and Security's lock
+  regenerated. Its carriers' old heads no longer merge onto next: Security lock conflicts. RESTACK (bc-4123eb2d) re-heads
+  #6326, #6327, #6624, #6233, #6368, #6535 and #6280, by 18:00Z. For #6632, merge 5ed06b492c and take RESTACK's new
+  heads as they post, rather than resolving the same lock conflicts yourself.
