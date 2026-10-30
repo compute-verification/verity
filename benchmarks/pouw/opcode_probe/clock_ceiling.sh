@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# RT-CLOCK: the highest SM clock a prover with root reaches on one GPU (the P1 premise, "the run's clock <= the data
+# The highest SM clock a prover with root reaches on one GPU (the P1 premise, "the run's clock <= the data
 # sheet's f_max"). Builds and gates probes/power.cu outside the lease, then under one gpu-lease (clock_ceiling_lease.sh)
 # tries every clock and power knob the driver offers on the leased GPU only, each followed by host-timed launches
 # (power.cu --calib: clock64 cycles over the host's steady_clock, and over %globaltimer), sustains the clock kernels at
 # the settings that clock highest, and puts the node's settings back on exit. From a pushed commit:
 #
-#   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source <tree> --cwd source --custody-ttl 12h \
-#     --env GPU_LEASE_WHO=<lane> -- bash benchmarks/pouw/opcode_probe/clock_ceiling.sh
+#   research run --on vy-nebius-2 --project verity --source <tree> --cwd source --custody-ttl 12h \
+#     --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/opcode_probe/clock_ceiling.sh
 #
 # $OUT gets trials.jsonl (each knob's command, rc and output), states.jsonl (clocks.py state after each), calib.jsonl,
 # sustain.jsonl, smi_trace.csv, the nvidia-smi -q snapshots, restored.txt and ceiling.txt (eps1.py ceiling and clock).

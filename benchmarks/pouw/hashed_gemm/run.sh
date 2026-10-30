@@ -7,7 +7,7 @@
 # every level of every tree and sampled tiles' receipts by the repository's functions; only if all pass, lease 2 times
 # each linear's 8-call sequences (HG_ARMS) and ncu's issue and pipe counters at o_proj. Clocks are read, never set.
 #
-#   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=EGEMM \
+#   research run --on vy-nebius-2 --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
 #     -- bash benchmarks/pouw/hashed_gemm/run.sh
 set -uo pipefail
 export O=${OUT:?}
