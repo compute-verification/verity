@@ -445,8 +445,9 @@ def distinct_calls(graph_path: str | None, modules: str | None = None, definitio
                    exclude: re.Pattern | None = None) -> tuple[Any, dict[str, int], list[dict]]:
     """A served row's distinct Call Definitions, from its program graph (``vllm-program-graph/v1``): (a Program with one Call of
     each, the row's Call count of each by descriptor id, a provenance row per Definition). ``modules``: a module-path prefix
-    (``model.model.layers.0.``) to keep. Each Definition is bound from the registry and its v0 encoding's SHA-256 is checked
-    against the graph's ``definitions_index`` where the graph has it (every group's spec; attention's smallest and largest T).
+    (``model.model.layers.0.``) to keep. Each Definition is bound from the registry and its definition digest
+    (`codec.definition_digest`) is checked against the graph's ``definitions_index`` where the graph has it (every group's
+    spec; attention's smallest and largest T).
     A per-Call partition (``Q_word``, an owner function) cuts this Program's Calls exactly as the row's, so its classes are the
     row's and the row's unit counts are the per-Call counts times the Call counts. ``definitions`` ({descriptor id: Call count})
     adds Definitions without a graph (bound from the registry, no digest to check); ``exclude`` drops the ids it matches."""
