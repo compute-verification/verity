@@ -1256,6 +1256,47 @@ def test_admission_prefetches_the_marks_of_every_pr_it_will_ask_of(world):
     assert asked == [[(1, h1), (3, h3)]]
 
 
+def test_above_is_each_heads_rev_list_and_first_parent_line(world):
+    """`entries` reads what each head has above the base from one walk, not two `rev-list`s a PR."""
+    from research.queue import above
+
+    a = world.change({"a.txt": "1\n"})
+    b = world.change({"b.txt": "2\n"}, a)
+    c = world.change({"c.txt": "3\n"})
+    _git(world.dev, "checkout", "-q", "--detach", b)
+    _git(world.dev, "merge", "-q", "--no-edit", c)
+    m = _git(world.dev, "rev-parse", "HEAD")
+    d = world.change({"d.txt": "4\n"}, m)
+    main = _git(world.dev, "rev-parse", "origin/main")
+    heads = [a, b, c, m, d, main]
+    got = above(world.dev, "origin/main", heads)
+    for h in heads:
+        assert got[h] == (set(_git(world.dev, "rev-list", f"origin/main..{h}").split()),
+                          set(_git(world.dev, "rev-list", "--first-parent", f"origin/main..{h}").split())), h
+    assert got[d][1] == {d, m, b, a} and got[main] == (set(), set())
+
+
+def test_status_merges_each_head_onto_main_once_until_main_or_the_clones_head_moves(world, monkeypatch):
+    """A merge of an old head onto `main` takes about a second, and `status` merged every admitted PR not on `next` each call."""
+    import research.queue as Qm
+
+    world.gh.put(1, h1 := world.change({"a.txt": "1\n"}))
+    world.gh.put(2, h2 := world.change({"b.txt": "2\n"}))
+    merged: list[str] = []
+    real = Qm.conflicting_files
+    monkeypatch.setattr(Qm, "conflicting_files", lambda repo, base, head: merged.append(head) or real(repo, base, head))
+    q = world.queue()
+    assert {n: e.state for n, e in q.status().items()} == {1: "ready", 2: "ready"} and sorted(merged) == sorted([h1, h2])
+    merged.clear()
+    assert {n: e.state for n, e in q.status().items()} == {1: "ready", 2: "ready"} and merged == []
+    _git(world.dev, "push", "-q", "origin", f"{world.change({'a.txt': 'main\n'})}:refs/heads/main")
+    for again in (False, True):
+        merged.clear()
+        st = q.status()
+        assert st[1].state == "refused" and st[1].why.startswith("conflicts with `main` in a.txt") and st[2].state == "ready"
+        assert sorted(merged) == ([] if again else sorted([h1, h2]))
+
+
 def test_status_on_any_vm_applies_the_rules_cutoff_as_drive_does(world, monkeypatch, capsys):
     """`research queue status` on any VM, run without `--marked-after`, doesn't list as admitted old marks drive, with its
     cutoff, never takes.  The cutoff is `marked_after` in the rules on `main`, and a PR whose mark it ignores says so, so its
@@ -3186,7 +3227,27 @@ def test_a_gh_call_that_never_answers_fails_the_tick_instead_of_holding_it(monke
         Q.GitHub("o/r").open_prs()
     with pytest.raises(M.Refused, match=f"no answer in {M.GH_TIMEOUT_S} s"):
         M._gh_cli(Path("."), "pr", "view", "1")
-    assert asked == [Q.GH_TIMEOUT_S, M.GH_TIMEOUT_S]
+    assert set(asked[:-1]) == {Q.GH_TIMEOUT_S} and asked[-1] == M.GH_TIMEOUT_S       # the pages not yet asked for are cancelled
+
+
+def test_the_open_prs_are_read_a_wave_of_pages_at_a_time_until_one_isnt_full(monkeypatch):
+    """`gh api --paginate` read the ~10 pages one after another, seconds of every `research queue status`."""
+    import research.queue as Q
+
+    numbers = [*range(250, 150, -1), *range(151, 51, -1), *range(51, 0, -1)]       # 151 again: the listing shifted a page
+    asked: list[int] = []
+
+    def gh(argv, **kw):
+        page = int(re.search(r"&page=(\d+)$", argv[-1]).group(1))
+        asked.append(page)
+        rows = [{"number": n, "head": {"sha": f"{n:040x}", "ref": f"b{n}"}, "body": "Lane `ci`."}
+                for n in numbers[(page - 1) * Q.GH_PER_PAGE:page * Q.GH_PER_PAGE]]
+        return subprocess.CompletedProcess(argv, 0, json.dumps(rows), "")
+
+    monkeypatch.setattr(subprocess, "run", gh)
+    monkeypatch.setattr(Q, "GH_PAGES", 2)
+    assert [p.number for p in Q.GitHub("o/r").open_prs()] == list(range(250, 0, -1))
+    assert sorted(asked) == [1, 2, 3, 4]
 
 
 def test_handle_reads_mains_registry_once_per_fetch(world, monkeypatch):
