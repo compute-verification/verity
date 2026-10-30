@@ -13,7 +13,7 @@ cryptography's advantage:
   Its δ is `p / ε'` with `p = δ_s + δ_bind + δ_ks` per window, by Markov over every window at once: `ε'` is the share
   whose certificates may be wrong, and `δ` the chance more are.
 * `Detection`, sampled proofs with terminal detection: their slack is `break` (the verdict lag `JΔ/H` and, sampled,
-  the incorrect blocks accepted before detection `θ`) and `exfil.faulty`, Lean's `χ` (the compute that bits injected by
+  the incorrect blocks accepted before detection `θ`) and `exfil.incorrect`, Lean's `χ` (the compute that bits injected by
   accepted incorrect blocks buy, at `chord` products a bit; not double counting, §8 "Channels"). Its δ is the escape
   bound's.
 * `Wipe`: at each wipe a server keeps at most `k_wipe` bits of the earlier content of its whole memory `M_s` (`per =
@@ -199,7 +199,7 @@ class Detection:
         cheat = self.cheat if self.cheat is not None else (
             u.gates(2 * self.chord * self.injected() / self.chord_kappa) / c if self.sampled else 0.0)
         if cheat:
-            out["exfil.faulty"] = min(1.0, cheat)
+            out["exfil.incorrect"] = min(1.0, cheat)
         return out
 
     def delta(self, ctx: Context) -> tuple[float, float]:
