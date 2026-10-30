@@ -29,7 +29,8 @@ before any digest is taken.
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Callable, Mapping, Sequence
+import json
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any
 
@@ -69,9 +70,29 @@ class Refused(Exception):
         self.entry, self.name = entry, name
 
 
+def _strings(j: Any) -> Iterator[str]:
+    if type(j) is str:
+        yield j
+    elif isinstance(j, Mapping):
+        for k, v in j.items():
+            yield k
+            yield from _strings(v)
+    elif isinstance(j, (list, tuple)):
+        for v in j:
+            yield from _strings(v)
+
+
+def canon(obj: Any) -> bytes:
+    """`obj`'s canonical JSON as the Lean's `Flock.canon` writes it: `canonical`'s bytes, and past ASCII, where
+    `canonical` raises, its strings in UTF-8, so a log or parameters outside ASCII reach `ascii`'s refusal by name."""
+    if all(s.isascii() for s in _strings(obj)):
+        return canonical(obj)
+    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+
+
 def tagged(tag: str, obj: Any) -> str:
     """`SHA-512(tag ‖ 0 ‖ canon(obj))` as hex."""
-    return hashlib.sha512(tag.encode() + b"\0" + canonical(obj)).hexdigest()
+    return hashlib.sha512(tag.encode() + b"\0" + canon(obj)).hexdigest()
 
 
 @dataclass(frozen=True)
@@ -186,7 +207,7 @@ def chain(composite: str, bodies: Sequence[Hardware | Information]) -> list[Entr
 
 def committed(composite: str, log: Sequence[Entry]) -> bytes:
     """The log as committed: the canonical JSON the protocol's commitment is."""
-    return canonical({"composite": composite, "entries": [e.to_json() for e in log]})
+    return canon({"composite": composite, "entries": [e.to_json() for e in log]})
 
 
 # --- decoding: exactly what the encoders write ------------------------------------------------------------------------
@@ -286,8 +307,9 @@ def item_of(j: Any) -> dict[str, Any]:
 
 def ascii(j: Any, what: str) -> None:
     """Registration is ASCII-only: `j`'s canonical JSON holds no other character, so its digest is the same however a
-    canonical JSON escapes the rest."""
-    if not canonical(j).isascii():
+    canonical JSON escapes the rest. Its strings, keys included, are read before any canonical JSON is taken, since
+    `canonical` raises on what this refuses by name."""
+    if not all(s.isascii() for s in _strings(j)):
         raise Malformed(f"ascii: {what} holds a character outside ASCII")
 
 
