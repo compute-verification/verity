@@ -7,7 +7,7 @@
 
 The private circuit's gates and wiring are a value, a `Netlist`, that this Definition takes as input beside the data, so the
 unit's structure is a function of the size class (G, N_IN, N_OUT) alone. It is not how a private circuit is hidden: circuit
-hiding is recursion (C-Flock's ``--hide``).
+hiding is recursion (Flock's ``--hide``).
 
 **The private circuit's description** is in SSA form: wires 0 .. N_IN - 1 are the data inputs x, and wire N_IN + g is gate g's output. Gate g is
 ``(op, a, b)``; it reads wires a and b and computes

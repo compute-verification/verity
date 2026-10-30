@@ -1,6 +1,6 @@
 """The worked example: a two-party protocol the deployment layer's tests run every way it runs a protocol.
 
-The challenger draws a 32-byte nonce from its coins, reads its clock and sends it (`Challenge`, coins); the responder
+The challenger samples a 32-byte nonce from its coins, reads its clock and sends it (`Challenge`, coins); the responder
 must answer SHA-512 of it (`Answer`) before the challenger's deadline (`deadline_ns`, a `Timer`). The challenger reads
 its clock again on the answer, sends its verdict (`Verdict`, output) and finishes: refused `late` when its timer fires
 first, `wrong` for another answer, and by the wire's name for a frame it refuses. The responder finishes on the verdict.
@@ -119,7 +119,7 @@ class DyingResponder(Responder):
 
 
 class GreedyChallenger(Challenger):
-    """A challenger that draws 64 coins where the recorded one drew 32."""
+    """A challenger that samples 64 coins where the recorded one drew 32."""
 
     def start(self, params, identity):
         super().start(params, identity)
