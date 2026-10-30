@@ -4,7 +4,8 @@
 `verity/core/devices/certifier/lean/scripts/issuer_vectors.py` writes 160 LMS keys with calls to one issuer
 on each in a certifier session (its id 32 bytes, or 31 or 33, which the issuer refuses), and what this package's real
 `certificate.Issuer` does with them, its signer at the leaf the host reserves for each call (the parameters digest, the
-certified record or none, `verify` under the key and after a tamper, its certificate passed as a clock, and the
+certified record or none, none for every record whose status isn't complete, `verify` under the key and after a
+tamper, its certificate passed as a clock, and the
 issuer's `refused`), and clock calls on the same issuer (`Issuer.salted_clock`: the salted clock certificate or none,
 refused under a salt an earlier signed one took, `verify` under the key and after a tamper). `check` runs the Lean
 half in its Lean audit (`runs` in that package's `lean-audit.json`,
@@ -103,6 +104,10 @@ def test_the_generator_covers_what_it_says():
                 continue
             assert session == 32
             certified = r["certify"]["certified"]
+            if c["record"]["status"] is not None:
+                calls["status refused"] += 1
+                assert certified is None
+                continue
             if certified is None:
                 calls["leaf refused"] += 1
                 assert c["leaf"] is None
@@ -127,7 +132,8 @@ def test_the_generator_covers_what_it_says():
     assert {k for k, _ in malformed} == set(vectors.MALFORMED)
     for kind in vectors.MALFORMED:
         assert malformed[kind, True] > malformed[kind, False], kind
-    assert calls["record refused"] > 20 and calls["leaf refused"] > 20 and after_refusal > 5
+    assert calls["record refused"] > 20 and calls["leaf refused"] > 10 and calls["status refused"] > 20
+    assert after_refusal > 5
     for direction in ["egress", "ingress"]:
         for deadline in [True, False]:
             assert calls["certified", direction, False, deadline] > 0

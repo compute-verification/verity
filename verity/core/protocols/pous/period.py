@@ -365,9 +365,10 @@ def run(node: str, store: bytes, coins: bytes, *, signer: mc.Signer | None = Non
 
 
 def serve(exe: str | os.PathLike, cases: Sequence[Mapping[str, Any]], *args: str) -> list[dict[str, Any]]:
-    """`EXE [ARGS] serve` on `cases`, one canonical JSON line each: the Lean's answers (`Core.Protocol` CLI)."""
-    lines = "".join(canonical_json_bytes(dict(c)).decode() + "\n" for c in cases)
-    p = subprocess.run([str(exe), *args, "serve"], input=lines, capture_output=True, text=True, check=True)
+    """`EXE [ARGS] serve` on `cases`, one canonical JSON line each: the Lean's answers (`Core.Protocol` CLI). The lines go
+    as bytes, so a served case (gigabytes) is held once beside its own JSON, not again as text."""
+    lines = b"".join(canonical_json_bytes(dict(c)) + b"\n" for c in cases)
+    p = subprocess.run([str(exe), *args, "serve"], input=lines, capture_output=True, check=True)
     return [json.loads(x) for x in p.stdout.splitlines()]
 
 
