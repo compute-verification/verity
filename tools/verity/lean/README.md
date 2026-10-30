@@ -219,7 +219,7 @@ installs it first, so a machine without elan works), must pass clean and fail on
   module or of a module under `shape.premises` that a hypothesis mentions. `--update` writes each one's `digest`: its `reads`
   record's, else, wherever its module lies, that of it and every definition it reads in `meaning` and this repository's
   modules (`Facts.lean`'s `assumption_reads`). So a change to an assumption or to what it reads fails under its own name,
-  and Daniel's DM shows it; an entry no guarantee reads fails. A list of modules is the old form:
+  and the landing DM shows it; an entry no guarantee reads fails. A list of modules is the old form:
   it fails, and `--update` converts it into the definitions the guarantees read there, each owned by their owner.
 - `meaning` (default `roots`): the modules whose definitions a guarantee's meaning is followed through. What a
   statement is about (an executable, Mathlib) stays outside.
@@ -241,7 +241,7 @@ installs it first, so a machine without elan works), must pass clean and fail on
   with allowed axioms replaces it. A record written before guarantees were called that holds them (and each module's
   readers) under `pins`: the audit reads it so, `--update` rewrites it under today's names, and a record holding both
   is refused.
-- `owner`, in each guarantee's entry: the handle of the lane that answers for it (`@proofs`, `@compute-accounting`), whom
+- `owner`, in each guarantee's entry: the handle of the lane that answers for it (a handle of the registry), whom
   a broken or restated guarantee goes to. The audit fails an entry without one. Write it by hand, or pass
   `--update --owner @lane`, which gives it to the new entries only: `--update` keeps an entry's owner, and writes no
   entry without one. A changed owner is one line in the review and no change of the statement.
@@ -287,7 +287,7 @@ installs it first, so a machine without elan works), must pass clean and fail on
   package whose statements are about its executable, not about a model of it), as an object {prefix: the reason}; an
   entry that exempts no read outside the spec fails, and no entry covers a spec module outside `meaning`, nor a module of
   the proofs tree (the trees check judges those).
-- **The trees** (Daniel, 24 Oct): `trees` names which module prefixes are the definitions tree (what a reader reads:
+- **The trees**: `trees` names which module prefixes are the definitions tree (what a reader reads:
   each area's vocabulary, named assumptions and guarantee statements), the properties tree (statements about the code)
   and the proofs tree (every proof, lemma and proof-only definition); a module's tree is that of its longest prefix
   (`Proofs.Properties` before `Properties`), and a package's trees reach the packages that require it by path
@@ -298,7 +298,7 @@ installs it first, so a machine without elan works), must pass clean and fail on
   excepts nothing fails. `Security`'s `except` is the cleanup's to-do.
   The report also lists, without failing, the spec definitions that no guarantee reads, its own or a dependent
   package's (`unread_spec` in `report.json`).
-- **Heartbeat overrides are listed, never refused** (Daniel, 2026-10-09). Each `set_option maxHeartbeats N` (and
+- **Heartbeat overrides are listed, never refused.** Each `set_option maxHeartbeats N` (and
   `synthInstance.maxHeartbeats`) in a package's sources is in its report (`heartbeats` in `report.json`, and printed
   under its `AUDIT` line, so the nightly lists them): its file and line, its value, the reason beside it (a `--` comment
   ending its line, else the `--` comments just above), and the build time of its module in the audit's own build. Write
@@ -308,10 +308,10 @@ installs it first, so a machine without elan works), must pass clean and fail on
   literals) and drops what it drops (binder names and binder info, `let` names, metadata). A renamed hypothesis is
   therefore the same statement, and a different term is a different one. Records written with `Expr.hash`, which has
   32 bits, are still checked as they are, and the run notes them. `--update` rewrites them, and its review says
-  "rehashed" where the 32-bit hash still matches, which Daniel's DM (below) leaves out.
+  "rehashed" where the 32-bit hash still matches, which the landing DM (below) leaves out.
 
-**A changed guarantee reaches Daniel.** A weakened definition leaves every proof valid, so the axiom checks and the
-replay pass it: only the records see it, and only a person can judge it. (A redefinition of `Collision` once made a
+**A changed guarantee is shown when it lands.** A weakened definition leaves every proof valid, so the axiom checks and
+the replay pass it: only the records see it, and only a person can judge it. (A redefinition of `Collision` once made a
 Merkle binding guarantee vacuous for unsalted schemes; the records flagged it and a review caught it.) `--update` records
 the change and prints it: each changed guarantee's signature before and after, and each changed definition a guarantee
 reads, with the guarantees that read it and its source now (also in `review.txt` among the reports). Say so in the PR.
@@ -323,7 +323,7 @@ are is decided by code, not by text: every failure carries one (`check.py`'s `Fa
 `orphan.file`, its first part the check its text names first), `report.json` and `audit.json` list them beside the texts
 (`failure_codes`, and `settled_codes` for what `--regenerate` settled), and the record differences are the codes in
 `RECORD_DIFFERENCE`, so rewording a message changes nothing a train commits.
-When the change lands on `main` (`research merge --push`, or drive's landing), Daniel gets a DM with each new, removed
+When the change lands on `main` (`research merge --push`, or drive's landing), the landing DM lists each new, removed
 or changed guarantee and each changed definition (`research.spec_alert`); nobody approves it first. A guarantee whose
 statement is the same but prints differently (the same type hash and named assumptions, after a toolchain bump or a change
 of notation) gets one line, "printed differently", and is left out of the DM. Definitions are compared by name, so one
@@ -338,10 +338,10 @@ are, and in place of `G as` the value of `G` at the type's universe levels with 
 theorems) put back in place, as a theorem's type keeps them. Nothing else is reduced, and the text is hashed as every
 type is. A certified lift gets one line, "lifted into G: the same statement, its definition unfolded once", and `G`, new and
 read by no other guarantee, needs no reading of its own; the review then holds no statement change. (No merge needs a
-statement reviewer, for a lift or any other change: Daniel, 8 Oct.) Any other lift prints in full: a `G` whose value differs from `e` in anything the hash sees
+statement reviewer, for a lift or any other change.) Any other lift prints in full: a `G` whose value differs from `e` in anything the hash sees
 (binder names and metadata aside), a `G` outside a `Guarantees` module, and a lift that moves a named assumption from the
-theorem's binders into `G`, which the record's `assumptions` would lose. Daniel's DM reads only the records, so it still
-lists a lifted guarantee as changed.
+theorem's binders into `G`, which the record's `assumptions` would lose. The landing DM reads only the records, so it
+still lists a lifted guarantee as changed.
 
 `four_names` lists the namespace roots (`["Nci", "NetTiming"]`) whose guarantees are all in the four-name form: each is
 `X.SecurityProofs.G : X.Guarantees.G` (universe parameters aside), with `G` a definition of a `Guarantees` module, and the
@@ -369,8 +369,8 @@ are renamed, and `Facts.lean` writes each guarantee's statement and each definit
 mapped back to the old ones, a lifted statement also with its definition unfolded. The review compares those texts with the
 records of the old names: a guarantee that says what its record says gets one line, "the same statement under its old
 names" (moved from its old name, lifted as above, or both), and the definitions the same under their old names are counted
-on one line. Daniel's DM, which reads only the records, leaves out a guarantee renamed with its type hash unchanged and a
-definition moved with its content. Everything else prints as without the map. A map whose new names nest differently
+on one line. The landing DM, which reads only the records, leaves out a guarantee renamed with its type hash unchanged and
+a definition moved with its content. Everything else prints as without the map. A map whose new names nest differently
 from its old ones is refused, and so is one under which two constants of those texts (or two guarantees) would have one old
 name, since the comparison could not tell them apart; an old theorem kept under its old name as the lemma behind a new
 guarantee is no conflict.
