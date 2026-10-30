@@ -80,3 +80,32 @@ determined dynamically by the swarm." Background: Daniel's doc "Hardness trainin
 - Spend beyond existing budget lines goes to the coordinator, with a number, and from there to Daniel.
 - **Times:** preliminary notes by 00:00Z Sat (5 PM PDT), and the coordinator's synthesis to Daniel by 01:00Z
   (6 PM PDT). ML experiments may report a first signal by then and continue.
+
+## Addendum: does the training process need an assumption? (Daniel, 1:02 PM PDT)
+
+Daniel: "there would have to be some assumption about the training process... it would have to preserve the hardness
+injected by the randomness." The coordinator's answer, for HT-CLAIM to confirm or break:
+
+- **Something must preserve the hardness.** Either it is assumed of the training process (design C, heuristic), or the
+  circuit enforces it for every value of the trainable parameters (designs A and B), in which case it is a reduction,
+  not an assumption about training.
+- **The reduction for A:**
+  - Any algorithm that multiplies by W = R + UVᵀ yields one for R that costs only 2nr more a row: compute
+    ((x+E)V)Uᵀ and subtract it.
+  - This holds for every U, V, even ones chosen adversarially after seeing R. So P1-with-preprocessing covers
+    adaptively trained adapters, and training can do anything to U and V.
+  - It needs the circuit to keep the two terms exact and separate: no requantizing R + UVᵀ into int8 (rounding and
+    clipping would break it).
+- **Every extra knob training gets needs its own reduction.**
+  - Diagonal scalings D₁RD₂ with zero entries sparsify R.
+  - Output-side D₁ reduces exactly if its entries are nonzero, since the division is exact.
+  - Input-side D₂ changes R's distribution (column k is uniform on d_k·[−128, 127]), so P1 must hold for that class.
+  - Masks, norms and anything that zeroes parts of R need the same treatment.
+  - The circuit enforces nonzero entries in ZK, or the credited M counts only the nonzero part.
+- **Design B (a ball of radius ρ) needs more than A:** an assumption that no matrix within ρ of a random R has a fast
+  exact multiply.
+  - That's a rigidity-style statement. Random matrices are rigid w.h.p. for rank reduction (Valiant), but not
+    necessarily for every hardware-fast form (e.g. 2:4 sparsity: zeroing the two smallest of every four costs a
+    relative norm of roughly 0.35–0.45, unchecked).
+  - It's still about the ball, not about the training.
+- **What A costs instead: quality,** since training only gets rank-r freedom. That's HT-ML's question.
