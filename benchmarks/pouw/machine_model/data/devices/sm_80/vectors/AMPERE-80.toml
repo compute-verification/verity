@@ -1,4 +1,4 @@
-# Π on the A100: every row of EPS1 AMPERE's census (rows.csv). No price LP is solved on it, so it credits nothing.
+# Π on the A100: every row of the measured census (rows.csv). No price LP is solved on it, so it credits nothing.
 name = "AMPERE-80"
 epoch = "AMPERE-80"
 summary = "the A100 (sm_80) census: issue, the pipes, the operand loads, the tensor pipe of every mma.sync form and their joint issue row JIM"
