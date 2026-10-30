@@ -328,7 +328,10 @@ int ssn_lead_check_operands(int m, int N, int K, unsigned long long seed) {
   int bad = 0;
   for (size_t i = 0; i < ta.size(); i++) bad += ga[i] != ta[i];
   for (size_t i = 0; i < tb.size(); i++) bad += gb[i] != tb[i];
-  CK(cudaFree(dx)), CK(cudaFree(dw)), CK(cudaFree(dA)), CK(cudaFree(dB));
+  CK(cudaFree(dx));
+  CK(cudaFree(dw));
+  CK(cudaFree(dA));
+  CK(cudaFree(dB));
   return bad;
 }
 
