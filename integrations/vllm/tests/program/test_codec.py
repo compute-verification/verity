@@ -180,10 +180,10 @@ def test_duplicate_definition_objects_are_identity_checked_once_per_object(monke
 
     def decoded_dot(desc):                                                      # the DotConflict_v1 definition object of one decode
         root = decode_program(desc, REGISTRY).root
-        return next(n.fn for n in root.body.nodes if C._spec_id(n.fn) == "DotConflict_v1")
+        return next(n.fn for n in root.body.nodes if C.descriptor_id(n.fn) == "DotConflict_v1")
     r1, r2 = decoded_dot(desc_a), decoded_dot(desc_a)                            # two decodes: two objects, one id
     rid = "DotConflict_v1"
-    assert r1 is not r2 and C._spec_id(r1) == C._spec_id(r2) == rid
+    assert r1 is not r2 and C.descriptor_id(r1) == C.descriptor_id(r2) == rid
 
     def body(B, S, x, w):
         return array_of([B.call(r1, x, w)] + [B.call(r2, x, w) for _ in range(N)])
@@ -193,15 +193,15 @@ def test_duplicate_definition_objects_are_identity_checked_once_per_object(monke
     orig = C._encode_definition
 
     def counting(fn, *a, **k):
-        if not a and not k and C._spec_id(fn) == rid:                        # the identity check's self-contained (v0) encodes
-            v0_checks.append(C._spec_id(fn))
+        if not a and not k and C.descriptor_id(fn) == rid:                        # the identity check's self-contained (v0) encodes
+            v0_checks.append(C.descriptor_id(fn))
         return orig(fn, *a, **k)
     monkeypatch.setattr(C, "_encode_definition", counting)
     desc = encode_program(P)
     assert len(v0_checks) == 2, v0_checks                                    # one duplicate object -> one comparison (2 encodes), not N
     assert desc["definitions"][rid]["form"] == "composite"
     root_nodes = decode_program(desc, REGISTRY).root.body.nodes
-    assert sum(1 for n in root_nodes if n.form == "call" and C._spec_id(n.fn) == rid) == N + 1      # every call survived the dedup
+    assert sum(1 for n in root_nodes if n.form == "call" and C.descriptor_id(n.fn) == rid) == N + 1      # every call survived the dedup
     monkeypatch.setattr(C, "_encode_definition", orig)
     assert program_digest(desc) == program_digest(encode_program(P))          # deterministic; the dedup does not enter the descriptor
     # the same shape with a CONFLICTING re-decoded duplicate (same id, other body) is still refused
@@ -210,7 +210,7 @@ def test_duplicate_definition_objects_are_identity_checked_once_per_object(monke
     def body_conflict(B, S, x, w):
         return array_of([B.call(r1, x, w)] + [B.call(r3, x, w) for _ in range(N)])
     topc = CompositeDefinition("TopManyDupConflict", 1, (), lambda S: ((("x", A2), ("w", A2)), Array(N + 1, V16)), body_conflict, register=False)
-    assert r3 is not r1 and C._spec_id(r3) == rid
+    assert r3 is not r1 and C.descriptor_id(r3) == rid
     with pytest.raises(IdentityConflict, match="DotConflict"):
         encode_program(Program(bind(topc)))
 
