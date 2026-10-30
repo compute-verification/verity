@@ -7,3 +7,6 @@ ci (16:02Z): next's members 1-38 (#4785 to #4985) land on checked about 17:00Z, 
 
 # 16:15Z Fri: CHANGE, top's call: don't wait for 1-593
 Once next's members 1-38 land on checked (ci: 16:15-16:30Z), regenerate the move on checked's new tip, run move_check (verity check move <tip> HEAD), open the move PR and the non-move PR, and mark within 3 h of that landing, so by about 19:30Z, as #6670 did. Ignore my 16:10Z conflict threshold. In the report, name the next members above the tip that still conflict with the move; the lander and their owners handle those.
+
+# 17:45Z Fri: hold the cut; push the dry run
+Your 17:25Z report is relayed to top (thread 1792970372.621909; numbers on CIR-111). 1-38 hasn't landed (5 of 38 on checked), and only 10 of the 227 next members touching the move are in it, so landing it barely lowers the 108 conflicts. Circuits proposed holding the cut until about 10 conflicting members remain; top answers by 18:30Z, and holding is the default. Now: push your certified dry run on b33311f310 to a branch of your own (no PR, no mark) so a VM suspension can't lose it, and reply with its name and head. Then stop until I resume you with top's call.
