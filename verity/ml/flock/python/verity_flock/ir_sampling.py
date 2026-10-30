@@ -131,7 +131,7 @@ class Lane:
 
     V: int
     circuit: Circuit
-    layout: IL.Layout
+    layout: IL.LoweredUnit
 
     @property
     def name(self) -> str:

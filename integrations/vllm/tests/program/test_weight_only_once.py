@@ -13,7 +13,7 @@ import pytest
 import torch
 import torch.nn as nn
 
-from verity.ml.circuits.codec import _spec_id, program_digest
+from verity.ml.circuits.codec import descriptor_id, program_digest
 from verity.ml.circuits.refs import runs
 from verity_vllm.program.frontend.rules.vllm_bindings import clear_observations, observe_export_facts, observe_target_profile
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
@@ -62,7 +62,7 @@ def _specs(rep) -> list[str]:
 
 def _rows(rep) -> dict:
     return {"params": [[n, str(t)] for n, t in rep.program.fn.body.params],
-            "rows": [{"i": k, "spec": _spec_id(n.fn), "form": n.form, "name": n.name, "args": [[list(r) for r in runs(a.refs)] for a in n.args]}
+            "rows": [{"i": k, "spec": descriptor_id(n.fn), "form": n.form, "name": n.name, "args": [[list(r) for r in runs(a.refs)] for a in n.args]}
                      for k, n in enumerate(rep.program.fn.body.nodes)]}
 
 
@@ -114,7 +114,7 @@ def test_cross_call_finds_the_repeated_adds_only_per_forward():
     r = X.check_program(_rows(per), strict=False)
     (a,) = r["recomputes"]
     add = next(n.fn for n in per.program.fn.body.nodes if n.fn.id == ADD)
-    assert (a["definition"], a["level"], a["calls"]) == (_spec_id(add), "call", 2 * (FORWARDS - 1))
+    assert (a["definition"], a["level"], a["calls"]) == (descriptor_id(add), "call", 2 * (FORWARDS - 1))
     assert X.check_program(_rows(once))["ok"]
 
 
