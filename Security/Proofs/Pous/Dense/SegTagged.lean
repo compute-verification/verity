@@ -174,7 +174,7 @@ variable {X Y Z : Type} [Fintype X] [DecidableEq X] [Fintype Y] [DecidableEq Y] 
 
 /-- A program against the random oracle on `X`, run against the random oracle on `Y` by sending each query through
 `f`. -/
-def liftProg (f : X → Y) {α : Type} : Prog (IdealModel.randomOracle X Z) α → Prog (IdealModel.randomOracle Y Z) α
+def liftProg (f : X → Y) {α : Type} : OracleAlgorithm (IdealModel.randomOracle X Z) α → OracleAlgorithm (IdealModel.randomOracle Y Z) α
   | .ret a => .ret a
   | .round qs k => .round (qs.map f) fun as => liftProg f (k as)
 
@@ -183,7 +183,7 @@ theorem map_map_comp (f : X → Y) (H : Y → Z) (l : List X) :
     (l.map f).map (fun y => H y) = l.map (fun x => H (f x)) := by
   rw [List.map_map]; rfl
 
-theorem run_liftProg (f : X → Y) {α : Type} (H : Y → Z) (p : Prog (IdealModel.randomOracle X Z) α) :
+theorem run_liftProg (f : X → Y) {α : Type} (H : Y → Z) (p : OracleAlgorithm (IdealModel.randomOracle X Z) α) :
     (liftProg f p).run (fun y => H y) = p.run (fun x => H (f x)) := by
   induction p with
   | ret a => rfl
@@ -191,7 +191,7 @@ theorem run_liftProg (f : X → Y) {α : Type} (H : Y → Z) (p : Prog (IdealMod
     have hm := map_map_comp f H qs
     exact (congrArg (fun as => (liftProg f (k as)).run (fun y => H y)) hm).trans (ih _)
 
-theorem depth_liftProg (f : X → Y) {α : Type} (H : Y → Z) (p : Prog (IdealModel.randomOracle X Z) α) :
+theorem depth_liftProg (f : X → Y) {α : Type} (H : Y → Z) (p : OracleAlgorithm (IdealModel.randomOracle X Z) α) :
     (liftProg f p).depth (fun y => H y) = p.depth (fun x => H (f x)) := by
   induction p with
   | ret a => rfl
@@ -199,7 +199,7 @@ theorem depth_liftProg (f : X → Y) {α : Type} (H : Y → Z) (p : Prog (IdealM
     have hm := map_map_comp f H qs
     exact (congrArg (fun as => (liftProg f (k as)).depth (fun y => H y) + 1) hm).trans (congrArg (· + 1) (ih _))
 
-theorem work_liftProg (f : X → Y) {α : Type} (H : Y → Z) (p : Prog (IdealModel.randomOracle X Z) α) :
+theorem work_liftProg (f : X → Y) {α : Type} (H : Y → Z) (p : OracleAlgorithm (IdealModel.randomOracle X Z) α) :
     (liftProg f p).work (fun y => H y) = p.work (fun x => H (f x)) := by
   induction p with
   | ret a => rfl
@@ -208,7 +208,7 @@ theorem work_liftProg (f : X → Y) {α : Type} (H : Y → Z) (p : Prog (IdealMo
     have hl : ((qs : List X).map f).length = (qs : List X).length := List.length_map _
     exact congrArg₂ (· + ·) hl ((congrArg (fun as => (liftProg f (k as)).work (fun y => H y)) hm).trans (ih _))
 
-theorem bounded_liftProg (f : X → Y) {α : Type} {D Q : ℕ} {p : Prog (IdealModel.randomOracle X Z) α}
+theorem bounded_liftProg (f : X → Y) {α : Type} {D Q : ℕ} {p : OracleAlgorithm (IdealModel.randomOracle X Z) α}
     (h : p.Bounded D Q) : (liftProg f p).Bounded D Q := fun H => by
   have := h (fun x => H (f x))
   exact ⟨(depth_liftProg f H p).trans_le this.1, (work_liftProg f H p).trans_le this.2⟩
@@ -235,7 +235,7 @@ theorem pr_comp_injective {Γ : Type} [Fintype Γ] (f : X → Y) (hf : Function.
   convert h2 using 2
 
 theorem seqAnswers_liftProg (f : X → Y) (H : Y → Z) {ℓ S B : ℕ}
-    (step : ℕ → Bits S → Fin B → Prog (IdealModel.randomOracle X Z) (Bits ℓ × Bits S)) :
+    (step : ℕ → Bits S → Fin B → OracleAlgorithm (IdealModel.randomOracle X Z) (Bits ℓ × Bits S)) :
     ∀ j is σ, seqAnswers ((IdealModel.randomOracle Y Z).answer H) (fun j σ i => liftProg f (step j σ i)) j is σ =
       seqAnswers ((IdealModel.randomOracle X Z).answer fun x => H (f x)) step j is σ
   | _, [], _ => rfl
