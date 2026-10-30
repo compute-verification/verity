@@ -18,7 +18,8 @@
 #   tie      on the warden path, the I/O tie on the warden's ingress, proved (n2_tie_zk.py prove --class warden)
 #   report   $OUT/report/report.json and report.md (chain_record.py report)
 #   guard    on every exit, before custody publishes the run dir, the record's leak guard (leak_guard.py): each file in it
-#            holding a gate run's witness moved to the quarantine, the run refused by name (exit 3; $OUT/leak-guard.json)
+#            or in the hold holding a gate run's witness moved to the quarantine, the run refused by name (exit 3;
+#            $OUT/leak-guard.json), and the rest of the hold released to $OUT
 # CR_PATH=warden is the warden path: every step reads the active warden's own run (CR_WARDEN_RUN, or the one gate run
 # holding a certified.jsonl) and nothing of a certifier rehearsal's, which in CR_GATES is refused by name: certs
 # --warden-run, endpoint (chain_record.py endpoint, the advice bound to the certified I/O off the warden's cells),
@@ -60,9 +61,13 @@
 # state, a gate run's witness/ (custody uploads all of $OUT; a warden run's witness is its lane key's only) nor a
 # rehearsal's request values (plan.json's and probe.json's requests, io.json's certified I/O, out-witness.jsonl's rows).
 # Custody publishes the whole run dir once this exits (out/, the runner's logs, and undeclared files, inputs/ among
-# them), so none of it may hold the gates' witness: a gate sent under inputs/ is moved to the quarantine once unpacked,
-# and on every exit leak_guard.py moves out whatever else holds a piece of it. On a signal (a timeout's SIGTERM leaves
-# seconds, not a scan) or when the guard can't run, out/, inputs/ and the logs are withheld whole instead.
+# them), so none of it may hold the gates' witness. Every step writes to the hold, $Q/held (0700, outside the run dir),
+# and so does the job's own stdout and stderr (released as out/stdout.log), so nothing it writes reaches the record
+# before the guard has read it: on every exit leak_guard.py reads the run dir and the hold, moves what holds a piece of
+# the witness to the quarantine and only then releases the rest of the hold to out/. A gate sent under inputs/ is
+# moved to the quarantine once unpacked. On a signal (a timeout's SIGTERM leaves seconds, not a scan), past the guard's
+# budget or when it can't run, nothing is released, and out/, inputs/ and the runner's logs are withheld whole too; a
+# SIGKILL leaves the hold where it is, out of the record.
 set -uo pipefail
 export HZ_CONFIGS=chain HZ_MEM_GB=${CR_MEM_GB:?}
 CR_CACHE=${CR_CACHE:-/workspace/research/cache/pouw-hidden-zk}
@@ -76,24 +81,28 @@ CR=benchmarks/network_traces/chain_record.py
 G=$W/gates RUN=$RESEARCH_RUN_DIR SIGNALED=
 mkdir -p "$G"
 Q=${CR_QUARANTINE:-$(dirname "$(dirname "$RUN")")/quarantine/$(basename "$RUN")}
+PUB=$OUT
 withhold() {   # withhold WHY: out/, inputs/ and the logs moved to the quarantine whole, deleted if they can't be moved
-  log "chain: $1: out/, inputs/ and the logs withheld from the record (in $Q/files)"
+  echo "chain: $1: nothing released from $Q/held; out/, inputs/ and the logs withheld from the record (in $Q/files)"
   local f
   for f in out inputs stdout.log stderr.log; do
     [ -e "$RUN/$f" ] || continue
     mv "$RUN/$f" "$Q/files/" 2>/dev/null || rm -rf "${RUN:?}/$f"
   done
 }
-leak_guard() {   # on every exit: the guard on the run dir, then job.sh's removal of $W (the unpacked gates with it)
+leak_guard() {   # on every exit: the guard on the run dir and the hold, then job.sh's removal of $W (the unpacked gates)
   local rc=$? g
   # a signal now ends the guard (its exit then withholds), not this handler
   trap - EXIT; trap 'SIGNALED=SIGTERM' TERM; trap 'SIGNALED=SIGINT' INT
+  [ "$OUT" = "$PUB" ] || exec 1>&3 2>&4
   if [ -n "$SIGNALED" ]; then withhold "$SIGNALED ended the run before the leak guard read it"
+  elif [ "$OUT" = "$PUB" ]; then withhold "no hold at $Q/held"; rc=3
   else
-    "${PY:-python3}" "$SRC/benchmarks/network_traces/leak_guard.py" "$RUN" "$Q" --gates "$G" \
-      --report "$OUT/leak-guard.json" > "$W/leak-guard.out" 2> "$W/leak-guard.err"
+    "${PY:-python3}" "$SRC/benchmarks/network_traces/leak_guard.py" "$RUN" "$Q" --gates "$G" --hold "$OUT" \
+      --release-to "$PUB" --report "$PUB/leak-guard.json" > "$W/leak-guard.out" 2> "$W/leak-guard.err"
     g=$?
-    if [ "$g" = 0 ] || [ "$g" = 3 ]; then log "chain: $(cat "$W/leak-guard.out")"
+    if [ "$g" = 0 ] || [ "$g" = 3 ]; then OUT=$PUB; log "chain: $(cat "$W/leak-guard.out")"
+    elif [ -n "$SIGNALED" ]; then withhold "$SIGNALED ended the leak guard (exit $g)"; rc=143
     else withhold "the leak guard failed (exit $g: $(tail -n 1 "$W/leak-guard.err" | cut -c1-300))"; fi
     [ "$g" = 0 ] || [ "$rc" != 0 ] || rc=3
   fi
@@ -103,7 +112,10 @@ leak_guard() {   # on every exit: the guard on the run dir, then job.sh's remova
 trap 'SIGNALED=SIGTERM; exit 143' TERM
 trap 'SIGNALED=SIGINT; exit 130' INT
 trap leak_guard EXIT
-mkdir -p "$Q/files" && chmod 700 "$Q" || { log "chain: no quarantine at $Q"; exit 3; }
+mkdir -p "$Q/files" "$Q/held" && chmod 700 "$Q" || { echo "chain: no quarantine at $Q"; exit 3; }
+echo "chain: every output and this job's own output held in $Q/held until the leak guard passes them"
+OUT=$Q/held
+exec 3>&1 4>&2 >>"$OUT/stdout.log" 2>&1
 
 # ---- the gates -------------------------------------------------------------------------------------------------------
 unpack() {   # unpack SRC DIR: a tarball under the run's inputs/ (or a path), an art: id, or a directory, into DIR
