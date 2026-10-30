@@ -12,7 +12,7 @@ The effective-compute penalty of training a language model whose large linears a
 - `analyze.py`: loss gaps and the effective-compute penalty against the baseline runs.
 
 ~~~bash
-research run --on vy-nebius-cpu-6 --project compute-research --source . --cwd source -- bash -c \
+research run --on vy-nebius-cpu-6 --project verity --campaign hardness --source . --cwd source -- bash -c \
   '. benchmarks/hardness_ml/env.sh && python benchmarks/hardness_ml/prep.py --data $HML_DATA && \
    python benchmarks/hardness_ml/sweep.py --preset bench --data $HML_DATA --out $OUT'
 ~~~

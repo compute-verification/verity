@@ -5,7 +5,8 @@ A hardened linear computes, per design:
 - ``dense``: y = x̃·Wᵀ, W trainable (the baseline; with noise it is the noise-only control).
 - ``A``: y = D₁ ⊙ (x̃·Rᵀ) + (x̃·V)·Uᵀ, R frozen dense random, U, V trainable rank r, D₁, D₂ optional learned diagonals
   (x̃ is formed from D₂ ⊙ x).
-- ``B``: y = x̃·(R + Δ)ᵀ with ‖Δ‖_F ≤ ρ‖R‖_F, enforced by projection after every step.
+- ``B``: y = x̃·(R + Δ)ᵀ with ‖Δ‖_F ≤ ρ‖R‖_F, enforced by projection after every step; with ``diag``,
+  y = D₁ ⊙ (x̃·(R + Δ)ᵀ), x̃ formed from D₂ ⊙ x (the cap still binds R + Δ, the matrix the hardened product uses).
 - ``lowrank``: y = (x̃·V)·Uᵀ (A without R).
 - ``frozen``: y = D₁ ⊙ (x̃·Rᵀ) (A with r = 0).
 
