@@ -12,8 +12,8 @@ from __future__ import annotations
 import hashlib
 
 from .codec import canonical_json
-from .query_ast import (Concat, Default, Each, Instances, Inter, Members, Minus, NameSel, Nodes, NodeSel, Override, Path,
-                      Pred, Query, QueryError, Rest, Root, Union, Where, Zip)
+from .query_ast import (Concat, Default, Each, Group, Instances, Inter, Members, Minus, NameSel, Nodes, NodeSel, Override, Path,
+                      Pred, Query, QueryError, Rest, Root, Table, Union, Where, Zip, group, table)
 
 SCHEMA = "verity-ir/query/v1"
 
@@ -62,6 +62,10 @@ def to_json(q) -> dict:
         return {"op": "inter", "a": to_json(q.a), "b": to_json(q.b)}
     if isinstance(q, Root):
         return {"op": "root"}
+    if isinstance(q, Table):
+        return {"op": "table", "path": str(q.path), "table": q.name} | ({} if q.of == "nodes" else {"of": q.of})
+    if isinstance(q, Group):
+        return {"op": "group", "base": to_json(q.base), "key": q.key[0] if len(q.key) == 1 else list(q.key)}
     raise TypeError(f"cannot encode {type(q).__name__} as a query document (not a Query, dict or to_json() object)")
 
 
@@ -114,6 +118,12 @@ def _decode(doc: dict) -> Query:
         return Inter(from_json(doc["a"]), from_json(doc["b"]))
     if op == "root":
         return Root()
+    if op == "table":
+        return table(Path.parse(doc["path"]), doc["table"], doc.get("of", "nodes"))
+    if op == "group":
+        if not isinstance(doc["key"], (str, list)):
+            raise QueryError(f"group: key is a key part or a list of them, got {doc['key']!r}")
+        return group(from_json(doc["base"]), doc["key"])
     raise QueryError(f"unknown query op {op!r}")
 
 
