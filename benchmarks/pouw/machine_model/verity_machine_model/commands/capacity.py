@@ -27,7 +27,7 @@ def run(args) -> int:
     for g in args.groups:
         w, _, spec = g.rpartition("/")
         groups.append((float(w) if w else 1.0, C.parse(spec)))
-    x = C.window(pi, groups, C.useful_of(args.data))
+    x = C.cell(pi, groups, C.useful_of(args.data))
     if args.json:
         print(json.dumps(x.record(), ensure_ascii=False, indent=1))
         return 0
