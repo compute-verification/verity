@@ -12,3 +12,6 @@ Put the warm-path fix in your measured numbers if it's in your change.
 
 # 09:05Z Fri: inbox name, and scratch bounds
 Your inbox branch is cursor/inbox-cckey-21f3 (my 08:00Z brief said -cc-key-). For the shared binding records: keep their scratch under the run's own scratch, removed on a crash, and state their peak bytes. A dead apart run left 178 GB of 8 GB JSON files on cpu-2 last night (CIR-145).
+
+# 10:52Z Fri: #6657 also conflicts with #6585
+drive (10:48Z): #6657 at d8a4f2ee9f conflicts with next in circuit_check/units.py and tests/test_units.py, touched by #6660 (merge it, as briefed) and by #6585 (ci's ruff config for tools/verity, head 1519de785f, on next). After merging #6660, check merge-tree onto next; if units.py or test_units.py still conflict, merge #6585's head too (it's only lint fixes), then rerun the suite and the ruff and ratchet lints before re-marking.
