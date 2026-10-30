@@ -20,7 +20,7 @@ documents = [
 mhz = 1980
 grade = "whitepaper (H100 SXM5)"
 source = "WP Table 3: 'GPU Boost Clock for FP64 Tensor Core Ops, FP32 and FP64 non Tensor Core Ops: 1980 MHz'; the DS states no clock"
-measured = "the driver's maximum on vy-dc-h200 is 1980 MHz; under a saturated wgmma the event clock is 1518-1797 MHz while NVML reads 1905-1965 (RT-H200-EMP)"
+measured = "the driver's maximum is 1980 MHz (@h200-fmax); under a saturated wgmma the event clock is 1518-1797 MHz while NVML reads 1905-1965 (@rt-h200-emp)"
 
 [clocks.tensor]
 mhz = 1830
@@ -201,7 +201,7 @@ figure = 67
 grade = "data sheet"
 source = "DS 'FP64 Tensor Core 67 TFLOPS' (no sparsity footnote), at the 1980 MHz FP64 tensor clock (WP Table 3: 66.9)"
 measured = 128
-runs = "DMMA.16x8x16 128, DMMA.8x8x4 64 MACs a SM-clock alone (RT-ISA-1, r20261019-085210-4776)"
+runs = "DMMA.16x8x16 128, DMMA.8x8x4 64 MACs a SM-clock alone (r20261019-085210-4776)"
 
 [[rate]]
 key = "tensor.b1.k256"
@@ -414,7 +414,7 @@ sheet = 128
 grade = "Programming Guide"
 source = "CPG 'Shared Memory' (§18.4.3 onward, kept through CC 9.0): 32 banks, each 32 bits a clock; §18.8.3: unified L1 and shared memory, 256 KB a SM"
 measured = 127.96
-runs = "LDS.128 alone 127.96; beside wgmma n128 SS (94.3 B a SM-clock of operand reads) 28.7, 123.0 together: SS wgmma shares the port (emp_smem, RT-H200-EMP: r20261019-062628-43df r20261019-063344-f650 r20261019-064443-0ae6)"
+runs = "LDS.128 alone 127.96; beside wgmma n128 SS (94.3 B a SM-clock of operand reads) 28.7, 123.0 together: SS wgmma shares the port (emp_smem; r20261019-062628-43df r20261019-063344-f650 r20261019-064443-0ae6)"
 
 [[rate]]
 key = "smem.bcast"
@@ -486,7 +486,7 @@ value = 52428800
 unit = "B"
 grade = "whitepaper (H100 SXM5)"
 source = "WP Table 3, H100 SXM5: 'L2 Cache Size 50 MB'; the H200 DS states none (the same GH100 die)"
-gap = "read cudaDeviceProp.l2CacheSize on vy-dc-h200 (no GPU time)"
+gap = "read cudaDeviceProp.l2CacheSize on an H200 (no GPU time)"
 
 [[capacity]]
 key = "hbm"
@@ -534,7 +534,7 @@ isa = "PTX §9.7.15.5"
 [[path]]
 format = "f64"
 native = "DMMA m8n8k4, m16n8k4, k8, k16"
-exact = "an int8 × int8 product is exact in f64 (RT-ISA-1)"
+exact = "an int8 × int8 product is exact in f64"
 isa = "PTX §9.7.14.5 (.f64 mma)"
 
 [[path]]
@@ -768,7 +768,7 @@ unit = "adds/SM/clk"
 sheet = 3.93
 grade = "data sheet (an upper bound: the link)"
 source = "DS 'NVLink: 900GB/s' (450 GB/s each way); a received 4-B word of an 8-GPU sum carries at most 7 adds: 450e9 / 4 · 7 / (132 SMs · 1518 MHz, the lowest event clock under wgmma) = 3.93"
-gap = "a multimem.ld_reduce probe over the 8 H200s of vy-dc-h200 (GPU queue)"
+gap = "a multimem.ld_reduce probe over an 8-H200 node (GPU queue)"
 
 [[rate]]
 key = "tex"
@@ -804,7 +804,7 @@ what = "SHA-512 compressions of the noise kernel's leaf block, whose message is 
 unit = "compressions/SM/clk"
 sheet = 0.022559
 grade = "Programming Guide (alu.lop3's 64 lanes over that kernel's 2,837 ALU instructions a compression)"
-source = "CPG Table 7, CC 9.0: 64 lanes a SM-clock for 32-bit shifts, logic and adds; SASS of the H200 noise kernel: 2,967 instructions a compression, 2,837 on the ALU pipe (SHF 1,427, LOP3 756, IADD3 654); a constant word is cheaper for honest and for any other kernel alike (RT-UNITS U10)"
+source = "CPG Table 7, CC 9.0: 64 lanes a SM-clock for 32-bit shifts, logic and adds; SASS of the H200 noise kernel: 2,967 instructions a compression, 2,837 on the ALU pipe (SHF 1,427, LOP3 756, IADD3 654); a constant word is cheaper for honest and for any other kernel alike"
 gap = "the noise kernel's leaf compressions timed alone on the H200 (GPU queue)"
 
 [[rate]]
@@ -852,7 +852,7 @@ what = "host cores a GPU on the node we run"
 value = 8
 unit = "cores/GPU"
 grade = "measured (the VM's CPU count)"
-source = "vy-dc-h200-2: a Xeon 8468 VM, 8 cores / 16 threads, one H200"
+source = "the H200 node: a Xeon 8468 VM, 8 cores / 16 threads, one H200"
 
 [[unit]]
 key = "tensor"
@@ -1014,7 +1014,7 @@ rotates = 864
 adds = 152
 add_form = "IADD3 + IMAD.X"
 overlap = "θ's joint rows: IADD3 and IMAD issue together under JI90_0 (d 21.6 measured); the moves untimed on the H200"
-source = "commit_gpu's default build on sm_90 (RT-UNITS' reading, 'SHA-512 schedules'): 3,608 instructions, SHF 1,728 (864 rotations and shifts), LOP3 912, IADD3(.X) 760, 152 IMAD.X (the carry halves of 152 2-input adds), 56 other"
+source = "commit_gpu's default build on sm_90: 3,608 instructions, SHF 1,728 (864 rotations and shifts), LOP3 912, IADD3(.X) 760, 152 IMAD.X (the carry halves of 152 2-input adds), 56 other"
 
 [[public]]
 impl = "hashcat 6.2.6-850 sha512crypt (mode 1800, 5,000 rounds, each one compression of a block holding the last round's 64-B digest)"
