@@ -46,6 +46,8 @@ target isn't separable, so `--free=2,3,3` is complete for L = 2 on the zero targ
 repeats, the free terms are per drawn row and column, and each cell draws its own entry states, so a sat at any grid
 is a fit to be rechecked and an unsat at any grid holds. `--escalate` solves the second grid only where the first is
 sat, as soon as it is. `--cegis` gives the same answers from a growing subset of a grid's examples (`cegis`).
+`--split-ops` solves each choice of one instruction per slot apart (16 solves at L = 2, most without a multiplier),
+escalates each on its own, and counts a member none only when every choice is unsat.
 
 `--pairs=PATH` makes the members `xoradd` steps at the listed constants (a JSON list of {"c", "k", "width", "carry",
 "covers"}, `r80x_batch.py --pairs-out`'s), keeping those of the run's width: a round's word-entry certificates. A
@@ -58,11 +60,13 @@ can do; carries split over two predicates and spent in different instructions ar
 
 Run: `uv run --no-project --with z3-solver python -B fold_family.py OUT.json --window=PATH/fold_window.py [--width=8]
 [--members=12] [--steps=1,2] [--families=...] [--targets=zero,words] [--timeout=300] [--jobs=4] [--sweep=KIND]
-[--sweep-c=C] [--ks=K,K] [--free=F] [--pairs=PATH] [--grids=3x3x4,4x4x6] [--escalate] [--cegis] [--full]` (from this directory). PATH is `benchmarks/pouw/hash_sparse/` on N-FLOOR's branch.
+[--sweep-c=C] [--ks=K,K] [--free=F] [--pairs=PATH] [--grids=3x3x4,4x4x6] [--escalate] [--cegis] [--split-ops] [--full]`
+(from this directory). PATH is `benchmarks/pouw/hash_sparse/` on N-FLOOR's branch.
 """
 from __future__ import annotations
 
 import importlib.util
+import itertools
 import json
 import multiprocessing as mp
 import queue
@@ -181,6 +185,7 @@ def instance(spec):
     full = spec.get("full", False)
     prog = carry_program("p", L, len(names), w, full) if carry else WINDOW.Program("p", L, len(names), w, full=full)
     sol.add(prog.constraints())
+    sol.add([prog.op[j] == op for j, op in enumerate(spec.get("ops") or ())])
     V = lambda x: z3.BitVecVal(x & mask, w)  # noqa: E731
     rows = [[rng.randrange(0, 1 << w) for _ in range(s)] for _ in range(nr)]
     cols = [[rng.randrange(0, 1 << w) for _ in range(s)] for _ in range(nc)]
@@ -281,6 +286,7 @@ def specs(opt):
     full = "--full" in opt
     if full and w != 32:
         raise SystemExit("--full needs --width=32: its instructions move high bits down, so no width reduction holds")
+    nops = len(WINDOW.OPS) * (2 if full else 1)
     out = []
     for fam in fams:
         for s in steps:
@@ -294,26 +300,36 @@ def specs(opt):
                                                        (h, (2, 2, 3)))):
                         if L == h and i:
                             continue
-                        out.append({"name": f"{fam}-s{s}-m{i}-{target}-L{L}-g{'x'.join(map(str, grid))}"
-                                            + (f"-F{'-'.join(map(str, free)) if isinstance(free, list) else free}"
-                                               if free else "") + ("-full" if full else ""),
-                                    "family": fam, "s": s, "index": i, "target": target, "member": member,
-                                    "honest": h, "L": L, "grid": grid, "width": w, "free": free, "full": full,
-                                    "phase": phase, "cegis": "--cegis" in opt,
-                                    "timeout": timeout * (3 if L == h else 1),
-                                    "seed": zlib.crc32(f"{fam}-{s}-{i}-{target}-{L}-{grid}".encode())})
+                        split = "--split-ops" in opt and L < h
+                        for ops in itertools.product(range(nops), repeat=L) if split else [None]:
+                            out.append({"name": f"{fam}-s{s}-m{i}-{target}-L{L}-g{'x'.join(map(str, grid))}"
+                                                + (f"-F{'-'.join(map(str, free)) if isinstance(free, list) else free}"
+                                                   if free else "") + ("-full" if full else "")
+                                                + (f"-ops{''.join(map(str, ops))}" if ops else ""),
+                                        "family": fam, "s": s, "index": i, "target": target, "member": member,
+                                        "honest": h, "L": L, "grid": grid, "width": w, "free": free, "full": full,
+                                        "phase": phase, "cegis": "--cegis" in opt, "ops": ops,
+                                        "splits": nops ** L if split else 1,
+                                        "timeout": timeout * (3 if L == h else 1),
+                                        "seed": zlib.crc32(f"{fam}-{s}-{i}-{target}-{L}-{grid}".encode())})
     return out
 
 
 def summarize(results):
-    """A member has a shortcut when both grids at honest − 1 are sat, and none when either is unsat."""
+    """A member's split (all programs, or with `--split-ops` those of one instruction per slot) has a shortcut when
+    both grids at honest − 1 are sat, and none when either is unsat. A member has a shortcut when a split has one,
+    and none when every split has none."""
     by = {}
     for x in results:
         if x["L"] != x["honest"]:
-            by.setdefault((x["family"], x["s"], x["target"]), {}).setdefault(x["index"], []).append(x["result"])
+            by.setdefault((x["family"], x["s"], x["target"]), {}).setdefault(x["index"], [x.get("splits", 1), {}])[
+                1].setdefault(tuple(x.get("ops") or ()), []).append(x["result"])
     rows = []
     for (fam, s, target), cell in sorted(by.items()):
-        vals = ["unsat" if "unsat" in v else "sat" if v == ["sat", "sat"] else "open" for v in cell.values()]
+        vals = []
+        for n, split in cell.values():
+            per = ["unsat" if "unsat" in v else "sat" if v == ["sat", "sat"] else "open" for v in split.values()]
+            vals.append("sat" if "sat" in per else "unsat" if per.count("unsat") == n else "open")
         rows.append({"family": fam, "s": s, "target": target, "members": len(vals),
                      "shortcut": vals.count("sat"), "none": vals.count("unsat"),
                      "open": len(vals) - vals.count("sat") - vals.count("unsat")})
@@ -329,7 +345,7 @@ def main():
     todo = specs(opt)
     todo.sort(key=lambda x: (x["s"], x["L"], x["grid"]))
     escalate = "--escalate" in opt
-    key = lambda x: (x["family"], x["s"], x["index"], x["target"])  # noqa: E731
+    key = lambda x: (x["family"], x["s"], x["index"], x["target"], tuple(x.get("ops") or ()))  # noqa: E731
     later = {key(x): x for x in todo if escalate and x["phase"] == 1}
     results, done = [], queue.Queue()
     ctx = mp.get_context("fork")
