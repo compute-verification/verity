@@ -89,7 +89,7 @@ judged through the proof system (`sampled_proofs.service`, P1: a `Stream`'s `reg
   failing closed (``certifier``), each through the certifier's client (`RemoteCertifier`: a signed request, a signed
   answer it verifies): the certifier gives p's salt once, within its reveal deadline on its own clock, so its
   parameters carry no ``registration_deadline``.  The window registers once per PoUW window, stream and prover
-  (`salt.Registrations`, ``reregistered``), and its draw coin is a live epoch's ``pouw/draw`` coin 0, checked against
+  (`salt.Registrations`, ``reregistered``), and its draw coin is its draw session's ``pouw/draw`` coin 0, checked against
   the commitment the challenger reads from its challenger's signed record (`challenger.trusted_commitment`), which the
   sample's check of record verifies again, both under the challenger key the window's deployment pins (`Deployment`,
   beside the certifier's key and run id; `Deployment.pinned` reads it from infra's published pin, `CHALLENGER_KEY_PIN`,
@@ -803,7 +803,7 @@ def _signed_coins(path: str | os.PathLike | None, key: Ch.ChallengerKey | None) 
     """A certified window's trusted coin commitment, which the challenger reads itself from the record its challenger
     signed and wrote at `path` under the verifier's `key` (`challenger.trusted_commitment`), and the record with the key
     as the sample's check of record reads them (`core_check.draw` verifies the record again).  Raises `ValueError` when
-    there is no such record, or it isn't a live epoch's."""
+    there is no such record, or it isn't a live window's sampling session's."""
     if path is None or not isinstance(key, Ch.ChallengerKey):
         raise ValueError("a certified window's challenger reads its coin commitment from its challenger's signed record "
                          "(`coin_record`, the path it was written to) under the challenger key its deployment pins "
@@ -816,8 +816,8 @@ def _signed_coins(path: str | os.PathLike | None, key: Ch.ChallengerKey | None) 
         raise ValueError(f"a certified window's draw coin opens against its challenger's signed record: {e}") from None
     if not same:
         raise ValueError(f"the challenger record at {path} changed while the challenger read it")
-    if (why := Wd.live_epoch_reason(trusted)) is not None:
-        raise ValueError(f"a certified window's draw coin is a live epoch's: {why}")
+    if (why := Wd.draw_epoch_reason(trusted)) is not None:
+        raise ValueError(f"a certified window's draw coin is a live window's draw session's: {why}")
     return trusted, {"key": key.to_json(), "record": doc}
 
 
@@ -846,8 +846,8 @@ class Challenger:
     With `certifier` the window is certified (module docstring): `certifier` is the network certifier's client
     (`certifier.active.RemoteCertifier`), whose `certifier_run` names the stream (`stream_id`) and whose `committed` and
     `reveal` are the certifier's signed answers to the challenger's signed requests, verified; `prover` is its 64-byte
-    id (`salt.prover_id`), `coins` the live epoch's challenger (`window.live_challenger`) whose ``pouw/draw`` coin 0 the
-    sample opens, `coin_record` the path of the record that challenger signed and wrote on its own host
+    id (`salt.prover_id`), `coins` the window's sampling session's challenger (`window.draw_challenger`) whose ``pouw/draw``
+    coin 0 the sample opens, `coin_record` the path of the record that challenger signed and wrote on its own host
     (`challenger.write_record`), and `deployment` what the verifier pins of its deployment (`Deployment`): the network
     certifier's key and run id, which `certifier` must be the client for, and its challenger's key, under which the
     challenger reads its trusted commitment itself (`challenger.trusted_commitment`).  Every opening is checked against
@@ -923,7 +923,8 @@ class Challenger:
 
     def open(self, label: str, after: bytes) -> CoinOpening | Ch.LiveOpening:
         """The epoch's `label` coin, opened once after `after` and checked against the published commitment.  A certified
-        window's one coin is its sampling coin, ``pouw/draw`` 0 of its live epoch, checked against the trusted commitment."""
+        window's one coin is its sampling coin, ``pouw/draw`` 0 of its sampling session, checked against the trusted
+        commitment."""
         if self.trusted is not None:
             if label != "draw":
                 raise _refused("coin", f"a certified window's salt is the network certifier's: it opens no {label} coin")

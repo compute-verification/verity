@@ -628,12 +628,12 @@ def _certified_window(words, run: str, reveal: bytes, sid: bytes, prover: bytes,
 
 
 def _live(path: Path, entropy: str | None = None) -> tuple[Ch.LiveChallenger, Ch.ChallengerKey]:
-    """A live epoch's challenger on its host, its record signed and written to `path`, and the verifier's key for that
+    """A live window's draw session's challenger on its host, its record signed and written to `path`, and the verifier's key for that
     record (`challenger.ChallengerKey`); `entropy` names another challenger's coins, whose record isn't the one written."""
     k = lms.keygen(lms.Params(64, 4, 2), hashlib.sha512(str(path).encode()).digest())
-    live = Wd.live_challenger(0, 1, random.Random(str(path)).randbytes)
+    live = Wd.draw_challenger(0, random.Random(str(path)).randbytes)
     Ch.write_record(path, live.sign_record("vy-nebius-cpu-1", lms.public_key(k), lambda m: lms.sign_at(k, 0, m).encode()))
-    return (live if entropy is None else Wd.live_challenger(0, 1, random.Random(entropy).randbytes)), \
+    return (live if entropy is None else Wd.draw_challenger(0, random.Random(entropy).randbytes)), \
         Ch.ChallengerKey(4, 2, lms.public_key(k))
 
 
@@ -716,7 +716,7 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_drawn_under_
     sampled, signed, and salts its pass from the salt it receives in-band.  `register` reads that record on the window's
     registration and only then has the certifier reveal window 0's salt, so a challenger whose stream or prover isn't
     the recorded one is refused (``coin``) and takes no reveal: the honest one after it passes (``certifier``), holds
-    the salt its pass was checked against, and its sample is the live epoch's ``pouw/draw`` coin 0 opened after the
+    the salt its pass was checked against, and its sample is its sampling session's ``pouw/draw`` coin 0 opened after the
     registration, under the commitment the challenger read itself from its challenger's signed record, which the sample's
     check of record verifies again under the challenger key the deployment pins (`Deployment`), and refuses under any
     other pin (``coin-key``).  Its drawn units are opened under that salt (`Challenger.check`, SALT-BIND-1),

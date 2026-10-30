@@ -239,15 +239,23 @@ def await_end(status: Any, polls: int = 300) -> dict[str, Any]:
 def gate_command(argv: list[str]) -> Any:
     """The `pouw_h1_window.Gate` that runs the gate's verbs as `argv` + VERB (an ``ssh ... research@HOST``): ``open
     --session S --root R``, its JSON answer's ``commitment`` (null until serve.py signs its record) then read from ``status
-    S``, and the answer returned once its ``port`` listens on this host (`await_listener`). ``reserve(peer, steps)`` is
-    the gate's reserve of a window of S = `steps` rounds served on `peer` (its answer; ValueError naming what the gate
-    said when it refuses), and ``ended(session)`` the challenge phase's ``status`` once it has its end entry (`await_end`)."""
+    S``, and the answer returned once its ``port`` listens on this host (`await_listener`); with ``withhold`` (a draw's
+    challenge phase, reserved withheld, whose commitment is released only when it closes) the answer must say
+    ``withheld`` and ``signed`` and carry no ``commitment``. ``reserve(peer, steps)`` is the gate's reserve of a window
+    of S = `steps` rounds served on `peer` (with `steps` None, of the window's draw's challenge phase,
+    `pouw_h1_challenger.draw_families`, reserved ``--withhold``; its answer; ValueError naming what the gate said when
+    it refuses, or when it reserved a draw's challenge phase plain), and ``ended(session)`` the challenge phase's
+    ``status`` once it has its end entry (`await_end`)."""
     def verb(*args: str) -> dict[str, Any]:
         return json.loads(subprocess.run(gate_argv(argv, args), check=True, capture_output=True, text=True).stdout)
 
-    def gate(session: str, root: str) -> dict[str, Any]:
+    def gate(session: str, root: str, withhold: bool = False) -> dict[str, Any]:
+        from verity_vllm.protocols.pouw.h1 import window as PHW
         answer = verb("open", "--session", session, "--root", root)
-        if answer.get("commitment") is None:
+        if withhold:
+            if answer.get("withheld") is not True or answer.get("commitment") is not None or answer.get("signed") is not True:
+                raise ValueError(f"the gate's open of {session}: {PHW.WITHHELD_OPEN}: {json.dumps(answer)[-1000:]}")
+        elif answer.get("commitment") is None:
             answer["commitment"] = verb("status", session).get("commitment")
         if type(answer.get("port")) is int:
             polls = await_listener(answer["port"])
@@ -255,16 +263,21 @@ def gate_command(argv: list[str]) -> Any:
                   + (f"listening after {polls} polls" if polls is not None else "not listening after 300 polls"), flush=True)
         return answer
 
-    def reserve(peer: str, steps: int) -> dict[str, Any]:
+    def reserve(peer: str, steps: int | None) -> dict[str, Any]:
         from verity_vllm.protocols.pouw.h1 import challenger as PHC
+        from verity_vllm.protocols.pouw.h1 import window as PHW
+        families = PHC.draw_families() if steps is None else PHC.families(steps)
         p = subprocess.run(gate_argv(argv, ["reserve", "--peer", peer, "--scheme", PHC.SCHEME, "--families",
-                                            PHC.families(steps)]), capture_output=True, text=True)
+                                            families, *(("--withhold",) if steps is None else ())]),
+                           capture_output=True, text=True)
         try:
             answer = json.loads(p.stdout)
         except ValueError:
             answer = None
         if p.returncode or not isinstance(answer, dict) or "refused" in answer:
             raise ValueError(f"the gate refused the reserve (exit {p.returncode}): {(p.stdout + p.stderr)[-1000:]}")
+        if steps is None and answer.get("withheld") is not True:
+            raise ValueError(f"the gate reserved draw challenge phase {answer.get('session')} plain: {PHW.WITHHELD_OPEN}")
         return answer
 
     gate.argv, gate.reserve, gate.ended = argv, reserve, lambda session: await_end(lambda: verb("status", session))
@@ -275,21 +288,28 @@ def window_sessions(gate: Any, peer: str, steps: int) -> Any:
     """With ``--peer``: each window the run serves gets a challenge phase of its own, reserved at the gate (``gate.reserve``) just
     before the window is installed, since the auditor host's challenger serves one window a challenge phase and a challenge phase opens
     once; ``sessions(name)`` is window `name`'s reserve answer (`pouw_h1_window.reserved_of`), and a name asked for twice
-    is refused (ValueError), as is a reserve the gate refuses. ``sessions.held`` maps each window to its answer."""
+    is refused (ValueError), as is a reserve the gate refuses. Each window's draw session is reserved with it
+    (``gate.reserve(peer, None)``), ``sessions.draws[name]`` its answer. ``sessions.held`` maps each window to its
+    answer."""
     from verity_vllm.protocols.pouw.h1 import window as PHW
     held: dict[str, dict[str, Any]] = {}
+    draws: dict[str, dict[str, Any]] = {}
+
+    def fresh(name: str, rounds: int | None, what: str) -> dict[str, Any]:
+        answer = gate.reserve(peer, rounds)
+        reserved = PHW.reserved_of({k: v for k, v in answer.items() if k in ("session", *PHW.RESERVE_FIELDS)})
+        if reserved is None or reserved["session"] in {r["session"] for r in (*held.values(), *draws.values())}:
+            raise ValueError(f"window {name}: the gate's reserve answer {answer!r} is no fresh {what}")
+        print(f"[gate] window {name}: reserved {what} {reserved['session']} on {peer}", flush=True)
+        return reserved
 
     def sessions(name: str) -> dict[str, Any]:
         if name in held:
             raise ValueError(f"window {name} has its session ({held[name]['session']}) already: one session a window")
-        answer = gate.reserve(peer, steps)
-        reserved = PHW.reserved_of({k: v for k, v in answer.items() if k in ("session", *PHW.RESERVE_FIELDS)})
-        if reserved is None or reserved["session"] in {r["session"] for r in held.values()}:
-            raise ValueError(f"window {name}: the gate's reserve answer {answer!r} is no fresh session")
-        held[name] = reserved
-        print(f"[gate] window {name}: reserved session {reserved['session']} on {peer}", flush=True)
-        return reserved
-    sessions.held = held
+        held[name] = fresh(name, steps, "session")
+        draws[name] = fresh(name, None, "draw session")
+        return held[name]
+    sessions.held, sessions.draws = held, draws
     return sessions
 
 
@@ -311,12 +331,13 @@ def fixed_length(decl: Any) -> dict[str, Any]:
 
 
 def period_open_argv(name: str, circuit: str, draw_k: int, decl: Any, files: dict[str, str]) -> list[str]:
-    """``period-open`` of the Commit window's period `name`: cap 1 (the Commit's window alone, so a negative's refused
-    window, which ends complete, is never one of it), its circuit (the period's declared Program's digest), its sample K
+    """``period-open`` of the Commit window's period `name`: cap 2 (the Commit's window and its sampling session alone, so
+    a negative's refused window, which ends complete, is never one of it), its circuit (the period's declared Program's
+    digest), its sample K
     (`pouw_h1_challenger.draw_k` over the declared layout, core's `credit.committed_k`), T, its circuit files
     (`period_files`, core's `credit.committed_files`) and the fixed length (`fixed_length`, core's
     `credit.committed_length`)."""
-    return ["period-open", "--name", name, "--cap", "1", "--circuit", circuit, "--draw-k", str(draw_k),
+    return ["period-open", "--name", name, "--cap", "2", "--circuit", circuit, "--draw-k", str(draw_k),
             "--rows", str(decl.rows), "--circuit-files", json.dumps(files, sort_keys=True, separators=(",", ":")),
             "--length", json.dumps(fixed_length(decl), sort_keys=True, separators=(",", ":"))]
 
@@ -370,14 +391,16 @@ def model_key_of(gate: Any, model: str, circuit: str) -> Any:
 
 
 def h1_settings(eng: Any, rows: int, steps: int, challenger: str | None = None, session: Any = None, gate: Any = None,
-                **kw: Any) -> dict[str, Any]:
+                draw_session: Any = None, **kw: Any) -> dict[str, Any]:
     """The option's settings for one served window: the engine's model runner (where the scheduler's admissions arrive) and
     the window's coins, its salt coin and one live round coin a step: the auditor host's at `challenger` (``HOST:PORT``, one
-    challenge phase a window, `pouw_h1_challenger`) in the `session` the challenger gate reserved for it, which `gate` opens on the
-    window's open root, else held in this process, which no verifier trusts and which credits nothing (a measurement)."""
+    challenge phase a window, `pouw_h1_challenger`) in the `session` the challenger gate reserved for it, which `gate`
+    opens on the window's open root, and its draw coin from the `draw_session` the gate reserved beside it, which `gate`
+    opens withheld on the window's draw root; else held in this process, which no verifier trusts and which credits
+    nothing (a measurement)."""
     if challenger:
-        return {"pouw": {"challenger": challenger, "session": session, "gate": gate, "runner": eng.runner, "rows": rows,
-                         "steps": steps, **kw}}
+        return {"pouw": {"challenger": challenger, "session": session, "draw_session": draw_session, "gate": gate,
+                         "runner": eng.runner, "rows": rows, "steps": steps, **kw}}
     from verity.core.protocols.pouw import verifier
     from verity.core.protocols.pouw import window as Wd
     from verity.core.protocols.pouw.coins import Challenger
@@ -457,8 +480,8 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     plain = serve()
     entry_name = f"pouw:{PH.SCHEME}"
     ctx = PO.Context(stage="serve", enabled=(entry_name,),
-                     settings=h1_settings(eng, a.rows, steps_public, a.challenger, a.session, a.gate, retain_steps=a.retain,
-                                          transcript_dir=str(outdir), admission="per-round"))
+                     settings=h1_settings(eng, a.rows, steps_public, a.challenger, a.session, a.gate, a.draw_session,
+                                          retain_steps=a.retain, transcript_dir=str(outdir), admission="per-round"))
     t0 = time.monotonic()
     comp = PO.install(eng.model, ctx)
     doc["install_s"] = round(time.monotonic() - t0, 1)
@@ -661,6 +684,7 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         from verity_vllm.engine.hooks import Hooks
         rss0 = rss_gib()
         reserved = sessions(name) if sessions is not None else a.session
+        drawn = sessions.draws[name] if sessions is not None else a.draw_session
         layers = layers or PHK.layers(eng.model, pouw.linear_types())
         com = tap = None
         if commit:
@@ -708,8 +732,9 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
             served.commit = timed
             SV.NR.commit = hashing
         ctx = PO.Context(stage="serve", enabled=(entry_name,),
-                         settings=h1_settings(eng, decl.rows, decl.steps, a.challenger, reserved, a.gate, retain_steps=a.retain,
-                                              transcript_dir=str(tdir), admission="round-0", served=served))
+                         settings=h1_settings(eng, decl.rows, decl.steps, a.challenger, reserved, a.gate, drawn,
+                                              retain_steps=a.retain, transcript_dir=str(tdir), admission="round-0",
+                                              served=served))
         t0 = time.monotonic()
         comp = PO.install(eng.model, ctx)
         out: dict[str, Any] = {"install_s": round(time.monotonic() - t0, 1), "host": host_memory()}
@@ -799,7 +824,8 @@ def fill(a: argparse.Namespace) -> dict[str, Any]:
         out = released(name, h1, out, served, tdir, bool(a.challenger), register=not (a.commit or a.skip_register))
         if sessions is not None:
             out["session"] = session_end(a.gate, reserved)
-            out["ok"] = bool(out["ok"] and out["session"]["ok"])
+            out["draw_session"] = session_end(a.gate, drawn)
+            out["ok"] = bool(out["ok"] and out["session"]["ok"] and out["draw_session"]["ok"])
             print(f"[fill] {name} session {json.dumps(out['session'])}", flush=True)
         if tap is not None:
             out["core"] = core_tie({"commitment": dict(h1.commits), "calls": h1.manifest()}, h1.served.program, tdir)
@@ -983,15 +1009,16 @@ def hand_off(h1: Any, a: argparse.Namespace, doc: dict[str, Any]) -> dict[str, A
 
 
 def fill_close(a: argparse.Namespace) -> dict[str, Any]:
-    """The close phase, on no GPU: the window ``--close-from`` holds, its challenge phase the stream ``--stream-fd``, closed and
-    released as the serving process would have (`pouw_h1_handoff`), and the fill record completed from ``SERVING``."""
+    """The close phase, on no GPU: the window ``--close-from`` holds, its challenge phase the stream ``--stream-fd``,
+    closed and released as the serving process would have (`pouw_h1_handoff`), its draw's challenge phase opened through
+    ``--gate``, and the fill record completed from ``SERVING``."""
     from verity_vllm.protocols.pouw.h1 import handoff as HO
     from verity_vllm.protocols.pouw.h1 import window as PHW
     outdir = Path(a.out)
     doc = json.loads((outdir / SERVING).read_text())
     doc["close_argv"], h = sys.argv, doc["h1"]
     t0 = time.monotonic()
-    h1, client = HO.resume(a.close_from, a.stream_fd)
+    h1, client = HO.resume(a.close_from, a.stream_fd, a.gate)
     h["handoff"]["resume_s"] = round(time.monotonic() - t0, 1)
     bad = list(h["hook_bad"])
 
@@ -1175,18 +1202,20 @@ def coins_summary(doc: dict[str, Any], challenger: bool) -> dict[str, Any]:
     """A ``--commit`` run's coins, window by window (the Commit window, each negative, the fill window): its coin source,
     its challenge phase and how that ended, and its credit gate (`pouw_h1.H1Run.credit`): the gate-passed rows, the refused calls
     with each reason, and the credited share, gate-passed MACs over served MACs. ``ok`` without ``challenger``; with it,
-    when every window's coins are the auditor host's from a challenge phase of its own that ended closed and complete, and the
-    honest Commit window's gate passes rows and refuses none of its calls."""
+    when every window's coins are the auditor host's from a challenge phase of its own that ended closed and complete,
+    and the honest Commit window's gate passes rows and refuses none of its calls, its draw's challenge phase ended
+    closed and complete too (a refused negative may never open its own)."""
     wins = {"commit": doc.get("h1_commit"), **{f"commit-{k}": v.get("window") for k, v in (doc.get("negatives") or {}).items()},
             "fill": doc.get("h1")}
     rows: dict[str, dict[str, Any]] = {}
     for name, w in wins.items():
         if not w:
             continue
-        g, s = w.get("gate") or {}, w.get("session") or {}
+        g, s, ds = w.get("gate") or {}, w.get("session") or {}, w.get("draw_session") or {}
         passed, refused = g.get("gate_passed") or {}, g.get("refused") or {}
         served = (passed.get("macs") or 0) + (refused.get("macs") or 0)
         rows[name] = {"coin_source": w.get("coin_source"), "session": s.get("session"), "session_ok": s.get("ok"),
+                      "draw_session": ds.get("session"), "draw_session_ok": ds.get("ok"),
                       "gate_passed_rows": passed.get("rows"), "refused_calls": refused.get("calls"),
                       "credited_share": round((passed.get("macs") or 0) / served, 6) if served else None,
                       "reasons": refused.get("reasons")}
@@ -1194,7 +1223,7 @@ def coins_summary(doc: dict[str, Any], challenger: bool) -> dict[str, Any]:
     c = rows.get("commit") or {}
     ok = not challenger or bool(rows and all(r["coin_source"] == "challenger" and r["session_ok"] for r in rows.values())
                                 and None not in sessions and len(set(sessions)) == len(sessions)
-                                and c.get("refused_calls") == 0 and c.get("gate_passed_rows"))
+                                and c.get("refused_calls") == 0 and c.get("gate_passed_rows") and c.get("draw_session_ok"))
     return {"windows": rows, "ok": ok}
 
 
@@ -1372,7 +1401,8 @@ def compile_from(calls_file: str, out: str) -> dict[str, Any]:
 
 def check_challenger(calls_file: str, directory: str, public_sha512: str, out: str, ledger: list[str],
                      window_file: str | None = None, period: str | None = None, descriptor: bytes | None = None,
-                     pins: list[str] | None = None, main: list[str] | None = None) -> dict[str, Any]:
+                     pins: list[str] | None = None, main: list[str] | None = None,
+                     draw_directory: str | None = None) -> dict[str, Any]:
     """The verifier's side, on no GPU: the served window's coins (`calls_file`'s commitment) against the challenger's own
     directory under the auditor's key, pinned by the SHA-512 of its public key (`pouw_h1_challenger.pinned_key`), `ledger`
     every head the gate published of the auditor's signed ledger, `pins` every head of the host's pins log (the host's
@@ -1387,14 +1417,19 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     must credit the lane's period with the window accepted and presented as its close's windows, its open committing
     ``draw_k`` (`pouw_h1_challenger.period_reason`, core's `credit.period`). Its ``credit`` is core's
     (`pouw_h1_challenger.credit_reason`) over `descriptor`, the bytes of the circuit the period committed
-    (`pouw_h1_served.descriptor`; none refuses it)."""
+    (`pouw_h1_served.descriptor`; none refuses it). `draw_directory` is the window's draw session as `directory` is its
+    session (its ``out/`` with `window_file`, else its tree), from which its draw coin is read (none refuses it)."""
     from verity.core.protocols.sampled_proofs import remote
     from verity_vllm.protocols.pouw import h1 as PH
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
     rec, tree = json.loads(Path(calls_file).read_text()), Path(directory)
     d = tree if window_file is not None else tree / "out"
+    draw_tree = None if draw_directory is None else Path(draw_directory)
+    draw_out = None if draw_tree is None else draw_tree if window_file is not None else draw_tree / "out"
     sid = (rec["commitment"].get("session") or {}).get("session")
+    dsid = (rec["commitment"].get("draw_session") or {}).get("session")
+    draw_root = (rec["commitment"].get("draw") or {}).get("root")
     doc: dict[str, Any] = {"schema": SCHEMA + "/challenger", "argv": sys.argv, "calls_file": calls_file, "directory": directory,
                            "pinned_public_sha512": public_sha512, "ledger": ledger, "pins": pins,
                            "window_file": window_file,
@@ -1406,24 +1441,26 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
         if window_file is not None:
             doc["window"] = json.loads(Path(window_file).read_text())
             doc["reason"] = PHC.trusted_rounds_reason(rec["commitment"], d, ledger, doc["window"], key, pins=pins,
-                                                      main=main)
+                                                      main=main, draw_directory=draw_out)
         else:
             newest = PHC.Ledger.load(ledger, key, pins=pins, main=main)
-            doc["reason"] = PHC.session_reason(rec["commitment"], newest, lambda s: tree if s == sid else None)
+            trees = {sid: tree, **({dsid: draw_tree} if dsid and draw_tree is not None else {})}
+            doc["reason"] = PHC.session_reason(rec["commitment"], newest, trees.get)
     except Exception as e:  # noqa: BLE001
         doc["reason"] = f"{type(e).__name__}: {e}"
     doc["manifest"] = PHC.manifest_reason(rec)
     if key is not None:
         win = doc.get("window") or {"root": (rec["commitment"].get("session") or {}).get("root")}
-        doc["credit"] = PHC.credit_reason(rec, d, ledger, win, key, descriptor, pins=pins, main=main)
+        doc["credit"] = PHC.credit_reason(rec, d, ledger, win, key, descriptor, pins=pins, main=main,
+                                          draw_directory=draw_out)
     if period is not None:
         try:
             if key is None:
                 raise ValueError("no key the pin names, so the auditor's ledger is unread")
             newest = PHC.Ledger.load(ledger, key, pins=pins, main=main)
             root = (doc.get("window") or {}).get("root") or (rec["commitment"].get("session") or {}).get("root")
-            accepted = [sid] if doc["reason"] is None else []
-            doc["period"] = {"name": period, "reasons": PHC.period_reason(newest, period, accepted, [root])}
+            accepted = [sid, dsid] if doc["reason"] is None else []
+            doc["period"] = {"name": period, "reasons": PHC.period_reason(newest, period, accepted, [root, draw_root])}
         except Exception as e:  # noqa: BLE001
             doc["period"] = {"name": period, "reasons": [f"{type(e).__name__}: {e}"]}
     for name in (remote.RECORD, remote.CLOSE):
@@ -1472,6 +1509,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--check-challenger", nargs=2, metavar=("CALLS_JSON", "CHALLENGER_DIR"),
                     help="no GPU: a served window's coins against the challenger run's out/ (with --window) or the "
                          "session's tree (needs --key-sha512 and --ledger)")
+    ap.add_argument("--draw-dir", metavar="DRAW_DIR",
+                    help="with --check-challenger: the window's draw session as CHALLENGER_DIR is its session (its "
+                         "out/ with --window, else its tree), whose draw coin the window's draw is")
     ap.add_argument("--key-sha512", help="the SHA-512 of the auditor's challenger public key, in hex")
     ap.add_argument("--ledger", metavar="HEAD", action="append",
                     help="with --check-challenger: a published head of the auditor's signed ledger (infra's windows.jsonl), "
@@ -1485,6 +1525,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--session", type=json.loads, metavar="JSON",
                     help="with --challenger: the challenger gate's reserve answer, {\"session\", \"seq\", \"peer\", "
                          "\"by\", \"expires_utc\", \"period\"}")
+    ap.add_argument("--draw-session", type=json.loads, metavar="JSON",
+                    help="with --session: the gate's reserve answer for the window's draw session (families "
+                         "pouw_h1_challenger.draw_families), which the window opens withheld on its draw root")
     ap.add_argument("--gate", type=lambda v: gate_command(shlex.split(v)), metavar="CMD",
                     help="with --challenger: the command the gate's verbs follow (ssh -i KEY -o BatchMode=yes "
                          "research@HOST), which opens the reserved session on the window's open root")
@@ -1583,6 +1626,8 @@ def main(argv: list[str] | None = None) -> int:
     if a.peer and not (a.challenger and a.gate and a.workload == "fill" and not a.handoff and a.session is None):
         ap.error("--peer is the fill workload's, with --challenger and --gate, without --session or --handoff (each window "
                  "reserves its own session)")
+    if (a.session is None) != (a.draw_session is None):
+        ap.error("--session and --draw-session go together: a window's draw coin is its own draw session's (CMP-177)")
     if a.period and not a.check_challenger and not (a.commit and a.peer):
         ap.error("--period is --check-challenger's, or --commit's with --peer (the period its Commit window opens)")
     if a.period and a.commit and not a.circuits:
@@ -1611,7 +1656,7 @@ def main(argv: list[str] | None = None) -> int:
         desc = gzip.decompress(Path(a.descriptor).read_bytes()) if a.descriptor else None
         main = None if a.main is None else remote.main_lines(a.main)
         return 0 if check_challenger(*a.check_challenger, a.key_sha512, a.out, a.ledger, a.window, a.period, desc,
-                                     a.pins, main)["ok"] else 1
+                                     a.pins, main, a.draw_dir)["ok"] else 1
     if not (a.at and a.by):
         ap.error("serving needs --at and --by (the pin entry's, if one is made)")
     return 0 if (fill if a.workload == "fill" else run)(a)["ok"] else 1

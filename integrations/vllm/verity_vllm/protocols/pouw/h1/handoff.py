@@ -19,7 +19,9 @@ GPU lease ends only when it exits.
 * **What is unchanged.** The resuming process runs the same `close` and release (`pouw_h1_window.finish`) the serving
   process would have: the same empty calls, tables, rounds, trees and draw, each committed when it would have been, and
   each coin opened after the same roots, on the same session. Nothing opens in the gap: the next frame is the round coin
-  of the first step past the last served one.
+  of the first step past the last served one. The draw coin is the window's draw session's
+  (`pouw_h1_window.DrawSession`), not yet opened at the hand-off: its reserve answer travels in the file, and the
+  resuming process opens it through the gate it is given, withheld on the draw root, as the serving process would have.
 * **The file** holds the run's salt key, which nothing else persists, so it is the prover's scratch (mode 0600, outside a
   run's published directory), and its holder deletes it once the window has closed.
 """
@@ -39,6 +41,7 @@ from verity.core.protocols.sampled_proofs.challenger import LiveCommitment, Live
 from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import requests as RQ
 from verity_vllm.protocols.pouw.h1 import served as SV
+from verity_vllm.protocols.pouw.h1 import window as PHW
 
 SCHEMA = "verity-vllm/pouw-h1-handoff/v1"
 FILE = "h1-window.pkl"
@@ -73,6 +76,21 @@ def _live(state: dict[str, Any] | None, client: Any) -> LiveRecord | None:
     rec.__dict__.update(state)
     rec.challenger = client
     return rec
+
+
+def _draw_state(draw: Any) -> dict[str, Any] | None:
+    if not isinstance(draw, PHW.DrawSession):
+        return _record(draw)
+    if draw._asked:
+        raise ValueError(f"{draw.entry}: a window hands off before its draw session opens")
+    return {"draw_session": {"entry": draw.entry, "at": draw.at, "reserved": draw.reserved}}
+
+
+def _draw_of(state: dict[str, Any] | None, client: Any, gate: PHW.Gate | None) -> Any:
+    if state is None or "draw_session" not in state:
+        return _live(state, client)
+    s = state["draw_session"]
+    return PHW.DrawSession(s["entry"], s["at"], s["reserved"], gate)
 
 
 class _HostOnly(pickle.Pickler):
@@ -110,7 +128,7 @@ def suspend(run: PH.H1Run, directory: str | Path) -> Path:
     state = {k: v for k, v in run.__dict__.items() if k not in _REBUILT}
     codes = {} if served is None else {w: c for w, (t, c) in served._weights.items() if run._weights.get(w, (None,))[0] is t}
     state["weights"] = {w: (codes[w] if w in codes else PH.numpy_of(t), PH.numpy_of(s)) for w, (t, s) in run._weights.items()}
-    state["rounds"], state["draw"] = _record(run.rounds), _record(run.draw)
+    state["rounds"], state["draw"] = _record(run.rounds), _draw_state(run.draw)
     state["request_rounds"], state["slot_rounds"] = sorted(run._tables), sorted(run._slot_tables)
     if served is not None:
         state["served"] = (type(served), {k: v for k, v in served.__dict__.items() if k not in ("_weights", "program")},
@@ -123,8 +141,9 @@ def suspend(run: PH.H1Run, directory: str | Path) -> Path:
     return path
 
 
-def resume(directory: str | Path, fd: int) -> tuple[PH.H1Run, Resumed]:
-    """The run `suspend` saved in `directory`, its coins on the session whose stream is the descriptor `fd`, and that
+def resume(directory: str | Path, fd: int, gate: PHW.Gate | None = None) -> tuple[PH.H1Run, Resumed]:
+    """The run `suspend` saved in `directory`, its coins on the session whose stream is the descriptor `fd`, its draw
+    session opened through `gate` (`pouw_h1_window.Gate`; None leaves it unopenable, and the draw is refused), and that
     session's client: refused (ValueError) when a rebuilt request or slot table isn't the one its round's root is over."""
     import torch
 
@@ -145,7 +164,7 @@ def resume(directory: str | Path, fd: int) -> tuple[PH.H1Run, Resumed]:
             raise ValueError(f"{run.entry}: round {r}'s request or slot table, rebuilt, is not the one its root is over")
     client = Resumed(socket.socket(fileno=fd), LiveCommitment.from_json(doc["commitment"]))
     run.listeners, run._opener, run._recorded = [], None, None
-    run.rounds, run.draw = _live(rounds, client), _live(draw, client)
+    run.rounds, run.draw = _live(rounds, client), _draw_of(draw, client, gate)
     run._weights = {w: (torch.from_numpy(c), torch.from_numpy(s)) for w, (c, s) in weights.items()}
     if served is not None:
         kind, sstate, layers = served

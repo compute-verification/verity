@@ -18,9 +18,12 @@ own Commit.
 * **Coins.** With ``--challenger-gate CMD`` and ``--challenger-peer NAME`` (`sessions_of`), the auditor host's
   challenger's, one session a window through infra's gate (`GateSessions`, `commit_coins.Gate`): window 0's session is
   reserved (scheme `pouw_h1_challenger.SCHEME`, `pouw_h1_challenger.families` (S)) at its open and window k+1's while
-  window k serves, off the engine loop (`GateSessions.take`); round 0 opens it on the window's open root
+  window k serves, off the engine loop (`GateSessions.take`), each with its sampling session beside it
+  (`pouw_h1_challenger.draw_families`, reserved withheld: ``reserve --withhold``); round 0 opens it on the window's open root
   (`pouw_h1_window.Window`), reached on this machine's 127.0.0.1 at the port the gate's open answers once the auditor
-  host's ``ssh -R`` listens there, and the window's release waits for its end entry. The gate's open answers a port no
+  host's ``ssh -R`` listens there, and the window's sampling session opens on the window's sample root once the
+  prover's commitment is in (`pouw_h1_window.DrawSession`), its challenger releasing its coin commitment only at its
+  close; the window's release waits for both end entries. The gate's open answers a port no
   session without an end entry holds, so a window whose session opens while the window before is still releasing takes
   a port of its own. A reserve joins its lane's open period, if one is open, so window 0's waits for its open, after a
   period opened once the server listens; and a reserve made ahead that no window opens (the server stopped first) would
@@ -264,11 +267,12 @@ def listening(port: int) -> bool:
 class GateSessions:
     """H1's coins from the auditor host's challenger, one session a window, through infra's gate `gate` (a
     `commit_coins.Gate`) as peer `peer`, for windows of S `steps` rounds. `take` is a window's session, `open` (the
-    pouw setting ``gate``) opens it on the window's open root and `ended` waits for its end entry. ``held`` is each
-    session reserved, as the gate answered it, under the window it was reserved for; one no window opened says why
-    (``unused``). With ``ahead`` (a `worker`), each window's after the first is reserved there before it opens (`take`).
-    `wait` sleeps between polls, `listens` is `listening` and `now` the UTC time a reserve's expiry is read against
-    (tests)."""
+    pouw setting ``gate``) opens it on the window's open root and its sampling session on its sample root, and `ended`
+    waits for an end entry. ``held`` is each session reserved, as the gate answered it, under the window it was reserved
+    for, its sampling session's (`reserve`, reserved withheld right after it) as its ``draw``; one no window opened says
+    why (``unused``). With ``ahead`` (a `worker`), each window's after the first is reserved there before it opens
+    (`take`). `wait` sleeps between polls, `listens` is `listening` and `now` the UTC time a reserve's expiry is read
+    against (tests)."""
 
     def __init__(self, gate: Any, peer: str, steps: int, *, wait: Callable[[float], Any] = time.sleep,
                  listens: Callable[[int], bool] = listening, ahead: Any = None,
@@ -296,7 +300,37 @@ class GateSessions:
             self.held.append({"window": window, **reserved})
         print(f"[serve-h1] window {window}: reserved session {reserved['session']} on {self.peer} "
               f"(period {reserved.get('period')})", flush=True)
+        self.reserve_draw(window, reserved["session"])
         return reserved
+
+    def reserve_draw(self, window: int, session: str) -> dict[str, Any]:
+        """Window `window`'s sampling session reserved withheld right after its session `session` (``reserve --peer PEER
+        --scheme SCHEME --families draw_families() --withhold``), so a period lists the two in turn: the gate's reserve
+        answer as the pouw setting ``draw_session`` takes it, held as `session`'s ``draw``. The window opens it on its
+        sample root (`pouw_h1_window.DrawSession`). `CoinError` when the gate refuses, or reserves it plain."""
+        from verity.core.protocols.sampled_proofs.challenger import CoinError
+
+        from verity_vllm.protocols.pouw.h1 import challenger as PHC
+        from verity_vllm.protocols.pouw.h1 import window as PHW
+
+        answer = self.gate.call("reserve", "--peer", self.peer, "--scheme", PHC.SCHEME, "--families", PHC.draw_families(),
+                                "--withhold")
+        if answer.get("withheld") is not True:
+            raise CoinError(f"the gate reserved sampling session {answer.get('session')} plain, not withheld: its "
+                            "challenger would hand out its coin commitment's root before the prover's commitment")
+        reserved = PHW.reserved_of({k: v for k, v in answer.items() if k in ("session", *PHW.RESERVE_FIELDS)},
+                                   "draw_session")
+        self.held_of(session)["draw"] = dict(reserved)
+        print(f"[serve-h1] window {window}: reserved sampling session {reserved['session']} on {self.peer}", flush=True)
+        return reserved
+
+    def draw_session(self, session: str) -> dict[str, Any] | None:
+        """The pouw setting ``draw_session`` of the window whose session is `session`: its sampling session's reserve
+        answer (`reserve_draw`)."""
+        from verity_vllm.protocols.pouw.h1 import window as PHW
+
+        draw = self.held_of(session).get("draw")
+        return None if draw is None else {k: v for k, v in draw.items() if k in ("session", *PHW.RESERVE_FIELDS)}
 
     def ahead_of(self, window: int) -> None:
         """Window `window`'s session reserved on ``ahead``, so its open finds it (`take`); nothing without ``ahead``."""
@@ -327,7 +361,10 @@ class GateSessions:
             return next((h for h in self.held if h["session"] == session), {})
 
     def _unused(self, session: str, why: str) -> None:
-        self.held_of(session)["unused"] = why
+        held = self.held_of(session)
+        held["unused"] = why
+        if isinstance(held.get("draw"), dict):
+            held["draw"]["unused"] = why
 
     def drain(self) -> None:
         """Every reserve made ahead ended, the ones no window took marked ``unused``."""
@@ -338,10 +375,11 @@ class GateSessions:
                 self._unused(fut.result()["session"], f"reserved ahead for window {window}, which never opened")
         self._ahead.clear()
 
-    def open(self, session: str, root: str) -> dict[str, Any]:
+    def open(self, session: str, root: str, withhold: bool = False) -> dict[str, Any]:
         """`pouw_h1_window.Gate`: ``open --session SESSION --root ROOT`` (its commitment from ``status`` when the answer's
-        is null), answered once the answer's port listens here (the auditor host's ``ssh -R``, polled `POLLS` times)."""
-        answer = self._open(session, root)
+        is null; with `withhold`, a sampling session's, reserved withheld, the answer must say ``withheld`` and carry
+        none), answered once the answer's port listens here (the auditor host's ``ssh -R``, polled `POLLS` times)."""
+        answer = self._open(session, root, withhold=withhold)
         port, polls = answer.get("port"), None
         if type(port) is int:
             for i in range(POLLS):
@@ -349,7 +387,9 @@ class GateSessions:
                     polls = i
                     break
                 self.wait(1.0)
-        self.held_of(session).update(port=port, listen_polls=polls)
+        with self._lock:
+            held = next((d for h in self.held for d in (h, h.get("draw") or {}) if d.get("session") == session), {})
+        held.update(port=port, listen_polls=polls)
         print(f"[serve-h1] session {session} opened on {root[:16]}…: port {port} "
               + (f"listening after {polls} polls" if polls is not None else f"not listening after {POLLS} polls"),
               flush=True)
@@ -460,8 +500,8 @@ class H1Windows:
         t0, coins, held = self.clock(), {}, None
         if self.sessions is not None:
             reserved = self.sessions.take(window)
-            coins, held = {"challenger": AT, "session": reserved, "gate": self.sessions.open}, \
-                self.sessions.held_of(reserved["session"])
+            coins, held = {"challenger": AT, "session": reserved, "draw_session": self.sessions.draw_session(reserved["session"]),
+                           "gate": self.sessions.open}, self.sessions.held_of(reserved["session"])
         t1 = self.clock()
         self.tap = HC.tap(self.com, self.model, self.layers, range(self.steps))
         served = SV.Served(unit=self.unit, weights=self.weights, tap=self.tap, window=os.urandom(64),
@@ -526,6 +566,8 @@ class H1Windows:
                     drawn = self.drawn(window, run, held, error)
                 if held:
                     end = self.sessions.ended(held["session"])
+                    if isinstance(held.get("draw"), dict):
+                        held["draw"]["end"] = self.sessions.ended(held["draw"]["session"])
             seconds = {**seconds, "queued": round(t0 - queued, 4), "release": round(t1 - t0, 4),
                        "ended": round(self.clock() - t1, 4)}
             out = self._outcome(window, run, held, end, seconds)
@@ -632,7 +674,8 @@ class H1Windows:
         (``releasing``) and the sessions reserved that no window opened (``unused``)."""
         with self._lock:
             outs, releasing = list(self.outcomes), self.releasing
-        unused = [] if self.sessions is None else [h["session"] for h in list(self.sessions.held) if "unused" in h]
+        unused = [] if self.sessions is None else [d["session"] for h in list(self.sessions.held)
+                                                   for d in (h, h.get("draw") or {}) if "unused" in d]
         return {"windows": len(outs), "tied": sum(o["tied"] is True for o in outs),
                 "untied": [o["window"] for o in outs if o["tied"] is False][:20],
                 "gate_passed_rows": sum(int(o["gate"]["gate_passed"]["rows"]) for o in outs
