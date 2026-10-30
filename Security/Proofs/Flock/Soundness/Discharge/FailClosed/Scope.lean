@@ -44,9 +44,8 @@ without `--zk` or `--plain-tables` at public outputs, or under `--plain-tables` 
 a header naming registered values without `--registered`; with it, `Registered.check` needs a shared-row public file,
 which the check passes only at hidden outputs and `hm96-sha512/v1` leaves, where `VerifiesR` and `VerifiesZKR` model the
 registered check), a coin-tree
-key an earlier session of the run used, and a session file it cannot read. A later session of a run whose draw has an earlier
-one's canonical form is verified against that earlier setup; `canon` takes integers only, so the two draws hold the same
-content.
+key an earlier session of the run used, and a session file it cannot read. Each drawn session of a run is set up at its own draw,
+and the draw-less setup, one statement, once.
 -/
 
 namespace FlockSoundness.Discharge.FailClosed
