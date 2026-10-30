@@ -126,20 +126,48 @@ def _window(calls: int = 64) -> L.WindowKeying:
 @pytest.mark.parametrize("shapes", [((1, 128, 1, 128),), ((1, 128, 1, 128),) * 3, ((1, 3072, 64, 256),),
                                     ((17, 256, 9, 128), (1, 3072, 74, 256), (64, 2048, 74, 128), (1, 8, 1, 128)),
                                     ((16, 2048, 256, 256), (16, 16384, 16, 256), (16, 3072, 64, 256))])
-def test_device_words_top_keys_the_cpus_words_root(ext, hasher, shapes):
+@pytest.mark.parametrize("lanes", [1, 3, 16])
+def test_device_words_top_keys_the_cpus_words_root(ext, hasher, shapes, lanes):
     """`DeviceWords` over a forward's calls (one chunk; one-chunk calls with pads; whole powers of two; ragged last chunks
-    across calls) hands `words_top` the CPU subtree's top: check mode passes and d is `words_root`'s."""
+    across calls), on one lane, on fewer lanes than calls and on more, hands `words_top` the CPU subtree's top: check mode
+    passes and d is `words_root`'s."""
     rng = np.random.default_rng(len(shapes) + sum(map(sum, shapes)))
     exports = [_export(rng, *s) for s in shapes]
     streams = [L.stream(ex, *s) for ex, s in zip(exports, shapes)]
     count = sum(L.chunk_count(m, n, S) for m, n, S, _ in shapes)
     w = _window()
-    dw = L.DeviceWords(ext, hasher, w.words_domain(0, count), _stream())
+    dw = L.DeviceWords(ext, hasher, w.words_domain(0, count), _stream(), lanes=lanes)
     for ex, s in zip(exports, shapes):
         dw.add(torch.from_numpy(ex).cuda(), *s)
     top = dw.top()
     assert len(top) == (len(streams[0]) if count == 1 else 128)
     assert w.words_top(0, count, top, check=streams) == _window().words_root(0, streams)
+
+
+def test_device_words_lanes_wait_for_the_export_the_stream_writes(ext, hasher):
+    """A lane gathers a call's export only after the work its stream holds when the call is added: each export is written on
+    the stream behind a long kernel, and the top is still the CPU's."""
+    shapes = ((64, 2048, 74, 128), (17, 256, 9, 128), (1, 3072, 64, 256))
+    rng = np.random.default_rng(5)
+    exports = [_export(rng, *s) for s in shapes]
+    streams = [L.stream(ex, *s) for ex, s in zip(exports, shapes)]
+    count = sum(L.chunk_count(m, n, S) for m, n, S, _ in shapes)
+    staged = [torch.from_numpy(ex).cuda() for ex in exports]
+    torch.cuda.synchronize()
+    w = _window()
+    dw = L.DeviceWords(ext, hasher, w.words_domain(0, count), _stream(), lanes=4)
+    for src, s in zip(staged, shapes):
+        ex = torch.zeros_like(src)
+        torch.cuda._sleep(1 << 26)
+        ex.copy_(src)
+        dw.add(ex, *s)
+    assert w.words_top(0, count, dw.top(), check=streams) == _window().words_root(0, streams)
+
+
+def test_device_words_needs_a_lane(ext, hasher):
+    for lanes in (0, -1, 2.0, True):
+        with pytest.raises(ValueError):
+            L.DeviceWords(ext, hasher, _window().words_domain(0, 4), _stream(), lanes=lanes)
 
 
 def test_device_words_refuses_leaves_past_or_short_of_its_count(ext, hasher):

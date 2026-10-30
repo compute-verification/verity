@@ -283,13 +283,20 @@ class DeviceWords:
     export: its committed stream (``lead_stream``, the tile gather) and its chunks' inline position-bound leaves
     (``lead_leaves``) at the instance's next ranks.  :meth:`top` pads the leaves (``rows_frame``) and hashes the levels
     (``rows_tree``) up to the top :meth:`WindowKeying.words_top` keys.  ``dom`` is :meth:`WindowKeying.words_domain`'s; only
-    the leaves outlive a call, 64 bytes a chunk."""
+    the leaves outlive a call, 64 bytes a chunk.
 
-    def __init__(self, ext, hasher, dom: CommitmentDomain, stream_ptr: int) -> None:
+    A call's leaves are few (``chunk_count``) and each hashes 256 KiB serially, so one call's leaf kernel is latency-bound.  Each
+    call's gather and leaves run on the next of ``lanes`` side streams, after the work ``stream_ptr`` holds so far, so that
+    calls overlap; a call's committed stream lives until its leaves are hashed, so at most ``lanes`` of them are live at once."""
+
+    def __init__(self, ext, hasher, dom: CommitmentDomain, stream_ptr: int, *, lanes: int = 16) -> None:
         import torch
 
+        if type(lanes) is not int or lanes < 1:
+            raise ValueError(f"DeviceWords needs at least one lane, not {lanes!r}")
         self._torch, self._hasher, self._dom = torch, hasher, dom
-        self._stream_ptr, self._stream = stream_ptr, torch.cuda.ExternalStream(stream_ptr)
+        self._stream = torch.cuda.ExternalStream(stream_ptr)
+        self._lanes = [torch.cuda.Stream(device=self._stream.device) for _ in range(lanes)]
         self._ls = ext.LeadStep(dom.domain_id, WORDS_LEAF_TAG)
         # pads and nodes read only the domain id; the row-leaf fields are never hashed here
         self._rs = ext.RowStep(dom.domain_id, bytes(64), bytes(128), bytes(128), bytes(128), WORDS_LEAF_TAG, 64)
@@ -306,11 +313,14 @@ class DeviceWords:
         k = chunk_count(m, n, S)
         if self._next + k > self.count:
             raise Refused(f"a call of {k} chunks after {self._next} of a words instance of {self.count} leaves")
-        with self._torch.cuda.stream(self._stream):
-            words = self._hasher.lead_stream(export, m, n, S, bn, self._stream_ptr)
+        side = self._lanes[len(self._leaves) % len(self._lanes)]
+        side.wait_stream(self._stream)
+        with self._torch.cuda.stream(side):
+            words = self._hasher.lead_stream(export, m, n, S, bn, side.cuda_stream)
             size = 4 * words.numel()
             leaves = self._hasher.lead_leaves(self._ls, words.view(self._torch.uint8), 4 * CHUNK_WORDS, k,
-                                              size - 4 * CHUNK_WORDS * (k - 1), self._next, self._stream_ptr)
+                                              size - 4 * CHUNK_WORDS * (k - 1), self._next, side.cuda_stream)
+        export.record_stream(side)
         self._leaves.append(leaves)
         if self.count == 1:
             self._one = words
@@ -321,13 +331,18 @@ class DeviceWords:
         torch, count = self._torch, self.count
         if self._next != count:
             raise Refused(f"a words instance of {count} leaves got {self._next}")
-        with torch.cuda.stream(self._stream):
+        main = self._stream
+        for side in self._lanes:
+            main.wait_stream(side)
+        for t in self._leaves if count > 1 else [self._one]:
+            t.record_stream(main)
+        with torch.cuda.stream(main):
             if count == 1:
                 return self._one.view(torch.uint8).cpu().numpy().tobytes()
             leaves = torch.cat(self._leaves) if len(self._leaves) > 1 else self._leaves[0]
             width = 1 << (count - 1).bit_length()
             if width > count:
-                pads = self._hasher.rows_frame(self._rs, leaves.new_empty((0, 64)), count, width - count, count, self._stream_ptr)
+                pads = self._hasher.rows_frame(self._rs, leaves.new_empty((0, 64)), count, width - count, count, main.cuda_stream)
                 leaves = torch.cat([leaves, pads])
-            levels, _root, _ms = self._hasher.rows_tree(self._rs, leaves.contiguous(), 0, self._stream_ptr)
+            levels, _root, _ms = self._hasher.rows_tree(self._rs, leaves.contiguous(), 0, main.cuda_stream)
             return levels[-2].cpu().numpy().tobytes()
