@@ -263,3 +263,14 @@ where h_forced ≤ h is the hashing or fold work a cheater can't skip. So 99% ne
   - Overhead premises need precision of about 1%/h: lead 0.008%, R80X about 0.05%, h ≈ 1 about 1%. That is HASH's second motivation beside T2.
   - Co-issue is judged in work, not wall time (§2a), which answers SI-THEORY's 14–28% time reading: report it, don't judge on it.
 - HASH re-targets at 23:00Z as planned, under §2a.
+
+**08:05Z, ROUNDS checkpoint 3 (note 20261030T0755Z-report-hash-fold-rounds): R80X specified as a v3 candidate.**
+- **Function:** SHA-512's rounds over free 64-bit words, each XORed with `xc(t)`, plus the feed-forward per block. Honest cost is 30j + 14 writes a block of j words.
+- **h** 18.10 / 17.72 (7.0–7.2× under the lead), within 0.6% of the structural best inside the unmodified round.
+- **Word layout:** each 64-bit word is the accumulator pair at rows r and r+8 of one MMA fragment, so no shuffle.
+- **Constants:** K at (t+40) mod 80, rotated a byte at a time until each half has a nonzero bit in 4..6, then low nibble 0x1. This fixes 8 halves at 0x81.
+- **Cadence:** one chain a thread slot, started a window from SHA-512(tag ‖ salt ‖ chain id), carried across calls, its state sealed once a call as a hiding leaf.
+- **Under §2a,** the fold adds no gap only if Daniel extends ShaSpeed ("hashing credited, with honest taken as the best") from SHA-512 to its round function on raw words. Without that, the gap is the premise's slack, which must hold to 0.055% (1.39 writes a block).
+- **T2, estimate:** 9.1/10.7 at t8192 against the lead's 54.9/66.0. The measurement plan is sm_120 tiers 1–3, then an H200 run of record.
+- **Lean draft:** `Security/Definitions/Pouw/Assumptions/ShaWritesR80.lean` (type-checks; pinned to `xc` and to SHA-512("abc")). It is weaker than the protocol's premise until W1 gains carry predicates. The falsification test is `hash_r80_premise.py falsify`.
+- **Next:** when COUNTER's R80X attack reports (09:00Z), the coordinator puts the ShaSpeed-R80 extension to Daniel as a card.
