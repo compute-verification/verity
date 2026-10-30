@@ -28,6 +28,10 @@ open Pouw.Dimension.H100
 
 variable (L : Pouw.Lead.Layout) (N₀ : ℕ)
 
+/-- The coins are finite. Spelled out because instance search doesn't reach `Coins`' four nested function types
+under one more (`Fin N₀ → Coins L`). -/
+instance instFintypeCoins : Fintype (Coins L) := inferInstanceAs (Fintype (_ × _ × _ × _))
+
 /-- The salt: every unit's coins. -/
 abbrev Salt : Type := Fin N₀ → Coins L
 
