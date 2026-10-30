@@ -61,7 +61,9 @@
   "Properties.Nci.Protocol",
   "Properties.Verity.Soundness",
   "Properties.Verity.Game",
-  "Properties.Verity.Idle"
+  "Properties.Verity.Idle",
+  "Properties.NetworkCertifier.Period",
+  "Properties.Verity.Network"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -276,6 +278,10 @@
   "Properties.RemoteAudit.ScheduleLayoutGap": {
    "owner": "@memory-accounting",
    "digest": "7a9fc4b287459b57492b22f04af9961b0fea507e9e20f7d07ece852e1050d80b"
+  },
+  "Properties.NetworkCertifier.HonestWindowProved": {
+   "owner": "@network-accounting",
+   "digest": "df1259c692fb01347468eb242d13bc0aa27f115e2ad5dca76f5311830d497c4f"
   }
  },
  "meaning": [
@@ -467,9 +473,15 @@
    "why": "the bridge is stated against core's identity hash and C-Flock's SHA-512, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.NetworkCertifier": {
-   "imports": ["NetworkCheck.Check", "NetworkCheck.LinkWindow", "Properties.Identity", "Lms.Sign"],
+   "imports": [
+    "NetworkCheck.Check",
+    "NetworkCheck.LinkWindow",
+    "Properties.Identity",
+    "NetworkCheck.Period",
+    "Lms.Sign"
+   ],
    "except": [],
-   "why": "the properties are stated against the code's own functions, the check's and N2's link-window verdict of record's, and the certificates the certifier's device signs against LMS's own signer (`CertifierSigned`), never a proof"
+   "why": "the properties are stated against the code's own functions, the check's, N2's link-window verdict of record's and the period check's (NetworkCheck.Period), and the certificates the certifier's device signs against LMS's own signer (`CertifierSigned`), never a proof; the period's honest instance signs with LMS's own key derivation and signer (Lms.Sign)"
   },
   "Properties.Evaluate": {
    "imports": ["Evaluate", "Definitions.Core.Scalar", "Definitions.Core.Fp32", "Definitions.Core.Prims"],
@@ -597,10 +609,12 @@
     "Definitions.Core.Site",
     "Definitions.Nci",
     "Definitions.Hash.Assumptions",
-    "Lms.Verify"
+    "Lms.Verify",
+    "Properties.Verity",
+    "Properties.NetworkCertifier.Period"
    ],
    "except": [],
-   "why": "soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 and LMS verifier, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; the blocks and the wipe; the site; the inference-only policy; the hash area's named assumptions), the shared game and the row-leaf opening it reads the commitment through, never over a proof"
+   "why": "soundness at the verifier of record is stated over the composites' compiled code (CoreComposites, CoreOnsite) and its SHA-512 and LMS verifier, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the one vocabulary's shared definitions (Accounting.PeriodLive, the one definition of a period; the blocks and the wipe; the site; the inference-only policy; the hash area's named assumptions), the shared game and the row-leaf opening it reads the commitment through, the network period check's property (PeriodAcceptMeans, which the lift from ComponentAccepts .network reads) and its own modules (the game's vocabulary), never over a proof"
   },
   "Properties.Pouw.Period": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck"],
@@ -3014,6 +3028,44 @@
    ],
    "assumptions": [],
    "type_hash": "5331eb5f08954cebb0c4dda27e710eeab5c3ec3baba428f68d214b1f2d74f91d"
+  },
+  "Properties.NetworkCertifier.periodAcceptMeans": {
+   "owner": "@network-accounting",
+   "signature": ["Properties.NetworkCertifier.periodAcceptMeans : Properties.NetworkCertifier.PeriodAcceptMeans"],
+   "assumptions": [],
+   "type_hash": "a03ac9ceefb2566c1415183a6ffc0ad1af4e0b29b14d1582d485d9ca52daa2b3"
+  },
+  "Properties.NetworkCertifier.periodAcceptMeans_honest": {
+   "owner": "@network-accounting",
+   "signature": [
+    "Properties.NetworkCertifier.periodAcceptMeans_honest (hv : Properties.NetworkCertifier.HonestWindowProved) :",
+    "  Exists fun l =>",
+    "    Exists fun prog =>",
+    "      Exists fun reg =>",
+    "        Exists fun de =>",
+    "          Exists fun di =>",
+    "            Exists fun s =>",
+    "              Exists fun ev =>",
+    "                Exists fun bs =>",
+    "                  Eq",
+    "                    (NetworkCheck.Period.check (Properties.NetworkCertifier.honestParams l prog)",
+    "                      (Properties.NetworkCertifier.honestCommitment reg)",
+    "                      (Properties.NetworkCertifier.honestEvidence de di s ev) bs)",
+    "                    (Core.Outcome.accept",
+    "                      (NetworkCheck.Period.terms List.nil.toArray List.nil.toArray List.nil.toArray 0 1 1)",
+    "                      { link := \"link\", windows := 1 })"
+   ],
+   "assumptions": ["Properties.NetworkCertifier.HonestWindowProved"],
+   "type_hash": "294a6f99276808d7191704840fb12a26d9b85ac90f32474fbcaa6b08d8c0d372"
+  },
+  "Properties.NetworkCertifier.periodAcceptMeans_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [
+    "Properties.NetworkCertifier.periodAcceptMeans_nontrivial :",
+    "  Not (Properties.NetworkCertifier.PeriodAcceptMeansOf Properties.NetworkCertifier.acceptAllPeriod)"
+   ],
+   "assumptions": [],
+   "type_hash": "366dda7544176736db2b6bcd31647f2ab3af422f219a1f809eb89aa1d6c9a0c2"
   }
  },
  "shape": {
@@ -4206,6 +4258,10 @@
    "Properties.NetworkPeriod.rowsStateTied": {
     "function": "NetworkCheck.Period.check",
     "outcome": "accept"
+   },
+   "Properties.NetworkCertifier.periodAcceptMeans": {
+    "function": "NetworkCheck.Period.check",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -4274,7 +4330,9 @@
    "Properties.NetworkScan.ScanScopeAcc": "unstated: scanScopeAcc_of_scanFits (Proofs.Properties.NetworkScan) proves it from ScanFits, which is unstated until its part (3) is proved (its entry)",
    "Properties.NetworkPeriod.rowsProgWired_nontrivial": "lemma: RowsProgWired's nontrivial witness: a period check that accepts everything (acceptAllRows) fails RowsProgWiredOf at a rows-form period of one link-window whose scan's prog is no audit's slot entries",
    "Properties.NetworkPeriod.rowsStateTied_nontrivial": "lemma: RowsStateTied's nontrivial witness: a period check that accepts everything (acceptAllRows) fails RowsStateTiedOf at a rows-form period of one link-window whose scan's state is not its wired audit's SCAN_STATE",
-   "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial": "lemma: RowsTiedDrawn's nontrivial witness: a period check that accepts everything (acceptAllRows) fails RowsTiedDrawnOf at a rows-form period whose tied audit one-stage didn't answer"
+   "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial": "lemma: RowsTiedDrawn's nontrivial witness: a period check that accepts everything (acceptAllRows) fails RowsTiedDrawnOf at a rows-form period whose tied audit one-stage didn't answer",
+   "Properties.NetworkCertifier.periodAcceptMeans_honest": "lemma: PeriodAcceptMeans' honest witness (LEAN-66): the check accepts an honest one-window clock-form period on some clock link, Program, registration, certified digests and proof of it that one-stage v2 accepts and that opens, under the named assumption HonestWindowProved (N2's completeness on that link-window, which no kernel evaluation makes); the witnesses rule holds it to its form once it runs",
+   "Properties.NetworkCertifier.periodAcceptMeans_nontrivial": "lemma: PeriodAcceptMeans' nontrivial witness (LEAN-66): a period check that accepts everything (acceptAllPeriod) fails PeriodAcceptMeansOf; the witnesses rule holds it to its form once it runs"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -20481,6 +20539,10 @@
   },
   "NciCheck.Properties.SecurityProofs.ProtocolAccepts": {
    "nontrivial": "NciCheck.Properties.SecurityProofs.ProtocolAccepts_nontrivial"
+  },
+  "Properties.NetworkCertifier.periodAcceptMeans": {
+   "honest": ["Properties.NetworkCertifier.periodAcceptMeans_honest"],
+   "nontrivial": "Properties.NetworkCertifier.periodAcceptMeans_nontrivial"
   }
  },
  "unwitnessed": {
