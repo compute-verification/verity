@@ -36,8 +36,4 @@ theorem accepts_of_R {I : Inputs} {own : Array Registered.Port} {t : Exec.Transc
   let ⟨spec, sts, hs, _, hv⟩ := h
   ⟨spec, sts, hs, hv⟩
 
-theorem liveAccepts_of_R {I : Inputs} {own : Array Registered.Port} {o : Reg × Finset (Fin n) × Exec.Transcript}
-    (h : LiveAcceptsR I own o) : LiveAccepts I o :=
-  accepts_of_R h
-
 end FlockSoundness.Discharge.PlainReg
