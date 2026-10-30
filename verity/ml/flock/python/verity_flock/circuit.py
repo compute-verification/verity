@@ -63,7 +63,7 @@ from pathlib import Path
 
 import numpy as np
 
-from verity.ml.windows.interface import K_MAX, K_MIN, MASK_LOG, PER_SLOT, SLOT_LOG
+from verity.ml.windows.interface import K_MAX, K_MIN, MASK_LOG, PACK_LOG, PER_SLOT, SLOT_LOG
 
 from . import ir_lower as IL
 
@@ -728,7 +728,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
 
     if vus_per_block is None:
         G, k1 = 1, fits(1)[1]
-        while 2 * G * U.n <= 4096 and fits(2 * G)[1] <= max(k1, 22):
+        while 2 * G * U.n <= 4096 and fits(2 * G)[1] <= max(k1, PACK_LOG):
             G *= 2
     else:
         G = vus_per_block
