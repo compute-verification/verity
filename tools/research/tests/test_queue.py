@@ -20,6 +20,7 @@ from typing import Callable
 
 import pytest
 
+import research.queue as Q
 from research.cli import _custody_ttl_problem, main as research_main
 from research.pods.nebius import slot_only
 from research.queue import (DRIVE_FLAGS, PR, PREFLIGHT_BUDGET_S, SHADOW_BRANCH, Queue, QueueError, Rules, conflicting_files,
@@ -439,10 +440,20 @@ def test_a_sync_by_merge_tree_builds_the_next_and_refusals_the_worktree_merges_b
         heads[n] = world.change(files, base=heads[3] if n == 29 else "origin/main")
         world.gh.put(n, heads[n])
     new = world.queue()
-    monkeypatch.setattr(new, "_merge_in_worktree", lambda *a: pytest.fail("merged in the worktree"))
     old = Queue(world.tmp / "q-old" / "verity", remote=str(world.origin), github=world.gh, store=world.store,
                 log=world.logs.append, ready=lambda n, h: (n, h) in world.gh.ready, shadow=True)
-    old._attr_source = False
+
+    def in_worktree(tip, pr, members):
+        _git(old.workdir, "checkout", "-q", "--detach", tip)
+        r = Q._git(old.workdir, "merge", "--no-ff", "--no-edit", "-m", Q._message(pr), pr.head, check=False, env=Q.IDENTITY)
+        if r.returncode == 0:
+            return _git(old.workdir, "rev-parse", "HEAD"), ""
+        files = _git(old.workdir, "diff", "--name-only", "--diff-filter=U").split()
+        Q._git(old.workdir, "merge", "--abort", check=False)
+        _git(old.workdir, "reset", "-q", "--hard", tip)
+        return None, old._unmerged(r, files, members)
+
+    monkeypatch.setattr(old, "_merge", in_worktree)
 
     def same() -> list:
         (got, ge), (want, we) = new.sync(), old.sync()
@@ -462,6 +473,23 @@ def test_a_sync_by_merge_tree_builds_the_next_and_refusals_the_worktree_merges_b
     world.gh.put(31, world.change({"f31.txt": "31\n"}))
     again, _ = same()
     assert [m.commit for m in again[:-1]] == [m.commit for m in first] and again[-1].pr == 31
+
+
+def test_a_sync_on_a_git_without_attr_source_raises_rather_than_merging_without_the_pin_merge(world, monkeypatch):
+    """A git before 2.40 refuses `--attr-source` (exit 129); merging without it left out every PR whose only conflict is a pin,
+    silently.  The sync raises, naming the fix, and pushes no `next`."""
+    real = Q._git
+
+    def old_git(repo, *args, **kw):
+        if args[0].startswith("--attr-source"):
+            return subprocess.CompletedProcess(args, 129, "", f"unknown option: {args[0]}\nusage: git [--version] [--help]")
+        return real(repo, *args, **kw)
+
+    monkeypatch.setattr(Q, "_git", old_git)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    with pytest.raises(QueueError, match=r"has no `--attr-source`, which merging `next` needs: install git >= 2\.40"):
+        world.queue().sync()
+    assert not _git(world.origin, "for-each-ref", "refs/heads/next")
 
 
 def test_a_conflicting_pr_is_left_out_with_the_queued_pr_that_touched_the_file_and_no_note_is_written(world, monkeypatch):

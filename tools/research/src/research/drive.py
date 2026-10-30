@@ -117,6 +117,9 @@ from .queue import (IDENTITY, PR, Entry, Member, Queue, QueueError, StoreLabels,
 
 #: who hears what drive can't settle
 CI = "@ci"
+#: the oldest git whose `merge-tree` takes `--attr-source` (`Queue._merge`): on an older one drive refuses each tick and rings
+#: `CI` and `INFRA`, again each `OLD_GIT_EVERY_S` while it stays (`Driver._old_git`)
+GIT_MIN, OLD_GIT_EVERY_S, INFRA = (2, 40), 3600, "@infra"
 #: a pytest location (`tests/test_x.py:503: NameError`) or a traceback frame (`File "/.../x.py", line 12`) in a suite's log
 TRACE_RE = re.compile(r'^\s*([\w./+-]+\.py):\d+:|File "([^"]+\.py)", line \d+', re.M)
 #: a repository path a pytest failure report names (`E   tools/x/README.md: 48 KB > 48 KB`: a lint's offender is in
@@ -497,6 +500,11 @@ def cancel_runs(repo: Path, ids: list[str], reason: str) -> dict[str, str]:
         if r.returncode:
             failed[rid] = (r.stderr or r.stdout).strip()[-300:] or f"exit {r.returncode}"
     return failed
+
+
+def git_version() -> str:
+    """`git --version` of the git drive runs."""
+    return subprocess.run(["git", "--version"], capture_output=True, text=True).stdout.strip()
 
 
 def merge_thread_post(text: str, to: tuple[str, ...] = (CI,), sender: str = "ci") -> bool:
@@ -2914,6 +2922,8 @@ class Driver:
         self.dry_run, self._seen, self._prs, self._ev = dry_run, {}, None, {}
         self._reg, self._own_files, self._jobs_at = None, {}, {}
         q._clone()
+        if why := self._old_git():
+            return why
         q.fetch()
         if q.store is not None and q.store.remote is not None:
             try:
@@ -2928,6 +2938,26 @@ class Driver:
         self._drive = drive
         self.follow_postland(drive)
         return self._review(state, drive, dry_run)
+
+    def _old_git(self) -> str | None:
+        """Why the tick is refused, before any sync or push, when drive's git is older than `GIT_MIN`: `Queue._merge` needs its
+        `merge-tree --attr-source`.  It rings `CI` and `INFRA` with the version and the fix once in `OLD_GIT_EVERY_S`; None on
+        a git that has it."""
+        v = git_version()
+        if (m := re.search(r"(\d+)\.(\d+)", v)) and (int(m[1]), int(m[2])) >= GIT_MIN:
+            return None
+        q, need = self.q, ".".join(map(str, GIT_MIN))
+        text = (f"drive refuses its ticks: `{v or 'git --version'}` has no `merge-tree --attr-source`, so a sync would leave out "
+                f"every PR whose only conflict is a pin. Fix: install git >= {need} on drive's machine")
+        q.log(f"research queue drive: {text}")
+        if q.shadow or self.dry_run:
+            return text
+        state = q.load_state()
+        drive = state.setdefault("drive", {})
+        if self.now() - drive.get("rang_old_git", 0) >= OLD_GIT_EVERY_S and self.post(f"{CI} {INFRA} queue: {text}", (CI, INFRA)):
+            drive["rang_old_git"] = self.now()
+            q.save_state(state)
+        return text
 
     def _sweep(self, drive: dict, dry_run: bool) -> None:
         q = self.q
