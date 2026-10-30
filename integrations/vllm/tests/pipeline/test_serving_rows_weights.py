@@ -6,11 +6,15 @@ members.  The leak count holds them free until an audit opens them against the p
 from __future__ import annotations
 
 import json
+import re
 
+import numpy as np
 import pytest
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.pipeline import serving_rows as SRW, weight_rows as WT
+from verity_vllm.program.predict import window_weights as WW
 
+from verity.core.protocols.sampled_proofs.one_stage import registered as REG, registration as R
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops import gemm as G
@@ -79,6 +83,58 @@ def test_chunks_are_cut_again_at_the_reads_ends(served):
     window, _rows, doc = served({**PARTITION, "chunk_cap": {T: 4}})
     assert [(m.base, m.n) for m in window.members] == [(0, 3), (3, 1), (4, 2), (6, 2), (8, 1), (9, 3), (12, 3), (15, 1), (16, 2)]
     assert doc["registered"] == served(PARTITION)[2]["registered"]
+
+
+def values_and_rows(window, doc, key=bytes(range(32))):
+    """The committer's weights committed under ``key`` (`window_weights.weight_value`, rows held), and each member's rows as
+    `serving_rows.read_all` reads them: ``in0`` the activations, ``in1`` the weight row each unit reads."""
+    rng, reg = np.random.default_rng(5), IF.listed_registered(doc)
+    words = {f: rng.integers(0, 1 << 16, c, dtype=np.uint16) for f, c, _s, _b in FIELDS}
+    values = {p: WW.weight_value("cd" * 64, p, words[p.split("/", 1)[1].rpartition("@")[0]], key, WW.WEIGHTS_NONCE + i,
+                                 keep_rows=True) for i, p in enumerate(reg.params)}
+    data = []
+    for m in window.members:
+        (r,) = [r for r in reg.reads if r.at <= m.base < r.at + r.reader_units]
+        at = r.source(np.arange(m.base - r.at, m.base - r.at + m.n)) // 32
+        data.append({"rows": {"in0": rng.integers(0, 1 << 16, (m.n, 32), dtype=np.uint16), "in1": CS.value_rows(values[r.param], at)},
+                     "outs": {p: np.zeros((m.n, w), dtype=np.uint16) for p, w in m.outs}})
+    return values, data
+
+
+def test_the_committer_commits_each_read_by_reference_as_the_lean_verifier_opens_it(served, tmp_path):
+    """Given the committer's weights, each read port's rows are its value's rows, its units' positions the ones the Lean
+    verifier's ``--registered`` derives from the record alone (`interface.registered_reads`, under the pins of the values'
+    entries); the window writes them as its members' ``registered`` and ``value_rows`` and records each value's root."""
+    window, _rows, doc = served(PARTITION)
+    values, data = values_and_rows(window, doc)
+    got, entries, roots = WT.by_reference(window, IF.listed_registered(doc), data, values)
+    assert roots == {p: v.root.hex() for p, v in values.items()}
+    assert {k: e["in1"]["positions"] for k, e in entries.items()} == {f"{T}/c{j}": [3 * (j % 3 == 2) + i for i in range(3)]
+                                                                       for j in range(6)}
+    assert all(isinstance(d["rows"]["in1"], CS.ValueRows) and isinstance(d["rows"]["in0"], np.ndarray) for d in got)
+    lean = IF.registered_reads(doc, IF.window_of_record(doc, window.law, {T: UNIT}.__getitem__),
+                               {p: v.entry() for p, v in values.items()}, registered=REG)
+    assert {k: (e["ports"]["in1"]["reads"], e["ports"]["in1"]["root"]) for k, e in lean.items()} == {
+        k: (e["in1"]["positions"], roots[e["in1"]["value"]]) for k, e in entries.items()}
+    res = CS.write(CS.commit(window, got, salt_key=bytes(32)), tmp_path, {"registered_roots": roots}, {}, registered=entries,
+                   registrar=R)
+    assert [m["registered"]["in1"] for m in res["members"]] == [{"value": e["in1"]["value"], "positions": e["in1"]["positions"]}
+                                                                 for e in entries.values()]
+    assert not any("value_rows" in m for m in res["members"]) and set(res["registered_paths"]) == set(roots)
+    assert IF.registered_roots(json.loads((tmp_path / "registration.json").read_text())["window"]) == roots
+
+
+def test_a_read_whose_rows_are_not_its_values_is_refused_and_no_values_commit_rows_in_full(served):
+    window, _rows, doc = served(PARTITION)
+    values, data = values_and_rows(window, doc)
+    reg = IF.listed_registered(doc)
+    assert WT.by_reference(window, reg, data, None) == (data, {}, {})
+    other, _ = values_and_rows(window, doc, key=bytes(32))
+    data[1]["rows"]["in1"] = data[1]["rows"]["in1"] ^ np.uint16(1)
+    with pytest.raises(ValueError, match=re.escape(f"{T}/c1 in1: the rows its units read aren't 'weights/model.layers.1.mlp.gate.weight@32'")):
+        WT.by_reference(window, reg, data, values)
+    with pytest.raises(ValueError, match="give its committed value, or no values at all"):
+        WT.by_reference(window, reg, data, {p: v for p, v in other.items() if "layers.0" in p})
 
 
 def test_a_read_that_would_cut_a_wired_member_is_refused():

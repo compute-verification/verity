@@ -3,17 +3,19 @@
 row of one weight of the Program's ``weights`` struct (`Gemm_v2{N=1}`'s ``w[n]``), as a read of that weight's registered
 parameter at the port's row width (``weights/<label>@<words>``, `check.weights_of_record.weight_param`), its leaves the
 weight's u16 words.  A read is declared only where the port's rows are the registered value's rows' schema (``row/v2``
-bit rows), so the committer can commit it by reference to the weight's committed rows; a row template's ``row/v1`` rows, a
-coordinate's ``w[:, n, :]`` and an s8 unit's ``W[c, :] ‖ sw[c]`` are no such row, and stay free.  The window's members are
-cut where the reads begin and end (`cut`), so each read covers whole members.  It reads the Programs' rows alone, public
-structure, never a value, so the registered compiler's record of the advice (``prove_path.py circuit``) states the same
-reads as the prover's."""
+bit rows), so the committer, given its weights, commits it by reference to the weight's committed rows (`by_reference`); a
+row template's ``row/v1`` rows, a coordinate's ``w[:, n, :]`` and an s8 unit's ``W[c, :] ‖ sw[c]`` are no such row, and stay
+free.  The window's members are cut where the reads begin and end (`cut`), so each read covers whole members.  The reads
+come from the Programs' rows alone, public structure, never a value, so the registered compiler's record of the advice
+(``prove_path.py circuit``) states the same reads as the prover's."""
 from __future__ import annotations
 
 import math
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 from typing import Any
+
+import numpy as np
 
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.ml.windows import interface as IF
@@ -89,6 +91,38 @@ def reads(members: Sequence[CS.Member], rows: Sequence[list[Row]],
             at += units(t, d)
     got = IF.coalesce(out)
     return IF.Registered({p: params[p] for p in sorted({x.param for x in got})}, reads=tuple(got)) if got else None
+
+
+def by_reference(window: CS.Binding, registered: IF.Registered | None, data: Sequence[dict[str, Any]],
+                 values: Mapping[str, Any] | None) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[str, str]]:
+    """``data`` (`serving_rows.read_all`'s, one a member) with each port a read of ``registered`` fills given by reference
+    (`rows.ValueRows`) as the rows its units read of the parameter's committed value in ``values`` (``{param: core's
+    registered.Registered}``, the committer's weights under its key at their nonces, rows held: `window_weights.weight_value`),
+    so each unit's row is the value's row the Lean verifier opens against the pinned root (`interface.registered_reads`);
+    with each such member's header entries (`rows.write`'s ``registered``) and each value's root (``registered_roots``).
+    Refused (ValueError) where a read's value is missing or isn't the words its units read.  ``data`` as given with no
+    ``values``, or in a window with row tables (whose rows `rows.commit` takes in full): its reads stay free."""
+    if not values or registered is None or window.row_tables:
+        return list(data), {}, {}
+    base: dict[str, int] = {}
+    for m in window.members:
+        base.setdefault(m.template, m.base)
+    out, entries, roots = [], {}, {}
+    for m, d in zip(window.members, data, strict=True):
+        lo, d = m.base - base[m.template], {**d, "rows": dict(d["rows"])}
+        for r in (r for r in registered.reads if r.reader == m.template and r.at <= lo < r.at + r.reader_units):
+            v, w = values.get(r.param), dict(m.rows)[r.port]
+            if v is None:
+                raise ValueError(f"{m.key} {r.port} reads {r.param!r}: give its committed value, or no values at all")
+            at = r.source(np.arange(lo - r.at, lo - r.at + m.n)) // w
+            if v.words != w or not np.array_equal(CS.value_rows(v, at), np.asarray(d["rows"][r.port], dtype=np.uint16)):
+                raise ValueError(f"{m.key} {r.port}: the rows its units read aren't {r.param!r}'s committed rows {at[:4].tolist()}...")
+            d["rows"][r.port] = CS.ValueRows(v, tuple(int(x) for x in at))
+            entries.setdefault(m.key, {})[r.port] = {"value": v.value, "positions": [int(x) for x in at],
+                                                     "paths": [v.path(int(x)).hex() for x in at]}
+            roots[r.param] = v.root.hex()
+        out.append(d)
+    return out, entries, roots
 
 
 def cut(members: Sequence[CS.Member], registered: IF.Registered | None) -> list[CS.Member]:

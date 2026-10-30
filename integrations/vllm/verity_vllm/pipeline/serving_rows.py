@@ -285,8 +285,7 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
                                                              for j, f in enumerate(CR.fields(template(t))))
             schemas = tuple((p, s) for p, s, _b, _ps in in_rows) + tuple((p, CS.SCHEMA_HM96_SHA512_ROW_V2) for p, _w in outs)
             out += [CS.Member(t, tuple((p, b // 16) for p, _s, b, _ps in in_rows), outs, min(cap, n - lo), base + lo, name=f"{t}/c{j}",
-                              schemas=schemas)
-                    for j, lo in enumerate(range(0, n, cap))]
+                              schemas=schemas) for j, lo in enumerate(range(0, n, cap))]
             base += n
             continue
         if layout == "rope":
@@ -754,7 +753,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
                  workers: int | None = None, stand_in: Mapping[str, Any] | None = None, tp: Mapping[str, Any] | None = None,
                  index: Mapping[str, Any] | None = None, row_tables: Mapping[str, Any] | None = None,
                  reuse: Sequence[ProgramIndex] = (), binding: Mapping[str, Any] | None = None,
-                 transfer_gates: Sequence[str] = ()) -> dict[str, Any]:
+                 transfer_gates: Sequence[str] = (), weight_values: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Commit the verifier's partition's units of a run whose roots are final and write the window's files into ``out_dir``:
     the registration (core's v1 record, its window the run root ``run_root`` and the provenance: the scheme the values were read
     under (``commitment``: the reader's committer's, rows-sha512 by default or vllm-v1 by name), the research run ``run``, the row, the
@@ -762,7 +761,8 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     with ``stand_in`` (its ``of`` and ``link``), a ``stand-in`` with them in its provenance.  A TP rank's window (`pipeline.tp.
     serving_rows`) gives its run as a string, its world and roots as ``tp``, its ProgramIndex arguments as ``index`` and the index it
     loaded its Programs with as ``reuse``.  ``transfer_gates`` are the templates the registered compiler lists as holding transfer
-    gates, which the window's law proves whole (`population`).  A
+    gates, which the window's law proves whole (`population`); ``weight_values`` (the committer's weights, by registered
+    parameter) commit its weight reads by reference, their roots its ``registered_roots`` (`weight_rows.by_reference`).  A
     row-table layout takes the serving loop's ``row_tables``: ``{"context": <hex>, "key": <the run's row key>, "step_roots":
     {engine step: root}}`` (`commit.row_tables.step_roots`), which the window's step roots must be.  It reads the committed values
     and writes only ``out_dir``, ``circuit.json`` among its files: the window's circuit record (`circuit_record`), whose SHA-512
@@ -770,19 +770,19 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     compiler's digest and the advice's hiding root (`pipeline.advice_windows.binding`)."""
     t0 = time.perf_counter()
     dirs = {str(k): v for k, v in (program_dirs or {}).items()}
-    pf = json.loads(Path(partition_file).read_text())
-    rt = row_tables or {}
+    pf, rt = json.loads(Path(partition_file).read_text()), row_tables or {}
     window, rows = population(programs, pf, run_root if isinstance(run_root, str) else bytes(run_root).hex(), dirs, index, arrivals,
                               rt.get("context", ""), reuse, transfer_gates)
     ms = window.members
     store = CommittedStore.of_record(bmap, committed, manifest)
     got = read_all(ms, rows, store, weights, arrivals)
+    data, entries, roots = WT.by_reference(window, WT.reads(ms, rows, row_units), [g[0] for g in got], weight_values)
     t_read = time.perf_counter()
-    c = CS.commit(window, [g[0] for g in got], row_salt_key=rt.get("key"), segment_roots=rt.get("step_roots"),
+    c = CS.commit(window, data, row_salt_key=rt.get("key"), segment_roots=rt.get("step_roots"),
                   workers=workers or min(16, os.cpu_count() or 1))
     prov = {"commitment": "vllm-v1", "row": row, "research_run": run, "committer": dict(committer or {}, module=CS.__name__),
             "served_programs": {str(k): str(v) for k, v in sorted((digests or {}).items())}, "scope": pf.get("scope"),
-            **({"tp": dict(tp)} if tp else {}), **(stand_in or {}), **(binding or {})}
+            **({"tp": dict(tp)} if tp else {}), **(stand_in or {}), **(binding or {}), **({"registered_roots": roots} if roots else {})}
     prov["commitment"] = getattr(getattr(committed, "com", None), "commit_scheme", prov["commitment"])
     c.seconds["read_s"] = round(t_read - t0, 3)
     Path(out_dir).mkdir(parents=True, exist_ok=True)
@@ -791,7 +791,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     (Path(out_dir) / "circuit.json").write_bytes(body)
     prov["circuit"] = hashlib.sha512(body).hexdigest()
     res = CS.write(c, out_dir, prov, IX.index_doc(ms, [g[1] for g in got], window.run), kind="stand-in" if stand_in else "served",
-                   registrar=R)
+                   registered=entries, registrar=R)
     res["seconds"]["hook_s"] = round(time.perf_counter() - t0, 3)
     (Path(out_dir) / "window.json").write_text(json.dumps(res, indent=1, default=str) + "\n")
     print(f"[serving-rows] {window.population} units in {len(ms)} members committed ({CS.SCHEME}): "
