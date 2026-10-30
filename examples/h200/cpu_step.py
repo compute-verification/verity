@@ -1,6 +1,6 @@
 """The frozen architecture's decode step on the CPU: an MQA decoder of any `weights.Shape` (the H200's frozen shape, or a
 tiny instance of it), every operation a proof block in circuits' forms (their plan's row semantics), and every unit's inputs and
-outputs recorded, so `replay` has a step to draw from before the GPU driver commits one.
+outputs recorded, so `replay` has a step to sample from before the GPU driver commits one.
 
 It computes in torch, the way a kernel computes: f32 tensors with one IEEE rounding an operation, every reduction a loop in
 ascending index from +0, ``torch.round`` (half to even) for the quantizer, and torch's bf16 cast (RNE). Two functions torch

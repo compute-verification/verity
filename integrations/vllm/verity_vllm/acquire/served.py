@@ -678,7 +678,7 @@ def probe_routes(shapes: list[list[int]]) -> dict[str, Any]:
     """cuBLAS's route at each (M, K, N) on this GPU, read from the words of `torch.mm(x, w.t(), out=y)` as the served wrapper calls
     it (W rows past the probe's zero): x all ones against `bf16_gemm_check.splitk_count_probe`'s rows reads the split counts a
     partition could have (`fit_cublas_split_k`); of the routes those leave (`cublas_routes_at`), the one whose twin
-    (`cublas_route_rows`) computes every word of `route_probe_rows`' spread and cancelling rows (drawn from the generator of
+    (`cublas_route_rows`) computes every word of `route_probe_rows`' spread and cancelling rows (sampled from the generator of
     seed (M, K, N)) is the route, and none or more than one is refused, naming each route's missed words."""
     import torch
 

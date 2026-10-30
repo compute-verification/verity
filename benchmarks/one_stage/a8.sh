@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # One-stage audit, run A8, on a CPU machine: one window of the remote bandwidth audit's openings proved in zero knowledge
 # through the opening unit (a8.py), honest and with a tampered block, and the cost points, on hidden_zk's builds (its
-# job.sh, sourced: C-Flock's flock-circuit and the Lean flock-verify). From a clone, since the verifier of record builds
+# job.sh, sourced: Flock's flock-circuit and the Lean flock-verify). From a clone, since the verifier of record builds
 # the sampled-proofs Lean in the tree:
 #   research run --on vy-nebius-cpu-1 --source . --pool research --as LANE --project verity --cwd clone --env A8_MEM_GB=96 -- \
 #     bash benchmarks/one_stage/a8.sh
 # env: A8_MEM_GB (what job.sh's stages may take, within the slot's)  A8_BLOCKS  A8_PLAN  A8_SAMPLES  A8_POINTS (a8.py's
 #      --blocks, --plan, --samples, --points; points 1,4,16 by default)  A8_ARMS (fw,nofw by default; fw builds the
-#      firewall's Lean frame beside flock-verify)  A8_COLD  A8_CACHE (the build cache, kept across runs where writable)
+#      ZK server's Lean frame beside flock-verify)  A8_COLD  A8_CACHE (the build cache, kept across runs where writable)
 #      A8_NO_AUDIT=1 (a8.py's --no-audit: the honest statement staged and the cost points only)
 # Kept in $OUT/a8: a8's records and logs, the public files and everything the verifier received; never a prover's file
 # (inst-*) nor a circuit (its pin is kept), nor a session's archive.
