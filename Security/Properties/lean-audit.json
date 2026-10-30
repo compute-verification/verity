@@ -395,6 +395,22 @@
   "Properties.NetworkScan.scanScopeAcc": {
    "honest": ["Properties.NetworkScan.scan_honest"],
    "nontrivial": "Properties.NetworkScan.scanScopeAcc_nontrivial"
+  },
+  "Properties.Site.refuses": {
+   "honest": ["Properties.Site.refuses_honest"],
+   "nontrivial": "Properties.Site.refuses_nontrivial"
+  },
+  "Properties.Site.entryValid": {
+   "honest": ["Properties.Site.entryValid_honest"],
+   "nontrivial": "Properties.Site.entryValid_nontrivial"
+  },
+  "Properties.Site.checks": {
+   "honest": ["Properties.Site.checks_honest"],
+   "nontrivial": "Properties.Site.checks_nontrivial"
+  },
+  "Properties.Site.refusedAt": {
+   "honest": ["Properties.Site.refusedAt_honest"],
+   "nontrivial": "Properties.Site.refusedAt_nontrivial"
   }
  },
  "unwitnessed": {
@@ -3233,6 +3249,142 @@
    "signature": ["Properties.Site.refuses : Properties.Site.Refuses"],
    "assumptions": [],
    "type_hash": "cb22f6c9f5a52ccc946173ae7376585926859abd08933bb077686088442d0087"
+  },
+  "Properties.Site.checks_honest": {
+   "owner": "@lean",
+   "signature": [
+    "Properties.Site.checks_honest :",
+    "  And",
+    "    (Eq",
+    "      (Core.Site.Registration.check Properties.Site.witnessDigests Properties.Site.witnessAuditor",
+    "        Core.Site.Registration.Composite.remote Properties.Site.honestLog)",
+    "      (Except.ok (Core.Site.ofLog Properties.Site.honestLog)))",
+    "    (Verity.Registration.Valid (Properties.Site.digests Properties.Site.witnessDigests)",
+    "      (Properties.Site.auditor Properties.Site.witnessAuditor)",
+    "      (Properties.Site.composite Core.Site.Registration.Composite.remote)",
+    "      (Properties.Site.log Properties.Site.honestLog))"
+   ],
+   "assumptions": [],
+   "type_hash": "adca6ff5253544af0d324781a65ce7a8b47069ab3153dd4a456faab8aaa7063c"
+  },
+  "Properties.Site.checks_nontrivial": {
+   "owner": "@lean",
+   "signature": [
+    "Properties.Site.checks_nontrivial :",
+    "  Not",
+    "    (Eq (Option.map Properties.Site.site (Properties.Site.acceptAllCheck Properties.Site.staleLog).toOption)",
+    "      (ite",
+    "        (Verity.Registration.Valid (Properties.Site.digests Properties.Site.witnessDigests)",
+    "          (Properties.Site.auditor Properties.Site.witnessAuditor)",
+    "          (Properties.Site.composite Core.Site.Registration.Composite.remote)",
+    "          (Properties.Site.log Properties.Site.staleLog))",
+    "        (Option.some (Verity.Site.ofLog (Properties.Site.log Properties.Site.staleLog))) Option.none))"
+   ],
+   "assumptions": [],
+   "type_hash": "00140ea54fda7516a0ae67c4aaf7ffc30baed54c6fb298a7ad040725592681ab"
+  },
+  "Properties.Site.entryValid_honest": {
+   "owner": "@lean",
+   "signature": [
+    "Properties.Site.entryValid_honest :",
+    "  And",
+    "    (Eq",
+    "      (Core.Site.Registration.Entry.refusal Properties.Site.witnessDigests Properties.Site.witnessAuditor",
+    "        Core.Site.Registration.Composite.remote Properties.Site.emptySite \"genesis\" Properties.Site.honestEntry)",
+    "      Option.none)",
+    "    (Verity.Registration.Entry.Valid (Properties.Site.digests Properties.Site.witnessDigests)",
+    "      (Properties.Site.auditor Properties.Site.witnessAuditor)",
+    "      (Properties.Site.composite Core.Site.Registration.Composite.remote)",
+    "      (Properties.Site.site Properties.Site.emptySite) \"genesis\" (Properties.Site.regEntry Properties.Site.honestEntry))"
+   ],
+   "assumptions": [],
+   "type_hash": "98c3c342f109d3c30375ebbd555b968ea8ce4285536799e234ff832f049d4e21"
+  },
+  "Properties.Site.entryValid_nontrivial": {
+   "owner": "@lean",
+   "signature": [
+    "Properties.Site.entryValid_nontrivial :",
+    "  Not",
+    "    (Iff (Eq (Properties.Site.acceptAllRefusal Properties.Site.staleEntry) Option.none)",
+    "      (Verity.Registration.Entry.Valid (Properties.Site.digests Properties.Site.witnessDigests)",
+    "        (Properties.Site.auditor Properties.Site.witnessAuditor)",
+    "        (Properties.Site.composite Core.Site.Registration.Composite.remote)",
+    "        (Properties.Site.site Properties.Site.emptySite) \"genesis\"",
+    "        (Properties.Site.regEntry Properties.Site.staleEntry)))"
+   ],
+   "assumptions": [],
+   "type_hash": "9652f423b69623e86918b46b092a3fb8f6056c8e80e689b1e6e2b18b39c87391"
+  },
+  "Properties.Site.refusedAt_honest": {
+   "owner": "@lean",
+   "signature": [
+    "Properties.Site.refusedAt_honest :",
+    "  And",
+    "    (Eq",
+    "      (Core.Site.Registration.check Properties.Site.witnessDigests Properties.Site.witnessAuditor",
+    "        Core.Site.Registration.Composite.remote Properties.Site.honestLog)",
+    "      (Except.ok (Core.Site.ofLog Properties.Site.honestLog)))",
+    "    (Eq",
+    "      (Core.Site.Registration.check Properties.Site.witnessDigests Properties.Site.witnessAuditor",
+    "        Core.Site.Registration.Composite.remote Properties.Site.staleLog)",
+    "      (Except.error { fst := 1, snd := Core.Site.Registration.Refusal.previous }))"
+   ],
+   "assumptions": [],
+   "type_hash": "2a2c817c80c36b43aaf2449ca7973b6da1a1e97bccc464d8aa183aac2783e2b5"
+  },
+  "Properties.Site.refusedAt_nontrivial": {
+   "owner": "@lean",
+   "signature": [
+    "Properties.Site.refusedAt_nontrivial (i : Fin (List.length Properties.Site.honestLog)) :",
+    "  Not",
+    "    (Eq",
+    "      (Verity.Registration.Entry.refusal (Properties.Site.digests Properties.Site.witnessDigests)",
+    "        (Properties.Site.auditor Properties.Site.witnessAuditor)",
+    "        (Properties.Site.composite Core.Site.Registration.Composite.remote)",
+    "        (Verity.Site.ofLog (Properties.Site.log (List.take i.val Properties.Site.honestLog)))",
+    "        (Verity.Registration.head (Properties.Site.digests Properties.Site.witnessDigests)",
+    "          (Properties.Site.composite Core.Site.Registration.Composite.remote)",
+    "          (Properties.Site.log (List.take i.val Properties.Site.honestLog)))",
+    "        (Properties.Site.regEntry (Fin.instGetElemFinVal.getElem Properties.Site.honestLog i ⋯)))",
+    "      (Option.some (Properties.Site.refusal Core.Site.Registration.Refusal.previous)))"
+   ],
+   "assumptions": [],
+   "type_hash": "2e85460be8aae15812eca0923faafa0cd49f467fa60614f8921ccf5f0d62a5e8"
+  },
+  "Properties.Site.refuses_honest": {
+   "owner": "@lean",
+   "signature": [
+    "Properties.Site.refuses_honest :",
+    "  And",
+    "    (Eq",
+    "      (Core.Site.Registration.Entry.refusal Properties.Site.witnessDigests Properties.Site.witnessAuditor",
+    "        Core.Site.Registration.Composite.remote Properties.Site.emptySite \"genesis\" Properties.Site.honestEntry)",
+    "      Option.none)",
+    "    (Eq",
+    "      (Verity.Registration.Entry.refusal (Properties.Site.digests Properties.Site.witnessDigests)",
+    "        (Properties.Site.auditor Properties.Site.witnessAuditor)",
+    "        (Properties.Site.composite Core.Site.Registration.Composite.remote)",
+    "        (Properties.Site.site Properties.Site.emptySite) \"genesis\"",
+    "        (Properties.Site.regEntry Properties.Site.honestEntry))",
+    "      Option.none)"
+   ],
+   "assumptions": [],
+   "type_hash": "0cfb9aae510c0f167fc6285d189da21d5ee44ab4a164f8dbf571f7b88278ff42"
+  },
+  "Properties.Site.refuses_nontrivial": {
+   "owner": "@lean",
+   "signature": [
+    "Properties.Site.refuses_nontrivial :",
+    "  Not",
+    "    (Eq (Option.map Properties.Site.refusal (Properties.Site.acceptAllRefusal Properties.Site.staleEntry))",
+    "      (Verity.Registration.Entry.refusal (Properties.Site.digests Properties.Site.witnessDigests)",
+    "        (Properties.Site.auditor Properties.Site.witnessAuditor)",
+    "        (Properties.Site.composite Core.Site.Registration.Composite.remote)",
+    "        (Properties.Site.site Properties.Site.emptySite) \"genesis\"",
+    "        (Properties.Site.regEntry Properties.Site.staleEntry)))"
+   ],
+   "assumptions": [],
+   "type_hash": "18aa0be157689c21712bf3aeb5199fb4b9b22378baf5efaf9efb9df44d38cb47"
   }
  },
  "shape": {
@@ -4499,7 +4651,15 @@
    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundNontrivial": "completeness: the nontrivial lemma of wipeSurvivorBound: at one segment, a strategy that keeps the whole store and answers zeros fails the survivor bound at the published pair under a verdict that accepts every run, with every egress in A, for every PRF: it keeps the published 11,709,069 bits (2^19 labels, 2152 reads, r = 24) with probability 1, while eps is 2^-128 and the PRF advantage and delta_net are 0",
    "Properties.Challenger.LiveAnswer": "unstated: a live check's answer at the coins its evidence reads is its answer, proved in security_proofs by Properties.Challenger.liveAnswer; a draft statement, which gets a guarantee entry once the one theorem reads it",
    "Properties.Challenger.DrawnByDevice": "unstated: Challenger.drawCoins accepts only coins a withheld session of the key's device released for that window and label, or the fixed finder findBreak outputs a break from the run (an LMS forgery or a SHA-512 collision); an open statement, to be proved from euf-cma/lms-sha512-n64 and ecr/sha-512 asked of that finder",
-   "Properties.Challenger.CoinsFromLog": "unstated: an accepted answer is the live answer at the coins the challenger's device released, or a break, proved from DrawnByDevice in security_proofs by Properties.Challenger.coinsFromLog; a draft statement, which gets a guarantee entry once the one theorem reads it"
+   "Properties.Challenger.CoinsFromLog": "unstated: an accepted answer is the live answer at the coins the challenger's device released, or a break, proved from DrawnByDevice in security_proofs by Properties.Challenger.coinsFromLog; a draft statement, which gets a guarantee entry once the one theorem reads it",
+   "Properties.Site.refuses_honest": "completeness: Refuses's honest lemma: the code accepts honestEntry, a site with one host and its uplink, against the empty Site at the genesis, and so does the spec, each decided by the code's check, so Refuses holds at a concrete log",
+   "Properties.Site.refuses_nontrivial": "lemma: Refuses's nontrivial lemma: an entry check that accepts everything refuses staleEntry, which follows no head, with no refusal, and the spec refuses it, so Refuses says something of the code's check",
+   "Properties.Site.entryValid_honest": "completeness: EntryValid's honest lemma: the code accepts honestEntry against the empty Site at the genesis, and it is valid there, each decided by the code's check, so EntryValid holds at a concrete log",
+   "Properties.Site.entryValid_nontrivial": "lemma: EntryValid's nontrivial lemma: an entry check that accepts everything accepts staleEntry, which is not valid, so EntryValid says something of the code's check",
+   "Properties.Site.checks_honest": "completeness: Checks's honest lemma: the code's check accepts honestLog with the code's Site of it, and the log is valid, each decided by the code's check, so Checks holds at a concrete log",
+   "Properties.Site.checks_nontrivial": "lemma: Checks's nontrivial lemma: a log check that accepts everything accepts staleLog, which is not valid, so Checks says something of the code's check",
+   "Properties.Site.refusedAt_honest": "completeness: RefusedAt's honest lemma: the code's check accepts honestLog and refuses staleLog at its second entry, as not following the head, each decided by the code's check, so RefusedAt holds at a concrete log",
+   "Properties.Site.refusedAt_nontrivial": "lemma: RefusedAt's nontrivial lemma: a log check that refuses everything at its first entry, as not following the head, names a refusal the spec does not give honestLog's first entry, so RefusedAt says something of the code's check"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
