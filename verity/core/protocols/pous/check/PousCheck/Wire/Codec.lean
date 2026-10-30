@@ -1,4 +1,4 @@
-import PousCheck.Randomness
+import Randomness
 
 /-!
 # The decode an audit with verification flag bit 0 checks
@@ -21,7 +21,7 @@ prefixes; when both are in one tree this module is theirs at the spec's prefix.
 
 namespace PousCheck.Wire.Codec
 
-open Randomness
+open FlockSoundness.Randomness
 
 def KEYS_TAG : ByteArray := "verity/pous/p2/keys/v4".toUTF8.push 0
 def PROTOCOL := "p2/v4"
@@ -53,7 +53,7 @@ def below (base : ByteArray) (n p : Nat) : (fuel a : Nat) → Option Nat
 
 /-- Block `(segment, block)`'s `(K, t)` for a width of `n` bytes and prime `p`. -/
 def keys (primeId : String) (model salt : ByteArray) (n p segment block : Nat) : Option (Nat × Nat) :=
-  let base := expandPrefix primeId model salt ++ (Randomness.be8 segment) ++ (Randomness.be8 block)
+  let base := expandPrefix primeId model salt ++ (be8 segment) ++ (be8 block)
   (below base n p (64 * 2 ^ 32 / n) 0).map fun t => (natOfBE (streamRange base "K" 0 n), t)
 
 /-- The signed squaring `d(z) = ±z² mod p`, negated for odd `z`. -/
