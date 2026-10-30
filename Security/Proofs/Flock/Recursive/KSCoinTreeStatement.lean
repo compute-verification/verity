@@ -8,11 +8,10 @@ import Proofs.Flock.Claims.Recursion.KSLin2Committed
 them at Hello in an hm96 coin tree (`coin-tree/hm96-sha512`) and opens each round's coin with its answer; a V\* session
 before the last one that accepts is answered with `[]`, and no coin is opened there. `RecursiveKSDeployed` is
 `RecursiveKS`'s bound at that run (`KSLin2OnC`, at `RecursiveKS`'s record, bound record, outer record, caps and
-statements): for every leaf hiding bound `δ₁ ≠ ∞`, every hm96 tree whose leaves hide at `δ₁` (`Claims.Hm96Hiding`, the
-named assumption `hash-derived-key` at the pinned key) and every prover that reads the root and the openings, some
-simulator `S` of the tree bounds the committed run's acceptance by the probability that `RecursiveKS`'s extractor, run
-on the prover with `S`'s root and openings, recovers a witness, plus `RecursiveKS`'s bound at that prover and
-`2 · k(x) · δ₁`.
+statements): at every leaf hiding bound `δ₁ ≠ ∞`, every hm96 tree whose leaves hide at `δ₁` (`Claims.Hm96Hiding`, the
+named assumption `hash-derived-key` at the pinned key) has a simulator `S` such that, for every prover that reads the
+root and the openings, the committed run accepts at most as often as `RecursiveKS`'s extractor, run on the prover with
+`S`'s root and openings, recovers a witness, plus `RecursiveKS`'s bound at that prover and `2 · k(x) · δ₁`.
 -/
 
 namespace Flock.Guarantees

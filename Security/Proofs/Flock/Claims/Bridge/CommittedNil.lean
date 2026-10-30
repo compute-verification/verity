@@ -219,42 +219,45 @@ end Hm96Tree
 round with its coin, through an injective `ans`, or with nothing, and an hm96 coin tree whose leaves hide at `δ₁ ≠ ∞`,
 an event of the masked committed run is at most `2 · k(x) · δ₁` likelier than at `Claims.run` of a prover that reads a
 simulator's root and openings, masked alike. -/
-theorem Pr_runCM_le_hm96 {Coin Ω B Y C T₀ : Type} [Fintype Coin] [Inhabited Coin] [Fintype Ω] [Nonempty Ω]
-    [AddGroup B] [Fintype B] [Fintype Y] [Nonempty Y] [Fintype T₀] [Nonempty T₀] (H : Msg → Msg) (V : Verifier Coin)
-    (x : Msg) (T : Hm96Tree Coin B Y C T₀ (V.k x)) {δ₁ : ℝ≥0∞} (hH : Hm96Hiding T.My T.cs δ₁) (hδ : δ₁ ≠ ⊤)
-    (ans : Coin → Msg) (hans : Function.Injective ans) (hV : AnswersCoinOrNil H V x ans) (P : CProver Ω) :
-    ∃ S : OnlineSim, ∀ Ev : Ω → (Fin (V.k x) → Coin) → Trace → Prop,
+theorem Pr_runCM_le_hm96 {Coin B Y C T₀ : Type} [Fintype Coin] [Inhabited Coin] [AddGroup B] [Fintype B] [Fintype Y]
+    [Nonempty Y] [Fintype T₀] [Nonempty T₀] (H : Msg → Msg) (V : Verifier Coin) (x : Msg)
+    (T : Hm96Tree Coin B Y C T₀ (V.k x)) {δ₁ : ℝ≥0∞} (hH : Hm96Hiding T.My T.cs δ₁) (hδ : δ₁ ≠ ⊤) (ans : Coin → Msg)
+    (hans : Function.Injective ans) (hV : AnswersCoinOrNil H V x ans) :
+    ∃ S : OnlineSim, ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : CProver Ω)
+      (Ev : Ω → (Fin (V.k x) → Coin) → Trace → Prop),
       Pr (fun p : Ω × (Fin (V.k x) → Coin) × (Fin (V.k x) → Y) × T₀ =>
           Ev p.1 p.2.1 (runCM H P V x T.tree p.1 p.2.1 p.2.2)) ≤
         Pr (fun p : (Ω × S.Tape) × (Fin (V.k x) → Coin) => Ev p.1.1 p.2 (run H (simProverM S V.k P) V x p.1 p.2)) +
           2 * V.k x * δ₁.toReal := by
-  refine ⟨T.sim (Function.invFun ans), fun Ev => ?_⟩
+  refine ⟨T.sim (Function.invFun ans), ?_⟩
+  intro Ω _ _ P Ev
   have h := (abs_le.1 (runCM_near H V x T.tree ans (T.sim (Function.invFun ans))
     (T.simHides hH hδ ans _ (Function.leftInverse_invFun hans)) (T.sim_lastOnly _) hV P Ev)).2
   linarith
 
 /-- **Knowledge soundness at masked committed coins, from `PrBad` at live ones**: against a verifier that answers each
 round with its coin, through an injective `ans`, or with nothing, and an hm96 coin tree whose leaves hide at `δ₁ ≠ ∞`,
-the masked committed run accepts at most as often as the extractor `E`, run on the simulating prover `simProverM S`,
-recovers a witness, plus `PrBad` at that prover and `2 · k(x) · δ₁`. -/
-theorem Pr_acc_runCM_le {Coin W Ω B Y C T₀ : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [Fintype Ω]
-    [Nonempty Ω] [AddGroup B] [Fintype B] [Fintype Y] [Nonempty Y] [Fintype T₀] [Nonempty T₀] (H : Msg → Msg)
-    (V : Verifier Coin) (R : Rel W) (E : Extractor Coin W V) (x : Msg) (T : Hm96Tree Coin B Y C T₀ (V.k x))
-    {δ₁ : ℝ≥0∞} (hH : Hm96Hiding T.My T.cs δ₁) (hδ : δ₁ ≠ ⊤) (ans : Coin → Msg) (hans : Function.Injective ans)
-    (hV : AnswersCoinOrNil H V x ans) (P : CProver Ω) :
-    ∃ S : OnlineSim,
+one simulator `S` of the tree serves every prover: the masked committed run accepts at most as often as the extractor
+`E`, run on the simulating prover `simProverM S`, recovers a witness, plus `PrBad` at that prover and `2 · k(x) · δ₁`. -/
+theorem Pr_acc_runCM_le {Coin W B Y C T₀ : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [AddGroup B]
+    [Fintype B] [Fintype Y] [Nonempty Y] [Fintype T₀] [Nonempty T₀] (H : Msg → Msg) (V : Verifier Coin) (R : Rel W)
+    (E : Extractor Coin W V) (x : Msg) (T : Hm96Tree Coin B Y C T₀ (V.k x)) {δ₁ : ℝ≥0∞}
+    (hH : Hm96Hiding T.My T.cs δ₁) (hδ : δ₁ ≠ ⊤) (ans : Coin → Msg) (hans : Function.Injective ans)
+    (hV : AnswersCoinOrNil H V x ans) :
+    ∃ S : OnlineSim, ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : CProver Ω),
       Pr (fun p : Ω × (Fin (V.k x) → Coin) × (Fin (V.k x) → Y) × T₀ =>
           (runCM H P V x T.tree p.1 p.2.1 p.2.2).out = .acc) ≤
         Pr (fun s : (Ω × S.Tape) × (Fin (V.k x) → Coin) × E.C x =>
             R.ext x (E.eval H (simProverM S V.k P) x s.1 s.2.1 s.2.2).1) +
           PrBad H V R E x (simProverM S V.k P) + 2 * V.k x * δ₁.toReal := by
-  obtain ⟨S, hS⟩ := Pr_runCM_le_hm96 H V x T hH hδ ans hans hV P
+  obtain ⟨S, hS⟩ := Pr_runCM_le_hm96 H V x T hH hδ ans hans hV
   refine ⟨S, ?_⟩
+  intro Ω _ _ P
   have h1 : Pr (fun p : Ω × (Fin (V.k x) → Coin) × (Fin (V.k x) → Y) × T₀ =>
         (runCM H P V x T.tree p.1 p.2.1 p.2.2).out = .acc) ≤
       Pr (fun p : (Ω × S.Tape) × (Fin (V.k x) → Coin) => (run H (simProverM S V.k P) V x p.1 p.2).out = .acc) +
         2 * V.k x * δ₁.toReal :=
-    hS fun _ _ t => t.out = .acc
+    hS Ω P fun _ _ t => t.out = .acc
   have h2 : Pr (fun p : (Ω × S.Tape) × (Fin (V.k x) → Coin) => (run H (simProverM S V.k P) V x p.1 p.2).out = .acc) =
       Pr (fun s : (Ω × S.Tape) × (Fin (V.k x) → Coin) × E.C x =>
         (run H (simProverM S V.k P) V x s.1 s.2.1).out = .acc) :=
