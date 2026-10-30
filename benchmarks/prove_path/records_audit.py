@@ -54,6 +54,15 @@ them out of an audit (its summary says so), for a run of several audits of one c
         --out DIR [--delta D] [--port P] [--ports N] [--forged] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--skip-negatives]
     records_audit.py count --circuit FILE --bits N [--catalog MODULE ...] [--pin NAME=ROOT ...] [--pins FILE ...] [--registration FILE]
+    records_audit.py period --window DIR --audit DIR --out FILE [--pin NAME=ROOT ...] [--pins FILE ...]
+
+``period``: a window's audit as one compute audit of the network certifier's period (`NetworkCheck.Period`'s rows form),
+the ``audits`` entry `scan_period.rows_case` reads (`scan_zk.answers` writes the block round's in that shape): the window's
+registration (``--window``'s ``registration.json``), the population Program's descriptor the audit drew over (``--audit``'s
+``window/program.json``, the one the registration names), the audit's one-stage answer (`served_integrity.answer`), and its
+terms, ``free`` and ``steps`` 0. ``free`` is the count `audit` reports (`declared_count` at the pins, with the window's own
+values pinned, its untied ones free) but for the scan's state (`TIED`): the period refuses an audit whose state isn't
+the scan's state tree (``stateTied``), so its reads count registered. Refused where the window commits no scan state.
 
 ``count``: a stated record that declares its inputs (cuts, registered reads, ingress: `interface.Circuit.declared`) counted
 from its description alone (`declared_count`), before the committer writes its members' rows. A registered read counts as
@@ -118,7 +127,9 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
+from verity.core.protocols.certifier.ingress_scan import SCAN_STATE  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
+from verity.ml.circuits.codec import program_digest  # noqa: E402
 from verity.ml.windows import interface as IF  # noqa: E402
 
 #: where an audit's ports start when ``--port`` isn't given (`free_ports`): below Linux's ephemeral range (32768-60999), from
@@ -756,6 +767,39 @@ def audit(a: argparse.Namespace) -> int:
     return 0 if row["ok"] else 1
 
 
+#: the window value the network certifier's period ties to its scan's state tree (``stateTied``): the scan's state rows
+TIED = SCAN_STATE
+
+
+def period(window: Path, audit: Path, pins: Mapping[str, str]) -> dict[str, Any]:
+    """The window's audit as one compute audit of the network certifier's period (module docstring's ``period``):
+    ``{answer, free, program, registration, steps}``. ``pins`` are the verifier's (`pins_of`). ValueError where the
+    circuit isn't the one the registration binds, the window commits no `TIED` value its circuit reads, the audit wrote no
+    Program or another than the registration names, or its answer commits to another registration."""
+    import served_integrity as SI
+
+    rec = json.loads((window / "registration.json").read_text())
+    body, own = (window / "circuit.json").read_bytes(), rec.get("window") or {}
+    if hashlib.sha512(body).hexdigest() != own.get("circuit"):
+        raise ValueError(f"{window / 'circuit.json'} is not the circuit record the registration binds")
+    doc = json.loads(body)
+    ties, untied = window_pins(own, doc)
+    if TIED not in ties | untied:
+        raise ValueError(f"the window commits no {TIED} its circuit reads: the period has no state to tie to its scan's")
+    count = declared_count(doc, 0, pins={**pins, **pin_roots({**ties, **untied})}, roots=window_roots(own),
+                           untied=set(untied) - {TIED})
+    try:
+        program = json.loads((audit / "window" / "program.json").read_text())
+    except OSError:
+        raise ValueError(f"the audit under {audit} wrote no Program: it stopped before staging its members") from None
+    if program_digest(program) != rec.get("program"):
+        raise ValueError(f"the audit's Program ({program_digest(program)[:16]}…) isn't the one the registration names")
+    answer = SI.answer(audit, rec)
+    if answer["commitment"] != R.digest(rec):
+        raise ValueError("the audit's answer commits to another registration than the window's")
+    return {"answer": answer, "free": count["free"], "program": program, "registration": rec, "steps": 0}
+
+
 def main(argv: list[str] | None = None) -> int:
     import a5 as A5
 
@@ -815,7 +859,25 @@ def main(argv: list[str] | None = None) -> int:
                    "window_weights.weights_registration), with --pin's (repeatable)")
     p.add_argument("--registration", help="the window's registration, whose roots for its parameters (`registration_roots`) are held "
                    "to the pins (none: no root is the window's, and every registered read is free)")
+    p = sub.add_parser("period", help="a window's audit as one compute audit of the network certifier's period (`period`)")
+    p.add_argument("--window", required=True, type=Path, help="the window's directory: circuit.json, registration.json")
+    p.add_argument("--audit", required=True, type=Path, help="the audit's --out: summary.json, window/program.json, "
+                   "window/audit.json")
+    p.add_argument("--out", required=True, type=Path, help="the period's audit entry, JSON")
+    p.add_argument("--pin", action="append", default=[], type=pin_arg, metavar="NAME=ROOT", help="as count's")
+    p.add_argument("--pins", action="append", default=[], metavar="FILE", help="as count's")
     a = ap.parse_args(argv)
+    if a.cmd == "period":
+        try:
+            got = period(a.window, a.audit, pins_of(a.pin, a.pins))
+        except (ValueError, RuntimeError) as e:
+            print(f"records_audit.py period: {e}", file=sys.stderr)
+            return 1
+        a.out.write_text(json.dumps(got, indent=1, sort_keys=True) + "\n")
+        print("PERIOD " + json.dumps({"verdict": got["answer"]["verdict"], "reason": got["answer"]["reason"],
+                                      "free": got["free"], "commitment": got["answer"]["commitment"],
+                                      "program": got["registration"]["program"]}, sort_keys=True))
+        return 0
     if a.cmd == "count":
         for m in a.catalog:
             importlib.import_module(m)

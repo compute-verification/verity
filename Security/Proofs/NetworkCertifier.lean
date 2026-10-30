@@ -3,9 +3,9 @@ import Definitions.NetworkCertifier.Guarantees.AdviceString
 import Definitions.NetworkCertifier.Guarantees.AdviceV1
 import Definitions.NetworkCertifier.Guarantees.WindowCharge
 import Definitions.NetworkCertifier.Guarantees.Warden
-import Definitions.NetworkCertifier.Guarantees.Horizon
+import Definitions.NetworkCertifier.Guarantees.Pooled
 import Definitions.NetworkCertifier.Guarantees.Period
-import Definitions.NetworkCertifier.Guarantees.HorizonLeak
+import Definitions.NetworkCertifier.Guarantees.PooledLeak
 import Proofs.NetworkCertifier.Lemmas
 import Proofs.NetworkCertifier.Occupancy
 import Proofs.NetworkCertifier.Counting
@@ -18,10 +18,10 @@ import Proofs.NetworkCertifier.SampledLeak
 import Proofs.NetworkCertifier.SampledLeakReg
 import Proofs.NetworkCertifier.SampledLeakRegPlain
 import Proofs.NetworkCertifier.PeriodSum
-import Proofs.NetworkCertifier.Horizon
+import Proofs.NetworkCertifier.Pooled
 import Proofs.NetworkCertifier.TapRows
 import Proofs.NetworkCertifier.Period
-import Proofs.NetworkCertifier.HorizonLeak
+import Proofs.NetworkCertifier.PooledLeak
 import Proofs.NetworkCertifier.Schedule
 import Proofs.NetworkCertifier.PerWindow
 import Proofs.NetworkCertifier.Sanity
@@ -33,6 +33,7 @@ import Proofs.NetworkCertifier.WindowCharge
 import Proofs.NetworkCertifier.Warden
 import Proofs.NetworkCertifier.Tap
 import Proofs.NetworkCertifier.RecordRows
+import Proofs.NetworkCertifier.Witnesses
 
 /-!
 # Proofs of the network certifier's guarantees
@@ -47,7 +48,8 @@ the leak bound with it), `WindowCharge` (advice v1's whole-window charge counts,
 and every lemma behind them. `SampledLeak` composes `SampledCharge`'s count with `SampledAuditAccepted`, taken as a hypothesis until
 PRF-144 proves it (`NetTiming.sampledLeak`), and `SampledLeakReg` moves its count to the registration's values
 (`NetTiming.sampledLeak_registered`);
-`SampledLeakRegPlain` states it at the deployed plain record (`NetTiming.sampledLeak_registered_plain_sha512`). `Sanity` shows every named assumption satisfiable. `Code` proves the certifier's program
+`SampledLeakRegPlain` states it at the deployed plain record (`NetTiming.sampledLeak_registered_plain_sha512`). `Sanity` shows every named assumption satisfiable, and `Witnesses` gives each acceptance guarantee its honest and
+nontrivial lemmas. `Code` proves the certifier's program
 (`certifier_program`, `NetworkCertifier`), which the difftest runs against the Python audit, equal to these definitions.
 `Accepted` proves `security_properties`' `AcceptedRunsAreProgramRuns` through `Code`: a run the network certificate
 check accepts is a run of the constant-rate Program under the declared advice, so the guarantees here count it.
@@ -176,7 +178,7 @@ theorem EncardWardenViewsLe : NetTiming.Guarantees.EncardWardenViewsLe := @NetTi
 theorem EncardWardenDecodableLe : NetTiming.Guarantees.EncardWardenDecodableLe :=
   @NetTiming.encard_wardenDecodable_le
 theorem PeriodLeakAccepted : NetTiming.Guarantees.PeriodLeakAccepted := NetTiming.periodLeak
-theorem HorizonWrongUnitsLe : NetTiming.Guarantees.HorizonWrongUnitsLe := NetTiming.horizonWrongUnits
-theorem HorizonLeakAccepted : NetTiming.Guarantees.HorizonLeakAccepted := NetTiming.horizonLeak
+theorem PooledWrongUnitsLe : NetTiming.Guarantees.PooledWrongUnitsLe := NetTiming.horizonWrongUnits
+theorem PooledLeakAccepted : NetTiming.Guarantees.PooledLeakAccepted := NetTiming.horizonLeak
 
 end NetTiming.SecurityProofs
