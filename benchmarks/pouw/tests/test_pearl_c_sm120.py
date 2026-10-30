@@ -1,10 +1,10 @@
-"""Pearl-C's sm_120 tree off the card (benchmarks/pouw/pearl_c_sm120): the shared-memory swizzles conflict-free for every
-ldmatrix phase and the GEMMs within sm_120's 99 KB, the kernel's constants the scheme's, the SASS gate refusing a lowered or
-spilling build, the check fixture against the scheme on both device records, and run.py's identity refusal and dry run on
-a CPU stand-in for libcuda (#449's, with fake_tma.c's tensor maps; an RTX PRO 6000's name, SM count, compute capability,
-UUID and shared-memory limit), every launch's pointers and sizes checked against each kernel's footprint as pearl_c_sm120.cu
-states it, and each mainloop GEMM's operands against the tensor maps encoded for them.  With VERITY_POUW_NVCC naming a
-CUDA >= 12.8 toolkit, the real sm_120a build passes the gate."""
+"""Pearl-C's sm_120 tree off the card (benchmarks/pouw/pearl_c_sm120): the shared-memory swizzles conflict-free for
+every ldmatrix phase and the GEMMs within sm_120's 99 KB, the kernel's constants the scheme's, the SASS gate refusing a
+lowered or spilling build, the check fixture against the scheme on both device records, and run.py's identity refusal
+and dry run on a CPU stand-in for libcuda (pearl_c/fake_cuda.c, with fake_tma.c's tensor maps; an RTX PRO 6000's name,
+SM count, compute capability, UUID and shared-memory limit), every launch's pointers and sizes checked against each
+kernel's footprint as pearl_c_sm120.cu states it, and each mainloop GEMM's operands against the tensor maps encoded for
+them.  With VERITY_POUW_NVCC naming a CUDA >= 12.8 toolkit, the real sm_120a build passes the gate."""
 
 from __future__ import annotations
 
@@ -127,7 +127,7 @@ def test_gemms_fit_sm120_shared_memory():
 
 
 def test_k32_is_the_transposed_grid_of_column_pairs_and_leaves_every_product_unchanged():
-    """form_s5's codes and the lines' transposed F lines in K32 order (the pous root's 10:29Z ruling): within each aligned
+    """form_s5's codes and the lines' transposed F lines in K32 order (the pous root's ruling): within each aligned
     32, position 8q + 2b + s holds column 8b + 2q + s; the kernel's k32 and the fixture's are the same map, an involution,
     and a product over k of two operands both in K32 order is the unpermuted one's, word for word, on both device records."""
     t = np.arange(96)

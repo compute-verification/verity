@@ -1,6 +1,6 @@
-"""RT-FP-13's control: H1's U keeps its co32c and cohalf words off FP4 at split 1, whatever the data.
+"""A control: H1's U keeps its co32c and cohalf words off FP4 at split 1, whatever the data.
 
-H1's MMA operands carry U (co32c-u16, decision 82: U = −16 + Σ w_p β_p, w = (1, 2, 4, 8, 17), so U ∈ {−16..−1, 1..16}
+H1's MMA operands carry U (co32c-u16: U = −16 + Σ w_p β_p, w = (1, 2, 4, 8, 17), so U ∈ {−16..−1, 1..16}
 uniform, fresh a position of its period r = 32): the T words multiply P + c + U against X, and the D and O′ words
 multiply U itself (benchmarks/pouw/theory/checked_strip.py, `co32c_words`). FP4 at split 1 needs every k-block of an
 operand row on one scaled E2M1 grid, s·{0, ±½, ±1, ±3/2, ±2, ±3, ±4, ±6}, for some scale s the form allows: UE4M3 on

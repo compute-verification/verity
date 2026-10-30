@@ -4,7 +4,7 @@
 # From a pushed commit:
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source <tree> --cwd source --custody-ttl 12h \
-#     --env GPU_LEASE_WHO=compute-accounting -- bash benchmarks/pouw/qstar/run.sh [M,K,N ...]
+#     --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/qstar/run.sh [M,K,N ...]
 #
 # The default shapes are 4096,14336,4096 and 4096,4096,4096; at the first, the two-stream arms (IMMA on n - co2 columns
 # beside fr16, or beside design A's bb, bx and bx_mix, on co2) again at co2 = 512 and 1024. QS_ARMS (comma-separated)
