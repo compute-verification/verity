@@ -106,6 +106,7 @@ one scan of its interval.
 from __future__ import annotations
 
 import heapq
+import operator
 from array import array
 from collections import Counter
 from typing import Any, Iterable, Iterator, Sequence
@@ -474,28 +475,36 @@ def owners(graph: CallGraph, head: list[int], kinds: list[str]) -> tuple[list[in
     n = graph.n
     consumers: list[list[int]] = [[] for _ in range(n)]
     producers: list[list[int]] = [[] for _ in range(n)]
-    edges = list(zip(graph.src.tolist(), graph.dst.tolist()))
+    src, dst = graph.src.tolist(), graph.dst.tolist()
+    edges = list(zip(src, dst))
     for p, q in edges:
         consumers[p].append(q)
         producers[q].append(p)
-    forward = all(p < q for p, q in edges)
-
-    def promotable(p: int) -> bool:
-        return own[p] == -2 and any(own[q] >= 0 for q in consumers[p])
-
+    forward = all(map(operator.lt, src, dst))
     own: list[int] = []
     moved: list[int] = []
     while True:
         if not own or not forward:
             own = list(head)
-            for g in range(n - 1, -1, -1):
-                if own[g] < 0:
-                    own[g] = _agreed(own, consumers[g])
+            for g in range(n - 1, -1, -1):                        # `_agreed` inlined: a call per gate costs a tenth of the pass
+                if own[g] >= 0:
+                    continue
+                o = -1
+                for c in consumers[g]:
+                    oc = own[c]
+                    if oc == -1 or oc == o:
+                        continue
+                    if o == -1 and oc >= 0:
+                        o = oc
+                    else:
+                        o = -2
+                        break
+                own[g] = o
             ready = {p for p, q in edges if own[p] == -2 and own[q] >= 0}
         else:
             for g in _repass(own, head, consumers, producers, moved):
                 for p in (g, *producers[g]):
-                    if promotable(p):
+                    if own[p] == -2 and any(own[q] >= 0 for q in consumers[p]):
                         ready.add(p)
                     else:
                         ready.discard(p)
