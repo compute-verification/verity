@@ -10,9 +10,10 @@ def _network_advised_roots() -> list[Any]:
     unsalted and salted), which reach every part at its smallest, at the deployed T = 600: R_in = 1, and R_in = 4
     salted, as the served counts' (`served.circuit-check.py`), and at the certifier-serve rehearsal's served links, T =
     60, salted, R_in = 1 and R_in = 2, which
-    `benchmarks/network_traces/n2_advised_zk.py --e2e` proves on a served run's advice. T = 600, R_in = 4 salted is
-    over circuit-check's whole-Definition AND budget (65,536), so check holds it to the reference and its digest pin
-    without lowering it; the rest are under it, so their Flock lowering is checked and their AND count pinned."""
+    `benchmarks/network_traces/n2_advised_zk.py --e2e` proves on a served run's advice. The T = 600 roots are over
+    circuit-check's whole-Definition AND budget (60,000), so check holds them to the reference and their digest pins
+    without lowering them; T = 512 and T = 60 are under it, so their Flock lowering is checked and their AND count
+    pinned."""
     from verity.core.protocols.certifier.advised import unit
 
     return [

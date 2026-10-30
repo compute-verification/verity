@@ -10,10 +10,6 @@
    "and": 6259,
    "type": "bcc16364da47ac7e8b345b7beb9b7f76b598b7ac94d1aaebb4a55a8882a0e6537132f50edc12c62a314a25666f084317d66685358abb32917eccbb38dd575c37"
   },
-  "NetworkAdvisedCounts_v1{T=600,RIN=1,OWN=0}": {
-   "and": 62986,
-   "type": "4fb6a3e7999ee00e98c33ebad6d56330f0bc0afe117a214bb803684c654f21199c281acb3a7fbfdb222d3eab365b8c47715da420c89360b40f401c6a760aec94"
-  },
   "NetworkAdvisedCounts_v1{T=8,RIN=2,OWN=0}": {
    "and": 832
   },
