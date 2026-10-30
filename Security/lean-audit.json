@@ -2173,6 +2173,9 @@
   "Verity.Wipe.SurvivorBound": {
    "owner": "@lean",
    "digest": "bf84cb5a0a2aeb6b7cfe821ead9bbe586c943fdc53e514d102efefe3793ff3e9"
+  },
+  "Accounting.Assumptions.WipeLabelsPrf": {
+   "owner": "@memory-accounting"
   }
  },
  "meaning": [
@@ -12031,6 +12034,9 @@
    "signature": ["Verity.SecurityProofs.ToCircuitAnd : Verity.Guarantees.ToCircuitAnd"],
    "assumptions": [],
    "type_hash": "d7a46674efa40159e39bed4221c853818c160c91fe491f6e0746b33d2e6b02ab"
+  },
+  "Accounting.SecurityProofs.WipeLabelsAdvantage": {
+   "owner": "@memory-accounting"
   }
  },
  "shape": {
@@ -13215,7 +13221,8 @@
    "Pouw.SecurityProofs.OnsiteFreed": "frozen (verdict): a probability statement over quantified work and certifier verdicts whose soundness is the premises RemoteWorkFloor and CertifiedImport, not a property of one function; it gets the shape when the onsite protocol's verdict is a named Lean function the event reads.",
    "Pouw.SecurityProofs.OnsiteFreed_honest": "completeness: OnsiteFreed's honest witness: every premise, RemoteWorkFloor from WorkSound's conclusion, OutsourceWithinEgressPeriod from the per-program premise and CertifiedImport from ImportWithinCertifier among them, holds at the toy instance (Definitions.Pouw.Witness), the bound is below 1, and the onsite verdict accepts the honest prover, which exchanges nothing, so OnsiteFreed is not vacuous.",
    "Pouw.SecurityProofs.OnsiteFreed_nontrivial": "lemma: OnsiteFreed's nontrivial witness, in the Lean check's three-part form: at the toy instance with a work check that accepts everything, every premise of OnsiteFreed but RemoteWorkFloor holds, RemoteWorkFloor fails (the quiet prover exchanges nothing, is accepted and spends 0 < F) and the conclusion fails; a counterexample about no protocol function.",
-   "Pouw.SecurityProofs.outsourcePeriod_of_perProgram": "lemma: the per-program OutsourceWithinEgress implies its period form OutsourceWithinEgressPeriod, one premise's form from another's, about no protocol function's acceptance."
+   "Pouw.SecurityProofs.outsourcePeriod_of_perProgram": "lemma: the per-program OutsourceWithinEgress implies its period form OutsourceWithinEgressPeriod, one premise's form from another's, about no protocol function's acceptance.",
+   "Accounting.SecurityProofs.WipeLabelsAdvantage": "frozen (no-function): It bounds the PRF advantage (Pous.StreamedWipe.prfAdvantage) of an arbitrary distinguisher against the streamed wipe's deployed labels (Accounting.Wipe.deployedLabels, Security/Definitions/Accounting/WipeLabels.lean) under an arbitrary hash, from the labels' premise WipeLabelsPrf at that distinguisher: a relay of the premise to the term the wipe's survivor bound pays, about no function of the code."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {

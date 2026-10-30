@@ -19,7 +19,8 @@ open scoped ENNReal
 distinguisher `D`, with coins `ω`, outputs true on the `N` deployed labels of a uniform 256-bit key
 (`Accounting.Wipe.deployedLabels H N`) at most `ε t N` more often than on `N` uniform labels:
 $$\Pr_{x, K}\big[D(x, \mathrm{labels}_H(K))\big] \le \Pr_{x, L}\big[D(x, L)\big] + \varepsilon(t, N).$$
-It bounds the PRF advantage `Pous.StreamedWipe.prfAdvantage (deployedLabels H N) D` by `ε t N`.
+It bounds the PRF advantage `Pous.StreamedWipe.prfAdvantage (deployedLabels H N) D` by `ε t N`
+(`Accounting.Guarantees.WipeLabelsAdvantage`).
 
 A statement takes it at the distinguisher the adversary's moves make (`Accounting.Wipe.Strategy.distinguisher`: it runs
 the strategy on the labels it is given and outputs whether the observed event holds, the strategy reads the foreign
