@@ -112,25 +112,6 @@ theorem colIdx_colBlk (L : Pouw.Lead.Layout) (hLn : L.n = 8 * L.colBlocks) (j : 
     colIdx L hLn (colBlk L hLn j) ⟨(j : ℕ) % 8, Nat.mod_lt _ (by norm_num)⟩ = j :=
   Fin.ext (by simp only [colIdx, colBlk]; omega)
 
-theorem mul_add_lt {a b A B : ℕ} (ha : a < A) (hb : b < B) : a * B + b < A * B :=
-  calc a * B + b < a * B + B := by omega
-    _ = (a + 1) * B := by ring
-    _ ≤ A * B := Nat.mul_le_mul_right _ ha
-
-theorem mul_add_inj {C a₁ a₂ b₁ b₂ : ℕ} (hb₁ : b₁ < C) (hb₂ : b₂ < C) (h : a₁ * C + b₁ = a₂ * C + b₂) :
-    a₁ = a₂ ∧ b₁ = b₂ := by
-  have key : a₁ = a₂ := by
-    by_contra hne
-    rcases Nat.lt_or_gt_of_ne hne with hl | hl
-    · have := Nat.mul_le_mul_right C hl
-      rw [Nat.succ_mul] at this
-      omega
-    · have := Nat.mul_le_mul_right C hl
-      rw [Nat.succ_mul] at this
-      omega
-  subst key
-  omega
-
 /-- **A tile reads its rows' and columns' coin terms at its step and before.** -/
 theorem tileOf_congr (L : Pouw.Lead.Layout) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (ω ω' : Coins L) (rb cb : ℕ)
     (t : Fin L.S) (h : ∀ (i : Fin L.m) (τ : Fin L.S) (j : Fin L.n), (i : ℕ) / 16 = rb → (j : ℕ) / 8 = cb → τ ≤ t →

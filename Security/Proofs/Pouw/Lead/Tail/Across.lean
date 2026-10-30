@@ -40,13 +40,6 @@ theorem blkIdx_le_of_le (L : Pouw.Lead.Layout) {t t' : ℕ} (ct cb : ℕ) (h : t
   unfold blkIdx
   exact Nat.add_le_add_right (Nat.mul_le_mul_right _ (Nat.add_le_add_right (Nat.mul_le_mul_right _ h) _)) _
 
-theorem blkIdx_inj (L : Pouw.Lead.Layout) {t₁ t₂ c₁ c₂ b₁ b₂ : ℕ} (hc₁ : c₁ < L.tiles) (hc₂ : c₂ < L.tiles)
-    (hb₁ : b₁ < L.colBlocks) (hb₂ : b₂ < L.colBlocks) (h : blkIdx L t₁ c₁ b₁ = blkIdx L t₂ c₂ b₂) :
-    t₁ = t₂ ∧ c₁ = c₂ ∧ b₁ = b₂ := by
-  obtain ⟨h1, rfl⟩ := mul_add_inj hb₁ hb₂ h
-  obtain ⟨rfl, rfl⟩ := mul_add_inj hc₁ hc₂ h1
-  exact ⟨rfl, rfl, rfl⟩
-
 /-- **A block's lanes move only its own coin tile and column block's coin lanes, at its step.** -/
 theorem laneTerm_setLanes (L : Pouw.Lead.Layout) (htile : L.tile = 64) (ω : Coins L) (β : Blk L)
     (v w : Fin 3 → Fin 8 → Fin (2 ^ L.e)) (i : Fin L.m) (τ : Fin L.S) (j : Fin L.n) :
