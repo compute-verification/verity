@@ -120,7 +120,7 @@ def grid(x: int, bits: int = GRID_BITS) -> int:
     return -(-x >> e) << e
 
 
-def definition_digest(fn: Any) -> str:
+def id_digest(fn: Any) -> str:
     """The SHA-512 the advice names a Definition by: of its specialization id, `fn.id`."""
     return hashlib.sha512(b"verity/partition/v2/definition\0" + fn.id.encode()).hexdigest()
 
@@ -157,7 +157,7 @@ class Call:
 
 @dataclass(frozen=True)
 class Entry:
-    definition: str                                   # `definition_digest`
+    definition: str                                   # `id_digest`
     kind: int                                         # FLAT or PARTS
     gates: int                                        # computing gates of one activation
     units: int
@@ -248,7 +248,7 @@ def _advice(program: Any, q: Mapping[str, Any] | None,
         n = len(shape) if units is None else units
         for u, bits in enumerate(boundary_widths(graph(fn), owner, n)[0]):
             spans.setdefault(unit_class(bits), (fn.id, u))
-        return Entry(definition_digest(fn), FLAT, graph(fn).n, n, owner, shape, classes)
+        return Entry(id_digest(fn), FLAT, graph(fn).n, n, owner, shape, classes)
 
     def add(fn: Any) -> int:
         if fn.id in index:
@@ -265,7 +265,7 @@ def _advice(program: Any, q: Mapping[str, Any] | None,
                 entries[i] = flat(fn, cut.flat, cut.units)
             else:
                 parts = tuple((add(c.fn) if c is not None else None, m) for c, m in cut.parts)
-                entries[i] = Entry(definition_digest(fn), PARTS, cut.gates, cut.units, parts=parts)
+                entries[i] = Entry(id_digest(fn), PARTS, cut.gates, cut.units, parts=parts)
         return i
 
     calls: list[Call] = []
@@ -651,7 +651,7 @@ def check(st: Mapping[str, Any], rs: Sequence[bytes], program: Any) -> CutVerdic
     canon = p["canonical"]
     for j, fn in sorted(fns.items()):
         en = adv.entries[j]
-        if en.definition != definition_digest(fn):
+        if en.definition != id_digest(fn):
             fail("entry-definition", [j, fn.id])
             continue
         if canon is not None and en.units > evaluate_definition(fn, int(canon["params"]["X"]), G.memo).units:
@@ -938,7 +938,7 @@ def unit(st: Mapping[str, Any], read: Callable[[int], bytes], i: int, program: A
     k, node, member, path, j, u, en = got
     fn, base = _place(program, node, member, path)
     bad: dict[str, list] = {}
-    if definition_digest(fn) != en.definition:
+    if id_digest(fn) != en.definition:
         bad["unit-definition"] = [[j, fn.id]]
         return Unit(i, False, k, node, member, tuple(path), j, u, fn.id, None, base, detail=bad)
     acts = {} if acts is None else acts
@@ -1022,6 +1022,6 @@ def from_v1(obj: Mapping[str, Any]) -> dict[str, Any]:
 
 
 __all__ = ["FORMAT", "ROW_BYTES", "ROW_BITS", "MAGIC", "BINDING", "NONE", "FLAT", "PARTS", "GRID_BITS", "WIDTH", "UNIT_CLASS_MAX",
-           "UNIT_CLASSES", "Call", "Entry", "Advice", "Malformed", "MixedClasses", "Reader", "Unit", "grid", "definition_digest",
+           "UNIT_CLASSES", "Call", "Entry", "Advice", "Malformed", "MixedClasses", "Reader", "Unit", "grid", "id_digest",
            "unit_class", "build", "rows", "pad", "decode", "predicates",
            "statement", "validate", "digest", "check", "locate", "unit", "check_unit", "openings", "from_v1"]

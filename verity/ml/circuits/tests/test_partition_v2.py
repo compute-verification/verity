@@ -184,7 +184,7 @@ def _restart(adv: V.Advice) -> V.Advice:
 
 def _classes(adv, j, program, owner):
     from verity.ml.circuits.units import Activation
-    fn = [fn for _k, fn in PO.calls(program) if V.definition_digest(fn) == adv.entries[j].definition][0]
+    fn = [fn for _k, fn in PO.calls(program) if V.id_digest(fn) == adv.entries[j].definition][0]
     shape, classes = V._classes(uc.shape for uc in Activation(fn).circuits(owner))
     return {"owner": tuple(owner), "units": max(owner) + 1, "shape": shape, "classes": classes}
 
