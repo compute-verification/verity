@@ -849,18 +849,30 @@ def _runs(xs: Any) -> list[list]:
 
 def _static_fns(v: Any) -> list:
     """The functions a binding's static value names, as the decoder follows them (`Flock.Program.staticFns`): an
-    object's ``fn``, none in an ``f64``, a ``dict``'s values', a list's items'."""
-    if isinstance(v, dict):
-        return [v["fn"]] if "fn" in v else [] if "f64" in v else [
-            f for x in v["dict"].values() for f in _static_fns(x)] if isinstance(v.get("dict"), dict) else []
-    return [f for x in v for f in _static_fns(x)] if isinstance(v, list) else []
+    object's ``fn``, none in an ``f64``, a ``dict``'s values', a list's items', at any depth."""
+    out, todo = [], [v]
+    while todo:
+        x = todo.pop()
+        if isinstance(x, list):
+            todo += x
+        elif isinstance(x, dict) and "fn" in x:
+            out.append(x["fn"])
+        elif isinstance(x, dict) and "f64" not in x and isinstance(x.get("dict"), dict):
+            todo += x["dict"].values()
+    return out
 
 
 def _record_fns(v: Any) -> list:
-    """Every ``{"fn": id}`` in a record value (`codec._record_function_ids`, `Flock.Program.recordFunctionIds`)."""
-    if isinstance(v, dict):
-        return [v["fn"]] if list(v) == ["fn"] else [f for k in sorted(v) for f in _record_fns(v[k])]
-    return [f for x in v for f in _record_fns(x)] if isinstance(v, list) else []
+    """Every ``{"fn": id}`` in a record value (`codec._record_function_ids`, `Flock.Program.recordFunctionIds`), at
+    any depth."""
+    out, todo = [], [v]
+    while todo:
+        x = todo.pop()
+        if isinstance(x, dict) and list(x) == ["fn"]:
+            out.append(x["fn"])
+        elif isinstance(x, dict | list):
+            todo += x.values() if isinstance(x, dict) else x
+    return out
 
 
 def _misreads(body: Any, types: list) -> bool:
@@ -914,10 +926,7 @@ def _reinterprets(d: dict) -> bool:
     defs, callees, seen = d["definitions"], d["callees"], set()
     todo = [d["root"]]
     for _k, v in _record(d["program_fn"]):
-        try:
-            todo += _record_fns(json.loads(v, parse_constant=_no_constant))
-        except (ValueError, RecursionError):
-            pass
+        todo += _record_fns(_loads(v)[1])
     try:
         types = [type_from_json(t) for t in d.get("types", [])]
     except (TypeError, ValueError, IndexError, KeyError, AttributeError, RecursionError):
@@ -930,10 +939,7 @@ def _reinterprets(d: dict) -> bool:
         seen.add(fid)
         body = x.get("body")
         nds = body.get("nodes") if isinstance(body, dict) else None
-        try:
-            todo += _static_fns(x.get("bindings"))
-        except RecursionError:
-            pass
+        todo += _static_fns(x.get("bindings"))
         todo += [callees[nd["fn"]] for nd in nds if isinstance(nd, dict) and _nat(nd.get("fn"))
                  and nd["fn"] < len(callees)] if type(nds) is list else []
         if _misreads(body, types):
