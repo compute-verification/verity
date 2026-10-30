@@ -48,8 +48,9 @@ to ``SERVE_DIR/period.json``. ``period close`` closes that period and adds its a
 
 ``program``: serve-openai's declared window Program for ``--model`` at T, S, built on a CPU without serving (`program`,
 `DECLARED`) and written as serve-openai writes ``h1/``, so the circuit files can be built before the serve that needs
-them (the Program is a function of the linears, T and S). ``--like`` takes model, T and S from a serve-openai run and
-refuses unless the digest is that run's.
+them (the Program is a function of the linears, T and S, and of the pouw settings ``unit`` and ``ks`` in
+``--protocols-config``, which must be serve-openai's own). ``--like`` takes model, T, S and that config from a
+serve-openai run and refuses unless the digest is that run's.
 
 ``pouw``: PoUW's development piece (``POUW_CMD``): window K's H1 outcome (``windows.jsonl``'s ``pouw_h1``) and record
 (``h1/w<K>/pouw-h1-calls.json``); with the auditor host's challenger's coins, the window's session as the gate's ``fetch``
@@ -280,26 +281,36 @@ def gate_ready(gate: str, lane: str, main: Path | None = None) -> tuple[bool, st
     return period is None, line
 
 
-def program(out: Path, model: str, rows: int, steps: int, like: Path | None = None) -> dict[str, Any]:
-    """``program``: the window Program serve-openai declares for `model` at T `rows` and S `steps`, built without serving
-    (`DECLARED`'s linears) and written as serve-openai writes it (`served.write_program`) into `out`; its meta. With
-    `like`, a serve-openai run's dir, its model, T and S are that run's and its digest must be the run's
-    (serve.json's ``protocols.program``), else ValueError."""
+def program(out: Path, model: str, rows: int, steps: int, like: Path | None = None,
+            config: str | None = None) -> dict[str, Any]:
+    """``program``: the window Program serve-openai declares for `model` at T `rows` and S `steps` under `config`, its
+    ``--protocols-config`` (`serve_h1.config_of`'s, a JSON object or file), built without serving (`DECLARED`'s linears
+    at the pouw setting ``ks``'s K's, over the setting ``unit``'s tile unit, `served.unit_of`) and written as
+    serve-openai writes it (`served.write_program`) into `out`; its meta. With `like`, a serve-openai run's dir, its
+    model, T, S and config are that run's (serve.json's ``protocols``) and its digest must be the run's
+    (``protocols.program``), else ValueError."""
+    from verity_vllm.pipeline import serve_h1 as SH
+    from verity_vllm.protocols import pouw as PW
     from verity_vllm.protocols.pouw import h1 as PH
     from verity_vllm.protocols.pouw.h1 import served as SV
 
-    want = None
+    want, cfg = None, SH.config_of(config)
     if like is not None:
         serve = json.loads((like / "serve.json").read_text())
         proto = serve.get("protocols") or {}
         model, rows, steps, want = serve.get("served_model_name") or model, proto["rows"], proto["steps"], proto["program"]
+        cfg = proto.get("config") or {}
     if model not in DECLARED:
         raise ValueError(f"no declared linears for {model!r}: add them to DECLARED ({sorted(DECLARED)})")
+    pw = PW.Settings.of(cfg.get("pouw", {}))
     layers, linears = DECLARED[model]
-    named = [(f"model.layers.{i}.{m}", n, k) for i in range(layers) for m, n, k in linears]
+    named = [(f"model.layers.{i}.{m}", n, k) for i in range(layers) for m, n, k in linears if pw.ks is None or k in pw.ks]
+    if not named:
+        raise ValueError(f"{model} has no linear at K {list(pw.ks or ())} (the pouw setting 'ks'): its K's are "
+                         f"{sorted({k for _m, _n, k in linears})}")
     shapes = [(n, k) for _m, n, k in named]
     modules = {w: m for w, (m, _n, _k) in enumerate(named)}
-    digest = SV.write_program(SV.declared(shapes, modules, rows, steps),
+    digest = SV.write_program(SV.declared(shapes, modules, rows, steps, unit=SV.unit_of(pw.unit)),
                               SV.declared_layout(shapes, modules, rows, steps), out, rows=rows, steps=steps)
     if want is not None and digest != want:
         raise ValueError(f"{model}'s Program at T {rows}, S {steps} is {digest[:16]}..., not {like}'s {str(want)[:16]}...: "
@@ -712,6 +723,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     pr.add_argument("--rows", type=int, default=512)
     pr.add_argument("--steps", type=int, default=16)
     pr.add_argument("--like", type=Path)
+    pr.add_argument("--protocols-config", help="serve-openai's --protocols-config (H1_PROTOCOLS_CONFIG), the same value")
     o = sub.add_parser("pouw")
     o.add_argument("serve_dir", type=Path)
     o.add_argument("window", type=int)
@@ -778,7 +790,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if a.cmd == "program":
         try:
-            meta = program(a.out, a.model, a.rows, a.steps, a.like)
+            meta = program(a.out, a.model, a.rows, a.steps, a.like, a.protocols_config)
         except (OSError, ValueError, KeyError) as e:
             print(f"PROGRAM refused: {type(e).__name__}: {e}"[:1200], flush=True)
             return 1
