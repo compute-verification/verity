@@ -124,7 +124,12 @@ A transcript that doesn't name its session's pace replays only with the pace its
 - `coins.py`: a session's live coins, an epoch of the proof service's one challenger (`sampled_proofs.challenger`, in
   process or through `sampled_proofs.remote`), each opened after the root it follows, and what the auditor's ledger
   opens for the session's window inside the audit's period, read through `challenger.pinned_session`: the host's pins
-  log records the session's pin, on the verifier's own first-parent list of main (`trusted`).
+  log records the session's pin, on the verifier's own first-parent list of main (`trusted`). The prover gets the
+  coins in this order: each window's challenge as it is released, its value and the root it follows (`Released`); the
+  window's draws after its roots; and, once the session has its outcome and no root can follow, the commitment and
+  every released coin's opening (`audit.Session.disclose`; the remote session's `coins` after `ended`), which it
+  checks each coin it was sent against (`received_reason`). The commitment's root is a function of every coin, so the
+  prover holds none of it while the session runs, and no guarantee takes a hiding premise on it (`PROTOCOL.md` §4).
 - `receipts.py`: seeds, plans, receipts and their trees.
 - `codec.py`: the store's encoding (kv/v0).
 - `p2.py`: the audit over PoUS's P2-encoded weights store (`PROTOCOL.md` §11): the registration from PoUS's setup,
