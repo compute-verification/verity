@@ -1620,14 +1620,19 @@ class Queue:
 
     # -- status
 
-    def status(self, stale: Callable[[list[PR]], dict[int, float]] | None = None, close_days: int = 0) -> dict[int, Entry]:
+    def status(self, stale: Callable[[list[PR]], dict[int, float]] | None = None, close_days: int = 0,
+               fetched: Callable[[], tuple[Callable[[list[PR]], dict[int, float]] | None, int]] | None = None) -> dict[int, Entry]:
         """Each open PR's entry; with ``stale`` (`research.stale.stale_prs` over the open PRs), each stale one says so, an unmarked
-        PR based on another branch among them, and ``close_days`` (drive's `stale_close_days`) when drive closes it."""
+        PR based on another branch among them, and ``close_days`` (drive's `stale_close_days`) when drive closes it.
+        ``fetched``, called once the clone is fetched and before anything reads it, returns those two instead: the command reads
+        its cutoff and drive.toml at `main` there, so it fetches once."""
         self._clone()
         state = self.load_state()
         open_prs = self.github.open_prs()
         prs, waiting = self.fetch_prs([p for p in open_prs if p.base == "main"])
         self.unlock()
+        if fetched is not None:
+            stale, close_days = fetched()
         prefetch = self.prefetch
         if prefetch is not None:                # one pull for every label below, not one each for admission, off-main and stale
             prefetch([(p.number, p.head) for p in open_prs])
@@ -4110,24 +4115,24 @@ def main(argv: list[str]) -> int:
             a.marked_after = flags.marked_after
             labels.since = a.marked_after
             q.log(f"research queue drive: flags from {where}: {flags.line()}")
-        fetched = False
-        if not a.marked_after:
+        if not a.marked_after and a.command != "status":
             if a.rules is None:
                 q._clone()
                 q.fetch()
-                fetched = True
             labels.since = q.rules().marked_after
         if a.command == "status":
             from .stale import stale_prs
 
-            if not fetched:
-                q._clone()
-                q.fetch()
-            r = _git(q.workdir, "show", f"refs/remotes/origin/main:{DRIVE_FLAGS}", check=False)
-            got = DriveFlags.parse(r.stdout, f"{DRIVE_FLAGS} at main") if r.returncode == 0 else DriveFlags()
-            entries = q.status(lambda prs: stale_prs(q, prs, q.now(), got.stale_days,
-                                                     lambda n, h: [lab.ts for lab in labels.reviews(n, h)], keep=got.stale_keep),
-                               got.stale_close_days)
+            def at_main() -> tuple[Callable[[list[PR]], dict[int, float]], int]:
+                if not a.marked_after:
+                    labels.since = q.rules().marked_after
+                r = _git(q.workdir, "show", f"refs/remotes/origin/main:{DRIVE_FLAGS}", check=False)
+                got = DriveFlags.parse(r.stdout, f"{DRIVE_FLAGS} at main") if r.returncode == 0 else DriveFlags()
+                return (lambda prs: stale_prs(q, prs, q.now(), got.stale_days,
+                                              lambda n, h: [lab.ts for lab in labels.reviews(n, h)], keep=got.stale_keep),
+                        got.stale_close_days)
+
+            entries = q.status(fetched=at_main)
             if a.json:
                 print(json.dumps([{"pr": e.pr.number, "head": e.pr.head, "owner": e.pr.owner, "draft": e.pr.draft, "state": e.state,
                                    "why": e.why, "position": e.position, "commit": e.commit, "after": list(e.after),
