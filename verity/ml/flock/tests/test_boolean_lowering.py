@@ -1,4 +1,4 @@
-"""C-Flock lowers the Boolean BF16 Definitions (`verity.ml.circuits.ops.boolean.gemm`) and NVFP4 quantization's casts and the bit AND
+"""Flock lowers the Boolean BF16 Definitions (`verity.ml.circuits.ops.boolean.gemm`) and NVFP4 quantization's casts and the bit AND
 (`verity.ml.circuits.ops.boolean.scalar`) by their builders: each step and cast and the AND lower to exactly the circuit of the piece
 their word primitive lowers to (the same ANDs and the same nonzeros of the AND rows), and the coordinate to
 `GemmCoordinate_v2`'s, whose words it evaluates to. A Boolean Definition whose builder commits keeps its commits as rows, so

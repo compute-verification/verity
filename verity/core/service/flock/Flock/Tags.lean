@@ -61,7 +61,7 @@ structure Tags where
   /-- the prover of main from `804be92b4`: on per-round OS coins (`FC_COINS=os`) its identity names the coin mode and no coin
   commitment or derivation (`liveOsIdentity`) -/
   liveOs : Bool := false
-  /-- the prover after verity `cec3e347` (Daniel's decision 4): every random value it uses is the OS's bytes, which the
+  /-- the prover after verity `cec3e347`: every random value it uses is the OS's bytes, which the
   `--zk` identity's `hooks` name (`Flock.Zk.hooks`); before, the pads and every table's draws were ChaCha20 streams of the
   prover's seed -/
   osMasks : Bool := false
@@ -167,7 +167,7 @@ def leafSchemeSha512 : Json :=
       ("salt_source", s "os generator, one draw per leaf"), ("key", s "default_key, a statement constant for every tree"),
       ("key_sha512", s (hexOf (Sha512.hash Hm96.sha512.keyFromLabel)))])]
 
-/-- `verity/flock-circuit` on SHA-512 trees (PR #83 at `631567f7`, Daniel's SHA-512 decision): every Ligerito level's Merkle
+/-- `verity/flock-circuit` on SHA-512 trees (the circuit prover at `631567f7`): every Ligerito level's Merkle
 tree on SHA-512 (64-byte digests), the SHA-512 coin commitment, and the coin server retaining every round's bytes. -/
 def circuit631567f7 : Tags :=
   { circuit19c7269a with
@@ -190,7 +190,7 @@ def leafSchemeHm96 : Json :=
     ("salt_source", s "chacha20 expansion of a fresh 256-bit os key per proof, never reused or stored"),
     ("key", s "default_key, a statement constant for every tree"), ("key_sha512", s (hexOf (Sha512.hash Hm96.Default512.key)))]
 
-/-- META `leaf_scheme` after verity #1654 (`b3727bd9`, Daniel's decision 4(a)): `leafSchemeHm96` with its salts named as
+/-- META `leaf_scheme` after verity `b3727bd9`: `leafSchemeHm96` with its salts named as
 the prover draws them, the OS's own bytes, every leaf's 192 read with its tree's (`zk_hooks::LeafSalts`). -/
 def leafSchemeHm96Os : Json :=
   Json.mkObj [("id", s "hm96-sha512/v1"), ("inner", s "sha512 column digest"), ("salt_bytes", n 192),
