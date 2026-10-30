@@ -368,8 +368,8 @@ section Comm
 open Claims Claims.Sampling NetTiming Accounting.JointBridge
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
-  {H : Msg → Msg} {D : Deploy Coin Col T} {L Kₒ S : ℕ} {lay : Stmt → Layout L S} {k : Stmt → ℕ} {δ : ℝ}
-  {decode : List (ℕ × Col) → List T} {reg : Stmt → Finset ℕ} {Dj n : ℕ}
+  {H : Msg → Msg} {D : Deploy Coin Col T} {L Kₒ S : ℕ} {lay : AuditStatement → BoundaryGates L S}
+  {k : AuditStatement → ℕ} {δ : ℝ} {decode : List (ℕ × Col) → List T} {reg : AuditStatement → Finset ℕ} {Dj n : ℕ}
 
 /-- **The network certifier's refinement: the network certifier's per-window bound at its compiled component.** At every
 window `i` and every value `ξ` of the other coins, the probability over the network audit's own coins that
