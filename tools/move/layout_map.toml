@@ -317,9 +317,7 @@ exclude = ["*.lean", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*
            "verity/ml/circuits/silicon/captures/**", "verity/ml/circuits/silicon/hawkeye/**",
            "tools/check/tests/test_suites.py", "tools/verity/check/tests/test_suites.py",          # synthetic trees borrow old names
            "tools/check/tests/test_move_check.py", "tools/verity/check/tests/test_move_check.py",  # so do its synthetic moves
-           "tools/research/src/research/store/moves.json",       # each move's old paths, kept as they were
-           "tools/tc_probe_fp4/fp4_emulation_1ad1aaa2.py",       # verbatim at 1ad1aaa2: t1_merged.emulation_gate pins its bytes
-           "benchmarks/tc_probe_fp4/fp4_emulation_1ad1aaa2.py"]
+           "tools/research/src/research/store/moves.json"]       # each move's old paths, kept as they were
 # Old paths that are keys outside the tree, never rewritten: the frozen evidence artifact is laid out at its former repository
 # paths (`verity_numerical.bench.frozen`), and labels cite them.
 keep = ["backends/numerical/reports", "backends/numerical/reports/*", "backends/*/results", "backends/*/results/*",
