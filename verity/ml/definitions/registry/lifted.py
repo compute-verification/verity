@@ -58,7 +58,7 @@ from typing import Any, Callable, Iterable, Sequence
 from verity.ml.circuits.defs import (REGISTRY, Builder, CompositeDefinition, FunctionDefinition, Node, PrimitiveDefinition, SpecializedDefinition, bind,
                     composite)
 from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, Refs, Strided, coll_concat, concat, tuple_of
-from verity.ml.circuits.types import Array, Record, Tuple, Type, Value
+from verity.ml.circuits.types import Array, RecordType, Tuple, Type, Value
 from verity.ml.definitions.registry import b1, operand_widths
 
 LIFTING_VERSION = "v1"  # the `lifting: v1` the derive report names
@@ -151,8 +151,8 @@ def lift_type(t: Type) -> Type:
         return Array(t.n, lift_type(t.elem))
     if isinstance(t, Tuple):
         return Tuple(*[lift_type(f) for f in t.fields])
-    if isinstance(t, Record):
-        return Record(*[(k, lift_type(ft)) for k, ft in t.fields])
+    if isinstance(t, RecordType):
+        return RecordType(*[(k, lift_type(ft)) for k, ft in t.fields])
     raise TypeError(t)
 
 
@@ -165,8 +165,8 @@ def unlift_type(t: Type) -> Type:
         return Array(t.n, unlift_type(t.elem))
     if isinstance(t, Tuple):
         return Tuple(*[unlift_type(f) for f in t.fields])
-    if isinstance(t, Record):
-        return Record(*[(k, unlift_type(ft)) for k, ft in t.fields])
+    if isinstance(t, RecordType):
+        return RecordType(*[(k, unlift_type(ft)) for k, ft in t.fields])
     raise TypeError(t)
 
 

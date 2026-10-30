@@ -23,7 +23,7 @@ from typing import Any, Callable, Sequence
 
 from .ports import bind_ports
 from .refs import Affine, Coll, Concat, Explicit, Refs, Strided, concat
-from .types import Array, Record, Tuple as TupleT, Type, Value, field_at, field_starts, field_types, range_widths, remove_axis
+from .types import Array, RecordType, Tuple as TupleT, Type, Value, field_at, field_starts, field_types, range_widths, remove_axis
 
 StaticValue = Any  # int | str | tuple[int, ...] | FunctionDefinition
 
@@ -487,7 +487,7 @@ def _cover(t: Type, lo: int, hi: int) -> tuple[Type, int]:
             if (hi - 1 - off) // L != i:
                 return t, off
             t, off = t.elem, off + i * L
-        elif isinstance(t, (Record, TupleT)) and 0 <= lo - off < t.leaves:
+        elif isinstance(t, (RecordType, TupleT)) and 0 <= lo - off < t.leaves:
             starts = field_starts(t)
             i = field_at(t, lo - off)
             if hi - off > starts[i + 1]:
