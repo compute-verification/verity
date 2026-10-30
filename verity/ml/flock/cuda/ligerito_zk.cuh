@@ -1,4 +1,4 @@
-// verity C-Flock ZK (lane flock-zk): Ligerito level 0's hiding in the F256 ladder (cuda-ghash/ligerito_f256.cuh), as
+// verity C-Flock ZK: Ligerito level 0's hiding in the F256 ladder (cuda-ghash/ligerito_f256.cuh), as
 // verity's flock-zk patch adds it to the Rust ladder (flock_core::pcs::ligerito::zk; verity/ml/flock/live/PROTOCOL.md
 // §8). Included by ligerito_f256.cuh before run_ligerito_f256, which calls these at five points when its `zk` argument
 // is set (installed by verity/ml/flock/cuda_circuit_patch.py): the open label after level 0's cap, each OOD pair and
