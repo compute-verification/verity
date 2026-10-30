@@ -1,4 +1,5 @@
 import Mathlib.Analysis.SpecialFunctions.Stirling
+import Mathlib.Analysis.Complex.ExponentialBounds
 import Proofs.Pouw.Lead.Tail.Blocks
 
 /-!
@@ -56,11 +57,126 @@ theorem lt_tailCount (L : Pouw.Lead.Layout) : (coinBranchMean L + coinSlack L) /
   push_cast
   exact Nat.lt_floor_add_one _
 
-/-- **Decode has a route.** -/
+theorem cut_le_div {size r : ℕ} {l : ℝ} (hl : 0 ≤ l) : cut size l r ≤ l ^ r / r.factorial := by
+  unfold cut
+  split_ifs
+  · positivity
+  · exact le_rfl
+
+/-- **A Poisson term against a geometric bound**: `λ^r / r! ≤ q^{r₀}` once `e λ ≤ q r`, `q ≤ 1` and `r ≥ r₀`. -/
+theorem cut_le_pow {size r r₀ : ℕ} {l q : ℝ} (hl : 0 ≤ l) (hq : 0 ≤ q) (hq1 : q ≤ 1) (hr₀ : 0 < r₀)
+    (hr : r₀ ≤ r) (h : 2.7182818286 * l ≤ q * r) : cut size l r ≤ q ^ r₀ := by
+  have hr0 : 0 < r := lt_of_lt_of_le hr₀ hr
+  have hr' : (0 : ℝ) < r := by exact_mod_cast hr0
+  have he : Real.exp 1 * l / r ≤ q := by
+    rw [div_le_iff₀ hr']
+    nlinarith [mul_le_mul_of_nonneg_right Real.exp_one_lt_d9.le hl]
+  calc cut size l r ≤ l ^ r / r.factorial := cut_le_div hl
+    _ ≤ (Real.exp 1 * l / r) ^ r := pow_div_factorial_le hl hr0
+    _ ≤ q ^ r := pow_le_pow_left₀ (by positivity) he r
+    _ ≤ q ^ r₀ := pow_le_pow_of_le_one hq hq1 hr
+
+/-- **The three points' shape**: four row blocks a coin tile, whole coin tiles, at least 512 column blocks and 147
+steps; and the tail's least repeats exceed `4082 / 1,470,000` of the blocks (the slack alone: `tiles · colBlocks ·
+K / 10^4`, with `147 K ≥ 4082 S`). -/
+theorem three_facts (T m n K : ℕ) (hm : m = 64 ∨ m = 512 ∨ m = 8192) (hn : 4096 ≤ n) (hK : 4096 ≤ K) :
+    rho (lead T m n K) = 4 ∧ pairs (lead T m n K) = 6 ∧
+      (lead T m n K).rowBlocks = 4 * (lead T m n K).tiles ∧ 512 ≤ (lead T m n K).colBlocks ∧
+      147 ≤ (lead T m n K).S ∧ 1 ≤ (lead T m n K).tiles ∧
+      4082 * ((lead T m n K).colBlocks * ((lead T m n K).S * (lead T m n K).tiles)) <
+        1470000 * tailCount (lead T m n K) := by
+  have hshape : (lead T m n K).m = 64 * (lead T m n K).tiles ∧
+      (lead T m n K).rowBlocks = 4 * (lead T m n K).tiles ∧ 1 ≤ (lead T m n K).tiles := by
+    rcases hm with rfl | rfl | rfl <;> simp only [lead, padRows, Layout.tiles, Layout.rowBlocks] <;> norm_num
+  obtain ⟨hmt, hrb, ht⟩ := hshape
+  have hρ : rho (lead T m n K) = 4 := by unfold rho; rw [hrb]; omega
+  have hLn : (lead T m n K).n = 8 * (lead T m n K).colBlocks := by
+    simp only [Layout.colBlocks, lead, padCols]; omega
+  have hC : 512 ≤ (lead T m n K).colBlocks := by simp only [Layout.colBlocks, lead, padCols]; omega
+  have hS : 147 ≤ (lead T m n K).S := by simp only [lead, stepsFor]; omega
+  have hKS : 4082 * (lead T m n K).S ≤ 147 * (lead T m n K).K := by simp only [lead, stepsFor]; omega
+  refine ⟨hρ, by unfold pairs; rw [hρ], hrb, hC, hS, ht, ?_⟩
+  set L := lead T m n K
+  have h1 := lt_tailCount L
+  have hmean : 0 ≤ coinBranchMean L := by unfold coinBranchMean tileWords; positivity
+  have hslack : coinSlack L = ((L.tiles * L.colBlocks * L.K : ℕ) : ℚ) * 128 / 10000 := by
+    unfold coinSlack stockRegs
+    rw [hmt, hLn]
+    push_cast
+    ring
+  have hq : ((4082 * (L.colBlocks * (L.S * L.tiles)) : ℕ) : ℚ) < ((1470000 * tailCount L : ℕ) : ℚ) := by
+    have hKq : ((4082 * L.S : ℕ) : ℚ) ≤ ((147 * L.K : ℕ) : ℚ) := by exact_mod_cast hKS
+    have hCt : (0 : ℚ) ≤ L.colBlocks * L.tiles := by positivity
+    have h2 := mul_le_mul_of_nonneg_left hKq hCt
+    rw [hslack, div_lt_iff₀ (by unfold tileWords; norm_num)] at h1
+    unfold tileWords at h1
+    push_cast at h1 h2 ⊢
+    nlinarith
+  exact_mod_cast hq
+
+/-- **Decode's shape**: one row block and coin tile, at least 512 column blocks and 147 steps; and the tail's least
+repeats exceed `4082 / 5,880,000` of the blocks. -/
+theorem decode_facts (T n K : ℕ) (hn : 4096 ≤ n) (hK : 4096 ≤ K) :
+    rho (lead T 1 n K) = 1 ∧ pairs (lead T 1 n K) = 0 ∧ (lead T 1 n K).rowBlocks = 1 ∧ (lead T 1 n K).tiles = 1 ∧
+      512 ≤ (lead T 1 n K).colBlocks ∧ 147 ≤ (lead T 1 n K).S ∧
+      4082 * ((lead T 1 n K).colBlocks * (lead T 1 n K).S) < 5880000 * tailCount (lead T 1 n K) := by
+  have hm : (lead T 1 n K).m = 16 := by simp only [lead, padRows]
+  have hrb : (lead T 1 n K).rowBlocks = 1 := by simp only [Layout.rowBlocks, hm]
+  have ht : (lead T 1 n K).tiles = 1 := by simp only [Layout.tiles, hm]; simp only [lead]
+  have hρ : rho (lead T 1 n K) = 1 := by unfold rho; rw [hrb]; rfl
+  have hLn : (lead T 1 n K).n = 8 * (lead T 1 n K).colBlocks := by
+    simp only [Layout.colBlocks, lead, padCols]; omega
+  have hC : 512 ≤ (lead T 1 n K).colBlocks := by simp only [Layout.colBlocks, lead, padCols]; omega
+  have hS : 147 ≤ (lead T 1 n K).S := by simp only [lead, stepsFor]; omega
+  have hKS : 4082 * (lead T 1 n K).S ≤ 147 * (lead T 1 n K).K := by simp only [lead, stepsFor]; omega
+  refine ⟨hρ, by unfold pairs; rw [hρ], hrb, ht, hC, hS, ?_⟩
+  set L := lead T 1 n K
+  have h1 := lt_tailCount L
+  have hmean : 0 ≤ coinBranchMean L := by unfold coinBranchMean tileWords; positivity
+  have hslack : coinSlack L = ((L.colBlocks * L.K : ℕ) : ℚ) * 32 / 10000 := by
+    unfold coinSlack stockRegs
+    rw [hm, hLn]
+    push_cast
+    ring
+  have hq : ((4082 * (L.colBlocks * L.S) : ℕ) : ℚ) < ((5880000 * tailCount L : ℕ) : ℚ) := by
+    have hKq : ((4082 * L.S : ℕ) : ℚ) ≤ ((147 * L.K : ℕ) : ℚ) := by exact_mod_cast hKS
+    have hC0 : (0 : ℚ) ≤ L.colBlocks := by positivity
+    have h2 := mul_le_mul_of_nonneg_left hKq hC0
+    rw [hslack, div_lt_iff₀ (by unfold tileWords; norm_num)] at h1
+    unfold tileWords at h1
+    push_cast at h1 h2 ⊢
+    nlinarith
+  exact_mod_cast hq
+
+/-- **Decode has a route**: `a = R`, and the other counts 1, where `pairs = 0` leaves the column blocks' and slots'
+terms 0. -/
 theorem route_decode (T n K : ℕ) (hn : 4096 ≤ n) (hK : 4096 ≤ K)
     (htiles : (lead T 1 n K).rowBlocks * (lead T 1 n K).colBlocks * (lead T 1 n K).S ≤ 2 ^ 30) :
     Route (lead T 1 n K) := by
-  sorry
+  obtain ⟨hρ, hp, hrb, ht, hC, hS, hR⟩ := decode_facts T n K hn hK
+  set L := lead T 1 n K
+  rw [hrb, one_mul] at htiles
+  have hU : 512 * 147 ≤ L.colBlocks * L.S := Nat.mul_le_mul hC hS
+  have hR5 : 5 ≤ tailCount L := by omega
+  refine ⟨tailCount L, 1, 1, 1, by rw [hρ]; omega, by norm_num, ?_⟩
+  have hG : lamG L = 0 := by simp [lamG, hp]
+  have hB : lamB L = 0 := by simp [lamB, hp]
+  have h0 : ∀ size, cut size 0 1 = 0 := fun size => by unfold cut; split_ifs <;> simp
+  rw [hG, hB, h0, h0, mul_zero, add_zero, add_zero]
+  have hX : cut (blkCount L) (lamX L) (tailCount L) ≤ (1 / 1024) ^ 5 := by
+    refine cut_le_pow (by unfold lamX; positivity) (by norm_num) (by norm_num) (by norm_num) hR5 ?_
+    have hB : blkCount L = L.colBlocks * L.S := by unfold blkCount; rw [ht]; ring
+    have hU2 : ((L.colBlocks * L.S : ℕ) : ℝ) ^ 2 ≤ 2 ^ 30 * ((L.colBlocks * L.S : ℕ) : ℝ) := by
+      rw [sq]
+      exact mul_le_mul_of_nonneg_right (by exact_mod_cast htiles) (Nat.cast_nonneg _)
+    have hRr : (4082 : ℝ) * ((L.colBlocks * L.S : ℕ) : ℝ) ≤ 5880000 * (tailCount L : ℝ) := by
+      exact_mod_cast hR.le
+    unfold lamX
+    rw [hρ, hB]
+    push_cast at hU2 hRr ⊢
+    nlinarith
+  calc cut (blkCount L) (lamX L) (tailCount L) ≤ (1 / 1024) ^ 5 := hX
+    _ ≤ 1 / 2 ^ 42 := by norm_num
 
 /-- **The three points have a route at `2^16` slots a column block or more.** -/
 theorem route_wide (T m n K : ℕ) (hm : m = 64 ∨ m = 512 ∨ m = 8192) (hn : 4096 ≤ n) (hK : 4096 ≤ K)
