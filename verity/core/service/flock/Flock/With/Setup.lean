@@ -21,6 +21,7 @@ a registered scheme through the oracle, `MerkleScheme.opsWith`). No digest of th
 -/
 import Flock.With.Hashes
 import Flock.HmRow
+import Flock.JsonParse
 
 namespace Flock
 
@@ -321,7 +322,7 @@ def parseWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (
   let name := (head.drop (tags.fileFormat.length + 1)).toString
   let metaLine := (lines.getD 1 "").trimAsciiEnd.toString
   if !metaLine.startsWith "META " then throw "circuit: no META line"
-  let mj ← match Json.parse (metaLine.drop 5).toString with
+  let mj ← match JsonParse.parse (metaLine.drop 5).toString with
     | .ok j => pure j
     | .error e => throw s!"META: {e}"
   if (← J.str mj "format" ctx) != tags.fileFormat || (← J.str mj "statement" ctx) != tags.statement then
@@ -469,7 +470,7 @@ def loadPublicWith (hs : Hashes M) (tags : Tags) (c : Circuit) (file : ByteArray
   let text ← match String.fromUTF8? (file.extract 0 nl) with
     | some s => pure s
     | none => throw "public file: header is not UTF-8"
-  let header ← match Json.parse text with
+  let header ← match JsonParse.parse text with
     | .ok j => pure (Flock.norm j)
     | .error e => throw s!"public file: header: {e}"
   let pctx := "public file"

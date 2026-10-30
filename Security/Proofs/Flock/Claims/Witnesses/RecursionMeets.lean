@@ -233,8 +233,8 @@ theorem ZKStop_meets {N Ω : Msg → Type} [∀ x, Fintype (N x)] [∀ x, Nonemp
   (`FlockComplete.RecordFitsAt`), the same: in scope, those three facts are exactly the inner readiness the stop reads
   (`RecDeploy.ready_inScope_iff`).
 
-No statement in scope is exhibited: the scope check and Flock's setup read the statement's JSON with `Lean.Json.parse`,
-a `partial` function the kernel can't unfold (as at Flock, `Claims.Flock.scope_meets_plain`), and the honest record's
+No statement in scope is exhibited: the scope check and Flock's setup read the statement's circuit file, whose rows
+`HmRow.parse` reads by regenerating the `hm96` nets, beyond what the kernel evaluates (as at Flock, `Claims.Flock.scope_meets_plain`), and the honest record's
 size (`RecordFitsAt`) is a bound with no proof here. -/
 theorem ZKStop_meets_ready {N Ω : Msg → Type} [∀ x, Fintype (N x)] [∀ x, Nonempty (N x)] [∀ x, Fintype (Ω x)]
     [∀ x, Nonempty (Ω x)] (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)

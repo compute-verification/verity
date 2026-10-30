@@ -12,6 +12,7 @@ import Flock.RecBudget
 import Flock.RecCoins
 import Flock.RecRecord
 import Flock.Witness
+import Flock.JsonParse
 
 namespace Flock
 namespace RecSetup
@@ -52,7 +53,7 @@ table's `root_B` and the link points (`RecVStar.innerLink`), the rounds the sche
 stream, round, coin count and counts (`RecVStar.checkSchedule`'s), each rep's salted tops and `c_k` with their
 rounds (`innerLink`'s tops and `cs`, `RecVStar.innerCommits`), and every round, with its stream and round, its coins
 (`jsonRounds`: the values `innerCommits` holds the inner session record's coins to). The JSON readers run first, so a
-record they refuse is refused as before. Bytes that repeat a key read two ways (`Json.parse` keeps the last, `readFull`
+record they refuse is refused as before. Bytes that repeat a key read two ways (`JsonParse.parse` keeps the last, `readFull`
 the first), and the coins are refused unless both read the same. -/
 def checkReads (i : RecVStar.Inner) (tt : String) (tr : Json) (record : String) (cs : RecVStar.InnerCommits) :
     V Unit := do
@@ -104,12 +105,12 @@ def commits (inner : Option RecVStar.Inner) (t : V String) (r : V (Option String
         throw ("rec inner registration: candidate 3's session needs R's circuit registration " ++
           "(--rec-inner-registration), which binds R before the coins")
       pure none
-    | some s => match Json.parse s with
+    | some s => match JsonParse.parse s with
       | .ok j => pure (some j)
       | .error e => throw s!"rec inner registration: not JSON: {e}"
   let (bound, shape) ← bound
   let tt ← t
-  match Json.parse tt with
+  match JsonParse.parse tt with
   | .ok j =>
     let cs ← RecVStar.innerCommits j record rj bound shape
     if let some i := inner then
@@ -158,7 +159,7 @@ def checkForm (form : Option RecCoins.InnerForm) (st : Stmt) : V Unit := do
     throw "rec-inner: the inner statement names lookup tables (--rec-inner-tables), and its files set it up with none"
   let some b := fm.draw | throw "rec-inner: the inner statement has no draw (--rec-inner-draw)"
   let some t := String.fromUTF8? b | throw "rec-inner: the inner statement's draw: not UTF-8"
-  let d ← (Json.parse t).mapError (s!"rec-inner: the inner statement's draw: not JSON: " ++ ·)
+  let d ← (JsonParse.parse t).mapError (s!"rec-inner: the inner statement's draw: not JSON: " ++ ·)
   let D ← Draw.UnitDraw.ofJson (Flock.norm d)
   if D.proved != Array.range st.n then
     throw s!"rec-inner: the inner statement's draw proves {D.proved.size} units, not every one of its files' {st.n} in order"
