@@ -8,6 +8,9 @@ A hardened linear computes, per design:
 - ``B``: y = x̃·(R + Δ)ᵀ with ‖Δ‖_F ≤ ρ‖R‖_F, enforced by projection after every step.
 - ``lowrank``: y = (x̃·V)·Uᵀ (A without R).
 - ``frozen``: y = D₁ ⊙ (x̃·Rᵀ) (A with r = 0).
+- ``lsb``: y = s ⊙ (x̃·Cᵀ), C an int8 code matrix whose low b bits (``lsb_bits``) are public uniform random L and whose
+  high 8 − b bits are trained: C = 2ᵇ·H + L, H = round((W/s − L)/2ᵇ) from a latent W (straight-through), s a per-row
+  scale. b = 0 is plain int8 weight training.
 
 x̃ is x itself, or, with ``int8``, x quantized per token to the integers in ±(127 − k) (straight-through), plus live noise
 E uniform on the integers in [−k, k] (``noise_k``), so x̃ + E is an int8 operand; R is then uniform int8 times a scale.
@@ -54,6 +57,7 @@ class Cfg:
     rank_frac: float = 0.125  # r = rank_frac * d_model
     diag: bool = False
     rho: float = 0.25
+    lsb_bits: int = 4
     noise_k: int = 0
     int8: bool = False
     r_dist: str = "gauss"  # gauss | int8
@@ -91,8 +95,12 @@ class HLinear(nn.Module):
             R = R * cfg.r_scale
         self.register_buffer("R", R)
         self.U = self.V = self.d1 = self.d2 = self.weight = self.delta = None
-        if self.design == "dense":
+        if self.design in ("dense", "lsb"):
             self.weight = nn.Parameter(R.clone())
+        if self.design == "lsb":
+            self.step = 2 ** cfg.lsb_bits
+            lo = torch.randint(0, self.step, (n_out, n_in), generator=torch.Generator().manual_seed(seed + 7919))
+            self.register_buffer("lo", lo.float())
         elif self.design == "B":
             self.delta = nn.Parameter(torch.zeros_like(R))
             self.rho = cfg.rho
@@ -112,7 +120,7 @@ class HLinear(nn.Module):
         """Forward MACs per token: (hardened R-product, trainable, frozen non-R)."""
         nm = self.n_in * self.n_out
         uv = 0 if self.U is None else self.U.shape[1] * (self.n_in + self.n_out)
-        if self.design in ("dense", "B"):
+        if self.design in ("dense", "B", "lsb"):
             return (nm if self.hard else 0), nm, 0
         if self.design == "lowrank":
             return 0, uv, 0
@@ -141,6 +149,8 @@ class HLinear(nn.Module):
             return F.linear(x, self.weight)
         if self.design == "B":
             return F.linear(x, self.R + self.delta)
+        if self.design == "lsb":
+            return F.linear(x, self.lsb_weight())
         y_r = None
         if self.design in ("A", "frozen"):
             y_r = F.linear(x, self.R)
@@ -153,6 +163,19 @@ class HLinear(nn.Module):
         if y_r is None:
             return y_uv
         return y_r if y_uv is None else y_r + y_uv
+
+    def lsb_weight(self):
+        w = self.weight.float()
+        s = w.detach().abs().amax(1, keepdim=True).clamp_min(1e-8) / 127
+        hi = torch.round((w.detach() / s - self.lo) / self.step).clamp(-128 // self.step, 128 // self.step - 1)
+        return w + ((self.step * hi + self.lo) * s - w).detach()
+
+    @torch.no_grad()
+    def lsb_codes(self):
+        w = self.weight.float()
+        s = w.abs().amax(1, keepdim=True).clamp_min(1e-8) / 127
+        hi = torch.round((w / s - self.lo) / self.step).clamp(-128 // self.step, 128 // self.step - 1)
+        return self.step * hi + self.lo
 
     @torch.no_grad()
     def project(self):
@@ -295,6 +318,11 @@ def diagnostics(model: GPT):
             rec["dw_stable_rank"] = float(dw.norm() ** 2 / torch.linalg.matrix_norm(dw, 2) ** 2)
         if m.design == "B":
             rec["delta_over_r_fro"] = float(m.delta.norm() / m.R.norm())
+        if m.design == "lsb":
+            c = m.lsb_codes()
+            rec["lsb_low_bits_public"] = float(((c - m.lo).remainder(m.step) == 0).float().mean())
+            hi = (c - m.lo) / m.step
+            rec["lsb_codes_at_clamp"] = float(((hi <= -128 // m.step) | (hi >= 128 // m.step - 1)).float().mean())
         if m.U is not None:
             uv = m.U @ m.V
             rec["uv_fro_over_r_fro"] = float(uv.norm() / m.R.norm())
@@ -309,7 +337,7 @@ def diagnostics(model: GPT):
 
 def summarize_diag(diag):
     keys = ["rel_move_fro", "rel_move_spec", "dw_stable_rank", "delta_over_r_fro", "uv_fro_over_r_fro", "d1_rms",
-            "r_share_out"]
+            "r_share_out", "lsb_low_bits_public", "lsb_codes_at_clamp"]
     res = {}
     for kind in ("qkv", "o", "fc1", "fc2"):
         rows = [v for k, v in diag.items() if k.endswith("." + kind)]

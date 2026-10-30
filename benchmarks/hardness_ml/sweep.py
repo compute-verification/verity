@@ -30,7 +30,26 @@ def bench():
     ]
 
 
-PRESETS = {"bench": bench}
+def redml():
+    """HT-REDML's first signal: public random low bits (``lsb``) against A at the T1 rank cap, r(1/n + 1/m) ≤ 1%,
+    which at d 256 is r = 2, and at HT-ML's r = d/8; every hardened linear int8 with noise k = 1."""
+    tokens = int(os.environ.get("REDML_TOKENS", 4_000_000))
+    base = {"size": "s256", "tokens": tokens, "harden": "all", "int8": True, "noise_k": 1, "r_dist": "int8",
+            "eval_every": 250, "final_eval_batches": 32}
+    cap = 2 / 256
+    return [
+        {**base, "name": "redml-dense-float", "int8": False, "noise_k": 0},
+        {**base, "name": "redml-int8w-k1", "design": "lsb", "lsb_bits": 0},
+        {**base, "name": "redml-lsb2-k1", "design": "lsb", "lsb_bits": 2},
+        {**base, "name": "redml-lsb4-k1", "design": "lsb", "lsb_bits": 4},
+        {**base, "name": "redml-lsb6-k1", "design": "lsb", "lsb_bits": 6},
+        {**base, "name": "redml-A-cap-k1", "design": "A", "diag": True, "rank_frac": cap},
+        {**base, "name": "redml-lowrank-cap-k1", "design": "lowrank", "rank_frac": cap},
+        {**base, "name": "redml-A-r32-k1", "design": "A", "diag": True, "rank_frac": 0.125},
+    ]
+
+
+PRESETS = {"bench": bench, "redml": redml}
 
 
 def run_one(cfg, data, out, threads):
