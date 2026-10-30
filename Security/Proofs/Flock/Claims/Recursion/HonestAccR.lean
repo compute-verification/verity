@@ -10,7 +10,7 @@ import Proofs.Flock.Soundness.Refine.Seam
 
 `RecursiveKSAt` at the deployed reader (`rdR`, `finalR`, `DeployedR.bdR`) is not vacuous: an honest run meets the
 premises it reads of the inner verifier. At every plain completeness run (`FlockComplete.Run` at SHA-512 and the
-deployed relation), `RecDeploy.honest_accepts_nextR` gives, at the
+deployed relation), with the record's JSON specification (`JsonSpec`), `RecDeploy.honest_accepts_nextR` gives, at the
 run's own coins (`Run.recCoins`) and the honest prover's messages (`Run.recMsgs` with the last message `Run.recLast`):
 
 * **The reading and the five checks** (`ReadOkR`, `holdsR` at every `VerdictR`): the setup, the shapes, the names
@@ -279,7 +279,7 @@ theorem honest_drawTied (o : Run sha512 Readable.relation) :
     exact drawEq_refl _
 
 /-- **The reader's record carries the statement's draw** at the honest decision. -/
-theorem honest_drawJ (o : Run sha512 Readable.relation)
+theorem honest_drawJ (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) (o : Run sha512 Readable.relation)
     (cs : List Coin) : drawEq (drawOfJ (o.recDec cs).f.j) o.s.read.draw = true := by
   show drawEq (drawOfJ (recJ o.spec o.sts o.recLink o.recC₁ (o.recFrames cs) cs.tail.dropLast o.recPs))
     o.s.read.draw = true
@@ -310,7 +310,7 @@ theorem honest_readOkR (o : Run sha512 Readable.relation) :
     (honest_len o o.coinsAt_recCoins o.recCoins_length _) (honest_decR_deployed o) o.scope_ok
 
 /-- **The five checks hold at the honest messages.** -/
-theorem honest_holdsR (o : Run sha512 Readable.relation) :
+theorem honest_holdsR (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) (o : Run sha512 Readable.relation) :
     ∀ q : VerdictR, holdsR sha512 RecDeploy.DeployedR.rdR q o.x (o.recMsgs o.recCoins o.recLast) o.recCoins := by
   have hcs := o.coinsAt_recCoins
   intro q
@@ -320,14 +320,14 @@ theorem honest_holdsR (o : Run sha512 Readable.relation) :
   · exact honestSetup o _ hcs
   · exact honestShaped out64_sha512 o _ hcs
   · exact honestNames o _ hcs
-  · exact honestVerdict o _ hcs
+  · exact honestVerdict S o _ hcs
   · intro spec' sts' hs'
     change setupWith (Claims.hOf sha512) o.s.read = _ at hs'
     rw [o.recSetup] at hs'
     cases hs'
     obtain ⟨lv, hL, hC⟩ := RecDeploy.custodyRecJ RecDeploy.DeployedR.rdR o.x _ _ _
       (honest_len o hcs o.recCoins_length _) (honest_decR_deployed o) o.scope_ok
-    exact RecDeploy.checksAtJ_ok_of (f := ⟨o.x, (o.recDec o.recCoins).f.j, #[]⟩) rfl (honest_drawJ o _) hL hC
+    exact RecDeploy.checksAtJ_ok_of (f := ⟨o.x, (o.recDec o.recCoins).f.j, #[]⟩) rfl (honest_drawJ S o _) hL hC
       o.scope_ok o.ready_parts.1
 
 end FlockDeploy
@@ -338,7 +338,8 @@ open Flock
 open FlockComplete (Run)
 
 /-- **The deployed verifier accepts the honest recursive prover** (non-vacuity of `RecursiveKSAt`'s premises, the honest
-half). At every plain completeness run at SHA-512 and the deployed relation, at the run's coins and the honest prover's messages (its tables' caps, each rep's rows of its file's proof, then
+half). At every plain completeness run at SHA-512 and the deployed relation, under the record's JSON specification,
+at the run's coins and the honest prover's messages (its tables' caps, each rep's rows of its file's proof, then
 `encLast` of the statement and the proofs' openings):
 
 1. `nextR rdR`'s reading and its five checks hold (`ReadOkR`, `holdsR`);
@@ -346,9 +347,11 @@ half). At every plain completeness run at SHA-512 and the deployed relation, at 
 3. `IVStar` at `DeployedR.bdR` accepts the honest committed run (its rows under any salts `ys`, then `lastOR`);
 4. row D's `hlev` holds at every decision on the honest messages.
 
-The only hypothesis is the run (`o`: a statement in scope that the verifier can accept, a witness in the relation, a
-tape, coins outside `Bad`, and the honest session's run on them). -/
-theorem honest_accepts_nextR (o : Run FlockDeploy.sha512 Readable.relation) (ys : ℕ → ℕ → Salt) :
+The only hypotheses are the run (`o`: a statement in scope that the verifier can accept, a witness in the relation, a
+tape, coins outside `Bad`, and the honest session's run on them) and `JsonSpec`, completeness's specification of the
+JSON library. -/
+theorem honest_accepts_nextR (S : Claims.JsonSpec FlockComplete.printJ Flock.canon)
+    (o : Run FlockDeploy.sha512 Readable.relation) (ys : ℕ → ℕ → Salt) :
     FlockDeploy.ReadOkR DeployedR.rdR o.x (o.recMsgs o.recCoins o.recLast) o.recCoins ∧
       (∀ q : FlockDeploy.VerdictR,
         FlockDeploy.holdsR FlockDeploy.sha512 DeployedR.rdR q o.x (o.recMsgs o.recCoins o.recLast) o.recCoins) ∧
@@ -369,7 +372,7 @@ theorem honest_accepts_nextR (o : Run FlockDeploy.sha512 Readable.relation) (ys 
     intro i hi
     simp only [FlockComplete.Case.resp, hcs.1 i hi]
   have hR := FlockDeploy.honest_readOkR o
-  have hH := FlockDeploy.honest_holdsR o
+  have hH := FlockDeploy.honest_holdsR S o
   have hacc := FlockDeploy.nextR_sound _ _ _ _ _ hR hH
   refine ⟨hR, hH, hacc, ?_, ?_⟩
   · exact DeployedR.ivstar_honest_filesR Readable.relation DeployedR.rdR

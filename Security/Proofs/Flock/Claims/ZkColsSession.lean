@@ -93,7 +93,7 @@ def main (args : List String) : IO UInt32 := do
     | IO.eprintln "usage: ZkColsSession.lean SESSION_DIR M K_LOG CLAIMS TABLE..."; return 2
   let (some m, some kLog, some claims) := (m.toNat?, kLog.toNat?, claims.toNat?)
     | IO.eprintln "M, K_LOG and CLAIMS are natural numbers"; return 2
-  let j ← ofV "session.json" (Flock.JsonParse.parse (← IO.FS.readFile s!"{dir}/session.json"))
+  let j ← ofV "session.json" (Json.parse (← IO.FS.readFile s!"{dir}/session.json"))
   let mut ok := true
   for t in tables do
     ok := (← table j dir m kLog claims t) && ok

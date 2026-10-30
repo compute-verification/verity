@@ -19,7 +19,6 @@ count = { value = 132, unit = "SM", mark = "ceiling", source = "H100 whitepaper 
 
 [clock]
 sm = { value = 1980, unit = "MHz", mark = "ceiling", source = "art:72daa20de42c, art:28ff838a63c9 (nvidia-smi -q: max, application, default application and max customer boost clocks 1980 MHz); art:d10829e5b08e (SM and memory clock offset ranges [0, 0], supported clocks top at 1980 and 3201); H100 whitepaper V1.04 Table 3, 'GPU Boost Clock ... 1980 MHz', footnote 2 'GPU Peak Clock and GPU Boost Clock are synonymous'" }
-tensor = { value = 1830, unit = "MHz", mark = "ceiling", source = "the tensor's clock ceiling, not a clock a loaded card holds. The H200 data sheet's 1,979 dense INT8 TOPS, 4096 a SM-clock on 132 SMs at the 1830 MHz tensor boost clock (Accounting.TS.Sheets.H200 A3); art:50daf54f471b (the SMs' clock64 over %globaltimer: at most 1830 MHz in the arms that keep the tensor pipe full, at rate.tensor's 4096 s8 MACs a SM-clock, while nvidia-smi read 1980 MHz; 1717-1723 MHz with random operands at the 700 W limit; 1978-1980 MHz in the arms with the tensor idle, clock.sm); art:72daa20de42c, art:28ff838a63c9 (nvidia-smi -q: max and application clocks 1980 MHz). A served workload under the 700 W limit holds lower clocks still" }
 memory = { value = 3201, unit = "MHz", mark = "ceiling", source = "art:72daa20de42c, art:28ff838a63c9 (max and application memory clock 3201 MHz); art:d10829e5b08e (offset range [0, 0])" }
 
 # The stores. Registers in 32-bit words an SM; the rest in bytes.
@@ -30,9 +29,9 @@ smem = { value = 262144, unit = "B/SM", mark = "ceiling", source = "H100 whitepa
 l2 = { value = 52428800, unit = "B", mark = "ceiling", source = "H100 whitepaper V1.04 Table 3: 'L2 Cache Size 50 MB', taken as 50 MiB" }
 dram = { value = 151397597184, unit = "B", mark = "ceiling", source = "H200 data sheet, 'GPU Memory 141GB', taken as 141 GiB, above the 143,771 MiB the driver reports" }
 
-# The resources' rates, each a SM-clock (the Lean's rho is SMs x this x clock.sm, the tensor's x clock.tensor).
+# The resources' rates, each a SM-clock (the Lean's rho is SMs x this x the SM clock).
 [rate]
-tensor = { value = 4096, unit = "s8 MAC/SM-clock", mark = "ceiling", source = "the H200 data sheet's 1,979 dense INT8 TOPS over 2 x 132 SMs at the 1830 MHz tensor boost clock (Accounting.TS.Sheets.H200 A3), taken at clock.tensor, 989.4 T MACs a second; measured 4095.6 (wgmma N >= 64, art:83dbd28b545b, art:9ed5ca6ccddd) and 4096 (art:50daf54f471b), a SM-clock each" }
+tensor = { value = 4096, unit = "s8 MAC/SM-clock", mark = "ceiling", source = "the H200 data sheet's 1,979 dense INT8 TOPS over 2 x 132 SMs at the 1830 MHz tensor boost clock (Accounting.TS.Sheets.H200 A3), taken at 1980 MHz; measured 4095.6 (wgmma N >= 64, art:83dbd28b545b, art:9ed5ca6ccddd)" }
 issue = { value = 4, unit = "warp instruction/SM-clock", mark = "ceiling", source = "H100 whitepaper, 'H100 SM Architecture': four partitions, each a warp scheduler dispatching one warp instruction a clock" }
 alu = { value = 64, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7, CC 9.0: 32-bit integer add, compare, min, max, logic and shift 64" }
 imad = { value = 64, unit = "lane/SM-clock", mark = "ceiling", source = "CUDA C++ Programming Guide 12.9 section 6.4.1 Table 7, CC 9.0: 32-bit integer multiply and multiply-add 64" }
@@ -60,7 +59,7 @@ bf16 = { value = 2, unit = "tensor unit/MAC", mark = "ceiling", source = "the H2
 tf32 = { value = 4, unit = "tensor unit/MAC", mark = "ceiling", source = "the H200 data sheet: TF32 494.5 dense TFLOPS" }
 nvf4 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "as e2m1: no FP4 MMA on the card" }
 mxf4 = { value = 1, unit = "tensor unit/MAC", mark = "ceiling", source = "as e2m1: no FP4 MMA on the card" }
-f64 = { value = 29.5, unit = "tensor unit/MAC", mark = "ceiling", source = "H100 whitepaper: FP64 Tensor Core 67 TFLOPS over 132 SMs at its 1980 MHz FP64 boost clock is 128.2 DMMA MACs a SM-clock there; at clock.tensor that is 4096 / 128 x 1830 / 1980 = 29.58 units a MAC, rounded down so the table's FP64 rate stays at or above the whitepaper's" }
+f64 = { value = 32, unit = "tensor unit/MAC", mark = "ceiling", source = "H100 whitepaper: FP64 Tensor Core 67 TFLOPS over 132 SMs at 1980 MHz is 128.2 DMMA MACs a SM-clock, 4096 / 128" }
 
 # The model's own ranges (Accel.Card's exact and text).
 [model]

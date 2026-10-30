@@ -608,8 +608,6 @@ KNOWN: dict[str, str] = {
         "homonym, the memory challengers a property ranges over: rename (lean)",
     "Security/Properties/RemoteAudit/Line/Record.lean::Properties.RemoteAudit.Line.Node":
         "duplicate of the Site (`Verity.Site`): becomes what `Accounting.Remote.Node` becomes (lean)",
-    "Security/Properties/Pous/MemoryChallenger.lean::MemoryChallenger.Properties.Device":
-        "homonym, the memory challengers a property ranges over: rename (lean)",
     "Security/Properties/RemoteAudit/Line/Record.lean::Properties.RemoteAudit.Line.Record":
         "duplicate of the auditor's record chain (`SampledProofs.Challenger.LedgerEntry`): becomes what RemoteAudit becomes (lean)",
     # benchmarks/
@@ -860,8 +858,14 @@ KNOWN: dict[str, str] = {
     "verity/core/protocols/certifier/lean/NetworkCertifier/WindowCharge.lean::NetworkCertifier.WindowCharge.Window":
         "homonym, one window's timing advice: rename (network-accounting)",
     "verity/core/protocols/certifier/replay_chain.py::Window": "homonym, a replay row: rename (network-accounting)",
+    "verity/core/protocols/certifier/window_charge.py::Window":
+        "homonym, one sampling block's charge: rename (network-accounting)",
     "verity/core/protocols/certifier/service.py::Opening":
         "homonym, a link-window's witness: rename (network-accounting)",
+    "verity/core/protocols/interface/CoreProtocol/Profile.lean::Core.Draw":
+        "homonym, how a profile level is drawn: rename (proofs)",
+    "verity/core/protocols/interface/CoreProtocol/Record.lean::Core.Record":
+        "duplicate of the auditor's record chain (`SampledProofs.Challenger.LedgerEntry`): becomes a reading of it (proofs)",
     "verity/core/protocols/interface/CoreProtocol/Registration.lean::Core.Registration.Card":
         "duplicate of `Verity.Accel.Card`: becomes a reading of it (soundness)",
     "verity/core/protocols/interface/CoreProtocol/Registration.lean::Core.Registration.Link":

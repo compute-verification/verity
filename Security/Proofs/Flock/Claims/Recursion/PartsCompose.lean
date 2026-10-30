@@ -58,7 +58,7 @@ readers' messages, so a part not tied to the round it reads (its own commit stri
 discharge it.
 
 The record is a prover message, so the success of parsing its text is no check the statement fixes, and no part
-computes the parse. The last step is therefore taken at the record's parsed value (`FlockDeploy.nextJ`,
+computes `Json.parse`. The last step is therefore taken at the record's parsed value (`FlockDeploy.nextJ`,
 `RecDeploy.decompB_nextJ`), where parse success is no check and the reading, the record value's fields and shapes, is
 one check given to the reader part of the last round (`RecDeploy.ownJ`). There the proof files' decoding inside
 `verifyRepWith` stays among the verdict's checks, owned by no reader part; at `FlockDeploy.nextS`

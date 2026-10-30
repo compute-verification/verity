@@ -63,7 +63,7 @@ def helloOf (spec : SessionSpec) : V (String × List (String × Json)) :=
   match spec.coinTree with
   | none => pure (spec.hello, [])
   | some ct => do
-    let some own := (Flock.JsonParse.parse spec.hello).toOption | throw "S2/R7: the verifier's Hello is not JSON"
+    let some own := (Json.parse spec.hello).toOption | throw "S2/R7: the verifier's Hello is not JSON"
     let nonce := zeros 64
     let coins := (own.getObjVal? "coins").toOption.getD Json.null
     let h ← canon (own.setObjVal! "coins" (coins.setObjVal! "nonce" (Json.str nonce)))

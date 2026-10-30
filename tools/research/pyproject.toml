@@ -70,8 +70,8 @@ exports = ["tools/research/src/research/__init__.py", "tools/research/src/resear
            "tools/research/src/research/store/ids.py", "tools/research/src/research/store/index.py",
            "tools/research/src/research/store/kinds.py", "tools/research/src/research/store/local.py",
            "tools/research/src/research/store/model.py", "tools/research/src/research/store/remote.py",
-           "tools/research/src/research/store/remote_s3.py", "tools/research/src/research/store/tool.py",
-           "tools/research/src/research/store/tools_registry.py", "tools/research/src/research/store/vocab.py",
-           "tools/research/src/research/telemetry/__init__.py", "tools/research/src/research/telemetry/cgroup.py",
-           "tools/research/src/research/telemetry/events.py", "tools/research/src/research/telemetry/job.py",
-           "tools/research/src/research/telemetry/source_identity.py"]
+           "tools/research/src/research/store/remote_s3.py", "tools/research/src/research/store/settings.py",
+           "tools/research/src/research/store/tool.py", "tools/research/src/research/store/tools_registry.py",
+           "tools/research/src/research/store/vllm_tools.py",
+           "tools/research/src/research/store/vocab.py", "tools/research/src/research/telemetry/__init__.py", "tools/research/src/research/telemetry/cgroup.py",
+           "tools/research/src/research/telemetry/events.py", "tools/research/src/research/telemetry/job.py"]

@@ -140,7 +140,7 @@ theorem commits_of_checks {commits : Option RecVStar.InnerCommits} (hsp : ish.sp
 /-- **The verifier's hold of the inner transcript, and the transcript on its schedule**: `commits` at the verifier's
 inner shape is `innerCommits` on the files' parses, and it holds the transcript to the schedule
 (`RecVStar.checkSchedule`). -/
-theorem commits_ok (htr : Flock.JsonParse.parse tt = .ok tr) (hreg : Flock.JsonParse.parse rt = .ok reg)
+theorem commits_ok (htr : Json.parse tt = .ok tr) (hreg : Json.parse rt = .ok reg)
     (h : RecSetup.commits (some ish) (.ok tt) (.ok (some rt)) bound record = .ok cs) :
     ∃ d sh, bound = .ok (d, sh) ∧ RecVStar.innerCommits tr record (some reg) d sh = .ok cs ∧
       RecVStar.checkSchedule ish tr = .ok () := by
@@ -164,7 +164,7 @@ theorem commits_ok (htr : Flock.JsonParse.parse tt = .ok tr) (hreg : Flock.JsonP
           exact ⟨rfl, rfl⟩
 
 /-- **`commits` at the verifier's inner shape reads the record in its own format** (`RecSetup.checkReads`). -/
-theorem reads_of_commits {r : Except String (Option String)} (htr : Flock.JsonParse.parse tt = .ok tr)
+theorem reads_of_commits {r : Except String (Option String)} (htr : Json.parse tt = .ok tr)
     (h : RecSetup.commits (some ish) (.ok tt) r bound record = .ok cs) :
     RecSetup.checkReads ish tt tr record cs = .ok () := by
   unfold RecSetup.commits at h
@@ -238,20 +238,20 @@ theorem checkReads_ok (h : RecSetup.checkReads ish tt tr record cs = .ok ()) :
 /-- **A candidate-3 session holds R's registration**, and both files are JSON: `commits` refuses one without it. -/
 theorem held_of_commits {t : Except String String} {r : Except String (Option String)}
     (hsp : ish.sparse.isSome = true) (h : RecSetup.commits (some ish) t r bound record = .ok cs) :
-    ∃ tt tr rt reg, t = .ok tt ∧ Flock.JsonParse.parse tt = .ok tr ∧ r = .ok (some rt) ∧ Flock.JsonParse.parse rt = .ok reg := by
+    ∃ tt tr rt reg, t = .ok tt ∧ Json.parse tt = .ok tr ∧ r = .ok (some rt) ∧ Json.parse rt = .ok reg := by
   unfold RecSetup.commits at h
   replace h := ebind_ok h
   obtain ⟨_ | rt, rfl, h⟩ := h
   · simp only [Option.bind_some, hsp, ↓reduceIte, throw, throwThe, MonadExceptOf.throw, bind, Except.bind,
       reduceCtorEq] at h
   dsimp only at h
-  rcases hreg : Flock.JsonParse.parse rt with e | reg <;> rw [hreg] at h
+  rcases hreg : Json.parse rt with e | reg <;> rw [hreg] at h
   · cases h
   rcases bound with e | _
   · cases h
   rcases t with e | tt
   · cases h
-  rcases htr : Flock.JsonParse.parse tt with e | tr
+  rcases htr : Json.parse tt with e | tr
   · dsimp only [pure, Except.pure, bind, Except.bind] at h
     rw [htr] at h
     cases h
@@ -321,7 +321,7 @@ holds, check 5's verdict included (its sparse refusals and its inner shape). -/
 theorem c3_of_checks (hsp : ish.sparse.isSome = true)
     (hpub : Stmt.setupTables RecVStar.innerTags f.circuit f.pub Coins.os 1 (partition := obj) (program := prog) =
       .ok (spec, #[st])) (hzk : ∃ p, Zk.schedule st.m = .ok p)
-    (htr : Flock.JsonParse.parse tt = .ok tr) (hreg : Flock.JsonParse.parse rt = .ok reg)
+    (htr : Json.parse tt = .ok tr) (hreg : Json.parse rt = .ok reg)
     (hcs : RecSetup.commits (some ish) (.ok tt) (.ok (some rt)) bound record = .ok cs)
     (hin : RecSetup.checkInner (some ish) (some (.files f)) bound = .ok ())
     (hck : RecSetup.checks (some ish) (some cs) tags tables sts circuitB partition program registered part bindings
@@ -358,7 +358,7 @@ theorem acceptsC3_of_verify {I : Exec.Inputs} {r : String} {spec' : SessionSpec}
     (hset : Exec.setupOf I r = .ok (spec', sts)) (hsp : ish.sparse.isSome = true)
     (hpub : Stmt.setupTables RecVStar.innerTags f.circuit f.pub Coins.os 1 (partition := obj) (program := prog) =
       .ok (spec, #[st])) (hzk : ∃ p, Zk.schedule st.m = .ok p)
-    (htr : Flock.JsonParse.parse tt = .ok tr) (hreg : Flock.JsonParse.parse rt = .ok reg)
+    (htr : Json.parse tt = .ok tr) (hreg : Json.parse rt = .ok reg)
     (hcs : RecSetup.commits (some ish) (.ok tt) (.ok (some rt)) bound record = .ok cs)
     (hin : RecSetup.checkInner (some ish) (some (.files f)) bound = .ok ())
     (hck : RecSetup.checks (some ish) (some cs) tags tables sts circuitB partition program registered part bindings

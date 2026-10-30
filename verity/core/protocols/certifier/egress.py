@@ -11,7 +11,7 @@ verifier's PROTOCOL.md §16.13; `warden_rows.bucket_port`: proof block `reads_fr
 the network certifier's registered row only when the row the state renders is it, bit for bit. Only o0 is public: a
 proof block's public output
 is at most 16 bits, and o1 is committed. Every switch is computed from the state, none is witness, so the unit adds
-nothing to c, and bucket t's egress reads no ingress after bucket t: structural Fits (`NetTiming.BoundaryGates.Fits`: no
+nothing to c, and bucket t's egress reads no ingress after bucket t: structural Fits (`NetTiming.Layout.Fits`: no
 egress gate is an input, and none of step t depends on an ingress gate of a step t' > t) holds by construction. It
 reads S_t rather than S_{t−1} because the network certifier's egress row of a connection's admission bucket already
 holds its lane, a `PAD` on its q.

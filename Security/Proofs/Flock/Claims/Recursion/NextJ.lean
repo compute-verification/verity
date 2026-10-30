@@ -3,13 +3,13 @@ import Proofs.Flock.Claims.Recursion.NextCs
 /-!
 # `IVStar`'s last step at the record's parsed value (`nextJ`)
 
-`nextCs` still parses the record's text (`Flock.JsonParse.parse`), so a split of its last step has a check, the parse's
+`nextCs` still parses the record's text (`Json.parse`, opaque), so a split of its last step has a check, the parse's
 success, that no V\* part computes and the statement does not fix: the record is a prover message, a witness under a
 hiding leaf, and `StmtFixes` asks a check to hold at the readers' messages of every witnesses. `nextJ` is the
 element-level step whose last message carries the record's parsed value: the layout's reader `rd` (the code side's, as
 `final` is) reads it as the statement, the parsed value and the proof files (`FinalJ`), and the decision runs the
 verdict and custody's reading at the coin-substituted value (`decisionAtJ`), the draw check at the parsed value
-(`drawOfJ`). There is no parse in it, so parse success is no check of `IVStar`.
+(`drawOfJ`). There is no `Json.parse` in it, so parse success is no check of `IVStar`.
 
 * **The step** (`actJ`, `nextJ`): a coin is answered as the deployed plain verifier answers it (`nextJ_coin`, so
   `deploySplit` applies); at a decision it is `decisionJF` (`nextJ_decide`).
@@ -47,7 +47,7 @@ def drawOfJ (j : Json) : Option Json :=
   | .ok d => some (Flock.norm d)
   | .error _ => none
 
-theorem recordDraw_of_parse {record : String} {j : Json} (h : Flock.JsonParse.parse record = .ok j) :
+theorem recordDraw_of_parse {record : String} {j : Json} (h : Json.parse record = .ok j) :
     FlockSoundness.Discharge.Exec.recordDraw record = drawOfJ j := by
   unfold FlockSoundness.Discharge.Exec.recordDraw
   rw [h]
@@ -123,7 +123,7 @@ theorem nextJ_decide {rd : Claims.Msg → Option FinalJ} {x : Claims.Msg} {as : 
 /-- **The parsed value's decision at a session is `nextCs`'s** on a record in its canonical text that parses to it. -/
 theorem decisionAtJ_eq (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (x : Claims.Msg)
     (link : List ByteArray × List ByteArray) (c₁ : Coin) (mids : List (Claims.Msg × Coin)) {f : Final} {j : Json}
-    (hj : Flock.JsonParse.parse f.record = .ok j) (hc : RecordText.printT j = f.record) :
+    (hj : Json.parse f.record = .ok j) (hc : RecordText.printT j = f.record) :
     decisionAtJ s spec sts x link c₁ mids ⟨f.stmt, j, f.proofs⟩ = decisionCsAt s spec sts x link c₁ mids f := by
   have hs : RecordText.check f.record = pure () := RecordText.check_of hj hc
   rw [decisionCsAt_parse s spec sts x link c₁ mids hj]
@@ -132,7 +132,7 @@ theorem decisionAtJ_eq (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (x : Cl
 
 /-- **The parsed value's decision is `nextCs`'s** on a record in its canonical text that parses to it. -/
 theorem decisionJF_eq (s : Ins) (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin)
-    (mids : List (Claims.Msg × Coin)) {f : Final} {j : Json} (hj : Flock.JsonParse.parse f.record = .ok j)
+    (mids : List (Claims.Msg × Coin)) {f : Final} {j : Json} (hj : Json.parse f.record = .ok j)
     (hc : RecordText.printT j = f.record) :
     decisionJF s x link c₁ mids ⟨f.stmt, j, f.proofs⟩ = decisionCs s x link c₁ mids f := by
   unfold decisionJF decisionCs

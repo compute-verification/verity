@@ -54,8 +54,8 @@ prover: as an argument, or from the record. `Claims.Complete` stays folded: with
   `FlockComplete.complete_of_goals` concludes it from the honest run's goals, `FlockComplete.Goals H rel`. The trim
   reads only the columns and the code through `trimCol`, and keeps the verifier, the parser, the reference prover and
   its error, so completeness at the trimmed record is the untrimmed record's (`Flock.complete_mapCols`). At the
-  deployed relation (`Readable.relation`) it holds with no premise (`FlockComplete.Replay.complete_plain_json`), so
-  `flock_plain_assembled_relation` takes no `hComplete`.
+  deployed relation (`Readable.relation`) it follows from the record's JSON (`Claims.JsonSpec printJ canon`,
+  `FlockComplete.Replay.complete_plain_json`), so `flock_plain_assembled_relation` takes `JsonSpec` in its place.
 
 `flock_zk_assembled`:
 * `hKS : Flock.KS H (deployZkTrim rel)`. At SHA-512 it follows from the fixed-table bound at the untrimmed instance at
@@ -64,8 +64,8 @@ prover: as an argument, or from the record. `Claims.Complete` stays folded: with
   premise (`FlockDeploy.KS.zk_KS`), so `flock_zk_assembled_trim` drops it; so does KS at the untrimmed instance, which
   the sampling claims read (`FlockDeploy.KS.zk_KS_untrim`).
 * `hComplete`: `Flock.Complete` at the masked record, unfolded, of `ZkTables.honestPR` at `ZkTables.δc H`, at any
-  number of tables, the untrimmed record's (`Flock.complete_mapCols`). At the deployed relation it follows from
-  three premises on the honest masked run, each at every good case or run and every table of it
+  number of tables, the untrimmed record's (`Flock.complete_mapCols`). At the deployed relation it follows from the
+  record's JSON and three premises on the honest masked run, each at every good case or run and every table of it
   (`FlockComplete.ZkTables.complete_json`), so `flock_zk_assembled_relation` takes those in its place: the masked
   prover's pieces return (`ProverRunsAt`), its rep proofs fit their shapes (`RepShapedAt`) and, per rep, the masked
   Ligerito and the inner proof accept (`LgInnerAt`).
@@ -180,10 +180,11 @@ theorem _root_.Claims.Flock.complete_mapCols {Coin Col T : Type} [Fintype Coin] 
   Iff.rfl
 
 /-- **Flock's claims at the deployed plain verifier at the deployed relation** (`Readable.relation`), at every hash:
-`flock_plain_assembled` with its completeness proved (`complete_plain_json`, at the trimmed record by
+`flock_plain_assembled` with its completeness from the record's JSON (`complete_plain_json`, at the trimmed record by
 `Flock.complete_mapCols`). `hKS` (E4) is what remains. -/
 theorem flock_plain_assembled_relation (H : Claims.Msg → Claims.Msg)
-    (hKS : Claims.Flock.KS H (deployPlainTrim Readable.relation)) :
+    (hKS : Claims.Flock.KS H (deployPlainTrim Readable.relation))
+    (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) :
     Claims.Flock.ScopeMatches (deployPlainTrim Readable.relation) ∧
       Claims.Flock.KS H (deployPlainTrim Readable.relation) ∧
       Claims.Flock.Bits H (deployPlainTrim Readable.relation) ∧
@@ -196,12 +197,13 @@ theorem flock_plain_assembled_relation (H : Claims.Msg → Claims.Msg)
       Claims.Flock.Complete H (deployPlainTrim Readable.relation) :=
   flock_plain_assembled Readable.relation H hKS
     ((Claims.Flock.complete_mapCols H (deployPlain Readable.relation) trimCol).2
-      (FlockComplete.Replay.complete_plain_json H))
+      (FlockComplete.Replay.complete_plain_json H S))
 
 /-- **Flock's claims at the deployed plain verifier at the deployed relation, at SHA-512**:
 `flock_plain_assembled_relation` with KS from the live sessions' bound with escapes on accepted runs at the statements
-some run accepts (`FlockDeploy.KS.plain_KS_of_liveAcc`). That bound is what remains. -/
-theorem flock_plain_assembled_trim
+some run accepts (`FlockDeploy.KS.plain_KS_of_liveAcc`). The record's JSON (`JsonSpec`) and that bound are what
+remain. -/
+theorem flock_plain_assembled_trim (S : Claims.JsonSpec FlockComplete.printJ Flock.canon)
     (hl : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V false) x → FlockDeploy.KS.PlainLiveAcc x) :
     Claims.Flock.ScopeMatches (deployPlainTrim Readable.relation) ∧
       Claims.Flock.KS sha512 (deployPlainTrim Readable.relation) ∧
@@ -214,7 +216,7 @@ theorem flock_plain_assembled_trim
           fun x => min (a x) (255.5 - b x / 2) - 1) ∧
       Claims.Flock.Efficient sha512 (deployPlainTrim Readable.relation) plainStepPoly ∧
       Claims.Flock.Complete sha512 (deployPlainTrim Readable.relation) :=
-  flock_plain_assembled_relation sha512 (FlockDeploy.KS.plain_KS_of_liveAcc hl)
+  flock_plain_assembled_relation sha512 (FlockDeploy.KS.plain_KS_of_liveAcc hl) S
 
 /-- **Flock's claims at the deployed masked (`--zk`) verifier**, at every relation's fields and every hash: the
 readable scope is the verifier's; KS at `E^rep`; bits at every decoder meeting `ListWithin`, and at the record's
@@ -253,12 +255,13 @@ theorem flock_zk_assembled (rel : Readable.Parsed → Readable.Relation) (H : Cl
     efficient_zk H rel, hComplete⟩
 
 /-- **Flock's claims at the deployed masked verifier at the deployed relation** (`Readable.relation`), at every hash:
-`flock_zk_assembled` with its completeness from the honest masked run's premises
+`flock_zk_assembled` with its completeness from the record's JSON and the honest masked run's premises
 (`FlockComplete.ZkTables.complete_json`, at the trimmed record by `Flock.complete_mapCols`) and the mask slots' rank
 bound (`FlockComplete.MaskRank.MaskRankBound`). `hKS` (E4), those premises and `Flock.zk_deployZk_of_models`'
 hypotheses are what remains. -/
 theorem flock_zk_assembled_relation (H : Claims.Msg → Claims.Msg)
     (hKS : Claims.Flock.KS H (deployZkTrim Readable.relation))
+    (S : Claims.JsonSpec FlockComplete.printJ Flock.canon)
     (hPR : ∀ c : FlockComplete.ZkTables.Case H Readable.relation, FlockComplete.ZkTables.ProverRunsAt c)
     (hR : ∀ c : FlockComplete.ZkTables.Case H Readable.relation, FlockComplete.ZkTables.RepShapedAt c)
     (hLI : ∀ o : FlockComplete.ZkTables.Run H Readable.relation,
@@ -287,14 +290,14 @@ theorem flock_zk_assembled_relation (H : Claims.Msg → Claims.Msg)
       Claims.Flock.Complete H (deployZkTrim Readable.relation) :=
   flock_zk_assembled Readable.relation H hKS
     ((Claims.Flock.complete_mapCols H (deployZk Readable.relation) trimCol).2
-      (FlockComplete.ZkTables.complete_json H hPR hR hLI hMR))
+      (FlockComplete.ZkTables.complete_json H S hPR hR hLI hMR))
     G t ht hK My cs hT1 hδ₁ Mp Mc nL nB hnL hnB hL hS hN hI hC coinOf tapeOf hG
 
 /-- **Flock's claims at the deployed masked verifier at the deployed relation, at SHA-512**:
-`flock_zk_assembled_relation` with KS, which holds with no premise (`FlockDeploy.KS.zk_KS`). The honest masked run's
-premises, the mask slots' rank bound and `Flock.zk_deployZk_of_models`'
+`flock_zk_assembled_relation` with KS, which holds with no premise (`FlockDeploy.KS.zk_KS`). The record's JSON
+(`JsonSpec`), the honest masked run's premises, the mask slots' rank bound and `Flock.zk_deployZk_of_models`'
 hypotheses, `hT1` its named assumption, are what remain. -/
-theorem flock_zk_assembled_trim
+theorem flock_zk_assembled_trim (S : Claims.JsonSpec FlockComplete.printJ Flock.canon)
     (hPR : ∀ c : FlockComplete.ZkTables.Case sha512 Readable.relation, FlockComplete.ZkTables.ProverRunsAt c)
     (hR : ∀ c : FlockComplete.ZkTables.Case sha512 Readable.relation, FlockComplete.ZkTables.RepShapedAt c)
     (hLI : ∀ o : FlockComplete.ZkTables.Run sha512 Readable.relation,
@@ -322,7 +325,7 @@ theorem flock_zk_assembled_trim
         (fun x => 8 * nL x * δ₁.toReal + 8 * t * nB x * δ₁.toReal + 2 * (1 / 3) ^ t) (fun _ => 4 * t * 3 ^ t) ∧
       Claims.Flock.Efficient sha512 (deployZkTrim Readable.relation) zkStepPoly ∧
       Claims.Flock.Complete sha512 (deployZkTrim Readable.relation) :=
-  flock_zk_assembled_relation sha512 FlockDeploy.KS.zk_KS hPR hR hLI hMR G t ht hK My cs hT1 hδ₁ Mp Mc nL nB hnL hnB
+  flock_zk_assembled_relation sha512 FlockDeploy.KS.zk_KS S hPR hR hLI hMR G t ht hK My cs hT1 hδ₁ Mp Mc nL nB hnL hnB
     hL hS hN hI hC coinOf tapeOf hG
 
 end FlockDeploy.Assembled

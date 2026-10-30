@@ -209,10 +209,9 @@ def rowDigest (row : Array (Option ByteArray)) : ByteArray :=
   let frames := row.filterMap id
   taggedSha256 "verity-network-warden/row/v1" (frames.foldl (· ++ ·) (Flock.be32 frames.size.toUInt32))
 
-/-- `record_digest(link, window, grid, COMPLETE, params)` as `tagged_sha256` writes it, lowercase hex. Its header is in
-the identity form (`Flock.canonUtf8`, `canonical_json_bytes`), a link's characters past ASCII in UTF-8. -/
+/-- `record_digest(link, window, grid, COMPLETE, params)` as `tagged_sha256` writes it, lowercase hex. -/
 def committedDigest (link : String) (window : Nat) (grid : RawGrid) (g : Grid) : Flock.V String := do
-  let header ← Flock.canonUtf8 (Json.mkObj [
+  let header ← Flock.canon (Json.mkObj [
     ("link", .str link), ("window", toJson window), ("buckets", toJson g.buckets), ("allocation", toJson g.allocation),
     ("frame_bytes", toJson g.frameBytes), ("bucket_ms", toJson g.bucketMs), ("status", .str "complete")])
   let h := header.toUTF8

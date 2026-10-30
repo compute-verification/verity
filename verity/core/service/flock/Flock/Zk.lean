@@ -6,7 +6,6 @@ constraint at once (`verifyInner`). The session around the reps is `Flock.verify
 -/
 import Flock.Verify
 import Flock.ZkLigerito
-import Flock.JsonParse
 
 namespace Flock.Zk
 
@@ -373,7 +372,7 @@ def maskLogOf (circuit : ByteArray) : Nat :=
     match String.fromUTF8? (circuit.extract (e1 + 1) e2) with
     | none => 14
     | some line =>
-      match JsonParse.parse (line.drop 5).toString with
+      match Json.parse (line.drop 5).toString with
       | .ok j => (j.getObjValAs? Nat "mask_log").toOption.getD 14
       | .error _ => 14
 

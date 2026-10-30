@@ -390,7 +390,7 @@ NOISE_LINE = ("Per-call noise adds **+8.5 s a step at batch 4,096** (5.59 s of u
               "(r20261027-022021-3a48). The commit's own overhead, measured on one H200 at the frozen shape "
               "(r20261029-203322-1680): as served (FAMILIES, every SM) it adds +8.9 s to M3's 0.440 s step at 512 "
               "slots (20.3×) and +71.7 s to the 3.246 s step at 4,096 slots (22.1×); on circuits' 1 KiB shared rows, "
-              "which e2e_h200's committer doesn't serve yet, it adds +0.071 s (0.161×) and +0.448 s (0.138×, inside "
+              "which e2e_h200's committer doesn't serve yet, it adds +0.071 s (0.161×) and +0.448 s (0.138×, under "
               "0.20–0.25×). Capping the commit's SMs doesn't help the served loop, and 9 → 7 compressions a row-slot "
               "isn't built. In ANDs the commit is 0.174× the served step as served and 0.0013× at 1 KiB rows.")
 

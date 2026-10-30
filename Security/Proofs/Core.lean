@@ -16,7 +16,6 @@ import Proofs.Core.Game.Batch
 import Proofs.Core.Game.BatchInduced
 import Proofs.Core.Game.Rewinding
 import Proofs.Core.Game.Unambiguous
-import Proofs.Core.Challenger
 import Proofs.Core.Round
 import Proofs.Core.Prims.Round
 import Proofs.Core.TC
@@ -30,6 +29,8 @@ import Proofs.Core.Accel.Witness
 import Proofs.Core.NaiveStrassen
 import Proofs.Core.Bilinear
 import Proofs.Core.Blocks
+import Proofs.Core.ProofSystem
+import Proofs.Core.Structure
 import Proofs.Core.Fp32.Vectors
 import Proofs.Pouw.Prob
 import Proofs.Core.Prims.Vectors

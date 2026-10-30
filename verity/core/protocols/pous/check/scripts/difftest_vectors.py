@@ -49,8 +49,7 @@ def _python(repo: Path):
 
 
 def canonical(obj) -> str:
-    """`Flock.canon`'s text: compact, keys sorted, every character outside printable ASCII escaped."""
-    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
 def _merkle(rng: random.Random) -> dict:

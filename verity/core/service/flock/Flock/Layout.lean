@@ -25,7 +25,6 @@ import Lean.Data.Json
 import Flock.Canon
 import Flock.Hash
 import Flock.CircuitType
-import Flock.JsonParse
 
 namespace Flock
 
@@ -435,7 +434,7 @@ def checkFile (j : Json) : V (Array String × Array Nat) := do
 def cmd (paths : List String) : IO UInt32 := do
   for path in paths do
     let text ← try IO.FS.readFile path catch _ => pure ""
-    let line := match JsonParse.parse text >>= checkFile with
+    let line := match Json.parse text >>= checkFile with
       | .ok (ds, sizes) => Json.mkObj [("file", Json.str path), ("ok", Json.bool true), ("digests", Lean.toJson ds),
                                        ("sizes", Lean.toJson sizes)]
       | .error e => Json.mkObj [("file", Json.str path), ("ok", Json.bool false), ("error", Json.str e)]

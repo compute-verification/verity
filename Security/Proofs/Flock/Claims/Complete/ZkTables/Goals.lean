@@ -2,7 +2,6 @@ import Proofs.Flock.Claims.Complete.ZkTables.Prover
 import Proofs.Flock.Claims.Complete.ZkTables.Session
 import Proofs.Flock.Claims.Complete.ZkTables.Decode
 import Proofs.Flock.Claims.Complete.Json.Text
-import Proofs.Flock.Claims.Complete.Json.Canon
 
 /-!
 # The record's checks at the honest masked run of several tables
@@ -30,7 +29,7 @@ theorem tabsOf_size (sts : Array Flock.Stmt) : (tabsOf sts).size = sts.size := b
 /-- **The honest masked run's record**, at any number of tables: it is the printed honest masked record of one
 `root_B` per table, `Record.decodeWith` reads it as `sessOf` and `liveOf` as its live session, the link is its
 `root_B`s and no public words, and the sends after the link are its streams' rounds. -/
-theorem Run.jsonJ (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) :
+theorem Run.jsonJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) :
     ∃ rbs streams hz ct, rbs.size = o.spec.tables.size ∧ streams.size = o.spec.repStreams.size ∧
       o.proofs.size = o.spec.repStreams.size ∧
       o.link = (rbs.toList, (o.tabs.map fun _ => ByteArray.empty).toList) ∧
@@ -44,7 +43,7 @@ theorem Run.jsonJ (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) :
       o.live = ⟨rbs, o.spec.tables.map fun _ => ByteArray.empty, pointsOf o.spec (Claims.coinSeq o.r 0),
         streams.map (·.map liveRound)⟩ := by
   obtain ⟨hsig, hdraw, -, m, kvs, hown, hm, hkv, hco, hg⟩ := hS
-  obtain ⟨hz, hcz, -⟩ := FlockComplete.JsonRT.canon_ok _ hg
+  obtain ⟨hz, hcz⟩ := S.canon_ok _ hg
   have hH : HelloOk o.spec hz := ⟨m, kvs, hown, hm, hkv, hco, hg, hcz⟩
   obtain ⟨ct, hct⟩ : ∃ ct, o.spec.coinTree = some ct := Option.isSome_iff_exists.1 o.ready_parts.2.2.2.2
   have hn := o.toCase.tables_nodup
@@ -81,12 +80,12 @@ theorem Run.jsonJ (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) :
   have hdec : Record.decodeWith o.hs o.spec o.record =
       .ok (sessOf o.spec (Claims.hOf H) rbs (pointsOf o.spec (Claims.coinSeq o.r 0)) streams o.proofs) := by
     rw [hrec]
-    exact decode_recordObjZkJ (hOf_size h64) hn hct hH hdraw hsig hrbs (fun rb h => (hrb rb h).1) hpts hpm hss hrs
+    exact decode_recordObjZkJ S (hOf_size h64) hn hct hH hdraw hsig hrbs (fun rb h => (hrb rb h).1) hpts hpm hss hrs
       o.proofs
   have hlv : liveOf o.spec o.record = .ok ⟨rbs, o.spec.tables.map fun _ => ByteArray.empty,
       pointsOf o.spec (Claims.coinSeq o.r 0), streams.map (·.map liveRound)⟩ := by
     rw [hrec]
-    exact live_recordObjZkJ hn (good_draw hdraw) hz ct hrbs hss o.proofs
+    exact live_recordObjZkJ S hn (good_draw hdraw) hz ct hrbs hss o.proofs
   have hsend : o.sends.headD [] = 0 :: linkBody rbs.toList (o.tabs.map fun _ => ByteArray.empty).toList := by
     unfold Run.sends
     rw [hbs]
@@ -151,9 +150,9 @@ structure RecordJsonAt (o : Run H rel) : Prop where
   canonical : Flock.RecordText.check o.record = .ok ()
 
 /-- **The record's checks hold at every run** where the statement's `hello` prints. -/
-theorem recordJsonJ (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) : RecordJsonAt o := by
+theorem recordJsonJ (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) : RecordJsonAt o := by
   obtain ⟨rbs, streams, hz, ct, hrbs, hss, hpf, hlink, ⟨bs, hbs, hrecs⟩, hrec, hsess, hdec, hlv, hlive⟩ :=
-    o.jsonJ h64 hS
+    o.jsonJ S h64 hS
   obtain ⟨-, hdraw, hdr, -⟩ := hS
   have hn := o.toCase.tables_nodup
   obtain ⟨-, -, hsz, -⟩ := o.toCase.tables
@@ -179,7 +178,7 @@ theorem recordJsonJ (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) : Rec
       liveReads := hlv
       canonical := by
         rw [hrec]
-        exact check_printJ (good_recordObjZkJ hn _ hz ct hrbs _ streams o.proofs (good_draw hdraw))
+        exact check_printJ S (good_recordObjZkJ hn _ hz ct hrbs _ streams o.proofs (good_draw hdraw))
       rootB := by rw [hlive, hlink]; exact list_bytes_beq_self _
       publicsLink := ?_
       points := by rw [hlive]; exact beq_self_eq_true _
@@ -191,7 +190,7 @@ theorem recordJsonJ (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) : Rec
       proofDigests := ?_
       repStream := ?_
       repExtras := ?_ }
-  · have hd := recordDraw_recordObjZkJ (h := Claims.hOf H) hn hdraw hz ct hrbs
+  · have hd := recordDraw_recordObjZkJ S (h := Claims.hOf H) hn hdraw hz ct hrbs
       (pointsOf o.spec (Claims.coinSeq o.r 0)) streams o.proofs
     rw [hrec, ← hdr]
     revert hd
@@ -278,9 +277,9 @@ variable (H rel) in
 def FilesJ : Prop := ∀ o : Run H rel, 1 < o.sts.size → FilesAt o
 
 /-- **The record's checks at a run** where the statement's `hello` prints, from what they ask of the proof files. -/
-theorem recordAt_of (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) (hFi : FilesAt o) :
+theorem recordAt_of (S : JsonSpec) (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) (hFi : FilesAt o) :
     RecordAt H rel o :=
-  have hJ := recordJsonJ h64 o hS
+  have hJ := recordJsonJ S h64 o hS
   { finalFits := hFi.finalFits
     draw := hJ.draw
     liveReads := hJ.liveReads
@@ -302,17 +301,17 @@ theorem recordAt_of (h64 : Out64 H) (o : Run H rel) (hS : StmtAt o.toCase) (hFi 
     capCommitted := hFi.capCommitted }
 
 /-- **The record's checks at every run of several tables**, from what they ask of the proof files. -/
-theorem recordJ_of (h64 : Out64 H) (hS : StmtOkJ H rel) (hF : FilesJ H rel) : RecordJ H rel :=
-  fun o hc => recordAt_of h64 o (hS o.toCase hc) (hF o hc)
+theorem recordJ_of (S : JsonSpec) (h64 : Out64 H) (hS : StmtOkJ H rel) (hF : FilesJ H rel) : RecordJ H rel :=
+  fun o hc => recordAt_of S h64 o (hS o.toCase hc) (hF o hc)
 
 /-- **Flock's masked verifier is complete** for the honest masked prover on each table's share, with error `δc H`, at
 any number of tables, the record's checks discharged: from `complete`'s premises at one table and at several tables
 `StmtOkJ`, `ProverRunsJ`, what the record's checks ask of the proof files (`FilesJ`) and the rep's checks (`OpenJ`). -/
 theorem completeJ (H : Claims.Msg → Claims.Msg) (rel : Readable.Parsed → Readable.Relation)
-    (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
+    (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hS : JsonRT.StmtOkZk H rel) (hR : JsonRT.RepShapedZk H rel)
     (hPR : JsonRT.ProverRunsZk H rel) (hRS : FlockComplete.RingSwitchZk H rel) (hLg : FlockComplete.LigeritoZk H rel)
     (hIn : FlockComplete.Inner H rel) (hSJ : StmtOkJ H rel) (hPRJ : ProverRunsJ H rel) (hFJ : FilesJ H rel)
     (hOp : OpenJ H rel) (hMR : MaskRank.MaskRankBound) (hMF : MaskFree rel) : Claims.Flock.Complete H (deployZk rel) :=
-  complete H rel h64 hS hR hPR hRS hLg hIn hSJ hPRJ (recordJ_of h64 hSJ hFJ) hOp hMR hMF
+  complete H rel S h64 hS hR hPR hRS hLg hIn hSJ hPRJ (recordJ_of S h64 hSJ hFJ) hOp hMR hMF
 
 end FlockComplete.ZkTables

@@ -27,7 +27,6 @@ import Flock.RecSparse
 import Flock.RecOpening
 import Flock.SplitNL
 import Flock.Norm
-import Flock.JsonParse
 import Flock.LinkUnits
 
 namespace Flock
@@ -621,7 +620,7 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   let name := (head.drop (tags.fileFormat.length + 1)).toString
   let metaLine := (lines.getD 1 "").trimAsciiEnd.toString
   if !metaLine.startsWith "META " then throw "circuit: no META line"
-  let mj ← match JsonParse.parse (metaLine.drop 5).toString with
+  let mj ← match Json.parse (metaLine.drop 5).toString with
     | .ok j => pure j
     | .error e => throw s!"META: {e}"
   if (← J.str mj "format" ctx) != tags.fileFormat || (← J.str mj "statement" ctx) != tags.statement then
@@ -778,7 +777,7 @@ the branch that reads it, which here is the last. -/
   let name := (head.drop (tags.fileFormat.length + 1)).toString
   let metaLine := (lines.getD 1 "").trimAsciiEnd.toString
   if !metaLine.startsWith "META " then throw "circuit: no META line"
-  let mj ← match JsonParse.parse (metaLine.drop 5).toString with
+  let mj ← match Json.parse (metaLine.drop 5).toString with
     | .ok j => pure j
     | .error e => throw s!"META: {e}"
   if (← J.str mj "format" ctx) != tags.fileFormat || (← J.str mj "statement" ctx) != tags.statement then
@@ -1329,7 +1328,7 @@ def loadPublic (tags : Tags) (c : Circuit) (file : ByteArray) : V Public := do
   let text ← match String.fromUTF8? (file.extract 0 nl) with
     | some s => pure s
     | none => throw "public file: header is not UTF-8"
-  let header ← match JsonParse.parse text with
+  let header ← match Json.parse text with
     | .ok j => pure (Flock.norm j)
     | .error e => throw s!"public file: header: {e}"
   let pctx := "public file"
@@ -1768,7 +1767,7 @@ def metaOf (bytes : ByteArray) : V Json := do
   let some line := String.fromUTF8? (bytes.extract (n1 + 1) n2) | throw "circuit: not UTF-8"
   let line := line.trimAsciiEnd.toString
   if !line.startsWith "META " then throw "circuit: no META line"
-  match JsonParse.parse (line.drop 5).toString with
+  match Json.parse (line.drop 5).toString with
   | .ok j => pure j
   | .error e => throw s!"META: {e}"
 
@@ -2168,7 +2167,7 @@ def checkOwn (pi : Ports) (pop : Public) (own : Option ByteArray) : V Unit := do
   | some f, false =>
     let some nl := findByte f 10 | throw "--public-inputs: no header line"
     let header ← match String.fromUTF8? (f.extract 0 nl) with
-      | some t => match JsonParse.parse t with
+      | some t => match Json.parse t with
         | .ok j => pure j
         | .error e => throw s!"--public-inputs: header: {e}"
       | none => throw "--public-inputs: header is not UTF-8"

@@ -1,7 +1,13 @@
-# Drive's flags of record: `research queue drive --config tools/verity/check/drive.toml` reads this file at `main` in the queue's
-# clone on every tick (`DriveFlags` in tools/research/src/research/queue.py), so a change here is a reviewed commit and needs no
-# restart. A flag given on the command line overrides its key here. ci owns this file; infra runs drive from it on the control pod.
+# Drive's flags, their one source: `research queue drive` reads this file at `main` in the queue's clone on every tick
+# (`DriveFlags`, `drive_flags` in tools/research/src/research/queue.py), so a change here is a reviewed commit and needs no
+# restart, and a temporary setting is a commit here too. A `--config FILE` on drive's machine is refused, naming each key, unless
+# every key it sets has this file's value; a command-line flag overrides its key only where `command_line` lets it. Before it
+# syncs, each tick refuses, with the fix, a name used here that doesn't exist: the `land_into` branch and drive's push to it,
+# each machine of `on`, each of `landing_gates` (`drive_names`). ci owns this file; infra runs drive from it on the control pod.
 
+# the keys drive's command line (the control pod's /data/drive/args) may override: `--on` and `--first`; any other flag there
+# refuses the tick
+command_line = ["on", "first"]
 # the machines train.sh launches drive's Lean checks and its after-landing run on (a machine, or `auto`)
 on = ["vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
 # ready marks written before this don't count

@@ -14,7 +14,6 @@ The analysis holds these to the coin layer's `Hello` (`Claims.ZKMal.CoinLayer.he
 -/
 import Flock.Witness
 import Flock.Firewall.Coins
-import Flock.JsonParse
 
 namespace Flock.Firewall.Hello
 
@@ -27,7 +26,7 @@ def json (spec : SessionSpec) (nonce : String) : V String :=
   match spec.coinTree with
   | none => pure spec.hello
   | some _ => do
-    let some own := (JsonParse.parse spec.hello).toOption | throw "S2/R7: the verifier's Hello is not JSON"
+    let some own := (Json.parse spec.hello).toOption | throw "S2/R7: the verifier's Hello is not JSON"
     let coins := (own.getObjVal? "coins").toOption.getD Json.null
     canon (own.setObjVal! "coins" (coins.setObjVal! "nonce" (Json.str nonce)))
 
@@ -45,7 +44,7 @@ def NONCE_BYTES : Nat := 32
 
 /-- A request's draw: the verifier's answer to `Register`, JSON text, `null` where it drew none. -/
 def drawOf (text : String) : Except String (Option Json) :=
-  match JsonParse.parse text with
+  match Json.parse text with
   | .ok Json.null => .ok none
   | .ok d => .ok (some d)
   | .error e => .error s!"the draw is not JSON: {e}"

@@ -32,7 +32,6 @@ verity_vllm/ops/pod_bootstrap.sh
 verity_vllm/ops/pod_gate.sh
 
 # --- Python entry points
-verity_vllm.pipeline.research_tools
 verity_vllm.pipeline.cli
 verity_vllm.program.predict.steps      # I2, the compiler: a library entry point (`compile_steps`), called from outside the package
 verity_vllm.program.predict.window_circuit      # the window class circuit: a library entry point (`window_circuit`), called by benchmarks/prove_path (window-circuit, class-size)
@@ -75,6 +74,9 @@ verity_vllm.protocols.pouw.h1.settings
 verity_vllm.protocols.pouw.h1.static
 verity_vllm.protocols.pouw.h1.window
 verity_vllm.protocols.pouw.native
+verity_vllm.protocols.pouw.lead
+verity_vllm.protocols.pouw.lead.feed      # the lead's coin feed: the coin link's packing and the in-process certifier, until the lead arm imports it
+verity_vllm.protocols.pouw.lead.record      # the pass's record, until the lead arm imports it
 verity_vllm.protocols.pouw.pearl_c.passes
 verity_vllm.protocols.pouw.pearl_c
 verity_vllm.protocols.pouw.pearl_c.graphs

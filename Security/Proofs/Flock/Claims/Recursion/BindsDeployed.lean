@@ -66,7 +66,7 @@ theorem binds_deployed (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Read
 /-- **Lean's JSON parser accepts trailing whitespace**: `Json.parse` is `ws; anyCore; eof`, and every branch of
 `anyCore` ends with `ws`. A hypothesis because `anyCore` is `partial`. -/
 def JsonTrailingSpace : Prop :=
-  ∀ (r : String) (j : Json), Flock.JsonParse.parse r = .ok j → Flock.JsonParse.parse (r ++ " ") = .ok j
+  ∀ (r : String) (j : Json), Json.parse r = .ok j → Json.parse (r ++ " ") = .ok j
 
 end RecDeploy
 
@@ -187,26 +187,26 @@ open Lean (Json)
 
 /-! ## The deployed plain verifier reads the record only through `Json.parse` -/
 
-theorem recordDraw_congr {r r' : String} (h : Flock.JsonParse.parse r' = Flock.JsonParse.parse r) :
+theorem recordDraw_congr {r r' : String} (h : Json.parse r' = Json.parse r) :
     FlockSoundness.Discharge.Exec.recordDraw r' = FlockSoundness.Discharge.Exec.recordDraw r := by
   unfold FlockSoundness.Discharge.Exec.recordDraw
   rw [h]
 
-theorem liveOf_congr (spec : _root_.Flock.SessionSpec) {r r' : String} (h : Flock.JsonParse.parse r' = Flock.JsonParse.parse r) :
+theorem liveOf_congr (spec : _root_.Flock.SessionSpec) {r r' : String} (h : Json.parse r' = Json.parse r) :
     FlockDeploy.liveOf spec r' = FlockDeploy.liveOf spec r := by
   unfold FlockDeploy.liveOf
   rw [h]
 
 theorem decodeWith_congr {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT _root_.Flock.V M]
     (hs : _root_.Flock.Hashes M) (spec : _root_.Flock.SessionSpec) {r r' : String}
-    (h : Flock.JsonParse.parse r' = Flock.JsonParse.parse r) :
+    (h : Json.parse r' = Json.parse r) :
     _root_.Flock.Record.decodeWith hs spec r' = _root_.Flock.Record.decodeWith hs spec r := by
   unfold _root_.Flock.Record.decodeWith
   rw [h]
 
 theorem verifyWithM_congr {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT _root_.Flock.V M]
     (hs : _root_.Flock.Hashes M) (spec : _root_.Flock.SessionSpec) (tabs : Array _root_.Flock.Setup)
-    (ps : Array ByteArray) {r r' : String} (h : Flock.JsonParse.parse r' = Flock.JsonParse.parse r) :
+    (ps : Array ByteArray) {r r' : String} (h : Json.parse r' = Json.parse r) :
     _root_.Flock.verifyWithM hs spec tabs r' ps = _root_.Flock.verifyWithM hs spec tabs r ps := by
   unfold _root_.Flock.verifyWithM
   rw [decodeWith_congr hs spec h]
@@ -224,7 +224,7 @@ theorem append_space_ne (r : String) : r ++ " " ≠ r := by
 message the same, are one text (S0, `Flock.RecordText.check_inj`). -/
 theorem checks_record_eq {zk : Bool} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {x : Msg}
     {link : List ByteArray × List ByteArray} {c₁ : FlockDeploy.Coin} {mids : List (Msg × FlockDeploy.Coin)}
-    {st : Msg} {ps : Array ByteArray} {r r' : String} (h : Flock.JsonParse.parse r' = Flock.JsonParse.parse r)
+    {st : Msg} {ps : Array ByteArray} {r r' : String} (h : Json.parse r' = Json.parse r)
     (hc : FlockDeploy.checks zk s spec x link c₁ mids ⟨st, r, ps⟩ = .ok ())
     (hc' : FlockDeploy.checks zk s spec x link c₁ mids ⟨st, r', ps⟩ = .ok ()) : r' = r :=
   _root_.Flock.RecordText.check_inj (Claims.Bridge.Custody.checks_canonical hc')

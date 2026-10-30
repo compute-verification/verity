@@ -232,14 +232,14 @@ theorem stream_pred {x : Json} {name w : String} (h : Record.str x "stream" = .o
 /-- **What `liveOf` reads**: the record's JSON, its link, its streams, each table's `root_B`, the link points and each
 rep stream's rounds, field by field. -/
 theorem liveOf_ok {spec : SessionSpec} {record : String} {lv : Live} (h : liveOf spec record = .ok lv) :
-    ∃ j l recs, Flock.JsonParse.parse record = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.arr j "streams" = .ok recs ∧
+    ∃ j l recs, Json.parse record = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.arr j "streams" = .ok recs ∧
       List.Forall₂ (RootField l) spec.tables.toList lv.rootB.toList ∧
       (∃ ps, Record.arr l "points" = .ok ps ∧ List.Forall₂ PointField ps.toList lv.points.toList) ∧
       List.Forall₂ (LiveStream recs) spec.repStreams.toList lv.streams.toList := by
   revert lv
   show Ret (liveOf spec record) _
   rw [liveOf.eq_def]
-  cases hp : Flock.JsonParse.parse record with
+  cases hp : Json.parse record with
   | error e => intro lv h; cases h
   | ok j =>
     dsimp only
@@ -290,14 +290,14 @@ theorem liveOf_ok {spec : SessionSpec} {record : String} {lv : Live} (h : liveOf
 `root_B`, the link points, and each stream's name and rounds, with a retained round's recorded digest that of its bytes
 (S12). -/
 theorem decode_ok {spec : SessionSpec} {text : String} {sess : RunRecord} (h : Record.decode spec text = .ok sess) :
-    ∃ j l recs, Flock.JsonParse.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.arr j "streams" = .ok recs ∧
+    ∃ j l recs, Json.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.arr j "streams" = .ok recs ∧
       List.Forall₂ (RootField l) spec.tables.toList sess.rootB.toList ∧
       (∃ ps, Record.arr l "points" = .ok ps ∧ List.Forall₂ PointField ps.toList sess.points.toList) ∧
       List.Forall₂ (DecStream spec) recs.toList sess.streams.toList := by
   revert sess
   show Ret (Record.decode spec text) _
   rw [Record.decode.eq_def]
-  cases hp : Flock.JsonParse.parse text with
+  cases hp : Json.parse text with
   | error e => intro sess h; cases h
   | ok j =>
     simp only []

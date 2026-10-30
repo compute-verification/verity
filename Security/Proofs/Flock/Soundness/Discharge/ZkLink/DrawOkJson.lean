@@ -14,7 +14,7 @@ law can make; the round trip claims nothing about the others.
 So `DrawFileZK`, the second half of `RecordCustodyZK` and of `RecordCustodyZKJ`, follows from each draw file being the
 JSON value `flock-verify draw` printed for the verifier's own draw (`drawFileZK_of_toJson`, `drawFileZK_of_toJson_subset`).
 That equality is of Lean `Json` values, whose objects are trees shaped by the order their keys were inserted in:
-`Flock.JsonParse.parse` of the keys in sorted order, as `compress` prints them, gives `toJson`'s trees, and other orders give other
+`Json.parse` of the keys in sorted order, as `compress` prints them, gives `toJson`'s trees, and other orders give other
 trees that `ofJson` reads alike.
 -/
 

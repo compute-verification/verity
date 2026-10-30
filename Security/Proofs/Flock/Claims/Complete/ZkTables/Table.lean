@@ -547,7 +547,7 @@ theorem take_flatMap_length {α : Type} (xs : Array (Array α)) :
 /-- **Each rep of a run, as a table-level rep**: table `i`'s rep `r`'s recorded rounds are the `2 i + r`th stream's
 as the decoder reads them back, its decoded masked proof is the one it returned, from `1 +` the earlier streams' rounds
 sends, on its inputs (`RepIn`). -/
-theorem Run.repIn (h64 : JsonRT.Out64 H) (hR : RepShapedT H) (o : Run H Readable.relation) :
+theorem Run.repIn (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hR : RepShapedT H) (o : Run H Readable.relation) :
     ∃ (schs : Array (Schedule × ℕ)) (cms : Array Commit) (streams : Array (Array Round)),
       streams.size = 2 * o.sts.size ∧ (∀ rs ∈ streams, ∀ x ∈ rs, ∃ c, x.bytes = some c) ∧
       ∀ i < o.sts.size, o.tabs[i]! = Setup.ofCircuit o.sts[i]! ∧ Zk.schedule o.sts[i]!.m = .ok schs[i]! ∧
@@ -559,9 +559,9 @@ theorem Run.repIn (h64 : JsonRT.Out64 H) (hR : RepShapedT H) (o : Run H Readable
             (o.extras i) r ic ∧
           (repT H o.r o.sts[i]! (traces o.sts o.w)[i]! o.ω i (o.spec.domain o.spec.tables[i]! r).toUTF8 schs[i]! cms[i]!
             (o.extras i) r ic prior ws).go l = (.ok (p, t'), l') := by
-  have hS := stmtAt_all o.toCase
-  obtain ⟨schs, cms, streams, hss, hbytes, -, hpts, hrep⟩ := Run.walkJ h64 o hS (repShapedAt_of hR h64 o.toCase)
-  have hJ := recordJsonJ h64 o hS
+  have hS := stmtAt_all S o.toCase
+  obtain ⟨schs, cms, streams, hss, hbytes, -, hpts, hrep⟩ := Run.walkJ S h64 o hS (repShapedAt_of hR h64 o.toCase)
+  have hJ := recordJsonJ S h64 o hS
   refine ⟨schs, cms, streams, hss, hbytes, fun i hi => ?_⟩
   obtain ⟨htabi, hv, hsch, hreps⟩ := hrep i hi
   refine ⟨htabi, hv, hsch, fun r hr => ?_⟩
@@ -606,11 +606,11 @@ theorem Run.start_eq (hPR : ProverRunsT H) (h64 : Claims.Out64 H) {o : Run H Rea
 inputs and run are the walk's (`Run.repIn`), from `repStartZk` sends (`Run.start_eq`), where `¬ BadZk` gives its coins
 (`Case.coinsT`); its recorded rounds carry the prover's, the masked replay (`replayJ`) and the ring switch
 (`ringSwitchJ`) return, and level 0's lanes are its constraints (`lanesJ`). -/
-theorem lgInnerAt_of (h64 : JsonRT.Out64 H) (hR : RepShapedT H) (hPR : ProverRunsT H)
+theorem lgInnerAt_of (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hR : RepShapedT H) (hPR : ProverRunsT H)
     (hLg : LigeritoT H) (hIn : InnerT H) (o : Run H Readable.relation) : LgInnerAt H Readable.relation o := by
-  have hS := stmtAt_all o.toCase
+  have hS := stmtAt_all S o.toCase
   have hRA := repShapedAt_of hR h64 o.toCase
-  obtain ⟨schs, cms, streams, hss, hbytes, hrep⟩ := Run.repIn h64 hR o
+  obtain ⟨schs, cms, streams, hss, hbytes, hrep⟩ := Run.repIn S h64 hR o
   have key : ∀ i < o.tabs.size, ∀ r < 2,
       (Zk.ligeritoWith o.hs o.tabs[i]!.merkle (o.sch i) (o.sw i r).1.1 (o.zp i r).proof.cap (o.zp i r).proof.ligerito
         (basis (o.sw i r).1.2) ⟨o.tPad i, r, (o.zp i r).level0⟩).run (o.sw i r).2 = .ok (o.lg i r) ∧
@@ -650,9 +650,9 @@ theorem lgInnerAt_of (h64 : JsonRT.Out64 H) (hR : RepShapedT H) (hPR : ProverRun
       rw [getElem!_pos _ i (by simpa using hi), Array.getElem_map, ← getElem!_pos o.tabs i hi, htabi]
       unfold schedZkOf
       rw [hv']
-    have hRp := replayJ h64 o hS hRA i hi r hr
-    have hRS := ringSwitchJ h64 o hS hRA o.rsExtras i hi r hr
-    have hD := ((Run.repJ h64 o hS hRA).2.2 i hi r hr).1
+    have hRp := replayJ S h64 o hS hRA i hi r hr
+    have hRS := ringSwitchJ S h64 o hS hRA o.rsExtras i hi r hr
+    have hD := ((Run.repJ S h64 o hS hRA).2.2 i hi r hr).1
     rw [htabi, hlay, hzp] at hRp
     rw [htabi, hzp] at hRS
     have hT := o.toCase.tableT hi'
@@ -680,10 +680,10 @@ theorem lgInnerAt_of (h64 : JsonRT.Out64 H) (hR : RepShapedT H) (hPR : ProverRun
 share, with error `δc H`, at any number of tables, under the JSON library's specification, from the four premises at
 each table: the rep proofs' shapes (`RepShapedT`), the masked prover's reps (`ProverRunsT`), the masked Ligerito
 (`LigeritoT`) and the inner proof (`InnerT`). -/
-theorem complete_jsonT (H : Claims.Msg → Claims.Msg) (hR : RepShapedT H)
+theorem complete_jsonT (H : Claims.Msg → Claims.Msg) (S : Claims.JsonSpec printJ Flock.canon) (hR : RepShapedT H)
     (hPR : ProverRunsT H) (hLg : LigeritoT H) (hIn : InnerT H) (hMR : MaskRank.MaskRankBound) :
     Claims.Flock.Complete H (deployZk Readable.relation) := fun h64 =>
-  completeRelS H h64 (proverRunsAt_of hPR h64) (repShapedAt_of hR h64) (lgInnerAt_of h64 hR hPR hLg hIn) hMR
+  completeRelS H S h64 (proverRunsAt_of hPR h64) (repShapedAt_of hR h64) (lgInnerAt_of S h64 hR hPR hLg hIn) hMR
     h64
 
 /-! ## One table: `complete_zk`'s premises from the table-level ones -/
@@ -769,10 +769,10 @@ theorem proverRunsZk_of (hPR : ProverRunsT H) (h64 : Claims.Out64 H) : JsonRT.Pr
 
 /-- **`LigeritoZk` and `Inner` at the deployed relation**, from `LigeritoT` and `InnerT` at the one table: a masked run
 is a run of one table (`RunZk.toRun`), at which `lgInnerAt_of` gives both. -/
-theorem lgInnerZk_of (h64 : JsonRT.Out64 H) (hR : RepShapedT H) (hPR : ProverRunsT H)
+theorem lgInnerZk_of (S : JsonRT.JsonSpec) (h64 : JsonRT.Out64 H) (hR : RepShapedT H) (hPR : ProverRunsT H)
     (hLg : LigeritoT H) (hIn : InnerT H) :
     FlockComplete.LigeritoZk H Readable.relation ∧ FlockComplete.Inner H Readable.relation :=
-  ⟨fun o => (lgInnerAt_of h64 hR hPR hLg hIn o.toRun).ligerito,
-    fun o => (lgInnerAt_of h64 hR hPR hLg hIn o.toRun).inner⟩
+  ⟨fun o => (lgInnerAt_of S h64 hR hPR hLg hIn o.toRun).ligerito,
+    fun o => (lgInnerAt_of S h64 hR hPR hLg hIn o.toRun).inner⟩
 
 end FlockComplete.ZkTables

@@ -5,7 +5,6 @@ S0 (PROTOCOL.md §5.1): `RecordText.printT` prints what `Json.compress` prints, 
 form, a duplicate key and a text that isn't JSON are each refused.
 -/
 import Flock.RecordText
-import Flock.JsonParse
 
 namespace Flock.Test.RecordText
 
@@ -13,12 +12,12 @@ open Flock Lean
 
 /-- `printT` and `Json.compress` agree on what `s` parses to. -/
 def same (s : String) : Bool :=
-  match JsonParse.parse s with
+  match Json.parse s with
   | .ok j => RecordText.printT j == j.compress
   | .error _ => false
 
 /-- `printT` of what `s` parses to. -/
-def printed (s : String) : Option String := (JsonParse.parse s).toOption.map RecordText.printT
+def printed (s : String) : Option String := (Json.parse s).toOption.map RecordText.printT
 
 def accepts (s : String) : Bool := (RecordText.check s).toBool
 

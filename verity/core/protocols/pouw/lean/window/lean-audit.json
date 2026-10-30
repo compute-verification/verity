@@ -70,7 +70,7 @@
    "why": "the leaf's registered data ports are code over the layout and C-Flock's registered-file format: Lean core only, no Mathlib and nothing of Security, so LeafLanesSound's statement reads them"
   },
   "PouwWindow.FullDraw": {
-   "imports": ["Flock.Draw", "Flock.Norm", "Flock.JsonParse"],
+   "imports": ["Flock.Draw", "Flock.Norm"],
    "except": [],
    "why": "the leaf's draw policy is code over C-Flock's draw format: Lean core only, no Mathlib and nothing of Security, so LeafLanesSound's statement reads it"
   }

@@ -45,7 +45,7 @@ theorem parse_rows {lines : Array String} {net : Net} (h : Net.parse lines = .ok
   have ho : Net.ofRows ((tokens (lines.getD 0 "")).getD 1 "") useful constPos ig.1 og.1 s.1 s.2 = .ok net := by
     by_cases hL : (lines.getD (1 + useful) "").startsWith "LEAVES " = true
     · rw [ite_eq_left_of_eq_true _ _ (eq_true hL)] at h
-      rcases hj : Flock.JsonParse.parse ((lines.getD (1 + useful) "").drop 7).toString with e | j
+      rcases hj : Lean.Json.parse ((lines.getD (1 + useful) "").drop 7).toString with e | j
       · rw [hj] at h; exact absurd h throw_bind_ne
       · rw [hj] at h
         exact ite_throw_ok (ite_throw_ok h)

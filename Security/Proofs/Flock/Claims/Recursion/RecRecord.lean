@@ -8,7 +8,7 @@ import Flock.RecRecord
 (`readFull_recordFullW`): the rounds, the record's kind and tops' format, the prover's Hello (`readHello_helloW`) and
 the link's level-0 tops and points (`readObj_objW`), piece by piece: literals, hex strings, escaped strings, decimal
 numbers, lists and objects at their indentation and coins. No JSON library is involved, so no property of one is
-assumed.
+assumed (`Claims.JsonSpec` stays a completeness premise).
 
 At the deployment's model (`recTr`, `recRead`) the coin server's transcript of the inner rounds is that record, as
 `rec_live`'s coin server writes it (`recOf`): round 0's message, the link, as its table's level-0 top (one node a

@@ -5,15 +5,16 @@ each template's units the budget certifies.
     uv run python benchmarks/sampling_plan/cpu_budget.py --plan PLAN.json --slots 17 --hours 2.5 [--out DIR]
 
 * **A statement** holds up to `UNITS` drawn units of one template, at no more cost than one, since C-Flock pads a
-  statement to 8 instance slots. Its m is k_log + 3, with k_log = ceil(log2(proved ANDs)), the unit's ANDs with its
-  rows' openings (`h200.py`'s ``proved_ands``). C-Flock proves no instance past k_log `K_MAX`, so a unit with more
-  ANDs is drawn whole and proved as its least number of parts under it, each part a template of its own (a row cut
-  where a partial sum is committed).
+  statement to 8 instance slots. Its m is k_log + 3, with k_log the one C-Flock's composer gives the unit
+  (`proof_block_k_log` of its ANDs and its rows, `h200.py`'s ``ands`` and ``rows``, its return's row last). C-Flock
+  proves no instance past k_log `K_MAX`, so a unit past it is drawn whole and proved as its least number of parts
+  under it, each its share of the ANDs and of every row's bytes, a template of its own (a row cut where a partial sum
+  is committed).
 * **Its cost** comes from `CALIBRATION`: firewalled `--zk` cold sessions on Genoa proofs slots, every one accepted by
   the live verifier and by Lean. Prove wall time is scaled to a 42-core slot by thread count, with the peak summed
   over the prover, the live verifier and the firewall. Lean `verify --zk` (one core) and staging are counted apart.
   Past m = 30 time is extrapolated at 2.2x and memory at 2x per m, and a statement takes as many 120 GB slots as its
-  memory needs. No statement is smaller than k_log `K_LOG_MIN` (m = 25), so a smaller unit costs the m = 25 point.
+  memory needs. No statement is smaller than k_log `PACK_LOG` (m = 25), so a smaller unit costs the m = 25 point.
 * **The plan**: every template draws k = ceil(ln(S/1%)/share), rounded up to fill its last statement and at most n.
   The share is the least whose statements fit `slots` x `hours` of slot time. Each window then has fewer than
   K0 = ln(S/delta) n/k units incorrect outside delta (`IntegrityPeriodLog`, delta split over the S windows), and its
@@ -23,11 +24,12 @@ from __future__ import annotations
 
 import argparse
 import json
-from math import ceil, log, log2
+from collections.abc import Sequence
+from math import ceil, log
 from pathlib import Path
 
 from verity.core.protocols.pous import wipe_monitoring
-from verity.ml.windows.interface import K_MAX
+from verity.ml.windows.interface import K_MAX, MAX_ROWS, proof_block_k_log
 
 #: core's reporting deltas, as floats, and its monitoring periods, seconds by name (`wipe_monitoring`)
 DELTAS = tuple(map(float, wipe_monitoring.DELTAS))
@@ -42,12 +44,22 @@ CALIBRATION = {25: (21.0, 34, 5.0, 9.5, 0.8, "r20261026-005203-c613"),
                28: (119.7, 30, 28.1, 70.4, 9.1, "r20261025-233158-1a1c"),
                29: (194.3, 30, 55.9, 138.5, 18.8, "r20261025-234257-5cf3"),
                30: (384.1, 42, 107.4, 276.8, 39.4, "r20261025-234304-229c")}
-#: the least k_log a statement takes: a unit of 21,963 ANDs (ScaledMm K=128) and one of 139,283 (K=1024) both prove at 22
-K_LOG_MIN = 22
 
 
-def k_log(proved_ands: int) -> int:
-    return max(K_LOG_MIN, ceil(log2(max(proved_ands, 2))))
+def k_log(rows: Sequence[int], ands: int) -> int:
+    return proof_block_k_log(rows[:-1], rows[-1:], ands)
+
+
+def split(t: dict) -> tuple[int, int]:
+    """(parts, k_log): the least number of parts ``t``'s unit proves in under 2^`K_MAX` bits, each its share of the ANDs
+    and of every row's bytes, and a part's k_log."""
+    if len(t["rows"]) > MAX_ROWS:
+        raise ValueError(f"{t['template']}: {len(t['rows'])} rows, past the {MAX_ROWS} a C-Flock block holds: cut its "
+                         "unit into fewer rows")
+    p = 1
+    while (k := k_log([-(-b // p) for b in t["rows"]], -(-t["ands"] // p))) > K_MAX:
+        p += 1
+    return p, k
 
 
 def statement(m: int) -> dict:
@@ -67,8 +79,8 @@ def statement(m: int) -> dict:
 def window(t: dict, k: int, windows: int) -> dict:
     n = t["units"]
     k = min(n, ceil(k / UNITS) * UNITS)
-    parts = ceil(t["proved_ands"] / 2 ** K_MAX)
-    st = statement(k_log(ceil(t["proved_ands"] / parts)) + 3)
+    parts, kl = split(t)
+    st = statement(kl + 3)
     count = parts * ceil(k / UNITS)
     K0 = {str(d): min(ceil(log(windows / d) * n / k), n - k + 1) for d in DELTAS}
     pooled = {str(d): min(log(windows / d) * n / k, n - k + 1) for d in DELTAS}
@@ -100,7 +112,7 @@ def budget_share(ts: list[dict], budget: float) -> float | None:
 
 
 def report(o: dict, slots: int, hours: float) -> dict:
-    ts = [{"template": w["template"], "units": w["units"], "proved_ands": w["proved_ands"]} for w in o["windows"]]
+    ts = [{"template": w["template"], "units": w["units"], "rows": w["rows"], "ands": w["ands"]} for w in o["windows"]]
     budget = slots * hours * 3600
     s = budget_share(ts, budget)
     ws = plan(ts, s if s is not None else 1.0)

@@ -866,7 +866,7 @@ theorem parse_name {lines : Array String} {net : Net} (h : Net.parse lines = .ok
   obtain ⟨s, -, h⟩ := except_bind_ok h
   by_cases hL : (lines.getD (1 + useful) "").startsWith "LEAVES " = true
   · rw [ite_eq_left_of_eq_true _ _ (eq_true hL)] at h
-    rcases hj : Flock.JsonParse.parse ((lines.getD (1 + useful) "").drop 7).toString with e | j
+    rcases hj : Lean.Json.parse ((lines.getD (1 + useful) "").drop 7).toString with e | j
     · rw [hj] at h; exact absurd h throw_bind_ne
     · rw [hj] at h
       exact ofRows_name (ite_throw_ok (ite_throw_ok h))

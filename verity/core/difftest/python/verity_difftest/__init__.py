@@ -90,10 +90,9 @@ class Vacuous(AssertionError):
 
 
 def canonical(value: Any) -> str:
-    """The canonical JSON text of `value` (as `Flock.canon` writes it): compact, object keys sorted, and every character
-    outside printable ASCII a lowercase `\\uXXXX` escape (a surrogate pair above U+FFFF), so the text is ASCII without DEL.
-    Its domain is null, booleans, integers, strings, lists (tuples) and objects with string keys; anything else, a float
-    among them, raises `TypeError`."""
+    """The canonical JSON text of `value` (as `Flock.canon` writes it): compact, object keys sorted, strings in UTF-8 with
+    only `"`, `\\` and control characters escaped. Its domain is null, booleans, integers, strings, lists (tuples) and objects
+    with string keys; anything else, a float among them, raises `TypeError`."""
     stack = [value]
     while stack:
         x = stack.pop()
@@ -113,7 +112,7 @@ def canonical(value: Any) -> str:
             stack.extend(x.values())
         else:
             raise TypeError(f"not canonical JSON: a {type(x).__name__}")
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
 #: Lake builds a path require in place, and ports share theirs (`lean/` here, the core protocol interface), so two ports'

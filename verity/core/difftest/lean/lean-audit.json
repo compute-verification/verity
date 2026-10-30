@@ -1,8 +1,7 @@
 {
- "roots": ["Difftest", "DifftestExample", "AnnotDifftest", "FlockJsonDifftest"],
+ "roots": ["Difftest", "DifftestExample", "AnnotDifftest"],
  "exempt": {
-  "AnnotDifftestMain": "the annot-difftest executable's entry point, one line: Difftest.serve AnnotDifftest.table, audited under AnnotDifftest; a root of its own would put a second `main` beside DifftestExample's",
-  "FlockJsonDifftestMain": "the flock-json-difftest server's entry point, one line: Difftest.serve of FlockJsonDifftest.table, which tests/test_flock_json_port.py drives against the Python mirror; audited under FlockJsonDifftest (a root beside DifftestExample, which declares `main` too)"
+  "AnnotDifftestMain": "the annot-difftest executable's entry point, one line: Difftest.serve AnnotDifftest.table, audited under AnnotDifftest; a root of its own would put a second `main` beside DifftestExample's"
  },
  "layers": {
   "Difftest": {
@@ -19,11 +18,6 @@
    "imports": ["Lean", "Difftest", "Flock.Annot", "Flock.AnnotExpand"],
    "except": [],
    "why": "the annotation check's port reaches Lean through the harness and C-Flock's Flock.Annot and its per-gate reference, as a port does"
-  },
-  "FlockJsonDifftest": {
-   "imports": ["Difftest", "Flock.JsonParse"],
-   "except": [],
-   "why": "C-Flock's JSON parser's port reads the parser it holds to its Python mirror, and Lean core's parser through the harness"
   }
  },
  "dependencies": {

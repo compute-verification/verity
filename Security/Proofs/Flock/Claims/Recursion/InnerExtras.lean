@@ -141,7 +141,7 @@ theorem getArr_ok {q : Lean.Json} {a : Array Lean.Json} (h : q.getArr? = .ok a) 
 /-- **The inner session's record's link points are the coin server's**: `RecVStar.innerLink` reads the record's
 `link.points` as hex coins and refuses them unless they are the transcript's (`lk.points`). -/
 theorem innerLink_points {tr : Lean.Json} {record : String} {lk : RecVStar.InnerLink} {j l : Lean.Json}
-    (hj : Flock.JsonParse.parse record = .ok j) (hl : j.getObjVal? "link" = .ok l)
+    (hj : Lean.Json.parse record = .ok j) (hl : j.getObjVal? "link" = .ok l)
     (h : RecVStar.innerLink tr record = .ok lk) :
     ∃ rp, l.getObjValAs? (Array (Array String)) "points" = .ok rp ∧
       List.Forall₂ (fun xs pt => List.Forall₂ (fun s y => f128OfHex s = .ok y) xs.toList pt.toList)
@@ -168,7 +168,7 @@ theorem innerLink_points {tr : Lean.Json} {record : String} {lk : RecVStar.Inner
 /-- **The decoded link points are the record's `link.points`, read as `innerLink` reads them.** -/
 theorem held_eq {spec : SessionSpec} {text : String} {sess : RunRecord} {j l : Lean.Json}
     {rp : Array (Array String)} {pts : Array (Array F128)}
-    (hdec : Record.decode spec text = .ok sess) (hj : Flock.JsonParse.parse text = .ok j)
+    (hdec : Record.decode spec text = .ok sess) (hj : Lean.Json.parse text = .ok j)
     (hl : j.getObjVal? "link" = .ok l) (hrp : l.getObjValAs? (Array (Array String)) "points" = .ok rp)
     (hh : List.Forall₂ (fun xs pt => List.Forall₂ (fun s y => f128OfHex s = .ok y) xs.toList pt.toList)
       rp.toList pts.toList) :
