@@ -32,7 +32,7 @@ trace's commitment binds (`CommitmentScheme.Binds`), at `δ ≥ 0` and a decoder
 where each window's prover has `κ − δ + √(γ·Pr[B]) ≤ ε_ks` (`Claims.Sampling.KS`'s knowledge error), and at a finder
 `B` (the network component's: `PeriodLive.finder .network s` at the strategy `s`) that outputs a collision of `H` at
 least as often as each window's extraction finder `B_ext` and its finders `B_tap` and `B_reg` of the collisions against
-the network certifier's openings and the registration's:
+the network certifier's openings and the registration's (`RealizesCommOfPeriodLeakAccepted.FinderCovers`):
 
 * the network audit's `PeriodRun.Sound` holds at `n · (δ + ε_ks + 3 · Pr[B])`;
 * a covert sender in the server over schedules the period admits (`R.Ss`), whose secrets a decoder recovers from the
@@ -49,11 +49,7 @@ def CommOfPeriodLeakAccepted : Prop :=
     (εks : ℝ) (B : Claims.Finder)
     (herr : ∀ ξ i, Claims.Sampling.κ D δ (R.stmt ξ i) - δ +
       Real.sqrt (Claims.Sampling.γ D (R.stmt ξ i) * PrB H D.V (R.prover ξ i) (R.stmt ξ i)) ≤ εks)
-    (hext : ∀ ξ i, (Bext H D.V (E D decode) (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i)).Pr H ≤ B.Pr H)
-    (htap : ∀ ξ i, (Btap H D.V (E D decode) D.commit D.parse R.tops (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i)).Pr H ≤
-      B.Pr H)
-    (hreg : ∀ ξ i, (Breg H D.V (E D decode) D.commit D.parse R.rops (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i)).Pr H ≤
-      B.Pr H),
+    (hB : R.FinderCovers B),
     r.Sound c p .network (n * (δ + εks + 3 * B.Pr H)) ∧
       ∀ {Z : Type} (Zs : Set Z) (schedOf : Z → WardenSchedule R.Conn) (srvOf : Z → R.Srv)
         (hs : ∀ z ∈ Zs, schedOf z ∈ R.Ss) (dec : (R.Conn → List (ℕ × CellView R.Cell)) → Z)

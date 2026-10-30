@@ -160,4 +160,19 @@ structure RealizesCommOfPeriodLeakAccepted {ι : Type} {d : Device ι} {α : Typ
 attribute [instance] RealizesCommOfPeriodLeakAccepted.tapeFintype RealizesCommOfPeriodLeakAccepted.tapeNonempty
   RealizesCommOfPeriodLeakAccepted.connFintype
 
+/-- **The finder `B` covers every window's collisions**: at every value of the coins and every window, `B` outputs a
+collision of `H` at least as often as the window's extraction finder (`Claims.Sampling.Bext`), its finder of the
+collisions against the network certifier's openings (`NetTiming.Btap`) and its finder of those against the
+registration's openings (`NetTiming.Breg`), each at the window's prover and statement. In the causal game `B` is the
+network component's finder (`Accounting.PeriodLive.finder .network s`). -/
+def RealizesCommOfPeriodLeakAccepted.FinderCovers {ι : Type} {d : Device ι} {α : Type} [Fintype α]
+    {C : Verity.Circuit} {I : Type} {Ω : I → Type} [DecidableEq I] [∀ i, Fintype (Ω i)] {Coin Col T : Type}
+    [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] {r : PeriodRun d α C Ω} {K : ℝ}
+    {H : Msg → Msg} {D : Deploy Coin Col T} {L Kₒ S : ℕ} {lay : AuditStatement → BoundaryGates L S}
+    {k : AuditStatement → ℕ} {δ : ℝ} {decode : List (ℕ × Col) → List T} {reg : AuditStatement → Finset ℕ} {Dj n : ℕ}
+    (R : RealizesCommOfPeriodLeakAccepted r K H D L Kₒ S lay k δ decode reg Dj n) (B : Claims.Finder) : Prop :=
+  ∀ ξ i, (Bext H D.V (E D decode) (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i)).Pr H ≤ B.Pr H ∧
+    (Btap H D.V (E D decode) D.commit D.parse R.tops (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i)).Pr H ≤ B.Pr H ∧
+    (Breg H D.V (E D decode) D.commit D.parse R.rops (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i)).Pr H ≤ B.Pr H
+
 end Accounting.JointBridge

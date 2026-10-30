@@ -13,7 +13,7 @@ means some window fails `WindowGood` (`comm_iff`); the union bound over the wind
 at most the sampled verifier's `PrBad` at `RLeakTap` at the registration's values (`window_le`), which
 `PeriodLeakAccepted`'s per-window conjunct bounds, where the registration opens them (`rops_opens`), by
 `κ + √(γ·Pr[B]) + Pr[B_ext] + Pr[B_tap] + Pr[B_reg]`, at most `δ + ε_ks + 3 · Pr[B]` at each window's prover, since `B`
-finds a collision at least as often as that window's `B_ext`, its `B_tap` and its `B_reg`.
+finds a collision at least as often as that window's `B_ext`, its `B_tap` and its `B_reg` (`FinderCovers`).
 
 The per-window conjunct of `PeriodLeakAccepted` reads neither the period's windows nor the network certifier device,
 so it is read off at the period of no windows (`ksLin_of_periodLeak`). Its count of the secrets is what the claim at
@@ -76,11 +76,7 @@ theorem comm_of_periodLeak (hsrc : Guarantees.PeriodLeakAccepted) {ι : Type} {d
     (εks : ℝ) (B : Claims.Finder)
     (herr : ∀ ξ i, Claims.Sampling.κ D δ (R.stmt ξ i) - δ +
       Real.sqrt (Claims.Sampling.γ D (R.stmt ξ i) * PrB H D.V (R.prover ξ i) (R.stmt ξ i)) ≤ εks)
-    (hext : ∀ ξ i, (Bext H D.V (E D decode) (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i)).Pr H ≤ B.Pr H)
-    (htap : ∀ ξ i, (Btap H D.V (E D decode) D.commit D.parse R.tops (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i)).Pr H ≤
-      B.Pr H)
-    (hreg : ∀ ξ i, (Breg H D.V (E D decode) D.commit D.parse R.rops (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i)).Pr H ≤
-      B.Pr H) :
+    (hB : R.FinderCovers B) :
     r.Sound c p .network (n * (δ + εks + 3 * B.Pr H)) ∧
       ∀ {Z : Type} (Zs : Set Z) (schedOf : Z → WardenSchedule R.Conn) (srvOf : Z → R.Srv)
         (_hs : ∀ z ∈ Zs, schedOf z ∈ R.Ss) (dec : (R.Conn → List (ℕ × CellView R.Cell)) → Z)
@@ -121,9 +117,7 @@ theorem comm_of_periodLeak (hsrc : Guarantees.PeriodLeakAccepted) {ι : Type} {d
         refine Finset.sum_le_sum fun i _ => (R.window_le ξ i).trans ?_
         have h := hlin (R.stmt ξ i) (R.scope ξ i) (R.rops_opens ξ i) (R.Tape ξ i) (R.prover ξ i)
         have he := herr ξ i
-        have hx := hext ξ i
-        have ht := htap ξ i
-        have hr := hreg ξ i
+        obtain ⟨hx, ht, hr⟩ := hB ξ i
         linarith
     _ = n * (δ + εks + 3 * B.Pr H) := by
         rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
