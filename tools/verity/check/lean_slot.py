@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """`python3 tools/verity/check/lean_slot.py [--pool NAME] [--by NAME] -- CMD...`: CMD in one of this node's Lean audit slots.
 
-A Lean audit builds its packages against Mathlib on every core it gets, so a node runs only so many at once (vy-nebius-1, 3 Oct:
-a cap of 4, kept by hand and overrun). The steward sets the cap in SLOTS (`/workspace/research/locks/lean-slots`; LEAN_SLOTS
+A Lean audit builds its packages against Mathlib on every core it gets, so a node runs only so many at once (a cap kept
+by hand is overrun). The steward sets the cap in SLOTS (`/workspace/research/locks/lean-slots`; LEAN_SLOTS
 overrides), one pool per line, which it may rewrite at any time:
 
     NAME N      # e.g. `check 2` (check's lean-audit step), `audit 2` (`tools/verity/lean/check.py --build` run by
