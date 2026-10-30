@@ -10,15 +10,17 @@ inbox doorbells, and whatever needs judgment rings @top instead of being decided
 **asks**, every 15 min: the Asks for Daniel pages (the registry's #ask-daniel `pages`) edited since the last pass, and every
 Default-kind page still Waiting on Daniel past its Deadline.
 - Approve ticked: Status Approved, Decision "Approved by Daniel (Approve ticked, <time PT>)".
-- Choose set: Status Decided otherwise, Decision "Daniel chose <letter>: <that option's heading on the page>".
+- Choose set to a letter the relay hasn't seen on the page: Status Decided otherwise, Decision "Daniel chose <letter>: <that
+  option's heading on the page>". A lane fills Choose on a page it decides itself, and that pick stays the lane's when the page
+  reopens.
 - Approve ticked on a Decided by lane page: Status Approved, and " Endorsed by Daniel." appended to its Decision.
 - A Default-kind page past its Deadline, still Waiting on Daniel: Status Default applied, Decision "Default applied <time PT>:
   <If no answer>".
 - New text under the bold first line of the yellow "Your reply" callout, or a new comment, not starting with an @handle or the
   page's lane (or top) and a colon or a time (`proofs 03:20Z:`): quoted (QUOTE_MAX characters).
 Each rings the page's Lane, led by its name, with what to do (`resolve` on its card), and @top with one line, since top writes the
-decisions log. The state keeps `since`, the pages decided, the reply pieces seen per page (by block id) and the comment ids
-seen.
+decisions log. The state keeps `since`, the pages decided, the reply pieces seen per page (by block id), the comment ids
+seen, and the Choose last seen per page (`chosen`; its first pass records every page not open that carries one).
 
 **sweep**, hourly; each finding rings its owner once (its id kept in `rung` for KEEP_S):
 1. `research msg traffic`: an ask unanswered for over an hour from a person or a handle (not a machine: `vy-*`): its addressees.
@@ -182,13 +184,14 @@ def comments(notion, pid: str) -> list[dict]:
     return notion.call("GET", f"/comments?block_id={urllib.parse.quote(pid)}&page_size=100").get("results") or []
 
 
-def decide(p: dict, headings: Callable[[], dict[str, str]], now: float) -> tuple[str, str, str] | None:
-    """(Status, Decision, the choice for `resolve`) the page's ticks call for, or None."""
+def decide(p: dict, headings: Callable[[], dict[str, str]], now: float, chose: str | None = None) -> tuple[str, str, str] | None:
+    """(Status, Decision, the choice for `resolve`) the page's ticks call for, or None. `chose` is the Choose the relay last saw
+    on the page: the same letter again is no new choice."""
     st, kind = p.get("Status"), p.get("Kind")
     rec = (m[1] if (m := OPTION_LETTER.match(p.get("Recommendation", ""))) else "<value>")
     if st in OPEN and p.get("Approve") == "yes":
         return "Approved", f"Approved by Daniel (Approve ticked, {pt(now)})", rec
-    if st in OPEN and p.get("Choose"):
+    if st in OPEN and p.get("Choose") and p["Choose"] != chose:
         c = p["Choose"]
         return "Decided otherwise", f"Daniel chose {c}: {headings().get(c, '(no such option on the page)')}", c
     if st == "Decided by lane" and p.get("Approve") == "yes":
@@ -209,6 +212,10 @@ def asks_pass(state: dict, notion, ring: Ringer | None, ds: str, now: float, dry
                        {"property": "Deadline", "date": {"before": iso(now)}}]}
     pages = {p["id"]: p for p in query_all(notion, ds, {"filter": edited}) + query_all(notion, ds, {"filter": overdue})}
     decided, replies, seen = set(state.get("decided", [])), state.setdefault("replies", {}), set(state.get("comments", []))
+    chosen = state.get("chosen")
+    if chosen is None:
+        chosen = {pg["id"]: c for pg in query_all(notion, ds, {"filter": {"or": [{"property": "Choose", "select": {"is_not_empty": True}}]}})
+                  if (q := props(pg)).get("Status") not in OPEN and (c := q.get("Choose"))}
     said: list = []
     for pid, page in pages.items():
         p, url = props(page), page.get("url", "")
@@ -230,7 +237,10 @@ def asks_pass(state: dict, notion, ring: Ringer | None, ds: str, now: float, dry
             if lane != "top":
                 ring("top", f"{lane}'s ask \u201c{ask[:120]}\u201d: {what[:300]} {url}", thread)
 
-        if ring is not None and pid not in decided and (d := decide(p, heads, now)):   # a seed leaves a pending tick to the next pass
+        before = chosen.get(pid)
+        if ring is not None or p.get("Status") not in OPEN:
+            chosen[pid] = p.get("Choose") or ""
+        if ring is not None and pid not in decided and (d := decide(p, heads, now, before)):   # a seed leaves a pending tick to the next pass
             status, decision, choice = d
             if dry:
                 log(f"would set {url}: Status {status}, Decision {decision}")
@@ -258,7 +268,7 @@ def asks_pass(state: dict, notion, ring: Ringer | None, ds: str, now: float, dry
             text = plain(c.get("rich_text")).strip()
             if text and not lead.match(text):
                 tell(f"Daniel commented: \u201c{text[:QUOTE_MAX]}\u201d", "<value>")
-    state.update(since=now, decided=sorted(decided), comments=sorted(seen))
+    state.update(since=now, decided=sorted(decided), comments=sorted(seen), chosen=chosen)
 
 
 # ---- sweep ----
