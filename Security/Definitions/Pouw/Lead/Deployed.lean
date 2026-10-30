@@ -7,18 +7,26 @@ import Definitions.Hash.Hm96
 
 The instance the honest lemma is about, as specs the code is tied to by properties:
 
-* **The commitment** (`l1wCommit`, the layout `l1w`, the served committer's): a call's words and its A are two hm96
-  instances, each hiding one frame-v3 tree under its own domain (`Pouw.Assumptions.SubtreeLayout`), `Hash.Tree.root`
-  under `Hash.Hm96.leaf`. Each leaf is the inline frame-v3 leaf of its value at its own rank, position equal to rank
-  (`dom.leaf(r, r, schema, v)`).
-  - The words are one stream (`wordsBytes`): the GEMM export's MMA tiles inside the call's `rowBlocks × colBlocks`, in
-    the order (64-row tile, column tile, step, column block, row block), each tile's 128 words in the MMA fragment's
-    order, each word s32 little-endian. The stream is cut into `chunkWords`-word chunks, the last one short, under
-    `pouw/lead/words/v1`.
-  - A is its served rows' row-major bytes cut into 1 KiB segments, the last one short, under `pouw/lead/a/v1`.
-  - The registered root is the words instance's hm96 leaf, `msgs` every message the words instance hashes, and
-    `aMsgs` every message A's instance hashes. A is committed before the coins, so `aMsgs` is fixed, at the hash `H₀`
-    it was committed under.
+* **The commitment** (`l1wCommit`, the layout `l1w`, the served committer's): a call's A and its forward's words are
+  hm96 instances, each hiding one frame-v3 tree under its own domain (`Pouw.Assumptions.SubtreeLayout`),
+  `Hash.Tree.root` under `Hash.Hm96.leaf`.
+  - **Positions.** A window's instances are forward `f`'s call `j`'s A at `f · calls + j` (`aPos`), one a call, and
+    forward `f`'s words at `2^63 + f` (`wordsPos`), one a forward, with `calls` the window's calls a forward.
+  - **Domains.** The instance at position `p` with `count` leaves has the range-indexed domain of owner −1 over
+    `RangeIndexedDomain(0, count)` bound to `SHA-512("pouw/lead/instance/v1" ‖ salt_w ‖ u64be(p))` (`instanceDom`),
+    and each leaf is the inline frame-v3 leaf of its value at its own rank, position equal to rank
+    (`dom.leaf(r, r, schema, v)`).
+  - **The words.** A call's words are one stream (`wordsBytes`): the GEMM export's MMA tiles inside the call's
+    `rowBlocks × colBlocks`, in the order (64-row tile, column tile, step, column block, row block), each tile's 128
+    words in the MMA fragment's order, each word s32 little-endian. Each call's stream is cut into `chunkWords`-word
+    chunks, the last one short (`callChunks`), and the forward's words instance holds its calls' chunks in call order
+    under `pouw/lead/words/v1` (`Forward.values`): a call's chunks sit at their own ranks, after its earlier calls'.
+  - **A** is its served rows' row-major bytes cut into 1 KiB segments, the last one short, under `pouw/lead/a/v1`.
+  - At a call, the forward's other calls' words are fixed (`Forward`). The registered root is the forward's words
+    instance's hm96 leaf and `msgs` every message that instance hashes; `aRoot` is A's hm96 leaf and `aMsgs` every
+    message A's instance hashes. A is committed before the coins, so `aMsgs` is fixed, at the hash `H₀` it was
+    committed under. A domain's id is the verifier's derivation from public parameters, not a message of the
+    commitment.
 * **The form classifier** (`l1wIsA`): a message is of A's form when A's instance hashes it.
 * **The certifier's coin stream** (`certStream`): the call's coins where the certifier's feed puts them (`feedSlot`,
   the bit each starts at): the row words (row `i`'s `a₁[i, e]`, then its tag bits `b_t[i]` from step 1; step 0's tag
@@ -32,15 +40,14 @@ The instance the honest lemma is about, as specs the code is tied to by properti
 
 namespace Pouw.Lead
 
-/-- **The deployed commitment's public parameters**, fixed before the coins: the verifier's hm96 key; the words
-instance's and A's frame-v3 domain ids (the verifier's, from each instance's binding, owner, positions and count) and
-hm96 salts; and the served GEMM's column tile in column blocks (`BN / 8`), which orders the words' stream. -/
+/-- **The deployed commitment's public parameters**, fixed before the coins: the verifier's hm96 key, the window's
+live salt `salt_w` and its calls a forward, each instance's hm96 salt by its position, and the served GEMM's column tile
+in column blocks (`BN / 8`), which orders the words' stream. -/
 structure L1w where
   key : Hash.Msg
-  idw : Hash.Digest
-  ida : Hash.Digest
-  yw : Hash.Msg
-  ya : Hash.Msg
+  salt : Hash.Msg
+  calls : ℕ
+  y : ℕ → Hash.Msg
   nb : ℕ
 
 /-- The words leaves' schema. -/
@@ -49,7 +56,7 @@ def wordsSchema : String := "pouw/lead/words/v1"
 /-- A's leaves' schema. -/
 def aSchema : String := "pouw/lead/a/v1"
 
-/-- A's segment: bytes a leaf of A. -/
+/-- A's segment: bytes a leaf of A (`ROW_SEG_BYTES`). -/
 def aSegment : ℕ := 1024
 
 /-- Word `(i, t, j)` of the words `w`, zero outside the call. -/
@@ -81,12 +88,42 @@ def wordBytes (x : ℤ) : Hash.Msg := (Hash.be 4 (x % 2 ^ 32).toNat).reverse
 def wordsBytes (L : Layout) (nb : ℕ) (w : Fin L.m → Fin L.S → Fin L.n → ℤ) : Hash.Msg :=
   ((wordsTiles L nb).flatMap (tileFrag L w)).flatMap wordBytes
 
-/-- The words leaves: the stream's `chunkWords`-word chunks. -/
+/-- A call's words leaves: its stream's `chunkWords`-word chunks. -/
 def wordsLeaves (L : Layout) (nb : ℕ) : ℕ := (tileWords * (wordsTiles L nb).length + L.chunkWords - 1) / L.chunkWords
 
-/-- Words chunk `r`: the stream's bytes from `4 · chunkWords · r`, `4 · chunkWords` of them (the last chunk short). -/
+/-- A call's words chunk `r`: the stream's bytes from `4 · chunkWords · r`, `4 · chunkWords` of them (the last chunk
+short). -/
 def wordsChunk (L : Layout) (nb : ℕ) (w : Fin L.m → Fin L.S → Fin L.n → ℤ) (r : ℕ) : Hash.Msg :=
   ((wordsBytes L nb w).drop (4 * L.chunkWords * r)).take (4 * L.chunkWords)
+
+/-- A call's committed words: its layout and its words. -/
+abbrev CallWords : Type := Σ L : Layout, (Fin L.m → Fin L.S → Fin L.n → ℤ)
+
+/-- A call's words chunks, in order. -/
+def callChunks (nb : ℕ) (c : CallWords) : List Hash.Msg :=
+  (List.range (wordsLeaves c.1 nb)).map (wordsChunk c.1 nb c.2)
+
+/-- **A call's forward**: the forward `f` and its other calls' committed words in call order, those before the call
+(`pre`) and those after it (`post`). The call is the forward's call `pre.length`. -/
+structure Forward where
+  f : ℕ
+  pre : List CallWords
+  post : List CallWords
+
+/-- The forward's words leaves before the call: its earlier calls' chunks. -/
+def Forward.before (F : Forward) (nb : ℕ) : ℕ := (F.pre.map fun c => wordsLeaves c.1 nb).sum
+
+/-- The forward's words leaves, the call's at the layout `L` among them: every call's chunks. -/
+def Forward.leaves (F : Forward) (nb : ℕ) (L : Layout) : ℕ :=
+  F.before nb + wordsLeaves L nb + (F.post.map fun c => wordsLeaves c.1 nb).sum
+
+/-- **The forward's words leaves' values**, the call's words `w` among them: each call's chunks, in call order. -/
+def Forward.values (F : Forward) (nb : ℕ) (L : Layout) (w : Fin L.m → Fin L.S → Fin L.n → ℤ) : List Hash.Msg :=
+  F.pre.flatMap (callChunks nb) ++ callChunks nb ⟨L, w⟩ ++ F.post.flatMap (callChunks nb)
+
+/-- The forward's words leaf value at rank `r`. -/
+def Forward.value (F : Forward) (nb : ℕ) (L : Layout) (w : Fin L.m → Fin L.S → Fin L.n → ℤ) (r : ℕ) : Hash.Msg :=
+  (F.values nb L w).getD r []
 
 /-- A's bytes: its served rows', row-major. -/
 def aBytes (L : Layout) (A : Fin L.rows → Fin L.K → UInt8) : Hash.Msg := (List.ofFn fun i => List.ofFn (A i)).flatten
@@ -98,26 +135,45 @@ def aLeaves (L : Layout) : ℕ := (L.rows * L.K + aSegment - 1) / aSegment
 def aSeg (L : Layout) (A : Fin L.rows → Fin L.K → UInt8) (r : ℕ) : Hash.Msg :=
   ((aBytes L A).drop (aSegment * r)).take aSegment
 
-/-- The words' domain: `wordsLeaves` leaves, each at the position of its rank. -/
-def L1w.wordsDom (P : L1w) (L : Layout) : Hash.Tree.Domain := ⟨P.idw, wordsLeaves L P.nb, id⟩
+/-- Forward `f`'s words instance's position: `2^63 + f`. -/
+def wordsPos (f : ℕ) : ℕ := 2 ^ 63 + f
 
-/-- A's domain: `aLeaves` leaves, each at the position of its rank. -/
-def L1w.aDom (P : L1w) (L : Layout) : Hash.Tree.Domain := ⟨P.ida, aLeaves L, id⟩
+/-- The A instance's position of forward `f`'s call `j`, at `calls` calls a forward: `f · calls + j`. -/
+def aPos (calls f j : ℕ) : ℕ := f * calls + j
 
-/-- **The lead's deployed commitment** (`l1w`) under the parameters `P`, of the call's A, committed under `H₀`: the
-words tree's root under the words' hm96 leaf, and every message each instance hashes. -/
-def l1wCommit (L : Layout) (P : L1w) (H₀ : Hash.Msg → Hash.Digest) (A : Fin L.rows → Fin L.K → UInt8) : Commit L where
-  msgs H w := Hash.Tree.msgs H (P.wordsDom L) wordsSchema (wordsChunk L P.nb w) ++
-    Hash.Hm96.hashed H P.key (Hash.Tree.root H (P.wordsDom L) wordsSchema (wordsChunk L P.nb w)) P.yw
-  root H w := Hash.Hm96.leaf H P.key (Hash.Tree.root H (P.wordsDom L) wordsSchema (wordsChunk L P.nb w)) P.yw
-  aMsgs := Hash.Tree.msgs H₀ (P.aDom L) aSchema (aSeg L A) ++
-    Hash.Hm96.hashed H₀ P.key (Hash.Tree.root H₀ (P.aDom L) aSchema (aSeg L A)) P.ya
+/-- **An instance's domain** at the hash `H`: `count` leaves in the range-indexed domain of owner −1 bound to
+`SHA-512("pouw/lead/instance/v1" ‖ salt_w ‖ u64be(p))`, `p` the instance's position. -/
+def instanceDom (H : Hash.Msg → Hash.Digest) (salt : Hash.Msg) (p count : ℕ) : Hash.Tree.Domain :=
+  Hash.Tree.Domain.range H (H (Hash.utf8 "pouw/lead/instance/v1" ++ salt ++ Hash.be 8 p)) (-1) count
+
+/-- The words' domain: the forward's words leaves, at its words instance's position. -/
+def L1w.wordsDom (P : L1w) (H : Hash.Msg → Hash.Digest) (F : Forward) (L : Layout) : Hash.Tree.Domain :=
+  instanceDom H P.salt (wordsPos F.f) (F.leaves P.nb L)
+
+/-- A's domain: its segments, at the call's A instance's position. -/
+def L1w.aDom (P : L1w) (H : Hash.Msg → Hash.Digest) (F : Forward) (L : Layout) : Hash.Tree.Domain :=
+  instanceDom H P.salt (aPos P.calls F.f F.pre.length) (aLeaves L)
+
+/-- **The lead's deployed commitment** (`l1w`) of a call of the forward `F`, under the parameters `P`, of its A,
+committed under `H₀`: the forward's words tree's root under its hm96 leaf, A's tree's root under its own, and every
+message each instance hashes. -/
+def l1wCommit (L : Layout) (P : L1w) (F : Forward) (H₀ : Hash.Msg → Hash.Digest) (A : Fin L.rows → Fin L.K → UInt8) :
+    Commit L where
+  msgs H w := Hash.Tree.msgs H (P.wordsDom H F L) wordsSchema (F.value P.nb L w) ++
+    Hash.Hm96.hashed H P.key (Hash.Tree.root H (P.wordsDom H F L) wordsSchema (F.value P.nb L w)) (P.y (wordsPos F.f))
+  root H w :=
+    Hash.Hm96.leaf H P.key (Hash.Tree.root H (P.wordsDom H F L) wordsSchema (F.value P.nb L w)) (P.y (wordsPos F.f))
+  aMsgs := Hash.Tree.msgs H₀ (P.aDom H₀ F L) aSchema (aSeg L A) ++
+    Hash.Hm96.hashed H₀ P.key (Hash.Tree.root H₀ (P.aDom H₀ F L) aSchema (aSeg L A))
+      (P.y (aPos P.calls F.f F.pre.length))
+  aRoot H := Hash.Hm96.leaf H P.key (Hash.Tree.root H (P.aDom H F L) aSchema (aSeg L A))
+    (P.y (aPos P.calls F.f F.pre.length))
   chunks := wordsLeaves L P.nb
 
 /-- **The form classifier** of `l1wCommit`: a message is of A's form when A's instance hashes it. -/
-def l1wIsA (L : Layout) (P : L1w) (H₀ : Hash.Msg → Hash.Digest) (A : Fin L.rows → Fin L.K → UInt8) (x : Hash.Msg) :
-    Bool :=
-  decide (x ∈ (l1wCommit L P H₀ A).aMsgs)
+def l1wIsA (L : Layout) (P : L1w) (F : Forward) (H₀ : Hash.Msg → Hash.Digest) (A : Fin L.rows → Fin L.K → UInt8)
+    (x : Hash.Msg) : Bool :=
+  decide (x ∈ (l1wCommit L P F H₀ A).aMsgs)
 
 /-- The feed's row words a row: `⌈(S + 3)/32⌉`. -/
 def Layout.feedRowWords (L : Layout) : ℕ := (L.S + 3 + 31) / 32

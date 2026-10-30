@@ -5,16 +5,18 @@ import Proofs.Pouw.Lead.Compose.Honest
 # The lead's honest lemma at the deployed instance
 
 At the deployed commitment (`l1wCommit`) and form classifier (`l1wIsA`), `CommitL1w` holds (`commitL1w_l1w`) when the
-two domains' ids differ, the call's rows and columns are whole MMA tiles, and the words chunks and A's segments number
-at most `2^64` (`range-u64` domains refuse more): each words chunk and each segment of A is its tree's frame leaf at
-its own rank, so `commitL1w_of_leaves` applies. A words leaf is no message of A's instance (`leafMsg_not_mem_aMsgs`):
-A's leaves carry A's id (`leafMsg_id_inj`), and its pads, nodes, empty root and hm96 messages differ from a leaf in a
-header byte. The stream's tiles are the call's `S · rowBlocks · colBlocks` (`wordsTiles_length`), so the chunks are
-`wordChunks` and cover the words' bytes (`sum_chunks`), and A's segments its `rows · K` bytes.
+call's rows and columns are whole MMA tiles and the forward's words leaves and A's segments number at most `2^64`
+(`range-u64` domains refuse more): each of the call's words chunks is its forward's words leaf at its own rank, after
+the forward's earlier calls' (`value_call`), and each segment of A is A's leaf at its own rank, so
+`commitL1w_of_leaves` applies over the words leaves up to the call's last. A words leaf is no message of A's instance
+(`leafMsg_not_mem_aMsgs`): A's leaves are under a schema of another length (`leafMsg_schema_ne`), and its pads, nodes,
+empty root and hm96 messages differ from a leaf in a header byte. The stream's tiles are the call's
+`S · rowBlocks · colBlocks` (`wordsTiles_length`), so the call's chunks are `wordChunks` and cover its words' bytes
+(`sum_chunks`), and A's segments its `rows · K` bytes.
 
 `honestL1w` is the honest lemma at the deployed instance: `honestOfCommit` at `l1wCommit`, `l1wIsA` and the certifier's
-stream `certStream`, at every admitted call whose A is at most `2^64` bytes; the chunks' bound follows from the call's
-admission.
+stream `certStream`, at every admitted call whose A is at most `2^64` bytes, in every forward whose words leaves number
+at most `2^64`.
 -/
 
 namespace Pouw.SecurityProofs.Lead.Compose
@@ -55,17 +57,17 @@ theorem mem_build {H : Hash.Msg → Hash.Digest} {D : Hash.Tree.Domain} :
       exact ⟨lv, j, l, r, rfl⟩
     · exact mem_build h
 
-/-- A tree's messages are its empty root's, its leaves', its pads' and its nodes'. -/
+/-- A tree's messages are its empty root's, its leaves' at ranks below the count, its pads' and its nodes'. -/
 theorem mem_msgs {H : Hash.Msg → Hash.Digest} {D : Hash.Tree.Domain} {s : String} {v : ℕ → Hash.Msg} {y : Hash.Msg}
     (h : y ∈ Hash.Tree.msgs H D s v) :
-    y = Hash.Tree.emptyMsg D ∨ (∃ r, y = Hash.Tree.leafMsg D r s (v r)) ∨ (∃ r, y = Hash.Tree.padMsg D r) ∨
-      ∃ lv j l r, y = Hash.Tree.nodeMsg D lv j l r := by
+    y = Hash.Tree.emptyMsg D ∨ (∃ r < D.count, y = Hash.Tree.leafMsg D r s (v r)) ∨
+      (∃ r, y = Hash.Tree.padMsg D r) ∨ ∃ lv j l r, y = Hash.Tree.nodeMsg D lv j l r := by
   unfold Hash.Tree.msgs at h
   split_ifs at h
   · exact Or.inl (List.mem_singleton.1 h)
   · simp only [Hash.Tree.leaves, List.mem_append, List.mem_map] at h
-    rcases h with (⟨r, -, rfl⟩ | ⟨r, -, rfl⟩) | h
-    · exact Or.inr (Or.inl ⟨r, rfl⟩)
+    rcases h with (⟨r, hr, rfl⟩ | ⟨r, -, rfl⟩) | h
+    · exact Or.inr (Or.inl ⟨r, List.mem_range.1 hr, rfl⟩)
     · exact Or.inr (Or.inr (Or.inl ⟨r, rfl⟩))
     · exact Or.inr (Or.inr (Or.inr (mem_build h)))
 
@@ -128,18 +130,39 @@ theorem leafMsg_not_mem_hm96 {D : Hash.Tree.Domain} {r : ℕ} {s : String} {v : 
   · rw [h, hp] at hl
     exact absurd hl (by decide)
 
+/-- A `uint` part below `2^64` determines what follows it. -/
+theorem uint_part_cancel {a b : ℕ} {X Y : Hash.Msg} (ha : a < 2 ^ 64) (hb : b < 2 ^ 64)
+    (h : Hash.be 8 (Hash.uint a).length ++ (Hash.uint a ++ X) = Hash.be 8 (Hash.uint b).length ++ (Hash.uint b ++ Y)) :
+    X = Y := by
+  obtain ⟨hlen, h⟩ := List.append_inj h (by simp)
+  exact (List.append_inj h (Hash.BindingProofs.be_inj_lt ((uint_length_le ha).trans_lt (by norm_num))
+    ((uint_length_le hb).trans_lt (by norm_num)) hlen)).2
+
+/-- **Frame leaves under schemas of different lengths are distinct**, at ranks and positions below `2^64`, whatever
+their domains and values. -/
+theorem leafMsg_schema_ne {D D' : Hash.Tree.Domain} {r r' : ℕ} {s s' : String} {v v' : Hash.Msg} (hr : r < 2 ^ 64)
+    (hr' : r' < 2 ^ 64) (hp : D.position r < 2 ^ 64) (hp' : D'.position r' < 2 ^ 64)
+    (hs : Hash.be 8 (Hash.utf8 s).length ≠ Hash.be 8 (Hash.utf8 s').length) :
+    Hash.Tree.leafMsg D r s v ≠ Hash.Tree.leafMsg D' r' s' v' := fun h => by
+  have h := Hash.BindingProofs.frame_parts h
+  simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil, List.append_assoc, Hash.BindingProofs.bytes_length,
+    List.append_cancel_left_eq] at h
+  exact hs (List.append_inj (uint_part_cancel hp hp' (uint_part_cancel hr hr' (List.append_inj h (by simp)).2))
+    (by simp)).1
+
 /-! ## `CommitL1w` at the deployed commitment -/
 
-/-- **A words leaf is no message of A's instance**, when the two domains' ids differ. -/
-theorem leafMsg_not_mem_aMsgs (L : Pouw.Lead.Layout) (P : L1w) (H₀ : Hash.Msg → Hash.Digest)
-    (A : Fin L.rows → Fin L.K → UInt8) (hid : P.idw ≠ P.ida) (r : ℕ) (v : Hash.Msg) :
-    Hash.Tree.leafMsg (P.wordsDom L) r wordsSchema v ∉ (l1wCommit L P H₀ A).aMsgs := by
+/-- **A words leaf is no message of A's instance**: A's leaves are under another schema at ranks below `2^64`, and its
+pads, nodes, empty root and hm96 messages differ from a leaf in a header byte. -/
+theorem leafMsg_not_mem_aMsgs (L : Pouw.Lead.Layout) (P : L1w) (F : Forward) (H H₀ : Hash.Msg → Hash.Digest)
+    (A : Fin L.rows → Fin L.K → UInt8) (hka : aLeaves L ≤ 2 ^ 64) {r : ℕ} (hr : r < 2 ^ 64) (v : Hash.Msg) :
+    Hash.Tree.leafMsg (P.wordsDom H F L) r wordsSchema v ∉ (l1wCommit L P F H₀ A).aMsgs := by
   intro h
   simp only [l1wCommit, List.mem_append] at h
   rcases h with h | h
-  · rcases mem_msgs h with h | ⟨_, h⟩ | ⟨_, h⟩ | ⟨_, _, _, _, h⟩
+  · rcases mem_msgs h with h | ⟨r', hr', h⟩ | ⟨_, h⟩ | ⟨_, _, _, _, h⟩
     · exact leafMsg_ne_emptyMsg h
-    · exact hid (leafMsg_id_inj h)
+    · exact leafMsg_schema_ne hr (hr'.trans_le hka) hr (hr'.trans_le hka) (by decide) h
     · exact leafMsg_ne_padMsg h
     · exact leafMsg_ne_nodeMsg h
   · exact leafMsg_not_mem_hm96 _ _ _ _ h
@@ -213,14 +236,26 @@ theorem aBytes_length (L : Pouw.Lead.Layout) (A : Fin L.rows → Fin L.K → UIn
   simp only [aBytes, List.length_flatten, List.map_ofFn, Function.comp_def, List.length_ofFn, List.sum_ofFn,
     Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul]
 
-/-- **`CommitL1w` at the deployed commitment**: for all parameters whose two domain ids differ and whose column tile
-is a positive number of blocks, and every A, at every hash and data, when the call's rows and columns are whole MMA
-tiles and its words chunks and A's segments number at most `2^64`. -/
-theorem commitL1w_l1w (L : Pouw.Lead.Layout) (hm : 16 ∣ L.m) (hn : 8 ∣ L.n) (hcw : 0 < L.chunkWords)
-    (hkw : wordChunks L ≤ 2 ^ 64) (hka : aLeaves L ≤ 2 ^ 64) (P : L1w) (hnb : 0 < P.nb) (hid : P.idw ≠ P.ida)
+/-- **The call's chunks follow its earlier calls'**: the forward's words leaf at rank `before + i` is the call's
+chunk `i`. -/
+theorem value_call (F : Forward) (nb : ℕ) (L : Pouw.Lead.Layout) (w : Fin L.m → Fin L.S → Fin L.n → ℤ) {i : ℕ}
+    (hi : i < wordsLeaves L nb) : F.value nb L w (F.before nb + i) = wordsChunk L nb w i := by
+  have hpre : (F.pre.flatMap (callChunks nb)).length = F.before nb := by
+    simp [Forward.before, callChunks, List.length_flatMap]
+  have hcall : (callChunks nb ⟨L, w⟩).length = wordsLeaves L nb := by simp [callChunks]
+  rw [Forward.value, Forward.values, List.getD_eq_getElem?_getD,
+    List.getElem?_append_left (by rw [List.length_append, hpre, hcall]; omega),
+    List.getElem?_append_right (by rw [hpre]; omega), hpre, Nat.add_sub_cancel_left]
+  simp [callChunks, hi]
+
+/-- **`CommitL1w` at the deployed commitment**: for all parameters whose column tile is a positive number of blocks,
+every forward and every A, at every hash and data, when the call's rows and columns are whole MMA tiles and the
+forward's words leaves and A's segments number at most `2^64`. -/
+theorem commitL1w_l1w (L : Pouw.Lead.Layout) (hm : 16 ∣ L.m) (hn : 8 ∣ L.n) (hcw : 0 < L.chunkWords) (P : L1w)
+    (hnb : 0 < P.nb) (F : Forward) (hkw : F.leaves P.nb L ≤ 2 ^ 64) (hka : aLeaves L ≤ 2 ^ 64)
     (H₀ : Hash.Msg → Hash.Digest) (A : Fin L.rows → Fin L.K → UInt8) (H : Hash.Msg → Hash.Digest)
     (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) :
-    CommitL1w H (l1wCommit L P H₀ A) (l1wIsA L P H₀ A) κ := by
+    CommitL1w H (l1wCommit L P F H₀ A) (l1wIsA L P F H₀ A) κ := by
   have hw : tileWords * (wordsTiles L P.nb).length = L.m * L.n * L.S := by
     rw [wordsTiles_length L hnb]
     obtain ⟨a, ha⟩ := hm
@@ -231,10 +266,13 @@ theorem commitL1w_l1w (L : Pouw.Lead.Layout) (hm : 16 ∣ L.m) (hn : 8 ∣ L.n) 
   have hch : wordsLeaves L P.nb = wordChunks L := by
     rw [wordsLeaves, hw]
     rfl
-  refine commitL1w_of_leaves H _ _ κ hch (P.wordsDom L) (P.aDom L) wordsSchema aSchema (wordsLeaves L P.nb)
-    (aLeaves L) (hch.le.trans hkw) hka le_rfl (fun ω => wordsChunk L P.nb (word L κ ω)) (aSeg L A) (fun ω => ?_) ?_
-    (fun ω r hr => ?_) (fun ω r hr => ?_) (fun ω r _ => ?_) (fun r hr => ?_)
-  · simp only [wordsChunk]
+  have hk : F.before P.nb + wordsLeaves L P.nb ≤ F.leaves P.nb L := by
+    unfold Forward.leaves
+    omega
+  have hwc : ∀ w, 4 * (L.m * L.n * L.S) ≤
+      ((List.range (wordsLeaves L P.nb)).map fun i => (wordsChunk L P.nb w i).length).sum := by
+    intro w
+    simp only [wordsChunk]
     rw [sum_chunks, wordsBytes_length, hw, hch]
     have hq := Nat.div_add_mod (L.m * L.n * L.S + L.chunkWords - 1) L.chunkWords
     have hr := Nat.mod_lt (L.m * L.n * L.S + L.chunkWords - 1) hcw
@@ -244,13 +282,20 @@ theorem commitL1w_l1w (L : Pouw.Lead.Layout) (hm : 16 ∣ L.m) (hn : 8 ∣ L.n) 
     generalize L.m * L.n * L.S = a at hq ⊢
     have : 4 * L.chunkWords * q = 4 * (L.chunkWords * q) := by ring
     omega
+  refine commitL1w_of_leaves H _ _ κ hch (P.wordsDom H F L) (P.aDom H₀ F L) wordsSchema aSchema
+    (F.before P.nb + wordsLeaves L P.nb) (aLeaves L) (hk.trans hkw) hka (Nat.le_add_left _ _)
+    (fun ω => F.value P.nb L (word L κ ω)) (aSeg L A) (fun ω => (hwc (word L κ ω)).trans ?_) ?_ (fun ω r hr => ?_)
+    (fun ω r hr => ?_) (fun ω r hr => ?_) (fun r hr => ?_)
+  · rw [List.range_add, List.map_append, List.sum_append, List.map_map]
+    refine le_add_left (le_of_eq (congrArg List.sum (List.map_congr_left fun i hi => ?_)))
+    simp only [Function.comp_apply, value_call F P.nb L _ (List.mem_range.1 hi)]
   · simp only [aSeg]
     rw [sum_chunks, aBytes_length]
     unfold aLeaves aSegment
     omega
-  · exact List.mem_append_left _ (List.mem_append_left _ (leaf_mem_msgs H _ _ _ hr))
+  · exact List.mem_append_left _ (List.mem_append_left _ (leaf_mem_msgs H _ _ _ (hr.trans_le hk)))
   · exact List.mem_append_right _ (List.mem_append_left _ (leaf_mem_msgs H₀ _ _ _ hr))
-  · exact decide_eq_false (leafMsg_not_mem_aMsgs L P H₀ A hid r _)
+  · exact decide_eq_false (leafMsg_not_mem_aMsgs L P F H H₀ A hka (hr.trans_le (hk.trans hkw)) _)
   · exact decide_eq_true (List.mem_append_left _ (leaf_mem_msgs H₀ _ _ _ hr))
 
 /-! ## The certifier's stream holds every coin the feed carries -/
@@ -369,41 +414,30 @@ theorem certStream_ι (L : Pouw.Lead.Layout) {x : CoinIdx L} {c : ℕ} {p : Fin 
   split_ifs
   exact congrArg some (feedSlot_inj L h.2.choose_spec hx)
 
-/-- An admitted call of the lead has at most `2^64` words chunks: its words are at most `2^47`. -/
-theorem wordChunks_le (T m n K : ℕ) (hadm : (lead T m n K).Admits) : wordChunks (lead T m n K) ≤ 2 ^ 64 := by
-  have h := hadm.2
-  have hw : (lead T m n K).m * (lead T m n K).n * (lead T m n K).S =
-      128 * ((lead T m n K).rowBlocks * (lead T m n K).colBlocks * (lead T m n K).S) := by
-    simp only [lead, Layout.rowBlocks, Layout.colBlocks, padRows, padCols]
-    rw [show (16 * ((m + 15) / 16) + 15) / 16 = (m + 15) / 16 by omega,
-      show (8 * ((n + 7) / 8) + 7) / 8 = (n + 7) / 8 by omega]
-    ring
-  unfold wordChunks
-  rw [hw]
-  simp only [lead] at h ⊢
-  omega
-
 /-- An A of at most `2^64` bytes has at most `2^64` segments. -/
 theorem aLeaves_le (T m n K : ℕ) (hA : m * K ≤ 2 ^ 64) : aLeaves (lead T m n K) ≤ 2 ^ 64 := by
   simp only [aLeaves, aSegment, lead]
   omega
 
 /-- **The honest lemma at the deployed instance**: at every admitted call of the lead whose A is at most `2^64` bytes,
-every hash and data, all commitment parameters whose two domain ids differ and whose column tile is a positive number
-of blocks, and every A, committed under the same hash, some set of strategies meets every premise of `G` at the
-deployed commitment `l1wCommit`, its classifier `l1wIsA` and the certifier's stream `certStream`, and holds an honest
-strategy accepted at every coin value. -/
+every hash and data, all commitment parameters whose column tile is a positive number of blocks, every forward of the
+call whose words leaves number at most `2^64`, and every A, committed under the same hash, some set of strategies
+meets every premise of `G` at the deployed commitment `l1wCommit`, its classifier `l1wIsA` and the certifier's stream
+`certStream`, and holds an honest strategy accepted at every coin value. -/
 theorem honestL1w (T m n K : ℕ) (hadm : (lead T m n K).Admits) (hA : m * K ≤ 2 ^ 64) (H : Hash.Msg → Hash.Digest)
     (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ) (P : L1w) (hnb : 0 < P.nb)
-    (hid : P.idw ≠ P.ida) (A : Fin (lead T m n K).rows → Fin (lead T m n K).K → UInt8) :
+    (F : Forward) (hF : F.leaves P.nb (lead T m n K) ≤ 2 ^ 64)
+    (A : Fin (lead T m n K).rows → Fin (lead T m n K).K → UInt8) :
     ∃ (Real : Strategy (lead T m n K) → Prop) (σ : Strategy (lead T m n K)),
-      CommitL1w H (l1wCommit _ P H A) (l1wIsA _ P H A) κ ∧ H32 h100Nominal ∧ W1 h100Nominal Real ∧
-      TileGrain H (l1wCommit _ P H A) κ (certStream _) Real ∧ OneInstructionMinimal Real ∧ CardWithinAccelW1 Real Real ∧
-      ShaWrites (l1wIsA _ P H A) Real ∧ HonestHashRuled H (l1wCommit _ P H A) κ Real ∧
-      OutsourceWithinEgressLead h100Nominal (betaLead (lead T m n K) (l1wCommit _ P H A)) H (l1wCommit _ P H A) κ Real ∧
-      Real σ ∧ ∀ ω, Accepted (lead T m n K) H (l1wCommit _ P H A) κ σ ω :=
-  honestOfCommit T m n K H κ (certStream _) (l1wCommit _ P H A) (l1wIsA _ P H A)
-    (commitL1w_l1w _ (Dvd.intro _ rfl) (Dvd.intro _ rfl) (show 0 < 65536 by norm_num) (wordChunks_le T m n K hadm)
-      (aLeaves_le T m n K hA) P hnb hid H A H κ) hadm
+      CommitL1w H (l1wCommit _ P F H A) (l1wIsA _ P F H A) κ ∧ H32 h100Nominal ∧ W1 h100Nominal Real ∧
+      TileGrain H (l1wCommit _ P F H A) κ (certStream _) Real ∧ OneInstructionMinimal Real ∧
+      CardWithinAccelW1 Real Real ∧ ShaWrites (l1wIsA _ P F H A) Real ∧
+      HonestHashRuled H (l1wCommit _ P F H A) κ Real ∧
+      OutsourceWithinEgressLead h100Nominal (betaLead (lead T m n K) (l1wCommit _ P F H A)) H
+        (l1wCommit _ P F H A) κ Real ∧
+      Real σ ∧ ∀ ω, Accepted (lead T m n K) H (l1wCommit _ P F H A) κ σ ω :=
+  honestOfCommit T m n K H κ (certStream _) (l1wCommit _ P F H A) (l1wIsA _ P F H A)
+    (commitL1w_l1w _ (Dvd.intro _ rfl) (Dvd.intro _ rfl) (show 0 < 65536 by norm_num) P hnb F hF
+      (aLeaves_le T m n K hA) H A H κ) hadm
 
 end Pouw.SecurityProofs.Lead.Compose
