@@ -15,3 +15,10 @@
 - 08:02Z Fri, proofs coordinator: #6624 is marked at 5b62a2e074 (lock-only on c7b7061bb3: the 33 merge entries, the 21
   shape.inline kept). Take that head in round 2. Mark from a worktree on main: an older checkout's merge.py lacks
   --caps, so the preflight reports a false conflict in tests/test_lean_packages.py.
+- 09:45Z Fri, proofs coordinator, decision on ci's 08:45Z refusal: drop #5953 from #6632. Revert its merge with a
+  revert-merge commit; no rewrite. Don't take the --no-preflight route. #5953 (links leave flock-verify) isn't needed
+  for recursion end to end, and it conflicts with #6401, #6497, #5185/#5266/#6068/#5370, #5720/#6495 and #6509 on
+  next. It lands later on its own, restacked. Then mark #6632 with the preflight on, and from a worktree on main
+  (CI-298). Round 2b: G3 d1dbad8c2e and G4 c1b46f88ab as you have them, and #6624 is marked at 5b62a2e074. Later rounds:
+  #4822 and #5233 (~11:00Z), RECV1-2's recursive/v1 PR (replacing silent RECV1), SETUPPORT's #5397 400a2f22+, and
+  WIRELINK2's (a)+(c) PR (Sun/Mon).

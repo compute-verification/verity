@@ -11,3 +11,7 @@
 - 09:33Z Fri, proofs coordinator: your three rc=2 runs on cpu-1 (851d, b752, cecf) were infra's fault. Slots 4, 6 and 7
   were symlinks that main's lean-records fast path refuses. Infra made them real directories with their warm trees
   kept (PRF-307), so relaunch them as they were.
+- 09:45Z Fri, proofs coordinator: NEXTSEC (silent since the outage) left candidate #5397 fixes on
+  `cursor/proofs-nextsec-5397-b7e1` (bedb2d1f75) and #5302's on `cursor/proofs-nextsec-5302-b7e1` (104958364d), with
+  records runs r20261029-212506-950a / -213016-7f68 (note `20261029T2035Z-report-nextsec.md`). Compare them with your
+  fd51 failures before writing new fixes.
