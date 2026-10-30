@@ -407,7 +407,9 @@
   "VStar.Stage",
   "VStar.Stream",
   "VStar.Unit",
-  "VStarRecursive"
+  "VStarRecursive",
+  "CoreProtocol.Live",
+  "VStar.Cli"
  ],
  "layers": {
   "Properties.Composition": {
