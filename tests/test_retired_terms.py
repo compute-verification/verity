@@ -4,8 +4,10 @@ A semantically meaningful part of the registered or actual circuit is a block, a
 proof block (Glossary, "Incorrect proof block"). The proof service is the proof system (`ARCHITECTURE.md`, Glossary, "Proof system").
 
 Scanned: every tracked text file but the Lean (`.lean` files, their packages' `lakefile.toml` and their locks' reasons, `lean-audit.json`). A term matches case-insensitively as two words, hyphenated, or wrapped onto the next
-line (behind a comment marker or not). Every file under `benchmarks/rho/` retires more (``RHO_TERMS``): its proof
-blocks, their steps and their outputs are incorrect, never faulty, while a faulty node, link or device keeps the word. Identifiers (`proof_unit`) are code; the retired-terms table
+line (behind a comment marker or not). Every file under `benchmarks/rho/`, `benchmarks/network_traces/` and the
+network tests retires more (``INCORRECT_TERMS``): its proof blocks, their steps, outputs and windows, and K's terms for
+them are incorrect, never faulty or wrong, while a faulty node, link or device keeps the word. Identifiers (`proof_unit`,
+a key that mirrors a Lean name such as `faulty_bits`) are code; the retired-terms table
 (`GLOSSARY.md`) names them. What may stay: the table's own rows (``RETIRED_ROWS``), a spelling baked into a
 record or a digest (``ALLOWED``, one reason each; an entry that matches nothing fails too), and a file whose lines a PR
 already queued on `next` rewrites (``PENDING``), until that PR lands and the rename follows it.
@@ -23,15 +25,19 @@ import re
 from test_repository import ROOT, _tracked
 
 #: Each retired term and what to write instead.
-TERMS = {"proof unit": "proof block", "faulty unit": "incorrect proof block", "proof service": "proof system"}
+TERMS = {"proof unit": "proof block", "faulty unit": "incorrect proof block", "proof service": "proof system",
+         "faulty ANDs": "incorrect ANDs"}
 _SEP = r"(?:[ \t]+|-|[ \t]*\n[ \t]*(?:#+|//+|--|\*|;+)?[ \t]*)"
-_TERM = re.compile(rf"\b(?:(?:proof|faulty){_SEP}units?|proof{_SEP}services?)\b", re.I)
+_TERM = re.compile(rf"\b(?:(?:proof|faulty){_SEP}units?|proof{_SEP}services?|faulty{_SEP}ANDs)\b", re.I)
 
-#: Retired in every file under RHO too, and what to write instead.
-RHO = "benchmarks/rho/"
-RHO_TERMS = {"faulty outputs, faulty step, faulty ingress unit, faulty block, faulty set":
-             "incorrect outputs, incorrect step, incorrect ingress unit, incorrect proof block, the incorrect set"}
-_RHO_TERM = re.compile(rf"\bfaulty{_SEP}(?:outputs?|steps?|ingress{_SEP}units?|(?:proof{_SEP})?blocks?|sets?)\b", re.I)
+#: Retired in every file under INCORRECT too, and what to write instead.
+INCORRECT = ("benchmarks/rho/", "benchmarks/network_traces/", "verity/core/protocols/network/tests/")
+INCORRECT_TERMS = {"faulty outputs, faulty step, faulty ingress unit, faulty block, faulty set":
+                   "incorrect outputs, incorrect step, incorrect ingress unit, incorrect proof block, the incorrect set",
+                   "faulty window, wrong unit": "incorrect window, incorrect proof block",
+                   "faulty term, faulty bits": "the term for incorrect proof blocks, their bits"}
+_INCORRECT_TERM = re.compile(rf"\b(?:faulty{_SEP}(?:outputs?|steps?|ingress{_SEP}units?|(?:proof{_SEP})?blocks?|sets?"
+                             rf"|windows?|terms?|bits)|wrong{_SEP}units?)\b", re.I)
 
 #: The retired-terms table, the Glossary's older names (`ARCHITECTURE.md` links it).
 GLOSSARY = "GLOSSARY.md"
@@ -98,9 +104,20 @@ ALLOWED: dict[str, str] = {
     "verity/proof-service/": "the stream's and outcome's record formats (`sampled_proofs.service.STREAM`, `OUTCOME`), "
                              "which their digests hash",
     "report-proof-service-": "a cited note's id",
+    "Faulty ANDs (`Stratified.harm_bound`": "`sampling_plan/h200.py`'s docstring: a queued PR on next rewrites the line beside "
+                                            "it; renamed after it lands",
     "before any coin draws (the firewall's staged statements)": "a line of GLOSSARY.md that queued PRs on next rewrite; the protocol vocabulary's rename follows them",
     "no wrong certificate, faulty block or detection": "a comment beside `Remote.CITES` in `benchmarks/rho/rho/envelopes.py`, "
                                                        "which a queued PR on next rewrites; renamed after it lands",
+    "charges a tied audit no faulty term": "`NetworkCheck.Period`'s refusal of a tied audit with a unit undrawn, which the "
+                                           "network tests' mirror and difftest pin; renamed with the Lean's faulty names",
+    "(its wrong units' outputs are the egress's)": "the same refusal's reason, the Lean's text; renamed with the Lean's "
+                                                   "faulty names",
+    "no faulty proof block, every one being drawn": "`benchmarks/network_traces/leak_bounds.py`'s docstring: a queued PR on "
+                                                    "next rewrites the line beside it; renamed after it lands",
+    "a proof unit's public outputs are at most 16 bits": "`verity/core/protocols/network/tests/period_case.py`'s comment on "
+                                                         "OUT_BITS: a queued PR on next rewrites the lines above it; renamed "
+                                                         "after it lands",
 }
 
 PENDING: dict[str, str] = {
@@ -122,7 +139,6 @@ PENDING: dict[str, str] = {
     "examples/h200/interfaces/README.md": "#4719 rewrites its lines",
     "examples/h200/interfaces/verity_e2e_demo/report.py": "#4691 adds a line",
     "examples/h200/README.md": "#4680 rewrites its lines",
-    "benchmarks/network_traces/chain_record.py": "#4575 rewrites its lines",
     "benchmarks/stacked_share/README.md": "#4514 rewrites its lines",
     "benchmarks/torch_gpu/p2_stage/README.md": "#4761 adds lines",
     "integrations/vllm/README.md": "#4773 adds lines",
@@ -130,8 +146,6 @@ PENDING: dict[str, str] = {
     "verity/core/protocols/certifier/boundary.py": "#4721 rewrites its lines",
     "verity/core/protocols/certifier/egress.py": "#4721 rewrites its lines",
     "verity/core/protocols/certifier/tests/test_network_certifier_egress.py": "#4721 rewrites its lines",
-    "verity/core/protocols/network/tests/period_case.py": "#4721 rewrites its lines",
-    "verity/core/protocols/network/tests/test_network_period_protocol.py": "#4721 adds lines",
     "verity/core/protocols/pous/README.md": "#4719 rewrites its lines",
     "verity/core/protocols/remote_bandwidth/PROTOCOL.md": "#4620 rewrites its lines",
     "verity/ml/circuits/ops/boolean/rowwise.py": "#4539 rewrites its lines",
@@ -208,12 +222,12 @@ def offenders(files: list[str], read=_read) -> tuple[list[tuple[str, int, str]],
     out, used = [], set()
     for f in scanned(files):
         text = read(f)
-        rho = f.startswith(RHO)
-        if text is None or not ("unit" in text.lower() or "service" in text.lower() or rho and "faulty" in text.lower()):
+        incorrect = f.startswith(INCORRECT)
+        if text is None or not ("unit" in text.lower() or "service" in text.lower() or "faulty" in text.lower()):
             continue
         allowed = [(m.start(), m.end(), s) for s in ALLOWED for m in re.finditer(re.escape(s), text)]
         lines = text.splitlines()
-        terms = (_TERM, _RHO_TERM) if rho else (_TERM,)
+        terms = (_TERM, _INCORRECT_TERM) if incorrect else (_TERM,)
         for m in sorted((m for t in terms for m in t.finditer(text)), key=lambda m: m.start()):
             n = text.count("\n", 0, m.start()) + 1
             if f == GLOSSARY and lines[n - 1].startswith(RETIRED_ROWS):
@@ -252,7 +266,8 @@ def test_no_retired_term_in_prose():
     bad, used = offenders(_tracked())
     assert not bad, (
         "a retired term: say " + " and ".join(f'"{new}" for "{old}"' for old, new in TERMS.items())
-        + f" (in {RHO}, also " + " and ".join(f'"{new}" for "{old}"' for old, new in RHO_TERMS.items()) + ")"
+        + f" (in {', '.join(INCORRECT)}, also " + " and ".join(f'"{new}" for "{old}"' for old, new in INCORRECT_TERMS.items())
+        + ")"
         + f' (ARCHITECTURE.md, Glossary, "Block"; {GLOSSARY}); a spelling baked into a record or a digest goes in ALLOWED'
         + " with its reason:\n" + "\n".join(f"  {f}:{n}: {term}" for f, n, term in bad))
     unused = set(ALLOWED) - used - doc_offenders(_tracked())[1]
@@ -306,6 +321,29 @@ def test_the_scan_reads_rho_terms():
         ("benchmarks/rho/a.py", 2, "faulty ingress unit"), ("benchmarks/rho/a.py", 2, "faulty set"),
         ("benchmarks/rho/data/b.toml", 1, "Faulty outputs"), ("benchmarks/rho/data/b.toml", 1, "faulty proof block"),
         ("benchmarks/rho/data/b.toml", 1, "faulty blocks")]
+
+
+def test_the_scan_reads_the_network_terms():
+    """The network tests' and `benchmarks/network_traces`' incorrect proof blocks, windows and K's terms for them, on toy
+    files: a key or a name that mirrors the Lean's (`faulty_bits`, `wrong_units`, `faultySets`), a faulty certifier, a
+    wrong verdict, and the same words outside them stay."""
+    net = "verity/core/protocols/network/tests/a.py"
+    docs = {
+        net: ('"""Its faulty bits, no faulty\n    term and at most 3 wrong units."""\n'
+              'class _Faulty(Certifier):  # a faulty certifier; a wrong verdict\n'
+              'k = t["faulty_bits"] + t["wrong_units"]  # faultySets\n'),
+        "benchmarks/network_traces/b.md": "Each link pays its faulty proof blocks; none of its faulty-windows drawn.\n",
+        "c.py": "# faulty bits and wrong units outside them\n",
+    }
+    assert offenders(list(docs), read=docs.__getitem__)[0] == [
+        ("benchmarks/network_traces/b.md", 1, "faulty proof blocks"), ("benchmarks/network_traces/b.md", 1, "faulty-windows"),
+        (net, 1, "faulty bits"), (net, 1, "faulty term"), (net, 2, "wrong units")]
+
+
+def test_the_scan_reads_the_incorrect_ands():
+    """`sampling_plan`'s incorrect ANDs, on toy files, in every file: an AND gate in another sense stays."""
+    docs = {"a.py": "# 9 faulty ANDs and faulty\n# ANDs; a faulty AND gate, faulty outputs outside rho\n"}
+    assert offenders(list(docs), read=docs.__getitem__)[0] == [("a.py", 1, "faulty ANDs"), ("a.py", 1, "faulty # ANDs")]
 
 
 def test_the_doc_scan_reads_each_form():
