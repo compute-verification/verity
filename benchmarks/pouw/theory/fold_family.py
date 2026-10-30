@@ -32,7 +32,13 @@ Families: `mulxor` (FOLD-OPT's step, the keys drawn), `arith` (the first four ki
 
 `--sweep=KIND` replaces the drawn members by KIND's one-step members at every w-bit c (k drawn odd). An unsat at c
 then holds for every 32-bit pair of constants whose low w bits are c and that k. `--sweep-c=C` fixes c at C and sweeps
-every w-bit k instead, even ones included (a round's K_t is any constant).
+every w-bit k instead, even ones included (a round's K_t is any constant), or only the k that `--ks=K,K` lists.
+
+`--free=F` gives the zero target F free terms of each kind instead of s. An unsat holds only for programs with at most
+F of each: at c = 1, (R + C) ⊕ 1 = (R − 2r_0) + (C − 2c_0 + 1) + 4·r_0·c_0 (r_0, c_0 the low bits), one IMAD of two
+free terms, so with F = 2 the 32-bit word entry has a two-instruction program at every k, and with F = 1 only where
+4k ≡ 0 mod 2^w. A w-bit sweep at a c whose low w bits are 1 certifies nothing a prover with two free terms a side
+can't beat.
 
 `--grids=AxBxC,AxBxC` sets the zero target's two grids (rows × columns × entry states). Rows and columns are drawn with
 repeats, the free terms are per drawn row and column, and each cell draws its own entry states, so a sat at any grid
@@ -40,7 +46,7 @@ is a fit to be rechecked and an unsat at any grid holds.
 
 Run: `uv run --no-project --with z3-solver python -B fold_family.py OUT.json --window=PATH/fold_window.py [--width=8]
 [--members=12] [--steps=1,2] [--families=...] [--targets=zero,words] [--timeout=300] [--jobs=4] [--sweep=KIND]
-[--grids=3x3x4,4x4x6]` (from this directory). PATH is `benchmarks/pouw/hash_sparse/` on N-FLOOR's branch.
+[--sweep-c=C] [--ks=K,K] [--free=F] [--grids=3x3x4,4x4x6]` (from this directory). PATH is `benchmarks/pouw/hash_sparse/` on N-FLOOR's branch.
 """
 from __future__ import annotations
 
@@ -114,7 +120,7 @@ def draw_member(rng, family, s, w):
 def instance(spec):
     """The solver for one member at length L: examples over rows × columns × entry states (zero) or states × words."""
     w, member, target, L = spec["width"], spec["member"], spec["target"], spec["L"]
-    s, mask, F = len(member), (1 << spec["width"]) - 1, len(member)
+    s, mask, F = len(member), (1 << spec["width"]) - 1, spec.get("free") or len(member)
     nr, nc, nn = spec["grid"]
     rng = random.Random(spec["seed"])
     consts = [x for _, p in member for x in (p["k"], p["c"])]
@@ -176,7 +182,9 @@ def specs(opt):
         if "--sweep-c" in opt:
             c = int(opt["--sweep-c"], 0)
             fams = [f"sweep-{sweep}-c{c}"]
-            drawn = [[(sweep, {"k": k, "c": c, "t": 3})] for k in range(1 << w)]
+            ks = [int(k, 0) for k in str(opt["--ks"]).split(",")] if "--ks" in opt else range(1 << w)
+            drawn = [[(sweep, {"k": k, "c": c, "t": 3})] for k in ks]
+    free = int(opt["--free"]) if "--free" in opt else None
     out = []
     for fam in fams:
         for s in steps:
@@ -189,9 +197,10 @@ def specs(opt):
                                     (h - 1, zgrids[1] if target == "zero" else (1, 1, 48)), (h, (2, 2, 3))):
                         if L == h and i:
                             continue
-                        out.append({"name": f"{fam}-s{s}-m{i}-{target}-L{L}-g{'x'.join(map(str, grid))}",
+                        out.append({"name": f"{fam}-s{s}-m{i}-{target}-L{L}-g{'x'.join(map(str, grid))}"
+                                            + (f"-F{free}" if free else ""),
                                     "family": fam, "s": s, "index": i, "target": target, "member": member,
-                                    "honest": h, "L": L, "grid": grid, "width": w,
+                                    "honest": h, "L": L, "grid": grid, "width": w, "free": free,
                                     "timeout": timeout * (3 if L == h else 1),
                                     "seed": zlib.crc32(f"{fam}-{s}-{i}-{target}-{L}-{grid}".encode())})
     return out
