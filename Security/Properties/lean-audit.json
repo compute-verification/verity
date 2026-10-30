@@ -6460,13 +6460,17 @@
    ]
   },
   "CoreProtocol.Protocol.Canonical": {
-   "digest": "3d2638832eb8e80b558572b93d06d47957b947a6ec429686b7c3397f07806427",
+   "digest": "a0b32d60d2a74f7dab45abadc6f5cab7bd79c57bc79add80bc2ca5a62147bad4",
    "definitions": {
+    "Core.Canonical.NOT_ASCII": "0085b92a3e5a2bf10691f29e3182886f861845fea0f820c21c358790dc881751",
     "Core.Canonical.arr._f": "61b78719c4ba86943dab9e54383b6c89ee45ac0f308b33d6058993e032fec5e5",
     "Core.Canonical.arr.match_1": "5de434dd8583f360ac7537bf6459ed27bd4884165afdb652c46983d585543866",
     "Core.Canonical.arr.match_3": "59cc184ffb6524f9f97d26642170a0ad13e3c7c07343a3f585b3b65eb1947a6b",
     "Core.Canonical.byte": "6010ef60d4b5e7996e52319eea59b7c82ac8e7f58306b3c586c8c302578bdca7",
+    "Core.Canonical.canonError": "00d07ef5f3808fc2fd80f8fca29b80b4e4b8f1e45c0894f879683be2a5c8b0e2",
+    "Core.Canonical.canonError._sparseCasesOn_1": "3b563ee842f41afb85c6fa53ab64cc8d53d572870f4c3c89fe0e539fa37a4be5",
     "Core.Canonical.digits": "dff71ee9fbebcaf4b5d38cc2d5acf6b6992d0b054f0c5a66bb5da33cf3c25567",
+    "Core.Canonical.hex4At": "20f7ac8169fc4e9e5a48ff4c7702424be06be6a1a2b114673885605eee681253",
     "Core.Canonical.int": "487b0bcb53deabeb7e491efe78fd12fd2454c91dd7a9fbfe7ec86c6e0133540d",
     "Core.Canonical.integers": "1c0a1ca31035ec47cc97b1fbd91b4c1883282e1d0f8de0a484ff781bd606faf7",
     "Core.Canonical.integers._sparseCasesOn_1": "43cf80e3f0c4b300c9e9251ac7239cbccf4ddc103aee151a4ac0761744e73daf",
@@ -6488,6 +6492,8 @@
     "Core.Canonical.strValue._sparseCasesOn_1": "b9d00923e41fe6ad9d73fe12b9ed4dda555c75fc67d3972b246430fcdc1ae22e",
     "Core.Canonical.strValue._sparseCasesOn_2": "dee58ad2f46399f29a3df4f338ebb656a9f62caeb8005982e0d881209fbcf268",
     "Core.Canonical.strWrites": "9d8af6800ae101fcceb1850a580abae628231d11381ac6120cfa7499d2e29aaf",
+    "Core.Canonical.uAt": "c0f3fa8134175dde29766bc6c0fd1de8897b1799c9f31493f478942d725e29ec",
+    "Core.Canonical.uEscaped": "f58be8a72efb88d1f127d6f0300b956dff63e1aa0f2e53ab79b4d9c8cce2586f",
     "Core.Canonical.unhex": "0d0fdfd376161017c00bb86c41da32c4d36a3a8dbab84776b356946b00693fa7",
     "Core.Canonical.unhexFrom": "7cf077ac15d19f6db2be735f258fbab09e777b6eb1973e47693e5d300c308297",
     "Core.Canonical.value": "3521b415db8a6890d06fb4cab0b7817b31e0eee0b086be739c05c42d7dc97f01",
@@ -6501,7 +6507,8 @@
     "_private.CoreProtocol.Protocol.Canonical.0.Core.Canonical.QUOTE": "30eecde2ab99f6d43562bc8269b2650fee3c3c07881e2feeff713244f2b99e1a",
     "_private.CoreProtocol.Protocol.Canonical.0.Core.Canonical.RBRACE": "de7bb0db14ba0d01d74a75b8d695fbf3da924d389cad0b7600763a28c8af5348",
     "_private.CoreProtocol.Protocol.Canonical.0.Core.Canonical.RBRACKET": "b22e52061e1f25e6b4a423daee8225cdffd9f3fcc2538d6e4bb778362e73ac43",
-    "_private.CoreProtocol.Protocol.Canonical.0.Core.Canonical.hexDigit": "b47efd5dc3f07b24d8d54f10f534cb06daeb59997fc621dda42a202226f8437f"
+    "_private.CoreProtocol.Protocol.Canonical.0.Core.Canonical.hexDigit": "b47efd5dc3f07b24d8d54f10f534cb06daeb59997fc621dda42a202226f8437f",
+    "_private.CoreProtocol.Protocol.Canonical.0.Core.Canonical.parseAscii": "330d9368773882ca6f44879a1330f0b4fc4bc482c08d348b72ac962cbf3a524f"
    },
    "guarantees": [
     "Pous.Component.SecurityProofs.runAccepts",
@@ -11981,7 +11988,7 @@
    ]
   },
   "Flock.HmRow": {
-   "digest": "db7373a1d9a48b7ed12d3de2911672b9b728bf05602db2b1b2621bcf42723398",
+   "digest": "c9c53d0f30388d881f6284902844e8a45400653f157bda3273a964ad0b620739",
    "definitions": {
     "Flock.HmOut.checkPinned": "be695fb6208f54d0549abc4562a07a5a6a0e9141cdbfec833fc24bcee6fc732b",
     "Flock.HmOut.checkRows": "098f24c4033c2c7f98461e63d948ae97698a038872521e9bb334da3a4d1926a0",
@@ -12027,6 +12034,7 @@
     "Flock.HmRow.classOf": "b8f51fb77db04529e65c5fca0e1b2a34e9ce207127237429b83ff7414a3e07c2",
     "Flock.HmRow.classOf._sparseCasesOn_1": "d2860e4ced1127f5e5bde67ba6d17ef7a999b320c5da1dc21c5ee4371705b79e",
     "Flock.HmRow.classOf._sparseCasesOn_4": "7527a195dcbd853e48f368caa72976ad86037dcda062478acf755a6261afb6e4",
+    "Flock.HmRow.classOf.match_1": "ce7fc272801e50552046fb1d7fc3377303e2ad76cb0993faf8e7ea8872d4e3aa",
     "Flock.HmRow.drawn.match_1": "d53732ad9f7687c14a93fe77fe8536e81480bcdd632e6dd5655c2ebf3bcc2565",
     "Flock.HmRow.hex16": "12dc3acaacbb3091b3932a4959ee233f484701d4445c54e9deb5a1cfb15eed6f",
     "Flock.HmRow.isSha512Hex": "d45224822965131f484b3ab4bdf9ab5e2cb311cdb0ff5a8566ff840b77b65734",
