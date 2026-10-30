@@ -52,20 +52,7 @@ class Clock:
         return self.now
 
 
-class _Bytes(T.ChallengerCoins):
-    """A select-only test's bytes, read as a challenger's coins: no session opens them, so a run of the verifier on a
-    draw from them has no evidence and refuses it."""
-
-    def __init__(self, source) -> None:
-        super().__init__(None)
-        self._source = source
-
-    def __call__(self, n: int) -> bytes:
-        return self._source(n)
-
-
 def _stream(spec=None, budget=2, clock=None, coins=None, sampler=None) -> S.Stream:
-    coins = coins if coins is None or isinstance(coins, T.ChallengerCoins) else _Bytes(coins)
     return FC.Stream(spec or _spec(), PAIR, budget=budget, delta=DELTA, challenger="challenger-test", coins=coins,
                      clock=clock or Clock(), sampler=sampler)
 
@@ -153,18 +140,15 @@ def test_the_draw_is_the_challengers_coins_and_nothing_else():
 def test_a_stream_draws_no_coins_of_its_own():
     """A stream whose selection reads coins takes only the auditor's challenger's (`coins.ChallengerCoins`): asked for
     none, the operating system's bytes as the Lean reads them (`verifier.coins`), or any other source of bytes, it
-    refuses (`NO_OWN_COINS`), and a salt from any coins but a challenger's is refused the same way before a byte is read.
-    A stream that reads no coins (`All`, or one a sampler draws for) needs none."""
+    refuses (`NO_OWN_COINS`), and so does one that reads no coins given any. A stream that reads none takes none."""
     for coins in (None, V.coins, lambda n: b"\x07" * n, random.Random(0).randbytes):
         for spec in (_spec(), _spec(S.Law("bernoulli:1/2"))):
             with pytest.raises(ValueError) as e:
                 S.Stream(spec, PAIR, budget=1, delta=DELTA, challenger="c", coins=coins)
             assert str(e.value) == S.NO_OWN_COINS
-    reads: list[int] = []
-    every = S.Stream(_spec(S.All()), PAIR, budget=1, delta=DELTA, challenger="c", coins=lambda n: reads.append(n) or bytes(n))
-    with pytest.raises(ValueError) as e:
-        every.salt()
-    assert str(e.value) == S.NO_OWN_COINS and reads == [] and every.epoch_log == ()
+        if coins is not None:
+            with pytest.raises(ValueError, match="no coins of its own"):
+                S.Stream(_spec(S.All()), PAIR, budget=1, delta=DELTA, challenger="c", coins=coins)
     assert S.Stream(_spec(S.All()), PAIR, budget=1, delta=DELTA, challenger="c").digest
     assert S.Stream(_spec(), PAIR, budget=1, delta=DELTA, challenger="c", sampler=lambda law, n: [0, 1]).digest
 
@@ -712,14 +696,14 @@ def test_a_closure_widens_a_work_draw_only_and_stays_in_range():
     stream = _stream()
     reg = stream.register(_record(), _ports(6))
     assert _refused(lambda: stream.select(reg, closure=NEXT)) == ("closure",)
-    reads: list[int] = []
-    stream = _stream(_spec(S.Law("work:2"), public=(*STEP0, STRATUM)), coins=lambda n: reads.append(n) or b"\x07" * n)
+    ch = FC.Challenger()
+    stream = _stream(_spec(S.Law("work:2"), public=(*STEP0, STRATUM)), coins=ch)
     reg = stream.register(_record(law={"law": "work", "k": 2}, work_table=WORK), _ports(6), work_table=WORK)
     for bad in ({u: [6] for u in range(6)}, {6: [0]}, {u: [-1] for u in range(6)}, {u: ["1"] for u in range(6)},
                 [[1]] * 6):
         assert _refused(lambda: stream.select(reg, closure=bad)) == ("closure",)
-    assert reads == []
-    assert "closure" not in stream.select(reg, closure={}).draw and reads
+    assert not any(s.openings for s in ch.segments)
+    assert "closure" not in stream.select(reg, closure={}).draw and ch.segments[-1].openings
 
 
 @pytest.mark.parametrize("text", ["subset:2", "bernoulli:3/3", "stratified:2", "work:2"])
@@ -729,7 +713,9 @@ def test_the_default_draw_is_draw_first_on_the_challengers_bytes(text):
     table = WORK if text.startswith("work") else None
     closure = NEXT if table else None
     for seed in range(8):
-        stream = _stream(_spec(S.Law(text), public=(*STEP0, STRATUM)), coins=random.Random(seed).randbytes)
+        ch = FC.Challenger(str(seed))
+        stream = _stream(_spec(S.Law(text), public=(*STEP0, STRATUM)), coins=ch)
         reg = stream.register(_record(law=D.parse_law(text), work_table=table), _ports(6), work_table=table)
         draw = stream.select(reg, closure=closure)
-        assert dict(draw.draw) == T.draw_first(T.OwnRandomness(random.Random(seed).randbytes), draw.law, 6, closure)
+        read = b"".join(o.coin for o in ch.segments[-1].openings)
+        assert dict(draw.draw) == T.draw_first(T.OwnRandomness(T._on(read)), draw.law, 6, closure)

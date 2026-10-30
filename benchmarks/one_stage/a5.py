@@ -217,9 +217,8 @@ CHALLENGER = "a5.py on the auditor's challenger's coins"
 
 
 def stream_of(a: argparse.Namespace, mine: CS.Window, members: list[dict], want: dict, leaf_layer: str | None,
-              coins: Callable[[int], bytes]) -> tuple[S.Stream, dict | None]:
-    """The rank's `service.Stream` on ``coins`` (the challenger's, a `ChallengerCoins`, or the verifier's own, its
-    `challenger` naming which): its unit the window's templates in their order (the one
+              coins: CC.ChallengerCoins) -> tuple[S.Stream, dict | None]:
+    """The rank's `service.Stream` on the challenger's ``coins``: its unit the window's templates in their order (the one
     template's Definition where the window's query is `Q_template_instance`), the Spec's values the window's ports (a
     row-table window's `row-table` port a tree over its steps' roots, `service.ROOTS` over row-seg leaves), its public
     items what the registration shows (N, each template's stratum, the window, the leaf layer and each port's layout), its
@@ -293,7 +292,7 @@ def port_refusal(mine: CS.Window, draw: dict, port: int, ports: int | None) -> d
 
 
 def coins_draw(a: argparse.Namespace, rank: int, rec: dict, mine: CS.Window, members: list[dict], want: dict,
-               leaf_layer: str | None) -> tuple[S.Stream | None, S.Draw | None, dict | None, Callable[[int], bytes],
+               leaf_layer: str | None) -> tuple[S.Stream | None, S.Draw | None, dict | None, AC.RankCoins,
                                                 dict | None, dict | None, int | None]:
     """Rank ``rank``'s draw of record (`stream_of`): the stream registers the window under the TP run root (`register`, at
     the window's counts), and draws once (`select`: Lean's `Select.select` on the bytes read, then `check_draw`), on the
@@ -315,36 +314,8 @@ def coins_draw(a: argparse.Namespace, rank: int, rec: dict, mine: CS.Window, mem
     except (ValueError, AC.Ch.CoinError, V.LeanError) as e:
         refused = {"ok": False, "codes": ["stream"], "detail": {"stream": str(e)}}
     finally:
-        segment = coins.drawn() if a.coins is not None else None
-    return stream, draw, counts, coins, segment, refused, coins.need if a.coins is not None else None
-
-
-def verifier_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts: dict | None, coins: AC.VerifierCoins,
-                     rec: dict, mine: CS.Window, members: list[dict], want: dict, leaf_layer: str | None,
-                     sessions: list[str], verdicts: dict, statement: dict, given: dict) -> tuple[dict | None, dict, dict]:
-    """The sample's outcome of record on the verifier's own coins: its proof delivered (`Stream.deliver`) and its outcome
-    (`Stream.outcome`, ``given`` its proved units, instances, served units and session roots) with no coins' evidence,
-    whose audit record fails `run` unless the Lean verifier of record's whole run (`Run.run`, `coin_source` verifier, its
-    window the TP run root) is the Python's. Then the refusals that apply to the verifier's coins
-    (`a5_coins.verifier_negatives`), each its own stream's on the honest draw's bytes or the honest stream's. -> (the audit
-    record, None for a late proof or an outcome the stream refuses or holds pending; the negatives; the coins' record)."""
-    def outcome(s: S.Stream, d: S.Draw, evidence: dict | None) -> tuple[S.Outcome, dict | None]:
-        late = s.deliver(d, sessions)
-        return (late if late is not None else s.outcome(d, verdicts, statement, coins=evidence, **given)), s.records[-1]["audit"]
-
-    try:
-        o, result = outcome(stream, draw, None)
-        told = {"stream": stream.digest, "record": o.record, "accepted": o.accepted, "codes": list(o.verdict.codes)}
-    except (S.Refused, S.Pending) as e:
-        result, told = None, {"stream": stream.digest, "accepted": False, "refused": AC._refusal(e)}
-    neg = AC.verifier_negatives(
-        lambda c: stream_of(a, mine, members, want, leaf_layer, c)[0],
-        lambda s: s.register(rec, want, leaf_layer=leaf_layer, window_root=a.window_root, counts=counts, work_table=mine.work_table),
-        stream, coins, draw, outcome, a.window_root, output_closure(a, mine.population))
-    checks = (result or {}).get("checks") or {}
-    record = {"source": stream.coin_source, "challenger": stream.challenger, "read": bytes(coins.read).hex(), "outcome": told,
-              "run": None if result is None or not result["verifiers"]["agree"] else checks.get("run", {"ok": True})}
-    return result, neg, record
+        segment = coins.drawn()
+    return stream, draw, counts, coins, segment, refused, coins.need
 
 
 def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts: dict | None, rec: dict, mine: CS.Window,
@@ -518,7 +489,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         raise SystemExit(f"--plain: {why}")
     if not streamed(a) and law.get("law") != "subset":
         raise SystemExit(f"a5 draws by the subset law with Lean's own coins; the partition file's is {law}: draw it through "
-                         "a rank's service.Stream (--challenger or --coins verifier, a TP Commit)")
+                         "a rank's service.Stream (--challenger, a TP Commit)")
     drawn_law = D.derive(program, query, law, table)
     if (why := output_refusal(a, mine, drawn_law)) is not None:
         summary["refused"] = why

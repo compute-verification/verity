@@ -29,8 +29,9 @@ NORM_TAP_SO = "/workspace/research/vllm-composed-h200int8/norm_tap/build/verity_
 # itself); the prover and the Lean verifier run on the serving node after the lease ends. The endpoint serves PoUW's H1 with
 # each sampling block's coins from a session of its own on vy-challenger-1's gate (H1_GATE, the gate key of the node's
 # research user; H1_PEER the node); `--env MAIN_SHA=SHA` also holds the gate's pins to main's first-parent line from SHA.
-# The sampled proofs' coins are the Lean verifier's own unless PP_CHALLENGER names the live challenger
-# (`--env PP_CHALLENGER=gate:USER@HOST` with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY).
+# The sampled proofs' coins are a local development challenger session's on the node unless PP_CHALLENGER names the
+# live challenger (`--env PP_CHALLENGER=gate:USER@HOST` with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY); the verifier
+# draws none of its own.
 node = "vy-dc-h200"
 research = ["--cwd", "clone", "--timeout", "6h"]
 env = { H1_GATE = "ssh -i ~/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84", H1_PEER = "vy-dc-h200" }

@@ -47,24 +47,22 @@ proves with the sampled proof blocks.
 From the selection rule to the sample object it is `selection_law`, `draw.derive` and `select_draw`, which the Lean
 verifier's `SampledProofs.Select` ports, held to them by its difftest on fixed coins.
 
-**The salt and the registration deadline.** `Stream.salt` issues the epoch's salt coin once, from the challenger's own
-coins, and reads its release on the challenger's clock (`salted_at`). `Stream.salt_released` instead records a salt
-released elsewhere (PoUW's epoch coin, shared by one stream per level) with its release on the same clock, which can't
-be later than the clock's reading now (`released-later`); either is the epoch's one salt. Under `Check.registration_deadline` (seconds on
+**The salt and the registration deadline.** The epoch's one salt is a challenger's coin: `Stream.salt_released`
+records it (PoUW's epoch coin, shared by one stream per level) with its release on the stream's clock (`salted_at`),
+which can't be later than the clock's reading now (`released-later`); the stream issues none of its own. Under `Check.registration_deadline` (seconds on
 that clock from the release), `register` reads the receipt (`received_at`) first and refuses a registration received
 later than the deadline, or before any salt, as `late-registration`, whatever it holds. That is one visible failure,
 never retried, and it ends the epoch: the stream receives no registration after it (`epoch-ended`) and never reissues
 the salt (`salted`). It is the rule of `Pouw.AcceptsBy` (`Security/Definitions/Pouw/Game/Deadline.lean`), with `ts` =
 `salted_at`, `tr` = `received_at` and `td` = `ts` + the deadline. The readings are the challenger's own: the stream's
 epoch log (`Stream.epoch_log`) and each `Registration` carry them, and neither the receipt nor an outcome's record does.
-`salt(n=64)` is `n` bytes of the challenger's coins, read in order with the draws'. A level's stream created at its
-first registration still measures from the epoch's release. A salt that isn't non-empty bytes, or a release that isn't a
-finite number, raises `ValueError`, and after the epoch ends a salt of either kind is refused (`epoch-ended`). The epoch
-log holds `{"event": "salt", "salt", "salted_at"}` (with `"external": true` from `salt_released`), then each
+A level's stream created at its first registration still measures from the epoch's release. A salt that isn't non-empty
+bytes, or a release that isn't a finite number, raises `ValueError`, and after the epoch ends a salt is refused
+(`epoch-ended`). The epoch log holds `{"event": "salt", "salt", "salted_at", "external": true}`, then each
 `{"event": "registration", "order", "registration", "salted_at", "received_at"}` or `{"event": "late-registration",
 "salted_at", "received_at"}`. With no registration deadline `register` reads no clock and logs nothing to the epoch log.
 
-**No retries.** The salt is issued or recorded once (`salt`, `salt_released`). A registration is sampled once, after its receipt (`select`); its
+**No retries.** The salt is recorded once (`salt_released`). A registration is sampled once, after its receipt (`select`); its
 proof is delivered once (`deliver`); its outcome is final (`outcome`), and nothing
 resamples. A proof delivered after `Check.proof_deadline` (seconds on the challenger's clock, from the sample) is a reject,
 and so is a sample whose proof is not delivered by then: a `Stream` refuses a check without a proof deadline, so every sample
@@ -291,7 +289,7 @@ class Check:
     the auditor reads. `deadline`: a timed session's (PoUS's rounds). `proof_deadline`: seconds on the challenger's clock
     from the sample; a proof delivered later, or none by then, is a reject (`late`), and a `Stream` refuses a check
     without one. `registration_deadline`: seconds on the challenger's clock from
-    the salt coin's release (`Stream.salt`, or `Stream.salt_released`'s `released_at`); a registration received later,
+    the salt coin's release (`Stream.salt_released`'s `released_at`); a registration received later,
     or before any salt, is refused (`late-registration`) and ends the epoch."""
 
     program: str | tuple[str, ...]
@@ -1122,7 +1120,7 @@ class Stream:
     the stream's digest names: the verifier has no coins of its own, so there is no default, and a stream whose
     selection reads coins refuses any other source (`NO_OWN_COINS`). Every outcome's run by the verifier needs the
     coins' evidence (`outcome`'s `coins`), refusing a sample without it. A stream that reads no coins (`All`, or one a
-    `sampler` draws for) needs none and reads none it is given. `clock` is its clock in seconds; tests inject both, the coins from a challenger of
+    `sampler` draws for) takes none. `clock` is its clock in seconds; tests inject both, the coins from a challenger of
     their own. `sampler`, when given, draws instead of the coins (`flock-verify draw` in a process of its own, say), never
     beside the challenger's: it takes the challenger's sampling design and N, and its sample is held to them like any
     other. `prover`, when given, is the identity the challenger registered the stream's prover under
@@ -1130,8 +1128,8 @@ class Stream:
     (`binding`, `registration.check`'s): its window names both, and a window salt is bound to them, so a tile seeded for
     one prover's stream is refused in any other.
 
-    A stream runs one epoch with one salt: `salt` issues it from the coins, or `salt_released` records one released
-    elsewhere with its release, and under `Check.registration_deadline` every registration is received within the
+    A stream runs one epoch with one salt, a challenger's coin released elsewhere: `salt_released` records it with its
+    release, and under `Check.registration_deadline` every registration is received within the
     deadline of that release, or the epoch ends (`ended`) at the first that isn't. `epoch_log` holds the challenger's
     clock readings.
 
@@ -1176,9 +1174,10 @@ class Stream:
             raise ValueError(f"delta is a float in (0, 1), not {delta!r}")
         if not (type(rounds) is int and 1 <= rounds <= ROUNDS):
             raise ValueError(f"a session covers 1 to {ROUNDS} rounds, not {rounds!r}")
-        if isinstance(coins, ChallengerCoins) and sampler is not None:
+        if coins is not None and sampler is not None:
             raise ValueError("a stream drawing from the challenger's coins takes no sampler, which would draw instead")
-        if not (isinstance(coins, ChallengerCoins) or sampler is not None or isinstance(spec.selection, All)):
+        if not (isinstance(coins, ChallengerCoins) or coins is None and (sampler is not None
+                                                                          or isinstance(spec.selection, All))):
             raise ValueError(NO_OWN_COINS)
         self.spec, self.unit, self.budget, self.delta, self.challenger = spec, unit, budget, delta, challenger
         self.templates = None if isinstance(unit, SpecializedDefinition) else units
@@ -1187,7 +1186,7 @@ class Stream:
         self.digest = _sha512({"format": STREAM, "spec": spec.digest(), "budget": budget, "delta": delta,
                                "challenger": challenger, **({"rounds": rounds} if rounds > 1 else {}),
                                **({"prover": prover} if prover is not None else {}),
-                               **({"coins": "challenger"} if isinstance(coins, ChallengerCoins) else {})})
+                               **({"coins": "challenger"} if coins is not None else {})})
         self.binding = None if prover is None else R._binding({"stream": self.digest, "prover": prover})
         self._params = {"budget": budget, "rounds": rounds,
                         "registration_deadline": _reading(spec.check.registration_deadline),
@@ -1317,35 +1316,14 @@ class Stream:
         outcome as it may (`open`): `rounds`, and never more than `budget` minus its failures."""
         self._held(self._decide({"op": "ready"}))
 
-    def salt(self, n: int = 64) -> bytes:
-        """The epoch's salt coin: `n` bytes of the challenger's own coins (`OwnRandomness`, in order with the samples'
-        reads), issued once, and only from a `coins.ChallengerCoins` (`ValueError`, `NO_OWN_COINS`, before any byte is
-        read). Its release is read on the challenger's clock (`salted_at`) and logged (`epoch_log`);
-        `Check.registration_deadline` counts from it. Raises `Refused`: `salted` (the epoch has a salt, from `salt` or
-        `salt_released`: nothing resamples it) or `epoch-ended` (the epoch ended before any salt)."""
-        if not (type(n) is int and n >= 1):
-            raise ValueError(f"a salt is a positive number of bytes, not {n!r}")
-        if not isinstance(self._coins, ChallengerCoins):
-            raise ValueError(NO_OWN_COINS)
-        got: dict[str, Any] = {}
-
-        def at() -> float:
-            got["salt"] = OwnRandomness(self._coins).read(n)
-            got["salted_at"] = self._clock()
-            return float(got["salted_at"])
-        self._held(self._decide({"op": "salt"}, {"at": at}))
-        self._salted_at = got["salted_at"]
-        self._epoch_log.append({"event": "salt", "salt": got["salt"].hex(), "salted_at": self._salted_at})
-        return got["salt"]
-
     def salt_released(self, salt: bytes, released_at: float) -> None:
-        """The epoch's salt when it was released elsewhere (PoUW's epoch coin, shared by one stream per level):
-        `released_at` is its release, read on this stream's clock. It is then the epoch's salt as `salt`'s is, and
-        `Check.registration_deadline` counts from `released_at`, so a stream created after the release (a level's, at
-        its first registration) still measures from it. Logged with `"external": true`. Raises `ValueError` for a salt
-        that isn't non-empty bytes or a release that isn't a finite number, and `Refused`: `salted` (the epoch has a
-        salt), `epoch-ended`, or `released-later` (`released_at` after the clock's reading now: a release is never in
-        the future)."""
+        """The epoch's salt, a challenger's coin released elsewhere (PoUW's epoch coin, shared by one stream per level),
+        once: the stream issues none of its own. `released_at` is its release, read on this stream's clock, and
+        `Check.registration_deadline` counts from it, so a stream created after the release (a level's, at its first
+        registration) still measures from it. Logged with `"external": true`. Raises `ValueError` for a salt that isn't
+        non-empty bytes or a release that isn't a finite number, and `Refused`: `salted` (the epoch has a salt: nothing
+        redraws it), `epoch-ended`, or `released-later` (`released_at` after the clock's reading now: a release is never
+        in the future)."""
         if not (isinstance(salt, bytes) and salt):
             raise ValueError(f"a released salt is non-empty bytes, not {salt!r}")
         if not (isinstance(released_at, (int, float)) and not isinstance(released_at, bool) and math.isfinite(released_at)):
@@ -1491,7 +1469,7 @@ class Stream:
         return [self._log[i] for i in sorted(at)]
 
     def select(self, registration: Registration, *, closure: Mapping[int, Sequence[int]] | None = None) -> Draw:
-        """The draw, once per registration, from the challenger's own randomness after the receipt: indices in [0, N) by
+        """The draw, once per registration, from the auditor's challenger's coins after the receipt: indices in [0, N) by
         the selection rule's sampling design (`select_draw`; `All` draws every proof block and reads no coins). `closure` is the challenger's closure map
         (`{unit: [units proved with it]}` over [0, N), from its own layout), for a work sampling design only: the draw carries the
         drawn proof blocks' closure (`coins.closure_of`), which `draw.proved` and `draw.check_proved` count. The draw of
@@ -1711,6 +1689,6 @@ def _why(symbol: str, audit: Mapping[str, Any] | None,
 
 
 __all__ = ["ACCEPT", "All", "Check", "Draw", "Exhaustive", "Fleet", "HALTED", "HIDING", "KINDS", "LATE", "Law", "Outcome",
-           "PHASES", "Pending", "Public", "REJECT", "ROOTS", "ROUNDS", "Refused", "Registration", "SCHEME", "SOURCES", "Selection",
+           "NO_OWN_COINS", "PHASES", "Pending", "Public", "REJECT", "ROOTS", "ROUNDS", "Refused", "Registration", "SCHEME", "SOURCES", "Selection",
            "Sequential", "Session", "Spec", "Stream", "Terms", "Value", "check_public", "check_verdicts",
            "select_draw", "selection_law"]

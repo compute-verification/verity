@@ -46,7 +46,7 @@ class SignedRun(Run):
         super().__init__(tmp_path, clocks=None)
         self.lw = replace(self.lw, certified_clocks=tuple(sign(self.issuer)))
         self.stream = self.lw.stream(budget=8, delta=2.0 ** -40, challenger="challenger-test",
-                                     coins=lambda n: b"\x07" * n, clock=lambda: 0.0)
+                                     clock=lambda: 0.0)
 
 
 def _signed(syncs, link=LINK):

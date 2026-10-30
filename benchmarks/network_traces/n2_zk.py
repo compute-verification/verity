@@ -189,7 +189,7 @@ def link_windows(run: Path, edit=None, clock=None, warden: bool = False) -> Simp
             expect=int(word == 0b11 and others), statement=None))
     rd = SimpleNamespace(lw=lw, plan=plan, syncs=syncs, windows=out, issuer_refused=refused, advice=None)
     if clock is not None:
-        st = lw.stream(budget=plan["windows"], delta=cs.DELTA, challenger="n2-zk", coins=cs._no_coins, clock=clock)
+        st = lw.stream(budget=plan["windows"], delta=cs.DELTA, challenger="n2-zk", clock=clock)
         previous = None
         for x in out:
             reg = lw.register(st, lw.registration(x.opening, previous))
@@ -480,7 +480,7 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
     lw = rd.lw
     k = getattr(a, "draw", 0) or None
     stream = lw.stream(budget=rd.plan["windows"], delta=getattr(a, "delta", None) or cs.DELTA, challenger="n2-zk",
-                       coins=cs._no_coins, clock=time.monotonic)
+                       clock=time.monotonic)
     gpu = getattr(a, "gpu", False)
     # the ZK server rechecks a witness the host computed, so a device prover takes the host's, as n2_tie_zk's does
     env = {**firewall(M, sg), **({"FC_HOST_WITNESS": "1"} if gpu else {})}

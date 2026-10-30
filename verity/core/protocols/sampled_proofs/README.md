@@ -156,7 +156,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
     1.03 s of the certifier's, the offset ACCEL's timing allows.
 - **The Python.** `verity.core.protocols.sampled_proofs.one_stage` is the one-stage audit's reference: `registration`,
   `draw` (the draw's checks, not a sampler), `partition`, `audit` and `verdict`. `consumers` reads its profile. `service` is the proof system over it, whose `Stream`
-  draws from the challenger's own randomness as `coins.draw_first` does. `coins` is the verifier's randomness, and
+  draws from the challenger's coins as `coins.draw_first` does. `coins` holds the draws and the challenger's coins, and
   `plan` holds verification plans over IR Programs. `optimize`, `candidates` and
   `costfit` plan a sampling design (`benchmarks/sampling_plan`).
 - **The Lean-generated vectors.** `tests/fixtures/exfiltration_lean.json` is `audit_exfiltration` and
@@ -503,7 +503,7 @@ log's history by `tests/test_service_history.py`, sessions by `tests/test_servic
 
 The verifier draws no coins of its own. A draw's coins are the auditor's challenger's, read from its log: a stream whose
 selection reads coins takes only a `coins.ChallengerCoins` (`service.NO_OWN_COINS` otherwise; a stream of `All`, or one a
-`sampler` draws for, needs none and reads none it is given), and the Lean verifier's run (`Run.run`) refuses a draw that read coins without the
+`sampler` draws for, takes none), and the Lean verifier's run (`Run.run`) refuses a draw that read coins without the
 challenger's evidence, and any `coin_source` but the challenger's. `coins.OwnRandomness` reads the challenger's bytes with
 the Lean verifier's samplers (`Flock.Draw`), with no hash, no derivation and no beacon, after the registration it follows.
 `draw_first` reads the bytes as `Flock.Draw.drawWith` does. Nothing derives a draw, the proof system's included, except

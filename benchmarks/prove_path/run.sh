@@ -35,7 +35,7 @@
 #     honest subset:4, forged subset:8 (every unit drawn); with PP_PLAIN=1, stratified:4 and stratified:8.
 #   PP_PLAIN=1: plain Flock sessions, not --zk (prove_path.py audit --plain, a5's --plain): one table under a stratified
 #     draw, until multi-table coverage lands, so each partition's law must be stratified:K over a window of one member.
-#   PP_JOBS=N ranks at once (a GLM-5.3 rank: its bundle window ~2.5 min and ~11 GB, its audit ~10 GB); PP_RANKS=0,3 those ranks
+#   PP_JOBS=N ranks at once (the audit's default every audited rank, one challenger session; a GLM-5.3 rank: its bundle window ~2.5 min and ~11 GB, its audit ~10 GB); PP_RANKS=0,3 those ranks
 #   only; PP_FORGE=MEMBER:UNIT the forged unit (default 0:1); PP_ONLY=honest|forged that run alone; PP_FLOCK_WORK=DIR keeps M0's
 #   build across runs. The Llama honest audit peaks at ~20 GB (one process), its forged one well under.
 #   PP_TRANSFER_GATES="T ..." the templates the registered compiler lists as holding transfer gates (--transfer-gate, both
@@ -80,26 +80,24 @@ wait $LP || { tail -40 $O/build-lean.log; exit 7; }
 LEAN=$REPO/verity/core/service/flock/.lake/build/bin/flock-verify; FWL=${LEAN%/*}/flock-firewall
 (cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
 sha256sum $BIN $LEAN $FWL | tee $O/binaries.sha256
-PP_CHALLENGER=${PP_CHALLENGER:-local}   # the sample's coins are a challenger's: a local development session unless named
 
 for I in 256 1536 8192 ${PP_SETS:-}; do   # the verifier's lowering: a synthetic input set per template (its values are never read)
   case $I in */*) SUB=$I SET=${I//\//_};; *) SUB=silu-mul-v2/i$I/bf16 SET=i$I;; esac
   $PY -m verity_numerical.bench.generate --subcircuit $SUB --n 4 --seed 1 --out $W/sets/$SET > $O/sets-$SET.log 2>&1 || exit 9
 done
 TG=(); for t in ${PP_TRANSFER_GATES:-}; do TG+=(--transfer-gate "$t"); done
-CH=()
-if [ -n "${PP_CHALLENGER:-}" ]; then   # the verifier's own copy of main's first-parent history, which the session's pin must be on
-  UNSHALLOW=(); [ "$(git rev-parse --is-shallow-repository)" = true ] && UNSHALLOW=(--unshallow)
-  git fetch -q "${UNSHALLOW[@]}" origin +refs/heads/main:refs/remotes/origin/main > $O/fetch-main.log 2>&1 \
-    || git fetch -q "${UNSHALLOW[@]}" origin +refs/remotes/origin/main:refs/remotes/origin/main >> $O/fetch-main.log 2>&1 \
-    && git rev-list --first-parent refs/remotes/origin/main > $O/main.txt || { tail -5 $O/fetch-main.log; exit 4; }
-  CH=(--challenger $PP_CHALLENGER --main $O/main.txt)
-  case $PP_CHALLENGER in gate:*)
-    [ -n "${PP_PEER:-}" ] && [ -n "${PP_CHALLENGER_KEY:-}" ] || { echo "PP_CHALLENGER=gate:… needs PP_PEER and PP_CHALLENGER_KEY"; exit 4; }
-    [ -n "${PP_ONLY:-}" ] || { echo "PP_CHALLENGER=gate:… opens the window's root once: run one arm, PP_ONLY=honest|forged"; exit 4; }
-    CH+=(--peer $PP_PEER --challenger-key $PP_CHALLENGER_KEY ${PP_GATE_KEY:+--gate-key $PP_GATE_KEY});;
-  esac
-fi
+PP_CHALLENGER=${PP_CHALLENGER:-local}
+# the verifier's own copy of main's first-parent history, which the session's pin must be on
+UNSHALLOW=(); [ "$(git rev-parse --is-shallow-repository)" = true ] && UNSHALLOW=(--unshallow)
+git fetch -q "${UNSHALLOW[@]}" origin +refs/heads/main:refs/remotes/origin/main > $O/fetch-main.log 2>&1 \
+  || git fetch -q "${UNSHALLOW[@]}" origin +refs/remotes/origin/main:refs/remotes/origin/main >> $O/fetch-main.log 2>&1 \
+  && git rev-list --first-parent refs/remotes/origin/main > $O/main.txt || { tail -5 $O/fetch-main.log; exit 4; }
+CH=(--challenger $PP_CHALLENGER --main $O/main.txt)
+case $PP_CHALLENGER in gate:*)
+  [ -n "${PP_PEER:-}" ] && [ -n "${PP_CHALLENGER_KEY:-}" ] || { echo "PP_CHALLENGER=gate:… needs PP_PEER and PP_CHALLENGER_KEY"; exit 4; }
+  [ -n "${PP_ONLY:-}" ] || { echo "PP_CHALLENGER=gate:… opens the window's root once: run one arm, PP_ONLY=honest|forged"; exit 4; }
+  CH+=(--peer $PP_PEER --challenger-key $PP_CHALLENGER_KEY ${PP_GATE_KEY:+--gate-key $PP_GATE_KEY});;
+esac
 PLAIN=(); LAW=subset; [ -n "${PP_PLAIN:-}" ] && PLAIN=(--plain) LAW=stratified
 M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/ml/flock/python:$REPO/integrations/vllm
 export RAYON_NUM_THREADS=$(nproc)

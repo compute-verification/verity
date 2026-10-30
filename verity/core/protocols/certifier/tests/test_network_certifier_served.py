@@ -74,7 +74,7 @@ class Run:
         self.lw = LinkWindows(LINK, P, SYNC_SET, self.signer.public_key(), "r-served-test", signers.SESSION,
                               proof_deadline=60.0, served=profile)
         self.stream = self.lw.stream(budget=8, delta=2.0 ** -40, challenger="challenger-test",
-                                     coins=lambda n: b"\x07" * n, clock=lambda: 0.0)
+                                     clock=lambda: 0.0)
         self.previous = None
 
     def round(self, w, egress, ingress) -> S.Outcome:

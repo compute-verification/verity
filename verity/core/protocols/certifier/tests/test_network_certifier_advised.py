@@ -78,7 +78,7 @@ class Run:
                               ingress=PIN, proof_deadline=60.0, advised=AD.AdvisedProfile(WINDOWS, FRAMING, own),
                               ties=ties, clocks=clocks)
         self.stream = self.lw.stream(budget=8, delta=2.0 ** -40, challenger="challenger-test",
-                                     coins=lambda n: b"\x07" * n, clock=lambda: 0.0)
+                                     clock=lambda: 0.0)
         self.previous = None
 
     def draw(self, w, egress, ingress):

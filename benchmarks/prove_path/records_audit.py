@@ -51,7 +51,7 @@ them out of an audit (its summary says so), for a run of several audits of one c
 
     records_audit.py audit --window DIR --law L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512) --run HEX \\
         [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
-        --out DIR [--delta D] [--port P] [--ports N] [--forged] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
+        --out DIR [--delta D] [--port P] [--ports N] [--forged] --challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE \\
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--skip-negatives]
     records_audit.py count --circuit FILE --bits N [--catalog MODULE ...] [--pin NAME=ROOT ...] [--pins FILE ...] [--registration FILE]
 
@@ -677,7 +677,7 @@ def audit(a: argparse.Namespace) -> int:
     more = {} if a.skip_negatives else negatives(w, held, doc, out / "negatives")
     a.ports = a.ports if a.ports is not None else max(1, len(mine.members))
     a.port = a.port if a.port is not None else free_ports(a.ports)
-    a.coins, a.verifier_coins, a.window_root, a.rule = None, not a.challenger, mine.run, a.law
+    a.coins, a.window_root, a.rule = None, mine.run, a.law
     a.compose_cache = None
     a.outputs = output_class(doc, json.loads(Path(a.outputs).read_text()) if a.outputs else (), own=set(ties) | set(untied))
     if a.forged:

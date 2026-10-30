@@ -819,7 +819,8 @@ class LinkWindows:
         return S.Spec((S.Value(VALUE, SCHEMA, "serve"),), S.All(), check, public, context)
 
     def stream(self, **kwargs: Any) -> S.Stream:
-        """The challenger's stream for this link (`S.Stream`'s budget, delta, challenger, coins and clock)."""
+        """The challenger's stream for this link (`S.Stream`'s budget, delta, challenger and clock): it proves every
+        link-window (`All`), so it takes no coins."""
         return S.Stream(self.spec, self.unit, **kwargs)
 
     def domain(self, window: int) -> CommitmentDomain:

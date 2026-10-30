@@ -92,8 +92,7 @@ def _warden(tmp):
     occupancy profile."""
     run = plain.Run(tmp)
     run.lw = lw = replace(run.lw, occupancy=(None, None), warden=SVC.WardenProfile(3, plain.WARDEN_DIGEST))
-    run.stream = lw.stream(budget=8, delta=plain.DELTA, challenger="challenger-test", coins=lambda n: b"\x07" * n,
-                           clock=run.clock)
+    run.stream = lw.stream(budget=8, delta=plain.DELTA, challenger="challenger-test", clock=run.clock)
     warden = lambda d, r: run.issuer.certify(r, d, plain.PARAMS, plain.WARDEN_DIGEST)
     opening = lw.commit(0, warden(plain.EGRESS, plain.egress_records()[0]),
                         warden(plain.INGRESS, plain.ingress_records()[0]), plain.SALTS[0])

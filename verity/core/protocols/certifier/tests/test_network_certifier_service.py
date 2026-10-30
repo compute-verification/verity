@@ -72,7 +72,7 @@ class Run:
     stream. The link's occupancy profile is the honest run's on egress and none on ingress unless `occupancy` says. The
     certifier's coins give each record a fresh salt, the same in every run."""
 
-    def __init__(self, tmp_path, *, proof_deadline=60.0, coins=b"\x07", occupancy=None) -> None:
+    def __init__(self, tmp_path, *, proof_deadline=60.0, occupancy=None) -> None:
         self.tmp = tmp_path
         self.signer = signers.signer(tmp_path)
         drawn = itertools.count(0xc0)
@@ -81,7 +81,7 @@ class Run:
                               proof_deadline=proof_deadline,
                               occupancy=occupancy or (honest_occupancy()[0], None))
         self.clock = Clock()
-        self.stream = self.lw.stream(budget=8, delta=DELTA, challenger="challenger-test", coins=lambda n: coins * n,
+        self.stream = self.lw.stream(budget=8, delta=DELTA, challenger="challenger-test",
                                      clock=self.clock)
         self.previous = None
 
@@ -690,8 +690,7 @@ def test_a_warden_link_holds_both_heads_to_the_wardens_digest_and_reads_no_sync(
     and its two ends are one grid."""
     run = Run(tmp_path)
     run.lw = lw = replace(run.lw, occupancy=(None, None), warden=SVC.WardenProfile(3, WARDEN_DIGEST))
-    run.stream = lw.stream(budget=8, delta=DELTA, challenger="challenger-test", coins=lambda n: b"\x07" * n,
-                           clock=run.clock)
+    run.stream = lw.stream(budget=8, delta=DELTA, challenger="challenger-test", clock=run.clock)
     assert lw.spec.public == SVC.PUBLIC_WARDEN and lw.charge == 0.0 and lw.windows == 3
     assert lw.kind == "warden" and SVC.OF_RECORD[lw.kind] == "lean"
     items = {p.item for p in lw.spec.public}
