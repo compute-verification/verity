@@ -131,6 +131,25 @@ Everything else is engineering on parts we have.
   - Coverage κ is 11–85% of forward MACs at 32K. There's no HBM or network claim, and the work is certified, not its
     usefulness.
 
+- **HT-PREMISE** (note:compute-research/20261030T2141Z-report-hardness-premise; exact integer routes on CPU, costs in
+  W1, nothing on a GPU; art:b3c905d9…):
+  - **P1 is false at b = 1:** R's low bit through a b1 MMA, plus Strassen on the rest, costs 0.957–0.993 at
+    K ≥ 8,192 on the H200.
+  - **It is false at w = 8 for any b:** Strassen mod 2⁸ costs about 0.77.
+  - **b = 2, w = 16 holds against every route found, but by 1.8% at K 53k and 11.6% at K ≤ 8,192 on the H200** (0.9% and
+    6.4% on sm_120). The margin comes *only* from additions and accumulator drains; counting tensor work alone, a
+    depth-6 Strassen costs 0.878.
+    - So M3 must price additions, or cap the scheme depth at 4.
+    - Recommend b = 2, w = 16, and K ≤ 8,192 per committed product.
+  - **P2 as worded is false;** it is part of P1.
+  - **P1, minimal:** per entry; average over R *and* E; worst case over x and the program; unbounded preprocessing; a
+    2⁻ʷ guessing term; stated on the seeded SHA-512 expansion. Tables lose at least 5×.
+  - **P1 splits** into a finite check over bilinear schedules with additions priced (extending `NaiveStrassen.lean`) and a
+    conjecture for every other kind of program.
+  - **Correction to HT-REDML and to the coordinator:** the H200 runs b1 at 8× s8 (CORE §2a, measured: b1 wgmma).
+    A-LSB is therefore credited at most **0.38 at b = 2 and about 0.8–0.85 at b = 4** on the H200, not a full unit.
+  - Upper bounds only: the flip-graph sweep and the addition-priced schedule search didn't finish.
+
 ## Lanes (notes: `lanes/compute-research/<ts>-report-hardness-<lane>.md`)
 
 | lane | modules | first deliverable |
@@ -158,7 +177,7 @@ Everything else is engineering on parts we have.
    init" are already 4–9× over the 3× kill line, and A at the rank the ε budget allows is +0.68 nats on the toy.
    The real-scale test moves to **A-LSB** (W = 2ᵇ·H + L, with L public random low bits): a QAT pass on an existing open
    model, which is cheap.
-2. **A-LSB's "a full unit on the H200 at b = 2" rests on a recalled fact:** that sm_90a has no fast b1/s4 tensor path.
+2. **(Resolved 21:45Z by HT-PREMISE: the H200 has b1 at 8×, so b = 2 earns 0.38 and b = 4 about 0.8.) A-LSB's "a full unit on the H200 at b = 2" rested on a recalled fact:** that sm_90a has no fast b1/s4 tensor path.
    It defines the credit, so HT-PREMISE must *measure* mma.sync .b1 and .s4 (and any packing route) on an H200 before
    anyone states the credit.
 3. **"Costs nothing" is a toy** (d 256, TinyStories, CPU). Label it that way until the real-scale QAT run.
