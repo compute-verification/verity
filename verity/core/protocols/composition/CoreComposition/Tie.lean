@@ -1,26 +1,27 @@
 /-
-A tie: components of a composition that must name one value, each read off its case's commitment, the way onsite's
-space and bandwidth components must be on one store (`Core.Onsite.store`). `tiedSame` is `same` with ties: once `same`
-doesn't reject, components of a tie that didn't all name one value reject whatever the components answer, and any
-rejection of `same`'s, a component's, the record's or the cases' misfit, stands. Its parameters, commitment and evidence
-are `same`'s.
+A tie: components of a composition that must name one value, each reading the values it names off its case, the way
+onsite's space and bandwidth components must be on one store (`Core.Onsite.store`) and each window of remote's PoUW
+period must name the policy's record (`Core.Remote.windows`). `tiedSame` is `same` with ties: once `same` doesn't
+reject, components of a tie that didn't all name one value reject whatever the components answer, and any rejection of
+`same`'s, a component's, the record's or the cases' misfit, stands. Its parameters, commitment and evidence are
+`same`'s.
 -/
 import CoreComposition.Blobs
 
 namespace Core.Composition
 
-/-- The components `names` must all name one value, `what`, each as its function reads it off its case's commitment
-(`none`: that commitment doesn't decode, and the component rejects). -/
+/-- The components `names` must all name one value, `what`, each naming the values its function reads off its case
+(`none`: the case doesn't decode, and the component rejects). -/
 structure Tie where
   what : String
-  names : List (String × (ByteArray → Option ByteArray))
+  names : List (String × (Case → Option (List ByteArray)))
 
-/-- Why the components of the tie `t` didn't all name one value on the cases `ev`: the first whose value isn't the first
-one's, with both; `none` when they all named it, or when one of them has no case or names nothing. -/
+/-- Why the components of the tie `t` didn't all name one value on the cases `ev`: the first value that isn't the first
+one, with both; `none` when they all named it, or when one of them has no case or its case doesn't decode. -/
 def Tie.strays (t : Tie) (ev : List Case) : Option String :=
-  let named (n : String × (ByteArray → Option ByteArray)) : Option (String × ByteArray) :=
-    ((ev.find? fun (k : Case) => k.id == n.1).bind fun k => n.2 k.commitment).map (n.1, ·)
-  match t.names.mapM named with
+  let named (n : String × (Case → Option (List ByteArray))) : Option (List (String × ByteArray)) :=
+    ((ev.find? fun (k : Case) => k.id == n.1).bind n.2).map fun ds => ds.map (n.1, ·)
+  match (t.names.mapM named).map List.flatten with
   | some ((s, d) :: rest) => (rest.find? fun (x : String × ByteArray) => x.2 != d).map fun x =>
     s!"{t.what}: {s} committed {Flock.hexOf d}, {x.1} committed {Flock.hexOf x.2}"
   | _ => none
