@@ -46,7 +46,7 @@ open scoped ENNReal
 
 /-! ## The dense scheme -/
 
-/-- **Pinned as drafted** (`lean/submissions/dense/DenseMeetsDraft.lean`, `PousDense.dense_meets`; the scheme is
+/-- **Pinned as drafted** (`Security/Proofs/Pous/Dense/DenseMeets.lean`, `PousDense.dense_meets`; the scheme is
 in `Pous.Dense`).
 
  **The first end-to-end `Meets` with no named assumption** (`docs/p3-scheme.md` §4). The dense scheme on
@@ -80,9 +80,9 @@ fresh setup. As for every `Meets` here, `W` is fixed before the primitives are d
 `p3SchemeC 2384 B(220, 12)` meets the requirement with sequential reveal, `D = 10` rounds, `Q = 2^20` queries per
 answer, `k = 106` challenges and `ε = 2^-128`: it is correct, `|C| ≥ |W|`, within the space bound, and every
 `⌊ρ|C|⌋`-bit adversary is accepted with probability at most `δ + 2^-128`. Pinned as drafted
-(`lean/submissions/p3-concrete-multi/finals/P3ConcreteFinals.lean`; graded with the namespaces `PousX` renamed `Pous.X`, `grading/`, `PousP3ConcreteMulti.p3_meets_concrete_64_D10_unconditional`; here `Pous.SecurityProofs.P3ConcreteMeets64`).
-It rests on `PousP3Concrete.p3SegCharges` (`lean/submissions/p3-concrete/P3ChainSegCharges.lean`) through the ex post
-facto target `P3ChainEPF`, and on the proved chain certificate `p3ChainCert` (`X = 1` at `D = 10`). Red team: GO
+(`PousP3ConcreteMulti.p3_meets_concrete_64_D10_unconditional`; here `Pous.SecurityProofs.P3ConcreteMeets64`). It
+rests on `Pous.P3Concrete.p3SegCharges` through the ex post facto target `P3ChainEPF`, and on the proved chain
+certificate `p3ChainCert` (`X = 1` at `D = 10`). Red team: GO
 (`docs/lean-trusted-layer-review.md` §§50–51). Scope: as the section header.
 
 Frozen (no-function, hash): a `Meets` in an ideal model, which no Lean function computes. -/
@@ -94,8 +94,8 @@ def P3ConcreteMeets64 : Prop :=
 `p3SchemeNC 2384 B(220, 12) 971` meets the requirement with sequential reveal, `D = 10`, `Q = 2^20`, `k = 106` and
 `ε = 2^-128`. Security is joint over all 971 segments: one advice string for the whole store, and segment-by-segment
 bounds do not combine to this (`not_jointClassWeight`). Pinned as drafted
-(`lean/submissions/p3-concrete-multi/finals/P3ConcreteFinals.lean`; graded with the namespaces `PousX` renamed `Pous.X`, `grading/`,
-`PousP3ConcreteMulti.p3_meets_concrete_multi_64_D10_unconditional`; here `Pous.SecurityProofs.P3ConcreteMeets14GB`). It rests on `p3SegCharges` through
+(`PousP3ConcreteMulti.p3_meets_concrete_multi_64_D10_unconditional`; here `Pous.SecurityProofs.P3ConcreteMeets14GB`).
+It rests on `p3SegCharges` through
 `P3ChainEPFMulti` and the joint bridge (`PousP3ConcreteMulti.p3ChainEPFMulti_of_segCharges`), and on `p3ChainCert`.
 Red team: as `P3ConcreteMeets64` (GO, §50). Scope: as the section header.
 
@@ -106,8 +106,9 @@ def P3ConcreteMeets14GB : Prop :=
 
 /-- **Unconditional (no hypothesis): the fallback, P3 with a concrete `H` at `D = 12` on `B(220, 16)`, one
 segment.** `p3SchemeC 2384 B(220, 16)` meets the requirement with sequential reveal, `D = 12`, `Q = 2^20`, `k = 106`
-and `ε = 2^-128`. Pinned as drafted (`lean/submissions/p3-concrete-multi/finals/P3ConcreteFinals.lean`; graded with the namespaces `PousX` renamed `Pous.X`, `grading/`,
-`PousP3ConcreteMulti.p3_meets_concrete_64_D12_band16_unconditional`; here `Pous.SecurityProofs.P3ConcreteMeets64D12`), from `P3ChainEPF` and the certificate
+and `ε = 2^-128`. Pinned as drafted
+(`PousP3ConcreteMulti.p3_meets_concrete_64_D12_band16_unconditional`; here `Pous.SecurityProofs.P3ConcreteMeets64D12`),
+from `P3ChainEPF` and the certificate
 `p3ChainCert_band16`. Red team: as `P3ConcreteMeets64` (GO, §50). Scope: as the section header.
 
 Frozen (no-function, hash): a `Meets` in an ideal model, which no Lean function computes. -/
@@ -119,8 +120,7 @@ def P3ConcreteMeets64D12 : Prop :=
 
 Red team: GO (`docs/lean-trusted-layer-review.md` §§52–57). The proofs
 are in this package (`Pous.SecurityProofs.Band*`, `Pous.SecurityProofs.ChainDense*`, from
-`Security/Proofs/Pous/Chain/Flat.lean`), and each was graded PASS
-(`lean/submissions/sponge-dense/grading/GRADE.txt`).
+`Security/Proofs/Pous/Chain/Flat.lean`).
 
 The model is `Pous.Sponge.idealPerm (2·524288 + 512)`: one uniform permutation `Π₂` of `1049088` bits, queried both
 ways, so `D` and `Q` count `Π₂^{±1}` calls. `H` is the overwrite chain on `Π₂` (`Pous.Sponge.ovKey`), labels are 64 KiB
@@ -129,12 +129,12 @@ ways, so `D` and `Q` count `Π₂^{±1}` calls. `H` is the overwrite chain on `�
 Scope: the ideal-permutation model only. Lean does not prove anything about a concrete permutation, decode cost, the
 wall-clock-to-`Q` calibration, authentication, accounting or fresh setup. As for every `Meets` here, `W` is fixed
 before `Π₂` is drawn, and the salt is a parameter every statement quantifies over. The band needs in-degree `d ≥ D`:
-with `d + 1 ≤ D` it is broken (`BandGapAttack`, `lean/submissions/band-chain/BandChain.lean`). -/
+with `d + 1 ≤ D` it is broken (`BandGapAttack`, proved as `band_gap_attack`). -/
 
 /-- **Unconditional: the band scheme at 64 KiB.** For every in-degree `d ≥ 5` and salt, `chainBand (2^9) d` (512
 blocks of 64 KiB labels) meets the requirement with sequential reveal, `D = 5` rounds, `Q = 2^20` queries per answer,
-`k = 111` challenges and `ε = 2^-128`. Proof: `lean/submissions/sponge-dense/ChainEPFV6FinalBand64.lean`,
-`PousBandChain.band_meets_64_final`; here `Pous.SecurityProofs.BandChainMeets64`.
+`k = 111` challenges and `ε = 2^-128`. Proof: `Pous.BandChain.band_meets_64_final`; here
+`Pous.SecurityProofs.BandChainMeets64`.
 
 Frozen (no-function, hash): a `Meets` in an ideal model, which no Lean function computes. -/
 def BandChainMeets64 : Prop :=
@@ -162,7 +162,7 @@ def BandChainMeets64D12 : Prop :=
 (229,376 blocks of 64 KiB) meets the requirement at `D = 5`, `Q = 2^20`, `k = 111`, `ε = 2^-128`, both with the
 implementation's per-segment tags (`segDom salt`, segment `s` keyed by `salt ‖ u64(s)`, any 192-bit salt) and with one
 global salt and global indices (`dom salt`). One advice string covers the whole store. Proof:
-`ChainEPFV6FinalBand14.lean`, `PousBandMulti.band_meets_14_final`; here `Pous.SecurityProofs.BandMultiMeets14`.
+`Pous.BandMulti.band_meets_14_final`; here `Pous.SecurityProofs.BandMultiMeets14`.
 
 Frozen (no-function, hash): a `Meets` in an ideal model, which no Lean function computes. -/
 def BandMultiMeets14 : Prop :=
@@ -188,11 +188,9 @@ requirement at `D = 5`, `Q = 2^20`, `k = 111`, `ε = 2^-128`, both with the impl
 (`segDom salt`, segment `s` keyed by `salt ‖ u64(s)`, any 192-bit salt) and with one global salt and global indices
 (`dom salt`). One advice string covers the whole store. `2^64` is where `u64(s)` stops being injective, and the domains
 must be injective across segments: with a shared domain every `N ≥ 2` breaks (`shared_domain_breaks_fam`).
-At `N = 448` this is `BandMultiMeets14`, and at `N = 1` its global layout is `BandChainMeets64`. Red team: GO (the
-POUS store's `docs/lean-trusted-layer-review.md` §58 and
-`internal/p3-instantiation/band-family-pin-redteam-verdict.md`). Proof: the POUS store's
-`lean/submissions/band-multi/BandMultiFamilyFinal.lean`, `PousBandMulti.band_meets_family_final` (graded:
-`band-multi/family-pin/GRADE.txt`); here `Pous.SecurityProofs.BandMultiMeetsFamily`.
+At `N = 448` this is `BandMultiMeets14`, and at `N = 1` its global layout is `BandChainMeets64`. Red team: GO
+(`docs/lean-trusted-layer-review.md` §58). Proof: `Pous.BandMulti.band_meets_family_final`
+(`Security/Proofs/Pous/Chain/Family.lean`); here `Pous.SecurityProofs.BandMultiMeetsFamily`.
 
 Frozen (no-function, hash): a `Meets` in an ideal model, which no Lean function computes. -/
 def BandMultiMeetsFamily : Prop :=
@@ -207,8 +205,7 @@ def BandMultiMeetsFamily : Prop :=
 /-- **Unconditional: the overwrite-chain dense scheme at 64 KiB.** `chainDense (2^9)` (512 blocks of 64 KiB on the
 complete DAG) meets the requirement at `D = 5`, `Q = 2^20`, `k = 111`, `ε = 2^-128`. Not `DenseMeets` (the dense
 scheme with `H` a random oracle), and not `SpongeDense`'s `ChainDenseMeetsPinned` (`2^16` blocks of 1 KiB, `D = 64`).
-Proof: `ChainEPFV6FinalDense.lean`, `PousSpongeChain.chain_meets_64_final`; here
-`Pous.SecurityProofs.ChainDenseMeets64`.
+Proof: `PousSpongeChain.chain_meets_64_final`; here `Pous.SecurityProofs.ChainDenseMeets64`.
 
 Frozen (no-function, hash): a `Meets` in an ideal model, which no Lean function computes. -/
 def ChainDenseMeets64 : Prop :=
@@ -301,11 +298,11 @@ review's §48, which are in its docstring. The proofs are in this package (`Pous
 
 /-- **Unconditional: the band at 64 KiB with a public encoder.** For every `d ≥ 5` and salt, `PubMeets` for
 `chainBand (2^9) d` with the exact check, at `D = 5`, `Q = 2^20`, `k = 111`, `ε = 2^-128`: an untrusted server that
-encodes the data is exactly as secure as verifier-side encoding (`PubMeets ↔ Meets`: `band_pub_iff_64`,
-`lean/submissions/public-encoder/PubEncoderBand.lean`). Deployment conditions (§48): (1) the check is the exact,
-full-decode check (a sampled or spot check is not covered); (2) the salt is fixed by the verifier or the protocol, not
+encodes the data is exactly as secure as verifier-side encoding (`PubMeets ↔ Meets`: `band_pub_iff_64`). Deployment
+conditions (§48): (1) the check is the exact, full-decode check (a sampled or spot check is not covered); (2) the
+salt is fixed by the verifier or the protocol, not
 the server; (3) `W` is fixed before setup, and `Π₂` is independent of `W` and the salt; (4) the commitment to `W` and
-the binding of `C*` are idealized. Proof: `ChainEPFV6FinalPub.lean`, `PousPub.band_pub_meets_64_final`; here
+the binding of `C*` are idealized. Proof: `PousPub.band_pub_meets_64_final`; here
 `Pous.SecurityProofs.BandPubMeets64`.
 
 Frozen (no-function, hash): `PubMeets` with the model's `exactCheck`, not the setup check `PousCheck` runs. -/
@@ -398,8 +395,7 @@ The dense chain scheme at the deployment point is pinned here at `k = 111`, whic
 one ideal permutation) meets the requirement with sequential reveal, `D = 64` rounds, `Q = 2^20` queries per answer,
 `k = 111` challenges and `ε = 2^-128`. It is strictly weaker than the `k = 107` target (`ChainDenseMeetsPinned`), which
 stays open: it costs four more challenges. Not `DenseMeets`, which is the dense scheme with `H` a random oracle at
-`k = 107`. Proof: `lean/submissions/sponge-dense/ChainEPFV6FinalDense111.lean`,
-`PousSpongeChain.chainDenseMeets111_final`; here `Pous.SecurityProofs.ChainDenseMeets111`.
+`k = 107`. Proof: `PousSpongeChain.chainDenseMeets111_final`; here `Pous.SecurityProofs.ChainDenseMeets111`.
 
 Frozen (no-function, hash): a `Meets` in an ideal model, which no Lean function computes. -/
 def ChainDenseMeets111 : Prop :=
