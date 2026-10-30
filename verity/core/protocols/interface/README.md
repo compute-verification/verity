@@ -51,6 +51,13 @@ profile's types derive `DecidableEq`.
   JSON, and writes one flushed outcome line per case. This is the mode the difftest harness drives.
 - A usage error exits 64, and an outcome that can't be written canonically exits 70.
 
+A case is read in place by `Core.Canonical` (`CoreProtocol/Protocol/Canonical.lean`), which gives `canonicalJson`'s and
+`Flock.unhex`'s answers at any size, and a protocol's decoder reads evidence that can be gigabytes with it too (PoUS's,
+a composition's). Those two go through `String.toList`, whose runtime counts characters in 32 bits and spends about 30
+bytes on each: they refuse a canonical text holding a string of `2^32` characters or more, or read a prefix of it.
+`Canonical` imports only what `Protocol` does, so it sits in `Protocol`'s layer. `serve` frees a case's line before it
+decodes the evidence, and its peak memory is about 2.6 times the line.
+
 ## Blobs (`CoreProtocol/Blobs.lean`)
 
 A check that reads bytes too large for canonical JSON (a statement's circuit file, its public file, its sessions'
@@ -72,6 +79,31 @@ the toy protocol whose guards cover both.
 `{"law":"stratified","strata":[...]}`), `delta` and `drawn`. The one change is that δ is an exact ratio, not a float. A
 protocol whose acceptance isn't a sampling design over proof blocks (a timed storage audit, a certificate check) declares its
 own profile type and JSON.
+
+## The registration log (`CoreProtocol/Registration.lean`)
+
+`Core.Registration` is a deployment's one registration log, which every subprotocol and both composites read. It is
+append-only: each entry names the head of the log before it (`previous`), the digest of its last entry or of its
+composite's genesis, so the head names the whole log. An entry is one of two kinds, each with its own versioned format:
+
+| format | what it registers |
+| --- | --- |
+| `verity/registration/site/v1` | the Site's own site entry (`Core.Site.Registration.Entry`, `CoreProtocol/Site.lean`): the sheets, locations and links it adds to the Site, with the Site's JSON, digest and check |
+| `verity/registration/information/v1` | θ, each registered value by its committed root (`value`, `root`, `leaves`, `words`, `word_bits`, `domain`, a public checkpoint's pin), and the builder `B` (digest, advice format, public advice cap `ℓ`); each once in the log |
+
+Registration registers the site, θ and `B`, not the circuit `B` builds. A subprotocol's Program and parameters, and
+the proof system, are that protocol's public verifier parameters, not entries of the log.
+
+An entry's digest is `SHA-512(format ‖ 0 ‖ canon(entry))`, and the genesis is the Site's, so a log of site entries alone
+has the Site's head. `check` holds each entry to the log before it and refuses the first that fails by name: a site
+entry by the Site's checks (`Core.Site.Registration.Entry.refusal`, `previous` first), an information entry by
+`previous` and then `duplicate-information`. A component reads its view of an accepted log by projection (`View`: the
+Site, θ's values and the builder, at the head). As a core protocol, `protocol` (`verity/registration/log/v1`, the
+`core-registration` executable) takes the auditor's parameters (`{"auditor", "composite"}`, the auditor the Site's
+`Core.Site.Registration.Auditor`), the log as commitment (`{"composite", "entries"}`, its head the digest) and `{}` as
+evidence; it makes public the log's view and rejects as `entry I: REFUSAL`, and refuses a log or parameters outside
+ASCII without DEL as `Core.canonicalJson` does. `verity.core.protocols.registration` is its Python, held to it by the
+composition suite's difftest (`../composition/tests/test_registration_difftest.py`).
 
 ## Properties
 

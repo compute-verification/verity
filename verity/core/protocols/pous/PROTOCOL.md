@@ -574,12 +574,12 @@ probe in Tuesday's window on vy-dc-h200-2 is to measure it, and the 8×H200 rows
 
 Each of `StreamedWipeMeetsReadsTight`, `StreamedWipeMeetsServer`, `StreamedWipeMeetsServer5GB` and
 `StreamedWipeMeetsServerH200` is its claim (`Security/Definitions/Pous/Claims/StreamedWipeServer.lean`) at the wipe's
-verdict, with two lemmas beside it (`Security/Proofs/Pous/StreamedWipe/Witnesses.lean`). The honest one
-(`Pous.Claims.<name>_meets`): its numeric premises, `M_s = 512·N + R`, `0 < N`, `(r − 1)^k · 2^129 ≤ r^k` and the
-5 GB point, hold at the measured H200 at `k = 5500`. The nontrivial one (`Pous.Claims.<name>_fails`): against a verdict
-that accepts everything, a prover that writes its prior content into its memory and reads it back is accepted and
-keeps it with probability 1, while the PRF's advantage against the distinguisher built from it
-(`wipeDistinguisher P`) is 0. A prover that keeps nothing stays within `2^-q` (`Pous.Claims.keepNothing_within`).
+acceptance rule (`Pous.StreamedWipe.Acceptance`), with two lemmas beside it
+(`Security/Proofs/Pous/StreamedWipe/Witnesses.lean`). The honest one (`Pous.Claims.<name>_meets`): its numeric
+premises, `M_s = 512·N + R`, `0 < N`, `(r − 1)^k · 2^129 ≤ r^k` and the 5 GB point, hold at the measured H200 at
+`k = 5500`. The nontrivial one (`Pous.Claims.<name>_fails`): against an acceptance rule that accepts everything, a
+prover that writes its prior content into its memory and reads it back is accepted and keeps it with probability 1,
+while the PRF's advantage against the distinguisher built from it (`wipeDistinguisher P`) is 0. A prover that keeps nothing stays within `2^-q` (`Pous.Claims.keepNothing_within`).
 
 **Measured** (`r20261019-061002-ee6b`, one RTX PRO 6000 Blackwell Server Edition with 188 SMs;
 `benchmarks/pous/streamed_wipe/run.sh`; every gate passed, 76 vectors against `streamed_wipe.label`):
@@ -888,7 +888,7 @@ not reach; it is re-pinned at `k = 111`, four challenges more.
 The frozen statements (claims about a model, an ideal primitive or the model's memory challenger, which no Lean function
 computes) are in `Security/Definitions/Pous/Guarantees.lean` and its `Guarantees/` modules, each docstring ending with its
 category. The lemmas (`KFloor`, Theorem 1, Track A, the pebbling and sampled-audit results, the tagged keying's
-transfer, the column game's rows, the secure-erasure digest, `PerAnswer`, `ContinuousTimeAverage`, and the falsified
+transfer, the column game's rows, `PerAnswer`, `ContinuousTimeAverage`, and the falsified
 `InvExPostFactoTwoLayer` beside `N10Refuted`) are stated under the same `Pous.Guarantees` names in
 `Security/Proofs/Pous/Statements.lean`, and `ContinuousComplete`, the memory challenger's completeness, with them.
 The properties of the Lean verdicts `PousCheck.TimedAudit` and `MemoryChallenger.verdict`, and of the composed check
