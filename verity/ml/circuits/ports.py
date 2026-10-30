@@ -479,7 +479,7 @@ def _is_harness(fn: Any) -> bool:
 
 def root_ports(fn: Any, input_colls: Sequence[Coll], registered: Sequence[bool], nodes: Sequence[Type]) -> PortTypes | None:
     """A root's port types: its input nodes (of output types `nodes`, referenced by `input_colls` per parameter) take the
-    program function's parameter ports, its return the function's return ports. A coin is drawn per run, so a coin parameter is
+    program function's parameter ports, its return the function's return ports. A coin is flipped per run, so a coin parameter is
     never registered; a parameter is an input, so never static and never bounded narrower than its width (but in a
     `harness`)."""
     pt = port_types(fn)

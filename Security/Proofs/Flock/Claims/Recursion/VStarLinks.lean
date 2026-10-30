@@ -304,10 +304,18 @@ without public input words parses each table with `HmRow.parse` (`parseFacts_of_
 `ParseFacts`, among them each V* unit's own check. -/
 theorem parseFacts_of_parse {decode : Claims.Msg → Option Read} {x : Claims.Msg} {p : Parsed}
     (hx : parseBytes decode x = some p) (ht : p.tags.typed = false) (hpi : p.publicInputs = none) {t : ℕ}
-    (htl : t < p.sts.size) : ∃ tags, FlockSoundness.ParseFacts tags p.sts[t].c := by
+    (htl : t < p.sts.size) (hf : p.sts[t].c.tmpl = none) : ∃ tags, FlockSoundness.ParseFacts tags p.sts[t].c := by
   unfold parseBytes at hx
   obtain ⟨r, -, hr⟩ := Option.bind_eq_some_iff.1 hx
-  exact parseFacts_of_tablesOf (tablesOf_of_parses (parses_of_parse hr)) ht hpi htl
+  exact parseFacts_of_tablesOf (tablesOf_of_parses (parses_of_parse hr)) ht hpi htl hf
+
+/-- `parseFacts_of_parse` whatever the table's template (`ParseFactsU`, `parseFactsU_of_tablesOf`). -/
+theorem parseFactsU_of_parse {decode : Claims.Msg → Option Read} {x : Claims.Msg} {p : Parsed}
+    (hx : parseBytes decode x = some p) (ht : p.tags.typed = false) (hpi : p.publicInputs = none) {t : ℕ}
+    (htl : t < p.sts.size) : ∃ tags pre, FlockSoundness.ParseFactsU tags pre p.sts[t].c := by
+  unfold parseBytes at hx
+  obtain ⟨r, -, hr⟩ := Option.bind_eq_some_iff.1 hx
+  exact parseFactsU_of_tablesOf (tablesOf_of_parses (parses_of_parse hr)) ht hpi htl
 
 /-! ## A rec-sparse copy's inputs off its columns, at any shape -/
 
@@ -357,7 +365,7 @@ theorem levelCalls_of_check {decode : Claims.Msg → Option Read} {x : Claims.Ms
     {o g u : ℕ} (ho : o < 2 ^ (p.sts[t].m - p.sts[t].c.kLog)) (hg : g < p.sts[t].c.g) (hu : u < p.sts[t].c.upv) :
     LevelCalls (copyOf p t htl w o g u) LANES H := by
   obtain ⟨L, regs, hz⟩ := layout_of_check h hx ht hpi htl
-  obtain ⟨_, P⟩ := parseFacts_of_parse hx ht hpi htl
+  obtain ⟨_, _, P⟩ := parseFactsU_of_parse hx ht hpi htl
   have hnet : ∃ name, H ≤ 32 ∧
       Flock.HmNets.netOf name (Flock.RecOpen.unitLaid LANES H) = .ok p.sts[t].c.unit := by
     rcases hp with hp | hp
@@ -369,7 +377,7 @@ theorem levelCalls_of_check {decode : Claims.Msg → Option Read} {x : Claims.Ms
       exact ⟨_, hv.2, hl⟩
   obtain ⟨name, hH, hl⟩ := hnet
   obtain ⟨hr, -, -, -, hss, hrow, haux, -, -, hdir⟩ := openIns_reads (copyOf p t htl w o g u) LANES H
-  have hL := laidRows_of_satisfies L regs hz ho hg hu hl
+  have hL := laidRows_of_satisfies L (flat_of_check h hx ht hpi htl (recUnit_open hp)) regs hz ho hg hu hl
   rw [FlockVBridge.inWords_unit hl] at hL
   exact FlockVBridge.laid_unit_calls LANES H hH _ hL _ _ _ (by rw [FlockVBridge.size_rowBytes, hr]) hss hrow haux hdir
 
@@ -431,7 +439,7 @@ theorem unitOuts_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg}
     (ht : p.tags.typed = false) (hpi : p.publicInputs = none) {t : ℕ} (htl : t < p.sts.size)
     {K : (ℕ → Bool) → Prop} (hK : UnitOuts p.sts[t].c K) {o g u : ℕ} (ho : o < 2 ^ (p.sts[t].m - p.sts[t].c.kLog))
     (hg : g < p.sts[t].c.g) (hu : u < p.sts[t].c.upv) : K (copyOf p t htl w o g u) := by
-  obtain ⟨_, P⟩ := parseFacts_of_parse hx ht hpi htl
+  obtain ⟨_, _, P⟩ := parseFactsU_of_parse hx ht hpi htl
   rcases hK with ⟨LANES, H, hp, rfl⟩ | ⟨S, ns, nv, hpart, rfl⟩ | ⟨sh, hp, rfl⟩ | ⟨l, N, -, rfl⟩
   · exact ⟨climbAt_of_check h hx ht hpi htl hp ho hg hu Flock.MerkleScheme.hm96Sha512 (fun _ _ => rfl)
       (openIns_reads _ LANES H), levelCalls_of_check h hx ht hpi htl hp ho hg hu⟩
@@ -651,7 +659,8 @@ def StmtUnit (sv : VStar.Stmt) (c : Flock.Circuit) (K : (ℕ → Bool) → Prop)
 unit's own check (`ParseFacts`) reads the name back at `sv`'s numbers (`params_of_check`, `stackedParams_of_check`,
 `sparseParams_of_check`, `openingParams_of_check` with `check_opening`), and at an algebra part the part check gives the
 verifier's part (`checkPart_inner`). -/
-theorem stmtUnit_of_check {tags : Flock.Tags} {c : Flock.Circuit} (P : FlockSoundness.ParseFacts tags c)
+theorem stmtUnit_of_check {tags : Flock.Tags} {pre : Array (String × Flock.Net)} {c : Flock.Circuit}
+    (P : FlockSoundness.ParseFactsU tags pre c)
     {sv : VStar.Stmt} (hn : c.unit.name = sv.name) (hp : Flock.RecVStar.checkPart sv c = .ok ()) :
     ∃ K, StmtUnit sv c K := by
   cases sv with
@@ -1417,7 +1426,7 @@ theorem stagedReads {untr : TrReader} {b : Brings} {s : ℕ} {x xO : Msg} {c : �
       ∀ t (ht : t < p.sts.size), p.sts[t].c.unit.name = sv.name ∧ ∃ K, Flock.Readable.StmtUnit sv p.sts[t].c K := by
   obtain ⟨p, r, sv, hx, ht, hpi, hr, hss, hsz, htab⟩ := stagedTables h.2
   refine ⟨p, r, sv, hx, ht, hpi, hr, hss, hsz, fun t htl => ⟨(htab t htl).1, ?_⟩⟩
-  obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi htl
+  obtain ⟨_, _, P⟩ := Flock.Readable.parseFactsU_of_parse hx ht hpi htl
   exact Flock.Readable.stmtUnit_of_check P (htab t htl).1 (htab t htl).2.1
 
 /-! ## The held tie at `layoutOf`
@@ -1728,6 +1737,7 @@ theorem agrees_layoutOf {untr : TrReader} {b : Brings} {s j : ℕ} {x xO : Msg} 
   cases hp'
   obtain ⟨u, -, -, -, hl, -⟩ := FlockSoundness.Discharge.Recursion.checkParsed_ok (htab 0 h0).2.2
   obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hp ht hpi h0
+    (FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0).2.2)
   have hfx := layoutOf_fixedAt_of_msgAt hm
   obtain ⟨q, pt, rep, hpt, htop, hps⟩ := layoutOf_msgAt_staged hs.2 hp ht hpi h0 h1 hl hm
   refine ⟨q, pt, rep, hpt, fun bs hb hcol => ?_⟩
