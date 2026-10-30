@@ -1,6 +1,6 @@
 """Per-tile r = 0 routes on the sampled open-weight matrices, at D-OUT's tile shape (8 output channels x 256 deep) and
-coarser, so the gap compares with D-OUT's SAK-UF falsification test (note:compute-research/20261029T2229Z-report-hash-alt:
-0.516% MAC-weighted on Llama-3.2-1B at 1-bit noise). Each tile takes its cheapest of dense int8, and an alphabet route
+coarser, so the gap compares with D-OUT's SAK-UF falsification test on Llama-3.2-1B at 1-bit noise. Each tile takes
+its cheapest of dense int8, and an alphabet route
 (`prices.dense_part`) on the entries in [-a, a] plus the rest on the ALU. K is kept in its stored order (D-OUT also
 reorders K, which this omits). Writes `tiles.json` to `--out`.
 """
@@ -14,8 +14,8 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import natural  # noqa: E402
-from prices import CHIPS, dense_part  # noqa: E402
+import natural
+from prices import CHIPS, dense_part
 
 SHAPES = ((8, 256), (16, 64), (128, 128), (1, None))  # (1, None): a route per output channel over all of K
 ALPHA = (1, 2, 3, 4, 7, 15, 31, 36, 63)

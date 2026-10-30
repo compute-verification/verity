@@ -24,6 +24,7 @@ import lzma
 import math
 import sys
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -54,8 +55,12 @@ def fetch(url, start=None, end=None):
     headers = {"Range": f"bytes={start}-{end - 1}"} if start is not None else {}
     for attempt in range(5):
         try:
-            with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=300) as f:
+            with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=300) as f:  # noqa: S310  (HF's https URL)
                 return f.read()
+        except urllib.error.HTTPError as e:
+            if e.code == 404 or attempt == 4:
+                raise
+            time.sleep(2 ** attempt)
         except Exception:
             if attempt == 4:
                 raise
@@ -313,7 +318,10 @@ def model_tasks(name, layers_arg):
     layers = sorted({0, nl // 2, nl - 1}) if layers_arg == "edges" else [int(x) for x in layers_arg.split(",")]
     try:
         idx = json.loads(fetch(f"{HF}/{repo}/resolve/main/model.safetensors.index.json"))["weight_map"]
-    except Exception:
+    except urllib.error.HTTPError as e:
+        if e.code != 404:
+            raise
+        print(f"{repo}: no safetensors index (404), reading the single model.safetensors", flush=True)
         idx = None
     wanted = [f"model.layers.{i}.{blk}.{p}.weight" for i in layers for blk, p in PROJ]
     files = sorted({idx[t] for t in wanted}) if idx else ["model.safetensors"]

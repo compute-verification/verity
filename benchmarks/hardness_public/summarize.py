@@ -91,7 +91,6 @@ def natural(d):
 
 def tiles(f):
     rows = json.loads(Path(f).read_text())
-    keys = [k for k in rows[0]["routes"]]
     print("MAC-weighted cost by model and kind, tile 8x256 (H200 b1 / H200 b2 / sm120 b1 / sm120 b2):")
     print("| model | q | k | v | o | gate | up | down | all |")
     print("|---|---|---|---|---|---|---|---|---|")
@@ -168,9 +167,12 @@ def plant(f):
     print("| arm | L | val (honest) | planted route at plant | planted route at T | same t on honest W | S = 0 | abs S ≤ 1 | "
           "dist to plant | corr with honest | planes 0–7 agree with honest |")
     print("|---|---:|---|---|---|---|---:|---:|---:|---:|---|")
+
+    def fmt(d):
+        return "/".join(f"{d[k]:.3f}" for k in ks)
+
     for a, v in r["arms"].items():
         for L, p in sorted(v["plants"].items(), key=lambda kv: int(kv[0])):
-            fmt = lambda d: "/".join(f"{d[k]:.3f}" for k in ks)
             print(f"| {a} | {L} | {p['val_loss']:.4f} ({v['honest_val']:.4f}) | {fmt(p['at_plant'])} | {fmt(p['planted_final'])} | "
                   f"{fmt(p['honest_final'])} | {p['s0']:.3f} | {p['s_le1']:.3f} | {p['rel_dist_to_plant']:.3f} | "
                   f"{p['corr_with_honest']:.3f} | {[round(x, 3) for x in p['planes_agree_with_honest']]} |")

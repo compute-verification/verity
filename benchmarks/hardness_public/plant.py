@@ -23,8 +23,8 @@ import numpy as np
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import seeds  # noqa: E402
-from poison import teacher_route  # noqa: E402
+import seeds
+from poison import teacher_route
 
 PLANTED = ("fc", "out")
 

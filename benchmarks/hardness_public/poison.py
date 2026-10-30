@@ -16,8 +16,8 @@ import numpy as np
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import natural  # noqa: E402
-from prices import CHIPS, ZBITS, dense_part  # noqa: E402
+import natural
+from prices import CHIPS, ZBITS, dense_part
 
 N, K, C = 512, 1024, 0.05
 
