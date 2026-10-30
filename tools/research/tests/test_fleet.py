@@ -159,3 +159,31 @@ def test_a_restarted_loop_doesnt_post_a_quota_alert_it_already_posted_that_day(t
     assert len(posts) == 2, "a restart the same UTC day posts nothing again"
     run(t0 + 86400)
     assert len(posts) == 4, "the next day posts each quota once more"
+
+
+def test_a_running_vm_unread_ten_minutes_is_alerted_once_with_its_serial_tail_and_kept_off_auto_until_read(tmp_path, monkeypatch):
+    """Nodes sat in a soft lockup, RUNNING in Nebius and answering no ssh, for hours before anyone looked."""
+    monkeypatch.setattr(F, "FLEET_DIR", tmp_path / "fleet")
+    monkeypatch.setattr(F, "MACHINES_D", tmp_path / "machines.d")
+    F.MACHINES_D.mkdir()
+    (F.MACHINES_D / "vy-node-x.toml").write_text('provider = "ssh"\nhost = "203.0.113.9"\nproject = "verity"\n')
+    synced, sent, tails = [], [], []
+    monkeypatch.setattr(F, "sync_registry", synced.append)
+
+    def tail(instance_id):
+        tails.append(instance_id)
+        return ["[ 9.1] ok", "[8811.2] watchdog: BUG: soft lockup - CPU#77 stuck for 23s! [lean:4182]"]
+    row = {"name": "vy-node-x", "id": "computeinstance-x", "read": False}
+    t0 = 1_800_000_000.0
+    for dt in (-1200, -900, -600):
+        assert F.watch_unreachable([row], t0 + dt, lambda a, t: sent.append(t), tail) == [], "never read: not this key's to judge"
+    F.watch_unreachable([{**row, "read": True}], t0 - 300, lambda a, t: sent.append(t), tail)
+    for dt in (0, 300):
+        assert F.watch_unreachable([row], t0 + dt, lambda a, t: sent.append(t), tail) == []
+    assert F.watch_unreachable([row], t0 + 600, lambda a, t: sent.append(t), tail) == ["vy-node-x"]
+    assert F.watch_unreachable([row], t0 + 900, lambda a, t: sent.append(t), tail) == [], "alerted once"
+    (text,) = sent
+    assert "soft lockup - CPU#77" in text and "since " + F.utc(t0) in text and "marked `unreachable_since`" in text and tails == ["computeinstance-x"]
+    assert F.registry()["vy-node-x"]["unreachable_since"] == F.utc(t0)
+    F.watch_unreachable([{**row, "read": True}], t0 + 1200, lambda a, t: sent.append(t), tail)
+    assert "unreachable_since" not in F.registry()["vy-node-x"] and len(synced) == 2
