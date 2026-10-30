@@ -249,7 +249,7 @@ def srcOf (j : Json) : Except String In.Src := do
   let row : Json → String → Except String In.Row := fun x ctx => do
     let (w, s) ← pair x ctx
     pure { words := ← arrOf jNat w ctx, salt := ← hexB s ctx }
-  let opening : Json → String → Except String In.Opening := fun x ctx => do
+  let opening : Json → String → Except String In.Query := fun x ctx => do
     let q ← jObj x ["rep", "level", "j", "pos", "row", "sibs"] ctx
     pure { rep := ← jNatAt q "rep" ctx, level := ← jNatAt q "level" ctx, j := ← jNatAt q "j" ctx,
             pos := ← jNatAt q "pos" ctx, row := ← arrOf f128 (q "row") ctx, sibs := ← arrOf hexB (q "sibs") ctx }

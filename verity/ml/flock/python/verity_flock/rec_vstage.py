@@ -29,7 +29,7 @@ rep r's) under `rec_outer.session_program` of ``public.json``, which the chain s
 
 **Hidden unit circuits** (`verity_flock.rec_session`, ``fold.json``'s ``hidden``: ``InnerFold.lean --hide``): the comb is the
 public part's fold, the shape is holo (`rec_algebra.Shape.holo`), and h's round is one of the message rounds, its row
-registered as the others' are; z_partial's round draws no coins, which `rec_algebra.Coins` skips.
+registered as the others' are; z_partial's round draws no coins, which `rec_algebra.CoinSource` skips.
 
 **The sparse phase and R** (``--sparse``, with ``--circuit``): RecSparse over both reps' sparse streams (`stage_sparse`) and,
 when the session committed the stacked table R, R's levels as RecOpen statements, its openings on the chain after both
@@ -232,7 +232,7 @@ def sparse_reps(public: dict, private: dict, vf: SimpleNamespace, sp, rng: dict)
         coins = [[G.of_hex(c) for c in x["coins"]] for x in rs if x["n"]]
         pts = SP.inner_points(vf.sh, rv.rounds)
         U = SP.layout_factors(sp, pts["x_rest"], pts["y_rest"], rng)
-        c = SP.Coins(pts["alpha"], pts["z"], pts["x_rest"], pts["y_rest"], tuple(coins[0]), tuple(x for [x] in coins[1:at - 1]),
+        c = SP.SparsePublics(pts["alpha"], pts["z"], pts["x_rest"], pts["y_rest"], tuple(coins[0]), tuple(x for [x] in coins[1:at - 1]),
                      tuple(x for [x] in coins[at - 1:at - 1 + nsc]), tuple(coins[at - 1 + nsc]), (), tuple(U))
         u = el[at + nsc]
         out.append((c, {"h": RL.row_elements(prv[(f"{TABLE}/rep{r}", hk)]["rows"][0]), "pre": [tuple(e) for e in el[1:at - 1]],

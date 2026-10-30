@@ -33,7 +33,8 @@ $R "$S --fresh"                 # ignore the cache
 uv run tools/verity/check/suites.py --list                    # each suite's inputs, and whether a pass is cached (local: reads only)
 ~~~
 
-To record a check of your clean commit as an Attempt, the whole check or some of its steps (`--deferred lean-agreement`),
+To record a check of your clean commit as an Attempt, the whole check (every job on the merge gate: circuit-check and
+ratchet-gate, off it, only with `--deferred circuit-check,ratchet-gate`) or some of its steps (`--deferred lean-agreement`),
 launch `uv run python tools/verity/check/check.py --record --on vy-nebius-cpu-1 --pool research [--deferred STEP,...]` from
 your checkout. It starts its own `research run` in a slot of that lane pool (the CPU nodes' check slots take train checks only),
 so inside a `research run` it is refused, naming this command.
