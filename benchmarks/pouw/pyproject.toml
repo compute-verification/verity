@@ -46,7 +46,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/profile.py", "verity/core/protocols/pouw", "verity/core/protocols/sampled_proofs",
           "verity/core/protocols/certifier",
           "verity/core/difftest", "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto",
-          "verity/ml/kernels", "verity/ml/randomness", "verity/ml/flock/python", "verity/ml/windows",
+          "verity/ml/kernels", "verity/ml/randomness", "verity/ml/flock/python", "verity/ml/flock/cuda/sha512.cuh", "verity/ml/windows",
           "tools/config/verity_config",
           "integrations/vllm/verity_vllm/settings.py", "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/config.py",
           "integrations/vllm/verity_vllm/commit/__init__.py", "verity/ml/windows/hiding.py",
