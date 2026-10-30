@@ -54,7 +54,7 @@ theorem FreedOfFloor : Pouw.Guarantees.Dither.FreedOfFloor := by
       ∑ r, μ r * (Pd.cap r - W * Pd.hon r) + (∑ r, μ r * (W * Pd.hon r) - ∑ r, μ r * X r) := by
     rw [← Finset.sum_sub_distrib, ← Finset.sum_add_distrib]
     exact Finset.sum_congr rfl fun r _ => by ring
-  unfold Period.value
+  unfold Jobs.value
   nlinarith [h1, h3, hfloor, hslack]
 
 /-! ## Expectations over fresh coins -/
@@ -365,7 +365,7 @@ theorem floor_of_rounds {k : ℕ} (H pm ps cw ch cw' ch' ew eh D : Fin k → ℝ
 calls in the sampling blocks' commit phases and work use at least `calls · callUse_r` of a resource `r` a call uses,
 which fits within its capacity `cap_r ≤ Q callUse_r`, and a selected answer's calls use at most its use, which is at
 most `cap_r`. -/
-theorem withinCap_of_fits {G : Accel} {P : RoundProto} {k : ℕ} (A : Prover G P k) (Pd : Period G) {Q : ℝ}
+theorem withinCap_of_fits {G : Accel} {P : RoundProto} {k : ℕ} (A : Prover G P k) (Pd : Jobs G) {Q : ℝ}
     (sel : P.Chk → Prop) (hG3 : G.G3) (hneeds : ∀ j r, 0 ≤ Pd.needs j r)
     (hcap : ∃ r, 0 < G.callUse r ∧ Pd.cap r ≤ Q * G.callUse r) (o : P.Orc) (x : Fin k → P.Draw × P.Chk)
     {z : Pd.J → ℝ} (hfit : Pd.Fits (A.timedUse o x) z)
@@ -391,7 +391,7 @@ theorem withinCap_of_fits {G : Accel} {P : RoundProto} {k : ℕ} (A : Prover G P
 at `ε + ln(1/δ_coin)/(η C)` but with probability `δ_coin + κ`: where the shortfall `D` stays below `ln(1/δ_coin)/η` the
 moment's own bound holds at the larger `ε`, and `e^{η D} ≤ M` reaches `1/δ_coin` with probability at most `δ_coin`. -/
 theorem freedSound_of_momentSound {G : Accel} {P : RoundProto} {k : ℕ} {Obs : Type} {verdict : Verdict P k Obs}
-    {dev : Readings G P k Obs} {Pd : Period G} {W C η δ : ℝ} {ε ε' κ κ' : Prover G P k → ℝ} (hη : 0 < η)
+    {dev : Readings G P k Obs} {Pd : Jobs G} {W C η δ : ℝ} {ε ε' κ κ' : Prover G P k → ℝ} (hη : 0 < η)
     (hδ : 0 < δ) (hC : 0 ≤ C) (h : MomentSound G P k verdict dev Pd W ε C η κ)
     (hε : ∀ A, ε A + Real.log (1 / δ) / η / C ≤ ε' A) (hκ : ∀ A, δ + κ A ≤ κ' A) :
     FreedSound G P k verdict dev Pd W ε' C κ' := by
