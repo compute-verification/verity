@@ -2269,13 +2269,39 @@
    "type_hash": "610d10605450ee5a7692a41365797df1a88df14c95600e19330475dd2335d953"
   },
   "Properties.NetworkCertifier.refusesPastCallBits": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": ["Properties.NetworkCertifier.refusesPastCallBits : Properties.NetworkCertifier.RefusesPastCallBits"],
+   "assumptions": [],
+   "type_hash": "00a39289c4bbe4a314eb008dee50a63aa357f682f9e7f53a18de320a57b917ae"
   },
   "Properties.NetworkCertifier.refusesPastCallBits_honest": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "Properties.NetworkCertifier.refusesPastCallBits_honest :",
+    "  Eq",
+    "    (List.instGetElem?NatLtLength.getElem?",
+    "      (Properties.NetworkCertifier.honestEvents.zip",
+    "        (NetworkCertifier.Calls.run Properties.NetworkCertifier.witnessCap Properties.NetworkCertifier.honestReleaseBits",
+    "            (NetworkCertifier.Calls.State.init Properties.NetworkCertifier.honestEntropy)",
+    "            Properties.NetworkCertifier.honestEvents).fst)",
+    "      2)",
+    "    (Option.some",
+    "      { fst := NetworkCertifier.Calls.Event.wordsRoot 0 Properties.NetworkCertifier.witnessRoot,",
+    "        snd := NetworkCertifier.Calls.CallAnswer.verdict NetworkCertifier.Calls.ForwardVerdict.accepted })"
+   ],
+   "assumptions": [],
+   "type_hash": "4cb6bc3234d6798d56f3520ad5cc21e70e75708dc3a9f89efd2af5c7da0c87a4"
   },
   "Properties.NetworkCertifier.refusesPastCallBits_nontrivial": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "Properties.NetworkCertifier.refusesPastCallBits_nontrivial :",
+    "  Not",
+    "    (Properties.NetworkCertifier.WithinBits Properties.NetworkCertifier.witnessCap 0",
+    "      (Properties.NetworkCertifier.acceptsAll Properties.NetworkCertifier.pastEvents) 2 0)"
+   ],
+   "assumptions": [],
+   "type_hash": "514e84ebd3019ceaf567fad8ab4e9112303a780be636cf0cfabd6c9367b0f453"
   },
   "Properties.NetworkCertifier.undecidedPending": {
    "owner": "@network-accounting",
@@ -4729,28 +4755,23 @@
    "Pous.Period.SecurityProofs.periodHeldDeployed": {
     "Real.instLE.le (instHAdd.hAdd (instHAdd.hAdd (instHMul.hMul S (r.win Accounting.Resource.capacity).len.cast) d.chip.cast) (Finset.univ.sum fun i => instHMul.hMul (d.cap i) round).cast) Pous.EndToEnd.S.cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Pous.Period.SecurityProofs.periodHeldHonest": {
-    "Eq P.sid.size 32": "an equation, inline on next when the rule came (#5101, above #6037 there, under this PR): name it or state it as a guarantee's conclusion"
-   },
    "Pous.Period.SecurityProofs.periodHeldNontrivial": {
     "∀ (x : Prod (Pous.ringRO (instHPow.hPow 2 19) 16448 (instHSub.hSub (instHPow.hPow 2 16448) 21065)).Ω (Prod Pous.EndToEnd.HmCoins Pous.EndToEnd.Streams)), Not (P.Break { fst := o.fst, snd := { fst := o.snd, snd := x } })": "a negation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": {
-    "Accounting.Gates.Property caps Aud Wc": "Accounting.Gates.Property taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.Gates.Restricted B Wc": "Accounting.Gates.Restricted taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.RateSketch.LifetimeCapped (Properties.RemoteAudit.sessionLayout blocks dflt appended sent) joined L": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.RateSketch.LifetimeCapped layout joined L": "Accounting.RateSketch.LifetimeCapped taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le E (instHMul.hMul (instHMul.hMul 3 Accounting.Gates.p1024.squarings) es)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le εden (instHMul.hMul (instHPow.hPow 2 64) εnum)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Accounting.RateSketch.LifetimeCapped layout joined L": "Accounting.RateSketch.LifetimeCapped taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Accounting.Gates.Restricted B Wc": "Accounting.Gates.Restricted taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Accounting.Gates.Property caps Aud Wc": "Accounting.Gates.Property taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (v : Nat), instLTNat.lt v Aud.windows → instLENat.le (Aud.reads v) (instHMul.hMul (instHMul.hMul P N) 4096)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (b : Nat), SetLike.instMembership.mem (plan x w j) b → Set.instMembership.mem (Set.range (Function.instFunLikeEmbedding.coe (Properties.RemoteAudit.sessionLayout blocks dflt appended sent (Accounting.RateSketch.SketchPrefix.of x.snd w j) x.fst))) (addr x b)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (b : Nat), SetLike.instMembership.mem (plan x w j) b → Set.instMembership.mem (Set.range (Function.instFunLikeEmbedding.coe (layout (Accounting.RateSketch.SketchPrefix.of x.snd w j) x.fst))) (addr x b)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G), (p x).Deadlines (bind x) τ": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (w' : Fin n) (j' : Fin P), Or (instLTFin.lt w w') (And (Eq w w') (instLTFin.lt j j')) → instLTNat.lt (bind x w j) (bind x w' j')": "a disjunction, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Accounting.Requirement.OneBlockEach (ℓ x) (grp x) (Finset.instSDiff.sdiff (Accounting.Requirement.reads W (p x).toExecution (bind x w j)) (Accounting.Requirement.creditedReads W (p x).toExecution (ℓ x) (bind x w j)))": "Accounting.Requirement.OneBlockEach taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Accounting.Requirement.PlanMatches W (p x).toExecution (ℓ x) (plan x w j) 32768 (bind x w j)": "Accounting.Requirement.PlanMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Accounting.Requirement.StoreMatches W (p x).toExecution (ℓ x) (σ x) 32768 (bind x w j)": "Accounting.Requirement.StoreMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Accounting.Requirement.PlanMatches W (p x).toExecution (ℓ x) (plan x w j) 32768 (bind x w j)": "Accounting.Requirement.PlanMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Accounting.Requirement.OneBlockEach (ℓ x) (grp x) (Finset.instSDiff.sdiff (Accounting.Requirement.reads W (p x).toExecution (bind x w j)) (Accounting.Requirement.creditedReads W (p x).toExecution (ℓ x) (bind x w j)))": "Accounting.Requirement.OneBlockEach taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Set.InjOn (addr x) (Finset.instSetLike.coe (plan x w j))": "Set.InjOn taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G), (p x).Deadlines (bind x) τ": "a bound variable's predicate, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (b : Nat), SetLike.instMembership.mem (plan x w j) b → Set.instMembership.mem (Set.range (Function.instFunLikeEmbedding.coe (layout (Accounting.RateSketch.SketchPrefix.of x.snd w j) x.fst))) (addr x b)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.Pouw.LiveSalt.epochRootBinding": {
     "Eq w.size 64": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -11632,6 +11653,96 @@
     "NciCheck.Properties.SecurityProofs.DescWitnesses"
    ]
   },
+  "NetworkCertifier.Calls": {
+   "digest": "b0b825684350f679ecd63ec3a6830bd3719e5acac77d93a15759fcf2eb4bb21f",
+   "definitions": {
+    "NetworkCertifier.Calls.Call": "13736b04448566322ad789abe1884103ae05270605a12c0197e8047ab853406c",
+    "NetworkCertifier.Calls.Call.id": "2ae0a6d0e996a665ffea5aee21d66c9ff1d21f7b8b60597fbcf8367c5ec2898e",
+    "NetworkCertifier.Calls.Call.shape": "77885d137981ad81f0f5d23c3fce7f76c0e2286420ee20175b8905346a4bb90c",
+    "NetworkCertifier.Calls.CallAnswer": "cc4ae1a2277cbf23dcb5936a5936f86e39095a9faa6423d4519490b3adbb8d76",
+    "NetworkCertifier.Calls.CallAnswer.casesOn": "507e4880d7d4425f9da6a790f4c1c6911021700e8db465e64a37dd0ba4a96043",
+    "NetworkCertifier.Calls.CallAnswer.counted": "2ba45baed5c2cf537c640a32b759a0d3f9b30c253d5874968fcbab27ba470859",
+    "NetworkCertifier.Calls.CallAnswer.ctorIdx": "0de18bb17ca4db23344d76178d13daa9aed94339f8d4373e1e8fa48759d2da3f",
+    "NetworkCertifier.Calls.CallAnswer.noCoins": "2965a74edb32941200b261e8552ae1c034b5ddb217ab8eb520603141212575f9",
+    "NetworkCertifier.Calls.CallAnswer.rec": "2c5d034ab445c6799db33751f717d9e3ceb37eedb05f274aa68ea5a67bc9c736",
+    "NetworkCertifier.Calls.CallAnswer.refusal": "ce941ac4e380d9114b3be09442c5a9bb882f4166c873af26408667fea921680f",
+    "NetworkCertifier.Calls.CallAnswer.release": "c578a20f04e7d0996e6d42ee0367fff8fc12c31ccc3607224524b22113d90400",
+    "NetworkCertifier.Calls.CallAnswer.verdict": "321a65342c9fb3877745fa5938b1ef7afd4f96ec87a6de9171c583d53cc7a1bf",
+    "NetworkCertifier.Calls.CallAnswer.verdicts": "e5ec6b000d3d916c041672c005240dfeb2e43405af986c30b30942712eb7328b",
+    "NetworkCertifier.Calls.CallCoins": "903a619ffff03356f77dc7420391e8ed5a53d1b67addbcdcdc39733d412cd293",
+    "NetworkCertifier.Calls.CallCoins.g": "59f116e79f53c85624eeee3d9de4c2d7cc907c6c4ac2bb16b27b25a0e3f490ba",
+    "NetworkCertifier.Calls.CallCoins.rows": "b746c0d07e3cadd9cb54da626b6743feddaf3ee02633df95d6b1113c329a97e6",
+    "NetworkCertifier.Calls.CallCoins.u": "3bd870badccbae9a7b92e138034f6050a2d0862ecdad1eb36bcc091cf195581c",
+    "NetworkCertifier.Calls.Cap": "57c1fd0b0ad31ccf2588d7fd2370f2938518600388795fa9404af145c6eccdda",
+    "NetworkCertifier.Calls.Cap.cap": "1091f0550e829c3ea1e7c9ef5c47b4f532c868170960c1ce01badb91fb7f5dc5",
+    "NetworkCertifier.Calls.Cap.fwdMacs": "90d68e9a86ba295a4e8a04a80a7368b515590f9a6e8ff20292ec61892785e7fd",
+    "NetworkCertifier.Calls.Cap.passed": "a3328040fe5d7b5ff9ca28570ecb88614bc0c5787fdd83f8aa086c32aa83087e",
+    "NetworkCertifier.Calls.Event": "de358873bf3fd4ff76bb9ffa145a267d3856143a2c123389b9e054386dfe5cab",
+    "NetworkCertifier.Calls.Event.aRoot": "d89cf3aff1cd7640f9f0bf43f5829e64a96d600493895ff769f7881acb86e6aa",
+    "NetworkCertifier.Calls.Event.bucket": "00645401fd63fb0572512f8fe57600a645a17daea8d4a043b254903ad4ae3156",
+    "NetworkCertifier.Calls.Event.casesOn": "17cdd62a6c64f19a231d006e0506376be19775e64da2dccb403991498dc01e50",
+    "NetworkCertifier.Calls.Event.close": "b872e32e330f6c706a4d50b2d623dd7e6fad37e59f4355e5cd2ab0e620146195",
+    "NetworkCertifier.Calls.Event.ctorIdx": "7f0fe823abc08a840011ea0c4a7e883c196c4d26a0a9d5ea608b9068d1f302de",
+    "NetworkCertifier.Calls.Event.rec": "46f223790741fd7185a90134e522a29dc2dc39c6998baf2e333364bfa6cb8d5f",
+    "NetworkCertifier.Calls.Event.wordsRoot": "5d3e2dd954eb377a276e651ead89325078aff1e22311286181f7e68686eb5420",
+    "NetworkCertifier.Calls.Forward": "44527f6e7172cf5b69611f8dc38738394d7756ba855e3329e2f594a84ec8f615",
+    "NetworkCertifier.Calls.Forward.calls": "c1cad6810a2816848bed90ca3f2d51648fbf41660312ae94bfd9c2b067311097",
+    "NetworkCertifier.Calls.Forward.count": "191aeacdc03086b2ce96fe1404ab6bece8d5699957fd7fdea71feca21888c01a",
+    "NetworkCertifier.Calls.Forward.id": "9542dc1850f051731e6ceb0df6af1cccacffbcfcbf2a93d467bf074d9103d47b",
+    "NetworkCertifier.Calls.Forward.refuse": "5d8697c8eddf6534a7bd769f293b5bf3399fca8543953e4876dbb3212cc34268",
+    "NetworkCertifier.Calls.Forward.verdict": "4cf26502323b6c3aba13a7ddea6dcc423d6a499641da274df31caf9443da12f1",
+    "NetworkCertifier.Calls.Forward.wordsRoot": "9b95375ec9bf8dcf1ad5e598315c8d363965c2d349da345eec9792393d374c30",
+    "NetworkCertifier.Calls.ForwardVerdict": "5d85122b3fc9914f950d01ac2cffcae906b85632fe9e29c3b74c257fe8f79a56",
+    "NetworkCertifier.Calls.ForwardVerdict.accepted": "fcb1e5a7376d4442ae1e55cf23b4d2dc7ea65dc51ee2c1066de771068cd9f5f3",
+    "NetworkCertifier.Calls.ForwardVerdict.noCoins": "9b8a9538515617327d517b0f3997f47ba7e3582c15ebcbed211ca748ee0ff5ef",
+    "NetworkCertifier.Calls.ForwardVerdict.pastBits": "f4d178a2fbaef7f2b2dcffc917c8145f5e4f912fc20f9db3862ab1694b770482",
+    "NetworkCertifier.Calls.ForwardVerdict.unclosed": "c10b65ac2ada7eae20a2cdc8a79e989578c23c1f051d0c2c81d863aa0d0087ff",
+    "NetworkCertifier.Calls.Shape": "6863e315d7b4ab2c3470b05f0175972bd933b3dd10b900ff2fdd43ec8350fa38",
+    "NetworkCertifier.Calls.Shape.H": "4ecfbb7cbb4e82ac8ae0c35f092def4b1c1c24fe3722a3137db5e7aa6b5579bb",
+    "NetworkCertifier.Calls.Shape.K": "7eccaa519b48c1b23f9d48daad03cf62b38628e99300fed60e290950be9bd710",
+    "NetworkCertifier.Calls.Shape.S": "d72b38bbf1d9672a02a9364b1bec33ea8a2a8a625e1ee5b340afa27cba41e187",
+    "NetworkCertifier.Calls.Shape.cols": "bfaf35b95206f86e1b32a7dc3bff5cabb904c0c64f30f50723a86e77ad3ec4db",
+    "NetworkCertifier.Calls.Shape.m": "dd388b75d59960fe21c42c48c06ca9e5ebf2bd47a02e81ebdbf713f450a9c399",
+    "NetworkCertifier.Calls.Shape.macs": "01ec6644d2f5a57a9dbb7362d2116c7b0e64c5bc0fe9e43c727407c7a0efd427",
+    "NetworkCertifier.Calls.Shape.n": "3c8c0308f3a0cd8ff76262537d9f53633526e3edd5b0c40af3cc2b2ddbac3fe9",
+    "NetworkCertifier.Calls.Shape.rows": "547595394c5557708d3fd448a211496f0c8c1d406572d2b601ec629fd40c2819",
+    "NetworkCertifier.Calls.Shape.tiles": "b4b24ec9f40d63595877128751bbfb893bb2cecf8030b1626cb9246c8d9379a1",
+    "NetworkCertifier.Calls.Shape.valid": "a3d5be82a966b1838ae3e6b08fbb6622b9b566bb7092f9ea32a3ea98dc28e99e",
+    "NetworkCertifier.Calls.State": "8a21770907bc4584ee7cfbe15891048f4f0d951f7ed85687423729a067f93766",
+    "NetworkCertifier.Calls.State.closed": "5295cba0e13cf1d177be5043fe7a6592f84492a684aed544984d60368125aa6b",
+    "NetworkCertifier.Calls.State.entropy": "e8b6e7dddff071d1f90ede340293b41022f5f99e4274147a8be5a2b2138d3d72",
+    "NetworkCertifier.Calls.State.forwards": "5276a629a8d93a5201d26e0932f7708a0c4b3361c8beaf06a64572305123c3d0",
+    "NetworkCertifier.Calls.State.init": "46a8d9a7d875378be411e9e466b5890e9633bc634a32d9b9a6edd5cc223f79cc",
+    "NetworkCertifier.Calls.State.isOpen": "57ecee0a67c4745e21dcf58fd46fe1d0d06597ccaf16f5cfaeebe2d25d0abe63",
+    "NetworkCertifier.Calls.State.update": "c0e3a59461877d0ff25ffefc49c25940f01bd6dc48fcb4caa28936b3e578c1af",
+    "NetworkCertifier.Calls.admittedTiles": "6a1fa604848914dc2b030e3a69454c3bb1390eb5c4288196e8d9bfa3622a95e4",
+    "NetworkCertifier.Calls.colCode": "0e7bd7384640d3121e32f46a4bf96039673fd5d4392c0d203c7b0c3f3a27f0e3",
+    "NetworkCertifier.Calls.flip": "8b99d91217c8c15c474b56d154624dd5acb126b3b6e7fb1f60e63c1a090b2ebb",
+    "NetworkCertifier.Calls.gBound": "6c58e1cdb2bd7f4e45d6a718ab68c309ff9747f233566bda07d8b3ffa9355f63",
+    "NetworkCertifier.Calls.gBytes": "5a823f192c6fa64a24c48dc7418146c0b256c86415c0662ee5af26930f87fdd6",
+    "NetworkCertifier.Calls.insertById": "37ff0d6261152cc593b6339bedc134b883075cbcdd177d729a9adb2aba32a290",
+    "NetworkCertifier.Calls.int8": "42327f56655ec24ef7f29502fbbc32dfb6681cc94c25fa74de883aebe35fb9b9",
+    "NetworkCertifier.Calls.laneBytes": "60951029ab6d6d472d2a7f4343fef672efc1a5d14470cb18a6a40939bd1c3686",
+    "NetworkCertifier.Calls.release": "5c974b1ef99cc39d426e62c4508c13fcb9b436c429c6717db9ef90b838ca65b7",
+    "NetworkCertifier.Calls.rotW": "78304b884173e42b1772270ab6d84968c14c0ef04f5d4e641a0308e547be76ad",
+    "NetworkCertifier.Calls.rowBytes": "c10be83cd44249bc5c185a34b3b1a2b2d81c95238325f84e9b19314a1865e25a",
+    "NetworkCertifier.Calls.run": "362460d82398dcfc5c66311a4ee082efdbba05e6f7243d6fc9c95c0c66c94c51",
+    "NetworkCertifier.Calls.source": "b61b913030a702118b067d0bd4abb9add6cdab9ff865ded712a7ce72ddd85f63",
+    "NetworkCertifier.Calls.sourceBias": "586f4c3181c17b8409111f1e7506bcca9b25c35bce53bd3960ade1094023c782",
+    "NetworkCertifier.Calls.step": "2f16cbd0b80b6d4c6ee83c058d2206cfe414c56bceb827e82838d3652e21b488",
+    "NetworkCertifier.Calls.take?": "cf4418e8ebf1c87eba26a9875de56f8583e7589bd5793aa6ba492bebd55bd766",
+    "NetworkCertifier.Calls.tile": "7052af707a6f6aa0fcc4192c154a654389db7e9e3730b24834800098c1fc7034",
+    "NetworkCertifier.Calls.timingBits": "c458de65b5bee15817d06f5421865a4ba99d361e63b9da369e53ab4da1ae8217",
+    "NetworkCertifier.Calls.u32": "45fa200caa96d43d976a4acbba5a575b41b684207f19a63469a2acd752f464e7",
+    "NetworkCertifier.Calls.words": "7307ebb10eda66262cd35c3bac53b6912633fcdfea4c251b1dbb4053fbf4b126",
+    "NetworkCertifier.Calls.words._sparseCasesOn_1": "c4ecb294231344f64da25440ad4e1258be21c696f416b1cd27066cd4aa617a52"
+   },
+   "guarantees": [
+    "Properties.NetworkCertifier.refusesPastCallBits",
+    "Properties.NetworkCertifier.refusesPastCallBits_honest",
+    "Properties.NetworkCertifier.refusesPastCallBits_nontrivial"
+   ]
+  },
   "NetworkCertifier.Grid": {
    "digest": "2820ed149c9f5c25aab1a13fe34e16774250801c8bbaaca88b61e263b417b53c",
    "definitions": {
@@ -14684,6 +14795,33 @@
     "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans"
+   ]
+  },
+  "Properties.NetworkCertifier.Calls": {
+   "digest": "c1d2796fb1a48f9de71500c8fca1bfdea78849df39aada6acf030d3b4a487a7b",
+   "definitions": {
+    "Properties.NetworkCertifier.RefusesPastCallBits": "3e209e7077087e0ac47113cb5bb91ad010279173d7675e82bb80f4fd57555d07",
+    "Properties.NetworkCertifier.TookCall": "314b293f6d4c2c6ca728c59c6c82fca3ef5aa1e41295e20f615215cbd252bb98",
+    "Properties.NetworkCertifier.WithinBits": "a0958a4cdd40658b2cc6ea900e8738cbff974a4a84653c21e3b3352985b69cb4",
+    "Properties.NetworkCertifier.acceptsAll": "a5bd83b4df342f960cb859ce63c2b51ed9d3d5228616184a5decc101716e84e0",
+    "Properties.NetworkCertifier.callMacs": "509492567a680709f26482d84ed03cacad2bb07d4c78df883c1011f66b40ec9f",
+    "Properties.NetworkCertifier.callMacs._sparseCasesOn_1": "67b32347000955428d29126059be71bb143ff7d2e66976595be64a424afb438d",
+    "Properties.NetworkCertifier.countedBits": "d43478da0b417a6ce0445aa13d050c71fb56e03d22e7a9752b36ef98a10ce4a8",
+    "Properties.NetworkCertifier.countedBits._sparseCasesOn_1": "b01995019a0454b68860f8bab476b7737454b5638a1ca508fcedc2bc7d07bee7",
+    "Properties.NetworkCertifier.honestEntropy": "2e6481caee1a6414d2caff02ae849b9312d8416f0a9197f41714f15e1e3f00d2",
+    "Properties.NetworkCertifier.honestEvents": "03d2369f418445965b71dfb458cad535df6438592f32150174f974e362e3382c",
+    "Properties.NetworkCertifier.honestReleaseBits": "b8eae0c9a41db273e7d7c0cf147be4636a08430917926c55a3020b1eeafc5f4e",
+    "Properties.NetworkCertifier.pastEvents": "036048b1bfa2f8481d22e8000efb6c071e480f601e7b3f7f00448b93c1e7aabf",
+    "Properties.NetworkCertifier.refused": "81512fa6349727b483ce66b108f7974ca3a3921ce29f2adac40906464ea926a2",
+    "Properties.NetworkCertifier.refused._sparseCasesOn_1": "c32640dcfd90ca2988dfd53e55311c25581d5d6cafb59f5ad24c93f4ad9f42cf",
+    "Properties.NetworkCertifier.witnessCap": "424d5ad133070cd594d6e049cbedb1e3c4b1c2de9586ec7955aa5ddd9b111d0a",
+    "Properties.NetworkCertifier.witnessRoot": "89aa9d45ca980a98aad5b0f5476031b03d9c9ea9ff3e91f25790cce0d126bab2",
+    "Properties.NetworkCertifier.witnessShape": "7c1e87709ad6c429f8272ab6b845ea81acc4dcedbd127cb7aba6c48307581ed6"
+   },
+   "guarantees": [
+    "Properties.NetworkCertifier.refusesPastCallBits",
+    "Properties.NetworkCertifier.refusesPastCallBits_honest",
+    "Properties.NetworkCertifier.refusesPastCallBits_nontrivial"
    ]
   },
   "Properties.NetworkCertifier.LinkWindow": {
