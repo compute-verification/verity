@@ -18,7 +18,7 @@ bounds `n` and `v` `BitsLin2KOn` is read at:
 * the deployed caps have at most `5591040` positions (`CpDep_width_le_tight`).
 
 `κ ≤ (1 + 16·N_I)·2^{−202.98}`, and `1 + 16·N_I ≤ 2^{35.28}`. Each of `ε`'s five terms `2^{−(a − log₂ y)}` is at most
-`Y·2^{−255}` at `a ≥ 255` and `y ≤ Y` (`two_rpow_neg_sub_le`; `γ`'s at `y ≤ Y²`), and the five `Y` sum to at most
+`u·2^{−255}` at `a ≥ 255` and `y ≤ u` (`two_rpow_neg_sub_le`; `γ`'s at `y ≤ u²`), and the five `u` sum to at most
 `2^{80.05}`. `Fdev`'s, `β₂·c_S`, is all but about `2^{−11}` of the sum: it is the term that sets `ε`.
 -/
 
@@ -38,30 +38,30 @@ theorem le_two_rpow_of_pow_le {y : ℝ} {q N : ℕ} (h0 : 0 ≤ y) (hq : 0 < q) 
       _ ≤ 2 ^ ((N : ℝ) / q) :=
         Real.rpow_le_rpow_of_exponent_le (by norm_num) (logb_le_div_of_pow_le h0 hq h)
 
-theorem logb_le_logb_of_one_le {y Y : ℝ} (hy : 0 ≤ y) (hyY : y ≤ Y) (hY : 1 ≤ Y) :
-    Real.logb 2 y ≤ Real.logb 2 Y := by
+theorem logb_le_logb_of_one_le {y u : ℝ} (hy : 0 ≤ y) (hyu : y ≤ u) (hu : 1 ≤ u) :
+    Real.logb 2 y ≤ Real.logb 2 u := by
   rcases hy.eq_or_lt with rfl | hy
   · rw [Real.logb_zero]
-    exact Real.logb_nonneg (by norm_num) hY
-  · exact Real.logb_le_logb_of_le (by norm_num) hy hyY
+    exact Real.logb_nonneg (by norm_num) hu
+  · exact Real.logb_le_logb_of_le (by norm_num) hy hyu
 
-theorem two_rpow_le_mul {e Y : ℝ} (hY : 0 < Y) (h : e ≤ Real.logb 2 Y - 255) :
-    (2 : ℝ) ^ e ≤ Y * 2 ^ (-(255 : ℝ)) :=
-  calc (2 : ℝ) ^ e ≤ 2 ^ (Real.logb 2 Y + -(255 : ℝ)) :=
+theorem two_rpow_le_mul {e u : ℝ} (hu : 0 < u) (h : e ≤ Real.logb 2 u - 255) :
+    (2 : ℝ) ^ e ≤ u * 2 ^ (-(255 : ℝ)) :=
+  calc (2 : ℝ) ^ e ≤ 2 ^ (Real.logb 2 u + -(255 : ℝ)) :=
         Real.rpow_le_rpow_of_exponent_le (by norm_num) (by linarith)
-    _ = Y * 2 ^ (-(255 : ℝ)) := by
-        rw [Real.rpow_add (by norm_num), Real.rpow_logb (by norm_num) (by norm_num) hY]
+    _ = u * 2 ^ (-(255 : ℝ)) := by
+        rw [Real.rpow_add (by norm_num), Real.rpow_logb (by norm_num) (by norm_num) hu]
 
-/-- **A term `2^{−(a − log₂ y)}` at `a ≥ 255` is at most `Y·2^{−255}`**, at `0 ≤ y ≤ Y` and `1 ≤ Y`. -/
-theorem two_rpow_neg_sub_le {a y Y : ℝ} (ha : 255 ≤ a) (hy : 0 ≤ y) (hyY : y ≤ Y) (hY : 1 ≤ Y) :
-    (2 : ℝ) ^ (-(a - Real.logb 2 y)) ≤ Y * 2 ^ (-(255 : ℝ)) := by
-  have := logb_le_logb_of_one_le hy hyY hY
+/-- **A term `2^{−(a − log₂ y)}` at `a ≥ 255` is at most `u·2^{−255}`**, at `0 ≤ y ≤ u` and `1 ≤ u`. -/
+theorem two_rpow_neg_sub_le {a y u : ℝ} (ha : 255 ≤ a) (hy : 0 ≤ y) (hyu : y ≤ u) (hu : 1 ≤ u) :
+    (2 : ℝ) ^ (-(a - Real.logb 2 y)) ≤ u * 2 ^ (-(255 : ℝ)) := by
+  have := logb_le_logb_of_one_le hy hyu hu
   exact two_rpow_le_mul (by linarith) (by linarith)
 
-/-- **`γ`'s term `2^{−(255.5 − ½·log₂ y)}` is at most `Y·2^{−255}`**, at `0 ≤ y ≤ Y²` and `1 ≤ Y`. -/
-theorem two_rpow_neg_sub_half_le {y Y : ℝ} (hy : 0 ≤ y) (hyY : y ≤ Y ^ 2) (hY : 1 ≤ Y) :
-    (2 : ℝ) ^ (-(255.5 - Real.logb 2 y / 2)) ≤ Y * 2 ^ (-(255 : ℝ)) := by
-  have h := logb_le_logb_of_one_le hy hyY (by nlinarith)
+/-- **`γ`'s term `2^{−(255.5 − ½·log₂ y)}` is at most `u·2^{−255}`**, at `0 ≤ y ≤ u²` and `1 ≤ u`. -/
+theorem two_rpow_neg_sub_half_le {y u : ℝ} (hy : 0 ≤ y) (hyu : y ≤ u ^ 2) (hu : 1 ≤ u) :
+    (2 : ℝ) ^ (-(255.5 - Real.logb 2 y / 2)) ≤ u * 2 ^ (-(255 : ℝ)) := by
+  have h := logb_le_logb_of_one_le hy hyu (by nlinarith)
   rw [Real.logb_pow] at h
   push_cast at h
   exact two_rpow_le_mul (by linarith) (by linarith)
@@ -153,15 +153,15 @@ theorem kappa_eps_core {nS : ℕ} {VI kI wI W kx NI cBe nSet nU : ℕ} {κI : �
       congr 1
       norm_num
     refine le_trans (add_le_add (add_le_add (add_le_add (add_le_add
-      (two_rpow_neg_sub_half_le (Y := 2592237061 * (16 * 13000000000)) (by positivity)
+      (two_rpow_neg_sub_half_le (u := 2592237061 * (16 * 13000000000)) (by positivity)
         (pow_le_pow_left₀ hY0 hY 2) (by norm_num))
-      (two_rpow_neg_sub_le (Y := (4 * 4402 + 1) * 104426422404) (by norm_num) (by positivity)
+      (two_rpow_neg_sub_le (u := (4 * 4402 + 1) * 104426422404) (by norm_num) (by positivity)
         (mul_le_mul (by linarith) hcSR hc0 (by norm_num)) (by norm_num)))
-      (two_rpow_neg_sub_le (Y := 4 * 5591040 * 104426422404) (by norm_num) (by positivity)
+      (two_rpow_neg_sub_le (u := 4 * 5591040 * 104426422404) (by norm_num) (by positivity)
         (mul_le_mul (by linarith) hcSR hc0 (by norm_num)) (by norm_num)))
-      (two_rpow_neg_sub_le (Y := 4 * (12343986 + 1) * 104426422404) (by norm_num) (by positivity)
+      (two_rpow_neg_sub_le (u := 4 * (12343986 + 1) * 104426422404) (by norm_num) (by positivity)
         (mul_le_mul (by linarith) hcSR hc0 (by norm_num)) (by norm_num)))
-      (two_rpow_neg_sub_le (Y := (2592237061 + 8 * 5591040 + 4 * (12343986 + 1)) * 4402 * 104426422404)
+      (two_rpow_neg_sub_le (u := (2592237061 + 8 * 5591040 + 4 * (12343986 + 1)) * 4402 * 104426422404)
         (by norm_num) (by positivity)
         (mul_le_mul (mul_le_mul (by linarith) hVIR (Nat.cast_nonneg _) (by norm_num)) hcSR hc0 (by norm_num))
         (by norm_num))) ?_
@@ -260,7 +260,7 @@ theorem kappa_eps_deployed (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
     rw [h1, Nat.cast_one, one_mul] at hhi
     exact k_le_one (N := FlockDeploy.N₀ false (xIOf x)) hhi
   have hsum : ((List.range (nS x)).map fun j => (nums b.st x j).rounds).sum ≤ nS x * 4402 := by
-    refine (List.sum_le_card_nsmul _ 4402 fun a ha => ?_).trans (le_of_eq (by simp))
+    refine (List.sum_le_length_nsmul _ 4402 fun a ha => ?_).trans (le_of_eq (by simp))
     obtain ⟨j, hj, rfl⟩ := List.mem_map.1 ha
     obtain ⟨i, spec', sts', hp, hp1⟩ := hO j (List.mem_range.1 hj)
     exact numsOf_rounds_le_one hp hp1
