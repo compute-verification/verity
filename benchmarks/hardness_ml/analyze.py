@@ -9,6 +9,9 @@ For a constrained run of size N trained on D tokens to validation loss L:
 - ``compute_penalty``: C / C*(L), where C is the run's training FLOPs and C*(L) the least baseline training compute
   that reaches L, read off the lower envelope of every baseline run (all sizes, all token counts) in (log C, L).
   ``compute_penalty_dense`` uses the dense-shape FLOPs 6·(dense MACs)·D instead of the run's own.
+- ``size_penalty``: C / C_base(N, L), the same-size baseline's compute to reach L: ``token_mult`` times the run's training
+  FLOPs per token over the baseline's. It leaves out how far size N itself is from compute-optimal at D, which
+  ``compute_penalty`` includes.
 
 Baselines are runs with design ``dense``, no noise, no int8 and ``baseline_lr`` (default: each size's best final loss
 at the largest token count picks its lr).
@@ -87,6 +90,7 @@ def analyze(runs, baseline_lr=None):
         lr_of[size] = baseline_lr or min(cands, key=lambda r: r["final_val"])["cfg"]["lr"]
     ladder = {s: sorted(((r["tokens"], r["final_val"]) for r in rs if r["cfg"]["lr"] == lr_of[s]))
               for s, rs in by_size.items()}
+    base_fpt = {s: rs[0]["train_flops_per_token"] for s, rs in by_size.items()}
     frontier = envelope([(r["train_flops"], r["final_val"]) for r in base])
     rows = []
     for name, r in sorted(runs.items()):
@@ -107,6 +111,7 @@ def analyze(runs, baseline_lr=None):
             if ld is not None:
                 row["token_mult"] = r["tokens"] / math.exp(ld)
                 row["token_mult_extrapolated"] = ext
+                row["size_penalty"] = row["token_mult"] * r["train_flops_per_token"] / base_fpt[c["size"]]
         if len(frontier) >= 2:
             lc, ext = interp([math.log(x) for x, _ in frontier], [l for _, l in frontier], L)
             if lc is not None:
@@ -131,15 +136,16 @@ def fmt(v, nd=3):
 
 def table(res):
     cols = ["name", "design", "harden", "rank_frac", "diag", "rho", "noise_k", "tokens", "final_val", "gap",
-            "token_mult", "compute_penalty", "hardened_frac_fwd", "diag.fc1.r_share_out", "diag.fc2.r_share_out"]
+            "token_mult", "size_penalty", "compute_penalty", "hardened_frac_fwd", "diag.fc1.r_share_out",
+            "diag.fc2.r_share_out"]
     lines = ["| " + " | ".join(cols) + " |", "|" + "---|" * len(cols)]
     for row in sorted(res["rows"], key=lambda r: (r["size"], not r["baseline"], r["design"], r["name"])):
         cells = []
         for k in cols:
             v = row.get(k)
-            if k in ("token_mult", "compute_penalty") and v is not None:
-                v = f"{v:.2f}" + ("*" if row.get(k.replace("_mult", "_mult_extrapolated").replace(
-                    "penalty", "penalty_extrapolated")) else "")
+            if k in ("token_mult", "size_penalty", "compute_penalty") and v is not None:
+                flag = "compute_penalty_extrapolated" if k == "compute_penalty" else "token_mult_extrapolated"
+                v = f"{v:.2f}" + ("*" if row.get(flag) else "")
             cells.append(fmt(v))
         lines.append("| " + " | ".join(cells) + " |")
     return "\n".join(lines)
