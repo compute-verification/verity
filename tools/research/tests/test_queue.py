@@ -2383,17 +2383,6 @@ def test_a_pass_at_a_commit_whose_inputs_for_the_package_are_the_heads_vouches_f
         assert "nor at a commit whose inputs for it are the head's" in capsys.readouterr().err
 
 
-def test_a_short_head_compares_inputs_like_its_full_sha(world):
-    """`git diff-tree --stdin` reads a pair whose head isn't a full sha as one commit and prints no paths, so a 12-character head
-    vouched for every candidate (#6699).  The gate resolves every name first: the short head's diff is the full one's."""
-    a = world.change({"pkg/A.lean": "def a := 1\n"})
-    b = world.change({"pkg/A.lean": "def a := 2\n"}, base=a)
-    gate = _gate(world)
-    assert gate._differs(b, [a], ["pkg"]) == {a}
-    assert gate._differs(b[:12], [a], ["pkg"]) == {a}
-    assert gate._differs(b[:12], [b], ["pkg"]) == set()
-
-
 def test_the_same_inputs_search_reads_every_candidate_to_its_bound_newest_first_splitting_a_fetch_the_remote_refuses(world, capsys):
     """A search bounded to a few dozen commits would refuse carried locks with 'N commit(s) with runs can't be read here'.
     It fetches every candidate up to `RECORDS_FETCH`, in chunks, and a chunk the
@@ -3250,3 +3239,14 @@ def test_a_lane_line_names_its_handle_without_a_trailing_period():
     for body, lane in (("Lane proofs.", "proofs"), ("Lane `lane-2`.", "lane-2"), ("Lane a.", "a"), ("Lane ci-x_", "ci-x"),
                        ("Lane: vllm\n\nmore", "vllm")):
         assert PR(1, "h", "t", body).owner == lane, body
+
+
+def test_a_short_head_compares_inputs_like_its_full_sha(world):
+    """`git diff-tree --stdin` reads a pair whose head isn't a full sha as one commit and prints no paths, so a 12-character head
+    vouched for every candidate (#6699).  The gate resolves every name first: the short head's diff is the full one's."""
+    a = world.change({"pkg/A.lean": "def a := 1\n"})
+    b = world.change({"pkg/A.lean": "def a := 2\n"}, base=a)
+    gate = _gate(world)
+    assert gate._differs(b, [a], ["pkg"]) == {a}
+    assert gate._differs(b[:12], [a], ["pkg"]) == {a}
+    assert gate._differs(b[:12], [b], ["pkg"]) == set()
