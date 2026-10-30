@@ -42,11 +42,21 @@ can't beat.
 
 `--grids=AxBxC,AxBxC` sets the zero target's two grids (rows × columns × entry states). Rows and columns are drawn with
 repeats, the free terms are per drawn row and column, and each cell draws its own entry states, so a sat at any grid
-is a fit to be rechecked and an unsat at any grid holds.
+is a fit to be rechecked and an unsat at any grid holds. `--escalate` solves the second grid only where the first is
+sat.
+
+`--pairs=PATH` makes the members `xoradd` steps at the listed constants (a JSON list of {"c", "k", "width", "carry",
+"covers"}, `r80x_batch.py --pairs-out`'s), keeping those of the run's width: a round's word-entry certificates. A
+member with `carry` is a hi half, whose target is N + (D ⊕ c) + k + cin with cin the lo half's carry-out of U's 64-bit
+add. On a chain and a column the lo word's own sum overflows by c0 ∈ {0, 1}, and the lo state moves cin over
+{c0, c0 + 1}, so each cell's c0 is the solver's (an unsat holds for every pattern of lo overflows) and each entry state
+draws cin from the two. Any IADD3 may add cin (IADD3.X), and cin is a source too, which only adds to what the prover
+can do; carries split over two predicates and spent in different instructions are not modelled. `--full` (at
+`--width=32`) adds `fold_window`'s instructions that move high bits down.
 
 Run: `uv run --no-project --with z3-solver python -B fold_family.py OUT.json --window=PATH/fold_window.py [--width=8]
 [--members=12] [--steps=1,2] [--families=...] [--targets=zero,words] [--timeout=300] [--jobs=4] [--sweep=KIND]
-[--sweep-c=C] [--ks=K,K] [--free=F] [--grids=3x3x4,4x4x6]` (from this directory). PATH is `benchmarks/pouw/hash_sparse/` on N-FLOOR's branch.
+[--sweep-c=C] [--ks=K,K] [--free=F] [--pairs=PATH] [--grids=3x3x4,4x4x6] [--escalate] [--full]` (from this directory). PATH is `benchmarks/pouw/hash_sparse/` on N-FLOOR's branch.
 """
 from __future__ import annotations
 
@@ -117,6 +127,31 @@ def draw_member(rng, family, s, w):
                                             "t": rng.choice(G_TABLES)}) for _ in range(s)]
 
 
+def carry_program(tag, L, nsrc, w, full):
+    """`fold_window.Program` with IADD3.X: each IADD3 slot may add the carry-in besides its three operands."""
+    class CarryProgram(WINDOW.Program):
+        def __init__(self):
+            super().__init__(tag, L, nsrc, w, full=full)
+            self.x = [z3.Bool(f"{tag}x{j}") for j in range(L)]
+
+        def run(self, srcs, cin):
+            vals = list(srcs)
+            for j in range(L):
+                one = WINDOW.Program(f"{tag}{j}", 1, len(vals), w, full=full)
+                for name in ("op", "sub", "lut", "sh"):
+                    getattr(one, name)[0] = getattr(self, name)[j]
+                one.sel[0], one.neg[0] = self.sel[j], self.neg[j]
+                v = one.run(vals)[-1]
+                vals.append(v + z3.If(z3.And(self.op[j] == 1, self.x[j]), cin, z3.BitVecVal(0, w)))
+            return vals
+
+        def decode(self, m):
+            return [line + (" + cin" if line.split(" = ")[1].startswith("IADD3")
+                            and z3.is_true(m.eval(self.x[j], model_completion=True)) else "")
+                    for j, line in enumerate(super().decode(m))]
+    return CarryProgram()
+
+
 def instance(spec):
     """The solver for one member at length L: examples over rows × columns × entry states (zero) or states × words."""
     w, member, target, L = spec["width"], spec["member"], spec["target"], spec["L"]
@@ -129,19 +164,28 @@ def instance(spec):
     names += [f"{x}{t + 1}" for t in range(s) for x in "kc"] + [f"keyfun{f}" for f in range(F)]
     if target == "zero":
         names += [f"rowfun{f}" for f in range(F)] + [f"colfun{f}" for f in range(F)]
+    carry = target == "zero" and any(p.get("carry") for _, p in member)
+    if carry and [kind for kind, _ in member] not in (["xoradd"], ["addk"]):
+        raise SystemExit("a carry-in member is one additive step")
+    names += ["cin"] if carry else []
     kf = [z3.BitVec(f"kf{f}", w) for f in range(F)]
     rf = [[z3.BitVec(f"rf{f}_{r}", w) for r in range(nr)] for f in range(F)]
     cf = [[z3.BitVec(f"cf{f}_{c}", w) for c in range(nc)] for f in range(F)]
+    c0 = [[z3.BitVec(f"c0_{r}_{c}", w) for c in range(nc)] for r in range(nr)]
     sol = z3.SolverFor("QF_BV")
-    prog = WINDOW.Program("p", L, len(names), w)
+    full = spec.get("full", False)
+    prog = carry_program("p", L, len(names), w, full) if carry else WINDOW.Program("p", L, len(names), w, full=full)
     sol.add(prog.constraints())
     V = lambda x: z3.BitVecVal(x & mask, w)  # noqa: E731
     rows = [[rng.randrange(0, 1 << w) for _ in range(s)] for _ in range(nr)]
     cols = [[rng.randrange(0, 1 << w) for _ in range(s)] for _ in range(nc)]
     for r in range(nr):
         for c in range(nc):
+            if carry:
+                sol.add(z3.ULE(c0[r][c], 1))
             for _ in range(nn):
                 n = rng.randrange(0, 1 << w)
+                cin = c0[r][c] + rng.randrange(2) if carry else None
                 ds = ([(rows[r][t] + cols[c][t]) & mask for t in range(s)] if target == "zero"
                       else [rng.randrange(0, 1 << w) for _ in range(s)])
                 want = n
@@ -152,7 +196,10 @@ def instance(spec):
                 srcs += [V(x) for x in consts] + kf
                 if target == "zero":
                     srcs += [rf[f][r] for f in range(F)] + [cf[f][c] for f in range(F)]
-                sol.add(prog.run(srcs)[-1] == V(want))
+                if carry:
+                    sol.add(prog.run(srcs + [cin], cin)[-1] == V(want) + cin)
+                else:
+                    sol.add(prog.run(srcs)[-1] == V(want))
     return sol, prog, names
 
 
@@ -174,7 +221,7 @@ def specs(opt):
     targets = str(opt.get("--targets", "zero,words")).split(",")
     timeout = float(opt.get("--timeout", 300))
     zgrids = [tuple(map(int, g.split("x"))) for g in str(opt.get("--grids", "3x3x4,4x4x6")).split(",")]
-    sweep = opt.get("--sweep")
+    sweep, drawn = opt.get("--sweep"), None
     if sweep:
         rng = random.Random(f"sweep-{sweep}")
         fams, steps = [f"sweep-{sweep}"], [1]
@@ -184,23 +231,33 @@ def specs(opt):
             fams = [f"sweep-{sweep}-c{c}"]
             ks = [int(k, 0) for k in str(opt["--ks"]).split(",")] if "--ks" in opt else range(1 << w)
             drawn = [[(sweep, {"k": k, "c": c, "t": 3})] for k in ks]
+    if "--pairs" in opt:
+        fams, steps = ["pairs-xoradd"], [1]
+        drawn = [[("xoradd", {"k": p["k"], "c": p["c"], "t": 3, "carry": bool(p.get("carry")),
+                              "covers": p.get("covers", [])})]
+                 for p in json.load(open(opt["--pairs"])) if p.get("width", w) == w]
     free = int(opt["--free"]) if "--free" in opt else None
+    full = "--full" in opt
+    if full and w != 32:
+        raise SystemExit("--full needs --width=32: its instructions move high bits down, so no width reduction holds")
     out = []
     for fam in fams:
         for s in steps:
             rng = random.Random(f"{fam}-{s}")
-            for i in range(len(drawn) if sweep else members):
-                member = drawn[i] if sweep else draw_member(rng, fam, s, w)
+            for i in range(len(drawn) if drawn is not None else members):
+                member = drawn[i] if drawn is not None else draw_member(rng, fam, s, w)
                 for target in targets:
                     h = honest(target, member)
-                    for L, grid in ((h - 1, zgrids[0] if target == "zero" else (1, 1, 24)),
-                                    (h - 1, zgrids[1] if target == "zero" else (1, 1, 48)), (h, (2, 2, 3))):
+                    for phase, (L, grid) in enumerate(((h - 1, zgrids[0] if target == "zero" else (1, 1, 24)),
+                                                       (h - 1, zgrids[1] if target == "zero" else (1, 1, 48)),
+                                                       (h, (2, 2, 3)))):
                         if L == h and i:
                             continue
                         out.append({"name": f"{fam}-s{s}-m{i}-{target}-L{L}-g{'x'.join(map(str, grid))}"
-                                            + (f"-F{free}" if free else ""),
+                                            + (f"-F{free}" if free else "") + ("-full" if full else ""),
                                     "family": fam, "s": s, "index": i, "target": target, "member": member,
-                                    "honest": h, "L": L, "grid": grid, "width": w, "free": free,
+                                    "honest": h, "L": L, "grid": grid, "width": w, "free": free, "full": full,
+                                    "phase": phase,
                                     "timeout": timeout * (3 if L == h else 1),
                                     "seed": zlib.crc32(f"{fam}-{s}-{i}-{target}-{L}-{grid}".encode())})
     return out
@@ -229,15 +286,22 @@ def main():
     WINDOW = load_window(opt["--window"])
     todo = specs(opt)
     todo.sort(key=lambda x: (x["s"], x["L"], x["grid"]))
+    escalate = "--escalate" in opt
     results = []
     ctx = mp.get_context("fork")
     with ctx.Pool(int(opt.get("--jobs", mp.cpu_count()))) as pool:
-        for res in pool.imap_unordered(solve, todo):
-            results.append(res)
-            print(json.dumps({k: res[k] for k in ("name", "result", "seconds")}), flush=True)
-            with open(out_path, "w") as f:
-                json.dump({"results": sorted(results, key=lambda x: x["name"]), "summary": summarize(results)}, f,
-                          indent=1)
+        def run(batch):
+            for res in pool.imap_unordered(solve, batch):
+                results.append(res)
+                print(json.dumps({k: res[k] for k in ("name", "result", "seconds")}), flush=True)
+                with open(out_path, "w") as f:
+                    json.dump({"results": sorted(results, key=lambda x: x["name"]), "summary": summarize(results)}, f,
+                              indent=1)
+        key = lambda x: (x["family"], x["s"], x["index"], x["target"])  # noqa: E731
+        run([x for x in todo if not escalate or x["phase"] != 1])
+        if escalate:
+            fit = {key(x) for x in results if x["phase"] == 0 and x["result"] == "sat"}
+            run([x for x in todo if x["phase"] == 1 and key(x) in fit])
     sane = [x for x in results if x["L"] == x["honest"]]
     bad = [x["name"] for x in sane if x["result"] != "sat"]
     for row in summarize(results):
