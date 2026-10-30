@@ -298,7 +298,7 @@ def certifier_run(certifier: Any) -> dict[str, str]:
 
 DEPLOYMENT_FORM = ("a certified window's deployment is the network certifier's public key, its run's "
                    f"{RUN_ID_BYTES}-byte id and the verifier's challenger key (`challenger.ChallengerKey`)")
-#: the published challenger key, vy-challenger-1's: a challenger-key/v1 record
+#: the challenger's published key: a challenger-key/v1 record
 CHALLENGER_KEY_PIN = "art:d12f85becc22388f3e9834d3894cbb99eb655bc19484b0bc3abe9b080689a657"
 #: the SHA-512 of the public key `CHALLENGER_KEY_PIN` publishes; a record of any other key is refused, whatever it names
 CHALLENGER_KEY_SHA512 = "27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc"
