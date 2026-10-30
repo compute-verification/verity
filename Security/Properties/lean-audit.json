@@ -9751,9 +9751,7 @@
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
-    "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
-    "Properties.SampledProofs.acceptMeans",
-    "Properties.SampledProofs.bernoulliBounds"
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
   "Flock.Net": {
@@ -17552,11 +17550,11 @@
    ]
   },
   "SampledProofs.Supplied": {
-   "digest": "84b7d5d5bede9df795317072f220c729f605f44a1d4ae5a63d23d0172a14e42f",
+   "digest": "06e6ac72d2cf19341ae4a1c2d6d21264062dd9cccf206f6fb041f269d7ac56b8",
    "definitions": {
     "SampledProofs.Supplied.Rows": "776fe215cb458bc287adf02317250ed93eb9a0f36382d51d8dfc64d6926bf5e9",
     "SampledProofs.Supplied.SALT_BYTES": "60f4399cfb3ee4a3761e11b59dd8a469201238f1963ce7eb9314d3f30e951e64",
-    "SampledProofs.Supplied.SUPPLIED_SALT": "ea56d74890a05d6f8f3ca2325541829a103e8a13891cfdfe40e7a4226fdc6485",
+    "SampledProofs.Supplied.SUPPLIED_SALT": "cba16b610be978e65f778be4b7df7b52e1c3cb7e54b078e7cd239483c6907652",
     "SampledProofs.Supplied.WINDOW_SALT": "13ac4d68cba6fc1623ed8496a945cac4c7aa8fb925e6aeb11b0c6bbd76585cc9",
     "SampledProofs.Supplied.bytesLeaves": "666e4f6f72fc0c0deb299a9858e7540826fa3915607773a8962fe01e744165f9",
     "SampledProofs.Supplied.logBase": "b76e132518571a1b23d672b7ac853c306266394801f048872bad5e1a0e0c78fd",
@@ -17565,7 +17563,7 @@
     "SampledProofs.Supplied.rows": "3d049091901d9833547a2be2c4e165fb28f0960558208af0f933c50a41cae8a4",
     "SampledProofs.Supplied.rows._sparseCasesOn_1": "b9d37e5870679a015d25a5687b29c7cb17008a668a638dfa32642a9b20309eb1",
     "SampledProofs.Supplied.rows._sparseCasesOn_2": "90cd9aee9cc9353c50118ed62bdad4ef1f525d06c853028a4b2d718f9f0a4bc6",
-    "SampledProofs.Supplied.salt": "183578761e91d45d0622a33b6b30e802862c8c65d596de943bcd9405496f09b4",
+    "SampledProofs.Supplied.salt": "fda63c395b04550f9905f27f1680200d174b76d96dfb9e0da08f771ddbd7d584",
     "SampledProofs.Supplied.sourceBytes": "94df50890f94b28bf659f336577b5f1af228c430f40101c9fda6ba86a99228be",
     "SampledProofs.Supplied.sources._sparseCasesOn_1": "18bb62be0274db9c2349562465e41f9aa9717b2561869fc2e9df349d8c58bbf2",
     "SampledProofs.Supplied.sources.match_1": "a1720ee6b4da784ed5c7e27bfa5f1564f06bbaeb164b4090d61089305ca10737",
