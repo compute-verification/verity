@@ -65,3 +65,4 @@
   - **What lands:** `Accel.H200`'s tensorLong at 499,712 MACs a tick, with DMMA at 1980 (#5956's change). I opened no PR for it.
   - **CORE-H32** wasn't sweeping: the node was STOPPED at 14:15Z and no lease was held.
   - **#6630:** its re-gate waits on #6687, which is still open at 15:38Z.
+- (15:50Z, coordinator) **Correction to the 1830 PR brief (top's ASK-202 amendment, point 4):** "both readings" means **quote every H200 figure the change moves at both 1830 MHz (the sheet's tensor peak, on our firmware) and 1980 MHz (the max boost clock)**, per the rule that hardware constants are quoted under two or three readings. It does not mean wall clock and clock64. Throughput rests on the host wall clock only, and clock64 is a diagnostic. **Keep the sweep as the card's falsification test:** a test or script that refutes the card if any run exceeds 9.894·10¹⁴, referenced from the card's source. Cite r20261030-144548-0744 and the sheet.
