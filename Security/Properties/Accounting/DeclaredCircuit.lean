@@ -9,7 +9,7 @@ reads the codec and the append coins only through an `a`-bit summary. `Scheduled
 layout (`Properties.RemoteAudit.sessionLayout`: each tile where `checkOpening` checks the block at its position of the
 pass's plan) with that premise replaced by what the verifier checks: the schedule check (`RemoteAudit.Schedule.check`)
 at the steering cap the session committed before its first coin (`audit.Params.schedule_cap`,
-`audit.Ledger.steering`) accepts each pass of the session. It is stated here because it reads the verifier's code,
+`audit.GammaTerms.steering`) accepts each pass of the session. It is stated here because it reads the verifier's code,
 which the spec doesn't; its theorem, `Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement` in
 `Security/Proofs/Accounting/DeclaredCircuit/Scheduled.lean`, is `G`'s argument on the coins the check accepts, with the
 layout steered there by `Properties.RemoteAudit.steered_of_checked` (`ScheduleLayoutGap` holding of the verifier's
@@ -64,7 +64,7 @@ def ScheduledRequirement : Prop :=
     (appended sent : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω × (Fin T → Ca) → Array (ℕ × ℕ))
     {V K Dv : Type} [DecidableEq V] [DecidableEq K] (W : Requirement.Wiring V)
     (p : RateSketch.StackedCoins Ω Ca T n P N ρ G → Requirement.Placement Dv V)
-    (ℓ : RateSketch.StackedCoins Ω Ca T n P N ρ G → Requirement.Layout V)
+    (ℓ : RateSketch.StackedCoins Ω Ca T n P N ρ G → Requirement.Store.Placement V)
     (grp : RateSketch.StackedCoins Ω Ca T n P N ρ G → V → K)
     (bind : RateSketch.StackedCoins Ω Ca T n P N ρ G → Fin n → Fin P → ℕ)
     (σ : RateSketch.StackedCoins Ω Ca T n P N ρ G → Requirement.Store)

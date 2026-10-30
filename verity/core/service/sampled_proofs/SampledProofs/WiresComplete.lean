@@ -89,7 +89,7 @@ theorem boundsOk_of_ref {w : Wire} {rt wt : Template} (hc : 1 ≤ w.cuts) (hd : 
   simp only [boundsOk, Bool.and_eq_true, decide_eq_true_eq]
   omega
 
-theorem wireCode_of_ref {c : Circuit} {w : Wire} (hr : ∀ r ∈ w.radix, 1 ≤ r) (h : wireCodeRef c w = none) :
+theorem wireCode_of_ref {c : Wiring} {w : Wire} (hr : ∀ r ∈ w.radix, 1 ≤ r) (h : wireCodeRef c w = none) :
     wireCode c w = none := by
   unfold wireCodeRef at h
   unfold wireCode
@@ -150,7 +150,7 @@ theorem prodR_pos : ∀ ps : List (Nat × Int), (∀ p ∈ ps, 1 ≤ p.1) → 1 
 
 /-- **`check` is complete against the unrolled reference**: what `checkRef` accepts, `check` accepts, for wires whose
 radices are 1 or more. -/
-theorem check_complete {c : Circuit} {es : List Entry} (hr : ∀ w ∈ c.wires, ∀ r ∈ w.radix, 1 ≤ r)
+theorem check_complete {c : Wiring} {es : List Entry} (hr : ∀ w ∈ c.wires, ∀ r ∈ w.radix, 1 ≤ r)
     (h : checkRef c = .ok es) : check c = .ok ⟨c.wires, c.wires.map (rowWords c)⟩ := by
   unfold checkRef at h
   split at h

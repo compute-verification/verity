@@ -9,7 +9,7 @@ opening draw as it runs it (`Accounting.Remote.Draw`): a session of windows `D`,
 fixed before its own openings coin (`Live`), whose opened receipts an accepted session found correct or moved off the
 rows their roots hold (`Refused`, at the receipts `R`), and whose wrong receipts count the trace's (`Counted`). The
 prover is sent each coin as it is released, and the challenger's commitment to the session's coins only once the
-session has its outcome (`coins.Released`, `audit.Session.disclose`), so the session it plays is `D` itself: nothing it
+session has its outcome (`coins.Released`, `audit.AuditRun.disclose`), so the session it plays is `D` itself: nothing it
 holds before window `t`'s openings coin is released reads that coin. Window `t`'s openings are `Key.subset` on the
 first blocks `prf t` gives its uniform coin, the sampler exact on each draw's first word and the fallbacks `rest` free;
 `prf` is any function, the deployed one being SHA-512's keyed stream under

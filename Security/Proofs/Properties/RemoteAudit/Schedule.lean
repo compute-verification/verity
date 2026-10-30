@@ -243,11 +243,11 @@ theorem flatMap_byteBits_injective {l l' : List UInt8} (h : l.flatMap byteBits =
   exact ⟨byteBits_injective this.1, this.2⟩
 
 /-- A block a well-formed schedule may hold: freed only after its write. -/
-def BlockOk : Schedule.Block → Prop
+def BlockOk : Schedule.Chunk → Prop
   | some (w, some f) => w < f
   | _ => True
 
-theorem blockCode_prefix (x y : Schedule.Block) (r r' : List Nat) (hx : BlockOk x) (hy : BlockOk y)
+theorem blockCode_prefix (x y : Schedule.Chunk) (r r' : List Nat) (hx : BlockOk x) (hy : BlockOk y)
     (h : Schedule.blockCode x ++ r = Schedule.blockCode y ++ r') : x = y ∧ r = r' := by
   rcases x with _ | ⟨w, _ | f⟩ <;> rcases y with _ | ⟨w', _ | f'⟩ <;>
     simp only [Schedule.blockCode, BlockOk, List.cons_append, List.nil_append, List.cons.injEq] at h hx hy
@@ -265,7 +265,7 @@ theorem blockCode_prefix (x y : Schedule.Block) (r r' : List Nat) (hx : BlockOk 
 
 def regCode (x : Nat × Nat × Nat) : List Nat := [x.1, x.2.1, x.2.2]
 
-def appendCode (a : Array Schedule.Block) : List Nat := a.size :: a.toList.flatMap Schedule.blockCode
+def appendCode (a : Array Schedule.Chunk) : List Nat := a.size :: a.toList.flatMap Schedule.blockCode
 
 theorem regCode_prefix (x y : Nat × Nat × Nat) (r r' : List Nat) (_ : True) (_ : True)
     (h : regCode x ++ r = regCode y ++ r') : x = y ∧ r = r' := by
@@ -275,7 +275,7 @@ theorem regCode_prefix (x y : Nat × Nat × Nat) (r r' : List Nat) (_ : True) (_
   obtain ⟨rfl, rfl, rfl, rfl⟩ := h
   exact ⟨rfl, rfl⟩
 
-theorem appendCode_prefix (x y : Array Schedule.Block) (r r' : List Nat) (hx : ∀ b ∈ x.toList, BlockOk b)
+theorem appendCode_prefix (x y : Array Schedule.Chunk) (r r' : List Nat) (hx : ∀ b ∈ x.toList, BlockOk b)
     (hy : ∀ b ∈ y.toList, BlockOk b) (h : appendCode x ++ r = appendCode y ++ r') : x = y ∧ r = r' := by
   simp only [appendCode, List.cons_append, List.cons.injEq] at h
   obtain ⟨hs, h⟩ := h
@@ -450,8 +450,8 @@ theorem scheduleLayoutGap_code {Pfx Y : Type} {N T M : ℕ} (blocks : ℕ) (dflt
 
 /-- **The check's acceptance at the committed cap `a` gives `SteeredLayout` at `a + 1` bits, at the verifier's own
 layout** (`sessionLayout`, where `ScheduleLayoutGap` holds by definition, `scheduleLayoutGap_code`). `a` is the cap
-the session's parameters committed before its first coin (`audit.Params.schedule_cap`, `audit.Ledger.steering`), so it
-is the same at every prefix and coin. -/
+the session's parameters committed before its first coin (`audit.Params.schedule_cap`, `audit.GammaTerms.steering`), so
+it is the same at every prefix and coin. -/
 theorem steered_of_checked {Pfx Y : Type} {N T M : ℕ} {blocks a : ℕ} {idx : Pfx → ℕ}
     {dflt : Pfx → Fin N ↪ Fin T × Fin M} {appended sent : Pfx → Y → Array (ℕ × ℕ)}
     (checked : ∀ c y, ∃ sc passes b, Schedule.check sc blocks a passes (appended c y) = .ok b ∧
