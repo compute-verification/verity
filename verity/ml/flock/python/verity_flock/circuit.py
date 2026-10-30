@@ -848,22 +848,25 @@ def compose_to(path: Path, low: IL.Lowering, sub, **kw) -> dict:
     return got
 
 
-def _put(out: BinaryIO, s: str) -> None:
-    """``s`` written to ``out`` as UTF-8, :data:`_HASH_CHUNK` characters at a time."""
+def _put(out: BinaryIO | None, s: str, h=None) -> None:
+    """``s`` written to ``out`` as UTF-8 and hashed into ``h``, each where given, :data:`_HASH_CHUNK` characters at a time."""
     for k in range(0, len(s), _HASH_CHUNK):
-        out.write(s[k:k + _HASH_CHUNK].encode())
+        b = s[k:k + _HASH_CHUNK].encode()
+        if h is not None:
+            h.update(b)
+        if out is not None:
+            out.write(b)
 
 
 def _write_netlist(low: IL.Lowering, out: BinaryIO | None = None) -> tuple[str, int]:
     """The unit's netlist (:func:`_expanded`'s text) rendered a piece at a time (`ir_lower.netlist_pieces`), each piece hashed and
-    written to ``out`` where given: its ``unit_sha256`` (`Lowering.sha256_after`) and its lines."""
+    written to ``out`` where given, and dropped before the next is rendered: its ``unit_sha256`` (`Lowering.sha256_after`) and
+    its lines."""
     h, lines = hashlib.sha256(), 0
     for piece in IL.netlist_pieces(low.layout, low.name):
-        b = piece.encode()
-        h.update(b)
-        if out is not None:
-            out.write(b)
+        _put(out, piece, h)
         lines += piece.count("\n")
+        del piece
     return low.sha256_after(h), lines
 
 

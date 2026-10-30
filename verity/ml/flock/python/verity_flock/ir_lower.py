@@ -32,8 +32,9 @@ from .gf2 import Circuit, L, const_bits
 
 FORMAT = "flock-ir-unit/v2"
 WORD = 128
-#: the netlist's rows per joined piece, and the characters a digest encodes at a time
-NETLIST_ROWS = 1 << 16
+#: the netlist's rows per piece (what a caller that writes it as it renders it holds at a time; one row can be past 100 KB),
+#: and the characters a digest encodes at a time
+NETLIST_ROWS = 1 << 10
 HASH_CHUNK = 1 << 24
 NAN_TORCH = 0x7FC0
 NAN_F2FP = 0x7FFF
