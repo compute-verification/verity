@@ -947,7 +947,7 @@
   },
   "profile": "ampere",
   "query_id": "Q_module_body_v1",
-  "query_id_digest": "87caebae0306fa1cb7c8913853e07bd738c3ee61b5fd6bef721e60625546cb90",
+  "query_id_digest": "cec053ff98127cba744fb1f5f744b2a0781dfe203f3725f592d452fb5168483d8129166ba686bd6979b8d0856fcdaade66197086b45746ae6627c7717d879234",
   "query_text": "Q_module_body_v1: unit = module body = the maximal set of Calls whose recorded owning module path (correspondence: nn_module_stack-derived) is identical; a non-leaf module's own Calls are their own body; Calls with no module are the root body; boundary values = U_V (in(V) u out(V)) over these units (verity_vllm.query.units.boundary_values) minus the Program's literals (the Values of Calls that read no Value: written in the descriptor, never acquired); policy: prescribed = record-typed inputs (weights); protocol = sampling-event outputs + recorded return slots + returned tensors (every Value of an fx node's output at a step once any of them crosses the module body boundary), neither of which is a Call lowered to no runtime tensor whose Values nothing reads; unreturned = the Calls whose Values nothing reads, the Program does not return and the policy does not require, listed by identity; hidden = none; profile = ampere",
   "required_families": [
    "input_token_ids",

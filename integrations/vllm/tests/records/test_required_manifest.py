@@ -24,8 +24,8 @@ MANIFEST = DATA / "required_manifest.json"
 REQUIRED = ("schema", "program_digest", "manifest_digest", "requests", "identities")
 #: sha256 of the population record the replay writes over the fixture (`json.dumps(..., sort_keys=True, default=str)`), with the
 #: population's row addresses and with none
-POPULATION_SHA256 = {"rows": "24ba3eb73e38478f9a3f443393003b4e3e42523d97523b58ab7b009675223b43",
-                     "none": "ea6fc510b9ab5d05eb0bee28e8f653abc5b607ca665a0aa3044b69214f1e15cb"}
+POPULATION_SHA256 = {"rows": "f91926feb929bc6f7dc20de42487ee53c1ff1b1ac7688aef32e3308d44eba3ce",
+                     "none": "3b25fa7bbcc353950c0dcccfa764d6d18eeb1db724eb84e6da78bcd3b7691b97"}
 
 
 def _doc() -> dict:
