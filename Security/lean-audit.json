@@ -48503,21 +48503,21 @@
    ]
   },
   "Proofs.Flock.Claims.GS.RR": {
-   "digest": "45040ef9cea84c5862b56bb7901db69f52af00397ab2b613484dff6bb574fbbf",
+   "digest": "87874fa4f1c70b8db9cd54fda0b5eea61e195de844b4eb5c3d45d80d15a33812",
    "definitions": {
-    "Claims.GS.Node": "428d8acd11c44f1327a295cd92e373b890481121cfcd48638e4f6fabc6b565ab",
     "Claims.GS.RootFinder": "6aac0dec1c77ac98be06558ab5ec3da3c6154704225b3ffa17c1e04092ec81b7",
     "Claims.GS.RootFinder.cost": "f7221d66be8c188d604625bfc8e0c7f97db05d3a90fa95f3ff6eb355a0e80aba",
     "Claims.GS.RootFinder.run": "f589045383b27e026d92b1e44545fc47645613e5d1d7fe4136a3ad1f6ccf4c5f",
+    "Claims.GS.SearchNode": "61bb41b5b7421072d2771fdf94817a52a523dd4593c7bb4f7168a161a208c989",
     "Claims.GS.childCost": "246778a827c37bced89e63c3e2f79ae167dbc080215ce9b758579cbafc174082",
     "Claims.GS.childTab": "02d839d5e56c4c3efbb0c8d7713b97f5195cf072f7dd7ab23def834e75bc6f65",
-    "Claims.GS.expand": "fc7cb752d53b3869943596b81434d071b9155979d64ff22340d9e4e9f199a251",
-    "Claims.GS.expandCost": "e76f81035c8c041577612183f7293e85c0cd4544b23766d8fbde3f07e7d107f1",
-    "Claims.GS.level": "ae56df368f02b68d1b3de0db8aa90a9a523816f1fa4b46135bd573969e709b78",
+    "Claims.GS.expand": "688ed4d2fa9f7b891fbb76ce3e0de6380f0fa8e749436927ce2e6a7f87a67bf4",
+    "Claims.GS.expandCost": "c43aa43b5e7a9067461a203279415801798d9f347d4d627df56f1724a1e0d911",
+    "Claims.GS.level": "5056732b49391620debd0d5a7a030e1f64728c3a221bcfc0739d919718562d86",
     "Claims.GS.lowRow": "78056cbfad9877055db3a006a71a8b85fd99a24a4139cc3a5a3251833b9ce39d",
     "Claims.GS.mkTab": "8ea9ee746bbb5d1391a816ebb6cdad7f50663cb2b607878d3af8164f75b457a2",
     "Claims.GS.rr": "16b6361d8e66dd3ca1b78d1f2f656e097e0d717c40d1f81765256d3474e885ee",
-    "Claims.GS.rrCost": "6545b73da900c46666a2c9b0f66448e0d4dd1522e4f01906f0d823df7ee04f27",
+    "Claims.GS.rrCost": "bf05c865340321f491b7e170575c85ef5417d1565d5a0ec862207c65d51f116a",
     "Claims.GS.shiftEntry": "76752965a4c2cde8ea73daab490706cccd93ed91805ca2f4815185d2fa13bac0",
     "Claims.GS.tget": "be2b5caa89e039be5dabb0d971251b4d055ee03fdc5af8a7c6219209df0b865a"
    },
