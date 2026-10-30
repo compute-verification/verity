@@ -201,15 +201,21 @@ def _packs(packed: bool | Sequence[bool], groups: list[list[int]]) -> list[bool]
 @dataclass
 class Wiring:
     """A class statement of a template-instance partition (`Q_template_instance(s)` v0, the class one template's instances) whose
-    units may read other units' outputs: the program, the query, and each staged instance's unit (ascending). Each such read is
-    a link port: the reader's row of exactly the writer's output row's words (`link_ports`), committed under a salt of its own
-    like any input row. The statement declares no links: that a reader's row is its writer's output row is the recursive
-    statement's to check, against the committed partition table, and C-Flock verifies each statement alone. ``strict`` False
-    stages what a cheating prover may commit instead (the negative): a link row that is not its writer's output row."""
+    units may read other units' outputs (PROTOCOL.md §16.13, Linking): the program, the query, and each staged instance's unit
+    (ascending). Each such read is a link port: the reader's row of exactly the writer's output row's words (`link_ports`),
+    committed under the writer's output row's salt, so the two rows' ``b || c`` are equal and the verifiers compare them
+    (`link_triples`). This binds a public topology; it does not hide the topology: the verifiers derive the wiring from
+    their own program, which is part of the circuit. ``strict`` False and ``writer_salts`` False stage what a cheating
+    prover may commit instead (the negatives): a linked row that is not its writer's output row, or one under a salt of its
+    own."""
     program: Any
     query: dict
     indices: Sequence[int]
     strict: bool = True
+    writer_salts: bool = True
+
+
+LINKS_FORMAT = "verity/flock-links/v1"
 
 
 def cut_reads(tp: PO.TemplatePartition, units: Sequence[int]) -> list[list[tuple[int, int] | None]]:
@@ -274,6 +280,42 @@ def link_ports(uc: UnitCircuit, groups: list[list[int]], reads: list[list], n_ou
             origin.append(gi)
             spans.append((ls[0], ls[-1] + 1) if any(w is not None for w in linked) else None)
     return out, origin, spans
+
+
+def link_triples(meta: dict, reads: list[list], indices: Sequence[int], n_out) -> list[tuple[int, str, int]]:
+    """Every link the circuit's META ``links`` declares, as (reader instance, port, writer instance), from the units' reads
+    (`cut_reads` of the statement's units ``indices``): a link port's leaves are, in the reader, circuit inputs (no link) or one
+    writer's whole output row, the writer one of the statement's instances. Refuses a cut wire (a leaf reading another unit's
+    output) that no link port carries."""
+    links = meta.get("links") or []
+    pos = {u: i for i, u in enumerate(indices)}
+    covered = [(x["port"], *x["leaves"]) for x in links]
+    out = []
+    for i, r in enumerate(reads):
+        for t, x in enumerate(r):
+            if x is not None and not any(lo <= t < hi for _p, lo, hi in covered):
+                raise ValueError(f"cut wire: unit {indices[i]}'s parameter leaf {t} reads unit {x[0]}'s output {x[1]}, and no link port carries it")
+        for port, lo, hi in covered:
+            try:
+                v = _whole_row(r[lo:hi], n_out)
+            except ValueError as e:
+                raise ValueError(f"link port {port}: unit {indices[i]}'s leaves [{lo}, {hi}): {e}") from None
+            if v is None:
+                continue
+            if v not in pos:
+                raise ValueError(f"link port {port}: unit {indices[i]} reads unit {v}, which is not one of the statement's units")
+            out.append((i, port, pos[v]))
+    return out
+
+
+def links_file(program: Any, query: dict, text: str, indices: Sequence[int]) -> dict:
+    """The verifier's own ``--links`` file for the live verifier (``flock-circuit serve``): every link of the statement, derived
+    from its own program and query (`link_triples`), bound to the circuit and the partition it checks them for."""
+    meta = FC.meta_of(text)
+    tp = PO.TemplatePartition(program, query)
+    triples = link_triples(meta, cut_reads(tp, indices), indices, lambda v: len(tp.outputs(v)))
+    return {"format": LINKS_FORMAT, "circuit_sha512": FC.digest(text), "partition": meta["partition"]["digest"],
+            "ports": [x["port"] for x in meta.get("links") or []], "links": [list(x) for x in triples]}
 
 
 def class_lowering(act: Activation, uc: UnitCircuit, name: str, groups: list[list[int]] | None = None,
@@ -577,9 +619,9 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
 
     ``wiring`` (a template-instance partition, lanes with source identities, the instances its ``indices``): META names the
     template as the unit class's ``definition`` (the class names itself in ``program_digests``), and every read of another
-    unit's outputs is a link port (`link_ports`): its row the writer's output row's words (one word per output, as ``out``
-    holds them, never packed), one table row per reading instance, committed under its own salt (and, ``strict``, checked here
-    to be the writer's row). The statement declares no links (`Wiring`).
+    unit's outputs is a link port (`link_ports`, META ``links``): its row the writer's output row's words (one word per output,
+    as ``out`` holds them, never packed), one table row per reading instance, committed under the writer's ``out`` salt (and,
+    ``strict``, checked here to be the writer's row).
 
     ``pad``: the statement padded to ``pad`` instances (a public cap, `rec_shape`), the lanes its first and the rest fillers:
     every input word zero, one source identity of their own per port (so the fillers open one committed row, zero, per port),
@@ -588,7 +630,7 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
     ``share_rows=False`` (an unwired class): every instance opens its own row per port, equal rows included, and the public file
     has no shared-row tables, the form a verifier without its own registered reads covers (``ProvedScope.sharedRowsOk``)."""
     if wiring is not None and not share_rows:
-        raise ValueError("a wired class's link rows are tables of their reading instances (share_rows)")
+        raise ValueError("a wired class's link rows are its writers' shared rows (share_rows)")
     core_rows = CORE_ROWS if core_rows is None else core_rows
     packed = True if core_rows else PACK_WORDS if packed is None else packed
     act = units.activation(cl.definition)
@@ -632,22 +674,22 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
             if s is not None:
                 ws = [_whole_row(r[s[0]:s[1]], n_out) for r in reads]
                 if any(v is not None and v not in pos for v in ws):
-                    raise NotImplementedError(f"class {name}: a unit reads a unit outside this statement (its output row is another statement's)")
+                    raise NotImplementedError(f"class {name}: a unit reads a unit outside this statement (its salts are another statement's)")
                 ws = [None if v is None else pos[v] for v in ws]
             writers.append(ws)
         idents = [idents[o] if s is None else [("link", w, k) if w is not None else ("in", k) for k, w in enumerate(writers[i])]
                   for i, (o, s) in enumerate(zip(origin, spans))]
-    cuts = [list(s) for s in spans if s is not None]
+    links = [{"port": f"p{i}", "leaves": list(s)} for i, s in enumerate(spans) if s is not None]
     low = class_lowering(act, uc, f"unit-class/{name}", groups, packs, blocks=not core_rows)
     whole = wiring is None and uc.computing == act.graph.n and not isinstance(act.fn, PrimitiveDefinition)
     sub, iset = _shims(name, uc.form.encode() + (b"/" + suffix[1:].encode() if suffix else b"") +
-                       (b"/link-ports:" + json.dumps(cuts).encode() if cuts else b""), len(groups), act.fn if whole else None)
+                       (b"/links:" + json.dumps(links).encode() if links else b""), len(groups), act.fn if whole else None)
     rows, outs, per_port = pack(uc, ins, want, low.definition.w_in, low.definition.w_out, groups, low.definition.port_words, packs)
     got, _cut, ok = low.evaluate(rows.astype(np.uint64))
     if real is not None:
         outs[real:] = got[real:].astype(np.uint16)
     text = FC.compose(low, sub, partition=partition, program=program, port_bits=bits, seg_ports=seg_ports, seg_out_rows=seg_out_rows,
-                      v2_out_rows=v2_out_rows, definition=definition, leaf_scheme=LEAF_SCHEME)
+                      v2_out_rows=v2_out_rows, links=links or None, definition=definition, leaf_scheme=LEAF_SCHEME)
     if not int(ok) == (1 << len(rows)) - 1 or not np.array_equal(got.astype(np.uint16), outs):
         raise AssertionError(f"class {name}: the laid-out unit rows disagree with the reference on its lanes")
     if bits is not None:
@@ -683,23 +725,34 @@ def stage(units: PartitionUnits, spec: str, shape: str, cl, lanes_: tuple, out_d
             firsts[f"p{i}"] = at
             if not np.array_equal(tables[f"p{i}"][ref], per_port[f"p{i}"]):
                 raise AssertionError(f"class {name}: instances reading one source disagree on its row")
-    if wiring is not None and wiring.strict:
+    salts = None
+    if links:
+        ports = FC._meta_ports(meta)
+        salts = FC.stage_salts(iset, 0, n, ports, salt_key, {p.name: len(tables[p.name]) if p.name in tables else n for p in ports})
+        out_name = ports[-1].name
         for i, ws in enumerate(writers):
-            for r, k in enumerate(firsts[f"p{i}"] if ws is not None else ()):
-                w, row = ws[k], tables[f"p{i}"][r]
-                if w is not None and (not np.array_equal(row[:outs.shape[1]], outs[w]) or row[outs.shape[1]:].any()):
+            if ws is None:
+                continue
+            for r, k in enumerate(firsts[f"p{i}"]):
+                w = ws[k]
+                if w is None:
+                    continue
+                row = tables[f"p{i}"][r]
+                if wiring.strict and (not np.array_equal(row[:outs.shape[1]], outs[w]) or row[outs.shape[1]:].any()):
                     raise AssertionError(f"class {name}: instance {k}'s link row p{i} is not instance {w}'s output row")
+                if wiring.writer_salts:
+                    salts[f"p{i}"][r] = salts[out_name][w]
     if not share_rows:
         tables = refs = None
     head = FC.write(text, iset, 0, n, out_dir / f"inst-{n}.bin", out_dir / f"pub-{n}.bin", salt_key, rows=per_port, outs={"out": outs},
-                    share_rows=share_rows, tables=tables, refs=refs, indices=list(wiring.indices) if wiring else None)
+                    share_rows=share_rows, tables=tables, refs=refs, salts=salts, indices=list(wiring.indices) if wiring else None)
     return ({} if real is None else {"real": real, "fillers": n - real}) | \
         {"n": n, "unit_nnz": low.layout.counts["nnz_a"] + low.layout.counts["nnz_b"], "circuit_bytes": len(text), "w_in": low.definition.w_in,
             "w_out": low.definition.w_out, "unit_rows": low.layout.useful, "ports": list(low.definition.port_words),
             "shared_rows": head.get("shared_rows"), "ands": low.layout.counts["ands"], "k_log": meta["k_log"],
             "vus_per_block": meta["vus_per_block"], "circuit_sha512": FC.digest(text), "class_sha512": FC.class_digest(text)} | \
         ({"packed": True} if packed else {}) | ({"row_schemas": meta["row_schemas"]} if bits is not None else {}) | \
-        ({"link_ports": cuts, "definition": definition} if wiring is not None else {})
+        ({"links": links, "definition": definition} if wiring is not None else {})
 
 
 def _check_bit_rows(uc: UnitCircuit, ins: Sequence[Sequence[int]], groups: list[list[int]], bits: list[int], per_port: dict,

@@ -186,6 +186,13 @@ theorem inDrawnWith_std (c : Circuit) (pi : HmIn.Ports) (pub : Public) (draw : J
   exact drawnWith_std _ _ _
 
 set_option maxRecDepth 20000 in
+theorem linksCheckWith_std (c : Circuit) (pop : Public) (program : ByteArray) :
+    HmLinks.checkWith std c pop program = HmLinks.check c pop program := by
+  unfold HmLinks.checkWith HmLinks.check
+  simp -zeta only [programDecodeWith_std]
+  try rfl
+
+set_option maxRecDepth 20000 in
 theorem setupHiddenWith_std (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins)
     (tables : List (String × ByteArray)) (draw : Option Json) (partition : Option Json) (program : Option ByteArray)
     (publicInputs : Option ByteArray) :
@@ -193,7 +200,7 @@ theorem setupHiddenWith_std (tags : Tags) (circuitFile publicFile : ByteArray) (
       = Stmt.setupHidden tags circuitFile publicFile coins tables draw partition program publicInputs := by
   unfold Stmt.setupHiddenWith Stmt.setupHidden
   simp -zeta only [outParseWith_std, checkPartitionWith_std, inLoadPublicWith_std, inDrawnWith_std, stratifiedLawWith_std,
-    outCheckPublicWith_std, deriveTemplateUnitsWith_std, qwordFindingWith_std, std_sha512, pure_bind]
+    outCheckPublicWith_std, deriveTemplateUnitsWith_std, linksCheckWith_std, qwordFindingWith_std, std_sha512, pure_bind]
   try rfl
 
 set_option maxRecDepth 20000 in

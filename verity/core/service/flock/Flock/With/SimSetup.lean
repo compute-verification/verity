@@ -281,6 +281,15 @@ theorem hmInDrawnWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Th
     (draw : Json) : S.R (HmIn.drawnWith hs c pi pub draw) (HmIn.drawnWith hs' c pi pub draw) :=
   drawnWith_sim S tM tN hh _ pub draw
 
+theorem hmLinksCheckWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
+    {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (c : Circuit) (pop : Public) (program : ByteArray) :
+    S.R (HmLinks.checkWith hs c pop program) (HmLinks.checkWith hs' c pop program) := by
+  unfold HmLinks.checkWith
+  simp -zeta only [tM.bind, tN.bind]
+  sim_walk [programDecodeWith_sim S tM tN hh]
+  iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals sim_walk [programDecodeWith_sim S tM tN hh])
+
+
 theorem setupHiddenWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
     {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (tags : Tags) (circuitFile publicFile : ByteArray)
     (coins : Coins) (tables : List (String × ByteArray)) (draw : Option Json) (partition : Option Json)
@@ -291,13 +300,13 @@ theorem setupHiddenWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : 
   simp -zeta only [tM.bind, tN.bind]
   sim_walk [hmOutParseWith_sim S tM tN hh, Sim.map S, checkPartitionWith_sim S tM tN hh,
     hmInLoadPublicWith_sim S tM tN hh, hmInDrawnWith_sim S tM tN hh, stratifiedLawWith_sim S tM tN hh,
-    hmOutCheckPublicWith_sim S tM tN hh, deriveTemplateUnitsWith_sim S tM tN hh,
+    hmOutCheckPublicWith_sim S tM tN hh, deriveTemplateUnitsWith_sim S tM tN hh, hmLinksCheckWith_sim S tM tN hh,
     qwordFindingWith_sim S tM tN hh]
   iterate 40
     all_goals try (dsimp +zetaDelta -zeta only)
     all_goals sim_walk [hmOutParseWith_sim S tM tN hh, Sim.map S, checkPartitionWith_sim S tM tN hh,
       hmInLoadPublicWith_sim S tM tN hh, hmInDrawnWith_sim S tM tN hh, stratifiedLawWith_sim S tM tN hh,
-      hmOutCheckPublicWith_sim S tM tN hh, deriveTemplateUnitsWith_sim S tM tN hh,
+      hmOutCheckPublicWith_sim S tM tN hh, deriveTemplateUnitsWith_sim S tM tN hh, hmLinksCheckWith_sim S tM tN hh,
       qwordFindingWith_sim S tM tN hh]
 
 -- the walk meets each of the three draw checks' join points at every call that does not throw

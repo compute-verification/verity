@@ -16,8 +16,8 @@ research run --on vy-nebius-1 --cwd source --project verity --declared-output 'o
 ~~~
 
 `WIRED=1` runs each class as the wired circuit of four units (`universal.py --wired`) after the one-unit statement at the
-same instance count. Each cut wire is a link port committed under its reader's own salt, and both verifiers verify the
-statement alone (PROTOCOL.md §16.13): a prover whose unit reads a made-up input is accepted here, since that the link row is
-its writer's output row is the recursive statement's check, and a live verifier given a links file refuses before serving.
+same instance count, with its cut wires linked (PROTOCOL.md §16.13) and two cheating provers both verifiers must refuse.
+Linking binds a public topology; it does not hide the topology: the program descriptor is public in this run, which leaks
+the circuit's wiring beyond the size class.
 
 `check` runs nothing here.
