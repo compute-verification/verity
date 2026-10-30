@@ -13,7 +13,7 @@ a lower bound on `execute.py`'s count of every schedule in the family:
 - for a float atom, its fp32 drains, with the operands centred (the fewest drains).
 
 Not charged, so the bound stays a bound: shift corrections, E's affine map, the spilled reading's reloads, and wrapping
-mod 2^w (free here; a mask in practice). Mod 2^w, an operand wider than 2^w values wraps to 2^w, and the high digit of a split at a
+mod 2^w (free here; `execute.py` charges the noise side's mask). Mod 2^w, an operand wider than 2^w values wraps to 2^w, and the high digit of a split at a
 power of two d needs only w − log₂d bits (zero bits: free). `run_mod` executes any returned tree exactly mod 2^w.
 """
 
@@ -23,6 +23,7 @@ import argparse
 import gzip
 import json
 import math
+import re
 import sys
 from pathlib import Path
 
@@ -266,15 +267,15 @@ def check(node, a: int, b: int, w: int, chip: str, seeds: int = 2) -> bool:
     return ok
 
 
-def executed(tree, a: int, shape) -> dict:
-    """`execute.py`'s three readings of an exact (w = 16, R int8) tree at `shape`, E's affine map included."""
+def executed(tree, a: int, b: int, shape) -> dict:
+    """`execute.py`'s three readings of an exact tree (R centred on b values) at `shape`, E's affine map included."""
     import execute
 
     m, K, n = shape
     t = json.loads(json.dumps(tree))
     execute.heights(t)
     o = execute.Ops()
-    execute.run(t, None, None, (0, a - 1), (-128, 127), shape, o)
+    execute.run(t, None, None, (0, a - 1), (-(b // 2), b - b // 2 - 1), shape, o)
     o.add_out(m * n)
     return {r: o.w1(r) / (m * K * n) for r in ("fast", "plain", "spilled")}
 
@@ -291,8 +292,17 @@ def main(argv=None) -> int:
                     help="range rounding: `down` (a lower bound), `up` (an upper bound with a checked witness), `none`")
     ap.add_argument("--trees", type=Path, help="directory for the argmin trees (JSON)")
     ap.add_argument("--json", type=Path)
+    ap.add_argument("--recount", type=Path, nargs="+",
+                    help="count stored trees (`--trees` output) with the executor at the --shapes entry of their K and n")
     args = ap.parse_args(argv)
     sys.setrecursionlimit(100000)
+    if args.recount:
+        ms = {(K, n): m for m, K, n in (map(int, s.split(",")) for s in args.shapes.split())}
+        for f in args.recount:
+            t = json.loads(gzip.decompress(f.read_bytes()))
+            K, n = (int(re.search(rf"_{k}(\d+)_", f.name)[1]) for k in "Kn")
+            print(json.dumps({"tree": f.name, "w1": t["cost"], "executed": executed(t, t["a"], t["b"], (ms[K, n], K, n))}))
+        return 0
     out, ok = [], True
     for chip in args.chips.split():
         for case in args.cases.split():
@@ -313,8 +323,7 @@ def main(argv=None) -> int:
                             if grid != "down":
                                 row["exact"] = check(t, a, b, w, chip, seeds=1 if st["depth"] >= 5 else 2)
                                 ok &= row["exact"]
-                                if b == 256 and w == 16:
-                                    row["executed"] = executed(t, a, (m, K, n))
+                                row["executed"] = executed(t, a, b, (m, K, n))
                                 if args.trees:
                                     args.trees.mkdir(parents=True, exist_ok=True)
                                     f = args.trees / f"{chip}_a{a}_b{b}_w{w}_K{K}_n{n}_{reading}_L{L}.json.gz"
