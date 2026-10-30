@@ -2198,31 +2198,99 @@ def test_the_preflight_refuses_a_head_that_breaks_a_lean_module_a_pr_on_next_own
     assert StoreLabels(world.store, log=world.logs.append).ready(3, h3) is False and _no_worktree_left(world)
 
 
-def test_the_lean_step_says_why_it_built_nothing_as_a_skipped_check_and_refuses_nothing(world, monkeypatch, capsys):
-    """An agent VM keeps no warm Lean tree and builds nothing; a change more modules import than the preflight builds, a node
-    without Mathlib for the package, and a spent budget each leave the break to drive's Lean check: said as a skipped check,
-    never as nothing refused, and never refused."""
-    from research.queue import LakeBuild, MarkOnly, ready
+def test_the_lean_step_skips_past_its_bounds_and_refuses_what_it_cannot_build(world, monkeypatch, capsys):
+    """A change more modules import than the preflight builds, and a spent budget, leave the break to drive's Lean check: said
+    as a skipped check, never as nothing refused, and never refused.  A head whose few modules nothing builds (no warm tree and
+    no node to build on, a node without Mathlib for the package) is refused with the fix: an unbuilt module is how a head that
+    breaks `next`'s Lean got marked."""
+    from research.queue import LakeBuild, MarkOnly, StoreLabels, ready
 
     seen, slots = _lean_world(world, monkeypatch)
     cases = [
-        (LakeBuild(slots=world.tmp / "absent"), {}, "this machine keeps no warm Lean tree", False),
-        (LakeBuild(slots=slots), {"lean_modules": 5}, "6 modules are or import what it changes, over the 5", False),
-        (LakeBuild(slots=slots), {"lean_s": 0}, "budget was spent before it started", False),
-        (LakeBuild(slots=slots), {}, "lean/a not built: no Mathlib here", True),
+        (LakeBuild(slots=slots), {"lean_modules": 5}, "6 modules are or import what it changes, over the 5", False, False),
+        (LakeBuild(slots=slots), {"lean_s": 0}, "lean build timed out (6 module(s) not built: the Lean step's budget was spent",
+         False, False),
+        (LakeBuild(slots=world.tmp / "absent"), {}, "this machine keeps no warm Lean tree (no `build` pool in "
+         f"{world.tmp / 'absent'}; an agent VM builds nothing) and was given no node to build on: `ready --on MACHINE` builds "
+         "them on vy-nebius-cpu-3", False, True),
+        (LakeBuild(slots=slots), {}, "lean/a not built: no Mathlib here: mark again once this node builds them", True, True),
     ]
-    for n, (lean, kw, says, built) in enumerate(cases, start=2):
+    for n, (lean, kw, says, built, refused) in enumerate(cases, start=2):
         if built:
             monkeypatch.setenv("FAKE_LEAN_SKIP", "no Mathlib here")
         seen.unlink(missing_ok=True)
-        world.gh.put(n, world.change({"lean/a/A/Base.lean": "def bar := 1\n", f"n{n}.txt": "x\n"}), ready=False)
+        world.gh.put(n, h := world.change({"lean/a/A/Base.lean": "def bar := 1\n", f"n{n}.txt": "x\n"}), ready=False)
         world.logs.clear()
-        assert ready(world.gh, world.store, n, f"lane-{n}", MarkOnly(), preflight=_preflight(world, lean=lean, **kw)) == 0, \
-            capsys.readouterr().err
+        rc = ready(world.gh, world.store, n, f"lane-{n}", MarkOnly(), preflight=_preflight(world, lean=lean, **kw))
+        err = capsys.readouterr().err
+        assert seen.exists() is built and StoreLabels(world.store, log=world.logs.append).ready(n, h) is (not refused)
+        if refused:
+            found = [ln for ln in err.splitlines() if ln.startswith("  - ")]
+            assert rc == 1 and len(found) == 1, err
+            assert found[0].startswith(f"  - Lean: 6 module(s) that are or import what it changes couldn't be built: {says}"), err
+            continue
+        assert rc == 0, err
         said = next(s for s in world.logs if f"preflight: #{n} at" in s)
         assert "checks skipped: " in said and "nothing refused" not in said and says in said, said
         assert said.index("checks skipped: ") < said.index(says), said
-        assert seen.exists() is built
+
+
+def test_ready_mark_from_an_agent_vm_builds_the_lean_it_reaches_on_cpu_3_refuses_what_it_cannot_and_skips_a_timeout(
+        world, monkeypatch, capsys):
+    """`ready --mark` from a VM without a warm Lean tree used to skip the Lean step, so a head whose merge onto `next` broke 5
+    modules was marked.  The step ships the merged tree to `PREFLIGHT_LEAN_ON` whatever the tier (a stand-in for `research
+    run` runs the stand-in builder in the shipped tree) and refuses the break; a run that doesn't start refuses with the fix;
+    one that hasn't ended by the deadline marks, said as 'checks skipped: lean build timed out'."""
+    from research.queue import PREFLIGHT_LEAN_ON, LakeBuild, MarkOnly, StoreLabels, ready
+
+    seen, _ = _lean_world(world, monkeypatch)
+    rid, slow, runs, launched, mode = "r20261030-120000-abcd", "r20261030-120000-beef", world.tmp / "runs", [], {}
+
+    def run(argv, cwd, left):
+        if argv[3] == "fetch":
+            return 0, ""
+        launched.append(argv[3:])
+        if mode["now"] == "unreachable":
+            return 1, f"research run: {PREFLIGHT_LEAN_ON}: ssh: connect to host: Connection refused\n"
+        if mode["now"] == "slow":
+            return None, f"research: run {slow} launched on {PREFLIGHT_LEAN_ON} (pod) pid=1 -> /r\n"
+        source, tail = Path(argv[argv.index("--source") + 1]), argv[argv.index("--") + 2:]
+        p = subprocess.run([sys.executable, *tail], cwd=source, capture_output=True, text=True)
+        (runs / rid).mkdir(parents=True, exist_ok=True)
+        (runs / rid / "stdout.log").write_text(p.stdout)
+        return p.returncode, f"research: run {rid} launched on {PREFLIGHT_LEAN_ON} (pod) pid=1 -> /r\n"
+
+    lean = LakeBuild(on=PREFLIGHT_LEAN_ON, by="lane-2", slots=world.tmp / "absent", run=run, runs=lambda: runs)
+    mode["now"] = "builds"
+    world.gh.put(2, h2 := world.change({"lean/a/A/Base.lean": "def bar := 1\n"}), ready=False)
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world, lean=lean)) == 1
+    err = capsys.readouterr().err
+    assert [ln for ln in err.splitlines() if ln.startswith("  - ")] == [
+        "  - Lean: `B.Use` (lean/b/B/Use.lean), of #1 on `next`, fails to build with this head merged: error: lean/b/B/Use.lean:2:0: "
+        "unknown identifier 'foo': merge or stack on that PR, never merge `next` (it carries unlanded PRs)"], err
+    assert [a[:3] for a in launched] == [["run", "--on", PREFLIGHT_LEAN_ON]] * 2, "the merge, then what failed, on `next`"
+    assert [json.loads(ln) for ln in seen.read_text().splitlines()][1] == ["lean/b/B/Use.lean"]
+    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is False
+
+    mode["now"] = "unreachable"
+    world.gh.put(3, h3 := world.change({"lean/a/A/Base.lean": "def baz := 1\n"}), ready=False)
+    assert ready(world.gh, world.store, 3, "lane-3", MarkOnly(), preflight=_preflight(world, lean=lean)) == 1
+    err = capsys.readouterr().err
+    assert [ln for ln in err.splitlines() if ln.startswith("  - ")] == [
+        f"  - Lean: 6 module(s) that are or import what it changes couldn't be built: its build on {PREFLIGHT_LEAN_ON} exited 1 "
+        f"without a result line: research run: {PREFLIGHT_LEAN_ON}: ssh: connect to host: Connection refused: mark again once "
+        f"{PREFLIGHT_LEAN_ON} builds them (its `build` Lean slots are @infra's; `research status` there says why not)"], err
+    assert StoreLabels(world.store, log=world.logs.append).ready(3, h3) is False and _no_worktree_left(world)
+
+    mode["now"] = "slow"
+    world.gh.put(4, h4 := world.change({"lean/a/A/Base.lean": "def qux := 1\n"}), ready=False)
+    world.logs.clear()
+    assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=_preflight(world, lean=lean)) == 0, \
+        capsys.readouterr().err
+    said = next(s for s in world.logs if "preflight: #4 at" in s)
+    assert "checks skipped: lean build timed out (6 module(s) not built: its build on " \
+           f"{PREFLIGHT_LEAN_ON} (run {slow}) hadn't ended after" in said and "nothing refused" not in said, said
+    assert StoreLabels(world.store, log=world.logs.append).ready(4, h4) is True and _no_worktree_left(world)
 
 
 def test_the_lean_step_ships_the_merged_tree_to_a_node_for_ready_on_and_reads_its_result(tmp_path):
@@ -2265,9 +2333,11 @@ def test_research_queue_ready_runs_the_preflight_unless_no_preflight(world, monk
     monkeypatch.chdir(world.dev)
     base = ["queue", "ready", "3", "--mark", "--by", "lane-3", "--remote", str(world.origin), "--repo", "o/r"]
     assert research_main(base) == 0 and research_main([*base, "--no-preflight"]) == 0
+    assert research_main([*base[:3], "--local", *base[4:]]) == 0
     assert isinstance(seen[0], Q.Preflight) and seen[1] is None
-    assert isinstance(seen[0].lean, Q.LakeBuild) and seen[0].lean.on is None, "only `ready --on` ships the Lean step to a node"
-    assert all(isinstance(g, Q.RecordsGate) for g in gates) and len(gates) == 2        # the records gate isn't the preflight's
+    assert [(p.lean.on, p.lean.by) for p in (seen[0], seen[2])] == [(Q.PREFLIGHT_LEAN_ON, "lane-3")] * 2, \
+        "--mark and --local ship the Lean step to a node too"
+    assert all(isinstance(g, Q.RecordsGate) for g in gates) and len(gates) == 3        # the records gate isn't the preflight's
     with pytest.raises(SystemExit) as e:
         research_main(["queue", "status", "--no-preflight"])
     assert e.value.code == 2 and "--no-preflight is for ready only" in capsys.readouterr().err
