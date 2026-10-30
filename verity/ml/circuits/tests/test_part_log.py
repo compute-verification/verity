@@ -6,7 +6,7 @@ import json
 import random
 
 from verity.ml.circuits.codec import decode_program, encode_program
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, Registry
+from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, DefinitionTable
 from verity.ml.circuits.liveness import dead_gates
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided, broadcast, concat, prefix_runs, runs
@@ -199,7 +199,7 @@ def test_encoding_and_liveness_of_log_cuts_are_those_of_concat():
 def test_a_decoded_alias_chain_is_one_log_and_decodes_to_the_flat_parts():
     """Call P's key sequence is written as an alias to call P-1's plus one part; the decoder extends one log along the chain,
     and every decoded sequence is `Concat` of the flat parts the writer had."""
-    reg = Registry()
+    reg = DefinitionTable()
     reg.add(Neg16)
     reg.add(Add16)
     N = 30

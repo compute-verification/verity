@@ -18,7 +18,7 @@ import pytest
 from test_qword_vectors import TAdd64, Dead, Max3, Step, TwiceSep, WideTwice, Wiring, _c, _canon, _top, registry as _qword_registry
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import codec, cut, partition_object as PO
-from verity.ml.circuits.defs import PrimitiveDefinition, Registry
+from verity.ml.circuits.defs import PrimitiveDefinition, DefinitionTable
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
@@ -31,7 +31,7 @@ BIT, V32, V64 = BL.BIT, Value(32), Value(64)
 TLo32 = PrimitiveDefinition("TLo32", 1, (("a", V64),), V32, lambda a: a & 0xFFFFFFFF, register=False)
 
 
-def registry() -> Registry:
+def registry() -> DefinitionTable:
     r = _qword_registry()
     r.add(TLo32)
     return r
