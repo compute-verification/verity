@@ -42,17 +42,6 @@ theorem m1Schedule_logLen₀ {m : ℕ} (h1 : 25 ≤ m) (h2 : m ≤ 35) :
     10 ≤ ((m1Schedule m).levels.headD default).logLen ∧ ((m1Schedule m).levels.headD default).logLen ≤ 23 := by
   interval_cases m <;> decide
 
-/-- `k = ⌈4N₀/e⌉` at a `fast100` schedule is `kVal d₀`. -/
-theorem k_fast100 {m : ℕ} {sch : Schedule} (h : fast100 m = some sch) :
-    kRep (sch.levels.headD default).logLen = kVal (sch.levels.headD default).logLen := by
-  have hm : 22 ≤ m ∧ m ≤ 35 := by
-    by_contra hc
-    have : fast100 m = none := by unfold fast100; split <;> simp_all
-    simp [this] at h
-  obtain ⟨h1, h2⟩ := hm
-  apply kRep_eq
-  interval_cases m <;> (simp only [fast100, Option.some.injEq] at h; subst h; decide)
-
 /-! ## The weight -/
 
 /-- The weight's natural part: `2·Σ_ℓ 2^{d_ℓ}·Q_ℓ + 2N² + 2`. -/
