@@ -1,9 +1,10 @@
 """The Lean card tables agree with the card files, number by number.
 
-Each card file names its Lean table (``lean``). Its ``clock`` and ``card`` definitions are evaluated as exact rationals
+A GPU card file names its Lean table (``lean``). Its ``clock`` and ``card`` definitions are evaluated as exact rationals
 (``^`` a power, ``/`` exact, and a natural-number field refused where Lean's division would truncate) and each arm is
 compared with what the card file gives, for every store, resource and format the ACCEL ops are priced in
 (``Security/Definitions/Core/Accel/Isa.lean``): a constructor added there fails here until the card files carry it.
+The B200 has no card table yet, and its data sheet (``Accounting.TS.Sheets.B200``) is held to its card file instead.
 """
 
 from __future__ import annotations
@@ -20,6 +21,8 @@ from verity.hardware import load, skus
 
 ROOT = Path(__file__).resolve().parents[3]
 ISA = ROOT / "Security/Definitions/Core/Accel/Isa.lean"
+SHEET = ROOT / "Security/Definitions/Accounting/Sheets/B200.lean"
+LEAN = [sku for sku in skus("gpu") if "lean" in load(sku)]
 WORD = 4  # bytes in a 32-bit word, the unit of every store and of device memory's rate
 OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv}
 
@@ -116,12 +119,31 @@ def disagreements(card: dict, text: str) -> list[str]:
     return out
 
 
-@pytest.mark.parametrize("sku", skus())
+@pytest.mark.parametrize("sku", LEAN)
 def test_lean_table_agrees_with_the_card_file(sku: str) -> None:
     card = load(sku)
     found = disagreements(card, (ROOT / card["lean"]).read_text(encoding="utf-8"))
     assert not found, (f"{card['lean']} and verity/hardware/cards/{sku}.toml disagree; change the card file first, "
                        "then its Lean table to match:\n" + "\n".join(found))
+
+
+def test_the_gpu_cards_without_a_lean_table() -> None:
+    assert sorted(set(skus("gpu")) - set(LEAN)) == ["b200-sxm-180gb"]
+
+
+def test_the_b200_sheet_agrees_with_its_card_file() -> None:
+    """``Accounting.TS.Sheets.B200`` states the B200 card's clock, SMs and pipe widths, and each format's peak as
+    ``rate.tensor`` over that format's weight. The sheet's implied and FP64 clocks, its FP6 peak and its uniform pipe
+    have no key in the card file."""
+    card = load("b200-sxm-180gb")
+    sheet = dict(re.findall(r"^def (\w+) : ℝ := (.+)$", SHEET.read_text(encoding="utf-8"), re.M))
+    keys = {"fmaxMHz": ("clock", "sm"), "smCount": ("sm", "count"), "widthAlu": ("rate", "alu"),
+            "widthImad": ("rate", "imad"), "widthShfl": ("rate", "shfl")}
+    peaks = {"peakS8": "s8", "peakE4m3": "e4m3", "peakE5m2": "e5m2", "peakF16": "f16", "peakBf16": "bf16",
+             "peakTf32": "tf32", "peakFp4": "nvf4", "peakFp4_f8f6f4": "e2m1", "peakF64": "f64"}
+    want = {name: number(card[section][key]) for name, (section, key) in keys.items()}
+    want |= {name: number(card["rate"]["tensor"]) / number(card["weight"][fmt]) for name, fmt in peaks.items()}
+    assert {name: evaluate(sheet[name]) for name in want} == want
 
 
 def test_a_changed_number_is_a_disagreement() -> None:
