@@ -36,7 +36,7 @@ namespace Placed
 variable {L : Type*} (A : Placed L)
 
 /-- The pricing that counts the gates of op class `o`: one for each, nothing for the others. -/
-def classPrice (cls : Fin A.N → Option Op) (o : Op) : Fin A.N → ℕ := fun g => if cls g = some o then 1 else 0
+def classPrice (cls : Fin A.N → Option OpClass) (o : OpClass) : Fin A.N → ℕ := fun g => if cls g = some o then 1 else 0
 
 end Placed
 
@@ -48,7 +48,7 @@ open Classical in
 /-- **The schedule a run induces** on the device at `chip ∪ mem`, with its chip at `chip`, its memory at `mem`, its
 memory link `hbm` and its side channels `side` (each a link and its end at the device), each gate charged to `acct g`
 and counted as an op of `cls g`. -/
-noncomputable def schedule {E ι α : Type} (chip mem : Finset L) (cls : Fin R.A.N → Option Op) (acct : Fin R.A.N → α)
+noncomputable def schedule {E ι α : Type} (chip mem : Finset L) (cls : Fin R.A.N → Option OpClass) (acct : Fin R.A.N → α)
     (link : Fin R.A.N → Fin R.A.N → E) (hbm : E × L) (side : ι → E × L) : Schedule ι α := fun t =>
   { ops := fun a o => (((R.A.region (chip ∪ mem) (Set.Ico t (t + 1))).filter fun g => cls g = some o).filter
       fun g => acct g = a).card
