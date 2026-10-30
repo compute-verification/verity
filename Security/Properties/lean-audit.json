@@ -4088,6 +4088,8 @@
    "Verity.remote_soundness_of_subprotocols_honest": "completeness: RemoteSoundness's honest lemma: its three targets hold at remote's compiled composite at the idle deployment Verity.Idle.unbounded",
    "Verity.remote_soundness_of_subprotocols_nontrivial": "lemma: RemoteSoundness's nontrivial lemma: SoundnessFor fails at remote for a verifier that accepts everything at the idle deployment Verity.Idle.exact",
    "Properties.Composition.acceptSame_honest": "completeness: AcceptSame's honest lemma: remote's checkSame accepts a composition that fits, with no components, under the binding of no digests",
+   "Properties.Remote.SecurityProofs.acceptInferenceOnly_nontrivial": "lemma: AcceptInferenceOnly's nontrivial lemma: InferenceOnlyHeld fails at no cases, ev = [], which a verifier that accepts everything accepts",
+   "Properties.Remote.SecurityProofs.acceptComplies_nontrivial": "lemma: AcceptComplies' nontrivial lemma: CompliesHeld fails at no cases, ev = [], which a verifier that accepts everything accepts",
    "Properties.Composition.acceptSame_nontrivial": "lemma: AcceptSame's nontrivial lemma: SameAccepted fails at parameters that name a component the composition doesn't have, which a verifier that accepts everything accepts",
    "Properties.Composition.acceptTied_honest": "completeness: AcceptTied's honest lemma: holdTies accepts an accepted outcome whose ties hold",
    "Properties.Composition.acceptTied_nontrivial": "lemma: AcceptTied's nontrivial lemma: TiedAccepted fails at an outcome that rejected, which a verifier that accepts everything accepts",
