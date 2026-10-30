@@ -148,7 +148,7 @@ theorem inner_link {p : Readable.Parsed} {w : Claims.Flock.Wit} (hP : Readable.P
   have hnIn : HmOut.nIn st'.c ≤ st'.c.ports.size := Nat.sub_le _ _
   rcases RecLinkBind.link_binding hRr hWr hout hk with ⟨hin, hon, hx⟩ | hcr | hcw
   rotate_left
-  · exact .inr (collides_mem (by simp only [innerMsgs, List.mem_cons, eq_self, true_or, or_true])
+  · exact .inr (collides_mem (by simp only [innerMsgs, List.mem_cons, eq_self, true_or])
       (by simp only [innerMsgs, List.mem_cons, eq_self, true_or, or_true]) hcr)
   · exact .inr (collides_mem (by simp only [innerMsgs, List.mem_cons, eq_self, true_or, or_true])
       (by simp only [innerMsgs, List.mem_cons, eq_self, true_or, or_true]) hcw)
