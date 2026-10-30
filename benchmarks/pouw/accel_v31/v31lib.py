@@ -247,7 +247,9 @@ served_seeds = v31.served_seeds
 # ------------------------------------------------------------------------------------------------------------- gate
 # NAME KIND M N K LP L ROW A CHEAT. KIND fill (A pad: the filler's pad; llm/uniform: a served operand through the filler's
 # path) or served (A llm/uniform, through the context's device copy). CHEAT none, a cheat the verifier must refuse, or
-# rootless: an honest served call the prover must refuse at its root (a row of A + d_A spans -128 .. 128)
+# rootless: an honest served call the prover must refuse at its root (a row of A + d_A spans -128 .. 128). A forge's FRAC
+# makes a proof block land on it with probability at least 1/4 (its tiles' share times the share of segments whose check
+# reads T_S0), so the gate's q = 64 blocks all miss it with probability at most (3/4)^64, about 1e-8
 GATES = """
 f-pad-k fill 256 256 4096 512 4096 1024 pad none
 f-pad-768 fill 256 384 3072 256 768 1024 pad none
@@ -260,7 +262,7 @@ f-lp2048 fill 256 256 6144 2048 8192 1024 llm none
 f-row8k fill 128 256 8192 256 2048 8192 pad none
 f-big fill 512 1024 8192 512 4096 1024 llm none
 c-skip fill 256 256 4096 256 1024 1024 pad skip:5
-c-forge fill 256 256 4096 256 1024 1024 llm forge:2:0.25
+c-forge fill 256 256 4096 256 1024 1024 llm forge:2:0.5
 f-k2048 fill 256 384 2048 256 2048 2048 llm none
 c-skip-s1 fill 256 256 2048 256 2048 1024 pad skip:3
 c-forge-s1 fill 256 256 2048 256 2048 1024 llm forge:1:0.25
@@ -273,8 +275,8 @@ s-row1k served 256 512 2048 128 1024 1024 llm none
 s-big served 512 1024 8192 512 4096 16384 llm none
 s-uniform served 256 256 2048 256 2048 16384 uniform rootless
 cs-forgeO served 256 256 4096 512 4096 16384 llm forgeO:0.25
-cs-forgeO-s4 served 256 256 4096 128 1024 16384 llm forge:0:0.25
-cs-forge-s4 served 256 256 4096 128 1024 16384 llm forge:2:0.25
+cs-forgeO-s4 served 256 256 4096 128 1024 16384 llm forge:0:1
+cs-forge-s4 served 256 256 4096 128 1024 16384 llm forge:2:0.5
 cs-skip-s4 served 256 256 4096 128 1024 16384 llm skip:5
 cs-nodither served 256 256 4096 512 4096 16384 llm nodither
 cs-nodither-s4 served 256 256 4096 128 1024 16384 llm nodither
