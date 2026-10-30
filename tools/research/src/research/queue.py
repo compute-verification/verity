@@ -27,15 +27,20 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    checker (tools/verity/lean) are the head's, naming the run to start; then,
                                                    in about a minute, the preflight (`Preflight`) refuses, with
                                                    the fix, a head that conflicts with a
-                                                   fresh `next` (naming the paths), contains an open PR that isn't admitted
-                                                   (naming it), fails a landing gate of drive.toml at `main` (with
+                                                   fresh `next` outside the pins (naming the paths), contains an
+                                                   open PR that isn't admitted (naming it), fails a landing gate of drive.toml at `main` (with
                                                    the gate's fix), or, merged onto `next` in a temporary worktree, fails `pins.py
                                                    --stale`, tests/test_module_strings.py, test_pins.py, test_doc_paths.py,
                                                    test_repository.py, tools/research/tests/test_pythonpath.py, or `pytest
                                                    --collect-only` in a suite
                                                    whose inputs its change touches, or breaks the build of a Lean module that
                                                    is or imports what it changes (on a warm Lean tree: here on a node, else
-                                                   with --on on vy-nebius-cpu-3), naming the PR on `next` that owns it;
+                                                   on vy-nebius-cpu-3, whatever the tier; refused when it can't build them),
+                                                   naming the PR on `next` that owns it, or
+                                                   drops from a Lean lock it changes a shape.inline premise or shape.frozen
+                                                   key `next`'s statements still need (naming each; the sync leaves such a
+                                                   head off `next` too); a check it couldn't run it names under "checks
+                                                   skipped";
                                                    --no-preflight skips it (the lander's)
     research queue drive (--on MACHINE | --config PATH [--config-from-tree]) [--marked-after TS] [--first N,...]
                          [--[no-]regenerate-locks] [--[no-]after-landing-no-cache] [--dry-run]
@@ -111,9 +116,16 @@ a row another queued PR refits away (an error at collection), one lane's unlande
 `tests/test_repository.py` (a Markdown cap, a report-genre name), which the preflight runs too, as it runs the landing gates the
 sync would (on the head; the sync, on its merge onto `next`).  A Lean change can pass its own Lean check and break a module
 another PR on `next` owns (a changed signature, dropped premises, a dropped import), which drive's Lean check of the stack finds
-only an hour later; the preflight builds those modules (`LakeBuild`).  So `ready` runs `Preflight` before the mark and before any quick tier: a refusal names what it found and the fix, a
-failure `next` has too refuses nothing, and what keeps a check from running is said and refuses nothing (the after-landing run
-checks it).  `--no-preflight` skips it, for the lander.
+only an hour later; the preflight builds those modules (`LakeBuild`), on `PREFLIGHT_LEAN_ON` from a machine without a warm Lean
+tree whatever the tier, and refuses a head whose modules it can't build.  A head whose lock, merged onto `next` by
+`tools/verity/lean/merge.py`, drops a `shape.inline` premise or a `shape.frozen` key that `next`'s unchanged statements still need
+(a lock regenerated on an older tree) fails that Lean check too; the preflight names each such entry (`lock_drops`), and the sync
+leaves such a head off `next` with the same refusal.  So `ready` runs `Preflight` before the mark and before any quick tier: a refusal names what it found and the fix, a
+failure `next` has too refuses nothing, and what keeps a check from running is said under "checks skipped" and refuses nothing
+(the after-landing run checks it).  A conflict only in pins is merged as the sync merges it (`merged_tree`), and the checks run
+on that tree.  The merge runs the merge drivers of the commit it merges onto, as the sync's clone defines them (`base_drivers`):
+a branch's older checkout would run its own `tools/verity/lean/merge.py`, and one from before `--caps` reports a conflict in
+`tests/test_lean_packages.py` the sync never sees.  `--no-preflight` skips it, for the lander.
 
 Records gate.  A head whose own records run printed `AUDIT: FAIL` fails a train's Lean check, about 50 minutes later.
 So `ready` (and `judge`) first refuse a head whose change against `main` touches a `lean-audit.json`
@@ -145,11 +157,16 @@ Members on `next` never move for it, merged again or not: those above a moved or
 and only a `--first` PR placed again, or a `next` rebuilt on a `main` that moved off it, sorts what is above it.  Nor do they
 move but for drive's lift (`Queue.lift`, `Driver._lift`): while no Lean check of `next` runs
 or passed, the members with a land verdict go below those waiting for one (drive.toml's `reviewed_first`), those that change no
-Lean first, each after the PRs it contains and none past a held member, and land at once.  A PR that doesn't merge cleanly is left out of that sync, and its owner is told
+Lean first, each after the PRs it contains, and land at once; and for drive's park (`Queue.park`, `Driver._park`): each sync, a
+member held by a verdict at its head goes to the top of `next` with every PR that contains it, above what the sync adds, so
+one hold holds only itself and what contains it and the members that were above it land; it stays there until a land verdict
+(then it lands in its place) or a new head.  The park moves no member that a running or passed check covers below the lowest
+member it moves, so it cancels no check below a held member.  A PR that doesn't merge cleanly is left out of that sync, and its owner is told
 which files conflict and which queued PRs touched them; while its head stays, later syncs try it, and the PRs that contain it,
 above everything else, whatever `--first` or non-Lean first would say, so a sync with nothing new keeps `next`.  So is a PR a landing gate refuses (drive.toml's `landing_gates` at
 `main`, `gate_refusal`) on its merge onto `next` (`tools/verity/check/gates/markdown_caps.py`: one it puts over a cap),
-with the gate's fix: each PR the sync merges is judged, a new one or one merged again above a
+with the gate's fix, and a PR whose lock merge drops an entry `next`'s statements still need (`lock_drops`), naming each:
+each PR the sync merges is judged, a new one or one merged again above a
 dropped or moved member, never one in the prefix it keeps, so a refusal never takes a running check's commit off `next`; a merge
 with the message, tree and parent tree of one judged under the same `main` takes that verdict (`Queue._gated`).  A PR
 that contains one left out waits, recorded (the state's `waiting`) and told as a conflict is; `status` shows it waiting and
@@ -886,6 +903,10 @@ class Queue:
         #: with a land verdict, non-Lean first, while no Lean check of `next` runs or passed); what `order` moved of them
         self.lift: list[int] = []
         self._lifted: list[int] = []
+        #: members `next` keeps that this sync moves to its top, each with the PRs that contain it (`Driver._park`: those held
+        #: by a verdict at the head `next` holds), so the members above them form the prefix that lands; what `order` moved
+        self.park: list[int] = []
+        self._parked: list[int] = []
         self.now: Callable[[], float] = time.time
         #: releases the workdir's lock (`_lock`): a command that only reads calls it once its clone and fetches are done, so a
         #: listing that reads hundreds of members' labels doesn't refuse a verdict meanwhile
@@ -1136,18 +1157,31 @@ class Queue:
                     and not (self.before_cutoff and self.before_cutoff(a.pr.number, a.pr.head))    # then it's a `true`
                     and _who(self.marked_by(a.pr.number, a.pr.head) or "") == who))
 
-    def order(self, chain: list[Member], entries: dict[int, Entry], lift: Iterable[int] = ()) -> list[int]:
+    def order(self, chain: list[Member], entries: dict[int, Entry], lift: Iterable[int] = (),
+              park: Iterable[int] = ()) -> list[int]:
         """Members that keep their head, or move it to a descendant (`_same_or_fixed`), keep their order; the rest follow by PR
         number, each after the PRs it contains.  The PRs
         in `first` (`--first`) that are ready go below all of them, in the order given, so they land first; but
         above the bottom `hold` members, which a running or passed check covers.  With no `hold`, the members of ``lift`` at the heads
-        `next` holds go above `first` and below the rest, each only after the PRs it contains (`_lifted`)."""
+        `next` holds go above `first` and below the rest, each only after the PRs it contains (`_lifted`).  The members of
+        ``park`` that stay at the head `next` holds (or at the old head a check keeps), and every PR that contains one, go above
+        all of these, in `next`'s order (`_parked`), out of the `hold` members too: what a check covers below the lowest of
+        them keeps its place."""
         ready = {n for n, e in entries.items() if e.state == "ready"}
-        kept = [m.pr for m in chain
-                if m.pr in ready and self._same_or_fixed(m, entries) or self._frozen(m, entries) or self._pending(m, entries)]
+        stays = {m.pr for m in chain if self._frozen(m, entries) or self._pending(m, entries)}
+        kept = [m.pr for m in chain if m.pr in ready and self._same_or_fixed(m, entries) or m.pr in stays]
+        at = {m.pr: m.head for m in chain}
+        parked = {n for n in park if n in kept and (entries[n].pr.head == at[n] or n in stays)}
+        grown = bool(parked)
+        while grown:
+            grown = False
+            for n in ready.union(kept) - parked:
+                if parked.intersection(entries[n].after):
+                    parked.add(n)
+                    grown = True
         held: list[int] = []
         for m in chain[:self.hold]:
-            if m.pr not in kept:
+            if m.pr not in kept or m.pr in parked:
                 break
             held.append(m.pr)
         out: list[int] = []
@@ -1163,14 +1197,18 @@ class Queue:
 
         new = sorted(ready - set(kept))
         cold = {n for n in new if self._forces_cold(n)}
-        at = {m.pr: m.head for m in chain}
         self._lifted = []
         for n in () if held else lift:
-            if n in kept and entries[n].pr.head == at.get(n) and all(a in self._lifted for a in entries[n].after):
+            if (n in kept and n not in parked and entries[n].pr.head == at.get(n)
+                    and all(a in self._lifted for a in entries[n].after)):
                 self._lifted.append(n)
+        self._parked = [n for n in kept if n in parked] + sorted(parked - set(kept))
         # a newly ready PR that makes circuit-check run cold goes above the warm ones; members already on `next` keep their place,
         # and so the check that covers them
         for n in held + [f for f in self.first if f in ready] + self._lifted + kept + [n for n in new if n not in cold] + sorted(cold):
+            if n not in parked:
+                place(n)
+        for n in self._parked:
             place(n)
         return out
 
@@ -1239,29 +1277,23 @@ class Queue:
 
     def _merge(self, tip: str, pr: PR, members: list[Member]) -> tuple[str | None, str]:
         """(``pr``'s head merged onto ``tip``, "") or (None, why not), as `git merge --no-ff` in a checkout of ``tip`` gives them,
-        without the checkout: `git merge-tree` merges, with ``tip``'s merge drivers (`--attr-source`), and `git commit-tree`
+        without the checkout: `git merge-tree` merges, with ``tip``'s merge drivers (`merged_tree`), and `git commit-tree`
         makes the merge commit, so a candidate that conflicts costs one call (merging each candidate in the worktree, with
         many of them conflicting, takes tens of minutes).  A merge whose every conflict is in a pin is kept, each pin rebuilt
         from the merged tree (`repinned`).  A git without `--attr-source` (before 2.40) merges in the worktree
         (`_merge_in_worktree`), which refuses any conflict."""
         if not self._attr_source:
             return self._merge_in_worktree(tip, pr, members)
-        r = _git(self.workdir, f"--attr-source={tip}", "merge-tree", "--write-tree", "--name-only", "--no-messages", tip, pr.head,
-                 check=False)
+        tree, files, r = merged_tree(self.workdir, tip, pr.head, plain=False)
         if r.returncode == 129 and "attr-source" in r.stderr:
             self._attr_source = False
             return self._merge_in_worktree(tip, pr, members)
-        if r.returncode == 1:
-            files = list(dict.fromkeys(r.stdout.splitlines()[1:]))
-            if not (tree := repinned(self.workdir, r.stdout.split()[0], tip, pr.head, files)):
-                return None, self._unmerged(r, files, members)
+        if tree is None:
+            return None, self._unmerged(r, files, members)
+        if files:
             self.log(f"research queue: #{pr.number} conflicts only in pins: {', '.join(files)} rebuilt from the merged tree")
-        elif r.returncode:
-            return None, self._unmerged(r, [], members)
         elif not _git(self.workdir, "merge-base", "--is-ancestor", pr.head, tip, check=False).returncode:
             return tip, ""                                      # already merged: `merge --no-ff` makes no commit either
-        else:
-            tree = r.stdout.split()[0]
         commit = _git(self.workdir, "commit-tree", tree, "-p", tip, "-p", pr.head, "-m", _message(pr), env=IDENTITY).stdout.strip()
         return commit, ""
 
@@ -1361,7 +1393,7 @@ class Queue:
                 flag.append(self.flag("nonlean_first"))
             return flag[0]
 
-        order = last(self.order(chain, entries, self.lift))
+        order = last(self.order(chain, entries, self.lift, self.park))
         heads = {n: frozen.get(n, entries[n].pr.head) for n in order}
 
         def kept(order: list[int]) -> int:
@@ -1372,13 +1404,19 @@ class Queue:
         if lifted := k < len(self._lifted):
             self.log(f"research queue: {' '.join(f'#{n}' for n in self._lifted)} (reviewed) go to the bottom of `{self.branch}`, "
                      "below what waits for a review or a Lean check")
+        parked = set(self._parked)
+        low = next((i for i, m in enumerate(chain) if m.pr in parked), len(chain))
+        if any(m.pr not in parked and m.pr in heads for m in chain[low:]):
+            self.log(f"research queue: {' '.join(f'#{n}' for n in self._parked)} (held, or containing a held PR) go to the top "
+                     f"of `{self.branch}`, so what was above them lands")
         # members `next` holds are merged again in their order above a moved or dropped member, and only what comes new goes
         # non-Lean first: a re-sort of the whole tail would undo the lift's order, and the next lift would merge it all again.
-        # A `--first` PR placed again reorders from it; a `next` rebuilt on a moved `main` holds no member, so all of it is sorted
+        # A `--first` PR placed again reorders from it; a `next` rebuilt on a moved `main` holds no member, so all of it is sorted.
+        # The parked members stay above what comes new
         refirst = not lifted and set(self.first) & set(order[k:])
-        j = k if refirst else max(k, max((i + 1 for i, n in enumerate(order) if n in on), default=0))
-        if len(order) - j > 1 and nonlean():
-            order = last(order[:j] + self._nonlean_order(order[j:], heads, entries))
+        j = k if refirst else max(k, max((i + 1 for i, n in enumerate(order) if n in on and n not in parked), default=0))
+        if len(tail := [n for n in order[j:] if n not in parked]) > 1 and nonlean():
+            order = last(order[:j] + self._nonlean_order(tail, heads, entries) + [n for n in order[j:] if n in parked])
             k = kept(order)
         members = chain[:k]
         tip = members[-1].commit if members else main
@@ -1400,6 +1438,8 @@ class Queue:
                     self.log(f"research queue: #{n} at {e.pr.head[:8]} waits off `{self.branch}`: {e.why}")
                 continue
             (commit, why), merged = self._merge(tip, e.pr, members), True
+            if commit not in (None, tip) and (drops := lock_drops(self.workdir, tip, e.pr.head, commit)):
+                commit, why = None, lock_drop_refusal(drops, self.branch)
             if commit is not None and gates:
                 refused, unjudged = self._gated(main, gates, tip, commit, e.pr, before, verdicts)
                 if refused or unjudged:
@@ -1607,20 +1647,65 @@ def forces_cold(files: Iterable[str]) -> bool:
     return False
 
 
-def conflicting_files(repo: Path, base: str, head: str) -> list[str]:
-    """The files a merge of ``head`` onto ``base`` would leave conflicted, from `git merge-tree` (no worktree touched), so
-    `status` names a conflict on any VM, not only on the one whose last sync recorded it; [] when it merges cleanly.  It
-    merges as `Queue._merge` does: with ``base``'s merge drivers (`--attr-source`, where the clone has them installed), and
-    a conflict only in pins counts as none, since the sync rebuilds them (`repinned`; a conflict over PoUS's TRUSTED.sha256,
-    which the sync merges, refuses nothing)."""
-    r = _git(repo, f"--attr-source={base}", "merge-tree", "--write-tree", "--name-only", "--no-messages", base, head,
+def merged_tree(repo: Path, base: str, head: str, *, plain: bool = True,
+                config: tuple[str, ...] = ()) -> tuple[str | None, list[str], subprocess.CompletedProcess]:
+    """``head`` merged onto ``base`` by `git merge-tree` (no worktree touched), with ``base``'s merge drivers (`--attr-source`;
+    ``config``, git's `-c` options, from `base_drivers` to run them from ``base``'s tools): (the merged tree, the conflicted
+    files, `git merge-tree`'s result).  A merge whose every conflict is in a pin gives the tree with each pin rebuilt
+    (`repinned`) and those pins; one that doesn't merge gives None.  A git without `--attr-source` (before 2.40) merges
+    without the drivers, or with ``plain`` False gives None and its refusal (exit 129)."""
+    r = _git(repo, *config, f"--attr-source={base}", "merge-tree", "--write-tree", "--name-only", "--no-messages", base, head,
              check=False)
     if r.returncode == 129 and "attr-source" in r.stderr:
-        r = _git(repo, "merge-tree", "--write-tree", "--name-only", "--no-messages", base, head, check=False)
-    if r.returncode != 1:
-        return []
-    files = sorted({f for f in r.stdout.splitlines()[1:] if f})
-    return [] if repinned(repo, r.stdout.split()[0], base, head, files) else files
+        if not plain:
+            return None, [], r
+        r = _git(repo, *config, "merge-tree", "--write-tree", "--name-only", "--no-messages", base, head, check=False)
+    if r.returncode == 1:
+        files = sorted({f for f in r.stdout.splitlines()[1:] if f})
+        return repinned(repo, r.stdout.split()[0], base, head, files), files, r
+    return (None if r.returncode else r.stdout.split()[0]), [], r
+
+
+#: a path in a merge driver's command (`tools/verity/lean/merge.py`), relative to the top of the worktree git runs it in
+_DRIVER_PATH = re.compile(r"(?<![\w./-])[\w.-]+(?:/[\w.-]+)+")
+
+
+@contextlib.contextmanager
+def base_drivers(repo: Path, base: str):
+    """`git -c` options that run each merge driver ``base``'s `.gitattributes` names from ``base``'s tools: its command as the
+    sync's clone sets it (`RECORD_DRIVER`), else as ``repo``'s config does, with each path in it that ``base`` holds moved to
+    a temporary directory holding that path's directory as ``base`` has it (a driver loads files beside it), removed on exit.
+    Otherwise git runs a driver from ``repo``'s worktree: a branch's older checkout runs its own `tools/verity/lean/merge.py`,
+    and one from before `--caps` errors, so git reports a conflict in `tests/test_lean_packages.py` that the sync never sees."""
+    from .clone import RECORD_DRIVER
+
+    attrs = _git(repo, "show", f"{base}:.gitattributes", check=False)
+    names = dict.fromkeys(m for ln in attrs.stdout.splitlines() if not ln.lstrip().startswith("#")
+                          for m in re.findall(r"(?:^|\s)merge=(\S+)", ln)) if not attrs.returncode else {}
+    cmds = {k: c for k in (f"merge.{n}.driver" for n in names)
+            if (c := RECORD_DRIVER.get(k) or _git(repo, "config", "--get", k, check=False).stdout.strip())}
+    with tempfile.TemporaryDirectory(prefix="research-drivers-") as tmp:
+        held = {s.split(":", 1)[1] for s in _blobs(repo, [f"{base}:{p}" for c in cmds.values() for p in _DRIVER_PATH.findall(c)])}
+        files = []
+        for d in sorted({posixpath.dirname(p) for p in held}):
+            ls = _git(repo, "ls-tree", "-z", base, "--", f"{d}/").stdout
+            files += [e.split("\t", 1)[1] for e in ls.split("\0") if e and e.split()[1] == "blob"]
+        for spec, data in _blobs(repo, [f"{base}:{f}" for f in files]).items():
+            (out := Path(tmp) / spec.split(":", 1)[1]).parent.mkdir(parents=True, exist_ok=True)
+            out.write_bytes(data)
+        def moved(m: re.Match) -> str:
+            return shlex.quote(str(Path(tmp) / m[0])) if m[0] in held else m[0]
+
+        yield tuple(o for k, c in cmds.items() for o in ("-c", f"{k}={_DRIVER_PATH.sub(moved, c)}"))
+
+
+def conflicting_files(repo: Path, base: str, head: str) -> list[str]:
+    """The files a merge of ``head`` onto ``base`` would leave conflicted, so `status` names a conflict on any VM, not only on
+    the one whose last sync recorded it; [] when it merges cleanly.  It merges as `Queue._merge` does (`merged_tree`): a
+    conflict only in pins counts as none, since the sync rebuilds them (a conflict over PoUS's TRUSTED.sha256, which the sync
+    merges, refuses nothing)."""
+    tree, files, _ = merged_tree(repo, base, head)
+    return [] if tree else files
 
 
 def pins_at(repo: Path, ref: str) -> dict[str, tuple[str | None, str]]:
@@ -2122,12 +2207,12 @@ PREFLIGHT_JOBS = 2
 PREFLIGHT_MIN_FREE = 0.25
 #: the Lean step's bounds (`Preflight._lean`): the most modules it builds (those the change touches and every module importing one,
 #: transitively, each rebuilt since an import changed), and the seconds its builds may take, on the merged tree and, for what fails
-#: there, on `next`; past either it notes why and refuses nothing.  With `PREFLIGHT_BUDGET_S` the whole preflight stays within
-#: 5 minutes, and a warm tree rebuilds a few changed modules and their importers in a minute or two
+#: there, on `next`; past either it notes why and refuses nothing (`LeanTimedOut`).  With `PREFLIGHT_BUDGET_S` the whole
+#: preflight stays within 5 minutes, and a warm tree rebuilds a few changed modules and their importers in a minute or two
 PREFLIGHT_LEAN_MODULES = 40
 PREFLIGHT_LEAN_S = 180.0
-#: where the Lean step builds for `ready --on` when this machine keeps no warm Lean tree (cpu-3's `build` Lean slots, its research
-#: pool the least loaded; cpu-1's pool is congested).  The one place to move it
+#: where the Lean step builds, whatever the mark's tier, when this machine keeps no warm Lean tree (cpu-3's `build` Lean slots, its
+#: research pool the least loaded; cpu-1's pool is congested).  The one place to move it
 PREFLIGHT_LEAN_ON = "vy-nebius-cpu-3"
 #: the `research run` pool it takes there: none, as `verity lean try --on vy-nebius-cpu-3` runs, since the node's `build` Lean slots
 #: are the gate; a node without them would take its `research` pool
@@ -2165,6 +2250,12 @@ def free_memory() -> float | None:
 
 _SUMMARY_RE = re.compile(r"^(?:FAILED|ERROR) (.+?)(?: - (.*))?$", re.M)
 _LOCK_STALE = "needs to be updated"
+
+
+class Ran(str):
+    """A preflight note saying what ran.  Every other note names a check that didn't run or couldn't judge, and the preflight's
+    result lists it under "checks skipped", never as nothing refused."""
+
 
 @dataclass
 class Touched:
@@ -2288,7 +2379,7 @@ class LocalSuites:
                 if res:
                     out.failed.append(failed_row(s, res))
         if self.suites is None:
-            out.notes.append(f"collected {len(todo)} suite(s)" + (f" ({', '.join(todo)})" if len(todo) <= 6 else ""))
+            out.notes.append(Ran(f"collected {len(todo)} suite(s)" + (f" ({', '.join(todo)})" if len(todo) <= 6 else "")))
         return out
 
 
@@ -2450,6 +2541,15 @@ class LeanBuilt:
     notes: list[str] = field(default_factory=list)
 
 
+class LeanTimedOut(str):
+    """Why the Lean step built nothing within its time: a note under "checks skipped", refusing nothing.  Any other reason it
+    built nothing (a plain string) refuses the mark, naming the fix."""
+
+
+#: the fix a Lean step that couldn't build names, with where it builds
+LEAN_UNBUILT_FIX = "mark again once {on} builds them (its `build` Lean slots are @infra's; `research status` there says why not)"
+
+
 def run_group(argv: list[str], cwd: Path, left: float) -> tuple[int | None, str]:
     """``argv``'s exit status and output (stderr after stdout), in a process group of its own that is killed whole once ``left``
     seconds pass (a `lake build` it started included, which would otherwise go on in a slot's tree), and then None."""
@@ -2474,9 +2574,11 @@ class LakeBuild:
     """The Lean step's builds (`Preflight._lean`): the tree's `LEAN_BUILDER` (`lean_changed.py --build FILE...`), which builds the
     files' modules on the warm tree of a node's `build` Lean slot as `verity lean try` builds one, and ends with one
     `LEAN_BUILD_LINE`.  It runs here when this machine's Lean slot file (``slots``) lists a `build` pool, in a process group
-    killed at the step's deadline; else, given ``on`` (`ready --on`: `PREFLIGHT_LEAN_ON`), as a `research run` of the tree there
-    on its `build` Lean slot, or in ``pool`` (a slot named for ``by``) when one is given, bounded by the same deadline; else not
-    at all, and says so: an agent VM builds nothing (the team skill, "Machines"), and its preflight never starts a run unasked."""
+    killed at the step's deadline; else, given ``on`` (`ready`, whatever its tier: `PREFLIGHT_LEAN_ON`), as a `research run` of the
+    tree there on its `build` Lean slot, or in ``pool`` (a slot named for ``by``) when one is given, bounded by the same deadline
+    (an agent VM builds nothing itself: the team skill, "Machines").  A build that didn't end by the deadline is `LeanTimedOut`;
+    one that couldn't run or built nothing (no warm tree and no ``on``, a run that didn't start or left no result line, every
+    package skipped) is a plain string naming the fix, which refuses the mark."""
     on: str | None = None
     pool: str | None = PREFLIGHT_LEAN_POOL
     by: str | None = None
@@ -2492,34 +2594,36 @@ class LakeBuild:
 
     def __call__(self, wt: Path, files: list[str], left: float) -> LeanBuilt | str:
         if left <= 0:
-            return "the Lean step's budget was spent before it started"
+            return LeanTimedOut("the Lean step's budget was spent before it started")
         if not (wt / LEAN_BUILDER).is_file():
-            return f"the merged tree has no {LEAN_BUILDER}"
+            return f"the merged tree has no {LEAN_BUILDER}, which builds them"
         if self.warm():
             rc, text = self.run([sys.executable, LEAN_BUILDER, "--build", *files], wt, left)
-            where = "here"
+            where, fix = "here", LEAN_UNBUILT_FIX.format(on="this node")
         elif self.on:
             rc, text, where = self._remote(wt, files, left)
+            fix = LEAN_UNBUILT_FIX.format(on=self.on)
         else:
-            return (f"this machine keeps no warm Lean tree (no `build` pool in {self.slots}; an agent VM builds nothing): "
-                    f"`ready --on MACHINE` builds them on {PREFLIGHT_LEAN_ON}")
+            return (f"this machine keeps no warm Lean tree (no `build` pool in {self.slots}; an agent VM builds nothing) and was "
+                    f"given no node to build on: `ready --on MACHINE` builds them on {PREFLIGHT_LEAN_ON}")
         if rc is None:
-            return (f"its build {where} hadn't ended after {left:.0f} s (a wait in its pool's line counts){': ' + text if text else ''}"
-                    if where != "here" else f"its build here was still going after {left:.0f} s{': ' + text if text else ''}")
+            return LeanTimedOut(f"its build {where} hadn't ended after {left:.0f} s (a wait in its pool's line counts)"
+                                f"{': ' + text if text else ''}" if where != "here" else
+                                f"its build here was still going after {left:.0f} s{': ' + text if text else ''}")
         doc = next((ln[len(LEAN_BUILD_LINE):] for ln in reversed(text.splitlines()) if ln.startswith(LEAN_BUILD_LINE)), None)
         try:
             doc = json.loads(doc) if doc is not None else None
         except ValueError:
             doc = None
         if not isinstance(doc, dict):
-            return f"its build {where} exited {rc} without a result line: {text.strip()[-300:]}"
+            return f"its build {where} exited {rc} without a result line: {text.strip()[-300:]}: {fix}"
         built, skipped = doc.get("built") or {}, doc.get("skipped") or {}
         notes = [f"{p} not built: {why}" for p, why in skipped.items()]
         failed = {f: str(e) for f, e in (doc.get("failed") or {}).items()}
         notes += [f"`lake build` in {p} exited {c} with no Lean error in a file" for p, c in built.items()
                   if c and not any(f.startswith(p + "/") for f in failed)]
         if not built and not failed:
-            return "; ".join(notes) or f"its build {where} built nothing (exit {rc})"
+            return f"{'; '.join(notes) or f'its build {where} built nothing (exit {rc})'}: {fix}"
         return LeanBuilt(failed, notes)
 
     def _remote(self, wt: Path, files: list[str], left: float) -> tuple[int | None, str, str]:
@@ -2543,18 +2647,124 @@ class LakeBuild:
         return (None if rc == waitcap.STILL_GOING else rc), text, where
 
 
+#: the fix `lock_drop_refusal` names for each entry a lock merge drops
+LOCK_DROP_FIX = "restore it verbatim from `{onto}` in a lock-only commit (`git show origin/{onto}:PATH`) and mark that head"
+#: how much of a dropped premise's text `lock_drops` shows
+LOCK_DROP_SHOWN = 60
+
+
+def _unowned(rec):
+    return {k: v for k, v in rec.items() if k != "owner"} if isinstance(rec, dict) else rec
+
+
+def _texts(section: str, entries: dict, g: str) -> list[str]:
+    """The texts of ``g``'s entry in a lock's `shape` ``section``: its premises (`inline`), or its reason (`frozen`)."""
+    if g not in entries:
+        return []
+    v = entries[g]
+    if section == "inline":
+        return list(v) if isinstance(v, dict) else []
+    return [v if isinstance(v, str) else json.dumps(v, sort_keys=True)]
+
+
+def _read_by(lock: dict) -> dict[str, dict[str, str]]:
+    """{guarantee: {definition: its hash}} of what each guarantee reads, from the lock's `reads`."""
+    out: dict[str, dict[str, str]] = {}
+    for group in (lock.get("reads") or {}).values():
+        if isinstance(group, dict) and isinstance(defs := group.get("definitions"), dict):
+            for g in group.get("guarantees") or []:
+                out.setdefault(g, {}).update(defs)
+    return out
+
+
+def dropped_entries(base: dict, merged: dict) -> list[str]:
+    """Each entry of the lock ``base`` (`next`'s) that ``merged`` (the head's lock merged onto it) drops though `next`'s
+    statements still need it: a premise of `shape.inline` ({guarantee: {premise as printed: why}}), as `shape.inline[G]:
+    PREMISE`, and a key of `shape.frozen`, as `shape.frozen[G]`.  ``merged`` may drop a guarantee's entry when it no longer
+    lists the guarantee under `guarantees` (removed), or restated it: it records the guarantee otherwise than ``base`` does,
+    its owner aside, or a definition both say it reads has another hash (`check.py --update` keeps a premise only while the
+    statement prints it, and the head's records run checked its lock).  It may drop an entry whose text (a premise, a frozen
+    entry's reason) it holds under a key of the section ``base`` lacks (renamed), and a guarantee's premises while it adds as
+    many others under that guarantee (re-keyed at a restated statement, as `check.py`'s `paired` keys them)."""
+    listed, was = merged.get("guarantees") or {}, base.get("guarantees") or {}
+    reads, read = _read_by(base), _read_by(merged)
+
+    def restated(g: str) -> bool:
+        return _unowned(listed[g]) != _unowned(was.get(g)) or any(
+            read[g][d] != h for d, h in reads.get(g, {}).items() if d in read.get(g, {}))
+
+    out = []
+    for section in ("inline", "frozen"):
+        b, m = ((d.get("shape") or {}).get(section) or {} for d in (base, merged))
+        if not isinstance(b, dict) or not isinstance(m, dict):
+            continue
+        moved = {t for g in m if g not in b for t in _texts(section, m, g)}
+        for g in b:
+            if g not in listed or restated(g):
+                continue
+            had, kept = _texts(section, b, g), _texts(section, m, g)
+            gone = [t for t in had if t not in kept and t not in moved]
+            if section == "frozen":
+                out += [f"shape.frozen[{g}]" for _ in gone]
+            elif len(gone) > len([t for t in kept if t not in had]):
+                out += [f"shape.inline[{g}]: " + (t if len(t) <= LOCK_DROP_SHOWN else t[:LOCK_DROP_SHOWN] + "…") for t in gone]
+    return out
+
+
+def lock_drops(repo: Path, base: str, head: str, merged: str | None = None) -> list[str]:
+    """`dropped_entries` of each lock (`lean-audit.json`, `LEAN_FIXTURES` aside) that ``head``'s change from its merge base with
+    ``base`` touches, from ``base`` to ``merged`` (a commit or tree; by default ``head`` merged onto ``base`` as the sync merges
+    it, with ``base``'s merge drivers, so `tools/verity/lean/merge.py` merges the locks), each prefixed by the lock's path.  A
+    lock either side lacks is the head's to add or remove, one that doesn't parse is named, and a diff or merge git can't make
+    finds nothing: the train's Lean check still fails on a dropped premise."""
+    r = _git(repo, "diff", "--name-only", "--no-renames", f"{base}...{head}", check=False)
+    locks = [f for f in r.stdout.splitlines() if posixpath.basename(f) == LEAN_LOCK and not f.startswith(LEAN_FIXTURES)]
+    if r.returncode or not locks:
+        return []
+    if merged is None:
+        argv = ("merge-tree", "--write-tree", "--name-only", "--no-messages", base, head)
+        m = _git(repo, f"--attr-source={base}", *argv, check=False)
+        if m.returncode == 129 and "attr-source" in m.stderr:
+            m = _git(repo, *argv, check=False)
+        if m.returncode not in (0, 1) or not m.stdout.split():
+            return []
+        merged = m.stdout.split()[0]
+    blobs = _blobs(repo, [f"{c}:{f}" for f in locks for c in (base, merged)])
+    out = []
+    for f in locks:
+        if f"{base}:{f}" not in blobs or f"{merged}:{f}" not in blobs:
+            continue
+        try:
+            was, now = (json.loads(blobs[f"{c}:{f}"]) for c in (base, merged))
+        except ValueError as e:
+            out.append(f"{f}: not JSON on `{BRANCH}` or merged ({e}), so what it drops can't be told")
+            continue
+        if isinstance(was, dict) and isinstance(now, dict):
+            out += [f"{f}: {d}" for d in dropped_entries(was, now)]
+    return out
+
+
+def lock_drop_refusal(drops: list[str], onto: str = BRANCH) -> str:
+    """The refusal of a head whose lock merge onto ``onto`` drops ``drops`` (`lock_drops`), one string naming each and the fix."""
+    return (f"its lock merge onto `{onto}` drops {len(drops)} entr{'y' if len(drops) == 1 else 'ies'} `{onto}`'s statements still "
+            f"need: {'; '.join(drops)}: {LOCK_DROP_FIX.format(onto=onto)}")
+
+
 class Preflight:
     """`ready`'s preflight, before the mark (and before the quick tier): refused, each refusal naming its fix, when the head
-    (a) conflicts with `next` (`conflicting_files`, no worktree), naming the paths and the PRs on `next` that touched them;
+    (a) conflicts with `next` outside the pins (`merged_tree`, as drive's sync merges, no worktree, with the merge drivers of the
+    commit it merges onto, `base_drivers`, never the caller's checkout's), naming the paths and the PRs on `next` that touched them;
     (b) merged onto `next`, fails `pins.py --stale`, a test of `PREFLIGHT_TEST_PATHS`, a lint of `PREFLIGHT_LINTS` the change
     reaches, or `pytest --collect-only` in a suite whose inputs
     the change touches (`touched_suites` with `LocalSuites`, from `next` to the merged tree), or the merged tree's `uv sync --locked`
     finds its lock stale; (c) contains another open PR's head that isn't admitted (no ready mark at that head, held, or no
     owner), naming each; (d) fails one of drive.toml's `landing_gates` at `main` (`_gates`), with the gate's fix; or (e) merged
     onto `next`, breaks the build of a Lean module that is or imports, transitively, a module it changes, in that module's package
-    or one requiring it by path (`lean_graph`), built by ``lean`` (`LakeBuild`, on a warm Lean tree) within `lean_s`, naming the
+    or one requiring it by path (`lean_graph`), built by ``lean`` (`LakeBuild`, on a node's warm Lean tree) within `lean_s`, naming the
     module, its first error and the PR on `next` that owns it (`touched_by`), or for a module of its own, those that changed what it
-    imports.  A train most often breaks on one of (a) to (c), and a Lean break is most often one of (e).
+    imports; or (f) merged onto `next` as the sync merges it (`lock_drops`), drops from a lock it changes a `shape.inline` premise or
+    a `shape.frozen` key `next`'s statements still need (`dropped_entries`), naming each and the fix (`LOCK_DROP_FIX`).  A train
+    most often breaks on one of (a) to (c), and a Lean break is most often one of (e) or (f).
 
     `next` is fetched fresh; a PR already on it is merged onto the commit below its old head, as drive's next sync would rebuild
     it.  The checks of (b) and (e) run in a temporary worktree of the caller's repository at the merge (`merged_worktree`), (e)
@@ -2565,8 +2775,10 @@ class Preflight:
     named once and not judged.  A failure that `next` has too (a pin already stale there, a module two PRs on `next` already
     broke) isn't the PR's: each failed check runs again at `next` in the same worktree, within the same budget, and only what
     fails on the merge alone refuses.  What keeps a check from running (no `next` to fetch, the budget spent, labels that can't
-    be pulled, more than `lean_modules` Lean modules, no warm Lean tree) is said and refuses nothing: the preflight saves a
-    revert, and the after-landing run still checks the head."""
+    be pulled, more than `lean_modules` Lean modules, a Lean build that didn't end in time) is said under "checks skipped", never
+    as "nothing refused", and refuses nothing: the preflight saves a revert, and the after-landing run still checks the head.  A
+    Lean build that couldn't run or built nothing (no node to build on, a run that didn't start) refuses, naming the fix: the
+    modules it reaches are few enough to build, and an unbuilt one is how a head that breaks `next`'s Lean gets marked."""
 
     def __init__(self, repo: Path, remote: str, store, *, sync: tuple[str, ...] | None = PREFLIGHT_SYNC, python: str | None = None,
                  budget_s: float = PREFLIGHT_BUDGET_S, jobs: int = PREFLIGHT_JOBS, clock: Callable[[], float] = time.monotonic,
@@ -2587,25 +2799,38 @@ class Preflight:
         try:
             base, onto, members = self._fetch(pr)
         except QueueError as e:
-            self.log(f"research queue: preflight not run ({e}); the after-landing run still tests the head")
+            self.log(f"research queue: preflight: #{pr.number} at {pr.head[:12]}: checks skipped: all ({e}); the after-landing "
+                     "run still tests the head")
             return None
         notes: list[str] = []
         found = self._contained(pr, prs) + self._gates(pr, notes)
-        if files := conflicting_files(self.repo, base, pr.head):
+        with base_drivers(self.repo, base) as config:
+            tree, files, r = merged_tree(self.repo, base, pr.head, config=config)
+        if tree is None and files:
             by = touched_by(self.repo, members, files)
             found.insert(0, f"it conflicts with {onto} in {', '.join(files)}" + (f" (touched by {', '.join(by)})" if by else "")
                          + ": merge `main` once those land, or settle it with their owners; never merge `next` into the branch "
                            "(it carries unlanded PRs)")
+            notes.append("the merged tree's checks: it doesn't merge")
+        elif tree is None:
+            notes.append(f"the merged tree's checks: `git merge-tree` exited {r.returncode} ({(r.stderr or r.stdout).strip()[-200:]})")
         else:
+            if files:
+                notes.append(Ran(f"conflicts only in pins: {', '.join(files)}, rebuilt from the merged tree"))
+            if drops := lock_drops(self.repo, base, pr.head, tree):
+                found.append(lock_drop_refusal(drops, onto.split("`")[1]))
             try:
-                found += self._merged(pr, base, onto, notes, members)
+                found += self._merged(pr, base, tree, onto, notes, members)
             except QueueError as e:
-                notes.append(f"the merged tree's checks not run ({e})")
-        took = f"{self.clock() - start:.0f} s" + (f"; {'; '.join(notes)}" if notes else "")
+                notes.append(f"the merged tree's checks ({e})")
+        skipped = [n for n in notes if not isinstance(n, Ran)]
+        took = "; ".join([f"{self.clock() - start:.0f} s", *(n for n in notes if isinstance(n, Ran))])
         if found:
-            return (f"the preflight of its head merged onto {onto} refused it ({took}):\n  - " + "\n  - ".join(found)
+            return (f"the preflight of its head merged onto {onto} refused it ({took}"
+                    + (f"; checks skipped: {'; '.join(skipped)}" if skipped else "") + "):\n  - " + "\n  - ".join(found)
                     + "\n  (`--no-preflight` skips the preflight: the lander's)")
-        self.log(f"research queue: preflight: #{pr.number} at {pr.head[:12]} merged onto {onto}: nothing refused ({took})")
+        said = f"checks skipped: {'; '.join(skipped)}; the checks that ran passed" if skipped else "nothing refused"
+        self.log(f"research queue: preflight: #{pr.number} at {pr.head[:12]} merged onto {onto}: {said} ({took})")
         return None
 
     def _fetch(self, pr: PR) -> tuple[str, str, list[Member]]:
@@ -2681,27 +2906,22 @@ class Preflight:
         notes += unjudged
         return refused
 
-    def _merged(self, pr: PR, base: str, onto: str, notes: list[str], members: list[Member] | None = None) -> list[str]:
-        """(b) and (e), in a temporary worktree at the merge of the head onto ``base``."""
-        r = _git(self.repo, "merge-tree", "--write-tree", "--no-messages", base, pr.head, check=False)
-        if r.returncode:
-            notes.append(f"the merged tree's checks not run: `git merge-tree` exited {r.returncode} ({(r.stderr or r.stdout).strip()[-200:]})")
-            return []
-        tree = r.stdout.split()[0]
+    def _merged(self, pr: PR, base: str, tree: str, onto: str, notes: list[str], members: list[Member] | None = None) -> list[str]:
+        """(b) and (e), in a temporary worktree at the merge of the head onto ``base``, ``tree`` (`merged_tree`)."""
         commit = _out(self.repo, "commit-tree", tree, "-p", base, "-p", pr.head, "-m", f"preflight: #{pr.number} onto {base[:12]}")
         fixtures: dict[str, list[str]] = {}
+        out: list[str] = []
         with merged_worktree(self.repo, commit, self.root) as wt:
-            graph, lean_failed, lean_deadline = self._lean(wt, base, tree, notes)
+            graph, lean_failed, lean_deadline = self._lean(wt, base, tree, notes, out)
             deadline = self.clock() + self.budget_s
             failed = self._checks(wt, base, tree, None, notes, deadline, fixtures)
             if not any(failed.values()) and not lean_failed:
-                return []
+                return out
             _git(wt, "checkout", "-q", "--detach", "--force", base)
             _git(wt, "clean", "-qffdx", "-e", "/.venv")
             again = (self._checks(wt, base, tree, {k for k, v in failed.items() if v}, [], deadline, fixtures)
                      if any(failed.values()) else {})
             lean_again = self._lean_at_base(wt, lean_failed, lean_deadline) if lean_failed else {}
-        out = []
         for name, fails in failed.items():
             if fails and name not in again:
                 notes.append(f"{name} failed on the merged tree and couldn't run on {onto} to compare: {'; '.join(fails.values())}")
@@ -2717,10 +2937,11 @@ class Preflight:
                     for f, line in sorted(lean_failed.items()) if f not in lean_again]
         return out
 
-    def _lean(self, wt: Path, base: str, tree: str, notes: list[str]) -> tuple[LeanGraph, dict[str, str], float]:
+    def _lean(self, wt: Path, base: str, tree: str, notes: list[str], found: list[str]) -> tuple[LeanGraph, dict[str, str], float]:
         """(e): the modules of the merged tree in ``wt`` that the change from ``base`` touches and every module importing one, transitively
         (`lean_graph`), built by ``lean`` (`LakeBuild`) within `lean_s`: the graph, {file: its first Lean error} of each that failed,
-        and the step's deadline.  Past `lean_modules` modules, or when the build can't run, a note and nothing failed."""
+        and the step's deadline.  Past `lean_modules` modules, or a build that didn't end in time (`LeanTimedOut`), a note and
+        nothing failed; a build that couldn't run or built nothing refuses, into ``found``, naming the fix."""
         deadline = self.clock() + self.lean_s
         if self.lean is None:
             return LeanGraph(), {}, deadline
@@ -2733,11 +2954,14 @@ class Preflight:
                          f"{self.lean_modules} the preflight builds; drive's Lean check of `{BRANCH}` builds them")
             return graph, {}, deadline
         res = self.lean(wt, sorted(graph.targets), deadline - self.clock())
+        if isinstance(res, LeanTimedOut):
+            notes.append(f"lean build timed out ({len(graph.targets)} module(s) not built: {res})")
+            return graph, {}, deadline
         if isinstance(res, str):
-            notes.append(f"Lean: {len(graph.targets)} module(s) not built: {res}")
+            found.append(f"Lean: {len(graph.targets)} module(s) that are or import what it changes couldn't be built: {res}")
             return graph, {}, deadline
         notes += [f"Lean: {n}" for n in res.notes]
-        notes.append(f"Lean: built {len(graph.targets)} module(s), {len(res.failed)} failed")
+        notes.append(Ran(f"Lean: built {len(graph.targets)} module(s), {len(res.failed)} failed"))
         return graph, res.failed, deadline
 
     def _lean_at_base(self, wt: Path, failed: dict[str, str], deadline: float) -> dict[str, str] | str:
@@ -3809,7 +4033,8 @@ def main(argv: list[str]) -> int:
                          "doc paths, pythonpath) and `pytest --collect-only` of the suites its change touches, in a temporary "
                          f"worktree, in about {PREFLIGHT_BUDGET_S:g} s, and build the Lean modules that are or import what it "
                          f"changes (at most {PREFLIGHT_LEAN_MODULES}, in {PREFLIGHT_LEAN_S:g} s, on a warm Lean tree: here on a "
-                         f"node, else with --on on {PREFLIGHT_LEAN_ON}); the records gate (a changed Lean lock needs a records "
+                         f"node, else on {PREFLIGHT_LEAN_ON}, whatever the tier; one it can't build refuses the mark, one not "
+                         "built in time is a skipped check); the records gate (a changed Lean lock needs a records "
                          "run that passed it, of the head or of a commit whose files of its package and the packages it requires "
                          "(tests and docs aside), lean-toolchain and the Lean checker (tools/verity/lean) are the head's) still runs")
     ap.add_argument("--regenerate-locks", action=argparse.BooleanOptionalAction,
@@ -3940,8 +4165,7 @@ def main(argv: list[str]) -> int:
         if a.command == "ready":
             top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
             tier = MarkOnly() if a.mark else RemoteQuickTier(top, remote, a.on, by=a.by) if a.on else QuickTier(top, remote)
-            pre = None if a.no_preflight else Preflight(top, remote, store,
-                                                        lean=LakeBuild(on=PREFLIGHT_LEAN_ON if a.on else None, by=a.by))
+            pre = None if a.no_preflight else Preflight(top, remote, store, lean=LakeBuild(on=PREFLIGHT_LEAN_ON, by=a.by))
             return ready(GitHub(repo), store, a.pr, a.by, tier, again=a.again, preflight=pre, sha=a.sha, as_json=a.json,
                          records=RecordsGate(top, remote, store))
         labels = StoreLabels(store, log=lambda s: print(s, file=sys.stderr), since=a.marked_after)
