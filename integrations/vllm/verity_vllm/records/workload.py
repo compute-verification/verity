@@ -7,7 +7,7 @@ Its writers are `config.RowConfig.to_json` (the row files), `pipeline.workload.w
 row file for running it (v2 only, with the engine's checks); this is the record a check reads.
 
     w = Workload.load(path)                     # MissingField / UnknownField name the file and the field
-    w.requests[0].prompt_length, w.sampling_variant, w.arrive_step(0), w.doc_sha256
+    w.requests[0].prompt_length, w.sampling_variant, w.arrive_step(0), w.doc_sha512
 """
 from __future__ import annotations
 
@@ -47,6 +47,22 @@ def _ints(v: Sequence[Any] | None, where: str, name: str) -> tuple[int, ...] | N
 def _put(out: dict[str, Any], **kv: Any) -> dict[str, Any]:
     out.update({k: v for k, v in kv.items() if v is not None})
     return out
+
+
+def doc_digest(doc: Mapping[str, Any]) -> str:
+    """The workload document's SHA-512 as the driver records it (`vllm_adapter.load_workload`; RunHeader.workload.sha512 and a
+    Commit run's `workload_sha512`): sort_keys, compact separators."""
+    return hashlib.sha512(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def served(doc: Mapping[str, Any], want: str | None, where: str) -> None:
+    """Refuse ``doc`` unless it is the workload a record served: ``want`` is the record's `workload_sha512`."""
+    if not want:
+        raise ValueError(f"{where}: the record carries no workload_sha512 (a run recorded before workload digests became SHA-512 has "
+                         "only workload_sha256): re-serve the run")
+    got = doc_digest(doc)
+    if got != want:
+        raise ValueError(f"{where}: workload SHA-512 {got[:16]} is not the record's {str(want)[:16]}")
 
 
 @dataclass(frozen=True)
@@ -149,8 +165,8 @@ class Workload:
     sampling: WorkloadSampling | None                 # `properties.holdout` writes none: the driver's greedy default
     sweep: Mapping[str, Any] | None                   # the sweep plan the requests were sampled from (`pipeline.workload`), else none
     info: Mapping[str, Any]                           # the `INFO` fields it carries (and `V1_INFO`, for a v1 workload)
-    # the document's sha256 as the driver records it (RunHeader.workload.sha256: sort_keys, compact separators), of the JSON as read
-    doc_sha256: str = field(default="", compare=False)
+    # the document's SHA-512 as the driver records it (RunHeader.workload.sha512: sort_keys, compact separators), of the JSON as read
+    doc_sha512: str = field(default="", compare=False)
 
     @property
     def sampling_variant(self) -> str | None:
@@ -189,7 +205,7 @@ class Workload:
                    sampling=None if sampling is None else WorkloadSampling.of(sampling, where),
                    sweep=optional(doc, "sweep", where, Mapping),
                    info={k: doc[k] for k in info if k in doc},
-                   doc_sha256=hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest())
+                   doc_sha512=doc_digest(doc))
 
     @classmethod
     def load(cls, path: str | Path) -> Workload:

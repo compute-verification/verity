@@ -1812,7 +1812,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
             if tokens_ref is None:
                 tokens_ref = r["tokens"]
             row: dict[str, Any] = {
-                "schema": SCHEMA, "label": args.label, "workload": args.workload, "workload_sha256": wl["sha256"], "case": eng.case,
+                "schema": SCHEMA, "label": args.label, "workload": args.workload, "workload_sha512": wl["sha512"], "case": eng.case,
                 "model": eng.cp["repo"], "pair": pair, "order_in_pair": k, "arm": arm,
                 "committer": None if arm == "control" else (arm if multi else args.committer), "committer_name": com.name if arm != "control" else None,
                 "wall_s": r["wall_s"], "iterations": r["iterations"], "engine_steps": len(r["step_wall_s"]),

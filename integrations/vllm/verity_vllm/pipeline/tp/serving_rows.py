@@ -30,7 +30,6 @@ whose replay did not fail, with that ``of`` and ``link``."""
 from __future__ import annotations
 
 import dataclasses
-import hashlib
 import json
 import os
 import traceback
@@ -40,6 +39,7 @@ from typing import Any
 
 from verity_vllm import config as C
 from verity_vllm.config import option
+from verity_vllm.records import workload as WR
 
 SCHEMA = "verity-vllm/tp-serving-rows/v1"
 ROWS_SCHEME = "rows-sha512"
@@ -226,7 +226,7 @@ def record(commit_dir: str | os.PathLike) -> dict[str, Any]:
     return {"world": world, "tp_run_root": c["tp_run_root"], "roots": {str(r): roots[r] for r in range(world)}, "root_tag": v["root_tag"],
             "bundles": bundles,
             "of_record": (v.get("sampled_replay") or {}).get("of_record") or {}, "label": row.get("label"),
-            "workload": argv[argv.index("--workload") + 1] if "--workload" in argv[:-1] else None, "workload_sha256": row.get("workload_sha256")}
+            "workload": argv[argv.index("--workload") + 1] if "--workload" in argv[:-1] else None, "workload_sha512": row.get("workload_sha512")}
 
 
 def window_of_record(commit_dir: str | os.PathLike, rank: int, partition_file: str | os.PathLike, build_root: str | os.PathLike,
@@ -234,7 +234,7 @@ def window_of_record(commit_dir: str | os.PathLike, rank: int, partition_file: s
     """The verifier's own window of rank ``rank`` (`pipeline.serving_rows.population` over the rank's Programs of record under
     ``<build_root>/rank<r>``, its run ``<TP run root>/rank<r>`` of `record`), and what `source` holds the rank's registration to.
     The requests are the workload's in order, ``r<position>``, as ``tp-commit`` names them, from a workload file refused unless the
-    one the record served (its ``workload_sha256``, `vllm_adapter.load_workload`'s digest)."""
+    one the record served (its ``workload_sha512``, `vllm_adapter.load_workload`'s digest)."""
     from verity_vllm.pipeline.tp import rank_replay as RR
 
     rec = record(commit_dir)
@@ -242,9 +242,7 @@ def window_of_record(commit_dir: str | os.PathLike, rank: int, partition_file: s
     if not 0 <= rank < world:
         raise ValueError(f"rank {rank} is not a rank of the world of {world}")
     doc = json.loads(C.workload_file(workload_file).read_text())
-    got = hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-    if got != rec["workload_sha256"]:
-        raise ValueError(f"{workload_file}: workload sha256 {got[:16]} is not the record's {str(rec['workload_sha256'])[:16]}")
+    WR.served(doc, rec["workload_sha512"], str(workload_file))
     reqs = [{"request_id": f"r{i}", "arrive_step": int(q.get("arrive_step") or 0), "prompt_len": len(q["prompt_token_ids"]),
              "max_tokens": int(q["max_tokens"])} for i, q in enumerate(doc["requests"])]
     p = RR.load({"programs": {str(rank): str(Path(build_root) / f"rank{rank}")}, "of_record": rec["of_record"], "requests": reqs}, rank, world,

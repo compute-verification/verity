@@ -281,7 +281,7 @@ def run_census(workload_path: str, out_dir: str, checkpoints: str, *, max_tokens
     doc = {
         "schema": "verity-capture/census/v1",
         "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "workload": {"source": wl.get("source"), "sha256": wl.get("sha256"), "requests": wl["requests"], "sampling": wl["sampling"]},
+        "workload": {"source": wl.get("source"), "sha512": wl.get("sha512"), "requests": wl["requests"], "sampling": wl["sampling"]},
         "engine_kwargs": {k: v for k, v in eng.kwargs.items() if k not in ("model", "tokenizer")},
         "env_flags": eng.env_flags,
         "versions": versions,
@@ -447,7 +447,7 @@ def reconcile(census: dict, log_path: str, profile_name: str, proposed_allowlist
     rep = {
         "schema": "verity-capture/census-reconciliation/v2",
         "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-        "census": {"utc": census.get("utc"), "workload_sha256": (census.get("workload") or {}).get("sha256"),
+        "census": {"utc": census.get("utc"), "workload_sha512": (census.get("workload") or {}).get("sha512"),
                    "engine_steps": census.get("engine_steps"), "steps_with_device_work": len(census_steps),
                    "tokens_equal_accepted": census.get("tokens_equal_accepted"), "method": census.get("method"),
                    "versions": {k: (census.get("versions") or {}).get(k) for k in ("torch", "triton", "vllm", "cuda", "gpu")}},

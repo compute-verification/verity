@@ -430,7 +430,7 @@ def main(args: Options) -> int:
                 r = run_workload(eng, reqs, sampling)
                 cpu = TRACE.cpu_delta(cpu0, llm.collective_rpc(TRACE.thread_cpu, timeout=args.rpc_timeout))
                 ran.update(wall_s=round(r["wall_s"], 4), steps=len(r["step_wall_s"]))
-                row = {"schema": SCHEMA, "label": args.label, "workload": args.workload, "workload_sha256": wl.get("sha256"), "case": case, "model": cp["repo"],
+                row = {"schema": SCHEMA, "label": args.label, "workload": args.workload, "workload_sha512": wl.get("sha512"), "case": case, "model": cp["repo"],
                        "tp": args.tp, "pair": pair, "order_in_pair": k, "arm": arm, "committer": None if arm == "control" else args.committer,
                        "wall_s": r["wall_s"], "iterations": r["iterations"], "engine_steps": len(r["step_wall_s"]), "generated_tokens": r["generated_tokens"],
                        "prompt_tokens": r["prompt_tokens"], "generated_tokens_per_s": r["generated_tokens"] / r["wall_s"],

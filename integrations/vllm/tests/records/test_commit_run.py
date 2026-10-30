@@ -14,7 +14,7 @@ from verity_vllm.records.fields import MissingField, RecordError, UnknownField
 
 def _row(arm: str = "instrumented") -> dict:
     """The fields `pipeline.commit` writes for one run of a pair (the control arm has no `commit` block)."""
-    row = {"schema": SCHEMA, "label": "l", "workload": "w.json", "workload_sha256": "ab" * 32, "case": "c", "model": "m", "pair": 1,
+    row = {"schema": SCHEMA, "label": "l", "workload": "w.json", "workload_sha512": "ab" * 64, "case": "c", "model": "m", "pair": 1,
            "order_in_pair": 0, "arm": arm, "committer": None if arm == "control" else "hm96", "committer_name": None if arm == "control" else "hm96",
            "wall_s": 1.5, "iterations": 3, "engine_steps": 3, "generated_tokens": 8, "prompt_tokens": 4, "generated_tokens_per_s": 5.3,
            "total_tokens_per_s": 8.0, "step_wall_s": [0.5, 0.5, 0.5], "step_wall_prefill_s": 0.5, "step_wall_decode_mean_s": 0.5,

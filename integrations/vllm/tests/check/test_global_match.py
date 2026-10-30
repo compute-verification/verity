@@ -47,10 +47,10 @@ def _arr(r):
     return int(r.get("arrive", 0))
 
 
-def preamble(reqs, wl_sha=None):
+def preamble(reqs, wl_sha=None, wl_key="sha512"):
     # the recorder's shape (vllm_adapter build_manifest -> RunHeader.profile): the effective engine kwargs and the compilation facts are
     # nested under `profile` -- G1 reads them there; an eager run attests mode "0" / cudagraph NONE.
-    # RunHeader.workload carries the manifest's sha256 and each request's seed as the driver records them
+    # RunHeader.workload carries the manifest's SHA-512 and each request's seed as the driver records them
     # the toy engine schedules synchronously: async_scheduling False is ON RECORD (the lag-0 instance of the EOS
     # lag rule needs the flag too -- a lag-0 record without it is indistinguishable from a lag-1 record with a deleted step)
     hdr = RunHeader("verity-capture/log/v1", "2026-09-19T00:00:00Z", "toy-profile",
@@ -58,7 +58,7 @@ def preamble(reqs, wl_sha=None):
                      "compilation": {"mode": "0", "cudagraph_mode": "NONE", "enforce_eager": True}},
                     {"repo": "toy", "config": C},
                     {"requests": [{"request_id": r["id"], "prompt_token_ids": list(r["prompt"]), "max_tokens": _cap(r), "arrive_step": _arr(r), "seed": r.get("seed")} for r in reqs],
-                     "sampling": {"temperature": 0.0, "variant": "greedy"}, "sha256": wl_sha})
+                     "sampling": {"temperature": 0.0, "variant": "greedy"}, wl_key: wl_sha})
     evs = [hdr]
     weights = [(A_EMBED, W_EMBED, "model.embed_tokens.weight"), (A_LN1, W_LN1, "model.layers.0.input_layernorm.weight"),
                (A_QKV_W, W_QKV, "model.layers.0.self_attn.qkv_proj.weight"), (A_O_W, W_O, "model.layers.0.self_attn.o_proj.weight"),
@@ -174,9 +174,9 @@ def step_events(step, reqs, ids, base_alloc):
     return evs
 
 
-def batched_log(reqs, wl_sha=None):
+def batched_log(reqs, wl_sha=None, wl_key="sha512"):
     ids = Ids()
-    evs = preamble(reqs, wl_sha)
+    evs = preamble(reqs, wl_sha, wl_key)
     n_steps = max(_arr(r) + len(r["sampled"]) for r in reqs)
     for s in range(n_steps):
         evs += step_events(s, reqs, ids, 20 + 40 * s)
@@ -244,8 +244,8 @@ def profile_tgrouped(leak=False):
     return Profile("toy", pats, dict(C), toy.weight_field, False)
 
 
-def batched(reqs, d, leak=False, tgrouped=False, wl_sha=None, witness=None):
-    evs = batched_log(reqs, wl_sha)
+def batched(reqs, d, leak=False, tgrouped=False, wl_sha=None, witness=None, wl_key="sha512"):
+    evs = batched_log(reqs, wl_sha, wl_key)
     r = fold(evs, profile_tgrouped(leak) if tgrouped else profile(leak, witness), strict=True)
     assert r.report.unsupported == 0 and not r.errors
     return persist(r, evs, d, reqs)
@@ -373,8 +373,8 @@ def workload(reqs, path):
 
 
 def _sha(path):
-    """RunHeader.workload.sha256 as the driver computes it (vllm_adapter.load_workload): the canonical manifest document."""
-    return __import__("hashlib").sha256(json.dumps(json.load(open(path)), sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    """RunHeader.workload.sha512 as the driver computes it (vllm_adapter.load_workload): the canonical manifest document."""
+    return __import__("hashlib").sha512(json.dumps(json.load(open(path)), sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 EOS = 11   # the fixture model's EOS id (R1_EOS stops on it); the Program declares it as its stop rule
@@ -1383,14 +1383,14 @@ def test_a_registered_s_component_binds_by_shape_in_any_workload(tmp_path):
 @pytest.mark.slow
 def test_g1_ties_the_manifest_of_record_to_the_run_header_sha_and_sampling_fields(memory, tmp_path):
     """GM-01 was blind to the manifest's sampling fields -- seeds swapped or a seed deleted in the manifest (GP-01
-    recomposed: digest unchanged, seeds are Inputs) passed G1 by ids/prompts/caps/arrivals. G1 now requires RunHeader.workload.sha256 ==
+    recomposed: digest unchanged, seeds are Inputs) passed G1 by ids/prompts/caps/arrivals. G1 now requires RunHeader.workload.sha512 ==
     the manifest of record and compares each request's seed and the workload sampling policy with the header, by name."""
     R0s, R1s = dict(R0, seed=1901028918), dict(R1, seed=2097394646)
     gp, oracle = assemble([R0s, R1s], tmp_path)
     res = gm.check(gp, oracle)
     assert res["verdict"] == "PASS", res["reasons"]
     g1 = _check(res, "G1")
-    assert g1["header_workload_sha256"] == g1["workload_doc_sha256"] != g1["workload_sha256"] and g1["sampling"]["manifest"]["variant"] == "greedy"
+    assert g1["header_workload_sha512"] == g1["workload_doc_sha512"] != __import__("hashlib").sha512(open(gp["workload"]["path"], "rb").read()).hexdigest() and g1["sampling"]["manifest"]["variant"] == "greedy"
     wl_path = gp["workload"]["path"]
     comps = [r["component"]["dir"] for r in gp["requests"]]
 
@@ -1453,14 +1453,19 @@ def test_g1_ties_the_manifest_of_record_to_the_run_header_sha_and_sampling_field
     pr = _check(res, "G1")["problems"]
     assert res["verdict"] == "FAIL" and any("not one sampling declaration -- temperature: label=0.0, variants_table=0.5" in p for p in pr), pr
     assert any("sampling temperature=0.5 but the run header records temperature=0.0" in p for p in pr), pr   # and the table value vs the header
-    # a header without workload.sha256 cannot tie the manifest of record to the run: fail closed, named
+    # a header without workload.sha512 cannot tie the manifest of record to the run: fail closed, named
     reqs = [R0, R1]
     d = tmp_path / "nosha"
     d.mkdir()
     wl2 = workload(reqs, d / "workload.json")
     oracle2 = batched(reqs, d / "batched", wl_sha=None)
     res = gm.check(gm.mock_global_program(wl2, comps, eos_token_ids=[EOS], lag=0), oracle2)
-    assert res["verdict"] == "FAIL" and any("carries no workload.sha256" in p for p in _check(res, "G1")["problems"])
+    assert res["verdict"] == "FAIL" and any("carries no workload.sha512: the manifest" in p for p in _check(res, "G1")["problems"])
+    # a run recorded before workload digests became SHA-512 (its header's workload.sha256) is refused by name, with the fix
+    oracle3 = batched(reqs, d / "batched-sha256", wl_sha=_sha(wl2)[:64], wl_key="sha256")
+    res = gm.check(gm.mock_global_program(wl2, comps, eos_token_ids=[EOS], lag=0), oracle3)
+    assert res["verdict"] == "FAIL" and any("workload.sha256 is from before workload digests became SHA-512, so re-serve" in p
+                                            for p in _check(res, "G1")["problems"])
 
 
 def test_execution_past_a_declared_eos_fails_g6(memory, tmp_path):

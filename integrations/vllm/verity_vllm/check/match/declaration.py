@@ -535,19 +535,21 @@ def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs
         c.info["workload_sha256"] = have
         if want and want != have:
             c.fail("workload manifest sha256 differs from the global Program's")
-        # the manifest of record must be the manifest the RUN was captured with: the driver records its sha256 in
-        # RunHeader.workload.sha256 -- a manifest edited after the run (seeds swapped, a seed deleted) composes the same Program and
+        # the manifest of record must be the manifest the RUN was captured with: the driver records its SHA-512 in
+        # RunHeader.workload.sha512 -- a manifest edited after the run (seeds swapped, a seed deleted) composes the same Program and
         # passed G1 by ids/prompts/caps/arrivals alone; and per request the header's sampling fields are compared with the manifest's
-        hw = (header.get("workload") or {}).get("sha256")
+        hwl = header.get("workload") or {}
+        hw = hwl.get("sha512")
         # the driver (vllm_adapter.load_workload) hashes the manifest DOCUMENT canonically (sort_keys, compact separators), not the file
-        have_doc = wl.doc_sha256
-        c.info["header_workload_sha256"] = hw
-        c.info["workload_doc_sha256"] = have_doc
+        have_doc = wl.doc_sha512
+        c.info["header_workload_sha512"] = hw
+        c.info["workload_doc_sha512"] = have_doc
         if not hw:
-            c.fail("the record header carries no workload.sha256: the manifest of record cannot be tied to the run (fail closed)")
-        elif hw not in (have_doc, have):
-            c.fail(f"manifest of record differs from the header: RunHeader.workload.sha256 {hw[:16]} != manifest {have_doc[:16]} "
-                   f"(canonical document; file {have[:16]}) -- the run was captured with another manifest")
+            c.fail("the record header carries no workload.sha512: " + ("its workload.sha256 is from before workload digests became SHA-512, "
+                   "so re-serve the run" if hwl.get("sha256") else "the manifest of record cannot be tied to the run (fail closed)"))
+        elif hw != have_doc:
+            c.fail(f"manifest of record differs from the header: RunHeader.workload.sha512 {hw[:16]} != manifest {have_doc[:16]} "
+                   "(canonical document) -- the run was captured with another manifest")
         hdr_by_id = {r["request_id"]: r for r in hdr_reqs}
         for i, w in enumerate(wl.requests):
             h = hdr_by_id.get(request_id_of(i))

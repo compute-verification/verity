@@ -486,12 +486,11 @@ def i2_of_record(bundle: str, row_dir: str, workload: str, hf_config: str | None
     ``transfer_gates``; its Programs' Builds under ``programs_root`` (default the row dir; with ``own``, the verifier's own)."""
     from verity_vllm.program.predict.score import phi_of
     from verity_vllm.program.predict.steps import Registered
+    from verity_vllm.records.workload import served
 
     r = record1(str(bundle), str(row_dir))
     doc = json.loads(Path(workload).read_text())
-    got = hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-    if got != r.row.get("workload_sha256"):
-        raise ValueError(f"{workload}: workload sha256 {got[:16]} is not the record's {str(r.row.get('workload_sha256'))[:16]}")
+    served(doc, r.row.get("workload_sha512"), str(workload))
     phi = phi_of({"row": r.row["label"], "workload": doc}, config=str(hf_config or LLAMA32_1B_CONFIG))
     return I2Compiler(Registered.of(phi, int(doc.get("seed") or 0), cap_bits), ingress_of(r.ctx), str(programs_root or row_dir),
                       transfer_gates=tuple(dict.fromkeys(map(str, transfer_gates))), own=own)

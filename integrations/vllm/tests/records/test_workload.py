@@ -10,7 +10,7 @@ import pytest
 
 from verity_vllm.config import WORKLOAD_SCHEMA, RowConfig, workload_files
 from verity_vllm.records.fields import MissingField, RecordError, UnknownField
-from verity_vllm.records.workload import SCHEMA, V1, Workload
+from verity_vllm.records.workload import SCHEMA, V1, Workload, served
 
 ROWS = workload_files()
 
@@ -30,8 +30,8 @@ def _v1() -> dict:
     return doc | {"schema": V1, "tokenizer_revision": "0" * 40, "engine_args_required": {"max_model_len": 64}}
 
 
-def _sha256(doc: dict) -> str:
-    return hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+def _sha512(doc: dict) -> str:
+    return hashlib.sha512(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 def test_every_row_file_loads_and_dumps_back_to_itself():
@@ -40,7 +40,7 @@ def test_every_row_file_loads_and_dumps_back_to_itself():
         doc = json.loads(p.read_text())
         w = Workload.load(p)
         assert w.dump() == doc and Workload.of(w.dump(), str(p)) == w, p.name
-        assert w.doc_sha256 == _sha256(doc)
+        assert w.doc_sha512 == _sha512(doc) and len(w.doc_sha512) == 128
         cfg = RowConfig.of(doc)
         assert (w.model, w.case, w.engine) == (cfg.model, cfg.case, doc["engine"]), p.name
 
@@ -118,10 +118,10 @@ def test_a_wrong_schema_or_type_is_refused():
 def test_a_record_passes_through_and_the_digest_is_of_the_document_read():
     doc = _v2()
     w = Workload.of(doc, "w")
-    assert Workload.of(w, "elsewhere") is w and w.doc_sha256 == _sha256(doc)
+    assert Workload.of(w, "elsewhere") is w and w.doc_sha512 == _sha512(doc)
     edited = copy.deepcopy(doc)
     edited["requests"][0]["seed"] = 5
-    assert Workload.of(edited, "w").doc_sha256 != w.doc_sha256
+    assert Workload.of(edited, "w").doc_sha512 != w.doc_sha512
 
 
 def test_a_requests_arrival_is_its_own_else_the_sweeps_else_zero():
@@ -133,3 +133,12 @@ def test_a_requests_arrival_is_its_own_else_the_sweeps_else_zero():
     doc["sweep"] = {"arrive_steps": [9, 5]}
     w = Workload.of(doc, "w")
     assert [w.arrive_step(i) for i in range(3)] == [4, 5, 0]
+
+
+def test_a_workload_is_the_one_a_record_served_only_by_its_sha512():
+    doc = _v2()
+    served(doc, _sha512(doc), "w")
+    with pytest.raises(ValueError, match="workload SHA-512 .* is not the record's"):
+        served(doc, _sha512(_v1()), "w")
+    with pytest.raises(ValueError, match="carries no workload_sha512 .* only workload_sha256.*: re-serve the run"):
+        served(doc, None, "w")

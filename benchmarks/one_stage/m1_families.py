@@ -18,7 +18,6 @@ templates past the row itself: ``units``), and for each ``--also`` Definition (`
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import re
 import resource
@@ -176,13 +175,16 @@ def main() -> int:
     from verity_vllm.pipeline.tp import rank_replay as RR
     from verity_vllm.pipeline.tp import serving_rows as TS
     from verity_vllm.pipeline.workload_file import workload_file
+    from verity_vllm.records.workload import served
 
     t0 = time.time()
     rec = TS.record(a.commit)
     world = int(rec["world"])
     doc = json.loads(workload_file(a.workload).read_text())
-    if hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest() != rec["workload_sha256"]:
-        raise SystemExit(f"{a.workload}: not the workload the record served")
+    try:
+        served(doc, rec["workload_sha512"], str(a.workload))
+    except ValueError as e:
+        raise SystemExit(f"not the workload the record served: {e}") from e
     reqs = [{"request_id": f"r{i}", "arrive_step": int(q.get("arrive_step") or 0), "prompt_len": len(q["prompt_token_ids"]),
              "max_tokens": int(q["max_tokens"])} for i, q in enumerate(doc["requests"])]
     p = RR.load({"programs": {str(a.rank): str(Path(a.build_root) / f"rank{a.rank}")}, "of_record": rec["of_record"], "requests": reqs},

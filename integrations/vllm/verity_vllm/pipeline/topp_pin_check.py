@@ -108,7 +108,7 @@ def served(workload: str, out: Path) -> dict:
     differ = sorted(rid for rid in together if together[rid] != alone.get(rid))
     S = registered_splits(num_sm)
     doc = {"ok": not differ and s_together == s_alone == {S} and topp_pin.pinned(), "pinned": topp_pin.pinned(),
-           "row": wl["row_id"], "workload_sha256": wl["sha256"], "sampling": {k: wl["sampling"][k] for k in ("temperature", "top_p")},
+           "row": wl["row_id"], "workload_sha512": wl["sha512"], "sampling": {k: wl["sampling"][k] for k in ("temperature", "top_p")},
            "num_sm": num_sm, "registered_splits": S, "S_together": sorted(s_together), "S_alone": sorted(s_alone),
            "requests": len(reqs), "differ": differ, "tokens_together": together, "tokens_alone": alone}
     (out / "served.json").write_text(json.dumps(doc, indent=1) + "\n")
