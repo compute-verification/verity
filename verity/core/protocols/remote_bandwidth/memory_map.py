@@ -36,7 +36,8 @@ registered block, and the writer records one at its values' last structural read
 credited past it: weights only the first steps read are freed after the last of them, and a gathered table (an
 embedding, the experts a router indexes) stays until the last step whose gather may select any of its rows, whichever
 rows the run selected.  That every free but a re-key's (below), of a registered block or a written one, is at its
-values' last structural reader is the memory-map unit's to prove (I4, `PROTOCOL.md` §8 "The requirement's link").  A
+values' last structural reader is the memory-map unit's to prove (`verity.ml.circuits.requirement_units`,
+`PROTOCOL.md` §8 "The requirement's link").  A
 step's frees apply before its writes; a step frees a slot at most once, only a live one, and writes a slot at most
 once.  A block is written once, complete and encoded (deferred residency):
 a KV block the step's tokens are still filling is not in the record until it is complete, and a complete one is not
@@ -87,7 +88,7 @@ step's root and before the next pass's, and a re-key's old index is below the st
 Passes and steps.  Each pass of the audit covers one step `s`, which it names with its root (`Session.receive(...,
 step=s)`, public), and the steps of a session's passes strictly increase.  Its plan holds every complete block the
 circuit reads at `s`, filler beside them allowed: here the blocks resident at `s`, registered or written at a step
-before `s` and not freed or overwritten at one (A1's `Store.resident` and `PlanMatches`, in the Lean module
+before `s` and not freed or overwritten at one (`Store.resident` and `PlanMatches`, in the Lean module
 `Definitions.Accounting.Requirement`).
 A step's record takes effect after the step's reads: its writes are of blocks the step completed, or an earlier step
 did and the device has since encoded, and its frees are of blocks whose values' last structural reader it is.
