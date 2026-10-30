@@ -449,9 +449,10 @@ def test_records_only_stores_every_record_and_a_forked_run_from_a_copy_of_them_b
     root = _tree(tmp_path / "t")
     _bindings(root, *BINDINGS)
     first = _records_only(root)
-    assert first["reused"] == 0 and first["stored"] == len(first["rebuilt"]) == 5, first
+    assert first["reused"] == 0 and first["stored"] == len(first["rebuilt"]) == 5 and first["scratch_bytes"] > 0, first
     assert len(_records(root)) == len(list((root / "cache").glob("*/*/*.json"))) == 5     # no target's entry, no task list
-    assert _records_only(root) == {"reused": 5, "rebuilt": [], "stored": 0}
+    assert first["bytes"] == sum(p.stat().st_size for p in _records(root))
+    assert _records_only(root) == {"reused": 5, "rebuilt": [], "scratch_bytes": 0, "stored": 0, "bytes": first["bytes"]}
 
     warm = _copied(root, tmp_path / "warm")
     out = _run(warm, FORKED)
@@ -832,7 +833,7 @@ def shown(suite, units):
 if mode == "whole":
     out = shown(TG.suite(), TG.BINDINGS)
 elif mode == "build":
-    kept, dropped, _ = UN.built_apart(UN.made_entries(), 2)
+    kept, dropped, _, _ = UN.built_apart(UN.made_entries(), 2)
     manifest.write_text(json.dumps(UN.manifest(kept, dropped)))
     out = {"errors": sorted(map(list, TG.ROOT_ERRORS)), "dropped": [list(u) for u in dropped]}
 else:
@@ -879,9 +880,10 @@ def die():
 """
 
 
-def _apart(root: Path, mode: str, ok: bool = True) -> dict | str:
-    """``mode``'s output over ``root`` (`APART`, its manifest beside the tree), or its stderr when it fails (``ok`` false)."""
-    env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1"}
+def _apart(root: Path, mode: str, ok: bool = True, **env: str) -> dict | str:
+    """``mode``'s output over ``root`` (`APART`, its manifest beside the tree), or its stderr when it fails (``ok`` false);
+    ``env`` added to its environment."""
+    env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1", **env}
     r = subprocess.run([sys.executable, "-c", APART, str(root), str(REPO), mode, str(root.parent / f"{root.name}-manifest.json")],
                        capture_output=True, text=True, cwd=REPO, env=env)
     if not ok:
@@ -930,6 +932,20 @@ def test_a_binding_whose_process_dies_is_named_and_a_model_is_dropped(tmp_path):
     assert f"RuntimeError: _die_roots: {died}" in _apart(root, "build", ok=False)
 
 
+def test_a_build_apart_killed_with_its_binding_s_process_leaves_no_file_behind(tmp_path):
+    """The process building the catalog apart killed with a binding's (a node's lockup, the OOM killer's pick of each) leaves
+    nothing of theirs in the temporary directory: each binding's result is a file with no name, which the system frees with
+    the last process that holds it, where a named one would stay until someone removed it."""
+    root = _apart_tree(tmp_path / "t")
+    _edit(root, "syn/die.py", "    os.kill(os.getpid(), signal.SIGKILL)",
+          "    os.kill(os.getppid(), signal.SIGKILL)\n    os.kill(os.getpid(), signal.SIGKILL)")
+    _edit(root, "syn/catalog.py", "]\nFAMILIES", ', (("_model_roots:SynDie_v1",), die)]\nFAMILIES')
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    _apart(root, "build", ok=False, TMPDIR=str(scratch))
+    assert not list(scratch.glob("circuit-check-*"))
+
+
 def test_one_xdist_worker_builds_the_catalog_and_the_others_take_it(tmp_path, monkeypatch):
     """Under xdist the first worker to ask builds the catalog apart and writes its manifest beside the workers' basetemps; a later
     one takes the manifest and builds nothing.  A builder that failed leaves its error there, and each later worker fails on it
@@ -939,7 +955,7 @@ def test_one_xdist_worker_builds_the_catalog_and_the_others_take_it(tmp_path, mo
 
     jobs: list[int] = []
     monkeypatch.setattr(UN, "built_apart",
-                        lambda entries, n, budget, weights: jobs.append(n) or (entries[:1], [("gone",)], {}))
+                        lambda entries, n, budget, weights: jobs.append(n) or (entries[:1], [("gone",)], {}, 0))
     monkeypatch.setattr(UN, "manifest", lambda kept, dropped: {"kept": len(kept), "dropped": dropped})
     monkeypatch.setattr(UN, "from_manifest", lambda entries, got: entries[:got["kept"]])
     assert conftest._built(["a", "b"], tmp_path, 3) == (["a"], "built apart")

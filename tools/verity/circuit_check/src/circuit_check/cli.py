@@ -797,17 +797,20 @@ def records(cache: Path, *, log=print, jobs: int = 1, mem_gb: int | None = None)
     run), then builds no binding: it starts from the records.  Nothing is stored when this process or a binding's did
     something the tracer cannot see (`cache.untraced`), nor when a record disagrees with what was built (`units.Stale`), and
     the report says why; a run from the cache builds each binding it misses, as it would with no records.  The report: the
-    bindings reused and built (`units.Plan.stats`), the records stored, and why none were."""
+    bindings reused and built (`units.Plan.stats`), the most bytes their builds' results held on disk at once
+    (``scratch_bytes``, `units.built_apart`), the records stored and the bytes every binding's records take in ``cache``
+    (``bytes``), and why none were stored."""
     if not CC.tracing():
         raise RuntimeError("records: the tracer is off (`cache.trace`), so a record would hold no read")
     try:
         plan = UN.plan(cache, REPO, log, (max(1, jobs), budget_gb(mem_gb), heavy()))
     except UN.Stale as e:
         return {"stored": 0, "why": f"a record disagrees with what was built ({e})"}
-    out = plan.stats()
+    out = {**plan.stats(), "scratch_bytes": plan.scratch}
     if why := CC.untraced():
         return {**out, "stored": 0, "why": f"the tracer could not see what it did ({'; '.join(why[:3])})"}
-    return {**out, "stored": UN.store(cache, REPO, plan.entries, only_rebuilt=True)}
+    stored = UN.store(cache, REPO, plan.entries, only_rebuilt=True)
+    return {**out, "stored": stored, "bytes": UN.held(cache, plan.entries)}
 
 
 def _owners(plan: UN.Plan, tasks: list[tuple], n: int) -> dict[str, int]:
@@ -1316,7 +1319,9 @@ def _records_main(a: argparse.Namespace, cache: Path, jobs: int) -> int:
         a.out.write_text(json.dumps(rep, indent=1) + "\n")
     print("circuit-check --records-only: "
           + (f"{len(rep['rebuilt'])} catalog binding(s) built, {rep['reused']} reused, " if "rebuilt" in rep else "")
-          + f"{rep['stored']} record(s) stored in {cache} in {rep['seconds']}s" + (f"; {rep['why']}" if "why" in rep else ""))
+          + f"{rep['stored']} record(s) stored in {cache} in {rep['seconds']}s"
+          + (f" ({rep['bytes']} bytes of records; the builds' results at most {rep['scratch_bytes']} bytes at once)"
+             if "bytes" in rep else "") + (f"; {rep['why']}" if "why" in rep else ""))
     return 1 if "why" in rep else 0
 
 
