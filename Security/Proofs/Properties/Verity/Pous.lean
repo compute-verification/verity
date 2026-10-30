@@ -41,7 +41,8 @@ probability at most its published `δ` at the strategy's SHA-512 calls, its verd
 `ε_forge(t, Q)` at the forger's budget (`epsForge`), and its verdict with a break at most its loss at the finder's
 collision probability. Elsewhere its error is `⊤`. -/
 theorem target_of_split (k : Verity.Registration.Composite) (a : Subprotocol)
-    (brk forged : ∀ θ F c : ByteArray, Game.Strategy (V.game θ F c) → Exchange → Prop)
+    (brk forged : ∀ (θ : ByteArray) (F : Array ByteArray) (c : ByteArray), Game.Strategy (V.game θ F c) → Exchange →
+      Prop)
     (hgood : ∀ θ F c σ, V.FinderCR a θ F c σ ∧ V.Unforgeable a θ F c σ →
       Game.prob (fun o => V.Verdict k a o ∧ ¬ brk θ F c σ o ∧ ¬ forged θ F c σ o ∧ ¬ V.Holds k θ F c σ a o)
         (V.game θ F c) σ ≤ V.delta θ a (V.cost θ F c σ))
@@ -68,7 +69,8 @@ theorem target_of_split (k : Verity.Registration.Composite) (a : Subprotocol)
 
 /-- **PoUS's target from its three parts** (`target_of_split` at PoUS). -/
 theorem pousSound_of_split (k : Verity.Registration.Composite)
-    (brk forged : ∀ θ F c : ByteArray, Game.Strategy (V.game θ F c) → Exchange → Prop)
+    (brk forged : ∀ (θ : ByteArray) (F : Array ByteArray) (c : ByteArray), Game.Strategy (V.game θ F c) → Exchange →
+      Prop)
     (hgood : ∀ θ F c σ, V.FinderCR .pous θ F c σ ∧ V.Unforgeable .pous θ F c σ →
       Game.prob (fun o => V.Verdict k .pous o ∧ ¬ brk θ F c σ o ∧ ¬ forged θ F c σ o ∧ ¬ V.Holds k θ F c σ .pous o)
         (V.game θ F c) σ ≤ V.delta θ .pous (V.cost θ F c σ))
@@ -82,7 +84,8 @@ theorem pousSound_of_split (k : Verity.Registration.Composite)
   V.target_of_split k .pous brk forged hgood hforged hbrk
 
 /-- A subprotocol's error is `⊤` at a strategy where its published `δ` is. -/
-theorem error_eq_top {a : Subprotocol} {θ F c : ByteArray} {σ : Game.Strategy (V.game θ F c)}
+theorem error_eq_top {a : Subprotocol} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
+    {σ : Game.Strategy (V.game θ F c)}
     (h : V.delta θ a (V.cost θ F c σ) = ⊤) : V.error a θ F c σ = ⊤ := by
   unfold Vocab.error condError
   split_ifs
@@ -92,7 +95,7 @@ theorem error_eq_top {a : Subprotocol} {θ F c : ByteArray} {σ : Game.Strategy 
 /-- **The target holds at parameters whose published `δ` is `⊤`**, at every committed file, commitment and
 strategy. -/
 theorem target_at_of_delta_top (k : Verity.Registration.Composite) (a : Subprotocol) (θ : ByteArray)
-    (h : ∀ n, V.delta θ a n = ⊤) (F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) :
+    (h : ∀ n, V.delta θ a n = ⊤) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) :
     Game.prob (fun o => V.Verdict k a o ∧ ¬ V.Holds k θ F c σ a o) (V.game θ F c) σ ≤ V.error a θ F c σ := by
   rw [V.error_eq_top (h _)]
   exact le_top
@@ -286,7 +289,7 @@ end Verity
 `q`. -/
 theorem Pous.EndToEnd.acceptedAt_deployed (trusted : List ByteArray) (c : PousCheck.SetupProtocol.Commitment)
     (C : Array (Array ByteArray)) (pub : PousCheck.SetupProtocol.Public) (digests : ByteArray)
-    (r : PousCheck.Run.Session) (sid : ByteArray) :
+    (r : PousCheck.Run.ChallengerRecord) (sid : ByteArray) :
     Pous.EndToEnd.AcceptedAt PousCheck.Run.DEPLOYED trusted c C pub digests r sid ↔
       Pous.EndToEnd.Accepted trusted c C pub digests r sid :=
   Iff.rfl

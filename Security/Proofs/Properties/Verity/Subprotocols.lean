@@ -347,7 +347,7 @@ def _root_.Accounting.RealizesSpaceOfPeriodHeld.atCode {r : PeriodRun d α C Ω}
 
 /-- **PoUS at the code**: `SpaceOfPeriodHeld` at `atCode r A`, from a realization at `r` (its own
 `accepts` not read), `PousAccepts` and `PousNoBreak`. -/
-theorem pous_atCode (hd : AcceptsDecodes) (hp : PublishesRoot) (hH : P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ENNReal) ^ 131))
+theorem pous_atCode (hd : AcceptsDecodes) (hp : PublishesRoot)
     {D Q L : ℕ} (hP : P2.Assumptions.P2RingAuditSecure D Q L) [Fintype ι] {r : PeriodRun d α C Ω} {ΩW ΩQ : Type}
     {run : Run d α ΩW ΩQ ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams)} {P : Audits ΩW ΩQ}
     {τ : Pous.Period.Strategy ΩW ΩQ} {round : ℕ} {c : Certificates} {p : Price}
@@ -356,7 +356,7 @@ theorem pous_atCode (hd : AcceptsDecodes) (hp : PublishesRoot) (hH : P2.Assumpti
     (hS : c.S * (run.win .capacity).len + d.chip + ((∑ i, d.cap i * round : ℕ) : ℝ) ≤ Pous.EndToEnd.S)
     {A : Audit → ((i : I) → Ω i) → Prop} (hA : PousAccepts R A P) (hB : PousNoBreak R A P) :
     (atCode r A).Sound c p .pous ((Params.δ : ℝ) + Params.εMax.toReal) :=
-  Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld hd hp hH D Q L hP ι α d C I Ω (atCode r A) ΩW ΩQ run P τ round c p
+  Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld hd hp D Q L hP ι α d C I Ω (atCode r A) ΩW ΩQ run P τ round c p
     (R.atCode A fun ξ hx => ⟨hA ξ hx, hB ξ hx⟩) hdev hinst hS
 
 end Space

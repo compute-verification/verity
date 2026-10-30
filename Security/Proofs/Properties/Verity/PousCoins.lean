@@ -165,7 +165,7 @@ device model and the instantiation at budget `(D, Q, L)`, the certificate's fit 
 time `t` of the period's event as a test of `Sha512Prf`, and the coupling's verdict at the code meaning the verifier's
 whole decision (`accepts`) outside a break (`brk`: a PoUS break is the coupling's, which its `BreakBound` answers
 for). -/
-structure PousCoins [Fintype ι] {θ F c : ByteArray} {σ : Game.Strategy (V.game θ F c)}
+structure PousCoins [Fintype ι] {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {σ : Game.Strategy (V.game θ F c)}
     (q : V.Coupling k .pous θ F c σ) (D Q L : ℕ) where
   ΩW : Type
   ΩQ : Type
@@ -191,7 +191,7 @@ structure PousCoins [Fintype ι] {θ F c : ByteArray} {σ : Game.Strategy (V.gam
 /-- **The coupling's run at the verdict at the code has PoUS's per-period guarantee** at
 `δ + ε_max + ε(t, 1) + ε(t, 6720)`, given `Sha512Prf` at the challenger's two tests. -/
 theorem PousCoins.sound [Fintype ι] {D Q L : ℕ} (hP : P2.Assumptions.P2RingAuditSecure D Q L)
-    {θ F c : ByteArray} {σ : Game.Strategy (V.game θ F c)}
+    {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {σ : Game.Strategy (V.game θ F c)}
     {q : V.Coupling k .pous θ F c σ} (w : V.PousCoins q D Q L) {ε : ℕ → ℕ → ℝ≥0∞}
     (hprf : PrfTests w.run w.P (V.certOf θ).S w.ω₀ ε w.t)
     (hB : ENNReal.ofReal Params.δ + Params.εMax + ε w.t 1 + ε w.t (105 * 64) ≠ ⊤) :
