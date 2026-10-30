@@ -137,7 +137,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   `flock-verify verify --zk`'s one-stage path (the C-Flock library calls `verifyCmd` makes) on those blobs, binds the
   evidence's `proved_units` to what the accepted sessions proved, and hands the verdicts to v1's `checkAt` at those coins.
   Each session's coins are the challenger's too: before any verdict, the check holds every session's record to the coin
-  trees the same signed release log shows the challenger drew and opened (`SampledProofs/ChallengerTrees.lean`,
+  trees the same signed release log shows the challenger sampled and opened (`SampledProofs/ChallengerTrees.lean`,
   `challenger.sessions_tree_reason`): its `coin_tree` a logged tree, its link points and every round's coins that
   tree's openings after its link's roots and each round's message, one tree a session and every tree a session's.
   `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds

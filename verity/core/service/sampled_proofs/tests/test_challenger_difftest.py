@@ -25,10 +25,10 @@ opening, coins opened before the commitment (their `after` rewritten or not), a 
 tampered or longer, another commitment, a release log edited, the window of another session the ledger opens (a prover
 picking the window), a session whose pin is off the verifier's copy of main, no pins log, each malformed form. A
 ``--zk`` session's coins (`COIN_TREES`, `SESSION_TREES`: `coin_trees_of` and `sessions_tree_reason`,
-`SampledProofs.ChallengerTrees`) are coin trees a session's challenger drew and opened, their lines among its roots and
-releases, and the records of sessions on them, one tree each; then a tree's or a round's line with a key dropped or
-added, a malformed key, nonce, root, spec, after or coins, a root or key drawn twice, a tree's line no reader reads, a
-round of no tree drawn earlier, of a stream the tree lacks, out of order, opened twice or past the tree's rounds or
+`SampledProofs.ChallengerTrees`) are coin trees a session's challenger sampled and opened, their lines among its roots
+and releases, and the records of sessions on them, one tree each; then a tree's or a round's line with a key dropped or
+added, a malformed key, nonce, root, spec, after or coins, a root or key sampled twice, a tree's line no reader reads, a
+round of no tree sampled earlier, of a stream the tree lacks, out of order, opened twice or past the tree's rounds or
 block; a record on no logged tree or on another than the one logged under its root, its link's roots or points edited, a
 round's coins, count or message edited, a round added or swapped, a stream renamed, each malformed form, its link
 unopened, a tree two sessions use, or one none does. The release logs of `RELEASED`, `READ` and `DRAW_COINS` hold tree
@@ -904,7 +904,7 @@ RELEASED_NAMES = ["honest", "head", "head-form", "empty", "odd", "root", "after"
 
 
 def released_case(rng: random.Random, name: str) -> Any:
-    """A session's release log, mutated as `name` names, with the lines of coin trees its challenger drew and opened
+    """A session's release log, mutated as `name` names, with the lines of coin trees its challenger sampled and opened
     (`TreeSession`) among its roots and releases."""
     rng = _seeded(rng)
     s = Session(rng)
@@ -1551,8 +1551,8 @@ class Drawn:
     (one read, or a read and a rerun's extension), between other roots: the other family's, `draw` coins opened before
     the commitment (at least one when `before`), and later ones. `ledger` opens the session for its window. `after` is
     the commitment (drawn, by default), and `reads` reads the coins (`reads(coins)`, the bytes read), by default in one
-    or two reads of drawn lengths.  The ledger opens the session withheld unless `withheld` is false.  The challenger
-    draws and opens `trees` coin trees too (`TreeSession`; drawn, by default), their lines among the others."""
+    or two reads of random lengths.  The ledger opens the session withheld unless `withheld` is false.  The challenger
+    samples and opens `trees` coin trees too (`TreeSession`; sampled, by default), their lines among the others."""
 
     def __init__(self, rng: random.Random, before: bool = False, after: bytes | None = None,
                  reads: Callable[[Callable[[int], bytes]], bytes] | None = None, withheld: bool = True,
@@ -1772,18 +1772,18 @@ def _interleave(rng: random.Random, lines: list[str], runs: Sequence[list[str]])
 
 
 class TreeSession:
-    """A ``--zk`` session's coin tree as challenger `ch` draws and opens it (`LiveChallenger.draw_tree`, `open_tree`):
-    `lines` its release log lines in order, and `record` the session's record on it (``coin_tree``, ``link`` and
-    ``streams``, beside keys the check doesn't read): its link points the tree's ``session`` round 0, opened after the
-    link's ``root_F`` and its tables' ``root_B``, and each table's two streams some rounds, each opened after its
-    message's digest, in an order drawn across the streams, the first round holding at least one coin."""
+    """A ``--zk`` session's coin tree as challenger `ch` samples and opens it (`LiveChallenger.sample_tree`,
+    `open_tree`): `lines` its release log lines in order, and `record` the session's record on it (``coin_tree``,
+    ``link`` and ``streams``, beside keys the check doesn't read): its link points the tree's ``session`` round 0,
+    opened after the link's ``root_F`` and its tables' ``root_B``, and each table's two streams some rounds, each opened
+    after its message's digest, in a random order across the streams, the first round holding at least one coin."""
 
     def __init__(self, rng: random.Random, ch: Ch.LiveChallenger) -> None:
         self.ch = ch
         tables = sorted(rng.sample(TABLES, rng.randint(1, 3)))
         self.spec = {"block": rng.choice([1, 2, 3, 5]), "rounds_log": rng.choice([0, 1, 2]), "scheme": CT.SCHEME,
                      "streams": [CT.SESSION] + [f"{t}/rep{r}" for t in tables for r in (0, 1)]}
-        tree, line = ch.draw_tree(self.spec, rng.choice([None, rng.randbytes(CT.NONCE_BYTES)]))
+        tree, line = ch.sample_tree(self.spec, rng.choice([None, rng.randbytes(CT.NONCE_BYTES)]))
         self.root, self.lines, self.opened = tree.root().hex(), [line], Counter()
         block, rounds = self.spec["block"], 1 << self.spec["rounds_log"]
         root_f, root_b = rng.randbytes(64), {t: rng.randbytes(64) for t in tables}
@@ -1882,8 +1882,8 @@ def _tree_mutated(rng: random.Random, t: TreeSession, name: str) -> None:
 
 
 def _tree_log(rng: random.Random, name: str = "honest") -> tuple[Session, list[TreeSession], list[str]]:
-    """A session whose challenger drew and opened coin trees, one of them mutated as `name` names (`_tree_mutated`), and
-    the release log holding their lines among the session's roots and releases."""
+    """A session whose challenger sampled and opened coin trees, one of them mutated as `name` names (`_tree_mutated`),
+    and the release log holding their lines among the session's roots and releases."""
     s = Session(rng)
     trees = [TreeSession(rng, s.ch) for _ in range(rng.randint(1, 3))]
     if name in COIN_TREES_NAMES[1:-1]:

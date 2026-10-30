@@ -23,12 +23,13 @@ withheld    {"type": "layout", "layout"}, {"type": "coin", "coin"} and {"type": 
             session's answers (`open_session(..., withhold=True)`)
 ~~~
 
-**A ``--zk`` session's coin tree** (`challenger`, "A --zk session's coins") is drawn and opened in the window's session,
-withheld or not.  `tree` draws one of spec `spec` under `nonce` (the prover's ``Hello`` nonce, or null for the challenger
-to draw it; `LiveChallenger.draw_tree`) and answers ``{key, nonce, root}``, ``Hello``'s answer; `tree-open` opens round
-`round` of stream `stream` of the tree whose root is `tree`, its first `n` coins after `after`, and answers the round's
-opening words (`coin_tree.CoinTree.open`, its coins first), each 32 lowercase hex digits, high word first.  Each writes its
-release log line, fsynced, before it answers, and the client checks each round against its tree (`coin_tree.check`).
+**A ``--zk`` session's coin tree** (`challenger`, "A --zk session's coins") is sampled and opened in the window's
+session, withheld or not.  `tree` samples one of spec `spec` under `nonce` (the prover's ``Hello`` nonce, or null for
+the challenger to sample it; `LiveChallenger.sample_tree`) and answers ``{key, nonce, root}``, ``Hello``'s answer;
+`tree-open` opens round `round` of stream `stream` of the tree whose root is `tree`, its first `n` coins after `after`,
+and answers the round's opening words (`coin_tree.CoinTree.open`, its coins first), each 32 lowercase hex digits, high
+word first.  Each writes its release log line, fsynced, before it answers, and the client checks each round against its
+tree (`coin_tree.check`).
 
 **A withheld session** keeps the challenger's commitment on its host until the session closes (`challenger`, "A
 withheld session"): it answers the hello with the layout alone (`{epoch, families, scheme}`), each open with the coin's
@@ -243,13 +244,14 @@ def _append(log: Any, lines: list[str], new: list[str], what: str) -> None:
 
 
 def _drawn(head: dict, challenger: LiveChallenger, log: Any, lines: list[str]) -> dict:
-    """A `tree` frame's answer: the coin tree the challenger draws (`LiveChallenger.draw_tree`), its line logged first."""
+    """A `tree` frame's answer: the coin tree the challenger samples (`LiveChallenger.sample_tree`), its line logged
+    first."""
     if sorted(head) != ["nonce", "spec", "type"]:
         raise CoinError(SEQUENCE)
     nonce = None if head["nonce"] is None else Ch._hex(head["nonce"])
     if head["nonce"] is not None and (nonce is None or len(nonce) != CT.NONCE_BYTES):
         raise CoinError(f"a coin tree's nonce is {CT.NONCE_BYTES} bytes in lowercase hex, or null")
-    tree, line = challenger.draw_tree(head["spec"], nonce)
+    tree, line = challenger.sample_tree(head["spec"], nonce)
     _append(log, lines, [line], "the coin tree")
     return {"key": tree.key.hex(), "nonce": tree.nonce.hex(), "root": tree.root().hex()}
 
@@ -522,9 +524,9 @@ class RemoteChallenger:
         return openings
 
     def tree(self, spec: dict, nonce: bytes | None = None) -> tuple[bytes, bytes, bytes]:
-        """A ``--zk`` session's coin tree, drawn by the challenger (`LiveChallenger.draw_tree`) of spec `spec` (its JSON)
-        under `nonce` (the prover's ``Hello`` nonce; None: the challenger draws it): its nonce, root and key, ``Hello``'s
-        answer.  The tree is kept, so `tree_open` checks each round against it."""
+        """A ``--zk`` session's coin tree, sampled by the challenger (`LiveChallenger.sample_tree`) of spec `spec` (its
+        JSON) under `nonce` (the prover's ``Hello`` nonce; None: the challenger samples it): its nonce, root and key,
+        ``Hello``'s answer.  The tree is kept, so `tree_open` checks each round against it."""
         try:
             s = CT.Spec.of_json(spec)
         except ValueError as e:
@@ -542,7 +544,7 @@ class RemoteChallenger:
         against the tree (`coin_tree.check`).  An opening that doesn't open the tree ends the session and raises."""
         s, rules = self._trees.get(bytes(root), (None, None))
         if s is None or stream not in s.streams:
-            raise CoinError(f"no coin tree this session drew under that root has a stream {stream!r}")
+            raise CoinError(f"no coin tree this session sampled under that root has a stream {stream!r}")
         ws = self._ask({"type": "tree-open", "after": bytes(after).hex(), "n": n, "round": rnd, "stream": stream,
                         "tree": bytes(root).hex()}, "tree-coins", _words_of)
         try:

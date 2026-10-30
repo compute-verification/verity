@@ -50,8 +50,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   `read_reason`, the bytes a draw read against its segment, and `coins_reason`, against the segment and the session the
   auditor's ledger opens for the verifier's window (`trusted_session_of`).
 * `challenger_coin_trees`, `challenger_session_trees`: a `--zk` session's coins (`ChallengerTrees`): the coin trees a
-  release log shows the challenger drew and opened (`coin_trees_of`), and an audit's session records held to them, one
-  tree a session (`sessions_tree_reason`).
+  release log shows the challenger sampled and opened (`coin_trees_of`), and an audit's session records held to them,
+  one tree a session (`sessions_tree_reason`).
 * `wires`, `wires_unrolled`: a window circuit's wires checked at the size of their description (`Wires.check`) and by
   the unrolled reference (`Wires.checkRef`), each with its summary: wired rows and bits, spans, and drawn rows' writers.
 * `wires_drawn`, `wires_drawn_unrolled`: the wire check on the drawn units alone (`Wires.Summary.drawnOk`, each drawn

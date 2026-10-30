@@ -578,7 +578,7 @@ def tree_record(nonce: bytes, tree_root: bytes, key: bytes, points: list[int], r
 
 
 def test_a_coin_tree_is_drawn_and_opened_in_the_windows_session_under_its_signed_close(tmp_path, signer):
-    """The challenger draws a ``--zk`` session's coin tree under the prover's nonce and opens each round itself, after
+    """The challenger samples a ``--zk`` session's coin tree under the prover's nonce and opens each round itself, after
     what it follows, between the session's own coins; each line is logged before its answer, the signed close covers
     them, the verifier's read of the session's roots reads past them, and a record on those coins is held to them
     (`session_tree_reason`), one whose round's coins differ refused."""
@@ -616,7 +616,7 @@ def _tree_frames(tree_root: str) -> dict[str, list[dict]]:
         "a round opened twice": [tree_open, tree_open],
         "a round past its block": [{**tree_open, "n": 4}],
         "a stream the tree hasn't": [{**tree_open, "stream": "u/rep0"}],
-        "a tree no one drew": [{**tree_open, "tree": root(6).hex()}],
+        "a tree no one sampled": [{**tree_open, "tree": root(6).hex()}],
         "a round after a short root": [{**tree_open, "after": root(5)[:32].hex()}],
         "a round frame with an extra key": [{**tree_open, "retry": True}],
         "a tree of another scheme": [{"type": "tree", "nonce": None, "spec": {**TREE_SPEC, "scheme": "coin-tree/v1"}}],
@@ -631,15 +631,16 @@ def _tree_frames(tree_root: str) -> dict[str, list[dict]]:
 @pytest.mark.parametrize("case", sorted(_tree_frames("")))
 def test_a_tree_frame_out_of_its_form_or_order_is_refused_and_ends_the_session(tmp_path, signer, case):
     """A coin tree's frames are refused as the session's own coins are: each round of each stream once, in order, at
-    most its block, after 64 bytes, of a tree the challenger drew from a spec it takes; the refusal ends the session."""
+    most its block, after 64 bytes, of a tree the challenger sampled from a spec it takes; the refusal ends the
+    session."""
     host = Host(tmp_path, signer, closed=True)
     with socket.create_connection(host.listener.getsockname()) as s:
         s.sendall(frame({"type": "hello"}))
         assert reply(s)["type"] == "commitment"
         s.sendall(frame({"type": "tree", "nonce": NONCE.hex(), "spec": TREE_SPEC}))
-        drawn = reply(s)
-        assert drawn["type"] == "tree"
-        frames = _tree_frames(drawn["tree"]["root"])[case]
+        sampled = reply(s)
+        assert sampled["type"] == "tree"
+        frames = _tree_frames(sampled["tree"]["root"])[case]
         for f in frames[:-1]:
             s.sendall(frame(f))
             assert reply(s)["type"] == "tree-coins"
@@ -649,7 +650,7 @@ def test_a_tree_frame_out_of_its_form_or_order_is_refused_and_ends_the_session(t
     assert host.ended() == answer["reason"]
     assert host.error is None
     lines = R.log_lines(host.directory / R.RELEASES)
-    assert len(C.coin_trees_of(lines)[drawn["tree"]["root"]].opened) == len(frames) - 1
+    assert len(C.coin_trees_of(lines)[sampled["tree"]["root"]].opened) == len(frames) - 1
 
 
 def _tree_server(answer):
@@ -674,18 +675,19 @@ def _tree_server(answer):
 
 
 def _honest_tree(other: bool = False):
-    """The answers of a challenger that draws the asked tree (another tree when `other`, under the nonce asked for) and
-    opens its rounds."""
-    drawn: list[CT.CoinTree] = []
+    """The answers of a challenger that samples the asked tree (another tree when `other`, under the nonce asked for)
+    and opens its rounds."""
+    sampled: list[CT.CoinTree] = []
 
     def answer(kind: str, head: dict) -> dict:
         if kind == "tree":
             ch = C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("tree"))
-            tree, _ = ch.draw_tree(head["spec"], bytes.fromhex(head["nonce"]))
-            drawn.append(ch.draw_tree(head["spec"], bytes.fromhex(head["nonce"]))[0] if other else tree)
+            tree, _ = ch.sample_tree(head["spec"], bytes.fromhex(head["nonce"]))
+            sampled.append(ch.sample_tree(head["spec"], bytes.fromhex(head["nonce"]))[0] if other else tree)
             return {"type": "tree", "tree": {"key": tree.key.hex(), "nonce": tree.nonce.hex(), "root": tree.root().hex()}}
         stream = TREE_SPEC["streams"].index(head["stream"])
-        return {"type": "tree-coins", "tree-coins": [f128(w) for w in drawn[0].open(stream, head["round"], head["n"])[1]]}
+        words = sampled[0].open(stream, head["round"], head["n"])[1]
+        return {"type": "tree-coins", "tree-coins": [f128(w) for w in words]}
     return answer
 
 

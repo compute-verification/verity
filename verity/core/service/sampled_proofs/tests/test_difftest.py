@@ -1930,7 +1930,7 @@ def decode_params_v2(j) -> dict:
 
 def _challenger_draw(rng: random.Random, s: Setup, law: dict, rec: dict, trees: int = 1) -> tuple[Drawn, dict, dict]:
     """A draw under `law` from the coins of a challenger session its ledger opens withheld, released after `rec`'s
-    digest and read as `draw_first` reads them, the session's challenger drawing and opening `trees` coin trees too
+    digest and read as `draw_first` reads them, the session's challenger sampling and opening `trees` coin trees too
     (`TreeSession`): the session, the draw, and the evidence's `coins` (the session's record without the key, which the
     verifier's parameters name)."""
     mine = DR.derive(s.program, s.query, law, None)
@@ -2028,7 +2028,7 @@ def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
     was forged, each mutation of the segment, or a session the ledger doesn't open withheld. On the challenger's coins
     it goes on to its own verdicts, and a draw other than theirs is rejected after them (`checkBlobsAt`, v1's
     `checkAt`). Each step Lean rejects at is the Python reference's: `decode_params_v2`, `_coins_of`, then v1's `check`
-    with the session's verdict the reject its blobs give, its record on the coin tree the challenger drew."""
+    with the session's verdict the reject its blobs give, its record on the coin tree the challenger sampled."""
     s, law = SETUPS[3], {"k": 3, "law": "stratified"}
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF)

@@ -66,8 +66,8 @@ open Flock (V)
 def CLOSE_ROLE : String := "verity/challenger-close/v1"
 def LOG_TAG : String := "verity/challenger/release-log/v1"
 def MAX_SESSION_ID : Nat := 128
-/-- A release log's most coin-tree lines (`ChallengerTrees.coinTreesOf`): each tree the challenger drew and each round it
-opened. -/
+/-- A release log's most coin-tree lines (`ChallengerTrees.coinTreesOf`): each tree the challenger sampled and each
+round it opened. -/
 def MAX_TREE_LINES : Nat := 2 ^ 20
 /-- A release log's most lines: its head, then a root and its release per coin, and its coin-tree lines. -/
 def MAX_LOG_LINES : Nat := 2 * MAX_COINS + 1 + MAX_TREE_LINES
