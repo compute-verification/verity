@@ -1,5 +1,6 @@
-"""Design D's tables from an iter_sweep output directory: every arm's served loss against the clean int8 arm, beside
-its alphabets' forced work (iter_price), and the post-draw arms.
+"""Design D's tables from an iter_sweep output directory: every arm's served loss against the clean int8 arm with the
+same seed (gap), the untrained base served under the same draws against the base (one-shot), its alphabets' forced
+work (iter_price), and the post-draw arms.
 
     python iter_report.py OUT_DIR [--json REPORT]
 """
@@ -20,7 +21,7 @@ def load(out: Path):
     return runs
 
 
-def arm(name, r, ref):
+def arm(name, r, ref, base):
     c = r["cfg"]
     ne, nr = c["n_e"], c["n_r"]
     draws = r.get("val_d0_draws") or []
@@ -30,8 +31,11 @@ def arm(name, r, ref):
            "val_clean": r.get("val_clean"), "code_rms": r.get("code_rms"), "code_sat": r.get("code_sat_frac"),
            "coin_bits": math.log2(ne) if ne > 1 else 0.0}
     be = r.get("base_evals", {})
-    if "untrained_val_d0" in be:
-        row["oneshot_gap"] = be["untrained_val_d0"] - ref
+    if "untrained_val_d0" in be and base is not None:
+        # the untrained base served under fresh draws, against the base itself: no fine-tune on either side
+        row["oneshot_gap"] = be["untrained_val_d0"] - base
+        row["oneshot_e"] = be.get("untrained_val_e", base) - base
+        row["oneshot_r"] = be["untrained_val_r"] - base
     if c["regime"] == "designA":
         row.update({"r_norm_share": r.get("r_norm_share"), "d1_rms": r.get("d1_rms"), "rank_frac": c["rank_frac"]})
     if ne > 1 or nr > 1:
@@ -49,8 +53,10 @@ def main():
     ap.add_argument("--json", default=None)
     a = ap.parse_args()
     runs = load(Path(a.out))
+    base_json = Path(a.out) / "base.json"
+    base = json.loads(base_json.read_text())["val_clean"] if base_json.exists() else None
     refs = {s: runs[n]["val_d0"] for n, s in (("clean", 0), ("clean-s1", 1)) if n in runs}
-    rows = [arm(n, r, refs.get(r["cfg"]["seed"], refs.get(0))) for n, r in runs.items()]
+    rows = [arm(n, r, refs.get(r["cfg"]["seed"], refs.get(0)), base) for n, r in runs.items()]
     post = {}
     for n, r in runs.items():
         if "post" in r:
@@ -58,9 +64,9 @@ def main():
             before = p["val_d0_draw0"]
             post[n] = {k: {**v, "gain": before - v["val_d0_draw0"]} for k, v in p.items() if isinstance(v, dict)}
             post[n]["before"] = before
-    rep = {"refs": refs, "arms": rows, "post": post}
-    cols = ["name", "val_d0", "gap", "oneshot_gap", "sigma_draws", "forced", "forced_mod", "h200_raw", "sm120_raw",
-            "coin_bits", "code_rms", "r_norm_share"]
+    rep = {"base": base, "refs": refs, "arms": rows, "post": post}
+    cols = ["name", "val_d0", "gap", "oneshot_gap", "oneshot_e", "oneshot_r", "sigma_draws", "forced", "forced_mod",
+            "h200_raw", "sm120_raw", "coin_bits", "code_rms", "r_norm_share"]
     print("| " + " | ".join(cols) + " |")
     print("|" + "---|" * len(cols))
     for row in sorted(rows, key=lambda x: x["name"]):
