@@ -1,4 +1,4 @@
-"""The H1 tile unit as a C-Flock statement, and the window's commitments it is opened against: what the committer, the
+"""The H1 tile unit as a Flock statement, and the window's commitments it is opened against: what the committer, the
 prover and the verifier of `run.py` share.
 
 * **The unit** is `circuit.h1zy.PouwH1TileZy` over `circuit.h1tile.PouwH1Tile{EXACT=GemmAccumulatorS8_v2{K, sm120}, R, C,
@@ -36,7 +36,7 @@ prover and the verifier of `run.py` share.
   it is held across windows: PRF-127, `credit.domain_of`), so the Lean verifier opens every row a statement reads
   against their roots; ``receipt`` is the
   window's own tree (`domain`), opened outside the proof. Every unit's ``roots`` input is (the A tables' digest, root(b))
-  (`window_roots`). `commit_strings` computes a row's ``b || c`` with C-Flock's own function on the port the statement's
+  (`window_roots`). `commit_strings` computes a row's ``b || c`` with Flock's own function on the port the statement's
   META declares (`stage.py` holds the two equal), so a proof's committed rows are the window's leaves exactly when its
   rows and salts are the committed ones.
 * **The window's public Program** (`h1window.program`, `Shape.window`): every tile of the window as one call of the unit
@@ -155,7 +155,7 @@ def stager(definition, name: str, in_rows, out_rows, layout: str | None, **kw):
 def stand_in_reveal(coin: bytes) -> bytes:
     """A STAND-IN for the network certifier's salt for the window, its ``reveal(p)`` (`pouw.salt.revealed`), which this
     harness has no certifier to give: SHA-512 of the epoch's opened salt coin (`pouw.coins`) under this harness's tag.
-    Like the certifier's salt it is the auditor's, drawn before the window and opened only after the window's roots are
+    Like the certifier's salt it is the auditor's, sampled before the window and opened only after the window's roots are
     recorded; unlike it, no certifier signs it or bounds when it is revealed."""
     return hashlib.sha512(STAND_IN_REVEAL_TAG + bytes(coin)).digest()
 
@@ -470,7 +470,7 @@ class Shape:
         return [f"a{i}" for i in range(self.r)] + [f"b{j}" for j in range(self.c)] + ["zy"]
 
     def ports(self) -> list:
-        """The statement's rows as C-Flock's ports: the A and B rows, the record, the public row, then the receipt's and
+        """The statement's rows as Flock's ports: the A and B rows, the record, the public row, then the receipt's and
         ok's output rows."""
         from verity_flock import circuit as FC
         return ([FC._port(n, self.ab_words, 16 * self.ab_words) for n in self.in_rows[:-1]]
@@ -563,7 +563,7 @@ def receipt_words(rc: list[int]) -> np.ndarray:
 
 
 def commit_strings(port, rows: np.ndarray, salts: list[bytes]) -> list[bytes]:
-    """Each row's ``b || c`` under its salt, by C-Flock's own function (`circuit._commit_strings`) on `port`."""
+    """Each row's ``b || c`` under its salt, by Flock's own function (`circuit._commit_strings`) on `port`."""
     from verity_flock import circuit as FC
     return FC._commit_strings([port], {port.name: np.asarray(rows, np.uint16).reshape(len(salts), -1)}, {port.name: salts})[port.name]
 
@@ -673,7 +673,7 @@ def verifier_pub(circuit_head: dict, set_name: str, subcircuit: str, bcs: list[d
                  reads: list[dict[str, tuple[str, int, str]]]) -> bytes:
     """The verifier's own public file for n units (`circuit.write`'s ``pub_path`` of a shared-row statement):
     ``circuit_head`` the statement's circuit-side fields (its META, pin and class, which the verifier reads off the
-    circuit file it holds), each unit's global index in the window's Program (``indices``, ascending: the drawn units),
+    circuit file it holds), each unit's global index in the window's Program (``indices``, ascending: the sampled proof blocks),
     each unit's rows' ``b || c`` (port name -> 128 bytes: the window's opened leaves, and its own public and ok rows'), and
     each unit's registered reads (``reads``: port -> (value, position, path), the position the verifier's Program reads
     and the opened path, hex; one value a port, `one_value`). A registered port's table is its units' distinct positions

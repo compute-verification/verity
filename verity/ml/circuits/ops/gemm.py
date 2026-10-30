@@ -180,7 +180,7 @@ def GemmCoordinatePad(B, S, x, wrow):
 def PvRow(B, S, p, *vs):
     """One head's attention output row at T <= K keys: for each of V's D dims, `GemmCoordinatePad_v1{T, K, DOT}` of the
     probability row p and that dim's column of the T key rows v0..v{T-1}. One proof block a head: each key row is D words (128 bytes
-    at D = 64), over the 111 bytes C-Flock needs of some row of a proof block, where a coordinate's own two rows are 2T bytes."""
+    at D = 64), over the 111 bytes Flock needs of some row of a proof block, where a coordinate's own two rows are 2T bytes."""
     v = Coll(Array(S.T, Array(S.D, BF16)), concat([r.refs for r in vs]))
     return B.batch(bind(GemmCoordinatePad, T=S.T, K=S.K, DOT=S.DOT), p, v, axes=(None, 1))
 

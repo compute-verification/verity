@@ -7,7 +7,9 @@
                                                  OURS, under way at the root, wrote by merging text (`merged`)
 
 A pin is written only by its command, never by hand: #1499's revert came from a hand-written one. A pin is stale when a file it
-records has another digest in the tree (or is gone), and its command, run at the root of a checkout, rewrites it from the tree.
+records has another digest in the tree (or is gone), or, for a `sha256sum` listing, when its command's arguments (a `find`
+among them) name a file it doesn't list or no longer name one it does (`Pin.gap`), and its command, run at the root of a
+checkout, rewrites it from the tree.
 `tests/test_pins.py` fails while a pin is stale, naming its command, and while a tracked file records the digest of a Lean source
 (`*.lean`, a Lake manifest, lakefile or toolchain) without being listed here. `tools/move/restack.py` runs `--regen` on every
 restacked branch. Not listed, since another check owns them: a `lean-audit.json`'s records (the Lean check, `check.py --update`)
@@ -65,6 +67,9 @@ class Pin:
     #: its dependencies nor Mathlib's built cache, and `lake build` would compile Mathlib)
     builds: str | None = None
 
+    def _rooted(self, p: str) -> str:
+        return os.path.normpath(os.path.join(self.under, p)) if self.under else p
+
     def recorded(self, root: Path) -> dict[str, str]:
         """{root-relative path: recorded digest}."""
         text = (root / self.path).read_text()
@@ -72,25 +77,41 @@ class Pin:
             pairs = [ln.split("  ", 1)[::-1] for ln in text.splitlines() if ln.strip()]
         else:
             pairs = json.loads(text)[self.key].items()
-        return {str(Path(self.under, p)) if self.under else p: h for p, h in pairs}
+        return {self._rooted(p): h for p, h in pairs}
+
+    def gap(self, root: Path) -> tuple[list[str], list[str]]:
+        """A `sha256sum` listing's (files its command hashes that it doesn't list, files it lists that its command doesn't
+        hash), from the command's arguments as bash expands them in `under` (a `find` in them sees a file added since), without
+        hashing anything; ([], []) for a pin with a command of its own, which records the fixed list its command names."""
+        if self.command is not None:
+            return [], []
+        args = self._sha256sum(root).removeprefix("sha256sum")
+        out = subprocess.run(["bash", "-c", f"printf '%s\\n' {args}"], cwd=root / self.under, capture_output=True, text=True,
+                             check=True).stdout
+        hashed, listed = {self._rooted(p) for p in out.splitlines() if p}, set(self.recorded(root))
+        return sorted(hashed - listed), sorted(listed - hashed)
 
     def stale(self, root: Path) -> list[str]:
-        """The recorded files whose digest in the tree differs, or that are gone. One git ignores (a fetched fixture) is judged
-        only where it has been fetched."""
+        """The recorded files whose digest in the tree differs, or that are gone, and those `gap` finds. One git ignores (a
+        fetched fixture) is judged only where it has been fetched."""
         rec = self.recorded(root)
         missing = [p for p in rec if not (root / p).is_file()]
         return sorted({p for p, h in rec.items() if p not in missing and sha256(root / p) != h} |
-                      set(missing) - ignored(root, missing))
+                      set(missing) - ignored(root, missing) | set().union(*self.gap(root)))
 
-    def shell(self, root: Path) -> str:
-        if self.command is not None:
-            return self.command
+    def _sha256sum(self, root: Path) -> str:
+        """The `sha256sum ...` that `under`'s README.md writes this pin with, on one line."""
         name = Path(self.path).name
         readme = re.sub(r"\\\n\s*", "", (root / self.under / "README.md").read_text())
         m = re.search(rf"^(sha256sum [^\n]*) > {re.escape(name)}$", readme, re.M)
         if not m:
             raise SystemExit(f"{self.under}/README.md: no `sha256sum ... > {name}` command")
-        return f"cd {self.under} && {m.group(1)} > {name}"
+        return m.group(1)
+
+    def shell(self, root: Path) -> str:
+        if self.command is not None:
+            return self.command
+        return f"cd {self.under} && {self._sha256sum(root)} > {Path(self.path).name}"
 
 
 NCP = "verity/core/protocols/pouw/tests/ncp_lean.py"
@@ -316,8 +337,20 @@ def merged(root: Path, ours: str, theirs: str, conflicted: list[str]) -> tuple[i
 
 
 def report(rows: list[tuple[Pin, list[str]]], root: Path) -> str:
-    return "\n".join(f"{pin.path} is stale ({', '.join(s[:3])}{', ...' if len(s) > 3 else ''}): run `{pin.shell(root)}`"
-                     for pin, s in rows)
+    def few(s: list[str]) -> str:
+        return ", ".join(s[:3]) + (", ..." if len(s) > 3 else "")
+
+    def files(s: list[str]) -> str:
+        return f"{len(s)} file{'s' * (len(s) != 1)}"
+
+    lines = []
+    for pin, s in rows:
+        new, old = pin.gap(root)
+        why = [few(changed)] if (changed := [p for p in s if p not in new and p not in old]) else []
+        why += [f"its command hashes {files(new)} it doesn't list: {few(new)}"] if new else []
+        why += [f"it lists {files(old)} its command doesn't hash: {few(old)}"] if old else []
+        lines.append(f"{pin.path} is stale ({'; '.join(why)}): run `{pin.shell(root)}`")
+    return "\n".join(lines)
 
 
 def main(argv: list[str] | None = None) -> int:
