@@ -1,11 +1,13 @@
 """`circuit_check.bodies`: a composite run body by body is the reference (`verity.ml.circuits.evaluation.evaluate`) on every
 construct a body has (a call, a batch along no axis, axis 0 and a later one, a batch and a scan of composites, a scan with xs
-and shared arguments, a lazy and a wide-fan-in primitive, a parameter returned as is), raises what the reference raises with
+and shared arguments, a lazy and a wide-fan-in primitive, a parameter returned as is, And2, Xor2 and Not alone and batched on
+any operands), raises what the reference raises with
 the same gate indices, with every activation run and with a repeated one taking an earlier one's values (`bodies._Memo`), and
 leaves to the reference what it doesn't compile; its non-constant gates are the ones `checks._pieces_used` counts gate by
 gate."""
 from __future__ import annotations
 
+import itertools
 import random
 from collections import Counter
 
@@ -15,6 +17,7 @@ from circuit_check import bodies as BD
 from circuit_check import checks as CK
 from circuit_check import targets as TG
 from circuit_check import vectors as VX
+from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.evaluation import evaluate as reference
 from verity.ml.circuits.evaluation.reference import signature_of
@@ -131,6 +134,65 @@ def test_a_body_with_every_construct_evaluates_as_the_reference(memo):
     for args in [_random_args(TOP_PARAMS, rng) for _ in range(6)] + [_alike(TOP_PARAMS, v) for v in (0, 1, 3, 255)]:
         got = _outcome(BD.evaluate, TOP, *args)
         assert got[0] == "returned" and got == _outcome(reference, TOP, *args)
+
+
+ODD = (0, 1, 2, 3, -1, -2, 1 << 70, (1 << 70) + 1, True, False, None, 1.0, "1")
+
+
+def _typed(outcome: tuple) -> tuple:
+    return outcome if outcome[0] == "raised" else (outcome[0], tuple((type(v), v) for v in outcome[1]))
+
+
+def test_and2_xor2_and_not_on_any_operands_are_their_evaluators():
+    """`bodies._and2`, `_xor2` and a `_COLS` step's columns return what And2, Xor2 and Not's evaluators return, of the same type,
+    and on operands that aren't all `int` the step takes the evaluators, so it raises what they raise."""
+    for prim, pair in BD._PAIRS.items():
+        for a, b in itertools.product(ODD, repeat=2):
+            fast, ev = _outcome(lambda: (pair(a, b),)), _outcome(lambda: (prim.evaluate(a, b),))
+            assert _typed(fast) == _typed(ev), (prim.id, a, b)
+    ints = [v for v in ODD if type(v) is int]
+    for prim, bits in BD._BITS.items():
+        cols = [list(c) for c in zip(*itertools.product(ints, repeat=sum(p.leaves for _, p in prim.params)))]
+        assert _typed(("returned", tuple(bits(*cols)))) == _typed(("returned", tuple(map(prim.evaluate, *cols))))
+
+
+BIT = BL.BIT
+QUAD = _composite("Quad", (Array(2, Array(2, BIT)),), BIT,
+                  lambda B, S, q: B.call(BL.XOR, BL.operands(B.call(BL.AND, q[0]), B.call(BL.AND, q[1]))))
+GATES_PARAMS = (Array(4, Array(2, BIT)), Array(2, Array(4, BIT)), Array(2, Array(3, Array(2, BIT))), BIT)
+
+
+def _gates(B, S, p, t, z, c):
+    a = B.batch(BL.AND, p, axes=(0,))
+    x = B.batch(BL.XOR, t, axes=(1,))
+    n = B.batch(BL.NOT, a, axes=(0,))
+    q = B.batch(QUAD, z, axes=(1,))
+    one = B.call(BL.AND, BL.operands(x[0], c))
+    two = B.call(BL.XOR, BL.operands(one, q[2]))
+    mixed = B.batch(BL.AND, _flat(Array(2, Array(2, BIT)), [c, t[0][1], t[1][2], c]), axes=(0,))
+    parts = [a, x, n, q, one, two, B.call(BL.NOT, two), B.call(BL.XOR, BL.operands(c, n[1])), mixed]
+    return _flat(Array(sum(p.type.leaves for p in parts), BIT), parts)
+
+
+GATES = _composite("Gates", GATES_PARAMS, Array(21, BIT), _gates)
+
+
+def test_boolean_gates_on_any_operands_evaluate_as_the_reference(memo):
+    """And2, Xor2 and Not as single gates and as batches (along axis 0, along a later one, over a batch's own outputs, inside a
+    composite batched along a later axis of runs of two leaves) return the reference's values, of the same types, on bits, on
+    `int` leaves past one bit, and on a `bool` (a scalar parameter, which a single gate and a batch read), which takes the
+    evaluators."""
+    body = BD.compiled(GATES)
+    assert body is not None, "the test would compare the reference with itself"
+    assert {st[0] for st in body.steps} >= {BD._COLS, BD._PRIM2, BD._PRIM1}
+    assert {st[1] for st in body.steps if st[0] == BD._PRIM2} == {BD._and2, BD._xor2}
+    rng = random.Random(11)
+    leaves = [v for v in ODD if type(v) is int]
+    for c in (0, 1, True, False, 3):
+        for pick in (lambda: rng.randint(0, 1), lambda: rng.choice(leaves)):
+            args = [[pick() for _ in range(t.leaves)] for t in GATES_PARAMS[:3]] + [c]
+            got = _outcome(BD.evaluate, GATES, *args)
+            assert got[0] == "returned" and _typed(got) == _typed(_outcome(reference, GATES, *args)), (args, c)
 
 
 CALLS: Counter = Counter()

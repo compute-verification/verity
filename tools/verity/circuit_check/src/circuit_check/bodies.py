@@ -5,7 +5,9 @@ The reference (`verity.ml.circuits.evaluation.evaluate`) walks a composite's sta
 (`layout.Circuit.gate`, `layout.resolve_gate`); that search is most of what checking a large Definition costs. `evaluate`
 here compiles each specialized Definition's body once into local wires (its parameters' leaves, then each node's output
 leaves) and runs it per activation: the same gates, in the same canonical order, on the same operands, through the same
-primitive evaluators. So it returns what the reference returns and raises the first exception the reference raises, and
+primitive evaluators, except that And2, Xor2 and Not on `int` operands take the bit their evaluators return through Python's
+own ``&`` and ``^`` (`_and2`, `_xor2`, `_BITS`), and their evaluators on anything else. So it returns what the reference
+returns and raises the first exception the reference raises, and
 its `MissingValue` messages name the same gate indices. A Definition whose body it doesn't compile (`Unsupported`), or whose
 activations would copy far more leaves than it has gates (`MAX_TRAFFIC`), is evaluated by the reference.
 
@@ -21,14 +23,18 @@ once per body and pattern of constant parameter leaves.
 from __future__ import annotations
 
 from collections import Counter
+from itertools import repeat
+from operator import and_, xor
 from typing import Any, Sequence
 
+from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import PrimitiveDefinition, SpecializedDefinition
 from verity.ml.circuits.evaluation import MissingValue
 from verity.ml.circuits.evaluation.reference import RegisteredTable, resolve, standalone_call
 from verity.ml.circuits.evaluation.reference import evaluate as reference
 from verity.ml.circuits.layout import WIDE_FAN_IN
 from verity.ml.circuits.refs import runs
+from verity.ml.circuits.types import axis_runs, remove_axis
 
 #: a body of more nodes than this is left to the reference: its compiled steps would hold several hundred bytes a gate
 MAX_NODES = 1 << 22
@@ -49,8 +55,35 @@ class Unsupported(Exception):
     """A body `compile_body` leaves to the reference."""
 
 
-_PRIM1, _PRIM2, _PRIMN, _PRIMS, _GATHER, _LAZY, _INPUT, _CALL, _BATCH, _SCAN = range(10)
+_PRIM1, _PRIM2, _PRIMN, _PRIMS, _GATHER, _LAZY, _INPUT, _CALL, _BATCH, _SCAN, _COLS = range(11)
 _ALL, _AX0, _PER = range(3)
+
+
+def _and2(a: Any, b: Any) -> Any:
+    return a & b & 1 if type(a) is int and type(b) is int else BL.AND.evaluate(a, b)
+
+
+def _xor2(a: Any, b: Any) -> Any:
+    return (a ^ b) & 1 if type(a) is int and type(b) is int else BL.XOR.evaluate(a, b)
+
+
+def _and_cols(a: list, b: list) -> Any:
+    return map(and_, map(and_, a, b), repeat(1))
+
+
+def _xor_cols(a: list, b: list) -> Any:
+    return map(and_, map(xor, a, b), repeat(1))
+
+
+def _not_cols(a: list) -> Any:
+    return map(and_, map(xor, a, repeat(1)), repeat(1))
+
+
+#: a two-operand gate's evaluator on any operands, the same as the primitive's
+_PAIRS = {BL.AND: _and2, BL.XOR: _xor2}
+#: a batch's values from its operands' columns where every operand is an `int` (`_COLS`): on those, each is the bit the
+#: primitive's evaluator returns
+_BITS = {BL.AND: _and_cols, BL.XOR: _xor_cols, BL.NOT: _not_cols}
 
 
 class Body:
@@ -136,6 +169,11 @@ def _compile(spec: SpecializedDefinition) -> Body:
                 out.append((_ALL, wires(a.refs, k)))
             elif ax == 0:
                 out.append((_AX0, wires(a.refs, k), a.type.elem.leaves))
+            elif node.n and remove_axis(a.type, ax)[0] == node.n:
+                # member m's leaves: the run of L at m in each of `outer` blocks of n * L leaves (`axis_runs`)
+                outer, n, L = axis_runs(a.type, ax)
+                ws, s = wires(a.refs, k), n * L
+                out.append((_PER, [[w for o in range(m * L, outer * s, s) for w in ws[o:o + L]] for m in range(n)]))
             else:
                 out.append((_PER, [wires(a.take(ax, m).refs, k) for m in range(node.n)]))
         return out
@@ -168,9 +206,11 @@ def _compile(spec: SpecializedDefinition) -> Body:
             elif n == 1 and fanin == 1:
                 steps.append((_PRIM1, fn.evaluate, cols[0][0], out))
             elif n == 1 and fanin == 2:
-                steps.append((_PRIM2, fn.evaluate, cols[0][0], cols[1][0], out))
+                steps.append((_PRIM2, _PAIRS.get(fn, fn.evaluate), cols[0][0], cols[1][0], out))
             elif n == 1:
                 steps.append((_PRIMN, fn.evaluate, [c[0] for c in cols], out))
+            elif fn in _BITS:
+                steps.append((_COLS, _BITS[fn], fn.evaluate, cols, n, out))
             else:
                 steps.append((_PRIMS, fn.evaluate, cols, n, out))
             continue
@@ -294,6 +334,11 @@ def _run(body: Body, V: list, off: int, memo: _Memo) -> None:
             _, ev, cols, n, out = st
             get = V.__getitem__
             V[out:out + n] = list(map(ev, *[map(get, c) for c in cols])) if cols else [ev() for _ in range(n)]
+        elif op == _COLS:
+            _, bits, ev, cols, n, out = st
+            get = V.__getitem__
+            xs = [list(map(get, c)) for c in cols]
+            V[out:out + n] = list(bits(*xs) if all({*map(type, x)} <= _INT for x in xs) else map(ev, *xs))
         elif op == _PRIMN:
             V[st[3]] = st[1](*[V[w] for w in st[2]])
         elif op == _CALL:
