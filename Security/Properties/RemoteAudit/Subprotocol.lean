@@ -17,7 +17,7 @@ node's g accepting a record's session (`Properties.RemoteAudit.Line.Verified`). 
   `certify params g sm`'s, the reads that record's openings certify and their error. The check refuses what
   `sessionOf` refuses, so what it accepts is `Shared.run g`'s, never `Flight.run`'s at one window in flight, which no
   property covers.
-* **LineHeldAtComponent**: `Properties.RemoteAudit.Line.LineHeld` with the component's acceptance in the event in place
+* **LineHeldAtSubprotocol**: `Properties.RemoteAudit.Line.LineHeld` with the component's acceptance in the event in place
   of `Verified`. On the same node, trace, records and premises, and the bytes `a ω`, `b ω` and `e ω` the component is
   given at each outcome (the parameters, the commitment and the evidence), the probability that the component accepts
   bytes that play the record of `ω` on the node (`Plays`) while the network certifiers sign nothing but the verifier's
@@ -35,7 +35,7 @@ that is not the record's is an outcome the bound counts nothing for, not one the
 
 Each property is its verifier's instance of a form over the verifier, so that its witnesses can say what the verifier
 contributes. `AcceptIsVerifiedFor chk` and `PublishedEpsFor chk` are `AcceptIsVerified` and `PublishedEps` at a check
-`chk`, and `LineHeldAtComponentBy acc ver sum` is `LineHeldAtComponent` at an acceptance `acc` in the event, a verdict
+`chk`, and `LineHeldAtSubprotocolBy acc ver sum` is `LineHeldAtSubprotocol` at an acceptance `acc` in the event, a verdict
 `ver` the trace reads and a record `sum` the line reads: at `RemoteAudit.Protocol.check`, and at `Plays`, `Verified`
 and `Record.summary`, they are the three properties. `LineHeldBy ver sum` is `LineHeld` at a verdict `ver` in the event
 and the trace and a record `sum`: at `Verified` and `Record.summary` it is `LineHeld`. The honest instance the witnesses
@@ -45,7 +45,7 @@ messages entering it, as its certifiers count (`quietIngress`), on a schedule th
 (`HonestSchedule`).
 -/
 
-namespace Properties.RemoteAudit.Component
+namespace Properties.RemoteAudit.Subprotocol
 
 open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
   Accounting.Remote.Draw.Assumptions Properties.RemoteAudit.Line
@@ -67,12 +67,12 @@ def AcceptIsVerified : Prop :=
         .ok (rs, s) ∧
       s.outcome = some "accepted" ∧ s.summary = some sm ∧ pub = (RemoteAudit.Protocol.certify params g sm).1
 
-/-- **The component publishes the draw term of `LineHeldAtComponent`'s bound.** Whenever `RemoteAudit.Protocol.check`
+/-- **The component publishes the draw term of `LineHeldAtSubprotocol`'s bound.** Whenever `RemoteAudit.Protocol.check`
 accepts parameters `p`, a registration `reg` and a log `e` with public outputs `pub`: `p` and `e` decode to a session
 (`sessionOf`: its parameters, its windows a draw g, coins, append coins, clock floor and events), and either the public
 outputs certify nothing (`eps` and `q_bytes` 0, the pooled bound refusing the windows), or at every node of those
 parameters and g whose δ is the component's `RemoteAudit.Protocol.DELTA` the published `eps` is `δ + Σ_c s/2^64` over
-the node's `⌈W/g⌉` draws (`Node.draws`) at its `samples` s, the draw term of `LineHeldAtComponent`'s bound. It is a
+the node's `⌈W/g⌉` draws (`Node.draws`) at its `samples` s, the draw term of `LineHeldAtSubprotocol`'s bound. It is a
 constant of the session's parameters, not of the draws the session made. -/
 def PublishedEps : Prop :=
   ∀ (p : RemoteAudit.Protocol.Params) (reg : RemoteAudit.Registration) (e : RemoteAudit.Protocol.Evidence)
@@ -106,7 +106,7 @@ each outcome (`a`, `b`, `e`: the parameters, the commitment and the evidence): t
 accepts bytes that play the record of `ω` on the node (`Plays`) while the network certifiers sign nothing but the
 verifier's messages entering the node over the credited passes and the record's line credits more bits read than the
 passes read is at most `δs + δnet + (δ + Σ_c s / 2^64 + Σ_c adv_c + Σ_c hide_c + bind)`, `LineHeld`'s bound. -/
-def LineHeldAtComponent : Prop :=
+def LineHeldAtSubprotocol : Prop :=
   ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.draws → Pous.Bits κ → Blocks receiptMax)
     (rest : DrawCoins node.draws κ X → Fin node.draws → ℕ → ℕ) (recs : Cm → DrawCoins node.draws κ X → Record)
     (correct : Cm → Fin node.draws → DrawCoins node.draws κ X → Finset ℕ) (com : DrawCoins node.draws κ X → Cm)
@@ -223,11 +223,11 @@ def LineHeldBy (ver : Node → Record → Prop) (sum : Node → Record → Optio
           ((F.play (Committed.junk com t)).distinguisher prf (node.delta : ℝ) t)).toReal +
         (∑ t, F.hide com prf (node.delta : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal)
 
-/-- **`LineHeldAtComponent` at a verifier**: its node, trace, records, premises and bound verbatim, with `acc` for the
+/-- **`LineHeldAtSubprotocol` at a verifier**: its node, trace, records, premises and bound verbatim, with `acc` for the
 component's acceptance in the event (`Plays`), the trace's verdict `ver` (`Verified`) and the record the line and its
-paced session read `sum` (`Record.summary`). `LineHeldAtComponent` is it at `Plays`, `Verified` and
+paced session read `sum` (`Record.summary`). `LineHeldAtSubprotocol` is it at `Plays`, `Verified` and
 `Record.summary`. -/
-def LineHeldAtComponentBy (acc : Node → Record → ByteArray → ByteArray → ByteArray → Prop)
+def LineHeldAtSubprotocolBy (acc : Node → Record → ByteArray → ByteArray → ByteArray → Prop)
     (ver : Node → Record → Prop) (sum : Node → Record → Option RemoteAudit.Session.Summary) : Prop :=
   ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.draws → Pous.Bits κ → Blocks receiptMax)
     (rest : DrawCoins node.draws κ X → Fin node.draws → ℕ → ℕ) (recs : Cm → DrawCoins node.draws κ X → Record)
@@ -303,4 +303,4 @@ def HonestSchedule {Ω Cm : Type} (node : Node) (passes : ℕ) (tick : Ω → �
       ∀ g < node.windows, ∀ p, firstPass gs g ≤ p → p < firstPass gs (g + 1) →
         released gs node.windows g ≤ tick ω p ∧ tick ω (p + 1) ≤ ended gs g
 
-end Properties.RemoteAudit.Component
+end Properties.RemoteAudit.Subprotocol

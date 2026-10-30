@@ -145,7 +145,7 @@ def _part(answer: dict) -> dict:
 def test_a_small_periods_answers_agree(server) -> None:
     """The hook's own answer (the live session's) is the Python verifier's of its case and the Lean's: accepted with the
     reads its openings certify, rejected for the dropped chunks' paths, and undecided with a window unverified. The
-    accepted one's ε is its two openings coins' at `samples` each, `LineHeldAtComponent`'s term, though its windows of
+    accepted one's ε is its two openings coins' at `samples` each, `LineHeldAtSubprotocol`'s term, though its windows of
     3 receipts drew fewer."""
     got = {}
     for name, p in periods().items():

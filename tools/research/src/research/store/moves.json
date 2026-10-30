@@ -1522,6 +1522,14 @@
         "Security/Definitions/Population/DrawPressure.lean": "Security/Definitions/Population/SamplePressure.lean",
         "Security/Proofs/Population/DrawPressure.lean": "Security/Proofs/Population/SamplePressure.lean"
       }
+    },
+    {
+      "paths": {
+        "Security/Proofs/Accounting/RemoteHeld/Component.lean": "Security/Proofs/Accounting/RemoteHeld/Subprotocol.lean",
+        "Security/Proofs/Properties/RemoteAudit/Component.lean": "Security/Proofs/Properties/RemoteAudit/Subprotocol.lean",
+        "Security/Proofs/Properties/RemoteAudit/ComponentWitnesses.lean": "Security/Proofs/Properties/RemoteAudit/SubprotocolWitnesses.lean",
+        "Security/Properties/RemoteAudit/Component.lean": "Security/Properties/RemoteAudit/Subprotocol.lean"
+      }
     }
   ]
 }

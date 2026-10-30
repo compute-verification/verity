@@ -1,7 +1,7 @@
-import Properties.RemoteAudit.Component
+import Properties.RemoteAudit.Subprotocol
 
 /-!
-# The bandwidth component accepts only what `Shared.run g` accepts, proved (`Properties.RemoteAudit.Component`)
+# The bandwidth component accepts only what `Shared.run g` accepts, proved (`Properties.RemoteAudit.Subprotocol`)
 
 `check` matches on `replay`, which binds `sessionOf` and then `Shared.run g` (`replay_ok`), and accepts only at a state
 that ended accepted with a record, publishing `certify` of it at the session's parameters and g (`acceptIsVerified`).
@@ -10,7 +10,7 @@ record's at the node, at the node's windows a draw. `publishedEps` reads `certif
 and g: `ratio` of a nonnegative rational is that rational (`ratio_val`), and `openingsCoins` is `Node.draws`.
 -/
 
-namespace Properties.RemoteAudit.Component
+namespace Properties.RemoteAudit.Subprotocol
 
 open Properties.RemoteAudit.Line
 
@@ -96,4 +96,4 @@ theorem publishedEps : PublishedEps := by
     try ring
   · exact .inl ⟨rfl, rfl⟩
 
-end Properties.RemoteAudit.Component
+end Properties.RemoteAudit.Subprotocol

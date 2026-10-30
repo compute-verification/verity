@@ -53,7 +53,7 @@
   "Properties.RemoteAudit.Line",
   "Properties.RemoteAudit.Schedule",
   "Properties.RemoteAudit.Live",
-  "Properties.RemoteAudit.Component",
+  "Properties.RemoteAudit.Subprotocol",
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
   "Properties.Accounting.JointBridge.WorkOfCreditedWords",
   "Properties.Pous.WipeSigned",
@@ -281,7 +281,7 @@
    "owner": "@compute-research",
    "digest": "19cd4ab81fedf945c477eb836d3259d50e6e9b9dba5d85a0bae33cc138a0561f"
   },
-  "Properties.RemoteAudit.Component.HonestSchedule": {
+  "Properties.RemoteAudit.Subprotocol.HonestSchedule": {
    "owner": "@memory-accounting",
    "digest": "78b64c8ef4f8e96c69c8f809928e38b51f2acc08b6fd52b48f9f65e4c17b4aa9"
   }
@@ -400,44 +400,44 @@
   "CoreRemote"
  ],
  "claims": {
-  "modules": ["Properties.RemoteAudit.Component"],
+  "modules": ["Properties.RemoteAudit.Subprotocol"],
   "witnesses": {
-   "Properties.RemoteAudit.Component.AcceptIsVerifiedFor": {
-    "fails": "Properties.RemoteAudit.Component.acceptIsVerified_nontrivial",
+   "Properties.RemoteAudit.Subprotocol.AcceptIsVerifiedFor": {
+    "fails": "Properties.RemoteAudit.Subprotocol.acceptIsVerified_nontrivial",
     "meets": [
-     "Properties.RemoteAudit.Component.acceptIsVerified_honest",
-     "Properties.RemoteAudit.Component.acceptIsVerified_complete"
+     "Properties.RemoteAudit.Subprotocol.acceptIsVerified_honest",
+     "Properties.RemoteAudit.Subprotocol.acceptIsVerified_complete"
     ]
    },
-   "Properties.RemoteAudit.Component.LineHeldAtComponentBy": {
-    "fails": "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
+   "Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocolBy": {
+    "fails": "Properties.RemoteAudit.Subprotocol.lineHeldAtSubprotocol_nontrivial",
     "meets": [
-     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
-     "Properties.RemoteAudit.Component.lineHeldAtComponent_bites"
+     "Properties.RemoteAudit.Subprotocol.lineHeldAtSubprotocol_honest",
+     "Properties.RemoteAudit.Subprotocol.lineHeldAtSubprotocol_bites"
     ]
    },
-   "Properties.RemoteAudit.Component.LineHeldBy": {
-    "fails": "Properties.RemoteAudit.Component.lineHeld_nontrivial",
+   "Properties.RemoteAudit.Subprotocol.LineHeldBy": {
+    "fails": "Properties.RemoteAudit.Subprotocol.lineHeld_nontrivial",
     "meets": [
-     "Properties.RemoteAudit.Component.lineHeld_honest",
-     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest"
+     "Properties.RemoteAudit.Subprotocol.lineHeld_honest",
+     "Properties.RemoteAudit.Subprotocol.lineHeldAtSubprotocol_honest"
     ]
    },
-   "Properties.RemoteAudit.Component.PublishedEpsFor": {
-    "fails": "Properties.RemoteAudit.Component.publishedEps_nontrivial",
+   "Properties.RemoteAudit.Subprotocol.PublishedEpsFor": {
+    "fails": "Properties.RemoteAudit.Subprotocol.publishedEps_nontrivial",
     "meets": [
-     "Properties.RemoteAudit.Component.acceptIsVerified_honest",
-     "Properties.RemoteAudit.Component.acceptIsVerified_complete"
+     "Properties.RemoteAudit.Subprotocol.acceptIsVerified_honest",
+     "Properties.RemoteAudit.Subprotocol.acceptIsVerified_complete"
     ]
    }
   },
   "not": {
-   "Properties.RemoteAudit.Component.AcceptIsVerified": "a closed statement: the `AcceptIsVerifiedFor` form at the deployed verifier (`Properties.RemoteAudit.Component.acceptIsVerified_iff`, `Iff.rfl`), whose witnesses are this statement's",
-   "Properties.RemoteAudit.Component.LineHeldAtComponent": "a closed statement: the `LineHeldAtComponentBy` form at the deployed verifier (`Properties.RemoteAudit.Component.lineHeldAtComponent_iff`, `Iff.rfl`), whose witnesses are this statement's",
-   "Properties.RemoteAudit.Component.Plays": "the component's acceptance of a record's bytes, which `LineHeldAtComponent` reads in its event: an event, no claim",
-   "Properties.RemoteAudit.Component.HonestSchedule": "the honest instance's schedule, a hypothesis of `lineHeldAtComponent_honest`: the honest case, no claim",
-   "Properties.RemoteAudit.Component.ReadBy": "the line's bits-read claim at a verifier's record, which `LineHeldBy` and `LineHeldAtComponentBy` read in their event: an event, no claim",
-   "Properties.RemoteAudit.Component.PublishedEps": "a closed statement: the `PublishedEpsFor` form at the deployed verifier (`Properties.RemoteAudit.Component.publishedEps_iff`, `Iff.rfl`), whose witnesses are this statement's"
+   "Properties.RemoteAudit.Subprotocol.AcceptIsVerified": "a closed statement: the `AcceptIsVerifiedFor` form at the deployed verifier (`Properties.RemoteAudit.Subprotocol.acceptIsVerified_iff`, `Iff.rfl`), whose witnesses are this statement's",
+   "Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocol": "a closed statement: the `LineHeldAtSubprotocolBy` form at the deployed verifier (`Properties.RemoteAudit.Subprotocol.lineHeldAtSubprotocol_iff`, `Iff.rfl`), whose witnesses are this statement's",
+   "Properties.RemoteAudit.Subprotocol.Plays": "the component's acceptance of a record's bytes, which `LineHeldAtSubprotocol` reads in its event: an event, no claim",
+   "Properties.RemoteAudit.Subprotocol.HonestSchedule": "the honest instance's schedule, a hypothesis of `lineHeldAtSubprotocol_honest`: the honest case, no claim",
+   "Properties.RemoteAudit.Subprotocol.ReadBy": "the line's bits-read claim at a verifier's record, which `LineHeldBy` and `LineHeldAtSubprotocolBy` read in their event: an event, no claim",
+   "Properties.RemoteAudit.Subprotocol.PublishedEps": "a closed statement: the `PublishedEpsFor` form at the deployed verifier (`Properties.RemoteAudit.Subprotocol.publishedEps_iff`, `Iff.rfl`), whose witnesses are this statement's"
   }
  },
  "witnesses": {
@@ -624,9 +624,9 @@
   "Properties.Pouw.Window.padRefuses": "2c2d22f4c1189a576da9882358b50af1699c2d28f7dee2443267d52fe37f67ca",
   "Properties.Pouw.Window.pointRefuses": "6b3249983259aa1e4b30cdf04a812d8542728e4123f82ff71ade2e0143d81c75",
   "Properties.Pouw.Window.workAtRefuses": "106f9eeb8a719c5b3bdc75b1580cd548d065c3f5d3b7d429eb3709f3b281ee09",
-  "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent": "6fb8373a02a810bf600b6c591918363ed77972bd908601d917d4ff66bd582156",
-  "Properties.RemoteAudit.Component.acceptIsVerified": "5e3069f2c0bb12102f9cf9ec32b6cb573d48b81d26b2f1ce0143b0c683f65959",
-  "Properties.RemoteAudit.Component.publishedEps": "cf7c54d7f6c205f892c215116f64e504646a0e2fba5a236dea6c734cd5e15789",
+  "Properties.RemoteAudit.Subprotocol.SecurityProofs.lineHeldAtSubprotocol": "6fb8373a02a810bf600b6c591918363ed77972bd908601d917d4ff66bd582156",
+  "Properties.RemoteAudit.Subprotocol.acceptIsVerified": "5e3069f2c0bb12102f9cf9ec32b6cb573d48b81d26b2f1ce0143b0c683f65959",
+  "Properties.RemoteAudit.Subprotocol.publishedEps": "cf7c54d7f6c205f892c215116f64e504646a0e2fba5a236dea6c734cd5e15789",
   "Properties.RemoteAudit.Line.SecurityProofs.lineHeld": "869ce854c6e28bbfab9afec70664c0ff52cb2e286516fc98f0886488f20e2951",
   "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity": "32103c4822a99f98eae5a5aec862a2c834114c156876ace2daa1b364bb187a9f",
   "Properties.RemoteAudit.Line.lineChecked": "92521b24e4953445a0d2e7c4dec1648b2bb5b0afc4b6894f08334057afa8cf9a",
@@ -789,7 +789,7 @@
     "Properties.RemoteAudit.Line.Premises",
     "Properties.RemoteAudit.Line.Record",
     "Properties.RemoteAudit.Schedule",
-    "Properties.RemoteAudit.Component"
+    "Properties.RemoteAudit.Subprotocol"
    ],
    "why": "the properties are stated against the verifier's own functions, on Lean core: nothing of Mathlib or of `security`",
    "sealed": true
@@ -932,7 +932,7 @@
    "except": [],
    "why": "what the period check's rows-form K counts is stated against its own terms (`rowsTerms`) and Mathlib's finite products, never a proof"
   },
-  "Properties.RemoteAudit.Component": {
+  "Properties.RemoteAudit.Subprotocol": {
    "imports": ["RemoteAudit", "Properties.RemoteAudit.Line"],
    "except": [],
    "why": "the bandwidth component's refinement is stated against its own check (`RemoteAudit.Protocol`) and the memory line of record (`Properties.RemoteAudit.Line`), whose model vocabulary it reads through that module; never a proof"
@@ -4724,11 +4724,11 @@
     "function": "RemoteAudit.Line.lineOfRegistered",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.Component.acceptIsVerified": {
+   "Properties.RemoteAudit.Subprotocol.acceptIsVerified": {
     "function": "RemoteAudit.Protocol.check",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent": {
+   "Properties.RemoteAudit.Subprotocol.SecurityProofs.lineHeldAtSubprotocol": {
     "function": "RemoteAudit.Protocol.check",
     "outcome": "accept"
    },
@@ -4776,7 +4776,7 @@
     "function": "Core.Site.Registration.Entry.refusal",
     "outcome": "none"
    },
-   "Properties.RemoteAudit.Component.publishedEps": {
+   "Properties.RemoteAudit.Subprotocol.publishedEps": {
     "function": "RemoteAudit.Protocol.check",
     "outcome": "accept"
    },
