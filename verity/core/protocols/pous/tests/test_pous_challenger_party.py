@@ -122,16 +122,16 @@ def test_the_prover_answers_with_no_collection_inside_the_rounds() -> None:
 
 
 def test_the_party_follows_period_json(tmp_path) -> None:
-    local = CP.Party.of({}, "vy-nebius-cpu-4", tmp_path)
-    assert (local.host, local.address) == ("vy-nebius-cpu-4", None) and str(tmp_path) in local.command
-    assert CP.Party.of({"challenger_host": "vy-nebius-cpu-4"}, "vy-nebius-cpu-4", tmp_path) == local
-    with pytest.raises(RuntimeError, match="vy-auditor-1 isn't wired for pous"):
-        CP.Party.of({"challenger_host": "vy-auditor-1", "challenger": {"bandwidth": {"command": ["x"]}}},
-                    "vy-nebius-cpu-4", tmp_path)
-    wired = CP.Party.of({"challenger_host": "vy-auditor-1", "challenger": {"pous": {
-        "command": ["ssh", "gate", "pous-challenger"], "address": "127.0.0.1:7960"}}}, "vy-nebius-cpu-4", tmp_path)
-    assert wired == CP.Party("vy-auditor-1", ("ssh", "gate", "pous-challenger"), ("127.0.0.1", 7960))
+    local = CP.Party.of({}, "cpu-node", tmp_path)
+    assert (local.host, local.address) == ("cpu-node", None) and str(tmp_path) in local.command
+    assert CP.Party.of({"challenger_host": "cpu-node"}, "cpu-node", tmp_path) == local
+    with pytest.raises(RuntimeError, match="auditor-host isn't wired for pous"):
+        CP.Party.of({"challenger_host": "auditor-host", "challenger": {"bandwidth": {"command": ["x"]}}},
+                    "cpu-node", tmp_path)
+    wired = CP.Party.of({"challenger_host": "auditor-host", "challenger": {"pous": {
+        "command": ["ssh", "gate", "pous-challenger"], "address": "127.0.0.1:7960"}}}, "cpu-node", tmp_path)
+    assert wired == CP.Party("auditor-host", ("ssh", "gate", "pous-challenger"), ("127.0.0.1", 7960))
     assert CP.placement("n0", "n0")[CP.PREMISE].startswith("unmet: ")
-    assert CP.placement("n0", "vy-auditor-1") == {
-        "parties": {"memory_challenger": "vy-auditor-1", "prover": "n0", "verifier": "n0"},
-        CP.PREMISE: "holds: the memory challenger ran on vy-auditor-1, not the prover's n0"}
+    assert CP.placement("n0", "auditor-host") == {
+        "parties": {"memory_challenger": "auditor-host", "prover": "n0", "verifier": "n0"},
+        CP.PREMISE: "holds: the memory challenger ran on auditor-host, not the prover's n0"}
