@@ -294,8 +294,10 @@ A spec-level reference for network accounting's timing channel:
   passes its calls' bits summed,
   cap · rows · n · K / fwdMacs each (`Pouw.Lead.Layout.callBits`; 32 · rows bits at cap 32), or when the window closes
   first. The control channel, which carries the registrations in and the releases out, ends at the certifier and is no
-  boundary link. On a node (`NodeCalls`) a window's forwards are a PoUW window's, and the proxies of all of the node's
-  links count their buckets against the open one (`active.Proxy(calls=…)`); the prover registers on the control channel
+  boundary link. What the prover sends on it leaves the certifier only in the window's record (`Calls.close`), each
+  forward's calls, words root and verdict, which the close answers once it has ended every count. On a node
+  (`NodeCalls`) a window's forwards are a PoUW window's, and the proxies of all of the node's links count their
+  buckets against the open one (`active.Proxy(calls=…)`); the prover registers on the control channel
   (`serve_calls`, `CallsClient`). The hold makes that count completeness for an honest server: the prover's frames are
   handed between forwards, and an A root that would open the next forward is held until an egress tick has run since
   it came with none of the prover's frames still to leave on any link, so they count against no forward, for up to a

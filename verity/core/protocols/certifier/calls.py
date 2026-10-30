@@ -28,7 +28,9 @@ forward's committed words. A forward is **open** from its first call's A root to
   frame.
 
 The record (`Calls.summary`) carries each forward's calls, with their shapes, A roots and releases' digests, and its
-words root and verdict; the counts are witness.
+words root and verdict; the counts are witness. It carries what the prover sent on the control channel and is the one
+answer that leaves for the auditor, so it is answered only at the window's close (`Calls.close`), which ends every
+count.
 
 **On the node** (`NodeCalls`), one window's forwards are PoUW window p's, from p's first tick on any of the node's
 links, and every link's proxy counts each of its buckets against the open forward as it ticks
@@ -422,9 +424,9 @@ class Calls:
             f.verdict = ForwardVerdict.PAST_BITS if past else ForwardVerdict.ACCEPTED
         return f.verdict
 
-    def close(self) -> dict[int, ForwardVerdict]:
-        """Close the window: a forward still open is refused (`UNCLOSED`) unless it was already. Returns every forward's
-        verdict, in id order."""
+    def close(self) -> list[dict]:
+        """Close the window: a forward still open is refused (`UNCLOSED`) unless it was already. Returns the record
+        (`summary`), every forward's verdict in it."""
         self._live()
         if self._open is not None:
             f = self._forwards[self._open]
@@ -432,7 +434,7 @@ class Calls:
                 f.verdict = ForwardVerdict.UNCLOSED
         self._open = None
         self._closed = True
-        return {k: f.verdict for k, f in sorted(self._forwards.items())}
+        return self.summary()
 
     def summary(self) -> list[dict]:
         """The record's forwards, in id order: each one's calls (in id order, each its shape, A root and release's
@@ -459,7 +461,7 @@ class _Held:
 class NodeCalls:
     """A node's forwards across its PoUW windows and its boundary links, as the network certifier keeps them. PoUW
     window p's forwards (`Calls`) are the node's from p's first tick on any of the node's links (`tick`), which closes
-    the window before it and gives that window's record to `publish(window, Calls.summary())` (by default kept in
+    the window before it and gives that window's record to `publish(window, Calls.close())` (by default kept in
     `records`). Every link's every bucket counts against the forward open when its tick runs, whatever window the tick
     is in: that is when its frames leave or enter the node. `release_bits` is the node's release at a forward's end
     (`Calls`). The control channel (`serve_calls`) and the links' ticks may run on other threads, and a lock orders
@@ -595,8 +597,7 @@ class NodeCalls:
 
     def _close_window(self) -> None:
         if self._calls is not None:
-            self._calls.close()
-            self.publish(self.window, self._calls.summary())
+            self.publish(self.window, self._calls.close())
 
 
 #: The longest request or answer line on the control channel. A release's bytes follow its answer line.
