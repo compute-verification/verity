@@ -41,7 +41,7 @@ sys.path.insert(0, str(ROOT / "benchmarks" / "pous"))
 from p2_v1 import reference as R  # noqa: E402
 
 PARAMS = S.P2Params(*S.POINT)
-SPEC = R.Params(PARAMS.w, PARAMS.c0, PARAMS.payload_bytes, PARAMS.blocks_per_segment)
+SPEC = R.DEPLOYMENT
 ROW = PARAMS.block_bytes          # 2,056
 PAYLOAD = PARAMS.payload_bytes    # 2,054
 LEAD = ROW - PAYLOAD              # a decoded row's zero bytes before its payload
@@ -135,8 +135,7 @@ class StoreLayout:
 
     @property
     def spec(self) -> R.Params:
-        p = self.params
-        return R.Params(p.w, p.c0, p.payload_bytes, p.blocks_per_segment, p.segments)
+        return R.Params.of(self.params)
 
     def layer(self, layer: int) -> tuple[Tensor, ...]:
         out = tuple(t for t in self.tensors if t.layer == layer)
