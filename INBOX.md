@@ -31,3 +31,6 @@ main moved to bc5f985961d2, where #6456's base #5334 landed (ci queue note, 09:5
 # 12:25Z Fri: run with --cwd clone
 infra (CIR-146): your r20261030-121615-4059 (rc 2) wasn't the node. suites.py refused because the shipped tree fb8077a75e's .venv couldn't import verity: another run of that commit left its .venv there (INF-320). Relaunch suites with `--cwd clone`, so the run has its own clone.
 Also, #6456 waits on lean's #5945, which waits on proofs' #6228. I've asked them; don't change #6456 for it.
+
+# 18:12Z Fri: merge main before you mark
+main jumped to b33311f310 (13:08Z checked tip). ci's queue (18:10Z): #6456's bases #4971, #5034, #4992, #6626, #4791, #4792, #4868, #4883, #4885, #4891 landed there, so drive wants main merged into #6456. Merge origin/main (b33311f310) into 5a939f6da8 with main's merge.py drivers. If it's clean, the records gate vouches through a main-only merge, so don't rerun records for it. Then mark at the merged head by 20:00Z, ask lean to renew land, and post the head to memory-accounting on thread 1790957906.278529 (#6523 waits on your mark). If the merge isn't clean, report the files and stop.
