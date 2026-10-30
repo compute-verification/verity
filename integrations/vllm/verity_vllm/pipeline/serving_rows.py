@@ -127,11 +127,10 @@ from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit import index as IX, row_tables as RTB
 from verity.ml.windows import interface as IF
 from verity.ml.windows import rows as CS
-from verity_vllm.pipeline import chunk_rows as CR
-from verity_vllm.pipeline import ingress_rows as IR
+from verity_vllm.pipeline import chunk_rows as CR, ingress_rows as IR
 from verity_vllm.pipeline import kchunk_rows as KC
 from verity_vllm.pipeline import slice_rows as SL
-from verity_vllm.pipeline import split_rows as SP
+from verity_vllm.pipeline import split_rows as SP, weight_rows as WT
 from verity_vllm.pipeline.chunk_rows import s8_words
 from verity_vllm.pipeline.serving_templates import (COLS, COORDS, CUT, LAYOUTS, PACKED, PART_OF, PARTS, SLICES, SPLITS,  # noqa: F401
                                                     Template, _bind, part, template, unit_templates)
@@ -429,6 +428,7 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
     scope = partition.get("scope") or {}
     rows, defs, counts = member_rows(programs, tmpls, scope.get("op_path_prefix"), program_dirs, index, scope.get("steps"), reuse)
     ms = SP.wire(KC.wire(members(tmpls, rows, counts, partition.get("chunk_cap") or {}), tmpls, rows), tmpls, rows)
+    ms = WT.cut(ms, WT.reads(ms, rows, row_units))
     tables: tuple[CS.RowTable, ...] = ()
     if partition.get("row_tables"):
         ms, tables = with_row_tables(ms, tmpls, rows, arrivals)
@@ -458,14 +458,14 @@ def partition_doc(window: CS.Binding, partition: Mapping[str, Any]) -> dict[str,
 def circuit_record(window: CS.Binding, rows: Sequence[list[Row]], arrivals: Mapping[str, int] | None = None) -> dict[str, Any]:
     """The window's ``circuit.json`` (`interface.circuit_record`): each chunked template's statement its `chunk_rows.unit_rows`
     and `chunk_rows.reads`, as ``compose_circuit.py --template`` composes it (a template of word rows has none: the verifier's
-    input set lowers it), and its ``rows``' window ingress at their steps under ``arrivals`` (`ingress_rows.ingress`)."""
+    input set lowers it), its ``rows``' window ingress under ``arrivals`` and weight reads (`ingress_rows`, `weight_rows`)."""
     sts = {}
     for t in dict.fromkeys(m.template for m in window.members if m.schemas):
         in_rows, out_rows = CR.unit_rows(template(t))
         sts[t] = {"in_rows": in_rows, "out_rows": out_rows, "reads": CR.reads(template(t))}
-    got = IR.ingress(window, rows, row_units, arrivals)
-    return IF.circuit_record(window, CIRCUIT_NAME, IF.templates_of(window), sts,
-                             declared={IF.WINDOW_INGRESS: [g.doc() for g in got]} if got else None)
+    got, reg = IR.ingress(window, rows, row_units, arrivals), WT.reads(window.members, rows, row_units)
+    return IF.circuit_record(window, CIRCUIT_NAME, IF.templates_of(window), sts, declared={
+        **({IF.WINDOW_INGRESS: [g.doc() for g in got]} if got else {}), **({"registered": reg.doc()} if reg else {})} or None)
 
 
 def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
