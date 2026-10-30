@@ -913,7 +913,6 @@
     {"file": "integrations/vllm/tests/protocols/challenger_host.py", "count": 1},
     {"file": "integrations/vllm/tests/protocols/test_pouw_h1_registered.py", "count": 1},
     {"file": "integrations/vllm/tests/protocols/test_pouw_h1_served.py", "count": 1},
-    {"file": "integrations/vllm/tests/query/test_guarded_max.py", "count": 1},
     {"file": "integrations/vllm/tests/query/test_literal_operands.py", "count": 2},
     {"file": "integrations/vllm/tests/query/test_manifest_format.py", "count": 3},
     {"file": "integrations/vllm/tests/query/test_module_body.py", "count": 1},
