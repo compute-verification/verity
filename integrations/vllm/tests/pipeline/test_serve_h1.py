@@ -180,10 +180,11 @@ def test_each_window_draws_its_coins_from_a_gate_session_of_its_own(tmp_path, mo
     the window's open root once its port listens, the draw opens the draw session withheld on the window's draw root,
     and the window's close waits for both end entries, closed and complete. The window's salt and round coins are its
     session's and its draw coin its draw session's, its record carries the sessions without their secrets, and the
-    verifier's check of the record against the auditor's ledger (`pouw_h1_challenger.session_reason`) passes."""
+    verifier's check of the record against the auditor's ledger (`pouw_h1_challenger.session_reason`) passes. No file
+    the windows wrote holds the weight trees' salt key (`pouw_h1.WEIGHT_KEY`), raw or in hex."""
     srv, auditor = _Server(monkeypatch), _GateAuditor(tmp_path, monkeypatch)
     ports: list[int] = []
-    sessions = SH.GateSessions(CC.Gate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle,
+    sessions = SH.GateSessions(CC.ChallengerGate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle,
                                listens=lambda port: ports.append(port) or True)
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), sessions=sessions)
     assert (arm.describe()["coins"], arm.describe()["peer"]) == ("challenger", PEER)
@@ -216,6 +217,8 @@ def test_each_window_draws_its_coins_from_a_gate_session_of_its_own(tmp_path, mo
     assert reserves == [["reserve", "--peer", PEER, "--scheme", PHC.SCHEME, "--families", PHC.families(STEPS)],
                         ["reserve", "--peer", PEER, "--scheme", PHC.SCHEME, "--families", PHC.draw_families(),
                          "--withhold"]] * 2
+    written = [f.read_bytes() for f in tmp_path.rglob("*") if f.is_file()]
+    assert written and not any(PH.WEIGHT_KEY in b or PH.WEIGHT_KEY.hex().encode() in b for b in written)
     srv.src.uninstall()
 
 
@@ -223,7 +226,7 @@ def test_a_window_whose_reserve_the_gate_refuses_installs_nothing(tmp_path, monk
     """The gate refuses the window's reserve: its open raises the refusal before any tap or hook goes on, so the Commit
     serves on and the window's line carries the error."""
     srv = _Server(monkeypatch)
-    sessions = SH.GateSessions(CC.Gate(GATE, lambda argv: (3, json.dumps({"refused": "--peer 'x': one of []"}))), PEER,
+    sessions = SH.GateSessions(CC.ChallengerGate(GATE, lambda argv: (3, json.dumps({"refused": "--peer 'x': one of []"}))), PEER,
                                STEPS, wait=lambda s: pytest.fail("no poll"), listens=lambda p: pytest.fail("no port"))
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), sessions=sessions)
     with pytest.raises(CoinError, match="the challenger gate refused reserve"):
@@ -297,7 +300,7 @@ def test_reserves_and_releases_run_off_the_loop_while_the_next_window_serves(tmp
     def gate(argv: list[str]) -> tuple[int, str]:
         calls.append((shlex.split(argv[-1])[0], ahead.inside or closer.inside))
         return auditor.run(argv)
-    sessions = SH.GateSessions(CC.Gate(GATE, gate), PEER, STEPS, wait=auditor.settle, listens=lambda port: True,
+    sessions = SH.GateSessions(CC.ChallengerGate(GATE, gate), PEER, STEPS, wait=auditor.settle, listens=lambda port: True,
                                ahead=ahead, now=lambda: datetime(2026, 10, 20, 11, 8, tzinfo=UTC))
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), sessions=sessions,
                        closer=closer)
@@ -351,7 +354,7 @@ def test_a_reserve_ahead_that_expires_before_its_window_is_replaced_and_none_is_
                               "peer": PEER, "by": "vllm", **last,
                               **({"withheld": True} if "--withhold" in words else {})})
     ahead = Later()
-    sessions = SH.GateSessions(CC.Gate(GATE, gate), PEER, STEPS, ahead=ahead,
+    sessions = SH.GateSessions(CC.ChallengerGate(GATE, gate), PEER, STEPS, ahead=ahead,
                                now=lambda: datetime(2026, 10, 27, 20, 0, tzinfo=UTC))
     sessions.ahead_of(0)
     ahead.run()
@@ -385,7 +388,7 @@ def test_the_arm_is_ready_before_the_server_listens(tmp_path, monkeypatch):
     def gate(argv: list[str]) -> tuple[int, str]:
         calls.append(shlex.split(argv[-1])[0])
         return auditor.run(argv)
-    sessions = SH.GateSessions(CC.Gate(GATE, gate), PEER, STEPS, wait=auditor.settle, listens=lambda port: True,
+    sessions = SH.GateSessions(CC.ChallengerGate(GATE, gate), PEER, STEPS, wait=auditor.settle, listens=lambda port: True,
                                ahead=Now(), now=lambda: datetime(2026, 10, 20, 11, 8, tzinfo=UTC))
     weight_root, ticks = PH.weight_root, iter(range(1000))
     monkeypatch.setattr(SH, "sessions_of", lambda opts: sessions)
@@ -397,7 +400,7 @@ def test_the_arm_is_ready_before_the_server_listens(tmp_path, monkeypatch):
     monkeypatch.setattr(TD, "available", lambda: False)
     monkeypatch.setattr(verifier, "executable", lambda: built.append(len(calls)))
     opts = SimpleNamespace(protocols=SH.ENTRY, max_num_batched_tokens=ROWS, window_steps=STEPS, protocols_config=None,
-                           gate=SimpleNamespace(h1_prover=None))
+                           gate=SimpleNamespace(h1_prover=None, h1_model=None, h1_weights_root=None))
     arm = SH.arm_of(opts, SimpleNamespace(model=srv.model, vllm=object()), srv.com, tmp_path)
     (held,) = sessions.held
     assert arm.describe()["ready"] == {"tables": "off", "kernels": 3, "session": held["session"],
@@ -423,7 +426,7 @@ def test_a_reserve_at_startup_that_fails_leaves_window_0_s_to_its_open():
     def gate(argv: list[str]) -> tuple[int, str]:
         refusals.append(shlex.split(argv[-1])[0])
         return 3, json.dumps({"refused": "--peer 'x': one of []"})
-    sessions = SH.GateSessions(CC.Gate(GATE, gate), PEER, STEPS, ahead=Now())
+    sessions = SH.GateSessions(CC.ChallengerGate(GATE, gate), PEER, STEPS, ahead=Now())
     assert sessions.settled(0) is None and not refusals
     sessions.ahead_of(0)
     assert sessions.settled(0) is None and refusals == ["reserve"]
@@ -512,7 +515,7 @@ def test_a_served_window_under_release_after_pouw_releases_exactly_h1s_drawn_rea
     sessions = None
     if coins == "gate":
         auditor = _PeriodAuditor(tmp_path, monkeypatch)
-        sessions = SH.GateSessions(CC.Gate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle, listens=lambda port: True)
+        sessions = SH.GateSessions(CC.ChallengerGate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle, listens=lambda port: True)
         k = _PeriodAuditor.K
     else:
         monkeypatch.setattr(PHC, "draw_k", lambda layout: 1)
@@ -580,7 +583,7 @@ def test_a_window_with_no_draw_refuses_its_release_by_name(tmp_path, monkeypatch
     from verity_vllm.pipeline import serve_release as SL
 
     srv, auditor, draws = _Server(monkeypatch), _GateAuditor(tmp_path, monkeypatch), SL.Draws((SH.DRAWER,))
-    sessions = SH.GateSessions(CC.Gate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle, listens=lambda port: True)
+    sessions = SH.GateSessions(CC.ChallengerGate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle, listens=lambda port: True)
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), sessions=sessions)
     arm.drawing(draws)
     assert arm.close(3) is None
@@ -765,3 +768,20 @@ def test_the_pouw_settings_unit_and_ks_serve_a_j10r_window_over_the_linears_at_o
     assert {(c.layer, c.k) for c in run.calls} == {(0, K)} and len(run.calls) == STEPS
     assert f"outside the pouw setting 'ks' [{K}]" in run.details["uncovered"]
     srv.src.uninstall()
+
+
+def test_model_key_reads_the_auditors_key_for_the_programs_circuit():
+    """`model_key_of` asks the gate's ``model-key`` for the window Program's circuit (and the period's root when given) and
+    hands back the registration's salt key and weights root, so the windows' b/<K> are committed under the auditor's key."""
+    asked = []
+
+    class Gate:
+        def call(self, *words):
+            asked.append(words)
+            return {"key": "ab" * 32, "weights_root": "cd" * 64}
+
+    key, root = SH.model_key_of(Gate(), "ROLE", "ef" * 64)("12" * 64)
+    assert (key, root) == (bytes.fromhex("ab" * 32), "cd" * 64)
+    assert asked == [("model-key", "--model", "ROLE", "--circuit", "12" * 64, "--weights-root", "ef" * 64)]
+    SH.model_key_of(Gate(), "ROLE", None)("12" * 64)
+    assert asked[-1] == ("model-key", "--model", "ROLE", "--circuit", "12" * 64)

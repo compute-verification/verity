@@ -199,7 +199,7 @@ def session(entry: str, at: str, steps: int, root: bytes,
 
 
 def gate_of(call: Callable[..., Mapping[str, Any]]) -> Gate:
-    """The `Gate` of infra's gate as words (`commit_coins.Gate.call`): ``open --session S --root R``, its ``commitment``
+    """The `Gate` of infra's gate as words (`commit_coins.ChallengerGate.call`): ``open --session S --root R``, its ``commitment``
     from ``status S`` when the open answers none, and only the fields a session's answer has (`pouw_h1_challenger.session_of`).
     `withhold` opens a session reserved withheld (``reserve --withhold``, a sampling session's), whose challenger releases
     no commitment until it closes: the answer must say ``withheld``, carry no root and say its challenger signed its record
