@@ -40,17 +40,20 @@ def test_research_run_pool_wraps_the_command_in_a_named_pool_that_the_launcher_a
     assert c == ["env", "CHECK_SLOTS=/workspace/research/locks/research/slots", "python3", "tools/verity/check/slot.py", "--by",
                  "compute-accounting", "--", "nice", "-n", "19", "python3", "search.py", "--n", "4"]
     assert S.through_slot(c) and all(S.through_slot(S.in_pool(p, "x", ["true"])) for p in S.POOLS)
-    try:
-        S.in_pool("gpu", "x", ["true"])
-        raise AssertionError("an unknown pool must be refused")
-    except ValueError as e:
-        assert "the pools are network, proofs, research" in str(e)
+    leanrec = S.in_pool("leanrec", "lean", ["true"])
+    assert leanrec[1] == "CHECK_SLOTS=/workspace/research/locks/leanrec/slots" and S.through_slot(leanrec), "a node's own pool"
+    for bad in ("../x", "a b", "", "x/y"):
+        try:
+            S.in_pool(bad, "x", ["true"])
+            raise AssertionError(f"pool {bad!r} must be refused")
+        except ValueError as e:
+            assert "a pool is a name of letters, digits" in str(e)
     from research.cli import main
     for argv, why in ((["--pool", "research", "--", "true"], "needs --on MACHINE and --source"),
                       (["--on", "m", "--source", ".", "--pool", "research", "--", "true"], "needs a lane"),
                       (["--on", "m", "--source", ".", "--pool", "research", "--as", "x", "--cwd", "clone/sub", "--", "true"], "not --cwd clone/sub"),
                       (["--on", "m", "--source", ".", "--pool", "research", "--as", "x", "--cwd", "/tmp", "--", "true"], "not --cwd /tmp"),
-                      (["--on", "m", "--source", ".", "--pool", "gpu", "--as", "x", "--", "true"], "no pool 'gpu'")):
+                      (["--on", "m", "--source", ".", "--pool", "../gpu", "--as", "x", "--", "true"], "no pool '../gpu'")):
         assert main(["run", *argv]) == 2 and why in capsys.readouterr().err, argv
     # a job that writes into its tree (a Lean check rewriting a lock) runs in a private clone, so the shared tree stays clean
     main(["run", "--on", "m", "--source", ".", "--pool", "proofs", "--as", "x", "--cwd", "clone", "--", "true"])
