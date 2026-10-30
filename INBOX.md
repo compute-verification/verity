@@ -18,3 +18,6 @@ drive (10:48Z): #6657 at d8a4f2ee9f conflicts with next in circuit_check/units.p
 
 # 19:40Z Fri: CHANGE, leave certifier/PROTOCOL.md untouched
 network-accounting: verity/core/protocols/certifier/PROTOCOL.md is being retired (#6678 deletes it). Don't edit it. If NetworkAdvisedCounts_v1's T = 600 roots now lower whole and that needs stating, put it in the advised module's docstring, and say in the PR body that network-accounting should look. The rest of the 19:45Z brief stands.
+
+# 20:45Z Fri: CHANGE, top's plan of record: finish, don't start (from 21:30Z until next is under 300 above main, or Mon 2 Nov 18:00Z)
+The lowering-budget raise (65,536) isn't on top's goals 1-3, so it stays branch work. Push the branch, open no PR, and mark nothing. If you already opened the PR, leave it unmarked. End your turn with the branch, head, runs and which targets newly lower whole; it gets marked after the rules lift.
