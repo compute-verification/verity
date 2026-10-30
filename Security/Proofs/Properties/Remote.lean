@@ -244,6 +244,7 @@ theorem stage_registered {p : SampledProofs.OneStage.Params} {c : SampledProofs.
   unfold SampledProofs.OneStage.checkLive Core.atCoins at h
   split at h
   · unfold SampledProofs.OneStage.checkAt at h
+    beta_reduce at h
     split at h
     · cases h
     · obtain ⟨law, d, n, hreg, -⟩ := Properties.SampledProofs.acceptMeans _ _ _ _ _ h
