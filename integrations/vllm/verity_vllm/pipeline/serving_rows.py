@@ -458,14 +458,14 @@ def partition_doc(window: CS.Binding, partition: Mapping[str, Any]) -> dict[str,
 def circuit_record(window: CS.Binding, rows: Sequence[list[Row]], arrivals: Mapping[str, int] | None = None) -> dict[str, Any]:
     """The window's ``circuit.json`` (`interface.circuit_record`): each chunked template's statement its `chunk_rows.unit_rows`
     and `chunk_rows.reads`, as ``compose_circuit.py --template`` composes it (a template of word rows has none: the verifier's
-    input set lowers it), and its ``rows``' ingress at their steps under ``arrivals`` (`ingress_rows.ingress`)."""
+    input set lowers it), and its ``rows``' window ingress at their steps under ``arrivals`` (`ingress_rows.ingress`)."""
     sts = {}
     for t in dict.fromkeys(m.template for m in window.members if m.schemas):
         in_rows, out_rows = CR.unit_rows(template(t))
         sts[t] = {"in_rows": in_rows, "out_rows": out_rows, "reads": CR.reads(template(t))}
     got = IR.ingress(window, rows, row_units, arrivals)
     return IF.circuit_record(window, CIRCUIT_NAME, IF.templates_of(window), sts,
-                             declared={"ingress": [g.doc() for g in got]} if got else None)
+                             declared={IF.WINDOW_INGRESS: [g.doc() for g in got]} if got else None)
 
 
 def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,

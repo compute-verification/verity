@@ -476,7 +476,7 @@ def test_a_listed_records_registered_weight_reads_are_audited_and_counted_as_a_s
     pin = RA.pin_roots(pins)
     roots = RA.registration_roots(json.loads((listed.dir / "registration.json").read_text()))
     count = RA.declared_count(ldoc, 0, pins=pin, roots=roots)
-    assert roots == pin and count == RA.declared_count(sdoc, 0, pins=pin, roots=roots)
+    assert roots == pin and count == {**RA.declared_count(sdoc, 0, pins=pin, roots=roots), IF.WINDOW_INGRESS: 0}
     assert count["registered"] == 8 * 8 * K and "unpinned" not in count
     for p, r in ((None, roots), ({"w": "cd" * 64}, roots), (pin, {})):
         free = RA.declared_count(ldoc, 0, pins=p, roots=r)

@@ -1,7 +1,8 @@
-"""A served window's ingress (`pipeline.ingress_rows.ingress`): a unit's input port is the system's ingress at its engine step
-when every slice it reads is a committed member of a row outside the window, so the circuit record declares it and the leak
-bound's count subtracts it (`interface.input_count`); a port reading a row of the window, registered weights or a mix stays
-free.  The record states only the Programs' public structure, and the same ingress whether the template is chunked or not."""
+"""A served window's window ingress (`pipeline.ingress_rows.ingress`): a unit's input port is window ingress at its engine step
+when every slice it reads is a committed member of a row before the window, so the circuit record declares it apart from the
+run's ingress, and the leak count holds it apart too (`interface.input_count`'s ``window_ingress``, its ``free`` still the
+run's); a port reading a row of the window, registered weights or a mix stays free.  The record states only the Programs'
+public structure, and the same window ingress whether the template is chunked or not."""
 from __future__ import annotations
 
 import json
@@ -49,27 +50,27 @@ def served(monkeypatch):
     return window
 
 
-def test_a_port_is_ingress_where_every_slice_it_reads_is_a_row_outside_the_window(served):
+def test_a_port_is_window_ingress_where_every_slice_it_reads_is_a_row_before_the_window(served):
     """Each request's rows 10 .. 14 at its arrival plus their steps: ``in0`` of rows 11 (row 10's output, inside the window)
-    and 14 (half of it row 12's) and ``in1`` of row 12 (the weights) are free; every other port is ingress, in runs of one
-    port at one step over consecutive units."""
+    and 14 (half of it row 12's) and ``in1`` of row 12 (the weights) are free; every other port is window ingress, in runs
+    of one port at one step over consecutive units.  None is the run's ingress, so the count's ``free`` is every input."""
     window, rows, doc = served(PARTITION)
-    got = [(g["port"], g["at"], g["units"], g["step"]) for g in doc["ingress"]]
+    got = [(g["port"], g["at"], g["units"], g["step"]) for g in doc[IF.WINDOW_INGRESS]]
     assert got == [("in0", 0, 1, 0), ("in1", 0, 2, 0), ("in0", 2, 1, 0), ("in0", 3, 1, 1), ("in1", 3, 2, 1),
                    ("in0", 5, 1, 3), ("in1", 5, 2, 3), ("in0", 7, 1, 3), ("in0", 8, 1, 4), ("in1", 8, 2, 4)]
-    assert {g["reader"] for g in doc["ingress"]} == {T} and "cap" not in doc
+    assert {g["reader"] for g in doc[IF.WINDOW_INGRESS]} == {T} and not {"cap", "ingress"} & set(doc)
     row = 16 * 8
-    assert IF.input_count(doc) == {"units": 10, "inputs": 20 * row, "wired": 0, "registered": 0, "ingress": 14 * row,
-                                   "free": 6 * row}
-    assert IF.input_count({k: v for k, v in doc.items() if k != "ingress"})["free"] == 20 * row
+    assert IF.input_count(doc) == {"units": 10, "inputs": 20 * row, "wired": 0, "registered": 0, "ingress": 0,
+                                   IF.WINDOW_INGRESS: 14 * row, "free": 20 * row}
+    assert IF.input_count({k: v for k, v in doc.items() if k != IF.WINDOW_INGRESS})[IF.WINDOW_INGRESS] == 0
     assert IF.window_of_record(doc, window.law, {T: FN}.__getitem__).members == window.members
-    assert [g.doc() for g in IR.ingress(window, rows, SRW.row_units, ARRIVALS)] == doc["ingress"]
+    assert [g.doc() for g in IR.ingress(window, rows, SRW.row_units, ARRIVALS)] == doc[IF.WINDOW_INGRESS]
 
 
-def test_a_chunked_templates_ingress_is_its_units_and_counts_the_same(served):
-    """Chunked (the partition's ``chunk_cap``), the template's units are members of at most 3 on its bit rows, and the ingress
-    the record declares covers the same units and bits across the chunks' bounds."""
+def test_a_chunked_templates_window_ingress_is_its_units_and_counts_the_same(served):
+    """Chunked (the partition's ``chunk_cap``), the template's units are members of at most 3 on its bit rows, and the window
+    ingress the record declares covers the same units and bits across the chunks' bounds."""
     whole = served(PARTITION)[2]
     window, _rows, doc = served({**PARTITION, "chunk_cap": {T: 3}})
     assert [m.n for m in window.members] == [3, 3, 3, 1]
-    assert doc["ingress"] == whole["ingress"] and IF.input_count(doc) == IF.input_count(whole)
+    assert doc[IF.WINDOW_INGRESS] == whole[IF.WINDOW_INGRESS] and IF.input_count(doc) == IF.input_count(whole)

@@ -21,8 +21,8 @@ TP stand-in (integrations/vllm's `tests.pipeline.served_tp`, deferred), without 
 * What no Program digest covers (a Build's row names, its parameters' names and types, its correspondence): the verifier's I2
   reads it only from its own Build of each Program, which its compile writes (`own_builds`, `naming.write_build`), whatever the
   row dir holds under the same digests, and its compile command runs with no vLLM importable.
-* A served window's circuit record states its ingress at each step, so the leak bound's count over it is the advice's charge
-  (`records_audit.declared_count`), where counted from its members alone it was vacuous."""
+* A served window's circuit record states its window ingress at each step, so the leak count prints a window figure, the
+  advice's charge under its named premise, beside the run figure, which stays vacuous (`records_audit.declared_count`)."""
 from __future__ import annotations
 
 import argparse
@@ -1384,14 +1384,15 @@ def test_the_compile_command_writes_its_own_builds_with_no_vllm(tmp_path, monkey
     assert json.loads(out.read_text())["templates"]
 
 
-def test_a_served_windows_record_states_its_ingress_and_its_leak_bound_is_within_the_advices_charge(tmp_path, monkeypatch):
+def test_a_served_windows_record_states_its_window_ingress_and_its_window_figure_is_the_advices_charge(tmp_path, monkeypatch):
     """TINY's served window over layer 0's ``SiluMul_v2{I=128}`` (`LAYER0`), as the registered compiler's ``circuit`` command
-    writes its record from the advice alone: each unit reads the gate and up projection's output, a row outside the window, so
-    the record declares that port the ingress at its engine step (r0's four prompt tokens at step 0 and its decode at 1; r1,
-    arriving at 2, at 2, 3 and 4). Counted from its members alone (`records_audit.leak_count`) every input bit was other and
-    the bound vacuous; counted with the ingress it declares (`declared_count`, the audit's count for it) nothing is free and
-    its other inputs are the advice's bits, the charge. The verifier's window from the record is the one the prover's
-    Programs make (`_circuit`), and the prover's record is the compiler's."""
+    writes its record from the advice alone: each unit reads the gate and up projection's output, a row before the window, so
+    the record declares that port window ingress at its engine step (r0's four prompt tokens at step 0 and its decode at 1;
+    r1, arriving at 2, at 2, 3 and 4). Counted from its members alone (`records_audit.leak_count`) every input bit is other
+    and the bound vacuous, and the run figure (`declared_count`'s, only the run's ingress counted) is the same: the window
+    reads none of the run's ingress. The window figure beside it subtracts the window ingress, leaving the advice's bits,
+    the charge, only under its premise (`records_audit.WINDOW_PREMISE`), which the count names. The verifier's window from
+    the record is the one the prover's Programs make (`_circuit`), and the prover's record is the compiler's."""
     import records_audit as RA
 
     s = _tiny_served(tmp_path, monkeypatch)
@@ -1401,15 +1402,19 @@ def test_a_served_windows_record_states_its_ingress_and_its_leak_bound_is_within
     assert PP.main(["circuit", "--serve-run", str(s.run), "--window", "0", "--partition", str(tmp_path / "part.json"),
                     "--advice", str(tmp_path / "advice.bin"), "--out", str(out)]) == 0
     doc, bits = json.loads(out.read_text()), s.bound["advice"]["bits"]
-    assert [(g["port"], g["at"], g["units"], g["step"]) for g in doc["ingress"]] == [
+    assert [(g["port"], g["at"], g["units"], g["step"]) for g in doc[IF.WINDOW_INGRESS]] == [
         ("in0", 0, 4, 0), ("in0", 4, 1, 1), ("in0", 5, 4, 2), ("in0", 9, 1, 3), ("in0", 10, 1, 4)]
+    assert "ingress" not in doc
     mine = IF.window_of_record(doc, DR.parse_law(LAYER0["law"]), IF.resolve)
     inputs = 11 * 16 * 2 * 128
     assert doc["templates"] == [["SiluMul_v2{I=128}", 11]] and bits > 0
     assert RA.leak_count(mine.members, (), bits) == {"inputs": inputs, "wired": 0, "ingress": 0, "registered": 0, "external": 0,
                                                      "other_inputs": inputs, "advice_bits": bits, "bound": "vacuous"}
-    assert RA.declared_count(doc, bits) == {"units": 11, "inputs": inputs, "wired": 0, "registered": 0, "ingress": inputs,
-                                            "free": 0, "other_inputs": bits, "advice_bits": bits, "bound": "within the charge"}
+    window_figure = {"ingress": inputs, "free": 0, "other_inputs": bits, "bound": "within the charge",
+                     "premise": RA.WINDOW_PREMISE}
+    assert RA.declared_count(doc, bits) == {"units": 11, "inputs": inputs, "wired": 0, "registered": 0, "ingress": 0,
+                                            IF.WINDOW_INGRESS: inputs, "free": inputs, "other_inputs": inputs + bits,
+                                            "advice_bits": bits, "bound": "vacuous", "window": window_figure}
     _row_dir(Path(s.a.row_dir), s)
     prover = PP.compiler_of_args(argparse.Namespace(**vars(s.a), transfer_gate=[]))
     record, _rows = _circuit(prover, s.data, LAYER0)
