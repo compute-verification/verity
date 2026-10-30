@@ -7,9 +7,11 @@ in-process certifier's. Measurement only: what it serves credits nothing.
     python serve_lead.py report --arm NAME=DIR ... --T T --out REPORT.json
 
 * ``check``: `serve.cu`'s A' and B' against ssn.cu's host tiling (``ssn_lead_check_operands``), then every served output
-  of Llama-3.2-1B's four fused linears at 1, 17, 100 and 640 rows against `reference` bit for bit, its buffers poisoned
-  first, under fresh coins (`feed.InProcessCertifier`) and under pooled ones (`PooledCertifier`), with the outputs that
-  differ from stock's (`int8_exact.dequantize`) counted. Exits 1 on any mismatch.
+  of Llama-3.2-1B's four fused linears at 1, 17, 100 and 640 rows against `reference` and against stock's y
+  (`int8_exact.dequantize` of the exact product, verity_int8's) bit for bit, its buffers poisoned first, under fresh coins
+  (`feed.InProcessCertifier`) and under pooled ones (`PooledCertifier`). Exits 1 on any output that differs from either.
+  ssn.cu's FOLD=1 fold serves the word less σ alone, the other coin terms left in, through fl(−1.5·2²³·s_j) with the
+  weight's scale first, so `check` fails on it.
 * ``serve``: serve-openai (``ARGS``, its own arguments) with the lead on its engine: ``protocols`` the lead's scheme and
   its ``backend`` this library, added to serve-openai's engine options; the coin link a `PooledCertifier` prepared once
   the linears are loaded. ``--audit N`` checks the first N calls' outputs against `reference` and stock's. ``--stats``
@@ -207,69 +209,42 @@ class PooledCertifier(F.InProcessCertifier):
         return PooledFeed(call, self._pool(call.k, call.n))
 
 
-def _words(a: Any, device: Any) -> Any:
-    """u32 words (numpy, or torch i32 bits) as int64 on ``device``."""
+def fold(read: Any, s_a: Any, s_w: Any) -> Any:
+    """The lead's fold: y [m, N] bf16 from the integer its epilogue reads back, ``read`` (int64 [m, N], taken mod 2³²: the
+    word plus its row and column sources, every coin term folded out), and the scales ``s_a`` [m] and ``s_w`` [N]. v is
+    the float whose bits are ``read`` and y = bf16(fl(fl(fl(v − 1.5·2²³)·s_i)·s_j)): an FADD, then the scales in
+    verity_int8's order, the activation's first. On read = 0x4B400000 + p, v − 1.5·2²³ is p exactly while |p| ≤ 2²²
+    (`FOLD_BOUND`), so y is stock's y on p; past it v is another float."""
     import torch
-    t = torch.from_numpy(np.ascontiguousarray(a).astype(np.int64)) if isinstance(a, np.ndarray) else a.to(torch.int64)
-    return t.to(device) & 0xFFFFFFFF
-
-
-def tags(m: int) -> np.ndarray:
-    """T(i)[e] for i < ``m``, int64 [m, 4]: the balanced base-13 digits of z_i = (⌊i/2⌋ + 1)(−1)^i (layout.h's tag_of)."""
-    i = np.arange(m, dtype=np.int64)
-    z = (i // 2 + 1) * np.where(i & 1, -1, 1)
-    out = np.empty((m, 4), dtype=np.int64)
-    for e in range(4):
-        out[:, e] = d = (z % 13 + 6) % 13 - 6
-        z = (z - d) // 13
-    return out
-
-
-def reference(xq: Any, s_a: Any, w8: Any, s_w: Any, rows: Any, g: Any) -> tuple[Any, Any, Any]:
-    """The lead's served y [m, N] bf16 for the s8 rows ``xq`` [m, K] (scales ``s_a`` [m]), weight ``w8`` [N, K] (scales
-    ``s_w``) and the call's row words ``rows`` [≥ m, H] and G words ``g`` [N], as serve.cu's kernel serves it under FOLD,
-    with p and A·Bᵀ (int64 [m, N]). p = A·Bᵀ − β_j + Σ_e a1[i, e] C[e, j] + Σ_e T(i)[e] G[e, j] + Σ_{t ≥ 1} (1 + b_t[i]) (the
-    lane coins fold out exactly); y = bf16(fl(fma(v, s_j, m_j)) · s_i), v the float whose bits are 0x4B400000 + p mod 2³²
-    (1.5·2²³ + p while |p| < 2²²; the misread past it too), m_j = fl(−1.5·2²³ s_j). Every product below is exact in
-    float64, so the one rounding to float32 is fmaf's."""
-    import torch
-    dev, (m, k), n = xq.device, tuple(xq.shape), int(w8.shape[0])
-    S = F.steps(k)
-    ab = (xq.to(torch.float64) @ w8.to(torch.float64).T).to(torch.int64)
-    r = _words(rows, dev)[:m]
-    a1 = torch.stack([(r[:, 0] >> e) & 1 for e in range(4)], 1)
-    bits = ((r[:, :, None] >> torch.arange(32, device=dev)) & 1).reshape(m, -1)
-    walk = (S - 1) + bits[:, 4:S + 3].sum(1)
-    gw = _words(g, dev)[:n]
-    G = torch.stack([(gw >> (8 * e)) & 0xFF for e in range(4)])
-    G = G - 256 * (G >= 128)
-    C = torch.from_numpy(F.codes(n)).to(dev)
-    beta = torch.div(C.sum(0) + 3 * (S - 1) + 1, 2, rounding_mode="floor")
-    tg = torch.from_numpy(tags(m)).to(dev)
-    noise = (a1.to(torch.float64) @ C.to(torch.float64) + tg.to(torch.float64) @ G.to(torch.float64)).to(torch.int64)
-    p = ab - beta + noise + walk[:, None]
-    word = (p + MAGIC) & 0xFFFFFFFF
+    word = read & 0xFFFFFFFF
     v = torch.where(word >= 1 << 31, word - (1 << 32), word).to(torch.int32).view(torch.float32)
-    sj = s_w.reshape(-1).to(torch.float32)
-    mj = sj * -12582912.0
-    f = (v.to(torch.float64) * sj.to(torch.float64) + mj.to(torch.float64)).to(torch.float32)
-    return (f * s_a.reshape(-1, 1).to(torch.float32)).to(torch.bfloat16), p, ab
+    f = v - torch.tensor(12582912.0, dtype=torch.float32, device=v.device)
+    return (f * s_a.reshape(-1, 1).to(torch.float32) * s_w.reshape(1, -1).to(torch.float32)).to(torch.bfloat16)
 
 
-def compare(xq: Any, s_a: Any, w8: Any, s_w: Any, feed: Any, y: Any) -> dict[str, Any]:
-    """The served ``y`` against `reference` (bit for bit) and against stock's y (`int8_exact.dequantize` of the exact
-    product): the outputs, those that differ from each, the most bf16 steps between y and stock's among outputs of one sign,
-    and the outputs whose p or A·Bᵀ is past 2²²."""
+def reference(xq: Any, s_a: Any, w8: Any, s_w: Any) -> tuple[Any, Any]:
+    """The lead's served y [m, N] bf16 for the s8 rows ``xq`` [m, K] (scales ``s_a`` [m]) and weight ``w8`` [N, K] (scales
+    ``s_w``), with A·Bᵀ (int64 [m, N]): `fold` on 0x4B400000 + A·Bᵀ, whatever the call's coins, which is stock's y
+    (`int8_exact.dequantize` of A·Bᵀ) bit for bit while |A·Bᵀ| ≤ 2²² (the misread past it too)."""
+    import torch
+    ab = (xq.to(torch.float64) @ w8.to(torch.float64).T).to(torch.int64)
+    return fold(ab + MAGIC, s_a, s_w), ab
+
+
+def compare(xq: Any, s_a: Any, w8: Any, s_w: Any, y: Any) -> dict[str, Any]:
+    """The served ``y`` against `reference` and against stock's y (`int8_exact.dequantize` of the exact product), bit for
+    bit: the outputs, those that differ from each, the most bf16 steps between y and stock's among outputs of one sign,
+    and the outputs whose A·Bᵀ is past 2²²."""
     import torch
     from verity_vllm.engine import int8_exact as E
-    ref, p, ab = reference(xq, s_a, w8, s_w, feed.rows, feed.g)
+    ref, ab = reference(xq, s_a, w8, s_w)
     stock = E.dequantize(ab.to(torch.int32), s_a.reshape(-1), s_w)
     yb, sb = y.view(torch.int16).to(torch.int32), stock.view(torch.int16).to(torch.int32)
     same = (yb >= 0) == (sb >= 0)
     return {"outputs": int(y.numel()), "differ_from_reference": int((y.view(torch.int16) != ref.view(torch.int16)).sum()),
             "differ_from_stock": int((yb != sb).sum()), "sign_differs_from_stock": int((~same).sum()),
             "max_steps_from_stock": int(((yb - sb).abs() * same).max()) if y.numel() else 0,
-            "p_past_bound": int((p.abs() > FOLD_BOUND).sum()), "ab_past_bound": int((ab.abs() > FOLD_BOUND).sum())}
+            "ab_past_bound": int((ab.abs() > FOLD_BOUND).sum())}
 
 
 class SsnLead:
@@ -330,7 +305,7 @@ class SsnLead:
         if self.audit > 0:
             self.audit -= 1
             self.audits.append({"linear": w, "m": m, "n": n, "k": int(xq.shape[1]),
-                                **compare(x, sa, *self.weights[w], feed, y[:m])})
+                                **compare(x, sa, *self.weights[w], y[:m])})
         return y[:m]
 
     def words_root(self, window: Any) -> bytes:
@@ -382,8 +357,8 @@ def check(a: argparse.Namespace) -> int:
             for name, link in links.items():
                 feed = link.release(call, root)
                 y = backend.call(w, layers[w], xq, s_a, feed)
-                got = compare(xq, s_a, layers[w].weight, layers[w].weight_scale, feed, y)
-                bad += got["differ_from_reference"] != 0
+                got = compare(xq, s_a, layers[w].weight, layers[w].weight_scale, y)
+                bad += got["differ_from_reference"] != 0 or got["differ_from_stock"] != 0
                 lines.append({"check": "call", "coins": name, "mode": a.mode, "m": m, "n": n, "k": k, **got})
             j += 1
         root = backend.words_root(PL.WindowKeys(0, calls, bytes(64), bytes(64)))
@@ -491,7 +466,7 @@ def report(a: argparse.Namespace) -> int:
             doc["arms"][name]["lead"] = {k: v for k, v in lead.items() if k != "audits"} | {
                 "audited_calls": len(audits),
                 **{f"audit_{k}": sum(x[k] for x in audits) for k in ("outputs", "differ_from_reference", "differ_from_stock",
-                                                                      "sign_differs_from_stock", "p_past_bound", "ab_past_bound")},
+                                                                      "sign_differs_from_stock", "ab_past_bound")},
                 "audit_max_steps_from_stock": max((x["max_steps_from_stock"] for x in audits), default=None)}
         s = doc["arms"][name].get("step_ms", {})
         print(f"ARM {name}: {doc['arms'][name]['full_steps']} full steps, step median {s.get('median')} ms "

@@ -1,8 +1,10 @@
-"""The served lead's host side off the device (benchmarks/pouw/np_kernel/serve_lead.py): `reference` against a word model of
-the formed A' and B' (layout.h's lane_a and lane_b under the lead's layout, the lane words over B' lanes 28-31 as ssn_k's
-cv puts them, the column sources at each row's parity) fed through the flat strided feed serve.cu copies, under fresh
-coins and pooled ones; the pooled certifier's order, refusals and prefixes; the tags; and the report's steady steps and
-output comparison."""
+"""The served lead's host side off the device (benchmarks/pouw/np_kernel/serve_lead.py): its y, `reference` and `fold`,
+against verity_int8's (`int8_exact`'s product and epilogue) bit for bit, and folds that leave a coin term in or fold
+through fl(−1.5·2²³·s_j) or the weight's scale first against it; the final word of a word model of the formed A' and B'
+(layout.h's lane_a and lane_b under the lead's layout, the lane words over B' lanes 28-31 as ssn_k's cv puts them, the
+column sources at each row's parity), fed through the flat strided feed serve.cu copies under fresh coins and pooled
+ones, as the product plus the coin terms its fold folds out; the pooled certifier's order, refusals and prefixes; and the
+report's steady steps and output comparison."""
 
 from __future__ import annotations
 
@@ -16,6 +18,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
+from verity_vllm.engine import int8_exact as E  # noqa: E402
 from verity_vllm.protocols.pouw.lead import feed as F  # noqa: E402
 
 HERE = Path(__file__).resolve().parents[1] / "np_kernel"
@@ -50,13 +53,12 @@ def u32(a) -> np.ndarray:
     return (a.numpy() if hasattr(a, "numpy") else np.asarray(a)).view(np.uint32).astype(np.int64)
 
 
-def kernel_model(xq: np.ndarray, w8: np.ndarray, s_a: np.ndarray, s_w: np.ndarray, feed, n: int):
-    """The served p and y [m, n] from A' and B' formed lane by lane, the GEMM's Σ A'·B' − β_j, then the column source of
-    the row's tile and parity added mod 2³² and the fold (fma exact in float64, one rounding to float32)."""
+def final_word(xq: np.ndarray, w8: np.ndarray, feed, n: int) -> np.ndarray:
+    """The GEMM's final word [m, n] from A' and B' formed lane by lane: Σ A'·B' − β_j (int64, unwrapped)."""
     m, k = xq.shape
     S = F.steps(k)
     rows, g = u32(feed.rows), u32(feed.g)
-    lanes, src = u32(feed.lanes(n)).reshape(-1, S, n), u32(feed.sources(n)).reshape(-1, 2, n)
+    lanes = u32(feed.lanes(n)).reshape(-1, S, n)
     p = np.zeros((m, n), dtype=np.int64)
     for i in range(m):
         bit = lambda q: int(rows[i, q >> 5] >> (q & 31)) & 1  # noqa: E731
@@ -80,32 +82,109 @@ def kernel_model(xq: np.ndarray, w8: np.ndarray, s_a: np.ndarray, s_w: np.ndarra
                     acc += a * b
             beta = (sum(code_of(j, e) for e in range(4)) + 3 * (S - 1) + 1) // 2
             p[i, j] = acc - beta
-    word = p + src[np.arange(m) // 64, np.arange(m) & 1]
-    v = (word & 0xFFFFFFFF).astype(np.uint32).view(np.float32).astype(np.float64)
-    sj = s_w.astype(np.float32)
-    f = (v * sj.astype(np.float64) + (sj * np.float32(-12582912.0)).astype(np.float64)).astype(np.float32)
-    y = torch.from_numpy(f * s_a.astype(np.float32)[:, None]).to(torch.bfloat16)
-    return word - F.MAGIC, y
+    return p
+
+
+def coin_terms(m: int, k: int, n: int, feed) -> np.ndarray:
+    """n_ij = −β_j + Σ_e a1[i, e] C[e, j] + Σ_e T(i)[e] G[e, j] + Σ_{t ≥ 1} (1 + b_t[i]), int64 [m, n], from the call's
+    row and G words."""
+    S, rows, g = F.steps(k), u32(feed.rows)[:m], u32(feed.g)[:n]
+    a1 = np.stack([(rows[:, 0] >> e) & 1 for e in range(4)], 1)
+    walk = (S - 1) + np.array([sum(int(r[q >> 5] >> (q & 31)) & 1 for q in range(4, S + 3)) for r in rows])
+    G = np.array([[signed(int(g[j]), e) for j in range(n)] for e in range(4)])
+    C, T = F.codes(n), np.array([[tag_of(i, e) for e in range(4)] for i in range(m)])
+    beta = (C.sum(0) + 3 * (S - 1) + 1) // 2
+    return -beta[None, :] + a1 @ C + T @ G + walk[:, None]
+
+
+def stock(ab, s_a, s_w):
+    """verity_int8's y on the exact product ``ab``: `int8_exact.dequantize`, its epilogue."""
+    return E.dequantize(torch.as_tensor(ab).to(torch.int32), torch.as_tensor(s_a).reshape(-1), torch.as_tensor(s_w))
+
+
+def bits(y) -> np.ndarray:
+    return y.view(torch.int16).numpy()
+
+
+def call_of(m: int, k: int, n: int, seed: int):
+    """A call as the served arm makes one: rows quantized by verity_int8 (heavy-tailed, so s_a spans decades) and a
+    weight quantized per row, both scales with 24-bit significands."""
+    gen = torch.Generator().manual_seed(seed)
+    x = torch.randn((m, k), generator=gen) * (1 + 30 * (torch.rand((1, k), generator=gen) < 0.01))
+    xq, s_a = E.quantize_rows(x.to(torch.bfloat16))
+    w8, s_w = E.quantize_rows(torch.randn((n, k), generator=gen) * 0.02)
+    return xq, s_a, w8, s_w
+
+
+@pytest.mark.parametrize("m,k,n", [(1, 2048, 256), (17, 2048, 512), (64, 8192, 256), (100, 60, 48)])
+def test_the_leads_y_is_verity_int8s(m, k, n):
+    """The lead's served y is the plain arm's bit for bit, whatever the coins: `reference` against `int8_exact`'s own
+    product and epilogue, on rows and weights quantized as the arm quantizes them."""
+    xq, s_a, w8, s_w = call_of(m, k, n, m * 1000 + n)
+    y, ab = SL.reference(xq, s_a, w8, s_w)
+    assert np.array_equal(bits(y), bits(E.dequantize(E.int_mm(xq, w8), s_a, s_w)))
+    assert torch.equal(ab, E.int_mm(xq, w8).to(torch.int64)) and int(ab.abs().max()) <= SL.FOLD_BOUND
+    assert ((s_w.view(torch.int32) & 3) != 0).float().mean() > 0.5
+
+
+def test_the_fold_is_stock_on_p_up_to_the_bound():
+    rng = np.random.default_rng(3)
+    p = np.concatenate([[0, 1, -1, SL.FOLD_BOUND, -SL.FOLD_BOUND, SL.FOLD_BOUND - 1, 1 - SL.FOLD_BOUND],
+                        rng.integers(-SL.FOLD_BOUND, SL.FOLD_BOUND + 1, 249)]).reshape(16, 16)
+    s_a = (rng.random(16) * 0.1 + 1e-6).astype(np.float32)
+    s_w = (rng.random(16) * 4e-3 + 1e-7).astype(np.float32)
+    got = SL.fold(torch.from_numpy(p + F.MAGIC), torch.from_numpy(s_a), torch.from_numpy(s_w))
+    assert np.array_equal(bits(got), bits(stock(p, s_a, s_w)))
+
+
+#: (p, s_a's bits, s_w's bits) where the scales' order alone moves the bf16 output
+ORDER = [(-162281, 1024863733, 983206857), (77507, 1023883001, 969546748), (163583, 1027132447, 980511694),
+         (-132060, 1026526746, 984294742)]
+
+
+def test_a_fold_that_leaves_a_coin_term_in_or_folds_otherwise_isnt_verity_int8s():
+    """What FOLD=1 serves fails `test_the_leads_y_is_verity_int8s`, each way it departs from `fold`: the word less σ alone
+    (the coin terms n_ij left in), the weight's scale folded through m_j = fl(−1.5·2²³·s_j) by an FMA, and the weight's
+    scale first."""
+    m, k, n = 64, 2048, 256
+    xq, s_a, w8, s_w = call_of(m, k, n, 11)
+    link = F.InProcessCertifier(np.random.default_rng(11).bytes)
+    link.open(0, bytes(64), bytes(64), 1)
+    feed = link.release(F.Call(0, 0, 0, m, k, n), bytes(64))
+    ab = E.int_mm(xq, w8).to(torch.int64)
+    want = bits(stock(ab, s_a, s_w))
+    noisy = SL.fold(ab + torch.from_numpy(coin_terms(m, k, n, feed)) + F.MAGIC, s_a, s_w)
+    assert (bits(noisy) != want).mean() > 0.05
+    sj, si = s_w.reshape(1, -1).to(torch.float64), s_a.reshape(-1, 1)
+    v = (ab + F.MAGIC).to(torch.int32).view(torch.float32).to(torch.float64)
+    ffma = ((v * sj + (s_w.reshape(1, -1) * -12582912.0).to(torch.float64)).to(torch.float32) * si).to(torch.bfloat16)
+    assert (bits(ffma) != want).sum() > 0
+    p = torch.tensor([[q] for q, _, _ in ORDER], dtype=torch.int64)
+    sa = torch.tensor([a for _, a, _ in ORDER], dtype=torch.int32).view(torch.float32)
+    sw = torch.tensor([w for _, _, w in ORDER], dtype=torch.int32).view(torch.float32)
+    for i in range(len(ORDER)):
+        one = (p[i:i + 1], sa[i:i + 1], sw[i:i + 1])
+        weight_first = ((one[0].to(torch.float32) * one[2]) * one[1]).to(torch.bfloat16)
+        assert bits(SL.fold(one[0] + F.MAGIC, one[1], one[2])).item() == bits(stock(*one)).item()
+        assert bits(weight_first).item() != bits(stock(*one)).item()
 
 
 @pytest.mark.parametrize("coins", ["fresh", "pooled"])
 @pytest.mark.parametrize("m,k", [(5, 60), (70, 200)])
-def test_reference_is_the_formed_operands_word_model(coins, m, k):
+def test_the_formed_operands_final_word_is_the_product_plus_the_coin_terms(coins, m, k):
+    """The final word of each row's tile and parity is A·B + σ + n_ij: σ, the lane coins' sum, and n_ij (`coin_terms`) are
+    what the lead's fold folds out, nonzero on the call."""
     n, rng = 16, np.random.default_rng(m * 1000 + k)
     xq = rng.integers(-127, 128, (m, k)).astype(np.int8)
     w8 = rng.integers(-127, 128, (n, k)).astype(np.int8)
-    s_a = (rng.random(m) * 1e-2 + 1e-4).astype(np.float32)
-    s_w = (rng.random(n) * 2e-3 + 1e-5).astype(np.float32)
     link = F.InProcessCertifier(rng.bytes) if coins == "fresh" else SL.PooledCertifier(128, rng.bytes, pin=False)
     link.open(0, bytes(64), bytes(64), 1)
     feed = link.release(F.Call(0, 0, 0, m, k, n), bytes(64))
-    p_model, y_model = kernel_model(xq, w8, s_a, s_w, feed, n)
-    y, p, ab = SL.reference(torch.from_numpy(xq), torch.from_numpy(s_a), torch.from_numpy(w8), torch.from_numpy(s_w),
-                            feed.rows, feed.g)
-    assert np.array_equal(p.numpy(), p_model)
-    assert torch.equal(y.view(torch.int16), y_model.view(torch.int16))
-    assert np.array_equal(ab.numpy(), xq.astype(np.int64) @ w8.astype(np.int64).T)
-    assert (p != ab).any()
+    sigma = F.MAGIC - u32(feed.sources(n)).reshape(-1, 2, n)[np.arange(m) // 64, np.arange(m) & 1]
+    ab = xq.astype(np.int64) @ w8.astype(np.int64).T
+    terms = coin_terms(m, k, n, feed)
+    assert np.array_equal(final_word(xq, w8, feed, n), ab + sigma + terms)
+    assert (sigma != 0).any() and (terms != 0).any()
 
 
 def test_a_pool_holds_each_tiles_coins_as_a_64_row_calls_feed():
@@ -144,13 +223,6 @@ def test_the_pooled_certifier_keeps_the_certifiers_order_and_refusals():
     assert first.pool is second.pool and torch.equal(second.rows, first.rows[:16])
 
 
-def test_tags_are_layouts():
-    got = SL.tags(400)
-    assert got.tolist() == [[tag_of(i, e) for e in range(4)] for i in range(400)]
-    z = (np.arange(400) // 2 + 1) * np.where(np.arange(400) & 1, -1, 1)
-    assert np.array_equal(got @ (13 ** np.arange(4)), z) and np.abs(got).max() <= 6
-
-
 def write_arm(d: Path, steps: list[tuple[int, float]], start: float, tokens: dict[str, list[int]], lead=None) -> Path:
     d.mkdir(parents=True)
     recs = [{"kind": "header"}] + [{"kind": "step", "step": s, "T": T, "t": t} for s, (T, t) in enumerate(steps)]
@@ -172,7 +244,7 @@ def test_steady_is_the_longest_run_of_full_steps_from_the_loads_start():
 
 def test_the_report_compares_step_walls_and_tokens_with_the_base(tmp_path, capsys):
     audit = {k: 1 for k in ("outputs", "differ_from_reference", "differ_from_stock", "sign_differs_from_stock",
-                             "p_past_bound", "ab_past_bound")} | {"max_steps_from_stock": 3}
+                             "ab_past_bound")} | {"max_steps_from_stock": 3}
     stock = write_arm(tmp_path / "stock", [(8192, 10.0 + 0.03 * s) for s in range(5)], 9.0, {"a": [1], "b": [2]})
     lead = write_arm(tmp_path / "lead2", [(8192, 10.0 + 0.5 * s) for s in range(5)], 9.0, {"a": [1], "b": [3]},
                      lead={"mode": 2, "audits": [audit, audit]})
