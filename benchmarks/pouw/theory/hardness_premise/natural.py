@@ -167,8 +167,8 @@ def plane_stats(C):
 class Natural:
     """The cheapest schedule for A·C, A the noise side (m×K) and C = Wᵀ's form (K×n), priced on one chip and reading."""
 
-    def __init__(self, chip: str, reading: str, a: int = 4):
-        self.chip, self.a = chip, a
+    def __init__(self, chip: str, reading: str, a: int = 4, alu: float = 1.0):
+        self.chip, self.a, self.alu = chip, a, alu
         self.iadd3 = reading == "fast"
         self.lanes = 4 if self.iadd3 else 2
         self.b1, self.nvf4 = "b1" in CHIPS[chip], "nvf4" in CHIPS[chip]
@@ -176,7 +176,7 @@ class Natural:
     def corr(self, hs, ia, m):
         """W1 to add 256·(A·hi) exactly into the outputs hi touches, hi the overflow digit."""
         S, T, nnz, hmax = hs["S"], hs["T"], hs["nnz"], hs["hmax"]
-        opts = [(m * S * T + 32 * m * T, "gather"), (32 * m * nnz + 32 * m * S / self.lanes, "alu")]
+        opts = [(m * S * T + 32 * m * T, "gather"), (32 * self.alu * m * nnz + 32 * m * S / self.lanes, "alu")]
         if self.b1:
             pE = max(1, math.ceil(math.log2(ia[1] - ia[0] + 1)))
             pH = 2 * math.ceil(math.log2(hmax + 1))
@@ -337,7 +337,7 @@ def check_counts(chip, reading, depth, a, seed=0):
     return cost * m, o.w1(reading)
 
 
-def price(q, chips, readings, depth, a, kcap):
+def price(q, chips, readings, depth, a, kcap, alu=1.0):
     """W1 per MAC of E·qᵀ: the best schedule, the best one that isn't the plain leaf, and the plane routes."""
     n, K = q.shape
     chunks = math.ceil(K / kcap) if kcap else 1
@@ -352,7 +352,7 @@ def price(q, chips, readings, depth, a, kcap):
     macs, rows = n * K, []
     for chip in chips:
         for reading in readings:
-            nat = Natural(chip, reading, a)
+            nat = Natural(chip, reading, a, alu)
             best = alt = 0.0
             planes, trees = {}, []
             for st, ps in zip(sts, pss):
@@ -392,7 +392,7 @@ def overflow_profile(q, depth):
     return out
 
 
-def work(task, chips, readings, depth, a, kcaps, full=False):
+def work(task, chips, readings, depth, a, kcaps, full=False, alu=1.0):
     name, tensor, url, base, entry = task
     t0 = time.time()
     q = quantize(load_tensor(url, base, entry))
@@ -407,7 +407,7 @@ def work(task, chips, readings, depth, a, kcaps, full=False):
     for kcap in kcaps:
         if kcap and kcap >= q.shape[1] and 0 in kcaps:
             continue
-        rec["rows"] += price(q, chips, readings, depth, a, kcap)
+        rec["rows"] += price(q, chips, readings, depth, a, kcap, alu)
     rec["seconds"] = time.time() - t0
     return rec
 
@@ -424,6 +424,7 @@ def main(argv=None) -> int:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--self-check", action="store_true", help="only the bookkeeping check against execute.run")
     ap.add_argument("--full-check", action="store_true", help="also execute the served-K trees on whole matrices")
+    ap.add_argument("--alu", type=float, default=1.0, help="register writes an ALU correction takes per nonzero and noise row")
     args = ap.parse_args(argv)
     chips, readings = args.chips.split(), args.readings.split()
     for chip in chips:
@@ -439,7 +440,7 @@ def main(argv=None) -> int:
     kcaps = [int(k) for k in args.kcaps.split()]
     ok = True
     with concurrent.futures.ProcessPoolExecutor(args.workers) as ex:
-        futs = [ex.submit(work, t, chips, readings, args.depth, args.a, kcaps, args.full_check) for t in tasks]
+        futs = [ex.submit(work, t, chips, readings, args.depth, args.a, kcaps, args.full_check, args.alu) for t in tasks]
         with open(args.out / "matrices.jsonl", "w") as f:
             for fut in concurrent.futures.as_completed(futs):
                 rec = fut.result()
