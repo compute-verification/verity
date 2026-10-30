@@ -34,7 +34,7 @@ from typing import Any
 
 from verity.ml.circuits import codec as C
 from verity.ml.circuits import ports as P
-from verity.ml.circuits.defs import Builder, Node, PrimitiveDefinition, SpecializedDefinition
+from verity.ml.circuits.defs import Builder, BodyNode, PrimitiveDefinition, SpecializedDefinition
 from verity.ml.circuits.refs import Affine, Coll
 
 from . import cache as CC
@@ -47,7 +47,7 @@ CHECK = "by-calls"
 class _Unlaid(Builder):
     """A `Builder` that lays out no gates: a node's interval is its callee's gate count, which builds the callee's body."""
 
-    def _emit(self, node: Node) -> Coll:
+    def _emit(self, node: BodyNode) -> Coll:
         self.nodes.append(node)
         self.offsets.append(0)
         return Coll(node.out, Affine("n", len(self.nodes) - 1, 0, node.out.leaves))

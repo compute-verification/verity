@@ -32,7 +32,7 @@ import json
 from fractions import Fraction
 
 from verity.ml.circuits import codec
-from verity.ml.circuits.defs import PrimitiveDefinition, Registry
+from verity.ml.circuits.defs import PrimitiveDefinition, DefinitionTable
 from verity.ml.circuits.program import input_id, is_input, is_registered
 from verity.ml.circuits.types import type_from_json
 
@@ -53,9 +53,9 @@ def _unevaluated(*_a):
     raise NotImplementedError("the NCI check evaluates no gate")
 
 
-def declared(desc: dict) -> Registry:
+def declared(desc: dict) -> DefinitionTable:
     """A registry of the descriptor's primitives as it declares them (inputs aside, which the decoder makes itself)."""
-    reg = Registry()
+    reg = DefinitionTable()
     for fid, d in desc["definitions"].items():
         if d.get("form") == "primitive" and input_id(fid) is None:
             name, _, version = fid.rpartition("_v")
