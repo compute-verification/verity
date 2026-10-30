@@ -29,8 +29,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import layout as L
 
-from verity.core.protocols.remote_bandwidth import p2
-from verity.core.protocols.remote_bandwidth import receipts as R
+from verity.core.protocols.poub import p2
+from verity.core.protocols.poub import receipts as R
 
 PER = p2.UNIT_BLOCKS
 _JOB: dict = {}

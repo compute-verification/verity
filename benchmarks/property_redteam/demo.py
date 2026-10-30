@@ -11,7 +11,7 @@ Sections (encode_in_circuit takes ~35 s a word on one core):
   floors  registry primitives that compute an exact floor, carry, comparison, select or mod, with the class the
           stacking-budget classifier (cursor/stack-property-6cd3, benchmarks/stacking_budgets/count_budgets.py) gives each
           and whether property/v1's "roundings" budget (cast + act) counts it;
-  codec   the store codec (p1024/k3/masked, verity.core.protocols.remote_bandwidth.codec): its encode/decode round-trip,
+  codec   the store codec (p1024/k3/masked, verity.core.protocols.poub.codec): its encode/decode round-trip,
           its per-byte squaring cost, the seed-key malleability a post-seed store would exploit, and the bound key that
           closes it (the composition the Lean guarantee rests on);
   encode_in_circuit  the codec's `encode_word` from u8 IMMA products (in range from C = 0) and registry integer and
@@ -33,7 +33,7 @@ from verity.ml.circuits.defs import REGISTRY, PrimitiveDefinition
 from verity.ml.circuits.silicon.integer import (BLACKWELL_SM120_S8_M16N8K32 as IMMA_SAT,
                                                  BLACKWELL_SM120_S8_M16N8K32_WRAP as IMMA_WRAP, IntegerMma, S32_MAX,
                                                  S32_MIN, s32_value)
-from verity.core.protocols.remote_bandwidth import codec as C
+from verity.core.protocols.poub import codec as C
 
 M32 = (1 << 32) - 1
 

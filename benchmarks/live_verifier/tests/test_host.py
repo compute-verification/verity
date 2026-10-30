@@ -27,7 +27,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-RS = ROOT / "benchmarks" / "remote_session"
+RS = ROOT / "benchmarks" / "poub_session"
 PACKAGING = ROOT / "tools" / "research" / "src" / "research" / "pods" / "nebius" / "verifier"
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(RS))
@@ -125,7 +125,7 @@ def test_a_run_is_held_to_the_whitelist_written_as_its_request_and_started_as_it
         "period": "memory-line-1", "pin": KEY, "paced": ["2:8000:40:2", "4:16000:40:2"]}
     argv = req["argv"]
     assert argv == doc["argv"]
-    assert argv[:3] == ["/usr/bin/python3", "-I", str(H.TREE / "benchmarks" / "remote_session" / "verifier.py")]
+    assert argv[:3] == ["/usr/bin/python3", "-I", str(H.TREE / "benchmarks" / "poub_session" / "verifier.py")]
     i = argv.index("--paced")
     assert dict(zip(argv[3:i:2], argv[4:i:2])) == {
         "--host": "127.0.0.1", "--port": "7951", "--out": str(svc.runs / RUN / "out"), "--registry": str(svc.registry),

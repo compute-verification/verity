@@ -83,7 +83,7 @@
    "name": "remote_audit",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
-   "dir": "../../verity/core/protocols/remote_bandwidth/lean",
+   "dir": "../../verity/core/protocols/poub/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",

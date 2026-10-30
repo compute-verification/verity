@@ -6,7 +6,7 @@
    "name": "remote_audit",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
-   "dir": "../remote_bandwidth/lean",
+   "dir": "../poub/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",

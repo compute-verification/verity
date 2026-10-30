@@ -13,7 +13,7 @@ adaptive prover.
   except with δ at most M − 1 of the T wipes fail their bound.
 - **Per wipe** (`per_wipe`): every one of the T wipes meets its `foreign_bits` at once, except with T·`eps`.
 
-`short_sessions`, `PERIODS` and `DELTAS` are the remote bandwidth audit's too (`remote_bandwidth.monitoring`).
+`short_sessions`, `PERIODS` and `DELTAS` are the remote bandwidth audit's too (`poub.monitoring`).
 
 A wipe signed `UNCOUNTED` is vacuous until a network certifier counts its egress: `counted` recomputes its bound from a
 covered `wipe-egress/v1` record's `egress_mib` (`wipe_period.certify`, on the session's parameters in the answer's

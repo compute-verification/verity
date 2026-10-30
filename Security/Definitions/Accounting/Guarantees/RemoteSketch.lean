@@ -20,7 +20,7 @@ device did not obtain is uniform, and at rank `r` at most `256^(32−r)` of its 
 `Accounting.Guarantees.SketchRankFiber`); and `ε_ro`, the keys' distance from uniform.
 
 * `SketchBoundSession`: at every parameter.
-* `SketchBoundDeployed`: at the deployed receipts (`remote_bandwidth.receipts`: 4096-byte blocks of `m = 128` sectors,
+* `SketchBoundDeployed`: at the deployed receipts (`poub.receipts`: 4096-byte blocks of `m = 128` sectors,
   16 sign rows, SHA-512 tags, `h = 512`) and rank `r = 12`, with `Q` the SHA-512 compressions the prover can make over
   the session, the node's `C` times the outside-compute factor `F` (grinding a seed reads no block, so it can run off
   the node): at most `Q + P` candidate seeds and `Q` queries in all give, with the keys within the 256-bit sign keys'

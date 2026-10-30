@@ -21,7 +21,7 @@
 # commits each decode step's tags, serve.py --commit), any arm with +c compiled as vLLM serves by default (serve.py
 # --compiled) or +d compiled without any choice made by timing (--no-autotune, the compiled gate); wide.cu is built for
 # each BITS the arms name (WW_KMAX=${WW_KMAX:-2}, the carry-chain squaring); +s (before any /g) registers the node's store
-# through `verity_vllm.protocols.remote_bandwidth`'s binder (serve.py --store, in windows of STORE_WINDOW=${STORE_WINDOW:-50} passes, 0 none);
+# through `verity_vllm.protocols.poub`'s binder (serve.py --store, in windows of STORE_WINDOW=${STORE_WINDOW:-50} passes, 0 none);
 # a last /g makes an arm its gates and one
 # point (batch 1, context 512, 16 steps); SERVE_ARGS passes through to every arm; ARM_MIN bounds one arm (default 7 minutes).
 # MODEL (default the e2e's Llama-3.1-8B-Instruct; for 70B the hub snapshot of unsloth/Meta-Llama-3.1-70B with SERVE_ARGS
