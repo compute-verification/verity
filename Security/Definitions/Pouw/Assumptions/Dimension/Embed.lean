@@ -42,7 +42,7 @@ namespace Pouw.Dimension.Embed
 open Finset Pouw.NCP Pouw.NCP.Relation Pouw.Dimension Pouw.Dimension.Assumptions Pouw.Dimension.OpenPipe
 
 /-- An `M4090` instruction over the grid `G` (draft semantics, pending review). -/
-inductive Op (G : Type) where
+inductive M4090Instr (G : Type) where
   /-- A tensor-core instruction at its full shape's price, writing the accumulator registers `outs`. -/
   | mma (outs : List (G → ℚ)) (price : ℕ)
   /-- An FP32-pipe instruction `κ` (FFMA, FADD or FMUL, with operand modifiers) of registers `i`, `j`, `l`, at 8. -/
@@ -69,7 +69,7 @@ def fpVal (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (κ i j l : ℕ) (Rs : L
   fun g => fpSem κ (Rs.getD i 0 g) (Rs.getD j 0 g) (Rs.getD l 0 g)
 
 /-- The registers an instruction writes, given the registers `Rs` before it. -/
-def Op.outs (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) : Op G → List (G → ℚ) → List (G → ℚ)
+def M4090Instr.outs (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) : M4090Instr G → List (G → ℚ) → List (G → ℚ)
   | .mma outs _, _ => outs
   | .fp32 κ i j l, Rs => [fpVal fpSem κ i j l Rs]
   | .int f, _ => [f]
@@ -80,7 +80,7 @@ def Op.outs (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) : Op G → List (G →
   | .operand f, _ => [f]
 
 /-- An instruction's W1 price. -/
-def Op.price : Op G → ℕ
+def M4090Instr.price : M4090Instr G → ℕ
   | .mma _ p => p
   | .fp32 .. => 8
   | .int _ => 16
@@ -92,29 +92,29 @@ def Op.price : Op G → ℕ
 
 /-- Well-formed: a tensor-core instruction costs at least 16 per accumulator register it writes, and pre-salt and
 operand words are free values. -/
-def Op.WF {N m n k : ℕ} : Op (Noise N m n k) → Prop
+def M4090Instr.WF {N m n k : ℕ} : M4090Instr (Noise N m n k) → Prop
   | .mma outs p => 16 * outs.length ≤ p
   | .presalt f => f ∈ V0 N m n k
   | .operand f => f ∈ V0 N m n k
   | _ => True
 
 /-- A program's registers: its inputs `L`, then the registers each instruction writes, in order. -/
-def regs (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (P : List (Op G)) (L : List (G → ℚ)) : List (G → ℚ) :=
+def regs (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (P : List (M4090Instr G)) (L : List (G → ℚ)) : List (G → ℚ) :=
   P.foldl (fun Rs o => Rs ++ o.outs fpSem Rs) L
 
 /-- A program's W1 cost: the sum of its prices. -/
-def cost4090 (P : List (Op G)) : ℕ := (P.map Op.price).sum
+def cost4090 (P : List (M4090Instr G)) : ℕ := (P.map M4090Instr.price).sum
 
 open Classical in
 /-- `1` for an FP32 instruction whose value is not a `QuadStep` over the registers before it, else `0`. -/
-noncomputable def Op.nq {N m n k : ℕ} (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) :
-    Op (Noise N m n k) → List (Noise N m n k → ℚ) → ℕ
+noncomputable def M4090Instr.nq {N m n k : ℕ} (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) :
+    M4090Instr (Noise N m n k) → List (Noise N m n k → ℚ) → ℕ
   | .fp32 κ i j l, Rs => if QuadStep Rs (fpVal fpSem κ i j l Rs) then 0 else 1
   | _, _ => 0
 
 /-- The number of **non-quadratic FP32 instructions** of a program on inputs `Rs`. -/
 noncomputable def nonQuad {N m n k : ℕ} (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) :
-    List (Op (Noise N m n k)) → List (Noise N m n k → ℚ) → ℕ
+    List (M4090Instr (Noise N m n k)) → List (Noise N m n k → ℚ) → ℕ
   | [], _ => 0
   | o :: P, Rs => o.nq fpSem Rs + nonQuad fpSem P (Rs ++ o.outs fpSem Rs)
 
@@ -129,7 +129,7 @@ noncomputable def canonNaN (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (κ : �
 well-formed `M4090` program on inputs in `V₀` maps to an `OpenQuadPipe 16 8` program whose slots contain every
 register outside `V₀`, at no greater cost except 8 for each non-quadratic FP32 instruction. -/
 def EmbedM4090 : Prop :=
-  ∀ (N m n k : ℕ) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (L : List (Noise N m n k → ℚ)) (P : List (Op (Noise N m n k))),
+  ∀ (N m n k : ℕ) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (L : List (Noise N m n k → ℚ)) (P : List (M4090Instr (Noise N m n k))),
     (∀ f ∈ L, f ∈ V0 N m n k) → (∀ o ∈ P, o.WF) →
     ∃ P' : List (Instr (Noise N m n k)), OpenQuadPipe 16 8 P' ∧
       (∀ r ∈ regs fpSem P L, r ∈ V0 N m n k ∨ r ∈ slots P' L) ∧
@@ -139,7 +139,7 @@ def EmbedM4090 : Prop :=
 well-formed `M4090 fpSem` program on inputs in `V₀` maps to an `FpPipe fpSem` program whose slots contain every
 register outside `V₀`, at no greater cost. -/
 def EmbedFp : Prop :=
-  ∀ (N m n k : ℕ) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (L : List (Noise N m n k → ℚ)) (P : List (Op (Noise N m n k))),
+  ∀ (N m n k : ℕ) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (L : List (Noise N m n k → ℚ)) (P : List (M4090Instr (Noise N m n k))),
     (∀ f ∈ L, f ∈ V0 N m n k) → (∀ o ∈ P, o.WF) →
     ∃ P' : List (Instr (Noise N m n k)), FpPipe fpSem P' ∧
       (∀ r ∈ regs fpSem P L, r ∈ V0 N m n k ∨ r ∈ slots P' L) ∧ cost P' ≤ cost4090 P
@@ -150,7 +150,7 @@ on inputs in `V₀` whose registers include the non-final checked words at `S �
 `16·|S| ≤ cost + 8·nonQuad`. -/
 def PerWordM4090 : Prop :=
   ∀ (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ)
-    (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (L : List (Noise N m n k → ℚ)) (P : List (Op (Noise N m n k))),
+    (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (L : List (Noise N m n k → ℚ)) (P : List (M4090Instr (Noise N m n k))),
     CheckpointIndependent k 16 R → MinRankGe k R 5 → U ⊆ range N → (∀ f ∈ L, f ∈ V0 N m n k) →
     (∀ o ∈ P, o.WF) → ∀ S ⊆ U ×ˢ range (nonFinal k m n), (∀ x ∈ S, word k m n N R A B x.1 x.2 ∈ regs fpSem P L) →
       16 * S.card ≤ cost4090 P + 8 * nonQuad fpSem P L
@@ -183,7 +183,7 @@ checked word takes a value that `fpSem` never outputs, a well-formed program on 
 the checked words at `S ⊆ U × [0, nonFinal)` has `16·|S| ≤ cost`. -/
 def PerWordM4090Gap : Prop :=
   ∀ (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat)
-    (U : Finset ℕ) (L : List (Noise N m n k → ℚ)) (P : List (Op (Noise N m n k))),
+    (U : Finset ℕ) (L : List (Noise N m n k → ℚ)) (P : List (M4090Instr (Noise N m n k))),
     CheckpointIndependent k 16 R → U ⊆ range N → (∀ f ∈ L, f ∈ V0 N m n k) → (∀ o ∈ P, o.WF) →
     (∀ x ∈ U ×ˢ range (nonFinal k m n), ∃ ω : Noise N m n k,
       ∀ κ a b c, fpSem κ a b c ≠ word k m n N R A B x.1 x.2 ω) →
