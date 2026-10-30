@@ -61,6 +61,7 @@
   "Properties.Composition",
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
   "Properties.Accounting.JointBridge.WorkOfCreditedWords",
+  "Properties.Accounting.JointBridge.ServiceSoundOfSessions",
   "Properties.Core.Site",
   "Properties.Flock.Circuit",
   "Properties.Pous.WipeSigned",
@@ -119,6 +120,10 @@
   "Accounting.Assumptions.TS.OperandHMu": {
    "owner": "@compute-accounting",
    "digest": "c286bfdcb1c3bc358b47cad5625850ef2de3501375d23e554515e939a4fe47dc"
+  },
+  "Accounting.Assumptions.TS.ProofSoundAt": {
+   "owner": "@soundness",
+   "digest": "c13e208b16273cf7b13fa743820d7840c1098c93a9f9a4cf484bef0b17fffd0c"
   },
   "Accounting.Assumptions.TS.ReceiptLuckAt": {
    "owner": "@compute-accounting",
@@ -464,6 +469,10 @@
   "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses": {
    "honest": ["Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_honest"],
    "nontrivial": "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_nontrivial"
+  },
+  "Accounting.SecurityProofs.Bridge.CheckProofSystemSound": {
+   "honest": ["Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest"],
+   "nontrivial": "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial"
   }
  },
  "unwitnessed": {
@@ -792,7 +801,8 @@
     "Properties.Accounting.JointBridge.SpaceOfPeriodHeld",
     "Properties.Accounting.DeclaredCircuit",
     "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
-    "Properties.Accounting.JointBridge.WorkOfCreditedWords"
+    "Properties.Accounting.JointBridge.WorkOfCreditedWords",
+    "Properties.Accounting.JointBridge.ServiceSoundOfSessions"
    ],
    "why": "the requirement code's equalities are stated against its functions and the `Definitions.Accounting.Requirement` definitions they copy, never a proof"
   },
@@ -967,6 +977,32 @@
   "PouwCheck.Rounds": "PoUW check's rounds code, read by `Credit.window` through `roundsCheck` in `Properties.Pouw.PeriodJ10R.WindowAccepts`: the window's round coins read through the challenger's session; PouwCheck's lock declares no spec layer for `PouwCheck.Rounds`, so its definitions are recorded here as read rather than as a spec (CMP-127)"
  },
  "guarantees": {
+  "Accounting.SecurityProofs.Bridge.CheckProofSystemSound": {
+   "owner": "@soundness",
+   "signature": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound : Properties.Accounting.JointBridge.CheckProofSystemSound"
+   ],
+   "assumptions": [],
+   "type_hash": "d46942015bedbc339e267a13e6472ab88749d840d89e20491146ef746abab41c"
+  },
+  "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest": {
+   "owner": "@soundness",
+   "signature": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest :",
+    "  Properties.Accounting.JointBridge.CheckProofSystemSoundHonest"
+   ],
+   "assumptions": [],
+   "type_hash": "fc57ea7b58f18910be4e5eb6044150d60f4390ee89822246581530dfb30ec3ee"
+  },
+  "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial": {
+   "owner": "@soundness",
+   "signature": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial :",
+    "  Properties.Accounting.JointBridge.CheckProofSystemSoundNontrivial"
+   ],
+   "assumptions": [],
+   "type_hash": "7ec3286a5bee58139a2c276505328ad7c82b8bf7ee20db8da595d74974508e46"
+  },
   "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld": {
    "owner": "@lean",
    "signature": ["Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld : Accounting.Bridge.SpaceOfPeriodHeld"],
@@ -5128,7 +5164,10 @@
    "Properties.NetworkPeriod.rowsProgWired_nontrivial": "lemma: RowsProgWired's nontrivial witness: a period check that accepts everything (acceptAllRows) fails RowsProgWiredOf at a rows-form period of one link-window whose scan's prog is no audit's slot entries",
    "Properties.NetworkPeriod.rowsStateTied_nontrivial": "lemma: RowsStateTied's nontrivial witness: a period check that accepts everything (acceptAllRows) fails RowsStateTiedOf at a rows-form period of one link-window whose scan's state is not its wired audit's SCAN_STATE",
    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_honest": "completeness: GroupedDrawMisses's honest lemma: its premises hold at the lanes window, sixteen 32 × 32 leaves at K = 2048 each proved as its 32 lanes and their combine: strata and law accept it at K = 8, kPrime answers K′ ≤ 8 at ε = 1/2 and δ = 1/256 over its whole work, no leaf's blocks do more than the leaf, and the blocks do at least ε of the work, so GroupedDrawMisses is not vacuous",
-   "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_nontrivial": "lemma: GroupedDrawMisses's nontrivial lemma: its conclusion fails under the strata a law that accepts everything may give, none: the draw is empty whatever the streams, so the lanes window's blocks all escape, with probability 1 > 1/256"
+   "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_nontrivial": "lemma: GroupedDrawMisses's nontrivial lemma: its conclusion fails under the strata a law that accepts everything may give, none: the draw is empty whatever the streams, so the lanes window's blocks all escape, with probability 1 > 1/256",
+   "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest": "completeness: the honest lemma of CheckProofSystemSound: at H1's honest live-salt period of one window and one session (the instance its proof takes) the deployed check accepts every window on every path and the check layer is sound at 0, so its premise can hold where the check accepts",
+   "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial": "completeness: the nontrivial lemma of CheckProofSystemSound: at H1's honest period of one window the deployed check accepts and publishes a drawn unit on every path, so with relations every opening fails, ServiceSound fails at 0",
+   "Accounting.SecurityProofs.Bridge.CheckProofSystemSound": "frozen (no-function,world-unlisted): ServiceSound from ProofSoundAt, a union bound over each window's sessions of the deployed check's layer (Properties.Accounting.JointBridge.Sessions.checkLayer, PouwCheck.protocol.check's acceptance and Public.drawn): no deployed function's outcome is one hypothesis, its sound case is the named premise Accounting.Assumptions.TS.ProofSoundAt, and its conclusion is a Pouw.RelativeSecurity.prob event that shape.events does not list; no new premise"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -6053,6 +6092,9 @@
     "_private.CoreProtocol.Profile.0.Core.strs": "bbca2243bbc14ebf08d9b82f9d2b820ffd41c0ce2440cf00060323e6fa62b68c"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.NetworkPeriod.rowsProgWired",
@@ -6129,6 +6171,9 @@
     "_private.CoreProtocol.Protocol.0.Core.opt": "7720a69b388da12990009ab9c126a25370b5ea8b036100358463e2813c7a0710"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial",
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
@@ -6251,6 +6296,9 @@
     "_private.CoreProtocol.Ratio.0.Core.natOf": "dd52a4d0265fa019fb204c0a90430954dc053bef4f8e47df1eaa149eed83a970"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "MemoryChallenger.Properties.SecurityProofs.wipeSigned",
@@ -6669,13 +6717,16 @@
    ]
   },
   "Definitions.Accounting.Assumptions.TS": {
-   "digest": "24930e88103be1ff9183987e67aefff79a0b0624d2f016528771aeb4da4c4140",
+   "digest": "4be1b84923a37f50ef401537ad75bb8e2c51605c73fa18fce3c27c50daf6f9b6",
    "definitions": {
     "Accounting.Assumptions.TS.OperandHMu": "c286bfdcb1c3bc358b47cad5625850ef2de3501375d23e554515e939a4fe47dc",
+    "Accounting.Assumptions.TS.ProofSoundAt": "c13e208b16273cf7b13fa743820d7840c1098c93a9f9a4cf484bef0b17fffd0c",
     "Accounting.Assumptions.TS.ReceiptLuckAt": "27772d5066118b3fd4e2b40eb32aeb5c2f2cc0c08ff65c1b7a1f603222dc64df",
     "Accounting.Assumptions.TS.UnitFixed": "61adf5931691beff6fc2262a15fbc3222265629e661c621c463c73d1d9857ad2"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
@@ -7681,11 +7732,19 @@
    ]
   },
   "Definitions.Accounting.TS.ProofLayer": {
-   "digest": "34f88d6c6e870431fa1c2dd5fd774816690c027031d65e88e99a91ac02533921",
+   "digest": "ccfbd49c448226bb078044691e872d361e714d63f0d4a338924447319278c0d8",
    "definitions": {
+    "Accounting.TS.ProofLayer": "bc394d9f03723a46b50a518026fcdb15325fbceb5e8838264e369df48452fd0b",
+    "Accounting.TS.ProofLayer.SoundAt": "176465e170875487d7aefac3c26f2efa881763a0a1b598957e8a02b3a6488be3",
+    "Accounting.TS.ProofLayer.Unsound": "27028b90a3180fa0a6f68c3d8aadfb59ec329bdeb9ab8be51391d745a11423e2",
+    "Accounting.TS.ProofLayer.accepted": "5798c39a51753e14dc84c29e68082020233a71fe03974d40ba023bcdd747943f",
+    "Accounting.TS.ProofLayer.opened": "16d9397ed5f723e4ed47ef3060b017f9f551d23ff837035d3eb2572744255712",
+    "Accounting.TS.ProofLayer.rel": "ae5d5f4ed7a9a1a28a006d3e238992a79203b715192ddbf178036b87a4560f9b",
     "Accounting.TS.splice": "23e1874cde3d6a922d163ccc57a9b970e58ca7e88f6898d154d6764a0e24ecc0"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
@@ -9462,6 +9521,9 @@
     "Pouw.RelativeSecurity.prob": "45903db0657e0aae952b67744101d45314e1904c052d74ff5b83d86cbbdda633"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Credit.SecurityProofs.epsAtSound",
@@ -9800,6 +9862,9 @@
     "_private.Flock.Bytes.0.Flock.hexDigit": "242ae26c46d2dc228fe0433d3eaba3116be00c18226f89bb07d3bb80ff51768a"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial",
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
@@ -9998,6 +10063,9 @@
     "_private.Flock.Canon.0.Flock.hex4": "7c4da174272bc28875627bc5c5f157d6d70a8c1163e8e6e961d111bf7cf9a56c"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial",
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
@@ -10400,6 +10468,9 @@
     "Flock.Sha512.word": "b1086da4c00e9cf65abe8a24bde5bf83aa2e6897854b30766e6be070dc7de279"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial",
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
@@ -10607,6 +10678,9 @@
     "_private.Flock.Hm96.0.Flock.Hm96.tag": "824dbcae40eb3817e77d8bdc91e1a12f0b1fe7ccbebc0be5d3097e7c4fc436eb"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial",
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
@@ -10804,6 +10878,9 @@
     "Flock.nextPow2": "672248e8c4c082f39e900d47584890b871bb09171798a196ac4378253b873524"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial",
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
@@ -11271,6 +11348,9 @@
     "_private.Flock.Registered.0.Flock.Registered.tagged": "57d4d01156f6691bd7c899ff653c3c5f75b8fa9183ad7afbcaef5d134b584330"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
@@ -11600,6 +11680,9 @@
     "Lms.verify": "e4b8065fd9ecda3f72f3a8d9cbd35b348ad16e89e96084e1cd081a7dd37b58de"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial",
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
@@ -13696,6 +13779,9 @@
     "PouwCheck.wrongItems": "b21fbbbd00797cffb6602f73c045f76d5a2f57badad60a041340556db20810c5"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
@@ -14050,6 +14136,9 @@
     "PouwCheck.stratumOf": "a63e25cf0bec688e68a1e487821aa6f5dd39db0f9260d246cd8724de518ffa69"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
@@ -14083,6 +14172,9 @@
     "PouwCheck.str?._sparseCasesOn_1": "0dcb1635b1fc7740c0b324bfe8d608dd943443a82e1fff3fb791bc293d3fd9dc"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
@@ -14187,6 +14279,9 @@
     "PouwCheck.workloadOf._sparseCasesOn_1": "eefd4ccef0454fbbd77e58e4aa9ff2cd91bc1279023c2ce31aebd0c9792e3cc4"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
@@ -14222,6 +14317,9 @@
     "PouwCheck.protocol": "961c984bdfe303e63ea917e4070736c65a07c1eb0988d939985c5745847cf547"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
@@ -14249,6 +14347,9 @@
     "PouwCheck.tiles": "21e9d75908b950de8cb8e5121b70ba0caf24f47aeeaf4119ec3e79cc65173dda"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
@@ -14290,6 +14391,9 @@
     "PouwCheck.windowSaltReason": "28302c3d6e3a786cf602d7cf4efc287e4c0d33ca2d197d6c5248eb5fe3ca3c46"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
@@ -14444,6 +14548,9 @@
     "_private.PouwCommit.Py.0.PouwCommit.pySpace": "c3ec0bc34652c6a6663e9741ef09984310ffc4f4741dfdcfb1ceff8b3cdaeaaf"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
@@ -14533,6 +14640,9 @@
     "PouwWindow.sampling": "89386ffeda49657977d3575bdea94b69d6db731d239dc5ce0ac247f28ae8166f"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
@@ -14587,6 +14697,9 @@
     "PouwWindow.shift": "02023ba5d741609365f3d7bfc1c8ef4a9c97b2e5b9ab33f1524cf9174e8fefd0"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
@@ -14642,6 +14755,9 @@
     "PouwWindow.natOf?": "aac6e072a42e1ec1123bb1d03d27b84050dd2c0923562dd7c95ed8837d68d67a"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
@@ -14689,6 +14805,9 @@
     "PouwWindow.stopFixed": "821833c5c184786beb7c4f5f02a4312d93ebda1f93c91ee0cd907ef3b86d317b"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
@@ -14717,6 +14836,9 @@
     "PouwWindow.registered": "679c6eb48d59b5fe15606c0ea0e2df4b0585d157d32baecc61cd8c08d63172bf"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
@@ -14740,6 +14862,21 @@
     "Properties.DeclaredCircuit.ScheduledRequirement": "3442d7c11ed1368700b0fa199ba7a7cd91f70942b954f78ec9d51c588761e3ac"
    },
    "guarantees": ["Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement"]
+  },
+  "Properties.Accounting.JointBridge.ServiceSoundOfSessions": {
+   "digest": "b6cfbb886b21803fb437cfb2777b95c300281cac8831084275886053afe546e7",
+   "definitions": {
+    "Properties.Accounting.JointBridge.CheckProofSystemSound": "1339276a6f2abaa969367b74ee4f83fbed14b2b71b53ad83eed07db1ea6642c1",
+    "Properties.Accounting.JointBridge.CheckProofSystemSoundHonest": "cb3f16f581f0160fd9408b941b89a06f861c85e33cf9e6f752a7777af37dbd8b",
+    "Properties.Accounting.JointBridge.CheckProofSystemSoundNontrivial": "931181f7df9a201a5af9e0cc82b9f0359ef2174f2b464c6e89836a82ad2c1c69",
+    "Properties.Accounting.JointBridge.Sessions.checkLayer": "53b83c2d582b0727b9c5bd3af666cefc4b1d719ce1ea73d1e640ab8907b2f984",
+    "Properties.Accounting.JointBridge.Sessions.layer": "aa180166a8d0610aab1ed734d2b2cb5940850569624c46442d624a13e7da3778"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial"
+   ]
   },
   "Properties.Accounting.JointBridge.SpaceOfPeriodHeld": {
    "digest": "02b28929a7688f2ad46fa2f359e1bf292db7321b38e83bad85cd5342bc768369",
@@ -16242,6 +16379,9 @@
     "Properties.Pouw.Period.stagedAt": "f23f95cf2dabffd3e340832985219360b36cda377fab4717e1363cbaf5cafda1"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
@@ -17753,6 +17893,9 @@
     "_private.SampledProofs.Challenger.0.SampledProofs.Challenger.hexAt": "955c0a2b26794035e957cb274044856fa7c1eda21739edc30fc526203c50aa7a"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
@@ -17805,6 +17948,9 @@
     "_private.SampledProofs.ChallengerRecord.0.SampledProofs.Challenger.hexOf?._sparseCasesOn_1": "1a17f35f5b069009e84ec6d65f79026154b3c2bf14b6bc75a148865543afe4a3"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
@@ -17974,6 +18120,9 @@
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.verifies": "b9b71e2ff104e74e2e67b4b245b1ae12ae7baca0dfbf59acd8fb67572395a007"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
@@ -18093,6 +18242,9 @@
     "_private.SampledProofs.Json.0.SampledProofs.hexDigits": "4caf758cb28fc30e4e641ee7f8165b4f2fa6340f153d37dcaa1904c4ed3bfda2"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
@@ -18234,6 +18386,9 @@
     "_private.SampledProofs.PyJson.0.SampledProofs.PyJson.scaled": "b79e42b746949fff933b2307356c191b50aa25b45b1696d2f4b56553dab6e7a0"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest",
+    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.Pouw.Check.acceptMeans",
