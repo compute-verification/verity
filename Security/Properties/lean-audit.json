@@ -382,6 +382,7 @@
   "Properties.Composition",
   "CoreComposition",
   "CoreProtocol.Blobs",
+  "CoreProtocol.Live",
   "Properties.Verity",
   "CoreOnsite",
   "CoreRemote"
@@ -18976,6 +18977,47 @@
     "Verity.soundness_of_subprotocols_nontrivial"
    ]
   },
+  "SampledProofs.ChallengerCoins": {
+   "digest": "9001b3cf27d0d1ea1d035349adc7486c267c265f533fad8c6dba1cc65ac4733c",
+   "definitions": {
+    "SampledProofs.Challenger.SEGMENT_FORM": "5ac1f915d9f88d71864a9a187d8c8e7499a360dd52c6fca2f4766012d03e51b7",
+    "SampledProofs.Challenger.WITHHELD": "0981507444c3805f604a08914f43d1da00e0dec518c451d0d16ff2a3175b6f77",
+    "SampledProofs.Challenger.challengerStream": "0febf556954f55481fba319d754c4bd2ac99ec0c61e30fedf868b714c13430bb",
+    "SampledProofs.Challenger.challengerStream._sparseCasesOn_1": "9af0c29da241258797763e2ee249dcf4ce7a4e40e212324d62f5f91c86f188f6",
+    "SampledProofs.Challenger.challengerStream._sparseCasesOn_8": "20b15d55bb0a2555909fbfdba7e97028afdcb8c8c950727f6588268e6f68eebb",
+    "SampledProofs.Challenger.challengerStream._sparseCasesOn_9": "84f78ac33f4312b45af97aea912c4592bbd87dd66daa8cd55d3fd5288a658e50",
+    "SampledProofs.Challenger.withheldOn": "5f9554873f4c880f872ef8bc05ab32dfb7c986c44b256649b4a1e33547f36622"
+   },
+   "guarantees": [
+    "Verity.remote_soundness_of_subprotocols",
+    "Verity.remote_soundness_of_subprotocols_honest",
+    "Verity.remote_soundness_of_subprotocols_nontrivial",
+    "Verity.soundness_at_of_targets",
+    "Verity.soundness_at_of_targets_honest",
+    "Verity.soundness_at_of_targets_nontrivial",
+    "Verity.soundness_of_subprotocols",
+    "Verity.soundness_of_subprotocols_honest",
+    "Verity.soundness_of_subprotocols_nontrivial"
+   ]
+  },
+  "SampledProofs.ChallengerDraw": {
+   "digest": "c6d7fceb4f96e10991e66bea274359cfa58625f563bfc3eb0ddbb55d767369d3",
+   "definitions": {
+    "SampledProofs.Challenger.DRAW_FORM": "a80cdf39d88315792d7a71eb3e997c2aa8782423ae3e1f5d25fc96e9e4382f8e",
+    "SampledProofs.Challenger.drawCoins": "3601f44679204d508d8fbeeee3d7c6233ddf4aabf2fbe046b6d289d32a985862"
+   },
+   "guarantees": [
+    "Verity.remote_soundness_of_subprotocols",
+    "Verity.remote_soundness_of_subprotocols_honest",
+    "Verity.remote_soundness_of_subprotocols_nontrivial",
+    "Verity.soundness_at_of_targets",
+    "Verity.soundness_at_of_targets_honest",
+    "Verity.soundness_at_of_targets_nontrivial",
+    "Verity.soundness_of_subprotocols",
+    "Verity.soundness_of_subprotocols_honest",
+    "Verity.soundness_of_subprotocols_nontrivial"
+   ]
+  },
   "SampledProofs.ChallengerRecord": {
    "digest": "d97f33bfd7daabb7f66ea583a0874bf5f2cf6074c90aeff95cb77dcbdece0d48",
    "definitions": {
@@ -19357,12 +19399,13 @@
    ]
   },
   "SampledProofs.OneStage": {
-   "digest": "c00fdce58130ecdfc87cbb7d997fae19a980a2ebbf09114362985981536287a7",
+   "digest": "a2ce5259a5b1f58aa3fe14125a4133d8dfa6d66ee1affba54d14d76f424f12d5",
    "definitions": {
     "SampledProofs.OneStage.Commitment": "d744e6fb2fdff36157845bc9fb3224434ff1f62fc26396f87b4393a0af67c01b",
     "SampledProofs.OneStage.Commitment.digest": "8f1997edbf41ef170699331a03a0ea01ec0eeefb3a34a36d521c4eb1673c6f01",
     "SampledProofs.OneStage.Commitment.record": "6d1c7df56f375ecb5dbbc08f1650b8575d600d384bea8cd5c2415cc4574dc9e5",
     "SampledProofs.OneStage.Evidence": "52d0a3bcc8448597fa8b6dd7fd6cc820c22c737fd7f46afeef97bec0b8eb155d",
+    "SampledProofs.OneStage.Evidence.coins": "e7489fcc0292101e6e425cc8dc39bb0286c9eda142e2aca7ffd37d4cec3b2974",
     "SampledProofs.OneStage.Evidence.draw": "c79ae947b22fb1fe093f74841a2a2b0f704408100f1ac412388db2e19d94ab19",
     "SampledProofs.OneStage.Evidence.instances": "aa63879e2456e9507bc1d49e34a16d5fb4b552c723f4f4027e0559d44aaf6d4c",
     "SampledProofs.OneStage.Evidence.provedUnits": "a224da91926bb06cf743781bfccbc6444942a6645c31fb556c9553f8f6d4797e",
@@ -19372,6 +19415,7 @@
     "SampledProofs.OneStage.Evidence.verdicts": "015cd6bead98f4ab91582fd9ff07e43153df5b7536db1039a08fa226a08c725c",
     "SampledProofs.OneStage.PARAM_KEYS": "e6ca47326c443d7d33cdd523aabd781e197717594d7879c26eba1391860dbbb7",
     "SampledProofs.OneStage.Params": "a521d3ff07ff072d5dd988a3894ae53994ba99269e13ff810353ca0d4d9992b6",
+    "SampledProofs.OneStage.Params.challenger": "bf26e42e90eb39a64ef81d63acc4b5660e7b9e3852459a96710dadcf8b0e845a",
     "SampledProofs.OneStage.Params.delta": "aec48d4bb81bf5c81c2309b92d9e805c095f778149cb1fa31fb91c55b80df8b6",
     "SampledProofs.OneStage.Params.verifier": "1774a7ae1000d869c7c34b71d7c55b661a6536f5b29e6f6cc6682ca12e56c9e9",
     "SampledProofs.OneStage.Public": "27240f20d02a2ba4a3fec008798a134ae627f74ae9c61a69d48d83a25a246b41",
@@ -19380,30 +19424,31 @@
     "SampledProofs.OneStage.Public.perTemplate": "cee9dfeaa056b82323ba4a1e671df95a1db12239728107e5b81b2979fcc81f96",
     "SampledProofs.OneStage.Public.proved": "251a30fd9abf58ef92a91c5405eaea2d6ff44e08737af21230fc21f7acdbfd8d",
     "SampledProofs.OneStage.check": "ff2113bc9a80eb888d8447e2251d5f8d6d27672fcb28c2589921cdfcba702d43",
+    "SampledProofs.OneStage.checkAt": "0d9c6814141cd42112cd8ec43d0c804a42793d898db0818215bd295e1868f712",
+    "SampledProofs.OneStage.checkLive": "c5b4911075b9848b1d0e8b14b0f518fb30394386caafc1e52400e04a3e2dd5e4",
+    "SampledProofs.OneStage.coinsOf": "626a40763dc0e16582de1e693f224360f493ce5fc567f26c7ace69bf0211f456",
+    "SampledProofs.OneStage.coinsReason": "adbfd59e5f73c1ca4ce6d1819813638a7282c38b1a62eb1aef3f3f4c16e1aee0",
+    "SampledProofs.OneStage.coinsWhy": "b91075cc15a97b2ae6fb798eaf0ea03d3d05701ed2785aea1c9dbd672ac4874f",
     "SampledProofs.OneStage.commitmentOf": "5bfb1e03c91600c44f3a6747c32138ad793238e8ace18e02798c7a743242ca2a",
-    "SampledProofs.OneStage.evidenceOf": "c4c1f15ca8709660e4caacf39c0cd1b91aa2e018c21b944f0d7cb38364a1b38e",
+    "SampledProofs.OneStage.drawnFrom": "5f45f7613fc94b625b270bde7b3ba35bcdabc5f11e2f0efe6c775b0e9202b753",
+    "SampledProofs.OneStage.evidenceOf": "86148dff0eb556e677a844375fc54f36b94ecefe83398e5360c64874c702b3d1",
     "SampledProofs.OneStage.evidenceOf._sparseCasesOn_1": "8e558b5b22ba8f2e6fc45b155e2873ea54e96b3eb143741661ce605035691d8a",
-    "SampledProofs.OneStage.paramsOfJson": "6272ab9a9dcdb77fd7daf10147d4176c6febd6ba415f94a02d81c8f5ab06e490",
+    "SampledProofs.OneStage.paramsOfJson": "1b6d83998d8eec65aa20ae14720ab7c1134feed30f6deddacec8f78c651b4155",
     "SampledProofs.OneStage.paramsOfJson._sparseCasesOn_1": "550ca3a6407ae9eddfce113acbbe7f68a39f38515b10ee793b9c6f5cec0e989a",
     "SampledProofs.OneStage.paramsOfJson._sparseCasesOn_19": "53a4a3a89e9004fc47f0e631c4c1b2ee774940e6e49df4d6da383a674c01f536",
     "SampledProofs.OneStage.paramsOfJson._sparseCasesOn_6": "4423fad4c5056c29842f0a79f5d285cd35ac7250ee14baae2282a0fd6b6402f9",
-    "SampledProofs.OneStage.paramsOfJson.match_1": "2be19a82f7a3bd166dee12ae5a355eb0a9deedb27d0d498b7f7da560205c4a5f",
-    "SampledProofs.OneStage.paramsOfJson.match_4": "30c8c08189a370fed3d34bb0604baff0e510d71a54ce7fcbf101adda28b0342f",
-    "SampledProofs.OneStage.protocol": "9169ef68e0d5fc8a43f5b40db6745288aff22c5d4e0317350fa3e8ffbf671b9d",
+    "SampledProofs.OneStage.protocol": "6451ded57bbf08ff53c366c2c5559490cb2cfecf6ae23299f76dee31eb633d2c",
     "SampledProofs.OneStage.publicJson": "6135a484607556ea7975c3bfa5a3d67eba1e6d6912ecf927909aa78fe87fbbce",
     "SampledProofs.OneStage.recordChecks": "9f4fc6200367dc5afc56c4102a26ef761e1131c1010ec2a940996ece331013bb",
     "SampledProofs.OneStage.rule": "ed39e7ebb0484e29d69641a966648a7975fb73c5385615ac1db603dae94c5d28",
     "SampledProofs.OneStage.rule._sparseCasesOn_1": "216efcb31cf09d588536b6263a8ee3a1ea7833cb1914acdeea3f9aa4ed948819",
-    "SampledProofs.OneStage.rule.match_1": "ba6245dafae4cb96f7fd37458827dff55b15bc9d8cd4c429ce0f6ec35717bb7a",
     "SampledProofs.OneStage.verdictOf": "79b0561bd45fa6be54904e9bba689c1cd0c7912e0d9deae4ff3e5abe0518c1ec",
     "_private.SampledProofs.OneStage.0.SampledProofs.OneStage.exactly": "9a646a7a1cc9045d688672c166714022565e4ef19b249aee201a98415096e2ff",
     "_private.SampledProofs.OneStage.0.SampledProofs.OneStage.logRecord": "5339c15abcb8b80ab3837ac99300aa3f671a3c6d4ef0cc0eb9dcad6e67ec2858",
     "_private.SampledProofs.OneStage.0.SampledProofs.OneStage.nats": "4a8503d7e44e138eb20f35d7adb22aa02ef0463befa3527554cc211354c78a5b",
     "_private.SampledProofs.OneStage.0.SampledProofs.OneStage.nats._sparseCasesOn_3": "34463fd1b87a91595810594887f47fd421a30d28cbe58c29250a54af0a4d2c99",
-    "_private.SampledProofs.OneStage.0.SampledProofs.OneStage.nats.match_3": "ab678b51c7dd01fa9329a2e88cb3c672fc6781f9540a95b8facd3de3780d2934",
     "_private.SampledProofs.OneStage.0.SampledProofs.OneStage.obj": "d3fc148450a6d76fc673dffc81655919395f1f1a2d7435303f625a1f327b43c0",
-    "_private.SampledProofs.OneStage.0.SampledProofs.OneStage.obj._sparseCasesOn_1": "893435e025be63a152671e93321de616e050561c7399547e3e66a92a5463576f",
-    "_private.SampledProofs.OneStage.0.SampledProofs.OneStage.obj.match_1": "7b45133531dec7cafddef0507a49b644df8116f8d1a37809fe655d2d0df23dc2"
+    "_private.SampledProofs.OneStage.0.SampledProofs.OneStage.obj._sparseCasesOn_1": "893435e025be63a152671e93321de616e050561c7399547e3e66a92a5463576f"
    },
    "guarantees": [
     "Properties.SampledProofs.acceptMeans",
