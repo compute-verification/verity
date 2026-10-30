@@ -1247,6 +1247,34 @@ def test_the_cache_reads_the_tree_as_git_has_it(tmp_path):
     CC._MEMO.clear()
 
 
+def test_the_cache_key_is_the_same_on_hosts_that_differ_only_in_their_kernel(monkeypatch):
+    """Pods of one image run on hosts with different kernels; a report one pod stored must count on another."""
+    import platform
+
+    from circuit_check import cache as CC
+
+    here = CC.key({"target": "F32Mul_v1"})
+    monkeypatch.setattr(platform, "release", lambda: "0.0.0-another-host")
+    monkeypatch.setattr(platform, "version", lambda: "#1 SMP another build")
+    monkeypatch.setattr(platform, "platform", lambda *a, **k: "Linux-0.0.0-another-host-x86_64")
+    assert CC.key({"target": "F32Mul_v1"}) == here
+    monkeypatch.setattr(platform, "machine", lambda: "aarch64")
+    assert CC.key({"target": "F32Mul_v1"}) != here                  # a different CPU is a different machine
+
+
+def test_the_cache_key_is_the_same_in_every_check_slot(monkeypatch):
+    """Each check slot keeps its tests' results apart (`VERITY_TEST_CACHE`, `tools/verity/check/slot.py`); a report one slot
+    stored must count in another, while a variable that can change what a check computes still keys it."""
+    from circuit_check import cache as CC
+
+    monkeypatch.setenv("VERITY_TEST_CACHE", "/home/research/.cache/verity/tests-slot-a")
+    here = CC.key({"target": "F32Mul_v1"})
+    monkeypatch.setenv("VERITY_TEST_CACHE", "/home/research/.cache/verity/tests-slot-b")
+    assert CC.key({"target": "F32Mul_v1"}) == here
+    monkeypatch.setenv("VERITY_REGRESSION", "1" if os.environ.get("VERITY_REGRESSION") != "1" else "0")
+    assert CC.key({"target": "F32Mul_v1"}) != here
+
+
 def test_the_cache_key_is_the_same_on_every_node(monkeypatch, tmp_path):
     """A report one node stored counts on every other node of the image (`check.py --plan`, `research merge --verdicts`): the key
     names no host, kernel, working directory, home, PATH or check slot (each slot sets its own `VERITY_TEST_CACHE`,
