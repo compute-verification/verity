@@ -36,8 +36,8 @@ W1.lean`) and every sm_120 SASS opcode that writes a 32-bit register (`OPCODES`)
 **Beyond one write** (part T): the amortized routes. The add, mul, hi and dot invariants read only mixed differences, so
 they hold for F minus any functions of x alone and of y alone: they also refute Y + Z with Y one-sided and Z one
 instruction (the round's IADD3 adding Y and Z for free). For Z a LOP3, both LUT orientations are refuted exhaustively at
-8 bits, which the low byte of any width inherits; the byte-degenerate low bytes (0x01, 0x7f, 0xfe among them) admit one,
-and xc avoids them. A P2R'd correction of up to 8 predicate bits in one byte is refuted by
+8 bits, which the low byte of any width inherits; the byte-degenerate low bytes (0x01, 0x7f, 0x81, 0xfe among them)
+admit one, and xc avoids them. A P2R'd correction of up to 8 predicate bits in one byte is refuted by
 the mixed differences. The ballot route (VOTE.ANY of 32 lanes' bits) and a table lookup at a summed address are
 priced, not refuted (part T's last checks).
 
@@ -57,7 +57,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "exact_kit"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from exact_kit.checks import Checks
-from hash_rounds import DEGENERATE_BYTES, xc
+from hash_rounds import DEGENERATE_BYTES, XC_NIBBLE, xc
 
 M32 = (1 << 32) - 1
 TWO32 = 1 << 32
@@ -493,10 +493,12 @@ def main() -> int:
         n = int(checks.args[checks.args.index("--configs") + 1])
     rng = np.random.default_rng(20261029)
 
-    checks.check("constants: the 160 halves of xc(t) avoid the four values that make the XOR an add or a negation "
-                 "(0, 2^31, ~0, 2^31 - 1) and the byte-degenerate low bytes (0x00, 0x01, 0x7f, 0x80, 0xfe, 0xff)",
-                 len(CONSTS) == 160 and not set(CONSTS) & set(BAD)
-                 and not {c & 0xFF for c in CONSTS} & set(DEGENERATE_BYTES), f"{len(CONSTS)} halves")
+    checks.check("constants: the 160 halves of xc(t) are distinct, each with low nibble 0x1 and a nonzero bit in 4..7, so "
+                 "they avoid the four values that make the XOR an add or a negation (0, 2^31, ~0, 2^31 - 1) and the "
+                 "byte-degenerate low bytes (0x00, 0x01, 0x7f, 0x80, 0x81, 0xfe, 0xff)",
+                 len(CONSTS) == 160 and all(c & 0xF == XC_NIBBLE and c >> 4 & 0xF for c in CONSTS)
+                 and not set(CONSTS) & set(BAD) and not {c & 0xFF for c in CONSTS} & set(DEGENERATE_BYTES),
+                 f"{len(CONSTS)} halves, low bytes {sorted({c & 0xFF for c in CONSTS})}")
 
     doms = ("full", "span", "window")
     worst1 = {}

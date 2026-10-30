@@ -96,19 +96,25 @@ def round_ref(st: list[int], w: int, k: int, v: int = 0) -> list[int]:
     return round_u(st, (st[7] + k + w) & M64, v)
 
 
-DEGENERATE_BYTES = (0x00, 0x01, 0x7F, 0x80, 0xFE, 0xFF)
+DEGENERATE_BYTES = (0x00, 0x01, 0x7F, 0x80, 0x81, 0xFE, 0xFF)
+
+
+XC_NIBBLE = 0x1
 
 
 @functools.lru_cache(maxsize=None)
 def xc(t: int) -> int:
-    """The per-position constant XORed into a word before an add-only injection: K_{t+40}, rotated right a byte at a
-    time until neither half is 0, 2^31, ~0 or 2^31 - 1 (which let the XOR pass through an add) and neither half's low
-    byte is in DEGENERATE_BYTES (which let a one-sided add and a LOP3 match it on the low byte, hash_addxor.py)."""
+    """The per-position constant XORed into a word before an add-only injection, t its position in the block: K_{t+40},
+    rotated right a byte at a time until both 32-bit halves have a nonzero bit in 4..6, then each half's low nibble set
+    to XC_NIBBLE. A half ending in 0x1 is odd and not ~0 or 2^31 - 1, so it is none of the four values that let the XOR
+    pass through an add (0, 2^31, ~0, 2^31 - 1), and its nibble admits no two-instruction skip at four bits. Bits 4..6
+    keep its low byte off 0x01 and 0x81 (bit 7 alone XORs as an add of 0x80 mod 2^8, so 0x81 is 0x01 shifted), the
+    bytes at which a one-sided add and a LOP3 match it (hash_addxor.py, DEGENERATE_BYTES). Every K_t needs at most two
+    bytes of rotation."""
     k = K[(t + 40) % 80]
-    while not all(k >> s & M32 not in (0, 1 << 31, M32, (1 << 31) - 1) and k >> s & 0xFF not in DEGENERATE_BYTES
-                  for s in (0, 32)):
+    while not all(k >> s >> 4 & 0x7 for s in (0, 32)):
         k = rotr(k, 8)
-    return k
+    return k & ~(0xF << 32 | 0xF) | XC_NIBBLE << 32 | XC_NIBBLE
 
 
 def sched_ref(w16: list[int], m: int = 0) -> int:
