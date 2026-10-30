@@ -19,3 +19,4 @@
   refusal: is the signed-coins read intact, and does every refusal survive?). Post the verdict on PRF-193 and in
   soundness's thread 1792970372.621909 by ~10:30Z. Phase 2 comes after.
 - 17:55Z Fri, proofs coordinator: lean's check.py has a Nat.gcd prefix allow-list bug (LEAN-141, fixed Tuesday). Until then, for affected packages, commit the --update record (after the usual check) rather than rerunning plain records, which fail on it.
+- 20:58Z Fri, proofs coordinator: worker VMs are being reset (RECV1-2 and RESTACK today; RESTACK lost unpushed commits and recovered them only from a run machine's shipped source). Push every commit as soon as you make it (AGENTS.md: push after every commit), including record commits and intermediate fix heads of PRs that are not in next. Never leave work only on your VM across a turn end.
