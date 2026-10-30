@@ -86,9 +86,10 @@ theorem seenInv_step {c : Circuit} {L : List ℕ} {s : Array Bool} (hs : SeenInv
       · exact absurd (List.mem_singleton.1 hm).symm he
 
 /-- **`HmRow.check`'s `seen` loop**: in an untyped circuit whose unit returns the outputs, the copies' leaf maps, in
-order, return each output word at most once. -/
-theorem check_returned {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed = none) (ho : c.outNet = c.unitNet)
-    (h : HmRow.check c tags ls = .ok ()) : (returned c (List.range c.upv)).Nodup := by
+order, return each output word exactly once. -/
+theorem check_returned_all {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed = none)
+    (ho : c.outNet = c.unitNet) (h : HmRow.check c tags ls = .ok ()) :
+    (returned c (List.range c.upv)).Nodup ∧ ∀ o < c.outWords, o ∈ returned c (List.range c.upv) := by
   unfold HmRow.check at h
   obtain ⟨spans, -, h⟩ := except_bind_ok h
   obtain ⟨u, -, h⟩ := except_bind_ok h
@@ -105,24 +106,37 @@ theorem check_returned {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.type
   obtain ⟨wired2, -, h⟩ := except_bind_ok h
   obtain ⟨u3, -, h⟩ := except_bind_ok h
   obtain ⟨-, h⟩ := ite_throw_cond h
-  obtain ⟨seen, hseen, -⟩ := except_bind_ok h
-  refine (forIn_range_inv (fun pre s => SeenInv c (returned c pre) s) (fun pre a s t hs hst => ?_) ?_ hseen).2.2.1
-  · obtain ⟨-, hst⟩ := ite_throw_cond hst
-    obtain ⟨s', hin, hst⟩ := except_bind_ok hst
-    cases hst
-    refine ⟨_, rfl, ?_⟩
-    have e0 : (default : Array ℕ) = #[] := rfl
-    rw [Hidden.getElem!_eq_getD', e0, ← Array.forIn_toList] at hin
-    have := forIn_list_inv (fun pre' s => SeenInv c (returned c pre ++ pre') s) (fun pre' o s t hs hst => by
-      obtain ⟨hc, hst⟩ := ite_throw_cond hst
+  obtain ⟨seen, hseen, h⟩ := except_bind_ok h
+  obtain ⟨hany, -⟩ := ite_throw_cond h
+  have hI : SeenInv c (returned c (List.range c.upv)) seen := by
+    refine forIn_range_inv (fun pre s => SeenInv c (returned c pre) s) (fun pre a s t hs hst => ?_) ?_ hseen
+    · obtain ⟨-, hst⟩ := ite_throw_cond hst
+      obtain ⟨s', hin, hst⟩ := except_bind_ok hst
       cases hst
       refine ⟨_, rfl, ?_⟩
-      rw [← List.append_assoc]
-      exact seenInv_step hs hc) _ [] s s' (by simpa using hs) hin
-    simpa [returned, List.flatMap_append] using this
-  · refine ⟨Array.size_replicate, fun o h1 => ?_, List.nodup_nil, fun o h => by cases h⟩
-    rw [bool_get, Array.getElem?_replicate, ho, bne_self_eq_false] at h1
-    split at h1 <;> cases h1
+      have e0 : (default : Array ℕ) = #[] := rfl
+      rw [Hidden.getElem!_eq_getD', e0, ← Array.forIn_toList] at hin
+      have := forIn_list_inv (fun pre' s => SeenInv c (returned c pre ++ pre') s) (fun pre' o s t hs hst => by
+        obtain ⟨hc, hst⟩ := ite_throw_cond hst
+        cases hst
+        refine ⟨_, rfl, ?_⟩
+        rw [← List.append_assoc]
+        exact seenInv_step hs hc) _ [] s s' (by simpa using hs) hin
+      simpa [returned, List.flatMap_append] using this
+    · refine ⟨Array.size_replicate, fun o h1 => ?_, List.nodup_nil, fun o h => by cases h⟩
+      rw [bool_get, Array.getElem?_replicate, ho, bne_self_eq_false] at h1
+      split at h1 <;> cases h1
+  refine ⟨hI.2.2.1, fun o hlt => hI.2.1 o ?_⟩
+  have hsz : o < seen.size := by rw [hI.1]; exact hlt
+  rw [getElem!_pos seen o hsz]
+  by_contra hf
+  exact hany (Array.any_eq_true.2 ⟨o, hsz, by simpa using hf⟩)
+
+/-- **`HmRow.check`'s `seen` loop**: the copies' leaf maps, in order, return each output word at most once
+(`check_returned_all`). -/
+theorem check_returned {c : Circuit} {tags : Tags} {ls : Lean.Json} (ht : c.typed = none) (ho : c.outNet = c.unitNet)
+    (h : HmRow.check c tags ls = .ok ()) : (returned c (List.range c.upv)).Nodup :=
+  (check_returned_all ht ho h).1
 
 /-! ## `ret` -/
 
@@ -298,22 +312,43 @@ theorem outPortOf_spec (c : Circuit) {o : ℕ} (ho : o < c.outWords) :
 
 /-! ## An output row's words -/
 
-/-- **Each output row's words hold its port's** (`HmOut.checkRows`: a padded lone port's are the port's, zero-padded to
+/-- **Each output row's words hold its port's** (`Hidden.RowsOut`: a padded lone port's are the port's, zero-padded to
 whole SHA-512 blocks; a bit row of `16 · words` bits holds exactly its port's). -/
-theorem checkRows_words {c : Circuit} (h : HmOut.checkRows c = .ok ())
-    (hr : c.outRowPorts = Array.replicate c.outPorts.size 1)
-    (hb : ∀ p ∈ c.ports.toList, p.bits = 16 * p.words) {j : ℕ} (hj : j < c.outPorts.size) :
+theorem rowsOut_wordsN {c : Circuit} (h : Hidden.RowsOut c) {N : ℕ}
+    (hr : c.outRowPorts = Array.replicate N 1)
+    (hb : ∀ p ∈ c.ports.toList, p.bits = 16 * p.words) {j : ℕ} (hj : j < N) (hjo : j < c.outPorts.size) :
     (c.outPorts.getD j default).2 ≤ (c.ports.getD (HmOut.nIn c + j) default).words := by
   have hj' : j < c.outRowPorts.size := by rw [hr, Array.size_replicate]; exact hj
-  obtain ⟨hlt, hrow⟩ := Hidden.checkRows_out h hj'
+  obtain ⟨hlt, hrow⟩ := h j hj'
   have hmem : c.ports.getD (HmOut.nIn c + j) default ∈ c.ports.toList := by
     rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hlt, Option.getD_some]
     exact Array.getElem_mem_toList hlt
-  rw [Hidden.outGroup_single hr hj] at hrow
+  rw [Hidden.outGroup_singleN hr hj hjo] at hrow
   dsimp only at hrow
   have := hb _ hmem
   rcases hrow with ⟨-, hw, -⟩ | ⟨-, hb'⟩
   · rw [hw]; omega
   · omega
+
+/-- `rowsOut_wordsN` at one output row per output port. -/
+theorem rowsOut_words {c : Circuit} (h : Hidden.RowsOut c)
+    (hr : c.outRowPorts = Array.replicate c.outPorts.size 1)
+    (hb : ∀ p ∈ c.ports.toList, p.bits = 16 * p.words) {j : ℕ} (hj : j < c.outPorts.size) :
+    (c.outPorts.getD j default).2 ≤ (c.ports.getD (HmOut.nIn c + j) default).words :=
+  rowsOut_wordsN h hr hb hj hj
+
+/-- **Each output row's words hold its port's** (`HmOut.checkRows`, through `rowsOut_wordsN`). -/
+theorem checkRows_wordsN {c : Circuit} (h : HmOut.checkRows c = .ok ()) {N : ℕ}
+    (hr : c.outRowPorts = Array.replicate N 1)
+    (hb : ∀ p ∈ c.ports.toList, p.bits = 16 * p.words) {j : ℕ} (hj : j < N) (hjo : j < c.outPorts.size) :
+    (c.outPorts.getD j default).2 ≤ (c.ports.getD (HmOut.nIn c + j) default).words :=
+  rowsOut_wordsN (Hidden.rowsOut_of_checkRows h) hr hb hj hjo
+
+/-- **Each output row's words hold its port's** (`HmOut.checkRows`, through `rowsOut_words`). -/
+theorem checkRows_words {c : Circuit} (h : HmOut.checkRows c = .ok ())
+    (hr : c.outRowPorts = Array.replicate c.outPorts.size 1)
+    (hb : ∀ p ∈ c.ports.toList, p.bits = 16 * p.words) {j : ℕ} (hj : j < c.outPorts.size) :
+    (c.outPorts.getD j default).2 ≤ (c.ports.getD (HmOut.nIn c + j) default).words :=
+  rowsOut_words (Hidden.rowsOut_of_checkRows h) hr hb hj
 
 end FlockSoundness.Discharge.HiddenExec
