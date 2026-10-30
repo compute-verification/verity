@@ -7,3 +7,9 @@
   #6367. Keep 3a4950781b as an ancestor (new commits on top only) so they need no remerge. Mark as soon as #6228's
   gate passes, then #5774 and #5971.
 - 12:24Z: your #6228 push (04b1ec21) took about 8 carriers off next until it's marked. Run only #6228's gate first (the two tests, quick suites, records only if the lock inputs changed) and mark the moment it passes. Then the others.
+- 12:29Z Fri, proofs coordinator: ci ejected (not held) the proofs PRs that carry #6228's 3a4950781b: #6233 and likely
+  #6368, #6326, #6525, #6535, #6327, #6280, #6624 and #6328. Check each with `research queue status N`. Once #6228's
+  fix is marked and back on next, re-mark each ejected one at its current head (`research queue ready N --mark --by
+  proofs --sha <head>`, from a worktree on main, CI-298). They contain 3a4950781b, an ancestor of #6228's new head, so
+  no code change is needed. List what you re-marked. RECINTEG's #6632 carries several; re-mark them anyway, since
+  drive lands whichever is ready first.
