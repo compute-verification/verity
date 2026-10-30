@@ -18,9 +18,9 @@ followed by the window's own (`queue`, at most Q) and the window's decoded decis
 proof block reads it at the same public position. The state row carries the two cursors as private heads (`qh`, `dh`),
 and `ReplayAdvance` checks that the step's A arrivals and A decision bits are the window row's at the heads, with a log
 shifter that computes only the A entries it returns. Once a window `ReplayLoad` writes the window row: the last
-window row past its heads, then the window's certified arrivals (K slots, the warden's) and its decoded decisions,
-which it reads at public positions. So every read in the chain is at a public position, and no gate hashes a row: the
-Lean verifier checks each read's path (`registered.verify_read`).
+window row past its heads, then the window's certified arrivals (K slots, the network certifier's) and its decoded
+decisions, which it reads at public positions. So every read in the chain is at a public position, and no gate hashes a
+row: the Lean verifier checks each read's path (`registered.verify_read`).
 
 **The rows**, each field's elements in turn and each element least significant bit first, then zero bits to a whole
 16-bit word. A state row (`row_fields`, `Shape.width` bits) and a window row (`window_fields`, `Shape.window_width`):
@@ -122,8 +122,8 @@ def _bitlen(v: int) -> int:
 class Shape:
     """The public size class: ReplayStep_v1's R running slots, W waiting slots and A arrivals a step, the engine's
     max_model_len L and num_gpu_blocks NB, a request id's width IW; the chain's Q pending arrivals, D decisions and P
-    steps a window, and the warden's K arrival slots a window; ReplayStep_v1's async_scheduling AS (0 or 1) and its
-    walk entries' width EW (0 for none)."""
+    steps a window, and the network certifier's K arrival slots a window; ReplayStep_v1's async_scheduling AS (0 or 1)
+    and its walk entries' width EW (0 for none)."""
 
     R: int
     W: int
