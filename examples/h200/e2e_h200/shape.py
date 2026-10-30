@@ -1,4 +1,4 @@
-"""The decoder shapes the skeleton runs: ALLP-IFACE's `served_weights.Shape` (CMP-95 item 1), whose tensors and
+"""The decoder shapes the skeleton runs: `served_weights.Shape`, whose tensors and
 weights stream the store holds. `FROZEN` is the H200 demo's frozen shape (the toy); the others are small instances of the same
 MQA architecture (one KV head, query heads covering the width) for CPU runs and tests.
 

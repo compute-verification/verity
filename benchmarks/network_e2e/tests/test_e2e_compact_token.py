@@ -2,7 +2,7 @@
 changed ids are placed on the compact records as `negatives.tie_run` places them (`active.compact_record_data`), so
 the run gets its verdict and the link-windows its changed ids fall in, where reading its 8-byte cells as id events
 raised `struct.error` out of the report. A frame neither reading places gives the run no verdict, with the reason.
-The runs are the gate's own compact rehearsal (network_traces' `gate_compact`), with IO-TIE's parts all holding
+The runs are the gate's own compact rehearsal (network_traces' `gate_compact`), with `io_tie`'s parts all holding
 (`HOLDS`, a stand-in), so the token run is refused by its finish alone.
 """
 from __future__ import annotations
@@ -39,7 +39,7 @@ def _parse(cell: bytes):
     return SimpleNamespace(data=kind == 1, stream=q, id=x) if kind in (0, 1) else None
 
 
-#: what `negatives.tie_run` calls of IO-TIE (`io_tie`), every part of its `reference_parts` holding
+#: what `negatives.tie_run` calls of `io_tie`, every part of its `reference_parts` holding
 HOLDS = SimpleNamespace(
     pad_cell=bytes, data_cell=lambda x, q, B: struct.pack(">BII", 1, q, x).ljust(B, b"\0"), parse_cell=_parse,
     port_row=lambda ids, P: b"".join(x.to_bytes(4, "big") for x in ids).ljust(4 * P, b"\0"),
@@ -73,7 +73,7 @@ def _windows_of(run: Path, users: set[str]) -> list[int]:
 
 
 def test_the_compact_token_run_under_its_own_name_gets_its_verdict_and_changed_windows(tied):
-    """The token run under its own name: the tie gives it a verdict (refused by its finish, every IO-TIE part holding
+    """The token run under its own name: the tie gives it a verdict (refused by its finish, every `io_tie` part holding
     here) and the link-windows its changed ids fall in, which are those of its tampered requests' records."""
     got, ids = tied
     run = got["token"]["dir"]

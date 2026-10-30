@@ -5,9 +5,11 @@
 * a probe of one Program projected to a class is that class's own census, unit for unit and byte for byte, at more outputs
   and fewer lanes too (a slot's units at their Definitions' rows there), and a probe's slot unit its Definition doesn't
   give is refused;
-* the attention at key blocks of 4 over 6 positions is the hand count, and in 2-key groups (`L3a`) too;
+* the attention at key blocks of 4 over 6 positions is the hand count, each block reading its keys' and values' rows, and
+  with a block's state in one row (`L3b`) too;
 * at the class of record, every lever leaves the commit's compressions no larger and every step of the plan lowers them,
-  and the plan from ``L1 + L2`` on leaves no pad pass at any traffic;
+  and the plan from ``L1 + L2`` on leaves no pad pass at any traffic, once Llama-3.2-1B's class circuit lowers (until its
+  readers' Definitions land, the window refuses its key blocks' values, o_proj's quantizer and a norm by name);
 * serving's stream commit is its stream's 4 KiB rows under both schedules, its FA3 interiors the hand count of each launch,
   and ``F`` leaves out exactly those;
 * the H200's AND tables are `BS.compile`'s counts.
@@ -20,6 +22,7 @@ from pathlib import Path
 
 import pytest
 from verity_vllm.program.model import INT8_EXACT_QUANT
+from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.steps import Registered
 from verity_vllm.program.predict.window_circuit import Grain, WindowClass, class_circuit
@@ -34,7 +37,7 @@ import window_cost as W
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128,
         "num_attention_heads": 4, "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5,
         "tie_word_embeddings": True, "max_position_embeddings": 64, "hidden_act": "silu"}
-GRAIN = Grain(gemm_words=512, rows=9, select=64)
+GRAIN = Grain(gemm_words=1024, rows=256, select=64)
 LLAMA_1B = Path(__file__).resolve().parents[3] / "integrations/vllm/tests/program/predict/fixtures/llama32-1b.config.json"
 #: Llama-3.2-1B's arena sizing record (`step_bound_bytes`'s widths)
 SIZING = Path(__file__).resolve().parents[3] / "integrations/vllm/tests/pipeline/fixtures/admission/b16.json"
@@ -42,7 +45,7 @@ SIZING = Path(__file__).resolve().parents[3] / "integrations/vllm/tests/pipeline
 
 def _census(cls: WindowClass, probe: int | None = None) -> dict:
     phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": TINY}, target={"compute_capability": [12, 0], "num_sms": 188})
-    doc = CR.census(class_circuit(Registered.of(phi, default_seed=7), cls, probe, GRAIN), IF)
+    doc = CR.census(class_circuit(Registered.of(phi, default_seed=7), cls, probe, GRAIN, provable=False), IF)
     doc["class"] = {"slots": cls.slots, "prompt": cls.prompt, "outputs": cls.outputs, "positions": cls.positions}
     return doc
 
@@ -74,9 +77,9 @@ def test_a_probe_of_one_program_projected_to_a_class_is_that_class_census(to):
 
 def test_a_probe_unit_its_definition_doesnt_give_is_refused():
     probe = _census(WindowClass(1, 2, 2), 1)
-    scan = next(lab for lab in probe["templates"] if lab.startswith("ScanSlots_v1{"))
+    scan = next(lab for lab in probe["templates"] if lab.startswith("ScanSlots_v2{"))
     probe["templates"][scan]["bytes"]["value"] += 2
-    with pytest.raises(ValueError, match=r"ScanSlots_v1\{.*\} is not its Definition's rows at the probe's class"):
+    with pytest.raises(ValueError, match=r"ScanSlots_v2\{.*\} is not its Definition's rows at the probe's class"):
         W.project(probe, 2, 4, 2, "sm120")
 
 
@@ -84,24 +87,21 @@ def _heads() -> W.Heads:
     first = W.Unit("", 1, wired=3, out=3, out_bytes=276, x=8, wired_bytes=128)
     full = W.Unit("", 1, wired=6, out=3, out_bytes=276, x=8, wired_bytes=404)
     end = W.Unit("AttnHeadEnd_v1{D=8}", 1, wired=2, out=1, out_bytes=128, x=3, wired_bytes=272)
-    return W.Heads(S=1, P=6, H=1, G=2, D=8, BN=4, block="AttnBlock_v5", first=first, full=full, end=end)
+    return W.Heads(S=1, P=6, H=1, R=2, D=8, BN=4, block="AttnBlock_v5", first=first, full=full, end=end)
 
 
 def test_the_attention_at_blocks_of_4_over_6_positions_is_the_hand_count():
     got = {u.label: (u.n, u.wired, u.wired_bytes) for u in _heads().units()}
     first = "AttnBlockFirst_v1{D=8,NVIS=%d,BN=4}"
+    full = "AttnBlock_v5{D=8,NVIS=4,FIRST=false,BN=4,CHECK=false}"
     assert got == {"AttnHeadEnd_v1{D=8}": (6, 2, 272),
-                   first % 1: (2, 3, 160), first % 2: (2, 3, 192), first % 3: (1, 3, 224), first % 4: (1, 3, 256),
-                   "AttnBlock_v5{D=8,NVIS=4,FIRST=false,BN=4,CHECK=false}": (2, 6, 532),
-                   "AllGather_v1{WORLD=2,N=8}": (4, 2, 32), "AllGather_v1{WORLD=3,N=8}": (2, 3, 48),
-                   "AllGather_v1{WORLD=4,N=8}": (2, 4, 64)}
-    grouped = {u.label: (u.n, u.wired) for u in _heads().units(group=2)}
-    assert grouped[first % 3] == (1, 5) and grouped[first % 2] == (2, 3)
-    assert grouped["AllGather_v1{WORLD=2,N=8}"] == (6, 2) and grouped["AllGather_v1{WORLD=4,N=8}"] == (2, 2)
-    assert "AllGather_v1{WORLD=3,N=8}" not in grouped
+                   first % 1: (2, 5, 160), first % 2: (2, 7, 192), first % 3: (1, 9, 224), first % 4: (1, 11, 256),
+                   full: (2, 14, 532)}
+    packed = {u.label: (u.out, u.wired) for u in _heads().units(packed=True)}
+    assert (packed[first % 4], packed[full], packed["AttnHeadEnd_v1{D=8}"]) == ((1, 11), (1, 12), (1, 1))
 
 
-@pytest.mark.parametrize("levers", [(), ("L3a",), ("L3b",), ("L3a", "L3b", "W", "R")])
+@pytest.mark.parametrize("levers", [(), ("L3b",), ("W", "R"), ("L3b", "W", "R")])
 def test_a_windows_position_layouts_are_its_output_rows_and_bytes(levers):
     doc = _census(WindowClass(2, 4, 2))
     rest, heads = W.split(W.units_of(doc), doc["class"], "sm120")
@@ -115,12 +115,13 @@ def test_a_windows_position_layouts_are_its_output_rows_and_bytes(levers):
 
 
 @pytest.mark.slow
+@pytest.mark.xfail(raises=Unexpressible, strict=True, reason="Llama-3.2-1B's class circuit waits on its readers' Definitions")
 def test_at_the_class_of_record_every_lever_lowers_the_commit_and_the_plan_leaves_no_pad_pass():
     """Lowers int8 Llama-3.2-1B's probe for the H200 (about 5 s), as `class_rows.py --llama1b --int8 --probe 1,2,2`."""
     cfg = json.loads(LLAMA_1B.read_text()) | {"quantization_config": dict(INT8_EXACT_QUANT)}
     phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": cfg},
               target={"compute_capability": [9, 0], "num_sms": 132, "int8_exact": "linears"})
-    probe = CR.census(class_circuit(Registered.of(phi, default_seed=7), WindowClass(1, 2, 2), 1), IF)
+    probe = CR.census(class_circuit(Registered.of(phi, default_seed=7), WindowClass(1, 2, 2), 1, provable=False), IF)
     probe["class"] = {"slots": 1, "prompt": 2, "outputs": 2, "positions": 3}
     doc = W.price(probe, "h200", to=(8, 1024, 64), sizing=json.loads(SIZING.read_text())["sizing"])
     assert all(0 < r["F"]["ands"] < r["all"]["ands"] for r in doc["stream"].values())

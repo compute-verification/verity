@@ -33,7 +33,12 @@ SLOW = pytest.mark.skipif(not os.environ.get("FLOCK_IR_SLOW"), reason="derives a
 CASES = [(t, dict(zip(names, key if isinstance(key, tuple) else (key,))), pin)
          for t, names in PIN_PARAMS.items() for key, pin in sorted(REG.module(t).PINS.items())]
 CASES += [("rmsnorm-fused-cuda", {"N": 64, "EPS": 1e-5}, None)]
-CASES = [pytest.param(t, p, pin, marks=[SLOW] if t in SLOW_UNITS else [], id=f"{t}-{'-'.join(map(str, p.values()))}")
+#: Each template's smallest case, by its parameters, runs in the quick tier; its larger pins (RMSNorm at 2048 and 4096
+#: elements take 25 to 90 s each) derive the same layout code at more elements, so they are `slow`.
+SMALLEST = {t: min((tuple(p.values()) for u, p, _ in CASES if u == t),
+                   key=lambda v: [(0, x) if isinstance(x, (int, float)) else (1, str(x)) for x in v]) for t, _, _ in CASES}
+CASES = [pytest.param(t, p, pin, id=f"{t}-{'-'.join(map(str, p.values()))}",
+                      marks=[SLOW] if t in SLOW_UNITS else [] if tuple(p.values()) == SMALLEST[t] else [pytest.mark.slow])
          for t, p, pin in CASES]
 needs_lake = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 

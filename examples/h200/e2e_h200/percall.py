@@ -57,7 +57,7 @@ CREDIT = {
     "status": "blocked",
     "eps": None,
     "blockers": [
-        {"id": "h1zy-j10r-lanes", "what": "J10-R's lane Definitions in h1zy are pending (#4654): a drawn unit has no "
+        {"id": "h1zy-j10r-lanes", "what": "J10-R's lane Definitions in h1zy are pending: a drawn unit has no "
                                           "registered lane statement for C-Flock to prove at the served K (16,384 and "
                                           "65,536)"},
         {"id": "CMP-127 TileDrawIsCoin", "what": "PouwCheck.Credit.window does not yet read the tile stratum of the single "
@@ -66,9 +66,9 @@ CREDIT = {
 }
 STANDS_IN = {
     "salt": "SHA-512 of the step's salt key: window_salt.issue's live salt replaces it",
-    "roots": "root(A) and root(B) are SHA-512 tags of the call and the tensor (CMP-91): the step's table root and the "
+    "roots": "root(A) and root(B) are SHA-512 tags of the call and the tensor: the step's table root and the "
              "weights' registration root replace them",
-    "check_draw": "a FIXTURE coin picks the checked units; the tile stratum's draw from live coins replaces it (CMP-127)",
+    "check_draw": "a FIXTURE coin picks the checked units; the tile stratum's draw from live coins replaces it",
     "commit_layout": "this module's per-call trees under the engine's hm96 leaves; the registered Program's layout "
                      "replaces it",
 }

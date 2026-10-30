@@ -1,4 +1,4 @@
-"""[BRIEF §5 step 2 -- compact representation] Operand references as RUN PROGRESSIONS instead of one tuple per run.
+"""Compact representation: operand references as RUN PROGRESSIONS instead of one tuple per run.
 
 The checker of record holds every instance operand as its list of MAXIMAL CONTIGUOUS RUNS `(space, idx, lo, hi)` (verity.ml.circuits.refs.runs).
 On a real fold 91 % of all runs are the K/V gathers of Attention (mprof, llama B8 256/32: 3.52 M runs, 200 per Attention
@@ -307,7 +307,7 @@ def hash_operand(items: list[tuple]) -> list | dict:
     return [list(t) for t in expand_mixed(items)]
 
 
-# ---- the STORED form (F2, COORD R17-34 (2)): instances.jsonl `operand_refs` items ------------------------------------------------------
+# ---- the STORED form: instances.jsonl `operand_refs` items ------------------------------------------------------
 # An operand in the file is a list of items in reference order.  Record form (verity-gen/instances/v1): every item a maximal run
 # ["space", idx, lo, hi].  Progressions form (v2): node- and parameter-space references as progressions
 # ["N"|"P", idx, lo, hi, dI, dL, dH, count] -- the UPPER-CASE space is the marker, one progression per maximal arithmetic run sequence of
@@ -487,71 +487,21 @@ def rle_runs(mapped_runs: list[tuple], n_base: int) -> list[tuple]:
 
 def lean_root(desc: dict, registry) -> dict:
     """The root body of a descriptor as compact instances WITHOUT building its Node / Coll / Refs objects (codec.decode_program builds
-    them for every root node, then compare.Prog expanded their runs and dropped the IR).  Every non-root definition is decoded exactly
-    as decode_program does (they are the Definitions' small bodies: their spec ids come from the same SpecializedDefinition objects,
-    `_spec_id`, so the spec strings are the record's).  Returns {"nodes": [(k, fid, form, args, out_str, n)], "n_nodes", "params"}.
-    Root-body semantics mirrored from codec.decode_program: v1 `alias` = the compact operand of an earlier node (flattened concat
-    parts and nesting do not change the run sequence); v0 descriptors have no aliases."""
-    from verity.ml.circuits.codec import (SCHEMA_V0, SCHEMAS, Body, Coll, CompositeDefinition, Node, SpecializedDefinition, _decode_refs,
-                                 _lookup_primitive, _spec_id, _statics_order, type_from_json)
-    schema = desc.get("schema")
-    if schema not in SCHEMAS:
-        raise ValueError(f"unexpected descriptor schema {schema!r}")
-    ddefs = desc["definitions"]
-    built: dict = {}
+    them for every root node, then compare.Prog expanded their runs and dropped the IR).  Every non-root definition is decoded by
+    decode_program's own reader, `codec.definition_decoder`, refusals included (they are the Definitions' small bodies: their spec
+    ids come from the same SpecializedDefinition objects, `descriptor_id`, so the spec strings are the record's).  Returns
+    {"nodes": [(k, fid, form, args, out_str, n)], "n_nodes", "params"}.  Root-body semantics mirrored from codec.decode_program:
+    v1 `alias` = the compact operand of an earlier node (flattened concat parts and nesting do not change the run sequence); v0
+    descriptors have no aliases."""
+    from verity.ml.circuits.codec import SCHEMA_V0, definition_decoder, descriptor_id, type_from_json
+    get = definition_decoder(desc, registry)
+    schema = desc["schema"]
     if schema == SCHEMA_V0:
         callee_id, arg_type = (lambda f: f), type_from_json
     else:
         callees, types = desc["callees"], [type_from_json(t) for t in desc["types"]]
         callee_id, arg_type = callees.__getitem__, types.__getitem__
-    root_fid = desc["root"]
-
-    def get(fid: str):   # == codec.decode_program.get, bodies built for every definition but the root
-        if fid in built:
-            return built[fid]
-        d = ddefs[fid]
-        if d["form"] == "primitive":
-            p = _lookup_primitive(registry, d["id"])
-            if [[n, t.to_json()] for n, t in p.params] != d["params"] or p.ret.to_json() != d["ret"]:
-                raise ValueError(f"primitive {fid} signature differs from the registry")
-            built[fid] = p
-            return p
-        name, _, ver = d["id"].rpartition("_v")
-        statics = _statics_order(fid, tuple(d["bindings"].keys()))
-        cdef = CompositeDefinition(f"{name}", int(ver), statics, lambda S: ((), None), lambda *_: None, register=False)
-        sp = SpecializedDefinition(cdef, {}, ())
-        built[fid] = sp
-
-        def static_of(v):
-            if isinstance(v, dict) and "fn" in v:
-                return get(v["fn"])
-            if isinstance(v, dict) and "f64" in v:
-                return float.fromhex(v["f64"])
-            if isinstance(v, dict) and "dict" in v:
-                return {k2: static_of(v2) for k2, v2 in v["dict"].items()}
-            if isinstance(v, list):
-                return tuple(static_of(x) for x in v)
-            return v
-
-        sp.bindings.update({k: static_of(v) for k, v in d["bindings"].items()})
-        if fid == root_fid:
-            return sp   # the root's body is read below, compactly
-        b = d["body"]
-        params = tuple((n, type_from_json(t)) for n, t in b["params"])
-        ret_type = type_from_json(b["ret_type"])
-        nodes: list = []
-        offsets = [0]
-        for nd in b["nodes"]:
-            fn = get(callee_id(nd["fn"]))
-            args = tuple(Coll(arg_type(a["type"]), _decode_refs(a["refs"], nodes, schema)) for a in nd["args"])
-            node = Node(nd["form"], fn, args, arg_type(nd["out"]), axes=tuple(nd.get("axes", ())), n=nd.get("n", 1), n_xs=nd.get("n_xs", 0))
-            nodes.append(node)
-            offsets.append(offsets[-1] + node.gates)
-        sp.set_body(Body(params, ret_type, nodes, _decode_refs(b["ret"], nodes, schema), offsets))
-        return sp
-
-    get(root_fid)
-    b = ddefs[root_fid]["body"]
+    b = desc["definitions"][desc["root"]]["body"]
     args_of: list[list[list[Prog]]] = []   # node k -> compact operands (alias targets)
     out_nodes = []
     spec_cache: dict = {}
@@ -566,7 +516,7 @@ def lean_root(desc: dict, registry) -> dict:
         fkey = nd["fn"]
         fid = spec_cache.get(fkey)
         if fid is None:
-            fid = spec_cache[fkey] = _spec_id(get(callee_id(fkey)))
+            fid = spec_cache[fkey] = descriptor_id(get(callee_id(fkey)))
         okey = nd["out"]
         out = out_cache.get(okey) if not isinstance(okey, dict) else None
         if out is None:

@@ -1,5 +1,5 @@
 """`registry.torch_loss`: each Boolean Definition computes, word for word, the numpy model of its torch CUDA kernel
-(`numerics.torch_kernels`), warp by warp at V = 12,288 (three loads a thread, the least vocabulary the block kernel runs at), on
+(`numerics.torch_kernels`; a row's, `numerics.torch_blocks`), warp by warp at V = 12,288 (three loads a thread, the least vocabulary the block kernel runs at), on
 rows of normal logits and rows with special words (NaN, ±inf, all -0, the extremes). The model then matches torch's CPU
 cross-entropy and its backward to f32 rounding: the CPU kernels sum in another order and with another expf. The CUDA kernels
 themselves are `test_torch_training_gpu.py`'s. The target's logit is picked in numpy, since `GatherBf16x{V}_v2` is made on demand and has
@@ -11,6 +11,7 @@ import pytest
 
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.bits import evaluate_words
+from verity.ml.definitions.numerics import torch_blocks as TB
 from verity.ml.definitions.numerics import torch_kernels as TK
 from verity.ml.definitions.registry import torch_loss as TL
 
@@ -135,6 +136,28 @@ def test_each_warps_backward_is_the_epilogue_on_its_chunk() -> None:
         _same(got, TK.chunk(want, w))
 
 
+# --- the step's blocks ---------------------------------------------------------------------------------------------------------
+
+@pytest.mark.slow
+def test_a_row_is_its_warps_then_the_row_end() -> None:
+    """Six rows (NaN, ±inf, the extremes, all -0), labels in all three chunks' warps, ignored and V. About 40 s."""
+    x = logits(np.random.default_rng(7))
+    t = np.array([4096 * 2 + 128 * 31 + 127, 0, IGNORE, 4096 + 5, V, 77], np.uint32)
+    _same(_ev(bind(TL.LogSoftmaxRow, V=V), x, t), np.stack(TB.MODELS["LogSoftmaxRow_v1"]({"V": V}, x, t), 1))
+
+
+def test_a_rows_backward_is_its_slots_then_its_warps() -> None:
+    rng = np.random.default_rng(8)
+    x = logits(rng)
+    t = np.array([5, 4096 + 128 * 7 + 2, IGNORE, 77, V - 1, 4096 * 2 + 128 * 7], np.uint32)
+    mx = TK.warp_reduce(TK.log_softmax_maxes(x), TK.max_combine)
+    ls = np.full(len(x), 0x41140000, np.uint32)
+    ls[-1] = 0x7FFFFFFF
+    g = np.array([0xB9800000, 0xB9800000, 0xB9800000, 0x80000000, 0x7FC00000, 0xBF800000], np.uint32)
+    want = TB.MODELS["LogSoftmaxNllBackwardRow_v1"]({"V": V}, x, t, mx, ls, g)
+    _same(_ev(bind(TL.LogSoftmaxNllBackwardRow, V=V), x, t, mx, ls, g), want)
+
+
 # --- the model against torch's CPU cross-entropy -----------------------------------------------------------------------------
 
 def _torch():
@@ -173,6 +196,7 @@ def test_the_model_matches_torch_cross_entropy_to_rounding() -> None:
     (TL.LogSoftmaxLaneMax, {"KL": 2}), (TL.LogSoftmaxLaneSumExp, {"KL": 0}), (TL.NllLossTorch, {"M": 15, "V": V, "MEAN": 1}),
     (TL.NllLossTorch, {"M": 16, "V": V, "MEAN": 2}), (TL.NllLossTorchBackward, {"MEAN": -1}),
     (TL.LogSoftmaxNllSlots, {"V": 100}), (TL.LogSoftmaxNllBackwardWarp, {"V": 12288 * 2 + 1}),
+    (TL.LogSoftmaxRow, {"V": 4096}), (TL.LogSoftmaxNllBackwardRow, {"V": 12289}),
 ], ids=lambda a: getattr(a, "name", repr(a)))
 def test_bind_refuses_statics_outside_the_kernels_range(d, statics) -> None:
     with pytest.raises(ValueError, match="refuses this binding"):

@@ -1,4 +1,4 @@
-"""A live dither-a-so window's audit, run as an Attempt (`research run`) from the VM that holds the gate key:
+"""A live dither-a-so window's audit, run from the machine that holds the gate key:
 the session and the auditor's ledger fetched from the challenger's gate, the GPU run's manifest and stop record and the
 challenger's key record fetched from the store, then
 
@@ -20,9 +20,8 @@ labelled `challenger-pins head` (each head keeps its label when the next is put)
 
 ``audit.json`` holds the three verdicts, the commits and the inputs' SHA-512s; the exit status is 0 only when all hold.
 
-    research run --campaign dither-loop --run-record -- python benchmarks/hash/dither/live_audit.py \\
-        --session SID --run RUN --gate USER@HOST --ssh-key KEY --key-record ART --period P --core-from MAIN \\
-        --main FIRST_PARENT [--pins PINS]
+    OUT=DIR python3 benchmarks/hash/dither/live_audit.py audit --session SID --run RUN --arm ARM --gate USER@HOST \\
+        --ssh-key KEY --key-record ART --period P --core-from MAIN --main FIRST_PARENT [--pins PINS]
 """
 from __future__ import annotations
 

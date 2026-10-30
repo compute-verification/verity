@@ -22,7 +22,7 @@ only, the token's own key and value, one coordinate at a time). A count form cha
 (variant ``A``, what a priced proof needs), or by count at ``p_min D > k`` (variant ``B``, the two-cost hypothesis with
 ``c_w = p_min``).
 
-Conventions, as the realism note's (``note:training-20261022T1045Z-cover-assumptions-realism``):
+Conventions:
 
 * ``s = 4.52e16`` and ``k`` in bits (1 MB = 8e6), ``c_a = b`` (16 / 8 / 4);
 * ``M*`` holds one block per (updated weight, token): the forward products of kappa's ``N`` (every matrix, the router

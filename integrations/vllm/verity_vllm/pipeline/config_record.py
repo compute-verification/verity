@@ -129,7 +129,7 @@ def index_refusal(row: str) -> str | None:
 
 def match_part(d: Path, world: int) -> dict[str, Any] | None:
     """The Match's verdict: a TP row's fold Match (`match/fold_match/tp2_fold_match.json`: per-rank fold, compare and GM-01, the
-    cross-rank leg, the profile it folded with), a single-GPU row's global Match (`global_match.json`, GM-01's ``verdict``).  None when
+    cross-rank check, the profile it folded with), a single-GPU row's global Match (`global_match.json`, GM-01's ``verdict``).  None when
     no Match ran."""
     if world > 1:
         fm = _json(d / "match" / "fold_match" / "tp2_fold_match.json")
