@@ -27,11 +27,11 @@ open Hash
 a drawn unit's accepted proof opens the value `v` at `rank` of instance `pos` through the inner digest `x` and the salt
 `y` (`Opens pos rank v x y`), the instance's registered root `root pos` is the hm96 leaf over `x` and `y` under the
 verifier's key, and `v`'s frame-v3 leaf at `rank` climbs to `x` under the instance's domain `dom pos`. An instance is a
-call's `A` rows (its root the one the call's coins are drawn after) or a forward's words.
+call's `A`, in 1 KiB segments of its bytes (its root the one the call's coins are drawn after), or a forward's words.
 
-Rationale: a call's `A` rows are the leaves of their own subtree, in the call's domain, whose root one hm96 instance
-hides, and a drawn unit's proof climbs its rows to that root and checks the instance's commit string against the
-registered leaf. The commitment code has no per-instance domain, no hm96 instance over a subtree root and no seed or
+Rationale: a call's `A` segments are the leaves of their own subtree, in the call's domain, whose root one hm96
+instance hides, and a drawn unit's proof climbs its leaves to that root and checks the instance's commit string against
+the registered leaf. The commitment code has no per-instance domain, no hm96 instance over a subtree root and no seed or
 record reading one, so this is a premise of the protocol until it does. With row-bound, an opened row is bound to its
 instance and rank, or the checks hashed a collision (`Hash.Guarantees.TreeBinding`). -/
 def SubtreeLayout (H : Msg → Digest) (key : Msg) (dom : ℕ → Tree.Domain) (schema : String) (root : ℕ → Digest)

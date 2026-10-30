@@ -12,11 +12,11 @@ admitted call (`Layout.Admits`) it is accepted at every coin value (`honestAt`):
 run starts from, and the honest run writes every committed tile. So the honest lemma holds at every stream and every
 commitment meeting `CommitL1w` (`honestOfCommit`), and at a deployed instance it is `CommitL1w` at the deployed
 commitment. That holds where the commitment's messages include frame-v3 leaves, at ranks below `2^64`, over the words'
-bytes in the lead's chunks and over A's rows (`commitL1w_of_leaves`): a frame leaf carries its domain's id and its
+bytes in the lead's chunks and over A's bytes (`commitL1w_of_leaves`): a frame leaf carries its domain's id and its
 rank (`leafMsg_id_inj`, `leafMsg_rank_inj`), so leaves at distinct ranks are distinct messages however their values
-repeat, and its header puts one more compression on its value's (`blocks_leafMsg`). `honest` is `honestOfCommit` at a
-one-message commitment and the empty stream, beside a certifier that runs `certCode` with the coins as its entropy
-(`certifierCoins`).
+repeat, and its header puts one more compression on its value's (`blocks_leafMsg`). `certifierCoins` is a certifier
+that runs `certCode` with the coins as its entropy. `Compose/Deployed.lean` has the honest lemma at the deployed
+instance (`honestL1w`) and the guarantee (`honest`).
 -/
 
 namespace Pouw.SecurityProofs.Lead.Compose
@@ -273,7 +273,7 @@ theorem commitL1w_of_leaves {L : Pouw.Lead.Layout} (H : Hash.Msg → Hash.Digest
 /-- **The honest lemma at every coin stream and every commitment meeting `CommitL1w`**: at every admitted call, for
 every coin stream, commitment format and form classifier meeting `CommitL1w`, some set of strategies meets every
 premise of `G` and holds an honest strategy accepted at every coin value. At the protocol's stream and commitment it is
-the honest lemma at the deployed instance, given `CommitL1w` there. -/
+the honest lemma at the deployed instance, given `CommitL1w` there (`honestL1w`). -/
 theorem honestOfCommit (T m n K : ℕ) (H : Hash.Msg → Hash.Digest)
     (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ)
     (stream : CoinStream (lead T m n K)) (C : Pouw.Lead.Commit (lead T m n K)) (isA : Hash.Msg → Bool)
@@ -285,55 +285,9 @@ theorem honestOfCommit (T m n K : ℕ) (H : Hash.Msg → Hash.Digest)
       ∀ ω, Accepted (lead T m n K) H C κ σ ω :=
   ⟨_, _, hC, honestAt (lead T m n K) H κ stream C isA hadm⟩
 
-/-! ## At a stand-in commitment -/
-
-/-- The empty coin stream: no coin streamed. -/
-def noStream (L : Pouw.Lead.Layout) : CoinStream L :=
-  ⟨fun _ _ => none, fun _ _ _ => rfl, fun _ _ _ _ _ h => by cases h⟩
-
-/-- The words' and A's compressions `CommitL1w` credits, each rounded up. -/
-noncomputable def oneMsgBlocks (L : Pouw.Lead.Layout) : ℕ :=
-  ⌈4 * wordsRegs L / 128 + (wordChunks L : ℚ)⌉₊ + ⌈aBlocks L⌉₊
-
-/-- One message of `oneMsgBlocks L + 1` compressions. -/
-noncomputable def oneMsg (L : Pouw.Lead.Layout) : Hash.Msg := List.replicate (128 * oneMsgBlocks L) 0
-
-/-- A commitment format meeting `CommitL1w` at every layout and data: one words message of `oneMsgBlocks L + 1`
-compressions, and no A message. -/
-noncomputable def oneMsgCommit (L : Pouw.Lead.Layout) : Pouw.Lead.Commit L where
-  msgs _ _ := [oneMsg L]
-  root _ _ := 0
-  aMsgs := []
-  aRoot _ := 0
-  chunks := wordChunks L
-
-theorem blocks_oneMsg (L : Pouw.Lead.Layout) : blocks (oneMsg L) = oneMsgBlocks L + 1 := by
-  rw [blocks, oneMsg, List.length_replicate]
-  omega
-
-theorem commitL1w_oneMsg (L : Pouw.Lead.Layout) (H : Hash.Msg → Hash.Digest) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) :
-    CommitL1w H (oneMsgCommit L) (fun _ => false) κ := by
-  refine ⟨rfl, fun ω => ?_⟩
-  simp only [oneMsgCommit, List.append_nil, List.dedup_cons_of_notMem List.not_mem_nil, List.dedup_nil,
-    List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero, shaCredit, blocks_oneMsg, wordsBlocks,
-    Bool.false_eq_true, ↓reduceIte]
-  have hX := Nat.le_ceil (4 * wordsRegs L / 128 + (wordChunks L : ℚ))
-  have hY := Nat.le_ceil (aBlocks L)
-  have hY0 : 0 ≤ aBlocks L := by unfold aBlocks; positivity
-  unfold oneMsgBlocks
-  push_cast
-  norm_num only [shaWordsRegs, shaARegs]
-  linarith
-
 /-- **A certifier meeting `CertifierCoins`**: a device that runs `certCode`, its entropy the coins themselves. -/
 theorem certifierCoins (L : Pouw.Lead.Layout) :
     CertifierCoins () (Equiv.refl (Coins L)) fun (_ : Unit) => certCode (Equiv.refl (Coins L)) :=
   fun _ => rfl
-
-/-- **The honest lemma** (`Pouw.Guarantees.Lead.Honest`): `honestAt` at the one-message commitment, which meets
-`CommitL1w` (`commitL1w_oneMsg`), and the empty stream, at every admitted call, beside `certifierCoins`. -/
-theorem honest : Pouw.Guarantees.Lead.Honest := fun T m n K H κ hadm =>
-  ⟨⟨Unit, _, (), _, _, certifierCoins _⟩, noStream _, oneMsgCommit _, fun _ => false,
-    honestOfCommit T m n K H κ (noStream _) (oneMsgCommit _) (fun _ => false) (commitL1w_oneMsg _ H κ) hadm⟩
 
 end Pouw.SecurityProofs.Lead.Compose

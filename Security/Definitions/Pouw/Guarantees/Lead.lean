@@ -1,4 +1,5 @@
 import Definitions.Pouw.Assumptions.Lead
+import Definitions.Pouw.Lead.Deployed
 
 /-!
 # The lead's work guarantee (trusted statements)
@@ -24,11 +25,12 @@ The lead is `tag-blc4a-t64-rot/served/s8/k32/w/l1w/l1a/min` (`Pouw.Lead.lead`). 
 * `GapAt`: the gap's share of served stock at T 512 × 64, T 512 × 512 and T 8,192, for every call of `n ≥ 512` and
   `K ≥ 2,048`, the served shapes': at most 0.157%, 0.134% and 0.131%. The cap doesn't enter the gap.
 * `GapAtDecode`: at decode (`m = 1`, committed as 16 rows), the gap is at most 3.79% of served stock.
-* `Honest`: the hypotheses are jointly satisfiable at every call the verifier admits: some certifier running
-  `certCode`, the nominal W1 table, and some coin stream, commitment format and set of strategies meeting every other
-  premise, with an honest strategy accepted at every coin value. The commitment format is existential, so `Honest`
-  does not say the served format meets `CommitL1w`. Every call of at most `2^15` rows, `2^20` columns and an inner
-  dimension from 1 to `2^16` is admitted (`Statement.admits_of_caps`), Llama-3.2-1B's included.
+* `Honest`: the hypotheses are jointly satisfiable at every call the verifier admits, at the deployed instance: some
+  certifier running `certCode`, and at the deployed commitment (`l1wCommit`: A in 1 KiB segments, the forward's words
+  in its calls' chunks) and the certifier's coin stream (`certStream`), the nominal W1 table and some set of
+  strategies meeting every other premise, with an honest strategy accepted at every coin value. The deployed
+  definitions are to be tied to the served code (difftest). Every call of at most `2^15` rows, `2^20` columns and an
+  inner dimension from 1 to `2^16` is admitted (`Statement.admits_of_caps`), Llama-3.2-1B's included.
 * `Nontrivial`: the conclusion fails for a verifier that accepts everything: at the three points the honest work
   exceeds the gap, and a strategy that does nothing does no work, exchanges nothing and hashes nothing.
 -/
@@ -106,20 +108,26 @@ def GapAtDecode : Prop :=
     ∀ C : Pouw.Lead.Commit (lead T 1 n K), ChunksOf _ C → gapServed _ C ≤ 379 / 10000
 
 /-- **The honest lemma**: at every call of the lead the verifier admits (`Layout.Admits`), the hypotheses are jointly
-satisfiable: some certifier meets `CertifierCoins`, the nominal W1 table meets `H32`, and for some coin stream,
-commitment format and set of strategies every other premise of `G` holds, with an honest strategy accepted at every
-coin value. The stream and the format are existential, not the protocol's. -/
+satisfiable at the deployed instance: some certifier meets `CertifierCoins`, and at the deployed commitment
+(`l1wCommit`), its form classifier (`l1wIsA`) and the certifier's coin stream (`certStream`) the nominal W1 table and
+some set of strategies meet every other premise of `G`, with an honest strategy accepted at every coin value. That is
+for every A of at most `2^64` bytes, all commitment parameters whose column tile is a positive number of blocks, and
+every forward of the call whose words leaves number at most `2^64` (`range-u64` domains refuse more). -/
 def Honest : Prop :=
   ∀ (T m n K : ℕ) (H : Hash.Msg → Hash.Digest)
     (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ), (lead T m n K).Admits →
     (∃ (Device Ent : Type) (cert : Device) (coinsOf : Ent ≃ Coins (lead T m n K))
       (runC : Device → Hash.Digest × Ent → Hash.Digest × Coins (lead T m n K)), CertifierCoins cert coinsOf runC) ∧
-    ∃ (stream : CoinStream (lead T m n K)) (C : Pouw.Lead.Commit (lead T m n K)) (isA : Hash.Msg → Bool)
-      (Real : Strategy (lead T m n K) → Prop) (σ : Strategy (lead T m n K)),
-      CommitL1w H C isA κ ∧ H32 h100Nominal ∧ W1 h100Nominal Real ∧ TileGrain H C κ stream Real ∧
-      OneInstructionMinimal Real ∧ CardWithinAccelW1 Real Real ∧ ShaWrites isA Real ∧ HonestHashRuled H C κ Real ∧
-      OutsourceWithinEgressLead h100Nominal (betaLead (lead T m n K) C) H C κ Real ∧ Real σ ∧
-      ∀ ω, Accepted (lead T m n K) H C κ σ ω
+    ∀ (P : L1w) (F : CallForward) (A : Fin (lead T m n K).rows → Fin (lead T m n K).K → UInt8),
+      0 < P.nb → m * K ≤ 2 ^ 64 → F.leaves P.nb (lead T m n K) ≤ 2 ^ 64 →
+      ∃ (Real : Strategy (lead T m n K) → Prop) (σ : Strategy (lead T m n K)),
+        CommitL1w H (l1wCommit _ P F H A) (l1wIsA _ P F H A) κ ∧ H32 h100Nominal ∧ W1 h100Nominal Real ∧
+        TileGrain H (l1wCommit _ P F H A) κ (certStream _) Real ∧ OneInstructionMinimal Real ∧
+        CardWithinAccelW1 Real Real ∧ ShaWrites (l1wIsA _ P F H A) Real ∧
+        HonestHashRuled H (l1wCommit _ P F H A) κ Real ∧
+        OutsourceWithinEgressLead h100Nominal (betaLead (lead T m n K) (l1wCommit _ P F H A)) H
+          (l1wCommit _ P F H A) κ Real ∧
+        Real σ ∧ ∀ ω, Accepted (lead T m n K) H (l1wCommit _ P F H A) κ σ ω
 
 /-- **The nontrivial lemma**: `G`'s conclusion fails for a verifier that accepts everything. At the three points the
 honest work exceeds the gap, and a strategy that does nothing does no priced work, exchanges nothing and hashes
