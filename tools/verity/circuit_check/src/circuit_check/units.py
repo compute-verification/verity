@@ -52,6 +52,8 @@ first one registered of that word, so a check forked from here finds the one a f
 dies fails the run, as it would kill a build in one process.  When every binding was built apart, the task list's entry is
 stored as a full build stores it, its reads every binding's share and this process's own; it and each record are digested
 where this process stores them, as a full build's are (a full build digests none of its reads where it builds them either).
+``--records-only`` (`cli.records`) builds and stores the records so and checks no target, so that each run from a copy of
+its cache (each shard of one run, on a machine of its own) builds no binding.
 
 A run from the records, forked or not, has no process that imported every module a full build has imported before its
 checks, and `sidecars.owner` reads those: a Definition a factory makes is owned by the module that binds it at its top level,
@@ -361,13 +363,15 @@ def _lookup(cache: Path, repo: Path, e: Entry) -> tuple[dict, dict[str, list[str
 
 @dataclass
 class Plan:
-    """A run's catalog from records: each binding, the objects built now, the derived suite and whether each is a Call; and
-    when every binding was built apart, what the task list's entry holds beside this process's reads (``listed``)."""
+    """A run's catalog from records: each binding, the objects built now, the derived suite and whether each is a Call; when
+    every binding was built apart, what the task list's entry holds beside this process's reads (``listed``); and the most
+    bytes the results of those built apart held on disk at once (`built_apart`)."""
     entries: list[Entry]
     objects: dict[str, Any]
     derived: Derived
     calls: set[str]
     listed: dict[str, list[str]] | None = None
+    scratch: int = 0
 
     def stats(self) -> dict:
         return {"reused": sum(e.reused for e in self.entries),
@@ -430,15 +434,16 @@ def plan(cache: Path | None, repo: Path, log: Callable[[str], None] | None = Non
     if not any(e.reused for e in entries) and apart is None:
         return None
     pinned = TG.pinned()
-    listed = None
+    listed, scratch = None, 0
     if apart is not None and (todo := [e for e in entries if not e.reused]):
         side = [u for e in entries if e.units != REGISTERED and not e.root_ids for u in e.units] if CC.tracing() else None
         if side is not None:
             CC.warm()
-        kept, _, grew = built_apart(todo, *apart, described=True, side=side, strict=True, pinned=pinned)
+        kept, _, grew, scratch = built_apart(todo, *apart, described=True, side=side, strict=True, pinned=pinned)
         if log:
             over = sorted(((gb, n) for n, gb in grew.items() if gb > apart[2].get(n, APART_GB)), reverse=True)
-            log(f"circuit-check: {len(kept)} of {len(todo)} bindings built apart" + (
+            log(f"circuit-check: {len(kept)} of {len(todo)} bindings built apart, their results at most {scratch} bytes on "
+                "disk at once" + (
                 f"; {len(over)} grew past their heavy.json GiB: " + ", ".join(f"{n} {gb}" for gb, n in over) if over else ""))
         gone = {id(e) for e in todo} - {id(e) for e in kept}
         entries = [e for e in entries if id(e) not in gone]
@@ -462,7 +467,7 @@ def plan(cache: Path | None, repo: Path, log: Callable[[str], None] | None = Non
         if "d" not in d.nodes[fid]:
             d.nodes[fid].update(_described(_materialize(entries, objects, fid, via=d.via.get(fid)), d.nodes[fid]["k"]))
     calls = call_families(entries, d, objects)
-    out = Plan(entries, objects, d, calls, listed)
+    out = Plan(entries, objects, d, calls, listed, scratch)
     words = made_words(out)
     if log:
         log(f"circuit-check: catalog from records: {sum(e.reused for e in entries)} of {len(entries)} bindings reused, "
@@ -552,6 +557,12 @@ def store(cache: Path, repo: Path, entries: list[Entry], only_rebuilt: bool) -> 
         if CC.store(cache, e.key, repo, got, value, now) is not None:
             n += 1
     return n
+
+
+def held(cache: Path, entries: list[Entry]) -> int:
+    """The bytes ``entries``' records take in ``cache``: what a run from a copy of it copies."""
+    with CC.internal():
+        return sum(p.stat().st_size for e in entries for p in CC._dir(cache, e.key).glob("*.json"))
 
 
 def made_entries() -> list[Entry]:
@@ -703,7 +714,7 @@ APART_GB = 2.0
 
 def built_apart(entries: list[Entry], jobs: int, budget: float = float("inf"), weights: dict[str, float] | None = None, *,
                 described: bool = False, side: list[str] | None = None, strict: bool = False,
-                pinned: frozenset[str] | None = None) -> tuple[list[Entry], list[tuple[str, ...]], dict[str, float]]:
+                pinned: frozenset[str] | None = None) -> tuple[list[Entry], list[tuple[str, ...]], dict[str, float], int]:
     """``entries`` (`made_entries`) with each one's nodes (`_reach_one`, ``described`` or not, with this process's ``pinned``:
     `_child`), each binding built in a process forked from this one for it alone: this process builds no body, and each
     binding's bodies go with its process.  Up to
@@ -714,7 +725,8 @@ def built_apart(entries: list[Entry], jobs: int, budget: float = float("inf"), w
     its process read, and what that process did that the tracer cannot see is this one's too.  Returned with how far each
     binding's process grew, in GiB: its peak RSS past the RSS it started with, which it shares with this process.  Each process
     puts what it returns in a file of no name made for it (`_result`), which it alone of them holds open and this process reads
-    once it ends: at most ``jobs`` such files at once, and none left behind however the run ends."""
+    once it ends: at most ``jobs`` such files at once, and none left behind however the run ends; returned last, the most bytes
+    they held at once."""
     import gc
     import warnings
 
@@ -728,6 +740,7 @@ def built_apart(entries: list[Entry], jobs: int, budget: float = float("inf"), w
     peaks: dict[str, float] = {}
     running: dict[int, int] = {}
     files: dict[int, Any] = {}
+    scratch = 0
     queue = sorted(range(len(entries)), key=lambda i: -weigh(i))
     sys.stdout.flush()
     sys.stderr.flush()
@@ -754,6 +767,7 @@ def built_apart(entries: list[Entry], jobs: int, budget: float = float("inf"), w
                 pid, status, usage = os.wait4(-1, 0)
                 if (i := running.pop(pid, None)) is None:
                     continue
+                scratch = max(scratch, sum(os.fstat(f.fileno()).st_size for f in files.values()))
                 if (got := _taken(files.pop(i), status)) is None:
                     code = os.waitstatus_to_exitcode(status)
                     how = f"signal {-code}" if code < 0 else f"exit {code}"
@@ -776,7 +790,7 @@ def built_apart(entries: list[Entry], jobs: int, budget: float = float("inf"), w
         if entries[i].kind != "model" or (strict and i in died):
             raise RuntimeError(f"{entries[i].name}: {err} (its peak: {peaks[entries[i].name]} GiB past its start)")
         TG.ROOT_ERRORS.append((entries[i].label, err))
-    return [e for i, e in enumerate(entries) if i not in failed], [entries[i].units for i in sorted(failed)], peaks
+    return [e for i, e in enumerate(entries) if i not in failed], [entries[i].units for i in sorted(failed)], peaks, scratch
 
 
 def planned(entries: list[Entry]) -> Plan:
