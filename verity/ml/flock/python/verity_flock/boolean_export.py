@@ -225,7 +225,7 @@ def _evaluate_type(types: dict, d: str, C: Circuit, T: int = 64, seed: int = 0) 
     return got == [x for bits in want.values() for x in bits]
 
 
-class Registry:
+class CircuitTypeTable:
     """Every circuit type (`circuit_types`) the export builds, by its digest: each distinct sub-circuit once, shared across
     templates and rows, with its names and counts as metadata."""
 
@@ -300,7 +300,7 @@ class Registry:
         self.nodes[d] = rec
 
 
-def write_modules(reg: Registry, path: Path) -> int:
+def write_modules(reg: CircuitTypeTable, path: Path) -> int:
     """``modules.json.gz``: ``{schema, format, types: {digest: content}}`` (``circuit_types``' content, its digest the key),
     streamed; returns its bytes."""
     with open(path, "wb") as raw, gzip.GzipFile(fileobj=raw, mode="wb", compresslevel=6, mtime=0) as gz, \
@@ -459,7 +459,7 @@ class Walker:
     tensor-core step is the proof block; another primitive is its ir_lower piece (lowered once per operand signature, constant
     operands a Const node gives propagated) or not yet lowered."""
 
-    def __init__(self, reg: Registry, store: DefStore, cache: dict):
+    def __init__(self, reg: CircuitTypeTable, store: DefStore, cache: dict):
         self.reg, self.store, self.cache = reg, store, cache
         self.defs: dict[str, dict] = {}
         self.openings: set[str] = set()
@@ -1110,7 +1110,7 @@ def _constants(call) -> dict[int, int]:
     return cval
 
 
-def _tail(reg: Registry, units, target, cache: dict) -> list[dict]:
+def _tail(reg: CircuitTypeTable, units, target, cache: dict) -> list[dict]:
     """The template's gates outside its units: each (primitive, constant operands) once with its count, lowered with its
     ``ir_lower`` piece where one exists, else marked not yet lowered."""
     _prog, call = IL.standalone(target)
@@ -1165,7 +1165,7 @@ def _io_bits(target) -> tuple[int, int]:
     return sum(leaf.values()), sum(by[r].prim.ret.w if r in by else leaf[r] for r in call.returns)
 
 
-def _unit(reg: Registry, units, name: str, cache: dict) -> str:
+def _unit(reg: CircuitTypeTable, units, name: str, cache: dict) -> str:
     key = ("unit", units.signature if units.builder is None else "tc")
     if key not in cache:
         cache[key] = reg.type_of(units.circuit, name, "c-flock-unit")
@@ -1186,7 +1186,7 @@ def _attention_ids(store: DefStore, tname: str, tp: dict, statics: dict) -> dict
     return store.find("AttentionHead_v3", D=str(tp["D"]), BN=str(tp["BN"]))
 
 
-def template(reg: Registry, tname: str, tp: dict, T_range=None, cache: dict | None = None, walker: "Walker | None" = None,
+def template(reg: CircuitTypeTable, tname: str, tp: dict, T_range=None, cache: dict | None = None, walker: "Walker | None" = None,
              spec: str | None = None, member: str | None = None) -> dict:
     """A leaf template's record: its proof blocks under the committed cut and its tail (C-Flock's unit lowerings), or its
     Definition tree (the walker: attention per T, GEMM coordinates, every other template). ``member``: the Definition one
@@ -1230,7 +1230,7 @@ def template(reg: Registry, tname: str, tp: dict, T_range=None, cache: dict | No
     return _walked(base, walker, spec, spec or tname)
 
 
-def _spine(reg: Registry, sub, base: dict, walker: "Walker", spec: str | None, walked_name: str, name: str, cache: dict) -> dict:
+def _spine(reg: CircuitTypeTable, sub, base: dict, walker: "Walker", spec: str | None, walked_name: str, name: str, cache: dict) -> dict:
     """A spine template's record: its C-Flock unit with the instance count and its tail, or, where the kernel's warps differ (no
     single unit), its Definition walked."""
     from verity_numerical.bench import lowerings
@@ -1286,7 +1286,7 @@ def _walked(base: dict, walker: "Walker", did: str | None, name: str) -> dict:
                 in_bits=d.get("in_bits"), out_bits=d.get("out_bits"))
 
 
-def _totals(reg: Registry, children: list[dict], defs: dict | None = None) -> dict:
+def _totals(reg: CircuitTypeTable, children: list[dict], defs: dict | None = None) -> dict:
     t = {"and": 0, "xor": 0, "not": 0, "flat_and": 0, "not_yet_lowered": 0}
     for c in children:
         if "def" in c:
@@ -1303,7 +1303,7 @@ def _totals(reg: Registry, children: list[dict], defs: dict | None = None) -> di
     return t
 
 
-def export_row(pg_path: Path, out: Path, reg: Registry, tpl_cache: dict, cache: dict, walker: "Walker", cm: "Commitments | None" = None,
+def export_row(pg_path: Path, out: Path, reg: CircuitTypeTable, tpl_cache: dict, cache: dict, walker: "Walker", cm: "Commitments | None" = None,
                checks: dict | None = None) -> dict:
     p = json.loads(Path(pg_path).read_text())
     walker.store.add_inline(p.get("definitions") or {})
@@ -1385,7 +1385,7 @@ def subcircuit(sub, statics=({},)) -> dict:
     recorded (a spine template its C-Flock unit and tail, any other its Definition walked), with every definition, subcircuit
     node and circuit type (``circuit_types`` content, keyed by digest) they reach. Raises where the subcircuit has no core
     Definition (a silicon reference)."""
-    reg, cache, store = Registry(), {}, _Encoded()
+    reg, cache, store = CircuitTypeTable(), {}, _Encoded()
     walker = Walker(reg, store, cache)
     variants = {}
     for st in statics:
@@ -1562,7 +1562,7 @@ def main(argv=None) -> int:
     GATHERS = a.gathers
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    reg = Registry(out)
+    reg = CircuitTypeTable(out)
     ntpl = out / "templates.json"
     tpl_cache, cache = {}, {}
     walker = Walker(reg, DefStore(Path(a.program_graph[0]).parent), cache)
