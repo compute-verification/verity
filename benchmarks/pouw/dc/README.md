@@ -41,7 +41,7 @@ control pass (`../opcode_probe/README.md`).
 ## Running
 
 ~~~text
-research run --on vy-dc-h200 --project verity --campaign cmp-13 --source /workspace --cwd source --custody-ttl 12h \
+research run --on vy-dc-h200 --project verity --source /workspace --cwd source --custody-ttl 12h \
   --timeout 60m --env GPU_LEASE_WHO=dc -- bash benchmarks/pouw/dc/run.sh sm90
 research run --on vy-dc-b200 ... -- bash benchmarks/pouw/dc/run.sh sm100
 research run --on vy-dc-b200 ... --timeout 40m ... -- bash benchmarks/pouw/dc/pipe.sh
