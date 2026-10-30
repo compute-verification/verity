@@ -21,7 +21,7 @@ structure Setup where
   publics : ByteArray → V Unit
   /-- the proof's Merkle trees (`Flock.Merkle`) -/
   merkle : MerkleScheme
-  /-- every opening carries `opened_salts`, empty for an unsalted scheme, as PR #83's prover writes it from `2908d078` on
+  /-- every opening carries `opened_salts`, empty for an unsalted scheme, as the circuit prover writes it from `2908d078` on
   (`Tags.withPlainLeaves`); its earlier unsalted openings carry none -/
   openedSalts : Bool := false
   deriving Inhabited

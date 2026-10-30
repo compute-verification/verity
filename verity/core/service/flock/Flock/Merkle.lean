@@ -31,11 +31,11 @@ def rowBytes (row : Array F128) : ByteArray := row.foldl F128.pushBytes ByteArra
 def sha256 (id : String) : MerkleScheme :=
   { id, digestLen := 32, pcsIndex := 0, node := fun l r => Sha256.hash (l ++ r), leaf := fun row _ => Sha256.hash (rowBytes row) }
 
-/-- Unsalted SHA-512 with 64-byte digests (PR #83 at `631567f7`, `HashKind::Sha512 = 2`). -/
+/-- Unsalted SHA-512 with 64-byte digests (the circuit prover at `631567f7`, `HashKind::Sha512 = 2`). -/
 def sha512 (id : String) : MerkleScheme :=
   { id, digestLen := 64, pcsIndex := 2, node := fun l r => Sha512.hash (l ++ r), leaf := fun row _ => Sha512.hash (rowBytes row) }
 
-/-- `hm96-sha512/v1` (PR #83 from `2908d078`, `HashKind::Hm96Sha512 = 3`): the leaf hides its row, `SHA-512(leaf_prefix ‖ b ‖ c)`
+/-- `hm96-sha512/v1` (the circuit prover from `2908d078`, `HashKind::Hm96Sha512 = 3`): the leaf hides its row, `SHA-512(leaf_prefix ‖ b ‖ c)`
 for `x = SHA-512(row)` and the opening's 192-byte salt; nodes `SHA-512(l ‖ r)`. -/
 def hm96Sha512 : MerkleScheme :=
   { id := "hm96-sha512/v1", digestLen := 64, pcsIndex := 3, saltBytes := 192, node := fun l r => Sha512.hash (l ++ r),

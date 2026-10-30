@@ -1,5 +1,5 @@
 /-
-`Flock.Partition`: `Q_word` v1 over the verifier's own copy of the program (`verity.ir.cut`, PR #111, read through #120's
+`Flock.Partition`: `Q_word` v1 over the verifier's own copy of the program (`verity.ir.cut`, read through the descriptor
 format, `Flock.Program`): each Call's computing graph (`CallGraph` of `cut.CallGraph`), separability, and the Program's units
 by Call, which `Flock.Qword` cuts. `Q_word` v2 evaluates the same; only its cut check differs (`checkCalls`' `report`).
 
