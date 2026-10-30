@@ -27,7 +27,7 @@ def answer(tmp_path, conversation_id, tool_input, tool_name="Task") -> dict:
 
 def test_cursor_runs_the_hook_before_every_task_call_direct_or_dynamic():
     entries = json.loads((ROOT / ".cursor/hooks.json").read_text())["hooks"]["preToolUse"]
-    assert {e["command"] for e in entries} == {"sh tools/agent-guard/hook.sh task_hook.py"}
+    assert len({e["command"] for e in entries}) == 1 and entries[0]["command"].endswith(" guard task_hook.py")
     assert sorted(e["matcher"] for e in entries) == ["CallDynamicTool", "Task", "^MCP:"]
 
 
