@@ -486,29 +486,58 @@ def ingressTemplates : List (Flock.Program.Node × Flock.Program.Defn) →
 entry the scan's ingress reads at that slot (its `o0`). -/
 def slotEntryId : String := "SlotEntry_v1"
 
-/-- A Definition's descriptor entry `e` with the descriptor's interning resolved (`callees`, `types`): each node's
-callee id (`fn`), output type (`out`) and argument types inline, as `annotations.definition_digest` hashes it, so one
-Definition has one entry in any Program. -/
-def resolvedEntry (callees types : Array Json) (e : Json) : Json :=
+/-- The parts reference sequence `j` stands for, flat (PROTOCOL.md §4.8): an alias's are the parts of argument `a` of node
+`k` (`rows`, the nodes before the one `j` is in), a concatenation's are its parts' spliced in, and any other is its one
+part. Concatenations nest at most `fuel` deep. -/
+def flatParts (rows : Array (Array (Array Json))) : Nat → Json → V (Array Json)
+  | 0, _ => throw "program: references nest deeper than this verifier follows"
+  | fuel + 1, j => do
+    if let .ok a := j.getObjVal? "alias" then
+      let ps := match a with
+        | .arr #[k, x] => match k.getNat?, x.getNat? with
+          | .ok k, .ok x => rows[k]?.bind (·[x]?)
+          | _, _ => none
+        | _ => none
+      let some ps := ps | throw s!"program: alias {a.compress} names no argument of an earlier node"
+      return ps
+    if let .ok (.arr ps) := j.getObjVal? "concat" then
+      return (← ps.mapM (flatParts rows fuel)).foldl (· ++ ·) #[]
+    return #[j]
+
+/-- A flat sequence as the canonical entry writes it: its one part, or `{"concat": parts}`. -/
+def written (ps : Array Json) : Json := match ps with
+  | #[p] => p
+  | ps => Json.mkObj [("concat", .arr ps)]
+
+/-- A Definition's canonical entry (`codec.canonical_entry`, PROTOCOL.md §4.8), from its descriptor entry `e` and the
+descriptor's interning (`callees`, `types`): each node's callee id (`fn`), output type (`out`) and argument types inline,
+every alias replaced by the parts it stands for and every reference sequence flat, so one Definition has one entry in any
+Program, whichever aliases its writer chose. -/
+def canonicalEntry (callees types : Array Json) (e : Json) : V Json := do
   let set := fun (j : Json) (k : String) (v : Json) => match j with
     | .obj kvs => Json.obj (kvs.insert k v)
     | j => j
   let at_ := fun (xs : Array Json) (i : Json) => match i.getNat? with
     | .ok i => xs.getD i .null
     | .error _ => .null
-  match e.getObjValD "form", e.getObjValD "body" with
-  | .str "composite", body => match body.getObjValD "nodes" with
-    | .arr nodes => set e "body" (set body "nodes" (.arr (nodes.map fun n =>
-        let args := match n.getObjValD "args" with
-          | .arr xs => Json.arr (xs.map fun a => set a "type" (at_ types (a.getObjValD "type")))
-          | x => x
-        set (set (set n "fn" (at_ callees (n.getObjValD "fn"))) "out" (at_ types (n.getObjValD "out"))) "args" args)))
-    | _ => e
-  | _, _ => e
+  unless e.getObjValD "form" == .str "composite" do return e
+  let body := e.getObjValD "body"
+  let .arr nodes := body.getObjValD "nodes" | return e
+  let mut rows : Array (Array (Array Json)) := #[]
+  let mut out : Array Json := #[]
+  for n in nodes do
+    let .arr args := n.getObjValD "args" | throw "program: a node's arguments are not a list"
+    let row ← args.mapM fun a => flatParts rows Flock.Steps.FUEL (a.getObjValD "refs")
+    rows := rows.push row
+    let args := (args.zip row).map fun (a, ps) => set (set a "type" (at_ types (a.getObjValD "type"))) "refs" (written ps)
+    out := out.push (set (set (set n "fn" (at_ callees (n.getObjValD "fn"))) "out" (at_ types (n.getObjValD "out"))) "args"
+      (.arr args))
+  let ret ← flatParts rows Flock.Steps.FUEL (body.getObjValD "ret")
+  return set e "body" (set (set body "nodes" (.arr out)) "ret" (written ret))
 
-/-- `annotations.definition_digest`: the SHA-512, in hex, of a Definition's canonical `resolvedEntry`. -/
+/-- `codec.definition_digest`: the SHA-512, in hex, of a Definition's canonical entry (`canonicalEntry`). -/
 def definitionDigest (callees types : Array Json) (e : Json) : V String := do
-  pure (Flock.hexOf (Flock.Sha512.hash (← Flock.canon (resolvedEntry callees types e)).toUTF8))
+  pure (Flock.hexOf (Flock.Sha512.hash (← Flock.canon (← canonicalEntry callees types e)).toUTF8))
 
 /-- The closure digest of Definition `key` of the Program whose descriptor is `j`: the SHA-512, in hex, of the
 canonical JSON object that maps each Definition `key` reaches (itself, its nodes' callees, theirs, …), by descriptor
