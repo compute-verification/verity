@@ -1,5 +1,5 @@
 """Advice v0's validity as a Boolean Definition: the first part of the compile unit, "this committed bit string decodes to
-a well-formed v0 advice" (`advice`, PROTOCOL.md "Advice v0").
+a well-formed v0 advice" (`advice`).
 
     AdviceCheck_v1{L} (bits: Array<L, Value<1>>, length: Array<LW, Value<1>>) -> Value<1>
 

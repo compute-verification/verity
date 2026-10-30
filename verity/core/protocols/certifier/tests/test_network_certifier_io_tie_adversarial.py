@@ -1,5 +1,4 @@
-"""Adversarial cases against the I/O tie's prototype (`io_tie`; PROTOCOL.md, "Advice for
-arbitrary serving: what it can carry"), as the tie that opens every cell answers them:
+"""Adversarial cases against the I/O tie's prototype (`io_tie`), as the tie that opens every cell answers them:
 
 - No field of a cell but the id is the server's: another frame kind, payload length, a finish reason or a second id
   in the padding is refused by the reference and by `IoTieCell`. The stream parses, because the warden writes it from

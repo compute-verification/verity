@@ -73,7 +73,8 @@ records are the wire, and each window's frames root (`certificate.frames_root`) 
 (`WardenParams.fails_grid`). `audit` is the read of the records in the clear: every connection's cells are the
 schedule's, every `FAIL` has its one reason, and no connection failed.
 
-`PROTOCOL.md`'s "The active warden" has the leak bound. The module imports only the standard library and `verity`.
+`Security/Definitions/NetworkCertifier/Guarantees/Warden.lean` has the leak bound (`EncardWardenViewsLe`). The module
+imports only the standard library and `verity`.
 """
 
 from __future__ import annotations
