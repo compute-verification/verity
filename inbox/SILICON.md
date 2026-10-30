@@ -163,3 +163,13 @@ Together (synthesized netlists, not simulated):
   - the seal's and the PRF's premises are unattacked.
 - BRW: brw32 over ℤ/2³² fails from G 3. brw31 (F_p) and the hardware BRWs hold to G 31, except at zero data without per-tile starts.
 - **Correction to §prelim:** the design needs these three rules to hold. §prelim's "T1 = 0" was the proposals' own claim, before attack.
+
+**08:10Z, SI-NOISE final (note 20261029T2232Z-report-silicon-noise, status final; run r20261030-075845-30db):**
+- SI-FOLD's split Keccak transcript (FT) and SI-NOISE's PRF sketch (SN) are one class.
+  - FT dominates on cell area (−9.4 to −12.9 GE a MAC) and on premise: one Keccak-chain assumption against SN's four.
+  - SN dominates on proof cost above margin 2.33, and may win on area if FT's tap needs its own channel (up to 23.6 GE a MAC), which layout decides.
+  - They tie on h, energy and closure.
+- **Recommendation:** FT with per-chain ids (SI-RED's copy fix) and the whole-descriptor tag (the sparse-issue fix). On the H200 that is a round every 32 words, margin 3.75, 22.2 GE a MAC = **2.71% of an s8 MAC**.
+- **§2a credit theorems:** both have gap 0 against stock. cost(P) ≥ cost(H) + cost*(F, Z | A, B, A·Bᵀ). FT's hypotheses are the chain-id rule and the Keccak-chain assumption (ε ≈ 2⁻⁵¹²); SN's are seclusion, distinct ids, the PRF and no-separation with the 2³¹−1 multiplier.
+- Under §2a, the energy gap (about 6%) is time, not work, so it falls outside the theorem. Closure needs the whole-descriptor tag only if issue time is ever judged.
+- Corrections to its preliminary: no-separation was wrong (SI-RED); margins were 1.67× off; the Keccak lead was overstated. SI-FOLD's 0.90 margin a bit assumes the full 1,600-bit output; at rate 1,088 it is 1.32.
