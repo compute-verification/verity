@@ -67,18 +67,21 @@ codec than the record's, or a bare fraction. The stated ceiling is the node's, t
 `timing.READ_BYTES_PER_S`). The failure probability is \(W\delta\) for a session of \(W\) windows read per window, or
 \(\delta\) read over the horizon, plus \(2^{-\text{slack}}\) per pass, plus \(s/2^{512}\) per window for guessing a
 receipt, plus the deployed draw's terms beyond \(\delta\) (`ledger.draw`, `PooledDraw`'s): \(\sum_t s'_t/2^{64}\) for
-a rejected first word (`ledger.rejection`), the coin commitment's hiding terms (\(n \cdot 2^{-191}\) over \(n\)
-windows), and the receipts' binding term, \(\sum_t \sqrt{|L_t| s_t} \cdot q_t/2^{256.5}\) under `cr/sha-512` for
-window \(t\)'s fork finder of \(q_t = 2FC + 2 \cdot 69 \, s_t\) SHA-512 calls, which runs the prover twice from the
+a rejected first word (`ledger.rejection`) and the receipts' binding term, \(\sum_t \sqrt{|L_t| s_t} \cdot q_t/2^{256.5}\)
+under `cr/sha-512` for window \(t\)'s fork finder of \(q_t = 2FC + 2 \cdot 69 \, s_t\) SHA-512 calls, which runs the prover twice from the
 cut before the window's coin (`ledger.binding`). It is charged at the session's bounds, not at one record's \(U_t\)
 and \(s'_t\), which follow the prover's play: \(|L_t|\), the most receipts a window of the session can have, is its
 pass cap (the pace's \(k\), unpaced `STEP_LIMIT` − 1) times its extent (\(N\), or the codec's `max_blocks` when the
 session reserves append coins), and \(s_t = \min(s, |L_t|)\). Drawn \(g > 1\) windows a coin (`groups_per_coin`), its
 \(t\) is a draw: \(\lceil W/g \rceil\) of them, each with at most \(g\) times a window's \(|L_t|\) receipts and the
 cap \(s\) over them together. It takes the chance that the two runs' roots differ as
-0, which the deployed protocol doesn't yet ensure (the gap `binding-split`, §8). The windows' PRF advantages are the draw's fourth term: named with their claim
-(`prf/sha-512`, `ledger.PRF_CLAIM`), with no value. The memory line's \(\delta\) carries the hiding and binding terms
-beside its \(2^{-\text{slack}}\) a pass. Under the default receipt kind, sketch-sha512, a receipt also rests on the receipts' sketch (`SketchBound`,
+0: the prover holds nothing of a window's openings coin before its roots (§4), but that its play then fixes them by the
+cut is not yet stated in Lean (the gap `binding-split`, §8). The draw has no hiding term: the prover is sent the coin
+commitment only once the session has its outcome (§4). The windows' PRF advantages are the draw's third term: named
+with their claim (`prf/sha-512`, `ledger.PRF_CLAIM`), with no value. The memory line's \(\delta\) carries the
+binding term and, while `LineHeld` reads the prover's records through the commitment, the commitment's hiding terms
+(\(n \cdot 2^{-191}\) over \(n\) windows, `ledger.hiding`), beside its \(2^{-\text{slack}}\) a pass. Under the default
+receipt kind, sketch-sha512, a receipt also rests on the receipts' sketch (`SketchBound`,
 derived by `Accounting.Guarantees.Remote.SketchBoundDeployed`), which adds at most \(Q \cdot 2^{-95.12}\) a session
 at 16 rows for a prover of \(Q = F \cdot C\) SHA-512 compressions, \(C\) the node's own over the span and \(F\) the
 outside-compute factor (\(2^{20}\), provisional), and \((Q + P) N \cdot 2^{-512}\) for a receipt right without its
@@ -345,7 +348,8 @@ process ends early, until `--close`. The registry's record holds digests and out
 ## 4. The coins and the chained passes
 
 Before a session the challenger draws its coins and commits to them, one epoch of the proof service's live coins
-(`coins.py`, `sampled_proofs.challenger`), and the prover receives the commitment before the first coin:
+(`coins.py`, `sampled_proofs.challenger`), and the verifier holds the commitment before the first coin. The prover
+receives each coin's value as it is released and the commitment only once the session has its outcome:
 
 ~~~text
 layout      scheme verity/remote-bandwidth/coins/v1, epoch k (the session's index over its registration), families
@@ -357,11 +361,20 @@ c           64 bytes a coin from the challenger's generator, committed whole (`c
 R           SHA512("verity/remote-bandwidth/window/v1\0" ‖ registration digest ‖ u64be k): the session's window
 after       σ_0 after R; σ_t (t ≥ 1) after the last root received when it leaves; window t's openings coin after window
             t's last root; append i's coin after append i's root
-opening     (epoch, label, index, after, coin, salt, path): checked by the prover against the commitment (`coin_reason`)
+released    (epoch, label, index, after, coin): what the prover is sent when a coin leaves (`coins.Released`), no salt
+            or path
+opening     (epoch, label, index, after, coin, salt, path): every released coin's, sent to the prover with the
+            commitment at the session's end (`Session.disclose`), which it checks each coin it was sent against
+            (`coins.received_reason`)
 ~~~
 
-The challenger can't choose a coin after seeing a root, and hm96 keeps every coin hidden until it is released. This
-is the construction of PoUW's epoch coins, from the same challenger. Each coin leaves once, after the root the verifier
+The messages run: registration; then each window's challenge σ_t as it is released, the window's roots, and its
+openings coin, draws and openings; then the outcome; then the commitment and every released coin's opening, which the
+prover checks (the remote session's `end`, `ended`, `coins`). The challenger can't choose a coin after seeing a root,
+and the prover holds nothing of a coin before it is released: not its leaf, and not the commitment's root, a function
+of every coin, the windows' to come among them, which it is sent only when no root of the session can follow, so no
+guarantee takes a hiding premise on the root. This is the construction of PoUW's epoch coins, from
+the same challenger. Each coin leaves once, after the root the verifier
 recorded for it, and the challenger logs both before the coin leaves its host and signs the log when the session ends.
 The verifier holds that log to its own record (`Session.released_reason`): the commitment it used, the same roots in
 the same order, σ_0 after \(R\), and each window's openings coin after that window's last root, so a coin opened before
@@ -981,7 +994,8 @@ its structure, its outputs, the verifier's coins and draws, and hiding commitmen
   (`ledger.Node`: a maximal rebuild batch, \(S_{\text{chip}}\), and a maximal disk read, a second at the ceiling;
   link-charged, one link window as well), and its on-chip storage \(S_{\text{chip}}\). δ is the horizon's error plus
   the coin commitment's hiding terms \(\sum_t \mathrm{hide}_t\), at most \(n \cdot 2^{-191}\) over \(n\) windows
-  (`ledger.hiding`), plus the receipts' binding term \(\sum_t \sqrt{|L_t| s_t} \cdot q_t/2^{256.5}\) at the session's
+  (`ledger.hiding`, which `LineHeld` states while it reads the prover's records through the commitment), plus the
+  receipts' binding term \(\sum_t \sqrt{|L_t| s_t} \cdot q_t/2^{256.5}\) at the session's
   bounds (`ledger.binding`, §1; it takes the gap `binding-split` as closed),
   plus the sketch's (`timing.sketch_failure`) plus the draw's rejection \(\sum_t k_t / 2^{64}\) (`ledger.rejection`),
   at the receipts each draw requested, \(k_t\) the record's `samples`, not the \(\min(k_t, U_t)\) it drew: a draw
@@ -1325,10 +1339,9 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   \(2^{448}\) receipts (the verifier's `RECEIPT_LIMIT`, \(2^{64}\), keeps them there), at δ plus
   \(\sum_t s_t/2^{64}\) (a rejected first word) plus each window's PRF advantage, C3's term, against one
   distinguisher a window that the session fixes (`Session.distinguisher`: it runs the session through window \(t\)
-  at the coin commitment with leaf \(t\) committing zeros and reads at most \(s_t\) first blocks of the stream it
-  is given), plus the commitment's hiding terms, hm96's, at most \(n \cdot 2^{-191}\) over \(n\) windows
-  (`Committed.hide`, `ledger.hiding`): the prover holds the root of every coin from the start, so a window is
-  fixed before its coin only once that root is (`Live` of `Committed.view`). Plus the receipts' binding term
+  and reads at most \(s_t\) first blocks of the stream it is given). It has no hiding term: the prover is sent each
+  coin's value as it is released and the coin commitment only once the session has its outcome (§4), so the session
+  it plays is the one `PooledDraw` reads, `Live` of that session. Plus the receipts' binding term
   (`Receipts.binding`, `ledger.binding`): `Refused` lets an opened receipt through only correct or moved off the row
   its root holds (`Receipts.held`, the plurality of the accepted rows it shows over its window's continuations from
   the cut before its coin, the same at every continuation: `Binding.held_cont`, `tally_le_held`), and a move is two
@@ -1338,8 +1351,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   independent openings coins, with \(L_t\) a set holding every receipt window \(t\) opens at every outcome, \(s_t\) the
   session's draw cap and \(\mathrm{split}_t\) the chance that the two runs' roots differ. `ledger.binding` charges it
   at the session's bounds (§1) and at \(\mathrm{split}_t = 0\) (`Binding.binding_le_of_fixed`), which holds where the
-  cut fixes the roots; the deployed prover may compute them from the coin commitment, so that is the gap
-  `binding-split` (below).
+  cut fixes the roots; that the deployed prover's play fixes them is the gap `binding-split` (below).
   `pooled` is computed in exact rationals in the verifier's Lean
   (`lean/RemoteAudit/Pooled.lean`, `pooled.py` held to it by a difftest), the budget \(\bar d \cdot S\) from above by a
   certified rational root, and `Properties.RemoteAudit.PooledCovers` proves its W at least the bound `PooledDraw`
@@ -1349,25 +1361,18 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   a receipt under a registration that binds \(z\), the sketch's bound read at \(r^*\) (`timing.sketch_reading`), and
   the profile at δ.
   The chain's ordering is a random-oracle argument over a prover of bounded queries, which the statements must say.
-- **The gap `binding-split`.** The verifier sends the prover the coin commitment in its `session` message, before the
-  first coin, and each challenge coin with its leaf and path (`coins.coin_reason`, `prover.py`). The commitment's root
-  is a function of every coin, window \(t\)'s openings coin among them, so the prover may compute window \(t\)'s roots
-  from it, and two runs from the cut on independent openings coins may root the window differently:
-  \(\mathrm{split}_t\) has no bound, and hiding doesn't give one (the two runs share the salts, and the move is read
-  after the coin is released). `ledger.binding` takes \(\mathrm{split}_t = 0\), and every line says it is conditional
-  on it (`auditor_line.py`'s `CONDITIONAL_ON`). The change that closes it: the verifier sends the prover no commitment
-  and no coin's leaf or path until the session ends, only the challenge and append coins' values and each window's
-  draws, and at
-  `end` it sends the commitment and every released coin's opening, which the prover checks then (`layout_reason`,
-  `coin_reason`) and refuses the session's record over. The auditor's check of the coins against the record's
-  commitment is unchanged; what moves is the prover's own check that no coin was chosen after a root, which becomes
-  after the fact. Window \(t\)'s roots, ranks and the receipts' verifier then read only the cut before its openings
-  coin (the challenge coins, the earlier windows' openings, the append coins and the prover's own randomness), so the
-  two runs root it alike, \(\mathrm{split}_t = 0\), and `Binding.binding_le_of_fixed`'s hypothesis holds. It touches
-  `verifier.py`'s `session` and `coin` messages, `prover.py`'s coin check, `wire.py`, the Lean model of the play
-  (`Committed.play`, which gives the prover the commitment from the start) and a statement that the play fixes each
-  window's receipts by its cut, which is what closes the gap. The same view may also let `PooledDraw` drop the
-  hiding terms, which is for its statement to show.
+- **The gap `binding-split`.** The verifier sends the prover each coin's value as it releases it, and the coin
+  commitment with every released coin's opening only once the session has its outcome (`coins.Released`,
+  `audit.Session.disclose`; the remote session's `coins` message after `ended`), which the prover checks then
+  (`coins.layout_reason`, `coins.received_reason`) and refuses the session's record over. Window \(t\)'s roots, ranks
+  and the receipts' verifier then read only the cut before its openings coin (the challenge coins, the earlier
+  windows' openings, the append coins and the prover's own randomness), so two runs from the cut on independent
+  openings coins root it alike. What is open is the Lean: a model of the prover's play over the cut and a statement
+  that it fixes each window's receipts by its cut, \(\mathrm{split}_t = 0\), `Binding.binding_le_of_fixed`'s
+  hypothesis. Until it lands `ledger.binding` takes \(\mathrm{split}_t = 0\), and every line says it is conditional
+  on it (`auditor_line.py`'s `CONDITIONAL_ON`). `PooledDraw` already reads the session the prover plays, with no
+  hiding term; `LineHeld` still reads the prover's records through the commitment (`Committed.play`), and charges
+  its hiding terms.
 - **The binding's Lean.** The store binding's decision (`store.py`, §3) is ported to `lean/RemoteAudit/Store.lean`
   and held to the Python by a difftest (`lean/tests/test_binding.py`), refusals compared word for word: the pin from
   its file's bytes (`pinOf`, `modelPin`), `checkpoint_sha512`, the payload salts, the expected payload root from the
@@ -1603,6 +1608,13 @@ path check, `PousCheck.Merkle`), and \(y_g\) recomputed from the four blocks (`p
 path is `C*`'s block, by SHA-512's collision resistance. A P2 store is fixed at setup, so a session over it appends
 nothing (`append`).
 
+**Of record** (`lean/RemoteAudit/P2Session.lean`). The Lean verifier's process decides a P2 session (`p2_party.py`):
+it holds the registration file's bytes (its digest recomputed from its fields, a stated `digest` refused unless it is
+theirs) and reads the prover's request and each root and openings line as sent, a line out of form rejecting the
+session `malformed` at the window filling. Its bookkeeping is §4–§6's over the U units, and its openings are checked
+as above, on the registered vk root. `p2.Session` runs beside it as a veto: where the two differ the session is
+rejected `disagreement`.
+
 **What it rests on, and what is open.**
 
 - The record (`Session.record`) is §7's, with `block_bytes` 8,224, `codec` `p2-16448/v4` and layout `p2-unit4/v0`.
@@ -1614,9 +1626,10 @@ nothing (`append`).
   \(\varepsilon = 257 \cdot\) `timing.sign_rank_at_most(16, 11)` \(= 2^{-95.2491}\) (\(2^{-96.2548}\) at 4,096-byte
   blocks' 128 sectors). The memory line's `SketchBoundAt` follows from it by `SketchBoundLine`, which holds at every
   \(m\).
-- Not yet built: the Lean session over a P2 store (the Lean ports here are the registration digest, the partials,
-  the unit receipt and the opening check, `lean/RemoteAudit/P2.lean`), the registry's one live registration a node for
-  P2, and the zero-knowledge opening unit of a P2 unit (§8).
+- No property in `Security/Properties/RemoteAudit` states yet what the Lean accepts of a P2 session; the difftest
+  (`lean/tests/test_p2.py`'s `p2_session`) holds `p2.Session` to it.
+- Not yet built: the registry's one live registration a node for P2, and the zero-knowledge opening unit of a P2 unit
+  (§8).
 
 ## Appendix A. Live coins, and why the protocol doesn't use them
 
