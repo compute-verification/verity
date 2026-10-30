@@ -8,12 +8,15 @@ there.
   order, each unit one proof unit, its gates (`Partition.unitGates`): an instance's, a `Q_call` unit's interval, or the
   span of the gates a `Q_word` unit owns, which another unit's gates may interleave. The input class is one stratum (none
   when the root has no input) of every gate of the root's input nodes, in gate order, each a replay unit of one proof
-  unit; it is drawn `all`, as `partition_object`'s input unit is always checked and never drawn.
+  unit; the claims' design reads it `all`, as `partition_object`'s input unit is never drawn. No run opens an input
+  row on its own: `Run.run` proves the drawn units (`Draw.proved`), whose session (`HmRow.drawn`) opens only the rows
+  its units read, and registration opens none. So an input row is opened only through a drawn unit that reads it.
 * **Slots.** A replay unit's slot is its index in class, stratum and replay-unit order (`Partition.rus`). Where no two
   strata's units interleave, unit `i`'s slot is `i`.
 * **Checked.** `checked` lists the proof units of every replay unit the draw proves (`Select.select`'s proved units: its
   units and a work draw's closure) and of every input slot, each as `(slot, index)`, in slot order. The rules a stream
-  runs make every replay unit one proof unit, so each index is `0`.
+  runs make every replay unit one proof unit, so each index is `0`. It is the claims' reading of a draw; `Run.run`
+  doesn't call it, and the session proves no input slot of a unit outside the draw.
 -/
 import SampledProofs.Select
 
@@ -77,7 +80,8 @@ def popOk (p : Program) (query : Json) (n : Nat) : Bool :=
   | .ok l => decide ((popOf l).map (·.unit) = (List.range n).map some)
 
 /-- **The checked proof units** (`Deploy.checked`) of a draw that proves the units `proved`: each proof unit of every
-replay unit among them and of every input slot, as `(slot, index)`, in slot order. -/
+replay unit among them and of every input slot, as `(slot, index)`, in slot order. An input slot listed here is
+opened only where a drawn unit reads its row. -/
 def checked (l : Layout) (proved : Array Nat) : Array (Nat × Nat) :=
   (l.rus.zipIdx.filter fun (r, _) => r.unit.all proved.contains).flatMap fun (r, v) =>
     (Array.range r.pus.size).map (v, ·)

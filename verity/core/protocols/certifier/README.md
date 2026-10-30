@@ -174,10 +174,10 @@ A spec-level reference for network accounting's timing channel:
   whose unit ℓ·T + t holds bucket t of egress link ℓ (`EgressBucket`'s frame, the row it computes and returns,
   committed as a registered read of the warden's row, and its u16 verdict, whose bit 0 is the slots' presence) and of
   ingress link ℓ (its frame parameter row, the warden's registered row; with ``first``, `IngressScanFirst` holds bucket
-  0), the same gates whatever the load, so arrival steps and prompt lengths stay private (`NetTiming.Layout`); its
+  0), the same gates whatever the load, so arrival steps and prompt lengths stay private (`NetTiming.BoundaryGates`); its
   format is `verity/boundary/v3`. `refusal`, the verifier's check before it draws, checks that the layout fits the
-  circuit (`NetTiming.Layout.Fits`: no egress gate is an input, and each is one the circuit returns) at the record's
-  grain, which contains the gate grain's, held to `prog_fits`, `Layout.Fits` itself on a flattened program; the scan's
+  circuit (`NetTiming.BoundaryGates.Fits`: no egress gate is an input, and each is one the circuit returns) at the record's
+  grain, which contains the gate grain's, held to `prog_fits`, `BoundaryGates.Fits` itself on a flattened program; the scan's
   state and view chains are wires of the record. A frame that is a parameter row, an input, is refused by name. `Fits`
   stays structural: a served window fits in the step-indexed scan's form, and a window in any other form is refused;
 - the transfer rows (`transfer_rows`): every value that crosses a server block's boundary, the weights' load, a
@@ -196,7 +196,7 @@ A spec-level reference for network accounting's timing channel:
   shape and one step a row). `pins` gives the verifier's pinned roots from the certificates alone, so the interface's
   ``input_count`` under them has no free input, and `certified` refuses a wire whose two certifiers' roots differ (the
   receiver's commits under the sender's salts, so the rows that arrived are the rows that left). An inference block
-  runs on a single server (NET-92, Daniel's ruling of 26 Oct): a server's ingress and egress carry only its inference
+  runs on a single server: a server's ingress and egress carry only its inference
   blocks' declared inputs and outputs, so which server may read an inference block's input bits is unambiguous. `check`
   reads each unit's (slot, step) from the record's inference entries (``blocks.inference``) and refuses, by name, a
   block whose units are on two servers, and two servers or more over a record that states no inference block;
@@ -204,28 +204,38 @@ A spec-level reference for network accounting's timing channel:
   registration the inference-only policy checks and not a private partition, so it is checked in the clear with no
   proof block;
 - the scan's ingress side (`ingress_scan`): `IngressScanBucket`, one unit a certifier bucket, reads the bucket's
-  warden ingress row, the slot state the bucket before carries and the Programs' row (registered reads), and computes
-  the next state (each block to the slot holding its connection, a new connection to the lowest free slot, its prompt
-  ids appended, a due slot's output count and ids taken from the Programs' row at its anchor, a slot held through its
+  warden ingress row, the slot state the bucket before carries and the Programs' entries, one port `prog<j>` a slot,
+  each `SlotEntry_v1`'s word-aligned row of its slot (registered reads), and computes the next state (each block to the
+  slot holding its connection, a new connection to the lowest free slot, its prompt ids appended, a due, occupied
+  slot's output count and ids taken from its entry at its anchor, every other entry ignored, a slot held through its
   last egress bucket, `admitted + D + ⌊n/r⌋`) and its egress view, the state as `egress.EgressBucket` reads it (bucket,
-  then per slot live, q, admitted, n and the output ids), its outputs beside a public ok bit; `IngressScanFirst`, the
-  first bucket's, starts from the empty state, constants of its circuit. Programs start at fixed slots a network
-  timestep (ASK-122): a timestep is `EVERY` buckets, the warden's `every`, which divides its window, with
-  `SLOTS` = lanes Program slots each, and only `EVERY` and the slot count are public. The token-id row a slot's
-  Program reads is the scan's state row b − 1 (`verity/certifier/scan-state/v1`, `token_row`): its occupancy word
-  `occ` (1 for a slot whose Program starts at b, 0 for an empty slot), its prompt's length `fields` and its prompt ids,
-  which the scan reads off the warden's signed ingress cells, so no other tie holds them to the certified bytes;
+  then per slot live, q, admitted, n and the output ids), its outputs beside a public ok bit, which is 0 at an
+  occupied slot whose entry of the Programs' row isn't read (its read bit 0: a request no Program served). Unless the
+  Programs' row is a compute audit's `SlotEntry_v1` template's entries, that template a pinned Definition (its closure
+  digest one of `slotEntryPins`), the read bit is the prover's word (an entry of read 1 and no outputs passes), so the
+  period check refuses such a link-window (`NetworkCheck.Period`'s `wired`), and one whose scan's state isn't that
+  audit's `SCAN_STATE`, by root and domain (`stateTied`): the scan's state tree is the window state (`window_state`),
+  each row but the empty state's the one a unit computes (its o1) and the next reads (its sin), both registered reads,
+  so a Program reads the states the scan's steps computed;
+  `IngressScanFirst`, the first bucket's, starts from the empty state, constants of its circuit. Programs start at
+  fixed slots a network timestep (ASK-122): a timestep is `EVERY` buckets, the warden's `every`, which divides its
+  window, with `SLOTS` = lanes Program slots each, and only `EVERY` and the slot count are public. The token-id row a
+  slot's Program reads is the scan's state row b − 1 (`verity/certifier/scan-state/v1`, `token_row`): its occupancy
+  word `occ` (1 for a slot whose Program starts at b, 0 for an empty slot), its prompt's length `fields` and its prompt
+  ids, which the scan reads off the warden's signed ingress cells, so no other tie holds them to the certified bytes;
   `slot_row` gives each one's bits in the state row, for a reader that takes them as i32s (vllm's `ScanSlots_v2`), and
   `window_state` the rows a window circuit of the link-window from bucket t0 reads, the scan's rows t0 − 1 on (the
-  empty state's for row −1). A Program gives all its outputs to the Programs' row at its anchor (n, u32, and 64 ids
-  of 17 bits at w63's class); an empty slot's entry is all zero (its outputs masked by `occ`, never on the egress). A
-  request the class can't hold is refused at the scan's unit, never truncated: a prompt of more than `KI` ids (1,024
-  at w63's class) at its cell, a Program's n over `KO` at its anchor. A window whose warden refused a connection,
-  traffic past its slots, has no certified record, and the period check refuses it. `Class.serves` names the warden
-  parameters it takes every run of. `benchmarks/network_traces/scan_zk.py` proves both sides of a group of
-  link-windows in one registration: ingress unit t's state and view outputs are committed as registered reads of the
-  scan's state and view rows t, which ingress unit t + 1 and egress unit t read, and egress unit t's row as a
-  registered read of the warden's egress row t, so the chains are wires through the registered roots;
+  empty state's for row −1). A Program gives all its outputs to its entry at its anchor (its read bit, n, u32, and 64
+  ids of 17 bits at w63's class, 71 words, the row `SlotEntry_v1` writes); a link-window's
+  bucket t reads slot j's entry at row j·nb + ⌊t / EVERY⌋ of one slot-entries input, and an empty slot's entry is
+  ignored (its outputs masked by `occ`, never on the egress). A request the class can't hold is refused at the scan's
+  unit, never truncated: a prompt of more than `KI` ids (1,024 at w63's class) at its cell, a Program's n over `KO` at
+  its anchor. A window whose warden refused a connection, traffic past its slots, has no certified record, and the
+  period check refuses it. `Class.serves` names the warden parameters it takes every run of.
+  `benchmarks/network_traces/scan_zk.py` proves both sides of a group of link-windows in one registration: ingress unit
+  t's state and view outputs are committed as registered reads of the scan's state and view rows t, which ingress unit
+  t + 1 and egress unit t read, and egress unit t's row as a registered read of the warden's egress row t, so the
+  chains are wires through the registered roots;
 - the active certifier (`active`): an asyncio TCP proxy that runs the certifiers on a live link and publishes their records.
   With its salt on (`Proxy(salt=active.fresh_salt)`, off by default), each PoUW window (`pouw_window` certifier
   windows) gets one salt of `salt_bits` bits (512 by default), carried into the block only. The ingress record holds a
@@ -267,10 +277,26 @@ A spec-level reference for network accounting's timing channel:
 - the ingress tie through the proof system (`tie_service`): `IngressTie`, each ingress link-window's `IoTieRequest`
   units, one a bucket row of the warden's registered ingress cells, proved as `NetworkIngressTieBucket` (one gate
   naming its pinned circuit digest, `io_request.circuit-check.json`) with the row read off the warden's root
-  (`warden_rows.bucket_port`), decided by the verifier of record on its own lanes from the advice and the warden's
+  (`warden_rows.bucket_port`) and its lanes and output row off values the verifier registers at known content
+  (`IngressTie.known`), decided by the verifier of record on its own lanes from the advice and the warden's
   release, and `IngressTie.tie`, which builds `advised.IoTieVerdict` on the link and the stream's registrations from
   the stream's outcomes of record alone; `Ties`, the tie, its stream and the release as the `LinkWindows.ties` the
-  advised link reads. A size class no sidecar pins has no accepted proof.
+  advised link reads. A size class no sidecar pins has no accepted proof;
+- the lead's calls (`calls`), whose coin source and count the certifier is. Once it holds a call's A root, and not
+  before, it flips the call's coins (`Pouw.Lead.Coins`: the tag bits b from step 1, the step-1 bits a₁, the tag weights
+  G, taken by rejection so they are exactly uniform, and the coin lanes) from its own entropy and releases them once,
+  as its reply to that registration, in the words the lead's kernel reads: each row's bits, each column's G, then a
+  coin tile at a time its lane-coin words (three coins and a public byte each) and its column sources, which are no
+  coins but a public function of them. Every length is fixed by the call's shape. The count is per forward: a forward
+  is open from its first call's A root to its words root, the forwards are serial, and every bucket of every boundary
+  link while one is open counts once against it, ⌈log2(r + 1)⌉ timing bits and each real frame's content bits, with
+  its release at the boundary (`release_bits`) once when its words root closes it. A forward is refused when its count
+  passes its calls' bits summed,
+  cap · rows · n · K / fwdMacs each (`Pouw.Lead.Layout.callBits`; 32 · rows bits at cap 32), or when the window closes
+  first. The control channel, which carries the registrations in and the releases out, ends at the certifier and is no
+  boundary link. On a node (`NodeCalls`) a window's forwards are a PoUW window's, and the proxies of all of the node's
+  links count their buckets against the open one (`active.Proxy(calls=…)`); the prover registers on the control channel
+  (`serve_calls`, `CallsClient`).
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
 `tagged_sha512` and `canonical_json_bytes`, in `service` the proof system, the hm96 leaves and the check's
@@ -286,7 +312,8 @@ package to them (`lake exe certifier-difftest INSTANCES PYTHON N` on what `lean/
 from `lean/lean-audit.json`). Advice v1's charge has its own: `lake exe certifier-charge-difftest INSTANCES PYTHON N` on
 what `lean/scripts/charge_vectors.py` writes from `arith_encode.reference_charge`, and its whole window's
 `lake exe certifier-window-difftest INSTANCES PYTHON N` on what `lean/scripts/window_vectors.py` writes from
-`window_charge.reference_window`.
+`window_charge.reference_window`. The lead's calls are `NetworkCertifier.Calls`, held to `calls.Calls` by
+`lake exe certifier-calls-difftest INSTANCES PYTHON N` on what `lean/scripts/calls_vectors.py` writes.
 
 The two terms of the charge the capacity bounds leave open are fixed in the trusted text, in the last section of
 `Security/Definitions/NetworkCertifier/Guarantees.lean`'s documentation:
@@ -324,7 +351,7 @@ uv run network-certifier-calibrate trace.json --ingress-bucket-ms 100
 
 Every protocol is to be zero-knowledge. The network audit's claim is counts only: N2 holds each window's per-bucket
 counts to the occupancy profile on every link-window (on a served link, to the ones its ingress counts derive under
-the declared sync), beside the proved timing bound (Daniel's provisional call on ASK-70, 19 Oct). N3, the content check,
+the declared sync), beside the proved timing bound (provisional). N3, the content check,
 is retired, superseded by the step-indexed scan (`ingress_scan`, `egress`).
 
 N2's verifier of record, `LinkWindows.verify`, decides each link-window on a `--zk` proof of N2's registered unit
