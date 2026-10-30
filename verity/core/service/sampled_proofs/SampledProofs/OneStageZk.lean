@@ -258,12 +258,13 @@ def verdicts (p : Own) (pub : String) (sessions : Array Session) (provedUnits? :
     | .error e => Except.error s!"setup: {e}"
   let programSha := programDigest p.program
   let want := getD p.partition "program"
-  let records ← sessions.mapM fun s => do
+  let records ← sessions.mapM fun (s : Session) => do
     let some record := String.fromUTF8? (← bs.get s.record s!"session {s.name}'s record")
       | throw s!"session {s.name}'s record is not UTF-8"
     pure record
   if let some ts := trees then
-    let named := (sessions.zip records).map fun (s, r) => (s.name, (Json.parse r).toOption.getD Json.null)
+    let named := (sessions.zip records).map fun (sr : Session × String) =>
+      (sr.1.name, (Json.parse sr.2).toOption.getD Json.null)
     if let some why := Challenger.sessionsTreeReason ts named then throw why
   let mut coinKeys : Array String := #[]
   let mut out : Array (String × Json) := #[]

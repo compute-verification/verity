@@ -89,10 +89,6 @@ private def isStream (j : Json) : Bool :=
       s.all fun c => c.isAlphanum && c.toNat < 128 || c == '-' || c == '.' || c == '_' || c == '/'
   | _ => false
 
-private def distinct : List Json → Bool
-  | [] => true
-  | x :: rest => !rest.contains x && distinct rest
-
 /-- `tree_spec_reason`'s domain: `{block, rounds_log, scheme, streams}`, `TREE_SCHEME`, 1 to `MAX_BLOCK` coins a round,
 at most `2^MAX_ROUNDS_LOG` rounds a stream, and its streams distinct names (`isStream`). -/
 def isTreeSpec (spec : Json) : Bool :=
@@ -100,7 +96,7 @@ def isTreeSpec (spec : Json) : Bool :=
     (match nat? (getD spec "block") with | some b => 1 ≤ b && b ≤ MAX_BLOCK | none => false) &&
     (match nat? (getD spec "rounds_log") with | some r => r ≤ MAX_ROUNDS_LOG | none => false) &&
     (match getD spec "streams" with
-      | .arr ss => !ss.isEmpty && ss.all isStream && distinct ss.toList
+      | .arr ss => !ss.isEmpty && ss.all isStream && distinct (ss.toList.map strOf)
       | _ => false)
 
 /-- `coin_trees_of` (module docstring): the coin trees the release log `log` shows the challenger drew, in the order
@@ -122,7 +118,7 @@ def coinTreesOf (log : List String) : V (Array LoggedTree) := do
       unless keys? d == some #["after", "coins", "event", "n", "round", "stream", "tree"] do throw LOG_MALFORMED
       let .str root := getD d "tree" | throw LOG_MALFORMED
       let some i := trees.findIdx? (·.root == root) | throw LOG_MALFORMED
-      let t := trees[i]!
+      let some t := trees[i]? | throw LOG_MALFORMED
       let .str s := getD d "stream" | throw LOG_MALFORMED
       let (some k, some n) := (nat? (getD d "round"), nat? (getD d "n")) | throw LOG_MALFORMED
       let streams := match getD t.spec "streams" with | .arr ss => ss | _ => #[]
@@ -151,14 +147,16 @@ private def recordCoins? (cs : Json) : Option ByteArray :=
 the release log shows the challenger released (`trees`, `coinTreesOf`'s); `none` when it does. -/
 def sessionTreeReason (trees : Array LoggedTree) (record : Json) : Option String := Id.run do
   let ct := getD record "coin_tree"
-  let some t := (match getD ct "root" with | .str r => trees.find? (·.root == r) | _ => none) | return some NO_TREE
+  let some t := trees.find? (fun (t : LoggedTree) => getD ct "root" == Json.str t.root) | return some NO_TREE
   unless jeq ct t.record do
     return some "its coin tree is not the one the challenger's release log shows it drew under that root"
   let link := getD record "link"
   let (.obj _, .obj _, .arr ps) := (link, getD link "root_b", getD link "points") | return some TREE_RECORD_FORM
-  let flat := ps.foldl (fun acc p => match p with | .arr cs => acc ++ cs | _ => acc.push Json.null) #[]
-  let rootB := (entries (getD link "root_b")).filterMap fun (k, v) => match v with
-    | .str s => (Flock.unhex s).toOption.map (k, ·)
+  let flat := ps.foldl (fun (acc : Array Json) (p : Json) => match p with
+    | .arr cs => acc ++ cs
+    | _ => acc.push Json.null) #[]
+  let rootB := (entries (getD link "root_b")).filterMap fun (kv : String × Json) => match kv.2 with
+    | .str s => (Flock.unhex s).toOption.map (kv.1, ·)
     | _ => none
   let (some rootF, some points, .arr streams) := ((match getD link "root_f" with
       | .str s => (Flock.unhex s).toOption
