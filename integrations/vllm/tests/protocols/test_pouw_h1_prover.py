@@ -99,27 +99,26 @@ def test_a_call_goes_where_the_ring_is_free_and_the_caller_waits_only_while_it_i
 def test_two_threads_write_a_later_call_while_an_earlier_one_is_held_and_free_the_ring_in_order(tmp_path, monkeypatch):
     """With two writer threads, call 1's file is written while call 0's is still held, and a third call waits for room
     though call 1 is written: its bytes go where call 0's still are only once call 0 is written, so every file is
-    ``np.savez``'s of its own call."""
-    gate, wrote, savez = threading.Event(), threading.Event(), PV._savez
+    ``np.savez``'s of its own call. The third caller starts once call 1's writer has finished with the lock, so the only
+    notify it can wake to before call 0 is written is the one that frees the ring."""
+    gate, savez = threading.Event(), PV._savez
 
     def held(path, *arrays):
         if path.name == "0.npz":
             gate.wait()
-        out = savez(path, *arrays)
-        if path.name == "1.npz":
-            wrote.set()
-        return out
+        return savez(path, *arrays)
     monkeypatch.setattr(PV, "_savez", held)
     calls = [_call(10 + i) for i in range(3)]
     w, d = PV.Writer(2 * _size(*calls[0])), tmp_path / "w0"
     w.open(d)
     w.keep(d, 0, *calls[0])
     w.keep(d, 1, *calls[1])
-    wrote.wait()
-    third = threading.Thread(target=w.keep, args=(d, 2, *calls[2]))
+    st = w._dirs[str(d)]
+    with w._cv:
+        w._cv.wait_for(lambda: st["pending"] == 1)
+    third = threading.Thread(target=w.keep, args=(d, 2, *calls[2]), daemon=True)
     third.start()
     with w._cv:
-        st = w._dirs[str(d)]
         w._cv.wait_for(lambda: st["waits"] > 0 or st["calls"] == 3)
         assert (st["waits"], st["calls"], [j.index for j in w._jobs]) == (1, 2, [0, 1])
         assert sorted(p.name for p in (d / PV.CALLS).iterdir()) == ["1.npz"]
