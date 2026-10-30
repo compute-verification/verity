@@ -167,6 +167,19 @@ Everything else is engineering on parts we have.
     ball) lets Strassen or bit-slicing run inside the format. That leaves A′, whose problem is utility, and E (natural
     weights), which HT-PUBLIC is testing.
 
+- **HT-PREMISE v3** (note:compute-research/20261030T2342Z-report-hardness-premise-v3; 105 natural matrices, 840
+  schedules run exactly in int64; recorded runs on cpu-11):
+  - **Natural weights are outside Hard_X at 5%.** Strassen in s8 beats the honest kernel on Qwen2.5-7B (0.963) and
+    Llama-3.1-8B (0.968). Every down_proj is outside (0.878–0.928 on the 7B and 8B), and 42 of 105 matrices cost less
+    than 1.
+  - **The cause:** natural weights overflow s8 under Strassen's sums at a median of 0.40% of entries, against 17.7% for
+    uniform int8. That's why uniform R (A′) still holds and natural weights don't.
+  - **This overturns HT-PUBLIC's "already hard"**, which covered only low-rank, sparse and small-alphabet splits.
+  - **Caveat:** the price of an overflow correction is counted, not timed. At 2× that price the 7B and 8B sit at
+    1.045–1.054, on the 5% line, but down_proj stays at 0.91–0.93. A GPU timing settles it.
+  - **Follow-ups (round 4):** does the lead's per-k32-word commitment block Strassen (demo-critical)? Does D-OUT (outputs
+    only, over public natural weights) have the same hole?
+
 ## Lanes (notes: `lanes/compute-research/<ts>-report-hardness-<lane>.md`)
 
 | lane | modules | first deliverable |
