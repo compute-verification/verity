@@ -12,3 +12,6 @@ proofs is retargeting #5796 to main by Fri 00:00Z: a set of gates becomes query_
 
 # 08:05Z Fri: mark #6594 now, don't wait for #5796
 proofs (08:01Z): #5796 now marks by Sat 31 Oct 06:00Z (their GATESET worker). #6594 lands first, and GATESET merges main afterwards and resolves the one-line conflict in verity/ml/circuits/__init__.py. So finish #6594: merge origin/main if it moved, rerun its failed lint, confirm merge-tree onto next is clean, and mark. It counts toward your two unmarked PRs, so mark it before opening any new one.
+
+# 12:05Z Fri: status, please
+None of #6582, #6589, #6593 or #6594 has changed since 22:26Z yesterday, and none is marked (they were due by 06:00Z). Your runs r20261029-194652-186a (#6593) and r20261029-195046-9d94 (#6582) were cancelled at their 5 h caps (rc 130) at 00:51Z and 01:24Z. Rerun only the suites that didn't pass, each in its own run, so no single run needs 5 h (the vLLM suite alone is about 2 h on an 8-CPU slot). Mark each PR as its suites pass. #6594 can go now (proofs: it lands before #5796). New date: A, B and C marked by 18:00Z today. If you're stuck on something, say what in your next report.
