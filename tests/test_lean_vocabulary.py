@@ -111,7 +111,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Placement": (f"{REQ}::CircuitRequirement.Placement", f"{REQ_PY}::Placement"),
     "Prog": (f"{CORE}Accel/Machine.lean::Verity.Accel.Machine.Prog", f"{FLOCK}Program.lean::Flock.Program.Prog"),
     "Program": ("verity/ml/circuits/program.py::Program",),
-    "Record": ("verity/core/protocols/interface/CoreProtocol/Record.lean::Core.Record",),
+    "Record": (),
     "Registration": (f"{CORE}Formalism.lean::Verity.Registration",),
     "Registry": (),
     "Session": (),
@@ -125,6 +125,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Window": (),
     "Witness": (f"{CORE}TC/Relation.lean::Verity.TC.Relation.Witness",),
 }
+CANONICAL["Record"] = ("verity/core/protocols/interface/CoreProtocol/Record.lean::Core.Record",)
 
 RA, RA_PY = "verity/core/protocols/remote_bandwidth/lean/RemoteAudit/", "verity/core/protocols/remote_bandwidth/audit.py"
 MC, MC_PY = "verity/core/devices/memory_challenger/lean/MemoryChallenger/", "verity/core/protocols/pous/"
