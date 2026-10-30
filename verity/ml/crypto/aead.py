@@ -1,6 +1,6 @@
 """An AEAD built from SHA-512 alone, with its whole 64-byte output: counter mode over a keyed SHA-512, then HMAC-SHA512
 over the nonce and the ciphertext (encrypt-then-MAC). It seals the frames between two of the auditor's network
-certifiers (`verity.core.protocols.certifier.active.Pair`, the certifier's `PROTOCOL.md`, "Sealed pair links").
+certifiers (`verity.core.protocols.certifier.active.Pair`).
 
 H is SHA-512, HMAC is HMAC-SHA512 (RFC 2104) and [x] is u16be len(x) ‖ x.
 

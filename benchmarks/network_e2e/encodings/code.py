@@ -227,7 +227,7 @@ class ArithDecoder:
     reading it, and `finish` moves the reader to the next segment.
 
     Alone it would take 2 to 4 strings for one message: any whose interval meets the final interval, after reading 32 bits
-    past the segment (the certifier PROTOCOL's attack 10). So `finish` re-encodes the intervals it consumed and refuses the
+    past the segment. So `finish` re-encodes the intervals it consumed and refuses the
     segment unless its bits are the encoder's, bit for bit, and lie inside the input. The segments it accepts are then
     exactly the encoder's, and the bits read past an accepted segment decide nothing."""
 

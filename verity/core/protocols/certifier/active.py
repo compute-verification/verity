@@ -119,7 +119,7 @@ it signs) and the deployment record's custody (the keys and the run id it gives 
 `reveal(p, registration)` and `committed(p, registration)` are the in-process calls the tests and replays make, and
 hold only on the auditor's side.
 
-**Sealed pair links** (`Proxy(pair=…)`, off by default; PROTOCOL.md, "Sealed pair links"): when the link's peer is
+**Sealed pair links** (`Proxy(pair=…)`, off by default): when the link's peer is
 another of the auditor's certifiers, the frames between them are sealed under `verity.ml.crypto.aead`, keys of the
 pair's session secret per direction (`Pair.of`). The egress tick seals each of its bucket's r slots, frames and padding
 alike, after the egress certifier records it (`Sealer`, slot j of bucket t at nonce (t // T, t mod T, j)), and the
