@@ -88,8 +88,10 @@ ALLOWED = {
                                       "ml.randomness", "core.protocols.profile", "core.protocols.record"},
     # 2026-10-27 (memory accounting, the deployment API v3): the wipe's memory challenger and prover are parties of the
     # deployment layer (`wipe_parties`), their messages the wire's. The
-    # memory challenger reports its sessions under its party's per-period root (`core.attest`).
-    "core.protocols.pous": {"core.claims", "core.attest", "core.wire", "core.deploy", "ml.circuits", "ml.commitments",
+    # memory challenger reports its sessions under its party's per-period root (`core.attest`). The wipe's monitoring
+    # periods are the core's.
+    "core.protocols.pous": {"core.periods",
+                            "core.claims", "core.attest", "core.wire", "core.deploy", "ml.circuits", "ml.commitments",
                             "ml.crypto", "ml.randomness"},
     # The verifier's side runs where `period.json` puts it, a side of the deployment layer (`verity.core.deploy.stream`).
     # The remote bandwidth audit commits receipts in frame-v3-sha512
