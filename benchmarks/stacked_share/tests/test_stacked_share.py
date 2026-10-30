@@ -1,7 +1,7 @@
 """The stacked-share tool on toys: `units.py` on a small Program (property/v1's units by callee and step, the cross-check against
 `stacking.analyze`), the exact window fit and its refusal of another form, the attention window of a KV call a head and a row
 call a (row, head), a modeled TP variant, and `share.py`'s trace totals, its refusal of keys the requests can't account for, the
-per-step split, f and the levers, the attention row's data products, and the declared-circuit witness's lives."""
+per-step split, f and the levers, the attention row's data products, and the registered-circuit witness's lives."""
 from __future__ import annotations
 
 import sys

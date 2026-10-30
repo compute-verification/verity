@@ -7,7 +7,7 @@ partition, any sampling design, and any per-unit proof system. The derivations a
 **The model.** The prover registers `R` (its roots); the verifier samples units from its own randomness after registration;
 one batched session proves the sampled proof blocks (`audit`). The **committed trace** `X` is an analysis function of the
 prover's state at registration (its registration and its session strategy for every sample), so the sample is independent of
-its faulty proof blocks; nobody computes it. A unit is **faulty** in `X` (the Lean's `wrong`) when its committed outputs differ
+its incorrect proof blocks; nobody computes it. A unit is **incorrect** in `X` (the Lean's `wrong`) when its committed outputs differ
 from its gates applied to its committed inputs (`Partition.Correct`). Every bound holds for every prover strategy
 (`Game.prob … σ`), the form `table_sound_exec` takes. The Lean's names predate the Glossary's: a `Law` is a sampling
 design, its `escape` (here $e_L(B)$) is the acceptance probability $P_a(B)$, and $\delta_{link}$ (`LinkSound`) is the
@@ -34,7 +34,7 @@ roots gets `X`'s values up to that opening's own binding term, which the audit d
   this is the lifetime union bound, with every term against a prover that took part in all the audits;
 - `Partition.audit_cone`: for committed wires $T$ fixed before the sample, $\Pr[\text{accept} \wedge X_T \ne
   \mathrm{eval}_C(a)_T] \le \max_{u \in \mathrm{cone}(T)} (1 - \pi_u) + \varepsilon_{ks} + \delta_{link} + \delta_{in}$;
-- `Partition.audit_cone_count`: at least $j$ faulty proof blocks in a cone;
+- `Partition.audit_cone_count`: at least $j$ incorrect proof blocks in a cone;
 - `Partition.audit_covered`: a cone inside the sample, for wires chosen even after the sample: $\varepsilon_{ks} +
   \delta_{link} + \delta_{in}$;
 - `Partition.oracle_count`, `oracle_profile`, `oracle_drawn`, `oracle_cone`: the same at the oracle layer, from
@@ -45,7 +45,7 @@ $(1-p)^{|B|}$; `subset_escape`, the uniform $k$-subset's acceptance probability 
 `subset_miss`, its count curve $\binom{n-K}{k}/\binom{n}{k}$; `subset_escape_le_prod`, the product bound
 $e(B) \le \prod_{u \in B}(1 - \pi_u) = (1 - k/n)^{|B|}$, so inclusion probabilities alone give a consumer a valid bound;
 `subset_minimax`, **uniform is optimal**: no sampling design that proves $k$ units on average has a smaller count curve,
-at any $K$; `demo_count_590`, the demo's point (1,024 heads, 16 sampled): 590 or more faulty heads have acceptance
+at any $K$; `demo_count_590`, the demo's point (1,024 heads, 16 sampled): 590 or more incorrect heads have acceptance
 probability at most $2^{-20}$, by exact arithmetic. **A block's share** (`Audit/Share.lean`): for a uniform $kd$-subset
 $S$ of $N$ units and a block $B$, conditioned on $|S \cap B| = j$ the share $S \cap B$ is a uniform $j$-subset of $B$
 (`share_uniform`, `share_cond`), the share size is hypergeometric (`share_card`), and $W \subseteq B$ escapes at share
@@ -99,7 +99,7 @@ $\prod_s \binom{n_s - m_s}{k_s}/\binom{n_s}{k_s}$ with $m_s = |B \cap U_s|$, whi
 `verity.core.protocols.profile.Stratified` computes; `stratified_escape_floor`, **a floor catches its whole stratum**:
 with $k_s \ge 1$, a set containing $U_s$ has acceptance probability 0; `audit_whole_stratum` and
 `extraction_audit_whole_stratum`, the one-stage profile instantiated, so an audit accepts while a whole floored stratum
-is faulty with probability at most the per-unit terms. `stratified_miss_eq_greedy` (`Audit/StratifiedMiss.lean`), **the
+is incorrect with probability at most the per-unit terms. `stratified_miss_eq_greedy` (`Audit/StratifiedMiss.lean`), **the
 stratified count curve**: a count vector that some $\tau \in (0, 1]$ separates, every acceptance factor
 $r_s(c) = (n_s - c - k_s)/(n_s - c)$ it takes at least $\tau$ and every one it leaves at most $\tau$, attains
 $\mathrm{miss}(\sum_s a_s) = \prod_s \binom{n_s - a_s}{k_s}/\binom{n_s}{k_s}$. A greedy fill has such a $\tau$, so this
@@ -111,7 +111,7 @@ $k_s = \min(n_s, \max(f_s, \lceil K w_s n_s / W \rceil))$, where $w_s$ is the Po
 $W = \sum_s w_s n_s$ and $f_s \ge 1$ its floor, set per stratum in the verifier's work table; every stratified and
 one-stage theorem holds of it as stated, and the theorems below hold for every such $f$. `floor_le_workK`, **the
 floor**: a stratum samples at least $\min(n_s, f_s)$ units, so every non-empty stratum samples at least one and
-`audit_work_whole_stratum` and `extraction_audit_work_whole_stratum` catch a wholly faulty one. `work_escape_floor_le`,
+`audit_work_whole_stratum` and `extraction_audit_work_whole_stratum` catch a wholly incorrect one. `work_escape_floor_le`,
 **the per-stratum floor bound**: a set with $b_s$ units in a non-empty stratum has acceptance probability at most
 $((n_s - b_s)/n_s)^{f_s}$, audited at both layers (`audit_work_floor`, `extraction_audit_work_floor`). `workK_ge`: a
 stratum samples at least $K w_s n_s / W$ units, or all of them. `sum_workK_le`: at most $K + \sum_s f_s$ units are sampled.
@@ -123,7 +123,7 @@ $C$ (`choose_div_anti`: the hypergeometric acceptance probability falls as the s
 $B$ of units doing $W_B$ of the work has acceptance probability at most $((W - W_B)/W)^K$, from the per-stratum
 hypergeometric and weighted AM-GM over the work shares. `audit_work` and `extraction_audit_work` bound
 $\Pr[\text{accept} \wedge W_{\mathrm{wrong}(X)} \ge T]$ by $((W - T)/W)^K$ plus the per-unit terms. `record_sizing` and
-`audit_work_of_record`: at $K = 27{,}713$, faulty proof blocks doing at least 0.1% of the work have acceptance probability at
+`audit_work_of_record`: at $K = 27{,}713$, incorrect proof blocks doing at least 0.1% of the work have acceptance probability at
 most $2^{-40}$; `record_sizing_one_fewer`: $K = 27{,}712$ does not reach it under this bound. `Law.widen` and
 `escape_widen_le`, the seam for closure samples: proving more units than are sampled, on the same coins, never raises an
 acceptance probability. `FlockWork.lean`'s `workRule_eq_draw` and `countRule_eq_draw`: the executable's
@@ -143,7 +143,7 @@ duality over the exact risk $\ln(\binom{n_s}{k_s}/\binom{n_s - c}{k_s})$ (`strat
 `le_stratumRisk`), the knapsack whose value core's `Stratified.harm_bound` computes.
 
 **Theorems, the cumulative harm budget** (`Audit/HarmBudget.lean`, `Audit/HarmBudgetLife.lean`), over a run of adaptive
-rounds (`Adaptive.Play`): each round's faulty proof blocks $B_t$ and sampling design are fixed by the history before that
+rounds (`Adaptive.Play`): each round's incorrect proof blocks $B_t$ and sampling design are fixed by the history before that
 round's own coins, and the prover may stop after any round. A sampling design meets the **design condition**
 (`Law.Design L π`) when every $B$ fixed before the coins has acceptance probability at most $\exp(-\sum_{u \in B}
 \pi_u)$: `bernoulli_design` ($\pi_u = q$), `subset_design` ($k/n$), `stratified_design` ($k_s/n_s$, the closed form of
@@ -151,7 +151,7 @@ round's own coins, and the prover may stop after any round. A sampling design me
 with $\lambda h_u \le \pi_u$, $\Pr[\text{accept} \wedge \sum_t h(B_t) \ge H] \le e^{-\lambda H} + \sum_t
 \mathrm{err}_t$, where $\mathrm{err}_t$ bounds the probability that round $t$'s sample hits $B_t$ and the round still
 passes (`Play.Drawn`, indexed by the rounds left after it); `harm_budget_rate` takes $\lambda = \min_{h_u > 0} \pi_u /
-h_u$. `harm_count`: under Bernoulli($q$) samples, an accepted run with $K$ or more faulty proof blocks summed over its rounds has
+h_u$. `harm_count`: under Bernoulli($q$) samples, an accepted run with $K$ or more incorrect proof blocks summed over its rounds has
 probability at most $(1-q)^K + \sum_t \mathrm{err}_t$, tight for one round (`harm_count_tight`); `harm_count_kstar`
 gives $1 - p + \sum_t \mathrm{err}_t$ at $k^*(p) = \ln(1/(1-p)) / (-\ln(1-q))$. `life_harm_budget` is the instance over
 a lifetime of $N$ one-stage audits (`life`): after each accepted audit the prover chooses whether to go on, and a
@@ -163,14 +163,14 @@ the whole run.
 **Theorems, closure samples** (`Audit/Closure.lean`; `Flock.Draw`): `Law.closure L cl` is `L` widened on its coins
 by the verifier's closure map, each sampled proof block proved with its closure. `closure_escape`: its acceptance probability is
 the base sampling design's acceptance probability of $B \cup \mathrm{unsound}(B)$, $\mathrm{unsound}(B)$ being the units
-whose closure meets $B$, so a faulty proof block that is never sampled on its own is charged to the units above it. `unsoundWork`
-is the work of $B \cup \mathrm{unsound}(B)$: a closure map need not list a unit in its own closure, so the faulty proof blocks'
-own work is counted explicitly (`workOf_le_unsoundWork`). `harm_le_unsoundWork`: a
-faulty proof block's harm (its own work and that of the units whose closure holds it) is in the unsound work, sampled or not;
+whose closure meets $B$, so an incorrect proof block that is never sampled on its own is charged to the units above it. `unsoundWork`
+is the work of $B \cup \mathrm{unsound}(B)$: a closure map need not list a unit in its own closure, so the incorrect proof blocks'
+own work is counted explicitly (`workOf_le_unsoundWork`). `harm_le_unsoundWork`: an
+incorrect proof block's harm (its own work and that of the units whose closure holds it) is in the unsound work, sampled or not;
 `unsoundWork_le_harm` (coverage) and `unsoundWork_singleton`. `audit_work_closure` and `extraction_audit_work_closure`:
 under the work sampling design's closure sample, at any floors $f_s \ge 1$,
 $\Pr[\text{accept} \wedge \mathrm{work}(B \cup \mathrm{unsound}(B)) \ge T] \le ((W - T)/W)^K$ plus the per-unit terms, for
-$B = \mathrm{wrong}(X)$; `audit_work_closure_harm`: likewise for a faulty proof block's harm; `audit_work_closure_of_record`:
+$B = \mathrm{wrong}(X)$; `audit_work_closure_harm`: likewise for an incorrect proof block's harm; `audit_work_closure_of_record`:
 $2^{-40}$ at $K = 27{,}713$ for unsound work of at least 0.1%.
 
 **Theorems, windows of calls** (`Audit/Window.lean`): a window is one stratified sampling design
@@ -183,7 +183,7 @@ $K_c = \min(N_c, \max(1, \lceil K W_c / W \rceil))$, covers the window's work wh
 `covers_of_floor`: y's floors $f_s$ with $K_y v_s n_s \le f_s N$ cover the y weights $v$ at $K_y$. `audit_window` and
 `extraction_audit_window`:
 $\Pr[\text{accept} \wedge (\mathrm{unsoundWork}_w \ge T \vee \mathrm{unsoundWork}_v \ge T_y)]$ is at most the larger of
-the two bounds plus the per-unit terms, not their sum, since both bound the one committed faulty set.
+the two bounds plus the per-unit terms, not their sum, since both bound the one committed incorrect set.
 `audit_window_of_le`: the same for any sampling design whose acceptance probabilities are at most the product design's,
 such as an executable sample; `audit_window_of_le_slack` and, at the compiled layer,
 `extraction_audit_window_of_le_slack`: for a sampling design within $\eta$ of it, with $\eta$ added to the bound, as a
@@ -203,7 +203,7 @@ context.
 - `effEscape_bernoulli_prod`: with a Bernoulli first stage, $e_{\text{eff}}(B) = \prod_{u \in B}\big(1 - p + p\,m_u\big)$ for
   any second stage, $m_u$ the largest second-stage miss probability inside $u$;
 - `Partition.two_stage_a_coarse`: **(a) is one-stage over the fine partition**, and its curve bounds coarse counts;
-- `Partition.Refines.exists_wrong_fine`: a faulty coarse unit has a faulty fine unit under every interior, the lemma
+- `Partition.Refines.exists_wrong_fine`: an incorrect coarse unit has an incorrect fine unit under every interior, the lemma
   behind (b).
 - `Refines.oracle₂_profile`, `oracle₂_full_profile`: the same at the oracle layer, from a sound fine-level session
   (`SessionSound₂ ε`), with the link term zero. These are the plan's `two_stage_b_profile` and
@@ -216,12 +216,12 @@ evaluation on every committed wire) and `compose_cone` (the same for a consumer'
 circuit's other outputs, such as commitments and leaves, are not delivered. $K$ **separates** the units $B$ from $D$
 (`Separates K B D`, a downstream cut) when every gate path from a unit of $B$ to a wire of $D$ meets $K$.
 
-- `outputs_eq_of_separates`, **the influence cap**: two traces with the anchors' inputs, whose faulty proof blocks lie in
+- `outputs_eq_of_separates`, **the influence cap**: two traces with the anchors' inputs, whose incorrect proof blocks lie in
   $B$, and that agree on a committed separator $K$ of $B$, deliver the same values on $D$;
 - `card_delivered_le`: so they deliver at most $2^{|K|}$ values on $D$;
 - `separates_exits`: the committed wires of the units of $B$ separate $B$ (a replay block's exports); `Separates.mono`,
   `Separates.union`;
-- `card_influenceSet_le`: the influence set at $\delta$, what is delivered with the faulty proof blocks inside some set of
+- `card_influenceSet_le`: the influence set at $\delta$, what is delivered with the incorrect proof blocks inside some set of
   acceptance probability at least $\delta$, fixed before the prover, has at most $\sum_{B : e(B) \ge \delta} 2^{|K_B|}$
   members;
 - `audit_influence`: $\Pr[\text{accept} \wedge \mathrm{out}_D(X) \notin \mathrm{influenceSet}] \le \delta +
@@ -231,7 +231,7 @@ circuit's other outputs, such as commitments and leaves, are not delivered. $K$ 
 - `card_influenceSet_le_harm` and `card_admissible_le`: that influence is at most $H + \log_2 \sum_{j \le K}
   \binom{n}{j}$ bits, for a harm bound $H$ (`IsHarmBound`, `Audit/Harm.lean`: the specification of core's `harm_bound`) with
   each unit's harm the width it adds to a separator, such as its exits (`card_exits_le`), and $\mathrm{miss}(K+1) <
-  \delta$. $H$ counts the value bits and the second term the choice of which units are faulty.
+  \delta$. $H$ counts the value bits and the second term the choice of which units are incorrect.
 - `audit_exfiltration`, **exfiltration with the location term**: a prover that picks its strategy from a uniform message
   $m \in M$, and a receiver that sees only what is delivered on $D$, recover $m$ from an accepted audit with probability
   at most $2^H \sum_{j \le K} \binom{n}{j} / |M| + \delta + \varepsilon_{ks} + \delta_{link} + \delta_{in}$; with
@@ -239,7 +239,7 @@ circuit's other outputs, such as commitments and leaves, are not delivered. $K$ 
   step and `audit_exfiltration_influenceSet` its form over $|\mathrm{influenceSet}|$. Core's reading is
   `verity.core.protocols.sampled_proofs.consumers.exfiltration_bound`: `harm_bound` over output bits plus `location_bits`.
 - **Not vacuous** (`Audit/InfluenceWitness.lean`, the statement reviewer's witness): on a four-gate circuit,
-  `W.lemma47` applies the influence cap to two different traces that both have a faulty proof block, with a separator
+  `W.lemma47` applies the influence cap to two different traces that both have an incorrect proof block, with a separator
   narrower than the unit's exits (`W.three_mem_exits`), and `W.count` bounds what they deliver by 2; `A.influence`
   meets `audit_influence`'s hypotheses at 0 on an audit that accepts with probability 1 (`A.accepts`); `Gen.harm_witness`
   meets `card_influenceSet_le_harm`'s on any partition and sampling design, with the exits as separators and each unit's
@@ -251,13 +251,13 @@ circuit's other outputs, such as commitments and leaves, are not delivered. $K$ 
 **Tightness and insecurity** (`Audit/Examples.lean`, on `K` chains of `nv` NOT gates, one coarse unit per chain and one
 fine unit per gate, with a uniform `k₂`-subset of each sampled chain's gates in the second stage and an ideal session):
 
-- `two_stage_b_tight`: for every first-stage sampling design, a prover whose chains are all faulty is accepted with
+- `two_stage_b_tight`: for every first-stage sampling design, a prover whose chains are all incorrect is accepted with
   probability exactly `twoStage_count`'s bound, $\mathbb E_{S_1}[q^{|S_1|}]$ with
   $q = \binom{n_v - 1}{k_2}/\binom{n_v}{k_2} = 1 - k_2/n_v$;
 - `naive_two_level_unsound`: if the second stage leaves a gate undrawn and the first samples anything, that exceeds
   $\mathrm{miss}_{L_1}(K)$, the bound that one-stage over the coarse partition (and the `m`-dependent reading of
   the retired Python `TwoStageLaw.profile`, at $m = n_v$) would give. Nested sampling dilutes;
-- `late_interior_insecure`: with the interior committed after the fine sample (`twoStageLate`), a faulty chain is accepted
+- `late_interior_insecure`: with the interior committed after the fine sample (`twoStageLate`), an incorrect chain is accepted
   with probability 1.
 
 - `effEscape_bernoulli`: **(b2) is one-stage over the coarse partition, thinned.** With a Bernoulli($p$) first stage,
