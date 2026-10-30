@@ -554,10 +554,10 @@ def test_a_refused_report_names_each_failing_step_and_its_why_and_a_scan_that_ex
 
 
 def test_k_counts_the_audits_draw_and_free_inputs_and_the_networks_terms_once_a_period(tmp_path):
-    h = cr.horizon_k([{"units": 6, "drawn": 6, "free": 2, "jitter": 4}], Fraction(1, 100),
+    h = cr.pooled_k([{"units": 6, "drawn": 6, "free": 2, "jitter": 4}], Fraction(1, 100),
                      {"advice": 8, "syncs": 0, "cells": 6})
     assert (h["Fmax"], h["terms"]["faulty_sets"], h["K"]) == (5, 15, 8 + 6 + 80 + 15 + 2 + 4)
-    assert h["conditional"] == cr.HORIZON_CONDITION
+    assert h["conditional"] == cr.POOLED_CONDITION
     circuit = {"templates": [["T", 4]], "external": ["T/y"], "wires": [],
                "statements": {"T": {"in_rows": [["x", 0, 8, ["x"]], ["y", 1, 16, ["y"]]]}}}
     assert cr.free_inputs(circuit) == 4 * 8

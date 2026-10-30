@@ -37,7 +37,7 @@
   before. On the certifier-only path (``--job``'s ``path``, `CERTIFIER_ONLY`) there are no warden rows: the scan
   isn't run or required, and the report's ``stubbed`` says what the path stands on (`STUBBED`, `stubbed`). Its
   negatives are N2's members, the rehearsal's own check on each run it must refuse, and the I/O tie's verdict on each
-  tampered run that check lets through. d1's K (`horizon_k`) counts the served units' compute audits (``--audit``: each
+  tampered run that check lets through. d1's K (`pooled_k`) counts the served units' compute audits (``--audit``: each
   window's draw and free inputs, `free_inputs`) and the network's own terms (`network_terms`), at each δ. With
   ``--period-answer`` (certifier/v0's ``network-period check`` answer on the period, a ``certifier.answer.json``,
   its case ``certifier.case.json`` beside it or ``--period-case``) and ``--server``, an accepted report also writes
@@ -145,8 +145,8 @@ OUT_BITS = 16
 #: buckets tell a receiver no more than an idle one. The warden hands each bucket to a pacer that releases it at a time
 #: fixed before the bucket is made (`warden.Warden(paced=…)`), as the served proxy does (`active.Proxy(paced=…)`)
 JITTER = "assumed (J)"
-#: what `horizon_k`'s K rests on until its two per-window inputs are discharged
-HORIZON_CONDITION = ("NetTiming.Guarantees.HorizonLeakAccepted is conditional: its per-window inputs hesc "
+#: what `pooled_k`'s K rests on until its two per-window inputs are discharged
+POOLED_CONDITION = ("NetTiming.Guarantees.PooledLeakAccepted is conditional: its per-window inputs hesc "
                      "(proofs' SampledKSLive) and hleak (the live SampledLeakAccepted) are not discharged")
 #: why a report without ``--period-answer`` writes no block entry
 NO_PERIOD_ANSWER = ("no --period-answer: certifier/v0's case needs the period's compute audit (its registration and "
@@ -605,12 +605,12 @@ def audit_of(d: Path) -> dict:
             "free": free_inputs(json.loads((d / "circuit.json").read_text())), "jitter": 0}
 
 
-def horizon_k(audits: list[dict], delta: Fraction, network: dict) -> dict:
-    """`NetTiming.Guarantees.HorizonLeakAccepted`'s K over one monitoring period: the faulty proof blocks paid once over
+def pooled_k(audits: list[dict], delta: Fraction, network: dict) -> dict:
+    """`NetTiming.Guarantees.PooledLeakAccepted`'s K over one monitoring period: the faulty proof blocks paid once over
     the period, ``Fmax = ⌈ln(1/δ)/q⌉`` with ``q`` the least ``k_i/n_i`` of its compute audits (a stratified audit's
     least stratum's, `audit_of`'s ``q``), so K = the network's own terms (``network``: the advice's and the syncs' bits,
     and the cells') + ``Fmax·16 + ⌈log2 (N + 1)^Fmax⌉ + Σ_i (free_i + jitter_i)``, ``N = Σ_i n_i``, except with
-    probability ``δ + Σ_i (e_i + e'_i)``. `HorizonLeakAccepted` is conditional on its per-window inputs, so this K is
+    probability ``δ + Σ_i (e_i + e'_i)``. `PooledLeakAccepted` is conditional on its per-window inputs, so this K is
     cited as conditional, and its jitter term as `JITTER` (``jitter_term``)."""
     q = min(Fraction(a["q"]) if "q" in a else Fraction(a["drawn"], a["units"]) for a in audits)
     fmax = math.ceil(math.log(1 / float(delta)) / float(q) * (1 + 1e-12))
@@ -620,7 +620,7 @@ def horizon_k(audits: list[dict], delta: Fraction, network: dict) -> dict:
     k = sum(terms.values())
     return {"delta": str(delta), "q": str(q), "Fmax": fmax, "units": n, "terms": terms, "K": k,
             "share": k / (OUT_BITS * n), "eps": f"{delta} + Σ_i (e_i + e'_i) over {len(audits)} audits",
-            "conditional": HORIZON_CONDITION, "jitter_term": JITTER}
+            "conditional": POOLED_CONDITION, "jitter_term": JITTER}
 
 
 def network_terms(cert: dict, endpoint: dict) -> dict:
@@ -645,7 +645,7 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
         k = {"open": "no compute audit's window (--audit: the served units' registration and circuit), whose free "
                      "inputs and draw the K counts", "network": network}
     else:
-        k = {f"{d:.3g}": horizon_k(audits, Fraction(d), network) for d in DELTAS} | {"audits": audits}
+        k = {f"{d:.3g}": pooled_k(audits, Fraction(d), network) for d in DELTAS} | {"audits": audits}
     return {"theorem": "NetTiming.Guarantees.PeriodLeakAccepted, KS as hypothesis",
             "K": k,
             "sum": "NetTiming.periodLeak_le_sum: Pr[every window accepted ∧ total > a + Σ_w b_w] ≤ Σ_w ε_w",
@@ -679,7 +679,7 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     request rate (`leak_bounds.per_link`), and as many identical links summed as the census's reference datacenter has
     machines (`leak_bounds.datacenter_links`) and as the adversary resource model's compute fills
     (`leak_bounds.world`). Each count is in both forms, the per-period form (`PeriodLeakAccepted`'s count) and the
-    pooled one (`HorizonLeakAccepted`'s at q = 1), in both readings of the sampling block's free inputs
+    pooled one (`PooledLeakAccepted`'s at q = 1), in both readings of the sampling block's free inputs
     (`leak_bounds.READINGS`), and beside ε, its scans' δ summed, and its share of ``weights`` (`leak_bounds.WEIGHTS`)."""
     import leak_bounds as LB
     import scan_zk as SZ
