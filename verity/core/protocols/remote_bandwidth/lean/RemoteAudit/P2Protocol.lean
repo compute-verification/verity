@@ -26,7 +26,9 @@ store it audits is the one PoUS's setup published. Its bytes are canonical JSON 
 On acceptance it publishes `{"eps", "q_bytes", "span_ns"}`: the credited reads (`P2Session.credit`, the answer's),
 their span, and the error they hold at, ε = δ + S/2^64 for S the draws, `RemoteAudit.Protocol.certify`'s terms (not
 the sketch's term at units, `SketchBoundP2`, which is drafted). The profile is the rest of the session's answer.
-No property states yet what this check accepts; `p2_case.py`'s tests hold it to the live process's answer.
+`Properties.RemoteAudit.P2Subprotocol.AcceptIsVerified` states that it accepts only a request of the registration's
+node whose log replays to a session with no failure and every window verified, and publishes `certify` of its record;
+`p2_case.py`'s tests hold it to the live process's answer.
 -/
 
 namespace RemoteAudit.P2Protocol

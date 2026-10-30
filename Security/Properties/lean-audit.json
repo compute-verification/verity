@@ -52,6 +52,7 @@
   "Properties.RemoteAudit.Schedule",
   "Properties.RemoteAudit.Live",
   "Properties.RemoteAudit.Component",
+  "Properties.RemoteAudit.P2Subprotocol",
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
   "Properties.Accounting.JointBridge.WorkOfCreditedWords",
   "Properties.Challenger",
@@ -2551,6 +2552,15 @@
    "assumptions": [],
    "type_hash": "00e2f065edf6e116f146ffde18cb1f3059766d17bf24b38880c6ca480be91680"
   },
+  "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_nontrivial": {
+   "owner": "@memory-accounting"
+  },
   "Properties.RemoteAudit.Shared.acceptDrawsOpenable": {
    "owner": "@memory-accounting",
    "signature": ["Properties.RemoteAudit.Shared.acceptDrawsOpenable : Properties.RemoteAudit.Shared.AcceptDrawsOpenable"],
@@ -4253,6 +4263,10 @@
    "Properties.RemoteAudit.Component.publishedEps": {
     "function": "RemoteAudit.Protocol.check",
     "outcome": "accept"
+   },
+   "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified": {
+    "function": "RemoteAudit.P2Protocol.check",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -4310,7 +4324,9 @@
    "Properties.Challenger.DrawnByDevice": "unstated: Challenger.drawCoins accepts only coins a withheld session of the key's device released for that window and label, or the fixed finder findBreak outputs a break from the run (an LMS forgery or a SHA-512 collision); an open statement, to be proved from euf-cma/lms-sha512-n64 and ecr/sha-512 asked of that finder",
    "Properties.Challenger.CoinsFromLog": "unstated: an accepted answer is the live answer at the coins the challenger's device released, or a break, proved from DrawnByDevice in security_proofs by Properties.Challenger.coinsFromLog; a draft statement, which gets a guarantee entry once the one theorem reads it",
    "Properties.NetworkScan.ScanFits": "unstated: NetTiming.Layout.Fits' parts (1) and (2) at an accepted scan's layout are proved from scanOf's acceptance (scanFits_egress_ingress, Proofs.Properties.NetworkScan.Fits); part (3), no egress gate depending on a later step's ingress, is open, and ScanFits gets a guarantee entry with its proof",
-   "Properties.NetworkScan.ScanScopeAcc": "unstated: scanScopeAcc_of_scanFits (Proofs.Properties.NetworkScan) proves it from ScanFits, which is unstated until its part (3) is proved (its entry)"
+   "Properties.NetworkScan.ScanScopeAcc": "unstated: scanScopeAcc_of_scanFits (Proofs.Properties.NetworkScan) proves it from ScanFits, which is unstated until its part (3) is proved (its entry)",
+   "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_honest": "completeness: AcceptIsVerified's honest lemma: the auditor's session requested for a store of PoUS's reads as its parameters, and the P2 check leaves it undecided before its first request is answered",
+   "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_nontrivial": "lemma: AcceptIsVerified's nontrivial lemma: a request that is no object replays no session, so the conclusion fails where a check that accepts everything accepts"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -20452,6 +20468,10 @@
   },
   "NciCheck.Properties.SecurityProofs.ProtocolAccepts": {
    "nontrivial": "NciCheck.Properties.SecurityProofs.ProtocolAccepts_nontrivial"
+  },
+  "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified": {
+   "honest": ["Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_honest"],
+   "nontrivial": "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_nontrivial"
   }
  },
  "unwitnessed": {
