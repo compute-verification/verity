@@ -785,7 +785,6 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]]] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins seed|os | --zk [--ks-form]] [--session-tables J] [--plain-tables] [--upstream-plain] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   let stmtName := (argOf args "--statement").getD Tags.circuit.name
-  let templated := Tags.templated.any (·.name == stmtName)
   let some tags := Tags.find? stmtName <|> Tags.templated.find? (·.name == stmtName)
     | IO.eprintln s!"unknown statement; known: {(Tags.all ++ Tags.templated).map (·.name)}"; return 2
   let tags := if args.contains "--upstream-plain" then { tags with upstreamPlain := true } else tags
@@ -883,13 +882,11 @@ def verifyCmd (args : List String) : IO UInt32 := do
   -- a drawn statement that sets up is still refused when no soundness claim draws by its draw's law
   -- (`ProvedScope.drawLaw`); a statement whose form the soundness proof does not cover (`ProvedScope.check`) is refused in
   -- each session's verdict
-  -- the circuit parsed once, for the scope check and every setup (`ProvedScope.check_eq`, `buildSessionOf_eq`)
-  -- a templated statement (`Tags.templated`) is read from its template and refused in each session's verdict, after every
-  -- other check, until a soundness theorem reads `Circuit.tmpl`
-  let parsed := if templated then HmOut.parseTmpl tags circuitB tables else ProvedScope.circuitOf tags circuitB tables
-  let scope := if templated then .error (ProvedScope.refusal s!"{tags.name}, a templated statement")
-    -- `FailClosed.ScopeP` is the check without --registered F: no plain multi-table claim reads a shared-row public file
-    else if plainTables then ProvedScope.checkPOf parsed tags pubB count program publicInputs.isSome false
+  -- the circuit parsed once, for the scope check and every setup (`ProvedScope.check_eq`, `buildSessionOf_eq`): a templated
+  -- statement's (`Tags.templated`) carries its template, which the check reads (`ProvedScope.scopeOkT`)
+  let parsed := ProvedScope.circuitOf tags circuitB tables
+  -- `FailClosed.ScopeP` is the check without --registered F: no plain multi-table claim reads a shared-row public file
+  let scope := if plainTables then ProvedScope.checkPOf parsed tags pubB count program publicInputs.isSome false
     else ProvedScope.checkOf parsed tags zk pubB count publicInputs.isSome registered.isSome
   let setupOf := fun (draw : Option Lean.Json) =>
     match (do
@@ -919,7 +916,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
         (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null, registeredOpenings sts registered)
     | .error e => Except.error s!"setup: {e}"
   let programSha := program.bind ProvedScope.programDigest
-  let ksParsed := if tags.hiddenOutputs && !templated then parsed else HmOut.parse tags circuitB tables
+  let ksParsed := if tags.hiddenOutputs then parsed else HmOut.parse tags circuitB tables
   let ksFiles := if zk then PortRoots.checkOf ksParsed tags pubB else .ok ()
   IO.eprintln s!"inputs: {(← IO.monoMsNow) - t0} ms"
   -- the population's statement is set up once, when a session first needs it; a drawn session at its own draw, never at
@@ -999,13 +996,13 @@ def verifyCmd (args : List String) : IO UInt32 := do
 
 /-- `ks-form [--statement ID] [--archive DIR] --circuit F --public F [--session-tables J]`: `verify --zk`'s form check
 (`KsScope.checkOf`) alone, on the circuit and public file as `verify --zk` reads them and a session without a draw, as one
-line `KS-FORM ok` (exit 0) or `KS-FORM <refusal>` (exit 1). It accepts no session: it is the check the Python mirror
-(`one_stage.proofs.ks_form_why`) is held to. -/
+line `KS-FORM ok` (exit 0) or `KS-FORM <refusal>` (exit 1). A templated statement's circuit is read as `HmOut.parse` reads
+it, which refuses it: what passing the check establishes (`KsScope.check_ok`) is stated at that parse only. It accepts no
+session: it is the check the Python mirror (`one_stage.proofs.ks_form_why`) is held to. -/
 def ksFormCmd (args : List String) : IO UInt32 := do
   let usage := "usage: flock-verify ks-form [--statement ID] [--archive DIR] --circuit F --public F [--session-tables J]"
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   let stmtName := (argOf args "--statement").getD Tags.circuit.name
-  let templated := Tags.templated.any (·.name == stmtName)
   let some tags := Tags.find? stmtName <|> Tags.templated.find? (·.name == stmtName)
     | IO.eprintln s!"unknown statement; known: {(Tags.all ++ Tags.templated).map (·.name)}"; return 2
   let some count := ((argOf args "--session-tables").getD "1").toNat? | IO.eprintln usage; return 2
@@ -1014,23 +1011,11 @@ def ksFormCmd (args : List String) : IO UInt32 := do
     | .ok x => pure x
     | .error e => IO.eprintln s!"statement inputs: {e}"; return 2
   let tags := Zk.tags tags (Zk.maskLogOf circuitB) count
-  let ksParsed := if tags.hiddenOutputs && !templated then ProvedScope.circuitOf tags circuitB tables
+  let ksParsed := if tags.hiddenOutputs && !tags.isTmpl then ProvedScope.circuitOf tags circuitB tables
     else HmOut.parse tags circuitB tables
   match KsScope.checkOf ksParsed tags pubB count none with
   | .ok () => IO.println "KS-FORM ok"; return 0
   | .error why => IO.println s!"KS-FORM {why}"; return 1
-
-/-- A templated statement's one-table statement (`Tags.templated`), its circuit read from its template
-(`HmOut.parseTmpl`). -/
-def buildStmtTmpl (tags : Tags) (circuitB pubB compB : ByteArray) (coins : Coins) (tables : List (String × ByteArray))
-    (partition : Option Lean.Json) (program : Option ByteArray) (registered : Option (Array Registered.Port))
-    (publicInputs : Option ByteArray) (identifier : Option String) : V Stmt := do
-  let (_, sts) ← buildSessionOf (HmOut.parseTmpl tags circuitB tables) tags circuitB pubB compB coins tables 1
-    (partition := partition) (program := program) (registered := registered) (publicInputs := publicInputs)
-    (identifier := identifier)
-  match sts[0]? with
-  | some st => pure st
-  | none => throw "statement: the templated setup built no statement"
 
 /-- `statement` with `verify`'s statement flags: the derived statement (digest, Σ, `Hello`, shape) as one JSON line. With
 `--rec-inner F`, the statement must be one of V*'s at that inner shape, statement `--rec-part J` of them under the
@@ -1050,7 +1035,6 @@ def statementCmd (args : List String) : IO UInt32 := do
   let (some _, some _) := (argOf args "--circuit", argOf args "--public")
     | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-transcript F --rec-inner-session DIR [--rec-inner-circuit F --rec-inner-registration F] [--rec-inner-public F --rec-inner-partition F [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]]]] [--coins seed|os]"; return 2
   let stmtName := (argOf args "--statement").getD Tags.circuit.name
-  let templated := Tags.templated.any (·.name == stmtName)
   let some tags := Tags.find? stmtName <|> Tags.templated.find? (·.name == stmtName)
     | IO.eprintln s!"unknown statement; known: {(Tags.all ++ Tags.templated).map (·.name)}"; return 2
   let stmtTags := tags
@@ -1104,10 +1088,8 @@ def statementCmd (args : List String) : IO UInt32 := do
       RecSetup.checkInner recInner recCoins recBound
       RecBudget.regs recInner registered
       RecBudget.statements recInner
-      let st ← (if templated then buildStmtTmpl tags circuitB pubB compB coins tables partition program registered
-          publicInputs (identifier.map Prod.snd)
-        else buildStmt tags circuitB pubB compB coins tables none partition program registered publicInputs
-          (identifier.map Prod.snd))
+      let st ← buildStmt tags circuitB pubB compB coins tables none partition program registered publicInputs
+        (identifier.map Prod.snd)
       RecBudget.table recInner #[st]
       if complete then Registered.checkComplete st.c (registered.getD #[])
       KnownRead.check st.c known
