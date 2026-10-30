@@ -1,6 +1,6 @@
 """The lead's calls at the network certifier (`calls`): the shape a call's coins take, the coins flipped after its A root
-(G exactly uniform by rejection), the release word for word as the lead's kernel reads it, and the per-call count refused
-past the call's bits."""
+(G exactly uniform by rejection), the release word for word as the lead's kernel reads it, and each forward's pooled count,
+the forwards serial, refused past the forward's bits."""
 
 import itertools
 import math
@@ -9,8 +9,8 @@ import struct
 import pytest
 
 from verity.core.protocols.certifier.calls import (
-    ADMITTED_TILES, G_BOUND, RELEASE_TAG, ROT_W, CallRefusal, Calls, CallShape, Coins, EgressCap, Verdict, col_code,
-    flip, release, timing_bits,
+    ADMITTED_TILES, G_BOUND, RELEASE_TAG, ROT_W, CallCoins, CallRefusal, Calls, CallShape, EgressCap, ForwardVerdict,
+    col_code, flip, release, timing_bits,
 )
 from verity.ml.commitments.identity import tagged_sha512
 
@@ -18,7 +18,7 @@ ROOT_A, ROOT_W = bytes(range(64)), bytes(range(64, 128))
 #: m 16, n 8, S 1, H 1, one tile: 64 bytes of row words, 32 of G (no rejection) and 24 of lanes.
 SMALL = CallShape(1, 8, 1)
 SMALL_ENTROPY = 64 + 32 + 24
-#: rows · n · K = 8192, so a cap of 32 bits over 8192 MACs gives it exactly 32 bits.
+#: rows · n · K = 8192 MACs, so a cap of 32 bits over 8192 gives it exactly 32 bits.
 TIGHT = CallShape(16, 8, 64)
 #: The lead's cap and its forward's MACs a token.
 LEAD = EgressCap(32, 973_078_528)
@@ -45,7 +45,7 @@ def g_feed(words, *, lanes=bytes(24)) -> Feed:
     return Feed(bytes(64) + b"".join(w.to_bytes(4, "little") for w in words) + lanes)
 
 
-def weights(coins: Coins) -> list[tuple[int, ...]]:
+def weights(coins: CallCoins) -> list[tuple[int, ...]]:
     return [tuple(coins.G(q, j) for q in range(4)) for j in range(coins.shape.n)]
 
 
@@ -53,7 +53,7 @@ def words(data: bytes) -> list[int]:
     return list(struct.unpack(f"<{len(data) // 4}I", data))
 
 
-def kernel_feed(coins: Coins) -> list[int]:
+def kernel_feed(coins: CallCoins) -> list[int]:
     """The release as the lead's kernel lays it out, built a word at a time from the coins' values: row i's words with
     a₁[i, e] at bit e and b_t[i] at bit t + 3; column j's G word, byte e the int8 G[e, j]; then each tile's lane-coin
     words, (t·n + j), bytes 0–2 the int8 s_t[e, k, j] and byte 3 C[3, j] at step 0 and 1 later; and its column sources,
@@ -218,61 +218,66 @@ def test_coins_hold_their_sizes_and_ranges():
                 {"g": bytes([0xFC]) + good.g[1:]}, {"u": good.u[:-1]}, {"u": bytes([128]) + good.u[1:]},
                 {"rows": bytearray(good.rows)}):
         with pytest.raises(ValueError):
-            Coins(**{"shape": shape, "rows": good.rows, "g": good.g, "u": good.u, **bad})
-    assert Coins(shape, bytes([0b11_1111]) + good.rows[1:], bytes([0xFD, 3]) + good.g[2:], bytes([127]) + good.u[1:])
+            CallCoins(**{"shape": shape, "rows": good.rows, "g": good.g, "u": good.u, **bad})
+    assert CallCoins(shape, bytes([0b11_1111]) + good.rows[1:], bytes([0xFD, 3]) + good.g[2:], bytes([127]) + good.u[1:])
 
 
 def test_the_coins_follow_the_a_root_and_go_out_once():
     seen: list[list[str]] = []
 
     def entropy(k: int) -> bytes:
-        seen.append([c["a_root"] for c in calls.summary()])
+        seen.append([c["a_root"] for f in calls.summary() for c in f["calls"]])
         return bytes(k)
 
     calls = Calls(LEAD, entropy)
-    for refused in (lambda: calls.words_root(0, ROOT_W), lambda: calls.a_root(0, b"short", SMALL),
-                    lambda: calls.a_root(-1, ROOT_A, SMALL), lambda: calls.a_root(True, ROOT_A, SMALL),
-                    lambda: calls.a_root(0, ROOT_A, (1, 8, 1))):
+    for refused in (lambda: calls.words_root(0, ROOT_W), lambda: calls.a_root(0, 0, b"short", SMALL),
+                    lambda: calls.a_root(-1, 0, ROOT_A, SMALL), lambda: calls.a_root(0, -1, ROOT_A, SMALL),
+                    lambda: calls.a_root(True, 0, ROOT_A, SMALL), lambda: calls.a_root(0, True, ROOT_A, SMALL),
+                    lambda: calls.a_root(0, 0, ROOT_A, (1, 8, 1))):
         with pytest.raises(CallRefusal):
             refused()
-    assert seen == [] and calls.summary() == []
-    out = calls.a_root(0, ROOT_A, SMALL)
+    assert seen == [] and calls.summary() == [] and calls.open_forward is None
+    out = calls.a_root(0, 0, ROOT_A, SMALL)
     assert len(out) == SMALL.release_bytes and seen and all(ROOT_A.hex() in held for held in seen)
     reads = len(seen)
     with pytest.raises(CallRefusal, match="once"):
-        calls.a_root(0, ROOT_A, SMALL)
+        calls.a_root(0, 0, ROOT_A, SMALL)
     assert len(seen) == reads
-    assert calls.summary()[0]["release"] == tagged_sha512(RELEASE_TAG, out).hex()
+    assert calls.summary()[0]["calls"][0]["release"] == tagged_sha512(RELEASE_TAG, out).hex()
 
 
-def test_a_call_whose_coins_arent_flipped_is_refused_and_never_opens():
+def test_a_call_whose_coins_arent_flipped_refuses_its_forward_which_stays_open():
     def broken(k: int) -> bytes:
         raise OSError("no entropy")
 
     calls = Calls(LEAD, broken)
     with pytest.raises(OSError):
-        calls.a_root(0, ROOT_A, SMALL)
-    with pytest.raises(CallRefusal):
-        calls.words_root(0, ROOT_W)
+        calls.a_root(0, 0, ROOT_A, SMALL)
+    assert calls.open_forward == 0
     with pytest.raises(CallRefusal, match="once"):
-        calls.a_root(0, ROOT_A, SMALL)
+        calls.a_root(0, 0, ROOT_A, SMALL)
+    with pytest.raises(ValueError, match="failed earlier"):
+        calls.a_root(0, 1, ROOT_A, SMALL)
+    assert calls.words_root(0, ROOT_W) is ForwardVerdict.NO_COINS
     short = Calls(LEAD, lambda k: bytes(k - 1))
     with pytest.raises(ValueError, match="entropy gave"):
-        short.a_root(0, ROOT_A, SMALL)
-    assert calls.close() == short.close() == {0: Verdict.NO_COINS}
-    assert calls.summary()[0]["release"] is None and calls.summary()[0]["verdict"] == Verdict.NO_COINS.value
+        short.a_root(0, 0, ROOT_A, SMALL)
+    assert calls.close() == short.close() == {0: ForwardVerdict.NO_COINS}
+    assert [c["release"] for c in calls.summary()[0]["calls"]] == [None, None]
+    assert calls.summary()[0]["verdict"] == ForwardVerdict.NO_COINS.value
 
 
 def test_once_the_entropy_fails_the_window_flips_nothing_more():
     feed = Feed(bytes(SMALL_ENTROPY))
     calls = Calls(LEAD, feed)
     with pytest.raises(RuntimeError, match="ran out"):
-        calls.a_root(0, ROOT_A, CallShape(64, 64, 64))
+        calls.a_root(0, 0, ROOT_A, CallShape(64, 64, 64))
+    assert calls.words_root(0, ROOT_W) is ForwardVerdict.NO_COINS
     read = feed.read
     with pytest.raises(ValueError, match="failed earlier"):
-        calls.a_root(1, ROOT_A, SMALL)
+        calls.a_root(1, 0, ROOT_A, SMALL)
     assert feed.read == read < SMALL_ENTROPY
-    assert calls.close() == {0: Verdict.NO_COINS, 1: Verdict.NO_COINS}
+    assert calls.close() == {0: ForwardVerdict.NO_COINS, 1: ForwardVerdict.NO_COINS}
 
 
 def test_timing_bits_are_ceil_log2_of_r_plus_1():
@@ -283,62 +288,106 @@ def test_timing_bits_are_ceil_log2_of_r_plus_1():
             timing_bits(bad)
 
 
-def test_a_call_is_refused_once_its_count_passes_its_bits():
-    calls = Calls(EgressCap(32, 16 * 8 * 64))
-    calls.a_root(0, ROOT_A, TIGHT)
-    assert calls.bucket(32, [26]) == []
-    assert calls.bucket(0) == []
-    assert calls.bucket(1) == [0]
-    assert calls.bucket(1) == []
-    assert calls.words_root(0, ROOT_W) is Verdict.PAST_BITS
+@pytest.mark.parametrize("last,verdict", [(0, ForwardVerdict.ACCEPTED), (1, ForwardVerdict.PAST_BITS)])
+def test_a_forward_is_refused_when_its_count_passes_its_bits(last, verdict):
+    """TIGHT's 8192 MACs at a cap of 32 bits over 8192: 6 timing bits and 26 content bits, then one more bucket."""
+    calls = Calls(EgressCap(32, TIGHT.macs))
+    calls.a_root(0, 0, ROOT_A, TIGHT)
+    calls.bucket(32, [26])
+    calls.bucket(last)
+    assert calls.words_root(0, ROOT_W) is verdict
 
 
-@pytest.mark.parametrize("count,verdict", [(10, Verdict.ACCEPTED), (11, Verdict.PAST_BITS)])
+@pytest.mark.parametrize("count,verdict", [(64, ForwardVerdict.ACCEPTED), (65, ForwardVerdict.PAST_BITS)])
+def test_a_forward_pools_its_calls_bits_and_counts_each_bucket_once(count, verdict):
+    """Two TIGHT calls bring 32 bits each; every bucket of the span counts once against their 64, never once a call."""
+    calls = Calls(EgressCap(32, TIGHT.macs))
+    calls.a_root(0, 0, ROOT_A, TIGHT)
+    calls.bucket(1, [count // 2 - 1])
+    calls.a_root(0, 1, ROOT_A, TIGHT)
+    calls.bucket(1, [count - count // 2 - 1])
+    assert calls.words_root(0, ROOT_W) is verdict
+
+
+@pytest.mark.parametrize("count,verdict", [(10, ForwardVerdict.ACCEPTED), (11, ForwardVerdict.PAST_BITS)])
 def test_a_share_that_isnt_an_integer_compares_exactly(count, verdict):
-    calls = Calls(EgressCap(32, 3 * 16 * 8 * 64))
-    calls.a_root(0, ROOT_A, TIGHT)
+    calls = Calls(EgressCap(32, 3 * TIGHT.macs))
+    calls.a_root(0, 0, ROOT_A, TIGHT)
     calls.bucket(1, [count - 1])
     assert calls.words_root(0, ROOT_W) is verdict
 
 
-def test_the_lead_gives_a_t512x64_call_8_bits_and_a_decode_call_none():
-    assert not LEAD.passed(CallShape(64, 2048, 2048), 8) and LEAD.passed(CallShape(64, 2048, 2048), 9)
+def test_the_lead_gives_a_forward_32_bits_a_row():
+    """Llama-3.2-1B's 16 layers of linears are the lead's fwdMacs at one row, so a decode forward has 32 bits and a
+    forward of 64 rows 2048. A forward the certifier holds at r = 0 counts nothing; one bucket a call at r = 1 passes."""
+    decode = [CallShape(1, n, K) for K, n in LLAMA] * 16
+    macs = sum(sh.macs for sh in decode)
+    assert macs == LEAD.fwd_macs
+    assert not LEAD.passed(macs, 32) and LEAD.passed(macs, 33)
+    assert not LEAD.passed(64 * macs, 2048) and LEAD.passed(64 * macs, 2049)
     held, leaky = Calls(LEAD), Calls(LEAD)
-    for calls in (held, leaky):
-        calls.a_root(0, ROOT_A, CallShape(1, 2048, 2048))
-    for _ in range(600):
-        assert held.bucket(0) == []
-    assert leaky.bucket(1) == [0]
-    assert held.words_root(0, ROOT_W) is Verdict.ACCEPTED and leaky.words_root(0, ROOT_W) is Verdict.PAST_BITS
+    for calls, r in ((held, 0), (leaky, 1)):
+        for j, sh in enumerate(decode):
+            calls.open(0, j, ROOT_A, sh)
+            calls.released(0, j, b"")
+            calls.bucket(r)
+    assert held.words_root(0, ROOT_W) is ForwardVerdict.ACCEPTED
+    assert leaky.words_root(0, ROOT_W) is ForwardVerdict.PAST_BITS
 
 
-def test_a_bucket_inside_two_spans_counts_against_both():
-    calls = Calls(EgressCap(32, 16 * 8 * 64))
-    calls.a_root(0, ROOT_A, TIGHT)
-    calls.bucket(1, [20])
-    calls.a_root(1, ROOT_A, TIGHT)
-    assert calls.bucket(1, [11]) == [0]
-    assert calls.bucket(1, [18]) == []
-    assert calls.bucket(1, [0]) == []
-    assert calls.bucket(1) == [1]
-    assert calls.close() == {0: Verdict.PAST_BITS, 1: Verdict.PAST_BITS}
+@pytest.mark.parametrize("count,verdict", [(29, ForwardVerdict.ACCEPTED), (30, ForwardVerdict.PAST_BITS)])
+def test_the_release_counts_once_a_forward_when_its_words_root_closes_it(count, verdict):
+    calls = Calls(EgressCap(32, TIGHT.macs), release_bits=3)
+    for forward in (0, 1):
+        calls.a_root(forward, 0, ROOT_A, TIGHT)
+        calls.bucket(1, [count - 1])
+        assert calls.words_root(forward, ROOT_W) is verdict
 
 
-def test_buckets_outside_a_span_dont_count():
-    calls = Calls(EgressCap(32, 16 * 8 * 64))
+@pytest.mark.parametrize("bad", [-1, 1.0, True])
+def test_a_releases_bits_are_an_integer(bad):
+    with pytest.raises(ValueError):
+        Calls(LEAD, release_bits=bad)
+
+
+def test_the_forwards_are_serial_and_a_closed_forward_takes_no_call():
+    feed = Feed(bytes(3 * SMALL_ENTROPY))
+    calls = Calls(LEAD, feed)
+    calls.a_root(0, 0, ROOT_A, SMALL)
+    read = feed.read
+    with pytest.raises(CallRefusal, match="serial"):
+        calls.a_root(1, 0, ROOT_A, SMALL)
+    with pytest.raises(CallRefusal, match="not open"):
+        calls.words_root(1, ROOT_W)
+    assert feed.read == read and calls.open_forward == 0
+    calls.a_root(0, 1, ROOT_A, SMALL)
+    assert calls.words_root(0, ROOT_W) is ForwardVerdict.ACCEPTED and calls.open_forward is None
+    for refused in (lambda: calls.a_root(0, 2, ROOT_A, SMALL), lambda: calls.words_root(0, ROOT_W)):
+        with pytest.raises(CallRefusal, match="closed|not open"):
+            refused()
+    calls.a_root(1, 0, ROOT_A, SMALL)
+    assert calls.open_forward == 1 and feed.read == 3 * SMALL_ENTROPY
+
+
+def test_buckets_outside_a_forward_dont_count():
+    calls = Calls(EgressCap(32, TIGHT.macs))
     calls.bucket(64, [10**6] * 64)
-    calls.a_root(0, ROOT_A, TIGHT)
-    calls.a_root(1, ROOT_A, TIGHT)
-    assert calls.words_root(0, ROOT_W) is Verdict.ACCEPTED
-    assert calls.bucket(64, [10**6]) == [1]
-    assert calls.close() == {0: Verdict.ACCEPTED, 1: Verdict.PAST_BITS}
+    calls.a_root(0, 0, ROOT_A, TIGHT)
+    assert calls.words_root(0, ROOT_W) is ForwardVerdict.ACCEPTED
+    calls.bucket(64, [10**6])
+    calls.a_root(1, 0, ROOT_A, TIGHT)
+    calls.bucket(64, [10**6])
+    assert calls.words_root(1, ROOT_W) is ForwardVerdict.PAST_BITS
 
 
-def test_a_malformed_bucket_is_refused():
+@pytest.mark.parametrize("bad", [(-1, []), (1, [8, 8]), (2, [-1]), (2, [1.5]), (2, [True])])
+def test_a_malformed_bucket_is_refused_open_or_not(bad):
     calls = Calls(LEAD)
-    for bad in ((-1, []), (1, [8, 8]), (2, [-1]), (2, [1.5]), (2, [True])):
-        with pytest.raises(CallRefusal):
-            calls.bucket(*bad)
+    with pytest.raises(CallRefusal):
+        calls.bucket(*bad)
+    calls.a_root(0, 0, ROOT_A, SMALL)
+    with pytest.raises(CallRefusal):
+        calls.bucket(*bad)
 
 
 @pytest.mark.parametrize("cap,macs", [(-1, 1), (32, 0), (32.0, 1), (32, 1.5)])
@@ -347,26 +396,32 @@ def test_an_egress_cap_is_bits_over_macs(cap, macs):
         EgressCap(cap, macs)
 
 
-def test_a_call_open_when_the_window_closes_is_refused_and_the_window_takes_nothing_after():
+def test_a_forward_open_when_the_window_closes_is_refused_and_the_window_takes_nothing_after():
     calls = Calls(LEAD)
-    calls.a_root(0, ROOT_A, SMALL)
-    calls.a_root(1, ROOT_A, SMALL)
-    assert calls.words_root(1, ROOT_W) is Verdict.ACCEPTED
-    with pytest.raises(CallRefusal, match="not open"):
-        calls.words_root(1, ROOT_W)
-    assert calls.close() == {0: Verdict.UNCLOSED, 1: Verdict.ACCEPTED}
-    for late in (lambda: calls.a_root(2, ROOT_A, SMALL), lambda: calls.words_root(0, ROOT_W), lambda: calls.bucket(0),
+    calls.a_root(0, 0, ROOT_A, SMALL)
+    assert calls.words_root(0, ROOT_W) is ForwardVerdict.ACCEPTED
+    calls.a_root(1, 0, ROOT_A, SMALL)
+    calls.open(1, 1, ROOT_A, SMALL)
+    assert calls.close() == {0: ForwardVerdict.ACCEPTED, 1: ForwardVerdict.UNCLOSED}
+    for late in (lambda: calls.a_root(2, 0, ROOT_A, SMALL), lambda: calls.open(1, 2, ROOT_A, SMALL),
+                 lambda: calls.released(1, 1, b""), lambda: calls.words_root(1, ROOT_W), lambda: calls.bucket(0),
                  calls.close):
         with pytest.raises(CallRefusal, match="closed"):
             late()
+    assert calls.summary()[1]["calls"][1]["release"] is None
 
 
-def test_the_record_carries_shape_roots_release_digest_and_verdict_and_no_count():
-    calls = Calls(EgressCap(32, 16 * 8 * 64))
-    out = calls.a_root(3, ROOT_A, TIGHT)
+def test_the_record_carries_each_forwards_calls_words_root_and_verdict_and_no_count():
+    calls = Calls(EgressCap(32, TIGHT.macs))
+    out1 = calls.a_root(3, 1, ROOT_A, TIGHT)
+    out0 = calls.a_root(3, 0, ROOT_W, SMALL)
     calls.bucket(1, [7])
-    want = {"call": 3, "rows": 16, "cols": 8, "K": 64, "a_root": ROOT_A.hex(),
-            "release": tagged_sha512(RELEASE_TAG, out).hex(), "words_root": None, "verdict": None}
+    want = {"forward": 3,
+            "calls": [{"call": 0, "rows": 1, "cols": 8, "K": 1, "a_root": ROOT_W.hex(),
+                       "release": tagged_sha512(RELEASE_TAG, out0).hex()},
+                      {"call": 1, "rows": 16, "cols": 8, "K": 64, "a_root": ROOT_A.hex(),
+                       "release": tagged_sha512(RELEASE_TAG, out1).hex()}],
+            "words_root": None, "verdict": None}
     assert calls.summary() == [want]
     calls.words_root(3, ROOT_W)
     assert calls.summary() == [{**want, "words_root": ROOT_W.hex(), "verdict": "accepted"}]
