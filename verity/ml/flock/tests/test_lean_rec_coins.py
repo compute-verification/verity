@@ -1,10 +1,10 @@
 """V*'s verifier-registered values against the verifier's own coins (`Flock/RecCoins.lean`, `verify --rec-inner-*`): the
-smallest level of a recorded recursive session (`r20261009-111638-6720`, class (16,16,8) at 64 instances: level 3,
+smallest level of a recorded recursive session (class (16,16,8) at 64 instances: level 3,
 `rec-open/l16-h4`, 106 openings), restaged by `rec_vstage.stage` from the fetched fixture `rec-coins/16-16-8-n64`: the inner
 statement, the inner session's public record and the prover's, V*'s fold, points and running-sum salts, the level's
 recorded `pub.bin` and `registered.json`, and its recorded outer session. The level and its outer session were proved
-again at the current leaf scheme (`r20261010-040650-84a9`: the inner statement's leaves are unsalted, so the rest of the
-session is 6720's), before #1677's OS masks, as `verity/flock-circuit@cec3e347`. `verify` sets V*'s statements up only
+again at the current leaf scheme (the inner statement's leaves are unsalted, so the rest of the
+session is the first record's), before the OS masks, as `verity/flock-circuit@cec3e347`. `verify` sets V*'s statements up only
 as `verity/flock-circuit`, so the recorded outer session is refused at the record's first check (S2/R7) once every V*
 check has passed at setup. The honest level passes setup at the honest inner session and the coin server's transcript of
 it (`--rec-inner-transcript`), and is refused without either, at a transcript whose level-3 tops or link points are not
@@ -609,7 +609,7 @@ def test_a_parts_row_ports_are_the_verifiers_shared_rows(algebra, shape, undrawn
 
     Each verify sets the part's statement up over its whole population before any V* check (about 9 minutes at one core and
     4 GB), and none can reuse another's: each runs the verifier on other files. So they run at once, the next test's beside
-    these (with the salted staging, the five took 49 minutes one after the other, `r20261010-121137-2b46`)."""
+    these (with the salted staging, the five took 49 minutes one after the other)."""
     a = next(p for p in sorted(algebra.iterdir()) if "acc0" in json.loads((p / "registered.json").read_text())["ports"])
     unit = _unit(a)
     with cf.ThreadPoolExecutor(max_workers=3) as ex:
