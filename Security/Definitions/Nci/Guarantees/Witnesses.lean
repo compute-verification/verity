@@ -11,6 +11,7 @@ import Definitions.Nci.Assumptions.Training
 import Definitions.Nci.Assumptions.PackedTraining
 import Definitions.Nci.Support
 import Definitions.Nci.Guarantees.CoverTraining
+import Definitions.Nci.Guarantees.CoverChained
 import Definitions.Nci.Guarantees.Remote
 
 /-!
@@ -30,7 +31,8 @@ reference circuit (at the threading `T0` of no counted multiplication, every bou
 in the read cap `k` (at `Dθ`, the declaration registering the token too, the toy complies at `k = 0`), the size of the
 reference circuit for `Training`, the sessions for `Inference`, `WindowsHold` for the dampener, and PoUW's soundness
 (`PouwSound`) for the remote dampener. The cover theorem's joins (`Nci.Cover.Guarantees.CoverTraining` and
-`CoverTrainingAligned`) are stated at the multiplication blocks `mb0` of no product, where coverage `α₀ > 0` fails.
+`CoverTrainingAligned`) are stated at the multiplication blocks `mb0` of no product, where coverage `α₀ > 0` fails;
+`CoverTrainingChained` at the toy's two products on its bit view, where at depth `0` the cap `k < c_w D` fails.
 -/
 
 namespace Nci.Guarantees
@@ -458,5 +460,22 @@ def CoverTrainingAligned_nontrivial : Prop :=
     Assumptions.BlockFits D 2 1 1 4 ∧ ¬ Nci.Assumptions.Coverage 2 D (mb0 D).P.card ∧
     ¬ (2 * 1 * ((1 : ℕ) : ℝ) * ((2 : ℕ) : ℝ) * D.D.size D.D.computed ≤
         (((1 : ℕ) : ℝ) * ((1 : ℕ) : ℝ) + 1 * ((1 : ℕ) : ℝ) * ((1 : ℕ) : ℝ)) * D.D.size D.D.computed)
+
+/-- **`CoverTrainingChained`'s premises hold together** at the toy, with `c = 2`, `k = 1`, `c_w = 1`, `r = d = Toy.D`
+through the containment of the toy in itself, the toy's two products on its bit view (`mbBits`), which a set of bits
+completes only when it is handed the token's bit, at depth `D = 2` and block size `s = 4`. -/
+def CoverTrainingChained_honest : Prop :=
+  Nci.Complies 2 1 D ∧ Nci.Assumptions.ThetaRegistered D D M1 ∧
+    Nci.Assumptions.ParameterHardAt (bitDecl D) mbBits 4 1 ∧ Assumptions.CapBelowDepth 1 1 2 ∧
+    Assumptions.BlockFits D 2 1 1 4
+
+/-- **`CoverTrainingChained` without `k < c_w D`**: at depth `D = 0` both of `mbBits`' products are chained at
+`c_a = 2`, and `c_w c_a c |𝓜*| = 8` exceeds `(k² + c_w c_a k) size(d) = 6`. -/
+def CoverTrainingChained_nontrivial : Prop :=
+  (0 : ℝ) < 2 ∧ Nci.Complies 2 1 D ∧ Nci.Assumptions.ThetaRegistered D D M1 ∧
+    Nci.Assumptions.ParameterHardAt (bitDecl D) mbBits 4 1 ∧ ¬ Assumptions.CapBelowDepth 1 1 0 ∧
+    Assumptions.BlockFits D 2 1 1 4 ∧
+    ¬ (1 * 2 * ((2 : ℕ) : ℝ) * (Nci.Assumptions.chainedBlocksAt (bitDecl D) mbBits 0 2).card ≤
+        (((1 : ℕ) : ℝ) * ((1 : ℕ) : ℝ) + 1 * 2 * ((1 : ℕ) : ℝ)) * D.D.size D.D.computed)
 
 end Nci.Cover.Guarantees

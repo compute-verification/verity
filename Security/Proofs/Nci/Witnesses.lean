@@ -453,6 +453,43 @@ theorem capBelowDepth_one_two : Cover.Assumptions.CapBelowDepth 1 1 2 := by
   unfold Cover.Assumptions.CapBelowDepth
   norm_num
 
+/-- The token's bit in the toy's bit view. -/
+def tokenBit : Fin (Cover.bitDecl D).D.N := Fin.cast (by decide : 4 = (Cover.bitDecl D).D.N) 1
+
+theorem tokenBit_read : ∀ j, tokenBit ∈ (Cover.bitDecl D).D.reads (productBit j) := by decide
+
+theorem tokenBit_source : tokenBit ∈ Covering.sources (Cover.bitDecl D).D := by decide
+
+theorem tokenBit_not_θ : tokenBit ∉ (Cover.bitDecl D).θ := by decide
+
+/-- A set of bits that completes one of `mbBits`' products is handed the token's bit, one bit outside the registered
+ones, and there is one weight. -/
+theorem mbBits_parameterHard (s : ℕ) : Assumptions.ParameterHardAt (Cover.bitDecl D) mbBits s 1 := by
+  classical
+  intro S _
+  rw [one_mul]
+  by_cases h : (mbBits.weightsCompleted S).Nonempty
+  · obtain ⟨i, hi⟩ := h
+    obtain ⟨p, hp, -⟩ := mem_image.1 hi
+    have ho : mbBits.o p ∈ S.inner := (mem_filter.1 hp).2 (mem_singleton_self _)
+    obtain ⟨hg, hn⟩ := mem_sdiff.1 ho
+    have htok : tokenBit ∈ S.gates := S.closed _ hg hn (tokenBit_read p.2)
+    have h1 : (mbBits.weightsCompleted S).card ≤ 1 := (card_le_univ _).trans_eq (Fintype.card_fin _)
+    have h2 : 1 ≤ (S.ins \ (Cover.bitDecl D).θ).card :=
+      card_pos.2 ⟨_, mem_sdiff.2 ⟨S.sources_ins _ htok tokenBit_source, tokenBit_not_θ⟩⟩
+    exact_mod_cast h1.trans h2
+  · rw [not_nonempty_iff_eq_empty.1 h]
+    simp
+
+/-- At depth `0` every product is chained, with no activation and no upstream weight. -/
+theorem mbBits_chained_zero (ca : ℝ) : (Assumptions.chainedBlocksAt (Cover.bitDecl D) mbBits 0 ca).card = 2 := by
+  classical
+  have h : Assumptions.chainedBlocksAt (Cover.bitDecl D) mbBits 0 ca = mbBits.P :=
+    filter_true_of_mem fun p hp => ⟨hp, ∅, ∅, empty_subset _, fun a ha => absurd ha (notMem_empty a),
+      Nat.zero_le _, fun i h => absurd h (notMem_empty i), fun _ hQ => absurd hQ (Nat.not_lt_zero _)⟩
+  rw [h]
+  rfl
+
 end Nci.Witness
 
 namespace Nci.SecurityProofs
@@ -689,7 +726,7 @@ theorem DampenerRemote_honest : Guarantees.DampenerRemote_honest :=
 theorem DampenerRemote_nontrivial : Guarantees.DampenerRemote_nontrivial := by
   refine ⟨by norm_num, by norm_num, fun _ => by norm_num, oneWindow_withinCompute, oneWindow_not_pouwSound,
     by norm_num, by norm_num, by norm_num, fun _ b => b.elim, fun _ b => b.elim,
-    fun _ _ _ => by simp [OneWindow.bad], by norm_num, fun b => b.elim, by norm_num, by norm_num, by norm_num,
+    fun _ _ _ => by simp, by norm_num, fun b => b.elim, by norm_num, by norm_num, by norm_num,
     fun _ b => b.elim, fun b => b.elim, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
     by norm_num, by norm_num, by norm_num, complies_D, theta_id D, T0_threaded _ _ _ _ _, T0_weights _ _ _ _ _,
     by rw [size_D]; norm_num, by norm_num, by decide, by norm_num,
@@ -722,5 +759,12 @@ theorem CoverTrainingAligned_honest : Guarantees.CoverTrainingAligned_honest :=
 theorem CoverTrainingAligned_nontrivial : Guarantees.CoverTrainingAligned_nontrivial :=
   ⟨by norm_num, complies_D, theta_id D, mb0_updateHardness D 4 1, mb0_upstream D _ 2, capBelowDepth_one_two,
     mb0_regionsAtLeast D _ 1, D_blockFits, mb0_not_coverage_two, by rw [size_D]; norm_num⟩
+
+theorem CoverTrainingChained_honest : Guarantees.CoverTrainingChained_honest :=
+  ⟨complies_D, theta_id D, mbBits_parameterHard 4, capBelowDepth_one_two, D_blockFits⟩
+
+theorem CoverTrainingChained_nontrivial : Guarantees.CoverTrainingChained_nontrivial :=
+  ⟨by norm_num, complies_D, theta_id D, mbBits_parameterHard 4,
+    by unfold Assumptions.CapBelowDepth; norm_num, D_blockFits, by rw [mbBits_chained_zero, size_D]; norm_num⟩
 
 end Nci.Cover.SecurityProofs

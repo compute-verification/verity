@@ -8310,6 +8310,12 @@
    "assumptions": [],
    "type_hash": "9a1943883ad405f64f840a9b45038f151f41e7326de41401e2ab942670210f83"
   },
+  "Nci.Cover.SecurityProofs.CoverTrainingChained_honest": {
+   "owner": "@training"
+  },
+  "Nci.Cover.SecurityProofs.CoverTrainingChained_nontrivial": {
+   "owner": "@training"
+  },
   "Nci.Cover.SecurityProofs.CoverTraining_honest": {
    "owner": "@training"
   },
@@ -60866,6 +60872,11 @@
   "Nci.Cover.SecurityProofs.CoverTrainingAligned": {
    "honest": ["Nci.Cover.SecurityProofs.CoverTrainingAligned_honest"],
    "nontrivial": "Nci.Cover.SecurityProofs.CoverTrainingAligned_nontrivial",
+   "kind": "exclusion"
+  },
+  "Nci.Cover.SecurityProofs.CoverTrainingChained": {
+   "honest": ["Nci.Cover.SecurityProofs.CoverTrainingChained_honest"],
+   "nontrivial": "Nci.Cover.SecurityProofs.CoverTrainingChained_nontrivial",
    "kind": "exclusion"
   },
   "Nci.SecurityProofs.ActivationsBoundOn": {
