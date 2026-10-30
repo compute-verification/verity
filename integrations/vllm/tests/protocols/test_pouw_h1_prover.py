@@ -4,7 +4,7 @@
 whose file wasn't written is raised by its window's `Writer.wait`, the other windows unaffected."""
 from __future__ import annotations
 
-import threading
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -77,32 +77,22 @@ def test_savez_writes_np_savezs_bytes_for_many_small_arrays_of_any_dtype(tmp_pat
     assert sorted(np.load(tmp_path / "got.npz").files) == sorted(arrays)
 
 
-def test_the_caller_waits_only_while_the_ring_is_full(tmp_path, monkeypatch):
-    """A ring of two calls' bytes takes two calls while the first is still being written, neither caller waiting; a third
-    waits for room until the first is written, so no more than the bound is ever in flight."""
-    started, gate, savez = threading.Event(), threading.Event(), PV._savez
-
-    def held(path, *arrays):
-        started.set()
-        gate.wait()
-        return savez(path, *arrays)
-    monkeypatch.setattr(PV, "_savez", held)
-    a, s_a, r = _call(3)
-    w, d = PV.Writer(2 * _size(a, s_a, r)), tmp_path / "w0"
-    w.open(d)
-    w.keep(d, 0, a, s_a, r)
-    w.keep(d, 1, a, s_a, r)
-    started.wait()
-    third = threading.Thread(target=w.keep, args=(d, 2, a, s_a, r))
-    third.start()
-    with w._cv:
-        w._cv.wait_for(lambda: w._dirs[str(d)]["waits"] > 0)
-        assert len(w._jobs) == 2 and list((d / PV.CALLS).iterdir()) == []
-    gate.set()
-    third.join()
-    assert w.wait(d) == {"calls": 3, "bytes": 3 * (a.nbytes + s_a.nbytes + r.nbytes), "waits": 1}
-    assert sorted(p.name for p in (d / PV.CALLS).iterdir()) == ["0.npz", "1.npz", "2.npz"]
+@pytest.mark.parametrize("oldest, head, n, at", [
+    (None, 0, 16, 0),
+    (0, 8, 8, 8), (0, 8, 9, None), (0, 16, 1, None),
+    (6, 12, 4, 12), (6, 12, 6, 0), (6, 12, 7, None),
+    (8, 4, 4, 4), (8, 4, 5, None), (8, 8, 1, None),
+])
+def test_a_call_goes_where_the_ring_is_free_and_the_caller_waits_only_while_it_is_full(oldest, head, n, at):
+    """`Writer.keep` waits exactly while `_fit` is None. On a ring of 16 units whose oldest queued call starts at unit
+    ``oldest`` (None: nothing queued) and whose next free unit is ``head``, a call of ``n`` units goes after the queued
+    calls, else back at the start before the oldest one, and is None only when neither has room, so no more than the
+    bound is ever in flight. The ring's state is set here, with the writer's thread already ended."""
+    w = PV.Writer(16 * PV.ALIGN)
     w.close()
+    w._jobs.extend([] if oldest is None else [SimpleNamespace(lo=oldest * PV.ALIGN)])
+    w._head = head * PV.ALIGN
+    assert w._fit(n * PV.ALIGN) == (None if at is None else at * PV.ALIGN)
 
 
 def test_a_call_not_written_fails_its_window_alone(tmp_path, monkeypatch):
