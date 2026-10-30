@@ -387,7 +387,7 @@ theorem forIn_foldlM {σ α : Type} (g : σ → α → Except String σ) (f : �
 theorem run_of_replay {p : P2Protocol.Params} {c : P2Protocol.Commitment} {e : P2Protocol.Evidence} {s : State}
     (h : P2Protocol.replay p c e = .ok s) :
     ∃ params, P2Session.requestOf c.held p.request = .ok params ∧
-      Record.run ⟨params, c.held⟩ ⟨p.notBeforeNs, e.log⟩ = .ok s := by
+      Replay.run ⟨params, c.held⟩ ⟨p.notBeforeNs, p.request, e.log⟩ = .ok s := by
   unfold P2Protocol.replay at h
   cases hq : P2Session.requestOf c.held p.request with
   | error why => simp [hq, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
@@ -417,13 +417,13 @@ theorem run_of_replay {p : P2Protocol.Params} {c : P2Protocol.Commitment} {e : P
         rw [getElem!_pos e.log _ (by omega)]
         simp
     rw [show [:e.log.size].start = 0 from rfl, show [:e.log.size].step = 1 from rfl, hsz, hl] at this
-    unfold Record.run Record.init
+    unfold Replay.run Replay.init
     rw [← Array.foldlM_toList]
     exact this
 
 /-- What every state a record's log reaches on the node keeps: the invariant, its drawn windows sized, the node's
 parameters, the store standing in as its registration, and no append coin. -/
-def Kept (node : Node) (s : State) : Prop :=
+def Kept (node : Audited) (s : State) : Prop :=
   (Inv s ∧ DrawnSized s) ∧ s.params = node.params ∧ s.reg = P2Session.standIn node.held.reg ∧ s.appendCoins = #[]
 
 theorem inv_p2init (held : P2Session.Held) (params : Params) (coins : Array ByteArray) (nb : Nat) :
@@ -432,19 +432,19 @@ theorem inv_p2init (held : P2Session.Held) (params : Params) (coins : Array Byte
   unfold Inv at h ⊢
   exact h
 
-theorem kept_init (node : Node) (r : Record) : Kept node (r.init node) :=
-  ⟨⟨inv_p2init _ _ _ _, fun t ht => by simp [Record.init, P2Session.init, State.init] at ht⟩, rfl, rfl, rfl⟩
+theorem kept_init (node : Audited) (r : Replay) : Kept node (r.init node) :=
+  ⟨⟨inv_p2init _ _ _ _, fun t ht => by simp [Replay.init, P2Session.init, State.init] at ht⟩, rfl, rfl, rfl⟩
 
-theorem kept_step {node : Node} (hm : 1 ≤ node.params.minPasses) {s s' : State} {op : P2Protocol.Op}
+theorem kept_step {node : Audited} (hm : 1 ≤ node.params.minPasses) {s s' : State} {op : P2Protocol.Op}
     (h : Kept node s) (he : P2Protocol.step node.held s op = .ok s') : Kept node s' := by
   obtain ⟨hI, hp, hr, ha⟩ := h
   have ⟨hI', fp, fr, fa⟩ := p2_step hI (hp ▸ hm) he
   exact ⟨hI', fp.trans hp, fr.trans hr, fa.trans ha⟩
 
 /-- Every state a record's log reaches on the node is `Kept`, where the node's parameters take a pass a window. -/
-theorem kept_run {node : Node} {r : Record} {s : State} (hm : 1 ≤ node.params.minPasses) (h : r.run node = .ok s) :
+theorem kept_run {node : Audited} {r : Replay} {s : State} (hm : 1 ≤ node.params.minPasses) (h : r.run node = .ok s) :
     Kept node s := by
-  unfold Record.run at h
+  unfold Replay.run at h
   rw [← Array.foldlM_toList] at h
   have key : ∀ (l : List P2Protocol.Op) (s₀ : State), Kept node s₀ →
       l.foldlM (P2Protocol.step node.held) s₀ = .ok s → Kept node s := by
@@ -477,10 +477,10 @@ theorem reach_of_fold (held : P2Session.Held) (l : List P2Protocol.Op) :
       exact ih s₁ s' h
 
 /-- Where the record's log runs every request, the state it reaches is its run's last. -/
-theorem reached_of_run {node : Node} {r : Record} {s : State} (h : r.run node = .ok s) : r.reached node = s := by
-  unfold Record.run at h
+theorem reached_of_run {node : Audited} {r : Replay} {s : State} (h : r.run node = .ok s) : r.reached node = s := by
+  unfold Replay.run at h
   rw [← Array.foldlM_toList] at h
-  unfold Record.reached
+  unfold Replay.reached
   rw [← Array.foldlM_toList, reach_of_fold _ _ _ _ h]
 
 theorem length_le_of_reads {pl : Plan} {B : Nat} (h : ReadsDistinct pl B) : pl.length ≤ B := by
@@ -505,7 +505,7 @@ theorem summary_window {s : State} {sm : Summary} (h : s.summary = some sm) {t :
 /-- **The verifier's record of a session it accepts on the node**: the run's last state `s`, one window for each of the
 node's, its registered blocks the store's units, and each window's passes those of `s`'s window, below
 `RECEIPT_LIMIT` in all, drawing `min(s, U_t)` of them, each reading at most the store's units. -/
-theorem summary_facts {node : Node} {r : Record} {sm : Summary} (hm : 1 ≤ node.params.minPasses)
+theorem summary_facts {node : Audited} {r : Replay} {sm : Summary} (hm : 1 ≤ node.params.minPasses)
     (hsm : r.summary node = some sm) :
     ∃ s, r.run node = .ok s ∧ s.outcome = some "accepted" ∧ s.summary = some sm ∧
       sm.windows.size = node.windows ∧ s.windows.size = node.windows ∧ sm.blocks = node.blocks ∧
@@ -513,7 +513,7 @@ theorem summary_facts {node : Node} {r : Record} {sm : Summary} (hm : 1 ≤ node
         (sm.windows[t]!).lengths.toList.sum = s.windows[t].receipts ∧ s.windows[t].receipts < RECEIPT_LIMIT ∧
         (sm.windows[t]!).drawn = min node.params.samples s.windows[t].receipts ∧
         ∀ L ∈ (sm.windows[t]!).lengths, L ≤ node.blocks := by
-  unfold Record.summary at hsm
+  unfold Replay.summary at hsm
   split at hsm
   · rename_i s hrun
     obtain ⟨⟨hI, hD⟩, hp, hr, ha⟩ := kept_run hm hrun
