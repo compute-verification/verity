@@ -346,7 +346,7 @@ part `s`,
 * the output tie: S's residuals at `W`, `vv` on that copy's output columns (`PartCols`) give the inner check `chk s`. -/
 def ResLinks (D : Deploy Coin) (decode : Msg → Option Flock.Readable.Read) (L : Layout) (shape : Form → Prop)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (c : ℕ → Coin), shows s x xO c →
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (c : ℕ → Coin), shows s x xO c →
     ∃ p, Flock.Readable.parseBytes decode xO = some p ∧ p.tags.typed = false ∧ p.publicInputs = none ∧
       ∃ t, ∃ ht : t < p.sts.size, ∃ (m k cl j : ℕ) (sh : _root_.Flock.Shape) (S : _root_.Flock.RecOpen.GfS)
         (ns : List ℕ) (nv : ℕ),
@@ -386,7 +386,7 @@ what is left of the input tie sits in the output tie's premise: S's residuals at
 inner check, which they do once those elements are the held messages' and the coins' coefficients. -/
 def ResReads (D : Deploy Coin) (decode : Msg → Option Flock.Readable.Read) (L : Layout) (shape : Form → Prop)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (c : ℕ → Coin), shows s x xO c →
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (c : ℕ → Coin), shows s x xO c →
     ∃ p, Flock.Readable.parseBytes decode xO = some p ∧ p.tags.typed = false ∧ p.publicInputs = none ∧
       ∃ t, ∃ ht : t < p.sts.size, ∃ (m k cl j : ℕ) (sh : _root_.Flock.Shape) (S : _root_.Flock.RecOpen.GfS)
         (ns : List ℕ) (nv : ℕ),
@@ -434,7 +434,7 @@ for part `s`,
   `chk s`. -/
 def OpenLinks (D : Deploy Coin) (decode : Msg → Option Flock.Readable.Read) (L : Layout) (shape : Form → Prop)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (c : ℕ → Coin), shows s x xO c →
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (c : ℕ → Coin), shows s x xO c →
     ∃ p, Flock.Readable.parseBytes decode xO = some p ∧ p.tags.typed = false ∧ p.publicInputs = none ∧
       ∃ t, ∃ ht : t < p.sts.size, ∃ LANES Ht : ℕ,
         _root_.Flock.RecOpen.check p.sts[t].c = .ok () ∧
@@ -485,7 +485,7 @@ among the calls the part records, which read the copy's SHA-512 gadgets. -/
 def OpenLogLinks (D : Deploy Coin) (decode : Msg → Option Flock.Readable.Read) (L : Layout) (shape : Form → Prop)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (logs : ℕ → Msg → (ℕ → Coin) → List Msg → List (Msg × Msg))
     (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (c : ℕ → Coin), shows s x xO c →
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (c : ℕ → Coin), shows s x xO c →
     ∃ p, Flock.Readable.parseBytes decode xO = some p ∧ p.tags.typed = false ∧ p.publicInputs = none ∧
       ∃ t, ∃ ht : t < p.sts.size, ∃ LANES Ht : ℕ,
         _root_.Flock.RecOpen.check p.sts[t].c = .ok () ∧
@@ -581,7 +581,7 @@ coins for part `s`, each inner round's message the part holds opens under `openi
 public file names for that round (the `b ‖ c` the part's hm96 row computes), through calls the part records. -/
 def HeldOpens {Coin Col T : Type} (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : Layout) (shape : Form → Prop)
     (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (opening : Opening) (dig : Msg → ℕ → Msg → Msg) (s : ℕ) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
     Flock.check DO.parse xO w = true → ∀ c, shows s x xO c → ∀ i < L.rounds x, ∀ m, L.held x s w i = some m →
       ∃ cs, cs ⊆ L.calls x s w ∧ opening.opens (dig x i xO) m cs
 
@@ -594,7 +594,7 @@ input either climb hashes is one the setup evaluates at `xO` (`D.setup xO`) or o
 def RegClimbs {Coin Col T : Type} (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : Layout)
     (shape : Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt dig : Msg → ℕ → Msg → Msg) (s : ℕ) :
     Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
     Flock.check DO.parse xO w = true → ∀ c, shows s x xO c → ∀ i < L.rounds x, ∀ m, L.held x s w i = some m →
       ∃ fs gs : List (Msg → Msg), StepsApart fs gs ∧ chainH H fs (dig x i xO) = chainH H gs (cmt x i xO) ∧
         ∀ u ∈ chainIns H fs (dig x i xO) ++ chainIns H gs (cmt x i xO), u ∈ D.setup xO ∨ (u, H u) ∈ L.calls x s w

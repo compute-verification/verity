@@ -12,7 +12,8 @@
 #        honest-own     the honest session, the verifier's own anchors file                         ACCEPT
 #        honest-wrong   the honest session, one bit of one anchor wrong in the verifier's file      REJECT
 #        honest-chosen  the honest session, the same anchor bit chosen by the prover (public file)  REJECT
-#        st-<case>      the selftest build's records under verity/flock-circuit+seed-injection: honest ACCEPT;
+#        st-<case>      the selftest build's records under verity/flock-circuit+seed-injection, a statement flock-verify
+#                       refuses once every check has passed (`ProvedScope.servedForm`): honest passes every check;
 #                       output_row_committed_false (a tampered output row), output_claim_false, unit_internal_bit_flipped
 #                       and public_input_claim_false (a false anchor claim, the verifier's file agreeing with it) REJECT
 #      until T4 the verifier refuses --public-inputs (#1179), so summarize.py expects each row-unit check REFUSED; once every
