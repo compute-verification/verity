@@ -178,7 +178,8 @@ def _claimed(public: Path, session: str) -> tuple[int, ...]:
     outcome names; none when its files don't say."""
     try:
         return PF.proved_units(public, Path(session))
-    except (OSError, ValueError, KeyError, IndexError, TypeError):
+    except (OSError, ValueError, KeyError, IndexError, TypeError) as e:
+        print(f"pouw_piece: {session}: its files name no units ({type(e).__name__}: {e})", file=sys.stderr)
         return ()
 
 
