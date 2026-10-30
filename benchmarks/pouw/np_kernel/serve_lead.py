@@ -10,9 +10,9 @@ in-process certifier's. Measurement only: what it serves credits nothing.
   Llama-3.2-1B's four fused linears at each of 1, 17, 100 and 640 rows through `lead.LeadRun`, under fresh coins
   (`feed.InProcessCertifier`) and under pooled ones (`PooledCertifier`), its window keyings from fixed bytes
   (`FixedKeys`): every served output against `reference` and against stock's y (`int8_exact.dequantize` of the exact
-  product, verity_int8's) bit for bit, its buffers poisoned first, and at mode 2 each window's recorded words root
-  against the CPU's (`lead_rows.WindowKeying.words_root`) over the same calls' exported words. Exits 1 on any that
-  differs.
+  product, verity_int8's) bit for bit, its buffers poisoned first, each window's recorded root(A_j) against the CPU's
+  (`lead_rows.WindowKeying.a_root`) over the same rows, and at mode 2 each window's recorded words root against the
+  CPU's (`lead_rows.WindowKeying.words_root`) over the same calls' exported words. Exits 1 on any that differs.
 * ``serve``: serve-openai (``ARGS``, its own arguments) with the lead on its engine: ``protocols`` the lead's scheme and
   its ``backend`` this library, added to serve-openai's engine options; the coin link a `PooledCertifier` prepared once
   the linears are loaded. ``--audit N`` checks the first N calls' outputs against `reference` and stock's. ``--stats``
@@ -26,9 +26,9 @@ in-process certifier's. Measurement only: what it serves credits nothing.
 Modes (`SsnLead`): 2 the lead, each call's words exported into a buffer of their own and added at once to the window's
 `lead_rows.DeviceWords` (on ``--lanes`` side streams), whose top the committer keys as the forward's words root; 1
 exported and dropped; 0 the GEMM serving y alone. At 1 and 0 a window's words top is zeros: their records commit to no
-words. What isn't served yet:
+words. At every mode each call's A is hashed on the device where the arm quantized it (`lead_rows.device_a_top`, through
+`SsnLead.a_top`), and the committer keys its top as root(A_j) (`lead.LeadRun`). What isn't served yet:
 
-* root(A_j) is the committer's keyed root (`lead.LeadRun`), hashed on the host from a copy of the call's rows;
 * a call's words are exported whole before they are hashed, ``64 ceil(m / 64) N S`` words of the device's a call;
 * the coins are this process's (`PooledCertifier`): each (K, N)'s coins are sampled once before serving, for the most
   rows a call takes, and each call is fed their leading rows and tiles, so every call of a shape reads the same coins
@@ -271,7 +271,7 @@ class SsnLead:
         self.dom: Any = None
         self.streams: list[bytes] = []
         self.audits: list[dict[str, Any]] = []
-        self.stats = {"calls": 0, "rows": 0, "feed_bytes": 0, "export_bytes": 0, "call_s": 0.0, "passes": 0}
+        self.stats = {"calls": 0, "rows": 0, "feed_bytes": 0, "export_bytes": 0, "call_s": 0.0, "a_s": 0.0, "passes": 0}
 
     def load(self, w: int, layer: Any) -> None:
         import torch
@@ -282,16 +282,26 @@ class SsnLead:
         self.shapes[w], self.weights[w] = (n, k), (layer.weight, layer.weight_scale)
 
     def ready(self) -> int:
-        """The library's call buffers, and at mode 2 the native collector's extension (built once, before serving)."""
+        """The library's call buffers, and the native collector's extension that hashes A and mode 2's words (built
+        once, before serving)."""
         if self.held is None:
             got = ctypes.c_ulonglong(0)
             _rc("ready", self.lib.so.ssn_lead_ready(ctypes.byref(got)))
             self.held = got.value
-            if self.mode == 2:
-                from verity_vllm.commit.committer import native_collect as NC
-                ext = NC.ext()
-                self.native = (ext, ext.StepHasher())
+            from verity_vllm.commit.committer import native_collect as NC
+            ext = NC.ext()
+            self.native = (ext, ext.StepHasher())
         return self.held
+
+    def a_top(self, dom: Any, xq: Any) -> bytes:
+        """The top of A_j's instance under ``dom``, hashed on the device from the call's rows ``xq``
+        (`lead_rows.device_a_top`)."""
+        from verity_vllm.commit import lead_rows as L
+        self.ready()
+        t0 = time.perf_counter()
+        top = L.device_a_top(*self.native, dom, xq, _stream())
+        self.stats["a_s"] += time.perf_counter() - t0
+        return top
 
     def call(self, w: int, layer: Any, xq: Any, s_a: Any, feed: Any, dom: Any) -> Any:
         import torch
@@ -404,12 +414,14 @@ def check(a: argparse.Namespace) -> int:
                 lines.append({"check": "call", "coins": name, "mode": a.mode, "m": m, "n": n, "k": k, **got})
             record, leaves = run.record, run.leaves
             run.end_pass()
-            line = {"check": "words_root", "coins": name, "mode": a.mode, "m": m, "leaves": leaves,
-                    "root": record.words_root.hex()[:16]}
+            twin = FixedKeys.twin(i, len(SERVED), weights_root, record.salt)
+            cpu_a = [twin.a_root(PL.FORWARD, w, rows[m, w][0].cpu().numpy().tobytes()) for w in range(len(SERVED))]
+            line = {"check": "roots", "coins": name, "mode": a.mode, "m": m, "leaves": leaves,
+                    "root": record.words_root.hex()[:16], "a_equal_to_cpu": record.a_roots == cpu_a}
+            bad += not line["a_equal_to_cpu"]
             if a.mode == 2:
-                cpu = FixedKeys.twin(i, len(SERVED), weights_root, record.salt).words_root(PL.FORWARD, backend.streams)
-                line["equal_to_cpu"] = record.words_root == cpu
-                bad += not line["equal_to_cpu"]
+                line["words_equal_to_cpu"] = record.words_root == twin.words_root(PL.FORWARD, backend.streams)
+                bad += not line["words_equal_to_cpu"]
             lines.append(line)
     Path(a.out).write_text("".join(json.dumps(x) + "\n" for x in lines))
     for x in lines:

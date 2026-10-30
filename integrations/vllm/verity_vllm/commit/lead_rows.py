@@ -324,7 +324,7 @@ def _device_top(hasher, rs, leaves, count: int, stream) -> bytes:
     return levels[-2].cpu().numpy().tobytes()
 
 
-def device_a_top(ext, hasher, dom: CommitmentDomain, a, stream_ptr: int) -> bytes:
+def device_a_top(ext: Any, hasher: Any, dom: CommitmentDomain, a: Any, stream_ptr: int) -> bytes:
     """A_j's subtree top hashed on the device, from its row-major bytes ``a`` (the call's quantized activations, a CUDA tensor
     of one-byte elements) under :meth:`WindowKeying.a_domain`'s ``dom``, on the CUDA stream ``stream_ptr``: its segments'
     inline position-bound leaves (``lead_leaves``), then the pads and levels :meth:`DeviceWords.top` hashes, up to the top

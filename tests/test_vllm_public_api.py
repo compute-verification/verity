@@ -56,7 +56,7 @@ PUBLIC = {
     "verity_vllm.protocols.pouw.lead": "I3: the lead's scheme as a kernel outside the integration serves it: its name, the "
                                        "backend it calls and the run that calls it",
     "verity_vllm.commit.lead_rows": "I3: the lead's commitment of a call's words and its A: their leaves, a window's keying "
-                                    "and a forward's words hashed on the device",
+                                    "and a forward's words and each call's A hashed on the device",
     "verity_vllm.protocols.pouw.lead.feed": "I3: the lead's coin feed: a call's shape and coins, and the in-process certifier "
                                             "that releases them",
     "verity_vllm.pipeline.serve_h1": "I1: serve-openai's PoUW H1 arm, its --protocols-config (config_of) and the window "
