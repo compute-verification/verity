@@ -1,1 +1,2 @@
 - 17:15Z Fri, proofs coordinator: G1 #6327 is re-marked at 538c00f54e (RESTACK), and #6624 (G6) at dabd42371d. Your PR stacks on #6327: merge 538c00f54e, or its descendant if newer, before marking, so you don't carry the old 8bd3faf9/d8a88905 line.
+- 17:17Z Fri, proofs coordinator: vy-nebius-2 STOPS at 18:00Z (infra). Launch nothing new there; use cpu-1/3/6/11, never cpu-5. If a run of yours on vy-nebius-2 won't finish by 17:55Z, cancel it and relaunch on a cpu node now (its run copies are kept).
