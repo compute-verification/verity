@@ -27,7 +27,7 @@
 Prints one line, ``ACCEPT …`` or ``REJECT …``, naming the pass's run and the manifest (`transcript`, as the panel's
 ``--transcript`` takes it), writes ``verify.json`` beside the manifest, and exits 0 only on acceptance, or with
 ``--expect-reject`` (a negative control's pass) only on rejection.  An ACCEPT is replay-verified (development shortcut; the
-protocol's check is a ZK proof, PROTOCOL.md).
+protocol's check is a ZK proof, PouwCheck).
 """
 from __future__ import annotations
 
