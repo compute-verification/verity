@@ -24,7 +24,7 @@ from verity_flock import rec_sparse as RS
 
 from test_rec_sparse import _template, session
 
-BIN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock" / ".lake" / "build" / "bin" / "flock-verify"
+BIN = Path(__file__).resolve().parents[4] / "verity/core/service/flock" / ".lake" / "build" / "bin" / "flock-verify"
 #: a stacked table of 2^22 bits, fast100's smallest m: 2^6 entries, 16 planes (ELL = 7), 2^12 types; two slots
 SPARSE = RS.Shape(6, 7, 1, 12)
 OPEN = A.Shape(22, 6, 2, opening_only=True)
@@ -33,7 +33,7 @@ U = (0, 1)
 
 # --- the honest opening ------------------------------------------------------------------------------------------------------
 
-class _Draw(A.Coins):
+class _Draw(A.CoinSource):
     """The verifier's coins drawn as the prover goes, in the rounds `rec_algebra.run` reads them."""
 
     def __init__(self, g: random.Random):
@@ -402,7 +402,7 @@ def test_a_padded_coordinate_that_is_not_zero_is_refused():
         A.run(OPEN, A._dummy_coins(OPEN), M, [ok[0], bad])
     with pytest.raises(ValueError, match="fixed at zero"):
         A.run(OPEN, A._dummy_coins(OPEN), M, [ok[0], dataclasses.replace(ok[1], pad=OPEN.m - 5)])
-    c = RS.Coins(alpha=0, z=0, x_rest=(), y_rest=(), zeta_c=(), pre=(), rounds=pt(SPARSE.NU + SPARSE.S_LOG),
+    c = RS.SparsePublics(alpha=0, z=0, x_rest=(), y_rest=(), zeta_c=(), pre=(), rounds=pt(SPARSE.NU + SPARSE.S_LOG),
                  zeta_p=pt(SPARSE.P_LOG), rho=pt(SPARSE.T_LOG), U=())
     assert RS.registered_claim(SPARSE, c, 0).pad == 0 and RS.registered_claim(SPARSE, c, 0, pad_to=25).pad == 3
 
