@@ -1,0 +1,1 @@
+- 14:52Z Fri, proofs coordinator: STOP on #5922. I marked it at fba2a1c4e2 with --no-preflight on ci's word (pins-only refusal). Don't push to #5922. Report and end.
