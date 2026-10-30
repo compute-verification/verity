@@ -104,7 +104,7 @@ def _sid(stream: str = "window") -> bytes:
 
 
 def _certifier(sid: bytes, key, sign, record: bytes, tmp_path: Path,
-               reveals) -> tuple[active.RemoteCertifier, dict[int, bytes]]:
+               reveals) -> tuple[active.CertifierClient, dict[int, bytes]]:
     """The certifier's run `RUN_ID` on `LINK` with PoUW windows 0 and 1, the prover's record taken for both before their
     salts are drawn, both published, served on localhost (`reveals`): the challenger's client of it, and the salts it
     drew."""
@@ -126,16 +126,16 @@ def _certifier(sid: bytes, key, sign, record: bytes, tmp_path: Path,
         c.commit_weights(p, record, sign(active.weights_message(LINK, p, record, sid)))
     for _ in range(WINDOWS * INGRESS.buckets):
         c.bucketer.tick()
-    return active.RemoteCertifier(*reveals(c), signers[0].public_key(), signers[1], LINK, RUN_ID), drawn
+    return active.CertifierClient(*reveals(c), signers[0].public_key(), signers[1], LINK, RUN_ID), drawn
 
 
-def _challenger(params, c, prover, path: Path, ledger: PS.Registrations) -> SC.Challenger:
+def _challenger(params, c, prover, path: Path, ledger: PS.WindowOpens) -> SC.Challenger:
     k = lms.keygen(lms.Params(64, 4, 2), hashlib.sha512(str(path).encode()).digest())
     live = Wd.live_challenger(0, 1, random.Random(str(path)).randbytes)
     Ch.write_record(path, live.sign_record("auditor-host", lms.public_key(k), lambda m: lms.sign_at(k, 0, m).encode()))
     deployment = SC.Deployment(c.certifier_key, c.run_id, Ch.ChallengerKey(4, 2, lms.public_key(k)))
     return SC.Challenger(params, live, clock=lambda: 0.0, record=OR.Record(lean=False), certifier=c, prover=prover,
-                         coin_record=path, deployment=deployment, registrations=ledger)
+                         coin_record=path, deployment=deployment, opens=ledger)
 
 
 def _window(p: int, reveal: bytes, sid: bytes, prover: bytes, words) -> dict:
@@ -169,7 +169,7 @@ def _pub(priv, advice, t: int) -> bytes:
 def test_rows_formed_before_any_salt_are_refused_at_a_certified_windows_opening(tmp_path, monkeypatch, reveals):
     """RT4-INT-10, the served path. RT4-INT's witness: lift `unit_reason` and the prover's rows, formed once under a salt
     that is neither window's and committed in PoUW windows 0 and 1, pass the certifier's record and reveal (through its
-    client, `RemoteCertifier`), `pass_epoch` of record, the registration ledger and the live draw. They now stop at the
+    client, `CertifierClient`), `pass_epoch` of record, the registration ledger and the live draw. They now stop at the
     opening of record: the window is certified and `Pc8TileSide` reads no salt, so every drawn unit is refused, through
     `Challenger.check` (under the certified salt its pass was checked against, `certified_salt`) and through
     `core_check.opening` under that salt and under none."""
@@ -178,7 +178,7 @@ def test_rows_formed_before_any_salt_are_refused_at_a_certified_windows_opening(
     prover, sid = PS.prover_id(key.public), _sid()
     committed = PS.pouw_record(weights_root(_pass(RUN)[1]), sid, prover)
     c, drawn = _certifier(sid, key, sign, committed, tmp_path, reveals)
-    ledger = PS.Registrations()
+    ledger = PS.WindowOpens()
     refused = "the window is certified, and its template's unit reads no salt"
     for p in (0, 1):
         w = _window(p, drawn[p], sid, prover, PRECOMPUTED)

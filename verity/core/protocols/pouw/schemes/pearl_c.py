@@ -61,7 +61,17 @@ the registered schemes, and `SM120_PRICES` (the device statement's `Prices.sm120
 
 **The domain** (TT_OUT's `pearlCDomain` and `OperandOK`): 128 ∣ k (whole promotion groups), and on every row of both
 operands the noise floor ρ·α ≥ 1 (the exact product of the FP32 words) and liveness `LiveRow 1 x Stat.every8`: with the
-exact ρ² = Σ_{p ≡ 0 (8)} x_p² / ⌈k/8⌉ over the words' values, at most k/64 entries have x_l² ≥ 64 ρ².
+exact ρ² = Σ_{p ≡ 0 (8)} x_p² / ⌈k/8⌉ over the words' values, at most k/64 entries have x_l² ≥ 64 ρ².  Columns come in
+whole 64-wide tiles (a narrower edge tile's words can be guessed whole), and rows in whole 16 x 16 ticket subtiles, so
+the last row tile may be partial (decode's 32 x 64 tile): `PearlC.check`.
+
+**Why -h3 seeds each row of A.**  A seed that doesn't read A's rows (h0's seed_A, over the unit's roots and index) tells
+the prover each row's noise before it chooses the row, so it can form every row onto a few shared A′ rows, compute their
+C̃ once per weight and copy it, while every row passes every rule.  Keyed on its own digest, each candidate row costs an
+oracle query again, and forming waits on that row's digest alone.  -h3 also caps each credited row's debit at ρ times
+its cells' credit (4ρ at a census k, `row_cap_at`) beside the tile's: that is (C2), under which
+`Pouw.SecurityProofs.PearlC.TTOutRowSeedOfTTOut` reduces the row-seeded TT_OUT to the per-unit one, and an aggregate cap
+doesn't transfer.  The registered -h3 schemes are ``pearl-c-sm120-v1-h3`` (the served default) and ``pearl-c-h100-v1-h3``.
 
 **The device** (`pearl_c_device.Device`) is a scheme parameter: the atom, the peel's step, G and the W1 prices above are
 the record's, and the H100 names in this docstring are `pearl_c_device.H100`'s.  ``pearl-c-sm120-v1`` is v1 on
@@ -465,14 +475,14 @@ class PearlC:
     def __init__(self, k_min: int = 1024, tile: tuple[int, int] = (TILE, TILE), forming: str = "v0", device: Device = H100,
                  hashing: str = "h0", prices: Prices | None = None):
         if forming not in ("v0", "v1"):
-            raise ValueError(f"forming {forming!r}: v0 (#311's, as ported) or v1 (§5's)")
+            raise ValueError(f"forming {forming!r}: v0 (the H100 port's) or v1 (§5's)")
         if forming == "v0" and device != H100:
-            raise ValueError(f"forming v0 is #311's H100 port; {device.name} takes v1")
+            raise ValueError(f"forming v0 is the H100 port's; {device.name} takes v1")
         if hashing not in HASHINGS:
             raise ValueError(f"hashing {hashing!r}: h0 (TurboSHAKE128 and SHA-256) or h3 (SHA-512, per-row seeds)")
         prices = prices or device.prices
         if forming == "v0" and prices != H100_PRICES:
-            raise ValueError(f"forming v0 is #311's H100 port, priced on the H100 only, not {prices.device}")
+            raise ValueError(f"forming v0 is the H100 port's, priced on the H100 only, not {prices.device}")
         self.name = ((NAME if forming == "v0" else f"pearl-c-{device.name}-v1") + ("" if hashing == "h0" else f"-{hashing}")
                      + ("" if prices == device.prices else f"@{prices.device}"))
         self.k_min, self.tile, self.forming, self.device, self.hashing, self.prices = k_min, tile, forming, device, hashing, prices
@@ -484,8 +494,8 @@ class PearlC:
         self.cap = device.cap
         self.commitment_hash = TREE_HASH[hashing]
         self.line_norm = P.NOISE_NORM if forming == "v0" else LINE_NORM_V1
-        allowance = ("forming v0 is #311's as ported (FP10 decode and exact norms depend on A alone and are skippable, "
-                     "X-PC-2); pearl-c-h100-v1 has the reworked forming") if forming == "v0" else (
+        allowance = ("forming v0 is the H100 port's (FP10 decode and exact norms depend on A alone and are skippable); "
+                     "pearl-c-h100-v1 has the reworked forming") if forming == "v0" else (
                      "forming v1 is §5's: ρ over every 8th position depends on A alone (about 4 units per element) and is "
                      "not credited; the model adopts s, ρ and α as its own FP8 quantizer (Costs.adopted)")
         rho, honest = device.cap, f"{float(100 * (1 - device.cap)):g}%"

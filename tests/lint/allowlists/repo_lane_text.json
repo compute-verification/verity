@@ -1413,7 +1413,6 @@
     {"file": "verity/core/protocols/pous/tests/test_pous_protocol.py", "count": 1},
     {"file": "verity/core/protocols/pous/tests/test_pous_wipe_store.py", "count": 2},
     {"file": "verity/core/protocols/pous/wipe_parties.py", "count": 1},
-    {"file": "verity/core/protocols/pouw/PROTOCOL.md", "count": 43},
     {"file": "verity/core/protocols/pouw/circuit/__init__.py", "count": 1},
     {"file": "verity/core/protocols/pouw/circuit/cap.py", "count": 2},
     {"file": "verity/core/protocols/pouw/circuit/dither.py", "count": 7},
