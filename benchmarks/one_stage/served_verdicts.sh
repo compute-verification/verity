@@ -61,18 +61,23 @@
 # names the live challenger (run.sh's gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY). With H1_GATE (the
 # lane's gate command, by default "ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84"; empty, no
 # H1) the endpoint serves PoUW H1 (--protocols pouw:eps1-sm120-h1fx1 --challenger-gate H1_GATE --challenger-peer H1_PEER,
-# default vy-dc-h200, at the engine's T and S WINDOW_STEPS 16, the Program build H1 affords), each window's coins from a session of
-# its own on vy-challenger-1, once `served_verdicts.py gate` finds no period of the lane open (a reserve would join it).
+# default vy-dc-h200, at the engine's T and S WINDOW_STEPS 16, the Program build H1 affords), each window's coins from a
+# session of its own on vy-challenger-1, once `served_verdicts.py gate` finds no period of lane H1_LANE (default vllm,
+# the lane on H1_GATE's key's line) open (a reserve would join it).
 # PoUW's piece (POUW_CMD's default then, `served_verdicts.py pouw`) checks the window's coins against the gate's session,
-# ledger and pins under H1_KEY_SHA512 (vy-challenger-1's key) and main's first-parent line from MAIN_SHA (default the tree's
-# HEAD). That key is a development key, so the run is a development run and credits nothing. The COINS line says which.
-# With H1_CIRCUITS too (a directory), once the endpoint listens and before the requests,
-# `pouw_h1_circuits --program D/h1 --out H1_CIRCUITS --live H1_T,WINDOW_STEPS --strata H1_STRATA` builds the circuit files of the Program serve-openai wrote (the live
-# file, and only the strata H1_STRATA lists, default none; a file already there under the same bind is reused), then
-# `served_verdicts.py period open` opens period H1_PERIOD (default served-RUN_ID) on the Program digest
-# serve-openai wrote, its draw K H1_DRAW_K (default `pouw_h1_challenger.draw_k`'s), its weights H1_MODEL's registration
-# (default none, which credit refuses), and its fixed length SLOTS requests of MAX_TOKENS; every window joins it, and
-# `period close` closes it once they're sealed. The PERIOD lines say what it committed. H1_STATEMENTS and
+# ledger and pins under H1_KEY_SHA512 (vy-challenger-1's key) and main's first-parent line: MAIN_FILE's (a file, kept as
+# $OUT/main.txt; the gate's pin is a commit of `next`, so give `git rev-list --first-parent` of it), else MAIN_SHA's
+# (default the tree's HEAD). That key is a development key, so the run is a development run and credits nothing. The COINS line says which.
+# With H1_CIRCUITS too (a directory), before serve-openai starts (its startup reserves window 0's session, which joins
+# only a period already open), `served_verdicts.py program D/h1` writes the Program serve-openai will declare for REPO at
+# T and WINDOW_STEPS, `pouw_h1_circuits --program D/h1 --out H1_CIRCUITS --live T,WINDOW_STEPS --strata H1_STRATA`
+# builds its circuit files (the live file, and only the strata H1_STRATA lists, default none; a file already there under
+# the same bind is reused), then `served_verdicts.py period open` opens period H1_PERIOD (default served-RUN_ID) on its
+# digest, its draw K H1_DRAW_K (default `pouw_h1_challenger.draw_k`'s), its weights H1_MODEL's registration (default
+# none, which credit refuses), and its fixed length SLOTS requests of MAX_TOKENS (`--cap 1`: one window); `period served`
+# holds the Program serve-openai then declared to it, and `period close` closes it once the windows are sealed, or
+# when the endpoint never listens. The PERIOD lines say what it committed; $OUT/serve keeps period.json, the Program
+# (h1/window-program.json.gz and its meta) and H1_CIRCUITS' circuit-files.json. H1_STATEMENTS and
 # H1_LIVE_EVIDENCE (files) go to PoUW's piece as its --statements and --live-evidence, the evidence core's credit reads.
 # A step that can't run says why, and the chain stops there. C-Flock, Lean's flock-verify and sampled-proofs-verifier and the
 # tree's venv are built while the endpoint serves, C-Flock in FLOCK_WORK (kept on the node, so a rerun reuses its build).
@@ -208,6 +213,20 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
       > "$OUT/pieces/wipe/piece.log" 2>&1
     say "WIPE (exit $?, within WIPE_TIMEOUT=${WIPE_TIMEOUT:-20m}): $(tail -1 "$OUT/pieces/wipe/piece.log" | cut -c1-600)"
   fi
+  local period=0
+  if [ -n "${H1_GATE:-}" ] && [ -n "${H1_CIRCUITS:-}" ]; then  # before serve-openai, whose startup reserves window 0's
+    # session (`serve_h1.arm_of`): a reserve joins only a period already open, so it's opened on the offline Program
+    say "$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" program "$D/h1" --model "$REPO" --rows "$T" \
+      --steps "$WINDOW_STEPS" 2>&1 | tail -1)"
+    (cd "$TREE/integrations/vllm" && PYTHONPATH=$PYTHONPATH:$TREE/verity/ml/flock/python "$PY" -m tests.protocols.pouw_h1_circuits \
+      --program "$D/h1" --out "$H1_CIRCUITS" --live "$T,$WINDOW_STEPS" --strata "${H1_STRATA:-none}") \
+      > "$OUT/h1-circuits.log" 2>&1 || say "H1-CIRCUITS refused (exit $?): $(tail -1 "$OUT/h1-circuits.log" | cut -c1-400)"
+    # shellcheck disable=SC2086
+    say "$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" period open "$D" --gate "$H1_GATE" \
+      --name "${H1_PERIOD:-served-${RESEARCH_RUN_ID:-local}}" --circuits "$H1_CIRCUITS" --slots "$SLOTS" \
+      --max-tokens "$MAX_TOKENS" ${H1_DRAW_K:+--draw-k "$H1_DRAW_K"} ${H1_MODEL:+--model "$H1_MODEL"} 2>&1 | tail -1)"
+    [ -f "$D/period.json" ] && period=1
+  fi
   # shellcheck disable=SC2086
   "$PY" -m verity_vllm.pipeline.cli serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" \
     --precision "$PRECISION" --run-id "${RESEARCH_RUN_ID:-local}" --scheme rows-sha512 --seal --gpu-tree \
@@ -226,21 +245,13 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   if [ "$up" != 1 ]; then
     tail -40 "$OUT/serve.log"
     say "SERVE: not listening: $(grep -m1 -E 'UsageError|Error|refus' "$OUT/serve.log" | cut -c1-400)"
-    kill -TERM "$srv" 2>/dev/null; wait "$srv"; return 10
+    kill -TERM "$srv" 2>/dev/null; wait "$srv"
+    [ "$period" = 1 ] && say "$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" period close "$D" --gate "$H1_GATE" 2>&1 | tail -1)"
+    return 10
   fi
   say "SERVE $(grep -m1 'SERVE-OPENAI listening' "$OUT/serve.log" | cut -c1-300)"
   weights
-  local period=0
-  if [ -n "${H1_GATE:-}" ] && [ -n "${H1_CIRCUITS:-}" ]; then  # before the first window reserves, at its first engine step
-    (cd "$TREE/integrations/vllm" && PYTHONPATH=$PYTHONPATH:$TREE/verity/ml/flock/python "$PY" -m tests.protocols.pouw_h1_circuits \
-      --program "$D/h1" --out "$H1_CIRCUITS" --live "$T,$WINDOW_STEPS" --strata "${H1_STRATA:-none}") \
-      > "$OUT/h1-circuits.log" 2>&1 || say "H1-CIRCUITS refused (exit $?): $(tail -1 "$OUT/h1-circuits.log" | cut -c1-400)"
-    # shellcheck disable=SC2086
-    say "$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" period open "$D" --gate "$H1_GATE" \
-      --name "${H1_PERIOD:-served-${RESEARCH_RUN_ID:-local}}" --circuits "$H1_CIRCUITS" --slots "$SLOTS" \
-      --max-tokens "$MAX_TOKENS" ${H1_DRAW_K:+--draw-k "$H1_DRAW_K"} ${H1_MODEL:+--model "$H1_MODEL"} 2>&1 | tail -1)"
-    [ -f "$D/period.json" ] && period=1
-  fi
+  [ "$period" = 1 ] && say "$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" period served "$D" 2>&1 | tail -1)"
   if [ -n "${CERTIFIER_FRONT:-}" ]; then  # the network certifier's warden in front of the endpoint, before the requests
     # below: its group closes into the run's earliest window, which `served_verdicts.py window` picks on a tie in requests
     (cd "$TREE" && timeout -k 1m 20m bash -c "$CERTIFIER_FRONT" _ "$PORT" "$D" "$OUT/certifier-front") \
@@ -315,6 +326,13 @@ mkdir -p "$D" "$ROOT/cache" "$FW"
 KEEP_WHY="served_verdicts.sh's serve dirs (sealed row dirs, advice, window circuits) and C-Flock's build"
 { "$PY" -m research keep "$ROOT" --owner @vllm --expires 7d --priority high --why "$KEEP_WHY" \
   || research keep "$ROOT" --owner @vllm --expires 7d --priority high --why "$KEEP_WHY"; } 2>&1 | tail -2
+# H1's every window open runs its Lean verifier of record; without lake each is refused and serving goes on uncredited
+if [ -n "$H1_GATE" ] || [[ " ${SERVE_ARGS:-} " == *" --protocols "* ]]; then
+  command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh \
+    | sh -s -- -y --default-toolchain none > "$OUT/elan.log" 2>&1
+  (cd "$TREE/verity/core/protocols/pouw/lean/check" && lake build pouw-check-difftest) > "$OUT/h1-lean.log" 2>&1 \
+    || { tail -20 "$OUT/h1-lean.log"; say "PREFLIGHT: H1's Lean verifier (pouw-check-difftest) didn't build"; exit 3; }
+fi
 
 build() {  # what prove_path/run.sh builds, here while the endpoint serves; run.sh's own builds then find them done
   command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -344,11 +362,15 @@ fi
 
 H1_COINS="PoUW H1: not served (H1_GATE empty)"
 if [ -n "$H1_GATE" ]; then
-  if [ -n "$MAIN_SHA" ]; then
+  if [ -n "${MAIN_FILE:-}" ]; then
+    [ -s "$MAIN_FILE" ] || { say "PREFLIGHT: MAIN_FILE $MAIN_FILE is missing or empty"; exit 3; }
+    [ "$MAIN_FILE" -ef "$OUT/main.txt" ] || cp "$MAIN_FILE" "$OUT/main.txt"
+    export MAIN_FILE=$OUT/main.txt
+  elif [ -n "$MAIN_SHA" ]; then
     git -C "$TREE" rev-list --first-parent "$MAIN_SHA" > "$OUT/main.txt" || { say "PREFLIGHT: MAIN_SHA $MAIN_SHA not in this tree"; exit 3; }
     export MAIN_FILE=$OUT/main.txt
   fi
-  "$PY" benchmarks/one_stage/served_verdicts.py gate --gate "$H1_GATE" ${MAIN_FILE:+--main "$MAIN_FILE"} 2>&1 \
+  "$PY" benchmarks/one_stage/served_verdicts.py gate --gate "$H1_GATE" --lane "${H1_LANE:-vllm}" ${MAIN_FILE:+--main "$MAIN_FILE"} 2>&1 \
     | tee -a "$OUT/verdicts.txt"
   [ "${PIPESTATUS[0]}" = 0 ] || stop gate 3
   H1_COINS="PoUW H1: each window's coins from a session of its own on vy-challenger-1's gate (peer $H1_PEER, T $T, S $WINDOW_STEPS), a development run under the lane's development key: it credits nothing"
@@ -398,8 +420,10 @@ print(f"SERVED-SEAL VERDICT: {'PASS' if ok else 'FAIL'} ({len(seals)} sealed win
 sys.exit(0 if ok else 1)
 EOF
 [ "${PIPESTATUS[0]}" = 0 ] || stop seal 11
-for f in serve.json windows.jsonl seals.jsonl requests.jsonl load.jsonl; do cp "$D/$f" "$OUT/serve/" 2>/dev/null; done
-[ -d "$D/h1" ] && (cd "$D" && find h1 -name pouw-h1-calls.json -exec cp --parents {} "$OUT/serve/" \;)
+for f in serve.json windows.jsonl seals.jsonl requests.jsonl load.jsonl period.json; do cp "$D/$f" "$OUT/serve/" 2>/dev/null; done
+[ -d "$D/h1" ] && (cd "$D" && find h1 -name pouw-h1-calls.json -exec cp --parents {} "$OUT/serve/" \;
+                   cp --parents h1/window-program.json.gz h1/window-program.meta.json "$OUT/serve/" 2>/dev/null)
+[ -n "${H1_CIRCUITS:-}" ] && [ -f "$H1_CIRCUITS/circuit-files.json" ] && cp "$H1_CIRCUITS/circuit-files.json" "$OUT/serve/"
 
 # 3. sampled proofs: the window, its advice and Programs, V3b's window circuit, then C-Flock --zk and the Lean verifier
 PICK=$("$PY" benchmarks/one_stage/served_verdicts.py window "$D" --slots "$SLOTS" ${WINDOW:+--window "$WINDOW"} 2> "$OUT/window.err")
