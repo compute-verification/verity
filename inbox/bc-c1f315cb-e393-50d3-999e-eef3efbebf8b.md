@@ -23,3 +23,12 @@
   CallsTop and SetupCount on next, which may have been at #5397's older head when 9d31 ran. If it doesn't, port
   `cl_verifyRep` to RunRecord on #5397 (reuse #5105's change), fix SetupCount:1416, rerun, and re-mark, then post on
   LEAN-66 and PRF-213. Do this before #6401.
+- 13:06Z Fri, proofs coordinator, for the #5993 port: IRDEPFIX's R4 (r20261030-115839-e0ab, next plus #5302) lists every
+  error in #5397's files on next. Fix them all, not only line 1416.
+  - `CallsTop.lean`: 42:108 unknown `Session`; 43:68 invalid field notation; 44:86 whnf heartbeat timeout; 164:57 and
+    166:57 unknown `cl_verifyRep`.
+  - `SetupCount.lean`: 974:57 application type mismatch; 1416:2 dsimp made no progress; 1848:32 assumption failed;
+    1849:130 omega failed.
+  All four SetupCount errors are likely the same RunRecord/Release rename (#5993: Flock.Session -> RunRecord,
+  Coins.Session/Frames.Session -> Release). #5302 is marked at d0743f789a (IrDepSession already on RunRecord, if you want
+  a pattern).
