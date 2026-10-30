@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# EPS1 DC r4 on one datacenter GPU: the uniform datapath (probes/uniform.cuh) and the IMAD forms of duo's ALU work
-# (probes/imad_forms.cuh), each family's counts pinned by its own table. From a pushed commit, on a 1x H200 or 1x B200:
+# The uniform-datapath probes on one datacenter GPU: the uniform datapath (probes/uniform.cuh) and the IMAD forms of
+# duo's ALU work (probes/imad_forms.cuh), each family's counts pinned by its own table. From a pushed commit, on a 1x
+# H200 or 1x B200:
 #
 #   research run --on <node> --project verity --campaign cmp-13 --source <tree> --cwd source --custody-ttl 12h \
 #     --timeout 30m --env GPU_LEASE_WHO=dc -- bash benchmarks/pouw/dc/uni.sh sm90|sm100

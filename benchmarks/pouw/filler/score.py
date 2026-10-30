@@ -1,18 +1,17 @@
-"""The certified filler's scorer (SCORER, cmp-13), locked: changes go to its owner, compute-accounting, never into an arm's
-PR. The spec, its desiderata, metrics and gates: note:20261016T0435Z-report-filler-spec. The arithmetic: `scoring.py`;
-the arm contract: `arms.py`; the device driver: `dscore.cu`.
+"""The certified filler's scorer, locked: a change to it is its own change, never part of an arm's. The arithmetic:
+`scoring.py`; the arm contract: `arms.py`; the device driver: `dscore.cu`.
 
   python3 benchmarks/pouw/filler/score.py ARM [--rounds 8] [--reps 3] [--no-robust]   build, lease one GPU, measure, report
   python3 benchmarks/pouw/filler/score.py measure ARM --bin DIR --out DIR             the measurement, inside a lease
   python3 benchmarks/pouw/filler/score.py report OUT_DIR [--json] [--as v4] [--coins]  score a measured run's out dir
-  python3 benchmarks/pouw/filler/score.py tp-report OUT... --bin|--nvd X [--noise]    SCORE-TP of tpcomm.sh out dirs (v5)
+  python3 benchmarks/pouw/filler/score.py tp-report OUT... --bin|--nvd X [--noise]    TP score of tpcomm.sh out dirs (v5)
   python3 benchmarks/pouw/filler/score.py defer-fit [--T 4096] [--json]               the deferred pass's calibration
   python3 benchmarks/pouw/filler/score.py check ARM                                   the arm's contract and record limits
   python3 benchmarks/pouw/filler/score.py --leaderboard [--refresh] [--local DIR ...] every filler attempt, best first
 
 A climber's run, from a clean pushed checkout:
 
-  research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=<lane> \\
+  research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=LANE \\
     -- python3 benchmarks/pouw/filler/score.py <arm|benchmarks/pouw/filler/my_arm.py:MyArm>
 
 `score.py ARM` builds dcap.cu and dscore.cu (outside the lease), then under `gpu-lease 1 --wait` runs the gates before
@@ -39,7 +38,7 @@ entry `scoring.filler_entry` decides from the arm's declared `Filler.noise` and 
 build (`build.json`), with SCORE under CH (every filler at 0.99, v2's reading) beside it, and each point's slowdown
 margin. `report OUT --as v2` (or `v3`) reads a run as that version did, without writing `score.json`.
 
-filler-scorer/v4 (`report OUT --as v4`; the lock from the coordinator's 11:05Z to 12:10Z) keeps v3's load check and
+filler-scorer/v4 (`report OUT --as v4`) keeps v3's load check and
 reads the filler wherever it's called from.
 The build also compiles each CUDA driver the arm lists (fscore.cu, pscore.cu) and records `scoring.program_facts` over
 dscore's and the drivers' nvdisasm. The theorem entries' SASS checks read the `dfill_k`/`dfill_p` functions' bodies alone
@@ -48,16 +47,16 @@ filler warps run refuses the arm (gate `filler_paths`); other MMAs are serving's
 spot-checked public tiles of a binary the scorer read (`credit_fixed`); and the honest gate bounds the whole kernel's
 MACs, serving's and the filler warps', by its SMs' peak (`whole_of_peak`). `scoring.UNCHECKED_V4` is what it can't see.
 
-filler-scorer/v5, the lock (`scoring.SCORER`, active since the coordinator's 12:10Z: its fold check is a soundness
-correction, decision 43), keeps v4's gates, the slowdown gate on the measured step against clean serving. It reads the
-receipt's fold (`scoring.fold_reading`) from `Filler.fold` or the lineage's receipt tag and the build's `fold_facts`:
-ram and the XOR-family folds halve a theorem entry (Theorem K's proved half; their full reading, if P2-FF r10's
-select-charging lemma lands, is a secondary readout, `scoring.SELECT_LEMMA`), and duo, whose receipt takes in every word
-(`scoring.FOLDS`), reads in full where the build confirms it. Its SCORE is the measured filler part plus a MODELLED served part (`scoring.score_v5`; `served_part_modelled` in
-score.json and the record): every served MAC at Theorem K's 0.9 over the wall time the edited design would take
-(`scoring.served_model`'s named constants and their sources, decode's deferred pass calibrated to measurement,
-`scoring.defer_fit`; `--coins` sets prefill's coins factor). `tp-report` reads HC-COMM's TP suite (`scoring.tp_score`).
-`defer-fit` prints the deferred pass's calibration and its residuals.
+filler-scorer/v5, the lock (`scoring.SCORER`; its fold check is a soundness correction), keeps v4's gates, the slowdown
+gate on the measured step against clean serving. It reads the receipt's fold (`scoring.fold_reading`) from `Filler.fold`
+or the lineage's receipt tag and the build's `fold_facts`: ram and the XOR-family folds halve a theorem entry (Theorem
+K's proved half; their full reading, if the r10 select-charging lemma lands, is a secondary readout,
+`scoring.SELECT_LEMMA`), and duo, whose receipt takes in every word (`scoring.FOLDS`), reads in full where the build
+confirms it. Its SCORE is the measured filler part plus a MODELLED served part (`scoring.score_v5`;
+`served_part_modelled` in score.json and the record): every served MAC at Theorem K's 0.9 over the wall time the edited
+design would take (`scoring.served_model`'s named constants and their sources, decode's deferred pass calibrated to
+measurement, `scoring.defer_fit`; `--coins` sets prefill's coins factor). `tp-report` reads tpcomm's TP suite
+(`scoring.tp_score`). `defer-fit` prints the deferred pass's calibration and its residuals.
 """
 
 from __future__ import annotations
@@ -615,7 +614,7 @@ def leaderboard(local: list[Path], refresh: bool, as_json: bool) -> int:
     return 0
 
 
-#: what SCORE-TP's gates can't check from tpcomm.sh's out dirs
+#: what the TP score's gates can't check from tpcomm.sh's out dirs
 TP_UNCHECKED = (
     "replay: tpcomm's filler rounds carry no tile range the scorer fixes, so no anti-replay check",
     "serving_exact: tpcomm records no serving gate rows",
@@ -629,12 +628,12 @@ def _text(p: Path) -> str | None:
 
 def tp_report(outs: list[Path], listings: dict | None, noise: str | None, fold: str | None,
               facts_from: str | None = None) -> dict:
-    """SCORE-TP (filler-scorer/v5): tpcomm.sh's out dirs (HC-COMM's TP suite, note:20261016T0748Z-draft-hc-comm
-    round 2), read together. The filler is read at v5's entry (`scoring.filler_entry_v5`) from the TP build's program
-    and fold facts at `scoring.TP_FILLER` (`listings`: the tpcomm binary's nvdisasm; None reads the filler at the
-    floor), with the declared noise and fold; each (TP, B, L) at `scoring.tp_entry`; the gates are `scoring.tp_gates`,
-    each out dir's DRAM (ncu, `scoring.TP_NCU_KERNEL`) and clocks (application clocks at their default, every rep's
-    clock read), and the whole kernel's MACs, served and filler, within each rank's peak."""
+    """The TP score (filler-scorer/v5): tpcomm.sh's out dirs (the TP suite), read together. The filler is read at v5's
+    entry (`scoring.filler_entry_v5`) from the TP build's program and fold facts at `scoring.TP_FILLER` (`listings`: the
+    tpcomm binary's nvdisasm; None reads the filler at the floor), with the declared noise and fold; each (TP, B, L) at
+    `scoring.tp_entry`; the gates are `scoring.tp_gates`, each out dir's DRAM (ncu, `scoring.TP_NCU_KERNEL`) and clocks
+    (application clocks at their default, every rep's clock read), and the whole kernel's MACs, served and filler,
+    within each rank's peak."""
     sets, by = [], {}
     for out in outs:
         for sd in sorted(p for p in out.glob("set*") if p.is_dir()):

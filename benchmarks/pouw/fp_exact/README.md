@@ -52,7 +52,7 @@ K runs over every power of two from one firing to 262144.
 Each value of C0 (`c0_words`) has a role:
 
 - `zero`.
-- `binade`: NOBITS' 0x4B400000 generalized, so its ulp is one product unit (`note:20261016T0703Z-draft-fp4-nobits-probe`).
+- `binade`: NOBITS' 0x4B400000 generalized, so its ulp is one product unit.
 - `nobits`: NOBITS' own word, whose ulp of 1 is coarser than a dyadic grid's units.
 - `over`: one binade higher, so FP32 must round.
 - `negzero`, on the cancelling draws.

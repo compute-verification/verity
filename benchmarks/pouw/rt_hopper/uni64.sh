@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# RT-HOPPER-7's CPU job: uni64.cu built for sm_90a, its SASS and the count of each uniform-datapath opcode. No GPU:
+# The CPU job: uni64.cu built for sm_90a, its SASS and the count of each uniform-datapath opcode. No GPU:
 #
 #   research run --on auto --project verity --campaign eps1 --cwd source --wait -- bash benchmarks/pouw/rt_hopper/uni64.sh
 #
