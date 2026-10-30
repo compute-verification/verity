@@ -107,7 +107,7 @@ def released(allocation: int, enqueued: Sequence[int], queue: int = 0) -> list[i
 
 
 @dataclass(frozen=True, slots=True)
-class Record:
+class BlockGrid:
     """W5: the network certificate of one link-window is exactly the grid and one status."""
 
     link: str
@@ -176,10 +176,10 @@ class Certifier:
         self._rows.append(row)
         return row
 
-    def close_window(self) -> Record:
+    def close_window(self) -> BlockGrid:
         if len(self._rows) != self.params.buckets:
             raise RuntimeError(f"a window has {self.params.buckets} buckets, not {len(self._rows)}")
-        record = Record(self.link, self.window, tuple(self._rows), Status(self._fault))
+        record = BlockGrid(self.link, self.window, tuple(self._rows), Status(self._fault))
         self._rows, self._fault = [], None
         self.window += 1
         return record
