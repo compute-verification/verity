@@ -11,9 +11,9 @@
  },
  "layers": {
   "MemoryChallenger": {
-   "imports": ["Flock", "Randomness", "Lms", "CoreProtocol", "MemoryChallenger"],
+   "imports": ["Flock", "Randomness", "Lms", "Attest", "CoreProtocol", "MemoryChallenger"],
    "except": ["MemoryChallenger.Difftest"],
-   "why": "the verdict is code: Lean core, C-Flock's hashes, bytes, canonical JSON and hm96, core's randomness, LMS and protocol interface; no Mathlib and nothing of Security. The difftest's table (MemoryChallenger.Difftest) also imports the difftest server"
+   "why": "the verdict is code: Lean core, C-Flock's hashes, bytes, canonical JSON and hm96, core's randomness, LMS, the auditor parties' period checks (Attest) and protocol interface; no Mathlib and nothing of Security. The difftest's table (MemoryChallenger.Difftest) also imports the difftest server"
   }
  },
  "dependencies": {

@@ -235,7 +235,7 @@ def test_the_amplifier_multiplies_every_term():
 
 
 def test_the_verdict_lag_adds_a_lag_of_skipped_work_per_identity():
-    """Until the halt a developer can skip all declared work, once per identity (1 hour is 1.1e-4)."""
+    """Until the halt a developer can skip all registered work, once per identity (1 hour is 1.1e-4)."""
     p = T.DEFAULTS | {"host_share": 0.0}
     no_lag = T.evaluate(p | {"lag_s": 0.0}, T.TIERS["T1"])
     lag = T.evaluate(p | {"identities": 3.0}, T.TIERS["T1"])
