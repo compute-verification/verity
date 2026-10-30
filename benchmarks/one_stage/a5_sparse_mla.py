@@ -3,9 +3,9 @@ window (one ``SparseMlaSplit_v1{T=40,NS=3,NH=2,DR=16,DV=32,BN=16}`` row in its s
 8-key parts and two three-split combines, each combine slot wired to the output rows of the part unit that wrote it), its run
 ``<ROOT>/rank0``, committed as serving commits it (`pipeline.serving_rows.read_all` on the fixture's served values, each part's
 partial and lse by the twin, `ml.windows.rows.commit`) and audited by `a5.audit` as rank 0 of a one-rank step on a local
-challenger's coins under ``stratified:1``, one unit of each template: the wiring check on the public bodies before the draw
+challenger's coins under ``stratified:1``, one unit of each template: the wiring check on the public bodies before the sample
 (`commit.wiring.check`), each template's circuit (`compose_circuit.py --template`; the 16-key part's MUFU reads in lookup
-slots, the 8-key part's and the combine's inline, `chunk_rows.reads`), M0's `--zk` session of each drawn unit behind the firewall, the Lean verifier of record, the stream's
+slots, the 8-key part's and the combine's inline, `chunk_rows.reads`), M0's `--zk` session of each sampled proof block behind the ZK server, the Lean verifier of record, the stream's
 outcome and the negatives (`a5.wiring_negatives` among them). It stands in for step 16's 78 rows (at T = 272, per head, four
 64-key parts, one 16-key part and a five-split combine), whose units it does not prove. The run exits 0 only when the outcome
 is accepted and every negative refused. ``--out`` holds the window serving wrote (``window/``, its private files too) and a5's

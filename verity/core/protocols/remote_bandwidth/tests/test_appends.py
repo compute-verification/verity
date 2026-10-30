@@ -77,7 +77,7 @@ def pages(first: int, count: int) -> list[bytes]:
 
 
 class Run:
-    """One session over `store`, the verifier's side and the prover's in step, every receipt drawn by default.  The
+    """One session over `store`, the verifier's side and the prover's in step, every receipt sampled by default.  The
     prover computes its passes from `prover_store` (`store` by default) and commits `store`'s appends, each encoded
     under the coin the verifier replies with (`coins`, by first index), each pass's seed binding every append it sent
     before the pass's root (`head`).  With a `registry`, the session is its next over the store's registration.  Its
@@ -187,7 +187,7 @@ def honest() -> tuple[Run, list[audit.Verdict]]:
 
 
 def test_an_honest_session_over_appended_and_released_pages_is_accepted(honest) -> None:
-    """Every receipt is drawn, the appended pages' among them, each opened with its payload's digest and its path to
+    """Every receipt is sampled, the appended pages' among them, each opened with its payload's digest and its path to
     its append's root, and every window is accepted.  The record counts each pass's post-seed reads, the blocks
     appended and those released."""
     r, verdicts = honest
@@ -702,7 +702,7 @@ def test_an_appended_block_opens_only_with_its_digest(appended, digest, failure)
 
 @pytest.mark.parametrize("opened", [0, 1], ids=["no-openings", "an-opening"])
 def test_a_window_with_no_draws_is_malformed_whatever_its_openings(opened) -> None:
-    """No session draws nothing (`Params` refuses `samples` or `min_passes` under 1), but a window whose draws are
+    """No session samples nothing (`Params` refuses `samples` or `min_passes` under 1), but a window whose draws are
     empty is `malformed` at `verify`, with or without openings, as the Lean `Session.verify` has it: a frame that
     doesn't decode, read as no openings, is refused on every window."""
     r = Run(store(), windows=1)
