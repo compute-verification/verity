@@ -40,14 +40,14 @@ theorem networkWindowLe {r : PeriodRun d α C Ω} {K : ℝ}
 
 /-- **S5's guard at onsite's network coupling**: the coupling's verdict at the code past its component's acceptance,
 each release its check read at its round of the device's log and the coupling's break absent. -/
-abbrev couplingGuard {V : Vocab d α} {θ F c : ByteArray} {σ : Game.Strategy (V.game θ F c)}
-    (q : V.Coupling .onsite .network θ F c σ) (ξ : (i : q.I) → q.Ω i) : Prop :=
+abbrev couplingGuard {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
+    {σ : Game.Strategy (V.game θ F c)} (q : V.Coupling .onsite .network θ F c σ) (ξ : (i : q.I) → q.Ω i) : Prop :=
   V.Logged (q.pos .network) .network (V.outcome θ F c σ q.coins ξ) ∧ ¬ q.brk ξ
 
 /-- **The refinement in the game**: the network certifier's refinement at a coupling's verdict at the code, with the steps at what the prover
 sent at the outcome the coins lead to, S5 guarded by the verdict's releases at their rounds and break absent. -/
-theorem networkWindowLe_verdict {V : Vocab d α} {θ F c : ByteArray} {σ : Game.Strategy (V.game θ F c)}
-    (q : V.Coupling .onsite .network θ F c σ) {K : ℝ}
+theorem networkWindowLe_verdict {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
+    {σ : Game.Strategy (V.game θ F c)} (q : V.Coupling .onsite .network θ F c σ) {K : ℝ}
     {R : RealizesCommOfPeriodLeakAccepted q.run K H D L Kₒ S lay k δ decode reg Dj n} (W : WindowRuns R)
     (h2 : PeriodRunsV2 W fun ξ => (V.outcome θ F c σ q.coins ξ).sent) (h4 : WindowCoinsLive W)
     (h5 : SessionIsSampledRun W (couplingGuard q))
@@ -81,8 +81,8 @@ theorem network_atCode_of_steps {r : PeriodRun d α C Ω} (c : Certificates) (p 
 (`Vocab.Coupling.atCode`) meets `CommOfPeriodLeakAccepted`'s bound at the published certificates and the coupling's
 price, the per-period guarantee `Vocab.networkSound_of_coupling` reads, from the bridge's assumptions and the steps at
 what the prover sent at the outcome the coins lead to. -/
-theorem coupling_atCode_of_steps {V : Vocab d α} {θ F c : ByteArray} {σ : Game.Strategy (V.game θ F c)}
-    (q : V.Coupling .onsite .network θ F c σ)
+theorem coupling_atCode_of_steps {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
+    {σ : Game.Strategy (V.game θ F c)} (q : V.Coupling .onsite .network θ F c σ)
     (R : RealizesCommOfPeriodLeakAccepted q.run (V.certOf θ).K H D L Kₒ S lay k δ decode reg Dj n) (hks : KS H D)
     (hb : D.commit.Binds H) (hδ : 0 ≤ δ) (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode)
     (εks εbind εtap : ℝ)
