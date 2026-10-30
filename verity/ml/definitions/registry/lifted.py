@@ -1957,11 +1957,11 @@ def _remap_nodes(r: Refs, args: Sequence[Coll], nidx: Sequence[int], redirect: d
 def request_boundaries(body, boundary_prefix: str = BOUNDARY_PREFIX) -> list[int]:
     """The sampling-event nodes of a flat request body: the nodes whose spec id starts with `boundary_prefix`, each a one-leaf
     `Value<32>` (the committed token of event `s`), in body order.  `cap = len(...)`."""
-    from verity.ml.circuits.codec import _spec_id
-    b = [k for k, n in enumerate(body.nodes) if _spec_id(n.fn).startswith(boundary_prefix)]
+    from verity.ml.circuits.codec import descriptor_id
+    b = [k for k, n in enumerate(body.nodes) if descriptor_id(n.fn).startswith(boundary_prefix)]
     for k in b:
         if body.nodes[k].out != Value(32):
-            raise ValueError(f"boundary node {k} ({_spec_id(body.nodes[k].fn)}) returns {body.nodes[k].out!r}, not one Value<32> token")
+            raise ValueError(f"boundary node {k} ({descriptor_id(body.nodes[k].fn)}) returns {body.nodes[k].out!r}, not one Value<32> token")
     return b
 
 
@@ -2095,7 +2095,7 @@ def lift_request_component(fn: SpecializedDefinition, eos: Sequence[int], *, max
 def address_map_modulo_guards(lifted: SpecializedDefinition) -> list[tuple[str, int, int]]:
     """PAD-03's deletion rule as a function: the lifted body's `(spec id, lo, hi)` rows with the guard rows deleted and the gates
     renumbered — equal to the unlifted component's rows modulo the `Lifted[…]` spec ids (tested)."""
-    from verity.ml.circuits.codec import _spec_id
+    from verity.ml.circuits.codec import descriptor_id
     b = lifted.body
     guards = set(lifted.guard_nodes)  # type: ignore[attr-defined]
     rows, g = [], 0
@@ -2103,7 +2103,7 @@ def address_map_modulo_guards(lifted: SpecializedDefinition) -> list[tuple[str, 
         if k in guards:
             continue
         w = b.offsets[k + 1] - b.offsets[k]
-        rows.append((_spec_id(n.fn), g, g + w))
+        rows.append((descriptor_id(n.fn), g, g + w))
         g += w
     return rows
 
