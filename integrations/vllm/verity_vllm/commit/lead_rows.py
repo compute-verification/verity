@@ -33,6 +33,7 @@ import hashlib
 import os
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 
@@ -289,7 +290,7 @@ class DeviceWords:
     call's gather and leaves run on the next of ``lanes`` side streams, after the work ``stream_ptr`` holds so far, so that
     calls overlap; a call's committed stream lives until its leaves are hashed, so at most ``lanes`` of them are live at once."""
 
-    def __init__(self, ext, hasher, dom: CommitmentDomain, stream_ptr: int, *, lanes: int = 16) -> None:
+    def __init__(self, ext: Any, hasher: Any, dom: CommitmentDomain, stream_ptr: int, *, lanes: int = 16) -> None:
         import torch
 
         if type(lanes) is not int or lanes < 1:
@@ -308,7 +309,7 @@ class DeviceWords:
     def count(self) -> int:
         return self._dom.count
 
-    def add(self, export, m: int, n: int, S: int, bn: int) -> None:
+    def add(self, export: Any, m: int, n: int, S: int, bn: int) -> None:
         """The next call's export (``lead_stream``'s): its chunks become the instance's next leaves."""
         k = chunk_count(m, n, S)
         if self._next + k > self.count:

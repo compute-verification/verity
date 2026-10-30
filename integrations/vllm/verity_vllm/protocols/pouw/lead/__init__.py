@@ -45,7 +45,7 @@ from verity_vllm.errors import Refused
 from verity_vllm.protocols.pouw.lead import feed as F
 from verity_vllm.protocols.pouw.lead import record as R
 
-__all__ = ["SCHEME", "LeadBackend", "WindowKeys"]
+__all__ = ["FORWARD", "SCHEME", "LeadBackend", "LeadRun"]
 
 SCHEME = "lead-blc4a-t64-rot"
 #: the pouw settings the lead never reads: its coins come off the coin link, call by call, and it retains nothing

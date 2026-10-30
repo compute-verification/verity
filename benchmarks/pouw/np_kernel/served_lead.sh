@@ -13,8 +13,9 @@
 # model.
 #   ARMS (stock lead2 lead1 lead0: stock, then the lead at serve.cu's modes 2, 1 and 0; the first is the report's base),
 #   T (512), PROMPT_IDS (16), SLOTS (4), MAX_MODEL_LEN (64), N (96), WARM (2·SLOTS), AUDIT (128: lead2's first calls
-#   compared with the reference and stock, the warm load's), BUDGET_GB (8: the exported words a hash chunk holds), NBUF (4:
-#   mode 2's buffers), MODES (2 1 0: the checks; empty skips them), LEASE_MIN (90), CUDA_HOME (/usr/local/cuda-13.0),
+#   compared with the reference and stock, the warm load's), LANES (16: mode 2's side streams hashing the calls' words),
+#   MODES (2 1 0: the checks, mode 2's building the native collector's extension into CACHE; empty skips them),
+#   LEASE_MIN (90), CUDA_HOME (/usr/local/cuda-13.0),
 #   VENV (/workspace/cp/venv312), HF_HOME (/workspace/hf), CACHE (/workspace/research/cache/served-lead: vLLM's, Triton's
 #   and torch's), PORT (18191), BUILD_ONLY (0; 1 stops after the build, the SASS checks and the gate, on any machine with
 #   a CUDA toolkit and the venv).
@@ -27,7 +28,7 @@ say() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$OUT/steps.txt"; }
 export TREE=${TREE:-$PWD} HERE=benchmarks/pouw/np_kernel
 export T=${T:-512} PROMPT_IDS=${PROMPT_IDS:-16} SLOTS=${SLOTS:-4} MAX_MODEL_LEN=${MAX_MODEL_LEN:-64} N=${N:-96}
 export WARM=${WARM:-$(( 2 * SLOTS ))} STEP_TOKENS=$(( SLOTS * PROMPT_IDS )) ARMS=${ARMS:-stock lead2 lead1 lead0} MODES=${MODES-2 1 0}
-export AUDIT=${AUDIT:-128} BUDGET_GB=${BUDGET_GB:-8} NBUF=${NBUF:-4} PORT=${PORT:-18191}
+export AUDIT=${AUDIT:-128} LANES=${LANES:-16} PORT=${PORT:-18191}
 export VENV=${VENV:-/workspace/cp/venv312} CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
 export PY=$VENV/bin/python REPO=verity-int8/Llama-3.2-1B-INT8 REV=15b0976d400d796ee589e7737d03a919526bf800
 export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src:$TREE/tools/config
@@ -99,8 +100,8 @@ trap 'kill $smi 2>/dev/null; [ -n "$srv" ] && kill -TERM "$srv" 2>/dev/null' EXI
 LIB=$SCR/libssn_lead.so
 worst=0
 for m in $MODES; do
-  (cd "$TREE/integrations/vllm" && "$PY" "$TREE/$HERE/serve_lead.py" check --lib "$LIB" --mode "$m" --budget-gb "$BUDGET_GB" \
-    --nbuf "$NBUF" --out "$OUT/check_m$m.jsonl") > "$OUT/check_m$m.log" 2>&1
+  (cd "$TREE/integrations/vllm" && "$PY" "$TREE/$HERE/serve_lead.py" check --lib "$LIB" --mode "$m" --lanes "$LANES" \
+    --out "$OUT/check_m$m.jsonl") > "$OUT/check_m$m.log" 2>&1
   rc=$?; say "check mode $m rc $rc: $(tail -1 "$OUT/check_m$m.log" | cut -c1-200)"
   [ "$rc" = 0 ] || { worst=$rc; tail -20 "$OUT/check_m$m.log"; }
 done
@@ -118,7 +119,7 @@ for arm in $ARMS; do
         --max-num-batched-tokens "$T" --max-model-len "$MAX_MODEL_LEN" --window-steps 1 --no-prefix-caching --no-commit)
   case $arm in
     stock) lead=(--stock) ;;
-    lead*) m=${arm#lead}; lead=(--lib "$LIB" --mode "$m" --budget-gb "$BUDGET_GB" --nbuf "$NBUF" --max-m "$T" --stats "$A/lead.json")
+    lead*) m=${arm#lead}; lead=(--lib "$LIB" --mode "$m" --lanes "$LANES" --max-m "$T" --stats "$A/lead.json")
            [ "$m" = 2 ] && lead+=(--audit "$AUDIT") ;;
   esac
   (cd "$TREE/integrations/vllm" && exec "$PY" "$TREE/$HERE/serve_lead.py" serve "${lead[@]}" -- "${args[@]}") > "$D/serve.log" 2>&1 &

@@ -2,14 +2,17 @@
 the lead's `LeadBackend` (`SsnLead`) and installed on the engine through `verity_vllm.LLM`'s protocols, its coins the
 in-process certifier's. Measurement only: what it serves credits nothing.
 
-    python serve_lead.py check --lib LIB [--mode M] --out OUT.jsonl
-    python serve_lead.py serve (--stock | --lib LIB [--mode M] [--budget-gb G] [--nbuf B] [--audit N]) [--stats OUT.json] -- ARGS...
+    python serve_lead.py check --lib LIB [--mode M] [--lanes L] --out OUT.jsonl
+    python serve_lead.py serve (--stock | --lib LIB [--mode M] [--lanes L] [--audit N]) [--stats OUT.json] -- ARGS...
     python serve_lead.py report --arm NAME=DIR ... --T T --out REPORT.json
 
-* ``check``: `serve.cu`'s A' and B' against ssn.cu's host tiling (``ssn_lead_check_operands``), then every served output
-  of Llama-3.2-1B's four fused linears at 1, 17, 100 and 640 rows against `reference` and against stock's y
-  (`int8_exact.dequantize` of the exact product, verity_int8's) bit for bit, its buffers poisoned first, under fresh coins
-  (`feed.InProcessCertifier`) and under pooled ones (`PooledCertifier`). Exits 1 on any output that differs from either.
+* ``check``: `serve.cu`'s A' and B' against ssn.cu's host tiling (``ssn_lead_check_operands``), then a window of
+  Llama-3.2-1B's four fused linears at each of 1, 17, 100 and 640 rows through `lead.LeadRun`, under fresh coins
+  (`feed.InProcessCertifier`) and under pooled ones (`PooledCertifier`), its window keyings from fixed bytes
+  (`FixedKeys`): every served output against `reference` and against stock's y (`int8_exact.dequantize` of the exact
+  product, verity_int8's) bit for bit, its buffers poisoned first, and at mode 2 each window's recorded words root
+  against the CPU's (`lead_rows.WindowKeying.words_root`) over the same calls' exported words. Exits 1 on any that
+  differs.
 * ``serve``: serve-openai (``ARGS``, its own arguments) with the lead on its engine: ``protocols`` the lead's scheme and
   its ``backend`` this library, added to serve-openai's engine options; the coin link a `PooledCertifier` prepared once
   the linears are loaded. ``--audit N`` checks the first N calls' outputs against `reference` and stock's. ``--stats``
@@ -20,11 +23,13 @@ in-process certifier's. Measurement only: what it serves credits nothing.
   longest run of consecutive full steps of T tokens that starts at or after the main load's start), and its main load's
   tokens against the first arm's, request by request.
 
-Modes (`serve.cu`): 2 the lead (every word exported and hashed beside the GEMM), 1 exported only, 0 the GEMM serving y
-alone. What stands in for what isn't served yet:
+Modes (`SsnLead`): 2 the lead, each call's words exported into a buffer of their own and added at once to the window's
+`lead_rows.DeviceWords` (on ``--lanes`` side streams), whose top the committer keys as the forward's words root; 1
+exported and dropped; 0 the GEMM serving y alone. At 1 and 0 a window's words top is zeros: their records commit to no
+words. What isn't served yet:
 
-* root(A_j) and the words root are hm96 rows and frame trees of the served committer's kernels under stand-in constants
-  (`serve.cu`), not the committer's keyed roots; the key leaf is a SHA-512 of the key;
+* root(A_j) is the committer's keyed root (`lead.LeadRun`), hashed on the host from a copy of the call's rows;
+* a call's words are exported whole before they are hashed, ``64 ceil(m / 64) N S`` words of the device's a call;
 * the coins are this process's (`PooledCertifier`): each (K, N)'s coins are sampled once before serving, for the most
   rows a call takes, and each call is fed their leading rows and tiles, so every call of a shape reads the same coins
   (the release's order and refusals stay the certifier's); the feed is copied to the device from pinned host memory,
@@ -49,10 +54,9 @@ import numpy as np
 from verity_vllm.protocols.pouw.lead import feed as F
 
 HERE = Path(__file__).resolve().parent
-#: the kernel's tiles: 64 rows, 256 columns (a linear's N a whole number of them, its K whole KiB)
+#: the kernel's tiles: 64 rows, 256 columns (a linear's N a whole number of them)
 ROW_TILE, COL_TILE = 64, 256
-#: the most chunk roots the library holds between two `SsnLead.words_root` calls (serve.cu's MAX_CHUNKS)
-MAX_ROOTS = 8192
+MODES = (0, 1, 2)
 #: the bf16 bits a poisoned output holds until the kernel writes it (0xA5A5)
 POISON = 0xA5A5 - (1 << 16)
 #: Llama-3.2-1B's fused linears, (N, K): qkv, o, gate_up, down (gate.py's SERVED)
@@ -83,14 +87,13 @@ class Lib:
     def __init__(self, path: str | Path) -> None:
         self.so = so = ctypes.CDLL(str(path))
         i, p = ctypes.c_int, ctypes.c_void_p
-        for name, args in {"init": [i, ctypes.c_double, i, i], "load": [i, i, i, p, p, p], "ready": [p],
-                           "a_root": [i, i, p, p, p], "call": [i, i, p, p, p, p, p, p, p, p],
-                           "words_roots": [p, i], "check_operands": [i, i, i, ctypes.c_ulonglong]}.items():
+        for name, args in {"init": [i], "load": [i, i, i, p, p, p], "ready": [p], "call": [i, i, p, p, p, p, p, p, p, p, p],
+                           "check_operands": [i, i, i, ctypes.c_ulonglong]}.items():
             f = getattr(so, f"ssn_lead_{name}")
             f.argtypes, f.restype = args, i
 
-    def init(self, max_m: int, budget_gb: float, nbuf: int, mode: int) -> None:
-        _rc("init", self.so.ssn_lead_init(max_m, budget_gb, nbuf, mode))
+    def init(self, max_m: int) -> None:
+        _rc("init", self.so.ssn_lead_init(max_m))
 
 
 def _stream() -> int:
@@ -248,16 +251,27 @@ def compare(xq: Any, s_a: Any, w8: Any, s_w: Any, y: Any) -> dict[str, Any]:
 
 
 class SsnLead:
-    """The lead's `LeadBackend` on `serve.cu` (``lib``, initialized), its kernel ``variant``. Each call's y is a fresh
-    tensor of whole 64-row tiles, poisoned first with ``poison``; the first ``audit`` calls are compared (`compare`)."""
+    """The lead's `LeadBackend` on `serve.cu` (``lib``, initialized), its kernel ``variant``, at ``mode`` (the module's
+    Modes; ``lanes`` the side streams of mode 2's `lead_rows.DeviceWords`). Each call's y is a fresh tensor of whole
+    64-row tiles, poisoned first with ``poison``; the first ``audit`` calls are compared (`compare`). With ``keep``, each
+    call's committed stream is copied to the host (``streams``, until the caller clears it) for the CPU's words root."""
 
-    def __init__(self, lib: Lib, variant: str | None, *, poison: bool = False, audit: int = 0) -> None:
-        self.lib, self.variant, self.poison, self.audit = lib, variant, poison, audit
+    def __init__(self, lib: Lib, variant: str | None, *, mode: int = 2, lanes: int = 16, poison: bool = False,
+                 audit: int = 0, keep: bool = False) -> None:
+        if mode not in MODES:
+            raise ValueError(f"mode {mode!r}: the lead's modes are {MODES}")
+        self.lib, self.variant, self.mode, self.lanes = lib, variant, mode, lanes
+        self.poison, self.audit, self.keep = poison, audit, keep
         self.shapes: dict[int, tuple[int, int]] = {}
         self.weights: dict[int, tuple[Any, Any]] = {}
         self.held: int | None = None
+        self.native: tuple[Any, Any] | None = None
+        #: the open window's device words instance (mode 2) and its domain, from its first call to `words`
+        self.words_on: Any = None
+        self.dom: Any = None
+        self.streams: list[bytes] = []
         self.audits: list[dict[str, Any]] = []
-        self.stats = {"calls": 0, "rows": 0, "feed_bytes": 0, "a_root_s": 0.0, "call_s": 0.0, "chunk_roots": 0, "passes": 0}
+        self.stats = {"calls": 0, "rows": 0, "feed_bytes": 0, "export_bytes": 0, "call_s": 0.0, "passes": 0}
 
     def load(self, w: int, layer: Any) -> None:
         import torch
@@ -268,54 +282,59 @@ class SsnLead:
         self.shapes[w], self.weights[w] = (n, k), (layer.weight, layer.weight_scale)
 
     def ready(self) -> int:
+        """The library's call buffers, and at mode 2 the native collector's extension (built once, before serving)."""
         if self.held is None:
             got = ctypes.c_ulonglong(0)
             _rc("ready", self.lib.so.ssn_lead_ready(ctypes.byref(got)))
             self.held = got.value
+            if self.mode == 2:
+                from verity_vllm.commit.committer import native_collect as NC
+                ext = NC.ext()
+                self.native = (ext, ext.StepHasher())
         return self.held
 
-    def key_leaf(self, key: bytes) -> bytes:
-        return hashlib.sha512(b"lead/key-leaf/stand-in" + key).digest()
-
-    def a_root(self, w: int, call: F.Call, xq: Any, window: Any) -> bytes:
-        self.ready()
-        x = xq.contiguous()
-        out = ctypes.create_string_buffer(64)
-        t0 = time.perf_counter()
-        _rc("a_root", self.lib.so.ssn_lead_a_root(w, call.m, x.data_ptr(), ctypes.addressof(out), _stream()))
-        self.stats["a_root_s"] += time.perf_counter() - t0
-        return out.raw
-
-    def call(self, w: int, layer: Any, xq: Any, s_a: Any, feed: Any) -> Any:
+    def call(self, w: int, layer: Any, xq: Any, s_a: Any, feed: Any, dom: Any) -> Any:
         import torch
-        n, _ = self.shapes[w]
-        m = int(xq.shape[0])
-        y = torch.empty((-(-m // ROW_TILE) * ROW_TILE, n), dtype=torch.bfloat16, device=xq.device)
+        from verity_vllm.commit import lead_rows as L
+        self.ready()
+        n, k = self.shapes[w]
+        m, S = int(xq.shape[0]), F.steps(k)
+        rows = -(-m // ROW_TILE) * ROW_TILE
+        y = torch.empty((rows, n), dtype=torch.bfloat16, device=xq.device)
         if self.poison:
             y.view(torch.int16).fill_(POISON)
+        words = torch.empty(rows * n * S, dtype=torch.int32, device=xq.device) if self.mode else None
         x, sa = xq.contiguous(), s_a.reshape(-1).to(torch.float32).contiguous()
         held = [_host(a) for a in (feed.rows, feed.g, feed.lanes(n), feed.sources(n))]
         t0 = time.perf_counter()
         _rc("call", self.lib.so.ssn_lead_call(w, m, x.data_ptr(), sa.data_ptr(), *(p for _, p in held), y.data_ptr(),
-                                              _stream()))
+                                              None if words is None else words.data_ptr(), _stream()))
+        if self.mode == 2:
+            if self.words_on is None:
+                self.words_on = L.DeviceWords(*self.native, dom, _stream(), lanes=self.lanes)
+            self.words_on.add(words, m, n, S, COL_TILE)
+        self.dom = dom
         self.stats["call_s"] += time.perf_counter() - t0
         self.stats["calls"] += 1
         self.stats["rows"] += m
         self.stats["feed_bytes"] += sum(a.nbytes if isinstance(a, np.ndarray) else a.numel() * 4 for a, _ in held)
+        self.stats["export_bytes"] += 0 if words is None else 4 * words.numel()
+        if self.keep and words is not None:
+            self.streams.append(L.stream(words.cpu().numpy(), m, n, S, COL_TILE))
         if self.audit > 0:
             self.audit -= 1
-            self.audits.append({"linear": w, "m": m, "n": n, "k": int(xq.shape[1]),
-                                **compare(x, sa, *self.weights[w], y[:m])})
+            self.audits.append({"linear": w, "m": m, "n": n, "k": k, **compare(x, sa, *self.weights[w], y[:m])})
         return y[:m]
 
-    def words_root(self, window: Any) -> bytes:
-        buf = ctypes.create_string_buffer(64 * MAX_ROOTS)
-        n = self.lib.so.ssn_lead_words_roots(ctypes.addressof(buf), MAX_ROOTS)
-        if n < 0:
-            raise LeadLibError(f"ssn_lead_words_roots: past {MAX_ROOTS} chunk roots in one window")
-        self.stats["chunk_roots"] += n
+    def words(self) -> bytes:
+        """The window's words top: mode 2's device top (`lead_rows.DeviceWords.top`), else zeros of a top's size."""
+        dw, dom, self.words_on, self.dom = self.words_on, self.dom, None, None
+        if dom is None:
+            raise LeadLibError("the window's words before any of its calls")
         self.stats["passes"] += 1
-        return hashlib.sha512(b"lead/words-root/stand-in" + window.key + window.salt + buf.raw[:64 * n]).digest()
+        if self.mode == 2:
+            return dw.top()
+        return bytes(128 if dom.count > 1 else 1)
 
 
 @dataclass
@@ -324,45 +343,74 @@ class _Layer:
     weight_scale: Any
 
 
+class FixedKeys:
+    """The check's window keyings (`lead_rows.WindowKeying`) from fixed bytes: window i's ks_w and y0 are labels of i, so
+    `twin` keys the same digests on the CPU. Never a served window's: its keys are public."""
+
+    def __init__(self) -> None:
+        self.made = 0
+
+    def __call__(self, calls: int) -> Any:
+        self.made += 1
+        return self.twin(self.made - 1, calls)
+
+    @staticmethod
+    def twin(i: int, calls: int, weights_root: bytes | None = None, salt: bytes | None = None) -> Any:
+        """Window i's keying, registered under ``weights_root`` and opened under ``salt`` when given."""
+        from verity_vllm.commit import lead_rows as L
+
+        def label(what: bytes, size: int) -> bytes:
+            return hashlib.shake_256(b"serve_lead/check/" + what + i.to_bytes(8, "big")).digest(size)
+
+        k = L.WindowKeying(calls, ks_w=label(b"ks_w", 64), y0=label(b"y0", L.KEY_SALT_BYTES))
+        if weights_root is not None:
+            k.register(weights_root)
+            k.open(salt)
+        return k
+
+
 def check(a: argparse.Namespace) -> int:
     import torch
     from verity_vllm.engine import int8_exact as E
     from verity_vllm.protocols.pouw import lead as PL
     lib = Lib(a.lib)
-    lib.init(max(CHECK_ROWS), a.budget_gb, a.nbuf, a.mode)
+    lib.init(max(CHECK_ROWS))
     lines, bad = [], 0
     for m, n, k in OPERANDS:
         got = lib.so.ssn_lead_check_operands(m, n, k, a.seed)
         bad += got != 0
         lines.append({"check": "operands", "m": m, "n": n, "k": k, "bytes_differ": got})
-    backend = SsnLead(lib, None, poison=True)
+    backend = SsnLead(lib, None, mode=a.mode, lanes=a.lanes, poison=True, keep=a.mode == 2)
     gen = torch.Generator(device="cuda").manual_seed(a.seed)
     layers = []
     for w, (n, k) in enumerate(SERVED):
         layers.append(_Layer(torch.randint(-127, 128, (n, k), dtype=torch.int8, device="cuda", generator=gen),
                              (torch.rand((n, 1), device="cuda", generator=gen) * 2e-3 + 1e-5).to(torch.float32)))
         backend.load(w, layers[-1])
-    calls = len(CHECK_ROWS) * len(SERVED)
+    rows = {(m, w): E.quantize_rows(torch.randn((m, k), device="cuda", generator=gen).to(torch.bfloat16))
+            for m in CHECK_ROWS for w, (_, k) in enumerate(SERVED)}
+    weights_root = hashlib.sha512(b"serve_lead/check/weights").digest()
     links = {"fresh": F.InProcessCertifier(np.random.default_rng(a.seed).bytes),
              "pooled": PooledCertifier(max(CHECK_ROWS), np.random.default_rng(a.seed + 1).bytes)}
     for name, link in links.items():
-        link.open(0, bytes(64), bytes(64), calls)
-    j = 0
-    for m in CHECK_ROWS:
-        for w, (n, k) in enumerate(SERVED):
-            x = torch.randn((m, k), device="cuda", generator=gen).to(torch.bfloat16)
-            xq, s_a = E.quantize_rows(x)
-            call = F.Call(0, j, w, m, k, n)
-            root = backend.a_root(w, call, xq, None)
-            for name, link in links.items():
-                feed = link.release(call, root)
-                y = backend.call(w, layers[w], xq, s_a, feed)
+        run = PL.LeadRun(f"pouw:{PL.SCHEME}", backend, link, weights_root, SERVED, keying=FixedKeys())
+        for i, m in enumerate(CHECK_ROWS):
+            backend.streams.clear()
+            for w, (n, k) in enumerate(SERVED):
+                xq, s_a = rows[m, w]
+                y = run.call(w, layers[w], xq, s_a)
                 got = compare(xq, s_a, layers[w].weight, layers[w].weight_scale, y)
                 bad += got["differ_from_reference"] != 0 or got["differ_from_stock"] != 0
                 lines.append({"check": "call", "coins": name, "mode": a.mode, "m": m, "n": n, "k": k, **got})
-            j += 1
-        root = backend.words_root(PL.WindowKeys(0, calls, bytes(64), bytes(64)))
-        lines.append({"check": "words_root", "m": m, "chunk_roots": backend.stats["chunk_roots"], "root": root.hex()[:16]})
+            record, leaves = run.record, run.leaves
+            run.end_pass()
+            line = {"check": "words_root", "coins": name, "mode": a.mode, "m": m, "leaves": leaves,
+                    "root": record.words_root.hex()[:16]}
+            if a.mode == 2:
+                cpu = FixedKeys.twin(i, len(SERVED), weights_root, record.salt).words_root(PL.FORWARD, backend.streams)
+                line["equal_to_cpu"] = record.words_root == cpu
+                bad += not line["equal_to_cpu"]
+            lines.append(line)
     Path(a.out).write_text("".join(json.dumps(x) + "\n" for x in lines))
     for x in lines:
         print(json.dumps(x), flush=True)
@@ -380,8 +428,8 @@ def serve(a: argparse.Namespace, rest: list[str]) -> int:
         print(f"LEAD none: the stock arm, engine options {json.dumps(added)} added", flush=True)
     else:
         lib = Lib(a.lib)
-        lib.init(a.max_m, a.budget_gb, a.nbuf, a.mode)
-        backend = SsnLead(lib, admitted_variant(), audit=a.audit)
+        lib.init(a.max_m)
+        backend = SsnLead(lib, admitted_variant(), mode=a.mode, lanes=a.lanes, audit=a.audit)
         link = PooledCertifier(a.max_m)
         F.InProcessCertifier = lambda: link
         added |= {"protocols": f"pouw:{PL.SCHEME}", "protocols_config": {"pouw": {"backend": backend}}}
@@ -392,10 +440,11 @@ def serve(a: argparse.Namespace, rest: list[str]) -> int:
         if not a.stock:
             t0 = time.perf_counter()
             link.prepare(sorted({(k, n) for n, k in backend.shapes.values()}))
+            backend.ready()
             held["prepare_s"] = time.perf_counter() - t0
-            print(f"LEAD installed: {len(backend.shapes)} linears, kernel {backend.variant}, mode {a.mode}, pools "
-                  f"{sum(p.bytes() for p in link.pools.values()) / 1e9:.2f} GB sampled in {held['prepare_s']:.1f} s",
-                  flush=True)
+            print(f"LEAD installed: {len(backend.shapes)} linears, kernel {backend.variant}, mode {a.mode}, lanes "
+                  f"{a.lanes}, pools {sum(p.bytes() for p in link.pools.values()) / 1e9:.2f} GB sampled and the library "
+                  f"ready in {held['prepare_s']:.1f} s", flush=True)
         return llm, com
 
     SO.engine_options, SO.build = (lambda opts: base_options(opts) | added), build
@@ -410,7 +459,7 @@ def serve(a: argparse.Namespace, rest: list[str]) -> int:
             llm.close()
         if not a.stock and a.stats:
             Path(a.stats).write_text(json.dumps({
-                "mode": a.mode, "budget_gb": a.budget_gb, "nbuf": a.nbuf, "max_m": a.max_m, "kernel": backend.variant,
+                "mode": a.mode, "lanes": a.lanes, "max_m": a.max_m, "kernel": backend.variant,
                 "device_bytes": backend.held, "pool_bytes": sum(p.bytes() for p in link.pools.values()),
                 "prepare_s": held.get("prepare_s"), "stats": backend.stats, "audits": backend.audits,
                 "details": dict(opt.details) if opt is not None else None,
@@ -485,9 +534,8 @@ def main(argv: list[str] | None = None) -> int:
     for name in ("check", "serve"):
         p = sub.add_parser(name)
         p.add_argument("--lib", required=name == "check", help="serve.cu's shared library")
-        p.add_argument("--mode", type=int, default=2, choices=(0, 1, 2))
-        p.add_argument("--budget-gb", type=float, default=8.0, help="the exported words a hash chunk holds")
-        p.add_argument("--nbuf", type=int, default=4, help="mode 2's word buffers, each its own hash stream")
+        p.add_argument("--mode", type=int, default=2, choices=MODES)
+        p.add_argument("--lanes", type=int, default=16, help="mode 2's side streams hashing the calls' words")
     c = sub.choices["check"]
     c.add_argument("--seed", type=int, default=1)
     c.add_argument("--out", required=True)
