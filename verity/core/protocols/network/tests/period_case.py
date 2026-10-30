@@ -1208,7 +1208,7 @@ EXPECT = {
     "clock-ingress": REJECT, "clock-forged": REJECT, "clock-window": REJECT, "clock-session": REJECT,
     "clock-reused": REJECT, "clock-unsalted": REJECT,
     "answer-made-up": REJECT, "v2-verdicts": REJECT, "v2-refused": REJECT, "v2-blobs": REJECT, "v2-session": REJECT,
-    "v2-other-window": REJECT, "v2-domain": REJECT, "v2-previous": REJECT,
+    "v2-other-window": REJECT, "v2-domain": REJECT, "v2-previous": REJECT, "v2-coins": REJECT,
     "audit-other": REJECT, "audit-reject": REJECT, "audit-undecided": UNDECIDED, "audit-profile": REJECT,
     "audit-bound": REJECT, "audit-program": REJECT, "audit-units": REJECT, "state-read": REJECT,
     "form": REJECT, "first": REJECT, "count-windows": REJECT, "count-audits": REJECT, "evidence-count": REJECT,
@@ -1852,6 +1852,21 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         elif aimed and m == "form":
             window = {"answer": made_up, "certificates": window["certificates"], "registrations": []}
         windows.append(window)
+    if not rows:
+        rc = random.Random(f"network-period coins {m} {seed}")
+        challenger, coins = ZK.challenger(rc, setup, law, window_regs)
+        for x, c in zip(windows, coins):
+            if "one_stage" in x:
+                x["one_stage"]["coins"] = c
+        if m == "v2-coins":
+            one, c = windows[t]["one_stage"], coins[t]
+            seg = c["segment"]
+            one["coins"] = r.choice([
+                None, ZK.challenger(rc, setup, law, window_regs)[1][t],
+                c | {"segment": seg | {"openings": seg["openings"][1:], "start": seg["start"] + 1}},
+                *(x for i, x in enumerate(coins) if i != t)])
+            if one["coins"] is None:
+                del one["coins"]
 
     audit_params, audit_regs, audits = [], [], []
     slots = sched.window // sched.every * sched.lanes if rows else 0
@@ -1948,7 +1963,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         one_stage = OS._json({
             "anchors": [], "delta": r.choice(["1/1000", "1/10", "1/2"]), "law": law, "leaf_layer": None, "log": log,
             "partition": part, "program": setup.desc, "proofs": {"circuit": ZK.sha(ZK.CIRCUIT), "registered": None},
-            "query": setup.query, "registered": None, "scheme": OS.SCHEME, "work_table": None})
+            "query": setup.query, "registered": None, "scheme": OS.SCHEME, "work_table": None, **challenger})
         if m == "v2-refused" and r.random() < 0.25:
             one_stage["proofs"]["circuit"] = ZK.sha(b"another circuit file")
         case_params |= {"egress": _end_json(r, first + n_windows), "ingress": _end_json(r, first + n_windows),
@@ -2007,6 +2022,8 @@ def _bad_params(p: dict, n: int) -> list:
                       p | {"sync_set": ss | {"rhos": [[1, 2], [2, 4]]}}, p | {"sync_set": ss | {"x": 0}},
                       p | {"one_stage": os_ | {"ports": {}}}, p | {"one_stage": "x"},
                       p | {"one_stage": {k: v for k, v in os_.items() if k != "proofs"}},
+                      p | {"one_stage": {k: v for k, v in os_.items() if k != "challenger"}},
+                      p | {"one_stage": {k: v for k, v in os_.items() if k != "window_root"}},
                       p | {"one_stage": os_ | {"proofs": {"circuit": "ab", "registered": None}}},
                       p | {"one_stage": os_ | {"partition": None}}, p | {"one_stage": os_ | {"delta": "2"}},
                       p | {"one_stage": os_ | {"log": "x"}}, p | {"run": 0}, p | {"program": "ab" * 64},

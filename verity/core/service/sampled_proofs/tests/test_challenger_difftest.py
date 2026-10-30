@@ -1531,16 +1531,18 @@ def _pairs(log: Sequence[dict]) -> list[str]:
 
 
 class Drawn:
-    """A sample's coins from family `draw` of a ledger session's challenger, as `ChallengerCoins` opens them after `after`
-    (one read, or a read and a rerun's extension), between other roots: the other family's, `draw` coins opened before
-    the commitment (at least one when `before`), and later ones. `ledger` opens the session for its window. `after` is
-    the commitment (drawn, by default), and `reads` reads the coins (`reads(coins)`, the bytes read), by default in one
-    or two reads of drawn lengths.  The ledger opens the session withheld unless `withheld` is false."""
+    """A sample's coins from family `draw` (`size` coins) of a ledger session's challenger, as `ChallengerCoins` opens
+    them after `after` (one read, or a read and a rerun's extension), between other roots: the other family's, `draw`
+    coins opened before the commitment (at least one when `before`), and later ones. `ledger` opens the session for its
+    window. `after` is the commitment (drawn, by default), and `reads` reads the coins (`reads(coins)`, the bytes read),
+    by default in one or two reads of drawn lengths.  The ledger opens the session withheld unless `withheld` is
+    false."""
 
     def __init__(self, rng: random.Random, before: bool = False, after: bytes | None = None,
-                 reads: Callable[[Callable[[int], bytes]], bytes] | None = None, withheld: bool = True) -> None:
+                 reads: Callable[[Callable[[int], bytes]], bytes] | None = None, withheld: bool = True,
+                 size: int = 12) -> None:
         s = self.s = _ledger_session(rng)
-        s.ch = _challenger(rng, [("other", 2), ("draw", 12)])
+        s.ch = _challenger(rng, [("other", 2), ("draw", size)])
         s.ch.sign_record(s.host, s.pub, lambda m: lms.sign_at(s.k, s.q, m).encode())
         c = s.ch.commitment
         s.lines = [canonical_json_text({"event": "commitment", "root": c.root.hex()})]

@@ -3363,6 +3363,18 @@
  },
  "four_names": ["Nci", "NetTiming", "Accounting", "Hash"],
  "guarantees": {
+  "Accounting.SecurityProofs.AccelAdditive": {
+   "owner": "@compute-research",
+   "signature": ["Accounting.SecurityProofs.AccelAdditive : Accounting.Guarantees.AccelAdditive"],
+   "assumptions": [],
+   "type_hash": "d40d7bc6a40c0afeb4793787bda1f439b2855b67e79a509cad8645dc792f7a5d"
+  },
+  "Accounting.SecurityProofs.AccelRate": {
+   "owner": "@compute-research",
+   "signature": ["Accounting.SecurityProofs.AccelRate : Accounting.Guarantees.AccelRate"],
+   "assumptions": [],
+   "type_hash": "ceb44afb1f12b9cd4607f52406ddb1ef61e0e2441adec746f17aa50a268d8cbb"
+  },
   "Accounting.SecurityProofs.Actual.DampenerWindowsCap": {
    "owner": "@lean",
    "signature": [
@@ -13667,7 +13679,9 @@
    "Pouw.SecurityProofs.OnsiteFreed": "frozen (verdict): a probability statement over quantified work and certifier verdicts whose soundness is the premises RemoteWorkFloor and CertifiedImport, not a property of one function; it gets the shape when the onsite protocol's verdict is a named Lean function the event reads.",
    "Pouw.SecurityProofs.OnsiteFreed_honest": "completeness: OnsiteFreed's honest witness: every premise, RemoteWorkFloor from WorkSound's conclusion, OutsourceWithinEgressPeriod from the per-program premise and CertifiedImport from ImportWithinCertifier among them, holds at the toy instance (Definitions.Pouw.Witness), the bound is below 1, and the onsite verdict accepts the honest prover, which exchanges nothing, so OnsiteFreed is not vacuous.",
    "Pouw.SecurityProofs.OnsiteFreed_nontrivial": "lemma: OnsiteFreed's nontrivial witness, in the Lean check's three-part form: at the toy instance with a work check that accepts everything, every premise of OnsiteFreed but RemoteWorkFloor holds, RemoteWorkFloor fails (the quiet prover exchanges nothing, is accepted and spends 0 < F) and the conclusion fails; a counterexample about no protocol function.",
-   "Pouw.SecurityProofs.outsourcePeriod_of_perProgram": "lemma: the per-program OutsourceWithinEgress implies its period form OutsourceWithinEgressPeriod, one premise's form from another's, about no protocol function's acceptance."
+   "Pouw.SecurityProofs.outsourcePeriod_of_perProgram": "lemma: the per-program OutsourceWithinEgress implies its period form OutsourceWithinEgressPeriod, one premise's form from another's, about no protocol function's acceptance.",
+   "Accounting.SecurityProofs.AccelRate": "frozen (no-function): It shows the instructions of runs of the machine model 𝓜 back to back (Verity.Accel.Machine.run) meet a rate at their seconds summed, not a Lean function's acceptance.",
+   "Accounting.SecurityProofs.AccelAdditive": "frozen (no-function): It bounds the resource units of disjoint sets of the instructions a period issues on the machine model 𝓜 by the period's rate, not a Lean function's acceptance."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -16236,6 +16250,22 @@
     "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork"
    ]
   },
+  "Definitions.Accounting.Additive": {
+   "digest": "7396ef7fe7b9b62015b2cc6b00c9f8f5bdcc31b55e6fd0914421db9cd8f68faf",
+   "definitions": {
+    "Accounting.AccelRun": "f279de16b6c41143c893725ca545d914aa321ebea362f2486254f318bcbbb6d5",
+    "Accounting.AccelRun.P": "17b464782f5599a89fe4521ecb08b3773e03fa5ae516d1945677eb53609b6bb6",
+    "Accounting.AccelRun.T": "f42cf17d8b08923d1632a0e326b4f525fac0edc75941f8da09ef5ed6b2960cb8",
+    "Accounting.AccelRun.instrs": "b63ff684c27c4f17575210d654c68c0633d0c0d3b4c53e9110157e2eac910529",
+    "Accounting.AccelRun.sched": "9fda0915608c094a5779452f939ce8eab409979641091e625a204331c2b90bdf",
+    "Accounting.AccelRun.σ": "3effbf1d37705a31b05dce5f793f9eceef07a635c78faf08d508ea169a71d825",
+    "Accounting.issued": "12e3bf0ac0f77ad86c8071d4e530708558d52f6dc1c1995e48b3cb16d368a5ad",
+    "Accounting.occUse": "411c2145daa505f37a4762afa2666855d594e72643e9653efb4648bac702c726",
+    "Accounting.periodSeconds": "8d8f54dfe0c99b0d3dd527af4096aa6d008ded51be4a7d58845185ebdaf8fcd8",
+    "Accounting.stream": "42102635b13346d903f55e3f30b69edb7ca888e3f62eb1b6b3eaea9649e4751b"
+   },
+   "guarantees": ["Accounting.SecurityProofs.AccelAdditive", "Accounting.SecurityProofs.AccelRate"]
+  },
   "Definitions.Accounting.Assumptions.Compose": {
    "digest": "92174b9279ae651025b5472d0fb208a506f3957b2df520e2820d63c3d352f86a",
    "definitions": {
@@ -17688,6 +17718,14 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots"
    ]
+  },
+  "Definitions.Accounting.Guarantees.Additive": {
+   "digest": "a4b353f1da122175b5d4a014b094fbb3bb32b2f845091de1e5fa9541b56ed6c6",
+   "definitions": {
+    "Accounting.Guarantees.AccelAdditive": "9ababa0abe19fd8c18a2c8a267794d3565a96612fdb801cc3625b57c625067b1",
+    "Accounting.Guarantees.AccelRate": "c43f322d7e638689821bb5ffb14c5f17f8237a2b907e9d9f426ae1d47c7bf9dc"
+   },
+   "guarantees": ["Accounting.SecurityProofs.AccelAdditive", "Accounting.SecurityProofs.AccelRate"]
   },
   "Definitions.Accounting.Guarantees.Bandwidth": {
    "digest": "6c1c75ddbe1763710d0b9bd4f8025c0610684cc46fb93a5566ff59a129649c2a",
@@ -22019,28 +22057,71 @@
    ]
   },
   "Definitions.Core.Accel.Card": {
-   "digest": "8f54519a61935cb149e9503c9b1db4b8f2250bd76666a6ddf04ca4efb5a9a87d",
+   "digest": "347dd66c244fc890bfffc1dadf55e7da84852a6a996ed88e5da27f7a9348a8b6",
    "definitions": {
     "Verity.Accel.Card": "428e0398432b8c5785c4d2ba9d51ef7edb29b2f3dafd5f5e5334a5d202a35411",
+    "Verity.Accel.Card.Avail": "f994c4b1f6ce8768170ec258895baf8a2c57fe77a014d0d9dd601b119332d1b2",
     "Verity.Accel.Card.Exact": "f13b0004040c17242c244b1336f78520617d481e56e477b018c872f9d707bafd",
     "Verity.Accel.Card.Loc": "5ea92fb1896a39cc29338436e8db010074e95d12fbbb213f6f26c9969f81fed4",
     "Verity.Accel.Card.Mem": "bd025954710aac21d13601c5fc140b714e727b976526ff4ccfe3ba40f7f7b36b",
+    "Verity.Accel.Card.bw": "f6a9838f08761846a9dd4b59800809efda5728029fc52568c94a74a2d1e0ebb5",
+    "Verity.Accel.Card.captured": "109cc933266b5b720ce26a93348824e196a12a14371f9b951431bbc99d1e6468",
+    "Verity.Accel.Card.cuda": "89489dd1984ba747fc1fab053e4eff21178cc9ab9748f00963ca9192ce2a6979",
+    "Verity.Accel.Card.decode": "bcd85764005481b6b061578f8b64b95d23d6f20a881372df5e76f773cc7c2b5c",
+    "Verity.Accel.Card.dot": "01da340b415a973ce9d950e6a325a107600c2e79d249f4ac675241469f7f9b78",
     "Verity.Accel.Card.exact": "6afcadb9ea74eaeaecaab20f8360209abe2ac75279862e70bbbb3e5f16d06c62",
+    "Verity.Accel.Card.floors": "eded77633c2730f9a9a3cb671c80b4766bac203e8b88e9e5240dae16e8c59ff3",
     "Verity.Accel.Card.machine": "a69177d09f658da87563e2a0eeeb51c6761214a2b0a7f694b3db96365ed21e97",
+    "Verity.Accel.Card.scale": "6da5391291deb96a9c1b68a45272c1e8f92edaafdf2b1a7a1edf8b137f663f12",
     "Verity.Accel.Card.size": "c30924c4ff54c3d2f36e1f5e60dce96fc961bf4051dcdda311600fca015bf168",
+    "Verity.Accel.Card.tc": "3d7e8d5882191a3c610f78264ac04fdd0b7c18d9a9230878f495fb03c9acc4f5",
     "Verity.Accel.Card.text": "9022c508938b1e3bbcebe9cc8306c3874fe9959d6b7d4d4efd048e31e30893ff",
     "Verity.Accel.Card.use": "62f1b838f5a78fb00908d8b6f23b0b1e749e0963220518e472659c7ba3ec708c",
     "Verity.Accel.Card.weight": "1d7befe23f2943afa33d1f466598935e4c3983b462b4cb6e3b7531c65b333c17",
+    "Verity.Accel.Card.weightOf": "d6fa065cd91df11771b30747867283c71f1c69fe594903f0cbb2dc79d05633bd",
+    "Verity.Accel.Card.zeroOnly": "f723d12d4dc36829ac9944ac8063f82350999a764cbf8a16da76e06f1a476156",
     "Verity.Accel.Card.ρ": "d07b3829898a40395a0c3a03f2ee24313e39a267a743d0629c9966c67847efb0",
+    "Verity.Accel.Enc": "03e25745d21896abcd19f895c6d77d53cb63b4556c5d5917186f2bdb3dee9940",
+    "Verity.Accel.Enc.bf16x2": "f7e718f6fa6d7ebde5e7a43f2e08fb6c586dcf7b958d8e6cf5dc464de64f22c2",
+    "Verity.Accel.Enc.casesOn": "18e0ce8e0f22c4d76f4b9264a98ed4a685703f46a1e031c571a47c5b0d8c5d92",
+    "Verity.Accel.Enc.ctorIdx": "c8ed39610304b2602f425af9799bf76541cf7b44130160fadc43fb2478612661",
+    "Verity.Accel.Enc.dec": "3bb3ac772abb1dbd8d5106ccf56511646ea23e05da75c64ffc60eba51a2b08a0",
+    "Verity.Accel.Enc.f16x2": "ac2f990a7e6a17530def63acc9938f3cec203be8161ede93e1b640496ab8a4f8",
+    "Verity.Accel.Enc.f32": "6638d6469bc14a88f6ddd9ac61abd48116a0544251a19535ef3f67f5b79a1601",
+    "Verity.Accel.Enc.f64hi": "d2be905ed8e3c4b27a8f0313a8d0a7547a45ffd21f8d2e8c5d3a2101c85d99e6",
+    "Verity.Accel.Enc.f64lo": "76fac7eb98bd58ed3732301bcb77ded33621eb25d8aa576f13b29540e1ee23a4",
+    "Verity.Accel.Enc.raw": "ea2a8005ec5b9b02f01ed661295e93f90f1ed73f0b1f15e3fe29e12c397c1c94",
+    "Verity.Accel.Enc.rec": "5e92e0a02e02efcf42e50247e7d0cd2f45199effdd33fcc121458deaa9aca285",
+    "Verity.Accel.Open.b1": "62f1ca9927bd3b0677e42eb4e699d93ab7d81251788b94dbe4e29a9b91d04506",
+    "Verity.Accel.Open.madHi": "b7bec29ffecd532c8124bc6978584e83a12f8d39eef8459520b1be7075e34409",
+    "Verity.Accel.Open.slack": "ed3a32ea07aac2228d9da3a965b2afa4ff120595faa8643e083d7f4a76844e34",
+    "Verity.Accel.Open.sync": "6e71d98daa243481efd92a2efa966e1a8842f1f8233608681557773382fc0c07",
+    "Verity.Accel.Res.tensorLong": "b4624ff3492c2f7183bc02cbf1c1d4ea2808c5c03da208f8e74dfc3dd48a9d43",
+    "Verity.Accel.decInt": "c9169c6a1e1097db8ac59644e00c742b743c7b21dd4573aec5245dc33f5000f7",
+    "Verity.Accel.floatInt": "c1792266fee117fb7234346e6771be244d7dadcb94897cfc8d08b23bcba6d9e4",
+    "Verity.Accel.instDecidableEqEnc": "b6479e5ecac034a1cc11444aa364ff33fed88dac0133d79f08121993bad63262",
+    "Verity.Accel.intCaptured": "1fe3f028fa4e251b462daa8737d91963f4a172db15290503ca3ce6ee724b9910",
+    "Verity.Accel.intPair._sparseCasesOn_2": "4a26c8ace2df538815045bf94ddcd90670bacecd4fee472e493d554b51da0d4b",
+    "Verity.Accel.intPair._sparseCasesOn_3": "705957b51ecb71126fd584a3145452668a4946f20cef2d4d949d35b1571aac92",
+    "Verity.Accel.opUse": "de717ab3d4a538e2cf0d6174c3d4b470f6db622cb0f7368e59fc8afab24a4d3c",
+    "Verity.Accel.opUse._sparseCasesOn_1": "788f101bc9e5c599a78aeb0905e66db9b0b07bf2dc2409f33c8d737ddd6177b3",
+    "Verity.Accel.opUse._sparseCasesOn_4": "9e8de34f432014188f52b1972125109ba7fc0fb82a19c6583e633c1cd1af6e72",
+    "Verity.Accel.opUse._sparseCasesOn_5": "436ff6171cd9202f3341aef4d599aaadb8817048f18591631a25b0a0fd4f2385",
+    "Verity.Accel.opUse._sparseCasesOn_6": "95ffdd0c3931a05b5ab6c678309eea5df2095baed1aac0ca927636ae8135d5cb",
+    "Verity.Accel.opUse._sparseCasesOn_7": "db5dddee87ab9a085e515bbd3bc1b9ec07ef8efc67b644d897bd1fd5118041b0",
+    "Verity.Accel.opUse._sparseCasesOn_8": "eaa7fd9d61dcdd039a2e2bd11f9a0b9f225725117e3d37a76812ee42dd8dad57",
     "Verity.Accel.port": "c0a41ccab5ff20aa84d48fd3e198f951f21eb12e4e3940c480eec29dc0eeb802",
     "Verity.Accel.port._sparseCasesOn_1": "15c03a12b7960489cee3062580c315ae84666f5fa3023702549bac79deb12a40",
     "Verity.Accel.port._sparseCasesOn_2": "e966b99a37a0e27d72bbe429862d3a9057f6f3a6d0b3b04ae8880bd3d36176de",
     "Verity.Accel.port._sparseCasesOn_3": "d5b54252c1a5def94a391047145cb31a0b4290173091b8128446912423e14dc5",
     "Verity.Accel.port._sparseCasesOn_4": "b46e08649b44fa34d094b5fa1a12d4da9ae343487e96d8915b010ce36fb8b602",
+    "Verity.Accel.rd": "f13be6c88b41560e9d473bccdf5b11808614aa44650f66e08315602109a7b60a",
     "Verity.Accel.regWr": "667dd506c025f30b0fe1c9f3cc2d3fb19078cbf8fe21fe14ca792636303ce665",
     "Verity.Accel.slot": "dac00a5a5cb9083968389b4dd810676595c991b1697202df0b0635172ed70d3b"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.AccelAdditive",
+    "Accounting.SecurityProofs.AccelRate",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundH200",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardH200",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardSm120",
@@ -22190,6 +22271,8 @@
     "Verity.Accel.selSp": "df78a815e60b0b7dab710091978a0c36f75748003309efe7216133b020134864"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.AccelAdditive",
+    "Accounting.SecurityProofs.AccelRate",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundH200",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardH200",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardSm120",
@@ -22237,6 +22320,8 @@
     "Verity.Accel.Machine.units": "7a95d03de9f53bf0b9da53424ed895d9205e99b055e536fdc737d646208984cb"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.AccelAdditive",
+    "Accounting.SecurityProofs.AccelRate",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundH200",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardH200",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardSm120",
