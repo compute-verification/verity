@@ -68,7 +68,7 @@ words: the falsification test (`test_squaring_floor_known_constructions`) builds
 nonlinear units against `e`. -/
 def SquaringFloor (F : Field) (e εnum εden : ℕ) : Prop :=
   εden ≤ 2 ^ 64 * εnum → 2 ^ 66 ≤ F.p →
-  ∀ {ι : Type} (C : Dag ι) (x : ℕ → ι → ℤ) (out : ℕ → ℕ) (fmt : ℕ → Int8Fmt) (good : Finset ℕ),
+  ∀ {ι : Type} (C : IntDag ι) (x : ℕ → ι → ℤ) (out : ℕ → ℕ) (fmt : ℕ → Int8Fmt) (good : Finset ℕ),
     Proven C → runBits C = 0 → good ⊆ Finset.range F.p → MoreThan (Finset.range F.p) good εnum εden →
     (∀ i, (∃ g ∈ C, g.op = .input .registered i) → ∀ a ∈ good, ∀ a' ∈ good, x a i = x a' i) →
     (∀ i, (∃ g ∈ C, g.op = .input .coin i) →
