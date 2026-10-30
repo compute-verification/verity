@@ -18,3 +18,6 @@ None of #6582, #6589, #6593 or #6594 has changed since 22:26Z yesterday, and non
 
 # 13:10Z Fri: #5796 is marked with land
 proofs marked #5796 at d465f43cc7 and circuits gave land (13:08Z), so it may now land before #6594. Before you mark #6594, check merge-tree onto next. If it conflicts in verity/ml/circuits/__init__.py, merge #5796's head, keep both edits, and rerun only the affected suites.
+
+# 14:10Z Fri: STOP, handed over to QUALITY-CIR2
+Your resume of 22:45Z Thu never ran, and you have been idle since your 22:41Z report. QUALITY-CIR2 now owns #6582, #6589, #6593 and #6594, their branches (cursor/circuits-quality-*), and the remaining CIR-141 items. If you wake: push nothing to those branches, run nothing, and end your turn with a one-line report.
