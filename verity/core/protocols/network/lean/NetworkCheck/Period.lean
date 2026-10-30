@@ -28,7 +28,7 @@ read.
 
 **Params**, JSON with exactly these keys (and each nested object exactly its own), in the clock form
 
-    {"audits": [{"circuit"?: record, "pins"?: {param: root, …}, "program": descriptor, "steps": k}, …],
+    {"audits": [{"circuit"?: record, "free"?: f, "pins"?: {param: root, …}, "program": descriptor, "steps": k}, …],
      "cells": [cap, …], "first": w₀, "jitter": Dj, "key": hex(I ‖ T[1]), "link": name,
      "lms": {"H": h, "N": n, "W": w, "toy": bool}, "program": hex, "session": hex(session),
      "sync_set": {"deltas": [δ, …], "rhos": [[num, den], …]}, "windows": m}
@@ -46,8 +46,9 @@ template or binding of its own. The audit's free inputs, the ones the prover cho
 parameter: the check counts them from its registered circuit (`Audit.free`, `interface.input_count`), its Program's
 input bits less those the record's wires and ingress fill and those its registered reads, table reads and openings read
 of a parameter whose root in the registration (`registered_roots`) is the pin (`inputsOf`), where the registration
-binds the record, and all of them where it binds none or the record states no wires; an audit with a `free` key is
-refused. Then each network certifier connection's cell cap over the period
+binds the record, and all of them where it binds none or the record states no wires; an audit's `free`, a natural,
+is read as nothing, so a caller's count, right or wrong, changes no verdict and no bound. Then each network certifier
+connection's cell cap over the period
 (`cap_c`), the session's window
 the period starts at (`w₀`: its link-windows are the session's `w₀ … w₀ + m − 1`, so one certifier session spans many
 periods),
@@ -850,16 +851,16 @@ no template is refused. With its window's circuit record (`circuit`), its `circu
 (`circuitDigest`), `registered` what the record registers of its slot entries (`entriesOf`), and its inputs counted
 from the record (`inputsOf`) under the verifier's pins (`pins`, `pinsOf`); its slot entries' templates are its root's
 template nodes whose descriptor id the record registers as an entry template, each with its closure digest
-(`closureDigest`). Without a record it registers none, and all its inputs count free. A `free` count is refused: the
-check derives it (`Audit.free`), so no number the caller supplies reaches the bound. -/
+(`closureDigest`). Without a record it registers none, and all its inputs count free. A `free` count, a natural, is
+read as nothing: the check derives it (`Audit.free`), so no number the caller supplies reaches the verdict or the
+bound. -/
 def auditOf (a : Json) (ctx : String) : V Audit := do
-  if (keysOf a).contains "free" then
-    throw s!"{ctx}: free: the check derives an audit's free inputs from its registered circuit (Audit.free), so the \
-      parameters carry no count"
-  let withCircuit := keysOf a == ["circuit", "program", "steps"] || keysOf a == ["circuit", "pins", "program", "steps"]
-  unless withCircuit || keysOf a == ["program", "steps"] do
+  let ks := (keysOf a).filter (· != "free")
+  let withCircuit := ks == ["circuit", "program", "steps"] || ks == ["circuit", "pins", "program", "steps"]
+  unless withCircuit || ks == ["program", "steps"] do
     throw s!"{ctx}: the keys must be [program, steps], [circuit, program, steps] or [circuit, pins, program, steps], \
-      not {keysOf a}"
+      and optionally free, not {keysOf a}"
+  if (keysOf a).contains "free" then discard <| Flock.J.nat a "free" ctx
   let pj ← Flock.J.get a "program" ctx
   let prog ← match Flock.Program.decode (← Flock.canon pj).toUTF8 with
     | .ok prog => pure prog
@@ -1737,6 +1738,32 @@ def protocol : Core.Protocol where
       (counted r#"{"reader": "A", "port": "x", "at": 1, "units": 1, "step": 0}"#).isNone &&
       ((record "").toOption.bind fun r => (inputsOf r ts.reverse #[]).toOption).isNone &&
       ((record "").toOption.bind fun r => (inputsOf r (ts.map fun (d, _) => (d, 3)) #[]).toOption).isNone
+  | none => false
+-- three units of a template E whose key (one word), root (32) and row (2) are its inputs, its root a table read of
+-- table t over the registered parameter w and its row an opening of t at its key, verdict o1: of 1680 input bits,
+-- 1632 read of w, so 48 free (the keys) where w is held at its pin, all 1680 where it isn't; and a table read of a
+-- port that isn't 64 bytes, an opening of an undeclared table and a table past w's leaves are refused
+#guard
+  let e : Flock.Program.Defn :=
+    { key := "E", id := "E", prim := false, params := #[("key", .value 16), ("root", .array 32 (.value 16)),
+      ("row", .array 2 (.value 16))], ret := .tuple #[.value 16, .value 16], gates := 0, paramLeaves := 0,
+      outLeaves := 0 }
+  let root := r#"{"reader": "E", "port": "root", "table": "t", "of": "root", "at": 0, "units": 3}"#
+  let opening := r#"{"reader": "E", "table": "t", "key": "key", "ports": ["row"], "verdict": "o1", "at": 0, "units": 3}"#
+  let table := r#"{"name": "t", "param": "w", "offset": 0, "words": 2, "rows": 4}"#
+  let record := fun (t r o : String) => Json.parse s!"\{\"templates\": [[\"E\", 3]], \"wires\": [], \"registered\": \
+    \{\"params\": \{\"w\": 8}, \"tables\": [{t}], \"reads\": [], \"roots\": [{r}], \"openings\": [{o}]}}"
+  let counted := fun (t r o : String) => (record t r o).toOption.bind fun j =>
+    (inputsOf j #[(e, 3)] #[("w", "p")]).toOption
+  let reg := fun (root : String) => Json.mkObj [("window", Json.mkObj [("circuit", .str "c"),
+    ("registered_roots", Json.mkObj [("w", .str root)])])]
+  match counted table root opening with
+  | some i =>
+    let a : Audit := ⟨i, 0, "", 3, 16, #[], "c", {}⟩
+    i.total == 1680 && i.declared == 0 && a.free (reg "p") == 48 && a.free (reg "q") == 1680 &&
+      (counted table (root.replace "\"root\", \"table\"" "\"row\", \"table\"") opening).isNone &&
+      (counted table root (opening.replace "\"t\"" "\"u\"")).isNone &&
+      (counted (table.replace "\"rows\": 4" "\"rows\": 5") root opening).isNone
   | none => false
 -- a record that states no wires counts every input bit free
 #guard
