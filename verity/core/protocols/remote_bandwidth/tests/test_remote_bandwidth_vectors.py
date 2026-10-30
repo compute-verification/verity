@@ -280,16 +280,16 @@ def test_vectors_cover_zero_weights_a_short_last_leaf_a_partial_plan_and_the_cha
 @pytest.mark.slow
 @pytest.mark.parametrize("kind, bind, rows", [rv.DEFAULT, *rv.VARIANTS])
 def test_the_provers_passes_and_the_sessions_draws_reproduce_the_pinned_ones(kind, bind, rows) -> None:
-    """The generator computes receipts and draws on its own; the audit's `Prover` and `Session` must agree with it, at the
-    default codec, under each receipt kind, of the block alone and binding z, and at 64 rows.  Slow for the same store
-    as `test_vectors_are_reproduced`, which encodes it once for all of them."""
+    """The generator computes receipts and draws on its own; the audit's `Prover` and `AuditRun` must agree with it, at
+    the default codec, under each receipt kind, of the block alone and binding z, and at 64 rows.  Slow for the same
+    store as `test_vectors_are_reproduced`, which encodes it once for all of them."""
     store = rv.store() if (kind, bind, rows) == rv.DEFAULT else rv.registered(kind, bind, rows)
     reg = store.registration
     challenger = coins.local(reg.digest, 0, rv.PARAMS.windows, rv.Entropy(rv.COIN_LABEL))
     clock = Clock()
     tiles = audit.NoiseTiles(96) if bind else None
-    s = audit.Session(dataclasses.replace(rv.PARAMS, receipt=kind, bind=bind, rows=rows), reg, tiles, challenger,
-                      not_before_ns=0, clock=clock)
+    s = audit.AuditRun(dataclasses.replace(rv.PARAMS, receipt=kind, bind=bind, rows=rows), reg, tiles, challenger,
+                       not_before_ns=0, clock=clock)
     prover = audit.Prover(store, tiles, entropy=rv.Entropy(rv.LEAF_SALT_LABEL))
     pinned = json.loads(rv.PATH.read_text())
     pinned = pinned if (kind, bind, rows) == rv.DEFAULT else pinned["variants"][rv.name(kind, bind, rows)]
