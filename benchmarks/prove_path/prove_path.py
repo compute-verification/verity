@@ -1404,6 +1404,45 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> tuple[list[lis
     return rows, [None if q is None else user[q] for q in starts]
 
 
+def place_slots(cls: Any, served: Sequence[str], ingress: Mapping[str, Mapping[str, Any]],
+                scan: tuple[Sequence[str | None], Sequence[tuple[Sequence[int], Sequence[int]]]] | None = None,
+                ) -> list[tuple[str | None, list[int], int]]:
+    """Each slot of a window of class ``cls`` serving the requests of I1 ids ``served``, whose bodies ``ingress`` holds:
+    its request (None for an empty slot), its row (occupancy, prompt length, ids) and its ``max_tokens``. Without a
+    scan, slot k holds the k-th served request, its row its prompt's. With one, ``scan`` is the scan's starts
+    (`kept_scan`'s) and each slot's row and head (`window_rows.scan_slots`'s): slot k holds the request the scan starts
+    there, its row and ``max_tokens`` the scan's. Refused where the scan starts one request in two slots, a served
+    request in none, or a request that wasn't served, and where a slot's prompt or ``max_tokens`` isn't its served
+    request's."""
+    if scan is None:
+        placed, heads = [served[k] if k < len(served) else None for k in range(cls.slots)], None
+    else:
+        placed, heads = list(scan[0]), scan[1]
+        named = [s for s in placed if s is not None]
+        if len(set(named)) != len(named):
+            raise ValueError("the scan starts one request in two slots of the window")
+        if unplaced := set(served) - set(named):
+            raise ValueError(f"{len(unplaced)} of the window's {len(set(served))} served requests start in none of its "
+                             "slots: the scan anchors them in another window")
+        if extra := sorted(set(named) - set(served)):
+            raise ValueError(f"the scan starts certified requests in the window that it didn't serve: {extra[:4]}")
+    out = []
+    for k, u in enumerate(placed):
+        row, max_tokens = [0] * (cls.prompt + 2), 0
+        if heads is not None:
+            row, max_tokens = list(heads[k][0]), int(heads[k][1][1])
+        if u is not None:
+            body = ingress[u]
+            ids = [int(x) for x in body["prompt"]]
+            want = [1, len(ids), *ids, *[0] * (cls.prompt - len(ids))]
+            if heads is None:
+                row, max_tokens = want, int(body["max_tokens"])
+            elif row[:len(ids) + 2] != want[:len(ids) + 2] or max_tokens != int(body["max_tokens"]):
+                raise ValueError(f"slot {k}: the scan's request isn't the served one: its prompt or max_tokens differ")
+        out.append((u, row, max_tokens))
+    return out
+
+
 def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     """A served window committed as its window class's one Circuit (V3c, module docstring): the class lowered
     (`window_circuit.lower`, refused where the class's slots don't take the window), each slot's values (`window_rows.Slot`,
@@ -1412,13 +1451,13 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     ``--registration`` (`weights-registration`, before the first window's coins) committed them, and the scan state the
     window's own value. Where the certifier front kept the network certifier's run under the serve dir, the scan state is
     its scan of that run (`kept_scan`), whose state rows the scan's state ports open, and slot k holds the request whose
-    Program the scan starts there, its row the scan's (refused where a served request isn't started in the window, one
-    started isn't served, or the scan's prompt or ``max_tokens`` isn't the served one); else slot k holds the advice's
-    k-th request and the scan state is a stand-in, the rows its slots' rows and ``max_tokens`` give
-    (`window_rows.standin_state`). Refused for a registration of another model. -> the window's run root, its circuit
-    record's SHA-512, its population and members, the scan state's kind (``scanned`` or ``stand-in``), the registered
-    weights whose root the window's is (``held``) and those it isn't, whose reads are free (``free``), and the seconds
-    each part took."""
+    Program the scan starts there, its row the scan's (`place_slots`, refused where the scan starts a request in two
+    slots, a served request in none or one that wasn't served, or the scan's prompt or ``max_tokens`` isn't the served
+    one); else slot k holds the advice's k-th request and the scan state is a stand-in, the rows its slots' rows and
+    ``max_tokens`` give (`window_rows.standin_state`). Refused for a registration of another model. -> the window's run
+    root, its circuit record's SHA-512, its population and members, the scan state's kind (``scanned`` or ``stand-in``),
+    the registered weights whose root the window's is (``held``) and those it isn't, whose reads are free (``free``), and
+    the seconds each part took."""
     import numpy as np
     from verity_vllm.check import weights_of_record as WR
     from verity_vllm.check.oracle_compare import OpenedReader
@@ -1475,34 +1514,14 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     scanned = kept_scan(Path(a.serve_run), cls, [u.id for u in units])
     state = None if scanned is None else WRS.state_value(WC.NAME, cls, scanned[0], key, int(a.window), window=run)
     lap("scan")
-    if state is None:
-        placed, heads = [units[k] if k < len(units) else None for k in range(cls.slots)], None
-    else:
-        by = {u.id: u for u in units}
-        starts = scanned[1]
-        if len({s for s in starts if s is not None}) != sum(s is not None for s in starts):
-            raise ValueError("the scan starts one request in two slots of the window")
-        if unplaced := set(by) - set(starts):
-            raise ValueError(f"{len(unplaced)} of the window's {len(by)} served requests start in none of its slots: the "
-                             "scan anchors them in another window")
-        if extra := sum(s is not None and s not in by for s in starts):
-            raise ValueError(f"the scan starts {extra} certified requests in the window that it didn't serve")
-        placed, heads = [None if s is None else by[s] for s in starts], WRS.scan_slots(low, state.rows)
+    placed = place_slots(cls, [u.id for u in units], compiler.inner.ingress,
+                         None if state is None else (scanned[1], WRS.scan_slots(low, state.rows)))
     slots, rows = [], []
-    for k, u in enumerate(placed):
-        row, max_tokens, served_ = [0] * (cls.prompt + 2), 0, None
-        if heads is not None:
-            row, max_tokens = list(heads[k][0]), int(heads[k][1][1])
+    for u, row, max_tokens in placed:
+        served_ = None
         if u is not None:
-            body = compiler.inner.ingress[u.id]
-            ids = [int(x) for x in body["prompt"]]
-            want = [1, len(ids), *ids, *[0] * (cls.prompt - len(ids))]
-            if heads is None:
-                row, max_tokens = want, int(body["max_tokens"])
-            elif row[:len(ids) + 2] != want[:len(ids) + 2] or max_tokens != int(body["max_tokens"]):
-                raise ValueError(f"slot {k}: the scan's request isn't the served one: its prompt or max_tokens differ")
-            pi = ProgramIndex(p.progs[u.id], program_dir=p.dirs[u.id])
-            served_ = WRS.Served.of_record(pi, store, u.id, p.arrivals[u.id])
+            pi = ProgramIndex(p.progs[u], program_dir=p.dirs[u])
+            served_ = WRS.Served.of_record(pi, store, u, p.arrivals[u])
         slots.append(WRS.Slot(low.fn, cls, row, weights, served_))
         rows.append((row, max_tokens))
     lap("slots")
