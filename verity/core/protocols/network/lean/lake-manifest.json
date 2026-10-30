@@ -55,7 +55,7 @@
    "name": "verity_difftest",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
-   "dir": "../../../primitives/identity/../../difftest/lean",
+   "dir": "../../../service/sampled_proofs/../../difftest/lean",
    "configFile": "lakefile.toml"}],
  "name": "network_check",
  "lakeDir": ".lake",

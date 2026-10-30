@@ -70,7 +70,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../../../protocols/network/lean/../../../primitives/identity/../../difftest/lean",
+   "../../../protocols/network/lean/../../../service/sampled_proofs/../../difftest/lean",
    "configFile": "lakefile.toml"}],
  "name": "certifier_device",
  "lakeDir": ".lake",

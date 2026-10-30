@@ -8,12 +8,12 @@ A monitoring period is `m` windows, each audited on its own live coins (the peri
 `i`'s at `ω i`) at a statement registered as `sw i`. `HorizonLeakAccepted` is the count `K_horizon`: what a covert
 sender in the server moves through the network certifier over the whole monitoring period, with the faulty units paid
 for once over the period rather than at `δ` in every window. At each window the witness computed from the
-registration, before the window's draw, has a faulty set `W i` (it reads only the earlier windows' coins), and the
+registration, before the window's sample, has a faulty set `W i` (it reads only the earlier windows' coins), and the
 statement takes two inputs per window:
 
 * the conditional escape (`hesc`): given the earlier windows' coins, the window's audit accepts with probability at most
-  `(1 - q)^|W_i| + e_i`, `q` the deployed design's per-window detection probability (a uniform draw of `kd_i` of the
-  window's `n_i` units meets it at `q = kd_i / n_i`; the statement fixes no draw's form);
+  `(1 - q)^|W_i| + e_i`, `q` the deployed design's per-window detection probability (a uniform sample of `kd_i` of the
+  window's `n_i` proof blocks meets it at `q = kd_i / n_i`; the statement fixes no sample's form);
 * the leak relation at that same witness (`hleak`): the audit accepts while the window's observations in the network
   certifier's record are not accepted with the faulty set `W_i` (`LeakAt`) with probability at most `e'_i`.
 
@@ -22,13 +22,14 @@ relation fails, with probability at most `δ + Σ_i e_i + Σ_i e'_i` (the escape
 argument with the escape as the input); and the secrets whose every window meets its relation, with the faulty sets
 under `Fmax` (`HorizonGood`), number at most
 `#Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b · Fmax) · ∏_i 2^#(freeInputs_i \ reg_i) · Dj^k_i`, `N = Σ_i n_i` the
-period's units and `b` each unit's committed bits: `(ln(1/δ)/q + 1) · (b + log2 (N + 1))` bits for the faulty units,
-plus the advice and timing terms and the schedule terms. A proof unit's outputs are at most 16 bits, so `b = 16`.
+period's proof blocks and `b` each proof block's committed bits: `(ln(1/δ)/q + 1) · (b + log2 (N + 1))` bits for the
+faulty proof blocks, plus the advice and timing terms and the schedule terms. A proof block's outputs are at most 16
+bits, so `b = 16`.
 
 The network certifier is one device on the server's uplink, as in `PeriodLeakAccepted`
 (`Definitions.NetworkCertifier.Tap`): one run of its code gives the cells the client receives (it functions as an
-active warden) and its record of them, the observations the audits read, so on every schedule its record format holds
-the client's cells read back from the record. Its one named assumption is `trusted-host`.
+active network certifier) and its record of them, the observations the audits read, so on every schedule its record
+format holds the client's cells read back from the record. Its one named assumption is `trusted-host`.
 
 The statement is conditional: it holds for any audits that satisfy the two inputs. Over a monitoring period of live
 audits they are `Flock.Guarantees.SampledKSLive` at each window's history (at `K₀ = |W_i|`) and the live
@@ -45,8 +46,8 @@ set_option linter.unusedVariables false
 
 /-- **The leak through the network certifier over a monitoring period of accepted sampled audits** (conditional on its
 two per-window inputs). Over `m` windows on independent live coins, window `i` registered as `sw i` (partition `Pw i`,
-values `ρ i` at the registered inputs, operator `op i`), with `n i` units, each committing at most `b` bits; with the
-network certifier running its code by `trusted-host` on schedules in `Ss`, each held by its record format `f`
+values `ρ i` at the registered inputs, operator `op i`), with `n i` proof blocks, each committing at most `b` bits; with
+the network certifier running its code by `trusted-host` on schedules in `Ss`, each held by its record format `f`
 (`TapRecord.fits`) and giving connection `c` at most `cap c` cells, its one run giving the cells the client receives
 and its record of them in the format `f`,
 the windows' observations; and a covert sender in the server whose secrets `z ∈ Zs` a decoder recovers from the
@@ -64,7 +65,7 @@ for `0 ≤ q ≤ 1` and `Fmax ≥ ln(1/δ)/q`:
 * for every secret, every audit accepts and the monitoring period's good event fails (`HorizonGood`: the faulty sets
   hold under `Fmax` units and every window meets its leak relation at its own) with probability at most
   `δ + Σ e + Σ e'`;
-* at every draw of the coins, the secrets that meet the good event number at most
+* at every sample of the coins, the secrets that meet the good event number at most
   `#Ss · ∏_c (cap c + 1) · (N + 1)^Fmax · 2^(b · Fmax) · ∏_i 2^#(freeInputs_i \ reg_i) · Dj^k_i`, `N = Σ_i n i`. -/
 def HorizonLeakAccepted : Prop :=
   ∀ {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (reg : AuditStatement → Finset ℕ) (Dj : ℕ) {m : ℕ}
