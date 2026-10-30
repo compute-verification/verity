@@ -43,7 +43,7 @@ def test_tp_digest_of_record_is_the_rank_fold(tmp_path):
     assert dig["tp"] == 4
     assert dig["rank_workload_digests"] == WDS
     assert dig["step_digest"] == "0" * 64
-    assert dig["program_digest"] == hashlib.sha256(("tp-ranks/" + ",".join(sorted(WDS))).encode()).hexdigest()
+    assert dig["program_digest"] == hashlib.sha512(("tp-ranks/" + ",".join(sorted(WDS))).encode()).hexdigest()
 
 
 def test_tp_digest_absent_when_a_rank_has_no_workload_program(tmp_path):

@@ -5,6 +5,7 @@ committed short) and the binding loader's two engine-step shapes -- over manifes
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 
 import pytest
@@ -49,6 +50,19 @@ def test_digest_determinism():
     assert manifest_digest(ids) == man["manifest_digest"]
     assert v2_manifest(inst, digest="q" * 64)["manifest_digest"] != man["manifest_digest"]   # the Program digest does
     assert len(canonical_identity(man["identities"][0])) == 8
+
+
+def test_the_folds_the_query_and_the_population_digests_are_whole_sha512_digests():
+    comps, ranks = ["b" * 128, "a" * 128], ["d" * 128, "c" * 128]
+    assert MF.components_fold_digest(comps) == hashlib.sha512(("workload-components/" + "a" * 128 + "," + "b" * 128).encode()).hexdigest()
+    assert MF.tp_ranks_fold_digest(ranks) == hashlib.sha512(("tp-ranks/" + "c" * 128 + "," + "d" * 128).encode()).hexdigest()
+    assert MF.query_id_digest("Q") == hashlib.sha512(b"Q").hexdigest()
+    assert {len(MF.components_fold_digest(comps)), len(MF.tp_ranks_fold_digest(ranks)), len(MF.query_id_digest("Q"))} == {128}
+    man = v2_manifest(_program()[0])
+    assert man["query"]["query_id_digest"] == MF.query_id_digest(man["query"]["query_text"])
+    ids = [B.identity(man["program_digest"], "r0", 0, 0, "m", "out", 0, 4, 0), B.identity(man["program_digest"], "r0", 1, 0, "m", "out", 0, 4, 0)]
+    lines = b"".join(json.dumps(B.identity_dict(i), sort_keys=True, separators=(",", ":")).encode() + b"\n" for i in ids)
+    assert B.population_digest(ids) == (hashlib.sha512(lines).hexdigest(), 2) and len(B.population_digest(ids)[0]) == 128
 
 
 def test_coverage_positive_and_negatives():
