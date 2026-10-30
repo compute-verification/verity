@@ -35,6 +35,7 @@ from typing import Iterator, Sequence
 
 from .defs import Node, PrimitiveDefinition, SpecializedDefinition
 from .refs import Ref
+from .types import axis_runs
 
 
 class Scope:
@@ -92,7 +93,8 @@ def resolve_gate(scope: Scope, ref: Ref) -> tuple[int, PrimitiveDefinition]:
                 elif ax == 0:
                     space, idx, leaf = a.refs[scope.member * a.type.elem.leaves + leaf]
                 else:
-                    space, idx, leaf = a.take(ax, scope.member).refs[leaf]
+                    _outer, n, L = axis_runs(a.type, ax)
+                    space, idx, leaf = a.refs[(leaf // L) * n * L + scope.member * L + leaf % L]
             else:  # scan: params are (carry, xs..., shared...)
                 if idx == 0:
                     if scope.member == 0:
@@ -207,7 +209,11 @@ def _prim_member_args(scope: Scope, node: Node, m: int):
             L = a.type.elem.leaves
             out.extend(resolve(scope, a.refs[m * L + j]) for j in range(L))
         else:
-            out.extend(resolve(scope, r) for r in a.take(ax, m).refs)
+            outer, n, L = axis_runs(a.type, ax)
+            if not 0 <= m < n:
+                raise IndexError(m)
+            refs = a.refs
+            out.extend(resolve(scope, refs[k * n * L + m * L + j]) for k in range(outer) for j in range(L))
     return tuple(out)
 
 
