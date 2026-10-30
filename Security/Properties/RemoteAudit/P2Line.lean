@@ -165,9 +165,10 @@ at its `samples` s) and the record of each outcome the one played holding the de
 trace of record (`ofRecord`: over the store's units, its verdict the P2 subprotocol's on the record) meets the premises
 of v0's line (`Properties.RemoteAudit.Line.LineHeld`) at the record's pace: the probability that the verifier accepts
 the record's session, the certifiers sign nothing but the verifier's messages entering the node over the credited
-passes, and the record's credit claims more bits read than the passes read (`ReadAt`) is at most `δs + δnet + (δ + Σ_c s / 2^64 + Σ_c adv_c + Σ_c hide_c + bind)`, `δ` the P2 credit's
-(`P2Session.DELTA`, 2^-40), `adv_c` the advantage on `prf c` of draw `c`'s distinguisher at it with leaf `c` of the
-coin commitment committing zeros, `hide_c` draw `c`'s hiding term and `bind` the receipts' binding term at `R`. -/
+passes, and the record's credit claims more bits read than the passes read (`ReadAt`) is at most
+`δs + δnet + (δ + Σ_c s / 2^64 + Σ_c adv_c + Σ_c hide_c + bind)`, `δ` the P2 credit's (`P2Session.DELTA`, 2^-40),
+`adv_c` the advantage on `prf c` of draw `c`'s distinguisher at it with leaf `c` of the coin commitment committing
+zeros, `hide_c` draw `c`'s hiding term and `bind` the receipts' binding term at `R`. -/
 def LineHeld : Prop :=
   ∀ (node : Audited) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.draws → Pous.Bits κ → Blocks Line.receiptMax)
     (rest : Coins node.draws κ X → Fin node.draws → ℕ → ℕ) (recs : Cm → Coins node.draws κ X → Replay)

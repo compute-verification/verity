@@ -62,6 +62,7 @@ roots = ["Proofs.Core", "Proofs.Nci", "Proofs.Pous", "Proofs.Pouw", "Proofs.Netw
   "Proofs.Properties.RemoteAudit.SharedLink", "Proofs.Properties.RemoteAudit.Live",
   "Proofs.Properties.RemoteAudit.Component", "Proofs.Properties.RemoteAudit.ComponentWitnesses",
   "Proofs.Properties.RemoteAudit.P2Subprotocol", "Proofs.Properties.RemoteAudit.P2Line",
+  "Proofs.Properties.RemoteAudit.P2SubprotocolWitnesses",
   "Proofs.Properties.Pouw.LiveSalt.Ledger", "Proofs.Properties.Nci.ReadsExact",
   "Proofs.Properties.Nci.BodiesOk.ReadsDecoded", "Proofs.Properties.Composition", "Proofs.Properties.Challenger",
   "Proofs.Properties.Core.Site", "Proofs.Properties.Nci.Protocol", "Proofs.Properties.Verity.Soundness",

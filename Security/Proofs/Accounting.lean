@@ -54,6 +54,7 @@ import Proofs.Accounting.RemoteHeld.SketchP2
 import Proofs.Accounting.RemoteHeld.Line
 import Proofs.Accounting.RemoteHeld.Component
 import Proofs.Accounting.RemoteHeld.P2Line
+import Proofs.Accounting.RemoteHeld.P2Subprotocol
 import Proofs.Accounting.Requirement
 import Proofs.Accounting.RequirementPouw
 import Proofs.Accounting.Sanity

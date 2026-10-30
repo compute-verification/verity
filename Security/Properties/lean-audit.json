@@ -2601,6 +2601,9 @@
    "assumptions": [],
    "type_hash": "00e2f065edf6e116f146ffde18cb1f3059766d17bf24b38880c6ca480be91680"
   },
+  "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol": {
+   "owner": "@memory-accounting"
+  },
   "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified": {
    "owner": "@memory-accounting"
   },
@@ -2608,6 +2611,9 @@
    "owner": "@memory-accounting"
   },
   "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_nontrivial": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial": {
    "owner": "@memory-accounting"
   },
   "Properties.RemoteAudit.Shared.acceptDrawsOpenable": {
@@ -4316,6 +4322,10 @@
    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified": {
     "function": "RemoteAudit.P2Protocol.check",
     "outcome": "accept"
+   },
+   "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol": {
+    "function": "RemoteAudit.P2Protocol.check",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -4377,7 +4387,8 @@
    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_honest": "completeness: AcceptIsVerified's honest lemma: the auditor's session requested for a store of PoUS's reads as its parameters, and the P2 check leaves it undecided before its first request is answered",
    "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_nontrivial": "lemma: AcceptIsVerified's nontrivial lemma: a request that is no object replays no session, so the conclusion fails where a check that accepts everything accepts",
    "Properties.Pouw.Served.SecurityProofs.servedWork": "frozen (no-function,world-unlisted): ServedWork, the served PoUW protocol's work in the remote form: H1J10RCheckedCreditPeriod's fixed words priced on the prover's inventory, one machine of the accelerator model (Pouw.Dither.Accel) at its device premises G1, G2, P1 and P2, wherever it ran (no network certifier, wipe or latency check), except with probability delta_s + n(delta_bind + delta_ks) + n kappa_deg(B); not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. Its new premises, each listed under assumptions: Pouw.Assumptions.SAKServed, SakLb.SAKResidual's claim at the served words, proposed, which is false of the accelerator model as Definitions.Core.Accel writes it (free register reductions run the four Russians' method below the public best's cost), so the guarantee is non-vacuous only on a model that prices register reductions; FixedAreRight, the bridge from the play's fixed words to the inventory's right words, to be made provable with UnitFixed's adaptive model; FixedBeforeSalt, a protocol-code fact (each window's instance, advice and program fixed before its salt, which SaltIsLiveCoin's discharge orders). The inventory's closure (ext = 0) and the advice bound are the statement's framing. Its honest and nontrivial lemmas are Proofs.Pouw.ServedWork.Honest's served_honest and served_nontrivial. Proved from h1J10RCheckedCreditPeriod (Proofs.Pouw.ServedWork).",
-   "Properties.Pouw.Served.SecurityProofs.servedFreed": "frozen (no-function,world-unlisted): ServedFreed, the served PoUW protocol's freed compute in the onsite form: an accepted period whose network certifier counted it in (cert) frees at most eps(x) C + beta K_c of the registered devices' capacity C = sum_r mu_r H_r at the period's dual price mu (Pouw.Dither.FreedWithin at W = 1, Period.DualOpt), with eps(x) = max 0 (C - ServedWork's credit at the period's accepted prefix + beta K_c) / C, except with probability ServedWork's delta_s + n(delta_bind + delta_ks) + n kappa_deg(B) plus the certifier's delta; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. It is ServedWork's premises less the inventory's closure (ext = 0), which OutsourceWithinEgressServed supplies, and adds two premises, each listed under assumptions: OutsourceWithinEgressServed, the price of an exchanged bit over the period's programs together, implied by the per-program Pouw.Assumptions.OutsourceWithinEgress (outsourceServed_of_perProgram); CertifiedExchange, the network certifier's guarantee at the period (its count in, K_c, exceeded with probability at most delta), the form network accounting's certifier is to instantiate, on a trusted-host device whose coins are witness (WitnessPathPrivate discharges CoinsConfidential). DualOpt and the capacity's positivity are the statement's framing. SAKServed makes it non-vacuous only on a model that charges free register reductions, as ServedWork. Its honest and nontrivial lemmas are Proofs.Pouw.ServedFreed.Honest's servedFreed_honest and servedFreed_nontrivial. Proved from servedWork and Pouw.SecurityProofs.Dither.FreedOfFloor (Proofs.Pouw.ServedFreed)."
+   "Properties.Pouw.Served.SecurityProofs.servedFreed": "frozen (no-function,world-unlisted): ServedFreed, the served PoUW protocol's freed compute in the onsite form: an accepted period whose network certifier counted it in (cert) frees at most eps(x) C + beta K_c of the registered devices' capacity C = sum_r mu_r H_r at the period's dual price mu (Pouw.Dither.FreedWithin at W = 1, Period.DualOpt), with eps(x) = max 0 (C - ServedWork's credit at the period's accepted prefix + beta K_c) / C, except with probability ServedWork's delta_s + n(delta_bind + delta_ks) + n kappa_deg(B) plus the certifier's delta; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. It is ServedWork's premises less the inventory's closure (ext = 0), which OutsourceWithinEgressServed supplies, and adds two premises, each listed under assumptions: OutsourceWithinEgressServed, the price of an exchanged bit over the period's programs together, implied by the per-program Pouw.Assumptions.OutsourceWithinEgress (outsourceServed_of_perProgram); CertifiedExchange, the network certifier's guarantee at the period (its count in, K_c, exceeded with probability at most delta), the form network accounting's certifier is to instantiate, on a trusted-host device whose coins are witness (WitnessPathPrivate discharges CoinsConfidential). DualOpt and the capacity's positivity are the statement's framing. SAKServed makes it non-vacuous only on a model that charges free register reductions, as ServedWork. Its honest and nontrivial lemmas are Proofs.Pouw.ServedFreed.Honest's servedFreed_honest and servedFreed_nontrivial. Proved from servedWork and Pouw.SecurityProofs.Dither.FreedOfFloor (Proofs.Pouw.ServedFreed).",
+   "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial": "lemma: LineHeldAtSubprotocol's nontrivial lemma: at a verifier that accepts everything and records one summary for every record, a toy node meets every premise while the summary's credit claims two units its passes read once, so the bound fails"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -20699,6 +20710,10 @@
   "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified": {
    "honest": ["Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_honest"],
    "nontrivial": "Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_nontrivial"
+  },
+  "Properties.RemoteAudit.P2Subprotocol.SecurityProofs.lineHeldAtSubprotocol": {
+   "honest": ["Properties.RemoteAudit.P2Subprotocol.acceptIsVerified_honest"],
+   "nontrivial": "Properties.RemoteAudit.P2Subprotocol.lineHeldAtSubprotocol_nontrivial"
   }
  },
  "unwitnessed": {
