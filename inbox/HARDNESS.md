@@ -150,6 +150,23 @@ Everything else is engineering on parts we have.
     A-LSB is therefore credited at most **0.38 at b = 2 and about 0.8–0.85 at b = 4** on the H200, not a full unit.
   - Upper bounds only: the flip-graph sweep and the addition-priced schedule search didn't finish.
 
+- **HT-PREMISE v2** (note:compute-research/20261030T2300Z-report-hardness-premise-v2; recorded runs on cpu-6 and cpu-11;
+  addition-priced schedule search to depth 6–8, bounds agree, witnesses exact):
+  - **A-LSB is capped below 0.9 at every b from 2 to 5, on both chips.** For b ≥ 4 the cheapest route is Strassen on s8
+    over narrow operands: executed, 0.761 at K 2,048 and 0.642 at K 8,192. A credit of 0.9 needs K ≤ 256.
+  - **D0's smoothed premise fails:** the developer picks A = 0, which costs at most 0.753.
+  - **Design A′ (full-entropy int8 R, b_E = 2, w = 16) holds at K ≤ 4,096,** with a margin of at least 8.5% on the H200
+    and 6.0% on sm_120. At K ≤ 8,192 the margin is only 0.84% and 0.17%, and from K 16,384 it breaks in the fast
+    reading.
+  - **The thin long-K margin is structural:** Strassen's tensor work is below 1 from depth 5, and additions shrink like
+    1/K. So every Lean statement of P1 must price additions.
+  - **The K ≤ 4,096 cap costs** ×1.09 the committed outputs on Llama-3.2-1B, ×2.49 on 70B and ×4.94 on 405B.
+  - D₁RD₂ needs odd entries, not just nonzero ones.
+  - **The principle (coordinator's reading):** the forced random operand must be *full-width* in the MMA format, dense,
+    with wide outputs and short K. Any narrowness (b1-sized E, a few random low bits, a small-magnitude R, a grid in a
+    ball) lets Strassen or bit-slicing run inside the format. That leaves A′, whose problem is utility, and E (natural
+    weights), which HT-PUBLIC is testing.
+
 ## Lanes (notes: `lanes/compute-research/<ts>-report-hardness-<lane>.md`)
 
 | lane | modules | first deliverable |
