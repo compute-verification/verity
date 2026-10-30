@@ -366,9 +366,9 @@ theorem hex4_toList (n : Nat) :
 theorem hex4_ok (n : Nat) (hn : n < 0x10000) : (hex4 n).toList.length = 4 ∧ unhexL (hex4 n).toList = n := by
   rw [hex4_toList]
   refine ⟨rfl, ?_⟩
-  have e12 : n >>> 12 = n / 4096 := by rw [Nat.shiftRight_eq_div_pow]; rfl
-  have e8 : n >>> 8 = n / 256 := by rw [Nat.shiftRight_eq_div_pow]; rfl
-  have e4 : n >>> 4 = n / 16 := by rw [Nat.shiftRight_eq_div_pow]; rfl
+  have e12 : n >>> 12 = n / 4096 := by rw [Nat.shiftRight_eq_div_pow]
+  have e8 : n >>> 8 = n / 256 := by rw [Nat.shiftRight_eq_div_pow]
+  have e4 : n >>> 4 = n / 16 := by rw [Nat.shiftRight_eq_div_pow]
   have e0 : n >>> 0 = n := Nat.shiftRight_zero
   simp only [unhexL, List.foldl_cons, List.foldl_nil, nib_dg _ (Nat.mod_lt _ (by decide : 16 > 0)), e12, e8, e4, e0]
   omega
@@ -409,7 +409,7 @@ theorem unesc_escU (c : Char) (r : List Char) : unesc ((Flock.escU c.toNat).toLi
   have hv : c.toNat < 0xd800 ∨ (0xdfff < c.toNat ∧ c.toNat < 0x110000) := c.valid
   unfold Flock.escU
   by_cases hlt : c.toNat < 0x10000
-  · rw [if_pos hlt]
+  · simp only [hlt, ↓reduceIte]
     have hc : high c.toNat = false := by
       unfold high
       rcases hv with h | ⟨h, -⟩
@@ -420,7 +420,7 @@ theorem unesc_escU (c : Char) (r : List Char) : unesc ((Flock.escU c.toNat).toLi
     generalize (hex4 c.toNat).toList = xs at hl hx ⊢
     match xs, hl with
     | [a1, a2, a3, a4], _ => simp [u_toList, unesc, unesc2, hx, hc, Char.ofNat_toNat]
-  · rw [if_neg hlt]
+  · simp only [hlt, ↓reduceIte]
     have hH : 0xD800 + (c.toNat - 0x10000) / 0x400 < 0x10000 := by omega
     have hL : 0xDC00 + (c.toNat - 0x10000) % 0x400 < 0x10000 := by omega
     have hp : pair (0xD800 + (c.toNat - 0x10000) / 0x400) (0xDC00 + (c.toNat - 0x10000) % 0x400) = c.toNat := by
