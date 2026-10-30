@@ -597,10 +597,10 @@ def _certifier(sid: bytes, key, sign, record: bytes, keys, seed: bytes = b"", cl
     return c, drawn
 
 
-def _client(c: Proxy, at: tuple[str, int], keys) -> active.RemoteCertifier:
+def _client(c: Proxy, at: tuple[str, int], keys) -> active.CertifierClient:
     """The challenger's client of certifier `c` served at `at` (the `reveals` fixture), for its key, run and link."""
     _, run_id, link = c.certifier_run
-    return active.RemoteCertifier(*at, c.signer.public_key(), keys[1], link, run_id)
+    return active.CertifierClient(*at, c.signer.public_key(), keys[1], link, run_id)
 
 
 def _sid(run: str, keys, stream: str = "window", link: str = "requests", run_id: bytes = RUN_ID) -> bytes:
@@ -637,7 +637,7 @@ def _live(path: Path, entropy: str | None = None) -> tuple[Ch.LiveChallenger, Ch
         Ch.ChallengerKey(4, 2, lms.public_key(k))
 
 
-def _deployment(client: active.RemoteCertifier, ck: Ch.ChallengerKey) -> SC.Deployment:
+def _deployment(client: active.CertifierClient, ck: Ch.ChallengerKey) -> SC.Deployment:
     """What the verifier pins of the deployment: `client`'s certifier key and run id, and its challenger's key `ck`."""
     return SC.Deployment(client.certifier_key, client.run_id, ck)
 
@@ -709,7 +709,7 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_drawn_under_
         served, tmp_path, monkeypatch, reveals):
     """What a certified window of salted units runs through after `salt.unit_reason`, which no served-zk window passes
     today (the two tests above): this test lifts that one rule (monkeypatched to accept) and holds the rest end to end
-    against the network certifier, which the challenger asks through its client (`RemoteCertifier`, a signed request
+    against the network certifier, which the challenger asks through its client (`CertifierClient`, a signed request
     and a signed answer it verifies, over localhost to `serve_reveals`).  The prover records its pass's weights, the
     window's stream (`stream_id`, naming the certifier's run, (key id, run id, ingress link), which the proxy and its
     client give alike) and its prover id (`salt.prover_id`) with the certifier for PoUW window 0 before its salt is
