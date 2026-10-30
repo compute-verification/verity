@@ -101,9 +101,14 @@ from typing import Any, Callable
 from zoneinfo import ZoneInfo
 
 try:
-    from . import waitcap
+    from . import vocabulary, waitcap
     from .timefmt import both, slack_dates
 except ImportError:                                                 # run as a single file: `python3 slack.py ...`
+    class vocabulary:  # research/vocabulary.py's table isn't beside a single file: nothing is flagged
+        @staticmethod
+        def retired(text: str) -> list[tuple[str, str]]:
+            return []
+
     def both(t: Any) -> str:
         return f"{datetime.fromtimestamp(float(t), UTC):%H:%MZ}" if re.fullmatch(r"\d+(?:\.\d+)?", str(t)) else str(t)
 
@@ -2830,8 +2835,14 @@ LENGTH_FIX = ("put the body in its Linear issue (`research msg linear comment IS
 
 def check_length(reg: dict, ch: str, text: str, limit: int) -> None:
     """A post `send`, `reply`, `announce` or `ask` makes in the front door, in words as `traffic --volume` counts them: past
-    `limit` it goes out with a note on stderr, and past twice `limit` it is refused before anything is posted."""
-    if ch != channel_id_for(reg, FRONT_DOOR) or (n := len(plain(text).split())) <= limit:
+    `limit` it goes out with a note on stderr, and past twice `limit` it is refused before anything is posted.  A retired term
+    (`vocabulary.retired`) in its prose goes out with a note naming what to write instead."""
+    if ch != channel_id_for(reg, FRONT_DOOR):
+        return
+    if found := vocabulary.retired(plain(text)):
+        print("research msg: retired term(s), posted anyway: " + "; ".join(f"{t!r}: write {w}" for t, w in found)
+              + " (GLOSSARY.md's older names; a name quoted in backticks is kept)", file=sys.stderr)
+    if (n := len(plain(text).split())) <= limit:
         return
     if n > 2 * limit:
         raise SlackError(f"{n} words, past twice the {limit} a post in #{FRONT_DOOR} may have, so nothing was posted: {LENGTH_FIX}")
