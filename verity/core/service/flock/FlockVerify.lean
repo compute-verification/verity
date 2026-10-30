@@ -1672,5 +1672,5 @@ def main (args : List String) : IO UInt32 := do
   | "typed-expand" :: rest => typedExpandCmd rest
   | "typed-rows" :: rest => typedRowsCmd rest
   | "circuit-type" :: paths => CircuitType.cmd paths
-  | "layout" :: paths => Layout.cmd paths
+  | "layout" :: paths => BlockLayout.cmd paths
   | _ => IO.eprintln "usage: flock-verify field-test FILE"; return 2

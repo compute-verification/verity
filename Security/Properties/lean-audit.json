@@ -19129,20 +19129,20 @@
    ]
   },
   "Properties.SampledProofs.Draw": {
-   "digest": "b52be431536bd0a52e5b433d1030f1687a39e96a0467abb9f00d9af770528530",
+   "digest": "2c2d273b4aa435d6576276b361a64c30b9cd2919ff9c71b30d234a59a3c19d05",
    "definitions": {
-    "Properties.SampledProofs.DesignWellFormed": "997f50a4b20b993b7a5c14cac860f738551f95c036f67d1972d07d50b4f52978",
-    "Properties.SampledProofs.DrawMisses": "c9504492bb874b05725a64762151b81273b777f28944429501436ca7d86412f6",
+    "Properties.SampledProofs.DesignWellFormed": "a70b4187db515fcbdd272e1778676b6a36da52d95ea1b23e13e91e82718d6820",
+    "Properties.SampledProofs.DrawMisses": "108c7a7af0bceaa84e4683342c66b40abad35e7e09bb2ec82a08c798107c4a04",
     "Properties.SampledProofs.Misses": "c4dce71062e85afcc3a34a9fccf4fa062fb4c2cf81117a7b9cc6deb8cb368a92",
     "Properties.SampledProofs.bytesOf": "47ea121f0f122b7f11aa2e92b9fb775eff4d93c1668da4bfe59ff647ae1de7ab",
-    "Properties.SampledProofs.checkedOf": "33d2eafc2757ba639adcddef9e2f9316d96a4d6190e4eacd39633d3715ec2e96",
-    "Properties.SampledProofs.missBound": "f9c8306dfd52e3bba065f732da4d9c33bcec2c1e371dea9074c0f13629f8b649",
+    "Properties.SampledProofs.checkedOf": "0edc2119c4404b790d25028e5328282e377b122d8d0613b378b65c75ba5f20d3",
+    "Properties.SampledProofs.missBound": "3aa4059a1927f211d57a7b796b67556100e71fde0e732fe5781cb45c5f9fce9c",
     "Properties.SampledProofs.missBound._sparseCasesOn_1": "1023bb6aa0105a630e9f51407ebfdea9d906c7d295dca8d404db851ddbe3b9cf",
     "Properties.SampledProofs.oneStageOf": "317833d5e07aa626380ff1a4e3ad4b2d165381e58fd2b2e3b4a88f570055323e",
     "Properties.SampledProofs.puGates": "c7bb4c0d082dc4243ebfaee488211b631433dd00bdf7f00781677fc67eb22eed",
     "Properties.SampledProofs.slotDesign": "8ac5da9e336c6a1631f563a222b9cc51b8a9d3f212f404a3a5809725a6630a41",
     "Properties.SampledProofs.slotDesign._sparseCasesOn_1": "28226848ad079560f70662a832200f44b2062e2306227f72ae4a16a010493094",
-    "Properties.SampledProofs.slotPartition": "b3b384e9e60e279d7c5ee97ea0512058900add4769b29353b8c2cf13abacd57c"
+    "Properties.SampledProofs.slotPartition": "bfb38bca66a884e30e1e0e112ac400b600ba15c175d8c9317091ea27f437397a"
    },
    "guarantees": [
     "Properties.Pouw.Credit.SecurityProofs.epsAtSound",
@@ -21507,19 +21507,19 @@
    ]
   },
   "SampledProofs.Slots": {
-   "digest": "165e732154ebfab2b441baf30ce8b3ccbe762a2379cdcc2b0110b8f7879a3f43",
+   "digest": "6b329d88a56dc8168b6d003ef036586ba5470150bbfc80092d773be7aa19e5cf",
    "definitions": {
-    "SampledProofs.Slots.Layout": "d593208818fe8549fb1d469d0d199451e6870e22873c6e416b6761bc2a9ac885",
-    "SampledProofs.Slots.Layout.blocks": "a3107a94ab88924a563a646989f61f778af46a52189a763b5ced5d520d691d9f",
-    "SampledProofs.Slots.Layout.classes": "0355b23ce60fca697c8314f154efe590d39aa8d466ed5ef5f7eec260228f317d",
     "SampledProofs.Slots.ProofBlock": "4221241040882f42556865bd35b7c1b5b0a8f9ccc1c1bf5a2699e1e6c1396e09",
     "SampledProofs.Slots.ProofBlock.gates": "0bdb3db59d2a24fbd40522478142b2fcd59a76042b85decdfd791ba534809262",
     "SampledProofs.Slots.ProofBlock.unit": "56478ee38c0ca5e926e0da2c648d8202de8d610c86dae1ead2943f7224ec9642",
-    "SampledProofs.Slots.checked": "b6b62fd31f82042f48c0281dab222c43e8e31436f7c89d741168d8a668f655cb",
+    "SampledProofs.Slots.SlotOrder": "29dea1f199f6349e8255a843c13eadcd9391789b0e45c4a073e2a5f2e0e1f342",
+    "SampledProofs.Slots.SlotOrder.blocks": "cc5aa8e0508a4e7c7a7a30e9824b9691f147e509721089c293bec91c5b354328",
+    "SampledProofs.Slots.SlotOrder.classes": "3468321450b23c04ac6c9eaeba2be5d31e58ffa37cbc5afb19ee0db79c05ced0",
+    "SampledProofs.Slots.checked": "d0f5846f05ae497dfa321685f9bb5e9f836981b97ca714366d385846065985cf",
     "SampledProofs.Slots.inputGates": "8a99e94f2b8d9d527299307bc0ee392fcf864afbe6de11bdc7262ba95cf3d561",
     "SampledProofs.Slots.inputGates._sparseCasesOn_1": "fd7b8c9205a9b4d0d3b02a394c1e1396254b1a3813b52b413e44feaf609e17c1",
-    "SampledProofs.Slots.layout": "41c1af315f5daf52e6d1b62dcebae83178479dff4d56b4ad4f8d52fb587b86d4",
-    "SampledProofs.Slots.select": "4913de65f50dae7c0187950269b496224785ab9b50a64ed2ec8624bad8cb83c1"
+    "SampledProofs.Slots.layout": "9ebf5ded61f78ee3afc4666b66f6f033d20bc9b28240fc6cfa620c28ac00f826",
+    "SampledProofs.Slots.select": "d12ba99b475065e8aae0ce4436cfb7967c58b93f40d110cafb4f6782fcdf3038"
    },
    "guarantees": [
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
