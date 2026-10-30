@@ -8189,6 +8189,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.Served.SecurityProofs.servedFreed",
+    "Properties.Pouw.Served.SecurityProofs.servedWork",
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds"
@@ -8919,7 +8921,7 @@
    ]
   },
   "Flock.Registered": {
-   "digest": "54d9820197f787f2dd952bd3808a8119febb6ece628d36a7c6dd71cdadce3b03",
+   "digest": "3404a65444a53e3b8a4ec04e4ddd02ff4d148c7e28bb3ac80297157a646d40a6",
    "definitions": {
     "Flock.Registered.Port": "8bf63b4f11162dce1bbc385541afd32990ae8951927d86e9839649edf19734a7",
     "Flock.Registered.Port.domain": "59766f0cc4f10430def56f75d58c4ba25d8b353a298127516dfd435ef2349909",
@@ -8928,11 +8930,8 @@
     "Flock.Registered.WIDTHS": "f4977ebbfc1f56b3a8b18966d93bca3730eb80a89722073817b69365af01fb60",
     "Flock.Registered.WIDTH_KEY": "622d07ccba61c2e7c41c90ab6fdc3227805b4c267753ea215026fa7f9a71b5a0",
     "Flock.Registered.WORD_BITS": "4542d084de1788925e0a2fcbecfc92a7faea54947782d73e5ba18998b41cf3aa",
-    "Flock.Registered.climbL": "deeb59c4c0ff09253eaf700ca259e36c92c5c09b5fc142a81d3f076bfe62ff73",
     "Flock.Registered.domain": "6b7a33fcaa3a1e513ec58845d192a740233d3126543af6653c93abb8f450ac69",
     "Flock.Registered.domainWith": "49b0e81e704d15a08c8f2d14781f9568f3e557a203c02d514c5ef667be8ec782",
-    "Flock.Registered.leafAs": "a7fc4cfe446fe2cffc2c9cb01a9a0a0b9efd6894c75e872799b4fece18667eaf",
-    "Flock.Registered.node": "41c6d6d90c4fbfc4f762607cc2052780c452b0365f95f22323ff6d93f35d6bb1",
     "Flock.Registered.rowLeaf": "09ceb544a5a4910cbbfa21ac341e5fdcf6b3fd232451f5f63fb7d9ff9ea64cde",
     "Flock.Registered.rowWords": "88b71b67bc7da442e3af20bc7d557b6a01b1f73607299f5c42ff7b1df66dee0b",
     "_private.Flock.Registered.0.Flock.Registered.tagged": "722909620809d3fc0c88f4eca4e02b75c137673488be949e64466acf03bff32a"
@@ -15127,7 +15126,7 @@
    "guarantees": ["Properties.SampledProofs.acceptMeans", "Properties.SampledProofs.bernoulliBounds"]
   },
   "SampledProofs.Registered": {
-   "digest": "ce0fa9f06c7f7c254bca7697ad5e5a54a5824f1c211c9f64477d692d91a5bf48",
+   "digest": "6ed5d1a4b1bdac19819cc7430849ca71892f8bffb5456ec21e4a57b21d4ce769",
    "definitions": {
     "SampledProofs.Registered.ENTRY_KEYS": "6f05cfc6ff6b3b0ad56f59e907efb5d41a6629417e1a64c1ee1a7bad7c6d0c8f",
     "SampledProofs.Registered.Entry": "d192f6101537cf4f508aabe2a21685f00c2fec96b01038378df81c20bd174894",
@@ -15140,13 +15139,8 @@
     "SampledProofs.Registered.Param.gates": "01acbde8ab8b2438aecb4a8889d9f38b9cae8ab2fb2b4a472b53fc261bc0c502",
     "SampledProofs.Registered.Param.name": "98f4394c69e96930fa8b37070d3847b5e7cc0a960a4b7470b1146313ff419805",
     "SampledProofs.Registered.Param.ty": "9915421ab64336f2c7c651511d75e9e87053650efc90d9dc6f976056c4e433ff",
-    "SampledProofs.Registered.REGISTERED_DOMAIN": "13aa45c135023e02bf0f5947ff911ede548b2ba20a27a9a671503aa88ad25ff8",
     "SampledProofs.Registered.SCHEMA": "effbe563b7de9a4c54ba59a6b00d65c365cfc1c814a4ef04af89812dcb9414eb",
-    "SampledProofs.Registered.WIDTHS": "cdaaa7e42f811079475b71a2ff9e5bb352a8a4c80cea120cc3159ca9437e63f0",
-    "SampledProofs.Registered.WIDTH_KEY": "849e6a9ca40b0fa7795288e604ef7e232c76822d7e2afe097385eb684597941c",
     "SampledProofs.Registered.WINDOW_KEY": "84e015a1d4c1807c027caaf9044e207ad91b93ffd66bd91f7b6e255a12cb9f89",
-    "SampledProofs.Registered.WORD_BITS": "5a193994ad2c4b66f4e9020d63a40ba38d27f5e10ca01361603eefd0f4474fbb",
-    "SampledProofs.Registered.domain": "37d88b7c699c64128ddc28ced3b266d5a747ea9544a04dd61ff1ffc30096f3a7",
     "SampledProofs.Registered.domainAt": "1e681a0f2a4257edbeeeeb199cf91d7c782cb79cd736f727d896433198339f43",
     "SampledProofs.Registered.domainBound": "953e16a1879d2a32fc4f7700283a84393ae3835c43c6022bb26770bf28305b24",
     "SampledProofs.Registered.entries": "6fa6c8529457bc121b22c3847408686e92693e7341ce99f0a3a0873bb18be1b3",
@@ -15156,8 +15150,7 @@
     "SampledProofs.Registered.lower.match_7": "79a30032d604e9fe28d974adc26cbd289d2e162a424f2521d54b01ef785c28cb",
     "SampledProofs.Registered.rowLeaves": "ade801d9ded30fc5f6568549d9bb7b4bbd43b451ae950d6e31fbbd64e64cfc46",
     "SampledProofs.Registered.width": "dbf0d521325bedc9b165559596c094286592ae813817f8a4927a0bf62b068745",
-    "SampledProofs.Registered.widthSet": "456027ea3ccec5998cf8c30b9e6ac2595e98886b7b33d25eeff0238c4502fca2",
-    "_private.SampledProofs.Registered.0.SampledProofs.Registered.tagged": "c60ace592236ee8cff61eec70a4bd12397e594bb3e257886065716c9eb1a53f2"
+    "SampledProofs.Registered.widthSet": "456027ea3ccec5998cf8c30b9e6ac2595e98886b7b33d25eeff0238c4502fca2"
    },
    "guarantees": [
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
