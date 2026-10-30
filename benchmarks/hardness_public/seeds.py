@@ -45,7 +45,7 @@ D, LAYERS, HEADS, CTX, VOCAB = 192, 4, 4, 128, 4096
 LINEARS = ("qkv", "proj", "fc", "out")
 
 
-class Block(nn.Module):
+class DecoderLayer(nn.Module):
     def __init__(self):
         super().__init__()
         self.ln1, self.ln2 = nn.LayerNorm(D), nn.LayerNorm(D)
@@ -67,7 +67,7 @@ class GPT(nn.Module):
         super().__init__()
         self.emb = nn.Embedding(VOCAB, D)
         self.pos = nn.Embedding(CTX, D)
-        self.blocks = nn.ModuleList(Block() for _ in range(LAYERS))
+        self.blocks = nn.ModuleList(DecoderLayer() for _ in range(LAYERS))
         self.lnf = nn.LayerNorm(D)
         for name, p in self.named_parameters():
             if p.dim() == 2:
