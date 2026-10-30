@@ -34,6 +34,20 @@ def test_int8_pins_live_in_the_sibling_manifest():
     assert all(not e.get("fp8_of") and not e["repo"].endswith("-FP8") for e in INT8_PINS)
 
 
+def test_the_1b_k2048_role_is_the_1b_pin_with_its_k2048_linears_declared():
+    """LLAMA32_1B_INT8_K2048 is LLAMA32_1B_INT8's entry (the same files, after it, so an engine pin of the repo still
+    resolves to LLAMA32_1B_INT8) that declares the linears a J10-R window at K = 2048 serves: qkv_proj, o_proj and
+    gate_up_proj of each of the 16 layers in turn, down_proj (K = 8192) left out, which the auditor's registry
+    (`models.declared_linears`) registers it under instead of the decoder rule."""
+    roles = [e["role"] for e in SIBLING]
+    base, k2048 = (SIBLING[roles.index(r)] for r in ("LLAMA32_1B_INT8", "LLAMA32_1B_INT8_K2048"))
+    assert roles.index("LLAMA32_1B_INT8_K2048") > roles.index("LLAMA32_1B_INT8") and "linears" not in base
+    assert {k: v for k, v in k2048.items() if k not in ("role", "linears", "note")} == {
+        k: v for k, v in base.items() if k not in ("role", "note")}
+    assert k2048["linears"] == [f"model.layers.{i}.{m}" for i in range(16)
+                                for m in ("self_attn.qkv_proj", "self_attn.o_proj", "mlp.gate_up_proj")]
+
+
 def test_sibling_manifests_are_read_with_their_manifest(tmp_path):
     main = tmp_path / "checkpoints.json"
     main.write_text(json.dumps({"checkpoints": [{"role": "A", "repo": "o/a"}]}))
