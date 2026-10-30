@@ -6,3 +6,4 @@
   mark: lean's #6618 and #6472, soundness's #6540, circuits' #6456, memory-accounting's #6390, network-accounting's
   #6367. Keep 3a4950781b as an ancestor (new commits on top only) so they need no remerge. Mark as soon as #6228's
   gate passes, then #5774 and #5971.
+- 12:24Z: your #6228 push (04b1ec21) took about 8 carriers off next until it's marked. Run only #6228's gate first (the two tests, quick suites, records only if the lock inputs changed) and mark the moment it passes. Then the others.
