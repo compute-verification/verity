@@ -6,7 +6,10 @@ import Proofs.Flock.Claims.Recursion.KSLin2Committed
 
 `RecursiveKS` reads the recursive verifier's run at coins drawn after each message. Deployed, the coin server commits
 them at Hello in an hm96 coin tree (`coin-tree/hm96-sha512`) and opens each round's coin with its answer; a V\* session
-before the last one that accepts is answered with `[]`, and no coin is opened there. `RecursiveKSDeployed` is
+before the last one that accepts is answered with `[]`, and no coin is opened there: that round is the session's
+`Finish`, which C-Flock's live server answers with its verdict alone (it opens coins only at `Commit` and at each
+`Round`, `committed_coins`), and the ZK server's contract lets coins out only as a scheduled round's coins, none at
+`finish` (`Flock.Firewall.Contract.step`). `RecursiveKSDeployed` is
 `RecursiveKS`'s bound at that run (`KSLin2OnC`, at `RecursiveKS`'s record, bound record, outer record, caps and
 statements): at every leaf hiding bound `δ₁ ≠ ∞`, every hm96 tree whose leaves hide at `δ₁` (`Claims.Hm96Hiding`, the
 named assumption `hash-derived-key` at the pinned key) has a simulator `S` such that, for every prover that reads the

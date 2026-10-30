@@ -37,7 +37,8 @@ theorem nextO_msg (H : Claims.Msg → Claims.Msg) {x : Claims.Msg} {as : List Cl
     cases h
   | coin c =>
     rw [nextO_coin H ha] at h
-    exact ⟨c, actO_coin ha, (Claims.Out.msg.inj h).symm⟩
+    have h' : Claims.Out.msg c.bytes = .msg m := h
+    exact ⟨c, actO_coin ha, (Claims.Out.msg.inj h').symm⟩
   | decide s spec sts link c₁ mids f =>
     rcases nextO_decide_out H ha with ho | ho <;> rw [ho] at h <;> cases h
 
@@ -75,14 +76,15 @@ theorem ract_sess_drop {s j : ℕ} {xO : Claims.Msg} {as' : List Claims.Msg} {cs
 
 end Steps
 
-theorem getLast?_drop_concat {α : Type} {l : List α} {a b : α} {n : ℕ} (h : ((l ++ [a]).drop n).getLast? = some b) :
-    b = a := by
-  rw [List.getLast?_drop] at h
-  by_cases hn : (l ++ [a]).length ≤ n
-  · rw [if_pos hn] at h
-    cases h
-  · rw [if_neg hn, List.getLast?_concat] at h
+theorem getLast?_drop_concat {α : Type} : ∀ {l : List α} {a b : α} {n : ℕ},
+    ((l ++ [a]).drop n).getLast? = some b → b = a
+  | l, a, b, 0, h => by
+    rw [List.drop_zero, List.getLast?_concat] at h
     exact (Option.some.inj h).symm
+  | [], a, b, n + 1, h => by simp at h
+  | _ :: l, a, b, n + 1, h => by
+    have h' : ((l ++ [a]).drop n).getLast? = some b := by simpa using h
+    exact getLast?_drop_concat h'
 
 /-- **The compiled verifier answers each round with its coin's bytes or with nothing**: an inner or staging round, and
 a V\* session's round its outer verifier answers, with the round's coin; a V\* session before the last one that accepts,
@@ -97,9 +99,11 @@ theorem answersCoinOrNil_V (IV : Claims.Verifier Coin) (st : Stage) (H : Claims.
     cases h
   | coin c' =>
     rw [next_coin H hr] at h
-    have hc : c = c' := by simpa using ract_coin hr
+    have h' : Claims.Out.msg c'.bytes = .msg m := h
+    have hl := ract_coin hr
+    rw [List.getLast?_concat] at hl
     refine .inl ?_
-    rw [← Claims.Out.msg.inj h, hc]
+    rw [← Claims.Out.msg.inj h', Option.some.inj hl]
   | sess s j xO as' cs' =>
     rw [next_sess H hr] at h
     simp only at h
@@ -115,9 +119,8 @@ theorem answersCoinOrNil_V (IV : Claims.Verifier Coin) (st : Stage) (H : Claims.
     | acc =>
       rw [ho] at h
       refine .inr ?_
-      revert h
-      simp only [sessOut]
-      split_ifs <;> intro h <;> cases h <;> rfl
+      simp only [sessOut] at h
+      split_ifs at h <;> first | (cases h; done) | exact (Claims.Out.msg.inj h).symm
     | rej =>
       rw [ho] at h
       simp [sessOut] at h
