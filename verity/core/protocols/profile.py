@@ -124,7 +124,7 @@ class IntegrityProfile:
 
     levels: Hierarchy
     sizes: tuple[int, ...]
-    draws: Mapping[str, Draw] = field(hash=False)
+    draws: Mapping[str, SamplingDesign] = field(hash=False)
     delta: float
     programs: tuple[str, ...] = field(default=(), kw_only=True)
     prescribed: frozenset[str] = field(default=frozenset(), kw_only=True)
@@ -604,7 +604,7 @@ class WorkStratum:
 
 @dataclass(frozen=True, slots=True)
 class Work:
-    """The work sampling design `work:k` (Lean `Core.Draw.work`): uniform draws inside disjoint strata of the checked
+    """The work sampling design `work:k` (Lean `Core.SamplingDesign.work`): uniform draws inside disjoint strata of the checked
     level, each stratum's k_s sized by its work above its floor (`work_k`).  Its sample is the stratified one at those
     k_s, so its bounds are `stratified`'s."""
 
@@ -645,8 +645,8 @@ class Work:
                            for s in self.strata]}
 
 
-Draw = Bernoulli | Subset | Stratified | Work
+SamplingDesign = Bernoulli | Subset | Stratified | Work
 
 
-__all__ = ["HARM_MARGIN", "MARGIN", "WINDOW_DELTA", "Bernoulli", "Draw", "IntegrityProfile", "Stratified", "Stratum",
-           "Subset", "neg_log_ratio"]
+__all__ = ["HARM_MARGIN", "MARGIN", "WINDOW_DELTA", "Bernoulli", "IntegrityProfile", "SamplingDesign", "Stratified",
+           "Stratum", "Subset", "neg_log_ratio"]
