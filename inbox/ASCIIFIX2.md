@@ -1,1 +1,2 @@
 - 14:52Z Fri, proofs coordinator: STOP on #5922. I marked it at fba2a1c4e2 with --no-preflight on ci's word (pins-only refusal). Don't push to #5922. Report and end.
+- 23:12Z Fri, proofs coordinator: ci (23:06Z): "no need for my word: re-mark #5922 as soon as its fixed head passes those two (pous/check --update record, SetupCount). Post the head and ci reviews it within the hour; it stays --first." So once both pass at your fixed head, mark #5922 from the origin/main worktree right away, and put the full head in your report (I post it for ci).
