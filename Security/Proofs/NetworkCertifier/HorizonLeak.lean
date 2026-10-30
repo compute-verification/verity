@@ -159,7 +159,7 @@ theorem faultyBits_le_card_mul (C : Prog) (P : Partition) {n b : ℕ} {F : Finse
 
 /-! ### The count -/
 
-theorem encard_leakAt_le {L K S : ℕ} (lay : AuditStatement → Layout L S) (k : AuditStatement → ℕ) (reg : AuditStatement → Finset ℕ) (Dj : ℕ)
+theorem encard_leakAt_le {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (reg : AuditStatement → Finset ℕ) (Dj : ℕ)
     (s : AuditStatement) (P : Partition) (ρ : ℕ → Bool) (op : ℕ → List (Obs L K S) → List Bool) (F : Finset ℕ) :
     {o | LeakAt lay k reg Dj s P ρ op F o}.encard ≤
       ((2 ^ (freeInputs s.prog (lay s) (k s) \ reg s).card * (2 ^ faultyBits s.prog P F * Dj ^ k s) : ℕ) : ℕ∞) := by
@@ -178,7 +178,7 @@ theorem encard_leakAt_le {L K S : ℕ} (lay : AuditStatement → Layout L S) (k 
     rw [this, Set.encard_empty]
     exact zero_le
 
-theorem encard_horizonGood_le {L K S : ℕ} (lay : AuditStatement → Layout L S) (k : AuditStatement → ℕ) (reg : AuditStatement → Finset ℕ) (Dj : ℕ)
+theorem encard_horizonGood_le {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (reg : AuditStatement → Finset ℕ) (Dj : ℕ)
     {m : ℕ} (sw : Fin m → AuditStatement) (Pw : Fin m → Partition) (ρ : Fin m → ℕ → Bool)
     (op : Fin m → ℕ → List (Obs L K S) → List Bool) (n : Fin m → ℕ) (b : ℕ)
     (hb : ∀ i, ∀ v < n i, faultyBits (sw i).prog (Pw i) {v} ≤ b)
