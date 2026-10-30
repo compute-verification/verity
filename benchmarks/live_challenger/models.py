@@ -3,7 +3,7 @@ its own salts, so a period's weights' root is never the prover's choice.
 
 - **A registration** (`register`, vy-admin's `vy-challenger-gate model-register`, run as `auditor`) takes a model's int8
   checkpoint role (`--model`, a role listed exactly once in the pinned tree's `checkpoints-int8.json` files, `MANIFESTS`:
-  vLLM's), the period's declared
+  vLLM's), the period's registered
   circuit (`--circuit`, the SHA-512 of the window Program's descriptor, `--descriptor FILE`, which it must hash to) and the
   checkpoint's directory (`--checkpoint DIR`). It refuses unless:
   - DIR and every file the manifest lists are regular, not symlinks, and writable by no one but root and `auditor`

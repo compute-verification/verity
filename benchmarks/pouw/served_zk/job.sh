@@ -6,7 +6,7 @@
 #   research run --on vy-nebius-2 --project verity --campaign pouw --source <tree> --cwd source --declared-output 'out/*' \
 #     --declared-output 'out/*/*' --env SERVED_RUN=<serve.sh run id> --env HZ_MEM_GB=<GB> \
 #     --env HZ_CACHE=/workspace/research/cache/pouw-hidden-zk --env HZ_JOB=benchmarks/pouw/served_zk/job.sh -- bash benchmarks/pouw/hidden_zk/scope.sh CPUS GB
-# The drawn units run as a parallel fan-out across the scope's cores (step 5): SZ_JOBS workers at once (default HZ_MEM_GB * 3/4 /
+# The sampled proof blocks run as a parallel fan-out across the scope's cores (step 5): SZ_JOBS workers at once (default HZ_MEM_GB * 3/4 /
 # SZ_MEM_PER_JOB, capped to the CPUs; SZ_JOBS=1 is the old serial loop), SZ_MEM_PER_JOB the GB each is budgeted (default 13, the
 # session's serve + prove peak). Each unit's verdicts go to its own file; a reduce after the fan-out folds them into the summary.
 # In order, each step's files under out/:
@@ -19,17 +19,17 @@
 #      its requests and replies in challenger/requests.jsonl, the coins it opened in challenger/openings.jsonl): its salt
 #      coin opened after the request pass's weights' root (salt-opening.json), receive (Stream.register: receipt.json;
 #      the challenger re-starts the pass's epoch from its manifest under its own commitment, the request pass, salted by a
-#      beacon before epoch coins, as a recorded replay) and select (draw.json: the epoch's draw coin opened after the
+#      beacon before epoch coins, as a recorded replay) and select (draw.json: the epoch's sampling coin opened after the
 #      registration, once, and Lean flock-verify draw --population N --k K' --stream over its key)
-#   5. per drawn unit u<t>, as a parallel fan-out (SZ_JOBS at once): stage_tile.py (Pc8TileSide{K=4096,1,1,sm120}), the --zk
+#   5. per sampled proof block u<t>, as a parallel fan-out (SZ_JOBS at once): stage_tile.py (Pc8TileSide{K=4096,1,1,sm120}), the --zk
 #      session, the opening check, Lean; the selftest build's controls on the first; a filler unit's the same, and the other request's tile staged
-#   6. deliver (the drawn units' session records' SHA-512) and outcome (one-stage's audit record over every drawn unit and
+#   6. deliver (the sampled proof blocks' session records' SHA-512) and outcome (one-stage's audit record over every sampled proof block and
 #      PoUW's public items, outcome-<case>/); each control on a stream of its own that replays the honest draw
 #   7. the checks, each as expected, into summary.json:
 #        coins                 the challenger's coin commitment, published before any request                  COINS
 #        coin-salt             its salt coin, opened after the request pass's weights' root                    OPENED
 #        receive-coin-<case>   the request pass carrying a salt coin of another challenger (foreign), opened
-#                              after what the verifier had not recorded (early), labelled the draw coin
+#                              after what the verifier had not recorded (early), labelled the sampling coin
 #                              (mislabelled), a byte flipped (tampered), or the genuine coin beside the
 #                              beacon's salt (resalted)                                                        REFUSED
 #        receive-unrecorded    the request pass, salted by a beacon, not received as a recorded replay         REFUSED
@@ -39,11 +39,11 @@
 #        receive-raised        the request's registration claiming the next grid level (more credit)           REFUSED
 #        receive-honest        the challenger receives the request's registration                              REGISTERED
 #        receive-open          a second registration while the first has no outcome                            REFUSED
-#        select                Lean's draw of K' units over the draw coin's key, opened after the receipt    DRAWN
-#        select-again          a second select of the same registration: no retry redraws                     REFUSED
-#        receive-after-draw    the request's registration on a stream of its own, after the epoch's draw coin  REFUSED
-#        open-u<t>             each drawn unit's proof opens that unit's rows under the window root            ACCEPT
-#        lean-u<t>             the Lean verifier on each drawn unit's --zk session, every check passed and
+#        select                Lean's sample of K' units over the sampling coin's key, opened after the receipt    DRAWN
+#        select-again          a second select of the same registration: no retry resamples                     REFUSED
+#        receive-after-draw    the request's registration on a stream of its own, after the epoch's sampling coin  REFUSED
+#        open-u<t>             each sampled proof block's proof opens that unit's rows under the window root            ACCEPT
+#        lean-u<t>             the Lean verifier on each sampled proof block's --zk session, every check passed and
 #                              refused for the tile's want of a Program (no --program: NO_PROGRAM)             REFUSED
 #        open-filler           the filler unit's proof opens its zero rows under the window root              ACCEPT
 #        lean-filler           the Lean verifier on the filler unit's --zk session, as lean-u<t>               REFUSED
@@ -53,16 +53,16 @@
 #        open-foreign-commit   the request's proof, against the other request's registration                   REJECT
 #        lean-foreign-pub      the first unit's session against the other request's public file               REJECT
 #        lean-st-<case>        the selftest build's records on the first unit: honest REFUSED; the tampered REJECT
-#        deliver-honest        the drawn units' session records, once                                           DELIVERED
-#        outcome-honest        every drawn unit's verdicts, one audit record; public = PoUW's items: the Lean
+#        deliver-honest        the sampled proof blocks' session records, once                                           DELIVERED
+#        outcome-honest        every sampled proof block's verdicts, one audit record; public = PoUW's items: the Lean
 #                              verifier accepts no unit without its Program                                    REJECT
 #        outcome-again         a second outcome of the same registration: final                                 REFUSED
 #        deliver-again         a second delivery of the same draw                                               REFUSED
 #        outcome-foreign-proof the first unit's proof, opening and Lean verdict the other request's             REJECT
 #        retry-foreign-proof   a control's registration on that control's stream after its reject (budget 1)   REFUSED
 #        outcome-st-<case>     the first unit's Lean verdict a selftest case's: every case                     REJECT
-#        replay                the challenger's requests again from its recorded coins, Lean drawing          SAME
-#        replay-twin           the same, stream_subset (Lean's draw's Python twin) drawing                    SAME
+#        replay                the challenger's requests again from its recorded coins, Lean sampling          SAME
+#        replay-twin           the same, stream_subset (Lean's sample's Python twin) sampling                    SAME
 set -uo pipefail
 SRC=$(pwd)
 Z=$SRC/benchmarks/pouw/served_zk   # not J: hidden_zk/job.sh sets J to its own directory
@@ -94,7 +94,7 @@ command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
 log "Lean of record: pouw-check, pouw-check-difftest, sampled-proofs-difftest built"
 
 # ---- 2-3. params and commit ---------------------------------------------------------------------------------------------------
-# SZ_EPS / SZ_DELTA drive the draw at a non-default (ε, δ) for a realistic-parameter audit (k_prime grows with ln(1/δ)/ε);
+# SZ_EPS / SZ_DELTA drive the sample at a non-default (ε, δ) for a realistic-parameter audit (k_prime grows with ln(1/δ)/ε);
 # unset, served_commit's own defaults stand, so the default run is unchanged.
 PARG=()
 [ -n "${SZ_EPS:-}" ] && PARG+=(--eps "$SZ_EPS")
@@ -260,7 +260,7 @@ unit_work() {    # unit_work TAG SIDE UNIT: one unit's stage -> open -> (control
   rm -f "$W/$tag/inst.bin"; [ "$t" = "$FIRST" ] || rm -f "$W/$tag/circuit.txt"   # free the ~486 MB circuit; FIRST's stays for lean-foreign-pub
 }
 
-# A parallel fan-out over the drawn units: the session (serve + prove, ~12.5 GB together) bounds the worker count against the
+# A parallel fan-out over the sampled proof blocks: the session (serve + prove, ~12.5 GB together) bounds the worker count against the
 # scope's memory; the stage and Lean (the ~60 s, ~2.5 GB bottleneck) are single-threaded, so throughput is in the count, not the
 # threads. SZ_JOBS overrides the count (SZ_JOBS=1 is the old serial loop), SZ_MEM_PER_JOB the GB each is budgeted.
 JOBS=${SZ_JOBS:-$(( MEM_GB * 3 / 4 / ${SZ_MEM_PER_JOB:-13} ))}
