@@ -1,7 +1,7 @@
-# VF3e: VF3d with every kind charged its measured displacement beside an MMA (RS-W′ round 4).
+# VF3e: VF3d with every kind charged its measured displacement beside an MMA.
 name = "VF3e"
 epoch = "VF3e"
-summary = "VF3d with every kind charged its measured displacement beside an MMA (RS-W′ round 4)."
+summary = "VF3d with every kind charged its measured displacement beside an MMA."
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
     "F2FS", "XU", "R6r", "LDSi", "R6w", "LDG", "L2red", "UP",
