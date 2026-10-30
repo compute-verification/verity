@@ -131,9 +131,9 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
 
 | name | caller | in | out | module |
 | --- | --- | --- | --- | --- |
-| `Card`, `Loc`, `Link`, `Registration` | developer | the site's hardware | one entry of the log, chained to its head | missing: written in the example |
-| `Layout` (`genesis`, `add`, `device`, `boundary`, `accounting(ticks)`) | everyone | the log's entries | the site; each subprotocol's accounting | missing: written in the example (pieces: `Security/Definitions/Accounting/Physical.lean`'s `Hardware`, `Accounting/Device.lean`, the deploy manifest's machines and links) |
-| `check_registration(layout, registration, auditor)` | verifier | the layout so far, an entry, the auditor's own devices and keys | the layout it folds to, or a refusal by name | missing: written in the example |
+| `Card`, `Loc`, `Link`, `Registration` | developer | the site's hardware | one entry of the log, chained to its head | `Security/Definitions/Core/Site.lean` (`Verity.Site.Sheet`, `Loc`, `Link`, `Verity.Site.Entry`, `Verity.Registration.Entry.site`) |
+| `Layout` (`genesis`, `add`, `device`, `boundary`, `accounting(ticks)`) | everyone | the log's entries | the site; each subprotocol's accounting | `Security/Definitions/Core/Site.lean` (`Verity.Site`, `add`, `ofLog`, `Boundary`, `device`); `accounting(ticks)` missing: written in the example (pieces: `Security/Definitions/Accounting/Physical.lean`'s `Hardware`, `Accounting/Device.lean`, the deploy manifest's machines and links) |
+| `check_registration(layout, registration, auditor)` | verifier | the layout so far, an entry, the auditor's own devices and keys | the layout it folds to, or a refusal by name | `Security/Definitions/Core/Site.lean` (`Registration.Entry.Valid`, `Entry.refusal`; Lean's `sheetDigest` is `card-digest`, and its `figures`, a card's figures against the auditor's estimate, the example doesn't check yet), decidable; no difftest yet |
 | `Builder` (`descriptor`, `of`, `digest`, `grow`) | developer, verifier | a_1 ‖ … ‖ a_k | the declaration blocks | missing: written in the example |
 | `placement`, `check_placement` | developer, verifier | B, a block, the layout's head | `Requirement.Placement`'s data, or a refusal by name | missing: written in the example |
 | `register`, `check_baseline` | developer, verifier | product, theta, B, state0 | `Baseline` (roots and B's descriptor) | missing: written in the example |
@@ -154,13 +154,13 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
 
 ## (c) What this exposes
 
-- **The registered circuit has no one digest, and Lean's `Declaration` holds one circuit.** Each execution block has its
+- **The registered circuit has no one digest, and Lean's `RegisteredCircuit` holds one circuit.** Each execution block has its
   own Program digest, and the record chain binds them in order; `codec.program_digest` of B(a_1 ‖ … ‖ a_k) as one Program
-  is not prefix-incremental. `Security/Definitions/Core/Declaration.lean`'s `Declaration` is the registered circuit so far,
-  and its file says one Program is the circuit of record: d.D, one `Circuit`, is here every execution block composed
-  along the state wire (block k's state input is block k − 1's state output, not an input gate), which the spec has no
-  operation for; d.θ, the registered information, is theta's and the initial state's input gates. `Baseline` is d before any block,
-  and each `Declaration` record extends d.D by one block and d.θ by nothing: its requests are novel input gates.
+  is not prefix-incremental. `Security/Definitions/Core/RegisteredCircuit.lean`'s `RegisteredCircuit` is the registration, whose builder
+  names the registered compiler, with the advice so far, and its d.D, one `Circuit`, is B.init θ ‖ B(a_1) ‖ … ‖ B(a_k) (`Circuit.append`): each execution block
+  appended after the ones before it, reading their gates along the state wire (block k's state input is block k − 1's
+  state output, not an input gate); d.θ, the registered information, is theta's and the initial state's input gates, the
+  gates of B.init θ. `Baseline` is d before any block, and each `Declaration` record extends d.D by one block and d.θ by nothing: its requests are novel input gates.
 - **State crosses execution blocks as a committed value.** A sampled proof block at the start of block k opens block k − 1's
   last row (or the registered initial state), so one unit's statement reads three commitments. `Core.Protocol`'s answer carries
   one commitment: the cross-block read and the chain live outside every subprotocol, in `check_declaration` and
@@ -180,7 +180,7 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
 - **Placement is static, B's, and names the layout.** It isn't in the advice: B's plan and store name leaves, and each
   record's placement (units to device leaves, theta to a memory leaf) names the layout's head; a leaf no entry holds yet
   is refused. `Requirement.Placement`'s `ticks` and the onsite `placement-boundary` (the circuit's external I/O on a
-  certified uplink of its unit, `NetTiming.Layout.Fits`) are missing: the certifier's view names its registered link,
+  certified uplink of its unit, `NetTiming.BoundaryGates.Fits`) are missing: the certifier's view names its registered link,
   and nothing maps a unit's I/O gates to one.
 - **Accounting is the layout's projections.** PoUW's compute, PoUS's memory by tier, the bandwidth audit's rates and the
   certifier's boundary are each `Layout.accounting`; the challenger's round reads its link's latency and theta's

@@ -13,11 +13,13 @@ import Proofs.Flock.Soundness.Discharge.Layout.Site
 import Proofs.Flock.Soundness.Discharge.Layout.OutSite
 import Proofs.Flock.Soundness.Discharge.Layout.OfRows
 import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
+import Proofs.Flock.Soundness.Discharge.Layout.KeyProgP
 import Proofs.Flock.Soundness.Discharge.Layout.OutShape
 import Proofs.Flock.Soundness.Discharge.Layout.OutPin
 import Proofs.Flock.Soundness.Discharge.Layout.RowEnc
 import Proofs.Flock.Soundness.Discharge.Layout.KeysRow
 import Proofs.Flock.Soundness.Discharge.Layout.Outs
+import Proofs.Flock.Soundness.Discharge.Layout.OutsP
 import Proofs.Flock.Soundness.Discharge.Layout.Keyed
 import Proofs.Flock.Soundness.Discharge.Layout.Tables
 import Proofs.Flock.Soundness.Discharge.Layout.Scope
@@ -54,6 +56,8 @@ from the decoder's places and the executable's regions:
   with rows the message-keyed inputs (`keyRowOf`): Δ's copies (`keyProg_copies`), the rows' `b ‖ c`
   (`keyProg_bcPinned`), the single gates' bits (`keyProg_valPinned`), and `lay` and `rs` there (`keyLayout`,
   `keyRows`);
+* `KeyProgP`: the gates of `Placed.keyProgP` (keys with public inputs): row bits (`keyRowOfP`), public gates
+  (`keyPubOf`), the registration's bit at a single gate (`keyGateP`), and `single_gateP` under `KeysRowP`;
 * `OutShape`: the shape region "out" packs, from the verifier's checks in an untyped circuit whose unit returns the
   outputs (`outShape_of_parse`, by `Net.ofRows`'s `built_out` and `HmRow.check`'s `check_out`);
 * `OutPin`: the units' committed gates at those places hold the population's returned outputs (`keyProg_hout`, with the
@@ -67,6 +71,7 @@ from the decoder's places and the executable's regions:
 * `Outs`: the returned outputs' bits as the program's outputs (`outsOf`, with `OutsOut` by `outsOut_outsOf`: a unit's
   committed gate it computes is an output, `computed_committed_output`, since no unit reads a gate another computes,
   `keyProg_reads`);
+* `OutsP`: `Outs` at `Placed.keyProgP` (`OutsOutP`, `outsOfP`, `outsOutP_outsOfP`, `keyProgP_reads`);
 * `Keyed`: `lay` and `rs` at the production program's places (`keyedLayout`, `keyedRows`, `keyedRowsOfParse`,
   `keyedRowsOuts` at `outs := outsOf`), with [e2e-const]'s and [e2e-zero]'s constant and zero gates; `rs.Computes`
   there is [e2e-hm]'s `Discharge.Hm.keyedRowsOuts_computes`;

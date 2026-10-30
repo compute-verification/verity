@@ -1,5 +1,5 @@
 """verifier.py as the host's runner starts it, with the prover in this process: given the gate's command line, it runs one paced
-session over the remote audit's in-process harness (`benchmarks/remote_session/tests/test_session.py`'s `run`, a CPU prover on
+session over PoUB's in-process harness (`benchmarks/remote_session/tests/test_session.py`'s `run`, a CPU prover on
 a pass clock, the Lean verdict) with its transcript in `--transcript`, and leaves `--out` as verifier.py does: `verifier.json`
 (its sessions, registration and registry), `challenger/`, the registry at `--registry`. It prints the listening line the gate's
 `status` reads."""

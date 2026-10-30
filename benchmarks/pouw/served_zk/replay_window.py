@@ -20,7 +20,7 @@ entries are the 336-byte entry rows:
   the root with an entry's salt, a sibling or the index tampered, each failing its path; and a unit past the padded count,
   in no entry.
 
-A window of an older entry layout (the 6 Oct runs) gets the registered items only.  Every input goes to both sides, which
+A window of an older entry layout gets the registered items only.  Every input goes to both sides, which
 must give the same outcome, reason included; a check holds when the Python's outcome is the recorded value.
 """
 from __future__ import annotations

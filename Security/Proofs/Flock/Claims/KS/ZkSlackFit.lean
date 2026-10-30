@@ -140,7 +140,7 @@ theorem m1_slackNums : ∀ m : Fin 11, (Accounting.m1Schedule (m.val + 25)).leve
 last round, whatever the rounds `K`: `|IZW| ≤ 19`, the joined weights at most `2^41` times the room, and
 `4·√(19·8·2^{-128})·2^41 + 2·19·8·2^{-128}·2^41 ≤ 1`. -/
 theorem zk_slackFitW {K n : ℕ} (st : ℕ → Stmt) (hm : ∀ j < n, 25 ≤ (st j).m ∧ (st j).m ≤ 35)
-    (sch : ℕ → Accounting.Schedule) (hsch : ∀ j < n, sch j = Accounting.m1Schedule (st j).m) (Np : ℕ → ℕ)
+    (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < n, sch j = Accounting.m1Schedule (st j).m) (Np : ℕ → ℕ)
     (rd : (j : ℕ) → Claims.Flock.IZW (sch j).levels.length → Fin K) (hj : ∀ j < n, ∀ i, (rd j i).val + 1 < K)
     {δ : ℕ → ℝ} (hδ0 : ∀ t, 0 ≤ δ t) (hδ : ∀ t, t + 1 < K → δ t ≤ ((2 : ℝ) ^ 128)⁻¹) (hδ1 : ∀ t, δ t ≤ 1) :
     Claims.Flock.SlackFitW n sch Np rd δ := by
@@ -186,7 +186,7 @@ theorem δN_GF128_le {K : ℕ} {n : Fin K → ℕ} {t : ℕ} (hn : ∀ ht : t < 
 /-- **The slack fits the masked room at the coupling's chances** `FnFork.δN GF128 65536 n`, at C-Flock ZK's schedules,
 every fork before the last round, where every revealed length before the last round is positive. -/
 theorem zk_slackFitW_δN {K n : ℕ} (st : ℕ → Stmt) (hm : ∀ j < n, 25 ≤ (st j).m ∧ (st j).m ≤ 35)
-    (sch : ℕ → Accounting.Schedule) (hsch : ∀ j < n, sch j = Accounting.m1Schedule (st j).m) (Np : ℕ → ℕ)
+    (sch : ℕ → FlockSoundness.Accounting.Schedule) (hsch : ∀ j < n, sch j = Accounting.m1Schedule (st j).m) (Np : ℕ → ℕ)
     (rd : (j : ℕ) → Claims.Flock.IZW (sch j).levels.length → Fin K) (hj : ∀ j < n, ∀ i, (rd j i).val + 1 < K)
     (c : Fin K → ℕ) (hc : ∀ t : Fin K, t.val + 1 < K → 1 ≤ c t) :
     Claims.Flock.SlackFitW n sch Np rd (Claims.Flock.FnFork.δN FlockLevel3.GF128 65536 c) :=

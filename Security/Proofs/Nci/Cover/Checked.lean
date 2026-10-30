@@ -25,7 +25,7 @@ theorem coverTrained {j out : Json} (hev : evaluate j = .ok out) : Properties.Co
   fun i P d hpar hdec hL hθ hc b α₀ c M _ _ _ _ Mb A s D w₀ hb hB hH hU hk hw hs hα₀ =>
     Nci.Cover.SecurityProofs.CoverTraining i.gamma _ b α₀ c d M Mb A s D w₀ hb
       (div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _))
-      (Witnesses j out hev i P d hpar hdec hL hθ hc) hB hH hU hk hw hs hα₀
+      (Witnesses j out hev i P d hpar hdec hL hθ hc).1 hB hH hU hk hw hs hα₀
 
 /-- `Baseline.evaluate`'s verdict is `Desc.evaluate`'s: θ's provenance is checked after it, and the verdict returned
 unchanged. -/

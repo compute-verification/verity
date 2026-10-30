@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # The fixture of C-Flock's forged-proof negatives (forged_proofs.py), on a CPU machine, on hidden_zk's builds (its job.sh,
 # sourced: C-Flock's flock-circuit and the Lean flock-verify, cached under $FP_CACHE). From a clone:
-#   research run --on auto --source . --as LANE --project verity --cwd clone --cpus 8 --mem-gb 32 \
-#     --env FP_CACHE=/workspace/research/cache/pouw-hidden-zk -- bash benchmarks/one_stage/forged_proofs.sh
+#   FP_CACHE=/workspace/research/cache/pouw-hidden-zk bash benchmarks/one_stage/forged_proofs.sh
+#   (a job run from a clone of the tree, 8 CPUs, 32 GB)
 # Kept in $OUT: fixture/ (the tree to put as fixture/v1), forged-proofs.log and work/'s logs and records (never an inst file
 # nor a circuit).
 set -uo pipefail

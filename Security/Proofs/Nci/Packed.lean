@@ -179,7 +179,7 @@ end Lemmas
 open Classical in
 /-- **What an IU reads**, on a packed chain: `R` reads at least `b_w p_R + b_a (d τ_R + Q_R)` bits under
 `Assumptions.PackedActivationsIncompressible`. -/
-theorem iu_reads_packed {k : ℕ} (D : Declaration) (c : PackedChain D.D k) (Γ : ℕ) (K b_w b_a : ℝ) (d : ℕ)
+theorem iu_reads_packed {k : ℕ} (D : RegisteredCircuit) (c : PackedChain D.D k) (Γ : ℕ) (K b_w b_a : ℝ) (d : ℕ)
     (hd : ∀ ℓ, d ≤ c.d ℓ) (hb_a : 0 ≤ b_a) (h : Assumptions.PackedActivationsIncompressible D c Γ K b_w b_a)
     (R : Finset (Fin D.D.N)) (hR : R ⊆ D.D.computed) (hΓ : D.D.size R ≤ Γ) (hK : (novelReads D R : ℝ) ≤ K) :
     b_w * (c.weightsUsed R).card +
@@ -206,12 +206,12 @@ theorem iu_reads_packed {k : ℕ} (D : Declaration) (c : PackedChain D.D k) (Γ 
 open Classical in
 /-- **The partial-sum law over the pieces, with a budget for the dark gates**, on a packed chain:
 `max (min c₁ c₂) (μ b_a / Λ) · G_S ≤ α size(d) + (1 − μ) B`, with `G_S` counting products, whatever `k`. -/
-theorem matMulOn_of_counts_packed {k Γ : ℕ} {α K b_w b_a μ B : ℝ} {c d : Declaration} {ch : PackedChain c.D k}
+theorem matMulOn_of_counts_packed {k Γ : ℕ} {α K b_w b_a μ B : ℝ} {c d : RegisteredCircuit} {ch : PackedChain c.D k}
     {dd emax : ℕ} {M : PartialContainment c d} {n : ℕ} {P : Partition d.D n} (hα : 0 ≤ α) (hK : 0 < K)
     (hw : 0 < b_w) (ha : 0 < b_a) (hdd : 0 < dd) (hαK : α * Γ ≤ K) (hμ₀ : 0 ≤ μ) (hμ₁ : μ ≤ 1)
     (hd : ∀ ℓ, dd ≤ ch.d ℓ) (he : ∀ ℓ, ch.e ℓ ≤ emax)
     (hP : ∀ u, d.D.size (P.gates u) ≤ Γ ∧ (novelReads d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u))
-    (hB : Assumptions.BaselineRegistered c d M) (hA : Assumptions.PackedActivationsIncompressible c ch Γ K b_w b_a)
+    (hB : Assumptions.ThetaRegistered c d M) (hA : Assumptions.PackedActivationsIncompressible c ch Γ K b_w b_a)
     (h₂ : ∑ u, (b_w * ((ch.weightsUsed (piece M P u)).card : ℝ) +
         b_a / 2 * (outputsOtherPacked ch (piece M P u)).card) ≤ ∑ u, (novelReads d (P.gates u) : ℝ) + B) :
     max (min ((1 + √μ) ^ 2 * (b_w * b_a * dd / K)) (√2 * (1 + √μ) * √(1 - μ) * (b_a * √(b_w / K))))
@@ -281,7 +281,7 @@ theorem toPacked_linkedWhole {D : Circuit} (c : Chain D) (R : Finset (Fin D.N)) 
   obtain ⟨_ | m, hm⟩ := ℓ <;> first | exact Iff.rfl | simp [PackedChain.LinkedWhole, Chain.LinkedWhole]
 
 /-- At `k = 1` the packed assumption is the per-product one. -/
-theorem packedActivationsIncompressible_toPacked {D : Declaration} {c : Chain D.D} {Γ : ℕ} {K b_w b_a : ℝ} :
+theorem packedActivationsIncompressible_toPacked {D : RegisteredCircuit} {c : Chain D.D} {Γ : ℕ} {K b_w b_a : ℝ} :
     Assumptions.PackedActivationsIncompressible D c.toPacked Γ K b_w b_a ↔
       Assumptions.ActivationsIncompressible D c Γ K b_w b_a := by
   first

@@ -126,9 +126,9 @@ theorem complies : Complies 1 2 tcDecl := by
 gate, meets every hypothesis of `Nci.Cover.Guarantees.CoverTrainingChained` at `Γ = 1`, `α = 2`, `c_w = 1/2`,
 `c_a = 1`, `D = 5` and `s = 3`, with a chained multiplication block. -/
 theorem coverTrainingChained_nonvacuous :
-    ∃ (Γ : ℕ) (α : ℝ) (c d : Declaration) (M : Containment c.D d.D) (B : Nci.Covering.MulBlocks (bitDecl c)) (s D w₀ : ℕ)
+    ∃ (Γ : ℕ) (α : ℝ) (c d : RegisteredCircuit) (M : Containment c.D d.D) (B : Nci.Covering.MulBlocks (bitDecl c)) (s D w₀ : ℕ)
       (cw ca : ℝ),
-      0 ≤ α ∧ Complies Γ α d ∧ Assumptions.BaselineRegistered c d (PartialContainment.ofContainment M) ∧
+      0 ≤ α ∧ Complies Γ α d ∧ Assumptions.ThetaRegistered c d (PartialContainment.ofContainment M) ∧
       Assumptions.ParameterHardAt (bitDecl c) B s cw ∧ α * Γ < cw * D ∧ 0 < ca ∧ (∀ g, c.D.w g ≤ w₀) ∧
       w₀ * Γ + α * Γ + c.D.width c.θ ≤ s ∧ cw ≠ ca ∧ (Assumptions.chainedBlocksAt (bitDecl c) B D ca).Nonempty :=
   ⟨1, 2, tcDecl, tcDecl, selfContainment, bBlocks, 3, 5, 1, 1 / 2, 1, by norm_num, complies,

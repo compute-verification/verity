@@ -2,6 +2,8 @@ import Definitions.Core
 import Definitions.Core.Accel
 import Definitions.Core.Assumptions.Accel
 import Definitions.Core.Blocks
+import Definitions.Core.DeviceFigures
+import Definitions.Core.Site
 import Definitions.Core.Period
 import Definitions.Nci
 import Definitions.Nci.Support
@@ -10,6 +12,7 @@ import Definitions.Nci.Transfers
 import Definitions.Nci.Dark
 import Definitions.Nci.Packed
 import Definitions.Nci.Covering
+import Definitions.Nci.Capability
 import Definitions.Pous
 import Definitions.Pous.Guarantees.StreamedWipeFamily
 import Definitions.Pous.Guarantees.StreamedWipeReads
