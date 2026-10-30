@@ -35,6 +35,14 @@ links, and every link's proxy counts each of its buckets against the open forwar
 (`active.Proxy(calls=…)`), so a forward's count is over all of the node's boundary links. The prover registers on the
 control channel (`serve_calls`, `CallsClient`): an A root is answered with the call's release, and a words root with
 its forward's verdict.
+
+**The hold.** The prover's frames are handed between forwards, and the next forward opens only after the next tick:
+an A root that would open a forward is held until one of the node's links has ticked its egress since the A root came
+and no link has a frame the prover handed it still to leave (`NodeCalls.waiting`). The forward opens at that tick, so
+the frames an honest prover writes after a forward's words root and before the next forward's first A root leave
+between the two and count against neither, for up to a bucket a forward. Nothing on a link is held: the grid and its
+Program are unchanged, and a frame the prover hands while a forward is open counts against it. The hold is
+completeness alone; the count and the verdicts are as above whatever it does.
 """
 
 from __future__ import annotations
@@ -438,6 +446,16 @@ class Calls:
                 for k, f in sorted(self._forwards.items())]
 
 
+@dataclass(slots=True)
+class _Held:
+    """An A root the hold holds, opened when it lifts: `opened`, the window's calls and the entropy `Calls.open` gave,
+    or `refused`."""
+    request: tuple[int, int, bytes, CallShape]
+    ticks: int
+    opened: tuple[Calls, Entropy] | None = None
+    refused: CallRefusal | None = None
+
+
 class NodeCalls:
     """A node's forwards across its PoUW windows and its boundary links, as the network certifier keeps them. PoUW
     window p's forwards (`Calls`) are the node's from p's first tick on any of the node's links (`tick`), which closes
@@ -446,7 +464,13 @@ class NodeCalls:
     is in: that is when its frames leave or enter the node. `release_bits` is the node's release at a forward's end
     (`Calls`). The control channel (`serve_calls`) and the links' ticks may run on other threads, and a lock orders
     them. A call's coins are flipped outside the lock, so no tick waits for a flip; its forward is open from its first
-    A root on, so the buckets ticked meanwhile count against it. `publish` runs under the lock and doesn't call back."""
+    A root on, so the buckets ticked meanwhile count against it. `publish` runs under the lock and doesn't call back.
+
+    The hold (the module's) reads what each link's proxy reports (`waiting`): an A root that would open a forward
+    waits until a link has reported an egress tick since it came and no link has a frame waiting, and its forward
+    opens in the report that lifts the hold, on the reporting link's thread, so that tick's bucket counts against no
+    forward and the next one's against it. A node none of whose links reports, or whose links have all ended, holds
+    nothing."""
 
     def __init__(self, cap: EgressCap, entropy: Entropy = os.urandom,
                  publish: Callable[[int, list[dict]], None] | None = None, release_bits: int = 0) -> None:
@@ -458,6 +482,38 @@ class NodeCalls:
         self._calls: Calls | None = None
         self._closed = False
         self._lock = threading.Lock()
+        self._changed = threading.Condition(self._lock)
+        self._waiting: dict[object, int] = {}
+        self._ticks = 0
+        self._held: list[_Held] = []
+
+    @property
+    def held(self) -> int:
+        """The A roots the hold holds."""
+        return len(self._held)
+
+    def waiting(self, link: object, frames: int, tick: bool = False) -> None:
+        """Link `link`'s egress for the hold: `frames`, the frames the prover handed it that have yet to leave, as its
+        proxy takes each and, with `tick`, once its egress tick has run and counted its bucket."""
+        if type(frames) is not int or frames < 0:
+            raise ValueError(f"a link's waiting frames are an integer ≥ 0, not {frames!r}")
+        with self._lock:
+            self._waiting[link] = frames
+            if tick:
+                self._ticks += 1
+            self._lift()
+
+    def ended(self, link: object) -> None:
+        """Link `link`'s proxy has stopped: the hold no longer reads it."""
+        with self._lock:
+            self._waiting.pop(link, None)
+            self._lift()
+
+    def until(self, predicate: Callable[[NodeCalls], bool]) -> None:
+        """Wait until `predicate(self)` holds, rechecked as the hold changes: for a caller that drives the links and
+        reads `held`."""
+        with self._lock:
+            self._changed.wait_for(lambda: predicate(self))
 
     def tick(self, window: int, allocation: int, frames: Sequence[int] = ()) -> None:
         """One link's bucket at its tick in PoUW window `window`, counted against the open forward (`Calls.bucket`):
@@ -474,10 +530,20 @@ class NodeCalls:
 
     def a_root(self, forward: int, call: int, root: bytes, shape: CallShape) -> bytes:
         """`Calls.a_root` in the node's window, its coins flipped outside the lock: they go out only if the window is
-        still open once they are flipped."""
+        still open once they are flipped. An A root that would open a forward waits for the hold first, and is
+        refused if the node closes meanwhile."""
         with self._lock:
             calls = self._live()
-            entropy = calls.open(forward, call, root, shape)
+            if self._waiting and calls.open_forward is None:
+                held = _Held((forward, call, root, shape), self._ticks)
+                self._held.append(held)
+                self._changed.notify_all()
+                self._changed.wait_for(lambda: held.opened is not None or held.refused is not None)
+                if held.refused is not None:
+                    raise held.refused
+                calls, entropy = held.opened
+            else:
+                entropy = calls.open(forward, call, root, shape)
         try:
             out = release(flip(shape, entropy))
         except Exception:
@@ -499,6 +565,26 @@ class NodeCalls:
             if not self._closed:
                 self._close_window()
                 self._closed = True
+                for held in self._held:
+                    held.refused = CallRefusal("the node's calls are closed")
+                self._held.clear()
+                self._changed.notify_all()
+
+    def _lift(self) -> None:
+        """Open the held A roots, in the order they came, once nothing waits and each has seen an egress tick since it
+        came (or no link reports any more)."""
+        if self._held and not any(self._waiting.values()):
+            held, self._held = self._held, []
+            for h in held:
+                if self._waiting and h.ticks == self._ticks:
+                    self._held.append(h)
+                    continue
+                try:
+                    calls = self._live()
+                    h.opened = calls, calls.open(*h.request)
+                except CallRefusal as e:
+                    h.refused = e
+        self._changed.notify_all()
 
     def _live(self) -> Calls:
         if self._closed:
@@ -556,8 +642,8 @@ async def serve_calls(node: NodeCalls, host: str, port: int) -> asyncio.Server:
     "cols", "K"}` (the root in hex) with `{"forward", "call", "release": length}` and then the release's `length` bytes,
     `{"forward", "words_root"}` with `{"forward", "verdict"}`, and what `NodeCalls` refuses, or a line that isn't a
     request, with the request's ids and `"refused": reason` (without ids for a line that names none). Each request runs
-    off the loop, so no tick waits for a flip. The channel ends at the certifier: none of its bytes reaches a boundary
-    link, and none counts. Returns the listening server: `close()` stops it."""
+    off the loop, so no tick waits for a flip or for an A root the hold holds. The channel ends at the certifier: none
+    of its bytes reaches a boundary link, and none counts. Returns the listening server: `close()` stops it."""
 
     async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
