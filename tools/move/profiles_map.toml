@@ -1,6 +1,5 @@
 # The fold half of `engine/profiles/` up to `observe/fold/profiles/`: what
-# `tools/move/layout.py --map tools/move/profiles_map.toml` moves and rewrites (the vision's M2 row for `engine/profiles/`,
-# note:20261024T0615Z-draft-verity-vllm-vision, which names `engine/profiles/` fold data).
+# `tools/move/layout.py --map tools/move/profiles_map.toml` moves and rewrites (`engine/profiles/`'s fold data).
 #
 # What moves is what builds a fold `Profile`: the derived-profile finder and `profile_for_case` (`__init__.py`),
 # `generic.build_profile`, the architecture pattern libraries (`gen_*`) and the κ base module with its golden-corpus twin.
