@@ -466,12 +466,44 @@ theorem checkOne_ok {n : Nat} {rows name : String} {v : PartVerdict} (h : checkO
 
 theorem checkForm_ok {name inner : String} {links : Option (String × Nat)} {s : Shared}
     (h : checkForm name inner links s = .ok ()) : s.Complete inner links := by
+  have some_of {α : Type} {o : Option α} (h : ¬ o.isNone = true) : o.isSome = true := by
+    cases o
+    · exact absurd rfl h
+    · rfl
   unfold checkForm at h
-  repeat' split at h
-  all_goals first | (cases h; done) | skip
-  rename_i hr hi h1 h2 h3 h4 h5 h6 h7 h8 h9 h10
-  refine ⟨by rw [hr]; simpa using hi, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
-    simp_all [Option.isNone_iff_eq_none, Option.isSome_iff_ne_none]
+  cases hr : s.recInner with
+  | none => rw [hr] at h; cases h
+  | some r =>
+    rw [hr] at h
+    dsimp only at h
+    split at h; · cases h
+    rename_i hi
+    split at h; · cases h
+    rename_i h1
+    split at h; · cases h
+    rename_i h2
+    split at h; · cases h
+    rename_i h3
+    split at h; · cases h
+    rename_i h4
+    split at h; · cases h
+    rename_i h5
+    split at h; · cases h
+    rename_i h6
+    split at h; · cases h
+    rename_i h7
+    split at h; · cases h
+    rename_i h8
+    split at h; · cases h
+    rename_i h9
+    split at h; · cases h
+    rename_i h10
+    unfold Shared.Complete
+    refine ⟨by rw [hr, Decidable.byContradiction hi], some_of h1, some_of h2, some_of h3, ?_, some_of h5, some_of h6,
+      some_of h7, some_of h8, some_of h9, Decidable.byContradiction h10⟩
+    cases e : s.innerCoins with
+    | none => rfl
+    | some _ => rw [e] at h4; exact absurd rfl h4
 
 theorem checkShared_ok {sh : Shared} {name : String} {v : PartVerdict} (h : checkShared sh name v = .ok ()) :
     v.shared = some sh := by
