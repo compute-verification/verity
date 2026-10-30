@@ -291,8 +291,9 @@ def noise_section(checks, sn, rng, Ts=(16, 64, 256), bs=(1, 8)):
     checks.check(f"the zero-data σ keeps its entropy under φ = 2³¹ − 1 ({cells} cells, T {T}: as many distinct σ as "
                  "with φ = 1)", all(distinct[(b, PHI)] >= distinct[(b, 1)] - 1 >= cells - 2 for b in (1, 8)),
                  {f"b{b} φ {p:#x}": v for (b, p), v in distinct.items()})
-    checks.check("replicating an 8-bit n across the word (φ = 0x01010101, even weight) leaves the zero-data σ at most "
-                 "2^8 values", distinct[(8, 0x01010101)] <= 256, distinct[(8, 0x01010101)])
+    checks.check("replicating an 8-bit n across the word (φ = 0x01010101, fixed by rotl 8, so σ stays byte-periodic) "
+                 "leaves the zero-data σ at most 2^8 values", distinct[(8, 0x01010101)] <= 256,
+                 distinct[(8, 0x01010101)])
     for phi in (1, PHI):
         T, b = 24, 8
         acc = rng.integers(0, 1 << 32, (16, T), dtype=np.int64)
