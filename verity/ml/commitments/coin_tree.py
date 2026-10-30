@@ -91,7 +91,9 @@ class Rules:
         self._key_int = int.from_bytes(key, "little")
         self._windows: list[int] | None = None
         self._base = hashlib.sha512(self.nonce)
-        tag = lambda name: f"verity/coin-tree/{name}/v2\0".encode()
+        def tag(name: str) -> bytes:
+            return f"verity/coin-tree/{name}/v2\0".encode()
+
         self.tail, self.chain_tag, self.round_tag, self.pad_tag = tag("tail"), tag("chain"), tag("round"), tag("pad")
         self.salt_prefix = _padded128(SALT_TAG)
         self.leaf_prefix = _padded128(LEAF_TAG, hashlib.sha512(key).digest())

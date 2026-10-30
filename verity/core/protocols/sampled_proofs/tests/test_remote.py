@@ -664,10 +664,9 @@ def _tree_server(answer):
             wire.recv()
             wire.send({"type": "commitment", "commitment": ch.commitment.to_json()})
             for kind in ("tree", "tree-open"):
-                try:
-                    wire.send(answer(kind, wire.recv()))
-                except (OSError, C.CoinError):
-                    return
+                if not a.recv(1, socket.MSG_PEEK):
+                    return  # the client hung up on a reply it refused
+                wire.send(answer(kind, wire.recv()))
 
     t = threading.Thread(target=run)
     t.start()

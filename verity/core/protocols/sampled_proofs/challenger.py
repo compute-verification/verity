@@ -881,11 +881,7 @@ def session_tree_reason(trees: dict[str, LoggedTree], record: Any) -> str | None
     t = trees.get(ct["root"]) if isinstance(ct, dict) and type(ct.get("root")) is str else None
     if t is None:
         return NO_TREE
-    try:
-        same = canonical_json_text(ct) == canonical_json_text(t.record())
-    except (TypeError, ValueError):
-        same = False
-    if not same:
+    if not _same(ct, t.record()):
         return "its coin tree is not the one the challenger's release log shows it drew under that root"
     link, streams = record.get("link"), record.get("streams")
     if not isinstance(link, dict) or not isinstance(link.get("root_b"), dict) or type(link.get("points")) is not list:
