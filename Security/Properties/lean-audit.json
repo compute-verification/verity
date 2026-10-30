@@ -58,6 +58,7 @@
   "Properties.Composition",
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
   "Properties.Accounting.JointBridge.WorkOfCreditedWords",
+  "Properties.Flock.Circuit",
   "Properties.Pous.WipeSigned",
   "Properties.Challenger"
  ],
@@ -674,6 +675,11 @@
    ],
    "except": [],
    "why": "a party's signed periods are stated over the code that checks them (Attest.Period, Lms.Hss), the memory challenger's string framing, the claims' collision finders (Claims.Finder) and the party assumptions (Accounting.Assumptions.Parties), never over a proof"
+  },
+  "Properties.Flock": {
+   "imports": ["Mathlib", "Definitions.Flock", "Flock", "Properties.Flock"],
+   "except": [],
+   "why": "the circuit a parsed C-Flock circuit file is built into (`Placed.keyProg`, `Layout.outsOf`, `Built`) is defined over the verifier's own types and checks (`Flock.Circuit`, `Flock.Net`) and C-Flock's circuit vocabulary (`Definitions.Flock.Circuit`), never a proof"
   }
  },
  "reads_exempt": {
