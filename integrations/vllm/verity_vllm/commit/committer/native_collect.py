@@ -1035,8 +1035,9 @@ class NativeCollectCommitter(NativeHostCommitter):
             state["leaves"] = []
             n = int(lv.shape[0])
             dsts = [views[L][first >> L:(first >> L) + (n >> L)] for L in range(n_levels)] if copy is not None else []
-            state["tops"].append(self._hasher.rows_tree_window(state["rs"], lv, n_levels, first, side.cuda_stream, dsts,
-                                                               copy.cuda_stream if copy is not None else 0))
+            # copy_stream_ptr goes only with a copy stream: 0 is the binding's default, and a hasher may take the six arguments alone
+            on_copy = (copy.cuda_stream,) if copy is not None and copy.cuda_stream else ()
+            state["tops"].append(self._hasher.rows_tree_window(state["rs"], lv, n_levels, first, side.cuda_stream, dsts, *on_copy))
         if copy is not None:
             state["copied"] = torch.cuda.Event()
             state["copied"].record(copy)
