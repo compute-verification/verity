@@ -1,7 +1,7 @@
 """certifier_piece: the front sends one group of the window circuit's class through the gate's scan rehearsal and keeps
 the gate's fetch, witness and all, 0700 under the serve dir's private/certifier, publishing only the bundle less witness/
-and its outcome. The piece, on a serve dir whose window was the warden's synthetic run's certified requests (the run
-`test_warden_chain.gate_run` publishes in the gate's layout), runs as `served_verdicts.py pieces` runs it and writes
+and its outcome. The piece, on a serve dir whose window was the network certifier's synthetic run's certified requests
+(the run `test_warden_chain.gate_run` publishes in the gate's layout), runs as `served_verdicts.py pieces` runs it and writes
 `network-period`'s answer only when the chain accepted and the window's requests are certified ones in the scan's
 link-window: the period mirror's certifier/v0 accept (`period_case`), its profile with the placement (the certifier on
 the kept gate's host, the checks on the prover's node), then goes through `served_verdicts.py record` into the window
@@ -54,7 +54,8 @@ from verity_e2e_demo import block_record as BR  # noqa: E402
 PERIOD_CASE = ROOT / "verity" / "core" / "protocols" / "network" / "tests" / "period_case.py"
 SCHEMA = json.loads((Path(BR.__file__).parent / "schemas" / "block-record.v1.schema.json").read_text())
 K = 3
-#: the gate's end of a rehearsal its check passed, and of one whose every request was late past the warden's D·τ
+#: the gate's end of a rehearsal its check passed, and of one whose every request was late past the network certifier's
+#: D·τ
 PASSED = {"run": RUN, "rc": 0, "ended": "the rehearsal ended", "verdict": {"accepted": True, "problems": 0}}
 LATE = {"run": RUN, "rc": 1, "ended": "the rehearsal exited 1",
         "verdict": {"accepted": False, "problems": 8, "requests": 4, "ended": 0, "failed": ["fail"]}}
@@ -77,8 +78,8 @@ def period():
 
 @pytest.fixture(scope="module")
 def warden(tmp_path_factory):
-    """The synthetic warden run, its fetch (``late``: the same run, its rehearsal failed late), and the execution phase
-    holding the most whole certified requests."""
+    """The synthetic network certifier run, its fetch (``late``: the same run, its rehearsal failed late), and the
+    execution phase holding the most whole certified requests."""
     d = tmp_path_factory.mktemp("warden")
     run = gate_run(d)
     io, T = WC.io(run), WC.deployment(run)[1].window
@@ -104,8 +105,8 @@ def _write(path: Path, rows: list[dict]) -> None:
 
 def _serve_dir(d: Path, warden: dict, records: list[dict] | None = None, kept: bool = True,
                fetch: str = "fetch") -> Path:
-    """A serve dir whose window K served ``records`` (the warden's, by default those of its execution phase) and whose
-    gate fetch (``warden[fetch]``) the front kept."""
+    """A serve dir whose window K served ``records`` (the network certifier's, by default those of its execution phase)
+    and whose gate fetch (``warden[fetch]``) the front kept."""
     records = warden["records"] if records is None else records
     d.mkdir(parents=True)
     reqs = [{"engine_id": f"e{i}", "user": r["user"], "prompt_ids": r["prompt"], "streamed_ids": r["output"],
@@ -389,7 +390,7 @@ def test_a_chain_file_holding_a_witness_value_is_moved_out_of_dir(tmp_path, ward
 
 def test_a_rehearsal_the_gates_check_failed_late_leaves_the_certifier_missing_not_rejected(tmp_path, warden, capsys,
                                                                                           monkeypatch):
-    """Each request late past the warden's D·τ: the gate's check fails the rehearsal, and the served answers, longer
+    """Each request late past the network certifier's D·τ: the gate's check fails the rehearsal, and the served answers, longer
     than what the warden passed, don't bind to its certified ones. That is the endpoint's lateness, not the protocol
     rejecting a served answer, so the piece refuses before any chain and the certifier is missing, as for a busy gate;
     the same window on a rehearsal the check passed is a reject."""

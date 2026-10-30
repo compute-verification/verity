@@ -1,7 +1,7 @@
-"""The ingress-ids tie (`io_ids`, a prototype on a fake upstream Commit and the warden's own ingress): `IoTieRequest`
-with the prompt ids' values held to the Commit's `c00.input/ids` rows, so the model computes on the prompt the user
-sent (IoTieRequest counts each request's prompt fields and checks each is a u32, but ties the ids' values to
-nothing). Like IoTieRequest it is one proof block a bucket row of the warden's registered ingress
+"""The ingress-ids tie (`io_ids`, a prototype on a fake upstream Commit and the network certifier's own ingress):
+`IoTieRequest` with the prompt ids' values held to the Commit's `c00.input/ids` rows, so the model computes on the
+prompt the user sent (IoTieRequest counts each request's prompt fields and checks each is a u32, but ties the ids'
+values to nothing). Like IoTieRequest it is one proof block a bucket row of the network certifier's registered ingress
 (`warden_rows.bucket_port`).
 
 **The Commit side** (the fake upstream's layout, what the served path's Commit exposes): one `hm96-sha512/row/v2` row a
@@ -12,19 +12,19 @@ reads (`port_reads`, the egress port's `io_tie.port_reads` over `INPUT_IDS`), so
 
 **The map** (`bucket_map`, the verifier's, public in the named gap; at the target under the advice's hiding root).
 The bucket's prompt fields in scan order are its lanes': lane by lane, connection q's positions from the lane's
-carry-in fields to its carry-out's, q advice request i's where q = order[i] + 1; which cells hold them is the warden's
-timing. Field f is position p of request i, and its class is that of the position whose computation i's KV holds
-there, its root: (i, p), or for a prefix-cache hit (p below i's hit) its source's root at p, so a cached position
+carry-in fields to its carry-out's, q advice request i's where q = order[i] + 1; which cells hold them is the network
+certifier's timing. Field f is position p of request i, and its class is that of the position whose computation i's KV
+holds there, its root: (i, p), or for a prefix-cache hit (p below i's hit) its source's root at p, so a cached position
 shares a class with the computation it reads. `keys[f]` is field f's class, numbered from 0 in order of first
 appearance, the sink 2^CB − 1 past the bucket's fields. The opened steps are every step with a token whose root is a
 class of the bucket, and `ekeys[e]` is opened entry e's class, or the sink. The verifier refuses an advice whose class
 has no computation in any step.
 
 **What 1 means** (`reference`): every read row opens at its step under the Commit's root (the verifier's registered
-reads, outside the proof block, as the bucket row's under the warden's; here `reads_open`), and the proof block is 1
-(`unit_reference`): IoTieRequest's output on the row and the lanes, and the bucket's fields (`scan`) and the read
-entries hold one value a class, each class with a field. So every computation of a prompt position of the bucket, and
-every KV read in its place, is the id the user sent there.
+reads, outside the proof block, as the bucket row's under the network certifier's; here `reads_open`), and the proof
+block is 1 (`unit_reference`): IoTieRequest's output on the row and the lanes, and the bucket's fields (`scan`) and the
+read entries hold one value a class, each class with a field. So every computation of a prompt position of the bucket,
+and every KV read in its place, is the id the user sent there.
 
 **The proof block** (`IoTieRequestIds{B, L, R, P, S}`) is IoTieRequest's scan, lane by lane, plus:
 - each request cell's slots (`IoTieIdsSlots{B}`): slot k is a field when the frame's count of fields is above k, its

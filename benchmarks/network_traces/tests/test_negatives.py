@@ -9,8 +9,8 @@ only the I/O tie (pending) reads. The advice's tamperings run on I1 v0 (the advi
 importable, a stand-in of their fields until then): each changes exactly what its check reads and leaves the advice
 valid under v0's schedule rules (`_check`; the real classes refuse invalid advice on construction). The Commit's runs on
 a stand-in of I3 as drafted. The I/O tie's (`io_tie`, when importable) run on a fake upstream's cells and
-Commit port of the advice, under the map the verifier computes from it; `frame` also runs on the warden's own committed
-cells (`warden_rows`, when importable), by the verifier's registered read."""
+Commit port of the advice, under the map the verifier computes from it; `frame` also runs on the network certifier's own
+committed cells (`warden_rows`, when importable), by the verifier's registered read."""
 
 from __future__ import annotations
 
@@ -661,13 +661,13 @@ def test_the_ties_view_of_the_advice_is_each_kept_outputs_step_row_request_index
 
 def test_the_io_tie_refuses_each_negative_it_reads_by_its_part():
     """`io_tie`'s reference (`io_tie.reference_parts`, skipped until it's importable) on a fake upstream's cells and
-    Commit port of the advice served through a warden of r = 2 slots a connection (r0's last output released at
-    bucket 4, the warden's, not 5), one shape for every advice: the honest window passes; the changed cell under the
-    kept root fails the cells' root, the changed port id under the Commit's kept root the port's; a certified cell of
-    another id, a dropped cell, and the map of a length or missing advice negative fail the content; an extra
-    request, which no connection carries, and a release the warden didn't make fail the map; start and chunk, whose
-    outputs and buckets are honest's, pass, leaving them to the step proof block. Two lanes of r = 2 slots hold r0 and
-    r1 live together; one lane can't."""
+    Commit port of the advice served through a network certifier of r = 2 slots a connection (r0's last output released
+    at bucket 4, the network certifier's, not 5), one shape for every advice: the honest window passes; the changed cell
+    under the kept root fails the cells' root, the changed port id under the Commit's kept root the port's; a certified
+    cell of another id, a dropped cell, and the map of a length or missing advice negative fail the content; an extra
+    request, which no connection carries, and a release the network certifier didn't make fail the map; start and chunk,
+    whose outputs and buckets are honest's, pass, leaving them to the step proof block. Two lanes of r = 2 slots hold r0
+    and r1 live together; one lane can't."""
     pytest.importorskip(NG.IO_TIE_MODULE)
     rows = NG.tie_suite(_advice(), IDS, T=8)
     assert rows["honest"]["ok"] and rows["honest"]["shape"] == {"B": 256, "T": 8, "R": 4, "P": 3, "S": 3, "DS": 3,
@@ -686,7 +686,8 @@ def test_a_chunk_split_that_moves_outputs_to_later_steps_is_refused_by_the_ties_
     """With no chunked prefill, chunk splits a prefill row in two, so every later step moves one on: the map the
     verifier computes from that advice names port entries of other steps than the Commit sampled each output in, and the
     content refuses it; a map the verifier can't compute (a request no connection carries) refuses every window, by
-    `map`, and an advice the warden can't serve in R slots (two connections live in one lane) has no tie at all."""
+    `map`, and an advice the network certifier can't serve in R slots (two connections live in one lane) has no tie at
+    all."""
     pytest.importorskip(NG.IO_TIE_MODULE)
     a = _advice([[(0, "prefill", 0, 5), (1, "prefill", 0, 2)], [(0, "decode", 5, 1), (1, "decode", 2, 1)],
                  [(0, "decode", 6, 1)]])
@@ -792,9 +793,9 @@ def test_a_changed_byte_of_a_wardens_committed_cell_doesnt_read_under_its_root()
 
 def test_frame_on_a_warden_run_reads_its_data_cells_row_and_refuses_the_changed_byte(tmp_path):
     """`warden_frame` on a warden-serve run driven tick by tick (`test_warden_serve._run`): its egress registration
-    (v2) is read under the warden's key and the schedule, its bucket rows and signed wiring are committed under the
-    run's salts to the registered head, and its first data cell, at its bucket's row and slot, reads honest and not
-    with a payload byte changed; a run that kept no salts is not applicable."""
+    (v2) is read under the network certifier's key and the schedule, its bucket rows and signed wiring are committed
+    under the run's salts to the registered head, and its first data cell, at its bucket's row and slot, reads honest
+    and not with a payload byte changed; a run that kept no salts is not applicable."""
     pytest.importorskip(NG.WARDEN_ROWS_MODULE)
     sys.path.insert(0, str(HERE / "tests"))
     import test_warden_serve as tws
