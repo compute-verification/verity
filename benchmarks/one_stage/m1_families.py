@@ -174,8 +174,7 @@ def main() -> int:
     from verity_vllm.pipeline import serving_rows as SRW
     from verity_vllm.pipeline.tp import rank_replay as RR
     from verity_vllm.pipeline.tp import serving_rows as TS
-    from verity_vllm.pipeline.workload_file import workload_file
-    from verity_vllm.records.workload import served
+    from verity_vllm.pipeline.workload_file import served, workload_file
 
     t0 = time.time()
     rec = TS.record(a.commit)

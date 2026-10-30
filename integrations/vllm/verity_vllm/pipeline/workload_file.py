@@ -1,14 +1,16 @@
 """`verity-vllm workload-file ROW_OR_PATH...`: each workload made present and checked (`config.workload_file`: fetched by its art id
 when absent, refused unless its SHA-256 is the one its directory's ``SHA256SUMS`` lists), its path printed, one a line.  A row id is
 found as a row finds it (`config.row_file`); a ``.json`` path is taken as it is.  The shell scripts that read a workload themselves
-run it first, and code outside the integration reads one through this module's ``workload_file``."""
+run it first, and code outside the integration reads one through this module's ``workload_file``, and checks it is the one a
+record served with ``served`` (its SHA-512 against the record's ``workload_sha512``)."""
 from __future__ import annotations
 
 from dataclasses import dataclass
 
 from verity_vllm.config import option, row_file, workload_file
+from verity_vllm.records.workload import served
 
-__all__ = ["workload_file"]
+__all__ = ["workload_file", "served"]
 
 
 @dataclass(frozen=True)
