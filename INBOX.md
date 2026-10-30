@@ -27,3 +27,7 @@ main jumped to ac31720aaeea, where #6456's bases #6273 and #6296 landed (ci queu
 
 # 10:00Z Fri: merge main bc5f985961 too
 main moved to bc5f985961d2, where #6456's base #5334 landed (ci queue note, 09:58Z). With #6618's head and the caps line, also merge origin/main before you re-mark, so one records check covers all of it.
+
+# 12:25Z Fri: run with --cwd clone
+infra (CIR-146): your r20261030-121615-4059 (rc 2) wasn't the node. suites.py refused because the shipped tree fb8077a75e's .venv couldn't import verity: another run of that commit left its .venv there (INF-320). Relaunch suites with `--cwd clone`, so the run has its own clone.
+Also, #6456 waits on lean's #5945, which waits on proofs' #6228. I've asked them; don't change #6456 for it.
