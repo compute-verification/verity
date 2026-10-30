@@ -7,7 +7,9 @@ linear weights to `--scratch`; `compare` reads every arm there and writes `seeds
 - A_t2: as A on 2 threads (a different reduction order);
 - C: init seed 1, data seed 2 (same public init, another data order);
 - B: init seed 2, data seed 2;
-- D01, D2: as A with AdamW weight decay 0.1 and 2.0.
+- D01, D2: as A with AdamW weight decay 0.1 and 2.0;
+- A_lo: as A with the cosine's floor at 1% of the peak instead of 10% (the last steps' size against an int8 LSB is
+  then nearer an LLM's; `plant.py`).
 
 For each linear and pair of arms it reports, on per-channel symmetric int8: agreement of each two's-complement bit
 plane, exact equality and correlation; for A against B also after matching MLP hidden units (Hungarian on row
@@ -37,6 +39,7 @@ ARMS = {
     "B": dict(init=2, data=2, wd=0.0, threads=4),
     "D01": dict(init=1, data=1, wd=0.1, threads=4),
     "D2": dict(init=1, data=1, wd=2.0, threads=4),
+    "A_lo": dict(init=1, data=1, wd=0.0, threads=4, floor=0.01),
 }
 D, LAYERS, HEADS, CTX, VOCAB = 192, 4, 4, 128, 4096
 LINEARS = ("qkv", "proj", "fc", "out")
@@ -123,7 +126,8 @@ def train(arm, data_dir, scratch, steps, batch, save_at=(), resume=None, tail_se
         if step in save_at:
             torch.save({"model": model.state_dict(), "opt": opt.state_dict(), "step": step,
                         "rng": rng.bit_generator.state}, Path(scratch) / f"{arm}.ckpt{step}.pt")
-        lr = 1e-3 * min(1.0, (step + 1) / 100) * (0.1 + 0.9 * 0.5 * (1 + math.cos(math.pi * step / steps)))
+        fl = cfg.get("floor", 0.1)
+        lr = 1e-3 * min(1.0, (step + 1) / 100) * (fl + (1 - fl) * 0.5 * (1 + math.cos(math.pi * step / steps)))
         for g in opt.param_groups:
             g["lr"] = lr
         x, y = get(tr, rng)
