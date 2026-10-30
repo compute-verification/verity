@@ -69,6 +69,7 @@ import Proofs.Flock.Recursive.KS
 import Proofs.Flock.Recursive.KSV
 import Proofs.Flock.Recursive.KSDeployed
 import Proofs.Flock.Recursive.KSProved
+import Proofs.Flock.Recursive.KSLinked
 import Proofs.Flock.Claims.Recursion.DeployedCounts
 import Proofs.Flock.Recursive.InnerRows
 /-! The recursive audit: its model and soundness (`Defs` to `Stage`, with `ZkReg/`), hidden unit circuits' class,
