@@ -21,7 +21,7 @@ files = ["verity/core/protocols/certifier/active.py", "verity/core/devices/certi
 
 # a uniform sample's hypotheses, satisfiable
 [[words_in]]
-files = ["Security/Proofs/NetworkCertifier/Horizon.lean"]
+files = ["Security/Proofs/NetworkCertifier/Pooled.lean"]
 [words_in.words]
 "drawUniform_val" = "sampleUniform_val"
 
