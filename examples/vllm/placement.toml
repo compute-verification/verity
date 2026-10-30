@@ -31,9 +31,12 @@ NORM_TAP_SO = "/workspace/research/vllm-composed-h200int8/norm_tap/build/verity_
 # research user; H1_PEER the node); `--env MAIN_SHA=SHA` also holds the gate's pins to main's first-parent line from SHA.
 # The sampled proofs' coins are the Lean verifier's own unless PP_CHALLENGER names the live challenger
 # (`--env PP_CHALLENGER=gate:USER@HOST` with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY).
+# A demo samples two of H1's proof blocks (H1_DRAW_K, the period's committed sample size): it shows the code works, and
+# what the theorems give is reported apart, at stated operating points. A run without it gets `pouw_h1_challenger.draw_k`'s
+# sample size, set for epsilon 1/1000 at delta 2^-40.
 node = "vy-dc-h200"
 research = ["--cwd", "clone", "--timeout", "6h"]
-env = { H1_GATE = "ssh -i ~/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84", H1_PEER = "vy-dc-h200" }
+env = { H1_GATE = "ssh -i ~/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84", H1_PEER = "vy-dc-h200", H1_DRAW_K = "2" }
 
 [run.commit]
 # once per workload: its Build, Match and Commit with the sealed replay bundle (a GPU leased only for the Match capture and the
