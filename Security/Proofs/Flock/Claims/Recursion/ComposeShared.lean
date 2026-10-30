@@ -35,7 +35,7 @@ structure RecShared where
   innerStatementCoins : Option Bool
   innerTables : Option (List (String × ByteArray))
   innerDraw : Option ByteArray
-  links : Option (ByteArray × ℕ)
+  links : Option (ByteArray × Nat)
 
 /-- Every file of it. -/
 def RecShared.files (S : RecShared) : List ByteArray :=
@@ -114,7 +114,7 @@ theorem map_tables_eq : ∀ {t t' : List (String × ByteArray)},
     rw [hn, hab, map_tables_eq (fun x hx y hy => hinj x (List.mem_cons_of_mem _ hx) y (List.mem_cons_of_mem _ hy)) ht]
 
 /-- **The link table as `rec_shared` names it is the table**: its root's hex is the root. -/
-theorem linksOf_inj {a b : Option (ByteArray × ℕ)} (h : RecCompose.linksOf a = RecCompose.linksOf b) : a = b := by
+theorem linksOf_inj {a b : Option (ByteArray × Nat)} (h : RecCompose.linksOf a = RecCompose.linksOf b) : a = b := by
   cases a with
   | none => cases b with
     | none => rfl
@@ -169,7 +169,7 @@ theorem shared_eq {S T : RecShared} (hinj : ∀ a ∈ S.files, ∀ b ∈ T.files
 files are distinct with one SHA-512, or there is one `RecShared` in the compiled verifier's form, at the composition's
 own inner shape, link table and rows, that every part read; one part per V* statement, each accepted at one of them
 under `--zk` without an identifier, and no two on one coin key. -/
-theorem composed_views {n : Nat} {rows inner : String} {links : Option (String × ℕ)} {vs : List PartView}
+theorem composed_views {n : Nat} {rows inner : String} {links : Option (String × Nat)} {vs : List PartView}
     (h : RecCompose.Accepts n rows inner links (vs.map PartView.verdict)) :
     Collides vs ∨ ∃ S : RecShared, S.Form ∧ S.recInner.map RecCompose.digest = some inner ∧
       RecCompose.linksOf S.links = links ∧ S.recRows.map RecCompose.digest = some rows ∧ vs.length = n ∧
