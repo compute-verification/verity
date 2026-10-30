@@ -425,8 +425,14 @@ def read(root: Path) -> dict[str, Any]:
     if fw:
         s["flock_firewall"] = fw
     steps = step_status(root)
-    return {"schema": SCHEMA, "params": params(root), "inputs": STATEMENTS, "rows": [r.to_json() for r in rows], "summary": s,
-            "steps": steps, "headline": headline(rows, s, steps)}
+    staged = json.loads(text(root / "stage.json") or "null")
+    inputs = STATEMENTS if staged is None else {**STATEMENTS, "inner": (
+        f"{staged['n']} x {staged['unit']} ({staged['subcircuit']}, m = {staged['m']}) under Q_template_instance, staged by "
+        + (f"stage.sh from served window {staged['window']['run'][:16]}'s member {staged['window']['member']}"
+           if staged.get("window") else "stage.sh from seeded draws (generated values)")
+        + ", verity/flock-circuit+plain-leaves, M0 (no --zk), FC_COINS=os, through rec_live's proxy")}
+    return {"schema": SCHEMA, "params": params(root), "inputs": inputs, "rows": [r.to_json() for r in rows], "summary": s,
+            "steps": steps, "headline": headline(rows, s, steps), **({"staged": staged} if staged else {})}
 
 
 def staged_units(p: Path) -> dict[str, dict[str, Any]]:
@@ -495,7 +501,7 @@ def negative_rows(d: Path) -> list[Row]:
 
 
 def refused(r: Row) -> None:
-    """A forged statement's outer row: refused when no run of it was accepted (the firewall stopped it before release, or
+    """A forged statement's outer row: refused when no run of it was accepted (the ZK server stopped it before release, or
     its releases were refused), the stop or the refusal as its note; `forgeries` judges an accepted one."""
     r.extra["forged"] = True
     r.extra["refused"] = r.ok is not True
@@ -639,7 +645,7 @@ def summary(rows: list[Row]) -> dict[str, Any]:
     slow = max(timed, key=med, default=None)
     whole = {r.step: med(r) for r in rows if r.stage == f"{r.step} step" and r.wall_s}
     inner = next((r for r in rows if r.stage == "inner M0"), None)
-    # the mode that proved the most statements (firewall on a tie): a mode measured on one statement is no run's path
+    # the mode that proved the most statements (ZK server on a tie): a mode measured on one statement is no run's path
     mode = max(outer, key=lambda m: (outer[m]["statements"], m == "firewall"), default=None)
     # one recursive run's path, each part as long as an auditor waits for it: the inner run, V*'s staging (the
     # vstage and vcap steps' whole walls: their statements are staged in parallel), V*'s statements proved one after
@@ -711,7 +717,10 @@ def markdown(doc: dict[str, Any]) -> str:
     verdict = ("one whole recursive run, accepted" if h.get("ok") else
                "one whole recursive run, **not accepted** (see ok and the steps' exits)" if h.get("complete") else
                "**not a whole recursive run**: some of " + ", ".join(E2E_STEPS) + " did not run")
-    lines = [f"Recursion bench: K = {p.get('K')}, N = {p.get('N')}, oprove modes {p.get('modes', '?')}, "
+    st = doc.get("staged")
+    shape = (f"{st['subcircuit']} x {st['n']} (m = {st['m']}, {'served window' if st.get('window') else 'generated values'})"
+             if st else f"K = {p.get('K')}, N = {p.get('N')}")
+    lines = [f"Recursion bench: {shape}, oprove modes {p.get('modes', '?')}, "
              + ("; ".join(f"{k}: {each(q)}" for k, q in runs.items()) if runs else each(p))
              + f". Seconds: median [min–max] (n). Verdict: {verdict}"
              + (" (merged runs)" if h.get("merged") else "") + ".", "",

@@ -1,4 +1,4 @@
-"""Figures of the overhead: what `analysis` finds, drawn. Matplotlib is imported only when a figure is drawn.
+"""Figures of the overhead: what `analysis` finds, drawn. Matplotlib is imported only when a figure is sampled.
 
 Each figure writes `<name>.png` and `<name>.json` (the numbers it plots) into an output directory, never the repository
 (`tests/test_repository.py` forbids tracked renders):
@@ -241,7 +241,7 @@ def overheads(registry: Registry, out: Path, names: Sequence[str] | None = None,
         by_status = {st: evaluate(analysis.restrict(r.scenario, st)) for st in STATUSES[:3]}
         for i, f in enumerate(r.families):
             best = f.best_attack
-            rows.append({"scenario": name, "family": f.family, "lo": f.lo, "unmonitored": r.unmonitored,
+            rows.append({"scenario": name, "family": f.family, "lo": f.lo,
                          "attack": {"argument": best.argument, "rho": best.rho} if best else None,
                          "lo_by_status": {st: by_status[st].families[i].lo for st in by_status},
                          "bounds": [{"argument": e.argument, "status": e.status, "premise": e.premise, "rho": e.rho}
@@ -270,8 +270,6 @@ def overheads(registry: Registry, out: Path, names: Sequence[str] | None = None,
 
     for y, row in enumerate(reversed(rows)):
         ax.plot(edge(row["lo"]), y, "|", ms=22, mew=3, c="k", zorder=5, label=label("the lower bound (every bound)"))
-        ax.plot(edge(row["unmonitored"]), y, "|", ms=14, mew=1.5, c="#888888", zorder=2,
-                label=label("no protocol, μ / MFU (below it: vacuous)"))
         for e in row["bounds"]:
             if not math.isnan(e["rho"]):
                 refuted = e["premise"] == "refuted"

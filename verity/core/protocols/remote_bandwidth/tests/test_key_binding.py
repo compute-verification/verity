@@ -69,7 +69,7 @@ def one_decode(block: bytes, j: int, k: codec.Key, d: bytes) -> bytes:
 
 def window(store: audit.Store, prover_store: audit.Store, passes: int = 2) -> tuple[audit.Verdict, list, list]:
     """One window of `passes` whole-store passes, every receipt drawn: the verifier's verdict on `prover_store`'s
-    openings, the draws and the passes."""
+    openings, the samples and the passes."""
     reg = store.registration
     p = Params(blocks=reg.blocks, deadline_ns=10, windows=1, samples=passes * reg.blocks, delta=1e-6, window_ns=10)
     clock = Clock()
