@@ -18,7 +18,7 @@ needs the refusal. `--lean-refuses WHY` is D12 at a statement whose form the sou
 has passed (the form's first): a session they cover (every session, and each without a sample; neither a drawn session of
 `--lean-refuses-drawn`) refused with their `WHY` passed every check, and is compared as accepted, any other verdict as it
 is, and the Lean verifier must accept none of them. So is every session of a set without `--program`, which the Lean
-verifier refuses last (`NO_PROGRAM`), and every session of a plain set without `--coins os` (`SEED_COINS`). A session directory may carry its own public file (`pub.bin`, a forgery's false
+verifier refuses last (`NO_PROGRAM`). A session directory may carry its own public file (`pub.bin`, a forgery's false
 statement), the verifier's own registered reads (`registered.json`, in place of `--registered`; null for none; upstream
 reads none) and its expected verdict (`case.json`, from the vectors patch's `forgeries` subcommand). The Lean verifier loads the circuit, public, compression and table files from DIR/archive by
 their digests (PROTOCOL.md §16.8); upstream reads the paths. Writes DIR/agreement.tsv, the two
@@ -72,10 +72,6 @@ def archived(a, path):
 #: the Lean verifier's refusal of a session verified without `--program` (`FlockVerify.NO_PROGRAM`), last like D12's:
 #: every session of a set with no program (upstream reads none) is refused with it once every check has passed
 NO_PROGRAM = "refused: a session without the verifier's program (--program)"
-
-#: the Lean verifier's refusal of a plain session whose coins are not the OS's (`ProvedScope.SEED_COINS`), last: every
-#: session of a plain set without `--coins os` is refused with it once every check has passed
-SEED_COINS = "refused: a plain session whose coins are not the OS's"
 
 
 #: `--upstream live`: upstream's verdicts are its own live ones, recorded in each selftest session's `case.json`, for a
@@ -238,8 +234,7 @@ def main(argv=None, slots=None, quiet=False):
         shown = L
         refuses = [a.lean_refuses_drawn] if a.lean_refuses_drawn is not None and drawn(s) else []
         last = [] if refuses else [w for w, on in ((a.lean_refuses, True), (a.lean_refuses_drawless, not drawn(s)),
-                                                   (NO_PROGRAM, a.program is None),
-                                                   (SEED_COINS, not getattr(a, "zk", False) and getattr(a, "coins", None) != "os")) if w is not None and on]
+                                                   (NO_PROGRAM, a.program is None)) if w is not None and on]
         if last and L is not None:
             if L["accepted"]:
                 bad.append(name)

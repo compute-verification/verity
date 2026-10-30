@@ -22,9 +22,17 @@ def portReadsB (net : Net) : Bool :=
   (List.range (net.constPos - n)).all fun i =>
     ((net.a.row (n + i)).toList ++ (net.b.row (n + i)).toList).all fun x => decide (x < n → mask.getD x false = true)
 
+/-- No output port is pinned (META `pinned_outputs`, `HmRow.pinnedCount`): a form no soundness theorem covers yet. -/
+def unpinned (c : Circuit) : Bool := HmRow.pinnedCount c.metaJ == 0
+
+def pinnedWhy : String := HmRow.pinnedWhy
+
 /-- Every row is an unsegmented `sha512/row/v1` row: `16 · words` bits in at least one chunk. -/
-def v1Ports (c : Circuit) : Bool :=
+def v1Rows (c : Circuit) : Bool :=
   c.ports.all fun p => !p.v2 && p.segs.isNone && p.bits == 16 * p.words && 0 < p.chunks
+
+/-- `v1Rows`, and no pinned output (`unpinned`). -/
+def v1Ports (c : Circuit) : Bool := v1Rows c && unpinned c
 
 /-- The circuits the headlines cover: the unit reads only its leaf group, returns the outputs, has at most `2^32` rows and
 reads only port bits among its inputs, and every row is a `sha512/row/v1` row. -/
@@ -50,9 +58,12 @@ def segRow (p : Port) : Bool :=
       decide (128 * (((m + 7) / 8 + 17 + 127) / 128 - 1) ≤ (m + 7) / 8)
 
 /-- Every row is a `v2Row` or a `segRow`, of any mix, and each output row is a `v2Row` holding one output port. -/
-def bitRows (c : Circuit) : Bool :=
+def bitRowsU (c : Circuit) : Bool :=
   c.ports.all (fun p => v2Row p || segRow p) && c.outRowPorts.all (· == 1) &&
     (List.range c.outRowPorts.size).all fun j => v2Row (c.ports.getD (HmOut.nIn c + j) default)
+
+/-- `bitRowsU`, and no pinned output (`unpinned`). -/
+def bitRows (c : Circuit) : Bool := bitRowsU c && unpinned c
 
 /-- The circuits the hidden-output headlines cover: `scopeOk`'s conditions on the unit, and every row a
 `sha512/row/v1` row (`v1Ports`) or every row a `v2Row` or a `segRow`, each output row a `v2Row` of one output port
@@ -161,6 +172,7 @@ def scopeWhy (hidden : Bool) (c : Circuit) : String :=
   else if !hidden && c.outNet != c.unitNet then "a circuit whose outputs a tail stage computes (META out_net)"
   else if c.unit.unitLog > 32 then s!"a unit of 2^{c.unit.unitLog} rows"
   else if !portReadsB c.unit then "a unit row reading an input column that is not a port bit"
+  else if v1Rows c || (hidden && bitRowsU c) then pinnedWhy
   else if hidden then "rows that are neither all sha512/row/v1 rows of 16 · words bits in at least one chunk nor all \
     unsegmented sha512/row/v2 rows of 16 · words bits ending in their hm96 block or sha512/row-seg/v1 rows of \
     16 · words bits whose segments end in their last block, the output rows unsegmented, one output port each"
@@ -444,28 +456,34 @@ theorem programHeld_ok {program : Option ByteArray} (h : programHeld program = .
   · assumption
   · cases h
 
-/-- The refusal of a plain session whose coins are not the OS's (§7.2, §17.2), which `verify` reaches only when every
-check has passed. -/
+/-- **The statement versions `verify` takes**: the current statement and a recursive session's inner one. Every other
+version `Tags.all` names is superseded: a `+seed-injection` one is a selftest build's, whose coins the prover injected, and
+the older ones' coins derive through SHA-256 or, under `--zk`, their pads are ChaCha20 streams of the prover's seed. They
+stay in `Tags.all` so the agreement corpus and the recorded fixtures replay: `verify` runs every check on them, then
+refuses the session (`servedForm`). -/
+def served : List String := [Tags.circuit.name, Tags.circuitPlainLeaves.name]
+
+def versionWhy (tags : Tags) : Option String :=
+  if served.contains tags.name then none
+  else
+    let what := if tags.name.endsWith "+seed-injection" then "a selftest build's statement, whose coins the prover injected"
+      else "a superseded statement version"
+    some s!"refused: {tags.name}, {what}: verify takes only {" and ".intercalate served}"
+
+/-- A session on seed coins (`--coins seed`, the default without `--zk`): every coin derives from the prover's seed, so
+none is live and no plain claim's record premise (`RecordCustodyExec`) can hold. -/
 def SEED_COINS : String :=
-  "refused: a plain session whose coins are not the OS's (--coins os at a statement whose prover takes every coin from the OS): every plain soundness claim reads its coins as uniform and unknown to the prover before its round, and none covers coins derived from a seed"
+  "refused: a session on seed coins (--coins seed, the default without --zk): every coin derives from the prover's seed, so none is live; verify a plain session with --coins os"
 
-/-- **A plain session's coins are the OS's**: `--coins os` at a statement whose prover takes every coin from the OS
-(`Tags.liveOs`, read before `Tags.withCoins`); a `--zk` session's keyed coin tree passes. A seed's coins, or `os` at a
-statement whose prover seeds, are refused (`SEED_COINS`), whatever else the session passes. -/
-def plainCoins (tags : Tags) : Coins → Except String Unit
-  | .tree _ => .ok ()
-  | .os => if tags.liveOs then .ok () else .error SEED_COINS
-  | .seed => .error SEED_COINS
+def coinsWhy : Coins → Option String
+  | .seed => some SEED_COINS
+  | _ => none
 
-theorem plainCoins_ok {tags : Tags} {coins : Coins} (h : plainCoins tags coins = .ok ()) :
-    (∃ s, coins = .tree s) ∨ (coins = .os ∧ tags.liveOs = true) := by
-  cases coins with
-  | tree s => exact .inl ⟨s, rfl⟩
-  | os =>
-    refine .inr ⟨rfl, ?_⟩
-    cases hl : tags.liveOs
-    · simp [plainCoins, hl] at h
-    · rfl
-  | seed => simp [plainCoins] at h
+/-- **The session is in a form `verify` takes**: a statement version of `served`, on live coins (`--coins os`, or under
+`--zk` the keyed coin tree). `verify` runs it last, once every check has passed. -/
+def servedForm (tags : Tags) (coins : Coins) : Except String Unit :=
+  match versionWhy tags <|> coinsWhy coins with
+  | some why => .error why
+  | none => .ok ()
 
 end Flock.ProvedScope

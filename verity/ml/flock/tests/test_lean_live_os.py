@@ -3,7 +3,7 @@ derivation, and the identity is in the statement digest, so such a session passe
 `--coins os` (`Tags.withCoins`), and a seeded one only under `--coins seed`. The sessions are the fixture's: one live session
 per coin mode, recorded from a proving build of main (`record.sh`), both accepted by its server.
 Neither has a draw, which `verify` refuses after every check has passed (§16.15, D12), so passing is that refusal
-(`DRAWLESS`), which comes before the refusal of a plain session on a seed's coins (`ProvedScope.SEED_COINS`). The seeded session, edited one field at a time, is also each of the record's checks' control: every edit is
+(`DRAWLESS`). The seeded session, edited one field at a time, is also each of the record's checks' control: every edit is
 refused by the check that names it, so deleting any one of them fails a test."""
 from __future__ import annotations
 

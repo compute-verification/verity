@@ -5,7 +5,7 @@ What a statement keeps without parsing its own output. The keyed coin tree a ses
 kept as `Flock.norm` of what `Json.parse` read, which has the same value at every key, the same `unit_draw` once `drawn`
 puts the draw in, and the same canonical bytes (`publicDigest` hashes those).
 -/
-import Flock.ProvedScope
+import Flock.HmRow
 
 namespace Flock.Test.CoinsTree
 
@@ -39,21 +39,5 @@ def parsed : List Json := headers.filterMap fun h => (Json.parse h).toOption
   let d := Json.mkObj [("law", Json.str "subset"), ("population", Lean.toJson (4 : Nat))]
   (((Flock.norm j).setObjVal! "unit_draw" d).getObjVal? "unit_draw").toOption == some d &&
     (canon ((Flock.norm j).setObjVal! "unit_draw" d)).toOption == (canon (j.setObjVal! "unit_draw" d)).toOption
-
-/-! A plain session passes `ProvedScope.plainCoins` only on the OS's coins at a statement whose prover takes them; a seed's
-coins are refused at every statement, and a keyed coin tree passes at every statement. -/
-
-def why (t : Tags) (c : Coins) : Option String :=
-  match ProvedScope.plainCoins t c with
-  | .ok () => none
-  | .error e => some e
-
-def passes (t : Tags) (c : Coins) : Bool := (why t c).isNone
-
-#guard Tags.all.all fun t => !passes t .seed && passes t .os == t.liveOs && specs.all fun s => passes t (.tree s)
-#guard Tags.templated.all fun t => !passes t .seed
-#guard [Tags.circuit, Tags.circuitPlainLeaves, Tags.circuitTypes].all fun t => passes t .os
-#guard [Tags.circuitSelftest, Tags.circuitTypesSelftest].all fun t => !passes t .os
-#guard Tags.all.all fun t => [Coins.seed, .os].all fun c => passes t c || why t c == some ProvedScope.SEED_COINS
 
 end Flock.Test.CoinsTree

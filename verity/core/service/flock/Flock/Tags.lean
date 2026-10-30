@@ -246,6 +246,15 @@ def outRowsV2Identity (id : Json) : Json :=
       "the circuit; the public file has no output word"))
   else id
 
+/-- A hidden-output statement with pinned outputs (META `pinned_outputs`): `outputs` names them, as the
+prover's does; a statement without them keeps its identity. -/
+def pinnedIdentity (id : Json) : Json :=
+  if (id.getObjVal? "outputs").toOption.isSome then
+    id.setObjVal! "outputs" (s ("hidden: each output port an hm96-sha512/row/v2 row (each run of output ports in META " ++
+      "out_row_ports one bit row of their words), hashed in the circuit, but the last output ports, META pinned_outputs, " ++
+      "which have no row: each of their bits a copy of a forced-zero row; the public file has no output word"))
+  else id
+
 /-- `verity/flock-circuit` (PR #83 from `eb90718f`): serving rows are `hm96-sha512/row/v1` leaves proved in the circuit,
 every identity and binding digest is SHA-512, the proof's Merkle leaves are `hm96-sha512/v1`, and the unit draw is live. -/
 def circuitEb90718f : Tags :=
@@ -335,11 +344,6 @@ per-proof OS key (`leafSchemeHm96`). -/
 def circuitB3727bd9 : Tags :=
   { circuitF5df3bbc with name := "verity/flock-circuit@b3727bd9", identity := identityHidden false }
 
-/-- The same statement as the selftest harness's build pins it (`seed_injection: true`): M0's selftest records only. -/
-def circuitB3727bd9Selftest : Tags :=
-  { circuitB3727bd9 with
-    name := "verity/flock-circuit@b3727bd9+seed-injection", identity := identityHidden true, liveOs := false }
-
 /-- `verity/flock-circuit/types` (PROTOCOL.md §16.13) up to verity `b3727bd9`: `f5df3bbc`'s typed statement with its coins
 from `verity.primitives.randomness` v2 (SHA-512), and META's `leafSchemeHm96`. -/
 def circuitTypesB3727bd9 : Tags :=
@@ -359,12 +363,6 @@ def circuitCec3e347 : Tags :=
     name := "verity/flock-circuit@cec3e347", identity := identityHidden false (leafScheme := leafSchemeHm96Os),
     pinnedLeafScheme := some leafSchemeHm96Os }
 
-/-- The same statement as the selftest harness's build pins it (`seed_injection: true`): M0's selftest records only. -/
-def circuitCec3e347Selftest : Tags :=
-  { circuitCec3e347 with
-    name := "verity/flock-circuit@cec3e347+seed-injection", identity := identityHidden true (leafScheme := leafSchemeHm96Os),
-    liveOs := false }
-
 /-- `verity/flock-circuit/types` (PROTOCOL.md §16.13) up to verity `cec3e347`: `b3727bd9`'s typed statement with META's
 `leafSchemeHm96Os`. -/
 def circuitTypesCec3e347 : Tags :=
@@ -382,8 +380,12 @@ def circuitTypesCec3e347Selftest : Tags :=
 as its `--zk` identity's `hooks` say (`osMasks`). -/
 def circuit : Tags := { circuitCec3e347 with name := "verity/flock-circuit", osMasks := true }
 
-/-- The same statement as the selftest harness's build pins it (`seed_injection: true`): M0's selftest records only. -/
-def circuitSelftest : Tags := { circuitCec3e347Selftest with name := "verity/flock-circuit+seed-injection", osMasks := true }
+/-- The same statement as the selftest harness's build pins it (`seed_injection: true`): the selftest's records only, which
+`verify` refuses once every check has passed (`ProvedScope.servedForm`). -/
+def circuitSelftest : Tags :=
+  { circuit with
+    name := "verity/flock-circuit+seed-injection", identity := identityHidden true (leafScheme := leafSchemeHm96Os),
+    liveOs := false }
 
 /-- `verity/flock-circuit/types` (PROTOCOL.md §16.13): `cec3e347`'s typed statement with `osMasks`. -/
 def circuitTypes : Tags := { circuitTypesCec3e347 with name := "verity/flock-circuit/types", osMasks := true }
@@ -412,12 +414,14 @@ def plainLeaves (t : Tags) : Bool := t.pinnedLeafScheme == some leafSchemePlain
 /-- A recursive session's inner statement (PROTOCOL.md §16.16): the default statement with plain SHA-512 leaves. -/
 def circuitPlainLeaves : Tags := { circuit.withPlainLeaves with name := "verity/flock-circuit+plain-leaves" }
 
-/-- The versions this verifier knows, by name. -/
+/-- The versions this verifier knows, by name. `verify` accepts a session only at `circuit` or `circuitPlainLeaves`
+(`ProvedScope.served`); it sets every other version up and runs every check, so the agreement corpus and the recorded
+fixtures replay, and then refuses the session. -/
 def all : List Tags := [netlistV1, circuit19c7269a, circuitFd02e847, circuit631567f7, circuitEb90718f, circuitEb90718fSelftest,
   circuitE51e2b86, circuitE51e2b86Selftest, circuit967b8d06, circuit967b8d06Selftest, circuitTypes210d32e1,
   circuitTypes210d32e1Selftest, circuitF5df3bbc, circuitF5df3bbcSelftest, circuitTypesF5df3bbc, circuitTypesF5df3bbcSelftest,
-  circuitB3727bd9, circuitB3727bd9Selftest, circuitTypesB3727bd9, circuitTypesB3727bd9Selftest,
-  circuitCec3e347, circuitCec3e347Selftest, circuitTypesCec3e347, circuitTypesCec3e347Selftest,
+  circuitB3727bd9, circuitTypesB3727bd9, circuitTypesB3727bd9Selftest,
+  circuitCec3e347, circuitTypesCec3e347, circuitTypesCec3e347Selftest,
   circuit, circuitSelftest, circuitTypes, circuitTypesSelftest, circuitPlainLeaves]
 
 def find? (name : String) : Option Tags := all.find? (·.name == name)

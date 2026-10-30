@@ -40,7 +40,10 @@ record and the coin server's transcript). `RecDeploy.V` is that as one `Claims.V
   prover's values), one set for every part. So the prover sends them, after the inner rounds and before any V*
   session, as the staging round's message (`encStage`); the coin server's transcript of the inner rounds is the
   verifier's own (`Brings.tr`). The deployed composer (`flock-verify rec-compose`) accepts only where every part was
-  checked against one staged rows file.
+  checked against one staged rows file and one set of every other input the parts share, each part at its own index
+  (`ComposeParts.composed_parts`: each part is then `partRaw`'s form, up to a SHA-512 collision). That the parts'
+  sessions are one run of `V` is the open condition C10 `OneRun` (`ComposeParts`), which needs the service's
+  interactive-run record.
 * **V\* statements.** Part `s`'s statement is what the prover staged (`Stage.ofMsg`: the part's public file, the
   inner session's record and the shared rows off the staging message, the transcript the coin server's), in the part's
   recursive flags (`staged`). Its numbers (`numsOf`: `VO`'s rounds and `deployZkRec`'s errors, `N₀` and weight) are to be the ones `x`
@@ -313,14 +316,14 @@ def decodeR (x : Claims.Msg) : Option RecScope.Read := (readX x).map readOf
 inner shape (`RecScope.accepts`), the inner statement's bytes, its dimensions as check 5 sets it up, no circuit
 commitment, the form off the verifier's own inner shape, and no draw (the V* records are run messages; their draws are
 refused at the run, `DeployScope`). -/
-def parse (x : Claims.Msg) : Option Claims.Recursion.Stmt := RecScope.parseOf decodeR x
+def parse (x : Claims.Msg) : Option Claims.Recursion.CompiledStatement := RecScope.parseOf decodeR x
 
 /-- **The claims' scope check**: the deployed one (`RecScope.scopeCheckOf`) at `decodeR`, which reads only what the
 statement carries: the setup's checks accept its inner shape and the inner scope check takes its inner statement. -/
 def scopeCheck (ivScope : Claims.Msg → Bool) (x : Claims.Msg) : Bool := RecScope.scopeCheckOf ivScope decodeR x
 
 /-- The inner statement's bytes. -/
-def xIOf (x : Claims.Msg) : Claims.Msg := ((parse x).map Claims.Recursion.Stmt.inner).getD []
+def xIOf (x : Claims.Msg) : Claims.Msg := ((parse x).map Claims.Recursion.CompiledStatement.inner).getD []
 
 /-- The V* parts' count. -/
 def nS (x : Claims.Msg) : ℕ :=

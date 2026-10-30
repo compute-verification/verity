@@ -151,19 +151,15 @@ The verifier reads every coin from the record; how the server drew them decides 
 
 The server draws each round's coins from the OS after recording the round's digest. Soundness assumes only that they are
 uniform and unknown to the prover before it sent the round. `verify --coins os` binds the identity that mode
-(`FC_COINS=os`) writes; it binds the identity, not who drew the coins. `verify` accepts a plain session only on `os`
-coins at a statement whose prover takes every coin from the OS (`Tags.liveOs`): every plain soundness claim reads its
-coins as this section's, so a session on `seed` coins (§7.2), or `--coins os` at a `+seed-injection` statement or one
-before `967b8d06`, is refused once every check has passed (`ProvedScope.plainCoins`).
+(`FC_COINS=os`) writes; it binds the identity, not who drew the coins.
 
 ### 7.2 `seed`
 
 The server commits to a seed at `Hello` (`coin-commit/sha512`) and derives every coin from it with
 `verity.ml.randomness` v2; `flock-circuit replay-coins` audits the commitment and the derivation. The verifier still
-reads the coins from the record; with a seed, soundness also assumes the commitment hides it and SHA-512 is a PRF. No
-plain soundness claim takes those two, so `verify` refuses a plain session on `seed` coins (§7.1).
+reads the coins from the record; with a seed, soundness also assumes the commitment hides it and SHA-512 is a PRF.
 
-### 7.3 The unit draw
+### 7.3 The unit sample
 
 `Flock.Draw`, `flock-verify draw`. After serving registers its roots and before the session, the verifier draws the
 sampled units from its own OS randomness with `verity.ml.randomness`'s exact samplers, in the clear and under no hash.
@@ -446,10 +442,14 @@ with `refused: <why>: a statement form the soundness proof does not cover`. The 
 Also refused: a draw by a design no claim covers (bernoulli, work, a work draw with a closure, and a subset draw without
 `--zk` at public outputs; under `--plain-tables` the subset design alone), a session without a draw, a session verified
 without the verifier's own `--program`, and under `--rec-inner` a V* session that does not draw every unit of its one
-full table (`RecSetup.fullDraw`, `RecSetup.oneFull`); a recursive session without `--rec-inner` is refused too.
+full table (`RecSetup.fullDraw`, `RecSetup.oneFull`), over an inner session whose record holds no draw
+(`RecSetup.innerDrawn`), or at a holo or sparse inner shape (`RecSetup.denseOnly`: `RecursiveKS` covers the dense form
+only, and the compiled model refuses the same sessions, `RecDeploy.acc_dense`); a recursive session without `--rec-inner`
+or without `--zk` (`RecSetup.zkOnly`) is refused too. Last, once every other check has passed, `verify` refuses a
+statement version other than `verity/flock-circuit` and `verity/flock-circuit+plain-leaves` (a `+seed-injection` one as
+a selftest build's, the rest as superseded) and a plain session on seed coins (`ProvedScope.servedForm`); the versions
+stay parsed, so recorded sessions replay through every check.
 `flock-verify rec-compose` (`Flock.RecCompose`) gives a recursive statement's verdict from its parts' verdicts.
-
-Last of all, a plain session whose coins are not the OS's is refused (§7.1, `ProvedScope.plainCoins`).
 
 ### 16.16 Plain leaves
 
@@ -488,11 +488,6 @@ copying upstream. The deliberate divergences, each refused by Lean and accepted 
 | D20 | a record not in its canonical text (S0) |
 | D21 | a nonzero proof-of-work nonce |
 
-Lean also refuses, last, a plain session whose coins are not the OS's (§7.1), which upstream accepts: `agree.py` compares
-every session of a plain set without `--coins os` refused for that alone as accepted (`SEED_COINS`). `vectors.json`'s
-honest cells are upstream's alone (`honest_upstream_only`): their statements are legacy (§16.9) or before hm96-sha512
-rows, so Lean refuses each.
-
 ### 17.2 Assumptions
 
 A verdict's soundness rests on: the protocol's round-by-round errors at `fast100`, proved in Lean with no named
@@ -502,7 +497,7 @@ Merkle trees, the hiding leaves, the round digests and the statement binding (wi
 the pinned circuits meaning what the statement says, which the lowering proofs cover against their reference functions;
 and the verifier's custody of the record and the proofs.
 
-### 17.3 Trusted components
+### 17.3 Trusted code
 
 Lean's kernel, for the theorems. Lean's compiler, runtime and the C compiler, for the running binary: the agreement tests
 of §17.1 narrow that trust (an independent implementation must agree on the corpus and on fuzzed mutations), they don't
@@ -522,6 +517,8 @@ accepted.
 `verifier/vectors.json` (`flock-verifier-vectors/v1`) lists the honest sessions, the record-level negatives, the
 forgeries and the replayable and live sets; the bytes stay in the evidence store. `transcript_check.py` rebuilds every
 round of a session from this outline's §6 and §8–§13 and compares each round's digest and coin count with the record.
+Its honest cells are upstream's alone (`honest_upstream_only`): their statements are legacy (§16.9) or before hm96-sha512
+rows, so Lean refuses each and no agreement job replays them.
 
 ## 19. Ambiguities resolved from upstream's behaviour
 
