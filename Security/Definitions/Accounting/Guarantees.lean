@@ -1,6 +1,7 @@
 import Definitions.Accounting.Guarantees.Actual
 import Definitions.Accounting.Guarantees.Actual.Threaded
 import Definitions.Accounting.Guarantees.Actual.Dampener
+import Definitions.Accounting.Guarantees.Additive
 import Definitions.Accounting.Guarantees.Bandwidth
 import Definitions.Accounting.Guarantees.Bandwidth.Causal
 import Definitions.Accounting.Guarantees.BandwidthAudit
@@ -70,7 +71,7 @@ tiers and chained passes, the causal horizon bound on its samples and its conser
 composed guarantee for the remote bandwidth audit as deployed and its deployed instance, the remote
 bandwidth audit's conservation and node-level guarantees on the actual-circuit model, the actual circuit's capacity
 theorem, runtime corollary, memory cap over threads with its rate, dark gates and the compute dampener's windows,
-localization, composition and fit,
+localization, composition and fit, compute additivity's capacity from the machine model 𝓜,
 the obligations B1, B2 and B4, the tag and sketch guarantees, Lemma B with (H-μ⁺) derived from fresh coins and Lemma B′
 for a persistent pattern, the view independence the Build's coin rules give it, co-location and the link relay for
 receipts bound to the matmul, what a relay of the deployed bound receipt's sketch must exchange, the bandwidth audit's
