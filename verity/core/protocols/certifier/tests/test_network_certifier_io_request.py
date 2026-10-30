@@ -1,4 +1,4 @@
-"""IoTieRequest on the warden's own ingress (`io_request`): each request's prompt_len and arrival ordinal held to the
+"""IoTieRequest on the network certifier's own ingress (`io_request`): each request's prompt_len and arrival ordinal held to the
 warden's ingress cells, a bucket row at a time, by the reference and by the Boolean Definitions. The first negative
 is the swapped split: two requests' prompt lengths swapped with their total kept, which the advised floor alone
 accepts."""
@@ -45,7 +45,7 @@ def link():
 
 def _verdicts(link, prompt_lens, shape=SHAPE, order=None):
     """Each bucket's verdict on the verifier's lanes from `prompt_lens`, or None where the verifier's lanes refuse the
-    advice against the warden's release."""
+    advice against the network certifier's release."""
     try:
         return [Q.reference(shape, Q.Instance(tuple(row), Q.lanes(shape, prompt_lens, link.releases, t, order)))
                 for t, row in enumerate(link.rows)]
@@ -59,8 +59,8 @@ def _accepted(verdicts):
 
 @pytest.mark.parametrize("B", [512, 4096])
 def test_a_request_parses_to_its_prompt_length(B):
-    """Every cell of an id request as the warden cuts it (`warden.cells`) parses, and its cells' fields and bytes are
-    its prompt length and its own; `carries` is that cut's carry after each cell."""
+    """Every cell of an id request as the network certifier cuts it (`warden.cells`) parses, and its cells' fields and
+    bytes are its prompt length and its own; `carries` is that cut's carry after each cell."""
     lay = Q.layout(B)
     for n in (1, 2, 11, 12, 13, 56, 57, 58, 336, 337, 338, 339, 708, 709):
         raw = W.cells(_requests([n], B)[0], B, 1)
@@ -76,9 +76,10 @@ def test_a_request_parses_to_its_prompt_length(B):
 
 
 def test_every_bucket_of_the_wardens_ingress_is_accepted(link):
-    """The link served through the warden's own ingress (`warden.Warden._ingress`): every bucket row is accepted on the
-    verifier's lanes, which chain each connection from (0, 0) to (0, n) over its buckets. Requests trickle in over
-    three buckets, two connections share buckets, and a connection moves to lane 0 when the one before it ends."""
+    """The link served through the network certifier's own ingress (`warden.Warden._ingress`): every bucket row is
+    accepted on the verifier's lanes, which chain each connection from (0, 0) to (0, n) over its buckets. Requests
+    trickle in over three buckets, two connections share buckets, and a connection moves to lane 0 when the one before
+    it ends."""
     assert _verdicts(link, PL) == [1] * len(link.rows)
     held = {}
     for t in range(len(link.rows)):
@@ -142,8 +143,8 @@ def test_the_advice_order_names_each_requests_connection():
 
 
 def test_the_lanes_refuse_a_release_other_than_the_wardens(link):
-    """`lanes` raises where the release isn't the warden's schedule: ordinals out of order or admitted out of order, a
-    connection with no advice request, cells that aren't its request's or past R a bucket, no `END` in its last
+    """`lanes` raises where the release isn't the network certifier's schedule: ordinals out of order or admitted out of
+    order, a connection with no advice request, cells that aren't its request's or past R a bucket, no `END` in its last
     bucket, or more live connections than lanes."""
     rel = list(link.releases)
     bad = {"renumbered": [r._replace(q=r.q + 1) for r in rel],
@@ -166,8 +167,8 @@ def _tamper(cell, at, new):
 
 
 def _first_cell_tampers(first):
-    """(what, cell) for each way a request's first cell (a `DATA`) can differ from the warden's cell of a canonical id
-    request."""
+    """(what, cell) for each way a request's first cell (a `DATA`) can differ from the network certifier's cell of a
+    canonical id request."""
     lay, h = Q.layout(len(first)), HEADER.size
     kind, q, n = HEADER.unpack_from(first)
     assert kind == DATA and n == lay.room
@@ -198,7 +199,8 @@ def _first_cell_tampers(first):
 
 
 def _row_tampers(row, lanes_):
-    """(what, row) for each way a bucket row can differ from the warden's, as a function of the row and its lanes."""
+    """(what, row) for each way a bucket row can differ from the network certifier's, as a function of the row and its
+    lanes."""
     R, out = SHAPE.R, []
     lane_of = {i: lanes_[i // R] for i in range(len(row))}
 
@@ -281,7 +283,7 @@ def test_lanes_other_than_the_releases_are_refused(link):
 
 def test_a_client_that_ends_after_its_last_byte_is_refused():
     """A non-canonical client: its request's bytes fill a whole `DATA` (338 tokens at B = 4,096, exactly P bytes) and
-    it sends its `END` empty after it, so the warden releases a `DATA` then an empty `END`. The tie reads the
+    it sends its `END` empty after it, so the network certifier releases a `DATA` then an empty `END`. The tie reads the
     request's last byte in the `DATA`, where only an `END` may hold it, and refuses. The client shim (`warden.cells`)
     sends those bytes as one `END`, which is accepted."""
     shape = Q.Shape(4096, 1, 2)
@@ -295,9 +297,9 @@ def test_a_client_that_ends_after_its_last_byte_is_refused():
 
 
 def test_each_buckets_row_is_the_wardens_registered_row(link):
-    """The unit's row is the warden's registration v2 (`warden_rows`): bucket t's row is row t of the ingress record the
-    grid closed, the rows open the warden's root, the verifier's port (`bucket_port`) has unit t read row t, and the
-    host's registered read refuses rows out of place or edited."""
+    """The proof block's row is the network certifier's registration v2 (`warden_rows`): bucket t's row is row t of the
+    ingress record the grid closed, the rows open the network certifier's root, the verifier's port (`bucket_port`) has
+    proof block t read row t, and the host's registered read refuses rows out of place or edited."""
     assert len(link.records) == 2
     for w, record in enumerate(link.records):
         cells = WR.Cells.of("requests", Direction.INGRESS, record, PARAMS, hashlib.sha512(b"session").digest())
@@ -380,7 +382,7 @@ def test_redteam_phase6_cells_read_their_prompt_lengths():
     with 16. So the forged split's first request, 16 fields ending in one cell, is not in these cells.
 
     Slow (about 7 s, the served cell's ANDs traced and evaluated): the one test of the circuit on these cells
-    at the served cell size, which the reference's quick test reads in the clear and the unit's test reads at
+    at the served cell size, which the reference's quick test reads in the clear and the proof block's test reads at
     B = 512."""
     long_, short = (W.cells(r, 4096, q) for r, q in zip(_requests((400, 16), 4096), (1, 2)))
     cases = [(long_[:4096], 0, 1), (long_[4096:], Q.carries(400, 4096)[1][0], 1), (short, 0, 2)]
