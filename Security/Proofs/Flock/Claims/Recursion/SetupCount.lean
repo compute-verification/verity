@@ -1703,13 +1703,13 @@ theorem outParse_cost (tags : Tags) (bytes : ByteArray) (tables : List (String �
         | (with_reducible apply diteAny)
         | split)
     all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
-    · (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero]); omega
+  · (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero]); omega
 
 /-- At a flat statement's tags, the committed circuit is `HmOut.parseWith`'s. -/
 theorem outParseCommit_flat (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray))
     (hi : tags.isTmpl = false) :
     HmOut.parseCommitWith (Hashes.counted h) tags bytes tables = HmOut.parseWith (Hashes.counted h) tags bytes tables := by
-  rw [HmOut.parseCommitWith, if_neg (by simp [hi])]
+  rw [HmOut.parseCommitWith, ite_eq_right (by simp [hi])]
 
 set_option maxHeartbeats 8000000 in
 /-- **`Stmt.setupHiddenWith`'s calls**, at a drawn statement of an untyped, flat circuit: ten for its parse, partition,
