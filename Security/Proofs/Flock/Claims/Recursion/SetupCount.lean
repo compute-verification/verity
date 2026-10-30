@@ -970,8 +970,8 @@ theorem qwordFinding_cost (c : Circuit) (pub : Public) (obj : Json) (program : B
   · omega
 
 set_option maxHeartbeats 4000000 in
-theorem linksCheck_cost (c : Circuit) (pop : Public) (program : ByteArray) :
-    countC.P (HmLinks.checkWith (Hashes.counted h) c pop program) 1 := by
+theorem linksCheck_cost (c : Circuit) (pop : Public) (readers : Option (Array Nat)) (program : ByteArray) :
+    countC.P (HmLinks.checkWith (Hashes.counted h) c pop readers program) 1 := by
   apply countC.mono
   · unfold HmLinks.checkWith
     repeat (first
