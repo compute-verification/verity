@@ -1,4 +1,4 @@
-"""RT-BLACKWELL-16's test on the H200: are the JP*90 rows' wg_spec points block-timed artifacts?
+"""A test on the H200: are the JP*90 rows' wg_spec points block-timed artifacts?
 
 Reads `roles.jsonl` (sm90_clock's `roles`: wg_spec with each warp's loop end and the MMA iterations done when the first
 lane warp ended) and `joint.jsonl` (the probe's wg_s8_n256_a1, the tensor alone, and the wgspec/wgU points as timed).
