@@ -33,14 +33,14 @@ theorem prob_none {Ω : Type} [Fintype Ω] {p : Ω → Prop} (h : ∀ ω, ¬ p �
 /-! ## The circuit, its scheme and the honest period -/
 
 /-- The word: step `0` of an `S8Dot_v1` body of `K = L = 32` (its `T_1`, a served step), committed. -/
-def word : Accounting.Gates.Gate Unit where
+def word : Accounting.Gates.IntGate Unit where
   op := .const 0
   args := []
   lo := 0
   hi := 0
   step := 0
   prim := "S8Dot_v1"
-  site := .dot 32 32 [] 0
+  place := .dot 32 32 [] 0
   commit := true
 
 /-- One gate, one call site, one live round, one unit, every value committed before the round's coin. -/
@@ -73,7 +73,7 @@ def stages : SplitStages Bool (Fin 1) 1 :=
   .stage (fun _ _ => .paid) (fun _ _ => True) (fun _ _ => True) fun _ => .done
 
 /-- The honest period of `n` windows: every tile live, each window's stages `stages`, whatever the past. -/
-def period : (n : ℕ) → Period Bool (Paths Bool 1 × (Equiv.Perm (Fin 1) × Unit)) (Fin 1) 1 n
+def period : (n : ℕ) → WindowPlay Bool (Paths Bool 1 × (Equiv.Perm (Fin 1) × Unit)) (Fin 1) 1 n
   | 0 => .done
   | n + 1 => .window (fun _ => true) stages fun _ => period n
 
@@ -316,7 +316,7 @@ theorem honest_credit (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
 /-! ## A period with a dead tile and a refused window -/
 
 /-- A period of `n + 1` windows whose first window's tile is dead, then `period n`. -/
-def periodR (n : ℕ) : Period Bool (Paths Bool 1 × (Equiv.Perm (Fin 1) × Unit)) (Fin 1) 1 (n + 1) :=
+def periodR (n : ℕ) : WindowPlay Bool (Paths Bool 1 × (Equiv.Perm (Fin 1) × Unit)) (Fin 1) 1 (n + 1) :=
   .window (fun _ => false) stages fun _ => period n
 
 /-- Its proofs' run: window `w`'s proof is accepted iff its round's coin is `true`, so the accepted prefix ends at the

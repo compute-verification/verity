@@ -1,5 +1,5 @@
 import Proofs.NetworkCertifier.SampledAuditInstance
-import Proofs.NetworkCertifier.Horizon
+import Proofs.NetworkCertifier.Pooled
 import Proofs.Flock.Claims.Witnesses.Sampling
 import Proofs.Flock.Claims.Witnesses.Meets
 import Proofs.Flock.Claims.KS.ZkExtend
@@ -21,9 +21,9 @@ whose verifier accepts everything.
   witness is in `RelS`; the leak bounds at `leakD`, `sksD` at a statement whose program negates its input. There,
   with nothing opened, the trace holds `false` at the negation, which the circuit computes `true` from the ingress the
   trace carries; the one unit is drawn `all`, so no possible faulty set holds it, and no witness is in `RLeak`.
-* `HorizonWrongUnitsLe`. Its draw hypotheses hold at the uniform `k`-subset draw (`uniform_draw`), and its soundness
-  hypothesis at `ε = 0` when no unit is wrong. At one window of one unit, that unit wrong, an audit that always accepts,
-  `ε = 0` and `q = F = 1`, its bound reads `1 ≤ 0`.
+* `PooledIncorrectBlocksLe`. Its draw hypotheses hold at the uniform `k`-subset draw (`uniform_draw`), and its
+  soundness hypothesis at `ε = 0` when no block is incorrect. At one window of one block, that block incorrect, an audit
+  that always accepts, `ε = 0` and `q = F = 1`, its bound reads `1 ≤ 0`.
 
 The count conjuncts of the leak bounds read no verifier: they hold at every deployment, the accepting one included.
 -/
@@ -62,12 +62,12 @@ committed bits, all of them. -/
 theorem charge_bounds {Coin Col T : Type} (D : Claims.Sampling.Deploy Coin Col T) (δ : ℝ) :
     ∃ β : Claims.Sampling.AuditStatement → ℕ, ∀ s P, D.partition s = some P →
       ∀ F ∈ faultySets s.design P δ, faultyBits s.prog P F ≤ β s := by
-  refine ⟨fun s => ((D.partition s).map fun P => faultyBits s.prog P (Finset.range P.rus.length)).getD 0, ?_⟩
+  refine ⟨fun s => ((D.partition s).map fun P => faultyBits s.prog P (Finset.range P.blocks.length)).getD 0, ?_⟩
   intro s P hP F hF
   show faultyBits s.prog P F ≤
-    ((D.partition s).map fun P => faultyBits s.prog P (Finset.range P.rus.length)).getD 0
+    ((D.partition s).map fun P => faultyBits s.prog P (Finset.range P.blocks.length)).getD 0
   rw [hP]
-  show faultyBits s.prog P F ≤ faultyBits s.prog P (Finset.range P.rus.length)
+  show faultyBits s.prog P F ≤ faultyBits s.prog P (Finset.range P.blocks.length)
   classical
   simp only [faultySets, Finset.mem_filter, Finset.mem_powerset] at hF
   unfold faultyBits
@@ -143,10 +143,10 @@ def trivLay : BoundaryGates 1 1 := ⟨fun _ _ _ => (0, []), fun _ => []⟩
 def notProg : Claims.Sampling.Prog := ⟨[.input, .not 0], [1]⟩
 
 /-- The program, drawn `all`. -/
-def notStmt : Claims.Sampling.AuditStatement := ⟨[], notProg, ⟨"", 0, []⟩, ⟨[⟨.all, none⟩]⟩, []⟩
+def notStmt : Claims.Sampling.AuditStatement := ⟨[], notProg, ⟨"", 0, []⟩, ⟨[.all]⟩, []⟩
 
-/-- One class of one stratum of one replay unit, the proof unit `{0, 1}`. -/
-def notPart : Claims.Sampling.Partition := ⟨[[[[[0, 1]]]]]⟩
+/-- One class of one stratum of one proof unit, `{0, 1}`. -/
+def notPart : Claims.Sampling.Partition := ⟨[[[[0, 1]]]]⟩
 
 /-- Step `t`'s ingress is the input, and its egress slot's presence gate the negation. -/
 def notLay : BoundaryGates 1 1 := ⟨fun _ _ _ => (1, []), fun _ => [0]⟩
@@ -156,7 +156,7 @@ def obs0 : Obs 1 1 1 := ⟨fun _ _ => none, 0, fun _ => .complete⟩
 
 theorem inScope_not : Claims.Sampling.InScope notPart notStmt := by
   refine ⟨⟨fun g x hx i hi => ?_, by decide⟩,
-    ⟨by decide, by decide, by decide, by decide, by decide, by decide⟩, rfl, ?_⟩
+    ⟨by decide, by decide, by decide, by decide, by decide⟩, rfl, ?_⟩
   · rcases g with _ | _ | g
     · simp [notStmt, notProg] at hx
       subst hx
@@ -166,7 +166,7 @@ theorem inScope_not : Claims.Sampling.InScope notPart notStmt := by
       simp [BGate.reads] at hi
       omega
     · simp [notStmt, notProg] at hx
-  · simp [notStmt, notPart, Claims.Sampling.Rule.WellFormed, Claims.Sampling.OneStage.WellFormed]
+  · simp [notStmt, notPart, Claims.Sampling.OneStage.WellFormed]
 
 theorem notLay_fits : notLay.Fits notProg 1 := by
   refine ⟨fun t _ ℓ σ g hg => ?_, fun t _ g hg => ?_, fun t _ t' _ htt' => absurd htt' (by omega)⟩
@@ -179,7 +179,7 @@ theorem notLay_fits : notLay.Fits notProg 1 := by
 
 theorem rejCm_val_none (H : Msg → Msg) (s : Claims.Sampling.AuditStatement) (w : Claims.Sampling.Wit) (g : ℕ) :
     w.val H rejCm s g = none := by
-  simp [Wit.val, Commitment.Opens, rejCm, OC.eval]
+  simp [Wit.val, CommitmentScheme.Opens, rejCm, OC.eval]
 
 /-- With nothing held and the input `false`, the circuit computes the negation `true`. -/
 theorem notProg_val (inp : ℕ → Bool) (h0 : inp 0 = false) : valOver notProg inp (fun _ => none) 1 = true := by
@@ -353,10 +353,10 @@ theorem SampledLeakRegistered_nontrivial (H : Msg → Msg) :
 
 end Toy
 
-/-! ## The horizon -/
+/-! ## The monitoring period -/
 
-/-- **`HorizonWrongUnitsLe`'s draw hypotheses at the honest instance**: the uniform `k`-subset draw draws `k` units
-and each `k`-subset with share `1 / C(n, k)`. -/
+/-- **`PooledIncorrectBlocksLe`'s draw hypotheses at the honest instance**: the uniform `k`-subset draw draws `k`
+blocks and each `k`-subset with share `1 / C(n, k)`. -/
 theorem uniform_draw (n k : ℕ) :
     (∀ x : {S : Finset (Fin n) // S.card = k}, x.1.card = k) ∧
       ∀ S : Finset (Fin n), S.card = k →
@@ -368,17 +368,18 @@ theorem uniform_draw (n k : ℕ) :
     simp [Subtype.ext_iff]
   rw [h1, Finset.card_singleton, one_mul, Fintype.card_finset_len, Fintype.card_fin]
 
-/-- **`HorizonWrongUnitsLe`'s soundness hypothesis at the honest instance**: at the uniform `k`-subset draw
-(`uniform_draw`) with no unit wrong, every acceptance event meets a wrong unit with probability `0`, so `ε = 0`. -/
-theorem HorizonWrongUnitsLe_honest (n k : ℕ) :
+/-- **`PooledIncorrectBlocksLe`'s soundness hypothesis at the honest instance**: at the uniform `k`-subset draw
+(`uniform_draw`) with no block incorrect, every acceptance event meets an incorrect block with probability `0`, so
+`ε = 0`. -/
+theorem PooledIncorrectBlocksLe_honest (n k : ℕ) :
     ∀ (m : ℕ) (acc : Fin m → (Fin m → {S : Finset (Fin n) // S.card = k}) → Prop) (i : Fin m),
       Pr (fun ω => acc i ω ∧ ¬ Disjoint (ω i).1 (∅ : Finset (Fin n))) ≤ 0 := by
   intro m acc i
   simp [Pr]
 
-/-- **`HorizonWrongUnitsLe`'s conclusion fails at an audit that always accepts**, at `ε = 0`: one window of one unit,
-that unit wrong, `q = F = 1`. -/
-theorem HorizonWrongUnitsLe_nontrivial :
+/-- **`PooledIncorrectBlocksLe`'s conclusion fails at an audit that always accepts**, at `ε = 0`: one window of one
+block, that block incorrect, `q = F = 1`. -/
+theorem PooledIncorrectBlocksLe_nontrivial :
     ¬ Pr (fun _ : Fin 1 → Unit => (∀ _ : Fin 1, True) ∧
         1 ≤ ∑ _ : Fin 1, (Finset.univ : Finset (Fin 1)).card) ≤
       (1 - 1 : ℝ) ^ 1 + ∑ _ : Fin 1, (0 : ℝ) := by

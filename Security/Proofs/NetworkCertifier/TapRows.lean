@@ -20,7 +20,7 @@ certifier's records are among the sequences `AccSeqsSampled` counts at the trace
 
 An extracted trace that disagrees with the network certifier opens a transfer gate to a value the network certifier's
 opening there doesn't. The extractor checked that opening with its own calls (`Passes.found`, `ownLog_E`), so under
-`Commitment.Binds` its calls and those that check the network certifier's opening collide, and `B_tap` finds the
+`CommitmentScheme.Binds` its calls and those that check the network certifier's opening collide, and `B_tap` finds the
 collision (`tapColl_of_disagree`, `Pr_tapColl_le_Btap`). `sampledLeak_tap` is the bound:
 `Pr[acc ∧ ¬RLeakTap] ≤ δ + ε_ks + ε_bind + Pr[B_tap]`.
 
@@ -103,11 +103,11 @@ theorem runIn_mono {C : Prog} {ref ref' : ℕ → Option Bool} (hext : ∀ g b, 
     · simp only [hiu, ite_false] at hc ⊢
       exact read_mono hext hc
 
-theorem ruRef_mono {C : Prog} {r : RU} {ref ref' : ℕ → Option Bool} {ι : ℕ → Bool}
+theorem refIn_mono {C : Prog} {u : List ℕ} {ref ref' : ℕ → Option Bool} {ι : ℕ → Bool}
     (hext : ∀ g b, ref g = some b → ref' g = some b) :
-    ∀ g b, RU.ref C r ref ι g = some b → RU.ref C r ref' ι g = some b := by
+    ∀ g b, C.refIn u ref ι g = some b → C.refIn u ref' ι g = some b := by
   intro g b h
-  unfold RU.ref at h ⊢
+  unfold Prog.refIn at h ⊢
   split_ifs at h ⊢
   · exact h
   · exact hext g b h
@@ -156,7 +156,7 @@ theorem rowOf_congr {S : ℕ} {val val' : ℕ → Bool} {p : Fin S → ℕ × Li
 /-- **The filled trace carries the network certifier's records**: where the trace opens a transfer gate the network
 certifier opens, at the network certifier's value, the trace filled in with the network certifier's values carries every
 record the network certifier registers. -/
-theorem carries_fill {L K S : ℕ} {H : Msg → Msg} {Cm : Commitment Bool} {lay : BoundaryGates L S} {k : ℕ}
+theorem carries_fill {L K S : ℕ} {H : Msg → Msg} {Cm : CommitmentScheme Bool} {lay : BoundaryGates L S} {k : ℕ}
     {op : ℕ → List (Obs L K S) → List Bool} {s : AuditStatement} {ops : List (Opening Bool)} {o : List (Obs L K S)}
     {ref : ℕ → Option Bool} (hfit : lay.Fits s.prog k) (htap : TapOpens H Cm lay k op s ops o)
     (hag : ∀ g, (∃ q ∈ ops, q.pos = g) → ∀ b, ref g = some b → b = tapVal ops g) :
@@ -174,20 +174,16 @@ theorem carries_fill {L K S : ℕ} {H : Msg → Msg} {Cm : Commitment Bool} {lay
 
 /-! ### A registered input of a correct unit is opened, and its input value is the trace's -/
 
-theorem val_some_of_input {H : Msg → Msg} {Cm : Commitment Bool} {s : AuditStatement} {P : Partition} {w : Wit}
+theorem val_some_of_input {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement} {P : Partition} {w : Wit}
     (hP : P.Partitions s.prog) {g : ℕ} (hg : s.prog.gates[g]? = some .input)
     (hnf : ¬ FaultyGate s.prog P (faulty H Cm s P w) g) : ∃ b, w.val H Cm s g = some b := by
   obtain ⟨ι, hι⟩ := correct_of_not_faulty H Cm s P w
   have hlt : g < s.prog.gates.length := (List.getElem?_eq_some_iff.1 hg).1
   have hmem : g ∈ P.gates := hP.2.2.1 g hlt fun b h => by rw [hg] at h; cases h
-  obtain ⟨v, r, u, hr, hu, hgu⟩ := exists_of_mem_gates hmem
-  have hv : v ∉ faulty H Cm s P w := fun hv => hnf ⟨v, hv, r, hr, mem_ru_gates hu hgu, boundary_of_input hg⟩
-  obtain ⟨b, hb, -⟩ := (hι v r hr hv u hu g hgu).2 (boundary_of_input hg)
-  have hc : ¬ (g ∈ RU.gates r ∧ s.prog.Boundary (RU.gates r) g = false) := fun h => by
-    rw [boundary_of_input hg] at h
-    exact Bool.noConfusion h.2
-  unfold RU.ref at hb
-  rw [ite_eq_right hc] at hb
+  obtain ⟨v, u, hu, hgu⟩ := exists_of_mem_gates hmem
+  have hv : v ∉ faulty H Cm s P w := fun hv => hnf ⟨v, hv, u, hu, hgu, boundary_of_input hg⟩
+  obtain ⟨b, hb, -⟩ := (hι v u hu hv g hgu).2 (boundary_of_input hg)
+  rw [ref_of_boundary (boundary_of_input hg)] at hb
   exact ⟨b, hb⟩
 
 theorem traceVal_of_val {C : Prog} {ref : ℕ → Option Bool} {g : ℕ} {b : Bool} (hg : C.gates[g]? = some .input)
@@ -250,7 +246,7 @@ theorem rLeakTap_of_r (H : Msg → Msg) (D : Deploy Coin Col T) {L K S : ℕ} (l
     fill_ext
   have hcar := carries_fill hfit htap (hagree s hs htap.1)
   have hacc := accepted_of hsc.1 hsc.2.1 hfit ι
-    (fun v r hr hv u hu => correct_mono (ruRef_mono hext) (hι v r hr hv u hu)) hcar hcov
+    (fun v u hu hv => correct_mono (refIn_mono hext) (hι v u hu hv)) hcar hcov
   have hacc' : Accepted (circuitProgram s.prog (lay s) (k s)) op (k s) o
       (traceVal s.prog (w.val H D.commit s),
         heldAdv s.prog P (faulty H D.commit s P w) (fill (w.val H D.commit s) (tapVal (tops s)))) := by
@@ -275,7 +271,7 @@ theorem rLeakTap_of_r (H : Msg → Msg) (D : Deploy Coin Col T) {L K S : ℕ} (l
 
 /-! ### A disagreement with the network certifier is a collision -/
 
-theorem mem_assemble_of_val {H : Msg → Msg} {Cm : Commitment Bool} {s : AuditStatement} {found : List (List Msg × Opening Bool)}
+theorem mem_assemble_of_val {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement} {found : List (List Msg × Opening Bool)}
     {g : ℕ} {b : Bool} (h : (assemble s found).val H Cm s g = some b) :
     ∃ q ∈ found, q.1 = s.roots ∧ q.2.pos = g ∧ q.2.val = b := by
   unfold Wit.val at h
@@ -296,7 +292,7 @@ theorem tapVal_mem {ops : List (Opening Bool)} {g : ℕ} (h : ∃ o ∈ ops, o.p
   refine ⟨o, List.mem_of_find?_eq_some ho, by simpa using List.find?_some ho, ?_⟩
   simp [tapVal, ho]
 
-theorem tapLog_valid (H : Msg → Msg) (Cm : Commitment Bool) (roots : List Msg) (ops : List (Opening Bool)) :
+theorem tapLog_valid (H : Msg → Msg) (Cm : CommitmentScheme Bool) (roots : List Msg) (ops : List (Opening Bool)) :
     ∀ p ∈ tapLog H Cm roots ops, H p.1 = p.2 := by
   intro p hp
   obtain ⟨o, -, hpo⟩ := List.mem_flatMap.1 hp
