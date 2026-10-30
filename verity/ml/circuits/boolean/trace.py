@@ -533,26 +533,27 @@ def emit(T: Traced, params: Sequence[Type], ret: Type, B, *colls) -> Coll:
             if b in T.outputs:
                 c = B.call(BL.constant(b))
                 ref[b] = c.refs[0]
-    depth = [0] * (T.first_gate + len(T.gates))
-    for i, (_, ops) in enumerate(T.gates):
-        depth[T.first_gate + i] = 1 + max(depth[o] for o in ops)
-    order = sorted(range(len(T.gates)), key=lambda i: (depth[T.first_gate + i], _KINDS.index(T.gates[i][0]), i))
+    fg, gates, rank = T.first_gate, T.gates, {k: i for i, k in enumerate(_KINDS)}
+    depth = [0] * (fg + len(gates))
+    for i, (_, ops) in enumerate(gates):
+        depth[fg + i] = 1 + max(depth[o] for o in ops)
+    order = sorted(range(len(gates)), key=lambda i: (depth[fg + i], rank[gates[i][0]], i))
     g = 0
     while g < len(order):
         i0 = order[g]
-        kind, d = T.gates[i0][0], depth[T.first_gate + i0]
+        kind, d = gates[i0][0], depth[fg + i0]
         h = g
-        while h < len(order) and T.gates[order[h]][0] == kind and depth[T.first_gate + order[h]] == d:
+        while h < len(order) and gates[order[h]][0] == kind and depth[fg + order[h]] == d:
             h += 1
         group = order[g:h]
         if kind == "not":
-            out = B.batch(BL.NOT, Coll(Array(len(group), BL.BIT), _refs([ref[T.gates[i][1][0]] for i in group])), axes=(0,))
+            out = B.batch(BL.NOT, Coll(Array(len(group), BL.BIT), _refs([ref[gates[i][1][0]] for i in group])), axes=(0,))
         else:
             # operand-major (`Array<2, Array<m, Value<1>>>` over axis 1), so each operand's column keeps its runs
-            ops = _refs([ref[T.gates[i][1][a]] for a in range(2) for i in group])
+            ops = _refs([ref[gates[i][1][a]] for a in range(2) for i in group])
             out = B.batch(BL.AND if kind == "and" else BL.XOR, Coll(Array(2, Array(len(group), BL.BIT)), ops), axes=(1,))
         for m, i in enumerate(group):
-            ref[T.first_gate + i] = out.refs[m]
+            ref[fg + i] = out.refs[m]
         g = h
     return Coll(ret, _refs([ref[o] for o in T.outputs]))
 
