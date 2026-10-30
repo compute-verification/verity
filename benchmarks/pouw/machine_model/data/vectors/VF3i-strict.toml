@@ -33,9 +33,8 @@ credits = [
     ["STSM8T_X4", 4096], ["UTMA", 128], ["UTMA8", 256], ["UTMA512", 4096], ["G4_16", 512], ["G4_32", 1024],
 ]
 
-[published]  # as the legacy scripts printed them: τ, τ at 600 W and U/F_low to 4 places, the margin to 3
+[published]  # as the legacy scripts printed them: τ and U/F_low to 4 places, the margin to 3
 tau = 0.0698
-tau_600w = 0.0546
 uf_low = 1.0938
 margin = 1.935
 

@@ -26,7 +26,6 @@ cuda = ["FFMA", "VIMNMX", "HFMA2", "IMAD", "ALU", "F2FS", "XU", "SHFL", "NOROW",
 [constants]
 cycle_u = 300.08          # R*: u in one SMSP-cycle (rs-lp.py's dual weights)
 honest_real = 1.18        # u of real time a MAC for the honest kernel (99% budget; τ row at 85% of R*)
-honest_real_600w = 1.509  # the same at the 600 W cap
 
 [lp]
 rho = 0.25    # (i): every CUDA lane kind at least a quarter of the MMA's per-lane price
