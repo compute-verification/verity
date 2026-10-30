@@ -60,8 +60,11 @@ from its first second and counts, is followed and covers as drive's own.  Each l
 time of `checked`'s tip (`train.sh TIP MACHINES --deferred STEPS --base VERIFIED`) with every ci.toml job (`AFTER_LANDING`),
 circuit-check and ratchet-gate among them, which `_promote` doesn't wait for (`gate = false`: `_gating`), its base the last
 verified `checked` commit, below the tip, for ratchet-gate to judge the
-landings above; with drive.toml's `after_landing_shards` N, as N runs at once (`--shard K/N` each), passed once every shard
-passed; `--no-cache --circuit-cache` while `after_landing_no_cache` (no pass reused but circuit-check's per-target ones), and
+landings above; with drive.toml's `after_landing_shards` N, as N runs at once (`--shard K/N` each, on machines of `on` no other
+shard has while there are N: `shard_machines`), passed once every shard passed, a run ci launched in place of a shard's twin
+counting once `/data/infra/drive.sh queue drive-shard-add TIP K RUN_ID` adds it to shard K (`queue.drive_shard_add`; cancel
+the twin after);
+`--no-cache --circuit-cache` while `after_landing_no_cache` (no pass reused but circuit-check's per-target ones), and
 `--no-regenerate` (a lock record difference fails it).  Nothing lands before one such run of `checked`
 itself ended (its baseline, verifying the steps it passed; `/data/infra/drive.sh queue baseline SHA --by ci` records a green one
 by hand).  A red run runs on, so every red suite is named, and is cancelled only once its `TAIL` is all it has left (a cancel
@@ -279,6 +282,14 @@ def detach(repo: Path, argv: list[str], env: dict[str, str], script: str | None 
     p = subprocess.Popen(["sh", "-c", DETACH_JOB, "sh", d, *argv], cwd=repo, env=env, stdin=subprocess.DEVNULL,
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
     return {"dir": d, "pid": p.pid}
+
+
+def shard_machines(on: str, n: int) -> list[str]:
+    """Each of ``n`` shards' machines (train.sh's MACHINES) from ``on``'s: shard K gets every Nth from the Kth, so no machine is
+    in two shards and each keeps `on`'s order; with fewer machines than shards, shard K gets the ((K-1) mod M)th of the M,
+    shared.  train.sh twins only when no slot is free, so shards given one list all took its one free slot, one behind another."""
+    ms = on.split(",")
+    return [",".join(ms[k::n]) if len(ms) >= n else ms[k % len(ms)] for k in range(n)]
 
 
 def _ids(rec: dict) -> str:
@@ -1432,8 +1443,11 @@ class Driver:
         if n == 1:
             rec, tail = self._started(self.launch_postland(self.repo, main, self.on, steps, base=below, **extra))
         else:
-            got = [self._started(self.launch_postland(self.repo, main, self.on, steps, base=below, **extra, shard=f"{k}/{n}"))
-                   for k in range(1, n + 1)]
+            if len(self.on.split(",")) < n:
+                q.log(f"research queue drive: {n} shards of the post-landing run of {main[:12]} on {self.on}, fewer machines than "
+                      "shards: they share them")
+            got = [self._started(self.launch_postland(self.repo, main, on, steps, base=below, **extra, shard=f"{k}/{n}"))
+                   for k, on in enumerate(shard_machines(self.on, n), 1)]
             rec, tail = {"ids": [], "shards": [r for r, _ in got]}, next((t for r, t in got if r is None), "")
             if any(r is None for r, _ in got):
                 if ids := [i for r, _ in got if r for i in r.get("ids") or ()]:
