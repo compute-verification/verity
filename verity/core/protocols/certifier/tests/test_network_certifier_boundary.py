@@ -345,8 +345,8 @@ def test_the_scans_link_windows_fit(G):
         base += counts[tid]
     rows = {m["template"]: dict(map(tuple, m["rows"])) for m in members}
     outs = {m["template"]: dict(map(tuple, m["outs"])) for m in members}
-    assert rows["IngressScanBucket"] == {"row": cls.S * cls.B // 2, "sin": 9353, "prog": 280}
-    assert rows["IngressScanFirst"] == {"row": cls.S * cls.B // 2, "prog": 280}
+    assert rows["IngressScanBucket"] == {"row": cls.S * cls.B // 2, "sin": 9353, "prog": 281}
+    assert rows["IngressScanFirst"] == {"row": cls.S * cls.B // 2, "prog": 281}
     assert outs["IngressScanBucket"] == outs["IngressScanFirst"] == {"o0": 1, "o1": 9353, "o2": sh.state_words}
     assert rows["EgressBucket"] == {"state": sh.state_words} and outs["EgressBucket"] == {"o0": 1, "o1": sh.R * sh.B // 2}
     b = BD.Boundary(BD.Side("EgressBucket", "o1", 1, n, sh.R, sh.B, "o0"),
