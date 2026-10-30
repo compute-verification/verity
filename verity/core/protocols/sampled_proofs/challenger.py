@@ -72,23 +72,6 @@ own (`record_message`), which binds the close to the commitment and host.  `sess
 session: the record under its key, the close signed under it, the log the one the close signs, line for line, and a
 session its client closed; then the roots it received (`released_roots_of`).  A session that ends unclosed is no window's.
 
-**A ``--zk`` session's coins** are the challenger's too: C-Flock's keyed coin tree (``coin-tree/hm96-sha512/v2``,
-`verity.ml.commitments.coin_tree`), drawn in the window's session from the challenger's entropy under the prover's
-``Hello`` nonce (`LiveChallenger.draw_tree`), each round opened by the challenger once it has received what the round
-follows (`open_tree`).  The release log holds a line per tree and per round it opened, each written before what it
-records leaves the host, so the signed close covers them:
-
-    tree    = {event: coin-tree, key, nonce, root, spec}
-    round   = {after, coins, event: tree-open, n, round, stream, tree}     tree: its root; coins: `coins_digest`
-
-`after` is the round's message's SHA-512 (the record's ``msg_sha512``), and for the link points (stream ``session``,
-round 0) the SHA-512 of the link's ``root_F`` and each table's ``root_B`` (`link_after`).  `released_roots_of` reads past
-these lines (`tree_line`), `coin_trees_of` reads them, and `session_tree_reason` holds a session's record to them: its
-``coin_tree`` a tree the log shows drawn, its link points and every round's coins that tree's logged openings.
-`sessions_tree_reason` holds an audit's sessions to them, one tree a session and every tree a session's, so no statement's
-coins are drawn twice.  The tree's root and key leave at ``Hello``, as C-Flock's coin server releases them, so its
-unopened coins rest on the tree's hm96 hiding.
-
 **The auditor's ledger** names the one challenger session each window's coins come from (`audited_session`).  The
 auditor (`benchmarks/live_challenger/auditor.py` on the challenger's host, run by the host's operator) appends a signed
 entry, under the
@@ -151,6 +134,23 @@ main's history, but main's check ran on the merge's tree, never on the branch co
 its open names is the auditor-trusted host's word (`trusted-host`).  Every path that credits a session reads it
 through `pinned_session`: `credited_session` (the pin first, then the circuit) and `trusted_session_of`.
 `audited_session` checks no pin and credits nothing.
+
+**A ``--zk`` session's coins** are the challenger's too: C-Flock's keyed coin tree (``coin-tree/hm96-sha512/v2``,
+`verity.ml.commitments.coin_tree`), drawn in the window's session from the challenger's entropy under the prover's
+``Hello`` nonce (`LiveChallenger.draw_tree`), each round opened by the challenger once it has received what the round
+follows (`open_tree`).  The release log holds a line per tree and per round it opened, each written before what it
+records leaves the host, so the signed close covers them:
+
+    tree    = {event: coin-tree, key, nonce, root, spec}
+    round   = {after, coins, event: tree-open, n, round, stream, tree}     tree: its root; coins: `coins_digest`
+
+`after` is the round's message's SHA-512 (the record's ``msg_sha512``), and for the link points (stream ``session``,
+round 0) the SHA-512 of the link's ``root_F`` and each table's ``root_B`` (`link_after`).  `released_roots_of` reads past
+these lines (`tree_line`), `coin_trees_of` reads them, and `session_tree_reason` holds a session's record to them: its
+``coin_tree`` a tree the log shows drawn, its link points and every round's coins that tree's logged openings.
+`sessions_tree_reason` holds an audit's sessions to them, one tree a session and every tree a session's, so no statement's
+coins are drawn twice.  The tree's root and key leave at ``Hello``, as C-Flock's coin server releases them, so its
+unopened coins rest on the tree's hm96 hiding.
 
 The first client is PoUW's live window (`verity.core.protocols.pouw.window`, "Live windows"): its salt, its sample and
 its round coins, round r's opened after round r's root.  The module reads only the standard library,
@@ -1743,15 +1743,17 @@ __all__ = ["Audited", "BINDING", "CAP", "CIRCUIT", "CLOSE_FILE", "CLOSE_FORM", "
            "DESCRIPTOR_FORM", "END_FORM", "HEADS_FORM", "HELLOS_FILE", "HELLOS_FORM", "KEY_FORM", "KEY_RECORD_FORM", "KEY_RECORD_SCHEMA",
            "LEDGER_FORM", "LEDGER_ROLE", "LEDGER_SCHEMA", "LEDGER_SCHEMA_V1", "LEDGER_TAGS", "LOG_FILE", "LOG_FORM",
            "LOG_MALFORMED", "LOG_TAG", "LiveChallenger", "LiveCommitment", "LiveOpening", "LiveRecord", "MAX_COINS",
-           "MAIN_FORM", "MAX_BLOCK", "MAX_LEDGER_LINE", "MAX_LOG_LINE", "MAX_LOG_LINES", "MAX_ROUNDS_LOG", "MAX_SESSION_ID",
-           "MAX_TREE_COINS", "MAX_TREE_LINES", "MINUTES", "NO_AUDIT", "NO_CLOSE", "NO_MAIN", "NO_PINS", "NO_RECORD", "NO_TREE",
-           "OPEN_EVENT", "OPENING_FORM", "PERIOD_KINDS", "PINS_FORM", "PUBLIC_BYTES", "RECORD_FILE", "RECORD_FORM",
-           "RECORD_ROLE", "RESERVED", "SEALED_FILES", "SESSION_FORM", "SESSION_KINDS", "SHARED_TREE", "TREE_EVENT",
-           "TREE_RECORD_FORM", "TREE_SPEC_FORM", "UNUSED_TREE", "LoggedTree", "TreeOpening", "Verify", "WINDOW_FORM", "WITHHELD", "audited_session",
-           "cap_of", "circuit_of", "circuit_reason", "close_message", "coin_trees_of", "coins_digest", "credited_session",
-           "extends", "first_parent_reason", "key_of_record", "lane_of", "later", "layout_problem",
-           "leaf_of", "ledger_head", "ledger_line", "link_after", "pin_line", "pinned_session", "pins_reason", "pins_seal",
+           "MAIN_FORM", "MAX_LEDGER_LINE", "MAX_LOG_LINE", "MAX_LOG_LINES", "MAX_SESSION_ID", "MINUTES", "NO_AUDIT", "NO_CLOSE",
+           "NO_MAIN", "NO_PINS", "NO_RECORD", "OPENING_FORM", "PERIOD_KINDS", "PINS_FORM", "PUBLIC_BYTES", "RECORD_FILE",
+           "RECORD_FORM", "RECORD_ROLE",
+           "RESERVED", "SEALED_FILES", "SESSION_FORM", "SESSION_KINDS", "Verify", "WINDOW_FORM", "WITHHELD", "audited_session",
+           "cap_of", "circuit_of", "circuit_reason", "close_message", "credited_session", "extends", "first_parent_reason", "key_of_record", "lane_of", "later", "layout_problem",
+           "leaf_of", "ledger_head", "ledger_line", "pin_line", "pinned_session", "pins_reason", "pins_seal",
            "ledger_message", "ledger_text", "live_domain", "live_leaf", "live_reason", "log_chain", "log_digest",
            "order_reason", "record_many", "record_message", "record_reason", "released_roots_of", "root_of",
-           "session_named", "session_of", "session_tree_reason", "sessions_tree_reason", "tree_line", "tree_spec_reason", "trusted_commitment",
-           "trusted_reason", "trusted_session_of", "verify_ledger", "verify_periods", "withheld_on", "write_record"]
+           "session_named", "session_of", "trusted_commitment", "trusted_reason", "trusted_session_of", "verify_ledger",
+           "verify_periods", "withheld_on", "write_record",
+           "MAX_BLOCK", "MAX_ROUNDS_LOG", "MAX_TREE_COINS", "MAX_TREE_LINES", "NO_TREE", "OPEN_EVENT", "SHARED_TREE",
+           "TREE_EVENT", "TREE_RECORD_FORM", "TREE_SPEC_FORM", "UNUSED_TREE", "LoggedTree", "TreeOpening",
+           "coin_trees_of", "coins_digest", "link_after", "session_tree_reason", "sessions_tree_reason", "tree_line",
+           "tree_spec_reason"]

@@ -15,10 +15,10 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
 * **coins** (`coinsOf`): v1's (`OneStage.coinsOf`), what `Challenger.drawCoins` reads from the evidence's `coins` under
   the challenger's key, on the verifier's window; none read refuses. The check below runs at them (`checkBlobsAt`): v1's
   `checkAt` refuses a draw other than the one they give before v1's `check`;
-* **trees** (`treesOf`): the coin trees that same session's signed release log shows the challenger drew and opened
-  (`Challenger.trustedTreesOf`). Each session's coins must be one tree's, a tree no other session's, its record's
-  `coin_tree`, link points and every round's coins as the challenger logged them, and every tree logged must be a
-  session's (`Challenger.sessionsTreeReason`); else the check refuses, before any session's verdict;
+* **trees** (`treesOf`, `treesHeld`): the coin trees that same session's signed release log shows the challenger sampled
+  and opened (`Challenger.trustedTreesOf`). Each session's coins must be one tree's, a tree no other session's, its
+  record's `coin_tree`, link points and every round's coins as the challenger logged them, and every tree logged must be
+  a session's (`Challenger.sessionsTreeReason`); else the check refuses, before any session is verified;
 * **check**: `flock-verify verify --zk --statement verity/flock-circuit` with `--circuit`, `--public`, `--partition`,
   `--program` and `--registered` the verifier's own and one `--session` a session, as `one_stage.proofs.verify` runs it
   (`verdicts`, the C-Flock library calls `verifyCmd` makes on that path); then v1's `check` on those verdicts, one of
@@ -207,10 +207,9 @@ def provedUnits (pubB : ByteArray) (record : String) : V (Array Nat) := do
 /-- One `flock-verify verify --zk` over the evidence's sessions on the blobs, as `one_stage.proofs.verify` runs it: each
 session's verdict (`flock-verify/<name>`, of record), with the units an accepted one proved. A refusal for what
 `proofs.verify` refuses: registered values read without the verifier's registered file, a file no blob holds, an
-accepted session naming another program than the partition object's, or proved units other than the evidence's; and,
-given the challenger's `trees`, sessions whose coins aren't theirs (module docstring, **trees**). -/
+accepted session naming another program than the partition object's, or proved units other than the evidence's. -/
 def verdicts (p : Own) (pub : String) (sessions : Array Session) (provedUnits? : Option (Array Nat))
-    (trees : Option (Array Challenger.LoggedTree)) (bs : Core.Blobs) : V (Array (String × Json)) := do
+    (bs : Core.Blobs) : V (Array (String × Json)) := do
   let some tags0 := Flock.Tags.find? STATEMENT | throw s!"the statement {STATEMENT} is not known"
   if tags0.plainLeaves then throw s!"{tags0.name}: a statement with plain SHA-512 leaves: --zk's hiding needs hm96 leaves"
   if p.registered.isNone && readsRegistered p.programJ then
@@ -258,19 +257,13 @@ def verdicts (p : Own) (pub : String) (sessions : Array Session) (provedUnits? :
     | .error e => Except.error s!"setup: {e}"
   let programSha := programDigest p.program
   let want := getD p.partition "program"
-  let records ← sessions.mapM fun (s : Session) => do
-    let some record := String.fromUTF8? (← bs.get s.record s!"session {s.name}'s record")
-      | throw s!"session {s.name}'s record is not UTF-8"
-    pure record
-  if let some ts := trees then
-    let named := (sessions.zip records).map fun (sr : Session × String) =>
-      (sr.1.name, (Json.parse sr.2).toOption.getD Json.null)
-    if let some why := Challenger.sessionsTreeReason ts named then throw why
   let mut coinKeys : Array String := #[]
   let mut out : Array (String × Json) := #[]
   let mut proved : Array Nat := #[]
   let mut all := true
-  for (s, record) in sessions.zip records do
+  for s in sessions do
+    let some record := String.fromUTF8? (← bs.get s.record s!"session {s.name}'s record")
+      | throw s!"session {s.name}'s record is not UTF-8"
     let draw := Flock.Witness.recordDraw record
     -- never another session's setup: every draw whose canonical JSON fails would share one key
     let st := setupOf draw
@@ -323,18 +316,30 @@ def coinsOf (p : Params) (c : OneStage.Commitment) (e : Evidence) : V ByteArray 
   | some ξ => pure ξ
   | none => throw s!"coins: {NO_CHALLENGER}"
 
-/-- The coin trees the window's challenger session shows it drew and opened (module docstring, **trees**): read from
+/-- The coin trees the window's challenger session shows it sampled and opened (module docstring, **trees**): read from
 the evidence's `coins` under the parameters' challenger's key, on the verifier's window. -/
 def treesOf (p : Params) (e : Evidence) : V (Array Challenger.LoggedTree) :=
   match p.base.challenger, p.base.verifier.windowRoot with
   | some (key, _), some w => (Challenger.trustedTreesOf key w e.base.coins).mapError (s!"coins: {·}")
   | _, _ => throw s!"coins: {NO_CHALLENGER}"
 
-/-- The check at the coins `ξ` (module docstring, **check**): the sessions' verdicts on the blobs, each session's coins
-held to the trees the challenger logged (`treesOf`), then v1's `checkAt` at `ξ` on them. -/
+/-- The evidence's sessions held to the challenger's trees `ts` (module docstring, **trees**): each session's record
+on the blobs, refused as `verdicts` refuses it when no blob holds it or it isn't UTF-8, then
+`Challenger.sessionsTreeReason`. -/
+def treesHeld (ts : Array Challenger.LoggedTree) (e : Evidence) (bs : Core.Blobs) : V Unit := do
+  let mut named : Array (String × Json) := #[]
+  for s in e.sessions do
+    let some record := String.fromUTF8? (← bs.get s.record s!"session {s.name}'s record")
+      | throw s!"session {s.name}'s record is not UTF-8"
+    named := named.push (s.name, (Json.parse record).toOption.getD Json.null)
+  if let some why := Challenger.sessionsTreeReason ts named then throw why
+
+/-- The check at the coins `ξ` (module docstring, **check**): each session's coins held to the trees the challenger
+logged (`treesOf`, `treesHeld`), then the sessions' verdicts on the blobs, then v1's `checkAt` at `ξ` on them. -/
 def checkBlobsAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     Core.Outcome OneStage.Public Core.Integrity :=
-  match treesOf p e >>= fun ts => verdicts p.own e.pub e.sessions (some e.base.provedUnits) (some ts) bs with
+  match treesOf p e >>= (treesHeld · e bs) >>= fun () =>
+      verdicts p.own e.pub e.sessions (some e.base.provedUnits) bs with
   | .error err => .reject s!"proofs: {err}"
   | .ok vs => OneStage.checkAt p.base c (some ξ) { e.base with verdicts := vs }
 
@@ -368,10 +373,9 @@ def live (bs : Array ByteArray) : Core.Live (protocol.on bs) where
   factors _ _ _ := rfl
 
 /-- `protocol.main`'s commands, and `verdicts OWN PROOFS [BLOB ...]`: the sessions' verdicts alone (`verdicts`, with no
-proved units to bind and no challenger's trees to hold the coins to), from the verifier's own inputs (`ownOfJson`) and
-the evidence's `proofs` (`proofsOf`), each file canonical JSON; one line, `{"verdicts": [verdict, ...]}` in session
-order or `{"refused": why}`, exit 0 or 1. The difftest holds it to `flock-verify verify --zk`
-(`one_stage.proofs.verify`). -/
+proved units to bind), from the verifier's own inputs (`ownOfJson`) and the evidence's `proofs` (`proofsOf`), each file
+canonical JSON; one line, `{"verdicts": [verdict, ...]}` in session order or `{"refused": why}`, exit 0 or 1. The
+difftest holds it to `flock-verify verify --zk` (`one_stage.proofs.verify`). -/
 def main (args : List String) : IO UInt32 := do
   match args with
   | "verdicts" :: own :: proofs :: blobs =>
@@ -380,7 +384,7 @@ def main (args : List String) : IO UInt32 := do
     let proofsB ← IO.FS.readBinFile proofs
     let r : V (Array (String × Json)) := do
       let (pub, sessions) ← proofsOf (← Core.canonicalJson proofsB)
-      verdicts (← ownOfJson (← Core.canonicalJson ownB)) pub sessions none none (Core.Blobs.ofArray bs)
+      verdicts (← ownOfJson (← Core.canonicalJson ownB)) pub sessions none (Core.Blobs.ofArray bs)
     let line := match r with
       | .ok vs => Json.mkObj [("verdicts", Json.arr (vs.map (·.2)))]
       | .error e => Json.mkObj [("refused", Json.str e)]

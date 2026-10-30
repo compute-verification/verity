@@ -1958,10 +1958,10 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     """v2 (`SampledProofs.OneStageZk`, `one_stage.proofs.check_v2`) is v1 with the verdicts its own run of the verifier
     on the proofs. An audit v1 accepts on the verdict its evidence hands in and its challenger's coins is, in v2: refused
     for naming verdicts; rejected with them replaced by proofs naming no session (no session proved the units the
-    evidence claims, or, when the challenger drew a coin tree, no session used it), and by the session's own verdict
-    when its files are not a statement's; refused before that verdict when the session's coins are not a tree the
-    challenger logged, or two sessions share one; refused when a file it names is in no blob, or its sessions are not
-    the evidence's. `test_proofs.py` holds the verdicts to `verify`'s on a real session, and
+    evidence claims, or, when the challenger sampled a coin tree, no session used it), and by the session's own verdict
+    when its files are not a statement's; refused before any session is verified when a session's coins are not a tree
+    the challenger logged, or two sessions share one; refused when a file it names is in no blob, or its sessions are
+    not the evidence's. `test_proofs.py` holds the verdicts to `verify`'s on a real session, and
     `test_challenger_difftest.py` the trees' check to its Python."""
     s = SETUPS[3]
     law = {"k": 2, "law": "subset"}
@@ -2010,7 +2010,7 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
         "reject", f"proofs: session s's coins are not the challenger's: {NO_TREE}")
     assert run(base | {"proofs": proofs(["s", "t"]), "sessions": ["s", "t"]}) == (
         "reject", f"proofs: session t's coins are not the challenger's: {SHARED_TREE}")
-    got = run(base | {"proofs": proofs([])}, blobs_=blobs[1:])
+    got = run(base | {"proofs": proofs(["s"]), "sessions": ["s"]}, blobs_=blobs[1:])
     assert got[0] == "reject" and got[1].startswith("proofs: circuit: no blob has the SHA-512"), got
     got = run(base | {"proofs": proofs(["s"]), "sessions": ["s"]}, blobs_=blobs[:2])
     assert got[0] == "reject" and got[1].startswith("proofs: session s's record: no blob has the SHA-512"), got

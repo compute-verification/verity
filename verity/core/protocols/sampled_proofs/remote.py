@@ -696,5 +696,5 @@ def trusted_session(directory: str | os.PathLike, heads: Sequence[str | os.PathL
 
 
 __all__ = ["CLOSE", "HEADER", "HELLOS", "KEY", "MAX_BATCH", "MAX_HEAD", "RECORD", "RELEASES", "ROOT_BYTES",
-           "RemoteChallenger", "Session", "TREE_FORM", "close_session", "greet", "hello_lines", "ledger_lines", "log_lines",
+           "RemoteChallenger", "Session", "close_session", "greet", "hello_lines", "ledger_lines", "log_lines",
            "main_lines", "open_session", "released_roots", "serve", "session_files", "trusted_session"]
