@@ -79,7 +79,7 @@ def receiptUnitMacs (K R C : ℕ) : ℕ := 2 * (K / 32) * receiptWordMacs R C
 /-- **The fewest multiply-adds any credited word of the declared circuit stands for**, at `macs k` for a word of kind
 `k` (`receiptWordMacs R C` for an H1 + fx1 tile's): the minimum over its credited words (`Compose.creditedWords`), and
 `0` for a circuit of none. It is exact for a circuit whose words are all of one kind (H1 + fx1 alone). -/
-def Compose.minWordMacs {ι K : Type} (Sc : Compose.Scheme K) (Cd : Compose.Declared ι) (macs : Compose.Kind → ℕ) : ℕ :=
+def Compose.minWordMacs {ι K : Type} (Sc : Compose.Scheme K) (Cd : Compose.RegisteredCircuit ι) (macs : Compose.Kind → ℕ) : ℕ :=
   ((Compose.creditedWords Sc Cd).map fun i => macs (Compose.kindAt Cd i)).min?.getD 0
 
 end Accounting

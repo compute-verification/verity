@@ -44,7 +44,7 @@ open Accounting.SecurityProofs.ComposePeriod
 /-! ## The circuit -/
 
 /-- `N` committed words of no operands, one a unit, one live round. -/
-def circuit (N : ℕ) : Declared Unit where
+def circuit (N : ℕ) : RegisteredCircuit Unit where
   dag := List.replicate N Honest.word
   calls := 1
   call := fun _ => 0

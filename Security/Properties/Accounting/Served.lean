@@ -44,7 +44,7 @@ open Accounting.Compose Accounting.Served
 non-input gates `i` (its gates are `[start c, start (c + 1))`) lies in the gate span of a proof block of `l`, read as
 the Program's root gate `i − start c`, and its declared unit is `base (stepOf c) (linearOf c)` plus that proof block's
 number; each input slot's gate is an input of the call; and every proof block's number is below the call's units. -/
-def CallUnits {ι : Type} (L : Shape) (Cd : Declared ι) (start : ℕ → ℕ) (c : ℕ) (l : SampledProofs.Slots.SlotOrder) :
+def CallUnits {ι : Type} (L : Shape) (Cd : RegisteredCircuit ι) (start : ℕ → ℕ) (c : ℕ) (l : SampledProofs.Slots.SlotOrder) :
     Prop :=
   (∀ i, start c ≤ i → i < start (c + 1) → i < Cd.dag.length → Cd.binding i = none →
     ∃ b ∈ l.blocks.toList, ∃ u, b.unit = some u ∧ Cd.unit i = L.base (L.stepOf c) (L.linearOf c) + u ∧
@@ -57,7 +57,7 @@ def CallUnits {ι : Type} (L : Shape) (Cd : Declared ι) (start : ℕ → ℕ) (
 `query w` has `unitsOf w` units; the declared circuit has the window's `population` of units; each gate lies in its
 call site's gate range `[start c, start (c + 1))`; and every call site's gates are its Program's (`CallUnits`), wherever
 that Program's layout is defined. -/
-def ServedUnits {ι : Type} (L : Shape) (Cd : Declared ι) (prog : ℕ → SampledProofs.Program) (query : ℕ → Json)
+def ServedUnits {ι : Type} (L : Shape) (Cd : RegisteredCircuit ι) (prog : ℕ → SampledProofs.Program) (query : ℕ → Json)
     (start : ℕ → ℕ) : Prop :=
   (∀ w, w < L.calls → SampledProofs.Partition.units (prog w) (query w) = .ok (L.unitsOf w)) ∧
     Cd.units = L.population ∧
@@ -80,7 +80,7 @@ a run input that some gate reads: `UnitsOfLayout` commits the run input at the d
 its first reader's round, which is a round of the window. So no circuit with an activation meets both, and the live
 statements can't take `UnitsOfLayout` as written. -/
 def SeededScheduleNotLive : Prop :=
-  ∀ (ι : Type) (Cd : Declared ι) (Np Kd : ℕ) (p : SampledProofs.Program) (query : Json)
+  ∀ (ι : Type) (Cd : RegisteredCircuit ι) (Np Kd : ℕ) (p : SampledProofs.Program) (query : Json)
     (l : SampledProofs.Slots.SlotOrder),
     SampledProofs.Slots.layout p query = .ok l → Properties.Compose.UnitsOfLayout Cd Np Kd p query → Cd.Wf →
       (∃ ℓ j, Cd.binding ℓ = some .run ∧ j < Cd.dag.length ∧ Cd.Reads j ℓ) → ¬ LayerCommitted Cd
@@ -88,16 +88,16 @@ def SeededScheduleNotLive : Prop :=
 /-- **The served hypothesis**: declared circuit `Cd`, classed by `cls`, is served window `L` in form `F` (`Tie`), its
 units are the per-call Programs' (`ServedUnits`), and the verifier's draw over its population misses as a uniform
 subset does (`DrawMissesSubset`). With `TieCommits` and `TieLive` it gives `Scope`'s two protocol conjuncts
-(`LayerCommitted`, `Declared.Live`; `TieScope`), and it carries `UnitsOfLayout`'s units and draw, per call. -/
-def IsServed {ι : Type} (L : Shape) (F : Form) (Cd : Declared ι) (cls : ℕ → Cls) (prog : ℕ → SampledProofs.Program)
+(`LayerCommitted`, `RegisteredCircuit.Live`; `TieScope`), and it carries `UnitsOfLayout`'s units and draw, per call. -/
+def IsServed {ι : Type} (L : Shape) (F : Form) (Cd : RegisteredCircuit ι) (cls : ℕ → Cls) (prog : ℕ → SampledProofs.Program)
     (query : ℕ → Json) (start : ℕ → ℕ) : Prop :=
   Tie L F Cd cls ∧ ServedUnits L Cd prog query start ∧ DrawMissesSubset
 
 /-- **A tied circuit is in Compose's scope given the three conjuncts the tie doesn't read**: `Tie` gives `Scope`'s
-`Declared.Live` (`TieLive`) and `LayerCommitted` (`TieCommits`), so a tied circuit that is well formed, with a positive
+`RegisteredCircuit.Live` (`TieLive`) and `LayerCommitted` (`TieCommits`), so a tied circuit that is well formed, with a positive
 `δs` and its scheme's luck proved, meets `Scope`. -/
 def TieScope : Prop :=
-  ∀ (ι K : Type) (Sc : Scheme K) (L : Shape) (F : Form) (Cd : Declared ι) (cls : ℕ → Cls) (δs : ℝ),
+  ∀ (ι K : Type) (Sc : Scheme K) (L : Shape) (F : Form) (Cd : RegisteredCircuit ι) (cls : ℕ → Cls) (δs : ℝ),
     Tie L F Cd cls → Cd.Wf → 0 < δs → Sc.LuckProved → Scope Sc Cd δs
 
 end Properties.Served

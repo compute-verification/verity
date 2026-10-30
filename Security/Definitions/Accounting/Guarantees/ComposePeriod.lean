@@ -87,7 +87,7 @@ prefix, of `j = Outcomes.prefixLen` windows. Under:
   (`periodGame` at `liveCone`);
 * in every window, no dead tile's late cone holds live words (`DeadConeDead`, which a Program COMPILE accepts has when
   its `zeroCone` is `0`: *Its line*), so a dead tile's `liveCone` is `0`;
-* sampled (I8)'s pieces on the period's proofs, `Declared.layer` in every window (`Declared.periodLayer` at the run's
+* sampled (I8)'s pieces on the period's proofs, `RegisteredCircuit.layer` in every window (`RegisteredCircuit.periodLayer` at the run's
   `pr`): `Of`'s game clause on every prefix (`PrefixOf`), binding at `δ_bind` in each window (`MovedIn`), proof
   soundness jointly over each window's draws at `δ_ks` (`JointSound`) and `Pins`. Binding is per window, so the period
   composes the windows' binding;
@@ -167,9 +167,9 @@ period's check.
 run at once on several GPUs are not one period, so a period's windows are one serving stream's, and a fleet runs one
 period per stream: adding GPUs doesn't shorten a period.
 
-*Each window's writers.* `Declared.periodLayer` puts every position's writer in its own window by definition (its
+*Each window's writers.* `RegisteredCircuit.periodLayer` puts every position's writer in its own window by definition (its
 `src` at window `w` names a tile of window `w`, `periodLayer_src` by `rfl`, so a late edge stays in its window,
-`late_one`), and nothing is assumed for it. That a late edge's cone lies in the IR's rests on `Scope`'s `Declared.Wf`
+`late_one`), and nothing is assumed for it. That a late edge's cone lies in the IR's rests on `Scope`'s `RegisteredCircuit.Wf`
 and `LayerCommitted`, the service committing each value it writes by its IR cut, or a computed value only its own
 proof block reads by the draw. A window with one salt, opened before its activations are committed, doesn't meet
 `LayerCommitted`, so it is out of scope.
@@ -200,7 +200,7 @@ total draws `j·K_d` and its load set it, not how it is cut into windows.
 
 `D₀ = 0` is an assumption of these numbers, not a computed fact. `zeroCone` is `0` when no tile of no words reaches
 a tile of words, which COMPILE's `salt-flow` and `noise-in-z` checks are meant to give, and nothing computes
-`zeroCone` of a served circuit until a `Declared` is built from its Program. `DeadConeDead` rests on it too: at
+`zeroCone` of a served circuit until a `RegisteredCircuit` is built from its Program. `DeadConeDead` rests on it too: at
 `D₀ > 0` a tile of no words reaches a tile of words, and in a window where that tile is dead and the tile it reaches is
 live, `DeadConeDead` fails, the premise is false and the statement says nothing. Only where every such tile is live,
 in every window, does a positive `D₀` merely add `D₀/u` to `ε(j)`, a term that doesn't shrink with `j`.
@@ -228,11 +228,11 @@ attribution inside the period (one certificate for the prefix's device interval)
 first failure (no retry, and none dropped); no link between windows beyond each window's inputs, cut where its IR
 cuts them; no period over windows run at once (above); no check that the service's record ran the windows in order
 or kept its periods disjoint (above); nothing of seeded windows (*Live coins only*); and, as `CircuitWork`, nothing
-of a served workload until a `Declared` is built from a compiled Program and `Properties.Compose.UnitsOfLayout` is
+of a served workload until a `RegisteredCircuit` is built from a compiled Program and `Properties.Compose.UnitsOfLayout` is
 proved. -/
 def CircuitWorkPeriod : Prop :=
   ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
-    [Nonempty V] (Sc : Scheme K) (Cd : Declared ι) {n Np Kd : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ Np)
+    [Nonempty V] (Sc : Scheme K) (Cd : RegisteredCircuit ι) {n Np Kd : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ Np)
     (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
     (Wp : Period C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
     (Pl : Play (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n K T L U)
@@ -277,7 +277,7 @@ words' `T_cred`, needs `CreditOfWork` on each credited window's run, which the p
 is not stated. Everything `CircuitWorkPeriod` doesn't say, this doesn't either. -/
 def CircuitCreditPeriod : Prop :=
   ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
-    [Nonempty V] (Sc : Scheme K) (Cd : Declared ι) {n Np Kd : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ Np)
+    [Nonempty V] (Sc : Scheme K) (Cd : RegisteredCircuit ι) {n Np Kd : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ Np)
     (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
     (Wp : Period C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
     (Pl : Play (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n K T L U)

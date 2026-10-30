@@ -179,7 +179,7 @@ theorem skip_not_paid {B V : Type} {s N n : ℕ} (pr : Outcomes Bool B (circuit 
   unfold periodMode
   split_ifs
   · rw [stages_skipPeriod]
-    simp [skipStages, SplitStages.joint, SplitStages.modeAt, tileStage, Declared.stageOf, circuit]
+    simp [skipStages, SplitStages.joint, SplitStages.modeAt, tileStage, RegisteredCircuit.stageOf, circuit]
   · decide
 
 theorem paths_nonempty {Ω : Type} [h : Nonempty Ω] : ∀ n, Nonempty (Paths Ω n)
@@ -196,7 +196,7 @@ theorem sizePerWord_blocks {N : ℕ} (hN : 0 < N) :
   simp only [tileWords_eq, size_blocks, one_ne_zero, if_false, Nat.cast_one, div_one, ciSup_const]
 
 /-- **No right block, no right size.** -/
-theorem rightSize_none {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ} (sz : Fin Np → ℕ)
+theorem rightSize_none {ι K : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) {Np n : ℕ} (sz : Fin Np → ℕ)
     (good : Fin n → Fin Np → Prop) (h : ∀ w t, ¬ good w t) : rightSize Sc Cd sz good = 0 :=
   Finset.sum_eq_zero fun w _ => Finset.sum_eq_zero fun t _ => if_neg fun h' => h w t h'.1
 

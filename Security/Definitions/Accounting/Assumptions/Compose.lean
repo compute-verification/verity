@@ -21,7 +21,7 @@ The logical layer (`CircuitWork`) rests on four claims, the headlines', sampled 
   `Scheme.guess` names: the live line reads it at B′'s `½`, and `2^-64` isn't granted;
 * the fixed-words claim, `Accounting.Assumptions.TS.UnitFixed` (Lemma E1(c) per unit with its fold clause),
   at the run's modes (`Accounting.Compose.tileMode`; `jointMode` in the seeded statements, on the IR-cut layer
-  `Declared.atIR`) and the tiles' words. Its good units are the ones the run paid for, so a receipt-lucky skipped tile
+  `RegisteredCircuit.atIR`) and the tiles' words. Its good units are the ones the run paid for, so a receipt-lucky skipped tile
   isn't credited.
 
 The service's commit order (`Accounting.Compose.LayerCommitted`) is protocol structure, a fact of the declared circuit,
@@ -126,7 +126,7 @@ It has no stage order: a cheater may choose round `r`'s operands and skips after
 round's seed (look-ahead: try several of round `r`'s skip patterns, query round `r + 1`'s seed for each, keep the
 best), or re-roll round `r`'s values after its seed. Each try is a query of its own, and GRIND's per-query union over
 the `T_q` queries is what pays for it, so the premium's number is the staged one's. The binding the seeded statements
-check is at the draw (`Declared.atDraw`), after every seed, where Fiat–Shamir has fixed the roots each seed's
+check is at the draw (`RegisteredCircuit.atDraw`), after every seed, where Fiat–Shamir has fixed the roots each seed's
 preimage names and every round's receipts.
 
 `δ_b` is per prover, as `δ_bind` is: `ecr/sha-512` (`Claims.ExpectedCR`, the record PoUW's binding reads) on that

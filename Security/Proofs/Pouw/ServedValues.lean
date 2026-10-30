@@ -19,7 +19,7 @@ open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assum
 
 /-- **The blocks' sizes sum to at most the credit** of the registered declaration under its pinned lowering: the
 blocks are disjoint, so their AND gates outside the ledger are among `lower D`'s AND gates. -/
-theorem sum_size_le_creditSize {ι : Type} {Cd : Declared ι} {Np : ℕ} {lower : Verity.Declaration → Verity.Circuit}
+theorem sum_size_le_creditSize {ι : Type} {Cd : RegisteredCircuit ι} {Np : ℕ} {lower : Verity.Declaration → Verity.Circuit}
     {D : Verity.Declaration} (M : BlockMap Cd Np lower D) (ledger : Finset (Fin (lower D).N)) :
     ∑ t, M.size ledger t ≤ Verity.creditSize lower D := by
   classical
@@ -32,18 +32,18 @@ theorem sum_size_le_creditSize {ι : Type} {Cd : Declared ι} {Np : ℕ} {lower 
 
 open Classical in
 /-- **The right blocks' words**: the credited words of every block `good` names in each window. -/
-noncomputable def rightWords {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ}
+noncomputable def rightWords {ι K : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) {Np n : ℕ}
     (good : Fin n → Fin Np → Prop) : ℝ :=
   ∑ w : Fin n, ∑ t : Fin Np, if good w t then (tileWords Sc Cd Np t : ℝ) else 0
 
-theorem sizePerWord_nonneg {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np : ℕ) (sz : Fin Np → ℕ) :
+theorem sizePerWord_nonneg {ι K : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) (Np : ℕ) (sz : Fin Np → ℕ) :
     0 ≤ sizePerWord Sc Cd Np sz :=
   Real.iSup_nonneg fun t => by
     split_ifs
     exacts [le_rfl, div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)]
 
 /-- **A block of credited words carries at most `σ` a word.** -/
-theorem size_le_sizePerWord {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) {Np : ℕ} (sz : Fin Np → ℕ) (t : Fin Np)
+theorem size_le_sizePerWord {ι K : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) {Np : ℕ} (sz : Fin Np → ℕ) (t : Fin Np)
     (h : tileWords Sc Cd Np t ≠ 0) : (sz t : ℝ) ≤ sizePerWord Sc Cd Np sz * tileWords Sc Cd Np t := by
   have hle : (if tileWords Sc Cd Np t = 0 then 0 else (sz t : ℝ) / (tileWords Sc Cd Np t : ℝ)) ≤
       sizePerWord Sc Cd Np sz :=
@@ -52,7 +52,7 @@ theorem size_le_sizePerWord {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) {Np
   rw [if_neg h] at hle
   rwa [div_le_iff₀ (Nat.cast_pos.mpr (Nat.pos_of_ne_zero h))] at hle
 
-theorem creditLive_nonneg {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ}
+theorem creditLive_nonneg {ι K C B : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) {Np n : ℕ}
     (Wp : Period C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditWindows (Paths C Cd.rounds × B) n)
     (x : Paths (Paths C Cd.rounds × B) n) : 0 ≤ creditLive Sc Cd Wp ws x := by
   unfold creditLive
@@ -60,7 +60,7 @@ theorem creditLive_nonneg {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι) {
   split_ifs
   exacts [Finset.sum_nonneg fun t _ => Nat.cast_nonneg _, le_rfl]
 
-theorem creditedSize_nonneg {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ}
+theorem creditedSize_nonneg {ι K C B : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) {Np n : ℕ}
     (Wp : Period C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditWindows (Paths C Cd.rounds × B) n)
     (sz : Fin Np → ℕ) (x : Paths (Paths C Cd.rounds × B) n) : 0 ≤ creditedSize Sc Cd Wp ws sz x := by
   unfold creditedSize
@@ -68,7 +68,7 @@ theorem creditedSize_nonneg {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι)
   split_ifs
   exacts [Finset.sum_nonneg fun t _ => Nat.cast_nonneg _, le_rfl]
 
-theorem rightSize_nonneg {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ} (sz : Fin Np → ℕ)
+theorem rightSize_nonneg {ι K : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) {Np n : ℕ} (sz : Fin Np → ℕ)
     (good : Fin n → Fin Np → Prop) : 0 ≤ rightSize Sc Cd sz good := by
   classical
   unfold rightSize
@@ -78,7 +78,7 @@ theorem rightSize_nonneg {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n 
 
 /-- **The size the right blocks miss is at most `σ` times the words they miss**, when every right block is live in a
 credited window. -/
-theorem creditedSize_sub_le {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ}
+theorem creditedSize_sub_le {ι K C B : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) {Np n : ℕ}
     (Wp : Period C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditWindows (Paths C Cd.rounds × B) n)
     (sz : Fin Np → ℕ) (x : Paths (Paths C Cd.rounds × B) n) (good : Fin n → Fin Np → Prop)
     (hgood : ∀ w t, good w t → ws.AcceptedUpTo x w ∧ Wp.liveAt x w t = true) :
@@ -136,7 +136,7 @@ theorem creditFloor_le {N S σ ε Gw Gs : ℝ} (hN : 0 ≤ N) (hS : 0 ≤ S) (h�
       linarith
 
 /-- **A good block is live in a credited window**: it is paid, and `periodMode` skips every other block whole. -/
-theorem good_live {ι C Ξ V : Type} (Cd : Declared ι) {nB mB n : ℕ} (hr : 0 < Cd.rounds) (σ : Fin nB → Fin mB)
+theorem good_live {ι C Ξ V : Type} (Cd : RegisteredCircuit ι) {nB mB n : ℕ} (hr : 0 < Cd.rounds) (σ : Fin nB → Fin mB)
     (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (unitOf : Fin nB → ℕ) (hKd : 0 < k sT)
     (ws : CreditWindows (Coin C Ξ Cd.rounds σ sT) n)
     (opened : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → ℕ → ℕ → V)

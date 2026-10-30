@@ -60,7 +60,7 @@ circuit `Cd` lowered to `lower D`'s one-bit gates. The blocks are disjoint and h
 `t` (`unitWords Cd t`) is an output of the block: its bits are nonempty and among the block's exits
 (`Verity.Circuit.exits`: the block's gates that a gate outside it reads, or that are outputs of `lower D`). It is fixed
 at registration with `D`, `lower` and `Cd`, so each block's size is public. -/
-structure BlockMap {ι : Type} (Cd : Declared ι) (Np : ℕ) (lower : Verity.Declaration → Verity.Circuit)
+structure BlockMap {ι : Type} (Cd : RegisteredCircuit ι) (Np : ℕ) (lower : Verity.Declaration → Verity.Circuit)
     (D : Verity.Declaration) where
   gates : Fin Np → Finset (Fin (lower D).N)
   bits : ℕ → Finset (Fin (lower D).N)
@@ -72,20 +72,20 @@ structure BlockMap {ι : Type} (Cd : Declared ι) (Np : ℕ) (lower : Verity.Dec
 /-- **Proof block `t`'s size**: the credit size of its gates that no other protocol credits, their AND count in
 `lower D` outside `ledger`. `ledger` is the gates of `lower D` another protocol's credit already counts, one ledger
 for every protocol, so that no gate is counted twice. -/
-noncomputable def BlockMap.size {ι : Type} {Cd : Declared ι} {Np : ℕ} {lower : Verity.Declaration → Verity.Circuit}
+noncomputable def BlockMap.size {ι : Type} {Cd : RegisteredCircuit ι} {Np : ℕ} {lower : Verity.Declaration → Verity.Circuit}
     {D : Verity.Declaration} (M : BlockMap Cd Np lower D) (ledger : Finset (Fin (lower D).N)) (t : Fin Np) : ℕ :=
   (lower D).andSize (M.gates t \ ledger)
 
 /-- **A block's live size**: its size `sz t` when it carries live words (`liveWords`), and none when it is dead or of
 no credited words. -/
-def liveSize {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np : ℕ) (live : Fin Np → Bool) (sz : Fin Np → ℕ)
+def liveSize {ι K : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) (Np : ℕ) (live : Fin Np → Bool) (sz : Fin Np → ℕ)
     (t : Fin Np) : ℕ :=
   if liveWords Sc Cd Np live t = 0 then 0 else sz t
 
 open Classical in
 /-- **The credited size `S`**: the live size of every block of the windows before the first refusal
 (`CreditWindows.AcceptedUpTo`), `creditLive` with each block's size in place of its words. -/
-noncomputable def creditedSize {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ}
+noncomputable def creditedSize {ι K C B : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) {Np n : ℕ}
     (Wp : Period C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditWindows (Paths C Cd.rounds × B) n)
     (sz : Fin Np → ℕ) (x : Paths (Paths C Cd.rounds × B) n) : ℝ :=
   ∑ w : Fin n, if ws.AcceptedUpTo x w then ∑ t : Fin Np, (liveSize Sc Cd Np (Wp.liveAt x w) sz t : ℝ) else 0
@@ -94,25 +94,25 @@ open Classical in
 /-- **The right blocks' size**: the size of every block of credited words that `right` names in each window. At
 `DrawnLayer.Good` it is the size whose values the period certifies right: a good block is live in a credited window
 (`periodMode` skips every other block whole). -/
-noncomputable def rightSize {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ} (sz : Fin Np → ℕ)
+noncomputable def rightSize {ι K : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) {Np n : ℕ} (sz : Fin Np → ℕ)
     (right : Fin n → Fin Np → Prop) : ℝ :=
   ∑ w : Fin n, ∑ t : Fin Np, if right w t ∧ tileWords Sc Cd Np t ≠ 0 then (sz t : ℝ) else 0
 
 /-- **The most size a credited word carries**, `σ = max_t sz_t / words_t` over the blocks of credited words, and `0`
 when there are none. It is public, fixed by the registration. -/
-noncomputable def sizePerWord {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np : ℕ) (sz : Fin Np → ℕ) : ℝ :=
+noncomputable def sizePerWord {ι K : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) (Np : ℕ) (sz : Fin Np → ℕ) : ℝ :=
   ⨆ t : Fin Np, if tileWords Sc Cd Np t = 0 then 0 else (sz t : ℝ) / (tileWords Sc Cd Np t : ℝ)
 
 /-- **ε_skip at the accepted prefix**: `σ·ε(j)·N_live/S`, the words `ε(j)` leaves unfixed (`epsPrefix`) at the most
 size a word carries, as a share of the credited size `S`. When every block of credited words carries `σ` a word,
 `S = σ·N_live` and it is `ε(j)`. -/
-noncomputable def epsSkip {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np j : ℕ) (Nlive S : ℝ) (sz : Fin Np → ℕ)
+noncomputable def epsSkip {ι K : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) (Np j : ℕ) (Nlive S : ℝ) (sz : Fin Np → ℕ)
     (a b Λ δs : ℝ) : ℝ :=
   sizePerWord Sc Cd Np sz * epsPrefix Sc Cd Np j Nlive a b Λ δs * Nlive / S
 
 /-- **The size the right values must cover**: `(1 − ε_skip)₊·S`, the credited size discounted by `ε_skip` at the
 realized prefix. A prefix whose `ε_skip` is at least `1` earns nothing. -/
-noncomputable def creditFloor {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np j : ℕ) (Nlive S : ℝ)
+noncomputable def creditFloor {ι K : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) (Np j : ℕ) (Nlive S : ℝ)
     (sz : Fin Np → ℕ) (a b Λ δs : ℝ) : ℝ :=
   max (1 - epsSkip Sc Cd Np j Nlive S sz a b Λ δs) 0 * S
 
@@ -134,7 +134,7 @@ detection, which is to be proved or designed away by the no-fold receipt. -/
 def RightValues : Prop :=
   ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
     [Nonempty V] {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
-    (sT : Fin mB) (unitOf : Fin nB → ℕ) (Sc : Scheme K) (Cd : Declared ι) {n : ℕ} (_hn : 0 < n)
+    (sT : Fin mB) (unitOf : Fin nB → ℕ) (Sc : Scheme K) (Cd : RegisteredCircuit ι) {n : ℕ} (_hn : 0 < n)
     (_hN : Cd.units ≤ tileCount σ sT) (hr : 0 < Cd.rounds) (_hM : Cd.rounds = 1) (_hKd : 1 ≤ k sT)
     (D : Verity.Declaration) (lower : Verity.Declaration → Verity.Circuit) (M : BlockMap Cd (tileCount σ sT) lower D)
     (ledger : Finset (Fin (lower D).N)) (ws : CreditWindows (Coin C Ξ Cd.rounds σ sT) n)

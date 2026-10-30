@@ -214,7 +214,7 @@ end CreditWindows
 open Classical in
 /-- **The accepted prefix's live words**: the words of each window's live tiles (`Period.liveAt`), over the windows
 before the first refusal. `Properties.Pouw.Period.checkedLive` with `Credit.window`'s prefix. -/
-noncomputable def creditLive {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ}
+noncomputable def creditLive {ι K C B : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) {Np n : ℕ}
     (Wp : Period C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditWindows (Paths C Cd.rounds × B) n)
     (x : Paths (Paths C Cd.rounds × B) n) : ℝ :=
   ∑ w : Fin n, if ws.AcceptedUpTo x w then ∑ t : Fin Np, (liveWords Sc Cd Np (Wp.liveAt x w) t : ℝ) else 0
@@ -235,8 +235,8 @@ noncomputable def tileRun {C Ξ V : Type} {m nB mB n : ℕ} (σ : Fin nB → Fin
   rel := rel
   right := right
 
-/-- **The period's proofs as the IR defines them, under `Credit.window`**: `Declared.periodLayer` at `tileRun`. -/
-noncomputable def tileLayer {ι C Ξ V : Type} (Cd : Declared ι) {nB mB n : ℕ} (hr : 0 < Cd.rounds) (σ : Fin nB → Fin mB)
+/-- **The period's proofs as the IR defines them, under `Credit.window`**: `RegisteredCircuit.periodLayer` at `tileRun`. -/
+noncomputable def tileLayer {ι C Ξ V : Type} (Cd : RegisteredCircuit ι) {nB mB n : ℕ} (hr : 0 < Cd.rounds) (σ : Fin nB → Fin mB)
     (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (unitOf : Fin nB → ℕ)
     (ws : CreditWindows (Coin C Ξ Cd.rounds σ sT) n)
     (opened : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → ℕ → ℕ → V)
@@ -366,7 +366,7 @@ claim is computational, not luck, and the fold's no-cheap-part property is neces
 a useful `(c, η)`. The one computational premise covers exact matrix
 products only, so this claim is to be proved in the slot's model or designed away (the no-fold receipt),
 not assumed; until then it is a named premise. -/
-def SharedNoiseLucks {ι K C Ω : Type} [Fintype C] (Sc : Scheme K) (Cd : Declared ι) {Np M n : ℕ}
+def SharedNoiseLucks {ι K C Ω : Type} [Fintype C] (Sc : Scheme K) (Cd : RegisteredCircuit ι) {Np M n : ℕ}
     (Wp : Period C Ω (Fin Np) M n) : Prop :=
   Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G)) ∧
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G)) ∧
@@ -392,7 +392,7 @@ least `(1 − ε(j))₊` of the live words of the windows before the first refus
 def H1J10RCheckedCreditPeriod : Prop :=
   ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
     [Nonempty V] {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
-    (sT : Fin mB) (unitOf : Fin nB → ℕ) (Sc : Scheme K) (Cd : Declared ι) {n : ℕ} (_hn : 0 < n)
+    (sT : Fin mB) (unitOf : Fin nB → ℕ) (Sc : Scheme K) (Cd : RegisteredCircuit ι) {n : ℕ} (_hn : 0 < n)
     (_hN : Cd.units ≤ tileCount σ sT) (hr : 0 < Cd.rounds) (_hM : Cd.rounds = 1) (_hKd : 1 ≤ k sT)
     (ws : CreditWindows (Coin C Ξ Cd.rounds σ sT) n)
     (opened : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → ℕ → ℕ → V) (enc : C → ByteArray)

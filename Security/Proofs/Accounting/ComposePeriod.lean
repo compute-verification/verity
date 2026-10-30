@@ -120,13 +120,13 @@ theorem PeriodTailMax : Accounting.Guarantees.ComposePeriod.PeriodTailMax := by
 
 /-- **A tile's detected live weight**: its `liveCone` when it carries live words, and `0` for a tile of none, whose
 skip no draw detects. The period's budget is taken at these weights. -/
-noncomputable def liveShare {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np : ℕ) (live : Fin Np → Bool)
+noncomputable def liveShare {ι K : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) (Np : ℕ) (live : Fin Np → Bool)
     (t : Fin Np) : ℝ :=
   if liveWords Sc Cd Np live t = 0 then 0 else liveCone Sc Cd Np live t
 
 section Weights
 
-variable {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np : ℕ) (live : Fin Np → Bool)
+variable {ι K : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) (Np : ℕ) (live : Fin Np → Bool)
 
 theorem liveWords_le_tileWords (t : Fin Np) : liveWords Sc Cd Np live t ≤ tileWords Sc Cd Np t := by
   unfold liveWords
@@ -222,7 +222,7 @@ theorem stageShare_mono {N : ℕ} (stg : Fin N → ℕ) {w w' : Fin N → ℝ} (
 
 /-- **The live claims give the stages' luck**: `tileLuck` folded and `tileLuck0` whole on a live tile, as
 `luckAt_of_perTile` gives them, and `1` on a dead one. -/
-theorem luckAt_of_perLiveTile {ι K C : Type} [Fintype C] (Sc : Scheme K) (Cd : Declared ι) {Np : ℕ}
+theorem luckAt_of_perLiveTile {ι K C : Type} [Fintype C] (Sc : Scheme K) (Cd : RegisteredCircuit ι) {Np : ℕ}
     (hLP : Sc.LuckProved) (live : Fin Np → Bool) : ∀ {M : ℕ} (W : SplitStages C (Fin Np) M),
     PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G) →
     PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G) →
@@ -274,7 +274,7 @@ theorem luckAt_of_perLiveTile {ι K C : Type} [Fintype C] (Sc : Scheme K) (Cd : 
 
 /-- **One window's budget at its live weights**: `ServiceBudget` at `liveShare`, whose premises `CircuitWork`'s at
 `shareCone` give. -/
-theorem budget_window {ι K C Ξ : Type} [Fintype C] [Fintype Ξ] (Sc : Scheme K) (Cd : Declared ι) {Np Kd : ℕ}
+theorem budget_window {ι K C Ξ : Type} [Fintype C] [Fintype Ξ] (Sc : Scheme K) (Cd : RegisteredCircuit ι) {Np Kd : ℕ}
     (hLP : Sc.LuckProved) (live : Fin Np → Bool) (W : SplitStages C (Fin Np) Cd.rounds) {ρ p p0 a b wmax Λ : ℝ}
     (hρ : 0 < ρ) (hρN : ∀ t : Fin Np, ρ * Np * shareCone Sc Cd Np t ≤ 1)
     (hwmax : ∀ j, stageShare (tileStage Cd Np) (shareCone Sc Cd Np) j ≤ wmax)
@@ -304,7 +304,7 @@ theorem budget_window {ι K C Ξ : Type} [Fintype C] [Fintype Ξ] (Sc : Scheme K
 
 /-- **The period's budget at its windows' live weights**: `budget_window` in every window, then `PeriodBudget`'s
 induction. -/
-theorem budget_period {ι K C Ξ : Type} [Fintype C] [Fintype Ξ] (Sc : Scheme K) (Cd : Declared ι) {n Np Kd : ℕ}
+theorem budget_period {ι K C Ξ : Type} [Fintype C] [Fintype Ξ] (Sc : Scheme K) (Cd : RegisteredCircuit ι) {n Np Kd : ℕ}
     (hLP : Sc.LuckProved) {ρ p p0 a b wmax Λ : ℝ}
     (hρ : 0 < ρ) (hρN : ∀ t : Fin Np, ρ * Np * shareCone Sc Cd Np t ≤ 1)
     (hwmax : ∀ j, stageShare (tileStage Cd Np) (shareCone Sc Cd Np) j ≤ wmax)
@@ -408,7 +408,7 @@ theorem credited_iff {C B V : Type} {m s Np n : ℕ} (pr : Outcomes C B m s Np n
 
 section Window
 
-variable {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) {Np : ℕ} (live : Fin Np → Bool) (md : Fin Np → Mode)
+variable {ι K : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) {Np : ℕ} (live : Fin Np → Bool) (md : Fin Np → Mode)
 
 /-- A window's folded share at its live weights. -/
 noncomputable def foldS : ℝ := ∑ u, if md u = .folded then liveShare Sc Cd Np live u else 0
@@ -558,7 +558,7 @@ theorem liveWork_of {Nlive Nw a b Λl D0 fixed fd Gt NWt SF S0 Z j : ℝ} (ha : 
 open Classical in
 /-- **One accepted run's work over the period**, off both events: per credited window, the covers, `UnitFixed`'s
 sums and the zero-word cones, summed over the accepted prefix, whose budget game's shares are below `Λl`. -/
-theorem work_step {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) {n Np Kd : ℕ} (hn : 0 < n)
+theorem work_step {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) {n Np Kd : ℕ} (hn : 0 < n)
     (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
     (Wp : Period C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
     (pr : Outcomes C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V)
@@ -744,7 +744,7 @@ theorem circuitWorkPeriod_of_covers (hC : PeriodCoversStmt) :
 /-- **The credit is below the work**: under `LiveWorkAt` at `r(j)` with `a, b > 0`, the words not fixed right,
 `(d_F + d₀)·N_w`, are at most `r(j)·N_w/min(a, b) = ε(j)·N_live`, so `(1 − ε(j))₊·N_live` is at most the words fixed
 right when those aren't negative. -/
-theorem creditPrefix_le {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np j : ℕ) {Nlive a b Λ δs F fd : ℝ}
+theorem creditPrefix_le {ι K : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) (Np j : ℕ) {Nlive a b Λ δs F fd : ℝ}
     (ha : 0 < a) (hb : 0 < b) (hN : 0 ≤ Nlive) (hF : 0 ≤ F)
     (h : LiveWorkAt Nlive (wordsOf Sc Cd : ℝ) a b (rOfPrefix Sc Cd Np j a b Λ δs) F fd) :
     creditPrefix Sc Cd Np j Nlive a b Λ δs ≤ F := by
