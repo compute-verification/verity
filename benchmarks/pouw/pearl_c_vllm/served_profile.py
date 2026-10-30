@@ -88,7 +88,6 @@ def _instrument() -> None:
 
     def engine_(args, group):
         import torch
-        from vllm_bench import find_model
         llm = engine(args, group)
         _CTX["group"] = group
         seen: dict = defaultdict(int)
@@ -107,7 +106,7 @@ def _instrument() -> None:
                 torch.cuda.nvtx.range_pop()
 
         llm.generate = gen
-        model = find_model(llm)
+        model = e2e.find_model(llm)
 
         def pre(_m, a, kw):
             ids = kw.get("input_ids") if kw.get("input_ids") is not None else (a[0] if a else None)
