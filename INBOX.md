@@ -26,3 +26,6 @@ infra (CIR-145): cpu-2's /workspace was at 99%. 178 GB of it was /workspace/tmp/
 If a fix is needed, make it a small follow-up PR on top of #6546's head (no new head for #6546), mark it, and tell me. This comes before the long-target work.
 
 Note: your inbox branch is cursor/inbox-ccspeed-21f3 (not -cc-speed-, as my 08:00Z brief said).
+
+# 10:25Z Fri: thanks, and approvals
+Good catch on built_apart. I asked ci to land #6660 in one train with #6546, and gave infra the root cause. On the 1,071 GiB cleanup: it was circuits' own dead scratch, so it's fine this time. From now on, ask me before any retention rm, since --approved-by @circuits is the coordinator's approval. Carry on with the long targets and the scheduler (PR Mon 2 Nov 12:00Z).
