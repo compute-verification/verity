@@ -226,7 +226,7 @@ A spec-level reference for network accounting's timing channel:
   `slot_row` gives each one's bits in the state row, for a reader that takes them as i32s (vllm's `ScanSlots_v2`), and
   `window_state` the rows a window circuit of the link-window from bucket t0 reads, the scan's rows t0 − 1 on (the
   empty state's for row −1). A Program gives all its outputs to its entry at its anchor (its read bit, n, u32, and 64
-  ids of 17 bits at w63's class, 71 words, the row `SlotEntry_v1` writes once it carries the read bit); a link-window's
+  ids of 17 bits at w63's class, 71 words, the row `SlotEntry_v1` writes); a link-window's
   bucket t reads slot j's entry at row j·nb + ⌊t / EVERY⌋ of one slot-entries input, and an empty slot's entry is
   ignored (its outputs masked by `occ`, never on the egress). A request the class can't hold is refused at the scan's
   unit, never truncated: a prompt of more than `KI` ids (1,024 at w63's class) at its cell, a Program's n over `KO` at
