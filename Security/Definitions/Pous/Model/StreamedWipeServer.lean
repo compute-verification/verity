@@ -12,9 +12,9 @@ the host's RAM, its disks. The memory challenger fills `n` labels of 512 bits (6
 driver's reserve, the host OS. At ratio `r` the fill's share of what the server keeps through the wipe is about
 `(n/r)·(512 + log₂(e·r))` bits (`fillShare`); `R` and the egress count in full.
 
-The claims (`Security/Definitions/Pous/Claims/StreamedWipeServer.lean`) take the verdict as a parameter (`Verdict`,
-with `winRealBy` and `wipeDistinguisherBy` the game's `winReal` and `wipeDistinguisher` under it), so they can be
-stated false at `acceptAll`; and they are met at a deployment (`Deployment`), the H200 as measured (`h200`).
+The claims (`Security/Definitions/Pous/Claims/StreamedWipeServer.lean`) take the acceptance rule as a parameter
+(`Acceptance`, with `winRealBy` and `wipeDistinguisherBy` the game's `winReal` and `wipeDistinguisher` under it), so
+they can be stated false at `acceptAll`; and they are met at a deployment (`Deployment`), the H200 as measured (`h200`).
 -/
 
 namespace Pous.StreamedWipe
@@ -43,23 +43,23 @@ def serverBound (n r k R : ℕ) : ℕ := fillShare n r k + R
 keeps at most 5 GB of its assumed memory capacity plus its egress. -/
 def OperatingPoint (n r k R : ℕ) : Prop := serverBound n r k R ≤ 40000000000
 
-/-- A verdict of the wipe: whether the memory challenger accepts the prover `P` on prior content `z`, labels `L` and
-challenges `c`. The wipe's own is `Accepts` (every answer is its label); `acceptAll` accepts everything. -/
-abbrev Verdict : Type :=
+/-- An acceptance rule of the wipe: whether the memory challenger accepts the prover `P` on prior content `z`, labels
+`L` and challenges `c`. The wipe's own is `Accepts` (every answer is its label); `acceptAll` accepts everything. -/
+abbrev Acceptance : Type :=
   ∀ {N k b q M E : ℕ}, Prover N k b q M E → Bits q → (Fin N → Bits b) → (Fin k → Fin N) → Prop
 
-/-- The verdict that accepts every prover, against which the wipe's guarantees must fail. -/
-def acceptAll : Verdict := fun _ _ _ _ => True
+/-- The acceptance rule that accepts every prover, against which the wipe's guarantees must fail. -/
+def acceptAll : Acceptance := fun _ _ _ _ => True
 
-/-- `wipeDistinguisher` under the verdict `V`: coins `(z, c)`, labels `L`, and it outputs whether `V` accepts `P` and
-`P` keeps `z`. At `V = Accepts` it is `wipeDistinguisher P`. -/
-def wipeDistinguisherBy (V : Verdict) {N k b q M E : ℕ} (P : Prover N k b q M E) :
+/-- `wipeDistinguisher` under the acceptance rule `V`: coins `(z, c)`, labels `L`, and it outputs whether `V` accepts
+`P` and `P` keeps `z`. At `V = Accepts` it is `wipeDistinguisher P`. -/
+def wipeDistinguisherBy (V : Acceptance) {N k b q M E : ℕ} (P : Prover N k b q M E) :
     (Bits q × (Fin k → Fin N)) × (Fin N → Bits b) → Prop :=
   fun x => V P x.1.1 x.2 x.1.2 ∧ Keeps P x.1.1 x.2 x.1.2
 
-/-- `winReal` under the verdict `V`: the probability that `V` accepts `P` and `P` keeps `z`, with the labels `prf K`
-under a uniform key `K`. At `V = Accepts` it is `winReal prf P`. -/
-noncomputable def winRealBy (V : Verdict) {N k b q M E κ : ℕ} (prf : Bits κ → Fin N → Bits b)
+/-- `winReal` under the acceptance rule `V`: the probability that `V` accepts `P` and `P` keeps `z`, with the labels
+`prf K` under a uniform key `K`. At `V = Accepts` it is `winReal prf P`. -/
+noncomputable def winRealBy (V : Acceptance) {N k b q M E κ : ℕ} (prf : Bits κ → Fin N → Bits b)
     (P : Prover N k b q M E) : ℝ≥0∞ :=
   pr (fun x : (Bits q × (Fin k → Fin N)) × Bits κ => wipeDistinguisherBy V P (x.1, prf x.2))
 
