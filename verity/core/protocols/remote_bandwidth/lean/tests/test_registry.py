@@ -58,6 +58,32 @@ def register_op(draw) -> dict:
     return v
 
 
+def stored_op(draw) -> tuple[dict, str]:
+    """A registration of the store a registration log registers (`register_stored`), and its node; now and then of a
+    store the log doesn't register so: θ's value for it of other leaves, words, word width or node, a leaf not whole
+    blocks, or a store the log doesn't name."""
+    n, blocks = draw(st.sampled_from(NODES)), draw(st.sampled_from([1, 6]))
+    root = bytes.fromhex(expand(draw(st.binary(max_size=4)), 64))
+    good, item, store_bytes, store = audit.payload_item(M.STORE, n, blocks, root), None, None, M.STORE
+    if rare(draw, 6):
+        bad = draw(st.sampled_from(["leaves", "words", "word_bits", "domain", "bytes", "store"]))
+        if bad == "bytes":
+            store_bytes = blocks * codec.BLOCK_BYTES + 2
+        elif bad == "store":
+            store = "elsewhere"
+        else:
+            item = good | {"leaves": {"leaves": blocks + 1}, "words": {"words": 1024},
+                           "word_bits": {"word_bits": 32, "words": 1024},
+                           "domain": {"domain": audit.payload_item(M.STORE, b"node-b", 2, root)["domain"]}}[bad]
+    c = draw(st.sampled_from([M.P512, codec.DEFAULT]))
+    kind = draw(st.sampled_from(receipts.KINDS))
+    v = {"op": "register_stored", **M.store_log(n, blocks, root, item=item, store_bytes=store_bytes), "store": store,
+         "codec": M.codec_json(c), "receipt": kind, "bind": False, "layout": receipts.LAYOUT,
+         "rows": 16 if kind == receipts.SKETCH_SHA512 else 0,
+         "nonce": expand(draw(st.binary(max_size=4)), audit.NONCE_BYTES)}
+    return v, n.hex()
+
+
 def event_op(draw, n: str) -> dict:
     """An event for session 0 or 1 of node `n`'s live registration: one that releases a coin, takes a root (now and
     then a malformed one), closes a window or verifies it with no openings."""
@@ -145,9 +171,12 @@ def registry_inputs(draw) -> dict:
         kind = draw(st.sampled_from(["fresh", "fresh", "fresh", "register", "session", "event", "close", "close",
                                      "live", "drawn"]))
         if kind in ("fresh", "register"):
-            r = register_op(draw)
+            if rare(draw, 2):
+                r, n = stored_op(draw)
+            else:
+                r = register_op(draw)
+                n = r["node"]
             ops.append(r)
-            n = r["node"]
             if n not in live:
                 live[n] = (len(drawn), 0)
                 drawn.append(n)
@@ -204,6 +233,20 @@ def test_a_recorded_session_is_counted_at_close_as_the_lean_ends_it(server, name
                                           "sessions": [M.SCENARIOS[name][3]]}]
     assert out["registry"]["refused"] == {M.NODE.hex(): 1}
     assert [out["results"][k] for k in (-4, -1)] == [1, 2]
+
+
+@pytest.mark.parametrize("name", ["honest", "honest-appends", "few", "receipt-path-leaf"])
+def test_a_store_drawn_from_the_registration_log_is_the_registration_of_record(server, name) -> None:
+    """The scenario's store read from a registration log that registers it (`register_stored`) draws the codec seed
+    and digest its registration of record has, and its session is counted at close as that one's."""
+    case, _ = M.recorded(name)
+    reg = M.registration_of(case["registration"])
+    v = recorded(name)
+    stored = {"op": "register_stored", "nonce": ZERO, "store": M.STORE,
+              **M.store_log(reg.node, reg.blocks, reg.payload_root)} | {
+        k: case["registration"][k] for k in ("codec", "receipt", "bind", "layout", "rows")}
+    v["ops"] = [stored, *v["ops"][1:]]
+    assert json.loads(D.replay(PORT, v, server)[1]) == json.loads(D.replay(PORT, recorded(name), server)[1])
 
 
 def test_a_registration_that_binds_tiles_is_refused_as_the_lean_refuses_it(server) -> None:

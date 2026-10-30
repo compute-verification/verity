@@ -1,14 +1,14 @@
-"""The Python side of the remote audit's difftests, which hold `audit.py`, `receipts.py` and `codec.py` to the Lean
+"""The Python side of PoUB's difftests, which hold `audit.py`, `receipts.py` and `codec.py` to the Lean
 (`RemoteAudit`, the verifier's definition: `../../README.md`): the Python behind the Lean's JSON formats
 (`RemoteAudit.Difftest`), and the sessions the tests record. Where the two differ, the Python is what is wrong.
 
 The decoders mirror `RemoteAudit.Difftest`'s: byte strings lowercase hex, indices integers, a registration checked as
 `audit.register` checks one, and `bind` refused (the Lean covers receipts of blocks alone), as `audit.Registry.register`
 refuses a registration that would bind (counted, for a node with one live). Past decoding each side is
-the Python's own code on the decoded objects. A session's events run through `audit.Session` itself, on a clock each
+the Python's own code on the decoded objects. A session's events run through `audit.AuditRun` itself, on a clock each
 event sets, its coins those of a challenger that replays the case's (`Replay`).
 
-A recorded session is one `Run` drives through a real `Session`, the prover's side computed by `audit.Prover` from a
+A recorded session is one `Run` drives through a real `AuditRun`, the prover's side computed by `audit.Prover` from a
 `Store`, honest or with one deviation, every call kept as an event with the clock it read. `SCENARIOS` are the recorded
 ones; each names the outcome the definition gives it, which `test_session.py` holds the Lean's answer to, so a scenario
 that stops reaching its failure fails there, not silently in the difftest."""
@@ -26,8 +26,10 @@ from typing import Any
 
 import verity_difftest as D
 from verity_difftest import protocol as P
+from verity.core import site as S
+from verity.core.protocols import registration as log
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts, wire
-from verity.core.protocols.remote_bandwidth.audit import Params, Session, SessionError
+from verity.core.protocols.remote_bandwidth.audit import AuditRun, Params, SessionError
 from verity.core.protocols.remote_bandwidth.receipts import Plan
 from verity.core.protocols.sampled_proofs.challenger import COIN_BYTES as LIVE_COIN_BYTES, HM96, LiveChallenger
 
@@ -214,11 +216,18 @@ def event_of(v: Any) -> tuple:
 # --- the session ----------------------------------------------------------------------------------------------------
 
 class Clock:
-    def __init__(self) -> None:
-        self.now = 0
+    """The suite's one injected clock: nanoseconds from `now`, each reading `step` after the last (at `step = 0` time moves
+    only when a test sets `now`); waiting until `t` (`period.run`'s `sleep_until`) moves it there."""
+
+    def __init__(self, now: int = 0, step: int = 0) -> None:
+        self.now, self.step = now, step
 
     def __call__(self) -> int:
+        self.now += self.step
         return self.now
+
+    def sleep_until(self, _clock, t: int) -> None:
+        self.now = max(self.now, t)
 
 
 class Replay:
@@ -241,8 +250,9 @@ class Replay:
 
 
 def replayed(reg: audit.Registration, k: int, windows: int, committed: list[bytes], appends: list[bytes],
-             per_coin: int = 1) -> coins.Coins:
-    return coins.Coins(Replay(k, windows, committed, appends, per_coin), reg.digest, k, windows, per_coin=per_coin)
+             per_coin: int = 1) -> coins.SessionCoins:
+    return coins.SessionCoins(Replay(k, windows, committed, appends, per_coin), reg.digest, k, windows,
+                              per_coin=per_coin)
 
 
 def verdict_json(v: audit.Verdict) -> dict:
@@ -254,7 +264,7 @@ def _done(out: audit.Verdict | None) -> dict:
     return {"ok": True} if out is None else verdict_json(out)
 
 
-def apply(s: Session, clock: Clock, e: tuple) -> dict:
+def apply(s: AuditRun, clock: Clock, e: tuple) -> dict:
     """One event through the session: what the call returns, or `refused` where it raises `SessionError`."""
     kind = e[0]
     try:
@@ -283,8 +293,8 @@ def apply(s: Session, clock: Clock, e: tuple) -> dict:
         return {"refused": True}
 
 
-def summary(s: Session) -> dict:
-    """`summaryJ`: what `Session.record` gives that the port computes, which is all of it but the coin commitment's
+def summary(s: AuditRun) -> dict:
+    """`summaryJ`: what `AuditRun.record` gives that the port computes, which is all of it but the coin commitment's
     root, the block size and the registration's fields its digest binds, and of each window's profile its draws; and
     `sessionFn`'s `groups_per_coin` when it isn't 1."""
     rec = s.record()
@@ -341,15 +351,15 @@ def params_of(reg: audit.Registration, kw: dict) -> Params:
 
 
 def session(v: Any) -> dict:
-    """`sessionFn`: a case's events through `audit.Session`, every event's result, the outcome and the record."""
+    """`sessionFn`: a case's events through `audit.AuditRun`, every event's result, the outcome and the record."""
     with decoding():
         reg = registration_of(_get(v, "registration"))
         kw, committed, appends, not_before = session_of(v)
         events = [event_of(e) for e in _list(v, "events")]
         params = params_of(reg, kw)
     clock = Clock()
-    s = Session(params, reg, None, replayed(reg, 0, params.windows, committed, appends, params.groups_per_coin),
-                not_before_ns=not_before, clock=clock)
+    s = AuditRun(params, reg, None, replayed(reg, 0, params.windows, committed, appends, params.groups_per_coin),
+                 not_before_ns=not_before, clock=clock)
     results = [apply(s, clock, e) for e in events]
     return {"outcome": s.outcome, "record": summary(s) if s.outcome == "accepted" else None, "results": results}
 
@@ -379,6 +389,36 @@ def registry_of(v: Any) -> audit.Registry:
     return audit.Registry.from_json(v)
 
 
+STORE = "store"
+
+
+def store_log(node: bytes, blocks: int, payload_root: bytes, store: str = STORE, item: dict | None = None,
+              store_bytes: int | None = None) -> dict:
+    """A remote site's registration log holding a node's store, with the auditor's parameters, as `register_stored`
+    takes them (`{"params", "log"}`): the site, the node as its host, the store as a memory leaf of the node's N blocks
+    (or `store_bytes`), and θ's value for its payload (`audit.payload_item`, or `item`)."""
+    n = node.decode()
+    site = log.site(locs=(S.Loc("site", "site"), S.Loc(n, "host", "site"),
+                          S.Loc(store, "memory", n, tier="dram",
+                                bytes=blocks * codec.BLOCK_BYTES if store_bytes is None else store_bytes)))
+    theta = log.Information((audit.payload_item(store, node, blocks, payload_root) if item is None else item,))
+    return {"params": log.params("remote", log.Auditor()),
+            "log": {"composite": "remote", "entries": [e.to_json() for e in log.chain("remote", [site, theta])]}}
+
+
+def logged_view(v: Any) -> log.View:
+    """`loggedView`: the view of an accepted registration log, `{"params", "log"}`; a log of another composite, or one
+    the check refuses, is refused."""
+    composite, auditor = log.params_of(_get(v, "params"))
+    theirs, entries = log.log_of(_get(v, "log"))
+    if theirs != composite:
+        raise D.Reject("the log is another composite's")
+    try:
+        return log.check(auditor, composite, entries).view()
+    except log.Refused as e:
+        raise D.Reject(str(e)) from None
+
+
 def registry_op(v: Any) -> tuple:
     """`opOf`: a call on the registry, its kind first. A session names its registration by its place among those sampled
     in the case, or in full."""
@@ -388,6 +428,11 @@ def registry_op(v: Any) -> tuple:
         receipts.receipt_kind(kind)
         return (op, hex_(v, "node"), nat(v, "blocks"), hex_(v, "payload_root"), codec_of(_get(v, "codec")), kind,
                 bind, _str(v, "layout"), nat(v, "rows"), hex_(v, "nonce"))
+    if op == "register_stored":
+        bind, kind = _bool(v, "bind"), _str(v, "receipt")
+        receipts.receipt_kind(kind)
+        return (op, logged_view(v), _str(v, "store"), codec_of(_get(v, "codec")), kind, bind, _str(v, "layout"),
+                nat(v, "rows"), hex_(v, "nonce"))
     if op == "session":
         which = _get(v, "registration")
         which = nat(v, "registration") if isinstance(which, int) and not isinstance(which, bool) else registration_of(which)
@@ -401,9 +446,10 @@ def registry_op(v: Any) -> tuple:
 
 
 def _registry_call(r: audit.Registry, source: bytes, drawn: list[audit.Registration], op: str, a: tuple) -> Any:
-    if op == "register":
-        node, blocks, root, c, kind, bind, layout, rows, nonce = a
-        reg = r.register(source, node, blocks, root, c, kind, bind=bind, layout=layout, rows=rows, nonce=nonce)
+    if op in ("register", "register_stored"):
+        *store, c, kind, bind, layout, rows, nonce = a
+        draw = r.register if op == "register" else r.register_stored
+        reg = draw(source, *store, c, kind, bind=bind, layout=layout, rows=rows, nonce=nonce)
         drawn.append(reg)
         return {"codec_seed": reg.codec_seed.hex(), "digest": reg.digest.hex()}
     if op == "session":
@@ -416,7 +462,7 @@ def _registry_call(r: audit.Registry, source: bytes, drawn: list[audit.Registrat
         node, k, e = a
         x = r._live.get(audit._node(node))
         s = x.sessions[k] if x is not None and k < len(x.sessions) else None
-        return apply(s, s.clock, e) if isinstance(s, Session) else {"refused": True}
+        return apply(s, s.clock, e) if isinstance(s, AuditRun) else {"refused": True}
     if op == "close":
         return r.close(a[0]).to_json()
     if op == "live":
@@ -428,7 +474,7 @@ def _registry_call(r: audit.Registry, source: bytes, drawn: list[audit.Registrat
 def registry(v: Any) -> dict:
     """`registryFn`: a case's calls on `audit.Registry` under its source, from the registry read back (`registry_of`),
     each call's result (`refused` where it raises `RegistryError`) and the registry after them. A session's events
-    go through the `Session` the registry holds, on the clock it was started with."""
+    go through the `AuditRun` the registry holds, on the clock it was started with."""
     with decoding():
         source = hex_(v, "source")
         r = registry_of(_get(v, "registry"))
@@ -446,7 +492,8 @@ def registry(v: Any) -> dict:
 # --- recorded sessions ----------------------------------------------------------------------------------------------
 
 class Entropy:
-    """SHA-512 in counter mode under `label`, in place of the operating system's generator."""
+    """The suite's one entropy source: SHA-512 in counter mode under `label`, in place of the operating system's
+    generator."""
 
     def __init__(self, label: bytes) -> None:
         self.label, self.count = label, 0
@@ -511,7 +558,7 @@ def _runs_json(runs) -> list | None:
 
 
 class Run:
-    """One session over a world's store, the verifier's side (a real `Session`) and the prover's (`audit.Prover`, from
+    """One session over a world's store, the verifier's side (a real `AuditRun`) and the prover's (`audit.Prover`, from
     `cheat` if given, else the store) in step, every call to the session kept as an event with the clock it read. The
     clock moves one tick an event unless a call needs more. Every receipt is sampled unless `samples` says fewer."""
 
@@ -528,9 +575,8 @@ class Run:
         self.clock.now = not_before_ns
         self.not_before_ns = not_before_ns
         self.coins = coins.local(reg.digest, 0, windows, Entropy(b"coins"), per_coin=groups_per_coin)
-        self.s = Session(self.params, reg, None, self.coins, not_before_ns=not_before_ns, clock=self.clock)
-        self.prover = audit.Prover(cheat(self.store) if cheat else self.store, None, self.s.commitment,
-                                   entropy=Entropy(b"receipt salts"))
+        self.s = AuditRun(self.params, reg, None, self.coins, not_before_ns=not_before_ns, clock=self.clock)
+        self.prover = audit.Prover(cheat(self.store) if cheat else self.store, None, entropy=Entropy(b"receipt salts"))
         self.events: list[dict] = []
         self.append_coins: list[bytes] = []
         self.challenges: dict[int, coins.LiveOpening] = {}

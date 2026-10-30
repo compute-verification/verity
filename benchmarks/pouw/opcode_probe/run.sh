@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Build every probe, gate it, then gate and time on one leased GPU; the rows go to $OUT. From a pushed commit:
 #
-#   research run --on vy-nebius-2 --project verity --campaign pouw --source <tree> --cwd source --custody-ttl 12h \
-#     --env GPU_LEASE_WHO=<lane> -- bash benchmarks/pouw/opcode_probe/run.sh [SOURCE.cu...] [-- probe.py run flags]
+#   research run --on MACHINE --project verity --source <tree> --cwd source --custody-ttl 12h \
+#     --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/opcode_probe/run.sh [SOURCE.cu...] [-- probe.py run flags]
 #
 # The build and the first gate run outside the lease; `probe.py run` gates again on the leased GPU and times nothing
 # unless every verdict is the declared one.

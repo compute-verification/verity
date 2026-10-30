@@ -574,12 +574,12 @@ probe in Tuesday's window on vy-dc-h200-2 is to measure it, and the 8×H200 rows
 
 Each of `StreamedWipeMeetsReadsTight`, `StreamedWipeMeetsServer`, `StreamedWipeMeetsServer5GB` and
 `StreamedWipeMeetsServerH200` is its claim (`Security/Definitions/Pous/Claims/StreamedWipeServer.lean`) at the wipe's
-verdict, with two lemmas beside it (`Security/Proofs/Pous/StreamedWipe/Witnesses.lean`). The honest one
-(`Pous.Claims.<name>_meets`): its numeric premises, `M_s = 512·N + R`, `0 < N`, `(r − 1)^k · 2^129 ≤ r^k` and the
-5 GB point, hold at the measured H200 at `k = 5500`. The nontrivial one (`Pous.Claims.<name>_fails`): against a verdict
-that accepts everything, a prover that writes its prior content into its memory and reads it back is accepted and
-keeps it with probability 1, while the PRF's advantage against the distinguisher built from it
-(`wipeDistinguisher P`) is 0. A prover that keeps nothing stays within `2^-q` (`Pous.Claims.keepNothing_within`).
+acceptance rule (`Pous.StreamedWipe.Acceptance`), with two lemmas beside it
+(`Security/Proofs/Pous/StreamedWipe/Witnesses.lean`). The honest one (`Pous.Claims.<name>_meets`): its numeric
+premises, `M_s = 512·N + R`, `0 < N`, `(r − 1)^k · 2^129 ≤ r^k` and the 5 GB point, hold at the measured H200 at
+`k = 5500`. The nontrivial one (`Pous.Claims.<name>_fails`): against an acceptance rule that accepts everything, a
+prover that writes its prior content into its memory and reads it back is accepted and keeps it with probability 1,
+while the PRF's advantage against the distinguisher built from it (`wipeDistinguisher P`) is 0. A prover that keeps nothing stays within `2^-q` (`Pous.Claims.keepNothing_within`).
 
 **Measured** (`r20261019-061002-ee6b`, one RTX PRO 6000 Blackwell Server Edition with 188 SMs;
 `benchmarks/pous/streamed_wipe/run.sh`; every gate passed, 76 vectors against `streamed_wipe.label`):
@@ -729,7 +729,7 @@ column storage, whole lower labels as separators, meet in the middle through `P�
   `chainBand` and `chainDense`), encode-after-decode on arbitrary `C`, negative controls, and the flag;
 - the two-labels-from-one-item attacks (`test_pous_two_for_one.py`), bit-exact on real labels: they succeed on the XOR
   sponge and on Miyaguchi–Preneel over band rows, and fail on the overwrite chain. The designer's state game
-  (`pous_state_game.py`, from `internal/p3-instantiation/overwrite-state-game.py`) agrees on dense and band rows;
+  (`pous_state_game.py`) agrees on dense and band rows;
 - the continuous audit's memory challengers against the Lean model (`test_pous_continuous_difftest.py`).
   `pous_continuous_model.py` transcribes the memory challenger of
   `Security/Definitions/Pous/Model/Continuous.lean` definition by definition (a test finds each one word for word

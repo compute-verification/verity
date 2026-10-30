@@ -1,5 +1,5 @@
 """cgemm.cu's gate judged on the CPU: each dumped tile recomputed from x (bf16), W and the per-call key alone, through
-CHECKED-STRIP's own construction (`benchmarks/pouw/theory/checked_strip.py`'s `co32c_words` and `digits`).
+checked_strip's own construction (`benchmarks/pouw/theory/checked_strip.py`'s `co32c_words` and `digits`).
 
 From the key (meta.json's four big-endian words): b (tag 7, egemm_ref.py's dither_rows), c (tag 8, the same patch
 layout over W), beta (tag 10: block j = rows 2j, 2j + 1, entry (row % 2) 32 + r digest byte v, beta_p = bit p of v, so
@@ -67,7 +67,7 @@ def u_rows(key: bytes, row0: int, rows: int) -> np.ndarray:
     return -64 + beta @ cs.W_RE
 
 
-#: H1's narrow U planes (co32c-u16, decision 82): narrow_u.planes(16), offset 16, so U in {-16..-1, 1..16}
+#: H1's narrow U planes (co32c-u16): narrow_u.planes(16), offset 16, so U in {-16..-1, 1..16}
 W_RE16 = np.array([1, 2, 4, 8, 17], np.int64)
 
 
@@ -123,7 +123,7 @@ def check_half(d: Path, meta: dict) -> dict:
     m_, n, k, seed, inv_s = meta["m"], meta["n"], meta["k"], meta["seed"], np.float32(meta["inv_s"])
     key = b"".join(struct.pack(">Q", int(w, 16)) for w in meta["key"])
     tiles_n = n // T
-    # H1 (co32c-u16, decision 82): Q/K per (head, token) asymmetric floor at top 111, s = max(max(x) / 111, max(-x) / 112)
+    # H1 (co32c-u16): Q/K per (head, token) asymmetric floor at top 111, s = max(max(x) / 111, max(-x) / 112)
     # clamped to 1e-30 then * (1 + 2^-20), X = floor(x / s) + b in [-112, 111] (matching hrow_s + hquant_h1 and
     # steps.floor_quant: one divide, no clamp); the narrow U (u_rows16_half); Y = X_lo + X_hi in [-224, 222] split as
     # Y0 = ((Y + 64) & 127) - 64, Y1 = (Y - Y0) >> 7 with P_A = [Y0 | Y1], P_B = [-U | -U]. Else Dither-C's 7-bit cohalf.
@@ -189,7 +189,7 @@ def check(d: Path) -> dict:
     if "cohalf" in meta.get("kinds", {}).values():
         return check_half(d, meta)
     m_, n, k, seed, inv_s = meta["m"], meta["n"], meta["k"], meta["seed"], np.float32(meta["inv_s"])
-    # H1's numerics (co32c-u16, decision 82): per-token s_a = amax / 126 (recomputed from x, fp32, matching crow_s), then
+    # H1's numerics (co32c-u16): per-token s_a = amax / 126 (recomputed from x, fp32, matching crow_s), then
     # X = floor(clamp(x / s_a, -126, 126)) + b dividing by s_a (two roundings, as crow_s + cquant_h1 and steps.act_quant
     # do, not one reciprocal), weights +-110 with the narrow U (u_rows16). Else Dither-C's one-scale 7-bit form.
     h1 = meta.get("numerics") == "h1"

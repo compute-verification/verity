@@ -1,3 +1,4 @@
+import CoreProtocol.Registration
 import Flock.Canon
 import RemoteAudit.Flight
 
@@ -7,9 +8,11 @@ import RemoteAudit.Flight
 At most one live registration a node (the red team's KB-4). `register` draws a codec seed (`Registration.register`) only
 for a node with none live: a second while one is live is refused and counted (`refused`), and draws nothing, so a retry
 never redraws. A session runs over its node's live registration, drawn by this registry, as its k-th, k its sessions so
-far: the epoch its coins are committed under (`coins.Coins`, epoch k of the one challenger). A registration ends only
+far: the epoch its coins are committed under (`coins.SessionCoins`, epoch k of the one challenger). A registration ends only
 when the verifier closes it (`close`), which counts each of its sessions as it stands: "accepted", the failure that
 rejected it, or `UNENDED`, counted as failed. `drawn` is R, the registrations a node has had, closed and live.
+`registerStored` draws for the store the deployment's registration log registers (`stored?`): its node, `N` and payload
+root are the log's.
 
 `toJson` and `ofJson` are `registry/v0`, which keeps the registry across the verifier's processes: a registration read
 back is live and closable, and runs no session, its sessions' outcomes as they stood.
@@ -87,6 +90,35 @@ def register (r : Registry) (source node : ByteArray) (blocks : Nat) (payloadRoo
     return (none, { r with refused })
   let reg ← Registration.register source node blocks payloadRoot codec receipt bind layout rows nonce
   pure (some reg, { r with live := r.live.push { node, digest := reg.digest, drawn := some reg } })
+
+/-- `audit.PAYLOAD_WORDS`: a payload leaf's words in θ, a block's bytes as 16-bit words. -/
+def PAYLOAD_WORDS : Nat := Codec.BLOCK_BYTES / 2
+
+/-- `audit.stored`: the store the registration log registers as `store`, read from an accepted log's view: the memory
+leaf of that id, in a host, whose id is the node, holding `N` blocks' bytes, and θ's value of the same name, the payload
+by its root, a leaf a block of `PAYLOAD_WORDS` 16-bit words in the node's payload domain. The node, `N` and the payload
+root, which the registration's digest binds. -/
+def stored? (v : Core.Registration.View) (store : String) : Except String (ByteArray × Nat × ByteArray) := do
+  let some x := (v.site.loc? store).filter (·.kind == .memory)
+    | throw s!"the registration log registers no memory leaf {store}"
+  let some host := v.site.host? x | throw s!"the store {store} is in no host"
+  if x.bytes % Codec.BLOCK_BYTES ≠ 0 then throw s!"the store {store} is not whole blocks of 4096 bytes"
+  let node ← node? host.toUTF8
+  let blocks := x.bytes / Codec.BLOCK_BYTES
+  let some t := v.value? store | throw s!"θ registers no payload for the store {store}"
+  let domain := Flock.hexOf (payloadDomain node blocks).id
+  if !(t.leaves == blocks && t.words == PAYLOAD_WORDS && t.wordBits == 16 && t.domain == domain
+      && t.checkpoint.isNone) then
+    throw s!"θ's value {store} is not the store's payload: a leaf a block of {PAYLOAD_WORDS} words in the node's payload domain"
+  pure (node, blocks, ← Flock.unhex t.root)
+
+/-- `Registry.register_stored`: `register` of the store the registration log registers as `store` (`stored?`), its
+node, `N` and payload root the log's; a store the log doesn't register draws nothing (an error). -/
+def registerStored (r : Registry) (source : ByteArray) (v : Core.Registration.View) (store : String)
+    (codec : Codec.Codec) (receipt : Kind) (bind : Bool) (layout : String) (rows : Nat) (nonce : ByteArray) :
+    Except String (Option Registration × Registry) := do
+  let (node, blocks, payloadRoot) ← stored? v store
+  r.register source node blocks payloadRoot codec receipt bind layout rows nonce
 
 /-- The next session over the node's live registration, `Session.State.init` on its parameters and coins, as its k-th
 (`index`, if given, must be k), at `inFlight` windows in flight (`Flight`) and `perCoin` windows a draw's openings coin

@@ -257,10 +257,6 @@ letters alone. -/
 def reprRegions (rs : Array Region) : String :=
   "[" ++ ", ".intercalate ((rs.toList.take 4).map fun (k, t, f, n) => s!"('{k}', '{t}', {f}, {n})") ++ "]"
 
-/-- `payload_domain(node, N)`. -/
-def payloadDomain (node : ByteArray) (blocks : Nat) : FrameV3.Domain :=
-  FrameV3.Domain.make (sha512 (PAYLOAD_DOMAIN ++ frameBytes node)) 0 0 blocks
-
 /-- `codec.digest` of a block of zeros. -/
 def ZERO_DIGEST : ByteArray := Codec.digest (zeros Codec.BLOCK_BYTES)
 
@@ -272,7 +268,7 @@ def weightsOf (digests : ByteArray) : Nat := digests.size / 64
 
 /-- Leaf `j` of the payload tree over `N` blocks, `engines` arenas of `arenaBlocks` (each its weights blocks, `digests`
 64 bytes a block, then zeros) and then zeros, salted under `key`; a pad leaf past `N`. -/
-def payloadLeaf (d : FrameV3.Domain) (engines arenaBlocks N : Nat) (digests key : ByteArray) (j : Nat) : ByteArray :=
+def payloadLeaf (d : FV3.Sha512.Domain) (engines arenaBlocks N : Nat) (digests key : ByteArray) (j : Nat) : ByteArray :=
   if j ≥ N then d.pad j
   else
     let W := weightsOf digests
@@ -282,7 +278,7 @@ def payloadLeaf (d : FrameV3.Domain) (engines arenaBlocks N : Nat) (digests key 
 
 /-- `store._up(dom, level, height, first)`: a level of nodes at `height`, the first of them under leaf `first`,
 climbed to its root. -/
-def climbUp (d : FrameV3.Domain) (level : Array ByteArray) (height first : Nat) : ByteArray := Id.run do
+def climbUp (d : FV3.Sha512.Domain) (level : Array ByteArray) (height first : Nat) : ByteArray := Id.run do
   let mut level := level
   let mut h := height
   for _ in [0:level.size] do
@@ -293,7 +289,7 @@ def climbUp (d : FrameV3.Domain) (level : Array ByteArray) (height first : Nat) 
   return level[0]!
 
 /-- `store._subtree`: the root of the subtree over leaves `first … first + 2^log2 − 1`. -/
-def subtree (d : FrameV3.Domain) (engines arenaBlocks N : Nat) (digests key : ByteArray) (first log2 : Nat) :
+def subtree (d : FV3.Sha512.Domain) (engines arenaBlocks N : Nat) (digests key : ByteArray) (first log2 : Nat) :
     ByteArray :=
   climbUp d ((Array.range (2 ^ log2)).map fun i => payloadLeaf d engines arenaBlocks N digests key (first + i)) 0 first
 
@@ -305,7 +301,7 @@ def expectedRoot (engines arenaBlocks hostBlocks : Nat) (digests node key : Byte
     (chunkLog2 : Nat := CHUNK_LOG2) : ByteArray :=
   let N := engines * arenaBlocks + hostBlocks
   let d := payloadDomain node N
-  let height := FrameV3.depth N
+  let height := log2ceil N
   let c := min chunkLog2 height
   let chunks := 2 ^ (height - c)
   let w := max 1 (min workers chunks)
