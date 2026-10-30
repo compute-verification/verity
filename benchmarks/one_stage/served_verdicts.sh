@@ -93,12 +93,13 @@
 #     V3c out of the run, for a `served_verdicts.sh v3c` started once the window's advice is written.
 #     With the network certifier's piece split in two, CERTIFIER_CHAIN_CMD and CERTIFIER_PERIOD_CMD (CERTIFIER_CMD then
 #     unset, and V3C_CLASS the certifier's scan class, which CLASSES holds), V3c runs before step 4, since the certifier's
-#     answer reads its period.json: the chain after the window commit and before V3c's audit, within CERTIFIER_TIMEOUT
-#     (default 60m), and the period check after period.json, within CERTIFIER_PERIOD_TIMEOUT (default 60m), each as
-#     `bash -c CMD _ D K DIR V3C` in TREE with DIR $OUT/pieces/certifier and V3C V3c's $D/v3c-w<K>-<class>. The period
-#     check writes the certifier's answer.json in DIR, which step 4's certifier piece reads; `served_verdicts.sh v3c`,
-#     which writes no record, moves the steps' logs (CERTIFIER_PRIVATE) to the serve dir's private/pieces/certifier
-#     before it exits.
+#     answer reads its period.json: the chain after the window commit, beside V3c's audit and period.json, within
+#     CERTIFIER_TIMEOUT (default 4h), and the period check once both are done and V3c wrote period.json, within
+#     CERTIFIER_PERIOD_TIMEOUT (default 60m), each as `bash -c CMD _ D K DIR V3C` in TREE with DIR $OUT/pieces/certifier
+#     and V3C V3c's $D/v3c-w<K>-<class>. V3c then takes the window commit, the longer of the chain and V3c's audit,
+#     and the period check, which the run's --timeout holds beside the other steps. The period check writes the
+#     certifier's answer.json in DIR, which step 4's certifier piece reads; `served_verdicts.sh v3c`, which writes no
+#     record, moves the steps' logs (CERTIFIER_PRIVATE) to the serve dir's private/pieces/certifier before it exits.
 # Coins: sampled proofs' draw is Lean's IO.getRandomBytes in the verifier's process on the served node unless PP_CHALLENGER
 # names the live challenger (run.sh's gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY). With H1_GATE (the
 # lane's gate command, by default "ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84"; empty, no
@@ -263,7 +264,7 @@ v3c_period() {  # V3c's audit as one compute audit of the network certifier's pe
 }
 certifier_step() {  # $1 chain|period: the split network certifier's step on V3c's window (step 6), if its command is set
   local cmd lim dir=$OUT/pieces/certifier rc
-  if [ "$1" = chain ]; then cmd=${CERTIFIER_CHAIN_CMD:-} lim=${CERTIFIER_TIMEOUT:-60m}
+  if [ "$1" = chain ]; then cmd=${CERTIFIER_CHAIN_CMD:-} lim=${CERTIFIER_TIMEOUT:-4h}
   else cmd=${CERTIFIER_PERIOD_CMD:-} lim=${CERTIFIER_PERIOD_TIMEOUT:-60m}; fi
   [ -n "$cmd" ] || return 0
   mkdir -p "$dir"
@@ -272,11 +273,12 @@ certifier_step() {  # $1 chain|period: the split network certifier's step on V3c
   say "CERTIFIER-${1^^} (exit $rc): $(tail -1 "$dir/$1.log" | cut -c1-600)"
   return $rc
 }
-v3c_proved() {  # V3c's window committed and the build done: the certifier's chain, V3c's audit and period.json, the period check
-  local rc prc
-  certifier_step chain
+v3c_proved() {  # V3c's window committed, the build done: the certifier's chain beside V3c's audit, then its period check
+  local rc prc chain
+  certifier_step chain & chain=$!
   v3c_audit; rc=$?
   v3c_period; prc=$?
+  wait "$chain"
   if [ "$prc" = 0 ]; then certifier_step period
   elif [ -n "${CERTIFIER_PERIOD_CMD:-}" ]; then say "CERTIFIER-PERIOD: not run: V3c wrote no period.json"; fi
   return $((rc ? rc : prc))
