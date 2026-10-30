@@ -943,17 +943,18 @@ class _Read:
 
 
 def netlist(lay: LoweredUnit, name: str, cut: dict | None = None, leaves: dict | None = None) -> str:
-    """The layout as ``flock-ir-unit/v2`` text: a header line ``FORMAT name rows const n_in_groups (col words n bits..)..
-    n_out_groups (col words n bits..)..``, then one line per row ``|A| A.. |B| B..``, then ``LEAVES <canonical JSON>``
-    (:attr:`Lowering.leaves`) and, for a cut lowering, ``CUT <canonical JSON>`` (:attr:`Lowering.cut`): the netlist's sha256
-    pins the units' leaf maps (red-team-flock-2 IR6) and the cut structure (IR4)."""
-    # the text is joined once: a GLM-5.3 norm unit's is 8.6 GB
+    """The layout as ``flock-ir-unit/v2`` text (:func:`netlist_pieces`), joined once: a GLM-5.3 norm unit's is 8.6 GB."""
     return "".join(netlist_pieces(lay, name, cut, leaves))
 
 
 def netlist_pieces(lay: LoweredUnit, name: str, cut: dict | None = None, leaves: dict | None = None) -> Iterator[str]:
-    """:func:`netlist`'s text in pieces (its header line, its rows :data:`NETLIST_ROWS` lines at a time, its pins), for a
-    caller that writes or hashes it as it is rendered (`circuit.compose_to`): one piece is alive at a time."""
+    """:func:`netlist`'s text a piece at a time (its header line, its rows :data:`NETLIST_ROWS` lines at a time, its pins),
+    for a caller that writes or hashes it as it is rendered (`circuit.compose_to`): one piece is alive at a time.
+
+    The text: a header line ``FORMAT name rows const n_in_groups (col words n bits..)..
+    n_out_groups (col words n bits..)..``, then one line per row ``|A| A.. |B| B..``, then ``LEAVES <canonical JSON>``
+    (:attr:`Lowering.leaves`) and, for a cut lowering, ``CUT <canonical JSON>`` (:attr:`Lowering.cut`): the netlist's sha256
+    pins the units' leaf maps (red-team-flock-2 IR6) and the cut structure (IR4)."""
     head = [FORMAT, name, lay.useful, lay.const]
     for groups in (lay.in_groups, lay.out_groups):
         head.append(len(groups))
