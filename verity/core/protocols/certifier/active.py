@@ -128,6 +128,12 @@ egress grid (`Opener`) before the ingress certifier takes it. So every record, a
 unsealed run's; only the link's bytes change. The first unit that doesn't open is refused, and so is every one after
 it: its ingress window and every later one fault `malformed`.
 
+**The lead's calls** (`Proxy(calls=…)`, off by default; `calls`): the proxies of all of a node's boundary links share
+the node's calls (`calls.NodeCalls`), and each egress and ingress tick counts its bucket against the forward open when
+it runs: ⌈log2(r + 1)⌉ timing bits at the grid's allocation r, and 8·B bits a real frame. A forward past its bits is
+refused in the calls' record, and the link is unchanged. The prover registers its calls on the control channel
+(`calls.serve_calls`), which ends at the certifier and is no boundary link.
+
 **Back from maintenance** (`Proxy(start=k, position=p)`, off by default): a certifier that was down serves from window k
 of the trusted clock on. Its first tick of each grid is the window's first bucket, its first records are window k's, and
 the first egress frame it takes is the Program's at position p, the frames before it being those of the windows before.
@@ -197,6 +203,7 @@ from dataclasses import dataclass, field, replace
 from verity.ml.commitments.identity import tagged_sha512
 from verity.ml.crypto import aead
 from verity.core.protocols.certifier.audit import Audit, Verdict
+from verity.core.protocols.certifier.calls import NodeCalls
 from verity.core.protocols.certifier.certificate import PublicKey, Signer, SignerRefused
 from verity.core.protocols.certifier.grid import (
     GridParams,
@@ -1157,6 +1164,11 @@ class Proxy:
       (`pacer.Pacer`), which writes it to the link `paced` after its boundary on the host's monotonic clock, `origin`'s
       clock then; `releases` holds each bucket's `pacer.Report`, and each egress record is published once its last
       bucket's is in;
+    - with `calls` (off by default), the node's calls (`calls.NodeCalls`), which every proxy of the node's boundary
+      links shares: each egress and ingress tick counts its bucket against the forward open when it runs, in the tick's
+      PoUW window of `pouw_window` certifier windows, at ⌈log2(r + 1)⌉ timing bits for the grid's allocation r and
+      8·B bits a real frame. It changes nothing on the link: a forward past its bits is refused in the calls' record, and
+      no frame is dropped or held for it;
     - `until(predicate)` waits until the proxy's state satisfies it, for a caller that drives a `VirtualClock`."""
 
     def __init__(self, upstream: tuple[str, int], egress: GridParams, ingress: GridParams, sync_set: SyncSet,
@@ -1172,7 +1184,7 @@ class Proxy:
                  prover_context: bytes = b"", challenger_key: PublicKey | None = None,
                  signer: Signer | None = None, run_nonce: Callable[[int], bytes] = secrets.token_bytes,
                  served: ServedProfile | None = None, ordinals: bool = False, compact: bool = False,
-                 pair: Pair | None = None, paced: float | None = None) -> None:
+                 pair: Pair | None = None, paced: float | None = None, calls: NodeCalls | None = None) -> None:
         if paced is not None and not (isinstance(paced, (int, float)) and paced > slack):
             raise ValueError(f"a paced bucket leaves past the slack, so that a tick in time hands it before its time, "
                              f"not {paced!r} s after its boundary")
@@ -1236,7 +1248,7 @@ class Proxy:
             served, egress.allocation, lambda w: syncs[w] if prover is None and w < len(syncs) else slowest)
         self.bucketer = Bucketer(Certifier(ingress_link, ingress), None if salt is None else self._draw_salt, start,
                                  served=admission)
-        self.pair, self.paced = pair, paced
+        self.pair, self.paced, self.calls = pair, paced, calls
         self.releases: list[Report] = []
         self._pacer: Pacer | None = None
         self._reports_task: asyncio.Task | None = None
@@ -1329,6 +1341,7 @@ class Proxy:
             self._check_forwarding()
             row, record = self.shaper.tick()
             n = row_count(row)
+            self._count(t, p, n)
             if not dropped:
                 if pair is None:
                     cells = [*row[:n], padding[: (p.allocation - n) * p.frame_bytes]]
@@ -1414,6 +1427,7 @@ class Proxy:
             if self.pair is not None and self.pair.opener.refused:
                 self.bucketer.certifier.fault(Reason.MALFORMED)
             row, record = self.bucketer.tick()
+            self._count(t, p, row_count(row))
             anchor = t * p.bucket_ms // self.egress.bucket_ms
             own = self.bucketer.own
             for i, frame in enumerate(row[: row_count(row)]):
@@ -1436,6 +1450,11 @@ class Proxy:
             self._changed.set()
 
         await self._ticks("ingress", p, self.bucketer.certifier, tick)
+
+    def _count(self, t: int, params: GridParams, n: int) -> None:
+        """Bucket t of a grid of `params`, holding n real frames, against the node's open forward."""
+        if self.calls is not None:
+            self.calls.tick(t // params.buckets // self.pouw_window, params.allocation, [8 * params.frame_bytes] * n)
 
     def _draw_salt(self, window: int) -> bytes | None:
         """At a PoUW window's first certifier window, draw its salt and give the certifier's own frame, the

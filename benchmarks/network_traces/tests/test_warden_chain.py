@@ -169,7 +169,10 @@ def _steps(tmp_path, run: Path) -> SimpleNamespace:
             "tampered": {"windows": [window | {"accepted": False}, window], "network": {"accepted": False},
                          "ok": True}}}),
         scan=put("scan.json", {"ok": True, "T": 32, "warden_run": rid, "rounds": {
-            "honest": {"audit": {"window_accepted": True}}, "forged": {"audit": {"window_accepted": False}}}}),
+            "honest": {"audit": {"window_accepted": True}}, "forged": {"audit": {"window_accepted": False}}},
+            "coins": {"challenger": "local", "rounds": {r: {"source": "challenger:local", "root": f"{i:02x}" * 64,
+                                                            "session": r, "ok": True}
+                                                        for i, r in enumerate(("honest", "forged"))}}}),
         job=put("job.json", {"path": cr.WARDEN, "rc": {"n2": "0", "scan": "0", "tie": "0"}}), warden_run=str(run))
 
 
@@ -209,6 +212,12 @@ def test_the_warden_path_requires_every_step_on_one_warden_run_and_refuses_a_cer
             f"the endpoint's report names no warden run: {proxy}")
     certifier_certs = cr.certs(certifier_run, certifier_run)
     refused("certs", lambda d: certifier_certs, f"the certificates step's input names no warden run: {proxy}")
+    scan = json.loads(Path(steps.scan).read_text())
+    Path(steps.scan).write_text(json.dumps(scan | {"coins": None}))
+    r = cr.report(steps)
+    assert r["verdict"] == "refused" and r["why"] == {
+        "coins": "refused: scan/honest: no challenger session; scan/forged: no challenger session"}
+    Path(steps.scan).write_text(json.dumps(scan))
     steps.endpoint = steps.tie = None
     r = cr.report(steps)
     assert r["verdict"] == "refused" and r["steps"]["endpoint"]["verdict"] == "not run"
