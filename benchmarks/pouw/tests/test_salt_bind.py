@@ -129,13 +129,13 @@ def _certifier(sid: bytes, key, sign, record: bytes, tmp_path: Path,
     return active.RemoteCertifier(*reveals(c), signers[0].public_key(), signers[1], LINK, RUN_ID), drawn
 
 
-def _challenger(params, c, prover, path: Path, ledger: PS.Registrations) -> SC.Challenger:
+def _challenger(params, c, prover, path: Path, ledger: PS.WindowOpens) -> SC.Challenger:
     k = lms.keygen(lms.Params(64, 4, 2), hashlib.sha512(str(path).encode()).digest())
     live = Wd.live_challenger(0, 1, random.Random(str(path)).randbytes)
     Ch.write_record(path, live.sign_record("auditor-host", lms.public_key(k), lambda m: lms.sign_at(k, 0, m).encode()))
     deployment = SC.Deployment(c.certifier_key, c.run_id, Ch.ChallengerKey(4, 2, lms.public_key(k)))
     return SC.Challenger(params, live, clock=lambda: 0.0, record=OR.Record(lean=False), certifier=c, prover=prover,
-                         coin_record=path, deployment=deployment, registrations=ledger)
+                         coin_record=path, deployment=deployment, opens=ledger)
 
 
 def _window(p: int, reveal: bytes, sid: bytes, prover: bytes, words) -> dict:
@@ -178,7 +178,7 @@ def test_rows_formed_before_any_salt_are_refused_at_a_certified_windows_opening(
     prover, sid = PS.prover_id(key.public), _sid()
     committed = PS.pouw_record(weights_root(_pass(RUN)[1]), sid, prover)
     c, drawn = _certifier(sid, key, sign, committed, tmp_path, reveals)
-    ledger = PS.Registrations()
+    ledger = PS.WindowOpens()
     refused = "the window is certified, and its template's unit reads no salt"
     for p in (0, 1):
         w = _window(p, drawn[p], sid, prover, PRECOMPUTED)
