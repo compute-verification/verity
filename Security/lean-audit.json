@@ -5732,7 +5732,7 @@
     "  (hat : Eq (c.at_ roots o.pos) (Option.some { fst := root, snd := 0 })) (hπ : Eq (c.π o) List.nil)",
     "  (hroot :",
     "    Eq (Claims.Sampling.bytes root)",
-    "      (Flock.Registered.climb dom",
+    "      (Flock.FV3.Sha512.climb dom",
     "        (Flock.Registered.rowLeaf dom 0",
     "          (Claims.Sampling.bytes",
     "            (FlockSoundness.Binding.digBytes",
@@ -5749,7 +5749,7 @@
     "    Bool.true"
    ],
    "assumptions": [],
-   "type_hash": "d9d2eafbac28ccd0a69ce8be6d0256297d9114209248bab63c7ade90ed10941a"
+   "type_hash": "4a1317dddcb169b5fecb54f61bb61966bc49e4006529e09c5ad4a182bb32d143"
   },
   "Claims.Sampling.BitsLin_fails": {
    "owner": "@proofs",
@@ -37528,6 +37528,7 @@
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
+    "Flock.SecurityProofs.SampledKSLiveV5",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -47260,7 +47261,7 @@
    "guarantees": ["Flock.SecurityProofs.SampledKSLiveHonest"]
   },
   "Proofs.Flock.Bridge.LeafMap": {
-   "digest": "1904c3ca4f401f01251c67e3b85ce5a9bec9d5f0ffa7aedb170444c1f62a31d4",
+   "digest": "f6cd0541155ebd59dc084700fabcb991f979812a032fcc43bf5ecdf1c8d77c4b",
    "definitions": {
     "Flock.Bridge.LeafMap": "0a88e232ce1777f3467a92829e2745d110fed9641d39664a0ae16c72145de533",
     "Flock.Bridge.LeafMap.cnt": "4c80450caa4a02b1328e30c826541d62f22d7ccf6683d2b256148ba6b691f87b",
@@ -47272,7 +47273,7 @@
     "Flock.Bridge.LeafMap.ref": "c2d536e506762810c5e344a8407a2608495193319e7ae540ae8fa92896cb02a5",
     "Flock.Bridge.RootFixesDomainL": "4179b593d8cf637861117774e87e259638f7a715249ab6ceb8e20ce826d44e7d",
     "Flock.Bridge.commitDepL": "7d44321223a335c606fcccab445f029f971e9c3f5536b959bc187053e52f8e01",
-    "Flock.Bridge.leavesL": "f6d2ae994619ab5c0730d725d8ac652aaba9b42a646275988c25a6c2fb687b20",
+    "Flock.Bridge.leavesL": "2d15d5d1f58e9ae49330750eb2f173983def48a0d78729ccae5b840cf29ac6e5",
     "Flock.Bridge.pathOfL": "15dc86cd5f624f00053a4dac89fb58464e310d3030929ee14825b610b5b2b73f",
     "Flock.Bridge.portIdxOf": "26853fc00617be1980abc82f5eee1d9f8983df2714b295a2d230a20db0bfa3a3",
     "Flock.Bridge.portsOfL": "ee1b66e2f2d8e3779b1c115777688ff291e97049a377dbe0ccddc9947c240e69",
