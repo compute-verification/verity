@@ -32,8 +32,8 @@ its window's key, regenerates them and checks each against its template (`check.
 Under H1 + fx1 (``eps1-sm120-h1fx1``, `pouw_h1`) on the eager int8_exact row nothing is executed in the linear's place
 (`executes`): the arm serves its own y, and each call is recorded as its own Program, compiled to H1 tile units
 (`verity.core.protocols.pouw.circuit.compile`), with its seed group's roots and its positions.
-Under the lead (``lead-blc4a-t64-rot``, `lead`) on the same arm, the setting ``backend`` (the lead's kernel and
-committer, `lead.LeadBackend`) computes each call's y on its coins, taken after the call's root(A_j), in place of
+Under the lead (``lead-blc4a-t64-rot``, `lead`) on the same arm, the setting ``backend`` (the lead's kernel,
+`lead.LeadBackend`) computes each call's y on its coins, taken after the call's root(A_j), in place of
 the arm's ``scaled_mm`` (`engine.int8_experts.PlainGemm.gemm`). Each engine step's forward is one pass and one window,
 whose salt follows its key's leaf, the weights' root and its call count, and is published at the step's end
 (`lead.LeadRun`).
@@ -197,7 +197,7 @@ class Settings:
     #: H1's window Program's tile unit (`pouw_h1_settings.UNITS`; None is v1's) and the K's it records (`pouw_h1_hooks.layers`)
     unit: str | None = None
     ks: tuple[int, ...] | None = None
-    #: the lead's kernel and committer (`lead.LeadBackend`: ``load``, ``key_leaf``, ``a_root``, ``call``, ``words_root``)
+    #: the lead's kernel (`lead.LeadBackend`: ``load``, ``call``, ``words``)
     backend: Any = None
 
     @classmethod
@@ -237,7 +237,7 @@ class Settings:
             raise ValueError("pouw setting 'start_forward' is a non-negative integer (the salt's SaltWindows.next_forward)")
         backend = raw.get("backend")
         if backend is not None and not all(callable(getattr(backend, f, None)) for f in PL.BACKEND):
-            raise ValueError(f"pouw setting 'backend' is the lead's kernel and committer (`lead.LeadBackend`): "
+            raise ValueError(f"pouw setting 'backend' is the lead's kernel (`lead.LeadBackend`): "
                              f"{', '.join(PL.BACKEND)}")
         return cls(coins, retain, tdir, draws, tamper, device, *paths, schedule, start, *PHS.of(raw), backend)
 
