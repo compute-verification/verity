@@ -1,5 +1,6 @@
 import Definitions.Nci.Guarantees.Witnesses
 import Proofs.Nci.Reads
+import Proofs.Nci.RemotePeriod
 import Proofs.Nci.Capability.Witnesses
 import Proofs.Core.Circuit
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
@@ -422,6 +423,36 @@ theorem factor_half : (1 / 2 : ℝ) ≤
 theorem not_bound {m x y : ℝ} (hm : 1 / 2 ≤ m) (hx : 1 ≤ x) (hy : y ≤ 0) : ¬ (m * x ≤ y) :=
   fun h => by nlinarith
 
+theorem mb0_updateHardness (r : Declaration) (s : ℕ) (b : ℝ) : Cover.Assumptions.UpdateHardness (mb0 r) s b := by
+  intro S _ B hB _
+  rw [Finset.subset_empty.1 hB]
+  simp
+
+theorem mb0_upstream (r : Declaration) (A : Empty → Finset (Fin (Cover.Circuit.ofDecl r).N)) (D' : ℕ) :
+    (mb0 r).Upstream A D' where
+  disjoint := by intro j; exact j.elim
+  disjoint_θ j := j.elim
+  upstream j := j.elim
+
+theorem mb0_regionsAtLeast (r : Declaration) (Aw : Empty → Finset (Fin r.D.N)) (f : ℕ) :
+    Cover.Assumptions.RegionsAtLeast (mb0 r) Aw f :=
+  fun j => j.elim
+
+theorem mb0_coverage_zero : Assumptions.Coverage 0 D (mb0 D).P.card := by
+  unfold Assumptions.Coverage
+  simp [mb0]
+
+theorem mb0_not_coverage_two : ¬ Assumptions.Coverage 2 D (mb0 D).P.card := by
+  unfold Assumptions.Coverage
+  rw [size_D]
+  norm_num [mb0]
+
+theorem D_blockFits : Cover.Assumptions.BlockFits D 2 1 1 4 := ⟨by decide, by decide⟩
+
+theorem capBelowDepth_one_two : Cover.Assumptions.CapBelowDepth 1 1 2 := by
+  unfold Cover.Assumptions.CapBelowDepth
+  norm_num
+
 end Nci.Witness
 
 namespace Nci.SecurityProofs
@@ -636,4 +667,60 @@ theorem PackedIncompressibleContainedTrainingOn_nontrivial :
     fun _ => le_rfl, fun _ => le_rfl, complies_Dθ, not_theta_Dθ, darkReads_Mθ _, pch1_T1_incompressible,
     coverage_pch1, not_bound factor_half (by rw [size_D, dark_Mθ]; norm_num) (by norm_num)⟩
 
+theorem oneWindow_withinCompute : Assumptions.WithinCompute OneWindow.cap 2 := by
+  norm_num [Assumptions.WithinCompute]
+
+theorem oneWindow_pouwSound : Assumptions.PouwSound (PMF.uniformOfFintype Bool) OneWindow.right 0 :=
+  fun _ => (prob_of_forall_not _ fun _ h => h).le
+
+theorem oneWindow_not_pouwSound : ¬ Assumptions.PouwSound (PMF.uniformOfFintype Bool) OneWindow.wrong 0 := by
+  intro h
+  have h1 := h 0
+  have h2 := prob_add_not (PMF.uniformOfFintype Bool) (fun ω => OneWindow.wrong ω 0)
+  rw [prob_of_forall_not (PMF.uniformOfFintype Bool) (E := fun ω => ¬ OneWindow.wrong ω 0) fun _ h => h trivial]
+    at h2
+  linarith
+
+theorem DampenerRemote_honest : Guarantees.DampenerRemote_honest :=
+  ⟨oneWindow_withinCompute, oneWindow_pouwSound, fun _ b => b.elim, fun b => b.elim, complies_D, theta_id D,
+    T1_threaded, T1_weights, by rw [size_D]; norm_num, by decide,
+    fun _ => by norm_num [Assumptions.ResidualAtMost, wrongCapacity]⟩
+
+theorem DampenerRemote_nontrivial : Guarantees.DampenerRemote_nontrivial := by
+  refine ⟨by norm_num, by norm_num, fun _ => by norm_num, oneWindow_withinCompute, oneWindow_not_pouwSound,
+    by norm_num, by norm_num, by norm_num, fun _ b => b.elim, fun _ b => b.elim,
+    fun _ _ _ => by simp [OneWindow.bad], by norm_num, fun b => b.elim, by norm_num, by norm_num, by norm_num,
+    fun _ b => b.elim, fun b => b.elim, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num, by norm_num,
+    by norm_num, by norm_num, by norm_num, complies_D, theta_id D, T0_threaded _ _ _ _ _, T0_weights _ _ _ _ _,
+    by rw [size_D]; norm_num, by norm_num, by decide, by norm_num,
+    fun _ => by norm_num [Assumptions.ResidualAtMost, wrongCapacity], by norm_num, ?_⟩
+  intro h
+  rw [prob_of_forall_not] at h
+  · norm_num at h
+  · rintro - ⟨h1, -⟩
+    rw [bound_T0] at h1
+    norm_num [efficiency, unmonitoredShare, residualShare, lagShare, declaredShare, rhoT] at h1
+
 end Nci.SecurityProofs
+
+namespace Nci.Cover.SecurityProofs
+
+open Verity Nci.Capability.Toy Nci.Witness
+
+theorem CoverTraining_honest : Guarantees.CoverTraining_honest :=
+  ⟨complies_D, theta_id D, mb0_updateHardness D 4 1, mb0_upstream D _ 2, capBelowDepth_one_two, D_blockFits,
+    mb0_coverage_zero⟩
+
+theorem CoverTraining_nontrivial : Guarantees.CoverTraining_nontrivial :=
+  ⟨by norm_num, complies_D, theta_id D, mb0_updateHardness D 4 1, mb0_upstream D _ 2, capBelowDepth_one_two,
+    D_blockFits, mb0_not_coverage_two, by rw [size_D]; norm_num⟩
+
+theorem CoverTrainingAligned_honest : Guarantees.CoverTrainingAligned_honest :=
+  ⟨complies_D, theta_id D, mb0_updateHardness D 4 1, mb0_upstream D _ 2, capBelowDepth_one_two,
+    mb0_regionsAtLeast D _ 1, D_blockFits, mb0_coverage_zero⟩
+
+theorem CoverTrainingAligned_nontrivial : Guarantees.CoverTrainingAligned_nontrivial :=
+  ⟨by norm_num, complies_D, theta_id D, mb0_updateHardness D 4 1, mb0_upstream D _ 2, capBelowDepth_one_two,
+    mb0_regionsAtLeast D _ 1, D_blockFits, mb0_not_coverage_two, by rw [size_D]; norm_num⟩
+
+end Nci.Cover.SecurityProofs

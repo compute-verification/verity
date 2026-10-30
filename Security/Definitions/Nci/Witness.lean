@@ -5,6 +5,7 @@ import Definitions.Nci.Links
 import Definitions.Nci.Fit
 import Definitions.Nci.Layered
 import Definitions.Nci.Packed
+import Definitions.Nci.BitView
 
 /-!
 # The (c, k) guarantees: the instances their witnesses are stated at
@@ -21,7 +22,10 @@ that nothing a proof block reads is fresh and the policy holds at read cap `0`.
 * `T1`: the toy's threading, one counted multiplication (gate `2`) of the weight by the token, the token the one
   thread's value; `T0`, the threading of no counted multiplication; `σ1` and `σ0`, their one parameter slot;
   `noLinks`, links with no sources; `layered0` and `layered1`, `T0` and `T1` keyed with no roots and no lookups;
-* `E0`, the declaration of no gates, which implements itself (`implE0`).
+* `E0`, the declaration of no gates, which implements itself (`implE0`);
+* `mb0`, the cover theorem's multiplication blocks of no product on a declaration's bit view;
+* `OneWindow`: one PoUW window of capacity `2` over the outcomes `Bool`, its certificate `right` or `wrong` at every
+  outcome, and no faulty proof block (`bad`).
 -/
 
 namespace Nci.Witness
@@ -217,5 +221,42 @@ def layered1 (d b : ℕ) : Layered T1 d 1 0 b where
   col_input _ h := absurd h (notMem_empty _)
   col_bits _ h := absurd h (notMem_empty _)
   col_disjoint _ h := absurd h (notMem_empty _)
+
+/-- The multiplication blocks of no product on a declaration's bit view: no counted product has a use, so the upstream
+certificate holds at every depth. -/
+def mb0 (r : Declaration) : Cover.MulBlocks (Cover.Circuit.ofDecl r) Empty Unit where
+  Pall := ∅
+  P := ∅
+  P_subset := subset_rfl
+  m _ := ∅
+  m_nonempty p := p.1.elim
+  m_computed p := p.1.elim
+  m_disjoint p := p.1.elim
+  o p := p.1.elim
+  m_outputs p := p.1.elim
+
+/-! One PoUW window of capacity `2` over the outcomes `Bool`, and no faulty proof block. -/
+
+namespace OneWindow
+
+/-- The window's capacity. -/
+abbrev cap : Fin 1 → ℝ := fun _ => 2
+
+/-- No certificate is wrong. -/
+abbrev right : Bool → Fin 1 → Prop := fun _ _ => False
+
+/-- Every certificate is wrong. -/
+abbrev wrong : Bool → Fin 1 → Prop := fun _ _ => True
+
+/-- No faulty proof block. -/
+abbrev bad : Bool → Finset Empty := fun _ => ∅
+
+/-- A faulty proof block's identity, of none. -/
+abbrev ident : Empty → Unit := fun b => b.elim
+
+/-- A faulty proof block's time and the declared work it skips, of none. -/
+abbrev time : Empty → ℝ := fun b => b.elim
+
+end OneWindow
 
 end Nci.Witness

@@ -10,6 +10,8 @@ import Definitions.Nci.Assumptions.Dampener
 import Definitions.Nci.Assumptions.Training
 import Definitions.Nci.Assumptions.PackedTraining
 import Definitions.Nci.Support
+import Definitions.Nci.Guarantees.CoverTraining
+import Definitions.Nci.Guarantees.Remote
 
 /-!
 # The inference-only policy's guarantees in `(c, k)`: their witnesses
@@ -26,7 +28,9 @@ witnesses at the toy circuit (`Nci.Capability.Toy`, with the instances of `Nci.W
 The premise each `X_nontrivial` drops is the one the bound rests on: the coverage `κ` when the bound is a share of the
 reference circuit (at the threading `T0` of no counted multiplication, every bound is `0`), `ThetaRegistered` when it is
 in the read cap `k` (at `Dθ`, the declaration registering the token too, the toy complies at `k = 0`), the size of the
-reference circuit for `Training`, the sessions for `Inference`, and `WindowsHold` for the dampener.
+reference circuit for `Training`, the sessions for `Inference`, `WindowsHold` for the dampener, and PoUW's soundness
+(`PouwSound`) for the remote dampener. The cover theorem's joins (`Nci.Cover.Guarantees.CoverTraining` and
+`CoverTrainingAligned`) are stated at the multiplication blocks `mb0` of no product, where coverage `α₀ > 0` fails.
 -/
 
 namespace Nci.Guarantees
@@ -364,4 +368,95 @@ def PackedIncompressibleContainedTrainingOn_nontrivial : Prop :=
         (1 * D.D.size D.D.computed - 2 * (1 * Mθ.dark.card)) ≤
       2 * (((0 : ℕ) / (2 : ℕ) : ℝ) * Dθ.D.size Dθ.D.computed + (1 - 1) * ∑ v ∈ Mθ.dark, (novelReads D {v} : ℝ)))
 
+/-- **`DampenerRemote`'s premises hold together** at `DampenerThreaded_honest`'s declaration, threading and charges,
+over the outcomes `Bool` drawn uniformly: one PoUW window of capacity `C = 2`, its certificate never wrong (`p = 0`), all
+of it certified (`W = 2`), no faulty proof block, so that every detection holds at `q = 1` and the residual is `0`, and
+one counted multiplication, the declared one. -/
+def DampenerRemote_honest : Prop :=
+  Assumptions.WithinCompute OneWindow.cap 2 ∧ Assumptions.PouwSound (PMF.uniformOfFintype Bool) OneWindow.right 0 ∧
+    (∀ ω, Assumptions.TerminalDetection (OneWindow.bad ω) (OneWindow.bad ω) OneWindow.ident OneWindow.time 0) ∧
+    Assumptions.SampledDetection (PMF.uniformOfFintype Bool) OneWindow.bad OneWindow.bad OneWindow.ident
+      OneWindow.time 1 ∧
+    Complies 2 1 D ∧ Assumptions.ThetaRegistered D D M1 ∧ T1.Threaded 2 1 1 0 ∧
+    Assumptions.WeightsIncompressible D T1 2 1 (1 / 2) (1 / 2) ∧ (D.D.size D.D.computed : ℝ) ≤ 2 ∧
+    1 ≤ 0 + 0 + T1.M.card + 0 ∧
+    (∀ ω, Assumptions.ResidualAtMost 0 2 2 0 2 (wrongCapacity OneWindow.cap (OneWindow.right ω))
+      (∑ b ∈ OneWindow.bad ω, OneWindow.time b))
+
+/-- **`DampenerRemote` without PoUW's soundness**: the window's certificate is wrong at every outcome, so the residual
+holds its capacity, `M_r = 2` counted multiplications at the threading `T0`, all of `C = 2` certified, `κ = 2`, `ε' = 1/2`
+and `θ = 1/4`. The efficiency `1` exceeds the bound `ε' + θ = 3/4` at every outcome, so the event has probability `0`,
+below `1 − δ = 1`. -/
+def DampenerRemote_nontrivial : Prop :=
+  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 / 2 ∧ (∀ i, 0 ≤ OneWindow.cap i) ∧ Assumptions.WithinCompute OneWindow.cap 2 ∧
+    ¬ Assumptions.PouwSound (PMF.uniformOfFintype Bool) OneWindow.wrong 0 ∧
+    (0 : ℝ) < 1 ∧ (0 : ℝ) ≤ 0 ∧ (0 : ℝ) * 1 ≤ 2 ∧
+    (∀ ω, ∀ b ∈ OneWindow.bad ω, OneWindow.ident b ∈ (∅ : Finset Unit)) ∧
+    (∀ ω, Assumptions.TerminalDetection (OneWindow.bad ω) (OneWindow.bad ω) OneWindow.ident OneWindow.time 0) ∧
+    (∀ ω j t, ∑ b ∈ OneWindow.bad ω with OneWindow.ident b = j ∧ t ≤ OneWindow.time b ∧ OneWindow.time b ≤ t + 0,
+      OneWindow.time b ≤ 0 * 0) ∧
+    (0 : ℝ) < 1 / 4 ∧ (∀ b, 0 ≤ OneWindow.time b) ∧ (0 : ℝ) < 1 ∧ (1 : ℝ) ≤ 1 ∧ (0 : ℝ) ≤ 0 ∧
+    (∀ ω, ∀ b ∈ OneWindow.bad ω, OneWindow.time b ≤ 0) ∧
+    Assumptions.SampledDetection (PMF.uniformOfFintype Bool) OneWindow.bad OneWindow.bad OneWindow.ident
+      OneWindow.time 1 ∧
+    (0 : ℝ) < 2 ∧ (0 : ℝ) < 2 ∧ (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 ∧ (1 : ℝ) ≤ 1 ∧ 0 < 2 ∧ (0 : ℝ) < 1 / 2 ∧
+    (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ Complies 2 1 D ∧ Assumptions.ThetaRegistered D D M1 ∧ (T0 D).Threaded 2 1 1 0 ∧
+    Assumptions.WeightsIncompressible D (T0 D) 2 1 (1 / 2) (1 / 2) ∧ (D.D.size D.D.computed : ℝ) ≤ 2 ∧
+    0 < 2 ∧ 2 ≤ 0 + 2 + (T0 D).M.card + 0 ∧ ((0 : ℕ) : ℝ) ≤ 1 * 2 * 0 / 2 ∧
+    (∀ ω, Assumptions.ResidualAtMost 2 2 2 0 2 (wrongCapacity OneWindow.cap (OneWindow.wrong ω))
+      (∑ b ∈ OneWindow.bad ω, OneWindow.time b)) ∧
+    ((0 : ℕ) : ℝ) ≤ 2 * 0 * (2 + 0) / 2 ∧
+    ¬ (1 - (0 / (1 / 2) + ((∅ : Finset Unit).card : ℝ) * ((1 - 1) / 1 * 0) / (1 / 4 * 2)) ≤
+      prob (PMF.uniformOfFintype Bool) (fun _ => efficiency 2 2 2 0 ≤
+          unmonitoredShare 2 0 +
+              (1 - unmonitoredShare 2 0) *
+                (residualShare 2 2 + 0 * 2 / 2 + 1 / 2 + lagShare ((∅ : Finset Unit).card) 0 1 + 1 / 4) +
+            declaredShare 2 (rhoT ((1 : ℕ) / (2 : ℕ) : ℝ) (1 / 2) ((T0 D).bound 1 (1 / 2) 1 0)) 2 0 + 0 ∧
+        remoteDampener 1 (unmonitoredShare 2 0)
+            ((1 - unmonitoredShare 2 0) *
+                (residualShare 2 2 + 0 * 2 / 2 + 1 / 2 + lagShare ((∅ : Finset Unit).card) 0 1 + 1 / 4) +
+              declaredShare 2 (rhoT ((1 : ℕ) / (2 : ℕ) : ℝ) (1 / 2) ((T0 D).bound 1 (1 / 2) 1 0)) 2 0 + 0) ≤
+          hardwareMultiple 1 2 2 2 0))
+
 end Nci.Guarantees
+
+namespace Nci.Cover.Guarantees
+
+open Verity Nci.Capability.Toy Nci.Witness
+
+/-- **`CoverTraining`'s premises hold together** at the toy, with `c = 2`, `k = 1`, `b = 1`, `r = d = Toy.D` through the
+containment of the toy in itself, the multiplication blocks `mb0` of no product at depth `D = 2`, block size
+`s = 4 = w₀ c + k + width(θ)` at `w₀ = 1`, and `α₀ = 0`, the share of the toy's gates that are counted products. -/
+def CoverTraining_honest : Prop :=
+  Nci.Complies 2 1 D ∧ Nci.Assumptions.ThetaRegistered D D M1 ∧ Assumptions.UpdateHardness (mb0 D) 4 1 ∧
+    (mb0 D).Upstream (fun _ => ∅) 2 ∧ Assumptions.CapBelowDepth 1 1 2 ∧ Assumptions.BlockFits D 2 1 1 4 ∧
+    Nci.Assumptions.Coverage 0 D (mb0 D).P.card
+
+/-- **`CoverTraining` without coverage**: at `CoverTraining_honest`'s instance, `α₀ = 2` is no coverage of the toy by
+`mb0`'s no product, and `α₀ b c size(r) = 8` exceeds `(k² + b k) size(d) = 4`. -/
+def CoverTraining_nontrivial : Prop :=
+  (0 : ℝ) < 1 ∧ Nci.Complies 2 1 D ∧ Nci.Assumptions.ThetaRegistered D D M1 ∧
+    Assumptions.UpdateHardness (mb0 D) 4 1 ∧ (mb0 D).Upstream (fun _ => ∅) 2 ∧ Assumptions.CapBelowDepth 1 1 2 ∧
+    Assumptions.BlockFits D 2 1 1 4 ∧ ¬ Nci.Assumptions.Coverage 2 D (mb0 D).P.card ∧
+    ¬ (2 * 1 * ((2 : ℕ) : ℝ) * D.D.size D.D.computed ≤
+        (((1 : ℕ) : ℝ) * ((1 : ℕ) : ℝ) + 1 * ((1 : ℕ) : ℝ)) * D.D.size D.D.computed)
+
+/-- **`CoverTrainingAligned`'s premises hold together**: `CoverTraining_honest`'s instance, with no activation region
+(`Aw = ∅`) at width `f = 1`. -/
+def CoverTrainingAligned_honest : Prop :=
+  Nci.Complies 2 1 D ∧ Nci.Assumptions.ThetaRegistered D D M1 ∧ Assumptions.UpdateHardness (mb0 D) 4 1 ∧
+    (mb0 D).Upstream (fun _ => wordBits D ∅) 2 ∧ Assumptions.CapBelowDepth 1 1 2 ∧
+    Assumptions.RegionsAtLeast (mb0 D) (fun _ => ∅) 1 ∧ Assumptions.BlockFits D 2 1 1 4 ∧
+    Nci.Assumptions.Coverage 0 D (mb0 D).P.card
+
+/-- **`CoverTrainingAligned` without coverage**: `CoverTraining_nontrivial`'s instance at width `f = 1`, where
+`α₀ b f c size(r) = 8` exceeds `(k² + b f k) size(d) = 4`. -/
+def CoverTrainingAligned_nontrivial : Prop :=
+  (0 : ℝ) < 1 ∧ Nci.Complies 2 1 D ∧ Nci.Assumptions.ThetaRegistered D D M1 ∧
+    Assumptions.UpdateHardness (mb0 D) 4 1 ∧ (mb0 D).Upstream (fun _ => wordBits D ∅) 2 ∧
+    Assumptions.CapBelowDepth 1 1 2 ∧ Assumptions.RegionsAtLeast (mb0 D) (fun _ => ∅) 1 ∧
+    Assumptions.BlockFits D 2 1 1 4 ∧ ¬ Nci.Assumptions.Coverage 2 D (mb0 D).P.card ∧
+    ¬ (2 * 1 * ((1 : ℕ) : ℝ) * ((2 : ℕ) : ℝ) * D.D.size D.D.computed ≤
+        (((1 : ℕ) : ℝ) * ((1 : ℕ) : ℝ) + 1 * ((1 : ℕ) : ℝ) * ((1 : ℕ) : ℝ)) * D.D.size D.D.computed)
+
+end Nci.Cover.Guarantees

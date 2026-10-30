@@ -8235,11 +8235,23 @@
    "assumptions": [],
    "type_hash": "29c9c2c38c76177811ea5bcb0c6f42fe547c4cfcdc9c46e78b9415d13b34cf35"
   },
+  "Nci.Cover.SecurityProofs.CoverTrainingAligned_honest": {
+   "owner": "@training"
+  },
+  "Nci.Cover.SecurityProofs.CoverTrainingAligned_nontrivial": {
+   "owner": "@training"
+  },
   "Nci.Cover.SecurityProofs.CoverTrainingChained": {
    "owner": "@training",
    "signature": ["Nci.Cover.SecurityProofs.CoverTrainingChained : Nci.Cover.Guarantees.CoverTrainingChained"],
    "assumptions": [],
    "type_hash": "9a1943883ad405f64f840a9b45038f151f41e7326de41401e2ab942670210f83"
+  },
+  "Nci.Cover.SecurityProofs.CoverTraining_honest": {
+   "owner": "@training"
+  },
+  "Nci.Cover.SecurityProofs.CoverTraining_nontrivial": {
+   "owner": "@training"
   },
   "Nci.Cover.SecurityProofs.CoveringBoundAdditive": {
    "owner": "@training",
@@ -8496,6 +8508,12 @@
    "signature": ["Nci.SecurityProofs.DampenerRemotePeriod_nontrivial : Nci.Guarantees.DampenerRemotePeriod_nontrivial"],
    "assumptions": [],
    "type_hash": "37a9dd20dbd9846c0fa2704730c0843e97677106f446caa801d2970bb88b856c"
+  },
+  "Nci.SecurityProofs.DampenerRemote_honest": {
+   "owner": "@lean"
+  },
+  "Nci.SecurityProofs.DampenerRemote_nontrivial": {
+   "owner": "@lean"
   },
   "Nci.SecurityProofs.DampenerThreaded": {
    "owner": "@lean",
@@ -60447,6 +60465,16 @@
    "honest": ["RecDeploy.HonestHalfFixture.honest_half_fixture"],
    "nontrivial": "Flock.Guarantees.recursiveKS_nontrivial"
   },
+  "Nci.Cover.SecurityProofs.CoverTraining": {
+   "honest": ["Nci.Cover.SecurityProofs.CoverTraining_honest"],
+   "nontrivial": "Nci.Cover.SecurityProofs.CoverTraining_nontrivial",
+   "kind": "exclusion"
+  },
+  "Nci.Cover.SecurityProofs.CoverTrainingAligned": {
+   "honest": ["Nci.Cover.SecurityProofs.CoverTrainingAligned_honest"],
+   "nontrivial": "Nci.Cover.SecurityProofs.CoverTrainingAligned_nontrivial",
+   "kind": "exclusion"
+  },
   "Nci.SecurityProofs.ActivationsBoundOn": {
    "honest": ["Nci.SecurityProofs.ActivationsBoundOn_honest"],
    "nontrivial": "Nci.SecurityProofs.ActivationsBoundOn_nontrivial",
@@ -60474,6 +60502,11 @@
   "Nci.SecurityProofs.ContainedTrainingOn": {
    "honest": ["Nci.SecurityProofs.ContainedTrainingOn_honest"],
    "nontrivial": "Nci.SecurityProofs.ContainedTrainingOn_nontrivial",
+   "kind": "exclusion"
+  },
+  "Nci.SecurityProofs.DampenerRemote": {
+   "honest": ["Nci.SecurityProofs.DampenerRemote_honest"],
+   "nontrivial": "Nci.SecurityProofs.DampenerRemote_nontrivial",
    "kind": "exclusion"
   },
   "Nci.SecurityProofs.DampenerThreaded": {
