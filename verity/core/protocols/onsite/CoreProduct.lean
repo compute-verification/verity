@@ -47,11 +47,11 @@ def main (args : List String) : IO UInt32 := do
 private def idOf (ids : List String) : Option String := (protocolOf ids).toOption.map (·.id)
 
 #guard idOf (registry.map (·.id)) == some "verity/onsite/v0"
-#guard idOf ["verity/sampled-proofs/one-stage/v2"] == some id
-#guard idOf ["verity/sampled-proofs/one-stage/v2", "verity/certifier/v0"] == some id
-#guard orderedB (registry.filter (["verity/sampled-proofs/one-stage/v2", "verity/certifier/v0"].contains ·.id))
+#guard idOf ["verity/sampled-proofs/one-stage/v1"] == some id
+#guard idOf ["verity/sampled-proofs/one-stage/v1", "verity/certifier/v0"] == some id
+#guard orderedB (registry.filter (["verity/sampled-proofs/one-stage/v1", "verity/certifier/v0"].contains ·.id))
 #guard (protocolOf []).toOption.isNone
-#guard (protocolOf ["verity/sampled-proofs/one-stage/v1"]).toOption.isNone
+#guard (protocolOf ["verity/sampled-proofs/one-stage/v2"]).toOption.isNone
 #guard (protocolOf ["verity/certifier/v0", "verity/certifier/v0"]).toOption.isNone
 
 -- a listed component whose case its own `answer` refuses rejects the product, and an unlisted one is not a component
@@ -59,13 +59,13 @@ private def refused (P : BlobProtocol) : Case :=
   { id := P.id, params := "{}", commitment := ByteArray.empty, evidence := ByteArray.empty }
 
 private def pair : List BlobProtocol :=
-  registry.filter (["verity/sampled-proofs/one-stage/v2", "verity/certifier/v0"].contains ·.id)
+  registry.filter (["verity/sampled-proofs/one-stage/v1", "verity/certifier/v0"].contains ·.id)
 
 private def pairAnswer (xs : List Case) : Answer :=
   Cases.answerCases ((productB id pair).on #[]) xs ⟨(List.replicate 64 0).toArray⟩
 
 #guard (pairAnswer (pair.map refused)).verdict == .reject
 #guard (pairAnswer (pair.map refused)).published.isNone
-#guard (pairAnswer [refused SampledProofs.OneStageZk.protocol]).reason == some "params: verity/certifier/v0 is missing"
+#guard (pairAnswer [refused SampledProofs.OneStage.protocol]).reason == some "params: verity/certifier/v0 is missing"
 
 end Core.Product

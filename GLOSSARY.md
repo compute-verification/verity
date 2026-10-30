@@ -97,14 +97,13 @@ Credit and all reporting are in circuit size, counted in AND gates (tentative).
   no-fold receipt, which takes none. PoUB (`Accounting.Remote`) bounds no hidden work itself, so PoUW's guarantee
   beside it is the size credit alone.
 - **The overhead lower bound** bounds the hidden training beside verified compute. Its N counted objects can come from
-  verified compute (products the registered circuit computes anyway, through inference-block yields) as well as free
-  compute: a server block on registered hardware yields at most min(q_S, its inference-block yields plus what its free
-  compute can do), unregistered hardware works at the hardware's rate, and the straddle term covers objects split
-  between the two. Onsite q_S is the smaller term (the fresh-input budget is small); remotely the other is: inference
-  blocks yield little, and free compute sets it. It is the one place the ACCEL model 𝓜's resources appear
-  (tensor-pipe time, issue slots, memory bandwidth), because gates can't measure a device's capacity. Its result is
-  reported as counted operations, each labelled with that operation's canonical AND count, never converted to "ANDs of
-  hidden work" (which would need a vacuous ceiling on ANDs per resource unit over all programs).
+  verified compute (products the registered circuit computes anyway, through inference-block yields) and free compute: a
+  server block on registered hardware yields at most min(q_S, its inference-block yields plus what its free compute can
+  do), unregistered hardware works at the hardware's rate, and the straddle term covers objects split between the two.
+  Onsite q_S is the smaller term (the fresh-input budget is small); remotely the other is: inference blocks yield
+  little, and free compute sets the number. It is the one place 𝓜's resources appear, because gates can't measure a
+  device's capacity. Its result is in counted operations, each labelled with its canonical AND count, never "ANDs of
+  hidden work" (that would need a vacuous ceiling on ANDs per resource unit over all programs).
 - **What counts every gate.** The (c, k)-partitions (inference blocks, a server block's c_S) and the Lean's counting
   results (`Circuit.size`) count every gate, so a report that reads one converts it explicitly (`Circuit.andSize` beside
   `Circuit.size`, and credit as `Verity.creditSize`: not yet in Lean). In Credit, S is the AND count of the
