@@ -1,11 +1,12 @@
 """The typed outputs of one sweep stage for the `research` store (`outputs.json`, schema research/outputs/v0.1).
 
-    verity-vllm research-outputs write <evidence-dir> <row-id> <stage> [--run-dir DIR] [--input build=art:...] [--input match=art:...]
+    verity-vllm research-outputs write <evidence-dir> <row-id> <stage>... [--run-dir DIR] [--input build=art:...] [--input match=art:...]
     verity-vllm research-outputs digest <evidence-dir> <row-id>      # the Program digest of record (build_summary.json)
 
 `run_row_v2.sh` calls this on EXIT of a `stage` run (the runner set RESEARCH_RUN_DIR): the stage's small account files are copied
 from the evidence dir into `$RESEARCH_RUN_DIR/outputs/<name>/` and declared in `$RESEARCH_RUN_DIR/outputs.json`, which
-`research.store.attempt.publish` turns into one artifact per entry:
+`research.store.attempt.publish` turns into one artifact per entry. A run of several stages (`examples/vllm/commit.sh`) names them
+all, and gets each stage's entries that stages.txt records (`build_stages`):
 
     plan    -> vllm-commit-plan/v1    plan/commit_plan.json (the Commit's plan: its key and the producer facts), plan.log,
                                       weights_of_record.log, manifest.log; meta {row, stage, program_digest, plan_key, stage_status}; refs.build
@@ -27,6 +28,8 @@ from the evidence dir into `$RESEARCH_RUN_DIR/outputs/<name>/` and declared in `
                                       commit/summary.json, as tp-commit-replay folded it).  Never a replay bundle or a slim keep
                                       (`cpu_replay.keep`): both hold clear values (committed values with their salts, the requests
                                       and served tokens, opened weights), so they stay on the node, prover-side.
+                                      The Match's tokens.json files and the Commit's token record (tokens_p<pair>.json) still carry
+                                      the requests' prompt and served token ids in the clear; the regression harness reads them.
     (all)   -> execution-evidence/v1  timeline.jsonl, stages.txt, admission.json, timeline_report.json; meta {row, stage}
     (all)   -> run-files/v1 `logs`    row.log and every top-level *.log of the evidence dir
 
@@ -283,6 +286,16 @@ def build_outputs(d: Path, row: str, stage: str, run_dir: Path, inputs: dict[str
     return {"schema": SCHEMA, "outputs": entries, "row": row, "stage": stage, "evidence_dir": str(d), "inputs": refs}
 
 
+def build_stages(d: Path, row: str, stages: list[str], run_dir: Path, inputs: dict[str, str]) -> dict[str, Any]:
+    """`build_outputs` over the stages of `stages` that stages.txt records (the last one when it records none), in order, a later
+    stage's entry replacing an earlier one's of the same name: the replay's verdict the Commit's, whose files it holds too, and the
+    last stage's evidence and logs, which are cumulative."""
+    ran = [s for s in stages if s in verdicts(d / "stages.txt")] or stages[-1:]
+    docs = [build_outputs(d, row, s, run_dir, inputs) for s in ran]
+    entries = {e["name"]: e for doc in docs for e in doc["outputs"]}
+    return {**docs[-1], "outputs": list(entries.values()), "stage": " ".join(ran)}
+
+
 def inputs_from_job(run_dir: Path) -> dict[str, str]:
     job = _read_json(run_dir / "job.json") or {}
     ins = ((job.get("store") or {}).get("inputs") or {}) if isinstance(job, dict) else {}
@@ -291,11 +304,11 @@ def inputs_from_job(run_dir: Path) -> dict[str, str]:
 
 @dataclass(frozen=True, kw_only=True)
 class WriteOptions:
-    """Declare the stage's outputs in RUN_DIR/outputs.json."""
+    """Declare the stages' outputs in RUN_DIR/outputs.json."""
 
     evidence_dir: str = option("evidence_dir")
     row: str = option("row")
-    stage: str = option("stage", choices=sorted(KINDS))
+    stages: list[str] = option("stages", nargs="+", choices=sorted(KINDS), metavar="stage")
     run_dir: str | None = option("--run-dir", env="RESEARCH_RUN_DIR", default=None)
     input: list[str] = option("--input", action="append", default=[], metavar="NAME=art:...",
                               help="an input artifact (default: job.json store.inputs)")
@@ -328,7 +341,7 @@ def main(a: WriteOptions | DigestOptions) -> int:
             k, _, v = spec.partition("=")
             if k and re.fullmatch(r"art:[0-9a-f]{64}", v or ""):
                 inputs[k] = v
-        doc = build_outputs(Path(a.evidence_dir), a.row, a.stage, run_dir, inputs)
+        doc = build_stages(Path(a.evidence_dir), a.row, a.stages, run_dir, inputs)
         tmp = run_dir / "outputs.json.tmp"
         tmp.write_text(json.dumps(doc, indent=1, sort_keys=True))
         os.replace(tmp, run_dir / "outputs.json")
