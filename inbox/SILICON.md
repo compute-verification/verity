@@ -108,3 +108,47 @@ exploration of the design space." Academic: nobody builds it this year. The outp
 - **A constraint, checked by `split_check.py`:** a sketch in the accumulator's own ring splits under `decomp`, field-native and binary-field MMAs included. A carry-less GF(2^k) fold over words accumulated with carries does not split. So keep carries in the MAC, and don't adopt a binary-field (Binius-style) MMA for PoUW.
 - The in-unit GF(2^32) fold (+13%, rank 5) is dominated by SI-FOLD's Keccak transcript (2.7%), and is kept as a fallback.
 - Synthesized baselines: s8 MAC and FP8/FP32 MAC, yosys + ABC (`cursor/compute-research-silicon-alg-8e03`).
+
+## §prelim (coordinator, 07:30Z Fri 30 Oct; due 00:30Z, delayed by the 23:22Z–07:06Z platform outage)
+
+**Answer.** Two circuit-level properties of the MMA unit would let PoUW credit the multiply itself and drop per-word hashing:
+1. **A transcript (sketch) register the MMA unit writes itself** on every credited accumulator write, never feeding the served accumulator, and sealed by SHA-512 once a tile.
+2. **A non-linear standard-primitive step in what it absorbs:** a seeded PRF word from the verifier's live seed (SI-NOISE), or a Keccak-f round (SI-FOLD).
+
+Together (synthesized netlists, not simulated):
+- h falls from 127.5 to about 0.28, a cut of about 450×, for +2–3% of an s8 MAC's area (about 1% of FP8's);
+- the premise is about a standard primitive (rank 4a), needed only to a factor of 2–7, against the lead's 0.008%;
+- the coins fall from megabytes a token to hundreds of bytes (seeds), which also removes the certifier-bandwidth problem;
+- proof cost is about +1 AND a MAC, against the lead's +65.
+
+**Why this shape, and why two lanes reached it independently:**
+- The served path must stay exactly bilinear. Any mixer a linear denoiser passes through is affine, and `decomp` fakes affine mixers (SI-FOLD: 48/48). Mixing in line breaks the outputs (0/128 exact).
+- So the transcript has to be a separate path, the split.
+- **Closure:** only full-K credited MMA issues may advance it, each binding its shape. A k16 issue under a k32 tag halves the cost (SI-THEORY, checked in `closure_ref.py`).
+
+**The classes, with the dominant point in each:**
+
+| class | dominant point | h | Δarea | premise (rank) | status |
+|---|---|---|---|---|---|
+| transcript or sketch register (split) | Keccak-p round, or PRF word + rotl-xor | 0.28 | +2.1–3.1% s8 | standard primitive (4a), factor 2–7 | synthesized; SI-RED attacking |
+| same, SHA-512 as the primitive | SHA-512 PRF or round | 0.28 | +6–21% s8 | ShaWrites with 6.9× slack (4a, existing) | synthesized |
+| in-unit GF(2^32) fold | carry-less over carried words | about 1 | +13% s8 | our construction (5) | dominated |
+| formats alone | Kulisch exact FP8 accumulation | unchanged | 1.03× s8 | none | exact, order-independent FP8: exact noise cancellation, Freivalds for FP8 |
+| raw-word SHA-512 round instruction | DistinctWrites credit only | ≥ 18 (R80X) | — | 4a | Intel's VSHA512RNDS2 adds K_t, so `decomp` breaks it; a new one must take the word raw |
+| binary-field MMA (Binius-style) | — | — | — | — | **avoid**: sketches in the accumulator's own ring split under `decomp` (SI-ALG) |
+
+**Open, being worked to 09:00Z:**
+- **Energy gap, about 6%:** zero operands run faster under a power cap, so the design credits issues, not energy. On-chip rank-1 operand noise is being tested.
+- Closure isn't yet enumerated over the instruction classes that write accumulators.
+- The wiring tap is unpriced.
+- SI-RED's attacks.
+- **Keccak or SHA-512 inside the unit**, for Daniel. A mixer that doesn't bind isn't a hash (21:15Z), so the one-hash rule holds either way. But a cost premise on Keccak is a new standard-primitive premise. SHA-512 costs 3–8× the area and keeps the existing premise.
+
+**Scope:**
+- Credit is in work at a locked clock, as §2a judges, not in wall time. Co-issued ALUs could fake transcripts for other statements (SI-THEORY estimates 14–28% of wall clock).
+- Every credit is relative to the published chip.
+
+**Smell check:**
+- Every area figure is a yosys + ABC netlist on a generic library, not simulated, against SI-ALG's synthesized baselines. The premise margins are estimates.
+- "h ≈ 0.28" is the card's operand binding plus the seal. It is not a measured kernel.
+- SI-NOISE's coin ratio used the stale 13.2 MB decode figure; the lead's real decode stream is 144.79 MB a token, so the saving is larger.
