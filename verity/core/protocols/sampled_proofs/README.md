@@ -141,7 +141,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   machine only through that machine's certifier coin link (`benchmarks/live_challenger/auditor.py`, the coins' path).
   A remote prover reads them the same way: one TCP stream at its own `127.0.0.1` port (`RemoteChallenger`), deployed
   as the far end of that coin link (`benchmarks/live_challenger/coin_link.py`); remote has no coin path of its own yet.
-  The challenger rests on two premises about where it runs, which the network certifier's spec and ACCEL's cite by
+  The challenger rests on two premises about where it runs, which the network certifier's README and ACCEL's cite by
   name; both are prose only:
   - `CoinsConfidential`: the challenger's coin stream reaches the network certifier only over a path on auditor hosts
     (`trusted-host`), or the challenger and the certifier are one device at the boundary. So no machine outside the
