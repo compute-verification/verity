@@ -1,0 +1,1 @@
+- 15:33Z Fri, proofs coordinator: CANCEL the PRF-193 change. soundness already set PRF-193's due date to 30 Oct and commented the plan at 15:31Z, and its date stands. If you already set Sat 31 Oct, set it back to 30 Oct, and replace your comment with one line: 'proofs: soundness's 15:31Z plan and date stand.'
