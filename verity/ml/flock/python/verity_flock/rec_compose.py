@@ -31,6 +31,7 @@ SHARED = (
     ("inner_tables", "the inner statement's lookup tables, --rec-inner-tables"),
     ("inner_draw", "the inner statement's draw, --rec-inner-draw"),
     ("rec_links", "the inner population's link table, --rec-links"),
+    ("inner_program", "the verifier's program of the inner statement, --rec-inner-program"),
 )
 
 
@@ -180,7 +181,7 @@ def _held(name: str, what: str) -> str:
 
 
 def _check_form(name: str, inner: str, links: tuple | None, s: tuple) -> None:
-    rec_inner, circuit, public, partition, coins, session, transcript, _, statement, statement_coins, tables, _, s_links = s
+    rec_inner, circuit, public, partition, coins, session, transcript, _, statement, statement_coins, tables, _, s_links, _ = s
     if rec_inner is None:
         raise Refused(f"{name}: its VERDICT names no rec_inner: it was not verified at V*'s inner shape (--rec-inner)")
     if rec_inner != inner:

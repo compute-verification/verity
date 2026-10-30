@@ -25,7 +25,7 @@ def inner : String := hex '1'
 
 def sh : Shared :=
   ⟨some inner, some (hex '2'), some (hex '3'), some (hex '4'), none, some (hex '5'), some (hex '6'), some (hex '7'),
-    some "batched", some true, some [("range8", hex '8')], none, none⟩
+    some "batched", some true, some [("range8", hex '8')], none, none, none⟩
 
 /-- A statement carrying the link table: its root and 18 rows. -/
 def table : Option (String × Nat) := some (hex 'c', 18)
@@ -107,12 +107,15 @@ def tampered : List Shared :=
     { sh with transcript := some (hex 'f') }, { sh with registration := none },
     { sh with innerStatement := some "unbatched" }, { sh with innerStatementCoins := some false },
     { sh with innerTables := some [("range8", hex 'f')] }, { sh with innerDraw := some (hex 'f') },
-    { sh with links := table }]
+    { sh with links := table }, { sh with innerProgram := some (hex 'f') }]
 
 #guard tampered.all fun s => s != sh
 #guard tampered.all fun s => !passes 4 (honest.set 2 ("alg-p0", log 2 (verdict 2 s)))
 #guard why 4 (honest.set 2 ("alg-p0", log 2 (verdict 2 { sh with transcript := some (hex 'f') }))) ==
   s!"alg-p0: its inner_transcript (the coin server's transcript, --rec-inner-transcript) is {hex 'f'}, not {hex '6'} as the first part's"
+#guard why 4 (honest.set 2 ("alg-p0", log 2 (verdict 2 { sh with innerProgram := some (hex 'f') }))) ==
+  s!"alg-p0: its inner_program (the verifier's program of the inner statement, --rec-inner-program) is {hex 'f'}, not none as the first part's"
+#guard (Shared.ofJson? (sh.toJson.setObjVal! "inner_program" (.num 3))).isNone
 -- every part alike, but not in the compiled verifier's form
 #guard [{ sh with recInner := some (hex 'f') }, { sh with recInner := none }, { sh with innerCircuit := none },
     { sh with innerPublic := none }, { sh with innerPartition := none }, { sh with innerCoins := some (hex 'f') },

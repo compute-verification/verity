@@ -20,7 +20,8 @@ open Flock
 /-- **What V*'s parts share** of their recursive statements, as files: the verifier's own inner shape, V*'s shared
 rows, the inner statement's three files, a record of check 5's coins, the inner session's record, the coin server's
 transcript, the circuit registration, and how the inner statement is set up (its id, coins, lookup tables and draw);
-and the inner population's link table (`--rec-links`, its root and row count). -/
+the inner population's link table (`--rec-links`, its root and row count); and the verifier's program of the inner
+statement (`--rec-inner-program`). -/
 structure RecShared where
   recInner : Option ByteArray
   recRows : Option ByteArray
@@ -36,17 +37,18 @@ structure RecShared where
   innerTables : Option (List (String × ByteArray))
   innerDraw : Option ByteArray
   links : Option (ByteArray × Nat)
+  innerProgram : Option ByteArray
 
 /-- Every file of it. -/
 def RecShared.files (S : RecShared) : List ByteArray :=
   S.recInner.toList ++ S.recRows.toList ++ S.innerCircuit.toList ++ S.innerPublic.toList ++
     S.innerPartition.toList ++ S.innerCoins.toList ++ S.innerSession.toList ++ S.transcript.toList ++
-    S.registration.toList ++ ((S.innerTables.getD []).map (·.2)) ++ S.innerDraw.toList
+    S.registration.toList ++ ((S.innerTables.getD []).map (·.2)) ++ S.innerDraw.toList ++ S.innerProgram.toList
 
 /-- The digests a `VERDICT`'s `rec_shared` names of it (`RecCompose.Shared.ofFiles`). -/
 def RecShared.digests (S : RecShared) : RecCompose.Shared :=
   RecCompose.Shared.ofFiles S.recInner S.innerCircuit S.innerPublic S.innerPartition S.innerCoins S.innerSession
-    S.transcript S.registration S.innerStatement S.innerStatementCoins S.innerTables S.innerDraw S.links
+    S.transcript S.registration S.innerStatement S.innerStatementCoins S.innerTables S.innerDraw S.links S.innerProgram
 
 /-- **The compiled verifier's form** (`RecDeploy.partRaw`): every input a part reads is held, and no record of check
 5's coins. -/
@@ -135,10 +137,10 @@ theorem linksOf_inj {a b : Option (ByteArray × Nat)} (h : RecCompose.linksOf a 
 /-- **Two shared sets with one set of digests are one**, unless two of their files collide. -/
 theorem shared_eq {S T : RecShared} (hinj : ∀ a ∈ S.files, ∀ b ∈ T.files, Sha512.hash a = Sha512.hash b → a = b)
     (h : S.digests = T.digests) (hr : S.recRows.map RecCompose.digest = T.recRows.map RecCompose.digest) : S = T := by
-  obtain ⟨s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14⟩ := S
-  obtain ⟨t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13, t14⟩ := T
+  obtain ⟨s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, s12, s13, s14, s15⟩ := S
+  obtain ⟨t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13, t14, t15⟩ := T
   simp only [RecShared.digests, RecCompose.Shared.ofFiles, RecCompose.Shared.mk.injEq] at h
-  obtain ⟨h1, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14⟩ := h
+  obtain ⟨h1, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15⟩ := h
   have e14 := linksOf_inj h14
   dsimp only at hr
   have e1 := map_digest_eq (fun a b ha hb => hinj a (by simp [RecShared.files, ha]) b (by simp [RecShared.files, hb])) h1
@@ -151,6 +153,7 @@ theorem shared_eq {S T : RecShared} (hinj : ∀ a ∈ S.files, ∀ b ∈ T.files
   have e8 := map_digest_eq (fun a b ha hb => hinj a (by simp [RecShared.files, ha]) b (by simp [RecShared.files, hb])) h8
   have e9 := map_digest_eq (fun a b ha hb => hinj a (by simp [RecShared.files, ha]) b (by simp [RecShared.files, hb])) h9
   have e13 := map_digest_eq (fun a b ha hb => hinj a (by simp [RecShared.files, ha]) b (by simp [RecShared.files, hb])) h13
+  have e15 := map_digest_eq (fun a b ha hb => hinj a (by simp [RecShared.files, ha]) b (by simp [RecShared.files, hb])) h15
   have e12 : s12 = t12 := by
     cases s12 with
     | none => cases t12 with
@@ -161,7 +164,7 @@ theorem shared_eq {S T : RecShared} (hinj : ∀ a ∈ S.files, ∀ b ∈ T.files
       | some ts' =>
         simp only [Option.map_some, Option.some.injEq] at h12
         rw [map_tables_eq (fun a ha b hb => hinj a (by simp [RecShared.files, ha]) b (by simp [RecShared.files, hb])) h12]
-  subst e1 e2 e3 e4 e5 e6 e7 e8 e9 e13 e12 e14 h10 h11
+  subst e1 e2 e3 e4 e5 e6 e7 e8 e9 e13 e12 e14 e15 h10 h11
   rfl
 
 /-- **The composition read back to the parts' files**: where `rec-compose` accepts the verdicts the parts' runs wrote
