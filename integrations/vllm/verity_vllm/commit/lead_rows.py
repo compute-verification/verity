@@ -21,7 +21,7 @@ calls concatenate their chunks into one words instance, chunks never spanning ca
 (``verity.ml.commitments.keyed``), in the subtree root's place.  A window's instances are A_j at f calls + j, one a call, and the
 forward's words at 2^63 + f, one a forward.  :class:`WindowKeying` keys them in the order d's hiding needs.  The window's call count
 is fixed when it is made.  keyLeaf (ks_w's hm96 leaf) and the weights' root are recorded before salt_w arrives.  Each position
-then gets one d.  It refuses everything else (:class:`Refused`).
+then gets one d.  It refuses everything else (:class:`verity_vllm.errors.Refused`).
 """
 from __future__ import annotations
 
@@ -35,9 +35,10 @@ import numpy as np
 from verity.ml.commitments import hm96, keyed
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
+from verity_vllm.errors import Refused
 
 __all__ = ["A_LEAF_TAG", "A_SEGMENT", "BINDING_TAG", "CHUNK_WORDS", "KEY_SALT_BYTES", "ROW_TILE", "TILE_COLS", "TILE_ROWS",
-           "TILE_WORDS", "WORDS_LEAF_TAG", "WORDS_POSITION", "Refused", "Subtree", "WindowKeying", "a_position", "a_segments", "chunks",
+           "TILE_WORDS", "WORDS_LEAF_TAG", "WORDS_POSITION", "Subtree", "WindowKeying", "a_position", "a_segments", "chunks",
            "committed_tiles", "instance_domain", "key_leaf", "keyed_root", "pad_cols", "pad_rows", "stream", "subtree",
            "words_position", "words_values"]
 
@@ -51,10 +52,6 @@ A_LEAF_TAG = "pouw/lead/a/v1"
 BINDING_TAG = b"pouw/lead/instance/v1"
 WORDS_POSITION = 1 << 63
 KEY_SALT_BYTES = hm96.SHA512.salt_bytes
-
-
-class Refused(ValueError):
-    """A committer step that the window's order or its positions forbid: a visible failure, never retried."""
 
 
 def pad_rows(m: int) -> int:

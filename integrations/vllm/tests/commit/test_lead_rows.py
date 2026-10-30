@@ -13,6 +13,7 @@ import pytest
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
 from verity_vllm.commit import lead_rows as L
+from verity_vllm.errors import Refused
 
 SALT = hashlib.sha512(b"lead_rows/salt").digest()
 
@@ -248,10 +249,10 @@ def test_window_refuses_a_second_digest_at_a_position():
     w.open(SALT_W)
     first = w.a_root(0, 1, b"\x01" * 2048)
     for again in (lambda: w.a_root(0, 1, b"\x01" * 2048), lambda: w.a_root(0, 1, b"\x02" * 64)):
-        with pytest.raises(L.Refused):
+        with pytest.raises(Refused):
             again()
     w.words_root(0, [b"\x03" * 512])
-    with pytest.raises(L.Refused):
+    with pytest.raises(Refused):
         w.words_root(0, [b"\x04" * 512])
     assert w.a_root(0, 2, b"\x01" * 2048) != first
 
@@ -260,7 +261,7 @@ def test_window_refuses_positions_outside_its_injective_map():
     """Positions f calls + j with j < calls and f calls + j < 2^63 are distinct and below every words position 2^63 + f; the
     window refuses a call count, a call or a forward outside them."""
     for calls in (0, -1, 1 << 63, 2.0):
-        with pytest.raises(L.Refused):
+        with pytest.raises(Refused):
             L.WindowKeying(calls)
     calls = 5
     positions = {L.a_position(f, calls, j) for f in range(7) for j in range(calls)}
@@ -269,12 +270,12 @@ def test_window_refuses_positions_outside_its_injective_map():
     w.register(WEIGHTS)
     w.open(SALT_W)
     for f, j in ((0, calls), (0, -1), (-1, 0), (((1 << 63) - 1) // calls, calls - 1), ((1 << 63) // calls + 1, 0)):
-        with pytest.raises(L.Refused):
+        with pytest.raises(Refused):
             w.a_root(f, j, b"\x05" * 64)
     for f in (-1, 1 << 63):
-        with pytest.raises(L.Refused):
+        with pytest.raises(Refused):
             w.words_root(f, [b"\x06" * 64])
-    with pytest.raises(L.Refused):
+    with pytest.raises(Refused):
         w.words_root(0, [b"\x06" * 64] * (calls + 1))
     assert w.a_root(((1 << 63) - 1) // calls - 1, calls - 1, b"\x05" * 64)
     assert w.words_root(0, [b"\x06" * 64] * calls)
@@ -282,18 +283,18 @@ def test_window_refuses_positions_outside_its_injective_map():
 
 def test_window_refuses_salt_w_before_its_registration():
     w = _window()
-    with pytest.raises(L.Refused):
+    with pytest.raises(Refused):
         w.open(SALT_W)
-    with pytest.raises(L.Refused):
+    with pytest.raises(Refused):
         w.a_root(0, 0, b"\x07" * 64)
     w.register(WEIGHTS)
-    with pytest.raises(L.Refused):
+    with pytest.raises(Refused):
         w.a_root(0, 0, b"\x07" * 64)
-    with pytest.raises(L.Refused):
+    with pytest.raises(Refused):
         w.open(SALT_W[:32])
     w.open(SALT_W)
     for late in (lambda: w.open(SALT_W), lambda: w.register(WEIGHTS)):
-        with pytest.raises(L.Refused):
+        with pytest.raises(Refused):
             late()
     with pytest.raises(AttributeError):
         w.calls = 65
