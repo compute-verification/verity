@@ -454,7 +454,7 @@ def load_required_manifest(path: str, program_digest: str, *, requests: list[str
 
 
 def population_digest(pop: Iterable[tuple]) -> tuple[str, int]:
-    h = hashlib.sha256()
+    h = hashlib.sha512()
     n = 0
     for ident in pop:
         h.update(json.dumps(identity_dict(ident), sort_keys=True, separators=(",", ":")).encode())
