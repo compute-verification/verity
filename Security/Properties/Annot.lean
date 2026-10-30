@@ -15,8 +15,9 @@ out. `Flock.Annot.expand P D` is the annotation laid out, each gate of `P`'s can
   primitive with an input id (`Flock.Annot.isInputGate`).
 * `CheckAgrees Φ`: on every program and annotation the check accepts, the annotation expands, and `Φ` holds of the
   expansion with the check's label count. The converse is not claimed: the check refuses some annotations whose expansion
-  satisfies `Φ` (a partition is tested on the family's sets, so a gate in two sets of one label is refused; under `group`,
-  `max_gates` bounds a label by the sum of its sets' sizes; `max_gates` under an affine label map is refused).
+  satisfies `Φ` (a partition is tested on the family's sets, so a gate in two sets of one label is refused; under `group`
+  and a label table, `max_gates` bounds a label by the sum of its sets' sizes; `max_gates` under an affine label map is
+  refused).
 
 Nothing proves `CheckAgrees` yet. Proving it needs, on the code side, the layout lemma that `Flock.Annot.walk` lays a plan's
 entries out where the descriptor's layout puts them (member `m` of node `j` of an activation at `off` is
@@ -48,9 +49,9 @@ def Holds (Φ : Meaning) (P : Prog) (n : Nat) (e : Array (Array Nat)) : Prop :=
   (∀ c, Φ.maxGates = some c → ∀ l < n, (holds e l).length ≤ c)
 
 /-- **The check at the size of the description agrees with the meaning gate by gate.** Whenever `Flock.Annot.check Φ`
-accepts annotation `D` of program `P`, `D` expands, and `Φ` holds of the expansion with the verdict's label count. -/
+accepts annotation `D` of program `P`, `D` expands, and `Φ` holds of the expansion with the result's label count. -/
 def CheckAgrees (Φ : Meaning) : Prop :=
-  ∀ (P : Prog) (D : Desc) (v : AnnotVerdict), check Φ P D = .ok v → v.accept = true →
+  ∀ (P : Prog) (D : Desc) (v : CheckResult), check Φ P D = .ok v → v.accept = true →
     ∃ e, expand P D = .ok e ∧ Holds Φ P v.count e
 
 end Properties.Annot

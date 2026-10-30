@@ -11,7 +11,7 @@ descriptor's text, `annotation` is `{"query", "tables"}` (`Annot.Desc.ofJson`) a
 `{"tiling", "max_gates", "max_count"}` (`Annot.Meaning.ofJson`):
 
 * `annot.term`: a query document read and written back (`Annot.Term.ofJson`, `toJson`): the codec's canonical form;
-* `annot.check`: `Annot.check`'s verdict `{accept, count, code?}` on `{program, annotation, meaning}`;
+* `annot.check`: `Annot.check`'s result `{accept, count, code?}` on `{program, annotation, meaning}`;
 * `annot.reference`: the same meaning decided gate by gate (`Annot.reference`);
 * `annot.sets`: the family's sets in order, each its root-gate intervals `[[a, b], …]`, and the gates each label holds,
   on `{program, annotation}` (`Annot.sets`, `Annot.labelled`).
@@ -48,7 +48,7 @@ def sets : Difftest.Fn := fun j => do
   let P ← program j
   let F ← eval P (← desc j)
   let ss ← Flock.Annot.sets P F
-  let ls ← labelled P F
+  let ls ← labelled P (← desc j) F
   return Json.mkObj [("sets", Json.arr (ss.map (intervals ·.gates))), ("labels", Json.arr (ls.map intervals))]
 
 def table := Difftest.table [("annot.term", term), ("annot.check", check), ("annot.reference", reference),

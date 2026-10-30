@@ -58,6 +58,14 @@ def walk : Nat → Nat → Nat → Array GateSet → V (Array GateSet)
         for (a, b) in e.members do
           for m in [a:b] do
             acc ← walk fuel s (at_ e.j m) acc
+      | .grid r s =>
+        let ms := (e.members.foldl (fun xs (a, b) => xs ++ (List.range (b - a)).toArray.map (a + ·)) #[])
+        let mut rows : Array (Array GateSet) := #[]
+        for m in ms do rows := rows.push (← walk fuel s (at_ e.j m) #[])
+        for u in [0:ceilDiv ms.size r] do
+          for v in [0:F.plans[s]!.total] do
+            let gs := (rows.extract (u * r) (u * r + r)).foldl (fun gs row => gs ++ row[v]!.gates) #[]
+            acc := acc.push { callee := some fn, gates := norm gs }
     return acc
 
 end
@@ -66,7 +74,7 @@ end
 def sets (P : Prog) (F : Family) : V (Array GateSet) := walk P F Steps.FUEL F.top 0 #[]
 
 /-- The gates each label holds: set `i` for label `i` without a map, else the union of the sets the map sends to it. -/
-def labelled (P : Prog) (F : Family) : V (Array (Array (Nat × Nat))) := do
+def labelled (P : Prog) (D : Desc) (F : Family) : V (Array (Array (Nat × Nat))) := do
   let ss ← sets P F
   match F.map with
   | none => return ss.map (·.gates)
@@ -76,12 +84,22 @@ def labelled (P : Prog) (F : Family) : V (Array (Array (Nat × Nat))) := do
       let v := (a * i + b) % n
       out := out.set! v (out[v]! ++ ss[i]!.gates)
     return out.map norm
-  | some (.group byName) =>
-    let mut keys : Array String := #[]
+  | some (.table name) =>
+    let (ls, n) ← tableLabels P D F name
+    let mut out := Array.replicate n #[]
+    let mut i := 0
+    for (e, l) in F.plans[F.top]!.entries.zip ls do
+      let c := e.count ((e.kind.sub?.map (F.plans[·]!.total)).getD 0)
+      if let some l := l then
+        for s in ss.extract i (i + c) do out := out.modify l (· ++ s.gates)
+      i := i + c
+    return out.map norm
+  | some (.group key) =>
+    let mut keys : Array (Array String) := #[]
     let mut out : Array (Array (Nat × Nat)) := #[]
     for s in ss do
-      let some c := s.callee | refuse "term" "group over sets of several nodes"
-      let k := if byName then baseName (P.defs[c]!).id else (P.defs[c]!).key
+      let some c := s.callee | refuse "plan" "group over sets of several nodes"
+      let k := groupKey key P.defs[c]!
       match keys.idxOf? k with
       | some i => out := out.set! i (out[i]! ++ s.gates)
       | none =>
@@ -91,7 +109,7 @@ def labelled (P : Prog) (F : Family) : V (Array (Array (Nat × Nat))) := do
 
 /-- `Annot.expand`: each gate of the circuit, its labels in increasing order. -/
 def expand (P : Prog) (D : Desc) : V (Array (Array Nat)) := do
-  let ls ← labelled P (← eval P D)
+  let ls ← labelled P D (← eval P D)
   let mut out := Array.replicate (P.defs[P.root]!).gates #[]
   for l in [0:ls.size] do
     for (a, b) in ls[l]! do
@@ -106,12 +124,12 @@ def isInputGate (P : Prog) (g : Nat) : V Bool := do
 
 /-- The meaning decided gate by gate: the tiling on the family's sets, each gate in increasing order (`input-held`,
 `overlap`, `gate-in-no-set`), then `too-many` on the labels, then `too-large` on the largest label's gates. -/
-def reference (Φ : Meaning) (P : Prog) (D : Desc) : V AnnotVerdict := do
+def reference (Φ : Meaning) (P : Prog) (D : Desc) : V CheckResult := do
   let F ← eval P D
   let ss ← sets P F
-  let ls ← labelled P F
+  let ls ← labelled P D F
   let count := ls.size
-  let refused := fun (code : String) => (pure { accept := false, code, count } : V AnnotVerdict)
+  let refused := fun (code : String) => (pure { accept := false, code, count } : V CheckResult)
   if let some t := Φ.tiling then
     let mut held := Array.replicate (P.defs[P.root]!).gates 0
     for s in ss do
