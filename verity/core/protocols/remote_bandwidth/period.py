@@ -1,4 +1,4 @@
-"""One remote bandwidth session a period on one node, at a small size: the registration, the verifier's session against the
+"""One PoUB session a period on one node, at a small size: the registration, the verifier's session against the
 prover's passes over its store, and the answer of the bandwidth component of onsite Verity (`verity/remote-bandwidth/v0`,
 `RemoteAudit.Protocol` in `lean/`).
 
