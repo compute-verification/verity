@@ -464,14 +464,41 @@ theorem checkOne_ok {n : Nat} {rows name : String} {v : PartVerdict} (h : checkO
     exact ⟨by simpa using ha, by simpa using hz, by simpa using hi, by rw [hr, hh], j, hj, by omega⟩
   · cases h
 
+theorem ite_error_ok {c : Prop} [inst : Decidable c] {e : String} {k : Except String Unit}
+    (h : (if c then Except.error e else k) = .ok ()) : ¬ c ∧ k = .ok () := by
+  cases inst with
+  | isTrue _ => cases h
+  | isFalse hc => exact ⟨hc, h⟩
+
 theorem checkForm_ok {name inner : String} {links : Option (String × Nat)} {s : Shared}
     (h : checkForm name inner links s = .ok ()) : s.Complete inner links := by
+  have some_of {α : Type} {o : Option α} (h : ¬ o.isNone = true) : o.isSome = true := by
+    cases o
+    · exact absurd rfl h
+    · rfl
   unfold checkForm at h
-  repeat' split at h
-  all_goals first | (cases h; done) | skip
-  rename_i hr hi h1 h2 h3 h4 h5 h6 h7 h8 h9 h10
-  refine ⟨by rw [hr]; simpa using hi, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
-    simp_all [Option.isNone_iff_eq_none, Option.isSome_iff_ne_none]
+  cases hr : s.recInner with
+  | none => rw [hr] at h; cases h
+  | some r =>
+    rw [hr] at h
+    dsimp only at h
+    obtain ⟨hi, h⟩ := ite_error_ok h
+    obtain ⟨h1, h⟩ := ite_error_ok h
+    obtain ⟨h2, h⟩ := ite_error_ok h
+    obtain ⟨h3, h⟩ := ite_error_ok h
+    obtain ⟨h4, h⟩ := ite_error_ok h
+    obtain ⟨h5, h⟩ := ite_error_ok h
+    obtain ⟨h6, h⟩ := ite_error_ok h
+    obtain ⟨h7, h⟩ := ite_error_ok h
+    obtain ⟨h8, h⟩ := ite_error_ok h
+    obtain ⟨h9, h⟩ := ite_error_ok h
+    obtain ⟨h10, -⟩ := ite_error_ok h
+    unfold Shared.Complete
+    refine ⟨by rw [hr, Decidable.byContradiction hi], some_of h1, some_of h2, some_of h3, ?_, some_of h5, some_of h6,
+      some_of h7, some_of h8, some_of h9, Decidable.byContradiction h10⟩
+    cases e : s.innerCoins with
+    | none => rfl
+    | some _ => rw [e] at h4; exact absurd rfl h4
 
 theorem checkShared_ok {sh : Shared} {name : String} {v : PartVerdict} (h : checkShared sh name v = .ok ()) :
     v.shared = some sh := by
