@@ -177,6 +177,20 @@ def _released_as_signed(out: dict) -> list[int]:
     return [n for n, _ in out["releases"]]
 
 
+def _late_is_uncertified(run: dict) -> None:
+    """The late shim's window-0 egress record is not established (`coverage-never-established`), so the certifier
+    certifies none of it (`certificate.Issuer` lists it in `issuer_refused`): the check stops at window 0 with no
+    certified record, nothing is registered and no salt is revealed, and the audit of the run's raw and committed
+    records refuses that record too."""
+    check = run["check"]
+    assert check["verdict"] == "refused" and not check["audit_accepted"] and not check["salt_accepted"]
+    assert [[d, w] for _, d, w in check["issuer_refused"]] == [["egress", 0]] and run["revealed"] == []
+    assert check["rows"] == [{"window": 0, "n2": "no certified record", "salt": "no certified record",
+                              "audit": {"egress": {"raw": "status:coverage-never-established",
+                                                   "committed": "status:coverage-never-established"},
+                                        "ingress": {"raw": None, "committed": None}}}]
+
+
 @pytest.fixture(scope="module")
 def served(tmp_path_factory):
     tmp = tmp_path_factory.mktemp("served")
@@ -641,8 +655,10 @@ def test_the_out_shape_reaches_each_rehearsed_serve_and_is_an_out_shape(tmp_path
 
 
 def test_each_salt_is_revealed_once_to_the_challengers_signed_request(served):
+    """Each certified window's salt, once; the late run has none certified, so it reveals none."""
     *_, runs = served
-    for strategy in cs.STRATEGIES:
+    _late_is_uncertified(runs["late"])
+    for strategy in ("honest", "extra"):
         check = runs[strategy]["check"]
         assert [r["salt"] for r in check["rows"]] == ["revealed", "revealed"]
         assert re.fullmatch(r"refused: the certifier refused window 0's salt: window 0's salt is revealed already",
@@ -652,17 +668,12 @@ def test_each_salt_is_revealed_once_to_the_challengers_signed_request(served):
 
 
 def test_a_shim_that_holds_a_session_past_every_sync_is_refused(served):
-    """The late shim's window-0 egress record is not established (`coverage-never-established`): the certifier's
-    audit refuses it, N2's head check rejects the link-window, and `network_verdict` refuses the link."""
+    """The late shim's window-0 egress record is not established (`coverage-never-established`): the certifier
+    certifies none of it, so N2 has no window to register and `network_verdict` refuses the link from window 0."""
     *_, runs = served
+    _late_is_uncertified(runs["late"])
     check = runs["late"]["check"]
-    assert check["verdict"] == "refused" and not check["network_verdict"]["accepted"]
-    assert 0 in check["network_verdict"]["refused"]
-    first = check["rows"][0]
-    assert first["n2"] == {"accepted": False, "codes": ["reject"], "public": {}}
-    assert first["audit"]["egress"] == {"raw": "status:coverage-never-established",
-                                        "committed": "status:coverage-never-established"}
-    assert check["salt_accepted"]
+    assert not check["network_verdict"]["accepted"] and check["network_verdict"]["refused"] == [0, 1]
 
 
 def test_a_shim_that_writes_one_event_more_is_refused_on_n2s_counts_alone(served):
@@ -792,20 +803,19 @@ def test_a_response_whose_last_two_tokens_share_an_event_is_padded_to_the_bodys_
 
 def test_honest_traffic_with_merged_events_is_accepted_on_every_window_and_late_and_extra_are_refused(merged):
     """Padded to F, honest traffic is accepted on every link-window, N2 on the planned profile among it; the late shim
-    is refused on its window-0 egress record, the extra one (F + 1 events in its first response) on N2's counts alone,
-    and each window's salt is revealed once in every run."""
+    is refused on its window-0 egress record, which the certifier doesn't certify, the extra one (F + 1 events in its
+    first response) on N2's counts alone, and each window's salt is revealed once in every run but late's."""
     *_, runs = merged
     honest = runs["honest"]["check"]
     assert honest["verdict"] == "accepted", cs.table(honest)
     assert all(r["n2"]["accepted"] for r in honest["rows"]) and honest["network_verdict"]["refused"] == []
     assert honest["timing"]["server_padded"] == {"responses": REQUESTS // 2, "events": REQUESTS // 2}
-    late = runs["late"]["check"]
-    assert late["verdict"] == "refused" and 0 in late["network_verdict"]["refused"]
-    assert late["rows"][0]["audit"]["egress"]["raw"] == "status:coverage-never-established"
+    _late_is_uncertified(runs["late"])
+    assert 0 in runs["late"]["check"]["network_verdict"]["refused"]
     extra = runs["extra"]["check"]
     assert runs["extra"]["events"] == REQUESTS * MERGED_TOKENS + 1
     assert extra["verdict"] == "refused" and extra["network_verdict"]["refused"] == [0] and extra["audit_accepted"]
-    for strategy in cs.STRATEGIES:
+    for strategy in ("honest", "extra"):
         check = runs[strategy]["check"]
         assert all(r["salt"] == "revealed" for r in check["rows"]) and check["salt_again"].startswith("refused")
         assert check["salt_accepted"]
@@ -910,14 +920,13 @@ def test_a_request_in_a_windows_first_bucket_is_released_behind_the_salt_frame_a
 
 
 def test_late_is_refused_and_extra_is_refused_by_the_served_counts(served_profile):
-    """The late shim's window-0 egress record is not established: the audit refuses it and N2 rejects the window. The
-    extra shim's first response is F + 1 events, on time and logged, so every record is complete and the audit accepts
-    it: only the served counts refuse window 0, whose egress counts are one more than its ingress counts derive."""
+    """The late shim's window-0 egress record is not established: the certifier certifies none of it, so N2 has no
+    window to register and refuses the link from window 0. The extra shim's first response is F + 1 events, on time and
+    logged, so every record is complete and the audit accepts it: only the served counts refuse window 0, whose egress
+    counts are one more than its ingress counts derive."""
     *_, runs = served_profile
-    late = runs["late"]["check"]
-    assert late["verdict"] == "refused" and 0 in late["network_verdict"]["refused"]
-    assert late["rows"][0]["n2"] == {"accepted": False, "codes": ["reject"], "public": {}}
-    assert late["rows"][0]["audit"]["egress"]["raw"] == "status:coverage-never-established"
+    _late_is_uncertified(runs["late"])
+    assert 0 in runs["late"]["check"]["network_verdict"]["refused"]
     assert runs["extra"]["events"] == REQUESTS * MERGED_TOKENS + 1
     extra = runs["extra"]["check"]
     assert extra["verdict"] == "refused" and extra["network_verdict"]["refused"] == [0]
@@ -928,8 +937,10 @@ def test_late_is_refused_and_extra_is_refused_by_the_served_counts(served_profil
 
 
 def test_each_salt_is_revealed_once_under_the_served_profile(served_profile):
+    """As on the planned profile: each certified window's salt once, and none of the late run's."""
     *_, runs = served_profile
-    for strategy in cs.STRATEGIES:
+    _late_is_uncertified(runs["late"])
+    for strategy in ("honest", "extra"):
         check = runs[strategy]["check"]
         assert [r["salt"] for r in check["rows"]] == ["revealed"] * 3
         assert check["salt_again"].startswith("refused: the certifier refused window 0's salt")
@@ -1020,18 +1031,18 @@ def test_a_glm_token_is_one_event_and_the_shim_carries_the_text_byte_for_byte(gl
 
 def test_honest_glm_traffic_is_accepted_and_late_and_extra_are_refused(glm):
     """On each of N2's profiles, honest GLM traffic is accepted on every link-window, the late shim is refused on its
-    window-0 egress record, the extra one on N2's counts alone, and each window's salt is revealed once."""
+    window-0 egress record, which the certifier doesn't certify, the extra one on N2's counts alone, and each window's
+    salt is revealed once in every run but late's."""
     *_, plan, runs = glm
     honest = runs["honest"]["check"]
     assert honest["verdict"] == "accepted", cs.table(honest)
     assert honest["profile"] == plan["occupancy"]["kind"] and honest["network_verdict"]["refused"] == []
     assert all(r["n2"]["accepted"] for r in honest["rows"])
-    late = runs["late"]["check"]
-    assert late["verdict"] == "refused" and 0 in late["network_verdict"]["refused"]
-    assert late["rows"][0]["audit"]["egress"]["raw"] == "status:coverage-never-established"
+    _late_is_uncertified(runs["late"])
+    assert 0 in runs["late"]["check"]["network_verdict"]["refused"]
     extra = runs["extra"]["check"]
     assert extra["verdict"] == "refused" and extra["network_verdict"]["refused"] == [0] and extra["audit_accepted"]
-    for strategy in cs.STRATEGIES:
+    for strategy in ("honest", "extra"):
         check = runs[strategy]["check"]
         assert all(r["salt"] == "revealed" for r in check["rows"]) and check["salt_again"].startswith("refused")
         assert runs[strategy]["revealed"] == list(range(plan["windows"]))
@@ -1406,14 +1417,12 @@ def test_honest_varied_traffic_is_certified_on_every_window_and_its_io_read_from
 
 
 def test_a_late_shim_is_refused_by_the_audit_and_an_extra_token_by_the_finish_rule(varied):
-    """The late shim's window-0 egress record is not established, which the certifier's audit refuses. The extra
-    shim's token after its first response's last is on time and logged, so the records are complete, certified, and
-    the audit accepts them: only the certified I/O's finish rule refuses it, the response going past its EOS or its
-    `max_tokens`."""
+    """The late shim's window-0 egress record is not established, which the certifier doesn't certify and its audit
+    refuses. The extra shim's token after its first response's last is on time and logged, so the records are
+    complete, certified, and the audit accepts them: only the certified I/O's finish rule refuses it, the response
+    going past its EOS or its `max_tokens`."""
     tmp, _, _, plan, runs, _ = varied
-    late = runs["late"]["check"]
-    assert late["verdict"] == "refused" and not late["audit_accepted"]
-    assert late["rows"][0]["audit"]["egress"]["raw"] == "status:coverage-never-established"
+    _late_is_uncertified(runs["late"])
     extra = runs["extra"]["check"]
     assert runs["extra"]["events"] == runs["honest"]["events"] + 1
     assert extra["verdict"] == "refused" and extra["certified_accepted"] and extra["audit_accepted"]
@@ -1422,7 +1431,7 @@ def test_a_late_shim_is_refused_by_the_audit_and_an_extra_token_by_the_finish_ru
     r = _io(tmp / "extra")[first]
     assert r["output"][-1] == 0 and r["finish"] in ("a token after EOS", "longer than max_tokens")
     assert extra["io"]["violations"] == [[r["stream"], r["finish"]]]
-    for strategy in cs.STRATEGIES:
+    for strategy in ("honest", "extra"):
         check = runs[strategy]["check"]
         assert all(row["salt"] == "revealed" for row in check["rows"]) and check["salt_again"].startswith("refused")
 
@@ -1467,15 +1476,18 @@ def test_the_io_tie_accepts_honest_varied_traffic_and_refuses_the_token_shims_id
     port entries' (accepted); the token shim's are not in exactly the windows its changed ids fall in, each refused by
     IoTieWindow.content alone; so is the extra shim's token past a response's end, which no committed output is, and
     the drop shim's response without its first token, whose later ids each sit one output early and whose last
-    committed output no cell carries. The late shim's held frames never reach a certified record. A committed output no
-    cell carries is refused by content at window -1, since no advice places it in a window."""
+    committed output no cell carries. The late shim's held frames never reach a certified record, and its window-0
+    egress record, whose coverage was never established, has no certified head for its frames to hold to (refused by
+    cells_root). A committed output no cell carries is refused by content at window -1, since no advice places it in a
+    window."""
     pytest.importorskip(negatives.IO_TIE_MODULE)
     tmp, _, _, plan, runs, _ = varied
     ids = negatives.read_ids(_ids(tmp, plan))
     got = {s: negatives.tie_run(tmp / s, ids) for s in runs}
     tokens, W = sum(map(len, ids.values())), plan["windows"]
-    for row in got.values():
-        assert row["held"] == {"egress": W, "ingress": W} and row["missing"] == {} and row["outputs"] == tokens
+    for s, row in got.items():
+        assert row["held"] == {"egress": W - (s == "late"), "ingress": W} and row["missing"] == {}
+        assert row["outputs"] == tokens
     honest, token, extra = got["honest"], got["token"], got["extra"]
     assert honest["verdict"] == "accepted" and honest["failing"] == {} and honest["codes"] == []
     assert honest["id_events"] == honest["placed"] == tokens and honest["unplaced"] == 0
@@ -1490,7 +1502,7 @@ def test_the_io_tie_accepts_honest_varied_traffic_and_refuses_the_token_shims_id
     assert drop["verdict"] == "refused" and drop["codes"] == ["IoTieWindow.content"] and -1 in drop["failing"]
     assert drop["id_events"] == drop["placed"] == tokens - 1 and drop["unplaced"] == 1
     late = got["late"]
-    assert late["verdict"] == "refused" and late["failing"] == {-1: ["content"]}
+    assert late["verdict"] == "refused" and late["failing"] == {0: ["cells_root"], -1: ["content"]}
     assert 0 < late["unplaced"] == tokens - late["id_events"] and runs["late"]["events"] == tokens
     assert all(negatives.tie_ok(s, got[s]) for s in ("honest", "token", "extra", "drop"))
 
