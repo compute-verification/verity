@@ -56,7 +56,7 @@ def v3c_window(d: Path, states: list[list[int]], entries: list[list[list[int]]])
                             "bindings": {"o0": dom.binding.hex()}, "owner": RWS.OWNER, "schemas": {"o0": V2}}})
         roots.append({"port": f"{name}/o0", "root": got["o0"].hex(), "leaves": n, "domain": dom.domain_id.hex()})
     (d / "window.json").write_text(json.dumps({"members": members}))
-    (d / "registration.json").write_text(json.dumps({"roots": roots, "registered": [st.entry()], "window": {
+    (d / "registration.json").write_text(json.dumps({"roots": roots, "window": {
         "kind": "served", "run": RUN, "activations": {"program": PROGRAM, "values": {sz.IS.SCAN_STATE: st.entry()}}}}))
     return d
 
@@ -75,7 +75,7 @@ def scanned(tmp_path_factory):
 def test_the_scan_reads_v3cs_trees_at_its_roots_and_proves_no_block_round(tmp_path, scanned):
     window = scanned["window"]
     rec = json.loads((window / "registration.json").read_text())
-    (state,), roots = rec["registered"], {r["port"]: r for r in rec["roots"]}
+    state, roots = rec["window"]["activations"]["values"][sz.IS.SCAN_STATE], {r["port"]: r for r in rec["roots"]}
     h = sz.host(tmp_path / "host", setup=S, v3c=window)
     assert set(h.rounds) == scanned["rounds"] - {"block"} and "block" in scanned["rounds"]
     trees = h.at.trees
@@ -113,7 +113,8 @@ def test_a_v3c_window_that_isnt_the_scans_is_refused_by_name(tmp_path, scanned, 
         entries[1][1][-1] ^= 1
     w = v3c_window(tmp_path / "window", states, entries)
     if case == "state root":
-        _rewrite(w, "registration.json", lambda d: d["registered"][0].update(root="ee" * 64))
+        _rewrite(w, "registration.json",
+                 lambda d: d["window"]["activations"]["values"][sz.IS.SCAN_STATE].update(root="ee" * 64))
     if case == "entry root":
         _rewrite(w, "registration.json", lambda d: d["roots"][2].update(root="ee" * 64))
     if case == "chunks":
