@@ -65,9 +65,9 @@ def _split(groups) -> tuple[int, ...]:
     return tuple(itertools.accumulate(len(bits) for _, _, bits in groups))[:-1]
 
 
-def unit_layout(low: IL.Lowering, t: CT.CircuitType) -> LY.Layout:
+def unit_layout(low: IL.Lowering, t: CT.CircuitType) -> LY.BlockLayout:
     """The unit's layout: placed by the block (no range), its port groups as the lowering laid them out."""
-    return LY.Layout(t.digest(), None, _split(low.layout.in_groups), _split(low.layout.out_groups), ("derive",), (), ())
+    return LY.BlockLayout(t.digest(), None, _split(low.layout.in_groups), _split(low.layout.out_groups), ("derive",), (), ())
 
 
 def sections(text: str) -> tuple[str, dict, list[tuple[str, str]]]:
@@ -329,12 +329,12 @@ def _compose_tail(low: IL.Lowering, sub, vus_per_block: int | None = None, **kw)
     tables = {sha: np.asarray(gf2.table(name), dtype=np.uint32) for name, sha, _, _ in inst.tables}
     info = {sha: LY.table_info(ws) for sha, ws in tables.items()}
     ul = meta["unit_log"]
-    layouts = [LY.Layout(Ut.digest(), ul, _split(low.layout.in_groups), _split(low.layout.out_groups), ("derive",), (), ())]
+    layouts = [LY.BlockLayout(Ut.digest(), ul, _split(low.layout.in_groups), _split(low.layout.out_groups), ("derive",), (), ())]
     gen = {}
     for _name, sha, ib, vb in inst.tables:
         lo = GEN_LO[ib]
         rows = LY.read_rows_placed(ib, lo, LY.k_of(sha, vb, info[sha]))
-        layouts.append(LY.Layout(None, C._slot_log(rows), (), (), ("gen", sha, ib, vb, lo), (), ()))
+        layouts.append(LY.BlockLayout(None, C._slot_log(rows), (), (), ("gen", sha, ib, vb, lo), (), ()))
         gen[sha] = len(layouts) - 1
     calls, reads, slot = [], [], {}
     for i, it in enumerate(R.items):
@@ -343,7 +343,7 @@ def _compose_tail(low: IL.Lowering, sub, vus_per_block: int | None = None, **kw)
         j = 0 if it[0] == CT.CALL else gen[R.tables[it[1]][0]]
         (calls if it[0] == CT.CALL else reads).append((i, j, slot.get(j, 0)))
         slot[j] = slot.get(j, 0) + 1
-    layouts.append(LY.Layout(R.digest(), None, tuple(range(1, len(R.ins))), tuple(range(1, len(R.outs))), ("derive",),
+    layouts.append(LY.BlockLayout(R.digest(), None, tuple(range(1, len(R.ins))), tuple(range(1, len(R.outs))), ("derive",),
                              tuple(calls), tuple(reads)))
     unit = len(layouts) - 1
     types = {R.digest(): R, Ut.digest(): Ut}
