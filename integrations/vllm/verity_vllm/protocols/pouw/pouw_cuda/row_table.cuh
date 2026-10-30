@@ -1,6 +1,9 @@
 // A serving step's row tables (`verity.ml.commitments.row_table`, `commit.row_tables.step_roots`) as functions that compile for
 // the host (g++, `row_table_host.cpp`, the twin the CPU tests hold to the Python reference) and the device (nvcc,
-// `row_table.cu`). One thread computes one segment digest, one row's leaf or one tree node; SHA-512 is `ncp2.cuh`'s.
+// `row_table.cu`). One thread computes one segment digest, one row's leaf or one tree node. The hm96-sha512 leaf and the
+// frame-v3-sha512 leaf, pad and node are the GPU's one row commitment (`row_commit.cuh`, `rc`, its forms with no plan, from
+// the domain id the tables carry); the row's segment and outer digests and its salt are this file's, the digests through
+// `ncp2.cuh`'s SHA-512.
 //
 // A row is its K s8 codes then its f32 scale's four bytes little-endian (`row_table.s8_row`). Its leaf, rank r of its table:
 //   d_j  = SHA-512(S(j, s, m_j) || row[1024 j : 1024 j + m_j / 8])           `rowleaf.sha512_row_seg_digest`
@@ -12,6 +15,7 @@
 // "frame-v3-sha512/root/v1" leaf under the step's domain. Domain ids come from the host. Words are SHA-512's big-endian u64s.
 #pragma once
 #include "ncp2.cuh"
+#include "row_commit.cuh"
 
 namespace rowtab {
 
@@ -19,9 +23,8 @@ using ncp2::Sha512;
 using ncp2::sha512_compress;
 
 constexpr uint32_t SEG_BYTES = 1024;
-// String literals, so device code reads them too: the frame (33 bytes with its NUL), the row-seg tags (25 and 33 with theirs)
-// and the two leaf schemas.
-#define ROWTAB_FRAME "veritor/protocol/merkle/frame/v3"
+// String literals, so device code reads them too: the row-seg tags (25 and 33 bytes with their NULs) and the two leaf
+// schemas.
 #define ROWTAB_SEG_TAG "verity/sha512-row-seg/v1"
 #define ROWTAB_SEG_SEGMENT_TAG "verity/sha512-row-seg/v1/segment"
 #define ROWTAB_ROW_SCHEMA "hm96-sha512/row-seg/v1"
@@ -195,140 +198,56 @@ HD void salt(const Args& a, uint32_t g, uint32_t y[48]) {
 // ---- hm96-sha512 ---------------------------------------------------------------------------------------------------------
 
 // b || c of the inner digest ``x`` under the salt ``y``; ``hm`` the key's byte tables (`hm96.Instance.byte_tables`), 192 x 256
-// entries of 8 words, and ``ms_salt`` the midstate after salt_prefix.
+// entries of 8 words (rc's position table as words), and ``ms_salt`` the midstate after salt_prefix.
 HD void commit_string(const uint64_t x[8], const uint32_t y[48], const uint64_t* hm, const uint64_t ms_salt[8], uint64_t bc[16]) {
-  uint64_t m[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-#pragma unroll
-  for (int p = 0; p < 192; ++p) {
-    const uint32_t v = (y[p >> 2] >> (8 * (p & 3))) & 0xffu;
-    const uint64_t* e = hm + ((size_t)p * 256 + v) * 8;
-#pragma unroll
-    for (int i = 0; i < 8; ++i) m[i] ^= e[i];
-  }
-#pragma unroll
-  for (int i = 0; i < 8; ++i) bc[i] = x[i] ^ m[i];
-  uint64_t h[8], w[16];
-  for (int i = 0; i < 8; ++i) h[i] = ms_salt[i];
-#pragma unroll
-  for (int i = 0; i < 16; ++i) w[i] = ((uint64_t)bswap32(y[2 * i]) << 32) | bswap32(y[2 * i + 1]);
-  sha512_compress(h, w);
-#pragma unroll
-  for (int i = 0; i < 8; ++i) w[i] = ((uint64_t)bswap32(y[32 + 2 * i]) << 32) | bswap32(y[33 + 2 * i]);
-  w[8] = 0x80ull << 56;
-#pragma unroll
-  for (int i = 9; i < 15; ++i) w[i] = 0;
-  w[15] = 8ull * (128 + 192);
-  sha512_compress(h, w);
-#pragma unroll
-  for (int i = 0; i < 8; ++i) bc[8 + i] = h[i];
+  const rc::PosTab<false, true> T{reinterpret_cast<const uint8_t*>(hm)};
+  uint32_t m[16];
+  uint64_t my[8];
+  rc::mask_positions(T, y, m);
+  T.words(m, my);
+  for (int i = 0; i < 8; ++i) bc[i] = x[i] ^ my[i];
+  rc::salt_digest(ms_salt, rc::SaltU32{y, 1}, bc + 8);
 }
 
 // SHA-512(leaf_prefix || b || c), from ``ms_leaf``, the midstate after leaf_prefix.
 HD void tree_leaf(const uint64_t bc[16], const uint64_t ms_leaf[8], uint64_t out[8]) {
-  uint64_t h[8], w[16];
-  for (int i = 0; i < 8; ++i) h[i] = ms_leaf[i];
-#pragma unroll
-  for (int i = 0; i < 16; ++i) w[i] = bc[i];
-  sha512_compress(h, w);
-  zero(w);
-  w[0] = 0x80ull << 56;
-  w[15] = 8ull * 256;
-  sha512_compress(h, w);
-  for (int i = 0; i < 8; ++i) out[i] = h[i];
+  uint64_t B[16];
+  for (int i = 0; i < 16; ++i) B[i] = bc[i];
+  rc::hm96_value(ms_leaf, sx::kw_pad256(), B, out);
 }
 
 // ---- frame-v3-sha512 -----------------------------------------------------------------------------------------------------
 
-// A frame message, written in place as big-endian words and hashed by one loop over its blocks, so each kind of message
-// inlines SHA-512's compress once (ncp2's byte absorber inlines it at every byte it writes). The longest, a node, is
-// 33 + 4 + 4 + 72 + 2 x 16 + 2 x 72 = 289 bytes: with its padding, three blocks.
-constexpr int FRAME_WORDS = 48;
-
-struct Frame {
-  uint64_t w[FRAME_WORDS];
-  uint32_t p;  // bytes written
-};
-
-// ``nbytes`` (1 to 8) big-endian bytes of ``v`` at the message's end.
-HD void frame_be(Frame& f, uint64_t v, int nbytes) {
-  const uint64_t x = nbytes == 8 ? v : v << (64 - 8 * nbytes);
-  const uint32_t o = f.p & 7, i = f.p >> 3;
-  f.w[i] |= x >> (8 * o);
-  if (o + nbytes > 8) f.w[i + 1] |= x << (64 - 8 * o);
-  f.p += nbytes;
+// rc's forms with no plan, from the domain id as the tables carry it (8 big-endian words).
+HD void did_bytes(const uint64_t did[8], uint8_t d[64]) {
+  for (int i = 0; i < 8; ++i) rc::be_put(d + 8 * i, did[i], 8);
 }
 
-template <int N>
-HD void frame_str(Frame& f, const char (&s)[N], bool nul) {
-  for (int k = 0; k < (nul ? N : N - 1); ++k) frame_be(f, (uint8_t)s[k], 1);
-}
-
-// merkle._uint: big-endian, at least one byte.
-HD int uint_len(uint64_t v) {
-  int n = 1;
-  while (n < 8 && (v >> (8 * n))) ++n;
-  return n;
-}
-
-HD void frame_uint(Frame& f, uint64_t v) {
-  const int n = uint_len(v);
-  frame_be(f, (uint64_t)n, 8);
-  frame_be(f, v, n);
-}
-
-HD void frame_digest(Frame& f, const uint64_t v[8]) {
-  frame_be(f, 64, 8);
-  for (int i = 0; i < 8; ++i) frame_be(f, v[i], 8);
-}
-
-template <int N>
-HD void frame_head(Frame& f, const char (&tag)[N], const uint64_t did[8]) {
-  for (int i = 0; i < FRAME_WORDS; ++i) f.w[i] = 0;
-  f.p = 0;
-  frame_str(f, ROWTAB_FRAME, true);
-  frame_be(f, N - 1, 4);
-  frame_str(f, tag, false);
-  frame_digest(f, did);
-}
-
-HD void frame_hash(Frame& f, uint64_t out[8]) {
-  const uint32_t len = f.p, blocks = (len + 17 + 127) / 128;
-  frame_be(f, 0x80, 1);
-  f.w[16 * blocks - 1] = 8ull * len;
-  iv(out);
-#pragma unroll 1
-  for (uint32_t b = 0; b < blocks; ++b) sha512_compress(out, f.w + 16 * b);
-}
-
-// CommitmentDomain.leaf(rank, rank, schema, value) for a 64-byte value.
+// CommitmentDomain.leaf(rank, rank, schema, value) for a 64-byte value: from its head (rc's leaf_head, leaf_tail).
 template <int N>
 HD void frame_leaf(const uint64_t did[8], uint64_t rank, const char (&schema)[N], const uint64_t value[8], uint64_t out[8]) {
-  Frame f;
-  frame_head(f, "leaf", did);
-  frame_uint(f, rank);
-  frame_uint(f, rank);
-  frame_be(f, N - 1, 8);
-  frame_str(f, schema, false);
-  frame_digest(f, value);
-  frame_hash(f, out);
+  static_assert(N - 1 <= rc::MAX_HEAD_SCHEMA, "a schema whose leaf head fits two blocks");
+  uint8_t d[64];
+  uint64_t mid[8], tail[16];
+  did_bytes(did, d);
+  const int q = rc::leaf_head(d, rank, rank, reinterpret_cast<const uint8_t*>(schema), N - 1, mid, tail);
+  rc::leaf_tail(mid, tail, (uint32_t)q, value, out);
 }
 
+// Its node at level (below 256): rc's node_at from the level's chaining value (node_mid).
 HD void frame_node(const uint64_t did[8], uint64_t level, uint64_t index, const uint64_t* left, const uint64_t* right,
                    uint64_t out[8]) {
-  Frame f;
-  frame_head(f, "node", did);
-  frame_uint(f, level);
-  frame_uint(f, index);
-  frame_digest(f, left);
-  frame_digest(f, right);
-  frame_hash(f, out);
+  uint8_t d[64];
+  uint64_t mid[8];
+  did_bytes(did, d);
+  rc::node_mid(d, (int)level, mid);
+  rc::node_at(mid, index, left, right, out);
 }
 
 HD void frame_pad(const uint64_t did[8], uint64_t rank, uint64_t out[8]) {
-  Frame f;
-  frame_head(f, "pad", did);
-  frame_uint(f, rank);
-  frame_hash(f, out);
+  uint8_t d[64];
+  did_bytes(did, d);
+  rc::pad_of(d, rank, out);
 }
 
 // ---- one row, one node ---------------------------------------------------------------------------------------------------
