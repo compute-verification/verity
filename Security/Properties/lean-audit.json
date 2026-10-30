@@ -8129,7 +8129,7 @@
    ]
   },
   "Definitions.Pous.Game.Oracle": {
-   "digest": "4ef81dd28a5839e8a718ddb685bdebac2881a7553edee23da8ae13c9cf5f371a",
+   "digest": "0947f14c728da55a0d29530068e1acc1169f00f93e275b726490724091e61650",
    "definitions": {
     "Pous.IdealModel": "9d7b6702a9651293498fba88662b0a07a5a4895043fe04c7dcb576631b27b8c3",
     "Pous.IdealModel.Ans": "9a85561dbf628699eef928a6cbfd6ffd5b0ebb87cf74a6d83cf828ececda3db4",
@@ -8145,16 +8145,7 @@
     "Pous.OracleAlgorithm.rec": "b314b881f92ed568e2c59c8e5cac18a538d185c76bf4092e36f7085e8c6acd29",
     "Pous.OracleAlgorithm.ret": "c46966b834e2a5ee3bf082dbac6d8aae84244773a4d8945fed49d2d6826e6153",
     "Pous.OracleAlgorithm.round": "e000ee5071597b5388fa145283e16f0165a429b5dc232531b79cb7171d674285",
-    "Pous.OracleAlgorithm.run": "49932e96b6ae0840d379cc44a66767287735757fdb6ae57c3cbac08e9320a529",
-    "Pous.Prog": "941722026665f4215fce0f03932cfac124fb4e8c762f3bdf3c4d762f7ef7fd46",
-    "Pous.Prog.below": "f2ba11ebc76930b734e0c363a741a6217169e38788fbcd394f683543dd1fd1da",
-    "Pous.Prog.brecOn": "e7ea1a46350c816d8d2712766f3a47ffc333686e382dada37b60fb21c41e9c20",
-    "Pous.Prog.brecOn.go": "3386ef6c3debf3705ea07e943b50f1d95a7776845f3f8aeb124e3af00f46514e",
-    "Pous.Prog.casesOn": "5dc0ca71d8db5b96d0f4063c90ed9db86012adf97cb4a8794187fa5be23d4f86",
-    "Pous.Prog.rec": "0e8a54c42faea2a78fc7e6a12ef88d5249fb3f39fd1272d2c550fa61fe029d29",
-    "Pous.Prog.ret": "d8b5cac8b5ba4ab1cf84a796971fbcd4302b21af0ebb13b90963d7177b7c63b5",
-    "Pous.Prog.round": "39667be7dd6280a1a588fcd513f9e447a539be4f8814290db4b36f2faedeeafe",
-    "Pous.Prog.run": "c0021163e15a15e3d0553d037f1a4752b6e69010f3dae00e0d5181e749eed9da"
+    "Pous.OracleAlgorithm.run": "49932e96b6ae0840d379cc44a66767287735757fdb6ae57c3cbac08e9320a529"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
@@ -8432,7 +8423,7 @@
    ]
   },
   "Definitions.Pous.P2.Cost": {
-   "digest": "17e2a44a60dd671411ccf713ed397eb2954d58d82e692122670acdf03edc95fa",
+   "digest": "10f5d026877d0112a3e419741a225d25c19c07e30bc6e90cb08514f06eac6adc",
    "definitions": {
     "Pous.AuditSecureOn": "a64457dcd109df60a0fe2c0a2130bb8f15f3f5796d89700d3e953a82b2a05482",
     "Pous.KeyPart": "eb2c163914e5f40399b790ce38d8b0b48f7d0fad1e64fb11d449ca855d26baee",
@@ -8445,10 +8436,6 @@
     "Pous.OracleAlgorithm.keyWork": "65f3d66799953bbb42d7e045b2417a9b699fc07b9e0a4a59eb6c1773b0080ef0",
     "Pous.OracleAlgorithm.mulDepth": "59ebf6bd7b818a26b8b285edf3464577592fa705863b956aaa164b04b4fb550c",
     "Pous.OracleAlgorithm.ringWork": "1cdc7a4c55d90d22b77833a282e3bdd677341f03930f8d0e6273af553f31117d",
-    "Pous.Prog.RingBounded": "52e3e55117db8dd0134cba49966e0ee7828c77124b6919be721584f1a9c93295",
-    "Pous.Prog.keyWork": "fca873b0cd0311e31091ce9f1d955fa525d941390b46d911d6570a98c57d1cca",
-    "Pous.Prog.mulDepth": "2d3f6426d2aa42f2f0b8ec83e165188fddc797b862ce0cc52ee55363491ac15a",
-    "Pous.Prog.ringWork": "a12afa7dcacf5e834d065f18e7cfd243eb42fe71e3102932a69239495519f09a",
     "Pous.RingQry": "e3a429afd76b7fc7b7869b9090ef184bdf7e2cc617b8f307a613938eee9ab589",
     "Pous.RingQry.add": "3d2987d195d620a4b1c7b8644da193d191d8734ad02b97d3d88fd2b65e812d56",
     "Pous.RingQry.casesOn": "73c5693553d36d335d2f53b8f13b4c365aab8224a84a0bf8048fbc7fc6fab904",
@@ -8462,9 +8449,7 @@
     "Pous.RingQry.one": "40b26cdba5058a1531f90d38ea3d36fcdf673ae39d3d7e55ffdd6c9ff4bf61c5",
     "Pous.RingQry.rec": "662150542c17dd3dfe6e2c8290691104cfa3810300966a3cee749d186b40f683",
     "Pous.SeqResponderOn": "a1b5e77546deed93fea6570c09e9d75398e784ef7a29ee4fe70bf4b4102d4faa",
-    "Pous.SeqResponderOn.step": "0c7b0adfa7625a66eda41d0003d31b68183669ce97aca4defc64c1ebb4b1a421",
     "Pous.SimResponderOn": "bcbd65872842d36ebb2a1d3343cb5262e588bee48ac1194bbafa008457c78d75",
-    "Pous.SimResponderOn.prog": "5fbc08c1caef87dcc0ee147520ff272369887fcb366daab96043ee8d9ad9a514",
     "Pous.decBlock": "482c64b1dd30607584d70b1b4c209501be73860e8de2a5dc63ba7d2c5c70ffe4",
     "Pous.eltD": "e0d35ad5a621d89317cedcaa1c472e5ca7089a6592f5e80abeed85a2296e66bb",
     "Pous.encBlock": "ae8a61be28a1724696c809666cbac5784158a6c30d0d19a592ad6b029056045e",
@@ -8522,10 +8507,9 @@
    "guarantees": ["Pous.Period.SecurityProofs.obligationHeld"]
   },
   "Definitions.Pous.P2.Rounds": {
-   "digest": "408c164405ccfd9b7b68eb9aa26047585862e5871df72b91c324de00c46eda1d",
+   "digest": "c19470bcc54fcca95113a928626691c7d21ffb7e02ed6176cce4b50ac413431e",
    "definitions": {
     "Pous.VarResponderOn": "3b16b9c38b62b8ad09046e7bac8676441c8e21528774425a982bc1c26d848a28",
-    "Pous.VarResponderOn.step": "813cf4769e42688bdce563b03dbd9d5d80fcca5dd763b11fff69c1751fba1b83",
     "Pous.varAnswers": "d78361de3a9478681b6a060c46e372da6e0ebb9fbf1d3bc87522b31fb4bc095e",
     "Pous.varPassesOn": "dd4b48c544e333215e59407ed3abac6280bd3e2d1414c9c7987265fd46f3f2f3"
    },
