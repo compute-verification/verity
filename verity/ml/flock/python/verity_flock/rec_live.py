@@ -1203,7 +1203,8 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
     a prover's ``--warm`` and ``--runs`` sessions), write each into ``out``, or ``out/s<k>`` when there are several, and
     return their summaries, each also passed to ``done`` as it ends. A session that finishes is written whole
     (`Proxy.write`); one that stops (a refusal, or a connection that ends without ``Finish``: closed, reset, or cut inside a
-    frame) has only the coin server's record, ``public.json``, and counts as one of the ``sessions``. Each session's coins
+    frame) has only the coin server's record, ``public.json``, and its coin tree's record, ``coin_tree.json``, when it has
+    one, and counts as one of the ``sessions``. Without ``tree`` each session's coins
     are live: the challenger commits to none. ``ready`` is called with the bound address. Every session is held to ``schedule`` (`schedule_for`'s, from public data alone), written to
     ``out/schedule.json`` before the first is served. With ``firewall`` (a `verity_flock.firewall.Firewall`), each session
     opens a recursive session on ``stream`` with its V* statements in their order (``parts``, public, from K: L0–L6 and the
@@ -1265,6 +1266,9 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
             if proxy.stopped is not None:
                 d.mkdir(parents=True, exist_ok=True)
                 (d / "public.json").write_text(record_bytes(proxy.coins.record()))
+                # the challenger logged this tree; an audit refuses a logged tree no session reports
+                if proxy.coins.tree_record is not None:
+                    (d / "coin_tree.json").write_text(json.dumps(proxy.coins.tree_record, indent=1, sort_keys=True))
                 res.append({"session": None, "refused": proxy.stopped, "rounds": len(proxy.coins.rounds)})
                 if firewall is not None:
                     firewall.stop(sid, "inner", proxy.stopped)

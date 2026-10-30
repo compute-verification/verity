@@ -409,6 +409,31 @@ def test_the_coin_server_draws_no_coin_tree_of_its_own():
         RL.CoinServer(_counter_rand(), TREE)
 
 
+def test_a_session_that_stops_after_hello_reports_the_coin_tree_the_challenger_drew(tmp_path):
+    """The challenger logs every tree it draws, and an audit refuses a logged tree no session reports: a session that ends
+    without Finish keeps its tree's record (``coin_tree.json``) beside the coin server's."""
+    import socket
+    import threading
+
+    src = _Logged(_counter_rand())
+    bound, got = threading.Event(), {}
+    t = threading.Thread(target=lambda: got.update(res=RL.serve("127.0.0.1:0", tmp_path, _counter_rand(), schedule=SCHEDULE,
+                                                                    tree=TREE, source=src,
+                                                                    ready=lambda a: (got.update(addr=a), bound.set()))))
+    t.start()
+    bound.wait()
+    host, port = got["addr"].rsplit(":", 1)
+    with socket.create_connection((host, int(port))) as s, s.makefile("rb") as rf, s.makefile("wb") as wf:
+        for req in (RL.encode_req(RL.REQ_REGISTER), RL.encode_req(RL.REQ_HELLO, _tree_hello())):
+            RL.write_frame(wf, req)
+            resp = RL.read_frame(rf)
+    t.join()
+    root, _ = CT.answer_of(RL.decode_resp(resp)[1])
+    assert got["res"][0]["refused"] == "rec proxy: the session ended without Finish"
+    assert json.loads((tmp_path / "coin_tree.json").read_text()) == src.trees[root].record()
+    assert src.asked == []
+
+
 def test_the_test_source_refuses_what_the_challenger_refuses():
     src = RL.OsTree(_counter_rand())
     _, root, _ = src.tree(TREE.to_json())
