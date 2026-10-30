@@ -27,6 +27,8 @@ What it establishes (each a `Checks` line):
   and isn't on random declared words.
 - **Seclusion.** With n readable, a bit-sliced fold of n gives the declared σ of 32 cells for 2b writes a step (b reads,
   b XORs), beside an MMA running hidden work: the net gap is 1 − 2b/32 of stock. FT's τ needs no seclusion.
+- **Double duty** (SI-RED's break of SN as written): hidden accumulators ≡ 0 mod 2^b give the zero-data σ through σ_x of
+  the hidden words, exactly; absorbing acc + n·(2³¹ − 1) removes it, and φ must not be fixed by a rotation.
 - **§2a.** Both designs' gap is 0 at every shape; operand noise to whiten power would add 32/K + 1/n + 1/m of honest work
   the zero-data adversary skips.
 
@@ -46,7 +48,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "si_fold"))
 import rho
 import silicon_fold as sf
 from exact_kit.checks import Checks
-from silicon_noise import SI_ALG, sketch
+from silicon_noise import M32, SI_ALG, sketch
 
 TC = 1024
 WORDS = 32
@@ -60,6 +62,7 @@ FF = 5.667
 PREFOLD_GE_A_WORD = 64.0
 KECCAK_ANDS = 1600
 SN_ANDS_A_WORD = 31
+PHI = (1 << 31) - 1
 MARGINS = (1.1, 1.5, 2.0, 2.4, 3.0, 3.75, 4.0, 5.0, 6.0, 7.9, 10.0)
 SHAPES = ((64, 2048, 2048), (8192, 2048, 2048), (64, 2048, 8192), (8192, 2048, 8192), (64, 8192, 2048),
           (8192, 8192, 2048))
@@ -210,6 +213,37 @@ def seclusion_section(checks: Checks) -> dict:
     return out
 
 
+def double_duty_section(checks: Checks) -> dict:
+    """SI-RED's double duty (note 20261030T0750Z-report-silicon-red §3): hidden accumulators ≡ 0 mod 2^b take no carry from
+    the noise, so σ(acc^H + n) ⊕ σ_x(acc^H) is the zero-data σ on every cell. Absorbing acc + n·φ, with φ = 2³¹ − 1 fixed
+    by no rotation, ties every hidden bit to the noise's carries."""
+    g = np.random.default_rng(43)
+    cells, T = 64, 32
+    r = np.ones(T, np.int64)
+    out = {}
+    for b in (1, 8):
+        n = g.integers(0, 1 << b, (cells, T), dtype=np.int64)
+        hid = (g.integers(0, 1 << (32 - b), (cells, T), dtype=np.int64) << b) & M32
+        zero = np.zeros_like(n)
+        fix = sketch("xorrot", hid, zero, r)
+        row = {}
+        for name, z in (("as written", n), ("phi 2^31-1", (n * PHI) & M32), ("phi 0x01010101", (n * 0x01010101) & M32)):
+            row[name] = int(np.sum((sketch("xorrot", hid, z, r) ^ fix) == sketch("xorrot", zero, z, r)))
+        row["zero_data_distinct_phi"] = len(set(sketch("xorrot", zero, (n * PHI) & M32, r).tolist()))
+        row["byte_periodic_phi"] = byte_periodic(sketch("xorrot", zero, (n * PHI) & M32, r))
+        out[b] = row
+    checks.check("double duty (SI-RED): as written, hidden accumulators ≡ 0 mod 2^b give the zero-data σ on every cell "
+                 "through σ_x of the hidden words, at b 1 and 8; absorbing acc + n·(2³¹ − 1) leaves no cell exact, and the "
+                 "zero-data σ keeps 64 of 64 distinct, none byte-periodic",
+                 all(v["as written"] == cells and v["phi 2^31-1"] == 0 and v["zero_data_distinct_phi"] == cells
+                     and v["byte_periodic_phi"] == 0 for v in out.values()), out)
+    return out
+
+
+def byte_periodic(s) -> int:
+    return sum(((x >> 8) | (x << 24)) & M32 == x for x in s.tolist())
+
+
 def sec2a_section(checks: Checks) -> dict:
     rows = []
     for m, n, K in SHAPES:
@@ -241,6 +275,11 @@ def mutations(checks: Checks, mine: dict, fold: dict) -> None:
         s = sketch("xorrot_x", acc, n1 ^ n2, r) ^ sketch("xorrot_x", acc, 0 * n1, r)
         t = sketch("xorrot_x", acc, n1, r) ^ sketch("xorrot_x", acc, n2, r)
         checks.check("not linear on random words", not np.array_equal(s, t))
+    with checks.mutant("φ = 0x01010101, which rotation by 8 fixes (SI-RED's condition on φ)"):
+        g = np.random.default_rng(47)
+        n = g.integers(0, 2, (64, 32), dtype=np.int64)
+        s = sketch("xorrot", np.zeros_like(n), (n * 0x01010101) & M32, np.ones(32, np.int64))
+        checks.check("no zero-data σ is byte-periodic", byte_periodic(s) == 0)
 
 
 def main() -> int:
@@ -257,7 +296,8 @@ def main() -> int:
     res = {"schema": "silicon-noise-reconcile/v1",
            "area": area_section(checks, mine, fold, mine_doc["library"]["cells"]["XOR2"]),
            "copy": copy_section(checks), "sha3": sha3_section(checks), "linear": linear_section(checks),
-           "seclusion": seclusion_section(checks), "sec2a": sec2a_section(checks)}
+           "seclusion": seclusion_section(checks), "double_duty": double_duty_section(checks),
+           "sec2a": sec2a_section(checks)}
     if checks.mutations:
         mutations(checks, mine, fold)
     Path(args[0] if args else "reconcile.json").write_text(json.dumps(res, indent=1, default=str) + "\n")
