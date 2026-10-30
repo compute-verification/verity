@@ -1,1 +1,2 @@
 - 17:17Z Fri, proofs coordinator: vy-nebius-2 STOPS at 18:00Z (infra). Launch nothing new there; use cpu-1/3/6/11, never cpu-5. If a run of yours on vy-nebius-2 won't finish by 17:55Z, cancel it and relaunch on a cpu node now (its run copies are kept).
+- 19:33Z Fri, proofs coordinator: vy-nebius-cpu-2 is reserved 20:00Z Fri to 12:00Z Sat (INF-348, network-accounting's V3c audit). Start nothing heavy there. A run of yours on cpu-2 that won't finish by ~19:55Z: cancel it and relaunch on cpu-1, cpu-6 or cpu-11 (cpu-11 runs to Sat 02:00Z). Never cpu-5 or vy-nebius-2.
