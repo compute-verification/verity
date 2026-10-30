@@ -37,12 +37,12 @@ the checker form is a bad scan (`bad_scans`), as is each check's negative of wha
 (`scan_negatives`). Beside them, the compute audits (in the rows form at least one, whose registrations' `roots` hold the
 scans' `prog`), each registered over its Program, a population of one or two stand-in templates whose units commit from
 8 to 320 bits, with its slot entries' in the rows form (`audit_descriptor`), and answered with a subset or stratified
-draw (a work law's) and its bound on wrong units, every unit drawn for an audit a scan's `prog` is tied to
-(`tied-undrawn`: one such audit drawn `subset:k`, k < N), and a link-window whose scan's state is not its wired audit's
-`SCAN_STATE` refused (`state-untied`: a `SCAN_STATE` that skips or alters one of the scan's transitions, at another root
-or domain, or none, `UNSTATES`). `case(kind, seed, form)` is a small period of the form aimed at a verdict, or at a
-decoding failure (`KINDS`, those the form reaches: `kinds`), and `cases(seed, form)` one of each with its answer, as a
-composition's difftest takes a real component's cases.
+draw (a work law's) and its bound on incorrect proof blocks, every unit drawn for an audit a scan's `prog` is
+tied to (`tied-undrawn`: one such audit drawn `subset:k`, k < N), and a link-window whose scan's state is not its wired
+audit's `SCAN_STATE` refused (`state-untied`: a `SCAN_STATE` that skips or alters one of the scan's transitions, at
+another root or domain, or none, `UNSTATES`). `case(kind, seed, form)` is a small period of the form aimed at a verdict,
+or at a decoding failure (`KINDS`, those the form reaches: `kinds`), and `cases(seed, form)` one of each with its
+answer, as a composition's difftest takes a real component's cases.
 
 This is test-side Python (it imports `verity_difftest` and PoUW's `core_check`, which the certifier's package may not),
 so it lives beside the period's difftest (`test_network_period_protocol.py`), and other suites load it by path."""
@@ -1442,8 +1442,8 @@ def _unit_sig(S):
     return (("x", Array(1, U16)),), Array(S.OUT, BYTE)
 
 
-#: A compute audit's stand-in unit: it commits `OUT` bytes, a proof unit's 16-bit public output (`OUT` = 2) or more or
-#: fewer, each one gate.
+#: A compute audit's stand-in unit: it commits `OUT` bytes, a proof block's 16-bit public output (`OUT` = 2) or more
+#: or fewer, each one gate.
 AUDIT_UNIT = CompositeDefinition("NetworkPeriodAuditUnit", 0, ("OUT",), _unit_sig,
                                  lambda B, S, x: B.batch(LOW, x[0], axes=(None,), n=S.OUT), register=False)
 #: The stand-in unit's widths in bytes: one under, at and over the public output's 16 bits.

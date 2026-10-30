@@ -73,7 +73,7 @@ the served window proves its drawn tiles in zero knowledge, and its verifier of 
    (`Proxy(origin=…)`), each with a salt drawn once from fresh randomness, so no epoch is bound; a proxy started again,
    or a second link, counts from 0 again, so a served-zk window's stream names the certifier's run:
    `served_commit.stream_id` reads its `certifier_run`, (key id, run id, ingress link), beside the deployment and the
-   stream's name. Every signed answer of the certifier binds that run, a `Proxy` and its `RemoteCertifier` give it
+   stream's name. Every signed answer of the certifier binds that run, a `Proxy` and its `CertifierClient` give it
    alike, the run id is drawn when a proxy starts (`Proxy.run_id`) and the ingress link has no default
    (`Proxy(ingress_link=…)`). That salt binds no weights, and
    the prover holds it from p's first ingress tick, so a certified window passes only weights, a stream and a prover
@@ -113,7 +113,7 @@ the served window proves its drawn tiles in zero knowledge, and its verifier of 
      No Lean statement covers the certified window's timing yet (`EndToEndWindow`'s t_d is the
      uncertified window's).
    - **The certifier–challenger link**. The certifier runs on the link and the challenger on an
-     auditor host, so the challenger asks through the certifier's client (`certifier.active.RemoteCertifier`, served by
+     auditor host, so the challenger asks through the certifier's client (`certifier.active.CertifierClient`, served by
      `serve_reveals`): each `committed` and `reveal` is a request the challenger signs for the certifier's run and an
      answer the certifier signs over its run, p, the registration's digest and the value, which the client verifies
      under the certifier's key. A `Proxy` in process has no signer, so it names no run, and a certified challenger

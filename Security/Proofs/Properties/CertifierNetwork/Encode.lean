@@ -289,7 +289,7 @@ theorem certificateMessage_of {k s : ByteArray} {l : String} {d : Direction} {w 
 theorem parameters_size {g : Params} {ss : Option _root_.NetworkCertifier.SyncSet} {pd : ByteArray}
     (h : parameters g ss = .ok pd) : pd.size = 64 := by
   unfold parameters NetworkCheck.parametersDigest at h
-  cases hc : Flock.canon (NetworkCheck.parametersManifest g (ss.map checkSyncSet)) with
+  cases hc : Flock.canonUtf8 (NetworkCheck.parametersManifest g (ss.map checkSyncSet)) with
   | error e => rw [hc] at h; cases h
   | ok j =>
     rw [hc] at h

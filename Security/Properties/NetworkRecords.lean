@@ -73,9 +73,10 @@ def rowInput (row : Array (Option ByteArray)) : ByteArray :=
   taggedInput "verity-network-warden/row/v1"
     ((row.filterMap id).foldl (· ++ ·) (Flock.be32 (row.filterMap id).size.toUInt32))
 
-/-- The canonical JSON header `record_digest` hashes for link-window `(l, w)` of a complete record under `g`. -/
+/-- The header `record_digest` hashes for link-window `(l, w)` of a complete record under `g`, in the identity form
+(`Flock.canonUtf8`). -/
 def header (l : String) (w : Nat) (g : Grid) : Flock.V String :=
-  Flock.canon (Lean.Json.mkObj [
+  Flock.canonUtf8 (Lean.Json.mkObj [
     ("link", .str l), ("window", Lean.toJson w), ("buckets", Lean.toJson g.buckets),
     ("allocation", Lean.toJson g.allocation), ("frame_bytes", Lean.toJson g.frameBytes),
     ("bucket_ms", Lean.toJson g.bucketMs), ("status", .str "complete")])
