@@ -2,8 +2,9 @@
 
 `committer` builds the server's committer: ``--scheme rows-sha512`` (the default) the declared Commit of record's
 (`pipeline.commit.make_committer`'s ``native_collect_v2b``: hm96-sha512 rows in frame-v3-sha512 trees, 64-byte roots) with its
-acquisition built as the Commit builds it (`pipeline.commit_attach.attach_of_record`) over the bench row's required manifest
-(``--required-manifest``): the attention hidden tap (``--hidden-so``), the norm-scale tap (``--norm-tap-so``) and the hook sets of
+acquisition built as the Commit builds it (`pipeline.commit_attach.attach_of_record`) over the row's required manifest
+(``--required-manifest``, the one ``verity-vllm predict row`` wrote with the row's Build of record, `serve_row`): the attention
+hidden tap (``--hidden-so``), the norm-scale tap (``--norm-tap-so``) and the hook sets of
 the acquisition plan, so its name is the Commit's (``...+hidden_m1+norm_scale+plan``) and a part the manifest names that did not
 attach is refused (`parts_missing`); ``--scheme vllm-v1`` `NativeHostCommitter` (SHA-256, 32-byte roots), which only a recorded
 run's readers take, so a run under it names the recorded vllm-v1 run it serves again (``--of-record``, `scheme_refusal`). Then
@@ -65,6 +66,7 @@ from verity_vllm.commit import json_chunks as JC
 from verity_vllm.commit import step_rows
 from verity_vllm.commit.served_record import PORT_NAMES, StepInputPort
 from verity_vllm.config import UsageError, option
+from verity_vllm.pipeline.serve_row import programs_root_of, row_refusal
 
 ROWS, V1 = step_rows.NAME, "vllm-v1"
 #: the token budget's floor under rows-sha512: the step-input port's ids fill whole ``step_rows.ROW_BYTES`` rows
@@ -152,21 +154,24 @@ def recorded_scheme(rec: Mapping[str, Any]) -> str | None:
 
 
 def scheme_refusal(opts: Any) -> str | None:
-    """Why ``opts`` can't commit under its scheme (None: it can). rows-sha512 needs the GPU tree, the bench row's manifest and
-    a token budget of whole step-input port rows (`PORT_IDS`). vllm-v1 commits SHA-256, which only a recorded run's readers
-    take, so it only serves again a recorded vllm-v1 run of the same model, the one ``--of-record`` names."""
+    """Why ``opts`` can't commit under its scheme (None: it can). rows-sha512 needs the GPU tree, the row's manifest and a token
+    budget of whole step-input port rows (`PORT_IDS`); a row's manifest, which the engine's scheduler follows too (`serve_row`),
+    is predict's (`serve_row.row_refusal`), committing or not. vllm-v1 commits SHA-256, which only a recorded run's readers take,
+    so it only serves again a recorded vllm-v1 run of the same model, the one ``--of-record`` names."""
     if why := retention_refusal(opts):
         return why
     if opts.of_record and opts.scheme != V1:
         return f"--of-record names a recorded {V1} run to serve again under --scheme {V1}, not under --scheme {opts.scheme}"
+    if opts.required_manifest and (why := row_refusal(opts.required_manifest)):
+        return why
     if not opts.commit:
         return None
     if opts.scheme == ROWS and not opts.gpu_tree:
         return f"--scheme {ROWS} (the default) is the windowed collector's, which hashes its rows on the GPU: drop --no-gpu-tree"
     if opts.scheme == ROWS and not opts.required_manifest:
-        return (f"--scheme {ROWS} (the default) commits with the Commit of record's parts, which its bench row's manifest names: "
-                "pass --required-manifest ROW_DIR/manifest.json (and the row's --hidden-so, --norm-tap-so), or --no-commit to serve "
-                "without a Commit")
+        return (f"--scheme {ROWS} (the default) commits with the Commit of record's parts, which its row's manifest names: pass "
+                "--required-manifest DIR/manifest.json, DIR the row's Build of record (`verity-vllm predict row --row ROW --out DIR`), "
+                "and the row's --hidden-so, --norm-tap-so, or --no-commit to serve without a Commit")
     if opts.scheme == ROWS and int(opts.max_num_batched_tokens) % PORT_IDS:
         return (f"--scheme {ROWS} starts each step's stream with its step-input port, the step's ids in whole "
                 f"{step_rows.ROW_BYTES}-byte rows: pass --max-num-batched-tokens a multiple of {PORT_IDS}, not "
@@ -193,7 +198,7 @@ def scheme_refusal(opts: Any) -> str | None:
 
 def committer_args(opts: Any) -> SimpleNamespace:
     """What `pipeline.commit.make_committer` and `pipeline.commit_attach.attach_of_record` read of a Commit's options, for
-    `DECLARED_COMMITTER` under ``opts.scheme`` and the bench row's manifest ``opts.required_manifest``."""
+    `DECLARED_COMMITTER` under ``opts.scheme`` and the row's manifest ``opts.required_manifest``."""
     from verity_vllm.acquire.sources.taps import TapSources
 
     return SimpleNamespace(layout="chunk-leaf-v1", arena_mb=0, profile_hooks=False, pinned_populate_threads=None,
@@ -204,16 +209,8 @@ def committer_args(opts: Any) -> SimpleNamespace:
                            required_classes=None)
 
 
-def programs_root_of(opts: Any) -> str | None:
-    """The Build's row dir the manifest's partition and the attention record are read from: ``--programs-root``, else the
-    manifest's own directory."""
-    if opts.programs_root:
-        return opts.programs_root
-    return str(Path(opts.required_manifest).resolve().parent) if opts.required_manifest else None
-
-
 def manifest_of_record(opts: Any) -> dict[str, Any]:
-    """The bench row's required manifest, held to its partition of record (`commit.partition.require_partition`), as the Commit
+    """The row's required manifest, held to its partition of record (`commit.partition.require_partition`), as the Commit
     loads it."""
     from verity_vllm.commit.partition import require_partition
 
