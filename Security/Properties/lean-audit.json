@@ -386,6 +386,7 @@
   "CoreComposition",
   "CoreProtocol.Blobs",
   "CoreProtocol.Live",
+  "VStar.Cli",
   "Properties.Verity",
   "CoreOnsite",
   "CoreRemote"
