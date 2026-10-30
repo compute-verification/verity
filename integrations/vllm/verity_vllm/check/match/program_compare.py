@@ -36,7 +36,7 @@ from dataclasses import dataclass
 
 from verity_vllm.check.match import compiler_form as CF
 from verity_vllm.check.match import split_selects
-from verity_vllm.check.match.instance_sequence import Prog
+from verity_vllm.check.match.instance_sequence import RootView
 from verity_vllm.check.match.program_loaders import load_derived, load_oracle
 from verity_vllm.check.match.sampler_geometry import constant_splits_agree
 from verity_vllm.config import UsageError, option
@@ -83,14 +83,14 @@ def _divergence_report(a: list, b: list) -> dict:
     return out
 
 
-def compare_steps(A: Prog, B: Prog, unfold_a: bool = False, *, canon_step_relative=None, canonical_hash=None) -> dict:
+def compare_steps(A: RootView, B: RootView, unfold_a: bool = False, *, canon_step_relative=None, canonical_hash=None) -> dict:
     """Spec sequences + wiring per step. `unfold_a`: drop A's pad-kind instances and follow muxes (padded vs flat)."""
     canon_step_relative, canonical_hash = canon_step_relative or _canon_step_relative, canonical_hash or _canonical_hash
-    def seq(P: Prog, unfold: bool):   # each step's instances, pad kinds dropped when unfolding; empty segments dropped
+    def seq(P: RootView, unfold: bool):   # each step's instances, pad kinds dropped when unfolding; empty segments dropped
         return [k for k in ([i for i in idxs if not (unfold and P.is_pad(i))] for idxs in P.steps) if k]
 
     sa, sb = seq(A, unfold_a), seq(B, False)
-    def _side(P: Prog, seqs):
+    def _side(P: RootView, seqs):
         d = {"label": P.label, "digest": P.digest, "instances": len(P.inst), "steps": len(seqs), "inputs": len(P.inputs)}
         # the derived split count binding, when present on this side (fold: bound Const32[S] per select; Program: splits input)
         sv = getattr(P, "splits_values", {})
@@ -160,7 +160,7 @@ def compare_steps(A: Prog, B: Prog, unfold_a: bool = False, *, canon_step_relati
     return res
 
 
-def _canonical_hash(P: Prog, seqs: list[list[int]], unfold: bool, canon_step_relative=None) -> str:
+def _canonical_hash(P: RootView, seqs: list[list[int]], unfold: bool, canon_step_relative=None) -> str:
     """sha256 of the expanded instance sequence in canonical form: (spec, form, canonical operand sources, out type) per
     instance, producers as (step, index-within-step) — independent of input layout, node numbering and root naming."""
     import hashlib
@@ -182,15 +182,15 @@ def _short(x):
     return [list(t) if len(str(t)) < 120 else str(t)[:120] for t in x][:6]
 
 
-def _runs_of(P: Prog, canon_arg) -> list:
-    """A canonical operand as the record prints it: per run.  Identity for a record-form Prog; expands a compact Prog's progressions
+def _runs_of(P: RootView, canon_arg) -> list:
+    """A canonical operand as the record prints it: per run.  Identity for a record-form RootView; expands a compact RootView's progressions
     (only the first 6 runs are ever printed -- bounded work)."""
     if not getattr(P, "compact", False):
         return canon_arg
     return _expand_mixed(canon_arg)[:6]
 
 
-def _canon_step_relative(P: Prog, i: int, seqs: list[list[int]], unfold: bool):
+def _canon_step_relative(P: RootView, i: int, seqs: list[list[int]], unfold: bool):
     """Canonical operands with node producers expressed as (N, step, index within the FILTERED step sequence)."""
     pos = getattr(P, "_pos_cache", None)
     if pos is None or P._pos_cache_key != (unfold, id(seqs)):
@@ -221,7 +221,7 @@ def _canon_step_relative(P: Prog, i: int, seqs: list[list[int]], unfold: bool):
     return out
 
 
-def audit_padding(P: Prog) -> dict:
+def audit_padding(P: RootView) -> dict:
     """The padded program's mux discipline: per decode step, one live bit keys 1 SelectI32 + 2*NL SelectBf16 batches,
     against one Const16 zero; guards = I32Eq + BitNot + BitAnd per event. Segments are TokenSelect-terminated, so segment
     s+1 holds event s's guard (it follows the sample) and decode step s's row muxes (the step-boundary cache clear)."""
@@ -252,13 +252,13 @@ def audit_padding(P: Prog) -> dict:
     return {"per_step": per_step}
 
 
-def spec_histograms(P: Prog) -> dict:
+def spec_histograms(P: RootView) -> dict:
     h = collections.Counter(r["spec"] for r in P.inst)
     hT = collections.Counter(_norm_T(r["spec"]) for r in P.inst)
     return {"exact": dict(sorted(h.items())), "T_normalised": dict(sorted(hT.items()))}
 
 
-def per_step_templates(P: Prog) -> list[dict]:
+def per_step_templates(P: RootView) -> list[dict]:
     out = []
     for s, idxs in enumerate(P.steps):
         h = collections.Counter(_norm_T(P.inst[i]["spec"]) for i in idxs)
