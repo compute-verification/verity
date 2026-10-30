@@ -40,9 +40,9 @@ ENTRY = f"pouw:{PL.SCHEME}"
 class Linear:
     """A dense linear on the plain arm: int8 weight [n, K], scales [n, 1], its own `PlainGemm`."""
 
-    def __init__(self, n: int, seed: int, method: type = X.PlainGemm):
+    def __init__(self, n: int, seed: int, method: type = X.PlainGemm, k: int = K):
         g = torch.Generator().manual_seed(seed)
-        self.weight = torch.randint(-127, 128, (n, K), generator=g, dtype=torch.int8)
+        self.weight = torch.randint(-127, 128, (n, k), generator=g, dtype=torch.int8)
         self.weight_scale = (torch.rand(n, 1, generator=g) * 0.01 + 1e-4).float()
         self.quant_method = method(f"linear{seed}")
 
@@ -89,28 +89,45 @@ class Keys:
         return k
 
 
-def top(dom, streams) -> bytes:
-    """The words instance's subtree top as `lead_rows.DeviceWords.top` hands it, computed on the host: the root's two
-    children, or the one chunk; refused, as the device refuses it, unless the streams hold the domain's leaves."""
-    values = L.words_values(streams)
-    if len(values) != dom.count:
-        raise Refused(f"a words instance of {dom.count} leaves got {len(values)}")
-    sub = L.subtree(dom, L.WORDS_LEAF_TAG, values)
+def _top(dom, schema, values) -> bytes:
+    """An instance's subtree top as the device hands it, computed on the host: the root's two children, or the one
+    value."""
+    sub = L.subtree(dom, schema, values)
     return b"".join(sub.levels[-2]) if len(sub.levels) > 1 else sub.values[0]
 
 
+def top(dom, streams) -> bytes:
+    """The words instance's top as `lead_rows.DeviceWords.top` hands it; refused, as the device refuses it, unless the
+    streams hold the domain's leaves."""
+    values = L.words_values(streams)
+    if len(values) != dom.count:
+        raise Refused(f"a words instance of {dom.count} leaves got {len(values)}")
+    return _top(dom, L.WORDS_LEAF_TAG, values)
+
+
+def a_top(dom, xq) -> bytes:
+    """A_j's top as `lead_rows.device_a_top` hands it, from the rows' bytes."""
+    return _top(dom, L.A_LEAF_TAG, L.a_segments(xq.contiguous().cpu().numpy().tobytes()))
+
+
 class Backend:
-    """The lead's kernel, standing in: the plain product as y, each call's committed stream a hash of its rows and coins
-    of the stream's length, and the words instance's top hashed on the host under the domain each call was handed
-    (``doms``, one a call)."""
+    """The lead's kernel, standing in: each call's A top hashed on the host under the domain it was handed (``a_doms``),
+    the plain product as y, each call's committed stream a hash of its rows and coins of the stream's length, and the
+    words instance's top hashed on the host under the domain each call was handed (``doms``, one a call)."""
 
     variant = "stand-in"
 
     def __init__(self, log: list | None = None):
         self.loaded, self.log, self.streams, self.handed, self.doms = [], [] if log is None else log, [], [], []
+        self.a_doms = []
 
     def load(self, w, layer):
         self.loaded.append(w)
+
+    def a_top(self, dom, xq):
+        self.log.append(("a_top", dom.count))
+        self.a_doms.append(dom)
+        return a_top(dom, xq)
 
     def call(self, w, layer, xq, s_a, feed, dom):
         self.log.append(("backend", w, feed.call))
@@ -159,9 +176,9 @@ def _ctx(stage="serve", enabled=(ENTRY,), **settings):
     return PO.Context(stage=stage, enabled=enabled, settings={"pouw": settings})
 
 
-def _x(m: int, seed: int) -> torch.Tensor:
+def _x(m: int, seed: int, k: int = K) -> torch.Tensor:
     g = torch.Generator().manual_seed(seed)
-    return torch.randn(m, K, generator=g).to(torch.bfloat16)
+    return torch.randn(m, k, generator=g).to(torch.bfloat16)
 
 
 def test_the_lead_is_a_scheme_that_executes_and_keeps_its_weights():
@@ -172,7 +189,7 @@ def test_the_lead_is_a_scheme_that_executes_and_keeps_its_weights():
 
 def test_the_lead_refuses_what_it_cannot_be():
     assert PO.refusals(_ctx(backend=Backend())) == ()
-    assert any("'backend' is the lead's kernel (`LeadBackend`: load, call, words)" in r for r in PO.refusals(_ctx()))
+    assert any("'backend' is the lead's kernel (`LeadBackend`: load, a_top, call, words)" in r for r in PO.refusals(_ctx()))
     taken = PO.refusals(_ctx(backend=Backend(), coins=Challenger(0, np.random.default_rng(0).bytes), retain_steps=2,
                              transcript_dir="/tmp/x"))
     assert any("pouw settings coins, transcript_dir, retain_steps are other schemes'" in r for r in taken)
@@ -204,8 +221,8 @@ def test_own_auditor_coins_are_not_added_under_the_lead():
 def test_a_window_opens_at_its_first_call_and_each_call_commits_its_rows_before_its_coins():
     """C3's order: the window keying's registration, then the link's salt, sampled once it holds keyLeaf, the weights'
     root and the window's call count; then the words instance's domain, of each linear's chunks at the first call's m;
-    then each call's root(A_j), the keying's digest of its rows at its position, its coins and its kernel, which gets
-    the window's one domain."""
+    then each call's root(A_j), the keying's digest of its rows at its position from the top the backend hashed under
+    its A domain, its coins and its kernel, which gets the window's one domain."""
     log = []
     backend, layer, link = Backend(log), Linear(24, 1), Link(log)
     linears = _linears(16, 8, 8, 24)
@@ -221,8 +238,9 @@ def test_a_window_opens_at_its_first_call_and_each_call_commits_its_rows_before_
     assert (record.weights_root, record.key_leaf, record.window_calls) == (W, leaf, 4)
     call = F.Call(0, 0, 3, 5, K, 24)
     twin = Keys.twin(0, 4, record.salt)
+    assert backend.a_doms == [twin.a_domain(PL.FORWARD, 0, 1)]
     root = twin.a_root(PL.FORWARD, 0, xq.numpy().tobytes())
-    assert log == [("open", 0, leaf, W, 4), ("release", call, root), ("backend", 3, call)]
+    assert log == [("open", 0, leaf, W, 4), ("a_top", 1), ("release", call, root), ("backend", 3, call)]
     assert record.a_roots == [root] and record.words_root is None
     assert (run.m, run.leaves) == (5, 4) == (5, PL.words_leaves(5, linears))
     assert run.dom.domain_id == twin.words_domain(PL.FORWARD, 4).domain_id and backend.doms == [run.dom]
@@ -231,6 +249,48 @@ def test_a_window_opens_at_its_first_call_and_each_call_commits_its_rows_before_
     assert record.a_roots[1] == twin.a_root(PL.FORWARD, 1, xq1.numpy().tobytes())
     assert [c.index for c in record.calls] == [0, 1] and run.details["calls"] == 2
     assert [e[0] for e in log].count("open") == 1 and backend.doms == [run.dom] * 2
+
+
+@pytest.mark.parametrize("check", [False, True])
+@pytest.mark.parametrize("m,count", [(1, 1), (16, 1), (17, 2), (80, 5)])
+def test_each_calls_root_a_keys_the_backends_top_under_its_own_a_domain(m, count, check):
+    """Each call's A is hashed by the backend under its own domain at its position, of ``ceil(m K / A_SEGMENT)``
+    segments (one up to the 1024-byte edge, a ragged second, several), and the root recorded from that top is the CPU's
+    root(A_j) of the rows, whether ``check`` recomputes it on the host or not."""
+    backend = Backend()
+    run = PL.LeadRun(ENTRY, backend, Link([]), W, _linears(16, 24), keying=Keys(), check=check)
+    rows = [E.quantize_rows(_x(m, w)) for w in range(2)]
+    for w, (n, (xq, s_a)) in enumerate(zip((16, 24), rows)):
+        run.call(w, Linear(n, w), xq, s_a)
+    twin = Keys.twin(0, 2, run.record.salt)
+    assert PL.a_count(rows[0][0]) == count
+    assert backend.a_doms == [twin.a_domain(PL.FORWARD, j, count) for j in range(2)]
+    assert run.record.a_roots == [twin.a_root(PL.FORWARD, j, xq.numpy().tobytes()) for j, (xq, _) in enumerate(rows)]
+
+
+def _flip(t: bytes) -> bytes:
+    return bytes([t[0] ^ 1]) + t[1:]
+
+
+@pytest.mark.parametrize("m,bad,check,why", [
+    (1, lambda t: b"", False, "call 0's A in forward 0: a one-leaf instance holds 1 to 1024 bytes, not 0"),
+    (17, lambda t: t[:64], False, "root's two 64-byte children, not 64 bytes"),
+    (1, _flip, True, "call 0's A in forward 0: the top from the device is not the CPU's"),
+    (80, _flip, True, "call 0's A in forward 0: the top from the device is not the CPU's")])
+def test_an_a_top_of_the_wrong_size_or_off_the_cpus_is_refused_before_its_coins(m, bad, check, why):
+    """A call whose A top the keying refuses (of the wrong size, or under ``check`` not the CPU's) gets no root, coins or
+    kernel, and its pass is never published."""
+    class Bad(Backend):
+        def a_top(self, dom, xq):
+            return bad(super().a_top(dom, xq))
+    log = []
+    run = PL.LeadRun(ENTRY, Bad(log), Link(log), W, _linears(16), keying=Keys(), check=check)
+    with pytest.raises(Refused, match=why):
+        run.call(0, Linear(16, 0), *E.quantize_rows(_x(m, 0)))
+    assert [e[0] for e in log] == ["open", "a_top"] and run.record.a_roots == []
+    with pytest.raises(R.RecordError, match="call 0 raised before its kernel served it"):
+        run.end_pass()
+    assert not run.passes
 
 
 def test_a_step_is_a_pass_published_at_its_end_with_one_words_root():
@@ -287,7 +347,7 @@ def test_the_words_root_keys_the_backends_top_over_its_linears_chunks_at_the_win
     assert record.words_root == twin.words_root(PL.FORWARD, backend.handed[0]) == run.passes[0].transcript_root
 
 
-@pytest.mark.parametrize("calls,cut,why", [(1, lambda t: b"", "one-chunk words instance holds 1 to"),
+@pytest.mark.parametrize("calls,cut,why", [(1, lambda t: b"", "forward 0's words: a one-leaf instance holds 1 to"),
                                            (2, lambda t: t[:64], "root's two 64-byte children, not 64 bytes"),
                                            (2, lambda t: t + bytes(64), "not 192 bytes")])
 def test_a_top_of_the_wrong_size_is_refused_and_its_pass_never_published(calls, cut, why):
@@ -315,7 +375,7 @@ def test_a_call_on_another_m_or_off_its_linear_is_refused_by_name_and_its_window
     w, n, m = second
     with pytest.raises(Refused, match=why):
         run.call(w, Linear(n, 1), *E.quantize_rows(_x(m, 1)))
-    assert [e[0] for e in log] == ["open", "release", "backend"] and len(run.record.calls) == 1
+    assert [e[0] for e in log] == ["open", "a_top", "release", "backend"] and len(run.record.calls) == 1
     with pytest.raises(R.RecordError, match="call 1 raised before its kernel served it"):
         run.end_pass()
     assert not run.passes
@@ -376,7 +436,7 @@ def test_a_call_the_link_refuses_gets_no_kernel():
     run = PL.LeadRun(ENTRY, Backend(log), Refusing(log), W, _linears(16, 16), keying=Keys())
     with pytest.raises(F.FeedError, match="refused"):
         run.call(0, Linear(16, 1), *E.quantize_rows(_x(1, 1)))
-    assert [e[0] for e in log] == ["open", "release"]
+    assert [e[0] for e in log] == ["open", "a_top", "release"]
     with pytest.raises(R.RecordError, match="call 0 raised before its kernel served it"):
         run.end_pass()
 
@@ -407,7 +467,7 @@ def test_install_serves_each_call_through_the_lead_and_uninstalls_to_the_plain_a
     runner = Runner(model)
     served = runner.execute_model(x)
     assert torch.equal(served.view(torch.int16), plain.view(torch.int16))
-    assert [e[0] for e in log] == ["open", *["release", "backend"] * 3, "words"]
+    assert [e[0] for e in log] == ["open", *["a_top", "release", "backend"] * 3, "words"]
     assert [e[2].linear for e in log if e[0] == "backend"] == [0, 1, 2]
     assert [e[4] for e in log if e[0] == "open"] == [3] and option.commits["calls"] == 3
     assert len(option.commits["passes"]) == 1 and option.commits["passes"][0]["units"] == 3

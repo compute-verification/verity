@@ -18,8 +18,10 @@ window opens:
 Then the lead serves each linear call on the arm through the arm's ``gemm`` (`engine.int8_experts.PlainGemm`). The arm
 quantizes the call's rows as it always does, then
 
-1. root(A_j), the keyed digest of the call's s8 rows at its position j < ``calls`` of the window's one forward
-   (`lead_rows.WindowKeying.a_root`, hashed on the host), is recorded in the pass's record (`record.PassRecord.a_root`);
+1. root(A_j), the keyed digest of the call's s8 rows at its position j < ``calls`` of the window's one forward, is
+   hashed on the device where the rows are (`LeadBackend.a_top`, under `lead_rows.WindowKeying.a_domain`), keyed from
+   its subtree's top (`lead_rows.WindowKeying.a_top`) and recorded in the pass's record (`record.PassRecord.a_root`),
+   so A never comes to the host;
 2. the call's coins come from the coin link, released after that root (`feed.CoinLink.release`);
 3. the lead's kernel runs on the rows and the coins (`LeadBackend.call`), giving the served y in the plain arm's place:
    the plain arm's y bit for bit, every coin term folded out of the word exactly. Its export's committed words join the
@@ -50,7 +52,7 @@ SCHEME = "lead-blc4a-t64-rot"
 OTHERS = ("coins", "draws", "tamper", "device", "kernel", "cubin", "transcript_dir")
 UNCOVERED = "every GEMM outside LinearBase (lm_head, attention)"
 #: what `LeadBackend` implements
-BACKEND = ("load", "call", "words")
+BACKEND = ("load", "a_top", "call", "words")
 #: a window is one forward, forward 0 of its keying's positions
 FORWARD = 0
 
@@ -63,6 +65,10 @@ class LeadBackend(Protocol):
     def load(self, w: int, layer: Any) -> None:
         """Linear ``w``'s weight operands, from ``layer.weight`` [N, K] int8 and ``layer.weight_scale`` [N, 1], once an
         install."""
+
+    def a_top(self, dom: CommitmentDomain, xq: Any) -> bytes:
+        """The top of A_j's instance under ``dom`` (`lead_rows.WindowKeying.a_domain`), hashed where the s8 rows ``xq``
+        [m, K] are (`lead_rows.device_a_top`): the root's two children, or the one segment."""
 
     def call(self, w: int, layer: Any, xq: Any, s_a: Any, feed: F.Feed, dom: CommitmentDomain) -> Any:
         """Linear ``w``'s call on the s8 rows ``xq`` [m, K] (scales ``s_a`` [m]) under the coins ``feed``: the served y
@@ -91,8 +97,14 @@ def words_root(window: L.WindowKeying, backend: LeadBackend, leaves: int) -> byt
     return window.words_top(FORWARD, leaves, backend.words())
 
 
+def a_count(xq: Any) -> int:
+    """The leaves of A_j's instance, its segments (`lead_rows.a_segments`): ``ceil(m K / A_SEGMENT)`` for the call's m
+    rows of K int8."""
+    return -(-int(xq.numel()) // L.A_SEGMENT)
+
+
 def _rows(xq: Any) -> bytes:
-    """A_j's bytes on the host: the call's m rows of K int8, row-major."""
+    """A_j's bytes on the host, for `LeadRun`'s ``check``: the call's m rows of K int8, row-major."""
     return xq.contiguous().cpu().numpy().tobytes()
 
 
@@ -115,12 +127,15 @@ class LeadRun:
     """One install's lead on rank ``rank`` of ``world``: each call served through ``backend`` under coins from ``link``.
     A window is one call of each of ``linears`` (each one's n x k, ``calls`` of them) on one m, keyed by a fresh
     ``keying(calls)`` (`lead_rows.WindowKeying`), its record committed to the weights' root ``weights_root``.
-    ``commits`` holds every published pass's `PassCommitment` (``passes``) in order."""
+    ``commits`` holds every published pass's `PassCommitment` (``passes``) in order. ``check`` copies each call's A to
+    the host and recomputes its root(A_j) there, refusing a device top that differs (`lead_rows.WindowKeying.a_top`'s
+    ``check``): for tests, since it is the host copy the device's A top removes."""
 
     def __init__(self, entry: str, backend: LeadBackend, link: F.CoinLink, weights_root: bytes,
                  linears: Sequence[tuple[int, int]], *, rank: int = 0, world: int = 1,
-                 keying: Callable[[int], L.WindowKeying] = L.WindowKeying) -> None:
+                 keying: Callable[[int], L.WindowKeying] = L.WindowKeying, check: bool = False) -> None:
         self.entry, self.backend, self.link, self.weights_root = entry, backend, link, bytes(weights_root)
+        self.check = check
         self.linears = tuple((int(n), int(k)) for n, k in linears)
         self.calls, self.rank, self.world, self.keying = len(self.linears), rank, world, keying
         self.kernel = getattr(backend, "variant", None)
@@ -165,7 +180,9 @@ class LeadRun:
         if not 0 <= w < self.calls or self.linears[w] != (n, k):
             raise Refused(f"pass {record.pass_index}: call {call.index} is {n} x {k} on linear {w}, not one of the "
                           f"{self.calls} linears the window's words were counted for")
-        root = window.a_root(FORWARD, call.index, _rows(xq))
+        count = a_count(xq)
+        top = self.backend.a_top(window.a_domain(FORWARD, call.index, count), xq)
+        root = window.a_top(FORWARD, call.index, count, top, check=_rows(xq) if self.check else None)
         record.a_root(call, root)
         y = self.backend.call(w, layer, xq, s_a, self.link.release(call, root), self.dom)
         self.unserved = None
