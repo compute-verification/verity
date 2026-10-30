@@ -1197,7 +1197,8 @@ class Queue:
         held: list[int] = []
         self._held = {}
         for m in chain[:self.hold]:
-            stands = self._stands(m, entries.get(m.pr))
+            e = entries.get(m.pr)
+            stands = self._stands(m, e) and (m.pr in self.frozen or e.pr.head == m.head)
             if m.pr in parked or not (stands or m.pr in kept):
                 break
             held.append(m.pr)
