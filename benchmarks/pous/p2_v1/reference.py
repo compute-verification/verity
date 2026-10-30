@@ -111,7 +111,7 @@ DEPLOYMENT = Params(16_448, 21_065, 2_054)
 
 
 def setup_salt(source: bytes, params: Params, model: bytes) -> bytes:
-    """The 256-bit setup salt, drawn after the commitment to `W` (`model`) from the verifier's or a beacon's `source`."""
+    """The 256-bit setup salt, sampled after the commitment to `W` (`model`) from the verifier's or a beacon's `source`."""
     return derive(source, SETUP_DOMAIN, {"model": model, "prime": params.prime_id, "protocol": PROTOCOL}).value
 
 

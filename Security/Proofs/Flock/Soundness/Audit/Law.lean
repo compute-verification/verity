@@ -4,8 +4,9 @@ import Proofs.Flock.Soundness.Game.Prob
 /-!
 # Draw laws
 
-A draw law is the verifier's coin space `Ω`, uniform, and the set of units each coin draws. What a
-law gives a consumer is its escape function: the probability that a draw misses a set `B` of units.
+A draw law is the verifier's coin space `Ω`, uniform, and the set of units each coin draws, core's `Verity.Law`
+(`Definitions.Core.Draw`) over `Fin n`. What a law gives a consumer is its escape function: the probability that a draw
+misses a set `B` of units.
 
 * `escape L B`: the draw is disjoint from `B`;
 * `miss L K`: the largest escape over sets of at least `K` units, the sampling term of the count
@@ -23,9 +24,10 @@ namespace FlockSoundness.Audit
 
 open Game
 open scoped ENNReal
-attribute [instance] Law.fintype Law.nonempty
 
 namespace Law
+
+open Verity.Law (escape miss incl)
 
 variable {n : ℕ}
 

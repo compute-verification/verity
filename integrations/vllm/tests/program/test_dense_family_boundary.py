@@ -1,5 +1,5 @@
-"""The dense family's Definition modules (dense, activation, norms, RoPE, GEMM bias) import only `verity` and other Definition
-modules, so they can move to `verity/ml/circuits/` as they are. Their twins and vocabulary live in the integration package:
+"""The dense family's Definition modules (dense, activation, norms, RoPE, GEMM bias) import only `verity`, other Definition
+modules and the evidence their conformance texts cite (`EVIDENCE`), so they can move to `verity/ml/circuits/` as they are. Their twins and vocabulary live in the integration package:
 `properties.difftests.rope_difftest`, `properties.difftests.rope_gptj_difftest`,
 `program.kernels.rmsnorm_fused_sweep`, `program.frontend.gemm_targets`."""
 from __future__ import annotations
@@ -22,6 +22,8 @@ READS = ("prims", "b1", "sampling", "value_inputs", "tables")
 THIRD_PARTY = ("numpy",)
 #: the catalog, where the layout move put core's Definitions and silicon models
 CATALOG = "verity.ml.circuits"
+#: `evidence.json`'s ids, read with the standard library only
+EVIDENCE = "verity.ml.definitions.evidence"
 MOVED = ("verity_vllm.properties.difftests.rope_difftest", "verity_vllm.properties.difftests.rope_gptj_difftest",
          "verity_vllm.program.rmsnorm_fused_sweep", "verity_vllm.program.frontend.gemm_targets")
 
@@ -41,7 +43,7 @@ def _imports(path: Path) -> list[tuple[int, str, tuple[str, ...]]]:
 
 def _core(name: str) -> bool:
     """`name` is core as it was before the platform move: under `verity`, except what moves since put there from outside it
-    (the catalog, the kernels, C-Flock, verity_experimental's multiproofs, private circuits and ports), with core's own
+    (the catalog, the kernels, Flock, verity_experimental's multiproofs, private circuits and ports), with core's own
     protocols and claims, which are under `verity.core` now."""
     def under(prefix: str) -> bool:
         return name == prefix or name.startswith(prefix + ".")
@@ -59,7 +61,7 @@ def _foreign(mod: str, names: tuple[str, ...]) -> list[str]:
         return [f"{REGISTRY}.{x}" for x in names if x not in allowed]
     if mod.startswith(REGISTRY + "."):
         return [] if mod[len(REGISTRY) + 1:].split(".")[0] in allowed else [mod]
-    if top in sys.stdlib_module_names or top in THIRD_PARTY or _core(mod) or mod == CATALOG or mod.startswith(CATALOG + "."):
+    if top in sys.stdlib_module_names or top in THIRD_PARTY or _core(mod) or mod in (CATALOG, EVIDENCE) or mod.startswith(CATALOG + "."):
         return []
     return [mod]
 

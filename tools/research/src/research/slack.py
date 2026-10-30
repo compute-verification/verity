@@ -212,7 +212,7 @@ COLLABORATOR_MAY = "ask a lane for something and request work within its budgets
 COLLABORATOR_NEVER = "spend, access or keys, destructive changes or node changes"
 CHAT_PREFIX = "chat-"                                            # a collaborator's private channel, `chat open NAME`
 CHAT_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,74}$")          # Slack's channel names: 80 characters, lower case, no spaces
-CHAT_WATCHER = "top"                                             # subscribes to every chat channel; rings for a post routed to no one
+CHAT_WATCHER = "top"                                             # rung for a chat post routed to no one
 PEOPLE_DIR = "people.d"                                          # in the notes, beside routes.d: one `<NAME>.json` per chat's person
 PERSON_SCHEMA = "verity/slack-person/v1"
 EXPECTED = "expected"                                            # a people.d record's status before its person joins Slack
@@ -457,9 +457,9 @@ def entry(reg: dict, handle: str) -> dict:
 
 
 def chat_channels(reg: dict) -> dict[str, dict]:
-    """Each open chat (`chat open`, people.d) as a registry channel: its id and its `person`.  CHAT_WATCHER subscribes to its
-    top level and hands each post to `deliver`, until `research msg router` reads them."""
-    return {r["channel"]["key"]: {"id": r["channel"]["id"], "person": r, "subscribers": [CHAT_WATCHER],
+    """Each open chat (`chat open`, people.d) as a registry channel: its id and its `person`.  No handle subscribes: the Slack
+    events service hands each post to `deliver`, which rings the lanes it names, else CHAT_WATCHER."""
+    return {r["channel"]["key"]: {"id": r["channel"]["id"], "person": r, "subscribers": [],
                                   "purpose": f"{r['name']}'s questions to the lanes (private)"}
             for r in reg.get("chat_people", [])}
 
@@ -2049,7 +2049,7 @@ def cmd_send(ns: argparse.Namespace, reg: dict) -> int:
     ch = channel_id(ns, reg, FRONT_DOOR) if not (ns.thread or ns.channel) else channel_id(ns, reg)   # --channel: a machine's alert
     quiet = ns.quiet or kind == "fyi"                                # an fyi wants no reply, so it wakes only its --to names
     tags = tuple(t for t in (kind if kind not in ("announce", "reply") else "", QUIET if quiet else "") if t)
-    if not getattr(ns, "machine", False):
+    if not getattr(ns, "report", False):
         check_length(reg, ch, text, ANNOUNCE_WORDS if kind == "announce" else POST_WORDS)
     _post(client(ns), ch, h["handle"], text, ns.thread, route=_route(ns, reg, ch), urgent=ns.urgent, tags=tags)
     return 0
@@ -2066,7 +2066,7 @@ def cmd_reply(ns: argparse.Namespace, reg: dict) -> int:
     ch = channel_id(ns, reg)
     body = _body(ns)
     warn_unrouted(body, reg, h["handle"])
-    if not getattr(ns, "machine", False):
+    if not getattr(ns, "report", False):
         check_length(reg, ch, body, POST_WORDS)
     _post(client(ns), ch, h["handle"], body, ns.thread, route=_route(ns, reg, ch), urgent=ns.urgent,
           tags=(QUIET,) if ns.quiet else ())                         # a footer tag rides on the first piece of a long post
@@ -3910,7 +3910,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                                                                                help="checkout paths (none: read them from stdin)")
     cmd("subscriptions", "the subscribe calls this handle's holder makes", as_=True)
     p = cmd("send", "post a message: a new thread, or into --thread; the --to names lead it and get it", as_=True, body=True)
-    p.add_argument("--machine", action="store_true", help="a program's report (drive, the merge train), held to no length")
+    p.add_argument("--report", action="store_true", help="a program's report (drive, the merge train), held to no length")
     p.add_argument("--to", nargs="+", action="extend", default=[], metavar="@NAME", help="who it's for: handles or names with an inbox")
     p.add_argument("--thread", default=None, metavar="TS", help="reply in this thread (default: start one)")
     p.add_argument("--kind", default=None, metavar="WORD",
@@ -4003,7 +4003,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p = cmd("reply", "a post in a thread; `@name` at its start also rings that name's doorbell", as_=True, thread=True, body=True)
     p.add_argument("--quiet", action="store_true", help="ring only the names it starts with: no reply needed")
     p.add_argument("--urgent", action="store_true", help="the doorbells say URGENT")
-    p.add_argument("--machine", action="store_true", help="a program's report (drive, the merge train), held to no length")
+    p.add_argument("--report", action="store_true", help="a program's report (drive, the merge train), held to no length")
     p = cmd("names", "the leads' names, each an inbox thread: open, read, close, list")
     p.add_argument("verb", choices=("open", "read", "close", "list"))
     p.add_argument("--as", dest="handle", default=None, metavar="NAME", help="the inbox's name: your handle")

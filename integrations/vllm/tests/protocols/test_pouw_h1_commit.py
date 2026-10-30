@@ -390,7 +390,7 @@ UNTIED_A = "roots1: round 0's A table h1/a/64@0 of calls [0, 1] is not the Commi
 
 @pytest.mark.parametrize("edit,own", [(_zero, 2), (_one_row, 1)], ids=["a-all-zero", "one-a-row-off"])
 def test_a_served_a_off_the_commits_arow_credits_nothing(tmp_path, monkeypatch, edit, own):
-    """H1 handed codes other than the ones the Commit acquired (every A all zero, the RT4 A = 0 probe; or one row of call
+    """H1 handed codes other than the ones the Commit acquired (every A all zero, the A = 0 probe; or one row of call
     0), with an honest Commit: the Commit registers those steps' rows as trees of its own at another root, so the
     serving process credits no call (`UNTIED`), and core's credit refuses the window at ``arow`` (also
     `test_credit_gate.test_a_window_whose_tables_are_not_the_commits_is_refused_by_core`)."""
@@ -770,7 +770,7 @@ def _summary_row(gate, sessions, name, record, run):
 def test_each_commit_window_draws_every_coin_from_a_session_of_its_own(tmp_path, monkeypatch):
     """`pouw_h1_gpu.py --commit --challenger --gate --peer`: the honest Commit window and a negative each reserve their own
     challenge phase at the gate (`window_sessions`), opened on that window's open root; every coin the credit gate checks, the
-    salt, each round's and the draw, is that challenge phase's, which the verifier trusts (`trusted_rounds_reason`) and which
+    salt, each round's and the sample, is that challenge phase's, which the verifier trusts (`trusted_rounds_reason`) and which
     ends closed and complete before the next is reserved (`session_end`). The honest window's credit gate passes every
     served call, the negative's refuses every one as untied (never as in-process), core still refuses the negative at
     ``arow``, the harness's summary is ok, and a window asks for its challenge phase once."""
@@ -815,7 +815,7 @@ def test_each_commit_window_draws_every_coin_from_a_session_of_its_own(tmp_path,
 
 def test_a_commit_window_on_coins_held_in_process_credits_nothing(tmp_path, monkeypatch):
     """`pouw_h1_gpu.py --commit` without ``--challenger``: the Commit ties and core's
-    ROOTS1 steps pass, but the window's coins were drawn in the serving process, so its credit gate refuses every served
+    ROOTS1 steps pass, but the window's coins were flipped in the serving process, so its credit gate refuses every served
     call as ``coins-not-the-auditors`` and the harness's summary under a challenger run would not be ok."""
     from tests.protocols import pouw_h1_gpu as G
     record, run, _tap = _window(tmp_path, monkeypatch, coins=_in_process)
@@ -831,7 +831,7 @@ def test_a_commit_window_on_coins_held_in_process_credits_nothing(tmp_path, monk
 
 
 def test_a_run_mixing_live_and_in_process_coins_credits_only_the_live_window(tmp_path, monkeypatch):
-    """A run whose Commit window drew its coins from its own challenge phase and whose next window drew them in process: the live
+    """A run whose Commit window flipped its coins from its own challenge phase and whose next window drew them in process: the live
     window credits every served call, the in-process one none (``coins-not-the-auditors``), and the summary is not ok,
     since every window of a challenger run must be the challenger's. One window's coins come from one source: settings
     with both the challenger and coins held in process are refused before anything is served."""
@@ -857,7 +857,7 @@ def test_a_run_mixing_live_and_in_process_coins_credits_only_the_live_window(tmp
 
 def test_a_refused_reserve_or_a_reused_session_serves_no_window():
     """`window_sessions` takes each window's reserve from the gate as it is: one the gate refuses, or an answer naming a
-    challenge phase another window of the run already holds, raises before the window is installed, so no coin is drawn."""
+    challenge phase another window of the run already holds, raises before the window is installed, so no coin is flipped."""
     from tests.protocols import pouw_h1_gpu as G
 
     class Refusing:

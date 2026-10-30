@@ -69,7 +69,7 @@ INTEGRITY_OWNER = "compute-accounting"
 PIECES: dict[str, tuple[str, str, str, str, str]] = {
     "work": ("PoUW", "pouw", "vllm-serve-arms", "VLLM-33 G1",
              ("H1 on the served window: with H1_GATE its coins are vy-challenger-1's (--challenger-gate, a development run "
-              "that credits nothing until the lane's Cursor secret, Daniel's call), else in-process")),
+              "that credits nothing until the lane's own Cursor secret), else in-process")),
     "bandwidth": ("the bandwidth audit", "bandwidth", "vllm-serve-arms", "VLLM-33 G2",
                   ("the remote bandwidth audit of the served window, against the bandwidth verifier on vy-auditor-2 at "
                    "10.96.0.36:7952 (INF-263, due Tue 27 Oct 18:00Z)")),
@@ -87,7 +87,7 @@ NAMES = {"integrity": "sampled proofs", **{k: v[0] for k, v in PIECES.items()}, 
 DEVELOPMENT = "development.json"
 #: why a development piece's verdict credits nothing, so its subprotocol's row in the record stays missing
 DEV_WHY = ("a development run: H1's coins come from vy-challenger-1's gate under the lane's development key (TOP-84), and "
-           "a window counts for credit only under the lane's own Cursor secret (Daniel's call); core's credit also needs "
+           "a window counts for credit only under the lane's own Cursor secret; core's credit also needs "
            "the window in a period whose open commits its draw K, rows and weights")
 #: H1's record of a window (`pouw_h1.CALLS_FILE`) under the serve dir
 H1_CALLS = "h1/w{k}/pouw-h1-calls.json"

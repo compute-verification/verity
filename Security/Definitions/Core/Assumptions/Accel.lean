@@ -50,7 +50,7 @@ them. With every register word `raw`, `decode` is the identity and this is a bit
 the model prices (the reasons are rows of the coverage table, `Accel/README.md`): the video and JPEG engines
 (fixed-function codecs on pixel formats); sm_120's RT cores (FP32 ray-box and ray-triangle tests); the texture path's
 filtering (FP interpolation at 8-bit fractional weights); the copy engines (moves only, at device memory's and the
-host link's bandwidth, which the model prices); and compute data compression (U7: the committed words are noised
+host link's bandwidth, which the model prices); and compute data compression (the committed words are noised
 and incompressible; a method bound by device memory or L2 on compressible data of its own is outside the claim).
 
 **Gaps**, units the card has that the instances don't have yet, so the claim is open for code that uses them until each

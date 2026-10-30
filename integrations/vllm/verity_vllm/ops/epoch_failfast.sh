@@ -2,7 +2,7 @@
 # epoch_failfast.sh CASES OUT: pod_bootstrap.sh --cases CASES --out OUT --gpu, under the fail-fast: nvidia-smi,
 # torch's CUDA init and `import vllm` must all pass within 15 min of the pod's start (POD_START, epoch seconds, from the launcher), else
 # the bootstrap's process group is stopped and this exits 40 ("STOP failfast FAIL" in progress.txt: the pod is to be terminated).
-# With EXPECT_SMS / EXPECT_CC (sm_89 rows) the device must have that many SMs at that compute capability, else 40 at once.
+# With EXPECT_SMS / EXPECT_CC (sm_89 workloads) the device must have that many SMs at that compute capability, else 40 at once.
 # Exit: the bootstrap's rc once the imports passed; 40 on the fail-fast.  Run by epoch_row.sh from integrations/vllm with $EV set.
 set -u
 CASES=${1:?cases}; OUT=${2:?out}

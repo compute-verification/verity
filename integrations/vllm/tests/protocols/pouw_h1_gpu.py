@@ -75,8 +75,8 @@ and they are held to `h1tile.j10r_reference`; v1's proof block is the default.
 
 ``--credit`` (with ``--commit`` and ``--receipts``) runs core credit's statement steps over the honest Commit window
 (`credit_check`, `pouw_h1_credit`): `credit.registered_file`, `credit._verified` on a stand-in verifier of record that
-opens each drawn proof block's pub, o0 and o1 rows against that file's roots and recomputes its receipt, `credit._proved` and
-`credit._registration`, the drawn proof blocks the first and last of each kept call; then a receipt word flipped (with and
+opens each sampled proof block's pub, o0 and o1 rows against that file's roots and recomputes its receipt, `credit._proved` and
+`credit._registration`, the sampled proof blocks the first and last of each kept call; then a receipt word flipped (with and
 without its round's root re-listed), a public table under another step's A root and an ok row 0, each to be refused.
 
 ``--commit`` (fill, ``--served``) serves the 64's window again with the Commit in the engine
@@ -92,7 +92,7 @@ window twice more with an honest Commit, H1 handed all-zero A codes or one A row
 ``arow``, and on a MoE (``--role OLMOE_INT8 --int8-exact linears``) once more with one routed expert call's codes zero
 (`EXPERT_NEGATIVE`): the Commit acquires each expert call's rows under its H1 name (`acquire.h1_commit.H1Source`). ``--declare SLOTS,CAP,T,S`` shrinks the fill workload (`declared_of`) so the pure-Python registration fits a run.
 Without ``--challenger`` its windows' coins are this process's, so every call's credit gate verdict is
-`pouw_h1.IN_PROCESS`; with ``--challenger --gate --peer`` each window draws its salt, round and draw coins from a
+`pouw_h1.IN_PROCESS`; with ``--challenger --gate --peer`` each window samples its salt, round and flip coins from a
 challenge phase of its own, and ``commit.coins`` (`coins_summary`) holds each window's coin source, challenge phase and credit gate,
 ``ok`` only when every window's coins are the challenger's and the honest Commit window's gate refuses none of its calls.
 
@@ -312,7 +312,7 @@ def fixed_length(decl: Any) -> dict[str, Any]:
 
 def period_open_argv(name: str, circuit: str, draw_k: int, decl: Any, files: dict[str, str]) -> list[str]:
     """``period-open`` of the Commit window's period `name`: cap 1 (the Commit's window alone, so a negative's refused
-    window, which ends complete, is never one of it), its circuit (the period's declared Program's digest), its draw K
+    window, which ends complete, is never one of it), its circuit (the period's declared Program's digest), its sample K
     (`pouw_h1_challenger.draw_k` over the declared layout, core's `credit.committed_k`), T, its circuit files
     (`period_files`, core's `credit.committed_files`) and the fixed length (`fixed_length`, core's
     `credit.committed_length`)."""
@@ -1075,7 +1075,7 @@ def negatives_of(layers: list[Any]) -> tuple[str, ...]:
 
 
 def editor(kind: str) -> Any:
-    """The codes H1 is handed of the ones the arm quantized: every call's all zero (``a-zero``, the RT4 A = 0 probe),
+    """The codes H1 is handed of the ones the arm quantized: every call's all zero (``a-zero``, the A = 0 probe),
     row 1's first code moved off by one in the first call of two rows or more (``a-row-off``), or the first routed
     expert down call with rows all zero (``a-zero-expert``: its K, the intermediate width, is the experts' alone). The
     edit's ``at`` names the expert site it zeroed."""
@@ -1308,7 +1308,7 @@ def receipts_check(made: Any) -> dict[str, Any]:
 
 def credit_check(h1: Any, served: Any, made: Any) -> dict[str, Any]:
     """``--credit``: core credit's statement steps (`pouw_h1_credit.check`) over the honest Commit window with receipts
-    on, the drawn proof blocks the first and last of each kept call (`receipts_producer`'s: the first layer's linears at step 0
+    on, the sampled proof blocks the first and last of each kept call (`receipts_producer`'s: the first layer's linears at step 0
     and the last step), their operands and receipts the producer's on the serving GPU; then each prover-side negative
     (`pouw_h1_credit.NEGATIVES`) at the first of them."""
     from tests.protocols import pouw_h1_credit as PC
@@ -1379,7 +1379,7 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     ``pins.jsonl``, the gate's ``pins``; none refuses every challenge phase: `pouw_h1_challenger.pins_head`) and `main` the
     auditor's own first-parent history of main (none refuses every challenge phase, as `challenger.pinned_session` refuses
     it). With `window_file` (the window's ``{root}``) `directory` is
-    the challenger run's ``out/`` (``research fetch RUN --all``), as the challenge phase the longest of the heads, each extending
+    the challenger run's ``out/``, fetched whole, as the challenge phase the longest of the heads, each extending
     the others, opens and ends for the window (`trusted_rounds_reason`); without it the ledger is read as the newest that
     the others extend (`Ledger.load`, core's check), the window held to the challenge phase it opened for its Commit's root
     (`session_reason`), `directory` being that challenge phase's tree as the gate's ``fetch SESSION`` gives it (its ``out/``
