@@ -65,9 +65,15 @@ n = `weights.chunks`(K) chunks along K (`h1zy.lane_statements`; every served J10
 
 STAND-IN: the rows of ``a``, ``b``, ``zy`` and ``receipt`` are leaf-local (the leaf's own registration); in a served
 window they are the window's table rows (`circuit.h1window`), which this module then takes as an offset.
+
+**In a served window** (`served`): a drawn leaf u's after-draw values and its known rows are its own,
+``<prefix><value>@<u>`` (``<prefix>partials@<u>``, ``<prefix>pub<l>@<u>``, ``<prefix>ok<i>@<u>``, ...), so no two leaves
+of a window share a tree, and each known row is committed under `known_salt` of the window's draw root and its name,
+which the verifier and the prover derive alike (`credit`'s lanes form).
 """
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -100,6 +106,23 @@ OKS, CARRY = "oks", "carry"
 FULL = (A, B, PARTIALS, OKS)
 LANE_ROWS, LANE_COLS = 4, 8
 LANE, CHUNK, COMBINE = "lane", "chunk", "combine"
+#: the tag of a served leaf's known rows' salts (`known_salt`)
+KNOWN_SALT_TAG = b"verity/pouw/h1/leaf-known/v1\0"
+
+
+def served(prefix: str, value: str, u: int) -> str:
+    """Drawn leaf ``u``'s own ``value`` in a served window of parameter prefix ``prefix``: ``<prefix><value>@<u>``."""
+    if not (isinstance(u, int) and u >= 0):
+        raise ValueError(f"a leaf is a unit of the window, a natural number, not {u!r}")
+    return f"{prefix}{value}@{u}"
+
+
+def known_salt(registration: str, value: str) -> bytes:
+    """The salt a served leaf's known row ``value`` (its `served` name) is committed under, public, so the prover's tree is
+    the verifier's: SHA-512 of `KNOWN_SALT_TAG`, i (u32 little-endian), the window's draw root ``registration`` (64 bytes
+    in hex) and the name, for i = 0, 1, 2, the 192 bytes of an hm96-sha512 row's salt."""
+    head = bytes.fromhex(registration) + value.encode()
+    return b"".join(hashlib.sha512(KNOWN_SALT_TAG + i.to_bytes(4, "little") + head).digest() for i in range(3))
 
 
 def n_digits(ks: int) -> int:
@@ -359,6 +382,7 @@ __all__ = [
     "COMBINE",
     "COMPLETE",
     "FULL",
+    "KNOWN_SALT_TAG",
     "LANE",
     "LANE_COLS",
     "LANE_ROWS",
@@ -382,6 +406,7 @@ __all__ = [
     "key_block",
     "known",
     "known_rows",
+    "known_salt",
     "lane_cols",
     "lane_rows",
     "lanes",
@@ -393,6 +418,7 @@ __all__ = [
     "read_in_full",
     "reads",
     "registered_file",
+    "served",
     "statements",
     "verifier_entries",
     "word_order",
