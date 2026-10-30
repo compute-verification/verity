@@ -1392,7 +1392,8 @@ def listed_ingress(members: Sequence[CS.Member], templates: Sequence[Sequence[An
     Refused (ValueError) where one names no template, reads outside its units or units no member holds, or a port that
     isn't an input row of every member holding those units, or is one a wire or a shared-row table fills (`CS.Member`'s
     ``wired`` and ``tables``), or two meet: every input row is wired, ingress or free, at most one of them. The work is
-    per declaration and per member it covers, never per unit."""
+    per declaration and per member it covers, never per unit. `circuit_record`, `window_of_record` and `input_count` each
+    refuse a listed record whose ingress this refuses."""
     base, at = {}, 0
     for t, n in templates:
         base[str(t)], at = (at, int(n)), at + int(n)
@@ -1621,9 +1622,8 @@ def window_of_record(doc: Mapping[str, Any], law: Mapping[str, Any], resolve: Ca
     """The verifier's window from ``circuit.json``'s document under its own ``law``, each template's Definition by
     ``resolve`` (descriptor id -> Definition, the verifier's own catalog), its members the listed ones or, where the record
     states them, the ones its templates, ``cap``, wires and server blocks make (`members`); refused unless the population
-    program, query, program digest and partition digest it rebuilds are the record's, its blocks (stated records only)
-    are well-formed and its proof block is the record's (`Blocks.of`), and its declarations are well-formed for its
-    templates (`check_inputs`) or, where it lists its members, its ingress for them (`listed_ingress`)."""
+    program, query, program digest and partition digest it rebuilds are the record's, and its blocks (stated records only)
+    are well-formed and its proof block is the record's (`Blocks.of`)."""
     if doc.get("format") != CIRCUIT:
         raise ValueError(f"a window's circuit record is {CIRCUIT}, not {doc.get('format')!r}")
     defs = [(resolve(t), int(n)) for t, n in doc["templates"]]
