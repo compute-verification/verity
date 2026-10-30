@@ -294,7 +294,7 @@ and `test_rowleaf_bits.py` check them.
 
 A tree mode for latency, not a leaf schema of frame v3: `CommitmentDomain(binding, owner, positions, hash="blake3")` in
 `verity.ml.commitments.merkle`, where the module docstring states the layout. Its first user is Pearl-C's hashing format `-h1`
-(`verity/core/protocols/pouw/PROTOCOL.md`), whose rows must be committed within a decode step. The SP1 kernel, `ligero-verify` and
+(`verity/core/protocols/pouw/schemes/pearl_c.py`), whose rows must be committed within a decode step. The SP1 kernel, `ligero-verify` and
 B-Ligero do not mirror it, `FrameV3` does not offer it, and `multiproof` refuses it.
 
 ~~~text
