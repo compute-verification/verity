@@ -7,6 +7,7 @@ import Proofs.Flock.VBridge.RecLink
 import Proofs.Flock.VBridge.Pinned
 import Proofs.Flock.Recursive.VStarCheck
 import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
+import Proofs.Flock.C3.VStarList.Shape
 
 /-!
 # The link part on the outer side: what an accepted run's link part fixes
@@ -21,6 +22,9 @@ a collision among what the link finder reads. This file holds the outer side's p
 * `linkName_inj`, `linkName_params`, `linkParams_of_check`: the name `rec-link/u<UB>-p<PB>` determines `UB` and `PB`
   (as `FlockVBridge.unitName_inj` does a level's), so `RecLinkPart.check` at a part so named ran `checkLinks` at them
   (`linkCheck_staged`).
+* `linkAt_staged`: at a statement carrying the table `(T, N)` whose staged session sets up, V\*'s list holds the link
+  part second to last over `N` rows: the session's table is the statement's (`insO_staged_links`), `checkShape` holds
+  the inner shape's rows to `N`, and `linkStatements` sits just before level 0's cap (`statements_link`).
 * `stagedLink`: a staged part whose V\* statement is `.link UB PB N` has one table, its circuit the part's, named
   `linkName UB PB`, its rows and leaves V\*'s, and its population `N`.
 -/
@@ -206,5 +210,103 @@ theorem stagedLink {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x x
   rw [hc0] at hupv hleaves hrows
   exact ⟨h1, hc0, ⟨tags, P⟩, hn, ho, ⟨u, hu, hupv, hleaves, hrows⟩,
     fun q hq => (FlockSoundness.Discharge.Layout.scopeOk_ports hsc q hq).1, ht, hpi, hpop⟩
+
+/-! ## The table's row count -/
+
+theorem RecRaw.ins_links {w : RecRaw} {s : RecIns} (h : w.ins = .ok s) : linksOf w = .ok s.links := by
+  unfold RecRaw.ins at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  repeat' split at h
+  all_goals first | (cases h; done) | (cases h; assumption)
+
+theorem linksOf_eq {w : RecRaw} {l : Option (ByteArray × ℕ)} (h : linksOf w = .ok l) : l = w.recLinks := by
+  unfold linksOf at h
+  cases hw : w.recLinks with
+  | none =>
+    rw [hw] at h
+    simp [pure, Except.pure] at h
+    first | exact h.symm | exact h
+  | some t =>
+    rw [hw] at h
+    cases hc : RecLinkTree.checkLinks t.1 t.2 with
+    | error e => simp [Option.mapM_some, hc, bind, Except.bind, Functor.map, Except.map] at h
+    | ok u =>
+      simp only [Option.mapM_some, hc, bind, Except.bind, pure, Except.pure, Functor.map, Except.map,
+        Except.ok.injEq] at h
+      first | exact h.symm | exact h
+
+/-- **A staged session's link table is the statement's own** (`partRaw` carries `x`'s, which `linksOf` keeps). -/
+theorem insO_staged_links {st : Stage} {x : Msg} {ms : List (Msg × Claims.Out)} {s : ℕ} {i : RecIns}
+    (h : insO (staged st x ms s) = some i) {r : XR} (hr : readX x = some r) : i.links = r.w.links := by
+  have hne : staged st x ms s ≠ [] := fun he => by rw [he, insO_nil] at h; cases h
+  obtain ⟨r', p, hr', -, hd⟩ := staged_decode hne
+  rw [show r = r' from Option.some.inj (hr.symm.trans hr')]
+  unfold insO at h
+  rw [hd] at h
+  simp only [Option.bind_eq_bind, Option.bind_some] at h
+  split_ifs at h
+  · simp at h
+  have h' : (partRaw r' st x ms s p).ins.toOption = some i := by simpa using h
+  exact linksOf_eq (RecRaw.ins_links (toOption_eq_some h'))
+
+theorem RecIns.setup_linkShape {s : RecIns} {spec : SessionSpec} {sts : Array Stmt} (h : s.setup = .ok (spec, sts)) :
+    RecLinkPart.checkShape s.inner s.links = .ok () := by
+  unfold RecIns.setup at h
+  simp only [bind, Except.bind, pure, Except.pure] at h
+  repeat' split at h
+  all_goals first | (cases h; done) | skip
+  all_goals
+    obtain ⟨-, h2⟩ := Prod.mk.inj (Except.ok.inj h)
+    subst h2
+    assumption
+
+/-- `checkShape` holds a statement's table of `N` rows to an inner shape naming one of `N` rows. -/
+theorem checkShape_rows {sh : RecVStar.Inner} {T : ByteArray} {N : ℕ}
+    (h : RecLinkPart.checkShape (some sh) (some (T, N)) = .ok ()) : ∃ l, sh.links = some l ∧ l.rows = N := by
+  unfold RecLinkPart.checkShape at h
+  cases hs : sh.links with
+  | none => simp [hs, throw, throwThe, MonadExceptOf.throw] at h
+  | some l =>
+    refine ⟨l, rfl, ?_⟩
+    by_contra hne
+    have hb : (l.rows == N) = false := by simpa using hne
+    simp only [Option.bind_some, hs, hb, Bool.false_eq_true, ↓reduceIte] at h
+    cases h
+
+/-- **V\*'s list holds the link part second to last** where the inner shape names a table (`statements_ok`,
+`linkStatements_ok`). -/
+theorem statements_link {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVStar.statements i = .ok ss)
+    {l : RecVStar.LinkShape} (hl : i.links = some l) : ss[ss.size - 2]? = some (.link l.UB l.PB l.rows) := by
+  obtain ⟨vsh, A, C, K, L, n, -, -, -, -, hL, -, rfl, -⟩ := FlockC3.VStarList.statements_ok h
+  rcases FlockC3.VStarList.linkStatements_ok hL with ⟨hn, -⟩ | ⟨l', hl', rfl⟩
+  · rw [hl] at hn
+    cases hn
+  · rw [show l' = l from Option.some.inj (hl'.symm.trans hl)]
+    rw [show A ++ C ++ (K ++ #[VStar.Stmt.link l.UB l.PB l.rows] ++ #[VStar.Stmt.cap 0 n]) =
+        (A ++ C ++ K) ++ #[VStar.Stmt.link l.UB l.PB l.rows, VStar.Stmt.cap 0 n] by simp [Array.append_assoc]]
+    generalize A ++ C ++ K = B
+    rw [Array.getElem?_append_right (by simp)]
+    simp
+
+/-- **The link part's index and row count are the statement's table's**: at a statement carrying the table `(T, N)`
+whose part `s` stages a session that sets up, V\*'s list holds `.link UB PB N` second to last, the part `linkAt`
+names. -/
+theorem linkAt_staged {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {r : XR} (hr : readX x = some r)
+    {T : ByteArray} {N : ℕ} (hl : r.w.links = some (T, N)) :
+    ∃ ss UB PB, RecVStar.statements r.shape = .ok ss ∧ ss[ss.size - 2]? = some (.link UB PB N) ∧
+      linkAt r = some (ss.size - 2, N) := by
+  obtain ⟨p0, r0, sv0, -, -, -, hr0, ⟨ss, hss, -⟩, -, -⟩ := stagedTables hS
+  rw [← show r = r0 from Option.some.inj (hr.symm.trans hr0)] at hss
+  obtain ⟨ms, i, spec, sts, rfl, hsu, -⟩ := hS
+  obtain ⟨hins, hset⟩ := setupO_some hsu
+  obtain ⟨r1, hr1, hinner, -⟩ := insO_staged hins
+  rw [← show r = r1 from Option.some.inj (hr.symm.trans hr1)] at hinner
+  have hsh := RecIns.setup_linkShape hset
+  rw [hinner, insO_staged_links hins hr, hl] at hsh
+  obtain ⟨l, hll, hrows⟩ := checkShape_rows hsh
+  have hat := statements_link hss hll
+  rw [hrows] at hat
+  refine ⟨ss, l.UB, l.PB, hss, hat, ?_⟩
+  simp only [linkAt, hss, Except.toOption, Option.bind_some, hat]
 
 end RecDeploy.Links
