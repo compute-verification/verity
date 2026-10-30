@@ -78,7 +78,7 @@ def shape (i : Option Inner) (l : Option (ByteArray × Nat)) : Option String :=
 #guard shape none (some (T, 18)) == shape (some inner) (some (T, 18))
 
 def circuitOf (name : String) : Circuit :=
-  { (default : Circuit) with nets := #[(name, { (default : Net) with name })],
+  { (default : Circuit) with nets := #[(name, { (default : Net) with name := name })],
     metaJ := Json.mkObj [("program_sha512", Json.str "p")] }
 
 /-- A public file whose units header labels its instances `indices`. -/
