@@ -410,7 +410,7 @@ def test_the_window_circuit_command_writes_i2s_circuit_whose_count_is_the_charge
 
 
 def _registered(d: Path, n: int = 8, cap: int = 4, name: str = "w", own: bool = False) -> SimpleNamespace:
-    """A window of ``n`` coordinates each reading its ``wrow`` from a registered value ``name`` of 4 rows (unit u row u % 4),
+    """A window of ``n`` coordinates each reading its ``wrow`` from a registered value ``name`` of 4 rows (coordinate u row u % 4),
     committed by core's registered rows, and the verifier's pin of it; ``own``: the window's own value instead, committed
     under its run root and registered in its ``activations``, as `prove_path.py window-commit` commits the scan's state."""
     rng = np.random.default_rng(1)
@@ -458,9 +458,9 @@ def test_registered_reads_are_audited_against_the_pinned_entries_and_leave_the_f
 
 
 def _audited(window: Path, out: Path, registration: dict | None = None, accepted: bool = True) -> Path:
-    """What the records audit leaves under its ``--out`` ``out`` for ``window``: the population Program it drew over, its
-    summary, and an audit record of ``registration`` (default the window's) accepting a subset draw of 2 units; or, not
-    ``accepted``, a check before the draw that failed."""
+    """What the records audit leaves under its ``--out`` ``out`` for ``window``: the population Program it sampled, its
+    summary, and an audit record of ``registration`` (default the window's) accepting a subset sample of 2 proof blocks;
+    or, not ``accepted``, a check before the sample that failed."""
     mine, _doc, _sets = RA.verifier_window(window, D.parse_law(LAW), None)
     rec = registration or json.loads((window / "registration.json").read_text())
     (out / "window").mkdir(parents=True)
@@ -479,7 +479,7 @@ def _audited(window: Path, out: Path, registration: dict | None = None, accepted
 
 def test_a_windows_audit_is_a_period_audit_whose_scan_state_reads_count_registered(tmp_path, capsys):
     """`period`: a window whose circuit reads its own scan state (`RA.TIED`) gives the network certifier's period its
-    registration, the Program the audit drew over (the one the registration names), the audit's answer, ``steps`` 0 and
+    registration, the Program the audit sampled (the one the registration names), the audit's answer, ``steps`` 0 and
     ``free``: the audit's count, but with the state's reads registered (the period ties them to its scan's state tree),
     where the audit's own count leaves them free. ``records_audit.py period`` writes the same and says it in one line.
     Refused by name: a window that commits no scan state, a circuit the registration doesn't bind, an audit that wrote no
