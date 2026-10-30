@@ -82,8 +82,11 @@ def linears(model):
     return {f"{i}.{n}": getattr(b, n).weight.detach().clone().numpy() for i, b in enumerate(model.blocks) for n in LINEARS}
 
 
-def train(arm, data_dir, scratch, steps, batch):
+def train(arm, data_dir, scratch, steps, batch, save_at=(), resume=None, tail_seed=None, tag=None):
+    """One arm; `save_at` writes resumable checkpoints, `resume` continues one, with the data order reseeded by
+    `tail_seed` (None keeps the checkpoint's own stream), written under `tag`."""
     cfg = ARMS[arm]
+    tag = tag or arm
     torch.set_num_threads(cfg["threads"])
     torch.manual_seed(cfg["init"])
     model = GPT()
@@ -95,6 +98,16 @@ def train(arm, data_dir, scratch, steps, batch):
     tr = np.memmap(Path(data_dir) / "train.bin", dtype=np.uint16, mode="r")
     va = np.memmap(Path(data_dir) / "val.bin", dtype=np.uint16, mode="r")
     rng = np.random.default_rng(cfg["data"])
+    start = 0
+    if resume:
+        ck = torch.load(resume, weights_only=False)
+        model.load_state_dict(ck["model"])
+        opt.load_state_dict(ck["opt"])
+        start = ck["step"]
+        if tail_seed is None:
+            rng.bit_generator.state = ck["rng"]
+        else:
+            rng = np.random.default_rng(tail_seed)
 
     def get(arr, g):
         off = g.integers(0, len(arr) - CTX - 1, size=batch)
@@ -102,7 +115,10 @@ def train(arm, data_dir, scratch, steps, batch):
         return torch.from_numpy(x[:, :-1]), torch.from_numpy(x[:, 1:])
 
     log = []
-    for step in range(steps):
+    for step in range(start, steps):
+        if step in save_at:
+            torch.save({"model": model.state_dict(), "opt": opt.state_dict(), "step": step,
+                        "rng": rng.bit_generator.state}, Path(scratch) / f"{arm}.ckpt{step}.pt")
         lr = 1e-3 * min(1.0, (step + 1) / 100) * (0.1 + 0.9 * 0.5 * (1 + math.cos(math.pi * step / steps)))
         for g in opt.param_groups:
             g["lr"] = lr
@@ -119,9 +135,28 @@ def train(arm, data_dir, scratch, steps, batch):
         val = float(np.mean([F.cross_entropy(model(x).reshape(-1, VOCAB), y.reshape(-1)).item()
                              for x, y in (get(va, vg) for _ in range(32))]))
     w1 = linears(model)
-    np.savez(Path(scratch) / f"{arm}.npz", **{f"init/{k}": v for k, v in w0.items()}, **{f"final/{k}": v for k, v in w1.items()})
-    (Path(scratch) / f"{arm}.json").write_text(json.dumps({"arm": arm, **cfg, "steps": steps, "batch": batch,
+    np.savez(Path(scratch) / f"{tag}.npz", **{f"init/{k}": v for k, v in w0.items()}, **{f"final/{k}": v for k, v in w1.items()})
+    (Path(scratch) / f"{tag}.json").write_text(json.dumps({"arm": arm, "tag": tag, **cfg, "steps": steps, "batch": batch,
+                                                           "resume": str(resume), "tail_seed": tail_seed,
                                                            "val_loss": val, "log": log}))
+
+
+def tails(scratch, out, steps, lengths):
+    """The tail test: A's final weights against A resumed at steps - L with a fresh data order."""
+    a = dict(np.load(Path(scratch) / "A.npz"))
+    names = [f"{i}.{n}" for i in range(LAYERS) for n in LINEARS]
+    res = {}
+    for L in lengths:
+        for kind in ("fresh", "same"):
+            p = Path(scratch) / f"A_tail{L}_{kind}.npz"
+            if not p.exists():
+                continue
+            b = dict(np.load(p))
+            per = {k: pair(a[f"final/{k}"], b[f"final/{k}"]) for k in names}
+            res[f"{L}_{kind}"] = {"per_matrix": per,
+                                  "planes_agree_mean": np.mean([per[k]["planes_agree"] for k in names], axis=0).tolist(),
+                                  "val_loss": json.loads((Path(scratch) / f"A_tail{L}_{kind}.json").read_text())["val_loss"]}
+    (Path(out) / "tails.json").write_text(json.dumps({"steps": steps, "lengths": lengths, "tails": res}))
 
 
 def q8(w):
@@ -201,16 +236,24 @@ def compare(scratch, out):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=("train", "compare"))
+    ap.add_argument("cmd", choices=("train", "compare", "tails"))
     ap.add_argument("--arm")
     ap.add_argument("--data", default=os.path.expanduser("~/hardness-ml/tinystories-bpe4096"))
     ap.add_argument("--scratch", required=True)
     ap.add_argument("--out")
     ap.add_argument("--steps", type=int, default=1500)
     ap.add_argument("--batch", type=int, default=16)
+    ap.add_argument("--save-at", default="")
+    ap.add_argument("--resume")
+    ap.add_argument("--tail-seed", type=int)
+    ap.add_argument("--tag")
+    ap.add_argument("--lengths", default="")
     args = ap.parse_args()
     if args.cmd == "train":
-        train(args.arm, args.data, args.scratch, args.steps, args.batch)
+        save_at = {int(x) for x in args.save_at.split(",") if x}
+        train(args.arm, args.data, args.scratch, args.steps, args.batch, save_at, args.resume, args.tail_seed, args.tag)
+    elif args.cmd == "tails":
+        tails(args.scratch, args.out, args.steps, [int(x) for x in args.lengths.split(",")])
     else:
         compare(args.scratch, args.out)
 
