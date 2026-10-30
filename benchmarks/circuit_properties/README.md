@@ -32,7 +32,7 @@ fan-in is read at. `references.GEMM_PRODUCTS` is the GEMMs' products: each lane 
   `Blocks(runs)` is a partition as runs of gate indices (`Blocks.from_owner` from each gate's block, `Blocks.by_root`
   one block per root activation).
 
-`measure` computes all of them hierarchically, once per Definition, so a served layer of 10^10 to 10^12 gates measures
+`measure` computes all of them hierarchically, once per Definition, so a served layer of 10^9 to 10^12 gates measures
 in seconds. `flat` computes them gate by gate from the definitions; the tests hold the two equal on synthetic circuits
 covering every node form, the Boolean GEMM, and b1's layer at tiny shapes. `measure.Ambiguous` refuses the one case the
 summaries can't count exactly (one value bound to two activation leaves above the op); `flat` measures it.

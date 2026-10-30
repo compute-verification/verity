@@ -21,7 +21,7 @@ import Proofs.Pous.Thm1.Theorem1iiSeq
 # The dense single-layer scheme meets the requirement: `PousDense.dense_meets`
 
 The first end-to-end `Pous.Meets` with no named assumption, in the random-oracle model (`docs/p3-scheme.md` §4,
-S1). The scheme is the trusted `Pous.Dense.denseScheme`, and the statement is `DenseMeetsDraft.lean`'s, verbatim.
+S1). The scheme is the trusted `Pous.Dense.denseScheme`, and the statement is `Pous.Guarantees.DenseMeets`'s, verbatim.
 The proof composes five pieces:
 
 1. **Reach** (`card_reach_le`, `complete_hard`). Greedy pebbling of the complete DAG adds at most the least
