@@ -393,13 +393,11 @@ def _code_version() -> str:
 
 
 def closure_digest(fn: Any) -> str:
-    """SHA-512 of `fn`'s definition digest (`codec.definition_digest`) and, sorted, its callees' closure digests: its whole
-    content, whatever program it is in."""
+    """SHA-512 of `fn`'s definition digest (`codec.definition_digest`) and, sorted, its callees' closure digests, in any program."""
     d = _DIGESTS.get(fn.id)
     if d is None:
         callees = [] if isinstance(fn, PrimitiveDefinition) else sorted({closure_digest(n.fn) for n in fn.body.nodes})
-        own = definition_digest(definition_entry(fn))
-        d = _DIGESTS[fn.id] = hashlib.sha512(canonical_json({"definition": own, "callees": callees})).hexdigest()
+        d = _DIGESTS[fn.id] = hashlib.sha512(canonical_json({"definition": definition_digest(definition_entry(fn)), "callees": callees})).hexdigest()
     return d
 
 
