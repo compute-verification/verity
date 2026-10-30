@@ -46,7 +46,7 @@ if [ "${1:-}" != leased ]; then
   COMMITTER=integrations/vllm/verity_vllm/commit/committer
   python3 "$HERE/plain_rows.py" "$COMMITTER/native_rows.cu" "$SCR/native_rows_p.cu" || { say "plain_rows.py failed"; exit 3; }
   "$CUDA_HOME/bin/nvcc" -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a -Xptxas -v --no-compress -Xcompiler -fPIC \
-    -shared "$HERE/serve.cu" "$COMMITTER/native_rows.cu" "$SCR/native_rows_p.cu" -I "$COMMITTER" -I "$HERE" -lcuda \
+    -shared "$HERE/serve.cu" "$COMMITTER/native_rows.cu" "$SCR/native_rows_p.cu" -I "$COMMITTER" -I verity/ml/kernels -I "$HERE" -lcuda \
     -o "$SCR/libssn_lead.so" > "$OUT/build.log" 2>&1
   rc=$?; say "build libssn_lead.so rc $rc"; [ "$rc" = 0 ] || { tail -40 "$OUT/build.log"; exit 3; }
   POUW_CUDA_BIN="$CUDA_HOME/bin" POUW_SASS_GATE_CACHE=none python3 benchmarks/pouw/harness/sass_gate.py \
