@@ -1,6 +1,6 @@
-import Proofs.Flock.Claims.Recursion.KSLin2E
 import Proofs.Flock.Claims.KS.PlainRConflict
 import Proofs.Flock.Claims.KS.PlainRCapPrefix
+import Proofs.Flock.Claims.Recursion.CallsAgreeE
 
 /-!
 # `KSFlockLin` at the deployed reader's bound record (U3)
