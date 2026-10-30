@@ -46,7 +46,7 @@ to Python.
   combine): each known port's rows' words.
 * a drawn leaf's registered files (`PouwWindow.RegFile`, held to `leaf_lanes.registered_file` at
   `leaf_lanes.verifier_entries` by `tests/test_reg_file.py`): `registered_file` (`registration` and `produced` records,
-  `r`, `c`, `k`, `lane` or null, `known` an object of ports, `complete`); `leaf_own` (those records, the tile and
+  `r`, `c`, `k`, `lane` or null, `known` an object of ports); `leaf_own` (those records, the tile and
   statement, and the `file`): `true` where `pouw-leaf-own` accepts the file, a reject where it refuses; `full_draw`
   (`record`, a session record's text): `true` where `PouwWindow.Lanes.checkFull` accepts its draw, a reject where it
   refuses.
@@ -205,15 +205,13 @@ def leafPlace (j : Json) : Except String (String → String × Nat) := do
   | some _ => throw "the input's place is not an object"
 
 /-- `registered_file`: statement `lane`'s `--registered` file at the roots of `registration` and `produced` and the
-placement `place` (`leafPlace`), every value's rows `hm96-sha512/row/v2`, with the known ports `known` and
-`complete`. -/
+placement `place` (`leafPlace`), every value's rows `hm96-sha512/row/v2`, with the known ports `known`. -/
 def registeredFileJson (j : Json) : Except String Json := do
   let T ← leafTile j
   let _ ← leafPorts j
   let rs ← Lanes.roots? (← get j "registration") (← get j "produced") T.lanes (2 * T.nw) Flock.HmRow.ROW_SCHEMA_V2
   let .obj known ← get j "known" | throw "the input's known is not an object"
-  let .bool complete ← get j "complete" | throw "the input's complete is not a boolean"
-  Lanes.fileOf? rs (← leafPlace j) T (← leafStmt j) known.toArray.toList complete
+  Lanes.fileOf? rs (← leafPlace j) T (← leafStmt j) known.toArray.toList
 
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("on_grid", fun j => do pure (toJson (onGridInt (← nat j "bits") (← int j "n")))),

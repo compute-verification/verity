@@ -30,7 +30,6 @@ from functools import cached_property
 from typing import Any
 
 from verity.errors import InvalidArtifact
-from verity.ml.circuits.codec import canonical_json
 
 from .identity import tagged_sha512_prefix
 
@@ -101,9 +100,10 @@ class RowsPerSlot:
     def __post_init__(self) -> None:
         if type(self.name) is not str:
             raise InvalidArtifact("a layout's name is a string")
-        if not self.name.isascii() or "\x7f" in self.name:
-            raise InvalidArtifact(f"a layout's name is ASCII without DEL, as canonical JSON's strings are, not "
-                                  f"{self.name[:40]!r}")
+        try:
+            self.name.encode("utf-8")
+        except UnicodeEncodeError:
+            raise InvalidArtifact("a layout's name is UTF-8 text") from None
 
     @cached_property
     def unit_base(self) -> tuple[int, ...]:
@@ -120,11 +120,11 @@ class RowsPerSlot:
         text: dict[int, bytes] = {}
         for g in self.groups:
             if id(g) not in text:
-                text[id(g)] = canonical_json(_group_json(g))
+                text[id(g)] = _canonical(_group_json(g))
         pieces = [b'{"groups":[']
         for j, g in enumerate(self.groups):
             pieces += (b",", text[id(g)]) if j else (text[id(g)],)
-        pieces += (b'],"name":', canonical_json(self.name), b"}")
+        pieces += (b'],"name":', json.dumps(self.name, ensure_ascii=False).encode("utf-8"), b"}")
         h = hashlib.sha512(tagged_sha512_prefix(JSON_TAG, sum(map(len, pieces))))
         for p in pieces:
             h.update(p)

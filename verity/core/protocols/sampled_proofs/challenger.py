@@ -89,8 +89,9 @@ more entries, its `period-open` and `period-close`:
               null for a reserve never opened
     message = SHA-512([LEDGER_ROLE] || I || [identity_digest_sha512(LEDGER_TAGS[schema], entry without sig)])
 
-each line as the auditor writes it (`ledger_text`, every character past ASCII escaped), and each signature over the entry's
-canonical JSON in UTF-8 (`ledger_message`).  The window is `{root}`, the served Commit's root, its prover the
+each line as the auditor writes it
+(`ledger_text`, every character past ASCII escaped), and each signature over the entry's canonical JSON in UTF-8
+(`ledger_message`).  The window is `{root}`, the served Commit's root, its prover the
 open's `for`, else its `by` (`lane_of`).  The verifier pins the challenger key from outside the ledger (the window's
 deployment; `key_of_record` reads the operator's published pin), and refuses any open or period-open naming another
 key's
@@ -749,11 +750,10 @@ def ledger_message(I: bytes, entry: dict) -> bytes:
     tag = LEDGER_TAGS.get(entry.get("schema"))
     if tag is None:
         raise ValueError(f"schema {entry.get('schema')!r} is none of {sorted(LEDGER_TAGS)}")
-    body = {k: v for k, v in entry.items() if k != "sig"}
-    canonical_json_text(_hexed(body))
-    text = json.dumps(body, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":"))
-    digest = tagged_sha512(tag, text.encode())
-    return hashlib.sha512(_field(LEDGER_ROLE.encode()) + I + _field(digest)).digest()
+    unsigned = core_record.unsigned(entry)
+    canonical_json_text(_hexed(unsigned))
+    text = json.dumps(unsigned, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":"))
+    return core_record.message(LEDGER_ROLE, I, tagged_sha512(tag, text.encode()))
 
 
 def leaf_of(sig: Any) -> int:
@@ -1006,6 +1006,7 @@ def _ledger_entry(line: Any) -> dict | None:
         if e is None or ledger_text(e) != line or any(f"\\ud{c}" in line for c in "89abcdef"):
             return None
         canonical_json_text(_hexed(e))
+        core_record.of_json(e)
     except (ValueError, TypeError, RecursionError):
         return None
     if not (isinstance(e, dict) and sorted(e) == ["body", "kind", "prev", "schema", "seq", "session", "sig"]

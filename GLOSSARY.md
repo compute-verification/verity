@@ -97,14 +97,13 @@ Credit and all reporting are in circuit size, counted in AND gates (tentative).
   no-fold receipt, which takes none. PoUB (`Accounting.Remote`) bounds no hidden work itself, so PoUW's guarantee
   beside it is the size credit alone.
 - **The overhead lower bound** bounds the hidden training beside verified compute. Its N counted objects can come from
-  verified compute (products the registered circuit computes anyway, through inference-block yields) as well as free
-  compute: a server block on registered hardware yields at most min(q_S, its inference-block yields plus what its free
-  compute can do), unregistered hardware works at the hardware's rate, and the straddle term covers objects split
-  between the two. Onsite q_S is the smaller term, the fresh-input budget being small; remotely the other is: inference
-  blocks yield little, and free compute sets the number. It is the one place the ACCEL model 𝓜's resources appear
-  (tensor-pipe time, issue slots, memory bandwidth), because gates can't measure a device's capacity. Its result is
-  reported as counted operations, each labelled with that operation's canonical AND count, never converted to "ANDs of
-  hidden work" (that would need a ceiling on ANDs per resource unit over all programs, which is vacuous).
+  verified compute (products the registered circuit computes anyway, through inference-block yields) and free compute: a
+  server block on registered hardware yields at most min(q_S, its inference-block yields plus what its free compute can
+  do), unregistered hardware works at the hardware's rate, and the straddle term covers objects split between the two.
+  Onsite q_S is the smaller term (the fresh-input budget is small); remotely the other is: inference blocks yield
+  little, and free compute sets the number. It is the one place 𝓜's resources appear, because gates can't measure a
+  device's capacity. Its result is in counted operations, each labelled with its canonical AND count, never "ANDs of
+  hidden work" (that would need a vacuous ceiling on ANDs per resource unit over all programs).
 - **What counts every gate.** The (c, k)-partitions (inference blocks, a server block's c_S) and the Lean's counting
   results (`Circuit.size`) count every gate, so a report that reads one converts it explicitly (`Circuit.andSize` beside
   `Circuit.size`, and credit as `Verity.creditSize`: not yet in Lean). In Credit, S is the AND count of the
@@ -228,15 +227,15 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | a served span: "window", `IntegrityPeriod`, PoUW's "commit period" and `window`, "sampling block", until renamed | execution phase |
 | "sampling period" for work plus its audit | an execution phase and its verification phase |
 | "hm96 rows" in protocol prose (the commitments' docs keep it) | hiding commitments |
-| "proof service" | the proof system |
-| "audit coin"; "the audit" as a step | the challenger's coins; the verification phase |
+| "proof service" | proof system |
+| "audit coin"; "the audit" as a step | challenger's coins; verification phase |
 | "before that period's coins exist"; "rejection dominates", "reject dominance" | before any coins are flipped; any rejection rejects |
 | tick(g) | t(g) |
 | D for the chosen-state budget | Λ (D is the registered circuit) |
 | D_b^τ for the PRF distinguisher | 𝒟_b^τ |
 
-The `veritor.*` gate families (`verity/ml/circuits/targets/target.py`) keep their spelling, which the `*_FAMILY_DIGEST`
-pins, fixtures and recorded runs bake in; a new family takes a fresh id (`test_targets_frozen_families.py`).
+The `veritor.*` gate families (`verity/ml/circuits/targets/target.py`) keep their spelling, which `*_FAMILY_DIGEST`
+pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_frozen_families.py`).
 
 ## The ACCEL model and Dither
 
@@ -281,7 +280,7 @@ Some words keep a different, narrower sense:
     `Stmt.InRange`, with at most 1024 regions and m_pts ≤ 64): a proof block whose unit circuit doesn't fit in one
     R1CS block can't be proved as one.
 
-  An R1CS block is never a proof block, and `units_per_vu`, `vus_per_block` and `blocks_real` keep their names.
+  An R1CS block is never a proof block; `units_per_vu`, `vus_per_block` and `blocks_real` keep their names.
 - "Candidate C" and "Candidate V" in older notes are the QuickSilver VOLE research backend, since deleted, not Flock.
 - A **pipeline stage** is one buffered step of a CTA's software pipeline, the operands it loads ahead of the tensor cores
   (CUTLASS's `Stages`, Triton's `num_stages`); it is not a phase or a run.
