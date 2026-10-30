@@ -40,7 +40,7 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   window circuit of the group reads as its `SCAN_STATE` (`ingress_scan.window_state` from bucket 0), so S_{G·T−1},
   which no bucket of the group reads, has no leaf; ``prog``, the slot entries (`slot_entries`),
   NR·nb leaves for the group's nb = G·T / EVERY boundaries, leaf j·nb + b slot j's entry at boundary b (the outputs of
-  the Program anchored there, read and its response ids, as `SlotEntry_v1` writes them once it carries the read bit),
+  the Program anchored there, read and its response ids, as `SlotEntry_v1` writes them),
   the block round's o0 rows; and ``view``, G·T leaves, leaf t S_t's egress view.
 * **The block round** (`BLOCK`): the slot entries' stand-in (`SlotEntry{KO, IDB}`, whose Definition id,
   ``SlotEntry_v1``, is the one `NetworkCheck.Period`'s `wired` reads: o0 its `entry_bits` input ``x`` through two
@@ -1436,8 +1436,9 @@ def per_unit(members: list[dict], statement: dict) -> dict[str, dict]:
 def window_answer(reg: dict, record: dict | None, delta: Fraction, reason: str) -> dict:
     """One-stage's answer for the group's registration ``reg`` as a period check reads a link-window's scan answer
     (`NetworkCheck.Period`'s rows form, `pouw.core_check.answer_of`): from an accepted audit record (``record``,
-    `audit`'s ``audit.json``), its sample and proved units with one-stage's profile and bound on wrong units at
-    ``delta`` (`audit.profile`, `audit.wrong_units`: every unit drawn, the bound 0); else a reject naming ``reason``."""
+    `audit`'s ``audit.json``), its sample and proved units with one-stage's profile and bound on incorrect proof
+    blocks at ``delta`` (`audit.profile`, `audit.wrong_units`: every unit drawn, the bound 0); else a reject naming
+    ``reason``."""
     commitment = RG.digest(reg)
     if record is None:
         return {"commitment": commitment, "profile": None, "protocol": RG.PROTOCOL, "public": None, "reason": reason,
