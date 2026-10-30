@@ -5,9 +5,11 @@ the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
         [--prompts 4] [--prompt-ids 24] [--tokens 4] [--vocab 128000] [--height 10] [--minutes M] [--bucket-ms MS]
         [--warmup N]
     python certifier_piece.py piece SERVE_DIR WINDOW DIR [--eos-ids IDS] [--lean EXE] [--draw K] [--chain-cmd CMD]
-        [CR_K=V ...]
+        [--challenger gate:USER@HOST --challenger-key RECORD [--coin-peer NAME] [--key KEY] | --challenger local]
+        [--main FILE] [CR_K=V ...]
     python certifier_piece.py chain SERVE_DIR WINDOW DIR V3C [--eos-ids IDS] [--draw K] [--class w63k4]
-        [--chain-cmd CMD] [CR_K=V ...]
+        [--chain-cmd CMD] [--challenger gate:USER@HOST --challenger-key RECORD [--coin-peer NAME] [--key KEY] |
+        --challenger local] [--main FILE] [CR_K=V ...]
     python certifier_piece.py period SERVE_DIR WINDOW DIR V3C [--lean EXE]
     python certifier_piece.py relay --listen PORT --to PORT
 
@@ -47,46 +49,52 @@ the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
   3. The chain (`served_session.py chain`: chain_record.sh's warden path, certs, endpoint, N2, tie and scan) on the
      kept run, with the serve dir's endpoint records (`ENDPOINT`, copied to SERVE_DIR/`PRIVATE`/RUN/endpoint), its run
      dir and quarantine under SERVE_DIR/`PRIVATE`/RUN, so nothing of the witness reaches a record. N2 and the tie
-     take every link-window of a run of at most 8 (`sized`). Its report's verdict ``accepted`` goes on; any other is a
-     reject with its why.
+     take every link-window of a run of at most 8 (`sized`). Every round that draws reads its coins from a session of
+     its own of the auditor's challenger (``--challenger``: the gate's, `served_session.GATE`, by default, its client
+     on this node, ``--coin-peer`` as the gate's peers file names it; ``local``, a dry run's). The report's coins step
+     not accepted (no challenger, the gate unreachable, a session refused or its evidence not holding) is `NotRun`:
+     nothing falls back to other coins. Else its verdict ``accepted`` goes on; any other is a reject with its why.
   4. The period's link-window is the scan's (``answers.json``'s one window): every window request's release and
      streamed ids lie in it, else reject.
   5. The period check: `scan_period.rows_case` of the warden run and the chain's scan, checked by ``network-period``
      (``--lean``, else built in verity/core/protocols/network/lean); its answer is the piece's, an accept's profile
-     with its ``placement`` (`placement`): the certifier on the gate's host, and the chain, the period check and
-     their proofs' coins in this piece on the prover's node, so `trusted-host` is assumed with the auditor's devices
-     not placed.
+     with its ``placement`` (`placement`): the certifier on the gate's host, every drawing round's coins the auditor's
+     challenger's (``--challenger``'s host), and the chain, the period check and their Flock sessions' coins in this
+     piece on the prover's node, so `trusted-host` is assumed with the auditor's devices not placed.
   DIR also gets the chain's public part (`PUBLIC`: its report's verdicts and ε at δ, and the scan's answers; never the
-  endpoint's report, the report's counts or a step's summary, which are private) and the check's three input files in
-  DIR/period. All of them and the answer are written to a fresh hold under SERVE_DIR/`PRIVATE`/held (0700) and reach
-  DIR only through the record's leak guard (`leak_guard.py`), which reads DIR and the hold against the warden run's
-  witness, DIR declared to hold those files, the split's `CHAINED` and the logs alone (`PIECE_FILES`), moves what
-  holds a piece of it or lies at another path to SERVE_DIR/`PRIVATE`/quarantine and only then releases the rest. The
-  period files it releases become DIR/`CASE` (`write_case`), the case as `composite.py` reads a piece's:
-  ``{"commitment", "evidence", "params"}``, the commitment and evidence hex and the params ``params.json``'s canonical
-  JSON, all inline, since certifier/v0 reads no blob (about 83 MB on a served window, nearly all of it the params).
-  DIR/period then goes, so the case has one copy; the guard reads the files before they are hex, which it searches
-  only for a binary witness file's pieces. Only the protocol rejects: a step that can't run (no kept run, a rehearsal
-  the gate's check didn't pass, a build, a tool or the chain failing without a report, an input missing, the leak
-  guard failing, or SIGTERM from the piece's time limit) is `NotRun`, and the piece then refuses, releasing nothing
-  from the hold: DIR keeps only its logs (`LOGS`) and gets DIR/`REFUSED` naming why, with no answer, which
-  `served_verdicts.py` reads as the certifier missing. Each step it runs (the build, the chain, the check and the leak
-  guard) is a process group of its own, which the piece ends however the step ends (`run_group`: SIGTERM, `GRACE_S`,
-  SIGKILL), so nothing a step started outlives it; a SIGTERM while a step runs is held until the step's group has
-  ended, so a step never outlives the refusal either. ``--draw K`` is the scan's sample, K proof blocks (every proof
-  block by default); a CR_K=V goes to the chain; ``--chain-cmd`` replaces the chain (a test's, which writes the report
-  and the scan's answers under RESEARCH_RUN_DIR/out).
+  endpoint's report, the report's counts or a step's summary, which are private), each drawing round's challenger
+  evidence (its ``challenger/`` directory: the session's files, the ledger, the pins log and ``coins.json``,
+  `CHALLENGER`), and the check's three input files in DIR/period. All of them and the answer are written to a fresh
+  hold under SERVE_DIR/`PRIVATE`/held (0700) and reach DIR only through the record's leak guard (`leak_guard.py`),
+  which reads DIR and the hold against the warden run's witness, DIR declared to hold those files, the split's
+  `CHAINED` and the logs alone (`PIECE_FILES`), moves what holds a piece of it or lies at another path to
+  SERVE_DIR/`PRIVATE`/quarantine and only then releases the rest. The period files it releases become DIR/`CASE`
+  (`write_case`), the case as `composite.py` reads a piece's: ``{"commitment", "evidence", "params"}``, the commitment
+  and evidence hex and the params ``params.json``'s canonical JSON, all inline, since certifier/v0 reads no blob
+  (about 83 MB on a served window, nearly all of it the params). DIR/period then goes, so the case has one copy; the
+  guard reads the files before they are hex, which it searches only for a binary witness file's pieces. Only the
+  protocol rejects: a step that can't run (no kept run, a rehearsal the gate's check didn't pass, no challenger for the
+  chain's coins, a build, a tool or the chain failing without a report, an input missing, the leak guard failing, or
+  SIGTERM from the piece's time limit) is `NotRun`, and the piece then refuses, releasing nothing from the hold: DIR
+  keeps only its logs (`LOGS`) and gets DIR/`REFUSED` naming why, with no answer, which `served_verdicts.py` reads as
+  the certifier missing. Each step it runs (the build, the chain, the check and the leak guard) is a process group of
+  its own, which the piece ends however the step ends (`run_group`: SIGTERM, `GRACE_S`, SIGKILL), so nothing a step
+  started outlives it; a SIGTERM while a step runs is held until the step's group has ended, so a step never outlives
+  the refusal either. ``--draw K`` is the scan's sample, K proof blocks (every proof block by default); a CR_K=V goes
+  to the chain; ``--chain-cmd`` replaces the chain (a test's, which writes the report and the scan's answers under
+  RESEARCH_RUN_DIR/out).
 * **chain** and **period** are the piece split in two around V3c (`served_verdicts.sh`'s ``CERTIFIER_CHAIN_CMD`` and
   ``CERTIFIER_PERIOD_CMD``, each run as ``bash -c CMD _ D K DIR V3C``, e.g. ``CERTIFIER_CHAIN_CMD='python
   benchmarks/network_traces/certifier_piece.py chain "$@"'``), so the period's compute audit is V3c's audit of the
   served window itself. **chain** runs steps 1 to 4 once V3c's window is committed, its scan on V3c's trees
-  (``scan_zk.py --class CLASS --v3c V3C/window`` in CR_SCAN_ARGS: the window's committed scan state and slot entries):
-  a reject is DIR/answer.json as the piece's, an accept DIR/`CHAINED`. **period** runs once V3c's audit wrote
-  V3C/period.json: steps 1, 2 and 4 again on the chain's kept report (no chain runs), then step 5 on the rows case whose
-  one compute audit is V3C/period.json (`scan_period.rows_case`), whose answer is DIR/answer.json; it answers nothing
-  where the chain step refused (DIR/`REFUSED`) or rejected (its answer stands), and refuses where it left no
-  DIR/`CHAINED` or the chain's scan read no V3c window or another. Each releases through its own hold and refuses as
-  the piece does, keeping ``served_verdicts.sh``'s logs (`LOGS`).
+  (``scan_zk.py --class CLASS --v3c V3C/window`` in CR_SCAN_ARGS: the window's committed scan state and slot entries)
+  and its drawing rounds on the piece's ``--challenger``: a reject is DIR/answer.json as the piece's, an accept
+  DIR/`CHAINED`, which names that challenger. **period** runs once V3c's audit wrote V3C/period.json: steps 1, 2 and 4
+  again on the chain's kept report (no chain runs), then step 5 on the rows case whose one compute audit is
+  V3C/period.json (`scan_period.rows_case`), whose answer is DIR/answer.json, its placement naming `CHAINED`'s
+  challenger; it answers nothing where the chain step refused (DIR/`REFUSED`) or rejected (its answer stands), and
+  refuses where it left no DIR/`CHAINED` or the chain's scan read no V3c window or another. Each releases through its
+  own hold and refuses as the piece does, keeping ``served_verdicts.sh``'s logs (`LOGS`).
 * **relay**: a TCP relay from 127.0.0.1:``--listen`` to 127.0.0.1:``--to``, the local gate's tunnel.
 """
 from __future__ import annotations
@@ -144,10 +152,13 @@ CASE = "case.json"
 CHAINED = "chain.json"
 #: the logs `served_verdicts.sh` and `served_verdicts.py` write in DIR, which a refusal keeps
 LOGS = ("piece.log", "chain.log", "period.log")
-#: every file DIR may hold when the leak guard reads it and the hold (its ``--public``): the answer, the logs, the
-#: split's `CHAINED`, the period check's three input files and `PUBLIC`'s
+#: each drawing round's challenger evidence in the chain's out/ (`round_coins.RoundSession`), copied whole: everything
+#: in its ``challenger/`` directory, and N2's certificates its root is recomputed from
+CHALLENGER = ("scan/*/challenger/*", "n2/*/challenger/*", "n2/*/verifier/period-certificates.json")
+#: every file DIR may hold when the leak guard reads it and the hold (its ``--public``, whose ``*`` takes a ``/``): the
+#: answer, the logs, the split's `CHAINED`, the period check's three input files, `PUBLIC`'s and `CHALLENGER`'s
 PIECE_FILES = ("answer.json", *LOGS, CHAINED, "period/commitment.bin", "period/evidence.json", "period/params.json",
-               *(f"chain/{rel}" for rel in PUBLIC))
+               *(f"chain/{rel}" for rel in PUBLIC), *(f"chain/{rel}" for rel in CHALLENGER))
 #: the scan class of V3c's default window class (`served_verdicts.sh`'s V3C_CLASS 8,32,4,4,16)
 V3C_SCAN_CLASS = "w63k4"
 LEAN_DIR = TREE / "verity" / "core" / "protocols" / "network" / "lean"
@@ -157,6 +168,8 @@ HEIGHT = 10
 #: how long a warm-up request may take, and how long the front waits for serve-openai to record the warm-ups'
 #: windows closed
 WARMUP_REQUEST_S, WARMUP_CLOSE_S = 600, 600
+#: the served node, where the front's peer and the piece and its chain run, as the gate's peers file names it
+SERVED = SS.SITE["front_peer"]
 #: how long a step's process group has after SIGTERM before SIGKILL: inside `timeout -k`'s minute and the research
 #: runner's grace, so the piece has ended its steps before anything ends the piece; and how often it looks
 GRACE_S, POLL_S = 5, 0.05
@@ -287,31 +300,37 @@ def kept_run(serve_dir: Path) -> str:
     return runs[0]
 
 
-def placement(serve_dir: Path, run: str) -> dict:
+def placement(serve_dir: Path, run: str, challenger: str) -> dict:
     """Which host ran each party, and what `trusted-host`'s premise rests on: the network certifier ran on the gate's
-    host (the kept `SESSION`'s ``gate``; ``local`` is the prover's node), and the chain's checks and draws, the period
-    check and their proofs' coins ran in this piece on the prover's node, the kept run's peer. No device of the
-    auditor's is on the node's links, so the premise is assumed of both hosts; ``links`` are the node's to the gate,
-    and K counts the certified one alone."""
+    host (the kept `SESSION`'s ``gate``; ``local`` is the prover's node), each drawing round's coins came from the
+    auditor's challenger (``challenger``, the chain's ``--challenger``: the gate's host, or the prover's node for
+    ``local``), and the chain's checks, the period check and their Flock sessions' coins ran in this piece on the
+    prover's node, the kept run's peer. No device of the auditor's is on the node's links, so the premise is assumed of
+    both hosts; ``links`` are the node's to the gate, and K counts the certified one alone."""
     kept = serve_dir / PRIVATE / run
     if not (kept / SESSION).is_file():
         raise NotRun(f"{kept} has no {SESSION}, which names the gate the certifier ran on: keep the run with this "
                      "tree's front")
     gate = json.loads((kept / SESSION).read_text())["gate"]
     node = SS.served_peer(kept / "fetch.tar.gz") or socket.gethostname()
+    coins = node if challenger == "local" else challenger.partition(":")[2].rpartition("@")[2]
+    parties = {"challenger": coins, "prover": node, "verifier": node}
     if gate == "local":
-        return {"kind": "prover-node", "parties": {"network_certifier": node, "prover": node, "verifier": node},
+        return {"kind": "prover-node", "parties": {"network_certifier": node, **parties},
                 PREMISE: f"unmet: the network certifier ran on the prover's node {node} (the front's --gate local)",
                 "links": [], "uncounted": f"every link of {node}'s"}
     host = gate.rpartition("@")[2]
-    return {"kind": "not-placed", "parties": {"network_certifier": host, "prover": node, "verifier": node},
-            PREMISE: (f"assumed, the auditor's devices not placed: the network certifier ran on {host}, not the "
-                      f"prover's {node}, but the chain's checks and draws, the period check and their proofs' coins "
-                      f"ran on {node}, and no device of the auditor's is on {node}'s links"),
+    drawn = f" and each drawing round's coins came from the auditor's challenger on {coins}" if coins != node else ""
+    local = "" if drawn else " the draws' coins (--challenger local),"
+    return {"kind": "not-placed", "parties": {"network_certifier": host, **parties},
+            PREMISE: (f"assumed, the auditor's devices not placed: the network certifier ran on {host}{drawn}, not the "
+                      f"prover's {node}, but the chain's checks,{local} the period check and their Flock sessions' "
+                      f"coins ran on {node}, and no device of the auditor's is on {node}'s links"),
             "links": [{"name": "certified", "from": host, "to": node, "counted": True,
                        "via": "the warden's tunnel to the endpoint's port"},
                       {"name": "gate", "from": node, "to": host, "counted": False,
-                       "via": "ssh, both ways: the session's request and prompts, its status and its fetch"}],
+                       "via": "ssh, both ways: the session's request and prompts, its status and its fetch, and each "
+                              "drawing round's challenger session and its coins"}],
             "uncounted": f"every link of {node}'s but the certified one"}
 
 
@@ -398,6 +417,13 @@ def sized(windows: int, sets: list[str]) -> list[str]:
             *([f"CR_TIE_WINDOWS={windows}"] if "CR_TIE_WINDOWS" not in given else []), *sets]
 
 
+def coin_argv(a: argparse.Namespace) -> list[str]:
+    """`served_session.py chain`'s challenger flags (`served_session.coin_env`), the piece's own."""
+    return ["--challenger", a.challenger, "--coin-peer", a.coin_peer, "--key", str(a.key),
+            *(["--challenger-key", str(a.challenger_key)] if a.challenger_key else []),
+            *(["--main", str(a.main)] if a.main else [])]
+
+
 def live(pid: int, pgid: int | None = None) -> bool:
     """Whether ``pid`` is a process (of process group ``pgid``, when given) that hasn't exited."""
     try:
@@ -463,16 +489,17 @@ def captured(argv: list[str], **kw) -> subprocess.CompletedProcess:
         return subprocess.CompletedProcess(argv, rc, out.read(), err.read())
 
 
-def run_chain(keep: Path, run: str, endpoint: Path, eos: str, draw: int | None, sets: list[str],
+def run_chain(keep: Path, run: str, endpoint: Path, eos: str, draw: int | None, sets: list[str], coins: list[str],
               cmd: str | None = None) -> int:
-    """`served_session.py chain` on the kept run (or ``cmd``, run as ``bash -c CMD _ KEEP RUN ENDPOINT CR_K=V ...``),
-    its run dir (RESEARCH_RUN_DIR, whose out/ holds the report) and quarantine private under KEEP/RUN."""
+    """`served_session.py chain` on the kept run, its rounds drawn on the challenger `coins` (`coin_argv`), or
+    ``cmd``, run as ``bash -c CMD _ KEEP RUN ENDPOINT CR_K=V ...``; its run dir (RESEARCH_RUN_DIR, whose out/ holds the
+    report) and quarantine private under KEEP/RUN."""
     d = keep / run
     env = dict(os.environ, RESEARCH_RUN_DIR=str(d / "chain"), CR_QUARANTINE=str(d / "quarantine"))
     (d / "chain").mkdir(mode=0o700, exist_ok=True)
     argv = ["bash", "-c", cmd, "_", str(keep), run, str(endpoint), *sets] if cmd else [
         sys.executable, str(HERE / "served_session.py"), "chain", "--run", run, "--keep", str(keep),
-        "--endpoint", str(endpoint), "--eos-ids", eos, *(["--draw", str(draw)] if draw else []), *sets]
+        "--endpoint", str(endpoint), "--eos-ids", eos, *(["--draw", str(draw)] if draw else []), *coins, *sets]
     with open(d / "chain" / "stdout.log", "w") as log:
         return run_group(argv, cwd=TREE, env=env, stdout=log, stderr=subprocess.STDOUT)
 
@@ -531,12 +558,20 @@ def public(doc: dict, keys: tuple[str, ...]) -> dict:
 
 
 def publish(chain_out: Path, d: Path) -> None:
-    """``d``/chain: each `PUBLIC` file the chain wrote, less every key `PUBLIC` doesn't name."""
+    """``d``/chain: each `PUBLIC` file the chain wrote, less every key `PUBLIC` doesn't name, and each drawing round's
+    challenger evidence (`CHALLENGER`) whole."""
     for rel, keys in PUBLIC.items():
         if (chain_out / rel).is_file():
             (d / "chain" / rel).parent.mkdir(parents=True, exist_ok=True)
             doc = public(json.loads((chain_out / rel).read_text()), keys)
             (d / "chain" / rel).write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
+    for p in (p for pattern in CHALLENGER for p in sorted(chain_out.glob(pattern))):
+        to = d / "chain" / p.relative_to(chain_out)
+        to.parent.mkdir(parents=True, exist_ok=True)
+        if p.is_dir():
+            shutil.copytree(p, to, dirs_exist_ok=True)
+        else:
+            shutil.copyfile(p, to)
 
 
 def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str, Path, int], int] | None,
@@ -572,6 +607,10 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
             if not report.is_file():
                 raise NotRun(f"the chain wrote no report (exit {rc}): see chain/ and the kept run's stdout.log")
         doc = json.loads(report.read_text())
+        coins = (doc.get("steps") or {}).get("coins") or {}
+        if coins.get("verdict") != "accepted":
+            raise NotRun(f"the challenger's coins ({coins.get('challenger')}): "
+                         f"{coins.get('why') or 'the report has no coins step'}"[:1800])
         if doc.get("verdict") != "accepted":
             raise Rejected(f"the chain {doc.get('verdict')}: {json.dumps(doc.get('why'), default=str)}"[:1800])
         try:
@@ -659,10 +698,11 @@ def said(got: dict) -> int:
 
 
 def settle(serve_dir: Path, window: int, d: Path, limit: str,
-           step: Callable[[Path], tuple[dict | None, Path | None]]) -> dict | None:
+           step: Callable[[Path], tuple[dict | None, Path | None]], challenger: Callable[[], str]) -> dict | None:
     """``step``'s answer: its files written to a fresh hold under SERVE_DIR/`PRIVATE`/held (``step`` is given it), an
-    accept's profile with its `placement`, all released to DIR by the leak guard and the case written; None where the
-    split's chain step accepted. `NotRun` (SIGTERM included, naming ``limit``) for a step that can't run."""
+    accept's profile with its `placement` (``challenger()`` the chain's ``--challenger``), all released to DIR by the
+    leak guard and the case written; None where the split's chain step accepted. `NotRun` (SIGTERM included, naming
+    ``limit``) for a step that can't run."""
     was, unpacked, hold = signal.signal(signal.SIGTERM, ended(limit)), None, None
     try:
         if not any((serve_dir / PRIVATE).glob("*/fetch.tar.gz")):
@@ -673,7 +713,8 @@ def settle(serve_dir: Path, window: int, d: Path, limit: str,
         got, unpacked = step(hold)
         if got is not None:
             if isinstance(got.get("profile"), dict):
-                got = got | {"profile": got["profile"] | {"placement": placement(serve_dir, kept_run(serve_dir))}}
+                got = got | {"profile": got["profile"] | {"placement": placement(serve_dir, kept_run(serve_dir),
+                                                                                 challenger())}}
             (hold / "answer.json").write_text(json.dumps(got, indent=1, sort_keys=True) + "\n")
         g = guard(d, hold, unpacked, serve_dir / PRIVATE / "quarantine")
         if g not in (0, 3) or got is not None and not (d / "answer.json").is_file():
@@ -698,6 +739,12 @@ def sets_ok(sets: list[str]) -> bool:
     return not bad
 
 
+def challenged(a: argparse.Namespace) -> None:
+    """`NotRun` when ``--challenger`` can't give the chain's coins (`served_session.challenger_refusal`)."""
+    if why := SS.challenger_refusal(a):
+        raise NotRun(f"no challenger for the chain's coins: {why}")
+
+
 def piece(a: argparse.Namespace) -> int:
     serve_dir, d = a.serve_dir.resolve(), a.dir.resolve()
     d.mkdir(parents=True, exist_ok=True)
@@ -705,12 +752,13 @@ def piece(a: argparse.Namespace) -> int:
         return 2
 
     def step(hold: Path) -> tuple[dict | None, Path | None]:
+        challenged(a)
         exe = period_exe(a.lean)
         chain = lambda keep, run, ep, n: run_chain(keep, run, ep, a.eos_ids, a.draw, sized(n, a.set),  # noqa: E731
-                                                   a.chain_cmd)
+                                                   coin_argv(a), a.chain_cmd)
         return decide(serve_dir, a.window, hold, chain=chain, check=lambda c, p: period_check(exe, c, p))
     try:
-        got = settle(serve_dir, a.window, d, "CERTIFIER_TIMEOUT", step)
+        got = settle(serve_dir, a.window, d, "CERTIFIER_TIMEOUT", step, lambda: a.challenger)
     except NotRun as e:
         return refuse(d, str(e))
     return said(got)
@@ -738,14 +786,18 @@ def chain_step(a: argparse.Namespace) -> int:
     try:
         sets = v3c_scan(v3c, a.scan_class, a.set)
         chain = lambda keep, run, ep, n: run_chain(keep, run, ep, a.eos_ids, a.draw, sized(n, sets),  # noqa: E731
-                                                   a.chain_cmd)
-        got = settle(serve_dir, a.window, d, "CERTIFIER_TIMEOUT",
-                     lambda hold: decide(serve_dir, a.window, hold, chain=chain, check=None))
+                                                   coin_argv(a), a.chain_cmd)
+
+        def step(hold: Path) -> tuple[dict | None, Path | None]:
+            challenged(a)
+            return decide(serve_dir, a.window, hold, chain=chain, check=None)
+        got = settle(serve_dir, a.window, d, "CERTIFIER_TIMEOUT", step, lambda: a.challenger)
     except NotRun as e:
         return refuse(d, str(e))
     if got is not None:
         return said(got)
-    (d / CHAINED).write_text(json.dumps({"chain": "accepted", "v3c": str(v3c)}, indent=1, sort_keys=True) + "\n")
+    (d / CHAINED).write_text(json.dumps({"chain": "accepted", "v3c": str(v3c), "challenger": a.challenger}, indent=1,
+                                        sort_keys=True) + "\n")
     print(f"CERTIFIER-CHAIN accepted on V3c's window {v3c / 'window'}: the period step checks its period.json",
           flush=True)
     return 0
@@ -766,8 +818,13 @@ def period_step(a: argparse.Namespace) -> int:
         exe = period_exe(a.lean)
         return decide(serve_dir, a.window, hold, chain=None, check=lambda c, p: period_check(exe, c, p),
                       case=v3c_case(v3c))
+
+    def challenger() -> str:
+        if not (got := json.loads((d / CHAINED).read_text()).get("challenger")):
+            raise NotRun(f"{CHAINED} names no challenger for the chain's coins: run the chain step with this tree")
+        return got
     try:
-        got = settle(serve_dir, a.window, d, "CERTIFIER_PERIOD_TIMEOUT", step)
+        got = settle(serve_dir, a.window, d, "CERTIFIER_PERIOD_TIMEOUT", step, challenger)
     except NotRun as e:
         return refuse(d, str(e))
     return said(got)
@@ -782,7 +839,7 @@ def parser() -> argparse.ArgumentParser:
     f.add_argument("out", type=Path)
     f.add_argument("--gate", default=SS.GATE, help="USER@HOST, the gate's; or local, the dry run's")
     f.add_argument("--key", type=Path, default=SS.KEY)
-    f.add_argument("--peer", default="vy-dc-h200")
+    f.add_argument("--peer", default=SERVED)
     f.add_argument("--prompts", type=int, default=PROMPTS)
     f.add_argument("--prompt-ids", type=int, default=PROMPT_IDS)
     f.add_argument("--tokens", type=int, default=TOKENS)
@@ -802,6 +859,8 @@ def parser() -> argparse.ArgumentParser:
     q.add_argument("--lean", help="network-period, built (else built here)")
     q.add_argument("--draw", type=int, help="the scan's sample, K proof blocks (every proof block by default)")
     q.add_argument("--chain-cmd", help="replaces served_session.py chain: bash -c CMD _ KEEP RUN ENDPOINT CR_K=V ...")
+    SS.coin_flags(q, SERVED)
+    q.add_argument("--key", type=Path, default=SS.KEY, help="with --challenger gate:…: the lane's gate key")
     q.add_argument("set", nargs="*", help="CR_K=V")
     for name in ("chain", "period"):
         q = sub.add_parser(name)
@@ -815,6 +874,8 @@ def parser() -> argparse.ArgumentParser:
     q.add_argument("--class", dest="scan_class", default=V3C_SCAN_CLASS,
                    help=f"the scan's class, V3c's window class's (default {V3C_SCAN_CLASS})")
     q.add_argument("--chain-cmd", help="replaces served_session.py chain: bash -c CMD _ KEEP RUN ENDPOINT CR_K=V ...")
+    SS.coin_flags(q, SERVED)
+    q.add_argument("--key", type=Path, default=SS.KEY, help="with --challenger gate:…: the lane's gate key")
     q.add_argument("set", nargs="*", help="CR_K=V")
     sub.choices["period"].add_argument("--lean", help="network-period, built (else built here)")
     r = sub.add_parser("relay")

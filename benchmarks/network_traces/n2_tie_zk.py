@@ -37,13 +37,14 @@ through `tie_service.Ties`, the verifier's tie source).
   the Definition its pinned digest names), and each link-window a statement of T instances, unit t bucket t, on rows
   ``pub`` and ``wit`` (`IngressTie.layout`) and the output row ``o0``, the verdict bit: a shared-row file every port
   of which is a registered read, ``wit`` the window's bucket rows under the warden's salts and paths, and ``pub`` and
-  ``o0`` the prover's rows under the known values' public salts (`known`). A round registers, selects, proves live
-  behind the firewall, delivers, and decides on the proof: the verifier's own Lean run with its own registered reads
-  (`IngressTie.registered`: the warden's root, and at known content its own lanes from the advice and the release
-  and the output word 1), each ``pub`` row opened to its own copy and each ``o0`` row read. Per window: prove (the
-  session's wall time, the prover's ``prove_total_s``, proof bytes) and verify (the verifier of record's run, Lean
-  included). The members run one after another, one firewalled session at a time (`n2_zk.ONE_SESSION`: ``--jobs`` is
-  1).
+  ``o0`` the prover's rows under the known values' public salts (`known`). A round registers, selects every window
+  (Selection All, which reads no coin: the summary's ``coins``, beside every Flock session's own,
+  `round_coins.FLOCK`), proves live behind the firewall, delivers, and decides on the proof: the verifier's own Lean
+  run with its own registered reads (`IngressTie.registered`: the network certifier's root, and at known content its
+  own lanes from the advice and the release and the output word 1), each ``pub`` row opened to its own copy and each
+  ``o0`` row read. Per window: prove (the session's wall time, the prover's ``prove_total_s``, proof bytes) and verify
+  (the verifier of record's run, Lean included). The members run one after another, one firewalled session at a time
+  (`n2_zk.ONE_SESSION`: ``--jobs`` is 1).
 * **What the verifier receives** is `RECEIVED` per window and the advice (``advice.json``), scanned for every piece of
   the windows' held cells and their salts but those the public circuit or an empty slot holds, and a member fails on a
   piece `leak_scan.scan` reads as ``leaked``, not on a find it reads as structured (across the format's fields, or
@@ -67,6 +68,7 @@ from typing import NamedTuple
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+import round_coins as RC  # noqa: E402
 import certifier_serve as cs  # noqa: E402
 import leak_scan as LS  # noqa: E402
 import n2_zk as Z  # noqa: E402
@@ -590,6 +592,7 @@ def prove(a) -> int:
                      "advice": {name: TS.digest(rd.advice) for name, rd in rounds.items()},
                      "debug_clear": a.debug_clear, "received": RECEIVED}
     summary["instances_s"] = round(time.time() - t, 1)
+    summary["coins"] = {"draw": Z.NO_COIN["draw"], "flock": RC.FLOCK}
     for name, rd in rounds.items():
         summary.setdefault("members", {})[name] = {
             "reference": [{"window": x.window, "words": x.words, "opens": x.opens, "expect": x.expect}
