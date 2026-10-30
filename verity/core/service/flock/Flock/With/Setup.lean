@@ -768,46 +768,11 @@ namespace HmLinks
 open HmRow
 
 /-- `HmLinks.check` through the oracle. -/
-def checkWith (hs : Hashes M) (c : Circuit) (pop : Public) (program : ByteArray) : M Nat := do
+def checkWith (hs : Hashes M) (c : Circuit) (pop : Public) (readers : Option (Array Nat)) (program : ByteArray) : M Nat := do
   let links ← parse c
   let P ← Program.decodeWith hs.sha512 program
-  let us := units P
-  let np := c.ports.size
-  let popIdx ← (← J.arr (← J.get pop.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
-  let inst : Std.HashMap Nat Nat := (Array.range popIdx.size).foldl (fun m i => m.insert popIdx[i]! i) {}
-  let mut outs : Std.HashMap Nat (Array Nat) := {}
-  let mut wires := 0
-  for i in [0:popIdx.size] do
-    let u := popIdx[i]!
-    let some (k, m, _, _) := us[u]? | throw s!"links: unit {u} is outside the program's {us.size} units"
-    let ops ← Program.operands P P.rootScope ((P.defs[P.root]!).body.nodes[k]!) m
-    for t in [0:ops.size] do
-      if let some v := owner us ops[t]! then
-        if !links.any (fun (_, lo, hi) => lo ≤ t && t < hi) then
-          throw s!"links: cut wire: unit {u}'s parameter leaf {t} reads unit {v}'s output (gate {ops[t]!}), and no link row (META links) carries it"
-    for (p, lo, hi) in links do
-      let name := (c.ports.getD p default).name
-      if hi > ops.size then throw s!"links: {name}'s leaves [{lo}, {hi}) are past unit {u}'s {ops.size} parameter leaves"
-      let rd := ops.extract lo hi
-      match owner us rd[0]! with
-      | none =>
-        if rd.any (owner us · |>.isSome) then
-          throw s!"links: unit {u}'s leaves [{lo}, {hi}) (row {name}) read both circuit inputs and a unit's outputs"
-      | some v =>
-        let og ← match outs[v]? with
-          | some og => pure og
-          | none => do
-            let og ← outGates P us v
-            outs := outs.insert v og
-            pure og
-        if og != rd then
-          throw s!"links: unit {u}'s leaves [{lo}, {hi}) (row {name}) are not exactly unit {v}'s {og.size} outputs in order"
-        let some w := inst[v]?
-          | throw s!"links: unit {u}'s row {name} reads unit {v}, which is not a unit of this public file (a link across statements is not checked)"
-        if pop.digest i p np != pop.digest w (np - 1) np then
-          throw s!"links: cut wire [{lo}, {hi}) from unit {v} to unit {u}: the reader's row {name} is not the writer's committed output row (their b ‖ c differ)"
-        wires := wires + 1
-  return wires
+  let ns := nodes P
+  checkAt c pop P links (unitAt ns) (ownerAt ns) (count ns) readers
 
 end HmLinks
 
@@ -838,9 +803,9 @@ def Stmt.setupHiddenWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
       if (TemplateQuery.templatesOf ((q.getObjValAs? String "name").toOption.getD "") ((q.getObjValAs? Nat "version").toOption.getD 0) Json.null).isSome then
         let indices ← (← J.arr (← J.get pub.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
         let note ← HmRow.deriveTemplateUnitsWith hs c obj prog indices
-        let wires ← HmLinks.checkWith hs c pop prog
+        let wires ← HmLinks.checkWith hs c pop (HmLinks.readersOf draw) prog
         let linking := if wires == 0 && !linked then "; no cut wire between the statement's units"
-          else s!"; Linking checked: {wires} cut wire(s) over the {pop.n} units of the population, each reader's link row the writer's committed output row"
+          else s!"; Linking checked: {wires} cut wire(s) into the {pub.n} proved units of the population's {pop.n}, each reader's link row the writer's committed output row"
         pure (some { f with derived := true, note := note ++ linking })
       else if linked then throw "META links: Linking is checked under a template query (Q_template_instance v0, Q_template_instances v0) only"
       else HmRow.qwordFindingWith hs c pub obj prog f
