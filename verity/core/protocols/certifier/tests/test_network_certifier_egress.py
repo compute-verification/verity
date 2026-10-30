@@ -194,8 +194,8 @@ def test_the_bucket_circuit_computes_the_wardens_rows():
 
 
 def test_the_unit_reads_the_state_and_computes_the_row():
-    """The unit's one input is the state's row (every switch computed, none witness); its outputs are o0, a u16, and
-    o1, the row of R B-byte cells, gates of the circuit and never an input."""
+    """The proof block's one input is the state's row (every switch computed, none witness); its outputs are o0, a u16,
+    and o1, the row of R B-byte cells, gates of the circuit and never an input."""
     for sh in (shape(PARAMS, NR, K), EG.Shape(256, 16, 4, 4, 64, 17, 22)):
         params, out = _fn(sh).signature()
         assert [(name, t.leaves) for name, t in params] == [("state", sh.state_words * 16)]
@@ -208,9 +208,10 @@ def _committed(served, w):
 
 
 def test_the_registered_read_holds_the_row_output_to_the_wardens_rows():
-    """The verifier's registered read of the unit's row output o1 (`warden_rows.refusal` on `bucket_port`: unit 3 + t
-    reads row t) accepts the rows a window's units compute from its states, committed under the warden's salts, and
-    refuses a row with one bit flipped and a row moved to another bucket, at its own position and at the other's."""
+    """The verifier's registered read of the proof block's row output o1 (`warden_rows.refusal` on `bucket_port`: proof
+    block 3 + t reads row t) accepts the rows a window's proof blocks compute from its states, committed under the
+    warden's salts, and refuses a row with one bit flipped and a row moved to another bucket, at its own position and at
+    the other's."""
     served = busy(6, PARAMS, 14, 15, 6)
     T, sh = PARAMS.window, shape(PARAMS, NR, K)
     w = max(range(len(served.records)), key=lambda w: len(set(WR.window_rows(served.records[w], PARAMS))))
@@ -252,13 +253,13 @@ def test_a_request_not_yet_in_the_state_computes_another_row():
 
 
 def test_the_units_ands():
-    """The unit's ANDs at the ZK driver's shape and at the scan note's class (16 cells of 256 bytes in 4 lanes, 4
+    """The proof block's ANDs at the ZK driver's shape and at the scan note's class (16 cells of 256 bytes in 4 lanes, 4
     request slots of 64 outputs, 17-bit ids, D = 22): what circuit-check pins and the status extrapolates."""
     assert HC.ands(_fn(shape(PARAMS, NR, K))) == ANDS_ZK
     assert HC.ands(_fn(EG.Shape(256, 16, 4, 4, 64, 17, 22))) == ANDS_CLASS
 
 
-#: `EgressBucket_v1{B=256,R=8,r=2,NR=4,K=16,IB=18,D=2}`'s, egress_zk.py's unit
+#: `EgressBucket_v1{B=256,R=8,r=2,NR=4,K=16,IB=18,D=2}`'s, egress_zk.py's proof block
 ANDS_ZK = 5_795
 #: `EgressBucket_v1{B=256,R=16,r=4,NR=4,K=64,IB=17,D=22}`'s
 ANDS_CLASS = 11_555

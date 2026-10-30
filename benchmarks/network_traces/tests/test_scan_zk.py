@@ -1,4 +1,4 @@
-"""scan_zk's host side: the run it reads (each link-window's rows the warden's committed ones, each egress bucket
+"""scan_zk's host side: the run it reads (each execution phase's rows the warden's committed ones, each egress bucket
 computing the warden's row from the view its ingress bucket wrote, w63's request 5 in request 1's slot past its egress)
 and each round's host read (`scan_zk.member`, as Lean's registered reads make it, and the references' outputs) as the
 round's: honest accepted with every output 1, its state and view chains wires through the registered roots
@@ -270,10 +270,10 @@ def test_the_scans_root_reads_each_units_slot_entries_at_one_root():
 
 def published(out: Path, setup=sz.W63, seed: bytes = b"warden-run", windows: int | None = None,
               late: tuple[int, ...] = ()) -> Path:
-    """The synthetic run's records over ``windows`` link-windows (the setup's by default) published as warden_serve's
-    `Publisher` publishes a served run's (each record and its certificate, the wire's rows' registration and salts),
-    under a warden key of its own, beside its `deployment.json`; the connections of ``late`` failed late (a void run,
-    their reasons in ``fails.records``)."""
+    """The synthetic run's records over ``windows`` execution phases (the setup's by default) published as
+    warden_serve's `Publisher` publishes a served run's (each record and its certificate, the wire's rows' registration
+    and salts), under a warden key of its own, beside its `deployment.json`; the connections of ``late`` failed late (a
+    void run, their reasons in ``fails.records``)."""
     windows = windows or setup.windows
     reqs = [sz._request(setup, i, p) for i, p in enumerate(setup.prompts)]
     served = sz.traffic.serve(setup.params, reqs, setup.arrivals, [1 << 20] * len(reqs), setup.responses, windows,
@@ -310,7 +310,7 @@ def test_a_warden_runs_rows_are_read_under_its_deployments_key(tmp_path):
 
 
 def _cells(run: Path) -> dict[tuple[str, int], dict]:
-    """A run's row registrations in ``cells.jsonl``, by direction and link-window."""
+    """A run's row registrations in ``cells.jsonl``, by direction and execution phase."""
     return {(d["registration"]["direction"], d["registration"]["window"]): d["registration"]
             for d in map(json.loads, (run / "cells.jsonl").read_text().splitlines()) if "registration" in d}
 
@@ -319,9 +319,9 @@ def test_the_registration_names_each_link_windows_warden_rows_its_ports_read(tmp
     """The rows form's hold (`NetworkCheck.Period`: the scan's registration names each of W's row registrations' root
     and domain): a G = 2 group's honest round names, as ``rows/<direction>/<w>``, each of the four row registrations
     of the run's ``cells.jsonl``, T leaves each (ingress's row ports and egress's o1 read them); the tampered round,
-    egress only, names the egress rows alone, the re-signed link-window's in its place. No root is named as the value
-    Lean reports a read under, so the audit's registered reads (`audit.session_registered`, Lean's ``registered`` of
-    each member) hold none of them, as the registration registers none."""
+    egress only, names the egress rows alone, the re-signed execution phase's in its place. No root is named as the
+    value Lean reports a read under, so the audit's registered reads (`audit.session_registered`, Lean's ``registered``
+    of each member) hold none of them, as the registration registers none."""
     G, T = 2, sz.TEST.params.window
     run = published(tmp_path / "run", sz.TEST, windows=G)
     h = sz.host(tmp_path / "host", run, setup=sz.TEST, group=G)
@@ -345,8 +345,8 @@ def test_lean_reads_each_warden_port_at_the_root_the_warden_signed_never_one_the
     """The verifier's own ``--registered`` file of each member (`registered_file`: `stage` writes it, `a0.lean_verify`
     passes it, and a Lean verdict's ``registered`` reports its roots) holds each warden port at the root and domain of
     the row registration the deployment's key signed (`warden_rows.check_registration`, read here afresh from the
-    run's ``cells.jsonl``), the root `warden_roots` registers for that direction and link-window. A member whose rows
-    the prover committed afresh, under salts of its own, is still read at the signed root, and refused there; and a
+    run's ``cells.jsonl``), the root `warden_roots` registers for that direction and execution phase. A member whose
+    rows the prover committed afresh, under salts of its own, is still read at the signed root, and refused there; and a
     statement whose header names a port registered that the verifier's file doesn't is refused, as Lean refuses it
     (`header_refusal`, `Flock.Registered.check`)."""
     G = 2
@@ -389,10 +389,10 @@ def test_lean_reads_each_warden_port_at_the_root_the_warden_signed_never_one_the
 
 
 def test_each_link_windows_answer_is_one_stages_on_the_groups_registration():
-    """`window_answer` as the rows form reads a link-window's scan answer (`pouw.core_check.answer_of` and `integrity`,
-    the period mirror's own reads): every unit of a G = 2 group drawn, one level drawn stratified over the three
-    templates, its bound 0, for the group's registration; a refused audit a reject of the same registration naming
-    why; an accepted record of another registration the driver's error."""
+    """`window_answer` as the rows form reads an execution phase's scan answer (`pouw.core_check.answer_of` and
+    `integrity`, the period mirror's own reads): every proof block of a G = 2 group sampled, one level sampled
+    stratified over the three templates, its bound 0, for the group's registration; a refused audit a reject of the same
+    registration naming why; an accepted record of another registration the driver's error."""
     from verity.core.protocols.pouw import core_check as CC
 
     G, T = 2, 4
@@ -420,7 +420,7 @@ def test_each_link_windows_answer_is_one_stages_on_the_groups_registration():
 
 def test_an_audit_refused_with_every_member_held_answers_each_link_window_naming_its_failed_checks(tmp_path):
     """`answers` of a round whose members Lean all held but whose audit refused (a check of the record's own, say its
-    registered reads): each link-window's answer is the reject of the round's registration, its reason the failed
+    registered reads): each execution phase's answer is the reject of the round's registration, its reason the failed
     checks and their codes, and its registrations its own two."""
     G = 2
     h = sz.host(tmp_path / "host", published(tmp_path / "run", sz.TEST, windows=G), setup=sz.TEST, group=G)
@@ -438,7 +438,8 @@ def test_an_audit_refused_with_every_member_held_answers_each_link_window_naming
 
 
 def _program(G: int, T: int) -> tuple:
-    """The scan's Program, query and law (every unit drawn) for a group of G link-windows of T buckets."""
+    """The scan's Program, query and sampling design (every proof block sampled) for a group of G execution phases of T
+    buckets."""
     counts = sz.counts_of(sz.members_of(sz.TEMPLATES, G, T))
     defs = {"first": FIRST, "ingress": ING, "egress": EG}
     return (sz.PA.mixed_population_program([(defs[t], counts[t]) for t in sz.TEMPLATES]),
@@ -449,7 +450,7 @@ def test_a_void_run_is_its_honest_round_refused_at_the_egress_member_of_its_fail
     """A warden run whose warden failed a connection late (its server sent nothing: a FAIL in the egress row the
     warden signed, its reason in ``fails.records``) is read, not refused: the scan renders the connection's END where
     the warden wrote FAIL, that bucket alone differs from the warden's row, and the run's one round, honest, is refused
-    ("does not open") at the egress member of the FAIL's link-window, every other member held."""
+    ("does not open") at the egress member of the FAIL's execution phase, every other member held."""
     G, T = 2, sz.TEST.params.window
     h = sz.host(tmp_path / "host", published(tmp_path / "run", sz.TEST, windows=G, late=(1,)), setup=sz.TEST, group=G)
     at = h.at
@@ -764,9 +765,9 @@ def test_a_forged_cell_row_another_key_or_another_schedule_is_refused_by_name(tm
 
 def test_a_fails_reason_outside_its_fails_bucket_is_refused_by_name_and_one_outside_the_group_is_not_read(tmp_path):
     """A connection's reason in the warden's ``fails`` record is in the bucket of its egress `FAIL` (a void run, whose
-    link-windows the scan answers refused): a reason in a scanned bucket whose egress row has no `FAIL` is refused,
-    naming the run's ``check.json`` problems that say a connection failed closed; one in a link-window past the group
-    is another group's, and the group is read as if it weren't there."""
+    execution phases the scan answers refused): a reason in a scanned bucket whose egress row has no `FAIL` is refused,
+    naming the run's ``check.json`` problems that say a connection failed closed; one in an execution phase past the
+    group is another group's, and the group is read as if it weren't there."""
     run = published(tmp_path / "run")
     rec = WS.ar.unpack_record(WS.ar.read_blobs(run / "responses.records")[0], sz.PARAMS.cell_bytes)
     t, j = next((t, j) for t, row in enumerate(rec.grid) for j, f in enumerate(row) if f is not None)
@@ -800,7 +801,7 @@ def test_a_challenger_draw_that_cant_draw_is_refused_by_name_before_anything_run
 
 def test_the_window_root_is_the_wardens_signed_link_windows(tmp_path):
     """Each run's root is its own (the synthetic run's registrations carry fresh salts), a warden run's is read from its
-    published registrations alone, and a group's covers each of its link-windows."""
+    published registrations alone, and a group's covers each of its execution phases."""
     syn = sz.link(tmp_path / "syn")
     root = sz.window_root(syn)
     assert re.fullmatch("[0-9a-f]{128}", root) and root != sz.window_root(sz.link(tmp_path / "again"))
@@ -816,7 +817,7 @@ def test_the_window_root_is_the_wardens_signed_link_windows(tmp_path):
 
 
 def test_the_honest_rounds_spec_is_what_its_registration_shows_over_the_units_its_stream_takes():
-    """`spec_of` on a round of two stand-in templates split a member a link-window (the scan's own take a minute to
+    """`spec_of` on a round of two stand-in templates split a member an execution phase (the scan's own take a minute to
     build; `spec_of` reads only the round's program, query, templates and members), its ports a member's and the scan's
     trees as `audit` names them, its counts each template's over its members."""
     T, k, root = 32, 16, "dd" * 64

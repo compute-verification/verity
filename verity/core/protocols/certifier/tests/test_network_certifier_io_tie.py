@@ -2,7 +2,7 @@
 the warden's schedule (`warden.Warden._egress` cuts every cell, the certifier's grid lays them out a row a bucket, as
 `warden_rows` registers them); advice-v0-shaped outputs, from which the verifier computes each window's map (through
 advice v1's order permutation where the engine's numbering isn't the arrival order, as on the corpus's heavy trace);
-and the Commit's sampled ids, one hiding row a step, which each bucket's unit reads at its outputs' steps as
+and the Commit's sampled ids, one hiding row a step, which each bucket's proof block reads at its outputs' steps as
 registered rows. The reference accepts every honest window and refuses every way the cells can differ from the map and
 the port, every port that isn't the Commit's and a connection the warden failed; the Boolean parts agree with it."""
 
@@ -273,9 +273,9 @@ def test_every_window_of_the_wardens_egress_is_accepted(link, big):
 
 
 def test_each_buckets_row_is_the_wardens_registered_row(link):
-    """The units read the warden's registration v2 (`warden_rows`): bucket t's row is row t of the record the grid
-    closed (`window_rows`, its wiring read off it), it opens the warden's root at t, and the verifier's port
-    (`bucket_port`) has unit t read row t, an idle window's too."""
+    """The proof blocks read the warden's registration v2 (`warden_rows`): bucket t's row is row t of the record the
+    grid closed (`window_rows`, its wiring read off it), it opens the warden's root at t, and the verifier's port
+    (`bucket_port`) has proof block t read row t, an idle window's too."""
     p = link.params
     assert len(link.records) == 6
     for w, record in enumerate(link.records):
@@ -411,8 +411,9 @@ def test_a_connection_the_warden_failed_is_refused():
 
 
 def port_statement(inst: IT.Instance, s: int) -> tuple[dict, list[bytes]]:
-    """A statement's registered entry of port row s over the window's T bucket units (unit t's s-th read row at its
-    step, with its path) and each table row's b ‖ c, as `warden_rows.Cells.statement` gives the bucket rows'."""
+    """A statement's registered entry of port row s over the window's T bucket proof blocks (proof block t's s-th read
+    row at its step, with its path) and each table row's b ‖ c, as `warden_rows.Cells.statement` gives the bucket
+    rows'."""
     T = inst.shape.T
     entry = {"value": IT.SAMPLED, "positions": [inst.steps[t][s] for t in range(T)],
              "paths": [b"".join(inst.paths[t][s]).hex() for t in range(T)]}
@@ -446,8 +447,9 @@ def test_the_hosts_registered_reads_climb_the_domain_the_verifiers_port_names():
 def test_the_ports_reads_are_the_commits_registration():
     """The fake Commit's port tree is `verity.ml.commitments.advice`'s registration of its rows (`hm96-sha512/row/v2`
     leaves under `domain`), the form the served rows' registration takes, so its root is one the Lean verifier's
-    registered reads open. `port_reads` has unit `reads_from + t` read its bucket's s-th step at `port[s]`, a row of
-    2P u16 words, keys a one-row port `port`, and refuses units of unequal S and a read past the Commit's rows."""
+    registered reads open. `port_reads` has proof block `reads_from + t` read its bucket's s-th step at `port[s]`, a row
+    of 2P u16 words, keys a one-row port `port`, and refuses proof blocks of unequal S and a read past the Commit's
+    rows."""
     link = small()
     inst, count = commit(SMALL, link, 0), len(link.port)
     binding, salts = _h(b"portw"), [IT.fake_salt(b"wp", s) for s in range(count)]
