@@ -283,3 +283,19 @@ where h_forced ≤ h is the hashing or fold work a cheater can't skip. So 99% ne
 - RDX's raw V skip ties, at 34 = 34 writes a round.
 
 ROUNDS constants for COUNTER's certificates: 7408679cbad22b9ffdb5ae4d476390ed3b84a76e
+
+**16:32Z, #6190 (dedupe: retire the TS facet model) after INF-382: still wanted, merged with main, not pushed or marked:**
+- **Still wanted.** main (36d67551e3) and next (930764f6bd) still carry everything it retires, and no PR supersedes it. Daniel's yes is compute-accounting's default card a1256bb4, "defaulted to retirement" (note 20261029T0005Z-report-coordinator-checkpoint).
+- **Merged.** origin/main merged at 79c242f0bc. The one conflict was the comment in `benchmarks/pouw/pyproject.toml`; its dangling Headline inputs were dropped. Security's lock has exactly the 30 retired guarantees fewer (973), and Properties' lock is unchanged. #6212's queued head is merged, with `cpw_floor` kept as main has it (145ca3b738). Both are preserved on `cursor/compute-research-ts-facet-retire-merge-f979`.
+- **Not pushed.** The guard refuses the push to the PR branch, which is registered to bc-df47de6b (TS-DIM). It moves once its owner runs `worktree_guard.py hand cursor/compute-research-dedupe-ts-facet-retire-7c1d <agent>`, or fast-forwards it to 145ca3b738 itself.
+- **Not markable.** Every head of #6190, 3d0b177 included, conflicts with next in 7 files, so preflight would refuse the mark:
+  - Accounting `Compose.lean` (Definitions, Definitions/Guarantees, Proofs): #5917/#5938/#5621 rename what it deletes.
+  - `Security/lean-audit.json`: the merge driver refuses CircuitCredit(Seeded) "removed vs changed".
+  - `benchmarks/pouw/pyproject.toml`: seven queued PRs touch it.
+  - `verity/core/claims/tests/test_claims_registry.py`: #6514 and #5497.
+  - `verity/core/protocols/pouw/PROTOCOL.md`: next deletes it (#6672).
+- **Runs.** The records runs (Security, Security/Properties) and the suites run at 79c242f0bc on cpu-7 were cancelled before they started. They could vouch for no markable head.
+- **To finish:**
+  1. Merge main again once it has absorbed those PRs, or merge their queued heads, and resolve the conflicts.
+  2. Rerun records for both locks and `suites.py --changed origin/main --quick`.
+  3. Run `research queue ready 6190 --mark --by compute-research`.
