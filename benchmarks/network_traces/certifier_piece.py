@@ -628,11 +628,16 @@ def rm(*paths: Path) -> None:
 
 
 def refuse(d: Path, why: str) -> int:
-    """DIR emptied but for its logs, and DIR/`REFUSED` naming why: no answer, so the certifier reads missing."""
-    signal.signal(signal.SIGTERM, signal.SIG_IGN)
-    rm(*(p for p in d.iterdir() if p.name not in LOGS))
-    (d / REFUSED).write_text(why + "\n")
-    print(f"CERTIFIER refused: {why}", flush=True)
+    """DIR emptied but for its logs, and DIR/`REFUSED` naming why: no answer, so the certifier reads missing. SIGTERM is
+    ignored while it writes and then handled as before, so the children of a process that refused don't inherit it
+    ignored."""
+    was = signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    try:
+        rm(*(p for p in d.iterdir() if p.name not in LOGS))
+        (d / REFUSED).write_text(why + "\n")
+        print(f"CERTIFIER refused: {why}", flush=True)
+    finally:
+        signal.signal(signal.SIGTERM, was)
     return 3
 
 
