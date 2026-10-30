@@ -14,11 +14,11 @@ using namespace sxr;
 
 namespace {
 struct D {
-  static void run(u64* st, u64* w) {
+  static void compress(u64* st, u64* w) {
     ++counts[0];
     sx::compress<0, 1>(st, w);
   }
-  static void kw(u64* st, const u64* kw) {
+  static void compress_kw(u64* st, const u64* kw) {
     ++counts[0];
     ++counts[1];
     sx::compress_kw<0, 1>(st, kw);
@@ -47,7 +47,7 @@ void sxr_midstate(const uint8_t* block, uint64_t* out) {
     w[i] = v;
   }
   sx::iv(out);
-  D::run(out, w);
+  D::compress(out, w);
 }
 
 int sxr_row_setup(void*, RowSpec* rows, uint32_t G) {
@@ -111,7 +111,7 @@ int sxr_level(void*, const uint64_t* mids, uint32_t D_, const uint64_t* pre, uin
     const u64* kids = in + tree * in_stride;
     const u64* l = !pre ? kids + 8 * j : j ? kids + 8 * (j - 1) : pre + tree * pre_stride;
     const u64* r = kids + 8 * (pre ? j : j + 1);
-    node<D>(mids + 8 * (D_ == 1 ? 0 : tree), first + i, l, r, out + 8 * t);
+    rc::node_at<D>(mids + 8 * (D_ == 1 ? 0 : tree), first + i, l, r, out + 8 * t);
   }
   return 0;
 }

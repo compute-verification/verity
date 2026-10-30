@@ -3,6 +3,13 @@
  "packages":
  [{"type": "path",
    "scope": "",
+   "name": "core_protocol",
+   "manifestFile": "lake-manifest.json",
+   "inherited": false,
+   "dir": "../../../interface",
+   "configFile": "lakefile.toml"},
+  {"type": "path",
+   "scope": "",
    "name": "flock_verifier",
    "manifestFile": "lake-manifest.json",
    "inherited": false,

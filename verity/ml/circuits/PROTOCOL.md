@@ -450,7 +450,7 @@ descriptor, digest, gate table and truth table on words.
 conventions and v1's Calls, proof blocks, owners and committed sets. It differs from v1 in one rule of the cut check: a value computed in
 two proof blocks (a recomputed pair whose gates have two owners) is reported in `verify`'s detail (`recomputed_across`), not refused
 (`gate-recomputed`). Every other code and the width rule are v1's, and `validate_unit_cut` and `cut.check_cut` refuse by default.
-v2's proof blocks may compute a common value, so a count of v2 proof blocks or gates bounds the faulty proof blocks' size from
+v2's proof blocks may compute a common value, so a count of v2 proof blocks or gates bounds the incorrect proof blocks' size from
 above but counts a shared value more than once, and a consumer that credits size (PoUW) does not take `Q_word` v2.
 
 Vectors: `qword_vectors.json` → `v2`: v1's recompute-free evaluation and every verify refusal at v2, and the program v1 refuses
@@ -471,7 +471,7 @@ What carries over from §8 and §10:
 - **Calls.** §8's Calls (the root's non-input nodes, in body order). Each is cut as its Definition's activation in a one-Call
   Program, every returned leaf a designated output, so activations of one Definition share their cut.
 - **Recomputes.** §10's report: a value computed in two proof blocks is `verify`'s `detail["recomputed_across"]`, never a code. The
-  §10 caveat holds: a count of proof blocks bounds the faulty ones' size but counts a shared value more than once, so a
+  §10 caveat holds: a count of proof blocks bounds the incorrect ones' size but counts a shared value more than once, so a
   consumer that credits size (PoUW) does not take `Q_call` v1.
 
 What changes:

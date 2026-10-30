@@ -1,4 +1,4 @@
-// Side units beside the honest kernel (EPS1's eps_side, note:20261017T0310Z-report-eps1-program): the words a cycle a unit
+// Side units beside the honest kernel (eps_side): the words a cycle a unit
 // that works off the SM's vector pipes (L2 reductions and atomics, cp.async, TMA bulk copies and reductions, DSMEM,
 // texture point fetch and bilinear filtering over 32 MB, and tld1c/texc over a window the texture cache holds; tld1d,
 // texd, atomgd, tld1cd: tld1, texbil, atomg32, tld1c with 4x, 2x, 4x, 4x the fetches in flight; texr: texd on two rows

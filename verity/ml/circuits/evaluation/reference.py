@@ -1,8 +1,11 @@
 """The plain-integer reference: what every kernel is checked against.
 
-`evaluate_region` / `evaluate_call` are the gate-by-gate oracle of `verity.ml.circuits.evaluate`, re-exported unchanged (the code
-moves here once no importer of the old path is left).  `evaluate(target, *args)` runs a target on one input of plain
-ints: a primitive through its evaluator, a composite specialization through the oracle on a one-call Program.
+`evaluate_region` / `evaluate_call` are the gate-by-gate oracle (IR §6). A `Trace` is an indexed assignment gate index ->
+encoding (Python int bit pattern), a run's gate values. The oracle walks a gate selection gate by gate in canonical order,
+reading operands from the trace and applying the primitive's total evaluator. `Input` gates are never evaluated: their
+values must already be in the trace (they are the prescribed inputs; the correspondence tool authenticates them
+separately).  `evaluate(target, *args)` runs a target on one input of plain ints: a primitive through its evaluator, a
+composite specialization through the oracle on a one-call Program.
 
 A target is a Definition (`PrimitiveDefinition`, a static-free `CompositeDefinition`, a complete
 `SpecializedDefinition`) or a `ScalarReference`: a silicon function that no core Definition wraps yet (the FP8 and NVFP4
@@ -16,22 +19,21 @@ from __future__ import annotations
 
 import bisect
 from dataclasses import dataclass, field, replace
-from typing import Any, Callable, Sequence
+from typing import Any, Callable, Iterable, Sequence
 
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
-from verity.ml.circuits.evaluate import ExecutionTranscript, MissingValue, evaluate_call, evaluate_region
-from verity.ml.circuits.layout import FunctionCall
+from verity.ml.circuits.layout import Circuit, FunctionCall, GateSelection
 from verity.ml.circuits.ports import forward, harness
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine
 from verity.ml.circuits.types import Type, Value
 
 __all__ = [
-    "ExecutionTranscript",
     "MissingValue",
     "RegisteredTable",
     "ScalarReference",
     "Target",
+    "Trace",
     "evaluate",
     "evaluate_call",
     "evaluate_region",
@@ -42,6 +44,57 @@ __all__ = [
     "standalone_call",
     "statics_of",
 ]
+
+Trace = dict[int, int]
+
+
+class MissingValue(KeyError):
+    pass
+
+
+def evaluate_region(circuit: Circuit, sub: GateSelection, trace: Trace, *, strict: bool = True) -> Trace:
+    """Evaluate every gate of `sub` in canonical order, writing into `trace` (mutated and returned).
+    `Input` gates must be present already. With `strict=False`, gates whose operands are missing are skipped."""
+    for gv in sub:
+        prim = gv.prim
+        if getattr(prim, "family", None) == "Input":
+            if gv.index not in trace:
+                raise MissingValue(f"Input gate {gv.index} has no prescribed value in the transcript")
+            continue
+        lazy = getattr(prim, "evaluate_lazy", None)
+        if lazy is not None:
+            ops_seq = gv.operands
+            try:
+                trace[gv.index] = lazy(lambda j, _s=ops_seq: trace[_s[j]])
+            except KeyError as e:
+                if strict:
+                    raise MissingValue(f"gate {gv.index} ({prim.id}) operand {e.args[0]} is not in the transcript") from None
+            continue
+        try:
+            ops = [trace[o] for o in gv.operands]
+        except KeyError as e:
+            if strict:
+                raise MissingValue(f"gate {gv.index} ({prim.id}) operand {e.args[0]} is not in the transcript") from None
+            continue
+        trace[gv.index] = prim.evaluate(*ops)
+    return trace
+
+
+def evaluate_call(circuit: Circuit, call: FunctionCall, args: Iterable[int], trace: Trace | None = None) -> tuple[int, ...]:
+    """Bind `args` (encodings, in `call.args` order) then evaluate the call's region; return the encodings
+    of `call.returns`. Values of `call.args` that lie inside the call (impossible for a well-formed call)
+    or repeated references are bound consistently or rejected."""
+    t: Trace = {} if trace is None else trace
+    arg_gates = call.args
+    args = list(args)
+    if len(args) != len(arg_gates):
+        raise ValueError(f"{call!r}: expected {len(arg_gates)} argument encodings, got {len(args)}")
+    for g, v in zip(arg_gates, args):
+        if g in t and t[g] != v:
+            raise ValueError(f"{call!r}: gate {g} bound to two different values")
+        t[g] = v
+    evaluate_region(circuit, call, t)
+    return tuple(t[g] for g in call.returns)
 
 
 @dataclass(frozen=True, eq=False)
@@ -204,8 +257,8 @@ class _Operands:
         return part.read(i) if isinstance(part, RegisteredTable) else part[i]
 
 
-class _Transcript(dict):
-    """An execution trace whose registered tables' Input gates are read through the table, never stored.
+class _TableTrace(dict):
+    """A trace whose registered tables' Input gates are read through the table, never stored.
 
     ``in`` doesn't see those gates, only ``[]`` does. `evaluate_region` asks ``in`` only of Input gates inside its selection,
     and a standalone call's selection holds none."""
@@ -248,7 +301,7 @@ def _evaluate_with_tables(t: Any, args: Sequence[Any]) -> tuple[int, ...]:
             raise TypeError(f"{t.id} has no evaluate_lazy: its evaluator takes every leaf of the registered table")
         return (lazy(_Operands(args).__getitem__),)
     prog, call = standalone_call(t)
-    tr = _Transcript()
+    tr = _TableTrace()
     for pi, a in enumerate(args):
         refs = prog.input_coll(pi).refs
         if isinstance(a, RegisteredTable):
