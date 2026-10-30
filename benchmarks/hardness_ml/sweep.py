@@ -71,8 +71,26 @@ def lite(size, tokens, threads, lr=2e-3):
     return cfgs
 
 
+def replan1(size="w256", tokens=20_000_000, lr=2e-3, threads=4):
+    """After the first signal: the noise knee on the baseline shape and on B, B's int8 R and small ρ, B on all
+    linears, and seeds for the baseline, B ρ = 0.5 and A 1/8 (the measurement's noise floor)."""
+    b = {"size": size, "tokens": tokens, "lr": lr, "threads": threads}
+    B5 = {**b, "design": "B", "rho": 0.5}
+    cfgs = [{**b, "name": f"{size}-int8-k{k}", "int8": True, "noise_k": k} for k in (2, 4, 8)]
+    cfgs += [{**B5, "name": f"{size}-B0.5-int8-k{k}", "int8": True, "noise_k": k, "r_dist": "int8"}
+             for k in (0, 4, 16)]
+    cfgs += [{**b, "name": f"{size}-B0.05", "design": "B", "rho": 0.05},
+             {**b, "name": f"{size}-B0.25-all", "design": "B", "rho": 0.25, "harden": "all"},
+             {**B5, "name": f"{size}-B0.5-lr{lr * 2:g}", "lr": lr * 2}]
+    cfgs += [{**b, "name": f"{size}-base-D{tokens}-s{s}", "seed": s} for s in (1, 2)]
+    cfgs += [{**B5, "name": f"{size}-B0.5-s{s}", "seed": s} for s in (1, 2)]
+    cfgs += [{**b, "name": f"{size}-A8-diag-s1", "design": "A", "rank_frac": 1 / 8, "diag": True, "seed": 1}]
+    return cfgs
+
+
 PRESETS = {
     "bench": bench,
+    "replan1": replan1,
     "w256": lambda: grid("w256", 20_000_000),
     "scale1": lambda: lite("w512", 20_000_000, 6) + lite("w128", 20_000_000, 2),
 }
