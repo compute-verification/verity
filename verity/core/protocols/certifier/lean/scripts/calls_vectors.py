@@ -5,23 +5,25 @@
 
 Writes `DIR/calls/instances.jsonl`, one window per line as `NetworkCertifier.Calls.CallsDifftest.rawOfJson` reads it,
 and `DIR/calls/python.jsonl`, the same line's results from the checkout's `verity.core.protocols.certifier.calls`: each
-event's answer (an A root's release as hex, the calls a bucket refuses, a words root's verdict, the close's verdicts,
-`"refusal"` for a `CallRefusal` and `"no coins"` for an A root whose coins weren't flipped), and the window's calls as
-`Calls.summary` gives them without the release's digest, whose bytes the answers hold. The Lean audit runs
+event's answer (an A root's release as hex, `"counted"` for a bucket, a words root's verdict, the close's verdicts,
+`"refusal"` for a `CallRefusal` and `"no coins"` for an A root whose coins weren't flipped), and the window's forwards as
+`Calls.summary` gives them without the releases' digests, whose bytes the answers hold. The Lean audit runs
 `CallsDifftestMain.lean` on both files (`runs` in `lean-audit.json`, which pins their SHA-256), and
 `verity/core/protocols/certifier/tests/test_network_certifier_calls_lean_difftest.py` checks that this script still
 writes them.
 
-A window is an egress cap and up to 31 events: A roots of calls 0 … 7, buckets and words roots, and in nine windows of
-ten the close, which a quarter of them follow with more events. Shapes are small (most at most 40 rows, 16 columns and K 150; some up to 200 rows,
-four coin tiles; some K 806 … 900, two row words a row), and now and then one the certifier refuses (a dimension 0, or
-past 2^40 MMA tiles) or one at exactly 2^40 tiles, which it admits and whose flip the entropy can't hold. The
-certifier's entropy is the calls' flips in order: random row bytes, G words below `G_BOUND` (now and then 0 or
+A window is an egress cap, the node's release bits and up to 31 events: A roots of calls 0 … 7 of forwards 0 … 5, mostly
+of the open forward or, with none open, of a new one, buckets and words roots, and in nine windows of ten the close,
+which a quarter of them follow with more events. Shapes are small (most at most 40 rows, 16 columns and K 150; some up to
+200 rows, four coin tiles; some K 806 … 900, two row words a row), and now and then one the certifier refuses (a
+dimension 0, or past 2^40 MMA tiles) or one at exactly 2^40 tiles, which it admits and whose flip the entropy can't hold.
+The certifier's entropy is the calls' flips in order: random row bytes, G words below `G_BOUND` (now and then 0 or
 `G_BOUND − 1`) with rejected words planted before them (now and then `G_BOUND` or 2^32 − 1), and random lane bytes;
 now and then it ends inside a flip, after which no call's coins are flipped, and otherwise it may run on past the last.
-Caps run from 0 to many bits a MAC, and a third of the buckets bring an open call's count exactly to its bits or one
-past them. Refused events: a second A root of a call, a root not of 64 bytes, a bucket of more frames than its
-allocation, a words root of a call not open, and any event after the close.
+Caps run from 0 to many bits a MAC; a third of the buckets while a forward is open, and one before four in five of its
+words roots, bring its count with the release exactly to its bits or one past them. Refused events: a second A root of a call, a root not of 64 bytes, an A root of
+another forward while one is open or of a closed forward, a bucket of more frames than its allocation, a words root of
+a forward not open, and any event after the close.
 """
 from __future__ import annotations
 
@@ -99,83 +101,91 @@ def _bucket_of(rng: random.Random, bits: int) -> tuple[int, list[int]]:
 
 
 class _Window:
-    """A window's events and the entropy its flips read, built as the certifier will answer them: which calls are
-    registered, which are open (each one's `cap · rows · n · K`, its count and whether it is refused), whether the
-    entropy has ended and whether the window is closed."""
+    """A window's events and the entropy its flips read, built as the certifier will answer them: each forward's calls,
+    the open forward's bits (cap · its calls' MACs), count and whether it is refused, whether the entropy has ended and
+    whether the window is closed."""
 
-    def __init__(self, rng: random.Random, cap: EgressCap) -> None:
-        self.rng, self.cap = rng, cap
+    def __init__(self, rng: random.Random, cap: EgressCap, release_bits: int) -> None:
+        self.rng, self.cap, self.release_bits = rng, cap, release_bits
         self.events: list[list] = []
         self.chunks: list[bytes] = []
-        self.ids: set[int] = set()
-        self.open: dict[int, list] = {}
-        self.spent = self.closed = False
+        self.calls: dict[int, set[int]] = {}
+        self.open: int | None = None
+        self.limit = self.count = 0
+        self.refused = self.spent = self.closed = False
 
     def a_root(self) -> None:
         rng = self.rng
-        fresh = [c for c in range(8) if c not in self.ids]
-        call = rng.choice(sorted(self.ids)) if self.ids and (not fresh or rng.random() < 0.06) else rng.choice(fresh)
+        fresh = [f for f in range(6) if f not in self.calls]
+        if self.open is not None and rng.random() < 0.85:
+            forward = self.open
+        elif fresh and rng.random() < 0.9:
+            forward = rng.choice(fresh)
+        else:
+            forward = rng.randrange(6)
+        held = self.calls.get(forward, set())
+        unused = [c for c in range(8) if c not in held]
+        call = rng.choice(sorted(held)) if held and (not unused or rng.random() < 0.06) else rng.choice(unused or [0])
         root = rng.randbytes(rng.choice([64] * 30 + [0, 63, 65]))
         rows, cols, K = _shape(rng)
-        self.events.append(["a", call, root.hex(), rows, cols, K])
-        if self.closed or call in self.ids or len(root) != 64:
+        self.events.append(["a", forward, call, root.hex(), rows, cols, K])
+        if self.closed or len(root) != 64 or call in held:
+            return
+        if self.open != forward and (self.open is not None or forward in self.calls):
             return
         try:
             shape = CallShape(rows, cols, K)
         except CallRefusal:
             return
-        self.ids.add(call)
-        if self.spent:
+        if self.open is None:
+            self.open, self.limit, self.count, self.refused = forward, 0, 0, False
+        self.calls.setdefault(forward, set()).add(call)
+        self.limit += self.cap.cap * shape.macs
+        if not self.spent and shape.release_bytes <= 2**20 and rng.random() >= 0.04:
+            self.chunks.append(_flip_bytes(rng, shape))
             return
-        if shape.release_bytes > 2**20:
-            self.spent = True
-            return
-        flip = _flip_bytes(rng, shape)
-        if rng.random() < 0.04:
+        if not self.spent and shape.release_bytes <= 2**20:
+            flip = _flip_bytes(rng, shape)
             self.chunks.append(flip[:rng.randrange(len(flip))])
-            self.spent = True
-            return
-        self.chunks.append(flip)
-        self.open[call] = [self.cap.cap * rows * shape.n * K, 0, False]
+        self.spent = self.refused = True
 
-    def bucket(self) -> None:
+    def bucket(self, aimed: float = 0.35) -> None:
+        """A bucket; with chance `aimed` while a forward is open and not refused, one that brings its count with the
+        release to its bits or one past."""
         rng = self.rng
-        live = [c for c, s in sorted(self.open.items()) if not s[2]]
-        if live and rng.random() < 0.35:
-            limit, count, _ = self.open[rng.choice(live)]
-            r, frames = _bucket_of(rng, limit // self.cap.fwd_macs - count + rng.choice([0, 1]))
+        if self.open is not None and not self.refused and rng.random() < aimed:
+            target = self.limit // self.cap.fwd_macs + rng.choice([0, 1])
+            r, frames = _bucket_of(rng, max(target - self.count - self.release_bits, 0))
         else:
             r = rng.choice([0, 1, 2, 3, 7, 8, rng.randint(0, 64)])
             frames = [rng.choice([0, 1, 8, rng.randint(0, 512)]) for _ in range(rng.randint(0, r))]
             if rng.random() < 0.04:
                 frames.append(rng.randint(0, 64))
         self.events.append(["b", r, frames])
-        if self.closed or len(frames) > r:
-            return
-        for s in self.open.values():
-            if not s[2]:
-                s[1] += r.bit_length() + sum(frames)
-                s[2] = s[1] * self.cap.fwd_macs > s[0]
+        if not self.closed and len(frames) <= r:
+            self.count += r.bit_length() + sum(frames)
 
     def words_root(self) -> None:
         rng = self.rng
-        call = rng.choice(sorted(self.open)) if self.open and rng.random() < 0.85 else rng.randrange(8)
+        if self.open is not None and not self.refused and rng.random() < 0.8:
+            self.bucket(aimed=1)
+        forward = self.open if self.open is not None and rng.random() < 0.85 else rng.randrange(6)
         root = rng.randbytes(rng.choice([64] * 30 + [0, 32, 65]))
-        self.events.append(["w", call, root.hex()])
-        if not self.closed and len(root) == 64:
-            self.open.pop(call, None)
+        self.events.append(["w", forward, root.hex()])
+        if not self.closed and forward == self.open and len(root) == 64:
+            self.open = None
 
     def close(self) -> None:
         self.events.append(["c"])
         self.closed = True
-        self.open.clear()
+        self.open = None
 
 
 def instance(seed: int) -> dict:
     rng = random.Random(seed)
     cap = EgressCap(rng.choice([0, 1, 2, 5, rng.randint(0, 50), rng.randint(0, 5000)]),
                     rng.choice([1, 1, 3, 1000, rng.randint(1, 10**6)]))
-    w = _Window(rng, cap)
+    w = _Window(rng, cap, rng.choice([0, 0, 1, 3, rng.randint(0, 40)]))
     for _ in range(rng.randint(0, 26)):
         rng.choices([w.a_root, w.bucket, w.words_root], [0.3, 0.5, 0.2])[0]()
     if rng.random() < 0.9:
@@ -184,39 +194,46 @@ def instance(seed: int) -> dict:
             rng.choice([w.a_root, w.bucket, w.words_root, w.close])()
     if not w.spent:
         w.chunks.append(rng.randbytes(rng.choice([0, 0, 1, 7, 64])))
-    return {"cap": cap, "entropy": b"".join(w.chunks), "events": w.events}
+    return {"cap": cap, "release_bits": w.release_bits, "entropy": b"".join(w.chunks), "events": w.events}
 
 
 def lean_input(inst: dict) -> dict:
-    return {"cap": inst["cap"].cap, "fwd_macs": inst["cap"].fwd_macs, "entropy": inst["entropy"].hex(),
-            "events": inst["events"]}
+    return {"cap": inst["cap"].cap, "fwd_macs": inst["cap"].fwd_macs, "release_bits": inst["release_bits"],
+            "entropy": inst["entropy"].hex(), "events": inst["events"]}
 
 
 def _answer(calls: Calls, event: list) -> dict | str:
     try:
         match event:
-            case ["a", call, root, rows, cols, K]:
+            case ["a", forward, call, root, rows, cols, K]:
                 try:
-                    return {"release": calls.a_root(call, bytes.fromhex(root), CallShape(rows, cols, K)).hex()}
+                    return {"release": calls.a_root(forward, call, bytes.fromhex(root), CallShape(rows, cols, K)).hex()}
                 except CallRefusal:
                     raise
                 except ValueError:
                     return "no coins"
             case ["b", r, frames]:
-                return {"refused": calls.bucket(r, frames)}
-            case ["w", call, root]:
-                return {"verdict": calls.words_root(call, bytes.fromhex(root)).value}
+                calls.bucket(r, frames)
+                return "counted"
+            case ["w", forward, root]:
+                return {"verdict": calls.words_root(forward, bytes.fromhex(root)).value}
             case ["c"]:
-                return {"verdicts": [[call, v.value] for call, v in calls.close().items()]}
+                return {"verdicts": [[forward, v.value] for forward, v in calls.close().items()]}
     except CallRefusal:
         return "refusal"
     raise ValueError(f"not an event: {event!r}")
 
 
+def summary(calls: Calls) -> list[dict]:
+    """`calls.summary()` without the releases' digests."""
+    return [{**f, "calls": [{k: v for k, v in c.items() if k != "release"} for c in f["calls"]]}
+            for f in calls.summary()]
+
+
 def python_results(inst: dict) -> dict:
-    calls = Calls(inst["cap"], Entropy(inst["entropy"]))
+    calls = Calls(inst["cap"], Entropy(inst["entropy"]), inst["release_bits"])
     answers = [_answer(calls, ev) for ev in inst["events"]]
-    return {"answers": answers, "summary": [{k: v for k, v in c.items() if k != "release"} for c in calls.summary()]}
+    return {"answers": answers, "summary": summary(calls)}
 
 
 def line(obj: dict) -> str:

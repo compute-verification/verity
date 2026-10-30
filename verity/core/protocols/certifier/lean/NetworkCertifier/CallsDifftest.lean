@@ -9,14 +9,15 @@ import Lean.Data.Json
 from the program's definitions (`NetworkCertifier.Calls`), gives every one of them. The Lean audit runs it (`runs` in
 `lean-audit.json`): compiled evaluation, a test and not a proof.
 
-An instance is a window: `{"cap", "fwd_macs", "entropy", "events"}`, the certifier's entropy as hex, and each event
-`["a", call, root, rows, cols, K]` (an A root and its shape), `["b", r, frames]` (a boundary link's bucket at allocation
-`r`, its real frames' content bits), `["w", call, root]` (a words root) or `["c"]` (the window's close), each root as
-hex. `evaluate` gives
-* `answers`: each event's answer, `{"release": hex}` (the release's bytes), `"no coins"`, `{"refused": calls}`,
-  `{"verdict": name}`, `{"verdicts": [[call, name], …]}` or `"refusal"`;
-* `summary`: the window's calls in id order, `{"call", "rows", "cols", "K", "a_root", "words_root", "verdict"}`, as
-  `Calls.summary` gives them without the release's digest, which the answers hold the bytes of.
+An instance is a window: `{"cap", "fwd_macs", "release_bits", "entropy", "events"}`, the certifier's entropy as hex,
+and each event `["a", forward, call, root, rows, cols, K]` (a call's A root and its shape), `["b", r, frames]` (a
+boundary link's bucket at allocation `r`, its real frames' content bits), `["w", forward, root]` (a forward's words
+root) or `["c"]` (the window's close), each root as hex. `evaluate` gives
+* `answers`: each event's answer, `{"release": hex}` (the release's bytes), `"no coins"`, `"counted"`,
+  `{"verdict": name}`, `{"verdicts": [[forward, name], …]}` or `"refusal"`;
+* `summary`: the window's forwards in id order, `{"forward", "calls", "words_root", "verdict"}` with each call
+  `{"call", "rows", "cols", "K", "a_root"}`, as `Calls.summary` gives them without the releases' digests, which the
+  answers hold the bytes of.
 -/
 
 namespace NetworkCertifier.Calls.CallsDifftest
@@ -48,46 +49,53 @@ def hexOf (bytes : List Nat) : String :=
 /-- An event as read. -/
 def eventOfJson (j : Json) : Except String Event := do
   match ← fromJson? (α := List Json) j with
-  | [.str "a", call, root, rows, cols, k] =>
-    pure (.aRoot (← fromJson? call) (← bytesOfHex (← fromJson? root)) ⟨← fromJson? rows, ← fromJson? cols, ← fromJson? k⟩)
+  | [.str "a", forward, call, root, rows, cols, k] =>
+    pure (.aRoot (← fromJson? forward) (← fromJson? call) (← bytesOfHex (← fromJson? root))
+      ⟨← fromJson? rows, ← fromJson? cols, ← fromJson? k⟩)
   | [.str "b", r, frames] => pure (.bucket (← fromJson? r) (← fromJson? frames))
-  | [.str "w", call, root] => pure (.wordsRoot (← fromJson? call) (← bytesOfHex (← fromJson? root)))
+  | [.str "w", forward, root] => pure (.wordsRoot (← fromJson? forward) (← bytesOfHex (← fromJson? root)))
   | [.str "c"] => pure .close
   | _ => throw s!"not an event: {j.compress}"
 
 /-- An instance as read. -/
 structure Raw where
   cap : Cap
+  releaseBits : Nat
   entropy : List Nat
   events : List Event
 
 def rawOfJson (j : Json) : Except String Raw := do
   pure {
     cap := ⟨← j.getObjValAs? Nat "cap", ← j.getObjValAs? Nat "fwd_macs"⟩
+    releaseBits := ← j.getObjValAs? Nat "release_bits"
     entropy := ← bytesOfHex (← j.getObjValAs? String "entropy")
     events := ← (← j.getObjValAs? (List Json) "events").mapM eventOfJson }
 
 /-- An answer as `calls_vectors.py` writes it. -/
-def answerJson : Answer → Json
+def answerJson : CallAnswer → Json
   | .release bytes => Json.mkObj [("release", Json.str (hexOf bytes))]
-  | .refused cs => Json.mkObj [("refused", toJson cs)]
+  | .counted => Json.str "counted"
   | .verdict v => Json.mkObj [("verdict", Json.str v.name)]
-  | .verdicts vs => Json.mkObj [("verdicts", Json.arr (vs.map fun (c, v) => Json.arr #[toJson c, Json.str v.name]).toArray)]
+  | .verdicts vs => Json.mkObj [("verdicts", Json.arr (vs.map fun (f, v) => Json.arr #[toJson f, Json.str v.name]).toArray)]
   | .refusal => Json.str "refusal"
   | .noCoins => Json.str "no coins"
 
 /-- A call as `Calls.summary` gives it, without the release's digest. -/
 def callJson (c : Call) : Json :=
   Json.mkObj [("call", toJson c.id), ("rows", toJson c.shape.rows), ("cols", toJson c.shape.cols),
-    ("K", toJson c.shape.K), ("a_root", Json.str (hexOf c.aRoot)),
-    ("words_root", match c.wordsRoot with | some r => Json.str (hexOf r) | none => Json.null),
-    ("verdict", match c.verdict with | some v => Json.str v.name | none => Json.null)]
+    ("K", toJson c.shape.K), ("a_root", Json.str (hexOf c.aRoot))]
+
+/-- A forward as `Calls.summary` gives it, without its calls' releases' digests. -/
+def forwardJson (f : Forward) : Json :=
+  Json.mkObj [("forward", toJson f.id), ("calls", Json.arr (f.calls.map callJson).toArray),
+    ("words_root", match f.wordsRoot with | some r => Json.str (hexOf r) | none => Json.null),
+    ("verdict", match f.verdict with | some v => Json.str v.name | none => Json.null)]
 
 /-- What the program's definitions give on an instance, in the shape of the Python results. -/
 def evaluate (r : Raw) : Except String Json := do
-  let (answers, st) := run r.cap (State.init r.entropy) r.events
+  let (answers, st) := run r.cap r.releaseBits (State.init r.entropy) r.events
   pure <| Json.mkObj [("answers", Json.arr (answers.map answerJson).toArray),
-    ("summary", Json.arr (st.calls.map callJson).toArray)]
+    ("summary", Json.arr (st.forwards.map forwardJson).toArray)]
 
 /-- The results' fields, in the order they are compared. -/
 def fields : List String := ["answers", "summary"]

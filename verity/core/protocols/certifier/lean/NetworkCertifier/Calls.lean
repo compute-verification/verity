@@ -1,8 +1,9 @@
 /-!
 # The certifier program: the lead's calls
 
-The network certifier as the lead's coin source and per-call count: the definition `verity.core.protocols.certifier.calls`
-mirrors, held to it by the difftest (`NetworkCertifier.Calls.CallsDifftest`). Lean core only.
+The network certifier as the lead's coin source and per-forward count: the definition
+`verity.core.protocols.certifier.calls` mirrors, held to it by the difftest (`NetworkCertifier.Calls.CallsDifftest`).
+Lean core only.
 
 * **A call's shape** (`Shape`): `rows` rows of A, `cols` output columns and inner dimension `K`, committed over whole MMA
   tiles (`Shape.m`, `Shape.n`) in `Shape.S` k32 steps, with `Shape.H` row words a row and `Shape.tiles` coin tiles, as
@@ -17,11 +18,12 @@ mirrors, held to it by the difftest (`NetworkCertifier.Calls.CallsDifftest`). Le
   the G words (byte `q` of column `j`'s the int8 `G[q, j]`), then a coin tile at a time its lane-coin words
   (`laneBytes`: three int8 coin lanes, and byte 3 the column code's top digit at step 0 and 1 later) and its column
   sources (`source`), which are no coins but a public function of them.
-* **The count** (`step`): the window's calls as the certifier keeps them. An A root opens its call and is answered with
-  the call's release, once; a bucket of a boundary link at allocation `r` counts `timingBits r` and its real frames'
-  content bits against every open call, and refuses one whose count passes its bits (`Cap.passed`); a words root closes
-  its call with its verdict; the window's close refuses each call still open. Once the entropy fails the window flips
-  nothing more.
+* **The count** (`step`): the window's forwards as the certifier keeps them. A call's A root is answered with the call's
+  release, once; a forward's first call opens it, while no other forward is open. A bucket of a boundary link at
+  allocation `r` counts `timingBits r` and its real frames' content bits once, against the open forward. A forward's
+  words root closes it, its release's bits (`releaseBits`) counted, and refuses it if its count passes its calls' bits
+  summed (`Cap.passed`); the window's close refuses the forward still open. Once the entropy fails the window flips
+  nothing more, and the forward whose call it failed is refused.
 -/
 
 namespace NetworkCertifier.Calls
@@ -73,11 +75,14 @@ its steps. -/
 def valid (s : Shape) : Bool :=
   decide (0 < s.rows ∧ 0 < s.cols ∧ 0 < s.K ∧ s.m / 16 * (s.n / 8) * s.S ≤ admittedTiles)
 
+/-- Its MACs a token, the share of the egress cap it brings its forward: `rows · n · K` (the lead's `callBits`). -/
+def macs (s : Shape) : Nat := s.rows * s.n * s.K
+
 end Shape
 
 /-- A call's coins as the certifier flips them, in the release's bytes: `rows`, the row words'; `g`, the G words'; `u`,
 the coin lanes' `u` in `[0, 128)`, `u[((k·S + t)·n + j)·3 + ℓ]` at tile `k`, step `t`, column `j` and lane `ℓ`. -/
-structure Coins where
+structure CallCoins where
   rows : List Nat
   g : List Nat
   u : List Nat
@@ -110,7 +115,7 @@ def gBytes (ws : List Nat) : List Nat :=
   ws.flatMap fun w => (List.range 4).map fun q => int8 ((w / 7 ^ q % 7 : Nat) - 3)
 
 /-- **The flip**: the call's coins from the entropy, and the entropy left, or none when it ends first. -/
-def flip (s : Shape) (e : List Nat) : Option (Coins × List Nat) := do
+def flip (s : Shape) (e : List Nat) : Option (CallCoins × List Nat) := do
   let (raw, e) ← take? (4 * s.m * s.H) e
   let (ws, e) ← words s.n e []
   let (ub, e) ← take? (3 * s.S * s.tiles * s.n) e
@@ -139,7 +144,7 @@ def source (S n : Nat) (u : Array Nat) (c j : Nat) : Nat :=
 
 /-- **The release**: the call's row words and G words, then a coin tile at a time its lane-coin words and its column
 sources (class 0's `n`, then class 1's). -/
-def release (s : Shape) (c : Coins) : List Nat :=
+def release (s : Shape) (c : CallCoins) : List Nat :=
   c.rows ++ c.g ++ (List.range s.tiles).flatMap fun k =>
     let u := (c.u.drop (k * (3 * s.S * s.n))).take (3 * s.S * s.n)
     let ua := u.toArray
@@ -155,12 +160,13 @@ structure Cap where
   fwdMacs : Nat
   deriving DecidableEq, Repr
 
-/-- Whether `count` bits pass the call's bits, `cap · rows · n · K / fwdMacs`, compared in integers. -/
-def Cap.passed (c : Cap) (s : Shape) (count : Nat) : Bool :=
-  c.cap * s.rows * s.n * s.K < count * c.fwdMacs
+/-- Whether `count` bits pass the bits of calls of `macs` MACs (`Shape.macs` summed), `cap · macs / fwdMacs`, compared in
+integers. -/
+def Cap.passed (c : Cap) (macs count : Nat) : Bool :=
+  c.cap * macs < count * c.fwdMacs
 
-/-- A call's verdict in the record. -/
-inductive Verdict
+/-- A forward's verdict in the record. -/
+inductive ForwardVerdict
   | accepted
   | pastBits
   | unclosed
@@ -168,101 +174,112 @@ inductive Verdict
   deriving DecidableEq, Repr
 
 /-- A verdict's name in the record. -/
-def Verdict.name : Verdict → String
+def ForwardVerdict.name : ForwardVerdict → String
   | .accepted => "accepted"
   | .pastBits => "past its bits"
   | .unclosed => "open when the window closed"
-  | .noCoins => "its coins were not flipped"
+  | .noCoins => "a call's coins were not flipped"
 
-/-- A call as the certifier keeps it. -/
+/-- A call as the certifier keeps it: its id, shape and A root. -/
 structure Call where
   id : Nat
   shape : Shape
   aRoot : List Nat
-  wordsRoot : Option (List Nat)
-  count : Nat
-  verdict : Option Verdict
-  isOpen : Bool
   deriving Repr
+
+/-- A forward as the certifier keeps it: its id, its calls in id order, its count, its words root and its verdict. -/
+structure Forward where
+  id : Nat
+  calls : List Call
+  count : Nat
+  wordsRoot : Option (List Nat)
+  verdict : Option ForwardVerdict
+  deriving Repr
+
+/-- A forward refused for `v`, unless it was refused already. -/
+def Forward.refuse (v : ForwardVerdict) (f : Forward) : Forward := { f with verdict := some (f.verdict.getD v) }
 
 /-- What reaches the certifier: the prover's registrations on the control channel, each boundary link's bucket at its
 tick (its allocation and its real frames' content bits), and the window's close. -/
 inductive Event
-  | aRoot (call : Nat) (root : List Nat) (shape : Shape)
+  | aRoot (forward call : Nat) (root : List Nat) (shape : Shape)
   | bucket (r : Nat) (frames : List Nat)
-  | wordsRoot (call : Nat) (root : List Nat)
+  | wordsRoot (forward : Nat) (root : List Nat)
   | close
 
-/-- What the certifier answers: an A root's release, the calls a bucket refuses, a words root's verdict, every call's
-verdict at the close, a refused event, or a call whose coins weren't flipped. -/
-inductive Answer
+/-- What the certifier answers: an A root's release, a counted bucket, a words root's verdict, every forward's verdict
+at the close, a refused event, or a call whose coins weren't flipped. -/
+inductive CallAnswer
   | release (bytes : List Nat)
-  | refused (calls : List Nat)
-  | verdict (v : Verdict)
-  | verdicts (vs : List (Nat × Verdict))
+  | counted
+  | verdict (v : ForwardVerdict)
+  | verdicts (vs : List (Nat × ForwardVerdict))
   | refusal
   | noCoins
 
-/-- The window's calls, in id order, the entropy left, and whether the window is closed. -/
+/-- The window's forwards, in id order, the open one, the entropy left, and whether the window is closed. -/
 structure State where
-  calls : List Call
+  forwards : List Forward
+  isOpen : Option Nat
   entropy : List Nat
   closed : Bool
 
 /-- A window's start, with its entropy. -/
-def State.init (e : List Nat) : State := ⟨[], e, false⟩
+def State.init (e : List Nat) : State := ⟨[], none, e, false⟩
 
-/-- `c` in its place by id. -/
-def insertCall (c : Call) : List Call → List Call
-  | [] => [c]
-  | d :: ds => if c.id < d.id then c :: d :: ds else d :: insertCall c ds
+/-- `x` in its place by `id`. -/
+def insertById {α : Type} (id : α → Nat) (x : α) : List α → List α
+  | [] => [x]
+  | y :: ys => if id x < id y then x :: y :: ys else y :: insertById id x ys
 
-/-- A call counted by a bucket of `bits`: an open call not yet refused takes them, and is refused once its count passes
-its bits. -/
-def Call.counted (cap : Cap) (bits : Nat) (c : Call) : Call :=
-  if c.isOpen && c.verdict.isNone then
-    { c with count := c.count + bits,
-             verdict := if cap.passed c.shape (c.count + bits) then some .pastBits else none }
-  else c
+/-- The state with forward `k` changed by `g`. -/
+def State.update (st : State) (k : Nat) (g : Forward → Forward) : State :=
+  { st with forwards := st.forwards.map fun f => if f.id == k then g f else f }
 
-/-- **The certifier's step** on one event. -/
-def step (cap : Cap) (st : State) : Event → State × Answer
-  | .aRoot call root shape =>
-    if st.closed || st.calls.any (·.id == call) || root.length != 64 || !shape.valid then (st, .refusal) else
+/-- **The certifier's step** on one event, with the egress cap `cap` and the node's release at a forward's end,
+`releaseBits`. -/
+def step (cap : Cap) (releaseBits : Nat) (st : State) : Event → State × CallAnswer
+  | .aRoot forward call root shape =>
+    let isNew := !st.forwards.any (·.id == forward)
+    let f := (st.forwards.find? (·.id == forward)).getD ⟨forward, [], 0, none, none⟩
+    if st.closed || !shape.valid || root.length != 64 ||
+        !(st.isOpen == some forward || (st.isOpen.isNone && isNew)) || f.calls.any (·.id == call) then
+      (st, .refusal) else
+    let f := { f with calls := insertById Call.id ⟨call, shape, root⟩ f.calls }
+    let opened := { st with forwards := insertById Forward.id f (st.forwards.filter (·.id != forward)),
+                            isOpen := some forward }
     match flip shape st.entropy with
-    | some (c, e) =>
-      ({ st with calls := insertCall ⟨call, shape, root, none, 0, none, true⟩ st.calls, entropy := e },
-        .release (release shape c))
-    | none =>
-      ({ st with calls := insertCall ⟨call, shape, root, none, 0, some .noCoins, false⟩ st.calls, entropy := [] },
-        .noCoins)
+    | some (c, e) => ({ opened with entropy := e }, .release (release shape c))
+    | none => ({ opened.update forward (Forward.refuse .noCoins) with entropy := [] }, .noCoins)
   | .bucket r frames =>
     if st.closed || decide (r < frames.length) then (st, .refusal) else
-    let calls := st.calls.map (Call.counted cap (timingBits r + frames.sum))
-    let refused := (st.calls.zip calls).filterMap fun (c, c') =>
-      if c.verdict.isNone && c'.verdict.isSome then some c.id else none
-    ({ st with calls := calls }, .refused refused)
-  | .wordsRoot call root =>
-    match st.calls.find? (·.id == call) with
-    | some c =>
-      if st.closed || !c.isOpen || root.length != 64 then (st, .refusal) else
-      let v := c.verdict.getD .accepted
-      ({ st with calls := st.calls.map fun d =>
-          if d.id == call then { d with wordsRoot := some root, isOpen := false, verdict := some v } else d },
-        .verdict v)
+    match st.isOpen with
+    | some k => (st.update k fun f => { f with count := f.count + timingBits r + frames.sum }, .counted)
+    | none => (st, .counted)
+  | .wordsRoot forward root =>
+    if st.closed || st.isOpen != some forward || root.length != 64 then (st, .refusal) else
+    match st.forwards.find? (·.id == forward) with
     | none => (st, .refusal)
+    | some f =>
+      let count := f.count + releaseBits
+      let v := f.verdict.getD
+        (if cap.passed (f.calls.map (·.shape.macs)).sum count then .pastBits else .accepted)
+      ({ st.update forward (fun f => { f with count, wordsRoot := some root, verdict := some v }) with isOpen := none },
+        .verdict v)
   | .close =>
     if st.closed then (st, .refusal) else
-    let calls := st.calls.map fun c =>
-      if c.isOpen then { c with isOpen := false, verdict := some (c.verdict.getD .unclosed) } else c
-    ({ st with calls := calls, closed := true }, .verdicts (calls.map fun c => (c.id, c.verdict.getD .unclosed)))
+    let st := match st.isOpen with
+      | some k => st.update k (Forward.refuse .unclosed)
+      | none => st
+    ({ st with isOpen := none, closed := true },
+      .verdicts (st.forwards.map fun f => (f.id, f.verdict.getD .unclosed)))
 
 /-- The window's answers to `evs` in order, and its state after them. -/
-def run (cap : Cap) (st : State) : List Event → List Answer × State
+def run (cap : Cap) (releaseBits : Nat) (st : State) : List Event → List CallAnswer × State
   | [] => ([], st)
   | ev :: evs =>
-    let (st', a) := step cap st ev
-    let (as, st'') := run cap st' evs
+    let (st', a) := step cap releaseBits st ev
+    let (as, st'') := run cap releaseBits st' evs
     (a :: as, st'')
 
 end NetworkCertifier.Calls

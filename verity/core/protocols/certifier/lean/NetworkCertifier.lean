@@ -19,6 +19,6 @@ The executable forms of the reference definitions in `Security/Definitions/Netwo
 `NetworkCertifier.AdviceV1.ChargeDifftest`, `NetworkCertifier.WindowCharge.WindowDifftest`). Code: it imports only Lean,
 and never `Security/`; `security_proofs` requires it and proves the agreement (`Proofs.NetworkCertifier.Code`).
 
-The certifier as the lead's coin source and per-call count, `NetworkCertifier.Calls`, is the definition itself, with
+The certifier as the lead's coin source and per-forward count, `NetworkCertifier.Calls`, is the definition itself, with
 its difftest against `calls.Calls` (`NetworkCertifier.Calls.CallsDifftest`).
 -/
