@@ -8,7 +8,7 @@ import Proofs.Pouw.Lead.Tail.Fiber
 `λ_G^k / k!` share of the coins, `λ_G = pairs · colBlocks · S · tiles / 7^8` (`lamG`).
 
 A column block's own coordinates are its eight columns' tag weights (`setG`), and the coins are the rest (`b`, `a₁`,
-the coin lanes), drawn first, and a product over the column blocks. `count_tail_fiber` then needs:
+the coin lanes), drawn first, and a product over the column blocks (`gEquiv`). `count_tail_equiv` then needs:
 
 * **Reads**: a column block's tiles read the tag weights of its own columns only.
 * **The fiber** (`columns_fiber`): two tiles at one step, column block and coin tile have rows of one parity in one
@@ -136,11 +136,73 @@ theorem columns_fiber (T m n K : ℕ) (κ : Fin (lead T m n K).m → Fin (lead T
         Fintype.card (Fin 4 → Fin 8 → Fin 7) :=
   columns_fiber_of _ (lead_n T m n K) κ ω cb
 
+/-- **The coins are the rest and each column block's tag weights.** -/
+def gEquiv (L : Pouw.Lead.Layout) (hLn : L.n = 8 * L.colBlocks) :
+    Coins L ≃ ((Fin L.m → Fin L.S → Fin 2) × (Fin L.m → Fin 4 → Fin 2) ×
+      (Fin L.S → Fin L.tiles → Fin 3 → Fin L.n → Fin (2 ^ L.e))) × (Fin L.colBlocks → Fin 4 → Fin 8 → Fin 7) where
+  toFun ω := ((ω.1, ω.2.1, ω.2.2.2), fun cb q c => ω.2.2.1 q (colIdx L hLn cb c))
+  invFun x := (x.1.1, x.1.2.1, fun q j => x.2 (colBlk L hLn j) q ⟨(j : ℕ) % 8, Nat.mod_lt _ (by norm_num)⟩, x.1.2.2)
+  left_inv ω := Prod.ext rfl (Prod.ext rfl (Prod.ext (funext fun q => funext fun j =>
+    congrArg (ω.2.2.1 q) (colIdx_colBlk L hLn j)) rfl))
+  right_inv x := by
+    refine Prod.ext rfl (funext fun cb => funext fun q => funext fun c => ?_)
+    have h1 : colBlk L hLn (colIdx L hLn cb c) = cb := Fin.ext (by simp only [colIdx, colBlk]; omega)
+    have h2 : (⟨((colIdx L hLn cb c : Fin L.n) : ℕ) % 8, Nat.mod_lt _ (by norm_num)⟩ : Fin 8) = c :=
+      Fin.ext (by simp only [colIdx]; omega)
+    simp only [h1, h2]
+
+theorem gEquiv_g (L : Pouw.Lead.Layout) (hLn : L.n = 8 * L.colBlocks) (ω : Coins L) (q : Fin 4) (j : Fin L.n) :
+    (gEquiv L hLn ω).2 (colBlk L hLn j) q ⟨(j : ℕ) % 8, Nat.mod_lt _ (by norm_num)⟩ = ω.2.2.1 q j :=
+  congrArg (ω.2.2.1 q) (colIdx_colBlk L hLn j)
+
+/-- Moving one column block's coordinate is `setG`. -/
+theorem gEquiv_update (L : Pouw.Lead.Layout) (hLn : L.n = 8 * L.colBlocks) (ω : Coins L) (cb : Fin L.colBlocks)
+    (v : Fin 4 → Fin 8 → Fin 7) :
+    (gEquiv L hLn).symm ((gEquiv L hLn ω).1, Function.update (gEquiv L hLn ω).2 cb v) = setG L ω cb v := by
+  refine Prod.ext rfl (Prod.ext rfl (Prod.ext (funext fun q => funext fun j => ?_) rfl))
+  simp only [gEquiv, Equiv.coe_fn_mk, Equiv.coe_fn_symm_mk, setG]
+  by_cases hk : colBlk L hLn j = cb
+  · rw [hk, Function.update_self, ite_eq_left (by rw [← hk]; rfl)]
+  · rw [Function.update_of_ne hk, ite_eq_right (show ¬ (j : ℕ) / 8 = cb from fun h => hk (Fin.ext h))]
+    exact congrArg (ω.2.2.1 q) (colIdx_colBlk L hLn j)
+
+open Classical in
+/-- `columns_tail` on any layout of whole MMA tiles and 64-row coin tiles. -/
+theorem columns_tail_of (L : Pouw.Lead.Layout) (htile : L.tile = 64) (hLn : L.n = 8 * L.colBlocks)
+    (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (k : ℕ) :
+    Pouw.pr (fun ω : Coins L => k ≤ (hitCols L κ ω).card) ≤ lamG L ^ k / k.factorial := by
+  let e := gEquiv L hLn
+  let p : Fin L.colBlocks → ℝ := fun _ => (pairs L * L.S * L.tiles : ℕ) / 7 ^ 8
+  have htail := count_tail_equiv e (fun cb ω => ∃ t ct, withinAt L κ ω (t, ct, cb)) p (fun i => by positivity)
+    (fun cb ω ω' hr hl => ?_) (fun cb ω => ?_) k
+  · have hsum : ∑ i, p i = lamG L := by
+      simp only [p, Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul, lamG]
+      push_cast
+      ring
+    rw [← hsum]
+    refine le_of_eq_of_le (pr_congr fun ω => ?_) htail
+    unfold hitCols
+    congr!
+  · have hr' : (ω.1, ω.2.1, ω.2.2.2) = (ω'.1, ω'.2.1, ω'.2.2.2) := hr
+    simp only [Prod.mk.injEq] at hr'
+    obtain ⟨h1, h2, h3⟩ := hr'
+    have hg : ∀ q (j : Fin L.n), (j : ℕ) / 8 = cb → ω.2.2.1 q j = ω'.2.2.1 q j := fun q j hj => by
+      have hb : colBlk L hLn j = cb := Fin.ext hj
+      rw [← gEquiv_g L hLn ω q j, ← gEquiv_g L hLn ω' q j, hb]
+      exact congrFun (congrFun (hl cb le_rfl) q) _
+    have htl : ∀ rb (t : Fin L.S), tileOf L κ ω rb cb t = tileOf L κ ω' rb cb t := fun rb t =>
+      tileOf_congr L κ ω ω' rb cb t fun i' τ j _ hj _ =>
+        coinTerm_congr L htile ω ω' i' τ j (fun _ => by rw [h1]) (fun _ q => by rw [h2])
+          (fun _ q => hg q j hj) fun k ℓ _ => by rw [h3]
+    simp only [withinAt, htl]
+  · simp only [e, gEquiv_update]
+    exact columns_fiber_of L hLn κ ω cb
+
 /-- **Column blocks with a repeat inside a block are rarely many**: `k` or more of them on at most a `λ_G^k / k!`
 share of the coins. -/
 theorem columns_tail (T m n K : ℕ) (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ)
     (k : ℕ) :
-    Pouw.pr (fun ω : Coins (lead T m n K) => k ≤ (hitCols _ κ ω).card) ≤ lamG (lead T m n K) ^ k / k.factorial := by
-  sorry
+    Pouw.pr (fun ω : Coins (lead T m n K) => k ≤ (hitCols _ κ ω).card) ≤ lamG (lead T m n K) ^ k / k.factorial :=
+  columns_tail_of _ rfl (lead_n T m n K) κ k
 
 end Pouw.SecurityProofs.Lead.Tail

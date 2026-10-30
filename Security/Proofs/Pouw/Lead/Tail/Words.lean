@@ -100,6 +100,18 @@ theorem offBlock_eq {X : Type} {b : ℕ} (hb : b < 4) {v w : Fin 64 → X} (h : 
   simp only [offBlock] at this
   convert this using 2 <;> exact Fin.ext (by simp only; split_ifs <;> omega)
 
+/-- Column `8 cb + c`. -/
+def colIdx (L : Pouw.Lead.Layout) (hLn : L.n = 8 * L.colBlocks) (cb : Fin L.colBlocks) (c : Fin 8) : Fin L.n :=
+  ⟨8 * cb + c, by have := cb.isLt; have := c.isLt; omega⟩
+
+/-- Column `j`'s column block. -/
+def colBlk (L : Pouw.Lead.Layout) (hLn : L.n = 8 * L.colBlocks) (j : Fin L.n) : Fin L.colBlocks :=
+  ⟨(j : ℕ) / 8, by have := j.isLt; omega⟩
+
+theorem colIdx_colBlk (L : Pouw.Lead.Layout) (hLn : L.n = 8 * L.colBlocks) (j : Fin L.n) :
+    colIdx L hLn (colBlk L hLn j) ⟨(j : ℕ) % 8, Nat.mod_lt _ (by norm_num)⟩ = j :=
+  Fin.ext (by simp only [colIdx, colBlk]; omega)
+
 theorem mul_add_lt {a b A B : ℕ} (ha : a < A) (hb : b < B) : a * B + b < A * B :=
   calc a * B + b < a * B + B := by omega
     _ = (a + 1) * B := by ring

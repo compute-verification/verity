@@ -206,14 +206,6 @@ noncomputable def blkEquiv (L : Pouw.Lead.Layout) : Blk L ≃ Fin (blkCount L) :
 
 theorem blkEquiv_val (L : Pouw.Lead.Layout) (β : Blk L) : (blkEquiv L β : ℕ) = blkIdx L β.1 β.2.1 β.2.2 := rfl
 
-/-- Column `8 cb + c`. -/
-def colIdx (L : Pouw.Lead.Layout) (hLn : L.n = 8 * L.colBlocks) (cb : Fin L.colBlocks) (c : Fin 8) : Fin L.n :=
-  ⟨8 * cb + c, by have := cb.isLt; have := c.isLt; omega⟩
-
-/-- Column `j`'s column block. -/
-def colBlk (L : Pouw.Lead.Layout) (hLn : L.n = 8 * L.colBlocks) (j : Fin L.n) : Fin L.colBlocks :=
-  ⟨(j : ℕ) / 8, by have := j.isLt; omega⟩
-
 /-- **The coins are the rest and each block's own lanes**, the blocks in block order. -/
 noncomputable def laneEquiv (L : Pouw.Lead.Layout) (hLn : L.n = 8 * L.colBlocks) :
     Coins L ≃ ((Fin L.m → Fin L.S → Fin 2) × (Fin L.m → Fin 4 → Fin 2) × (Fin 4 → Fin L.n → Fin 7)) ×
