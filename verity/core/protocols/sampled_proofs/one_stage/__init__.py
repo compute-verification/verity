@@ -1,2 +1,2 @@
-"""One-stage audit: serving commits and registers its roots, the verifier draws proof blocks on the challenger's coins, the drawn
+"""One-stage audit: serving commits and registers its roots, the verifier samples proof blocks on the challenger's coins, the sampled
 proof blocks are proved and checked, and the audit record with its `IntegrityProfile` comes out. See the package's `README.md`."""

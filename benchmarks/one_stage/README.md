@@ -1,7 +1,7 @@
 # One-stage audit runs
 
 The one-stage audit (`verity.core.protocols.sampled_proofs.one_stage`) end to end: serving's committed values through registration, the verifier's
-draw, C-Flock's circuit prover (M0) and the Lean verifier, to the audit record with its integrity profile, then the
+sample, C-Flock's circuit prover (M0) and the Lean verifier, to the audit record with its integrity profile, then the
 negatives.
 
 - `a<N>.py`: the driver of run A<N>; its docstring says what the run adds and how to call it.
@@ -23,7 +23,7 @@ negatives.
   and that window, whose private bodies stay on the node.
 - `a5_tp.sh`: A5 over a TP Commit's windows, one `served` window per rank (`a5.py --tp-commit`), taken as served only under a
   SHA-512 TP run root (`tp.run_root`'s v2, over the ranks' rows-sha512 roots; an old record's SHA-256 v1 root is refused before
-  the draw): GLM-5.3's TP8 Commit with
+  the sample): GLM-5.3's TP8 Commit with
   `SERVING_ROWS=benchmarks/one_stage/glm53_silu_mul_v2_tp8.json` (its SiluMul_v2 partition: every unit of `SiluMul_v2{I=1536}`,
   the dense layers' 861 per rank, by `subset:512`), or by default the CPU TP stand-in
   (`integrations/vllm/tests/pipeline/served_tp.py`). A member's whole population is one M0 statement, whose shape takes at most
@@ -35,11 +35,11 @@ negatives.
 - `a5_row_tables.py` (`a5_tp.sh` with `STANDIN=row-tables`): A5 on a window with row tables, which no TP window of record has
   yet: `integrations/vllm/tests/pipeline/test_row_tables.py`'s ScaledMmS8Coordinate chunks, whose `x` rows link four row
   tables over two engine steps, each chunk one table's, as rank 0 of a one-rank step on a local challenger's coins. Lean
-  verifies each drawn chunk with its table's registered reads (`--registered`, `tables.registered_reads`).
+  verifies each sampled chunk with its table's registered reads (`--registered`, `tables.registered_reads`).
 - `a5_warden.py` (`a5_tp.sh` with `STANDIN=warden`, `warden:altered`, `warden:pad`, `warden:pad-named` or `warden:swapped`):
   A5 on a window with transfer gates, which no served window has yet: two chunks of the warden's toy unit whose ports are the
   bucket rows of one connection's ingress and egress cells (a row a bucket, registration v2), committed under the warden's
-  salts, proved whole (the work law's selection All) beside a drawn rest, on a local challenger's coins or the verifier's
+  salts, proved whole (the work law's selection All) beside a sampled rest, on a local challenger's coins or the verifier's
   own. The units' wiring is the Program's (`warden_rows.Units`, from public structure alone: ingress cells 0 … n − 1, egress
   cells D·r … D·r + n − 1). Lean verifies each chunk with the verifier's own registered reads at the root the warden signed,
   named by the units' value and each unit's read (connection, cell) placed by the wiring the warden signed
@@ -54,7 +54,7 @@ negatives.
   each reduction (layer 0's embedding, o_proj and down_proj, H = 2048) for each request is a registered value its
   registration names; each rank's chunk of a request's reduction, the registered `AllReduce2_v1{H}` with its input's two
   rows staged as two ports, is
-  proved whole beside a drawn rest, and Lean verifies it with the verifier's own registered reads of both ranks' partials of
+  proved whole beside a sampled rest, and Lean verifies it with the verifier's own registered reads of both ranks' partials of
   that request at the roots each owner registered, every registration read before any rank's coin. A received row moved one
   bit (`--altered`), two tokens' rows swapped, another collective's partial, another request's, and the receiving rank's own
   partial read as its peer's (`--made-for`) are each refused by Lean's registered reads on rank 1, rank 0 accepted.
@@ -86,16 +86,16 @@ negatives.
   share proved under `--zk` across its template's statements and held by the Lean verifier with the units it derives itself.
 - `a8.sh`: run A8's entry point, on the same builds. A8 is one window of the remote bandwidth audit over a registered store of
   a few thousand blocks with every opening proved by the opening unit (`remote_bandwidth.opening`) under `--zk` and held by
-  Lean, honest and with a tampered block, a scan of everything the verifier received for the drawn blocks' bytes, and the
+  Lean, honest and with a tampered block, a scan of everything the verifier received for the sampled proof blocks' bytes, and the
   prover's cost per opening. `a8_gpu.sh` takes its cost points on sm_120 (`flock-circuit prove --zk --gpu`), as a GPU host
   job, and `a8_cost.py` reads a run's sessions into the one cost model's observations (`benchmarks/sampling_plan`).
-- `a7.sh`: run A7's entry point, on the same builds; the remote session's checks 1-3 and 5 on each drawn receipt are
+- `a7.sh`: run A7's entry point, on the same builds; the remote session's checks 1-3 and 5 on each sampled receipt are
   proved, not opened, by the opening unit (`remote_bandwidth.opening`, `verity.ml.commitments.gates.block_check`) in a
   second statement. A7 is the requirement's plan and memory-map units
   (`verity.ml.circuits.requirement_units`), one of each per step of a stand-in decoder's requirement, under the stratified
   law, their witness rows bound to canonical commitments, then wired to the remote bandwidth audit's ledger as its
-  requirement link (`audit.RequirementLink`), its ε the most share of the linked credit the units its draw leaves
-  unproved can carry and its δ the draw's.
+  requirement link (`audit.RequirementLink`), its ε the most share of the linked credit the units its sample leaves
+  unproved can carry and its δ the sample's.
 - `plan_shards.py`: the sharded plan unit (`PlanShard_v1`) on a recorded remote session (vllm's `remote_session.json` and the
   remote verifier's `verifier.json`): each pass's plan cut into the store's shards, every instance held to the unit's
   reference, each distinct one to the circuit, and one staged by `UnitStager` for its fit in M0's block. A CPU job; it
@@ -105,26 +105,26 @@ negatives.
   staged in statements of 1 to 512 units, and sessions of 1 to 512 drawn units are proved by `flock-circuit prove --zk
   --gpu`, with the firewall's send check on and off. The Lean verifier checks them, and the job fits the per-session,
   per-statement and per-unit costs with their standard errors, writing `costfit` observations. `ZK_DRAWS=c` proves every
-  staged unit: the cost of c drawn units in one statement, up to a table's 2^(35 − k_log) (2048 at K = 4096). Each point
+  staged unit: the cost of c sampled proof blocks in one statement, up to a table's 2^(35 − k_log) (2048 at K = 4096). Each point
   takes its own GPU lease, and a node without CUDA 13.3 gets its packages unpacked under `FLOCK_WORK`.
-- `prove_bundle.sh`: a drawn-unit replay bundle (`examples/h200/interfaces`, `verity/drawn-unit-bundle/v2`) proved by
+- `prove_bundle.sh`: a sampled-proof-block replay bundle (`examples/h200/interfaces`, `verity/drawn-unit-bundle/v2`) proved by
   `prove_bundle.py`: `PB_BUNDLE` of the window `PB_WINDOW`, else the store's `BUNDLE_WINDOW` (a W8A8 MLP's window under a
-  test key, its tampered twin and the interfaces' bundle of four drawn units under the window's registered `subset:4`).
-  `tests/test_prove_bundle.py` holds that bundle to the window's public part (`tests/fixtures/bundle-window-public`). `PB_LIVE=1` requires the bundle's draw to be live. The bundle is held to the prover's window: its own check (the draw's
-  law the registered one among it), its run, registration and partition, each drawn member's public body and a live
-  draw's receipt and record. Each drawn member is one `prove --zk` session behind the Lean firewall, one at a time, served the bundle's
-  draw, with Lean `verify --zk` as the verdict, overlapping the next session. The negatives are `zk_mutants.py`'s one-bit
-  proof edits (`PB_FLIPS=N`: the first N), refused by Lean, and a tampered window's member, stopped by the firewall and
-  refused by Lean without it. `PB_BUILD_ONLY=1` only builds the prover, Lean verifier and firewall into its `out/bin`, stamped
+  test key, its tampered twin and the interfaces' bundle of four sampled proof blocks under the window's registered `subset:4`).
+  `tests/test_prove_bundle.py` holds that bundle to the window's public part (`tests/fixtures/bundle-window-public`). `PB_LIVE=1` requires the bundle's sample to be live. The bundle is held to the prover's window: its own check (the sample's
+  law the registered one among it), its run, registration and partition, each sampled member's public body and a live
+  sample's receipt and record. Each sampled member is one `prove --zk` session behind the Lean ZK server, one at a time, served the bundle's
+  sample, with Lean `verify --zk` as the verdict, overlapping the next session. The negatives are `zk_mutants.py`'s one-bit
+  proof edits (`PB_FLIPS=N`: the first N), refused by Lean, and a tampered window's member, stopped by the ZK server and
+  refused by Lean without it. `PB_BUILD_ONLY=1` only builds the prover, Lean verifier and ZK server into its `out/bin`, stamped
   with the trees they come from. A later run with `PB_BINARIES=` that directory uses them while the stamp matches its own
   source, so M3's reserved window doesn't spend time on the build.
 - `zk_cost_cpu.sh`: the same sessions on a CPU node (`zk_cost.py prove --cpu`), proved by the CPU prover that
-  `prove_path/run.sh` builds, with the firewall's send check. It runs in a proofs slot, one point at a time. Each session's
-  record carries its wall time and its summed peak memory (prover, live verifier and firewall), which is what a CPU node
-  spends on one drawn statement of a block's draw.
+  `prove_path/run.sh` builds, with the ZK server's send check. It runs in a proofs slot, one point at a time. Each session's
+  record carries its wall time and its summed peak memory (prover, live verifier and ZK server), which is what a CPU node
+  spends on one sampled statement of a block's sample.
 - `forged_proofs.sh`: the fixture of C-Flock's forged-proof negatives (`verity/ml/flock/tests/test_lean_forged_proofs.py`),
   on hidden_zk's cached builds (`forged_proofs.py`). A small A8 unit (`LlBf16DotprodDot_v1` at K = 128) staged bound to its partition,
-  with one honest drawn `--zk` session and two whose committed output word is wrong, proved with the prover's self-check
+  with one honest sampled `--zk` session and two whose committed output word is wrong, proved with the prover's self-check
   skipped (`FC_ZK_SELF_CHECK=skip`), so the Lean verifier gets a well-formed proof of a false statement.
 - `a11.sh`: run A11's entry point, on A6's builds. A11 is GLM-5.3 TP8 B1's served step, rank 0: `a11_kinds.py` censuses
   the request Program's root Calls by Definition kind and tries one unit of each through M0 (a kind whose word units M0
@@ -145,7 +145,7 @@ negatives.
   registration window naming the committed values.
 - `m1_families.py` and `m1_unit.py`: M1's full-step coverage. `m1_families.py` reads a rank's Programs of record from a
   deferred TP Commit's Build and lists the unit families of the given steps: each Definition the serving rows' partition
-  draws from, its rows, op paths, ports and whether `serving_rows.template` takes it; `--estimate` adds each family's
+  samples from, its rows, op paths, ports and whether `serving_rows.template` takes it; `--estimate` adds each family's
   ANDs, table reads and assertions from its leaves lowered once (an upper bound on the flat count), against 2^26, and
   the log2 of M0's block for its unit against `K_MAX` (the hashing of its rows alone bounds that block from below), the
   same for each of its split units, and with `--also`/`--also-file` for Definitions a split main lacks would use.

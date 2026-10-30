@@ -1,6 +1,6 @@
-"""A5's draw from the auditor's challenger (`a5.py --challenger`): one challenger session for the TP step, opened on its TP run root
+"""A5's sample from the auditor's challenger (`a5.py --challenger`): one challenger session for the TP step, opened on its TP run root
 of record, from whose coins each rank's registration draws once (`sampled_proofs.coins.ChallengerCoins` over a
-`remote.RemoteChallenger`), and the evidence its verifier checks every draw's coins against once the session has ended.
+`remote.RemoteChallenger`), and the evidence its verifier checks every sample's coins against once the session has ended.
 
 * **The session.** ``local``: a development session on this machine, run by the auditor host's own service
   (`benchmarks/live_challenger/auditor.py`'s reserve, admit and run, then `serve.py`, with no tunnel) on a scratch root under an
@@ -11,22 +11,29 @@ of record, from whose coins each rank's registration draws once (`sampled_proofs
   (`challenger_party.py`, `Loopback`), asked for its open and finish over loopback TCP. ``gate:USER@HOST``: vy-challenger-1 through infra's gate with the lane's gate key: `reserve` with this machine as its
   peer, `open` on the TP run root (`served_h1.coins.open_window`), the client on the peer's 127.0.0.1:PORT with the session's
   secret, and once the session has ended its `status`, `fetch`, `ledger` and `pins`; the verifier's key is then the
-  deployment's record (`served_h1.coins.key_record`), never the session's key.json. The layout is `SCHEME` with one family
+  deployment's record (`served_h1.coins.key_record`), never the session's key.json. Either way the session is a withheld
+  one (`reserve --withhold`; the draw's verifier takes only such a session's coins, `challenger.withheld_on`): the gate
+  hands out no coin commitment root before the session's end, its hello answers the layout alone, each coin comes as its
+  raw bytes, and at the close the challenger releases its commitment and every coin's full opening, which the client
+  checks (`remote.RemoteChallenger.close`) and settles each draw's segment to (`ChallengerCoins.settle`), and which must
+  be the commitment the session's record signs once it has ended (`start`). The layout is `SCHEME` with one family
   `FAMILY`, sized from the draws before anything opens (`families`): one coin, then each rank's `need`, at least
   `COINS_PER_RANK` coins. The session opens once every rank has passed its checks before the draw and planned it
   (`Draws.plan`) and the layout covers every need (`reserve_reason`). Otherwise nothing opens and every rank's draw is
   refused, so a refusal before the draw never spends the root's one session.
 * **The draws** (`Draws`, in a `multiprocessing` manager's process, so every rank's process reads the one client): first one
   coin after the window's root itself, before any registration (`pre`: the negatives' coin opened before the registration),
-  then each rank's draw once, by its own `service.Stream` on `RankCoins`: the stream registers the rank's window, the coins
+  then each rank's sample once, by its own `service.Stream` on `RankCoins`: the stream registers the rank's window, the coins
   commit to the registration's digest (`ChallengerCoins.commit`), and the stream's `select` reads them, in the rank's turn
-  on the one client until `drawn` returns its segment. Once every rank has drawn or won't (`skip`), the client closes the
+  on the one client until `drawn` returns its segment, which is settled once the session has closed (`Draws.released`).
+  Once every rank has drawn or won't (`skip`), the client closes the
   session. `Replay` reads an honest draw's bytes again, for the negatives' streams.
 * **The evidence** (`Local.finish` or `Gate.finish`, on a thread of the run's process once the session closed): the session's out/,
   the auditor's ledger and the host's pins log, copied to ``out/challenger/``, the key, the verifier's own copy of main's
   first-parent history (`start`'s ``main``, never the host's or the prover's), `remote.trusted_session`'s check of the files the
   ledger's end sealed and `challenger.pinned_session`'s of the open's pin. `evidence` is one draw's `{key, ledger, main, pins,
-  segment, session}` (`coins.coins_reason`'s, and the Lean run's), and `negatives` its altered copies.
+  segment, session}` (`coins.coins_reason`'s, and the Lean run's), its segment the settled one, and `negatives` its altered
+  copies.
 """
 from __future__ import annotations
 
@@ -34,6 +41,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import re
 import secrets
 import shutil
 import socket
@@ -80,13 +88,13 @@ def served_h1():
 
 def need(rule: str, program: Program, query: Mapping[str, Any], population: int,
          work_table: Mapping[str, Any] | None = None) -> int:
-    """The most coins one rank's draw reads, known from its window before anything opens. The window gives the stream's law:
+    """The most coins one rank's sample reads, known from its window before anything opens. The window gives the stream's law:
     the rule over its N (`service.selection_law`), expanded over its program and query (`draw.derive`) under the work table
     the rank registers with (a ``work`` law's), as `Stream.register` expands it. The stream's own sampler (`service.select_draw`) draws that law on bytes that reject no
     word (zeros: a zero word is below every largest multiple), and the need is what it reads plus its longest stream once
     more. `coins.draw_first` reads each stream (the law's one, or one per stratum) once, 2 k width(n) + 64 bytes. It reads
     a stream again only when the stream's words run out, which takes k + 1 of them rejected, each with probability below
-    2^-64 (`coins.OwnRandomness`). The margin covers one such rerun, so a draw reads past its need only after two."""
+    2^-64 (`coins.OwnRandomness`). The margin covers one such rerun, so a sample reads past its need only after two."""
     selection = S.Law(rule)
     law = D.derive(program, query, S.selection_law(selection, population), work_table)
     reads: list[int] = []
@@ -99,13 +107,13 @@ def need(rule: str, program: Program, query: Mapping[str, Any], population: int,
 
 
 def families(needs: Mapping[int, int]) -> list[list[Any]]:
-    """The session's layout for the draws `needs` (rank -> `need`): the family `FAMILY`, with the coin after the window's
+    """The session's layout for the samples `needs` (rank -> `need`): the family `FAMILY`, with the coin after the window's
     root (`Draws.pre`) and each rank's need, at least `COINS_PER_RANK` coins."""
     return [[FAMILY, 1 + sum(max(COINS_PER_RANK, n) for n in needs.values())]]
 
 
 def reserve_reason(layout: list, needs: Mapping[int, int]) -> str | None:
-    """Why the challenger's reserve `layout` can't cover the coin after the window's root and every rank's draw (`needs`,
+    """Why the challenger's reserve `layout` can't cover the coin after the window's root and every rank's sample (`needs`,
     rank -> `need`), naming the need and the reserve; None when it can."""
     want = 1 + sum(needs.values())
     why = Ch.layout_problem(SCHEME, 0, tuple(tuple(f) for f in layout))
@@ -139,10 +147,10 @@ TUNNEL_WAIT_S, connect_when_listening = R.TUNNEL_WAIT_S, R.connect_when_listenin
 
 
 class Draws:
-    """The step's coins over the window root `window_root` for every rank of `ranks`. Each rank plans its draw (`plan`).
+    """The step's coins over the window root `window_root` for every rank of `ranks`. Each rank plans its sample (`plan`).
     Once every rank has planned or ended (`wait_planned`), the session either opens (`connect`: its client, one
     `ChallengerCoins` for every rank) or is refused (`refuse`). The session's evidence follows once published. A rank's
-    draw holds the client from its `commit` to its `drawn` (its turn), so no other rank's coins open between its commitment
+    sample holds the client from its `commit` to its `drawn` (its turn), so no other rank's coins open between its commitment
     and its reads."""
 
     def __init__(self, window_root: str, ranks: list[int]) -> None:
@@ -175,18 +183,23 @@ class Draws:
             self._planned.set()
 
     def wait_planned(self) -> dict[int, int]:
-        """Once every rank has planned its draw or ended: each planned rank's coins (a rank that ended first has none)."""
+        """Once every rank has planned its sample or ended: each planned rank's coins (a rank that ended first has none)."""
         self._planned.wait()
         return dict(self._needs)
 
-    def connect(self, address: str, secret: str | None, commitment: str | None) -> None:
+    def connect(self, address: str, secret: str | None, commitment: str | None, withheld: bool = False) -> None:
         """The opened session's client at `address` (its hello with `secret`, its commitment the gate's open's `commitment`
-        when given), then the one coin after the window's root itself, before any rank registers. Raises `CoinError`,
-        refusing every rank's draw, when either fails."""
+        when given), then the one coin after the window's root itself, before any rank registers. A `withheld` session's
+        hello must answer its layout alone: its commitment comes at the close (`_close`), checked against the record its
+        challenger signed once the session has ended (`start`). Raises `CoinError`, refusing every rank's draw, when either
+        fails."""
         client = None
         try:
             client = connect_when_listening(address, None if secret is None else bytes.fromhex(secret))
-            if commitment is not None and client.commitment.root.hex() != commitment:
+            if withheld and not client.withheld:
+                raise Ch.CoinError("the challenger's hello answered its commitment, and the session opened withheld: its "
+                                   "commitment stays on the challenger's host until the close")
+            if commitment is not None and not client.withheld and client.commitment.root.hex() != commitment:
                 raise Ch.CoinError(f"the challenger's hello answered commitment {client.commitment.root.hex()[:16]}…, not "
                                    f"the gate's {commitment[:16]}…")
             coins = CC.ChallengerCoins(Ch.LiveRecord(client, FAMILY))
@@ -200,14 +213,14 @@ class Draws:
                     pass
             self.refuse(f"the challenger's session opened, and its client failed: {e}")
             raise Ch.CoinError(str(e)) from e
-        self._client, self._coins, self._pre = client, coins, pre.to_json()
+        self._client, self._coins, self._pre = client, coins, pre
         self._opened.set()
         with self._lock:
             if not self._left and self._current is None:
                 self._close()
 
     def refuse(self, why: str) -> None:
-        """No session for the draws (`why`): every rank's `plan` and `commit` raise it."""
+        """No session for the samples (`why`): every rank's `plan` and `commit` raise it."""
         self._refused = why
         self._opened.set()
         self._closed.set()
@@ -249,7 +262,7 @@ class Draws:
         return segment
 
     def skip(self, rank: int) -> None:
-        """Rank `rank` draws nothing (refused before its draw, or its process failed), ending its turn if it holds one: no-op
+        """Rank `rank` draws nothing (refused before its sample, or its process failed), ending its turn if it holds one: no-op
         once it has drawn."""
         self.drawn(rank)
         with self._lock:
@@ -260,17 +273,29 @@ class Draws:
                 self._close()
 
     def _close(self) -> None:
+        """Close the session, then settle every segment's coins to the full openings a withheld session released at its
+        close (`ChallengerCoins.settle`), before any evidence is published."""
         if self._closed.is_set():
             return
         try:
             if self._client is not None:
                 self._client.close()
+                self._coins.settle()
         except Ch.CoinError as e:
             self._ended = str(e)
         self._closed.set()
 
-    def pre(self) -> dict:
-        return self._pre
+    def pre(self) -> dict | None:
+        """The coin after the window's root (`connect`), with its full opening once the session has closed."""
+        return None if self._pre is None else self._pre.to_json()
+
+    def released(self) -> dict:
+        """Once the client has closed the session: the commitment its challenger answered (a withheld session's, released
+        at its close; None when the close failed first) and every draw's segment, settled (`_close`), in order."""
+        self._closed.wait()
+        c = None if self._client is None else self._client.commitment
+        return {"commitment": None if c is None else c.root.hex(),
+                "segments": [] if self._coins is None else [s.to_json() for s in self._coins.segments]}
 
     def wait_closed(self) -> str | None:
         """Once the client has closed the session: None, or why its close failed."""
@@ -304,7 +329,7 @@ class RankCoins(CC.ChallengerCoins):
         self._draws, self._rank, self.read, self.need = draws, rank, bytearray(), None
 
     def plan(self, coins: int) -> None:
-        """The draw reads at most `coins` coins (`need`): once every rank has planned, the session opens (`Draws.plan`)."""
+        """The sample reads at most `coins` coins (`need`): once every rank has planned, the session opens (`Draws.plan`)."""
         self.need = coins
         self._draws.plan(self._rank, coins)
 
@@ -348,6 +373,19 @@ def _refusal(e: Exception) -> dict:
         if isinstance(e, S.Pending) else {"stream": str(e)}
 
 
+def opened_reason(got: dict, withhold: bool) -> str | None:
+    """Why the gate's open answer `got` isn't the session the draws asked for, None when it is: a plain one carries the
+    coin commitment's root its challenger signed, and a withheld one (`withhold`) says so (`withheld`), carries no root
+    and says its challenger signed its record (`signed`)."""
+    if got.get("withheld", False) is not withhold:
+        return f"the gate opened a {'plain' if withhold else 'withheld'} session, not a {'withheld' if withhold else 'plain'} one"
+    if not withhold:
+        return "its challenger signed no commitment" if got.get("commitment") is None else None
+    if got.get("commitment") is not None:
+        return "the gate handed out a withheld session's coin commitment before its end"
+    return None if got.get("signed") is True else "its challenger signed no record"
+
+
 class Local:
     """A development session on this machine (module docstring), its auditor host's root in scratch `root`, pinned on the
     verifier's copy of main's first-parent line `main`."""
@@ -374,14 +412,16 @@ class Local:
         argv += ["--params", ",".join(map(str, LOCAL_PARAMS)), "--keygen-workers", "1"]
         A.run(host, session, signer=self.signer, pinned=self.pin, now=lambda: datetime.now(timezone.utc), argv=argv)
 
-    def open(self, root: str, layout: list, minutes: int = MINUTES, scheme: str = SCHEME) -> tuple[str, str, str]:
-        """Reserve and open the session on `root` with the coins `layout` of `scheme`, as the gate does: (address, secret,
-        commitment)."""
+    def open(self, root: str, layout: list, minutes: int = MINUTES, scheme: str = SCHEME,
+             withhold: bool = False) -> tuple[str, str, str | None]:
+        """Reserve and open the session on `root` with the coins `layout` of `scheme`, as the gate does, a withheld one
+        when `withhold`: (address, secret, commitment), the commitment None on a withheld session (the gate holds its
+        root until the session's end)."""
         A, host, now = self.A, self.host, datetime.now(timezone.utc)
         hooks = dict(by=self.by, now=now, own=lambda p: None, token=secrets.token_hex(2),
                      reserve=lambda s: A.reserve(host, s, signer=self.signer, pinned=self.pin, now=now))
         rc, out = A.gate(["reserve", "--peer", LOCAL_PEER, "--scheme", scheme, "--families", json.dumps(layout),
-                          "--minutes", str(minutes)], host, **hooks)
+                          "--minutes", str(minutes), *(["--withhold"] if withhold else [])], host, **hooks)
         if rc:
             raise Ch.CoinError(f"the local gate refused the reserve: {out.decode().strip()}")
         self.session = json.loads(out)["session"]
@@ -396,8 +436,8 @@ class Local:
                          admit=lambda s: A.admit(host, s, signer=self.signer, pinned=self.pin, now=now, active=alive),
                          start=start, active=alive, ready=lambda s: A.await_commitment(host, s, alive))
         got = json.loads(out)
-        if rc or got.get("commitment") is None:
-            raise Ch.CoinError(f"the local gate refused the open, or its challenger signed no commitment: {out.decode().strip()}")
+        if rc or opened_reason(got, withhold) is not None:
+            raise Ch.CoinError(f"the local gate refused the open, or {opened_reason(got, withhold)}: {out.decode().strip()}")
         address = host.sessions / self.session / "out" / "address.json"
         # serve.py writes the file in place, its newline last: read it only once it is whole
         while not (address.exists() and address.read_text().endswith("\n")) and alive(self.session):
@@ -435,9 +475,11 @@ class Gate:
             raise Ch.CoinError(f"infra's gate refused {words.split()[0]}: {p.stderr.decode().strip() or p.stdout.decode().strip()}")
         return p.stdout
 
-    def open(self, root: str, layout: list, minutes: int = MINUTES, scheme: str = SCHEME) -> tuple[str, str, str]:
-        """Reserve and open the root's one session, of `scheme`, once the host's pins log pins, in its last line, a commit on
-        `main`: a session from any other tree gives coins `pinned_session` refuses, and the gate opens a root once, ever."""
+    def open(self, root: str, layout: list, minutes: int = MINUTES, scheme: str = SCHEME,
+             withhold: bool = False) -> tuple[str, str, str | None]:
+        """Reserve and open the root's one session, of `scheme`, a withheld one when `withhold` (its commitment None, as
+        `Local.open`'s), once the host's pins log pins, in its last line, a commit on `main`: a session from any other tree
+        gives coins `pinned_session` refuses, and the gate opens a root once, ever."""
         pins = [x for x in self._raw("pins").decode().split("\n") if x]
         pin = json.loads(pins[-1]).get("commit") if pins else None
         if pin not in self.main:
@@ -446,10 +488,21 @@ class Gate:
                                "repin the host to a commit on it (vy-challenger-pin), or refresh --main, before spending the "
                                "root's one session")
         got = self.H1.gate_call(self.gate, ["reserve", "--peer", self.peer, "--scheme", scheme, "--families",
-                                            json.dumps(layout, separators=(",", ":")), "--minutes", str(minutes)], self.ssh)
+                                            json.dumps(layout, separators=(",", ":")), "--minutes", str(minutes),
+                                            *(["--withhold"] if withhold else [])], self.ssh)
         self.session = got["session"]
-        session, _ = self.H1.open_window(self.gate, self.session, bytes.fromhex(root), self.ssh)
-        return session.address, session.secret.hex(), session.commitment
+        if not withhold:
+            session, _ = self.H1.open_window(self.gate, self.session, bytes.fromhex(root), self.ssh)
+            return session.address, session.secret.hex(), session.commitment
+        got = self.H1.gate_call(self.gate, ["open", "--session", self.session, "--root", root], self.ssh)
+        secret = got.pop("secret", None)
+        if (got.get("session") != self.session or got.get("root") != root or type(got.get("port")) is not int
+                or not (isinstance(secret, str) and re.fullmatch(r"[0-9a-f]{64}", secret))):
+            raise Ch.CoinError(f"infra's gate answered the open of {self.session} with another session, root or port, or no "
+                               f"secret: {json.dumps(got)}")
+        if (why := opened_reason(got, withhold)) is not None:
+            raise Ch.CoinError(f"infra's gate opened {self.session}, and {why}: `status {self.session}` says why")
+        return f"127.0.0.1:{got['port']}", secret, None
 
     def finish(self, dest: Path, minutes: int = MINUTES) -> tuple[Path, Path, Path, Ch.ChallengerKey]:
         """Once the gate's ledger has the session's end: its fetched directory, the ledger and the host's pins log in `dest`, and
@@ -516,11 +569,11 @@ def opened_pin(ledger: list[str], session: str) -> str | None:
 def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | Path, *, ssh_key: str | None = None,
           peer: str | None = None, key_record: str | None = None,
           reserve: Callable[[Mapping[int, int]], list] = families):
-    """The step's session on `root` (``local`` or ``gate:USER@HOST``, module docstring) and its draws' manager: (the manager, a
+    """The step's session on `root` (``local`` or ``gate:USER@HOST``, module docstring) and its samples' manager: (the manager, a
     `Draws` proxy, and the thread that opens the session and publishes its evidence). The thread waits until every rank of
-    `ranks` has planned its draw (`Draws.plan`), then opens the session with the layout `reserve` gives their needs
+    `ranks` has planned its sample (`Draws.plan`), then opens the session with the layout `reserve` gives their needs
     (`families`). It finishes the session into `dest` once the client has closed it. It opens nothing, and refuses every
-    rank's draw, when a rank ended before planning (refused before its draw, or failed) or `reserve_reason` refuses the
+    rank's sample, when a rank ended before planning (refused before its sample, or failed) or `reserve_reason` refuses the
     layout. The evidence's `plan` is the needs, the layout and the session's id (None when none opened). `main` is the
     verifier's own copy of main's first-parent history (`remote.main_lines`'s file: ``git rev-list --first-parent
     origin/main``)."""
@@ -554,21 +607,25 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | 
             draws.publish({"error": f"the challenger's session was not opened: {e}", "plan": plan})
             return
         try:
-            address, secret, commitment = session.open(root, layout)
+            address, secret, commitment = session.open(root, layout, withhold=True)
         except Exception as e:
             draws.refuse(f"opening the challenger's session failed: {e}")
             draws.publish({"error": f"opening the challenger's session failed: {e}", "plan": plan})
             return
         plan["session"] = session.session
         try:
-            draws.connect(address, secret, commitment)
+            draws.connect(address, secret, commitment, True)
         except Exception as e:
             draws.publish({"error": f"the challenger's session {session.session} gave no client: {e}", "plan": plan})
             return
         ended = draws.wait_closed()
+        released = draws.released()
         try:
             directory, ledger, pins_log, key = session.finish(dest)
             commitment_, roots = R.trusted_session(directory, [ledger], {"root": root}, key, lms_verify)
+            if ended is None and released["commitment"] != commitment_.root.hex():
+                raise Ch.CoinError(f"the challenger released commitment {str(released['commitment'])[:16]}… at the close, "
+                                   f"not the {commitment_.root.hex()[:16]}… its record signs")
             led, pins = R.ledger_lines(ledger), lines(pins_log)
             try:
                 Ch.pinned_session(led, {"root": root}, key, pins, first_parent, lms_verify)
@@ -576,7 +633,7 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | 
             except Ch.CoinError as e:
                 pinned = str(e)
             draws.publish({"key": key.to_json(), "ledger": led, "main": first_parent, "pins": pins,
-                           "session": R.session_files(directory),
+                           "segments": released["segments"], "session": R.session_files(directory),
                            "trusted": {"commitment": commitment_.root.hex(), "released": {k: len(v) for k, v in roots.items()},
                                        "close": ended, "ledger_sha512": hashlib.sha512(ledger.read_bytes()).hexdigest(),
                                        "pin": opened_pin(led, session.session), "pins_lines": len(pins),
@@ -591,11 +648,21 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | 
 
 def evidence(published: dict, segment: dict) -> dict | None:
     """One draw's coins' evidence, `coins.coins_reason`'s {key, ledger, main, pins, segment, session}; None when the session
-    gave none."""
+    gave none. The draw's `segment` (`drawn`'s, read before the close: a withheld session's coins as raw bytes) is the
+    published one of its family, first coin, commitment and coins, settled to the openings its challenger released at its
+    close (`Draws.released`); a segment no published one has those of stays as it is."""
     if "error" in published:
         return None
+
+    def coins_of(s: Any) -> tuple | None:
+        if not (isinstance(s, Mapping) and type(s.get("openings")) is list
+                and all(isinstance(o, Mapping) for o in s["openings"])):
+            return None
+        return s.get("label"), s.get("start"), s.get("after"), [o.get("coin") for o in s["openings"]]
+    at = coins_of(segment)
+    settled = next((s for s in published.get("segments", ()) if at is not None and coins_of(s) == at), segment)
     return {"key": published["key"], "ledger": published["ledger"], "main": published["main"], "pins": published["pins"],
-            "segment": segment, "session": published["session"]}
+            "segment": settled, "session": published["session"]}
 
 
 def negatives(ev: dict, pre: dict) -> dict[str, dict | None]:

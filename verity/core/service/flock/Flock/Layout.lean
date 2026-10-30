@@ -112,7 +112,7 @@ def ofJson (j : Json) : V Layout := do
   return { type := ty, rangeLog := rl, inSplit := ← natArr (← J.get j "in_split" ctx) "in_split",
            outSplit := ← natArr (← J.get j "out_split" ctx) "out_split", own, calls, reads }
 
-/-- The record, as `verity_flock.layouts.Layout.record` writes it (without `sha512`). -/
+/-- The record, as `verity_flock.layouts.BlockLayout.record` writes it (without `sha512`). -/
 def record (l : Layout) : Json :=
   let own := match l.own with
     | .derive => Json.mkObj [("derive", Json.str "v2")]

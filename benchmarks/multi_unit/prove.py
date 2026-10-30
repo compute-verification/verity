@@ -1,4 +1,4 @@
-"""prove.py BINARY DIR N [--zk] [--runs R] [--selftest [CASE ...]]: one loopback session of DIR's statement drawing all N
+"""prove.py BINARY DIR N [--zk] [--runs R] [--selftest [CASE ...]]: one loopback session of DIR's statement sampling all N
 instances (``serve`` on 127.0.0.1, then ``prove``; ``--zk`` the served path's --zk session), with the prover's peak memory (its
 rusage) and the verifier's (VmHWM), or the selftest's negative cases (``--selftest``, `class_statement.prove`: every case, or
 each CASE in its own process). A form the

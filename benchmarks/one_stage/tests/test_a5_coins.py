@@ -1,6 +1,6 @@
-"""a5's coins: a window's `service.Stream` draws only on the auditor's challenger's coins (`a5_coins.RankCoins`, or
-`Replay` of an honest draw's bytes for the negatives), refusing any other source (`service.NO_OWN_COINS`): the verifier
-draws no coins of its own. A draw on the challenger's bytes with no evidence is rejected by the Lean verifier of record's
+"""a5's coins: a window's `service.Stream` samples only from the auditor's challenger's coins (`a5_coins.RankCoins`, or
+`Replay` of an honest sample's bytes for the negatives), refusing any other source (`service.NO_OWN_COINS`): the verifier
+samples no coins of its own. A sample on the challenger's bytes with no evidence is rejected by the Lean verifier of record's
 whole run (`Run.run`) at its select (`coins`). A toy window of two templates; and the session's connect."""
 
 from __future__ import annotations

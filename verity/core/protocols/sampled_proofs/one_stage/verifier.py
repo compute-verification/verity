@@ -11,11 +11,11 @@ or run, or that refuses an input (a form its decoders don't read), disagrees wit
 * `check`: R1-R7 (`registration.check`), compared on `ok` and the codes; the details are Python's (the Lean reports codes);
 * `matches_public`, `check_draw`, `check_proved`, and the proof system's public-items rule (`check_public`) and hold on
   an outcome's verdicts (`check_verdicts`), whose Python verdict the service passes in: compared whole, details included;
-* `select`: the challenger's draw (`service.select_draw`, which the service passes in with the bytes of its coins that
-  draw read), compared whole with the number of bytes read; the draw of record is the Lean's;
+* `select`: the challenger's sample (`service.select_draw`, which the service passes in with the bytes of its coins that
+  sample read), compared whole with the number of bytes read; the sample of record is the Lean's;
 * `coins`: the entropy a challenger flips its coins from (`challenger.LiveChallenger`, on the challenger's host), which
   only the Lean reads from the operating system (`IO.getRandomBytes`, A3); there is no Python twin to compare, and a
-  Lean that can't answer leaves no coins. The verifier reads none of it: its draws read the challenger's coins from its
+  Lean that can't answer leaves no coins. The verifier reads none of it: its samples read the challenger's coins from its
   log (`run`'s `coins`);
 * `run`: the stream's run of one registration from its public check through its verdict (`Run.run`), which `Stream.outcome`
   passes in with everything it read on the way: compared whole;
@@ -56,7 +56,7 @@ RECORD_VERDICT = "lean"
 
 DISAGREE = "disagree"
 CORE = Path(__file__).resolve().parents[3]
-PACKAGE = CORE / "service" / "sampled_proofs"
+PACKAGE = CORE.parents[1] / "verity/core/service/sampled_proofs"
 EXE = "sampled-proofs-verifier"
 BUILD_LOCK = CORE / "difftest" / "lean" / ".lake" / "harness-build.lock"
 #: The δ the Lean's registration parameters carry, which R1-R7 never read.
@@ -173,7 +173,7 @@ COINS_MAX = 1 << 24
 def coins(n: int) -> bytes:
     """`n` bytes of the operating system's randomness, read by the Lean verifier (`IO.getRandomBytes`, A3's
     `uniform/io-getrandombytes`): a challenger's entropy (`challenger.LiveChallenger`'s, on its own host), which the
-    Python never reads from the operating system itself. No stream or verifier draws on it: they read the challenger's
+    Python never reads from the operating system itself. No stream or verifier samples from it: they read the challenger's
     coins from its log. Raises `LeanError` where the Lean can't run, refuses or answers other than `n` bytes: no
     coins."""
     if not (type(n) is int and 0 <= n <= COINS_MAX):
@@ -318,8 +318,8 @@ def select(python: Mapping[str, Any], read: bytes, rule: Mapping[str, Any], prog
     """The challenger's draw by the verifier: the Lean's `Select.select` on `read`, the bytes of the challenger's
     coins that the Python draw `python` (`service.select_draw`'s) read in order, under the Spec's selection rule (its
     `to_json`) over the population `program` and the check's `query`, with the work table and the closure map. The two
-    agree when the Lean draws the same object and reads exactly `read`; the draw of record is then `RECORD_VERDICT`'s. Where
-    they disagree, or the Lean refuses, the verdict fails with `DISAGREE` alone (the draw returned is Python's, and the
+    agree when the Lean draws the same object and reads exactly `read`; the sample of record is then `RECORD_VERDICT`'s. Where
+    they disagree, or the Lean refuses, the verdict fails with `DISAGREE` alone (the sample returned is Python's, and the
     caller refuses it)."""
     got = lean("select", {"rule": dict(rule), "program": codec.encode_program(program), "query": dict(query),
                           "work_table": None if work_table is None else dict(work_table),
@@ -348,9 +348,9 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
     """The stream's run of one registration, from its public check through its verdict, by the Lean (`Run.run`), held whole to
     `python`, the stream's own (`{"receipt", "draw", "read", "symbol", "public", "audit"}`, the audit record without its
     `verifiers`): on `check`'s copies, `check_public`'s values and declared items, the receipt's challenger and place in
-    the log, `select`'s rule, the bytes of the coins the draw read and the closure map, and `audit_record`'s arguments
-    with the sessions' roots whole. The verifier has no coins of its own: for a draw that read coins the Lean also checks
-    `coins`, their evidence (`coins.coins_reason`'s), that the bytes the draw read are the coins the session the ledger
+    the log, `select`'s rule, the bytes of the coins the sample read and the closure map, and `audit_record`'s arguments
+    with the sessions' roots whole. The verifier has no coins of its own: for a sample that read coins the Lean also checks
+    `coins`, their evidence (`coins.coins_reason`'s), that the bytes the sample read are the coins the session the ledger
     opens for `window_root` released after the registration's digest, and refuses the select step where they aren't or
     `coins` is missing (code `coins`); for one that read none, `coins` must be None. Where the two differ,
     or the Lean refuses a step, the verdict fails with `DISAGREE` alone."""
