@@ -33,7 +33,7 @@ def sources(t: str, r: Mapping[str, Any]) -> dict[str, list[int]]:
     return {nm: [int(g)] for nm, (src, g) in zip(names, srcs) if src == "arg"}
 
 
-def ingress(window: CS.Window, rows: Sequence[list[Row]], units: Callable[[str, Mapping[str, Any]], int],
+def ingress(window: CS.Binding, rows: Sequence[list[Row]], units: Callable[[str, Mapping[str, Any]], int],
             arrivals: Mapping[str, int] | None = None) -> list[IF.Ingress]:
     """The window's ingress over its templates' ``rows`` (`serving_rows.population`'s), ``units`` how many of a template's units
     a row holds (`serving_rows.row_units`): each input port of a unit (`LAYOUTS`) whose every argument slice is a committed
