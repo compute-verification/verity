@@ -196,31 +196,63 @@ theorem ServingBlockBound_nontrivial : Guarantees.ServingBlocks.ServingBlockBoun
     ?_, zero_le_one, fun _ _ => le_rfl, Counter.uncertified, Counter.dark, ?_⟩
   · unfold OperationBodies; decide
   · unfold Overlap; decide
-  · rw [Counter.total_eq]
+  · refine not_le.2 ?_
+    rw [Counter.total_eq]
     norm_num [Counter.q]
 
-theorem ServingBlockBound_nontrivial_bodies : Guarantees.ServingBlocks.ServingBlockBound_nontrivial_bodies := by
+/-- **The serving-block bound is false without operation bodies**: at `Detached`, whose operation takes in gate 1 though
+no gate of it reads gate 1, with `(c_S, k_S) = (c, k) = (1, 0)`, the serving blocks as their own inference blocks,
+`ω_max = μ = 1`, `q_U(u) = 1` and `q_U(L_dark) = 0`, every other premise holds and the counted weight `1` is above the
+right-hand side `0`: the serving block after the wipe reads no unregistered bit, yet the operation is assigned to it. -/
+theorem ServingBlockBound_nontrivial_bodies :
+    ServingSizes Detached.d Detached.P Detached.S (fun _ => 1) (fun _ => 0) ∧
+    (∀ u ∈ Detached.S, PerBlockCap Detached.d Detached.J Detached.q 1 0) ∧ Detached.P.IsCK Detached.d 1 0 ∧
+    PerBlockCap Detached.d Detached.J Detached.q 1 0 ∧ ¬ OperationBodies Detached.d Detached.J ∧
+    Overlap Detached.J 1 ∧ (0 : ℝ) ≤ 1 ∧ WeightsAtMost Detached.J 1 ∧
+    (∀ u ∈ Detached.S, UncertifiedCap Detached.J (Detached.P.gates u)
+      (fun i : {i // Detached.r.parent i = u} => Detached.P.gates i) 1) ∧
+    UncertifiedCap Detached.J ((univ \ Detached.S).biUnion Detached.P.gates)
+      (Fin.elim0 : Fin 0 → Finset (Fin Detached.d.D.N)) 0 ∧
+    ¬ Detached.J.total ≤ ∑ u ∈ Detached.S, min (Detached.q 1 0 + 1 * (1 : ℕ) * (0 : ℕ))
+      (((univ.filter fun i => Detached.r.parent i = u).card : ℝ) * Detached.q 1 0 + 1) + 0 := by
   refine ⟨Detached.blocks, fun _ _ => Detached.cap 0, Detached.isCK, Detached.cap 0, ?_, ?_, zero_le_one,
     fun _ _ => le_rfl, Detached.uncertified, Detached.dark, ?_⟩
   · unfold OperationBodies; decide
   · unfold Overlap; decide
-  · rw [Detached.total_eq]
+  · refine not_le.2 ?_
+    rw [Detached.total_eq]
     norm_num [Detached.q]
 
-theorem ServingBlockBound_nontrivial_overlap : Guarantees.ServingBlocks.ServingBlockBound_nontrivial_overlap := by
+/-- **The serving-block bound is false without overlap, and so without its boundary term**: at `Straddle`, whose
+operation is split across the wipe, with `(c_S, k_S) = (c, k) = (1, 1)`, the serving blocks as their own inference
+blocks, `ω_max = 1`, `μ = 0`, `q_U(u) = 1` and `q_U(L_dark) = 0`, every other premise holds, no gate is in at most `0`
+bodies, and the counted weight `1` is above the right-hand side `0`. At `μ = 0` the boundary term `ω_max μ k_S`
+vanishes: the bound without it is false where every premise holds at `μ = 1`. -/
+theorem ServingBlockBound_nontrivial_overlap :
+    ServingSizes Straddle.d Straddle.P Straddle.S (fun _ => 1) (fun _ => 1) ∧
+    (∀ u ∈ Straddle.S, PerBlockCap Straddle.d Straddle.J Straddle.q 1 1) ∧ Straddle.P.IsCK Straddle.d 1 1 ∧
+    PerBlockCap Straddle.d Straddle.J Straddle.q 1 1 ∧ OperationBodies Straddle.d Straddle.J ∧
+    Overlap Straddle.J 1 ∧ ¬ Overlap Straddle.J 0 ∧ (0 : ℝ) ≤ 1 ∧ WeightsAtMost Straddle.J 1 ∧
+    (∀ u ∈ Straddle.S, UncertifiedCap Straddle.J (Straddle.P.gates u)
+      (fun i : {i // Straddle.r.parent i = u} => Straddle.P.gates i) 1) ∧
+    UncertifiedCap Straddle.J ((univ \ Straddle.S).biUnion Straddle.P.gates)
+      (Fin.elim0 : Fin 0 → Finset (Fin Straddle.d.D.N)) 0 ∧
+    ¬ Straddle.J.total ≤ ∑ u ∈ Straddle.S, min (Straddle.q 1 1 + 1 * (0 : ℕ) * (1 : ℕ))
+      (((univ.filter fun i => Straddle.r.parent i = u).card : ℝ) * Straddle.q 1 1 + 1) + 0 := by
   refine ⟨Straddle.blocks, fun _ _ => Straddle.cap 1, Straddle.isCK, Straddle.cap 1, ?_, ?_, ?_, zero_le_one,
     fun _ _ => le_rfl, Straddle.uncertified, Straddle.dark, ?_⟩
   · unfold OperationBodies; decide
   · unfold Overlap; decide
   · unfold Overlap; decide
-  · rw [Straddle.total_eq]
+  · refine not_le.2 ?_
+    rw [Straddle.total_eq]
     norm_num [Straddle.q]
 
 theorem ServingBlockBoundRemote_honest : Guarantees.ServingBlocks.ServingBlockBoundRemote_honest :=
   ⟨Honest.isCK, Honest.cap 1 1, Honest.uncertified, Honest.dark⟩
 
 theorem ServingBlockBoundRemote_nontrivial : Guarantees.ServingBlocks.ServingBlockBoundRemote_nontrivial := by
-  refine ⟨Counter.isCK, Counter.not_cap_zero, Counter.uncertified, Counter.dark, ?_⟩
+  refine ⟨Counter.isCK, Counter.not_cap_zero, Counter.uncertified, Counter.dark, not_le.2 ?_⟩
   rw [Counter.total_eq]
   norm_num [Counter.q]
 
@@ -232,7 +264,7 @@ theorem UncertifiedElementary_nontrivial : Guarantees.ServingBlocks.UncertifiedE
   exact absurd (Nat.cast_le.1 h) (by decide)
 
 /-! Each lemma is its guarantee's premises as the guarantee states them: the guarantee applies at the honest instance,
-and at a counter-example the dropped premise would give the bound the lemma's last conjunct refutes. -/
+and at a counter-example the dropped premise would give the bound the lemma's last conjunct negates. -/
 
 example : Honest.J.total ≤ ∑ u ∈ Honest.S, min (Honest.q 1 1 + 1 * (1 : ℕ) * (1 : ℕ))
     (((univ.filter fun i => Honest.r.parent i = u).card : ℝ) * Honest.q 1 1 + 1) + 1 := by
@@ -242,17 +274,17 @@ example : Honest.J.total ≤ ∑ u ∈ Honest.S, min (Honest.q 1 1 + 1 * (1 : �
 
 example (h2 : ∀ u ∈ Counter.S, PerBlockCap Counter.d Counter.J Counter.q 1 0) : False := by
   obtain ⟨h1, -, h3, h4, h5, h6, h7, h8, h9, h10, hlt⟩ := ServingBlockBound_nontrivial
-  exact not_le.2 hlt (ServingBlockBound Counter.d Counter.J Counter.q 1 1 1 1 Counter.P Counter.S (fun _ => 1)
+  exact hlt (ServingBlockBound Counter.d Counter.J Counter.q 1 1 1 1 Counter.P Counter.S (fun _ => 1)
     (fun _ => 0) Counter.P Counter.r 1 1 (fun _ => 0) 0 h1 h2 h3 h4 h5 h6 h7 h8 h9 h10)
 
 example (h5 : OperationBodies Detached.d Detached.J) : False := by
   obtain ⟨h1, h2, h3, h4, -, h6, h7, h8, h9, h10, hlt⟩ := ServingBlockBound_nontrivial_bodies
-  exact not_le.2 hlt (ServingBlockBound Detached.d Detached.J Detached.q 1 0 2 2 Detached.P Detached.S (fun _ => 1)
+  exact hlt (ServingBlockBound Detached.d Detached.J Detached.q 1 0 2 2 Detached.P Detached.S (fun _ => 1)
     (fun _ => 0) Detached.P Detached.r 1 1 (fun _ => 1) 0 h1 h2 h3 h4 h5 h6 h7 h8 h9 h10)
 
 example (h6 : Overlap Straddle.J 0) : False := by
   obtain ⟨h1, h2, h3, h4, h5, -, -, h7, h8, h9, h10, hlt⟩ := ServingBlockBound_nontrivial_overlap
-  exact not_le.2 hlt (ServingBlockBound Straddle.d Straddle.J Straddle.q 1 1 2 2 Straddle.P Straddle.S (fun _ => 1)
+  exact hlt (ServingBlockBound Straddle.d Straddle.J Straddle.q 1 1 2 2 Straddle.P Straddle.S (fun _ => 1)
     (fun _ => 1) Straddle.P Straddle.r 1 0 (fun _ => 1) 0 h1 h2 h3 h4 h5 h6 h7 h8 h9 h10)
 
 example : Honest.J.total ≤
@@ -263,7 +295,7 @@ example : Honest.J.total ≤
 
 example (h2 : PerBlockCap Counter.d Counter.J Counter.q 1 0) : False := by
   obtain ⟨h1, -, h3, h4, hlt⟩ := ServingBlockBoundRemote_nontrivial
-  exact not_le.2 hlt (ServingBlockBoundRemote Counter.d Counter.J Counter.q 1 0 1 1 Counter.P Counter.S Counter.P
+  exact hlt (ServingBlockBoundRemote Counter.d Counter.J Counter.q 1 0 1 1 Counter.P Counter.S Counter.P
     Counter.r (fun _ => 0) 0 h1 h2 h3 h4)
 
 example : ∃ r : Honest.P.Refines Honest.P, ∀ u, UncertifiedCap Honest.J (Honest.P.gates u)
