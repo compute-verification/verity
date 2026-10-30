@@ -613,8 +613,8 @@ def audit_of(d: Path) -> dict:
 def pooled_k(audits: list[dict], delta: Fraction, network: dict) -> dict:
     """`NetTiming.Guarantees.PooledLeakAccepted`'s K over one monitoring period: the incorrect proof blocks paid once
     over the period, ``Fmax = ⌈ln(1/δ)/q⌉`` with ``q`` the least ``k_i/n_i`` of its compute audits (a stratified audit's
-    least stratum's, `audit_of`'s ``q``), so K = the network's own terms (``network``: the advice's and the syncs' bits,
-    and the cells') + ``Fmax·16 + ⌈log2 (N + 1)^Fmax⌉ + Σ_i (free_i + jitter_i)``, ``N = Σ_i n_i``, except with
+    least stratum's, `audit_of`'s ``q``), so K = the network's own terms (``network``: the advice's and the syncs'
+    bits) + ``Fmax·16 + ⌈log2 (N + 1)^Fmax⌉ + Σ_i (free_i + jitter_i)``, ``N = Σ_i n_i``, except with
     probability ``δ + Σ_i (e_i + e'_i)``. `PooledLeakAccepted` is conditional on its per-window inputs, so this K is
     cited as conditional, and its jitter term as `leak_bounds.JITTER` (``jitter_term``)."""
     import leak_bounds as LB
@@ -631,12 +631,11 @@ def pooled_k(audits: list[dict], delta: Fraction, network: dict) -> dict:
 
 def network_terms(cert: dict, endpoint: dict) -> dict:
     """The network's own terms of K, charged once a period: the advice's residual bits (`advice_bits`; its v0 bits
-    when it wasn't rebuilt from the certified I/O), each window's declared sync, log2 #Σ_sync (`LinkWindows.charge`),
-    and no cell: no connection passes the certifier but the link, whose counts the advice fixes."""
+    when it wasn't rebuilt from the certified I/O) and each window's declared sync, log2 #Σ_sync
+    (`LinkWindows.charge`). The cells are no term: the record holds the schedule (`PeriodLeakAccepted`)."""
     bits, syncs = endpoint.get("advice_bits") or {}, cert.get("sync_bits")
     advice = bits.get("derived") if bits.get("derived") is not None else bits.get("v0_total")
-    return {"advice": advice, "syncs": None if syncs is None else math.ceil(len(cert.get("rows") or []) * syncs),
-            "cells": 0}
+    return {"advice": advice, "syncs": None if syncs is None else math.ceil(len(cert.get("rows") or []) * syncs)}
 
 
 def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict | None = None,
@@ -664,7 +663,8 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
             "windows": len(rows), "acc": acc, "all_accepted": bool(acc) and all(acc),
             "eps_w": "δ + ε_ks + ε_bind per window (KSLinOn), plus the draw's term at δ (eps_at_delta)",
             "sum_eps": f"{len(rows)}·(δ + ε_ks + ε_bind)",
-            "a": "log2 #Ss + Σ_c log2(cap_c + 1), charged once a period",
+            "a": "the network's own terms (network_terms), charged once a period; PeriodLeakAccepted's count adds no "
+                 "schedule or cap term, since the record holds the schedule",
             "b_w": "#(freeInputs_w \\ reg_w) + log2 #faultySets_w(δ) + β_w + k_w·log2 Dj",
             "lms_height": [g.get("lms_height") for g in custody_doc.get("gate_runs", [])],
             "uncovered": [

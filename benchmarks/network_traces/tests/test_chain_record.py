@@ -631,9 +631,8 @@ def test_a_refused_report_names_each_failing_step_and_its_why_and_a_scan_that_ex
 
 
 def test_k_counts_the_audits_draw_and_free_inputs_and_the_networks_terms_once_a_period(tmp_path):
-    h = cr.pooled_k([{"units": 6, "drawn": 6, "free": 2, "jitter": 4}], Fraction(1, 100),
-                     {"advice": 8, "syncs": 0, "cells": 6})
-    assert (h["Fmax"], h["terms"]["faulty_sets"], h["K"]) == (5, 15, 8 + 6 + 80 + 15 + 2 + 4)
+    h = cr.pooled_k([{"units": 6, "drawn": 6, "free": 2, "jitter": 4}], Fraction(1, 100), {"advice": 8, "syncs": 3})
+    assert (h["Fmax"], h["terms"]["faulty_sets"], h["K"]) == (5, 15, 8 + 3 + 80 + 15 + 2 + 4)
     assert h["conditional"] == cr.POOLED_CONDITION
     circuit = {"templates": [["T", 4]], "external": ["T/y"], "wires": [],
                "statements": {"T": {"in_rows": [["x", 0, 8, ["x"]], ["y", 1, 16, ["y"]]]}}}
@@ -652,8 +651,7 @@ def test_k_counts_the_audits_draw_and_free_inputs_and_the_networks_terms_once_a_
     audit = cr.audit_of(tmp_path)
     assert (audit["units"], audit["drawn"], audit["free"]) == (4, 2, 32) and "jitter" not in audit
     cert = {"sync_bits": 7.0, "rows": [{"window": w, "certified": True} for w in range(3)], "window_buckets": 60}
-    assert cr.network_terms(cert, {"advice_bits": {"derived": 40, "v0_total": 90}}) == {"advice": 40, "syncs": 21,
-                                                                                        "cells": 0}
+    assert cr.network_terms(cert, {"advice_bits": {"derived": 40, "v0_total": 90}}) == {"advice": 40, "syncs": 21}
     assert cr.network_terms(cert, {"advice_bits": {"derived": None, "v0_total": 90}})["advice"] == 90
     d1 = cr.d1_terms(cert, {}, {}, {}, {"advice_bits": {"derived": 40}}, [audit])
     k = d1["K"][f"{2.0 ** -20:.3g}"]
