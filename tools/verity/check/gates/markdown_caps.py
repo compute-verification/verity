@@ -13,7 +13,7 @@ its own cap.
 
 The merge queue runs `main`'s copy of it as a landing gate (drive.toml's ``landing_gates``): on a PR's head at
 `research queue ready`'s preflight, and at the sync on the PR's merge onto `next`, where the members below add their bytes too
-(a merge over its cap fails every check above it at `preflight-lints`).  Before marking a branch, run ``python3 tools/verity/check/gates/markdown_caps.py origin/main HEAD``.
+(a merge over its cap fails every Lean check above it at `preflight-lints`).  Before marking a branch, run ``python3 tools/verity/check/gates/markdown_caps.py origin/main HEAD``.
 Exit 0 when no change puts a file over its cap, 1 when one does (with the fix), 2 on a usage or git error; ``--json`` prints
 `KIND`.
 """

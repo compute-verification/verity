@@ -494,31 +494,75 @@ def fetch_run(rid: str, names: list[str], cwd: Path | None = None, refresh: bool
         return None
 
 
+def live_records(rid: str, fetch=fetch_run) -> dict[str, tuple[str, Path | None]] | None:
+    """`regenerated_records` of a check whose files aren't in the store (a Lean check still running, which drive's landing lands on),
+    read from its run dir on its node with ``fetch`` (`fetch_run`), each record's sha256 taken of the bytes fetched; None when
+    its run can't be read or holds no report of its Lean check.  `Unreadable` when the report can't be parsed, or names a
+    record the run dir doesn't hold."""
+    if (got := fetch(rid, [AUDIT])) is None:
+        return None
+    try:
+        audit = json.loads((got[0] / AUDIT).read_text())
+    except OSError:
+        return None
+    except ValueError as e:
+        raise Unreadable(f"{rid}'s {AUDIT} on its node can't be parsed ({e})") from e
+    if not (want := _regenerated_in(rid, audit)):
+        return {}
+    got = fetch(rid, sorted(set(want.values())))
+    if missing := sorted(pkg for pkg, p in want.items() if got is None or not (got[0] / p).is_file()):
+        raise Unreadable(f"{rid}'s {AUDIT} says it regenerated {', '.join(missing)}'s lock, which can't be fetched from its "
+                         "run dir on its node")
+    return {pkg: (hashlib.sha256((got[0] / p).read_bytes()).hexdigest(), got[0] / p) for pkg, p in want.items()}
+
+
 def _blob_sha256(repo: Path, commit: str, path: str) -> str:
     r = subprocess.run(["git", "-C", str(repo), "cat-file", "blob", f"{commit}:{path}"], capture_output=True)
     return hashlib.sha256(r.stdout).hexdigest() if r.returncode == 0 else ""
 
 
+def _ran_on(store, rid: str, commit: str, fetch) -> bool:
+    """Whether run ``rid`` checked ``commit``: its attempt's clean source in the store, else its run record's `tree_sha`."""
+    rows = store.index.sql("SELECT source_commit, source_dirty FROM attempts WHERE id = ?", (rid,))
+    if rows:
+        return rows[0][0] == commit and not rows[0][1]
+    got = fetch(rid, []) if fetch is not None else None
+    return got is not None and got[1].get("tree_sha") == commit
+
+
 def regenerated_parent(repo: Path, commit: str, store, *, tool: str, kinds: frozenset[str], command: tuple[str, ...],
-                       maps=None) -> str | None:
+                       maps=None, deferred: str | None = None, fetch=None, ran: str | None = None) -> str | None:
     """The passing ``tool`` attempt of ``commit``'s one parent that vouches for ``commit``, or None: ``commit`` changes only Lake
     packages' locks, names exactly those in its `Regenerated:` trailer, and they are byte for byte the locks that attempt
-    regenerated, one for each package it regenerated, so the tree that lands is the one that check audited."""
+    regenerated, one for each package it regenerated, so the tree that lands is the one that check audited.
+
+    ``deferred`` is the Lean check drive lands the parent on (`Driver._unvouched`), which may have no passing attempt yet: it
+    vouches when ``commit``'s `Checked:` trailer names it, it ran on the parent, and its records match, read from the store, else from its run dir on its node (``fetch``: `live_records`), hashed here, never
+    digests a caller hands in.  Only drive passes it, having read that verdict itself; `gate` and the push guard never do.
+    With it, ``ran`` is the commit that check ran on when it isn't the parent (`Driver._carry` rebuilt the parent above a lock
+    commit drive landed): ``commit``'s files are then taken against ``ran``, so what lands is still the tree it checked with its
+    records, whatever the parent holds."""
     parents = _git(repo, "rev-list", "--parents", "-n", "1", commit).stdout.split()[1:]
     if len(parents) != 1:
         return None
-    parent = parents[0]
+    parent = ran if deferred is not None and ran else parents[0]
     files = _git(repo, "diff", "--name-only", "--no-renames", parent, commit).stdout.split()
     said = {f.strip() for f in _git(repo, "log", "-1", "--format=%(trailers:key=Regenerated,valueonly,separator=%x2C)",
                                      commit).stdout.replace("\n", ",").split(",") if f.strip()}
     if not files or set(files) != said or not all(os.path.basename(f) == LOCK for f in files):
         return None
-    tree = _git(repo, "rev-parse", f"{parent}^{{tree}}").stdout.strip()
-    ids = passing(store, parent, tool, kinds=kinds, command=command, tree=tree, maps=maps, repo=repo)
+    if deferred is not None:
+        checked = re.findall(r"^Checked: (\S+)", _git(repo, "log", "-1", "--format=%B", commit).stdout, re.M)
+        ids = [deferred] if checked == [deferred] and _ran_on(store, deferred, parent, fetch) else []
+    else:
+        tree = _git(repo, "rev-parse", f"{parent}^{{tree}}").stdout.strip()
+        ids = passing(store, parent, tool, kinds=kinds, command=command, tree=tree, maps=maps, repo=repo)
     lock = {os.path.dirname(f) or ".": _blob_sha256(repo, commit, f) for f in files}
     for rid in ids:
         try:
             recs = regenerated_records(store, rid)
+            if recs is None and fetch is not None:
+                recs = live_records(rid, fetch)
         except Exception:  # noqa: BLE001  (`Unreadable`, or the store failing: nothing to vouch with)
             continue
         if recs and {(pkg or "."): sha for pkg, (sha, _) in recs.items()} == lock:
@@ -1559,34 +1603,18 @@ LEAN_PUBLISH, LEAN_PUBLISH_ENV, LEAN_PUBLISH_LOG, LEAN_PUBLISH_TIMEOUT_S = (
     "/data/infra/lean_publish.sh", "RESEARCH_LEAN_PUBLISH", "/data/drive/lean-publish.log", 120)
 
 
-#: the files of a Lake package (one with a `LOCK`) its cache holds builds of
-LEAN_SOURCES = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "lake-manifest.json")
-
-
-def lean_touched(repo: Path, start: str, tip: str) -> bool:
-    """Whether ``start``..``tip`` changes a Lake package's lock or a Lean source of a package that has one."""
-    files = subprocess.run(["git", "diff", "--name-only", "--no-renames", start, tip], cwd=repo, capture_output=True,
-                           text=True, check=True).stdout.split()
-    if any(Path(f).name == LOCK for f in files):
-        return True
-    if not (lean := [f for f in files if f.endswith(LEAN_SOURCES)]):
-        return False
-    tree = subprocess.run(["git", "ls-tree", "-r", "--name-only", tip], cwd=repo, capture_output=True, text=True,
-                          check=True).stdout.splitlines()
-    pkgs = {str(Path(f).parent) for f in tree if Path(f).name == LOCK}
-    return any(p == "." or f.startswith(p + "/") for f in lean for p in pkgs)
-
-
 def lean_publish(repo: Path, start: str, tip: str, log=print, run=subprocess.run, clock=time.monotonic) -> bool:
     """Start the Lean cache's publish of ``tip`` when what landed since ``start`` touches a Lake package's lock or Lean sources
-    (`lean_touched`), with one line in ``log`` saying whether it started, why not, and the seconds the script took to start.
+    (`queue.lean_change`), with one line in ``log`` saying whether it started, why not, and the seconds the script took to start.
     It waits only for the script's start, bounded by LEAN_PUBLISH_TIMEOUT_S, and nothing raises: the landing stands either way."""
+    from .queue import lean_change
+
     script, what = os.environ.get(LEAN_PUBLISH_ENV, LEAN_PUBLISH).strip(), f"research merge: the Lean cache publish of {tip[:12]}"
     if not script:
         log(f"{what} is off (${LEAN_PUBLISH_ENV} is empty)")
         return False
     try:
-        touched = lean_touched(repo, start, tip)
+        touched = lean_change(repo, tip, base=start)
     except Exception as e:                                      # noqa: BLE001: a diff that can't be read skips only the publish
         log(f"{what} not started: {start[:12]}..{tip[:12]} can't be diffed ({type(e).__name__}: {e})")
         return False

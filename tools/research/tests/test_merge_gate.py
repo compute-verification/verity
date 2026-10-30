@@ -975,6 +975,48 @@ def test_the_canary_passes_only_while_every_gate_refuses_the_bad_attempts_and_ad
             raise AssertionError(f"{argv} is a usage error")
 
 
+def _deferred_lock(feat: Path, tip: str, files: dict[str, str], checked: str) -> str:
+    """Drive's lock commit on ``tip`` for a landing made with `--defer`, naming its check ``checked``."""
+    _git(feat, "reset", "-q", "--hard", tip)
+    for rel, text in files.items():
+        (feat / rel).parent.mkdir(parents=True, exist_ok=True)
+        (feat / rel).write_text(text)
+        _git(feat, "add", rel)
+    _git(feat, "commit", "-q", "-m", f"Lock records regenerated for #1\n\nChecked: {checked} (the Lean check of {tip[:12]}, passed "
+                                     f"by regenerating them)\nRegenerated: {', '.join(files)}")
+    return _git(feat, "rev-parse", "HEAD")
+
+
+def test_a_deferred_landings_lock_commit_is_vouched_for_only_by_the_records_its_running_check_regenerated(tmp_path):
+    """Drive lands with `--defer` while the train's check runs, so the gate reads that check's records from its run dir on
+    its node, hashing the bytes it fetches; a lock commit whose records differ, that names another check, that leaves out a
+    package the check regenerated, or whose check ran on another commit is refused, and without drive's verdict (`deferred`)
+    the check, having no passing attempt, vouches for nothing."""
+    from research.merge import regenerated_parent
+    from research.store.local import LocalStore
+    from test_queue_drive import _live_run
+
+    main, feat, tip = _repos(tmp_path)
+    base, store, lock = _git(main, "rev-parse", "HEAD"), LocalStore(), "pkg/lean-audit.json"
+    _, fetch, _ = _live_run(tmp_path, "r20261020-000001-0001", tip, {"pkg": '{"records": 2}\n'})
+    _, both, _ = _live_run(tmp_path, "r20261020-000002-0002", tip, {"pkg": '{"records": 2}\n', "pkg2": '{"records": 5}\n'})
+    _, elsewhere, _ = _live_run(tmp_path, "r20261020-000003-0003", base, {"pkg": '{"records": 2}\n'})
+
+    def vouched(commit: str, rid: str, f, deferred: bool = True) -> str | None:
+        return regenerated_parent(feat, commit, store, tool="check", kinds=frozenset({"check/v1"}), command=CHECKED,
+                                  deferred=rid if deferred else None, fetch=f)
+
+    ok = _deferred_lock(feat, tip, {lock: '{"records": 2}\n'}, "r20261020-000001-0001")
+    assert vouched(ok, "r20261020-000001-0001", fetch) == "r20261020-000001-0001"
+    assert vouched(ok, "r20261020-000001-0001", fetch, deferred=False) is None
+    assert vouched(_deferred_lock(feat, tip, {lock: '{"records": 1}\n'}, "r20261020-000001-0001"), "r20261020-000001-0001", fetch) is None    # forged bytes
+    assert vouched(_deferred_lock(feat, tip, {lock: '{"records": 2}\n'}, "r20261020-000009-0009"), "r20261020-000001-0001", fetch) is None    # another check
+    assert vouched(_deferred_lock(feat, tip, {lock: '{"records": 2}\n'}, "r20261020-000002-0002"), "r20261020-000002-0002", both) is None     # pkg2's left out
+    assert vouched(_deferred_lock(feat, tip, {lock: '{"records": 2}\n', "pkg2/lean-audit.json": '{"records": 5}\n'}, "r20261020-000002-0002"),
+                   "r20261020-000002-0002", both) == "r20261020-000002-0002"
+    assert vouched(_deferred_lock(feat, tip, {lock: '{"records": 2}\n'}, "r20261020-000003-0003"), "r20261020-000003-0003", elsewhere) is None  # it checked main
+
+
 def test_a_report_naming_a_regenerated_record_the_stores_files_lack_is_unreadable_not_none(tmp_path, monkeypatch):
     """`regenerated_records` returning {} both for a check that regenerated nothing and for one whose records it couldn't
     read would land the train without them; a record the report names and the run's files lack raises."""

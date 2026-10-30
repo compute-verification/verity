@@ -14,10 +14,13 @@ from test_queue import World, _git
 
 FLAGS = """on = ["m1", "m2"]
 marked_after = "2026-10-12T06:00:00Z"
+regenerate_locks = true
 first = [1858]
 land = "review"
 after_landing_no_cache = true
 landing_gates = ["gates/g.py"]
+max_lean_checks = 3
+nonlean_first = false
 reviewed_first = false
 stale_days = 3
 stale_close_days = 7
@@ -37,7 +40,7 @@ def driven(monkeypatch) -> list[dict]:
     class Driver:
         def __init__(self, q, **kw):
             assert callable(kw.pop("reviews")) and callable(kw.pop("ready_by"))
-            built.append({"first": q.first, "reviewed_first": q.reviewed_first, **kw})
+            built.append({"first": q.first, "nonlean_first": q.nonlean_first, "reviewed_first": q.reviewed_first, **kw})
 
         def tick(self, dry_run=False):
             return ""
@@ -59,18 +62,22 @@ def on_main(world: World, text: str) -> str:
 
 def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defaults():
     f = DriveFlags.parse(FLAGS)
-    assert f == DriveFlags(on="m1,m2", marked_after="2026-10-12T06:00:00Z", first=(1858,), land="review",
-                           after_landing_no_cache=True, landing_gates=("gates/g.py",), reviewed_first=False,
+    assert f == DriveFlags(on="m1,m2", marked_after="2026-10-12T06:00:00Z", regenerate_locks=True, first=(1858,),
+                           land="review", after_landing_no_cache=True,
+                           landing_gates=("gates/g.py",), max_lean_checks=3, nonlean_first=False, reviewed_first=False,
                            stale_days=3, stale_close_days=7)
-    assert DriveFlags.parse("") == DriveFlags() == DriveFlags(None, None, (), "review", "main", False)
+    assert DriveFlags.parse("") == DriveFlags() == DriveFlags(None, None, False, (), "review", "main", False)
     assert DriveFlags.parse("after_landing_shards = 3\n").after_landing_shards == 3
-    assert f.line() == ("on=m1,m2 marked_after=2026-10-12T06:00:00Z first=1858 land=review land_into=main "
-                        "after_landing_no_cache=True landing_gates=gates/g.py reviewed_first=False stale_days=3 "
+    assert f.line() == ("on=m1,m2 marked_after=2026-10-12T06:00:00Z regenerate_locks=True first=1858 land=review "
+                        "land_into=main after_landing_no_cache=True landing_gates=gates/g.py max_lean_checks=3 nonlean_first=False reviewed_first=False stale_days=3 "
                         "stale_close_days=7 stale_keep= after_landing_shards=1")
     for text, why in (('on = "m1,m2"', 'on = \'m1,m2\': a list of names, as ["a", "b"]'),
                       ("on = []", "on = []: at least one machine"),
+                      ("max_lean_checks = 0", "max_lean_checks = 0: a whole number, 1 or more"),
                       ("after_landing_shards = 0", "after_landing_shards = 0: a whole number, 1 or a shard plan's N"),
                       ('marked_after = "12 Oct"', "marked_after = '12 Oct': a UTC time as YYYY-MM-DDTHH:MM:SSZ"),
+                      ('regenerate_locks = "yes"', "regenerate_locks = 'yes': true or false"),
+                      ("nonlean_first = 1", "nonlean_first = 1: true or false"),
                       ("reviewed_first = 1", "reviewed_first = 1: true or false"),
                       ('first = ["1858"]', "first = ['1858']: a list of PR numbers"),
                       ('land = "fast"', "land = 'fast': one of review"),
@@ -95,26 +102,11 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
 
 def test_drive_refuses_an_unknown_key_naming_the_keys_it_reads_and_the_one_it_likely_meant():
     with pytest.raises(QueueError) as e:
-        DriveFlags.parse("reviewed_frist = true\n", "d.toml", strict=True)
-    assert str(e.value) == ("d.toml: unknown key 'reviewed_frist' (did you mean 'reviewed_first'?): drive reads only on, "
-                            "marked_after, first, land, land_into, after_landing_no_cache, landing_gates, reviewed_first, "
-                            "stale_days, stale_close_days, stale_keep, after_landing_shards; "
+        DriveFlags.parse("max_lean_check = 4\n", "d.toml", strict=True)
+    assert str(e.value) == ("d.toml: unknown key 'max_lean_check' (did you mean 'max_lean_checks'?): drive reads only on, "
+                            "marked_after, regenerate_locks, first, land, land_into, after_landing_no_cache, landing_gates, max_lean_checks, "
+                            "nonlean_first, reviewed_first, stale_days, stale_close_days, stale_keep, after_landing_shards; "
                             "rename or remove it, or update this research")
-
-
-def test_the_per_member_lean_checks_keys_are_refused_by_name_with_their_removal_and_drive_toml_without_them_parses(capsys):
-    """Drive no longer runs a Lean check of its own per member, so `max_lean_checks`, `nonlean_first` and `regenerate_locks`
-    set nothing: drive loading its flags refuses each, naming its removal, rather than seem to obey it; a client reading
-    `main`'s flags ignores it with the same note.  A drive.toml that sets none of them parses strictly (the repository's own:
-    tests/test_drive_toml.py)."""
-    assert DriveFlags.parse(FLAGS, "d.toml", strict=True) == DriveFlags.parse(FLAGS)
-    for key, value in (("max_lean_checks", "5"), ("nonlean_first", "true"), ("regenerate_locks", "true")):
-        with pytest.raises(QueueError) as e:
-            DriveFlags.parse(f'on = ["m1"]\n{key} = {value}\n', "d.toml", strict=True)
-        assert str(e.value).startswith(f"d.toml: {key} was removed: members no longer wait for a Lean check of their own")
-        assert str(e.value).endswith("; remove the key")
-        assert DriveFlags.parse(f'on = ["m1"]\n{key} = {value}\n', "d.toml") == DriveFlags(on="m1")
-        assert f"d.toml: {key} was removed: " in (err := capsys.readouterr().err) and "(ignored here)" in err
 
 
 def test_a_client_ignores_every_key_it_doesnt_read_a_near_miss_too_so_it_parses_a_newer_mains_flags(capsys):
@@ -127,22 +119,24 @@ def test_drive_reads_the_flags_at_main_in_its_clone_never_the_callers_tree_and_t
     """The caller's working tree (here `dev`, checked out with other flags) is whatever its VM last pulled; drive reads main's."""
     sha = on_main(world, FLAGS)
     monkeypatch.chdir(world.dev)
-    (world.dev / DRIVE_FLAGS).write_text('on = ["stale"]\nstale_days = 1\n')
+    (world.dev / DRIVE_FLAGS).write_text('on = ["stale"]\nmax_lean_checks = 1\n')
     assert drive(world, "--config", DRIVE_FLAGS) == 0
-    assert driven[-1] == {"first": (1858,), "reviewed_first": False, "on": "m1,m2", "after_landing_no_cache": True,
-                          "stale_days": 3, "stale_close_days": 7, "stale_keep": (), "after_landing_shards": 1}
+    assert driven[-1] == {"first": (1858,), "nonlean_first": False, "reviewed_first": False, "on": "m1,m2", "regenerate_locks": True,
+                          "after_landing_no_cache": True, "max_lean_checks": 3, "stale_days": 3, "stale_close_days": 7, "stale_keep": (), "after_landing_shards": 1}
     lines = [x for x in capsys.readouterr().out.splitlines() if "flags from" in x]
     assert lines == [f"research queue drive: flags from {DRIVE_FLAGS} at main {sha[:12]}: on=m1,m2 "
-                     "marked_after=2026-10-12T06:00:00Z first=1858 land=review land_into=main after_landing_no_cache=True "
-                     "landing_gates=gates/g.py reviewed_first=False stale_days=3 stale_close_days=7 stale_keep= after_landing_shards=1"]
+                     "marked_after=2026-10-12T06:00:00Z regenerate_locks=True first=1858 land=review "
+                     "land_into=main after_landing_no_cache=True landing_gates=gates/g.py max_lean_checks=3 nonlean_first=False reviewed_first=False stale_days=3 "
+                     "stale_close_days=7 stale_keep= after_landing_shards=1"]
 
-    on_main(world, FLAGS.replace("stale_close_days = 7", "stale_close_days = 9"))
+    on_main(world, FLAGS.replace("max_lean_checks = 3", "max_lean_checks = 6"))
     assert drive(world, "--config", DRIVE_FLAGS) == 0
-    assert driven[-1]["stale_close_days"] == 9
+    assert driven[-1]["max_lean_checks"] == 6
 
-    (world.dev / DRIVE_FLAGS).write_text('on = ["stale"]\nstale_days = 1\n')
+    (world.dev / DRIVE_FLAGS).write_text('on = ["stale"]\nmax_lean_checks = 1\n')
     assert drive(world, "--config", DRIVE_FLAGS, "--config-from-tree") == 0
-    assert driven[-1] == {"first": (), "reviewed_first": True, "on": "stale", "after_landing_no_cache": False, "stale_days": 1,
+    assert driven[-1] == {"first": (), "nonlean_first": True, "reviewed_first": True, "on": "stale", "regenerate_locks": False,
+                          "after_landing_no_cache": False, "max_lean_checks": 1, "stale_days": 0,
                           "stale_close_days": 0, "stale_keep": (), "after_landing_shards": 1}
     assert f"flags from {DRIVE_FLAGS}: on=stale " in capsys.readouterr().out
 
@@ -150,9 +144,10 @@ def test_drive_reads_the_flags_at_main_in_its_clone_never_the_callers_tree_and_t
 def test_a_flag_given_on_the_command_line_overrides_the_files(world, driven, monkeypatch):
     on_main(world, FLAGS)
     monkeypatch.chdir(world.dev)
-    assert drive(world, "--config", DRIVE_FLAGS, "--on", "m9", "--first", "7,8", "--no-after-landing-no-cache") == 0
-    assert driven[-1] == {"first": (7, 8), "reviewed_first": False, "on": "m9", "after_landing_no_cache": False,
-                          "stale_days": 3, "stale_close_days": 7, "stale_keep": (), "after_landing_shards": 1}
+    assert drive(world, "--config", DRIVE_FLAGS, "--on", "m9", "--no-regenerate-locks", "--first", "7,8",
+                 "--no-after-landing-no-cache") == 0
+    assert driven[-1] == {"first": (7, 8), "nonlean_first": False, "reviewed_first": False, "on": "m9", "regenerate_locks": False,
+                          "after_landing_no_cache": False, "max_lean_checks": 3, "stale_days": 3, "stale_close_days": 7, "stale_keep": (), "after_landing_shards": 1}
 
 
 def test_without_config_drive_takes_its_flags_as_before(world, driven, monkeypatch, capsys):
@@ -160,11 +155,12 @@ def test_without_config_drive_takes_its_flags_as_before(world, driven, monkeypat
     rules.write_text('hold_label = "hold"\nmarked_after = "2026-10-12T06:00:00Z"\n')
     monkeypatch.chdir(world.dev)
     assert drive(world, "--on", "m1", "--rules", str(rules)) == 0
-    assert driven[-1] == {"first": (), "reviewed_first": None, "on": "m1", "after_landing_no_cache": False, "stale_days": 0,
+    assert driven[-1] == {"first": (), "nonlean_first": None, "reviewed_first": None, "on": "m1", "regenerate_locks": False,
+                          "after_landing_no_cache": False, "max_lean_checks": 2, "stale_days": 0,
                           "stale_close_days": 0, "stale_keep": (), "after_landing_shards": 1}
-    assert drive(world, "--on", "m1", "--rules", str(rules), "--after-landing-no-cache", "--first", "5") == 0
-    assert driven[-1] == {"first": (5,), "reviewed_first": None, "on": "m1", "after_landing_no_cache": True, "stale_days": 0,
-                          "stale_close_days": 0, "stale_keep": (), "after_landing_shards": 1}
+    assert drive(world, "--on", "m1", "--rules", str(rules), "--regenerate-locks", "--first", "5") == 0
+    assert driven[-1] == {"first": (5,), "nonlean_first": None, "reviewed_first": None, "on": "m1", "regenerate_locks": True,
+                          "after_landing_no_cache": False, "max_lean_checks": 2, "stale_days": 0, "stale_close_days": 0, "stale_keep": (), "after_landing_shards": 1}
     assert "flags from" not in capsys.readouterr().out
 
 
@@ -188,15 +184,12 @@ def test_config_refusals_name_the_fix(world, driven, monkeypatch, capsys):
     monkeypatch.chdir(world.dev)
     assert drive(world, "--config", DRIVE_FLAGS) == 1
     assert f"--config {DRIVE_FLAGS}: `main` (" in (err := capsys.readouterr().err) and "has no such file: land it first" in err
-    on_main(world, 'stale_days = 4\n')
+    on_main(world, 'max_lean_checks = 4\n')
     assert drive(world, "--config", DRIVE_FLAGS) == 1
     assert "drive needs a machine for the checks it launches: set `on` in" in capsys.readouterr().err
-    on_main(world, 'on = ["m1"]\nstale_day = 4\n')
+    on_main(world, 'on = ["m1"]\nmax_lean_check = 4\n')
     assert drive(world, "--config", DRIVE_FLAGS) == 1
-    assert "unknown key 'stale_day' (did you mean 'stale_days'?)" in capsys.readouterr().err
-    on_main(world, 'on = ["m1"]\nmax_lean_checks = 4\n')
-    assert drive(world, "--config", DRIVE_FLAGS) == 1
-    assert "max_lean_checks was removed: members no longer wait for a Lean check of their own" in capsys.readouterr().err
+    assert "unknown key 'max_lean_check' (did you mean 'max_lean_checks'?)" in capsys.readouterr().err
     assert drive(world, "--config", str(world.dev / DRIVE_FLAGS)) == 1
     assert "a path from the repository's root, read at `main` (or --config-from-tree" in capsys.readouterr().err
     assert driven == []

@@ -37,7 +37,10 @@ RECORD_DRIVER = {"merge.lean-audit.name": "lean-audit.json: each side's guarante
                  "merge.fixture-map.driver": "python3 tools/verity/check/merge_map.py %O %A %B %P",
                  "merge.vllm-allowlist.name": "the vLLM lints' allowlists and dead-code keep map: each side's entries "
                                               "(integrations/vllm/tests/lint/merge_allowlist.py)",
-                 "merge.vllm-allowlist.driver": "python3 integrations/vllm/tests/lint/merge_allowlist.py %O %A %B %P"}
+                 "merge.vllm-allowlist.driver": "python3 integrations/vllm/tests/lint/merge_allowlist.py %O %A %B %P",
+                 "merge.lean-caps.name": "tests/test_lean_packages.py: each side's change to the ratchet caps "
+                                         "(tools/verity/lean/merge.py)",
+                 "merge.lean-caps.driver": "python3 tools/verity/lean/merge.py --caps %O %A %B %P"}
 
 
 CWD_CLONE = "clone"

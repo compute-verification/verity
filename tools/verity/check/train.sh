@@ -14,7 +14,7 @@
 # --twin`): the first to take a slot runs the check and the others exit 75, not started, so RUN names one id per twin. When every
 # twin exits 75 (check.py's own exit 75), none of them ran: rerun the train.
 #
-# `--deferred STEP,...`: drive's after-landing run and its bisections in place of the check: only those ci.toml jobs and what
+# `--deferred STEP,...`: drive's after-landing run and its Lean checks in place of the check: only those ci.toml jobs and what
 # they need (`check.py --record --deferred`), in a priority slot as a check runs, recorded without `--tool check`, so no gate
 # reads it; drive reads its steps and suites. With it alone, `--agreement` sends the upstream build (a run of `main` has no
 # change to send it for), `--no-cache` reuses no pass (`--circuit-cache` beside it: but circuit-check's per-target ones), and
