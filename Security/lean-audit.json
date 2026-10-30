@@ -1218,13 +1218,37 @@
    "owner": "@lean",
    "digest": "9657b492f110a0188f677b492aec3e46e5eab5834bdfc613b955da6ee949f8ca"
   },
+  "Nci.Assumptions.CapBelowColumns": {
+   "owner": "@lean",
+   "digest": "262ba2aed142115072e7844249a6590b20774b9b1ce794439419059af36e6a43"
+  },
+  "Nci.Assumptions.CheatingAtMost": {
+   "owner": "@training",
+   "digest": "8a43bc61c0ac16a7f6f3ddf480eb0809aea4fe0ad50b256281cc5b844896ca19"
+  },
+  "Nci.Assumptions.Coverage": {
+   "owner": "@lean",
+   "digest": "dee08548b40a1ad3f5bb62bfa39af9897e9c391e40aa2d2ad50eb78436376a14"
+  },
   "Nci.Assumptions.CoversEfficientMethods": {
    "owner": "@training",
    "digest": "5278d5015393ac6b9b6a5609004ebec37b4caeafd791a72d8ba08aa4dca862c4"
   },
+  "Nci.Assumptions.DarkReads": {
+   "owner": "@lean",
+   "digest": "5bd941def5238ae0de6dfd9ba41fcc05905e6fc310eb494e8cdf5cef4b8595d6"
+  },
   "Nci.Assumptions.DescriptionHard": {
    "owner": "@training",
    "digest": "b47e8435596962a28160b1992a6287fa012b77d9101deaf597f8a82fce224289"
+  },
+  "Nci.Assumptions.DrawsAtLeast": {
+   "owner": "@lean",
+   "digest": "1d0b1999c4a5132c0ae5ea5bb127eb0785bbb6be75ac43b7305e005dbddd91b9"
+  },
+  "Nci.Assumptions.EntersAtMost": {
+   "owner": "@lean",
+   "digest": "b51cca89aae61f31b32b46bcd034c29e8e987509a23ded6ff7954b18dd7fb42c"
   },
   "Nci.Assumptions.Fits": {
    "owner": "@lean",
@@ -1233,6 +1257,18 @@
   "Nci.Assumptions.FitsSlots": {
    "owner": "@lean",
    "digest": "8ff9d95492497a7732b03f0c2ef82661695925df0aa3b84b6e7dddbb1c351941"
+  },
+  "Nci.Assumptions.IdentitySchedule": {
+   "owner": "@training",
+   "digest": "f7d502370c0b00f07fc595e4a3f3c837796aa8596c248dffed41b6719df60bfa"
+  },
+  "Nci.Assumptions.InClass": {
+   "owner": "@lean",
+   "digest": "7940462a2c8857dbb688c5ace84753850a635674d370735c5af3d0d18bc69653"
+  },
+  "Nci.Assumptions.InnerAtLeast": {
+   "owner": "@lean",
+   "digest": "059897c575e9831e3c9af03ff2cc594122a700130ede71b2555d1ed02ec7d68c"
   },
   "Nci.Assumptions.MinEntropyHard": {
    "owner": "@training",
@@ -1266,6 +1302,10 @@
    "owner": "@lean",
    "digest": "41973b0ef31177304eb9dc9239d86f5262bf110fb041b33fa0aa10771bc2d1fd"
   },
+  "Nci.Assumptions.PouwPerWindow": {
+   "owner": "@training",
+   "digest": "a0c7452a234c6c066ada42f4fd69f3611d4879b4959dd4a7fb0cc7e8be4c989f"
+  },
   "Nci.Assumptions.PouwSound": {
    "owner": "@lean",
    "digest": "29d44de1ab5d74abaab44bf203879de9c6902fdeb239418a76492aafae28afd0"
@@ -1286,13 +1326,41 @@
    "owner": "@lean",
    "digest": "fc90804727140bffc77562fb496823d54ad4f5f38d71d67124219bf95f0459a5"
   },
+  "Nci.Assumptions.RegisteredThrough": {
+   "owner": "@lean",
+   "digest": "7409f4bac93b2d59adb7b42f9d08d0b9f2d5b443b933942ed33a7456fdc13b69"
+  },
+  "Nci.Assumptions.ResidualAtMost": {
+   "owner": "@lean",
+   "digest": "a72543c10000bfb3fdf17ee896ff28cb7f29be0257a57e100f257edb3bbc9bdf"
+  },
+  "Nci.Assumptions.RunsThrottled": {
+   "owner": "@training",
+   "digest": "83fd408d9b423a677e1330429384b244d9175b08f9d09130c93955959273afb4"
+  },
   "Nci.Assumptions.SampledDetection": {
    "owner": "@lean",
    "digest": "343f2d282d4407a820a686cfc55f137e17a3b7edc6ffc42dc6cefca6b0409a2f"
   },
+  "Nci.Assumptions.SampledPerWindow": {
+   "owner": "@training",
+   "digest": "b4551085c57fd3e5842a71c3536b642b66b067f48ef4e25eb2784fa717330588"
+  },
+  "Nci.Assumptions.Sessions": {
+   "owner": "@lean",
+   "digest": "48f5a42146b2b1d9338a4e2ecd115d24dec4dc2378e91db46eee2adbbfadcb08"
+  },
+  "Nci.Assumptions.SmallBlocks": {
+   "owner": "@lean",
+   "digest": "e2cfbfd36a35dd442f3974716716ccf5885410e064ea1a38392d1dc9f182e35d"
+  },
   "Nci.Assumptions.SourceHard": {
    "owner": "@training",
    "digest": "d1d8b4b857bc5a14ae9af9c6e23b22eae9b20715563cb8e55bf0cf9f7730e78a"
+  },
+  "Nci.Assumptions.SourcesCover": {
+   "owner": "@training",
+   "digest": "1b88f3a9f96ca3119443da4b877d624e82d0da310a960193c81efc048238d7bb"
   },
   "Nci.Assumptions.TerminalDetection": {
    "owner": "@lean",
@@ -1305,6 +1373,10 @@
   "Nci.Assumptions.TrainingIncompressible": {
    "owner": "@lean",
    "digest": "56a0698d9b227d57a5c2945972316c52628327b72b281a9a5443779df0957263"
+  },
+  "Nci.Assumptions.UnmonitoredAtMost": {
+   "owner": "@training",
+   "digest": "5b6ed8b1d3137bd0ff81fc005fc086bf36950f3c4d50cb9def7b1a1047f09167"
   },
   "Nci.Assumptions.WeightsIncompressible": {
    "owner": "@lean",
@@ -1325,6 +1397,22 @@
   "Nci.Assumptions.WeightsSupportFmt2": {
    "owner": "@lean",
    "digest": "8b36a45c57a3aa6012f2dd4f9335d56bd5cf7b151bfd33aa070d22aa09a03405"
+  },
+  "Nci.Assumptions.WindowLength": {
+   "owner": "@lean",
+   "digest": "75fc88ca4a46d35c94a12a39979bd2e18b2b8099c0467558c9f238e28f088144"
+  },
+  "Nci.Assumptions.WindowsHold": {
+   "owner": "@lean",
+   "digest": "fd6529a430e6c70c9e58bc241d1c3f5c2d7ac70b72316fb418034c5ef4150407"
+  },
+  "Nci.Assumptions.WithinBlock": {
+   "owner": "@lean",
+   "digest": "071de9b19c7e213d592021f2feb34a10ae90d40145a13b592ab68a4a48cb7a7c"
+  },
+  "Nci.Assumptions.WithinCompute": {
+   "owner": "@lean",
+   "digest": "735d0cf81585b0377ce2d2bb7dd63273807df65d48dd77c31592a0710d7ddb57"
   },
   "Nci.Capability.Consumers.OverlapWeights": {
    "owner": "@training",
@@ -1362,6 +1450,14 @@
    "owner": "@training",
    "digest": "1c8c87ab3ebdada3e60cdcaeea235d0ef229573362c93d7c9172c67581a160da"
   },
+  "Nci.Cover.Assumptions.BlockFits": {
+   "owner": "@training",
+   "digest": "7450decec45707bb8b5d3a510c5f4681cbb073d90cb6bfba3386824e4300fe3e"
+  },
+  "Nci.Cover.Assumptions.CapBelowDepth": {
+   "owner": "@training",
+   "digest": "b6a2e9a44600c3a9661d08320279a30d4f6aaaad8e812302fd44694922c961aa"
+  },
   "Nci.Cover.Assumptions.ColumnsIncompressible": {
    "owner": "@training",
    "digest": "db289a17daf39dbe23016dfadb6521dbcfae1cd0257a7ac5675fd21b6d35d295"
@@ -1373,6 +1469,10 @@
   "Nci.Cover.Assumptions.ConditionalUpdateHardness": {
    "owner": "@training",
    "digest": "51cdeb0b80f7afbb568fdd7bd837c37887629958a22a9786216886bd90ac8c69"
+  },
+  "Nci.Cover.Assumptions.RegionsAtLeast": {
+   "owner": "@training",
+   "digest": "e36e5d7a86c5aea989a8ef81dd1601ad7584cefc082c17ad2819b410360dacd8"
   },
   "Nci.Cover.Assumptions.UpdateHardness": {
    "owner": "@training",
@@ -2161,106 +2261,6 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
-  },
-  "Nci.Assumptions.CapBelowColumns": {
-   "owner": "@lean",
-   "digest": "262ba2aed142115072e7844249a6590b20774b9b1ce794439419059af36e6a43"
-  },
-  "Nci.Assumptions.CheatingAtMost": {
-   "owner": "@training",
-   "digest": "8a43bc61c0ac16a7f6f3ddf480eb0809aea4fe0ad50b256281cc5b844896ca19"
-  },
-  "Nci.Assumptions.Coverage": {
-   "owner": "@lean",
-   "digest": "dee08548b40a1ad3f5bb62bfa39af9897e9c391e40aa2d2ad50eb78436376a14"
-  },
-  "Nci.Assumptions.DarkReads": {
-   "owner": "@lean",
-   "digest": "5bd941def5238ae0de6dfd9ba41fcc05905e6fc310eb494e8cdf5cef4b8595d6"
-  },
-  "Nci.Assumptions.DrawsAtLeast": {
-   "owner": "@lean",
-   "digest": "1d0b1999c4a5132c0ae5ea5bb127eb0785bbb6be75ac43b7305e005dbddd91b9"
-  },
-  "Nci.Assumptions.EntersAtMost": {
-   "owner": "@lean",
-   "digest": "b51cca89aae61f31b32b46bcd034c29e8e987509a23ded6ff7954b18dd7fb42c"
-  },
-  "Nci.Assumptions.IdentitySchedule": {
-   "owner": "@training",
-   "digest": "f7d502370c0b00f07fc595e4a3f3c837796aa8596c248dffed41b6719df60bfa"
-  },
-  "Nci.Assumptions.InClass": {
-   "owner": "@lean",
-   "digest": "7940462a2c8857dbb688c5ace84753850a635674d370735c5af3d0d18bc69653"
-  },
-  "Nci.Assumptions.InnerAtLeast": {
-   "owner": "@lean",
-   "digest": "059897c575e9831e3c9af03ff2cc594122a700130ede71b2555d1ed02ec7d68c"
-  },
-  "Nci.Assumptions.PouwPerWindow": {
-   "owner": "@training",
-   "digest": "a0c7452a234c6c066ada42f4fd69f3611d4879b4959dd4a7fb0cc7e8be4c989f"
-  },
-  "Nci.Assumptions.RegisteredThrough": {
-   "owner": "@lean",
-   "digest": "7409f4bac93b2d59adb7b42f9d08d0b9f2d5b443b933942ed33a7456fdc13b69"
-  },
-  "Nci.Assumptions.ResidualAtMost": {
-   "owner": "@lean",
-   "digest": "a72543c10000bfb3fdf17ee896ff28cb7f29be0257a57e100f257edb3bbc9bdf"
-  },
-  "Nci.Assumptions.RunsThrottled": {
-   "owner": "@training",
-   "digest": "83fd408d9b423a677e1330429384b244d9175b08f9d09130c93955959273afb4"
-  },
-  "Nci.Assumptions.SampledPerWindow": {
-   "owner": "@training",
-   "digest": "b4551085c57fd3e5842a71c3536b642b66b067f48ef4e25eb2784fa717330588"
-  },
-  "Nci.Assumptions.Sessions": {
-   "owner": "@lean",
-   "digest": "48f5a42146b2b1d9338a4e2ecd115d24dec4dc2378e91db46eee2adbbfadcb08"
-  },
-  "Nci.Assumptions.SmallBlocks": {
-   "owner": "@lean",
-   "digest": "e2cfbfd36a35dd442f3974716716ccf5885410e064ea1a38392d1dc9f182e35d"
-  },
-  "Nci.Assumptions.SourcesCover": {
-   "owner": "@training",
-   "digest": "1b88f3a9f96ca3119443da4b877d624e82d0da310a960193c81efc048238d7bb"
-  },
-  "Nci.Assumptions.UnmonitoredAtMost": {
-   "owner": "@training",
-   "digest": "5b6ed8b1d3137bd0ff81fc005fc086bf36950f3c4d50cb9def7b1a1047f09167"
-  },
-  "Nci.Assumptions.WindowLength": {
-   "owner": "@lean",
-   "digest": "75fc88ca4a46d35c94a12a39979bd2e18b2b8099c0467558c9f238e28f088144"
-  },
-  "Nci.Assumptions.WindowsHold": {
-   "owner": "@lean",
-   "digest": "fd6529a430e6c70c9e58bc241d1c3f5c2d7ac70b72316fb418034c5ef4150407"
-  },
-  "Nci.Assumptions.WithinBlock": {
-   "owner": "@lean",
-   "digest": "071de9b19c7e213d592021f2feb34a10ae90d40145a13b592ab68a4a48cb7a7c"
-  },
-  "Nci.Assumptions.WithinCompute": {
-   "owner": "@lean",
-   "digest": "735d0cf81585b0377ce2d2bb7dd63273807df65d48dd77c31592a0710d7ddb57"
-  },
-  "Nci.Cover.Assumptions.BlockFits": {
-   "owner": "@training",
-   "digest": "7450decec45707bb8b5d3a510c5f4681cbb073d90cb6bfba3386824e4300fe3e"
-  },
-  "Nci.Cover.Assumptions.CapBelowDepth": {
-   "owner": "@training",
-   "digest": "b6a2e9a44600c3a9661d08320279a30d4f6aaaad8e812302fd44694922c961aa"
-  },
-  "Nci.Cover.Assumptions.RegionsAtLeast": {
-   "owner": "@training",
-   "digest": "e36e5d7a86c5aea989a8ef81dd1601ad7584cefc082c17ad2819b410360dacd8"
   }
  },
  "meaning": [
