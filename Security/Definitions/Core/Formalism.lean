@@ -34,7 +34,7 @@ stated on these objects.
   included, and at most `k` unregistered input bits, `|in(I) \ θ| ≤ k` (`unregistered`). Its circuit has size `c · B`.
   Proof blocks of at most `c` gates become exactly `c` by a `Pad`: registered padding gates in each proof block, read by
   nothing of `d`.
-* The **slowdown** relative to a reference of size `T₀` is `|C| / T₀` (`slowdown`), a ratio of circuit sizes.
+* The **sizeRatio** relative to a reference of size `T₀` is `|C| / T₀` (`sizeRatio`), a ratio of circuit sizes.
 * **Local description length** (§4): `LDL M t r y` is the length of a shortest program on which the decoder `M`, with
   indexed access to the registered information `r`, outputs `y` within `t` steps, and `⊤` when none does. Side
   information `z` is registered information paired with it, `LDL M t (r, z) y`. The decoder is a parameter (`Decoder`):
@@ -120,8 +120,8 @@ structure Pad (d : Declaration) {B : ℕ} (P : Partition d.D B) (d' : Declaratio
   pad_input : ∀ g', g' ∉ Set.range M.emb → d'.D.isInput g' = true → g' ∈ d'.θ
   pad_reads : ∀ g', g' ∉ Set.range M.emb → ∀ a ∈ d'.D.reads g', a ∈ d'.θ
 
-/-- **The slowdown** of `C` relative to a reference circuit of size `T₀`: `|C| / T₀`. -/
-noncomputable def slowdown (C : Circuit) (T₀ : ℝ) : ℝ := ((C.size C.computed : ℕ) : ℝ) / T₀
+/-- **The sizeRatio** of `C` relative to a reference circuit of size `T₀`: `|C| / T₀`. -/
+noncomputable def sizeRatio (C : Circuit) (T₀ : ℝ) : ℝ := ((C.size C.computed : ℕ) : ℝ) / T₀
 
 /-- **The committed declaration** `R = (θ, C, 𝓘)`, fixed once before the monitored computation: the declaration
 `(C, θ)`, the committed values of `θ`'s gates (`val`, read only there) and the partition `P` into `B` proof blocks. -/

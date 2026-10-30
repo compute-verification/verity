@@ -110,7 +110,7 @@ theorem Counting : Guarantees.Counting := by
           mul_le_mul_of_nonneg_left hsum (div_nonneg (Nat.cast_nonneg _) hq.le)
       _ = c * B := by field_simp
   refine ⟨h1, fun T₀ hT => ?_⟩
-  rw [slowdown, show (c : ℝ) / (T₀ * q) * ∑ v ∈ V, ω v = (c / q * ∑ v ∈ V, ω v) / T₀ by ring]
+  rw [sizeRatio, show (c : ℝ) / (T₀ * q) * ∑ v ∈ V, ω v = (c / q * ∑ v ∈ V, ω v) / T₀ by ring]
   exact div_le_div_of_nonneg_right h1 hT.le
 
 end Verity.SecurityProofs
