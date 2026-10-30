@@ -102,6 +102,16 @@ status = "pending_review"
 reason = "The required manifest stops asking for the FlashAttention M1 stream (fa2_hidden_m1_stream, op paths fa2.m1/L<k>/<geometry>), which no proof block reads, and drops the `hidden = ...` clause from the query text, so manifest_digest moves. Solely that: the same rebuild at the change's base a65dcb3980 reproduces this row's contract, and at e09f3f818c program_digest 4bc2937c... is unchanged and identities fall 505743 -> 503695, exactly the base manifest's 2048 fa2_hidden_m1_stream rows (46 geometry classes, 736 distinct identity keys). Those 736 keys are the whole move in the set difference against v1: v1's manifest had all 736 of them, so removed_n grows by 736 (removed_n 245376 -> 246112, added_n 245376 -> 245376)."
 expected = { identities = 503695, program_digest = "4bc2937c31fb22a511fce7a827788bf16b6478f2f48b5a2327b8503c72b3e313", added_n = 245376, removed_n = 246112, complete = true, manifest_digest = "f6ab4c4cf6fe1363ea5e32d69590ca040dfbe18d4f07902d11ce0a518d2236e6", identity_rows_sha256 = "df2c34953d32071514e17d80fbcfa0eab4da93c5257fb35231788b0531ab13ea" }
 
+# labelled decision (Draft 3 §7): the manifest digest is SHA-512
+[[rows."llama32-1b__bf16__l40s__tp1__b64__i1024__o128__mixed__greedy__bi-eager".decisions]]
+check = "manifest_digest"
+since = "16b47db267"
+since_commit = "16b47db267a8cf7c1b29df045bed38957b9b64b3"
+finding = "SHA-512 manifest digests (16b47db267)"
+status = "pending_review"
+reason = "manifest_format.manifest_digest is SHA-512, its whole output, over the sorted (family + IDENTITY_KEY) rows (the one-hash rule). Rebuilt on the head that brings it beside #5777, every value of #5777's decision reproduces but manifest_digest: identities 503695, program_digest 4bc2937c..., identity_rows_sha256 df2c3495... (the identity set) unchanged; manifest_digest f6ab4c4c... (SHA-256) becomes 52c7c78a... (SHA-512)."
+expected = { identities = 503695, program_digest = "4bc2937c31fb22a511fce7a827788bf16b6478f2f48b5a2327b8503c72b3e313", added_n = 245376, removed_n = 246112, complete = true, manifest_digest = "52c7c78ab8e3499f54f6fc19d8c6d47e872b3756b4d5026320b1fc02ffa336616626bfc45f44b9fc24129f8fac09b6cf23e808a3f04df339df47f52d5dcf78f0", identity_rows_sha256 = "df2c34953d32071514e17d80fbcfa0eab4da93c5257fb35231788b0531ab13ea" }
+
 [rows."llama32-1b__bf16__l40s__tp1__b64__i1024__o128__mixed__greedy__bi-eager".local]
 tp2 = "/workspace/cp/sweep/r19-int-7/llama32-1b__bf16__l40s__tp1__b64__i1024__o128__mixed__greedy__bi-eager"
 
@@ -226,6 +236,16 @@ status = "pending_review"
 reason = "The required manifest stops asking for the FlashAttention M1 stream (fa2_hidden_m1_stream, op paths fa2.m1/L<k>/<geometry>), which no proof block reads, and drops the `hidden = ...` clause from the query text, so manifest_digest moves. Solely that: the same rebuild at the change's base a65dcb3980 reproduces this row's contract, and at e09f3f818c program_digest 44801d07... is unchanged and identities fall 504764 -> 501436, exactly the base manifest's 3328 fa2_hidden_m1_stream rows (21 geometry classes, 286 distinct identity keys). Those 286 keys are the whole move in the set difference against v1: v1's manifest had all 286 of them, so removed_n grows by 286 (removed_n 67392 -> 67678, added_n 409104 -> 409104)."
 expected = { identities = 501436, program_digest = "44801d07a45e925cd80ab5e8c2fed7a78461c3ac309d9406dd009288af7fad53", added_n = 409104, removed_n = 67678, complete = true, manifest_digest = "ffc0805f857b51d046fd869cb9ab1bdb9af906844f6d7d4c07a48bed2ecd9761", identity_rows_sha256 = "95224f0751d0bf73b1216931e4dcc31282a35a41c87f8b1786e746010dae641c" }
 
+# labelled decision (Draft 3 §7): the manifest digest is SHA-512
+[[rows."gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager".decisions]]
+check = "manifest_digest"
+since = "16b47db267"
+since_commit = "16b47db267a8cf7c1b29df045bed38957b9b64b3"
+finding = "SHA-512 manifest digests (16b47db267)"
+status = "pending_review"
+reason = "manifest_format.manifest_digest is SHA-512, its whole output, over the sorted (family + IDENTITY_KEY) rows (the one-hash rule). Rebuilt on the head that brings it beside #5777, every value of #5777's decision reproduces but manifest_digest: identities 501436, program_digest 44801d07..., identity_rows_sha256 95224f07... (the identity set) unchanged; manifest_digest ffc0805f... (SHA-256) becomes faaa11d8... (SHA-512)."
+expected = { identities = 501436, program_digest = "44801d07a45e925cd80ab5e8c2fed7a78461c3ac309d9406dd009288af7fad53", added_n = 409104, removed_n = 67678, complete = true, manifest_digest = "faaa11d8a41a8206d607e4c31fe3d9acb1ada81251e7a9a74a1d87c6252664e5d80aaa584dcb5c7fd6e9fda460023341223d0b7631d6f514ea59106b17441375", identity_rows_sha256 = "95224f0751d0bf73b1216931e4dcc31282a35a41c87f8b1786e746010dae641c" }
+
 [rows."gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager".local]
 tp2 = "/workspace/cp/sweep/r19-int-10/gemma2-2b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager"
 
@@ -261,6 +281,16 @@ finding = "#5777 no FlashAttention M1 stream (e09f3f818c)"
 status = "pending_review"
 reason = "The required manifest stops asking for the FlashAttention M1 stream (fa2_hidden_m1_stream, op paths fa2.m1/L<k>/<geometry>), which no proof block reads, and drops the `hidden = ...` clause from the query text, so manifest_digest moves. Solely that: the same rebuild at the change's base a65dcb3980 reproduces this row's contract, and at e09f3f818c program_digest fc911941... is unchanged and identities fall 205144 -> 201048, exactly the base manifest's 4096 fa2_hidden_m1_stream rows (11 geometry classes, 352 distinct identity keys). Those 352 keys are the whole move in the set difference against v1: v1's manifest had all 352 of them, so removed_n grows by 352 (removed_n 99072 -> 99424, added_n 99072 -> 99072)."
 expected = { identities = 201048, program_digest = "fc91194139375ddaae2f8b42ffd44d388ded000c8b3eec5eee51c7303eb53501", added_n = 99072, removed_n = 99424, complete = true, manifest_digest = "2a1c0f8fa073fb7d74b04126fdff3c5673808245c0cfd59787bf714666266093", identity_rows_sha256 = "5dfd77e3de415f334462370378f3d2fdeb61e519522d74ffa97efc904b7f2469" }
+
+# labelled decision (Draft 3 §7): the manifest digest is SHA-512
+[[rows."mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager".decisions]]
+check = "manifest_digest"
+since = "16b47db267"
+since_commit = "16b47db267a8cf7c1b29df045bed38957b9b64b3"
+finding = "SHA-512 manifest digests (16b47db267)"
+status = "pending_review"
+reason = "manifest_format.manifest_digest is SHA-512, its whole output, over the sorted (family + IDENTITY_KEY) rows (the one-hash rule). Rebuilt on the head that brings it beside #5777, every value of #5777's decision reproduces but manifest_digest: identities 201048, program_digest fc911941..., identity_rows_sha256 5dfd77e3... (the identity set) unchanged; manifest_digest 2a1c0f8f... (SHA-256) becomes 33261ce8... (SHA-512)."
+expected = { identities = 201048, program_digest = "fc91194139375ddaae2f8b42ffd44d388ded000c8b3eec5eee51c7303eb53501", added_n = 99072, removed_n = 99424, complete = true, manifest_digest = "33261ce8a4c1d0e6ddef578ad538ab0a9eb9e3e0979d52b1db291b3d84241b3492d9cb044ec453ddaf716024740022ced6361c535cdfba4c39453b38e7278a1c", identity_rows_sha256 = "5dfd77e3de415f334462370378f3d2fdeb61e519522d74ffa97efc904b7f2469" }
 
 [rows."mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager".local]
 
@@ -320,6 +350,16 @@ status = "pending_review"
 reason = "The required manifest stops asking for the FlashAttention M1 stream (fa2_hidden_m1_stream, op paths fa2.m1/L<k>/<geometry>), which no proof block reads, and drops the `hidden = ...` clause from the query text, so manifest_digest moves. Solely that: the same rebuild at the change's base a65dcb3980 reproduces this row's contract, and at e09f3f818c program_digest fdd998d4... is unchanged and identities fall 406432 -> 404384, exactly the base manifest's 2048 fa2_hidden_m1_stream rows (32 geometry classes, 512 distinct identity keys). Those 512 keys are the whole move in the set difference against v1: v1's manifest had all 512 of them, so removed_n grows by 512 (removed_n 104640 -> 105152, added_n 125568 -> 125568)."
 expected = { identities = 404384, program_digest = "fdd998d46fac4b37f55acd28b0f83d71a15fc412950e741d4ba7a7078e975a72", added_n = 125568, removed_n = 105152, complete = true, manifest_digest = "b7fe3967c7c2011a0e742051f09901fd13b5e28b99b476c80b225dac7fb8e809", identity_rows_sha256 = "24f1d2abc5218cd629de9b9a1dfb7e650b6696973dbb9d138eae627dd9785de1" }
 
+# labelled decision (Draft 3 §7): the manifest digest is SHA-512
+[[rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager".decisions]]
+check = "manifest_digest"
+since = "16b47db267"
+since_commit = "16b47db267a8cf7c1b29df045bed38957b9b64b3"
+finding = "SHA-512 manifest digests (16b47db267)"
+status = "pending_review"
+reason = "manifest_format.manifest_digest is SHA-512, its whole output, over the sorted (family + IDENTITY_KEY) rows (the one-hash rule). Rebuilt on the head that brings it beside #5777, every value of #5777's decision reproduces but manifest_digest: identities 404384, program_digest fdd998d4..., identity_rows_sha256 24f1d2ab... (the identity set) unchanged; manifest_digest b7fe3967... (SHA-256) becomes 4d1a89c4... (SHA-512)."
+expected = { identities = 404384, program_digest = "fdd998d46fac4b37f55acd28b0f83d71a15fc412950e741d4ba7a7078e975a72", added_n = 125568, removed_n = 105152, complete = true, manifest_digest = "4d1a89c45fc63d183a652097dc9ab5cc50a4e80cfd68b4e1ef2231f0b4f9989b16aa90c08d625becfd0d1aec4ee36e1e0057fa86630d4e76e7ea2f15abd10508", identity_rows_sha256 = "24f1d2abc5218cd629de9b9a1dfb7e650b6696973dbb9d138eae627dd9785de1" }
+
 [rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager".local]
 
 [rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed__greedy__bi-eager".artifacts]
@@ -377,6 +417,16 @@ finding = "#5777 no FlashAttention M1 stream (e09f3f818c)"
 status = "pending_review"
 reason = "The required manifest stops asking for the FlashAttention M1 stream (fa2_hidden_m1_stream, op paths fa2.m1/L<k>/<geometry>), which no proof block reads, and drops the `hidden = ...` clause from the query text, so manifest_digest moves. Solely that: the same rebuild at the change's base a65dcb3980 reproduces this row's contract, and at e09f3f818c program_digest 6de1e6af... is unchanged and identities fall 402938 -> 400058, exactly the base manifest's 2880 fa2_hidden_m1_stream rows (56 geometry classes, 896 distinct identity keys). Those 896 keys are the whole move in the set difference against v1: v1's manifest had all 896 of them, so removed_n grows by 896 (removed_n 103520 -> 104416, added_n 124224 -> 124224)."
 expected = { identities = 400058, program_digest = "6de1e6afdeffc1a8772201a8491aca7fdeeebae10c6b20fa65db2f84fb349ddf", added_n = 124224, removed_n = 104416, complete = true, manifest_digest = "27ca58928b5beb9fc219cbb6918bd606ce1c8cba89bb7a7b554f58fb49c9048f", identity_rows_sha256 = "b38dcbc17386a860917960bee85ebb637e7087dc2c7d0ddc76ee420fe646bc83" }
+
+# labelled decision (Draft 3 §7): the manifest digest is SHA-512
+[[rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed-arrivals__greedy__bi-eager".decisions]]
+check = "manifest_digest"
+since = "16b47db267"
+since_commit = "16b47db267a8cf7c1b29df045bed38957b9b64b3"
+finding = "SHA-512 manifest digests (16b47db267)"
+status = "pending_review"
+reason = "manifest_format.manifest_digest is SHA-512, its whole output, over the sorted (family + IDENTITY_KEY) rows (the one-hash rule). Rebuilt on the head that brings it beside #5777, every value of #5777's decision reproduces but manifest_digest: identities 400058, program_digest 6de1e6af..., identity_rows_sha256 b38dcbc1... (the identity set) unchanged; manifest_digest 27ca5892... (SHA-256) becomes b64764c5... (SHA-512)."
+expected = { identities = 400058, program_digest = "6de1e6afdeffc1a8772201a8491aca7fdeeebae10c6b20fa65db2f84fb349ddf", added_n = 124224, removed_n = 104416, complete = true, manifest_digest = "b64764c5106e08736b66ff24ff0f6f050315675b9606464544d615f630238d4614fa47af6474b961fc76619cbe6eb77e283d7d654ddf4ac9da33f55bc512eda8", identity_rows_sha256 = "b38dcbc17386a860917960bee85ebb637e7087dc2c7d0ddc76ee420fe646bc83" }
 
 [rows."olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed-arrivals__greedy__bi-eager".local]
 tp2 = "/workspace/cp/sweep/r19-int-10/olmoe-1b-7b__bf16__l40s__tp1__b32__i1024__o128__mixed-arrivals__greedy__bi-eager"
@@ -439,6 +489,16 @@ finding = "#5777 no FlashAttention M1 stream (e09f3f818c)"
 status = "pending_review"
 reason = "The required manifest stops asking for the FlashAttention M1 stream (fa3_hidden_m1_stream, op paths fa3.m1/L<k>/<geometry>), which no proof block reads, and drops the `hidden = ...` clause from the query text, so manifest_digest moves. Solely that: the same rebuild at the change's base a65dcb3980 reproduces this row's contract, and at e09f3f818c program_digest 357b965d... is unchanged and identities fall 316347 -> 311739, exactly the base manifest's 4608 fa3_hidden_m1_stream rows (11 geometry classes, 396 distinct identity keys). Those 396 keys are the whole move in the set difference against v1: none of them was in v1's manifest, so added_n falls by 396 (removed_n 103212 -> 103212, added_n 103212 -> 102816)."
 expected = { identities = 311739, program_digest = "357b965dca2497df1cc97c6b45b5d0f773e4aba40ee8ae0bc630469d45d10262", added_n = 102816, removed_n = 103212, complete = true, manifest_digest = "251d2e6c824535e2ca4b62f117b636ddf410201aec47387612c300f5177359ea", identity_rows_sha256 = "0ada6efa206b3a4dd2f15a097e3ed4031869dd36ec21f1cfba0a8ba05ae18e7d" }
+
+# labelled decision (Draft 3 §7): the manifest digest is SHA-512
+[[rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".decisions]]
+check = "manifest_digest"
+since = "16b47db267"
+since_commit = "16b47db267a8cf7c1b29df045bed38957b9b64b3"
+finding = "SHA-512 manifest digests (16b47db267)"
+status = "pending_review"
+reason = "manifest_format.manifest_digest is SHA-512, its whole output, over the sorted (family + IDENTITY_KEY) rows (the one-hash rule). Rebuilt on the head that brings it beside #5777, every value of #5777's decision reproduces but manifest_digest: identities 311739, program_digest 357b965d..., identity_rows_sha256 0ada6efa... (the identity set) unchanged; manifest_digest 251d2e6c... (SHA-256) becomes 5be1cabb... (SHA-512)."
+expected = { identities = 311739, program_digest = "357b965dca2497df1cc97c6b45b5d0f773e4aba40ee8ae0bc630469d45d10262", added_n = 102816, removed_n = 103212, complete = true, manifest_digest = "5be1cabbad644464c1b5e333b2ee045729392273f6c25faac37eeb91325ebdd4a084adf15eb1d509f7b3885e88e7d1a93e64bb5a806be0b6addc786398e55987", identity_rows_sha256 = "0ada6efa206b3a4dd2f15a097e3ed4031869dd36ec21f1cfba0a8ba05ae18e7d" }
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".local]
 
