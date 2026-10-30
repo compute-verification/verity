@@ -41,11 +41,11 @@ theorem linkRows_eq {UB PB : ℕ} {u : VStar.UnitC} (hu : VStar.linkUnit UB PB =
   rw [hin, hop]
   rfl
 
-/-- **The link part's `trow` port is a row of `LINK_ROW_WORDS` words.** -/
+/-- **The link part's `trow` port is a row of `LINK_ROW_WORDS` words**, 1024 bits. -/
 theorem trow_port {c : Circuit} {UB PB : ℕ} {u : VStar.UnitC} (hu : VStar.linkUnit UB PB = .ok u)
     (hrows : c.ports.toList.map (fun q => (q.name, q.words, q.bits)) = RecVStar.vstarRows (VStar.linkSub UB PB) u) :
     ∃ q, c.ports.findIdx? (·.name == "trow") = some q ∧ ∃ hq : q < c.ports.size,
-      c.ports[q].words = VStar.LINK_ROW_WORDS := by
+      c.ports[q].words = VStar.LINK_ROW_WORDS ∧ c.ports[q].bits = 1024 := by
   rw [linkRows_eq hu] at hrows
   obtain ⟨q, hq⟩ := CapLower.port_of_rows hrows (e := ("trow", 64, 1024)) (by simp)
   have hq : c.ports.findIdx? (·.name == "trow") = some q := hq
@@ -53,7 +53,7 @@ theorem trow_port {c : Circuit} {UB PB : ℕ} {u : VStar.UnitC} (hu : VStar.link
   refine ⟨q, hq, hqs, ?_⟩
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hm
   rcases hm with h | h | h | h | h | h | h
-  · exact (Prod.mk.inj (Prod.mk.inj h).2).1
+  · exact Prod.mk.inj (Prod.mk.inj h).2
   all_goals simp at h
 
 /-! ## What the setup checked at the link part -/
@@ -185,7 +185,7 @@ theorem rowOpens_staged {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wi
     (hn : n < N) : RowOpens dom T N n (trowAt c w n) := by
   obtain ⟨u, hu, hrows⟩ := CapLower.rows_staged hS hr hss hsv hpc
   have hu : VStar.linkUnit UB PB = .ok u := hu
-  obtain ⟨q, hq, hqs, hk⟩ := trow_port hu hrows
+  obtain ⟨q, hq, hqs, hk, -⟩ := trow_port hu hrows
   have hslot : readForms w (hmCommit c q n) =
       FlockSoundness.Binding.commitString (rowPfx c q ++ trowAt c w n) (readForms w (hmSalt c q n)) :=
     MoreSlots.slotIn_stagedG hS hck hr hss hsv hpc hq (show "trow" ∉ ["rin", "rout"] by decide) (.inl hn)
