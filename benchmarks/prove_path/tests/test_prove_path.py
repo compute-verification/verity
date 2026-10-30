@@ -833,7 +833,7 @@ def _circuit(compiler: Any, data: bytes, partition: Mapping[str, Any]) -> tuple[
 
     p = compiler.load(0, 1, PP.compile_advice(compiler, data))
     window, rows = SRW.population(p.progs, dict(partition), "", p.dirs, arrivals=p.arrivals, transfer_gates=compiler.transfer_gates)
-    return SRW.circuit_record(window), rows
+    return SRW.circuit_record(window, rows, p.arrivals), rows
 
 
 def test_a_served_windows_bodies_are_its_requests_ingress_by_i1_id(tmp_path, monkeypatch):

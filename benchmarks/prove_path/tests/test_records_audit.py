@@ -666,7 +666,7 @@ def test_the_served_compilers_command_charges_the_registered_length_and_refuses_
     loaded = SimpleNamespace(progs={"r0": {}}, dirs={"r0": "d"}, arrivals={"r0": 0})
     monkeypatch.setattr(PP.I2Compiler, "load", lambda self, rank, world, requests: loaded)
     window = IF.Window(IF.Circuit("test", ((COORD, 5),)), "", D.parse_law(LAW), 4).window
-    monkeypatch.setattr(SRW, "population", lambda progs, partition, run, dirs, **kw: (window, []) if run == "" else None)
+    monkeypatch.setattr(SRW, "population", lambda progs, partition, run, dirs, **kw: (window, [[]]) if run == "" else None)
     (tmp_path / "part.json").write_text(json.dumps({"templates": [TID], "law": LAW}))
     (tmp_path / "advice.bin").write_bytes(s.data)
     base = ["circuit", "--serve-run", str(s.run), "--window", "0", "--partition", str(tmp_path / "part.json"), "--out",
