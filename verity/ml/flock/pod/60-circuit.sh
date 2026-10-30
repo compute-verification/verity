@@ -25,7 +25,7 @@ F=${FLOCK_WORK:-/workspace}/flock-gpu-link/flock; FEAT="--features sha512 --feat
 # after the circuit prover is generated (it widens both provers' trees)
 (cd $F && rm -f crates/flock-merkle/src/hm96.rs && git apply $REPO/verity/ml/flock/flock-sha512-b684b12.patch \
   && git apply $REPO/verity/ml/flock/flock-glue-b684b12.patch) || exit 1
-# C-Flock ZK (lane flock-zk): Ligerito level 0's hiding (flock-circuit --zk)
+# C-Flock ZK: Ligerito level 0's hiding (flock-circuit --zk)
 (cd $F && git apply $REPO/verity/ml/flock/flock-zk-b684b12.patch) || exit 1
 # the session verifier's phase timers in the opening (session_verify.rs): clocks only, no check changes
 (cd $F && git apply $REPO/verity/ml/flock/flock-vtime-b684b12.patch) || exit 1
