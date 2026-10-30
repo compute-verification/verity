@@ -513,3 +513,43 @@ def test_the_after_landing_launch_gives_train_sh_no_cache_with_circuit_checks_ca
     ids, tail = train_launch(tmp_path, "c" * 40, "m1", extra.pop("agreement"), deferred="pytest,circuit-check", **extra)
     assert ids == ["r20261027-120000-aaaa"]
     assert f"argv: {'c' * 40} m1 --deferred pytest,circuit-check --no-cache --circuit-cache --no-regenerate" in tail, tail
+
+
+def test_a_tick_sets_the_record_drivers_its_clone_lacks_and_plain_git_then_merges_two_records_with_merge_py(world, monkeypatch):
+    """A queue clone seeded from a copy without the drivers (or with another value) gets every `RECORD_DRIVER` key on a tick,
+    logged once, and a later tick only reads them; then a git without `git_env`'s settings merges two PRs' lean-audit.json
+    records in that clone through merge.py rather than line by line."""
+    import json
+    import os
+    from pathlib import Path
+
+    from research.clone import RECORD_DRIVER
+
+    lean = Path(__file__).resolve().parents[2] / "verity" / "lean"
+    tools = {f"tools/verity/lean/{f}": (lean / f).read_text() for f in ("merge.py", "check.py")}
+    base = world.change({**tools, ".gitattributes": "lean-audit.json merge=lean-audit\n"})
+    _git(world.dev, "push", "-q", "origin", f"{base}:refs/heads/main")
+    wd = world.tmp / "q" / "verity"
+    _git(world.tmp, "clone", "-q", str(world.origin), str(wd))
+    _git(wd, "config", "--local", "merge.lean-caps.driver", "true")
+    h = Harness(world, monkeypatch)
+    assert h.q.workdir == wd
+
+    def said() -> list[str]:
+        return [x for x in world.logs if "set the record merge drivers" in x]
+
+    h.tick()
+    (line,) = said()
+    assert line.endswith(", ".join(RECORD_DRIVER)), line
+    assert {k: _git(wd, "config", "--local", "--get", k) for k in RECORD_DRIVER} == RECORD_DRIVER
+    h.tick()
+    assert said() == [line]
+
+    rec = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
+    a, b = (world.change({"pkg/lean-audit.json": json.dumps({**rec, "guarantees": {**rec["guarantees"], g: "1"}})}, base=base)
+            for g in "AB")
+    for k in [k for k in os.environ if k.startswith("GIT_CONFIG")]:
+        monkeypatch.delenv(k)
+    _git(wd, "fetch", "-q", "origin", f"refs/dev/{a}", f"refs/dev/{b}")
+    tree = _git(wd, f"--attr-source={base}", "merge-tree", "--write-tree", "--no-messages", a, b)
+    assert set(json.loads(_git(wd, "show", f"{tree}:pkg/lean-audit.json"))["guarantees"]) == {"T", "A", "B"}
