@@ -24,6 +24,13 @@ elif [ "$group" = margin ]; then
     w=$(python3 -c "import math; print(int(math.log2($b)))")
     echo "--chips $chip --cases 4,$b,$w --shapes '8192,128,8192 8192,256,8192 8192,512,8192 8192,1024,8192' --depths '4 6'"
   done; done >> "$jobs"
+elif [ "$group" = kcap ]; then
+  # the margin under a K cap of 4,096 or 8,192, at the widest served outputs
+  for chip in h200 sm120; do for a in 4 8; do
+    for s in 8192,4096,8192 8192,4096,57344 8192,4096,106496 8192,8192,106496; do
+      echo "--chips $chip --cases $a,256,16 --shapes $s --depths '5 6' --grids down"
+    done
+  done; done >> "$jobs"
 else
   # A-LSB and D0: L (or small R) over 2^b values, b = 2..5; output mod 2^b (the congruence) and mod 2^16 (W = L)
   for chip in h200 sm120 h200+s4; do for a in 4 8; do for b in 4 8 16 32; do
