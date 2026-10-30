@@ -240,8 +240,8 @@ theorem row_agree {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {rows : Opti
   exact FlockSoundness.Registered.enc_eq_of_not_clash (fun hc => h.2.1 ⟨j, j', hc⟩) hp hp' hroot hn hdom hsch hpos
 
 /-- **A chosen row for one read of R's level-`l` tops is the row at every other read of that node**:
-`row_agree` at the shared value `rec-top-stacked-L<l>`. This lets `MapsLeft` choose recursive cap entry `e l x`
-from one registrant read of node `x`; every opening at that node has the same encoded row off `RegColl`. -/
+`row_agree` at the shared value `rec-top-stacked-L<l>`: every opening at that node has the same encoded row off
+`RegColl`. -/
 theorem top_row_agree {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂}
     {rows : Option (Array Flock.Registered.Port)} (hsh : SharedOwnRoot rows F)
     {dg : ByteArray → ByteArray} {N k Rw : ℕ} (hro : FlockC3.HPort.ReadsOwnAt F dg N k Rw)

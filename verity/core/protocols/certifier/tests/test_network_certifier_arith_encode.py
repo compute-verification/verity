@@ -488,7 +488,8 @@ def test_the_charge_circuit_is_the_reference():
 
 
 def test_build_charge_inline():
-    """`build_charge`, the call a caller's circuit makes, is the unit: its public inputs split by `charge_fields`."""
+    """`build_charge`, the call a caller's circuit makes, is the proof block: its public inputs split by
+    `charge_fields`."""
     from verity.ml.circuits.boolean.forms import Circuit
     N, rng = 3, random.Random(3)
     cases = [_random_charge(rng, N) for _ in range(40)]

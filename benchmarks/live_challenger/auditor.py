@@ -1,7 +1,7 @@
 """The auditor host's challenger service: `serve.py` runs only as the `auditor` user, from a pinned
 tree, one session a window, each recorded in a signed append-only ledger before its first coin.
 
-    vy-challenger-gate reserve --peer NAME --scheme S --families JSON [--epoch E] [--minutes M] [--for LANE]
+    vy-challenger-gate reserve --peer NAME --scheme S --families JSON [--epoch E] [--minutes M] [--for LANE] [--withhold]
     vy-challenger-gate open --session S --root R
     vy-challenger-gate period-open --name P --cap N --circuit SHA512 [--draw-k K] [--rows T] [--model M | --weights-root W]
                                    [--circuit-files JSON] [--length JSON] [--lane LANE] | period-close --name P
@@ -14,7 +14,8 @@ tree, one session a window, each recorded in a signed append-only ledger before 
                                              [--seed S] [--eos-ids ID,...] [--compact B] [--margin M])
     vy-challenger-gate warden-rehearse --peer NAME --port PORT --minutes M [--requests N] [--tokens N] [--height H]
                                        [--temperature T] [--top-p P]
-                                       [--scan [--bucket-ms MS] [--prompts [--window-per-group]] < PROMPTS]
+                                       [--scan [--bucket-ms MS]
+                                        [--prompts [--scan-class w63|w63k4] [--window-per-group]] < PROMPTS]
     vy-challenger-gate weights-write [--shape h200|tiny]
     vy-challenger-gate load-relay --peer NAME --port PORT --sink-port PORT --program SHA512 --minutes M
                                   [--shape h200|tiny] [--streams 4] [warden-rehearse's flags]
@@ -55,6 +56,13 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   open's answer also carries the session's coin commitment root (`commitment`, from the record serve.py signs before it
   listens; `status` gives it too), so the serving side checks the hello's commitment against it before its first coin.
   Before the first reserve the ledger held one-step v2 opens (`--commit`), which still verify; none follows a reserve.
+- **A withheld session** (`reserve --withhold`, a sampled-proofs window's: its draw reads only such a session's coins,
+  `challenger.withheld_on`) keeps its coin commitment's root on this host until the prover's commitments are in. Its
+  reserve and open bodies carry `withheld: true`, and serve.py serves it `--withhold`, so it answers the hello with the
+  layout alone and releases the root, salts and paths only at the client's close. Until the session's `end` entry the
+  gate hands out no root either: the open's and `status`'s `commitment` are null (the open says whether serve.py signed
+  its record, `signed`), and `fetch` refuses, since `out/`'s `record.json` signs the root and the head of
+  `releases.jsonl` names it. serve.py still writes both before it listens.
 - **An `end` entry** follows when `serve.py` exits: its exit code, whether its client closed it, the SHA-512 of each file of
   `out/` (which seals the release log), how many coins each family released (`released`, counted from the release log under
   the signed record's commitment; `complete` when every family released all its coins, so a period can refuse a short
@@ -180,10 +188,13 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   token ids each, at most the scan's KI of 1024 and below 2^17, its IDB), writes them to `witness/prompts.json` alone (the request records their
   count and ids), and `rehearse --prompts` sends request j the (j mod n)-th of the n with exactly `--tokens`
   (`WARDEN_PROMPT_TOKENS`, the scan's 64 by default), `--requests` (`WARDEN_PROMPT_REQUESTS`) the prompts' count by
-  default. `--window-per-group` (at most the scan's 4 lanes of prompts) sends them a group at a time, group g's half a
-  bucket into link-window g·G (G = `scan_group_windows` of the tokens), so that group g's cells are exactly windows
-  g·G … (g+1)·G − 1, which `out/groups.json` publishes, and `--minutes` must cover `warden_group_minutes` of its
-  groups. The demo's stand-in (`benchmarks/network_traces/demo_stub.py`) serves the demo's class, prompts of exactly 8
+  default. `--scan-class CLASS` (with `--prompts`, recorded and passed on only when given) runs the network certifier
+  at that class's schedule instead (`SCAN_CLASSES`, `scan_schedule`: w63k4, the window circuit's 4,32,4, at 5 egress cells),
+  with its prompts of at most its KI ids (32) and `--tokens` at most its egress cells less the trailer (4)
+  (`scan_bounds`), the network certifier's run `scan_zk.py prove --class CLASS --warden-run` reads. `--window-per-group` (at most
+  the scan's 4 lanes of prompts) sends them a group at a time, group g's half a bucket into link-window g·G
+  (G = `scan_group_windows` of the tokens), so that group g's cells are exactly windows g·G … (g+1)·G − 1, which
+  `out/groups.json` publishes, and `--minutes` must cover `warden_group_minutes` of its groups. The demo's stand-in (`benchmarks/network_traces/demo_stub.py`) serves the demo's class, prompts of exactly 8
   byte ids and exactly 24 out, id-form, and prints its prompts: `demo_stub.py prompts | … warden-rehearse --scan
   --prompts --tokens 24`. Its request carries `device: warden`; it
   shares the certifier rehearsal's directory, run names, unit, `status` and `fetch`, and one of either runs at a time.
@@ -336,13 +347,20 @@ WARDEN_TOKENS = (16, 256)
 #: the warden rehearsal's traffic, which the gate fixes so that `warden_minutes` bounds it: Poisson arrivals at
 #: `WARDEN_RATE` a second sampled from `WARDEN_SEED`, the run lasting `WARDEN_TAIL_S` past the last
 WARDEN_RATE, WARDEN_TAIL_S, WARDEN_SEED = 0.5, 60, 0
-#: a scan rehearsal's (`--scan`) schedule, scan_zk's (`scan_zk.PARAMS`, `scan_zk.py schedule`), the only one
-#: `scan_zk.py prove --warden-run` takes but for its tick (`SCAN_BUCKET_MS`), as `warden_serve.py`'s flags
+#: a scan rehearsal's (`--scan`) schedule at the class of record, scan_zk's (`scan_zk.PARAMS`, `scan_zk.py schedule`),
+#: as `warden_serve.py`'s flags
 SCAN_SCHEDULE = ("--cell-bytes", "512", "--slots", "4", "--bucket-ms", "100", "--delay", "27", "--lanes", "4",
                  "--queue", "4", "--window", "32", "--ingress-cells", "47", "--ingress-buckets", "12",
                  "--egress-cells", "65", "--every", "16")
 #: the scan's schedule by flag, which `--window-per-group` sizes a group's link-windows on (`scan_group_windows`)
 SCAN = {f: int(v) for f, v in zip(SCAN_SCHEDULE[::2], SCAN_SCHEDULE[1::2])}
+#: a scan rehearsal's classes, scan_zk's (`scan_zk.SETUPS`) by name, each its egress cells (KO + 1) and KI, the most ids
+#: a prompt has. `--scan-class` (with `--prompts`; `SCAN_CLASS`, the class of record, by default) picks one, whose
+#: schedule (`scan_schedule`, `scan_zk.py schedule --class`) is the only one `scan_zk.py prove --warden-run --class`
+#: takes but for its tick (`SCAN_BUCKET_MS`): `SCAN_SCHEDULE` at its egress cells, so what the gate counts off `SCAN`
+#: (minutes, groups, sampling blocks) holds at each. w63k4 is the window circuit's 4,32,4
+SCAN_CLASS = "w63"
+SCAN_CLASSES = {SCAN_CLASS: (SCAN["--egress-cells"], 1024), "w63k4": (5, 32)}
 #: a scan rehearsal's `--bucket-ms`, its tick τ: the endpoint gets a short request in its admission's tick, and its
 #: first egress cell leaves D = 27 ticks later, by which an answer of at most r = 4 ids must be whole: D·τ = 2.7 s at
 #: the scan's 100 ms, and at the most 108 s, for an endpoint that takes up to about 90 s to answer
@@ -351,13 +369,14 @@ SCAN_BUCKET_MS = (SCAN["--bucket-ms"], 4000)
 #: `WARDEN_PROMPTS` prompts, each of `WARDEN_PROMPT_IDS` token ids below 2^`WARDEN_PROMPT_ID_BITS` (the scan's IDB);
 #: then `--requests` and `--tokens` (each request's exact count, at most the scan's egress cells but the trailer's)
 #: take `WARDEN_PROMPT_REQUESTS` and `WARDEN_PROMPT_TOKENS`. A prompt is at most the scan's KI ids (`scan_zk.CLASS`),
-#: since the scan refuses a request of more and the gate refuses it at input instead
+#: since the scan refuses a request of more and the gate refuses it at input instead. These are the class of
+#: record's; another `--scan-class`'s are its own (`scan_bounds`)
 WARDEN_PROMPTS_BYTES = 1 << 20
 WARDEN_PROMPTS = (1, 400)
-WARDEN_PROMPT_IDS = (1, 1024)
+WARDEN_PROMPT_IDS = (1, SCAN_CLASSES[SCAN_CLASS][1])
 WARDEN_PROMPT_ID_BITS = 17
 WARDEN_PROMPT_REQUESTS = (1, WARDEN_REQUESTS[1])
-WARDEN_PROMPT_TOKENS = (1, SCAN["--egress-cells"] - 1)
+WARDEN_PROMPT_TOKENS = (1, SCAN_CLASSES[SCAN_CLASS][0] - 1)
 #: the prompts' file in `witness/`, the prover's: `warden_serve.py rehearse --prompts` reads it
 PROMPTS = "prompts.json"
 #: what a warden rehearsal publishes in `out/`, beside its certificates (`certificates.jsonl`); everything else
@@ -824,12 +843,13 @@ def coin_ports(host: Host, peer: str) -> range:
 
 def parse_reserve(argv: list[str], host: Host, *, admin: bool = False) -> dict:
     """A reserve's request; `--for LANE` (vy-admin's alone: a development window reserved for a lane without its own key)
-    names the window's prover."""
+    names the window's prover, and `--withhold` makes its session a withheld one (`withheld`)."""
     p = argparse.ArgumentParser(prog="vy-challenger-gate reserve", exit_on_error=False, add_help=False, allow_abbrev=False)
     for flag in ("--peer", "--scheme", "--families"):
         p.add_argument(flag, required=True)
     p.add_argument("--epoch", type=int, default=0)
     p.add_argument("--minutes", type=int, default=120)
+    p.add_argument("--withhold", action="store_true")
     if admin:
         p.add_argument("--for", dest="lane", default=None)
 
@@ -864,7 +884,7 @@ def parse_reserve(argv: list[str], host: Host, *, admin: bool = False) -> dict:
     if lane is not None and (not NAME.fullmatch(lane) or lane in HOST_ACCOUNTS):
         raise Refused(f"--for {lane!r}: a lane's name")
     return {"peer": a.peer, "scheme": a.scheme, "families": families, "epoch": a.epoch, "minutes": a.minutes,
-            **({"for": lane} if lane else {})}
+            **({"for": lane} if lane else {}), **({"withheld": True} if a.withhold else {})}
 
 
 def parse_open(argv: list[str]) -> tuple[str, str]:
@@ -951,7 +971,18 @@ def gate_reserve(argv: list[str], host: Host, *, by: str, admin: bool, now: date
     held = period_holding(lines, session)
     return {"session": session, "seq": entry["seq"], "peer": req["peer"], "by": by,
             **({"for": req["for"]} if "for" in req else {}), "expires_utc": entry["body"]["expires_utc"],
-            "period": held and held[0]}
+            "period": held and held[0], **({"withheld": True} if entry["body"].get("withheld") is True else {})}
+
+
+def withheld(s: dict) -> bool:
+    """Whether session `s` (its ledger entries by kind, None where absent) is a withheld one: its reserve and open say
+    `withheld: true`, and serve.py serves it `--withhold`."""
+    return any(((s.get(k) or {}).get("body") or {}).get("withheld") is True for k in ("reserve", "open"))
+
+
+def root_held(s: dict) -> bool:
+    """Whether the gate holds back session `s`'s coin commitment root: a withheld session's, until its `end` entry."""
+    return withheld(s) and s.get("end") is None
 
 
 def gate_open(argv: list[str], host: Host, *, by: str, now: datetime, admit: Callable[[str], None],
@@ -961,7 +992,9 @@ def gate_open(argv: list[str], host: Host, *, by: str, now: datetime, admit: Cal
     binding the session and the root, and `start` its unit (serve.py with --root, so the salt opens only after it): the
     session's port on the peer, its secret, which only this answer carries, and its coin commitment's root once `ready`
     has it (serve.py signs its record before it listens), so the serving side checks the hello's commitment against it
-    before its first coin."""
+    before its first coin. A withheld session's answer comes once `ready` has the root too, but carries `withheld: true`,
+    no root (`commitment` null) and whether serve.py signed its record (`signed`): its client checks the commitment its
+    challenger releases at the close instead."""
     session, root = parse_open(argv)
     d = host.sessions / session
     with locked(host.root / "gate.lock"):
@@ -983,14 +1016,18 @@ def gate_open(argv: list[str], host: Host, *, by: str, now: datetime, admit: Cal
                 (d / f).unlink(missing_ok=True)
             raise
         start(session)
-    entry = sessions_of(read_ledger(host.ledger))[session]["open"]
+    s = sessions_of(read_ledger(host.ledger))[session]
+    entry, commitment = s["open"], ready(session)
     b = entry["body"]
     return {"session": session, "port": b["port"], "peer": b["peer"], "host": b["host"], "seq": entry["seq"],
             "reserve": b["reserve"], "root": root, "by": b["by"], **({"for": b["for"]} if "for" in b else {}),
-            "opened_by": by, "secret": secret.hex(), "commitment": ready(session)}
+            "opened_by": by, "secret": secret.hex(), "commitment": None if root_held(s) else commitment,
+            **({"withheld": True, "signed": commitment is not None} if withheld(s) else {})}
 
 
 def gate_status(session: str, host: Host, active: Callable[[str], bool], now: datetime) -> dict:
+    """The session's ledger entries, whether its unit runs, whether its reserve expired unopened, and its coin
+    commitment's root (null until serve.py has signed its record, and a withheld session's until its `end`)."""
     if not SESSION.fullmatch(session):
         raise Refused(f"no session {session!r}")
     s = sessions_of(read_ledger(host.ledger)).get(session)
@@ -999,12 +1036,16 @@ def gate_status(session: str, host: Host, active: Callable[[str], bool], now: da
     expired = "open" not in s and "reserve" in s and utc(now) > s["reserve"]["body"]["expires_utc"]
     return {"session": session, "reserve": s.get("reserve"), "open": s.get("open"), "end": s.get("end"),
             "active": "open" in s and "end" not in s and active(session), "expired": expired,
-            "commitment": commitment_of(host.sessions / session / "out")}
+            "commitment": None if root_held(s) else commitment_of(host.sessions / session / "out")}
 
 
 def gate_fetch(session: str, host: Host) -> bytes:
-    """The session's directory (its request and out/, never its secret) as a gzipped tar."""
-    gate_status(session, host, lambda _: False, datetime.now(timezone.utc))
+    """The session's directory (its request and out/, never its secret) as a gzipped tar; a withheld session's only once
+    its `end` is in the ledger, since `out/record.json` signs its coin commitment's root and `releases.jsonl` names it."""
+    s = gate_status(session, host, lambda _: False, datetime.now(timezone.utc))
+    if root_held(s):
+        raise Refused(f"session {session} is withheld, and its end is not in the ledger: its directory, whose record.json "
+                      "signs its coin commitment's root, is fetched once its end is (status says when)")
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
         tar.add(host.sessions / session, arcname=session,
@@ -1173,10 +1214,22 @@ def _minutes(arrivals_s: int, height: int) -> int:
     return -(-(arrivals_s + 3 * WARDEN_TAIL_S + 2 ** height // KEYGEN_LEAVES_S) // 60)
 
 
-def scan_schedule(bucket_ms: int | None = None) -> tuple[str, ...]:
-    """`SCAN_SCHEDULE` at the tick `bucket_ms` (`--bucket-ms`; its own when None)."""
-    at = SCAN_SCHEDULE.index("--bucket-ms") + 1
-    return SCAN_SCHEDULE if bucket_ms is None else (*SCAN_SCHEDULE[:at], str(bucket_ms), *SCAN_SCHEDULE[at + 1:])
+def scan_schedule(bucket_ms: int | None = None, scan_class: str | None = None) -> tuple[str, ...]:
+    """`SCAN_SCHEDULE` at the tick `bucket_ms` (`--bucket-ms`; its own when None) and the egress cells of
+    `scan_class` (`SCAN_CLASSES`; its own when None)."""
+    flags = dict(zip(SCAN_SCHEDULE[::2], SCAN_SCHEDULE[1::2]))
+    if bucket_ms is not None:
+        flags["--bucket-ms"] = str(bucket_ms)
+    if scan_class is not None:
+        flags["--egress-cells"] = str(SCAN_CLASSES[scan_class][0])
+    return tuple(x for flag in flags.items() for x in flag)
+
+
+def scan_bounds(scan_class: str | None = None) -> tuple[tuple[int, int], tuple[int, int]]:
+    """A scan rehearsal's `--prompts` at `scan_class` (`SCAN_CLASSES`; the class of record when None): a prompt's ids,
+    1 to its KI, and `--tokens`, 1 to its egress cells less the trailer's."""
+    cells, ki = SCAN_CLASSES[scan_class or SCAN_CLASS]
+    return (1, ki), (1, cells - 1)
 
 
 def warden_window_ms(req: dict) -> int:
@@ -1234,8 +1287,9 @@ def parse_warden(argv: list[str], host: Host, *, load: bool = False) -> dict:
     request asks for (`warden_serve.py`'s 256 otherwise) and `--scan` (the scan's schedule and traffic) with, when
     given, its tick `--bucket-ms` (`SCAN_BUCKET_MS`, which the minutes and the key's sampling blocks are counted at),
     the sampling (`sampling`) and the key's height. `--prompts` (with `--scan`) marks the request's prompts as the gate's stdin,
-    and `--window-per-group` (with `--prompts`) sends them a group a link-window's span; `warden_prompts` reads them
-    and checks what depends on them. With `load` (`load-relay`) it is the serving session with its load first
+    `--scan-class` (with `--prompts`, recorded only when given) the scan's class they are of (`SCAN_CLASSES`: its
+    schedule, prompt ids and tokens), and `--window-per-group` (with `--prompts`) sends them a group a link-window's
+    span; `warden_prompts` reads them and checks what depends on them. With `load` (`load-relay`) it is the serving session with its load first
     (`parse_load`: the request's ``load``), whose minutes come out of `--minutes` before the rehearsal's."""
     p = argparse.ArgumentParser(prog=f"vy-challenger-gate {'load-relay' if load else 'warden-rehearse'}",
                                 exit_on_error=False, add_help=False, allow_abbrev=False)
@@ -1247,6 +1301,7 @@ def parse_warden(argv: list[str], host: Host, *, load: bool = False) -> dict:
     p.add_argument("--scan", action="store_true")
     p.add_argument("--bucket-ms", default=None)
     p.add_argument("--prompts", action="store_true")
+    p.add_argument("--scan-class", default=None)
     p.add_argument("--window-per-group", action="store_true")
     if load:
         p.add_argument("--sink-port", required=True)
@@ -1262,6 +1317,10 @@ def parse_warden(argv: list[str], host: Host, *, load: bool = False) -> dict:
         raise Refused("--bucket-ms: the scan's tick, with --scan")
     if a.window_per_group and not a.prompts:
         raise Refused("--window-per-group: groups of the --prompts")
+    if a.scan_class is not None and not a.prompts:
+        raise Refused("--scan-class: the scan's class of the --prompts")
+    if a.scan_class is not None and a.scan_class not in SCAN_CLASSES:
+        raise Refused(f"--scan-class {a.scan_class!r}: one of {sorted(SCAN_CLASSES)}")
     tick = {} if a.bucket_ms is None else {"bucket_ms": bounded("--bucket-ms", a.bucket_ms, *SCAN_BUCKET_MS)}
     loaded = {"load": parse_load(a, host, port)} if load else {}
     spent = loaded["load"]["minutes"] if load else 0
@@ -1270,11 +1329,13 @@ def parse_warden(argv: list[str], host: Host, *, load: bool = False) -> dict:
                       f"and witness at {LOAD_RATE / 1e6:g} MB/s and {LOAD_READY_S} s for the endpoint), and the "
                       "serving after it more")
     if a.prompts:
+        cls = {} if a.scan_class is None else {"scan_class": a.scan_class}
+        tokens = scan_bounds(a.scan_class)[1]
         return {"device": "warden", "peer": a.peer, "port": port, "minutes": minutes, "height": a.height,
                 "requests": None if a.requests is None else bounded("--requests", a.requests, *WARDEN_PROMPT_REQUESTS),
-                **({} if a.tokens is None else {"tokens": bounded("--tokens", a.tokens, *WARDEN_PROMPT_TOKENS)}),
-                "scan": True, **tick, "prompts": True, **({"window_per_group": True} if a.window_per_group else {})} | \
-            a.sampling | loaded
+                **({} if a.tokens is None else {"tokens": bounded("--tokens", a.tokens, *tokens)}),
+                "scan": True, **tick, "prompts": True, **cls,
+                **({"window_per_group": True} if a.window_per_group else {})} | a.sampling | loaded
     requests = bounded("--requests", a.requests or "100", *WARDEN_REQUESTS)
     given = ({} if a.tokens is None else {"tokens": bounded("--tokens", a.tokens, *WARDEN_TOKENS)}) | \
         ({"scan": True} if a.scan else {}) | tick
@@ -1378,12 +1439,13 @@ def warden_prompts(req: dict, data: bytes) -> bytes:
     alone (the ids are the prover's, `witness/` only); refused when `--minutes` is under `warden_group_minutes` of its
     groups (`warden_minutes` of its requests otherwise), at its tick. Returns the prompts' canonical bytes, the
     witness's `PROMPTS`."""
-    prompts = prompts_of(data)
+    ids, most = scan_bounds(req.get("scan_class"))
+    prompts = prompts_of(data, ids)
     n = len(prompts)
     if req.get("window_per_group") and n > SCAN["--lanes"]:
         raise Refused(f"--window-per-group: {n} prompts, past a group's {SCAN['--lanes']} (the scan's lanes)")
     requests = req["requests"] or n
-    tokens, height, minutes = req.get("tokens", WARDEN_PROMPT_TOKENS[1]), req["height"], req["minutes"]
+    tokens, height, minutes = req.get("tokens", most[1]), req["height"], req["minutes"]
     spent, tick = req.get("load", {}).get("minutes", 0), req.get("bucket_ms", SCAN["--bucket-ms"])
     if req.get("window_per_group"):
         least, what = warden_group_minutes(-(-requests // n), tokens, height, tick), f"{-(-requests // n)} groups"
@@ -1482,6 +1544,7 @@ def certifier_fetch(run: str, host: Host, *, witness: bool = False) -> bytes:
 
 
 USAGE = ("verbs: reserve --peer NAME --scheme S --families JSON [--epoch E] [--minutes M] [--for LANE: vy-admin's] "
+         "[--withhold] "
          "| open --session S --root R "
          "| period-open --name P --cap N --circuit SHA512 [--draw-k K] [--rows T] [--model M | --weights-root W] [--circuit-files JSON] "
          "[--length JSON] [--lane LANE: vy-admin's] "
@@ -1705,7 +1768,7 @@ def reserve(host: Host, session: str, *, signer, pinned: str, now: datetime) -> 
         return {"by": req["by"], **({"for": req["for"]} if "for" in req else {}), "peer": req["peer"],
                 "scheme": req["scheme"], "epoch": req["epoch"], "families": req["families"], "minutes": req["minutes"],
                 "pinned": pinned, "key_sha512": key_sha512, "host": f"{host.name}.{session}", "started_utc": utc(now),
-                "expires_utc": later(utc(now), req["minutes"])}
+                "expires_utc": later(utc(now), req["minutes"]), **({"withheld": True} if req.get("withheld") is True else {})}
     return append(host, "reserve", session, body_of, I, sign)
 
 
@@ -1726,7 +1789,8 @@ def admit(host: Host, session: str, *, signer, pinned: str, now: datetime, activ
         return {"window": {"root": req["root"]}, "reserve": r["seq"],
                 **{k: r["body"][k] for k in RESERVED if k in r["body"]}, "opened_by": req["by"], "pinned": pinned,
                 "pins": seal, "key_sha512": key_sha512, "host": r["body"]["host"],
-                "port": free_port(lines, active, coin_ports(host, r["body"]["peer"])), "secret_sha512": req["secret_sha512"], "started_utc": utc(now)}
+                "port": free_port(lines, active, coin_ports(host, r["body"]["peer"])), "secret_sha512": req["secret_sha512"], "started_utc": utc(now),
+                **({"withheld": True} if r["body"].get("withheld") is True else {})}
     return append(host, "open", session, body_of, I, sign)
 
 
@@ -1793,13 +1857,15 @@ def period(host: Host, args: list[str], *, signer, pinned: str, now: datetime, a
 
 def serve_argv(host: Host, session: str, open_body: dict, tree: Path = TREE) -> list[str]:
     """serve.py for the session: it listens on this host's 127.0.0.1 at the open's port, which its peer's certifier coin
-    link carries to the peer (no `--peer`: serve.py opens no tunnel of its own)."""
+    link carries to the peer (no `--peer`: serve.py opens no tunnel of its own), and serves it `--withhold` when its open
+    says `withheld: true`."""
     return [sys.executable, "-I", str(tree / "benchmarks" / "live_challenger" / "serve.py"),
             "--out", str(host.sessions / session / "out"), "--port", str(open_body["port"]), "--scheme", open_body["scheme"],
             "--families", json.dumps(open_body["families"]), "--epoch", str(open_body["epoch"]),
             "--key", str(host.key), "--host", open_body["host"],
             "--root", open_body["window"]["root"], "--secret-file", str(host.sessions / session / SECRET),
-            "--session", session, "--sign-lock", str(host.root / "sign.lock")]
+            "--session", session, "--sign-lock", str(host.root / "sign.lock"),
+            *(["--withhold"] if open_body.get("withheld") is True else [])]
 
 
 def coin_link_argv(host: Host, session: str, open_body: dict, tree: Path = TREE) -> list[str]:
@@ -2031,12 +2097,12 @@ def warden_command(req: dict, out: Path, url: str, tree: Path = TREE, *, sinks: 
     """`warden_serve.py rehearse` of the request: the warden and its client here, the warden's upstream the endpoint
     at `url` (the tunnel's local end), its key at the request's height (`height_argv`), the request's number of
     requests on the gate's traffic (`WARDEN_RATE`, `WARDEN_SEED`, `WARDEN_TAIL_S`) at its sampling (`sampling_argv`),
-    for a scan rehearsal id requests (`--ids`) at the scan's schedule at the request's tick (`scan_schedule`), of its
-    prompts (`--prompts`, the gate's `PROMPTS` in `out`, the witness) and in groups (`--window-per-group`) when the
-    request says so, and the most tokens a request asks for only when the request has it. A `load-relay` request's
-    load goes first: the `store`'s stream of its shape relayed to `sinks` (the sink tunnels' local ends) for its
-    program, the endpoint given `LOAD_READY_S` to come up after it."""
-    scan = ["--ids", *scan_schedule(req.get("bucket_ms"))] if req.get("scan") else []
+    for a scan rehearsal id requests (`--ids`) at the scan's schedule at the request's tick and class
+    (`scan_schedule`), of its prompts (`--prompts`, the gate's `PROMPTS` in `out`, the witness) and in groups
+    (`--window-per-group`) when the request says so, and the most tokens a request asks for only when the request has
+    it. A `load-relay` request's load goes first: the `store`'s stream of its shape relayed to `sinks` (the sink
+    tunnels' local ends) for its program, the endpoint given `LOAD_READY_S` to come up after it."""
+    scan = ["--ids", *scan_schedule(req.get("bucket_ms"), req.get("scan_class"))] if req.get("scan") else []
     prompts = ["--prompts", str(out / PROMPTS)] if req.get("prompts") else []
     grouped = ["--window-per-group"] if req.get("window_per_group") else []
     given = ["--max-tokens", str(req["tokens"])] if "tokens" in req else []
