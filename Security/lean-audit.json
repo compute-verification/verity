@@ -1582,6 +1582,9 @@
    "owner": "@compute-research",
    "digest": "aca93284b4344597af71ea0c3d855de46f764cce17a7649612e8145c68315919"
   },
+  "Pouw.Assumptions.SaltDerivation": {
+   "owner": "@compute-research"
+  },
   "Pouw.Assumptions.ServiceSound": {
    "owner": "@compute-research",
    "digest": "ad7aa962f2d81c72c56e9a919f0f84a08e2183e328b115ed7192fc51fd7ab19f"
@@ -1625,6 +1628,9 @@
   "Pouw.Assumptions.ShaSpeed": {
    "owner": "@compute-research",
    "digest": "a7aaf286384107345096ab0159333defd5d18be6702c647d43c33036731f1ccf"
+  },
+  "Pouw.Assumptions.SubtreeLayout": {
+   "owner": "@compute-research"
   },
   "Pouw.Assumptions.TT": {
    "owner": "@compute-accounting",
@@ -2497,9 +2503,16 @@
    "sealed": true
   },
   "Definitions.Pouw.Assumptions": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Claims", "Definitions.Pouw", "Definitions.Pouw.Assumptions"],
+   "imports": [
+    "Mathlib",
+    "Definitions.Core",
+    "Definitions.Claims",
+    "Definitions.Hash",
+    "Definitions.Pouw",
+    "Definitions.Pouw.Assumptions"
+   ],
    "except": [],
-   "why": "a named assumption, and a definition or statement over named assumptions, reads the protocol's definitions, never a guarantee or a proof; the service premises per prover read the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ExpectedCR), as C-Flock's guarantees do",
+   "why": "a named assumption, and a definition or statement over named assumptions, reads the protocol's definitions, never a guarantee or a proof; the service premises per prover read the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ExpectedCR), as C-Flock's guarantees do; the lead's commitment premises read the hash area's keyed leaf and hm96 leaf (Definitions.Hash.Keyed, Definitions.Hash.Hm96)",
    "sealed": true
   },
   "Definitions.Pouw.Guarantees": {
@@ -2516,9 +2529,9 @@
    "sealed": true
   },
   "Definitions.Pouw": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Claims", "Definitions.Pouw"],
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.Claims", "Definitions.Hash", "Definitions.Pouw"],
    "except": ["Definitions.Pouw.PearlC.Defs"],
-   "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof; relative security's per-prover break term reads the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ecrBound), the one break term the areas share"
+   "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof; relative security's per-prover break term reads the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ecrBound), the one break term the areas share; the lead's keyed commitments read the hash area's keyed leaf and hm96 leaf (Definitions.Hash.Keyed, Definitions.Hash.Hm96)"
   },
   "Definitions.Pouw.Basic": {
    "imports": ["Mathlib", "Definitions.Pouw.Basic"],
@@ -11404,6 +11417,12 @@
    "signature": ["Verity.SecurityProofs.ToCircuitAnd : Verity.Guarantees.ToCircuitAnd"],
    "assumptions": [],
    "type_hash": "d7a46674efa40159e39bed4221c853818c160c91fe491f6e0746b33d2e6b02ab"
+  },
+  "Pouw.Salt.keyed_leaf_hides": {
+   "owner": "@compute-research"
+  },
+  "Pouw.Salt.keyed_leaf_binds": {
+   "owner": "@compute-research"
   }
  },
  "shape": {
@@ -11412,7 +11431,8 @@
    "Definitions.Accounting.Physical",
    "Definitions.Accounting.Assumptions.PouwWork",
    "Proofs.Flock.Recursive.Premises",
-   "Definitions.Nci.Assumptions.Fit"
+   "Definitions.Nci.Assumptions.Fit",
+   "Definitions.Pouw.Assumptions.LeadCommit"
   ],
   "properties": {
    "Flock.SecurityProofs.PublicAudit": {
@@ -11698,6 +11718,14 @@
    "Hash.SecurityProofs.EmbeddingReadBinding": {
     "function": "Hash.EmbeddingRead.ok",
     "outcome": "accept"
+   },
+   "Pouw.Salt.keyed_leaf_hides": {
+    "function": "Hash.Keyed.digest",
+    "outcome": "none"
+   },
+   "Pouw.Salt.keyed_leaf_binds": {
+    "function": "Hash.Keyed.accepts",
+    "outcome": "none"
    }
   },
   "frozen": {
