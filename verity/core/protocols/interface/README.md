@@ -51,6 +51,13 @@ profile's types derive `DecidableEq`.
   JSON, and writes one flushed outcome line per case. This is the mode the difftest harness drives.
 - A usage error exits 64, and an outcome that can't be written canonically exits 70.
 
+A case is read in place by `Core.Canonical` (`CoreProtocol/Protocol/Canonical.lean`), which gives `canonicalJson`'s and
+`Flock.unhex`'s answers at any size, and a protocol's decoder reads evidence that can be gigabytes with it too (PoUS's,
+a composition's). Those two go through `String.toList`, whose runtime counts characters in 32 bits and spends about 30
+bytes on each: they refuse a canonical text holding a string of `2^32` characters or more, or read a prefix of it.
+`Canonical` imports only what `Protocol` does, so it sits in `Protocol`'s layer. `serve` frees a case's line before it
+decodes the evidence, and its peak memory is about 2.6 times the line.
+
 ## Blobs (`CoreProtocol/Blobs.lean`)
 
 A check that reads bytes too large for canonical JSON (a statement's circuit file, its public file, its sessions'
@@ -89,7 +96,7 @@ composite's genesis, so the head names the whole log. An entry is in one of two 
 
 | format | what it registers |
 | --- | --- |
-| `verity/registration/hardware/v1` | the site's cards (by SKU, under the auditor's data sheets), locations (site, hosts, devices, memory leaves by tier and bytes, the auditor's certifiers and challengers with their keys) and links (`β`, latency) |
+| `verity/registration/hardware/v1` | the site's cards (each device's registered figures: SKU, tensor clock, peak rate per operand class, memory figures), locations (site, hosts, devices, memory leaves by tier and bytes, the auditor's certifiers and challengers with their keys) and links (`β`, latency) |
 | `verity/registration/information/v1` | θ, each registered value by its committed root (`value`, `root`, `leaves`, `words`, `word_bits`, `domain`, a public checkpoint's pin), and the builder `B` (digest, advice format, public advice cap `ℓ`); each once in the log |
 
 Registration registers the site, θ and `B`, not the circuit `B` builds. A subprotocol's Program and parameters, and
@@ -98,12 +105,16 @@ the proof system, are that protocol's public verifier parameters, not entries of
 An entry's digest is `SHA-512(format ‖ 0 ‖ canon(entry))`, a card's is under `verity/registration/card/v1`, and the
 genesis is under `verity/registration/genesis/v1` over `{"composite": "onsite" | "remote"}`. `check` holds each entry to
 the log before it and refuses the first that fails by name (`previous`, `duplicate-id`, `unknown-ref`, `kind`,
-`card-digest`, `capacity`, `owner`, and onsite `uncertified` and `challenger-reach`, then `duplicate-information`). A
+`card-digest`, `figures`, `capacity`, `owner`, and onsite `uncertified` and `challenger-reach`, then `duplicate-information`). A
 component reads its view of an accepted log by projection (`View`: the site, θ's values and the builder, at the head).
-Registration is ASCII-only: a log or parameters holding any other character is refused as `ascii` before any digest is
-taken. As a core protocol, `protocol` (`verity/registration/log/v1`, the `core-registration` executable) takes the
-auditor's parameters (`{"composite", "keys", "sheets"}`), the log as commitment (`{"composite", "entries"}`, its head
-the digest) and `{}` as evidence; it makes public the log's view and rejects as `entry I: REFUSAL`.
+Registration is ASCII-only without DEL: a log or parameters holding any other character is refused as `ascii` before
+any digest is taken. As a core protocol, `protocol` (`verity/registration/log/v1`, the `core-registration` executable) takes the
+auditor's parameters (`{"composite", "keys", "sheets", "tolerance"}`), the log as commitment (`{"composite", "entries"}`, its head
+the digest) and `{}` as evidence; it makes public the log's view and rejects as `entry I: REFUSAL`. `figures` is registration's check of a device's
+registered figures against the auditor's estimates (`DeviceFigures.Accepted`): the SKU is the sheet's, the clock and
+each peak rate (`peakRate`, one per operand class: `uniform-s8`, `uniform-s2`, `uniform-u2`, `uniform-u4`, `zero`) are
+within the auditor's tolerance `num / den` of the sheet's in both directions, every peak rate is positive, and the
+memory figures are the sheet's.
 `verity.core.protocols.registration` is its Python, held to it by the composition suite's difftest
 (`../composition/tests/test_registration_difftest.py`).
 

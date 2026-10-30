@@ -12,7 +12,7 @@ Stated here, open, and claims of no one:
 * `AcceptsComplete`, the completeness half that pairs with `AcceptsDecodes`: at valid parameters, a `C*` that decodes to
   the committed `W` is accepted. Its honest case (`HonestSetup`) is stated as written. Its concrete instance, the setup
   vector `SetupProtocol`'s guards accept (`p2-6B`, `W = 01 02 … 0c`), is not given yet: `Commit.commit` reads the
-  manifest through `Flock.canon`, well-founded recursion the kernel does not evaluate.
+  manifest through `Flock.canonUtf8`, well-founded recursion the kernel does not evaluate.
 * `DecodeIsModel`, a lemma statement: the code's `P2.decodeValue p K t c` is the trusted model's block decoder
   `Pous.decBlock` (P2 in the ring model `ringRO`) run at the identity labeling with block keys `(K, t)`, on every
   canonical `c < p`, read mod `2^b`. With `Decodes` (which reads `decodeValue`), it would tie what the check accepts to
