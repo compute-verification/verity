@@ -47,7 +47,7 @@ background wait any call, finishing whose start the watch didn't see (it lay bef
   `STICK_S` (a restarted run reads RUNNING for a while before it errors again, so seeing it running is not enough). When
   `OUTAGE_MIN` or more coordinators are down at once, it is the platform's failure: each is restarted every `OUTAGE_RETRY_S`,
   not counted and never relaunched, until it comes back; and once `RING_MIN` have been down `RING_DOWN_S`, an **outage**
-  record (the relay posts it to @top and Daniel) is written, again every `RING_EVERY_S` while it lasts. A sweep the API
+  record (the relay posts it to the top coordinator and the registry's human) is written, again every `RING_EVERY_S` while it lasts. A sweep the API
   refuses with 429 waits its Retry-After (`rate_wait`) rather than asking again every minute.
 
 A run among an agent's newest left in CREATING for 10 min by the API's own `updatedAt` with no newer run started (only ones
@@ -209,7 +209,7 @@ MAX_RESTARTS = 3            # ERROR runs in a row the watch restarts before leav
 STICK_S = 10 * 60           # a coordinator back from ERROR (its latest run not ERROR) this long: its restart count clears
 OUTAGE_MIN = 3              # coordinators down (latest run ERROR) at once: a platform outage, not one agent's fault, so
 OUTAGE_RETRY_S = 15 * 60    # ... each is restarted this often, uncapped and uncounted, and none is relaunched
-RING_DOWN_S = 30 * 60       # coordinators down this long, RING_MIN of them or more: an `outage` record, for @top and Daniel,
+RING_DOWN_S = 30 * 60       # coordinators down this long, RING_MIN of them or more: an `outage` record, for the top coordinator and a person,
 RING_MIN = 5
 RING_EVERY_S = 3600         # ... again this often while it lasts
 RATE_WAIT_S = (120, 900)    # a sweep refused with 429 waits Retry-After, else from the first, doubling, to the second
@@ -1045,7 +1045,7 @@ class Watch:
         self.save()
 
     def ring_outage(self, t: float) -> None:
-        """An `outage` record (the relay posts it to @top and Daniel) when `RING_MIN` or more coordinators have been down
+        """An `outage` record (the relay posts it to the top coordinator and a person) when `RING_MIN` or more coordinators have been down
         `RING_DOWN_S`, once every `RING_EVERY_S` while it lasts."""
         long = sorted((self.coords[x], since) for x, since in self.down.items() if x in self.coords and t - since >= RING_DOWN_S)
         if len(long) < RING_MIN or t - self.rung_outage < RING_EVERY_S:

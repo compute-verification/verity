@@ -18,7 +18,7 @@ The checks (cloud_watch.toml holds every threshold, price and path):
 
 - **loops**: each loop post_start.sh starts leaves a success marker (a log line with its time, a JSON time field, or a file's
   mtime). One with no success in twice its period is an anomaly; a loop's `also_mention` user groups are named in it too, and
-  once it is `page_after_s` later still, a second anomaly names `page_user` (the agent watch's: @top, then Daniel).
+  once it is `page_after_s` later still, a second anomaly names `page_user` (the agent watch's: the top coordinator's group, then the person who runs the project).
 - **r2**: an incremental ListObjectsV2 sweep of each bucket, at most `page_cap` pages (1000 keys, one class-A op) a pass, resumed
   from the last key, so a complete sweep's totals per top-level prefix come every few passes at a bounded cost. Growth between
   the last two sweeps above `max_gib_per_day`, or `mean_ratio` times the 7-day mean, is an anomaly naming the prefix that grew most;

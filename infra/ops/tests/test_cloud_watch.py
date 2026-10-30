@@ -375,8 +375,8 @@ def test_the_config_names_the_registry_channel_and_every_loop_post_start_starts(
     assert unwatched == [] and "research pods guard" in watched, f"add a [[loop]] to cloud_watch.toml for {unwatched}"
 
 
-def test_the_agent_watchs_stall_names_top_and_pages_daniel_an_hour_later(tmp_path):
-    """29-30 Oct: the agent watch failed every sweep (HTTP 429) from 03:26Z to 07:06Z and only @infra was told."""
+def test_the_agent_watchs_stall_names_the_top_group_and_pages_a_person_an_hour_later(tmp_path):
+    """A watch that failed every sweep for hours (HTTP 429) told only the infra group."""
     cfg = tomllib.loads((CONTROL / "cloud_watch.toml").read_text())
     (loop,) = [x for x in cfg["loop"] if x["name"] == "Agent watch"]
     loop = {**loop, "file": str(tmp_path / "status.json")}

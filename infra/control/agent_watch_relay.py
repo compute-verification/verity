@@ -2,7 +2,7 @@
 /data/agent-watch/events.jsonl (on the pod itself with $AGENT_WATCH_ON_POD, else over ssh) and posts each in #agent-alerts: a
 held run the watch cancelled and continued, a tool call running 45 minutes, a crashed run, a coordinator ready to wake. An agent that holds a handle
 (the Slack registry's `holder`) is named by its handle. What the watch leaves for a person (`TOP`: erroring, stuck, a refused
-cancel, held again within the hour, a run unreadable for an hour, and an outage, which names Daniel too; the first unreadable
+cancel, held again within the hour, a run unreadable for an hour, and an outage, which names the registry's human too; the first unreadable
 line is posted nowhere) leads with @top, and rings @top's inbox thread as `ring_decision` does for a decided card (the inbox is in the front door, so the post's
 own route can't ring it). A cloud worker (a Task subagent) that went idle, or has been ACTIVE for hours, leads with its lane's
 handle and rings that inbox the same way, for its coordinator to resume it with Task (the watch can't start a worker's run;
@@ -209,8 +209,8 @@ def text(rec: dict) -> str:
     lead = f"{slack.tag(slack.entry(REG, to))} " if (to := rung(rec)) else ""
     name = rec.get("name") or "(unnamed)"
     if rec.get("kind") == "outage":
-        daniel = slack.human_entry(REG, "daniel")
-        who = f" <@{daniel['slack_user']}>" if daniel else ""
+        human = next(iter(REG.get("humans") or []), None)
+        who = f" <@{human['slack_user']}>" if human and human.get("slack_user") else ""
         down = ", ".join(f"@{h}" for h in rec.get("handles") or [])
         return f"{lead.rstrip()}{who} *Agent watch, outage:* {SAY['outage'].format(**{**rec, 'handles': down})}."
     if rec.get("kind") == "silent":

@@ -2687,10 +2687,10 @@ def test_a_holder_whose_worker_went_quiet_is_not_held_unread(tmp_path):
     assert api.posts == [] and "held_unread" not in [r["kind"] for r in records(tmp_path)]
 
 
-def test_a_platform_outage_is_retried_uncapped_rings_top_and_daniel_and_clears_the_cap_once_coordinators_are_back(tmp_path):
-    """29-30 Oct: 13 of 15 coordinators ended in ERROR between 23:22Z and 03:49Z while every restart failed. The watch spent each
-    one's 3 restarts within minutes and left them for a person, nobody was rung, and after a Slack ring revived all 12 at 07:17Z
-    they stayed 'left for a person' until infra cleared state.json by hand. Replayed: one coordinator down every 20 minutes."""
+def test_a_platform_outage_is_retried_uncapped_rings_a_person_and_clears_the_cap_once_coordinators_are_back(tmp_path):
+    """Most coordinators ended in ERROR over a few hours while every restart failed. The watch spent each one's restarts within
+    minutes and left them for a person, nobody was rung, and after a ring revived them they stayed 'left for a person' until
+    state.json was cleared by hand. Replayed: one coordinator down every 20 minutes."""
     ids = [f"bc-{i:08x}-0000-0000-0000-{i:012x}" for i in range(1, 14)]
     reg, routes = tmp_path / "registry.json", tmp_path / "routes.d"
     routes.mkdir()
@@ -2699,7 +2699,7 @@ def test_a_platform_outage_is_retried_uncapped_rings_top_and_daniel_and_clears_t
                   {f"ok-{i}": {"status": "FINISHED"} for i in range(len(ids))})
     clock = Clock(T0)
     w = W.Watch(api, tmp_path / "events.jsonl", clock, registry=reg, routes=routes)
-    w.errors[ids[0]], w.left = W.MAX_RESTARTS, {ids[0]}          # its cap already spent, as every one's was by 03:49Z
+    w.errors[ids[0]], w.left = W.MAX_RESTARTS, {ids[0]}          # its cap already spent
     refused = []
 
     def down(path, body=None):
