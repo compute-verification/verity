@@ -688,9 +688,10 @@ vstage)
   /usr/bin/time -v -o $O/vstage/time-points.txt python3 -m verity_flock.rec_vstage points $INNER $DD/stage/circuit.txt \
     $DD/stage/pub-$N.bin > $V/points.json 2> $O/vstage/points.err || { tail -20 $O/vstage/points.err; exit 1; }
   # an inner statement whose description is registered (stage/registered.json, verity_flock.inner_registered) is folded
-  # against that registration (--registered)
+  # against that registration (--registered); set up on the program rec-inner reads, which a wired one's Linking needs
   REG=(); [ -s $DD/stage/registered.json ] && REG=(--registered $DD/stage/registered.json)
-  /usr/bin/time -v -o $O/vstage/time-fold.txt $FOLD_BIN --plain-leaves --partition $DD/stage/partition.json "${REG[@]}" verity/flock-circuit \
+  /usr/bin/time -v -o $O/vstage/time-fold.txt $FOLD_BIN --plain-leaves --partition $DD/stage/partition.json \
+    --program $DD/stage/program.json "${REG[@]}" verity/flock-circuit \
     $DD/stage/circuit.txt $DD/stage/pub-$N.bin $V/points.json os > $V/fold.json 2> $O/vstage/fold.err
   rc=$?; echo "fold exit $rc"; [ $rc = 0 ] || { tail -20 $O/vstage/fold.err; exit 1; }
   cp $V/points.json $V/fold.json $O/vstage/
