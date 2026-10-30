@@ -1895,6 +1895,50 @@ __global__ void __launch_bounds__(SMALL_THREADS, MINB)
     }
   persist_done(p);
 }
+#ifdef V31_WG
+// A served call's leaf phase in the order its GEMM leaves the rows' chains (V31_LORD 1): every commit tile's wrows word
+// rows first (the GEMM hashes none but RP 5's r5w), then its O rows by the GEMM's raster from its last tile back (gw commit tiles a GEMM
+// tile, lpt - wrows O rows each). leaf_persist's groups are 128 consecutive leaves, so each holds word rows or rows of
+// tiles the GEMM never reached, and a group takes its longest chain however much of the rest the GEMM hashed; in this
+// order a group's leaves have about as many chunks left. A group's leaves are then no longer one group's, so the
+// subtrees fold after them (fold_persist, or the level kernels when they fold every group, Lanes::folds_after).
+struct LeafOrder {
+  u64 tiles, lpt, wrows;
+  int tiles_m, tiles_n, group, gw;
+  DEV u64 pos(u64 v) const {
+    const u64 nw = tiles * wrows;
+    if (v < nw) return v / wrows * lpt + v % wrows;
+    const u64 lpo = lpt - wrows, per = (u64)gw * lpo, u = v - nw, k = u % per;
+    int tm, tn;
+    wgp::raster((int)(tiles / gw - 1 - u / per), tiles_m, tiles_n / gw, group, tm, tn);
+    return ((u64)tm * tiles_n + (u64)tn * gw + k / lpo) * lpt + wrows + k % lpo;
+  }
+};
+template <class Row, int MINB = SMALL_MINB>
+__global__ void __launch_bounds__(SMALL_THREADS, MINB)
+    leaf_order(Persist p, int dom, Row row, LeafOrder lo, const u64* __restrict__ S, const u64* __restrict__ F, u64 n,
+               u64* levels) {
+  if (persist_claim(p))
+    for (u32 vb; (vb = persist_next(p)) < p.nvb;) {
+      const u64 v = (u64)vb * SMALL_THREADS + threadIdx.x;
+      if (v < n) {
+        const u64 pos = lo.pos(v);
+        u64 x[8], out[8];
+        row.leaf_digest(pos, x);
+        leaf_from_digest<0>(dom, pos, x, S, out, nullptr, F);
+        st8(levels + 8 * pos, out);
+      }
+    }
+  persist_done(p);
+}
+// leaf_persist's folds of groups 0 .. nvb - 1 (fl levels each), once every leaf is in
+__global__ void __launch_bounds__(SMALL_THREADS, SMALL_MINB) fold_persist(Persist p, int dom, u64 width, u64* levels, int fl) {
+  const u32 cnt = (u32)(width < SMALL_THREADS ? width : SMALL_THREADS);
+  if (persist_claim(p))
+    for (u32 vb; (vb = persist_next(p)) < p.nvb;) fold_vb(dom, levels, width, cnt, fl, vb);
+  persist_done(p);
+}
+#endif
 
 // ---------------------------------------------------------------- synthetic operands
 // v31.py's `llm` operands on the device: rows of Student-t(3) activations or Gaussian weights quantized to +-127 by their
@@ -2155,6 +2199,9 @@ static std::string env_str(const char* name, const char* dflt) {
 // through shared memory with TMA, a hash warp issuing the stores); V31_HALL 1: every row there, past the
 // consumers' end, timing the hash warps alone, -1: none, timing the GEMM alone in that CTA; V31_HCHUNK
 // C > 0: the hash warps' passes over the posted rows, C chunks of each a visit, in place of each row whole in turn;
+// V31_RP 6 the ping-pong GEMM (gemm_pp, 128 x 128 tiles a consumer warpgroup), each warpgroup hashing O rows while the
+// other runs its mainloop, and 7 the same with warps 9 to 11 hashing too; V31_PPM, the k-tiles left in the other's
+// mainloop at which a consumer starts no more chunks; V31_PPH 0, the ping-pong GEMM without the hashing;
 // V31_WGW 0: the prefix-sum segments on gemm_kernel<true> rather than the wg protocol GEMM).
 // A Fill's commit: V31_LMINB 4, 5 (the default), 6 or 8, its leaf phase's CTAs an SM by registers (leaf_persist's MINB: 128,
 // 96, 80 or 64 a thread); V31_SAHEAD 1, a call's salt phase on a stream of its own (Ks a launch argument), issued with the
@@ -2165,11 +2212,14 @@ static std::string env_str(const char* name, const char* dflt) {
 // fold, rather than (0, the default) by a level_kernel launch a level, over the whole width, after the leaf phase.
 // V31_MASK: the salt phase's hm96 mask (salt_persist's MK): 0 its nibble table in shared memory as hm96_mask_block_h's
 // halves, 2 the nibble table through L1, 1 none (timing only; wrong roots); 1 and 2 at V31_SMINB 4 only.
+// V31_LORD 1, with V31_RP 4 to 7, its leaf phase in the order the GEMM leaves the rows' chains (leaf_order; V31_LMINB 4 or
+// 5), and its groups' levels folded after it (fold_persist at V31_LFOLD 1, else the level kernels).
 struct Knobs {
   int carve = env_int("V31_CARVE", 100), dyn = env_int("V31_DYN", 1), wrap = env_int("V31_WRAP", 2), wcw = env_int("V31_WCW", 256),
       ccta = env_int("V31_CCTA", 1), pf = env_int("V31_PF", 0), diag = env_int("V31_DIAG", 0), sched = env_int("V31_SCHED", 0),
       gemm = env_int("V31_GEMM", 0), wgbn = env_int("V31_WGBN", 256), cm = env_int("V31_CM", 0), wgg = env_int("V31_WGG", 16),
       rp = env_int("V31_RP", 0), lminb = env_int("V31_LMINB", SMALL_MINB), sahead = env_int("V31_SAHEAD", 0),
+      ppm = env_int("V31_PPM", 0), pph = env_int("V31_PPH", 1), lord = env_int("V31_LORD", 0),
       ltw = env_int("V31_LTW", 0),   // Fill at S = 1: cuBLASLt's int32 X W'^T in place of the protocol GEMM, rows its low halves
       full = env_int("V31_FULL", 1), sminb = env_int("V31_SMINB", 4), lfold = env_int("V31_LFOLD", 0),
       mask = env_int("V31_MASK", 0);
@@ -2199,6 +2249,10 @@ static void set_carveout(int pct) {
                       (const void*)salt_persist<true, SMALL_MINB>, (const void*)salt_persist<false, 4, 1>,
                       (const void*)salt_persist<true, 4, 1>, (const void*)salt_persist<false, 4, 2>, (const void*)salt_persist<true, 4, 2>};
   for (const void* k : ks) CK(cudaFuncSetAttribute(k, cudaFuncAttributePreferredSharedMemoryCarveout, pct));
+#ifdef V31_WG
+  for (const void* k : {(const void*)leaf_order<FusedRow, 4>, (const void*)leaf_order<FusedRow>, (const void*)fold_persist})
+    CK(cudaFuncSetAttribute(k, cudaFuncAttributePreferredSharedMemoryCarveout, pct));
+#endif
 }
 
 // A committer's salt and leaf phases in at most ccta CTAs an SM (salt_persist, leaf_persist; ccta 0: commit_gpu's small
@@ -2268,14 +2322,42 @@ struct Lanes {
       } else {
         leaf_persist<Row><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, rows, cm.S, cm.F, cm.n, cm.width, cm.levels, fl);
       }
-      for (int d = fl; d < L; ++d) {   // the whole width: salts left the groups of pads alone to these too
-        const u64 n_out = cm.width >> (d + 1);
-        level_kernel<<<(unsigned)((n_out + SMALL_THREADS - 1) / SMALL_THREADS), SMALL_THREADS, 0, st>>>(
-            cm.dom, cm.lv[d], cm.lv[d + 1], cm.width >> d, d);
-      }
+      fold_levels(cm, fl, L, st);
     }
     cm.nodes(st);
   }
+  // levels d0 .. L - 1 a level_kernel launch a level, over the whole width: salts left the groups of pads alone to these too
+  static void fold_levels(Committer& cm, int d0, int L, cudaStream_t st) {
+    for (int d = d0; d < L; ++d) {
+      const u64 n_out = cm.width >> (d + 1);
+      level_kernel<<<(unsigned)((n_out + SMALL_THREADS - 1) / SMALL_THREADS), SMALL_THREADS, 0, st>>>(
+          cm.dom, cm.lv[d], cm.lv[d + 1], cm.width >> d, d);
+    }
+  }
+#ifdef V31_WG
+  // leaves_nodes with the leaves in lo's order (leaf_order), then their groups' levels: on the level kernels when they
+  // fold every group (folds_after), else fold_persist over the groups of leaves (the salts folded those of pads)
+  template <class Row>
+  void leaves_ordered(Committer& cm, const Row& rows, const LeafOrder& lo, int ccta, cudaStream_t st) {
+    if (lminb != 4 && lminb != SMALL_MINB) {
+      fprintf(stderr, "V31_LMINB %d: the ordered leaf phase takes 4 or %d\n", lminb, SMALL_MINB);
+      exit(2);
+    }
+    const bool after = folds_after(ccta);
+    if (!ccta) ccta = 8;
+    const u64 nvb = (cm.n + SMALL_THREADS - 1) / SMALL_THREADS;
+    const int L = group_levels(cm.width);
+    if (lminb == 4)
+      leaf_order<Row, 4><<<grid(nvb, ccta), SMALL_THREADS, 0, st>>>(persist(nvb, ccta), cm.dom, rows, lo, cm.S, cm.F, cm.n,
+                                                                    cm.levels);
+    else
+      leaf_order<Row><<<grid(nvb, ccta), SMALL_THREADS, 0, st>>>(persist(nvb, ccta), cm.dom, rows, lo, cm.S, cm.F, cm.n,
+                                                                 cm.levels);
+    if (after) fold_levels(cm, 0, L, st);
+    else fold_persist<<<grid(nvb, ccta), SMALL_THREADS, 0, st>>>(persist(nvb, ccta), cm.dom, cm.width, cm.levels, L);
+    cm.nodes(st);
+  }
+#endif
 };
 
 // One shape's prover: every buffer of a call, NB copies of the committed values (words, O) for the overlapped arm.
@@ -2649,12 +2731,14 @@ struct Fill {
   uint8_t* obuf = nullptr;
   int ocap = 0;
   // V31_GEMM 1 (served): D = a' b'^T on wg_proto.cuh's plain GEMM (mode 0, static schedule) in place of cuBLASLt; V31_RP 4
-  // hashes its O rows in the GEMM's producer warpgroup (5: and a hash warpgroup, its registers r5h), digests to xd[copy]
-  // flagged with the launch's epoch xep[copy]; wgw (V31_WGW, default 1): the prefix-sum segments on the wg protocol GEMM
-  // too, in place of gemm_kernel<true>, with RP 5's hash warps unless r5w (V31_R5W) is 0; tst (V31_TST): RP 5's stores
-  // through shared memory with TMA, on the store maps tso[copy] (D) and tsw[copy] (words)
+  // hashes its O rows in the GEMM's producer warpgroup (5: and a hash warpgroup, its registers r5h; 6 and 7: between the
+  // ping-pong GEMM's mainloops, 128 x 128 tiles), digests to xd[copy] flagged with the launch's epoch xep[copy]; wgw
+  // (V31_WGW, default 1): the prefix-sum segments on the wg protocol GEMM too, in place of gemm_kernel<true>, with RP 5's
+  // hash warps unless r5w (V31_R5W) is 0; tst (V31_TST): RP 5's stores through shared memory with TMA, on the store maps
+  // tso[copy] (D) and tsw[copy] (words)
   bool wg = false, wgw = false, r5w = false, tst = false;
-  int wbn = 0, wgrid = 0, hchunk = 0, r5h = 0;
+  int wbn = 0, wgrid = 0, hchunk = 0, r5h = 0, ppgrid = 0;
+  bool pp() const { return kn.rp == 6 || kn.rp == 7; }
 #ifdef V31_WG
   CUtensorMap tso[2]{}, tsw[2]{};
 #endif
@@ -2835,8 +2919,8 @@ struct Fill {
   // served: the wg GEMMs' arguments (wgmma.linear, the bench's baseline, in any -DV31_WG build), and V31_GEMM 1's D
   void wg_setup() {
 #ifdef V31_WG
-    if (kn.gemm && kn.rp != 0 && kn.rp != 4 && kn.rp != 5) {
-      fprintf(stderr, "a served call's V31_RP is 0, 4 or 5\n");
+    if (kn.gemm && kn.rp != 0 && kn.rp != 4 && kn.rp != 5 && !pp()) {
+      fprintf(stderr, "a served call's V31_RP is 0, 4, 5, 6 or 7\n");
       exit(2);
     }
     r5h = env_int("V31_R5H", wgp::R5_SPLITS[0]);
@@ -2852,6 +2936,11 @@ struct Fill {
     CK(cudaMemcpy(wsw, hw.data(), 4 * (size_t)n, cudaMemcpyHostToDevice));
     wa_plain = wg_args(Ap, Bp, 0);
     wa_plain.hall = env_int("V31_HALL", 0);
+    if (pp()) {   // the ping-pong GEMM's 128 x 128 tiles (wbn stays the wgl arm's)
+      wa_plain.b = tmap(Bp, k, n, 128);
+      wa_plain.ppm = kn.ppm;
+      ppgrid = std::min((m / wgp::TM) * (n / 128), nsm);
+    }
     wgw = wg && Wn > 0 && env_int("V31_WGW", 1) != 0;
     if (wgw) {   // T_1 .. T_W: mode 1 with no tail and no O over k < W L, gemm_kernel<true>'s prefix sums bit for bit
       wa_words = wg_args(X, W, 1);
@@ -2867,7 +2956,7 @@ struct Fill {
         if (r5w && words[b]) tsw[b] = tmap_st(words[b], CU_TENSOR_MAP_DATA_TYPE_UINT16, 2, wgp::TW, (u64)tiles * Wn * wgp::TW);
       }
     hchunk = std::max(0, env_int("V31_HCHUNK", 0));
-    if (wg && (kn.rp == 4 || kn.rp == 5))
+    if (wg && (kn.rp == 4 || kn.rp == 5 || (pp() && kn.pph)))
       for (int b = 0; b < 2; b++) {
         xd[b] = dalloc<u64>(8 * (size_t)leaves);
         xf[b] = dalloc<u32>((size_t)leaves);
@@ -2875,11 +2964,14 @@ struct Fill {
       }
     const void* ks[] = {(const void*)wgp::gemm<256, 1>, (const void*)wgp::gemm<128, 1>,
                         (const void*)wgp::gemm_r4<256, FusedLeaves>, (const void*)wgp::gemm_r4<128, FusedLeaves>,
-                        r5_kernel(256), r5_kernel(128)};
-    for (int i = 0; i < 6; i++) {
-      CK(cudaFuncSetAttribute(ks[i], cudaFuncAttributeMaxDynamicSharedMemorySize, i >= 4 ? r5_smem(i % 2 ? 128 : 256)
-                                                                                  : i % 2 ? wgp::Tile<128>::SMEM
-                                                                                          : wgp::Tile<256>::SMEM));
+                        r5_kernel(256), r5_kernel(128),
+                        (const void*)wgp::gemm_pp<6, FusedLeaves>, (const void*)wgp::gemm_pp<7, FusedLeaves>,
+                        (const void*)wgp::gemm_pp<6, wgp::NoHash>};
+    const int sm[] = {wgp::Tile<256>::SMEM, wgp::Tile<128>::SMEM, wgp::Tile<256>::SMEM, wgp::Tile<128>::SMEM,
+                      r5_smem(256), r5_smem(128),
+                      wgp::Tile<128>::SMEM, wgp::Tile<128>::SMEM, wgp::Tile<128>::SMEM};
+    for (int i = 0; i < 9; i++) {
+      CK(cudaFuncSetAttribute(ks[i], cudaFuncAttributeMaxDynamicSharedMemorySize, sm[i]));
       if (kn.carve >= 0) CK(cudaFuncSetAttribute(ks[i], cudaFuncAttributePreferredSharedMemoryCarveout, kn.carve));
     }
 #else
@@ -2923,6 +3015,13 @@ struct Fill {
     else if (wbn == 256) wgp::gemm<256, 1><<<wgrid, T, sm, st>>>(g);
     else wgp::gemm<128, 1><<<wgrid, T, sm, st>>>(g);
   }
+  // RP 6 or 7's ping-pong GEMM, hashing with h (null: V31_PPH 0, the GEMM alone)
+  void wg_pp(cudaStream_t st, const wgp::Args& g, const FusedLeaves* h) {
+    constexpr int T = wgp::threads<6>(), sm = wgp::Tile<128>::SMEM;
+    if (!h) wgp::gemm_pp<6, wgp::NoHash><<<ppgrid, T, sm, st>>>(g, wgp::NoHash{});
+    else if (kn.rp == 7) wgp::gemm_pp<7, FusedLeaves><<<ppgrid, T, sm, st>>>(g, *h);
+    else wgp::gemm_pp<6, FusedLeaves><<<ppgrid, T, sm, st>>>(g, *h);
+  }
   // its O rows (the GEMM of D's hash warps), or every row (the GEMM of the prefix sums')
   FusedLeaves fused_leaves(int b, bool every = false) const {
     const ServedRow r = servedrow(b);
@@ -2946,10 +3045,13 @@ struct Fill {
       wgp::Args g = wa_plain;
       g.O = D[b];
       if (tst) g.tso = tso[b];
-      if (kn.rp == 4 || kn.rp == 5) {
+      if (kn.rp == 4 || kn.rp == 5 || (pp() && xd[b])) {
         xep[b] = epoch(st);
         const FusedLeaves h = fused_leaves(b);
-        wg_run(st, g, &h);
+        if (pp()) wg_pp(st, g, &h);
+        else wg_run(st, g, &h);
+      } else if (pp()) {
+        wg_pp(st, g, nullptr);
       } else {
         wg_run(st, g);
       }
@@ -2988,6 +3090,14 @@ struct Fill {
   // rows of whole SHA-512 blocks (V31_FULL): the leaf phase's hash_full path
   u32 full_rows() const { return kn.full && row % 128 == 0 ? 1u : 0u; }
   void leaves_nodes(int b, cudaStream_t st) {
+#ifdef V31_WG
+    if (!nomem && !ltw && o && xd[b] && kn.lord) {
+      const LeafOrder lo{(u64)tiles, (u64)lpt, (u64)Wn * (32768 / row), m / TILE, tiles_n, kn.wgg,
+                         kn.rp == 4 || kn.rp == 5 ? wbn / TILE : 1};
+      pl.leaves_ordered(cm[b], FusedRow{servedrow(b), xd[b], xf[b], xep[b]}, lo, kn.ccta, st);
+      return;
+    }
+#endif
     if (nomem) pl.leaves_nodes(cm[b], NoMemRow{(u32)row, full_rows()}, kn.ccta, st);
     else if (ltw) pl.leaves_nodes(cm[b], ltrow(b), kn.ccta, st);
     else if (o && xd[b]) pl.leaves_nodes(cm[b], FusedRow{servedrow(b), xd[b], xf[b], xep[b]}, kn.ccta, st);
@@ -3211,9 +3321,14 @@ static void kernel_attrs(FILE* f) {
                       {"wg_256_r3", (const void*)wgp::gemm_r3<256>}, {"wg_128_r3", (const void*)wgp::gemm_r3<128>},
                       {"wg_256_r4", (const void*)wgp::gemm_r4<256, FusedLeaves>},
                       {"wg_128_r4", (const void*)wgp::gemm_r4<128, FusedLeaves>},
+                      {"wg_128_pp6", (const void*)wgp::gemm_pp<6, FusedLeaves>},
+                      {"wg_128_pp7", (const void*)wgp::gemm_pp<7, FusedLeaves>},
+                      {"wg_128_pp6_nohash", (const void*)wgp::gemm_pp<6, wgp::NoHash>},
                       {"leaf_persist_fused", (const void*)leaf_persist<FusedRow>},
                       {"leaf_persist_fused_m4", (const void*)leaf_persist<FusedRow, 4>},
-                      {"leaf_persist_served_m4", (const void*)leaf_persist<ServedRow, 4>}};
+                      {"leaf_persist_served_m4", (const void*)leaf_persist<ServedRow, 4>},
+                      {"leaf_order_fused_m4", (const void*)leaf_order<FusedRow, 4>},
+                      {"fold_persist", (const void*)fold_persist}};
   for (const KAttr& w : wk) {
     cudaFuncAttributes a;
     CK(cudaFuncGetAttributes(&a, w.fn));
@@ -3773,8 +3888,8 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
     f.ready(f.calls - 2);
     f.ready(f.calls - 1);
     CK(cudaGetLastError());
-    // RP 4, 5: the leaves whose row the GEMMs' hash warps hashed whole, and the SHA-512 chunks they hashed, of the last
-    // overlapped call (of every row: the prefix-sum rows too under r5w)
+    // RP 4 to 7: the leaves whose row the GEMMs' hash warps hashed whole, and the SHA-512 chunks they hashed, of the last
+    // overlapped call (of every row: the prefix-sum rows too under RP 5's r5w)
     long long fused = -1, fused_blocks = -1;
     const u32 nblk = (row + 17 + 127) / 128;
     if (f.xf[bl]) {
@@ -3814,14 +3929,15 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
            "\"carve\": %d, \"dyn\": %d, \"cprio\": \"%s\", \"ccta\": %d, \"pf\": %d, \"maxnreg\": %d, \"wg_nreg\": %d, "
            "\"wg_stages\": %d, \"gemm_bn\": %d, \"sched\": %d, \"ltw\": %d, \"wg\": %d, \"rp\": %d, \"wbn\": %d, "
            "\"hall\": %d, \"hchunk\": %d, \"r5h\": %d, \"r5w\": %d, \"tst\": %d, \"wgw\": %d, \"lminb\": %d, \"sahead\": %d, "
-           "\"fused_leaves\": %lld, "
-           "\"o_leaves\": %llu, \"fused_blocks\": %lld, \"row_blocks\": %u, \"arms\": {",
+           "\"ppm\": %d, \"pph\": %d, \"lord\": %d, \"fused_leaves\": %lld, \"o_leaves\": %llu, \"fused_blocks\": %lld, "
+           "\"row_blocks\": %u, \"arms\": {",
            name, m, n, k, lp, L, row, f.S, f.Wn, f.o ? "true" : "false", (unsigned long long)f.leaves, prop.name, f.nsm, f.grid,
            lt.algo_id, lt.tile, lt.stages, lt.splitk, lt.ncand, cut.name.c_str(), cut.ncand, tm.steady ? "true" : "false",
            f.kn.carve, f.kn.dyn, f.kn.cprio.c_str(), f.kn.ccta, f.kn.pf, V31_MAXNREG, G_WG_NREG, G_WG_STAGES,
            f.pair ? G_BN : TILE, f.kn.sched, f.ltw ? 1 : 0, f.wg ? 1 : 0, f.kn.rp, f.wbn, env_int("V31_HALL", 0), f.hchunk,
            f.kn.rp == 5 ? f.r5h : 0, f.r5w ? 1 : 0, f.tst ? 1 : 0, f.wgw ? 1 : 0,
-           f.kn.lminb, f.kn.sahead ? 1 : 0, fused, f.o ? (unsigned long long)f.tiles * (65536 / row) : 0ull, fused_blocks, nblk);
+           f.kn.lminb, f.kn.sahead ? 1 : 0, f.kn.ppm, f.kn.pph, f.kn.lord, fused,
+           f.o ? (unsigned long long)f.tiles * (65536 / row) : 0ull, fused_blocks, nblk);
     for (size_t a = 0; a < arms.size(); a++)
       printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f}", a ? ", " : "", arms[a].name.c_str(), med[a], mhz[a]);
     const double l = at("lt");
