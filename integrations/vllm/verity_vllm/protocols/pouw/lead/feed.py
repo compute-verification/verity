@@ -1,13 +1,13 @@
 """The lead's coin feed: the coins the network certifier samples for one call of the lead (layout
-``blc4a_t64_e7_s1_rot_fold``, Lean's `Pouw.Lead.Layout` and `Pouw.Lead.Coins`) once it holds the call's root(A_j), packed
-as the served kernel reads them, and the in-process certifier that stands in for the certifier's coin link (`CoinLink`).
+``blc4a_t64_e7_s1_rot_fold``) once it holds the call's root(A_j), packed as the served kernel reads them, and the
+in-process certifier that stands in for the certifier's coin link (`CoinLink`).
 
 * **A call** (`Call`): its pass, its index in the pass, its linear's index among the registered linears and its shape
   m × K × n, which the up-link carries beside root(A_j) so the certifier can size the call's feed.
-* **Its sizes** (`Shape`): S = 1 + ⌈(K − 21)/28⌉ k32 steps (step 0 holds 21 data lanes, each later step 28; Lean's
-  `stepsFor`), H = ⌈(S + 3)/32⌉ row words, R = 16⌈m/16⌉ committed rows and C = 8⌈n/8⌉ committed columns (whole MMA tiles,
-  Lean's `padRows` and `padCols`) and T = ⌈R/64⌉ coin tiles.
-* **The coins** (`CallCoins`, Lean's `Coins L`, each `Fin` value a small integer): b [R, S] step bits, a1 [R, 4] step-0 bits,
+* **Its sizes** (`Shape`): S = 1 + ⌈max(K − 21, 0)/28⌉ k32 steps (step 0 holds 21 data lanes, each later step 28),
+  H = ⌈(S + 3)/32⌉ row words, R = 16⌈m/16⌉ committed rows and C = 8⌈n/8⌉ committed columns (m and n padded to whole
+  16 × 8 MMA tiles) and T = ⌈R/64⌉ coin tiles.
+* **The coins** (`CallCoins`, each a small unsigned integer held as a byte): b [R, S] step bits, a1 [R, 4] step-0 bits,
   g [4, C] in 0..6 (the tag weight G = g − 3) and u [S, T, 3, C] in 0..127 (the coin lane s = 2u − 127). b[:, 0]
   enters no word.
 * **The feed** (`Feed`, one release a call, in the order the link sends it):
@@ -40,13 +40,13 @@ LAYOUT = "blc4a_t64_e7_s1_rot_fold"
 STEP0_LANES, LATER_LANES = 21, 28
 ROW_TILE, COL_TILE, COIN_TILE = 16, 8, 64
 COIN_BITS = 7
-#: the lane-coin lanes' A′ by row parity (Lean's `rotWeight`)
+#: ROT_W[c][ℓ], coin lane ℓ's weight in a row of class c = i mod 2: 127 on lane c, 1 on the other two
 ROT_W = np.array([[127, 1, 1], [1, 127, 1]], dtype=np.int64)
 #: a sampled u32 is G's when below this: 2401 ⌊2³² / 2401⌋ (872 of the 2³² are rejected)
 G_KEEP = 2401 * (2**32 // 2401)
 #: 1.5 · 2²³: the fold reads a word plus its column source as this float plus the integer it leaves
 MAGIC = 0x4B400000
-#: Lean's `Layout.Admits`: at most 2⁴⁰ MMA tiles of words a call
+#: the most MMA tiles of words the lead admits in a call, (R/16)·(C/8)·S
 MAX_TILES = 2**40
 ROOT_BYTES = 64
 IN_PROCESS = "in-process"
@@ -60,12 +60,13 @@ class FeedError(ValueError):
 
 
 def steps(k: int) -> int:
-    """k32 steps for inner dimension ``k`` (Lean's `stepsFor`)."""
+    """k32 steps for inner dimension ``k``: step 0 holds 21 data lanes and each later step 28."""
     return 1 + (max(k - STEP0_LANES, 0) + LATER_LANES - 1) // LATER_LANES
 
 
 def codes(cols: int) -> np.ndarray:
-    """C[e, j] for j < ``cols``, int64 [4, cols]: the base-13 digits of j + 14,281 less 6 (Lean's `colCode`)."""
+    """C[e, j] for j < ``cols``, int64 [4, cols]: the base-13 digits of j + 14,281 less 6, which are the low four balanced
+    base-13 digits of j + 1."""
     c = np.arange(cols, dtype=np.int64) + 14281
     return np.stack([(c // 13**e) % 13 - 6 for e in range(4)])
 
@@ -103,8 +104,8 @@ class Shape:
         return bn * (-(-self.C // bn))
 
     def refusal(self) -> str | None:
-        """Why the lead doesn't take the call, or None: at least one row, and Lean's `Layout.Admits` (an inner dimension
-        of at least 1 and at most 2⁴⁰ MMA tiles of words)."""
+        """Why the lead doesn't take the call, or None: it admits a call of at least one row and one column, an inner
+        dimension of at least 1 and at most `MAX_TILES` MMA tiles of words."""
         if self.m < 1 or self.n < 1:
             return f"lead: a call of {self.m} x {self.n} has no words"
         if self.k < 1:
@@ -157,8 +158,8 @@ def g_digits(u: int) -> tuple[int, int, int, int] | None:
 
 @dataclass(frozen=True)
 class CallCoins:
-    """A call's coins (Lean's `Coins L`): ``b`` [R, S] and ``a1`` [R, 4] in {0, 1}, ``g`` [4, C] in 0..6 and ``u``
-    [S, T, 3, C] in 0..127, all uint8."""
+    """A call's coins: ``b`` [R, S] and ``a1`` [R, 4] in {0, 1}, ``g`` [4, C] in 0..6 and ``u`` [S, T, 3, C] in 0..127,
+    all uint8."""
 
     shape: Shape
     b: np.ndarray
