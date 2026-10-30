@@ -1,4 +1,6 @@
 import Proofs.Flock.Claims.Recursion.Deploy
+import Proofs.Flock.Claims.Recursion.DeployLayout
+import Proofs.Flock.Claims.Recursion.VStarBound
 import Proofs.Flock.Recursive.InnerRows
 import Proofs.Flock.Verifier.Registered
 import Proofs.Flock.Soundness.Discharge.Hm.Row
@@ -11,9 +13,9 @@ import Flock.RecLinkPart
 inputs. This file defines the first two at the deployment.
 
 * `tableRows`: where the verifier's inner shape names the link table, row `n` is the link part's instance `n`'s `trow`,
-  read off that part's witness at its circuit's message columns (`trowAt`, as `InnerRows.rowBytes` reads a row, behind
-  no prefix). The link part is V\*'s statement last but one (`linkAt`), and its circuit is the one the statement's bytes
-  hold (`partCircuit`), so the rows are a function of the statement and the witnesses alone.
+  read off that part's witness at the row's input columns (`trowAt`: `rowHidden`'s, the bytes the row's hm96 slot
+  commits behind its prefix). The link part is V\*'s statement last but one (`linkAt`), and its circuit is the one the
+  statement's bytes hold (`partCircuit`), so the rows are a function of the statement and the witnesses alone.
 * `LinksHold`, the link clause: at a statement carrying the table (its own root `T` and row count `N`, `--rec-links`),
   the rows are `N`, each opens its position of the registered table at `T` (`RowOpens`, under the domain the link part's
   program registers it at, `tableDomain`), and every link row holds at the inner witness (`LinkHolds`: the reader's and
@@ -44,15 +46,10 @@ def linkCircuit (r : XR) : Option (ℕ × ℕ × Circuit) := do
   let c ← r.w.parts[s]?.bind partCircuit
   pure (s, N, c)
 
-/-- The link part's port `trow` among a circuit's ports. -/
-def trowPort (c : Circuit) : Option ℕ := c.ports.findIdx? (·.name == "trow")
-
-/-- **Instance `n`'s port `q`, as a part's witness holds it**: the bytes at the port's message columns (`Typed.msgCol`)
-of template instance `n % g` of block `n / g`, in the part's one table, as `InnerRows.rowBytes` reads a row behind its
-prefix. -/
-def trowAt (c : Circuit) (q : ℕ) (w : Claims.Flock.Wit) (n : ℕ) : List UInt8 :=
-  FlockSoundness.Discharge.Hm.bytesOf (fun y => w.hid.getD (n / c.g * 2 ^ c.kLog + y) false) (2 * c.ports[q]!.words)
-    (FlockSoundness.Typed.msgCol c (n % c.g) q)
+/-- **Instance `n`'s `trow`, as a part's witness holds it**: the bytes of the row's hidden values at the instance's input
+columns (`rowHidden`), the row its hm96 slot commits behind its prefix (`SlotCommits`). -/
+def trowAt (c : Circuit) (w : Claims.Flock.Wit) (n : ℕ) : List UInt8 :=
+  Claims.Recursion.VStarB.readForms w (((rowHidden c "trow" n).getD []).map HmNets.Lin.var)
 
 /-- **The link table's rows, off the outer witnesses**: where the verifier's inner shape names the table, the link
 part's `N` instances' `trow` in order (`trowAt`), in the link part's witness; none elsewhere. -/
@@ -61,9 +58,7 @@ def tableRows (x : Msg) (ws : List Claims.Flock.Wit) : List (List UInt8) :=
   | none => []
   | some r => match linkCircuit r with
     | none => []
-    | some (s, N, c) => match trowPort c with
-      | none => []
-      | some q => (List.range N).map (trowAt c q (ws.getD s ⟨[]⟩))
+    | some (s, N, c) => (List.range N).map (trowAt c (ws.getD s ⟨[]⟩))
 
 /-! ## The table at `T` -/
 
