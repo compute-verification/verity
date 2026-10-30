@@ -24,8 +24,9 @@ reading it nowhere while it states every reader of the module as the base did (`
 merged record no longer lists, a group left without readers or definitions dropped) or ours' value (a hash or a record
 both sides changed differently), and names each in one line on stderr. Whether a guarantee is listed is
 not the build's: one side's removal applies over the other's change to its record. What only a person writes still
-refuses when both sides changed it differently: an `owner`, a `shape` or `frozen` entry, a dependency's revision, a policy
-entry (a layer's field, a `compile_time` digest).
+refuses when both sides changed it differently: an `owner`, a `shape` or `frozen` entry (a `shape.inline` entry is one
+premise of a guarantee, so two sides that each add or drop premises of one guarantee merge: `DEEPER`), a dependency's
+revision, a policy entry (a layer's field, a `compile_time` digest).
 
 Exit 0: merged. Exit 1: refused, the entries named on stderr and OURS left as it was, which git reports as a conflict; then
 regenerate the record on the merged tree (`check.py --update`), as without the driver. A merged record is a candidate, never
@@ -84,6 +85,9 @@ SORTED = {"assumptions", "guarantees", "reads", "dependencies", "compile_time"}
 #: sections whose entries are maps merged entry by entry in turn (`upstream`'s `scan` and `watch`, `shape`'s `properties`,
 #: `frozen` and `conjectures`, `trees`' `except`)
 NESTED = {"upstream", "shape", "claims", "trees"}
+#: nested maps whose entries are maps merged one level deeper still: `shape.inline`'s guarantees, each {premise: why} merged
+#: premise by premise, a guarantee left with none dropped (the check refuses an empty one, and `--update` drops it)
+DEEPER = {"shape[inline]"}
 MISSING = object()
 
 
@@ -114,13 +118,15 @@ def names(o, a, b) -> bool:
 
 
 def entries(path: str, o: dict, a: dict, b: dict, why: list[str], depth: int = 1) -> dict:
-    """Maps merged entry by entry; ``depth`` > 1 merges entries that are maps entry by entry too, and lists of names merge
-    as lists."""
+    """Maps merged entry by entry; ``depth`` > 1 merges entries that are maps entry by entry too (one level more under a
+    `DEEPER` path), and lists of names merge as lists."""
     out = {}
     for k in keys(path, a, b):
         x, y, z = o.get(k, MISSING), a.get(k, MISSING), b.get(k, MISSING)
         if depth > 1 and isinstance(y, dict) and isinstance(z, dict) and (x is MISSING or isinstance(x, dict)):
-            v = entries(f"{path}[{k}]", {} if x is MISSING else x, y, z, why, depth - 1)
+            sub = f"{path}[{k}]"
+            v = entries(sub, {} if x is MISSING else x, y, z, why, depth - 1 + (sub in DEEPER))
+            v = MISSING if path in DEEPER and not v else v
         elif depth > 1 and names(x, y, z):
             v = items([] if x is MISSING else x, y, z)
         else:
