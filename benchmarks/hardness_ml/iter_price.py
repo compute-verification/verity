@@ -69,17 +69,51 @@ def sm120(ne, nr):
     return min(1.0, 0.5 * side_factor(ne) * side_factor(nr))
 
 
+def mod_bits(nr):
+    """b with 2^b the largest power of two dividing n_R: (A + R) mod 2^b is then uniform for every A."""
+    return (nr & -nr).bit_length() - 1
+
+
+def h200_mod(ne, b):
+    """b1 planes of E·Lᵀ mod 2^b, L uniform mod 2^b: only plane pairs i + j < b reach the low b bits."""
+    return sum(1 for i in range(planes(ne)) for j in range(b) if i + j < b) / 8
+
+
+def mod_side(b):
+    """E2M1 planes for a uniform residue mod 2^b: the cheater picks any representative, so one plane with scale α
+    covers {α·d mod 2^b : d ∈ D}; base-9 digits cover 9^q residues with q planes."""
+    m = 1 << b
+    if m <= 1:
+        return 0.0
+    cov = max(len({(a * d) % m for d in D}) for a in range(1, m, 2))
+    if cov == m:
+        return 1.0
+    q = 1
+    while 9 ** (q + 1) < m:
+        q += 1
+    rho = 1 - cov / m if q == 1 else 0.5
+    return q + min(1.0, (0.25 + FFMA_UNITS * overflow(rho)) / 0.5)
+
+
+def sm120_mod(ne, b):
+    return 0.5 * side_factor(ne) * mod_side(b)
+
+
 def row(ne, nr):
+    b = mod_bits(nr)
     return {"n_e": ne, "n_r": nr, "bits_e": round(math.log2(ne), 2), "bits_r": round(math.log2(nr), 2),
             "var_e": var(ne), "var_r": var(nr), "planes_b1": [planes(ne), planes(nr)],
             "h200_units": h200(ne, nr), "h200_b1_raw": planes(ne) * planes(nr) / 8,
             "sm120_fp4": [round(side_factor(ne), 3), round(side_factor(nr), 3)],
             "sm120_units": round(sm120(ne, nr), 3), "sm120_raw": round(0.5 * side_factor(ne) * side_factor(nr), 3),
-            "forced": round(min(h200(ne, nr), sm120(ne, nr)), 3)}
+            "forced": round(min(h200(ne, nr), sm120(ne, nr)), 3),
+            # every-A bound from the low b bits alone (average-case premise, no smoothing)
+            "mod_b": b, "h200_mod_raw": h200_mod(ne, b), "sm120_mod_raw": round(sm120_mod(ne, b), 3),
+            "forced_mod": round(min(1.0, h200_mod(ne, b), sm120_mod(ne, b)), 3)}
 
 
-PAIRS = [(2, 2), (2, 4), (2, 16), (3, 3), (3, 9), (3, 10), (4, 16), (3, 17), (3, 19), (3, 22), (3, 32), (3, 64),
-         (5, 19), (10, 10), (19, 3), (17, 3), (2, 129), (2, 256)]
+PAIRS = [(2, 2), (2, 4), (2, 16), (3, 3), (3, 9), (3, 10), (4, 16), (3, 16), (3, 17), (3, 19), (3, 22), (3, 32),
+         (3, 64), (5, 19), (5, 32), (10, 10), (19, 3), (17, 3), (2, 129), (2, 256)]
 
 
 def main():

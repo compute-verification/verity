@@ -30,8 +30,12 @@ def d1(size, tokens, ft_tokens, post_tokens):
         runs.append({**ft, "name": f"{tag}-{reg}", "regime": reg, "n_e": ne, "n_r": nr})
     runs.append({**ft, "name": f"{tag}-perstep", "regime": "perstep", "n_e": ne, "n_r": nr, "post": True,
                  "d2_ranks": [8, 32]})
-    for ne2, nr2 in ((2, 1), (1, 19), (2, 16), (3, 10), (4, 16), (3, 32), (3, 64), (19, 3), (10, 10), (2, 129)):
+    for ne2, nr2 in ((2, 1), (1, 19), (2, 16), (3, 10), (4, 16), (3, 32), (3, 64), (19, 3), (10, 10), (2, 129),
+                     (5, 16), (10, 16), (5, 32)):
         runs.append({**ft, "name": f"e{ne2}r{nr2}-perstep", "regime": "perstep", "n_e": ne2, "n_r": nr2})
+    for base_run in [r for r in runs if r["name"] in ("clean", f"{tag}-perstep", "e10r16-perstep")]:
+        runs.append({k: v for k, v in base_run.items() if k not in ("post", "d2_ranks")}
+                    | {"name": base_run["name"] + "-s1", "seed": 1, "data_seed": 4322})
     for rf in (1 / 8, 1 / 4):
         runs.append({**ft, "name": f"designA-r{round(1 / rf)}-e2", "regime": "designA", "n_e": 2, "n_r": 256,
                      "rank_frac": rf})
