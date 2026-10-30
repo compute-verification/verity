@@ -64,7 +64,9 @@ done
 [ -z "$ccache" ] || pass+=(--circuit-cache)
 [ -z "$noregen" ] || pass+=(--no-regenerate)
 [ -z "$shard" ] || pass+=(--shard "$shard")
-python3 "$(dirname "$0")/settings.py" --of-record || { echo "train: a recorded train takes no debug or unknown check setting" >&2; exit 1; }
+# the tree's settings.py first: drive runs a copy of this script from outside the tree (`drive.detach`)
+settings=tools/verity/check/settings.py; [ -f "$settings" ] || settings="$(dirname "$0")/settings.py"
+python3 "$settings" --of-record || { echo "train: a recorded train takes no debug or unknown check setting" >&2; exit 1; }
 [ -z "${AWS_SESSION_TOKEN:-}" ] || { echo "train: AWS_SESSION_TOKEN is set; a temporary credential cannot mint the custody key" >&2; exit 1; }
 [ -n "${AWS_ACCESS_KEY_ID:-}" ] && [ -n "${R2_ENDPOINT:-}" ] || { echo "train: no parent store key (AWS_ACCESS_KEY_ID, R2_ENDPOINT)" >&2; exit 1; }
 # From here a launch that registers no run says so in the merge thread, with the reason and the log's last lines, as well as
