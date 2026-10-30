@@ -1,8 +1,9 @@
 # The population's samples: what `tools/move/rename.py --map tools/move/sample_map.toml` renames (a draw is a sample;
 # the coins stay coins). The population's uniform, independent and subset draws become samples (`uniformSample`,
 # `indepSample`, `subsetSample`), the detection-pressure module `DrawPressure` moves to `SamplePressure`, and their
-# lemmas follow; an overhead task's `draw`, its input at each value of the coin, becomes its `sample`. Only these files
-# are renamed. `Population.Exfil.Draw`, a second `Draw` beside the core's `Verity.Draw`, goes in its dedupe, and
+# lemmas follow; a task's `draw` (`Accounting.Slowdown.Task`), its input at each value of the coin, becomes its
+# `sample`, where `Slowdown.lean` declares it and `CoverageToy.lean` builds one. Only these files are renamed.
+# `Population.Exfil.Draw`, a second `Draw` beside the core's `Verity.Draw`, goes in its dedupe, and
 # `Pouw.Window.subsetDraw` is the PoUW window's. Declarations keep their place in the locks' records: `rename.py
 # --moves` prints the renames that `check.py --update --moved` takes.
 [words]
@@ -35,7 +36,7 @@ files = ["Security/Definitions/Population.lean", "Security/Definitions/Populatio
 "late_draw_dodges" = "late_sample_dodges"
 
 [[words_in]]
-files = ["Security/Definitions/Accounting/Overhead.lean"]
+files = ["Security/Definitions/Accounting/Slowdown.lean", "Security/Definitions/Accounting/CoverageToy.lean"]
 [words_in.words]
 "draw" = "sample"
 

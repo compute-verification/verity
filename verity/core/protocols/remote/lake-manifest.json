@@ -3,6 +3,13 @@
  "packages":
  [{"type": "path",
    "scope": "",
+   "name": "nci_check",
+   "manifestFile": "lake-manifest.json",
+   "inherited": false,
+   "dir": "../network/nci/lean",
+   "configFile": "lakefile.toml"},
+  {"type": "path",
+   "scope": "",
    "name": "pouw_check",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
