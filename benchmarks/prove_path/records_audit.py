@@ -58,7 +58,7 @@ them out of an audit (its summary says so), for a run of several audits of one c
 
 ``period``: a window's audit as one compute audit of the network certifier's period (`NetworkCheck.Period`'s rows form),
 the ``audits`` entry `scan_period.rows_case` reads (`scan_zk.answers` writes the block round's in that shape): the window's
-registration (``--window``'s ``registration.json``), the population Program's descriptor the audit drew over (``--audit``'s
+registration (``--window``'s ``registration.json``), the population Program's descriptor the audit sampled (``--audit``'s
 ``window/program.json``, the one the registration names), the audit's one-stage answer (`served_integrity.answer`), and its
 terms, ``free`` and ``steps`` 0. ``free`` is the count `audit` reports (`declared_count` at the pins, with the window's own
 values pinned, its untied ones free) but for the scan's state (`TIED`): the period refuses an audit whose state isn't
