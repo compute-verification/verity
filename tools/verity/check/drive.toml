@@ -60,10 +60,13 @@ lowrisk_lane = true
 lowrisk_per_tick = 20
 # what keeps a change off the low-risk lane: a directory from the root (ending in `/`), or a file name glob (any directory).
 # Lean, its locks and Lake files, the trusted hashes, the verifiers, and the soundness-path Python (AGENTS.md's SOUNDNESS_PATH
-# under verity/ml/)
+# under verity/ml/); and the guards that hold everything else to those rules: the Lean check (tools/verity/lean/), the
+# whole-tree invariants (root tests/: the import boundaries, SOUNDNESS_PATH, verifier cost), the check and this file
+# (tools/verity/check/), the merge drivers (.gitattributes), and the landing rules themselves (drive.py, queue.py)
 lowrisk_excludes = ["*.lean", "lean-audit.json", "lakefile.*", "lean-toolchain", "lake-manifest.json", "TRUSTED.sha256",
                     "verity/core/", "verity/ml/circuits/", "verity/ml/kernels/", "verity/ml/commitments/",
-                    "verity/ml/crypto/", "verity/ml/randomness/"]
+                    "verity/ml/crypto/", "verity/ml/randomness/",
+                    "tools/verity/lean/", "tests/", "tools/verity/check/", ".gitattributes", "drive.py", "queue.py"]
 # days an open PR not marked ready at its head stays idle (its head commit, and its ready, eject and review labels there) before
 # it is stale: `research queue status` says so and drive rings its owner once a day (`research.stale`); 0 is off
 stale_days = 3
