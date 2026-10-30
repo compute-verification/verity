@@ -69,7 +69,7 @@ theorem gapAll : GapAll := by
     omega
   have hm' : (0 : ℚ) < m := Nat.cast_pos.2 (by omega)
   have hn' : (0 : ℚ) < n := Nat.cast_pos.2 (by omega)
-  have hK' : (0 : ℚ) < K := Nat.cast_pos.2 (by have := hadm.1; omega)
+  have hK' : (0 : ℚ) < K := Nat.cast_pos.2 (by have : 1 ≤ K := hadm.1; omega)
   have hm0 := hm'.ne'
   have hn0 := hn'.ne'
   have hK0 := hK'.ne'
