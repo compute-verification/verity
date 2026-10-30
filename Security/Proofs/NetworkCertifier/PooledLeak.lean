@@ -111,7 +111,7 @@ theorem pr_adaptive_add_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {r : ℝ} (hr0
 
 /-! ### The families of faulty sets -/
 
-/-- The units that `g` lists in window `i`. -/
+/-- The proof blocks that `g` lists in window `i`. -/
 def famOf {m : ℕ} {n : Fin m → ℕ} {F : ℕ} (g : Fin F → Option (Σ i : Fin m, Fin (n i))) (i : Fin m) : Finset ℕ :=
   (univ.filter fun v : Fin (n i) => ∃ t, g t = some ⟨i, v⟩).image Fin.val
 
@@ -248,9 +248,9 @@ theorem tiedIncorrectBlocksLe_none {m : ℕ} {Ω Z : Type} [Fintype Ω] (Zs : Se
   simp only [Finset.card_empty, Finset.sum_const_zero] at h
   exact absurd h.2 (by omega)
 
-/-- **Sampled proofs' pooled bound at the tied audits' samples**: where window `i`'s tied audits draw a uniform
+/-- **Sampled proofs' pooled bound at the tied audits' samples**: where window `i`'s tied audits sample a uniform
 `kt i`-subset of their `nt i` proof blocks at its coins, the incorrect ones (`W z i ω`, `Wt z ω i` as indices) are fixed
-before that window's draw, and the window's audits accept while the sample meets an incorrect one with probability at
+before that window's sample, and the window's audits accept while the sample meets an incorrect one with probability at
 most `ε i`, `TiedIncorrectBlocksLe` holds at `et = (1 - qt)^Ft + Σ_i ε i`: `Guarantees.PooledIncorrectBlocksLe` at
 those samples, for each secret. -/
 theorem tiedIncorrectBlocksLe_of_samples {m : ℕ} {Ω Z : Type} [Fintype Ω] [Nonempty Ω] (Zs : Set Z)

@@ -8,7 +8,7 @@ A monitoring period is `m` windows, each audited on its own live coins (the peri
 `i`'s at `ω i`) at a statement registered as `sw i`. `PooledLeakAccepted` is the count `K_pooled`: what a covert
 sender in the server moves through the network certifier over the whole monitoring period, with the incorrect proof
 blocks paid for once over the period rather than at `δ` in every window. At each window the witness computed from the
-registration, before the window's draw, has a set `W i` of incorrect proof blocks (it reads only the earlier windows'
+registration, before the window's sample, has a set `W i` of incorrect proof blocks (it reads only the earlier windows'
 coins), and the statement takes two inputs per window:
 
 * the conditional escape (`hesc`): given the earlier windows' coins, the window's audit accepts with probability at most
@@ -18,11 +18,11 @@ coins), and the statement takes two inputs per window:
   certifier's record are not accepted with the proof blocks `W_i` incorrect (`LeakAt`) with probability at most `e'_i`.
 
 A window's scan registers the returned values of its tied audits `T i` (`TiedAudit`), compute audits sampled at their
-own sampling design. Their witness has a set `Wt i` of incorrect proof blocks, also fixed before the window's draw, and
-the leak relation holds with the scan inputs those proof blocks reach unpinned (`tiedReach`: the returned values in each
-one's downstream cone in its audit's Program, `inCone`; a returned value outside every incorrect proof block's cone is
-the value the tied audit's Program computes, `NetTiming.TiedAudit.valOver_eq_of_notMem_reach`). How many there are over
-the period is sampled proofs' pooled bound (`hpool`, `TiedIncorrectBlocksLe`): every audit accepts while the tied
+own sampling design. Their witness has a set `Wt i` of incorrect proof blocks, also fixed before the window's sample,
+and the leak relation holds with the scan inputs those proof blocks reach unpinned (`tiedReach`: the returned values in
+each one's downstream cone in its audit's Program, `inCone`; a returned value outside every incorrect proof block's cone
+is the value the tied audit's Program computes, `NetTiming.TiedAudit.valOver_eq_of_notMem_reach`). How many there are
+over the period is sampled proofs' pooled bound (`hpool`, `TiedIncorrectBlocksLe`): every audit accepts while the tied
 audits hold `F_t` or more incorrect proof blocks with probability at most `ε_t`.
 `NetTiming.tiedIncorrectBlocksLe_of_samples` derives it from `PooledIncorrectBlocksLe` at the tied audits' samples, at
 `ε_t = (1 - q_t)^F_t + Σ_i ε_i`. An empty list of tied audits is the statement without them: no tied proof block,
@@ -43,8 +43,8 @@ the incorrect proof blocks, `min(F_t · (R + log2 (N_t + 1)), Σ_i #span_i)` for
 
 The network certifier is one device on the server's uplink, as in `PeriodLeakAccepted`
 (`Definitions.NetworkCertifier.Tap`): one run of its code gives the cells the client receives (it functions as an
-active warden) and its record of them, the observations the audits read, so on every schedule its record format holds
-the client's cells read back from the record. Its one named assumption is `trusted-host`.
+active network certifier) and its record of them, the observations the audits read, so on every schedule its record
+format holds the client's cells read back from the record. Its one named assumption is `trusted-host`.
 
 The statement is conditional: it holds for any audits that satisfy the three inputs. Over a monitoring period of live
 audits they are `Flock.Guarantees.SampledKSLive` at each window's history (at `K₀ = |W_i|`); sampled proofs' pooled
@@ -86,7 +86,7 @@ for `0 ≤ q ≤ 1` and `Fmax ≥ ln(1/δ)/q`:
 * for every secret, every audit accepts and the monitoring period's good event fails (`PooledGood`: the incorrect proof
   blocks number under `Fmax` and the tied audits' under `Ft`, and every window meets its leak relation at its own) with
   probability at most `δ + et + Σ e + Σ e'`;
-* at every draw of the coins, the secrets that meet the good event number at most
+* at every sample of the coins, the secrets that meet the good event number at most
   `#Ss · ∏_c (cap c + 1) · (N + 1)^Fmax · 2^(b · Fmax) · ∏_i 2^#(freeInputs_i \ reg_i) · Dj^k_i` times
   `min((Nt + 1)^Ft · 2^(R · Ft), 2^(Σ_i #tiedSpan (T i)))`, `N = Σ_i n i`, `Nt` the period's tied proof blocks and `R`
   the most scan inputs one reaches (`tiedWidth`). -/

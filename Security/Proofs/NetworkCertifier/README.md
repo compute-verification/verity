@@ -260,8 +260,8 @@ The other 22 are the rest of the Capacity table's bounds and the schedule's caus
   `EncardIngressDecodableLe`, `EncardIngressObsDecodableLeContents`, `EncardIngressDecodableLeContents`,
   `EncardIngressObsDecodableLeContentsPerWindow`.
 - **The sampled audit implies `Accepted`** (`SampledAuditAccepted.lean`): `SampledAuditAccepted`, `KS`'s bound at
-  `RAcc δ` on the statements whose layout fits the program: no faulty proof block is drawn `all`, and the advice holding the
-  faulty proof blocks' committed gates at the trace's values makes `Accepted` every run the trace carries.
+  `RAcc δ` on the statements whose layout fits the program: no faulty proof block is sampled `all`, and the advice
+  holding the faulty proof blocks' committed gates at the trace's values makes `Accepted` every run the trace carries.
   `SampledAuditInstance.lean` discharges its `KS` hypothesis from `Claims.Sampling.sampling_assembled_of`'s `KS`
   conjunct: `sampledAuditAccepted_of` over any Flock record, `sampledAuditAccepted_zk` and `sampledAuditAccepted_plain`
   at the masked and plain records.
@@ -312,20 +312,19 @@ The other 22 are the rest of the Capacity table's bounds and the schedule's caus
   the count `K_pooled`, conditional on three inputs taken as plain hypotheses, two per window at the faulty set `W_i`
   of the witness computed from window `i`'s registration (read from the earlier windows' coins): the conditional escape
   `hesc`, `Pr[acc_i | earlier coins] ≤ (1 − q)^|W_i| + e_i` with `q` the design's per-window detection probability
-  (no draw's form: a uniform `kd_i`-of-`n_i` draw meets it at `q = kd_i/n_i`), and the leak relation at that set
+  (no sample's form: a uniform `kd_i`-of-`n_i` sample meets it at `q = kd_i/n_i`), and the leak relation at that set
   `hleak`, `Pr[acc_i ∧ ¬LeakAt W_i] ≤ e'_i`, read on the network certifier's record with the scan inputs the tied
   audits' incorrect proof blocks `Wt_i` reach unpinned (`tiedReach`); and sampled proofs' pooled bound at the tied
   audits' samples (`hpool`, the listed premise `TiedIncorrectBlocksLe`): every audit accepts while the tied audits
   hold `F_t` or more incorrect proof blocks with probability at most `ε_t`, which `tiedIncorrectBlocksLe_of_samples`
   derives from `horizonIncorrectBlocks` at the tied audits' uniform samples, at `ε_t = (1 - q_t)^F_t + Σ_i ε_i` given
-  each window's tied soundness error `ε_i`. From them every window accepts outside the monitoring
-  period's good event
-  (`PooledGood`: the faulty sets hold under `Fmax ≥ ln(1/δ)/q` units, the tied ones under `F_t`, and every window
-  meets its leak relation) with probability at most `δ + ε_t + Σ_i e_i + Σ_i e'_i`, and at each draw the secrets
-  meeting it number at most
+  each window's tied soundness error `ε_i`. From them every window accepts outside the monitoring period's good event
+  (`PooledGood`: the incorrect proof blocks number under `Fmax ≥ ln(1/δ)/q`, the tied ones under `F_t`, and every
+  window meets its leak relation) with probability at most `δ + ε_t + Σ_i e_i + Σ_i e'_i`, and at each sample of the
+  coins the secrets meeting it number at most
   `#Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b·Fmax) · ∏_i 2^#(freeInputs_i \ reg_i) · Dj^k_i` times the tied factor
-  `min((N_t + 1)^F_t · 2^(R · F_t), 2^(Σ_i #span_i))`, `N = Σ_i n_i`: the faulty units cost
-  `(ln(1/δ)/q + 1) · (b + log2 (N + 1))` bits once over the monitoring period, `b = 16` by a proof unit's output
+  `min((N_t + 1)^F_t · 2^(R · F_t), 2^(Σ_i #span_i))`, `N = Σ_i n_i`: the incorrect proof blocks cost
+  `(ln(1/δ)/q + 1) · (b + log2 (N + 1))` bits once over the monitoring period, `b = 16` by a proof block's output
   limit, and the tied audits' the capacity term `κ_t = min(F_t · (R + log2 (N_t + 1)), Σ_i #span_i)` once too, `N_t`
   their proof blocks, `R` the most scan inputs one reaches and `span_i` those any reaches in window `i`. The network
   certifier is one device, as in the period's bound: on every schedule its record format holds, the cells the client
@@ -430,7 +429,7 @@ The ingress bound adds these:
     and W4 hold for every action, faults included, and complete statuses carry nothing.
 11. **One allocation per link, one bucket width.** Link `ℓ` has allocation `r ℓ` (`Allocated`) within the shared slot
     count `S`, and every link shares the step, a bucket of ∂X. Ingress links with different bucket widths are not
-    modelled. Over the first `m` whole windows each link-window contributes `(r ℓ + 1)^T`
+    modelled. Over the first `m` whole windows each execution phase contributes `(r ℓ + 1)^T`
     (`EncardIngressObsDecodableLePerWindow`).
 12. **No Program, no clock.** The bound reads no Program and no advice: the outside sender chooses when frames arrive,
     so no clock pins ingress timing. Jitter on the inward release adds `D^n` (J, `D = 1` when tested ideal). W3's frame

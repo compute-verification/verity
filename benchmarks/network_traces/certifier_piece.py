@@ -1,9 +1,9 @@
 """certifier-piece: the network certifier's piece of `served_verdicts.sh` (its ``CERTIFIER_CMD``), and the front that puts
-the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
+the active network certifier in front of serve-openai there (its ``CERTIFIER_FRONT``).
 
     python certifier_piece.py front PORT SERVE_DIR OUT [--gate USER@HOST | --gate local] [--key KEY] [--peer NAME]
-        [--prompts 4] [--prompt-ids 24] [--tokens 4] [--vocab 128000] [--height 10] [--minutes M] [--bucket-ms MS]
-        [--warmup N]
+        [--prompts 4] [--prompt-ids 24] [--tokens 4] [--vocab 128000] [--scan-class w63k4] [--height 10]
+        [--minutes M] [--bucket-ms MS] [--warmup N]
     python certifier_piece.py piece SERVE_DIR WINDOW DIR [--eos-ids IDS] [--lean EXE] [--draw K] [--chain-cmd CMD]
         [CR_K=V ...]
     python certifier_piece.py relay --listen PORT --to PORT
@@ -11,11 +11,13 @@ the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
 * **front** runs before served_verdicts.sh's requests when ``CERTIFIER_FRONT`` names it: the gate's scan rehearsal
   (`served_session.session`, ``warden-rehearse --scan --prompts --window-per-group``) against serve-openai on PORT, one
   group of ``--prompts`` requests (at most the scan's 4 lanes) of ``--prompt-ids`` ids below ``--vocab``, each answered
-  with exactly ``--tokens`` ids, sampled from a fresh secret seed. A group is sent half a bucket into link-window 0 and
-  its cells are link-window 0's alone (``--tokens`` at most 4 keeps the group in one link-window), so the engine admits
-  the group together and closes it into one Commit window, the run's earliest: the window the run audits (with
+  with exactly ``--tokens`` ids, sampled from a fresh secret seed. A group is sent half a bucket into execution phase 0
+  and its cells are execution phase 0's alone (``--tokens`` at most 4 keeps the group in one execution phase), so the
+  engine admits the group together and closes it into one Commit window, the run's earliest: the window the run audits (with
   ``REQUESTS=1`` the requests after it make a smaller window, which `served_verdicts.py window` passes over). The
-  defaults are the window circuit's class 4,32,4 (4 slots, prompts of at most 32 ids, 4 outputs). The scan's schedule
+  defaults are the window circuit's class 4,32,4 (4 slots, prompts of at most 32 ids, 4 outputs), and the gate runs
+  the network certifier at its scan class's schedule (``--scan-class``, `V3C_SCAN_CLASS`: w63k4, at 5 egress cells),
+  the one the chain's scan at that class takes. The scan's schedule
   gives a request D·τ from its admission to its first egress cell, by which a short answer must be whole, and an
   endpoint slower than that fails each request late: 2.7 s at the scan's tick τ of 100 ms. ``--bucket-ms MS`` runs
   the scan at the tick MS instead (the gate's `auditor.SCAN_BUCKET_MS`, 100 to 4000: D·τ = 108 s at 4000), each
@@ -35,14 +37,15 @@ the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
   Exit as `served_session.session`'s.
 * **piece** writes window WINDOW's core answer to DIR/answer.json (`verity/certifier/v0`, `NetworkCheck.Period`'s rows
   form): accept only when the chain accepted and ``network-period check`` accepted the period, whose answer it then is.
-  1. The kept warden run: exactly one fetch under SERVE_DIR/`PRIVATE`, whose rehearsal the gate's check passed (its
-     ``end.json``: exit 0 and accepted, as the front's exit reads it). With none the run's load didn't go through the
-     front (it wasn't set, or the gate, its tunnel or ssh failed); a rehearsal that failed (each request late past the
-     warden's D·τ, or cut) certified no served answer, so there is none for the protocol to reject (`rehearsed`).
-  2. The window's requests are certified ones: each window request's user names one of the warden's certified
+  1. The kept network certifier run: exactly one fetch under SERVE_DIR/`PRIVATE`, whose rehearsal the gate's check
+     passed (its ``end.json``: exit 0 and accepted, as the front's exit reads it). With none the run's load didn't go
+     through the front (it wasn't set, or the gate, its tunnel or ssh failed); a rehearsal that failed (each request
+     late past the network certifier's D·τ, or cut) certified no served answer, so there is none for the protocol to
+     reject (`rehearsed`).
+  2. The window's requests are certified ones: each window request's user names one of the network certifier's certified
      requests (`warden_chain.io`), with the same prompt and streamed ids; else reject.
-  3. The chain (`served_session.py chain`: chain_record.sh's warden path, certs, endpoint, N2, tie and scan) on the
-     kept run, with the serve dir's endpoint records (`ENDPOINT`, copied to SERVE_DIR/`PRIVATE`/RUN/endpoint), its run
+  3. The chain (`served_session.py chain`: chain_record.sh's network certifier path, certs, endpoint, N2, tie and scan)
+     on the kept run, with the serve dir's endpoint records (`ENDPOINT`, copied to SERVE_DIR/`PRIVATE`/RUN/endpoint), its run
      dir and quarantine under SERVE_DIR/`PRIVATE`/RUN, so nothing of the witness reaches a record. N2 and the tie
      take every link-window of a run of at most 8 (`sized`). Its report's verdict ``accepted`` goes on; any other is a
      reject with its why.
@@ -126,6 +129,8 @@ PUBLIC = {"report/report.json": ("schema", "verdict", "path", "scope", "stubbed"
 REFUSED = "refused.txt"
 #: the piece's case, as `composite.py` reads it
 CASE = "case.json"
+#: the scan class of V3c's default window class (`served_verdicts.sh`'s V3C_CLASS)
+V3C_SCAN_CLASS = "w63k4"
 #: every file DIR may hold when the leak guard reads it and the hold (its ``--public``): the answer, the log
 #: `served_verdicts.py` writes, the period check's three input files and `PUBLIC`'s
 PIECE_FILES = ("answer.json", "piece.log", "period/commitment.bin", "period/evidence.json", "period/params.json",
@@ -303,7 +308,7 @@ def window_requests(serve_dir: Path, window: int) -> list[dict]:
 
 
 def unpack(fetch: Path) -> tuple[Path, Path]:
-    """The kept fetch unpacked in a 0700 scratch directory beside it, and its warden run."""
+    """The kept fetch unpacked in a 0700 scratch directory beside it, and its network certifier run."""
     d = Path(tempfile.mkdtemp(dir=fetch.parent, prefix="unpacked-"))
     try:
         with tarfile.open(fetch, "r:gz") as tar:
@@ -334,7 +339,7 @@ def rehearsed(run: Path) -> None:
 
 
 def bind(reqs: list[dict], io: dict) -> dict[str, dict]:
-    """Each window request's certified record by its user; Rejected when one isn't the warden's."""
+    """Each window request's certified record by its user; Rejected when one isn't the network certifier's."""
     if not io["accepted"]:
         raise Rejected(f"the warden's certified I/O doesn't read whole off its cells: {io['violations'][:3]}")
     by, got = {r["user"]: r for r in io["records"]}, {}
@@ -369,8 +374,9 @@ def endpoint_copy(serve_dir: Path, dest: Path) -> Path:
 
 
 def sized(windows: int, sets: list[str]) -> list[str]:
-    """N2's sample and the tie's link-windows for a run of ``windows`` link-windows: every one when they are at most
-    `served_session.chain`'s 8 (whose draw of 8 a shorter run refuses), unless a CR_K=V of ``sets`` names them."""
+    """N2's sample and the tie's execution phases for a run of ``windows`` execution phases: every one when they are at
+    most `served_session.chain`'s 8 (whose sample of 8 a shorter run refuses), unless a CR_K=V of ``sets`` names
+    them."""
     given = {kv.partition("=")[0] for kv in sets}
     if windows > 8:
         return sets
@@ -654,6 +660,8 @@ def parser() -> argparse.ArgumentParser:
     f.add_argument("--prompt-ids", type=int, default=PROMPT_IDS)
     f.add_argument("--tokens", type=int, default=TOKENS)
     f.add_argument("--vocab", type=int, default=SS.VOCAB)
+    f.add_argument("--scan-class", choices=sorted(SS.A.SCAN_CLASSES), default=V3C_SCAN_CLASS,
+                   help=f"the gate's scan class, the schedule its network certifier runs at (default {V3C_SCAN_CLASS})")
     f.add_argument("--height", type=int, default=HEIGHT)
     f.add_argument("--minutes", type=int)
     f.add_argument("--bucket-ms", type=int, metavar="MS",

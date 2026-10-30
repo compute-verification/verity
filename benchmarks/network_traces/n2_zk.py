@@ -1,10 +1,10 @@
-"""N2's verdict of record from zero-knowledge proofs of N2's registered unit, on a certifier-serve run: each link-window
-committed, registered on the link's own stream (`service.LinkWindows.stream`, the proof system's `Stream`), selected
-(Selection All: its one unit, no coins), its unit (`NetworkLinkWindow_v5`, both ends' head checks on their pinned gate
-ids) proved by Flock `prove --zk` behind the Lean ZK server, delivered, and decided by `LinkWindows.outcome`: the
-verifier's own Lean `verify --zk` of the proof, the proof's public row opened to the verifier's own copy and its output
-row read. No host check reads the opening; `--debug-clear` adds the in-the-clear comparison to each verdict, which
-decides nothing.
+"""N2's verdict of record from zero-knowledge proofs of N2's registered proof block, on a certifier-serve run: each
+execution phase committed, registered on the link's own stream (`service.LinkWindows.stream`, the proof system's
+`Stream`), selected (Selection All: its one proof block, no coins), its proof block (`NetworkLinkWindow_v5`, both ends'
+head checks on their pinned gate ids) proved by Flock `prove --zk` behind the Lean ZK server, delivered, and decided by
+`LinkWindows.outcome`: the verifier's own Lean `verify --zk` of the proof, the proof's public row opened to the
+verifier's own copy and its output row read. No host check reads the opening; `--debug-clear` adds the in-the-clear
+comparison to each verdict, which decides nothing.
 
     python benchmarks/network_traces/n2_zk.py virtual --out DIR [--requests 40] [--tokens 4]
     python benchmarks/network_traces/n2_zk.py prove --run DIR [--extra DIR] [--late DIR] --bin flock-circuit
@@ -15,15 +15,17 @@ decides nothing.
 * **The runs.** A certifier-serve run's directory (`certifier_serve.py rehearse`'s per strategy, or `virtual`'s): its
   `plan.json`, `calibration.json`, `deployment.json` and `certified.jsonl`. `virtual` makes them on an injected clock
   against a stub endpoint that answers at once (certifier-serve's tests' run), honest, extra and late, with fresh keys.
-  Or, with ``--warden-run``, an active warden's run (`warden_serve.py`'s, or the gate's ``warden-rehearse``'s), read by
-  `warden_chain`: its own certified records under its key and session, on the warden link (`service.WardenProfile`:
-  both heads at the warden's grid and parameters digest, no sync declared or charged), a certifier rehearsal's run
-  refused by name; its members are honest and tampered, the tampered head failing its signed digest alone.
-* **Members.** One stream each, over all of the run's link-windows: ``honest``; ``tampered``, the honest records with
-  window 0's egress head one count off (`one_count`), committed by the prover under its own root, the certificates still
-  the certifier's; with ``--extra``, certifier-serve's ``extra`` run (the shim wrote one event more and the certifier
-  certified it); with ``--late``, its ``late`` run. The prover's references (`head_check.reference_parts`, and the unit's
-  output word by the gates' references, `LinkWindows.outputs`) say beforehand which windows each member's proofs refuse
+  Or, with ``--warden-run``, an active network certifier's run (`warden_serve.py`'s, or the gate's
+  ``warden-rehearse``'s), read by `warden_chain`: its own certified records under its key and session, on the network
+  certifier link (`service.WardenProfile`: both heads at the network certifier's grid and parameters digest, no sync
+  declared or charged), a certifier rehearsal's run refused by name; its members are honest and tampered, the tampered
+  head failing its signed digest alone.
+* **Members.** One stream each, over all of the run's execution phases: ``honest``; ``tampered``, the honest records
+  with window 0's egress head one count off (`one_count`), committed by the prover under its own root, the certificates
+  still the certifier's; with ``--extra``, certifier-serve's ``extra`` run (the shim wrote one event more and the
+  certifier certified it); with ``--late``, its ``late`` run. The prover's references (`head_check.reference_parts`, and
+  the proof block's output word by the gates' references, `LinkWindows.outputs`) say beforehand which windows each
+  member's proofs refuse
   (`expected`).
 * **The period** (``--draw K``): each member's windows sampled rather than all proved: every window's salted root
   committed, then K of them drawn on the verifier's own coins (`LinkWindows.period_draw`), and only those
@@ -32,18 +34,18 @@ decides nothing.
   draw refuses, and with K < n ``other_subset`` proves the honest records on another K-subset (`other_subset`), every
   window accepted, which the network verdict refuses by name (``period-draw``).
 * **The statement** (`stager`, `stage`). One circuit, `LinkWindows.proof_unit` lowered once (the registered unit with each
-  gate the Definition its pinned digest names), bound to the registered partition and Program. Each link-window is a
-  statement of its own with one instance, unit 0: rows ``pub`` and ``wit`` (`LinkWindows.layout`, `LinkWindows.row`) and
-  the output row ``o0``, the verdict and deadline bits. The lowering evaluates every instance at once, held to the prover's
-  reference and to the IR reference; each statement's salts come from a key of its own, and the verifier's opening of its
-  ``pub`` and ``o0`` rows is checked on the staged public file before anything is proved.
-* **A round** (`member`), per link-window in order: register, select, one live `prove --zk` session behind the ZK server on
-  the statement (the server serving the stream's sample), deliver, and the outcome of record. Per window: prove (the
-  session's wall time, the prover's ``prove_total_s``, proof bytes) and verify (the verifier of record's run, Lean
-  included). Then the link's network verdict (`LinkWindows.network_verdict`). The members' rounds run one after
+  gate the Definition its pinned digest names), bound to the registered partition and Program. Each execution phase is a
+  statement of its own with one instance, proof block 0: rows ``pub`` and ``wit`` (`LinkWindows.layout`,
+  `LinkWindows.row`) and the output row ``o0``, the verdict and deadline bits. The lowering evaluates every instance at
+  once, held to the prover's reference and to the IR reference; each statement's salts come from a key of its own, and
+  the verifier's opening of its ``pub`` and ``o0`` rows is checked on the staged public file before anything is proved.
+* **A round** (`member`), per execution phase in order: register, select, one live `prove --zk` session behind the ZK
+  server on the statement (the server serving the stream's sample), deliver, and the outcome of record. Per window:
+  prove (the session's wall time, the prover's ``prove_total_s``, proof bytes) and verify (the verifier of record's run,
+  Lean included). Then the link's network verdict (`LinkWindows.network_verdict`). The members' rounds run one after
   another: outer proofs go through the ZK server one at a time (`ONE_SESSION`), so ``--jobs`` is 1 and more is refused.
-* **What the verifier receives**, per link-window, kept under ``<member>/verifier/`` (`RECEIVED`): the registration record
-  (the salted root, nothing of the certificates) and the sample; the two certificates' public fields, from the certifier,
+* **What the verifier receives**, per execution phase, kept under ``<member>/verifier/`` (`RECEIVED`): the registration
+  record (the salted root, nothing of the certificates) and the sample; the two certificates' public fields, from the certifier,
   the auditor's device; the declared clock syncs; from the prover, the statement's public file (its header and each row's
   hiding commitment), its session files, and the salts of the ``pub`` and ``o0`` rows with the output word; and the
   outcome record. Its own: the circuit file's SHA-512 (its lowering, which prover and verifier share here), the Program's
@@ -94,7 +96,7 @@ OTHER = "other_subset"
 ROUNDS = ("honest", "tampered", "extra", "late")
 #: AGENTS.md's design rule, which `one_session` holds every driver's ``--jobs`` to
 ONE_SESSION = "outer proofs go through the firewall one at a time (AGENTS.md, 'Live coins only')"
-#: what the verifier receives per link-window, by file (`member`)
+#: what the verifier receives per execution phase, by file (`member`)
 RECEIVED = {"registration.json": "the registration record", "draw.json": "the stream's draw",
             "certificates.json": "the certificates' public fields (the certifier's)", "syncs.json": "the declared syncs",
             "pub-1.bin": "the statement's public file", "session-*": "the session's files",
@@ -123,7 +125,7 @@ def _record_lean_runs(PF) -> None:
         PF.verify = recorded
 
 
-# --- the run's link-windows -------------------------------------------------------------------------------------------
+# --- the run's execution phases ---------------------------------------------------------------------------------------
 
 def link(run: Path) -> tuple[LinkWindows, dict]:
     """The run's link and its plan, as `certifier_serve.check` builds them."""
@@ -138,9 +140,9 @@ def link(run: Path) -> tuple[LinkWindows, dict]:
 
 
 def warden_link(run: Path) -> tuple[LinkWindows, dict, dict, list]:
-    """A warden run's link (`warden_chain.link`: the active warden's own records, its key and session, no sync), the
-    plan it stands for (its windows, no syncs), its certified records by (direction, window) and the signer's
-    refusals. A certifier rehearsal's run is refused by name (`warden_chain.PROXY`)."""
+    """A network certifier run's link (`warden_chain.link`: the active network certifier's own records, its key and
+    session, no sync), the plan it stands for (its windows, no syncs), its certified records by (direction, window) and
+    the signer's refusals. A certifier rehearsal's run is refused by name (`warden_chain.PROXY`)."""
     import warden_chain as WC
 
     lw, dep, _ = WC.link(run)
@@ -150,17 +152,18 @@ def warden_link(run: Path) -> tuple[LinkWindows, dict, dict, list]:
 
 
 def link_windows(run: Path, edit=None, clock=None, warden: bool = False) -> SimpleNamespace:
-    """Every link-window of the run with both certified records, as the prover holds it before it registers: its opening
-    (fresh salts), the root it commits (`LinkWindows.root`), the unit's arguments under that root (None where the unit
-    takes no instance), each end's head check's failed parts (`head_check.reference_parts`) and the unit's output word by
-    the gates' references (`LinkWindows.outputs`); and the certifier's certificates, which the verifier receives from
-    the certifier. ``edit(lw, w, pair)``: the records the prover commits in place of the certified ones. ``expect``: the
-    verdict the verifier of record should reach on an honest proof of the opening. With ``warden``, ``run`` is an active
-    warden's run (`warden_link`), its records and certificates the warden's own and no sync declared.
+    """Every execution phase of the run with both certified records, as the prover holds it before it registers: its
+    opening (fresh salts), the root it commits (`LinkWindows.root`), the proof block's arguments under that root (None
+    where the proof block takes no instance), each end's head check's failed parts (`head_check.reference_parts`) and
+    the proof block's output word by the gates' references (`LinkWindows.outputs`); and the certifier's certificates,
+    which the verifier receives from the certifier. ``edit(lw, w, pair)``: the records the prover commits in place of
+    the certified ones. ``expect``: the verdict the verifier of record should reach on an honest proof of the opening.
+    With ``warden``, ``run`` is an active network certifier's run (`warden_link`), its records and certificates the
+    network certifier's own and no sync declared.
 
     With ``clock``, for a report on runs nothing is proved for (network_e2e), also on N2's stream as certifier-serve's
-    check takes it: each link-window registered (``digest``), selected (Selection All) and decided before the next by
-    `LinkWindows.unproved_outcome`, in the clear (``host``), and the link's network verdict (``network``)."""
+    check takes it: each execution phase registered (``digest``), selected (Selection All) and decided before the next
+    by `LinkWindows.unproved_outcome`, in the clear (``host``), and the link's network verdict (``network``)."""
     if warden:
         lw, plan, certified, refused = warden_link(run)
     else:
@@ -222,8 +225,8 @@ def every_count(lw: LinkWindows, w: int, pair: tuple[CertifiedRecord, CertifiedR
 
 
 def expected(name: str, rd: SimpleNamespace) -> bool:
-    """Whether the member's references are its round's: every unit takes an instance, and its verdict bit is 1 exactly
-    where no part fails; honest and other_subset, none fails and every window accepts; tampered, window 0's egress head
+    """Whether the member's references are its round's: every proof block takes an instance, and its verdict bit is 1
+    exactly where no part fails; honest and other_subset, none fails and every window accepts; tampered, window 0's egress head
     (every window's, ``rd.every``) fails its counts and its signed digest only (its signed digest alone on the advice
     profile, whose egress counts no N2 unit holds, and on a warden link, whose counts are its schedule's);
     extra, egress heads fail their counts alone, on one window or more; late, no link-window at all, since the certifier
@@ -384,12 +387,13 @@ def stager(M, lw: LinkWindows, out: Path) -> SimpleNamespace:
 
 
 def stage(M, sg: SimpleNamespace, members: dict[str, SimpleNamespace], secret: bytes, out: Path) -> dict:
-    """Every link-window's statement on the one circuit, one instance each, unit 0. The lowering evaluates all of their
-    rows at once (`Lowering.evaluate`), which must satisfy every unit and give the prover's output words, held to the IR
-    reference in one batch (`UnitStager.reference_check`); then each statement's files are written as `UnitStager.stage`
-    writes them (`circuit.write`), under salts from a key of the statement's own (`circuit.stage_salts` derives them from
-    the key and the set's content, which every statement shares). The verifier's opening of each staged ``pub`` and
-    ``o0`` row is checked on its public file. Sets each window's ``statement``."""
+    """Every execution phase's statement on the one circuit, one instance each, proof block 0. The lowering evaluates
+    all of their rows at once (`Lowering.evaluate`), which must satisfy every proof block and give the prover's output
+    words, held to the IR reference in one batch (`UnitStager.reference_check`); then each statement's files are written
+    as `UnitStager.stage` writes them (`circuit.write`), under salts from a key of the statement's own
+    (`circuit.stage_salts` derives them from the key and the set's content, which every statement shares). The
+    verifier's opening of each staged ``pub`` and ``o0`` row is checked on its public file. Sets each window's
+    ``statement``."""
     np, st = M.np, sg.st
     items = [(name, x) for name, mb in members.items() for x in mb.windows]
     rows = {r: np.stack([np.frombuffer(members[name].lw.row(x.args, r), "<u2") for name, x in items])
@@ -466,7 +470,7 @@ def other_subset(drawn: dict) -> list[int]:
 
 def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path, port: int,
            coins=None, forge=None) -> dict:
-    """The member's link-windows on its own stream, in order: register, select, prove the statement live behind the
+    """The member's execution phases on its own stream, in order: register, select, prove the statement live behind the
     ZK server, deliver, and decide on the proof (`LinkWindows.outcome`); then its network verdict. Writes what the
     verifier receives under ``out / "verifier"`` (`RECEIVED`), each file prefixed by its window. Window j's session
     listens on ``port + j``, or with ``port`` 0 on a port the OS picks free.
@@ -475,11 +479,11 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
     committed first, then `coins` draw K of the windows, and only those are registered, proved and
     decided; the sample is ``period.json`` beside what the verifier receives, and the network verdict is the sampled one,
     with its ``wrong_units`` at the stream's δ (``a.delta``, by default `certifier_serve.DELTA`), on the sample of
-    record: the Lean verifier of record's (``--lean``) draw on the coins the period flip read (`service.lean_draw`),
+    record: the Lean verifier of record's (``--lean``) sample on the coins the period flip read (`service.lean_draw`),
     which the windows proved must be. Coins with a ``drawn`` (the challenger's, `a5_coins.RankCoins`) end their turn
     on the session once the sample has read them, and the result's ``segment`` is what they released. ``forge``, a
-    negative, is the prover's: of the period draw, the K windows it registers and proves instead, under a sample object
-    listing them (`other_subset`), which is what ``period.json`` then holds."""
+    negative, is the prover's: of the period sample, the K windows it registers and proves instead, under a sample
+    object listing them (`other_subset`), which is what ``period.json`` then holds."""
     lw = rd.lw
     k = getattr(a, "draw", 0) or None
     stream = lw.stream(budget=rd.plan["windows"], delta=getattr(a, "delta", None) or cs.DELTA, challenger="n2-zk",
@@ -578,7 +582,7 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
 def _member_scan(M, sg, rd, out: Path, received=None) -> dict:
     """The scan of what the verifier received for every window's witness pieces, leaving out the pieces the public
     circuit or a received window's ``pub`` row holds; `received`, the windows the verifier got (a sampled period's
-    drawn ones), by default every one. The control (the prover's instance files) is to hold every held piece but a
+    sampled ones), by default every one. The control (the prover's instance files) is to hold every held piece but a
     head's zero-padded last chunk, which `public_pieces` (``fields``) leaves out of the held ones since a head inside
     its row never shows it (``padded_tails`` counts them); the scan of what the verifier received still looks for
     those."""
@@ -711,10 +715,11 @@ def main(argv=None) -> int:
     v.add_argument("--out", required=True, type=Path)
     v.add_argument("--requests", type=int, default=40)
     v.add_argument("--tokens", type=int, default=4)
-    p = sub.add_parser("prove", help="each link-window's unit proved --zk and decided by N2's verifier of record")
+    p = sub.add_parser("prove", help="each execution phase's proof block proved --zk and decided by N2's verifier of "
+                                     "record")
     run = p.add_mutually_exclusive_group(required=True)
     run.add_argument("--run", type=Path, help="the honest run's directory")
-    run.add_argument("--warden-run", type=Path, help="an active warden's run (warden_serve.py's, or the gate's "
+    run.add_argument("--warden-run", type=Path, help="an active network certifier's run (warden_serve.py's, or the gate's "
                      "warden-rehearse's): its own certified records, no certifier rehearsal (warden_chain)")
     p.add_argument("--extra", type=Path, help="certifier-serve's extra run of the same plan")
     p.add_argument("--late", type=Path, help="certifier-serve's late run of the same plan")
