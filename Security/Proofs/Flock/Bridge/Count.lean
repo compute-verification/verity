@@ -10,8 +10,8 @@ import Proofs.Flock.Claims.Sampling.EndToEndDraw
 the population's subset miss at the population slots (`pa_partOf_window`). From them: `PartRusTarget`, `PaTarget`
 (`P_a(B) = C(n − |B|, kd)/C(n, kd)` for `B` of population slots), and `CountTarget`: a witness outside `RelS` at
 `δ = C(n − K₀, kd)/C(n, kd)` has at least `min K₀ (n − kd + 1)` faulty population slots, because `C(·, kd)` is strictly
-increasing from `kd` on (`choose_lt_of_lt`). A faulty input slot is outside this bound: the deployed verifier checks
-every input slot, and the design draws none.
+increasing from `kd` on (`choose_lt_of_lt`). A faulty input slot is outside this bound: the design draws none, and
+the deployed verifier opens an input row only through a drawn unit that reads it.
 
 Scope: `designOf kd` is well formed on `partOf P` at `1 ≤ kd ≤ n` (`designOf_wellFormed`), and every gate of
 `progOf C κ`, its input gates and constants included, is in a proof unit of `partOf P` (`mem_gates_partOf`,
