@@ -225,7 +225,7 @@ theorem linksOf_eq {w : RecRaw} {l : Option (ByteArray × ℕ)} (h : linksOf w =
   | none =>
     rw [hw] at h
     simp [pure, Except.pure] at h
-    first | exact h.symm | exact h
+    exact h.symm
   | some t =>
     rw [hw] at h
     cases hc : RecLinkTree.checkLinks t.1 t.2 with
@@ -233,7 +233,7 @@ theorem linksOf_eq {w : RecRaw} {l : Option (ByteArray × ℕ)} (h : linksOf w =
     | ok u =>
       simp only [Option.mapM_some, hc, bind, Except.bind, pure, Except.pure, Functor.map, Except.map,
         Except.ok.injEq] at h
-      first | exact h.symm | exact h
+      exact h.symm
 
 /-- **A staged session's link table is the statement's own** (`partRaw` carries `x`'s, which `linksOf` keeps). -/
 theorem insO_staged_links {st : Stage} {x : Msg} {ms : List (Msg × Claims.Out)} {s : ℕ} {i : RecIns}
@@ -284,10 +284,11 @@ theorem statements_link {i : RecVStar.Inner} {ss : Array VStar.Stmt} (h : RecVSt
     cases hn
   · rw [show l' = l from Option.some.inj (hl'.symm.trans hl)]
     rw [show A ++ C ++ (K ++ #[VStar.Stmt.link l.UB l.PB l.rows] ++ #[VStar.Stmt.cap 0 n]) =
-        (A ++ C ++ K) ++ #[VStar.Stmt.link l.UB l.PB l.rows, VStar.Stmt.cap 0 n] by simp [Array.append_assoc]]
+        ((A ++ C ++ K).push (VStar.Stmt.link l.UB l.PB l.rows)).push (VStar.Stmt.cap 0 n) by
+      simp only [Array.append_singleton, Array.append_push]]
     generalize A ++ C ++ K = B
-    rw [Array.getElem?_append_right (by simp)]
-    simp
+    rw [Array.size_push, Array.size_push, show B.size + 1 + 1 - 2 = B.size by omega,
+      Array.getElem?_push_lt (by simp), Array.getElem_push_eq]
 
 /-- **The link part's index and row count are the statement's table's**: at a statement carrying the table `(T, N)`
 whose part `s` stages a session that sets up, V\*'s list holds `.link UB PB N` second to last, the part `linkAt`
