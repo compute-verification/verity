@@ -7,7 +7,8 @@ mean |W| on t's support. Training then continues honestly on the checkpoint's ow
 matrix's route q = a·t + S is priced (`poison.teacher_route`), against the same t on the honest final weights.
 
 `--arms A,D2 --lengths 10,100,500 --scratch DIR --out DIR` trains each arm once with checkpoints, then every plant in
-parallel, and writes `plant.json` to `--out`.
+parallel, and writes `plant.json` to `--out`. `--preimage N` instead plans the jump through the honest continuation
+(`preimage`) and writes `preimage.json`.
 """
 
 import argparse
@@ -73,6 +74,43 @@ def planted(arm, data, scratch, steps, batch, pin, L):
                 tag=tag(arm, pin, L), mutate=mutate)
 
 
+def preimage(arm, data, scratch, steps, batch, pin, L, iters):
+    """The planned jump: W' at T - L chosen so that L honest steps land on a cheap target, the ternary of the honest
+    final W, by the fixed point W' <- W' + (target - F_L(W')) on the planted matrices. Iteration 0 is the plain plant."""
+    sc = Path(scratch)
+    hon = dict(np.load(sc / f"{arm}.npz"))
+    w_tl = torch.load(sc / f"{arm}.ckpt{steps - L}.pt", weights_only=False)["model"]
+    names = [f"{i}.{n}" for i in range(seeds.LAYERS) for n in PLANTED]
+    tgt = {k: ternary(hon[f"final/{k}"], pin) for k in names}
+    wp = {k: tgt[k][1].copy() for k in names}
+    hist = []
+    for it in range(iters):
+        def mutate(model, wp=wp):
+            for k, w in wp.items():
+                i, n = k.split(".")
+                getattr(model.blocks[int(i)], n).weight.copy_(torch.from_numpy(w))
+
+        tg = f"{arm}_pre{pin}_L{L}_it{it}"
+        jump = float(np.mean([np.linalg.norm(wp[k] - w_tl[f"blocks.{k}.weight"].numpy())
+                              / np.linalg.norm(w_tl[f"blocks.{k}.weight"].numpy()) for k in names]))
+        seeds.train(arm, data, scratch, steps, batch, resume=sc / f"{arm}.ckpt{steps - L}.pt", tag=tg, mutate=mutate)
+        fin = dict(np.load(sc / f"{tg}.npz"))
+        recs = [teacher_route(q(fin[f"final/{k}"]), tgt[k][0]) for k in names]
+        miss = [np.abs(fin[f"final/{k}"] - tgt[k][1]) / (np.abs(tgt[k][1]).max(axis=1, keepdims=True) / 127) for k in names]
+        hist.append({"iter": it, "val_loss": json.loads((sc / f"{tg}.json").read_text())["val_loss"],
+                     "jump_rel": jump, "route": mean_routes([r["teacher_route"] for r in recs]),
+                     "s0": float(np.mean([r["s_hist"]["0"] for r in recs])),
+                     "s_le1": float(np.mean([r["s_hist"]["0"] + r["s_hist"]["1"] for r in recs])),
+                     "miss_lsb_mean": float(np.mean([m.mean() for m in miss])),
+                     "miss_lsb_max": float(max(m.max() for m in miss))})
+        print(arm, pin, L, json.dumps(hist[-1]), flush=True)
+        for k in names:
+            wp[k] = (wp[k] + (tgt[k][1] - fin[f"final/{k}"])).astype(np.float32)
+    honest = [teacher_route(q(hon[f"final/{k}"]), tgt[k][0])["teacher_route"] for k in names]
+    return {"pin": pin, "L": L, "iters": hist, "honest_final_route": mean_routes(honest),
+            "honest_val": json.loads((sc / f"{arm}.json").read_text())["val_loss"]}
+
+
 def mean_routes(recs):
     return {k: float(np.mean([r[k] for r in recs])) for k in recs[0]}
 
@@ -117,6 +155,7 @@ def main():
     ap.add_argument("--steps", type=int, default=1500)
     ap.add_argument("--batch", type=int, default=16)
     ap.add_argument("--pins", default="0", help="0 plants a·t alone; k > 0 pins each row's absmax (`ternary`)")
+    ap.add_argument("--preimage", type=int, default=0, help="N > 0: the planned jump (`preimage`), N iterations")
     args = ap.parse_args()
     arms = args.arms.split(",")
     lengths = sorted(int(x) for x in args.lengths.split(","))
@@ -126,6 +165,14 @@ def main():
     with ProcessPoolExecutor(len(arms), mp_context=ctx) as ex:
         for f in [ex.submit(base, a, args.data, args.scratch, args.steps, args.batch, lengths) for a in arms]:
             f.result()
+    if args.preimage:
+        with ProcessPoolExecutor(len(jobs), mp_context=ctx) as ex:
+            fs = {(a, p, L): ex.submit(preimage, a, args.data, args.scratch, args.steps, args.batch, p, L, args.preimage)
+                  for a, p, L in jobs}
+            res = {"steps": args.steps, "runs": {f"{a}/pin{p}/L{L}": f.result() for (a, p, L), f in fs.items()}}
+        Path(args.out).mkdir(parents=True, exist_ok=True)
+        (Path(args.out) / "preimage.json").write_text(json.dumps(res))
+        return
     with ProcessPoolExecutor(len(jobs), mp_context=ctx) as ex:
         for f in [ex.submit(planted, a, args.data, args.scratch, args.steps, args.batch, p, L) for a, p, L in jobs]:
             f.result()
