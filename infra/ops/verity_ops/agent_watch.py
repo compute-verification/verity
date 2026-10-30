@@ -105,8 +105,10 @@ head ending in its id's last four characters (a coordinator's `cursor/...-1037`)
 watch first saw its sha (`heads.json` beside `--log`). The 90 min count from the latest of its ACTIVE spell's start, its newest
 note, its newest push and the first heads read, so a fresh deploy judges nobody for 90 min. It is recorded once, and again
 after a second window (`SILENT_RINGS`), then not until one of those moves; the relay rings its handle (a coordinator's own, a
-worker's launcher's). A silent agent still showing nothing `NO_STEP_S` (6 h) after its last activity is recorded once more,
-as **no_step**, rung to @top: on 26 Oct nine workers sat ACTIVE with no step for 30-64 h, each rung twice and then by no one.
+worker's launcher's). A silent agent still showing nothing `NO_STEP_S` (6 h) after its last activity is recorded once more:
+a worker is archived (`POST /v1/agents/{id}/archive`, which stops it and frees its slot) and recorded as **archived**, rung to
+its lane, which relaunches it from its last note or drops it; a coordinator, or a worker the API won't archive, is recorded as
+**no_step**, rung to @top.
 Its last activity there also counts its agent's own `updatedAt` and, for a coordinator, its judged run's `updatedAt` and last
 stream event, since no_step advises stopping and archiving it: on 26 Oct at 21:05Z it said so of compute-accounting's and
 network-accounting's coordinators, each working in Slack within two minutes, with no note or push for 6 h.
@@ -278,7 +280,7 @@ RUN_STATUSES = ("CREATING", "RUNNING", "WAITING_FOR_BACKGROUND_WORK", "FINISHED"
 WATCH_STATES = ("ok", "followed", "held", "held_again", "continued", "continue_failed", "cancel_refused", "long_call", "stuck",
                 "crashed", "erroring", "unreadable", "ready_to_wake", "worker_idle", "worker_long", "silent", "run_ended",
                 "stalled", "idle_after_run", "relaunch", "workers_failed", "not_relaunched", "held_unread", "no_step",
-                "outage")
+                "outage", "archived")
 BURST_S = 15 * 60               # workers of one parent failing within this of the first are one alert (proofs' 14: 16:49-17:03Z)
 BURST_QUIET_S = 3 * 60          # ... posted once none has joined for this long (so a lone failure waits about a sweep)
 CONV_MSGS = 6                   # a failed worker's last assistant messages read for a wake-up it set itself
@@ -1053,6 +1055,17 @@ class Watch:
         self.record("outage", Run("", "", ""), judged=False, owner="top", count=len(long),
                     handles=[h for h, _ in long], since=iso(min(s for _, s in long)), every_min=OUTAGE_RETRY_S // 60)
 
+    def archive(self, agent: str) -> str | None:
+        """Archive a silent worker (`POST /v1/agents/{id}/archive`), which stops it and frees its cloud-agent slot: None once
+        archived, else why the API refused."""
+        try:
+            self.api.post(f"/v1/agents/{agent}/archive", {})
+        except urllib.error.HTTPError as e:
+            return f"HTTP {e.code}"
+        except (urllib.error.URLError, OSError, ValueError) as e:
+            return f"{type(e).__name__}: {e}"
+        return None
+
     def restart(self, a: dict, run: str, t: float) -> None:
         """A new run on an agent whose latest run ended in ERROR, at most once every `RESTART_S` and `MAX_RESTARTS` times in a
         row; then a coordinator is relaunched."""
@@ -1508,9 +1521,14 @@ class Watch:
                 if s and not s.get("no_step") and t - still >= NO_STEP_S:
                     s["no_step"] = True
                     changed = True
-                    self.record("no_step", Run(agent, k["run"], k["name"]), since=iso(still), hours=int((t - still) // 3600),
-                                lane=k["lane"], **({"handle": k["handle"]} if k["handle"] else {}), owner="top",
-                                role="coordinator" if coord else "worker")
+                    why = None if coord else self.archive(agent)
+                    common = dict(since=iso(still), hours=int((t - still) // 3600), lane=k["lane"],
+                                  **({"handle": k["handle"]} if k["handle"] else {}), role="coordinator" if coord else "worker")
+                    if coord or why:
+                        self.record("no_step", Run(agent, k["run"], k["name"]), owner="top", **common,
+                                    **({"archive_failed": why} if why else {}))
+                    else:
+                        self.record("archived", Run(agent, k["run"], k["name"]), **common)
                 continue
             if t - last < (COORD_SILENT_S if coord else SILENT_S) * (n + 1):
                 continue
