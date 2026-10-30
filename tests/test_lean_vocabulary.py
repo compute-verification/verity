@@ -443,16 +443,12 @@ KNOWN: dict[str, str] = {
         "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes its interactive case (deleted) (memory-accounting)",
     "Security/Definitions/Accounting/Remote/Draw.lean::Accounting.Remote.Draw.Coins":
         "duplicate of the live coins (`Verity.Coins`; `SampledProofs.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",
-    "Security/Definitions/Accounting/Remote/Draw.lean::Accounting.Remote.Draw.Session":
-        "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it (memory-accounting)",
     "Security/Definitions/Accounting/Remote/Node.lean::Accounting.Remote.Node":
         "duplicate of the Site (`Verity.Site`): becomes a reading of it: a node's projection (memory-accounting)",
     "Security/Definitions/Accounting/Remote/Sketch.lean::Accounting.Remote.Sketch.Coins":
         "duplicate of the live coins (`Verity.Coins`; `SampledProofs.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",
     "Security/Definitions/Accounting/Remote/Sketch.lean::Accounting.Remote.Sketch.Outcome":
         "homonym, a session's random outcome (coins): rename (memory-accounting)",
-    "Security/Definitions/Accounting/Remote/Sketch.lean::Accounting.Remote.Sketch.Session":
-        "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it (memory-accounting)",
     "Security/Definitions/Accounting/Requirement.lean::Accounting.Requirement.Layout":
         "duplicate of the Site (`Verity.Site`): becomes a reading of it: values placed on the Site's memory leaves (memory-accounting)",
     "Security/Definitions/Accounting/Requirement.lean::Accounting.Requirement.Placement":
@@ -1310,10 +1306,10 @@ def test_readings_and_slots_are_exempt():
 def test_a_canonical_under_another_name():
     """`Verity.Play` is a hit, the session's canonical, at its key alone, and an abbrev of it reads it."""
     core, rate, other = f"{CORE}Period.lean", f"{D}Accounting/Rate.lean", f"{D}Accounting/Other.lean"
-    s = scan({core: "namespace Verity\nabbrev Play (n : Nat) (Ω : Type) (X : Fin n → Type) : Type :=\n"
-                    "  (t : Fin n) → ({s : Fin n // s < t} → Ω) → X t\nend Verity\n",
+    s = scan({core: "namespace Verity\nabbrev Play (n : Nat) (Ω X : Fin n → Type) : Type :=\n"
+                    "  (t : Fin n) → ((s : {s : Fin n // s < t}) → Ω s.1) → X t\nend Verity\n",
               rate: "namespace Accounting.Rate\nabbrev Session (n : Nat) : Type :=\n"
-                    "  Verity.Play n Nat (fun _ => Nat)\nend Accounting.Rate\n",
+                    "  Verity.Play n (fun _ => Nat) (fun _ => Nat)\nend Accounting.Rate\n",
               other: "namespace Accounting\nstructure Play where\n  x : Nat\nend Accounting\n"})
     assert [h.key for h in s.hits["Session"]] == [f"{core}::Verity.Play", f"{rate}::Accounting.Rate.Session"]
     assert "Play" not in s.hits
