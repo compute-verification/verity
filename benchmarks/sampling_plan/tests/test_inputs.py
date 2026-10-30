@@ -1,6 +1,7 @@
-"""A statement's cap (`inputs.cap`): the C-Flock block a proof block needs is the composer's occupancy of it (the unit's slot
-above its ANDs and port bits, an hm96 slot a row, the mask and the sha512x3 slots), not its ANDs with its rows' openings;
-past C-Flock's 2^K_MAX a shape is no proof block, and every plan reads the one cap."""
+"""A statement's cap (`inputs.cap`): the C-Flock block a proof block needs is the composer's occupancy of it
+(`block_k_log`, `proof_block_k_log` unpacked: the unit's slot over its ports and ANDs, an hm96 slot a row, the mask and
+the sha512x3 slots), not its ANDs with its rows' openings; past C-Flock's 2^K_MAX a shape is no proof block, and every
+plan reads the one cap."""
 
 from __future__ import annotations
 
@@ -23,10 +24,12 @@ def test_the_block_is_the_composers_at_the_measured_points():
 
 
 def test_a_one_slot_unit_fits_below_half_the_block():
-    """The unit's slot shares the block with its rows' slots, so a unit whose ANDs and port bits reach 2^(K_MAX - 1) needs
-    a block of 2^(K_MAX + 1) and is no proof block, though its ANDs are under 2^K_MAX."""
+    """The unit's slot shares the block with its rows' slots, so a unit whose ports and ANDs pass 2^(K_MAX - 1) cells
+    needs a block of 2^(K_MAX + 1) and is no proof block, though its ANDs are under 2^K_MAX: here the inputs' 2,058 bytes
+    are a port of 2^15 cells, and the logic, rounded up to a 128-cell word, is followed by the output's word and a
+    constant cell."""
     rows = (1024, 1024) + COORD_ROWS
-    under = (1 << (K_MAX - 1)) - 1 - 8 * sum(rows)
+    under = (1 << (K_MAX - 1)) - (1 << 15) - 2 * 128
     assert block_k_log(under, rows) == K_MAX and cap(under, rows) == 1 << (35 - K_MAX)
     assert block_k_log(under + 1, rows) == K_MAX + 1 and cap(under + 1, rows) == 0 and under + 1 < 1 << K_MAX
 
