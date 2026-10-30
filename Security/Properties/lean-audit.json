@@ -19,6 +19,7 @@
   "Properties.Pous",
   "Properties.NetworkCertifier",
   "Properties.NetworkCertifier.LinkWindow",
+  "Properties.NetworkCertifier.Calls",
   "Properties.CertifierNetwork",
   "Properties.CertifierNetwork.Runs",
   "Properties.Identity",
@@ -403,6 +404,10 @@
   "MemoryChallenger.Properties.SecurityProofs.wipeSigned": {
    "honest": ["MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest"],
    "nontrivial": "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial"
+  },
+  "Properties.NetworkCertifier.refusesPastCallBits": {
+   "honest": ["Properties.NetworkCertifier.refusesPastCallBits_honest"],
+   "nontrivial": "Properties.NetworkCertifier.refusesPastCallBits_nontrivial"
   }
  },
  "unwitnessed": {
@@ -675,9 +680,15 @@
    "why": "the bridge is stated against core's identity hash and C-Flock's SHA-512, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.NetworkCertifier": {
-   "imports": ["NetworkCheck.Check", "NetworkCheck.LinkWindow", "Properties.Identity", "Lms.Sign"],
+   "imports": [
+    "NetworkCheck.Check",
+    "NetworkCheck.LinkWindow",
+    "Properties.Identity",
+    "Lms.Sign",
+    "NetworkCertifier.Calls"
+   ],
    "except": [],
-   "why": "the properties are stated against the code's own functions, the check's and N2's link-window verdict of record's, and the certificates the certifier's device signs against LMS's own signer (`CertifierSigned`), never a proof"
+   "why": "the properties are stated against the code's own functions, the check's, N2's link-window verdict of record's and the certifier program's calls', and the certificates the certifier's device signs against LMS's own signer (`CertifierSigned`), never a proof"
   },
   "Properties.Evaluate": {
    "imports": ["Evaluate", "Definitions.Core.Scalar", "Definitions.Core.Fp32", "Definitions.Core.Prims"],
@@ -2256,6 +2267,15 @@
    ],
    "assumptions": [],
    "type_hash": "610d10605450ee5a7692a41365797df1a88df14c95600e19330475dd2335d953"
+  },
+  "Properties.NetworkCertifier.refusesPastCallBits": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkCertifier.refusesPastCallBits_honest": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkCertifier.refusesPastCallBits_nontrivial": {
+   "owner": "@network-accounting"
   },
   "Properties.NetworkCertifier.undecidedPending": {
    "owner": "@network-accounting",
@@ -4065,6 +4085,10 @@
     "function": "NetworkCheck.LinkWindow.verdict",
     "outcome": "accept"
    },
+   "Properties.NetworkCertifier.refusesPastCallBits": {
+    "function": "NetworkCertifier.Calls.run",
+    "outcome": "accept"
+   },
    "Properties.NetworkCertifier.undecidedPending": {
     "function": "NetworkCheck.Check.protocol.check",
     "outcome": "undecided"
@@ -4606,6 +4630,8 @@
    "Properties.Site.checks_nontrivial": "lemma: Checks's nontrivial lemma: a log check that accepts everything accepts staleLog, which is not valid, so Checks says something of the code's check",
    "Properties.Site.refusedAt_honest": "completeness: RefusedAt's honest lemma: the code's check accepts honestLog and refuses staleLog at its second entry, as not following the head, each decided by the code's check, so RefusedAt holds at a concrete log",
    "Properties.Site.refusedAt_nontrivial": "lemma: RefusedAt's nontrivial lemma: a log check that refuses everything at its first entry, as not following the head, names a refusal the spec does not give honestLog's first entry, so RefusedAt says something of the code's check",
+   "Properties.NetworkCertifier.refusesPastCallBits_honest": "completeness: RefusesPastCallBits' honest lemma: the certifier program's calls accept honestEvents' forward of one call at its words root, its bucket's bits and the release's at its cap, decided by the program's run, so RefusesPastCallBits holds at a concrete window",
+   "Properties.NetworkCertifier.refusesPastCallBits_nontrivial": "lemma: RefusesPastCallBits' nontrivial lemma: a certifier taking every event (acceptsAll) accepts pastEvents' forward, whose 1,001 bits pass its cap of 32, so RefusesPastCallBits says something of the program's calls",
    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_honest": "completeness: WipeSigned's honest lemma: at S1's deployed LMS parameters a key Lms.keygen derives signs the honest session at r20261026-094403-bb5f's parameters (2^24 labels, k = 2152 reads one at a time, 20 ms each) and clock readings (each read at the slowest round trip measured, 1.40 ms), and the wipe's compiled check of the period that trusts the key accepts it, so WipeSigned's hypothesis holds at the honest deployed instance",
    "MemoryChallenger.Properties.SecurityProofs.wipeSigned_nontrivial": "lemma: WipeSigned's nontrivial lemma: WipeRanAccepted fails at a session with a batch no record encodes, under the empty key, for the challengers that ran nothing: it is no run of theirs, and the collision finder and the forger built from it output nothing, so the break is not always true",
    "Pous.Component.SecurityProofs.runAccepts_by": "lemma: RunAccepts is RunAcceptsBy at PoUS's compiled run check (Iff.rfl), which ties runAccepts_fails to the guarantee",

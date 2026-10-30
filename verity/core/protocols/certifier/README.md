@@ -313,7 +313,10 @@ from `lean/lean-audit.json`). Advice v1's charge has its own: `lake exe certifie
 what `lean/scripts/charge_vectors.py` writes from `arith_encode.reference_charge`, and its whole window's
 `lake exe certifier-window-difftest INSTANCES PYTHON N` on what `lean/scripts/window_vectors.py` writes from
 `window_charge.reference_window`. The lead's calls are `NetworkCertifier.Calls`, held to `calls.Calls` by
-`lake exe certifier-calls-difftest INSTANCES PYTHON N` on what `lean/scripts/calls_vectors.py` writes.
+`lake exe certifier-calls-difftest INSTANCES PYTHON N` on what `lean/scripts/calls_vectors.py` writes. Their property
+is in `Security/Properties/NetworkCertifier/Calls.lean` (`Properties.NetworkCertifier.RefusesPastCallBits`, proved): a
+forward whose words root the certifier accepts stayed within its bits, the buckets counted from any of its calls to its
+words root with the release's bits at most `cap · Σ rows · n · K / fwdMacs`.
 
 The two terms of the charge the capacity bounds leave open are fixed in the trusted text, in the last section of
 `Security/Definitions/NetworkCertifier/Guarantees.lean`'s documentation:
