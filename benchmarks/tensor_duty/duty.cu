@@ -2,10 +2,11 @@
 // idle or non-tensor work moves more MACs a second than 132 SMs x 4096 MACs a clock at 1830 MHz (9.894e14), whatever
 // the SM clock is locked to. Timings only.
 //
-// One CTA an SM. Each period of PERIOD SM-cycles (clock64, counted from the CTA's start) issues a fixed count of tensor
-// operations, DUTY percent of what the arm sustains continuously (its calibration, MACs a SM-cycle), drains them, and
-// fills the rest of the period; DUTY 100 issues back to back with no drain or fill. Periods run until SECS seconds of
-// %globaltimer have passed, checked about every 65,536 cycles.
+// One CTA an SM. Each period (SM-cycles of clock64, counted from the CTA's start) issues a burst of whole batches of
+// tensor operations, BURST cycles of work at the rate the arm sustains continuously (its calibration, MACs a SM-cycle),
+// drains them, and fills the rest of the period, whose length makes the burst DUTY percent of it; DUTY 100 issues back
+// to back with no drain or fill. Periods run until SECS seconds of %globaltimer have passed, checked about every
+// 65,536 cycles.
 // Arms:    wg_s8    wgmma m64n256k32 s8.s8 -> s32, one warpgroup with A and B resident in shared memory (KS k-slices,
 //                   cycled), as int8_class_rate's wgmma kernel;
 //          wg_e4m3  the same, e4m3.e4m3 -> f32;
@@ -19,7 +20,7 @@
 //
 // Build: python3 gen_wgmma.py && nvcc -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a -I. -I../int8_class_rate \
 //          -o duty duty.cu
-// Run:   duty ARM CLASS FILL PERIOD SECS DUTY...    (DUTY in percent)
+// Run:   duty ARM CLASS FILL BURST SECS DUTY...    (BURST in SM-cycles, DUTY in percent)
 // One JSON line for the calibration, then one a point, on stdout.
 
 #include <cuda_runtime.h>
@@ -143,9 +144,10 @@ __device__ __forceinline__ void pass(T* d) {
   }
 }
 
-// `per` wgmmas a period (one warpgroup); cont: back to back, no drain or fill
+// nb batches of KS wgmmas a period (one warpgroup); cont: back to back, no drain or fill. Every batch is whole: a
+// wgmma issued under a condition gets its own warpgroup.arrive, which serializes the pipe.
 template <bool FP8, int FILL>
-__global__ void __launch_bounds__(128, 1) wg_k(int cls, u32 per, int cont, u64 period, u64 ns, Stamp* out, u32* sink) {
+__global__ void __launch_bounds__(128, 1) wg_k(int cls, u32 nb, int cont, u64 period, u64 ns, Stamp* out, u32* sink) {
   extern __shared__ __align__(1024) uint8_t smem[];
   __shared__ u64 s_base, s_t0;
   __shared__ int s_stop;
@@ -171,22 +173,20 @@ __global__ void __launch_bounds__(128, 1) wg_k(int cls, u32 per, int cont, u64 p
   u64 ops = 0, tns = 0, tcyc = 0;
   for (u64 k = 1;; ++k) {
     u64 ta = 0, ca = 0;
-    if (threadIdx.x == 0) { ta = gtimer(); ca = clk(); }
-    for (u32 j = 0; j < per; j += KS) {
+    if (threadIdx.x == 0 && !cont) { ta = gtimer(); ca = clk(); }
+    for (u32 j = 0; j < nb; ++j) {
       pass(d);
       asm volatile("wgmma.fence.sync.aligned;\n" ::: "memory");
 #pragma unroll
       for (int q = 0; q < KS; ++q) {
-        if (j + q < per) {
-          if constexpr (FP8) wgmma_e4m3_m64n256k32(d, da[q], db[q]);
-          else wgmma_s8s8_m64n256k32(d, da[q], db[q]);
-        }
+        if constexpr (FP8) wgmma_e4m3_m64n256k32(d, da[q], db[q]);
+        else wgmma_s8s8_m64n256k32(d, da[q], db[q]);
       }
       asm volatile("wgmma.commit_group.sync.aligned;\n" ::: "memory");
       asm volatile("wgmma.wait_group.sync.aligned 1;\n" ::: "memory");
       pass(d);
     }
-    ops += per;
+    ops += nb * KS;
     if (!cont) {
       asm volatile("wgmma.wait_group.sync.aligned 0;\n" ::: "memory");
       pass(d);
@@ -221,9 +221,9 @@ __device__ __forceinline__ void mma_s8(u32* c, const u32* a, const u32* b) {
                : "r"(a[0]), "r"(a[1]), "r"(a[2]), "r"(a[3]), "r"(b[0]), "r"(b[1]));
 }
 
-// `per` mma.syncs a warp a period; cont: back to back, no fill
+// nb batches of SA mma.syncs a warp a period; cont: back to back, no fill
 template <int FILL>
-__global__ void __launch_bounds__(SW * 32, 1) sync_k(int cls, u32 per, int cont, u64 period, u64 ns, Stamp* out, u32* sink) {
+__global__ void __launch_bounds__(SW * 32, 1) sync_k(int cls, u32 nb, int cont, u64 period, u64 ns, Stamp* out, u32* sink) {
   __shared__ u64 s_base, s_t0;
   __shared__ int s_stop;
   const u32 seed = (blockIdx.x * SW * 32 + threadIdx.x) * 32;
@@ -247,13 +247,12 @@ __global__ void __launch_bounds__(SW * 32, 1) sync_k(int cls, u32 per, int cont,
   u64 ops = 0, tns = 0, tcyc = 0;
   for (u64 k = 1;; ++k) {
     u64 ta = 0, ca = 0;
-    if (threadIdx.x == 0) { ta = gtimer(); ca = clk(); }
-    for (u32 j = 0; j < per; j += SA) {
+    if (threadIdx.x == 0 && !cont) { ta = gtimer(); ca = clk(); }
+    for (u32 j = 0; j < nb; ++j) {
 #pragma unroll
-      for (int u = 0; u < SA; ++u)
-        if (j + u < per) mma_s8(c[u], a[u % KS], b[u % KS]);
+      for (int u = 0; u < SA; ++u) mma_s8(c[u], a[u % KS], b[u % KS]);
     }
-    ops += per;
+    ops += nb * SA;
     if (!cont) {
       if (threadIdx.x == 0) {
         u32 y = 0;  // warp 0's last results, so its tensor phase ends when they land
@@ -285,16 +284,17 @@ using KernelFn = void (*)(int, u32, int, u64, u64, Stamp*, u32*);
 
 struct Arm {
   KernelFn k;
-  int threads, units;  // units: the CTA's issuers, each running `per` operations a period
+  int threads, units;  // units: the CTA's issuers, each running nb batches a period
   size_t smem;
   double macs;  // a unit's operation
+  int batch;    // a unit's operations a batch
 };
 
 static Arm arm_for(const std::string& name, int fill) {
   const size_t wsmem = (size_t)KS * (64 * 32 + N * 32);
-  if (name == "wg_s8") return {fill ? wg_k<false, ALU> : wg_k<false, IDLE>, 128, 1, wsmem, WG_MACS};
-  if (name == "wg_e4m3") return {fill ? wg_k<true, ALU> : wg_k<true, IDLE>, 128, 1, wsmem, WG_MACS};
-  if (name == "sync_s8") return {fill ? sync_k<ALU> : sync_k<IDLE>, SW * 32, SW, 0, SYNC_MACS};
+  if (name == "wg_s8") return {fill ? wg_k<false, ALU> : wg_k<false, IDLE>, 128, 1, wsmem, WG_MACS, KS};
+  if (name == "wg_e4m3") return {fill ? wg_k<true, ALU> : wg_k<true, IDLE>, 128, 1, wsmem, WG_MACS, KS};
+  if (name == "sync_s8") return {fill ? sync_k<ALU> : sync_k<IDLE>, SW * 32, SW, 0, SYNC_MACS, SA};
   fprintf(stderr, "ARM: wg_s8, wg_e4m3 or sync_s8\n");
   exit(2);
 }
@@ -309,7 +309,7 @@ struct Point {
 
 int main(int argc, char** argv) {
   if (argc < 7) {
-    fprintf(stderr, "duty ARM CLASS FILL PERIOD SECS DUTY...\n");
+    fprintf(stderr, "duty ARM CLASS FILL BURST SECS DUTY...\n");
     return 2;
   }
   const std::string aname = argv[1], cname = argv[2], fname = argv[3];
@@ -325,7 +325,7 @@ int main(int argc, char** argv) {
     return 2;
   }
   const int fill = fname == "alu" ? ALU : IDLE;
-  const u64 period = strtoull(argv[4], nullptr, 10);
+  const u64 burst = strtoull(argv[4], nullptr, 10);
   const double secs = atof(argv[5]);
   std::vector<double> duties;
   for (int i = 6; i < argc; ++i) duties.push_back(atof(argv[i]));
@@ -342,11 +342,11 @@ int main(int argc, char** argv) {
   CK(cudaEventCreate(&e0));
   CK(cudaEventCreate(&e1));
 
-  auto run = [&](u32 per, int cont, double s) {
+  auto run = [&](u32 nb, int cont, u64 period, double s) {
     Point pt{};
     pt.host_t0 = unix_now();
     CK(cudaEventRecord(e0));
-    arm.k<<<nsm, arm.threads, arm.smem>>>(cls, per, cont, period, (u64)(s * 1e9), sd, sink);
+    arm.k<<<nsm, arm.threads, arm.smem>>>(cls, nb, cont, period, (u64)(s * 1e9), sd, sink);
     CK(cudaGetLastError());
     CK(cudaEventRecord(e1));
     CK(cudaEventSynchronize(e1));
@@ -370,29 +370,33 @@ int main(int argc, char** argv) {
     return pt;
   };
 
-  // continuous: about one period's operations between stop checks, at the full rate's guess
+  // a CTA's batch, in MACs; continuous runs check for the end about every BURST cycles, at the full rate's guess
+  const double batch_macs = arm.units * arm.macs * arm.batch;
   const double guess = aname == "sync_s8" ? 2048.0 : 4096.0;
-  const u32 cont_per = std::max<u32>(1, (u32)std::lround(guess * period / arm.units / arm.macs));
-  run(cont_per, 1, 0.05);
-  const Point cal = run(cont_per, 1, 0.3);
+  const u32 cont_nb = std::max<u32>(1, (u32)std::lround(guess * burst / batch_macs));
+  run(cont_nb, 1, 0, 0.05);
+  const Point cal = run(cont_nb, 1, 0, 0.3);
   const double r100 = cal.macs / cal.cyc;  // MACs a SM-cycle, continuous
-  printf("{\"arm\": \"%s\", \"class\": \"%s\", \"fill\": \"%s\", \"period\": %llu, \"calibrate\": true, \"sms\": %d, "
-         "\"macs_per_smclk\": %.2f, \"clock64_mhz\": %.2f, \"tmacs_per_s\": %.3f}\n",
-         aname.c_str(), cname.c_str(), fname.c_str(), period, nsm, r100, cal.cyc / cal.ns * 1e3, cal.macs / cal.event_s * 1e-12);
+  const u32 nb = std::max<u32>(1, (u32)std::lround(burst * r100 / batch_macs));
+  printf("{\"arm\": \"%s\", \"class\": \"%s\", \"fill\": \"%s\", \"burst\": %llu, \"calibrate\": true, \"sms\": %d, "
+         "\"nb\": %u, \"macs_per_smclk\": %.2f, \"clock64_mhz\": %.2f, \"tmacs_per_s\": %.3f}\n",
+         aname.c_str(), cname.c_str(), fname.c_str(), burst, nsm, nb, r100, cal.cyc / cal.ns * 1e3,
+         cal.macs / cal.event_s * 1e-12);
   fflush(stdout);
 
   for (double duty : duties) {
     const bool cont = duty >= 100;
-    const u32 per = cont ? cont_per : std::max<u32>(1, (u32)std::lround(duty / 100 * r100 * period / arm.units / arm.macs));
-    const Point pt = run(per, cont, secs);
+    const u64 period = cont ? 0 : (u64)std::llround(nb * batch_macs / (duty / 100 * r100));
+    const Point pt = run(cont ? cont_nb : nb, cont, period, secs);
     const double rate = pt.macs / pt.event_s;
-    const double fcyc = pt.cyc - pt.tcyc * (cont ? 0 : 1), fns = pt.ns - pt.tns * (cont ? 0 : 1);
-    printf("{\"arm\": \"%s\", \"class\": \"%s\", \"fill\": \"%s\", \"period\": %llu, \"duty\": %.0f, \"per\": %u, "
-           "\"cont\": %s, \"secs\": %.2f, \"host_t0\": %.3f, \"host_t1\": %.3f, \"event_s\": %.6f, \"gt_s\": %.6f, "
-           "\"macs\": %.6e, \"tmacs_per_s\": %.4f, \"mhz_equiv\": %.2f, \"over_bound\": %s, \"clock64_mhz\": %.2f, "
-           "\"tensor_mhz\": %.2f, \"fill_mhz\": %.2f, \"macs_per_smclk\": %.2f, \"duty_achieved\": %.4f}\n",
-           aname.c_str(), cname.c_str(), fname.c_str(), period, duty, per, cont ? "true" : "false", secs, pt.host_t0,
-           pt.host_t1, pt.event_s, pt.gt_s, pt.macs, rate * 1e-12, rate / (nsm * 4096.0) * 1e-6,
+    const double fcyc = pt.cyc - pt.tcyc, fns = pt.ns - pt.tns;
+    printf("{\"arm\": \"%s\", \"class\": \"%s\", \"fill\": \"%s\", \"burst\": %llu, \"duty\": %.0f, \"nb\": %u, "
+           "\"period\": %llu, \"cont\": %s, \"secs\": %.2f, \"host_t0\": %.3f, \"host_t1\": %.3f, \"event_s\": %.6f, "
+           "\"gt_s\": %.6f, \"macs\": %.6e, \"tmacs_per_s\": %.4f, \"mhz_equiv\": %.2f, \"over_bound\": %s, "
+           "\"clock64_mhz\": %.2f, \"tensor_mhz\": %.2f, \"fill_mhz\": %.2f, \"macs_per_smclk\": %.2f, "
+           "\"duty_achieved\": %.4f}\n",
+           aname.c_str(), cname.c_str(), fname.c_str(), burst, duty, cont ? cont_nb : nb, period, cont ? "true" : "false",
+           secs, pt.host_t0, pt.host_t1, pt.event_s, pt.gt_s, pt.macs, rate * 1e-12, rate / (nsm * 4096.0) * 1e-6,
            rate > BOUND ? "true" : "false", pt.cyc / pt.ns * 1e3,
            cont ? pt.cyc / pt.ns * 1e3 : (pt.tns > 0 ? pt.tcyc / pt.tns * 1e3 : 0.0),
            cont ? 0.0 : (fns > 0 ? fcyc / fns * 1e3 : 0.0), pt.macs / pt.cyc, pt.macs / pt.cyc / r100);
