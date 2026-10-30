@@ -1,0 +1,39 @@
+# An escape is an acceptance: what `tools/move/rename.py --map tools/move/accept_prob_map.toml` renames in the
+# population's exfiltration bounds ("escape", `*_escape` and `effEscape` are older names for the acceptance probability,
+# P_a). The set of coins on which a wrong set goes uncaught, `Population.Exfil.escapes`, becomes `acceptCoins`, and the
+# lemmas bounding its probability say `acceptProb`. "Escapes" the verb, in prose, is another word, and so is a lock's
+# `escapes` (code no proof sees), so the bare word is renamed only in the two files that declare and read the coins, and
+# their prose keeps the verb. PoUW's J10-R lemma to prove, `TileStratumEscape`, the tile stratum's miss bound, becomes
+# `TileStratumAcceptProb`. Core's `Verity.Law.escape` is renamed with the sampling cluster. Declarations keep their
+# place in the locks' records: `rename.py --moves` prints the renames that `check.py --update --moved` takes.
+[words]
+"Exfil.escape_le_exp" = "Exfil.acceptProb_le_exp"
+"Exfil.pow_escape_le_exp" = "Exfil.pow_acceptProb_le_exp"
+"subsetDraw_escape" = "subsetDraw_acceptProb"
+"indepDraw_escapes" = "indepDraw_acceptCoins"
+"Exfil.escapes" = "Exfil.acceptCoins"
+"TileStratumEscape" = "TileStratumAcceptProb"
+
+# proofs' sampling designs have lemmas of their own that end in `_escape_le_exp` (`Law.stratified_escape_le_exp`)
+[[words_in]]
+files = ["Security/Definitions/Population.lean", "Security/Definitions/Population/*.lean", "Security/Proofs/Population.lean",
+         "Security/Proofs/Population/*.lean"]
+words = { "escape_le_exp" = "acceptProb_le_exp", "pow_escape_le_exp" = "pow_acceptProb_le_exp" }
+
+[[words_in]]
+files = ["Security/Definitions/Population/Exfiltration.lean", "Security/Proofs/Population/ExfiltrationBound.lean"]
+words = { "escapes" = "acceptCoins" }
+
+[rewrite]
+# host_map.toml's: records of what was (the earlier moves and their maps, changelogs, the rulings), the frozen backends,
+# files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line itself) and lock files.
+exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**",
+           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock"]
+
+[keep]
+# the verb, in those files' prose
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+',
+            'escapes(?= with| detection| exactly|:|\n)']
+strings = []
+
+[keep_in]
