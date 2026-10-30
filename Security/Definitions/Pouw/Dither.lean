@@ -3,7 +3,7 @@ import Definitions.Pouw.RelativeSecurity
 /-!
 # The no-fold Dither protocol's work-soundness: the vocabulary its guarantee reads (trusted)
 
-The headline of the ACCEL program (`Definitions.Pouw.Guarantees.Dither.WorkSound`) is stated over:
+Dither's headline (`Definitions.Pouw.Guarantees.Dither.WorkSound`) is stated over:
 
 * **the accelerator model** `G = (Σ, M, R, ρ, I, u)` (`Accel`): a machine's programs, the period's devices' resources
   with their data-sheet rates `ρ`, their memory `M`, a run's use of each resource `u`, the three device premises (G1)
@@ -44,9 +44,9 @@ and their composition), the period's devices' resources `Res` (tensor cores, iss
 ports, device memory, links), each at its data-sheet rate `rate` (`ρ`, units a second), their memory `mem` (`M`, bits),
 and per run its use of each resource `use` (`u`), the bits it holds at its peak `held`, its wall time `wall`, the
 bits it exchanges with machines outside the period's devices `ext` (what the network certifier counts), and its oracle
-calls `calls`, each a step of the machine that uses `callUse`. `P1` and `P2` are the arithmetic premises, exact operand
-formats and one accumulator per product, as `Definitions.Core.Accel.Principles` defines them. `θ = (M, ρ, u)`
-are the model's parameters. -/
+calls `calls`, each a step of the machine that uses `callUse`. `P1` and `P2` are the arithmetic
+premises, exact integer MMAs and one accumulator per product, as the machine 𝓜 defines them (`Accel.Card.Exact`,
+`Assumptions.AccelProductForm`). `θ = (M, ρ, u)` are the model's parameters. -/
 structure Accel where
   /-- The programs, what they compute and how they compose. -/
   Mc : Machine
@@ -71,9 +71,9 @@ structure Accel where
   calls : ∀ {I O : Type}, Mc.Alg I O → I → ℝ
   /-- The oracle-call step's use of each resource: the pinned public SHA-512 implementation's, a call. -/
   callUse : Res → ℝ
-  /-- (P1) exact operand formats, as `Definitions.Core.Accel.Principles` defines it. -/
+  /-- (P1) exact operand formats, as the ACCEL model defines it. -/
   P1 : Prop
-  /-- (P2) a product lives in one accumulator, as `Definitions.Core.Accel.Principles` defines it. -/
+  /-- (P2) a product lives in one accumulator, as the ACCEL model defines it. -/
   P2 : Prop
 
 attribute [instance] Accel.instRes
