@@ -283,3 +283,8 @@ where h_forced ≤ h is the hashing or fold work a cheater can't skip. So 99% ne
 - RDX's raw V skip ties, at 34 = 34 writes a round.
 
 ROUNDS constants for COUNTER's certificates: 7408679cbad22b9ffdb5ae4d476390ed3b84a76e
+
+**19:05Z, COUNTER (note 20261030T1900Z-report-hash-counter-r80x-certificates; ea3fb28192):**
+- **R80X's word entry is certified over LOP3, IADD3, IMAD and LEA.** None of the 160 `xc` halves (ROUNDS' 7408679cba) has a two-instruction program at 32 bits, against honest's three, hi carry-in included: z3 at 8 bits, `word_entry_rank` (all 93.6M IADD3/IMAD/LEA programs) and `word_entry_mux`. So §2a's word-entry term is 0 within that set (checked); four steps are hand arguments.
+- **Open:** PRMT, SHF, IMAD.WIDE hi, IDP.4A and IMNMX. The ceiling if every half had a route is 114% of stock (estimate; none is known). N-FLOOR certifies those pairs now.
+- **Then the coordinator takes the R80X v3 ask to Daniel:** extend ShaSpeed (\"honest taken as best\") from SHA-512's compression to its round function on raw words (`ShaWritesR80`), with ROUNDS' spec, the certificates and the T2 estimate.
