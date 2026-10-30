@@ -31,7 +31,7 @@ bound `Dj`, at `δ` and the decoder `decode`, with the claim at `K`. Every field
   certifier's record of the window (`obs`);
 * the claim at `K` is that every window meets `WindowGood` (`comm_iff`): that is the event whose secrets
   `PeriodLeakAccepted`'s count bounds, so `K` is the bits of that count,
-  `log2 (#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i)`. No field ties the
+  `log2 (∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i)`. No field ties the
   number `K` to the count yet (the follow-up: `Properties.NetworkPeriod.rowsKBoundsCount`, that the rows form's `K` is
   at least `⌈log2⌉` of the count);
 * the statements are in the sampled audit's scope (`scope`): the registration refuses any other;
@@ -53,14 +53,14 @@ structure RealizesCommOfPeriodLeakAccepted {ι : Type} {d : Device ι} {α : Typ
     {I : Type} {Ω : I → Type} [DecidableEq I] [∀ i, Fintype (Ω i)] {Coin Col T : Type} [Fintype Coin] [Nonempty Coin]
     [Inhabited Coin] [DecidableEq Col] [Zero Col]
     (r : PeriodRun d α C Ω) (K : ℝ) (H : Msg → Msg) (D : Deploy Coin Col T) (L Kₒ S : ℕ)
-    (lay : Stmt → Layout L S) (k : Stmt → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T) (reg : Stmt → Finset ℕ)
+    (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T) (reg : AuditStatement → Finset ℕ)
     (Dj n : ℕ) where
   /-- each window's registration -/
-  sw : Fin n → Stmt
+  sw : Fin n → AuditStatement
   /-- each window's registered values at its registered inputs -/
   ρ : Fin n → ℕ → Bool
   /-- the network certifier's openings at each statement, under its roots -/
-  tops : Stmt → List (Opening Bool)
+  tops : AuditStatement → List (Opening Bool)
   /-- each window's statement at the coins -/
   stmt : ((i : I) → Ω i) → Fin n → Msg
   /-- the audit's extracted witness at each window, at the coins -/
@@ -80,7 +80,6 @@ structure RealizesCommOfPeriodLeakAccepted {ι : Type} {d : Device ι} {α : Typ
   prover : (ξ : (i : I) → Ω i) → (i : Fin n) → Prover (Tape ξ i)
   /-- the connections on the server's uplink that the network certifier carries -/
   Conn : Type
-  [connFintype : Fintype Conn]
   /-- the cells it carries -/
   Cell : Type
   /-- the server's state, which fixes what reaches the network certifier -/
@@ -113,6 +112,5 @@ structure RealizesCommOfPeriodLeakAccepted {ι : Type} {d : Device ι} {α : Typ
       (E D decode) (stmt ξ i) (prover ξ i)
 
 attribute [instance] RealizesCommOfPeriodLeakAccepted.tapeFintype RealizesCommOfPeriodLeakAccepted.tapeNonempty
-  RealizesCommOfPeriodLeakAccepted.connFintype
 
 end Accounting.JointBridge

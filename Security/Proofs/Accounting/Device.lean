@@ -21,13 +21,13 @@ namespace Schedule
 
 variable {ι α : Type} [Fintype α] {d : Device ι} {sc : Schedule ι α}
 
-theorem sum_ops_le (h : sc.Fits d) (w : Window) (o : Op) : ∑ a, sc.ops w a o ≤ d.rate o * w.len := by
+theorem sum_ops_le (h : sc.Fits d) (w : Window) (o : OpClass) : ∑ a, sc.ops w a o ≤ d.rate o * w.len := by
   unfold Schedule.ops
   rw [Finset.sum_comm]
   calc ∑ t ∈ w.ticks, ∑ a, (sc t).ops a o ≤ ∑ _t ∈ w.ticks, d.rate o := Finset.sum_le_sum fun t _ => (h t).1 o
     _ = d.rate o * w.len := by rw [Finset.sum_const, Window.card_ticks, smul_eq_mul, mul_comm]
 
-theorem ops_le (h : sc.Fits d) (w : Window) (a : α) (o : Op) : sc.ops w a o ≤ d.rate o * w.len :=
+theorem ops_le (h : sc.Fits d) (w : Window) (a : α) (o : OpClass) : sc.ops w a o ≤ d.rate o * w.len :=
   (Finset.single_le_sum (fun _ _ => Nat.zero_le _) (Finset.mem_univ a)).trans (sum_ops_le h w o)
 
 theorem sum_work_le (h : sc.Fits d) (w : Window) (p : Price) : ∑ a, sc.work w a p ≤ d.priced p * w.len := by

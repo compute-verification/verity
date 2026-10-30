@@ -41,10 +41,10 @@ theorem pr_exists_le {β : Type} [Fintype β] {n : ℕ} (P : Fin n → β → Pr
 /-- `PeriodLeakAccepted`'s per-window conjunct, read off at the period of no windows. -/
 theorem ksLin_of_periodLeak (hsrc : Guarantees.PeriodLeakAccepted) {Coin Col T : Type} [Fintype Coin]
     [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] (H : Msg → Msg) (D : Deploy Coin Col T)
-    (hks : KS H D) (L Kₒ S : ℕ) (lay : Stmt → Layout L S) (k : Stmt → ℕ) (δ : ℝ)
+    (hks : KS H D) (L Kₒ S : ℕ) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ)
     (decode : List (ℕ × Col) → List T) (hδ : 0 ≤ δ)
-    (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (reg : Stmt → Finset ℕ) (Dj : ℕ)
-    (tops : Stmt → List (Opening Bool)) (hb : D.commit.Binds H) :
+    (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (reg : AuditStatement → Finset ℕ) (Dj : ℕ)
+    (tops : AuditStatement → List (Opening Bool)) (hb : D.commit.Binds H) :
     ∀ m, ScopeAcc D lay k m → ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
       PrBad H D.V
           (RLeakTap H D.commit D.parse D.partition L Kₒ S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) Dj tops)
@@ -52,11 +52,11 @@ theorem ksLin_of_periodLeak (hsrc : Guarantees.PeriodLeakAccepted) {Coin Col T :
         Claims.Sampling.κ D δ m + Real.sqrt (Claims.Sampling.γ D m * PrB H D.V P m) +
           (Bext H D.V (E D decode) Ω P m).Pr H + (Btap H D.V (E D decode) D.commit D.parse tops Ω P m).Pr H := by
   let f : TapRecord Empty Unit (Fin 0 → List (Obs L Kₒ S)) :=
-    ⟨fun _ _ _ => Fin.elim0, fun _ _ c => c.elim, fun _ => True, fun _ _ _ => funext fun c => c.elim⟩
+    ⟨fun _ _ _ => Fin.elim0, fun _ c => c.elim, fun _ => True, fun _ _ _ => funext fun c => c.elim⟩
   exact (hsrc (n := 0) (Conn := Empty) (Cell := Unit) (Srv := Unit) (Dev := Unit) (Z := Unit) H D hks L Kₒ S lay k δ
     decode hδ hdec reg Dj Fin.elim0 Fin.elim0 (fun i => i.elim0) Fin.elim0 Fin.elim0 Fin.elim0 (fun i => i.elim0)
-    (fun _ c => c.elim) f () (fun _ p => tapCode f p.1 (fun c => c.elim)) (fun _ => rfl) (fun c => c.elim) ∅
-    (fun _ h => h.elim) (fun _ h => h.elim) ∅ (fun _ => ⟨0, 0, Empty.elim, Empty.elim⟩) (fun _ => ())
+    (fun _ c => c.elim) f () (fun _ p => tapCode f p.1 (fun c => c.elim)) (fun _ => rfl) ∅
+    (fun _ h => h.elim) ∅ (fun _ => ⟨0, 0, Empty.elim, Empty.elim⟩) (fun _ => ())
     (fun _ h => h.elim) (fun _ => ()) (fun _ h => h.elim) (fun _ => Fin.elim0) (fun _ => Fin.elim0) tops hb).1
 
 /-- `Guarantees.Bridge.CommOfPeriodLeakAccepted` from `PeriodLeakAccepted`. -/
@@ -64,7 +64,7 @@ theorem comm_of_periodLeak (hsrc : Guarantees.PeriodLeakAccepted) {ι : Type} {d
     [Fintype α] {C : Verity.Circuit} {I : Type} {Ω : I → Type} [DecidableEq I] [∀ i, Fintype (Ω i)]
     {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     {r : PeriodRun d α C Ω} (c : Certificates) (p : Price) {H : Msg → Msg} {D : Deploy Coin Col T} {L Kₒ S : ℕ}
-    {lay : Stmt → Layout L S} {k : Stmt → ℕ} {δ : ℝ} {decode : List (ℕ × Col) → List T} {reg : Stmt → Finset ℕ}
+    {lay : AuditStatement → BoundaryGates L S} {k : AuditStatement → ℕ} {δ : ℝ} {decode : List (ℕ × Col) → List T} {reg : AuditStatement → Finset ℕ}
     {Dj n : ℕ} (R : RealizesCommOfPeriodLeakAccepted r c.K H D L Kₒ S lay k δ decode reg Dj n) (hks : KS H D)
     (hb : D.commit.Binds H) (hδ : 0 ≤ δ) (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode)
     (εks εbind εtap : ℝ)
