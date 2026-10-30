@@ -61,7 +61,8 @@
   "Properties.Nci.Protocol",
   "Properties.Verity.Soundness",
   "Properties.Verity.Game",
-  "Properties.Verity.Idle"
+  "Properties.Verity.Idle",
+  "Properties.Remote"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -387,7 +388,8 @@
   "CoreProtocol.Live",
   "Properties.Verity",
   "CoreOnsite",
-  "CoreRemote"
+  "CoreRemote",
+  "Properties.Remote"
  ],
  "layers": {
   "Properties.Composition": {
@@ -686,6 +688,11 @@
    "imports": ["NetworkCheck.Period", "Definitions.NetworkCertifier.SampledAudit"],
    "except": [],
    "why": "the scan's layout and its fit are stated against the period check's `scanOf`, C-Flock's decoder and resolution, and the sampled audit's scope (`NetTiming.ScopeAcc`, `NetTiming.Layout.Fits`), never a proof"
+  },
+  "Properties.Remote": {
+   "imports": ["Definitions.Core", "CoreRemote", "Properties.Composition", "Properties.Nci", "Properties.NciDesc", "Properties.SampledProofs"],
+   "except": [],
+   "why": "remote's acceptance is stated over the composite's own function (CoreRemote), the composition's properties, the shared definitions and the policy's properties it reads, never over a proof"
   }
  },
  "reads_exempt": {
@@ -2262,6 +2269,18 @@
    "signature": ["Properties.Pouw.Window.workAtRefuses : Properties.Pouw.Window.WorkAtRefuses"],
    "assumptions": [],
    "type_hash": "106f9eeb8a719c5b3bdc75b1580cd548d065c3f5d3b7d429eb3709f3b281ee09"
+  },
+  "Properties.Remote.SecurityProofs.acceptComplies": {
+   "owner": "@soundness"
+  },
+  "Properties.Remote.SecurityProofs.acceptComplies_nontrivial": {
+   "owner": "@soundness"
+  },
+  "Properties.Remote.SecurityProofs.acceptInferenceOnly": {
+   "owner": "@soundness"
+  },
+  "Properties.Remote.SecurityProofs.acceptInferenceOnly_nontrivial": {
+   "owner": "@soundness"
   },
   "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent": {
    "owner": "@memory-accounting",
@@ -4012,6 +4031,14 @@
    "Properties.Site.refuses": {
     "function": "Core.Site.Registration.Entry.refusal",
     "outcome": "none"
+   },
+   "Properties.Remote.SecurityProofs.acceptInferenceOnly": {
+    "function": "Core.Remote.protocol",
+    "outcome": "accept"
+   },
+   "Properties.Remote.SecurityProofs.acceptComplies": {
+    "function": "Core.Remote.protocol",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -19969,6 +19996,12 @@
   "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
  },
  "witnesses": {
+  "Properties.Remote.SecurityProofs.acceptInferenceOnly": {
+   "nontrivial": "Properties.Remote.SecurityProofs.acceptInferenceOnly_nontrivial"
+  },
+  "Properties.Remote.SecurityProofs.acceptComplies": {
+   "nontrivial": "Properties.Remote.SecurityProofs.acceptComplies_nontrivial"
+  },
   "Verity.soundness_at_of_targets": {
    "honest": ["Verity.soundness_at_of_targets_honest"],
    "nontrivial": "Verity.soundness_at_of_targets_nontrivial"
@@ -19994,6 +20027,16 @@
   }
  },
  "unwitnessed": {
+  "Properties.Remote.SecurityProofs.acceptComplies": {
+   "type_hash": "ef95cc7750100d943f75d3094ed74952a8c0428b1777f2562a2075e8f326e9d0",
+   "missing": "honest",
+   "why": "its honest case, remote's check accepting one run, needs the composite's check past parsing: each subprotocol's decoder reads its bytes through `Lean.Json.parse`, which is `partial`, so no proof evaluates it on a literal. PRF-299 brings the check factored past parsing and the reachability lemma; meanwhile `Properties.Remote.SecurityProofs.acceptInferenceOnly_honest` proves the tie on an honest run's one record"
+  },
+  "Properties.Remote.SecurityProofs.acceptInferenceOnly": {
+   "type_hash": "cb787233027c149c9cf3d23cbc2485781bdead41db68164723913059c512cde4",
+   "missing": "honest",
+   "why": "its honest case, remote's check accepting one run, needs the composite's check past parsing: each subprotocol's decoder reads its bytes through `Lean.Json.parse`, which is `partial`, so no proof evaluates it on a literal. PRF-299 brings the check factored past parsing and the reachability lemma; meanwhile `Properties.Remote.SecurityProofs.acceptInferenceOnly_honest` proves the tie on an honest run's one record"
+  },
   "NciCheck.Properties.SecurityProofs.ProtocolAccepts": {
    "type_hash": "3ed3e640db7f1e9da8395265071e56288b40285cb4846ebeacc990cd0b89007d",
    "missing": "honest",
