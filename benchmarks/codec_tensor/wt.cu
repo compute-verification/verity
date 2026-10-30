@@ -21,6 +21,8 @@
 #include <cstring>
 #include <cuda_runtime.h>
 
+#include "sha512.cuh"
+
 #ifndef WT_FIELD
 #define WT_FIELD 1279
 #endif
@@ -1939,8 +1941,6 @@ __global__ void __launch_bounds__(128) b3_chain_kernel(u64 steps, unsigned long 
   if ((cv[0] ^ cv[5]) == 0x12345679u) atomicXor(xr, (unsigned long long)cv[1]);
 }
 
-#include "sha512.cuh"
-
 struct Mid {
   u64 h[8];
 };
@@ -1991,7 +1991,7 @@ __device__ __forceinline__ void node_hash(const u64 *L, const u64 *R, u64 *out) 
     prev = cur;
   }
 #pragma unroll
-  for (int i = 0; i < 8; ++i) s[i] = kSha512Iv[i];
+  for (int i = 0; i < 8; ++i) s[i] = sx::IV_DEV[i];
   sha512_compress(s, w);
 #pragma unroll
   for (int i = 0; i < 16; ++i) w[i] = 0;
@@ -2048,7 +2048,7 @@ __constant__ u64 kRcptMid[8];
 // SHA-512 of the len bytes at m (big-endian words, the standard padding).
 __device__ void sha512_bytes(const uint8_t *m, int len, u64 (&s)[8]) {
 #pragma unroll
-  for (int i = 0; i < 8; ++i) s[i] = kSha512Iv[i];
+  for (int i = 0; i < 8; ++i) s[i] = sx::IV_DEV[i];
   const int nb = (len + 17 + 127) / 128;
   for (int blk = 0; blk < nb; ++blk) {
     u64 w[16];
@@ -2108,7 +2108,7 @@ __global__ void __launch_bounds__(PASS_THREADS) pass_kernel(unsigned j, const u6
       for (int b = 0; b < 8; ++b) v = (v << 8) | m[8 * i + b];
       w[i] = v;
     }
-    for (int i = 0; i < 8; ++i) h[i] = kSha512Iv[i];
+    for (int i = 0; i < 8; ++i) h[i] = sx::IV_DEV[i];
     sha512_compress(h, w);
     for (int i = 0; i < 8; ++i) g_pass.leafmid[i] = g_leafmid.h[i] = h[i];
   }
@@ -3550,7 +3550,7 @@ int wt_set_tag(const u32 *key, const uint8_t *leaf_prefix) {
     w[i] = v;
   }
   Mid mid;
-  for (int i = 0; i < 8; ++i) mid.h[i] = SHA512_IV_HOST[i];
+  sx::iv(mid.h);
   sha512_compress(mid.h, w);
   const u32 one = 1;
   if (cudaMemcpyToSymbol(kTagKey, key, 8 * 4) || cudaMemcpyToSymbol(kOne, &one, 4) ||

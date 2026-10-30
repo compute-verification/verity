@@ -1,5 +1,5 @@
-// The control for hashcat's SHA-512 rate: sha512x.cuh's default compression (sx::compress<0, ROLL>) timed in the
-// shapes of hashcat's -m 1700 optimized kernel (OpenCL/m01700_a3-optimized.cl, v7.1.2), so the difference between our raw
+// The control for hashcat's SHA-512 rate: the default compression, sx::compress<0, ROLL> (verity/ml/kernels/sha512.cuh),
+// timed in the shapes of hashcat's -m 1700 optimized kernel (OpenCL/m01700_a3-optimized.cl, v7.1.2), so the difference between our raw
 // rate and hashcat's can be attributed to what each form leaves out. Each thread runs REPS compressions a launch:
 //
 //   chain    sha_rate's (commit_gpu.cu): a variable block a compression, chained from the last state, every word live
@@ -9,7 +9,7 @@
 //   skip     iv with only d and h read, as m01700's compare reads digest[3] and digest[7] (OPTI_TYPE_EARLY_SKIP): d and h
 //            after round 79 are a and e after round 76, so the last three rounds and their three schedule words are dead
 //
-// ROLL is sha512x.cuh's (1: rounds 16..79 a loop of 16-round bodies; 0: straight-line, as hashcat's kernel is).
+// ROLL is sx's (1: rounds 16..79 a loop of 16-round bodies; 0: straight-line, as hashcat's kernel is).
 //
 //   hashcat_forms time LAUNCHES  one JSON line a form: compressions a second, the SM clock (NVML) after each launch
 //   hashcat_forms shapes LAUNCHES THREADS...
@@ -27,7 +27,7 @@
 #include <cstring>
 #include <vector>
 
-#include "sha512x.cuh"
+#include "../../../verity/ml/kernels/sha512.cuh"
 
 using u64 = uint64_t;
 

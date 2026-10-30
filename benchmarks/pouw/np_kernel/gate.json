@@ -1,0 +1,98 @@
+{
+ "variant": "pouw-lead-h200/e0fd420e199f",
+ "source_sha256": "e0fd420e199f08524e1914b5d8465f3edd79411c3c23feff5f6f4824621f5b32",
+ "binary_sha256": "c5497fca46cfe9f33475fbccfa65d449b67416cb918b714282a748cb9b2be1d5",
+ "sources": {
+  "benchmarks/pouw/dc/dc.cuh": "2d7fc2108aadd663306b2ce0e83dbbd9acbf532ef63bca67a5203c6c25ed0e58",
+  "benchmarks/pouw/dc/wgmma.cuh": "94941f85ccca112c1714fa9c1520b9bf0acf332f323e9e0646ecc5cc8c735118",
+  "benchmarks/pouw/np_kernel/l1.h": "c86ba3ddf591c851e20c9a87fa7660a5fcbc2adde2126095686cf9f64093d5f4",
+  "benchmarks/pouw/np_kernel/layout.h": "8e9897b804161f409b365cda8e57acba23830f7e3fe540100d68c1ef9bf256ce",
+  "benchmarks/pouw/np_kernel/plain_rows.py": "3d81ef0451de08a0efe920b1a7214078a3fa69a460b31ebe6a496fa0f0318ebb",
+  "benchmarks/pouw/np_kernel/run.sh": "769b35e2ae03d394216b91e5d0613c03a0393688a60b48c67c981ca4adf7ce4b",
+  "benchmarks/pouw/np_kernel/ssn.cu": "45cab074f74807ab43a5d6c42e446fd306982069fea6aa5de4e7a425b0f731b0",
+  "benchmarks/pouw/served_zk/hm96_rows.cu": "b7bf605b4b338dac95dbdfcbdb1ce087f694fea2f5796f11f536b0b381000b61",
+  "integrations/vllm/verity_vllm/commit/committer/native_rows.cu": "543cc759fff39c3b25d1f9ded8103696723f4a9ad75afad99e0f65ddd43888bd",
+  "verity/ml/flock/cuda/sha512.cuh": "815b28156c197a12e34c762b88ef7aaef2f4c10d961b7f7990fa97de7c4557a1",
+  "verity/ml/kernels/row_commit.cuh": "8ae91f6c3ea088f7439a8f6c30a507935bd39334099dbbd2c7c4e987a071686f",
+  "verity/ml/kernels/sha512.cuh": "f9bf63f128136ec7aea71cb3f3d683b23857984732da2a1bef0e81732f87c234"
+ },
+ "gate": {
+  "variant": "pouw-lead-h200/e0fd420e199f",
+  "run": "r20261030-134849-2ce4",
+  "gates": "np-kernel-gate/9930c1f57246",
+  "shapes": [
+   [
+    13,
+    100
+   ],
+   [
+    256,
+    24
+   ],
+   [
+    256,
+    25
+   ],
+   [
+    256,
+    28
+   ],
+   [
+    256,
+    59
+   ],
+   [
+    256,
+    2048
+   ],
+   [
+    256,
+    8192
+   ],
+   [
+    512,
+    100
+   ],
+   [
+    512,
+    2048
+   ],
+   [
+    768,
+    2048
+   ],
+   [
+    1000,
+    2048
+   ],
+   [
+    2048,
+    2048
+   ],
+   [
+    2048,
+    8192
+   ],
+   [
+    3072,
+    2048
+   ],
+   [
+    16384,
+    90
+   ],
+   [
+    16384,
+    2048
+   ]
+  ],
+  "exact": true,
+  "poisoned_accepted": true,
+  "controls_rejected": true,
+  "schedules_equal": true,
+  "sass_ok": true,
+  "toolkit": "13.0.1-sm_90a",
+  "prices": null,
+  "fold_bound": 4194304
+ }
+}
