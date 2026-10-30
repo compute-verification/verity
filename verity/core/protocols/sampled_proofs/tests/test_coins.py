@@ -1,4 +1,4 @@
-"""The verifier's coins: exact samplers over its own randomness, and the one-stage draws they make, byte for byte the Lean
+"""A draw's coins: exact samplers over a byte source (a challenger's coins), and the one-stage draws they make, byte for byte the Lean
 verifier's `Flock.Draw`."""
 
 from __future__ import annotations
