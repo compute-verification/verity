@@ -80,9 +80,9 @@ def test_power_split_arms_have_a_split_at_every_scored_point(monkeypatch, attr, 
     assert (P.theorem_k_setting(arm.lineage), P.products_per_slot(arm.lineage)) == (k, 1)
     for ph, b, l in S.points(robust=False):
         p = A.placed(arm, ph, b, l)
-        assert p == (A.Placement("split", 4) if ph == "prefill" else A.Placement("split", P.POWER_SPLIT[(b, l)]))
+        assert p == (A.Colocation("split", 4) if ph == "prefill" else A.Colocation("split", P.POWER_SPLIT[(b, l)]))
     for b, l in S.ROBUST:
-        assert A.placed(arm, "decode", b, l) == A.Placement("split", A.point_lookup(P.POWER_SPLIT, b, l))
+        assert A.placed(arm, "decode", b, l) == A.Colocation("split", A.point_lookup(P.POWER_SPLIT, b, l))
 
 
 def test_k_phase_arm_runs_pfill_k_with_a_phase_filler_of_the_builds_width(monkeypatch):
@@ -104,7 +104,7 @@ def test_k_phase_arm_runs_pfill_k_with_a_phase_filler_of_the_builds_width(monkey
     for ph, b, l in S.points(robust=True):
         q = arm.phase(ph, b, l)
         if ph == "prefill":
-            assert q is None and A.placed(arm, ph, b, l) == A.Placement("split", 4)
+            assert q is None and A.placed(arm, ph, b, l) == A.Colocation("split", 4)
             continue
         assert (b, l) in P.PHASE_K
         assert A.placed(arm, ph, b, l).place == "split"
@@ -134,7 +134,7 @@ def test_k_fused_arm_runs_pfill_k_beside_fills_step_with_no_filler_warps(monkeyp
     for ph, b, l in S.points(robust=True):
         q = arm.fused(ph, b, l)
         if ph == "prefill":
-            assert q is None and A.placed(arm, ph, b, l) == A.Placement("split", 4)
+            assert q is None and A.placed(arm, ph, b, l) == A.Colocation("split", 4)
             continue
         assert (b, l) in getattr(P, table) and A.placed(arm, ph, b, l).place == "split"
         if q is not None:
