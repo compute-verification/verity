@@ -28,10 +28,10 @@ The protocol premises the code can't be checked against yet:
   bounded by the protocol: `Accepted` refuses a call past its share of the cap (`Layout.callBits`).
 
 The device premise:
-* `CertifierCoins` (`trusted-host` at the network certifier): the certifier draws the coins from its own entropy after
-  it holds the call's `A`. `G` reads it through the model rather than as a hypothesis: the certifier's coins are a
-  `CoinStream`, a strategy fixes its tables before the coins (`Strategy`), `G` fixes the data before them, and every
-  bound averages over the coins uniformly. `CertifierCoins` is what ties that model to the deployed certifier.
+* `CertifierCoins` (`trusted-host` at the network certifier): the certifier reads the `A` root a strategy registered
+  and releases the coins, a one-to-one decoding of its own entropy, to the node alone. `G` takes it as a hypothesis
+  and is stated over the entropy: at each entropy value, the strategy runs at the coins the device releases
+  (`released`), so its bound averages over the coins uniformly because the device runs `certCode`.
 -/
 
 namespace Pouw.Assumptions.Lead
@@ -111,9 +111,10 @@ def ShaWrites (isA : Hash.Msg → Bool) (Real : Strategy L → Prop) : Prop :=
   ∀ σ, Real σ → ∀ ω, ((σ.exec ω).hashed.map (shaCredit isA)).sum ≤ (σ.exec ω).shaRegs
 
 /-- `pouw-honest-hash-ruled` (proposed; a ruling: the honest hashing is the minimum). **An accepted execution that
-exchanges nothing hashes the honest commitment's messages**: for each message the honest commitment of the call's
-words hashes, a realizable strategy's accepted execution at a coin value where it exchanges nothing hashes a message
-with its digest.
+exchanges nothing hashes the honest commitment's messages**: for each message the honest commitments of the call's
+words and of `A` hash, a realizable strategy's accepted execution at a coin value where it exchanges nothing hashes a
+message with its digest. An accepted strategy registered `A`'s honest root (`Accepted`), so `A`'s messages are the
+ones that root commits.
 
 Rationale: the premise counts registers; with no link out, a digest is reached only by hashing on the node. -/
 def HonestHashRuled (H : Hash.Msg → Hash.Digest) (C : Pouw.Lead.Commit L) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ)
@@ -142,32 +143,45 @@ def CommitL1w (H : Hash.Msg → Hash.Digest) (C : Pouw.Lead.Commit L) (isA : Has
 
 /-- `pouw-outsource-egress` (proposed; class L, the lead's instance at `β`). **An exchanged bit replaces at most `β`
 of priced W1 work**: every realizable strategy has a realizable twin that exchanges nothing, with the same pre-coin
-tables, and at every coin value registering the same root, hashing beyond what it hashes only the honest commitment's
-messages, at priced W1 work at most its own plus `β` a bit it exchanges.
+tables and `A` root, and at every coin value registering the same words root, hashing beyond what it hashes only the
+honest commitment's messages, at priced W1 work at most its own plus `β` a bit it exchanges.
 
 Rationale: what an outside machine computes for the node, the node can compute itself, the honest commitment's
 hashing included; a coin bit carries at most `n_max` MACs of the coins' work (every step carries the three coin
 lanes), each worth at most the call's honest W1 work a MAC (`betaLead`). The bits are the protocol's: `Accepted`
-bounds them by the call's share of the cap. -/
+bounds them by the call's share of the cap. `A` is fixed before the coins, so its root carries no coin bit: an outside
+machine that holds `A` can return its 512-bit root, and the twin then hashes `A`'s messages on the node at
+`3,449.05` registers a compression, more than `β · 512` once `rows · K` passes about 210,000. On such a call the
+premise is false for a node that some outside machine holding `A` serves. -/
 def OutsourceWithinEgressLead (pr : Prices100) (β : ℚ) (H : Hash.Msg → Hash.Digest) (C : Pouw.Lead.Commit L)
     (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (Real : Strategy L → Prop) : Prop :=
-  ∀ σ, Real σ → ∃ σ', Real σ' ∧ σ'.pre = σ.pre ∧ ∀ ω, (σ'.exec ω).egress = 0 ∧ (σ'.exec ω).root = (σ.exec ω).root ∧
+  ∀ σ, Real σ → ∃ σ', Real σ' ∧ σ'.pre = σ.pre ∧ σ'.aRoot = σ.aRoot ∧
+    ∀ ω, (σ'.exec ω).egress = 0 ∧ (σ'.exec ω).root = (σ.exec ω).root ∧
     (∀ x ∈ (σ'.exec ω).hashed, x ∈ (σ.exec ω).hashed ∨ x ∈ C.msgs H (word L κ ω) ++ C.aMsgs) ∧
     (σ'.work pr ω : ℚ) ≤ σ.work pr ω + β * (σ.exec ω).egress
 
 /-- The network certifier's code for the lead's coins: it reads `A`'s root and its own entropy, and returns the root
-with `coinsOf` of the entropy, a fixed decoding of the entropy alone. -/
-def certCode {Ent : Type} (coinsOf : Ent → Coins L) : Hash.Digest × Ent → Hash.Digest × Coins L :=
+with `coinsOf` of the entropy, a fixed one-to-one decoding of the entropy alone. -/
+def certCode {Ent : Type} (coinsOf : Ent ≃ Coins L) : Hash.Digest × Ent → Hash.Digest × Coins L :=
   fun x => (x.1, coinsOf x.2)
 
 /-- `pouw-certifier-coins` (proposed; `trusted-host` at the network certifier). **The certifier draws the coins after
-it holds `A`**: the auditor-trusted certifier `cert` runs `certCode coinsOf`, reading `A`'s root and the device's own
-entropy and releasing `coinsOf` of the entropy, so the coins are uniform when the entropy is and independent of `A`
-and of a strategy's pre-coin tables. Not a property of `NetworkCertifier`: that program draws and releases no coins.
+it reads `A`'s root**: the auditor-trusted certifier `cert` runs `certCode coinsOf`, reading the root a strategy
+registered and the device's own entropy and releasing `coinsOf` of the entropy. `coinsOf` is an equivalence, so
+uniform entropy gives uniform coins, independent of `A` and of a strategy's pre-coin tables: a short seed with a fixed
+expansion doesn't meet it. The device releases the coins only to the node, over the link it counts, and to no one
+else until the call's words root registers; `G`'s model reads that as the coins entering only the node's execution
+(`Strategy.exec`). Not a property of `NetworkCertifier`: that program draws and releases no coins.
 
 Rationale: `trusted-host`; the certifier is the auditor's hardware on a machine the prover doesn't control. -/
-def CertifierCoins {Device Ent : Type} (cert : Device) (coinsOf : Ent → Coins L)
+def CertifierCoins {Device Ent : Type} (cert : Device) (coinsOf : Ent ≃ Coins L)
     (runC : Device → Hash.Digest × Ent → Hash.Digest × Coins L) : Prop :=
   Verity.Assumptions.TrustedHost cert runC (certCode coinsOf)
+
+/-- **The coins the certifier releases** to a strategy's call at the entropy `e`: what the device `cert`, run as
+`runC`, returns on the `A` root the strategy registered and `e`. -/
+def released {Device Ent : Type} (cert : Device) (runC : Device → Hash.Digest × Ent → Hash.Digest × Coins L)
+    (σ : Strategy L) (e : Ent) : Coins L :=
+  (runC cert (σ.aRoot, e)).2
 
 end Pouw.Assumptions.Lead
