@@ -905,7 +905,7 @@ def test_the_honest_rounds_spec_is_what_its_registration_shows_over_the_units_it
     with pytest.raises(ValueError, match="not the check's program"):
         sz.S.Stream(spec, units[::-1], budget=1, delta=2.0 ** -20, challenger=sz.CHALLENGER)
     with pytest.raises(ValueError, match="generator form is over the scan's 3 templates"):
-        sz.RoundStream(spec, units, 2.0 ** -20, lambda n: bytes(n), (2, 2))
+        sz.RoundStream(spec, units, 2.0 ** -20, sz.CC.ChallengerCoins(None), (2, 2))
 
 
 def test_the_joint_rounds_stream_holds_its_registration_to_the_generator_form():
@@ -945,14 +945,15 @@ def test_the_joint_rounds_stream_holds_its_registration_to_the_generator_form():
     def check(rec: dict, program) -> tuple[str, ...]:
         return R.check(rec, program, query, law, sz.S.SCHEME, want, leaf_layer="ee" * 64).codes
 
-    stream = sz.RoundStream(spec, units, 2.0 ** -20, lambda m: bytes(m), pg.scan)
+    stream = sz.RoundStream(spec, units, 2.0 ** -20, sz.CC.ChallengerCoins(None), pg.scan)
     own = stream._program(n, given)
     rec = record(pg.program)
     assert sz.PA.program_digest(own) == rec["program"] == sz.PA.program_digest(pg.program)
     assert check(rec, own) == () and sz.PA.in_order(own, query, n)
-    mixed = sz.S.Stream(spec, units, budget=1, delta=2.0 ** -20, challenger=sz.CHALLENGER)._program(n, given)
+    mixed = sz.S.Stream(spec, units, budget=1, delta=2.0 ** -20, challenger=sz.CHALLENGER,
+                        coins=sz.CC.ChallengerCoins(None))._program(n, given)
     assert "R2-program" in check(rec, mixed)
     assert "R2-program" in check(record(root(2 * cls.EVERY)), own)
     assert stream._program(n + 1, given) is None
-    plain = sz.RoundStream(spec, units, 2.0 ** -20, lambda m: bytes(m))._program(n, given)
+    plain = sz.RoundStream(spec, units, 2.0 ** -20, sz.CC.ChallengerCoins(None))._program(n, given)
     assert sz.PA.program_digest(plain) == sz.PA.program_digest(mixed) != rec["program"]
