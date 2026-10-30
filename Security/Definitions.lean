@@ -8,6 +8,7 @@ import Definitions.Core.DeviceFigures
 import Definitions.Core.Structure
 import Definitions.Core.Site
 import Definitions.Core.Period
+import Definitions.Core.ProofSystem
 import Definitions.Nci
 import Definitions.Nci.Support
 import Definitions.Nci.Reads
