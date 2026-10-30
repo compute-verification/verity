@@ -46,7 +46,7 @@ class PlainGemm:
     #: T, the slots of each call's z/y records (`int8_ops.linear_zy`), or None to serve through ``scaled_mm``
     zy_rows: int | None = None
     #: a PoUW scheme's GEMM in place of ``scaled_mm``, ``gemm(layer, xq, s_a) -> y`` on the call's s8 rows and their
-    #: scales, serving the plain arm's y (`protocols.pouw.lead.LeadRun.call`), or None
+    #: scales, serving its y in the plain arm's place (`protocols.pouw.lead.LeadRun.call`), or None
     gemm: Any = None
     #: whether a call of no rows still reaches ``observe`` (with no rows)
     observe_empty = False
