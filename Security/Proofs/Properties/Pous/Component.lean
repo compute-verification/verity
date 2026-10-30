@@ -80,34 +80,21 @@ private theorem canonicalJson_ok {b : ByteArray} {j : Lean.Json} (h : Core.canon
     simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
   simp only [ha] at h
   cases hs : String.fromUTF8? b with
-  | none =>
-    simp [hs, throw, throwThe, MonadExceptOf.throw] at h
-    split at h
-    · cases h
-    · simp [bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
+  | none => simp [hs, throw, throwThe, MonadExceptOf.throw] at h
   | some s =>
     refine ⟨s, rfl, ?_⟩
     cases hp : Lean.Json.parse s with
-    | error e =>
-      simp [hs, hp, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
-      split at h <;> cases h
+    | error e => simp [hs, hp, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
     | ok j0 =>
       cases hc : Flock.canon j0 with
-      | error e =>
-        simp [hs, hp, hc, bind, Except.bind, pure, Except.pure] at h
-        split at h
-        · cases h
-        · simp [throw, throwThe, MonadExceptOf.throw] at h
+      | error e => simp [hs, hp, hc, bind, Except.bind, pure, Except.pure] at h
       | ok s' =>
         by_cases hne : s' = s
         · subst hne
           simp [hs, hp, hc, bind, Except.bind, pure, Except.pure] at h
-          split at h
-          · cases h
-            exact hc
-          · simp [throw, throwThe, MonadExceptOf.throw] at h
+          subst h
+          exact hc
         · simp [hs, hp, hc, hne, bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
-          split at h <;> cases h
 
 /-- What `exactly` accepts is in the form its encoder writes: the two have one canonical text. -/
 private theorem exactly_ok {α : Type} {f : Lean.Json → Flock.V α} {enc : α → Lean.Json} {j : Lean.Json} {a : α}
