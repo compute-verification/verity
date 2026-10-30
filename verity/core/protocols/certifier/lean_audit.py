@@ -24,7 +24,9 @@ a window or a grid field outside its integer width, a frame of other than B byte
 `VERITY_NETWORK_RECORDS_EXE` names the executable, and then nothing but `verity` and the stdlib is needed besides it; by
 default the first request runs `lake build network-records` in that package and starts what it builds. A process forked
 after a request starts its own executable at its first; `SERVER`'s is closed at exit. The same process answers
-`link-window` (`Server.call`), N2's verdict of record on one link-window's proof (`service.LinkWindows.verify`).
+`link-window` (`Server.call`), N2's verdict of record on one link-window's proof (`service.LinkWindows.verify`), and
+`certificates`, the client's check of one window's served certificates (`certificate_refusals`, with
+`audit.certificate_refusals` beside it as the reference).
 
 `encode` is the commitment's encoding of one published record (`NetworkCheck/Records.lean`'s module docstring).
 """
@@ -46,7 +48,8 @@ from typing import Any
 from verity.ml.crypto import lms
 from verity.core.protocols.certifier import audit
 from verity.core.protocols.certifier.audit import Published, Verdict
-from verity.core.protocols.certifier.certificate import STATUS_CODES, CertifiedRecord, Direction, LmsKey, PublicKey
+from verity.core.protocols.certifier.certificate import (STATUS_CODES, Certificate, CertifiedRecord, Direction, LmsKey,
+                                                        PublicKey)
 from verity.core.protocols.certifier.commitment import CommittedRecord
 from verity.core.protocols.certifier.grid import GridParams, Record, Status
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet
@@ -325,3 +328,37 @@ class Audit:
     @property
     def violations(self) -> list[Verdict]:
         return [v for v in self.verdicts if not v.accepted]
+
+
+def _certificate_json(c: Certificate) -> dict:
+    if not (type(c.key_id) is bytes and type(c.link) is str and isinstance(c.direction, Direction)
+            and type(c.window) is int and c.window >= 0 and type(c.digest) is bytes and type(c.signature) is bytes):
+        raise ValueError(f"outside the Lean audit's domain: a certificate of ill-typed fields: {c!r}")
+    return {"key_id": c.key_id.hex(), "link": c.link, "direction": c.direction.code, "window": c.window,
+            "digest": c.digest.hex(), "signature": c.signature.hex()}
+
+
+def certificate_refusals(key: PublicKey, session: bytes, link: str, window: int, certificates: Sequence[Certificate],
+                         clocks: Sequence[Certificate], seen: Sequence[bytes] = (), server: Server | None = None
+                         ) -> tuple[list[str | None], list[str | None]]:
+    """`audit.certificate_refusals`, each refusal the Lean's (`NetworkCheck.LinkWindow.refusals`, `network-records
+    verdicts`' ``certificates``), with `audit.certificate_refusals` run beside it as the reference: where the two differ
+    on any certificate or clock certificate, every one of the window is refused as `disagreement`. A key other than an
+    `LmsKey`, a certificate of ill-typed fields, or anything else the Lean refuses to read raises `ValueError`; a
+    reference that raises where the Lean answers raises `RuntimeError`."""
+    if not isinstance(key, LmsKey):
+        raise ValueError(f"outside the Lean audit's domain: certificates under a {type(key).__name__}, not an LmsKey")
+    p = key.params
+    case = {"lms": {"H": p.H, "N": p.N, "W": p.W, "toy": p.toy}, "key": key.public.hex(),
+            "session": bytes(session).hex(), "link": link, "window": window,
+            "certificates": [_certificate_json(c) for c in certificates],
+            "clocks": [_certificate_json(c) for c in clocks], "seen": [bytes(d).hex() for d in seen]}
+    out = (server or SERVER).call("certificates", case)
+    lean = (out["certificates"], out["clocks"])
+    try:
+        ref = audit.certificate_refusals(key, session, link, window, certificates, clocks, seen)
+    except Exception as e:
+        raise RuntimeError(f"the reference raised where the Lean check answered: {e!r}") from e
+    if lean != ref:
+        return [DISAGREEMENT] * len(certificates), [DISAGREEMENT] * len(clocks)
+    return lean
