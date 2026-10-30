@@ -72,6 +72,11 @@ Its gates as Lean code, `PousCheck.Verdict.prog` (`check/PousCheck/Verdict.lean`
 (`Security/Proofs/Pous/Continuous/VerdictCode.lean`), and `check/tests/test_verdict_difftest.py` holds the Definition's
 compiled circuit to that code.
 
+As an auditor party with a device identity, the challenger reports its sessions under its party's per-period root
+instead (`period_reports`, on `verity.core.attest`): each session is a sampling block whose one public output is its
+liveness record, and the period's root is signed once at its close, for the prover only. `period_reports.PERIOD` is not
+in `memory_challenger.SCHEMES` until `PousCheck.RunProtocol` reads `MemoryChallenger.Attest.check`.
+
 ~~~python
 from verity.ml.crypto import lms
 from verity.core.protocols.pous import memory_challenger as mc
