@@ -551,7 +551,7 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
         bdraw = {**sz.DR.derive(block, bquery, blaw), "population": E, "units": list(range(E))}
         brec = {"accepted": True, "registration": breg, "draw": bdraw, "proved_units": list(range(E))}
         return {"answer": sz.window_answer(breg, brec, sz.Fraction(1, 100), "unused"),
-                **({"circuit": circuit} if circuit else {}), "free": E * sz.IS.entry_bits(cls),
+                **({"circuit": circuit} if circuit else {}),
                 "program": encode_program(block), "registration": breg, "steps": 0}
 
     registrations = [h.at.sides[s][0].registration for s in ("ingress", "egress")]
@@ -568,8 +568,10 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     assert (p["key"], p["session"], p["schedule"], p["link"]) == (dep["key"]["public"], dep["session"], dep["params"],
                                                                   WS.LINK)
     assert (p["program"], p["windows"], p["first"]) == (reg["program"], 1, 0)
-    assert p["audits"] == [{"free": E * sz.IS.entry_bits(cls), "program": encode_program(block), "steps": 0}]
+    assert p["audits"] == [{"program": encode_program(block), "steps": 0}]
     assert PC.params(p).audits[0].entries == () and PC.params(p).audits[0].registered == PC.Entries()
+    breg = json.loads(bytes.fromhex(case["commitment"]))["audits"][0]
+    assert PC.params(p).audits[0].free(breg) == E * sz.IS.entry_bits(cls)
     assert p["scan"] == json.loads((scan / "joint" / "program.json").read_text())
     assert json.loads(bytes.fromhex(case["commitment"])) == {"audits": [audit["registration"]], "windows": [reg]}
     ev = json.loads(bytes.fromhex(case["evidence"]))

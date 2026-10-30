@@ -1426,14 +1426,13 @@ def answers(at: SimpleNamespace, out: Path, res: dict, delta: Fraction, block: d
     (`window_answer`: accepted where the round's outputs all open to 1), since its registration holds each W's rows
     (`warden_roots`). A refused round's (a void run's) names the members Lean refused. With the block round's audit
     (``block``), the compute audit whose lanes' o0 are the scan's ``prog<j>`` (``audits``): its registration and
-    answer, and the terms a period's parameters give it, its Program's descriptor, its free inputs (every bit of every
-    slot entry, the stand-in's ``x``: it copies its input) and no steps."""
+    answer, and the terms a period's parameters give it: its Program's descriptor and no steps (the check counts its
+    free inputs from it, `Audit.free`: every bit of every slot entry, the stand-in's ``x``, which it copies)."""
     reg, answer = _answer(out, "honest", res, delta, f"the scan's audit of link-windows {at.windows}")
     audits = []
     if block is not None:
         breg, banswer = _answer(out, "block", block, delta, "the block's audit")
-        audits.append({"answer": banswer, "free": entries_of(at.setup.cls, at.G, at.T) * IS.entry_bits(at.setup.cls),
-                       "program": json.loads((out / PROGRAMS[BLOCK] / "program.json").read_text()),
+        audits.append({"answer": banswer, "program": json.loads((out / PROGRAMS[BLOCK] / "program.json").read_text()),
                        "registration": breg, "steps": 0})
     doc = {"format": ANSWERS, "delta": str(delta), "registration": reg, "audits": audits,
            "windows": [{"window": w, "answer": answer,

@@ -87,7 +87,7 @@ def rows_case(run: Path, scan: Path, round_: str = "honest") -> dict:
         certs[1]["signature"] = sig[:-1] + ("1" if sig[-1] == "0" else "0")
     N, W, H = dep["key"]["params"]
     audits = doc.get("audits", [])
-    params = {"audits": [{k: a[k] for k in ("circuit", "free", "program", "steps") if k in a} for a in audits], "cells": [],
+    params = {"audits": [{k: a[k] for k in ("circuit", "pins", "program", "steps") if k in a} for a in audits], "cells": [],
               "first": x["window"], "jitter": 1, "key": dep["key"]["public"], "link": WS.LINK,
               "lms": {"H": H, "N": N, "W": W, "toy": False}, "program": doc["registration"]["program"],
               "scan": json.loads((scan / "joint" / "program.json").read_text()), "schedule": dict(dep["params"]),
