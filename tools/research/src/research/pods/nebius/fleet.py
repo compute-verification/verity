@@ -20,6 +20,10 @@ pods register`, <notes>/machines.d); one not registered is recorded from the API
 recorded as RUNNING and unread, never idle. Runs on infra's VM, which holds the Slack credential (the control pod holds none).
 Nebius calls go through pods/nebius/common.sh's `nebius_auth`, the way launch.sh makes them.
 
+A RUNNING VM that no sample has read for `UNREACH_S` (a soft lockup, a full disk, sshd refusing) is alerted on once in
+#agent-alerts with its serial console's tail, any kernel trouble in it named, and is marked `unreachable_since` in its registry
+entry, which keeps `research run --on auto` off it until a sample reads it again.
+
 The lane whose budget line pays for a node stops it when its work there ends; infra's idle stop is only a backstop
 (the lane contract, §3c). So the daily post rings each machine's owning lane (its registry entry's `lane`, infra when
 unset or unregistered) with its own idle hours. A sample also copies each VM's /etc/research/deadline into its registry entry's
@@ -30,6 +34,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -49,6 +54,12 @@ BUSY_PCT, IDLE_LOAD_SHARE, QUOTA_ALERT = 5, 0.1, 0.8
 # a memory-bound job (circuits' GLM folds on vy-glm53-cpu-2, 25 Oct: 2-4 busy cores of 192, 150-700 GB of 755 GB) is not idle
 IDLE_MEM_SHARE = 0.15
 STATUS_THREAD = "1791351683.780959"
+#: a RUNNING VM with a registered host that no sample has read this long is unreachable: one alert with its serial log's tail,
+#: and its registry entry's `unreachable_since` keeps `--on auto` off it (research.auto) until a sample reads it again
+UNREACH_S, SERIAL_LINES = 600, 40
+KERNEL_TROUBLE = re.compile(r"soft lockup|hung_task|blocked for more than|out of memory|oom-kill|watchdog: BUG|"
+                            r"rcu_sched self-detected|kernel panic", re.I)
+ANSI = re.compile(r"\x1b\[[0-9;]*m")
 OWNER_DEFAULT = "infra"          # registry.OWNER_DEFAULT (this file runs standalone)
 PROBE = ("echo gpu=$(nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null | tr '\\n' ,); "
          "echo cores=$(nproc); echo load=$(cut -d' ' -f1 /proc/loadavg); "
@@ -134,15 +145,85 @@ def sample(now: float | None = None) -> list[dict]:
     return rows
 
 
+def set_key(name: str, key: str, value: str | None) -> None:
+    """Set (or, with None, remove) one key of machine `name`'s registry file, keeping its other lines as they are."""
+    f = MACHINES_D / f"{name}.toml"
+    kept = [ln for ln in f.read_text().splitlines() if not ln.startswith(f"{key} =")]
+    f.write_text("\n".join([*kept, *([f'{key} = "{value}"'] if value is not None else [])]) + "\n")
+
+
+def serial_tail(instance_id: str, lines: int = SERIAL_LINES) -> list[str]:
+    """The last `lines` lines of a VM's serial console (`nebius compute instance logs`), oldest first, colors stripped."""
+    cmd = f'. "{HERE}/common.sh" && nebius_auth && nb compute instance logs --id \'{instance_id}\' --limit {int(lines)}'
+    p = subprocess.run(["bash", "-c", cmd], capture_output=True, text=True, timeout=120)
+    if p.returncode != 0:
+        raise RuntimeError(f"nebius compute instance logs: {p.stderr.strip()[-300:]}")
+    out = [ANSI.sub("", ln).rstrip() for ln in p.stdout.splitlines() if ln.strip() and not ln.startswith("Total:")]
+    return out[::-1]
+
+
+def watch_unreachable(rows: list[dict], now: float, send: Callable[[list[str], str], None],
+                      tail: Callable[[str], list[str]] = serial_tail) -> list[str]:
+    """Alert once on each RUNNING VM no sample has read for `UNREACH_S` (with its serial log's tail and any kernel trouble in it),
+    and mark it `unreachable_since` in the registry; clear the mark once it is read again. Only a VM some sample has read counts,
+    so a machine whose ssh is closed to this key (an auditor) never alerts. The machines alerted on this pass."""
+    path, reg = FLEET_DIR / "unreachable.json", registry()
+    try:
+        state = json.loads(path.read_text()) if path.exists() else {}
+    except (OSError, ValueError) as e:
+        print(f"{utc(now)} {path} unreadable, starting it afresh: {e}", file=sys.stderr, flush=True)
+        state = {}
+    changed, alerted = [], []
+    answered = set(state.pop("_answered", []))          # VMs a sample has read: the auditors' admin-only ssh never is
+    answered |= {r["name"] for r in rows if r.get("read")}
+    running = {r["name"] for r in rows}
+    for name in [n for n in state if n not in running]:         # stopped: no longer this watch's to judge
+        state.pop(name)
+        if reg.get(name, {}).get("unreachable_since"):
+            set_key(name, "unreachable_since", None)
+            changed.append(name)
+    for r in rows:
+        name, m = r["name"], reg.get(r["name"], {})
+        if r.get("read") or not m.get("host") or name not in answered:
+            state.pop(name, None)
+            if r.get("read") and m.get("unreachable_since"):
+                set_key(name, "unreachable_since", None)
+                changed.append(name)
+            continue
+        s = state.setdefault(name, {"since": now, "told": False})
+        if s["told"] or now - s["since"] < UNREACH_S:
+            continue
+        s["told"] = True
+        try:
+            lines = tail(r["id"])
+        except (RuntimeError, OSError, subprocess.TimeoutExpired) as e:
+            lines = [f"(its serial log couldn't be read: {e})"]
+        trouble = [ln for ln in lines if KERNEL_TROUBLE.search(ln)]
+        if name in reg:
+            set_key(name, "unreachable_since", utc(s["since"]))
+            changed.append(name)
+        send(["--channel", "agent-alerts", "--kind", "alert"],
+             f"{name} is RUNNING in Nebius but hasn't answered ssh since {utc(s['since'])} ({int((now - s['since']) // 60)} min); "
+             "`--on auto` skips it until a sample reads it again. "
+             + (f"Kernel trouble in its serial log: {' | '.join(trouble[-3:])[:600]}. " if trouble else "")
+             + f"If it stays down, restart it (`nb compute instance stop` then `start --id {r['id']}`; fix a passed "
+             f"/etc/research/deadline first, or the boot stops it again). Serial log tail:\n```\n"
+             + "\n".join(lines[-15:])[-2500:] + "\n```\n(fleet.py)")
+        alerted.append(name)
+    FLEET_DIR.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({**state, "_answered": sorted(answered)}) + "\n")
+    if changed:
+        sync_registry(f"machines.d: {', '.join(changed)}'s unreachable_since (fleet.py)")
+    return alerted
+
+
 def record_deadlines(rows: list[dict], reg: dict[str, dict]) -> list[str]:
     """Copy each read VM's /etc/research/deadline into its registry file's `deadline` where it differs; one notes sync for all."""
     changed = []
     for r in rows:
         if r.get("deadline") is None or r["name"] not in reg or reg[r["name"]].get("deadline") == utc(r["deadline"]):
             continue
-        f = MACHINES_D / f"{r['name']}.toml"
-        kept = [ln for ln in f.read_text().splitlines() if not ln.startswith("deadline =")]
-        f.write_text("\n".join([*kept, f'deadline = "{utc(r["deadline"])}"']) + "\n")
+        set_key(r["name"], "deadline", utc(r["deadline"]))
         changed.append(r["name"])
     if changed:
         sync_registry(f"machines.d: {', '.join(changed)}'s deadline (fleet.py)")
@@ -298,7 +379,7 @@ def loop(clock: Callable[[], float] = time.time, sleep: Callable[[float], None] 
         passes = None if passes is None else passes - 1
         now = clock()
         try:
-            sample(now)
+            watch_unreachable(sample(now), now, send)
         except Exception as e:  # noqa: BLE001 (a failed pass is logged, the loop goes on)
             print(f"{utc(now)} sample failed: {e}", file=sys.stderr, flush=True)
         day = utc(now)[:10]
