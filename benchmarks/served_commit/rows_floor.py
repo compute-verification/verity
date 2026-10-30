@@ -29,7 +29,6 @@ from verity_vllm.commit.committer.native_jit import CUDA_CFLAGS
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "integrations/vllm/verity_vllm/commit/committer/native_rows.cu"
-KERNELS = ROOT / "verity/ml/kernels"
 COMMIT_GPU = ROOT / "benchmarks/pouw/commit_gpu/commit_gpu.cu"
 c_p, c_u64 = ctypes.c_void_p, ctypes.c_uint64
 
@@ -198,7 +197,7 @@ def main() -> None:
     for minb in forms:
         so = tmp / f"rows_minb{minb}.so"
         rc, log = nvcc([*CUDA_CFLAGS, "-std=c++17", "-shared", "-Xcompiler", "-fPIC", f"-gencode=arch=compute_{arch},code=sm_{arch}",
-                        "-Xptxas", "-v", f"-DVERITY_ROWS_MIN_BLOCKS={minb}", "-I", str(KERNELS), str(SRC), "-o", str(so)])
+                        "-Xptxas", "-v", f"-DVERITY_ROWS_MIN_BLOCKS={minb}", str(SRC), "-o", str(so)])
         form: dict[str, Any] = {"build_rc": rc, "ptxas": ptxas(log)}
         res["forms"][f"minb{minb}"] = form
         if rc:
