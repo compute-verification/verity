@@ -50,8 +50,9 @@ def vstar_definition(unit: str, holo: bool = False):
     """V*'s Definition of the statement whose unit is ``unit`` (`Flock.RecVStar.templateId`'s): a level's of the table or of
     R ``RecOpen{LANES, H}``; a part of the algebra (at the inner session's holo flag ``holo``) or of R's opening
     ``InnerRepCheck{S}`` at its part's S (`rec_residuals.parts`, as `rec_vstage.stage` and `stage_opening` cut it);
-    RecSparse at its shape; a cap's RecCap. `ValueError` for a unit that is none of V*'s."""
-    from . import rec_cap
+    RecSparse at its shape; a cap's RecCap; the link table's RecLink at its ``(UB, PB)``. `ValueError` for a unit that is
+    none of V*'s."""
+    from . import rec_cap, rec_link
 
     n = r"([0-9]+)"
     if m := re.fullmatch(rf"rec-open(?:-stacked)?/l{n}-h{n}", unit):
@@ -64,6 +65,8 @@ def vstar_definition(unit: str, holo: bool = False):
         return _rec_sparse.definition(*map(int, m.groups()))
     if re.fullmatch(rf"rec-cap/n{n}(?:-l{n})?", unit):
         return rec_cap.definition()
+    if m := re.fullmatch(rf"rec-link/u{n}-p{n}", unit):
+        return rec_link.definition(int(m[1]), int(m[2]))
     raise ValueError(f"{unit}: not a unit of V*'s statements")
 
 

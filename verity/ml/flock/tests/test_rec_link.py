@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import random
 import struct
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -153,3 +154,82 @@ def test_the_definition_computes_the_reference():
     for t, (ports, _) in enumerate(cases):
         rin, rout = R.link_ref(UB, PB, *ports)
         assert [word(w) for w in res[t]] == rin + rout
+
+
+@pytest.mark.parametrize("ub, pb", [(0, 0), (2, 1), (12, 3), (16, 16)])
+def test_the_unit_commits_its_ports_as_five_rows_of_whole_sha512_blocks(ub, pb):
+    """`row_words` (`VStar.linkRows`) regroups `port_words` without moving a word: the digest and salt of each side are one
+    row, and every row is whole 128-byte blocks, as ``sha512/row/v1`` (`circuit.compose`, `VStar.checkRow`) requires."""
+    rows, ports = R.row_words(ub, pb), R.port_words(ub, pb)
+    assert R.ROWS == ("trow", "xyr", "raux", "xyw", "waux")
+    assert rows == (ports[0], ports[1] + ports[2], ports[3], ports[4] + ports[5], ports[6])
+    assert all(2 * w % 128 == 0 for w in rows)
+    sub = R.subcircuit(ub, pb)
+    assert [p.name for p in sub.inputs] == list(R.ROWS) and [p.name for p in sub.outputs] == ["rin", "rout"]
+    assert sub.id == R.unit_name(ub, pb) and sub.template.id == R.TEMPLATE
+
+
+def test_the_verifiers_bindings_name_the_link_units_definition():
+    from verity_flock import rec_bindings as RB
+
+    assert RB.vstar_definition("rec-link/u2-p1").id == R.definition(2, 1).id == "RecLink_v1{UB=2,PB=1}"
+    with pytest.raises(ValueError):
+        RB.vstar_definition("rec-link/u2")
+
+
+@pytest.fixture(scope="module")
+def chain(tmp_path_factory):
+    """The pod's wired inner statement (`rec_reprice.stage_chain`) at K = 16 over three units, two links."""
+    import sys
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pod"))
+    import rec_reprice
+
+    d = tmp_path_factory.mktemp("chain")
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("K", "16")
+        mp.setenv("N", "3")
+        mp.setenv("REC_CIRCUIT_CACHE", str(d / "circuits"))
+        rec = rec_reprice.stage_chain(d / "stage")
+        yield d, rec
+
+
+@pytest.mark.slow
+def test_the_link_part_stages_over_the_inner_statements_rows_and_a_forged_row_does_not_hold(chain):
+    """`rec_vstage.stage_links` over a wired inner statement: the part composes (its rows whole blocks), its table is the
+    registered value ``rec-links`` its statement names (``rec-links.txt``), every row's openings climb to the verifier's
+    roots, and the forgery's first row names a writer whose output is not its reader's row. About 80 s: only a staged inner
+    statement gives the rows, salts and file layout `inner_rows` reads, and only `circuit.compose` refuses a row that is not
+    whole blocks."""
+    import json
+
+    from verity_flock import rec_links as RLK
+    from verity_flock import rec_vstage as VS
+
+    d, rec = chain
+    stage = d / "stage"
+    assert rec["links"] == 2
+    circuit, inst = stage / "circuit.txt", stage / "inst-3.bin"
+    ports = [p[0] for p in VS.meta(circuit)["ports"]]
+    links = RLK.entries(ports, json.loads((stage / "links.json").read_text())["links"])
+    assert [(lk.reader, lk.writer, lk.out) for lk in links] == [(1, 0, 0), (2, 1, 0)]
+    rows = VS.inner_rows(VS.meta(circuit), inst)
+    assert (rows.n, len(rows.ports)) == (3, rows.n_in + 1)
+
+    honest = VS.stage_links(circuit, inst, links, d / "v")
+    assert honest["holds"] == honest["unit_agrees"] == [True, True]
+    assert (honest["name"], honest["instances"]) == (R.unit_name(2, R.bits_for(rows.n_in)), 2)
+    part = d / "v" / VS.LINKS_DIR
+    root, n = (part / "rec-links.txt").read_text().split()[0].split(":")
+    reads = json.loads((part / "registered.json").read_text())["ports"]
+    assert (reads["trow"]["value"], reads["trow"]["root"], int(n)) == (RLK.VALUE, root, 2)
+    assert (reads["rin"]["value"], reads["rout"]["value"]) == (R.IN_VALUE, R.OUT_VALUE)
+    assert [p[0] for p in VS.meta(part / "circuit.txt")["ports"]] == [*R.ROWS, "rin", "rout"]
+
+    forged = VS.stage_links(circuit, inst, links, d / "v", forge="link")
+    assert forged["forged_link"] == {"row": 0, "writer": 0, "forged_writer": 1}
+    assert forged["holds"] == [False, True] and forged["circuit_kept"]
+    assert (forged["in_root"], forged["out_root"]) == (honest["in_root"], honest["out_root"])
+    assert (d / "v" / "forged-link" / VS.LINKS_DIR / "rec-links.txt").read_text().split(":")[0] != root
+    with pytest.raises(ValueError, match="not the writer's"):
+        VS.stage_links(circuit, inst, [RLK.LinkEntry(1, links[0].port, 1, 0)], d / "bad")
