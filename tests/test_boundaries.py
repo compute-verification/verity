@@ -113,6 +113,8 @@ ALLOWED = {
     # A record entry (`Core.Record`): the form every protocol's signed, chained record entries take.
     "core.protocols.record": set(),
 }
+# PoUS reads its ledger's lines in the record form (`record.is_entry`).
+ALLOWED["core.protocols.pous"] |= {"core.protocols.record"}
 #: Import names ``verity`` never imports or names as a string: the other workspace distributions, external runtimes, and the
 #: repository's own directories.
 FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_flock", "verity_torch", "verity_cli", "verity_difftest",
