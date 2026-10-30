@@ -1,7 +1,7 @@
 """`verity.ml.circuits.partition`: the fast path (per-body induction over `Family.tiling()`) against the interval sweep on the
 same materialised sets; the sweep on synthetic interval families and on Parts of real Programs; `validate_width`
 (bound-only certification vs exact, budget, Unsupported) against an oracle boundary and against `verity.ml.circuits.boundary`;
-readiness on Programs with 64-bit gates; the `VuVerdict` composition; `query_ast` families end to end.
+readiness on Programs with 64-bit gates; `query_ast` families end to end.
 
 Stand-ins, built from explicit `Part`s so the validator is checked independently of `query_ast`:
 
@@ -24,8 +24,8 @@ from verity.ml.circuits import boundary, partition, query_ast as G
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.layout import Scope, GateSelection
 from verity.ml.circuits.parts import Limits, Part, Unsupported, n_members
-from verity.ml.circuits.partition import (PartitionVerdict, ReadinessReport, VuVerdict, WidthVerdict, gate_width_readiness, readiness_32bit,
-                                 validate_partition, validate_vu_family, validate_vu_partition, validate_width, vu_status)
+from verity.ml.circuits.partition import (PartitionVerdict, ReadinessReport, WidthVerdict, gate_width_readiness, readiness_32bit,
+                                 validate_partition, validate_width)
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
@@ -809,65 +809,17 @@ def test_readiness_counts_instances_by_multiplicity(gemm):
     assert r.gates_over == 6 * 3   # TZero32 + 2 TDot16 steps per coordinate; TCvt16 (16) and Input16 are fine
 
 
-# -- composition -------------------------------------------------------------------------------------------
-
-
-def test_vu_verdict_ok(gemm, oracle):
-    oracle()
-    v = validate_vu_family(gemm, family_of(gemm, gemm_vu_tiling(gemm)), 32)
-    assert isinstance(v, VuVerdict) and v.status == "ok" and v.count == 230
-    assert v.partition.status == "exact" and v.width.status == "ok" and v.readiness_32.ok
-    j = v.to_json()
-    assert j["status"] == "ok" and j["count"] == 230 and j["partition"]["status"] == "exact"
-    import json
-    json.dumps(j)  # JSON-serialisable
-
-
-def test_vu_verdict_fail_and_not_ready_and_unsupported(gemm, oracle):
-    oracle()
-    t = tiling(whole_body(gemm.root, {0: members_k(), 1: members_k()}))
-    assert validate_vu_family(gemm, family_of(gemm, t), 32).status == "fail"           # width violation
-    t = tiling(body_tiling(gemm.root, {0: members_k(), 2: members_k()}))
-    assert validate_vu_family(gemm, family_of(gemm, t), 32).status == "fail"           # gap
+def test_width_is_a_parameter_on_a_program_with_64bit_gates(oracle):
     W = wide_program()
     oracle(program=W)
-    v = validate_vu_family(W, family_of(W, tiling(whole_body(W.root))), 64)
-    assert v.status == "ok" and v.count == 5                                            # a 64-bit protocol
-    v = validate_vu_family(W, family_of(W, tiling(whole_body(W.root))), 32)
-    assert v.status == "fail" and not v.readiness_32.ok                                 # the returned 64-bit gate escapes
-    # the same Program where the 64-bit gates do not escape any set: readiness alone objects
+    whole = family_of(W, tiling(whole_body(W.root)))
+    assert validate_width(W, whole, 64).status == "ok"                  # a 64-bit protocol
+    assert validate_width(W, whole, 32).status == "violation"           # the returned 64-bit gate escapes
+    # the same Program where the 64-bit gates do not escape any set: width passes, readiness alone objects
     fam = StubFamily([StubGateSet((Part(W.circuit.root_scope, frozenset({(0, 0), (1, 0)})),)),
                       StubGateSet((Part(W.circuit.root_scope, frozenset({(2, 0), (3, 0), (4, 0)})),))])
-    v = validate_vu_family(W, fam, 64)
-    assert v.status == "ok"
-    v = validate_vu_family(W, fam, 96)
-    assert v.status == "ok"
+    assert validate_width(W, fam, 64).status == "ok" and validate_width(W, fam, 96).status == "ok"
     assert not gate_width_readiness(W, 32).ok
-
-    class L(Limits):
-        max_intervals = 2
-
-    oracle()
-    v = validate_vu_family(gemm, family_of(gemm, gemm_vu_tiling(gemm), with_tiling=False), 32, L())
-    assert v.status == "unsupported" and v.partition.status == "unsupported"
-
-
-def test_vu_status_precedence():
-    ok_p = PartitionVerdict("exact", (), {})
-    gap_p = PartitionVerdict("gap", (), {})
-    un_p = PartitionVerdict("unsupported", (), {})
-    ok_w = WidthVerdict(32, 16, (), (), "ok")
-    bad_w = WidthVerdict(32, 96, (0,), (), "violation")
-    un_w = WidthVerdict(32, None, (), (0,), "unsupported")
-    ready = ReadinessReport(32, True, (), 32, 1, 0)
-    unready = ReadinessReport(32, False, (), 64, 1, 1)
-    assert vu_status(ok_p, ok_w, ready) == "ok"
-    assert vu_status(gap_p, ok_w, ready) == "fail"
-    assert vu_status(ok_p, bad_w, unready) == "fail"
-    assert vu_status(ok_p, ok_w, unready) == "not-ready"
-    assert vu_status(un_p, ok_w, unready) == "not-ready"
-    assert vu_status(un_p, ok_w, ready) == "unsupported"
-    assert vu_status(ok_p, un_w, ready) == "unsupported"
 
 
 # -- the interval sweep (tier B) ---------------------------------------------------------------------------
@@ -1045,13 +997,13 @@ def test_width_with_the_real_boundary_agrees_with_the_oracle(gemm, synth, monkey
     assert partition._boundary() is boundary
 
 
-def test_query_ast_default_family_is_a_valid_vu_partition(gemm):
+def test_query_ast_default_family_is_a_valid_block_partition(gemm):
     fam = G.evaluate(gemm, G.default(32))
     assert fam.count() == 32 + 192 + 6
-    v = validate_vu_partition(gemm, G.default(32))
-    assert v.status == "ok" and v.count == 230
-    assert v.partition.status == "exact" and v.partition.detail["path"] == "tiling"
-    assert v.width.status == "ok" and v.width.max_seen == 16
+    v = validate_partition(gemm, fam)
+    assert v.status == "exact" and v.detail["path"] == "tiling"
+    w = validate_width(gemm, fam, 32)
+    assert w.status == "ok" and w.max_seen == 16
     swept = validate_partition(gemm, StubFamily(list(fam)))
     assert swept.status == "exact" and swept.detail["path"] == "sweep" and swept.detail["sets"] == 230
 
@@ -1064,7 +1016,7 @@ def test_query_ast_family_with_a_gap_and_an_overlap(synth):
     assert validate_partition(synth, StubFamily(sets + sets[:1])).status == "overlap"
 
 
-# -- hierarchies: subset cover, refinement, members per parent ----------------------------------------------
+# -- hierarchies: subset cover ----------------------------------------------------------------------------------
 
 
 def test_within_partitions_a_subset_of_gates(gemm):
@@ -1083,7 +1035,6 @@ def test_within_partitions_a_subset_of_gates(gemm):
     assert out.detail["outside"] == [{"gates": [0, 224]}] and out.detail["outside_count"] == 1
     both = validate_partition(gemm, StubFamily(coords + coords[:1]), within=[(224, 248)])
     assert both.status == "overlap"
-    assert vu_status(out, WidthVerdict(32, 16, (), (), "ok"), gate_width_readiness(gemm, 32)) == "fail"
     with pytest.raises(ValueError):
         validate_partition(gemm, StubFamily(coords), within=[(224, 249)])
 
@@ -1096,60 +1047,3 @@ def test_within_the_whole_program_agrees_with_the_full_check(gemm):
             within = validate_partition(gemm, StubFamily(fam), within=[(0, gemm.gates)])
             assert (within.status, within.codes) == (full.status, full.codes)
             assert {k: v for k, v in within.detail.items() if k != "within"} == full.detail
-
-
-def test_refinement_counts_members_per_parent(gemm):
-    whole = family_of(gemm, tiling(whole_body(gemm.root)))
-    vu = family_of(gemm, gemm_vu_tiling(gemm))
-    deep = family_of(gemm, gemm_deep_tiling(gemm))
-    assert partition.members_per_parent(gemm, whole, vu) == (32, 192, 6)
-    assert partition.members_per_parent(gemm, whole, deep) == (1, 1, 24)
-    coords = StubFamily([s for s in vu if s.intervals()[0][0] >= 224])
-    inside = StubFamily([s for s in deep if s.intervals()[0][0] >= 224])
-    v = partition.validate_refinement(gemm, coords, inside)
-    assert v.status == "ok" and v.counts == (4,) * 6 and v.detail == {"coarse_sets": 6, "fine_sets": 24}
-    assert partition.validate_refinement(gemm, vu, deep).codes == ("refine-crosses",)   # deep keeps Inputs whole
-
-
-def test_refinement_on_query_families_and_unequal_sizes(gemm):
-    """`each(F, G)` nests by construction; per-parent counts may differ (3 TDot gates, then 1 TCvt16)."""
-    coords = G.evaluate(gemm, G.instances("//TGemmCoordinate"))
-    subs = G.evaluate(gemm, G.each(G.instances("//TGemmCoordinate"), G.default(32)))
-    gates = G.evaluate(gemm, G.each(G.instances("//TGemmCoordinate"), G.default(0)))
-    assert partition.members_per_parent(gemm, coords, subs) == (2,) * 6
-    assert partition.members_per_parent(gemm, subs, gates) == (3, 1) * 6
-    assert partition.validate_refinement(gemm, gates, subs).codes == ("refine-crosses",)
-
-
-def test_crossing_outside_and_empty_sets_are_not_refinements(gemm):
-    whole = family_of(gemm, tiling(whole_body(gemm.root)))
-    vu = family_of(gemm, gemm_vu_tiling(gemm))
-    crosses = partition.validate_refinement(gemm, vu, whole)
-    assert crosses.status == "violation" and crosses.codes == ("refine-crosses",) and crosses.counts == ()
-    assert crosses.detail["refine-crosses"] == {"count": 3, "sets": [0, 1, 2]}
-    coords_only = StubFamily([s for s in vu if s.intervals()[0][0] >= 224])
-    outside = partition.validate_refinement(gemm, coords_only, vu)
-    assert outside.codes == ("refine-outside",) and outside.detail["refine-outside"]["count"] == 224
-    straddle = StubFamily([IntervalSet(((0, 20),)), IntervalSet(((20, 248),))])
-    halves = StubFamily([IntervalSet(((0, 10), (30, 40))), IntervalSet(((10, 30),)), IntervalSet(((40, 248),))])
-    assert partition.validate_refinement(gemm, straddle, halves).codes == ("refine-crosses",)
-    assert partition.validate_refinement(gemm, halves, StubFamily([IntervalSet(((5, 8), (32, 35)))])).counts == (1, 0, 0)
-    empty = partition.validate_refinement(gemm, whole, StubFamily([IntervalSet(())]))
-    assert empty.codes == ("refine-empty",)
-    overlap = partition.validate_refinement(gemm, StubFamily(list(whole) + list(whole)[:1]), vu)
-    assert overlap.codes == ("refine-coarse-overlap",)
-    with pytest.raises(ValueError, match="not a refinement"):
-        partition.members_per_parent(gemm, vu, whole)
-
-
-def test_refinement_is_unsupported_beyond_the_interval_limit(gemm):
-    def cap(n):
-        class L(Limits):
-            max_intervals = n
-        return L()
-
-    whole = family_of(gemm, tiling(whole_body(gemm.root)))
-    vu = family_of(gemm, gemm_vu_tiling(gemm))
-    assert partition.validate_refinement(gemm, whole, vu, cap(100)).status == "unsupported"
-    assert partition.validate_refinement(gemm, vu, whole, cap(100)).codes == ("limit-intervals",)
-    assert partition.validate_refinement(gemm, whole, vu, cap(233)).status == "ok"
