@@ -4,7 +4,7 @@
         [--protocol vllm|plain|ids [--id-payload 503]] [--no-commit] [--window-steps 64] [--no-learn-warmup]
         [--force-include-usage | --no-force-include-usage] [--retain-exclude hidden_m1] [--learn-host-budget-mb 4096]
         [--retain host|device [--retain-device-gb 32] [--release-after sampled_proofs,pouw_h1 [--draws-dir DIR]]]
-        [--required-manifest PREDICTED/manifest.json --hidden-so SO --norm-tap-so SO | --scheme vllm-v1 --of-record RUN] [--seal]
+        [--required-manifest PREDICTED/manifest.json --hidden-so SO --norm-tap-so SO] [--seal]
         [--no-seal-off-loop] [--no-seal-process] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb 300]
         [--copy-records-to $OUT] [--admit arrival|release-order [--admit-hold-ms 5000]] [--switch-interval-ms 0.1] [--async-scheduling]
         [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON] [--challenger-gate CMD --challenger-peer NAME]]
@@ -28,7 +28,7 @@ engine's resulting parameters, the seed and its rule). A request without a ``see
 `engine.served_seed.DEFAULT_SEED`. A ``top_p`` below 1 is refused (`TOP_P_REFUSAL`): the top-p sampler's split count is not
 pinned yet, so its sample is not a function of the committed values.
 
-The default precision is ``verity_int8`` (int8 linears, vLLM's attention) with the committer's GPU tree: the one setting
+The default precision is ``verity_int8`` (int8 linears, vLLM's attention), the one setting
 whose 16-token probe (0.81 s at 4 in flight) fits the certifier's plan (about 2.6 s); ``int8_exact`` takes 12.9 s even
 without the Commit. The ``verity_int8`` quantization method is registered under every precision, so a pin whose checkpoint
 names it loads under ``--precision pin`` too.
@@ -61,11 +61,11 @@ record of the step rows it ran, committed at its close under its run root for th
 whose rows and salts go to ``served_rows/w<k>.json``), ``requests.jsonl`` (one line a request: the HTTP id, the engine id, the
 body's ``user``, its release and its place among the engine's adds, the runner's ids, the prompt ids, the streamed ids, its
 ingress, its finish, its committed rows and seeds, and its check), ``request_users.jsonl`` (`serve_commit.REQUEST_USERS`) and
-`serve_commit.advice_trace`'s file. The Commit is rows-sha512 (``--scheme``'s default: hm96-sha512 rows in frame-v3-sha512 trees,
+`serve_commit.advice_trace`'s file. The Commit is rows-sha512 (``--scheme``: hm96-sha512 rows in frame-v3-sha512 trees,
 64-byte roots), as the bench row's declared Commit commits, with its committer parts built from the row's ``--required-manifest``
 and taps (the acquisition plan under ``acquisition/``): the manifest of the row's Build of record, which the ahead-of-time compiler
-writes (``verity-vllm predict row``; `serve_row.row_refusal` refuses any other, a traced Build's among them). ``--scheme vllm-v1`` (SHA-256, 32-byte roots) only serves again the
-recorded vllm-v1 run ``--of-record`` names (`serve_seal.scheme_refusal`). ``--seal`` seals each closed
+writes (``verity-vllm predict row``; `serve_row.row_refusal` refuses any other, a traced Build's among them;
+`serve_seal.scheme_refusal`). ``--seal`` seals each closed
 window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. ``--retain-exclude hidden_m1``
 commits the attention interiors without retaining them, and each seal's manifest names them (`serve_seal.RetentionOptions`). ``--retain device --release-after P,Q`` holds each window's values in a
 device pool until every subprotocol named has drawn the window, then keeps on host, and seals, only the leaves their drawn
@@ -168,22 +168,9 @@ class Options:
                                   help="at most this many distinct requests in a Commit window, the class's slots (0: no bound): the "
                                        "engine holds at most this many unfinished requests, the rest wait in admission order, and a "
                                        "window closes before a step that would bring in one more (the running ones carry on)")
-    chunk: int = option("--chunk", type=int, default=65536,
-                        help="vllm-v1: the committer's leaf, in bytes of the packed step stream (as `commit`'s); a rows-sha512 row "
-                             "is step_rows.ROW_BYTES")
-    hash_threads: int = option("--hash-threads", type=int, default=2, help="vllm-v1: the committer's hashlib threads")
-    gpu_tree: bool = option("--gpu-tree", action="boolean_optional", default=True,
-                            help="the committer's GPU-resident chunk tree, no D2H and no hashlib (default on, and rows-sha512 needs it; "
-                                 "its kernel is JIT-built with ninja, which must be on PATH)")
-    cudart_copy: bool = option("--cudart-copy", action="store_true", default=False,
-                               help="vllm-v1: the committer's snapshots by cudaMemcpyAsync")
     scheme: str = option("--scheme", choices=SS.SCHEMES, default=SS.ROWS,
-                         help="the Commit's scheme: rows-sha512 (default: the declared Commit's committer, hm96-sha512 rows, 64-byte "
-                              "roots; needs --required-manifest) or vllm-v1 (NativeHostCommitter, SHA-256, 32-byte roots), only with "
-                              "--of-record")
-    of_record: str | None = option("--of-record", default=None,
-                                   help="--scheme vllm-v1 only: the recorded serve-openai run (its dir, with serve.json) this one serves "
-                                        "again, which committed under vllm-v1 and served this --model and --revision")
+                         help="the Commit's scheme, rows-sha512 (the declared Commit's committer, hm96-sha512 rows, 64-byte roots; "
+                              "needs --required-manifest); its kernels are JIT-built with ninja, which must be on PATH")
     seal: bool = option("--seal", action="boolean_optional", default=False,
                         help="seal each closed window as a deferred Commit's row dir, OUT/windows/w<k>/ (serve_seal.seal_window)")
     sealing: SP.SealingOptions = group(SP.SealingOptions)
@@ -646,9 +633,9 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError(why)
     if why := SH.refusal(opts) or SR.refusal(opts) or SL.refusal(opts):
         raise UsageError(why)
-    if opts.commit and opts.gpu_tree and which("ninja") is None:
-        raise UsageError("--gpu-tree JIT-builds its kernel with ninja, which is not on PATH: put the environment's bin (where its "
-                         f"ninja is) on PATH{', or pass --no-gpu-tree' if opts.scheme == SS.V1 else ''}")
+    if opts.commit and which("ninja") is None:
+        raise UsageError("the Commit JIT-builds its kernels with ninja, which is not on PATH: put the environment's bin (where its "
+                         "ninja is) on PATH, or pass --no-commit")
 
 
 def build(opts: Options, session: SR.ServeSession | None = None, row: Mapping[str, Any] | None = None) -> tuple[Any, Any]:
@@ -738,8 +725,8 @@ def main(opts: Options) -> int:
               "default_seed": DEFAULT_SEED, "top_p": "refused below 1", "committer": getattr(com, "name", None),
               "admit": opts.admit, "admit_hold_ms": opts.admit_hold_ms if order is not None else None,
               "step_rows": "scheduler" if rows is not None else "runner",
-              "commit": opts.commit, "scheme": getattr(com, "commit_scheme", SS.V1) if com is not None else None,
-              "of_record": opts.of_record, "learn_warmup": getattr(com, "learn_warmup", None),
+              "commit": opts.commit, "scheme": com.commit_scheme if com is not None else None,
+              "learn_warmup": getattr(com, "learn_warmup", None),
               "sealed": "windows/w<k>/" if windows is not None and windows.seal is not None else None,
               "served_rows_statics": windows.served if windows is not None else None, "gpu_ext_warm_s": getattr(com, "gpu_ext_warm_s", None),
               "seal_off_loop": sealer is not None, "seal_hold_gb": opts.seal_hold_gb if sealer is not None else None, "pool_warmed": warmed,
@@ -750,8 +737,7 @@ def main(opts: Options) -> int:
               "weights": getattr(com, "weights", None), "window_steps": opts.window_steps, "idle_close_steps": opts.idle_close_steps,
               "window_requests": opts.window_requests or None, "protocols": arm.describe() if arm is not None else None,
               "remote_session": session.describe() if session is not None else None, "row_scheduling": row,
-              "committer_options": {k: getattr(opts, k) for k in ("chunk", "hash_threads", "gpu_tree", "cudart_copy", "required_manifest",
-                                                                  "hidden_so", "hidden_ns", "tap_cap_mb", "norm_tap_so")},
+              "committer_options": {k: getattr(opts, k) for k in ("required_manifest", "hidden_so", "hidden_ns", "tap_cap_mb", "norm_tap_so")},
               "required_manifest_path": getattr(com, "required_manifest_path", None), **SS.retention_record(opts, com),
               "arena": getattr(com, "arena_sizing_record", None), "engine": llm.engine_record, "run_id": opts.run_id,
               "switch_interval_s": sys.getswitchinterval(), "watchdog": {"period_s": watchdog.period_s, "min_s": watchdog.min_s},
