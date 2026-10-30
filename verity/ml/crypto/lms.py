@@ -138,7 +138,7 @@ class Signature:
 ROLES = {"network-certificate": "verity/network-certificate-message/v2",
          "memory-challenger-record": "verity/memory-challenger-record/v1"}
 DIRECTIONS = ("egress", "ingress")
-#: the length of a certifier session id, which the challenger draws for each session of the certifier
+#: the length of a certifier session id, which the challenger samples for each session of the certifier
 SESSION_BYTES = 32
 
 

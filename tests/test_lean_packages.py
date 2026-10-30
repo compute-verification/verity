@@ -50,7 +50,7 @@ def test_one_mathlib():
 
 
 def test_the_randomness_assumption_cites_this_toolchain():
-    """A3 (C-Flock soundness's `ASSUMPTIONS.md`, `Assumptions.UniformRandomBytes`) cites what the toolchain's runtime reads
+    """A3 (Flock soundness's `ASSUMPTIONS.md`, `Assumptions.UniformRandomBytes`) cites what the toolchain's runtime reads
     for `IO.getRandomBytes` (`lean_io_get_random_bytes`), so a toolchain bump fails here until someone re-reads it and
     updates the citation."""
     proofs = ROOT / "Security/Proofs"
@@ -151,7 +151,7 @@ def test_proofs_require_the_security_package():
 
 
 def test_code_never_requires_the_security_analysis():
-    """Code (C-Flock's verifier, the PoUS grader, the certifier's program) stays with its component and never imports
+    """Code (Flock's verifier, the PoUS grader, the certifier's program) stays with its component and never imports
     `Security/`: the analysis reads the code, never the reverse."""
     code = [pkg for pkg in lake_packages() if not pkg.is_relative_to(SECURITY) and not pkg.is_relative_to(ROOT / "tools")]
     assert code, "no code packages outside Security"
