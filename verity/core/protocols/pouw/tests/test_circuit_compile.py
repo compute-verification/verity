@@ -2,10 +2,10 @@
 compiled Program's served outputs are the served Program's.
 
 The scheme here (`compile-test`, tile 2 × 2; `compile-test-16`, 16 × 16) is a stand-in with a real scheme's shape,
-``(a: r rows of A, b: c rows of B, salt, position, roots) -> {z, receipt}`` (decisions 105 and 106): the unit derives its seed
+``(a: r rows of A, b: c rows of B, salt, position, roots) -> {z, receipt}``: the unit derives its seed
 from the salt, its position and its seed group's roots (`seeds.PouwSeed`), and from the seed one noise block a row of A; it
 adds the noise to its rows, folds each cell's noised arm into the receipt (the s8 family's prefix arm, or for another kind its
-own Definition on the noised row) and returns its cells' exact products as z. #2365's layer is `TemplatePopulations` over
+own Definition on the noised row) and returns its cells' exact products as z. The one-stage layer is `TemplatePopulations` over
 `ScaledMmS8Coordinate_v1` at K = 2048 and 8192, as `benchmarks/one_stage/a6.py` builds it."""
 from __future__ import annotations
 
@@ -43,10 +43,10 @@ REDUCED = ((2048, 3), (8192, 2))
 BOOLEAN = {"DOT": BG.BlackwellS8ImmaDot32, "TDOT": None}
 PORTS = C._ports
 ports = pytest.mark.skipif(PORTS is None, reason="port types (ml.circuits.ports) are not on this tree")
-#: COIN-RULES' seed role (`ports._coin_role`, a coin port beside an `In(kind="position")` one): the salt's flow into the seed
+#: the coin rules' seed role (`ports._coin_role`, a coin port beside an `In(kind="position")` one): the salt's flow into the seed
 #: is the seed's, and the Build check refuses some units before compile's own checks do (`UNIT_REFUSED`)
 SEEDS = PORTS is not None and "position" in PORTS.KINDS
-#: COIN-RULES before its seed role lets a coin reach only a noise primitive's or a receipt fold's coin port, so it refuses the
+#: the coin rules before their seed role let a coin reach only a noise primitive's or a receipt fold's coin port, so it refuses the
 #: salt's flow into the seed's gates
 COIN_RULES = PORTS is not None and hasattr(PORTS, "_coin_role") and not SEEDS
 compiles = pytest.mark.skipif(COIN_RULES, reason="COIN-RULES refuses the salt's flow into PouwSeed: E_COIN_FLOW")
@@ -80,7 +80,7 @@ XOR1 = _prim("CompileTestXor1", (("x", V1), ("e", V1)), V1, lambda x, e: x ^ e)
 PIECES = {w: tuple(_prim(f"CompileTestPiece{w}x{s}", (("x", V32),), Value(w), lambda x, s=s, w=w: (x >> w * s) % (1 << w))
                    for s in range(32 // w)) for w in (8, 16)}
 ADD8 = ADD[8]
-#: a noise primitive (COIN-RULES' coin flow): it adds its coin to its operand
+#: a noise primitive (the coin rules' coin flow): it adds its coin to its operand
 NOISED8 = _prim("CompileTestNoised8", (("x", V8), ("e", V8)), V8, lambda x, e: (x + e) & 0xFF, ports=COIN)
 FOLD32 = _prim("CompileTestFold32", (("r", V32), ("t", V32)), V32, lambda r, t: (r * 0x9E3779B1 + t) & M32, ports=FOLD)
 FOLD1 = _prim("CompileTestFold1", (("r", V1), ("t", V1)), V1, lambda r, t: r ^ t, ports=FOLD)
@@ -357,7 +357,7 @@ def _refused(code, program, scheme=SCHEME):
 @compiles
 @pytest.mark.slow
 def test_llama_layer_compiles():
-    """#2365's Llama-3.2-1B layer at full size, 16 × 16 tiles: one site per K, each 16 coordinates one unit, the coordinates'
+    """The one-stage Llama-3.2-1B layer at full size, 16 × 16 tiles: one site per K, each 16 coordinates one unit, the coordinates'
     rest one `PouwRest` batch reading only the scales and z, a position slot a unit, and the verifier's rebuilt Program the
     one compiled. Its values are `test_reduced_layer_serves_the_same_outputs`'s; this one catches what only the full counts
     show (a site's tiling and packing, and the Program's digest, at 1472 units over 23552 dots)."""
@@ -524,7 +524,7 @@ REFUSED = {
 @pytest.mark.parametrize("code", sorted(REFUSED))
 def test_refused(code):
     """Each rule's refusal; ``coin-read``: a served Program that derives a seed itself (the salt enters only through compile),
-    which COIN-RULES' seed role refuses as it is built: its seed's position is a constant."""
+    which the coin rules' seed role refuses as it is built: its seed's position is a constant."""
     if code == "coin-read" and SEEDS:
         with pytest.raises(PORTS.PortError) as e:
             Program(bind(REFUSED[code]()))
@@ -553,7 +553,7 @@ def test_scheme_refused():
         C.register(C.Scheme("compile-test-uncovering", (2, 2), {C.ANY: _unit(UNIT)}, cover=0))
 
 
-# -- kinds and seed groups (decisions 109 and 112) ---------------------------------------------------------------------------
+# -- kinds and seed groups ---------------------------------------------------------------------------------------------------
 
 BF = P.BF16
 QK = bind(G.DotBf16, K=64, **G.GEMM_AMPERE)
@@ -634,7 +634,7 @@ PREFILL = _def("CompileTestPrefill", ("C", "G", "L"),
 
 @compiles
 def test_qk_heads_compile():
-    """Attention's QKᵀ is credited (decision 109): each head's scores, `DotBf16` of its query on its keys, are a site's dots,
+    """Attention's QKᵀ is credited: each head's scores, `DotBf16` of its query on its keys, are a site's dots,
     its query meeting only its own keys (a 1 × 2 tile a head), and the softmax max chain is the rest (under a scheme with
     no row form for QKᵀ, so no grind term: `test_qk_grind`)."""
     served = Program(bind(HEADS, H=4, N=2))
@@ -655,9 +655,9 @@ def _grind_pct(rows, dots):
 
 @compiles
 def test_qk_grind():
-    """Decision 122: a seed group's QKᵀ carries GRIND's grind term, `grind.visible_premium` over its distinct rows (a Q row
+    """A seed group's QKᵀ carries GRIND's grind term, `grind.visible_premium` over its distinct rows (a Q row
     k + 320 bits read by its keys, a K row k bits read by the query heads on it) over its dots, and over 0.1% the group is
-    refused, pointing to decision 36's live coin. Four heads on their own keys are 4 Q rows and 8 K rows; four on shared keys
+    refused, pointing to a live window's per-round coin. Four heads on their own keys are 4 Q rows and 8 K rows; four on shared keys
     (GQA) are 4 Q rows and 2 K rows read 4 times each, one row however many query heads read it."""
     e = _refused("cover", Program(bind(HEADS, H=4, N=2)))
     assert "grind term of its DotBf16_v2 dots is " + _grind_pct([(4, 384, 2), (8, 64, 1)], 8) in str(e)
@@ -722,7 +722,7 @@ def test_kind_is_pluggable():
 
 @compiles
 def test_seed_group_covers_calls_committed_together():
-    """Two calls committed together are one seed group (decision 112): one slot of `pouw.roots` both units' seeds read, at
+    """Two calls committed together are one seed group: one slot of `pouw.roots` both units' seeds read, at
     their own positions, so their seeds still differ; keys are canonical, and a compiled Program is rebuilt only under its own
     groups."""
     served = Program(bind(TWICE))
@@ -766,7 +766,7 @@ def test_cover_is_the_least_seed_group():
 @compiles
 def test_seed_group_never_spans_a_chain():
     """A seed binds its calls' operand roots, so one seed group can't hold a call and a call that reads its output (a step's
-    layer ℓ and ℓ + 1, decision 122): each alone compiles, with the served outputs unchanged, and together they are refused."""
+    layer ℓ and ℓ + 1): each alone compiles, with the served outputs unchanged, and together they are refused."""
     served = Program(bind(CHAINED))
     c = C.compile(served, SCHEME)
     assert c.groups == ((0,), (1,))
@@ -836,7 +836,7 @@ def test_unit_refused(code, scheme):
 @compiles
 def test_shared_position_slots_refused(monkeypatch):
     """Two unit batches given the same slots of `pouw.positions` (here the second batch reading the first's) would seed two
-    units of a site alike: the root-level check refuses it, and COIN-RULES' seed role as the compiled Program is built."""
+    units of a site alike: the root-level check refuses it, and the coin rules' seed role as the compiled Program is built."""
     real = C._plan
 
     def shared(served, name):
@@ -855,7 +855,7 @@ def _coin_served_body(B, S, x, w, u):
 
 @ports
 def test_served_coin_parameter_refused():
-    """A served Program that takes a coin is refused, even one whose coin flows as COIN-RULES allows (into a noise
+    """A served Program that takes a coin is refused, even one whose coin flows as the coin rules allow (into a noise
     primitive): the salt enters only through compile."""
     defn = _def("CompileTestCoin", (), lambda S: ((*XW, ("u", Array(64, V8))), V32), _coin_served_body,
                 ports={"params": lambda p: {"u": p.In(kind="coin")}})
@@ -897,7 +897,7 @@ def test_positions_and_inputs():
 
 
 def test_seed_reads_every_field():
-    """seed_j and σ_R each move with every field, and no σ_R is a seed_j (decision 121: σ_R's tag is its own)."""
+    """seed_j and σ_R each move with every field, and no σ_R is a seed_j (σ_R's tag is its own)."""
     d = [hashlib.sha512(bytes([i])).digest() for i in range(6)]
     base = (d[0], 0, d[1], d[2])
     out = []
