@@ -145,7 +145,7 @@ theorem signed (d : Direction) (l : String) {pd : ByteArray} (hpd : pd.size = 64
     {q : Nat} (hq : q < 2) :
     ∃ (h : RecordHead) (dg σ : ByteArray), recordHead l d 0 #[#[none]] none grid pd true = .ok h ∧
       h.digest = .ok dg ∧
-      ∃ m, certificateMessage (params.key.extract 0 16) params.session l d 0 (certificateDigest salt dg) = .ok m ∧
+      ∃ m, certificateMessage (params.key.extract 0 16) params.session .record l d 0 (certificateDigest salt dg) = .ok m ∧
         LmsVerifies params m σ := by
   obtain ⟨h, D, m, hh, hprep⟩ := prepare_of (i := issuer) (r := record l) (d := d) (g := grid) (pd := pd) issuer_I
     session_size salt_size rfl (by

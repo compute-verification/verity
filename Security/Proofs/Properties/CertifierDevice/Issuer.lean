@@ -53,14 +53,15 @@ theorem except_bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except �
 theorem except_ok_bind {ε α β : Type} (a : α) (f : α → Except ε β) : (Except.ok a >>= f) = f a := rfl
 
 /-- What `prepare` returns: the record's head, the head's digest under the salt, which is 64 bytes, and the message
-under the issuer's identifier. -/
+under the issuer's identifier, as a record's. -/
 theorem prepare_spec {i : Issuer} {salt : ByteArray} {record : Record} {direction : NetworkCheck.Direction}
     {params : Params} {parameters : ByteArray} {deadline : Bool} {head : NetworkCheck.RecordHead}
     {digest message : ByteArray}
     (h : i.prepare salt record direction params parameters deadline = .ok (head, digest, message)) :
     salt.size = NetworkCheck.saltBytes ∧ head.link = record.link ∧ head.direction = direction ∧
       head.window = record.window ∧ (∃ R, head.digest = .ok R ∧ digest = NetworkCheck.certificateDigest salt R) ∧
-      NetworkCheck.certificateMessage i.key.I i.session record.link direction record.window digest = .ok message := by
+      NetworkCheck.certificateMessage i.key.I i.session .record record.link direction record.window digest =
+        .ok message := by
   unfold Issuer.prepare at h
   -- the signed digest stays opaque: unfolding SHA-512 of the tag's bytes overflows the kernel
   generalize hD : NetworkCheck.certificateDigest salt = D at h

@@ -231,7 +231,7 @@ from verity.core.protocols.certifier.active import COMPACT_RECORD, DATA, HEADER,
     Events, Proxy, CertifierClient, Requests, compact_record_data, decode_frame, event_body, event_data, fresh_salt, \
     id_event_data, id_request, id_request_fields, request_frame_count, serve_reveals
 from verity.core.protocols.certifier.certificate import Certificate, CertifiedClock, CertifiedRecord, Direction, \
-    Issuer, LmsKey, LmsSigner, RecordHead, SignerRefused, parameters_digest
+    Issuer, LmsKey, LmsSigner, RecordHead, Role, SignerRefused, parameters_digest
 from verity.core.protocols.certifier.grid import COMPLETE, Reason, Status, occupancy, row_count
 from verity.core.protocols.certifier.audit import certificate_refusals
 from verity.core.protocols.certifier.lean_audit import DISAGREEMENT, Audit
@@ -1171,10 +1171,10 @@ def check_certificates(deployment: dict, window: int, answer: dict, seen: dict[b
     session by `refusals` (`audit.certificate_refusals`; the chain record's `lean_audit.certificate_refusals`):
     (certificates, clock certificates, the link-windows the signer refused, refusals). A refusal names the
     certificate and what fails: another key's, another link-window's, a clock certificate that isn't egress, a
-    signature that doesn't verify over its fields in the session (forged, or a field altered, the digest it signs
-    among them), a second of its direction, or a clock certificate signing the digest an earlier window's in `seen`
-    (digest to name, which this adds to) signs: its salt was reused, under which two windows of one sync sign one
-    digest. The client holds no sync or salt, so it checks no opening. An answer that is a refusal, another window's
+    signature that doesn't verify over its fields in the session as its role, a record's or a clock's (forged, a field
+    altered, the digest it signs among them, or one served in the other's place), a second of its direction, or a clock
+    certificate signing the digest an earlier window's in `seen` (digest to name, which this adds to) signs: its salt
+    was reused, under which two windows of one sync sign one digest. The client holds no sync or salt, so it checks no opening. An answer that is a refusal, another window's
     or another session's, or not certificates, is refused whole, as is one `refusals` can't read or, under the
     Lean, one where it and its reference disagree."""
     key, session, link = read_public(deployment["certifier_key"]), deployment["session"], deployment["links"]["n2"]
@@ -1194,7 +1194,8 @@ def check_certificates(deployment: dict, window: int, answer: dict, seen: dict[b
     why = {"key": lambda c: f"another key's, not the deployment's {key.key_id.hex()[:16]}…",
            "link-window": lambda c: f"it names {c.link} window {c.window}, not {link} window {window}",
            "clock": lambda c: "a clock is an egress window's",
-           "signature": lambda c: "its signature doesn't verify under the deployment's key in its session",
+           "signature": lambda c: "its signature doesn't verify under the deployment's key in its session as its slot's "
+                                  "role, a record's or a clock's",
            "second": lambda c: "a second one of its direction",
            "reused": lambda c: f"its signed digest is also {seen.get(c.digest, 'an earlier one')}'s, so its salt was "
                                "reused, under which two windows of one sync sign one digest",

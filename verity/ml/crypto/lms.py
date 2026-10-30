@@ -51,11 +51,11 @@ from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
-__all__ = ["D_INTR", "D_LEAF", "D_MESG", "D_PBLC", "DEPLOYED", "DEPLOYMENT_BYTES", "DIRECTIONS", "HssSignature", "Identity",
-           "LeafState", "Params", "PartyKey", "PrivateKey", "ROLES", "SESSION_BYTES", "Signature", "StateError",
-           "certificate_message", "digits", "hss_verify", "key", "keygen", "liveness_message", "memory_challenger_message",
-           "party_key_message", "period_root_message", "public_key", "root_of", "sign", "sign_at", "verify",
-           "verify_certificate", "verify_liveness", "TOY_N"]
+__all__ = ["CERTIFICATE_ROLES", "D_INTR", "D_LEAF", "D_MESG", "D_PBLC", "DEPLOYED", "DEPLOYMENT_BYTES", "DIRECTIONS",
+           "HssSignature", "Identity", "LeafState", "Params", "PartyKey", "PrivateKey", "ROLES", "SESSION_BYTES",
+           "Signature", "StateError", "certificate_message", "digits", "hss_verify", "key", "keygen", "liveness_message",
+           "memory_challenger_message", "party_key_message", "period_root_message", "public_key", "root_of", "sign",
+           "sign_at", "verify", "verify_certificate", "verify_liveness", "TOY_N"]
 
 D_PBLC, D_MESG, D_LEAF, D_INTR = 0x8080, 0x8181, 0x8282, 0x8383
 
@@ -148,12 +148,15 @@ class Signature:
 #: role -> its tag, which every digest of the role begins with. The network certificate's is the message's own,
 #: distinct from the ids of the checks that read it (`verity/network-certificate/v4`, `verity/network-records/v3`). The
 #: last three are HSS's (`party_key_message`, `period_root_message`, `liveness_message`).
-ROLES = {"network-certificate": "verity/network-certificate-message/v2",
+ROLES = {"network-certificate": "verity/network-certificate-message/v3",
          "memory-challenger-record": "verity/memory-challenger-record/v1",
          "party-key": "verity/party-key/v1",
          "period-root": "verity/period-root/v1",
          "liveness": "verity/liveness/v1"}
 DIRECTIONS = ("egress", "ingress")
+#: what a network certificate signs, which its message names: a record's salted digest, a window's salted clock, or the
+#: head of the rows the certifier registers (cells, transfer or out rows). A certificate verifies only as its own role.
+CERTIFICATE_ROLES = ("record", "clock", "cells", "transfer", "out")
 #: the length of a certifier session id, which the challenger samples for each session of the certifier
 SESSION_BYTES = 32
 
@@ -168,16 +171,20 @@ def _digest(role: str, I: bytes, context: bytes, record: bytes) -> bytes:
     return hashlib.sha512(_field(ROLES[role].encode()) + I + _field(context) + _field(record)).digest()
 
 
-def certificate_message(I: bytes, session: bytes, link: str, direction: str, window: int, record: bytes) -> bytes:
+def certificate_message(I: bytes, session: bytes, role: str, link: str, direction: str, window: int,
+                        record: bytes) -> bytes:
     """The message a network certificate signs: ``SHA-512(tag || I || context || record)``, the tag
-    ``verity/network-certificate-message/v2``, the context the certifier session's id (`SESSION_BYTES`), the link's name,
-    the direction (``egress`` or ``ingress``) and the window's index, each field but I and the window prefixed with its
-    length (u64)."""
+    ``verity/network-certificate-message/v3``, the context the certifier session's id (`SESSION_BYTES`), the
+    certificate's role (`CERTIFICATE_ROLES`), the link's name, the direction (``egress`` or ``ingress``) and the
+    window's index, each field but I and the window prefixed with its length (u64)."""
+    if role not in CERTIFICATE_ROLES:
+        raise ValueError(f"a certificate's role is one of {CERTIFICATE_ROLES}, not {role!r}")
     if direction not in DIRECTIONS or isinstance(window, bool) or not 0 <= window < 2 ** 64:
         raise ValueError(f"a certificate's direction is one of {DIRECTIONS} and its window a u64, not {direction!r}, {window!r}")
     if len(session) != SESSION_BYTES:
         raise ValueError(f"a certifier session id is {SESSION_BYTES} bytes, not {len(session)}")
-    context = _field(bytes(session)) + _field(link.encode()) + _field(direction.encode()) + window.to_bytes(8, "big")
+    context = (_field(bytes(session)) + _field(role.encode()) + _field(link.encode()) + _field(direction.encode())
+               + window.to_bytes(8, "big"))
     return _digest("network-certificate", I, context, record)
 
 

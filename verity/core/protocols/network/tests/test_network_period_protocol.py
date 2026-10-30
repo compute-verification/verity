@@ -87,7 +87,7 @@ def test_a_mirror_that_skips_the_ingress_certificate_is_caught(server, monkeypat
     """A mirror that reads only the egress certificate accepts a period whose ingress certificate names another link,
     and Lean rejects it."""
     real = PC._certifies
-    monkeypatch.setattr(PC, "_certifies", lambda p, d, w, c: d is INGRESS or real(p, d, w, c))
+    monkeypatch.setattr(PC, "_certifies", lambda p, r, d, w, c: d is INGRESS or real(p, r, d, w, c))
     with pytest.raises(D.Mismatch) as x:
         D.run(dataclasses.replace(PORT, inputs=cases(("cert-link",))), examples=20, server=server)
     assert (x.value.lean[0], x.value.python[0]) == (REJECT, ACCEPT)
@@ -113,7 +113,9 @@ def test_a_mirror_that_skips_the_rows_check_is_caught(server, monkeypatch):
 ROWS_REFUSALS = {
     "rows-cert-missing": ("certificates: the requests', responses' and fails' records'", "certificates"),
     "rows-past-slots": ("certifies none of a window in which it refused a connection", "refused a connection"),
+    "rows-cert-role": ("certificates: the requests', responses' and fails' records'", "certificates"),
     "rows-reg-key": ("not under the deployment key in the session", "doesn't verify under"),
+    "rows-reg-role": ("not under the deployment key in the session", "doesn't verify under"),
     "rows-answer-window": ("another window's answer", "another window's answer"),
     "rows-schedule": ("another schedule's digest than the bound one", "the registration's parameters is"),
     "rows-delta": ("is not the period's", "is not the period's"),
@@ -126,8 +128,9 @@ ROWS_REFUSALS = {
 
 
 def test_the_rows_form_refuses_what_it_must(server):
-    """A link-window missing one of its records' certificates, one the warden left uncertified for refusing a
-    connection (traffic past its Program slots), a registration not under the deployment key, the scan's answer for
+    """A link-window missing one of its records' certificates or with one the key signed as another role, one the
+    warden left uncertified for refusing a connection (traffic past its Program slots), a registration not under the
+    deployment key or signed by it as another role than cells, the scan's answer for
     another window's rows, rows under a schedule whose digest isn't the bound one, scans at two δ, a scan answered over
     other than its 2T units, a scan whose `prog` is no compute audit's output, one whose `prog` is an audit's output but
     no `SlotEntry_v1` template's entries, an audit a scan's `prog` is tied to with a unit undrawn, and a scan whose

@@ -398,12 +398,14 @@ def opened (c : Case) (row : Option ByteArray) : Option Nat := do
 
 /-! ## The certificates and the sync -/
 
-/-- The certificates' check (`LinkWindows.certified`): two, each naming this link, its end (egress first) and the window,
-and the key's and verifying in the link's certifier session (`Certificate.signs`). -/
+/-- The certificates' check (`LinkWindows.certified`): two, each naming this link, its end (egress first) and the
+window, and the key's and verifying in the link's certifier session as a record's (`Certificate.signs`,
+`Role.record`). -/
 def certified (c : Case) : Bool :=
   c.certificates.size == 2 && (List.range 2).all fun d =>
     match c.certificates[d]! with
-    | some x => x.link == c.link && x.direction.code == d && x.window == c.window && x.signs c.lms c.key c.session
+    | some x =>
+      x.link == c.link && x.direction.code == d && x.window == c.window && x.signs c.lms c.key c.session .record
     | none => false
 
 /-- The window's declared sync is one of Σ_sync: its δ one of the deltas and its ρ one of the rhos. A warden link
@@ -504,14 +506,15 @@ end Served
 
 /-- Why the client refuses certificate `x`, in the order it checks, or none where it keeps it: another key's (`key`),
 another link-window's (`link-window`), a clock certificate that isn't egress (`clock`), a signature that doesn't verify
-under the key in the session (`Certificate.signs`: `signature`), a second of its direction among those `kept`
-(`second`), or a clock certificate signing a digest that one kept earlier signs (`signed`: `reused`). -/
+under the key in the session as a clock's or a record's, as `clock` says (`Certificate.signs`: `signature`), a second
+of its direction among those `kept` (`second`), or a clock certificate signing a digest that one kept earlier signs
+(`signed`: `reused`). -/
 def refusal (s : Served) (clock : Bool) (kept : Array Direction) (signed : Array ByteArray) (x : Certificate) :
     Option String :=
   if x.keyId != s.key.extract 0 16 then some "key"
   else if x.link != s.link || x.window != s.window then some "link-window"
   else if clock && x.direction != .egress then some "clock"
-  else if !x.signs s.lms s.key s.session then some "signature"
+  else if !x.signs s.lms s.key s.session (if clock then .clock else .record) then some "signature"
   else if kept.contains x.direction then some "second"
   else if clock && signed.contains x.digest then some "reused"
   else none

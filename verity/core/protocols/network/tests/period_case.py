@@ -56,7 +56,7 @@ from pathlib import Path
 import verity_difftest as D
 from verity_difftest import protocol as P
 from verity.core.protocols.certifier import warden_rows as WR
-from verity.core.protocols.certifier.certificate import (SALT_BYTES, Certificate, Direction, LmsKey,
+from verity.core.protocols.certifier.certificate import (SALT_BYTES, Certificate, Direction, LmsKey, Role,
                                                             certificate_digest, clock_digest)
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 from verity.core.protocols.certifier.warden import WardenParams
@@ -676,12 +676,12 @@ class Finding(Exception):
         self.verdict, self.reason = verdict, reason
 
 
-def _certifies_on(p: Params, link: str, d: Direction, w: int, c: Certificate) -> bool:
-    return c.direction is d and c.link == link and c.window == w and c.verify(p.key, p.session)
+def _certifies_on(p: Params, role: Role, link: str, d: Direction, w: int, c: Certificate) -> bool:
+    return c.direction is d and c.link == link and c.window == w and c.verify(p.key, p.session, role)
 
 
-def _certifies(p: Params, d: Direction, w: int, c: Certificate) -> bool:
-    return _certifies_on(p, p.link, d, w, c)
+def _certifies(p: Params, role: Role, d: Direction, w: int, c: Certificate) -> bool:
+    return _certifies_on(p, role, p.link, d, w, c)
 
 
 def _clock_digest(s: ClockSync) -> bytes | None:
@@ -722,9 +722,9 @@ def _window_check(p: Params, clear: set[bytes], earlier: list[bytes], w: int, re
             and D.canonical(reg.record.get("window")) == D.canonical(served(w))):
         raise Finding(REJECT, f"{what}: registration")
     if not (len(x.certificates) == 2
-            and all(_certifies(p, d, w, c) for c, d in zip(x.certificates, (EGRESS, INGRESS)))):
+            and all(_certifies(p, Role.RECORD, d, w, c) for c, d in zip(x.certificates, (EGRESS, INGRESS)))):
         raise Finding(REJECT, f"{what}: certificates")
-    if not _certifies(p, EGRESS, w, x.clock):
+    if not _certifies(p, Role.CLOCK, EGRESS, w, x.clock):
         raise Finding(REJECT, f"{what}: clock")
     if x.clock.digest in clear:
         raise Finding(REJECT, f"{what}: clock: unsalted")
@@ -858,7 +858,8 @@ def _rows_window_check(p: Params, audits: list[Registration], w: int, reg: Regis
     if reg.record.get("program") != p.program:
         raise Finding(REJECT, f"{what}: registration")
     if not (len(x.certificates) == 3
-            and all(_certifies_on(p, link, d, w, c) for c, (link, d) in zip(x.certificates, records(p.link)))):
+            and all(_certifies_on(p, Role.RECORD, link, d, w, c)
+                    for c, (link, d) in zip(x.certificates, records(p.link)))):
         raise Finding(REJECT, f"{what}: certificates (none of a window in which the network certifier refused a "
                               "connection)")
     if len(x.registrations) != 2:
@@ -1023,9 +1024,9 @@ EXPECT = {
     "honest": ACCEPT,
     "program": REJECT, "provenance": REJECT,
     "cert-swap": REJECT, "cert-count": REJECT, "cert-forged": REJECT, "cert-window": REJECT, "cert-link": REJECT,
-    "cert-session": REJECT, "cert-key": REJECT,
+    "cert-session": REJECT, "cert-key": REJECT, "cert-role": REJECT,
     "clock-ingress": REJECT, "clock-forged": REJECT, "clock-window": REJECT, "clock-session": REJECT,
-    "clock-reused": REJECT, "clock-unsalted": REJECT,
+    "clock-role": REJECT, "clock-reused": REJECT, "clock-unsalted": REJECT,
     "answer-protocol": REJECT, "answer-other": REJECT, "answer-reject": REJECT, "answer-undecided": UNDECIDED,
     "answer-profile": REJECT,
     "audit-other": REJECT, "audit-reject": REJECT, "audit-undecided": UNDECIDED, "audit-profile": REJECT,
@@ -1037,9 +1038,10 @@ EXPECT = {
     "rows-program": REJECT,
     "rows-cert-missing": REJECT, "rows-cert-swap": REJECT, "rows-cert-fails-link": REJECT,
     "rows-cert-direction": REJECT, "rows-cert-forged": REJECT, "rows-cert-window": REJECT, "rows-cert-session": REJECT,
-    "rows-cert-key": REJECT, "rows-past-slots": REJECT,
+    "rows-cert-key": REJECT, "rows-cert-role": REJECT, "rows-past-slots": REJECT,
     "rows-reg-count": REJECT, "rows-reg-swap": REJECT, "rows-reg-forged": REJECT, "rows-reg-window": REJECT,
-    "rows-reg-link": REJECT, "rows-reg-session": REJECT, "rows-reg-key": REJECT, "rows-reg-field": REJECT,
+    "rows-reg-link": REJECT, "rows-reg-session": REJECT, "rows-reg-key": REJECT, "rows-reg-role": REJECT,
+    "rows-reg-field": REJECT,
     "rows-schedule": REJECT,
     "rows-answer-protocol": REJECT, "rows-answer-other": REJECT, "rows-answer-window": REJECT,
     "rows-answer-reject": REJECT, "rows-answer-undecided": UNDECIDED, "rows-answer-profile": REJECT,
@@ -1419,9 +1421,11 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     tied = {x["audit"] for x in ties.values()}
     signed = iter(range(1 << 30))
 
-    def sign(link: str, d: Direction, w: int, digest: bytes, k: lms.PrivateKey = key, s: bytes = session) -> Certificate:
+    def sign(role: Role, link: str, d: Direction, w: int, digest: bytes, k: lms.PrivateKey = key,
+             s: bytes = session) -> Certificate:
         c = Certificate(k.I, link, d, w, digest, b"")
-        return dataclasses.replace(c, signature=lms.sign_at(k, next(signed) % 2 ** k.params.H, c.message(s)).encode())
+        return dataclasses.replace(c, signature=lms.sign_at(k, next(signed) % 2 ** k.params.H,
+                                                            c.message(s, role)).encode())
 
     def registrations(w: int, s: WardenParams | None = None, on: str = link, ses: bytes = session) -> list[dict]:
         """Link `on`'s ingress and egress rows at window `w`, committed under schedule `s` (the period's) in session
@@ -1432,12 +1436,12 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             cells = WR.Cells.commit(on, d, w, [r.randbytes(WR.row_bytes(s)) for _ in range(s.window)],
                                     WR.Wiring((), r.randbytes(WR.WIRING_SALT_BYTES)), s, ses,
                                     [r.randbytes(WR.SALT_BYTES) for _ in range(s.window)])
-            out.append(WR.registration(cells.head, sign(on, d, w, cells.head.digest(), s=ses), s))
+            out.append(WR.registration(cells.head, sign(Role.CELLS, on, d, w, cells.head.digest(), s=ses), s))
         return out
 
-    def resigned(doc: dict, **kw) -> dict:
-        c = sign(doc["link"], Direction(doc["direction"]), doc["window"], bytes.fromhex(doc["certificate"]["digest"]),
-                 **kw)
+    def resigned(doc: dict, role: Role = Role.CELLS, **kw) -> dict:
+        c = sign(role, doc["link"], Direction(doc["direction"]), doc["window"],
+                 bytes.fromhex(doc["certificate"]["digest"]), **kw)
         return doc | {"certificate": {"digest": c.digest.hex(), "key": c.key_id.hex(), "signature": c.signature.hex()}}
 
     window_regs, windows, clocks = [], [], []
@@ -1461,7 +1465,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             regs = r.choice([regs[:1], regs[1:], [], regs + regs[1:]])
         elif aimed and m == "reg-swap":
             regs = regs[::-1]
-        elif aimed and m in ("reg-forged", "reg-window", "reg-link", "reg-session", "reg-key", "reg-field"):
+        elif aimed and m in ("reg-forged", "reg-window", "reg-link", "reg-session", "reg-key", "reg-role", "reg-field"):
             doc, c = regs[i], regs[i]["certificate"]
             sig, dig = bytes.fromhex(c["signature"]), bytes.fromhex(c["digest"])
             if m == "reg-forged":
@@ -1478,6 +1482,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                 doc = resigned(doc, s=ses) if r.random() < 0.5 else registrations(w, ses=ses)[i]
             elif m == "reg-key":
                 doc = resigned(doc, k=_key(ki, 1, r.random() < 0.5))
+            elif m == "reg-role":
+                doc = resigned(doc, role=r.choice([x for x in Role if x is not Role.CELLS]))
             else:
                 lay = doc["layout"]
                 f = r.choice(LAYOUT_KEYS)
@@ -1488,7 +1494,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                     {"domain": r.randbytes(64).hex()}, {"parameters": r.randbytes(64).hex()},
                     {"direction": (EGRESS if i == 0 else INGRESS).value}, {"layout": lay | {f: lay[f] + 1}}])
             regs = regs[:i] + [doc] + regs[i + 1:]
-        recs = [sign(on, d, w, r.randbytes(64)) for on, d in records(link)]
+        recs = [sign(Role.RECORD, on, d, w, r.randbytes(64)) for on, d in records(link)]
         if aimed and m == "past-slots":
             recs, regs = [], []
         if aimed and m.startswith("cert-"):
@@ -1498,18 +1504,21 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             elif m == "cert-swap":
                 recs = [recs[x] for x in r.choice(SWAPS)]
             elif m == "cert-fails-link":
-                recs[2] = sign(r.choice([link, f"{link}-fail", f"{link}x-fails"]), EGRESS, w, recs[2].digest)
+                recs[2] = sign(Role.RECORD, r.choice([link, f"{link}-fail", f"{link}x-fails"]), EGRESS, w,
+                               recs[2].digest)
             elif m == "cert-direction":
-                recs[j] = sign(on, INGRESS if d is EGRESS else EGRESS, w, recs[j].digest)
+                recs[j] = sign(Role.RECORD, on, INGRESS if d is EGRESS else EGRESS, w, recs[j].digest)
             elif m == "cert-forged":
                 sig = recs[j].signature
                 recs[j] = dataclasses.replace(recs[j], signature=r.choice([_flip(sig, seed), sig[:-1], b""]))
             elif m == "cert-window":
-                recs[j] = sign(on, d, w + 1, recs[j].digest)
+                recs[j] = sign(Role.RECORD, on, d, w + 1, recs[j].digest)
             elif m == "cert-session":
-                recs[j] = sign(on, d, w, recs[j].digest, s=_flip(session, seed))
+                recs[j] = sign(Role.RECORD, on, d, w, recs[j].digest, s=_flip(session, seed))
             elif m == "cert-key":
-                recs[j] = sign(on, d, w, recs[j].digest, k=_key(ki, 1, r.random() < 0.5))
+                recs[j] = sign(Role.RECORD, on, d, w, recs[j].digest, k=_key(ki, 1, r.random() < 0.5))
+            elif m == "cert-role":
+                recs[j] = sign(r.choice([x for x in Role if x is not Role.RECORD]), on, d, w, recs[j].digest)
         entries = [{"domain": x["domain"], "root": x["root"], "value": x["value"]} for x in named]
         entries.insert(r.randrange(len(entries) + 1),
                        {"domain": r.randbytes(64).hex(), "root": r.randbytes(64).hex(), "value": "decoy"})
@@ -1562,9 +1571,9 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         elif aimed and m == "provenance":
             rec["window"] = r.choice([served(w + 1), {"kind": "batch", "window": w}, served(w) | {"run": 0}, None])
         digest = registration_digest(rec)
-        egress = sign(link, EGRESS, w, r.randbytes(64))
-        ingress = sign(link, INGRESS, w, r.randbytes(64))
-        clock = sign(link, EGRESS, w, clock_commitment(r.randbytes(SALT_BYTES), sync))
+        egress = sign(Role.RECORD, link, EGRESS, w, r.randbytes(64))
+        ingress = sign(Role.RECORD, link, INGRESS, w, r.randbytes(64))
+        clock = sign(Role.CLOCK, link, EGRESS, w, clock_commitment(r.randbytes(SALT_BYTES), sync))
         answer = _accepted(digest, program, rec["partition"], 1, 1, r.choice(["1/100", "1/1000000"]), 0)
         if aimed:
             if m == "cert-forged":
@@ -1574,27 +1583,35 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                 forged = dataclasses.replace(c, signature=sig)
                 egress, ingress = (forged, ingress) if i == 0 else (egress, forged)
             elif m == "cert-window":
-                egress = sign(link, EGRESS, w + 1, egress.digest)
+                egress = sign(Role.RECORD, link, EGRESS, w + 1, egress.digest)
             elif m == "cert-link":
-                ingress = sign(link + "x", INGRESS, w, ingress.digest)
+                ingress = sign(Role.RECORD, link + "x", INGRESS, w, ingress.digest)
             elif m == "cert-session":
-                egress = sign(link, EGRESS, w, egress.digest, s=_flip(session, seed))
+                egress = sign(Role.RECORD, link, EGRESS, w, egress.digest, s=_flip(session, seed))
             elif m == "cert-key":
-                ingress = sign(link, INGRESS, w, ingress.digest, k=_key(ki, 1, r.random() < 0.5))
+                ingress = sign(Role.RECORD, link, INGRESS, w, ingress.digest, k=_key(ki, 1, r.random() < 0.5))
+            elif m == "cert-role":
+                other = r.choice([x for x in Role if x is not Role.RECORD])
+                if r.random() < 0.5:
+                    egress = sign(other, link, EGRESS, w, egress.digest)
+                else:
+                    ingress = sign(other, link, INGRESS, w, ingress.digest)
             elif m == "clock-ingress":
-                clock = sign(link, INGRESS, w, clock.digest)
+                clock = sign(Role.CLOCK, link, INGRESS, w, clock.digest)
             elif m == "clock-forged":
                 sig, dig = clock.signature, clock.digest
                 clock = r.choice([dataclasses.replace(clock, signature=s) for s in (_flip(sig, seed), sig[:-1], b"")]
                                  + [dataclasses.replace(clock, digest=d) for d in (_flip(dig, seed), dig[:-1])])
             elif m == "clock-window":
-                clock = sign(link, EGRESS, w + 1, clock.digest)
+                clock = sign(Role.CLOCK, link, EGRESS, w + 1, clock.digest)
             elif m == "clock-session":
-                clock = sign(link, EGRESS, w, clock.digest, s=_flip(session, seed))
+                clock = sign(Role.CLOCK, link, EGRESS, w, clock.digest, s=_flip(session, seed))
+            elif m == "clock-role":
+                clock = sign(r.choice([x for x in Role if x is not Role.CLOCK]), link, EGRESS, w, clock.digest)
             elif m == "clock-reused":
-                clock = sign(link, EGRESS, w, r.choice(clocks).digest)
+                clock = sign(Role.CLOCK, link, EGRESS, w, r.choice(clocks).digest)
             elif m == "clock-unsalted":
-                clock = sign(link, EGRESS, w, clock_digest(sync))
+                clock = sign(Role.CLOCK, link, EGRESS, w, clock_digest(sync))
             elif m == "answer-protocol":
                 answer["protocol"] = "verity/sampled-proofs/two-stage/v1"
             elif m == "answer-other":

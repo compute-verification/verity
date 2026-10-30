@@ -30,8 +30,9 @@ from verity.ml.commitments.identity import tagged_sha512
 from verity.ml.crypto import lms
 from verity.core.protocols.certifier.audit import Audit
 from verity.core.protocols.certifier.certificate import (SALT_BYTES, STATUS_CODES, Certificate, CertifiedRecord,
-                                                                Direction, Issuer, LmsKey, RecordHead, SignerRefused,
-                                                                certificate_digest, parameters_digest, record_head)
+                                                                Direction, Issuer, LmsKey, RecordHead, Role,
+                                                                SignerRefused, certificate_digest, parameters_digest,
+                                                                record_head)
 from verity.core.protocols.certifier.grid import COMPLETE, Certifier, GridParams, Reason, Record, Status
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, expected_grids, run_shaper
 from verity.core.protocols.certifier.service import encode
@@ -289,7 +290,7 @@ EXPECT = {
     "missing": "no-verdict", "refused": "no-verdict", "deadline": "no-verdict",
     "status": "status", "duplicate": "duplicate",
     "replay-window": "signature", "replay-link": "signature", "replay-direction": "signature", "other-key": "signature",
-    "other-session": "signature", "forged": "signature", "tampered": "signature",
+    "other-session": "signature", "other-role": "signature", "forged": "signature", "tampered": "signature",
     "advice-outside": "advice", "advice-unit": "advice",
     "late": "mismatch", "frames": "mismatch", "parameters": "mismatch", "ingress-grid": "mismatch",
     "params": "params", "commitment": "commitment", "evidence": "evidence", "case": "case",
@@ -306,7 +307,7 @@ def _signed_anyway(issuer: Issuer, record: Record, direction: Direction, g: Grid
     head = record_head(record.link, direction, record.window, record.grid, record.status, g, parameters,
                        deadline=deadline)
     salt = issuer.coins(SALT_BYTES)
-    c = issuer.sign(record.link, direction, record.window, certificate_digest(salt, head.digest()))
+    c = issuer.sign(Role.RECORD, record.link, direction, record.window, certificate_digest(salt, head.digest()))
     return None if c is None else CertifiedRecord(head, salt, c)
 
 
@@ -484,7 +485,8 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
         k2 = _key(ki, 1, same_id)
         c = dataclasses.replace(r.certificate, key_id=k2.I)
         records[at] = CertifiedRecord(r.head, r.salt,
-                                      dataclasses.replace(c, signature=lms.sign_at(k2, 0, c.message(session)).encode()))
+                                      dataclasses.replace(c, signature=lms.sign_at(k2, 0, c.message(session, Role.RECORD))
+                                                          .encode()))
     elif m == "other-session" and at is not None:
         # the same key's certificate of the same record in another of the certifier's sessions
         r = records[at]
@@ -492,7 +494,14 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
         other = draw(st.sampled_from([_flip(session, n), bytes(lms.SESSION_BYTES), bytes(range(lms.SESSION_BYTES))])
                      .filter(lambda s: s != session))
         records[at] = CertifiedRecord(r.head, r.salt, dataclasses.replace(
-            c, signature=lms.sign_at(key, n % 2 ** key.params.H, c.message(other)).encode()))
+            c, signature=lms.sign_at(key, n % 2 ** key.params.H, c.message(other, Role.RECORD)).encode()))
+    elif m == "other-role" and at is not None:
+        # the certifier's key signed the record's salted digest at its link-window, in the session, as another role
+        r = records[at]
+        c = r.certificate
+        role = draw(st.sampled_from([x for x in Role if x is not Role.RECORD]))
+        records[at] = CertifiedRecord(r.head, r.salt, dataclasses.replace(
+            c, signature=lms.sign_at(key, n % 2 ** key.params.H, c.message(session, role)).encode()))
     elif m == "forged" and at is not None:
         r = records[at]
         sig = r.certificate.signature
@@ -519,7 +528,7 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
     elif m == "duplicate" and at is not None:
         r = records[at]
         records.append(draw(st.sampled_from([r, CertifiedRecord(r.head, r.salt, dataclasses.replace(
-            r.certificate, signature=lms.sign_at(key, 1, r.certificate.message(session)).encode()))])))
+            r.certificate, signature=lms.sign_at(key, 1, r.certificate.message(session, Role.RECORD)).encode()))])))
     elif m == "extra":
         empty = tuple((None,) * grid.allocation for _ in range(grid.buckets))
         extra = draw(st.sampled_from([Record("zz", 0, empty, COMPLETE), Record(tl, W, empty, COMPLETE)]))

@@ -128,7 +128,7 @@ import load_relay as lr
 import stall_probe
 from verity.core.protocols.certifier import io_tie as IT, warden_rows as WR
 from verity.core.protocols.certifier.active import DATA, PAD, id_request
-from verity.core.protocols.certifier.certificate import CertifiedRecord, Direction, Issuer, LmsKey, record_head
+from verity.core.protocols.certifier.certificate import CertifiedRecord, Direction, Issuer, LmsKey, Role, record_head
 from verity.core.protocols.certifier.grid import GridParams, Record, Status, row_count
 from verity.core.protocols.certifier.warden import END, FAIL, REFUSED, Shim, Warden, WardenParams, audit, cells
 
@@ -484,7 +484,7 @@ class Publisher:
         cells_ = self.commit(link, direction, record, self.params, self.issuer.session)
         head = cells_.head
         t1 = time.perf_counter()
-        cert = None if withheld else self.issuer.sign(link, direction, record.window, head.digest())
+        cert = None if withheld else self.issuer.sign(Role.CELLS, link, direction, record.window, head.digest())
         t2 = time.perf_counter()
         cost = {"rows": len(cells_.rows), "row_bytes": len(cells_.rows[0]), "commit_ms": round((t1 - t0) * 1000, 3),
                 "sign_ms": round((t2 - t1) * 1000, 3)}

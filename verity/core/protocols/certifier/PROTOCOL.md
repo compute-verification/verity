@@ -55,8 +55,8 @@ The certificate's signature reads no hash of witness. The certifier signs
   prover with the head as witness only (`CertifiedRecord.salt`, in the record leaf after the head; the head leaf is
   the head alone);
 - each end's head check holds `R` to the digest of the head it opens and `D` to `R` under `salt_c` (part 4 below);
-- the LMS check (`Certificate.verify`) reads only the public fields (key id, session, link, direction, window) and
-  `D`, a hiding commitment to `R`. The in-the-clear check (`LinkWindows.clear`, a debug comparison) also checks `D`
+- the LMS check (`Certificate.verify`) reads only the public fields (key id, session, link, direction, window), the
+  role its slot holds, and `D`, a hiding commitment to `R`. The in-the-clear check (`LinkWindows.clear`, a debug comparison) also checks `D`
   against the head and `salt_c` over the opening (`CertifiedRecord.verify`).
 
 ## The certifier (`grid`)
@@ -134,11 +134,17 @@ The certifier hands `salt_c` to the prover with the head, as witness only (`Cert
 D fixes R up to a SHA-512 collision (`cr/sha-512`). D hides R as SHA-512 under a secret, uniform 64-byte prefix does,
 which rests on `random-oracle`; no Lean guarantee states the hiding.
 
-**The certificate** is D and a signature over a 64-byte message that binds D to the key, the certifier session and the
-sampling block, so a certificate can't be replayed onto another window, link, direction, key or session:
+**The certificate** is D and a signature over a 64-byte message that binds D to the key, the certifier session, the
+certificate's role and the sampling block, so a certificate can't be replayed onto another window, link, direction,
+key, session or role:
 
-    message = SHA-512( [tag] ‖ I ‖ [ [session] ‖ [link] ‖ [direction] ‖ u64be window ] ‖ [D] ),
-              tag = "verity/network-certificate-message/v2", direction "egress" or "ingress", [x] = u64be len(x) ‖ x
+    message = SHA-512( [tag] ‖ I ‖ [ [session] ‖ [role] ‖ [link] ‖ [direction] ‖ u64be window ] ‖ [D] ),
+              tag = "verity/network-certificate-message/v3", direction "egress" or "ingress", [x] = u64be len(x) ‖ x
+
+`role` is what the certificate signs (`certificate.Role`, Lean `NetworkCheck.Role`): `record` here, `clock` for a
+window's salted sync, and `cells`, `transfer` or `out` for the head of rows the certifier registers (`warden_rows`,
+`transfer_rows`, `out_commit`). The signer names it and each check supplies the one its slot holds, so the certificate's
+encoding doesn't carry it: a certificate signed as one role fails the signature check as any other.
 
 This is LMS's network-certificate role digest (`verity.ml.crypto.lms.certificate_message`, its tag `lms.ROLES`'
 `network-certificate`), the message its in-proof verifier takes, and Lean's `NetworkCheck.messageInput` hashed. I is the

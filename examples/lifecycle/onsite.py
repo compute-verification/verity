@@ -112,7 +112,8 @@ def certified(I: bytes, view: Mapping[str, Any], direction: str) -> bytes:
     the count."""
     way = "in" if direction == "ingress" else "out"
     record = codec.canonical_json({"count": view["count"], "frames": [f[way] for f in view["frames"]]})
-    return lms.certificate_message(I, bytes.fromhex(view["session"]), view["link"], direction, view["declaration"], record)
+    return lms.certificate_message(I, bytes.fromhex(view["session"]), "record", view["link"], direction,
+                                   view["declaration"], record)
 
 
 class Challenger:

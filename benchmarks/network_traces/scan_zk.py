@@ -164,7 +164,7 @@ from verity.ml.crypto import lms  # noqa: E402
 from verity.core.protocols.certifier import egress as EG, ingress_scan as IS, io_tie as IT, warden as W  # noqa: E402
 from verity.core.protocols.certifier import warden_rows as WR  # noqa: E402
 from verity.core.protocols.certifier.active import DATA, id_request  # noqa: E402
-from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsSigner  # noqa: E402
+from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsSigner, Role  # noqa: E402
 from verity.core.protocols.sampled_proofs import coins as CC, service as S  # noqa: E402
 from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound, location_bits  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import audit as AU, draw as DR, partition as PA, produced  # noqa: E402
@@ -555,7 +555,7 @@ def _tamper(got: SimpleNamespace, egress: list[bytes], T: int, B: int, R: int) -
     rows = list(c.rows)
     rows[t % T] = bytes(x)
     cells = WR.Cells.commit(c.link, c.direction, c.window, rows, c.wiring, c.params, c.session)
-    cert = got.issuer.sign(c.link, c.direction, c.window, cells.head.digest())
+    cert = got.issuer.sign(Role.CELLS, c.link, c.direction, c.window, cells.head.digest())
     if cert is None:
         raise SystemExit("the test signer refused the tampered link-window")
     registration = WR.registration(cells.head, cert, c.params)

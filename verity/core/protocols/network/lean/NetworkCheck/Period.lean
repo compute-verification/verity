@@ -107,21 +107,21 @@ against that salted digest is a later change to its circuit (the certifier PROTO
 * link-window `w` (the `i`-th, `w = w₀ + i`): its registration names the link's Program and the provenance
   `{"kind": "served", "window": w}`;
   both certificates are the key's, name the link, their end and `w`, and verify under LMS over `certificate_message` in
-  the session; the clock certificate is the key's egress certificate of the link at `w` and verifies so, and the
-  digest it signs has the salted form: no sync of Σ_sync's `clock_digest` itself (the unsalted form, which shows the
+  the session as records' (`Role.record`); the clock certificate is the key's egress certificate of the link at `w` and
+  verifies so as a clock's (`Role.clock`), and the digest it signs has the salted form: no sync of Σ_sync's `clock_digest` itself (the unsalted form, which shows the
   sync), and no earlier link-window's clock digest in the period (a reused salt, under which two windows of one sync
   sign one digest); and the answer is one-stage's for that registration's digest,
   accepted with the profile of one unit drawn `subset:1`: the link-window was proved (N2's verifier of record,
   `LinkWindows.verify`, is the answer's verifier of record);
 * in the rows form, link-window `w`: its registration (the scan's, per window) names the scan's Program; its three
   certificates are the requests' record's (the link's ingress), the responses' (its egress) and the fails'
-  (`<link>-fails`, egress) at `w`, each the key's and verifying in the session, so a link-window missing any record's
+  (`<link>-fails`, egress) at `w`, each the key's and verifying in the session as a record's, so a link-window missing any record's
   certificate is refused, and the network certifier certifies no record of a link-window in which it refused a
   connection (traffic past the window's Program slots, `warden`'s "Admission"), so such a link-window is refused; its two registrations, ingress then egress, are what `warden_rows.check_registration` reads:
   the link-window's value, link, end and window, the schedule's digest (a registration under another schedule is
   refused), the schedule's rows, words, word bits, row format and layout, the link-window's domain in the session
   (`warden_rows.domain`), and a certificate that is the key's, signs the head (`CellsHead.digest`) and verifies in the
-  session (a registration not under the deployment key is refused); the scan's registration holds both, an entry of its
+  session as cells' (`Role.cells`; a registration not under the deployment key, or signed as another role, is refused); the scan's registration holds both, an entry of its
   `roots` or `registered` naming each one's root and domain, which bind the session, link, end and window (an answer
   for another window's rows is refused); its Programs' row is a compute audit's output (`progTied`): its `scan/prog`
   entry names the root and domain of an output port's entry (`<unit>/o<j>`, j ≥ 1) or a `SlotEntry_v1` template's
@@ -802,13 +802,14 @@ def clockDigest (s : ClockSync) : Option ByteArray :=
 def clearClocks (ss : NetworkCertifier.SyncSet) : List ByteArray :=
   ss.deltas.flatMap fun d => ss.rhos.attach.filterMap fun ρ => clockDigest ⟨d, ρ.1, ss.rhos_pos ρ.1 ρ.2⟩
 
-/-- A certificate of `link`'s end `d` at window `w`, the key's and verifying in the parameters' session
+/-- A certificate of `r` of `link`'s end `d` at window `w`, the key's and verifying in the parameters' session as `r`
 (`Certificate.signs`). -/
-def certifiesOn (p : Params) (link : String) (d : Direction) (w : Nat) (c : Certificate) : Bool :=
-  c.direction == d && c.link == link && c.window == w && c.signs p.lms p.key p.session
+def certifiesOn (p : Params) (r : Role) (link : String) (d : Direction) (w : Nat) (c : Certificate) : Bool :=
+  c.direction == d && c.link == link && c.window == w && c.signs p.lms p.key p.session r
 
-/-- A certificate of the link's end `d` at window `w`, the key's and verifying. -/
-def certifies (p : Params) (d : Direction) (w : Nat) (c : Certificate) : Bool := certifiesOn p p.link d w c
+/-- A certificate of `r` of the link's end `d` at window `w`, the key's and verifying as `r`. -/
+def certifies (p : Params) (r : Role) (d : Direction) (w : Nat) (c : Certificate) : Bool :=
+  certifiesOn p r p.link d w c
 
 /-- A finding against the period: a rejection, or what leaves it undecided. -/
 abbrev Found := Except (Core.Verdict × String)
@@ -843,9 +844,9 @@ def windowCheck (p : Params) (clear : List ByteArray) (earlier : Array ByteArray
       canonText (reg.record.getObjValD "window") == canonText (served w) do
     refuse s!"{what}: registration: not the link's Program at window {w}"
   unless x.certificates.size == 2 && (x.certificates.zip #[Direction.egress, .ingress]).all
-      (fun (c, d) => certifies p d w c) do
+      (fun (c, d) => certifies p .record d w c) do
     refuse s!"{what}: certificates"
-  unless certifies p .egress w clock do refuse s!"{what}: clock"
+  unless certifies p .clock .egress w clock do refuse s!"{what}: clock"
   if clear.contains clock.digest then refuse s!"{what}: clock: a sync's clock digest unsalted"
   if earlier.contains clock.digest then refuse s!"{what}: clock: an earlier link-window's digest, its salt reused"
   let (prof, _) ← answered what reg x.answer
@@ -884,7 +885,7 @@ def rowsCheck (p : Params) (s : Schedule) (sd : ByteArray) (w : Nat) (d : Direct
   unless r.domain == Flock.hexOf dom do refuse s!"{what}: not the link-window's domain"
   let .ok head := headDigest p.link d w sd s r.wiring dom r.root | refuse s!"{what}: the head doesn't encode"
   unless r.digest == head do refuse s!"{what}: the certificate doesn't sign the head"
-  unless certifiesOn p p.link d w
+  unless certifiesOn p .cells p.link d w
       { keyId := r.key, link := p.link, direction := d, window := w, digest := r.digest, signature := r.signature } do
     refuse s!"{what}: not under the deployment key in the session"
 
@@ -1017,7 +1018,7 @@ def rowsWindowCheck (p : Params) (s : Schedule) (sd : ByteArray) (audits : Array
   let .rows rs := x.shown | refuse s!"{what}: a clock certificate, not registrations: the clock form's"
   unless reg.record.getObjValD "program" == .str p.program do refuse s!"{what}: registration: not the scan's Program"
   unless x.certificates.size == 3 && (x.certificates.zip (records p.link)).all
-      (fun (c, l, d) => certifiesOn p l d w c) do
+      (fun (c, l, d) => certifiesOn p .record l d w c) do
     refuse s!"{what}: certificates: the requests', responses' and fails' records', each the key's (the network \
       certifier certifies none of a window in which it refused a connection: traffic past the Program slots)"
   unless rs.size == 2 do refuse s!"{what}: registrations: the ingress rows, then the egress rows"
@@ -1283,14 +1284,15 @@ def openingsOf (j : Json) : V Openings := do
 
 /-- Why an opening gives no sync (`CertifiedClock.refusal`), or none when it holds: its certificate isn't an egress one
 (`egress`), isn't the key's (`key`), signs another digest than its sync's clock digest salted by its 64-byte salt
-(`clock_commitment`, `opening`), or its signature doesn't verify in the session (`Certificate.signs`: `signature`). -/
+(`clock_commitment`, `opening`), or its signature doesn't verify in the session as a clock's (`Certificate.signs` at
+`Role.clock`: `signature`). -/
 def openingRefusal (s : Openings) (o : ClockOpening) : Option String :=
   let c := o.certificate
   if c.direction != .egress then some "egress"
   else if c.keyId != s.key.extract 0 16 then some "key"
   else if !(o.salt.size == saltBytes && (clockDigest o.sync).any (c.digest == certificateDigest o.salt ·)) then
     some "opening"
-  else if !c.signs s.lms s.key s.session then some "signature"
+  else if !c.signs s.lms s.key s.session .clock then some "signature"
   else none
 
 /-- The openings that hold by `first` (none), by salt: the first of each salt, and whether another of that salt isn't

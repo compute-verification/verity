@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.certifier.certificate import Certificate, Direction, LmsKey, certificate_message
+from verity.core.protocols.certifier.certificate import Certificate, Direction, LmsKey, Role, certificate_message
 from verity.core.protocols.certifier.warden import WardenParams
 from verity.core.protocols.pous import streamed_wipe as sw
 from verity.ml.crypto import lms
@@ -49,7 +49,7 @@ def at(ms: int) -> int:
 
 def _certificate(link: str, w: int, q: int, session: bytes = SESSION) -> dict:
     key, digest = _key(), hashlib.sha512(b"record %s %d" % (link.encode(), w)).digest()
-    message = certificate_message(key.I, session, link, Direction.EGRESS, w, digest)
+    message = certificate_message(key.I, session, Role.RECORD, link, Direction.EGRESS, w, digest)
     c = Certificate(key.I, link, Direction.EGRESS, w, digest, lms.sign_at(key, q, message).encode())
     return {"certificate": cs.certificate_json(c)}
 

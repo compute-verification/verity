@@ -24,8 +24,8 @@ and `verify` after the tamper. Its syncs include ρ = p/q not in lowest terms, w
 bytes. Some (`REUSE_SHARE`) take an earlier call's salt, which the issuer refuses where a clock certificate it signed
 took it, and not where only a record, or a clock it didn't sign, had it. Its tampers (`CLOCK_TAMPERS`) change the sync,
 the salt, the certificate's signature, window, direction or digest, the public key or the session, or change the
-certificate's window, direction or key identifier and sign it again: only the re-signed window verifies, a valid clock
-certificate of that other window.
+certificate's window, direction or key identifier and sign it again, or sign it again as another role (`Role`): only
+the re-signed window verifies, a valid clock certificate of that other window.
 
 The keys are the deployed scheme's N = 64, W = 1 at height 1 and `TOY_N` at W = 1, 2 and 4, small enough to sign
 interpreted (`Lms.SignDifftest` holds signing itself to `lms.sign_at` at more sets and heights). The records are grids of B-byte frames, left-packed, under random parameters and statuses, and grids
@@ -33,7 +33,8 @@ interpreted (`Lms.SignDifftest` holds signing itself to `lms.sign_at` at more se
 window past a u64, a link past 65,535 bytes, parameters bytes not 64 long, and leaves past 2^H. The tampers change the
 certificate's signature (a byte, or its length), link, direction, window or digest, the head's deadline, or the public
 key's identifier or root, or the record's salt, or check the certificate in another session; or they change the certificate's link, direction,
-window or key identifier and sign it again at the same leaf, so that only the checks that it names the head's link-window and the key reject it. The Lean audit runs `CertifierDevice/IssuerDifftestMain.lean` on both files (`runs` in
+window or key identifier and sign it again at the same leaf, so that only the checks that it names the head's link-window and the key reject it,
+or sign it again as another role, which only the signature check, made as a record's, rejects. The Lean audit runs `CertifierDevice/IssuerDifftestMain.lean` on both files (`runs` in
 `lean-audit.json`, which pins their SHA-256), and `verity/core/protocols/certifier/tests/
 test_network_certifier_issuer_lean_difftest.py` checks that this script still writes them.
 """
@@ -47,7 +48,7 @@ from fractions import Fraction
 from pathlib import Path
 
 import verity.core.protocols.certifier
-from verity.core.protocols.certifier.certificate import (SALT_BYTES, CertifiedClock, Direction, Issuer, LmsKey,
+from verity.core.protocols.certifier.certificate import (SALT_BYTES, CertifiedClock, Direction, Issuer, LmsKey, Role,
                                                                  SignerRefused, parameters_digest)
 from verity.core.protocols.certifier.grid import GridParams, Reason, Record, Status
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
@@ -60,13 +61,14 @@ KEYS = [((64, 1, 1, False), 3), ((8, 1, 2, True), 2), ((8, 2, 3, True), 2), ((8,
 RHOS = [Fraction(1), Fraction(1, 2), Fraction(3, 2), Fraction(999, 1000), Fraction(1001, 1000), Fraction(7)]
 LINKS = ["responses", "requests", "", "réponses/λ"]
 TAMPERS = ["signature", "signature-length", "link", "direction", "window", "digest", "deadline", "salt", "public-id",
-           "public-root", "session", "resign-link", "resign-direction", "resign-window", "resign-key-id"]
+           "public-root", "session", "resign-link", "resign-direction", "resign-window", "resign-key-id",
+           "resign-role"]
 MALFORMED = ["rows", "row", "packing", "frame", "window", "link", "parameters", "salt", "leaf"]
 #: (p, q) of a clock sync's ρ: some not in lowest terms, (2^64, 4) a u64 only once reduced
 RHO_PAIRS = [(1, 1), (1, 2), (3, 2), (999, 1000), (1001, 1000), (7, 1), (2, 4), (6, 3), (2 ** 64, 4), (2 ** 64 - 1, 1),
              (1, 2 ** 64 - 1)]
 CLOCK_TAMPERS = ["sync", "salt", "signature", "window", "direction", "digest", "public-id", "public-root", "session",
-                 "resign-window", "resign-direction", "resign-key-id"]
+                 "resign-window", "resign-direction", "resign-key-id", "resign-role"]
 CLOCK_MALFORMED = ["delta", "rho", "window", "leaf", "salt"]
 #: the share of an instance's calls that are clock calls
 CLOCK_SHARE = 0.35
@@ -190,6 +192,13 @@ def record_of(x: dict) -> Record:
     return Record(x["link"], x["window"], grid, Status(None if x["status"] is None else Reason(x["status"])))
 
 
+def other_role(role: Role, at: int) -> Role:
+    """The role a `resign-role` tamper signs the certificate as instead of `role`: the `at`-th of the others, in
+    `Role`'s order, cyclically."""
+    others = [x for x in Role if x is not role]
+    return others[at % len(others)]
+
+
 def tampered(c, key: LmsKey, private: lms.PrivateKey, q: int, session: bytes, tamper: list) -> bool:
     kind, at = tamper
     x, h, salt = c.certificate, c.head, c.salt
@@ -214,8 +223,10 @@ def tampered(c, key: LmsKey, private: lms.PrivateKey, q: int, session: bytes, ta
         x = dataclasses.replace(x, **{
             "link": {"link": x.link + "x"},
             "direction": {"direction": Direction.INGRESS if x.direction is Direction.EGRESS else Direction.EGRESS},
-            "window": {"window": x.window ^ 1}, "key-id": {"key_id": flip(x.key_id)}}[kind.removeprefix("resign-")])
-        x = dataclasses.replace(x, signature=lms.sign_at(private, q, x.message(session)).encode())
+            "window": {"window": x.window ^ 1}, "key-id": {"key_id": flip(x.key_id)},
+            "role": {}}[kind.removeprefix("resign-")])
+        role = other_role(Role.RECORD, at) if kind == "resign-role" else Role.RECORD
+        x = dataclasses.replace(x, signature=lms.sign_at(private, q, x.message(session, role)).encode())
     elif kind == "session":
         session = flip(session)
     elif kind == "public-id":
@@ -253,8 +264,9 @@ def clock_tampered(c: CertifiedClock, key: LmsKey, private: lms.PrivateKey, q: i
         x = dataclasses.replace(x, digest=flip(x.digest))
     elif kind.startswith("resign-"):
         x = dataclasses.replace(x, **{"window": {"window": x.window ^ 1}, "direction": {"direction": other},
-                                      "key-id": {"key_id": flip(x.key_id)}}[kind.removeprefix("resign-")])
-        x = dataclasses.replace(x, signature=lms.sign_at(private, q, x.message(session)).encode())
+                                      "key-id": {"key_id": flip(x.key_id)}, "role": {}}[kind.removeprefix("resign-")])
+        role = other_role(Role.CLOCK, at) if kind == "resign-role" else Role.CLOCK
+        x = dataclasses.replace(x, signature=lms.sign_at(private, q, x.message(session, role)).encode())
     elif kind == "session":
         session = flip(session)
     elif kind == "public-id":

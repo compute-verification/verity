@@ -1,8 +1,9 @@
 """The certifier's signed clock sync, salted as a record digest is (`certificate.CertifiedClock`,
 `Issuer.salted_clock`), read through its opening (`certificate.SignedClocks`): a window has a sync only from one
 opening that names it and holds, and each refused opening is named with why: a forged signature, an altered digest, a
-reused salt, a wrong window, another key, session or link, an ingress or a record certificate, a record's opening, and
-two syncs for one window. The issuer signs no clock under a salt an earlier signed one took."""
+reused salt, a wrong window, a certificate signed as a record's, another key, session or link, an ingress or a record
+certificate, a record's opening, and two syncs for one window. The issuer signs no clock under a salt an earlier signed
+one took."""
 
 import hashlib
 from dataclasses import replace
@@ -12,7 +13,7 @@ import pytest
 
 from verity.ml.commitments.identity import tagged_sha512
 from verity.core.protocols.certifier.certificate import CLOCK_TAG, SALT_BYTES, CertifiedClock, Direction, Issuer, \
-    SignedClocks, SignerRefused, clock_commitment, clock_digest, parameters_digest
+    Role, SignedClocks, SignerRefused, clock_commitment, clock_digest, parameters_digest
 from verity.core.protocols.certifier.grid import Certifier, GridParams
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 
@@ -118,10 +119,19 @@ def _relabelled(issuer, honest):
 def _reused(issuer, honest):
     """Window 0's salt again, under a certificate the certifier really signed for window 1's sync."""
     salt = honest[0].salt
-    return CertifiedClock(SYNCS[1], salt, issuer.sign(LINK, Direction.EGRESS, 1, clock_commitment(salt, SYNCS[1])))
+    return CertifiedClock(SYNCS[1], salt, issuer.sign(Role.CLOCK, LINK, Direction.EGRESS, 1,
+                                                      clock_commitment(salt, SYNCS[1])))
 
 
-UNVERIFIED = "its signature doesn't verify under the key in its session for the link-window it names"
+def _as_record(issuer, honest):
+    """Window 0's sync opened under a certificate the certifier really signed over its salted clock digest, as a
+    record's."""
+    salt = bytes(range(SALT_BYTES))
+    return CertifiedClock(SYNCS[0], salt, issuer.sign(Role.RECORD, LINK, Direction.EGRESS, 0,
+                                                      clock_commitment(salt, SYNCS[0])))
+
+
+UNVERIFIED = "its signature doesn't verify under the key in its session as a clock of the link-window it names"
 UNOPENED = "its sync and salt don't open the salted digest it signs"
 
 
@@ -130,13 +140,15 @@ UNOPENED = "its sync and salt don't open the salted digest it signs"
     (_altered, UNOPENED),
     (_swapped, UNOPENED),
     (_relabelled, UNVERIFIED),
+    (_as_record, UNVERIFIED),
     (_reused, f"its salt is also {LINK} window 0's, under which two windows of one sync sign one digest"),
 ])
 def test_each_refused_opening_is_named_with_why_and_gives_no_sync(signed, make, says):
     """Window 0's opening in place of its own with a forged signature, an altered digest, a sync swapped after
-    signing, or a wrong window (relabelled, so the message it signs is another window's); or beside the honest ones,
-    an opening of window 1 under window 0's salt, which the certifier really signed. Each is refused by name with why,
-    the honest opening whose salt it reuses too, and window 0 has no sync, so the link has none."""
+    signing, a wrong window (relabelled, so the message it signs is another window's), or a certificate signed as a
+    record's rather than a clock's; or beside the honest ones, an opening of window 1 under window 0's salt, which the
+    certifier really signed. Each is refused by name with why, the honest opening whose salt it reuses too, and window 0
+    has no sync, so the link has none."""
     issuer, key, honest = signed
     bad = make(issuer, honest)
     reused = make is _reused
@@ -159,7 +171,8 @@ def test_another_key_session_link_or_form_is_refused_by_name(signed, tmp_path):
     foreign = other.salted_clock(LINK, 0, SYNCS[0])
     elsewhere = issuer.salted_clock("requests", 0, SYNCS[0])
     salt = bytes(range(SALT_BYTES))
-    ingress = CertifiedClock(SYNCS[0], salt, issuer.sign(LINK, Direction.INGRESS, 0, clock_commitment(salt, SYNCS[0])))
+    ingress = CertifiedClock(SYNCS[0], salt, issuer.sign(Role.CLOCK, LINK, Direction.INGRESS, 0,
+                                                         clock_commitment(salt, SYNCS[0])))
     record = issuer.certify(_egress(), Direction.EGRESS, P, parameters_digest(P, SYNC_SET))
     as_clock = CertifiedClock(SYNCS[0], record.salt, record.certificate)
     second = issuer.salted_clock(LINK, 0, SYNCS[1])
@@ -173,7 +186,7 @@ def test_another_key_session_link_or_form_is_refused_by_name(signed, tmp_path):
     )
     assert source.syncs(LINK) == ()
     assert _source(key, honest, signers.OTHER_SESSION).refused == tuple(
-        f"{_name(c)}: its signature doesn't verify under the key in its session for the link-window it names"
+        f"{_name(c)}: its signature doesn't verify under the key in its session as a clock of the link-window it names"
         for c in honest)
     assert _source(key, [elsewhere, *honest]).syncs(LINK) == tuple(SYNCS)
     assert _source(key, [elsewhere]).syncs("requests") == (SYNCS[0],)

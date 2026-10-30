@@ -29,7 +29,8 @@ from verity_difftest import protocol as P
 from verity.ml.crypto import lms
 from verity.core.protocols.certifier import audit, lean_audit, service
 from verity.core.protocols.certifier.certificate import (CertifiedClock, CertifiedRecord, Direction, Issuer, LmsKey,
-                                                        LmsSigner, SignedClocks, clock_commitment, parameters_digest)
+                                                        LmsSigner, Role, SignedClocks, clock_commitment,
+                                                        parameters_digest)
 from verity.core.protocols.certifier.commitment import commit
 from verity.core.protocols.certifier.grid import Certifier, GridParams, occupancy
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, run_shaper
@@ -80,7 +81,9 @@ def test_the_adapter_gives_the_audits_verdicts_on_generated_units(lean):
     prefix of its own and, when no record is certified, with no key and no ingress parameters (`active_replay.py`'s
     calls); and a `ValueError` where the Lean check refuses the evidence (a frame of other than B bytes). With `grid`
     False, the same on units whose egress records are all certified, with no egress `mismatch` (an ingress one stays),
-    and a `ValueError` from both where a raw or committed record names an egress link."""
+    and a `ValueError` from both where a raw or committed record names an egress link. A second draw, of certified units
+    with a record missing, refused or without its deadline bit, gives the `grid`-False `no-verdict` whatever the first
+    draw's mix of changes."""
     kinds, no_grid = {}, {}
 
     @settings(derandomize=True, database=None, deadline=None, max_examples=600)
@@ -113,6 +116,13 @@ def test_the_adapter_gives_the_audits_verdicts_on_generated_units(lean):
             no_grid[v.violation or "accept"] = no_grid.get(v.violation or "accept", 0) + 1
 
     same()
+
+    @settings(derandomize=True, database=None, deadline=None, max_examples=60)
+    @given(R.record_cases(("certified",), ("missing", "refused", "deadline")), st.data())
+    def absent(case, data):
+        same.hypothesis.inner_test(case, data)
+
+    absent()
     print(kinds, no_grid)
     assert {"accept", "no-verdict", "duplicate", "signature", "advice", "mismatch"} <= set(kinds), kinds
     assert any(k.startswith("status:") for k in kinds), kinds
@@ -382,19 +392,22 @@ def _served():
     """A toy key's certificates as a reveal endpoint serves window 1 of link "n2" in `SESSION`, each named by the
     refusal it gets as the first certificate of its kind: kept (``egress``, ``ingress``, the clock certificate
     ``clock``), another key's, another link's and another window's, an ingress clock certificate, a forged signature,
-    one that doesn't decode, an altered digest, and a clock certificate signing ``seen``'s digest."""
+    one that doesn't decode, an altered digest, and a clock certificate signing ``seen``'s digest. The clock
+    certificates are signed as clocks and the rest as records."""
     key, other = V2._key(4), V2._key(4, seed=1)
     i, o = Issuer(V2._Signer(key), SESSION), Issuer(V2._Signer(other), SESSION)
-    egress = i.sign("n2", Direction.EGRESS, 1, _digest(0))
-    certs = {"egress": egress, "ingress": i.sign("n2", Direction.INGRESS, 1, _digest(1)),
-             "key": o.sign("n2", Direction.EGRESS, 1, _digest(2)),
-             "link": i.sign("m", Direction.EGRESS, 1, _digest(3)), "window": i.sign("n2", Direction.EGRESS, 2, _digest(3)),
+    record, clock = Role.RECORD, Role.CLOCK
+    egress = i.sign(record, "n2", Direction.EGRESS, 1, _digest(0))
+    certs = {"egress": egress, "ingress": i.sign(record, "n2", Direction.INGRESS, 1, _digest(1)),
+             "key": o.sign(record, "n2", Direction.EGRESS, 1, _digest(2)),
+             "link": i.sign(record, "m", Direction.EGRESS, 1, _digest(3)),
+             "window": i.sign(record, "n2", Direction.EGRESS, 2, _digest(3)),
              "forged": dataclasses.replace(egress, signature=bytes([egress.signature[0] ^ 1]) + egress.signature[1:]),
              "undecoded": dataclasses.replace(egress, signature=egress.signature[:-1]),
              "altered": dataclasses.replace(egress, digest=_digest(9)),
-             "clock": i.sign("n2", Direction.EGRESS, 1, _digest(5)),
-             "ingress clock": i.sign("n2", Direction.INGRESS, 1, _digest(6)),
-             "seen": i.sign("n2", Direction.EGRESS, 1, _digest(7))}
+             "clock": i.sign(clock, "n2", Direction.EGRESS, 1, _digest(5)),
+             "ingress clock": i.sign(clock, "n2", Direction.INGRESS, 1, _digest(6)),
+             "seen": i.sign(clock, "n2", Direction.EGRESS, 1, _digest(7))}
     return LmsKey(key.params, lms.public_key(key)), certs
 
 
@@ -409,18 +422,19 @@ def _refusals(lean, certificates, clocks, seen=(), session=SESSION):
 def test_the_clients_certificate_refusals_are_the_references(lean):
     """`lean_audit.certificate_refusals` (`network-records verdicts`' ``certificates``, `NetworkCheck.LinkWindow`) gives
     `audit.certificate_refusals`'s refusal of each certificate and clock certificate of a served window: another key's,
-    another link's or window's, a forged signature, one that doesn't decode and an altered digest, a second of a
-    direction, an ingress clock certificate and one signing a digest that `seen` holds, and in another session every
-    signature; the honest ones are kept."""
+    another link's or window's, a forged signature, one that doesn't decode and an altered digest, a clock certificate
+    in a record's place and a record certificate in a clock's (each signed as its own role), a second of a direction,
+    an ingress clock certificate and one signing a digest that `seen` holds, and in another session every signature;
+    the honest ones are kept."""
     _, c = _served()
     certs = [c[k] for k in ("key", "link", "window", "forged", "undecoded", "altered", "egress", "clock", "ingress")]
     clocks = [c[k] for k in ("ingress clock", "seen", "clock", "egress")]
     assert _refusals(lean, certs, clocks, [_digest(7)]) == (
-        ["key", "link-window", "link-window", "signature", "signature", "signature", None, "second", None],
-        ["clock", "reused", None, "second"])
+        ["key", "link-window", "link-window", "signature", "signature", "signature", None, "signature", None],
+        ["clock", "reused", None, "signature"])
     assert _refusals(lean, certs, clocks) == (
-        ["key", "link-window", "link-window", "signature", "signature", "signature", None, "second", None],
-        ["clock", None, "second", "second"])
+        ["key", "link-window", "link-window", "signature", "signature", "signature", None, "signature", None],
+        ["clock", None, "second", "signature"])
     assert _refusals(lean, certs, clocks, session=bytes(lms.SESSION_BYTES)) == (
         ["key", "link-window", "link-window"] + ["signature"] * 6, ["clock"] + ["signature"] * 3)
     assert _refusals(lean, [], []) == ([], [])
@@ -491,7 +505,8 @@ def _openings():
     """A toy key's salted clock certificates with their openings in `SESSION` (`Issuer.salted_clock`, each salt its
     own): ``honest``, windows 0 … 3 of "n2" under `CLOCK_SYNCS`, and window 0's in place of its own, named by what is
     wrong with it: an ingress certificate's, another key's, an altered digest, a sync swapped after signing or past a u64, a
-    forged signature, a certificate relabelled to another window; and beside the honest ones, window 1 signed under
+    forged signature, a certificate relabelled to another window, one signed as a record's; and beside the honest
+    ones, window 1 signed under
     window 0's salt (``reused``), a second sync for window 1, window 0's sync again under a salt of its own, and another
     link's."""
     key, other = V2._key(4), V2._key(4, seed=1)
@@ -500,13 +515,16 @@ def _openings():
     honest = tuple(i.salted_clock("n2", w, s) for w, s in enumerate(CLOCK_SYNCS))
     c = honest[0]
     replace = dataclasses.replace
-    bad = {"egress": CertifiedClock(c.sync, c.salt, i.sign("n2", Direction.INGRESS, 0, c.certificate.digest)),
+    bad = {"egress": CertifiedClock(c.sync, c.salt, i.sign(Role.CLOCK, "n2", Direction.INGRESS, 0,
+                                                           c.certificate.digest)),
            "key": o.salted_clock("n2", 0, CLOCK_SYNCS[0]),
            "altered": replace(c, certificate=replace(c.certificate, digest=bytes(64))),
            "swapped": replace(c, sync=CLOCK_SYNCS[1]), "wide": replace(c, sync=ClockSync(1 << 64, 1)),
            "forged": replace(c, certificate=replace(c.certificate, signature=bytes(len(c.certificate.signature)))),
-           "relabelled": replace(c, certificate=replace(c.certificate, window=9))}
-    beside = {"reused": CertifiedClock(CLOCK_SYNCS[1], c.salt, i.sign("n2", Direction.EGRESS, 1,
+           "relabelled": replace(c, certificate=replace(c.certificate, window=9)),
+           "record": CertifiedClock(c.sync, c.salt, i.sign(Role.RECORD, "n2", Direction.EGRESS, 0,
+                                                           c.certificate.digest))}
+    beside = {"reused": CertifiedClock(CLOCK_SYNCS[1], c.salt, i.sign(Role.CLOCK, "n2", Direction.EGRESS, 1,
                                                                       clock_commitment(c.salt, CLOCK_SYNCS[1]))),
               "second": i.salted_clock("n2", 1, CLOCK_SYNCS[2]), "again": i.salted_clock("n2", 0, CLOCK_SYNCS[0]),
               "link": i.salted_clock("m", 0, CLOCK_SYNCS[0])}
@@ -528,7 +546,8 @@ def test_the_signed_syncs_are_the_references(lean):
     """`lean_audit.signed_clocks` (`network-records verdicts`' ``clocks``, `NetworkCheck.Period.signedSyncs`) gives
     `certificate.SignedClocks`'s syncs, window 0's on up to the first without exactly one signed sync, and refuses each
     opening it does: not an egress certificate's, another key's, a sync and salt that don't open the signed digest,
-    a signature that doesn't verify (forged, relabelled, or another session's), and both openings sharing a salt. The
+    a signature that doesn't verify as a clock's (forged, relabelled, signed as a record's, or another session's), and
+    both openings sharing a salt. The
     same opening twice is one, and so is one sync signed twice for a window; two syncs for a window give it none."""
     _, honest, bad, beside = _openings()
     h = list(honest)
@@ -540,7 +559,7 @@ def test_the_signed_syncs_are_the_references(lean):
     assert _signed(lean, h + [beside["second"]]) == (CLOCK_SYNCS[:1], [None] * 5)
     assert _signed(lean, h + [beside["reused"]]) == ((), ["salt", None, None, None, "salt"])
     want = {"egress": "egress", "key": "key", "altered": "opening", "swapped": "opening", "wide": "opening",
-            "forged": "signature", "relabelled": "signature"}
+            "forged": "signature", "relabelled": "signature", "record": "signature"}
     for name, x in bad.items():
         assert _signed(lean, [x, *h[1:]]) == ((), [want[name], None, None, None]), name
     assert _signed(lean, h, session=bytes(lms.SESSION_BYTES)) == ((), ["signature"] * 4)

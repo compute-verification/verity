@@ -56,7 +56,7 @@ from collections import defaultdict
 from collections.abc import Collection, Sequence
 from dataclasses import dataclass, field
 
-from verity.core.protocols.certifier.certificate import (Certificate, CertifiedRecord, Direction, PublicKey,
+from verity.core.protocols.certifier.certificate import (Certificate, CertifiedRecord, Direction, PublicKey, Role,
                                                                           parameters_digest, record_head)
 from verity.core.protocols.certifier.commitment import CommittedRecord, record_digest
 from verity.core.protocols.certifier.grid import COMPLETE, GridParams, Record
@@ -205,15 +205,17 @@ def certificate_refusals(key: PublicKey, session: bytes, link: str, window: int,
     """Each certificate's refusal in one window's answer, then each clock certificate's, None where the client keeps
     it, each read against those kept before it: another key's (``key``), another link-window's than `link`'s window
     `window` (``link-window``), a clock certificate that isn't egress (``clock``), a signature that doesn't verify under
-    `key` in certifier session `session` (``signature``), a second of its direction (``second``), or a clock certificate
-    signing a digest that a kept one signs, earlier in the window or among `seen`'s (``reused``)."""
+    `key` in certifier session `session` as its slot's role, a record's or a clock's (``signature``), a second of its
+    direction (``second``), or a clock certificate signing a digest that a kept one signs, earlier in the window or among
+    `seen`'s (``reused``)."""
 
     def refusals(xs: Sequence[Certificate], clock: bool) -> list[str | None]:
         kept, signed, out = set(), set(seen), []
         for c in xs:
             why = ("key" if c.key_id != key.key_id else "link-window" if (c.link, c.window) != (link, window)
                    else "clock" if clock and c.direction is not Direction.EGRESS
-                   else "signature" if not c.verify(key, session) else "second" if c.direction in kept
+                   else "signature" if not c.verify(key, session, Role.CLOCK if clock else Role.RECORD)
+                   else "second" if c.direction in kept
                    else "reused" if clock and c.digest in signed else None)
             out.append(why)
             if why is None:

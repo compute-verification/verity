@@ -9,7 +9,8 @@ import CoreProtocol.Cli
 The auditor's check of one spatial unit's certified link-windows (record v2, `certificate.py`), as `audit.py`'s `Audit`
 runs it: `check_link` on every egress link in order, then `check_ingress_link` on every ingress link, each against the
 network certifier's public key (`LmsKey`) in the certifier session the parameters name. The id is the check's; the message
-a certificate signs has its own domain-separation tag, `verity/network-certificate-message/v2` (`messageTag`).
+a certificate signs has its own domain-separation tag, `verity/network-certificate-message/v3` (`messageTag`), and
+names the certificate's role, here a record's (`Role.record`).
 
 **Params**, canonical JSON:
 
@@ -105,11 +106,12 @@ structure Certificate where
   signature : ByteArray
 
 /-- `Certificate.verify`, every certificate check's LMS check: under the LMS key `key` in certifier session `session`,
-the certificate is the key's (its I) and its LMS signature verifies over `certificate_message` of its fields; a message
-that can't be formed or a signature that doesn't decode is false. -/
-def Certificate.signs (lms : Lms.Params) (key session : ByteArray) (c : Certificate) : Bool :=
+the certificate is the key's (its I) and its LMS signature verifies over `certificate_message` of its fields as a
+certificate of `r`, the role its slot holds, so one signed as another role is false; a message that can't be formed or
+a signature that doesn't decode is false. -/
+def Certificate.signs (lms : Lms.Params) (key session : ByteArray) (r : Role) (c : Certificate) : Bool :=
   c.keyId == key.extract 0 16 &&
-    match certificateMessage c.keyId session c.link c.direction c.window c.digest,
+    match certificateMessage c.keyId session r c.link c.direction c.window c.digest,
         Lms.Signature.decode lms c.signature with
     | .ok m, .ok sig => (Lms.verify lms key m sig).toOption == some true
     | _, _ => false
@@ -312,7 +314,7 @@ def manifestSet (ss : NetworkCertifier.SyncSet) : NetworkCheck.SyncSet :=
 
 /-- `CertifiedRecord.verify` under `LmsKey` in the parameters' session: the certificate names the head's link-window,
 signs the head's digest salted by the record's salt (`certificateDigest`), and is the key's and verifies in that session
-(`Certificate.signs`). -/
+as a record's (`Certificate.signs`, `Role.record`). -/
 def verifies (p : Params) (r : Certified) : Bool :=
   let c := r.certificate
   let h := r.head
@@ -320,7 +322,7 @@ def verifies (p : Params) (r : Certified) : Bool :=
     (match h.digest with
      | .ok d => c.digest == certificateDigest r.salt d
      | .error _ => false) &&
-    c.signs p.lms p.key p.session
+    c.signs p.lms p.key p.session .record
 
 /-- `_status_violation`: the one record of the link-window, or its violation. -/
 def screen (p : Params) (found : Array Certified) : Except String Certified :=

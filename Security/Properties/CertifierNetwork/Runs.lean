@@ -97,8 +97,8 @@ def egressDigest (p : NetworkCheck.Check.Params) : ByteArray :=
 input in certifier session `session`, and the frame tree of each record it published, under its grid. -/
 def deviceStrings (c : Config) (session : ByteArray) (out : DeviceOutput) : List ByteArray :=
   out.certificates.flatMap (fun cr => headStrings cr.head ++ saltedStrings cr.salt cr.head ++
-    (messageInput cr.certificate.keyId session cr.certificate.link cr.certificate.direction cr.certificate.window
-      cr.certificate.digest).toOption.toList) ++
+    (messageInput cr.certificate.keyId session .record cr.certificate.link cr.certificate.direction
+      cr.certificate.window cr.certificate.digest).toOption.toList) ++
   out.records.flatMap fun r => treeStrings (gridOf c r) r.grid
 
 /-- The strings the run hashes: the check's (`checkStrings`) and the device's (`deviceStrings`). -/

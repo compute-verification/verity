@@ -98,7 +98,7 @@ from verity.ml.commitments.merkle import _FRAME, _LEAF, _NODE, CommitmentDomain,
 from verity.ml.commitments.rowleaf import sha512_row_seg_digest, sha512_row_v2_prefix  # noqa: E402
 from verity.ml.crypto import chacha20  # noqa: E402
 from verity.core.protocols.certifier import transfer_rows as TR  # noqa: E402
-from verity.core.protocols.certifier.certificate import Direction, Issuer  # noqa: E402
+from verity.core.protocols.certifier.certificate import Direction, Issuer, Role  # noqa: E402
 from verity.core.protocols.pous.schemes import p2 as P2  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402
 
@@ -690,7 +690,7 @@ def sign_heads(issuer: Issuer, heads_: Sequence[TR.TransferHead]) -> list[dict[s
     """Each head signed by `issuer` in its session: its registration (`transfer_rows.registration`)."""
     out = []
     for head in heads_:
-        cert = issuer.sign(head.link, head.direction, head.window, head.digest())
+        cert = issuer.sign(Role.TRANSFER, head.link, head.direction, head.window, head.digest())
         if cert is None:
             raise Refused(f"{head.value}: the network certifier's signer refused: {issuer.refused}")
         out.append(TR.registration(head, cert))

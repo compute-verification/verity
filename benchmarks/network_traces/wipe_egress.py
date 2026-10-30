@@ -37,7 +37,7 @@ from fractions import Fraction
 from pathlib import Path
 
 import certifier_serve as cs
-from verity.core.protocols.certifier.certificate import Direction
+from verity.core.protocols.certifier.certificate import Direction, Role
 from verity.core.protocols.certifier.warden import WardenParams
 from verity.core.protocols.pous import streamed_wipe as sw
 
@@ -122,7 +122,7 @@ def record(files: dict[str, bytes], t0: int, t1: int, pad: int = PAD_NS) -> dict
             c = certificates.get((link, Direction.EGRESS, w))
             if c is None:
                 why.append(f"{link} egress window {w} has no certificate")
-            elif not c.verify(key, session):
+            elif not c.verify(key, session, Role.RECORD):
                 why.append(f"{link} egress window {w}'s certificate doesn't verify under the deployment's key")
             else:
                 verified += 1

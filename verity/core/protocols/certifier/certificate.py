@@ -38,22 +38,27 @@ certificate signs. So the signature check reads only the certificate's public fi
 (`Certificate.verify`), never a hash of witness. Until N2's unit is proved, its verifier of record checks that
 link on the host too, over the opening (`CertifiedRecord.verify`).
 
-**The certificate** signs a 64-byte message that binds the signed digest to the key, the certifier session and the
-link-window, so a certificate can't be replayed onto another window, link, direction, key or session. It is LMS's
-network-certificate role digest (`verity.ml.crypto.lms.certificate_message`), each field but I and the window prefixed
-with its length as a u64be:
+**The certificate** signs a 64-byte message that binds the signed digest to the key, the certifier session, the
+certificate's role and the link-window, so a certificate can't be replayed onto another window, link, direction, key,
+session or role. It is LMS's network-certificate role digest (`verity.ml.crypto.lms.certificate_message`), each field
+but I and the window prefixed with its length as a u64be:
 
-    message = SHA-512( [tag] ‖ I ‖ [ [session] ‖ [link] ‖ [direction] ‖ u64be window ] ‖ [signed digest] ),
-              tag = "verity/network-certificate-message/v2", direction "egress" or "ingress", [x] = u64be len(x) ‖ x
+    message = SHA-512( [tag] ‖ I ‖ [ [session] ‖ [role] ‖ [link] ‖ [direction] ‖ u64be window ]
+                       ‖ [signed digest] ),
+              tag = "verity/network-certificate-message/v3", direction "egress" or "ingress", [x] = u64be len(x) ‖ x
 
 `session` is the certifier session's id, 32 bytes (`lms.SESSION_BYTES`) that the challenger samples for the session and
 issues to the certifier; the audit takes it from its parameters, as it takes the key, so the record head and the
-certificate's encoding don't carry it. The tag is the message's own, distinct from the ids of the checks that read it
+certificate's encoding don't carry it. `role` is what the certificate signs (`Role`): `record` (a record's salted
+digest), `clock` (a window's salted sync, below), or `cells`, `transfer` or `out` (the head of rows the certifier
+registers: `warden_rows`, `transfer_rows`, `out_commit`). The signer names it and each check supplies the one its slot
+holds, so the certificate's encoding doesn't carry it either: a certificate the certifier signed as one role fails the
+signature check as any other. The tag is the message's own, distinct from the ids of the checks that read it
 (`verity/network-certificate/v4`, `verity/network-records/v3`).
 
 **The clock certificate** (`CertifiedClock`, `Issuer.salted_clock`): beside each egress record the certifier signs the
 sync its shaper ran the window under (`schedule.ClockSync`, δ and ρ = p/q in lowest terms), hidden as a record digest
-is, under the same message, so it names the same key, session and link-window:
+is, under the message of the same key, session and link-window as the record's, its role `clock`:
 
     clock digest  = tagged_sha512("verity-network-certifier/clock/v1", u64be δ ‖ u64be p ‖ u64be q)   (`clock_digest`)
     signed digest = SHA-512( "verity/net-cert/v1" ‖ salt_c ‖ clock digest )                         (`clock_commitment`)
@@ -63,9 +68,10 @@ the issuer has: under one salt two windows of one sync would sign one digest, wh
 What the certifier signs is witness: the sync and its salt never reach the auditor in the clear, and only the
 certificate, a signature over a hiding commitment, is public. A verifier reads each window's sync only through its
 opening against the salted digest its certificate signs (`CertifiedClock.refusal`, `SignedClocks`). A record
-certificate signs a record digest salted and a clock certificate a clock digest,
-each under its own tag, so one opens as the other only on a SHA-512 collision. The Lean device's issuer
-(`CertifierDevice.Issuer.clock`) signs the same, and its difftest holds it to `Issuer.salted_clock`.
+certificate signs a record digest salted and a clock certificate a clock digest, each under its own tag, so one opens
+as the other only on a SHA-512 collision; and each is signed as its own role, so one verifies as the other only on an
+LMS forgery or a SHA-512 collision of two messages' inputs. The Lean device's issuer (`CertifierDevice.Issuer.clock`)
+signs the same, and its difftest holds it to `Issuer.salted_clock`.
 
 The scheme is LMS over SHA-512 (`lms.DEPLOYED`: n = 64, w = 1, h = 20, the whole SHA-512 output, not truncated), whose
 unforgeability is ``euf-cma/lms-sha512-n64``. The certifier's signing step (`Issuer`) is handed it as a `Signer`
@@ -121,6 +127,18 @@ class Direction(enum.Enum):
     @property
     def code(self) -> int:
         return 0 if self is Direction.EGRESS else 1
+
+
+class Role(enum.Enum):
+    """What a certificate signs, which its message names (`lms.CERTIFICATE_ROLES`): a record's salted digest, a window's
+    salted clock, or the head of the cell rows (`warden_rows`), transfer rows (`transfer_rows`) or out rows
+    (`out_commit`) the certifier registers."""
+
+    RECORD = "record"
+    CLOCK = "clock"
+    CELLS = "cells"
+    TRANSFER = "transfer"
+    OUT = "out"
 
 
 def _block(*parts: bytes) -> bytes:
@@ -289,11 +307,11 @@ def certificate_digest(salt: bytes, record: bytes) -> bytes:
     return hashlib.sha512(CERTIFICATE_TAG + salt + record).digest()
 
 
-def certificate_message(key_id: bytes, session: bytes, link: str, direction: Direction, window: int,
+def certificate_message(key_id: bytes, session: bytes, role: Role, link: str, direction: Direction, window: int,
                         digest: bytes) -> bytes:
     if len(digest) != DIGEST_BYTES:
         raise ValueError("a signed digest is 64 bytes")
-    return lms.certificate_message(key_id, session, link, direction.value, window, digest)
+    return lms.certificate_message(key_id, session, role.value, link, direction.value, window, digest)
 
 
 def clock_digest(sync: ClockSync) -> bytes:
@@ -417,18 +435,19 @@ class Certificate:
     digest: bytes
     signature: bytes
 
-    def message(self, session: bytes) -> bytes:
-        """The message the certificate signs in certifier session ``session``."""
-        return certificate_message(self.key_id, session, self.link, self.direction, self.window, self.digest)
+    def message(self, session: bytes, role: Role) -> bytes:
+        """The message the certificate signs in certifier session ``session`` as a certificate of ``role``."""
+        return certificate_message(self.key_id, session, role, self.link, self.direction, self.window, self.digest)
 
-    def verify(self, key: PublicKey, session: bytes) -> bool:
+    def verify(self, key: PublicKey, session: bytes, role: Role) -> bool:
         """The host's signature check: the certificate is `key`'s and its signature verifies over its message in
-        certifier session `session`. It reads the certificate's public fields and its signed digest, nothing of the
-        head. The Lean's is `NetworkCheck.Check.Certificate.signs`, which every Lean certificate check reads."""
+        certifier session `session` as a certificate of `role`, so one the certifier signed as another role is refused.
+        It reads the certificate's public fields and its signed digest, nothing of the head. The Lean's is
+        `NetworkCheck.Check.Certificate.signs`, which every Lean certificate check reads."""
         if self.key_id != key.key_id:
             return False
         try:
-            message = self.message(session)
+            message = self.message(session, role)
         except ValueError:
             return False
         return key.verify(message, self.signature)
@@ -465,7 +484,7 @@ class CertifiedRecord:
 
     def verify(self, key: PublicKey, session: bytes) -> bool:
         """The certificate names the head's link-window, signs the head's digest under the record's salt, and verifies
-        under `key` in certifier session `session` (`Certificate.verify`)."""
+        under `key` in certifier session `session` as a record's (`Certificate.verify`)."""
         c, h = self.certificate, self.head
         if (c.link, c.direction, c.window) != (h.link, h.direction, h.window):
             return False
@@ -473,7 +492,7 @@ class CertifiedRecord:
             record = h.digest()
         except ValueError:
             return False
-        return c.digest == certificate_digest(self.salt, record) and c.verify(key, session)
+        return c.digest == certificate_digest(self.salt, record) and c.verify(key, session, Role.RECORD)
 
 
 @dataclass(frozen=True, slots=True)
@@ -502,8 +521,8 @@ class CertifiedClock:
         """Why the opening fails under `key` in certifier session `session`, by the Lean's code
         (`NetworkCheck.Period.openingRefusal`), or None when it holds: ``egress`` unless the certificate is an egress
         one, ``key`` unless it is `key`'s, ``opening`` unless the sync and the salt open the digest it signs, and
-        ``signature`` unless its signature verifies over its message in the session (`Certificate.verify`), which
-        binds the link and the window."""
+        ``signature`` unless its signature verifies over its message in the session as a clock's (`Certificate.verify`),
+        which binds the link and the window."""
         c = self.certificate
         if type(c) is not Certificate or c.direction is not Direction.EGRESS:
             return "egress"
@@ -515,7 +534,7 @@ class CertifiedClock:
             opened = None
         if c.digest != opened:
             return "opening"
-        if not c.verify(key, session):
+        if not c.verify(key, session, Role.CLOCK):
             return "signature"
         return None
 
@@ -535,7 +554,8 @@ def _why(code: str, key: PublicKey) -> str:
     return {"egress": "it isn't an egress certificate, and a clock is an egress window's",
             "key": f"another key's, not {key.key_id.hex()[:16]}…",
             "opening": "its sync and salt don't open the salted digest it signs",
-            "signature": "its signature doesn't verify under the key in its session for the link-window it names"}[code]
+            "signature": "its signature doesn't verify under the key in its session as a clock of the link-window it "
+                         "names"}[code]
 
 
 @dataclass(frozen=True)
@@ -630,10 +650,11 @@ class Issuer:
         digest = certificate_digest(salt, head.digest())
         if not record.status.complete:
             # formed as `sign` forms it, so what `sign` raises on (a session id not 32 bytes) raises here too
-            certificate_message(self.signer.key_id, self.session, record.link, direction, record.window, digest)
+            certificate_message(self.signer.key_id, self.session, Role.RECORD, record.link, direction, record.window,
+                                digest)
             self.refused.append((record.link, direction, record.window))
             return None
-        certificate = self.sign(record.link, direction, record.window, digest)
+        certificate = self.sign(Role.RECORD, record.link, direction, record.window, digest)
         return None if certificate is None else CertifiedRecord(head, salt, certificate)
 
     def salted_clock(self, link: str, window: int, sync: ClockSync) -> CertifiedClock | None:
@@ -648,18 +669,19 @@ class Issuer:
         if salt in self.clock_salts:
             raise ValueError("the certifier's coins gave an earlier clock certificate's salt again, under which two "
                              "windows of one sync would sign one digest, so it signs no clock under it")
-        certificate = self.sign(link, Direction.EGRESS, window, clock_commitment(salt, sync))
+        certificate = self.sign(Role.CLOCK, link, Direction.EGRESS, window, clock_commitment(salt, sync))
         if certificate is None:
             return None
         self.clock_salts.add(salt)
         return CertifiedClock(sync, salt, certificate)
 
-    def sign(self, link: str, direction: Direction, window: int, digest: bytes) -> Certificate | None:
-        """A certificate of the 64-byte `digest` for the link-window in this session, or None when the signer refuses
-        (the link-window is then listed in `refused`). `certify` signs a record's salted digest with it,
-        `salted_clock` a window's salted sync, and the warden's cell rows their head's digest (`warden_rows`)."""
+    def sign(self, role: Role, link: str, direction: Direction, window: int, digest: bytes) -> Certificate | None:
+        """A certificate of `role` over the 64-byte `digest` for the link-window in this session, or None when the
+        signer refuses (the link-window is then listed in `refused`). `certify` signs a record's salted digest with it,
+        `salted_clock` a window's salted sync, and the cell, transfer and out rows their head's digest (`warden_rows`,
+        `transfer_rows`, `out_commit`), each as its own role."""
         key_id = self.signer.key_id
-        message = certificate_message(key_id, self.session, link, direction, window, digest)
+        message = certificate_message(key_id, self.session, role, link, direction, window, digest)
         try:
             if not self.started:
                 self.signer.start(self.session)

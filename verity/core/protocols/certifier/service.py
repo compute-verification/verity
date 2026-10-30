@@ -211,7 +211,7 @@ from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf, s
 from verity.core.protocols.certifier import audit as host_audit, head_check as HC, lean_audit as LA, served as SV
 from verity.core.protocols.certifier.lean_audit import Audit
 from verity.core.protocols.certifier.certificate import Certificate, CertifiedRecord, Direction, LmsKey, PublicKey, \
-    parameters_digest
+    Role, parameters_digest
 from verity.core.protocols.certifier.grid import GridParams
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet
 from verity.core.protocols.sampled_proofs import service as S
@@ -923,12 +923,12 @@ class LinkWindows:
 
     def certified(self, window: int, certificates: Sequence[Certificate]) -> bool:
         """The certificates' check, on the host from their public fields alone: two certificates, each the certifier's
-        and verifying in its session over its fields and its signed digest (`Certificate.verify`), and each naming this
-        link, its end (egress first) and the window. Each signed digest is the one its end's head check reads
-        (`public_arguments`), which a proof holds to the head it opens."""
+        and verifying in its session as a record's over its fields and its signed digest (`Certificate.verify`), and
+        each naming this link, its end (egress first) and the window. Each signed digest is the one its end's head check
+        reads (`public_arguments`), which a proof holds to the head it opens."""
         return len(certificates) == 2 and all(
             isinstance(c, Certificate) and (c.link, c.direction.code, c.window) == (self.link, d, window)
-            and c.verify(self.key, self.certifier_session) for d, c in enumerate(certificates))
+            and c.verify(self.key, self.certifier_session, Role.RECORD) for d, c in enumerate(certificates))
 
     def _profiled(self) -> None:
         if self.occupancy[0] is None and self.served is None and self.warden is None:
