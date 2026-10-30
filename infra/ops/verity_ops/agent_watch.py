@@ -43,8 +43,12 @@ background wait any call, finishing whose start the watch didn't see (it lay bef
   build or a wait may be legitimate, unless it is a holder's held unread);
 - **crashed** when the agent's latest run ended in ERROR: the watch starts a new run, at most once every `RESTART_S` and
   `MAX_RESTARTS` times in a row (vllm's runs errored within a minute, run after run, on 18 Oct), then records it as
-  **erroring**, for a person. Only a latest run that FINISHED ends the row: a restarted run reads RUNNING for a while before
-  it errors again.
+  **erroring**, for a person. A latest run that FINISHED ends the row, and so does a coordinator back from ERROR for
+  `STICK_S` (a restarted run reads RUNNING for a while before it errors again, so seeing it running is not enough). When
+  `OUTAGE_MIN` or more coordinators are down at once, it is the platform's failure: each is restarted every `OUTAGE_RETRY_S`,
+  not counted and never relaunched, until it comes back; and once `RING_MIN` have been down `RING_DOWN_S`, an **outage**
+  record (the relay posts it to @top and Daniel) is written, again every `RING_EVERY_S` while it lasts. A sweep the API
+  refuses with 429 waits its Retry-After (`rate_wait`) rather than asking again every minute.
 
 A run among an agent's newest left in CREATING for 10 min by the API's own `updatedAt` with no newer run started (only ones
 cancelled on arrival) and no run followed (a run queued behind a followed one waits its turn, and that one is judged), or a followed background wait with nothing at all streamed for 2 h while its agent's `updatedAt` moves, is recorded once as **stuck**: on 18 Oct proofs' and circuits' runs sat in CREATING behind a
@@ -200,6 +204,13 @@ AWAIT_KEEP_S = 6 * 3600     # a run end nobody acted on this long ago is forgott
 CONTINUE_RETRY_S = 30 * 60  # how long a refused continue run is tried again before it is left for a person
 REFUSED_S = 5 * 60          # a run whose cancel got 409 still read as going this long after is left for a person
 MAX_RESTARTS = 3            # ERROR runs in a row the watch restarts before leaving the agent for a person
+STICK_S = 10 * 60           # a coordinator back from ERROR (its latest run not ERROR) this long: its restart count clears
+OUTAGE_MIN = 3              # coordinators down (latest run ERROR) at once: a platform outage, not one agent's fault, so
+OUTAGE_RETRY_S = 15 * 60    # ... each is restarted this often, uncapped and uncounted, and none is relaunched
+RING_DOWN_S = 30 * 60       # coordinators down this long, RING_MIN of them or more: an `outage` record, for @top and Daniel,
+RING_MIN = 5
+RING_EVERY_S = 3600         # ... again this often while it lasts
+RATE_WAIT_S = (120, 900)    # a sweep refused with 429 waits Retry-After, else from the first, doubling, to the second
 UNREADABLE_S = 3600         # a latest run the API won't read this long is recorded again, for a person
 IDLE_RECENT_S = 6 * 3600    # an IDLE agent is read only if it changed this recently (an ERROR leaves an agent IDLE)
 RUNS_PAGE = 50              # an ACTIVE agent's runs are read a page at a time, back to the newest that started
@@ -260,7 +271,8 @@ RUN_STATUSES = ("CREATING", "RUNNING", "WAITING_FOR_BACKGROUND_WORK", "FINISHED"
                 "unknown")
 WATCH_STATES = ("ok", "followed", "held", "held_again", "continued", "continue_failed", "cancel_refused", "long_call", "stuck",
                 "crashed", "erroring", "unreadable", "ready_to_wake", "worker_idle", "worker_long", "silent", "run_ended",
-                "stalled", "idle_after_run", "relaunch", "workers_failed", "not_relaunched", "held_unread", "no_step")
+                "stalled", "idle_after_run", "relaunch", "workers_failed", "not_relaunched", "held_unread", "no_step",
+                "outage")
 BURST_S = 15 * 60               # workers of one parent failing within this of the first are one alert (proofs' 14: 16:49-17:03Z)
 BURST_QUIET_S = 3 * 60          # ... posted once none has joined for this long (so a lone failure waits about a sweep)
 CONV_MSGS = 6                   # a failed worker's last assistant messages read for a wake-up it set itself
@@ -839,6 +851,9 @@ class Watch:
         self.owners: dict[str, str] = s.get("owners", {})         # listed agent a coordinator launched -> that coordinator's handle
         self.children: dict[str, dict] = s.get("children", {})    # worker a followed run's Task call named -> parent, name, t
         self.bursts: dict[str, dict] = s.get("bursts", {})        # parent -> its workers' failures held to post as one
+        self.down: dict[str, float] = s.get("down", {})           # agent -> since when its latest run has been ERROR
+        self.back: dict[str, float] = s.get("back", {})           # agent -> since when it has been back from ERROR
+        self.rung_outage: float = s.get("rung_outage", 0.0)       # when the last `outage` record was written
         self.final: dict[str, dict] = {}                          # run -> its terminal record, never read again (not saved)
         self.learn_tried: dict[str, float] = {}                   # sender whose brief named no coordinator -> when (not saved)
         self.learn_left = 0                                       # briefs the current node read may still read
@@ -856,7 +871,8 @@ class Watch:
                                    "pending": self.pending, "done": self.done, "woken": self.woken,
                                    "workers": self.workers, "active": self.active, "silent": self.silent,
                                    "awaiting": self.awaiting, "relaunched": self.relaunched, "owners": self.owners,
-                                   "children": children, "bursts": self.bursts}) + "\n")
+                                   "children": children, "bursts": self.bursts, "down": self.down, "back": self.back,
+                                   "rung_outage": self.rung_outage}) + "\n")
         tmp.replace(self.state_path)
 
     def owned(self, agent: str) -> dict[str, str]:
@@ -989,11 +1005,62 @@ class Watch:
         if due:
             self.save()
 
+    def outage(self) -> bool:
+        """Whether `OUTAGE_MIN` or more coordinators are down at once: the platform's failure, not one agent's."""
+        return sum(1 for x in self.down if x in self.coords) >= OUTAGE_MIN
+
+    def track(self, agent: str, status: str | None, t: float) -> None:
+        """Note when `agent`'s latest run went to ERROR (`down`) or came back from it (`back`). Back `STICK_S` (its restart stuck),
+        its restart count and its left-for-a-person mark clear, however its runs ended."""
+        if status == "ERROR":
+            self.back.pop(agent, None)
+            if agent not in self.down:
+                self.down[agent] = t
+                self.save()
+            return
+        if status is None or (agent not in self.down and agent not in self.errors and agent not in self.left):
+            return
+        since = self.back.setdefault(agent, t)
+        if t - since >= STICK_S:
+            for d in (self.down, self.back, self.errors):
+                d.pop(agent, None)
+            self.left.discard(agent)
+        self.save()
+
+    def ring_outage(self, t: float) -> None:
+        """An `outage` record (the relay posts it to @top and Daniel) when `RING_MIN` or more coordinators have been down
+        `RING_DOWN_S`, once every `RING_EVERY_S` while it lasts."""
+        long = sorted((self.coords[x], since) for x, since in self.down.items() if x in self.coords and t - since >= RING_DOWN_S)
+        if len(long) < RING_MIN or t - self.rung_outage < RING_EVERY_S:
+            return
+        self.rung_outage = t
+        self.save()
+        self.record("outage", Run("", "", ""), judged=False, owner="top", count=len(long),
+                    handles=[h for h, _ in long], since=iso(min(s for _, s in long)), every_min=OUTAGE_RETRY_S // 60)
+
     def restart(self, a: dict, run: str, t: float) -> None:
         """A new run on an agent whose latest run ended in ERROR, at most once every `RESTART_S` and `MAX_RESTARTS` times in a
         row; then a coordinator is relaunched."""
         r = Run(a["id"], run, a.get("name") or "")
         n = self.errors.get(a["id"], 0)
+        if a["id"] in self.coords and self.outage():
+            if t - self.freed.get(a["id"], -OUTAGE_RETRY_S) < OUTAGE_RETRY_S:
+                return
+            self.freed[a["id"]] = t
+            self.save()
+            down = sorted(self.coords[x] for x in self.down if x in self.coords)
+            try:
+                new = self.api.post(f"/v1/agents/{a['id']}/runs", {"prompt": {"text": AFTER_ERROR}})
+                action = "restarted in an outage (not counted toward its limit)"
+                self.record("crashed", r, status="ERROR", action=action, down=down,
+                            new_run=((new or {}).get("run") or {}).get("id"), **self.owned(a["id"]))
+            except urllib.error.HTTPError as e:
+                self.record("crashed", r, status="ERROR", action=f"restart in an outage failed: HTTP {e.code}; again in "
+                            f"{OUTAGE_RETRY_S // 60} min", down=down, **self.owned(a["id"]))
+            except (urllib.error.URLError, OSError, ValueError) as e:
+                self.record("crashed", r, status="ERROR", action=f"restart in an outage failed: {type(e).__name__}: {e}; again "
+                            f"in {OUTAGE_RETRY_S // 60} min", down=down, **self.owned(a["id"]))
+            return
         if run in self.done:                        # restarted already: only the next ERROR run counts
             return
         if n >= MAX_RESTARTS:
@@ -1840,6 +1907,7 @@ class Watch:
         current: dict[str, tuple[dict, dict]] = {}      # run -> (agent, run record)
         judged: dict[str, dict] = {}                    # run -> agent: the run each agent read is judged by
         judges: dict[str, dict] = {}                    # agent -> the record of the run it is judged by
+        errored: list[tuple[dict, str]] = []            # (agent, its latest run) ended in ERROR, restarted after the pass
         for a in live.values():
             latest = a["latestRunId"]
             if (runs := self.runs_of(a, t)) is None:
@@ -1863,12 +1931,19 @@ class Watch:
             if judge:
                 judges[a["id"]] = judge
                 self.status_of[a["id"]] = (judge["id"], str(judge.get("status")))
+            if a["id"] in coords:
+                self.track(a["id"], last.get("status") if last else None, t)
             if last and last.get("status") == "FINISHED":   # not a run going: a restart runs a minute before it errors
                 if self.errors.pop(a["id"], None) is not None or a["id"] in self.left:
                     self.left.discard(a["id"])
                     self.save()
             elif last and last.get("status") == "ERROR":
-                self.restart(a, latest, t)
+                errored.append((a, latest))
+        for x in [x for x in self.down if x not in coords]:
+            self.down.pop(x)
+        for a, latest in errored:                       # after every coordinator is tracked, so `outage` counts them all
+            self.restart(a, latest, t)
+        self.ring_outage(t)
         self.retry(current, t)
         bells, fresh = doorbells(self.log.with_name("doorbells.json"), t)
         every = timers(self.timers)
@@ -2068,6 +2143,15 @@ class Publisher:
                   f"published (psql read {(r.stdout or '').strip()[:40]!r})", file=sys.stderr, flush=True)
 
 
+def rate_wait(e: urllib.error.HTTPError, last: float) -> float:
+    """Seconds to wait after a sweep the API refused with 429: its Retry-After when it gives one, else double the last wait
+    (from `RATE_WAIT_S[0]`), at most `RATE_WAIT_S[1]`. A sweep every minute into a rate limit kept it shut for 3.5 h."""
+    first, cap = RATE_WAIT_S
+    given = str((e.headers or {}).get("Retry-After") or "")
+    asked = float(given) if re.fullmatch(r"\d+(?:\.\d+)?", given) else 0.0   # an HTTP-date form doubles instead
+    return min(cap, asked if asked > 0 else max(first, 2 * last))
+
+
 def pump(watch: Watch, r: Run) -> None:
     """Feed the run's stream to the watch until the run ends or the watch stops following it; then the next sweep may follow
     it again."""
@@ -2143,13 +2227,19 @@ def main(argv: list[str] | None = None) -> int:
     if ns.once:
         watch.sweep(lambda r: None)
         return 0
+    wait = 0.0
     while True:
         api.reads_until = api.clock() + SWEEP_READS_S
         try:
             watch.sweep(lambda r: follow(watch, r))
+            wait = 0.0
+        except urllib.error.HTTPError as e:
+            wait = rate_wait(e, wait) if e.code == 429 else 0.0
+            print(f"{iso(time.time())} sweep failed: {type(e).__name__}: {e}"
+                  + (f"; the next sweep in {wait:.0f} s" if wait else ""), file=sys.stderr, flush=True)
         except (urllib.error.URLError, OSError, ValueError) as e:
             print(f"{iso(time.time())} sweep failed: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
-        time.sleep(POLL_S)
+        time.sleep(max(POLL_S, wait))
 
 
 if __name__ == "__main__":

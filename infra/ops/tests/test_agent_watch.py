@@ -2634,3 +2634,68 @@ def test_a_holder_whose_worker_went_quiet_is_not_held_unread(tmp_path):
         api._agents[0]["updatedAt"] = W.iso(clock.t)
         w.sweep(lambda r: None)
     assert api.posts == [] and "held_unread" not in [r["kind"] for r in records(tmp_path)]
+
+
+def test_a_platform_outage_is_retried_uncapped_rings_top_and_daniel_and_clears_the_cap_once_coordinators_are_back(tmp_path):
+    """29-30 Oct: 13 of 15 coordinators ended in ERROR between 23:22Z and 03:49Z while every restart failed. The watch spent each
+    one's 3 restarts within minutes and left them for a person, nobody was rung, and after a Slack ring revived all 12 at 07:17Z
+    they stayed 'left for a person' until infra cleared state.json by hand. Replayed: one coordinator down every 20 minutes."""
+    ids = [f"bc-{i:08x}-0000-0000-0000-{i:012x}" for i in range(1, 14)]
+    reg, routes = tmp_path / "registry.json", tmp_path / "routes.d"
+    routes.mkdir()
+    reg.write_text(json.dumps({"handles": [{"handle": f"h{i}", "holder": f"the h{i} coordinator ({a})"} for i, a in enumerate(ids)]}))
+    api = FakeApi([{"id": a, "name": f"verity: h{i}", "status": "ACTIVE", "latestRunId": f"ok-{i}"} for i, a in enumerate(ids)],
+                  {f"ok-{i}": {"status": "FINISHED"} for i in range(len(ids))})
+    clock = Clock(T0)
+    w = W.Watch(api, tmp_path / "events.jsonl", clock, registry=reg, routes=routes)
+    w.errors[ids[0]], w.left = W.MAX_RESTARTS, {ids[0]}          # its cap already spent, as every one's was by 03:49Z
+    refused = []
+
+    def down(path, body=None):
+        refused.append((path, clock.t))
+        raise W.urllib.error.HTTPError(path, 503, "Service Unavailable", {}, None)
+    api.post = down
+    for minute in range(0, 4 * 60 + 1, 5):
+        if minute % 20 == 0 and minute // 20 < len(ids):
+            i = minute // 20
+            api._agents[i]["latestRunId"] = f"err-{i}"
+            api._runs[f"err-{i}"] = {"status": "ERROR"}
+        clock.t = T0 + minute * 60
+        w.sweep(lambda r: None)
+    outages = [r for r in records(tmp_path) if r["kind"] == "outage"]
+    assert [r["t"] for r in outages] == [W.iso(T0 + m * 60) for m in (110, 170, 230)], \
+        "rung once 5 have been down 30 min (the 5th fell at 80 min), then hourly"
+    assert outages[0]["count"] == 5 and outages[0]["owner"] == "top" and outages[0]["handles"] == [f"h{i}" for i in range(5)]
+    tries = [t for path, t in refused if path == f"/v1/agents/{ids[0]}/runs"]
+    outage_tries = [t for t in tries if t >= T0 + 40 * 60]
+    assert len(outage_tries) >= 12 and all(b - a >= W.OUTAGE_RETRY_S for a, b in zip(outage_tries, outage_tries[1:])), \
+        "in the outage the first coordinator is still tried every 15 min, its spent cap notwithstanding"
+    assert not any(r["kind"] == "relaunch" for r in records(tmp_path) if r["agent"] == ids[0] and r["t"] >= W.iso(T0 + 2400))
+    assert all(w.errors.get(a, 0) == 0 for a in ids[2:]), "a restart in an outage is not counted"
+    assert not any(r["kind"] in ("erroring", "relaunch") for r in records(tmp_path) if r["agent"] in ids[2:])
+    api.post = lambda path, body=None: {"run": {"id": "run-new"}}
+    for i, a in enumerate(ids):
+        api._agents[i]["latestRunId"] = f"back-{i}"
+        api._runs[f"back-{i}"] = {"status": "RUNNING"}
+    clock.t += 60
+    w.sweep(lambda r: None)
+    assert w.errors[ids[0]] and w.down, "seeing a restart running is not enough: one reads RUNNING a minute before it errors"
+    clock.t += W.STICK_S
+    w.sweep(lambda r: None)
+    assert not w.left and not any(w.errors.values()) and not w.down, "back STICK_S: every cap cleared, no person needed"
+    api._agents[3]["latestRunId"] = "err-again"
+    api._runs["err-again"] = {"status": "ERROR"}
+    clock.t += 60
+    w.sweep(lambda r: None)
+    assert w.errors[ids[3]] == 1 and records(tmp_path)[-1]["action"].startswith("restarted (1 of"), \
+        "one coordinator down alone is restarted and counted as before"
+
+
+def test_a_sweep_refused_with_429_waits_retry_after_or_doubles_to_a_cap():
+    def refused(retry_after=None):
+        return W.urllib.error.HTTPError("/v1/agents", 429, "Too Many Requests",
+                                        {"Retry-After": retry_after} if retry_after else {}, None)
+    assert W.rate_wait(refused("300"), 0) == 300
+    assert W.rate_wait(refused(), 0) == W.RATE_WAIT_S[0]
+    assert W.rate_wait(refused(), 240) == 480
+    assert W.rate_wait(refused(), 800) == W.RATE_WAIT_S[1] == W.rate_wait(refused("99999"), 0)
