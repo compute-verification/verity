@@ -36,8 +36,8 @@ pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.seg
 ROWS = Path(__file__).resolve().parents[5] / "Security" / "Proofs" / "Accounting" / "Gates" / "Rows.lean"
 #: the lanes' Boolean segment dots, s8-family steps in property/v1's table (`PouwSegDot0` is `PouwSegDot` from 0)
 LANE = ("PouwSegDot_v2", "PouwSegDot0_v2")
-#: the tile's versions on this tree: v1, the one-stream v3, the gated v4 (#2902's) and J10-R's v5 and v6 (v1's and v3's
-#: under call-scope noise, #3403's)
+#: the tile's versions on this tree: v1, the one-stream v3, the gated v4 and J10-R's v5 and v6 (v1's and v3's
+#: under call-scope noise)
 TILES = {v: d for v, d in ((1, H.PouwH1Tile), *((v, getattr(H, f"PouwH1Tile{v}", None)) for v in (3, 4, 5, 6)))
          if d is not None}
 #: a tile's classes that are bodies, not primitives: v1's and v5's exact accumulator (`EXACT`, whose type v3, v4 and v6
