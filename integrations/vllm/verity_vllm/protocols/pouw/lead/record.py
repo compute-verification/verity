@@ -2,11 +2,11 @@
 the one root of its words.
 
 The window opens in this order. The record takes the weights' root, the committer's hm96 leaf over the window's key
-(``key_leaf``, which binds the key the window's coins derive from) and the window's call count (``calls``), all three
-fixed before the certifier samples the window's salt salt_w. Then the record takes salt_w (`salted`). Then come the
-calls, in order: each one's root(A_j), at a position j below ``calls`` (`a_root`), so the committer's positions are
-injective. Once every call is in, the forward's words root comes (`words`): one words instance a forward, its calls'
-words in call order.
+(``key_leaf``: with salt_w, the key derives the hiding of the committer's leaves) and the window's call count
+(``calls``), all three fixed before the certifier samples the window's salt salt_w. Then the record takes salt_w
+(`salted`). Then come the calls, in order: each one's root(A_j), at a position j below ``calls`` (`a_root`), so the
+committer's positions are injective. Once every call is in, the forward's words root comes (`words`): one words
+instance a forward, its calls' words in call order.
 
 Both kinds of root are the committer's, and the record never recomputes them: it fixes their order. `publish` freezes
 the record as core's `PassCommitment`:
