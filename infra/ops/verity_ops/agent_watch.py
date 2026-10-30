@@ -43,8 +43,12 @@ background wait any call, finishing whose start the watch didn't see (it lay bef
   build or a wait may be legitimate, unless it is a holder's held unread);
 - **crashed** when the agent's latest run ended in ERROR: the watch starts a new run, at most once every `RESTART_S` and
   `MAX_RESTARTS` times in a row (vllm's runs errored within a minute, run after run, on 18 Oct), then records it as
-  **erroring**, for a person. Only a latest run that FINISHED ends the row: a restarted run reads RUNNING for a while before
-  it errors again.
+  **erroring**, for a person. A latest run that FINISHED ends the row, and so does a coordinator back from ERROR for
+  `STICK_S` (a restarted run reads RUNNING for a while before it errors again, so seeing it running is not enough). When
+  `OUTAGE_MIN` or more coordinators are down at once, it is the platform's failure: each is restarted every `OUTAGE_RETRY_S`,
+  not counted and never relaunched, until it comes back; and once `RING_MIN` have been down `RING_DOWN_S`, an **outage**
+  record (the relay posts it to the top coordinator and the registry's human) is written, again every `RING_EVERY_S` while it lasts. A sweep the API
+  refuses with 429 waits its Retry-After (`rate_wait`) rather than asking again every minute.
 
 A run among an agent's newest left in CREATING for 10 min by the API's own `updatedAt` with no newer run started (only ones
 cancelled on arrival) and no run followed (a run queued behind a followed one waits its turn, and that one is judged), or a followed background wait with nothing at all streamed for 2 h while its agent's `updatedAt` moves, is recorded once as **stuck**: on 18 Oct proofs' and circuits' runs sat in CREATING behind a
@@ -101,8 +105,10 @@ head ending in its id's last four characters (a coordinator's `cursor/...-1037`)
 watch first saw its sha (`heads.json` beside `--log`). The 90 min count from the latest of its ACTIVE spell's start, its newest
 note, its newest push and the first heads read, so a fresh deploy judges nobody for 90 min. It is recorded once, and again
 after a second window (`SILENT_RINGS`), then not until one of those moves; the relay rings its handle (a coordinator's own, a
-worker's launcher's). A silent agent still showing nothing `NO_STEP_S` (6 h) after its last activity is recorded once more,
-as **no_step**, rung to @top: on 26 Oct nine workers sat ACTIVE with no step for 30-64 h, each rung twice and then by no one.
+worker's launcher's). A silent agent still showing nothing `NO_STEP_S` (6 h) after its last activity is recorded once more:
+a worker is archived (`POST /v1/agents/{id}/archive`, which stops it and frees its slot) and recorded as **archived**, rung to
+its lane, which relaunches it from its last note or drops it; a coordinator, or a worker the API won't archive, is recorded as
+**no_step**, rung to @top.
 Its last activity there also counts its agent's own `updatedAt` and, for a coordinator, its judged run's `updatedAt` and last
 stream event, since no_step advises stopping and archiving it: on 26 Oct at 21:05Z it said so of compute-accounting's and
 network-accounting's coordinators, each working in Slack within two minutes, with no note or push for 6 h.
@@ -200,6 +206,13 @@ AWAIT_KEEP_S = 6 * 3600     # a run end nobody acted on this long ago is forgott
 CONTINUE_RETRY_S = 30 * 60  # how long a refused continue run is tried again before it is left for a person
 REFUSED_S = 5 * 60          # a run whose cancel got 409 still read as going this long after is left for a person
 MAX_RESTARTS = 3            # ERROR runs in a row the watch restarts before leaving the agent for a person
+STICK_S = 10 * 60           # a coordinator back from ERROR (its latest run not ERROR) this long: its restart count clears
+OUTAGE_MIN = 3              # coordinators down (latest run ERROR) at once: a platform outage, not one agent's fault, so
+OUTAGE_RETRY_S = 15 * 60    # ... each is restarted this often, uncapped and uncounted, and none is relaunched
+RING_DOWN_S = 30 * 60       # coordinators down this long, RING_MIN of them or more: an `outage` record, for the top coordinator and a person,
+RING_MIN = 5
+RING_EVERY_S = 3600         # ... again this often while it lasts
+RATE_WAIT_S = (120, 900)    # a sweep refused with 429 waits Retry-After, else from the first, doubling, to the second
 UNREADABLE_S = 3600         # a latest run the API won't read this long is recorded again, for a person
 IDLE_RECENT_S = 6 * 3600    # an IDLE agent is read only if it changed this recently (an ERROR leaves an agent IDLE)
 RUNS_PAGE = 50              # an ACTIVE agent's runs are read a page at a time, back to the newest that started
@@ -252,6 +265,12 @@ BELLS_STALE_S = 30 * 60
 # person's stop or the watch's own; ERROR is `restart`'s
 IDLE_DONE = {"FINISHED", "EXPIRED", "WAITING_FOR_BACKGROUND_WORK"}
 AGENT_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
+SHORT_AGENT_RE = re.compile(r"\b(bc-[0-9a-f]{8})\b(?!-[0-9a-f]{4}-)")
+
+
+def short_id(agent: str) -> str:
+    """An agent id as notes often write it: `bc-` and its first 8 hex digits."""
+    return agent[:11]
 WAKE = ("wake: your timer or your inbox subscription seems not to have fired ({why}; the agent watch started this run). Read "
         "your doorbell (`research msg read --as {handle}`), run your duties, and set again whichever lapsed.")
 SCHEMA = "verity/agent-watch-status/v1"
@@ -260,10 +279,14 @@ RUN_STATUSES = ("CREATING", "RUNNING", "WAITING_FOR_BACKGROUND_WORK", "FINISHED"
                 "unknown")
 WATCH_STATES = ("ok", "followed", "held", "held_again", "continued", "continue_failed", "cancel_refused", "long_call", "stuck",
                 "crashed", "erroring", "unreadable", "ready_to_wake", "worker_idle", "worker_long", "silent", "run_ended",
-                "stalled", "idle_after_run", "relaunch", "workers_failed", "not_relaunched", "held_unread", "no_step")
+                "stalled", "idle_after_run", "relaunch", "workers_failed", "not_relaunched", "held_unread", "no_step",
+                "outage", "archived")
 BURST_S = 15 * 60               # workers of one parent failing within this of the first are one alert (proofs' 14: 16:49-17:03Z)
 BURST_QUIET_S = 3 * 60          # ... posted once none has joined for this long (so a lone failure waits about a sweep)
 CONV_MSGS = 6                   # a failed worker's last assistant messages read for a wake-up it set itself
+#: a conversation read's timeout, and how long an agent whose read timed out goes unread: a coordinator's long transcript can
+#: take past the API's 60 s, and a few such reads spent a sweep's whole SWEEP_READS_S
+CONV_TIMEOUT_S, CONV_SKIP_S = 15, 30 * 60
 # a wake-up an agent says it set (subscribe_timer's tool call is not in the API's conversation, only what it says of it)
 WAKE_RE = re.compile(r"[^.!?\n]*\b(?:wake[- ]?up|subscribe_timer|timer)s?\b[^.!?\n]*[.!?]?", re.I)
 WAKE_IN_RE = re.compile(r"\bin (\d+) ?(min(?:ute)?s?|h(?:ours?)?)\b", re.I)
@@ -430,13 +453,14 @@ def workers(notes: Path | None, workers_d: Path, registry: Path | None, coords: 
 def note_times(notes: Path | None, t: float) -> tuple[dict[str, float], dict[str, set[str]], dict[str, float]]:
     """(agent id -> its newest note's mtime, agent id -> the branches its notes' origins name, lane -> its newest note's mtime),
     over the notes `recent_notes` gives: a note is an agent's when its `origin:` names it (`ZKS10, bc-...; code
-    cursor/zk-frame-c7a9`), and its lane's by its directory under `lanes/` and its `lane:`."""
+    cursor/zk-frame-c7a9`), by its full id or its short one (`bc-` and 8 hex digits, keyed as given: `short_id`), and its lane's by
+    its directory under `lanes/` and its `lane:`."""
     heard: dict[str, float] = {}
     named: dict[str, set[str]] = {}
     lanes: dict[str, float] = {}
     for p, mtime, fm in recent_notes(notes, t):
         origin = fm.get("origin", "")
-        for agent in AGENT_RE.findall(origin):
+        for agent in set(AGENT_RE.findall(origin)) | set(SHORT_AGENT_RE.findall(origin)):
             heard[agent] = max(heard.get(agent, mtime), mtime)
             named.setdefault(agent, set()).update(BRANCH_RE.findall(origin))
         for lane in {p.parent.name, fm.get("lane", "")} - {""}:
@@ -695,9 +719,9 @@ class Api:
             h["Content-Type"] = "application/json"
         return urllib.request.Request(self.base + path, data=data, method=method, headers=h)
 
-    def get(self, path: str, **params) -> dict:
+    def get(self, path: str, timeout: float | None = None, **params) -> dict:
         q = ("?" + urllib.parse.urlencode({k: v for k, v in params.items() if v is not None})) if params else ""
-        timeout = self.timeout
+        timeout = self.timeout if timeout is None else min(timeout, self.timeout)
         if self.reads_until is not None:
             if (timeout := min(timeout, self.reads_until - self.clock())) <= 0:
                 raise TimeoutError(f"this sweep's reads are spent ({SWEEP_READS_S // 60} min); the next sweep reads again")
@@ -812,6 +836,7 @@ class Watch:
         self.names: dict[str, str] = {}             # listed agent -> its name, for run_ended
         self.branches: dict[str, set[str]] = {}     # listed agent -> the branches its run records name
         self.worker_status: dict[str, str] = {}             # worker -> its status as this sweep read it, for status.json
+        self.slow_convs: dict[str, float] = {}              # agent -> until when its conversation goes unread (CONV_SKIP_S)
         self.agent_status: dict[str, str] = {}              # listed agent -> its status as this sweep read it, for run_ended
         self.registry, self.routes, self.timers = registry, routes, timers
         self.doorbells = ""                         # whether doorbells.json was fresh, stale or missing at the last sweep
@@ -839,6 +864,9 @@ class Watch:
         self.owners: dict[str, str] = s.get("owners", {})         # listed agent a coordinator launched -> that coordinator's handle
         self.children: dict[str, dict] = s.get("children", {})    # worker a followed run's Task call named -> parent, name, t
         self.bursts: dict[str, dict] = s.get("bursts", {})        # parent -> its workers' failures held to post as one
+        self.down: dict[str, float] = s.get("down", {})           # agent -> since when its latest run has been ERROR
+        self.back: dict[str, float] = s.get("back", {})           # agent -> since when it has been back from ERROR
+        self.rung_outage: float = s.get("rung_outage", 0.0)       # when the last `outage` record was written
         self.final: dict[str, dict] = {}                          # run -> its terminal record, never read again (not saved)
         self.learn_tried: dict[str, float] = {}                   # sender whose brief named no coordinator -> when (not saved)
         self.learn_left = 0                                       # briefs the current node read may still read
@@ -856,7 +884,8 @@ class Watch:
                                    "pending": self.pending, "done": self.done, "woken": self.woken,
                                    "workers": self.workers, "active": self.active, "silent": self.silent,
                                    "awaiting": self.awaiting, "relaunched": self.relaunched, "owners": self.owners,
-                                   "children": children, "bursts": self.bursts}) + "\n")
+                                   "children": children, "bursts": self.bursts, "down": self.down, "back": self.back,
+                                   "rung_outage": self.rung_outage}) + "\n")
         tmp.replace(self.state_path)
 
     def owned(self, agent: str) -> dict[str, str]:
@@ -936,9 +965,13 @@ class Watch:
     def conversation(self, agent: str) -> list[dict] | None:
         """An agent's messages (`GET /v0/agents/{id}/conversation`: user and assistant text only, no tool calls); None when
         the API won't read it."""
+        if self.clock() < self.slow_convs.get(agent, 0):
+            return None
         try:
-            msgs = (self.api.get(f"/v0/agents/{agent}/conversation") or {}).get("messages") or []
+            msgs = (self.api.get(f"/v0/agents/{agent}/conversation", timeout=CONV_TIMEOUT_S) or {}).get("messages") or []
         except (urllib.error.URLError, OSError, ValueError) as e:
+            if isinstance(e, TimeoutError) or isinstance(getattr(e, "reason", None), TimeoutError):
+                self.slow_convs[agent] = self.clock() + CONV_SKIP_S
             print(f"{iso(self.clock())} conversation of {agent}: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
             return None
         return [m for m in msgs if isinstance(m, dict)]
@@ -989,11 +1022,73 @@ class Watch:
         if due:
             self.save()
 
+    def outage(self) -> bool:
+        """Whether `OUTAGE_MIN` or more coordinators are down at once: the platform's failure, not one agent's."""
+        return sum(1 for x in self.down if x in self.coords) >= OUTAGE_MIN
+
+    def track(self, agent: str, status: str | None, t: float) -> None:
+        """Note when `agent`'s latest run went to ERROR (`down`) or came back from it (`back`). Back `STICK_S` (its restart stuck),
+        its restart count and its left-for-a-person mark clear, however its runs ended."""
+        if status == "ERROR":
+            self.back.pop(agent, None)
+            if agent not in self.down:
+                self.down[agent] = t
+                self.save()
+            return
+        if status is None or (agent not in self.down and agent not in self.errors and agent not in self.left):
+            return
+        since = self.back.setdefault(agent, t)
+        if t - since >= STICK_S:
+            for d in (self.down, self.back, self.errors):
+                d.pop(agent, None)
+            self.left.discard(agent)
+        self.save()
+
+    def ring_outage(self, t: float) -> None:
+        """An `outage` record (the relay posts it to the top coordinator and a person) when `RING_MIN` or more coordinators have been down
+        `RING_DOWN_S`, once every `RING_EVERY_S` while it lasts."""
+        long = sorted((self.coords[x], since) for x, since in self.down.items() if x in self.coords and t - since >= RING_DOWN_S)
+        if len(long) < RING_MIN or t - self.rung_outage < RING_EVERY_S:
+            return
+        self.rung_outage = t
+        self.save()
+        self.record("outage", Run("", "", ""), judged=False, owner="top", count=len(long),
+                    handles=[h for h, _ in long], since=iso(min(s for _, s in long)), every_min=OUTAGE_RETRY_S // 60)
+
+    def archive(self, agent: str) -> str | None:
+        """Archive a silent worker (`POST /v1/agents/{id}/archive`), which stops it and frees its cloud-agent slot: None once
+        archived, else why the API refused."""
+        try:
+            self.api.post(f"/v1/agents/{agent}/archive", {})
+        except urllib.error.HTTPError as e:
+            return f"HTTP {e.code}"
+        except (urllib.error.URLError, OSError, ValueError) as e:
+            return f"{type(e).__name__}: {e}"
+        return None
+
     def restart(self, a: dict, run: str, t: float) -> None:
         """A new run on an agent whose latest run ended in ERROR, at most once every `RESTART_S` and `MAX_RESTARTS` times in a
         row; then a coordinator is relaunched."""
         r = Run(a["id"], run, a.get("name") or "")
         n = self.errors.get(a["id"], 0)
+        if a["id"] in self.coords and self.outage():
+            if t - self.freed.get(a["id"], -OUTAGE_RETRY_S) < OUTAGE_RETRY_S:
+                return
+            self.freed[a["id"]] = t
+            self.save()
+            down = sorted(self.coords[x] for x in self.down if x in self.coords)
+            try:
+                new = self.api.post(f"/v1/agents/{a['id']}/runs", {"prompt": {"text": AFTER_ERROR}})
+                action = "restarted in an outage (not counted toward its limit)"
+                self.record("crashed", r, status="ERROR", action=action, down=down,
+                            new_run=((new or {}).get("run") or {}).get("id"), **self.owned(a["id"]))
+            except urllib.error.HTTPError as e:
+                self.record("crashed", r, status="ERROR", action=f"restart in an outage failed: HTTP {e.code}; again in "
+                            f"{OUTAGE_RETRY_S // 60} min", down=down, **self.owned(a["id"]))
+            except (urllib.error.URLError, OSError, ValueError) as e:
+                self.record("crashed", r, status="ERROR", action=f"restart in an outage failed: {type(e).__name__}: {e}; again "
+                            f"in {OUTAGE_RETRY_S // 60} min", down=down, **self.owned(a["id"]))
+            return
         if run in self.done:                        # restarted already: only the next ERROR run counts
             return
         if n >= MAX_RESTARTS:
@@ -1409,11 +1504,13 @@ class Watch:
         heads = self.heads.get("heads") or {}
         for agent, k in sorted(known.items()):
             coord = agent in self.coords
-            mine = {*k["branches"], *named.get(agent, ()), *(b for b in heads if b.endswith("-" + agent[-4:]))}
+            mine = {*k["branches"], *named.get(agent, ()), *named.get(short_id(agent), ()),
+                    *(b for b in heads if b.endswith("-" + agent[-4:]))}
             pushed = max((heads[b][1] for b in mine if b in heads), default=None)
             # a coordinator signs its notes with its lane, not its id (top, 27 Oct: four false silent rings in 70 min)
             lane_note = max((lanes[x] for x in (k["handle"], k["lane"]) if x and x in lanes), default=None) if coord else None
-            last = max(x for x in (k["since"], heard.get(agent), lane_note, pushed, self.heads["t0"]) if x is not None)
+            last = max(x for x in (k["since"], heard.get(agent), heard.get(short_id(agent)), lane_note, pushed, self.heads["t0"])
+                       if x is not None)
             s = self.silent.get(agent)
             if s and s["from"] != last:
                 self.silent.pop(agent)
@@ -1424,9 +1521,14 @@ class Watch:
                 if s and not s.get("no_step") and t - still >= NO_STEP_S:
                     s["no_step"] = True
                     changed = True
-                    self.record("no_step", Run(agent, k["run"], k["name"]), since=iso(still), hours=int((t - still) // 3600),
-                                lane=k["lane"], **({"handle": k["handle"]} if k["handle"] else {}), owner="top",
-                                role="coordinator" if coord else "worker")
+                    why = None if coord else self.archive(agent)
+                    common = dict(since=iso(still), hours=int((t - still) // 3600), lane=k["lane"],
+                                  **({"handle": k["handle"]} if k["handle"] else {}), role="coordinator" if coord else "worker")
+                    if coord or why:
+                        self.record("no_step", Run(agent, k["run"], k["name"]), owner="top", **common,
+                                    **({"archive_failed": why} if why else {}))
+                    else:
+                        self.record("archived", Run(agent, k["run"], k["name"]), **common)
                 continue
             if t - last < (COORD_SILENT_S if coord else SILENT_S) * (n + 1):
                 continue
@@ -1840,6 +1942,7 @@ class Watch:
         current: dict[str, tuple[dict, dict]] = {}      # run -> (agent, run record)
         judged: dict[str, dict] = {}                    # run -> agent: the run each agent read is judged by
         judges: dict[str, dict] = {}                    # agent -> the record of the run it is judged by
+        errored: list[tuple[dict, str]] = []            # (agent, its latest run) ended in ERROR, restarted after the pass
         for a in live.values():
             latest = a["latestRunId"]
             if (runs := self.runs_of(a, t)) is None:
@@ -1863,12 +1966,19 @@ class Watch:
             if judge:
                 judges[a["id"]] = judge
                 self.status_of[a["id"]] = (judge["id"], str(judge.get("status")))
+            if a["id"] in coords:
+                self.track(a["id"], last.get("status") if last else None, t)
             if last and last.get("status") == "FINISHED":   # not a run going: a restart runs a minute before it errors
                 if self.errors.pop(a["id"], None) is not None or a["id"] in self.left:
                     self.left.discard(a["id"])
                     self.save()
             elif last and last.get("status") == "ERROR":
-                self.restart(a, latest, t)
+                errored.append((a, latest))
+        for x in [x for x in self.down if x not in coords]:
+            self.down.pop(x)
+        for a, latest in errored:                       # after every coordinator is tracked, so `outage` counts them all
+            self.restart(a, latest, t)
+        self.ring_outage(t)
         self.retry(current, t)
         bells, fresh = doorbells(self.log.with_name("doorbells.json"), t)
         every = timers(self.timers)
@@ -2068,6 +2178,15 @@ class Publisher:
                   f"published (psql read {(r.stdout or '').strip()[:40]!r})", file=sys.stderr, flush=True)
 
 
+def rate_wait(e: urllib.error.HTTPError, last: float) -> float:
+    """Seconds to wait after a sweep the API refused with 429: its Retry-After when it gives one, else double the last wait
+    (from `RATE_WAIT_S[0]`), at most `RATE_WAIT_S[1]`. A sweep every minute into a rate limit kept it shut for 3.5 h."""
+    first, cap = RATE_WAIT_S
+    given = str((e.headers or {}).get("Retry-After") or "")
+    asked = float(given) if re.fullmatch(r"\d+(?:\.\d+)?", given) else 0.0   # an HTTP-date form doubles instead
+    return min(cap, asked if asked > 0 else max(first, 2 * last))
+
+
 def pump(watch: Watch, r: Run) -> None:
     """Feed the run's stream to the watch until the run ends or the watch stops following it; then the next sweep may follow
     it again."""
@@ -2143,13 +2262,19 @@ def main(argv: list[str] | None = None) -> int:
     if ns.once:
         watch.sweep(lambda r: None)
         return 0
+    wait = 0.0
     while True:
         api.reads_until = api.clock() + SWEEP_READS_S
         try:
             watch.sweep(lambda r: follow(watch, r))
+            wait = 0.0
+        except urllib.error.HTTPError as e:
+            wait = rate_wait(e, wait) if e.code == 429 else 0.0
+            print(f"{iso(time.time())} sweep failed: {type(e).__name__}: {e}"
+                  + (f"; the next sweep in {wait:.0f} s" if wait else ""), file=sys.stderr, flush=True)
         except (urllib.error.URLError, OSError, ValueError) as e:
             print(f"{iso(time.time())} sweep failed: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
-        time.sleep(POLL_S)
+        time.sleep(max(POLL_S, wait))
 
 
 if __name__ == "__main__":
