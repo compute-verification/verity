@@ -1,7 +1,7 @@
 [project]
 name = "pous-check"
 version = "0.1.0"
-description = "The differential test of pous_check, the PoUS setup check in Lean, against the Python reference: the core difftest harness drives its functions (pous-setup-difftest), its protocol (pous-setup) and the composed check of a recorded run (pous-run serve, against run.check_at); interop.py, the timed audit's wire (pous-audit-difftest serve) against wire.py on the spec's vectors; timed_audit.py, the strict timed audit's verdict of record (pous-timed-audit) against memory_challenger.verdict; and test_verdict_difftest.py, the verdict unit's code (pous-verdict-difftest) against the Definition verdict_circuit.PousVerdict, compiled."
+description = "The differential test of pous_check, the PoUS setup check in Lean, against the Python reference: the core difftest harness drives its functions (pous-setup-difftest), its protocol (pous-setup) and the composed check of a recorded run (pous-run serve, against run.check_at); interop.py, the timed audit's wire (pous-audit-difftest serve) against wire.py on the spec's vectors; timed_audit.py, the strict timed audit's verdict of record (pous-timed-audit) against memory_challenger.verdict; test_verdict_difftest.py, the verdict unit's code (pous-verdict-difftest) against the Definition verdict_circuit.PousVerdict, compiled; and test_wipe_labels.py, the spec's deployed wipe labels (Accounting.Wipe.deployedLabels) against streamed_wipe.label on the vectors the kernel checks."
 requires-python = ">=3.12"
 dependencies = ["verity", "verity-difftest", "hypothesis>=6.100"]
 
@@ -24,6 +24,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # test signer, read by path. `test_run_protocol.py` holds `PousCheck.RunProtocol` (onsite's PoUS component) to `run.py`
 # and the period hook (`period.py`) on the same sessions and on the hook's own periods. `test_verdict_difftest.py` holds
 # `PousCheck.Verdict` to `verdict_circuit.py`'s Definition, compiled and run by `verity.ml.circuits`' evaluator.
+# `test_wipe_labels.py` reads the deployed wipe labels' vectors, which the kernel checks against
+# `Accounting.Wipe.deployedLabels`, from their Lean file and holds `streamed_wipe.label` to them.
 # Of `verity` and the difftest harness (whose Lean `lake` builds too), what the tests import: these in place of both trees.
 inputs_only = true
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/claims/__init__.py",
@@ -39,4 +41,5 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/devices/memory_challenger/lean", "verity/core/attest/lean", "verity/core/primitives/lms/lean",
           # the deployment layer and its wire, which the period hook's memory challenger is started through
           # (`deploy.stream.Side`) and runs on
-          "verity/core/deploy", "verity/core/wire"]
+          "verity/core/deploy", "verity/core/wire",
+          "Security/Proofs/Properties/Verity/WipeLabelVectors.lean"]
