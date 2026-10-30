@@ -13,7 +13,8 @@ Counted work, priced in W1 (CORE.md §2a; H200 measured table, per register writ
   write;
 - a float leaf drains its fp32 accumulator to int32 before 2^24 (and an e4m3 leaf on the H200 every k32): two writes
   per drain an output;
-- noise-side additions (forming combinations, digits, row sums).
+- noise-side additions (forming combinations, digits, row sums, and one mask an entry where a node needs its
+  product only mod 2^w and the noise operand is wider than that; R-side work is not counted, as for its forms).
 
 Three readings: `fast` takes the IADD3 programs and four int8 lanes a register on the noise side (the attacker's best
 case), `plain` the IADD programs and two int16 lanes (the noise combinations outgrow int8 below the top levels), and
@@ -172,8 +173,18 @@ def _shift(iv, win):
 
 
 def run(node, A, B, ia, ib, shape, ops):
-    """A·B for E-side A (m×K) and R-side B (K×n) with value intervals ia, ib; A, B None counts only."""
+    """A·B mod 2^w(node) for E-side A (m×K) and R-side B (K×n) with value intervals ia, ib; A, B None counts only."""
     m, K, n = shape
+    if node.get("zero"):
+        return None if A is None else np.zeros((m, n), dtype=np.int64)
+    M = 1 << node["w"] if "w" in node else math.inf  # `witness.py` trees are exact: no w
+    if ia[1] - ia[0] >= M:
+        ia = (0, M - 1)
+        ops.e_adds += m * K  # one mask a noise entry: the node's product is needed only mod 2^w
+        A = A % M if A is not None else None
+    if ib[1] - ib[0] >= M:
+        ib = (0, M - 1)
+        B = B % M if B is not None else None
     if "atom" in node:
         win, _price, acc = FORMATS[node["atom"]]
         sa, sb = _shift(ia, win), _shift(ib, win)
@@ -284,7 +295,8 @@ def main(argv=None) -> int:
             R[0, 0], R[-1, -1] = -128, 127
             ops = Ops()
             Y = run(w, e, R.T, (0, a - 1), (-128, 127), (side, side, side), ops)
-            rec["exact"].append(bool(np.array_equal(Y, e @ R.T)))
+            mod = 1 << w.get("w", 62)
+            rec["exact"].append(bool(np.array_equal(Y % mod, (e @ R.T) % mod)))
         ok &= all(rec["exact"])
         tensor = sum(FORMATS[f][1] * c for f, c in ops.mac.items()) / side**3
         rec["tensor_w1_per_mac"] = tensor
