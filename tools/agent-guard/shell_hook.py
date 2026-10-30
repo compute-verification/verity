@@ -29,11 +29,13 @@ background (`&`), and `research run --wait-max S` past the cap. A polling loop i
 One agent per checkout (worktree_guard.py): it refuses an agent's branch switch in a worktree another agent owns, and its push of
 a branch registered to another agent.
 
-It also carries messages to running agents, the one channel that reaches a subagent mid-run (`inbox.py send AGENT_ID`).
-A message waits in `$AGENT_INBOX` (default `/tmp/agent-inbox`) as `<conversation_id>.md`. The agent's next allowed
-command is refused once, with the message as the refusal's text, which is what Cursor shows the agent (an `agent_message`
-on an allowed command reaches no one). The agent then re-runs the command. A refused secret-printing command keeps the
-message queued, and the delivered text is appended to `<conversation_id>.delivered`.
+It also carries messages to running agents, the one channel that reaches a subagent mid-run, on any VM (`inbox.py send
+AGENT_ID`). A message waits in `$AGENT_INBOX` (default `/tmp/agent-inbox`) as `<conversation_id>.md`. The agent's next
+allowed command is refused once, with the message as the refusal's text, which is what Cursor shows the agent (an
+`agent_message` on an allowed command reaches no one). The agent then re-runs the command. A refused secret-printing command
+keeps the message queued, and the delivered text is appended to `<conversation_id>.delivered`. Messages pushed from other
+VMs reach the inbox through `inbox.py pull`, which the hook starts in the background, detached, at most every
+$AGENT_INBOX_POLL_S seconds per agent (default 30; `off` stops it), so the hook itself never waits on the network.
 
 Before an allowed `git merge` or `git merge-tree`, it sets the repository's merge drivers (`.gitattributes` names them; git keeps
 them only in a clone's config) from the checkout's own `research.clone.RECORD_DRIVER` when lean-audit's is unset, as boot.sh and
@@ -45,7 +47,9 @@ import math
 import os
 import re
 import shlex
+import subprocess
 import sys
+import time
 
 PATTERN = re.compile(r"KEY|TOKEN|SECRET|PASSW|CREDENTIAL|PRIVATE", re.I)
 INBOX = os.environ.get("AGENT_INBOX", "/tmp/agent-inbox")
@@ -431,6 +435,25 @@ def delivery(conversation: str) -> str | None:
     return text if text.strip() else None
 
 
+def poll(conversation: str, repo: str) -> bool:
+    """Start `inbox.py pull` for agent `conversation` from checkout `repo`, detached, unless one started within the poll
+    interval; whether it started one."""
+    every = os.environ.get("AGENT_INBOX_POLL_S", "30")
+    if every == "off" or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}", conversation) or not repo:
+        return False
+    os.makedirs(INBOX, exist_ok=True)
+    mark = os.path.join(INBOX, conversation + ".polled")
+    if os.path.exists(mark) and time.time() - os.stat(mark).st_mtime < float(every):
+        return False
+    with open(mark, "a"):
+        os.utime(mark)
+    with open(os.path.join(INBOX, conversation + ".pull.log"), "a") as log:
+        subprocess.Popen([sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "inbox.py"), "pull",
+                          conversation, "--repo", repo], stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+                         env={**os.environ, "AGENT_INBOX": INBOX}, start_new_session=True)
+    return True
+
+
 MERGE = re.compile(r"\bgit\b.*\bmerge(-tree)?\b")
 CLONE_PY = "tools/research/src/research/clone.py"
 
@@ -462,9 +485,10 @@ def main() -> int:
         event = json.loads(raw)
         command = event.get("command") or ""
         conversation = str(event.get("conversation_id") or "")
-        cwd = event.get("cwd") or next(iter(event.get("workspace_roots") or []), "") or os.getcwd()
+        root = next(iter(event.get("workspace_roots") or []), "")
+        cwd = event.get("cwd") or root or os.getcwd()
     except (ValueError, AttributeError):
-        command, conversation, cwd = raw, "", os.getcwd()
+        command, conversation, cwd, root = raw, "", os.getcwd(), ""
     try:
         deny = refused_text(command)
     except Exception:                                   # a bug here must not allow what the fallback would refuse
@@ -487,6 +511,10 @@ def main() -> int:
                           "user_message": "Refused by tools/agent-guard/shell_hook.py: " + reason,
                           "agent_message": "Refused by tools/agent-guard/shell_hook.py (.cursor/hooks.json): " + reason}))
     else:
+        try:
+            poll(conversation, root or cwd)
+        except (OSError, ValueError) as e:              # nor a failed poll: the next command's hook tries again
+            print(f"shell_hook: inbox poll failed: {e}", file=sys.stderr)
         try:
             message = delivery(conversation)
         except Exception:                               # an unreadable inbox must not block the agent's command
