@@ -96,7 +96,7 @@
   },
   "Proofs.Flock.Claims.Recursion.IrDepSession": {
    "why": "its one #eval runs IrDepSession.main only when VERITY_IRDEP_ARGS is set (the Lean side of test_irdep_difftest.py): it reads the run tree that variable names and prints one IRDEP line of JSON, writing nothing; unset, as in every build, it does nothing. The module declares no guarantee and nothing a guarantee reads.",
-   "digest": "571c1e33225a822c46fbbf7eec81d2bf4d560ed38be8762bc308f30566ab1305"
+   "digest": "c932f5745f1dfbfd12723073acb5b0b9b1c3a287ed642623a84c6610deef2e6c"
   },
   "Proofs.Flock.Claims.Recursion.LogWalk": {
    "why": "retl_walk, the tactic (an elab) that walks RetL goals at elaboration, step by step on the logged computation's head (retlStep, in Recursion/DecodeLog.lean's proofs and the module's own). It reads no files and does no IO, and the kernel replays every proof it builds.",

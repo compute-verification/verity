@@ -68,13 +68,13 @@ def readTree (dir : String) (k : ℕ) : IO (FlockDeploy.Raw × String) := do
           stratified := some k, closure := none, registered := none, publicInputs := none }, record)
 
 /-- Rep `r`'s proof, decoded as `verifyRep` decodes it, and its batched value `T` from the verifier's transcript run on
-the record's stream. -/
-def repProof (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : Session) (r : ℕ) (bytes : ByteArray) :
-    IO (Proof × F128) := do
+the record's stream (the decoded record's `streams` and `points`). -/
+def repProof (spec : SessionSpec) (st : Setup) (sch : Schedule) (streams : Array StreamRec)
+    (points : Array (Array F128)) (r : ℕ) (bytes : ByteArray) : IO (Proof × F128) := do
   let t := spec.tables[0]!
   let name := s!"{t}/rep{r}"
-  let some stream := sess.streams.find? (·.name == name) | die s!"no stream {name}"
-  let extras ← ofE "extras" (st.extra sess.points)
+  let some stream := streams.find? (·.name == name) | die s!"no stream {name}"
+  let extras ← ofE "extras" (st.extra points)
   let saltLen : Option Nat := if st.merkle.saltBytes = 0 && !st.openedSalts then none else some st.merkle.saltBytes
   let shape : Flock.Shape :=
     { m := st.m, kLog := st.kLog, claims := 2 + extras.size, sched := sch, hashLen := st.merkle.digestLen, saltLen }
@@ -102,7 +102,7 @@ def runTree (dir : String) (k : ℕ) : IO UInt32 := do
   let some sch := fast100 st.m | die s!"m = {st.m}: no fast100 schedule"
   let mut ps : Array (Proof × F128) := #[]
   for r in [0:2] do
-    ps := ps.push (← repProof spec st sch sess r
+    ps := ps.push (← repProof spec st sch sess.streams sess.points r
       (← IO.FS.readBinFile s!"{dir}/inner/s0/session/{spec.tables[0]!}.rep{r}.bin"))
   say s!"decoded both reps' proofs, T {ps.map (·.2.toHex)}"
   let c₁ : Coin := fun i => (sess.points.getD (i.val / spec.mPts) #[]).getD (i.val % spec.mPts) 0
