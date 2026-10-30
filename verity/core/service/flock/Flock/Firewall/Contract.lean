@@ -374,16 +374,16 @@ def step (pub : PublicInput) (t : ReleaseLog) (s : State) : Item → V State
       "Finish: a masked value not checked against every relation"
     return { s with finished := true }
 
-/-- `run`'s verdict: the first `released` items may leave; `cut`, when some item may not, says why (the item at
+/-- `run`'s release decision: the first `released` items may leave; `cut`, when some item may not, says why (the item at
 `released`), or that the session ended without `finish`. -/
-structure Verdict where
+structure ReleaseDecision where
   released : Nat
   cut : Option String
   deriving Repr, Inhabited
 
-def Verdict.accepted (v : Verdict) : Bool := v.cut.isNone
+def ReleaseDecision.accepted (v : ReleaseDecision) : Bool := v.cut.isNone
 
-def go (pub : PublicInput) (t : ReleaseLog) : State → List Item → Nat → Verdict
+def go (pub : PublicInput) (t : ReleaseLog) : State → List Item → Nat → ReleaseDecision
   | s, [], n => if s.finished then ⟨n, none⟩ else ⟨n, some "the session ended without Finish"⟩
   | s, it :: rest, n =>
     if s.finished then ⟨n, some "an item after Finish"⟩
@@ -399,7 +399,7 @@ def tapeError (t : ReleaseLog) : Option String :=
 
 /-- The contract on one release log, held to the verifier's public input `pub`; a tape whose salts or pads repeat a value
 releases nothing. -/
-def run (pub : PublicInput) (t : ReleaseLog) : Verdict :=
+def run (pub : PublicInput) (t : ReleaseLog) : ReleaseDecision :=
   match tapeError t with
   | some why => ⟨0, some why⟩
   | none => go pub t (State.init t) t.items.toList 0
@@ -561,7 +561,7 @@ theorem go_last {pub : PublicInput} {t : ReleaseLog} : ∀ {s : State} {l : List
 /-- An accepted session's tape names each salt and each pad once, and `go` lets every item through. -/
 theorem holds_go {pub : PublicInput} {t : ReleaseLog} (h : Holds pub t) :
     tapeError t = none ∧ (go pub t (State.init t) t.items.toList 0).cut = none := by
-  have h' : (run pub t).cut = none := by simpa [Holds, Verdict.accepted, Option.isNone_iff_eq_none] using h
+  have h' : (run pub t).cut = none := by simpa [Holds, ReleaseDecision.accepted, Option.isNone_iff_eq_none] using h
   unfold run at h'
   cases he : tapeError t with
   | some why => simp [he] at h'
@@ -837,7 +837,7 @@ def PublicInput.ofJson (j : Json) : V PublicInput := do
     | _ => throw "public input.coins: not an object"
   return { schedule, relations := ← names "relations", statement, computes := ← names "computes", coins }
 
-def Verdict.toJson (v : Verdict) : Json :=
+def ReleaseDecision.toJson (v : ReleaseDecision) : Json :=
   Json.mkObj [("accepted", Json.bool v.accepted), ("released", Json.num v.released),
     ("why", match v.cut with | some w => Json.str w | none => Json.null)]
 
