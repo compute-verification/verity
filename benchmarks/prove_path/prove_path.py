@@ -8,7 +8,7 @@ advice is opened to the verifier until the compile unit exists, README.md), comp
 compiler, derives its own window and audits it through the one-stage audit's `service.Stream` (`benchmarks/one_stage/a5.py`'s
 `audit`): register, select on the verifier's own live coins (read only after the receipt), Flock `--zk` behind the Lean
 ZK server on the sampled proof blocks, Lean's verdicts, and the outcome, which the Lean verifier of record's `Run.run` must agree with. It
-then checks that the advice was fixed before the sample (`advice_before_draw`).
+then checks that the advice was fixed before the sample (`advice_before_sample`).
 
 Two kinds of committed run:
 
@@ -65,8 +65,8 @@ Two kinds of committed run:
   (`forging`): its rows, commit strings and roots all agree with the flipped word, so only the proof can refuse it.
 * **audit** (the verifier): each window from the record, the opened advice and its own compiler (`open_advice`, `window_of`;
   a single-GPU or served window's Programs from its own Builds, written into ``--builds``, default ``OUT/builds``),
-  audited by a5 on the verifier's coins with the advice negatives beside it (`more_negatives`), then `advice_before_draw` on the
-  sample's receipt and the advice-root-after-the-draw negative (`advice_after_draw`); ``OUT/summary.json`` over the windows.
+  audited by a5 on the verifier's coins with the advice negatives beside it (`more_negatives`), then `advice_before_sample` on the
+  sample's receipt and the advice-root-after-the-draw negative (`advice_after_sample`); ``OUT/summary.json`` over the windows.
   ``--forged``: the prover runs with its self-check skipped (``FC_ZK_SELF_CHECK=skip``) so it sends proofs of the false
   witness, and a window passes when its registration passed every check before the sample and Lean refused the outcome
   (`forged_row`). ``--plain``: the sessions are plain Flock, not `--zk` (a5's ``--plain``: a stratified sample over a window of
@@ -105,12 +105,12 @@ Two kinds of committed run:
   values}``, never a root computed from a checkpoint; a registered read counts registered only where the window's
   registration, `verity-vllm advice`'s, records the pinned root for its parameter, and any other is free), which
   ``records_audit.py count`` recounts from the record alone. A5 audits it once the committer writes each
-  unit's rows as the record's members (V3c).
+  unit's rows as the record's members.
 * **class-size**: that Circuit's padded size at ``--class``, too large to lower there (`class_size_of_advice`): one class
   Program of the window's registration lowered at the small class ``--probe`` and projected with v19's heads
   (`class_size.project`), its units, ANDs and m a Program and at the class's slots (the window's circuit, whatever its
   requests).
-* **window-commit** (the prover, V3c): the served window committed as that Circuit's units (`window_commit_of_advice`):
+* **window-commit** (the prover): the served window committed as that Circuit's units (`window_commit_of_advice`):
   slot k is the advice's k-th request, its row (occupancy, prompt length, ids) its ingress prompt, its values its sealed
   record's (`window_rows.Served`) and the class Program's where the engine computed none; the weights, composed from the
   checkpoint ``--checkpoint-dir`` (its shards checked against ``--checkpoints`` where given) and opened against the committed weights
@@ -140,7 +140,7 @@ read; ``local`` is a development session on this machine, pinned on ``--main``, 
 history; ``gate:USER@HOST`` is the auditor host through its SSH gate with the lane's gate key ``--gate-key``, its challenger on
 ``--peer``'s 127.0.0.1, so the audit runs on that peer, under the deployment's key record ``--challenger-key``). The gate opens
 a root once, ever, and a window's honest and forged commits share the run root, so only one of them draws there.
-`advice_before_draw` holds the advice to the receipt of the stream that sampled.
+`advice_before_sample` holds the advice to the receipt of the stream that sampled.
 """
 from __future__ import annotations
 
@@ -964,7 +964,7 @@ def more_negatives(a: argparse.Namespace, r: int, world: int, compiler: Capped, 
     return neg
 
 
-def advice_before_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], bound: Mapping[str, Any], coins: str = "verifier") -> dict:
+def advice_before_sample(receipt: Mapping[str, Any], rec: Mapping[str, Any], bound: Mapping[str, Any], coins: str = "verifier") -> dict:
     """That the advice was fixed before the coins, checked rather than assumed, as `pouw.credit.draw_root` checks the credit bits:
     the digest of the registration the verifier holds the opening to (`registration.digest`, which covers the window's
     ``compiler`` and ``advice`` root) must be the one the sample's receipt names, the receipt the stream wrote when it received the
@@ -983,18 +983,18 @@ def advice_before_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], bound
             "detail": {"drawn_after": receipt.get("registration"), "registration": R.digest(rec), "received": receipt.get("received")}}
 
 
-def advice_after_draw(compiler: Capped, receipt: Mapping[str, Any], rec: Mapping[str, Any], opening: Mapping[str, Any], mine: Any,
+def advice_after_sample(compiler: Capped, receipt: Mapping[str, Any], rec: Mapping[str, Any], opening: Mapping[str, Any], mine: Any,
                       held: dict, source: Callable[[dict | None, Any, dict], dict] = SRT.source, coins: str = "verifier") -> dict:
     """The negative: once the coins are read, the prover commits the same advice again (fresh salts, so a fresh root) and hands
     in a registration binding that root, with its opening. Every check before the sample passes on it (``source`` against the new
-    opening: the root is a true commitment of the advice), and `advice_before_draw` refuses it (``after-the-draw``): the sample
+    opening: the root is a true commitment of the advice), and `advice_before_sample` refuses it (``after-the-draw``): the sample
     followed the registration received first."""
     data = bytes.fromhex(opening["advice"])
     late = AW.opening(data, AW.commit_advice(compiler, data))
     _reqs, bound = open_advice(compiler, late)
     late_rec = {**rec, "window": {**rec["window"], "advice": bound["advice"]}}
     src = source(late_rec["window"], mine, {**held, **bound})
-    v = advice_before_draw(receipt, late_rec, bound, coins)
+    v = advice_before_sample(receipt, late_rec, bound, coins)
     return {"refused": not v["ok"], "codes": v["codes"], "before_draw_checks_pass": src["ok"]}
 
 
@@ -1037,8 +1037,8 @@ def template_bits(mine: Any, sets: Mapping[str, tuple]) -> dict[str, int]:
 
 def charge_terms(record: Mapping[str, Any], bits: Mapping[str, int], advice_bits: int, delta: float) -> dict[str, Any] | None:
     """The terms of the leak bound an accepted audit gives (README, "What an accepted audit means"): c, the advice's bits
-    (``advice_bits``); δ (``delta``); ``wrong_units``, the profile's bounds at δ; λ_δ, which units are faulty
-    (``location_bits``, `consumers.location_bits`); β_δ, the faulty proof blocks' committed bits (``harm_bound``: the profile's
+    (``advice_bits``); δ (``delta``); ``wrong_units``, the profile's bounds at δ; λ_δ, which units are incorrect
+    (``location_bits``, `consumers.location_bits`); β_δ, the incorrect proof blocks' committed bits (``harm_bound``: the profile's
     `harm_bound`, each template's units weighing its committed ``bits``, the most of them where the law's strata aren't the
     templates); and ``exfiltration_bound`` = β_δ + λ_δ (`consumers.exfiltration_bound`). ``record`` is the audit record
     (a5's ``audit.json``); None where it isn't accepted, which bounds nothing."""
@@ -1093,9 +1093,9 @@ def rank_audit(a: argparse.Namespace, world: int, r: int) -> dict:
     if s.get("draw") is not None:
         coins = "challenger" if a.coins is not None else "verifier"
         rec, receipt = (json.loads((out / f).read_text()) for f in ("registration.json", "receipt.json"))
-        row["advice_before_draw"] = advice_before_draw(receipt, rec, bound, coins)
+        row["advice_before_draw"] = advice_before_sample(receipt, rec, bound, coins)
         row["negatives"] = {**(row["negatives"] or {}),
-                            "advice-root-after-the-draw": advice_after_draw(compiler, receipt, rec, opening, mine, held, src, coins)}
+                            "advice-root-after-the-draw": advice_after_sample(compiler, receipt, rec, opening, mine, held, src, coins)}
         ordered = row["advice_before_draw"]["ok"] and row["negatives"]["advice-root-after-the-draw"]["refused"]
     else:
         ordered = False
@@ -1326,7 +1326,7 @@ def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
 
 
 def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
-    """A served window committed as its window class's one Circuit (V3c, module docstring): the class lowered
+    """A served window committed as its window class's one Circuit (module docstring): the class lowered
     (`window_circuit.lower`, refused where the class's slots don't take the window), each slot's values (`window_rows.Slot`,
     the k-th request's served values its sealed record's), every unit's rows (`window_rows.Rows`) recorded into a `Window`
     under the record's run root, the weights it serves committed under the committer's key ``--key`` as the registration
@@ -1413,16 +1413,15 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     lap("weights")
     filled = WRS.Rows(low, slots, values)
     lap("rows")
-    win = IF.Window(low.circuit, run, DR.parse_law(a.law), a.cap, registered=values)
+    win = IF.Window(low.circuit, run, DR.parse_law(a.law), a.cap, registered=values, forms=WRS.FORMS)
     win.supply(CR)
     filled.record(win)
     lap("record")
     c = win.close(workers=a.workers or min(16, os.cpu_count() or 1))
     lap("close")
-    prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "window": int(a.window),
-                               "requests": [u.id for u in units]},
+    prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "window": int(a.window)},
             "activations": {"program": WC.NAME, "values": {SS.SCAN_STATE: values[SS.SCAN_STATE].entry()}}}
-    win.write(c, a.out, prov, registrar=R)
+    win.write(c, a.out, prov, registrar=R, index_salt=WRS.index_salt(key, int(a.window)))
     lap("write")
     sources = {s: int(sum((x == i).sum() for x in filled.source.values())) for i, s in enumerate(WRS.SOURCES)}
     return {"run": run, "circuit": hashlib.sha512((Path(a.out) / "circuit.json").read_bytes()).hexdigest(),
@@ -1584,7 +1583,7 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument(flag, required=True)
     p.add_argument("--window", type=int, required=True)
     p.add_argument("--probe", default="1,2,2", help="the class SLOTS,PROMPT,OUTPUTS one Program is lowered at exactly")
-    p = sub.add_parser("window-commit", help="a served window committed as its window class's one Circuit's units (V3c)")
+    p = sub.add_parser("window-commit", help="a served window committed as its window class's one Circuit's units")
     for flag in ("--serve-run", "--row-dir", "--advice", "--out"):
         p.add_argument(flag, required=True)
     p.add_argument("--window", type=int, required=True)

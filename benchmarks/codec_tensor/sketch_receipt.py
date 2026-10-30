@@ -1,5 +1,5 @@
 """sketch-sha512 on the device: how the weight GEMM's sketch warps (wt.cu) and attention's form 13 (kv.cu) lay out the
-remote bandwidth driver's signs over the store's chunks. The receipt, its signs, σ and y, is
+PoUB driver's signs over the store's chunks. The receipt, its signs, σ and y, is
 `receipts.SketchReceipter`'s: `sign_bits` and `signs` are its signs as arrays, and `sketches` and `receipts_of` its σ
 and its y over many chunks.
 

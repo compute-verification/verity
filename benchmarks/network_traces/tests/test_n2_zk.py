@@ -45,7 +45,8 @@ def test_each_round_refuses_what_its_references_say(runs):
     assert all(x.word == 0b11 and x.expect == 1 for x in honest.windows)
     for name in n2.ROUNDS:
         assert n2.expected(name, runs[name]), name
-        assert (name == "honest") == all(x.expect for x in runs[name].windows), name
+        xs = runs[name].windows
+        assert (name == "honest") == (bool(xs) and all(x.expect for x in xs)), name
     e0, t0 = honest.windows[0].opening.records[0].head, runs["tampered"].windows[0].opening.records[0].head
     assert sum(a != b for a, b in zip(e0.counts, t0.counts)) == 1 and sum(t0.counts) == sum(e0.counts) + 1
     assert runs["tampered"].windows[0].certificates == honest.windows[0].certificates
@@ -88,7 +89,7 @@ def test_the_scan_leaves_out_only_the_pieces_the_public_circuit_holds(runs):
     assert held_kept == {k for k in kept if k.rsplit(" @", 1)[0] in held} - tails and held_kept
 
 
-def test_jobs_is_one_firewalled_session_at_a_time(monkeypatch):
+def test_jobs_is_one_zk_server_session_at_a_time(monkeypatch):
     monkeypatch.setattr(n2, "prove", lambda a: a.jobs)
     argv = ["prove", "--run", "r", "--out", "o", "--dry"]
     assert n2.main(argv) == 1 and n2.main([*argv, "--jobs", "1"]) == 1
