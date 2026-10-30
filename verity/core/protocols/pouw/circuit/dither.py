@@ -11,7 +11,9 @@ X = wrap8(A + d_A + V) and W′ = wrap8(B + d_B + U π_τ), τ = k div L′, and
     T_s = sum over k < min(s L, K) of X_ik W′_jk  mod 2^16   (s = 1 .. S = ceil(K / L)),   O_ij mod 2^32,
 
 with L = t L′ (by default L = 1,024 and L′ = 128, t = 8: `Shape`). It commits T_1 .. T_{S−1} and O:
-T_S is implied by O, and at L ≥ K a cell commits O alone. A filler call
+T_S is implied by O, and at L ≥ K a cell commits O alone. Only the noised segments s < S are credited, K − L MACs a
+cell: segment S is checked through O, the un-noised product of operands the prover chose, so its block checks O for
+O's consumers and earns nothing, and neither does a call at L ≥ K. A filler call
 may take its A from the per-call pad instead (`fill_seeds`, `pad_rows`); it commits no O, so it commits T_S (`Shape.o`).
 
 **The coins** are each stream's 512-bit seed, expanded as v31 expands them:
@@ -117,8 +119,8 @@ KEY = INST.default_key
 
 @dataclass(frozen=True)
 class Shape:
-    """A call: m rows of A against n rows of B at contraction k, HYB noise of period lp (L′), words every L inner indices,
-    leaf rows of `row` bytes, and O committed (`o`; a filler's calls commit none)."""
+    """A call: m rows of A against n rows of B at contraction k, HYB noise in noise tiles of lp (L′) inner indices,
+    words every L, leaf rows of `row` bytes, and O committed (`o`; a filler's calls commit none)."""
 
     m: int
     n: int
@@ -139,7 +141,7 @@ class Shape:
             raise ValueError(f"L is t L′, a multiple of L′ {self.lp}, not {self.L}")
         if min(self.L, self.k) > 8 * self.lp:
             raise ValueError(f"t = min(L, K) / L′ is at most 8 (verity/core/protocols/pouw/dither/PROTOCOL.md, The segment "
-                             f"and the noise period), not {min(self.L, self.k)} / {self.lp} at L {self.L}, K {self.k}")
+                             f"and the noise tile), not {min(self.L, self.k)} / {self.lp} at L {self.L}, K {self.k}")
         if self.row <= 0 or self.row % 16 or TILE_WORD_BYTES % self.row:
             raise ValueError(f"a row is a multiple of 16 bytes dividing {TILE_WORD_BYTES}, not {self.row}")
 
