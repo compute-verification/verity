@@ -8144,17 +8144,6 @@
     "Properties.SampledProofs.bernoulliBounds"
    ]
   },
-  "Flock.Public": {
-   "digest": "3884bfeaa41a93d6782996604d746354a90288863d80a01a9f6feb1615e58ab3",
-   "definitions": {
-    "Flock.FV3.FRAME": "7a59c990468cab7e2b8010a7dcb24e3ed28bce0494751048f05c32a61f8a71e8",
-    "Flock.FV3.hash": "b59ec9cab0b358159e9e87bbae75fb83fb1b8266134f3ad0d2959008ae422824",
-    "Flock.FV3.leaf": "027d85b9f1f1fbc3c30712279bc8edbae3ee86530a1a213a9f17487015cac266",
-    "Flock.FV3.root": "3f312addeaaede8670781070d6bcfb27b7ed5a7df60a536678d5db0e1d8ed3d3",
-    "Flock.FV3.uint": "f00ede6b3df22859c2566c85b1665172f6061ba7a25333f7f96b23c90f52252c"
-   },
-   "guarantees": ["Properties.Pouw.ServedValues.SecurityProofs.rightValues"]
-  },
   "Flock.Qcall": {
    "digest": "0deb08c223d18d1d6411a9981770c33971aa5da6e1909aee6a9e743aa00f4aaf",
    "definitions": {
