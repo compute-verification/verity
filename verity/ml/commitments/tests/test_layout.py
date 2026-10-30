@@ -32,12 +32,12 @@ DIGESTS = {
 }
 
 
-def written(layout: L.Layout) -> bytes:
+def written(layout: L.RowsPerSlot) -> bytes:
     """The file ``commit_slots/step.py export`` writes: ``_layout_json``'s output, compact, then a newline."""
     return (json.dumps(L.to_json(layout), separators=(",", ":")) + "\n").encode()
 
 
-def read(fixture: tuple[Path, str]) -> tuple[bytes, L.Layout]:
+def read(fixture: tuple[Path, str]) -> tuple[bytes, L.RowsPerSlot]:
     raw = fixture[0].read_bytes()
     assert hashlib.sha256(raw).hexdigest() == fixture[1]
     return raw, L.load(fixture[0])
