@@ -1918,6 +1918,24 @@ def test_a_run_that_ends_rings_its_senders_handle_once(tmp_path):
     assert len(ended(tmp_path)) == 4, "each run rings once, across restarts"
 
 
+def test_a_run_a_worker_sent_is_its_activity(tmp_path):
+    """A worker whose only sign of life was the runs it sent (no note, no push) was rung silent and then no_step while its runs
+    ended every hour. A run counts from when it was sent (its end less its wall time), learned when it ends."""
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits worker W3 ({W1_})", age_s=2 * 3600)
+    api, clock, w, sh, roots = nodes_setup(tmp_path, workers={W1_: worker("ACTIVE", W.iso(T0 - 3 * 3600))}, git_remote=REMOTE)
+    sh.heads["main"] = "m" * 40
+    w.sweep(lambda r: None)
+    for i in range(6):
+        sweeps(w, clock, 60)
+        node_run(roots["vy-nebius-1"], f"r20261018-2{i}0000-000{i}", clock.t, by=f"https://cursor.com/agents/{W1_}", wall_s=600)
+    sent = clock.t - 600
+    assert silent(tmp_path) == [], "a run sent every hour is activity"
+    sweeps(w, clock, 120)
+    (rec,) = silent(tmp_path)
+    assert rec["agent"] == W1_ and rec["since"] == W.iso(sent), "silence counts from its newest run's sending"
+
+
 def test_a_run_ends_sender_resolves_as_a_learned_worker_does_and_the_rest_are_one_record_for_infra(tmp_path):
     """The pod's watch log, 19 Oct: 847 run ends "which no handle owns: not rung" since 05:28Z. Among them, vy-nebius-2's
     r20261019-043737-f6de (05:28:58Z) sent by CENSUSAND (bc-fe356a9d), a worker learned from a Task call of circuits' generation

@@ -840,7 +840,8 @@ class Watch:
         self.holders_all: dict[str, str] = {}       # every agent a registry holder names (its lanes too) -> the handle
         self.heads_path, self.ends_path = log.with_name("heads.json"), log.with_name("run_ends.json")
         self.heads = read_json(self.heads_path)     # {"t0", "t", "heads": {branch: [sha, when the watch first saw it]}}
-        self.ends = read_json(self.ends_path)       # {"since", "nodes": {node: last read}, "seen": {node/run: when}}
+        self.ends = read_json(self.ends_path)       # {"since", "nodes": {node: last read}, "seen": {node/run: when},
+                                                    #  "ran": {agent: when its newest ended run was sent}}
         self.heads_read = self.ends_read = -float("inf")
         self.said: dict[str, float] = {}            # what failed -> when it was last printed
         self.names: dict[str, str] = {}             # listed agent -> its name, for run_ended
@@ -1499,8 +1500,8 @@ class Watch:
     def watch_silence(self, known: dict[str, dict], t: float) -> None:
         """Record `silent` for each agent in `known` (agent -> {name, handle, lane, run, since: ACTIVE since, branches}) with no
         note of its (`note_times`) and no push to its branches (its own, the ones its notes name, every head ending in its
-        id's last four characters, as a coordinator's `cursor/...-1037`, and the heads `same_task` finds for any of these) for
-        `SILENT_S`, counted from the latest of those, its
+        id's last four characters, as a coordinator's `cursor/...-1037`, and the heads `same_task` finds for any of these) and
+        no run it sent (`run_ends`' `ran`) for `SILENT_S`, counted from the latest of those, its
         ACTIVE spell's start and the first heads read; again after a second window, then not until one of those moves. Needs
         `--notes` and heads read in the last `HEADS_STALE_S`."""
         changed = False
@@ -1521,8 +1522,9 @@ class Watch:
             pushed = max((heads[b][1] for b in mine if b in heads), default=None)
             # a coordinator signs its notes with its lane, not its id (top, 27 Oct: four false silent rings in 70 min)
             lane_note = max((lanes[x] for x in (k["handle"], k["lane"]) if x and x in lanes), default=None) if coord else None
-            last = max(x for x in (k["since"], heard.get(agent), heard.get(short_id(agent)), lane_note, pushed, self.heads["t0"])
-                       if x is not None)
+            ran = (self.ends.get("ran") or {}).get(agent)
+            last = max(x for x in (k["since"], heard.get(agent), heard.get(short_id(agent)), lane_note, pushed, ran,
+                                   self.heads["t0"]) if x is not None)
             s = self.silent.get(agent)
             if s and s["from"] != last:
                 self.silent.pop(agent)
@@ -1612,8 +1614,9 @@ class Watch:
         as `run_ended` for the handle of whoever sent it: a coordinator's own or a former one's, a worker's launcher's or its
         parent's (only its coordinator can resume it, with Task), else its lane's (`--by`, the job's lane, or a handle named in
         `submitted_by`) when that is a handle. The read's runs no handle owns are one record, with no handle and role `unknown`.
-        `run_ends.json` keeps each node's last read and the runs already seen; runs that ended before the first read are not
-        rung."""
+        `run_ends.json` keeps each node's last read, the runs already seen, and when each sender sent its newest ended run (its
+        end less its wall time), which `watch_silence` counts as the sender's activity; runs that ended before the first read
+        are not rung."""
         cfg = read_json(self.nodes)
         nodes = [str(n) for n in cfg.get("nodes") or []]
         every = cfg.get("every_s") if isinstance(cfg.get("every_s"), (int, float)) else RUN_ENDS_EVERY_S
@@ -1621,7 +1624,8 @@ class Watch:
             return
         self.ends_read = t
         st = {"since": self.ends.get("since", t), "nodes": dict(self.ends.get("nodes") or {}),
-              "seen": {k: v for k, v in (self.ends.get("seen") or {}).items() if v >= t - RUN_ENDS_KEEP_S}}
+              "seen": {k: v for k, v in (self.ends.get("seen") or {}).items() if v >= t - RUN_ENDS_KEEP_S},
+              "ran": {k: v for k, v in (self.ends.get("ran") or {}).items() if v >= t - RUN_ENDS_KEEP_S}}
         handles = {str(h.get("handle")) for h in read_json(self.registry).get("handles") or []}
         quiet = {str(h) for h in cfg.get("quiet_handles") or []}
         unknown: list[dict] = []
@@ -1637,6 +1641,8 @@ class Watch:
                     continue
                 st["seen"][key] = t
                 ended = epoch(row.get("ended")) or row.get("mtime") or t
+                if (by := AGENT_RE.search(str(row.get("submitted_by") or ""))) and isinstance(row.get("wall_s"), (int, float)):
+                    st["ran"][by[0]] = max(ended - row["wall_s"], st["ran"].get(by[0], 0))
                 if ended >= st["since"] and (u := self.ring_run(node, row, coords, handles, ended, quiet)):
                     unknown.append(u)
         if unknown:
