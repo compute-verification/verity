@@ -123,18 +123,20 @@ def test_a_mirror_that_skips_the_rows_check_is_caught(server, monkeypatch):
 #: The refusals the period must make by name, each with what Lean's reason and the mirror's say: a link-window shown
 #: with an answer of its own (the made-up `{"verdict": "accept", …}` the check once read), one whose proof v2 refuses
 #: (a public file or a session record in no blob, proof blocks no session proved, a circuit file in no blob), one whose
-#: sessions opened a root other than the registered one, and in the rows form a link-window missing one of its
-#: records' certificates, one the network certifier left uncertified for refusing a connection (traffic past its
-#: Program slots), a registration not under the deployment key, the scan's answer for another window's rows, rows under
-#: a schedule whose digest isn't the bound one, scans at two δ, a scan answered over other than its 2T units, a scan
-#: whose `prog` is no compute audit's output and an audit a scan's `prog` is tied to with a proof block not sampled; and
-#: an audit's read of the scan's state rows in the clock form, which has no scan, or under no link-window's root and
-#: domain.
+#: sessions opened a root other than the registered one, one whose sample's coins are not the auditor's challenger's
+#: release after its registration (none, another session's, another link-window's, or with a coin skipped), and in the
+#: rows form a link-window missing one of its records' certificates, one the network certifier left uncertified for
+#: refusing a connection (traffic past its Program slots), a registration not under the deployment key, the scan's
+#: answer for another window's rows, rows under a schedule whose digest isn't the bound one, scans at two δ, a scan
+#: answered over other than its 2T units, a scan whose `prog` is no compute audit's output and an audit a scan's `prog`
+#: is tied to with a proof block not sampled; and an audit's read of the scan's state rows in the clock form, which has
+#: no scan, or under no link-window's root and domain.
 REFUSALS = {
     "answer-made-up": ("answer: the check runs one-stage v2 on the link-window's proof itself and takes no answer",
                        "answer: the check runs one-stage v2 on the link-window's proof itself"),
     "v2-refused": ("one-stage v2: ", "one-stage v2: "),
     "v2-session": ("one-stage v2: the audit's checks failed: roots", "one-stage v2: "),
+    "v2-coins": ("one-stage v2: coins: ",) * 2,
     "rows-cert-missing": ("certificates: the requests', responses' and fails' records'", "certificates"),
     "rows-past-slots": ("certifies none of a window in which it refused a connection", "refused a connection"),
     "rows-reg-key": ("not under the deployment key in the session", "doesn't verify under"),
