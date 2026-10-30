@@ -136,3 +136,24 @@ and easier to tune." The coordinator's reading, which lane HT-ITER tests:
   - Pricing that is HT-PREMISE's work. Magnitude against quality is HT-ITER's and HT-ML's.
 - **Redraws:** drawing R again after a bad draw lets the developer pick the best of k. That costs log k bits, which is
   negligible for counting, but it's a rule question. Prefer no redraw.
+
+**Correction to design D (Daniel, 1:31 PM PDT: "isn't the total entropy added what matters?").** "Only the last
+injection carries security" holds only when training between injections is unconstrained. The developer knows each
+R_t and can undo it. With constrained training between rounds, earlier randomness partly survives. The measure is not
+the total injected entropy:
+
+- **The right quantity:** the final W is F(R_1, …, R_T) for a developer-chosen F within the training constraints.
+  Hardness by counting needs the min-entropy of W, under the developer's best F, to exceed log |cheap matrices| plus
+  the security bits.
+- **That min-entropy is capped three ways:**
+  - **By the format:** at most 8 bits an entry for int8, however many rounds.
+  - **By how independent noise adds:** T rounds of ±1 sum to about ½·log₂T bits an entry in magnitude spread, not T
+    bits.
+  - **By the developer's adaptive training:** it acts after every round, so its total cancelling budget grows like T
+    while the accumulated noise grows like √T.
+- **So many small rounds can favour the adversary** unless the per-round budget shrinks like 1/√T. Low-rank rounds
+  compose to rank T·r, and the reduction goes vacuous as T·r → n.
+- **The strongest security per unit of quality is still one large final draw after the commitment,** with little or no
+  training after it. Iteration buys robustness, plus whatever survives constrained rounds.
+
+HT-ITER should model this: the surviving min-entropy against T, ρ_t and the alphabet.
