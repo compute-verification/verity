@@ -33,7 +33,7 @@ deployed bound record holds at SHA-512 with no premise (`RecDeploy.lastBindsEC_d
 
 **Where the record's text stands.** The verifier reads the record's text through `Json.parse`, and S0 accepts one text
 per parse (`LastGap.checks_record_eq`), so of two records that parse alike at most one is accepted: the trailing-space
-pair that refuted `LastBinds` before S0 is refused (`LastGap.check_space`). Two records that
+pair that refuted (P4) as first stated before S0 is refused (`LastGap.check_space`). Two records that
 parse differently can still give the same accepted decision, with calls that are the same set but not the same list:
 `Record.decodeWith` hashes the rounds in the record's own stream order, and the digest of a table's empty publics only
 when the record lists it. So the calls are compared as sets throughout: with them compared as lists,

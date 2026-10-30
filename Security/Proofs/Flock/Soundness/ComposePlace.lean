@@ -205,21 +205,28 @@ variable {st : Stmt} (L : Layout st)
 include L
 
 /-- The unit net's computed row `c`'s columns are below its slot's size. -/
-theorem unit_row_lt {c : ℕ} (hlo : st.c.unit.inWords * WORD ≤ c) (hhi : c < st.c.unit.constPos) (hu : st.c.unit.unitLog ≤ 32) :
+theorem unit_row_lt (hU : Built st.c.unit) {c : ℕ} (hlo : st.c.unit.inWords * WORD ≤ c) (hhi : c < st.c.unit.constPos)
+    (hu : st.c.unit.unitLog ≤ 32) :
     (∀ x ∈ (st.c.unit.a.row c).toList, x < 2 ^ st.c.unit.unitLog) ∧
       ∀ x ∈ (st.c.unit.b.row c).toList, x < 2 ^ st.c.unit.unitLog := by
-  have hn := L.unitRows_nIn
-  have hnc := L.unitRows_nIn_nComp
-  have hw := L.unitRows_w
-  let i : Fin (unitRows st L.unit_built).nComp := ⟨c - (unitRows st L.unit_built).nIn, by omega⟩
-  have hi : ((unitRows st L.unit_built).comp i).val = c := by
-    show (unitRows st L.unit_built).nIn + (c - (unitRows st L.unit_built).nIn) = c
+  have hn : (Rows.ofNet hU).nIn = st.c.unit.inWords * WORD := Nat.min_eq_left L.unit_in
+  have hnc : (Rows.ofNet hU).nIn + (Rows.ofNet hU).nComp = st.c.unit.constPos := by
+    show min _ _ + (_ - min _ _) = _
+    have := Nat.min_le_right (st.c.unit.inWords * WORD) st.c.unit.constPos
+    omega
+  have hw : (Rows.ofNet hU).w ≤ 2 ^ st.c.unit.unitLog := by
+    show _ + _ + 1 ≤ _
+    rw [hnc]
+    exact L.unit_const_lt
+  let i : Fin (Rows.ofNet hU).nComp := ⟨c - (Rows.ofNet hU).nIn, by omega⟩
+  have hi : (Rows.ofNet hU).nIn + i.val = c := by
+    show (Rows.ofNet hU).nIn + (c - (Rows.ofNet hU).nIn) = c
     omega
   refine ⟨fun x hx => ?_, fun x hx => ?_⟩
-  · rw [← hi, ← L.unitRows_a hu i] at hx
+  · rw [← hi, ← Rows.ofNet_a hU hu i] at hx
     obtain ⟨y, -, rfl⟩ := List.mem_map.1 hx
     exact lt_of_lt_of_le y.isLt hw
-  · rw [← hi, ← L.unitRows_b hu i] at hx
+  · rw [← hi, ← Rows.ofNet_b hU hu i] at hx
     obtain ⟨y, -, rfl⟩ := List.mem_map.1 hx
     exact lt_of_lt_of_le y.isLt hw
 
@@ -227,24 +234,22 @@ theorem slot_eq {s₀ : ℕ} : st.c.unitRange.slot s₀ = (st.c.unitRange.pos0 +
   unfold Range.slot; rw [L.unit_slotLog]
 
 /-- **The block's `A` at a unit slot's computed row**: the unit net's row, shifted to the slot. -/
-theorem placedA_comp {s₀ c : ℕ} (hs : s₀ < st.c.unitRange.count) (hlo : st.c.unit.inWords * WORD ≤ c)
+theorem placedA_comp (hU : Built st.c.unit) {s₀ c : ℕ} (hs : s₀ < st.c.unitRange.count) (hlo : st.c.unit.inWords * WORD ≤ c)
     (hhi : c < st.c.unit.constPos) (r j : Fin (2 ^ st.c.kLog)) (hr : r.val = st.c.unitRange.slot s₀ + c) :
     placedA st r j = ((((st.c.unit.a.row c).toList.map (st.c.unitRange.slot s₀ + ·)).count j.val : ℕ) : ZMod 2) := by
-  have hU := L.unit_built
   show rangesEntry st (slotEntryA st) r.val j.val + deltaEntry st.da r.val j.val = _
   rw [hr, L.rangesEntry_unit hs (lt_trans hhi L.unit_const_lt), L.delta_unit_comp hs hlo hhi, add_zero, L.slot_eq,
-    count_map_add_ite (Nat.two_pow_pos _) _ (L.unit_row_lt hlo hhi (L.unitLog_le hs)).1]
+    count_map_add_ite (Nat.two_pow_pos _) _ (L.unit_row_lt hU hlo hhi (L.unitLog_le hs)).1]
   exact if_congr Iff.rfl (sparseEntry_built_a hU _ _) rfl
 
 /-- **The block's `B` at a unit slot's computed row**: the unit net's row, shifted to the slot. -/
-theorem placedB_comp {s₀ c : ℕ} (hs : s₀ < st.c.unitRange.count) (hlo : st.c.unit.inWords * WORD ≤ c)
+theorem placedB_comp (hU : Built st.c.unit) {s₀ c : ℕ} (hs : s₀ < st.c.unitRange.count) (hlo : st.c.unit.inWords * WORD ≤ c)
     (hhi : c < st.c.unit.constPos) (r j : Fin (2 ^ st.c.kLog)) (hr : r.val = st.c.unitRange.slot s₀ + c) :
     placedB st r j = ((((st.c.unit.b.row c).toList.map (st.c.unitRange.slot s₀ + ·)).count j.val : ℕ) : ZMod 2) := by
-  have hU := L.unit_built
   have hlk : (st.c.nets.getD st.c.unitNet default).2.lookup = none := L.unit_lookup
   show rangesEntry st (slotEntryB st) r.val j.val + deltaEntry st.db r.val j.val = _
   rw [L.delta_b, hr, L.rangesEntry_unit hs (lt_trans hhi L.unit_const_lt), L.delta_unit_comp hs hlo hhi, add_zero,
-    L.slot_eq, count_map_add_ite (Nat.two_pow_pos _) _ (L.unit_row_lt hlo hhi (L.unitLog_le hs)).2]
+    L.slot_eq, count_map_add_ite (Nat.two_pow_pos _) _ (L.unit_row_lt hU hlo hhi (L.unitLog_le hs)).2]
   refine if_congr Iff.rfl ?_ rfl
   show sparseEntry _ _ _ + lookupEntry (st.c.nets.getD st.c.unitNet default).2.lookup _ _ = _
   rw [hlk]
@@ -300,7 +305,7 @@ theorem placed_pin (j : Fin (2 ^ st.c.kLog)) :
 /-- **A flat accepted statement realizes, at unit slot `s₀`, every `Logical` whose rows are its unit net's.** The
 positions are `slot s₀ + c`, and the statement is the model of the matrices the verifier folds (`Layout.model`). -/
 theorem realizes (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {s₀ : ℕ} (hs : s₀ < st.c.unitRange.count)
-    {Lg : Logical} (hm : NetRows st.c.unit Lg) :
+    (hU : Built st.c.unit) {Lg : Logical} (hm : NetRows st.c.unit Lg) :
     Realizes (L.model regs) Lg (fun c => st.c.unitRange.slot s₀ + c) := by
   have hpinv : ∀ j : Fin (2 ^ (L.model regs).kLog), (j = (L.model regs).pin) ↔ j.val = st.pin :=
     fun j => ⟨fun h => by rw [h]; rfl, fun h => Fin.ext h⟩
@@ -309,9 +314,9 @@ theorem realizes (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {s₀
   · have hc := hm.le (Lg.order.getD ℓ 0) (by rw [List.getD_eq_getElem _ _ hℓ]; exact List.getElem_mem hℓ)
     exact L.unit_slot_lt hs (lt_of_le_of_lt hc L.unit_const_lt)
   · obtain ⟨hlo, hhi, rfl⟩ := hm.rows k hk p hp
-    exact L.placedA_comp hs hlo hhi r j hr
+    exact L.placedA_comp hU hs hlo hhi r j hr
   · obtain ⟨hlo, hhi, rfl⟩ := hm.rows k hk p hp
-    exact L.placedB_comp hs hlo hhi r j hr
+    exact L.placedB_comp hU hs hlo hhi r j hr
   · rw [hm.one k hk hp] at hr
     rw [if_congr (hpinv j) rfl rfl]
     exact L.placedA_const hs r j hr
