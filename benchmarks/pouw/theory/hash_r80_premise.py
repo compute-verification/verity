@@ -16,7 +16,7 @@ ShaWrites at R_SHA registers a compression gives R = R_SHA - 1,280 for programs 
 the protocol's words, which aren't, it is a premise of its own.
 
 **The test** (`falsify`, the Prop's parameters as its arguments: `design` is x, `bound` R, `eps`, `blocks` n,
-`chains` m, `dist` the instances): a candidate is a W1 program on `Machine`, a function of register handles that calls
+`chains` m, `dist` the instances): a candidate is a W1 program on `IntCore`, a function of register handles that calls
 only the machine's instructions (IADD3 with its carries, LOP3, SHF, IMAD, IMAD.HI, PRMT, SEL; ISETP's predicates and
 immediates free), so its count is the machine's. It gets a whole window, m chains, so it may share work across them,
 and runs on N windows drawn from a distribution: uniform words; each 32-bit half in a 2^20 span around 0 (the zero-data
@@ -72,7 +72,7 @@ class Pred:
         self.i = i
 
 
-class Machine:
+class IntCore:
     """W1's integer core on 32-bit registers over n instances. A candidate holds only handles (Reg, Pred) and Python
     ints (immediates); every instruction that writes a register counts one write; predicates and immediates are free."""
 
@@ -156,7 +156,7 @@ LUT_XOR3, LUT_CH, LUT_MAJ, LUT_XOR2 = 0x96, 0xCA, 0xE8, 0x3C
 SIG = {"S0": (28, 34, 39), "S1": (14, 18, 41)}
 
 
-def add64(m: Machine, *terms):
+def add64(m: IntCore, *terms):
     """A 64-bit add of two or three (lo, hi) terms or 64-bit immediates: IADD3, IADD3.X."""
     lo = [t[0] if isinstance(t, tuple) else t & M32 for t in terms] + [0] * (3 - len(terms))
     hi = [t[1] if isinstance(t, tuple) else t >> 32 for t in terms] + [0] * (3 - len(terms))
@@ -165,18 +165,18 @@ def add64(m: Machine, *terms):
     return rlo, rhi
 
 
-def rotr64(m: Machine, x, n: int):
+def rotr64(m: IntCore, x, n: int):
     lo, hi = x if n < 32 else (x[1], x[0])
     s = n & 31
     return (m.shf(lo, hi, s), m.shf(hi, lo, s)) if s else (lo, hi)
 
 
-def sig64(m: Machine, name: str, x):
+def sig64(m: IntCore, name: str, x):
     p, q, r = (rotr64(m, x, s) for s in SIG[name])
     return m.lop3(p[0], q[0], r[0], LUT_XOR3), m.lop3(p[1], q[1], r[1], LUT_XOR3)
 
 
-def honest_r80(m: Machine, st0, ws, rounds: int = 80, xor: bool = False):
+def honest_r80(m: IntCore, st0, ws, rounds: int = 80, xor: bool = False):
     """Honest R80 on the machine: 28 writes a round, the feed-forward fused into round 79 (2,254 a block); with xor
     (R80X), word t's halves XORed with xc(t)'s by one LOP3 each first (2,414 a block)."""
     st = list(st0)
@@ -270,7 +270,7 @@ def falsify(candidate, rng: np.random.Generator, *, design: str = "R80X", dist: 
     bound * blocks * chains * (lcb - eps), lcb the lower bound on its fraction of chains right."""
     bound = HONEST[design] if bound is None else bound
     st0, ws = draw(rng, dist, blocks, trials, chains)
-    m = Machine(trials)
+    m = IntCore(trials)
     pair = lambda x: (m.load(x & np.uint64(M32)), m.load(x >> np.uint64(32)))  # noqa: E731
     out = candidate(m, [([pair(x) for x in st0[i]], [pair(x) for x in ws[i]]) for i in range(chains)])
     right = np.zeros(trials)
@@ -344,7 +344,7 @@ def main() -> int:
     checks.check("K: a round with a word in W_t and one in the K_t slot equals a round of their sum, so the K slot adds "
                  "no bits", ok_wk)
     checks.check("K: a fold with words in both slots collides at (w + d, k - d) for every d: it doesn't bind them", ok_col)
-    m = Machine(1)
+    m = IntCore(1)
     honest_r80(m, [(m.load(np.zeros(1, np.uint64)), m.load(np.zeros(1, np.uint64)))] * 8,
                [(m.load(np.zeros(1, np.uint64)), m.load(np.zeros(1, np.uint64)))] * 80, rounds=79)
     per_round = m.writes / 79
