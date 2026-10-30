@@ -14,11 +14,14 @@ to the table and to the inner statement:
   (`checkTable`), its instances labelled `0` to `N − 1` in order (`Registered.unitIndices`);
 * its `rin` and `rout` are rows the verifier registers itself (`RecCoins.checkValue`): every instance's `rin` is the
   input rows' tree's root and its `rout` the output rows' (`RecLinkRef.expected` of `RecLinkTree.rowsRoot`), each tree
-  over the inner statement's own commit strings (`innerRows`).
+  over the inner statement's own commit strings (`innerRows`);
+* its unit is V\*'s `RecLink{UB, PB}` net, equal in every field (`checkUnit`), so a copy's outputs are the unit's at its
+  inputs (`FlockVBridge.RecLink.laid_linkUnit`).
 
 An instance's outputs equal to those roots name a reader row and a writer row of the inner statement that commit one
-digest, or a SHA-512 collision (`Proofs.Flock.Verifier.RecLinks.link_binding`). Every other unit passes. The trees are
-built once per part, one hash a row a level: linear in the inner statement's public file, which setup already reads.
+digest, or a SHA-512 collision (`Flock.RecLinkBind.link_binding`). Every other unit passes. The trees are
+built once per part, one hash a row a level: linear in the inner statement's public file, which setup already reads; the
+unit's net once per part, of a size `UB` and `PB` bound (`RecLinkTree.checkShape`).
 `checkShape` holds the statement's table to the verifier's inner shape, so the list has the part exactly when the
 statement carries the table.
 
@@ -80,17 +83,36 @@ def checkTable (c : Circuit) (pub : Public) (own : Array Registered.Port) (T : B
     throw (s!"rec-links: {unit}: its instances are labelled {idx}, not 0 to {pub.n} - 1 in order, so instance i " ++
       "would not read row i")
 
-/-- **The link part against the table and the inner statement**: a `rec-link/u<UB>-p<PB>` unit (`VStar.linkParams`;
-another `rec-link/` name is refused) is refused unless the statement carries the table (`links`, `--rec-links`), the
-verifier holds its registered reads and the inner statement's files, its `trow` reads the table (`checkTable`), and its
-`rin` and `rout` are the roots of the inner statement's input and output rows' trees (`innerRows`,
-`RecLinkTree.rowsRoot`, which refuses a row past `UB` or `PB` bits), every instance's. Any other unit passes. -/
-def check (st : Stmt) (own : Option (Array Registered.Port)) (files : Option RecCoins.Source)
-    (links : Option (ByteArray × Nat)) : V Unit := do
+/-- V\*'s `RecLink{UB, PB}` net: `VStar.linkUnit`'s layout under `linkName`. -/
+def unitNet (UB PB : Nat) : V Net := do HmNets.netOf (VStar.linkName UB PB) (← (← VStar.linkUnit UB PB).laid)
+
+/-- **The part's unit is V\*'s `RecLink{UB, PB}`** (`unitNet`), equal in every field, as `RecOpen.check` holds a level's;
+`RecVStar.checkParsed` holds the part's rows and leaves to V\*'s. Irreducible, so that no unification against it builds
+the net. -/
+@[irreducible] def checkUnit (c : Circuit) (UB PB : Nat) : V Unit :=
+  match unitNet UB PB with
+  | .error e => throw s!"rec-links: {c.unit.name}: V*'s unit: {e}"
+  | .ok g =>
+    if c.unit = g then pure ()
+    else throw s!"rec-links: {c.unit.name}: not the verifier's unit ({HmNets.firstDiff c.unit g})"
+
+theorem checkUnit_ok {c : Circuit} {UB PB : Nat} (h : checkUnit c UB PB = .ok ()) : unitNet UB PB = .ok c.unit := by
+  unfold checkUnit at h
+  split at h
+  · cases h
+  · rename_i g hg
+    split at h
+    · rename_i he
+      rw [hg, he]
+    · cases h
+
+/-- The link part against the table and the inner statement, at `UB` and `PB`: the statement carries the table
+(`links`, `--rec-links`), the verifier holds its registered reads and the inner statement's files, its `trow` reads the
+table (`checkTable`), and its `rin` and `rout` are the roots of the inner statement's input and output rows' trees
+(`innerRows`, `RecLinkTree.rowsRoot`, which refuses a row past `UB` or `PB` bits), every instance's. -/
+def checkLinks (st : Stmt) (own : Option (Array Registered.Port)) (files : Option RecCoins.Source)
+    (links : Option (ByteArray × Nat)) (UB PB : Nat) : V Unit := do
   let unit := st.c.unit.name
-  let some (UB, PB) := VStar.linkParams unit
-    | if unit.startsWith "rec-link/" then throw s!"rec-links: {unit}: a rec-link/ unit not named rec-link/u<UB>-p<PB>"
-      else return
   let some (T, N) := links
     | throw s!"rec-links: {unit}: the statement carries no link table (--rec-links ROOT:N), whose rows this part checks"
   let some own := own
@@ -106,6 +128,31 @@ def check (st : Stmt) (own : Option (Array Registered.Port)) (files : Option Rec
     fun i => s!"row {i}'s input rows' root"
   RecCoins.checkValue st.c st.pub own "rout" OUT_VALUE (Array.replicate N (RecLinkRef.expected W).toArray)
     fun i => s!"row {i}'s output rows' root"
+
+/-- **The link part against the table, the inner statement and V\*'s unit**: a `rec-link/u<UB>-p<PB>` unit
+(`VStar.linkParams`; another `rec-link/` name is refused) is refused unless it passes `checkLinks` and its unit is V\*'s
+(`checkUnit`). Any other unit passes. -/
+def check (st : Stmt) (own : Option (Array Registered.Port)) (files : Option RecCoins.Source)
+    (links : Option (ByteArray × Nat)) : V Unit := do
+  let unit := st.c.unit.name
+  let some (UB, PB) := VStar.linkParams unit
+    | if unit.startsWith "rec-link/" then throw s!"rec-links: {unit}: a rec-link/ unit not named rec-link/u<UB>-p<PB>"
+      else return
+  checkLinks st own files links UB PB
+  checkUnit st.c UB PB
+
+/-- **What `check` accepted at a link part**: its table and inner statement (`checkLinks`) and V\*'s unit. -/
+theorem check_link {st : Stmt} {own : Option (Array Registered.Port)} {files : Option RecCoins.Source}
+    {links : Option (ByteArray × Nat)} (h : check st own files links = .ok ()) {UB PB : Nat}
+    (hp : VStar.linkParams st.c.unit.name = some (UB, PB)) :
+    checkLinks st own files links UB PB = .ok () ∧ unitNet UB PB = .ok st.c.unit := by
+  unfold check at h
+  simp only [hp, bind, Except.bind] at h
+  cases hl : checkLinks st own files links UB PB with
+  | error e => rw [hl] at h; cases h
+  | ok u =>
+    rw [hl] at h
+    exact ⟨rfl, checkUnit_ok h⟩
 
 end RecLinkPart
 end Flock
