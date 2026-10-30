@@ -2512,7 +2512,9 @@
    "nontrivial": "Pouw.SecurityProofs.Dither.WorkSound_nontrivial"
   },
   "Pouw.SecurityProofs.OnsiteFreed": {
-   "honest": ["Pouw.SecurityProofs.OnsiteFreed_honest"]
+   "honest": ["Pouw.SecurityProofs.OnsiteFreed_honest"],
+   "nontrivial": "Pouw.SecurityProofs.OnsiteFreed_nontrivial",
+   "kind": "exclusion"
   }
  },
  "unwitnessed": {
@@ -2830,11 +2832,6 @@
   "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardH200": "976778649c1a045eb4165c8b72e71a82af245ea1fd099800ca29e3fed945ce2c",
   "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardSm120": "52c39b1631fdf8d50794d876a25c2755914afe4e2d9887dc06b137158c46ca28",
   "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120": "f783d09e652e6d59f971b0d91401e64bd149ebbfa574976cdc439f52ab29a04b",
-  "Pouw.SecurityProofs.OnsiteFreed": {
-   "type_hash": "ea838f92eb546fdbd1a46db535290a9613d0ffe4e5b81e20314587429ad64bdd",
-   "missing": "nontrivial",
-   "why": "it reads Pouw.Dither.Prover.Accepted, a verifier's acceptance, so the rule holds its nontrivial lemma to the accept-all form, and OnsiteFreed_nontrivial states an exclusion's instead (its premises hold at a circuit where the bound fails)"
-  },
   "Pouw.SecurityProofs.PearlC.TileCheck4WordsCore": "76e1dd28768cc1a4ef30251a9db63bda229915b3c2d50ff921394a143c179cdf",
   "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore": "e57381cb5ec70754de5727e83fd659312830ca151e3abe1da5c28e8c03580b3b",
   "Pouw.SecurityProofs.PearlCSampledByDeadline": "746b126f892a61cc8de0e4ddd67553bb0a219bb089c1caa0cb120afd9c255a68",
