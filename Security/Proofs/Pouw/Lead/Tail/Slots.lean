@@ -1,4 +1,4 @@
-import Proofs.Pouw.Lead.Tail.Blocks
+import Proofs.Pouw.Lead.Tail.Words
 import Proofs.Pouw.Lead.Tail.Fiber
 
 /-!
@@ -36,6 +36,98 @@ def setBits (L : Pouw.Lead.Layout) (ω : Coins L) (t : Fin L.S) (ct : Fin L.tile
       else ω.2.1 i q,
     ω.2.2.1, ω.2.2.2)
 
+open Finset in
+/-- **A slot's bits move its coin tile's words at its step** by `b` once, or at step 0 by `a₁`'s digit 0 against the
+column code's digit 0. -/
+theorem word_setBits (L : Pouw.Lead.Layout) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (ω : Coins L) (t : Fin L.S)
+    (ct : Fin L.tiles) (v v' : Fin 64 → Fin 2) (i : Fin L.m) (hi : (i : ℕ) / 64 = ct) (j : Fin L.n) :
+    word L κ (setBits L ω t ct v) i t j - word L κ (setBits L ω t ct v') i t j =
+      (if (t : ℕ) = 0 then colCode j 0 else 1) *
+        (((v ⟨(i : ℕ) % 64, Nat.mod_lt _ (by norm_num)⟩ : ℕ) : ℤ) -
+          ((v' ⟨(i : ℕ) % 64, Nat.mod_lt _ (by norm_num)⟩ : ℕ) : ℤ)) := by
+  rw [Tags.word_sub, sum_eq_single t]
+  · rw [ite_eq_left le_rfl, Tags.coinTerm_sub_of_lanes (setBits L ω t ct v) (setBits L ω t ct v') rfl]
+    by_cases ht : (t : ℕ) = 0
+    · simp only [ht, ite_true, setBits, hi, Fin.sum_univ_four, true_and, and_true, Coins.G]
+      simp
+      ring
+    · simp [ht, setBits, hi]
+  · intro τ _ hτ
+    split_ifs with h
+    · rw [Tags.coinTerm_sub_of_lanes (setBits L ω t ct v) (setBits L ω t ct v') rfl]
+      by_cases ht : (t : ℕ) = 0
+      · have : (τ : ℕ) ≠ 0 := fun h0 => hτ (Fin.ext (h0.trans ht.symm))
+        simp [setBits, ht, this]
+      · simp [setBits, ht, hτ, Coins.G]
+    · rfl
+  · intro h
+    exact absurd (mem_univ t) h
+
+set_option maxRecDepth 2000 in
+open Classical Finset in
+/-- `slots_fiber` on any layout of whole MMA tiles. -/
+theorem slots_fiber_of (L : Pouw.Lead.Layout) (hLm : L.m = 16 * L.rowBlocks) (hLn : L.n = 8 * L.colBlocks)
+    (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (ω : Coins L) (cb : Fin L.colBlocks) (t : Fin L.S) (ct : Fin L.tiles) :
+    ((Finset.univ.filter fun v => withinAt L κ (setBits L ω t ct v) (t, ct, cb)).card : ℝ) ≤
+      (pairs L : ℝ) / 2 ^ 16 * Fintype.card (Fin 64 → Fin 2) := by
+  obtain ⟨c₀, hc₀, hcoef⟩ : ∃ c₀ < 8, (if (t : ℕ) = 0 then colCode (8 * cb + c₀) 0 else 1) ≠ 0 := by
+    by_cases h12 : (8 * (cb : ℕ)) % 13 = 12
+    · refine ⟨1, by norm_num, ?_⟩
+      split_ifs
+      · simp only [colCode, bal13, Fin.val_zero, pow_zero, Int.ediv_one]; push_cast; omega
+      · norm_num
+    · refine ⟨0, by norm_num, ?_⟩
+      split_ifs
+      · simp only [colCode, bal13, Fin.val_zero, pow_zero, Int.ediv_one]; push_cast; omega
+      · norm_num
+  let A : ℕ × ℕ → Finset (Fin 64 → Fin 2) := fun p => univ.filter fun v =>
+    tileOf L κ (setBits L ω t ct v) (4 * ct + p.1) cb t = tileOf L κ (setBits L ω t ct v) (4 * ct + p.2) cb t
+  have hsub : (univ.filter fun v => withinAt L κ (setBits L ω t ct v) (t, ct, cb)) ⊆ (pairsAt L ct).biUnion A := by
+    intro v hv
+    obtain ⟨p, hp, he⟩ := withinAt_pair (mem_filter.1 hv).2
+    exact mem_biUnion.2 ⟨p, hp, mem_filter.2 ⟨mem_univ _, he⟩⟩
+  have hA : ∀ p ∈ pairsAt L ct, #(A p) ≤ 2 ^ 48 := by
+    intro p hp
+    simp only [pairsAt, mem_filter, mem_product, mem_range] at hp
+    obtain ⟨⟨ha4, hb4⟩, hab, hbR⟩ := hp
+    refine (card_le_of_block (A p) hb4 fun v hv v' hv' hoff => funext fun k => ?_).trans_eq (by simp)
+    have hv := (mem_filter.1 hv).2
+    have hv' := (mem_filter.1 hv').2
+    by_cases hk : (k : ℕ) / 16 = p.2
+    · have hr : (k : ℕ) % 16 < 16 := Nat.mod_lt _ (by norm_num)
+      have hrbA : 4 * (ct : ℕ) + p.1 < L.rowBlocks := by omega
+      have hcb := cb.isLt
+      have eA := congrFun hv ⟨8 * ((k : ℕ) % 16) + c₀, by unfold tileWords; omega⟩
+      have eA' := congrFun hv' ⟨8 * ((k : ℕ) % 16) + c₀, by unfold tileWords; omega⟩
+      rw [tileOf_at hLm hLn _ _ hrbA hcb t hr hc₀, tileOf_at hLm hLn _ _ hbR hcb t hr hc₀] at eA eA'
+      have dA := word_setBits L κ ω t ct v v' ⟨16 * (4 * ct + p.1) + (k : ℕ) % 16, by omega⟩ (by simp; omega)
+        ⟨8 * cb + c₀, by omega⟩
+      have dB := word_setBits L κ ω t ct v v' ⟨16 * (4 * ct + p.2) + (k : ℕ) % 16, by omega⟩ (by simp; omega)
+        ⟨8 * cb + c₀, by omega⟩
+      have hvA := hoff ⟨(16 * (4 * ct + p.1) + (k : ℕ) % 16) % 64, Nat.mod_lt _ (by norm_num)⟩ (by simp; omega)
+      rw [hvA, sub_self, mul_zero] at dA
+      have hk' : (⟨(16 * (4 * ct + p.2) + (k : ℕ) % 16) % 64, Nat.mod_lt _ (by norm_num)⟩ : Fin 64) = k :=
+        Fin.ext (by simp only; omega)
+      rw [hk'] at dB
+      have h0 : (if (t : ℕ) = 0 then colCode (8 * cb + c₀) 0 else 1) * (((v k : ℕ) : ℤ) - ((v' k : ℕ) : ℤ)) = 0 := by
+        rw [← dB]
+        linarith
+      rcases mul_eq_zero.1 h0 with h | h
+      · exact absurd h hcoef
+      · exact Fin.ext (by exact_mod_cast sub_eq_zero.1 h)
+    · exact hoff k hk
+  have hcard : #(univ.filter fun v => withinAt L κ (setBits L ω t ct v) (t, ct, cb)) ≤ pairs L * 2 ^ 48 :=
+    calc _ ≤ #((pairsAt L ct).biUnion A) := card_le_card hsub
+      _ ≤ ∑ p ∈ pairsAt L ct, #(A p) := card_biUnion_le
+      _ ≤ ∑ _p ∈ pairsAt L ct, 2 ^ 48 := sum_le_sum hA
+      _ = #(pairsAt L ct) * 2 ^ 48 := by rw [sum_const, smul_eq_mul]
+      _ ≤ pairs L * 2 ^ 48 := Nat.mul_le_mul_right _ (pairsAt_card L ct)
+  rw [Fintype.card_fun, Fintype.card_fin, Fintype.card_fin]
+  calc (#(univ.filter fun v => withinAt L κ (setBits L ω t ct v) (t, ct, cb)) : ℝ) ≤ (pairs L * 2 ^ 48 : ℕ) := by
+        exact_mod_cast hcard
+    _ = (pairs L : ℝ) / 2 ^ 16 * ((2 ^ 64 : ℕ) : ℝ) := by push_cast; ring
+
+set_option maxRecDepth 2000 in
 open Classical in
 /-- **A slot's fresh bits rarely make two tiles of a block agree**: with every other coin fixed, slot `(t, ct)` of
 column block `cb` holds two equal tiles on at most a `pairs / 2^16` share of its fresh bits' values. -/
@@ -43,8 +135,8 @@ theorem slots_fiber (T m n K : ℕ) (κ : Fin (lead T m n K).m → Fin (lead T m
     (ω : Coins (lead T m n K)) (cb : Fin (lead T m n K).colBlocks) (t : Fin (lead T m n K).S)
     (ct : Fin (lead T m n K).tiles) :
     ((Finset.univ.filter fun v => withinAt _ κ (setBits _ ω t ct v) (t, ct, cb)).card : ℝ) ≤
-      (pairs (lead T m n K) : ℝ) / 2 ^ 16 * Fintype.card (Fin 64 → Fin 2) := by
-  sorry
+      (pairs (lead T m n K) : ℝ) / 2 ^ 16 * Fintype.card (Fin 64 → Fin 2) :=
+  slots_fiber_of _ (lead_m T m n K) (lead_n T m n K) κ ω cb t ct
 
 /-- **One column block's slots with a repeat inside a block are rarely many**: `x` or more of them on at most a
 `λ_b^x / x!` share of the coins, when the coin tiles are whole or there is one row block. -/
