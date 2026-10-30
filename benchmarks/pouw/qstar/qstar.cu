@@ -1,4 +1,4 @@
-// QSTAR: the cheapest CUDA-core programs that produce correct Dither prefix words (note:20261017T0344Z-draft-eps1-qstar).
+// QSTAR: the cheapest CUDA-core programs that produce correct Dither prefix words.
 // A word is T_ℓ[i, j] = Σ_{t < 32(ℓ+1)} Ã[i, t] B̃[t, j], exact s32, held in a register and folded by the duo receipt
 // (receipt_folds.cuh rf_duo_word, one chain per (i, j) over ℓ, keys from h_falsify/ref.py), so every arm's output is one
 // receipt word per (i, j) and the gate checks it bit for bit against the CPU reference. Arms:
@@ -481,7 +481,7 @@ __global__ void __launch_bounds__(CO_T, 1) k_co(const uint4* __restrict__ Ap, co
   }
 }
 
-// ---- design A (note:20261017T0340Z-draft-skip): both operands dither bits, Ã = R and B̃ = Rc ∈ {0,1}, so a word's
+// ---- design A: both operands dither bits, Ã = R and B̃ = Rc ∈ {0,1}, so a word's
 // segment is popc(R_ℓ[i] & C_ℓ[j]), with R_ℓ[i] and C_ℓ[j] the 32 bits as in Rw. A thread is BR = 4 consecutive rows by
 // BCPT = 4 consecutive columns; a block of 64 is BG × BG = 8 × 8 of them, 32 rows by 32 columns, so each 128-bit row
 // and column load is shared by 8 threads through L1 and L2 carries a quarter byte a lane-word (4 columns a block

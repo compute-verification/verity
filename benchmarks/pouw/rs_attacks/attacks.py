@@ -1,4 +1,4 @@
-"""Cheapest algorithms for the committed prefix targets of (A + U Vᵀ)(B + W Zᵀ) (RS-D2A, CMP-13).
+"""Cheapest algorithms for the committed prefix targets of (A + U Vᵀ)(B + W Zᵀ).
 
 Masks E = U Vᵀ, F = W Zᵀ of rank r are drawn after A and B are committed; the prover commits
 T_s = (A + E)[:, :sL] (B + F)[:sL, :] for s = 1..n/L. `check` verifies every attack route below bit for bit
@@ -239,8 +239,8 @@ def check():
 
 # Prices a committed word a block, in int8 tensor MAC slots (an m16n8k32 IMMA is 4,096 slots for 128 words).
 # ledger: the converged model's dual weights (y_T 63/64, y_H 1/8, y_I 1/4, y_M 1/256; L, A, U and shared memory
-# unpriced), i.e. priced use. time: the census rates (r20261015-064426-11ec), each op alone on the SM; prefix.cu
-# measured IDP.4A at 16.6 and IMAD at 16.2-16.6 a word (r20261015-191053-26cf). sm_120a has no packed FFMA2:
+# unpriced), i.e. priced use. time: the census rates, each op alone on the SM; prefix.cu
+# measured IDP.4A at 16.6 and IMAD at 16.2-16.6 a word. sm_120a has no packed FFMA2:
 # fma.rn.f32x2 lowers to two FFMAs (the same run's SASS), so an FP32 FMA or add is one lane-op.
 PRICES = {
     "ledger": dict(fma=2.0, add=2.0, iop=2.0, imad=4.0, dp4a_op=4.0, lookup=2.0),
@@ -296,7 +296,7 @@ def routes(r, L, n, price, beta=1):
     out["CUDA IMAD (exact mod 2^32)"] = r * p["imad"] + lower
     if g_max < 2 ** 15:
         out["CUDA IDP.2A (16-bit G_s × 8-bit Z)"] = math.ceil(r / 2) * p["dp4a_op"] + lower
-    # RS-D2F's rank-metric Steiner trees (note:20261015T1816Z-draft-rs-d2-lowrank-floor): their Steiner points are
+    # RS-D2F's rank-metric Steiner trees: their Steiner points are
     # rational, so exact arithmetic is mod 2^32, one IMAD a rank-one step a word
     if 2 <= r <= L and r % 2 == 0:
         out["Steiner hub tree mod 2^32 (IMAD), 3r/4 steps"] = 3 * r / 4 * p["imad"] + lower
@@ -373,7 +373,7 @@ def algebraic_threshold(L, eps):
     return r
 
 
-# prefix.cu's mix48 (r20261015-191053-26cf): the tensor pipe keeps 0.861 of its peak beside IDP.4A words at 0.67 of
+# prefix.cu's mix48: the tensor pipe keeps 0.861 of its peak beside IDP.4A words at 0.67 of
 # their rate alone (16.6 a word); mix16 and mix32 give (0.952, 0.247) and (0.925, 0.48). Beyond 0.67 is unmeasured.
 MIX = (0.861, 0.67)
 DP4A_TIME = 16.6

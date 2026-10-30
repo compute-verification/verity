@@ -4,7 +4,7 @@
 # the probe under the lease.  Clocks read only.  NTILES / SEED override the defaults.  Results in $OUT.
 #
 #   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source \
-#     --env GPU_LEASE_WHO=HYB -- bash benchmarks/pouw/fp4_nobits/run.sh
+#     --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/fp4_nobits/run.sh
 set -uxo pipefail
 export O=${OUT:?}
 export CUDA=/usr/local/cuda-13.0
