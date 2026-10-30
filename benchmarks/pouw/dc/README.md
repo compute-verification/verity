@@ -212,13 +212,13 @@ sm_103 has no tcgen05 kind::i8: ptxas refuses it (`Feature '.kind::i8' not suppo
 13.0), so `dg100` and the i8 probes don't build there (`scalar.cu` does). The honest kernel needs an exact route through
 an FP kind, which the protocol states as its own T1 table (an FP design or kind::ti16, sm_107f only):
 
-- **k3 on kind::f8f6f4 (E4M3)**, emu8's Karatsuba (`../emu8/`): balanced
+- **k3 on kind::f8f6f4 (E4M3)**, emu8's Karatsuba: balanced
   base-16 limbs, xy = 240hh′ + 16mm′ − 15ll′; three MMAs a k32 step into two accumulators started at binade constants
   (C1 ulp 1, C2 ulp 1/8), and the word grows by 15·bits(acc1) + 2·bits(acc2), two IMADs. k4 (four MMAs, one C0) is the
   fallback. Both are exact only if the tcgen05 FP32 adder keeps C + T exact in that binade. **On the B200 it does**:
   k3 and k4 on all five adversarial classes, 0 bad accumulators and 0 bad k32 words in two runs, so the E4M3 route
   holds for a k32 step.
-- **NVFP4** (kind::mxf4nvf4, K 64, twice the FP8 rate): emu8's `accounting.py` `fp4_route` writes U as two E2M1 terms
+- **NVFP4** (kind::mxf4nvf4, K 64, twice the FP8 rate): emu8's FP4 route writes U as two E2M1 terms
   under per-block scales; its adder matches the existing silicon model (SIL BLACKWELL_SM100_NVF4/MXF4).
 
 Cost against B200's kind::i8 kernel, at the rates the tensor table gives every 32-deep kind (256 slots a SM a clock):
@@ -238,7 +238,7 @@ for sm_103a (its guard and device check name sm_100a today) and extended from on
 then sm100_tcgen05.cu's f8f6f4, f16 and tcgen05.ld probes (its i8 forms removed) and `scalar.cu`: about 2 GPU-hours on
 a 1× B300.
 
-`../lowbit_dc/` has since run both routes end to end on the B200 in dgemm's kernel and receipts, bit-exact: k4s, k4 with
+Both routes have since run end to end on the B200 in dgemm's kernel and receipts, bit-exact: k4s, k4 with
 the accumulator restored to its binade by tcgen05.st after each word leaves, costs one IADD3 a word (no IMAD) and is
-1.24–1.45× native int8 in the same pipelined shape, while k3 from +0 (2 FFMA + IADD3) is 1.9–2.2×. Its `fpx` (every
-tcgen05 FP8 and FP4 kind to K = 2^17, and the adder's window) builds for sm_103a, and is the B300 exactness run.
+1.24–1.45× native int8 in the same pipelined shape, while k3 from +0 (2 FFMA + IADD3) is 1.9–2.2×. The probe that ran them
+(`fpx`: every tcgen05 FP8 and FP4 kind to K = 2^17, and the adder's window) also built for sm_103a.
