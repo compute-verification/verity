@@ -9878,14 +9878,24 @@
    "signature": ["Pouw.SecurityProofs.Lead.Compose.honest : Pouw.Guarantees.Lead.Honest"],
    "assumptions": []
   },
+  "Pouw.SecurityProofs.Lead.Network.networkFwd": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Lead.Network.networkFwd : Pouw.Guarantees.Lead.NetworkFwd"],
+   "assumptions": []
+  },
+  "Pouw.SecurityProofs.Lead.Network.networkLlama": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Lead.Network.networkLlama : Pouw.Guarantees.Lead.NetworkLlama"],
+   "assumptions": []
+  },
+  "Pouw.SecurityProofs.Lead.Statement.gapAll": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Lead.Statement.gapAll : Pouw.Guarantees.Lead.GapAll"],
+   "assumptions": []
+  },
   "Pouw.SecurityProofs.Lead.Statement.gapAt": {
    "owner": "@compute-research",
    "signature": ["Pouw.SecurityProofs.Lead.Statement.gapAt : Pouw.Guarantees.Lead.GapAt"],
-   "assumptions": []
-  },
-  "Pouw.SecurityProofs.Lead.Statement.gapAt320": {
-   "owner": "@compute-research",
-   "signature": ["Pouw.SecurityProofs.Lead.Statement.gapAt320 : Pouw.Guarantees.Lead.GapAt320"],
    "assumptions": []
   },
   "Pouw.SecurityProofs.Lead.Statement.gapAtDecode": {
@@ -12647,11 +12657,13 @@
    "Pouw.SecurityProofs.Writes.SsnServedDistinct": "frozen (no-function): A fact about served sparse noise's committed words in the bit model on the full coin grid (Security/Definitions/Pouw/Dimension/Ssn.lean), for the 4- and 5-lane layouts as the definitions state them; it reads no function of the code, so it has no acceptance to take. That the served kernel commits exactly these words is completeness. Its model's semantics are draft, pending review (Security/Definitions/Pouw/Assumptions/Dimension/H100W.lean), and the review must clear them before the statement says anything about a device.",
    "Pouw.SecurityProofs.Writes.SsnServedShift": "frozen (no-function): A fact about served sparse noise's committed words in the bit model on the full coin grid (Security/Definitions/Pouw/Dimension/Ssn.lean): no two differ by a constant and none is a free value plus one, the hypotheses of carrier separation. It reads no function of the code, so it has no acceptance to take. Its model's semantics are draft, pending review (Security/Definitions/Pouw/Assumptions/Dimension/H100W.lean), and the review must clear them before the statement says anything about a device.",
    "Pouw.SecurityProofs.Lead.Compose.G": "frozen (no-function,hash): The lead's work bound over every strategy the node can run on a call (the strategy model of Definitions.Pouw.Lead.Model, priced on MH100w), not over a Lean function of the code, so it has no acceptance to take; its other branch is a SHA-512 collision with the honest commitment's messages (Pouw.Lead.Break).",
-   "Pouw.SecurityProofs.Lead.Compose.honest": "completeness: G's honest lemma: at every admitted call of the lead (Layout.Admits) with data in range, the nominal W1 table and a set of strategies holding an honest one, accepted at every coin value, meet every premise of G, so G's hypotheses are not vacuous.",
-   "Pouw.SecurityProofs.Lead.Statement.nontrivial": "completeness: G's nontrivial lemma: at the three points the honest work exceeds the gap, and a strategy that does nothing does no priced work and hashes nothing, so G's conclusion fails for a verifier that accepts everything.",
-   "Pouw.SecurityProofs.Lead.Statement.gapAt": "lemma: the gap's share of stock at T 512 x 64, T 512 x 512 and T 8,192 at cap 32, an evaluation of the defined function Pouw.Lead.gapShare, not a property of a Lean function of the code.",
-   "Pouw.SecurityProofs.Lead.Statement.gapAt320": "lemma: the gap's share of stock at the same three points at cap 320, an evaluation of the defined function Pouw.Lead.gapShare, not a property of a Lean function of the code.",
-   "Pouw.SecurityProofs.Lead.Statement.gapAtDecode": "lemma: the gap at decode, the call committed padded to 16 rows, as a share of the padded and of the unpadded stock, an evaluation of the defined functions Pouw.Lead.gapShare and Pouw.Lead.gapRegs, not a property of a Lean function of the code."
+   "Pouw.SecurityProofs.Lead.Compose.honest": "completeness: G's honest lemma: at every admitted call of the lead (Layout.Admits), some certifier running certCode (CertifierCoins), the nominal W1 table, and a coin stream, commitment format and set of strategies holding an honest one, accepted at every coin value, meet every premise of G, so G's hypotheses are not vacuous.",
+   "Pouw.SecurityProofs.Lead.Statement.nontrivial": "completeness: G's nontrivial lemma: at the three points the honest work exceeds the gap, and a strategy that does nothing does no priced work, exchanges nothing and hashes nothing, so G's conclusion fails for a verifier that accepts everything.",
+   "Pouw.SecurityProofs.Lead.Statement.gapAt": "lemma: the gap's share of served stock at T 512 x 64, T 512 x 512 and T 8,192 for every call of n >= 512 and K >= 2,048, an evaluation of the defined function Pouw.Lead.gapServed, not a property of a Lean function of the code.",
+   "Pouw.SecurityProofs.Lead.Statement.gapAll": "lemma: the gap's share of served stock at every call the verifier admits is at most the closed form Pouw.Lead.gapBound, an evaluation of the defined functions Pouw.Lead.gapServed and Pouw.Lead.gapBound, not a property of a Lean function of the code.",
+   "Pouw.SecurityProofs.Lead.Network.networkFwd": "lemma: a forward's network term from its bits, over the forward model of Definitions.Pouw.Lead.Forward under SerialForwards, not a property of a Lean function of the code.",
+   "Pouw.SecurityProofs.Lead.Network.networkLlama": "lemma: the network term of a forward of Llama-3.2-1B's linears as a share of its calls' served stock, an evaluation over the forward model of Definitions.Pouw.Lead.Forward, not a property of a Lean function of the code.",
+   "Pouw.SecurityProofs.Lead.Statement.gapAtDecode": "lemma: the gap at decode, the call committed padded to 16 rows, as a share of the one served row's stock, an evaluation of the defined function Pouw.Lead.gapServed, not a property of a Lean function of the code."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
