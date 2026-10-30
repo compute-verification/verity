@@ -30,27 +30,27 @@ theorem outputs_committed_wide : OutputsCommittedWide := outputs_committed_wide'
 theorem outputs_binding_wide : OutputsBindingWide := outputs_binding_wide_of outputs_committed_wide'
 
 theorem outputs_committed_tail_checked : OutputsCommittedTailChecked := by
-  intro _ _ _ _ _ _ _ _ _ ht hs _ hl hpt _ hD hDp
-  exact outputs_committed_tail ht hs hl hpt hD hDp (setupHidden_upv_pos ht hs)
+  intro _ _ _ _ _ _ _ _ _ ht hi hs _ hl hpt _ hD hDp
+  exact outputs_committed_tail ht hi hs hl hpt hD hDp (setupHidden_upv_pos ht hi hs)
 
 theorem outputs_binding_tail_checked : OutputsBindingTailChecked := by
-  intro _ _ _ _ _ _ _ _ _ _ _ _ _ _ ht hs hs' _ hl hpt _ _ hD hDp hD' hDp'
-  exact outputs_binding_tail ht hs hs' hl hpt hD hDp hD' hDp' (setupHidden_upv_pos ht hs)
+  intro _ _ _ _ _ _ _ _ _ _ _ _ _ _ ht hi hs hs' _ hl hpt _ _ hD hDp hD' hDp'
+  exact outputs_binding_tail ht hi hs hs' hl hpt hD hDp hD' hDp' (setupHidden_upv_pos ht hi hs)
 
 theorem outputs_committed_v2_checked : OutputsCommittedV2Checked := by
-  intro _ _ _ _ _ _ _ _ _ ht hs _ hl hpt _ hD hDp
-  exact outputs_committed_v2 ht hs hl hpt hD hDp (setupHidden_upv_pos ht hs)
+  intro _ _ _ _ _ _ _ _ _ ht hi hs _ hl hpt _ hD hDp
+  exact outputs_committed_v2 ht hi hs hl hpt hD hDp (setupHidden_upv_pos ht hi hs)
 
 theorem outputs_binding_v2_checked : OutputsBindingV2Checked := by
-  intro _ _ _ _ _ _ _ _ _ _ _ _ _ _ ht hs hs' _ hl hpt _ _ hD hDp hD' hDp'
-  exact outputs_binding_v2 ht hs hs' hl hpt hD hDp hD' hDp' (setupHidden_upv_pos ht hs)
+  intro _ _ _ _ _ _ _ _ _ _ _ _ _ _ ht hi hs hs' _ hl hpt _ _ hD hDp hD' hDp'
+  exact outputs_binding_v2 ht hi hs hs' hl hpt hD hDp hD' hDp' (setupHidden_upv_pos ht hi hs)
 
 theorem outputs_committed_wide_checked : OutputsCommittedWideChecked := by
-  intro _ _ _ _ _ _ _ _ _ ht hs _ hl _ hD hDp
-  exact outputs_committed_wide ht hs hl hD hDp (setupHidden_upv_pos ht hs)
+  intro _ _ _ _ _ _ _ _ _ ht hi hs _ hl _ hD hDp
+  exact outputs_committed_wide ht hi hs hl hD hDp (setupHidden_upv_pos ht hi hs)
 
 theorem outputs_binding_wide_checked : OutputsBindingWideChecked := by
-  intro _ _ _ _ _ _ _ _ _ _ _ _ _ _ ht hs hs' _ hl _ _ hD hDp hD' hDp'
-  exact outputs_binding_wide ht hs hs' hl hD hDp hD' hDp' (setupHidden_upv_pos ht hs)
+  intro _ _ _ _ _ _ _ _ _ _ _ _ _ _ ht hi hs hs' _ hl _ _ hD hDp hD' hDp'
+  exact outputs_binding_wide ht hi hs hs' hl hD hDp hD' hDp' (setupHidden_upv_pos ht hi hs)
 
 end FlockSoundness.Discharge.Hidden

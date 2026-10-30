@@ -13,7 +13,6 @@
     {"file": "Security/Definitions/Accounting/Sheets/H200.lean", "count": 1},
     {"file": "Security/Definitions/Claims/Recursion.lean", "count": 1},
     {"file": "Security/Definitions/Core/Accel/H200.lean", "count": 1},
-    {"file": "Security/Definitions/Hash/Basic.lean", "count": 1},
     {"file": "Security/Definitions/NetworkCertifier/Guarantees/AdviceV1Kraft.lean", "count": 1},
     {"file": "Security/Definitions/NetworkCertifier/Guarantees/Warden.lean", "count": 2},
     {"file": "Security/Definitions/Pous/Model/StreamedWipeServer.lean", "count": 3},

@@ -68,12 +68,12 @@ def SessionOpensOne (H : Msg → Msg) (iroots : Msg → Seen → ℕ → List Ms
     Claims.Flock.check (FlockDeploy.deployZk rel).parse xS wF = true →
     ∀ u, (∃ q : Fin (nPU (deploy rel (code c reg L bytes sr sess)) x),
         ((code c reg L bytes sr sess).checked x r)[q.val]? = some u) →
-    ∃ rv pu, Pt.rus[u.1]? = some rv ∧ rv[u.2]? = some pu ∧
+    ∃ b, Pt.blocks[u]? = some b ∧
       ∀ (val : ℕ → Option Bool) (ι : ℕ → Bool),
         (∀ q ∈ c.reveal s u (run H P c.V x ω r).seen wF, (commit c).Opens H q.1 q.2 = true →
           (q.1 = s.roots → val q.2.pos = some q.2.val) ∧
-          (q.1 = iroots x (run H P c.V x ω r).seen u.1 → ι q.2.pos = q.2.val)) →
-        s.prog.Correct (RU.ref s.prog rv val ι) pu
+          (q.1 = iroots x (run H P c.V x ω r).seen u → ι q.2.pos = q.2.val)) →
+        s.prog.Correct (s.prog.refIn b val ι) b
 
 /-- **`SessionOpens` is the one session's.** -/
 theorem sessionOpens_code_iff (H : Msg → Msg) (iroots : Msg → Seen → ℕ → List Msg) :
