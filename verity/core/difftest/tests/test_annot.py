@@ -3,12 +3,13 @@
 * `annot.sets` gives, set for set, the gate intervals `verity.ml.circuits.query_ast` evaluates for the same query, on the
   terms both evaluate, `table`, `group` (every key part) and `label` (affine or by a table) among them, with the same
   tables, and `annot.term` writes `query_codec`'s document back as `query_codec` does;
-* `annot.check`, at the size of the description, gives `annot.reference`'s verdict, the meaning decided gate by gate, on
+* `annot.check`, at the size of the description, gives `annot.reference`'s result, the meaning decided gate by gate, on
   drawn tables, label maps and meanings, and accepts only what the reference accepts;
 * refusals carry their codes.
 
 The Programs: `gemm` (`TGemm{K=32,N=6}`: Input batches, a composite batch, nested calls), `synth` (two zip-able batches, a
-constant, a scan) and `twice` (one specialization called twice).
+constant, a scan), `twice` (one specialization called twice) and `nest` (a batch of `TGemm`, whose body is one batch: the
+two axes of `members(..., k=(r, c))`).
 """
 
 from __future__ import annotations
@@ -76,7 +77,12 @@ Twice = CompositeDefinition("TTwice", 1, (), lambda S: ((("x", Array(16, V16)), 
                             lambda B, S, x, w: B.call(bind(Gemm, K=16, N=16), B.call(bind(Gemm, K=16, N=16), x, w), w),
                             register=False)
 
-PROGRAMS = {"gemm": Program(bind(Gemm, K=32, N=6)), "synth": Program(bind(Synth, N=4)), "twice": Program(bind(Twice))}
+Nest = CompositeDefinition("TNest", 1, (), lambda S: ((("x", Array(3, Array(16, V16))), ("w", Array(4, Array(16, V16)))),
+                                                     Array(3, Array(4, V16))),
+                           lambda B, S, x, w: B.batch(bind(Gemm, K=16, N=4), x, w, axes=(0, None)), register=False)
+
+PROGRAMS = {"gemm": Program(bind(Gemm, K=32, N=6)), "synth": Program(bind(Synth, N=4)), "twice": Program(bind(Twice)),
+            "nest": Program(bind(Nest))}
 TEXT = {name: canonical_json(encode_program(p)).decode() for name, p in PROGRAMS.items()}
 
 QUERIES = {
@@ -93,7 +99,14 @@ QUERIES = {
               'zip(".", ["@0", "@3"])', 'each(zip(".", ["@1", "@2"]), default(8))'],
     "twice": ['default(32)', 'instances("//TGemm_v1")', 'instances("//TGemmCoordinate_v1")', 'members("//TGemm_v1", "@*", k=5)',
               'concat(instances("//TDot_v1"), rest())', 'each("//TGemm_v1", concat(members(".", "@*", k=3), rest()))',
-              'instances("//TDot_v1/@1")', 'members("//TGemm_v1/@0//TDot_v1", "@*")'],
+              'instances("//TDot_v1/@1")', 'members("//TGemm_v1/@0//TDot_v1", "@*")',
+              'members(".", "@call:TGemm_v1", k=(1, 4))', 'members(".", "@*", k=(1, 4))',
+              'concat(members(".", "@call:TGemm_v1", k=(1, 5)), rest())'],
+    "nest": ['members(".", "@batch:TGemm_v1", k=(2, 3))', 'members(".", "@2", k=(1, 4))', 'members(".", "@2", k=(3, 1))',
+             'members(".", "@2", k=(5, 7))', 'concat(members(".", "@2", k=(2, 2)), rest())', 'members(".", "@*", k=(2, 3))',
+             'members("//TGemm_v1", "@*", k=(1, 2))', 'each(members(".", "@2", k=(2, 2)), default(8))',
+             'where(members(".", "@2", k=(2, 2)), form="batch")', 'rest(members(".", "@2", k=(2, 3)))',
+             'concat(members(".", "@2", k=(2, 2)), instances("//TDot_v1"), rest())', 'default(16)'],
 }
 
 
@@ -244,7 +257,7 @@ def _instances(draw):
           suppress_health_check=[HealthCheck.too_slow])
 @given(_instances())
 def test_check_is_the_reference(server, inst) -> None:
-    """The check's verdict is the reference's, but where the check bounds a group's or a label table's gates by the sum of
+    """The check's result is the reference's, but where the check bounds a group's or a label table's gates by the sum of
     its sets' sizes: there it may refuse what the reference accepts, never the converse."""
     check = _call(server, "annot.check", inst)
     ref = _call(server, "annot.reference", inst)
@@ -263,7 +276,9 @@ def test_refusals_carry_codes(server) -> None:
     cases = [
         (synth, to_json(parse('zip(".", ["@0", "@3"])')), None, "plan:"),
         (synth, {"op": "frontier", "w": 32}, None, "term:"),
-        (synth, {"op": "members", "path": ".", "sel": "@*", "k": [2, 2]}, None, "term:"),
+        (synth, {"op": "members", "path": ".", "sel": "@*", "k": [2, 2]}, None, "plan:"),
+        (synth, {"op": "members", "path": ".", "sel": "@*", "k": [2, 0]}, None, "term:"),
+        (synth, {"op": "members", "path": ".", "sel": "@*", "k": [2, 2, 2]}, None, "term:"),
         (synth, {"op": "members", "path": ".", "sel": "@*", "k": 0}, None, "term:"),
         (synth, {"op": "table", "path": ".", "table": "t"}, {"t": {key: [0, None]}}, "table:"),
         (synth, {"op": "table", "path": ".", "table": "t"}, {"t": {key: [0, 2, None, None, None]}}, "table:"),
@@ -297,12 +312,12 @@ def test_partition_reads_inputs_as_held_by_none(server) -> None:
     whole = to_json(parse("default(32)"))
     computed = to_json(parse('instances("@2")'))
 
-    def verdict(q, t):
+    def result(q, t):
         return _call(server, "annot.check", annot.instance(text, q, None, {"tiling": t}))[1]
 
-    assert verdict(whole, "cover")["accept"]
-    assert verdict(whole, "partition")["code"] == "input-held"
-    assert verdict(computed, "partition") == {"accept": True, "count": 6}
+    assert result(whole, "cover")["accept"]
+    assert result(whole, "partition")["code"] == "input-held"
+    assert result(computed, "partition") == {"accept": True, "count": 6}
     twice = to_json(parse('concat(instances("@2"), instances("//TDot_v1"))'))
-    assert verdict(twice, "partition")["code"] == "overlap"
-    assert verdict(twice, "cover") == {"accept": True, "count": 12}
+    assert result(twice, "partition")["code"] == "overlap"
+    assert result(twice, "cover") == {"accept": True, "count": 12}
