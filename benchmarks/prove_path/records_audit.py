@@ -302,7 +302,7 @@ def declared_count(doc: Mapping[str, Any], bits: int, resolve: Callable[[str], A
     verifier's pin (``pins``, ``{param: root}``) and the run's ingress fill
     leave ``free``, and ``other_inputs`` is those plus the advice's ``bits``, the compile unit's one input, a statement of
     its own. So ``other_inputs`` equals the charge exactly when the circuit leaves no input free. That is the run figure,
-    the one to quote: only Lean's run ingress (``Layout.ingress``, read by ``freeInputs``) counts as ingress. A listed
+    the one to quote: only Lean's run ingress (the ingress gates ``freeInputs`` reads) counts as ingress. A listed
     record's window ingress (`interface.listed_ingress`: what its members read from rows before the window) adds the
     window figure beside it (``window``, those rows subtracted too), which holds only under its ``premise``
     (`WINDOW_PREMISE`). An ``untied`` value
