@@ -194,12 +194,12 @@ def test_a_group_of_link_windows_is_one_registration_a_member_a_window(tmp_path)
 
 def test_every_port_of_every_member_is_registered_a_ports_own_rows_at_its_frame_root(tmp_path):
     """The verifier's registered reads name every port of every member's circuit, inputs and output rows, as Lean's
-    `Flock.Registered.checkComplete` asks of every statement of a ``--registered`` file. A port no scan tree or warden
-    row registration holds (each unit's public o0, the last unit's o1, the block's row-seg ``x``) is the member's own
-    rows (`scan_zk.Frame`, value ``frame``): its domain the member's frame domain of the port (`frame_binding` over its
-    input set, its n units and the port's schema), each unit's b‖c its own row under the salt the stager is given,
-    which opens the root at the unit's position as core's mirror of Lean's read opens it (`registered.verify_read`).
-    Unread's o0 row is its 0, which the verifier opens as before."""
+    `Flock.Registered.checkComplete` asks of every statement of a ``--registered`` file. A port no scan tree or network
+    certifier row registration holds (each proof block's public o0, the last proof block's o1, the block round's
+    row-seg ``x``) is the member's own rows (`scan_zk.Frame`, value ``frame``): its domain the member's frame domain of
+    the port (`frame_binding` over its input set, its n proof blocks and the port's schema), each proof block's b‖c its
+    own row under the salt the stager is given, which opens the root at its position as core's mirror of Lean's read
+    opens it (`registered.verify_read`). Unread's o0 row is its 0, which the verifier opens as before."""
     h = sz.host(tmp_path, setup=sz.TEST)
     key, own = sz.ADV.INST.default_key, {}
     for name, members in h.rounds.items():

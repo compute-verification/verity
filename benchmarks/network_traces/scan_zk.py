@@ -81,11 +81,12 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   reads (ingress's ``row``, egress's ``o1``), so a period check holds the answer to them.
 * **Every port registered**: the verifier's registered reads name every port of every member's circuit, inputs and
   output rows (`Flock.Registered.checkComplete`, which `flock-verify` runs whenever ``--registered`` is given), so no
-  output reads a row the statement commits afresh. A port no scan tree or warden row registration holds (each unit's
-  public o0, the last unit's o1, the block's ``x``) is the member's own rows of it (`Frame`, value ``frame``),
-  committed under its statement's frame binding (`frame_binding`, over the member's input set), so its root is the
-  member's frame root of the port, which the round's registration names before any coin; `stage` refuses a member
-  whose frame root isn't the tree's. A public o0 is opened as before, under the salt the prover sends.
+  output reads a row the statement commits afresh. A port no scan tree or network certifier row registration holds
+  (each proof block's public o0, the last ingress proof block's o1, the block round's ``x``) is the member's own rows
+  of it (`Frame`, value ``frame``), committed under its statement's frame binding (`frame_binding`, over the member's
+  input set), so its root is the member's frame root of the port, which the round's registration names before any
+  coin; `stage` refuses a member whose frame root isn't the tree's. A public o0 is opened as before, under the salt the
+  prover sends.
 * **The answers** (``answers.json``, `answers`): the honest round's registration and, for each link-window W of the
   group, the warden's two row registrations of W and the scan's one-stage answer (`window_answer`), the same for every
   W, which `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) checks for W with W's three records'
@@ -264,8 +265,8 @@ PROGRAMS = {TEMPLATES: "joint", ("egress",): "solo", UNREAD: "unread", BLOCK: "b
 #: committed and so the scan's `prog` tree (`block_binding`), and a member's own rows of a port (`Frame`; `stage`
 #: refuses a member whose frame root of such a port isn't its tree's)
 FRAME_BINDING = "verity/flock-circuit/binding/v2"
-#: the scan's registered values: its three trees, and ``frame``, a member's own rows of a port no tree or warden row
-#: registration holds (`Frame`), registered as the member's frame root of the port
+#: the scan's registered values: its three trees, and ``frame``, a member's own rows of a port no tree or network
+#: certifier row registration holds (`Frame`), registered as the member's frame root of the port
 VALUES = {k: f"verity/certifier/scan-{k}/v1" for k in ("state", "prog", "view", "frame")}
 TIMING = ("e2e_s", "wait_s", "witness_s", "prove_total_s", "proof_bytes", "wire_sent", "wire_recv", "k_log", "nbl",
           "dense_m", "units", "ands_per_vu", "prover", "gpu")
@@ -392,8 +393,8 @@ def block_binding(set_name: str, n: int) -> bytes:
     return frame_binding(set_name, n, "o0")
 
 
-class Frame(ADV.Committed):
-    """A member's own rows of one port, committed as C-Flock's statement commits the port (`verity_flock.circuit.
+class Frame(ADV.Registration):
+    """A member's own rows of one port, committed as Flock's statement commits the port (`verity_flock.circuit.
     statement`): under its frame binding (`frame_binding`), its leaves of the port's schema (row/v2's, or a row-seg/v1
     row's, `ROW_SCHEMAS`), each row's b‖c under the salt the stager is given (`stage`), so its root and domain are the
     member's frame port's, which the round's registration names before any coin (`audit`)."""
@@ -419,7 +420,7 @@ def frame(set_name: str, port: str, rows: list, n_bits: int, schema: str = BitRo
                  tuple(ADV.INST.fresh_salt() for _ in rows), schema)
 
 
-def _schema(reg: ADV.Committed) -> str:
+def _schema(reg: ADV.Registration) -> str:
     """A registration's leaf schema: a member's own rows' (`Frame`) their port's, the scan's trees' row/v2."""
     return getattr(reg, "schema", BitRowLeaf.hiding_schema)
 
@@ -728,14 +729,15 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
     own ports, one for every port of its circuit (`Flock.Registered.checkComplete`), the host's read of them
     (`warden_rows.refusal`, `tree_refusal`: the ports in its signature's order, inputs, o0, then the other outputs),
     each unit's o0 word and its output rows as the references compute them (``made``, None where the ingress reference
-    gives none), and the warden's row registration each warden port reads (``warden``). An ingress unit's ``prog<j>``
-    is one table row a slot entry it reads (``refs``, `registered.table`), since a timestep's units read their
-    boundary's; its ``sin`` reads state leaf t and its o1 opens leaf t + 1, the group's last unit's none. The block's
-    unit k reads ``x``, slot entry k, its free input, and its o0, that entry, is a registered read of `prog`'s leaf k,
-    no public word (``outputs`` None). A port no tree or warden row registration holds (each unit's public o0, the last
-    unit's o1, the block's x) is the member's own rows of it (`Frame`, value ``frame``), registered as its frame root
-    in its statement's input set ``set_name`` (the block's `block_set`), which the round's registration names before
-    any coin; ``framed`` names the ports `stage` holds to their frame roots (those, and the block's o0)."""
+    gives none), and the network certifier's row registration each of its ports reads (``warden``). An ingress unit's
+    ``prog<j>`` is one table row a slot entry it reads (``refs``, `registered.table`), since a timestep's units read
+    their boundary's; its ``sin`` reads state leaf t and its o1 opens leaf t + 1, the group's last unit's none. The
+    block's unit k reads ``x``, slot entry k, its free input, and its o0, that entry, is a registered read of `prog`'s
+    leaf k, no public word (``outputs`` None). A port no tree or network certifier row registration holds (each proof
+    block's public o0, the last proof block's o1, the block round's x) is the member's own rows of it (`Frame`, value
+    ``frame``), registered as its frame root in its statement's input set ``set_name`` (the block's `block_set`), which
+    the round's registration names before any coin; ``framed`` names the ports `stage` holds to their frame roots
+    (those, and the block's o0)."""
     ch, T, cls = at.chain, at.T, at.setup.cls
     tp, w, bs = mb.template, mb.window, list(mb.buckets)
     rows = [b - w * T for b in bs]
@@ -781,7 +783,8 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
         if p not in reads and p not in warden:
             if any(x is None for x in own[p]):
                 raise SystemExit(f"{name}/{mb.name}: a unit's {p} row is none the reference gives, and a port no tree "
-                                 "or warden row holds is registered as the member's own rows before any coin")
+                                 "or network certifier row holds is registered as the member's own rows before any "
+                                 "coin")
             reads[p] = ("frame", frame(set_name, p, own[p], n_bits, ROW_SCHEMAS.get((tp, p), BitRowLeaf.hiding_schema)),
                         list(range(len(bs))))
     salts, entries, ports, bcs, refs = {}, {}, {}, {}, {}
