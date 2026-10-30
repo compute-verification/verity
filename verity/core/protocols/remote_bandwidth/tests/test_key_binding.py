@@ -75,7 +75,7 @@ def window(store: audit.Store, prover_store: audit.Store, passes: int = 2) -> tu
     clock = Clock()
     s = Session(p, reg, None, coins.local(reg.digest, 0, p.windows, Entropy(b"coins"), appends=1), not_before_ns=0,
                 clock=clock)
-    prover = audit.Prover(prover_store, None, s.commitment, entropy=Entropy(b"receipt salts"))
+    prover = audit.Prover(prover_store, None, entropy=Entropy(b"receipt salts"))
     challenge, previous, out = s.start(), reg.digest, []
     for i in range(passes):
         out.append(prover.run(challenge, i, previous))

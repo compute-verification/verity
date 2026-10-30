@@ -72,9 +72,9 @@ ALLOWED = {
     # views a protocol reads. Its digests are canonical JSON's, the wire's.
     "core.site": {"core.wire"},
     "core.deploy": {"core.wire"},
-    # The registration log every subprotocol and both composites read, the Python of `Core.Registration`: canonical JSON
-    # and SHA-512 only, so it reaches no ml.
-    "core.protocols.registration": {"core.wire"},
+    # The registration log every subprotocol and both composites read, the Python of `Core.Registration`: the Site's
+    # entries and check, canonical JSON and SHA-512 only, so it reaches no ml.
+    "core.protocols.registration": {"core.wire", "core.site"},
     "core.protocols.profile": {"ml.circuits"},
     # The verifier's coins sample its own bytes as the Lean verifier does (`coins`), and the proof system's challenger
     # draws with them (`service.Stream.select`); every coin source is named by a claim instance (`challenger.coin_claim`).
@@ -94,8 +94,10 @@ ALLOWED = {
     # trees, draws from the verifier's secret, and records its openings as an integrity profile.  Its coins are the
     # proof system's one challenger's (`sampled_proofs.challenger`).
     # The remote bandwidth audit is over the P2-encoded weights store, and a P2 store is PoUS's `C*`, under its setup and `vk`, reused as they are (`p2.py`).
+    # The session's verifier and prover are parties of the deployment layer (`session_parties`), their messages the wire's.
     "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness", "core.protocols.profile",
-                                        "core.protocols.sampled_proofs", "core.protocols.pous"},
+                                        "core.protocols.sampled_proofs", "core.protocols.pous", "core.wire",
+                                        "core.deploy"},
     # PoUW's tile check is a sampled proof (`.agents/skills/friction/SKILL.md`).  Its schemes and
     # circuits are stated over the catalog's silicon models and Definitions (the tensor-core steps, FP32 and the casts its
     # verifier recomputes): the one edge into the catalog.
