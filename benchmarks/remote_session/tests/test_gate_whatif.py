@@ -67,7 +67,7 @@ def loop(rtt: int, passes: list[int], *, tau: int = MS // 2, gap: int = MS // 5)
     return {"k": 0, "pace": {"k": 1}, "window_ns": 1, "windows_seen": seen}, lines, proved
 
 
-def recorded(rtt: int, passes: list[int], tau: int = MS // 2) -> tuple[gw.Record, dict]:
+def recorded(rtt: int, passes: list[int], tau: int = MS // 2) -> tuple[gw.SessionTimes, dict]:
     s, lines, proved = loop(rtt, passes, tau=tau)
     auditor, _ = al.auditor_seen(lines, s["windows_seen"])
     rec = gw.record(s, lines, auditor, proved, tau)
