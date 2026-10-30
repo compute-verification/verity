@@ -24,16 +24,16 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [De
 
 /-- **A statement registered as `s₀`**: the same program, design, layout, horizon, registered inputs and partition as
 `s₀`; only the trace's commitments (`roots`) and the description may differ. -/
-def SameRegistration {L S : ℕ} (D : Deploy Coin Col T) (lay : Stmt → Layout L S) (k : Stmt → ℕ)
-    (reg : Stmt → Finset ℕ) (s₀ s : Stmt) : Prop :=
+def SameRegistration {L S : ℕ} (D : Deploy Coin Col T) (lay : AuditStatement → Layout L S) (k : AuditStatement → ℕ)
+    (reg : AuditStatement → Finset ℕ) (s₀ s : AuditStatement) : Prop :=
   s.prog = s₀.prog ∧ s.design = s₀.design ∧ lay s = lay s₀ ∧ k s = k s₀ ∧ reg s = reg s₀ ∧ D.partition s = D.partition s₀
 
 /-- **A window's good event**: at the window's statement `x` and the audit's extracted witness `w`, the leak relation at
 the network certifier's rows holds (the network certifier's openings `tops s`), `x` is in the audit's scope and
 registered as `s₀`, the trace holds `ρ` at the registered inputs, and the run's observations `o` have the horizon's
 length, jitter below `Dj` and every status complete. -/
-def WindowGood (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : ℕ) (lay : Stmt → Layout L S) (k : Stmt → ℕ)
-    (δ : ℝ) (reg : Stmt → Finset ℕ) (Dj : ℕ) (s₀ : Stmt) (ρ : ℕ → Bool) (tops : Stmt → List (Opening Bool))
+def WindowGood (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : ℕ) (lay : AuditStatement → Layout L S) (k : AuditStatement → ℕ)
+    (δ : ℝ) (reg : AuditStatement → Finset ℕ) (Dj : ℕ) (s₀ : AuditStatement) (ρ : ℕ → Bool) (tops : AuditStatement → List (Opening Bool))
     (x : Msg) (w : Wit) (o : List (Obs L K S)) : Prop :=
   RLeakTap H D.commit D.parse D.partition L K S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) Dj tops x w ∧
     ScopeAcc D lay k x ∧

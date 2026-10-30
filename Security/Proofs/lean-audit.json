@@ -34,6 +34,7 @@
   "Proofs.Properties.Evaluate",
   "Proofs.Properties.NetworkRecords",
   "Proofs.Properties.NetworkPeriod",
+  "Proofs.Properties.NetworkScan",
   "Proofs.Properties.SampledProofs",
   "Proofs.Properties.SampledProofs.Halt",
   "Proofs.Properties.Pous.TimedAudit",
@@ -64,7 +65,8 @@
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
-  "Proofs.Flock.Claims.ZkColsSession": "the masked reader on recorded `--zk` sessions (art:5542740a), run by hand (`lake env lean --run`): a probe, not a proof"
+  "Proofs.Flock.Claims.ZkColsSession": "the masked reader on recorded `--zk` sessions (art:5542740a), run by hand (`lake env lean --run`): a probe, not a proof",
+  "Proofs.Flock.Claims.Recursion.IrDepSession": "IrDep at a deployed inner session (art:886efa1d), the Lean side of test_irdep_difftest.py, run by hand (`lake env lean --run`, or `lean_changed.py --try` with VERITY_IRDEP_ARGS): a probe, not a proof"
  },
  "runs": {
   "Proofs.Pouw.Bulk": {
@@ -91,6 +93,10 @@
   "Proofs.Flock.Claims.KS.PushSched": {
    "why": "push_unfold and lead_unfold, local tactics that unfold the primed prover one node (a `simp only` over Lock's rightSame, leftSame, lockWith, interleaveLock, bind and oracleStrat) in the pushing chooser's proofs (firstS_push, followR_push, lead_push and the rest of the module). They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
    "digest": "34be1e89abec1ac3c72f02d08dc9ac7c78124e56f609216a1ef9b345746e2edf"
+  },
+  "Proofs.Flock.Claims.Recursion.IrDepSession": {
+   "why": "its one #eval runs IrDepSession.main only when VERITY_IRDEP_ARGS is set (the Lean side of test_irdep_difftest.py): it reads the run tree that variable names and prints one IRDEP line of JSON, writing nothing; unset, as in every build, it does nothing. The module declares no guarantee and nothing a guarantee reads.",
+   "digest": "c932f5745f1dfbfd12723073acb5b0b9b1c3a287ed642623a84c6610deef2e6c"
   },
   "Proofs.Flock.Claims.Recursion.LogWalk": {
    "why": "retl_walk, the tactic (an elab) that walks RetL goals at elaboration, step by step on the logged computation's head (retlStep, in Recursion/DecodeLog.lean's proofs and the module's own). It reads no files and does no IO, and the kernel replays every proof it builds.",
