@@ -304,9 +304,10 @@ def _leaf_count(what: str, count: int) -> int:
     return count
 
 
-def _tree_step(ext, dom: CommitmentDomain, schema: str):
-    # pads and nodes read only the domain id; the row-leaf fields are never hashed here
-    return ext.RowStep(dom.domain_id, bytes(64), bytes(128), bytes(128), bytes(128), schema, 64)
+def _tree_step(ext, dom: CommitmentDomain):
+    # pads and nodes read only the domain id; the row-leaf fields, the schema among them, are never hashed here, and RowStep's
+    # leaf template fits the words schema (not the A one)
+    return ext.RowStep(dom.domain_id, bytes(64), bytes(128), bytes(128), bytes(128), WORDS_LEAF_TAG, 64)
 
 
 def _device_top(hasher, rs, leaves, count: int, stream) -> bytes:
@@ -343,7 +344,7 @@ def device_a_top(ext, hasher, dom: CommitmentDomain, a, stream_ptr: int) -> byte
             return flat.cpu().numpy().tobytes()
         leaves = hasher.lead_leaves(ext.LeadStep(dom.domain_id, A_LEAF_TAG), flat, A_SEGMENT, count,
                                     size - A_SEGMENT * (count - 1), 0, stream_ptr)
-        return _device_top(hasher, _tree_step(ext, dom, A_LEAF_TAG), leaves, count, main)
+        return _device_top(hasher, _tree_step(ext, dom), leaves, count, main)
 
 
 class DeviceWords:
@@ -367,7 +368,7 @@ class DeviceWords:
         self._stream = torch.cuda.ExternalStream(stream_ptr)
         self._lanes = [torch.cuda.Stream(device=self._stream.device) for _ in range(lanes)]
         self._ls = ext.LeadStep(dom.domain_id, WORDS_LEAF_TAG)
-        self._rs = _tree_step(ext, dom, WORDS_LEAF_TAG)
+        self._rs = _tree_step(ext, dom)
         self._leaves: list = []
         self._next = 0
         self._one = None
