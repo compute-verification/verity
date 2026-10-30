@@ -7,10 +7,24 @@ import re
 from pathlib import Path
 
 from verity_vllm.pipeline import research_outputs as ro
+from verity_vllm.pipeline import research_result, serve_commit
 
 ROW = "llama32-1b__bf16__l40s__tp4__b8__i256__o32__mixed__greedy__bi-eager"
 COMMIT_SH = Path(__file__).resolve().parents[4] / "examples" / "vllm" / "commit.sh"
 WDS = ["d" * 64, "a" * 64, "c" * 64, "b" * 64]
+#: an evidence dir's files that hold request values, where each rank ran or when each process ran: never published
+PRIVATE_FILES = {"match/capture/tokens.json": {"prompt_token_ids": [[1, 2]], "generated_token_ids": [[3]], "timing": {}},
+                 "match/control/tokens.json": {"prompt_token_ids": [[1, 2]]}, "commit/tokens_p0.json": {"generated_token_ids": [[3]]},
+                 "match_stoch.json": {"rows": [{"served": 3, "recomputed": 3}]},
+                 "commit/sampled_replay_p0.json": {"facts_of_record": {"served": [3]}},
+                 "commit/sampled_replay.json": {"facts_of_record": {"served": [3]}},
+                 "serve/requests.jsonl": '{"engine_id": "0", "prompt_ids": [1, 2], "output_ids": [3]}\n',
+                 "serve/step_trace.jsonl": '{"step": 0, "rows": {"0": 2}}\n',
+                 "serve/advice_trace.jsonl": '{"kind": "arrive", "request": "0", "prompt": 2, "params": {"seed": 1}}\n',
+                 "load.jsonl": '{"user": "u", "prompt": 2, "response": {"ids": [3]}}\n', "rep-0/load-1.jsonl": "{}\n",
+                 "match/capture/topology.json": {"ranks": [{"pid": 7, "cuda_visible_devices": "0"}]},
+                 "match/control/topology.json": {"driver_pid": 8}, "build/rank0/build_step/topology.json": {"build_s": 1.0},
+                 "timeline.jsonl": '{"utc": "2026-10-28T00:00:00Z", "pod": "computeinstance-x"}\n', "timeline_report.json": {}}
 
 
 def _w(p: Path, doc) -> None:
@@ -237,6 +251,30 @@ def test_a_replay_stage_publishes_neither_its_slim_keep_nor_the_bundle(tmp_path)
     assert not [x for x in (tmp_path / "run").rglob("*") if "replay_slim_p" in x.as_posix() or "replay_bundle_p" in x.as_posix()]
 
 
+def test_no_stage_publishes_request_values_placement_or_timing(tmp_path):
+    """Every stage at TP1 and TP, alone or as one run's stages, publishes none of PRIVATE_FILES wherever it sits (a listed record, under
+    a glob dir, or the evidence), and the sweep's result.json copies none beside the run: the requests' prompt and served token ids
+    are values, and where each part of the workload ran and when are private."""
+    t1 = tmp_path / "t1"
+    _w(t1 / "build_summary.json", {"request": {"program_digest": "r" * 64}, "step": {"program_digest": "s" * 64}})
+    _w(t1 / "verdict.json", {"outcome": "PASS"})
+    for d, row in ((t1, "smollm2-135m__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager"), (_tp_dir(tmp_path, world=2), ROW)):
+        _w(d / "stages.txt", "".join(f"{s} PASS 2026-10-28T00:00:0{i}Z rc=0\n" for i, s in enumerate(ro.KINDS)))
+        for rel, doc in {"commit/summary.json": {"pass": True}, "commit/verdict.json": {"commit_pass": True}, "config_record.json":
+                         {"outcome": "PASS"}, "match/run.json": {}, "global_match.json": {"verdict": "PASS"}, **PRIVATE_FILES}.items():
+            _w(d / rel, doc)
+        for stages in [[s] for s in ro.KINDS] + [list(ro.KINDS)]:
+            run = tmp_path / f"run_{d.name}_{'_'.join(stages)}"
+            ro.build_stages(d, row, stages, run, {})
+            staged = {p.relative_to(run / "outputs").as_posix().split("/", 1)[1] for p in (run / "outputs").rglob("*") if p.is_file()}
+            assert "stages.txt" in staged and not staged & set(PRIVATE_FILES), (d.name, stages, staged & set(PRIVATE_FILES))
+        doc = research_result.build_result(d, row, "v2", ["build", "match", "commit"], "r", tmp_path / f"result_{d.name}")
+        assert "evidence/match/run.json" in doc["artifacts"]
+        assert not {f.removeprefix("evidence/") for f in doc["artifacts"]} & set(PRIVATE_FILES), doc["artifacts"]
+    assert [rel for rel in PRIVATE_FILES if not ro.private(rel)] == [] and [r for r in research_result.RECORDS if ro.private(r)] == []
+    assert [n for n in serve_commit.MIRRORED if ro.private(n)] == [], "a served run's $OUT gets no request value"
+
+
 def test_the_example_commit_publishes_its_stages_records_and_none_of_its_private_files(tmp_path):
     """examples/vllm/commit.sh publishes what `research-outputs write` declares for the stages it names, and copies nothing into its
     run record: the sealed bundle (the committed store with its salts, Kw in weights/tree.json, the opened weights, the requests'
@@ -258,7 +296,7 @@ def test_the_example_commit_publishes_its_stages_records_and_none_of_its_private
                "commit/replay_bundle_p0/context.json": {"requests": [{"prompt_token_ids": [1, 2]}]},
                "commit/replay_bundle_p0/MANIFEST.json": {"committed_not_retained": {}}, "commit/replay_bundle_p0/binding_map.json": {},
                "commit/replay_slim_p0/slim.json": {"pair": 0}, "commit/replay_slim_p0/store/salts/s0.bin": "salt",
-               "match/capture/log.jsonl.gz": "planes"}
+               "match/capture/log.jsonl.gz": "planes", **PRIVATE_FILES}
     for rel, doc in {**public, **private}.items():
         _w(d / rel, doc)
     run = tmp_path / "run"

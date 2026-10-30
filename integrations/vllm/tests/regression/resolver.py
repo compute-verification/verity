@@ -25,7 +25,8 @@ $VERITY_REGRESSION_CANDIDATE/<row>/<rel>, or None: self-check mode), `row.decisi
 
 $VERITY_REGRESSION_CANDIDATE may also name Attempt ids (`r2026…`, comma-separated): the v2 candidate is then what those Attempts
 published -- `row.candidate_attempts()` are their manifests (matched to the row by `params.row`), `row.candidate_root()` the union
-of their `vllm-build/v1` / `vllm-match-record/v1` / `vllm-verdict/v1` / `execution-evidence/v1` trees laid out like a row dir.
+of their `vllm-build/v1` / `vllm-match-record/v1` / `vllm-verdict/v1` / `execution-evidence/v1` trees laid out like a row dir.  Those
+never hold a private file (`research_outputs.private`), so a check that reads one declares it not applicable (`kept_on_the_node`).
 """
 from __future__ import annotations
 
@@ -477,6 +478,14 @@ def not_applicable(why: str) -> dict[str, str]:
     binding by): `{"not_applicable": why}` in `actual`.  `diff` does not count it as a difference and `is_not_applicable` finds them so the
     test records what was declared inapplicable, by key and reason."""
     return {NOT_APPLICABLE: why}
+
+
+def kept_on_the_node(row: "Row", rel: str) -> dict[str, str] | None:
+    """`not_applicable` when the candidate is Attempts, which never publish the private file `rel` (`research_outputs.private`: request
+    values, placement and timing stay on the node), and lack it; None otherwise."""
+    if candidate_attempt_ids() and row.candidate(rel) is None:
+        return not_applicable(f"an Attempt never publishes {rel}, which stays on the node: give the candidate as its row dirs")
+    return None
 
 
 def is_not_applicable(x: Any) -> bool:
