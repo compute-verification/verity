@@ -96,7 +96,9 @@
 #     answer reads its period.json: the chain after the window commit and before V3c's audit, within CERTIFIER_TIMEOUT
 #     (default 60m), and the period check after period.json, within CERTIFIER_PERIOD_TIMEOUT (default 60m), each as
 #     `bash -c CMD _ D K DIR V3C` in TREE with DIR $OUT/pieces/certifier and V3C V3c's $D/v3c-w<K>-<class>. The period
-#     check writes the certifier's answer.json in DIR, which step 4's certifier piece reads.
+#     check writes the certifier's answer.json in DIR, which step 4's certifier piece reads; `served_verdicts.sh v3c`,
+#     which writes no record, moves the steps' logs (CERTIFIER_PRIVATE) to the serve dir's private/pieces/certifier
+#     before it exits.
 # Coins: sampled proofs' draw is Lean's IO.getRandomBytes in the verifier's process on the served node unless PP_CHALLENGER
 # names the live challenger (run.sh's gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY). With H1_GATE (the
 # lane's gate command, by default "ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84"; empty, no
@@ -423,8 +425,8 @@ front_ok() {  # preflight: LOAD=front has a front, and each flag CERTIFIER_FRONT
   done
 }
 # the certifier's chain files list and count the window's requests (its certs, its tie's prompt lengths, its N2 warden's
-# counts, its report and the piece's log, or the split's two logs); once the record has read them they move to the serve
-# dir's private/
+# counts, its report and the piece's log, or the split's two logs); once the record has read them, or
+# `served_verdicts.sh v3c` is done, they move to the serve dir's private/
 CERTIFIER_PRIVATE="chain/certs.json chain/report chain/tie/summary.json chain/n2/summary.json piece.log chain.log period.log"
 private_pieces() {
   local f
@@ -487,7 +489,9 @@ if [ "${1:-}" = v3c ]; then  # an existing serve dir's window: D and K set, its 
   wait "$BUILD"; rc=$?
   [ "$rc" = 0 ] || { tail -30 "$OUT/build.log"; stop build "$rc"; }
   [ "$v3c_ok" = 1 ] || exit 16
-  v3c_proved; exit $?
+  v3c_proved; rc=$?
+  private_pieces
+  exit "$rc"
 fi
 
 H1_COINS="PoUW H1: not served (H1_GATE empty)"
