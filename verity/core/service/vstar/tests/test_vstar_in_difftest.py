@@ -289,7 +289,7 @@ SET = FLOCK_TESTS / "fixtures" / "hidden-outputs" / "flat" / "gemm-coordinate"
 
 
 def _inner(tmp: Path) -> Path:
-    """rec-algebra's fixture session replayed through the firewall (`rec_live.Proxy`, seeded salts), as
+    """rec-algebra's fixture session replayed through the ZK server (`rec_live.Proxy`, seeded salts), as
     ``verity_flock``'s `test_rec_vstage` replays it."""
     rec = json.loads((SET / "records-cpu" / "honest.json").read_text())["record"]
     g, pending = random.Random(5), bytearray()
@@ -412,7 +412,7 @@ def test_the_recorded_plain_leaf_session_agrees(server, tmp_path):
 @DEPLOYED
 @_fetched(SET, "hidden-outputs")
 def test_the_deployed_algebra_shape_agrees(server, tmp_path):
-    """rec-algebra's fixture session (m = 25, k_log = 22, the deployed algebra shape) replayed through the firewall: every
+    """rec-algebra's fixture session (m = 25, k_log = 22, the deployed algebra shape) replayed through the ZK server: every
     part of the algebra and every level's cap is Lean's port inputs (its openings are hm96 leaves, so the stager stages no
     level of it)."""
     INNER = json.loads((FLOCK_TESTS / "fixtures" / "inner_claims.json").read_text())

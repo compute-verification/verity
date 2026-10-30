@@ -64,7 +64,7 @@ def served_inputs(run: Path, window: int) -> tuple[Path, dict, dict, dict]:
 
 def registered_seed(meta: dict) -> int:
     """The default seed the registration fixes, `engine.served_seed.DEFAULT_SEED`; a ValueError when the run's server says it
-    filled in another (or says none), since a request that sent no seed would be compiled under a seed its draw didn't use."""
+    filled in another (or says none), since a request that sent no seed would be compiled under a seed its sample didn't use."""
     from verity_vllm.engine.served_seed import DEFAULT_SEED
 
     seed = meta.get("default_seed")
