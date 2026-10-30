@@ -22,10 +22,12 @@ answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the 
 * **The check**: each case through the mirror (``--mirror``, `period_case.py` loaded by path: `reference`) and
   ``network-period check`` (``--lean``), whose verdicts must agree and be the case's: reject, and where the scan's
   answer accepts, at the wiring (the mirror's ``UNWIRED`` in its reason and in Lean's). The block round's o0 is a
-  `SlotEntry_v1` stand-in's entries, whose closure digest is none the period check pins (`slotEntryPins`: the scan's
-  `prog` must be `io_shell.SlotEntry_v1`'s own entries), so the honest case passes every check before the wiring and
-  is refused there; its registration names the scan's state tree as ``scan/state``, the state the stand-in's
-  `SCAN_STATE` is tied to (`stateTied`). ``DIR`` gets each case's files and ``period.json``, each case's answers.
+  `SlotEntry_v1` stand-in's entries, whose closure digest is none the period check pins (`entryPins`: the scan's
+  `prog` is a ``scan/prog<j>`` a lane, and lane j's must be chunk j, ``<descriptor id>/c<j>/o0``, of a pinned
+  `SlotEntry_v1`'s or `SelectEntry_v1`'s own entries, as the block round's lane-j o0 is of the stand-in's), so the
+  honest case passes every check before the wiring and is refused there; its registration names the scan's state tree
+  as ``scan/state``, the state the stand-in's `SCAN_STATE` is tied to (`stateTied`). ``DIR`` gets each case's files
+  and ``period.json``, each case's answers.
 """
 from __future__ import annotations
 
