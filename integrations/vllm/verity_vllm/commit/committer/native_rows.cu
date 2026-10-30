@@ -17,6 +17,8 @@
 //   leaf = SHA-512(frame || "leaf" || domain id || uint(pos) || uint(pos) || "hm96-sha512/row/v2" || h)   (framed parts)
 //   pad  = SHA-512(frame || "pad" || domain id || uint(pos)) for n <= pos < width
 // then node(level, index, left, right) up the tree, up to ten levels a launch, each block folding its own aligned slice (rows_levels_kernel).
+// The lead's leaves (verity_vllm.commit.lead_rows) are inline: rows_leaf_gather_kernel cuts a call's committed tiles out of its export
+// and rows_leaf_inline_kernel hashes each chunk or segment inside its frame leaf; their pads and nodes are the kernels above.
 #include <cuda_runtime.h>
 
 #include <cstdint>
@@ -381,6 +383,86 @@ __global__ void __launch_bounds__(THREADS) rows_levels_kernel(const __grid_const
   }
 }
 
+// --- the lead (verity_vllm.commit.lead_rows) -----------------------------------------------------------------------------------
+// A call's committed stream, the export's 16 x 8 MMA tiles (128 words, 512 bytes) inside pad_rows(m) x pad_cols(n) in their order
+// (rt, ct, t, ni, w); and inline frame-v3-sha512 leaves SHA-512(prefix(rank, |v|) || v) over its chunks and A_j's segments.  Their
+// pads and nodes are the rows-sha512 kernels' under the instance's domain.
+
+constexpr int LEAD_TPL = 24;         // words of a leaf message's prefix: at most 192 bytes, schemas up to 32 bytes
+
+struct LeadK {
+  u64 tpl[MAX_NB][LEAD_TPL];         // per nb = len(uint(rank)): the leaf message before its value, rank, position and |v| zero
+  u32 plen[MAX_NB];                  // its bytes, the value's offset in the message
+};
+
+// Thread a 16-byte piece of committed tile k: the call's r16 x c8 tiles a step, row tiles of 64 rows (the last may commit fewer than
+// four tile rows) and column tiles of nni tile columns (the last may commit fewer), so stream tile k is export tile
+// ((rt nct + ct) S + t) 4 nni + 4 ni + w.
+__global__ void __launch_bounds__(THREADS) rows_leaf_gather_kernel(const uint4* __restrict__ ex, uint4* __restrict__ out, u64 n_tiles, u32 r16,
+                                                                   u32 c8, u32 S, u32 nct, u32 nni) {
+  const u64 g = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  if (g >= 32 * n_tiles) return;
+  u64 k = g >> 5;
+  const u64 per_rt = 4ull * c8 * S, rt = k / per_rt;
+  k -= rt * per_rt;
+  const u32 nw = min(4u, r16 - 4 * (u32)rt);
+  const u64 per_ct = (u64)nw * S * nni, ct = k / per_ct;
+  k -= ct * per_ct;
+  const u32 ncol = min(nni, c8 - nni * (u32)ct);
+  const u64 t = k / (ncol * nw), r = k % (ncol * nw), ni = r / nw, w = r % nw;
+  out[g] = __ldg(ex + 32 * (((rt * nct + ct) * S + t) * 4 * nni + 4 * ni + w) + (g & 31));
+}
+
+// value word q of a len-byte value (len a multiple of 8), big-endian; zero outside it
+DEV u64 lead_vword(const uint8_t* v, u64 nw, long long q) {
+  if (q < 0 || (u64)q >= nw) return 0;
+  const uint2 x = __ldg(reinterpret_cast<const uint2*>(v) + q);
+  return be64(x.x, x.y);
+}
+// OR the low n bytes of v, big-endian, into W at byte offset off.
+DEV void lead_or(u64* W, u32 off, int n, u64 v) {
+  for (int i = 0; i < n; ++i) {
+    const u32 b = off + i;
+    W[b >> 3] |= ((v >> (8 * (n - 1 - i))) & 0xFFull) << (56 - 8 * (b & 7));
+  }
+}
+
+// A thread a leaf: rank first + i over values + i value_bytes, value_bytes long but the last (last_bytes).  Message word mw holds the
+// prefix's word mw and the value's words q = mw - P / 8 and q - 1 shifted by P mod 8 bytes, then the 0x80 byte and the length.
+__global__ void __launch_bounds__(THREADS) rows_leaf_inline_kernel(const __grid_constant__ LeadK K, const uint8_t* __restrict__ values,
+                                                                   u64 value_bytes, u64 n, u64 last_bytes, u64 first, uint8_t* __restrict__ out) {
+  const u64 i = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  if (i >= n) return;
+  const u64 rank = first + i, len = i + 1 == n ? last_bytes : value_bytes;
+  const int nb = nbytes(rank);
+  const u32 P = K.plen[nb - 1], a = P >> 3, s = 8 * (P & 7);
+  u64 pw[LEAD_TPL];
+#pragma unroll
+  for (int k = 0; k < LEAD_TPL; ++k) pw[k] = K.tpl[nb - 1][k];
+  lead_or(pw, 121, nb, rank);
+  lead_or(pw, 129 + nb, nb, rank);
+  lead_or(pw, P - 8, 8, len);
+  const uint8_t* v = values + i * value_bytes;
+  const u64 nw = len >> 3, E = P + len, nblk = (E + 17 + 127) >> 7;
+  u64 h[8];
+  sha::iv(h);
+  for (u64 b = 0; b < nblk; ++b) {
+    u64 W[16];
+#pragma unroll
+    for (int k = 0; k < 16; ++k) {
+      const u64 mw = 16 * b + k;
+      const long long q = (long long)mw - a;
+      u64 x = mw < LEAD_TPL ? pw[mw] : 0;
+      x |= s ? lead_vword(v, nw, q) >> s | lead_vword(v, nw, q - 1) << (64 - s) : lead_vword(v, nw, q);
+      if (mw == E >> 3) x |= 0x80ull << (56 - 8 * (E & 7));
+      W[k] = x;
+    }
+    if (b + 1 == nblk) W[15] = 8 * E;
+    sha::compress(h, W);
+  }
+  st_be(out + 64 * i, h, 8);
+}
+
 // --- host: the step's parameters ---------------------------------------------------------------------------------
 
 constexpr int SCHEMA_LEN = 18;   // "hm96-sha512/row/v2": the leaf template's offsets assume its length (rc's SX = 0)
@@ -446,7 +528,8 @@ static int rows_kernel_attributes() {
                         reinterpret_cast<const void*>(rows_leaf_salt_kernel<false>), reinterpret_cast<const void*>(rows_leaf_salt_kernel<true>),
                         reinterpret_cast<const void*>(rows_leaf_data_kernel<false>), reinterpret_cast<const void*>(rows_leaf_data_kernel<true>),
                         reinterpret_cast<const void*>(rows_leaf_frame_kernel), reinterpret_cast<const void*>(rows_level_kernel),
-                        reinterpret_cast<const void*>(rows_levels_kernel)})
+                        reinterpret_cast<const void*>(rows_levels_kernel), reinterpret_cast<const void*>(rows_leaf_gather_kernel),
+                        reinterpret_cast<const void*>(rows_leaf_inline_kernel)})
     if (const cudaError_t rc = cudaFuncSetAttribute(f, cudaFuncAttributePreferredSharedMemoryCarveout, cudaSharedmemCarveoutMaxShared))
       return static_cast<int>(rc);
   done[dev] = true;
@@ -574,5 +657,52 @@ extern "C" int verity_rows_levels_launch(const void* params, const uint8_t* in, 
   const Params* p = static_cast<const Params*>(params);
   if (const int rc = rows_kernel_attributes()) return rc;
   rows_levels_kernel<<<static_cast<unsigned>(n_in >> n_levels), THREADS, 0, st>>>(p->node, in, out, n_in, level, base, n_levels);
+  return static_cast<int>(cudaGetLastError());
+}
+
+extern "C" int verity_lead_params_bytes() { return static_cast<int>(sizeof(LeadK)); }
+
+// An instance's leaf parameters into `out` (verity_lead_params_bytes()): its domain id (64 bytes) and the leaves' schema (at most
+// 32 bytes).  0, or -1 for a longer schema.
+extern "C" int verity_lead_build(const uint8_t* domain_id, const char* schema, int schema_len, void* out) {
+  if (schema_len < 0 || schema_len > 32) return -1;
+  LeadK k{};
+  const std::vector<uint8_t> did(domain_id, domain_id + 64), sch(schema, schema + schema_len);
+  for (int nb = 1; nb <= MAX_NB; ++nb) {
+    std::vector<uint8_t> m = message("leaf", {did, zeros(nb), zeros(nb), sch});
+    m.resize(m.size() + 8, 0);
+    if (m.size() > 8 * LEAD_TPL) return -1;
+    k.plen[nb - 1] = static_cast<u32>(m.size());
+    m.resize(8 * LEAD_TPL, 0);
+    words_of(m.data(), k.tpl[nb - 1], LEAD_TPL);
+  }
+  memcpy(out, &k, sizeof k);
+  return 0;
+}
+
+// The committed stream of a call of m rows and n columns at S steps from its export over bn-column tiles (64 ceil(m / 64) x
+// bn ceil(n / bn) words a step): pad_rows(m) pad_cols(n) S words to out.  ex and out 16-byte aligned.
+extern "C" int verity_lead_gather_launch(const uint8_t* ex, uint8_t* out, int m, int n, int S, int bn, cudaStream_t st) {
+  if (m <= 0 || n <= 0 || S <= 0 || bn <= 0 || bn % 8 || reinterpret_cast<uintptr_t>(ex) % 16 || reinterpret_cast<uintptr_t>(out) % 16)
+    return static_cast<int>(cudaErrorInvalidValue);
+  if (const int rc = rows_kernel_attributes()) return rc;
+  const u32 r16 = (m + 15) / 16, c8 = (n + 7) / 8, nct = (n + bn - 1) / bn, nni = bn / 8;
+  const u64 tiles = (u64)r16 * c8 * S;
+  rows_leaf_gather_kernel<<<static_cast<unsigned>((32 * tiles + THREADS - 1) / THREADS), THREADS, 0, st>>>(
+      reinterpret_cast<const uint4*>(ex), reinterpret_cast<uint4*>(out), tiles, r16, c8, static_cast<u32>(S), nct, nni);
+  return static_cast<int>(cudaGetLastError());
+}
+
+// The inline leaves of ranks first .. first + n - 1 over n values at values + i value_bytes, each value_bytes long but the last
+// (last_bytes): 64 bytes a leaf to out.  values 8-byte aligned, both lengths multiples of 8, first + n <= 2^32.
+extern "C" int verity_lead_leaves_launch(const void* params, const uint8_t* values, uint64_t value_bytes, uint64_t n, uint64_t last_bytes,
+                                         uint64_t first, uint8_t* out, cudaStream_t st) {
+  if (!n) return 0;
+  if (value_bytes % 8 || last_bytes % 8 || !last_bytes || last_bytes > value_bytes || first + n > (1ull << 32) ||
+      reinterpret_cast<uintptr_t>(values) % 8)
+    return static_cast<int>(cudaErrorInvalidValue);
+  if (const int rc = rows_kernel_attributes()) return rc;
+  rows_leaf_inline_kernel<<<static_cast<unsigned>((n + THREADS - 1) / THREADS), THREADS, 0, st>>>(*static_cast<const LeadK*>(params), values,
+                                                                                                 value_bytes, n, last_bytes, first, out);
   return static_cast<int>(cudaGetLastError());
 }
