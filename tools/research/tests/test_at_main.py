@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 from research import at_main
@@ -88,3 +89,12 @@ def test_the_shim_runs_origin_mains_code_for_a_stale_checkout_and_the_checkouts_
     commit(repo, "tools/research/src/research/cli.py", "the lane's own\n")
     at_main.shim(["queue", "status"], repo, tmp_path / "cache", lambda exe, args, env: ran.append((args, env)))
     assert [env["PYTHONPATH"].split(os.pathsep)[0] for _, env in ran] == [str(repo / "tools/research/src")]
+
+
+def test_a_research_a_test_starts_never_loads_at_main():
+    """Other packages' suites start `python -m research` without declaring at_main.py, so loading it failed their read
+    guard; under a test the tree's code runs anyway."""
+    probe = ("import sys; sys.argv = ['research', '--help']; from research import cli; cli.main(); "
+             "print('at_main' if 'research.at_main' in sys.modules else 'clean')")
+    out = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, check=True).stdout
+    assert out.splitlines()[-1] == "clean"
