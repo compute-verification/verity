@@ -1,4 +1,4 @@
-"""`vllm_bench`'s NCP operands, formed in every call: X·Yᵀ = A·Bᵀ exactly under each fresh draw of E₁ and F₁, with NCP's word
+"""`vllm_bench`'s NCP operands, formed in every call: X·Yᵀ = A·Bᵀ exactly under each fresh sample of E₁ and F₁, with NCP's word
 permutation, so the layer needs nothing but its int7 weight between calls."""
 
 from __future__ import annotations
@@ -29,4 +29,4 @@ def test_each_calls_operands_cancel_to_the_int7_product():
         assert X.shape == (m, 3 * k) and Y.shape == (n, 3 * k) and X.dtype == Y.dtype == torch.uint8
         assert torch.equal(X.view(torch.int8).long() @ Y.view(torch.int8).long().T, want)
         ys.append(Y)
-    assert not torch.equal(ys[0], ys[1]) and not torch.equal(ys[1], ys[2])      # F₁ is drawn anew in each call
+    assert not torch.equal(ys[0], ys[1]) and not torch.equal(ys[1], ys[2])      # F₁ is sampled anew in each call
