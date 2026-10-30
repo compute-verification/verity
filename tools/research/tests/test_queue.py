@@ -2183,6 +2183,8 @@ def _published(world: World, commit: str, *, pkg: str = "pkg", passed: bool = Tr
 
     node = LocalStore(world.tmp / "node", config_path=world.tmp / "store.toml")
     rid, outputs = new_run_id(at), {}
+    while node.attempt_path(rid).exists():      # an id is a second and 16 random bits: runs published in one second can share one
+        rid = new_run_id(at)
     if files is not None:
         tree = world.tmp / "run-files" / rid
         for rel, text in files.items():
