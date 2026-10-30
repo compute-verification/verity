@@ -102,7 +102,7 @@ def params : NetworkCheck.Check.Params where
   session := session
 
 /-- The egress link opens no frames and declares `sync`. -/
-def link : NetworkCheck.Check.Link := ⟨[], #[sync]⟩
+def link : NetworkCheck.Check.LinkOpening := ⟨[], #[sync]⟩
 
 def evidence : Evidence := ⟨#[link]⟩
 
