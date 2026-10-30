@@ -153,10 +153,8 @@ class FsRemote:
 
 def _retry_after(value: str | None) -> float | None:
     """A `Retry-After` header's seconds, or None for none or an HTTP date (the backoff stands in)."""
-    try:
-        return max(0.0, float(value)) if value else None
-    except ValueError:
-        return None
+    v = (value or "").strip()
+    return float(v) if v.isdigit() else None
 
 
 class HttpRemote:
