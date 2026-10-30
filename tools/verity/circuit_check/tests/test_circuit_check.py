@@ -919,8 +919,23 @@ def test_a_proof_blocks_export_counts_its_circuit_types():
         C.output("out0", [C.AND(x, y) for x, y in zip(a, b)])
         return C
 
-    assert CK._export_counts(build, "test unit") == {"and": 4, "xor": 0, "not": 0, "subcircuit_types": 1, "flat_ands": 4,
-                                                      "shared_across_types": 0}
+    want = {"and": 4, "xor": 0, "not": 0, "subcircuit_types": 1, "flat_ands": 4, "shared_across_types": 0}
+    assert CK._export_counts(build, "test unit") == want == CK._export_counts(build, "test unit", build())
+
+
+def test_a_proof_blocks_export_is_evaluated_against_the_circuit_it_is_handed():
+    """`checks._export_counts` given the circuit ``build`` made (`template_lowering` hands it `_traced`'s) evaluates the
+    export's types against that circuit: one that computes something else is refused."""
+    from verity_flock import gf2
+
+    def build(xor: bool = False):
+        C = gf2.Circuit(cse=True)
+        a, b = C.input("a", 4), C.input("b", 4)
+        C.output("out0", [x ^ y if xor else C.AND(x, y) for x, y in zip(a, b)])
+        return C
+
+    with pytest.raises(AssertionError, match="disagree with its circuit"):
+        CK._export_counts(build, "test unit", build(xor=True))
 
 
 def _lowering_pin(e: dict) -> dict:
