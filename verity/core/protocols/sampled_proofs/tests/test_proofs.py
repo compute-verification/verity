@@ -82,6 +82,48 @@ def test_a_program_without_registered_reads_or_given_them_goes_on_to_its_files(t
     assert got is None and why[0] == "proof", why
 
 
+def test_the_group_form_hands_v2_each_member_and_its_share_of_the_sessions_in_order(tmp_path, monkeypatch):
+    """`check_v2_group` puts each member's circuit digest and registered file in the parameters and its public file and
+    sessions in the evidence, the evidence's ``sessions`` split among the members in order (a member with no unit drawn,
+    its public file alone), and every member's files and the tables in as blobs; sessions left over are refused before
+    Lean runs."""
+    def proof(name: str, n: int) -> PF.Proof:
+        d = tmp_path / name
+        (d / "sessions").mkdir(parents=True)
+        (d / "circuit.txt").write_text(f"circuit {name}")
+        (d / "pub.bin").write_bytes(name.encode())
+        for i in range(n):
+            (d / "sessions" / str(i)).mkdir()
+            (d / "sessions" / str(i) / "session.json").write_text(f"{name} {i}")
+            (d / "sessions" / str(i) / "rep-0.bin").write_bytes(bytes([i]))
+        return PF.Proof(d / "circuit.txt", d / "pub.bin", tuple(d / "sessions" / str(i) for i in range(n)))
+
+    got = {}
+    monkeypatch.setattr(PF, "_check", lambda *a: got.update(args=a) or {"verdict": "accept"})
+    members = [PF.Member("first", proof("first", 1), "aa" * 64, None),
+               PF.Member("ingress-w", proof("ingress-w", 0), "bb" * 64, {"reads": []}),
+               PF.Member("egress-w", proof("egress-w", 2), "cc" * 64, None)]
+    table = tmp_path / "table.bin"
+    table.write_bytes(b"t")
+    evidence = {"sessions": ["s0", "s1", "s2"], "verdicts": {}}
+    assert PF.check_v2_group({"law": {}}, {"leaf_layer": "x"}, evidence, members, [table]) == {"verdict": "accept"}
+    _params, own, _record, _evidence, pr, blobs = got["args"]
+    assert own == {"members": [{"name": m.name, "circuit": m.circuit_sha512, "registered": m.registered}
+                               for m in members]}
+    assert [(m["name"], m["public"], [s["name"] for s in m["sessions"]]) for m in pr["members"]] == [
+        ("first", PF.file_sha512(members[0].proof.public), ["s0"]),
+        ("ingress-w", PF.file_sha512(members[1].proof.public), []),
+        ("egress-w", PF.file_sha512(members[2].proof.public), ["s1", "s2"])]
+    assert pr["members"][2]["sessions"][1]["reps"] == {"rep-0.bin": PF.file_sha512(members[2].proof.sessions[1] /
+                                                                                     "rep-0.bin")}
+    assert members[1].proof.public in blobs and members[2].proof.sessions[1] / "session.json" in blobs
+    assert blobs[-1] == table
+    with pytest.raises(ValueError, match="the members hold 3 sessions; the evidence names 4"):
+        PF.check_v2_group({}, {}, {"sessions": ["s0", "s1", "s2", "s3"]}, members)
+    with pytest.raises(ValueError, match="1 names for 2 sessions"):
+        PF.check_v2_group({}, {}, {"sessions": ["s0", "s1"]}, members)
+
+
 def _files(d: Path, groups: int = 1, meta: dict | None = None, header: dict | None = None) -> tuple[Path, Path]:
     """A circuit file's head (its META and a ``unit`` circuit of `groups` input groups) and a public file's header."""
     unit = f"flock-ir-unit/v2 u 1 2 {groups}" + " 0 1 1 16" * groups + " 1 1 1 1 16\n0 0\n"

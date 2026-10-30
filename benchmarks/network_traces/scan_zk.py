@@ -74,6 +74,11 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   which no slot is live, so none is due. Accepted: every o0 opens to 1. The registration's roots also name, as
   ``rows/<direction>/<w>`` (`warden_roots`), the root and domain of each warden row registration a member's warden port
   reads (ingress's ``row``, egress's ``o1``), so a period check holds the answer to them.
+* **One-stage v2** (`v2_group`, ``v2.json``): each round's audit again as `SampledProofs.OneStageZk`'s group form
+  (`proofs.check_v2_group`): one member a member of the round, its circuit the auditor's pin and its registered file the
+  verifier's own, the registration's ``leaf_layer`` the members' public files', and each member's sessions run by the
+  Lean verifier inside v2 on one run. An accepted round is accepted there; a refused one (``chain``, ``tampered``, a
+  void run's) is refused there.
 * **The answers** (``answers.json``, `answers`): the honest round's registration and, for each link-window W of the
   group, the warden's two row registrations of W and the scan's one-stage answer (`window_answer`), the same for every
   W, which `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) checks for W with W's three records'
@@ -1230,13 +1235,13 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
         lean_draw, receipt = dict(draw.draw), dict(draw.registration.receipt)
         (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
     (out / "draw.json").write_text(json.dumps(lean_draw, sort_keys=True))
-    proved, served, n_inst, verdicts, statement, sessions, session_roots = [], [], 0, {}, {}, [], {}
+    proved, served, n_inst, verdicts, statement, sessions, session_roots, sdirs = [], [], 0, {}, {}, [], {}, {}
     for j, m in enumerate(members):
         local = sorted(u - m["base"] for u in lean_draw["units"] if m["base"] <= u < m["base"] + m["n"])
         if not local:
             log(f"{name}/{m['name']}: no unit drawn, no session")
             continue
-        sdir = out / f"session-{m['name']}"
+        sdir = sdirs[m["name"]] = out / f"session-{m['name']}"
         record, live, proc = M.a8.session(a, m, sdir, local, port + j if port else _free_port(), env=WZ.firewall(M, m))
         draw_t = (record or {}).get("unit_draw") or {}
         v = V.check_draw(draw_t, {"population": m["n"]}, {"law": "subset", "k": len(local)})
@@ -1273,6 +1278,10 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
             f"{told['coins_reason']}, run {told['run']}, negatives refused "
             f"{ {x: y['refused'] for x, y in neg.items()} }")
         result = result or {"accepted": False, "outcome": told["outcome"]}
+    v2 = v2_group(M, a, pg, rec, law, want, leaf_layer, result, members, sdirs, sessions,
+                  {"instances": n_inst, "served": sorted(served), "session_roots": session_roots})
+    (out / "v2.json").write_text(json.dumps(v2, indent=1, sort_keys=True))
+    log(f"{name}: one-stage v2's group form (checkGroup): {v2.get('verdict')} {v2.get('reason') or ''}")
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
     held = set(proved) if result.get("accepted") else set()
     public = {m["base"] + i for m in members if m["outputs"] is not None for i in range(m["n"])}
@@ -1293,7 +1302,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
             json.dumps(at.tampered.registration, indent=1, sort_keys=True))
     streamed = (out / "receipt.json", out / "segment.json", out / "coins.json") if stream is not None else ()
     for f in (out / "registration.json", pg.partition_file, pg.program_file, out / "draw.json", out / "audit.json",
-              *streamed):
+              out / "v2.json", *streamed):
         os.link(f, vdir / f.name)
     for m in members:
         for f in (m["dir"] / "circuit.txt", m["dir"] / f"pub-{m['n']}.bin", m["registered_file"]):
@@ -1313,7 +1322,47 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
             "charge": charge_terms(M, result, members, a.delta),
             "per_unit": per_unit(members, statement),
             "verdicts": {x: y.get("accepted") for x, y in verdicts.items()},
-            "why": {x: y.get("why") for x, y in verdicts.items()}, "timing": statement}
+            "why": {x: y.get("why") for x, y in verdicts.items()}, "timing": statement,
+            "v2": {x: v2.get(x) for x in ("verdict", "reason")}}
+
+
+def _one_stage_replay():
+    """`benchmarks/one_stage/replay.py`, loaded by its path: this directory's own `replay.py` is first on `sys.path`."""
+    if "one_stage_replay" not in sys.modules:
+        one_stage = HERE.parent / "one_stage"
+        sys.path.append(str(one_stage))
+        spec = importlib.util.spec_from_file_location("one_stage_replay", one_stage / "replay.py")
+        sys.modules["one_stage_replay"] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sys.modules["one_stage_replay"])
+    return sys.modules["one_stage_replay"]
+
+
+def v2_group(M, a, pg: SimpleNamespace, rec: dict, law: dict, want: dict, leaf_layer: str, result: dict,
+             members: list[dict], sdirs: dict[str, Path], sessions: list[str], given: dict) -> dict:
+    """One-stage v2's group form on the round (`proofs.check_v2_group`, `SampledProofs.OneStageZk.checkGroup`): v1's
+    parameters (the round's Program, query, law, ports, leaf layer and partition object) and the audit record's
+    evidence (`given`: its instances, served units and session roots; its statement's timings, floats canonical JSON
+    has no form for, as strings, `replay.strings`), its verdicts replaced by each member's files,
+    every member in the Program's order with the auditor's circuit (its pin) and the verifier's own registered file, a
+    member with no unit drawn its public file alone. -> the outcome line, or a None verdict and why there is none (the
+    stream refused or holds the outcome)."""
+    from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+
+    RP = _one_stage_replay()
+    if "draw" not in result:
+        return {"verdict": None, "reason": f"no audit record to check: {result.get('outcome')}"}
+    params = RP.params(pg.program, pg.query, law, want, leaf_layer, str(Fraction(a.delta).limit_denominator(10**12)),
+                       partition=json.loads(pg.partition_file.read_text()))
+    evidence = RP.strings(RP.evidence(result, sessions=sessions, **given))
+    ms = [PF.Member(m["name"], PF.Proof(m["dir"] / "circuit.txt", m["dir"] / f"pub-{m['n']}.bin", tuple(
+        f.parent for f in sorted((sdirs[m["name"]] / "sessions").glob("*/session.json"))) if m["name"] in sdirs else ()),
+        m["pin"], json.loads(m["registered_file"].read_text())) for m in members]
+    tables = [f for m in members if (m["dir"] / "tables").is_dir() for f in sorted((m["dir"] / "tables").iterdir())
+              if f.is_file()]
+    try:
+        return PF.check_v2_group(params, rec, evidence, ms, tables)
+    except (PF.LeanError, ValueError) as e:
+        return {"verdict": None, "reason": f"{type(e).__name__}: {e}"}
 
 
 def charge_terms(M, result: dict, members: list[dict], delta: float) -> dict | None:
@@ -1408,19 +1457,21 @@ def answers(at: SimpleNamespace, out: Path, res: dict, delta: Fraction, block: d
 
 
 def expected(at: SimpleNamespace, name: str, res: dict) -> bool:
-    """An accepted round: accepted, every output 1; the unread round: its proof held and its audit accepted, and its
-    unit's output opened to 0, so the link-window is refused; a refused one (`rounds_of`): refused by Lean's
-    registered reads ("does not open") at each of its target members (`targets`), every other member's proof held."""
+    """An accepted round: accepted, every output 1, and accepted by one-stage v2's group form; the unread round: its
+    proof held and its audit accepted, and its unit's output opened to 0, so the link-window is refused; a refused one
+    (`rounds_of`): refused by Lean's registered reads ("does not open") at each of its target members (`targets`),
+    every other member's proof held, and refused by v2's group form."""
     lean = {k.split("/", 1)[1]: v for k, v in res["verdicts"].items() if k.startswith("lean-verify/")}
     outcome = rounds_of(at)[name][1]
+    v2 = (res.get("v2") or {}).get("verdict")
     if outcome == "accepted":
-        return res["window_accepted"] and all(lean.values())
+        return res["window_accepted"] and all(lean.values()) and v2 == "accept"
     if outcome == "ok 0":
         return (res["accepted"] and not res["window_accepted"] and bool(lean) and all(lean.values())
                 and res["opened"] == {targets(at, name)[0]: [0]})
     ts = targets(at, name)
     whys = [res["why"].get(f"lean-verify/{t}") or "" for t in ts]
-    return (not res["accepted"] and all(lean.get(t) is False for t in ts)
+    return (not res["accepted"] and v2 == "reject" and all(lean.get(t) is False for t in ts)
             and all("registered reads" in why and outcome in why for why in whys)
             and all(v for x, v in lean.items() if x not in ts))
 

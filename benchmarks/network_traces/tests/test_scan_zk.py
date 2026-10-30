@@ -417,6 +417,31 @@ def test_each_link_windows_answer_is_one_stages_on_the_groups_registration():
         sz.window_answer(reg, {**record, "registration": {**reg, "population": 1}}, sz.Fraction(1, 100), "")
 
 
+def test_v2s_group_form_reads_the_statements_timings_as_strings(tmp_path, monkeypatch):
+    """`v2_group` hands `check_v2_group` evidence in canonical JSON's domain: the statement's timings, floats, as
+    strings (`replay.strings`), which `Core.canonicalJson` otherwise refuses ("a non-integer number":
+    r20261027-071336-56fc refused every round there); the integers it reads are unchanged."""
+    from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+    from verity.ml.circuits.codec import jcs_domain_error
+
+    program, query, law = _program(1, 4)
+    reg = R.record(program, query, law, sz.S.SCHEME, [], {"kind": "stand-in"}, leaf_layer="ee" * 64)
+    (part := tmp_path / "partition.json").write_text("{}")
+    seen = {}
+    monkeypatch.setattr(PF, "check_v2_group", lambda p, r, e, ms, ts: seen.setdefault("e", e) and {"verdict": "accept"})
+    result = {"draw": {"units": [0, 1]}, "proved_units": [0, 1], "receipt": {"n": 2},
+              "statement": {"first": {"session_s": 25.7, "timing": {"prove_total_s": 15.66, "proof_bytes": [3]}}},
+              "verdicts": {}}
+    got = sz.v2_group(None, SimpleNamespace(delta=2.0 ** -20), SimpleNamespace(program=program, query=query,
+                                                                                partition_file=part),
+                      reg, {"law": "stratified:8"}, {}, "ee" * 64, result, [], {}, [],
+                      {"instances": 2, "served": [0, 1], "session_roots": {}})
+    assert got == {"verdict": "accept"} and jcs_domain_error(seen["e"]) is None
+    assert seen["e"]["statement"] == {"first": {"session_s": "25.7", "timing": {"prove_total_s": "15.66",
+                                                                                "proof_bytes": [3]}}}
+    assert seen["e"]["proved_units"] == [0, 1] and seen["e"]["instances"] == 2 and seen["e"]["receipt"] == {"n": 2}
+
+
 def test_an_audit_refused_with_every_member_held_answers_each_link_window_naming_its_failed_checks(tmp_path):
     """`answers` of a round whose members Lean all held but whose audit refused (a check of the record's own, say its
     registered reads): each link-window's answer is the reject of the round's registration, its reason the failed

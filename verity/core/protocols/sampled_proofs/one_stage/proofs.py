@@ -26,8 +26,9 @@ peak), then O(proof) a session: so a protocol verifies one statement a stratum, 
 
 The one-stage audit's v2 (`V2`, `SampledProofs.OneStageZk`) runs this verifier inside the audit's own Lean, on the files
 as content-addressed blobs: `check_v2` hands it v1's inputs with the verdicts replaced by the files' digests
-(`evidence_v2`) and the files themselves, and `verdicts_v2` is that run's verdicts alone, which the difftest holds to
-`verify`'s.
+(`evidence_v2`) and the files themselves, `check_v2_group` the same for a population of several templates (v2's group
+form: one `Member` a template, the registration's ``leaf_layer`` the members' public files'), and `verdicts_v2` is that
+run's verdicts alone, which the difftest holds to `verify`'s.
 
 Building takes the lock `verifier.BUILD_LOCK` takes: Lake builds the flock package in place for `sampled-proofs-verifier`
 too, and two builds at once would rewrite one module's C under each other.
@@ -316,7 +317,43 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
     line. `params` must name the auditor's challenger and its window (``challenger``, ``window_root``), whose signed
     release in the evidence's ``coins`` the draw reads: v2 refuses parameters naming none."""
     pr, blobs = evidence_v2(proof, evidence["sessions"])
-    p2 = {**params, "proofs": {"circuit": circuit_sha512, "registered": registered}}
+    return _check(params, {"circuit": circuit_sha512, "registered": registered}, record, evidence, pr, blobs)
+
+
+@dataclass(frozen=True)
+class Member:
+    """One member of v2's group form: its name, its proof's files, the auditor's circuit digest and the verifier's own
+    registered file (None: it reads no registered value)."""
+    name: str
+    proof: Proof
+    circuit_sha512: str
+    registered: Mapping[str, Any] | None
+
+
+def check_v2_group(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Mapping[str, Any],
+                   members: Sequence[Member], tables: Sequence[Path] = ()) -> dict:
+    """`check_v2`'s group form (`checkGroup`): ``proofs`` names each of `members`, in the Program's order, with its
+    circuit digest and registered file in the parameters and its public file and sessions in the evidence, the members'
+    sessions in order the evidence's ``sessions``; `tables`, the pinned lookup tables, go in as blobs too. The
+    registration's ``leaf_layer`` is to be the SHA-512 of the canonical ``{name: public file's SHA-512}``. The outcome
+    line."""
+    names, at, ps, es, blobs = list(evidence["sessions"]), 0, [], [], []
+    for m in members:
+        pr, bs = evidence_v2(m.proof, names[at:at + len(m.proof.sessions)])
+        at += len(m.proof.sessions)
+        ps.append({"name": m.name, "circuit": m.circuit_sha512, "registered": m.registered})
+        es.append({"name": m.name, **pr})
+        blobs += bs
+    if at != len(names):
+        raise ValueError(f"the members hold {at} sessions; the evidence names {len(names)}")
+    return _check(params, {"members": ps}, record, evidence, {"members": es}, [*blobs, *tables])
+
+
+def _check(params: Mapping[str, Any], own: dict, record: Mapping[str, Any], evidence: Mapping[str, Any], pr: dict,
+           blobs: Sequence[Path]) -> dict:
+    """`sampled-proofs-one-stage-zk check` on v1's `params` with ``proofs`` `own`, the registration `record`, and v1's
+    `evidence` with its ``verdicts`` replaced by ``proofs`` `pr`, the files `blobs`; the outcome line."""
+    p2 = {**params, "proofs": own}
     e2 = {k: v for k, v in evidence.items() if k != "verdicts"} | {"proofs": pr}
     with tempfile.TemporaryDirectory(prefix="verity-proofs-v2-") as d:
         paths = [Path(d, n) for n in ("params.json", "record.json", "evidence.json")]
@@ -330,6 +367,6 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
         raise LeanError(f"{V2_EXE} check answered no line (exit {p.returncode}): {p.stderr[-400:]}") from None
 
 
-__all__ = ["EXE", "PACKAGE", "SCOPE_WHY", "STATEMENT", "TABLES_WHY", "V2", "V2_EXE", "Finding", "LeanError", "Proof",
-           "check_v2", "evidence_v2", "executable", "file_sha512", "ks_form_why", "proved_units", "reads_registered",
-           "v2_executable", "verdicts_v2", "verify"]
+__all__ = ["EXE", "PACKAGE", "SCOPE_WHY", "STATEMENT", "TABLES_WHY", "V2", "V2_EXE", "Finding", "LeanError", "Member",
+           "Proof", "check_v2", "check_v2_group", "evidence_v2", "executable", "file_sha512", "ks_form_why",
+           "proved_units", "reads_registered", "v2_executable", "verdicts_v2", "verify"]

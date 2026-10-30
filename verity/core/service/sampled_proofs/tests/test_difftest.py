@@ -38,10 +38,12 @@ from __future__ import annotations
 import copy
 import functools
 import hashlib
+import importlib
 import json
 import random
 import re
 import shutil
+import sys
 from fractions import Fraction
 from math import gcd
 from pathlib import Path
@@ -2099,6 +2101,81 @@ def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
              for name in DRAW_MUTATIONS if name not in ("unread", "read-tampered", "other-after")}
         for name, (want, a) in cases.items():
             assert (python(a), lean(a)) == (want, want), (seed, name)
+
+
+def test_v2_group_form(server_v2):
+    """v2's group form (`OneStageZk.checkGroupAt`, a scan's three templates as `scan_zk.members_of` splits them), held
+    to the Python twin (`one_stage_zk_case.answer`) case by case, on cases that need no proof, each at its challenger's
+    coins: a group that sampled no proof block reaches v1, undecided for want of the verifier of record; it is rejected
+    where the registration's ``leaf_layer`` isn't the members' public files' or the evidence's members aren't the
+    parameters', where a member's circuit or public file is in no blob or its session's record is in none, and where
+    the members' sessions prove no proof block the evidence claims; the decoders refuse a group with no member, two
+    members of one name, a member's other keys, and the members' sessions not the evidence's. The accept path, which
+    needs a proof, is `scan_zk`'s."""
+    sys.modules.setdefault("one_stage_difftest", sys.modules[__name__])
+    zk = importlib.import_module("one_stage_zk_case")
+    s = SETUPS[3]
+    law = {"k": 0, "law": "subset"}
+    names = ["first", "ingress-0", "egress-0"]
+    circuits = {n: f"circuit of {n}".encode() for n in names}
+    publics = {n: f"public file of {n}".encode() for n in names}
+    blobs = [*circuits.values(), *publics.values()]
+    members_e = [{"name": n, "public": _sha(publics[n]), "sessions": []} for n in names]
+    layer = zk.leaf_layer(members_e)
+
+    def case(e_members=members_e, p_members=None, leaf=layer, proved=(), sessions=(), blobs_=blobs, pr=None, epr=None):
+        rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+                       WINDOW, leaf_layer=leaf)
+        dr, draw, coins = _challenger_draw(random.Random(f"one-stage-v2-group/{leaf}"), s, law, rec)
+        p_members = [{"circuit": _sha(circuits[n]), "name": n, "registered": None} for n in names] \
+            if p_members is None else p_members
+        params = {"anchors": [], "delta": "1/20", "law": law, "leaf_layer": leaf, "log": [],
+                  "partition": P.partition(s.program, s.query), "ports": s.ports, "program": s.desc,
+                  "proofs": {"members": p_members} if pr is None else pr, "query": s.query, "registered": None,
+                  "scheme": SCHEME, "work_table": None, "challenger": {"key": dr.s.key.to_json(), "label": "draw"},
+                  "window_root": dr.ledger.window["root"]}
+        evidence = {"coins": coins, "draw": draw, "instances": 0, "proofs": {"members": e_members} if epr is None else epr,
+                    "proved_units": list(proved), "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None,
+                    "session_roots": None, "sessions": list(sessions), "statement": {}}
+        return _json({"blobs": [b.hex() for b in blobs_], "commitment": _hex(rec), "evidence": _hex(evidence),
+                      "params": params})
+
+    def agree(c):
+        out, want = server_v2.exchange(c), zk.answer(c | {"blobs": [bytes.fromhex(b) for b in c["blobs"]]})
+        assert out["verdict"] == want["verdict"], (out, want)
+        return out["verdict"], out["reason"]
+
+    session = {"name": "s", "record": _sha(b"a record in no blob"), "reps": {}}
+    one = [m | {"sessions": [session]} if m["name"] == "ingress-0" else m for m in members_e]
+    assert agree(case())[0] == "undecided"
+    assert agree(case(leaf="ee" * 64)) == (
+        "reject", "proofs: the registration's leaf_layer is not the members' public files' leaf layer")
+    assert agree(case(e_members=members_e[::-1])) == (
+        "reject", "proofs: the members are not the parameters' members, in order")
+    assert agree(case(e_members=members_e[:2], leaf=zk.leaf_layer(members_e[:2]))) == (
+        "reject", "proofs: the members are not the parameters' members, in order")
+    got = agree(case(blobs_=[b for b in blobs if b != circuits["egress-0"]]))
+    assert got[0] == "reject" and got[1].startswith("proofs: member egress-0: circuit: no blob has the SHA-512"), got
+    got = agree(case(blobs_=[b for b in blobs if b != publics["first"]]))
+    assert got[0] == "reject" and got[1].startswith("proofs: member first: public file: no blob has the SHA-512"), got
+    got = agree(case(e_members=one, sessions=["s"]))
+    assert got[0] == "reject" and got[1].startswith("proofs: member ingress-0: session s's record: no blob has"), got
+    assert agree(case(proved=[0])) == (
+        "reject", "proofs: the units the members' sessions proved are not the evidence's proved_units, each once")
+    assert agree(case(pr={"circuit": _sha(circuits["first"]), "registered": None}))[0] == "reject"
+    for refused in (case(p_members=[]),
+                    case(p_members=[{"circuit": _sha(circuits[n]), "name": "first", "registered": None} for n in names]),
+                    case(p_members=[{"circuit": _sha(circuits[n]), "name": n, "registered": None, "public": ""}
+                                    for n in names]),
+                    case(pr={"circuit": _sha(circuits["first"]), "members": [], "registered": None})):
+        got = agree(refused)
+        assert got[0] == "reject" and got[1].startswith("params: "), got
+    for refused in (case(e_members=one),
+                    case(sessions=["s"]),
+                    case(epr={"members": members_e, "public": _sha(publics["first"])}),
+                    case(e_members=[m | {"circuit": ""} for m in members_e])):
+        got = agree(refused)
+        assert got[0] == "reject" and got[1].startswith("evidence: "), got
 
 
 def committed_bits(j):
