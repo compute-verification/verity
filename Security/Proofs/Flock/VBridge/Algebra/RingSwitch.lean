@@ -160,7 +160,7 @@ def wvOf (cl : AClaim α) : Array F128 :=
   (Array.range 128).map fun v => cl.skip[v % 64]! * (if v / 64 == 1 then cl.x[0]! else (1 : F128) + cl.x[0]!)
 
 theorem rsClaims_spec (M : Messages α) :
-    ∀ (l : List (AClaim α)) (k k₀ k₁ : Nat) (src : Coins) (outs betas : Array α)
+    ∀ (l : List (AClaim α)) (k k₀ k₁ : Nat) (src : CoinSource) (outs betas : Array α)
       (pts : Array (Array F128 × Array F128)),
       rsClaims M l k k₀ src = .ok ((outs, betas, pts), k₁) →
       outs.size = l.length ∧ betas.size = l.length ∧ pts.size = l.length ∧ k₁ = k₀ + l.length ∧
@@ -194,7 +194,7 @@ theorem rsClaims_spec (M : Messages α) :
 /-- **Ring switching's coins.** The rounds `ringSwitch` draws from: `r''_k` for each claim, then the batching coins
 `γ`; and what it returns. -/
 theorem ringSwitch_spec {M : Messages α} {claims : Array (AClaim α)} (hn : claims.size ≠ 0) {k k' : Nat}
-    {src : Coins} {rsr : Array α} {rs : RsPts α} (h : ringSwitch M claims k src = .ok ((rsr, rs), k')) :
+    {src : CoinSource} {rsr : Array α} {rs : RsPts α} (h : ringSwitch M claims k src = .ok ((rsr, rs), k')) :
     ∃ betas : Array α, rsr.size = claims.size ∧ betas.size = claims.size ∧
       src.round (k + claims.size) claims.size = .ok rs.gamma ∧ k' = k + claims.size + 1 ∧
       rs.T = dotV rs.gamma betas ∧ rs.sws.size = claims.size ∧
@@ -232,7 +232,7 @@ def AClaim.toClaim (c : AClaim F128) : Claim := ⟨c.value, c.skip, c.x⟩
 value check (Opening.lean:78) on the ring switches it read, and its batched sum is `Σ_k γ_k·β_k` with
 `β_k = Σ_u eq(r''_k, u)·t_k[u]` for the transposes it read (Opening.lean:81–86). -/
 theorem ringSwitch_checks {M : Messages F128} {claims : Array (AClaim F128)} (hn : claims.size ≠ 0) {k k' : Nat}
-    {src : Coins} {rsr : Array F128} {rs : RsPts F128} (h : ringSwitch M claims k src = .ok ((rsr, rs), k'))
+    {src : CoinSource} {rsr : Array F128} {rs : RsPts F128} (h : ringSwitch M claims k src = .ok ((rsr, rs), k'))
     (hz : ∀ x ∈ rsr, x = 0) :
     (∀ j (hj : j < claims.size), dot (wOf claims[j].toClaim) M.rs[j]! = claims[j].value) ∧
       rs.T = dot rs.gamma ((List.range claims.size).map fun j => dot (eqTable (rs.sws[j]!).rpp) M.rsT[j]!).toArray := by

@@ -12,6 +12,8 @@ check of a log then follows the spec's validity one entry at a time (`go_says`),
 `Verity.Registration.valid_append_singleton`.
 -/
 
+open scoped NNRat
+
 namespace Properties.Site
 
 open Core.Site.Registration (Digests Auditor Composite)
@@ -39,12 +41,32 @@ theorem composite_eq_iff {c : Composite} {c' : Verity.Registration.Composite} :
 
 theorem ofComposite_composite (c : Composite) : ofComposite (composite c) = c := by cases c <;> rfl
 
-theorem ofSheet_sheet (k : Core.Site.Sheet) : ofSheet (sheet k) = k := rfl
+@[simp] theorem ofOperandClass_operandClass (c : Core.Site.OperandClass) : ofOperandClass (operandClass c) = c := by
+  cases c <;> rfl
+
+@[simp] theorem operandClass_ofOperandClass (c : Verity.OperandClass) : operandClass (ofOperandClass c) = c := by
+  cases c <;> rfl
+
+@[simp] theorem ofFigure_figure (q : Core.Site.Figure) : ofFigure (figure q) = q := rfl
+
+@[simp] theorem figure_ofFigure (q : ℚ≥0) : figure (ofFigure q) = q := rfl
+
+theorem ofDeviceFigures_deviceFigures (d : Core.Site.DeviceFigures) : ofDeviceFigures (deviceFigures d) = d := by
+  cases d; simp [deviceFigures, ofDeviceFigures]
+
+theorem deviceFigures_ofDeviceFigures (d : Verity.DeviceFigures) : deviceFigures (ofDeviceFigures d) = d := by
+  cases d; simp [deviceFigures, ofDeviceFigures]
+
+theorem ofSheet_sheet (k : Core.Site.Sheet) : ofSheet (sheet k) = k := by
+  cases k; simp [sheet, ofSheet, ofDeviceFigures_deviceFigures]
+
+theorem sheet_ofSheet (k : Verity.Site.Sheet) : sheet (ofSheet k) = k := by
+  cases k; simp [sheet, ofSheet, deviceFigures_ofDeviceFigures]
 
 theorem sheet_eq_iff {k : Core.Site.Sheet} {k' : Verity.Site.Sheet} : sheet k = k' ↔ k = ofSheet k' := by
   constructor
-  · rintro rfl; rfl
-  · rintro rfl; rfl
+  · rintro rfl; rw [ofSheet_sheet]
+  · rintro rfl; exact sheet_ofSheet k'
 
 theorem ofLoc_loc (x : Core.Site.Loc) : ofLoc (loc x) = x := by
   cases x
@@ -91,7 +113,8 @@ theorem refusal_injective : Function.Injective refusal := by
 @[simp] theorem kind_auditor (k : Core.Site.Kind) : (kind k).auditor = k.auditor := by cases k <;> rfl
 @[simp] theorem outside_eq : Verity.Site.outside = Core.Site.outside := rfl
 
-@[simp] theorem digests_sheet (D : Digests) (k : Core.Site.Sheet) : (digests D).sheet (sheet k) = D.sheet k := rfl
+@[simp] theorem digests_sheet (D : Digests) (k : Core.Site.Sheet) : (digests D).sheet (sheet k) = D.sheet k := by
+  simp only [digests, ofSheet_sheet]
 
 @[simp] theorem digests_entry (D : Digests) (e : Core.Site.Registration.Entry) :
     (digests D).entry (regEntry e) = D.entry e := by
@@ -215,9 +238,43 @@ theorem sheets_iff :
     Verity.Site.Entry.Sheets (digests D) (auditor A) (site S) (entry e) ↔ Core.Site.Entry.Sheets D A S e := by
   unfold Verity.Site.Entry.Sheets Core.Site.Entry.Sheets
   rw [← site_add]
-  simp only [entry_sheets, entry_locs, List.forall_mem_map, auditor_sheet, sheet_sku, map_sheet_eq_some, loc_kind,
+  simp only [entry_sheets, entry_locs, List.forall_mem_map, auditor_sheet, sheet_sku, Option.isSome_map, loc_kind,
     loc_sheet, site_sheets, List.map_map, Function.comp_def, digests_sheet, kind_eq_iff]
   simp [ofKind]
+
+@[simp] theorem coe_figure (q : Core.Site.Figure) : ((figure q : ℚ≥0) : ℚ) = q.1 := rfl
+
+theorem within_iff (τ e x : Core.Site.Figure) :
+    Verity.WithinTolerance (figure τ) (figure e) (figure x) ↔ Core.Site.WithinTolerance τ e x := by
+  have hmax : ∀ q : ℚ, ((q.toNNRat : ℚ≥0) : ℚ) = max q 0 := fun _ => rfl
+  unfold Verity.WithinTolerance Core.Site.WithinTolerance
+  rw [← NNRat.coe_le_coe, ← NNRat.coe_le_coe]
+  simp only [NNRat.coe_mul, NNRat.coe_add, NNRat.coe_one, NNRat.sub_def, hmax, coe_figure] <;> exact Iff.rfl
+
+theorem pos_iff (q : Core.Site.Figure) : 0 < figure q ↔ 0 < q.1 := by
+  rw [← NNRat.coe_pos, coe_figure]
+
+theorem forall_class {P : Core.Site.OperandClass → Prop} :
+    (∀ c : Verity.OperandClass, P (ofOperandClass c)) ↔ ∀ c ∈ Core.Site.OperandClass.all, P c := by
+  constructor
+  · intro h c _; simpa using h (operandClass c)
+  · intro h c; exact h _ (Core.Site.OperandClass.mem_all _)
+
+/-- The code's check of a device's figures is the spec's (`DeviceFigures.Accepted`). -/
+theorem accepted_iff (est : Core.Site.DeviceEstimate) (d : Core.Site.DeviceFigures) :
+    (deviceFigures d).Accepted ⟨deviceFigures est.figures, ⟨figure est.tolerance⟩⟩ ↔ d.Accepted est := by
+  unfold Verity.DeviceFigures.Accepted Core.Site.DeviceFigures.Accepted
+  refine and_congr Iff.rfl (and_congr (within_iff est.tolerance est.figures.clock d.clock) (and_congr ?_ ?_))
+  · exact (forall_congr' fun c => within_iff est.tolerance (est.figures.peakRate (ofOperandClass c))
+      (d.peakRate (ofOperandClass c))).trans
+      (forall_class (P := fun c => Core.Site.WithinTolerance est.tolerance (est.figures.peakRate c) (d.peakRate c)))
+  · exact (forall_congr' fun c => pos_iff (d.peakRate (ofOperandClass c))).trans
+      (forall_class (P := fun c => 0 < (d.peakRate c).1))
+
+theorem figures_iff : Verity.Site.Entry.Figures (auditor A) (entry e) ↔ Core.Site.Entry.Figures A e := by
+  unfold Verity.Site.Entry.Figures Core.Site.Entry.Figures
+  simp only [entry_sheets, List.forall_mem_map, auditor_sheet, sheet_sku, Option.forall_mem_map]
+  exact forall₂_congr fun k _ => forall₂_congr fun a _ => and_congr (accepted_iff (A.estimate a) k.figures) Iff.rfl
 
 theorem capacity_iff :
     Verity.Site.Entry.Capacity (digests D) (site S) (entry e) ↔ Core.Site.Entry.Capacity D S e := by
@@ -245,7 +302,8 @@ theorem reached_iff :
 theorem siteRefusal : (Core.Site.Entry.refusal D A c S e).map refusal =
     Verity.Site.Entry.refusal (digests D) (auditor A) (composite c) (site S) (entry e) := by
   unfold Core.Site.Entry.refusal Verity.Site.Entry.refusal
-  simp only [fresh_iff, refs_iff, kinds_iff, sheets_iff, capacity_iff, owners_iff, covered_iff, reached_iff]
+  simp only [fresh_iff, refs_iff, kinds_iff, sheets_iff, figures_iff, capacity_iff, owners_iff, covered_iff,
+    reached_iff]
   split_ifs <;> rfl
 
 end Checks

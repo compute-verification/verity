@@ -1,4 +1,4 @@
-# The remote bandwidth audit v0 (`verity/remote-bandwidth/v0`)
+# PoUB v0 (`verity/remote-bandwidth/v0`)
 
 A verifier with no hardware at the site certifies, window by window, how many reads of a node's registered blocks the
 node made. The node's memory is its GPUs' HBM and its host's DRAM. No prover hardware is trusted: the host, its CPUs
@@ -221,13 +221,15 @@ SHA-512s and the SHA-512 of their canonical JSON (`read_pin`), and holds every p
 any (`check`). It then lays out the store the checkpoint alone fixes: \(E\) arenas of \(A\) blocks, one an engine at
 one GPU, each holding the checkpoint's 2-D BF16 weights in vLLM's module order, each from a block boundary, zeros
 between and after, and then host filler of zeros (`arena`, `Store`). Before step 1 the verifier sends a fresh 32-byte
-salt key, and the prover takes block \(j\)'s 192-byte payload salt as `SHAKE256("verity/store/salt/v0\0" ‖ key ‖
-SHA512("verity/remote-session/payload-salts/v0") ‖ u64be j)` (`store_salt`), so the payload root follows from the pin,
-the store's shape and the key (`expected_root`). A hello is refused before the registry draws when its store is shorter
+salt key, and the prover takes block \(j\)'s 192-byte payload salt as `XOF(m)[0 : 192]`, `m = "verity/store/salt/v1\0"
+‖ key ‖ SHA512("verity/remote-session/payload-salts/v0") ‖ u64be j` and `XOF(m) = SHA512(m ‖ u32be 0) ‖ SHA512(m ‖
+u32be 1) ‖ …` (`store_salt`, `codec.xof`'s SHA-512 in counter mode), so the payload root follows from the pin, the
+store's shape and the key (`expected_root`). A hello is refused before the registry draws when its store is shorter
 than the arenas, its layout isn't the store's regions, or its payload root isn't that root (`Binding.hold`). The
-verifier's record keeps the binding: the model's name and `checkpoint_sha512`, the store's shape, both roots and
-`bound`. A period's circuit is this tree's git hash, so the circuit a period signs commits to this code. The binding's
-decision is also Lean (`lean/RemoteAudit/Store.lean`), and reading the files is Python only (§8).
+verifier's record keeps the binding: the model's name and `checkpoint_sha512`, the salts' format (`salt`,
+`store.SALT_VERSION`), the store's shape, both roots and `bound`. A period's circuit is this tree's git hash, so the
+circuit a period signs commits to this code. The binding's decision is also Lean (`lean/RemoteAudit/Store.lean`), and
+reading the files is Python only (§8).
 
 **The codec** is Sloth over \(p = 2^{1024} - 105\), with the mask \(\sigma_K\) between rounds, at \(k = 3\): `p1024/k3/masked`,
 `codec.DEFAULT`. The fallback is \(k = 2\) at the same width, `p1024/k2/masked` (`codec.FALLBACK`).
@@ -535,8 +537,8 @@ and under a registration that binds \(z\), PoUW's noise for the pass (§8).
 **The two receipt kinds.** The registration names one (`receipts.KINDS`), and `Params.receipt` must name the same.
 Every receipt of its sessions is of that kind, the weights' and the KV pages' alike (§8). sketch-sha512 is the default (`receipts.DEFAULT`) and the stated receipt: the receipt the guarantee is stated for.
 block-sha512 is kept as a second kind, for comparison only; it is not the stated receipt.
-sketch-sha512 is `benchmarks/codec_tensor/sketch_receipt.py`'s receipt, byte for byte:
-the suite pins its numpy outputs at both row counts, and `receipts.SketchReceipter` computes the same in pure Python.
+The GPU kernels' sketch-sha512 receipts are held byte for byte to `receipts.SketchReceipter`
+(`benchmarks/codec_tensor/sketch_receipt.py` lays its signs out for them), and the suite pins its outputs at both row counts.
 Each kind's receipt is 64 bytes, so leaves, salts and the tree don't change. The difference is what is hashed after
 the seed's block: sketch-sha512 hashes \(j\) and the sketch, one compression at 16 rows (64 bytes) and three at 64
 (256 bytes); block-sha512 hashes \(j\) and the 4,096 bytes, 33 SHA-512 compressions. The sketch's signs come from the
@@ -1299,13 +1301,10 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   registered KV block under the registration's block layout, committed in the pass's one tree and listed in its one
   plan with the weights'. A KV block is a registered block like any other: 4,096 bytes of the encoded store, 32 whole
   codec words, \(j = \text{slot} \cdot \text{LAYERS} + \text{layer}\) (§3), and its kernel's vectors pass `plan_of`
-  (§4). The device's KV receipt as it stands (word_codec's `kv_receipt.py` and `kv.cu`'s `rc_sha8_kernel`)
-  is a third kind:
-  its own SHA-512 domain (`verity/word-codec/kv-receipt/sha512/v0`), ro-sketch-blake3 signs, and half-block vectors
-  that take their 4,096 bytes from 16 tokens' head shares, zero-padded to whole blocks. The verifier can open
-  none of it, so none of it is credited: no pass's plan holds a KV block until its receipts are the registration's kind
-  over the registered KV layout, and a step that commits KV receipts of another kind keeps them out of its plan and
-  its credited bytes.
+  (§4). The device's KV receipt is `kv.cu`'s attention form 13: sketch-sha512 of each token-layer, a store block
+  (store-order/v0), under the pass's signs. No pass's plan holds a KV block whose receipts aren't the registration's
+  kind over the registered KV layout, and a step that commits KV receipts of another kind keeps them out of its plan
+  and its credited bytes.
 - **The challenger's state.** The challenger keeps every coin of a session until it releases it and never releases one
   twice. Persisting that across challenger restarts, and committing coins that outlive one session, is out of scope.
 - **Keeping receipts for the draws.** Any receipt of a window may be drawn once its roots are final, so the prover

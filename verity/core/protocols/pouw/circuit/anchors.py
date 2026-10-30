@@ -8,7 +8,7 @@
     position    (layer, site) from the registered layout: layer << 32 | site                 `position`
     weight id   the registered id of the matrix whose rows B opens under the weights root    `weight`
     row ids     the call's global row indices, distinct                                      `rowids`
-    column ids  the weight's global column indices, shards included (X-SPC-40), distinct     `colids`
+    column ids  the weight's global column indices, shards included, distinct                `colids`
 
 The verifier builds these inputs itself (`Anchors.call_inputs`, `Anchors.weight_inputs`), or compares a prover's
 (`Anchors.check_call`, `Anchors.check_weight`); it never takes them as stated.  A window's `Ledger` refuses a repeated
@@ -42,6 +42,8 @@ import re
 import secrets
 from dataclasses import dataclass
 from typing import Any, Callable, Sequence
+
+from verity.ml.commitments import domains
 
 from ..protocol import DomainError
 from .ncp2 import Shape
@@ -158,7 +160,7 @@ def region_bytes(words: Sequence[int]) -> bytes:
 
 
 #: C-Flock's format of the verifier's own `--public-inputs` file (its PROTOCOL.md §16.10, ``HmIn.checkOwn``)
-PUBLIC_INPUTS_FORMAT = "verity/flock-public-inputs/v1"
+PUBLIC_INPUTS_FORMAT = domains.FLOCK_PUBLIC_INPUTS
 
 
 def public_ports(shape, role: str) -> dict[str, dict[str, str]]:
@@ -175,7 +177,7 @@ def public_ports(shape, role: str) -> dict[str, dict[str, str]]:
 @dataclass(frozen=True)
 class TileAnchors:
     """One tile check's anchored inputs, as the verifier derives them: the scheme's seeds (`noise(ctx)`) and the global
-    indices of the block's rows of A (``rows``) and of B (``cols``), by which each E line is drawn.  ``shape`` is the
+    indices of the block's rows of A (``rows``) and of B (``cols``), by which each E line is sampled.  ``shape`` is the
     check's `pc4.Shape` or `pc8.Shape`: its ``derivations`` derive the lines and G on its own record, and its ``ports`` name
     each unit's public input regions."""
 
@@ -294,7 +296,7 @@ def _check(fn, args, want: dict[str, list[int]]) -> None:
             raise DomainError(f"{fn.id}: the anchored input {name!r} is not the verifier's")
 
 
-RECEIPT_TAG = b"verity/pouw/window-receipt/v1\0"
+RECEIPT_TAG = domains.POUW_PERIOD_RECEIPT.encode() + b"\0"
 SOURCE_BYTES = 32
 
 
@@ -359,7 +361,7 @@ class Receipt:
 
 
 def _fresh_source() -> bytes:
-    """A window's source: 32 fresh bytes from the operating system's CSPRNG (`secrets`), drawn once the receipt is
+    """A window's source: 32 fresh bytes from the operating system's CSPRNG (`secrets`), sampled once the receipt is
     complete and used for this window alone (A4's model: one fresh uniform source per derivation). A test seam only:
     production code never replaces it."""
     return secrets.token_bytes(SOURCE_BYTES)
@@ -371,7 +373,7 @@ class Ledger:
     A window's ledger comes from `Ledger.open(receipt)`, the only place its receipt, key and source are set: callers
     set no attribute of a ledger, before or after (`__setattr__` refuses), and `Traced.draw` takes the key from the
     ledger. A ledger built as `Ledger()` has none of them; it only refuses repeats (a window's input builders use
-    that) and draws nothing. Once the window's draw is sent (`sent`), the ledger draws nothing more, and `record`
+    that) and draws nothing. Once the window's sample is sent (`sent`), the ledger draws nothing more, and `record`
     gives the audit record its source and receipt digest."""
 
     __slots__ = ("seen", "_receipt", "_key", "_source", "_sent")
@@ -417,7 +419,7 @@ class Ledger:
         self.seen.add(anchors.call_index)
 
     def check_draw(self) -> None:
-        """Refuse a draw from a ledger not opened from a receipt, or once the window's draw has been sent."""
+        """Refuse a sample from a ledger not opened from a receipt, or once the window's sample has been sent."""
         if self._receipt is None or self._key is None:
             raise DomainError("a window draws only from a ledger opened from its complete receipt (Ledger.open)")
         if self._sent:
@@ -434,14 +436,14 @@ class Ledger:
         return entry[2]
 
     def sent(self) -> None:
-        """Mark the window's draw as sent to the prover: after this the ledger draws nothing, and its record is given."""
+        """Mark the window's sample as sent to the prover: after this the ledger draws nothing, and its record is given."""
         self.check_draw()
         object.__setattr__(self, "_sent", True)
 
     def record(self) -> dict[str, str]:
-        """The window's entry in the audit record once its draw is sent: the receipt digest and the source, from which
-        anyone re-derives the key and so the draw (`replay_key`). Revealing the source then helps no prover: the draw is
-        public, and the source derives nothing else and is never reused. A third party can check that the draw came
+        """The window's entry in the audit record once its sample is sent: the receipt digest and the source, from which
+        anyone re-derives the key and so the sample (`replay_key`). Revealing the source then helps no prover: the sample is
+        public, and the source derives nothing else and is never reused. A third party can check that the sample came
         from the recorded source, not that the source was fresh: a verifier colluding with a prover could pick a source
         whose draw misses. That is the designated verifier's trust; a beacon or a commit-and-reveal would be needed for
         a third party to check it."""

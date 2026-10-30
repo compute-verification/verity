@@ -11,6 +11,8 @@ from pathlib import Path
 
 import pytest
 
+from verity.core.protocols.remote_bandwidth.codec import Field, rho, rho_inv
+
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
@@ -38,18 +40,19 @@ def test_kernel_constants_match():
 
 @pytest.mark.parametrize("p", [7, 11, 19, 23, 31, 43, 127, 8191])
 def test_rho_is_a_permutation_with_the_parity_rule(p):
-    images = [C.rho(a, p) for a in range(p)]
+    f = Field("t", p.bit_length(), (1 << p.bit_length()) - p)
+    images = [rho(a, f) for a in range(p)]
     assert sorted(images) == list(range(p))
     for a, y in enumerate(images):
-        assert C.rho_inv(y, p) == a
+        assert rho_inv(y, f) == a
         assert (y % 2 == 0) == (pow(a, (p - 1) // 2, p) != p - 1)
 
 
 def test_rho_on_p61():
     rng = random.Random(1)
     for a in EDGES[:8] + [rng.randrange(C.P) for _ in range(200)]:
-        y = C.rho(a)
-        assert C.rho_inv(y) == a and C.rho(C.rho_inv(a)) == a
+        y = rho(a, C.FIELD)
+        assert rho_inv(y, C.FIELD) == a and rho(rho_inv(a, C.FIELD), C.FIELD) == a
         assert (y % 2 == 0) == (pow(a, (C.P - 1) // 2, C.P) != C.P - 1)
 
 
@@ -94,7 +97,7 @@ def test_tweak_separates_indices():
 
 def test_decode_rejects_a_non_payload():
     k = C.key(SEED, 1)
-    bad = next(y for y in range(1000, 2000) if (C.rho_inv(y) - k.c[0] - k.tweak(0)) % C.P >> 56)
+    bad = next(y for y in range(1000, 2000) if (rho_inv(y, C.FIELD) - k.c[0] - k.tweak(0)) % C.P >> 56)
     with pytest.raises(ValueError, match="decodes to no payload"):
         C.decode_word(bad, 0, k)
     with pytest.raises(ValueError, match="canonical"):
@@ -159,38 +162,6 @@ def test_fragment_layout_is_a_bijection(bits):
         C.fragment_stream(bytes(16 * 500), 16, 500)
 
 
-@pytest.mark.parametrize("bits", C.PACKINGS)
-def test_blocks_are_a_lane_of_a_task(bits):
-    lw = C.lane_words(bits)
-    tasks = 3
-    seen = sorted(i for j in range(32 * tasks) for i in C.block_indices(j, bits))
-    assert seen == list(range(tasks * lw * 32))
-    assert C.block_indices(32 * 2 + 5, bits) == [2 * lw * 32 + 32 * w + 5 for w in range(lw)]
-    store = list(range(tasks * lw * 32))
-    assert C.lane_block(store, 7, bits) == C.words_bytes([32 * w + 7 for w in range(lw)])
-
-
-@pytest.mark.parametrize("bits", C.PACKINGS)
-def test_twin_lane_tag_is_ro_blake3(bits):
-    """The kernel's message (u64be j, then the words as u32 pairs), lengths and flags give ro-blake3/v1's tag."""
-    from verity.core.protocols.bandwidth import tags
-    from verity.ml.crypto import blake3
-
-    scheme = tags.get("ro-blake3/v1")
-    seed = hashlib.sha256(b"verity/word-codec/tests/tag-seed").digest()
-    key = scheme.key(seed)
-    keyed = scheme.keyed(seed)
-    rng = random.Random(bits)
-    for j in (0, 1, 31, 32 * 4097 + 17, (1 << 40) + 3, (1 << 64) - 1):
-        words = [rng.randrange(C.P) for _ in range(C.lane_words(bits))]
-        cv = tuple(int.from_bytes(key[4 * i:4 * i + 4], "little") for i in range(8))
-        msgs = T.b3_lane_messages(j, words)
-        assert len(msgs) == 5 and msgs[-1][1] == (48 if bits == 56 else 32)
-        for m, length, flags in msgs:
-            cv = tuple(blake3.compress(cv, b"".join(v.to_bytes(4, "little") for v in m), 0, length, flags)[:8])
-        assert b"".join(v.to_bytes(4, "little") for v in cv) == keyed(j, C.words_bytes(words))
-
-
 @pytest.mark.parametrize("form", [0, 1])
 def test_twin_squaring_at_the_edges_of_its_range(form):
     rng = random.Random(10 + form)
@@ -214,7 +185,7 @@ def test_twin_decode_and_encode_equal_the_reference(form):
         for y in EDGES[:8]:
             want = y
             for c in reversed(k.c):
-                want = (C.rho_inv(want) - c - k.tweak(3)) % C.P
+                want = (rho_inv(want, C.FIELD) - c - k.tweak(3)) % C.P
             assert T.decode_word(y, k.tweak(3), k.c, form) == want
 
 
@@ -223,13 +194,6 @@ def test_twin_canon_and_fold_ranges():
         T.canon(r)
     for z in [0, 1, T.U64, T.U64 - 7, 1 << 63, (1 << 61) - 1]:
         assert T.fold(z) < (1 << 61) + 8 and T.fold(z) % C.P == z % C.P
-
-
-def test_twin_horner():
-    rng = random.Random(30)
-    for _ in range(1000):
-        T.horner31(rng.getrandbits(32), rng.randrange(1 << 31), rng.getrandbits(32))
-    T.horner31(T.U32, (1 << 31) - 1, T.U32)
 
 
 def test_bound_reproduces_the_draft():

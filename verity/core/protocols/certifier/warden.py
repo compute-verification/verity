@@ -293,7 +293,7 @@ class Warden:
       that tick's `publish`: a publisher in another process builds each record from them as it fills, so that the
       tick never hands it a whole window at once;
     - `requests_released` counts the `END`s released, each connection's N its count before (`log`'s `release`), and
-      `run_id`, `RUN_ID_BYTES` drawn from `run_nonce` at construction, names the run on the server's side;
+      `run_id`, `RUN_ID_BYTES` sampled from `run_nonce` at construction, names the run on the server's side;
     - with `paced`, seconds past `slack` (off by default), each tick hands its bucket to the pacer (`pacer.Pacer`;
       the module docstring's "The pacer"), which releases it `paced` after its boundary on the host's monotonic clock,
       `origin`'s clock then, to each connection's socket (`writer.get_extra_info("socket")`); `releases` holds each
