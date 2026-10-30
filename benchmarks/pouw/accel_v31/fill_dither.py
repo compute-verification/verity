@@ -1,5 +1,5 @@
 """The GPU's no-fold call (v31lib's Prover over libv31.so) checked against the reference itself,
-`verity/core/protocols/pouw/circuit/dither.py`, rather than v31.py's mirror of it, on filler calls (the pad,
+`verity/core/protocols/pouw/circuit/dither.py`, rather than v31.py's numpy forms of it, on filler calls (the pad,
 `dither.Shape` with `o` False: T_1 .. T_S a tile) and served calls (an operand A, `o` True: T_1 .. T_{S-1} and then O a
 tile). On each case: the call's seeds (`dither.fill_seeds` for a filler, `dither.seeds` for a served call) as the device's
 seed buffer holds them (v31's `fill_seeds_bytes`), read back stream by stream against dither's byte for byte, the
