@@ -64,6 +64,11 @@ extern "C" int verity_rows_level_launch(const void* params, const uint8_t* in, u
                                         uint64_t max_blocks, cudaStream_t st);
 extern "C" int verity_rows_levels_launch(const void* params, const uint8_t* in, uint8_t* out, uint64_t n_in, int level, uint64_t base,
                                          int n_levels, cudaStream_t st);
+extern "C" int verity_rows_lead_params_bytes();
+extern "C" int verity_rows_lead_build(const uint8_t* domain_id, const char* schema, int schema_len, void* out);
+extern "C" int verity_rows_lead_gather_launch(const uint8_t* ex, uint8_t* out, int m, int n, int S, int bn, cudaStream_t st);
+extern "C" int verity_rows_lead_leaves_launch(const void* params, const uint8_t* values, uint64_t value_bytes, uint64_t n,
+                                              uint64_t last_bytes, uint64_t first, uint8_t* out, cudaStream_t st);
 
 namespace {
 
@@ -1626,6 +1631,19 @@ struct RowStep {
   }
 };
 
+// The lead (verity_vllm.commit.lead_rows): one instance's inline-leaf parameters, its domain's and its schema's (native_rows.cu).
+struct LeadStep {
+  std::vector<uint8_t> params;
+  LeadStep(const py::bytes& domain_id, const std::string& schema) {
+    const std::string did = domain_id;
+    if (did.size() != 64) throw std::runtime_error("LeadStep: the domain id is 64 bytes");
+    params.resize(static_cast<size_t>(verity_rows_lead_params_bytes()));
+    if (verity_rows_lead_build(reinterpret_cast<const uint8_t*>(did.data()), schema.data(), static_cast<int>(schema.size()),
+                               params.data()) != 0)
+      throw std::runtime_error("LeadStep: a schema is at most 32 bytes, not " + std::to_string(schema.size()));
+  }
+};
+
 struct StepHasher {
   cudaEvent_t ev0 = nullptr, ev1 = nullptr, ev2 = nullptr, done = nullptr;
   uint32_t* root_host = nullptr;                 // pinned, 32 B
@@ -1962,6 +1980,51 @@ struct StepHasher {
     return leaves;
   }
 
+  // lead_rows.stream on the device: a call's committed words from its export (any dtype, 64 ceil(m / 64) x bn ceil(n / bn) x S
+  // 4-byte words).  -> [pad_rows(m) pad_cols(n) S] int32
+  at::Tensor lead_stream(at::Tensor exported, int64_t m, int64_t n, int64_t S, int64_t bn, int64_t stream_ptr) {
+    if (!exported.is_cuda() || !exported.is_contiguous()) throw std::runtime_error("lead_stream: the export must be a contiguous CUDA tensor");
+    if (m <= 0 || n <= 0 || S <= 0 || bn <= 0 || bn % 8 || m > (1 << 30) || n > (1 << 30) || S > (1 << 20))
+      throw std::runtime_error("lead_stream: a positive shape over tiles of a multiple of 8 columns");
+    const int64_t computed = 64 * ((m + 63) / 64) * bn * ((n + bn - 1) / bn) * S;
+    if (exported.numel() * exported.element_size() != 4 * computed)
+      throw std::runtime_error("lead_stream: the export holds " + std::to_string(exported.numel() * exported.element_size()) + " bytes, the call " +
+                               std::to_string(4 * computed));
+    py::gil_scoped_release nogil;
+    c10::InferenceMode inf;
+    cudaStream_t st = reinterpret_cast<cudaStream_t>(stream_ptr);
+    c10::cuda::CUDAStream cs = c10::cuda::getStreamFromExternal(st, exported.device().index());
+    c10::cuda::CUDAStreamGuard g(cs);
+    at::Tensor out = at::empty({16 * ((m + 15) / 16) * 8 * ((n + 7) / 8) * S}, at::TensorOptions().dtype(at::kInt).device(exported.device()));
+    const int lrc = verity_rows_lead_gather_launch(reinterpret_cast<const uint8_t*>(exported.data_ptr()),
+                                                   reinterpret_cast<uint8_t*>(out.data_ptr()), static_cast<int>(m), static_cast<int>(n),
+                                                   static_cast<int>(S), static_cast<int>(bn), st);
+    if (lrc != 0) throw std::runtime_error(std::string("lead_stream: ") + cudaGetErrorString(static_cast<cudaError_t>(lrc)));
+    return out;
+  }
+
+  // lead_rows' inline leaves of ranks first .. first + n - 1: n values at values' bytes i value_bytes, value_bytes long but the last
+  // (last_bytes).  -> leaves [n, 64] uint8
+  at::Tensor lead_leaves(const LeadStep& ls, at::Tensor values, int64_t value_bytes, int64_t n, int64_t last_bytes, int64_t first,
+                         int64_t stream_ptr) {
+    if (!values.is_cuda() || !values.is_contiguous()) throw std::runtime_error("lead_leaves: values must be a contiguous CUDA tensor");
+    if (n < 1 || first < 0 || first + n > (int64_t(1) << 32) || value_bytes < 8 || value_bytes % 8 || last_bytes < 8 || last_bytes % 8 ||
+        last_bytes > value_bytes || (n - 1) * value_bytes + last_bytes > values.numel() * values.element_size())
+      throw std::runtime_error("lead_leaves: n >= 1 values of multiples of 8 bytes inside the tensor, ranks below 2^32");
+    py::gil_scoped_release nogil;
+    c10::InferenceMode inf;
+    cudaStream_t st = reinterpret_cast<cudaStream_t>(stream_ptr);
+    c10::cuda::CUDAStream cs = c10::cuda::getStreamFromExternal(st, values.device().index());
+    c10::cuda::CUDAStreamGuard g(cs);
+    at::Tensor leaves = at::empty({n, 64}, at::TensorOptions().dtype(at::kByte).device(values.device()));
+    const int lrc = verity_rows_lead_leaves_launch(ls.params.data(), reinterpret_cast<const uint8_t*>(values.data_ptr()),
+                                                   static_cast<uint64_t>(value_bytes), static_cast<uint64_t>(n),
+                                                   static_cast<uint64_t>(last_bytes), static_cast<uint64_t>(first),
+                                                   reinterpret_cast<uint8_t*>(leaves.data_ptr()), st);
+    if (lrc != 0) throw std::runtime_error(std::string("lead_leaves: ") + cudaGetErrorString(static_cast<cudaError_t>(lrc)));
+    return leaves;
+  }
+
   // rows-sha512 absorb: levels 0 .. n_levels-1 of one window's subtree from its leaves (positions first .. first + m - 1, m a power of two
   // and first a multiple of m, so every pair is inside the window), each level copied D2H into host_dsts[L] when they are given (one event
   // sync at the end); with none, the levels stay on the device and nothing syncs.  -> the top level (device)
@@ -2070,12 +2133,16 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
       .def("rows_tree_window", &StepHasher::rows_tree_window, py::arg("rs"), py::arg("leaves"), py::arg("n_levels"), py::arg("first"), py::arg("stream_ptr"),
            py::arg("host_dsts"))
       .def("rows_tree", &StepHasher::rows_tree, py::arg("rs"), py::arg("nodes"), py::arg("level0"), py::arg("stream_ptr"), py::arg("levels_host") = false,
-           py::arg("levels_dst") = py::none());
+           py::arg("levels_dst") = py::none())
+      .def("lead_stream", &StepHasher::lead_stream, py::arg("exported"), py::arg("m"), py::arg("n"), py::arg("S"), py::arg("bn"), py::arg("stream_ptr"))
+      .def("lead_leaves", &StepHasher::lead_leaves, py::arg("ls"), py::arg("values"), py::arg("value_bytes"), py::arg("n"), py::arg("last_bytes"),
+           py::arg("first"), py::arg("stream_ptr"));
   py::class_<RowStep>(m, "RowStep")
       .def(py::init<const py::bytes&, const py::bytes&, const py::bytes&, const py::bytes&, const py::bytes&, const std::string&, int64_t>(), py::arg("domain_id"),
            py::arg("ks"), py::arg("row_prefix"), py::arg("salt_prefix"), py::arg("leaf_prefix"), py::arg("schema"), py::arg("row_bytes"))
       .def_readonly("row_bytes", &RowStep::row_bytes)
       .def_readwrite("max_blocks", &RowStep::max_blocks);
+  py::class_<LeadStep>(m, "LeadStep").def(py::init<const py::bytes&, const std::string&>(), py::arg("domain_id"), py::arg("schema"));
   py::class_<Collector>(m, "Collector")
       .def(py::init<>())
       .def("begin_step", &Collector::begin_step, py::arg("plan_key"), py::arg("arena_ptr"), py::arg("arena_bytes"), py::arg("use_plan") = true, py::arg("step_id") = -1)
