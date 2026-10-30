@@ -6,8 +6,9 @@ The reference (`verity.ml.circuits.evaluation.evaluate`) walks a composite's sta
 here compiles each specialized Definition's body once into local wires (its parameters' leaves, then each node's output
 leaves) and runs it per activation: the same gates, in the same canonical order, on the same operands, through the same
 primitive evaluators, except that And2, Xor2 and Not on `int` operands take the bit their evaluators return through Python's
-own ``&`` and ``^`` (`_and2`, `_xor2`, `_BITS`), and their evaluators on anything else. So it returns what the reference
-returns and raises the first exception the reference raises, and
+own ``&`` and ``^`` (`_and2`, `_xor2`, `_BITS`), and their evaluators on anything else. Those evaluators and the constant
+bits return an `int` on `int` operands, so a body of only gates, constant bits and Inputs (`Body.closed`) on `int` arguments
+skips those type checks. So it returns what the reference returns and raises the first exception the reference raises, and
 its `MissingValue` messages name the same gate indices. A Definition whose body it doesn't compile (`Unsupported`), or whose
 activations would copy far more leaves than it has gates (`MAX_TRAFFIC`), is evaluated by the reference.
 
@@ -89,9 +90,10 @@ _BITS = {BL.AND: _and_cols, BL.XOR: _xor_cols, BL.NOT: _not_cols}
 class Body:
     """One specialized Definition's body over local wires: ``P`` parameter leaves first, ``size`` wires in all. ``steps``
     evaluate its nodes in order, ``plans`` describe them for `nonconstant`, ``ret`` are its return's wires, ``traffic`` the
-    leaves one activation copies."""
+    leaves one activation copies. ``closed``: every primitive it reaches is a gate, one of `boolean.CONSTANTS` or an Input,
+    so on `int` parameters every value it computes is an `int`."""
 
-    __slots__ = ("spec", "P", "size", "pad", "steps", "plans", "ret", "traffic", "consts", "memo")
+    __slots__ = ("spec", "P", "size", "pad", "steps", "plans", "ret", "traffic", "consts", "memo", "closed")
 
     def __init__(self, spec: SpecializedDefinition) -> None:
         self.spec = spec
@@ -182,9 +184,11 @@ def _compile(spec: SpecializedDefinition) -> Body:
     steps: list[tuple] = []
     plans: list[tuple] = []
     traffic = 0
+    closed = True
     for k, node in enumerate(nodes):
         fn, out, goff, form = node.fn, nbase[k], b.offsets[k], node.form
         if form in ("primitive", "batch") and isinstance(fn, PrimitiveDefinition):
+            closed = closed and (BL.is_gate(fn) or fn in BL.CONSTANTS or getattr(fn, "family", None) == "Input")
             n = 1 if form == "primitive" else node.n
             if node.out.leaves != n:
                 raise Unsupported(f"{spec.id}: node {k} has {node.out.leaves} output leaves for {n} gates")
@@ -217,6 +221,7 @@ def _compile(spec: SpecializedDefinition) -> Body:
         if not isinstance(fn, SpecializedDefinition):
             raise Unsupported(f"{spec.id}: node {k} is a {form} of {fn!r}")
         sub = compile_body(fn)
+        closed = closed and sub.closed
         R, G = len(sub.ret), fn.gates
         if form == "call":
             ws = whole(node.args, k)
@@ -253,7 +258,7 @@ def _compile(spec: SpecializedDefinition) -> Body:
             raise Unsupported(f"{spec.id}: node {k} has form {form!r}")
     body.ret = wires(b.ret, len(nodes))
     body.P, body.size, body.pad = P, size, [None] * (size - P)
-    body.steps, body.plans, body.traffic = steps, plans, traffic
+    body.steps, body.plans, body.traffic, body.closed = steps, plans, traffic, closed
     body.memo = spec.gates >= MEMO_GATES_PER_LEAF * (P + len(body.ret))
     return body
 
@@ -304,26 +309,28 @@ class _Memo:
         self.room = MEMO_LEAVES
 
 
-def _activated(sub: Body, cv: list, off: int, memo: _Memo) -> list:
+def _activated(sub: Body, cv: list, off: int, memo: _Memo, ints: bool) -> list:
     """``sub``'s return values on its parameters' values ``cv``, which it extends with room for its nodes' outputs: an earlier
-    activation's on the same values where ``sub`` is looked up (`Body.memo`), else run."""
-    key = tuple(cv) if sub.memo and {*map(type, cv)} <= _INT else None
+    activation's on the same values where ``sub`` is looked up (`Body.memo`), else run. ``ints``: `_run`'s."""
+    key = tuple(cv) if sub.memo and (ints or {*map(type, cv)} <= _INT) else None
     if key is not None:
         seen = memo.seen.setdefault(sub, {})
         if (hit := seen.get(key)) is not None:
             return hit
     cv.extend(sub.pad)
-    _run(sub, cv, off, memo)
-    ret = [cv[w] for w in sub.ret]
-    if key is not None and memo.room >= len(key) + len(ret) and {*map(type, ret)} <= _INT:
+    _run(sub, cv, off, memo, ints)
+    ret = list(map(cv.__getitem__, sub.ret))
+    if key is not None and memo.room >= len(key) + len(ret) and (ints or {*map(type, ret)} <= _INT):
         seen[key] = ret
         memo.room -= len(key) + len(ret)
     return ret
 
 
-def _run(body: Body, V: list, off: int, memo: _Memo) -> None:
+def _run(body: Body, V: list, off: int, memo: _Memo, ints: bool) -> None:
     """``body``'s steps on ``V``, its parameters' values followed by room for every node's outputs; ``off`` is the
-    activation's root-scoped gate offset, which names a gate in an error as the reference names it."""
+    activation's root-scoped gate offset, which names a gate in an error as the reference names it. ``ints``: ``body`` is
+    `Body.closed` and its parameters' values are all `int`, so every value it computes is."""
+    get = V.__getitem__
     for st in body.steps:
         op = st[0]
         if op == _PRIM2:
@@ -332,22 +339,23 @@ def _run(body: Body, V: list, off: int, memo: _Memo) -> None:
             V[st[3]] = st[1](V[st[2]])
         elif op == _PRIMS:
             _, ev, cols, n, out = st
-            get = V.__getitem__
             V[out:out + n] = list(map(ev, *[map(get, c) for c in cols])) if cols else [ev() for _ in range(n)]
         elif op == _COLS:
             _, bits, ev, cols, n, out = st
-            get = V.__getitem__
-            xs = [list(map(get, c)) for c in cols]
-            V[out:out + n] = list(bits(*xs) if all({*map(type, x)} <= _INT for x in xs) else map(ev, *xs))
+            if ints:
+                V[out:out + n] = list(bits(*[map(get, c) for c in cols]))
+            else:
+                xs = [list(map(get, c)) for c in cols]
+                V[out:out + n] = list(bits(*xs) if all({*map(type, x)} <= _INT for x in xs) else map(ev, *xs))
         elif op == _PRIMN:
-            V[st[3]] = st[1](*[V[w] for w in st[2]])
+            V[st[3]] = st[1](*map(get, st[2]))
         elif op == _CALL:
             _, sub, ws, out, goff = st
-            V[out:out + len(sub.ret)] = _activated(sub, [V[w] for w in ws], off + goff, memo)
+            V[out:out + len(sub.ret)] = _activated(sub, list(map(get, ws)), off + goff, memo, ints)
         elif op == _BATCH:
             _, sub, sa, n, out, goff, G = st
             R = len(sub.ret)
-            shared = [[V[w] for w in s[1]] if s[0] == _ALL else None for s in sa]
+            shared = [list(map(get, s[1])) if s[0] == _ALL else None for s in sa]
             for m in range(n):
                 cv: list = []
                 for s, vals in zip(sa, shared):
@@ -355,20 +363,20 @@ def _run(body: Body, V: list, off: int, memo: _Memo) -> None:
                         cv.extend(vals)
                     elif s[0] == _AX0:
                         L = s[2]
-                        cv.extend([V[w] for w in s[1][m * L:(m + 1) * L]])
+                        cv.extend(map(get, s[1][m * L:(m + 1) * L]))
                     else:
-                        cv.extend([V[w] for w in s[1][m]])
-                V[out + m * R:out + (m + 1) * R] = _activated(sub, cv, off + goff + m * G, memo)
+                        cv.extend(map(get, s[1][m]))
+                V[out + m * R:out + (m + 1) * R] = _activated(sub, cv, off + goff + m * G, memo, ints)
         elif op == _SCAN:
             _, sub, init, xs, shared, n, c, y, out, goff, G = st
-            carry = [V[w] for w in init]
-            svals = [V[w] for w in shared]
+            carry = list(map(get, init))
+            svals = list(map(get, shared))
             for m in range(n):
                 cv = carry
                 for ws, L in xs:
-                    cv.extend([V[w] for w in ws[m * L:(m + 1) * L]])
+                    cv.extend(map(get, ws[m * L:(m + 1) * L]))
                 cv.extend(svals)
-                r = _activated(sub, cv, off + goff + m * G, memo)
+                r = _activated(sub, cv, off + goff + m * G, memo, ints)
                 carry = r[:c]
                 V[out + c + m * y:out + c + (m + 1) * y] = r[c:]
             V[out:out + c] = carry
@@ -376,18 +384,18 @@ def _run(body: Body, V: list, off: int, memo: _Memo) -> None:
             _, lazy, pid, n, sa, cols, wide, out, goff = st
             for m in range(n):
                 if wide:
-                    get = _Wide(V, sa, m).__getitem__
+                    read = _Wide(V, sa, m).__getitem__
                 else:
                     ws = tuple(c[m] for c in cols) if cols is not None else tuple(_member(sa, m))
-                    get = (lambda j, _ws=ws: V[_ws[j]])
+                    read = (lambda j, _ws=ws: V[_ws[j]])
                 try:
-                    V[out + m] = lazy(get)
+                    V[out + m] = lazy(read)
                 except KeyError as e:
                     raise MissingValue(f"gate {off + goff + m} ({pid}) operand {e.args[0]} is not in the transcript") from None
         elif op == _GATHER:
             _, ev, n, sa, out = st
             for m in range(n):
-                V[out + m] = ev(*[V[w] for w in _member(sa, m)])
+                V[out + m] = ev(*map(get, _member(sa, m)))
         elif op == _INPUT:
             raise MissingValue(f"Input gate {off + st[1]} has no prescribed value in the transcript")
         else:  # pragma: no cover
@@ -427,8 +435,9 @@ def evaluate(target: Any, *args: Any) -> tuple[int, ...]:
     V = _flat(args)
     if len(V) != body.P:
         raise ValueError(f"{call!r}: expected {body.P} argument encodings, got {len(V)}")
+    ints = body.closed and {*map(type, V)} <= _INT
     V.extend(body.pad)
-    _run(body, V, call.lo, _Memo())
+    _run(body, V, call.lo, _Memo(), ints)
     return tuple(V[w] for w in body.ret)
 
 

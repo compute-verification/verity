@@ -195,6 +195,23 @@ def test_boolean_gates_on_any_operands_evaluate_as_the_reference(memo):
             assert got[0] == "returned" and _typed(got) == _typed(_outcome(reference, GATES, *args)), (args, c)
 
 
+HALF = PrimitiveDefinition("CcBodiesHalf", 1, (("a", BIT),), BIT, lambda a: a / 2, register=False)
+HALVES = _composite("Halves", (Array(2, BIT), Array(2, BIT)), Array(4, BIT), lambda B, S, x, y: _flat(Array(4, BIT), [
+    h := B.batch(HALF, x, axes=(0,)), B.batch(BL.XOR, _flat(Array(2, Array(2, BIT)), [h[0], y[0], h[1], y[1]]), axes=(0,))]))
+CALLS_HALVES = _composite("CallsHalves", (Array(2, BIT), Array(2, BIT)), Array(4, BIT),
+                          lambda B, S, x, y: B.call(HALVES, x, y))
+
+
+def test_a_body_with_a_primitive_past_the_gates_takes_the_type_checks(memo):
+    """A body is `Body.closed` only when every primitive it reaches is a gate, a constant bit or an Input: a batch of Xor2 on
+    a primitive's `float` values, in a body called from one of no primitives, raises what the reference raises."""
+    assert BD.compiled(GATES).closed and not BD.compiled(TOP).closed
+    assert not BD.compiled(CALLS_HALVES).closed
+    for args in ([[0, 1], [1, 1]], [[1, 0], [0, 0]], [[0, 0], [1, 0]]):
+        got = _outcome(BD.evaluate, CALLS_HALVES, *args)
+        assert got[0] == "raised" and got == _outcome(reference, CALLS_HALVES, *args), args
+
+
 CALLS: Counter = Counter()
 
 
