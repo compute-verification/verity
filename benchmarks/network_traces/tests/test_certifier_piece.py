@@ -244,7 +244,7 @@ def test_a_step_that_cant_run_refuses_and_leaves_the_certifier_missing(case, tmp
     if case == "corrupt fetch":
         (d / CP.PRIVATE / RUN / "fetch.tar.gz").write_bytes(b"not a tarball")
     chain = _chain_out(tmp_path / "chain", "accepted", warden["w"])
-    cmd = {"no report": "exit 7", "time limit": 'kill -TERM "$PPID"; while :; do :; done'}.get(case)
+    cmd = {"no report": "exit 7", "time limit": 'kill -TERM "$PPID"; while kill -0 "$PPID" 2>/dev/null; do :; done'}.get(case)
     lean = tmp_path / "no-such-network-period" if case == "no build" else None
     answer = {"verdict": "accept", "protocol": "other"} if case == "foreign answer" else {}
     env = dict(os.environ, CERTIFIER_CMD=_piece_cmd(tmp_path, chain, answer, cmd, lean))
