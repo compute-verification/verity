@@ -86,8 +86,7 @@ def store_salt(key: bytes, label: bytes, c: int) -> bytes:
 
 
 def canonical_json(obj) -> bytes:
-    """`verity.ml.circuits.codec.canonical_json`'s bytes, which this protocol may not import, on every value codec
-    takes; a string past ASCII without DEL, which codec refuses, is escaped, as `RemoteAudit.Store.pyJson` escapes it."""
+    """`verity.ml.circuits.codec.canonical_json`'s bytes, which this protocol may not import."""
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
 
 
@@ -435,7 +434,7 @@ def _subtree(digests: str, shape: tuple[int, int, int, int], node: bytes, key: b
                 level.append(dom.pad(j))
                 continue
             r = j % A if j < engines * A else W
-            x = d[64 * r:64 * (r + 1)] if r < W else zero
+            x = d[codec.DIGEST_BYTES * r:codec.DIGEST_BYTES * (r + 1)] if r < W else zero
             level.append(dom.leaf(j, j, audit.PAYLOAD_SCHEMA, receipts.hidden_digest(x, store_salt(key, PAYLOAD_LABEL, j))))
     return _up(dom, level, 0, first)
 
