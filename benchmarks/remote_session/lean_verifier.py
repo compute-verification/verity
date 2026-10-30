@@ -1,10 +1,10 @@
 """The remote audit's verifier, the Lean process `remote-audit-verifier` (`RemoteAudit.Verifier`, in
-verity/core/protocols/remote_bandwidth/lean), as `verifier.py` runs it beside `audit.Session`: one request a JSON line
+verity/core/protocols/remote_bandwidth/lean), as `verifier.py` runs it beside `audit.AuditRun`: one request a JSON line
 on its stdin (an openings frame's bytes right after its line), each answered by one line on its stdout; a window's
 check runs on the process's threads and its verdict comes on a line of its own, handed to `done` as it arrives.
 
 And the JSON the two verifiers are compared in: each event as the Lean reads it (`Difftest.eventOf`), and what
-`audit.Session` returns for it as the Lean writes its result (`Difftest.resultJ`), as the difftest's
+`audit.AuditRun` returns for it as the Lean writes its result (`Difftest.resultJ`), as the difftest's
 `ra_cases.apply` writes it; an accepted session's record as the Lean writes it (`summary_json`), and that record read
 back as the `audit.Record` the ledger reads (`record_of`)."""
 from __future__ import annotations
