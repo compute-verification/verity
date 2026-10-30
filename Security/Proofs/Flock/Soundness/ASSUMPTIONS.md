@@ -141,7 +141,12 @@ coins.
     SHA-512 tree, and answers `Hello` with the root and the key. It opens round `r`'s leaves only in
     its answer to the prover's round-`r` message. That ordering takes the place of "sampled after the prover's message"
     in the statement above. As with A6 itself, the record can't establish it: the Lean verifier checks each opening against
-    the root, not when it was sampled or opened.
+    the root, not when it was sampled or opened. On the audit on the proofs (`sampled-proofs-one-stage-zk`), the
+    auditor's challenger is the coin server: it draws each session's tree and opens each round after the round's
+    message digest, logging both in the release log its close signs, and the audit holds every session's record to
+    those lines, one tree a session and every tree a session's
+    (`verity/core/service/sampled_proofs/SampledProofs/ChallengerTrees.lean`). There the
+    ordering rests on `trusted-host`, not on the prover's coin server.
   - *Why the model's coins are still the run's.* Given the key, each leaf has its own salt, so opening one reveals
     nothing about another. A hybrid swaps the unopened leaves for commitments to independent coins (openings resampled
     consistently); each leaf moves it by at most
