@@ -281,3 +281,5 @@ where h_forced ≤ h is the hashing or fold work a cheater can't skip. So 99% ne
 - **Plan:** ROUNDS sets bit 4 in every `xc` half (so all 160 certify at 8 bits), then COUNTER runs the 160 certificate solves at 8–10 bits on pods.
 - **The R80X v3 ask to Daniel (ShaSpeed-R80) waits on those certificates.**
 - RDX's raw V skip ties, at 34 = 34 writes a round.
+
+ROUNDS constants for COUNTER's certificates: 7408679cbad22b9ffdb5ae4d476390ed3b84a76e
