@@ -1,7 +1,7 @@
 import Definitions.Accounting.RateAuditRemote
 
 /-!
-# The causal horizon: rounds whose good sets precede their samples (trusted)
+# The monitoring period's causal rounds: good sets that precede their samples (trusted)
 
 A session of the rate audit is a sequence of rounds (windows, or a window's chained passes), each closed by a uniform
 sample of items (words, or a window's receipts) that the verifier opens. A round's good set is the items whose

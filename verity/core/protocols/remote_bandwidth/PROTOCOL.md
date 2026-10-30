@@ -1006,20 +1006,24 @@ its structure, its outputs, the verifier's coins and draws, and hiding commitmen
   windows' PRF advantages, \(\sum_t \mathrm{Adv}(\mathrm{prf}\,t)\), which have no numeric value: the ledger names
   them by their claim (prf/sha-512, `ledger.PRF_CLAIM`) and puts them in no δ.
 
-  Every form, the link-charged one included, is conditional on `NoOutsideCompute`, statement C in full: no device
-  outside the node computes on a registered block or a receipt during the session. Identity is only its links clause:
-  a relay prover, a thin node forwarding each coin to a helper that holds the store and computes the receipts, sends no
-  block over the links, so neither Identity nor the links' charge sees it, and only C excludes it. The line's statement
-  takes C as a premise (`LineHeld`, `LineHeldIdentity`, beside `SketchBoundAt`, the receipts' sketch wherever
-  computed, which `SketchBoundDeployed` gives at the sketch's δs on the line's trace read on the sketch outcomes and
-  `Accounting.Guarantees.Remote.SketchBoundLine` carries to the line's coins), and the line of record says it is
-  conditional on it (`auditor_line.json`'s `conditional_on`, `credit.md`; the `memory-line-of-record` label names the
-  field's names, and `research data label` holds it to the file) until certifiers cover the gate node's boundary
-  (`certifier-coverage`) and certify that nothing but the verifier's messages entered the node over the credited span.
-  `auditor_line.py --boundary`, off by default, refuses a session's credit when the certifiers' records of the boundary
-  links over its span show other ingress. `auditor_line.py --lockdown`, infra's record of the provider's lockdown of
-  the gate node, grounds C for a session whose signed span lies inside an applied interval: the line is then
-  conditional on `ProviderLockdown` (`trusted-host`), which names what the lockdown doesn't close, in C's place.
+  Statement C in full is that no device outside the node computes for it during the session. Identity is only its
+  links clause: a relay prover, a thin node forwarding each coin to a helper that holds the store and computes the
+  receipts, sends no block over the links, so neither Identity nor the links' charge sees it, and only C excludes it.
+  The line's statement (`LineHeld`) assumes nothing of the prover here: it reads C from what the network certifiers
+  observe. Its event is that the certifiers counted no ingress into the node over the credited passes and yet the
+  passes read fewer bits than the line credits, and its error carries δ_net, the certifiers' miscount
+  (`IngressCounted`, `trusted-host`), beside `SketchBoundAt` (the receipts' sketch wherever computed, which
+  `SketchBoundDeployed` gives at the sketch's δs on the line's trace read on the sketch outcomes and
+  `Accounting.Guarantees.Remote.SketchBoundLine` carries to the line's coins). `Covered` (`certifier-coverage`) is
+  the deployment's half: every uplink of the prover's server passes through an active certifier, so an outside device
+  computing for the node sends its result over a counted link. Memory held follows from the bits read under the
+  device model (`heldAt_of_read`). `auditor_line.py --boundary`, off by default, refuses a session's credit when the
+  certifiers' records of the boundary links over its span show other ingress; without it the line of record says it
+  is conditional on C, under the label vocabulary's name `NoOutsideCompute` (`auditor_line.json`'s `conditional_on`,
+  `credit.md`; the `memory-line-of-record` label names the field's names, and `research data label` holds it to the
+  file). `auditor_line.py --lockdown`, infra's record of the provider's lockdown of the gate node, grounds C for a
+  session whose signed span lies inside an applied interval: the line is then conditional on `ProviderLockdown`
+  (`trusted-host`), that label's name for what the lockdown doesn't close, in C's place.
 
 \(R\), \(S_{\text{chip}}\), the squaring ceiling, the disks' and links' ceilings and the bursts are the verifier's: the
 node's stated or measured capacities, protocol structure, never the prover's report (§1).
@@ -1332,9 +1336,10 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   each with a `Relay` form): `Accounting.SecurityProofs.Remote.Conservation` at the per-pass routes proved for
   it. The openings are
   `Accounting.Guarantees.RateWindowDraw`, a window's pooled draw over its passes' receipts, and `RateSessionDraw`,
-  the horizon and every window at once, both from `HorizonSampling`, the causal horizon bound. They take windows of
-  one size, \(M = P \cdot N\), and draws with replacement. The record's windows differ in \(U_t\), and its draws are
-  distinct, which only lowers the chance that they all pass. `pooled` applies the same argument at each window's own
+  the monitoring period and every window at once, both from `PooledSampling`, the causal bound over the monitoring
+  period. They take windows of one size, \(M = P \cdot N\), and draws with replacement. The record's windows differ
+  in \(U_t\), and its draws are distinct, which only lowers the chance that they all pass. `pooled` applies the same
+  argument at each window's own
   size: `Accounting.Guarantees.Remote.PooledDraw` states it on the deployed draw (`Accounting.Remote.Draw`: `Key.subset`
   on the first SHA-512 blocks a window's coin gives, released after its roots, the sampler exact on each draw's first
   word and its fallbacks free), for windows the prover sizes after the earlier windows' coins, each below
