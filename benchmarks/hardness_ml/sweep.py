@@ -57,7 +57,25 @@ def grid(size, tokens, lr=2e-3, tag=None):
     return cfgs
 
 
-PRESETS = {"bench": bench, "w256": lambda: grid("w256", 20_000_000)}
+def lite(size, tokens, threads, lr=2e-3):
+    """The scaling subset at one size: baseline ladder, A at r/n 1/32, 1/8, 1/4 with D₁RD₂, B at ρ 0.25, 0.5, 1,
+    and live noise k = 16 on the baseline and on A 1/8."""
+    b = {"size": size, "tokens": tokens, "lr": lr, "threads": threads}
+    cfgs = [{**b, "name": f"{size}-base-D{tokens // f}", "tokens": tokens // f} for f in (1, 2, 4, 8, 16)]
+    cfgs += [{**b, "name": f"{size}-A{inv}-diag", "design": "A", "rank_frac": 1 / inv, "diag": True}
+             for inv in (32, 8, 4)]
+    cfgs += [{**b, "name": f"{size}-B{rho:g}", "design": "B", "rho": rho} for rho in (0.25, 0.5, 1.0)]
+    cfgs += [{**b, "name": f"{size}-int8-k16", "int8": True, "noise_k": 16},
+             {**b, "name": f"{size}-A8-diag-int8-k16", "design": "A", "rank_frac": 1 / 8, "diag": True,
+              "int8": True, "noise_k": 16, "r_dist": "int8"}]
+    return cfgs
+
+
+PRESETS = {
+    "bench": bench,
+    "w256": lambda: grid("w256", 20_000_000),
+    "scale1": lambda: lite("w512", 20_000_000, 6) + lite("w128", 20_000_000, 2),
+}
 
 
 def run_one(cfg, data, out, threads):
