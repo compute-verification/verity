@@ -20,8 +20,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # `benchmarks/pouw/h1_prove/h1unit.py`, which import most of PoUW's protocol and the proof service's one-stage modules,
 # so both trees are named whole), with the core they import (the integrity profile, `verity.ml`'s circuits, commitments,
 # crypto, randomness and kernels' tensor-core reference, and `verity.errors`), and C-Flock's Python (`verity_flock`),
-# which lowers the statements whose input wires it holds `PouwWindow.Lanes` to, with the composer sizes it imports from
-# `verity.ml.windows`; what `lake` reads through the path
+# which lowers the statements whose input wires it holds `PouwWindow.Lanes` to; what `lake` reads through the path
 # requires: PoUW's commitments (`pouw_commit`, in PoUW's tree), the proof service's Lean (`core_sampled_proofs`) with the
 # core protocol interface and the LMS verifier, core's identity and randomness, and C-Flock's verifier with its
 # configuration.

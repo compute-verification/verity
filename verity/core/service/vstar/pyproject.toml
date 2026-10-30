@@ -4,8 +4,7 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# Test-only: the references are C-Flock's Python builders (verity_flock, with the composer sizes it imports from
-# `verity.ml.windows`) over core's forms, gadgets and codec, and a
+# Test-only: the references are C-Flock's Python builders (verity_flock) over core's forms, gadgets and codec, and a
 # statement's bindings are the one-stage audit's partition (`one_stage.partition`, which `rec_residuals.statement` reads)
 # and its registered values (`one_stage.registered`, which the stagers commit V*'s port inputs under);
 # `lake` builds this package against C-Flock's verifier and the difftest harness, both required by path.
