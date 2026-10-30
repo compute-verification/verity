@@ -119,6 +119,7 @@ def heights(node) -> int:
 FORMATS = {
     "s8": ((-128, 127), 1.0, None),
     "b1": ((0, 1), 0.125, None),
+    "s4": ((-8, 7), 0.5, None),  # hypothetical on the H200 (`search.CHIPS["h200+s4"]`)
     "e4m3": ((-16, 16), 1.0, (32, 14)),
     "e5m2": ((-8, 8), 1.0, (32, 14)),
     "e2m1": ((-4, 4), 1.0, (32, 24)),
@@ -167,7 +168,7 @@ def _shift(iv, win):
         return None
     if win[0] <= iv[0] and iv[1] <= win[1]:
         return 0
-    return iv[0] - win[0]
+    return iv[0] - win[0] - ((win[1] - win[0]) - (iv[1] - iv[0])) // 2  # centred: the fewest float drains
 
 
 def run(node, A, B, ia, ib, shape, ops):

@@ -20,10 +20,10 @@ power of two d needs only w − log₂d bits (zero bits: free). `run_mod` execut
 from __future__ import annotations
 
 import argparse
+import gzip
 import json
 import math
 import sys
-from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
@@ -50,6 +50,23 @@ CHIPS["h200+s4"] = dict(CHIPS["h200"], s4=(16, 0.5, None))
 FORMS = {name: (U, V) for name, (U, V, _W) in SCHEMES.items()}
 INF = float("inf")
 
+# Range grid: every integer to 64, every format's run and its neighbour, powers of two and their successors, and
+# 2^(k/16). Cost is monotone in the ranges, so the search with ranges rounded down is a lower bound and rounded up an
+# upper bound whose argmin tree runs on the true ranges (`run_mod` checks it).
+_CAPS = sorted({c for chip in CHIPS.values() for c, _p, _a in chip.values()})
+GRID = sorted(set(range(1, 65)) | set(_CAPS) | {c + 1 for c in _CAPS} | {2**j for j in range(40)}
+              | {2**j + 1 for j in range(40)} | {round(2 ** (k / 16)) for k in range(16 * 40)})
+
+
+def _grid(v: int, mode: str | None) -> int:
+    if mode is None:
+        return v
+    import bisect
+    i = bisect.bisect_left(GRID, v)
+    if mode == "up" or GRID[i] == v:
+        return GRID[i]
+    return GRID[i - 1]
+
 
 def _prog_cost(prog, iadd3: bool):
     """(writes from sum steps, the products it chains)."""
@@ -63,12 +80,22 @@ def _prog_cost(prog, iadd3: bool):
 
 
 class Search:
-    def __init__(self, chip: str, K: int, n: int, depth: int, reading: str = "fast"):
+    def __init__(self, chip: str, K: int, n: int, depth: int, reading: str = "fast", grid: str | None = None):
         self.atoms = CHIPS[chip]
         self.K, self.n, self.depth = K, n, depth
         self.iadd3 = reading == "fast"
         self.lanes = 4 if self.iadd3 else 2
-        self.F = lru_cache(maxsize=None)(self._F)
+        self.grid = grid
+        self.memo = {}  # a dict, not lru_cache: its C wrapper hits Python 3.12's fixed C recursion limit
+
+    def F(self, lvl: int, a: int, b: int, w: int):
+        if w > 0:
+            a, b = min(a, 2**w), min(b, 2**w)
+        key = (lvl, _grid(a, self.grid), _grid(b, self.grid), w)
+        r = self.memo.get(key)
+        if r is None:
+            r = self.memo[key] = self._F(*key)
+        return r
 
     def atom(self, lvl: int, a: int, b: int):
         K = self.K / 2**lvl
@@ -99,6 +126,8 @@ class Search:
             v = a if side == "a" else b
             for d in Model.cands(v):
                 hi = -(-v // d)
+                if max(_grid(d, self.grid), _grid(hi, self.grid)) >= v:
+                    continue
                 w_hi = w - int(math.log2(d)) if d & (d - 1) == 0 else w
                 lo_ab, hi_ab = ((d, b), (hi, b)) if side == "a" else ((a, d), (a, hi))
                 lo = self.F(lvl, *lo_ab, w)
@@ -127,6 +156,7 @@ class Search:
 
     def tree(self, lvl, a, b, w, chain=False):
         a, b = (min(a, 2**w), min(b, 2**w)) if w > 0 else (a, b)
+        a, b = _grid(a, self.grid), _grid(b, self.grid)
         cost, ch = self.F(lvl, a, b, w)[1 if chain else 0]
         if ch[0] == "zero":
             return {"zero": True, "w": w, "cost": 0.0}
@@ -230,14 +260,29 @@ def check(node, a: int, b: int, w: int, chip: str, seeds: int = 2) -> bool:
     return ok
 
 
+def executed(tree, a: int, shape) -> dict:
+    """`execute.py`'s three readings of an exact (w = 16, R int8) tree at `shape`, E's affine map included."""
+    import execute
+
+    m, K, n = shape
+    t = json.loads(json.dumps(tree))
+    execute.heights(t)
+    o = execute.Ops()
+    execute.run(t, None, None, (0, a - 1), (-128, 127), shape, o)
+    o.add_out(m * n)
+    return {r: o.w1(r) / (m * K * n) for r in ("fast", "plain", "spilled")}
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--chips", default="h200 sm120")
     ap.add_argument("--cases", default="4,256,16",
                     help="space-separated a,b,w: E over a values, R over b, output mod 2^w")
     ap.add_argument("--shapes", default="8192,2048,8192 8192,8192,8192 8192,16384,8192 8192,28672,8192 16384,53248,16384")
-    ap.add_argument("--depth", type=int, default=6)
+    ap.add_argument("--depths", default="4 6", help="depth caps to search at")
     ap.add_argument("--readings", default="fast plain")
+    ap.add_argument("--grids", default="down up",
+                    help="range rounding: `down` (a lower bound), `up` (an upper bound with a checked witness), `none`")
     ap.add_argument("--trees", type=Path, help="directory for the argmin trees (JSON)")
     ap.add_argument("--json", type=Path)
     args = ap.parse_args(argv)
@@ -249,24 +294,27 @@ def main(argv=None) -> int:
             for shape in args.shapes.split():
                 m, K, n = (int(v) for v in shape.split(","))
                 for reading in args.readings.split():
-                    row = {"chip": chip, "a": a, "b": b, "w": w, "m": m, "K": K, "n": n, "reading": reading, "by_depth": {}}
-                    for L in range(args.depth + 1):
-                        s = Search(chip, K, n, L, reading)
-                        cost = s.root(a, b, w)
-                        t = s.tree(0, a, b, w)
-                        st = stats(t)
-                        tensor = sum(CHIPS[chip][f][1] * x for f, x in st["mix"].items())
-                        row["by_depth"][L] = {"w1": cost, "depth_used": st["depth"], "tensor": tensor, "mix": st["mix"]}
-                        if L == args.depth:
-                            exact = check(t, a, b, w, chip)
-                            ok &= exact
-                            row.update(best=cost, depth_used=st["depth"], tensor=tensor, mix=st["mix"], exact=exact)
-                            if args.trees:
-                                args.trees.mkdir(parents=True, exist_ok=True)
-                                f = args.trees / f"{chip}_a{a}_b{b}_w{w}_K{K}_n{n}_{reading}.json"
-                                f.write_text(json.dumps(dict(t, a=a, b=b), indent=None))
-                    print(json.dumps({k: v for k, v in row.items() if k != "by_depth"}), flush=True)
-                    out.append(row)
+                    for L in (int(v) for v in args.depths.split()):
+                        for grid in args.grids.split():
+                            s = Search(chip, K, n, L, reading, None if grid == "none" else grid)
+                            cost = s.root(a, b, w)
+                            t = s.tree(0, a, b, w)
+                            st = stats(t)
+                            tensor = sum(CHIPS[chip][f][1] * x for f, x in st["mix"].items())
+                            row = {"chip": chip, "a": a, "b": b, "w": w, "m": m, "K": K, "n": n, "reading": reading,
+                                   "depth_cap": L, "grid": grid, "w1": cost, "depth_used": st["depth"], "tensor": tensor,
+                                   "mix": st["mix"], "states": len(s.memo)}
+                            if grid != "down":
+                                row["exact"] = check(t, a, b, w, chip, seeds=1 if st["depth"] >= 5 else 2)
+                                ok &= row["exact"]
+                                if b == 256 and w == 16:
+                                    row["executed"] = executed(t, a, (m, K, n))
+                                if args.trees:
+                                    args.trees.mkdir(parents=True, exist_ok=True)
+                                    f = args.trees / f"{chip}_a{a}_b{b}_w{w}_K{K}_n{n}_{reading}_L{L}.json.gz"
+                                    f.write_bytes(gzip.compress(json.dumps(dict(t, a=a, b=b)).encode()))
+                            print(json.dumps(row), flush=True)
+                            out.append(row)
     res = {"ok": bool(ok), "rows": out}
     if args.json:
         args.json.write_text(json.dumps(res, indent=1))
@@ -274,4 +322,11 @@ def main(argv=None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    import threading
+
+    threading.stack_size(1 << 29)
+    rc = []
+    th = threading.Thread(target=lambda: rc.append(main()))
+    th.start()
+    th.join()
+    sys.exit(rc[0] if rc else 1)
