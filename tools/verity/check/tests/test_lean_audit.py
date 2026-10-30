@@ -38,6 +38,7 @@ named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i a
 out.mkdir(parents=True, exist_ok=True)
 (out / "repo.txt").write_text(a[a.index("--repo") + 1] if "--repo" in a else "")
 (out / "argv.json").write_text(json.dumps(a))
+(out / "cwd.txt").write_text(str(root))
 reps, failed = [], []
 for pkg in named:
     pol = pkg / "lean-audit.json"
@@ -63,6 +64,13 @@ for pkg in named:
 (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "packages": reps}))
 sys.exit(1 if failed else 0)
 '''
+
+
+@pytest.fixture(autouse=True)
+def _scratch_beside_the_cache(tmp_path, monkeypatch):
+    """Every audit here makes its scratch tree beside its cache in ``tmp_path``, whatever volume the suite's machine offers."""
+    monkeypatch.setenv("LEAN_AUDIT_SCRATCH", str(tmp_path))
+    monkeypatch.setenv("LEAN_AUDIT_MIN_FREE_GB", "0")
 
 
 def _tree(tmp: Path, monkeypatch) -> Path:
@@ -605,6 +613,55 @@ def test_a_stopped_audit_removes_its_scratch_tree(tmp_path, monkeypatch):
     os.killpg(p.pid, signal.SIGTERM)
     p.communicate()
     assert p.returncode != 0 and list(cache.glob("lean-audit-scratch-*")) == []
+
+
+def _volumes(tmp: Path, monkeypatch) -> tuple[Path, Path]:
+    """A root disk holding ``~/.cache/verity-check`` and a big volume at `WORKSPACE`, two filesystems as `_device` sees them."""
+    home, big = tmp / "root" / ".cache" / "verity-check", tmp / "workspace"
+    home.mkdir(parents=True)
+    (big / "tmp" / "run").mkdir(parents=True)
+    monkeypatch.setattr(LA, "WORKSPACE", big)
+    monkeypatch.setattr(LA, "_device", lambda p: 2 if big in (p, *p.parents) else 1)
+    return home, big
+
+
+def test_the_scratch_tree_goes_on_the_big_volume_not_the_root_disk(tmp_path, monkeypatch):
+    """A scratch tree beside `~/.cache/verity-check` filled a node's 247 GB root disk while /workspace had TBs free."""
+    home, big = _volumes(tmp_path, monkeypatch)
+    monkeypatch.setattr(LA, "ROOT", tmp_path / "repo")
+    run = {"RESEARCH_RUN_DIR": str(big / "research/runs/r1"), "TMPDIR": str(big / "tmp" / "run")}
+    assert LA.scratch_base(home, {}) == big / "tmp"
+    assert LA.scratch_base(home, {"TMPDIR": str(big / "tmp" / "run")}) == big / "tmp"           # TMPDIR outside a run
+    assert LA.scratch_base(home, run) == big / "tmp" / "run"
+    assert LA.scratch_base(home, {**run, "LEAN_AUDIT_SCRATCH": str(big)}) == big
+    assert LA.scratch_base(home, {"LEAN_AUDIT_SCRATCH": str(tmp_path / "missing")}) == big / "tmp"
+    monkeypatch.setattr(LA, "_device", lambda p: 2)                                          # the cache is on the big volume
+    assert LA.scratch_base(home, run) == home
+    monkeypatch.setattr(LA, "_device", lambda p: 2 if big in (p, *p.parents) else 1)
+    monkeypatch.setattr(LA, "ROOT", big)                                                     # an agent VM's checkout is /workspace
+    assert LA.scratch_base(home, {}) == home
+    monkeypatch.setattr(LA, "WORKSPACE", tmp_path / "no-workspace")
+    assert LA.scratch_base(home, {}) == home
+
+
+def test_an_audit_builds_on_the_big_volume_removes_its_tree_and_refuses_one_short_of_room(tmp_path, monkeypatch):
+    root = _tree(tmp_path, monkeypatch)
+    (root / "pkg/b/lean-audit.json").write_text("{}")
+    home, big = _volumes(tmp_path, monkeypatch)
+    monkeypatch.delenv("LEAN_AUDIT_SCRATCH")
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    lines: list[str] = []
+    assert LA.run(tmp_path / "out", home / "lean-audit", home / "lean-deps", log=lines.append) == 0
+    assert Path((tmp_path / "out" / "cwd.txt").read_text()).parent == big / "tmp"
+    assert f"lean-audit: scratch trees in {big / 'tmp'}" in lines
+    assert list((big / "tmp").glob("lean-audit-scratch-*")) == list(home.glob("lean-audit-scratch-*")) == []
+
+    (root / "pkg/a/A.lean").write_text("theorem a' : True := trivial\n")
+    monkeypatch.setenv("LEAN_AUDIT_MIN_FREE_GB", "1e12")
+    lines.clear()
+    assert LA.run(tmp_path / "out2", home / "lean-audit", home / "lean-deps", log=lines.append) == 1
+    assert lines[-1].startswith(f"lean-audit: FAIL: {big / 'tmp'} has ") and "LEAN_AUDIT_MIN_FREE_GB" in lines[-1]
+    assert not (tmp_path / "out2" / "ran.txt").exists() and list((big / "tmp").glob("lean-audit-scratch-*")) == []
 
 
 def test_a_check_py_edit_keeps_every_verdict_and_a_pack_carries_them_to_another_machine(tmp_path, monkeypatch):
