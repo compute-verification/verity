@@ -45710,7 +45710,7 @@
    ]
   },
   "Proofs.Flock.Claims.Recursion.IrDep": {
-   "digest": "1c4f29b59daef6c30793001e9612fd6afc6e4956a8d915bbed3c253a4edec71d",
+   "digest": "e994ceddeb930044d8cf0beceeb6c351c5ec3885a6c53f60dc14d2aaf028af4c",
    "definitions": {
     "RecDeploy.VStarBuild.DepTape": "a0edabf84b8e040a49beb97f9dab0aa376410da135b84027eeca41f270ca3e4c",
     "RecDeploy.VStarBuild.DepTape.accSalts": "ff066ae6541a150722b299dd122e31e164a2257febe3ffbbb5807d6fbfe375b3",
@@ -45721,8 +45721,8 @@
     "RecDeploy.VStarBuild.combAt": "f7a8776a5b8f1f9c458f3d76e7bdefde72751e8653e3560f359da6108cdb7ea7",
     "RecDeploy.VStarBuild.combAt._sparseCasesOn_1": "83c41bc3fd954f6db9629a347850575bfd2f0d9fc33e79e5af28a4cfea92d5a8",
     "RecDeploy.VStarBuild.depCaps": "f80d48d8b44667626d584747012a9ee3ba1f6373ecf9d3d91d6704e6eec14f17",
-    "RecDeploy.VStarBuild.depOpen": "2d18cfc0f34919a50598ae5c34447dab48b41e8812eb8f11136ce8f3bd4f1e2a",
-    "RecDeploy.VStarBuild.depOpenings": "2c2b312787f30417e46dbc068f25b5f1d89a1041201b5cd3e4825876edc89370",
+    "RecDeploy.VStarBuild.depOpen": "b4457ecf7269e2015f0c9dd98e0184386ca364b3f027f0aa13bc4cfcb4da3828",
+    "RecDeploy.VStarBuild.depOpenings": "7b3559f26ae87d402021ceda863cbd307a7557ae38b3dd17032a3ae65de7e366",
     "RecDeploy.VStarBuild.depRest": "5f8cbbdcefb5120b79c7bfde86643de4fed225019fe4d70f5fd41ab46d74920e",
     "RecDeploy.VStarBuild.depRows": "6c0ea3843e23af1531aaab44028e6dbce41da3180c82dfff4f8192b5414cd535",
     "RecDeploy.VStarBuild.fitArr": "c9104c999a6ee652d93eb12295030cebe757d1709430b0c7bdb036ab68c09346",
