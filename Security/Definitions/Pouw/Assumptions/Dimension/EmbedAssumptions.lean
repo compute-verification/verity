@@ -17,16 +17,14 @@ has no tensor cores, loads, selects, sub-word operations, moves or pre-salt data
   `set.*.u32.f32` is FSETP + SEL (§11, Round 6).
 * **`A1_fp fpSem γ`** (named assumption): under checkpoint independence and MinRank ≥ 5, every `FpPipe fpSem`
   program on inputs in `V₀` whose slots include the non-final checked words at `S` costs at least `(1 − γ)·16·|S|`
-  (`A1fpOn` for one instance). It is exactly the per-word cost of `M4090` (`A1fpIff`), so it is the weakest
-  assumption that gives that conclusion; what the embedding removes is every instruction class but FP32, not logical
+  (`A1fpOn` for one instance). What the embedding removes is every instruction class but FP32, not logical
   strength. Its satisfiability witnesses are `A1fpFadd` (`γ = 0`, FADD only) and `A1fpHalf` (`γ = 1/2`, every
   `fpSem`).
 * **`CanonicalNaN fpSem`** (named assumption, the 4090's behaviour, measured in Round 5): no FFMA, FADD or FMUL
   outputs a value in the range gap `NaNGap`, the NaN patterns other than `0x7FFFFFFF` and `0xFFFFFFFF` read as
   int32. Its witness is `CanonicalNaNSat`.
-* `fpSem` is a parameter. `fpExact` is the formal-identity semantics of `a1-cost.md` §3.1 (FADD, FMUL, FFMA, with
-  negation modifiers, in exact ℚ arithmetic). The intended reading is IEEE binary32 on the int32 reading, round to
-  nearest, flush-to-zero off, with the canonical NaN; no IEEE semantics is defined here.
+* `fpSem` is a parameter. The intended reading is IEEE binary32 on the int32 reading, round to nearest,
+  flush-to-zero off, with the canonical NaN; no IEEE semantics is defined here.
 -/
 
 namespace Pouw.Dimension.Embed
@@ -51,13 +49,6 @@ def FpOK (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) : List (Noise N m n k →
 
 /-- **The FP32 pipe** for the FP32 semantics `fpSem`. -/
 def FpPipe (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (P : List (Instr (Noise N m n k))) : Prop := FpOK fpSem [] P
-
-/-- The formal-identity FP32 semantics: `κ mod 3` selects FADD `±x ± y`, FMUL `±x·y` or FFMA
-`±x·y ± z`; bit 0 of `κ / 3` negates the first operand, bit 0 of `κ / 6` the second addend. -/
-def fpExact (κ : ℕ) (x y z : ℚ) : ℚ :=
-  let x' := if κ / 3 % 2 = 1 then -x else x
-  let s : ℚ := if κ / 6 % 2 = 1 then -1 else 1
-  if κ % 3 = 0 then x' + s * y else if κ % 3 = 1 then x' * y else x' * y + s * z
 
 /-- The FADD-only semantics, `x + y`: every step is quadratic. -/
 def faddSem (_κ : ℕ) (x y _z : ℚ) : ℚ := x + y
