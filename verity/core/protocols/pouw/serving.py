@@ -324,9 +324,9 @@ def variant_refusals(v: KernelVariant, scheme: str, schedule: str, shapes: Seque
 
 #: PoUW's lead, the scheme its kernel computes
 POUW_V2 = "verity/pouw/v2"
-#: the lead's IADD3 fold (the word plus 0x4B400000 - sigma read as fp32, then FFMA(v, s_j, -1.5 2^23 s_j) and FMUL s_i)
-#: serves stock's epilogue on the noisy word p bit for bit while |p| <= 2^22 and s_j has a 22-bit significand; 2^22 + 1
-#: reads back as 2^22 + 2
+#: the lead's IADD3 fold (the word plus its row and column sources, less a1 . C and T . G by two IDP4A, is
+#: 0x4B400000 + p, p = A_i . B_j, read as fp32; then FADD -1.5 2^23, FMUL s_i and FMUL s_j) serves verity_int8's epilogue
+#: on p bit for bit while |p| <= 2^22, whatever the scales; 2^22 + 1 reads back as 2^22 + 2
 LEAD_FOLD_BOUND = 1 << 22
 #: the run-time choices that select the lead's layout (blc4a-t64-e7-s1 under ROT and FOLD) from its kernel directory's
 #: binary, which builds the other layouts too: they enter the source digest, so the id is the lead's, and serving runs

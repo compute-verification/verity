@@ -31,16 +31,18 @@
 //   i's u word and u1, u2 its signed bytes 1 and 2 (written by the forming); a step is added when fewer than 12 lanes are
 //   left, and S >= 2. The final word is A_i . B_j - beta_j + rho_i + sigma_{tile, class, j}, rho_i = u0 + 127 u1 + 127 e u2
 //   + sum_{t >= 2} (1 + a_t[i]) and sigma the lane coins' sum under row class i mod 2's A' (both classes alike without
-//   ROT); the GEMM's epilogue serves bf16(fl(fl(v s_j - 1.5 2^23 s_j) s_i)), v the float whose bits are the word
-//   + (0x4B400000 - rho_i) + (beta_j - sigma_{tile, class, j}) (one IADD3 of the forming's row source and the certifier's
-//   column source), which is stock's epilogue on A_i . B_j bit for bit while |A_i . B_j| <= 2^22 and s_j has a 22-bit
-//   significand. Past 2^22 the IADD3 reads back a wrong integer (2^22 + 1 as 2^22 + 2) and nothing flags it; the served
-//   output is wrong once that error passes bf16's rounding.
-// FOLD=1 (with BLC, not XU) is the lead served noisy: no de-noise lanes, and the same epilogue with row source 0 and column
-//   source 0x4B400000 - sigma_{tile, class, j}, so it serves stock's epilogue on the final word less sigma, A_i . B_j - beta_j
-//   + sum_e a1[i, e] C[e, j] + sum_e T(i)[e] G[e, j] + sum_{t >= 2} (1 + a_t[i]), bit for bit while that is within 2^22.
-// EPI=1 runs stock's epilogue on the final word instead. The lanes, the sources and the fold are layout.h's, which the CPU
-// check (cpu_check.cc) also reads.
+//   ROT); the GEMM's epilogue (layout.h's xu_fold) reads v, the float whose bits are the word + (0x4B400000 - rho_i)
+//   + (beta_j - sigma_{tile, class, j}) (one IADD3 of the forming's row source and the certifier's column source), and
+//   serves bf16(fl(fl(fl(v - 1.5 2^23) s_i) s_j)), which is verity_int8's epilogue on A_i . B_j bit for bit while
+//   |A_i . B_j| <= 2^22, whatever the scales. Past 2^22 the IADD3 reads back a wrong integer (2^22 + 1 as 2^22 + 2) and
+//   nothing flags it; the served output is wrong once that error passes bf16's rounding.
+// FOLD=1 (with BLC, not XU) is the lead served noisy: no de-noise lanes, and the same epilogue with row source
+//   0x4B400000 - w_i, w_i = sum_{t >= 2} (1 + a_t[i]), and column source beta_j - sigma_{tile, class, j}, then two IDP4A
+//   that take out sum_e T(i)[e] G[e, j] (the forming's -T(i) bytes against G, read from B' step 1's lanes 24-27) and
+//   sum_e a1[i, e] C[e, j] (the forming's -a1 bytes against C, formed at load), so it serves verity_int8's epilogue on
+//   A_i . B_j within the same 2^22.
+// EPI=1 runs verity_int8's epilogue on the final word instead. The lanes, the sources, the fold's words and the fold are
+// layout.h's, which the CPU check (cpu_check.cc) also reads.
 // Coins: the certifier draws every coin raw once it holds root(A_j) and feeds them to the call (layout.h's feed): row i's
 // H = ceil((S + 3) / 32) words (a1[i, e] bit e, a_t[i] bit t + 2), then under TAG=1 column j's G word (four int8 G[e, j],
 // drawn by rejection), then under XU=1 row i's u word, over the call's pad_rows(m) rows and pad_cols(n) columns; a computed
@@ -54,10 +56,11 @@
 //                             on small shapes (random, extreme and zero data; columns past 14,280, where the code's top
 //                             digit wraps; S = 1 and a
 //                             partial last step; random data with every lane coin 127), in the four layouts, then under
-//                             XU=1 on the three tag layouts with each served output against stock's epilogue, then
-//                             blc4a-t64-e7-s1 under ROT=1 without XU, with XU=1 and with FOLD=1; then the lead (FOLD=1)
-//                             at Llama-3.2-1B's fused linears on 64 rows and on one, at both tile widths. Ragged calls
-//                             (decode's one row; rows and columns off the tiles)
+//                             XU=1 on the three tag layouts, then blc4a-t64-e7-s1 under ROT=1 without XU, with XU=1 and
+//                             with FOLD=1; then the lead (FOLD=1) at Llama-3.2-1B's fused linears on 64 rows and on one,
+//                             at both tile widths. Under XU=1 and FOLD=1 each served output is held to verity_int8's
+//                             epilogue on A_i . B_j (int8_epilogue), scales with 24-bit significands, and the line says
+//                             so ("served_against"). Ragged calls (decode's one row; rows and columns off the tiles)
 //                             are served over whole tiles with zero data past the call, and the rows to pad_rows(m)
 //                             must carry their tags, lane-coin A' and coins. Each line holds the served outputs within
 //                             FOLD_BOUND and says so ("fold_bound"); its buffers start as 0xA5, and the no-write controls,
@@ -119,13 +122,14 @@ struct Clk {
   long long c0, c1;
   u64 t0, t1;
 };
-// The served epilogue (mode 1 stock's: I2F, FMUL s_j, FMUL s_i, the bf16 pack; mode 2 xu's: IADD3 of the row and column
-// sources, FFMA(v, s_j, -1.5 2^23 s_j), FMUL s_i, the pack), its outputs two bf16 a word, n a row
+// The served epilogue (mode 1 verity_int8's: I2F, FMUL s_i, FMUL s_j, the bf16 pack; mode 2 xu's, layout.h's xu_fold:
+// IADD3 of the row and column sources, two IDP4A, FADD -1.5 2^23, FMUL s_i, FMUL s_j, the pack), its outputs two bf16 a
+// word, n a row. Mode 2 reads G[0..3, j] from B' step 1's lanes 24-27, where g_k put it.
 struct Xu {
-  const int* r;     // 0x4B400000 - rho_i a row (FOLD=1: 0)
-  const float* s;   // s_i a row
-  const int* c;     // col_source a (64-row tile, row class i mod 2, column), (tile 2 + class) n + j
-  const float2* j;  // (s_j, -1.5 2^23 s_j) a column
+  const FoldRow* r;  // the row's words (the forming writes them)
+  const float* s;    // s_i a row
+  const int* c;      // col_source a (64-row tile, row class i mod 2, column), (tile 2 + class) n + j
+  const FoldCol* j;  // (s_j, C[0..3, j]) a column
   u32* o;
   int mode;
 };
@@ -238,24 +242,26 @@ __global__ void __launch_bounds__(128) ssn_k(const uint8_t* __restrict__ A, cons
     // the thread's rows r0 and r0 + 8 share their parity, g's, so one row class's column sources serve both
     const int r0 = 64 * rt + 16 * w + g;
     const float s0 = x.s[r0], s1 = x.s[r0 + 8];
-    const u32 x0 = x.mode == 2 ? (u32)x.r[r0] : 0u, x1 = x.mode == 2 ? (u32)x.r[r0 + 8] : 0u;
+    const FoldRow f0 = x.mode == 2 ? x.r[r0] : FoldRow{}, f1 = x.mode == 2 ? x.r[r0 + 8] : FoldRow{};
     const int* xc = x.c + ((size_t)rt * 2 + (g & 1)) * n;
 #pragma unroll
     for (int ni = 0; ni < BN / 8; ni++) {
       const int col = ct * BN + 8 * ni + 2 * q;
-      const float2 j0 = x.j[col], j1 = x.j[col + 1];
+      const FoldCol j0 = x.j[col], j1 = x.j[col + 1];
       float y[4];
       if (x.mode == 2) {
         const u32 k0 = (u32)xc[col], k1 = (u32)xc[col + 1];
-        y[0] = xu_fold((u32)d[4 * ni], x0, k0, j0.x, j0.y, s0);
-        y[1] = xu_fold((u32)d[4 * ni + 1], x0, k1, j1.x, j1.y, s0);
-        y[2] = xu_fold((u32)d[4 * ni + 2], x1, k0, j0.x, j0.y, s1);
-        y[3] = xu_fold((u32)d[4 * ni + 3], x1, k1, j1.x, j1.y, s1);
+        const u32 g0 = *reinterpret_cast<const u32*>(b0 + kmaj_off(8 * ni + 2 * q, 24, KB)),
+                  g1 = *reinterpret_cast<const u32*>(b0 + kmaj_off(8 * ni + 2 * q + 1, 24, KB));
+        y[0] = xu_fold((u32)d[4 * ni], f0.r, k0, f0.nt, g0, f0.na, j0.c, s0, j0.s);
+        y[1] = xu_fold((u32)d[4 * ni + 1], f0.r, k1, f0.nt, g1, f0.na, j1.c, s0, j1.s);
+        y[2] = xu_fold((u32)d[4 * ni + 2], f1.r, k0, f1.nt, g0, f1.na, j0.c, s1, j0.s);
+        y[3] = xu_fold((u32)d[4 * ni + 3], f1.r, k1, f1.nt, g1, f1.na, j1.c, s1, j1.s);
       } else {
-        y[0] = stock_fold(d[4 * ni], j0.x, s0);
-        y[1] = stock_fold(d[4 * ni + 1], j1.x, s0);
-        y[2] = stock_fold(d[4 * ni + 2], j0.x, s1);
-        y[3] = stock_fold(d[4 * ni + 3], j1.x, s1);
+        y[0] = int8_epilogue(d[4 * ni], s0, j0.s);
+        y[1] = int8_epilogue(d[4 * ni + 1], s0, j1.s);
+        y[2] = int8_epilogue(d[4 * ni + 2], s1, j0.s);
+        y[3] = int8_epilogue(d[4 * ni + 3], s1, j1.s);
       }
       const __nv_bfloat162 h0 = __floats2bfloat162_rn(y[0], y[1]), h1 = __floats2bfloat162_rn(y[2], y[3]);
       x.o[((size_t)r0 * n + col) / 2] = *reinterpret_cast<const u32*>(&h0);
@@ -284,10 +290,11 @@ __device__ __forceinline__ void form_a1(uint8_t* st, int r, u32 h0, bool s1) {
 // bit (a LOP3 and an IADD3, so a repeated call leaves it unchanged). A row from R on (computed, not committed) reads the H
 // zero words z.
 // XU=1 (uc, the rows' u words): the last step's thread also writes a1 at lane xa, the bytes u0 (7 bits), u1 and xe u2
-// from lane xa + 8, and the row source 0x4B400000 - rho_i, rho_i = u0 + 127 u1 + 127 xe u2 + sum_{t >= 2} (1 + a_t[i]).
+// from lane xa + 8, and the row's words, its source 0x4B400000 - rho_i, rho_i = u0 + 127 u1 + 127 xe u2 + sum_{t >= 2}
+// (1 + a_t[i]), and no cross bytes. FOLD=1 (fold): step 1's thread writes the row's words, layout.h's fold_row.
 __global__ void form_k(uint8_t* __restrict__ A, const u32* __restrict__ feed, const u32* __restrict__ z, int m, int R, int S,
                        bool tag, bool s1, const u32* __restrict__ uc = nullptr, int xa = 0, int xe = 0,
-                       int* __restrict__ xr = nullptr) {
+                       FoldRow* __restrict__ xr = nullptr, bool fold = false) {
   const long long x = (long long)blockIdx.x * blockDim.x + threadIdx.x;
   if (x >= (long long)m * S) return;
   const int i = (int)(x % m), t = (int)(x / m), H = coin_words(S);
@@ -296,6 +303,7 @@ __global__ void form_k(uint8_t* __restrict__ A, const u32* __restrict__ feed, co
   const u32* h = i < R ? feed + (size_t)i * H : z;
   if (t == 0) {
     form_a1(st, i & 63, h[0], s1);
+    if (fold) xr[i] = fold_row(h, i, S);
   } else {
     const int p = t + 3;
     const u32 b = __funnelshift_r(h[p >> 5], h[p >> 5], (p + 8) & 31) & 0x01000000u;
@@ -314,9 +322,7 @@ __global__ void form_k(uint8_t* __restrict__ A, const u32* __restrict__ feed, co
       }
       *reinterpret_cast<u32*>(st + kmaj_off(i & 63, l, KB)) = v;
     }
-    int walk = S - 1;
-    for (int p = 4; p < S + 3; p++) walk += (h[p >> 5] >> (p & 31)) & 1;
-    xr[i] = 0x4B400000 - (u0 + 127 * u1 + 127 * xe * u2 + walk);
+    xr[i] = FoldRow{XU_MAGIC_BITS - (u32)(u0 + 127 * u1 + 127 * xe * u2 + walk_of(h, S)), 0u, 0u, 0u};
   }
 }
 
@@ -569,16 +575,21 @@ static u32 lane_word(u64 x) {
 // a call's forming (parts & FORM) and, under the tag layout, G's copy (parts & GCOPY) from its feed (feed_of's layout, R
 // rows and C columns, its zero words after them) on st
 enum { FORM = 1, GCOPY = 2 };
-// XU=1: xa = xu_at(K, S), and xr the rows' sources
+// XU=1: xa = xu_at(K, S); XU=1 and FOLD=1: xr the rows' words, which the epilogue reads
 static void form_g(const u32* feed, uint8_t* A, uint8_t* B, int m, int n, int R, int C, int S, int BN, cudaStream_t st,
-                   int parts = FORM | GCOPY, int xa = 0, int* xr = nullptr) {
+                   int parts = FORM | GCOPY, int xa = 0, FoldRow* xr = nullptr) {
+  if ((g_xu || g_fold) && (parts & FORM) && !xr) {
+    fprintf(stderr, "ERR %s's forming writes each row's fold words (the row source and the cross bytes), which its "
+            "epilogue reads: pass form_g a buffer of m FoldRow\n", layout_name());
+    exit(2);
+  }
   const size_t rw = (size_t)R * coin_words(S);
   if (g_tag && (parts & GCOPY)) g_k<<<(unsigned)((n + 255) / 256), 256, 0, st>>>(B, feed + rw, n, C, S, BN, g_xu ? xa + 4 : -1);
   const long long r = (long long)m * S;
   const u32* uc = g_xu ? feed + rw + (g_tag ? C : 0) : nullptr;
   if (parts & FORM)
     form_k<<<(unsigned)((r + 255) / 256), 256, 0, st>>>(A, feed, feed + feed_words(R, S, C), m, R, S, g_tag, g_blc == 2, uc,
-                                                        xa, xu_e(xa), xr);
+                                                        xa, xu_e(xa), xr, g_fold);
   CK(cudaGetLastError());
 }
 
@@ -916,9 +927,9 @@ static size_t word_at(int i, int j, int t, int S, int n, int BN) {
   return blk * (64 * (size_t)BN) + ((size_t)ni * 128 + 32 * w + 4 * g + q) * 4 + 2 * eh + el;
 }
 
-// The fold's bound (serving.LEAD_FOLD_BOUND): xu_fold serves stock's epilogue on the integer p it reads back bit for bit
-// while |p| <= 2^22, and past it reads back another integer (2^22 + 1 as 2^22 + 2) with nothing on the device to flag it,
-// so the check holds every served output with |p| within it to stock's epilogue and counts those past it, unchecked
+// The fold's bound (serving.LEAD_FOLD_BOUND): xu_fold serves verity_int8's epilogue on p = A_i . B_j bit for bit while
+// |p| <= 2^22, and past it reads back another integer (2^22 + 1 as 2^22 + 2) with nothing on the device to flag it, so the
+// check holds every served output with |p| within it to int8_epilogue on p and counts those past it, unchecked
 constexpr long long FOLD_BOUND = 1ll << 22;
 
 // A call of cm rows and cn columns, served over whole kernel tiles (m rows, n columns) with zero data past the call: the
@@ -959,16 +970,16 @@ static int check_one(int cm, int cn, int K, int BN, int kind, u64 seed, bool con
       lc.push_back((kind == 4 ? 0x7F7F7Fu : lane_word(seed * 0x9E3779B97F4A7C15ull + x)) |
                    coin_word_top((int)(x / n % lc_steps(S)) + 1 - c1, (int)(x % n)));
   u32* dlc = lc.empty() ? nullptr : up(lc);
-  // XU=1 or FOLD=1: scales with 22-bit significands, the column source a (tile, row class, column) from the lane coins, and
-  // the served outputs
+  // XU=1 or FOLD=1: scales with 24-bit significands (real ones, as quantize_rows' absmax / 127 gives), the column source a
+  // (tile, row class, column) from the lane coins, the column words, and the served outputs
   const bool served = g_xu || g_fold;
   const int xa = xu_at(K, S), xe = xu_e(xa);
   std::vector<float> si(m), sj(n);
-  std::vector<float2> xj(n);
+  std::vector<FoldCol> xj(n);
   std::vector<int> xc((size_t)(m / 64) * 2 * n);
-  auto scale = [](u64 r, int lo) { return std::ldexp((float)((1u << 21) + (u32)(r & ((1u << 21) - 1))), -21 - lo - (int)((r >> 32) % 4)); };
+  auto scale = [](u64 r, int lo) { return std::ldexp((float)((1u << 23) + (u32)(r & ((1u << 23) - 1))), -23 - lo - (int)((r >> 32) % 4)); };
   for (int i = 0; i < m; i++) si[i] = scale(mix64(seed * 31 + i), 4);
-  for (int j = 0; j < n; j++) sj[j] = scale(mix64(~seed * 37 + j), 7), xj[j] = make_float2(sj[j], -12582912.0f * sj[j]);
+  for (int j = 0; j < n; j++) sj[j] = scale(mix64(~seed * 37 + j), 7), xj[j] = FoldCol{sj[j], code_word(j)};
   auto lane_sum = [&](int i, int t, int j) {
     if (!g_blc || t + c1 == 0) return 0;
     const u32 w = lc[((size_t)(i / 64) * lc_steps(S) + t - 1 + c1) * n + j];
@@ -983,13 +994,13 @@ static int check_one(int cm, int cn, int K, int BN, int kind, u64 seed, bool con
         xc[((size_t)rt * 2 + cls) * n + j] = col_source(beta[j], s);
         max_sigma = std::max(max_sigma, (long long)std::abs(s));
       }
-  int* dxr = nullptr;
+  FoldRow* dxr = nullptr;
   u32* dxo = nullptr;
   Xu xu{};
   if (served) {
-    CK(cudaMalloc(&dxr, m * 4));
+    CK(cudaMalloc(&dxr, m * sizeof(FoldRow)));
     CK(cudaMalloc(&dxo, (size_t)m * n * 2));
-    CK(cudaMemset(dxr, g_xu ? 0xA5 : 0, m * 4));
+    CK(cudaMemset(dxr, 0xA5, m * sizeof(FoldRow)));
     CK(cudaMemset(dxo, 0xA5, (size_t)m * n * 2));
     xu = Xu{dxr, up(si), up(xc), up(xj), dxo, 2};
   }
@@ -998,10 +1009,10 @@ static int check_one(int cm, int cn, int K, int BN, int kind, u64 seed, bool con
     gemm(BN, true, dA, dB, dbeta, m, n, S, dW, dout, nullptr, 0, dlc, xu);
   }
   CK(cudaDeviceSynchronize());
-  std::vector<int> xr(m);
+  std::vector<FoldRow> xr(m);
   std::vector<uint16_t> xo((size_t)m * n);
   if (served) {
-    CK(cudaMemcpy(xr.data(), dxr, m * 4, cudaMemcpyDeviceToHost));
+    CK(cudaMemcpy(xr.data(), dxr, m * sizeof(FoldRow), cudaMemcpyDeviceToHost));
     CK(cudaMemcpy(xo.data(), dxo, (size_t)m * n * 2, cudaMemcpyDeviceToHost));
   }
   std::vector<u32> fed(feed.size());
@@ -1060,8 +1071,9 @@ static int check_one(int cm, int cn, int K, int BN, int kind, u64 seed, bool con
   // every word against word (i, j, t) = D_t(i, j) - beta_j + sum_e a1[i, e] C[e, j] + sum_{2 <= t' <= t} a_t'[i], and
   // under the tag layout + sum_e T(i)[e] G[e, j] and 1 + a_t'[i] for a_t'[i], under blc4a-t64-e7 also + the three lane coins
   // of (i / 64, t', j) at each step t'; under XU=1 the last step's - sum_e a1[i, e] C[e, j] - sum_e T(i)[e] G[e, j] + u0 +
-  // 127 u1 + 127 e u2. The served output against stock's epilogue, bf16(fl(fl(float(D) s_j) s_i)), on D = A_i . B_j (XU=1)
-  // or on the final word less sigma (FOLD=1), where |D| <= FOLD_BOUND, and the outputs past it counted
+  // 127 u1 + 127 e u2. The row's words against the spec: XU=1 (0x4B400000 - rho_i, 0, 0), FOLD=1 (0x4B400000 - w_i,
+  // -a1[i, 0..3], -T(i)[0..3]). The served output against verity_int8's epilogue on its int32 product,
+  // bf16(fl(fl(float(D) s_i) s_j)) with D = A_i . B_j, where |D| <= FOLD_BOUND, and the outputs past it counted
   size_t bad_w = 0, bad_o = 0, ones = 0, bad_xr = 0, bad_served = 0, past = 0;
   long long maxabs = 0;
   std::vector<int> code(4 * (size_t)n);
@@ -1074,12 +1086,19 @@ static int check_one(int cm, int cn, int K, int BN, int kind, u64 seed, bool con
     for (int e = 0; e < 4; e++) T[e] = tag_of(i, e);
     const u32 u = row_coins(i).u;
     const int u0 = u0_of(u), u1 = u1_of(u), u2 = u2_of(u);
-    int rho = u0 + 127 * u1 + 127 * xe * u2;
-    for (int t = 1; t < S; t++) rho += 1 + bit(i, t + 3);
-    bad_xr += g_xu ? xr[i] != 0x4B400000 - rho : g_fold && xr[i] != 0;
+    int walk = 0;
+    for (int t = 1; t < S; t++) walk += 1 + bit(i, t + 3);
+    if (served) {
+      u32 na = 0, nt = 0;
+      for (int e = 0; e < 4; e++)
+        na |= (u32)(uint8_t)(int8_t)-bit(i, e) << (8 * e), nt |= (u32)(uint8_t)(int8_t)-T[e] << (8 * e);
+      const FoldRow want = g_xu ? FoldRow{0x4B400000u - (u32)(u0 + 127 * u1 + 127 * xe * u2 + walk), 0u, 0u, 0u}
+                                : FoldRow{0x4B400000u - (u32)walk, na, nt, 0u};
+      bad_xr += xr[i].r != want.r || xr[i].na != want.na || xr[i].nt != want.nt || xr[i].unused != 0u;
+    }
     for (int j = 0; j < n; j++) {
       const int8_t* b = &L.B[(size_t)j * K];
-      long long acc = -beta[j], ab = 0, sig = 0;
+      long long acc = -beta[j], ab = 0;
       for (int e = 0; e < 4; e++) acc += bit(i, e) * code[4 * j + e] + T[e] * G[4 * j + e];
       for (int t = 0; t < S; t++) {
         const int lo = t == 0 ? 0 : d1 + lanesl() * (t - 1), hi = std::min(K, t == 0 ? d1 : lo + lanesl());
@@ -1087,7 +1106,6 @@ static int check_one(int cm, int cn, int K, int BN, int kind, u64 seed, bool con
         for (int k = lo; k < hi; k++) acc += (int)a[k] * (int)b[k];
         if (t > 0) acc += (g_tag ? 1 : 0) + bit(i, t + 3);
         acc += lane_sum(i, t, j);
-        sig += lane_sum(i, t, j);
         if (g_xu && t == S - 1) {
           for (int e = 0; e < 4; e++) acc -= bit(i, e) * code[4 * j + e] + T[e] * G[4 * j + e];
           acc += u0 + 127 * u1 + 127 * xe * u2;
@@ -1097,12 +1115,12 @@ static int check_one(int cm, int cn, int K, int BN, int kind, u64 seed, bool con
       }
       bad_o += out[(size_t)i * n + j] != (int)acc;
       if (served) {
-        const long long pv = g_xu ? ab : acc - sig;
+        const long long pv = ab;
         if (pv < -FOLD_BOUND || pv > FOLD_BOUND) {
           past++;
           continue;
         }
-        bad_served += xo[(size_t)i * n + j] != bf16_rn(stock_fold((int)pv, sj[j], si[i]));
+        bad_served += xo[(size_t)i * n + j] != bf16_rn(int8_epilogue((int)pv, si[i], sj[j]));
       }
     }
     for (int t = 1; t < S; t++) ones += bit(i, t + 3);
@@ -1114,13 +1132,14 @@ static int check_one(int cm, int cn, int K, int BN, int kind, u64 seed, bool con
          "\"word_mismatches\": %zu, \"final_mismatches\": %zu, \"formed_mismatches\": %zu, \"b_mismatches\": %zu, "
          "\"max_abs_word\": %lld, \"step_bits_set\": %zu, \"step_bits\": %zu, \"feed_words\": %lld, "
          "\"feed_word_mismatches\": %zu, \"g_redraws\": %zu, \"g_out_of_range\": %zu, \"lane_coin_words\": %zu, \"blc_w\": [%d, %d, %d], \"xu_lane\": %d, \"xu_e\": %d, "
-         "\"max_abs_sigma\": %lld, \"row_source_mismatches\": %zu, \"served_outputs\": %zu, \"served_mismatches\": %zu, "
-         "\"served_past_2_22\": %zu}\n",
+         "\"max_abs_sigma\": %lld, \"row_source_mismatches\": %zu, \"served_against\": %s, \"served_outputs\": %zu, "
+         "\"served_mismatches\": %zu, \"served_past_2_22\": %zu}\n",
          layout_name(), control ? "\"no-write\"" : "null", rejected ? "true" : "false", FOLD_BOUND, m, n, K, S, BN, cm, cn,
          pad_rows(cm), pad_cols(cn), coinless,
          kind == 0 ? "random" : kind == 1 ? "max" : kind == 2 ? "min" : kind == 3 ? "zero" : "random_max_coins",
          words, bad_w, bad_o, bad_form, bad_g, maxabs, ones, (size_t)m * (S - 1), fw, bad_feed, g_rej, g_range, lc.size(), g_lw[0], g_lw[1],
-         g_lw[2], g_xu ? xa : -1, g_xu ? xe : 0, max_sigma, bad_xr, served ? (size_t)m * n - past : 0, bad_served, past);
+         g_lw[2], g_xu ? xa : -1, g_xu ? xe : 0, max_sigma, bad_xr, served ? "\"int8_epilogue(A.B)\"" : "null",
+         served ? (size_t)m * n - past : 0, bad_served, past);
   fflush(stdout);
   if (dlc) CK(cudaFree(dlc));
   if (served) {
@@ -1230,12 +1249,13 @@ struct LinDev {
   u32 *feed, *hfeed;  // the call's feed on the device (with its zero words) and as the certifier sends it (pinned)
   long long fw;  // its words
   std::vector<L1Dev> l1;  // L1: each layer's call of this linear
-  // the served epilogue: xu's first lane, the row sources (XU=1, written by the forming), the column sources (host and
-  // device), the row and column scales
+  // the served epilogue: xu's first lane, the row words (written by the forming), the column sources (host and device), the
+  // row scales and the column words
   int xa = 0;
-  int *xr = nullptr, *xc = nullptr, *hxc = nullptr;
+  FoldRow* xr = nullptr;
+  int *xc = nullptr, *hxc = nullptr;
   float* xs = nullptr;
-  float2* xj = nullptr;
+  FoldCol* xj = nullptr;
 };
 
 // One JSON line a measurement, at M rows: per linear the plain GEMM at its own K, ssn_1l's GEMM without and with export,
@@ -1280,16 +1300,14 @@ static int time_all(int reps, int Mc, double budget_gb, const std::vector<int>& 
     max_chunk_words = std::max(max_chunk_words, (size_t)d.chunk * s.n * L.S);
     d.xa = xu_at(s.K, L.S);
     std::vector<float> xs(M);
-    std::vector<float2> xj(s.n);
-    for (int i = 0; i < M; i++) xs[i] = std::ldexp((float)((1u << 21) + (u32)(mix64(i + 3) & ((1u << 21) - 1))), -27);
-    for (int j = 0; j < s.n; j++) {
-      const float sj = std::ldexp((float)((1u << 21) + (u32)(mix64(j + 5) & ((1u << 21) - 1))), -30);
-      xj[j] = make_float2(sj, -12582912.0f * sj);
-    }
+    std::vector<FoldCol> xj(s.n);
+    for (int i = 0; i < M; i++) xs[i] = std::ldexp((float)((1u << 23) + (u32)(mix64(i + 3) & ((1u << 23) - 1))), -29);
+    for (int j = 0; j < s.n; j++)
+      xj[j] = FoldCol{std::ldexp((float)((1u << 23) + (u32)(mix64(j + 5) & ((1u << 23) - 1))), -32), code_word(j)};
     d.xs = up(xs);
     d.xj = up(xj);
-    CK(cudaMalloc(&d.xr, (size_t)M * 4));
-    CK(cudaMemset(d.xr, 0, (size_t)M * 4));
+    CK(cudaMalloc(&d.xr, (size_t)M * sizeof(FoldRow)));
+    CK(cudaMemset(d.xr, 0, (size_t)M * sizeof(FoldRow)));
     CK(cudaMallocHost(&d.hxc, (size_t)(M / 64) * 2 * s.n * 4));
     for (size_t x = 0; x < (size_t)(M / 64) * 2 * s.n; x++) d.hxc[x] = col_source(beta[x % s.n], 0);
     CK(cudaMalloc(&d.xc, (size_t)(M / 64) * 2 * s.n * 4));
@@ -1416,8 +1434,8 @@ static int time_all(int reps, int Mc, double budget_gb, const std::vector<int>& 
   auto hname = [&](int h) { return h < 0 ? std::string("none") : rname(rbs[h]); };
   int* dout;
   CK(cudaMalloc(&dout, (size_t)M * 16384 * 4));
-  // the served epilogue in each GEMM, on the chunk at r0: XU=1 and FOLD=1 xu's (FOLD=1 the lead's, folding out the lane
-  // coins), EPI=1 stock's on the final words, else none (the final words are only exported)
+  // the served epilogue in each GEMM, on the chunk at r0: XU=1 and FOLD=1 xu's (FOLD=1 the lead's, folding every coin
+  // term out), EPI=1 verity_int8's on the final words, else none (the final words are only exported)
   const int epi = g_xu || g_fold ? 2 : getenv("EPI") && atoi(getenv("EPI")) ? 1 : 0;
   auto xu_of = [&](const LinDev& d, int r0) {
     return Xu{d.xr + r0, d.xs + r0, d.xc + (size_t)(r0 / 64) * 2 * d.n, d.xj, (u32*)dout + (size_t)r0 * d.n / 2, epi};
@@ -1672,7 +1690,7 @@ static int time_all(int reps, int Mc, double budget_gb, const std::vector<int>& 
          "\"small_rows_max\": %llu}\n",
          f0, sm_mhz(dclk), nbuf, (unsigned long long)hash_cap, root_a, root_a_rows, (int)words_tree, (int)prio,
          layout_name(), g_lw[0], g_lw[1], g_lw[2], l1_mode, g_l1_cta, split_sms[0], split_sms[1],
-         epi == 2 ? (g_xu ? "xu" : "fold") : epi == 1 ? "stock" : "none", M, Mw,
+         epi == 2 ? (g_xu ? "xu" : "fold") : epi == 1 ? "int8" : "none", M, Mw,
 #ifdef SSN_SMALL_ROWS
          SSN_SMALL_ROWS, (unsigned long long)small_rows_max()
 #else

@@ -13,8 +13,9 @@ the SASS gate's record (``sass_gate.json``), which gives ``sass_ok`` and the pin
 (``check.jsonl``) on the lead's layout give the rest:
 
 - ``exact``: every honest line accepted (every exported word, final output and formed register equal to the host
-  reference, and every served output with |p| within the line's ``fold_bound`` equal to stock's epilogue), and the lines
-  agree on that bound, which becomes the record's ``fold_bound``;
+  reference, and every served output with |p| = |A_i . B_j| within the line's ``fold_bound`` equal to verity_int8's
+  epilogue on p, which the line says, ``served_against``), and the lines agree on that bound, which becomes the record's
+  ``fold_bound``;
 - ``poisoned_accepted``: every honest line read back buffers filled with 0xA5 before the call;
 - ``controls_rejected``: there is a no-write control (nothing formed, no GEMM) and each was rejected;
 - ``schedules_equal``: the lead runs the serial schedule alone, so there is no other schedule to hold to its bytes;
@@ -37,6 +38,8 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 #: ssn check's name of the lead's layout (layout.h's layout_name under BLC=2, ROT=1, FOLD=1)
 LEAD_LAYOUT = "blc4a_t64_e7_s1_rot_fold"
+#: what ssn check holds a served output to: verity_int8's epilogue (layout.h's int8_epilogue) on A_i . B_j
+SERVED_AGAINST = "int8_epilogue(A.B)"
 #: Llama-3.2-1B's fused linears, (n, K): qkv, o, gate_up, down (ssn.cu's time_all and check)
 SERVED = ((3072, 2048), (2048, 2048), (16384, 2048), (2048, 8192))
 #: the gate's own code: this file, ssn.cu (its check, which the source digest also covers), the SASS gate and its pins
@@ -109,7 +112,8 @@ def record(out: Path, run: str, root: Path = ROOT):
     honest = [x for x in lines if x.get("control") is None]
     controls = [x for x in lines if x.get("control") == "no-write"]
     bounds = {x.get("fold_bound") for x in honest}
-    exact = bool(honest) and len(bounds) == 1 and not any(x["rejected"] for x in honest)
+    exact = (bool(honest) and len(bounds) == 1 and not any(x["rejected"] for x in honest)
+             and all(x.get("served_against") == SERVED_AGAINST for x in honest))
     g = GateRecord(variant=v.id, run=run, gates=gate_version(),
                    shapes=tuple(sorted({(x["call_n"], x["K"]) for x in honest
                                         if not x["rejected"] and x["served_outputs"] > 0})),
