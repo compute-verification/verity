@@ -425,6 +425,36 @@ def test_a_run_read_that_times_out_skips_its_agent_and_the_sweep_goes_on(tmp_pat
     assert records(tmp_path) == [], "a timeout is not an unreadable run"
 
 
+def test_a_conversation_read_that_times_out_is_short_and_not_retried_for_a_while(tmp_path):
+    """A coordinator's long transcript timed out at the API's 60 s, and a few such reads spent the sweep's read budget."""
+    class SlowConvApi(FakeApi):
+        timeouts: list = []
+
+        def get(self, path, timeout=None, **params):
+            if path.endswith("/conversation"):
+                self.timeouts.append(timeout)
+                self.gets.append(path)
+                raise TimeoutError("The read operation timed out")
+            return super().get(path, **params)
+
+    clock = Clock()
+    api = SlowConvApi([], {})
+    w = W.Watch(api, tmp_path / "events.jsonl", clock)
+    assert w.conversation("bc-big") is None and api.timeouts == [W.CONV_TIMEOUT_S]
+    clock.t += W.CONV_SKIP_S - 1
+    assert w.wake_of("bc-big", clock.t) == {} and len(api.timeouts) == 1, "skipped while it's slow"
+    clock.t += 2
+    assert w.conversation("bc-big") is None and len(api.timeouts) == 2, "read again once the skip ends"
+
+
+def test_api_get_takes_a_shorter_timeout_but_never_a_longer_one(monkeypatch):
+    seen = []
+    monkeypatch.setattr(W.urllib.request, "urlopen", lambda req, timeout=None: seen.append(timeout) or io.BytesIO(b"{}"))
+    api = W.Api("k")
+    api.get("/v1/x"), api.get("/v1/x", timeout=15), api.get("/v1/x", timeout=600)
+    assert seen == [60, 15, 60]
+
+
 def test_a_tool_calls_interaction_update_twin_doesnt_hide_a_held_run(tmp_path):
     """18 Oct, live streams: every `tool_call` completed is followed within milliseconds by an `interaction_update`
     `tool-call-completed` (220 of 240 sampled). The watch took it for the agent's own text, so no run could ever be held."""
@@ -1668,12 +1698,14 @@ def test_a_silent_worker_still_showing_nothing_six_hours_on_is_one_no_step_for_t
                                  git_remote=REMOTE, sh=sh)
     w.sweep(lambda r: None)
     sweeps(w, clock, 359)
-    assert [r["kind"] for r in records(tmp_path) if r["kind"] in ("silent", "no_step")] == ["silent", "silent"]
+    assert [r["kind"] for r in records(tmp_path) if r["kind"] in ("silent", "no_step", "archived")] == ["silent", "silent"]
+    assert not [p for p, _ in api.posts if p.endswith("/archive")]
     sweeps(w, clock, 1)
     sweeps(w, clock, 600)
-    got = [r for r in records(tmp_path) if r["kind"] == "no_step"]
-    assert [{k: r[k] for k in ("agent", "since", "hours", "handle", "owner", "role")} for r in got] == [
-        {"agent": W1_, "since": W.iso(T0), "hours": 6, "handle": "circuits", "owner": "top", "role": "worker"}]
+    got = [r for r in records(tmp_path) if r["kind"] in ("no_step", "archived")]
+    assert [{k: r.get(k) for k in ("kind", "agent", "since", "hours", "handle", "owner", "role")} for r in got] == [
+        {"kind": "archived", "agent": W1_, "since": W.iso(T0), "hours": 6, "handle": "circuits", "owner": None, "role": "worker"}]
+    assert [p for p, _ in api.posts if p.endswith("/archive")] == [f"/v1/agents/{W1_}/archive"]
 
 
 def test_a_coordinator_working_with_no_note_or_push_is_silent_but_never_no_step(tmp_path):
@@ -2676,3 +2708,87 @@ def test_a_holder_whose_worker_went_quiet_is_not_held_unread(tmp_path):
         api._agents[0]["updatedAt"] = W.iso(clock.t)
         w.sweep(lambda r: None)
     assert api.posts == [] and "held_unread" not in [r["kind"] for r in records(tmp_path)]
+
+
+def test_a_platform_outage_is_retried_uncapped_rings_a_person_and_clears_the_cap_once_coordinators_are_back(tmp_path):
+    """Most coordinators ended in ERROR over a few hours while every restart failed. The watch spent each one's restarts within
+    minutes and left them for a person, nobody was rung, and after a ring revived them they stayed 'left for a person' until
+    state.json was cleared by hand. Replayed: one coordinator down every 20 minutes."""
+    ids = [f"bc-{i:08x}-0000-0000-0000-{i:012x}" for i in range(1, 14)]
+    reg, routes = tmp_path / "registry.json", tmp_path / "routes.d"
+    routes.mkdir()
+    reg.write_text(json.dumps({"handles": [{"handle": f"h{i}", "holder": f"the h{i} coordinator ({a})"} for i, a in enumerate(ids)]}))
+    api = FakeApi([{"id": a, "name": f"verity: h{i}", "status": "ACTIVE", "latestRunId": f"ok-{i}"} for i, a in enumerate(ids)],
+                  {f"ok-{i}": {"status": "FINISHED"} for i in range(len(ids))})
+    clock = Clock(T0)
+    w = W.Watch(api, tmp_path / "events.jsonl", clock, registry=reg, routes=routes)
+    w.errors[ids[0]], w.left = W.MAX_RESTARTS, {ids[0]}          # its cap already spent
+    refused = []
+
+    def down(path, body=None):
+        refused.append((path, clock.t))
+        raise W.urllib.error.HTTPError(path, 503, "Service Unavailable", {}, None)
+    api.post = down
+    for minute in range(0, 4 * 60 + 1, 5):
+        if minute % 20 == 0 and minute // 20 < len(ids):
+            i = minute // 20
+            api._agents[i]["latestRunId"] = f"err-{i}"
+            api._runs[f"err-{i}"] = {"status": "ERROR"}
+        clock.t = T0 + minute * 60
+        w.sweep(lambda r: None)
+    outages = [r for r in records(tmp_path) if r["kind"] == "outage"]
+    assert [r["t"] for r in outages] == [W.iso(T0 + m * 60) for m in (110, 170, 230)], \
+        "rung once 5 have been down 30 min (the 5th fell at 80 min), then hourly"
+    assert outages[0]["count"] == 5 and outages[0]["owner"] == "top" and outages[0]["handles"] == [f"h{i}" for i in range(5)]
+    tries = [t for path, t in refused if path == f"/v1/agents/{ids[0]}/runs"]
+    outage_tries = [t for t in tries if t >= T0 + 40 * 60]
+    assert len(outage_tries) >= 12 and all(b - a >= W.OUTAGE_RETRY_S for a, b in zip(outage_tries, outage_tries[1:])), \
+        "in the outage the first coordinator is still tried every 15 min, its spent cap notwithstanding"
+    assert not any(r["kind"] == "relaunch" for r in records(tmp_path) if r["agent"] == ids[0] and r["t"] >= W.iso(T0 + 2400))
+    assert all(w.errors.get(a, 0) == 0 for a in ids[2:]), "a restart in an outage is not counted"
+    assert not any(r["kind"] in ("erroring", "relaunch") for r in records(tmp_path) if r["agent"] in ids[2:])
+    api.post = lambda path, body=None: {"run": {"id": "run-new"}}
+    for i, a in enumerate(ids):
+        api._agents[i]["latestRunId"] = f"back-{i}"
+        api._runs[f"back-{i}"] = {"status": "RUNNING"}
+    clock.t += 60
+    w.sweep(lambda r: None)
+    assert w.errors[ids[0]] and w.down, "seeing a restart running is not enough: one reads RUNNING a minute before it errors"
+    clock.t += W.STICK_S
+    w.sweep(lambda r: None)
+    assert not w.left and not any(w.errors.values()) and not w.down, "back STICK_S: every cap cleared, no person needed"
+    api._agents[3]["latestRunId"] = "err-again"
+    api._runs["err-again"] = {"status": "ERROR"}
+    clock.t += 60
+    w.sweep(lambda r: None)
+    assert w.errors[ids[3]] == 1 and records(tmp_path)[-1]["action"].startswith("restarted (1 of"), \
+        "one coordinator down alone is restarted and counted as before"
+
+
+def test_a_sweep_refused_with_429_waits_retry_after_or_doubles_to_a_cap():
+    def refused(retry_after=None):
+        return W.urllib.error.HTTPError("/v1/agents", 429, "Too Many Requests",
+                                        {"Retry-After": retry_after} if retry_after else {}, None)
+    assert W.rate_wait(refused("300"), 0) == 300
+    assert W.rate_wait(refused(), 0) == W.RATE_WAIT_S[0]
+    assert W.rate_wait(refused(), 240) == 480
+    assert W.rate_wait(refused(), 800) == W.RATE_WAIT_S[1] == W.rate_wait(refused("99999"), 0)
+
+
+def test_a_silent_worker_the_api_wont_archive_is_a_no_step_for_top_with_why(tmp_path):
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits worker W3 ({W1_}); code cursor/w3-branch-c7a9", age_s=2 * 3600)
+    sh = FakeSh({"cursor/w3-branch-c7a9": "a" * 40})
+    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("ACTIVE", W.iso(T0 - 3 * 3600))}, notes=notes,
+                                 git_remote=REMOTE, sh=sh)
+
+    def refuse(path, body=None):
+        if path.endswith("/archive"):
+            raise W.urllib.error.HTTPError(path, 403, "Forbidden", {}, None)
+        return {}
+    api.post = refuse
+    w.sweep(lambda r: None)
+    sweeps(w, clock, 960)
+    got = [r for r in records(tmp_path) if r["kind"] in ("no_step", "archived")]
+    assert [{k: r.get(k) for k in ("kind", "owner", "role", "archive_failed")} for r in got] == [
+        {"kind": "no_step", "owner": "top", "role": "worker", "archive_failed": "HTTP 403"}]
