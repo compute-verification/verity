@@ -16,6 +16,7 @@ import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Callable
 
 import pytest
 
@@ -1207,9 +1208,14 @@ def test_a_cutoff_admits_only_ready_marks_written_at_or_after_it(tmp_path, monke
 
 
 def test_ready_marks_are_pulled_for_every_pr_at_once_and_each_pr_alone_when_that_fails(tmp_path, monkeypatch):
-    """One listing of the store's remote per open PR, in turn, would take seconds of every drive tick."""
-    from research.queue import StoreLabels
+    """One listing of the store's remote per open PR, in turn, would take seconds of every drive tick; and one GET at a time
+    took a fresh VM's listing four minutes for `next`'s ~1,000 labels, so the listings and the GETs each run
+    `PREFETCH_JOBS` at once."""
+    from research.queue import PREFETCH_JOBS, StoreLabels
 
+    pools: list[int] = []
+    pool = labels_sync.ThreadPoolExecutor
+    monkeypatch.setattr(labels_sync, "ThreadPoolExecutor", lambda max_workers: pools.append(max_workers) or pool(max_workers))
     heads = {n: f"{n:040x}" for n in (1, 2, 3)}
     cfg = tmp_path / "store.toml"
     cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
@@ -1222,10 +1228,15 @@ def test_ready_marks_are_pulled_for_every_pr_at_once_and_each_pr_alone_when_that
     pull = labels_sync.pull_targets
     monkeypatch.setattr(labels_sync, "pull_targets", lambda store, targets, jobs=1: pulls.append((len(targets), jobs))
                         or pull(store, targets, jobs=jobs))
+    for n in (1, 2):
+        lane.add_label(label_target(n, heads[n]), vocab.REVIEWED, "land", "ci", ts="2026-10-12T08:00:00Z")
+    assert labels_sync.push_targets(lane, [label_target(n, heads[n]) for n in (1, 2)])["failed"] == []
+    pools.clear()
     labels = StoreLabels(LocalStore(tmp_path / "q1"))
     labels.prefetch(list(heads.items()))
     assert [labels.ready(n, heads[n]) for n in (1, 2, 3)] == [True, False, False]
-    assert pulls == [(3, labels_sync.SYNC_JOBS)]
+    assert [len(labels.reviews(n, heads[n])) for n in (1, 2, 3)] == [1, 1, 0]
+    assert pulls == [(3, PREFETCH_JOBS)] and pools == [3, 4]          # the listings, then the four labels' GETs
 
     pulls.clear()
     monkeypatch.setattr(labels_sync, "remote_labels_for", lambda r, t, f=labels_sync.remote_labels_for:
@@ -1233,7 +1244,7 @@ def test_ready_marks_are_pulled_for_every_pr_at_once_and_each_pr_alone_when_that
     labels = StoreLabels(LocalStore(tmp_path / "q2"))
     labels.prefetch(list(heads.items()))
     assert [labels.ready(n, heads[n]) for n in (1, 2, 3)] == [True, False, False]
-    assert pulls == [(3, labels_sync.SYNC_JOBS), (1, 1), (1, 1), (1, 1)]
+    assert pulls == [(3, PREFETCH_JOBS), (1, 1), (1, 1), (1, 1)]
 
 
 def test_admission_prefetches_the_marks_of_every_pr_it_will_ask_of(world):
@@ -1272,6 +1283,33 @@ def test_status_on_any_vm_applies_the_rules_cutoff_as_drive_does(world, monkeypa
     assert got[2][0] == "ready" and "the next sync merges it onto `next`" in got[2][1]
     assert research_main([*argv, "--marked-after", "2026-10-01T00:00:00Z"]) == 0
     assert {e["pr"]: e["state"] for e in json.loads(capsys.readouterr().out)} == {1: "ready", 2: "ready"}
+
+
+def test_status_and_the_review_listing_free_the_queue_lock_before_they_read_labels(world, monkeypatch, capsys):
+    """The lock refuses a second queue command at once, and a fresh VM's listing read labels for minutes under it, so every
+    verdict meanwhile was refused.  A command that only reads holds it while it clones and fetches, not after."""
+    import research.queue as Qm
+
+    cfg = world.tmp / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{world.tmp / "vault"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    monkeypatch.setattr(Qm, "GitHub", lambda repo: world.gh)
+    world.gh.put(1, world.change({"1.txt": "x\n"}), ready=False)
+    workdir = world.tmp / "q" / "verity"
+    free: list[bool] = []
+
+    def prefetch(self, heads) -> None:
+        try:
+            Qm._lock(workdir).close()
+            free.append(True)
+        except QueueError:
+            free.append(False)
+
+    monkeypatch.setattr(Qm.StoreLabels, "prefetch", prefetch)
+    common = ["--workdir", str(workdir), "--remote", str(world.origin), "--repo", "o/verity", "--store", str(world.tmp / "qs")]
+    assert research_main(["queue", "status", "--json", *common]) == 0 and free == [True]
+    assert research_main(["queue", "review", *common]) == 0 and free == [True, True]
+    capsys.readouterr()
 
 
 def test_an_ejection_withdraws_the_heads_ready_mark_in_the_store(world):
@@ -2136,10 +2174,11 @@ def _lock(**entries: str) -> str:
 
 
 def _published(world: World, commit: str, *, pkg: str = "pkg", passed: bool = True, path: str = "slot",
-               files: dict[str, str] | None = None, steps: list | None = None, at: float | None = None) -> str:
+               files: dict[str, str] | None = None, steps: list | None = None, at: float | None = None,
+               argv: list[str] | None = None) -> str:
     """A run of ``commit`` that another machine published to the store's remote, as `research run` does: a records run
     (`lean_changed.py --records PKG`, result `lean-fast/v1`) with ``files`` as its run files, or with ``steps`` a check; ``at``
-    its start (its id's time), else now."""
+    its start (its id's time), else now; ``argv`` its command, else the records run's."""
     from research.runs import new_run_id
 
     node = LocalStore(world.tmp / "node", config_path=world.tmp / "store.toml")
@@ -2156,7 +2195,7 @@ def _published(world: World, commit: str, *, pkg: str = "pkg", passed: bool = Tr
     outputs["result"] = node.put_artifact(kind, meta)
     node.put_attempt({
         "schema": "research/attempt/v0.1", "id": rid, "tool": {"name": "python3", "version": None}, "derivation": "drv:" + "0" * 64,
-        "reuse_key": None, "argv": ["python3", "tools/verity/lean/lean_changed.py", "--records", pkg, "--update"], "params": {},
+        "reuse_key": None, "argv": argv or ["python3", "tools/verity/lean/lean_changed.py", "--records", pkg, "--update"], "params": {},
         "key_params": [], "inputs": {}, "conditions": {}, "key_conditions": [], "source": {"commit": commit, "dirty": False},
         "closure": None, "execution": {}, "cost": None, "status": {"state": "done" if passed else "failed", "rc": 0 if passed else 1},
         "outputs": outputs, "telemetry": None})
@@ -2173,18 +2212,18 @@ def _audit(pkg: str = "pkg", failure: str | None = None) -> str:
                        "packages": [{"package": at, "failures": [failure] if failure else []}]})
 
 
-def _gate(world: World, store=None):
+def _gate(world: World, store=None, now: Callable[[], float] | None = None):
     from research.queue import RecordsGate
 
     return RecordsGate(world.dev, str(world.origin), store or world.store, log=world.logs.append,
-                       lock_merge=world.tmp / "lock_merge.py")
+                       lock_merge=world.tmp / "lock_merge.py", **({"now": now} if now else {}))
 
 
-def _mark(world: World, n: int, head: str, store=None) -> int:
+def _mark(world: World, n: int, head: str, store=None, now: Callable[[], float] | None = None) -> int:
     from research.queue import MarkOnly, ready
 
     world.gh.put(n, head, ready=False)
-    return ready(world.gh, store or world.store, n, f"lane-{n}", MarkOnly(), records=_gate(world, store))
+    return ready(world.gh, store or world.store, n, f"lane-{n}", MarkOnly(), records=_gate(world, store, now))
 
 
 def test_a_head_that_changes_a_lock_is_marked_only_on_a_records_run_of_it_that_passed_and_a_refusal_names_the_run(world, capsys):
@@ -2216,6 +2255,22 @@ def test_a_head_that_changes_a_lock_is_marked_only_on_a_records_run_of_it_that_p
 
     plain = world.change({"a.txt": "no lock\n"})                     # no lock changed: nothing is read, not even the store
     assert _mark(world, 2, plain, store=LocalStore(world.tmp / "bare", config_path=world.tmp / "none.toml")) == 0
+
+
+def test_a_run_whose_indexed_manifest_cant_be_read_vouches_for_nothing_and_the_refusal_says_so(world, capsys):
+    """The records gate picks candidate runs by the command in the index's manifest; a row that doesn't parse is skipped, which
+    fails closed, and the refusal says how many were skipped and at which commit, rather than refusing with no trace of why."""
+    world.with_store_remote()
+    other = world.change({LOCK: _lock(A="2")})
+    _published(world, other, files={"lean-audit/audit.json": _audit()})
+    world.store.refresh(attempts_only=True)
+    with world.store.index.db as db:
+        db.execute("UPDATE attempts SET manifest_json = '{\"argv\": [\"lean_changed.py' WHERE source_commit = ?", (other,))
+    h = world.change({LOCK: _lock(A="2"), "pkg/A.lean": "theorem a : True := trivial\n"})
+    capsys.readouterr()
+    assert _mark(world, 1, h) == 1
+    assert f"1 attempt(s) whose manifest can't be read weren't searched for pkg's, e.g. at {other[:12]} (JSONDecodeError)" in \
+        capsys.readouterr().err
 
 
 def test_a_package_passes_as_a_requirer_on_a_reused_path_or_in_a_lean_check_and_only_its_own_verdict_counts(world, capsys):
@@ -2351,6 +2406,43 @@ def test_the_same_inputs_search_reads_every_candidate_to_its_bound_newest_first_
     h = world.change({LOCK: _lock(A="2")})
     capsys.readouterr()
     assert RECORDS_FETCH > 72 and _mark(world, 1, h) == 0
+    assert f"a records run of {c[:12]} ({rid}) with identical inputs" in world.logs[-1]
+
+
+def test_the_same_inputs_search_reads_a_fixed_age_of_runs_and_bounds_only_those_that_may_vouch_for_the_package(
+        world, monkeypatch, capsys):
+    """A window that started an hour before the head's 9th commit back dropped same-input runs from earlier the same night on a
+    branch with many merges, and the store holds thousands of runs a day, most of which are neither a records run
+    nor a Lean check.  The search reads every run of the last `RECORDS_LOOKBACK_S`, whatever the head's history, and applies its
+    bound only to runs that may hold a pass of the package, so newer runs past that bound don't hide the one that vouches."""
+    from research import queue as Q
+
+    world.with_store_remote()
+    monkeypatch.setattr(Q, "RECORDS_FETCH", 3)
+    other = world.tmp / "other"
+    _git(world.tmp, "clone", "-q", str(world.origin), str(other))
+    (other / LOCK).write_text(_lock(A="2"))
+    _git(other, "commit", "-q", "-am", "the carried change")
+    c = _git(other, "rev-parse", "HEAD")
+    t = int(_git(other, "log", "-1", "--format=%ct", c))
+
+    def now() -> float:
+        return t + 60
+
+    for i in range(6):                         # newer runs on the same inputs that can't pass pkg: another package's, a suite's
+        (other / "c.txt").write_text(f"{i}\n")
+        _git(other, "commit", "-q", "-am", f"another run {i}")
+        _published(world, _git(other, "rev-parse", "HEAD"), pkg="lib",
+                   argv=["python3", "tools/verity/check/suites.py", "--quick"] if i % 2 else None)
+    _git(other, "push", "-q", "origin", "HEAD:refs/dev/other")
+    _published(world, c, files={"lean-audit/audit.json": _audit()}, at=t - 4 * 86400)   # past the lookback
+    h = world.change({LOCK: _lock(A="2")})
+    capsys.readouterr()
+    assert _mark(world, 1, h, now=now) == 1
+    assert "--records pkg --update" in capsys.readouterr().err
+
+    rid = _published(world, c, files={"lean-audit/audit.json": _audit()}, at=t - 2 * 86400)
+    assert _mark(world, 1, h, now=now) == 0
     assert f"a records run of {c[:12]} ({rid}) with identical inputs" in world.logs[-1]
 
 
@@ -2849,7 +2941,7 @@ def test_a_remote_quick_tier_that_never_got_a_check_slot_never_started_and_did_n
     err = capsys.readouterr().err
     assert re.search(r"#1 is not marked ready at \w{12}: the quick tier never started: run \S+ on vy-test waited for a check slot "
                      r"until its --wait-max and never ran the tier", err) and "the quick tier failed" not in err
-    assert "lands on an eyeball review, and the quick tier isn't required" in err and "research run --on vy-nebius-cpu-K" in err
+    assert "A PR lands on `checked` on a review, and reaches `main` on the full check after, so the quick tier isn't required" in err and "research run --on vy-nebius-cpu-K" in err
     assert Q.StoreLabels(world.store, log=world.logs.append).ready(1, h1) is False
     rid = machine.launched[-1][machine.launched[-1].index("--id") + 1]
     assert Q.judge(world.gh, world.store, rid, "lane-1", fetch=machine.fetch) == 1
@@ -3068,7 +3160,7 @@ def test_a_quick_tier_in_a_check_slot_starts_lake_from_the_slots_warm_copy(tmp_p
         return quick_tier.build(str(lake), pkg, d, {**env, **extra})
 
     assert run(1) == {"dir": d, "rc": 0, "start": "cold"}
-    warm = tmp_path / "home" / ".cache" / "verity" / "lake-slot-a" / "verity--core--service--flock"
+    warm = tmp_path / "home" / ".cache" / "verity" / "lake-slot-a" / d.replace("/", "--")
     assert (warm / "warm").is_file()
     assert run(2) == {"dir": d, "rc": 0, "start": "warm"}
     assert run(3, FAIL_WARM="1") == {"dir": d, "rc": 0, "start": "cold"}
@@ -3112,7 +3204,8 @@ def test_handle_reads_mains_registry_once_per_fetch(world, monkeypatch):
     q.fetch()
     shows = []
     real = Q._git
-    monkeypatch.setattr(Q, "_git", lambda repo, *a, **kw: (shows.append(a) if a[:1] == ("show",) else None) or real(repo, *a, **kw))
+    monkeypatch.setattr(Q, "_git", lambda repo, *a, **kw: (shows.append(a) if a[:1] == ("show",) and a[1].endswith(str(Q.REGISTRY))
+                                                            else None) or real(repo, *a, **kw))
     prs = [PR(n, "h", "t", body) for n, body in ((1, "Lane circuits"), (2, "Lane infra"), (3, "Lane circuits"))]
     assert [q.handle(p) for p in prs] == ["circuits", None, "circuits"]
     assert len(shows) == 1
