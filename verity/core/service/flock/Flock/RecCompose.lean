@@ -49,8 +49,9 @@ the verifier's own inner shape (`--rec-inner`), of the inner statement's files (
 refuses), of the inner session's record (`--rec-inner-session`'s `session.json`), of the coin server's transcript
 (`--rec-inner-transcript`) and of the circuit registration (`--rec-inner-registration`); how the inner statement is set
 up (`--rec-inner-statement`, its coins `os` as `true`, each lookup table's name and SHA-512, and the SHA-512 of
-`--rec-inner-draw`); and the inner population's link table (`--rec-links ROOT:N`: its root in hex and its row count).
-`none` where `verify` held no such input. -/
+`--rec-inner-draw`); the inner population's link table (`--rec-links ROOT:N`: its root in hex and its row count); and
+the SHA-512 of the verifier's own program of the inner statement (`--rec-inner-program`), under which its Linking is
+checked. `none` where `verify` held no such input. -/
 structure Shared where
   recInner : Option String
   innerCircuit : Option String
@@ -65,6 +66,7 @@ structure Shared where
   innerTables : Option (List (String × String))
   innerDraw : Option String
   links : Option (String × Nat)
+  innerProgram : Option String
   deriving DecidableEq, Repr, Inhabited
 
 /-- The link table (`--rec-links ROOT:N`) as `rec_shared` names it: its root in hex and its row count. -/
@@ -74,10 +76,11 @@ def linksOf (links : Option (ByteArray × Nat)) : Option (String × Nat) := link
 def Shared.ofFiles (recInner innerCircuit innerPublic innerPartition innerCoins innerSession transcript registration :
     Option ByteArray) (innerStatement : Option String) (innerStatementCoins : Option Bool)
     (innerTables : Option (List (String × ByteArray))) (innerDraw : Option ByteArray)
-    (links : Option (ByteArray × Nat)) : Shared :=
+    (links : Option (ByteArray × Nat)) (innerProgram : Option ByteArray) : Shared :=
   ⟨recInner.map digest, innerCircuit.map digest, innerPublic.map digest, innerPartition.map digest,
     innerCoins.map digest, innerSession.map digest, transcript.map digest, registration.map digest, innerStatement,
-    innerStatementCoins, innerTables.map (·.map fun t => (t.1, digest t.2)), innerDraw.map digest, linksOf links⟩
+    innerStatementCoins, innerTables.map (·.map fun t => (t.1, digest t.2)), innerDraw.map digest, linksOf links,
+    innerProgram.map digest⟩
 
 /-- A string or `null`. -/
 def optJson : Option String → Json
@@ -104,7 +107,8 @@ def Shared.toJson (s : Shared) : Json :=
     ("inner_tables", match s.innerTables with
       | none => .null
       | some ts => .arr (ts.map fun t => Json.arr #[.str t.1, .str t.2]).toArray),
-    ("inner_draw", optJson s.innerDraw), ("rec_links", linksJson s.links)]
+    ("inner_draw", optJson s.innerDraw), ("rec_links", linksJson s.links),
+    ("inner_program", optJson s.innerProgram)]
 
 /-- Field `k` of `j`: a string, or `null` as `none`; nothing when absent or another value. -/
 def readOpt (j : Json) (k : String) : Option (Option String) :=
@@ -137,7 +141,8 @@ def Shared.ofJson? (j : Json) : Option Shared := do
     | _ => none
   pure ⟨← readOpt j "rec_inner", ← readOpt j "inner_circuit", ← readOpt j "inner_public", ← readOpt j "inner_partition",
     ← readOpt j "inner_coins", ← readOpt j "inner_session", ← readOpt j "inner_transcript",
-    ← readOpt j "inner_registration", ← readOpt j "inner_statement", coins, tables, ← readOpt j "inner_draw", links⟩
+    ← readOpt j "inner_registration", ← readOpt j "inner_statement", coins, tables, ← readOpt j "inner_draw", links,
+    ← readOpt j "inner_program"⟩
 
 /-- The first field in which `s` differs from `t`, the first part's, as a refusal's reason. -/
 def Shared.diff (s t : Shared) : String :=
@@ -159,7 +164,9 @@ def Shared.diff (s t : Shared) : String :=
       (s.innerTables.map toString) (t.innerTables.map toString) <|>
     one "inner_draw" "the inner statement's draw, --rec-inner-draw" s.innerDraw t.innerDraw <|>
     one "rec_links" "the inner population's link table, --rec-links" (s.links.map (linksShow ∘ some))
-      (t.links.map (linksShow ∘ some))).getD
+      (t.links.map (linksShow ∘ some)) <|>
+    one "inner_program" "the verifier's program of the inner statement, --rec-inner-program" s.innerProgram
+      t.innerProgram).getD
     "its rec_shared is not the first part's"
 
 /-- **A part's verdict as `rec-compose` reads it** off its `VERDICT` line. -/

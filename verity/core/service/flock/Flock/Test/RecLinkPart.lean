@@ -5,7 +5,8 @@ names a table, at a shape the link unit takes and a row count that is some table
 reads back from its JSON; an unlisted link part names the missing table; `RecLinkPart.checkShape` holds the statement's
 table (`--rec-links`) to the inner shape's; and `RecLinkPart.check` passes every other unit, refuses a `rec-link/` name
 `linkParams` does not read, and refuses a link part without the table, the registered reads or the inner statement's
-files, or whose `trow` is not the table at its root, rows, domain and fixed rows.
+files, or whose `trow` is not the table at its root, rows, domain and fixed rows. `RecLinkPart.checkUnit` passes the
+circuit `HmRow.parse` reads off V*'s own file and refuses a unit that is not V*'s net.
 -/
 import Flock.RecLinkPart
 
@@ -145,5 +146,22 @@ def link : String := "rec-link/u6-p6"
 -- Past the table, the inner statement's rows: here its files are empty, so its setup refuses.
 #guard ((checked link (some #[trow]) (some files) (some (T, 18))).map
   (·.startsWith "rec-coins: rec-link/u6-p6: the inner statement: ")) == some true
+
+-- The unit is V*'s: the circuit parsed from V*'s own file passes, and a unit that is not its net is refused.
+def bindings : VStar.Bindings :=
+  { partition := "".pushn 'a' 128, program := "".pushn 'a' 128, programDigests := Json.mkObj [] }
+
+def unitChecked (c : Circuit) : Option String :=
+  match RecLinkPart.checkUnit c 0 0 with
+  | .error e => some e
+  | .ok () => none
+
+def honest : Except String Circuit := do HmRow.parse Tags.circuit (← circuitFile (.link 0 0 1) bindings) []
+
+#guard (match honest with
+  | .ok c => (checkParsed (.link 0 0 1) c).toBool && unitChecked c == none
+  | .error _ => false)
+#guard ((unitChecked (circuitOf "rec-link/u0-p0")).map
+  (·.startsWith "rec-links: rec-link/u0-p0: not the verifier's unit (")) == some true
 
 end Flock.Test.RecLinkPart

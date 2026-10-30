@@ -274,9 +274,9 @@ theorem statements_of_checkStmt
     obtain ⟨ss, hss, -⟩ := check_ok (checkCircuit_ok hs).1
     simp [hss, Except.isOk, Except.toBool]
 
-/-- **The inner files' statement** (`Files.stmt`) is `setupHidden`'s on the files, with no program. -/
+/-- **The inner files' statement** (`Files.stmt`) is `setupHidden`'s on the files, under their program. -/
 theorem stmt_setupHidden {u : String} {spec' : SessionSpec} {st' : Stmt} (h : f.stmt u = .ok (spec', st')) :
-    Stmt.setupHidden RecVStar.innerTags f.circuit f.pub Coins.os [] none (some f.partition) none = .ok st' := by
+    Stmt.setupHidden RecVStar.innerTags f.circuit f.pub Coins.os [] none (some f.partition) f.program = .ok st' := by
   unfold RecCoins.Files.stmt at h
   split at h
   · rename_i x hx

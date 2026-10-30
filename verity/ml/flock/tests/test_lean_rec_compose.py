@@ -114,6 +114,9 @@ def _cases(n: int, inner: bytes) -> dict[str, list[tuple[str, str]]]:
     cases["rec_links-one-part"] = _set(h, 1, v(1, shared=_shared(inner, rec_links=table)))
     cases["rec_links-every-part"] = [(name, f"{v(j, shared=_shared(inner, rec_links=table))}\n")
                                      for j, (name, _) in enumerate(h)]
+    cases["inner_program-one-part"] = _set(h, 1, v(1, shared=_shared(inner, **PROGRAM)))
+    cases["inner_program-every-part"] = [(name, f"{v(j, shared=_shared(inner, **PROGRAM))}\n")
+                                         for j, (name, _) in enumerate(h)]
     return cases
 
 
@@ -146,13 +149,17 @@ def _runs(n: int, inner: bytes) -> dict[str, str]:
 CASES = ["honest", *(f"{k}-one-part" for k in ("rec_inner", *FILES, "inner_coins")), *(f"{k}-none" for k in FILES),
          "inner_coins-every-part", "other-inner-every-part", "other-rows-one-part", "other-rows-every-part", "not-zk",
          "identifier", "refused", "coin-key-reused", "no-rec-shared", "part-missing", "part-twice", "part-out-of-range",
-         "one-part-too-many", "two-verdicts", "no-verdict", "no-parts", "rec_links-one-part", "rec_links-every-part"]
+         "one-part-too-many", "two-verdicts", "no-verdict", "no-parts", "rec_links-one-part", "rec_links-every-part",
+         "inner_program-one-part", "inner_program-every-part"]
 RUNS = ["run-part-retried", "run-part-retried-composed-second", "run-part-unrecorded", "run-opened-not-composed",
         "run-part-out-of-range", "run-staged-after-hello", "run-staged-twice", "run-other-rows-staged",
         "run-other-shared-staged", "run-not-closed", "run-event-after-close", "run-none", "run-other-kind",
         "run-no-events", "run-event-out-of-form"]
 #: the compiled verifier leaves these optional: none in every part composes
 OPTIONAL = {"inner_registration-none", "inner_draw-none"}
+#: the verifier's program of the inner statement, which a part holds where the inner statement links: one in every part
+#: composes
+PROGRAM = {"inner_program": b"program"}
 
 
 def _compose(d: Path, tmp_path: Path, n: int, inner: bytes, parts: list[tuple[str, str]], run: str) -> tuple[bool, str]:
@@ -177,8 +184,10 @@ def test_rec_compose_agrees_with_its_mirror(setup, tmp_path, case):
     shared = None
     if case in OPTIONAL:
         shared = _shared(inner, **{case.removesuffix("-none"): None})
+    elif case == "inner_program-every-part":
+        shared = _shared(inner, **PROGRAM)
     want = _compose(d, tmp_path, n, inner, parts, _text(_record(n, inner, shared=shared)))
-    assert want[0] == (case == "honest" or case in OPTIONAL), (case, want)
+    assert want[0] == (case in ("honest", "inner_program-every-part") or case in OPTIONAL), (case, want)
 
 
 @pytest.mark.parametrize("case", RUNS)
