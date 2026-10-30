@@ -30,7 +30,7 @@ from inputs import (EPILOGUE, I, KEY, MODELS, S8_STEP, SCHEMES, SHA512, Model, l
 
 from verity.core.protocols.sampled_proofs.candidates import Shape, cuts, pressure  # noqa: E402
 from verity.core.protocols.sampled_proofs.costfit import Fitted, fit  # noqa: E402
-from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
+from verity.core.protocols.sampled_proofs.optimize import (Candidate, TensorCommit, CostModel, Objective,  # noqa: E402
                                                            ReplayDomain, for_budget, for_target, frontier,
                                                            needs_benchmark, overlaps, perturb, row_ands, structure,
                                                            weigh)
@@ -129,7 +129,7 @@ def workload(v: dict, window_rounds: float, m: Model) -> dict:
             "window_gpu_s": v["round"] * window_rounds}
 
 
-def serve(v: dict, m: Model, scheme: str | None, w: dict, *, kv: bool = False) -> tuple[Commitment, ...]:
+def serve(v: dict, m: Model, scheme: str | None, w: dict, *, kv: bool = False) -> tuple[TensorCommit, ...]:
     """The window's serve-time commitments under `scheme` (None: none, a plan's sampling spend alone), each priced at
     `commit_per_byte` (`floor`: its measured B), with its decode bytes and gating chain at a B32 step: one tree a call over
     its leaves, or a tile leaf a call."""
@@ -137,7 +137,7 @@ def serve(v: dict, m: Model, scheme: str | None, w: dict, *, kv: bool = False) -
         return ()
     if scheme == "floor":
         a = (m.hidden + m.heads * m.head_dim + m.hidden + m.intermediate) * w["tokens"] * m.layers
-        return (Commitment("floor", "s8 A operands, R = 128 leaves (measured)", a,
+        return (TensorCommit("floor", "s8 A operands, R = 128 leaves (measured)", a,
                            cost=v["commit_floor"] * w["window_gpu_s"]),)
     rate, step = v["commit_per_byte"], int(v["decode_tokens"])
     out = []
@@ -145,14 +145,14 @@ def serve(v: dict, m: Model, scheme: str | None, w: dict, *, kv: bool = False) -
         per_call = (r.decode or r.nbytes) * step
         chain = CALLS * leaf_chain(r.leaf, r.fmt) if r.tile else leaf_chain(r.leaf, r.fmt) + tree_chain(per_call / r.leaf)
         nbytes = r.nbytes * w["tokens"] * m.layers
-        out.append(Commitment(r.scale, r.tensor, nbytes, cost=nbytes * rate, decode_bytes=per_call * m.layers,
+        out.append(TensorCommit(r.scale, r.tensor, nbytes, cost=nbytes * rate, decode_bytes=per_call * m.layers,
                               chain=chain * m.layers, gates=r.gates))
     receipts = v["remote_receipts"] * v["passes_per_s"] * w["window_gpu_s"]
-    out.append(Commitment("remote", "store-block receipts", receipts, cost=receipts * rate))
+    out.append(TensorCommit("remote", "store-block receipts", receipts, cost=receipts * rate))
     return tuple(out)
 
 
-def model(v: dict, fit_: Fitted, replay_units: int, *, commitments: tuple[Commitment, ...] = (), commit: float = 1.0,
+def model(v: dict, fit_: Fitted, replay_units: int, *, commitments: tuple[TensorCommit, ...] = (), commit: float = 1.0,
           statement: float = 1.0) -> CostModel:
     m = fit_.model()
     m = replace(m, commit_per_bit=v["commit_per_byte"] / 8 * commit, serve=commitments,

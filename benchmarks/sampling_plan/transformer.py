@@ -56,7 +56,7 @@ from verity.core.protocols.profile import Stratified, Stratum  # noqa: E402
 from verity.core.protocols.sampled_proofs.candidates import Shape, cuts, shape_of  # noqa: E402
 from verity.core.protocols.sampled_proofs.costfit import Fitted, fit  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage.draw import work_k, work_table  # noqa: E402
-from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
+from verity.core.protocols.sampled_proofs.optimize import (Candidate, TensorCommit, CostModel, Objective,  # noqa: E402
                                                            Plan, ReplayDomain, certify, density_bound, for_target,
                                                            frontier, ln_upper, row_ands)
 from verity.ml.circuits.codec import descriptor_id  # noqa: E402
@@ -351,7 +351,7 @@ class Serving:
     step_s: float | None = None
 
 
-def serve(m: Model, s: Serving) -> tuple[Commitment, ...]:
+def serve(m: Model, s: Serving) -> tuple[TensorCommit, ...]:
     """Every serve-time commitment of the block beside the units' own outputs (which `Candidate.commit_bits` carries):
     the requests' bytes in, the in-flight requests' KV cache at the close (the carried state; also the QKV units'
     outputs, so a copy `overlaps` would price), PoUW's CP-W receipts under h1 (2 (K/32 + m) u32 a 32 x 32 tile, the
@@ -366,7 +366,7 @@ def serve(m: Model, s: Serving) -> tuple[Commitment, ...]:
             ("carry", "KV cache of the in-flight requests at the close", m.inflight * m.context * m.kv_bytes),
             ("pouw:h1", "CP-W receipts", m.requests * (m.positions * per_token + m.generate * head)),
             ("bandwidth", "receipts over the audited store", s.audit_passes * s.audit_store / 4096 * 64)]
-    return tuple(Commitment(scale, tensor, b, cost=b * rate) for scale, tensor, b in rows if b)
+    return tuple(TensorCommit(scale, tensor, b, cost=b * rate) for scale, tensor, b in rows if b)
 
 
 def costs(m: Model, s: Serving) -> CostModel:
