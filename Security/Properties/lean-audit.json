@@ -4861,7 +4861,7 @@
    "Properties.Challenger.CoinsFromLog": "unstated: an accepted answer is the live answer at the coins the challenger's device released, or a break, proved from DrawnByDevice in security_proofs by Properties.Challenger.coinsFromLog; a draft statement, which gets a guarantee entry once the one theorem reads it",
    "Properties.NetworkScan.ScanFits": "unstated: NetTiming.Layout.Fits' parts (1) and (2) at an accepted scan's layout are proved from scanOf's acceptance (scanFits_egress_ingress, Proofs.Properties.NetworkScan.Fits); part (3), no egress gate depending on a later step's ingress, is open, and ScanFits gets a guarantee entry with its proof",
    "Properties.NetworkScan.ScanScopeAcc": "unstated: scanScopeAcc_of_scanFits (Proofs.Properties.NetworkScan) proves it from ScanFits, which is unstated until its part (3) is proved (its entry)",
-   "Properties.Pouw.Served.SecurityProofs.servedFreed": "frozen (no-function,world-unlisted): ServedFreed, the served PoUW protocol's freed compute in the onsite form: an accepted period whose network certifier counted it in (cert) frees at most eps(x) C + beta K_c of the registered devices' capacity C = sum_r mu_r H_r at the period's dual price mu (Pouw.Dither.FreedWithin at W = 1, Jobs.DualOpt), with eps(x) = max 0 (C - ServedWork's credit at the period's accepted prefix + beta K_c) / C, except with probability ServedWork's delta_s + n(delta_bind + delta_ks) + n kappa_deg(B) plus the certifier's delta; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. It is ServedWork's premises less the inventory's closure (ext = 0), which OutsourceWithinEgressServed supplies, and adds two premises, each listed under assumptions: OutsourceWithinEgressServed, the price of an exchanged bit over the period's programs together, implied by the per-program Pouw.Assumptions.OutsourceWithinEgress (outsourceServed_of_perProgram); CertifiedExchange, the network certifier's guarantee at the period (its count in, K_c, exceeded with probability at most delta), the form network accounting's certifier is to instantiate, on a trusted-host device whose coins are witness (WitnessPathPrivate discharges CoinsConfidential). DualOpt and the capacity's positivity are the statement's framing. SAKServed makes it non-vacuous only on a model that charges free register reductions, as ServedWork. Its honest and nontrivial lemmas are Proofs.Pouw.ServedFreed.Honest's servedFreed_honest and servedFreed_nontrivial. Proved from servedWork and Pouw.SecurityProofs.Dither.FreedOfFloor (Proofs.Pouw.ServedFreed).",
+   "Properties.Pouw.Served.SecurityProofs.servedFreed": "frozen (no-function,world-unlisted): ServedFreed, the served PoUW protocol's freed compute in the onsite form: an accepted period whose network certifier counted it in (cert) frees at most eps(x) C + beta K_c of the registered devices' capacity C = sum_r mu_r H_r at the period's dual price mu (Pouw.Dither.FreedWithin at W = 1, Period.DualOpt), with eps(x) = max 0 (C - ServedWork's credit at the period's accepted prefix + beta K_c) / C, except with probability ServedWork's delta_s + n(delta_bind + delta_ks) + n kappa_deg(B) plus the certifier's delta; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. It is ServedWork's premises less the inventory's closure (ext = 0), which OutsourceWithinEgressServed supplies, and adds two premises, each listed under assumptions: OutsourceWithinEgressServed, the price of an exchanged bit over the period's programs together, implied by the per-program Pouw.Assumptions.OutsourceWithinEgress (outsourceServed_of_perProgram); CertifiedExchange, the network certifier's guarantee at the period (its count in, K_c, exceeded with probability at most delta), the form network accounting's certifier is to instantiate, on a trusted-host device whose coins are witness (WitnessPathPrivate discharges CoinsConfidential). DualOpt and the capacity's positivity are the statement's framing. SAKServed makes it non-vacuous only on a model that charges free register reductions, as ServedWork. Its honest and nontrivial lemmas are Proofs.Pouw.ServedFreed.Honest's servedFreed_honest and servedFreed_nontrivial. Proved from servedWork and Pouw.SecurityProofs.Dither.FreedOfFloor (Proofs.Pouw.ServedFreed).",
    "Properties.Pouw.Served.SecurityProofs.servedWork": "frozen (no-function,world-unlisted): ServedWork, the served PoUW protocol's work in the remote form: H1J10RCheckedCreditPeriod's fixed words priced on the prover's inventory, one machine of the accelerator model (Pouw.Dither.Accel) at its device premises G1, G2, P1 and P2, wherever it ran (no network certifier, wipe or latency check), except with probability delta_s + n(delta_bind + delta_ks) + n kappa_deg(B); not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. Its new premises, each listed under assumptions: Pouw.Assumptions.SAKServed, SakLb.SAKResidual's claim at the served words, proposed, which is false of the accelerator model as Definitions.Core.Accel writes it (free register reductions run the four Russians' method below the public best's cost), so the guarantee is non-vacuous only on a model that prices register reductions; FixedAreRight, the bridge from the play's fixed words to the inventory's right words, to be made provable with UnitFixed's adaptive model; FixedBeforeSalt, a protocol-code fact (each window's instance, advice and program fixed before its salt, which SaltIsLiveCoin's discharge orders). The inventory's closure (ext = 0) and the advice bound are the statement's framing. Its honest and nontrivial lemmas are Proofs.Pouw.ServedWork.Honest's served_honest and served_nontrivial. Proved from h1J10RCheckedCreditPeriod (Proofs.Pouw.ServedWork).",
    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest": "completeness: the honest lemma of CheckProofSystemSound: at H1's honest live-salt period of one window and one session (the instance its proof takes) the deployed check accepts every window on every path and the check layer is sound at 0, so its premise can hold where the check accepts",
    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_nontrivial": "completeness: the nontrivial lemma of CheckProofSystemSound: at H1's honest period of one window the deployed check accepts and publishes a drawn unit on every path, so with relations every opening fails, ServiceSound fails at 0",
@@ -9472,7 +9472,7 @@
    ]
   },
   "Definitions.Pouw.Dither": {
-   "digest": "3ba0cf85e613ef24defa423b941863878f07cb39e4c9d2a6895e138b747198ab",
+   "digest": "bebd572978b513d590f4675c05662b1ccd1103e96ce87b6dff2d644deaae3c66",
    "definitions": {
     "Pouw.Dither.Accel": "9ec480ad86ec2d74ede4f0425a6de1dc7b028b5da50ebe62f1272b00fa7b531d",
     "Pouw.Dither.Accel.G1": "4653da5027854c6fcc140db720f6a2dedbae2c9b3ec44e4c96c63aafd4278963",
@@ -9489,19 +9489,19 @@
     "Pouw.Dither.Accel.rate": "037f90b5f17f32a688176a832ac41d3e3cb7487b2a7cc629f9f57e30a59ae4d2",
     "Pouw.Dither.Accel.use": "f007520fb83e7f1590095b739c0c874f3aeaf50bac9d9eb4b80fd4c383c71bbc",
     "Pouw.Dither.Accel.wall": "ed94fd59ce3d84f3a84155a33d4361089a9a29721ffe3b8ef03904c36330f390",
-    "Pouw.Dither.Jobs": "ea283ecf860098aba806904e5628d0ac26baf189abc01858766182e03d8c387f",
-    "Pouw.Dither.Jobs.DualOpt": "199a0edcc6dc59708f6a02027e1590b0bbd32e0cb2e4c100e84d208e3493942f",
-    "Pouw.Dither.Jobs.Fits": "3938798655f7a3f3a38f501d0942b7c7c6f790f6bbbc633e5a7b0f107618bbf9",
-    "Pouw.Dither.Jobs.FreedWithin": "b7d6a3b590b420776ac1b8dfedb89f4b49088ec95d29033d1cf0b6a480b2131d",
-    "Pouw.Dither.Jobs.J": "0c779b6d67558c4207df4934dce66b301720dd29123d59b3c9e7af2b160ce892",
-    "Pouw.Dither.Jobs.T": "22d61056854af183e30590736cc233264c3ccd3fc9977bdef65ef5be4e7f6a53",
-    "Pouw.Dither.Jobs.cap": "693469cff5a7764b18513debf7c7b48d87e6bc46ecc552eb7716a764ba6fd17d",
-    "Pouw.Dither.Jobs.hon": "3f471592fdfb85d932bf737664afe8f9fad4a9452c60e145f292d9b039705eb0",
-    "Pouw.Dither.Jobs.instJ": "a3b75caa44a18211b2554466084f1313eb3d6306f15cbd49ad7fb7d29ef043e5",
-    "Pouw.Dither.Jobs.needs": "13e844044423e78a28ffe6485f69380f51d1904b9b6468d26603387eb6b3993c",
-    "Pouw.Dither.Jobs.rv": "90423e1e53b04a13bc120f58a750ee79adf51c990560238c31e30b641bdc1c5e",
-    "Pouw.Dither.Jobs.val": "a599cfb77c737c849244ad9910b5a2995a32a9828b85f5df58d8831a6bb99f7f",
-    "Pouw.Dither.Jobs.value": "5bf158180b429555f76979245a2b6fb407e177240731638ab376996f90d48405"
+    "Pouw.Dither.Period": "44ecbca92d8080608d2c17e9d1f5e18f0dbfcb8230376a71c84f167cd618787f",
+    "Pouw.Dither.Period.DualOpt": "de2cfdb23fc458876516bcb4d65a44dcd271dacfca87cc2b335f82c4d1ab181d",
+    "Pouw.Dither.Period.Fits": "9409d527a674bf2bfd45e109f28e6de008c5e986e2b64178aade79fa7ea769b6",
+    "Pouw.Dither.Period.FreedWithin": "11cc5e17af553af664c00a7d2b470a85a94188c243bb559c834a73f7a7072cdf",
+    "Pouw.Dither.Period.J": "bd1a5e0f860e7af0a6721f743cd610075f2a29b48d9c9ae5810fa052a950a616",
+    "Pouw.Dither.Period.T": "d42f1cf9a9e23599442195210d842a28014ebf27e5e3a39d2a58858cb6943e9c",
+    "Pouw.Dither.Period.cap": "91f3f3c1166c67810a25e540c23e7a9d81ca96e0e1d685bbdcc9e8457568ced6",
+    "Pouw.Dither.Period.hon": "095e8f3d1db819bc0371fe3dd9d96dd3d4cfe66d952285a88c443185b92c79d2",
+    "Pouw.Dither.Period.instJ": "ce452fcba586e0b760ccb47ae1e1fe3818440946cfaee9197abb9020578f9b9f",
+    "Pouw.Dither.Period.needs": "64e4f6307e97ec22e9cfe2b76140394916011c463bdd9ba9306c9caa918dffb7",
+    "Pouw.Dither.Period.rv": "93f43991f36cc320b6427edd201492a99b52a40724ab1bf581765b3b639ea96b",
+    "Pouw.Dither.Period.val": "9fc5c3a6662ec4e34eac41e1cdd41a606ff1405d6233cc1fd3632e394f0af3cf",
+    "Pouw.Dither.Period.value": "caf38c15514a505918eaa227960de6ca24a8f3fc303bb2eef524e01ad1908332"
    },
    "guarantees": ["Properties.Pouw.Served.SecurityProofs.servedFreed", "Properties.Pouw.Served.SecurityProofs.servedWork"]
   },
@@ -18742,11 +18742,11 @@
    ]
   },
   "Properties.Pouw.ServedFreed": {
-   "digest": "8aaf49d891c36c2c3afc1db96ee0595ebb5a52d00278656ffd5ecb872df415cf",
+   "digest": "b0b703e77b979f25c665bf2f860c5b07876d807b09899232796156a8642539f7",
    "definitions": {
     "Properties.Pouw.Served.CertifiedExchange": "a6929f13489cdf297588075b1af62348834de2858da838b461415ef613750244",
     "Properties.Pouw.Served.OutsourceWithinEgressServed": "19cd4ab81fedf945c477eb836d3259d50e6e9b9dba5d85a0bae33cc138a0561f",
-    "Properties.Pouw.Served.ServedFreed": "7340cd1a849184da015f198a7a63fd67ae22596c0d1b8f779b0b1fb1915c073e"
+    "Properties.Pouw.Served.ServedFreed": "7f4d77bad2e4820ed6d53b724532e36cdec6b3e654966ba736b99644822a9cb4"
    },
    "guarantees": ["Properties.Pouw.Served.SecurityProofs.servedFreed"]
   },

@@ -1776,7 +1776,7 @@
   },
   "Pouw.Dither.AnswersFit": {
    "owner": "@compute-research",
-   "digest": "e35aafb1d89939d93e67d5b1ffcb485db3ba602db4c46f438987a2efe7c99b89"
+   "digest": "e570fd22138edd4a4ac2b18e176f0e54d0cec0cc7eaab177a8b7105cfe6cdd29"
   },
   "Pouw.Dither.CallsAtPub": {
    "owner": "@compute-research",
@@ -1784,27 +1784,27 @@
   },
   "Pouw.Dither.FreedSound": {
    "owner": "@compute-research",
-   "digest": "5cced56a29c96e1c9c97b51dcaf1d9eb065e118479213e743a54d77982cb1400"
+   "digest": "d651f64f2dd7178c2c19065387a5d8e53b3dffadda6f93a99e55a3a3d0112613"
   },
   "Pouw.Dither.HostsCounted": {
    "owner": "@compute-research",
    "digest": "2e9647f866c68156bca4a51cafe3d1f65e86170e9569d9e33310a990c8dd1d1e"
   },
-  "Pouw.Dither.Jobs.DualOpt": {
-   "owner": "@compute-research",
-   "digest": "199a0edcc6dc59708f6a02027e1590b0bbd32e0cb2e4c100e84d208e3493942f"
-  },
-  "Pouw.Dither.Jobs.Fits": {
-   "owner": "@compute-research",
-   "digest": "3938798655f7a3f3a38f501d0942b7c7c6f790f6bbbc633e5a7b0f107618bbf9"
-  },
   "Pouw.Dither.MomentSound": {
    "owner": "@compute-research",
-   "digest": "e6eddf702949079281156222c90da16ac8b35e378fde8eb651488d7cdb0f7b73"
+   "digest": "b2f280b18c92267044f5539005dcd2395eae9960c595f4d4631bd6274e4e4874"
   },
   "Pouw.Dither.OnCard": {
    "owner": "@compute-research",
    "digest": "4a40e06630394c3a6d7647d8bd2d25ad8c9e8bb32d9f5dfa21228a53969e1612"
+  },
+  "Pouw.Dither.Period.DualOpt": {
+   "owner": "@compute-research",
+   "digest": "de2cfdb23fc458876516bcb4d65a44dcd271dacfca87cc2b335f82c4d1ab181d"
+  },
+  "Pouw.Dither.Period.Fits": {
+   "owner": "@compute-research",
+   "digest": "9409d527a674bf2bfd45e109f28e6de008c5e986e2b64178aade79fa7ea769b6"
   },
   "Pouw.Eps1.ClassP": {
    "owner": "@compute-accounting",
@@ -10536,7 +10536,7 @@
     "        (instHAdd.hAdd Pouw.Witness.twδ (Finset.univ.sum fun _u => 0)))"
    ],
    "assumptions": [],
-   "type_hash": "26b19f52b618223546592ca4f5c3a298e25da6f38c66f0b8bbc31e3c00e6d8c4"
+   "type_hash": "1021bf668ccc5adaf21e8a9122b217b4a1c15713c87042b47fef896f46517cba"
   },
   "Pouw.SecurityProofs.Dither.FreedOfFloor": {
    "owner": "@compute-research",
@@ -10609,7 +10609,7 @@
     "                                    x)))))))))))))))"
    ],
    "assumptions": [],
-   "type_hash": "1601c064e534853ae40d0b5207e34bc93eb7bd81d2410c6c8032d8e225f16dc4"
+   "type_hash": "a08329cb547895160c9873d07df35285ddc200372cac1105a7fffff5fb44533d"
   },
   "Pouw.SecurityProofs.Dither.WorkMoment_nontrivial": {
    "owner": "@compute-research",
@@ -10704,7 +10704,7 @@
     "                                                x)))))))))))))))))))))"
    ],
    "assumptions": [],
-   "type_hash": "8d4fa0d66b0d84b3071e8820441811b42dfde6e97ee113937c8a837ea199cd18"
+   "type_hash": "ed462e5592b14aa306b74426d355dad845f2e787e1db584ec8842a2cab748aa7"
   },
   "Pouw.SecurityProofs.Dither.WorkSound_nontrivial": {
    "owner": "@compute-research",
@@ -10717,7 +10717,7 @@
     "      Pouw.Witness.twκ)"
    ],
    "assumptions": [],
-   "type_hash": "ad7c152556ebef578d601ec8809903cab21a18024348b3a666cd2b36a6723cdb"
+   "type_hash": "8b010720797c9578554992956a33bf108d49188498883ce01bdb589805f9c6a5"
   },
   "Pouw.SecurityProofs.DitherInstance.WorkSoundH200": {
    "owner": "@compute-research",
@@ -10955,7 +10955,7 @@
     "                                Pouw.Witness.twDev o x)))))))))))))"
    ],
    "assumptions": [],
-   "type_hash": "61f778112559ba0bfbe50d92a191e1e2449dd2fbcc223a5a32f445e9d998291d"
+   "type_hash": "7627cc1a888bd3439b026910d2ecb4eda844722b6252425088a015b009fce70b"
   },
   "Pouw.SecurityProofs.OnsiteFreed_nontrivial": {
    "owner": "@compute-research",
@@ -11000,7 +11000,7 @@
     "                          fun x => instHAdd.hAdd (1 / 2) 0)))))))))))"
    ],
    "assumptions": [],
-   "type_hash": "2718494d9cdb86432ae38364ffad0ecb5b267fd179a785ca25bd89e61fb58e54"
+   "type_hash": "1a9cb1b3b3aabac715eed371c474396f7e59bcd28421604a60064ca0f59f9ab1"
   },
   "Pouw.SecurityProofs.PearlC.GammaFp4ChainOnlySm120IssueLut256_8192": {
    "owner": "@compute-accounting",
@@ -13047,7 +13047,7 @@
    "Accounting.SecurityProofs.B2Adds": "frozen (no-function,world-unlisted): It is stated over arbitrary families of strategies (maps from PoUS's outcomes to Accounting.Actual.Run) causal from every tick, takes B2's hypotheses on them, which are not on the premises list, and composes them with PoUS's AuditSecureOn over the ring model, taken as a hypothesis, through lemma M: about no function of the code.",
    "Accounting.SecurityProofs.B2AddsP2Ring": "frozen (no-function,world-unlisted): It is B2Adds at P2's deployed point: stated over arbitrary families of strategies causal from every tick, with B2's hypotheses on them, which are not on the premises list, and P2's named assumption P2RingAuditSecure taken as a hypothesis: about no function of the code.",
    "Accounting.SecurityProofs.TimelyTicks": "frozen (no-function,world-unlisted): It is about the definition Accounting.Timely (each window of a run's challenge ticks at most span ticks), taken as a hypothesis that is not on the premises list, and bounds the ticks: about no function of the code.",
-   "Accounting.SecurityProofs.B2Window": "frozen (no-function,world-unlisted): It is stated over arbitrary families of a location's windows with the ring's oracle locations (Accounting.RingWindow), takes the multiplications' latency and the windows' span as hypotheses that are not on the premises list, and concludes the existence of a PoUS sequential responder (SeqResponderOn), not a Lean function's acceptance.",
+   "Accounting.SecurityProofs.B2Window": "frozen (no-function,world-unlisted): It is stated over arbitrary families of a location's windows with the ring's oracle locations (Accounting.RingResponder), takes the multiplications' latency and the windows' span as hypotheses that are not on the premises list, and concludes the existence of a PoUS sequential responder (SeqResponderOn), not a Lean function's acceptance.",
    "Accounting.SecurityProofs.B2WindowAudit": "frozen (no-function,world-unlisted): It takes PoUS's sequential audit security (AuditSecureOn) at an arbitrary scheme as a hypothesis, and B2Window's hypotheses on an arbitrary family of windows (the multiplications' latency, the windows' span and their query budgets), which are not on the premises list; the event it bounds is the windows' answering every challenge, not a Lean function's acceptance.",
    "Accounting.SecurityProofs.B2WindowP2Ring": "frozen (no-function,world-unlisted): It is B2WindowAudit at P2's deployed point under Pous.P2.Assumptions.P2RingAuditSecure D Q L, paced (windows of at most T ticks, T ≤ D·ℓ), and takes B2Window's hypotheses on an arbitrary family of windows, which are not on the premises list; the event it bounds is the windows' answering every challenge, not a Lean function's acceptance.",
    "Accounting.SecurityProofs.BandwidthOfAudit": "frozen (no-function,hash): It carries Bandwidth.SecurityProofs.AuditRO, a bound in the random-oracle model over an abstract chip program, to the bandwidth audit of an abstract run of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/BandwidthAudit.lean), not to a Lean function, and bounds a Pouw.pr event, which shape.events does not list.",
@@ -13342,7 +13342,7 @@
    "Accounting.SecurityProofs.Compose.CircuitCreditSeeded": "frozen (no-function,world-unlisted): the composed credit CreditOfWork after CircuitWorkSeeded (decision 113) under seeded coins, in the random-oracle model, Accounting.Compose.CreditCertificate.Holds for every declared circuit's sampled window on a data sheet, in a device window the physical layer's ledger consumes, issued at coins = seeded with its grinding premiums (folded and whole, each at its own rate), the oracle's eps_id(T, |J|) once a window and 2 rounds (delta_g + delta_b), on a joint run with its binding at the draw (Declared.atDraw) and its cones at the IR (Declared.atIR), in ScopeSeeded with Accounting.Compose.SeedNamed (a protocol fact today's code doesn't meet), an Accounting.TS.prob event that shape.events does not list, not a Lean function; SeedExtractedAt (random-oracle), SeedLuckAt per round, UnitFixed at the run's modes, A1-A7, FoldOptFolded and FillOpt are not on the premises list. Its eps at r = 1, eps_flat = 0.571% and eps_mu = 0 is conditional on the whole-tile luck a query its wholeTheta reads, which no ruling grants: at 1/2 a query 56.6% for Llama-3.1-8B decode at batch up to 32 and 1.85% at prefill; under GuessLuckAt at 2^-64 1.691% (0.738% at batch 256, about 0.62% at prefill); under WholeEntropyAt at K/8 nats at most 0.672%; against EPS1's 1% and the live pair's 0.744%. The declared circuit is the served Program's only through Properties.Compose.UnitsOfLayout (unproved: its units, commit coins, seed preimages and draw) and an extractor that doesn't exist yet: until both exist, the guarantee speaks of the declared circuit, not of a served workload.",
    "Accounting.SecurityProofs.ComposePeriod.PeriodBudget": "lemma: the composition of resource accounting's window budgets over an accounting period: if every window's Accounting.Compose.serviceGame has RoundGame.BudgetAt Lambda whatever the earlier windows did, so has the period's game (Accounting.Compose.periodGame, each window one round, its play any function of the earlier windows' coins, Accounting.Compose.Period); by induction on the period, not a Lean function.",
    "Accounting.SecurityProofs.ComposePeriod.PeriodTailMax": "lemma: budget_tail at every prefix at once (Ville's inequality, finite form): when RoundGame.BudgetAt Lambda bounds a play, some prefix of its rounds passes (Accounting.Compose.RoundGame.acceptsUpTo) with share at least Lambda t (Accounting.Compose.RoundGame.deficiencyUpTo) with probability at most e^(-t), so a period credited up to its first failed window, a stopping time the cheater may steer, pays ln(1/delta_s) once; by induction on the play for every threshold, conditioning on the first round's coins, not a Lean function.",
-   "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod": "frozen (no-function,world-unlisted): INT-PERIOD's restatement of CircuitWork over an accounting period of at most n windows of one declared circuit (Accounting.Compose.Period, each window with its own live coins and draw), credited up to its first window with a refused proof (Accounting.Compose.PeriodRun.Credited, RT3-INT-7) and its words counted on each credited window's live tiles only (RT-INT's fix (c) with RT2-INT-1's), which Daniel took (ASK-64 = A, 19 Oct): an accepted period has its accepted prefix's live words fixed right but for a share at cost Lambda ln(1/delta_s) + j min(a, b) D0 at the realized prefix j (LiveWorkAt at rOfPrefix), except with probability delta_s + n (delta_bind + delta_ks); not a Lean function, an Accounting.TS.prob event that shape.events does not list, and its claims (OperandHMu, ReceiptLuckAt and GuessLuckAt per live tile under PerLiveTile, UnitFixed at the period's modes) are not on the premises list. Proved from CircuitWork's lemmas at n rounds: ServiceBudget per window at the live weights, PeriodBudget, PeriodTailMax once at the accepted prefix, DrawnRightOff at n rounds with PrefixOf, the period layer's covers (Accounting.SecurityProofs.ComposePeriod.periodCovers: Declared.periodLayer's writers are in their own window by its definition) and UnitFixed's sums. Its Scope holds LayerCommitted (each value the prover writes committed by its IR cut, or a computed value only its own unit reads by the draw, on which a late edge's cone lying in the IR's rests), which today's code doesn't meet, so a live window it serves is out of scope; and the period's record (cap and circuit committed before window 0's first coin, each window's first coin after the previous window's draw, closed at the first refused window) is protocol structure today's code doesn't meet either: the served Credits registers a window when it is received. Its live tiles are the ones live in-circuit: under #2731's tile (#2639's PouwH1Tile_v2) the served gate's admit bits admit a scale_only row block whose tile is dead (RT4-LOGIC-4), and under #2902's PouwH1Tile_v4 a tile's live bit is its admit bits' OR (RT4-LOGIC-20). Its quoted numbers take D0 = 0, which nothing computes for the served circuit, and at D0 > 0 DeadConeDead can fail, so that the statement says nothing (RT4-LOGIC-18). Its numbers are for live windows, which no served path runs yet, and the declared circuit is the served Program's only through Properties.Compose.UnitsOfLayout and an extractor that doesn't exist yet.",
+   "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod": "frozen (no-function,world-unlisted): INT-PERIOD's restatement of CircuitWork over an accounting period of at most n windows of one declared circuit (Accounting.Compose.Period, each window with its own live coins and draw), credited up to its first window with a refused proof (Accounting.Compose.Outcomes.Credited, RT3-INT-7) and its words counted on each credited window's live tiles only (RT-INT's fix (c) with RT2-INT-1's), which Daniel took (ASK-64 = A, 19 Oct): an accepted period has its accepted prefix's live words fixed right but for a share at cost Lambda ln(1/delta_s) + j min(a, b) D0 at the realized prefix j (LiveWorkAt at rOfPrefix), except with probability delta_s + n (delta_bind + delta_ks); not a Lean function, an Accounting.TS.prob event that shape.events does not list, and its claims (OperandHMu, ReceiptLuckAt and GuessLuckAt per live tile under PerLiveTile, UnitFixed at the period's modes) are not on the premises list. Proved from CircuitWork's lemmas at n rounds: ServiceBudget per window at the live weights, PeriodBudget, PeriodTailMax once at the accepted prefix, DrawnRightOff at n rounds with PrefixOf, the period layer's covers (Accounting.SecurityProofs.ComposePeriod.periodCovers: Declared.periodLayer's writers are in their own window by its definition) and UnitFixed's sums. Its Scope holds LayerCommitted (each value the prover writes committed by its IR cut, or a computed value only its own unit reads by the draw, on which a late edge's cone lying in the IR's rests), which today's code doesn't meet, so a live window it serves is out of scope; and the period's record (cap and circuit committed before window 0's first coin, each window's first coin after the previous window's draw, closed at the first refused window) is protocol structure today's code doesn't meet either: the served Credits registers a window when it is received. Its live tiles are the ones live in-circuit: under #2731's tile (#2639's PouwH1Tile_v2) the served gate's admit bits admit a scale_only row block whose tile is dead (RT4-LOGIC-4), and under #2902's PouwH1Tile_v4 a tile's live bit is its admit bits' OR (RT4-LOGIC-20). Its quoted numbers take D0 = 0, which nothing computes for the served circuit, and at D0 > 0 DeadConeDead can fail, so that the statement says nothing (RT4-LOGIC-18). Its numbers are for live windows, which no served path runs yet, and the declared circuit is the served Program's only through Properties.Compose.UnitsOfLayout and an extractor that doesn't exist yet.",
    "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod": "frozen (no-function,world-unlisted): CircuitWorkPeriod's credit in live words (RT4-INT-8): under its premises at a, b > 0, an accepted period has at least (1 - eps(j))+ of its accepted prefix's live words fixed right (Accounting.Compose.creditPrefix), eps(j) = r(j) N_w/(min(a, b) N_live) at the realized prefix j = PeriodRun.prefixLen (Accounting.Compose.epsPrefix), never at the cap n, except with probability delta_s + n (delta_bind + delta_ks), so a prefix whose eps is at least 1 earns nothing; not a Lean function, an Accounting.TS.prob event that shape.events does not list, with CircuitWorkPeriod's claims off the premises list. Proved from CircuitWorkPeriod's assembly (creditPrefix_le, with UnitFixed keeping an accepted run's fixed words nonnegative). A credit of words, not of time: the headline's time credit needs CreditOfWork on each credited window's run and is not stated.",
    "Accounting.SecurityProofs.TS.SessionSoundAt": "frozen (no-function,world-unlisted): #2909's SoundAt bridge on #2855's proof layer through its C-Flock sessions, over every window of sessions, not a Lean function; it takes EndToEndRegisteredRows' collision bounds at every session (RowsSession.CR) as hypotheses, and its premises AcceptedLive, WindowLaw, ServedChecksHold and ServedRootsLinked (Proofs.Accounting.TS.Session.Assumptions) are not on the premises list.",
    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline": "frozen (conjecture,no-function,world-unlisted): FP8-g1's headline on sm_120 at 5.860%, Accounting.SecurityProofs.TS.Sm120SheetHeadline (whose reason is this one's) at proof layers whose values are a round's operand leaves beside any other values (Leaves x W) with n_pi + 1 proofs a round, with binding at delta_bind (ProofLayer.BindingAt, #2855's form, which ProofsSoundOfPinned takes) in place of the record's fork form at delta_fork (BindingForkAt, read at sqrt(delta_fork) by BindingOfFork), so the budget reads delta_bind where the record's reads sqrt(delta_fork) and no number moves, and one hypothesis more over Definitions, every committed leaf FP8-g1's on H1's grids (Pouw.FpG1.Leaves.Fp8 at Pouw.FpG1.Grids.h1: E4M3's integers to 120 and to 104), which is not on the premises list; its conclusion reads no operand value, so the bound is the record's at g1's windows.",
@@ -30874,7 +30874,7 @@
    "guarantees": ["Pouw.SecurityProofs.Dimension.A2WordsIff"]
   },
   "Definitions.Pouw.Dither": {
-   "digest": "5775204cba85b181cccc77c05062405e74133cd091d572f52aba8d1782f96dc3",
+   "digest": "ef9cb41a341371d4fb61f7f4a99d701ae1358d261230384af7e3ba198b64b103",
    "definitions": {
     "Pouw.Dither.Accel": "9ec480ad86ec2d74ede4f0425a6de1dc7b028b5da50ebe62f1272b00fa7b531d",
     "Pouw.Dither.Accel.G1": "4653da5027854c6fcc140db720f6a2dedbae2c9b3ec44e4c96c63aafd4278963",
@@ -30895,22 +30895,9 @@
     "Pouw.Dither.Accel.rate": "037f90b5f17f32a688176a832ac41d3e3cb7487b2a7cc629f9f57e30a59ae4d2",
     "Pouw.Dither.Accel.use": "f007520fb83e7f1590095b739c0c874f3aeaf50bac9d9eb4b80fd4c383c71bbc",
     "Pouw.Dither.Accel.wall": "ed94fd59ce3d84f3a84155a33d4361089a9a29721ffe3b8ef03904c36330f390",
-    "Pouw.Dither.AnswersFit": "e35aafb1d89939d93e67d5b1ffcb485db3ba602db4c46f438987a2efe7c99b89",
-    "Pouw.Dither.FreedSound": "5cced56a29c96e1c9c97b51dcaf1d9eb065e118479213e743a54d77982cb1400",
-    "Pouw.Dither.Jobs": "ea283ecf860098aba806904e5628d0ac26baf189abc01858766182e03d8c387f",
-    "Pouw.Dither.Jobs.DualOpt": "199a0edcc6dc59708f6a02027e1590b0bbd32e0cb2e4c100e84d208e3493942f",
-    "Pouw.Dither.Jobs.Fits": "3938798655f7a3f3a38f501d0942b7c7c6f790f6bbbc633e5a7b0f107618bbf9",
-    "Pouw.Dither.Jobs.FreedWithin": "b7d6a3b590b420776ac1b8dfedb89f4b49088ec95d29033d1cf0b6a480b2131d",
-    "Pouw.Dither.Jobs.J": "0c779b6d67558c4207df4934dce66b301720dd29123d59b3c9e7af2b160ce892",
-    "Pouw.Dither.Jobs.T": "22d61056854af183e30590736cc233264c3ccd3fc9977bdef65ef5be4e7f6a53",
-    "Pouw.Dither.Jobs.cap": "693469cff5a7764b18513debf7c7b48d87e6bc46ecc552eb7716a764ba6fd17d",
-    "Pouw.Dither.Jobs.hon": "3f471592fdfb85d932bf737664afe8f9fad4a9452c60e145f292d9b039705eb0",
-    "Pouw.Dither.Jobs.instJ": "a3b75caa44a18211b2554466084f1313eb3d6306f15cbd49ad7fb7d29ef043e5",
-    "Pouw.Dither.Jobs.needs": "13e844044423e78a28ffe6485f69380f51d1904b9b6468d26603387eb6b3993c",
-    "Pouw.Dither.Jobs.rv": "90423e1e53b04a13bc120f58a750ee79adf51c990560238c31e30b641bdc1c5e",
-    "Pouw.Dither.Jobs.val": "a599cfb77c737c849244ad9910b5a2995a32a9828b85f5df58d8831a6bb99f7f",
-    "Pouw.Dither.Jobs.value": "5bf158180b429555f76979245a2b6fb407e177240731638ab376996f90d48405",
-    "Pouw.Dither.MomentSound": "e6eddf702949079281156222c90da16ac8b35e378fde8eb651488d7cdb0f7b73",
+    "Pouw.Dither.AnswersFit": "e570fd22138edd4a4ac2b18e176f0e54d0cec0cc7eaab177a8b7105cfe6cdd29",
+    "Pouw.Dither.FreedSound": "d651f64f2dd7178c2c19065387a5d8e53b3dffadda6f93a99e55a3a3d0112613",
+    "Pouw.Dither.MomentSound": "b2f280b18c92267044f5539005dcd2395eae9960c595f4d4631bd6274e4e4874",
     "Pouw.Dither.NoFold": "524a3001ca92a9049b4995d6172d95c2948cb1f4c5b727bbbd3bff7e057d9b46",
     "Pouw.Dither.NoFold.Chk": "f087b3c7c0e1971c5f066d0baae0ac481c570ec940ad6c4956aebd37f1512795",
     "Pouw.Dither.NoFold.Draw": "ac76d77cbe561e9e4fbbfa4fafd2df43707424ea1c0507dc63906f908591713e",
@@ -30929,6 +30916,19 @@
     "Pouw.Dither.NoFold.noise": "360292eaac68e48a7b11e49704e2e968ac46313fa3940e1182fc35227eda3d57",
     "Pouw.Dither.NoFold.opens": "34b9967f233997a19eebd14d569f5f1f22a1087da1e8d8971883a0c3c4cd202a",
     "Pouw.Dither.NoFold.s": "454590b6c7ad3d0c8b5b901312a939622d53e7dbdd9501f7d99095eac9ea9193",
+    "Pouw.Dither.Period": "44ecbca92d8080608d2c17e9d1f5e18f0dbfcb8230376a71c84f167cd618787f",
+    "Pouw.Dither.Period.DualOpt": "de2cfdb23fc458876516bcb4d65a44dcd271dacfca87cc2b335f82c4d1ab181d",
+    "Pouw.Dither.Period.Fits": "9409d527a674bf2bfd45e109f28e6de008c5e986e2b64178aade79fa7ea769b6",
+    "Pouw.Dither.Period.FreedWithin": "11cc5e17af553af664c00a7d2b470a85a94188c243bb559c834a73f7a7072cdf",
+    "Pouw.Dither.Period.J": "bd1a5e0f860e7af0a6721f743cd610075f2a29b48d9c9ae5810fa052a950a616",
+    "Pouw.Dither.Period.T": "d42f1cf9a9e23599442195210d842a28014ebf27e5e3a39d2a58858cb6943e9c",
+    "Pouw.Dither.Period.cap": "91f3f3c1166c67810a25e540c23e7a9d81ca96e0e1d685bbdcc9e8457568ced6",
+    "Pouw.Dither.Period.hon": "095e8f3d1db819bc0371fe3dd9d96dd3d4cfe66d952285a88c443185b92c79d2",
+    "Pouw.Dither.Period.instJ": "ce452fcba586e0b760ccb47ae1e1fe3818440946cfaee9197abb9020578f9b9f",
+    "Pouw.Dither.Period.needs": "64e4f6307e97ec22e9cfe2b76140394916011c463bdd9ba9306c9caa918dffb7",
+    "Pouw.Dither.Period.rv": "93f43991f36cc320b6427edd201492a99b52a40724ab1bf581765b3b639ea96b",
+    "Pouw.Dither.Period.val": "9fc5c3a6662ec4e34eac41e1cdd41a606ff1405d6233cc1fd3632e394f0af3cf",
+    "Pouw.Dither.Period.value": "caf38c15514a505918eaa227960de6ca24a8f3fc303bb2eef524e01ad1908332",
     "Pouw.Dither.Prover": "c2a37cc59ff90e203817bac72cb32b5d32a25b1537c7e8d70f1741cbc2b4f653",
     "Pouw.Dither.Prover.Accepted": "fb83191dd3f25998326d8fe22e1ee682fefc626ac3e4f64968fa8bee96be22a5",
     "Pouw.Dither.Prover.Passes": "d7f4ccf9d45beb93859280167894c73c5fd746732fa810df6ceb85fdd190bbf8",
@@ -31001,7 +31001,7 @@
    ]
   },
   "Definitions.Pouw.DitherInstance": {
-   "digest": "888ee0451172ca56bd83c8b5d3c030b797aa380a5416d18ce5c3201a6f7c7b97",
+   "digest": "012a6e975e3a7b8fb29dda06418e29bd2be9ec4ec086552603c89085f02aca0f",
    "definitions": {
     "Pouw.Dither.CallsAtPub": "4fd27c18ca3eb07b2fbafa6e459b881abf4047e92bf2b8cf73523cc83ddf7201",
     "Pouw.Dither.CardRunsAt": "5e79c94717cbf271888e33bd189df60cf3592130f9c4be689ee6811157bd382b",
@@ -31029,8 +31029,8 @@
     "Pouw.Dither.PubBest.mm": "dce1b856943e578402c3384463215ad34ca8c4ab66866c4930ac39357b670632",
     "Pouw.Dither.PubBest.sha": "d2b5f1feef9d1114d4e83a67e83d12ffac814144bf0b86faa27c56b0e70f0187",
     "Pouw.Dither.ResUnits": "3d8c0d264700e210ebb1fecc04f965bede4bd611610a65d313a4976a9cb4e2d9",
-    "Pouw.Dither.Timed": "26b1fe3ab14ae26d74bdfb4950e63723744261e13fdaf739f4362a68bbcfb375",
-    "Pouw.Dither.TimedWorkFits": "8d9157440dd68a0681eee23556081b3c6cf6e1836f04b141720a3839af08fc0f",
+    "Pouw.Dither.Timed": "58ef2b0f34b7b96379a74fa795d34aa26e298c7cfe048a7fea87bbb5270e1ace",
+    "Pouw.Dither.TimedWorkFits": "82083adcdba152dc434b6451ac2a977ffe5ecc69aa57a1e10f320200332634cd",
     "Pouw.Dither.cardRun": "3016cac84d25a6b758d60f89bae812a774026c41638cac5e7feabe3c1c708443",
     "Pouw.Dither.cardUnits": "9dff00021482e7a1f5477b823f290e6064de3f63b0b3d4866d90e37700979b16",
     "Pouw.Dither.hostH200": "48273c7f7f023bfce4e587116caa98fdfea8bf8fbd61b24841d5fe7afc414568",
@@ -31786,13 +31786,13 @@
    "guarantees": ["Pouw.SecurityProofs.Dimension.A2WordsIff"]
   },
   "Definitions.Pouw.Guarantees.Dither": {
-   "digest": "05dc8a681e91047bff63d5ee3f7ece44f66f2377e4704c4b84e5113aec6546c1",
+   "digest": "d98a910fe2b153b365b219ad5169f937addbc8fffd3d6566fe1d08fa2914e1c8",
    "definitions": {
-    "Pouw.Guarantees.Dither.FleetSound": "809ed96343d3067ef0a6be392722bd22ac24c04d28f6e6494297340eee79bcc2",
-    "Pouw.Guarantees.Dither.FreedOfFloor": "0c6852607cc216677ff4fee6562193cb9c95efb4f0394e4427e0e45fd79ee020",
-    "Pouw.Guarantees.Dither.WorkMoment": "e757fe88484de84f638dc64f3c6eed0ae29c4938ee0eea8eb7f6aa6462b662e4",
-    "Pouw.Guarantees.Dither.WorkSound": "257f01908a10dac3022777f5b2909942a9a020e9344f1329c52bf7778a316d6d",
-    "Pouw.Guarantees.Dither.WorkSoundNoFold": "0fdf9eecea054101a343dae63e8d3ce6b2bc09192a019d41ca03ebe34738dc1f"
+    "Pouw.Guarantees.Dither.FleetSound": "65a38e9df4c518edc4350f0c8739b71ca85a8105efd7d758b98928e71e16653a",
+    "Pouw.Guarantees.Dither.FreedOfFloor": "74e917dc708f8b7be81a2fae05513cc389e1d165d42c37e4b0e572857934f858",
+    "Pouw.Guarantees.Dither.WorkMoment": "92ad998b4cfc2c2e182def1122966ee089724eb35d872ac18611408ca1d99206",
+    "Pouw.Guarantees.Dither.WorkSound": "8b7eb7a598812a810eb964ca3756c93bfd9de17b1711be0d929a86ab0e4aee9a",
+    "Pouw.Guarantees.Dither.WorkSoundNoFold": "411bc22577b8a258932af64462437717f01cea7e759bfcecfef4684a67612756"
    },
    "guarantees": [
     "Pouw.SecurityProofs.Dither.FleetSound",
@@ -31803,10 +31803,10 @@
    ]
   },
   "Definitions.Pouw.Guarantees.DitherInstance": {
-   "digest": "5675c7066343769c545f4fd86113258b93fa73ab32c63db890d52c946c0fca96",
+   "digest": "3937a47fd7d8c12e13ddb9ac90a1d44631dea0c8b541f08b12ff0d06949ce12f",
    "definitions": {
     "Pouw.Guarantees.DitherInstance.WorkSoundAt": "368f1f2ade0dfbd379aca0aea8c44ba2f8fed6749da5f05b73a1224b7a2fbff9",
-    "Pouw.Guarantees.DitherInstance.WorkSoundAtX": "361402d354cfedc1d1af5c78d7e8d95755484830838266b8574cbaab836f6d86",
+    "Pouw.Guarantees.DitherInstance.WorkSoundAtX": "b4958812c4f60abdf6d147d8fd55f9132a057ee532a5fabfaf4639e226549270",
     "Pouw.Guarantees.DitherInstance.WorkSoundH200": "fa9597a9f89c02b477637bab831c3892f4cb39c2573cbcbadbca8f32c78e5385",
     "Pouw.Guarantees.DitherInstance.WorkSoundOnCard": "60d9c1b01c7f3715ecf4a3ef33d4feeceaabca5b72bb5a144bbbd8612c98aafa",
     "Pouw.Guarantees.DitherInstance.WorkSoundOnCardH200": "8ee80046f55922ff1450d52cf565b3a0922baa23d8ac99f1f2c80d6dae918af4",
@@ -31898,9 +31898,9 @@
    ]
   },
   "Definitions.Pouw.Guarantees.OnsiteFreed": {
-   "digest": "383005ae2b9350f9d7e2ec1467659fc88842ccc1c50e0d6c7fe25576a887f970",
+   "digest": "606eee6ca8d37e477e7eea11472dd94dc6e6f2fa35d59020d37b19a752adc481",
    "definitions": {
-    "Pouw.Guarantees.OnsiteFreed": "42387c0ed1d7d53eb08bf628c34b83b27e67d8b944b29ec3c11308b3a864d58f"
+    "Pouw.Guarantees.OnsiteFreed": "cd0625c3fd5b0e28a6d3344526af43add471c25395cab979da46d6b5a71b931b"
    },
    "guarantees": ["Pouw.SecurityProofs.OnsiteFreed"]
   },
@@ -35950,7 +35950,7 @@
    ]
   },
   "Definitions.Pouw.Witness": {
-   "digest": "950acdf9a6f4401fdbcff46822631edff4ff56b7ff6abb6924830129d93fcc4d",
+   "digest": "711fc474a8b7a9f398437dc9feba2ed93ef7bd5c0b0066cd46bca29e5b0d7780",
    "definitions": {
     "Pouw.Witness.RCell": "b0d12531f83bed957c03f0c37ca84fe80c0f8e1a1d65dace83cec07e42d1be3a",
     "Pouw.Witness.TAlg": "cdfda3f118d8d62180107d9902566ad36a28cdd7718c789b9ef9677a0e72333c",
@@ -35973,14 +35973,14 @@
     "Pouw.Witness.tw": "b21dc486befd6c746b2a5591c4dba63d0ad75cd4ee0b24377fa79578f1b633eb",
     "Pouw.Witness.twAdv": "01fb9d5f55de3fb269a2b1dbd21ad64e7e4066f130163dd731fdfb7e12989d91",
     "Pouw.Witness.twBadv": "998cf6e78bc4b9cd391997e92af1d112d014a261f45a9e94dbb5df982fe06fa9",
-    "Pouw.Witness.twDev": "6f1bb308097a9b828f6737501d05623d31ea00e3fc7e38cf4e15e275dcdcce3e",
+    "Pouw.Witness.twDev": "fcc974fecb6ad55f890e558ae47dc59edff48b979946cf59acf8d6bd28a09c42",
     "Pouw.Witness.twHmm": "266adefa680e49a00cb2fc97572a28ebce1f0a7c5c2813a8b6756eeeb355de92",
     "Pouw.Witness.twHo": "45d928e988ca443a83e1a5f14eece51ef70f1f6d672084176e945e242b76ca03",
     "Pouw.Witness.twHon": "1c45714f9370c14ba44f47f7ae025ebb1411ed2039a5a6dadbade95778511549",
     "Pouw.Witness.twHsha": "5fe24e818d24633e35b337531fffec35ecea81a12de2ec7c5daa277938718ac3",
     "Pouw.Witness.twInst": "3d5266dd50061adb63955c860f1b118acdfd20451e880a6457a290673a7614d4",
     "Pouw.Witness.twNF": "c1782003a4b15d1ce7ed248cc5a089aa7370f1c19ebf186c743f4af1037c5915",
-    "Pouw.Witness.twPd": "7dadc2fc1dcda2bd70e08df87088ed8b5b0db056bf2015356efc80b4e1a8de73",
+    "Pouw.Witness.twPd": "9fa9ecbefc42333416743e0693c74a21d8e401bc25a151efe374d69f5264289c",
     "Pouw.Witness.twQ": "317010e7c61f3e98de0ecbb9de8cd0c05b8017633595019dc92be0caad3fbb30",
     "Pouw.Witness.twReg": "8cb8d1038776eb79a9c7e72200082a5b50d2550666bc6571dfbf454b4a213630",
     "Pouw.Witness.twRound": "5989f49750a2d1f638e1abe1f61985d1ecd14f570dbc2df2544581831d26eee3",
