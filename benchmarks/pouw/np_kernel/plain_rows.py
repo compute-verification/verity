@@ -1,8 +1,8 @@
-"""Write the served committer's plain-leaf copy: native_rows.cu with its symbols renamed (verity_rows_p_*, namespace sha_p)
-and its split form's leaf made frame-v3-sha512's row leaf over the row digest, without hm96 (L1's words, whose hiding is one
-hm96 instance over their subtree): the salt kernel keeps only the frame leaf's first block, and the data kernel finishes
-the frame leaf on x instead of on the hm96 leaf h. Every edit must apply exactly once, so a change to the served file
-fails the build here instead of timing something else.
+"""Write the served committer's plain-leaf copy: native_rows.cu with its symbols renamed (verity_rows_p_*, namespaces
+sha_p and sx_p) and its split form's leaf made frame-v3-sha512's row leaf over the row digest, without hm96 (L1's words,
+whose hiding is one hm96 instance over their subtree): the salt kernel keeps only the frame leaf's first block, and the
+data kernel finishes the frame leaf on x instead of on the hm96 leaf h. Every edit must apply exactly once, so a change to
+the served file fails the build here instead of timing something else.
 
     python3 plain_rows.py NATIVE_ROWS_CU OUT_CU
 """
@@ -15,7 +15,7 @@ import sys
 EDITS = (
     (
         '#include "sha512.cuh"',
-        '#define sha sha_p\n#include "sha512.cuh"',
+        '#define sha sha_p\n#define sx sx_p\n#include "sha512.cuh"',
     ),
     (
         """  extern __shared__ uint4 T8[];
