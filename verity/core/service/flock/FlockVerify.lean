@@ -1368,9 +1368,27 @@ def heldToRegistration (law : Draw.Law) (pop : Nat) : Lean.Json × Nat → Optio
     else if pop != n then some s!"the population {pop} is not the registered {n}"
     else none
 
+/-- The draw of a law that samples every unit (a subset of the whole population, a Bernoulli draw at p = 1, or every
+stratum at its size), which reads no coins: its units are the same on any bytes. None for any other law. -/
+def drawEvery? (law : Draw.Law) (pop : Nat) : Option Draw.UnitDraw :=
+  let every := match law with
+    | .subset k => k == pop
+    | .bernoulli a b => a == b
+    | .stratified _ strata => strata.all fun s => s.k == s.size
+    | .work _ strata => strata.all fun s => s.k == s.toStratum.size
+  if every then Id.run (Draw.drawWith (fun _ need => pure (ByteArray.mk (Array.replicate need 0))) law pop) else none
+
+/-- What `draw` says, refusing before any coin, to a draw that would read coins and is given none: the verifier has no
+coins of its own. -/
+def NO_OWN_COINS : String :=
+  "draw: the verifier draws no coins of its own: a draw of fewer than every unit reads the challenger's coins, " ++
+    "given as --stream HEX or --stream-file F"
+
 /-- `draw (--population N (--k K | --p NUM/DEN) | --program P --partition Q (--stratified K | --work K --work-table F))
-[--closure F] [--registration F] [--tables J] [--stream HEX | --stream-file F]`: the unit draw (§7.3), from the operating system's randomness (a stratified or work draw:
-one stream per stratum), or from the given bytes (a test; a stratified or work draw's streams are its consecutive segments).
+[--closure F] [--registration F] [--tables J] [--stream HEX | --stream-file F]`: the unit draw (§7.3) on the given bytes, the
+challenger's coins (a stratified or work draw's streams are its consecutive segments). The verifier draws no coins of its
+own: without `--stream` or `--stream-file` only a draw of every unit, which reads no coins (`drawEvery?`), is drawn, and
+any other is refused (`NO_OWN_COINS`).
 The strata are the verifier's own, derived from its program and partition object, and a work law's works and floors are its
 own work table's; with `--closure F`, a work draw is widened by the verifier's closure map. With `--registration F` the
 draw is refused, before any coin is read, unless its law and population are the registration's. With `--tables J` it is
@@ -1417,7 +1435,9 @@ def drawCmd (args : List String) : IO UInt32 := do
     | none, some f => pure (some (← IO.FS.readBinFile f))
     | some _, some _ => IO.eprintln "draw: at most one of --stream, --stream-file"; return 2
   let d ← match stream with
-    | none => Draw.drawOS law pop
+    | none => match drawEvery? law pop with
+      | some d => pure d
+      | none => IO.eprintln NO_OWN_COINS; return 2
     | some src =>
       match Draw.drawOn law pop src with
       | some d => pure d
