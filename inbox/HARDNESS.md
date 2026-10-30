@@ -149,3 +149,23 @@ Everything else is engineering on parts we have.
 - Spend beyond existing budget lines goes to the coordinator, and from there to Daniel.
 - **Times:** preliminary notes by 00:00Z Sat (5 PM PDT), and the coordinator's synthesis to Daniel by 01:00Z (6 PM PDT),
   laid out on this architecture.
+
+## Coordinator's smell check and redirects (21:35Z Fri, after HT-ML's, HT-REDML's and HT-CLAIM's interim notes)
+
+1. **HT-ML's scaling plan scales an insecure arm.** Its reference arm is B at ρ = 0.25, but HT-REDML and HT-CLAIM show
+   the ball contains cheap matrices from ρ ≈ 0.03–0.06 (the low bits dropped, a 3-bit grid; Blackwell breaks at 6.3%).
+   *Redirect:* no GPU spend on B or A scaling. A is also near-dead on utility: GaLore and ReLoRA's "LoRA from a random
+   init" are already 4–9× over the 3× kill line, and A at the rank the ε budget allows is +0.68 nats on the toy.
+   The real-scale test moves to **A-LSB** (W = 2ᵇ·H + L, with L public random low bits): a QAT pass on an existing open
+   model, which is cheap.
+2. **A-LSB's "a full unit on the H200 at b = 2" rests on a recalled fact:** that sm_90a has no fast b1/s4 tensor path.
+   It defines the credit, so HT-PREMISE must *measure* mma.sync .b1 and .s4 (and any packing route) on an H200 before
+   anyone states the credit.
+3. **"Costs nothing" is a toy** (d 256, TinyStories, CPU). Label it that way until the real-scale QAT run.
+4. **Scope:** the designs force tensor work on the hardened linears only. Attention is 28–60% of MACs at 128K, and
+   there's no HBM or network claim. Every statement must carry κ. "Nearly all compute, HBM and network" needs a
+   mechanism per resource.
+5. **Coins are the binding deployment cost:** 1.6–15 GB/s a GPU, up to about 2 Tb/s into a node. They can't be seeded
+   under today's egress-only certifier. The lead shares this.
+6. **Fleet format:** int8 is 1.4–3.4% of FP8's rate on B300 and Rubin. A credit in int8 units covers almost nothing of
+   those chips, so an FP8 or FP4 analogue of A-LSB is required beyond Hopper.
