@@ -93,8 +93,8 @@ def test_an_import_of_one_part_takes_only_its_entries(tmp_path, monkeypatch):
 
 def test_the_lean_build_trees_are_never_walked(tmp_path, monkeypatch):
     """A recorded check snapshots and exports the caches around its steps, and a Lean build tree holds a package's whole
-    dependency copy (some 170k files); its `.json` files (records, `lake-manifest.json`, `links.json`) were packed as verdicts
-    (red team, #966)."""
+    dependency copy (some 170k files); its `.json` files (records, `lake-manifest.json`, `links.json`) are never packed as
+    verdicts."""
     r = _machine(tmp_path, monkeypatch, "a")
     _fill(r)
     _write(r["check"] / "lean-audit" / ".lake" / "x.json", "{}")
@@ -125,7 +125,7 @@ def test_since_a_snapshot_a_pack_holds_only_what_the_run_stored(tmp_path, monkey
 
 def test_snapshot_and_export_read_only_what_the_index_does_not_know(tmp_path, monkeypatch):
     """The caches run to hundreds of GB; re-reading every entry at both ends of a check held a finished run for an hour of
-    disk reads once another job had evicted the page cache (14 Oct, r20261014-032950-9e49).  The per-root index memoizes each
+    disk reads once another job had evicted the page cache.  The per-root index memoizes each
     entry's sha256 by (size, mtime_ns): a second snapshot reads nothing, and a closing export reads only the run's own writes."""
     r = _machine(tmp_path, monkeypatch, "a")
     _fill(r)
@@ -220,7 +220,7 @@ def _pack_with(tmp_path: Path, member: str) -> Path:
 @pytest.mark.parametrize("member", SKIPPED)
 def test_a_member_in_a_part_of_the_caches_never_packed_is_left_out_and_the_rest_taken(tmp_path, monkeypatch, member):
     """Packs written before `lean-builds/` was skipped hold its kept builds' `ir/*.setup.json`: their verdicts still count, and
-    neither `import` nor `combine` carries the builds (12 Oct: a combine of them ran a 15 GB VM out of disk)."""
+    neither `import` nor `combine` carries the builds (a combine of them runs a 15 GB VM out of disk)."""
     r = _machine(tmp_path, monkeypatch, "b")
     pack = _pack_with(tmp_path, member)
     assert V.refusal(pack) is None
@@ -342,8 +342,8 @@ def test_a_recorded_check_gathers_the_newest_recorded_checks_packs_into_one(tmp_
 
 
 def test_the_checks_gathered_are_the_ones_that_ended_last_so_a_long_ones_passes_reach_the_next_check(tmp_path, monkeypatch, capsys):
-    """16 Oct: a pre-warm of #2113's cold circuit-check ran 4.5 h while drive started more than twelve warm checks; ordered by
-    start, its pack was out of the window when the train it warmed ran."""
+    """A pre-warm of a cold circuit-check can run 4.5 h while drive starts more than twelve warm checks; ordered by start, its
+    pack would be out of the window when the train it warmed ran."""
     check = _load("check")
     packs = {}
     for name in ("short", "long"):
@@ -357,8 +357,8 @@ def test_the_checks_gathered_are_the_ones_that_ended_last_so_a_long_ones_passes_
 
 def test_a_recorded_checks_pack_import_refuses_is_passed_over_by_name_and_a_refused_pack_given_is_an_error(tmp_path, monkeypatch,
                                                                                                           capsys):
-    """A pack holding anything but verdict entries (9 Oct: a Lean audit's scratch in a recorded check's pack crashed every
-    `--record`; such a part is now left out of a pack, and a link or another prefix still refuses it) is skipped and the next one
+    """A pack holding anything but verdict entries (a Lean audit's scratch is left out of a pack, and a link or another
+    prefix still refuses it) is skipped and the next one
     taken; none of its entries is reused."""
     check = _load("check")
     bad = tmp_path / "bad.tar.gz"
@@ -451,7 +451,7 @@ def test_a_pack_given_is_added_to_the_gathered_ones_and_survives_a_store_that_ca
 
 def test_two_imports_on_one_machine_never_share_a_temporary_file(tmp_path, monkeypatch):
     """Two checks on one machine import the same pack at once: each writes its entries through a file of its own, so neither
-    renames the other's away (20 Oct: r20261020-144906-20cb died in `verdicts_in` with FileNotFoundError on the shared name)."""
+    renames the other's away (a shared name fails `verdicts_in` with FileNotFoundError)."""
     _fill(_machine(tmp_path, monkeypatch, "a"))
     pack = tmp_path / "pack.tar.gz"
     assert V.export(pack) == 4
