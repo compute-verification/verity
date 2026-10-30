@@ -7,7 +7,6 @@ constants mirrored by the SP1 kernel (``frame::tagged_sha256``); nothing here ma
 from __future__ import annotations
 
 import hashlib
-import json
 from collections.abc import Mapping, Sequence
 from enum import StrEnum
 from typing import NewType
@@ -50,31 +49,23 @@ def _normalize_json(value: object, path: str = "$") -> JSONValue:
 def canonical_json_text(manifest: JSONValue) -> str:
     """Encode a JSON-compatible identity manifest deterministically.
 
-    Object keys are sorted, insignificant whitespace is omitted, Unicode is
-    encoded directly as UTF-8 by :func:`canonical_json_bytes`, and floats are
-    rejected. Exact rational values must be represented by explicit integer
-    numerator/denominator fields.
+    Object keys are sorted, insignificant whitespace is omitted, every string
+    (keys included) is ASCII without DEL and any other is refused
+    (``ValueError``), and floats are rejected. Exact rational values must be
+    represented by explicit integer numerator/denominator fields.
     """
 
-    normalized = _normalize_json(manifest)
-    return json.dumps(
-        normalized,
-        ensure_ascii=False,
-        allow_nan=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    )
+    return canonical_json_bytes(manifest).decode("ascii")
 
 
 def canonical_json_bytes(manifest: JSONValue) -> bytes:
-    """Return the canonical UTF-8 encoding of an identity manifest."""
+    """Return the canonical encoding of an identity manifest:
+    ``verity.ml.circuits.codec.canonical_json`` of it, floats refused."""
 
-    try:
-        return canonical_json_text(manifest).encode("utf-8")
-    except UnicodeEncodeError as error:
-        raise ValueError(
-            "identity manifest contains an invalid Unicode surrogate"
-        ) from error
+    # imported here: `verity.ml.commitments` imports this module, and only a writer of canonical JSON reads the codec
+    from verity.ml.circuits.codec import canonical_json as codec_canonical_json
+
+    return codec_canonical_json(_normalize_json(manifest))
 
 
 # The short name follows the existing repository convention of returning bytes.

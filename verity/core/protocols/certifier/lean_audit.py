@@ -43,6 +43,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from verity.ml.circuits.codec import canonical_json
 from verity.ml.crypto import lms
 from verity.core.protocols.certifier import audit
 from verity.core.protocols.certifier.audit import Published, Verdict
@@ -140,7 +141,7 @@ def case(egress: Sequence[tuple[str, Sequence[LogicalFrame], Sequence[ClockSync]
     evidence = {"links": [{"frames": [[f.payload.hex(), f.anchor, f.index] for f in frames],
                            "syncs": [_sync_json(s) for s in syncs]} for _, frames, syncs in egress]}
     return {"commitment": b"".join(encode(r) for r in records).hex(),
-            "evidence": json.dumps(evidence, sort_keys=True, separators=(",", ":")).encode().hex(), "params": params}
+            "evidence": canonical_json(evidence).hex(), "params": params}
 
 
 def build() -> Path:
