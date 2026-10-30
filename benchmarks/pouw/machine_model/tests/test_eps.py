@@ -17,7 +17,7 @@ from verity_machine_model.model import DATA, DEVICES, census, device, devices, m
 
 PIN = "VF3l-16"                    # the vector these hand-checked numbers were read on, whatever is current
 PI = E.machine(PIN)
-PIU = E.uniform_on_issue(PI, 1.0)   # decision 73: a uniform instruction takes an issue slot, which VF3l-16 doesn't price
+PIU = E.uniform_on_issue(PI, 1.0)   # a uniform instruction takes an issue slot, which VF3l-16 doesn't price
 SPECS = Path(__file__).resolve().parents[3] / "ppl" / "specs"   # the perplexity arms a design names
 H = E.honest("dither-duo-l32")
 M = E.honest("e-l7qs")
@@ -47,16 +47,17 @@ def test_the_honest_profile():
 
 
 def test_the_measured_profile():
-    """PROFILE's e_l7qs: the model reproduces its work bound on JI3e_0, and the measured time above it is ε_sched."""
+    """The measured profile e_l7qs: the model reproduces its work bound on JI3e_0, and the measured time above it is
+    ε_sched."""
     assert M.status == "measured" and M.measured == 26.1221 and "WAIT" not in M.per_mma
     assert max(PI.load(M.per_mma).items(), key=lambda t: t[1]) == ("JI3e_0", pytest.approx(22.4334, abs=1e-4))
     e = E.eps(E.design("dither-1s"), PI, 8)
     assert e.T_honest_source == "measured" and e.T_honest * 128 == M.measured
     assert e.sched == pytest.approx(1 - 22.4334 / 26.1221, abs=1e-5)
-    assert e.clock == pytest.approx(1 - 2092 / 2430, abs=1e-4)   # SPEC's P1: the prover sets its own clocks
+    assert e.clock == pytest.approx(1 - 2092 / 2430, abs=1e-4)   # the prover sets its own clocks
     assert e.total() == pytest.approx(1 - (1 - e.skip - e.machine_eps - e.luck) * (1 - e.sched) * (1 - e.clock))
     assert e.floor == pytest.approx((22.4334 - JI - 12) / 22.4334, abs=1e-5)   # honest's overhead, under H's credit
-    m = E.eps(E.design("dither-1s"), PI, 8, credit="model")   # PROFILE's B(H)/f_max: ε_sched, ε_clock leave ε for γ
+    m = E.eps(E.design("dither-1s"), PI, 8, credit="model")   # B(H)/f_max: ε_sched, ε_clock leave ε for γ
     assert m.sched is None and m.clock == 0 and m.machine_eps == e.machine_eps and m.total() < e.total()
     assert m.credit_ratio == pytest.approx(1 / ((1 - e.sched) * (1 - e.clock)), rel=1e-9)
     r = E.eps(E.design("dither-1s").with_fold_cost(1.5), PI, 8)   # another fold: H's measured overhead carries over
@@ -67,7 +68,7 @@ def test_the_measured_profile():
 
 
 def test_the_noise_sets_the_operand_floor():
-    """SPEC §3.4: 1/39 a MMA where B̃ is resident at the zero instance, 0.20 where both operands are fresh."""
+    """The operand floor: 1/39 a MMA where B̃ is resident at the zero instance, 0.20 where both operands are fresh."""
     assert E.design("dither-1s").floor == {"LDSM_X4": pytest.approx(1 / 39, abs=1e-6)}
     assert E.design("dither-2s").floor == {"LDSM_X4": 0.2} == M.floor
     for n, phi in (("dither-1s", 1 / 39), ("dither-2s", 0.2)):
@@ -93,7 +94,7 @@ def test_the_operand_floor(operands):
 @pytest.mark.parametrize("operands", OPERANDS)
 def test_the_lane_route_pays_below_the_mma_s_issue_cost(operands):
     """A word on lanes costs q*/32 issue-cycles; on the tensor pipe (JI3e_0 + operands)/128 besides the fold both pay:
-    SPEC's Corollary D1, 32α/(βω) = 2.029 with operands free."""
+    Corollary D1, 32α/(βω) = 2.029 with operands free."""
     s = E.setup(DUO, PI, operands=operands)
     t = E.threshold(s, uniform=False)
     assert t == pytest.approx((JI + OPERANDS[operands]) / 4, abs=1e-5)
@@ -112,7 +113,7 @@ def test_the_uniform_route_in_closed_form(q):
 
 
 def test_a_uniform_instruction_on_the_issue_rows():
-    """Charged an issue slot (decision 73), a uniform instruction does one value where a lane instruction does 32, so
+    """Charged an issue slot, a uniform instruction does one value where a lane instruction does 32, so
     past the lanes' threshold the uniform route saves the cheater nothing, and no filler is needed to close it."""
     pi = PIU
     assert pi.c["UNI"]["issue"] == pi.c["UNI"]["JI3e_0"] == 1.0 and pi.c["UNI"]["UP"] == UP
@@ -147,7 +148,7 @@ def test_lane_filler_dilutes_the_operand_floor():
 
 @pytest.mark.parametrize("n, phi", [("dither-1s", 1 / 39), ("dither-2s", 0.2)])
 def test_the_floor_credit(n, phi):
-    """SPEC §0.7a: ♭ is the tensor route at φ_del with the fold, B_♭ = JI3e_0's MMA + 12 + φ_del a MMA. Under it ε_sched,
+    """♭ is the tensor route at φ_del with the fold, B_♭ = JI3e_0's MMA + 12 + φ_del a MMA. Under it ε_sched,
     ε_clock and honest's overhead leave ε for γ, and with a uniform instruction on the issue rows the cheater paying
     the floor saves nothing past the threshold. Paying nothing, it saves φ_del on JI3e_0."""
     d = E.design(n)
@@ -224,10 +225,10 @@ def test_luck_and_the_total():
 
 
 def test_adapt_is_a_proof_units_term():
-    """ε_adapt (SPEC's Theorem D) sits in the first factor beside ε_skip, ε_machine and ε_luck, and is the proof block's."""
+    """ε_adapt (Theorem D) sits in the first factor beside ε_skip, ε_machine and ε_luck, and is the proof block's."""
     assert set(E.adapts()) == {"segment", "whole", "whole-recompute", "per-stage"}
     assert E.adapt("segment").eps == 0.21 and E.adapt("whole").eps == 0.0035
-    assert {E.design(n).unit for n in E.designs()} == {"whole"}   # decision 72: whole dot products
+    assert {E.design(n).unit for n in E.designs()} == {"whole"}   # every design's proof block is whole dot products
     e0 = E.eps(DUO, PI, 8)
     e = E.eps(DUO, PI, 8, adapt=E.adapt("whole"))
     assert e0.terms()["adapt"] is None and e.terms()["adapt"] == 0.0035
@@ -259,7 +260,7 @@ def test_two_bit_entries_on_the_indexed_operand(tmp_path):
 
 def test_core_and_sample_are_two_layers():
     """The core ε is the protocol with 100% checking, Corollary D3's: every check is one draw, so ε_luck
-    is in it (LEDGER; JL is not assumed) and ε_adapt = 0; ε_sample = ε_adapt is the sampling compiler's and never
+    is in it (JL is not assumed) and ε_adapt = 0; ε_sample = ε_adapt is the sampling compiler's and never
     enters it."""
     e = E.eps(DUO, PI, 8, adapt=E.adapt("whole"))
     assert e.core() == pytest.approx(
@@ -313,7 +314,7 @@ def test_the_table_route_is_bound_by_L2():
 
 def test_designs_read_what_exists():
     """Every design reads the census, names a leaf of NOISE for each product, a proof block and, where one is on main,
-    its perplexity arm; decision 79's three names are designs, and each alias names one design."""
+    its perplexity arm; the three family names are designs, and each alias names one design."""
     c = census(model(), vector(PIN).epoch)
     for n in E.designs():
         d = E.design(n)
@@ -474,13 +475,14 @@ def test_devices_follow_the_layout():
 
 
 def test_sm89_the_fold_binds_honest():
-    """The L40S (EPS1 ADA): at L = 16 duo's two ALU-pipe instructions a word hold the floor program on row A, 8 a MMA at
+    """The L40S: at L = 16 duo's two ALU-pipe instructions a word hold the floor program on row A, 8 a MMA at
     ALU's measured rate, above IMMA.16816's issue, so no lane route saves time at any q*. The uniform route does: UNI
     runs on UP at 2.0 a SM-clock (uniform.cu, every form) and costs issue and JI89 its measured cost beside honest16, so
     a cheater writes words there in JI89's slack, less of them as q* grows, and ε_machine never reaches its floor. At
-    L = 32, with IMMA.16832's ALU and FFMA facets refitted to FACET-BREAK's schedule (EPS1 ADA r3, opcode_probe/sm89/
-    ji.py), JI89 binds the floor program and the cheater alike: lane words save time only below JI89's q*0 (IMMA.16832's
-    coefficient over a thread's 4 words, 1.9), and UNI's JI89 cost leaves the uniform route nothing."""
+    L = 32, with IMMA.16832's ALU and FFMA facets refitted to the schedule search
+    (opcode_probe/sm89/ji.py), JI89 binds the floor program and the cheater alike: lane words save time only below
+    JI89's q*0 (IMMA.16832's coefficient over a thread's 4 words, 1.9), and UNI's JI89 cost leaves the uniform route
+    nothing."""
     pi = E.machine("", SM89)
     assert pi.vector == "ADA-89" and set(pi.c[E.UNI]) == {"UP", "issue", "JI89"}
     assert pi.c[E.UNI]["UP"] == pytest.approx(4 / (2.0 * 1.02), rel=1e-3)   # UNI's rate + 2%
@@ -508,15 +510,15 @@ def test_sm89_the_fold_binds_honest():
 
 
 def test_dc_the_tensor_couples_with_lanes_on_sm90_not_sm100():
-    """EPS1 DC's H200 and B200 at L = 32. On sm_90 duo binds the floor program on the joint ALU facet: a wgmma takes
+    """The H200 and B200 at L = 32. On sm_90 duo binds the floor program on the joint ALU facet: a wgmma takes
     62.77 SMSP-cycles of it and 62.74 of issue, so lane words save time at every q* (no threshold) and ε_machine is 4%
     at q* = 2.03. On sm_100 the tensor holds no lane pipe row: beside the saturated tcgen05.mma the exact tclaneU_lop3
     keeps the tensor at 0.999 and LOP3 at 0.991 of alone, so census.py writes no JPA100 row, duo binds the ALU pipe A
     alone, and a word on lanes saves nothing there (threshold 0 without the uniform route). The uniform datapath (UP,
-    and 0.92 of an issue slot a uniform instruction, its price beside an issue-saturated stream: DC r5) takes 0.59% of
+    and 0.92 of an issue slot a uniform instruction, its price beside an issue-saturated stream) takes 0.59% of
     the B200's words off A at q* = 2.03, so it has no threshold; on the H200 JI90_0 charges a uniform instruction 0.96,
     which closes it. At L = 256 the B200 stays ALU-bound: 8 MMAs hold the tensor pipe 4015 SMSP-cycles a 32768 words,
-    under the fold's 4016 of ALU (RT-BLACKWELL-16: JPA100_1, fitted to the block-timed tclane_lop3_r128, coupled the
+    under the fold's 4016 of ALU (a JPA100_1 fitted to the block-timed tclane_lop3_r128, coupled the
     two, read this floor tensor-bound at 5410 and the cheat at over 20%)."""
     sm90, sm100 = DEVICES / "sm_90", DEVICES / "sm_100"
     duo = [n for n in E.designs(sm90) if "-li" not in n]
@@ -542,7 +544,7 @@ def test_dc_the_tensor_couples_with_lanes_on_sm90_not_sm100():
 
 
 def test_dc_li_binds_honest_on_the_lane_facet():
-    """DC-DESIGN's LI designs at L = 32 (one lane instruction a word, LOP3 and IMAD alternating): a balanced fold binds
+    """The LI designs at L = 32 (one lane instruction a word, LOP3 and IMAD alternating): a balanced fold binds
     honest where duo binds one pipe with issue slack, so relocating a word to lanes stops paying below output counting's
     q* = ½. On sm_90 LI alone leaves the ALU pipe 1.5% short of half issue; 0.02 verified FFMA a word puts honest on
     JI90_0, whose threshold is 0.4999, no margin. On sm_100 the x128 loads are the tensor route's, honest binds issue,
@@ -581,12 +583,12 @@ def test_sm90_ffma_filler_has_no_uniform_form():
 
 
 def test_the_fold_routes_are_the_cheaters_and_the_floor_programs():
-    """RT2-HOPPER-9, -11 and RT3-DC-1, -4: the bit-exact checkpoint routes (four segments' words in one STG.128, an XOR on
+    """The bit-exact checkpoint routes (four segments' words in one STG.128, an XOR on
     the uniform datapath, shared-memory and L2 atomics, a transpose through shared memory), each instruction at its
     census class, and the check reads the checkpoint word, not its program, so the cheater folds by any mix of the
-    design's fold and its `[fold_routes]`, RT4-SHEET-7's generic-address L2 XORs (ATOM.E, no AT90 line) among them, and
-    after them the counted folds, none built: RT4-SHEET-13's and -14's moves of LI on li and each route, and li-bulk's
-    BT1024 and trimmed W = ∞ members (RT4-SHEET-22); li-bulk itself (RT4-SHEET-17) is built, at its measured cost. With
+    design's fold and its `[fold_routes]`, the generic-address L2 XORs (ATOM.E, no AT90 line) among them, and
+    after them the counted folds, none built: the moves of LI on li and each route, and li-bulk's BT1024 and
+    trimmed W = ∞ members; li-bulk itself is built, at its measured cost. With
     ♭ at REDUX they beat it by 1.47% on DS-90 and 2.25% on DC-90-ri, where the cheater folds by the generic CP_RED2 and
     li-bulk's trimmed W = ∞ member (ATOME32, REDUX and the stores on the JI90 lines the H200 measured beside the IGMMA).
     ♭ folds by the built routes alone: by
@@ -644,7 +646,7 @@ def test_flat_never_folds_by_a_counted_route(tmp_path):
 
 
 def test_the_l2_xor_checkpoints_on_the_menu_span_their_family():
-    """RT2-HOPPER-1 and RT3-DC-1: the checkpoint's lane XOR in memory, a LOP3 and b red.global.xor (REDG) a segment,
+    """The checkpoint's lane XOR in memory, a LOP3 and b red.global.xor (REDG) a segment,
     2a + b ≥ 8, is bit-exact. CP_RED, CP_RED2 and CP_RED8, (a, b) = (4, 1), (3, 2) and (0, 8), are on the menu, a REDG at
     REDG32: one issue slot, and on DC-90 and DC-90-ri AT90's 290 SMSP-cycles too, the L2's atomic row. The family's
     (2, 4) and (1, 6) are mixes of CP_RED2 and CP_RED8, so with them on the menu ♭ and ε_machine don't move."""
@@ -661,14 +663,14 @@ def test_the_l2_xor_checkpoints_on_the_menu_span_their_family():
         assert r.machine_eps(1.22) == pytest.approx(s.machine_eps(1.22), abs=1e-9), vec
 
 
-HEADLINE_Q = 1.22   # decision 89's reading: the 1.22-slot issue floor (Theorem C, unproved in Lean; CALC r10)
+HEADLINE_Q = 1.22   # the measured reading: the 1.22-slot issue floor (Theorem C, unproved in Lean)
 HEADLINE = {fam: (f["design"], f["measured"]["vector"]) for fam, f in headline_spec()["family"].items()}   # headline.toml's
 
 
 def _worst_core_under_margin(data, pi, d, m):
     """Core ε with every near measured facet (one the cheater loads to within 5% at the headline q*) moved m in the
-    cheater's favour at once: decision 76's margin on the rows the headline reads. The axiomatic issue slot (every warp
-    instruction = 1, decision 73) is not a measured row, and the exact operand floor is an architectural count, so both
+    cheater's favour at once: the margin on the rows the headline reads. The axiomatic issue slot (every warp
+    instruction = 1) is not a measured row, and the exact operand floor is an architectural count, so both
     are left alone; a facet's measured lane coefficient is the small one it shares (not the tensor-pipe MMA value)."""
     def core(p):
         return E.eps(d, p, HEADLINE_Q, data, operands="free", credit="floor").core()
@@ -687,19 +689,19 @@ def _worst_core_under_margin(data, pi, d, m):
     return core(replace(pi, c=cc))
 
 
-def test_dc_the_headline_holds_decision_76s_margin():
-    """EPS1 DC's margin audit: each device family's headline core ε, on
+def test_dc_the_headline_holds_the_2pct_margin():
+    """The margin audit: each device family's headline core ε, on
     data/headline.toml's design at its measured reading's vector, stays under 1% when each measured facet the headline
-    reads moves 2% in the cheater's favour (decision 76), at the decision-89 reading (operands free, q* = 1.22), ε_luck
+    reads moves 2% in the cheater's favour, at the measured reading (operands free, q* = 1.22), ε_luck
     in the core (Corollary D3). A family whose core is at or over 1% before the margin is the headline's own row
     (test_headline pins it, with its reason), so the audit holds only the families under 1% to 1%; the margin never
     lowers a core. It doesn't move the A100 or the RTX PRO 6000, and it moves the L40S by under 0.01 points. How far it
     moves the H200 and the B200 depends on their designs, which the audit reads rather than pins.
     dither-2s-li-l32, the H200's headline before LI-CP-W, is the thin design: its 0.02 FFMA filler puts honest on JI90_0
     by only the ALU pipe's 1.5% issue slack, so a 2% rise in JPA90_0 (ALU lanes beside the tensor) moves honest's
-    binding off JI90_0 and opens the lane route, taking core to 1.084% with the peel at sm_90a's own counts (RT-ISA-7;
-    0.98% at sm_120's): it crosses 1% past a 1.7% margin. A 0.05 FFMA filler a word restores the full margin (core back
-    to its 0.679% floor) at γ 1.589, the cheapest add-on; its ε_skip at the larger ♭ is CALC's to re-price."""
+    binding off JI90_0 and opens the lane route, taking core to 1.084% with the peel at sm_90a's own counts (0.98%
+    at sm_120's): it crosses 1% past a 1.7% margin. A 0.05 FFMA filler a word restores the full margin (core back
+    to its 0.679% floor) at γ 1.589, the cheapest add-on."""
     worst = {}
     for dev, (name, vec) in HEADLINE.items():
         data = device(dev)
@@ -709,7 +711,7 @@ def test_dc_the_headline_holds_decision_76s_margin():
         worst[dev] = (base, _worst_core_under_margin(data, pi, d, 0.02))
         assert worst[dev][1] >= base - 1e-12, f"{dev} {name} on {vec}: the margin lowered core"
         if base < 0.01:
-            assert worst[dev][1] < 0.01, f"{dev} {name} on {vec}: {worst[dev][1]*100:.3f}% over 1% under decision 76's margin"
+            assert worst[dev][1] < 0.01, f"{dev} {name} on {vec}: {worst[dev][1]*100:.3f}% over 1% under the 2% margin"
     assert {"sm_80", "sm_89", "sm_120"} <= set(worst)
     for dev in ("sm_80", "sm_120"):
         assert worst[dev][1] == pytest.approx(worst[dev][0], rel=1e-9), f"{dev}: the margin moved core"
@@ -740,7 +742,7 @@ def test_cli_device(capsys):
         main(["--data", str(SM89), "--device", "sm89", "eps"])
 
 
-QPIN = "VF3q-16"                   # the per-form numbers below were read on it (FACET-BREAK's JI3q rows)
+QPIN = "VF3q-16"                   # the per-form numbers below were read on it (its JI3q rows)
 QPI = E.machine(QPIN)
 FORMS = E.forms()
 I = next(f for f in FORMS if f.kind == "IMMA16832")
@@ -817,7 +819,7 @@ def test_the_cheater_mixes_forms():
     ("dither-duo", 0.03447, 0.00457, 3.1993, 0.05883),
 ])
 def test_eps_with_a_class_per_form(n, eps2, eps3, q0, lookups):
-    """Core ε's machine term on VF3q-16, credit and operands at the floor: FACET-BREAK's IMMA16832-own counterfactual
+    """Core ε's machine term on VF3q-16, credit and operands at the floor: the IMMA16832-own counterfactual
     (3.50%/3.45% at q* = 2, 0 at q* = 4, the floor at q* = 3.2), now with the cheater free to mix forms. With
     the table route the floor is 5.98%/5.88% (4.81%/5.11% under the generic MMA at the minimum over forms)."""
     s = E.setup(E.design(n), QPI, operands="floor", credit="floor")
@@ -839,12 +841,12 @@ def test_cli_names_the_forms(capsys):
     assert d["honest_form"] == "IMMA16832" and d["cheat"]["forms"] == {"IMMA16832": pytest.approx(0.7194, abs=1e-4)}
 
 
-RPI = E.machine("VF3r-16")   # FACET-BREAK r4, the fx numbers below were read on it
+RPI = E.machine("VF3r-16")   # the fx numbers below were read on it
 
 
 @pytest.mark.parametrize("x, row, q0", [(1.0, "JI3s_0", 1.1261), (0.5, "JI3s_2", 1.3760)])
 def test_mandatory_lane_work_closes_the_lane_route(x, row, q0):
-    """One IMAD a word in front of duo (SAT-120's fx1) puts honest's floor program on JI3s_0, where a lane word costs
+    """One IMAD a word in front of duo (fx1) puts honest's floor program on JI3s_0, where a lane word costs
     more than the IMMA16832 share it replaces from q* = 1.13, under the generic table route's 1.22 slots, so ε_machine
     is 0 at every q* from there, by lanes or lookups. Half of it leaves honest on JI3s_2 (q*₀ 1.38)."""
     d = E.design("dither-c-peel")
