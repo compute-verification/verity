@@ -642,10 +642,6 @@ KNOWN: dict[str, str] = {
         "duplicate of `NetworkCheck.Check.Certificate`: becomes its certified record (network-accounting)",
     "benchmarks/network_sim/workload/block.py::Block":
         "homonym, the simulator's model of one served block: rename (network-accounting)",
-    "benchmarks/network_sim/workload/hardware.py::Hardware":
-        "duplicate of the Site (`Verity.Site`): becomes a reading of it (network-accounting)",
-    "benchmarks/network_sim/workload/hardware.py::Link":
-        "duplicate of the Site (`Verity.Site`): becomes its link (network-accounting)",
     "benchmarks/network_sim/workload/lab.py::Session":
         "homonym, the old word for a run, here a simulated read: rename (network-accounting)",
     "benchmarks/network_sim/workload/placement.py::Placement":
@@ -666,14 +662,6 @@ KNOWN: dict[str, str] = {
     "benchmarks/pouw/clear/clear_audit.py::Verdict":
         "duplicate of `Core.Verdict`: becomes a client of it (compute-accounting)",
     "benchmarks/pouw/dc/census.py::Device": "homonym, a census family's merged runs: rename (compute-accounting)",
-    "benchmarks/pouw/e2e_120/window.py::Coins":
-        "duplicate of the live coins (`Verity.Coins`; `SampledProofs.Challenger.LiveCommitment` in code): becomes a client of it (compute-accounting)",
-    "benchmarks/pouw/e2e_120/window.py::Draw":
-        "duplicate of `service.Draw`: becomes a client of it (compute-accounting)",
-    "benchmarks/pouw/e2e_120/window.py::Verdict":
-        "duplicate of `Core.Verdict`: becomes a client of it (compute-accounting)",
-    "benchmarks/pouw/e2e_120/window.py::Window":
-        "duplicate of the execution block (no canonical yet: LEAN-93): becomes a client of it (compute-accounting)",
     "benchmarks/pouw/filler/arms.py::Placement": "homonym, a filler arm's placement: rename (compute-accounting)",
     "benchmarks/pouw/grind_price.py::Site": "homonym, one seed group: rename (compute-accounting)",
     "benchmarks/pouw/harness/arm.py::Gate": "homonym, a kernel gate's verdict at one shape: rename (compute-accounting)",
@@ -691,8 +679,6 @@ KNOWN: dict[str, str] = {
         "homonym, a machine model's Π: rename (compute-accounting)",
     "benchmarks/pouw/pearl_c_vllm/e2e.py::Coins":
         "duplicate of the live coins (`Verity.Coins`; `SampledProofs.Challenger.LiveCommitment` in code): becomes a client of it (compute-accounting)",
-    "benchmarks/pouw/rt2_hopper/li_window_sat.py::Program":
-        "homonym, a SAT model's instruction list: rename (compute-accounting)",
     "benchmarks/pouw/served_h1/coins.py::Coins":
         "duplicate of the live coins (`Verity.Coins`; `SampledProofs.Challenger.LiveCommitment` in code): becomes a client of it (compute-accounting)",
     "benchmarks/pouw/served_h1/coins.py::Session":
@@ -886,6 +872,10 @@ KNOWN: dict[str, str] = {
         "duplicate of the Site (`Verity.Site`): becomes a reading of the code Site (`verity.core.site`, `Core.Site`) (soundness)",
     "verity/core/protocols/interface/CoreProtocol/Registration.lean::Core.Registration.Site":
         "duplicate of the Site (`Verity.Site`): becomes a reading of the code Site (`verity.core.site`, `Core.Site`) (soundness)",
+    "verity/core/protocols/interface/CoreProtocol/Profile.lean::Core.Draw":
+        "homonym, how a profile level is drawn: rename (proofs)",
+    "verity/core/protocols/interface/CoreProtocol/Record.lean::Core.Record":
+        "duplicate of the auditor's record chain (`SampledProofs.Challenger.LedgerEntry`): becomes a reading of it (proofs)",
     "verity/core/protocols/network/lean/NetworkCheck/Check.lean::NetworkCheck.Check.Link":
         "homonym, one egress link's opening: rename (proofs)",
     "verity/core/protocols/network/lean/NetworkCheck/LinkWindow.lean::NetworkCheck.LinkWindow.Verdict":

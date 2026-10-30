@@ -862,4 +862,4 @@ def leaf_reads_file(program: Program, u: int, kind: str, ln: int | None, roots: 
             out[port][READ_IN_FULL] = True
     if both := sorted(set(out) & set(known_ports)):
         raise ValueError(f"ports {both} are both reads and known")
-    return {"format": G.READS, "ports": {**out, **known_ports}, LL.COMPLETE: True}
+    return {"format": G.READS, "ports": {**out, **known_ports}}

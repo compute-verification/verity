@@ -76,7 +76,8 @@ DOC_TERMS = {
     "dampener, compute dampener": "the slowdown, slowdown(𝒢, 𝒜, η) (`Nci.Dampener` and `Dampener*` stay in backticks until renamed)",
     "NCI, novel communication intensity": "the inference-only policy (`Nci*`, `NciCheck` and the `nci` directories stay in backticks until "
                                           "renamed)",
-    "leg": "the subprotocol's name (sampled proofs, PoUW, PoUS, the bandwidth audit, the network certifier, the wipe), or run",
+    "leg": "the subprotocol's name (sampled proofs, PoUW, the inference-only policy, PoUS, PoUB, network certification, "
+           "memory wipes), or run",
 }
 _SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
 _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}units?|(?:physical|thread|KV){_SPACE}blocks?"

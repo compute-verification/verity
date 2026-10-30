@@ -10,3 +10,4 @@ import CoreProtocol.Example
 import CoreProtocol.Blobs
 import CoreProtocol.BlobsExample
 import CoreProtocol.Site
+import CoreProtocol.Registration

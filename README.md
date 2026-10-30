@@ -33,15 +33,14 @@ verifier still decides, a difftest holds it to the Lean until the Lean replaces 
 
 The subprotocols run composed, as one protocol with one verdict
 ([`verity/core/protocols/composition`](verity/core/protocols/composition/README.md)): a run is accepted only if
-every subprotocol accepts its own case, and the commitment binds all of theirs.
+every subprotocol accepts its own case, the commitment binds all of theirs, and the subprotocols whose commitment is
+the run's record (the inference-only policy and sampled proofs at both, PoUW too at remote) commit to one record.
 
 - **Onsite** (`verity/core/protocols/onsite`), for an auditor with devices at the datacenter: sampled proofs, PoUW,
-  PoUS, PoUB and network certification.
+  the inference-only policy, PoUS, PoUB, network certification and the memory wipe.
 - **Remote** ([`verity/core/protocols/remote/README.md`](verity/core/protocols/remote/README.md)), for an auditor with
-  no devices there: sampled proofs and PoUW. Start there for its lifecycle, guarantee, assumptions and demo.
-
-The memory wipe and the bandwidth audit over PoUS's store are not subprotocols of either yet, and the inference-only
-policy is not yet a subprotocol of the composites.
+  no devices there: sampled proofs, PoUW and the inference-only policy. Start there for its lifecycle, guarantee,
+  assumptions and demo.
 
 ## The vLLM integration
 
@@ -117,7 +116,7 @@ GPU machine.
 
 | Demo | What it serves and audits | Command | Details |
 | --- | --- | --- | --- |
-| The H200 demo | A fixed multi-query attention shape on one H200, every proof block's values committed. It runs sampled proofs, remote's sampled-proofs half: live coins draw proof blocks, which C-Flock `--zk` proves and the Lean verifier checks. Its other pieces are only a skeleton on fixture coins, and the demo claims none of them: PoUS and network certification (onsite's subprotocols), and the bandwidth audit over PoUS's store and memory wipes (subprotocols of neither composite yet). | `verity example h200` | `examples/h200/README.md`, `examples/h200/interfaces/README.md` |
+| The H200 demo | A fixed multi-query attention shape on one H200, every proof block's values committed. It runs sampled proofs, remote's sampled-proofs half: live coins draw proof blocks, which C-Flock `--zk` proves and the Lean verifier checks. Its other pieces are only a skeleton on fixture coins, and the demo claims none of them: PoUS, network certification and memory wipes (onsite's subprotocols), and the bandwidth audit over PoUS's store (a subprotocol of neither composite). | `verity example h200` | `examples/h200/README.md`, `examples/h200/interfaces/README.md` |
 | vLLM | Llama-3.2-1B INT8, served by vLLM on one H200 through the committing endpoint. It runs the remote protocol's two subprotocols: live coins sample proof blocks, which C-Flock `--zk` proves and the Lean verifier checks, and PoUW runs on the served model as a development run that credits nothing. Onsite's subprotocols run on the same served run where each has its piece. | `verity example vllm` | `examples/vllm/README.md` |
 | Lifecycle | Both composites, onsite and remote, stepped through one monitoring period on CPU in about 2 s: a toy two-layer int8 model, every party simulated in one process, a labelled stand-in for C-Flock's prover, and the verdict by the composition's Python mirror, with every deviation it lists refused. The only example that steps through the whole remote composite. It runs; nothing about it is proved. | `verity example lifecycle` | `examples/lifecycle/README.md` |
 | Full utilization | An 8B model's linear layers in s8 at M = 16,384 on one H200, with PoUW crediting the work through Dither's no-fold receipt. No runner yet. | none yet | `examples/dither_full_util/README.md` |

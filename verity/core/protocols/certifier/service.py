@@ -875,8 +875,7 @@ class LinkWindows:
                 return None
             insts.append(HC.Instance(root, self.domain(window).domain_id, self.link.encode("utf-8"), d, window,
                                      self.grid(d), None if profile is None else tuple(profile[window]), c.digest,
-                                     bytes(HC.Shape(L, T).HL), bytes(_INST.salt_bytes),
-                                     (bytes(HC.DIGEST_BYTES), bytes(HC.DIGEST_BYTES)),
+                                     bytes(HC.Shape(L, T).HL), bytes(_INST.salt_bytes), (bytes(64), bytes(64)),
                                      bytes(64), T))
         args = self._arguments(insts, sync)
         return {n: args[n] for n in self.layout["pub"]}

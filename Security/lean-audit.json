@@ -14166,8 +14166,8 @@
    "Flock.Guarantees.recursiveKS_nontrivial": "completeness: RecursiveKS's nontrivial lemma (LEAN-66, its witnesses entry): under the named assumption KSFixture, the statement is false at the accept-all verifier (not RecursiveKSAtRec at the record that accepts every message), a counterexample for another verifier, not a property of the deployed one.",
    "Flock.SecurityProofs.SampledKSLivePub": "frozen (no-function): SampledKSLiveV2 at a public error, proved from it; it reads SampledKSLivePub (Security/Proofs/Flock/Bridge/Public.lean), SampledKSLiveV2's statement with its error deltaPub read off public parameters, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
    "Accounting.SecurityProofs.JointPeriodLiveECR": "frozen (no-function): Like JointPeriodLive, with ecr/sha-512 asked of each subprotocol's finder: its per-period guarantees are hypotheses over an abstract live period of the device model whose verdicts, openings, extractor, finders, computed gates and world are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list.",
-   "Accounting.SecurityProofs.JointPeriodLive_honest": "lemma: JointPeriodLive's honest witness, soundness's ask (LEAN-64): an honest prover meets every claim, so the joint event is empty at it; as Flock.SoundAtBridge.soundAtBridge_nonvacuous, it leaves the list under the 5:11 PM ruling",
-   "Accounting.SecurityProofs.JointPeriodLive_nontrivial": "lemma: JointPeriodLive's failing witness, soundness's ask (LEAN-64): a one-gate period whose extractor reads the wrong bit fails the integrity claim with probability 1, so the bound is not vacuous; as Flock.SoundAtBridge.soundAtBridge_nonvacuous, it leaves the list under the 5:11 PM ruling",
+   "Accounting.SecurityProofs.JointPeriodLive_honest": "lemma: JointPeriodLive's honest witness: an honest prover meets every claim, so the joint event is empty at it; as Flock.SoundAtBridge.soundAtBridge_nonvacuous, it leaves the list under the 5:11 PM ruling",
+   "Accounting.SecurityProofs.JointPeriodLive_nontrivial": "lemma: JointPeriodLive's failing witness: a one-gate period whose extractor reads the wrong bit fails the integrity claim with probability 1, so the bound is not vacuous; as Flock.SoundAtBridge.soundAtBridge_nonvacuous, it leaves the list under the 5:11 PM ruling",
    "Pous.SecurityProofs.StreamedWipeMeetsReadsTight": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at every number of reads k with (1 - 1/r)^k <= 2^-129, with the count of the missing labels' sets (Security/Definitions/Pous/Model/StreamedWipeServer.lean), whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Pous.SecurityProofs.StreamedWipeMeetsServer": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) on a server of assumed memory capacity M_s = 512 n + R, at its threshold B(n, r, k, R) (Security/Definitions/Pous/Model/StreamedWipeServer.lean), whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
    "Pous.SecurityProofs.StreamedWipeMeetsServer5GB": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) on a server of assumed memory capacity M_s = 512 n + R at the 5 GB point, B(n, r, k, R) <= 4e10 bits (Security/Definitions/Pous/Model/StreamedWipeServer.lean), whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
@@ -44729,10 +44729,9 @@
    ]
   },
   "Flock.Registered": {
-   "digest": "8bb424523564f3fed2ea57ff21c38d806dd62e2d8847665e82a7d2b6ef329644",
+   "digest": "f0a813a99dd70683bef7a38864bc818f2fcf9da0ff409cfb51439784c2a3db0d",
    "definitions": {
-    "Flock.Registered.COMPLETE_KEY": "1e8b83345448089f0b9bbbaadd6b8f707757fe7ad2be919ac116f2c367d70951",
-    "Flock.Registered.FILE_KEYS": "6c5b75eeb14d2c79c435df97fa9b1355a95b53df7cfefad0c0fb9218f29bdf2d",
+    "Flock.Registered.FILE_KEYS": "f0c35dfcb8a6a4b2e574a62c121592a276b16512b53c37b2ff75025e63c2ae4e",
     "Flock.Registered.FORMAT": "fda4f60dfaea5d4458ee6f0696f8e183cfcd06e6f555178bf57f3c6e3ea83bd2",
     "Flock.Registered.FORMAT_V0": "a02a26231dce59059028ce6c558c2f565745e91e21315fc60525e82cb6c8aefc",
     "Flock.Registered.PORT_KEYS": "b75bbec26fce41808769e9244d849962ae1d1e4e756b510409a7c47491aaa983",
@@ -60411,7 +60410,6 @@
     "Flock.SecurityProofs.IntegrityHorizonCarried",
     "Flock.SecurityProofs.JointServed",
     "Flock.SecurityProofs.JointServed_nontrivial",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -60456,8 +60454,6 @@
     "Flock.SecurityProofs.IntegrityHorizonCarried",
     "Flock.SecurityProofs.JointServed",
     "Flock.SecurityProofs.JointServed_nontrivial",
-    "Flock.SecurityProofs.SampledKSLivePub",
-    "Flock.SecurityProofs.SampledKSLiveV5",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -62324,9 +62320,9 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkReg.Defs": {
-   "digest": "60b41f2b7ff3319033bbff52e39009a698ca00f82a47e4485ed54fc05bb2405e",
+   "digest": "c1082c6d0e9165ddc72fcc043fe5de1066742b17b8db51eeeff8ae5a4928c095",
    "definitions": {
-    "FlockSoundness.Discharge.ZkReg.AcceptsZKR": "413a2f07f95f33951926c91ea36ad6ad97ceb71ee0dae2f4663088c5d458dea5",
+    "FlockSoundness.Discharge.ZkReg.AcceptsZKR": "1c7ad6da1648d7210bc55256b2481da1c280773af2bc9763d3a259c51b666db0",
     "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR": "c29b27d7b194c783ad2a91b68e032b214dd164a06bdab08e740dce2f9544d569"
    },
    "guarantees": [
@@ -63063,7 +63059,6 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
-    "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
@@ -63074,7 +63069,6 @@
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.SampledKSLiveV5",
-    "Flock.SecurityProofs.SampledKSLiveV5Honest",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -65110,9 +65104,11 @@
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
+    "Flock.SecurityProofs.SampledKSLiveV5",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockVBridge.keyProg_parse"
@@ -65169,9 +65165,12 @@
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
+    "Flock.SecurityProofs.SampledKSLiveV5",
+    "Flock.SecurityProofs.SampledKSLiveV5Honest",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.y0_binderH_16_2_1",
@@ -65225,9 +65224,11 @@
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
+    "Flock.SecurityProofs.SampledKSLiveV5",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockVBridge.keyProg_parse"
@@ -65272,13 +65273,17 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
+    "Flock.SecurityProofs.SampledKSLiveV5",
+    "Flock.SecurityProofs.SampledKSLiveV5Honest",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.y0_binderH_16_2_1",

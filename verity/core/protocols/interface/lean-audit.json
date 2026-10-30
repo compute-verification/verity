@@ -2,7 +2,8 @@
  "roots": ["CoreProtocol", "CoreProtocol.PeriodDifftest"],
  "exempt": {
   "CoreProtocol.ExampleMain": "the core-protocol-example executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol",
-  "CoreProtocol.PeriodDifftestMain": "the core-periods-difftest server's entry point, one line: Difftest.serve of Core.PeriodDifftest.table, which verity/core/periods/tests/test_periods_difftest.py drives against the Python mirror; audited under CoreProtocol.PeriodDifftest"
+  "CoreProtocol.PeriodDifftestMain": "the core-periods-difftest server's entry point, one line: Difftest.serve of Core.PeriodDifftest.table, which verity/core/periods/tests/test_periods_difftest.py drives against the Python mirror; audited under CoreProtocol.PeriodDifftest",
+  "CoreProtocol.RegistrationMain": "the core-registration executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol"
  },
  "escapes": {
   "Core.serveLoop": "partial def: `serve` reads cases until end of input, which no bound limits; no proof is about it, and CoreProtocol.Example's guards cover Protocol.case, which it runs on each line",
@@ -48,6 +49,11 @@
    "imports": ["CoreProtocol.Period", "Difftest", "Lean.Data.Json", "Flock.Canon"],
    "except": [],
    "why": "the difftest's functions reach Lean only through the code's periods and the harness"
+  },
+  "CoreProtocol.Blobs": {
+   "imports": ["CoreProtocol.Cli", "Flock.Hash"],
+   "except": [],
+   "why": "the interface is spec: a protocol that reads content-addressed files (`BlobProtocol`, `Blobs`) is stated over the same `Protocol`, `Outcome` and `Answer`, so this imports only them (through the protocol's command line) and C-Flock's hash"
   }
  },
  "dependencies": {
