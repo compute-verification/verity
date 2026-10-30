@@ -1419,7 +1419,7 @@ def workLaw (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String 
 and output words against the header's; the pinned dummy `b ‖ c` against the zero row's (upstream's `check_public`). A
 statement with public outputs has no output row to link, so META `links` (`HmOut`) is refused. -/
 def checkPublic (c : Circuit) (pub : Public) : V Unit := do
-  if J.has c.metaJ "links" then throw "META links: a statement with public outputs has no output row to link (links are §16.13's)"
+  if J.has c.metaJ "links" then throw "META links: a statement with public outputs has no output row to link (links are a hidden-output statement's: `HmOut`)"
   let fv ← pub.frameV3
   if (← J.str fv "frame" "public file") != "frame-v3-sha512"
       || (← J.str fv "row_key_sha512" "public file") != hexOf (Sha512.hash Hm96.Default512.key) then

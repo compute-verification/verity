@@ -55,7 +55,7 @@ end
 
 /-- S0's refusal. -/
 def refusal : String :=
-  "S0: the record is not in its canonical text (what Json.compress prints of what it parses to: PROTOCOL.md §5.1)"
+  "S0: the record is not in its canonical text (what Json.compress prints of what it parses to: `RecordText.check`)"
 
 /-- **S0: the record is in its canonical text**: it parses, and `printT` of what it parses to is the record. -/
 def check (text : String) : V Unit :=
