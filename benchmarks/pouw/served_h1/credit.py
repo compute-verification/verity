@@ -1,4 +1,4 @@
-"""served_h1's credit by the padded-window rule (PADCREDIT round 2 with RT10's fixes): credit
+"""served_h1's credit by the padded-window rule: credit
 only the admitted slots, from admissions that always-proved units compute from the committed request queue and the rows'
 scales.
 
