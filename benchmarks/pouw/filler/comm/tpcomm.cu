@@ -467,7 +467,6 @@ __global__ void dprolog_k(int* dctr) {
 
 // warp w's receipt of tile `tile` after q pairs (pf_ref's chains, cut at q): the host's side of a record
 static uint64_t kf_ref_warp(uint64_t c0, uint64_t c1, uint64_t tile, int S, int w, int q) {
-  pf_host_k();
   uint64_t st[8];
   std::vector<uint64_t> Bb(PF_TN, 0);
   for (int b = 0; b < PF_TN / 16; b++) {
@@ -524,7 +523,6 @@ static inline int h_formed(uint64_t sStore, uint64_t sNoise, size_t o) {
 }
 // warp w's deferred-chunk receipt (tp_defer_run's math on the host), fragments f < fraglimit, pairs cut at q
 static uint64_t tp_defer_ref_warp(uint64_t c0, uint64_t c1, uint64_t chunk, int wc, int w, int Sd, int fraglimit, int q) {
-  pf_host_k();
   uint64_t st[8];
   pf_block_h(TP_DEFER_DOM, c0, c1, chunk, PF_KEY, st);
   const PfKeys key = pf_keys(st);
