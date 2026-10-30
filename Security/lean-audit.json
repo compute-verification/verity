@@ -618,9 +618,17 @@
    "owner": "@training",
    "digest": "fc80a20590bcf892400edbf6b11e8183eae21ac9f59a29ea41bc65787f7f05fd"
   },
+  "Accounting.ServingBlocks.ServingSizes": {
+   "owner": "@training",
+   "digest": "c38ff4a7c85ecd9a3b1d4832a712152c3b145aa0d4fa9018416abfbc2d36c925"
+  },
   "Accounting.ServingBlocks.UncertifiedCap": {
    "owner": "@training",
    "digest": "60d8c4b679a995ba4d2a6fcde0e0c8f8b429091b0f298ebc745f2186524375d1"
+  },
+  "Accounting.ServingBlocks.WeightsAtMost": {
+   "owner": "@training",
+   "digest": "be8cdd72aa1fbaa879af6dd1d6c45d80e3961755905c109c9d89473025cf8dd8"
   },
   "Accounting.SetupFixed": {
    "owner": "@memory-accounting",
@@ -2101,14 +2109,6 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
-  },
-  "Accounting.ServingBlocks.ServingSizes": {
-   "owner": "@training",
-   "digest": "c38ff4a7c85ecd9a3b1d4832a712152c3b145aa0d4fa9018416abfbc2d36c925"
-  },
-  "Accounting.ServingBlocks.WeightsAtMost": {
-   "owner": "@training",
-   "digest": "be8cdd72aa1fbaa879af6dd1d6c45d80e3961755905c109c9d89473025cf8dd8"
   }
  },
  "meaning": [
