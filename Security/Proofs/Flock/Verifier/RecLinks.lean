@@ -187,7 +187,8 @@ theorem subPath_size (e : Nat → ByteArray) : ∀ (h : Nat) (leaves : List (Nat
 /-- Two SHA-512 inputs that collide: different, with one digest. -/
 def Collides (p : ByteArray × ByteArray) : Prop := p.1 ≠ p.2 ∧ Sha512.hash p.1 = Sha512.hash p.2
 
-theorem Collides.collision {p : ByteArray × ByteArray} (h : Collides p) : Sha512.Collision := ⟨p.1, p.2, h.1, h.2⟩
+theorem Collides.collision {p : ByteArray × ByteArray} (h : Collides p) :
+    ∃ u v : ByteArray, u ≠ v ∧ Sha512.hash u = Sha512.hash v := ⟨p.1, p.2, h.1, h.2⟩
 
 /-- A rows tree's leaves, `rowLeaves`'s once its rows fit. -/
 def leavesOf (PB : Nat) (rows : List ((Nat × Nat) × ByteArray)) : List (Nat × ByteArray) :=
@@ -517,7 +518,7 @@ theorem link_binding_collision {UB PB : Nat} {rowsIn rowsOut : List ((Nat × Nat
         rowsIn ∧
       ((field (bytesOf trow) 3, field (bytesOf trow) 4), Hm96.Default512.commitString (bytesOf xw) (bytesOf yw)) ∈
         rowsOut ∧
-      bytesOf xr = bytesOf xw) ∨ Sha512.Collision := by
+      bytesOf xr = bytesOf xw) ∨ ∃ u v : ByteArray, u ≠ v ∧ Sha512.hash u = Sha512.hash v := by
   rcases link_binding hR hW hout hk with h | h | h
   · exact Or.inl h
   · exact Or.inr h.collision
