@@ -28,7 +28,7 @@ variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Rel
 def _root_.FlockComplete.Run.trace (o : Run H rel) (i : ℕ) : Trace := (tracesOf o.sts o.w)[i]!
 
 /-- Table `i`'s rep `r`'s zerocheck coins: the replies from the rep's first send on. -/
-def _root_.FlockComplete.Run.zcCoins (o : Run H rel) (i r : ℕ) : Zc.Coins :=
+def _root_.FlockComplete.Run.zcCoins (o : Run H rel) (i r : ℕ) : Zc.Challenges :=
   Zc.coinsAt o.resp (repStart o.spec o.sts (2 * i + r))
 
 theorem _root_.FlockComplete.Run.tab_m (o : Run H rel) {i : ℕ} (hi : i < o.tabs.size) :
@@ -66,7 +66,7 @@ theorem _root_.FlockComplete.Run.zc_c1 (o : Run H rel) {i : ℕ} (hi : i < o.tab
 
 /-- **The replay returns** on rounds that carry the prover's zerocheck rounds, from the rep's start, when the trace
 satisfies the block R1CS and no outer coin is `1`. -/
-theorem zerocheck_replay (hs : Hashes V) {m : ℕ} (hm : 14 ≤ m) (digest cap : ByteArray) (cs : Zc.Coins) (tr : Trace)
+theorem zerocheck_replay (hs : Hashes V) {m : ℕ} (hm : 14 ≤ m) (digest cap : ByteArray) (cs : Zc.Challenges) (tr : Trace)
     (R : Array Round) (dom : ByteArray)
     (hR : Agrees R (Zc.tEnd m digest cap cs tr (Transcript.init #[] dom)).rounds 0)
     (hR1CS : ∀ x < 2 ^ m, (tr.az[x]! && tr.bz[x]!) = tr.z[x]!) (hc1 : ∀ k < m - 13, cs.c1 k ≠ 1) :

@@ -96,7 +96,7 @@ noncomputable abbrev zwE (x : Msg) (w : Claims.Flock.Wit) (τ : UE.Tape) (j : Fi
 
 /-- Table `j`'s rep `r` zerocheck coins at the opened coins, from the rep's first round. -/
 abbrev zcE {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) (j : Fin (jOf x)) (r : Fin 2) :
-    FlockComplete.Replay.Zc.Coins :=
+    FlockComplete.Replay.Zc.Challenges :=
   FlockComplete.zcCoins (fun k i => slotAt c k i) (repBase x (2 * j.val + r.val))
 
 /-- The session's setup of table `j` is its statement's. -/
