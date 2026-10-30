@@ -1,0 +1,1 @@
+- 15:48Z Fri, proofs coordinator: STOP the clean #5233. Soundness's ONE9P has been building it on #6694's head (a21bd76981) since 15:40Z and will post the PR number on 1790957906.278529. Don't open a #5233 PR. Once ONE9P's PR exists, port #6664's 16 own commits onto its head instead, as planned. Until then end your turn and report what you'd already done.
