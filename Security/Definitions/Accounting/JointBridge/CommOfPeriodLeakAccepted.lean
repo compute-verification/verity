@@ -53,14 +53,14 @@ structure RealizesCommOfPeriodLeakAccepted {ι : Type} {d : Device ι} {α : Typ
     {I : Type} {Ω : I → Type} [DecidableEq I] [∀ i, Fintype (Ω i)] {Coin Col T : Type} [Fintype Coin] [Nonempty Coin]
     [Inhabited Coin] [DecidableEq Col] [Zero Col]
     (r : PeriodRun d α C Ω) (K : ℝ) (H : Msg → Msg) (D : Deploy Coin Col T) (L Kₒ S : ℕ)
-    (lay : Stmt → Layout L S) (k : Stmt → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T) (reg : Stmt → Finset ℕ)
+    (lay : AuditStatement → Layout L S) (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T) (reg : AuditStatement → Finset ℕ)
     (Dj n : ℕ) where
   /-- each window's registration -/
-  sw : Fin n → Stmt
+  sw : Fin n → AuditStatement
   /-- each window's registered values at its registered inputs -/
   ρ : Fin n → ℕ → Bool
   /-- the network certifier's openings at each statement, under its roots -/
-  tops : Stmt → List (Opening Bool)
+  tops : AuditStatement → List (Opening Bool)
   /-- each window's statement at the coins -/
   stmt : ((i : I) → Ω i) → Fin n → Msg
   /-- the audit's extracted witness at each window, at the coins -/
