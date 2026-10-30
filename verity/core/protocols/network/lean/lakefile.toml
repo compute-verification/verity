@@ -33,6 +33,12 @@ path = "../../../primitives/lms/lean"
 name = "core_identity"
 path = "../../../primitives/identity"
 
+# A compute audit's free inputs are counted from its circuit record's wires as one-stage's wire check reads them
+# (`SampledProofs.Wires`).
+[[require]]
+name = "core_sampled_proofs"
+path = "../../../service/sampled_proofs"
+
 [[lean_lib]]
 name = "NetworkCheck"
 

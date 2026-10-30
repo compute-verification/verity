@@ -4,6 +4,7 @@ import Flock.Program
 import Flock.Public
 import NciCheck.Desc
 import Flock.WindowRecord
+import SampledProofs.Wires
 
 /-!
 # The network certifier over a period, a core protocol: `verity/certifier/v0`
@@ -27,20 +28,26 @@ read.
 
 **Params**, JSON with exactly these keys (and each nested object exactly its own), in the clock form
 
-    {"audits": [{"circuit"?: record, "free": f, "program": descriptor, "steps": k}, …], "cells": [cap, …], "first": w₀,
-     "jitter": Dj, "key": hex(I ‖ T[1]), "link": name, "lms": {"H": h, "N": n, "W": w, "toy": bool}, "program": hex,
-     "session": hex(session), "sync_set": {"deltas": [δ, …], "rhos": [[num, den], …]}, "windows": m}
+    {"audits": [{"circuit"?: record, "pins"?: {param: root, …}, "program": descriptor, "steps": k}, …],
+     "cells": [cap, …], "first": w₀, "jitter": Dj, "key": hex(I ‖ T[1]), "link": name,
+     "lms": {"H": h, "N": n, "W": w, "toy": bool}, "program": hex, "session": hex(session),
+     "sync_set": {"deltas": [δ, …], "rhos": [[num, den], …]}, "windows": m}
 
-each compute audit's layout terms (`free`, the free inputs it doesn't register, `#(freeInputs \ reg)`; `steps`, its
-monitoring period `k`) and its Program, the descriptor (`verity-ir/descriptor/v1`) of the window's population program,
-which must decode (`Flock.Program.decode`) with a template in its root: the audit's units are the root's template
-instances, and each commits its template's return, the outputs it computes that other units or the client read, which
-can be wider than a proof unit's 16-bit public output; optionally its window's circuit record (`circuit.json`,
-`verity/window-circuit/v1`, naming the Program), whose SHA-512 the audit's registration binds (its window's `circuit`)
-and whose `entries` (`interface.Entries`, `entriesOf`) are what the integration registers for the scan: the templates
-whose `o0` is a slot's entry, each by descriptor id and closure digest (`closureDigest`), and the vocabulary size and
-stop ids each binds (its `V` and its `STOP`, where it binds them), so the check names no model, template or binding of
-its own; each network certifier connection's cell cap over the period
+each compute audit's monitoring period (`steps`, `k`) and its Program, the descriptor (`verity-ir/descriptor/v1`) of the
+window's population program, which must decode (`Flock.Program.decode`) with a template in its root: the audit's units
+are the root's template instances, and each commits its template's return, the outputs it computes that other units or
+the client read, which can be wider than a proof unit's 16-bit public output; optionally its window's circuit record
+(`circuit.json`, `verity/window-circuit/v1`, naming the Program), whose SHA-512 the audit's registration binds (its
+window's `circuit`), and the verifier's pins of its registered parameters (`pins`, each root a SHA-512 digest, fixed
+before the run). The record's `entries` (`interface.Entries`, `entriesOf`) are what the integration registers for the
+scan: the templates whose `o0` is a slot's entry, each by descriptor id and closure digest (`closureDigest`), and the
+vocabulary size and stop ids each binds (its `V` and its `STOP`, where it binds them), so the check names no model,
+template or binding of its own. The audit's free inputs, the ones the prover chose, `#(freeInputs \ reg)`, are not a
+parameter: the check counts them from its registered circuit (`Audit.free`, `interface.input_count`), its Program's
+input bits less those the record's wires and ingress fill and those its registered reads, table reads and openings read
+of a parameter whose root in the registration (`registered_roots`) is the pin (`inputsOf`), where the registration
+binds the record, and all of them where it binds none or the record states no wires; an audit with a `free` key is
+refused. Then each network certifier connection's cell cap over the period
 (`cap_c`), the session's window
 the period starts at (`w₀`: its link-windows are the session's `w₀ … w₀ + m − 1`, so one certifier session spans many
 periods),
@@ -168,7 +175,8 @@ against that salted digest is a later change to its circuit (the certifier PROTO
                          "wrong_units": b}, …],
      "cells": Σ_c ⌈log2 (cap_c + 1)⌉, "eps": Σ_i δ_i, "schedules": ⌈log2 #Σ_sync^m⌉, "windows": m}
 
-with `b` the audit's bound on wrong units at its δ (one-stage's `bound`, `Bound.boundOf`), `faulty_sets` =
+with `free` the audit's free inputs under its registration (`Audit.free`), `b` the audit's bound on wrong units at its
+δ (one-stage's `bound`, `Bound.boundOf`), `faulty_sets` =
 `⌈log2 Σ_{j ≤ b} C(N, j)⌉` (every set of at most `b` units, which holds the sets a `subset:k` or a stratified draw leaves
 possible; `drawn` is the draw's `k`, or its `Σ k` stratified),
 `faulty_bits` = `b · bits`, with `bits` the most one of its Program's units commits (its template's return, `bitsOf`:
@@ -201,8 +209,9 @@ link-window's term charges every entry bit (`faulty_entries`: `β_w ≤ 1[b ≥ 
   admits a queued connection at the first lane that frees, in the clients' arrival order, so the admissions are a
   function of the lengths, and `#Ss ≤ ∏_c (cap_c + 1)`. The second factor is the fail cell's position (`failCell`). A
   failed lane ends at its fail cell, so in a run the two coincide; `K` charges the product as the statement states it.
-* each scan's terms, from the scan's Program and its tied audits: `free` the parameters' `free` of the audits its
-  `prog` is an output of, summed (`tiedAudits`, each once; the scan's own is 0, as it registers the rows, its `prog` is
+* each scan's terms, from the scan's Program and its tied audits: `free` the free inputs of the audits its `prog` is an
+  output of, each under its registration (`Audit.free`), summed (`tiedFree`, each once; the scan's own is 0, as it
+  registers the rows, its `prog` is
   those audits' output, and bucket 0 starts from the empty state, constants of `IngressScanFirst`: the egress tie
   moves the free term from the scan's `prog` to the tied audit's inputs), `steps` T, `faulty_bits`
   `b · max(b_ing, b_eg)` with `b_ing` an ingress instance's return bits (its verdict u16, state and view) and `b_eg` an
@@ -225,7 +234,8 @@ rows (each signs its salted record, witness) and the scan's statements against i
 entries' input node the value it registers as `scan/prog<j>`), which one-stage's verifier of record checks inside the
 answer, and each connection's cap against its lane (the parameters' `cells`; the network certifier holds a lane to
 `egress_cells`); that a tied audit's entry templates' units read their lanes' occupancy from its `SCAN_STATE` (the check
-reads no wires of an audit's Program, only its root templates' ids and closure digests and its circuit record), and
+reads an audit's root templates' ids and closure digests, and its circuit record's wires and declarations only as
+counts of the rows they fill, `inputsOf`), and
 that an entry template computes the entry as
 the scan reads it, which is the registered circuit's, as every guarantee is about the registered circuit; and that the
 audits' answers are the sampled-proofs component's own, which the composition's theorem is to bind.
@@ -265,13 +275,24 @@ structure Entries where
   vocabulary : Nat := 0
   stop : Array Nat := #[]
 
-/-- A compute audit's layout terms, its free inputs it doesn't register and its monitoring period, and what its Program
-gives: its SHA-512, its units (its root's template instances), the most bits one of them commits, and its slot entries'
-templates (`entries`: each root template node whose descriptor id its circuit record registers as an entry template, by
-its descriptor id, members and closure digest, `closureDigest`); then its circuit record's SHA-512 (`circuitDigest`,
-empty with no record) and what the record registers (`registered`). -/
+/-- What a compute audit's free inputs are counted from (`Audit.free`, `interface.input_count`): its Program's input
+bits (`total`, every unit's parameters'); from its circuit record's statements, the bits its wires and its ingress fill
+(`declared`) and the bits each registered read, table read and opening of an input row reads, by registered parameter
+(`reads`); and the verifier's pins of the registered parameters (`pins`, `(param, root)`), fixed before the run. A
+record that states no wires (no record, or one that lists its members) declares and reads none. -/
+structure Inputs where
+  total : Nat := 0
+  declared : Nat := 0
+  reads : Array (String × Nat) := #[]
+  pins : Array (String × String) := #[]
+
+/-- A compute audit's inputs (`inputs`, whose free bits `Audit.free` counts) and monitoring period, and what its
+Program gives: its SHA-512, its units (its root's template instances), the most bits one of them commits, and its slot
+entries' templates (`entries`: each root template node whose descriptor id its circuit record registers as an entry
+template, by its descriptor id, members and closure digest, `closureDigest`); then its circuit record's SHA-512
+(`circuitDigest`, empty with no record) and what the record registers (`registered`). -/
 structure Audit where
-  free : Nat
+  inputs : Inputs
   steps : Nat
   program : String
   units : Nat
@@ -613,16 +634,232 @@ def entriesOf (r pj : Json) (program : String) (keys : Array String) (ctx : Stri
         (V) than the registered {vocabulary}"
   pure { templates, vocabulary, stop }
 
-/-- A compute audit's layout terms and its Program, from the Program's descriptor (`Flock.Program.decode` of its
-canonical bytes): its units are its root's template instances, each committing its template's return; a root with no
-template is refused. With its window's circuit record (`circuit`), its `circuit` is the record's SHA-512
-(`circuitDigest`), and `registered` what the record registers of its slot entries (`entriesOf`); its slot entries'
-templates are its root's template nodes whose descriptor id the record registers as an entry template, each with its
-closure digest (`closureDigest`). Without a record it registers none. -/
+/-! ## A compute audit's free inputs
+
+`#(freeInputs \ reg)`, the input bits only the prover chose, counted from the audit's registered circuit as
+`interface.input_count` counts them, at the size of the description (its templates, wires and declarations, never its
+units): its Program's input bits, less those its circuit record's wires fill (one-stage's wire check,
+`SampledProofs.Wires.check`, and its `wiredBits`), its ingress fills, and its registered reads, table reads and openings
+of an input row read of a held parameter (`Audit.free`), each declaration refused unless it names its template's ports,
+units and its parameter's or table's leaves, and no input row is filled twice. -/
+
+open SampledProofs
+
+/-- A return's fields, each an output row `o<j>` of its template (`interface.layout`): a tuple's or a record's, else the
+return itself, as is a tuple or a record of none. -/
+def retFields (t : Flock.Program.Ty) : Array Flock.Program.Ty := match t with
+  | .tuple fs => if fs.isEmpty then #[t] else fs
+  | .record fs => if fs.isEmpty then #[t] else fs.map (·.2)
+  | _ => #[t]
+
+/-- A parameter's outer length, which a cut divides: its outermost array's, 1 when it is not an array. -/
+def outerOf : Flock.Program.Ty → Nat
+  | .array n _ => n
+  | _ => 1
+
+/-- The root's templates in order of their first instance, each with its units, the members of its nodes summed (a
+wire counts a template's units together). -/
+def rootTemplates (P : Flock.Program.Prog) : Array (Flock.Program.Defn × Nat) :=
+  ((P.defs[P.root]?.map (·.body.nodes)).getD #[]).foldl (fun acc x => match P.defs[x.fn]? with
+    | some d => if d.prim then acc else match acc.findIdx? (·.1.key == d.key) with
+      | some i => acc.modify i fun (e, n) => (e, n + x.members)
+      | none => acc.push (d, x.members)
+    | none => acc) #[]
+
+/-- The templates' input bits: every unit's parameters'. -/
+def inputBits (ts : Array (Flock.Program.Defn × Nat)) : Nat := ts.foldl (fun n (d, k) => n + k * paramBits d.params) 0
+
+/-- Template `d`'s rows (`interface.layout`), of `units` units: each parameter a row of its u16 words, at least one, with
+its outer length, and each return field (`retFields`) an output row `o<j>` of its bits in u16 words, rounded up; refused
+where a parameter is not whole u16 words or is named like an output row. -/
+def layoutOf (d : Flock.Program.Defn) (units : Nat) : V Wires.Template := do
+  let outs := (retFields d.ret).toList.zipIdx.map fun (t, j) => (s!"o{j}", (bitsOf t + 15) / 16)
+  let rows ← d.params.toList.mapM fun (p, t) =>
+    if bitsOf t % 16 == 0 && 16 ≤ bitsOf t then
+      pure (p, ({ words := bitsOf t / 16, outer := outerOf t } : Wires.Port))
+    else throw s!"{d.key}: its parameter {p} is {bitsOf t} bits, not whole u16 words"
+  unless decide (rows.map (·.1) ++ outs.map (·.1)).Nodup do
+    throw s!"{d.key}: a parameter is named like an output row"
+  pure { units, rows, outs }
+
+/-- What one declaration fills of template `tid`'s port `port`: units `[lo, hi)`, rows `[r0, r1)` of the port's cut. -/
+structure Rect where
+  tid : String
+  port : String
+  lo : Nat
+  hi : Nat
+  r0 : Nat
+  r1 : Nat
+
+/-- Two rectangles of one port that share a row of a unit. -/
+def Rect.meets (a b : Rect) : Bool :=
+  a.tid == b.tid && a.port == b.port && a.lo < b.hi && b.lo < a.hi && a.r0 < b.r1 && b.r0 < a.r1
+
+/-- No two of the rectangles meet: no input row is filled twice. Pair by pair, per declaration. -/
+def apart : List Rect → Bool
+  | [] => true
+  | r :: rs => !rs.any r.meets && apart rs
+
+/-- A wire's or a read's reader rows. -/
+def wireRect (w : Wires.Wire) : Rect := ⟨w.reader, w.port, w.start, w.start + w.readerUnits, w.cut0, w.cut0 + w.cuts⟩
+
+/-- The keys of a registered read (`interface.Read`), beside its optional cut. -/
+def readKeys : List String := ["reader", "port", "param", "at", "radix", "base", "step"]
+
+/-- A registered read (`interface.Read`): a wire's pattern from the registered parameter `param` (its `writer`, its `out`
+none), exactly the read's fields and optionally its cut. -/
+def readOf (j : Json) : V Wires.Wire := do
+  let ks := (Wires.keysOf j).getD []
+  if ks.contains "cut" then Wires.sameKeys j ("cut" :: readKeys) "a read" else Wires.sameKeys j readKeys "a read"
+  let kvs ← Wires.fields j
+  Wires.Wire.ofJson (Json.mkObj (("out", .str "") :: kvs.map fun (k, v) => (if k == "param" then "writer" else k, v)))
+
+/-- A natural field of a declaration. -/
+private def natIn (j : Json) (k what : String) : V Nat := (Wires.natAt j k).mapError (s!"{what}: " ++ ·)
+
+/-- A string field of a declaration. -/
+private def strIn (j : Json) (k what : String) : V String := do Wires.strOf s!"{what}'s {k}" (← Wires.field j k)
+
+/-- A record's list `k`, none when it has no `k`. -/
+private def itemsOf (j : Json) (k : String) : V (List Json) :=
+  match j.getObjVal? k with
+  | .ok v => Wires.arrOf k v
+  | .error _ => pure []
+
+/-- The inputs of the audit whose root's templates are `ts` (`rootTemplates`), from its circuit record `r` and the
+verifier's pins `pins` (`interface.input_count`). A record that states no wires (one that lists its members) declares
+none, so all its inputs count free. Else its templates are the root's, each with its units, in order; its cuts and wires
+pass one-stage's wire check (`SampledProofs.Wires.check`); each registered parameter has at least one leaf; each table
+(`interface.Table`) is a new name, rows of a registered parameter's leaves; each read (`interface.Read`) names a
+parameter or an output row of its template, its rows among the port's cut, units among its template's and leaves among
+its parameter's; each table read (`interface.TableRead`) a 32-word input row, units among its template's, and a
+declared table's root or domain id; each opening (`interface.Opening`) units among its template's, its key and its
+ports input rows of it, a declared table and its verdict an output row; each ingress (`interface.Ingress`) an input row
+and units among its template's; and no input row is filled by two (`apart`). Its declared bits are the wires'
+(`Summary.wiredBits`) and the ingress's, and its reads' those of input rows, by the parameter each reads. -/
+def inputsOf (r : Json) (ts : Array (Flock.Program.Defn × Nat)) (pins : Array (String × String)) : V Inputs := do
+  let total := inputBits ts
+  if (r.getObjVal? "wires").toOption.isNone then return { total, pins }
+  let tpl ← ts.toList.mapM fun (d, n) => do pure (d.key, ← layoutOf d n)
+  let named ← (← Wires.arrOf "templates" (← Wires.field r "templates")).mapM fun t => match t with
+    | .arr #[.str k, n] => match Wires.nat? n with
+      | some n => pure (k, n)
+      | none => throw "a template is [descriptor id, units]"
+    | _ => throw "a template is [descriptor id, units]"
+  unless named == tpl.map fun (k, t) => (k, t.units) do
+    throw s!"its templates are not its Program's root templates with their units, in order: {named}"
+  let cuts ← match r.getObjVal? "cuts" with
+    | .error _ => pure []
+    | .ok cj => do
+      let cs ← (← Wires.fields cj).mapM fun (tid, kv) => do
+        pure (tid, ← (← Wires.fields kv).mapM fun (p, k) => do pure (p, ← Wires.natOf "a cut" k))
+      pure (cs.filter fun (_, kv) => !kv.isEmpty)
+  let wires ← (← Wires.arrOf "wires" (← Wires.field r "wires")).mapM Wires.Wire.ofJson
+  let c : Wires.Circuit := { templates := tpl, cuts, wires }
+  let sum ← match Wires.check c with
+    | .ok s => pure s
+    | .error e => throw s!"wires: refused ({e.code.name}{(e.wire.map (s!", wire {·}")).getD ""})"
+  let lay := fun (tid : String) => tpl.lookup tid
+  let row := fun (tid p : String) => (lay tid).bind (·.rows.lookup p)
+  let unitsOk := fun (tid : String) (lo n : Nat) => match lay tid with
+    | some t => 1 ≤ n && lo + n ≤ t.units
+    | none => false
+  let (params, tableJs, readJs, rootJs, openJs) ← match r.getObjVal? "registered" with
+    | .error _ => pure ([], [], [], [], [])
+    | .ok g => do
+      exactly g ["openings", "params", "reads", "roots", "tables"] "registered"
+      pure (← Wires.fields (← Wires.field g "params"), ← itemsOf g "tables", ← itemsOf g "reads",
+        ← itemsOf g "roots", ← itemsOf g "openings")
+  let params ← params.mapM fun (p, v) => do
+    let n ← Wires.natOf s!"registered parameter {p}'s leaves" v
+    unless 1 ≤ n do throw s!"registered parameter {p}: at least one leaf"
+    pure (p, n)
+  let mut tables : List (String × String) := []
+  for t in tableJs do
+    Wires.sameKeys t ["name", "param", "offset", "words", "rows"] "a table"
+    let (name, param) := (← strIn t "name" "a table", ← strIn t "param" "a table")
+    let (offset, words, rows) := (← natIn t "offset" "a table", ← natIn t "words" "a table", ← natIn t "rows" "a table")
+    unless (tables.lookup name).isNone && 1 ≤ words && 1 ≤ rows &&
+        (params.lookup param).any fun n => decide (offset + words * rows ≤ n) do
+      throw s!"table {name}: a new name, rows of a registered parameter's leaves"
+    tables := tables ++ [(name, param)]
+  let mut rects := sum.wires.map wireRect
+  let mut reads : Array (String × Nat) := #[]
+  for j in readJs do
+    let w ← readOf j
+    let k := c.cutsOf w.reader w.port
+    let some words := (row w.reader w.port).map (·.words) <|> ((lay w.reader).bind (·.outs.lookup w.port))
+      | throw s!"read of {w.reader} {w.port}: names no parameter of a template of the circuit nor its output"
+    let (lo, hi) := w.span
+    unless w.cut0 + w.cuts ≤ k && (w.cuts == 1 || w.radix.getLast? == some w.cuts) && w.units % w.cuts == 0 &&
+        unitsOk w.reader w.start w.readerUnits && decide (0 ≤ lo) &&
+        (params.lookup w.writer).any fun n => decide (hi + ((words / k : Nat) : Int) ≤ (n : Int)) do
+      throw s!"read of {w.reader} {w.port}: rows of its port's cut, units among its template's and leaves of a \
+        registered parameter"
+    rects := rects ++ [wireRect w]
+    if (row w.reader w.port).isSome then reads := reads.push (w.writer, w.units * (16 * (words / k)))
+  for j in rootJs do
+    Wires.sameKeys j ["reader", "port", "table", "of", "at", "units"] "a table read"
+    let (tid, port, table, of) := (← strIn j "reader" "a table read", ← strIn j "port" "a table read",
+      ← strIn j "table" "a table read", ← strIn j "of" "a table read")
+    let (lo, n) := (← natIn j "at" "a table read", ← natIn j "units" "a table read")
+    let some p := row tid port | throw s!"table read of {tid} {port}: names no parameter of a template of the circuit"
+    let some param := tables.lookup table | throw s!"table read of {tid} {port}: of no declared table"
+    unless unitsOk tid lo n && (of == "root" || of == "domain") && p.words == 32 do
+      throw s!"table read of {tid} {port}: a declared table's root or domain id, a 64-byte port, units among its \
+        template's"
+    rects := rects ++ [⟨tid, port, lo, lo + n, 0, c.cutsOf tid port⟩]
+    reads := reads.push (param, n * (16 * p.words))
+  for j in openJs do
+    Wires.sameKeys j ["reader", "table", "key", "ports", "verdict", "at", "units"] "an opening"
+    let (tid, table, key, verdict) := (← strIn j "reader" "an opening", ← strIn j "table" "an opening",
+      ← strIn j "key" "an opening", ← strIn j "verdict" "an opening")
+    let (lo, n) := (← natIn j "at" "an opening", ← natIn j "units" "an opening")
+    let ports ← (← Wires.arrOf "ports" (← Wires.field j "ports")).mapM (Wires.strOf "a port")
+    let some param := tables.lookup table | throw s!"opening of {tid}: of no declared table"
+    unless unitsOk tid lo n && (row tid key).isSome && ((lay tid).bind (·.outs.lookup verdict)).isSome &&
+        !ports.isEmpty && ports.all fun q => (row tid q).isSome do
+      throw s!"opening of {tid}: a declared table's row at its key, with a verdict output, its ports and units its \
+        template's"
+    for q in ports do
+      rects := rects ++ [⟨tid, q, lo, lo + n, 0, c.cutsOf tid q⟩]
+      reads := reads.push (param, n * (16 * ((row tid q).map (·.words)).getD 0))
+  let mut ingress := 0
+  for j in ← itemsOf r "ingress" do
+    Wires.sameKeys j ["reader", "port", "at", "units", "step"] "an ingress"
+    let (tid, port) := (← strIn j "reader" "an ingress", ← strIn j "port" "an ingress")
+    let (lo, n, _) := (← natIn j "at" "an ingress", ← natIn j "units" "an ingress", ← natIn j "step" "an ingress")
+    let some p := row tid port | throw s!"ingress of {tid} {port}: names no parameter of a template of the circuit"
+    unless unitsOk tid lo n do throw s!"ingress of {tid} {port}: units among its template's"
+    rects := rects ++ [⟨tid, port, lo, lo + n, 0, c.cutsOf tid port⟩]
+    ingress := ingress + n * (16 * p.words)
+  unless apart rects do throw "an input row is filled by two of its wires and declarations"
+  pure { total, declared := sum.wiredBits + ingress, reads, pins }
+
+/-- The verifier's pins of an audit's registered parameters, fixed before the run: `{param: root}`, each root a SHA-512
+digest. -/
+def pinsOf (j : Json) (ctx : String) : V (Array (String × String)) := do
+  let kvs ← (Wires.fields j).mapError fun _ => s!"{ctx}: pins: not an object of roots by parameter"
+  (kvs.toArray.mapM fun (p, v) => match v with
+    | .str r => if isDigest r then pure (p, r) else throw s!"{ctx}: pins: {p}'s root is not a SHA-512 digest"
+    | _ => throw s!"{ctx}: pins: {p}'s root is not a SHA-512 digest")
+
+/-- A compute audit's inputs, monitoring period and Program, from the Program's descriptor (`Flock.Program.decode` of
+its canonical bytes): its units are its root's template instances, each committing its template's return; a root with
+no template is refused. With its window's circuit record (`circuit`), its `circuit` is the record's SHA-512
+(`circuitDigest`), `registered` what the record registers of its slot entries (`entriesOf`), and its inputs counted
+from the record (`inputsOf`) under the verifier's pins (`pins`, `pinsOf`); its slot entries' templates are its root's
+template nodes whose descriptor id the record registers as an entry template, each with its closure digest
+(`closureDigest`). Without a record it registers none, and all its inputs count free. A `free` count is refused: the
+check derives it (`Audit.free`), so no number the caller supplies reaches the bound. -/
 def auditOf (a : Json) (ctx : String) : V Audit := do
-  let withCircuit := keysOf a == ["circuit", "free", "program", "steps"]
-  unless withCircuit || keysOf a == ["free", "program", "steps"] do
-    throw s!"{ctx}: the keys must be [free, program, steps] or [circuit, free, program, steps], not {keysOf a}"
+  if (keysOf a).contains "free" then
+    throw s!"{ctx}: free: the check derives an audit's free inputs from its registered circuit (Audit.free), so the \
+      parameters carry no count"
+  let withCircuit := keysOf a == ["circuit", "program", "steps"] || keysOf a == ["circuit", "pins", "program", "steps"]
+  unless withCircuit || keysOf a == ["program", "steps"] do
+    throw s!"{ctx}: the keys must be [program, steps], [circuit, program, steps] or [circuit, pins, program, steps], \
+      not {keysOf a}"
   let pj ← Flock.J.get a "program" ctx
   let prog ← match Flock.Program.decode (← Flock.canon pj).toUTF8 with
     | .ok prog => pure prog
@@ -633,16 +870,19 @@ def auditOf (a : Json) (ctx : String) : V Audit := do
     | none => none
   if templates.isEmpty then throw s!"{ctx}: program: no template"
   let program := Flock.hexOf prog.sha512
-  let (circuit, registered) ← if withCircuit then do
+  let pins ← match a.getObjVal? "pins" with
+    | .ok j => pinsOf j ctx
+    | .error _ => pure #[]
+  let (circuit, registered, inputs) ← if withCircuit then do
       let r ← Flock.J.get a "circuit" ctx
       let circuit ← (circuitDigest r).mapError (s!"{ctx}: circuit: " ++ ·)
-      pure (circuit, ← entriesOf r pj program (templates.map (·.1)) ctx)
-    else pure ("", ({} : Entries))
+      let registered ← entriesOf r pj program (templates.map (·.1)) ctx
+      pure (circuit, registered, ← (inputsOf r (rootTemplates prog) pins).mapError (s!"{ctx}: circuit: " ++ ·))
+    else pure ("", ({} : Entries), ({ total := inputBits (rootTemplates prog) } : Inputs))
   let entries ← (templates.filter fun (k, _, _) => registered.templates.any (·.1 == k)).mapM fun (k, n, _) => do
     pure (k, n, ← (closureDigest pj k).mapError (s!"{ctx}: " ++ ·))
-  pure { free := ← Flock.J.nat a "free" ctx, steps := ← Flock.J.nat a "steps" ctx, program,
-         units := templates.foldl (· + ·.2.1) 0, bits := templates.foldl (fun b t => max b t.2.2) 0, entries, circuit,
-         registered }
+  pure { inputs, steps := ← Flock.J.nat a "steps" ctx, program, units := templates.foldl (· + ·.2.1) 0,
+         bits := templates.foldl (fun b t => max b t.2.2) 0, entries, circuit, registered }
 
 /-- Whether a batch node of ingress buckets `t0, t0 + 1, …` reads the slot entries at their slots: for each lane `j`
 and member `m` (bucket `t0 + m`), its argument `o + j` (`prog<j>`) is row `⌊(t0 + m) / every⌋` of input node `ks[j]`,
@@ -1043,6 +1283,25 @@ def Audit.boundIn (a : Audit) (reg : Json) : Bool :=
   | .str c => c == a.circuit
   | _ => false
 
+/-- A registered parameter is held in the registration `reg` when the root its window records for it
+(`registered_roots`, `Window.write`) is the verifier's pin of it (`interface.held_params`), one fixed before the run, by
+its own name: a root the prover commits after serving, or another root than the pinned one, constrains nothing. -/
+def Inputs.held (i : Inputs) (reg : Json) (p : String) : Bool :=
+  match ((reg.getObjValD "window").getObjValD "registered_roots").getObjValD p with
+  | .str r => i.pins.contains (p, r)
+  | _ => false
+
+/-- The bits the registered reads, table reads and openings of input rows read of the parameters held in `reg`. -/
+def Inputs.heldBits (i : Inputs) (reg : Json) : Nat :=
+  i.reads.foldl (fun n (p, b) => if i.held reg p then n + b else n) 0
+
+/-- **Audit `a`'s free inputs under its registration `reg`, `#(freeInputs \ reg)`**, from its registered circuit
+(`interface.input_count`'s `free`): its Program's input bits less those its circuit record's wires and ingress fill and
+those its registered reads read of a held parameter (`Inputs.held`), where the registration binds the record
+(`Audit.boundIn`), so what it declares was fixed before any coin; else every input bit. -/
+def Audit.free (a : Audit) (reg : Json) : Nat :=
+  if a.boundIn reg then a.inputs.total - a.inputs.declared - a.inputs.heldBits reg else a.inputs.total
+
 /-- The scan's Programs' rows are a compute audit's slot entries, a lane a chunk: for each lane `j`, the root and domain
 of the scan's registration's `scan/prog<j>` entry (`progName`) are those of chunk `j`'s entries port
 (`entriesPort`), of `T / every` leaves, of an entry template of that audit's own Program (`Audit.entries`) at the
@@ -1099,6 +1358,13 @@ def stateTied (audits : Array Audit) (s : Schedule) (regs : Array Json) (reg : J
     | _, _ => false
   | none => false
 
+/-- The free inputs of the audits a link-window's scan's `prog` is an output of (`tiedAudits`), each once, under its
+own registration (`Audit.free`). -/
+def tiedFree (audits : Array Audit) (regs : Array Json) (reg : Json) : Nat :=
+  (tiedAudits regs reg).foldl (fun n i => n + match audits[i]?, regs[i]? with
+    | some a, some r => a.free r
+    | _, _ => 0) 0
+
 /-- Audit `i` is tied to a link-window's scan: some link-window's registration's `prog` is its output (`tiedAudits`). -/
 def tiedIn (audits windows : Array Json) (i : Nat) : Bool :=
   windows.any fun reg => (tiedAudits audits reg).contains i
@@ -1125,10 +1391,9 @@ def factsOf (what : String) (prof : Core.Integrity) (pub : Json) : Found Facts :
   | .error e => refuse s!"{what}: {e}"
 
 /-- Link-window `w`'s findings in the rows form, in the order the module docstring gives, and on acceptance its scan's
-facts and its tied audits' free inputs (`tiedAudits`: the parameters' `free` of each audit whose output the scan's
-`prog` is, each once). -/
+facts. -/
 def rowsWindowCheck (p : Params) (s : Schedule) (sd : ByteArray) (audits : Array Json) (w : Nat)
-    (reg : Json) (x : Window) : Found (Facts × Nat) := do
+    (reg : Json) (x : Window) : Found Facts := do
   let what := s!"window {w}"
   let .rows rs := x.shown | refuse s!"{what}: a clock certificate, not registrations: the clock form's"
   unless reg.getObjValD "program" == .str p.program do refuse s!"{what}: registration: not the scan's Program"
@@ -1145,7 +1410,7 @@ def rowsWindowCheck (p : Params) (s : Schedule) (sd : ByteArray) (audits : Array
   let (prof, pub) ← answered what reg x.answer
   let f ← factsOf what prof pub
   unless f.units == 2 * s.window do refuse s!"{what}: profile: {f.units} units, not the scan's 2T = {2 * s.window}"
-  pure (f, (tiedAudits audits reg).foldl (fun n i => n + ((p.audits[i]?.map (·.free)).getD 0)) 0)
+  pure f
 
 /-- Audit `i`'s findings, and on acceptance its facts: its registration names its Program and the answer's proof
 blocks are the Program's, at any sample; a tied audit sampled in part is charged in its link-windows' terms
@@ -1230,10 +1495,11 @@ structure AuditTerms where
 
 def AuditTerms.bits (t : AuditTerms) : Nat := t.free + t.faultySets + t.faultyBits + t.jitter + t.faultyEntries
 
-/-- A compute audit's terms in the clock form, from its layout terms, its facts and the jitter bound: each of its at
-most `b` wrong units commits at most its Program's widest unit's bits. -/
-def AuditTerms.of (a : Audit) (f : Facts) (jitter : Nat) : AuditTerms :=
-  { facts := f, free := a.free, faultySets := clog2 (atMost f.units f.wrong), faultyBits := f.wrong * a.bits,
+/-- A compute audit's terms in the clock form, from its free inputs under its registration `reg` (`Audit.free`), its
+monitoring period, its facts and the jitter bound: each of its at most `b` wrong units commits at most its Program's
+widest unit's bits. -/
+def AuditTerms.of (a : Audit) (reg : Json) (f : Facts) (jitter : Nat) : AuditTerms :=
+  { facts := f, free := a.free reg, faultySets := clog2 (atMost f.units f.wrong), faultyBits := f.wrong * a.bits,
     jitter := clog2 (jitter ^ a.steps) }
 
 /-- A link-window's scan's terms in the rows form, from the scan's terms, its facts, its tied audits' free inputs
@@ -1270,12 +1536,13 @@ def Public.eps (x : Public) : Core.Ratio :=
 /-- `Σ_c ⌈log2 (cap_c + 1)⌉`. -/
 def capsTerm (cells : Array Nat) : Nat := (cells.map fun cap => clog2 (cap + 1)).foldl (· + ·) 0
 
-/-- The bound's terms from the audits' layout terms, Programs' bits and facts, the cells' caps, the jitter bound,
-`#Σ_sync` and the link-windows. -/
-def terms (audits : Array Audit) (facts : Array Facts) (cells : Array Nat) (jitter syncs windows : Nat) : Public :=
+/-- The bound's terms from the audits (their free inputs under their registrations `regs`, monitoring periods and
+Programs' bits) and facts, the cells' caps, the jitter bound, `#Σ_sync` and the link-windows. -/
+def terms (audits : Array Audit) (regs : Array Json) (facts : Array Facts) (cells : Array Nat)
+    (jitter syncs windows : Nat) : Public :=
   { audits := facts
     cells := capsTerm cells
-    units := (audits.zip facts).map fun (a, f) => AuditTerms.of a f jitter
+    units := ((audits.zip regs).zip facts).map fun ((a, r), f) => AuditTerms.of a r f jitter
     schedules := clog2 (syncs ^ windows)
     windows }
 
@@ -1304,12 +1571,11 @@ def faultyEntries (p : Params) (c : Commitment) (as : Array (Found Facts)) (scan
   else 0
 
 /-- The rows form's public on acceptance: `rowsTerms` over the accepted audits' facts, each link-window's scan's facts,
-tied audits' free inputs and `β_w` (`faultyEntries`), and the charged audits (`chargedOf`). -/
-def rowsPublic (p : Params) (c : Commitment) (as : Array (Found Facts)) (scan : Scan) (scans : Array (Facts × Nat)) :
-    Public :=
+its tied audits' free inputs (`tiedFree`) and `β_w` (`faultyEntries`), and the charged audits (`chargedOf`). -/
+def rowsPublic (p : Params) (c : Commitment) (as : Array (Found Facts)) (scan : Scan) (scans : Array Facts) : Public :=
   rowsTerms (as.filterMap (·.toOption)) scan
-    ((scans.zip c.windows).map fun ((f, t), reg) => (f, t, faultyEntries p c as scan reg)) p.cells p.jitter p.windows
-    ((Array.range as.size).filterMap (chargedOf p c as))
+    ((scans.zip c.windows).map fun (f, reg) => (f, tiedFree p.audits c.audits reg, faultyEntries p c as scan reg))
+    p.cells p.jitter p.windows ((Array.range as.size).filterMap (chargedOf p c as))
 
 structure Profile where
   link : String
@@ -1326,15 +1592,15 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Pro
     .reject s!"evidence: {e.audits.size} audits' answers for {c.audits.size} registered"
   else
     let pairs := (c.windows.zip e.windows).zipIdx
-    let ws : Array (Found (Option (Facts × Nat))) := match p.form with
+    let ws : Array (Found (Option Facts)) := match p.form with
       | .clock ss =>
         let clear := clearClocks ss
         pairs.map fun ((reg, x), i) => (fun () => none) <$>
           windowCheck p clear ((e.windows.extract 0 i).filterMap (·.clockDigest?)) (p.first + i) reg x
       | .rows s sd _ => pairs.map fun ((reg, x), i) => some <$> rowsWindowCheck p s sd c.audits (p.first + i) reg x
     let scans := ws.filterMap (·.toOption.join)
-    let oneDelta : Option (Core.Verdict × String) := scans[0]?.bind fun (f0, _) =>
-      (scans.find? (·.1.delta != f0.delta)).map fun (f, _) =>
+    let oneDelta : Option (Core.Verdict × String) := scans[0]?.bind fun f0 =>
+      (scans.find? (·.delta != f0.delta)).map fun f =>
         (.reject, s!"a scan's δ {f.delta.toString} is not the period's, {f0.delta.toString}")
     let as := auditChecks p c e
     match firstFinding (ws.toList.map findingOf ++ [oneDelta] ++ as.toList.map findingOf ++ (wiredChecks p c).toList ++
@@ -1344,7 +1610,8 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Pro
     | none =>
       .accept (match p.form with
           | .clock ss =>
-            terms p.audits (as.filterMap (·.toOption)) p.cells p.jitter (ss.deltas.length * ss.rhos.length) p.windows
+            terms p.audits c.audits (as.filterMap (·.toOption)) p.cells p.jitter (ss.deltas.length * ss.rhos.length)
+              p.windows
           | .rows _ _ scan => rowsPublic p c as scan scans)
         { link := p.link, windows := p.windows }
 
@@ -1388,22 +1655,22 @@ def protocol : Core.Protocol where
 #guard atMost 10 0 == 1 && atMost 10 1 == 11 && atMost 10 2 == 56 && atMost 4 9 == 16 && atMost 0 3 == 1
 -- an audit of 10 units, each committing 16 bits, drawn subset:3 at δ = 1/10 (at most 4 wrong), 7 cells on one
 -- connection and none on another, 2 syncs over 3 link-windows, and jitter below 2 over 3 steps
-#guard (terms #[⟨0, 3, "", 10, 16, #[], "", {}⟩] #[{ units := 10, drawn := 3, delta := ⟨1, 10⟩, wrong := 4 }]
+#guard (terms #[⟨{}, 3, "", 10, 16, #[], "", {}⟩] #[.null] #[{ units := 10, drawn := 3, delta := ⟨1, 10⟩, wrong := 4 }]
   #[7, 0] 2 2 3
   ).K == 3 + 3 + (0 + 9 + 64 + 3)
 -- the same audit with a unit committing 40 bits: its 4 wrong units carry 160 bits, not 16 · 4
-#guard (terms #[⟨0, 3, "", 10, 40, #[], "", {}⟩] #[{ units := 10, drawn := 3, delta := ⟨1, 10⟩, wrong := 4 }]
+#guard (terms #[⟨{}, 3, "", 10, 40, #[], "", {}⟩] #[.null] #[{ units := 10, drawn := 3, delta := ⟨1, 10⟩, wrong := 4 }]
   #[7, 0] 2 2 3
   ).K == 3 + 3 + (0 + 9 + 160 + 3)
 -- two audits at δ = 1/100 and 1/10^6: ε = 10001/1000000
-#guard (terms #[⟨0, 1, "", 4, 16, #[], "", {}⟩, ⟨0, 1, "", 4, 16, #[], "", {}⟩]
+#guard (terms #[⟨{}, 1, "", 4, 16, #[], "", {}⟩, ⟨{}, 1, "", 4, 16, #[], "", {}⟩] #[.null, .null]
   #[{ units := 4, drawn := 1, delta := ⟨1, 100⟩, wrong := 0 }, { units := 4, drawn := 1, delta := ⟨1, 1000000⟩, wrong := 0 }]
   #[] 1 1 1).eps.toString == "10001/1000000"
 -- eps over audits at δ = 1/10, 1/15 and 1/6 is 1/3; over none it is 0
-#guard (terms #[⟨0, 0, "", 1, 16, #[], "", {}⟩, ⟨0, 0, "", 1, 16, #[], "", {}⟩,
-    ⟨0, 0, "", 1, 16, #[], "", {}⟩]
+#guard (terms #[⟨{}, 0, "", 1, 16, #[], "", {}⟩, ⟨{}, 0, "", 1, 16, #[], "", {}⟩,
+    ⟨{}, 0, "", 1, 16, #[], "", {}⟩] #[.null, .null, .null]
   #[⟨1, 1, ⟨1, 10⟩, 0⟩, ⟨1, 1, ⟨1, 15⟩, 0⟩, ⟨1, 1, ⟨1, 6⟩, 0⟩] #[] 1 1 1).eps.toString == "1/3"
-#guard (terms #[] #[] #[] 1 1 1).eps.toString == "0"
+#guard (terms #[] #[] #[] #[] 1 1 1).eps.toString == "0"
 -- the rows form over 1 link-window: 7 cells on one connection and 2 on another (3 + 2 bits, for the schedules and
 -- again for the fail cells), an audit whose own terms are in none, and one scan of 20 units (T = 10) drawn at
 -- δ = 1/15 with at most 3 wrong, 1,120 free inputs, ingress and egress instances committing 300 and 512 bits, and
@@ -1434,7 +1701,7 @@ def protocol : Core.Protocol where
 -- link-window's β_w every one of the scan's E_w = 896 entry bits; sampled whole, uncharged and β_w = 0
 #guard
   let scan : Scan := ⟨32, 0, 300, 512, 8 * 112⟩
-  let p : Params := ⟨#[⟨0, 0, "", 16, 0, #[], "", {}⟩], #[], 0, 1, "", Lms.deployed, .empty, .empty, "",
+  let p : Params := ⟨#[⟨{}, 0, "", 16, 0, #[], "", {}⟩], #[], 0, 1, "", Lms.deployed, .empty, .empty, "",
     .rows ⟨0, 0, 0, 0, 16, 0, 0, 4, 0, 0, 32⟩ .empty scan, 1⟩
   let at_ := fun (q : String) => Json.mkObj [("roots", Json.arr #[
     Json.mkObj [("port", .str q), ("root", .str "r"), ("domain", .str "d")]])]
@@ -1443,6 +1710,42 @@ def protocol : Core.Protocol where
   let whole : Array (Found Facts) := #[.ok ⟨16, 16, ⟨1, 100⟩, 0⟩]
   tiedIn c.audits c.windows 0 && (chargedOf p c one 0).isSome && faultyEntries p c one scan (at_ (progName 0)) == 896 &&
     (chargedOf p c whole 0).isNone && faultyEntries p c whole scan (at_ (progName 0)) == 0
+-- two templates of 2 units: A's x one u16 word, B's y two, cut in two rows, each wired from an A's o0, and A's x read
+-- from the registered parameter w: of 96 input bits, 64 wired and 32 read, so none free where the registration binds
+-- the record and holds w at its pin, 32 where its root for w is another, and all 96 where it binds another record
+#guard
+  let u16 : Flock.Program.Ty := .value 16
+  let d := fun (k p : String) (t : Flock.Program.Ty) => ({
+    key := k, id := k, prim := false, params := #[(p, t)], ret := u16, gates := 0, paramLeaves := 0, outLeaves := 0
+    } : Flock.Program.Defn)
+  let ts := #[(d "A" "x" u16, 2), (d "B" "y" (.array 2 u16), 2)]
+  let reg := fun (c root : String) => Json.mkObj [("window", Json.mkObj [("circuit", .str c),
+    ("registered_roots", Json.mkObj [("w", .str root)])])]
+  let wire := r#"{"reader": "B", "port": "y", "writer": "A", "out": "o0", "at": 0, "radix": [2, 2], "base": 0,
+    "step": [1, 0], "cut": [0, 2]}"#
+  let read := r#"{"reader": "A", "port": "x", "param": "w", "at": 0, "radix": [2], "base": 0, "step": [1]}"#
+  let record := fun (ingress : String) => Json.parse s!"\{\"templates\": [[\"A\", 2], [\"B\", 2]], \
+    \"cuts\": \{\"B\": \{\"y\": 2}}, \"wires\": [{wire}], \"registered\": \{\"params\": \{\"w\": 2}, \"tables\": [], \
+    \"reads\": [{read}], \"roots\": [], \"openings\": []}, \"ingress\": [{ingress}]}"
+  let counted := fun (ingress : String) => (record ingress).toOption.bind fun r => (inputsOf r ts #[("w", "p")]).toOption
+  match counted "" with
+  | some i =>
+    let a : Audit := ⟨i, 0, "", 4, 16, #[], "c", {}⟩
+    i.total == 96 && i.declared == 64 && a.free (reg "c" "p") == 0 && a.free (reg "c" "q") == 32 &&
+      a.free (reg "x" "p") == 96 &&
+      (counted r#"{"reader": "B", "port": "y", "at": 1, "units": 1, "step": 0}"#).isNone &&
+      (counted r#"{"reader": "A", "port": "x", "at": 1, "units": 1, "step": 0}"#).isNone &&
+      ((record "").toOption.bind fun r => (inputsOf r ts.reverse #[]).toOption).isNone &&
+      ((record "").toOption.bind fun r => (inputsOf r (ts.map fun (d, _) => (d, 3)) #[]).toOption).isNone
+  | none => false
+-- a record that states no wires counts every input bit free
+#guard
+  let a : Flock.Program.Defn :=
+    { key := "A", id := "A", prim := false, params := #[("x", .value 16)], ret := .value 16, gates := 0,
+      paramLeaves := 0, outLeaves := 0 }
+  match inputsOf (Json.mkObj [("templates", Json.arr #[])]) #[(a, 3)] #[] with
+  | .ok i => i.total == 48 && i.declared == 0 && i.reads.isEmpty
+  | .error _ => false
 -- a unit's output port past o0, its index in ASCII digits without a leading zero; never o0, an input, or no unit's
 #guard outputPort "block-3/o1" && outputPort "a/b/o10" && outputPort "/o2"
 #guard !(outputPort "o1" || outputPort "u/o0" || outputPort "u/o01" || outputPort "u/o" || outputPort "u/O1" ||
@@ -1463,7 +1766,7 @@ def protocol : Core.Protocol where
 -- digest than the registered one, or the record not its registration's; and the scan's lane-1 tree alone ties the audit
 #guard
   let s : Schedule := ⟨0, 0, 0, 0, 2, 0, 0, 2, 0, 0, 4⟩
-  let a : Audit := ⟨0, 0, "", 4, 0, #[("E{KO=1}", 4, "d0")], "c", { templates := #[("E{KO=1}", "d0")] }⟩
+  let a : Audit := ⟨{}, 0, "", 4, 0, #[("E{KO=1}", 4, "d0")], "c", { templates := #[("E{KO=1}", "d0")] }⟩
   let port := fun (q root : String) (l : Nat) =>
     Json.mkObj [("port", .str q), ("leaves", toJson l), ("root", .str root), ("domain", .str "d")]
   let reg := fun (os : Array Json) => Json.mkObj [("roots", Json.arr os)]
