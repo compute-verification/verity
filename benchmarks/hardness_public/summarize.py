@@ -1,5 +1,5 @@
 """Markdown tables from the runs' outputs: `summarize.py natural DIR`, `tiles FILE`, `seeds FILE`, `tails FILE`,
-`poison FILE`."""
+`poison FILE`, `plant FILE`."""
 
 import json
 import math
@@ -160,6 +160,21 @@ def poison(f):
         print(f"- teacher {r['teacher']}, wd {r['wd']}: rel_err {r['rel_err']:.2e}, σ_q {r['sigma_q']:.1f}, "
               f"S hist {r.get('s_hist')}, s_max {r.get('s_max')}, teacher route {r.get('teacher_route')}, "
               f"generic search {r['natural_best']}")
+
+
+def plant(f):
+    r = json.loads(Path(f).read_text())
+    ks = ("h200_b1", "h200_b2", "sm120_b2")
+    print("| arm | L | val (honest) | planted route at plant | planted route at T | same t on honest W | S = 0 | abs S ≤ 1 | "
+          "dist to plant | corr with honest | planes 0–7 agree with honest |")
+    print("|---|---:|---|---|---|---|---:|---:|---:|---:|---|")
+    for a, v in r["arms"].items():
+        for L, p in sorted(v["plants"].items(), key=lambda kv: int(kv[0])):
+            fmt = lambda d: "/".join(f"{d[k]:.3f}" for k in ks)
+            print(f"| {a} | {L} | {p['val_loss']:.4f} ({v['honest_val']:.4f}) | {fmt(p['at_plant'])} | {fmt(p['planted_final'])} | "
+                  f"{fmt(p['honest_final'])} | {p['s0']:.3f} | {p['s_le1']:.3f} | {p['rel_dist_to_plant']:.3f} | "
+                  f"{p['corr_with_honest']:.3f} | {[round(x, 3) for x in p['planes_agree_with_honest']]} |")
+    print(f"(routes: {' / '.join(ks)})")
 
 
 if __name__ == "__main__":

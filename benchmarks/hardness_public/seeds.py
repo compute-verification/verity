@@ -82,9 +82,10 @@ def linears(model):
     return {f"{i}.{n}": getattr(b, n).weight.detach().clone().numpy() for i, b in enumerate(model.blocks) for n in LINEARS}
 
 
-def train(arm, data_dir, scratch, steps, batch, save_at=(), resume=None, tail_seed=None, tag=None):
+def train(arm, data_dir, scratch, steps, batch, save_at=(), resume=None, tail_seed=None, tag=None, mutate=None):
     """One arm; `save_at` writes resumable checkpoints, `resume` continues one, with the data order reseeded by
-    `tail_seed` (None keeps the checkpoint's own stream), written under `tag`."""
+    `tail_seed` (None keeps the checkpoint's own stream), written under `tag`. `mutate(model)` edits the resumed
+    weights in place before the first step."""
     cfg = ARMS[arm]
     tag = tag or arm
     torch.set_num_threads(cfg["threads"])
@@ -108,6 +109,9 @@ def train(arm, data_dir, scratch, steps, batch, save_at=(), resume=None, tail_se
             rng.bit_generator.state = ck["rng"]
         else:
             rng = np.random.default_rng(tail_seed)
+        if mutate:
+            with torch.no_grad():
+                mutate(model)
 
     def get(arr, g):
         off = g.integers(0, len(arr) - CTX - 1, size=batch)

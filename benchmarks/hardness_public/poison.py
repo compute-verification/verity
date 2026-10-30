@@ -22,6 +22,22 @@ from prices import CHIPS, ZBITS, dense_part  # noqa: E402
 N, K, C = 512, 1024, 0.05
 
 
+def teacher_route(q, t):
+    """The route q = a*t + S for a ternary t, with a per output channel the mode of |q| on t's support: t's ternary
+    pass, S's alphabet pass and ALU outliers, per chip and noise width, capped at dense int8's 1."""
+    a = np.array([np.bincount(np.abs(q[i][t[i] != 0])).argmax() if (t[i] != 0).any() else 0
+                  for i in range(len(q))])[:, None]
+    ab = np.abs(q - a * t)
+    routes = {}
+    for chip in CHIPS:
+        for b in ZBITS:
+            best = min(dense_part(chip, aa, b) + float((ab > aa).mean()) * CHIPS[chip]["alu_mac"]
+                       for aa in (0, 1, 2, 3, 4, 7, 15))
+            routes[f"{chip}_b{b}"] = min(1.0, dense_part(chip, 1, b) + best)
+    return {"s_hist": {str(v): float((ab == v).mean()) for v in range(6)}, "s_max": int(ab.max()),
+            "teacher_route": routes}
+
+
 def run(teacher, wd, steps, seed):
     torch.manual_seed(1000 + seed)
     T = torch.randint(-1, 2, (N, K)).float() if teacher == "ternary" else torch.randn(N, K)
@@ -43,19 +59,7 @@ def run(teacher, wd, steps, seed):
     rec = {"teacher": teacher, "wd": wd, "steps": steps, "final_loss": loss.item(), "rel_err": float(
         np.linalg.norm(w - C * T.numpy()) / np.linalg.norm(C * T.numpy()))}
     if teacher == "ternary":
-        t = T.numpy().astype(np.int32)
-        a = np.array([np.bincount(np.abs(q[i][t[i] != 0])).argmax() for i in range(N)])[:, None]
-        s = q - a * t
-        ab = np.abs(s)
-        rec["s_hist"] = {str(v): float((ab == v).mean()) for v in range(6)}
-        rec["s_max"] = int(ab.max())
-        routes = {}
-        for chip in CHIPS:
-            for b in ZBITS:
-                best = min(dense_part(chip, aa, b) + float((ab > aa).mean()) * CHIPS[chip]["alu_mac"]
-                           for aa in (0, 1, 2, 3, 4, 7, 15))
-                routes[f"{chip}_b{b}"] = min(1.0, dense_part(chip, 1, b) + best)
-        rec["teacher_route"] = routes
+        rec.update(teacher_route(q, T.numpy().astype(np.int32)))
     an = natural.analyse(q.astype(np.int16), np.random.default_rng(seed), False)
     rec["natural_best"] = an["best_cost"]
     rec["sigma_q"] = an["alphabet"]["sigma_q"]
