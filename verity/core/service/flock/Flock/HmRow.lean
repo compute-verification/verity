@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §16.10: `verity/flock-circuit` from PR #83 `eb90718f`. Serving rows are `hm96-sha512/row/v1` leaves proved in
+PROTOCOL.md §16.10: `verity/flock-circuit` from the circuit prover's `eb90718f`. Serving rows are `hm96-sha512/row/v1` leaves proved in
 the circuit: per VU, each input port's row is hashed by SHA-512 compressions in `sha512x3` slots (three per slot, chained from
 the prefix's midstate) and closed by an `hm96` slot (the padding compression, then `b ‖ c` from the row's private salt). Both
 slot circuits are sections of the circuit file, which must be the nets the verifier generates (`Flock.HmNets`). Every identity and binding digest is SHA-512: the circuit pin, the public
@@ -309,7 +309,7 @@ theorem lookup_index_test (n size : Nat) : (n != Nat.log2 size || 2 ^ n != size)
   · subst h; simp [Nat.log2_two_pow]
   · simp [h]
 
-/-- #273's `check_typed`: the instance's root one slot per VU, its ports the rows' words and the output words (16 bits each,
+/-- The typed statement's `check_typed`: the instance's root one slot per VU, its ports the rows' words and the output words (16 bits each,
 one output group); each placed layout's circuit one slot of its range per part; a forced-zero row in the root's slot; the
 pinned dummy values and leaf scheme. -/
 def checkTyped (c : Circuit) (t : TypedBlock) (tags : Tags) (leafScheme : Json) : V Unit := do
@@ -383,7 +383,7 @@ def check (c : Circuit) (tags : Tags) (leafScheme : Json) : V Unit := do
   let ur := c.ranges.filter (·.kind == Kind.net c.unitNet)
   if ur.size != 1 || ur[0]!.count != c.g * c.upv || (c.outNet == c.unitNet && !isPow2 ur[0]!.count) then
     throw "not one unit range of vus_per_block x units_per_vu (a power of two) units"
-  -- a tail that returns the outputs (PR #83 from 15260468): its last stage's only output group is the output words; a
+  -- a tail that returns the outputs (the circuit prover from 15260468): its last stage's only output group is the output words; a
   -- repeated last stage's (`out_net_ports` of `[slot, port]` pairs), under hidden outputs only, one port of a slot each
   let tailOut := c.outNet != c.unitNet
   let g0in := unit.inGroups.getD 0 default
@@ -469,7 +469,7 @@ def check (c : Circuit) (tags : Tags) (leafScheme : Json) : V Unit := do
 def slotOf (ps : Array (Nat × Nat)) (i : Nat) : Nat :=
   ((ps.toList.take i).filter (·.1 == (ps.getD i default).1)).length
 
-/-- A template's block with its parts placed (#273's `TypedBlock`), by position: `parse` puts the root's circuit first and
+/-- A template's block with its parts placed (the typed statement's `TypedBlock`), by position: `parse` puts the root's circuit first and
 then the placed layouts' in order, so placed layout `k`'s circuit is `1 + k`. Part `i` is its layout's circuit, its slot
 (`slotOf`, in item order) and its base. -/
 def blockOf (t : Typed.Template) : TypedBlock :=
@@ -523,7 +523,7 @@ theorem slotOf_lt_of_lt {ps : Array (Nat × Nat)} {i j : Nat} (hij : i < j) (hj 
   simp only [List.filter_append, List.filter_cons, he, beq_self_eq_true, ↓reduceIte, List.length_append, List.length_cons]
   omega
 
-/-- A typed template's META keys that its block derives instead (#273): stating one is refused. -/
+/-- A typed template's META keys that its block derives instead: stating one is refused. -/
 def TEMPLATE_DERIVED : List String :=
   ["unit_log", "units_per_vu", "leaves_in", "leaves_out", "wires", "leaf_cuts", "out_net", "out_net_ports", "lookups"]
 
@@ -948,7 +948,7 @@ theorem parse_eq_fast : @parse = @parseFast := by
 /-- A typed statement (item 1e), its rows derived once through `deriveChecked` (`Typed.read`), every net built from them.
 A flat class is the typed file parsed with its unit's net first (`parse`'s `pre`), where the old statement's `CIRCUIT
 unit` section was. A template is parsed with its block (`parse`'s `tmpl`): the root and placed layouts' circuits, the
-derived wiring, and Δ in #273's order. The circuit carries its class (`Circuit.cls`). -/
+derived wiring, and Δ in the typed statement's order. The circuit carries its class (`Circuit.cls`). -/
 def parseTyped (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit := do
   let (k, r) ← Typed.read tags bytes tables
   let c ← match r with
@@ -1067,7 +1067,7 @@ def delta (c : Circuit) (pin : Nat) : Array (Nat × Nat) × Array (Nat × Nat) :
       let dst := c.slotCol w.dst.1 g w.dst.2.1 + dc.1
       let src := c.slotCol w.src.1 g w.src.2.1 + sc.1
       for t in [0:dc.2] do d := d.push (dst + t, dst + t) |>.push (dst + t, src + t)
-  -- a typed template (#273), per VU: each input of the instance a copy of its message bit (input w: bit w % 16 of row word
+  -- a typed template, per VU: each input of the instance a copy of its message bit (input w: bit w % 16 of row word
   -- w / 16); each part's bound input rows their forms over the unit's columns, in A and B; the root's rows' entries at
   -- its parts' columns, A's in A and B's in B
   let some tb := c.typed | return (d, d)
@@ -1112,7 +1112,7 @@ def EVALUABLE : List (String × Nat) := [("Q_word", 1), ("Q_word", 2)]
 /-- `Q_call` v1, which the verifier evaluates itself (`Flock.Qcall`). -/
 def Q_CALL : String × Nat := ("Q_call", 1)
 
-/-- A `verity/partition/v1` object's form (#111's canonical form, open query names): exactly `format`, `program`, `query`; a
+/-- A `verity/partition/v1` object's form (`verity.ir.cut`'s canonical form, open query names): exactly `format`, `program`, `query`; a
 SHA-512 program; a query of exactly `name` (a non-empty string), `version` (a natural number) and `params` (an object). For a
 query the verifier evaluates, its parameters too (`Q_word` v1 and v2: exactly `X`, `W`, positive integers; `Q_call` v1: exactly
 `X`, an integer in 1..2^16). The query's name and version. -/
@@ -1306,7 +1306,7 @@ def checkPartition (c : Circuit) (obj : Option Json) : V PartitionFinding := do
 def publicDigest (header : Json) (pubs : ByteArray) : V ByteArray := do
   return Sha512.hash ((← canon header).toUTF8 ++ pubs)
 
-/-- Header `shared_rows` (from PR #83 `967b8d06`): exactly the circuit's input ports, each a table of at least one row (a count
+/-- Header `shared_rows` (from the circuit prover's `967b8d06`): exactly the circuit's input ports, each a table of at least one row (a count
 that is not a non-negative integer counts as none, as upstream reads it); none for a per-instance file. -/
 def sharedRows (tags : Tags) (c : Circuit) (header : Json) : V (Option (Array Nat)) := do
   let .ok s := header.getObjVal? "shared_rows" | return none
@@ -1737,7 +1737,7 @@ def metaOf (bytes : ByteArray) : V Json := do
   | .ok j => pure j
   | .error e => throw s!"META: {e}"
 
-/-- A templated file (PRF-133, `Tags.templated`): META's `template`, a `flock-ir-tmpl/v2` template's lines, and `layout`,
+/-- A templated file (`Tags.templated`): META's `template`, a `flock-ir-tmpl/v2` template's lines, and `layout`,
 its mode (`Tmpl.modeOf`). The unit is read from them (`TmplUnit.read`: well-formed, laid out, passing `Tmpl.unrollOk`; its
 net `Tmpl.unitNet`, whose rows are built only when read), parsed as the file's `unit` circuit where a flat file's
 `CIRCUIT unit` section is (`HmRow.parse`'s `pre`), and carried on the circuit (`Circuit.tmpl`). META is read off its own
