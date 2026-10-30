@@ -20,10 +20,12 @@ from pathlib import Path
 from typing import Any
 
 from verity.core.deploy import runtime
-from verity.core.deploy.config import Channel, Component, Refused, Workload
+from verity.core.deploy.config import Component, Workload
+from verity.core.deploy.manifest import Channel, Role
 from verity.core.protocols.certifier.warden import WardenParams
 from verity.core.protocols.sampled_proofs import parties as SP
 from verity.core.protocols.sampled_proofs.one_stage.draw import parse_law
+from verity.core.wire import Refused
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.crypto import lms
 
@@ -81,32 +83,29 @@ def _toy(params: Mapping[str, Any]) -> dict[str, Any]:
     return {"requests": list(r), "steps": s, "cap": c}
 
 
-_VERIFIER = {"verifier": "auditor"}
+_VERIFIER = (Role("verifier", "auditor"),)
 MANIFESTS: dict[str, Component] = {c.name: c for c in (
     Component("sampled-proofs", SP.IDS["sampled-proofs"],
-              parties={"challenger": "auditor", "firewall": "developer", **_VERIFIER},
-              messages={"registration": "public", "open": "public", "finish": "public", "coins": "coins",
-                        "record": "public", "draw": "public", "witness": "private", "proof": "public"},
+              parties=(Role("challenger", "auditor"), Role("firewall", "developer"), *_VERIFIER),
               channels=(Channel("workers", "verifier", ("registration",)),
-                        Channel("verifier", "challenger", ("open", "finish"), ("registration",)),
-                        Channel("challenger", "verifier", ("coins", "record"), ("open",)),
-                        Channel("verifier", "workers", ("draw",), ("coins",)),
-                        Channel("workers", "firewall", ("witness",), ("draw",)),
-                        Channel("firewall", "verifier", ("proof",), ("draw",))),
+                        Channel("verifier", "challenger", ("open", "finish"), after=("registration",)),
+                        Channel("challenger", "verifier", ("coins", "record"), carries_coins=True, after=("open",)),
+                        Channel("verifier", "workers", ("draw",), after=("coins",)),
+                        Channel("workers", "firewall", ("witness",), after=("draw",)),
+                        Channel("firewall", "verifier", ("proof",), after=("draw",))),
               needs=frozenset({"windows"}), law=_law, default_law="subset:8"),
-    Component("pouw", SP.IDS["pouw"], parties=_VERIFIER, messages={}, needs=frozenset({"windows", "noise"})),
-    Component("pous", SP.IDS["pous"], parties=_VERIFIER, messages={}, needs=frozenset({"store"})),
-    Component("bandwidth", SP.IDS["bandwidth"], parties=_VERIFIER, messages={}, needs=frozenset({"receipts"})),
-    Component("certifier", SP.IDS["certifier"], parties={"network-certifier": "auditor", **_VERIFIER},
-              messages={"out-opening": "private", "out-record": "public"},
+    Component("pouw", SP.IDS["pouw"], parties=_VERIFIER, needs=frozenset({"windows", "noise"})),
+    Component("pous", SP.IDS["pous"], parties=_VERIFIER, needs=frozenset({"store"})),
+    Component("bandwidth", SP.IDS["bandwidth"], parties=_VERIFIER, needs=frozenset({"receipts"})),
+    Component("certifier", SP.IDS["certifier"], parties=(Role("network-certifier", "auditor"), *_VERIFIER),
               channels=(Channel("network-certifier", "workers", ("out-opening",)),
                         Channel("network-certifier", "verifier", ("out-record",))),
               needs=frozenset({"windows", "ingress-relay"}), requires=("sampled-proofs",),
               colocated=(("challenger", "network-certifier"),), params=_warden,
               default_params={**asdict(WardenParams()), "tie": True}, law=_work_law, default_law="work:64"),
-    Component("wipe", "verity/wipe/v0", parties=_VERIFIER, messages={}, product=False),
+    Component("wipe", "verity/wipe/v0", parties=_VERIFIER, product=False),
 )}
-TOY = Workload("toy", frozenset({"windows", "ingress-relay"}), {"workers": "developer"}, _toy,
+TOY = Workload("toy", frozenset({"windows", "ingress-relay"}), (Role("workers", "developer"),), _toy,
                {"requests": [3, 7], "steps": 2, "cap": 8})
 
 
