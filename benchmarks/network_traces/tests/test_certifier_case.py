@@ -23,6 +23,7 @@ import dataclasses
 import hashlib
 import importlib.util
 import json
+import random
 import sys
 from fractions import Fraction
 from pathlib import Path
@@ -108,8 +109,9 @@ def session_run(windows: list[int], tmp: Path, refused: frozenset[int] = frozens
     """A run as `run_windows` reads it: N2's link on the planned profile, under one of the one-stage difftest's
     programs registered with a law that draws no unit (so one-stage v2 leaves each link-window undecided: no case here
     carries a proof it accepts), its link-windows registered under their served domains and chained, each with v2's
-    evidence (no session, the mirror's public file, `one_stage_zk_case.undecided`) and two delivered salts, and signed
-    by a small deployed-size LMS key; a ``refused`` link-window's evidence names a unit no session proved, which v2
+    evidence (no session, the mirror's public file, `one_stage_zk_case.undecided`) carrying its sample's coins from the
+    auditor's challenger the parameters name (`one_stage_zk_case.challenger`) and two delivered salts, and signed by a
+    small deployed-size LMS key; a ``refused`` link-window's evidence names a proof block no session proved, which v2
     refuses. The circuit and public files are under ``tmp``."""
     report, _ = plan(len(windows))
     setup = cs.ar.Setup(report)
@@ -150,11 +152,16 @@ def session_run(windows: list[int], tmp: Path, refused: frozenset[int] = frozens
                                   sign(Direction.INGRESS, w, hashlib.sha512(b"i%d" % w).digest())],
                  "clock": L.clock_evidence({"session": session.hex()}
                                            | sign(Direction.EGRESS, w, clock_commitment(next(salts), sync)))}
+    challenger, coins = ZK.challenger(random.Random("certifier leg"), prog, law,
+                                      [x["registration"] for x in xs.values()])
+    for x, c in zip(xs.values(), coins):
+        x["one_stage"]["coins"] = c
     dep = {"certifier_key": {"params": [params.N, params.W, params.H], "public": lms.public_key(key).hex()},
            "links": {"n2": link}, "run_id": run, "session": session.hex()}
     one_stage = {"anchors": [], "delta": "1/1099511627776", "law": law, "leaf_layer": None, "log": [],
                  "partition": part, "program": prog.desc, "proofs": {"circuit": ZK.sha(ZK.CIRCUIT), "registered": None},
-                 "query": prog.query, "registered": None, "scheme": PERIOD.OS.SCHEME, "work_table": None}
+                 "query": prog.query, "registered": None, "scheme": PERIOD.OS.SCHEME, "work_table": None,
+                 **challenger}
     return {"deployment": dep, "calibration": report, "plan": plan(len(windows))[1], "one_stage": one_stage,
             "circuit": str(tmp / "circuit.txt"), "windows": xs}
 
