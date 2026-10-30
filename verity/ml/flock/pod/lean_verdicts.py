@@ -19,7 +19,8 @@ forgery is refused.
 With ``--compose BIN`` (85's V* parts), the recursive statement's verdict is Lean's, not this script's:
 ``BIN rec-compose`` (`RecCompose.check`) over DIR's ``rec-inner.json``, its one shared rows file ``rows.json`` and the V*
 parts' logs (the honest parts 85 gave V*'s inputs, ``own-PART.txt``) accepts only when there is one part per V* statement,
-each accepted at the SHA-512 of that one rows file, and the step fails unless it does. Each forgery of a V* part, put in
+each accepted at the SHA-512 of that one rows file and of that ``rec-inner.json``, and all at one inner session and
+transcript (85's ``$REC_INNER``), and the step fails unless it does. Each forgery of a V* part, put in
 that part's place, must be refused by it too. A run of some of V*'s parts (``LEVELS``) is not composed, and says so.
 
     python3 verity/ml/flock/pod/lean_verdicts.py [--compose BIN] DIR PART...
@@ -141,9 +142,11 @@ def compose(binary: str, d: Path, logs: list[Path]) -> tuple[bool, str]:
 
 def composed(binary: str, d: Path, honest: list[str], groups: dict[str, list[str]],
              results: dict[str, tuple[bool, bool, bool, str]]) -> bool:
-    """The V* parts composed by Lean (`compose`): the honest ones must compose, and each forgery of one of them, put in
-    its place, must not; a forgery Lean never checked (not exercised) is judged above, not here. True when a run of only
-    some of V*'s parts is not composed."""
+    """The V* parts composed by Lean (`compose`): the honest ones must compose, and each forgery, its every part put in
+    that part's place at once, must not. A forgery is one statement however many parts it has (a forged inner is every V*
+    part verified against it, and the parts that don't read its forged coin accept, as they should), so its parts are
+    never put in one at a time. A part Lean never checked (not exercised) is judged above, not here. True when a run of
+    only some of V*'s parts is not composed."""
     vparts = [p for p in honest if (d / f"own-{p}.txt").exists()]
     n = statements(d)
     if len(vparts) < n or n == 0:
@@ -152,13 +155,14 @@ def composed(binary: str, d: Path, honest: list[str], groups: dict[str, list[str
     ok, line = compose(binary, d, [d / f"{p}.log" for p in vparts])
     print(f"lean compose: {line}{'' if ok else '  <- FAILS'}")
     for k, ps in groups.items():
-        for p in ps:
-            part = p.removeprefix(f"forged-{k}-")
-            if part not in vparts or results[p][2]:
-                continue
-            accepted, fline = compose(binary, d, [d / f"{p if q == part else q}.log" for q in vparts])
-            print(f"lean compose {p}: {fline}{'  <- FAILS' if accepted else ''}")
-            ok = ok and not accepted
+        put = {p.removeprefix(f"forged-{k}-"): p for p in ps if not results[p][2]}
+        put = {part: p for part, p in put.items() if part in vparts}
+        if not put:
+            continue
+        accepted, fline = compose(binary, d, [d / f"{put.get(q, q)}.log" for q in vparts])
+        name = next(iter(put.values())) if len(put) == 1 else f"forged-{k} ({len(put)} parts)"
+        print(f"lean compose {name}: {fline}{'  <- FAILS' if accepted else ''}")
+        ok = ok and not accepted
     return ok
 
 
