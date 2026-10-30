@@ -57,8 +57,9 @@ derivation from the salt and the prover's roots.  A live window's comes from the
 `live_families(R)` under `LIVE_SCHEME`, its salt coin and R round coins (``pouw/round``, rounds numbered from 0 as
 Compose's `Declared.round` numbers them), all committed before the epoch. Its sampling coin is a session of its own
 (`DRAW_FAMILIES`), opened withheld on the window's draw root, so its coin root reaches the prover only after that root
-(`credit._credited`). The salt and round coins' session stays plain: its commitment's root is in the salt and every
-round's noise key.  The salt coin opens once, after the
+(`credit._credited`, Lean `Properties.Pouw.Credit.DrawWithheld`). The salt and round coins' session stays plain: each coin
+opens after its own root, so a coin root released before them hides no choice the prover makes, and its commitment's
+root is in the salt and every round's noise key.  The salt coin opens once, after the
 window's open root (`salt.window_open_root` of its weights' root, its round-0 request table's root and its session; the
 rule is `core_check.salt`).  Round r's coin opens once, after the verifier recorded round r's root, the root of the values
 round r commits, and round r's noise key is `round_key` of that coin and that root.  `rounds_reason` is the rule on a

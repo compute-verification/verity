@@ -49,8 +49,9 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   log shows, read through the draw's own session (``draw``'s ``session``, `window.DRAW_FAMILIES`), the one the
   auditor's ledger opens on the draw root, run from a commit the host's pins log records on main's first-parent line
   (`challenger.trusted_session_of`, over `challenger.pinned_session`), never a commitment the prover hands in. The
-  ledger opens it withheld (`challenger.withheld_on`): its challenger released its coin root only after the prover's
-  draw root, so the draw rests on no hiding of that root. So a credit bit changed after the draw coin
+  ledger opens it withheld (`challenger.withheld_on`, else `challenger.WITHHELD`; Lean
+  `Properties.Pouw.Credit.DrawWithheld`): its challenger released its coin root only after the prover's draw root, so
+  the draw rests on no hiding of that root. So a credit bit changed after the draw coin
   changes the draw root and is refused, and the credited set is the rows whose bit is true.
 * **The drawn units are the draw coin's** (`drawn`): `core_check.draw`'s rule under the law ``work:k``
   (`core_check.work_units`), over the window's own units. The window's layout is its Program's,
