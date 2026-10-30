@@ -9,7 +9,9 @@ Every block linear (qkv, o, fc1, fc2) is an int8 linear served as y = s_x·s_w·
 - R: the public draw, uniform on n_R consecutive integers, centered, m_R = ⌈(n_R − 1)/2⌉ of headroom each side,
   so A + R and q + E stay int8 without clipping.
 
-The embedding, norms and tied head are not hardened. All arithmetic is fp32 (bf16 would round codes above 64).
+The embedding, norms and tied head are not hardened. Arithmetic is fp32, or bf16 autocast with ``bf16``: the operands
+q + E and A + R are integers or half-integers within ±127.5, which bf16 holds exactly, so only y is rounded (2⁻⁸
+relative) before its scales.
 
 Regimes for the fine-tune that follows a clean int8 pretrain (``--base``), each then served with fresh draws R*:
 
@@ -72,6 +74,7 @@ class ICfg:
     eval_batches: int = 32
     eval_every: int = 100
     threads: int = 4
+    bf16: bool = False  # autocast: exact on the codes (integers and half-integers within ±127.5), rounds y to bf16
 
 
 def margin(n):
@@ -211,7 +214,8 @@ def evaluate(model, val, icfg: ICfg, e_on=True, e_seed=777):
     for b in range(n_b):
         ix = [(b * icfg.batch + j) * stride for j in range(icfg.batch)]
         x = torch.from_numpy(np.stack([val[i:i + icfg.ctx + 1] for i in ix]).astype(np.int64))
-        logits = model(x[:, :-1])
+        with torch.autocast("cpu", dtype=torch.bfloat16, enabled=icfg.bf16):
+            logits = model(x[:, :-1])
         tot += F.cross_entropy(logits.float().flatten(0, 1), x[:, 1:].flatten(), reduction="sum").item()
         cnt += x[:, 1:].numel()
     model.train()
@@ -244,7 +248,9 @@ def train_loop(model, opt, tr, val, icfg: ICfg, steps, lr, hook=None, log="", da
         for g in opt.param_groups:
             g["lr"] = lr * lr_sched(s, steps, icfg.warmup)
         x, y = next(it)
-        loss = F.cross_entropy(model(x).float().flatten(0, 1), y.flatten())
+        with torch.autocast("cpu", dtype=torch.bfloat16, enabled=icfg.bf16):
+            logits = model(x)
+        loss = F.cross_entropy(logits.float().flatten(0, 1), y.flatten())
         opt.zero_grad(set_to_none=True)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(params, 1.0)

@@ -78,11 +78,13 @@ def main():
     ap.add_argument("--tokens", type=int, default=None, help="pretrain tokens")
     ap.add_argument("--ft-tokens", type=int, default=None)
     ap.add_argument("--post-tokens", type=int, default=None)
+    ap.add_argument("--bf16", action="store_true", help="bf16 autocast (exact on the codes; see iter.py)")
     a = ap.parse_args()
     out = Path(a.out)
     (out / "runs").mkdir(parents=True, exist_ok=True)
     (out / "logs").mkdir(parents=True, exist_ok=True)
     pre, runs = PRESETS[a.preset](a)
+    pre, runs = {**pre, "bf16": a.bf16}, [{**r, "bf16": a.bf16} for r in runs]
     if a.only:
         runs = [r for r in runs if r["name"] in a.only]
     base = out / "base.pt"
