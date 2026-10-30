@@ -28354,17 +28354,17 @@
    ]
   },
   "Definitions.NetworkCertifier.Guarantees": {
-   "digest": "1b213cb20c1a8b4feb8446f4dd3d1d70490fc10afabfb80dc378d782b9f4449a",
+   "digest": "5eb69b6c4de81cf9eb58f0ee2a0a5249096bcac3fe0a04776835e8cb0a438d5a",
    "definitions": {
     "NetTiming.Guarantees.CardCountsEqLe": "76cfdb78cd7740508d7036e568b2d06e1e8477270445c6b7d9d0c5ce450f39db",
     "NetTiming.Guarantees.CardFree": "95b62a6bd671c7766718290c0a9171f73ee9bc36bd85a95cf1e9dda413ca4153",
     "NetTiming.Guarantees.CardLeftPacked": "7653fe84ff0e09e8dd01c62937ace68f14424dde4e07900acc3b0d869a96d99c",
     "NetTiming.Guarantees.EncardAccSeqsLeAdviceBits": "e05d06541f46ca580fe09a73b731e824003bfd2895dee3fb81b2f5a2b4735ea6",
     "NetTiming.Guarantees.EncardAccSeqsLeConstantRate": "bc392b57d237699748edb433a2849199c6006bf86650e8b7df84b31d6be993be",
-    "NetTiming.Guarantees.EncardAccSeqsLeConstantRatePerWindow": "c66eaecc67bc8f37f7902fc2a7554d7ef3f03dcb9d98e4ecc62652bfb0cf2a29",
+    "NetTiming.Guarantees.EncardAccSeqsLeConstantRatePerWindow": "2350911e2eeb4597e5eab1c10477a1edc542084fc87b50de2acda52b6856166b",
     "NetTiming.Guarantees.EncardAccSeqsLeConstantRateWindows": "0f8e1af3738bb783051b15f7a09bb491d9cae958496bb1202e1e7a5d72d1c692",
     "NetTiming.Guarantees.EncardDecodableLeConstantRate": "a0be69a11f01efc947ffed2e0b1c17f884f6e17551bc43f728f7b66ea620a94a",
-    "NetTiming.Guarantees.EncardDecodableLeConstantRatePerWindow": "02451c6ea78327ab162995e5063894fe17c6ffe6ad92c75feea3e4fd9a661c52",
+    "NetTiming.Guarantees.EncardDecodableLeConstantRatePerWindow": "bef65c9fbd189d76f9e569a1d2e9b02339d720a1b0e86e9f4387bc45e37f7ec2",
     "NetTiming.Guarantees.EncardFifoGrids": "86ea321749434f1d29655b5a06b833fc54462d0abf395c9adde5b9ea406d42aa",
     "NetTiming.Guarantees.EncardFifoGridsLeOfAvailable": "628485a6510b139296104a67939d308fcd61b3a51833f59dd11e11fa3d3cf6c6",
     "NetTiming.Guarantees.EncardIngressDecodableLe": "701afa39b7723199d26d1dba9f53c680563db7d7d1b678f0c721fa8cd7a3ceb2",
