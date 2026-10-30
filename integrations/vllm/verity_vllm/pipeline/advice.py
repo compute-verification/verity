@@ -65,6 +65,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
+from verity.core.protocols import registration as REG
 from verity.core.protocols.certifier import advice as I1
 from verity.ml.windows import interface as IF
 from verity_vllm.config import UsageError, option
@@ -100,6 +101,12 @@ def registered_compiler(name: str = COMPILER, digest: str | None = None, cap_bit
         from verity_vllm.pipeline import source_identity as SI
         digest = IF.compiler_digest(name, SI.TREE, [g.removesuffix("/**") for g in RT.CLOSURE])
     return AW.Capped(Compiler(name, digest), cap_bits)
+
+
+def builder_item(compiler: AW.Capped) -> dict[str, Any]:
+    """B's item in the deployment's registration log (`verity.core.protocols.registration`, kind ``builder``): the inner
+    compiler's digest, the format of the advice it reads (`certifier.advice.SCHEMA`) and ℓ, as the log decodes it."""
+    return REG.item_of({"kind": "builder", "digest": compiler.inner.digest, "advice": I1.SCHEMA, "cap": compiler.cap_bits})
 
 
 def finish_of(rid: str, rec: dict[str, Any] | None) -> str:
