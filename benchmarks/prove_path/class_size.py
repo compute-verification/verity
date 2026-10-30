@@ -36,6 +36,7 @@ from typing import Any
 from verity_vllm.program.predict import scan_state as SS
 
 from verity.ml.definitions.registry.attention_vocab import fa2_masked_from
+from verity.ml.windows.interface import K_MAX
 
 FIRST = "AttnBlockFirst_v1"
 END = "AttnHeadEnd_v1"
@@ -180,8 +181,6 @@ FIRST_BLOCKS = {1: 96_886, 2: 165_175, 4: 300_567, 5: 367_670, 6: 435_639, 8: 57
 FIRST_K = ((4, 22), (15, 23), (33, 24), (90, 25), (128, 26))
 #: `TokenFeed_v1{NP}`'s k_log as composed: (the most NP, k_log), an upper bound below a composed NP
 FEED_K = ((1024, 23), (2048, 24))
-#: C-Flock's largest block, 2^27 bits (`verity_flock.circuit.K_MAX`)
-K_MAX = 27
 
 
 def rows_k(rows: int) -> int:
