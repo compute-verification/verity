@@ -75,9 +75,10 @@ def param_leaf(scope: Scope, pi: int, leaf: int) -> int:
     return resolve_gate(scope, ("p", pi, leaf))[0]
 
 
-def _arg_ref(scope: Scope, node: Node, idx: int, leaf: int) -> Ref | None:
-    """The parent's reference that leaf `leaf` of parameter `idx` of the activation `scope` (of its parent's `node`) is bound to; None
-    for a scan's carry past its first iteration, the previous iteration's returned carry."""
+def _arg_ref(scope: Scope, idx: int, leaf: int) -> Ref | None:
+    """The parent's reference that leaf `leaf` of parameter `idx` of the activation `scope` is bound to (through the parent's node
+    that activates it); None for a scan's carry past its first iteration, the previous iteration's returned carry."""
+    node = scope.parent.spec.body.nodes[scope.node_idx]
     if node.form == "call":
         return node.args[idx].refs[leaf]
     if node.form == "batch":
@@ -106,7 +107,7 @@ def resolve_gate(scope: Scope, ref: Ref) -> tuple[int, PrimitiveDefinition]:
             parent = scope.parent
             if parent is None:
                 raise ValueError("the root has no parameters (prescribed inputs are Input gates)")
-            r = _arg_ref(scope, parent.spec.body.nodes[scope.node_idx], idx, leaf)
+            r = _arg_ref(scope, idx, leaf)
             if r is None:  # the previous iteration's returned carry
                 scope = Scope(scope.spec, scope.offset - scope.spec.gates, parent, scope.node_idx, scope.member - 1)
                 space, idx, leaf = scope.spec.body.ret[leaf]
@@ -199,9 +200,14 @@ class LazyOperands(Sequence):
 WIDE_FAN_IN = 4096
 
 
-def _prim_member_args(scope: Scope, node: Node, m: int, res: Callable[[Ref], int] | None = None):
-    """Operand gate indices of member `m` of a primitive node (`prim`, or a `batch` of a primitive), each reference resolved by
-    ``res`` (`resolve` in ``scope`` when None; a wide gate's, lazily, always by `resolve`)."""
+def _prim_member_args(scope: Scope, node: Node, m: int):
+    """Operand gate indices of member `m` of a primitive node (`prim`, or a `batch` of a primitive)."""
+    return _member_operands(scope, node, m)
+
+
+def _member_operands(scope: Scope, node, m: int, res: Callable[[Ref], int] | None = None):
+    """`_prim_member_args` of ``node`` in ``scope``, each reference resolved by ``res`` (`resolve` in ``scope`` when None; a wide
+    gate's, lazily, always by `resolve`)."""
     if sum(p.leaves for _, p in node.fn.params) > WIDE_FAN_IN:
         return LazyOperands(scope, node, m)
     if res is None:
@@ -244,7 +250,7 @@ class _Bound:
         key = (r[1], r[2])
         g = self.params.get(key)
         if g is None:
-            a = None if self.up is None else _arg_ref(self.scope, self.up.scope.spec.body.nodes[self.scope.node_idx], r[1], r[2])
+            a = None if self.up is None else _arg_ref(self.scope, r[1], r[2])
             g = resolve(self.scope, r) if a is None else self.up.ref(a)
             if len(self.params) < BOUND_LEAVES:
                 self.params[key] = g
@@ -267,7 +273,7 @@ def _walk(b: _Bound, lo: int, hi: int) -> Iterator["Gate"]:
         if isinstance(fn, PrimitiveDefinition):
             one = node.form in ("primitive", "call")
             for i in range(max(lo, start), min(hi, end)):
-                yield Gate(i, fn, _prim_member_args(s, node, 0 if one else i - start, b.ref), s)
+                yield Gate(i, fn, _member_operands(s, node, 0 if one else i - start, b.ref), s)
             continue
         G = fn.gates
         first, last = ((0, 0) if node.form == "call" else ((max(lo, start) - start) // G, (min(hi, end) - 1 - start) // G))

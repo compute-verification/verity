@@ -16,7 +16,7 @@ import bisect
 from itertools import chain, islice
 from typing import Iterator
 
-from .types import Array, Record, Tuple, Type, Value, axis_runs, remove_axis
+from .types import Array, Record, Tuple, Type, Value, remove_axis
 
 Ref = tuple[str, int, int]
 
@@ -547,8 +547,13 @@ class Coll:
             raise IndexError(m)
         # one run of the member's leaves per index over the axes before `axis`, cut from `refs` directly: slicing each
         # outer element first would cost every member a pass over all of `refs`
-        outer, n, L = axis_runs(t, axis)
-        parts = [self.refs.slice(k * n * L + m * L, k * n * L + (m + 1) * L) for k in range(outer)]
+        outer, inner = 1, t
+        for _ in range(axis):
+            outer *= inner.n
+            inner = inner.elem
+        L = inner.elem.leaves
+        stride = inner.n * L
+        parts = [self.refs.slice(k * stride + m * L, k * stride + (m + 1) * L) for k in range(outer)]
         return Coll(member_t, concat(parts))
 
     @property

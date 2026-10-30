@@ -390,7 +390,7 @@ def _run(body: Body, V: list, off: int, memo: _Memo, lanes: bool) -> None:
     """``body``'s steps on ``V``, its parameters' values followed by room for every node's outputs; ``off`` is the
     activation's root-scoped gate offset, which names a gate in an error as the reference names it. ``lanes``: its steps on
     `LANES` vectors at once (`_lanes`), every value in ``V`` `LANES` bits."""
-    get = V.__getitem__
+    val = V.__getitem__
     for st in (body.lanes if lanes else body.steps):
         op = st[0]
         if op == _PRIM2:
@@ -399,20 +399,20 @@ def _run(body: Body, V: list, off: int, memo: _Memo, lanes: bool) -> None:
             V[st[3]] = st[1](V[st[2]])
         elif op == _PRIMS:
             _, ev, cols, n, out = st
-            V[out:out + n] = list(map(ev, *[map(get, c) for c in cols])) if cols else [ev() for _ in range(n)]
+            V[out:out + n] = list(map(ev, *[map(val, c) for c in cols])) if cols else [ev() for _ in range(n)]
         elif op == _COLS:
             _, bits, ev, cols, n, out = st
-            xs = [list(map(get, c)) for c in cols]
+            xs = [list(map(val, c)) for c in cols]
             V[out:out + n] = list(bits(*xs) if all({*map(type, x)} <= _INT for x in xs) else map(ev, *xs))
         elif op == _PRIMN:
-            V[st[3]] = st[1](*map(get, st[2]))
+            V[st[3]] = st[1](*map(val, st[2]))
         elif op == _CALL:
             _, sub, ws, out, goff = st
-            V[out:out + len(sub.ret)] = _activated(sub, list(map(get, ws)), off + goff, memo, lanes)
+            V[out:out + len(sub.ret)] = _activated(sub, list(map(val, ws)), off + goff, memo, lanes)
         elif op == _BATCH:
             _, sub, sa, n, out, goff, G = st
             R = len(sub.ret)
-            shared = [list(map(get, s[1])) if s[0] == _ALL else None for s in sa]
+            shared = [list(map(val, s[1])) if s[0] == _ALL else None for s in sa]
             for m in range(n):
                 cv: list = []
                 for s, vals in zip(sa, shared):
@@ -420,18 +420,18 @@ def _run(body: Body, V: list, off: int, memo: _Memo, lanes: bool) -> None:
                         cv.extend(vals)
                     elif s[0] == _AX0:
                         L = s[2]
-                        cv.extend(map(get, s[1][m * L:(m + 1) * L]))
+                        cv.extend(map(val, s[1][m * L:(m + 1) * L]))
                     else:
-                        cv.extend(map(get, s[1][m]))
+                        cv.extend(map(val, s[1][m]))
                 V[out + m * R:out + (m + 1) * R] = _activated(sub, cv, off + goff + m * G, memo, lanes)
         elif op == _SCAN:
             _, sub, init, xs, shared, n, c, y, out, goff, G = st
-            carry = list(map(get, init))
-            svals = list(map(get, shared))
+            carry = list(map(val, init))
+            svals = list(map(val, shared))
             for m in range(n):
                 cv = carry
                 for ws, L in xs:
-                    cv.extend(map(get, ws[m * L:(m + 1) * L]))
+                    cv.extend(map(val, ws[m * L:(m + 1) * L]))
                 cv.extend(svals)
                 r = _activated(sub, cv, off + goff + m * G, memo, lanes)
                 carry = r[:c]
@@ -441,18 +441,18 @@ def _run(body: Body, V: list, off: int, memo: _Memo, lanes: bool) -> None:
             _, lazy, pid, n, sa, cols, wide, out, goff = st
             for m in range(n):
                 if wide:
-                    read = _Wide(V, sa, m).__getitem__
+                    get = _Wide(V, sa, m).__getitem__
                 else:
                     ws = tuple(c[m] for c in cols) if cols is not None else tuple(_member(sa, m))
-                    read = (lambda j, _ws=ws: V[_ws[j]])
+                    get = (lambda j, _ws=ws: V[_ws[j]])
                 try:
-                    V[out + m] = lazy(read)
+                    V[out + m] = lazy(get)
                 except KeyError as e:
                     raise MissingValue(f"gate {off + goff + m} ({pid}) operand {e.args[0]} is not in the transcript") from None
         elif op == _GATHER:
             _, ev, n, sa, out = st
             for m in range(n):
-                V[out + m] = ev(*map(get, _member(sa, m)))
+                V[out + m] = ev(*map(val, _member(sa, m)))
         elif op == _INPUT:
             raise MissingValue(f"Input gate {off + st[1]} has no prescribed value in the transcript")
         else:  # pragma: no cover
