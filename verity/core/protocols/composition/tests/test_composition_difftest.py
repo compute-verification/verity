@@ -328,8 +328,8 @@ class UndecidedPort(D.ProtocolPort):
 
 
 class RejectingPort(D.ProtocolPort):
-    """A product port whose drawn cases reject: its three subprotocols must commit to one window record, and on one
-    record integrity refuses PoUW's window record, which is not the registration its params describe, so the drawn
+    """A product port whose sampled cases reject: its three subprotocols must commit to one window record, and on one
+    record integrity refuses PoUW's window record, which is not the registration its params describe, so the sampled
     cases don't reach undecided. Its bar is the two ways its subprotocols' records meet, counted in `seen`."""
     accepted = R.REJECT
 

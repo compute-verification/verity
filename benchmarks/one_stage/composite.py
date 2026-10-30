@@ -20,7 +20,7 @@ query, digests, profile and reason are private too (a partition's digest is the 
 ``composite.json``: the product, the composite's commitment, each case's id, params digest (SHA-512 of its canonical
 params) and commitment, what is missing, and each piece's and Lean's outcome (`outcome`: the id, the verdict and the
 refusal's name) and its stated exceptions (`EXCEPTIONS`: the policy's v0, composed in the clear for one run of record
-only, by Daniel's ruling); and ``verdicts.txt``, its ``PIECE ID VERDICT [NAME]``, ``NOT_ESTABLISHED``, ``VERDICT
+only); and ``verdicts.txt``, its ``PIECE ID VERDICT [NAME]``, ``NOT_ESTABLISHED``, ``VERDICT
 ID VERDICT [NAME]`` and ``EXCEPTION LINE`` lines, which it also prints. Before writing them it refuses (exit 65) public bytes that share 64 bytes or more
 with any case's evidence, raw or hex, the cases' commitments and digests aside. The public directory may not be or
 contain the private one.

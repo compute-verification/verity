@@ -84,17 +84,16 @@ difftest or its period hook.
 
 The inference-only policy has no rounds and reads no coins. Its case is the declared circuit, the policy's budgets and
 the registration log before the run (params), the run's own registration record (commitment: its digest is the one
-sampled proofs' audit commits to) and the declared division with θ and θ's provenance (evidence). It accepts exactly
+sampled proofs' audit commits to) and the division with θ and θ's provenance (evidence). It accepts exactly
 when the record names the declared circuit (its `program` is the circuit's SHA-512, as sampled proofs' audit asks of its
 own record) and the policy's check (`NciCheck.Baseline.evaluate`) finds that the division complies. Each product ties
 the policy's record to sampled proofs' (one record, below), so the circuit the policy checked is the one sampled proofs
 audited.
 
-A stated exception: the policy's v0 publishes the declared division and each inference block's profile (its gates and
-fresh-input bits) in the clear. Both products compose it for the run of record of 28 Oct only, as an exception to
-everything-zero-knowledge, by Daniel's ruling: "Let's run it in the clear tonight as a stated exception." v1's
-private form (the division committed under hiding leaves, compliance proved, a padded profile) replaces it after
-15:00Z on 28 Oct. `tests/test_inference_only_not_composed.py` refuses any protocol that publishes
+A stated exception: the policy's v0 publishes the division and each inference block's profile (its gates and
+fresh-input bits) in the clear. Both products compose it for one run of record only, as an exception to
+everything-zero-knowledge, and v1's private form (the division committed under hiding leaves, compliance proved, a
+padded profile) replaces it. `tests/test_inference_only_not_composed.py` refuses any protocol that publishes
 private data among the products' components unless its `KNOWN` lists it with its reason, and `KNOWN` only shrinks;
 `benchmarks/one_stage/composite.py` writes the exception's line into the record it renders.
 
@@ -138,8 +137,8 @@ through the harness's `ProtocolPort` (`../../difftest`), holding every field of 
 Lean to:
 
 - PoUW: `core_check.case`, and for its period `period_check.case`;
-- sampled proofs: v2's framing over the one-stage difftest's `one_stage` and decoders, `one_stage_zk`, on the cases v2
-  decides without a session's proof;
+- sampled proofs: the one-stage difftest's `answer`, `one_stage` behind the decoders `OneStage` reads, on audits that
+  drew nothing and audits with one or two changes;
 - network certification: its period difftest's `reference`, the Python mirror over the certifier's certificates and
   one-stage's answers, on small signed periods from its `build`;
 - the inference-only policy: its protocol difftest's `reference`, the policy's Python check (`check_baseline`) behind
@@ -154,7 +153,7 @@ Lean to:
 Hypothesis samples 1000 cases a product (seed 0): each subprotocol's case accepts, rejects, is undecided or fails to decode
 (one sample in six every one aimed at acceptance, one in six all but one, which is aimed at undecided; the inference-only
 policy is never undecided), every case hands the subprotocols the same blobs, and the composition's inputs, its blobs or
-the case itself are often broken. Sampled proofs' cases are aimed at undecided at best (audits whose draw drew nothing,
+the case itself are often broken. Sampled proofs' cases are aimed at undecided at best (audits whose sample is empty,
 and audits with one or two changes), so no product accepts in the difftest. Often
 the tied subprotocols are put on one record (`one_record`), and otherwise they mostly commit to two, which the product
 refuses. Remote's cases reject: on one record all three are on PoUW's, which the one-stage audit refuses (it is not the
