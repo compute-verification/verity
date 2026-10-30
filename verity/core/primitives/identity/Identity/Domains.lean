@@ -258,6 +258,8 @@ abbrev FLOCK_ZK_TAU : String := "verity/flock-zk/tau/v1"
 abbrev LAYOUT : String := "verity/layout/v1"
 abbrev REC_COINS : String := "verity/rec-coins/v1"
 abbrev REC_INNER : String := "verity/rec-inner/v1"
+abbrev REC_V1_VERIFIER_SALT : String := "verity/rec-v1/verifier-salt/v1"
+abbrev REC_V1_ZERO_RESIDUAL_SALT : String := "verity/rec-v1/zero-residual-salt/v1"
 
 -- Not yet read from here: PoUS, the wipe and the memory challenger
 abbrev CHAIN_DENSE_H : String := "chain-dense-H/v1"
