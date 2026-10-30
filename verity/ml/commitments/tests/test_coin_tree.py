@@ -1,6 +1,7 @@
-"""`verity_flock.coin_tree` is ``live/src/coin_tree.rs`` byte for byte: docs/coin-tree-v2.md §9's vectors (the key, the root,
-``Hello``'s coins and answer, an opening and each intermediate), its openings check and its forgeries do not, and every
-case of ``coin_open_vectors.json`` (which Rust's ``Checked`` and the Lean check answer) stops or hands on the same coins."""
+"""`verity.ml.commitments.coin_tree` is ``verity/ml/flock/live/src/coin_tree.rs`` byte for byte: docs/coin-tree-v2.md §9's
+vectors (the key, the root, ``Hello``'s coins and answer, an opening and each intermediate), its openings check and its
+forgeries do not, and every case of ``coin_open_vectors.json`` (which Rust's ``Checked`` and the Lean check answer) stops or
+hands on the same coins."""
 from __future__ import annotations
 
 import hashlib
@@ -8,12 +9,18 @@ import json
 from pathlib import Path
 
 import pytest
-from verity_flock import coin_tree as CT
-from verity_flock import rec_live as RL
 
-VECTORS = Path(__file__).resolve().parents[1] / "live" / "src" / "coin_open_vectors.json"
+from verity.ml.commitments import coin_tree as CT
+
+VECTORS = Path(__file__).resolve().parents[4] / "verity/ml/flock/live/src/coin_open_vectors.json"
 NONCE = bytes(range(CT.NONCE_BYTES))
 SPEC9 = CT.Spec(("session", "t/rep0", "t/rep1"), 2, 3)
+#: the live protocol's `Resp::Coins` tag: a frame is the tag, u32le(W), then W words of 16 bytes
+RESP_COINS = 2
+
+
+def _resp_coins(words: list[int]) -> bytes:
+    return bytes([RESP_COINS]) + len(words).to_bytes(4, "little") + CT.unwords(words)
 
 
 def _spec_tape():
@@ -56,7 +63,7 @@ def test_the_draw_reproduces_the_specs_vectors():
     assert json.dumps({**SPEC9.to_json(), "nonce": NONCE.hex()}, sort_keys=True, separators=(",", ":")) == (
         '{"block":3,"nonce":"000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f","rounds_log":2,'
         '"scheme":"coin-tree/hm96-sha512/v2","streams":["session","t/rep0","t/rep1"]}')
-    assert RL.resp_coins(t.answer_words()).hex() == "0214000000" + t.root().hex() + t.key.hex()
+    assert _resp_coins(t.answer_words()).hex() == "0214000000" + t.root().hex() + t.key.hex()
     s, k, n = 1, 2, 2
     c, w = t.open(s, k, n)
     assert [CT.f128_bytes(x).hex() for x in c] == ["063456f31ef84a3d219bb0b5fd492f5e", "401968e9dd010aa780e6c0f421c2b05f"]
@@ -114,9 +121,9 @@ def test_openings_check_and_forgeries_do_not():
 
 
 def _frame_words(frame: str) -> list[int]:
-    tag, words = RL.decode_resp(bytes.fromhex(frame))
-    assert tag == RL.RESP_COINS
-    return words
+    b = bytes.fromhex(frame)
+    assert b[0] == RESP_COINS and int.from_bytes(b[1:5], "little") * 16 == len(b) - 5
+    return CT.words(b[5:])
 
 
 def _walk(case: dict) -> list[str | None]:
