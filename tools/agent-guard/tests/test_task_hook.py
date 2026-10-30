@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[3]
 HOOK = ROOT / "tools/agent-guard/task_hook.py"
 HOLDER = "bc-8f4b652b-17bc-5055-a120-b56940b7c7a9"
 WORKER = "bc-00000000-0000-0000-0000-000000000000"
