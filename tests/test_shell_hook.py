@@ -1,6 +1,7 @@
 """`.cursor/hooks.json`'s shell hook refuses commands that print the environment and lets everything else through."""
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -27,8 +28,26 @@ def answer(command: str, **env: str) -> dict:
 
 def test_cursor_runs_the_hook_on_every_shell_command_and_blocks_if_it_fails():
     (entry,) = json.loads((ROOT / ".cursor/hooks.json").read_text())["hooks"]["beforeShellExecution"]
-    assert entry["command"] == "sh tools/agent-guard/hook.sh shell_hook.py" and entry["failClosed"] is True
-    assert "matcher" not in entry
+    assert entry["command"].startswith("sh -c 'h=tools/agent-guard/hook.sh;") and entry["command"].endswith(" guard shell_hook.py")
+    assert entry["failClosed"] is True and "matcher" not in entry
+
+
+def test_a_checkout_without_the_guard_runs_the_cached_copy_so_a_branch_switch_cant_lock_the_agent_out(tmp_path):
+    """Cursor keeps the hooks it read at the session's start. A branch without tools/agent-guard (checked out later) would make
+    every command, the checkout back included, fail the fail-closed hook; the command falls back to the cached origin/main copy."""
+    (entry,) = json.loads((ROOT / ".cursor/hooks.json").read_text())["hooks"]["beforeShellExecution"]
+    ws, cache = tmp_path / "ws", tmp_path / "cache"
+    ws.mkdir()
+    shutil.copytree(ROOT / "tools/agent-guard", cache / "0123abcd")
+
+    def ask(command):
+        event = json.dumps({"hook_event_name": "beforeShellExecution", "command": command, "cwd": str(ws)})
+        out = subprocess.run(["sh", "-c", entry["command"]], input=event, cwd=ws, capture_output=True, text=True, check=True,
+                             env={**os.environ, "AGENT_GUARD_CACHE": str(cache), "AGENT_GUARD_MIN_AVAIL": "0"}).stdout
+        return json.loads(out)["permission"]
+
+    assert ask("git checkout main") == "allow"
+    assert ask("env | cut -d= -f1") == "deny"
 
 
 @pytest.mark.parametrize("command", [
