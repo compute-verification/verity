@@ -1,7 +1,7 @@
 """H1's coins from the proof system's challenger on its auditor host (`verity.core.protocols.sampled_proofs.remote`), and the
 verifier's check that a served window's coins are that challenger's.
 
-* **Serving** (`pouw_h1_window`): a window takes its salt, round and draw coins from one session of the auditor host's
+* **Serving** (`pouw_h1_window`): a window takes its salt, round and sampling coins from one session of the auditor host's
   challenger, H1's opened on the window's open root and ncp-v2's after the weights' root.
 * **Checking** (`trusted_rounds_reason`): the verifier reads the challenger's directory from the challenger's own run
   (its ``out/``, fetched whole), never from the prover's bundle, under its own challenger key (`pinned_key`),
@@ -60,15 +60,15 @@ verifier's check that a served window's coins are that challenger's.
   after its coins).
 * **Credit** is core's rules of record (`verity.core.protocols.pouw.credit`), called through its one composed
   entry, never copied or run step by step. A period's open commits its circuit, the SHA-512 of the declared window
-  Program's descriptor (`pouw_h1_served.descriptor`), its draw K (``draw_k``, `draw_k`: the proof system's selection
+  Program's descriptor (`pouw_h1_served.descriptor`), its sample size K (``draw_k``, `draw_k`: the proof system's selection
   at `DRAW_EPS` for the credited share `EXPECTED_CREDIT`), each K's circuit file (``circuit_files``) and its
-  registered weights' root (`credit.WEIGHTS_FIELD`, the gate's ``--weights-root``) before any draw. A window's credit
+  registered weights' root (`credit.WEIGHTS_FIELD`, the gate's ``--weights-root``) before sampling. A window's credit
   (`credit_reason`) is core's `credit.window` on its evidence (`window_evidence`: its registered ``entries``, and each
-  drawn call's `statement`, proof files that credit verifies with the verifier of record itself, never a verdict) and
+  sampled call's `statement`, proof files that credit verifies with the verifier of record itself, never a verdict) and
   that descriptor, whose layout core reads (`credit.layout_of`): its round log the challenger's, every A table the tree
   its round root commits, each K's ``h1/b/<K>`` folding to the weights' root its period's open signed, the proof blocks the
-  draw coin draws at its period's K each with an accepted session that opened its step's ``a/<K>@<s>`` and its K's
-  ``h1/b/<K>``, and the registration theirs. It reports the ε the draw established at δ = 2^-40
+  sampling coin samples at its period's K each with an accepted session that opened its step's ``a/<K>@<s>`` and its K's
+  ``h1/b/<K>``, and the registration theirs. It reports the ε the sample established at δ = 2^-40
   (`credit.established`). A period earns only as a whole (`period_credit`, `credit.period_credit`): the windows
   presented are exactly its close's, in order, the close complete, each window proving the period's circuit and
   credited. The serving process's gate-passed count (`pouw_h1.H1Run.credit`) is never credit.
@@ -107,8 +107,8 @@ SESSION_FIELDS = ("session", "seq", "root", "commitment")
 REPLY_FIELDS = ("host", "port", "peer", "by", "for", "reserve", "opened_by", "secret")
 _ROOT = re.compile(r"^[0-9a-f]{128}$")
 _SECRET = re.compile(r"^[0-9a-f]{64}$")
-#: the ε the proof system sizes its committed draw K for (`draw_k`), at core's δ = 2^-40 (`credit.DELTA`), and the
-#: share of a window's work it expects credited; the verifier reports the ε a window's draw established, not this one
+#: the ε the proof system sets its committed sample size K for (`draw_k`), at core's δ = 2^-40 (`credit.DELTA`), and the
+#: share of a window's work it expects credited; the verifier reports the ε a window's sample established, not this one
 DRAW_EPS = Fraction(1, 1000)
 EXPECTED_CREDIT = Fraction(8, 9)
 
@@ -586,12 +586,12 @@ def program_salt_of(c: Mapping[str, Any]) -> bytes:
 
 
 def draw_k(layout: Any, eps: Fraction = DRAW_EPS, credited: Fraction = EXPECTED_CREDIT) -> int:
-    """The K the proof system commits as ``draw_k`` in a period's open, before any draw, for windows of `layout` (the
+    """The K the proof system commits as ``draw_k`` in a period's open, before sampling, for windows of `layout` (the
     period's declared Program's, `pouw_h1_served.declared_layout`, what `credit.layout_of` reads from its descriptor):
     `window.k_prime` at `eps` and core's δ (`credit.DELTA`) over the window's work W, the credited work the share
     `credited` of it (⌊credited·W⌋, the fraction the service expects credited, unknown at the open), at most the
-    window's proof blocks (core's work law draws at most every proof block). It states no ε: the verifier reports what each window's
-    draw established (`credit.established`). ValueError when core's `credit.strata` refuses the layout."""
+    window's proof blocks (core's work law samples at most every proof block). It states no ε: the verifier reports what each window's
+    sample established (`credit.established`). ValueError when core's `credit.strata` refuses the layout."""
     _ss, why = CR.strata(layout)
     if why is not None:
         raise ValueError(f"{why[0]}: {why[1]}")
@@ -610,11 +610,11 @@ def _layout(descriptor: Any) -> tuple[dict | None, Any]:
 
 def drawn_of(record: Mapping[str, Any], window: Mapping[str, Any], k: Any, descriptor: bytes
              ) -> tuple[list[int] | None, Any]:
-    """The proof blocks core draws from the window `record` (`pouw_h1.CALLS_FILE`) at K = `k`, and None; or None and core's
-    refusal: `credit.drawn` of its draw coin over the layout of `descriptor` (`credit.layout_of`, the bytes of the
+    """The proof blocks core samples from the window `record` (`pouw_h1.CALLS_FILE`) at K = `k`, and None; or None and core's
+    refusal: `credit.drawn` of its sampling coin over the layout of `descriptor` (`credit.layout_of`, the bytes of the
     circuit its period committed, `pouw_h1_served.descriptor`), on the served window's arguments (stream the window's
-    root, ``window.root``, registration its draw root, receipt ``{"receipts": draw.receipts}``), as `credit.window`
-    draws it. The coin is read, not checked: `credit_reason` checks it."""
+    root, ``window.root``, registration its `draw_root`, receipt ``{"receipts": draw.receipts}``), as `credit.window`
+    samples it. The coin is read, not checked: `credit_reason` checks it."""
     layout, why = _layout(descriptor)
     if why is not None:
         return None, why
@@ -629,7 +629,7 @@ def drawn_of(record: Mapping[str, Any], window: Mapping[str, Any], k: Any, descr
 
 def statement(call: int, circuit: str | Path, public: str | Path, sessions: Sequence[str | Path]) -> dict[str, Any]:
     """Call `call`'s statement as the window's evidence carries it (`credit.STATEMENT_KEYS`): its circuit file, its public
-    file and each drawn proof block's session directory, its ``session.json`` and rep files (`flock-circuit --zk`), which
+    file and each sampled proof block's session directory, its ``session.json`` and rep files (`flock-circuit --zk`), which
     credit's verifier of record verifies itself (`proofs.verify`) against the ``--registered`` file credit builds from
     the window's entries. Proof files, never verdicts. ValueError on a session with no ``session.json``."""
     for s in sessions:
@@ -652,13 +652,13 @@ def credit_reason(record: Mapping[str, Any], directory: str | Path, heads: Seque
     (`challenger.pinned_session`), the circuit files its period's open committed (`credit.committed_files`) and its K
     (`credit.committed_k`, or `k`) and table rows T (`credit.committed_rows`). `run` is the
     verifier of record (default credit's own, `proofs.verify`). The refusal (or None) of ``manifest``
-    (`manifest_reason`) and ``window`` (core's: each credit bit fixed before the draw coin, the round log the
+    (`manifest_reason`) and ``window`` (core's: each credit bit fixed before the sampling coin, the round log the
     challenger's, every A table the tree its round root commits, each K's ``b/<K>`` the weights its period's open
-    signed (``weights``), the proof blocks the draw coin draws at K, each verified from its statement's proof files, and the
-    window's registration, each drawn session opening its A and its K's ``b/<K>``, and each round's live@<s> proving its
+    signed (``weights``), the proof blocks the sampling coin samples at K, each verified from its statement's proof files, and the
+    window's registration, each sampled session opening its A and its K's ``b/<K>``, and each round's live@<s> proving its
     step's served rows, ``live``); ``k``; ``drawn``, the proof blocks core
-    draws (`drawn_of`); ``calls``, the credited calls (a call whose step served no rows is none); ``eps``, what the
-    draw established at δ over their served rows' work (`credit.established`); and ``credit``, the calls only when every refusal is None. A period's credit is
+    samples (`drawn_of`); ``calls``, the credited calls (a call whose step served no rows is none); ``eps``, what the
+    sample established at δ over their served rows' work (`credit.established`); and ``credit``, the calls only when every refusal is None. A period's credit is
     `period_credit`'s."""
     out: dict[str, Any] = {"manifest": manifest_reason(record), "window": None, "calls": None, "k": k, "drawn": None,
                            "eps": None}
@@ -730,7 +730,7 @@ def period_credit(ledger: Ledger, period: str, windows: Sequence[Mapping[str, An
     `ledger` and each window's evidence (`window_evidence`), which must be exactly the windows the period's close lists,
     in its order, the close complete, its open's ``draw_k``, circuit files and weights' root committed, and every window
     credited at that K, its ``b/<K>`` the period's weights, each window's session run from a commit the ledger's pins
-    log records on its `main` (core's `challenger.credited_session`, ``circuit``), and each drawn proof block verified from its
+    log records on its `main` (core's `challenger.credited_session`, ``circuit``), and each sampled proof block verified from its
     statement's proof files by `run` (default credit's verifier of record). The credit is ``{windows, work, k, delta,
     eps}``."""
     return CR.period_credit(ledger.key.to_json(), list(ledger.lines), _listed(ledger.pins), _listed(ledger.main),
