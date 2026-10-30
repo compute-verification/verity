@@ -57,7 +57,7 @@ two gate verbs on the auditor's machine:
   `warden-rehearse`'s flags) is `warden-rehearse` with the load first. The store goes over 4 TCP streams, an SSH
   tunnel each, to `load_relay.py sink` on the H200's loopback; each value is held to its digest and committed under the
   reading program's domain as it crosses. The certifier's one signer on that link then signs the load's heads before
-  its first sampling block, so one LMS key and one attachment carry the load and the sampling blocks. `load.json` (the
+  its first execution phase, so one LMS key and one attachment carry the load and the execution phases. `load.json` (the
   registrations the server-time block's record pins) and `load-relay.json` are public in the run's `out/`.
 - The witness, every row's salts, is the sink's `--witness` file (0600) on the prover's host. The certifier's host
   never writes a salt.
@@ -69,9 +69,9 @@ its period [t0, t1) comes after, from a relay run that spans it: `wipe_gate.sh` 
 (`warden-rehearse --scan --prompts` against the toy, `demo_stub.py serve`, on the peer's loopback), at a given UTC time
 when asked, and fetches the run's bundle: with `witness/` into a 0700 directory outside the run dir, and to the run's
 `$OUT` only the bundle less `witness/`. `wipe_egress.py BUNDLE --t0-ns T0 --t1-ns T1` then writes the `wipe-egress/v1`
-record from what the gate published. Each sampling block whose sampling period meets [t0 − 1 s, t1 + 1 s) counts at the
-schedule's capacity, 2,621,440 bits a sampling block, with K that count and δ 0. The record is covered only when every
-one of those sampling blocks is certified. The wipe's reader takes `wipe_period.certify(p, egress_mib)` from a covered
+record from what the gate published. Each execution phase whose sampling period meets [t0 − 1 s, t1 + 1 s) counts at the
+schedule's capacity, 2,621,440 bits an execution phase, with K that count and δ 0. The record is covered only when every
+one of those execution phases is certified. The wipe's reader takes `wipe_period.certify(p, egress_mib)` from a covered
 record and keeps the wipe uncounted otherwise.
 
 ## The served session
@@ -102,7 +102,7 @@ warden run's witness never go on the prover's machine. Without the gate's coins 
 
 `certifier_piece.py` is the network certifier's piece of `benchmarks/one_stage/served_verdicts.sh`. Its `front`
 (`CERTIFIER_FRONT`) runs before that run's requests: the gate's scan rehearsal sends one group of the window circuit's
-class (4 prompts of 24 ids, 4 ids out, `--window-per-group`) to serve-openai, all of it in link-window 0, so the engine
+class (4 prompts of 24 ids, 4 ids out, `--window-per-group`) to serve-openai, all of it in execution phase 0, so the engine
 closes it into the run's earliest window, the one the run audits, and the gate's fetch is kept in the serve dir's
 `private/certifier`. A request's answer must be whole D·τ after its admission, 2.7 s at the scan's 100 ms tick; for a
 slower endpoint `--bucket-ms` runs the scan at a longer tick, up to 4000 ms (108 s). Its `piece` (`CERTIFIER_CMD`)
@@ -125,10 +125,10 @@ bits. The leak guard (`--public`) moves any file the piece doesn't declare out o
 The run of record takes the network chain end to end on the gate's machines:
 
 1. The network certifier signs every record with its LMS key, on an auditor machine, never on the prover's node.
-2. It certifies each sampling block's records and signs each sampling period's clock sync (a clock certificate).
+2. It certifies each execution phase's records and signs each sampling period's clock sync (a clock certificate).
 3. The client receives the certificates and keeps them (`certificates.jsonl`, `clocks.jsonl`).
 4. The consistency proof blocks are proved by sampled C-Flock `--zk` and decided by the Lean verifier of record: N2's
-   (each sampling block's head checks and counts), and the scan's ingress and egress proof blocks chained by registered
+   (each execution phase's head checks and counts), and the scan's ingress and egress proof blocks chained by registered
    reads.
 5. The verdict is the per-sampling-block acceptance that the certification period's leak bound reads.
 
