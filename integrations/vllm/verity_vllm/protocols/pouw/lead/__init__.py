@@ -6,7 +6,8 @@ coin link; `record` is the pass's record.
 whose calls are fixed in number at install: the hooked linears (``calls``). The window's keyed digests are the
 committer's (`commit.lead_rows.WindowKeying`), in the one order it enforces. At the pass's first call the window opens:
 
-1. a fresh window keying, which draws the window's secret ks_w and gives its keyLeaf, ks_w's hm96 leaf;
+1. a fresh window keying, which takes fresh OS bytes for the window's secret ks_w and gives its keyLeaf, ks_w's hm96
+   leaf;
 2. its registration, the weights' root, keyLeaf and ``calls``, recorded in the pass's record (`record.PassRecord`);
 3. the window's salt salt_w, which the coin link samples once it holds all three (`feed.CoinLink.open`), recorded
    (`record.PassRecord.salted`) and taken by the keying.
