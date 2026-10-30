@@ -22,7 +22,8 @@ def stripped : Public :=
   { pub with header := Json.mkObj [("units", Json.mkObj [("indices", Lean.toJson [0, 1])])] }
 
 /-- `flock-verify verify`'s registered reads in its setup's order: `Registered.checkProgram` on the verifier's own program,
-then `Registered.check` on the statement (its units derived). -/
+then `Registered.check` on the statement (its units derived); setup's `checkComplete`, which follows, is
+`Flock.Test.RegComplete`'s. -/
 def run (program : Option ByteArray) (f : Option Json) (p : Public) : Except String Unit := do
   let own ← f.mapM Registered.ofJson
   Registered.checkProgram program own.isSome
@@ -46,8 +47,8 @@ def refusal : String :=
 #guard why (some reg) none stripped == refusal
 
 -- with --registered, the verifier's ports are opened; a stripped header is refused by `Registered.check`
-#guard (run (some reg) (some (file none)) pub).toBool
-#guard why (some reg) (some (file none)) stripped ==
+#guard (run (some reg) (some file) pub).toBool
+#guard why (some reg) (some file) stripped ==
   "registered reads: the statement names no registered rows: a registered value's rows committed afresh open no registered root"
 
 -- a program with no registered input needs no --registered: its statement's header names none

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One FACET-BREAK batch: generate the seeded grid, build and gate it (the gate's refusals are dropped by name and the rest
+# One facet_break batch: generate the seeded grid, build and gate it (the gate's refusals are dropped by name and the rest
 # rebuilt in chunks of 64, so one bad sink loses only its chunk), gate again and time on one leased GPU, then load every
 # program on every facet. From a pushed commit:
 #
