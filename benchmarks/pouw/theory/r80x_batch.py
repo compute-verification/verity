@@ -20,6 +20,13 @@ and share it. Checked bit for bit on 64 chains of 160 positions:
 - **R80X's XORed W, the same skip on U = h + W' + K.** `hash_rounds.decomp_r80(xor=True)`'s program is wrong (the XOR
   doesn't pass through the add) and its raw-word control is exact; AddXor (FOLD-ROUNDS, checked for one write) says
   no instruction merges the XOR with either add.
+- **The word entry's parity route** (`xc_routes`). At c = 1, N + ((R + C) ⊕ 1) + k is two instructions from two free
+  terms a side (the cross term is 4·r_0·c_0), at 32 bits and every k, and with one free term a side exactly where
+  4k ≡ 0 mod 2^w. So a w-bit window sees a nibble-0x1 constant as c = 1 and its sweep certifies it only against one
+  free term a side. At 32 bits every `xc` half has a nonzero minor that rules out N + IMAD(ρ, γ, δ) + ε and
+  N + x·IMAD(ρ, γ, δ) for any free terms; a LOP3 of free terms, then the add, is the shape left, for windows of width
+  5 to 7 (the lowest set bit of the half in 4..6, plus one) with four free terms a side, a two-instruction program's
+  most.
 
 What it doesn't see: a shared part combined with a per-chain part in some other way than the two skips above (the
 census counts only values equal across chains), and routes that change the write count of a round itself
@@ -32,6 +39,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import random
 import sys
 from pathlib import Path
 
@@ -121,6 +129,72 @@ def rdx_vskip(hr, b: dict, st0: list[np.ndarray], mutate: str | None = None):
     return [hr.from_pair(p) for p in st], r.total() + 2 * len(b["ws"]), shared.total(), carries
 
 
+def parity_route(r: int, c: int, n: int, k: int, cross: bool = True) -> int:
+    """N + ((R + C) ⊕ 1) + k in two instructions from two free terms a side: v = IMAD(2r_0, 2c_0, C − 2c_0 + 1 + k),
+    then IADD3(N, v, R − 2r_0)."""
+    r0, c0 = r & 1, c & 1
+    v = ((2 * r0) * (2 * c0) * cross + c - 2 * c0 + 1 + k) & M32
+    return (n + v + r - 2 * r0) & M32
+
+
+def one_free_term(w: int, k: int) -> bool:
+    """Whether IADD3(N, IMAD(ρ, γ, C), R) with one free term a side, ρ = a + b·r_0 and γ = g + d·c_0, is N + ((R + C) ⊕ 1)
+    + k mod 2^w: the product's four coefficients must be (1 + k, −2, −2, 4)."""
+    m = (1 << w) - 1
+    for a in range(1, 1 << w, 2):
+        g, d = (1 + k) * pow(a, -1, 1 << w) & m, -2 * pow(a, -1, 1 << w) & m
+        if any((b * g) & m == -2 & m and (b * d) & m == 4 for b in range(1 << w)):
+            return True
+    return False
+
+
+def product_rank_witness(c: int, k: int, rng, rank: int, trials: int = 2000) -> bool:
+    """A nonzero (rank + 1)-minor mod 2^32 of the word entry f(a, b) = ((a + b) ⊕ c) + k, for rank 1 double-differenced
+    at a random base point (which cancels its separable part and k). N + IMAD(ρ, γ, δ) + ε (ρ, γ, δ, ε any row,
+    column or constant terms) leaves a rank-1 double difference and N + x·IMAD(ρ, γ, δ) a rank-2 f, so a witness rules
+    out that shape."""
+    f = lambda a, b: ((((a + b) & M32) ^ c) + k) & M32  # noqa: E731
+    a0, b0 = rng.getrandbits(32), rng.getrandbits(32)
+    g = (lambda a, b: (f(a, b) - f(a, b0) - f(a0, b) + f(a0, b0)) & M32) if rank == 1 else f
+    for _ in range(trials):
+        rows, cols = [rng.getrandbits(32) for _ in range(rank + 1)], [rng.getrandbits(32) for _ in range(rank + 1)]
+        mat = [[g(a, b) for b in cols] for a in rows]
+        det = (mat[0][0] * mat[1][1] - mat[0][1] * mat[1][0] if rank == 1 else
+               sum(mat[0][j] * (mat[1][(j + 1) % 3] * mat[2][(j + 2) % 3] - mat[1][(j + 2) % 3] * mat[2][(j + 1) % 3])
+                   for j in range(3)))
+        if det & M32:
+            return True
+    return False
+
+
+def xc_routes(hr, checks: Checks) -> dict:
+    """The two-instruction word entry N + ((R + C) ⊕ c) + k against `hash_rounds.xc`'s halves, at 32 bits."""
+    rng = random.Random(81)
+    draws = [tuple(rng.getrandbits(32) for _ in range(4)) for _ in range(100_000)]
+    exact = all(parity_route(r, c, n, k) == (n + (((r + c) & M32) ^ 1) + k) & M32 for r, c, n, k in draws)
+    checks.check("c = 1: (R + C) ⊕ 1 = (R − 2r_0) + (C − 2c_0 + 1) + 4·r_0·c_0, so IMAD then IADD3 on two free terms a "
+                 "side computes the word entry at 32 bits for every k (honest 3)", exact, "100,000 draws")
+    ks = {w: [k for k in range(1 << w) if one_free_term(w, k)] for w in (4, 5, 6)}
+    checks.check("c = 1, one free term a side: the product route exists exactly where 4k ≡ 0 mod 2^w, so a w-bit "
+                 "window's k ≡ 0 mod 4 fits at width 4 are this route, and at 32 bits it needs k ≡ 0 mod 2^30",
+                 all(ks[w] == list(range(0, 1 << w, 1 << (w - 2))) for w in ks), ks)
+    halves = [(t, s, hr.xc(t) >> s & M32, hr.K[t] >> s & M32) for t in range(80) for s in (0, 32)]
+    lowest = {w: sum(min(i for i in (4, 5, 6) if c >> i & 1) + 1 == w for *_, c, _ in halves) for w in (5, 6, 7)}
+    k0 = {w: sum(min(i for i in (4, 5, 6) if c >> i & 1) + 1 == w and k % 4 == 0 for *_, c, k in halves)
+          for w in (5, 6, 7)}
+    w1 = [product_rank_witness(c, k, rng, 1, 400) for *_, c, k in halves]
+    w2 = [product_rank_witness(c, k, rng, 2, 400) for *_, c, k in halves]
+    checks.check("every xc half: a nonzero minor rules out N + IMAD(ρ, γ, δ) + ε and N + x·IMAD(ρ, γ, δ) at 32 bits, "
+                 "with any number of free terms, so the parity route doesn't reach a constant with a bit in 4..6",
+                 all(w1) and all(w2), f"{sum(w1)}/{len(halves)} rank 1, {sum(w2)}/{len(halves)} rank 2")
+    checks.check("controls: c = 1's double difference has rank 1 and c = 0's entry a + b + k rank 2 (no witness), so "
+                 "the witness tests separate",
+                 not product_rank_witness(1, 0, rng, 1, 2000) and not product_rank_witness(0, 5, rng, 2, 2000))
+    return {"c1_two_free_terms_exact": exact, "c1_one_free_term_k": ks, "halves": len(halves),
+            "halves_k_0mod4": sum(k % 4 == 0 for *_, k in halves), "certificate_width": lowest,
+            "certificate_width_k_0mod4": k0, "rank1_witness": sum(w1), "rank2_witness": sum(w2)}
+
+
 def main() -> int:
     checks = Checks()
     arg = lambda key: next((a.split("=", 1)[1] for a in checks.args if a.startswith(f"--{key}=")), None)  # noqa: E731
@@ -172,8 +246,14 @@ def main() -> int:
     report["r80x_w"] = {"decomp_r80_xor_exact": xok, "decomp_r80_raw_exact": rok}
     checks.check("R80X: the word skip on U = h + W' + K is wrong with the XOR and exact on raw words (decomp_r80)",
                  rok and not xok)
+    report["xc_routes"] = xc_routes(hr, checks)
 
     if checks.mutations:
+        rng = random.Random(82)
+        drawn = [tuple(rng.getrandbits(32) for _ in range(4)) for _ in range(1000)]
+        checks.mutation("parity route with no cross term",
+                        not all(parity_route(r, c, n, k, cross=False) == (n + (((r + c) & M32) ^ 1) + k) & M32
+                                for r, c, n, k in drawn))
         b = batch(np.random.default_rng(4), v_words=True, span=32)
         hs = rdx_honest(hr, b, live)[0]
         for m in ("no carry fix", "no a' fix"):
