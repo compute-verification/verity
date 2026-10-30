@@ -17,7 +17,7 @@ first-template member, bucket `t ≥ 1`'s later-template member `t − 1`, the t
 composite (`NetworkCheck.Period.templateNodes`, as `scanOf` reads them). Gates are `Flock.Program.resolve`'s (§6), the
 canonical layout's. A statement's layout is its descriptor's (`layOf`), at horizon `T`.
 
-**The flattening** (`Flattens`): the sampling statement's gates (`Claims.Sampling.Stmt.prog`, "the descriptor
+**The flattening** (`Flattens`): the sampling statement's gates (`Claims.Sampling.AuditStatement.prog`, "the descriptor
 flattened") are its descriptor's canonical layout, gate for gate: as many, an input gate exactly where its primitive is
 an input node, reading exactly the gates its operands name, returning the gates its root's return resolves to.
 `StmtFlattens` says it of every statement a deployment parses; the deployed parser is the sampled verifier's
@@ -54,7 +54,7 @@ def scanLayout (P : Flock.Program.Prog) (s : Schedule) : NetTiming.Layout 1 s.al
       (List.range (s.allocation * bits)).map fun j => gateAt P (P.child P.rootScope km.1 km.2) ⟨true, 0, j⟩ }
 
 /-- A statement's layout at the schedule `s`: its descriptor's scan layout, none where the descriptor doesn't decode. -/
-def layOf (s : Schedule) (x : Claims.Sampling.Stmt) : NetTiming.Layout 1 s.allocation :=
+def layOf (s : Schedule) (x : Claims.Sampling.AuditStatement) : NetTiming.Layout 1 s.allocation :=
   match Flock.Program.decode ⟨x.desc.toArray⟩ with
   | .ok P => scanLayout P s
   | .error _ => { egress := fun _ _ _ => (0, []), ingress := fun _ => [] }
