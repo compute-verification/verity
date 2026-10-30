@@ -19,7 +19,6 @@ count = { value = 188, unit = "SM", mark = "ceiling", source = "NVIDIA RTX PRO B
 
 [clock]
 sm = { value = 2430, unit = "MHz", mark = "ceiling", source = "art:0620926423e6 (nvidia-smi -q, all eight cards: max, application, default application and max customer boost clocks 2430 MHz); art:529e118ea9ea (NVML: SM and memory clock offset ranges [0, 0], supported graphics clocks top at 2430); art:198a12d9c2e8 (every lock, application clock and offset above 2430 MHz refused or clamped)" }
-tensor = { value = 2430, unit = "MHz", mark = "ceiling", source = "clock.sm: the tensor cores run on the SM clock, and no source gives this card a lower tensor clock" }
 memory = { value = 12481, unit = "MHz", mark = "ceiling", source = "art:0620926423e6 (max and application memory clock 12481 MHz); art:529e118ea9ea (supported memory clocks [12481, 405], offset range [0, 0])" }
 
 # The stores. Registers in 32-bit words an SM; the rest in bytes.
@@ -31,7 +30,7 @@ l2 = { value = 134217728, unit = "B", mark = "ceiling", source = "whitepaper v1.
 dram = { value = 103079215104, unit = "B", mark = "ceiling", source = "product page, 'GPU Memory 96 GB GDDR7', taken as 96 GiB" }
 chip = { value = 263163904, unit = "B", mark = "ceiling", source = "all of the card's on-chip storage, S_chip's device term: 188 SMs' registers, L1 and shared memory, L1.5, instruction caches, uniform registers and warp state, the L2, the TLB and 1 MiB of buffers (chip.cu's enumeration, runs art:2b6cac05 to art:90de6479)" }
 
-# The resources' rates, each a SM-clock (the Lean's rho is SMs x this x clock.sm, the tensor's x clock.tensor).
+# The resources' rates, each a SM-clock (the Lean's rho is SMs x this x the SM clock).
 [rate]
 tensor = { value = 1024, unit = "s8 MAC/SM-clock", mark = "ceiling", source = "whitepaper v1.1, Table 4: FP8 1007.6 dense TFLOPS over 2 x 188 SMs at its 2617 MHz boost is 1024 MACs a SM-clock; IMMA.16832 runs s8 at the same rate, 4096 MACs in 16 tensor cycles of a sub-partition (measured 1023.8, art:ecfc88319554)" }
 issue = { value = 4, unit = "warp instruction/SM-clock", mark = "ceiling", source = "whitepaper v1.1: four sub-partitions, one warp scheduler each, one warp instruction a clock" }
