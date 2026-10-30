@@ -28,16 +28,19 @@ theorem unitIn_of_drop {tags : Tags} {st : Stmt} (L : Layout st) (F : Aliased.Un
     (hp : HmIn.parse st.c = .ok pi) {r : ℕ} (hk : keepCol st.c pi r = false) : UnitIn st.c r := by
   simp only [keepCol, Bool.or_eq_false_iff] at hk
   have hq : HmIn.publicCol st.c pi r = true := by simpa using hk.2
-  have hU := FlockSoundness.unit_built F.parse F.check
-  obtain ⟨k, hk', jj, -, t, -, hr, hlt, -⟩ := publicCol_at hp hk.1 F.check hU hq
-  have hb := built_spec hU
+  have hgr := (built_spec L.unit_built).2.2.2.2.1
+  rw [L.unit_at.groups, L.unit_at.in_eq] at hgr
+  obtain ⟨k, hk', jj, -, t, -, hr, hlt, -⟩ := publicCol_at hp hk.1 F.check hgr hq
   have hz : st.c.unit.useful < 2 ^ st.c.unitRange.slotLog := by rw [L.unit_slotLog]; exact F.check.unit_zero
   have hz' : st.c.unit.useful < 2 ^ (st.c.rangeOf st.c.unitNet).slotLog := hz
-  have h1 := hb.2.1
-  have h2 := hb.2.2.2.1
+  have h1 := F.useful
+  have h2 := L.unit_at.in_le
+  rw [L.unit_at.in_eq] at h2
+  have h3 := L.unit_at.const_le
   exact ⟨k, _, ⟨hk', by omega, hr⟩, hlt⟩
 
-/-- **Off the unit input rows, `HmIn.delta`'s level-0 entries are `HmOut.delta`'s**: `HmRow.delta`'s, then `outPairs`. -/
+/-- **Off the unit input rows, `HmIn.delta`'s level-0 entries are `HmOut.delta`'s**: `HmRow.delta`'s, then `outPairs`, where
+no output is pinned (`hidden_delta_unpinned`). -/
 theorem da_offUnit {tags : Tags} {st : Stmt} (L0 : Layout (flatTwin st)) (F0 : Aliased.UnitFacts tags (flatTwin st))
     {pi : HmIn.Ports} (hp : HmIn.parse st.c = .ok pi) (hda : st.da = (HmIn.delta st.c pi st.pin).1)
     (hpin : HmRow.pinnedCount st.c.metaJ = 0) (r : ℕ) (hr : ¬ UnitIn st.c r) (i : ℕ) :
