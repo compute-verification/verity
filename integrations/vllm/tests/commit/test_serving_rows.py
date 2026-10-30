@@ -39,12 +39,12 @@ def population(n0: int, n1: int) -> tuple[SR.Member, SR.Member]:
             SR.Member(TEMPLATES[1], (("in0", 128), ("in1", 64)), (("out.0", 128), ("out.1", 3)), n1, n0))
 
 
-def window(n0: int, n1: int, run: str = RUN) -> SR.Window:
+def window(n0: int, n1: int, run: str = RUN) -> SR.Binding:
     program, query = SR.population_program([(DEFS[0], n0), (DEFS[1], n1)])
-    return SR.Window(program, query, LAW, run, population(n0, n1))
+    return SR.Binding(program, query, LAW, run, population(n0, n1))
 
 
-def data(w: SR.Window, seed: int = 3) -> list[dict[str, dict[str, np.ndarray]]]:
+def data(w: SR.Binding, seed: int = 3) -> list[dict[str, dict[str, np.ndarray]]]:
     rng = np.random.default_rng(seed)
     gen = lambda n, k: rng.integers(0, 1 << 16, size=(n, k), dtype=np.uint16)  # noqa: E731
     return [{"rows": {p: gen(m.n, k) for p, k in m.rows}, "outs": {p: gen(m.n, k) for p, k in m.outs}} for m in w.members]
@@ -116,9 +116,9 @@ def test_population_is_the_partitions():
     w = window(6, 2)
     assert (w.population, [m.base for m in w.members]) == (8, [0, 6])
     with pytest.raises(ValueError, match="partition's units"):
-        SR.Window(w.program, w.query, LAW, RUN, population(6, 3))
+        SR.Binding(w.program, w.query, LAW, RUN, population(6, 3))
     with pytest.raises(ValueError, match="partition's units"):
-        SR.Window(w.program, w.query, LAW, RUN, population(6, 2)[::-1])
+        SR.Binding(w.program, w.query, LAW, RUN, population(6, 2)[::-1])
     bad = data(w)
     bad[1]["rows"]["in0"] = bad[1]["rows"]["in0"][:1]
     with pytest.raises(ValueError, match="SiluMul_v1"):
@@ -264,7 +264,7 @@ def test_a_shared_row_member_commits_its_tables_and_writes_m0s_shared_row_body(t
     y = rng.integers(0, 1 << 16, size=(15, 1), dtype=np.uint16)
     gemm = bind(REGISTRY["GemmCoordinate_v1"], K=64)
     m = SR.Member(P.template_id(gemm), (("x", 64), ("w", 64)), (("y", 1),), 15, 0, tables=(("x", 3), ("w", 5)))
-    w = SR.Window(*SR.population_program([(gemm, 15)]), LAW, RUN, (m,))
+    w = SR.Binding(*SR.population_program([(gemm, 15)]), LAW, RUN, (m,))
     assert SR.port_leaves(m) == {"x": 3, "w": 5, "y": 15}
     assert {p: e["leaves"] for p, e in SR.expected_ports(w).items()} == {m.port("x"): 3, m.port("w"): 5, m.port("y"): 15}
     c = SR.commit(w, [{"rows": tables, "outs": {"y": y}, "refs": refs}], salt_key=bytes(32))
@@ -287,12 +287,12 @@ def test_a_shared_row_member_commits_its_tables_and_writes_m0s_shared_row_body(t
     assert head["shared_rows"] == {"x": 3, "w": 5, "y": 15} and head["instances"] == 15
 
 
-def s8_window(chunks: list[tuple[int, int]], n: int = 5) -> tuple[SR.Window, list[SR.Member]]:
+def s8_window(chunks: list[tuple[int, int]], n: int = 5) -> tuple[SR.Binding, list[SR.Member]]:
     """``ScaledMmS8Coordinate_v1{K=64}``'s ``n`` units as bit-row members ``(base, size)``, under ``TemplatePopulations``."""
     t = bind(REGISTRY["ScaledMmS8Coordinate_v1"], K=64, DOT=REGISTRY["BlackwellS8ImmaDot32_v1"])
     ms = [SR.Member(P.template_id(t), (("x", 34), ("w", 34)), (("o0", 1),), size, base, name=f"{P.template_id(t)}/c{j}",
                     schemas=(("x", SEG), ("w", V2), ("o0", V2))) for j, (base, size) in enumerate(chunks)]
-    return SR.Window(*SR.population_program([(t, n)], several=True), D.parse_law("stratified:2"), RUN, tuple(ms)), ms
+    return SR.Binding(*SR.population_program([(t, n)], several=True), D.parse_law("stratified:2"), RUN, tuple(ms)), ms
 
 
 def test_bit_row_chunks_commit_each_port_under_its_schema_and_tile_their_template(tmp_path):
