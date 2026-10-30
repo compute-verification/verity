@@ -17331,9 +17331,9 @@
    "guarantees": ["Accounting.SecurityProofs.Composition", "Accounting.SecurityProofs.Fit"]
   },
   "Definitions.Accounting.Guarantees.DeclaredCircuit": {
-   "digest": "be978def54403a3091316c95e91cbf1bd93bb9b4bd0b403d73cfca370574e5f5",
+   "digest": "6285565506ddab79d1e87e99d50ef46b0e20ac846d42d0cf871160d71ba470bc",
    "definitions": {
-    "Accounting.Guarantees.DeclaredCircuitRequirement": "77615282bcfcf8776c105dd3587bb772f2dd806f481da10c7794534d1c894918"
+    "Accounting.Guarantees.DeclaredCircuitRequirement": "13a8c0306cbff41fa934e600abf4dc72341eafb70c726b2e99df984281ce9ead"
    },
    "guarantees": ["Accounting.SecurityProofs.DeclaredCircuitRequirement"]
   },
