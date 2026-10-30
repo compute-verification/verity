@@ -4,8 +4,8 @@ released them after the registration's digest, so a test's stream draws from thi
 
 `Challenger` is a `ChallengerCoins` each of whose commitments opens a session of its own: a `LiveChallenger` on
 seeded entropy whose record is signed under the pinned key (`test_remote.PINNED`) and which an auditor's ledger of its
-own opens for `WINDOW` and ends once the draw is read, as a served session's would (`remote.open_session`,
-`remote.close_session`). `evidence(digest)` is then `coins.coins_reason`'s evidence for the draw after `digest`.
+own opens for `WINDOW`, withheld (the verifier takes only a withheld session's coins, `challenger.withheld_on`), and
+ends once the draw is read, as a served session's would (`remote.open_session`, `remote.close_session`). `evidence(digest)` is then `coins.coins_reason`'s evidence for the draw after `digest`.
 `Stream` is a `service.Stream` over one, as a deployment drives it: `register` names the window, `select` commits the
 coins to the registration's digest first, and `outcome` hands the verifier the draw's evidence."""
 
@@ -44,9 +44,9 @@ class Challenger(T.ChallengerCoins):
         d = self.directory / sid
         d.mkdir()
         ledger = Ledger(d / "windows.jsonl", at(0, 3))
-        ledger.open(sid, WINDOW)
+        ledger.open(sid, WINDOW, withheld=True)
         challenger = C.LiveChallenger(SCHEME, 0, [(LABEL, self.coins)], entropy(f"{self.seed}/{sid}"))
-        session = R.open_session(challenger, pinned_key(), f"{HOST}.{sid}", at(1, 2), d, sid)
+        session = R.open_session(challenger, pinned_key(), f"{HOST}.{sid}", at(1, 2), d, sid, withhold=True)
         (d / R.HELLOS).write_text("")
         record = C.LiveRecord(challenger, LABEL, itertools.count().__next__)
         self.sessions[after] = (session, ledger, record)
