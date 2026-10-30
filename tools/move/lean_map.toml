@@ -1,4 +1,4 @@
-# The Lean layout move: what `tools/move/lean.py` moves, renames and regenerates (Daniel's ruling, 5 Oct 2026 8:53 AM PDT).
+# The Lean layout move: what `tools/move/lean.py` moves, renames and regenerates.
 #
 # Lean is code (programs and the interfaces they use, untrusted, with their component) and security analysis
 # (`verity/Security/`): `Definitions` (trusted vocabulary) and `Specs` (named assumptions and guarantee statements) in the
