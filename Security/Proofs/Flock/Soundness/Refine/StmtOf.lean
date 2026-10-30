@@ -473,7 +473,7 @@ def stmtOf (st : Stmt) (h : StmtWF st) (regions : List (Model.Region st.c.kLog (
   B₀ := fun i c => matB st i.val c.val
   regions := regions
 
-/-- **The circuit fold realizes `stmtOf`** (§10, §16.1). When the executable's fold succeeds on `α`, `lw` and `ρ`, entry
+/-- **The circuit fold realizes `stmtOf`** (`Flock.Piop`'s lincheck, `Flock.Statement`). When the executable's fold succeeds on `α`, `lw` and `ρ`, entry
 `c` is `Σ_i e_i·(α·A₀[i, c] + B₀[i, c])` for the matrices `stmtOf` reads off the layout. -/
 theorem stmtOf_fold (st : Stmt) (h : StmtWF st) (regions : List (Model.Region st.c.kLog (st.m - st.c.kLog))) :
     FoldRealizes st.circuitFold (stmtOf st h regions) where

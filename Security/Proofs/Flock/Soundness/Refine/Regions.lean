@@ -490,7 +490,7 @@ theorem regionClaim_rel' (st : Stmt) (hwf : StmtWF st) (regs : List (Model.Regio
   obtain rfl : rr = fun t => fOf r[t.val]! := funext hrr
   exact regionClaim_rel st hwf regs reg hw hm r hr v hv
 
-/-- **The statement's extra claims are the model's** (§11, §16.2). At two link points of `m_pts` coordinates, the extra
+/-- **The statement's extra claims are the model's** (`Flock.Piop`, `Flock.Statement`'s regions). At two link points of `m_pts` coordinates, the extra
 claims `Setup.ofCircuit st` hands the verifier are `extraClaims` of `stmtOf st` with the regions read off `st.regions`. -/
 theorem ofCircuit_extra (st : Stmt) (hwf : StmtWF st) (hr : RegionsWF st) (points : Array (Array F128))
     (hpts : points.size = 2) (hsz : ∀ p ∈ points.toList, p.size = st.mPts) :

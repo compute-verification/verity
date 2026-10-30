@@ -1174,7 +1174,7 @@ impl Composite {
         self.check_public_inputs()
     }
 
-    /// The public input ports (§16.10): each named once, and no row's name; one public leaf map per unit, each public leaf a
+    /// The public input ports (`Flock.HmRow`): each named once, and no row's name; one public leaf map per unit, each public leaf a
     /// zero leaf of `leaves_in`; the unit range unpacked, since the `in` regions read it; their words
     /// ([`Self::public_leaf_words`]) inside the leaf group, each leaf in them a public or a zero leaf in every unit.
     fn check_public_inputs(&self) -> Result<(), String> {
@@ -1239,7 +1239,7 @@ impl Composite {
         self.leaves_public.iter().flat_map(|l| l.iter().enumerate().filter(|x| *x.1 >= 0).map(move |(j, _)| col + j / 8)).collect()
     }
 
-    /// The `in` regions (§16.10), as `(w, s)`: `2^s` words of every unit slot from word `w`. The public leaves' words
+    /// The `in` regions (`Flock.HmRow`), as `(w, s)`: `2^s` words of every unit slot from word `w`. The public leaves' words
     /// ([`Self::public_leaf_words`]) in aligned blocks of `2^e` words ([`aligned_blocks`]), each split into `2^(e - s)`
     /// regions, `s = min(e, PT_LOCAL - 7 - log2ceil(units))` (`7 + s` free bits beside the slot bits).
     pub fn in_regions(&self) -> Vec<(usize, usize)> {
@@ -3360,7 +3360,7 @@ mod tests {
         assert!(regions_in_range(&[region((0..14).collect()), overlap]).unwrap_err().contains("LinkLayout"));
     }
 
-    /// §16.10: the in regions' words, run by run, in the largest aligned blocks (the vectors `test_circuit.py` gives Python's).
+    /// `Flock.HmRow`: the in regions' words, run by run, in the largest aligned blocks (the vectors `test_circuit.py` gives Python's).
     #[test]
     fn public_words_are_cut_into_aligned_blocks() {
         let blocks = |w: &[usize]| aligned_blocks(&w.iter().copied().collect());
