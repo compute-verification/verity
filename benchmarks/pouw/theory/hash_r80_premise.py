@@ -2,10 +2,10 @@
 
     python3 hash_r80_premise.py [--trials N] [--mutations] [--verdict PATH]
 
-**The premise** is `Pouw.Assumptions.ShaWritesR80.ShaWritesR80 x dv R eps n m inst`
+**The premise** is `Pouw.Assumptions.R80.ShaWritesR80 x dv Rw Rb eps inst`
 (`Security/Definitions/Pouw/Assumptions/ShaWritesR80.lean`): for every data the prover chooses, every W1 program run on
-a window's m chains of n blocks pays, in expectation over the coins, at least R registers a block for each chain whose
-sealed state it gets right, less eps a chain:
+a window's m chains pays, in expectation over the coins, at least Rw registers a word and Rb a block for each chain
+whose sealed state it gets right, less eps of the window's credit. On whole blocks, n a chain, with R = 80 Rw + Rb:
 
     E[writes] >= R * n * (E[chains right] - eps * m).
 
@@ -15,8 +15,8 @@ With SHA-512's schedule (64 steps of 20 writes) in front of it, an R80 program c
 ShaWrites at R_SHA registers a compression gives R = R_SHA - 1,280 for programs right on schedule-consistent words; on
 the protocol's words, which aren't, it is a premise of its own.
 
-**The test** (`falsify`, the Prop's parameters as its arguments: `design` is x, `bound` R, `eps`, `blocks` n,
-`chains` m, `dist` the instances): a candidate is a W1 program on `IntCore`, a function of register handles that calls
+**The test** (`falsify`, the Prop's parameters as its arguments: `design` is x, `bound` R = 80 Rw + Rb, `eps`,
+`blocks` n, `chains` m, `dist` the instances): a candidate is a W1 program on `IntCore`, a function of register handles that calls
 only the machine's instructions (IADD3 with its carries, LOP3, SHF, IMAD, IMAD.HI, PRMT, SEL; ISETP's predicates and
 immediates free), so its count is the machine's. It gets a whole window, m chains, so it may share work across them,
 and runs on N windows drawn from a distribution: uniform words; each 32-bit half in a 2^20 span around 0 (the zero-data

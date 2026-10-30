@@ -1,7 +1,7 @@
 import Definitions.Pouw.PearlC.W1
 
 /-!
-# ShaWrites-R80: SHA-512's round function, credited per word absorbed (draft; a trusted statement, not yet listed)
+# ShaWrites-R80: SHA-512's round function, credited per round and per block (draft; a trusted statement, not yet listed)
 
 A fold that absorbs the committed words into SHA-512's own rounds, so the premise it reads is about SHA-512's round
 function as `ShaWrites` is (`Pouw.Assumptions.Lead.ShaWrites`, which credits a SHA-512 compression its registers).
@@ -13,15 +13,16 @@ function as `ShaWrites` is (`Pouw.Assumptions.Lead.ShaWrites`, which credits a S
 * `chain x cv ws`: the blocks absorbed in turn. One chain a thread, carried across calls: a call's words for the chain
   are 80-word blocks and one short last block, and the protocol commits the chain's state as the call leaves it, under
   a hiding SHA-512 leaf, never the words.
-* `ShaWritesR80 x dv R ε inst`: for every data the prover chooses, every program on the W1 machine
-  (`Pouw.PearlC.W1`) pays, in expectation over the coins, at least `R / 80` INT32 instructions for each word of each
-  chain of a window it gets right, less `ε` of the window's words.
+* `ShaWritesR80 x dv Rw Rb ε inst`: for every data the prover chooses, every program on the W1 machine
+  (`Pouw.PearlC.W1`) pays, in expectation over the coins, at least `Rw` INT32 instructions for each word and `Rb` for
+  each block of each chain of a window it gets right, less `ε` of the window's credit.
 
 **The additive form.** The premise credits each chain the program gets right, rather than bounding the fraction a
 cheap program gets right: a program honest on a fraction `f` of the chains and idle on the rest is credited `f` of
 the work, so the protocol's gap (additive against stock, in priced work) composes with it term by term. Honest R80X
-pays `30·j + 14` writes for a block of `j` words, at least `2,414 / 80 · j` for every `j ≤ 80`, so the credit at
-`R = 2,414` never exceeds honest's cost, short blocks included.
+pays `30·j + 14` writes for a block of `j` words (28 a round, a `LOP3` a half for the XOR, and the feed-forward's 14
+fused into the last round), and R80 `28·j + 14`: at `Rw = 30, Rb = 14` (R80X) and `Rw = 28, Rb = 14` (R80) the credit
+is honest's cost exactly, a call's short last block included, and a whole block is 2,414 and 2,254.
 
 **Its relation to `ShaWrites`.** R80 over the 80 words of a block's message schedule is SHA-512's compression of that
 block (the `example` below, on FIPS 180-2's `"abc"`). So for programs right on every input, or on any set holding the
@@ -88,6 +89,9 @@ abbrev Inst := List ℕ × List (List ℕ)
 /-- The words a chain's rounds absorb. -/
 def wordCount (c : Inst) : ℕ := (c.2.map roundsOf).sum
 
+/-- A chain's credit at `Rw` a word and `Rb` a block. -/
+def credit (Rw Rb : ℚ) (c : Inst) : ℚ := Rw * wordCount c + Rb * c.2.length
+
 /-- An instance's input as 32-bit words, high first (`W1.word64`'s order): the start state's 8 words, then each
 block's words its rounds read. The blocks' lengths are the layout's, public. -/
 def inputWords (c : Inst) : List ℕ :=
@@ -118,9 +122,10 @@ def right (x : ℕ → ℕ) (dv : W1Device) {m : ℕ} (consts : List ℕ) (code 
 /-- `pouw-sha-writes-r80` (proposed; `ShaWrites` carried to raw round words, at its rank). **SHA-512's round
 function costs its registers on the protocol's words**: for every data `d` the prover chooses, every program of
 bounded text, run on the window `inst d s` of `m` chains at each coin value `s`, costs in total over the coins at
-least `R / 80` INT32 instructions for each word of each chain it gets right, less `ε` of the window's words:
+least `Rw` INT32 instructions for each word and `Rb` for each block of each chain it gets right, less `ε` of the
+window's credit:
 
-`R / 80 · int32 · Σ_s (Σ_{i right at s} words(i) - ε · Σ_i words(i)) ≤ Σ_s cost at s`.
+`int32 · Σ_s (Σ_{i right at s} credit(i) - ε · Σ_i credit(i)) ≤ Σ_s cost at s`.
 
 The window is the protocol's: `inst d s i` is chain `i`'s start state and its blocks, derived from the data and the
 coins, so the program may share work across the window's chains (at zero data their words are row walks plus column
@@ -129,17 +134,17 @@ walks), which is what the batch form lets an attack exploit.
 Rationale: the round is 28 writes on sm_120 (four 64-bit adds of two 32-bit writes each, `Σ₀` and `Σ₁` of four
 funnel shifts and a `LOP3` a half, `Ch` and `Maj` of a `LOP3` a half), and nothing in it is skippable on words of
 the prover's choosing; `ShaWrites` accepts the same count of the same function, through its padding block. -/
-def ShaWritesR80 (x : ℕ → ℕ) (dv : W1Device) (R ε : ℚ) {D S : Type} [Fintype S] {m : ℕ}
+def ShaWritesR80 (x : ℕ → ℕ) (dv : W1Device) (Rw Rb ε : ℚ) {D S : Type} [Fintype S] {m : ℕ}
     (inst : D → S → Fin m → Inst) : Prop :=
   ∀ d : D, ∀ (consts : List ℕ) (code : Code), code.size ≤ 2 ^ 64 → consts.length ≤ 2 ^ 64 →
-    R / 80 * dv.prices.int32 * ∑ s, ((∑ i ∈ right x dv consts code (inst d s), (wordCount (inst d s i) : ℚ)) -
-        ε * ∑ i, (wordCount (inst d s i) : ℚ)) ≤
+    dv.prices.int32 * ∑ s, ((∑ i ∈ right x dv consts code (inst d s), credit Rw Rb (inst d s i)) -
+        ε * ∑ i, credit Rw Rb (inst d s i)) ≤
       ∑ s, (run dv consts code (inst d s)).cost
 
-/-- **ShaWrites-R80X**: `ShaWritesR80` at R80X's constants `xc`. -/
-def ShaWritesR80X (dv : W1Device) (R ε : ℚ) {D S : Type} [Fintype S] {m : ℕ} (inst : D → S → Fin m → Inst) :
+/-- **ShaWrites-R80X**: `ShaWritesR80` at R80X's constants `xc` and honest's credit, 30 a word and 14 a block. -/
+def ShaWritesR80X (dv : W1Device) (ε : ℚ) {D S : Type} [Fintype S] {m : ℕ} (inst : D → S → Fin m → Inst) :
     Prop :=
-  ShaWritesR80 xc dv R ε inst
+  ShaWritesR80 xc dv 30 14 ε inst
 
 example : xc 0 = 0xa2bfe8a14cf10361 ∧ xc 1 = 0x01a81a614bbc4231 ∧ xc 79 = 0x3b92722185148231 := by decide +kernel
 
