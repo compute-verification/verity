@@ -63,6 +63,8 @@ extern "C" __global__ void sz_mid(Args a) {
 }
 
 // p: rows (row r at r * stride bytes), seg_mids (s states), digests out (rows * s * 64)   i: rows, stride, s, last segment bytes
+// A segment's index divides in 32 bits (rows * s < 2^32, else it traps): ptxas's 64-bit division leaves its 32-bit fast
+// path's seed live into __cuda_sm20_div_s64, past what the SASS gate (harness/sass_gate.py) can follow.
 extern "C" __global__ void sz_segments(Args a) {
     extern __shared__ uint32_t sz_sw[];
     const uint8_t* data = (const uint8_t*)a.p[0];
@@ -71,12 +73,14 @@ extern "C" __global__ void sz_segments(Args a) {
     long long rows = a.i[0], stride = a.i[1];
     int s = a.i[2], last = a.i[3];
     long long total = rows * s;
+    if (total >> 32) __trap();
+    const uint32_t us = (uint32_t)s;
     int wid = threadIdx.x >> 5, lane = threadIdx.x & 31;
     uint32_t* sh = sz_sw + wid * (32 * 33);
     long long warp0 = ((long long)blockIdx.x * (blockDim.x >> 5) + wid) * 32;
     if (warp0 >= total) return;
     long long g = warp0 + lane;
-    int j = (int)(g % s);
+    int j = (int)((uint32_t)g % us);
     int bytes = j == s - 1 ? last : 1024;
     uint64_t st[8];
     if (g < total)
@@ -88,9 +92,11 @@ extern "C" __global__ void sz_segments(Args a) {
             long long pg = warp0 + piece;
             uint4 v = make_uint4(0, 0, 0, 0);
             if (pg < total) {
-                int pj = (int)(pg % s);
+                const uint32_t pu = (uint32_t)pg;
+                int pj = (int)(pu % us);
                 int pb = pj == s - 1 ? last : 1024;
-                if (c * 128 < pb) v = *(const uint4*)(data + (pg / s) * stride + (long long)pj * 1024 + c * 128 + off * 16);
+                if (c * 128 < pb)
+                    v = *(const uint4*)(data + (long long)(pu / us) * stride + (long long)pj * 1024 + c * 128 + off * 16);
             }
             uint32_t* d = sh + piece * 33 + off * 4;
             d[0] = v.x; d[1] = v.y; d[2] = v.z; d[3] = v.w;
