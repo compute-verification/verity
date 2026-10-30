@@ -6,7 +6,7 @@ running-sum salts, the level's `pub.bin` and `registered.json` as staging record
 earlier recording's level 3, proved before the OS masks as `verity/flock-circuit@cec3e347`. `verify` sets V*'s statements
 up only as `verity/flock-circuit`, so that outer session is refused at the record's first check (S2/R7) once every V*
 check has passed at setup. The honest level, restaged under SHA-512's salts (`rec_residuals.salt_of`), is the recorded
-one byte for byte, and passes setup at the honest inner session and the coin server's transcript of
+one but for its own rows' fresh salts, and passes setup at the honest inner session and the coin server's transcript of
 it (`--rec-inner-transcript`), and is refused without either, at a transcript whose level-3 tops or link points are not
 the ones it climbs to and the record's (`RecVStar.checkTopRows`, `RecVStar.innerLink`) or not in the coin server's
 format (`RecSetup.checkReads`), and where V* registered its
@@ -221,10 +221,20 @@ def test_the_honest_level_passes_setup_at_the_honest_inner_session(forged, shape
 
 
 def test_the_recorded_level_is_the_level_restaged(restaged):
-    """Staging is a function of the inner session, V*'s fold and points and the running sums' salts: restaged from the
-    fixture, level 3's public file and registration are the recorded ones byte for byte."""
-    for f in ("pub.bin", "registered.json"):
-        assert (SET / "L3" / f).read_bytes() == (restaged / f).read_bytes(), f
+    """Staging is a function of the inner session, V*'s fold and points and the running sums' salts, but for the salts
+    of the prover's own `row` and `aux` rows, which it draws afresh (`rec_outer.stage`): restaged from the fixture, level
+    3's registration is the recorded one byte for byte, and so is its public file's header but for those two ports'
+    bindings and roots."""
+    assert (SET / "L3" / "registered.json").read_bytes() == (restaged / "registered.json").read_bytes()
+
+    def header(d: Path) -> dict:
+        h = json.loads((d / "pub.bin").read_bytes().split(b"\n", 1)[0])
+        for k in ("bindings", "roots"):
+            for port in ("row", "aux"):
+                del h["frame_v3"][k][port]
+        return h
+
+    assert header(SET / "L3") == header(restaged)
 
 
 def test_the_honest_level_is_refused_without_the_inner_session(forged, shape, tmp_path, restaged):
@@ -245,12 +255,13 @@ def test_the_honest_level_is_refused_without_the_inner_transcript(forged, shape,
 @pytest.mark.parametrize("rep", [0, 1])
 def test_a_level_climbing_to_tops_the_coin_server_did_not_commit_is_refused(forged, shape, tmp_path, rep, restaged):
     """`RecVStar.checkTopRows` at a real level: the honest level 3 against an inner transcript whose rep `rep` level-3 top
-    (its last salted top, 32 nodes; `rec-top-L3` is rep 0's, then rep 1's) has node 0's `b ‖ c` one bit off is refused at
-    the table row that reads the node: the prover's registered top is not the one the coin server committed before the
-    level's query coins. `root_B`, which only level 0 reads, is tested in `test_lean_registered_reads` and
-    `Flock.Test.InnerLink`."""
+    (its third salted top, 32 nodes, after level 0's `root_B` and one salted top a level, `rec_vstar.tops`; `rec-top-L3`
+    is rep 0's, then rep 1's) has node 0's `b ‖ c` one bit off is refused at the table row that reads the node: the
+    prover's registered top is not the one the coin server committed before the level's query coins. `root_B`, which only
+    level 0 reads, is tested in `test_lean_registered_reads` and `Flock.Test.InnerLink`."""
     t = json.loads((SET / "inner-honest" / "public.json").read_text())
-    r = max((r for r in t["rounds"] if r["stream"] == f"circuit/rep{rep}" and r["tops"]), key=lambda r: r["k"])
+    r = sorted((r for r in t["rounds"] if r["stream"] == f"circuit/rep{rep}" and r["tops"]), key=lambda r: r["k"])[LEVEL - 1]
+    assert len(r["tops"]) == 1 and len(r["tops"][0]) == 32, r["k"]
     c = bytearray.fromhex(r["tops"][0][0])
     c[0] ^= 1
     r["tops"][0][0] = c.hex()
@@ -745,11 +756,11 @@ def test_a_session_staged_under_another_salt_reads_rec_acc_as_another_registrati
 
 def test_a_level_reading_rec_acc_off_its_openings_rows_of_the_chain_is_refused(level_major, forged, shape, tmp_path, restaged):
     """`OpenKeysS`' positions (`RecVStar.checkAccReads`): the restaged level 3's `acc` reads rows 395 to 447 for rep 0 and
-    843 to 895 for rep 1 (the chain rep-major, then by level and query, at 448 openings a rep) and `acc_out` the next. On a
+    886 to 938 for rep 1 (the chain rep-major, then by level and query, at 491 openings a rep) and `acc_out` the next. On a
     level-major chain, consistently registered, `acc` reads row `790 + u` at unit `u`, which passes `checkAcc` at its own
     registration and is refused at unit 0."""
     reads = lambda d: json.loads((d / "registered.json").read_text())["ports"]
-    honest = [395 + j for j in range(53)] + [843 + j for j in range(53)]
+    honest = [395 + j for j in range(53)] + [886 + j for j in range(53)]
     assert reads(restaged)["acc"]["reads"] == honest
     assert reads(restaged)["acc_out"]["reads"] == [p + 1 for p in honest]
     assert reads(level_major)["acc"]["reads"] == [790 + u for u in range(106)]
