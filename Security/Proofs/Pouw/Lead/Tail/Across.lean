@@ -1,5 +1,6 @@
 import Proofs.Pouw.Lead.Tail.Words
 import Proofs.Pouw.Lead.Tail.Fiber
+import Mathlib.Algebra.BigOperators.Field
 
 /-!
 # Blocks that repeat an earlier tile
@@ -9,8 +10,8 @@ share of the coins, `λ_X = ρ² · blocks² / 2^57` (`lamX`).
 
 A block's own coordinates are its step's three coin lanes of its coin tile at its column block's eight columns
 (`setLanes`). The lead's columns fill whole column blocks, so every coin lane is one block's, and the coins are the
-rest (`b`, `a₁`, `G`), drawn first, and a product over the blocks in block order (`blkIdx`). `count_tail_fiber` then
-needs:
+rest (`b`, `a₁`, `G`), drawn first, and a product over the blocks in block order (`blkIdx`, `laneEquiv`).
+`count_tail_equiv` then needs:
 
 * **Reads**: block `β`'s tiles read the lanes of `β`'s coin tile and column block at steps up to `β`'s, and the
   earlier tiles it is compared with read their own blocks' lanes: all blocks at or before `β`.
@@ -38,20 +39,6 @@ theorem blkIdx_le_of_le (L : Pouw.Lead.Layout) {t t' : ℕ} (ct cb : ℕ) (h : t
     blkIdx L t ct cb ≤ blkIdx L t' ct cb := by
   unfold blkIdx
   exact Nat.add_le_add_right (Nat.mul_le_mul_right _ (Nat.add_le_add_right (Nat.mul_le_mul_right _ h) _)) _
-
-theorem mul_add_inj {C a₁ a₂ b₁ b₂ : ℕ} (hb₁ : b₁ < C) (hb₂ : b₂ < C) (h : a₁ * C + b₁ = a₂ * C + b₂) :
-    a₁ = a₂ ∧ b₁ = b₂ := by
-  have key : a₁ = a₂ := by
-    by_contra hne
-    rcases Nat.lt_or_gt_of_ne hne with hl | hl
-    · have := Nat.mul_le_mul_right C hl
-      rw [Nat.succ_mul] at this
-      omega
-    · have := Nat.mul_le_mul_right C hl
-      rw [Nat.succ_mul] at this
-      omega
-  subst key
-  omega
 
 theorem blkIdx_inj (L : Pouw.Lead.Layout) {t₁ t₂ c₁ c₂ b₁ b₂ : ℕ} (hc₁ : c₁ < L.tiles) (hc₂ : c₂ < L.tiles)
     (hb₁ : b₁ < L.colBlocks) (hb₂ : b₂ < L.colBlocks) (h : blkIdx L t₁ c₁ b₁ = blkIdx L t₂ c₂ b₂) :
@@ -206,11 +193,139 @@ theorem across_fiber (T m n K : ℕ) (κ : Fin (lead T m n K).m → Fin (lead T 
         Fintype.card (Fin 3 → Fin 8 → Fin (2 ^ (lead T m n K).e)) :=
   across_fiber_of _ rfl rfl (lead_m T m n K) (lead_n T m n K) κ ω β
 
+theorem blkIdx_lt (L : Pouw.Lead.Layout) (β : Blk L) : blkIdx L β.1 β.2.1 β.2.2 < blkCount L :=
+  mul_add_lt (mul_add_lt β.1.isLt β.2.1.isLt) β.2.2.isLt
+
+/-- The blocks in block order. -/
+noncomputable def blkEquiv (L : Pouw.Lead.Layout) : Blk L ≃ Fin (blkCount L) :=
+  Equiv.ofBijective (fun β => ⟨blkIdx L β.1 β.2.1 β.2.2, blkIdx_lt L β⟩)
+    ((Fintype.bijective_iff_injective_and_card _).2 ⟨fun β β' h => by
+      obtain ⟨e1, e2, e3⟩ := blkIdx_inj L β.2.1.isLt β'.2.1.isLt β.2.2.isLt β'.2.2.isLt (congrArg Fin.val h)
+      exact Prod.ext (Fin.ext e1) (Prod.ext (Fin.ext e2) (Fin.ext e3)),
+      by simp only [Fintype.card_prod, Fintype.card_fin, blkCount, mul_assoc]⟩)
+
+theorem blkEquiv_val (L : Pouw.Lead.Layout) (β : Blk L) : (blkEquiv L β : ℕ) = blkIdx L β.1 β.2.1 β.2.2 := rfl
+
+/-- Column `8 cb + c`. -/
+def colIdx (L : Pouw.Lead.Layout) (hLn : L.n = 8 * L.colBlocks) (cb : Fin L.colBlocks) (c : Fin 8) : Fin L.n :=
+  ⟨8 * cb + c, by have := cb.isLt; have := c.isLt; omega⟩
+
+/-- Column `j`'s column block. -/
+def colBlk (L : Pouw.Lead.Layout) (hLn : L.n = 8 * L.colBlocks) (j : Fin L.n) : Fin L.colBlocks :=
+  ⟨(j : ℕ) / 8, by have := j.isLt; omega⟩
+
+/-- **The coins are the rest and each block's own lanes**, the blocks in block order. -/
+noncomputable def laneEquiv (L : Pouw.Lead.Layout) (hLn : L.n = 8 * L.colBlocks) :
+    Coins L ≃ ((Fin L.m → Fin L.S → Fin 2) × (Fin L.m → Fin 4 → Fin 2) × (Fin 4 → Fin L.n → Fin 7)) ×
+      (Fin (blkCount L) → Fin 3 → Fin 8 → Fin (2 ^ L.e)) where
+  toFun ω := ((ω.1, ω.2.1, ω.2.2.1), fun i ℓ c =>
+    ω.2.2.2 ((blkEquiv L).symm i).1 ((blkEquiv L).symm i).2.1 ℓ (colIdx L hLn ((blkEquiv L).symm i).2.2 c))
+  invFun x := (x.1.1, x.1.2.1, x.1.2.2, fun t ct ℓ j =>
+    x.2 (blkEquiv L (t, ct, colBlk L hLn j)) ℓ ⟨(j : ℕ) % 8, Nat.mod_lt _ (by norm_num)⟩)
+  left_inv ω := by
+    refine Prod.ext rfl (Prod.ext rfl (Prod.ext rfl (funext fun t => funext fun ct => funext fun ℓ => funext fun j => ?_)))
+    simp only [Equiv.symm_apply_apply]
+    exact congrArg (ω.2.2.2 t ct ℓ) (Fin.ext (by simp only [colIdx, colBlk]; omega))
+  right_inv x := by
+    refine Prod.ext rfl (funext fun i => funext fun ℓ => funext fun c => ?_)
+    have h1 : colBlk L hLn (colIdx L hLn ((blkEquiv L).symm i).2.2 c) = ((blkEquiv L).symm i).2.2 :=
+      Fin.ext (by simp only [colIdx, colBlk]; omega)
+    have h2 : (⟨((colIdx L hLn ((blkEquiv L).symm i).2.2 c : Fin L.n) : ℕ) % 8, Nat.mod_lt _ (by norm_num)⟩ : Fin 8) =
+        c := Fin.ext (by simp only [colIdx]; omega)
+    simp only [h1, h2, Prod.mk.eta, Equiv.apply_symm_apply]
+
+theorem laneEquiv_lane (L : Pouw.Lead.Layout) (hLn : L.n = 8 * L.colBlocks) (ω : Coins L) (t : Fin L.S)
+    (ct : Fin L.tiles) (ℓ : Fin 3) (j : Fin L.n) :
+    (laneEquiv L hLn ω).2 (blkEquiv L (t, ct, colBlk L hLn j)) ℓ ⟨(j : ℕ) % 8, Nat.mod_lt _ (by norm_num)⟩ =
+      ω.2.2.2 t ct ℓ j := by
+  simp only [laneEquiv, Equiv.coe_fn_mk, Equiv.symm_apply_apply]
+  exact congrArg (ω.2.2.2 t ct ℓ) (Fin.ext (by simp only [colIdx, colBlk]; omega))
+
+/-- Moving one block's coordinate is `setLanes`. -/
+theorem laneEquiv_update (L : Pouw.Lead.Layout) (hLn : L.n = 8 * L.colBlocks) (ω : Coins L) (i : Fin (blkCount L))
+    (v : Fin 3 → Fin 8 → Fin (2 ^ L.e)) :
+    (laneEquiv L hLn).symm ((laneEquiv L hLn ω).1, Function.update (laneEquiv L hLn ω).2 i v) =
+      setLanes L ω ((blkEquiv L).symm i) v := by
+  refine Prod.ext rfl (Prod.ext rfl (Prod.ext rfl (funext fun t => funext fun ct => funext fun ℓ => funext fun j => ?_)))
+  simp only [laneEquiv, Equiv.coe_fn_mk, Equiv.coe_fn_symm_mk, setLanes]
+  by_cases hk : blkEquiv L (t, ct, colBlk L hLn j) = i
+  · have hβ : (t, ct, colBlk L hLn j) = (blkEquiv L).symm i := by rw [← hk, Equiv.symm_apply_apply]
+    rw [hk, Function.update_self, ite_eq_left ⟨by rw [← hβ], by rw [← hβ], by rw [← hβ]; rfl⟩]
+  · rw [Function.update_of_ne hk]
+    have hn : ¬ (t = ((blkEquiv L).symm i).1 ∧ ct = ((blkEquiv L).symm i).2.1 ∧
+        (j : ℕ) / 8 = ((blkEquiv L).symm i).2.2) := by
+      rintro ⟨h1, h2, h3⟩
+      refine hk ((Equiv.eq_symm_apply _).1 ?_)
+      exact Prod.ext h1 (Prod.ext h2 (Fin.ext h3))
+    rw [ite_eq_right hn, Equiv.symm_apply_apply]
+    exact congrArg (ω.2.2.2 t ct ℓ) (Fin.ext (by simp only [colIdx, colBlk]; omega))
+
+/-- `across_tail` on any layout of whole MMA tiles, 64-row coin tiles and 7-bit coin lanes. -/
+theorem across_tail_of (L : Pouw.Lead.Layout) (htile : L.tile = 64) (he : L.e = 7) (hLm : L.m = 16 * L.rowBlocks)
+    (hLn : L.n = 8 * L.colBlocks) (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (a : ℕ) :
+    Pouw.pr (fun ω : Coins L => a ≤ (across L κ ω).card) ≤ lamX L ^ a / a.factorial := by
+  classical
+  let e := laneEquiv L hLn
+  let p : Fin (blkCount L) → ℝ := fun i => (rho L ^ 2 * (i : ℕ) : ℕ) / 2 ^ 56
+  have hcount : ∀ ω, (across L κ ω).card = (univ.filter fun i => acrossAt L κ ω ((blkEquiv L).symm i)).card :=
+    fun ω => card_equiv (blkEquiv L) fun β => by simp only [across, mem_filter, mem_univ, true_and,
+      Equiv.symm_apply_apply]
+  have htail := count_tail_equiv e (fun i ω => acrossAt L κ ω ((blkEquiv L).symm i)) p (fun i => by positivity)
+    (fun i ω ω' hr hl => ?_) (fun i ω => ?_) a
+  · have hsum : ∑ i, p i ≤ lamX L := by
+      have hg : (∑ i : Fin (blkCount L), (i : ℕ)) * 2 ≤ blkCount L ^ 2 := by
+        rw [Fin.sum_univ_eq_sum_range (fun i => i) (blkCount L), Finset.sum_range_id_mul_two, sq]
+        exact Nat.mul_le_mul_left _ (Nat.sub_le _ _)
+      have hg' : ((rho L ^ 2 * ∑ i : Fin (blkCount L), (i : ℕ) : ℕ) : ℝ) * 2 ≤ (rho L ^ 2 * blkCount L ^ 2 : ℕ) := by
+        exact_mod_cast (show (rho L ^ 2 * ∑ i : Fin (blkCount L), (i : ℕ)) * 2 ≤ rho L ^ 2 * blkCount L ^ 2 by
+          rw [mul_assoc]; exact Nat.mul_le_mul_left _ hg)
+      calc ∑ i, p i = ((rho L ^ 2 * ∑ i : Fin (blkCount L), (i : ℕ) : ℕ) : ℝ) / 2 ^ 56 := by
+            simp only [p]
+            rw [← Finset.sum_div, Nat.cast_mul, Nat.cast_sum, Finset.mul_sum]
+            push_cast
+            rfl
+        _ ≤ lamX L := by
+            unfold lamX
+            rw [div_le_div_iff₀ (by positivity) (by positivity)]
+            nlinarith
+    have hp0 : 0 ≤ ∑ i, p i := Finset.sum_nonneg fun i _ => by positivity
+    calc Pouw.pr (fun ω : Coins L => a ≤ (across L κ ω).card) =
+          Pouw.pr (fun ω : Coins L => a ≤ (univ.filter fun i => acrossAt L κ ω ((blkEquiv L).symm i)).card) :=
+          pr_congr fun ω => by rw [hcount]
+      _ ≤ (∑ i, p i) ^ a / a.factorial := htail
+      _ ≤ lamX L ^ a / a.factorial :=
+          div_le_div_of_nonneg_right (pow_le_pow_left₀ hp0 hsum a) (by positivity)
+  · have hr' : (ω.1, ω.2.1, ω.2.2.1) = (ω'.1, ω'.2.1, ω'.2.2.1) := hr
+    simp only [Prod.mk.injEq] at hr'
+    obtain ⟨h1, h2, h3⟩ := hr'
+    have hlane : ∀ (τ : Fin L.S) (k : Fin L.tiles) (j : Fin L.n) ℓ, blkIdx L τ k ((j : ℕ) / 8) ≤ i →
+        ω.2.2.2 τ k ℓ j = ω'.2.2.2 τ k ℓ j := fun τ k j ℓ hle => by
+      rw [← laneEquiv_lane L hLn ω τ k ℓ j, ← laneEquiv_lane L hLn ω' τ k ℓ j]
+      exact congrFun (congrFun (hl _ hle) ℓ) _
+    have htl : ∀ rb cb (t : Fin L.S), blkIdx L t (rb / 4) cb ≤ i →
+        tileOf L κ ω rb cb t = tileOf L κ ω' rb cb t := fun rb cb t hle =>
+      tileOf_congr L κ ω ω' rb cb t fun i' τ j hi hj hτ =>
+        coinTerm_congr L htile ω ω' i' τ j (fun _ => by rw [h1]) (fun _ q => by rw [h2]) (fun _ q => by rw [h3])
+          fun k ℓ hk => hlane τ k j ℓ (by
+            have e1 : (k : ℕ) = rb / 4 := by omega
+            rw [e1, hj]
+            exact le_trans (blkIdx_le_of_le L _ _ hτ) hle)
+    have hβ : blkIdx L ((blkEquiv L).symm i).1 ((blkEquiv L).symm i).2.1 ((blkEquiv L).symm i).2.2 = (i : ℕ) := by
+      rw [← blkEquiv_val, Equiv.apply_symm_apply]
+    unfold acrossAt
+    refine exists_congr fun rb => and_congr_right fun hrb => and_congr_right fun hrb4 => exists_congr fun x =>
+      and_congr_right fun hx => and_congr_right fun hlt => ?_
+    rw [htl rb _ _ (by rw [hrb4]; exact hβ.le), htl x.1 x.2.1 x.2.2 (by rw [← hβ]; exact hlt.le)]
+  · simp only [e, laneEquiv_update]
+    have := across_fiber_of L htile he hLm hLn κ ω ((blkEquiv L).symm i)
+    rw [← blkEquiv_val, Equiv.apply_symm_apply] at this
+    exact this
+
 /-- **Blocks that repeat an earlier tile are rarely many**: `a` or more of them on at most a `λ_X^a / a!` share of
 the coins. -/
 theorem across_tail (T m n K : ℕ) (κ : Fin (lead T m n K).m → Fin (lead T m n K).S → Fin (lead T m n K).n → ℤ)
     (a : ℕ) :
-    Pouw.pr (fun ω : Coins (lead T m n K) => a ≤ (across _ κ ω).card) ≤ lamX (lead T m n K) ^ a / a.factorial := by
-  sorry
+    Pouw.pr (fun ω : Coins (lead T m n K) => a ≤ (across _ κ ω).card) ≤ lamX (lead T m n K) ^ a / a.factorial :=
+  across_tail_of _ rfl rfl (lead_m T m n K) (lead_n T m n K) κ a
 
 end Pouw.SecurityProofs.Lead.Tail

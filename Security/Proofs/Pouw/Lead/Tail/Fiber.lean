@@ -73,4 +73,25 @@ theorem count_tail_fiber {B : ℕ} {X : Fin B → Type} [∀ i, Fintype (X i)] (
         mul_le_mul_of_nonneg_right (hfib i ω) (Nat.cast_nonneg _)
     _ = p i * (Fintype.card (X i) * #W) := by ring
 
+open Classical in
+/-- **`count_tail_fiber` on coins that are a product up to `e`**: the first factor drawn first, then coordinates
+`Fin B` in order. Event `i` reads the first factor and coordinates up to `i`, and with every other coin fixed at most a
+`p i` share of coordinate `i`'s values make it hold. -/
+theorem count_tail_equiv {α R X : Type} [Fintype α] [Fintype R] [Fintype X] {B : ℕ} (e : α ≃ R × (Fin B → X))
+    (E : Fin B → α → Prop) (p : Fin B → ℝ) (hp : ∀ i, 0 ≤ p i)
+    (hread : ∀ i (ω ω' : α), (e ω).1 = (e ω').1 → (∀ j, j ≤ i → (e ω).2 j = (e ω').2 j) → (E i ω ↔ E i ω'))
+    (hfib : ∀ i (ω : α),
+      ((univ.filter fun v : X => E i (e.symm ((e ω).1, Function.update (e ω).2 i v))).card : ℝ) ≤
+        p i * Fintype.card X)
+    (r : ℕ) :
+    Pouw.pr (fun ω : α => r ≤ (univ.filter fun i => E i ω).card) ≤ (∑ i, p i) ^ r / r.factorial := by
+  have h0 : 0 ≤ (∑ i, p i) ^ r / r.factorial := by
+    have := Finset.sum_nonneg fun i (_ : i ∈ univ) => hp i
+    positivity
+  refine (Pouw.pr_equiv e.symm _).symm.trans_le (Pouw.pr_prod_le _ _ h0 fun r₀ => ?_)
+  refine count_tail_fiber (X := fun _ => X) (fun i f => E i (e.symm (r₀, f))) p hp (fun i f f' h => ?_)
+    (fun i f => ?_) r
+  · exact hread i _ _ (by simp only [Equiv.apply_symm_apply]) (by simpa only [Equiv.apply_symm_apply] using h)
+  · simpa only [Equiv.apply_symm_apply] using hfib i (e.symm (r₀, f))
+
 end Pouw.SecurityProofs.Lead.Tail
