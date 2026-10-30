@@ -113,7 +113,7 @@ statement adds each row's hm96 commitment.
 
 `plan_match`, `plan_shard` and `memory_map` are the references, over plain ints; `plan_rows`, `plan_shard_rows` and
 `memory_map_rows` name each instance's rows (C-Flock's `in_rows` params). `plan_inputs` and `map_inputs` are a step's arguments
-from a `requirement.Requirement`, its `Store.Placement` and `Store` (`layout_words`, `map_words` and `pass_words` the shared
+from a `requirement.Requirement`, its `Store.Packing` and `Store` (`layout_words`, `map_words` and `pass_words` the shared
 rows), `shard_inputs` a shard's from a pass's plan and the blocks its step reads, and `row_words` an instance's rows from
 them.
 """
@@ -526,7 +526,7 @@ def _mask(bits, n: int) -> list[int]:
     return out
 
 
-def layout_words(S, req: Requirement, layout: Store.Placement, positions: Sequence[int]) -> list[int]:
+def layout_words(S, req: Requirement, layout: Store.Packing, positions: Sequence[int]) -> list[int]:
     """The layout row at epoch 0: written value ``positions[i]``'s store index and slot at words 2 i and 2 i + 1, zero past
     them and at every later epoch (a re-key's entries, ``(e V + i)``'s words, are its caller's)."""
     vw, out = value_bits(S.SLOTS), [0] * (2 * S.V * S.E)
