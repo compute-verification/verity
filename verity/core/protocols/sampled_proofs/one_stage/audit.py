@@ -2,9 +2,9 @@
 
 The profile (`profile`) is core's `IntegrityProfile` of one level `unit`, the partition's proof blocks (`sizes = (population,)`),
 sampled by the verifier's sampling design (`Subset`, `Bernoulli`, or a `Stratified` sampling design with one stratum per template), with the count
-drawn and delta. It bounds faulty proof blocks and weights nothing: under `Subset(k)` a trace with m faulty proof blocks passes with
+drawn and delta. It bounds incorrect proof blocks and weights nothing: under `Subset(k)` a trace with m incorrect proof blocks passes with
 probability C(N - m, k) / C(N, k), and under the stratified sampling design with prod_s C(n_s - m_s, k_s) / C(n_s, k_s). Except with
-probability delta, an accepted trace has at most `bound()` faulty proof blocks, and at most `stratum_bounds()[t]` in template
+probability delta, an accepted trace has at most `bound()` incorrect proof blocks, and at most `stratum_bounds()[t]` in template
 t: exact for `subset` and `stratified`, the linear relaxation for `bernoulli`. Applications read it through `consumers`.
 
 The record states the profile three ways, in the forms its recorded runs hold: `profile`, the profile's JSON (a stratified
@@ -86,7 +86,7 @@ def design(law: Mapping[str, Any]) -> SamplingDesign:
 
 
 def wrong_units(registration: Mapping[str, Any], draw: Mapping[str, Any], delta: float) -> dict[str, Any]:
-    """The profile's bounds on faulty proof blocks at delta, as the record states them: `bound`, and for `stratified` each
+    """The profile's bounds on incorrect proof blocks at delta, as the record states them: `bound`, and for `stratified` each
     template's own (`per_template`)."""
     p = profile(registration, draw, delta)
     out: dict[str, Any] = {"delta": delta, "of": registration["population"], "bound": p.bound(),
