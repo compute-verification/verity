@@ -25,7 +25,9 @@ open Lean Flock Flock.RecVStar
 
 #guard (VStar.Stmt.link 4 3 18).name == "rec-link/u4-p3"
 #guard (VStar.Stmt.link 4 3 18).instances == 18 && (VStar.Stmt.link 4 3 18).dir == "links"
-#guard (VStar.Stmt.link 4 3 18).sub.inputs == ["trow", "xr", "yr", "raux", "xw", "yw", "waux"]
+#guard (VStar.Stmt.link 4 3 18).sub.inputs == ["trow", "xyr", "raux", "xyw", "waux"]
+#guard VStar.linkRows 4 3 == [64, 128, VStar.auxWords 7, 128, VStar.auxWords 7]
+#guard (VStar.linkRows 4 3).all (fun w => 2 * w % 128 == 0)
 #guard (VStar.Stmt.link 4 3 18).sub.outputs == ["rin", "rout"]
 #guard ownPorts (.link 4 3 18) == [] && rowPorts (.link 4 3 18) == [] && accPorts (.link 4 3 18) == []
 
