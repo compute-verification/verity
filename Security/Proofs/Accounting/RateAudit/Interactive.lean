@@ -334,7 +334,9 @@ open scoped ENNReal
 (`Accounting.Guarantees.RateAuditInteractiveRO`). -/
 theorem RateAuditInteractiveRO : Accounting.Guarantees.RateAuditInteractiveRO := by
   intro N b h ρ S L q s k F cTag cEnc lam A hA
-  have hev : (fun x : Store N b × Coins N b h ρ s =>
+  rw [Bandwidth.pr_coins_flat]
+  dsimp only
+  have hev : (fun x : Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
         A.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
           A.footprint x.1 x.2.1 x.2.2.1 * cEnc < floor b ρ S L F cTag cEnc k lam) =
       fun x => A.toRelay.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.toRelay.compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
@@ -348,7 +350,9 @@ theorem RateAuditInteractiveRO : Accounting.Guarantees.RateAuditInteractiveRO :=
 (`Accounting.Guarantees.RateAuditInteractive`). -/
 theorem RateAuditInteractive : Accounting.Guarantees.RateAuditInteractive := by
   intro N b h ρ S L q s k m F cTag cEnc lam A
-  have hev : (fun x : Store N b × Coins N b h ρ s =>
+  rw [Bandwidth.pr_coins_flat]
+  dsimp only
+  have hev : (fun x : Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
         A.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
           A.footprint x.1 x.2.1 x.2.2.1 * cEnc < floor b ρ S L F cTag cEnc (k - m) lam) =
       fun x => A.toRelay.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.toRelay.compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
@@ -371,7 +375,7 @@ theorem RateOfAuditInteractive : Accounting.Guarantees.RateOfAuditInteractive :=
   · have h1 := real.compute_le x y s'
     have h2 := r.work_add_othersWork p (x, y, s')
     omega
-  · have h3 : (real.dev (x, s')).footprint y.1 y.2.1 y.2.2.1 * cEnc ≤ r.read (x, y, s') * cEnc :=
+  · have h3 : (real.dev (x, s')).footprint y.1 y.2.1.1 y.2.1.2 * cEnc ≤ r.read (x, y, s') * cEnc :=
       Nat.mul_le_mul_right _ (((real.dev (x, s')).footprint_le_ingress _ _ _).trans (real.ingress_le x y s'))
     exact lt_of_le_of_lt h3 hread
 
@@ -388,7 +392,7 @@ theorem RateOfAuditInteractiveRO : Accounting.Guarantees.RateOfAuditInteractiveR
   · have h1 := real.compute_le x y s'
     have h2 := r.work_add_othersWork p (x, y, s')
     omega
-  · have h3 : (real.dev (x, s')).footprint y.1 y.2.1 y.2.2.1 * cEnc ≤ r.read (x, y, s') * cEnc :=
+  · have h3 : (real.dev (x, s')).footprint y.1 y.2.1.1 y.2.1.2 * cEnc ≤ r.read (x, y, s') * cEnc :=
       Nat.mul_le_mul_right _ (((real.dev (x, s')).footprint_le_ingress _ _ _).trans (real.ingress_le x y s'))
     exact lt_of_le_of_lt h3 hread
 
