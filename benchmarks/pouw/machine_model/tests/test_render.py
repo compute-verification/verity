@@ -1,5 +1,5 @@
 """`machine-model render` prints every table of a data directory, and the README holds none: a table there is a line
-every new vector, design or census row edits, and two lane PRs that each add one conflict on it."""
+every new vector, design or census row edits, and two changes that each add one conflict on it."""
 from __future__ import annotations
 
 import re
