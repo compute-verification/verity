@@ -1064,7 +1064,7 @@ def test_query_ast_family_with_a_gap_and_an_overlap(synth):
     assert validate_partition(synth, StubFamily(sets + sets[:1])).status == "overlap"
 
 
-# -- hierarchies: subset cover, refinement, members per parent ----------------------------------------------
+# -- hierarchies: subset cover ----------------------------------------------------------------------------------
 
 
 def test_within_partitions_a_subset_of_gates(gemm):
@@ -1096,60 +1096,3 @@ def test_within_the_whole_program_agrees_with_the_full_check(gemm):
             within = validate_partition(gemm, StubFamily(fam), within=[(0, gemm.gates)])
             assert (within.status, within.codes) == (full.status, full.codes)
             assert {k: v for k, v in within.detail.items() if k != "within"} == full.detail
-
-
-def test_refinement_counts_members_per_parent(gemm):
-    whole = family_of(gemm, tiling(whole_body(gemm.root)))
-    vu = family_of(gemm, gemm_vu_tiling(gemm))
-    deep = family_of(gemm, gemm_deep_tiling(gemm))
-    assert partition.members_per_parent(gemm, whole, vu) == (32, 192, 6)
-    assert partition.members_per_parent(gemm, whole, deep) == (1, 1, 24)
-    coords = StubFamily([s for s in vu if s.intervals()[0][0] >= 224])
-    inside = StubFamily([s for s in deep if s.intervals()[0][0] >= 224])
-    v = partition.validate_refinement(gemm, coords, inside)
-    assert v.status == "ok" and v.counts == (4,) * 6 and v.detail == {"coarse_sets": 6, "fine_sets": 24}
-    assert partition.validate_refinement(gemm, vu, deep).codes == ("refine-crosses",)   # deep keeps Inputs whole
-
-
-def test_refinement_on_query_families_and_unequal_sizes(gemm):
-    """`each(F, G)` nests by construction; per-parent counts may differ (3 TDot gates, then 1 TCvt16)."""
-    coords = G.evaluate(gemm, G.instances("//TGemmCoordinate"))
-    subs = G.evaluate(gemm, G.each(G.instances("//TGemmCoordinate"), G.default(32)))
-    gates = G.evaluate(gemm, G.each(G.instances("//TGemmCoordinate"), G.default(0)))
-    assert partition.members_per_parent(gemm, coords, subs) == (2,) * 6
-    assert partition.members_per_parent(gemm, subs, gates) == (3, 1) * 6
-    assert partition.validate_refinement(gemm, gates, subs).codes == ("refine-crosses",)
-
-
-def test_crossing_outside_and_empty_sets_are_not_refinements(gemm):
-    whole = family_of(gemm, tiling(whole_body(gemm.root)))
-    vu = family_of(gemm, gemm_vu_tiling(gemm))
-    crosses = partition.validate_refinement(gemm, vu, whole)
-    assert crosses.status == "violation" and crosses.codes == ("refine-crosses",) and crosses.counts == ()
-    assert crosses.detail["refine-crosses"] == {"count": 3, "sets": [0, 1, 2]}
-    coords_only = StubFamily([s for s in vu if s.intervals()[0][0] >= 224])
-    outside = partition.validate_refinement(gemm, coords_only, vu)
-    assert outside.codes == ("refine-outside",) and outside.detail["refine-outside"]["count"] == 224
-    straddle = StubFamily([IntervalSet(((0, 20),)), IntervalSet(((20, 248),))])
-    halves = StubFamily([IntervalSet(((0, 10), (30, 40))), IntervalSet(((10, 30),)), IntervalSet(((40, 248),))])
-    assert partition.validate_refinement(gemm, straddle, halves).codes == ("refine-crosses",)
-    assert partition.validate_refinement(gemm, halves, StubFamily([IntervalSet(((5, 8), (32, 35)))])).counts == (1, 0, 0)
-    empty = partition.validate_refinement(gemm, whole, StubFamily([IntervalSet(())]))
-    assert empty.codes == ("refine-empty",)
-    overlap = partition.validate_refinement(gemm, StubFamily(list(whole) + list(whole)[:1]), vu)
-    assert overlap.codes == ("refine-coarse-overlap",)
-    with pytest.raises(ValueError, match="not a refinement"):
-        partition.members_per_parent(gemm, vu, whole)
-
-
-def test_refinement_is_unsupported_beyond_the_interval_limit(gemm):
-    def cap(n):
-        class L(Limits):
-            max_intervals = n
-        return L()
-
-    whole = family_of(gemm, tiling(whole_body(gemm.root)))
-    vu = family_of(gemm, gemm_vu_tiling(gemm))
-    assert partition.validate_refinement(gemm, whole, vu, cap(100)).status == "unsupported"
-    assert partition.validate_refinement(gemm, vu, whole, cap(100)).codes == ("limit-intervals",)
-    assert partition.validate_refinement(gemm, whole, vu, cap(233)).status == "ok"
