@@ -50,11 +50,13 @@ sat, as soon as it is. `--cegis` gives the same answers from a growing subset of
 escalates each on its own, and counts a member none only when every choice is unsat.
 
 `--pairs=PATH` makes the members `xoradd` steps at the listed constants (a JSON list of {"c", "k", "width", "carry",
-"covers"}, `r80x_batch.py --pairs-out`'s), keeping those of the run's width: a round's word-entry certificates. A
+"covers", "lo"}, `r80x_batch.py --pairs-out`'s), keeping those of the run's width: a round's word-entry certificates. A
 member with `carry` is a hi half, whose target is N + (D ⊕ c) + k + cin with cin the lo half's carry-out of U's 64-bit
-add. On a chain and a column the lo word's own sum overflows by c0 ∈ {0, 1}, and the lo state moves cin over
-{c0, c0 + 1}, so each cell's c0 is the solver's (an unsat holds for every pattern of lo overflows) and each entry state
-draws cin from the two. Any IADD3 may add cin (IADD3.X), and cin is a source too, which only adds to what the prover
+add. On a chain and a column the lo word's own sum ((R_lo + C_lo) ⊕ c_lo) + k_lo overflows by c0 ∈ {0, 1}, and the
+lo state moves cin over {c0, c0 + 1}, so each entry state draws cin from the two. With the member's "lo" constants each
+drawn row and column also draws its lo coins and each cell's c0 is their overflow, so every example is one a round
+gives. Without them each cell's c0 is the solver's: an unsat then holds for every pattern of lo overflows, a far harder
+solve. Any IADD3 may add cin (IADD3.X), and cin is a source too, which only adds to what the prover
 can do; carries split over two predicates and spent in different instructions are not modelled. `--full` (at
 `--width=32`) adds `fold_window`'s instructions that move high bits down.
 
@@ -189,10 +191,16 @@ def instance(spec):
     V = lambda x: z3.BitVecVal(x & mask, w)  # noqa: E731
     rows = [[rng.randrange(0, 1 << w) for _ in range(s)] for _ in range(nr)]
     cols = [[rng.randrange(0, 1 << w) for _ in range(s)] for _ in range(nc)]
+    lo = carry and member[0][1].get("lo")
+    if lo:
+        lo_rows = [rng.randrange(0, 1 << 32) for _ in range(nr)]
+        lo_cols = [rng.randrange(0, 1 << 32) for _ in range(nc)]
+        c0 = [[z3.BitVecVal(((((a + b) & 0xFFFFFFFF) ^ lo["c"]) + lo["k"]) >> 32, w) for b in lo_cols]
+              for a in lo_rows]
     ex = []
     for r in range(nr):
         for c in range(nc):
-            if carry:
+            if carry and not lo:
                 sol.add(z3.ULE(c0[r][c], 1))
             for _ in range(nn):
                 n = rng.randrange(0, 1 << w)
@@ -277,7 +285,7 @@ def specs(opt):
     if "--pairs" in opt:
         fams, steps = ["pairs-xoradd"], [1]
         drawn = [[("xoradd", {"k": p["k"], "c": p["c"], "t": 3, "carry": bool(p.get("carry")),
-                              "covers": p.get("covers", [])})]
+                              "covers": p.get("covers", []), "lo": p.get("lo")})]
                  for p in json.load(open(opt["--pairs"])) if p.get("width", w) == w]
     free = [int(x) for x in str(opt["--free"]).split(",")] if "--free" in opt else None
     if free and len(free) not in (1, 3):

@@ -35,7 +35,7 @@ census counts only values equal across chains), and routes that change the write
 Run: `uv run --no-project --with numpy --with-editable ../exact_kit python -B r80x_batch.py --rounds=PATH/hash_rounds.py
 [--mutations] [--json=OUT] [--pairs-out=PAIRS.json]` (from this directory; PATH holds FOLD-ROUNDS' `hash_rounds.py`).
 `--pairs-out` writes the 160 halves as `fold_family.py --pairs` members, each at its least certifying width (at least 8)
-and the hi halves with their carry-in.
+and the hi halves with their carry-in and their round's lo constants.
 """
 from __future__ import annotations
 
@@ -212,7 +212,9 @@ def xc_routes(hr, checks: Checks) -> dict:
                  "the witness tests separate",
                  not product_rank_witness(1, 0, rng, 1, 2000) and not product_rank_witness(0, 5, rng, 2, 2000))
     pairs = [{"t": t, "half": "hi" if s else "lo", "c": c, "k": k, "width": max(8, x), "carry": bool(s),
-              "covers": [f"t{t} {'hi' if s else 'lo'}"]} for (t, s, c, k), x in zip(halves, width)]
+              "covers": [f"t{t} {'hi' if s else 'lo'}"]}
+             | ({"lo": {"c": hr.xc(t) & M32, "k": hr.K[t] & M32}} if s else {})
+             for (t, s, c, k), x in zip(halves, width)]
     return {"c1_two_free_terms_exact": exact, "c1_one_free_term_k": ks, "halves": len(halves),
             "halves_k_0mod4": sum(k % 4 == 0 for *_, k in halves),
             "imad_certificate_width": {w: width.count(w) for w in sorted(set(width))},
