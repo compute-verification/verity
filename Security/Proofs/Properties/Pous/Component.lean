@@ -74,11 +74,6 @@ private theorem toUTF8_of_fromUTF8? {b : ByteArray} {s : String} (h : String.fro
 private theorem canonicalJson_ok {b : ByteArray} {j : Lean.Json} (h : Core.canonicalJson b = .ok j) :
     ∃ s, String.fromUTF8? b = some s ∧ Flock.canon j = .ok s := by
   unfold Core.canonicalJson at h
-  cases ha : b.data.all (· < 0x7f)
-  case false =>
-    simp only [ha] at h
-    simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
-  simp only [ha] at h
   cases hs : String.fromUTF8? b with
   | none =>
     simp [hs, throw, throwThe, MonadExceptOf.throw] at h
