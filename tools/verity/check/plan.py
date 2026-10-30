@@ -7,10 +7,10 @@ COMMIT defaults to HEAD: this checkout as it is, uncommitted files included, as 
 checked out in a temporary worktree and planned there, in that tree's own environment (`DECLARED`, the declared command's `uv
 run`), by that commit's own key code: its `suites.py`, its `check.py` (`env`, `STEP_KEYS`), its `lean_audit.py` and its
 `circuit_check`.  Run it where `check` runs (a check node): the suites' and circuit-check's keys hold the interpreter, the base
-image and the installed versions, so a machine unlike the one that earned a pass never finds it.  `--on MACHINE` does that from
-anywhere the store is (`on_machine`): the packs are gathered here, and COMMIT (always a worktree of it, so committed files only)
-is planned on MACHINE by a short `research run --wait` that ships it with this plan.py, verdicts.py and those packs.  Its keys
-match passes earned on a machine of MACHINE's environment only (the vy-nebius-cpu nodes have no nvidia-smi, the GPU nodes do).
+image, the toolchains installed and the installed versions, so a machine unlike the one that earned a pass never finds it.  `--on
+MACHINE` does that from anywhere the store is (`on_machine`): the packs are gathered here, and COMMIT (always a worktree of it,
+so committed files only) is planned on MACHINE by a short `research run --wait` that ships it with this plan.py, verdicts.py and
+those packs.  Its keys match passes earned on any node of MACHINE's environment: no key names the node, its paths or its slot.
 
 Each part of the check, with its key at COMMIT and the recorded passes under that key:
 
@@ -23,8 +23,8 @@ Each part of the check, with its key at COMMIT and the recorded passes under tha
                           part, `circuit-check`, `unkeyed`: its targets' keys need the task list built (every Definition)
     lean-audit:PACKAGE    `lean_audit.key`, a pass whose report has the kernel replay (`check.lean_fast`'s rule)
     flock-rust-tests, lean-agreement, preflight-lints
-                          `STEP_KEYS`, under the step environment of each check slot here (the key reads VERITY_TEST_CACHE,
-                          which a slot sets to its own test cache), so a pass counts in the slot that earned it; preflight-lints
+                          `STEP_KEYS`, under the step environment here and, for a tree whose `check._env_key` reads
+                          VERITY_TEST_CACHE (which a slot sets to its own test cache), each check slot's; preflight-lints
                           passes too where the repository's own suite (tests/), which holds `LINTS`, passed
     lean                  `skipped`, in place of every Lean part, on a tree without the verifier's Lean package (check
                           skips its Lean group there): a skip passes nothing
@@ -94,6 +94,10 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
+_spec = importlib.util.spec_from_file_location("plan_settings", HERE / "settings.py")
+#: every environment variable check reads, declared once (`settings.py`), from beside this file: sent with it to a node (`--on`)
+SETTINGS = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(SETTINGS)
 KIND = "check-plan/v1"
 #: how a check runs a tree (`tools/verity/check/tool.py`'s command, less `python check.py`)
 DECLARED = ["run", "--locked", "--all-packages", "--extra", "torch-cpu", "python"]
@@ -247,7 +251,7 @@ def local_source(C, own: bool = False) -> Source:
     """This machine's caches: $CHECK_CACHE, $VERITY_TEST_CACHE and (unless ``own``, a check's own caches alone) every check
     slot's test cache."""
     S = C.SUITES
-    tests = [Path(os.environ.get("VERITY_TEST_CACHE") or S.CACHE), *([] if own else slot_caches(C))]
+    tests = [Path(SETTINGS.VERITY_TEST_CACHE or S.CACHE), *([] if own else slot_caches(C))]
     return Source("own" if own else "local", C.cache_dir(), list(dict.fromkeys(tests)))
 
 
@@ -268,9 +272,12 @@ def suite_parts(C, sources: list[Source], lean: bool) -> list[Part]:
     """One part per suite, as `suites.py`'s own plan keys and finds it (its `main`), under pytest's or lean-suites' environment."""
     S = C.SUITES
     e = step_env(C)
+    on_path = getattr(S, "cargo_on_path", lambda: None)            # a tree's suites.py puts cargo on the PATH before keying
     with environ(e):
+        on_path()
         env = {"pytest": S.environment()}
     with environ(lean_env(e)):
+        on_path()
         env["lean-suites"] = S.environment()
     pkgs, suites = S.members(), S.discover()
     tree = S.worktree()
@@ -338,7 +345,8 @@ def lean_parts(C, sources: list[Source]) -> list[Part]:
 
 
 def keyed_step_parts(C, sources: list[Source], names: list[str]) -> list[Part]:
-    """`STEP_KEYS`' steps: the key under the step environment as it is here and in each check slot (its VERITY_TEST_CACHE)."""
+    """`STEP_KEYS`' steps: the key under the step environment as it is here and in each check slot (its VERITY_TEST_CACHE, which
+    a tree's older `_env_key` reads; a key that doesn't is one key under all of them)."""
     e = step_env(C)
     variants = [e, *({**e, "VERITY_TEST_CACHE": str(p)} for p in slot_caches(C) if str(p) != e.get("VERITY_TEST_CACHE"))]
     out = []
@@ -563,10 +571,10 @@ def _clean_env(tree: Path) -> dict[str, str]:
     """This process's environment for a planning process in ``tree``, as a check run there would have it: without this
     checkout's virtualenv and `uv run`'s depth (the tree's own `uv run` sets both), and with this checkout's path written as
     ``tree``'s wherever it appears (`check._env_key` writes either as `<tree>`)."""
-    e = {k: v for k, v in os.environ.items() if k not in ("VIRTUAL_ENV", "UV_RUN_RECURSION_DEPTH")}
+    e = {k: v for k, v in SETTINGS.environ().items() if k not in ("VIRTUAL_ENV", "UV_RUN_RECURSION_DEPTH")}
     path = e.get("PATH", "").split(os.pathsep)
-    if os.environ.get("VIRTUAL_ENV") and str(Path(os.environ["VIRTUAL_ENV"]) / "bin") in path:
-        path.remove(str(Path(os.environ["VIRTUAL_ENV"]) / "bin"))       # the one `uv run` put first
+    if (venv := SETTINGS.VIRTUAL_ENV) and str(Path(venv) / "bin") in path:
+        path.remove(str(Path(venv) / "bin"))       # the one `uv run` put first
     e["PATH"] = os.pathsep.join(path)
     return {k: v.replace(str(ROOT), str(tree)) for k, v in e.items()}
 
@@ -584,10 +592,10 @@ LAUNCHED = re.compile(r"\brun (r20\d{6}-\d{6}-[0-9a-f]{4}) launched\b")
 def on_machine(machine: str, commit: str, d: Path, packs: list[tuple[str | None, Path]], flags: list[str], out: Path,
                notes: list[str], run=subprocess.run) -> int:
     """`--on MACHINE`: plan ``commit`` on MACHINE, a check node, where the keys are that machine's (its interpreter, base image,
-    the tools on its PATH and its check slots' caches), as a `research run --wait` of a worktree of ``commit`` (`--source`,
+    the toolchains it has, and its check slots' caches), as a `research run --wait` of a worktree of ``commit`` (`--source`,
     `--cwd source`, in `REMOTE_POOL`): this checkout's plan.py and verdicts.py, sent with the run, plan that tree (`--tree .`) in its own
     environment (`DECLARED`), on the packs gathered here, sent too, since a run on a node can't fetch the store's blobs.  Its
-    shell is no login shell: a profile's PATH would key flock-rust-tests, lean-agreement and preflight-lints unlike a check's.  The
+    shell is no login shell: a profile's variables (the locale, a `VERITY_*` switch) would key every part unlike a check's.  The
     plan comes back from the run's `REMOTE_OUT` to ``out``.  Returns the run's exit, 2 when it launched none."""
     if machine == "auto" or "," in machine:
         print(f"check.py --plan --on {machine}: name one machine; its keys are that machine's", file=sys.stderr)
@@ -601,11 +609,11 @@ def on_machine(machine: str, commit: str, d: Path, packs: list[tuple[str | None,
     cmd = " ".join(['I="$RESEARCH_RUN_DIR/inputs";', 'mkdir -p "$RESEARCH_RUN_DIR/out";', "exec uv --quiet", *DECLARED,
                     '"$I/plan.py"', "--tree", ".", "--out", f'"$RESEARCH_RUN_DIR/{REMOTE_OUT}"', *map(shlex.quote, flags),
                     *(shlex.quote(f"--pack={rid or ''}=") + f'"$I/{n}"' for rid, n in names)])
-    sends = [HERE / "plan.py", HERE / "verdicts.py", *(send / n for _, n in names)]
+    sends = [HERE / "plan.py", HERE / "verdicts.py", HERE / "settings.py", *(send / n for _, n in names)]
     _git("worktree", "add", "-q", "--detach", str(tree), commit, repo=ROOT)
     try:
         r = run([sys.executable, "-m", "research", "run", "--on", machine, "--project", REMOTE_PROJECT, "--source", str(tree),
-                 "--cwd", "source", "--pool", REMOTE_POOL, "--as", os.environ.get("RESEARCH_LANE") or "ci",
+                 "--cwd", "source", "--pool", REMOTE_POOL, "--as", SETTINGS.RESEARCH_LANE or "ci",
                  "--timeout", str(REMOTE_TIMEOUT_S), "--wait", "--declared-output", REMOTE_OUT,
                  *(x for f in sends for x in ("--send", str(f))), "--", "bash", "-c", cmd],
                 cwd=ROOT, capture_output=True, text=True, stdin=subprocess.DEVNULL)
@@ -700,7 +708,7 @@ def main(argv: list[str], host=None) -> int:
             tree = Path(d) / "tree"
             _git("worktree", "add", "-q", "--detach", str(tree), commit)
             try:
-                uv = os.environ.get("UV") or shutil.which("uv") or "uv"
+                uv = SETTINGS.UV or shutil.which("uv") or "uv"
                 r = subprocess.run([uv, "--quiet", *DECLARED, str(HERE / "plan.py"), "--tree", str(tree), "--out", str(out), *args],
                                    cwd=tree, env=_clean_env(tree)).returncode
             finally:

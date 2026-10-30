@@ -1275,3 +1275,40 @@ def test_the_cache_key_is_the_same_in_every_check_slot(monkeypatch):
     assert CC.key({"target": "F32Mul_v1"}) == here
     monkeypatch.setenv("VERITY_REGRESSION", "1" if os.environ.get("VERITY_REGRESSION") != "1" else "0")
     assert CC.key({"target": "F32Mul_v1"}) != here
+
+
+def test_the_cache_key_is_the_same_on_every_node(monkeypatch, tmp_path):
+    """A report one node stored counts on every other node of the image (`check.py --plan`, `research merge --verdicts`): the key
+    names no host, kernel, working directory, home, PATH or check slot (each slot sets its own `VERITY_TEST_CACHE`,
+    `tools/verity/check/slot.py`), while the CPU, a variable that can change what a check computes and the request still key it."""
+    import platform
+
+    from circuit_check import cache as CC
+
+    def node(name: str) -> dict:
+        home = tmp_path / name
+        return {"HOME": str(home), "PATH": f"{home}/.local/bin:/usr/bin", "HOSTNAME": name, "TMPDIR": f"{home}/tmp",
+                "VIRTUAL_ENV": f"{home}/trees/{name}/.venv", "SSH_CONNECTION": f"10.0.0.{len(name)} 22", "CUDA_VISIBLE_DEVICES": "",
+                "VERITY_TEST_CACHE": f"{home}/.cache/verity/tests-slot-{name}", "CHECK_SLOT": name}
+
+    def on(name: str) -> None:
+        for k, v in node(name).items():
+            monkeypatch.setenv(k, v)
+        (tmp_path / name).mkdir(exist_ok=True)
+        monkeypatch.chdir(tmp_path / name)
+        monkeypatch.setattr(platform, "node", lambda: name)
+        monkeypatch.setattr(platform, "release", lambda: f"6.{len(name)}.0-{name}")
+        monkeypatch.setattr(platform, "version", lambda: f"#1 SMP {name}")
+        monkeypatch.setattr(platform, "platform", lambda *a, **k: f"Linux-6.{len(name)}.0-{name}-x86_64")
+
+    on("vy-nebius-1")
+    here = CC.key({"target": "F32Mul_v1"})
+    on("vy-nebius-cpu-11")
+    assert CC.key({"target": "F32Mul_v1"}) == here
+    assert CC.key({"target": "F32Add_v1"}) != here
+    monkeypatch.setenv("VERITY_REGRESSION", "1" if os.environ.get("VERITY_REGRESSION") != "1" else "0")
+    assert CC.key({"target": "F32Mul_v1"}) != here
+    monkeypatch.undo()
+    here = CC.key({"target": "F32Mul_v1"})
+    monkeypatch.setattr(platform, "machine", lambda: "aarch64")
+    assert CC.key({"target": "F32Mul_v1"}) != here                  # a different CPU is a different machine
