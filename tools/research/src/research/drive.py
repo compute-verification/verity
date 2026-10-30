@@ -1748,7 +1748,7 @@ class Driver:
                     if unmarked:
                         notes.append(f"marked by {self.ready_by(n, d.pr.head) or q.handle(d.pr) or d.pr.owner}")
                     if m in d.older:
-                        notes.append(f"at an older head of #{m}")
+                        notes.append(f"at #{m}'s older head {d.held[m][:12]}")
                     names.append(f"#{n}" + (f" ({'; '.join(notes)})" if notes else ""))
                 one = len(deps) == 1
                 text += f". It takes out {', '.join(names)}, which contain{'s' if one else ''} it"

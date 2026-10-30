@@ -1774,8 +1774,8 @@ def test_the_owner_of_an_unmarked_pr_marked_ones_wait_for_is_told_once_with_thei
     h.tick()
     five = world.gh.prs[5].head
     assert told() == [
-        f"@ci @lane-5 @lane-7 @lane-9 queue: #5 at {five[:8]} isn't marked ready. It takes out #7 (marked by marker7; at an older "
-        f"head of #5), #9 (marked by lane-9), which contain it. Fix: mark #5 ready at {five[:8]}, or withdraw it (`research queue "
+        f"@ci @lane-5 @lane-7 @lane-9 queue: #5 at {five[:8]} isn't marked ready. It takes out #7 (marked by marker7; at #5's "
+        f"older head {old[:12]}), #9 (marked by lane-9), which contain it. Fix: mark #5 ready at {five[:8]}, or withdraw it (`research queue "
         f"eject 5 --reason ...`) and they carry it"], told()
     h.tick()
     assert len(told()) == 1
@@ -1787,8 +1787,8 @@ def test_the_owner_of_an_unmarked_pr_marked_ones_wait_for_is_told_once_with_thei
     # #9 holds #5's older head now; it only shares `old` with #8, which waits for nothing of #9's or #7's (`Queue.entries`)
     new = world.gh.prs[5].head
     assert told()[1:] == [
-        f"@ci @lane-5 @lane-7 @lane-9 queue: #5 at {new[:8]} isn't marked ready. It takes out #7 (marked by lane-7; at an older "
-        f"head of #5), #9 (marked by lane-9; at an older head of #5), which contain it. Fix: mark #5 ready at {new[:8]}, or "
+        f"@ci @lane-5 @lane-7 @lane-9 queue: #5 at {new[:8]} isn't marked ready. It takes out #7 (marked by lane-7; at #5's "
+        f"older head {old[:12]}), #9 (marked by lane-9; at #5's older head {five[:12]}), which contain it. Fix: mark #5 ready at {new[:8]}, or "
         f"withdraw it (`research queue eject 5 --reason ...`) and they carry it"], told()
     world.gh.ready.add((5, new))
     h.tick()
@@ -1814,11 +1814,33 @@ def test_a_marked_pr_left_out_for_an_ejected_pr_it_holds_an_older_head_of_is_tol
     h.tick()
     assert told() == [
         f"@ci @lane-6 @lane-7 queue: #6 at {new[:8]} isn't admitted (ejected at {new[:8]}: breaks circuits (a new push or ready "
-        f"mark re-admits it)). It takes out #7 (at an older head of #6), which contains it. Fix: mark #6 ready at {new[:8]}, drop "
-        f"#6's commits from #7, or ask @top to close #6"], told()
+        f"mark re-admits it)). It takes out #7 (at #6's older head {old[:12]}), which contains it. Fix: mark #6 ready at {new[:8]}, "
+        f"drop #6's commits from #7, or ask @top to close #6"], told()
     assert h.q.status()[7].state == "waiting"
     h.tick()
     assert len(told()) == 1
+
+
+def test_the_notice_names_the_older_head_a_pr_carries_never_a_merge_base_on_main(world, monkeypatch):
+    """#7 merged #5's branch at `q1`, then both merged `main` once it moved: their merge bases are `q1` and `main`'s commit, and
+    `git merge-base` may name either.  #5 hasn't landed, so #7 still waits for it, and the notice names `q1`, the head of #5's
+    whose commits #7 carries, never the commit of `main`."""
+    from test_queue import _merge
+
+    _registry(world, "lane-5", "lane-7")
+    q1 = world.change({"x.txt": "x = 1\n"})
+    seven = _merge(world, world.change({"k.txt": "kernels\n"}), q1)
+    _move_main(world, {"m.txt": "landed\n"})
+    main = _main(world)
+    five, seven = _merge(world, q1, main), _merge(world, seven, main)
+    assert main in _git(world.dev, "merge-base", "--all", seven, five).split()
+    h = Review(world, monkeypatch)
+    world.gh.put(5, five, ready=False)
+    world.gh.put(7, seven)
+    h.tick()
+    (told,) = [p for p in h.posts if "isn't marked ready" in p]
+    assert f"#5 at {five[:8]} isn't marked ready. It takes out #7 (marked by lane-7; at #5's older head {q1[:12]})" in told, told
+    assert main[:12] not in told and h.q.status()[7].state == "waiting"
 
 
 def _detached(h: Review, tmp_path, lean: bool = True, post: bool = False) -> list[str]:
