@@ -482,6 +482,23 @@ def test_forge_after_runs_after_lean_whenever_its_kinds_are_forged(capsys) -> No
     assert cmd[cmd.index("--timeout") + 1] == f"{RUN.SETUP_MIN + RUN.OTHER_MIN['lean'] + RUN.OTHER_MIN['forge-after']}m"
 
 
+def test_a_wired_run_budgets_its_link_part_and_its_forgery_as_the_largest_statement(capsys) -> None:
+    def launched(*argv: str) -> list[str]:
+        assert RUN.main(["run", "--dry-run", *argv]) == 0
+        return capsys.readouterr().out.split()
+
+    def limit(*argv: str) -> int:
+        cmd = launched(*argv)
+        return int(cmd[cmd.index("--timeout") + 1][:-1])
+
+    assert "REC_LINKS=1" in launched("--env", "REC_LINKS=1")
+    big = max(RUN.FW_S.values())
+    assert limit("--env", "REC_LINKS=1") - limit() == pytest.approx(RUN.MARGIN * 2 * big / 60, abs=1)
+    assert limit("--env", "REC_LINKS=1", "--oprove-runs", "2") - limit("--oprove-runs", "2") == pytest.approx(
+        RUN.MARGIN * 3 * big / 60, abs=1)
+    assert limit("--env", "REC_LINKS=1", "--env", "REC_LINKS=0") == limit()
+
+
 def test_forged_statements_are_ok_when_refused_and_forge_after_reads_each_case(tmp_path: Path) -> None:
     o = job(tmp_path)
     d = o / "steps" / "oprove" / "r1" / "out" / "oprove" / "forged-coef-L0-firewall"

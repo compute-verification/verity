@@ -71,6 +71,15 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
   the port one bit off, as its `b || c` alone, as `pub.bin`'s consistent table, and as the whole registration. Lean
   verifies each with the lean step's own flags, beside the honest control, which must accept. The headline's `forged_refused` gives
   each kind's verdict.
+- **Links** (`--env REC_LINKS=1`, default off): the inner population wired. build stages its N units as a chain
+  (`rec_reprice.py stage-chain`), each cut wire a link the inner statement's public file carries (META links), which
+  `serve`, `replay` and `statement` check against the verifier's links file (`stage/links.json`). vstage stages V*'s link
+  table part over it (`rec_vstage stage-links`: `links`, the table registered as V*'s value `rec-links`, and the forgery
+  `forged-link`, a table whose first row names a writer whose output is not its reader's row), oprove proves both beside
+  the other statements, and `rec-inner`, every verify and `rec-compose` read the table's `--rec-links ROOT:N`. Lean's
+  `verify` and `statement` refuse `--rec-links` (`RecLinks.refuseLinks`), and `rec-compose` refuses it (`NO_LINKS`),
+  until a guarantee covers the table, so such a run's lean step refuses every part. `--max-min` budgets the link
+  part's releases and its forgery's each as the largest measured statement's (`max_min` in `run.py`).
 - **The verdict** (`headline` in the result, the table's first line): `complete` when every step that one recursive
   run needs ran (build, inner, vstage, vcap, oprove, lean). `ok` when, in addition, every invocation exited 0, every
   honest verdict accepted, every flipped coin and every forgery was refused. A merged table's verdict is only as whole as its runs.
@@ -101,10 +110,10 @@ with `GPU=0`. The inner statement is `N` instances of `GemmCoordinate_v2{K, DOT=
 
 | # | step (STEP) | command (inside the pod script) | reads | writes | where |
 |---|---|---|---|---|---|
-| 0 | `build` | `60-circuit.sh MODE=build` (the prover), `lake build flock-verify` (Lean), `class_statement --stage-only` twice; `lake build flock-firewall` (the ZK server's Lean session loop) from the same Lean sources | the tree | `stage/` (plain SHA-512 leaves: the recursive inner), `stage-zk/` (hm96 leaves: the non-recursive `--zk`, the baseline) | CPU |
+| 0 | `build` | `60-circuit.sh MODE=build` (the prover), `lake build flock-verify` (Lean), `class_statement --stage-only` twice; `lake build flock-firewall` (the ZK server's Lean session loop) from the same Lean sources; with `REC_LINKS=1`, `rec_reprice.py stage-chain` instead of `class_statement` | the tree | `stage/` (plain SHA-512 leaves: the recursive inner), `stage-zk/` (hm96 leaves: the non-recursive `--zk`, the baseline), and with `REC_LINKS=1` each one's `links.json` | CPU |
 | 1 | `inner` | `flock-circuit prove --gpu` (ZK off, `FC_COINS=os`) against `python -m verity_flock.rec_live` (the inner ZK server's proxy); then the non-recursive ZK-off and `--zk` statements on loopback (`INNER_LOOPBACK=1`) | `stage/`, `stage-zk/` | `inner/s<k>/` | GPU |
 | 2 | `icheck` | `flock-circuit replay` of the last inner run, `python -m verity_flock.rec_vstar` (V*'s hashing reference) | `inner/` | records only | CPU |
-| 3 | `vstage` | `rec_vstage points`, `inner-fold` (`InnerFold.lean` as an executable), `rec_vstage stage` per statement: each Ligerito level's `RecOpen`, the algebra's `InnerRepCheck` parts, and `--forge`'s forged statements (`FORGE`) | `inner/`, `stage/` | `v/L<l>/`, `v/alg/p<j>/`, `v/forged-<kind>/` | CPU |
+| 3 | `vstage` | `rec_vstage points`, `inner-fold` (`InnerFold.lean` as an executable), `rec_vstage stage` per statement: each Ligerito level's `RecOpen`, the algebra's `InnerRepCheck` parts, and `--forge`'s forged statements (`FORGE`); with `REC_LINKS=1`, `rec_vstage stage-links` (the link table's part and `forged-link`) | `inner/`, `stage/` | `v/L<l>/`, `v/alg/p<j>/`, `v/forged-<kind>/`, `v/links/`, `v/forged-link/links/` | CPU |
 | 3b | `vcap` | `rec_vstage.stage_cap`: `RecCap` over each level's committed tops (V*'s verdict needs them) | `inner/`, `v/` | `v/cap/`, `v/cap/L<l>/` | CPU |
 | 4 | `oprove` | V*'s own inputs fixed before any session (`flock-verify rec-inner`, `rec-statements`, the shared rows, each statement's flags and bindings); per V* statement, one at a time: `flock-circuit serve --zk` (loopback) and `prove --zk --gpu` in each mode (`firewall`: `FC_FIREWALL=1`, the Lean session loop `flock-firewall`, live PROTOCOL.md §10.4, and the run's record `v-sess/rec-run.jsonl`: staged first, each Hello logged by `serve --rec-run`, closed last) | `v/`, `inner/` | `v-sess/` | GPU |
 | 5 | `oreplay` | `flock-circuit replay --zk` of each V* release (upstream's verifier) | `v-sess/` | records only | CPU |

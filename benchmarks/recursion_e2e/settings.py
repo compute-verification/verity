@@ -48,6 +48,8 @@ REGISTRY = Registry("benchmarks/recursion_e2e/settings.py", "recursion-e2e/setti
     S("WARM", int, 1, VALUE, "the inner step's warm runs"),
     S("RUNS", int, 3, VALUE, "the inner step's timed runs"),
     S("GPU", str, None, VALUE, "0: 85 proves on the CPU; unset, 1"),
+    S("REC_LINKS", str, None, VALUE, "1: 85 wires the inner population (a chain of its N units) and stages, proves and "
+      "composes V*'s link table part and its forged row under the table's --rec-links; unset, 0"),
     S("OPROVE_JOBS", int, 1, VALUE, "V* statements 85 proves at once (85's own default is 4), which their times depend on"),
     S("OPROVE_MEM_GB", int, None, VALUE, "the estimated peak GB the statements 85 proves at once may sum to; unset, 85's 48"),
     S("GPU_MAX_MIN", int, 75, WHERE, "each prove's GPU lease in minutes: a bound on how long it may hold the GPU"),

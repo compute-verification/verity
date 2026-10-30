@@ -18,6 +18,8 @@
 #      FORGE= (85's forgeries, staged by vstage and proved by oprove, comma separated: message,sum,comb,top,top-salt,coef,dirs;
 #      empty: none)  forge-after: coef, dirs and message made on the honest L0 and alg-p0 releases after proving
 #      (forge_after.py), each put to Lean beside its honest control
+#      REC_LINKS=0 (85's; 1: the inner population wired, a chain of its N units, and V*'s link table part and its forged-row
+#      forgery staged, proved and composed with the table's --rec-links)
 #      TAG=rb-<run id> (85's data/$TAG, removed at the end unless KEEP_DATA=1; a later job's STEPS=oprove,... takes it with
 #      TAG=... KEEP_DATA=1)  FLOCK_WORK=/workspace/jobs/rec-bench
 #      and any of 85's own (LEVELS, GPU, PCPUS, GPU_PREEMPTIBLE, ...), passed through
@@ -56,7 +58,7 @@ LSHA=$(cd verity/core/service/flock && find . -name .lake -prune -o -type f -pri
 { echo "commit=${RESEARCH_SOURCE_SHA:-$(git rev-parse HEAD 2>/dev/null)} K=$K N=$N TAG=$TAG WARM=$WARM RUNS=$RUNS REPEAT=$REPEAT settings=$SETTINGS"
   echo "OPROVE_WARM=${OPROVE_WARM:-0} OPROVE_RUNS=${OPROVE_RUNS:-1} GPU_MAX_MIN=$GPU_MAX_MIN GPU=${GPU:-1} OPROVE_GPU=$OPROVE_GPU OPROVE_JOBS=$OPROVE_JOBS" \
     $(for v in $(compgen -v REPEAT_); do echo "$v=${!v}"; done)
-  echo "steps=$STEPS modes=$MODES lean_jobs=${LEAN_JOBS:-4} lean_sources=$LSHA neg=${NEG// /+} forge=${FORGE//,/+}"
+  echo "steps=$STEPS modes=$MODES lean_jobs=${LEAN_JOBS:-4} lean_sources=$LSHA neg=${NEG// /+} forge=${FORGE//,/+} rec_links=${REC_LINKS:-0}"
   echo "cuda_tk=${CUDA_TK:-} warm_from=${WARM_FROM:-}"; nproc; nvidia-smi -L 2>/dev/null; } > "$O/params.txt"
 
 # timed NAME I CMD...: CMD under $O/steps/NAME/r<I> (its RESEARCH_RUN_DIR) and /usr/bin/time -v; its exit status
