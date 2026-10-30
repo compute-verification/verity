@@ -96,6 +96,14 @@ so no UE4M3 byte has bit 7 set, which sm_120 reads from its low 7 bits (a second
 scale from the committed rows, so no prover's byte reaches the checked values; the rule guards that forming, and every
 replayed step reads bytes as the hardware does (`hw_scales`).
 
+**Hashing.**  Under h0 seed_A doesn't read A's rows, so Pearl-C's adaptive-A attack (`pearl_c`'s "Why -h3 seeds each row
+of A") applies: every row can be folded onto one A′ row whose C̃ is computed once per weight row.  -h3
+(``pearl-c-nvfp4-v0-h3``, not registered) keys each row's E_A on its own SHA-512 digest, as Pearl-C's -h3 does; no device
+path forms it yet.  The domain (`PearlC4.check`), B-OVF's credit discount (`B_OVF`), D-SK (`seed_b`) and the accounting
+(`wref`, `credit_of`) are stated where they are coded.  The reference replay (`benchmarks/pouw/pearl_c4/replay.py`) opens
+rows and is a development shortcut: the protocol checks a drawn tile by a zero-knowledge proof of `circuit.pc4`'s hiding
+Programs, which opens nothing.
+
 **Stand-ins.**  The atoms are the RTX 5090 pins (`BLACKWELL_SM120_NVF4`, `_MXF4`, `HOPPER_BF16_M16N8K16`), pending GPU 4's
 RTX PRO recheck.  The E2M1, UE4M3 and UE8M0 casts are modelled from the PTX ISA, not captured.  A negative value that
 rounds to zero keeps its sign (code 0x8); no checked word depends on it.
