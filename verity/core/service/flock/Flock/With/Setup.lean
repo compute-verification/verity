@@ -189,7 +189,7 @@ def classOfWith (hs : Hashes M) (bytes : ByteArray) (head : String) (mj : Json) 
   let m := match mj with
     | .obj kvs => Json.mkObj (kvs.toArray.filter (fun kv => !BINDING_KEYS.contains kv.1)).toList
     | j => j
-  hs.sha512 (head.toUTF8 ++ "\nMETA ".toUTF8 ++ (← canon m).toUTF8 ++ "\n".toUTF8 ++ bytes.extract (n2 + 1) bytes.size)
+  hs.sha512 (head.toUTF8 ++ "\nMETA ".toUTF8 ++ (← canonUtf8 m).toUTF8 ++ "\n".toUTF8 ++ bytes.extract (n2 + 1) bytes.size)
 
 /-- `parse`'s sections after META from the state `s`, the nets so far and the line it reads next: each block line's net. -/
 def sectionsLoop (tags : Tags) (lines : Array String) (s : Array (String × Net) × Nat) : V (Array (String × Net) × Nat) :=
@@ -484,7 +484,7 @@ def checkPartitionWith (hs : Hashes M) (c : Circuit) (obj : Option Json) : M Par
 
 /-- `publicDigest` through the oracle. -/
 def publicDigestWith (hs : Hashes M) (header : Json) (pubs : ByteArray) : M ByteArray := do
-  hs.sha512 ((← canon header).toUTF8 ++ pubs)
+  hs.sha512 ((← canonUtf8 header).toUTF8 ++ pubs)
 
 /-- `loadPublic` through the oracle. -/
 def loadPublicWith (hs : Hashes M) (tags : Tags) (c : Circuit) (file : ByteArray) : M Public := do
@@ -671,7 +671,7 @@ def Stmt.setupHWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile : Byte
     (c.ports.getD (c.ports.size - c.outRowPorts.size + j) default).segs.isNone && c.outRowPorts[j]! > 1
   let identity := if !J.has c.metaJ "out_row_ports" then identity
     else if v2Run then Tags.outRowsV2Identity identity else Tags.outRowsIdentity identity
-  let mut h := tags.statement.toUTF8 ++ c.sha ++ (← canon identity).toUTF8
+  let mut h := tags.statement.toUTF8 ++ c.sha ++ (← identityBytes identity)
   for x in [n, blocksReal, nbl, m, c.kLog, pin, regions.size, c.g] do h := pushLe64 h x
   for d in [da, db] do
     h := pushLe64 h d.size
@@ -688,7 +688,8 @@ open HmRow
 
 /-- `HmOut.parse` through the oracle. -/
 def parseWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) :
-    M Circuit := do
+    M Circuit :=
+  if tags.isTmpl then throw s!"{tags.name}: a templated statement's circuit is read from its template" else do
   let c ← if !tags.typed then HmRow.parseWith hs tags bytes tables else do
     let (k, r) ← Typed.readWith hs tags bytes tables
     match r with
@@ -698,6 +699,28 @@ def parseWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (
     | .inl unit => pure { (← HmRow.parseWith hs tags bytes tables (pre := #[("unit", unit)])) with cls := some k }
   checkRows c
   return c
+
+/-- `HmOut.parseTmpl` through the oracle. -/
+def parseTmplWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) :
+    M Circuit := do
+  let mj ← metaOf bytes
+  let ctx := "templated statement META"
+  let lines ← (← J.arr mj "template" ctx).mapM fun x => J.asStr x "template line"
+  let some mode := Tmpl.modeOf (← J.str mj "layout" ctx)
+    | throw "META: layout is not a layout mode (iv, iv/strict, iv/hybrid, iv/hybrid/T)"
+  let tu ← TmplUnit.read (← Tmpl.parse lines) mode
+  let c ← HmRow.parseWith hs tags bytes tables (pre := #[("unit", tu.net)])
+  if (c.nets.extract 1 c.nets.size).any (fun x => x.1 == "unit" || x.1 == "root") then
+    throw "circuit: a templated statement carries no unit rows; the verifier reads them from its template"
+  if HmOut.recUnit tu.net.name then
+    throw s!"circuit: a templated statement's unit {tu.net.name} is a recursion unit, which is read flat"
+  checkRows c
+  return { c with tmpl := some tu }
+
+/-- `HmOut.parseCommit` through the oracle. -/
+def parseCommitWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) :
+    M Circuit :=
+  if tags.isTmpl then parseTmplWith hs tags bytes tables else parseWith hs tags bytes tables
 
 /-- `HmOut.checkPublic` through the oracle. -/
 def checkPublicWith (hs : Hashes M) (c : Circuit) (pub : Public) : M Unit := do
@@ -759,46 +782,11 @@ namespace HmLinks
 open HmRow
 
 /-- `HmLinks.check` through the oracle. -/
-def checkWith (hs : Hashes M) (c : Circuit) (pop : Public) (program : ByteArray) : M Nat := do
+def checkWith (hs : Hashes M) (c : Circuit) (pop : Public) (readers : Option (Array Nat)) (program : ByteArray) : M Nat := do
   let links ← parse c
   let P ← Program.decodeWith hs.sha512 program
-  let us := units P
-  let np := c.ports.size
-  let popIdx ← (← J.arr (← J.get pop.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
-  let inst : Std.HashMap Nat Nat := (Array.range popIdx.size).foldl (fun m i => m.insert popIdx[i]! i) {}
-  let mut outs : Std.HashMap Nat (Array Nat) := {}
-  let mut wires := 0
-  for i in [0:popIdx.size] do
-    let u := popIdx[i]!
-    let some (k, m, _, _) := us[u]? | throw s!"links: unit {u} is outside the program's {us.size} units"
-    let ops ← Program.operands P P.rootScope ((P.defs[P.root]!).body.nodes[k]!) m
-    for t in [0:ops.size] do
-      if let some v := owner us ops[t]! then
-        if !links.any (fun (_, lo, hi) => lo ≤ t && t < hi) then
-          throw s!"links: cut wire: unit {u}'s parameter leaf {t} reads unit {v}'s output (gate {ops[t]!}), and no link row (META links) carries it"
-    for (p, lo, hi) in links do
-      let name := (c.ports.getD p default).name
-      if hi > ops.size then throw s!"links: {name}'s leaves [{lo}, {hi}) are past unit {u}'s {ops.size} parameter leaves"
-      let rd := ops.extract lo hi
-      match owner us rd[0]! with
-      | none =>
-        if rd.any (owner us · |>.isSome) then
-          throw s!"links: unit {u}'s leaves [{lo}, {hi}) (row {name}) read both circuit inputs and a unit's outputs"
-      | some v =>
-        let og ← match outs[v]? with
-          | some og => pure og
-          | none => do
-            let og ← outGates P us v
-            outs := outs.insert v og
-            pure og
-        if og != rd then
-          throw s!"links: unit {u}'s leaves [{lo}, {hi}) (row {name}) are not exactly unit {v}'s {og.size} outputs in order"
-        let some w := inst[v]?
-          | throw s!"links: unit {u}'s row {name} reads unit {v}, which is not a unit of this public file (a link across statements is not checked)"
-        if pop.digest i p np != pop.digest w (np - 1) np then
-          throw s!"links: cut wire [{lo}, {hi}) from unit {v} to unit {u}: the reader's row {name} is not the writer's committed output row (their b ‖ c differ)"
-        wires := wires + 1
-  return wires
+  let ns := nodes P
+  checkAt c pop P links (unitAt ns) (ownerAt ns) (count ns) readers
 
 end HmLinks
 
@@ -806,7 +794,7 @@ end HmLinks
 def Stmt.setupHiddenWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins)
     (tables : List (String × ByteArray) := []) (draw : Option Json := none) (partition : Option Json := none)
     (program : Option ByteArray := none) (publicInputs : Option ByteArray := none) : M Stmt := do
-  let c ← HmOut.parseWith hs tags circuitFile tables
+  let c ← HmOut.parseCommitWith hs tags circuitFile tables
   let pi ← HmIn.parse c
   let finding0 ← if tags.bindings then (some <$> HmRow.checkPartitionWith hs c partition)
     else if partition.isSome then throw s!"{tags.name}: the statement binds no partition" else pure none
@@ -829,9 +817,9 @@ def Stmt.setupHiddenWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
       if (TemplateQuery.templatesOf ((q.getObjValAs? String "name").toOption.getD "") ((q.getObjValAs? Nat "version").toOption.getD 0) Json.null).isSome then
         let indices ← (← J.arr (← J.get pub.header "units" "public file") "indices" "public file").mapM (J.asNat · "a unit index")
         let note ← HmRow.deriveTemplateUnitsWith hs c obj prog indices
-        let wires ← HmLinks.checkWith hs c pop prog
+        let wires ← HmLinks.checkWith hs c pop (HmLinks.readersOf draw) prog
         let linking := if wires == 0 && !linked then "; no cut wire between the statement's units"
-          else s!"; Linking checked: {wires} cut wire(s) over the {pop.n} units of the population, each reader's link row the writer's committed output row"
+          else s!"; Linking checked: {wires} cut wire(s) into the {pub.n} proved units of the population's {pop.n}, each reader's link row the writer's committed output row"
         pure (some { f with derived := true, note := note ++ linking })
       else if linked then throw "META links: Linking is checked under a template query (Q_template_instance v0, Q_template_instances v0) only"
       else HmRow.qwordFindingWith hs c pub obj prog f
@@ -855,7 +843,7 @@ def Stmt.setupHiddenWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
   let identity := if !J.has c.metaJ "out_row_ports" then identity
     else if v2Run then Tags.outRowsV2Identity identity else Tags.outRowsIdentity identity
   let identity := if HmRow.pinnedCount c.metaJ > 0 then Tags.pinnedIdentity identity else identity
-  let mut h := tags.statement.toUTF8 ++ c.sha ++ (← canon identity).toUTF8
+  let mut h := tags.statement.toUTF8 ++ c.sha ++ (← identityBytes identity)
   for x in [n, blocksReal, nbl, m, c.kLog, pin, regions.size, c.g] do h := pushLe64 h x
   for d in [da, db] do
     h := pushLe64 h d.size

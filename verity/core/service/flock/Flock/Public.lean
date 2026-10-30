@@ -25,7 +25,8 @@ structure Public where
   n : Nat
   digests : Array ByteArray
   outputs : Array Nat
-  /-- SHA-256 of the canonical header (`rows = false`) and every byte after it: what Σ binds -/
+  /-- SHA-256 of the header (`rows = false`, in `canonUtf8`'s form, as upstream's `serde_json` writes it) and every byte
+  after it: what Σ binds -/
   sha : ByteArray
   /-- a drawn statement's registered population (its size, `b ‖ c` and outputs): the frame-v3 roots are over it -/
   population : Option (Nat × Array ByteArray × Array Nat) := none
@@ -53,7 +54,7 @@ def Public.load (tags : Tags) (c : Circuit) (file : ByteArray) : V Public := do
   let digests := (Array.range (n * np)).map fun i => body.extract (32 * i) (32 * i + 32)
   let o := 32 * n * np
   let outputs := (Array.range (n * nOut)).map fun i => (body.get! (o + 2 * i)).toNat + 256 * (body.get! (o + 2 * i + 1)).toNat
-  let sha := Sha256.hash ((← canon header).toUTF8 ++ body)
+  let sha := Sha256.hash ((← canonUtf8 header).toUTF8 ++ body)
   return { header, n, digests, outputs, sha }
 
 /-- Instance `i`'s port-`p` row digest: its own, or (a shared-row file) the table row its ref names. -/

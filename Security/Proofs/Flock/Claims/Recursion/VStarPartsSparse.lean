@@ -66,7 +66,8 @@ open FlockSoundness FlockSoundness.Discharge Exec
 table's circuit is one `HmRow.parse` returned (on the public-output path and the hidden one), with what it accepted
 (`ParseFacts`). -/
 theorem parseFacts_of_tablesOf {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some sts) (ht : r.tags.typed = false)
-    (hpi : r.publicInputs = none) {j : ℕ} (hj : j < sts.size) : ∃ tags, ParseFacts tags sts[j].c := by
+    (hpi : r.publicInputs = none) {j : ℕ} (hj : j < sts.size) (hf : sts[j].c.tmpl = none) :
+    ∃ tags, ParseFacts tags sts[j].c := by
   obtain ⟨spec, hset⟩ := setup_of_tablesOf hs
   unfold Read.setup at hset
   rw [hpi] at hset
@@ -81,7 +82,32 @@ theorem parseFacts_of_tablesOf {r : Read} {sts : Array Stmt} (hs : r.tablesOf = 
     exact ⟨_, parse_facts (setupH_spec ht' hd).1⟩
   · rw [hh] at hd
     simp only [↓reduceIte] at hd
-    exact ⟨_, parse_facts (Hidden.parse_untyped ht' (Hidden.setupHidden_spec' hd).parse).1⟩
+    rcases Hidden.committed_of_commit (Hidden.setupHidden_parseCommit hd) with hc | hc
+    · exact ⟨_, parse_facts (Hidden.parse_untyped ht' hc).1⟩
+    · obtain ⟨tu, c₀, -, -, he, -, -⟩ := TmplValue.parseTmpl_facts hc
+      rw [he] at hf
+      cases hf
+
+/-- **Every table the verifier parses passed `HmRow.parse`, whatever its template** (`ParseFactsU`): a templated
+table's with its committed unit net first (`Hidden.Committed.factsU`). -/
+theorem parseFactsU_of_tablesOf {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some sts) (ht : r.tags.typed = false)
+    (hpi : r.publicInputs = none) {j : ℕ} (hj : j < sts.size) : ∃ tags pre, ParseFactsU tags pre sts[j].c := by
+  obtain ⟨spec, hset⟩ := setup_of_tablesOf hs
+  unfold Read.setup at hset
+  rw [hpi] at hset
+  obtain ⟨-, hall⟩ := HiddenExec.setupTables_setupOne hset
+  obtain ⟨d, hd, -⟩ := hall j hj
+  have ht' : (tagsAt r.tags r.I.count j).typed = false := (tagsAt_typed _ _ _).trans ht
+  unfold HiddenExec.setupOne at hd
+  rw [tagsAt_hiddenOutputs] at hd
+  cases hh : r.tags.hiddenOutputs
+  · rw [hh] at hd
+    simp only [Bool.false_eq_true, ↓reduceIte] at hd
+    exact ⟨_, #[], (parse_facts (setupH_spec ht' hd).1).toU⟩
+  · rw [hh] at hd
+    simp only [↓reduceIte] at hd
+    obtain ⟨pre, P⟩ := (Hidden.committed_of_commit (Hidden.setupHidden_parseCommit hd)).factsU ht'
+    exact ⟨_, pre, P⟩
 
 end ParseFacts
 
@@ -91,11 +117,11 @@ one `HmRow.parse` returned. -/
 theorem parseFacts_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} {w : Claims.Flock.Wit}
     (h : Claims.Flock.check (parseOf relation decode) x w = true) {p : Parsed} (hx : parseBytes decode x = some p)
     (ht : p.tags.typed = false) (hpi : p.publicInputs = none) {t : ℕ} (htl : t < p.sts.size) :
-    ∃ tags, FlockSoundness.ParseFacts tags p.sts[t].c := by
+    ∃ tags pre, FlockSoundness.ParseFactsU tags pre p.sts[t].c := by
   obtain ⟨p', hx', hp', -⟩ := relS_of_check h
   rw [hx] at hx'
   cases hx'
-  exact parseFacts_of_tablesOf (tablesOf_of_parses hp') ht hpi htl
+  exact parseFactsU_of_tablesOf (tablesOf_of_parses hp') ht hpi htl
 
 /-! ## The units' semantics at a satisfied table -/
 
@@ -219,8 +245,8 @@ theorem sparseOuts_of_check {decode : Claims.Msg → Option Read} {x : Claims.Ms
     (hin : SparseIn sh (wA[·]!) (vA[·]!) (τA[·]!) (copyOf p t htl w o g u)) :
     SparseOuts sh (copyOf p t htl w o g u) wA vA τA := by
   obtain ⟨L, regs, hz⟩ := layout_of_check h hx ht hpi htl
-  obtain ⟨_, P⟩ := parseFacts_of_check h hx ht hpi htl
-  exact sparseOuts_of_satisfies L (flat_of_check h hx ht hpi htl) regs hz ho hg hu P.recSparse hp wA vA τA hin
+  obtain ⟨_, _, P⟩ := parseFacts_of_check h hx ht hpi htl
+  exact sparseOuts_of_satisfies L (flat_of_check h hx ht hpi htl (recUnit_sparse hp)) regs hz ho hg hu P.recSparse hp wA vA τA hin
 
 /-- **A rec-open or R-level part's copies climb at `Flock.check`** (`climb_of_satisfies` or
 `climbStacked_of_satisfies` at every table, with the parser's `RecOpen.check`): a table whose unit is named for
@@ -236,12 +262,12 @@ theorem climbAt_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} 
     (hin : OpenIns (copyOf p t htl w o g u) LANES H r a cf rest idx ss) :
     OpenOuts (copyOf p t htl w o g u) ms LANES H r a cf rest idx ss := by
   obtain ⟨L, regs, hz⟩ := layout_of_check h hx ht hpi htl
-  obtain ⟨_, P⟩ := parseFacts_of_check h hx ht hpi htl
+  obtain ⟨_, _, P⟩ := parseFacts_of_check h hx ht hpi htl
   rcases hp with hp | hp
   · obtain ⟨hr, ha, hcf, hrest, hss, hrow, haux, hacc, hcoef, hdir⟩ := hin
-    exact climb_of_satisfies L (flat_of_check h hx ht hpi htl) regs hz ho hg hu rfl ms hms P.recNet hp r a cf rest idx ss hr ha hcf hrest hss hrow
+    exact climb_of_satisfies L (flat_of_check h hx ht hpi htl (recUnit_open (.inl hp))) regs hz ho hg hu rfl ms hms P.recNet hp r a cf rest idx ss hr ha hcf hrest hss hrow
       haux hacc hcoef hdir
-  · exact climbStacked_of_satisfies L (flat_of_check h hx ht hpi htl) regs hz ho hg hu P.recNet hp ms hms hin
+  · exact climbStacked_of_satisfies L (flat_of_check h hx ht hpi htl (recUnit_open (.inr hp))) regs hz ho hg hu P.recNet hp ms hms hin
 
 /-- **A table of residuals: the plain algebra's part `j`, or R's opening's**: by its unit's name, the circuit `c` is
 part `j` of a plain shape's algebra (`RecResiduals`) or of R's opening at a shape (`RecOpening`), `S` with row ports of
@@ -264,10 +290,10 @@ theorem resCols_of_check {decode : Claims.Msg → Option Read} {x : Claims.Msg} 
     (hin : InCols (partRep ns nv) W vv (copyOf p t htl w o g u)) :
     PartCols S W vv (copyOf p t htl w o g u) (partBase S ns nv) := by
   obtain ⟨L, regs, hz⟩ := layout_of_check h hx ht hpi htl
-  obtain ⟨_, P⟩ := parseFacts_of_check h hx ht hpi htl
+  obtain ⟨_, _, P⟩ := parseFacts_of_check h hx ht hpi htl
   rcases hpart with ⟨m, k, cl, j, sh, hp, hsh, hh, hpart⟩ | ⟨m, cl, j, sh, hp, hsh, hpart⟩
-  · exact partCols_of_satisfies L (flat_of_check h hx ht hpi htl) regs hz ho hg hu P.recResiduals hp hsh hh hpart W vv hw0 hv0 hin
-  · exact openingCols_of_satisfies L (flat_of_check h hx ht hpi htl) regs hz ho hg hu P.recOpening hp hsh hpart W vv hw0 hv0 hin
+  · exact partCols_of_satisfies L (flat_of_check h hx ht hpi htl (recUnit_residuals hp)) regs hz ho hg hu P.recResiduals hp hsh hh hpart W vv hw0 hv0 hin
+  · exact openingCols_of_satisfies L (flat_of_check h hx ht hpi htl (recUnit_opening hp)) regs hz ho hg hu P.recOpening hp hsh hpart W vv hw0 hv0 hin
 
 /-! ## A rec-sparse copy's inputs off its columns -/
 
