@@ -17,7 +17,7 @@ SERVE = HERE.parent / "serve.py"
 sys.path[:0] = [str(HERE.parents[2]), str(HERE.parents[2] / "integrations" / "vllm")]
 
 
-def remote_or_skip():
+def poub_or_skip():
     if importlib.util.find_spec("vllm") is None:
         pytest.skip("no vLLM")
     torch = pytest.importorskip("torch")
@@ -41,7 +41,7 @@ def test_a_real_engines_serving_is_accepted_and_a_prover_that_drops_a_kv_block_i
     the engine's allocs, KV writes and frees reach the verifier as appends, releases and plans, a pass a step.  Honest
     serving is accepted, with the memory line's weights the layout's and its KV read the record's post-seed reads; a
     prover that withholds the first block appended is rejected at a receipt on it (every receipt is sampled)."""
-    remote_or_skip()
+    poub_or_skip()
     d = serve(tmp_path / "serve", "serve")
     v, p = d["verifier"], d["prover"]
     assert v["accepted"] and p["accepted"] and v["failure"] is None

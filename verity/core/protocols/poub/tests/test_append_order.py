@@ -124,13 +124,13 @@ def test_a_pass_s_seed_binds_every_append_sent_before_its_root(computed) -> None
 def test_the_chain_over_a_session_s_appends_and_a_session_without_appends_keeps_its_seeds() -> None:
     root, other = bytes(range(64)), bytes(range(64, 128))
     h1 = audit.append_head(None, N, 2, root)
-    assert h1 == hashlib.sha512(b"verity/remote-bandwidth/appends/v0\0" + bytes(64) + N.to_bytes(8, "big")
+    assert h1 == hashlib.sha512(b"verity/poub/appends/v0\0" + bytes(64) + N.to_bytes(8, "big")
                                 + (2).to_bytes(8, "big") + root).digest()
     h2 = audit.append_head(h1, N + 2, 1, other)
-    assert h2 == hashlib.sha512(b"verity/remote-bandwidth/appends/v0\0" + h1 + (N + 2).to_bytes(8, "big")
+    assert h2 == hashlib.sha512(b"verity/poub/appends/v0\0" + h1 + (N + 2).to_bytes(8, "big")
                                 + (1).to_bytes(8, "big") + other).digest()
     assert audit.chained(root, None) == root
-    assert audit.chained(root, h2) == hashlib.sha512(b"verity/remote-bandwidth/chained/v0\0" + root + h2).digest()
+    assert audit.chained(root, h2) == hashlib.sha512(b"verity/poub/chained/v0\0" + root + h2).digest()
     st = store()
     assert st.head is None
     a, b = st.append(pages(N, 2), salts(b"a", 2)), st.append(pages(N + 2, 1), salts(b"b", 1))

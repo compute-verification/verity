@@ -1,4 +1,4 @@
-"""The Commit's remote bandwidth session (``--remote-verifier HOST:PORT``, `store.remote.CommitSession`), from its
+"""The Commit's remote bandwidth session (``--poub-verifier HOST:PORT``, `store.remote.CommitSession`), from its
 ``--remote-*`` options to its lines in the Commit's record: the audited run's row entry, the verdict's
 ``poub_session`` and the Commit's last line, whose rejection fails the Commit (`pipeline.commit.main`)."""
 from __future__ import annotations
@@ -10,25 +10,25 @@ from verity_vllm.protocols.poub import remote
 
 def commit_session(opts: Any, out: Any, kv_pages: int | None) -> remote.CommitSession:
     """The session of ``opts``' ``--remote-*`` options (`pipeline.commit.Options`'s, or serve-openai's
-    `serve_poub.RemoteOptions`), its KV pool at ``kv_pages`` pages (None: the engine's own) and its record under ``out``."""
+    `serve_poub.PoubOptions`), its KV pool at ``kv_pages`` pages (None: the engine's own) and its record under ``out``."""
     backend_of = None
     if opts.poub_session_lib:
         from verity_vllm.protocols.poub.in_place import InPlaceBackend
         backend_of = InPlaceBackend.for_commit(opts.poub_session_lib)
-    return remote.CommitSession(opts.remote_verifier, plan=opts.remote_plan, kv_pages=kv_pages,
-                                weight_blocks=opts.remote_weight_blocks, kv_lib=opts.remote_kv_lib, backend_of=backend_of,
-                                out=out, step_ms=opts.remote_step_ms, filler_gib=opts.remote_filler_gib,
+    return remote.CommitSession(opts.poub_verifier, plan=opts.poub_plan, kv_pages=kv_pages,
+                                weight_blocks=opts.poub_weight_blocks, kv_lib=opts.poub_kv_lib, backend_of=backend_of,
+                                out=out, step_ms=opts.poub_step_ms, filler_gib=opts.poub_filler_gib,
                                 log=lambda m: print(m, flush=True))
 
 
 def session_of(args: Any) -> remote.CommitSession | None:
-    """The Commit's session from its options (`pipeline.commit.Options`), or None without ``--remote-verifier``; refused
+    """The Commit's session from its options (`pipeline.commit.Options`), or None without ``--poub-verifier``; refused
     before anything runs where the Commit has no instrumented run to audit."""
-    if not args.remote_verifier:
+    if not args.poub_verifier:
         return None
-    rs = commit_session(args, args.out, args.remote_kv_pages or None)
+    rs = commit_session(args, args.out, args.poub_kv_pages or None)
     if args.only_arm == "control" or args.pairs < 1:
-        raise SystemExit("--remote-verifier audits the Commit's first instrumented run: not without one (--only-arm control, --pairs 0)")
+        raise SystemExit("--poub-verifier audits the Commit's first instrumented run: not without one (--only-arm control, --pairs 0)")
     return rs
 
 

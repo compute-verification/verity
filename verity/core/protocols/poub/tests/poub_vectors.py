@@ -2,7 +2,7 @@
 `test_poub_vectors.py` holds the code to them.
 
 Payload blocks are generated, not stored: payload `j` is 64 pieces of 64 bytes, piece u the first 64 bytes of
-`SHA512("verity/remote-bandwidth/test-payload/v0\\0" ‖ u64be j ‖ u32be u)` with its top byte cleared, so every word is
+`SHA512("verity/poub/test-payload/v0\\0" ‖ u64be j ‖ u32be u)` with its top byte cleared, so every word is
 below p (two pieces a word at p1024, one at p512), and payload 0 is all zeros (the weights may be).  The store is under
 the default codec, p1024 masked at k = 3.  Every coin and salt comes from `entropy(label)`, SHA-512 in counter mode:
 call c returns the first n bytes of `SHA512(label ‖ u64be c) ‖ SHA512(label ‖ u64be c + 1) ‖ …`, the counter running on
@@ -40,7 +40,7 @@ from verity.ml.commitments.rowleaf import sha512_row_v2_digest
 from verity.ml.randomness import derive
 
 PATH = Path(__file__).with_name("vectors.json")
-PAYLOAD_DOMAIN = b"verity/remote-bandwidth/test-payload/v0\0"
+PAYLOAD_DOMAIN = b"verity/poub/test-payload/v0\0"
 SOURCE = b"verity remote bandwidth vector source"
 NODE = b"verity remote bandwidth vector node"
 NONCE = bytes(range(32))

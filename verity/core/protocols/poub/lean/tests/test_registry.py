@@ -1,5 +1,5 @@
-"""`audit.Registry` held to the verifier's registry in Lean (`RemoteAudit.Registry`, the definition, served by
-`remote-audit-difftest`): at most one live registration a node, a second refused and counted, sessions over the live
+"""`audit.Registry` held to the verifier's registry in Lean (`PoubCheck.Registry`, the definition, served by
+`poub-check-difftest`): at most one live registration a node, a second refused and counted, sessions over the live
 one as its k-th, their events, `close` counting each session as it stands, R (`drawn`), and `registry/v0` written and
 read back. Drawn cases are calls over a few nodes from an empty registry or one read back, with now and then a field
 either side refuses; recorded ones run a recorded session (`ra_cases.SCENARIOS`) through the registry, so that `close`
@@ -103,7 +103,7 @@ def read_back(draw) -> dict:
     if rare(draw, 6):
         edit = draw(st.integers(0, 6))
         if edit == 0:
-            v["schema"] = "verity/remote-bandwidth/registry/v1"
+            v["schema"] = "verity/poub/registry/v1"
         elif edit == 1:
             v["closed"].append({"node": "07", "registration": "00" * 63, "sessions": []})
         elif edit == 2:

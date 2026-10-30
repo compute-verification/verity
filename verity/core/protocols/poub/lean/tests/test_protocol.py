@@ -1,4 +1,4 @@
-"""`remote-audit-protocol serve` (`RemoteAudit.Protocol`, onsite Verity's bandwidth component) against the Python verifier
+"""`poub-check-protocol serve` (`PoubCheck.Protocol`, onsite Verity's bandwidth component) against the Python verifier
 of the same case (`protocol`: the case decoded as the Lean decodes it, its events through `audit.Session` as
 `ra_cases.session` replays them, and `poub.period.answer` of the session after them): every field of the
 answer but its reason, the certified `q_bytes`, `eps` and the profile among them. Both refuse a session paced at one
@@ -29,7 +29,7 @@ from verity.core.protocols.poub import audit, period
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
-EXE = "remote-audit-protocol"
+EXE = "poub-check-protocol"
 
 
 def _keys(j, want: list[str], ctx: str) -> None:
@@ -74,7 +74,7 @@ def _check(p: dict, reg: audit.Registration, e: dict) -> tuple:
 
 
 def protocol(case) -> dict:
-    """`RemoteAudit.Protocol.protocol.answer` in Python."""
+    """`PoubCheck.Protocol.protocol.answer` in Python."""
     return P.answer(period.PROTOCOL, case, params=_params, commitment=_registration, evidence=_evidence, check=_check,
                     digest=lambda r: r.digest)
 
@@ -157,7 +157,7 @@ def test_a_small_periods_answers_agree(server) -> None:
 
 
 def _covered(kw: dict) -> bool:
-    """A scenario's session is one the check replays (`RemoteAudit.Protocol.sessionOf`): not paced at one window in
+    """A scenario's session is one the check replays (`PoubCheck.Protocol.sessionOf`): not paced at one window in
     flight."""
     pace = kw.get("pace")
     return pace is None or pace.in_flight == 2

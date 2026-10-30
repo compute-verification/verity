@@ -1,6 +1,6 @@
 """One remote bandwidth session a period on one node, at a small size: the registration, the verifier's session against the
-prover's passes over its store, and the answer of the bandwidth component of onsite Verity (`verity/remote-bandwidth/v0`,
-`RemoteAudit.Protocol` in `lean/`).
+prover's passes over its store, and the answer of the bandwidth component of onsite Verity (`verity/poub/v0`,
+`PoubCheck.Protocol` in `lean/`).
 
 `run(node, store, coins)` plays every party in one process (the verifier's side, `session`, against the prover in its
 process, `Local`), in the protocol's order:
@@ -15,7 +15,7 @@ process, `Local`), in the protocol's order:
 3. the verifier draws each window's openings, the prover opens them, and the verifier verifies them.
 
 Every call to the session is an event of the verifier's log with the clock reading it took, and the log, its coins and
-the registration are the core case (`case`) that `RemoteAudit.Protocol` replays. The answer (`answer`) is the session's
+the registration are the core case (`case`) that `PoubCheck.Protocol` replays. The answer (`answer`) is the session's
 own: accepted, its failure, or undecided while a window is unverified; on acceptance `certified`'s reads `q_bytes`, the
 receipts less the wrong ones the openings leave (`pooled`'s W, rounded up), a `BLOCK_BYTES` block each, at
 `eps = (2^24 + S)/2^64` for S the draws, as the Lean's `certify` computes them.
@@ -47,9 +47,9 @@ from verity.ml.commitments.identity import canonical_json_bytes
 from . import audit, codec, pooled, receipts
 from . import coins as C
 
-PROTOCOL = "verity/remote-bandwidth/v0"
+PROTOCOL = "verity/poub/v0"
 DELTA = Fraction(1, 2 ** 40)
-"""`audit.DELTA`'s exact value, the pooled bound's δ (`RemoteAudit.Protocol.DELTA`)."""
+"""`audit.DELTA`'s exact value, the pooled bound's δ (`PoubCheck.Protocol.DELTA`)."""
 WORD_BYTES = 64
 DATA_BYTES = WORD_BYTES - 1
 """Each 64-byte little-endian piece of a block carries 63 bytes of the store under a zero top byte, so every word is below
@@ -66,7 +66,7 @@ def payloads(store: bytes) -> list[bytes]:
 
 
 def certified(record: audit.Record) -> tuple[dict[str, Any], dict[str, Any]]:
-    """`RemoteAudit.Protocol.certify`: an accepted session's public outputs `{"eps", "q_bytes"}` and its profile."""
+    """`PoubCheck.Protocol.certify`: an accepted session's public outputs `{"eps", "q_bytes"}` and its profile."""
     windows, _ = audit.pooled_windows(record)
     us, ss = sum(u for u, _ in windows), sum(s for _, s in windows)
     base = {"delta": str(DELTA), "receipts": us, "windows": [[u, s] for u, s in windows]}
@@ -80,8 +80,8 @@ def certified(record: audit.Record) -> tuple[dict[str, Any], dict[str, Any]]:
 
 
 def answer(session: audit.Session) -> dict[str, Any]:
-    """The session's answer in the core interface's canonical form, as `RemoteAudit.Protocol.check` gives it. Like the
-    check (`RemoteAudit.Protocol.sessionOf`), it refuses the one form no property of the Lean covers, a session paced at
+    """The session's answer in the core interface's canonical form, as `PoubCheck.Protocol.check` gives it. Like the
+    check (`PoubCheck.Protocol.sessionOf`), it refuses the one form no property of the Lean covers, a session paced at
     one window in flight."""
     out = {"commitment": session.registration.digest.hex(), "profile": None, "protocol": PROTOCOL, "public": None,
            "reason": None}
@@ -121,7 +121,7 @@ class _Stream:
     """The challenger's entropy: `coins` in SHA-512 counter mode, so a period's coins are its live secret's."""
 
     def __init__(self, coins: bytes, node: bytes) -> None:
-        self.base, self.count = hashlib.sha512(b"verity/remote-bandwidth-period/challenger/v1\0" + node + coins).digest(), 0
+        self.base, self.count = hashlib.sha512(b"verity/poub-period/challenger/v1\0" + node + coins).digest(), 0
 
     def __call__(self, n: int) -> bytes:
         out = b""
@@ -290,7 +290,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     """Bandwidth's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out) -> answer`): the session on the
     period's records, the verifier and its challenger a party of their own on `period.json`'s `challenger_host`
     (`verifier_party.Party.of`; on this node by default, as a process of its own, with its own coins) and the prover
-    here. With `remote-audit-protocol` among the period's tools the Lean answers (the verifier of record) and must agree
+    here. With `poub-check-protocol` among the period's tools the Lean answers (the verifier of record) and must agree
     with the Python; it writes `out/bandwidth.case.json` (onsite's bandwidth case) and `out/bandwidth.json`. Which host
     ran each party, and whether `trusted-host`'s premise holds (`verifier_party.placement`), go in
     `bandwidth.json` and in an accepted answer's profile (`placement`)."""
@@ -305,10 +305,10 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     seconds = round(time.monotonic() - t, 2)
     where = verifier_party.placement(node, party.host)
     answer_, lean = period.answer, None
-    if "remote-audit-protocol" in tools:
-        lean = serve(tools["remote-audit-protocol"], [period.case])[0]
+    if "poub-check-protocol" in tools:
+        lean = serve(tools["poub-check-protocol"], [period.case])[0]
         if {k: v for k, v in lean.items() if k != "reason"} != {k: v for k, v in answer_.items() if k != "reason"}:
-            raise RuntimeError(f"remote-audit-protocol answered {lean}, the Python {answer_}")
+            raise RuntimeError(f"poub-check-protocol answered {lean}, the Python {answer_}")
         answer_ = lean
     if answer_["profile"] is not None:
         answer_ = answer_ | {"profile": answer_["profile"] | {"placement": where}}

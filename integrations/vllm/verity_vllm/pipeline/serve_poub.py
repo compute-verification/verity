@@ -1,15 +1,15 @@
-"""serve-openai's remote bandwidth session (``--remote-verifier HOST:PORT``): the Commit's session
+"""serve-openai's remote bandwidth session (``--poub-verifier HOST:PORT``): the Commit's session
 (`protocols.poub.remote.CommitSession`, as `pipeline.poub_session` builds it for a declared Commit) on the
 server's engine.
 
 ~~~text
 preflight  refused before the model loads (`refusal`): an address that isn't HOST:PORT, a plan other than serve, a
-           store read in place (--remote-session-lib) without kv.cu (--remote-kv-lib), prefix caching (a hit brings a
+           store read in place (--poub-session-lib) without kv.cu (--poub-kv-lib), prefix caching (a hit brings a
            page back with its KV), and a store read in place under PoUW H1 (--protocols), whose windows hash the weights
            where the engine holds them, which that store holds encoded while its session lasts
 build      before the engine is built, the session's engine arguments (synchronous scheduling, no prefix caching; the KV
            pool the engine's own, outside the store) and the store binder on vLLM (`CommitSession.engine_args`,
-           `install`); after it, `CommitSession.check`, which registers --remote-filler-gib of zeros beside the weights.
+           `install`); after it, `CommitSession.check`, which registers --poub-filler-gib of zeros beside the weights.
            The engine then runs at LAG 0, so the bench row the server commits under declares ``async_scheduling``
            false, as a declared Commit's row does under its session (`CommitSession.target`)
 begin      once the committer has read every weight a seal reads, its weights tree at its build (`serve_seal.committer`)
@@ -36,23 +36,23 @@ from verity_vllm.pipeline import poub_session as RS
 
 
 @dataclass(frozen=True, kw_only=True)
-class RemoteOptions:
-    remote_verifier: str | None = option("--remote-verifier", default=None, metavar="HOST:PORT",
+class PoubOptions:
+    poub_verifier: str | None = option("--poub-verifier", default=None, metavar="HOST:PORT",
                                          help="the remote bandwidth session's verifier: the store binder on the engine from its "
                                               "build, and the store proved to it in lockstep with the server's engine steps "
                                               "from its first, a pass a step (serve_poub); a rejected session fails the exit")
-    remote_plan: str = option("--remote-plan", default="serve", help="the session's mode: serve")
-    remote_filler_gib: float = option("--remote-filler-gib", type=float, default=0.0,
+    poub_plan: str = option("--poub-plan", default="serve", help="the session's mode: serve")
+    poub_filler_gib: float = option("--poub-filler-gib", type=float, default=0.0,
                                       help="GiB of zeros on the engine's GPU registered after the build as the session's filler")
-    remote_weight_blocks: int | None = option("--remote-weight-blocks", type=int, default=None,
+    poub_weight_blocks: int | None = option("--poub-weight-blocks", type=int, default=None,
                                               help="register weight tensors in order up to this many 4 KiB blocks (default: all)")
-    remote_kv_lib: str | None = option("--remote-kv-lib", default=None,
+    poub_kv_lib: str | None = option("--poub-kv-lib", default=None,
                                        help="kv.cu built at the codec's field and mask: the store's encode on the GPU "
                                             "(default: the CPU reference)")
-    poub_session_lib: str | None = option("--remote-session-lib", default=None,
+    poub_session_lib: str | None = option("--poub-session-lib", default=None,
                                             help="session.cu's build: the session reads the store where the engine holds it, "
-                                                 "encoded in place by --remote-kv-lib (in_place)")
-    remote_step_ms: float = option("--remote-step-ms", type=float, default=0.0,
+                                                 "encoded in place by --poub-kv-lib (in_place)")
+    poub_step_ms: float = option("--poub-step-ms", type=float, default=0.0,
                                    help="the engine step a paced session's pass waits on, in ms, added to the calibration's "
                                         "pass times")
 
@@ -60,17 +60,17 @@ class RemoteOptions:
 def refusal(opts: Any) -> str | None:
     """Why serve-openai can't run ``opts``' session (module docstring's preflight), or None."""
     r = opts.remote
-    if not r.remote_verifier:
+    if not r.poub_verifier:
         return None
     try:
         RS.commit_session(r, None, None)
     except ValueError as e:
-        return f"--remote-verifier: {e}"
+        return f"--poub-verifier: {e}"
     if opts.prefix_caching:
-        return "--remote-verifier refuses --prefix-caching: a prefix hit brings a page back with its KV"
+        return "--poub-verifier refuses --prefix-caching: a prefix hit brings a page back with its KV"
     if r.poub_session_lib and opts.protocols:
-        return ("--remote-session-lib holds the weights encoded where the engine holds them while its session lasts, and "
-                "--protocols' H1 windows hash them there: serve both with the store's host mirror (no --remote-session-lib)")
+        return ("--poub-session-lib holds the weights encoded where the engine holds them while its session lasts, and "
+                "--protocols' H1 windows hash them there: serve both with the store's host mirror (no --poub-session-lib)")
     return None
 
 
@@ -146,7 +146,7 @@ class ServeSession:
 
 
 def session_of(opts: Any, out: Path) -> ServeSession | None:
-    return ServeSession(opts, out) if opts.remote.remote_verifier else None
+    return ServeSession(opts, out) if opts.remote.poub_verifier else None
 
 
 def accepted(session: ServeSession | None) -> bool:

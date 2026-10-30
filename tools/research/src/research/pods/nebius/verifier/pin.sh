@@ -3,7 +3,7 @@
 # it is unpacked root-owned at /opt/vy-verifier/COMMIT, never changed after. The Lean toolchain the remote audit's Lake package names
 # is installed under /opt/elan (root's) and linked as COMMIT/.lean-bin; elan itself is release ELAN, its archive checked against
 # ELAN_SHA256 before it runs. Each Lake package's .lake is auditor's, and `lake build
-# remote-audit-verifier remote-audit-difftest` and `sampled-proofs-verifier` (what a gate run's kit builds first) run there as
+# poub-check-verifier poub-check-difftest` and `sampled-proofs-verifier` (what a gate run's kit builds first) run there as
 # auditor, so neither a run nor a replay waits on a build. The pin (commit, UTC time) is appended to /opt/vy-verifier/pins.jsonl,
 # root's and append-only (`chattr +a`, host.py `record_pin`), and every run's request names its line (RT4-INT-40). Last,
 # /opt/vy-verifier/current -> COMMIT. A run runs from the tree it was requested at: host.py refuses one whose pin moved. Rerunning
@@ -56,7 +56,7 @@ find "$T" \( -name lakefile.toml -o -name lakefile.lean \) -printf '%h\n' | whil
   install -d -m 0755 -o auditor -g auditor "$d/.lake"
 done
 runuser -u auditor -- env -i HOME=/var/lib/vy-verifier PATH="$T/.lean-bin:/usr/bin:/bin" \
-  sh -c "cd '$pkg' && lake build remote-audit-verifier remote-audit-difftest &&
+  sh -c "cd '$pkg' && lake build poub-check-verifier poub-check-difftest &&
          cd '$T/verity/core/service/sampled_proofs' && lake build sampled-proofs-verifier" | tail -1
 /usr/bin/python3 -I "$T/benchmarks/live_verifier/host.py" pinned "$c"
 ln -sfn "$c" "$O/current.tmp"

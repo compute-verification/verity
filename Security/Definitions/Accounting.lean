@@ -39,13 +39,13 @@ import Definitions.Accounting.RateAuditHorizon
 import Definitions.Accounting.RateAuditInteractive
 import Definitions.Accounting.RateAuditJoint
 import Definitions.Accounting.RateAuditPartial
-import Definitions.Accounting.RateAuditRemote
+import Definitions.Accounting.RateAuditPoub
 import Definitions.Accounting.RateAuditSketch
 import Definitions.Accounting.RateAuditSketchDeployed
 import Definitions.Accounting.RateAuditSketchInteractive
 import Definitions.Accounting.RateAuditSketchLayout
-import Definitions.Accounting.Remote
-import Definitions.Accounting.Remote.Deployed
+import Definitions.Accounting.Poub
+import Definitions.Accounting.Poub.Deployed
 import Definitions.Accounting.Requirement
 import Definitions.Accounting.Requirement.Placed
 import Definitions.Accounting.Responder

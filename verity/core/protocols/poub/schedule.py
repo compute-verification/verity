@@ -1,6 +1,6 @@
 """The schedule check: each pass's plan is a fixed function of the schedule the prover publishes, which `audit.ledger`
 requires before it credits an appended chunk (`audit.Session.scheduled`).  Of record in its Lean,
-`lean/RemoteAudit/Schedule.lean`; this is held to it by the difftest (`lean/tests/test_schedule.py`, refusals compared
+`lean/PoubCheck/Schedule.lean`; this is held to it by the difftest (`lean/tests/test_schedule.py`, refusals compared
 word for word).
 
 Why.  The stacked guarantee (`Accounting.Guarantees.DeclaredCircuitRequirement`) lets a pass's layout follow the codec

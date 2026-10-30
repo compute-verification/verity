@@ -5,7 +5,7 @@ import Definitions.Accounting.RateAuditSketch
 
 `RateAuditSketch.lean`'s window, tag and digest, for a prover outside its verbatim class. What the prover holds in
 memory is laid out before the signs as any function of the store, as `RateAudit.lean`'s device memory is, and the chip
-reads it one bit at an address. That is the remote audit's prover under conservation: one
+reads it one bit at an address. That is PoUB's prover under conservation: one
 undifferentiated resource, every tier of whose memory is memory here, every device of which that computes is the chip,
 and every bit of which it reads is counted. The class here also holds nothing on chip, takes in nothing over the side
 link but the certified stream's sectors, and rebuilds nothing, so an arbitrary prover's class contains it. Its chip

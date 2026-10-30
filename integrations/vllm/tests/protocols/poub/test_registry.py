@@ -10,7 +10,7 @@ import pytest
 
 from verity.core.protocols.poub import receipts as rb
 from verity_vllm.protocols.poub.interface import IDENTITY, Append, Lifecycle, PageLayout, Stale, StoreView
-from verity_vllm.protocols.poub.registry import ArrayBacking, KindReceipt, RemoteBandwidthReceipt, Store, chain
+from verity_vllm.protocols.poub.registry import ArrayBacking, KindReceipt, PoubReceipt, Store, chain
 from verity_vllm.protocols.poub.verify import verify_opening
 
 WORD = 64
@@ -185,7 +185,7 @@ def test_passes_are_chained_from_the_challenge():
     assert w.passes[0].seed == chain(SIGMA, reg, 0)
     assert [p.seed for p in w.passes[1:]] == [chain(SIGMA, p.root, p.index + 1) for p in w.passes[:-1]]
     assert w.passes[0].seed == w2.passes[0].seed and w.passes[1].seed != w2.passes[1].seed
-    assert chain(SIGMA, reg, 0) == hashlib.sha512(b"verity/remote-bandwidth/seed/v0\0" + SIGMA + bytes(4) + reg).digest()
+    assert chain(SIGMA, reg, 0) == hashlib.sha512(b"verity/poub/seed/v0\0" + SIGMA + bytes(4) + reg).digest()
 
 
 def test_windows_chain_through_the_session():
@@ -224,7 +224,7 @@ def test_a_plan_is_its_runs_each_block_once():
     (pc,), w = _window(s, SIGMA, [([2], None)])
     runs = [(0, 8), (16, 4), (32, 4), (8, 2), (13, 1)]
     assert s.plan(0).tolist() == [b for f, c in runs for b in range(f, f + c)]
-    want = b"verity/remote-bandwidth/plan/v0\0" + struct.pack(">I", 5) + b"".join(struct.pack(">QQ", *r) for r in runs)
+    want = b"verity/poub/plan/v0\0" + struct.pack(">I", 5) + b"".join(struct.pack(">QQ", *r) for r in runs)
     assert pc.plan_digest == hashlib.sha512(want).digest() == rb.Plan(tuple(runs), s.layout().blocks).digest
     t = Store(filler_plan=lambda st, j: [("kv/0", [0, 8])])
     pool(t)
@@ -340,9 +340,9 @@ def test_a_pass_lays_its_segments_out_as_subtrees_of_the_drivers_tree():
 
 
 def test_under_the_drivers_receipt_the_pass_is_the_drivers_byte_for_byte():
-    """4 KiB blocks under `RemoteBandwidthReceipt`, bound to a z per block: 77 positions, so a short last leaf and three
+    """4 KiB blocks under `PoubReceipt`, bound to a z per block: 77 positions, so a short last leaf and three
     pads, and the root `rb.tree` gives over `rb.Receipter`'s receipts."""
-    s, rec = Store(salt_key=bytes(32)), RemoteBandwidthReceipt()
+    s, rec = Store(salt_key=bytes(32)), PoubReceipt()
     backings = {}
     for name, n in [("w", 40), ("w2", 37)]:
         backings[name] = ArrayBacking(np.random.default_rng(n).integers(0, 256, n * rb.BLOCK_BYTES, np.uint8))

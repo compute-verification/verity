@@ -1,5 +1,5 @@
-"""`audit.Session` held to the remote audit's verifier in Lean (`RemoteAudit.Session`, the definition, served by
-`remote-audit-difftest`), a whole session at a time: every event's result (the coin released, the append's index and
+"""`audit.Session` held to the remote audit's verifier in Lean (`PoubCheck.Session`, the definition, served by
+`poub-check-difftest`), a whole session at a time: every event's result (the coin released, the append's index and
 coin, the window's samples, the verdict, or the rejection with its failure and draw), the outcome and the record.
 Recorded sessions (`ra_cases.SCENARIOS`) are honest ones and ones that each reach one of `audit.FAILURES` in the Lean;
 drawn ones are those with their events, fields and parameters edited, which reach the rest of the bookkeeping and the

@@ -14,7 +14,7 @@ from verity.core.protocols.poub import audit, codec, coins, receipts
 from verity.core.protocols.poub.audit import Params, Session
 from verity.ml.commitments.rowleaf import sha512_row_v2_digest
 
-SEED = hashlib.sha512(b"verity/remote-bandwidth/test-key-binding/v0\0").digest()[:codec.SEED_BYTES]
+SEED = hashlib.sha512(b"verity/poub/test-key-binding/v0\0").digest()[:codec.SEED_BYTES]
 NODE = b"node-under-test"
 WEIGHTS, KV = 0, 1
 PICKED = bytes(codec.BLOCK_BYTES)

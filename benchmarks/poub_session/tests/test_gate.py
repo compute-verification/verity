@@ -96,7 +96,7 @@ def test_the_probe_passes_reading_only(tmp_path, repo):
                           capture_output=True, text=True, check=True).stdout.strip()
     doc = json.loads((out / "probe.json").read_text())
     assert doc["refused"] == [] and doc["challenger_pinned_at_commit"]
-    assert doc["circuit"] == hashlib.sha512(f"verity/remote-bandwidth/v0 verifier tree {tree}".encode()).hexdigest()
+    assert doc["circuit"] == hashlib.sha512(f"verity/poub/v0 verifier tree {tree}".encode()).hexdigest()
     assert [c.split()[-1] for c in calls] == ["pubkey", "pins", "ledger", "status"]
 
 

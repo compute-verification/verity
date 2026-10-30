@@ -9,7 +9,7 @@ import Proofs.Accounting.RateAudit.SketchRank
 For fixed full-rank signs, one pass's correct receipts are paid for except when it guessed an unqueried tag or made a
 correct digest query without obtaining a sector. `card_guess_le` prices the former by `N/2^h`;
 `card_bad_le` and `SketchRankFiber` price the latter by `q/2^(8r)`. A union over a pass's ground candidates and passes,
-then the existing causal pooled-draw argument over windows, gives `RemoteSessionConservationSketch`.
+then the existing causal pooled-draw argument over windows, gives `PoubSessionConservationSketch`.
 -/
 
 namespace Accounting.RateSketch
@@ -589,9 +589,9 @@ open Pous (pr)
 open scoped ENNReal
 open Bandwidth (pr_mono)
 
-/-- **The remote bandwidth audit with deployed tensor-sketch receipts, for the verbatim class**
-(`Accounting.Guarantees.RemoteSessionConservationSketch`). -/
-theorem RemoteSessionConservationSketch : Accounting.Guarantees.RemoteSessionConservationSketch := by
+/-- **PoUB with deployed tensor-sketch receipts, for the verbatim class**
+(`Accounting.Guarantees.PoubSessionConservationSketch`). -/
+theorem PoubSessionConservationSketch : Accounting.Guarantees.PoubSessionConservationSketch := by
   intro n P N m ρ h S L q ks G d r X ε A dbar dw hn hP hN hm hr32 hdw hRank hX
   let slack := S + (L - ρ * 256) + X
   let term := (N : ℝ≥0∞) / 2 ^ h + (q : ℝ≥0∞) / 2 ^ (8 * r)
@@ -663,9 +663,9 @@ theorem sketchQueryTermCaps :
 `2·2^-40 + n·ε + n·P·G·(N/2^512 + q/2^96)`: each grinding candidate at its own query cap `q`, which is the special
 case `qtot = G·q` of the deployed guarantee's shared budget (`Device.budget_of_bounded`). At the conservative caps
 `q = G = 2^55` its query term alone is `2^14` before `n·P` (`sketchQueryTermCaps`), which is why the deployed
-guarantee (`Accounting.Guarantees.RemoteSessionConservationSketchDeployed`, proved in `DeployedSketchSum.lean`)
+guarantee (`Accounting.Guarantees.PoubSessionConservationSketchDeployed`, proved in `DeployedSketchSum.lean`)
 states the sum form instead. -/
-theorem RemoteSessionConservationSketchDeployedProduct :
+theorem PoubSessionConservationSketchDeployedProduct :
     ∀ (n P N ρ S L q G X : ℕ) (ε : ℝ≥0∞)
       (A : RateSketch.SketchDeployedSession n P N 128 ρ 512 S L q 16 G 2773),
       7 ≤ n → 0 < P → 0 < N →
@@ -685,7 +685,7 @@ theorem RemoteSessionConservationSketchDeployedProduct :
         ≤ 2 / 2 ^ 40 + (n : ℝ≥0∞) * ε +
           (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ 512 + (q : ℝ≥0∞) / 2 ^ 96) := by
   intro n P N ρ S L q G X ε A hn hP hN hRank hX
-  have h := RemoteSessionConservationSketch n P N 128 ρ 512 S L q 16 G 2773 12 X ε A
+  have h := PoubSessionConservationSketch n P N 128 ρ 512 S L q 16 G 2773 12 X ε A
     0.0015 0.01 (by omega) hP hN (by norm_num) (by norm_num) (by norm_num) hRank hX
   have h' :
       pr (fun x : RateSketch.SketchStore N 128 ×

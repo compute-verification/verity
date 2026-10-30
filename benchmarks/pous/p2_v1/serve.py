@@ -45,7 +45,7 @@ from verity.core.protocols.pous import setup
 from verity.core.protocols.pous.schemes.p2 import expand_prefix
 from verity.core.protocols.poub import audit, coins, p2, receipts
 
-FIXTURE_SCHEMA = "verity-remote-bandwidth/p2-sketch-fixture/v0"
+FIXTURE_SCHEMA = "verity-poub/p2-sketch-fixture/v0"
 FIXTURE_SHA512 = ("658f6d40a5ecdcb252ca2d4b844f41c6b2af0550f291a4d2e33f975d3158fac2"
                   "b3da2a65666d146f6aabac37167b4d21aaf4d1ef5c02127ac1ad2f8380f88b9a")
 NODE = b"p2-toy-node"

@@ -50,7 +50,7 @@ T0 = datetime(2026, 10, 21, 1, 0, 0, tzinfo=timezone.utc)
 PIN = "c" * 40
 LANE = "memory-accounting"
 SECRET = bytes(range(32))
-CIRCUIT = hashlib.sha512(b"verity/remote-bandwidth/v0").hexdigest()
+CIRCUIT = hashlib.sha512(b"verity/poub/v0").hexdigest()
 #: the host's pins log: an earlier pin, then the tree it runs (`PIN`), each a commit of main's
 PINS = [pin_line("d" * 40, "e" * 40, "2026-10-20T08:00:00Z"), pin_line(PIN, "f" * 40, "2026-10-21T00:30:00Z")]
 #: the auditor's first-parent list of main, newest first: both pins on it

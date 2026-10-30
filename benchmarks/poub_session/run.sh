@@ -42,7 +42,7 @@
 # auditor-trusted devices), never on PEER. It keeps the registrations in REGISTRY (default
 # ~/.local/state/remote-session/registry.json on its own machine, across its runs: a node with a live registration there
 # is refused), and leaves out/verifier.json, out/registry.json (REGISTRY when it ends) and out/address.json, the address
-# the prover connects to: PEER's 127.0.0.1:PORT, a Commit's REMOTE_VERIFIER. VERIFIER_ARGS go to verifier.py as shell
+# the prover connects to: PEER's 127.0.0.1:PORT, a Commit's POUB_VERIFIER. VERIFIER_ARGS go to verifier.py as shell
 # words (quotes group one, as `--challenger-ssh '-i KEY HOST'` needs), under ROLE=both too: with `--challenger serve
 # --challenger-key DIR` each session's coins come from the challenger's own process,
 # `benchmarks/live_challenger/serve.py` on this machine (`challengers.py`), its out/ under out/challenger; with `--challenger gate --challenger-ssh WORDS --challenger-peer NAME --challenger-pin SHA512
@@ -62,10 +62,10 @@
 # /workspace/jobs/venv312/bin/python, its `verity-vllm` launcher beside it), this tree's verity_vllm first on its path,
 # against ROLE=verifier with SESSIONS=1 (one session a store). SERVE=tiny runs `serve.py --connect` (the vLLM tests'
 # tiny Llama, PLAN serve or servedrop:K). SERVE=row runs row ROW, `verity-vllm row run ROW CHECKPOINT REPO REV` with
-# the checkpoint `verity-vllm epoch resolve ROW` names, ROW_ARGS (such as --stages commit) and REMOTE_VERIFIER at the
+# the checkpoint `verity-vllm epoch resolve ROW` names, ROW_ARGS (such as --stages commit) and POUB_VERIFIER at the
 # tunnel; its Commit puts the store binder on its engine and proves the store in lockstep with its first instrumented
 # run, a pass an engine step (`verity_vllm.protocols.poub.remote.CommitSession`: one GPU, synchronous scheduling declared in the
-# row's target, its store the weights and --remote-filler-gib of filler, the KV pool outside it). Milestone 3's thin slice,
+# row's target, its store the weights and --poub-filler-gib of filler, the KV pool outside it). Milestone 3's thin slice,
 # int8 Llama-3.1-8B:
 #
 #   ROLE=verifier PEER=PROVER_NODE PORT=7797 SESSIONS=1 WINDOWS=7 WINDOW_MS=100 LIFETIME=4 \
@@ -113,7 +113,7 @@ if [ "$ROLE" = verifier ]; then
   fi
   read -ra TO <<< "$(grep "^${PEER:?} " /etc/vy/peers | cut -d' ' -f2-)"
   [ ${#TO[@]} -gt 0 ] || { echo "no peer $PEER in /etc/vy/peers"; exit 3; }
-  printf '{"verifier": "%s", "listen": "127.0.0.1:%s", "peer": "%s", "remote_verifier": "127.0.0.1:%s"}\n' \
+  printf '{"verifier": "%s", "listen": "127.0.0.1:%s", "peer": "%s", "poub_verifier": "127.0.0.1:%s"}\n' \
     "$(hostname)" "$PORT" "$PEER" "$PORT" | tee "$O/address.json"
   # A tty makes the session interactive, so ssh and sshd set TCP_NODELAY (under -N roots were held ~30 ms every few
   # seconds, enough to make a boundary pass's root late); and with keystroke-timing obfuscation off, since it sends an
@@ -170,7 +170,7 @@ if [ -n "${SERVE:-}" ]; then
       VV=$(dirname "$VPY")/verity-vllm
       read -r CK REPO REV _ < <("$VV" epoch resolve "${ROW:?}")
       # shellcheck disable=SC2086
-      RUN=(env "REMOTE_VERIFIER=127.0.0.1:$PORT" "$VV" row run "$ROW" "${CK:?}" "$REPO" "$REV" ${ROW_ARGS:-}) ;;
+      RUN=(env "POUB_VERIFIER=127.0.0.1:$PORT" "$VV" row run "$ROW" "${CK:?}" "$REPO" "$REV" ${ROW_ARGS:-}) ;;
     node)
       export VPY
       RUN=(bash $RS/node.sh) ;;

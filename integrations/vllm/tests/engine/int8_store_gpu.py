@@ -54,7 +54,7 @@ class Codec:
     """paged.cu's build at P1024 under the seed's key: its shape, token-layer words and in-place encoders."""
 
     def __init__(self, so: str) -> None:
-        self.P = session_module("paged", config.REMOTE_SESSION.parent / "vllm_encoded")
+        self.P = session_module("paged", config.POUB_SESSION.parent / "vllm_encoded")
         self.lib = self.P.PagedLib("p1024", so)
         self.P.KB.set_key(self.lib, self.P.KB.lib_key(self.lib, ROUNDS))
         self.F = self.lib.field

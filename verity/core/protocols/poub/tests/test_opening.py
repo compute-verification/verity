@@ -21,7 +21,7 @@ P512 = codec.Codec(codec.P512, 2, False)
 PLAN_BC = ("12f7869e085f13e475ea68ff04f83289655b686aa1c56da778cc299af82f355882e4e6870600f12fa17ba27a530593488ad2df0e5745cf04c3"
            "f28e1caf352a9f425fcf1a31e3f75bce33b749894811a7b0ded5eed561fc3e18dee59b0f24f0806e3369646067a9612ea4ff35315e63e53bf4"
            "fbe9f2bce4d0b79f9cffa203ecd4")
-SALT = hashlib.shake_256(b"verity/remote-bandwidth/opening/test plan salt").digest(receipts.SALT_BYTES)
+SALT = hashlib.shake_256(b"verity/poub/opening/test plan salt").digest(receipts.SALT_BYTES)
 
 
 class Clock:

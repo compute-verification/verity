@@ -1,8 +1,8 @@
 """The Python side of the remote audit's difftests, which hold `audit.py`, `receipts.py` and `codec.py` to the Lean
-(`RemoteAudit`, the verifier's definition: `../../README.md`): the Python behind the Lean's JSON formats
-(`RemoteAudit.Difftest`), and the sessions the tests record. Where the two differ, the Python is what is wrong.
+(`PoubCheck`, the verifier's definition: `../../README.md`): the Python behind the Lean's JSON formats
+(`PoubCheck.Difftest`), and the sessions the tests record. Where the two differ, the Python is what is wrong.
 
-The decoders mirror `RemoteAudit.Difftest`'s: byte strings lowercase hex, indices integers, a registration checked as
+The decoders mirror `PoubCheck.Difftest`'s: byte strings lowercase hex, indices integers, a registration checked as
 `audit.register` checks one, and `bind` refused (the Lean covers receipts of blocks alone), as `audit.Registry.register`
 refuses a registration that would bind (counted, for a node with one live). Past decoding each side is
 the Python's own code on the decoded objects. A session's events run through `audit.Session` itself, on a clock each
@@ -33,7 +33,7 @@ from verity.core.protocols.sampled_proofs.challenger import COIN_BYTES as LIVE_C
 
 HERE = Path(__file__).resolve().parent
 PACKAGE = HERE.parent
-EXE = "remote-audit-difftest"
+EXE = "poub-check-difftest"
 #: The ports' side of record (`verity_difftest`): the Lean, the verifier `benchmarks/poub_session/verifier.py` runs.
 OF_RECORD = "lean"
 #: What the Python raises where the Lean refuses: a decoder's `Reject`, and the Python's own refusals, `ValueError`
@@ -46,7 +46,7 @@ NODE = b"node-under-test"
 SOURCE = b"the verifier's secret"
 
 
-# --- decoding, as `RemoteAudit.Difftest` decodes ----------------------------------------------------------------------
+# --- decoding, as `PoubCheck.Difftest` decodes ----------------------------------------------------------------------
 
 def _get(j: Any, k: str) -> Any:
     if not isinstance(j, dict) or k not in j:

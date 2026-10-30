@@ -1,4 +1,4 @@
-"""`pooled.py`'s pooled bound held to its Lean (`RemoteAudit.Pooled`, served by `remote-audit-difftest`'s `pooled`),
+"""`pooled.py`'s pooled bound held to its Lean (`PoubCheck.Pooled`, served by `poub-check-difftest`'s `pooled`),
 refusals as outputs so that both sides' reasons are compared word for word: drawn records (one to many windows, ties
 in receipts a sample, windows opened whole, small and large S, δ as a float's exact value or a rational), gate runs
 5–7's records, and each refusal, with malformed inputs rejected by both. The line of record's W is the Lean's (the

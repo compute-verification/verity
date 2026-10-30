@@ -44,7 +44,7 @@ from .receipts import DEFAULT, DIGEST_BYTES, KINDS, PER_LEAF, SALT_BYTES, SKETCH
 MS = 1_000_000
 US = 1_000
 S = 1_000_000_000
-JITTER_DOMAIN = b"verity/remote-bandwidth/timing-jitter/v0\0"
+JITTER_DOMAIN = b"verity/poub/timing-jitter/v0\0"
 SECTOR_BYTES = 32
 SECTORS = BLOCK_BYTES // SECTOR_BYTES
 GPUS = 8
@@ -280,7 +280,7 @@ def sketch_failure(compressions: int, passes: int, rows: int = SKETCH_ROWS, r: i
     `Q · 2^-8r + (Q + P) · (SECTORS · sign_rank_at_most(rows, r − 1) + N · 2^-512) + (Q + P)² · 2^-257`, the third
     term a key's 512-bit receipt of a block right without its hash, and the last the keys' distance from uniform
     (`SketchHashRandom`'s ε): two of the `Q + P` seeds whose 256-bit sign keys collide share their signs.  At 16 rows
-    and r = 12 it is the δ at which `Accounting.Guarantees.Remote.SketchBoundDeployed` derives `SketchBound`."""
+    and r = 12 it is the δ at which `Accounting.Guarantees.Poub.SketchBoundDeployed` derives `SketchBound`."""
     if type(outside) is not int or outside < 1:
         raise ValueError("the outside-compute factor F is a positive integer")
     if r is None:

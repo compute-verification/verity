@@ -1,7 +1,7 @@
 """The memory line a paced session shows held over time, the line of record a gate run publishes: the conclusions of
-`Accounting.Guarantees.Remote.HeldOverTime` (time-held) and `HeldOverTimeLinks` (link-charged),
-`Security/Definitions/Accounting/Guarantees/RemoteHeld.lean`, read over each stretch of a session's groups, in exact
-rationals.  It is computed here and in its Lean, `lean/RemoteAudit/Line.lean`, held to this by the difftest
+`Accounting.Guarantees.Poub.HeldOverTime` (time-held) and `HeldOverTimeLinks` (link-charged),
+`Security/Definitions/Accounting/Guarantees/PoubHeld.lean`, read over each stretch of a session's groups, in exact
+rationals.  It is computed here and in its Lean, `lean/PoubCheck/Line.lean`, held to this by the difftest
 (`lean/tests/test_line.py`, every refusal compared word for word): `benchmarks/poub_session/verifier.py`'s
 `paced_line` (its diagnostic, on the verifier's clock) and `auditor_line.py` (the line of record, on the challenger's
 clock) read it.  The declared outputs' paced forms (`ledger.memory`) are the same arithmetic in floats, over the whole
@@ -22,7 +22,7 @@ from outside the store while the stretch's reads are served:
   each (L/n_hi in hi), highest first, at most n_g·N in group g;
 - the snapshot: at most (W + R)/P + S are absent at a pass, on average over the passes.
 
-W is the pooled bound of the session's record (`pooled.bound`, the Lean's `RemoteAudit.Pooled`: its windows' receipts
+W is the pooled bound of the session's record (`pooled.bound`, the Lean's `PoubCheck.Pooled`: its windows' receipts
 and draws at δ), so the line reads it from the record's windows, never from a float another module computed.  The
 line of record reads its groups' passes, its windows and its registered chunks off the Lean verifier's record of the
 session (`line_of_record`, the Lean's `lineOfRecordAt` at the record's `groups_per_coin` g, `lineOfRecord` at g = 1),
@@ -393,7 +393,7 @@ def line(groups: Sequence[Group], *, per: int, blocks: int, block_bytes: int, ch
                                   for f in FORMS), W)
 
 
-# --- the JSON form, the Lean's (`RemoteAudit.Difftest`'s `line`) ------------------------------------------------------
+# --- the JSON form, the Lean's (`PoubCheck.Difftest`'s `line`) ------------------------------------------------------
 
 def inputs_json(groups: Sequence[Group], *, per: int, blocks: int, block_bytes: int, chip_bytes: int, node_bytes: int,
                 windows: Sequence[tuple[int, int]], delta: object, rates: Rates) -> dict:
@@ -450,7 +450,7 @@ def run_json(j: Mapping) -> dict:
         return {"refused": str(e)}
 
 
-# --- the line read off the Lean verifier's record (`RemoteAudit.Line.lineOfRecordAt`, the Difftest's `line_record`) ---
+# --- the line read off the Lean verifier's record (`PoubCheck.Line.lineOfRecordAt`, the Difftest's `line_record`) ---
 
 SEEN = ("released_ns", "last_ns", "least", "weights", "hbm", "host")
 
@@ -500,7 +500,7 @@ def of_summary(record: Mapping, samples: int, seen: Sequence[Seen],
     the session's `samples` s, as the verifier's sample does. Drawn `g` > 1 windows a coin (`groups_per_coin`), the
     windows are the record's samples (`draws_of`), each refused unless it sampled min(s, U) of its U receipts and has fewer
     than `audit.RECEIPT_LIMIT` (2^64), as `receive` holds each window to: the memory model's sample reads at most
-    2^64 − 1 receipts (`Properties.RemoteAudit.Line.receiptMax`), and a sample's windows' receipts need not be."""
+    2^64 − 1 receipts (`Properties.PoubCheck.Line.receiptMax`), and a sample's windows' receipts need not be."""
     ws = record["windows"]
     if len(seen) != len(ws):
         raise Refused(f"the auditor saw {len(seen)} windows, not the record's {len(ws)}")
@@ -523,7 +523,7 @@ def of_summary(record: Mapping, samples: int, seen: Sequence[Seen],
 
 
 CLOCKS = ("record", "challenger", "replay")
-"""Whose clock a line's times seen are on (`RemoteAudit.Line.lineOfRecordOn`): the record's own, which holds them
+"""Whose clock a line's times seen are on (`PoubCheck.Line.lineOfRecordOn`): the record's own, which holds them
 (`times_off`), the challenger's release log's, or a replay's at another round trip (`gate_whatif`), which it
 doesn't."""
 

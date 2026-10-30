@@ -2,8 +2,8 @@
 (time-held and link-charged, each read held over time and at the passes, exact) with its groups' times read from what
 the auditor's host signed rather than from the verifier's stamps.
 
-**Who computes it** (`line_by`, `LINE_BY`). The Lean verifier (`remote-audit-verifier`'s `line_record` request,
-`RemoteAudit.Line.lineOfRecordOn` at the record's `groups_per_coin` g, with its W from `RemoteAudit.Pooled` over the
+**Who computes it** (`line_by`, `LINE_BY`). The Lean verifier (`poub-check-verifier`'s `line_record` request,
+`PoubCheck.Line.lineOfRecordOn` at the record's `groups_per_coin` g, with its W from `PoubCheck.Pooled` over the
 record's samples) computes each session's line off its record from
 the inputs `verifier.recorded_inputs` reads, and `poub.line` computes it beside it from the same JSON
 (`line.line_of_record`):
@@ -48,7 +48,7 @@ the auditor's.
 (`credit`), and gives any other session zero credit with the reasons:
 
 - *credited*: its window reads through `challenger.credited_session` (its pin first, as *pinned* reads it) with the
-  descriptor of the verifier that ran it, `verity/remote-bandwidth/v0 verifier tree <tree>`, `<tree>` being
+  descriptor of the verifier that ran it, `verity/poub/v0 verifier tree <tree>`, `<tree>` being
   `git rev-parse COMMIT:verity/core/protocols/poub` of the run's recorded commit (`--commit`), so it counts
   only toward a period that committed that verifier; and that commit is on the auditor's first-parent list
   of main (`--main`), as the challenger host's pin must be, so the verdict is that of a tree main's check ran on. A host
@@ -185,12 +185,12 @@ NAMED_TERMS = {"prf_advantage": {"claim": ledger.PRF_CLAIM, "term": "Σ_t Adv(pr
 """`LineHeld`'s error beyond δ: each window's PRF advantage, one oracle-access distinguisher a window, which its claim
 prices and no number here does. Every error records it by name, outside its total."""
 CONDITIONAL_ON = {"NoOutsideCompute": (
-    "statement C in full (Accounting.Remote.Held.Assumptions.NoOutsideCompute, a premise of LineHeld): no device "
+    "statement C in full (Accounting.Poub.Held.Assumptions.NoOutsideCompute, a premise of LineHeld): no device "
     "outside the node computes on a registered block or a receipt during the session; assumed until certifiers cover "
     "the gate node's boundary (certifier-coverage) and certify that nothing but the verifier's messages entered it over "
     "the credited span"),
     "binding-split": (
-    "the receipts' binding term (ledger.binding, Accounting.Guarantees.Remote.ReceiptsBindingOfCR) is charged with "
+    "the receipts' binding term (ledger.binding, Accounting.Guarantees.Poub.ReceiptsBindingOfCR) is charged with "
     "split_t, the chance that two runs of the prover from window t's cut on independent openings coins root the window "
     "differently, taken as 0; the deployed prover holds the coin commitment and may compute a window's roots from it, "
     "so that holds only once the verifier sends it no commitment to a window's openings coin before its roots "
@@ -203,7 +203,7 @@ GAPS = ("binding-split",)
 """The gaps in the line's charge (`CONDITIONAL_ON`'s), which every line is conditional on, grounded or not."""
 LOCKDOWN = "ProviderLockdown"
 GROUNDED = {LOCKDOWN: (
-    "the provider's lockdown of the gate node (Accounting.Remote.Held.Assumptions.ProviderLockdown, under "
+    "the provider's lockdown of the gate node (Accounting.Poub.Held.Assumptions.ProviderLockdown, under "
     "trusted-host): while infra's records show it applied, no device outside the node computes on a registered "
     "block or a receipt, which gives NoOutsideCompute for a session whose signed span lies inside an applied interval "
     "(noOutsideCompute_of_lockdown); it assumes what the security group doesn't close: the provider's resolver, flows "
@@ -1153,7 +1153,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="compute each line in the Lean verifier, held exactly to line.py's (the line of record), or in "
                          "line.py alone (a reading, not of record)")
     ap.add_argument("--lean-exe", type=Path, metavar="PATH",
-                    help="the remote-audit-verifier executable (default: `lake build` it in the remote audit's package)")
+                    help="the poub-check-verifier executable (default: `lake build` it in the remote audit's package)")
     ap.add_argument("--boundary", type=Path, metavar="FILE",
                     help="the network certifiers' records of the gate node's boundary links (`read_boundary`): refuse "
                          "a session's credit when they show ingress other than the verifier's messages over its span "

@@ -1,4 +1,4 @@
-"""`p2.py`, the remote audit over PoUS's P2 store, held to its Lean (`RemoteAudit.P2`, through `remote-audit-difftest`) on
+"""`p2.py`, the remote audit over PoUS's P2 store, held to its Lean (`PoubCheck.P2`, through `poub-check-difftest`) on
 drawn inputs that include what both sides must refuse: a registration's digest (`p2.Registration.digest`, with
 `codec.P2Codec`'s refusals), a unit's sketch from its blocks' partials (`p2.Sketcher`: π a block, σ their sum, and y
 from σ against y of the unit's bytes) and an opening's check (`p2.check`) on stores of drawn blocks under PoUS's leaf
@@ -52,7 +52,7 @@ def p2_blocks() -> st.SearchStrategy:
                          lambda b: (b * p2.BLOCK_BYTES)[:p2.BLOCK_BYTES]))
 
 
-# --- decoding, as `RemoteAudit.Difftest` decodes ----------------------------------------------------------------------
+# --- decoding, as `PoubCheck.Difftest` decodes ----------------------------------------------------------------------
 
 def registration_of(v) -> p2.Registration:
     c = M._get(v, "codec")

@@ -3,7 +3,7 @@ commits them.
 
 ~~~text
 Z(x)          x zero-padded to whole 128-byte blocks (one SHA-512 block here)
-seed_(t,i)    SHA512(SEED_DOMAIN ‖ σ_t ‖ u32be i ‖ root_(t,i−1)),  SEED_DOMAIN = "verity/remote-bandwidth/seed/v0\0",
+seed_(t,i)    SHA512(SEED_DOMAIN ‖ σ_t ‖ u32be i ‖ root_(t,i−1)),  SEED_DOMAIN = "verity/poub/seed/v0\0",
               σ_t window t's challenge (its live coin, `coins.py`), root_(t,−1) = root_(t−1,last) in a session and the
               registration's digest for its first window; in a session with appends, the root chained to them
               (`audit.chained`)
@@ -15,13 +15,13 @@ spread(z)     z laid over b = 4096 bytes: byte u of z XORed into byte u mod b (a
               z repeated
 e_(i,j)       E_j, the store's block j; under a registration that binds z (opt-in), E_j ⊕ spread(z_(i,j))
 y_(i,p)       sketch-sha512, the default: SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be j ‖ σ_(i,j)),
-              j = plan_i[p],  SKETCH_RECEIPT_DOMAIN = "verity/remote-bandwidth/sketch-receipt/v0\0"      64 bytes
+              j = plan_i[p],  SKETCH_RECEIPT_DOMAIN = "verity/poub/sketch-receipt/v0\0"      64 bytes
               block-sha512, for comparison: SHA512(Z(RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be j ‖ e_(i,j)),
-              RECEIPT_DOMAIN = "verity/remote-bandwidth/receipt/v0\0"                                    64 bytes
+              RECEIPT_DOMAIN = "verity/poub/receipt/v0\0"                                    64 bytes
 k_s           sketch-sha512's rows, the registration's: 16 (the default) or 64 (`ROWS`); 0 under block-sha512
 S_i           sketch-sha512's k_s × 4096 signs of pass i: K = derive(seed_i, SIGN_DOMAIN, {"tag": "sketch-sha512",
               "k": k_s, "n": 4096}), row c the first 512 bytes of K.stream(("row", c)), bit u (byte u // 8, LSB
-              first) 1 → −1, 0 → +1,  SIGN_DOMAIN = "verity/remote-bandwidth/sketch-signs/v0"; over a P2 store,
+              first) 1 → −1, 0 → +1,  SIGN_DOMAIN = "verity/poub/sketch-signs/v0"; over a P2 store,
               k_s × 8224, n = 8224 and 1,028 bytes a row, a unit of four blocks a vector (`p2.py`)
 σ_(i,j)       S_i · e_(i,j), its 4096 bytes as int8, over the integers (|σ[c]| ≤ 2^19): k_s int32 little-endian, 64
               bytes at 16 rows (y one compression after the seed's block) and 256 at 64 (three)
@@ -81,12 +81,12 @@ from verity.ml.randomness import derive, frame
 
 from .codec import BLOCK_BYTES
 
-SEED_DOMAIN = b"verity/remote-bandwidth/seed/v0\0"
-PLAN_DOMAIN = b"verity/remote-bandwidth/plan/v0\0"
-RECEIPT_DOMAIN = b"verity/remote-bandwidth/receipt/v0\0"
-SKETCH_RECEIPT_DOMAIN = b"verity/remote-bandwidth/sketch-receipt/v0\0"
-SIGN_DOMAIN = "verity/remote-bandwidth/sketch-signs/v0"
-TREE_DOMAIN = b"verity/remote-bandwidth/receipt-tree/v0\0"
+SEED_DOMAIN = b"verity/poub/seed/v0\0"
+PLAN_DOMAIN = b"verity/poub/plan/v0\0"
+RECEIPT_DOMAIN = b"verity/poub/receipt/v0\0"
+SKETCH_RECEIPT_DOMAIN = b"verity/poub/sketch-receipt/v0\0"
+SIGN_DOMAIN = "verity/poub/sketch-signs/v0"
+TREE_DOMAIN = b"verity/poub/receipt-tree/v0\0"
 BLOCK_SHA512 = "block-sha512"
 SKETCH_SHA512 = "sketch-sha512"
 SKETCH_ROWS = 16

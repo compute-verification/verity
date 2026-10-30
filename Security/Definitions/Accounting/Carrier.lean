@@ -53,8 +53,8 @@ own coin, and a re-key appends a block again under a fresh one. A pass's appende
 layout puts at positions of appends after the registration, and `Chip.rebuildsIn` counts a program's rebuilds of
 sectors in a set of tiles. The stacking premise charges carriers with the rebuilds of appended tiles only.
 
-**The lifetime cap.** The remote audit refuses a plan holding a block of an append that joined a window `L` or more
-before (its `lifetime`; `Properties.RemoteAudit.LifetimeCapped`). An append joins the window being filled at the first
+**The lifetime cap.** PoUB refuses a plan holding a block of an append that joined a window `L` or more
+before (its `lifetime`; `Properties.PoubCheck.LifetimeCapped`). An append joins the window being filled at the first
 pass after it, so its coin was drawn after every pass of the windows before. `LifetimeCapped layout joined L` is the
 game's form: at the session's coins, every pass whose layout holds a block of append `t` is in a window from `joined t`
 to `joined t + L − 1`. The game draws every append's coin with the codec, so `joined` is the game's only record of when.
@@ -208,7 +208,7 @@ def appendedTiles {Pfx Y : Type} {N T M : ℕ} (layout : Pfx → Y → Fin N ↪
     Finset (Fin N) :=
   Finset.univ.filter fun i => ((layout c y i).1 : ℕ) ≠ 0
 
-/-- **Each append's blocks are read within `L` windows of the one it joined**: the game's form of the remote audit's
+/-- **Each append's blocks are read within `L` windows of the one it joined**: the game's form of PoUB's
 `LifetimeCapped`. At the session's coins `x` (the codec and the append coins `x.1`, the windows' `x.2`), every pass
 whose layout puts a block of an append `t` after the registration in its store is in a window `w` with
 `joined x t ≤ w < joined x t + L`. `joined x t` is the window append `t` joined, the one being filled at the first pass

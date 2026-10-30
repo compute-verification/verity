@@ -12,7 +12,7 @@ registration  node, P2's parameters, PoUS's commitment to W, PoUS's salt, the vk
               the committed W (`setup.verifier_key_from_encoding`)
 digest        SHA512(REGISTRATION_DOMAIN ‖ frame(node) ‖ u32be w ‖ u32be c0 ‖ u32be blocks_per_segment ‖
               u64be segments ‖ frame(expander) ‖ commitment ‖ salt ‖ root ‖ frame(layout) ‖ frame(receipt kind) ‖
-              u32be k_s),  REGISTRATION_DOMAIN = "verity/remote-bandwidth/p2-registration/v0\\0"
+              u32be k_s),  REGISTRATION_DOMAIN = "verity/poub/p2-registration/v0\\0"
 S_i           k_s × 8224 signs (`receipts.sign_bits(seed_i, k_s, 8224)`): K = derive(seed_i, SIGN_DOMAIN, {"tag":
               "sketch-sha512", "k": k_s, "n": 8224}), row c the first 1,028 bytes of K.stream(("row", c)), bit x
               (byte x // 8, LSB first) 1 → −1, 0 → +1
@@ -60,8 +60,8 @@ from . import audit, coins, receipts
 from .codec import P2_LAYOUT, P2Codec
 from .receipts import DIGEST_BYTES, PER_LEAF, SALT_BYTES, Plan
 
-PROTOCOL_ID = "verity/remote-bandwidth/p2/v0"
-REGISTRATION_DOMAIN = b"verity/remote-bandwidth/p2-registration/v0\0"
+PROTOCOL_ID = "verity/poub/p2/v0"
+REGISTRATION_DOMAIN = b"verity/poub/p2-registration/v0\0"
 BLOCK_BYTES = 2056
 UNIT_BLOCKS = 4
 UNIT_BYTES = UNIT_BLOCKS * BLOCK_BYTES

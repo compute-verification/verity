@@ -1,4 +1,4 @@
-"""The remote bandwidth audit v0 (`verity/remote-bandwidth/v0`): a verifier with no hardware at the site certifies how
+"""The remote bandwidth audit v0 (`verity/poub/v0`): a verifier with no hardware at the site certifies how
 many reads of a node's registered blocks the node made in each window, from receipts chained pass to pass.
 
 1. Registration.  The prover commits to its payload blocks (`payload_tree`: the weights, KV pages and filler, each an
@@ -110,15 +110,15 @@ from . import schedule as _schedule
 from .codec import BLOCK_BYTES, P2_LAYOUT, SEED_BYTES, Codec, P2Codec
 from .receipts import DIGEST_BYTES, LIMITS, SALT_BYTES, Plan
 
-PROTOCOL_ID = "verity/remote-bandwidth/v0"
-CODEC_DOMAIN = "verity/remote-bandwidth/codec/v0"
-OPENINGS_DOMAIN = "verity/remote-bandwidth/openings/v0"
-PAYLOAD_DOMAIN = b"verity/remote-bandwidth/payload/v0\0"
-APPEND_DOMAIN = b"verity/remote-bandwidth/append/v0\0"
-APPENDS_DOMAIN = b"verity/remote-bandwidth/appends/v0\0"
-CHAINED_DOMAIN = b"verity/remote-bandwidth/chained/v0\0"
-REGISTRATION_DOMAIN = b"verity/remote-bandwidth/registration/v0\0"
-TILE_DOMAIN = b"verity/remote-bandwidth/stub-tile/v0\0"
+PROTOCOL_ID = "verity/poub/v0"
+CODEC_DOMAIN = "verity/poub/codec/v0"
+OPENINGS_DOMAIN = "verity/poub/openings/v0"
+PAYLOAD_DOMAIN = b"verity/poub/payload/v0\0"
+APPEND_DOMAIN = b"verity/poub/append/v0\0"
+APPENDS_DOMAIN = b"verity/poub/appends/v0\0"
+CHAINED_DOMAIN = b"verity/poub/chained/v0\0"
+REGISTRATION_DOMAIN = b"verity/poub/registration/v0\0"
+TILE_DOMAIN = b"verity/poub/stub-tile/v0\0"
 PAYLOAD_SCHEMA = receipts.SCHEMA
 NONCE_BYTES = 32
 NODE_BYTES = 64
@@ -1288,7 +1288,7 @@ class Session:
         return tuple((first, commitment.count) for first, _, commitment, _ in self._appends)
 
     def scheduled(self, schedule: _schedule.Schedule) -> Scheduled:
-        """The schedule check (`schedule.check`, of record in `lean/RemoteAudit/Schedule.lean`) on this session's own
+        """The schedule check (`schedule.check`, of record in `lean/PoubCheck/Schedule.lean`) on this session's own
         passes, each plan as received and the step it named, and its appends, at the cap its parameters committed
         before its first coin (`Params.schedule_cap`): its verdict, which `ledger` requires before it credits an
         appended block, or `schedule.Refused` and why not.  A session whose parameters commit no cap has none
@@ -1329,7 +1329,7 @@ class Session:
                       self.params.samples)
 
 
-REGISTRY_SCHEMA = "verity/remote-bandwidth/registry/v0"
+REGISTRY_SCHEMA = "verity/poub/registry/v0"
 UNENDED = "unended"
 """A closed registration's session that was neither accepted nor rejected when it closed: counted as failed."""
 
@@ -1404,7 +1404,7 @@ class Registry:
                  receipt: str = receipts.DEFAULT, **kw) -> Registration:
         """`register`'s draw for a node with no live registration, which it makes live; refused, and counted, for one
         with.  One that would bind PoUW's tile outputs (`bind`) draws nothing either (ValueError): the verifier's
-        definition, `RemoteAudit.Registry.register`, covers receipts of a block alone and refuses it."""
+        definition, `PoubCheck.Registry.register`, covers receipts of a block alone and refuses it."""
         node = _node(node)
         if node in self._live:
             self.refused[node] = self.refused.get(node, 0) + 1
@@ -1412,7 +1412,7 @@ class Registry:
                                 "second draws no codec seed until the verifier closes the first and counts its sessions")
         if _bind(kw.get("bind", False)):
             raise ValueError("a registration that binds PoUW's tile outputs is not covered: the verifier's definition "
-                             "(RemoteAudit, in Lean) covers receipts of a block alone")
+                             "(PoubCheck, in Lean) covers receipts of a block alone")
         registration = register(source, node, blocks, payload_root, codec, receipt, **kw)
         self._live[node] = _Live(registration.digest, registration, [])
         return registration
@@ -1672,7 +1672,7 @@ def pooled_windows(record: Record) -> tuple[list[tuple[int, int]], Fraction]:
 
 
 def pooled_bound(record: Record) -> _pooled.Bound:
-    """The record's pooled bound in exact rationals (`pooled.bound`, the Lean's `RemoteAudit.Pooled`)."""
+    """The record's pooled bound in exact rationals (`pooled.bound`, the Lean's `PoubCheck.Pooled`)."""
     return _pooled.bound(*pooled_windows(record))
 
 
@@ -1703,11 +1703,11 @@ def pooled(record: Record) -> tuple[float, float]:
     found s_t correct receipts).  `wrong` is the most Σ_t f_t·U_t those allow, and `floor` the most any f_t is:
     min(1 − s_t/U_t, d̄·S/s_t), about ln(1/δ)/s_t.  The Lean states `wrong` at each window's own U_t, on the deployed
     draw, at δ + Σ_t s_t/2^64 + the PRF advantage of each window's distinguisher, one a window that the session fixes,
-    + the coin commitment's hiding terms + the receipts' binding term (`Accounting.Guarantees.Remote.PooledDraw`,
+    + the coin commitment's hiding terms + the receipts' binding term (`Accounting.Guarantees.Poub.PooledDraw`,
     `ledger.draw`).
 
     Both are `pooled_bound`'s exact values rounded up: d̄·S from above by a certified rational (`pooled.budget`), and
-    `wrong` the greedy over the windows by U_t/s_t falling, which `Properties.RemoteAudit.PooledCovers` proves at least
+    `wrong` the greedy over the windows by U_t/s_t falling, which `Properties.PoubCheck.PooledCovers` proves at least
     the bound `PooledDraw` reads."""
     b = pooled_bound(record)
     return _up(b.wrong), _up(b.floor)
@@ -1790,7 +1790,7 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
     `link` is a binding record's only: an unbound receipt is of its block alone, and the record says nothing of where
     its read was made.  `wrong` is the profile's bound on wrong receipts (`IntegrityProfile.bound`; pass an
     approximation for a large store).  A sketch-sha512 record's receipts also rest on `SketchBound`
-    (`Accounting.Guarantees.Remote.SketchBoundDeployed`), whose terms add to the failure probability, not to γ:
+    (`Accounting.Guarantees.Poub.SketchBoundDeployed`), whose terms add to the failure probability, not to γ:
     `timing.sketch_failure` of the prover's SHA-512 compressions over the session (`PROTOCOL.md` §4).
     The record credits the receipts of registered blocks, and those of blocks appended after the codec seed only on
     `credit_post_seed`, the property's verdict on the circuits that wrote them (I2's; None credits none, and a verdict

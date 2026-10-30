@@ -1,4 +1,4 @@
-"""The openings frame, `lean/RemoteAudit/Wire.lean`'s: the bytes a prover sends a window's openings in, decoded
+"""The openings frame, `lean/PoubCheck/Wire.lean`'s: the bytes a prover sends a window's openings in, decoded
 strictly (`decode_openings`: None for a body that ends early, runs past its openings, or has a bound flag above 1), and a
 window's openings from its frames in the order they came (`openings_of`, `Wire.openingsOf`): none at all if any frame
 doesn't decode, so a malformed frame leaves the window no openings and it rejects as `malformed`. Every opening carries

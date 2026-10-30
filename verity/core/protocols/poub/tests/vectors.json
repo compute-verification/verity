@@ -99,7 +99,7 @@
   "digest": "5b594ff9d9bcb34dc97116514a475a5c2f751350b2ab703fdc6838c200861633ec9cec20e724e641af6a6bea7b81772ee1c17ef0e1b4e739f682683ac26d632f"
  },
  "coins": {
-  "scheme": "verity/remote-bandwidth/coins/v1",
+  "scheme": "verity/poub/coins/v1",
   "epoch": 0,
   "families": [
    [
@@ -281,8 +281,8 @@
   ]
  },
  "sketch": {
-  "sign_domain": "verity/remote-bandwidth/sketch-signs/v0",
-  "receipt_domain": "verity/remote-bandwidth/sketch-receipt/v0\u0000",
+  "sign_domain": "verity/poub/sketch-signs/v0",
+  "receipt_domain": "verity/poub/sketch-receipt/v0\u0000",
   "rows": 16,
   "rows_allowed": [
    16,

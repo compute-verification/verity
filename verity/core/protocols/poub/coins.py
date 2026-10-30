@@ -1,14 +1,14 @@
-"""The remote audit's coins on the proof system's one challenger (`verity/remote-bandwidth/coins/v1`): session k's coins
+"""The remote audit's coins on the proof system's one challenger (`verity/poub/coins/v1`): session k's coins
 are one epoch of `sampled_proofs.challenger`'s live coins, drawn and committed by the challenger before the session, on
 its own host when it is remote (`sampled_proofs.remote`), and each opened once, after the root the verifier recorded.
 
 ~~~text
-scheme     verity/remote-bandwidth/coins/v1, epoch k: the session's index over its registration
+scheme     verity/poub/coins/v1, epoch k: the session's index over its registration
 families   challenge W, openings ⌈W/g⌉, append A: window t's challenge σ_t, the openings coin of the sample over windows
            cg … (c + 1)g − 1 (g = `groups_per_coin`, 1 by default: window t's own), and append i's coin c_a; no append
            family when the session takes no appends (A = 0)
 coin       the first 32 bytes (COIN_BYTES) of the challenger's 64-byte coin, which its commitment holds whole
-R          SHA512("verity/remote-bandwidth/window/v1\0" ‖ registration digest ‖ u64be k): the session's window, {root} in
+R          SHA512("verity/poub/window/v1\0" ‖ registration digest ‖ u64be k): the session's window, {root} in
            the auditor's ledger, which opens one challenger session a root, ever
 after      σ_0 after R; σ_t (t ≥ 1) after the last root the verifier had received when it left; draw c's openings coin
            after the last root of its last window, min((c + 1)g, W) − 1; append i's coin after append i's root
@@ -44,13 +44,13 @@ from verity.core.protocols.sampled_proofs.challenger import (ChallengerKey, Coin
                                                              LiveOpening, LiveRecord, Verify, ledger_head, live_reason,
                                                              order_reason, pinned_session, record_many)
 
-SCHEME = "verity/remote-bandwidth/coins/v1"
+SCHEME = "verity/poub/coins/v1"
 CHALLENGE, OPENINGS, APPEND = "challenge", "openings", "append"
 LABELS = (CHALLENGE, OPENINGS, APPEND)
 COIN_BYTES = 32
 APPENDS = 1024
 """A session's append coins unless it names its own: one an append, so a session appends at most this many times."""
-WINDOW_DOMAIN = b"verity/remote-bandwidth/window/v1\0"
+WINDOW_DOMAIN = b"verity/poub/window/v1\0"
 
 
 def openings_coins(windows: int, per_coin: int = 1) -> int:

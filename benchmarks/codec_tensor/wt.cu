@@ -2021,7 +2021,7 @@ __global__ void __launch_bounds__(128) tag_level_kernel(const u64 *__restrict__ 
 // one CTA on the stream after the previous commit, fills them in, so the chain needs no host round trip.
 //
 // A WT_RECEIPT = 1 build's receipt is the remote bandwidth driver's sketch-sha512 instead (`receipts.SketchReceipter`):
-// s_j is the whole 64-byte SHA-512 (`receipts.seed`), K_S = derive(s_j, "verity/remote-bandwidth/sketch-signs/v0",
+// s_j is the whole 64-byte SHA-512 (`receipts.seed`), K_S = derive(s_j, "verity/poub/sketch-signs/v0",
 // {"k": k_s, "n": 4096, "tag": "sketch-sha512"}) at the registration's k_s (16 or 64), a vector is the store's block,
 // its 4,096 bytes in store order (store-order/v0: task q's halves are blocks 2 q and 2 q + 1, receipt_warp), and
 // y_j = SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ frame(s_j)) ‖ u64be j ‖ σ_j): one compression from the prefix's midstate
@@ -3585,10 +3585,10 @@ int wt_set_pass(const uint8_t *sigma, int ks, int n) {
   };
   const uint8_t zero[4 + 64] = {};
   const char *name = WT_RECEIPT ? "sketch-sha512" : "ro-sketch-blake3/v0";
-  const char *sign_domain = WT_RECEIPT ? "verity/remote-bandwidth/sketch-signs/v0" : "verity/bandwidth/sketch-signs/v0";
+  const char *sign_domain = WT_RECEIPT ? "verity/poub/sketch-signs/v0" : "verity/bandwidth/sketch-signs/v0";
   const int nl = (int)strlen(name);
   int o = 0;   // SHA512(PASS_DOMAIN ‖ σ ‖ u32be j ‖ root)
-  put(P.seed, o, "verity/remote-bandwidth/seed/v0", 32);
+  put(P.seed, o, "verity/poub/seed/v0", 32);
   put(P.seed, o, sigma, 32);
   put(P.seed, o, zero, 4 + 64);
   P.seed_len = o;
@@ -3614,7 +3614,7 @@ int wt_set_pass(const uint8_t *sigma, int ks, int n) {
   frame(P.tag, o, 'b', zero, 32);
   o = 0;   // Z(LEAF_DOMAIN ‖ frame(name) ‖ frame(s)): the leaves' prefix; sketch-sha512's receipt prefix
 #if WT_RECEIPT
-  put(P.leaf, o, "verity/remote-bandwidth/sketch-receipt/v0", 42);
+  put(P.leaf, o, "verity/poub/sketch-receipt/v0", 42);
 #else
   put(P.leaf, o, "verity/bandwidth/tag-leaf/v1", 29);
   frame(P.leaf, o, 's', name, nl);

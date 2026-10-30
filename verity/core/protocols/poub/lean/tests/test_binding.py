@@ -1,4 +1,4 @@
-"""`store.py`'s binding held to its Lean (`RemoteAudit.Store`, served by `remote-audit-difftest`), refusals as outputs
+"""`store.py`'s binding held to its Lean (`PoubCheck.Store`, served by `poub-check-difftest`), refusals as outputs
 so that both sides' reasons are compared word for word: the pin from a pin file's bytes (`store.pin_of`, and
 `model_pin` for `--model`) in each shape it reads (a pin, a registry line, a registry's JSON lines, core's
 `models.json`, and that file itself) and each refusal (not UTF-8, neither JSON nor JSON lines, a registry without one

@@ -1,5 +1,5 @@
-"""A recorded remote session replayed through both verifiers, `RemoteAudit.Session` (the definition, served by
-`remote-audit-difftest` as `session`) and `audit.Session` (`ra_cases.session`), their verdicts and reasons compared.
+"""A recorded remote session replayed through both verifiers, `PoubCheck.Session` (the definition, served by
+`poub-check-difftest` as `session`) and `audit.Session` (`ra_cases.session`), their verdicts and reasons compared.
 
 A record is one of two kinds:
 

@@ -38,7 +38,7 @@ import numpy as np
 
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.protocols.poub.interface import IDENTITY, Append, Codec, PageLayout, Receipt, Segment, WindowRecord
-from verity_vllm.protocols.poub.registry import KindReceipt, RemoteBandwidthReceipt, Store
+from verity_vllm.protocols.poub.registry import KindReceipt, PoubReceipt, Store
 
 if TYPE_CHECKING:
     from verity.core.protocols.poub.audit import Tiles
@@ -235,7 +235,7 @@ class Binder:
     `Registration.digest`).  Each window's record goes to ``on_window``; without a reader, a window's receipts are the
     reference's, every block read on the CPU.  With ``tiles`` (the driver's `audit.Tiles`), each receipt is bound to
     ``tiles.output(seed, j)``, PoUW's tile output before block ``j`` is read, and the default receipt is the driver's
-    (`RemoteBandwidthReceipt`); without them, its default kind, sketch-sha512, of the block alone (`KindReceipt`).
+    (`PoubReceipt`); without them, its default kind, sketch-sha512, of the block alone (`KindReceipt`).
     With ``passes=False`` the binder runs no pass: a remote session's backend runs them, and its windows (`verity_vllm.protocols.poub.remote.CommitSession`).
     With ``weight_blocks`` it registers weight tensors in order while their blocks fit that many, and counts the rest
     unregistered: a store small enough for a remote session's CPU passes (`remote.StoreBackend`).  With ``kv=False``
@@ -249,7 +249,7 @@ class Binder:
                  on_window: Callable[[WindowRecord], None] | None = None, tiles: Tiles | None = None,
                  passes: bool = True, weight_blocks: int | None = None, kv: bool = True) -> None:
         self.store, self.block_bytes, self.kv_codec, self.kv = store, block_bytes, kv_codec, kv
-        self.receipt = receipt or (RemoteBandwidthReceipt() if tiles is not None else KindReceipt())
+        self.receipt = receipt or (PoubReceipt() if tiles is not None else KindReceipt())
         self.weights, self.reader, self.fifo, self.tiles = weights, reader, fifo, tiles
         self.messages, self.registration, self.on_window, self.passes = messages, registration, on_window, passes
         self.weight_blocks = weight_blocks
