@@ -57,6 +57,11 @@ def test_stream_refuses_an_export_of_another_shape(hasher):
         hasher.lead_stream(torch.zeros(64 * 128 * 2 - 1, dtype=torch.int32, device="cuda"), 1, 128, 2, 128, _stream())
 
 
+def test_stream_refuses_a_call_past_the_gathers_u32_tiles(hasher):
+    with pytest.raises(RuntimeError, match="split the call's rows"):
+        hasher.lead_stream(torch.zeros(8, dtype=torch.int32, device="cuda"), 1 << 30, 1 << 30, 1, 8, _stream())
+
+
 def _leaves(ext, hasher, dom, schema: str, values: list[bytes], first: int) -> list[bytes]:
     ls = ext.LeadStep(dom.domain_id, schema)
     size = len(values[0])

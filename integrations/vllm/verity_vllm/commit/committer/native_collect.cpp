@@ -66,6 +66,7 @@ extern "C" int verity_rows_levels_launch(const void* params, const uint8_t* in, 
                                          int n_levels, cudaStream_t st);
 extern "C" int verity_rows_lead_params_bytes();
 extern "C" int verity_rows_lead_build(const uint8_t* domain_id, const char* schema, int schema_len, void* out);
+extern "C" uint64_t verity_rows_lead_gather_tiles(int m, int n, int S, int bn);
 extern "C" int verity_rows_lead_gather_launch(const uint8_t* ex, uint8_t* out, int m, int n, int S, int bn, cudaStream_t st);
 extern "C" int verity_rows_lead_leaves_launch(const void* params, const uint8_t* values, uint64_t value_bytes, uint64_t n,
                                               uint64_t last_bytes, uint64_t first, uint8_t* out, cudaStream_t st);
@@ -1984,8 +1985,11 @@ struct StepHasher {
   // 4-byte words).  -> [pad_rows(m) pad_cols(n) S] int32
   at::Tensor lead_stream(at::Tensor exported, int64_t m, int64_t n, int64_t S, int64_t bn, int64_t stream_ptr) {
     if (!exported.is_cuda() || !exported.is_contiguous()) throw std::runtime_error("lead_stream: the export must be a contiguous CUDA tensor");
-    if (m <= 0 || n <= 0 || S <= 0 || bn <= 0 || bn % 8 || m > (1 << 30) || n > (1 << 30) || S > (1 << 20))
+    if (m <= 0 || n <= 0 || S <= 0 || bn <= 0 || bn % 8 || m > (1 << 30) || n > (1 << 30) || S > (1 << 20) || bn > (1 << 30))
       throw std::runtime_error("lead_stream: a positive shape over tiles of a multiple of 8 columns");
+    if (const uint64_t tiles = verity_rows_lead_gather_tiles(static_cast<int>(m), static_cast<int>(n), static_cast<int>(S), static_cast<int>(bn));
+        tiles > UINT32_MAX)
+      throw std::runtime_error("lead_stream: the gather counts " + std::to_string(tiles) + " tiles in u32, past 2^32 - 1; split the call's rows");
     const int64_t computed = 64 * ((m + 63) / 64) * bn * ((n + bn - 1) / bn) * S;
     if (exported.numel() * exported.element_size() != 4 * computed)
       throw std::runtime_error("lead_stream: the export holds " + std::to_string(exported.numel() * exported.element_size()) + " bytes, the call " +
