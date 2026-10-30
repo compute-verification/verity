@@ -180,21 +180,42 @@ def test_the_pool_is_warmed_before_serving_in_blocks_that_hold_any_one_take(monk
     pool.mode = None
 
 
-def test_the_gpu_tree_extension_is_built_before_serving_only_for_a_worker_that_loads_it():
-    """A windowed or ``--gpu-tree`` committer's worker loads the extension in its first step, so it is built before serving;
-    any other committer never builds it."""
-    loads: list[Any] = []
+def test_every_committer_method_the_serving_modules_call_is_the_collectors():
+    """serve-openai's tests hand its modules stand-in committers, so a call to a method the collector does not have (a warm step
+    before serving, say) would fail only on a GPU, before the first request: every ``com.<method>(...)`` the serving modules make
+    names a method of the collector `pipeline.commit.make_committer` builds for `serve_seal.DECLARED_COMMITTER`."""
+    import ast
 
-    def com(**kw):
-        c = SimpleNamespace(**({"windowed": False, "gpu_tree": False} | kw))
-        c._gpu_ext_load = lambda: loads.append(c)
-        return c
+    from verity_vllm.commit.committer.native_collect import NativeCollectCommitter
 
-    for kw in ({"windowed": True}, {"gpu_tree": True}):
-        c, t = com(**kw), iter([2.0, 31.25])
-        assert ss.warm_gpu_ext(c, clock=lambda: next(t)) == 29.25 and loads == [c]
-        loads.clear()
-    assert ss.warm_gpu_ext(com(), clock=lambda: pytest.fail("no build to time")) is None and loads == []
+    assert ss.DECLARED_COMMITTER == "native_collect_v2b"
+    calls: dict[str, str] = {}
+    for f in sorted(Path(ss.__file__).parent.glob("serve_*.py")):
+        for n in ast.walk(ast.parse(f.read_text())):
+            if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and isinstance(n.func.value, ast.Name) and n.func.value.id == "com":
+                calls.setdefault(n.func.attr, f"{f.name}:{n.lineno}")
+    assert "size_arena" in calls and "enable_windows" in calls
+    assert not {a: at for a, at in calls.items() if not callable(getattr(NativeCollectCommitter, a, None))}
+
+
+def test_the_pool_warms_on_the_committer_itself(monkeypatch):
+    """`warm_pool` reads the real committer (its offline core, CPU only), not a stand-in: the pool it grows is the committer's own."""
+    from tests.check.opened import committer
+
+    monkeypatch.setattr(ss, "WARM_BLOCK", 1 << 20)
+    monkeypatch.setattr(PP, "_shared_map", lambda n: (torch.zeros(n, dtype=torch.uint8), None))
+    monkeypatch.setattr(PP, "_populate", lambda *_a: True)
+    monkeypatch.setattr(PP, "_register", lambda *_a: None)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    com = committer()
+    pool = com.pool
+    try:
+        assert ss.warm_pool(com, 3 * (1 << 20) / ss.GB)["blocks"] == 3 and pool.allocs == 1 and pool.reserved_bytes == pool.block_bytes
+        for _ in range(3):
+            pool.take(1 << 20)
+        assert pool.allocs == 1, "the takes are served from the block the warm-up made"
+    finally:
+        pool.mode = None
 
 
 def test_a_close_waits_for_room_only_while_the_windows_awaiting_their_seal_hold_the_bound():
