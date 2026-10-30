@@ -92,7 +92,7 @@ def launches(a) -> list[dict]:
     _, shapes = BW.MODELS[step["model_name"]]
     shapes = {**shapes, "lm_head": (128256, 4096 if step["model_name"] == "8b" else 8192)}
     st = BW.stream(torch)
-    BW.set_sketch_tag(lib)
+    BW.set_receipt_prefix(lib)
     rows = step.get("k_s", BW.SR.ROWS)
     BW.set_pass(lib, t, rows=rows)
     bits = BW.sketch_bits(lib, BW.window_seed(lib), rows, SKT.vector_bytes(lib.sb, t))
@@ -110,7 +110,7 @@ def launches(a) -> list[dict]:
             for var in ("sketch", "untagged"):
                 cfg = tuple(step["picks"][name]["k"][str(k)][var])
                 launched = ctypes.c_int(0)
-                lib.call("wt_fused_sketch", k, None, None, None, m, n, kd, 0, 0, cfg[0], cfg[1], 0, 0, None, None, 0,
+                lib.call("wt_fused_sketch", k, None, None, None, m, n, kd, 0, 0, cfg[0], cfg[1], 0, None, None, 0,
                          cfg[3], None, None, t, BW.sketch_warps(cfg), ctypes.byref(launched), st)
                 gr = launched.value // (kd // 512)
                 steps = BW.tsteps(lib, torch, key, cfg[0], gr, kd // 512)
@@ -118,7 +118,7 @@ def launches(a) -> list[dict]:
                 tags = torch.empty(max(nvec, 1) * lib.tag_bytes, dtype=torch.uint8, device="cuda")
                 sg = (frags if BW.sketch_warps(cfg) else signs) if cfg[3] else None
                 lib.call("wt_fused_sketch", k, BW.ptr(store), BW.ptr(x.view(torch.uint8)), BW.ptr(y), m, n, kd, 0, 0,
-                         cfg[0], cfg[1], gr, 0, BW.ptr(steps), BW.ptr(tags) if cfg[3] else None, lib.jbase, cfg[3],
+                         cfg[0], cfg[1], gr, BW.ptr(steps), BW.ptr(tags) if cfg[3] else None, lib.jbase, cfg[3],
                          BW.ptr(sg) if sg is not None else None, None, t, BW.sketch_warps(cfg), None, st)
                 torch.cuda.synchronize()
                 out.append({"kernel": "fused", "linear": name, "k": k, "variant": var, "cfg": list(cfg), "groups": gr,
@@ -168,7 +168,7 @@ def kv_launches(a, step: dict, torch, st) -> list[dict]:
             sk = torch.empty(slots * sh["kv_heads"], 16, dtype=torch.int32, device="cuda")
             tg = torch.empty(slots * layers, 16, dtype=torch.int32, device="cuda")
             kv.call("kv_rc_pass", BW_KV.ptr(signs), BW_KV.ptr(mid), st)
-            kv.call("kv_rc_buffers", BW_KV.ptr(sk), None, None)
+            kv.call("kv_rc_buffers", BW_KV.ptr(sk))
         kv.call("kv_attn", BW_KV.ptr(cache), form, BW_KV.ptr(q), BW_KV.ptr(o), BW_KV.ptr(part), b, ctx, layers, 1, sp,
                 k, st)
         if rc:
@@ -182,7 +182,7 @@ def kv_launches(a, step: dict, torch, st) -> list[dict]:
                     "share_bytes": sk.numel() * 4 if rc else 0})
         if rc:
             out.append({"kernel": "kv_receipts", "k": k, "receipts": slots, "receipt_bytes": 64 * slots})
-            kv.call("kv_rc_buffers", None, None, None)
+            kv.call("kv_rc_buffers", None)
             del sk, tg, signs, mid
     del cache
     model_layers = BW.MODELS[step["model_name"]][0]
