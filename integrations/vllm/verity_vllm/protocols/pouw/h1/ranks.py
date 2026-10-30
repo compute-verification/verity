@@ -50,6 +50,7 @@ from verity_vllm.engine.hooks import Hooks
 from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import commit as CT
 from verity_vllm.protocols.pouw.h1 import hooks as PHK
+from verity_vllm.protocols.pouw.h1 import records as ZR
 from verity_vllm.protocols.pouw.h1 import requests as RQ
 
 ENTRY = f"pouw:{PH.SCHEME}"
@@ -89,7 +90,7 @@ class RankRun(PH.H1Run):
                 self._held[w] = weight
             self.shipped[call.index] = {
                 "a": None if a is None else np.array(PH.numpy_of(a)),
-                "s_a": None if s_a is None else np.array(PH.numpy_of(s_a)), "records": records,
+                "s_a": None if s_a is None else np.array(PH.numpy_of(s_a)), "records": ZR.host(records),
                 "weight": np.array(PH.numpy_of(weight)) if new else None,
                 "weight_scale": np.array(PH.numpy_of(weight_scale)) if new and weight_scale is not None else None}
         return call

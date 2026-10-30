@@ -183,7 +183,7 @@ void launch_receipts(int mode, const uint4 *data, const uint4 *zs, u64 j0, u64 n
   }
 }
 
-// --- sketch-sha512 receipts (`sketch_receipt.py`) ----------------------------------------------------------------
+// --- sketch-sha512 receipts (`receipts.SketchReceipter`) ---------------------------------------------------------
 //
 // sketch_kernel: a CTA of 256 threads a block at a time, SK_BATCH blocks a step, thread t holding bytes 16 t … 16 t + 15
 // of each and their 16 rows of signs (int8 ±1, 64 registers, loaded once); 64 dp4a a block, then the warp's 16 sums

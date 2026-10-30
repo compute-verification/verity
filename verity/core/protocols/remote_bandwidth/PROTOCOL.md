@@ -548,8 +548,8 @@ and under a registration that binds \(z\), PoUW's noise for the pass (§8).
 **The two receipt kinds.** The registration names one (`receipts.KINDS`), and `Params.receipt` must name the same.
 Every receipt of its sessions is of that kind, the weights' and the KV pages' alike (§8). sketch-sha512 is the default (`receipts.DEFAULT`) and the stated receipt: the receipt the guarantee is stated for.
 block-sha512 is kept as a second kind, for comparison only; it is not the stated receipt.
-sketch-sha512 is `benchmarks/codec_tensor/sketch_receipt.py`'s receipt, byte for byte:
-the suite pins its numpy outputs at both row counts, and `receipts.SketchReceipter` computes the same in pure Python.
+The GPU kernels' sketch-sha512 receipts are held byte for byte to `receipts.SketchReceipter`
+(`benchmarks/codec_tensor/sketch_receipt.py` lays its signs out for them), and the suite pins its outputs at both row counts.
 Each kind's receipt is 64 bytes, so leaves, salts and the tree don't change. The difference is what is hashed after
 the seed's block: sketch-sha512 hashes \(j\) and the sketch, one compression at 16 rows (64 bytes) and three at 64
 (256 bytes); block-sha512 hashes \(j\) and the 4,096 bytes, 33 SHA-512 compressions. The sketch's signs come from the

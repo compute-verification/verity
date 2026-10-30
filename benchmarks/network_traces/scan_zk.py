@@ -2,8 +2,8 @@
 (`ingress_scan.IngressScanBucket`; bucket 0's `IngressScanFirst`, from the empty state) reads the warden's ingress row
 t, the scan's state S_{t−1} and its boundary's slot entries, and computes S_t and its egress view; egress bucket t
 (`egress.EgressBucket`) reads that view and computes the warden's egress row t. A group of link-windows is one
-registration, every row of every unit, input or output, a registered read, proved by C-Flock `prove --zk` behind the
-Lean firewall and held by Lean `verify --zk --registered`. Standalone: in no Spec, except the honest round on the
+registration, every row of every unit, input or output, a registered read, proved by Flock `prove --zk` behind the
+Lean ZK server and held by Lean `verify --zk --registered`. Standalone: in no Spec, except the honest round on the
 challenger's coins (``--challenger``), a `service.Stream`'s.
 
     python benchmarks/network_traces/scan_zk.py prove --bin flock-circuit --lean flock-verify --out DIR [--dry]
@@ -101,11 +101,11 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   outputs passes here, since the stand-in's entries are the prover's; an anchored Program's entry is its outputs on the
   `SCAN_STATE` it reads, which the period check holds to the scan's state tree (`stateTied`).
 * **A sampled draw** (``--draw K``): Lean ``draw --stratified K`` on the verifier's own coins (its OS randomness, the
-  rehearsal's live coins), each template's stratum its share and at least one unit; only the drawn units are proved
+  rehearsal's live coins), each template's stratum its share and at least one unit; only the sampled proof blocks are proved
   and opened, and an accepted audit carries ε at δ (``wrong_units``: at most ``bound`` of ``of`` units wrong, except
-  with probability δ), its charge terms (`charge_terms`) and each member's cost per drawn unit (`per_unit`). The chain
+  with probability δ), its charge terms (`charge_terms`) and each member's cost per sampled proof block (`per_unit`). The chain
   and tampered rounds draw too and are refused all the same: Lean holds every table row of a registered port, drawn or
-  not, an output port's table its instances' rows. A member none of whose units is drawn (G > 1) runs no session.
+  not, an output port's table its instances' rows. A member none of whose units is sampled (G > 1) runs no session.
 * **The challenger's coins** (``--challenger local|gate:USER@HOST --main FILE``, with ``--draw K``): the honest round's
   K drawn as prove_path's records audit draws (`a5_coins`): one session of the auditor's challenger on the group's root
   (`window_root`: the warden's session and the group's signed registrations), and the round's `service.Stream`
@@ -114,11 +114,11 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   ended, the outcome of record is the stream's with the coins' evidence, the Lean's whole run (`Run.run`, coin source
   the challenger) held to the Python's, and each altered evidence (`a5_coins.negatives`, the evidence for another
   window) refused by `coins.coins_reason` and the Lean's run (`coins_outcome`). ``local`` is a development session on
-  this machine (its own key; it shows the path, not an auditor's coins); ``gate:USER@HOST`` is vy-challenger-1's through
-  its gate, its challenger on ``--peer``'s 127.0.0.1, under the deployment's key record ``--challenger-key``. The
-  gate opens a root once, ever: a run's group is drawn once (the synthetic run's registrations carry fresh salts, so
-  each synthetic run has a root of its own). The other rounds keep the verifier's Lean's own coins: one session serves
-  one draw, and their refusal is Lean's registered reads, whatever the coins.
+  this machine (its own key; it shows the path, not an auditor's coins); ``gate:USER@HOST`` is the auditor's
+  challenger's through its gate, its challenger on ``--peer``'s 127.0.0.1, under the deployment's key record
+  ``--challenger-key``. The gate opens a root once, ever: a run's group is drawn once (the synthetic run's registrations
+  carry fresh salts, so each synthetic run has a root of its own). The other rounds keep the verifier's Lean's own
+  coins: one session serves one draw, and their refusal is Lean's registered reads, whatever the coins.
 * **What the verifier receives** is scanned for every piece of every unit's rows, inputs and outputs, and every salt
   but a public ``o0``'s, which the prover sends so the verifier opens each unit's output (`a8.received`; the slot
   entries' o0 is a committed row, `ROWS_O0`, whose salts it never sends), less the pieces public
@@ -1001,7 +1001,7 @@ def staged_wires(members: list[dict]) -> list[str]:
 def window_root(at: SimpleNamespace) -> str:
     """The root the challenger's session opens on (128 hex digits): the SHA-512 of the warden's session and the group's
     registrations, each link's in link-window order, whose heads the warden signed. The gate opens a root once, ever,
-    so a warden run's group is drawn once."""
+    so a warden run's group is sampled once."""
     return hashlib.sha512(canonical_json({"format": WINDOW_ROOT, "session": at.session.hex(),
                                           "registrations": {s: [x.registration for x in ws]
                                                             for s, ws in sorted(at.sides.items())}})).hexdigest()
@@ -1009,9 +1009,9 @@ def window_root(at: SimpleNamespace) -> str:
 
 @contextmanager
 def challenger(a, at: SimpleNamespace, out: Path):
-    """The challenger's session for the honest round's draw (``--challenger``, as prove_path's `records_audit.audit`
+    """The challenger's session for the honest round's sample (``--challenger``, as prove_path's `records_audit.audit`
     starts it): `a5_coins.start` on `window_root` for one rank, its evidence copied to ``out / "challenger"``; once the
-    rounds are done the rank's turn ends whether or not it drew (`Draws.skip`) and the session's evidence is published,
+    rounds are done the rank's turn ends whether or not it sampled (`Draws.skip`) and the session's evidence is published,
     which the yielded namespace's ``published`` then holds. None without ``--challenger``. Needs `WZ._one_stage`'s path
     (a5_coins is one-stage's)."""
     if not a.challenger:
@@ -1332,7 +1332,7 @@ def charge_terms(M, result: dict, members: list[dict], delta: float) -> dict | N
 
 
 def per_unit(members: list[dict], statement: dict) -> dict[str, dict]:
-    """Each member's session per drawn unit (prove_path's `per_unit`): C-Flock's ``prove_total_s``, the session's wall
+    """Each member's session per sampled proof block (prove_path's `per_unit`): Flock's ``prove_total_s``, the session's wall
     and Lean's verify, over the units the session proved; and a unit's ANDs and m."""
     out = {}
     for m in members:
@@ -1350,7 +1350,7 @@ def per_unit(members: list[dict], statement: dict) -> dict[str, dict]:
 def window_answer(reg: dict, record: dict | None, delta: Fraction, reason: str) -> dict:
     """One-stage's answer for the group's registration ``reg`` as a period check reads a link-window's scan answer
     (`NetworkCheck.Period`'s rows form, `pouw.core_check.answer_of`): from an accepted audit record (``record``,
-    `audit`'s ``audit.json``), its draw and proved units with one-stage's profile and bound on wrong units at
+    `audit`'s ``audit.json``), its sample and proved units with one-stage's profile and bound on wrong units at
     ``delta`` (`audit.profile`, `audit.wrong_units`: every unit drawn, the bound 0); else a reject naming ``reason``."""
     commitment = RG.digest(reg)
     if record is None:
@@ -1582,11 +1582,11 @@ def main(argv=None) -> int:
                    help="a warden_serve run's directory (rehearse --ids at the class's schedule): its group's "
                         "link-windows, verified under its deployment's key, in place of the synthetic run")
     p.add_argument("--draw", type=int,
-                   help="K: Lean draw --stratified K on the verifier's own coins, only the drawn units proved; default "
+                   help="K: Lean draw --stratified K on the verifier's own coins, only the sampled proof blocks proved; default "
                         "every unit")
     p.add_argument("--challenger", help="with --draw: the honest round's K drawn on the auditor's challenger's coins "
                    "(a5_coins, the round's service.Stream), not the verifier's: local, or gate:USER@HOST "
-                   "(vy-challenger-1 through its gate, with --peer and --challenger-key)")
+                   "(the auditor's challenger through its gate, with --peer and --challenger-key)")
     p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, "
                    "whose 127.0.0.1 the session's challenger listens on")
     p.add_argument("--challenger-key", help="with --challenger gate:USER@HOST: the challenger's key record of its "
