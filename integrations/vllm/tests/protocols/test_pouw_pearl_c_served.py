@@ -54,6 +54,8 @@ SID = CH.session_id(1)
 RESERVED = {"session": SID, "seq": 0, "peer": "vy-nebius-1", "by": "vllm", "expires_utc": "2026-10-20T11:18:00Z"}
 #: the auditor's challenger key, its ledger's and its challenge phases' (five leaves a challenge phase: reserve, open, record, close, end)
 PRIVATE, KEY = CH.challenger_key(3, H=5)
+#: what a reading of a gate's ledger here holds its sessions to: the gate's key, pins log and main (`CH.Gate.reading`)
+READ = CH.Gate(PRIVATE, KEY).reading()
 
 
 def salt_only(seed: int) -> LC.LiveChallenger:
@@ -423,28 +425,28 @@ def test_a_served_pass_counts_from_its_salt_only_session_ended_closed_and_comple
     assert c["weights_root"] == root.hex() and c["pass_index"] == 0 and c["session"]["root"] == r.hex()
     assert c["session"]["commitment"] == end["commitment"]
     ledger, fetch = gate.ledger(), {SID: s.tree}.get
-    assert PHC.session_reason(c, ledger, fetch) is None
-    assert PHC.session_reason(c, ledger, fetch, registered=root, commit=root.hex()) is None
-    assert PHC.session_reason(c, ledger, fetch, commit="cc" * 64) == (
+    assert PHC.session_reason(c, ledger, fetch, **READ) is None
+    assert PHC.session_reason(c, ledger, fetch, registered=root, commit=root.hex(), **READ) is None
+    assert PHC.session_reason(c, ledger, fetch, commit="cc" * 64, **READ) == (
         f"the pass's weights' root {root.hex()[:16]}... is not {'cc' * 8}..., the one the verifier holds")
-    assert PHC.session_reason(c, ledger, fetch, registered=bytes(64)) == (
+    assert PHC.session_reason(c, ledger, fetch, registered=bytes(64), **READ) == (
         "the pass's weights' root is not the one the period registered")
-    assert PHC.session_reason({**c, "coin_source": "in-process"}, ledger, fetch).startswith(
+    assert PHC.session_reason({**c, "coin_source": "in-process"}, ledger, fetch, **READ).startswith(
         "the window's coins were held in the serving process")
     seq = c["session"]["seq"]
-    assert PHC.session_reason({**c, "session": {**c["session"], "seq": seq + 1}}, ledger, fetch) == (
+    assert PHC.session_reason({**c, "session": {**c["session"], "seq": seq + 1}}, ledger, fetch, **READ) == (
         f"the window's session {SID} is ledger entry {seq + 1} in its reply, but entry {seq} opened it")
-    assert PHC.session_reason({**c, "session": {**c["session"], "secret": "ab" * 32}}, ledger, fetch) == (
+    assert PHC.session_reason({**c, "session": {**c["session"], "secret": "ab" * 32}}, ledger, fetch, **READ) == (
         "the pass's session names its hello's secret, which a pass never records: a refused pass")
     for k in (None, True, -1, 1 << 64, "0", 0.0):
-        assert PHC.session_reason({**c, "pass_index": k}, ledger, fetch) == (
+        assert PHC.session_reason({**c, "pass_index": k}, ledger, fetch, **READ) == (
             f"the pass's pass_index names no salt epoch: a salt epoch's number is an integer in [0, 2^64), not {k!r}")
-    assert PHC.session_reason({k: v for k, v in c.items() if k != "pass_index"}, ledger, fetch).startswith(
+    assert PHC.session_reason({k: v for k, v in c.items() if k != "pass_index"}, ledger, fetch, **READ).startswith(
         "the pass's pass_index names no salt epoch")
     r1 = PS.epoch_open_root(root, 1).hex()
-    assert PHC.session_reason({**c, "pass_index": 1}, ledger, fetch) == (
+    assert PHC.session_reason({**c, "pass_index": 1}, ledger, fetch, **READ) == (
         f"the window's session is for Commit {r.hex()}, not the window's Commit {r1}")
-    assert PHC.session_reason({**c, "pass_index": 1, "session": {**c["session"], "root": r1}}, ledger, fetch) == (
+    assert PHC.session_reason({**c, "pass_index": 1, "session": {**c["session"], "root": r1}}, ledger, fetch, **READ) == (
         f"the auditor's ledger has no session for Commit {r1}, so the window's coins are no session's of record")
     assert PPM.SESSION_KEYS == PHC.SESSION_FIELDS and PPM.session_head({}) == {}
     assert PPM.session_head({**c, "session": {**c["session"], "secret": "ab" * 32}}) == {
@@ -471,10 +473,10 @@ def test_a_salt_session_counts_only_reserved_salt_only_and_ended_closed_and_comp
     released = {Wd.ROUND: 0, Wd.SALT: 1}
     assert (_ended(gate)["complete"], _ended(gate)["released"]) == (False, released)
     fetch = {SID: s.tree}.get
-    assert PHC.session_reason(h1, gate.ledger(), fetch) == (
+    assert PHC.session_reason(h1, gate.ledger(), fetch, **READ) == (
         f"session {SID} ended without releasing every coin of its families (released {released}): a refused window")
     h1_layout = [list(f) for f in Wd.live_families(1)]
-    assert PHC.session_reason(h1, _ended_over(s.directory, Wd.live_families(1), r.hex(), complete=True), fetch) == (
+    assert PHC.session_reason(h1, _ended_over(s.directory, Wd.live_families(1), r.hex(), complete=True), fetch, **READ) == (
         f"session {SID} was reserved with {h1_layout}, not the salt coin alone [['pouw/salt', 1]]: a refused pass")
 
     one = tmp_path / "salt-only"
@@ -483,11 +485,11 @@ def test_a_salt_session_counts_only_reserved_salt_only_and_ended_closed_and_comp
     s = _GateSession(one, monkeypatch, gate, Wd.SALT_FAMILIES, salt_only(7))
     with PO.install(_model(), _served(s.open)) as comp:
         c = comp.get("pouw").commitment()
-    assert s.end() is None and PHC.session_reason(c, gate.ledger(), {SID: s.tree}.get) is None
+    assert s.end() is None and PHC.session_reason(c, gate.ledger(), {SID: s.tree}.get, **READ) is None
     fetch = {SID: s.tree}.get
 
     def over(**kw):
-        return PHC.session_reason(c, _ended_over(s.directory, Wd.SALT_FAMILIES, r.hex(), **kw), fetch)
+        return PHC.session_reason(c, _ended_over(s.directory, Wd.SALT_FAMILIES, r.hex(), **kw), fetch, **READ)
     assert over(end=False) == (
         f"session {SID} never ended (the auditor's ledger has its open entry and no end): a refused window")
     assert over(closed=False) == f"session {SID} ended without its client closing it (serve.py exited 1): a refused window"
@@ -508,23 +510,23 @@ def test_a_passs_salt_is_read_from_its_session_never_from_the_pass(tmp_path, mon
         c = comp.get("pouw").commitment()
     assert s.end() is None
     ledger, fetch, root = gate.ledger(), {SID: s.tree}.get, weights_root(ROOTS)
-    assert PHC.session_reason(c, ledger, fetch) is None
+    assert PHC.session_reason(c, ledger, fetch, **READ) is None
     forged = salt_only(9)
     opening = LC.LiveRecord(forged, Wd.SALT).record(PS.epoch_open_root(root, 0))
     workload = Workload((Matmul(0, Shape(16, 1024, 128), 0),))
     salt = PPD.epoch_of(workload, ROOTS, forged.commitment, opening, 0).salt
     own = {**c, "coins": forged.commitment.to_json(), "salt_opening": opening.to_json(), "salt": salt.hex()}
     signed = s.challenger.commitment.root.hex()
-    assert PHC.session_reason(own, ledger, fetch) == (
+    assert PHC.session_reason(own, ledger, fetch, **READ) == (
         f"the pass's coins {forged.commitment.root.hex()[:16]}... are not the coin commitment session {SID}'s "
         f"challenger signed ({signed[:16]}...)")
     assert PHC.session_reason({**c, "session": {**c["session"], "commitment": forged.commitment.root.hex()}},
-                              ledger, fetch) == (
+                              ledger, fetch, **READ) == (
         f"session {SID}'s end entry records coin commitment {signed[:16]}..., not "
         f"{forged.commitment.root.hex()[:16]}..., the window's (the gate's answer): a refused window")
-    assert PHC.session_reason({**c, "salt": "00" * 32}, ledger, fetch) == (
+    assert PHC.session_reason({**c, "salt": "00" * 32}, ledger, fetch, **READ) == (
         "the pass's salt is not audit.salt_of of its session's salt coin over its weights' root")
     other = tmp_path / "other"
     shutil.copytree(s.tree, other)
     (other / "out" / R.RECORD).write_text((other / "out" / R.RECORD).read_text().replace(signed, "dd" * 64))
-    assert PHC.session_reason(c, ledger, {SID: other}.get).startswith(f"session {SID} is not trusted: ")
+    assert PHC.session_reason(c, ledger, {SID: other}.get, **READ).startswith(f"session {SID} is not trusted: ")

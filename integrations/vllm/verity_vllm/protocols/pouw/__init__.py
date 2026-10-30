@@ -23,11 +23,11 @@ commitment and its salt coin's opening and, once closed,
 the transcript root with its unit and tile counts.  Pearl-C's also says what it claims of the weights (``registration``,
 `weights_claim`): the executor applies no keyed rotation and reads no curated list, so it claims nothing about which
 weights were served.  Pearl-C commits one pass per engine step, a step held to what one pass takes (`pouw_pass`), each
-retained in its own directory under ``transcript_dir`` when given.  The audit (drawing tiles, opening
+retained in its own directory under ``transcript_dir`` when given.  The audit (sampling tiles, opening
 them) is `verity.core.protocols.pouw.audit`'s, after the run.  Beside sampled proofs the composition asks
 `verity.core.protocols.pouw.circuit` (`protocol_options.CIRCUITS`), and only ``ncp-v2`` has a circuit.  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
 `NcpWeight_v1` Program call, once per run, and each call to its own `NcpLinear_v1` Program call reading it, their units
-computed natively and committed a leaf per unit (`pouw_native`, `pouw_circuit`); the replay draws each call's units under
+computed natively and committed a leaf per unit (`pouw_native`, `pouw_circuit`); the replay samples each call's units under
 its window's key, regenerates them and checks each against its template (`check.replay.pouw_circuit`).
 Under H1 + fx1 (``eps1-sm120-h1fx1``, `pouw_h1`) on the eager int8_exact row nothing is executed in the linear's place
 (`executes`): the arm serves its own y, and each call is recorded as its own Program, compiled to H1 tile units
@@ -139,11 +139,11 @@ class Settings:
     coins: Any = None
     retain_steps: int = 0
     transcript_dir: str | None = None
-    #: ``ncp-v2``'s replay: the window's work-law budget K, each call drawing its share (`plan.window_laws`); None is
+    #: ``ncp-v2``'s replay: the window's work-law budget K, each call sampling its share (`plan.window_laws`); None is
     #: `RECORD_K`
     draws: int | None = None
     #: ``ncp-v2``'s negative control, None for an honest run: ``tile`` commits and opens word 7 of every tile of the first
-    #: call with its low bit flipped, so whatever the window's fresh draw, a drawn tile is wrong
+    #: call with its low bit flipped, so whatever the window's fresh sample, a sampled tile is wrong
     #: (`check.replay.pouw_circuit.tamper_tiles`); ``bias`` commits and serves the first biased call with bias word 0's low
     #: bit flipped
     tamper: str | None = None
@@ -673,7 +673,7 @@ def weights_claim(scheme: Any, curated: bool = False, needs_gamma_fold: bool = F
     weights only when `SERVED_TRANSFORMS` pass the registered-weights rule (`registration.check_registration`, Pearl-C4's
     too); a keyed transform would take its key from the epoch's salt coin (`registration.rotation_key`).  Otherwise the
     claim says it is about nothing (`UNREGISTERED`) and names the refusal, and serving goes on: the salt is still the
-    challenger's live coin (`Epoch.start`), so what the draw establishes of the work is unchanged."""
+    challenger's live coin (`Epoch.start`), so what the sample establishes of the work is unchanged."""
     out: dict[str, Any] = {"transforms": list(SERVED_TRANSFORMS), "curated": curated}
     try:
         scheme.check_registration(SERVED_TRANSFORMS, curated, needs_gamma_fold)

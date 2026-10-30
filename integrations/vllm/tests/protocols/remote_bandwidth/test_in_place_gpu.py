@@ -28,7 +28,7 @@ from verity_vllm.protocols.remote_bandwidth import int8_kv, memory_map as store_
 from verity_vllm.protocols.remote_bandwidth.binder import PagedBacking, TorchBacking, page_layout, storage_bytes  # noqa: E402
 from verity_vllm.protocols.remote_bandwidth.in_place import InPlaceBackend  # noqa: E402
 from verity_vllm.protocols.remote_bandwidth.interface import IDENTITY, Append, PageLayout  # noqa: E402
-from verity_vllm.protocols.remote_bandwidth.registry import Store  # noqa: E402
+from verity_vllm.protocols.remote_bandwidth.registry import NodeMemory  # noqa: E402
 
 from .test_memory_map import kv_payload  # noqa: E402
 from .test_registry import RECEIPT  # noqa: E402
@@ -38,9 +38,9 @@ BLOCK = rcodec.BLOCK_BYTES
 LAYERS, PAGES, SLOTS, HEADS, DIM = 2, 6, 8, 4, 128      # a slot 1 KiB of K, 1 KiB of V; a plane-page 2 blocks
 
 
-def gpu_store() -> tuple[Store, list]:
+def gpu_store() -> tuple[NodeMemory, list]:
     """Five weight blocks, then two KV layers of 6 pages (FlashAttention's (2, pages, slots, heads, dim) bf16): N = 53."""
-    s = Store()
+    s = NodeMemory()
     w = torch.randint(0, 256, (5 * BLOCK,), dtype=torch.uint8, device="cuda")
     s.register("w", "hbm", "weights", TorchBacking(w, 5 * BLOCK), block_bytes=BLOCK, codec=IDENTITY, receipt=RECEIPT,
                source="w", encode=False)
@@ -52,7 +52,7 @@ def gpu_store() -> tuple[Store, list]:
     return s, caches
 
 
-def engine(s: Store, caches: list):
+def engine(s: NodeMemory, caches: list):
     """`test_remote_session.engine`'s trace, each step's KV written into the caches after its `kv_append` (the
     forward's write, after the schedule), then `end_step`."""
     lives, n = {3: 0}, [0]
@@ -92,7 +92,7 @@ class Ticking(InPlaceBackend):
         return out
 
 
-def backend(s: Store, caches: list, clock: PassClock | None = None, **kw) -> Ticking:
+def backend(s: NodeMemory, caches: list, clock: PassClock | None = None, **kw) -> Ticking:
     return Ticking(clock or PassClock(), s, engine(s, caches), [s.backing(r.name) for r in s.layout().regions],
                    session_lib=SESSION_SO, kv_lib=KV_SO, randbytes=random.Random(7).randbytes, **kw)
 
@@ -185,7 +185,7 @@ class Tiny(torch.nn.Module):
 
 def test_weights_are_decoded_at_use_so_the_forward_is_the_models_and_decoded_back_where_they_are_at_close():
     torch.manual_seed(3)
-    model, s, weights = Tiny(), Store(), {}
+    model, s, weights = Tiny(), NodeMemory(), {}
     for name, p in model.named_parameters():
         b = TorchBacking.of_tensor(p.data, BLOCK)
         if b is not None:
@@ -245,10 +245,10 @@ def test_a_registered_tensor_moved_mid_session_fails_it_by_name():
 I8_PAGES, I8_SLOTS, I8_HEADS = 4, 16, 8
 
 
-def int8_store() -> tuple[Store, list]:
+def int8_store() -> tuple[NodeMemory, list]:
     """Three weight blocks, then two layers of the int8 backend's cache (vLLM's view [pages, KV heads, slots, 2 x 128]
     over [pages][slots][KV heads][K ‖ V] bf16, a token-layer one block): N = 3 + 2 x 64."""
-    s, g = Store(), torch.Generator().manual_seed(5)
+    s, g = NodeMemory(), torch.Generator().manual_seed(5)
     w = torch.randint(0, 256, (3 * BLOCK,), dtype=torch.uint8, device="cuda")
     s.register("w", "hbm", "weights", TorchBacking(w, 3 * BLOCK), block_bytes=BLOCK, codec=IDENTITY, receipt=RECEIPT,
                source="w", encode=False)

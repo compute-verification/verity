@@ -1,5 +1,5 @@
 {
- "plan": "Demo A's plan of record at a one-week sampling block (PRF-166): per subcircuit its units, units drawn, ANDs (the credited work) and output bits, the objective's weights on them, and what core certified at each delta",
+ "plan": "Demo A's plan of record at a one-week sampling block: per subcircuit its units, units drawn, ANDs (the credited work) and output bits, the objective's weights on them, and what core certified at each delta",
  "run": "r20261026-052009-0a79",
  "weights": {
   "work": 2.343077413312391e-21,

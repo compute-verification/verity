@@ -19,7 +19,7 @@ from verity_vllm.protocols.pouw.h1 import requests as RQ
 _ROOT = re.compile(r"^[0-9a-f]{128}$")
 #: why a window's draw coin has no session to be read from
 NO_DRAW_SESSION = ("the verifier names no draw session: a window's draw coin is its own draw session's, opened withheld "
-                   "on its draw root (CMP-177)")
+                   "on its draw root")
 
 
 def _draw(commits: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -77,13 +77,18 @@ def draw_reason(commits: Mapping[str, Any], trusted: LiveCommitment, received: S
     return None if why is None else f"the window's draw coin: {why}"
 
 
-def draw_files(commits: Mapping[str, Any], ledger: Any, fetch: Any, verify: Any) -> Any:
-    """The files of the window's draw session (`draw_session_reason`), the one `ledger` (`pouw_h1_challenger.Ledger`)
-    opens on the window's draw root (its H1 commitment `commits`'s ``draw``'s ``root``), from its ``out/`` as `fetch`
-    gives it; None when the ledger opens none there or `fetch` has no tree for it, which `draw_session_reason` refuses."""
+def draw_files(commits: Mapping[str, Any], ledger: Ch.Ledger, fetch: Any, verify: Any, *, key: ChallengerKey,
+               pins: Sequence[str] | None, main: Sequence[str] | None) -> Any:
+    """The files of the window's draw session (`draw_session_reason`), the one `ledger` (`challenger.ledger_of` under
+    `key`) opens on the window's draw root (its H1 commitment `commits`'s ``draw``'s ``root``), run from a commit the
+    pins log `pins` records on `main` (`challenger.pinned_session`), from its ``out/`` as `fetch` gives it; None when
+    the ledger opens none there or `fetch` has no tree for it, which `draw_session_reason` refuses."""
     root = _draw(commits).get("root")
     try:
-        tree = fetch(ledger.pinned({"root": root}, verify).session) if isinstance(root, str) else None
+        audited = None if not isinstance(root, str) else Ch.pinned_session(
+            list(ledger.lines), {"root": root}, key, None if pins is None else list(pins),
+            None if main is None else list(main), verify)
+        tree = None if audited is None else fetch(audited.session)
         return None if tree is None else remote.session_files(Path(tree) / "out")
     except CoinError:
         return None

@@ -10,6 +10,9 @@ canonical and its digest names it. A frame past the transcript's bound (`keep`, 
 SHA-512, `elided`: a fill of gigabytes is a digest a frame, which a replay compares and can't feed. The record is its
 public projection (`public`): the entries of the four public kinds, private ones never. A run's record is its parties'
 projections, in the order of their names (`record`).
+
+A transcript's entries are wire frames, numbered from 0 as a record entry's `seq` is (`verity.core.protocols.record`),
+but neither chained nor signed, and their `kind` is the wire's publicity class, not a message's kind under a schema.
 """
 
 from __future__ import annotations

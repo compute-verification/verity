@@ -516,7 +516,7 @@ def _mutate_live(h: dict, name: str, rng: random.Random) -> None:
             u = rng.choice(man["matmuls"])
             u["index"] = rng.choice([CC.CALL_BOUND, CC.CALL_BOUND + rng.randrange(1, 1 << 20), (1 << 64) - 1])
         case "h1-layout" | "not-salt-only":
-            # #3868's session: H1's layout, its salt coin alone released, so ended incomplete; or another layout or scheme
+            # an H1 session: H1's layout, its salt coin alone released, so ended incomplete; or another layout or scheme
             layout, scheme = (Wd.live_families(rng.choice([1, 2])), Wd.LIVE_SCHEME) if name == "h1-layout" else \
                 rng.choice([(((Wd.SALT, 1), (Wd.DRAW, 1)), Wd.LIVE_SCHEME), (((Wd.SALT, 2),), Wd.LIVE_SCHEME),
                             (Wd.SALT_FAMILIES, "verity/vllm/commit-coins/v1")])
@@ -685,7 +685,7 @@ def signed(commitment: Ch.LiveCommitment, rng: random.Random, signer: int | None
     challenger key `signer` (0 or 1, at random), and the verifier's key for key `key` (the signer's by default)."""
     signer = rng.randrange(2) if signer is None else signer
     sk, vk = _challenger_key(signer), _challenger_key(signer if key is None else key)
-    host = rng.choice(["vy-nebius-cpu-1", "auditor.local", "h_1"])
+    host = rng.choice(["challenger-1.example", "auditor.local", "h_1"])
     message = Ch.record_message(lms.public_key(sk)[:16], host, commitment)
     record = Ch.ChallengerRecord(commitment, host, lms.sign_at(sk, rng.randrange(4), message).encode())
     return {"key": Ch.ChallengerKey(vk.params.W, vk.params.H, lms.public_key(vk)).to_json(), "record": record.to_json()}
