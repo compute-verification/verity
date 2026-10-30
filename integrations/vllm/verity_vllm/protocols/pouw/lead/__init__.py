@@ -17,7 +17,7 @@ quantizes the call's rows as it always does, then
    (`LeadBackend.a_root`), is recorded in the pass's record (`record.PassRecord.a_root`);
 2. the call's coins come from the coin link, released after that root (`feed.CoinLink.release`);
 3. the lead's kernel and committer run on the rows and the coins (`LeadBackend.call`), giving the served y in the plain
-   arm's place: the layout's fold of the noisy word (A·B plus the coin terms), so not the plain arm's y.
+   arm's place: the plain arm's y bit for bit, every coin term folded out of the word exactly.
 
 At the step's end (`LeadRun.end_pass`), the committer's root of the forward's one words instance (`LeadBackend.words_root`)
 is recorded, and the pass's `PassCommitment` is published, before any sample. A call made outside a step (an engine's
@@ -77,8 +77,8 @@ class LeadBackend(Protocol):
 
     def call(self, w: int, layer: Any, xq: Any, s_a: Any, feed: F.Feed) -> Any:
         """Linear ``w``'s call on the s8 rows ``xq`` [m, K] (scales ``s_a`` [m]) under the coins ``feed``: the served y
-        [m, N] bf16 in the plain arm's place, the layout's fold of the noisy word. Its committed words join the window's
-        words instance."""
+        [m, N] bf16 in the plain arm's place, the plain arm's y bit for bit (`engine.int8_exact.dequantize` of the exact
+        product), whatever the coins. Its committed words join the window's words instance."""
 
     def words_root(self, window: WindowKeys) -> bytes:
         """The 64-byte keyed root of ``window``'s words instance: its forward's calls' committed words in call order."""
