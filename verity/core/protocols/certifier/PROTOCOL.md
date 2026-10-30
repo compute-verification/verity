@@ -2071,10 +2071,7 @@ verifier: the network certifier's named gap "The cells' wiring is open to the ve
 **Demonstration** (`benchmarks/network_traces/warden_zk.py`). A toy unit, `WardenRowIdentity{B}` at B a row's S·B
 bytes, takes one row's bits through two NOTs. Each unit reads one of a connection's cells, so its row is that cell's
 bucket. Its port is registered against the network certifier's egress root of a `warden_serve` run, proved by Flock `prove --zk`
-behind the firewall, and held by Lean `verify --zk --registered`. Its other port is registered too, at the member's own
-value of its rows, committed before staging under the prover's salts with its root in the registration before any
-coin, so the verifier's registered reads name every port of the statement (`Flock.Registered.checkComplete`).
-The members:
+behind the firewall, and held by Lean `verify --zk --registered`. The members:
 - the sender's output and the receiver's input are accepted;
 - rows under the prover's own root are refused, and so is the prover's registration of it under the network certifier's
   certificate;
