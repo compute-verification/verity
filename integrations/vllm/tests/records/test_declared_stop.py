@@ -24,9 +24,10 @@ from verity_vllm.records.fields import MissingField, RecordError
 
 DATA = Path(__file__).parent / "data"
 REAL = DATA / "global_program.json"
-#: sha256 of the global match's outcomes over `_corpus` (`json.dumps(..., sort_keys=True, default=str)`, the run directory replaced), computed
-#: with G6 on the parsed JSON before it read the record
-OUTCOMES_SHA256 = "1a920268eff23cacdd3b4b51bec598d9070633c029861bca65ebdbf202cfe75a"
+#: SHA-512 of the global match's outcomes over `_corpus` (`json.dumps(..., sort_keys=True, default=str)`, the run directory replaced),
+#: messages included: a change to what the global match decides or says over the record changes it
+OUTCOMES_SHA512 = ("cb717c6fa104faca8735b31c87a494d1d6994063dd77f07e1b41895e9dbf4b97"
+                   "c1b26bb065e6e8579aaf777aca05337bb1123511683e27a8eba77d2e0a9f918b")
 REQUIRED = ("stop_rule.eos_token_ids", "lag.value")
 #: The global Program's two blocks as `pipeline.global_program` writes them (the real record's, with the toy's EOS id and the LAG to declare)
 GP01_SOURCE = {"generation_config.json": [T.EOS], "config.json": [T.EOS]}
@@ -173,7 +174,7 @@ def test_g6_reads_the_record_to_the_same_document(memory, tmp_path):
     got = _corpus(tmp_path)
     assert got["cap, as the mock writes it"]["verdict"] == "PASS" and got["cap, as GP-01 writes it"]["verdict"] == "PASS"
     blob = json.dumps(got, sort_keys=True, default=str).replace(str(tmp_path), "<run>")
-    assert hashlib.sha256(blob.encode()).hexdigest() == OUTCOMES_SHA256, {k: (v["verdict"], v["G6"]["problems"][:2]) for k, v in got.items()}
+    assert hashlib.sha512(blob.encode()).hexdigest() == OUTCOMES_SHA512, {k: (v["verdict"], v["G6"]["problems"][:2]) for k, v in got.items()}
 
 
 @pytest.mark.parametrize("block,value,field,why", [

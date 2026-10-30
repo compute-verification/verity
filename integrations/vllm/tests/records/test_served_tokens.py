@@ -24,10 +24,10 @@ from verity_vllm.records.served_tokens import ServedRequest, ServedTokens
 
 DATA = Path(__file__).parent / "data"
 REAL = DATA / "served_tokens.json"
-#: sha256 of the global match's outcomes over `_corpus` (`json.dumps(..., sort_keys=True, default=str)`, the run directory replaced), computed
-#: with G6 on the parsed JSON before it read the record, then once more when G6 began refusing a declared request the record has no
-#: entry for: that turned `a request unserved` and `no requests` from PASS to FAIL, and changed no other case
-OUTCOMES_SHA256 = "e1c4765cc877c03197d6e5546636ead5397ab51157445b575fcb4b590e513d8d"
+#: SHA-512 of the global match's outcomes over `_corpus` (`json.dumps(..., sort_keys=True, default=str)`, the run directory replaced),
+#: messages included: a change to what the global match decides or says over the record changes it
+OUTCOMES_SHA512 = ("6ad99f264ceda3ea30fd68fcb3ac8729a53a72cc3d08e2e3e48c29d6a130ac62"
+                   "c452b86b00995e5b54a18ba4f3e7bd4adf89aa2129f1ff0bf531bedab5453137")
 REQUIRED = ("requests", "requests[0].request_id", "requests[0].generated_token_ids", "lag.value")
 OPTIONAL = ("arrive_step_realized", "first_step", "finish_step", "finish_reason", "served_output_len", "executed_prefix_len")
 #: the TP capture's request fields (`pipeline.tp.capture`), and the TP Match arms' (`pipeline.tp.match`)
@@ -217,7 +217,7 @@ def test_g6_reads_the_record_to_the_same_document(memory, tmp_path):
     got = _corpus(tmp_path)
     assert {k: v["verdict"] for k, v in got.items()}["as written"] == "PASS"
     blob = json.dumps(got, sort_keys=True, default=str).replace(str(tmp_path), "<run>")
-    assert hashlib.sha256(blob.encode()).hexdigest() == OUTCOMES_SHA256, {k: (v["verdict"], v["G6"]["problems"][:2]) for k, v in got.items()}
+    assert hashlib.sha512(blob.encode()).hexdigest() == OUTCOMES_SHA512, {k: (v["verdict"], v["G6"]["problems"][:2]) for k, v in got.items()}
 
 
 @pytest.mark.parametrize("path,why", [("requests[1].generated_token_ids", "is missing: every writer of the record writes it"),

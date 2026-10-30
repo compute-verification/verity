@@ -12,7 +12,7 @@ from verity_vllm.program.frontend.target_profile import (ApplicabilityError, Art
                                                parse_target_arg, profile_mismatches, reuse_mismatches)
 
 B0_DIGEST = "59b35d80faf29438d21a0ea1c96c877ec69e2f21174f11b835ac1ef04c1ed496"  # B0 request 8/4 (identical on every build host)
-CV = {"schema": "cb-a/aot-artifact/v1", "rules": [{"id": "TritonGemm[vllm-bi]", "version": 1}], "sources_sha256": "ab" * 32}
+CV = {"schema": "cb-a/aot-artifact/v1", "rules": [{"id": "TritonGemm[vllm-bi]", "version": 1}], "sources_sha512": "ab" * 64}
 APPLIC = {"numerics_profile": "b1-eager-v3", "attention_impl": ["vllm.v1.attention.backends.flash_attn.FlashAttentionImpl"], "vllm_flash_attn_version": ["2"],
           "fused_add_rms_norm_dispatch": "batch_invariant", "vllm_version": "0.28.1rc1.dev472+gd9105ea80", "torch_version": "2.13.0+cu129",
           "triton_version": "3.7.1", "tuned_gemm_arch_family": "ada"}
@@ -68,9 +68,9 @@ def test_case_i_inconsistent_capability_same_digest_different_identity():
     assert a89.identity != a80.identity
     assert a89.target_profile["compute_capability"] == [8, 9] and a80.target_profile["compute_capability"] == [8, 0]
     # the identity is a function of exactly its four components (deterministic, length-prefixed)
-    assert a89.identity == ArtifactIdentity.compute(CV, p89, APPLIC, B0_DIGEST) == a89.recomputed()
+    assert a89.identity == ArtifactIdentity.compute(CV, p89, APPLIC, B0_DIGEST) == a89.recomputed() and len(a89.identity) == 128
     assert ArtifactIdentity.build(CV, p89, dict(APPLIC, vllm_flash_attn_version=["3"]), B0_DIGEST).identity != a89.identity
-    assert ArtifactIdentity.build(dict(CV, sources_sha256="cd" * 32), p89, APPLIC, B0_DIGEST).identity != a89.identity
+    assert ArtifactIdentity.build(dict(CV, sources_sha512="cd" * 64), p89, APPLIC, B0_DIGEST).identity != a89.identity
     assert ArtifactIdentity.build(CV, p89, APPLIC, "0" * 64).identity != a89.identity
 
 
@@ -109,7 +109,7 @@ def test_case_iv_reuse_under_mismatched_profile_is_refused_verbatim(tmp_path):
     partial = {k: v for k, v in APPLIC.items() if k != "fused_add_rms_norm_dispatch"}
     assert reuse_mismatches(art, p89, partial) == ["applicability.fused_add_rms_norm_dispatch: artifact requires 'batch_invariant', requester did not report it"]
     # another construction version (edited rule/shim): refused
-    assert reuse_mismatches(art, p89, APPLIC, dict(CV, sources_sha256="00" * 32)) == ["construction_version differs from the artifact's"]
+    assert reuse_mismatches(art, p89, APPLIC, dict(CV, sources_sha512="00" * 64)) == ["construction_version differs from the artifact's"]
 
 
 def test_tampered_wrapper_is_refused():
@@ -122,6 +122,10 @@ def test_tampered_wrapper_is_refused():
     assert bad and bad[0].startswith(f"identity {art.identity} does not match its components")
     with pytest.raises(ApplicabilityError):
         check_reuse(forged, TargetProfile(compute_capability=(9, 0)), APPLIC)
+    fresh = ArtifactIdentity.build(CV, p, APPLIC, B0_DIGEST)
+    old = ArtifactIdentity.from_json({**fresh.to_json(), "identity": art.identity[:64]})   # an artifact from before identities were SHA-512
+    assert reuse_mismatches(old, p, APPLIC) == [f"identity {art.identity[:16]} is a 64-hex SHA-256 digest, from before artifact identities "
+                                                "became SHA-512: rebuild the artifact"]
 
 
 def test_parse_target_arg_overrides_the_default():

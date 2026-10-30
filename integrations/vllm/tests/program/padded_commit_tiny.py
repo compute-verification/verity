@@ -113,7 +113,7 @@ def _reading(prim: Any, word: int, width: int) -> str:
 
 
 def _sha(obj: Any) -> str:
-    return hashlib.sha256(json.dumps(obj, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    return hashlib.sha512(json.dumps(obj, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 def _owner_name(prog: Program, g: int) -> str:

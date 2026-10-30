@@ -37,7 +37,7 @@ def _trace(d: Path) -> Path:
     d.mkdir(parents=True)
     (d / "descriptor.json.gz").write_bytes(gzip.compress(raw))
     (d / "result.json").write_text(json.dumps({"ok": True, "M": 1, "pos0": 8, "program": {
-        "digest": r.digest, "descriptor_sha256": hashlib.sha256(raw).hexdigest(), "correspondence_digest": correspondence_digest(desc)}}))
+        "digest": r.digest, "descriptor_sha512": hashlib.sha512(raw).hexdigest(), "correspondence_digest": correspondence_digest(desc)}}))
     for name in A.CARRIED[1:]:
         (d / name).write_text(json.dumps({"name": name}))
     leaves = [{"name": f"inner.{n}", "shape": [t.leaves], "field": i} for i, (n, t) in enumerate(_weights(r.program)[1].fields)]
@@ -72,12 +72,21 @@ def test_emit_refuses_weight_leaves_that_are_not_the_programs(tmp_path):
     assert not (tmp_path / "out").exists()
 
 
-@pytest.mark.parametrize("field,match", [("digest", "is not the predicted"), ("descriptor_sha256", "the predicted descriptor under the trace's")])
+@pytest.mark.parametrize("field,match", [("digest", "is not the predicted"), ("correspondence_digest", "is not the trace's descriptor.json.gz")])
 def test_emit_refuses_a_trace_of_another_program(tmp_path, field, match):
     trace = _trace(tmp_path / "trace")
     res = json.loads((trace / "result.json").read_text())
     (trace / "result.json").write_text(json.dumps({**res, "program": {**res["program"], field: "0" * 64}}))
     with pytest.raises(UsageError, match=match):
+        A.emit(_phi(TINY), "step", str(trace), str(tmp_path / "out"))
+    assert not (tmp_path / "out" / "descriptor.json.gz").exists()
+
+
+def test_emit_refuses_a_trace_whose_descriptor_is_not_the_predicted_one(tmp_path):
+    trace = _trace(tmp_path / "trace")
+    desc = json.loads(gzip.decompress((trace / "descriptor.json.gz").read_bytes()))
+    (trace / "descriptor.json.gz").write_bytes(gzip.compress(json.dumps({**desc, "root": "another"}, sort_keys=True).encode()))
+    with pytest.raises(UsageError, match="is not the trace's descriptor.json.gz"):
         A.emit(_phi(TINY), "step", str(trace), str(tmp_path / "out"))
     assert not (tmp_path / "out" / "descriptor.json.gz").exists()
 
@@ -117,3 +126,25 @@ def test_a_rank_composes_its_workload_from_each_requests_component_as_predicted(
     assert got["errors"] == {} and set(got["secs"]) == {"step", "workload", *names}
     assert got["requests"] == {n: build_program(phi, "request", LP=lp, T=t).digest for n, (lp, t) in zip(names, phi.request_shapes())}
     assert got["workload"] == S.predict_workload(phi)["digest"]
+
+
+def test_a_predicted_rows_workload_is_one_gm01_verifies_by_its_descriptor(tmp_path):
+    """`write_workload` writes predict's workload Program as GP-01 writes its own: GM-01's `from_gprog` recomputes its digest from
+    the descriptor beside it and holds the `lag` block to the Program's `lag` static, and refuses either edited."""
+    from verity_vllm.check.match.declaration import from_gprog
+    from verity_vllm.pipeline.global_program import request_id_of
+    phi = _phi(TINY, [{"request_id": f"u{i}", "index": i, "prompt_len": lp, "max_tokens": cap, "arrive_step": i}
+                      for i, (lp, cap) in enumerate([(5, 3), (7, 2)])])
+    wl, p = A.write_workload(phi, {}, {}, str(tmp_path)), tmp_path / "workload_program.json"
+    g = from_gprog(str(p))
+    assert g["workload_digest"] == wl.digest == S.predict_workload(phi)["digest"]
+    dv = g["gprog_artifact"]["digest_verification"]
+    assert dv["verified"] is True and dv["lag_static"] == wl.lag == g["lag"]["value"], dv
+    assert [r["request_id"] for r in g["requests"]] == [request_id_of(0), request_id_of(1)]
+    art = json.loads(p.read_text())
+    p.write_text(json.dumps({**art, "lag": {**art["lag"], "value": 1 - wl.lag}}))
+    with pytest.raises(ValueError, match="lag declaration is not the Program's"):
+        from_gprog(str(p))
+    p.write_text(json.dumps({**art, "workload_digest": "0" * 128}))
+    with pytest.raises(ValueError, match="is not the Program it names"):
+        from_gprog(str(p))

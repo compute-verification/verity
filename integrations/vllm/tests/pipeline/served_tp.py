@@ -61,7 +61,7 @@ def commit(root: Path, *, world: int = 2, I: int = 256, law: str = "subset:2", c
     wl = root / "workload.json"
     wl.write_text(json.dumps({"requests": [{"request_id": rid, "prompt_token_ids": pr, "max_tokens": MAX_TOKENS, "arrive_step": 0}
                                            for rid, pr in prompts.items()], "sampling": {"variant": "greedy"}}))
-    wl_sha = va.load_workload(wl)["sha256"]
+    wl_sha = va.load_workload(wl)["sha512"]
     reqs = [{"request_id": f"r{i}", "arrive_step": 0, "prompt_len": len(pr), "max_tokens": MAX_TOKENS} for i, pr in enumerate(prompts.values())]
     roots = {r: bytes(o.run.run_root) for r, (_c, o) in enumerate(ranks)}
     tag = (RT.TP_ROOT_TAG if commit_scheme == ROWS else RT.TP_ROOT_TAG_V1).decode()
@@ -92,7 +92,7 @@ def commit(root: Path, *, world: int = 2, I: int = 256, law: str = "subset:2", c
     if deferred:
         commit_doc.update(commitment_vector=[{"rank": r, "run_root": x.hex()} for r, x in roots.items()], commit_pass=None)
     rows = [{"pair": 0, "arm": "control", "label": LABEL},
-            {"pair": 0, "arm": "instrumented", "label": LABEL, "workload_sha256": wl_sha, "commit": commit_doc}]
+            {"pair": 0, "arm": "instrumented", "label": LABEL, "workload_sha512": wl_sha, "commit": commit_doc}]
     (out / "runs.jsonl").write_text("".join(json.dumps(x) + "\n" for x in rows))
     (out / "versions.json").write_text(json.dumps({"root_tag": tag, "commit_scheme": commit_scheme, "sampled_replay": {"of_record": of_record},
                                                    "argv": ["tp-commit", "--workload", wl.name, "--tp", str(world), "--label", LABEL]}))
@@ -114,7 +114,7 @@ def seal(out: Path, tp: dict, ranks: list, replay: dict, per_rank: dict) -> None
             shutil.copytree(o.bdir / d, part / d)
         bmap = json.loads((o.out / f"binding_map_p{o.pair}.json").read_text())
         canon = json.dumps(bmap.get("entries"), sort_keys=True, separators=(",", ":"), default=str).encode()
-        bmap.update(rank=r, run_root=root, digest=hashlib.sha256(canon).hexdigest())
+        bmap.update(rank=r, run_root=root, digest=hashlib.sha512(canon).hexdigest())
         (part / "binding_map.json").write_text(json.dumps(bmap))
         wr = o.row["commit"]["weight_registration"]
         ctx = {"tp": {"world": tp["world"], "rank": r}, "pair": 0, "label": LABEL, "code": "test", "run_root": root, "tp_run_root": tp["tp_run_root"],

@@ -5,8 +5,8 @@
 Two arms in ONE process on ONE engine (vLLM d9105ea80, eager, bf16, VLLM_BATCH_INVARIANT=1, the adapter's declared profile):
   control       Verity disabled entirely — no observer, no hooks, no wrapped runner methods; the loop below is the only code around
                 `engine.step()` (the same loop runs the instrumented arm, so it is in both numerator and denominator)
-  instrumented  a committer installed for the run (`--committer native_host` = the naturally-materialised reference path; other
-                committers plug in through the same `Committer` interface), uninstalled afterwards; the harness asserts the engine
+  instrumented  a committer installed for the run (`--committer native_collect_v2b`, the windowed worker, which commits rows-sha512;
+                other committers plug in through the same `Committer` interface), uninstalled afterwards; the harness asserts the engine
                 is pristine again before the next control run.
 Pairs are interleaved (control, instrumented) with the order alternating per pair; ≥ 5 pairs.  Warm-up: two control passes and one
 instrumented pass on throwaway prompts of the same shape (Triton JIT, allocator, pinned pool), reported separately.  Weight registration
@@ -21,7 +21,7 @@ Outputs (DIR): runs.jsonl (one row per run), steps.jsonl (one row per step), sum
 versions.json.  Every number is MEASURED unless the key says otherwise.
 
     PYTHONPATH=. verity-vllm commit \
-        --workload workloads/workload_cov_b0_b1_c256.json --pairs 5 --committer native_host --out /workspace/cp/cmt3/b0_b1
+        --workload workloads/workload_cov_b0_b1_c256.json --pairs 5 --out /workspace/cp/cmt3/b0_b1
 
 PROTOCOL SUMMARY (Commit phase entry: the instrumented runs + the fail-closed X-03 verdict)
   Purpose: run the row's workload on ONE engine in interleaved (control, instrumented) pairs; the instrumented arm commits every
@@ -45,7 +45,7 @@ from __future__ import annotations
 
 import time
 
-from verity_vllm.records.commit_run import SCHEMA, CommitRun
+from verity_vllm.records.commit_run import SCHEMA
 
 _T_PROCESS0 = time.time()      # process start (before the torch / vLLM imports): startup.imports = engine.build start - this
 
@@ -243,7 +243,7 @@ def run_workload(engine: va.Engine, requests: list[dict], sampling: dict, step: 
             "prompt_tokens": sum(len(r["prompt_token_ids"]) for r in requests), "tokens": tokens, "finish_reasons": finish, "t_last_step": step_t[-1]}
 
 
-# the compiled check's sampled steps are drawn from the run root AFTER commitment: seed = int(run_root.hex()[:8], 16)
+# the compiled check's steps are sampled from the run root AFTER commitment: seed = int(run_root.hex()[:8], 16)
 # (first 4 bytes).  Recorded on value_correspondence.compiled_check.seed_source so the finalizer recomputes it from the same runs.jsonl as a fact.
 COMPILED_REPLAY_SEED_SOURCE = "run root (first 4 bytes, after commitment): int(run_root.hex()[:8], 16)"
 
@@ -410,63 +410,16 @@ def cuda_residue(base: dict[int, tuple[int, str]], now: dict[int, tuple[int, str
     return {"count": len(new), "mib": round(sum(v[0] for v in new.values()) / 2**20, 1), "largest": holders}
 
 
-V1 = "vllm-v1"
-
-
-def scheme_refusal(args: Any, wl: dict[str, Any]) -> str | None:
-    """Why the Commit can't commit under ``--commit-scheme`` (None: it can), serve-openai's rule (`serve_seal.scheme_refusal`):
-    vllm-v1 commits SHA-256 (32-byte roots), which only a recorded run's readers take, so it only commits again the recorded vllm-v1
-    Commit ``--of-record`` names, one whose ``runs.jsonl`` records committed runs under 32-byte run roots alone, of the workload's model."""
-    of_record = getattr(args, "of_record", None)
-    if of_record and args.commit_scheme != V1:
-        return f"--of-record names a recorded {V1} Commit to commit again under --commit-scheme {V1}, not under {args.commit_scheme}"
-    if args.commit_scheme != V1:
-        return None
-    if not of_record:
-        return (f"--commit-scheme {V1} commits SHA-256 (32-byte roots), which only a recorded run's readers take: commit under {SR.NAME}, "
-                f"the default, or name the recorded {V1} Commit this one commits again with --of-record RUN_DIR (its runs.jsonl)")
-    try:
-        runs = [r for r in CommitRun.load_lines(Path(of_record) / "runs.jsonl") if r.commit is not None and r.commit.run_root]
-    except (OSError, ValueError) as e:
-        return f"--of-record {of_record}: not a recorded Commit ({type(e).__name__}: {e})"
-    if not runs:
-        return f"--of-record {of_record}: its runs.jsonl records no committed run"
-    if any(len(r.commit.run_root) != 2 * 32 for r in runs):
-        return (f"--of-record {of_record} committed {SR.NAME} ({SR.ROOT_BYTES}-byte run roots), not {V1}: commit under {SR.NAME} "
-                f"(drop --commit-scheme {V1} and --of-record)")
-    models = {r.entry.get("model") for r in runs}
-    if wl.get("model") and models != {wl["model"]}:
-        return f"--of-record {of_record} committed {sorted(map(str, models))}, not {wl['model']}: a Commit under {V1} commits its recorded run's model again"
-    return None
-
-
 def make_committer(kind: str, engine: va.Engine, args: Options, run_id: str):
-    if (layout := getattr(args, "layout", "chunk-leaf-v1")) != "chunk-leaf-v1" and not kind.startswith("native_collect"):
-        raise ValueError(f"leaf layout {layout} is implemented by the native_collect committers only, not {kind}")
-    if kind in ("native_host", "native_host_direct"):
-        from verity_vllm.commit.committer.native_host import NativeHostCommitter
-        if getattr(args, "commit_scheme", None) == SR.NAME:
-            raise ValueError(f"--committer {kind} commits vllm-v1 only: {SR.NAME} is native_collect_v2b's (or name --commit-scheme vllm-v1)")
-        return NativeHostCommitter(engine, run_id=run_id, chunk=args.chunk, hash_threads=args.hash_threads, populate_threads=getattr(args, "pinned_populate_threads", None),
-                                   staging="arena" if kind == "native_host" else "direct", arena_bytes=((args.arena_mb << 20) if args.arena_mb else None),
-                                   batch_copy=bool(getattr(args, "batch_copy", False)), fast_copy=bool(getattr(args, "fast_copy", False)), regen_row4=bool(getattr(args, "regen_row4", False)), gpu_tree=bool(getattr(args, "gpu_tree", False)))
-    if kind in ("native_collect", "native_collect_hook", "native_collect_gather", "native_collect_v2", "native_collect_v2_memcpy", "native_collect_v2_auto",
-                "native_collect_v2b"):
-        # acq-native (arm 3): CMT-3's complete path (fast copy + GPU tree + FA2 M1 source) with native acquisition at the
-        # existing hook boundaries; `native_collect_hook` keeps register_forward_hook (ablation), `native_collect` wraps module.forward,
-        # `native_collect_gather` = secondary bet: staged copies + one gather launch per legal collection point (owner 2's windows).
-        # `native_collect_v2`: gather windows (32 blocks/descriptor) + C++ hook bodies + C++ FA2 tap glue (no Python per producer);
-        # `native_collect_v2_memcpy` = the same native hooks with one memcpy per tensor (ablation of the windows).
+    if kind == "native_collect_v2b":
+        # the windowed worker (candidate B: native hook bodies and FA2 tap glue, size-adaptive gather windows, the native worker step),
+        # which commits rows-sha512 (`step_rows`) over a ring of device windows; VERITY_HI_PRIO=1 adds the high-priority serving stream
+        # variant (labelled `_hp`)
         from verity_vllm.commit.committer.native_collect import NativeCollectCommitter
 
-        # `native_collect_v2b` (candidate B) = v2 + size-adaptive gather blocks + native worker step (GIL-free GPU tree); VERITY_HI_PRIO=1 adds
-        # the high-priority serving stream variant (labelled `_hp`)
-        v2 = kind.startswith("native_collect_v2")
-        return NativeCollectCommitter(engine, run_id=run_id, arena_bytes=((args.arena_mb << 20) if args.arena_mb else None), wrap=(kind != "native_collect_hook"),
-                                      gather=(kind in ("native_collect_gather", "native_collect_v2", "native_collect_v2_auto", "native_collect_v2b")),
-                                      native_hooks=v2, auto_blocks=(kind in ("native_collect_v2_auto", "native_collect_v2b")),
-                                      native_worker=(kind == "native_collect_v2b"), layout=layout,
-                                      profile=bool(getattr(args, "profile_hooks", False)) and not v2, populate_threads=getattr(args, "pinned_populate_threads", None),
+        return NativeCollectCommitter(engine, run_id=run_id, arena_bytes=((args.arena_mb << 20) if args.arena_mb else None), gather=True,
+                                      native_hooks=True, auto_blocks=True, native_worker=True,
+                                      populate_threads=getattr(args, "pinned_populate_threads", None),
                                       commit_scheme=getattr(args, "commit_scheme", None))
     if kind == "hooks_only":
         from verity_vllm.commit.committer.native_host import NativeHostCommitter
@@ -496,7 +449,8 @@ def make_committer(kind: str, engine: va.Engine, args: Options, run_id: str):
 
         factory = getattr(importlib.import_module(mod), fn)
         return factory(engine, run_id=run_id)
-    raise ValueError(kind)
+    raise ValueError(f"--committer {kind}: the Commit's committers are native_collect_v2b (the windowed worker, rows-sha512), hooks_only "
+                     "and plugin:<module>:<factory>")
 
 
 from verity_vllm.check.commit_rules import REQUIRED_CLASSES_DEFAULT, class_coverage, required_classes_default  # noqa: E402
@@ -575,7 +529,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     """`served_tokens` / `finish_reasons`: {workload request_id: ...} of THIS run (run_workload's); `stop`: stop_rule_of_record's {eos, lag}
     -- together the executed prefix of record every population consumer is placed over."""
     """The binding map (fixed at finalize, digest recorded), the collector-INDEPENDENT expected population (model structure x
-    workload requests/steps/ranks), the identity-coverage verdict, and openings drawn from the EXPECTED population (incl. the last step
+    workload requests/steps/ranks), the identity-coverage verdict, and openings sampled from the EXPECTED population (incl. the last step
     and every family) verified against the original roots.  Requests: `r<i>` in workload order; B>1 needs the per-step request->row map
     from the global Program (gprog/manifest) -- without it the map binds everything to r0 and the coverage of r1.. FAILS (fail-closed)."""
     from verity_vllm.commit import binding as B, executed_prefix as EP, partition as PT
@@ -605,7 +559,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     derived_splits = stochastic and ("sampler_splits" in _man_fams or sampling.get("splits") == "derived")
     structure = B.structure_of(com, stochastic=stochastic, derived_splits=derived_splits)
     collector = {"variant": com.name, "retention": getattr(com, "retain", None), "window_mb": args.window_mb, "window_slots": getattr(args, "window_slots", None),
-                 "arena_mb": args.arena_mb, "layout": args.layout, "gpu_tree": bool(args.gpu_tree), **PT.partition_entry(_hdr if getattr(args, "required_manifest", None) else None)}
+                 "arena_mb": args.arena_mb, "layout": "chunk-leaf-v1", **PT.partition_entry(_hdr if getattr(args, "required_manifest", None) else None)}
     # the FA2 tap's bounded-residency record (cap, the one allocation, peaks, split counts) beside the collector variant
     for _s in getattr(com, "sources", []) or []:
         if hasattr(_s, "tap_cap_bytes"):
@@ -740,7 +694,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     elif bound and getattr(com, "retain_exclude", None):
         # retain=host + exclude: a population pick whose leaf lies in an excluded family's interior has no host bytes here;
         # it is handed to openings_after_release (com._oar_deferred) and opened there by REPLAY against this run's root.  The host share
-        # opens now and must verify (binding_check).  Nothing is dropped: every drawn identity is opened by one of the two paths.
+        # opens now and must verify (binding_check).  Nothing is dropped: every sampled identity is opened by one of the two paths.
         want = [(e["identity"]["step"], leaf) for _, e, leaf in bound]
         held = [p for p in want if com.leaf_retained(*p)]
         po_deferred = [p for p in want if not com.leaf_retained(*p)]
@@ -817,9 +771,9 @@ def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair: int, 
             forced.append((first, 0)); forced_why[forced[-1]] = "first step: first leaf"
     forced = [f for f in forced if f not in sample]
     # the in-run challenge / population picks this run could NOT open from host (excluded families' interior; handed over
-    # by the openings and binding stages via com._oar_deferred) are opened here by replay -- every drawn leaf is opened by one of the paths
+    # by the openings and binding stages via com._oar_deferred) are opened here by replay -- every sampled leaf is opened by one of the paths
     handed = list(dict.fromkeys(tuple(p) for p in (getattr(com, "_oar_deferred", None) or [])))
-    deferred = [p for p in handed if p not in sample and p not in forced]    # the rest are drawn here anyway (and open by replay when not held)
+    deferred = [p for p in handed if p not in sample and p not in forced]    # the rest are sampled here anyway (and open by replay when not held)
     com._oar_deferred = []
     picks = sample + forced + deferred
     # which picks the frozen run can open from its OWN retained bytes: all of them (retain=host), none (retain=none), or
@@ -1052,13 +1006,12 @@ class Options:
     case: str | None = option("--case", default=None)
     out: str = option("--out")
     pairs: int = option("--pairs", type=int, default=5)
-    committer: str = option("--committer", default="native_collect_v2b", help="native_collect_v2b (default: the windowed worker, which commits rows-sha512) | native_collect* | native_host | native_host_direct | hooks_only | plugin:<module>:<factory>")
-    commit_scheme: str = option("--commit-scheme", default=SR.NAME, choices=(SR.NAME, V1), help="the commitment scheme: rows-sha512 (default; the windowed worker, native_collect_v2b with --window-mb > 0, 64-byte roots) or vllm-v1 by name, only to commit again the recorded vllm-v1 Commit --of-record names (`scheme_refusal`)")
-    of_record: str | None = option("--of-record", default=None, metavar="RUN_DIR", help="with --commit-scheme vllm-v1: the recorded vllm-v1 Commit this one commits again (its --out, whose runs.jsonl run roots are 32 bytes), of the workload's model")
-    chunk: int = option("--chunk", type=int, default=65536, help="native_host leaf = chunk bytes of the packed step stream (opening granularity); 4096 measured 3x slower on decode steps (per-leaf Python overhead)")
+    committer: str = option("--committer", default="native_collect_v2b", help="native_collect_v2b (default: the windowed worker, which commits rows-sha512) | hooks_only (an ablation, not a commitment) | plugin:<module>:<factory>")
+    commit_scheme: str = option("--commit-scheme", default=SR.NAME, choices=(SR.NAME,), help="the commitment scheme, rows-sha512 (hm96-sha512 rows in frame-v3-sha512 trees, 64-byte roots), the windowed worker's (native_collect_v2b with --window-mb > 0)")
+    chunk: int = option("--chunk", type=int, default=65536, help="hooks_only: the leaf, in bytes of the packed step stream, it reports (it hashes nothing); a rows-sha512 row is step_rows.ROW_BYTES")
     arena_unchecked: bool = option("--arena-unchecked", default=False, action="store_true", help="NEGATIVE TEST ONLY: skip the X-02 arm-time bound check for an explicit --arena-mb so a " "too-small block reaches the collector (its refusal must then yield Commit FAIL under X-03)")
     arena_mb: int = option("--arena-mb", type=int, default=0, help="device staging block (MB); default 0 = X-02 auto: sized at arm time from the workload envelope " "(B, max prompt, max_num_batched_tokens, max_model_len; + FA2 hidden stream); 2 blocks preallocated, grown on demand (counted). " "An explicit value smaller than the step bound is refused before the run. Memory headroom for the arena comes from " "--engine-arg gpu_memory_utilization=<x> (0.5-0.6 on 48 GB for <=2B models at 1024-token prompts; 0.75 on 80 GB)")
-    weights_hash: str = option("--weights-hash", choices=("host", "device", "device-checked"), env="VERITY_WEIGHTS_HASH", default="host", help="where the weights registration hashes: host (default; Python on the CPU), device (the same leaves and per-tensor trees " "on the GPU: rows-sha512's hiding rows by native_rows.cu, verity_vllm.commit.committer.weights_rows; vllm-v1's pos_leaf leaves by " "native_leafhash.cu, verity_vllm.commit.committer.leafhash), device-checked (both, each tensor's device root compared with its host " "root and a mismatch refused; validation runs); a leased Commit's row sets device unless the item sets it " "(pipeline.gpu_lease).  Recorded in versions.json weights.hash")
+    weights_hash: str = option("--weights-hash", choices=("host", "device", "device-checked"), env="VERITY_WEIGHTS_HASH", default="host", help="where the weights registration hashes: host (default; Python on the CPU), device (the same leaves and per-tensor trees " "on the GPU: rows-sha512's hiding rows by native_rows.cu, verity_vllm.commit.committer.weights_rows), device-checked (both, each tensor's device root compared with its host " "root and a mismatch refused; validation runs); a leased Commit's row sets device unless the item sets it " "(pipeline.gpu_lease).  Recorded in versions.json weights.hash")
     hash_threads: int = option("--hash-threads", env="HASH_THREADS", type=int, default=2, help="hashlib worker threads (pod CPU tune: 2 threads x 4 KB = 2.2 GB/s; 8 threads x 4 KB = 0.4 GB/s, GIL thrash)")
     pinned_populate_threads: int | None = option("--pinned-populate-threads", env="VERITY_PINNED_POPULATE_THREADS", type=int, default=None, help="helper threads that fault a fresh exact pinned block's pages in (MADV_POPULATE_WRITE) before the caller registers it (default: commit.committer.pinned_pool.POPULATE_THREADS; recorded as pinned_populate_threads); 0 = the registration faults them in")
     openings: int = option("--openings", type=int, default=64)
@@ -1068,10 +1021,6 @@ class Options:
     protocols_config: str | None = option("--protocols-config", default=None, help="the protocols' settings, a JSON file (default: the workload's `protocols_config`); never hashed")
     warmup: int = option("--warmup", type=int, default=2)
     label: str = option("--label", default="")
-    gpu_tree: bool = option("--gpu-tree", default=False, action="store_true", help="native_host: GPU-resident SHA-256 chunk tree (CMT-2 hidden_gpu_tree.cu) over the arena; no D2H, no hashlib")
-    regen_row4: bool = option("--regen-row4", default=False, action="store_true", help="native_host: row-4 BASELINE candidate — regenerate residual.float() and bind it (+4 B/elem)")
-    fast_copy: bool = option("--fast-copy", default=False, action="store_true", help="native_host: snapshot via cudaMemcpyAsync through ctypes (no torch ops on the serving thread)")
-    batch_copy: bool = option("--batch-copy", default=False, action="store_true", help="native_host: batch the D2D snapshots of not-overwritten tensors into one _foreach_copy_ per step")
     hidden_so: str | None = option("--hidden-so", default=None, help="CMT-2 M1 tap FA2 extension (.so): bind the FA2 hidden stream (rows R5-R8) into the same run root")
     hidden_ns: str | None = option("--hidden-ns", default=None, help="torch.ops namespace of the tapped .so (default verity_fa2_matAll; verity_fa2_matReq for the src-59 build)")
     tap_cap_mb: int | None = option("--tap-cap-mb", type=int, default=None, help="cap (MiB) on the FA2 M1 tap's device buffer: a multi-sequence launch whose padded tap buffer exceeds it is " "split into sequence groups tapped one after another into ONE bounded buffer (names/bytes/roots unchanged); default 2048 " "(VERITY_FA2_TAP_CAP_MB); 0 = the unbounded per-geometry buffers (B64 llama 1024: 24.53 GiB, which OOMs)")
@@ -1084,7 +1033,6 @@ class Options:
     flip_weight: str | None = option("--flip-weight", default=None, help="NEGATIVE TEST ONLY (a substituted weight input): " "<served param name>:<flat index>[:<value>] -- ONE element of that live parameter is changed in the instrumented process BEFORE " "register_weights, so the committer serves a model that is not the checkpoint the Program names; the weights pin MUST FAIL naming " "that field (served weight(s) differ from the checkpoint of record) and the Commit is FAIL rc 3.  Needs the pin armed " "(--weights-of-record / --checkpoint-dir + the Program).  Recorded in verdict.json negatives.flip_weight; never a row-procedure flag")
     window_mb: int | None = option("--window-mb", type=int, default=None, help="windowed staging -- lay the packed step stream over a ring of device windows of this size " "(MiB, multiple of 1) and absorb/release each window as soon as it is filled (sets VERITY_WINDOW_MB); omitted = the collector's " "(native_collect.window_mb_default: 256 on native_collect_v2b unless --retain device, else per-step blocks); 0 = per-step blocks")
     window_slots: int | None = option("--window-slots", type=int, default=None, help="P0: number of ring slots (default 8; raised automatically so the largest tensor fits)")
-    layout: str = option("--layout", default="chunk-leaf-v1", choices=["chunk-leaf-v1", "chunk-leaf-v2"], help="L1 leaf-header layout of the executed and padding " "leaves, recorded in the binding map; v2 = header M := 0 (coordinator decision; roots differ from v1; windowed native_collect_v2b only)")
     retain: str = option("--retain", default="none", choices=["device", "host", "none"], help="retention policy for absorbed raw staging (sets VERITY_RETAIN): device = a compact device copy per step " "(the collector footprint that OOMs Llama 1024/128 at B=2); host = copy to host memory, arena block recycled; none (default) = " "keep only the authentication state, openings by deterministic replay (--open-after-release)")
     footprint: str | None = option("--footprint", default=None, help="write the per-step device-memory timeline (JSONL) to this path (sets VERITY_FOOTPRINT)")
     bounded_staging: bool | None = option("--bounded-staging", default=None, action="boolean_optional", help="bounded host staging (sets VERITY_STAGING_BOUNDED; windowed path only; omitted = on whenever " "staging is windowed): a learning step's transient " "host copies are capped by --learn-budget-mb and returned right after the re-hash (over budget: the warm-up pass learns the " "plan and DISCARDS the windows, a record run FAILS by name); hit-plan steps take no hedge copy (a plan mismatch is a named " "FAIL); roots identical to the unbounded path (same headers, leaf order, padding). --no-bounded-staging: the hedge copies")
@@ -1108,7 +1056,7 @@ class Options:
     challenger_peer: str | None = option("--challenger-peer", default=None, metavar="NAME", help="with --challenger-gate: this machine's name in the auditor host's peers, where its challenger reaches the Commit (its certifier coin link)")
     weights_of_record: str | None = option("--weights-of-record", default=None, metavar="JSON", help="the weights of record: per-field digests of the served weights COMPOSED FROM THE PINNED CHECKPOINT SHARDS " "(verity_vllm.check.weights_of_record, written beside the Build's Program); every live parameter the committer registers is compared " "with it by name -- a served model that differs from the checkpoint in one element is a named COMMIT FAIL")
     checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="derive the weights of record in-process from this pinned checkpoint snapshot + the Program of record (--program-dir / " "--programs-root) when --weights-of-record is not given; the record is written to <out>/weights_of_record.json")
-    replay_k: int | None = option("--replay-k", type=int, default=None, help="the config run's sampled replay: k units in all (drawn by --replay-draw) in place of the row's per-stratum sample")
+    replay_k: int | None = option("--replay-k", type=int, default=None, help="the config run's sampled replay: k units in all (sampled by --replay-draw) in place of the row's per-stratum sample")
     replay_draw: str = option("--replay-draw", default="uniform", choices=("uniform", "family"), help="with --replay-k: uniform over every unit, or stratified by family (one stratum per family, round-robin, at least one each)")
     replay_max: int = option("--replay-max", type=int, default=2000, help="sampled replay: cap on the stratified sample per pair (never below one VU per stratum; recorded)")
     replay_workers: int | None = option("--replay-workers", type=int, default=None, help="sampled replay: evaluator threads (default min(16, cpus/2); recorded)")
@@ -1168,8 +1116,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         raise SystemExit(3) from None
     print(f"[delta] source identity OK: " + " ".join(f"{k}={(v.get('git_sha') or '-')[:9]}" for k, v in source_identity_doc["packages"].items())
           + f" tree={source_identity_doc['requested_root']}", flush=True)
-    if _sid_out is not None:   # native_host._gpu_ext_load writes its import-site document beside this one
-        settings.put("VERITY_SOURCE_IDENTITY_DIR", str(Path(args.out)))
     settings.put("VERITY_WEIGHTS_HASH", args.weights_hash)       # read by native_host.register_weights (this process and the forked replay)
     if _HOT is not None:
         _unsafe = hot_unsafe_reasons(args)
@@ -1244,8 +1190,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     # closed within VERITY_COLLECT_DEAD_GRACE_S; row_pod reads rc 3 as COMMIT FAIL, and a present marker names the hang in the row evidence.
     settings.setdefault("VERITY_COLLECT_WATCHDOG_MARKER", str(out / "COLLECTOR_DEAD_HUNG.json"))
     wl = va.load_workload(args.workload)
-    if (why := scheme_refusal(args, wl)) is not None:
-        raise SystemExit(why)
     engine_args = {**(wl.get("engine_args_required") or {}), **va.parse_engine_args(args.engine_arg)}
     TL.event("startup.imports", "end", s=round(time.time() - _T_PROCESS0, 3), label=args.label, workload=str(args.workload),
              hot_job=(_HOT or {}).get("jobs"))
@@ -1410,11 +1354,11 @@ def main(args: Options, argv: list[str] | None = None) -> None:
             if not hasattr(com, "_nc") or not hasattr(com, "attach_source"):
                 raise SystemExit(f"--compiled-taps kernels needs the native_collect committer (got {kind})")
             compiled_kernels.attach(com, required_manifest)
-            com.program_digest = SCH.program_field(required_manifest["program_digest"])   # P_compiled's digest binds the roots (manifest = P_compiled x query)
+            com.program_digest = (SR if com.rows else SCH).program_field(required_manifest["program_digest"])   # P_compiled's digest binds the roots (manifest = P_compiled x query)
             print(f"[delta] compiled kernel source attached -> committer {com.name}; program digest (P_compiled) {required_manifest['program_digest'][:16]}", flush=True)
         if served is not None:
             served.attach(com)                               # the committer wraps nothing: the source acquires every value of the Build
-            com.program_digest = SCH.program_field(required_manifest["program_digest"])   # the served Build's digest binds the roots
+            com.program_digest = (SR if com.rows else SCH).program_field(required_manifest["program_digest"])   # the served Build's digest binds the roots
         if compiled_src is not None:
             if not hasattr(com, "_nc") or not hasattr(com, "attach_source"):
                 raise SystemExit(f"--compiled-taps on needs the native_collect committer (got {kind})")
@@ -1812,7 +1756,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
             if tokens_ref is None:
                 tokens_ref = r["tokens"]
             row: dict[str, Any] = {
-                "schema": SCHEMA, "label": args.label, "workload": args.workload, "workload_sha256": wl["sha256"], "case": eng.case,
+                "schema": SCHEMA, "label": args.label, "workload": args.workload, "workload_sha512": wl["sha512"], "case": eng.case,
                 "model": eng.cp["repo"], "pair": pair, "order_in_pair": k, "arm": arm,
                 "committer": None if arm == "control" else (arm if multi else args.committer), "committer_name": com.name if arm != "control" else None,
                 "wall_s": r["wall_s"], "iterations": r["iterations"], "engine_steps": len(r["step_wall_s"]),
@@ -1896,7 +1840,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 row["commit"]["expected_tensors"] = rc.extra.get("expected_tensors")
                 row["commit"]["committed_tensors"] = rc.extra.get("committed_tensors")
                 row["commit"]["errors_n"] = rc.extra.get("errors_n", len(rc.extra.get("errors") or []))
-                # binding map + identity coverage against the collector-independent expected population, and openings drawn
+                # binding map + identity coverage against the collector-independent expected population, and openings sampled
                 # from that population (the map and its digest are fixed here, before either challenge is derived from them)
                 _rb_started = RB.start(out, pair, com, rc, args, protocols)
                 GL.release(TL, eng, list(coms.values()), args, last=pair == args.pairs - 1 and k == len(order) - 1 and (_HOT or {}).get("last", _HOT is None), after=_wstage, bundle=_rb_started is not None)   # nothing below reads the device

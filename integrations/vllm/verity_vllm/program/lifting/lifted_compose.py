@@ -32,7 +32,7 @@ def lift_component(component: Any, eos: Sequence[int], *, max_tokens: int, lag: 
     step_gates = tuple((body.offsets[a], body.offsets[b]) for a, b in segs)
     params = tuple((n, lift_type(t)) for n, t in component.params)  # the component's OWN parameter names (grouping), lifted types
     return W.RequestComponent(lifted, component.program_digest, component.program_fn, params, component.input_gates, body.gates,
-                              len(body.nodes), hashlib.sha256(json.dumps(body.offsets).encode()).hexdigest(), component.groups, tuple(segs), step_gates)
+                              len(body.nodes), hashlib.sha512(json.dumps(body.offsets).encode()).hexdigest(), component.groups, tuple(segs), step_gates)
 
 
 def lifted_workload(requests: Sequence[Any], eos: Sequence[int], *, lag: int, boundary_prefix: str = BOUNDARY_PREFIX, shared: str = "weights",

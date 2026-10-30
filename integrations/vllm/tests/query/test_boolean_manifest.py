@@ -162,7 +162,7 @@ def test_the_composition_and_the_match_read_a_boolean_dir_as_its_word_program(ro
     assert prov["refusal"] is None and (prov["recorded_digest"], prov["word_digest"]) == (digests["boolean"], digests["word"])
     comps = {ir: W.request_component(descs[ir], REGISTRY) for ir in dirs}
     assert comps["boolean"].program_digest == comps["word"].program_digest == digests["word"]
-    assert comps["boolean"].local_offsets_sha256 == comps["word"].local_offsets_sha256
+    assert comps["boolean"].local_offsets_sha512 == comps["word"].local_offsets_sha512
     progs = {ir: PC.load_derived(str(dirs[ir]), ir) for ir in dirs}
     assert progs["boolean"].digest == progs["word"].digest
     assert [r["spec"] for r in progs["boolean"].inst] == [r["spec"] for r in progs["word"].inst]

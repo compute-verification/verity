@@ -225,9 +225,10 @@ def test_the_rule_refuses_what_it_cannot_place_and_never_infers_the_lag(tmp_path
         PS.padding_layout([dict(ids[0], dtype="complex128")])
 
 
-#: sha256 of the conversion's outcomes over `_corpus` (`json.dumps(..., sort_keys=True, default=_plain)`, the run directory replaced),
+#: SHA-512 of the conversion's outcomes over `_corpus` (`json.dumps(..., sort_keys=True, default=_plain)`, the run directory replaced),
 #: messages included: a change to what the conversion decides or says changes it
-OUTCOMES_SHA256 = "6f16a33b80b40734410c77c44e253efa9feea2718d5602512d81466673595688"
+OUTCOMES_SHA512 = ("4b9b2150bbe1fb49fca2c0f7387f8d0d059d1e8287b0da99c3159d9a3d7e5fbc"
+                   "410c0d2ca093f483b48f6242ad1e64ee93b037abd2a6df0ed5153d78549fdd79")
 RECORDS = Path(__file__).parents[1] / "records" / "data"
 B1 = {"served": {"r0": [5, 6, EOS]}, "lag": 1, "executed_steps": {"r0": [0, 1, 2, 3]}}
 CAP_STOP = {"served": {"r0": [1, 2, 3, 4, 5, 6]}, "lag": 2, "executed_steps": {"r0": list(range(CAP))}}
@@ -292,7 +293,7 @@ def _corpus(tmp: Path) -> dict[str, Any]:
 
 def test_the_conversion_reads_the_records_to_the_same_outcomes(tmp_path):
     blob = json.dumps(_corpus(tmp_path), sort_keys=True, default=_plain).replace(str(tmp_path), "<run>")
-    assert hashlib.sha256(blob.encode()).hexdigest() == OUTCOMES_SHA256
+    assert hashlib.sha512(blob.encode()).hexdigest() == OUTCOMES_SHA512
 
 
 def test_a_lag_declared_only_in_the_stop_rule_converts_as_one_in_the_lag_block(tmp_path):

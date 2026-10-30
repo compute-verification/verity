@@ -89,11 +89,11 @@ def _source_root(rel: str) -> str:
 
 
 def construction_version(rules, root: str | None = None) -> dict:
-    """Identity of the CONSTRUCTION (not of the target, not of the host): schema, the binding rules (id + version), and the sha256 of
+    """Identity of the CONSTRUCTION (not of the target, not of the host): schema, the binding rules (id + version), and the SHA-512 of
     the builder's source files, each read from beside the package it belongs to (`_source_root`), or all from `root` when given.
     Two hosts running the same tree get the same value; an edited rule/shim gets another. A listed source that is not there
     raises."""
-    h = hashlib.sha256()
+    h = hashlib.sha512()
     files = []
     for rel in _CONSTRUCTION_SOURCES:
         base = root or _source_root(rel)
@@ -102,10 +102,10 @@ def construction_version(rules, root: str | None = None) -> dict:
             raise FileNotFoundError(f"construction_version: source {rel} is not under {base}")
         with open(p, "rb") as f:
             b = f.read()
-        files.append({"file": rel, "sha256": hashlib.sha256(b).hexdigest()})
+        files.append({"file": rel, "sha512": hashlib.sha512(b).hexdigest()})
         h.update(rel.encode() + b"\0" + b + b"\0")
     return {"schema": "cb-a/aot-artifact/v1", "mechanism": "torch.export(strict=False) on meta + verity_vllm.program.frontend.derive (profile mode)",
-            "rules": [{"id": r.rule_id, "version": r.info.version} for r in rules], "sources_sha256": h.hexdigest(), "files": files}
+            "rules": [{"id": r.rule_id, "version": r.info.version} for r in rules], "sources_sha512": h.hexdigest(), "files": files}
 
 
 def engine_dtype(model_config) -> str:
@@ -571,7 +571,7 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
     corr_doc = (desc.get("annotations") or {}).get(CORR_NS) or {}
     res["program"] = {"function": program.fn.id, "digest": digest, "gates": program.gates, "input_gates": program.input_gates,
                       "n_root_nodes": len(program.fn.body.nodes), "descriptor_bytes": len(canon),
-                      "descriptor_sha256": hashlib.sha256(raw).hexdigest(), "dead_gates": rep.dead.total if rep.dead else None,
+                      "descriptor_sha512": hashlib.sha512(raw).hexdigest(), "dead_gates": rep.dead.total if rep.dead else None,
                       "correspondence_digest": corr_digest,
                       "correspondence": {"schema": corr_doc.get("schema"), "namespace": CORR_NS, "calls": len(corr_doc.get("calls") or ()),
                                          "occurrences": len(corr_doc.get("occurrences") or ()), "rank": corr_doc.get("rank")} if corr_doc else None, **supplied}

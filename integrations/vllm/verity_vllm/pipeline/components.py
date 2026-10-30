@@ -118,7 +118,7 @@ def component_provenance(d: str, desc: dict) -> dict:
         refusal = (f"{d}: descriptor digest {recomputed[:16]} != the {'word ' if word else ''}digest the derive recorded {(word or recorded)[:16]}: "
                    f"the component descriptor is not the Program derive_step built")
     return {"dir": d, "descriptor_digest": recomputed, "recorded_digest": recorded, **({"word_digest": word} if word else {}),
-            "descriptor_sha256": hashlib.sha256(canonical_json(desc)).hexdigest(), "refusal": refusal}
+            "descriptor_sha512": hashlib.sha512(canonical_json(desc)).hexdigest(), "refusal": refusal}
 
 
 def load_component(d: str, canon: dict) -> dict:

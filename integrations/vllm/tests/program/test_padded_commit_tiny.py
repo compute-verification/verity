@@ -27,7 +27,7 @@ def test_eos_at_event_1_lag0_every_required_word_committed_inactive_canonical_pi
     assert c["inactive_population"] > 10_000 and c["inv_population"] == 0 and c["sets_unsupported"] == 0
     # commit + materialization: one leaf per required identity, the inactive leaves canonical 1||0^w, no INV, one root, one map
     assert cm["leaves_equal_required"] and cm["n_leaves"] == c["required_identities"] and cm["inactive_leaves_canonical"] and cm["no_inv"]
-    assert c["words_by_class"]["bot"] == c["out_words_inactive_sets"] > 0 and len(cm["root"]) == 64 and len(cm["map_digest"]) == 64
+    assert c["words_by_class"]["bot"] == c["out_words_inactive_sets"] > 0 and len(cm["root"]) == 64 and len(cm["map_digest"]) == 128
     bmap = json.load(__import__("gzip").open(p["files"]["binding_map"], "rt"))
     assert bmap["n_leaves"] == cm["n_leaves"] and bmap["root"] == cm["root"] and len(bmap["entries"]) == cm["n_leaves"]
     assert all(e["leaf"] == i for i, e in enumerate(bmap["entries"]))  # every entry is ONE identity at ONE leaf -- no ranges

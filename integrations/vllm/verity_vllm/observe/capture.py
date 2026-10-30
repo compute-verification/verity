@@ -789,7 +789,7 @@ def make_header(engine: Engine, workload: dict, *, adapter_revision: str, wheel_
         notes.update(extra_notes)
     model = {"repo": engine.cp["repo"], "revision": engine.cp["revision"], "local_path": engine.cp.get("local_path"),
              "case": engine.case, "config": model_config_subset(engine)}
-    wl = {"requests": workload["requests"], "sampling": workload["sampling"], "source": workload.get("source"), "sha256": workload.get("sha256")}
+    wl = {"requests": workload["requests"], "sampling": workload["sampling"], "source": workload.get("source"), "sha512": workload.get("sha512")}
     # n > 1: the request ids the runner sees are vLLM's children (`parallel_sampling.ParentRequest.get_child_info`:
     # id f"{index}_{request_id}", seed + index when seeded).  Recorded as a fact of the fork; the request record itself is unchanged.
     children = [{"request_id": f"{i}_{r['request_id']}", "parent": r["request_id"], "index": i,

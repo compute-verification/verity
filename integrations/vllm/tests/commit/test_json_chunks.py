@@ -22,7 +22,7 @@ COMPACT = {"separators": (",", ":"), "default": str}
 def test_a_list_in_pieces_is_the_bytes_of_one_dumps(n, chunk, kw):
     items = ENTRIES[:n]
     assert "".join(JC.list_pieces(items, chunk=chunk, **kw)) == json.dumps(items, **kw)
-    assert JC.sha256_hex(JC.list_pieces(items, chunk=chunk, **kw)) == hashlib.sha256(json.dumps(items, **kw).encode()).hexdigest()
+    assert JC.sha512_hex(JC.list_pieces(items, chunk=chunk, **kw)) == hashlib.sha512(json.dumps(items, **kw).encode()).hexdigest()
 
 
 @pytest.mark.parametrize("head", [{}, {"schema": "binding-map/1", "entries_n": 6, "digest": "ab"}])

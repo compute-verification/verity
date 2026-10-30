@@ -106,7 +106,7 @@ def load_workload(path: str | Path, max_tokens: int | None = None) -> dict:
             "engine": eng.to_json(),
             # each enabled protocol's settings (`protocol_options.load_settings`), never hashed: the capture and the Commit install from it
             "protocols_config": dict(doc["protocols_config"]) if isinstance(doc.get("protocols_config"), dict) else None,
-            "sha256": hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()}
+            "sha512": hashlib.sha512(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()}
 
 
 #: The accepted record's generated tokens for the B0 workload's request (its file predates `accepted_token_ids`):

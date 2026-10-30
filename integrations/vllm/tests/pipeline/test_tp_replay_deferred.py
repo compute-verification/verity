@@ -291,7 +291,7 @@ def test_without_a_replay_of_record_the_gates_are_the_pin_alone():
 
 def _bmap(rank, root):
     entries = [{"identity": {"rank": rank, "op": "model.embed_tokens"}, "kind": "leaf", "step_root": "00", "leaf_lo": 0, "leaf_hi": 1}]
-    digest = hashlib.sha256(json.dumps(entries, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
+    digest = hashlib.sha512(json.dumps(entries, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
     return {"schema": "m", "run_root": root, "rank": rank, "entries_n": 1, "digest": digest, "entries": entries}
 
 
@@ -528,7 +528,8 @@ def _tamper_versions(out, **kw):
 @pytest.mark.parametrize("tamper,named", [
     (lambda out: (out / "replay_bundle_p0_rank1" / "binding_map.json").write_text("{}"), "sha256 is not the manifest's"),
     (lambda out: _tamper_runs(out, lambda c: c["per_rank"]["1"].update(run_root="11" * 64)), "commitment vector|run root of record"),
-    (lambda out: _tamper_runs(out, lambda c: c["per_rank"]["1"]["binding"].update(map_digest="22" * 32)), "binding map"),
+    (lambda out: _tamper_runs(out, lambda c: c["per_rank"]["1"]["binding"].update(map_digest="22" * 64)), "binding map"),
+    (lambda out: _tamper_runs(out, lambda c: c["per_rank"]["1"]["binding"].update(map_digest="22" * 32)), "a 64-hex SHA-256 digest, from before"),
     (lambda out: _tamper_runs(out, lambda c: c["per_rank"]["1"].update(commit_pass=True)), "no rank awaiting its deferred replay"),
     (lambda out: _tamper_runs(out, lambda c: c.update(tp_run_root="33" * 64)), "TP run root of record"),
     (lambda out: _tamper_runs(out, lambda c: c["commitment_vector"][1].update(run_root="11" * 32)), "rank 1 root is 32 bytes, a vllm-v1"),
