@@ -6,6 +6,7 @@ import Definitions.Core.Assumptions.DeviceFigures
 import Definitions.Core.Blocks
 import Definitions.Core.DeviceFigures
 import Definitions.Core.Period
+import Definitions.Core.Structure
 import Definitions.Core.Site
 import Definitions.Nci
 import Definitions.Nci.Support
