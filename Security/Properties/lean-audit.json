@@ -376,6 +376,22 @@
   "CoreProtocol.Site"
  ],
  "witnesses": {
+  "Properties.Site.refuses": {
+   "honest": ["Properties.Site.refuses_honest"],
+   "nontrivial": "Properties.Site.refuses_nontrivial"
+  },
+  "Properties.Site.entryValid": {
+   "honest": ["Properties.Site.entryValid_honest"],
+   "nontrivial": "Properties.Site.entryValid_nontrivial"
+  },
+  "Properties.Site.checks": {
+   "honest": ["Properties.Site.checks_honest"],
+   "nontrivial": "Properties.Site.checks_nontrivial"
+  },
+  "Properties.Site.refusedAt": {
+   "honest": ["Properties.Site.refusedAt_honest"],
+   "nontrivial": "Properties.Site.refusedAt_nontrivial"
+  },
   "MemoryChallenger.Attest.Properties.SecurityProofs.periodSigned": {
    "honest": ["MemoryChallenger.Attest.Properties.SecurityProofs.periodSigned_honest"],
    "nontrivial": "MemoryChallenger.Attest.Properties.SecurityProofs.periodSigned_nontrivial"
@@ -3166,11 +3182,76 @@
    "assumptions": [],
    "type_hash": "2d8170bf6c6627424710a8c3e095295f580bdfa1b7934c90a76e0356caa3c517"
   },
+  "Properties.Site.checks_honest": {
+   "owner": "@lean",
+   "signature": [
+    "Properties.Site.checks_honest :",
+    "  And",
+    "    (Eq",
+    "      (Core.Site.Registration.check Properties.Site.witnessDigests Properties.Site.witnessAuditor",
+    "        Core.Site.Registration.Composite.remote Properties.Site.honestLog)",
+    "      (Except.ok (Core.Site.ofLog Properties.Site.honestLog)))",
+    "    (Verity.Registration.Valid (Properties.Site.digests Properties.Site.witnessDigests)",
+    "      (Properties.Site.auditor Properties.Site.witnessAuditor)",
+    "      (Properties.Site.composite Core.Site.Registration.Composite.remote)",
+    "      (Properties.Site.log Properties.Site.honestLog))"
+   ],
+   "assumptions": [],
+   "type_hash": "adca6ff5253544af0d324781a65ce7a8b47069ab3153dd4a456faab8aaa7063c"
+  },
+  "Properties.Site.checks_nontrivial": {
+   "owner": "@lean",
+   "signature": [
+    "Properties.Site.checks_nontrivial :",
+    "  Not",
+    "    (Eq (Option.map Properties.Site.site (Properties.Site.acceptAllCheck Properties.Site.staleLog).toOption)",
+    "      (ite",
+    "        (Verity.Registration.Valid (Properties.Site.digests Properties.Site.witnessDigests)",
+    "          (Properties.Site.auditor Properties.Site.witnessAuditor)",
+    "          (Properties.Site.composite Core.Site.Registration.Composite.remote)",
+    "          (Properties.Site.log Properties.Site.staleLog))",
+    "        (Option.some (Verity.Site.ofLog (Properties.Site.log Properties.Site.staleLog))) Option.none))"
+   ],
+   "assumptions": [],
+   "type_hash": "00140ea54fda7516a0ae67c4aaf7ffc30baed54c6fb298a7ad040725592681ab"
+  },
   "Properties.Site.entryValid": {
    "owner": "@lean",
    "signature": ["Properties.Site.entryValid : Properties.Site.EntryValid"],
    "assumptions": [],
    "type_hash": "8a89c567162cc9fa3f76cdf2e094f88fd657e778e58d1f37f25dd9b1ce78749f"
+  },
+  "Properties.Site.entryValid_honest": {
+   "owner": "@lean",
+   "signature": [
+    "Properties.Site.entryValid_honest :",
+    "  And",
+    "    (Eq",
+    "      (Core.Site.Registration.Entry.refusal Properties.Site.witnessDigests Properties.Site.witnessAuditor",
+    "        Core.Site.Registration.Composite.remote Properties.Site.emptySite \"genesis\" Properties.Site.honestEntry)",
+    "      Option.none)",
+    "    (Verity.Registration.Entry.Valid (Properties.Site.digests Properties.Site.witnessDigests)",
+    "      (Properties.Site.auditor Properties.Site.witnessAuditor)",
+    "      (Properties.Site.composite Core.Site.Registration.Composite.remote)",
+    "      (Properties.Site.site Properties.Site.emptySite) \"genesis\" (Properties.Site.regEntry Properties.Site.honestEntry))"
+   ],
+   "assumptions": [],
+   "type_hash": "98c3c342f109d3c30375ebbd555b968ea8ce4285536799e234ff832f049d4e21"
+  },
+  "Properties.Site.entryValid_nontrivial": {
+   "owner": "@lean",
+   "signature": [
+    "Properties.Site.entryValid_nontrivial :",
+    "  Not",
+    "    (Iff (Eq (Properties.Site.acceptAllRefusal Properties.Site.staleEntry) Option.none)",
+    "      (Verity.Registration.Entry.Valid (Properties.Site.digests Properties.Site.witnessDigests)",
+    "        (Properties.Site.auditor Properties.Site.witnessAuditor)",
+    "        (Properties.Site.composite Core.Site.Registration.Composite.remote)",
+    "        (Properties.Site.site Properties.Site.emptySite) \"genesis\"",
+    "        (Properties.Site.regEntry Properties.Site.staleEntry)))"
+   ],
+   "assumptions": [],
+   "type_hash": "9652f423b69623e86918b46b092a3fb8f6056c8e80e689b1e6e2b18b39c87391"
   },
   "Properties.Site.fold": {
    "owner": "@lean",
@@ -3184,11 +3265,82 @@
    "assumptions": [],
    "type_hash": "bded101a69bef766ebdd41f5169a68b8093d468663cfbc1fe206581d58ac002c"
   },
+  "Properties.Site.refusedAt_honest": {
+   "owner": "@lean",
+   "signature": [
+    "Properties.Site.refusedAt_honest :",
+    "  And",
+    "    (Eq",
+    "      (Core.Site.Registration.check Properties.Site.witnessDigests Properties.Site.witnessAuditor",
+    "        Core.Site.Registration.Composite.remote Properties.Site.honestLog)",
+    "      (Except.ok (Core.Site.ofLog Properties.Site.honestLog)))",
+    "    (Eq",
+    "      (Core.Site.Registration.check Properties.Site.witnessDigests Properties.Site.witnessAuditor",
+    "        Core.Site.Registration.Composite.remote Properties.Site.staleLog)",
+    "      (Except.error { fst := 1, snd := Core.Site.Registration.Refusal.previous }))"
+   ],
+   "assumptions": [],
+   "type_hash": "2a2c817c80c36b43aaf2449ca7973b6da1a1e97bccc464d8aa183aac2783e2b5"
+  },
+  "Properties.Site.refusedAt_nontrivial": {
+   "owner": "@lean",
+   "signature": [
+    "Properties.Site.refusedAt_nontrivial (i : Fin (List.length Properties.Site.honestLog)) :",
+    "  Not",
+    "    (Eq",
+    "      (Verity.Registration.Entry.refusal (Properties.Site.digests Properties.Site.witnessDigests)",
+    "        (Properties.Site.auditor Properties.Site.witnessAuditor)",
+    "        (Properties.Site.composite Core.Site.Registration.Composite.remote)",
+    "        (Verity.Site.ofLog (Properties.Site.log (List.take i.val Properties.Site.honestLog)))",
+    "        (Verity.Registration.head (Properties.Site.digests Properties.Site.witnessDigests)",
+    "          (Properties.Site.composite Core.Site.Registration.Composite.remote)",
+    "          (Properties.Site.log (List.take i.val Properties.Site.honestLog)))",
+    "        (Properties.Site.regEntry (Fin.instGetElemFinVal.getElem Properties.Site.honestLog i ⋯)))",
+    "      (Option.some (Properties.Site.refusal Core.Site.Registration.Refusal.previous)))"
+   ],
+   "assumptions": [],
+   "type_hash": "2e85460be8aae15812eca0923faafa0cd49f467fa60614f8921ccf5f0d62a5e8"
+  },
   "Properties.Site.refuses": {
    "owner": "@lean",
    "signature": ["Properties.Site.refuses : Properties.Site.Refuses"],
    "assumptions": [],
    "type_hash": "cb22f6c9f5a52ccc946173ae7376585926859abd08933bb077686088442d0087"
+  },
+  "Properties.Site.refuses_honest": {
+   "owner": "@lean",
+   "signature": [
+    "Properties.Site.refuses_honest :",
+    "  And",
+    "    (Eq",
+    "      (Core.Site.Registration.Entry.refusal Properties.Site.witnessDigests Properties.Site.witnessAuditor",
+    "        Core.Site.Registration.Composite.remote Properties.Site.emptySite \"genesis\" Properties.Site.honestEntry)",
+    "      Option.none)",
+    "    (Eq",
+    "      (Verity.Registration.Entry.refusal (Properties.Site.digests Properties.Site.witnessDigests)",
+    "        (Properties.Site.auditor Properties.Site.witnessAuditor)",
+    "        (Properties.Site.composite Core.Site.Registration.Composite.remote)",
+    "        (Properties.Site.site Properties.Site.emptySite) \"genesis\"",
+    "        (Properties.Site.regEntry Properties.Site.honestEntry))",
+    "      Option.none)"
+   ],
+   "assumptions": [],
+   "type_hash": "0cfb9aae510c0f167fc6285d189da21d5ee44ab4a164f8dbf571f7b88278ff42"
+  },
+  "Properties.Site.refuses_nontrivial": {
+   "owner": "@lean",
+   "signature": [
+    "Properties.Site.refuses_nontrivial :",
+    "  Not",
+    "    (Eq (Option.map Properties.Site.refusal (Properties.Site.acceptAllRefusal Properties.Site.staleEntry))",
+    "      (Verity.Registration.Entry.refusal (Properties.Site.digests Properties.Site.witnessDigests)",
+    "        (Properties.Site.auditor Properties.Site.witnessAuditor)",
+    "        (Properties.Site.composite Core.Site.Registration.Composite.remote)",
+    "        (Properties.Site.site Properties.Site.emptySite) \"genesis\"",
+    "        (Properties.Site.regEntry Properties.Site.staleEntry)))"
+   ],
+   "assumptions": [],
+   "type_hash": "18aa0be157689c21712bf3aeb5199fb4b9b22378baf5efaf9efb9df44d38cb47"
   }
  },
  "shape": {
