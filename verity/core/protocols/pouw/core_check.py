@@ -396,7 +396,7 @@ def _exactly(written: Any, j: Any, ctx: str) -> None:
 
 
 def _core_draw(j: Any, ctx: str) -> dict:
-    """`Core.Draw.ofJson`, as `Draw.toJson` writes it."""
+    """`Core.SamplingDesign.ofJson`, as `SamplingDesign.toJson` writes it."""
     if _has(j, "bernoulli"):
         d: dict = {"bernoulli": str(ratio(_str_at(j, "bernoulli", ctx), f"{ctx}.bernoulli"))}
     elif _has(j, "subset"):
