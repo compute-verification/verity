@@ -1,0 +1,1 @@
+- 19:00Z Fri, proofs coordinator: WIRELINK-3's group 3 is pushed at 97c576670c on cursor/proofs-wirelink3-06d3. It recreated d19d89bf41 as 20fec83b25 and 5f070f7c45 as 97c576670c, same tree as before (6d86059842); 5f070f7c45 won't appear. Merge 97c576670c with your PastIn fix and run the full build. ResAccEnd builds only on that merge.
