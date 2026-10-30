@@ -70,7 +70,7 @@ end Charges
 
 section Training
 
-variable {c : Declaration} {ch : Chain c.D} {T : Threading c} {Γ : ℕ} {K b_w b_a : ℝ}
+variable {c : RegisteredCircuit} {ch : Chain c.D} {T : Threading c} {Γ : ℕ} {K b_w b_a : ℝ}
 
 open Classical in
 /-- The law on one small IU: divide `c` into it and the rest. -/
@@ -162,7 +162,7 @@ theorem IncompressibleThreadedThrottledOn : Guarantees.IncompressibleThreadedThr
   exact ThreadedThrottledOn c k b_w b_a r d T dd e M hc hbw hba hdd hP hB hT (weightsIncompressible_of_training h)
 
 theorem IncompressibleContainedTraining_rate :
-    ∀ (Γ : ℕ) (α b_w b_a κ : ℝ) (c d : Declaration) (ch : Chain c.D) (T : Threading c) (dd : ℕ)
+    ∀ (Γ : ℕ) (α b_w b_a κ : ℝ) (c d : RegisteredCircuit) (ch : Chain c.D) (T : Threading c) (dd : ℕ)
       (M : Containment c.D d.D),
       0 < α → 0 < b_w → 0 < b_a → (∀ ℓ, dd ≤ ch.d ℓ) → CompliesRate Γ α d →
       Assumptions.ThetaRegistered c d (PartialContainment.ofContainment M) →
@@ -182,7 +182,7 @@ open Classical in
 /-- **The partial-sum law with dark gates, in reads**: each dark gate is a small IU of its own, whose partial sums are
 within its reads. -/
 theorem IncompressibleContainedMatMulOn_rate :
-    ∀ (Γ : ℕ) (α K b_w b_a μ : ℝ) (c d : Declaration) (ch : Chain c.D) (T : Threading c) (dd emax : ℕ)
+    ∀ (Γ : ℕ) (α K b_w b_a μ : ℝ) (c d : RegisteredCircuit) (ch : Chain c.D) (T : Threading c) (dd emax : ℕ)
       (M : PartialContainment c d),
       0 ≤ α → 0 < K → 0 < b_w → 0 < b_a → 0 < dd → 1 ≤ Γ → α * Γ ≤ K → 0 ≤ μ → μ ≤ 1 →
       (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → CompliesRate Γ α d → Assumptions.ThetaRegistered c d M →
@@ -218,7 +218,7 @@ theorem IncompressibleContainedMatMulOn_rate :
   exact h₀.trans (by linarith [mul_le_mul_of_nonneg_left hZ (by linarith : (0 : ℝ) ≤ 1 - μ)])
 
 theorem IncompressibleContainedTrainingOn_rate :
-    ∀ (Γ : ℕ) (α K b_w b_a μ κ : ℝ) (c d : Declaration) (ch : Chain c.D) (T : Threading c) (dd emax : ℕ)
+    ∀ (Γ : ℕ) (α K b_w b_a μ κ : ℝ) (c d : RegisteredCircuit) (ch : Chain c.D) (T : Threading c) (dd emax : ℕ)
       (M : PartialContainment c d),
       0 ≤ α → 0 < K → 0 < b_w → 0 < b_a → 0 < dd → 1 ≤ Γ → α * Γ ≤ K → 0 ≤ μ → μ ≤ 1 →
       (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → CompliesRate Γ α d → Assumptions.ThetaRegistered c d M →

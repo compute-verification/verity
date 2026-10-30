@@ -61,7 +61,7 @@ False when `D` is a declared circuit; it stands when `D` is a reference training
 as the activations' half of `TrainingIncompressible`. `ActivationsSupport`'s counterexample does not
 apply to it: an E2M1 product takes at most 37 values, but an inference block that holds the product gate reads its
 weight and input wires whole, at least `b_w + b_a` bits. -/
-def ActivationsIncompressible (D : Declaration) (ch : Chain D.D) (c : ℕ) (k b_w b_a : ℝ) : Prop :=
+def ActivationsIncompressible (D : RegisteredCircuit) (ch : Chain D.D) (c : ℕ) (k b_w b_a : ℝ) : Prop :=
   ∀ R ⊆ D.D.computed, D.D.size R ≤ c → (novelReads D R : ℝ) ≤ k →
     b_w * (ch.weightsUsed R).card +
         b_a * ((ch.inputsUsed R).filter fun x => ¬ ch.LinkedWhole R x.1 x.2.1 x.2.2).card ≤ novelReads D R
@@ -85,7 +85,7 @@ bound on `R`'s size: the support form says what the values are, not what an infe
 gate of the first multiplication holds an E2M1 × E2M1 product, `T` that one gate is charged `b_w + b_a` and takes at
 most 37 values, so the assumption fails at every cap of at least `b_w + b_a` once `b_w + b_a > log₂ 37 ≈ 5.21` (the
 calculator's 2.5 + 4 = 6.5). At FP8 (E4M3, 2011 products) this counterexample does not apply. -/
-def ActivationsSupport (D : Declaration) (θv : D.D.Transcript) (ch : Chain D.D) (k b_w b_a : ℝ) : Prop :=
+def ActivationsSupport (D : RegisteredCircuit) (θv : D.D.Transcript) (ch : Chain D.D) (k b_w b_a : ℝ) : Prop :=
   ∀ R ⊆ D.D.computed, ∀ T ⊆ R, ch.charge R b_w b_a T ≤ k → (2 : ℝ) ^ ch.charge R b_w b_a T ≤ support D θv T
 
 /-- **Incompressibility of partial sums** (the draft's partial-sum incompressibility, applied jointly with weight
@@ -108,7 +108,7 @@ False when `D` is a declared circuit; it stands when `D` is a reference training
 as the partial sums' half of `TrainingIncompressible`. `PartialSumsSupport`'s counterexample does not
 apply to it: an adder inference block over a `k × k × k` block holds values determined by `2k²` entries, but it reads
 its `k³` products' wires to form them. -/
-def PartialSumsIncompressible (D : Declaration) (ch : Chain D.D) (c : ℕ) (k b_w b_a : ℝ) : Prop :=
+def PartialSumsIncompressible (D : RegisteredCircuit) (ch : Chain D.D) (c : ℕ) (k b_w b_a : ℝ) : Prop :=
   ∀ (n : ℕ) (P : Partition D.D n), (∀ u, D.D.size (P.gates u) ≤ c ∧ (novelReads D (P.gates u) : ℝ) ≤ k) →
     ∃ s : Fin n → ℕ,
       ∑ x : (ℓ : Fin ch.L) × Fin ch.N × Fin (ch.e ℓ), (ch.spread P x.1 x.2.1 x.2.2 - 1) ≤ ∑ u, s u ∧
@@ -135,7 +135,7 @@ inference blocks, while each inference block's values are functions of the few w
 In the exact 1-bit toy (`d = e = N = 8`, `b_w = b_a = 1`) the inference blocks can be charged at most 183 (192 bits of
 entries) against the 448 required, for every `c ≥ 448` and `k ≥ 512`. At `d = 7168` and the deployed `k = 2·10⁷` such a
 division absorbs at most 8.4% of the charge at FP4 and 17.8% at FP8 (2.5 and 4 bits). -/
-def PartialSumsSupport (D : Declaration) (θv : D.D.Transcript) (ch : Chain D.D) (c : ℕ) (k b_w b_a : ℝ) : Prop :=
+def PartialSumsSupport (D : RegisteredCircuit) (θv : D.D.Transcript) (ch : Chain D.D) (c : ℕ) (k b_w b_a : ℝ) : Prop :=
   ∀ (n : ℕ) (P : Partition D.D n), (∀ u, D.D.size (P.gates u) ≤ c ∧ (novelReads D (P.gates u) : ℝ) ≤ k) →
     ∃ s : Fin n → ℕ,
       ∑ x : (ℓ : Fin ch.L) × Fin ch.N × Fin (ch.e ℓ), (ch.spread P x.1 x.2.1 x.2.2 - 1) ≤ ∑ u, s u ∧
@@ -153,18 +153,18 @@ def InnerAtLeast {D : Circuit} (ch : Chain D) (d : ℕ) : Prop :=
 computed gates, `κ · size(r) ≤ x`. A chain of `G` products counts `x = 2G` (a product and an addition each), a threading's
 counted multiplications `x = 2 |M|`, and the cover theorem's certified products `x = |P|`. A training run whose counted
 work is a small share of its gates is slowed in proportion to that share. -/
-def Coverage (κ : ℝ) (r : Declaration) (x : ℝ) : Prop :=
+def Coverage (κ : ℝ) (r : RegisteredCircuit) (x : ℝ) : Prop :=
   κ * r.D.size r.D.computed ≤ x
 
 /-- **Small inference blocks**: each block of the division `P` of `D` has at most `c` gates and reads at most `k` fresh
 input bits, the caps under which `PartialSumsIncompressible` charges a division. -/
-def SmallBlocks (D : Declaration) {n : ℕ} (P : Partition D.D n) (c : ℕ) (k : ℝ) : Prop :=
+def SmallBlocks (D : RegisteredCircuit) {n : ℕ} (P : Partition D.D n) (c : ℕ) (k : ℝ) : Prop :=
   ∀ u, D.D.size (P.gates u) ≤ c ∧ (novelReads D (P.gates u) : ℝ) ≤ k
 
 /-- **Sessions of exactly `c` gates, each reading its own prompt of at most `k` bits**: each block `u` of the division
 `P` of `d` has exactly `c` gates, padding included, and reads from outside itself only registered information and its
 prompt `prompt u`, at most `k` bits wide. It is the layout an inference deployment declares, a session per block. -/
-def Sessions (d : Declaration) {B : ℕ} (P : Partition d.D B) (prompt : Fin B → Finset (Fin d.D.N)) (c k : ℕ) : Prop :=
+def Sessions (d : RegisteredCircuit) {B : ℕ} (P : Partition d.D B) (prompt : Fin B → Finset (Fin d.D.N)) (c k : ℕ) : Prop :=
   (∀ u, (P.gates u).card = c) ∧ (∀ u, d.D.into (P.gates u) ⊆ d.θ ∪ prompt u) ∧ (∀ u, d.D.width (prompt u) ≤ k)
 
 /-- **The training circuit `T` is in the class `𝒯`** (the draft, "From updated matrix multiplications to training"):
@@ -172,7 +172,7 @@ every declared circuit `D` that implements `T` and complies at `(c, k)` runs a c
 multiplications whose inner dimensions are at least `d` and whose products cover a fraction `κ` of `T`'s size, with
 compute-bounded incompressibility for `ch` on `D`. It carries `ActivationsIncompressible` and
 `PartialSumsIncompressible` on declared circuits, and is false wherever they are. -/
-def InClass (T : Declaration) (c k : ℕ) (b_w b_a κ : ℝ) (d : ℕ) : Prop :=
+def InClass (T : RegisteredCircuit) (c k : ℕ) (b_w b_a κ : ℝ) (d : ℕ) : Prop :=
   ∀ D, T.Implements D → Complies c k D → ∃ ch : Chain D.D,
     InnerAtLeast ch d ∧ Coverage κ T (2 * ch.G) ∧
     ActivationsIncompressible D ch c k b_w b_a ∧ PartialSumsIncompressible D ch c k b_w b_a

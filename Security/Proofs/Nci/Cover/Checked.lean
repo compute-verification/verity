@@ -25,7 +25,7 @@ theorem coverTrained {j out : Json} (hev : evaluate j = .ok out) : Properties.Co
   fun i P d hpar hdec hL hθ hc b α₀ r M _ _ _ _ Mb A s D w₀ hb hB hH hU hk hw hs hα₀ => by
     have h := Nci.Cover.SecurityProofs.CoverTraining_rate i.gamma _ b α₀ r d M Mb A s D w₀ hb
       (div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _))
-      (Witnesses j out hev i P d hpar hdec hL hθ hc) hB hH hU hk hw hs hα₀
+      (Witnesses j out hev i P d hpar hdec hL hθ hc).1 hB hH hU hk hw hs hα₀
     calc _ = α₀ * b * r.D.size r.D.computed * i.gamma := by ring
       _ ≤ _ := mul_le_mul_of_nonneg_right h (Nat.cast_nonneg _)
       _ = _ := by ring

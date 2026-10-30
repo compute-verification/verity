@@ -13,7 +13,7 @@ import Definitions.Nci.Covering
 
 The witnesses of the inference-only policy's guarantees in `(c, k)` (`Definitions.Nci.Guarantees.Witnesses`) are stated
 at the local bounds' toy circuit (`Nci.Capability.Toy.C`): a registered weight `0`, an unregistered token `1`, and two
-gates `2` and `3` computing `0 ∧ 1`. Its declaration `Toy.D` registers the weight; `Dθ` registers the token too, so
+gates `2` and `3` computing `0 ∧ 1`. Its registered circuit `Toy.D` registers the weight; `Dθ` registers the token too, so
 that nothing a proof block reads is fresh and the policy holds at read cap `0`.
 
 * `idC`: a circuit contained in itself, and `M1` and `Mθ`, the toy in `Toy.D` and in `Dθ` through it; `ones`, the toy's
@@ -23,8 +23,8 @@ that nothing a proof block reads is fresh and the policy holds at read cap `0`.
 * `T1`: the toy's threading, one counted multiplication (gate `2`) of the weight by the token, the token the one
   thread's value; `T0`, the threading of no counted multiplication; `σ1` and `σ0`, their one parameter slot;
   `noLinks`, links with no sources; `layered0` and `layered1`, `T0` and `T1` keyed with no roots and no lookups;
-* `E0`, the declaration of no gates, which implements itself (`implE0`);
-* `mb0`, the cover theorem's multiplication blocks of no product on a declaration's bit view; `mbBits`, the covering
+* `E0`, the registered circuit of no gates, which implements itself (`implE0`);
+* `mb0`, the cover theorem's multiplication blocks of no product on a registered circuit's bit view; `mbBits`, the covering
   bound's two products of the toy's bit view (`Cover.bitDecl`), the weight's bit for each of two tokens;
 * `OneWindow`: one PoUW window of capacity `2` over the outcomes `Bool`, its certificate `right` or `wrong` at every
   outcome, and no faulty proof block (`bad`).
@@ -34,11 +34,8 @@ namespace Nci.Witness
 
 open Verity Finset Nci.Capability.Toy
 
-/-- The toy declaration with the token registered too: both inputs are registered information. -/
-@[reducible] def Dθ : Declaration where
-  D := C
-  θ := {0, 1}
-  θ_input := by decide
+/-- The toy registered circuit with the token registered too: both inputs are registered information. -/
+@[reducible] def Dθ : RegisteredCircuit := .ofCircuit C {0, 1} (by decide)
 
 /-- A circuit contains itself. -/
 def idC (C' : Circuit) : Containment C' C' where
@@ -97,7 +94,7 @@ def ch0 (D : Circuit) : Chain D where
   links ℓ := ℓ.elim0
 
 /-- The threading of no counted multiplication. -/
-def T0 (r : Declaration) : Threading r where
+def T0 (r : RegisteredCircuit) : Threading r where
   m := 0
   W := ∅
   thread _ := none
@@ -132,7 +129,7 @@ def T1 : Threading D where
   reuse_le := by decide
 
 /-- `T0`'s one parameter slot. -/
-def σ0 (r : Declaration) : (T0 r).Slots where
+def σ0 (r : RegisteredCircuit) : (T0 r).Slots where
   p := 1
   slot _ := 0
   reuse_le _ _ := by simp [T0]
@@ -155,13 +152,10 @@ def σ1 : T1.Slots where
   op_congr g := g.elim0
   outputs := ∅
 
-/-- The declaration of no gates. -/
-@[reducible] def E0 : Declaration where
-  D := C0
-  θ := ∅
-  θ_input _ h := absurd h (notMem_empty _)
+/-- The registered circuit of no gates. -/
+@[reducible] def E0 : RegisteredCircuit := .ofCircuit C0 ∅ fun _ h => absurd h (notMem_empty _)
 
-/-- The declaration of no gates implements itself. -/
+/-- The registered circuit of no gates implements itself. -/
 def implE0 : Implementation C0 C0 where
   inp := id
   inp_input g := g.elim0
@@ -173,13 +167,13 @@ def implE0 : Implementation C0 C0 where
   correct _ _ h := absurd h (notMem_empty _)
 
 /-- Links with no sources: every activation is computed from no counted multiplication. -/
-def noLinks {r : Declaration} (T : Threading r) : T.Links where
+def noLinks {r : RegisteredCircuit} (T : Threading r) : T.Links where
   src _ := ∅
   src_M _ := empty_subset _
   src_feeds _ _ h := absurd h (notMem_empty _)
 
 /-- `T0` keyed with no roots and no lookups. -/
-def layered0 (r : Declaration) (d e eLk b : ℕ) : Layered (T0 r) d e eLk b where
+def layered0 (r : RegisteredCircuit) (d e eLk b : ℕ) : Layered (T0 r) d e eLk b where
   key _ := none
   key_reads _ _ h := absurd h (by simp)
   key_thread _ _ h := absurd h (by simp)
@@ -224,9 +218,9 @@ def layered1 (d b : ℕ) : Layered T1 d 1 0 b where
   col_bits _ h := absurd h (notMem_empty _)
   col_disjoint _ h := absurd h (notMem_empty _)
 
-/-- The multiplication blocks of no product on a declaration's bit view: no counted product has a use, so the upstream
+/-- The multiplication blocks of no product on a registered circuit's bit view: no counted product has a use, so the upstream
 certificate holds at every depth. -/
-def mb0 (r : Declaration) : Cover.MulBlocks (Cover.Circuit.ofDecl r) Empty Unit where
+def mb0 (r : RegisteredCircuit) : Cover.MulBlocks (Cover.Circuit.ofDecl r) Empty Unit where
   Pall := ∅
   P := ∅
   P_subset := subset_rfl

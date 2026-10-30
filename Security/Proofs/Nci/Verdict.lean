@@ -22,7 +22,7 @@ incompressible and none of its fresh input registered** (`WeightsIncompressible`
 theorem Throttles : Properties.Throttles :=
   fun j out hev i P d hpar hdec hL hθ hc b_w b_a r T dd e M hbw hba hdd hB hT hW =>
     Nci.SecurityProofs.ThreadedThrottled_rate i.gamma ((i.num : ℝ) / i.den) b_w b_a r d T dd e M
-      (num_div_den_nonneg i) hbw hba hdd (Witnesses j out hev i P d hpar hdec hL hθ hc) hB hT hW
+      (num_div_den_nonneg i) hbw hba hdd (Witnesses j out hev i P d hpar hdec hL hθ hc).1 hB hT hW
 
 /-- **A verdict of compliance puts counted multiplications off the books in dark gates**, for every threaded reference
 circuit the declaration contains partly, if its weights are incompressible and none of its fresh input registered
@@ -30,20 +30,20 @@ circuit the declaration contains partly, if its weights are incompressible and n
 theorem ThrottlesDark : Properties.ThrottlesDark :=
   fun j out hev i P d hpar hdec hL hθ hc b_w b_a r T dd e M hbw hba hdd hB hT hW =>
     Nci.SecurityProofs.ThreadedThrottledDark_rate i.gamma ((i.num : ℝ) / i.den) b_w b_a r d T dd e M
-      (num_div_den_nonneg i) hbw hba hdd (Witnesses j out hev i P d hpar hdec hL hθ hc) hB hT hW
+      (num_div_den_nonneg i) hbw hba hdd (Witnesses j out hev i P d hpar hdec hL hθ hc).1 hB hT hW
 
 /-- **`Throttles` per parameter slot**, for threaded reference circuits under `WeightsIncompressibleSlots` and
 `ThetaRegistered`. -/
 theorem ThrottlesSlots : Properties.ThrottlesSlots :=
   fun j out hev i P d hpar hdec hL hθ hc b_w b_a r T σ dd e M hbw hba hdd hB hT hW =>
     Nci.SecurityProofs.ThreadedThrottledSlots_rate i.gamma ((i.num : ℝ) / i.den) b_w b_a r d T σ dd e M
-      (num_div_den_nonneg i) hbw hba hdd (Witnesses j out hev i P d hpar hdec hL hθ hc) hB hT hW
+      (num_div_den_nonneg i) hbw hba hdd (Witnesses j out hev i P d hpar hdec hL hθ hc).1 hB hT hW
 
 /-- **`ThrottlesDark` per parameter slot**, for threaded reference circuits under `WeightsIncompressibleSlots` and
 `ThetaRegistered`. -/
 theorem ThrottlesDarkSlots : Properties.ThrottlesDarkSlots :=
   fun j out hev i P d hpar hdec hL hθ hc b_w b_a r T σ dd e M hbw hba hdd hB hT hW =>
     Nci.SecurityProofs.ThreadedThrottledDarkSlots_rate i.gamma ((i.num : ℝ) / i.den) b_w b_a r d T σ dd e M
-      (num_div_den_nonneg i) hbw hba hdd (Witnesses j out hev i P d hpar hdec hL hθ hc) hB hT hW
+      (num_div_den_nonneg i) hbw hba hdd (Witnesses j out hev i P d hpar hdec hL hθ hc).1 hB hT hW
 
 end NciCheck.Properties.SecurityProofs

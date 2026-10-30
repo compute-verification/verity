@@ -22,7 +22,7 @@ incompressibility at `(c, k)`, the inference blocks together read at least `G ·
 `G` products that `D` runs. `b_w` and `b_a` are the widths of a weight entry and an activation entry, and `d` the
 smallest inner dimension. -/
 def UpdatedMatMulReads : Prop :=
-  ∀ (c : ℕ) (k b_w b_a : ℝ) (D : Declaration) (ch : Chain D.D) (d n : ℕ) (P : Partition D.D n),
+  ∀ (c : ℕ) (k b_w b_a : ℝ) (D : RegisteredCircuit) (ch : Chain D.D) (d n : ℕ) (P : Partition D.D n),
     0 < b_w → 0 < b_a → Assumptions.InnerAtLeast ch d → Assumptions.SmallBlocks D P c k →
     Assumptions.ActivationsIncompressible D ch c k b_w b_a →
     Assumptions.PartialSumsIncompressible D ch c k b_w b_a →

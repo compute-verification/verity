@@ -31,13 +31,13 @@ theorem size_D : D.D.size D.D.computed = 2 := by decide
 
 theorem card_T1 : T1.M.card = 1 := by decide
 
-theorem theta_id (r : Declaration) :
+theorem theta_id (r : RegisteredCircuit) :
     Assumptions.ThetaRegistered r r (PartialContainment.ofContainment (idC r.D)) := fun _ _ h => h
 
 theorem not_theta_Dθ : ¬ Assumptions.ThetaRegistered D Dθ Mθ :=
   fun h => absurd (h 1 (by decide) (by decide)) (by decide)
 
-theorem dark_id (r : Declaration) : (PartialContainment.ofContainment (c := r) (d := r) (idC r.D)).dark = ∅ :=
+theorem dark_id (r : RegisteredCircuit) : (PartialContainment.ofContainment (c := r) (d := r) (idC r.D)).dark = ∅ :=
   Finset.sdiff_self _
 
 /-- The toy complies at no read cap `0`: its gate `2` reads the token, an unregistered input, which no proof block
@@ -48,7 +48,7 @@ theorem not_complies_zero : ¬ Complies 2 0 D := by
   obtain ⟨u, hu⟩ := Option.ne_none_iff_exists'.1 h2
   have h1 : P.unit 1 = none := (P.input_iff 1).2 rfl
   have hmem : (1 : Fin 4) ∈ D.unregistered (P.gates u) := by
-    simp only [Declaration.unregistered, Circuit.into, Partition.gates, mem_sdiff, mem_filter, mem_univ, true_and]
+    simp only [RegisteredCircuit.unregistered, Circuit.into, Partition.gates, mem_sdiff, mem_filter, mem_univ, true_and]
     refine ⟨⟨by simp [h1], 2, hu, by decide⟩, by decide⟩
   have := hP.reads u
   rw [Nat.le_zero, card_eq_zero] at this
@@ -85,17 +85,17 @@ theorem coverage_T1 : Assumptions.Coverage 1 D (2 * T1.M.card) := by
   rw [size_D, card_T1]
   norm_num
 
-theorem T0_threaded (r : Declaration) (c : ℕ) (k : ℝ) (d e : ℕ) : (T0 r).Threaded c k d e :=
+theorem T0_threaded (r : RegisteredCircuit) (c : ℕ) (k : ℝ) (d e : ℕ) : (T0 r).Threaded c k d e :=
   fun _ _ t => t.elim0
 
-theorem T0_weights (r : Declaration) (c : ℕ) (k b_w b_a : ℝ) :
+theorem T0_weights (r : RegisteredCircuit) (c : ℕ) (k b_w b_a : ℝ) :
     Assumptions.WeightsIncompressible r (T0 r) c k b_w b_a := by
   intro R _
   have h0 : ∑ t, ((T0 r).threadReads R t).card = 0 := Finset.sum_eq_zero fun t _ => Fin.elim0 t
   rw [h0]
   simp [Threading.weightsUsed, Threading.mults, T0]
 
-theorem T0_weightsSlots (r : Declaration) (c : ℕ) (k b_w b_a : ℝ) :
+theorem T0_weightsSlots (r : RegisteredCircuit) (c : ℕ) (k b_w b_a : ℝ) :
     Assumptions.WeightsIncompressibleSlots r (T0 r) (σ0 r) c k b_w b_a := by
   intro R _
   have h0 : ∑ t, ((T0 r).threadReads R t).card = 0 := Finset.sum_eq_zero fun t _ => Fin.elim0 t
@@ -107,7 +107,7 @@ theorem not_coverage_T0 : ¬ Assumptions.Coverage 1 D (2 * (T0 D).M.card) := by
   rw [size_D, show (T0 D).M.card = 0 from rfl]
   norm_num
 
-theorem bound_T0 (r : Declaration) (k b_w : ℝ) (d e : ℕ) : (T0 r).bound k b_w d e = e := by
+theorem bound_T0 (r : RegisteredCircuit) (k b_w : ℝ) (d e : ℕ) : (T0 r).bound k b_w d e = e := by
   simp [Threading.bound, T0]
 
 theorem bound_T1 (k : ℝ) (hk : 0 ≤ k) : T1.bound k (1 / 2) 1 0 = k / 2 := by
@@ -120,7 +120,7 @@ theorem entersAtMost_T1 : Assumptions.EntersAtMost T1 1 := by
   unfold Assumptions.EntersAtMost
   decide
 
-theorem drawsAtLeast_noLinks {r : Declaration} (T : Threading r) (dd : ℕ) :
+theorem drawsAtLeast_noLinks {r : RegisteredCircuit} (T : Threading r) (dd : ℕ) :
     Assumptions.DrawsAtLeast (noLinks T) dd :=
   fun _ h => absurd h (by simp [noLinks])
 
@@ -133,10 +133,10 @@ theorem activations_T1 : Assumptions.ActivationsIncompressibleAll D T1 (noLinks 
     exact_mod_cast key R hR.1
   linarith
 
-theorem entersAtMost_T0 (r : Declaration) : Assumptions.EntersAtMost (T0 r) 0 :=
+theorem entersAtMost_T0 (r : RegisteredCircuit) : Assumptions.EntersAtMost (T0 r) 0 :=
   fun _ => (card_le_card (filter_subset _ _)).trans (by simp [T0])
 
-theorem activations_T0 (r : Declaration) (c : ℕ) (k b_w b_a : ℝ) :
+theorem activations_T0 (r : RegisteredCircuit) (c : ℕ) (k b_w b_a : ℝ) :
     Assumptions.ActivationsIncompressibleAll r (T0 r) (noLinks (T0 r)) c k b_w b_a := by
   intro R _
   simp [Threading.weightsUsed, Threading.actsUsed, Threading.mults, T0]
@@ -186,9 +186,9 @@ theorem ch0_inputsUsed (D' : Circuit) (R : Finset (Fin D'.N)) : (ch0 D').inputsU
 
 theorem ch0_G (D' : Circuit) : (ch0 D').G = 0 := Finset.sum_eq_zero fun ℓ _ => ℓ.elim0
 
-/-- A declaration whose coverage at `κ` asks nothing is in the class at every parameter: every declaration runs the
-chain of no multiplication. -/
-theorem inClass_of_le_zero {T : Declaration} {c k : ℕ} {b_w b_a κ : ℝ} {d : ℕ}
+/-- A registered circuit whose coverage at `κ` asks nothing is in the class at every parameter: every registered circuit
+runs the chain of no multiplication. -/
+theorem inClass_of_le_zero {T : RegisteredCircuit} {c k : ℕ} {b_w b_a κ : ℝ} {d : ℕ}
     (hT : κ * T.D.size T.D.computed ≤ 0) : Assumptions.InClass T c k b_w b_a κ d := by
   intro D' _ _
   refine ⟨ch0 D'.D, fun ℓ => ℓ.elim0, ?_, ?_, ?_⟩
@@ -211,7 +211,7 @@ theorem complies_E0 (c k : ℕ) : Complies c k E0 :=
   ⟨0, ⟨fun g => g.elim0, fun g => g.elim0⟩,
     { boolean := ⟨fun g => g.elim0, fun g => g.elim0⟩, card := fun u => u.elim0, reads := fun u => u.elim0 }⟩
 
-/-- The slowdown factor of the declaration of no gates is `0`: it implements itself and complies, at `0 / 0 = 0`. -/
+/-- The slowdown factor of the registered circuit of no gates is `0`: it implements itself and complies, at `0 / 0 = 0`. -/
 theorem slowdown_E0 (c k : ℕ) : slowdown (Complies c k) E0 = 0 :=
   nonpos_iff_eq_zero.1 ((iInf₂_le E0 ⟨implements_E0, complies_E0 c k⟩).trans_eq (by rw [size_E0]; simp))
 
@@ -423,18 +423,18 @@ theorem factor_half : (1 / 2 : ℝ) ≤
 theorem not_bound {m x y : ℝ} (hm : 1 / 2 ≤ m) (hx : 1 ≤ x) (hy : y ≤ 0) : ¬ (m * x ≤ y) :=
   fun h => by nlinarith
 
-theorem mb0_updateHardness (r : Declaration) (s : ℕ) (b : ℝ) : Cover.Assumptions.UpdateHardness (mb0 r) s b := by
+theorem mb0_updateHardness (r : RegisteredCircuit) (s : ℕ) (b : ℝ) : Cover.Assumptions.UpdateHardness (mb0 r) s b := by
   intro S _ B hB _
   rw [Finset.subset_empty.1 hB]
   simp
 
-theorem mb0_upstream (r : Declaration) (A : Empty → Finset (Fin (Cover.Circuit.ofDecl r).N)) (D' : ℕ) :
+theorem mb0_upstream (r : RegisteredCircuit) (A : Empty → Finset (Fin (Cover.Circuit.ofDecl r).N)) (D' : ℕ) :
     (mb0 r).Upstream A D' where
   disjoint := by intro j; exact j.elim
   disjoint_θ j := j.elim
   upstream j := j.elim
 
-theorem mb0_regionsAtLeast (r : Declaration) (Aw : Empty → Finset (Fin r.D.N)) (f : ℕ) :
+theorem mb0_regionsAtLeast (r : RegisteredCircuit) (Aw : Empty → Finset (Fin r.D.N)) (f : ℕ) :
     Cover.Assumptions.RegionsAtLeast (mb0 r) Aw f :=
   fun j => j.elim
 

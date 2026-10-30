@@ -13,16 +13,16 @@ namespace Nci.SecurityProofs
 
 open Verity Finset
 
-theorem compliesRate_of_complies {c k : ℕ} {d : Declaration} (h : Complies c k d) :
+theorem compliesRate_of_complies {c k : ℕ} {d : RegisteredCircuit} (h : Complies c k d) :
     CompliesRate c ((k : ℝ) / c) d := by
   obtain ⟨B, P, hP⟩ := h
   refine ⟨B, P, fun u => ⟨(hP.card u).le, ?_⟩⟩
   have hw : novelReads d (P.gates u) = (d.unregistered (P.gates u)).card := by
-    simp [novelReads, Declaration.unregistered, Circuit.width, hP.boolean.one_bit]
+    simp [novelReads, RegisteredCircuit.unregistered, Circuit.width, hP.boolean.one_bit]
   rw [hw, show d.D.size (P.gates u) = c from hP.card u]
   rcases Nat.eq_zero_or_pos c with rfl | hc
   · have h0 : P.gates u = ∅ := Finset.card_eq_zero.1 (hP.card u)
-    simp [Declaration.unregistered, Circuit.into, h0]
+    simp [RegisteredCircuit.unregistered, Circuit.into, h0]
   · rw [div_mul_cancel₀ _ (Nat.cast_ne_zero.2 hc.ne')]
     exact_mod_cast hP.reads u
 

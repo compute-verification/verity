@@ -41,13 +41,13 @@ contains that is `(dd, e)`-threaded with incompressible weights, with no fresh i
 information (`ThetaRegistered`), `Λ` being Theorem 1's bound at read cap `k`, at `c = gamma`, `α = num / den` and
 `k = α c` (`Nci.Guarantees.ThreadedThrottled`'s conclusion). -/
 def Throttled (j out : Json) : Prop :=
-  ∀ (i : Instance) (P : Prog) (d : Verity.Declaration),
+  ∀ (i : Instance) (P : Prog) (d : Verity.RegisteredCircuit),
     Parses j i → Flock.Program.decode i.program.toUTF8 = .ok P → LaysOut P d.D → Names i.theta d.θ →
     out.getObjVal? "complies" = .ok (.bool true) →
     let c : ℕ := i.gamma
     let α : ℝ := (i.num : ℝ) / i.den
     let k : ℝ := α * c
-    ∀ (b_w b_a : ℝ) (r : Verity.Declaration) (T : Nci.Threading r) (dd e : ℕ)
+    ∀ (b_w b_a : ℝ) (r : Verity.RegisteredCircuit) (T : Nci.Threading r) (dd e : ℕ)
       (M : Verity.Containment r.D d.D),
       0 < b_w → 0 < b_a → 0 < dd →
       Nci.Assumptions.ThetaRegistered r d (Nci.PartialContainment.ofContainment M) →
@@ -68,13 +68,13 @@ with no fresh input of `r` in `d`'s registered information (`ThetaRegistered`), 
 at most its dark gates plus `αΛ size(d) / b_a`, at `c = gamma`, `α = num / den` and `k = α c`
 (`Nci.Guarantees.ThreadedThrottledDark`'s conclusion). -/
 def ThrottledDark (j out : Json) : Prop :=
-  ∀ (i : Instance) (P : Prog) (d : Verity.Declaration),
+  ∀ (i : Instance) (P : Prog) (d : Verity.RegisteredCircuit),
     Parses j i → Flock.Program.decode i.program.toUTF8 = .ok P → LaysOut P d.D → Names i.theta d.θ →
     out.getObjVal? "complies" = .ok (.bool true) →
     let c : ℕ := i.gamma
     let α : ℝ := (i.num : ℝ) / i.den
     let k : ℝ := α * c
-    ∀ (b_w b_a : ℝ) (r : Verity.Declaration) (T : Nci.Threading r) (dd e : ℕ)
+    ∀ (b_w b_a : ℝ) (r : Verity.RegisteredCircuit) (T : Nci.Threading r) (dd e : ℕ)
       (M : Nci.PartialContainment r d),
       0 < b_w → 0 < b_a → 0 < dd → Nci.Assumptions.ThetaRegistered r d M → T.Threaded c k dd e →
       Nci.Assumptions.WeightsIncompressible r T c k b_w b_a →
@@ -92,13 +92,13 @@ def ThrottlesDark : Prop :=
 /-- `Throttled` with the weights charged per parameter slot of a slot map `σ` (`WeightsIncompressibleSlots`):
 `Nci.Guarantees.ThreadedThrottledSlots`'s conclusion. -/
 def ThrottledSlots (j out : Json) : Prop :=
-  ∀ (i : Instance) (P : Prog) (d : Verity.Declaration),
+  ∀ (i : Instance) (P : Prog) (d : Verity.RegisteredCircuit),
     Parses j i → Flock.Program.decode i.program.toUTF8 = .ok P → LaysOut P d.D → Names i.theta d.θ →
     out.getObjVal? "complies" = .ok (.bool true) →
     let c : ℕ := i.gamma
     let α : ℝ := (i.num : ℝ) / i.den
     let k : ℝ := α * c
-    ∀ (b_w b_a : ℝ) (r : Verity.Declaration) (T : Nci.Threading r) (σ : T.Slots) (dd e : ℕ)
+    ∀ (b_w b_a : ℝ) (r : Verity.RegisteredCircuit) (T : Nci.Threading r) (σ : T.Slots) (dd e : ℕ)
       (M : Verity.Containment r.D d.D),
       0 < b_w → 0 < b_a → 0 < dd →
       Nci.Assumptions.ThetaRegistered r d (Nci.PartialContainment.ofContainment M) →
@@ -115,13 +115,13 @@ def ThrottlesSlots : Prop :=
 /-- `ThrottledDark` with the weights charged per parameter slot of a slot map `σ` (`WeightsIncompressibleSlots`):
 `Nci.Guarantees.ThreadedThrottledDarkSlots`'s conclusion. -/
 def ThrottledDarkSlots (j out : Json) : Prop :=
-  ∀ (i : Instance) (P : Prog) (d : Verity.Declaration),
+  ∀ (i : Instance) (P : Prog) (d : Verity.RegisteredCircuit),
     Parses j i → Flock.Program.decode i.program.toUTF8 = .ok P → LaysOut P d.D → Names i.theta d.θ →
     out.getObjVal? "complies" = .ok (.bool true) →
     let c : ℕ := i.gamma
     let α : ℝ := (i.num : ℝ) / i.den
     let k : ℝ := α * c
-    ∀ (b_w b_a : ℝ) (r : Verity.Declaration) (T : Nci.Threading r) (σ : T.Slots) (dd e : ℕ)
+    ∀ (b_w b_a : ℝ) (r : Verity.RegisteredCircuit) (T : Nci.Threading r) (σ : T.Slots) (dd e : ℕ)
       (M : Nci.PartialContainment r d),
       0 < b_w → 0 < b_a → 0 < dd → Nci.Assumptions.ThetaRegistered r d M → T.Threaded c k dd e →
       Nci.Assumptions.WeightsIncompressibleSlots r T σ c k b_w b_a →

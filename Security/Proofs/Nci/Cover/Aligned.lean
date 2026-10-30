@@ -71,7 +71,7 @@ theorem finished_le_of_charge_base {C : Circuit} {J L : Type} [DecidableEq J] [D
 
 /-- **A block of whole words is charged `f` bits per use** of its whole products, when each use's activation region is
 the bits of whole words at least `f` bits wide. -/
-theorem aligned_charge (c : Verity.Declaration) {J L : Type} [DecidableEq J] [DecidableEq L]
+theorem aligned_charge (c : Verity.RegisteredCircuit) {J L : Type} [DecidableEq J] [DecidableEq L]
     (Mb : MulBlocks (Circuit.ofDecl c) J L) (Aw : J → Finset (Fin c.D.N)) {s k D f : ℕ} {b : ℝ} (hb : 0 < b)
     (hH : Assumptions.UpdateHardness Mb s b) (hU : Mb.Upstream (fun j => wordBits c (Aw j)) D)
     (hk : (k : ℝ) < b * D) (hf : ∀ j ∈ Mb.uses, ∀ a ∈ Aw j, f ≤ c.D.w a) (R : Finset (Fin c.D.N))
@@ -85,7 +85,7 @@ theorem aligned_charge (c : Verity.Declaration) {J L : Type} [DecidableEq J] [De
 
 /-- **The intensity of a block of whole words on whole-word activations**, under `UpdateHardness` alone: a block of at
 most `s` bits handed `k < b D` bits outside the free bits finishes at most `k² / (b f) + k` counted products. -/
-theorem alignedIntensity (c : Verity.Declaration) {J L : Type} [DecidableEq J] [DecidableEq L]
+theorem alignedIntensity (c : Verity.RegisteredCircuit) {J L : Type} [DecidableEq J] [DecidableEq L]
     (Mb : MulBlocks (Circuit.ofDecl c) J L) (Aw : J → Finset (Fin c.D.N)) {s k D f : ℕ} {b : ℝ} (hb : 0 < b)
     (hH : Assumptions.UpdateHardness Mb s b) (hU : Mb.Upstream (fun j => wordBits c (Aw j)) D)
     (hk : (k : ℝ) < b * D) (hf : ∀ j ∈ Mb.uses, ∀ a ∈ Aw j, f ≤ c.D.w a) (R : Finset (Fin c.D.N))
@@ -95,7 +95,7 @@ theorem alignedIntensity (c : Verity.Declaration) {J L : Type} [DecidableEq J] [
     (aligned_charge c Mb Aw hb hH hU hk hf R hs hR)
 
 theorem CoverTrainingAligned_rate :
-    ∀ (Γ : ℕ) (α b α₀ : ℝ) (c d : Verity.Declaration) (M : Verity.Containment c.D d.D)
+    ∀ (Γ : ℕ) (α b α₀ : ℝ) (c d : Verity.RegisteredCircuit) (M : Verity.Containment c.D d.D)
       {J L : Type} [DecidableEq J] [DecidableEq L] (Mb : MulBlocks (Circuit.ofDecl c) J L)
       (Aw : J → Finset (Fin c.D.N)) (s D w₀ f : ℕ),
       0 < b → 0 ≤ α → Nci.CompliesRate Γ α d →

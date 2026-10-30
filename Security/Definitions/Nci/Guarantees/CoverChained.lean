@@ -46,7 +46,7 @@ bits (`ParameterHardAt (bitDecl r)`) at the block size `s ≥ w₀ c + k + width
 `k < c_w D` and `c_a > 0`. Equivalently its slowdown `size(d) / size(r)` is at least
 `(|𝓜*| / size(r)) c / ((k / c_w)(k / c_a) + k)`; in that form a division by zero is zero. -/
 def CoverTrainingChained : Prop :=
-  ∀ (c k : ℕ) (r d : Verity.Declaration) (M : Verity.Containment r.D d.D)
+  ∀ (c k : ℕ) (r d : Verity.RegisteredCircuit) (M : Verity.Containment r.D d.D)
     (B : Nci.Covering.MulBlocks (bitDecl r)) (s D w₀ : ℕ) (cw ca : ℝ),
     Nci.Complies c k d →
     Nci.Assumptions.ThetaRegistered r d (Nci.PartialContainment.ofContainment M) →

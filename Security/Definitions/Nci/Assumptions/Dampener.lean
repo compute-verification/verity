@@ -22,7 +22,7 @@ def WindowLength (c k : ℕ) (F L R : ℝ) : Prop :=
 /-- **The servers' windows hold the residual and the declared computation**: summed over `n` servers' `⌈H / L⌉` windows,
 each reading at most `K = R + (k / c) F L` bits and holding at most `K Λ(K) / b_a` counted multiplications of `T`'s
 bound, `b_a (M_r + |M|) ≤ n ⌈H / L⌉ K Λ(K)`. -/
-def WindowsHold {r : Declaration} (T : Threading r) (c k Mr n : ℕ) (F H L R b_w b_a : ℝ) (dd e : ℕ) : Prop :=
+def WindowsHold {r : RegisteredCircuit} (T : Threading r) (c k Mr n : ℕ) (F H L R b_w b_a : ℝ) (dd e : ℕ) : Prop :=
   b_a * ((Mr : ℝ) + T.M.card) ≤
     n * ⌈H / L⌉₊ * ((R + (k / c : ℝ) * F * L) * T.bound (R + (k / c : ℝ) * F * L) b_w dd e)
 
@@ -55,7 +55,7 @@ def CheatingAtMost (Mx : ℕ) (κ χ C U : ℝ) : Prop :=
 `NciCheck.Properties.Throttled`'s conclusion `b_a |M_i| ≤ (k / c) Λ_i size(d_i)`, at `Λ_i = Th_i.bound k b_w dd e ≤ Λ`.
 It is what a verdict of compliance of the check of record gives a declaration it lays out
 (`NciCheck.Properties.DescThrottles`), and the bridge from those verdicts to the deployment's runs is not stated. -/
-def RunsThrottled {R : Type} {r : R → Declaration} (d : R → Declaration) (Th : (i : R) → Threading (r i)) (c : ℕ)
+def RunsThrottled {R : Type} {r : R → RegisteredCircuit} (d : R → RegisteredCircuit) (Th : (i : R) → Threading (r i)) (c : ℕ)
     (k b_w b_a : ℝ) (dd e : ℕ) (Λ : ℝ) : Prop :=
   (∀ i, b_a * (Th i).M.card ≤ (k / c : ℝ) * (Th i).bound k b_w dd e * (d i).D.size (d i).D.computed) ∧
     ∀ i, (Th i).bound k b_w dd e ≤ Λ

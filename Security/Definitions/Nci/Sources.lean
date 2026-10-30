@@ -28,7 +28,7 @@ open Verity
 /-- **The source of each value**, for a threading `T` of the reference circuit `c`: the value each gate is a copy of,
 with each source used at most `T.reuse` times per thread over all its copies, and the optimizer steps between the
 baseline and each source. -/
-structure Sources {c : Declaration} (T : Threading c) where
+structure Sources {c : RegisteredCircuit} (T : Threading c) where
   /-- The value a gate holds a copy of: a weight quantized for fprop and for dgrad maps to the weight it quantizes,
   an activation's quantized, transposed, cast or recomputed copy to the activation; any other gate to itself. -/
   src : Fin c.D.N → Fin c.D.N
@@ -40,7 +40,7 @@ structure Sources {c : Declaration} (T : Threading c) where
 
 namespace Sources
 
-variable {c : Declaration} {T : Threading c} (Src : T.Sources)
+variable {c : RegisteredCircuit} {T : Threading c} (Src : T.Sources)
 
 /-- The sources of the weights `R` uses. -/
 def sourcesUsed (R : Finset (Fin c.D.N)) : Finset (Fin c.D.N) := (T.weightsUsed R).image Src.src

@@ -379,7 +379,7 @@ None of these is assumed silently; each would restate the conclusion:
 | Step | Lean | Status |
 |---|---|---|
 | The actual circuit | `Accounting.Placed`, `Accounting.Placed.region` | Defined |
-| Registered objects | `Verity.Circuit`, `Verity.Partition`, `Verity.Partition.IsCK`, `Verity.Declaration`, `Verity.Committed`; the site and its registration log, `Verity.Site` and `Verity.Registration`; B, a_j and loc_j not yet in Lean | Partly defined |
+| Registered objects | `Verity.Circuit`, `Verity.Partition`, `Verity.Partition.IsCK`, `Verity.RegisteredCircuit`, `Verity.Committed`; the site and its registration log, `Verity.Site` and `Verity.Registration`; B, a_j and loc_j not yet in Lean | Partly defined |
 | Coverage | `Nci.Assumptions.CoversEfficientMethods` | A named assumption in the lock; Core not yet read off a run's circuit; untested |
 | Lemma 1 | `Verity.Guarantees.BlockDescription` | Proved |
 | Information premises | `Nci.Assumptions.DescriptionHard`, `Nci.Assumptions.MinEntropyHard`, `Nci.Assumptions.SourceHard`, `Nci.Assumptions.Recovers`, `Nci.Capability.Items` | Named assumptions in the lock, taken by the repertoire's proofs; no price measured at a decoder budget; several uniform activation rates refuted by exact decoders |
@@ -478,9 +478,15 @@ accept and the commitment binds both (`Properties.Composition`, proved). Onsite 
   with no Fiat–Shamir and no retries. The challenger and the verifier both run on auditor hosts. The challenger, which
   flips each coin after the commitment it challenges, is the one auditor-trusted device remote relies on
   (`trusted-host`); the verifier is the auditor's own check. Two premises about where the challenger runs,
-  `CoinsConfidential` and `OneClock`, are prose only (`verity/core/protocols/sampled_proofs/README.md`): no `.lean`
+  `CoinsConfidential` and `OneClock`, are onsite's and prose only (`verity/core/protocols/sampled_proofs/README.md`).
+  Remote's coin path is three named premises over the challenger's log (`Definitions/Core/Challenger.lean`), stated in
+  `Definitions/Core/Assumptions/Challenger.lean` and listed in the lock: the challenger logs every coin it releases
+  (`ChallengerLogsCoins`), flips each only after what it samples is recorded (`FlipsAfterRecorded`), and the verifier
+  reads coins only from that log (`VerifierReadsLog`). Under them a sample drawn with a logged coin misses a set fixed
+  before it at most as often as the draw law allows (`Verity.Guarantees.SampleAfterRecorded`, proved); for
+  `CoinsConfidential` and `OneClock`, no `.lean`
   file defines either. Network certifiers and memory challengers are onsite's.
-- **Not PoUB.** `Accounting.Remote` and `Properties.RemoteAudit` are PoUB, the proof of useful bandwidth
+- **Not the remote composite.** `Accounting.Remote` and `Properties.RemoteAudit` are PoUB
   (`verity/core/protocols/remote_bandwidth`), which proves the bits a node read from its registered store. It is a
   different protocol from the remote composite, and a subprotocol of onsite only.
 

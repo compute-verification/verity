@@ -33,7 +33,7 @@ subcircuit `R` of the reference circuit `r` computes at most `Λ = max(e, c_r ·
 per `b_a` fresh input bits it reads, where each activation enters at most `e` counted multiplications and each
 activation computed from counted multiplications is computed from at least `dd` distinct activations of its own thread. -/
 def ActivationsReads : Prop :=
-  ∀ (r : Declaration) (T : Threading r) (L : T.Links) (c : ℕ) (k b_w b_a : ℝ) (dd e : ℕ),
+  ∀ (r : RegisteredCircuit) (T : Threading r) (L : T.Links) (c : ℕ) (k b_w b_a : ℝ) (dd e : ℕ),
     0 < b_w → 0 < b_a → 0 < dd →
     Assumptions.EntersAtMost T e → Assumptions.DrawsAtLeast L dd →
     Assumptions.ActivationsIncompressibleAll r T L c k b_w b_a →
@@ -46,7 +46,7 @@ dark (`PartialContainment`), computes at most `(k / c) Λ size(d) / b_a` of `r`'
 `ThetaRegistered`. There is no term for the dark gates, so it holds however much of `r`, the partial sums included,
 is computed off the books. -/
 def ActivationsBoundOn : Prop :=
-  ∀ (c k : ℕ) (K b_w b_a : ℝ) (r d : Declaration) (T : Threading r) (L : T.Links) (dd e : ℕ)
+  ∀ (c k : ℕ) (K b_w b_a : ℝ) (r d : RegisteredCircuit) (T : Threading r) (L : T.Links) (dd e : ℕ)
     (M : PartialContainment r d),
     0 < c → (k : ℝ) ≤ K → 0 < b_w → 0 < b_a → 0 < dd → Complies c k d → Assumptions.ThetaRegistered r d M →
     Assumptions.EntersAtMost T e → Assumptions.DrawsAtLeast L dd →
@@ -59,7 +59,7 @@ its registered information free of the reference circuit's fresh input (`ThetaRe
 at least `κ c b_a / (2 k Λ)`, less what its dark gates absorb:
 `κ b_a size(r) ≤ 2 b_a #dark + 2 (k / c) Λ size(d)`. -/
 def ActivationsTrainingOn : Prop :=
-  ∀ (c k : ℕ) (K b_w b_a κ : ℝ) (r d : Declaration) (T : Threading r) (L : T.Links) (dd e : ℕ)
+  ∀ (c k : ℕ) (K b_w b_a κ : ℝ) (r d : RegisteredCircuit) (T : Threading r) (L : T.Links) (dd e : ℕ)
     (M : PartialContainment r d),
     0 < c → (k : ℝ) ≤ K → 0 < b_w → 0 < b_a → 0 < dd → Complies c k d → Assumptions.ThetaRegistered r d M →
     Assumptions.EntersAtMost T e → Assumptions.DrawsAtLeast L dd →
@@ -73,7 +73,7 @@ def ActivationsTrainingOn : Prop :=
 rates: a chain's weight entries and input entries are distinct weight and activation gates, and an input entry whose
 activation is whole in `R` is linked to an entry whole in `R`. -/
 def ActivationsChain : Prop :=
-  ∀ (r : Declaration) (ch : Chain r.D) (T : Threading r) (L : T.Links) (c : ℕ) (k b_w b_a : ℝ),
+  ∀ (r : RegisteredCircuit) (ch : Chain r.D) (T : Threading r) (L : T.Links) (c : ℕ) (k b_w b_a : ℝ),
     ChainIn ch T L → 0 ≤ b_w → 0 ≤ b_a →
     Assumptions.ActivationsIncompressibleAll r T L c k b_w b_a →
       Assumptions.ActivationsIncompressible r ch c k b_w b_a

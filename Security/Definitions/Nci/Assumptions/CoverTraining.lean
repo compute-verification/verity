@@ -20,12 +20,12 @@ def CapBelowDepth (k : ℕ) (b : ℝ) (D : ℕ) : Prop :=
 /-- **A piece's block fits the block size**: no gate of `r` is wider than `w₀` bits, and `w₀ c + k + width(θ) ≤ s`, so
 the bits of an inference block of at most `c` gates, of the at most `k` bits it reads and of `r`'s registered
 information are at most `s`. -/
-def BlockFits (r : Verity.Declaration) (c k w₀ s : ℕ) : Prop :=
+def BlockFits (r : Verity.RegisteredCircuit) (c k w₀ s : ℕ) : Prop :=
   (∀ g, r.D.w g ≤ w₀) ∧ w₀ * c + k + r.D.width r.θ ≤ s
 
 /-- **The activation regions are whole words at least `f` bits wide**: each use `j` of the multiplication blocks `Mb`
 reads its activations from the gates `Aw j` of `r`, each at least `f` bits wide. -/
-def RegionsAtLeast {r : Verity.Declaration} {J L : Type} [DecidableEq J] [DecidableEq L] (Mb : MulBlocks (Circuit.ofDecl r) J L)
+def RegionsAtLeast {r : Verity.RegisteredCircuit} {J L : Type} [DecidableEq J] [DecidableEq L] (Mb : MulBlocks (Circuit.ofDecl r) J L)
     (Aw : J → Finset (Fin r.D.N)) (f : ℕ) : Prop :=
   ∀ j ∈ Mb.uses, ∀ a ∈ Aw j, f ≤ r.D.w a
 

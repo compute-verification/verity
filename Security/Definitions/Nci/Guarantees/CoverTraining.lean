@@ -40,7 +40,7 @@ fresh input (`ThetaRegistered`), has `α₀ b c size(r) ≤ (k² + b k) size(d)`
 view are a fraction `α₀` of `r`'s gates, under `UpdateHardness` at the block size `s ≥ w₀ c + k + width(θ)` (no gate of
 `r` wider than `w₀`) and the upstream certificate at depth `D` with `k < b D`. -/
 def CoverTraining : Prop :=
-  ∀ (c k : ℕ) (b α₀ : ℝ) (r d : Verity.Declaration) (M : Verity.Containment r.D d.D)
+  ∀ (c k : ℕ) (b α₀ : ℝ) (r d : Verity.RegisteredCircuit) (M : Verity.Containment r.D d.D)
     {J L : Type} [DecidableEq J] [DecidableEq L] (Mb : MulBlocks (Circuit.ofDecl r) J L)
     (A : J → Finset (Fin (Circuit.ofDecl r).N)) (s D w₀ : ℕ),
     0 < b → Nci.Complies c k d →
@@ -54,7 +54,7 @@ each use's activation region the bits of a set `Aw j` of `r`'s gates (`wordBits`
 `α₀ b f c size(r) ≤ (k² + b f k) size(d)`, under `UpdateHardness` alone. A block of whole words handed a bit of a region
 of whole words is handed all of that word's bits, so each use of its whole products costs it `f` bits of its region. -/
 def CoverTrainingAligned : Prop :=
-  ∀ (c k : ℕ) (b α₀ : ℝ) (r d : Verity.Declaration) (M : Verity.Containment r.D d.D)
+  ∀ (c k : ℕ) (b α₀ : ℝ) (r d : Verity.RegisteredCircuit) (M : Verity.Containment r.D d.D)
     {J L : Type} [DecidableEq J] [DecidableEq L] (Mb : MulBlocks (Circuit.ofDecl r) J L)
     (Aw : J → Finset (Fin r.D.N)) (s D w₀ f : ℕ),
     0 < b → Nci.Complies c k d →

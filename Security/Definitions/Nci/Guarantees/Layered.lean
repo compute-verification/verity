@@ -20,13 +20,13 @@ most `e` counted multiplications and whose lookups each reach at most `eLk`, wit
 `(d − E, e + E · eLk)`-threaded at every `c` and every `S < (E + 1) · b`: a small subcircuit reads too little to hold
 more than `E` of a thread's lookups, and one that reads fewer than `d − E` values of a thread holds none of its roots. -/
 def ThreadedOfLayered : Prop :=
-  ∀ (r : Declaration) (T : Threading r) (d e eLk b : ℕ), Layered T d e eLk b →
+  ∀ (r : RegisteredCircuit) (T : Threading r) (d e eLk b : ℕ), Layered T d e eLk b →
     ∀ (c : ℕ) (S : ℝ) (E : ℕ), S < ((E + 1) * b : ℕ) → T.Threaded c S (d - E) (e + E * eLk)
 
 /-- **Training is slowed, for keyed circuits**: `ThreadedTraining` with its threading premise discharged by
 `ThreadedOfLayered` at `S = k`. -/
 def LayeredTraining : Prop :=
-  ∀ (c k : ℕ) (b_w b_a κ : ℝ) (r dcl : Declaration) (T : Threading r) (d e eLk b E : ℕ) (M : Containment r.D dcl.D),
+  ∀ (c k : ℕ) (b_w b_a κ : ℝ) (r dcl : RegisteredCircuit) (T : Threading r) (d e eLk b E : ℕ) (M : Containment r.D dcl.D),
     Layered T d e eLk b → 0 < c → 0 < b_w → 0 < b_a → E < d → Complies c k dcl →
     Assumptions.ThetaRegistered r dcl (PartialContainment.ofContainment M) →
     Assumptions.CapBelowColumns k E b → Assumptions.WeightsIncompressible r T c k b_w b_a →
@@ -38,7 +38,7 @@ def LayeredTraining : Prop :=
 Every `S ≤ 2·10⁷` is below `7 + 1` bf16 embedding columns (`8 · 163840 · 16 = 20971520` bits), so a reference circuit
 keyed at `(d₀, e, e_lk) = (17, 2328, 0)` is `(17 − 7, 2328 + 7 · 0) = (10, 2328)`-threaded at every `c`. -/
 def ReferenceThreaded : Prop :=
-  ∀ (c : Declaration) (T : Threading c), Assumptions.ReferenceLayered c T →
+  ∀ (c : RegisteredCircuit) (T : Threading c), Assumptions.ReferenceLayered c T →
     ∀ (Γ : ℕ) (S : ℝ), S ≤ 2 * 10 ^ 7 → T.Threaded Γ S 10 2328
 
 end Nci.Guarantees

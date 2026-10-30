@@ -19,7 +19,7 @@ subcircuits small by information and its weights are incompressible in support f
 computes at most `Λ = max(e, c · S / (4 d b_w))` counted multiplications per `b_a` bits of information its fresh input
 reads carry. It is `ThreadedReads` with `novelInfo`, which is at most `novelReads`, in place of `novelReads`. -/
 def ThreadedReadsInfo : Prop :=
-  ∀ (r : Declaration) (θv : r.D.Transcript) (T : Threading r) (c : ℕ) (S b_w b_a : ℝ) (d e : ℕ),
+  ∀ (r : RegisteredCircuit) (θv : r.D.Transcript) (T : Threading r) (c : ℕ) (S b_w b_a : ℝ) (d e : ℕ),
     0 < b_w → 0 < b_a → 0 < d → T.ThreadedInfo θv c S d e → Assumptions.WeightsSupport r θv T c S b_w b_a →
     ∀ R, SmallInfo r θv c S R → b_a * (T.mults R).card ≤ novelInfo r θv R * T.bound S b_w d e
 
@@ -29,7 +29,7 @@ a function `f` of `k` bits, then `R`'s gates take at most `2^(k + width(Sin))` v
 most `k + width(Sin)` bits of information. The baseline is what is registered: after a wipe, a state that is registered
 data entangled with at most `k` bits of slack reads as `k` bits, however wide it is. -/
 def InfoOfState : Prop :=
-  ∀ (D : Declaration) (θv : D.D.Transcript) (R Sst Sin : Finset (Fin D.D.N)) (k : ℕ)
+  ∀ (D : RegisteredCircuit) (θv : D.D.Transcript) (R Sst Sin : Finset (Fin D.D.N)) (k : ℕ)
     (f : BitVec k → (g : Sst) → BitVec (D.D.w g)),
     R ⊆ D.D.computed → D.D.into R \ D.θ ⊆ Sst ∪ Sin → (∀ a ∈ admissible D θv, ∃ s, values Sst a = f s) →
       support D θv R ≤ 2 ^ (k + D.D.width Sin) ∧ novelInfo D θv R ≤ k + D.D.width Sin
@@ -39,7 +39,7 @@ registered values `θc` the ones `θv` gives their images, and `r` is as in `Thr
 of `d`'s computed gates, at most `c` of them, whose fresh input reads carry at most `K` bits of information, holds at
 most `Λ` of `r`'s counted multiplications per `b_a` bits of information `W`'s fresh input reads carry. -/
 def ThreadedContainedInfo : Prop :=
-  ∀ (r d : Declaration) (M : Containment r.D d.D) (θc : r.D.Transcript) (θv : d.D.Transcript) (T : Threading r)
+  ∀ (r d : RegisteredCircuit) (M : Containment r.D d.D) (θc : r.D.Transcript) (θv : d.D.Transcript) (T : Threading r)
     (c : ℕ) (K b_w b_a : ℝ) (dd e : ℕ),
     Assumptions.RegisteredThrough M θc θv →
     0 < b_w → 0 < b_a → 0 < dd → T.ThreadedInfo θc c K dd e → Assumptions.WeightsSupport r θc T c K b_w b_a →
@@ -50,7 +50,7 @@ def ThreadedContainedInfo : Prop :=
 gates, at most `c` of them, whose fresh input reads are a state that is a function of `k` bits and an ingress `Sin`,
 holds at most `K · Λ(K) / b_a` of `r`'s counted multiplications, at `K = k + width(Sin)`. -/
 def ThreadedOfState : Prop :=
-  ∀ (r d : Declaration) (M : Containment r.D d.D) (θc : r.D.Transcript) (θv : d.D.Transcript) (T : Threading r)
+  ∀ (r d : RegisteredCircuit) (M : Containment r.D d.D) (θc : r.D.Transcript) (θv : d.D.Transcript) (T : Threading r)
     (c : ℕ) (b_w b_a : ℝ) (dd e : ℕ) (W Sst Sin : Finset (Fin d.D.N)) (k : ℕ)
     (f : BitVec k → (g : Sst) → BitVec (d.D.w g)),
     Assumptions.RegisteredThrough M θc θv →

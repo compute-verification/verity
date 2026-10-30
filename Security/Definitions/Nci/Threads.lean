@@ -24,7 +24,7 @@ namespace Nci
 open Verity Finset
 
 /-- **Counted multiplications and a thread partition** of the reference circuit `C`. -/
-structure Threading (C : Declaration) where
+structure Threading (C : RegisteredCircuit) where
   /-- The number of threads. -/
   m : ℕ
   /-- The weight gates. -/
@@ -49,12 +49,12 @@ structure Threading (C : Declaration) where
 
 /-- **A small subcircuit** (the draft's `F < F*`, `S < S*`, here as `≤`): at most `c` computed gates, reading at most
 `k` fresh input bits. -/
-def Small (C : Declaration) (c : ℕ) (k : ℝ) (R : Finset (Fin C.D.N)) : Prop :=
+def Small (C : RegisteredCircuit) (c : ℕ) (k : ℝ) (R : Finset (Fin C.D.N)) : Prop :=
   R ⊆ C.D.computed ∧ C.D.size R ≤ c ∧ (novelReads C R : ℝ) ≤ k
 
 namespace Threading
 
-variable {C : Declaration} (T : Threading C)
+variable {C : RegisteredCircuit} (T : Threading C)
 
 /-- The counted multiplications in `R`. -/
 def mults (R : Finset (Fin C.D.N)) : Finset (Fin C.D.N) := T.M ∩ R

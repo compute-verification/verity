@@ -16,7 +16,7 @@ namespace Nci.SecurityProofs
 open Verity Finset
 
 /-- A thread's counted multiplications in `R` number at most `reuse` per source of the weights `R` uses. -/
-theorem card_threadMults_le_sources {c : Declaration} (T : Threading c) (Src : T.Sources)
+theorem card_threadMults_le_sources {c : RegisteredCircuit} (T : Threading c) (Src : T.Sources)
     (R : Finset (Fin c.D.N)) (t : Fin T.m) :
     (T.threadMults R t).card ≤ T.reuse * (Src.sourcesUsed R).card := by
   classical
@@ -33,7 +33,7 @@ theorem card_threadMults_le_sources {c : Declaration} (T : Threading c) (Src : T
     _ = T.reuse * (Src.sourcesUsed R).card := by rw [sum_const, smul_eq_mul, mul_comm]
 
 /-- **Theorem 1 with reads counted by information, each value charged once over its copies.** -/
-theorem threaded_reads_info_fmt2 (c : Declaration) (θv : c.D.Transcript) (T : Threading c) (Src : T.Sources)
+theorem threaded_reads_info_fmt2 (c : RegisteredCircuit) (θv : c.D.Transcript) (T : Threading c) (Src : T.Sources)
     (Γ : ℕ) (S b_w b_a : ℝ) (d e n k₀ : ℕ) (hbw : 0 < b_w) (hba : 0 < b_a) (hd : 0 < d) (he : 0 < e)
     (hF : Src.FanOutBound b_a e n) (hk : Src.OffFresh k₀)
     (hW : Assumptions.WeightsSupportFmt2 c θv T Src Γ S b_w b_a d e n k₀)

@@ -21,7 +21,7 @@ information, and its weights are incompressible with each source charged once an
 `b_a`, every subcircuit `R` small by information computes at most `Λ = max(e, c · S / (4 d b_w))` counted
 multiplications per `b_a` bits of information its fresh input reads carry. -/
 def ThreadedReadsInfoFmt2 : Prop :=
-  ∀ (r : Declaration) (θv : r.D.Transcript) (T : Threading r) (Src : T.Sources) (c : ℕ) (S b_w b_a : ℝ)
+  ∀ (r : RegisteredCircuit) (θv : r.D.Transcript) (T : Threading r) (Src : T.Sources) (c : ℕ) (S b_w b_a : ℝ)
     (d e n k₀ : ℕ),
     0 < b_w → 0 < b_a → 0 < d → 0 < e → Src.FanOutBound b_a e n → Src.OffFresh k₀ →
     Assumptions.WeightsSupportFmt2 r θv T Src c S b_w b_a d e n k₀ →
@@ -33,7 +33,7 @@ reference circuit `r` through `M`, with `r`'s registered values `θc` the ones `
 carry at most `K` bits of information, holds at most `Λ` of `r`'s counted multiplications per `b_a` bits of information
 `W`'s fresh input reads carry. -/
 def ThreadedContainedInfoFmt2 : Prop :=
-  ∀ (r d : Declaration) (M : Containment r.D d.D) (θc : r.D.Transcript) (θv : d.D.Transcript) (T : Threading r)
+  ∀ (r d : RegisteredCircuit) (M : Containment r.D d.D) (θc : r.D.Transcript) (θv : d.D.Transcript) (T : Threading r)
     (Src : T.Sources) (c : ℕ) (K b_w b_a : ℝ) (dd e n k₀ : ℕ),
     Assumptions.RegisteredThrough M θc θv →
     0 < b_w → 0 < b_a → 0 < dd → 0 < e → Src.FanOutBound b_a e n → Src.OffFresh k₀ →
@@ -46,7 +46,7 @@ def ThreadedContainedInfoFmt2 : Prop :=
 that is a function of `k` bits and an ingress `Sin`, holds at most `K · Λ(K) / b_a` of `r`'s counted multiplications, at
 `K = k + width(Sin)`. -/
 def ThreadedOfStateFmt2 : Prop :=
-  ∀ (r d : Declaration) (M : Containment r.D d.D) (θc : r.D.Transcript) (θv : d.D.Transcript) (T : Threading r)
+  ∀ (r d : RegisteredCircuit) (M : Containment r.D d.D) (θc : r.D.Transcript) (θv : d.D.Transcript) (T : Threading r)
     (Src : T.Sources) (c : ℕ) (b_w b_a : ℝ) (dd e n k₀ : ℕ) (W Sst Sin : Finset (Fin d.D.N)) (k : ℕ)
     (f : BitVec k → (g : Sst) → BitVec (d.D.w g)),
     Assumptions.RegisteredThrough M θc θv →

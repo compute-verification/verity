@@ -75,7 +75,7 @@ theorem Inference : Guarantees.Inference := by
   have hc : Complies c k d := by
     refine ⟨B, P, ⟨hB, hcard, fun u => ?_⟩⟩
     have hsub : d.unregistered (P.gates u) ⊆ prompt u := fun a ha => by
-      rw [Declaration.unregistered, Finset.mem_sdiff] at ha
+      rw [RegisteredCircuit.unregistered, Finset.mem_sdiff] at ha
       exact (Finset.mem_union.1 (hreads u ha.1)).resolve_left ha.2
     have hw : d.D.width (prompt u) = (prompt u).card := by
       simp [Circuit.width, hB.one_bit]

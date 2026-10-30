@@ -26,7 +26,7 @@ takes both equal to the width `b`.
 It fails when a small subcircuit can rebuild weights it uses from less than their width: at the first training step,
 where they are committed in `θ`; under a low-rank update (LoRA), whose factors are narrower than the weights they
 update; or when the subcircuit computes the weights' updates itself from fewer bits of activations and gradients. -/
-def WeightsIncompressible (r : Declaration) (T : Threading r) (c : ℕ) (k b_w b_a : ℝ) : Prop :=
+def WeightsIncompressible (r : RegisteredCircuit) (T : Threading r) (c : ℕ) (k b_w b_a : ℝ) : Prop :=
   ∀ R, Small r c k R →
     b_w * (T.weightsUsed R).card + b_a * ∑ t, (T.threadReads R t).card ≤ novelReads r R
 
@@ -49,7 +49,7 @@ It fails when a small subcircuit rebuilds the first version it uses of a paramet
 first steps after a committed checkpoint, whose weights are in `θ` and read for free, until the updates since it depend
 on more than a small subcircuit computes; under a low-rank update (LoRA), whose factors are narrower than the weights
 they update; or when it computes that version itself from fewer bits of activations and gradients. -/
-def WeightsIncompressibleSlots (r : Declaration) (T : Threading r) (σ : T.Slots) (c : ℕ) (k b_w b_a : ℝ) : Prop :=
+def WeightsIncompressibleSlots (r : RegisteredCircuit) (T : Threading r) (σ : T.Slots) (c : ℕ) (k b_w b_a : ℝ) : Prop :=
   ∀ R, Small r c k R →
     b_w * (σ.slotsUsed R).card + b_a * ∑ t, (T.threadReads R t).card ≤ novelReads r R
 

@@ -20,7 +20,7 @@ value's worth, every subcircuit `R` small by information computes at most `Λ = 
 multiplications per `b_a` bits of information its fresh input reads carry. It is `ThreadedReadsInfo` with
 `WeightsSupportFmt` in place of `WeightsSupport` and the threading premise. -/
 def ThreadedReadsInfoFmt : Prop :=
-  ∀ (r : Declaration) (θv : r.D.Transcript) (T : Threading r) (c : ℕ) (S b_w b_a : ℝ) (d e n : ℕ) (μ : ℝ),
+  ∀ (r : RegisteredCircuit) (θv : r.D.Transcript) (T : Threading r) (c : ℕ) (S b_w b_a : ℝ) (d e n : ℕ) (μ : ℝ),
     0 < b_w → 0 < b_a → 0 < d → 0 < e → b_a ≤ Real.logb 2 n - μ →
     Assumptions.WeightsSupportFmt r θv T c S b_w d e n μ →
     ∀ R, SmallInfo r θv c S R → b_a * (T.mults R).card ≤ novelInfo r θv R * T.bound S b_w d e
@@ -31,7 +31,7 @@ circuit `r` through `M`, with `r`'s registered values `θc` the ones `θv` gives
 carry at most `K` bits of information, holds at most `Λ` of `r`'s counted multiplications per `b_a` bits of information
 `W`'s fresh input reads carry. -/
 def ThreadedContainedInfoFmt : Prop :=
-  ∀ (r d : Declaration) (M : Containment r.D d.D) (θc : r.D.Transcript) (θv : d.D.Transcript) (T : Threading r)
+  ∀ (r d : RegisteredCircuit) (M : Containment r.D d.D) (θc : r.D.Transcript) (θv : d.D.Transcript) (T : Threading r)
     (c : ℕ) (K b_w b_a : ℝ) (dd e n : ℕ) (μ : ℝ),
     Assumptions.RegisteredThrough M θc θv →
     0 < b_w → 0 < b_a → 0 < dd → 0 < e → b_a ≤ Real.logb 2 n - μ →
@@ -44,7 +44,7 @@ def ThreadedContainedInfoFmt : Prop :=
 that is a function of `k` bits and an ingress `Sin`, holds at most `K · Λ(K) / b_a` of `r`'s counted multiplications, at
 `K = k + width(Sin)`. -/
 def ThreadedOfStateFmt : Prop :=
-  ∀ (r d : Declaration) (M : Containment r.D d.D) (θc : r.D.Transcript) (θv : d.D.Transcript) (T : Threading r)
+  ∀ (r d : RegisteredCircuit) (M : Containment r.D d.D) (θc : r.D.Transcript) (θv : d.D.Transcript) (T : Threading r)
     (c : ℕ) (b_w b_a : ℝ) (dd e n : ℕ) (μ : ℝ) (W Sst Sin : Finset (Fin d.D.N)) (k : ℕ)
     (f : BitVec k → (g : Sst) → BitVec (d.D.w g)),
     Assumptions.RegisteredThrough M θc θv →

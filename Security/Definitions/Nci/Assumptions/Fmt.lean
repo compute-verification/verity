@@ -50,7 +50,7 @@ values: an NVFP4 16 × 16 2D-block weight is charged 1,280 bits against at most 
 llama-3-405b's gate and up projections read each activation 106,496 times, above `e · log₂ n / 4`: its FP8 run is
 charged 2.077·10⁷ bits against at most 1.947·10⁷. `WeightsSupportFmt2` restates it per source, with a fan-out bound in
 place of `μ` and the counted multiplications off weights fewer than `k₀` steps from `θ`. -/
-def WeightsSupportFmt (r : Declaration) (θv : r.D.Transcript) (T : Threading r) (c : ℕ) (S b_w : ℝ) (d e n : ℕ)
+def WeightsSupportFmt (r : RegisteredCircuit) (θv : r.D.Transcript) (T : Threading r) (c : ℕ) (S b_w : ℝ) (d e n : ℕ)
     (μ : ℝ) : Prop :=
   ∀ R, SmallInfo r θv c S R →
     (2 : ℝ) ^ (b_w * (T.weightsUsed R).card + (Real.logb 2 n - μ) * ∑ t, T.work d e R t) ≤

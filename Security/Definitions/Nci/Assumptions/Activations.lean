@@ -35,19 +35,19 @@ It is meant for honest training circuits whose weights, and every activation com
 depend on more than `c` work of training since the commitment, with no low-rank update (LoRA) whose factors are
 narrower than the weights they update, and with the read cap: without it an inference block that runs a transformer's
 first layers at many positions reads their weights once and computes the next layer's inputs itself. -/
-def ActivationsIncompressibleAll (r : Declaration) (T : Threading r) (L : T.Links) (c : ℕ) (k b_w b_a : ℝ) : Prop :=
+def ActivationsIncompressibleAll (r : RegisteredCircuit) (T : Threading r) (L : T.Links) (c : ℕ) (k b_w b_a : ℝ) : Prop :=
   ∀ R, Small r c k R →
     b_w * (T.weightsUsed R).card + b_a * ((T.actsUsed R).filter fun a => ¬ L.Whole R a).card ≤ novelReads r R
 
 /-- **Each activation enters at most `e` counted multiplications** of the threading `T`: the fan-out `e` of the
 activations bound `Λ = max(e, c_r · K / (4 dd b_w))`. -/
-def EntersAtMost {r : Declaration} (T : Threading r) (e : ℕ) : Prop :=
+def EntersAtMost {r : RegisteredCircuit} (T : Threading r) (e : ℕ) : Prop :=
   ∀ a, (T.M.filter fun g => T.act g = a).card ≤ e
 
 /-- **Each linked activation draws on at least `dd` activations of its own thread**: an activation computed from counted
 multiplications (`L.src a` nonempty) is computed from at least `dd` distinct activations of `a`'s thread, the fan-in
 `dd` of the activations bound. -/
-def DrawsAtLeast {r : Declaration} {T : Threading r} (L : T.Links) (dd : ℕ) : Prop :=
+def DrawsAtLeast {r : RegisteredCircuit} {T : Threading r} (L : T.Links) (dd : ℕ) : Prop :=
   ∀ a, (L.src a).Nonempty → dd ≤ (((L.src a).filter fun g => T.thread (T.act g) = T.thread a).image T.act).card
 
 end Nci.Assumptions

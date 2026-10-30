@@ -62,7 +62,7 @@ weights they update. Additions may have any fan-in. It is stated in reads, not s
 take fewer distinct values than its reads, and in support form the partial-sum charge is false for one honest matrix
 multiplication, since the partial sums over a `k × k × k` block are determined by `2k²` entries, not by the `k³`
 products an inference block must read to form them. -/
-def TrainingIncompressible (r : Declaration) (ch : Chain r.D) (T : Threading r) (c : ℕ) (k b_w b_a : ℝ) : Prop :=
+def TrainingIncompressible (r : RegisteredCircuit) (ch : Chain r.D) (T : Threading r) (c : ℕ) (k b_w b_a : ℝ) : Prop :=
   ∀ (n : ℕ) (P : Partition r.D n), ∃ s : Fin n → ℕ,
     ∑ x : (ℓ : Fin ch.L) × Fin ch.N × Fin (ch.e ℓ), (ch.spread P x.1 x.2.1 x.2.2 - 1) ≤ ∑ u, s u ∧
     ∀ u, Small r c k (P.gates u) →

@@ -32,7 +32,7 @@ complies at `(c, k)`, with its registered information free of the reference circ
 activations and partial sums are incompressible at `b_w` and `b_a` bits per entry, with `r`'s registered information at
 its committed values `θv`. `dd` is the chain's smallest inner dimension. -/
 def ContainedMatMul : Prop :=
-  ∀ (c k : ℕ) (b_w b_a : ℝ) (r d : Declaration) (θv : r.D.Transcript) (ch : Chain r.D) (dd : ℕ)
+  ∀ (c k : ℕ) (b_w b_a : ℝ) (r d : RegisteredCircuit) (θv : r.D.Transcript) (ch : Chain r.D) (dd : ℕ)
     (M : Containment r.D d.D),
     0 < c → 0 < k → 0 < b_w → 0 < b_a → (∀ ℓ, dd ≤ ch.d ℓ) → Complies c k d →
     Assumptions.ThetaRegistered r d (PartialContainment.ofContainment M) →
@@ -45,7 +45,7 @@ the reference circuit's size, every declaration that contains it and complies at
 information free of the reference circuit's fresh input (`ThetaRegistered`), is larger by a factor of at least `κ F`.
 -/
 def ContainedTraining : Prop :=
-  ∀ (c k : ℕ) (b_w b_a κ : ℝ) (r d : Declaration) (θv : r.D.Transcript) (ch : Chain r.D) (dd : ℕ)
+  ∀ (c k : ℕ) (b_w b_a κ : ℝ) (r d : RegisteredCircuit) (θv : r.D.Transcript) (ch : Chain r.D) (dd : ℕ)
     (M : Containment r.D d.D),
     0 < c → 0 < k → 0 < b_w → 0 < b_a → (∀ ℓ, dd ≤ ch.d ℓ) → Complies c k d →
     Assumptions.ThetaRegistered r d (PartialContainment.ofContainment M) →
@@ -63,7 +63,7 @@ with `e_max` the largest output dimension. The assumptions are on `r` at read ca
 registered-information premise `ThetaRegistered`, and each dark gate reads at most `K` itself, so that it is an
 inference block of its own: the dark gates absorb at most their width of the partial sums. -/
 def ContainedMatMulOn : Prop :=
-  ∀ (c k : ℕ) (K b_w b_a μ : ℝ) (r d : Declaration) (θv : r.D.Transcript) (ch : Chain r.D) (dd emax : ℕ)
+  ∀ (c k : ℕ) (K b_w b_a μ : ℝ) (r d : RegisteredCircuit) (θv : r.D.Transcript) (ch : Chain r.D) (dd emax : ℕ)
     (M : PartialContainment r d),
     0 < K → 0 < b_w → 0 < b_a → 0 < dd → 0 < c → (k : ℝ) ≤ K → 0 ≤ μ → μ ≤ 1 →
     (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → Complies c k d → Assumptions.ThetaRegistered r d M →
@@ -80,7 +80,7 @@ def ContainedMatMulOn : Prop :=
 fraction `κ` of the reference circuit's size, each product off the books is a dark gate, so
 `max (min c₁ c₂) (μ b_a / Λ) · (κ size(r) − 2 #dark) ≤ 2 ((k / c) size(d) + (1 − μ) width(dark))`. -/
 def ContainedTrainingOn : Prop :=
-  ∀ (c k : ℕ) (K b_w b_a μ κ : ℝ) (r d : Declaration) (θv : r.D.Transcript) (ch : Chain r.D) (dd emax : ℕ)
+  ∀ (c k : ℕ) (K b_w b_a μ κ : ℝ) (r d : RegisteredCircuit) (θv : r.D.Transcript) (ch : Chain r.D) (dd emax : ℕ)
     (M : PartialContainment r d),
     0 < K → 0 < b_w → 0 < b_a → 0 < dd → 0 < c → (k : ℝ) ≤ K → 0 ≤ μ → μ ≤ 1 →
     (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → Complies c k d → Assumptions.ThetaRegistered r d M →

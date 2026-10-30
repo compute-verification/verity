@@ -23,13 +23,13 @@ information `theta` names, containing a reference training circuit `r` with none
 `(D, c_a)`, at `c = gamma`, `α = num / den` and `k = α c` (`Nci.Cover.Guarantees.CoverTrainingChained`'s
 conclusion, under its premises on `bitDecl r`). -/
 def CoverTrainedChained (j out : Json) : Prop :=
-  ∀ (i : Instance) (P : Prog) (d : Verity.Declaration),
+  ∀ (i : Instance) (P : Prog) (d : Verity.RegisteredCircuit),
     Parses j i → Flock.Program.decode i.program.toUTF8 = .ok P → LaysOut P d.D → Names i.theta d.θ →
     out.getObjVal? "complies" = .ok (.bool true) →
     let c : ℕ := i.gamma
     let α : ℝ := (i.num : ℝ) / i.den
     let k : ℝ := α * c
-    ∀ (r : Verity.Declaration) (M : Verity.Containment r.D d.D)
+    ∀ (r : Verity.RegisteredCircuit) (M : Verity.Containment r.D d.D)
       (B : Nci.Covering.MulBlocks (Nci.Cover.bitDecl r)) (s D w₀ : ℕ) (cw ca : ℝ),
       Nci.Assumptions.ThetaRegistered r d (Nci.PartialContainment.ofContainment M) →
       Nci.Assumptions.ParameterHardAt (Nci.Cover.bitDecl r) B s cw → k < cw * D → 0 < ca →
@@ -46,7 +46,7 @@ theorem coverTrainedChained {j out : Json} (hev : evaluate j = .ok out) : CoverT
   fun i P d hpar hdec hL hθ hc r M B s D w₀ cw ca hB hH hk hca hw hs => by
     have h := Nci.Cover.SecurityProofs.CoverTrainingChained_rate i.gamma _ r d M B s D w₀ cw ca
       (div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _))
-      (Witnesses j out hev i P d hpar hdec hL hθ hc) hB hH hk hca hw hs
+      (Witnesses j out hev i P d hpar hdec hL hθ hc).1 hB hH hk hca hw hs
     refine ⟨?_, h.2⟩
     calc _ = cw * ca * ((Nci.Assumptions.chainedBlocksAt (Nci.Cover.bitDecl r) B D ca).card : ℝ) *
           i.gamma := by ring

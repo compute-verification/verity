@@ -105,7 +105,7 @@ theorem UpdatedMatMulReads : Guarantees.UpdatedMatMulReads := by
 block and the rate `α` has inference blocks of at most `Γ` gates, each reading at most `k = αΓ`, and reads at most
 `α size(D)` in total. -/
 theorem updatedMatMul_rate_of_reads (h : Guarantees.UpdatedMatMulReads) :
-    ∀ (Γ : ℕ) (α b_w b_a : ℝ) (D : Declaration) (c : Chain D.D) (d : ℕ),
+    ∀ (Γ : ℕ) (α b_w b_a : ℝ) (D : RegisteredCircuit) (c : Chain D.D) (d : ℕ),
       0 < α → 0 < b_w → 0 < b_a → (∀ ℓ, d ≤ c.d ℓ) → CompliesRate Γ α D →
       Assumptions.ActivationsIncompressible D c Γ (α * Γ) b_w b_a →
       Assumptions.PartialSumsIncompressible D c Γ (α * Γ) b_w b_a →

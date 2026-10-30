@@ -1,4 +1,4 @@
-"""`InPlaceBackend`: the remote bandwidth session's prover over vLLM's own tensors, the weights and the KV pool where
+"""`InPlaceBackend`: the PoUB session's prover over vLLM's own tensors, the weights and the KV pool where
 the binder registered them, with no copy of the store (`benchmarks/remote_session/inplace.py`'s `InPlace`, from
 `Region.of_backing` over each registered region's backing, and session.cu).
 

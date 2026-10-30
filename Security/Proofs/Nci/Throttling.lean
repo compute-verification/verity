@@ -181,7 +181,7 @@ open Classical in
 /-- **Updated matrix multiplications are throttled** (the draft's theorem, "Throttling updated matrix
 multiplications"). -/
 theorem UpdatedMatMul_rate :
-    ∀ (Γ : ℕ) (α b_w b_a : ℝ) (D : Declaration) (c : Chain D.D) (d : ℕ),
+    ∀ (Γ : ℕ) (α b_w b_a : ℝ) (D : RegisteredCircuit) (c : Chain D.D) (d : ℕ),
       0 < α → 0 < b_w → 0 < b_a → (∀ ℓ, d ≤ c.d ℓ) → CompliesRate Γ α D →
       Assumptions.ActivationsIncompressible D c Γ (α * Γ) b_w b_a →
       Assumptions.PartialSumsIncompressible D c Γ (α * Γ) b_w b_a →

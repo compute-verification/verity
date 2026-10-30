@@ -34,21 +34,21 @@ holds at deficit `1`. The deficit is spent: at `Λ = 0` description hardness fai
 bit. A selection is written out, not as `Selects`: the lock's witnesses rule refuses an honest witness's hypothesis
 headed by a definition outside an assumptions module. -/
 def HeldBudgetHonest : Prop :=
-  R1.P.IsCK R1.d 2 1 ∧
-    (∀ (U : Fin R1.B → Finset (Fin 1)) (σ : Fin 1 → Finset (Fin R1.d.D.N)),
-      (∀ u, (∀ i ∈ U u, σ i ∈ (Y2 2).cells i) ∧ ∀ i ∈ U u, σ i ⊆ holds R1.d.D (R1.P.gates u)) →
+  R1.d.𝓘.IsCK R1.d 2 1 ∧
+    (∀ (U : Fin R1.d.n → Finset (Fin 1)) (σ : Fin 1 → Finset (Fin R1.d.D.N)),
+      (∀ u, (∀ i ∈ U u, σ i ∈ (Y2 2).cells i) ∧ ∀ i ∈ U u, σ i ⊆ holds R1.d.D (R1.d.𝓘.gates u)) →
       ∃ e : List Bool, e.length ≤ 3 ∧ Evaluates M () 0 R1 e fun u T => selectionBits T (U u) σ) ∧
     Assumptions.DescriptionHard R1 (Y2 2) M () 0 1 ∧ ¬ Assumptions.DescriptionHard R1 (Y2 2) M () 0 0
 
 /-- **`HeldBudget`'s conclusion can fail**: with the value of gates `2` and `3` priced six bits, above every
 description of it, the proof block holds more than `k + ⌈log₂ B⌉ + aBlk + Λ = 5`. -/
 def HeldBudgetNontrivial : Prop :=
-  ¬ HeldPriceAtMost R1 (Y2 6) (((1 + Nat.clog 2 R1.B + 3 : ℕ) : ℝ) + 1)
+  ¬ HeldPriceAtMost R1 (Y2 6) (((1 + Nat.clog 2 R1.d.n + 3 : ℕ) : ℝ) + 1)
 
 /-- **`StatHeldBudget`'s premises hold together** at the toy, with `c = 2`, `k = 1`, `Λ = 0`, the token drawn
 uniformly and the product's value priced one bit. -/
 def StatHeldBudgetHonest : Prop :=
-  R1.P.IsCK R1.d 2 1 ∧ (∀ a ∈ μ.support, R1.Honest a) ∧ Assumptions.MinEntropyHard R1 (Y 1) μ 0
+  R1.d.𝓘.IsCK R1.d 2 1 ∧ (∀ a ∈ μ.support, R1.Honest a) ∧ Assumptions.MinEntropyHard R1 (Y 1) μ 0
 
 /-- **`StatHeldBudget`'s conclusion can fail**: with the product's value priced three bits, more than its one bit of
 entropy, the proof block holds more than `k + Λ = 1`. -/
@@ -61,7 +61,7 @@ recovering it with a one-bit complement (`βv = 2`, `amb = 1`). Both parameters 
 fails, since `M` describes `11` in one bit, and at `amb = 0` the recovery fails, since it needs its bit picking the
 source. -/
 def RecoveredBudgetHonest : Prop :=
-  R1.P.IsCK R1.d 2 1 ∧ ([true, true, true] : List Bool).length ≤ 3 ∧ Assumptions.SourceHard R1 M () 0 z 2 1 ∧
+  R1.d.𝓘.IsCK R1.d 2 1 ∧ ([true, true, true] : List Bool).length ≤ 3 ∧ Assumptions.SourceHard R1 M () 0 z 2 1 ∧
     Assumptions.Recovers R1 M () 0 [true, true, true] z 2 2 1 (fun _ => 1) ∧
     ¬ Assumptions.SourceHard R1 M () 0 z 2 0 ∧
     ¬ Assumptions.Recovers R1 M () 0 [true, true, true] z 2 2 0 fun _ => 1
@@ -70,9 +70,9 @@ def RecoveredBudgetHonest : Prop :=
 hardness hold as in its honest witness; at seven bits per eligible output, more than the source holds, the source is
 not recovered; and `βv · J = 7` exceeds `k + ⌈log₂ B⌉ + aBlk + δ + amb = 6`. -/
 def RecoveredBudgetNontrivial : Prop :=
-  R1.P.IsCK R1.d 2 1 ∧ ([true, true, true] : List Bool).length ≤ 3 ∧ Assumptions.SourceHard R1 M () 0 z 2 1 ∧
+  R1.d.𝓘.IsCK R1.d 2 1 ∧ ([true, true, true] : List Bool).length ≤ 3 ∧ Assumptions.SourceHard R1 M () 0 z 2 1 ∧
     ¬ Assumptions.Recovers R1 M () 0 [true, true, true] z 2 7 1 (fun _ => 1) ∧
-    ¬ ((7 : ℝ) * ((1 : ℕ) : ℝ) ≤ ((1 + Nat.clog 2 R1.B + 3 : ℕ) : ℝ) + 1 + 1)
+    ¬ ((7 : ℝ) * ((1 : ℕ) : ℝ) ≤ ((1 + Nat.clog 2 R1.d.n + 3 : ℕ) : ℝ) + 1 + 1)
 
 /-- **`IncidenceCap`'s premises hold together** at the toy's product: it reads its slot and its operand, with at most
 one product per slot-operand pair (`r = 1`) and per operand (`aout = 1`). -/
@@ -110,7 +110,7 @@ def OperandCapSeparateNontrivial : Prop :=
     (∀ o, ((B.P.filter fun q => I.occ q = o).card : ℝ) ≤ 1) ∧
     HeldPriceAtMost R1 W 1 ∧ HeldPriceAtMost R1 O 1 ∧
     ¬ (∀ x y : ℝ, 0 ≤ x → 0 ≤ y → 1 * x ≤ 1 → 1 * y ≤ 1 → min (1 * x * y) (1 * y) ≤ 0) ∧
-    ¬ (((completedIn B (R1.P.gates 0)).card : ℝ) ≤ 0)
+    ¬ (((completedIn B (R1.d.𝓘.gates 0)).card : ℝ) ≤ 0)
 
 /-- **`OperandCapJoint`'s premises hold together** at the toy: one bit per slot and per operand, the block holding
 slots and operands priced at most two bits together, and `Q = 2`. -/
@@ -130,7 +130,7 @@ def OperandCapJointNontrivial : Prop :=
     (∀ o, ((B.P.filter fun q => I.occ q = o).card : ℝ) ≤ 1) ∧
     HeldPriceAtMost R1 (W.sum O) 2 ∧
     ¬ (∀ x y : ℝ, 0 ≤ x → 0 ≤ y → 1 * x + 1 * y ≤ 2 → min (1 * x * y) (1 * y) ≤ 0) ∧
-    ¬ (((completedIn B (R1.P.gates 0)).card : ℝ) ≤ 0)
+    ¬ (((completedIn B (R1.d.𝓘.gates 0)).card : ℝ) ≤ 0)
 
 /-- **`ImportOrRecompute`'s premises hold together** at the toy: the token reaches the gate the product reads, and the
 one consumer has weight `1`. -/
@@ -142,9 +142,9 @@ the weight `2` is over what one gate's regions allow; and the proof block finish
 unregistered input bit and the consumers it recomputes. -/
 def ImportOrRecomputeNontrivial : Prop :=
   K.Upstream ∧ ¬ (K.OverlapWeights fun _ => 2) ∧
-    ¬ (∑ _c ∈ K.servedIn (R1.P.gates 0), (2 : ℝ) ≤
-        ((R1.d.unregistered (R1.P.gates 0)).card : ℝ) +
-          ∑ _c ∈ (K.servedIn (R1.P.gates 0)).filter (fun c => K.G c ⊆ R1.P.gates 0), (2 : ℝ))
+    ¬ (∑ _c ∈ K.servedIn (R1.d.𝓘.gates 0), (2 : ℝ) ≤
+        ((R1.d.unregistered (R1.d.𝓘.gates 0)).card : ℝ) +
+          ∑ _c ∈ (K.servedIn (R1.d.𝓘.gates 0)).filter (fun c => K.G c ⊆ R1.d.𝓘.gates 0), (2 : ℝ))
 
 /-- **`RecomputeByGates`'s premises hold together** at the toy: the consumer has weight `1` and one required gate
 (`g = 1`). -/
@@ -167,7 +167,7 @@ def RecomputeByStateHonest : Prop :=
 their values priced at most `h = 2`; recomputing the consumer needs no state above `h`; and the block contains the
 consumer's required gates. -/
 def RecomputeByStateNontrivial : Prop :=
-  HeldPriceAtMost R1 W2 2 ∧ ¬ K2.RequiresState W2 2 ∧ ¬ ∀ (u : Fin R1.B) (c : Fin 1), ¬ K2.G c ⊆ R1.P.gates u
+  HeldPriceAtMost R1 W2 2 ∧ ¬ K2.RequiresState W2 2 ∧ ¬ ∀ (u : Fin R1.d.n) (c : Fin 1), ¬ K2.G c ⊆ R1.d.𝓘.gates u
 
 /-- **`WeightedProductCap`'s premises hold together** at the toy: the product reads its slot, the use has weight `1`,
 and the block holds slots priced at most one bit. -/
@@ -178,6 +178,6 @@ def WeightedProductCapHonest : Prop :=
 `1`; the block holds the slot, priced above `h = 0`; and its weighted products exceed `h` times the weight it serves. -/
 def WeightedProductCapNontrivial : Prop :=
   SlotsRead B W ∧ (∀ _j : Fin B.nt, (0 : ℝ) ≤ 1) ∧ ¬ HeldPriceAtMost R1 W 0 ∧
-    ¬ (∑ q ∈ completedIn B (R1.P.gates 0), W.price q.1 * 1 ≤ 0 * ∑ _j ∈ served B (R1.P.gates 0), (1 : ℝ))
+    ¬ (∑ q ∈ completedIn B (R1.d.𝓘.gates 0), W.price q.1 * 1 ≤ 0 * ∑ _j ∈ served B (R1.d.𝓘.gates 0), (1 : ℝ))
 
 end Nci.Guarantees

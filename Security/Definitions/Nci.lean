@@ -4,7 +4,7 @@ import Mathlib.Analysis.Real.Sqrt
 /-!
 # The inference-only policy
 
-The developer declares `(D, θ)` (`Verity.Declaration`). The input gates in `θ` hold the registered information,
+The developer declares `(D, θ)` (`Verity.RegisteredCircuit`). The input gates in `θ` hold the registered information,
 committed beforehand; every other value is fresh input. A division of `D` into inference blocks is a `Verity.Partition`
 of its computed gates. Input gates are in no inference block, so an inference block that uses an input reads it. The
 gates `R` of an inference block read `width(in(R) \ θ)` fresh input bits (`novelReads`): registered information is free,
@@ -34,10 +34,10 @@ open Verity
 open scoped ENNReal
 
 /-- The fresh input that the gates `R` of `d`'s circuit read, in bits: the width of `in(R) \ θ`. -/
-def novelReads (d : Declaration) (R : Finset (Fin d.D.N)) : ℕ := d.D.width (d.D.into R \ d.θ)
+def novelReads (d : RegisteredCircuit) (R : Finset (Fin d.D.N)) : ℕ := d.D.width (d.D.into R \ d.θ)
 
 /-- A policy: a condition on declarations. -/
-abbrev Policy : Type := Declaration → Prop
+abbrev Policy : Type := RegisteredCircuit → Prop
 
 /-- **The inference-only policy** at `(c, k)`: `d` has a `(c, k)`-partition, its circuit Boolean and divided into
 inference blocks of exactly `c` gates, padding included, each with at most `k` fresh input bits. -/
@@ -53,13 +53,13 @@ def CompliesRate (c : ℕ) (α : ℝ) : Policy := fun d =>
 
 /-- `Reads_c(C)`: the least total fresh input that the inference blocks of a division of `C` into blocks of at most `c`
 gates read. -/
-noncomputable def Reads (c : ℕ) (C : Declaration) : ℕ :=
+noncomputable def Reads (c : ℕ) (C : RegisteredCircuit) : ℕ :=
   sInf {r | ∃ (n : ℕ) (P : Partition C.D n), (∀ u, C.D.size (P.gates u) ≤ c) ∧ r = ∑ u, novelReads C (P.gates u)}
 
 /-- **The slowdown factor** `ρ_policy(t)`: the least ratio of `size(d)` to `size(t)` over the declarations `d` that
 implement `t` and comply with `policy`, and `⊤` when none does. -/
-noncomputable def slowdown (policy : Policy) (t : Declaration) : ℝ≥0∞ :=
-  ⨅ (d : Declaration) (_ : t.Implements d ∧ policy d), (d.D.size d.D.computed : ℝ≥0∞) / t.D.size t.D.computed
+noncomputable def slowdown (policy : Policy) (t : RegisteredCircuit) : ℝ≥0∞ :=
+  ⨅ (d : RegisteredCircuit) (_ : t.Implements d ∧ policy d), (d.D.size d.D.computed : ℝ≥0∞) / t.D.size t.D.computed
 
 /-- **An updated matrix multiplication chain that `D` runs** (the draft, "Updated matrix multiplications"): weight
 matrices computed after the commitment and, at each of `N` token positions `t`, multiplications `y_t = W_ℓ x_t`. The

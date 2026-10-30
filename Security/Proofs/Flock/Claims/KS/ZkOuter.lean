@@ -21,7 +21,7 @@ open RecDeploy (RecIns insO setupO readOfO fullDrawO actO nextO VO runOfO colsO 
 
 /-- **The outer verifier's refusal after the checks**: the verdict's last refusals (`fullDrawO`). -/
 def wrapO (x : Claims.Msg) (f : Final) (v : Flock.V Unit) : Flock.V Unit :=
-  if fullDrawO x f then v else .error "rec: refused by the verdict's last refusals (fullDraw, innerDrawn)"
+  if fullDrawO x f then v else .error "rec: refused by the verdict's last refusals (fullDraw, innerDrawn, denseOnly)"
 
 /-- Under `--zk` the recursive setup passes every table's `Zk.shapeOk`. -/
 theorem recIns_shapeOk {r : RecIns} {spec : SessionSpec} {sts : Array Stmt} (h : r.setup = .ok (spec, sts))

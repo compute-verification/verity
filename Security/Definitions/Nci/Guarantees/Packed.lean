@@ -22,7 +22,7 @@ whichever gates hold them, and, at positions it completes entries of, `K / (4 b_
 weight and input reads. It needs only `PackedActivationsIncompressible` on `r` at read cap `K ≥ k`, besides the
 registered-information premise `ThetaRegistered`. -/
 def PackedContainedFanOutOn : Prop :=
-  ∀ (p c k : ℕ) (K b_w b_a : ℝ) (r d : Declaration) (ch : PackedChain r.D p) (dd emax : ℕ)
+  ∀ (p c k : ℕ) (K b_w b_a : ℝ) (r d : RegisteredCircuit) (ch : PackedChain r.D p) (dd emax : ℕ)
     (M : PartialContainment r d),
     0 < c → 0 < K → 0 < b_w → 0 < b_a → 0 < dd → (k : ℝ) ≤ K →
     (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → Complies c k d → Assumptions.ThetaRegistered r d M →

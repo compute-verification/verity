@@ -32,7 +32,7 @@ counted multiplication, it reads at least `b_a / (2Λ) = (b_a/2) · min(1/e, 4 d
 flop, the draft's statement at `b_w = b_a = b`, written multiplied out so that a subcircuit that reads nothing needs no
 division. -/
 def ThreadedReads : Prop :=
-  ∀ (r : Declaration) (T : Threading r) (c : ℕ) (k b_w b_a : ℝ) (d e : ℕ),
+  ∀ (r : RegisteredCircuit) (T : Threading r) (c : ℕ) (k b_w b_a : ℝ) (d e : ℕ),
     0 < b_w → 0 < b_a → 0 < d → T.Threaded c k d e → Assumptions.WeightsIncompressible r T c k b_w b_a →
     ∀ R, Small r c k R → b_a * (T.mults R).card ≤ novelReads r R * T.bound k b_w d e
 
@@ -41,7 +41,7 @@ Theorem 1: a declaration `d` that contains `r` (`M`) and complies at `(c, k)`, w
 registered information (`ThetaRegistered`), has at least `c b_a / (k Λ)` gates per counted multiplication of `r`,
 where `Λ` is Theorem 1's bound at `S = k`. -/
 def ThreadedThrottled : Prop :=
-  ∀ (c k : ℕ) (b_w b_a : ℝ) (r d : Declaration) (T : Threading r) (dd e : ℕ) (M : Containment r.D d.D),
+  ∀ (c k : ℕ) (b_w b_a : ℝ) (r d : RegisteredCircuit) (T : Threading r) (dd e : ℕ) (M : Containment r.D d.D),
     0 < c → 0 < b_w → 0 < b_a → 0 < dd → Complies c k d →
     Assumptions.ThetaRegistered r d (PartialContainment.ofContainment M) →
     T.Threaded c k dd e → Assumptions.WeightsIncompressible r T c k b_w b_a →
@@ -52,7 +52,7 @@ def ThreadedThrottled : Prop :=
 no fresh input of it in its registered information (`ThetaRegistered`), is larger by a factor of at least
 `κ c b_a / (2 k Λ)`. -/
 def ThreadedTraining : Prop :=
-  ∀ (c k : ℕ) (b_w b_a κ : ℝ) (r d : Declaration) (T : Threading r) (dd e : ℕ) (M : Containment r.D d.D),
+  ∀ (c k : ℕ) (b_w b_a κ : ℝ) (r d : RegisteredCircuit) (T : Threading r) (dd e : ℕ) (M : Containment r.D d.D),
     0 < c → 0 < b_w → 0 < b_a → 0 < dd → Complies c k d →
     Assumptions.ThetaRegistered r d (PartialContainment.ofContainment M) →
     T.Threaded c k dd e → Assumptions.WeightsIncompressible r T c k b_w b_a →
@@ -65,7 +65,7 @@ gates per counted multiplication of `r` in `S`, where `Λ` is Theorem 1's bound 
 `d` computes a piece of `S` that reads no more than the block, since a dark value enters `d` only as an input, and
 outside its registered information by `ThetaRegistered`. At `S = computed` it is `ThreadedThrottled`. -/
 def ThreadedThrottledOn : Prop :=
-  ∀ (c k : ℕ) (b_w b_a : ℝ) (r d : Declaration) (T : Threading r) (dd e : ℕ) (M : PartialContainment r d),
+  ∀ (c k : ℕ) (b_w b_a : ℝ) (r d : RegisteredCircuit) (T : Threading r) (dd e : ℕ) (M : PartialContainment r d),
     0 < c → 0 < b_w → 0 < b_a → 0 < dd → Complies c k d → Assumptions.ThetaRegistered r d M →
     T.Threaded c k dd e → Assumptions.WeightsIncompressible r T c k b_w b_a →
       b_a * (T.M ∩ M.S).card ≤ (k / c : ℝ) * T.bound k b_w dd e * d.D.size d.D.computed
@@ -74,7 +74,7 @@ def ThreadedThrottledOn : Prop :=
 multiplications number at most its dark gates plus `(k / c) Λ size(d) / b_a`: `M ≤ U + C / ρ` with `U` the gates
 computed off the books, `C = size(d)` and `ρ = c b_a / (k Λ)` the gates per counted multiplication. -/
 def ThreadedThrottledDark : Prop :=
-  ∀ (c k : ℕ) (b_w b_a : ℝ) (r d : Declaration) (T : Threading r) (dd e : ℕ) (M : PartialContainment r d),
+  ∀ (c k : ℕ) (b_w b_a : ℝ) (r d : RegisteredCircuit) (T : Threading r) (dd e : ℕ) (M : PartialContainment r d),
     0 < c → 0 < b_w → 0 < b_a → 0 < dd → Complies c k d → Assumptions.ThetaRegistered r d M →
     T.Threaded c k dd e → Assumptions.WeightsIncompressible r T c k b_w b_a →
       (T.M.card : ℝ) ≤ M.dark.card + (k / c : ℝ) * T.bound k b_w dd e * d.D.size d.D.computed / b_a
@@ -84,7 +84,7 @@ flops, a declaration that complies at `(c, k)` and contains it partly, with no f
 information (`ThetaRegistered`), is larger by a factor of at least `κ c b_a / (2 k Λ)`, less what its dark gates
 absorb: `κ b_a size(r) ≤ 2 b_a #dark + 2 (k / c) Λ size(d)`. -/
 def ThreadedTrainingOn : Prop :=
-  ∀ (c k : ℕ) (b_w b_a κ : ℝ) (r d : Declaration) (T : Threading r) (dd e : ℕ) (M : PartialContainment r d),
+  ∀ (c k : ℕ) (b_w b_a κ : ℝ) (r d : RegisteredCircuit) (T : Threading r) (dd e : ℕ) (M : PartialContainment r d),
     0 < c → 0 < b_w → 0 < b_a → 0 < dd → Complies c k d → Assumptions.ThetaRegistered r d M →
     T.Threaded c k dd e → Assumptions.WeightsIncompressible r T c k b_w b_a →
     Assumptions.Coverage κ r (2 * T.M.card) →
@@ -95,13 +95,13 @@ def ThreadedTrainingOn : Prop :=
 (`WeightsIncompressibleSlots`) rather than per weight gate. Its bound is the same, `Λ = max(e, reuse · k / (4 d b_w))`,
 since a thread's counted multiplications on the versions of one slot number at most `reuse` (`σ.reuse_le`). -/
 def ThreadedReadsSlots : Prop :=
-  ∀ (r : Declaration) (T : Threading r) (σ : T.Slots) (c : ℕ) (k b_w b_a : ℝ) (d e : ℕ),
+  ∀ (r : RegisteredCircuit) (T : Threading r) (σ : T.Slots) (c : ℕ) (k b_w b_a : ℝ) (d e : ℕ),
     0 < b_w → 0 < b_a → 0 < d → T.Threaded c k d e → Assumptions.WeightsIncompressibleSlots r T σ c k b_w b_a →
     ∀ R, Small r c k R → b_a * (T.mults R).card ≤ novelReads r R * T.bound k b_w d e
 
 /-- **Theorem 2 per parameter slot**: `ThreadedThrottled` under `WeightsIncompressibleSlots`. -/
 def ThreadedThrottledSlots : Prop :=
-  ∀ (c k : ℕ) (b_w b_a : ℝ) (r d : Declaration) (T : Threading r) (σ : T.Slots) (dd e : ℕ)
+  ∀ (c k : ℕ) (b_w b_a : ℝ) (r d : RegisteredCircuit) (T : Threading r) (σ : T.Slots) (dd e : ℕ)
     (M : Containment r.D d.D),
     0 < c → 0 < b_w → 0 < b_a → 0 < dd → Complies c k d →
     Assumptions.ThetaRegistered r d (PartialContainment.ofContainment M) →
@@ -110,7 +110,7 @@ def ThreadedThrottledSlots : Prop :=
 
 /-- **Theorem 2 with dark gates, per parameter slot**: `ThreadedThrottledOn` under `WeightsIncompressibleSlots`. -/
 def ThreadedThrottledOnSlots : Prop :=
-  ∀ (c k : ℕ) (b_w b_a : ℝ) (r d : Declaration) (T : Threading r) (σ : T.Slots) (dd e : ℕ)
+  ∀ (c k : ℕ) (b_w b_a : ℝ) (r d : RegisteredCircuit) (T : Threading r) (σ : T.Slots) (dd e : ℕ)
     (M : PartialContainment r d),
     0 < c → 0 < b_w → 0 < b_a → 0 < dd → Complies c k d → Assumptions.ThetaRegistered r d M →
     T.Threaded c k dd e → Assumptions.WeightsIncompressibleSlots r T σ c k b_w b_a →
@@ -119,7 +119,7 @@ def ThreadedThrottledOnSlots : Prop :=
 /-- **Counted multiplications off the books are dark gates, per parameter slot**: `ThreadedThrottledDark` under
 `WeightsIncompressibleSlots`. -/
 def ThreadedThrottledDarkSlots : Prop :=
-  ∀ (c k : ℕ) (b_w b_a : ℝ) (r d : Declaration) (T : Threading r) (σ : T.Slots) (dd e : ℕ)
+  ∀ (c k : ℕ) (b_w b_a : ℝ) (r d : RegisteredCircuit) (T : Threading r) (σ : T.Slots) (dd e : ℕ)
     (M : PartialContainment r d),
     0 < c → 0 < b_w → 0 < b_a → 0 < dd → Complies c k d → Assumptions.ThetaRegistered r d M →
     T.Threaded c k dd e → Assumptions.WeightsIncompressibleSlots r T σ c k b_w b_a →
