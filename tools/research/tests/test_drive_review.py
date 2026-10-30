@@ -1192,17 +1192,19 @@ def _red_landing(world, monkeypatch, tmp_path) -> tuple[Review, str]:
     return h, tip
 
 
-def test_an_after_landing_failure_rings_its_culprit_and_the_suites_owner_and_reverts_it_an_hour_later(world, monkeypatch,
-                                                                                                       tmp_path):
-    """Without a culprit, PRs keep landing on a `main` whose after-landing runs all fail, each failure going to @ci alone.
-    Drive names the one landing whose change touches the failing test, rings its owner and the suite's with the run and the first
-    error line, and reverts it once `FIX_WINDOW_S` passed with no fix marked."""
+def test_an_after_landing_failure_rings_its_culprits_lane_and_the_suites_owner_and_reverts_it_an_hour_later(world, monkeypatch,
+                                                                                                             tmp_path):
+    """Without a culprit, PRs keep landing on a `main` whose after-landing runs all fail, each failure going to ci alone.
+    Drive names the one landing whose change touches the failing test, rings its lane with the suite's owner in one post
+    (neither ci nor top) with the run and the first error line, and reverts it once `FIX_WINDOW_S` passed with no fix
+    marked, telling the same two."""
     from research.drive import FIX_WINDOW_S
 
     h, tip = _red_landing(world, monkeypatch, tmp_path)
     assert _main(world) == tip
     (ring,) = [p for p in h.posts if "is red on" in p]
-    assert ring.startswith("@ci @pkg-owner @lane-2 queue: suite pkg is red on `main`") and "(run r-post-0)" in ring, ring
+    assert ring.startswith("@lane-2 @pkg-owner queue: suite pkg is red on `main`") and "(run r-post-0)" in ring, ring
+    assert "@ci" not in ring and "@top" not in ring, ring
     assert "failed tests/test_x.py::test_y" in ring and "NameError: name '_once' is not defined" in ring, ring
     assert "Culprit: #2 (its change touches pkg/tests/test_x.py)" in ring and "unless a fix is marked" in ring, ring
     assert h.postland()["red"]["suite pkg"]["culprit"][0] == 2
@@ -1215,7 +1217,8 @@ def test_an_after_landing_failure_rings_its_culprit_and_the_suites_owner_and_rev
     assert _git(world.origin, "rev-parse", f"{main}^") == tip                            # one revert on top of the landing
     assert "pkg/tests/test_x.py" not in _git(world.origin, "ls-tree", "-r", "--name-only", main)
     (post,) = [p for p in h.posts if "reverted" in p]
-    assert post.startswith("@ci @lane-2 queue: #2 reverted on `main`") and "no fix was marked within 60 min" in post, post
+    assert post.startswith("@lane-2 @pkg-owner queue: #2 reverted on `main`") and "no fix was marked within 60 min" in post, post
+    assert "@ci" not in post and "@top" not in post, post
     assert h.posted[-1][0] == main and h.launched == []                                  # the next run checks the new tip
     h.run_state[f"r-post-{len(h.posted) - 1}"] = ("done", 0, None)
     h.evidence = [_steps_run(world.tmp, f"r-post-{len(h.posted) - 1}", {s: "passed" for s in h.posted[-1][1].split(",")})]
@@ -1408,7 +1411,7 @@ def test_a_revert_whose_push_loses_a_race_is_retried_on_the_next_tick(world, mon
     main = _main(world)
     assert _git(world.origin, "rev-parse", f"{main}^") == raced[0] and _reverts(world, tip) == 1
     assert _git(world.origin, "show", f"{main}:c.txt") == "landed in between"
-    assert any(p.startswith("@ci @lane-1 queue: #1 reverted on `main`") for p in h.posts), h.posts
+    assert any(p.startswith("@lane-1 queue: #1 reverted on `main`") for p in h.posts), h.posts
 
 
 def test_a_drive_killed_after_a_revert_pushed_does_not_revert_again_on_restart(world, monkeypatch, tmp_path):
@@ -1511,13 +1514,14 @@ def test_a_read_guard_failure_rings_the_pr_that_added_the_reading_test(world, mo
     h.evidence = [run]
     h.tick()
     (ring,) = [p for p in h.posts if "is red on" in p]
-    assert ring.startswith("@ci @pkg-owner @lane-1 queue: suite pkg is red"), ring
+    assert ring.startswith("@lane-1 @pkg-owner queue: suite pkg is red"), ring
     assert "read outside its declared inputs: data/x.json" in ring and "Culprit: #1" in ring, ring
 
 
-def test_main_far_behind_its_last_verified_commit_rings_ci_and_top_every_hour(world, monkeypatch, tmp_path):
+def test_main_far_behind_its_last_verified_commit_for_a_red_rings_the_culprits_lane_every_hour(world, monkeypatch, tmp_path):
     """A `main` many hours without a verified commit must reach someone.  Once its oldest unverified landing is
-    `BEHIND_S` old, drive rings @ci and @top, again every `BEHIND_EVERY_S` while it stays behind."""
+    `BEHIND_S` old, drive rings who acts on what is red there, the culprit's lane and the suite's owner (not ci and top, which
+    hear only while nothing red explains it), again every `BEHIND_EVERY_S` while it stays behind."""
     from research.drive import BEHIND_EVERY_S, BEHIND_S
 
     h, tip = _red_landing(world, monkeypatch, tmp_path)
@@ -1528,7 +1532,7 @@ def test_main_far_behind_its_last_verified_commit_rings_ci_and_top_every_hour(wo
     h.clock += 20
     h.tick()
     (alarm,) = [p for p in h.posts if "behind its tip" in p]
-    assert alarm.startswith("@ci @top queue: `main`'s last verified commit") and "red: suite pkg (culprit #2)" in alarm, alarm
+    assert alarm.startswith("@lane-2 @pkg-owner queue: `main`'s last verified commit") and "red: suite pkg (culprit #2)" in alarm, alarm
     h.clock += BEHIND_EVERY_S - 30
     h.tick()
     assert len([p for p in h.posts if "behind its tip" in p]) == 1
@@ -1552,7 +1556,7 @@ def test_a_healthy_after_landing_run_under_way_is_not_an_alarm(world, monkeypatc
     h.clock += POSTLAND_RUN_S
     h.tick()
     (alarm,) = [p for p in h.posts if "behind its tip" in p]
-    assert "its run r-post-0" in alarm and "red: nothing named red" in alarm, alarm
+    assert alarm.startswith("@ci @top queue: ") and "its run r-post-0" in alarm and "red: nothing named red" in alarm, alarm
 
 
 def test_an_after_landing_failure_several_prs_touch_is_bisected_to_the_one_that_broke_it(world, monkeypatch, tmp_path):
@@ -1593,7 +1597,7 @@ def test_an_after_landing_failure_several_prs_touch_is_bisected_to_the_one_that_
     h.tick()
     assert "bisect" not in h.postland() and not [p for p in h.posts if "reverted" in p]
     (ring,) = [p for p in h.posts if "Culprit: #2, by bisection" in p]
-    assert ring.startswith("@ci @lane-2 queue: suite pkg is red") and "passes on #1's landing" in ring, ring
+    assert ring.startswith("@lane-2 queue: suite pkg is red") and "passes on #1's landing" in ring, ring
     h.clock += FIX_WINDOW_S + 1
     h.tick()
     main = _main(world)
@@ -1601,7 +1605,7 @@ def test_an_after_landing_failure_several_prs_touch_is_bisected_to_the_one_that_
     assert _subject(world, revert).startswith('Revert "Queue: #2')
     assert _git(world.origin, "show", f"{main}:pkg/tests/test_x.py") == "def test_y():\n    pass"
     (post,) = [p for p in h.posts if "reverted" in p]
-    assert post.startswith("@ci @lane-2 queue: #2 reverted on `main`"), post
+    assert post.startswith("@lane-2 queue: #2 reverted on `main`"), post
 
 
 def _bisecting(world, monkeypatch, tmp_path, revert: bool = False) -> tuple[Review, str]:
