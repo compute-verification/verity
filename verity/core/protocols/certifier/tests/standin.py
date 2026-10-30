@@ -27,7 +27,7 @@ def _bc(data: bytes, bits: int, salt: bytes) -> bytes:
     return _INST.commit_string(_INST.default_key, sha512_row_v2_digest(data, bits), salt)
 
 
-def prove(lw: SVC.LinkWindows, opening: SVC.Opening, draw: S.Draw, syncs: Sequence[Any], out: Path, *,
+def prove(lw: SVC.LinkWindows, opening: SVC.Hidden, draw: S.Draw, syncs: Sequence[Any], out: Path, *,
           program: str | None = None, accepted: bool = True, word: int | None = None, root: bytes | None = None,
           salts: dict[str, bytes] | None = None, units: Sequence[int] | None = None,
           advice: Any = None) -> SVC.Delivered:
@@ -154,7 +154,7 @@ def lean(proof: PF.Proof, *, circuit_sha512: str, program: bytes, partition: dic
     return out, None
 
 
-def decide(lw: SVC.LinkWindows, stream: S.Stream, draw: S.Draw, opening: SVC.Opening, syncs: Sequence[Any], out: Path,
+def decide(lw: SVC.LinkWindows, stream: S.Stream, draw: S.Draw, opening: SVC.Hidden, syncs: Sequence[Any], out: Path,
            *, certificates: Sequence[Any] | None = None, advice: Any = None, **kw: Any) -> S.Outcome:
     """The drawn link-window proved on `opening` (`prove`, with `kw`, on an advised link of `advice`), delivered and
     decided by the verifier of record on the proof, the certificates (by default the opening's) and `advice`, with the

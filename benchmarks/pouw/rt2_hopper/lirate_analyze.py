@@ -5,7 +5,7 @@ count a unit (every instruction an issue slot), and its ALU-pipe count a unit at
 instruction for LOP3, IADD3, ISETP, SEL, LEA, SHF and PRMT). A loop bound by issue or by the ALU pipe runs at the larger
 of the two, so `measured / max(issue, alu)` near 1 says each instruction costs what the sheet charges it and nothing
 else; a REDG with a hidden cost (the L2's atomic unit) shows as CK_RED8 above it. The variants' differences are the
-chip's price of moving the checkpoint's lane XOR to memory: CK_RED2 against CK_SEG is RT2-HOPPER-1's (134, 134) route
+chip's price of moving the checkpoint's lane XOR to memory: CK_RED2 against CK_SEG is the red route's (134, 134)
 against LI-CP-W's (136, 136), CK_SEG4 against CK_SEG is LI-CP-W's checkpoints four to a STG.128 (issue 135.25,
 ALU 136), and CK_SEG4U and CK_SEG4M would move one LOP3 a checkpoint to two REDUX and a ULOP3 (136.25, 134) in all units
 and in one of four (135.5, 135.5), but ptxas emits that XOR as two moves and a LOP3, and the uniform count printed for

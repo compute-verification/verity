@@ -54,8 +54,12 @@ leaves (`DEPTHS`) padded with frame-v3's pad leaf under the window's side domain
 (`mode`; an item that names none is seeded, as Pearl-C's served path registers).  A seeded window's noise is its scheme's
 derivation from the salt and the prover's roots.  A live window's comes from the proof system's challenger
 (`verity.core.protocols.sampled_proofs.challenger`), whose first client this is: the epoch's coins are the layout
-`live_families(R)` under `LIVE_SCHEME`, its salt coin, its sampling coin and R round coins (``pouw/round``, rounds numbered
-from 0 as Compose's `Declared.round` numbers them), all committed before the epoch.  The salt coin opens once, after the
+`live_families(R)` under `LIVE_SCHEME`, its salt coin and R round coins (``pouw/round``, rounds numbered from 0 as
+Compose's `Declared.round` numbers them), all committed before the epoch. Its sampling coin is a session of its own
+(`DRAW_FAMILIES`), opened withheld on the window's draw root, so its coin root reaches the prover only after that root
+(`credit._credited`, Lean `Properties.Pouw.Credit.DrawWithheld`). The salt and round coins' session stays plain: each coin
+opens after its own root, so a coin root released before them hides no choice the prover makes, and its commitment's
+root is in the salt and every round's noise key.  The salt coin opens once, after the
 window's open root (`salt.window_open_root` of its weights' root, its round-0 request table's root and its session; the
 rule is `core_check.salt`).  Round r's coin opens once, after the verifier recorded round r's root, the root of the values
 round r commits, and round r's noise key is `round_key` of that coin and that root.  `rounds_reason` is the rule on a
@@ -767,8 +771,9 @@ def mode(check: Mapping[str, Any]) -> str:
 
 
 def live_families(rounds: int) -> tuple[tuple[str, int], ...]:
-    """A live epoch's coin layout: its salt coin, its sampling coin and `rounds` round coins, the most rounds a window takes."""
-    return ((SALT, 1), (DRAW, 1), (ROUND, rounds))
+    """A live epoch's coin layout: its salt coin and `rounds` round coins, the most rounds a window takes. Its sampling
+    coin is a session of its own (`DRAW_FAMILIES`)."""
+    return ((SALT, 1), (ROUND, rounds))
 
 
 def live_challenger(epoch: int, rounds: int, entropy: Callable[[int], bytes]) -> Ch.LiveChallenger:
@@ -782,8 +787,29 @@ def live_epoch_reason(commitment: Ch.LiveCommitment) -> str | None:
     if commitment.scheme != LIVE_SCHEME:
         return f"the coin commitment's scheme is {commitment.scheme}, not {LIVE_SCHEME}"
     f = commitment.families
-    if len(f) != 3 or f[0] != (SALT, 1) or f[1] != (DRAW, 1) or f[2][0] != ROUND:
-        return "the coin commitment's coins are not a live epoch's: one salt, one draw, then the rounds'"
+    if len(f) != 2 or f[0] != (SALT, 1) or f[1][0] != ROUND:
+        return "the coin commitment's coins are not a live epoch's: one salt, then the rounds'"
+    return None
+
+
+#: a live window's draw session's layout: its draw coin alone, released after the window's draw root by a session the
+#: gate opens withheld on that root (`remote.open_session(..., withhold=True)`), so the challenger's coin root reaches
+#: the prover only after the prover's draw root (`credit._credited`, `challenger.withheld_on`)
+DRAW_FAMILIES = ((DRAW, 1),)
+
+
+def draw_challenger(epoch: int, entropy: Callable[[int], bytes]) -> Ch.LiveChallenger:
+    """A live window's draw session's challenger (`DRAW_FAMILIES`), its coin and hm96 salt drawn from `entropy`."""
+    return Ch.LiveChallenger(LIVE_SCHEME, epoch, DRAW_FAMILIES, entropy)
+
+
+def draw_epoch_reason(commitment: Ch.LiveCommitment) -> str | None:
+    """Why `commitment` is not a live window's draw session's coin commitment (`LIVE_SCHEME`, `DRAW_FAMILIES`); None when
+    it is."""
+    if commitment.scheme != LIVE_SCHEME:
+        return f"the coin commitment's scheme is {commitment.scheme}, not {LIVE_SCHEME}"
+    if commitment.families != DRAW_FAMILIES:
+        return "the coin commitment's coins are not a live window's draw session's: its draw coin alone"
     return None
 
 
@@ -813,12 +839,13 @@ def round_key(commitment: Ch.LiveCommitment, coin: bytes, r: int, root: bytes) -
     return derive(coin, ROUND_NOISE_DOMAIN, {"coins": commitment.root, "epoch": commitment.epoch, "root": root, "round": r})
 
 
-__all__ = ["COINS", "DEPTHS", "DRAW", "ENTRY_SCHEMA", "EPS_BITS", "Entry", "GRID_BITS", "KINDS", "LEGACY_REGISTERED",
-           "LENGTH_KEYS", "LIVE_SCHEME", "MODES", "M_MAX", "PORT", "PUBLIC", "PUBLIC_INPUTS_FORMAT", "PUBLIC_PORTS",
-           "REGISTERED", "ROUND", "ROUND_NOISE_DOMAIN", "SALT", "SALT_FAMILIES", "STOP_FIXED", "T_BITS", "Work", "bucket",
-           "entry_bc", "entry_digest", "entry_leaf", "eps_at", "floor_point", "instance_ts", "k_prime", "layout_problem",
-           "length_item", "length_problem", "level", "levels", "live_challenger", "live_epoch_reason", "live_families",
-           "mode", "on_grid", "pad_node", "pass_tiles", "point", "public_inputs", "record_digest", "record_problem",
+__all__ = ["COINS", "DEPTHS", "DRAW", "DRAW_FAMILIES", "ENTRY_SCHEMA", "EPS_BITS", "Entry", "GRID_BITS", "KINDS",
+           "LEGACY_REGISTERED", "LENGTH_KEYS", "LIVE_SCHEME", "MODES", "M_MAX", "PORT", "PUBLIC",
+           "PUBLIC_INPUTS_FORMAT", "PUBLIC_PORTS", "REGISTERED", "ROUND", "ROUND_NOISE_DOMAIN", "SALT", "SALT_FAMILIES",
+           "STOP_FIXED", "T_BITS", "Work", "bucket", "draw_challenger", "draw_epoch_reason", "entry_bc", "entry_digest",
+           "entry_leaf", "eps_at", "floor_point", "instance_ts", "k_prime", "layout_problem", "length_item",
+           "length_problem", "level", "levels", "live_challenger", "live_epoch_reason", "live_families", "mode",
+           "on_grid", "pad_node", "pass_tiles", "point", "public_inputs", "record_digest", "record_problem",
            "round_key", "rounds_reason", "salt_epoch_reason", "sampling", "session_cap", "sessions", "side_domain",
            "side_index", "side_levels", "side_path", "side_row", "tile_at", "tile_in", "tile_read", "tiles",
            "window_problem"]

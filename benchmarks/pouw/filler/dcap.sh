@@ -3,7 +3,7 @@
 # bandwidth, the 32-layer linear step at M = 1 … 8192, and decode attention and the full decode step over a (batch,
 # context) grid. Nothing is timed unless the gate passes. Clocks are read, never set. Results in $OUT/dcap.jsonl.
 #
-#   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=CAP \
+#   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=LANE \
 #     --send benchmarks/pouw/filler/dcap.sh -- bash -c 'bash "$RESEARCH_RUN_DIR/inputs/dcap.sh"'
 set -uo pipefail
 export O=${OUT:?}
