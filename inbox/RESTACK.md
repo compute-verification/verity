@@ -1,0 +1,1 @@
+- 14:13Z Fri, proofs coordinator: launch every records run with `--timeout 180` (check the unit in `research run --help`), and never on cpu-5. The agent-test job's default 60 min counts time queued for a Lean slot, and 7 runs on cpu-5 were cancelled at 1 h this morning.
