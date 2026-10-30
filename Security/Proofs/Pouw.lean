@@ -11,6 +11,7 @@ import Proofs.Pouw.Dimension
 import Proofs.Pouw.Dither
 import Proofs.Pouw.DitherWitness
 import Proofs.Pouw.DitherInstance
+import Proofs.Pouw.DitherSelected
 import Proofs.Pouw.Dimension.A2WordsProofs
 import Proofs.Pouw.Dimension.CausalProofs
 import Proofs.Pouw.Dimension.EmbedProofs
@@ -171,6 +172,8 @@ import Proofs.Pouw.PearlC.RowStats
 import Proofs.Pouw.PearlC.PeelExists
 import Proofs.Pouw.PearlC.PeelExists4
 import Proofs.Pouw.PearlC.TileCheckWords
+import Proofs.Pouw.Pool
+import Proofs.Pouw.PoolWitness
 import Proofs.Pouw.Prob
 import Proofs.Pouw.QTree
 import Proofs.Pouw.Receipt
