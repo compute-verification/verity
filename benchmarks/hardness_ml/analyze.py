@@ -151,6 +151,22 @@ def table(res):
     return "\n".join(lines)
 
 
+def pivot(res):
+    """Arms (run names without their size prefix) by size: gap / size_penalty for each finished run."""
+    sizes = sorted({r["size"] for r in res["rows"]}, key=lambda s: int("".join(ch for ch in s if ch.isdigit())))
+    cells = defaultdict(dict)
+    for r in res["rows"]:
+        if r["baseline"] or "gap" not in r:
+            continue
+        arm = r["name"].split("-", 1)[1]
+        pen = r.get("size_penalty")
+        cells[arm][r["size"]] = f"{r['gap']:+.3f} / " + (f"{pen:.2f}×" if pen is not None else "-")
+    lines = ["| arm | " + " | ".join(sizes) + " |", "|---|" + "---|" * len(sizes)]
+    for arm in sorted(cells):
+        lines.append(f"| {arm} | " + " | ".join(cells[arm].get(s, "") for s in sizes) + " |")
+    return "\n".join(lines)
+
+
 def curves(runs, partial_dir_logs=()):
     """Gap to the same-size baseline at each eval step, for runs sharing the baseline's token count and schedule."""
     out = {}
@@ -170,12 +186,16 @@ def main():
     ap.add_argument("--baseline-lr", type=float, default=None)
     ap.add_argument("--json", default=None)
     ap.add_argument("--curves", action="store_true", help="print each run's gap to its baseline at every eval")
+    ap.add_argument("--pivot", action="store_true", help="print arms by size: gap / size_penalty")
     a = ap.parse_args()
     if a.curves:
         for name, pts in sorted(curves(load(a.dirs, partial=True)).items()):
             print(name, " ".join(f"{t / 1e6:.0f}M:{g:+.3f}" for t, g in pts[::2] + pts[-1:]))
         return
     res = analyze(load(a.dirs), a.baseline_lr)
+    if a.pivot:
+        print(pivot(res))
+        return
     if a.json:
         Path(a.json).write_text(json.dumps(res, indent=1))
     print("baseline lr:", res["baseline_lr"])
