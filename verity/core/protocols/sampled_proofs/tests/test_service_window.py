@@ -15,7 +15,7 @@ from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition 
 
 from test_challenger_coins import assert_only_honest_coins_accepted, coin_outcomes
 from test_remote import signer  # noqa: F401  (the challenger key's signer fixture)
-from test_service import DELTA, PAIR, RUN, SCHEMA, SESSION, STEP0, VALUES, XOR8, Clock, _lean, _refused
+from test_service import DELTA, PAIR, RECORD_ITEMS, RUN, SCHEMA, SESSION, VALUES, XOR8, Clock, _lean, _refused
 
 TRIPLE = bind(CompositeDefinition("ServiceTestTriple", 0, (), lambda S_: ((("x", Array(3, Bits(8))),), Bits(8)),
                                   lambda B, S_, x: B.call(XOR8, B.call(XOR8, x[0], x[1]), x[2]), register=False))
@@ -24,7 +24,7 @@ QUERY = P.template_instances_query(WINDOW)
 #: PAIR's one instance is a stratum `stratified:3` draws round(3 / 10) = 0 of, so its floor draws it.
 COUNTS = {P.template_id(PAIR): 1, P.template_id(TRIPLE): 9}
 LAW = S.Law("stratified:3")
-PUBLIC = (*STEP0, *(S.Public(f"population:{P.template_id(t)}", "structure", "a template's stratum") for t in WINDOW))
+PUBLIC = (*RECORD_ITEMS, *(S.Public(f"population:{P.template_id(t)}", "structure", "a template's stratum") for t in WINDOW))
 
 
 def _check(program=None, query=QUERY) -> S.Check:
