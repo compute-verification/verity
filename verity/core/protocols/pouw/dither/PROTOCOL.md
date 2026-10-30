@@ -27,7 +27,7 @@ hiding leaves before the check coin, and the sampled cells are opened after it; 
 The served PoUW moves to this receipt, and `SharedNoiseLucks`, the premise its folds' detection rests on, has no place in
 Dither: detection rests on the value root's binding before the coin, SHA-512's extraction and the proved sampling rate.
 
-Under "One proof service" (`AGENTS.md`), Dither owns what is committed, which proof blocks need proofs, the public Program
+Under "One proof system" (`AGENTS.md`), Dither owns what is committed, which proof blocks need proofs, the public Program
 each must pass, and what it does with the outcome. Coins, selection, timing, proving, verifying and the record are the
 service's. The second half of this document states what Dither needs from the service, each need as a requirement on the
 challenger, the certifier or the firewall, with the premise it makes true.
@@ -239,7 +239,7 @@ which is what its draw established, and a fleet's W_F or W_cap beside W_S.
 **The bound.** Except with probability δ_coin + δ_crypto + k(κ_dmm + κ_dsha), the credited work plus any other work the
 replica's devices did in the period, valued at μ°, is at most the honest optimum plus ε_skip·W_reg (`WorkSound`). Here:
 - δ_coin is the draw's failure probability;
-- δ_crypto = κ_S + κ_x(A) + κ_sha(A): the proof service's soundness error, and SHA-512's as a random oracle in the
+- δ_crypto = κ_S + κ_x(A) + κ_sha(A): the proof system's soundness error, and SHA-512's as a random oracle in the
   extraction and in `SAKSha`;
 - κ_dmm and κ_dsha are `SAKMatmul`'s and `SAKSha`'s degenerate-dither terms at the prover's advice B_adv(A), paid once
   per sampling block.
