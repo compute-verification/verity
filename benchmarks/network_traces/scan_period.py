@@ -8,12 +8,12 @@ and its Lean.
 * **The case** (`rows_case`) of link-window W: the parameters the warden run's ``deployment.json`` (its key, session
   and one schedule), the link `warden_serve.LINK`, the Program the scan's registration's, the compute audits
   ``answers.json`` carries (the block round's, whose o0 is the scan's `prog`: its descriptor and steps, and its circuit
-  record and pins where it carries them, from which the check counts its free inputs, `Audit.free`),
-  jitter bound 1 (K's jitter term 0, assumed (J), not met at 1), and the scan that Program's
-  descriptor (``joint/program.json``), off which the period check reads the scan's terms; the commitment the audits'
-  registrations and the scan's; the evidence the audits' answers, then the scan's answer, the certificates of W's
-  three records (``certified.jsonl``: requests, responses, fails) and W's two row registrations (``cells.jsonl``, as
-  ``answers.json`` carries them). The rows form reads a registration of one link-window's 2T units, so a group of
+  record and pins where it carries them, from which the check counts its free inputs, `Audit.free`), the jitter
+  bound `leak_bounds.JITTER_BOUND` (K's jitter term T bits a link-window, `leak_bounds.JITTER`), and the scan that
+  Program's descriptor (``joint/program.json``), off which the period check reads the scan's terms; the commitment the
+  audits' registrations and the scan's; the evidence the audits' answers, then the scan's answer, the certificates of
+  W's three records (``certified.jsonl``: requests, responses, fails) and W's two row registrations (``cells.jsonl``,
+  as ``answers.json`` carries them). The rows form reads a registration of one link-window's 2T units, so a group of
   more is refused, and the scan's `prog` must be the entries of a slot entry template its audit's circuit record
   registers, and its ``scan/state`` that audit's.
 * **tampered** and **chain**: the same rows and certificates with that round's registration
@@ -44,6 +44,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+import leak_bounds as LB  # noqa: E402
 import scan_zk as SZ  # noqa: E402
 import warden_serve as WS  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registration as RG  # noqa: E402
@@ -89,9 +90,9 @@ def rows_case(run: Path, scan: Path, round_: str = "honest") -> dict:
         certs[1]["signature"] = sig[:-1] + ("1" if sig[-1] == "0" else "0")
     N, W, H = dep["key"]["params"]
     audits = doc.get("audits", [])
-    params = {"audits": [{k: a[k] for k in ("circuit", "pins", "program", "steps") if k in a} for a in audits], "cells": [],
-              "first": x["window"], "jitter": 1, "key": dep["key"]["public"], "link": WS.LINK,
-              "lms": {"H": H, "N": N, "W": W, "toy": False}, "program": doc["registration"]["program"],
+    params = {"audits": [{k: a[k] for k in ("circuit", "pins", "program", "steps") if k in a} for a in audits],
+              "cells": [], "first": x["window"], "jitter": LB.JITTER_BOUND, "key": dep["key"]["public"],
+              "link": WS.LINK, "lms": {"H": H, "N": N, "W": W, "toy": False}, "program": doc["registration"]["program"],
               "scan": json.loads((scan / "joint" / "program.json").read_text()), "schedule": dict(dep["params"]),
               "session": dep["session"], "windows": 1}
     commitment = canonical_json({"audits": [a["registration"] for a in audits], "windows": [reg]})
