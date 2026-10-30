@@ -5,7 +5,7 @@ fan-out counted once, dead parameters, 64-bit gates -- and the RA rule that `Uns
 
 The three core modules are other owners' (`verity.ml.circuits.query_ast`, `verity.ml.circuits.boundary`, `verity.ml.circuits.partition`): every test
 `importorskip`s what it needs, so this file SKIPS (never fails) until the branches are merged.  The oracle side of every
-assertion is `fixtures_query` (explicit `GateSelection` on the expanded circuit)."""
+assertion is `fixtures_query` (the explicit `query_ast.oracle_in` / `oracle_out` on the expanded circuit)."""
 from __future__ import annotations
 
 import pytest

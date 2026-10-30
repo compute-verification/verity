@@ -10,6 +10,7 @@ import pytest
 from verity.ml.circuits import (Array, FunctionCall, Program, Tuple, Value, bind, composite, decode_program, descriptor_size,
                        encode_program, primitive, program_digest, query, query_ast, QueryError, REGISTRY)
 from verity.ml.circuits.evaluation import evaluate_call, evaluate_region
+from verity.ml.circuits.query_ast import oracle_gateset, oracle_in, oracle_out
 
 V16 = Value(16)
 MASK = 0xFFFF
@@ -164,11 +165,13 @@ def test_call_interface_vs_boundary():
     reg = C[14:18]
     assert reg.in_ == (0, 1, 4, 5)
     assert reg.out == (17,)  # the Relu16 output is a root output
+    R = oracle_gateset(C, range(14, 18))
+    assert (oracle_in(C, R), oracle_out(C, R)) == (reg.in_, reg.out)
     # a non-contiguous subcircuit: the two Mul16 gates of Row #0
-    S = C.gate_selection([15, 14])
-    assert S.size == 2 and S[0].index == 14 and S[1].index == 15
-    assert S.in_ == (0, 1, 4, 5)
-    assert S.out == (14, 15)
+    S = oracle_gateset(C, [15, 14])
+    assert S.size() == 2 and S.intervals() == [(14, 16)]
+    assert oracle_in(C, S) == (0, 1, 4, 5)
+    assert oracle_out(C, S) == (14, 15)
 
 
 def test_repeated_references_in_interface():

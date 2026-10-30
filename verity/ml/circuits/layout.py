@@ -1,4 +1,4 @@
-"""Canonical layout, root-scoped value references, and the three gate-selection classes (IR §4.4, §6, §D).
+"""Canonical layout, root-scoped value references, and the two addressing classes (IR §4.4, §6, §D).
 
 Layout: a function body is laid out in body order; each node is one interval; `batch` members and `scan`
 iterations are consecutive in structural order. Gate counts and offsets are *intrinsic summaries* cached per
@@ -8,23 +8,20 @@ hierarchy — never by expansion.
 Canonical reference of a produced value = its producing gate's root-scoped index. Prescribed inputs are
 `Input[k] : () -> Value<w_k>` gates (IR §D.3) and therefore have their own canonical references.
 
-Three classes (IR §D.1/§D.2), not synonyms:
+A set of gates is a `query_ast.GateSet`; an explicit one, and its boundary by expansion, are the test-only
+`query_ast.oracle_gateset` / `oracle_in` / `oracle_out`. Two addressing classes (IR §D.1/§D.2), not synonyms:
 
-* `GateSelection` — any selected set of gates of the root circuit + the wiring among them + its induced
-  boundary. `S.size`, `S[i]` (i-th selected gate in root canonical order), `S.in_` (the boundary gates
-  entering from outside: distinct gates outside S with a wire into S), `S.out` (the boundary gates leaving:
-  distinct gates inside S with a wire to a gate outside S, or designated root outputs). Boundaries are sets of
-  *gates* — a producer counts once regardless of fan-out; there is no `distinct()` operation. Canonical
-  boundary order: ascending root-scoped producing-gate index. These explicit computations are the oracle for
-  the compact per-part analysis in `verity.ml.circuits.boundary` (`in_gates` / `out_gates` / `w_out`).
-* `Region` — the contiguous special case `C[i:j]`, efficiently addressable.
-* `FunctionCall` — a hierarchy-defined gate selection (always a region in this layout) **plus** the declared interface
+* `Region` — the contiguous interval `C[i:j]`, efficiently addressable. `R.in_` (the boundary gates entering from
+  outside: distinct gates outside R with a wire into R) and `R.out` (the boundary gates leaving: distinct gates
+  inside R with a wire to a gate outside R, or designated root outputs). Boundaries are sets of *gates* — a producer
+  counts once regardless of fan-out. Canonical boundary order: ascending root-scoped producing-gate index.
+* `FunctionCall` — a hierarchy-defined region **plus** the declared interface
   `call.args` / `call.returns`, which keep signature order and repeated references. `F(v, v)` returning
   `(t, a, t)` has `args = [v, v]`, `returns = [t, v, t]`, `in_ = [v]`, `out = [t]` (if only `t` escapes).
 
 Intrinsic vs contextual summaries: gate count, interface types and offsets are intrinsic to a specialized
 definition and cached on it. Anything depending on consumers, enclosing wiring, protected outputs or a plan
-(`S.out` of an arbitrary gate selection, reachability, cuts) is contextual and is computed per instance, never
+(`out` of a gate set, reachability, cuts) is contextual and is computed per instance, never
 cached by definition.
 """
 
@@ -230,79 +227,12 @@ class Gate:
 
 
 # ---------------------------------------------------------------------------------------------------------
-# GateSelection / Region / FunctionCall
+# Region / FunctionCall
 # ---------------------------------------------------------------------------------------------------------
 
 
-class GateSelection:
-    """A selected set of gates of the root circuit + wiring among them + induced boundary (IR §D.1).
-    Constructed explicitly from a gate set; intended for small/flattened circuits (cones, hand-picked sets).
-    `in_`/`out` are *contextual*: computed on demand, never cached by definition."""
-
-    def __init__(self, circuit: "Circuit", gates: Sequence[int]) -> None:
-        self.circuit = circuit
-        self._gates = tuple(sorted(set(int(g) for g in gates)))
-        for g in self._gates[:1] + self._gates[-1:]:
-            if not (0 <= g < circuit.size):
-                raise IndexError(g)
-        self._set = frozenset(self._gates)
-
-    @property
-    def size(self) -> int:
-        return len(self._gates)
-
-    def __len__(self) -> int:
-        return self.size
-
-    def __contains__(self, g: int) -> bool:
-        return g in self._set
-
-    def gate_indices(self) -> tuple[int, ...]:
-        return self._gates
-
-    def __getitem__(self, i: int) -> Gate:
-        return self.circuit.gate(self._gates[i])
-
-    def __iter__(self) -> Iterator[Gate]:
-        for g in self._gates:
-            yield self.circuit.gate(g)
-
-    @property
-    def in_(self) -> tuple[int, ...]:
-        """Boundary gates entering from outside — distinct gates outside S with a wire into S — ascending by
-        gate index (`in(S)` of `verity/ml/circuits/parts.py`)."""
-        self.circuit._check_explicit(self.size)
-        s: set[int] = set()
-        for g in self:
-            s.update(o for o in g.operands if o not in self._set)
-        return tuple(sorted(s))
-
-    @property
-    def out(self) -> tuple[int, ...]:
-        """Boundary gates leaving — distinct gates inside S with a wire to a gate outside S, or designated root
-        outputs — ascending by gate index (`out(S)` of `verity/ml/circuits/parts.py`). Requires enumerating consumers:
-        explicit over the whole circuit; the compact equivalent is `boundary.out_gates`."""
-        c = self.circuit
-        c._check_explicit(c.size)
-        used: set[int] = set()
-        for g in range(c.size):
-            if g in self._set:
-                continue
-            for o in c.gate(g).operands:
-                if o in self._set:
-                    used.add(o)
-        used |= {o for o in c.root_outputs() if o in self._set}
-        return tuple(sorted(used))
-
-    def __repr__(self) -> str:
-        return f"GateSelection({self.size} gates)"
-
-    def __eq__(self, other) -> bool:
-        return isinstance(other, GateSelection) and self.circuit is other.circuit and self._gates == other._gates
-
-
-class Region(GateSelection):
-    """`C[i:j]`: the contiguous special case; addressable without materialising the gate set."""
+class Region:
+    """`C[i:j]`: a contiguous interval of the root circuit; addressable without materialising the gate set."""
 
     def __init__(self, circuit: "Circuit", lo: int, hi: int) -> None:
         if not (0 <= lo <= hi <= circuit.size):
@@ -312,6 +242,9 @@ class Region(GateSelection):
     @property
     def size(self) -> int:
         return self.hi - self.lo
+
+    def __len__(self) -> int:
+        return self.size
 
     def __contains__(self, g: int) -> bool:
         return self.lo <= g < self.hi
@@ -544,9 +477,6 @@ class Circuit:
 
     def region(self, lo: int, hi: int) -> Region:
         return Region(self, lo, hi)
-
-    def gate_selection(self, gates: Sequence[int]) -> GateSelection:
-        return GateSelection(self, gates)
 
     def root_calls(self, primitive_batches: "str | None" = None) -> Iterator[FunctionCall]:
         yield from _node_calls(self, self.root_scope, primitive_batches)
