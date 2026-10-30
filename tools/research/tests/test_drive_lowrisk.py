@@ -5,10 +5,12 @@ from __future__ import annotations
 
 import pytest
 
+from research.drive import LEAN_STEP
 from research.queue import lowrisk
 from test_drive_checked import _checked
 from test_drive_review import Review, _main, _subject
 from test_queue import World, _git
+from test_queue_drive import _steps_run, _tip
 
 #: drive.toml's `lowrisk_excludes`
 EXCLUDES = ("*.lean", "lean-audit.json", "lakefile.*", "lean-toolchain", "lake-manifest.json", "TRUSTED.sha256",
@@ -148,20 +150,104 @@ def test_a_hold_verdict_or_a_withdrawn_mark_keeps_a_member_off_the_lane(world, m
                                f"#3 (no ready mark at {three[:8]})"]
 
 
-def test_the_lane_waits_while_a_lean_check_of_next_runs(world, monkeypatch):
-    """A landing off `next` rebuilds all of it on the next sync, which would take the commit a Lean check runs on off `next`."""
+def _carried(world: World) -> list[str]:
+    return [x for x in world.logs if "(the low-risk lane's), and trees that differ in no file `lowrisk_excludes` names" in x]
+
+
+def _lean(h: Review) -> dict:
+    return h.d.q.load_state()["drive"]["lean"]
+
+
+def test_a_running_lean_check_moves_across_a_low_risk_landing_and_lands_there(world, monkeypatch):
+    """#2 lands off `next` under the running Lean check of #1: `next` is rebuilt on `checked` and the check holds #1's new
+    commit, whose tree differs from the one it checks by #2's file alone, so it isn't cancelled or launched again."""
+    h = _lane(world, monkeypatch)
+    world.gh.put(1, world.change({"pkg/T.lean": "theorem T : True := trivial\n"}))
+    h.review(1)
+    h.tick()
+    one = _tip(world)
+    assert [c for c, *_ in h.launched] == [one], world.logs
+    world.gh.put(2, world.change({"x.txt": "2\n"}))
+    assert h.tick().endswith("landed #2 on the low-risk lane"), world.logs
+    assert _subject(world, "checked") == "Queue: #2 change 2" and world.on_next(h.q) == [1]
+    new = _tip(world)
+    assert _git(world.origin, "rev-parse", f"{new}^1") == _checked(world)
+    (rid,) = h.lean_ids()
+    assert _carried(world) == [f"research queue drive: the Lean check {rid} of {one[:12]} (running) holds {new[:12]} of `next` "
+                               f"rebuilt on `checked` {_checked(world)[:12]}: the same PRs up to #1 at the same heads less #2 (the "
+                               "low-risk lane's), and trees that differ in no file `lowrisk_excludes` names"]
+    rec = _lean(h)[new]
+    assert list(_lean(h)) == [new] and rec["members"] == [[1, world.gh.prs[1].head]] and rec["rekeyed_from"] == one
+    assert not any("low-risk lane waits" in x for x in world.logs)
+    h.tick()
+    assert h.cancelled == [] and len(h.launched) == 1 and list(_lean(h)) == [new], world.logs
+    h.run_state[rid] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+    assert h.tick().startswith("landed #1"), world.logs
+    assert _checked(world) == new and len(h.launched) == 1
+
+
+def test_a_passed_lean_check_awaiting_its_verdict_moves_too_and_the_lane_doesnt_wait(world, monkeypatch):
+    h = _lane(world, monkeypatch)
+    world.gh.put(1, world.change({"pkg/T.lean": "theorem T : True := trivial\n"}))
+    h.tick()
+    one = _tip(world)
+    h.d.hand_lean(one, "ci")                                    # drive's own record: it moves
+    (rid,) = h.lean_ids()
+    h.run_state[rid] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+    world.gh.put(2, world.change({"x.txt": "2\n"}))
+    assert h.tick().endswith("landed #2 on the low-risk lane"), world.logs
+    new = _tip(world)
+    assert len(_carried(world)) == 1 and _lean(h)[new]["state"] == "passed" and list(_lean(h)) == [new], world.logs
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    assert _checked(world) == new and len(h.launched) == 1
+
+
+def test_a_lean_check_isnt_moved_across_a_change_lowrisk_excludes_names_and_the_lane_waits(world, monkeypatch):
+    """(b): `checked` moved within the tick by a verifier's file (`verity/core/`), so #1's commit rebuilt on the lane's
+    landing differs from the one its check runs on by more than the lane's change."""
+    h = _lane(world, monkeypatch)
+    world.gh.put(1, world.change({"pkg/T.lean": "theorem T : True := trivial\n"}))
+    h.review(1)
+    h.tick()
+    one = _tip(world)
+    world.gh.put(2, world.change({"x.txt": "2\n"}))
+    real, moved = h.d._stack_lean, []
+
+    def move(drive, dry_run):
+        _git(world.dev, "push", "-q", "origin",
+             f"{world.change({'verity/core/v.py': 'v = 1\n'}, base='origin/checked')}:refs/heads/checked")
+        h.q.fetch()
+        moved.append(_checked(world))
+        return real(drive, dry_run)
+
+    monkeypatch.setattr(h.d, "_stack_lean", move)
+    h.tick()
+    assert _checked(world) == moved[0] and not _landed(world) and not _carried(world), world.logs
+    assert list(_lean(h)) == [one] and _git(world.origin, "rev-parse", "next^1") == one
+    (line,) = [x for x in world.logs if "low-risk lane waits" in x]
+    assert line.startswith(f"research queue drive: low-risk lane waits: a landing off `next` rebuilds it, and (b) can't be "
+                           f"shown for the Lean check {h.lean_ids()[0]} of {one[:12]}: its tree and that of "), line
+    assert line.endswith("differ in verity/core/v.py, which `lowrisk_excludes` names"), line
+
+
+def test_the_lane_waits_while_a_lean_check_drive_didnt_launch_runs(world, monkeypatch):
+    """A hand check's run is of the commit it runs on, which a landing off `next` takes off it: (a) can't be shown for it."""
     h = _lane(world, monkeypatch)
     h.d.lowrisk_lane = False
     world.gh.put(1, world.change({"x.txt": "1\n"}))
     h.tick()
-    h.hand[_git(world.origin, "rev-parse", "next")] = ["r-hand"]          # ci's hand Lean check of `next`'s tip
+    tip = _git(world.origin, "rev-parse", "next")
+    h.hand[tip] = ["r-hand"]                                    # ci's hand Lean check of `next`'s tip
     h.run_state["r-hand"] = ("running", None, None)
     h.d.lowrisk_lane = True
     checked = _checked(world)
     h.tick()
     assert _checked(world) == checked and not _landed(world), world.logs
-    assert any(x.startswith("research queue drive: low-risk lane waits: a landing off `next` would rebuild it under the Lean "
-                            "check of ") for x in world.logs)
+    assert f"research queue drive: low-risk lane waits: a landing off `next` rebuilds it, and the Lean check of {tip[:12]}, " \
+           "which drive didn't launch, runs, and its run is of that commit" in world.logs
 
 
 def test_the_lane_never_lands_on_main(world, monkeypatch):
