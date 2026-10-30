@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# HC-SCHED's screens through the scorer's own driver: builds the locked dscore.cu and pscore.cu, then under one lease runs
+# psched's screens through the scorer's own driver: builds the locked dscore.cu and pscore.cu, then under one lease runs
 # each of PROBES (';'-separated "[NAME=V ...] dscore|pscore MODE ARGS...", as the binaries take them, with NAME=V set in
 # that probe's environment, such as DFILL_CHUNK_LOG2) and appends its row to
 # $OUT/probe.jsonl; psched_probe.py summarizes the rows with the locked scoring.point_stats. A screen, not a score: no
