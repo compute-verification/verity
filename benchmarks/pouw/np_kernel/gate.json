@@ -1,24 +1,25 @@
 {
- "variant": "pouw-lead-h200/567351d0a3f6",
- "source_sha256": "567351d0a3f6191f54b609d7f7688aa447e3d0ca3649cb92c9fff185f6b59124",
- "binary_sha256": "f3f90500b7f0483a63773291af651d1415e39f7b1f09dc019a3954728367f8f6",
+ "variant": "pouw-lead-h200/6198fcb13862",
+ "source_sha256": "6198fcb138624eeb9b3e04586a163558f765e3b7fd7c7b1f8f2137cef4d13564",
+ "binary_sha256": "1a75574ad9d5488de21eb0149071a2c9d9bfe09f49eeffac456b90be157b0336",
  "sources": {
   "benchmarks/pouw/dc/dc.cuh": "2d7fc2108aadd663306b2ce0e83dbbd9acbf532ef63bca67a5203c6c25ed0e58",
   "benchmarks/pouw/dc/wgmma.cuh": "94941f85ccca112c1714fa9c1520b9bf0acf332f323e9e0646ecc5cc8c735118",
   "benchmarks/pouw/np_kernel/l1.h": "c86ba3ddf591c851e20c9a87fa7660a5fcbc2adde2126095686cf9f64093d5f4",
-  "benchmarks/pouw/np_kernel/layout.h": "8e9897b804161f409b365cda8e57acba23830f7e3fe540100d68c1ef9bf256ce",
-  "benchmarks/pouw/np_kernel/plain_rows.py": "efe92df4996282bc4f456c04b84092c7c49e04d2b25de28426b588a8aa7e2b98",
-  "benchmarks/pouw/np_kernel/run.sh": "e9cffc99b8e4b9dc64c7b6a341506a912acce968508328718481fc11a3d2be5c",
-  "benchmarks/pouw/np_kernel/ssn.cu": "45cab074f74807ab43a5d6c42e446fd306982069fea6aa5de4e7a425b0f731b0",
-  "benchmarks/pouw/served_zk/hm96_rows.cu": "6fa0a24136964c9b67e0cec68edf2e855309d75926a0ddbf3a4e5f0a7d893f35",
-  "integrations/vllm/verity_vllm/commit/committer/native_rows.cu": "29a5a36f371779870882d82e9cc5b7039b5e364d8399cb40d4427cc4ec12ed9b",
-  "integrations/vllm/verity_vllm/commit/committer/sha512.cuh": "d7ae10e3233f3b99631f9507a4acbfe0bc6910e399cdbd1b9ea94ac5f6a936a9",
-  "verity/ml/flock/cuda/sha512.cuh": "815b28156c197a12e34c762b88ef7aaef2f4c10d961b7f7990fa97de7c4557a1"
+  "benchmarks/pouw/np_kernel/layout.h": "53043b30059451ace6f85d32e5b8f08d0cf2cae08ab72bc591259b7b12d6a384",
+  "benchmarks/pouw/np_kernel/plain_rows.py": "3d81ef0451de08a0efe920b1a7214078a3fa69a460b31ebe6a496fa0f0318ebb",
+  "benchmarks/pouw/np_kernel/run.sh": "825c2579c6597f6e9de6535f7a0fe7306c09124639febb2cad3db985793b86bd",
+  "benchmarks/pouw/np_kernel/ssn.cu": "48a5cbca13ecb1491d6b714e4a51f40154e02ff74e9b2c10e1998a3dbd12d591",
+  "benchmarks/pouw/served_zk/hm96_rows.cu": "b7bf605b4b338dac95dbdfcbdb1ce087f694fea2f5796f11f536b0b381000b61",
+  "integrations/vllm/verity_vllm/commit/committer/native_rows.cu": "543cc759fff39c3b25d1f9ded8103696723f4a9ad75afad99e0f65ddd43888bd",
+  "verity/ml/flock/cuda/sha512.cuh": "815b28156c197a12e34c762b88ef7aaef2f4c10d961b7f7990fa97de7c4557a1",
+  "verity/ml/kernels/row_commit.cuh": "8ae91f6c3ea088f7439a8f6c30a507935bd39334099dbbd2c7c4e987a071686f",
+  "verity/ml/kernels/sha512.cuh": "f9bf63f128136ec7aea71cb3f3d683b23857984732da2a1bef0e81732f87c234"
  },
  "gate": {
-  "variant": "pouw-lead-h200/567351d0a3f6",
-  "run": "r20261030-075645-059f",
-  "gates": "np-kernel-gate/9930c1f57246",
+  "variant": "pouw-lead-h200/6198fcb13862",
+  "run": "r20261030-203342-3dbb",
+  "gates": "np-kernel-gate/507b3ab0148c",
   "shapes": [
    [
     13,
