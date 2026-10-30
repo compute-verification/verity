@@ -57,6 +57,10 @@ def _sx8(v: int) -> int:
     return v - 256 if v & 0x80 else v
 
 
+def _sx(v: int, w: int) -> int:
+    return v - (1 << w) if v >> (w - 1) & 1 else v
+
+
 def _e4m3(v: int) -> float:
     s = -1.0 if v & 0x80 else 1.0
     e, m = (v >> 3) & 0xF, v & 7
@@ -121,6 +125,8 @@ def _dround(i):
 
 REF = {
     "mac4_s8": ({"a": 32, "b": 32, "acc": 32}, lambda i: (i["acc"] + sum(_sx8((i["a"] >> 8 * k) & 0xFF) * _sx8((i["b"] >> 8 * k) & 0xFF) for k in range(4))) & rho.M32),
+    "mac4_s9": ({"a": 36, "b": 36, "acc": 32}, lambda i: (i["acc"] + sum(_sx((i["a"] >> 9 * k) & 0x1FF, 9) * _sx((i["b"] >> 9 * k) & 0x1FF, 9) for k in range(4))) & rho.M32),
+    "noise_add9": ({"a": 8, "v": 8, "s": 1}, lambda i: (_sx8(i["a"]) + (-1 if i["s"] else 1) * _sx8(i["v"])) & 0x1FF),
     "fp8_mac": ({"a": 8, "b": 8, "acc": 32}, _fp8_ref),
     "sha512_rnd": ({"st": 512, "w": 64, "k": 64}, lambda i: _pack(rho.sha512_round(_words(i["st"], 8, 64), i["w"], i["k"]), 64)),
     "sha512_krom": ({"t": 7}, lambda i: rho.SHA512_K[i["t"]] if i["t"] < 80 else 0),
@@ -207,7 +213,7 @@ def synth_one(name: str, scratch: Path, vectors: int, seed: int, lib: str | None
             "vectors_ok": sum(g == w for g, (_, w) in zip(got, cases)),
             "checked": len(got) == len(cases) and all(g == w for g, (_, w) in zip(got, cases)),
         }
-    flatten = "synth -flatten -top " + name + (" -booth" if name == "mac4_s8" else "")
+    flatten = "synth -flatten -top " + name + (" -booth" if name.startswith("mac4_") else "")
     _yosys(
         f"read_verilog -sv m.v; {flatten}; abc -g {GATES}; opt_clean; tee -q -o stat.txt stat; "
         f"tee -q -o ltp.txt ltp -noff; {evals}",

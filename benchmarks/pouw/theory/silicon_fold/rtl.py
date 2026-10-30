@@ -25,13 +25,30 @@ def _rotl(x: str, r: int, w: int) -> str:
     return _rotr(x, w - (r % w), w)
 
 
-def mac4_s8() -> str:
-    lines = ["module mac4_s8(input [31:0] a, input [31:0] b, input [31:0] acc, output [31:0] y);"]
+def mac4_s(w: int) -> str:
+    """Four s{w} x s{w} products added into a 32-bit accumulator (s9 carries an s8 operand plus an s8 noise word)."""
+    p = 2 * w
+    lines = [f"module mac4_s{w}(input [{4 * w - 1}:0] a, input [{4 * w - 1}:0] b, input [31:0] acc, output [31:0] y);"]
     for i in range(4):
-        lines.append(f"  wire signed [15:0] p{i} = $signed(a[{8 * i + 7}:{8 * i}]) * $signed(b[{8 * i + 7}:{8 * i}]);")
-    lines.append("  assign y = acc + {{16{p0[15]}}, p0} + {{16{p1[15]}}, p1} + {{16{p2[15]}}, p2} + {{16{p3[15]}}, p3};")
+        lines.append(f"  wire signed [{p - 1}:0] p{i} = $signed(a[{w * i + w - 1}:{w * i}]) * $signed(b[{w * i + w - 1}:{w * i}]);")
+    ext = " + ".join(f"{{{{{32 - p}{{p{i}[{p - 1}]}}}}, p{i}}}" for i in range(4))
+    lines.append(f"  assign y = acc + {ext};")
     lines.append("endmodule")
     return "\n".join(lines)
+
+
+def mac4_s8() -> str:
+    return mac4_s(8)
+
+
+def noise_add9() -> str:
+    """One operand's on-chip rank-1 noise: y = a + s*v (s = +-1 as a sign bit), an s8 + s8 -> s9 add-or-subtract."""
+    return """
+module noise_add9(input [7:0] a, input [7:0] v, input s, output [8:0] y);
+  wire signed [8:0] sa = {a[7], a};
+  wire signed [8:0] sv = {v[7], v};
+  assign y = s ? sa - sv : sa + sv;
+endmodule"""
 
 
 def fp8_mac() -> str:
@@ -330,6 +347,8 @@ def affine() -> str:
 
 MODULES = {
     "mac4_s8": mac4_s8,
+    "mac4_s9": lambda: mac4_s(9),
+    "noise_add9": noise_add9,
     "fp8_mac": fp8_mac,
     "sha512_rnd": sha512_rnd,
     "sha512_krom": sha512_krom,
