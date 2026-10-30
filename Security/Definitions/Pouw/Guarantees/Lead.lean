@@ -34,6 +34,8 @@ The lead is `tag-blc4a-t64-rot/served/s8/k32/w/l1w/l1a/min` (`Pouw.Lead.lead`). 
   (`Statement.admits_of_caps`), Llama-3.2-1B's included.
 * `Nontrivial`: the conclusion fails for a verifier that accepts everything: at the three points the honest work
   exceeds the gap, and a strategy that does nothing does no work and hashes nothing.
+* `NontrivialTail`: the same for `G_tail`: at the three points the honest work exceeds the fixed gap, and `etaLead < 1`
+  at calls of at most `2^30` tiles.
 -/
 
 namespace Pouw.Guarantees.Lead
@@ -163,5 +165,15 @@ def Nontrivial : Prop :=
     (∀ C : Pouw.Lead.Commit (pt512x512 n K), ChunksOf _ C → gapRegs _ C < honestRegs _ C) ∧
     (∀ C : Pouw.Lead.Commit (pt8192 n K), ChunksOf _ C → gapRegs _ C < honestRegs _ C) ∧
     ∀ (L : Pouw.Lead.Layout) (pr : Prices100), ∃ σ : Strategy L, ∀ ω, σ.work pr ω = 0 ∧ (σ.exec ω).hashed = []
+
+/-- **The tail form's nontrivial lemma**: `G_tail`'s conclusion fails for a verifier that accepts everything. At the
+three points the honest work exceeds the fixed gap, and at calls of at most `2^30` tiles `etaLead < 1`. So
+`Nontrivial`'s strategy that does nothing, accepted at every coin value and below `32 · (honestRegs − gapFixed)` at
+each, puts every coin value in `G_tail`'s event, more than `etaLead`, unless the honest commitment's own messages
+collide. -/
+def NontrivialTail : Prop :=
+  ∀ n K : ℕ, 4096 ≤ n → 4096 ≤ K → ∀ L ∈ [pt512x64 n K, pt512x512 n K, pt8192 n K],
+    (∀ C : Pouw.Lead.Commit L, ChunksOf L C → gapFixed L C < honestRegs L C) ∧
+      (L.rowBlocks * L.colBlocks * L.S ≤ 2 ^ 30 → etaLead L < 1)
 
 end Pouw.Guarantees.Lead

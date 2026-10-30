@@ -10,6 +10,7 @@ import Proofs.Pouw.Lead.Tail.Table
 import Proofs.Pouw.Lead.Tail.Repeats
 import Proofs.Pouw.Lead.Tail.G
 import Proofs.Pouw.Lead.Tail.Gap
+import Proofs.Pouw.Lead.Tail.Nontrivial
 
 /-!
 # The lead's tail form
@@ -27,6 +28,7 @@ import Proofs.Pouw.Lead.Tail.Gap
 * `Repeats`: the coin-branch tail at the three points and decode (`coinTail_le`).
 * `G`: `G_tail` from `Compose.perCoin` and the two tails, and the tail at the three points and decode (`tailAt`).
 * `Gap`: the fixed gap at the three points and decode (`gapFixedAt`).
+* `Nontrivial`: the honest work above the fixed gap and `etaLead < 1` at the three points (`nontrivialTail`).
 
 Its proofs go in `Lead/Tail/`, its declarations in `Pouw.SecurityProofs.Lead.Tail`, and each file is imported here.
 -/
