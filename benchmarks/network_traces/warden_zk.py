@@ -23,9 +23,9 @@ held by the Lean verifier's registered reads (`flock-verify verify --zk --regist
   reads, even at the same rows.
 * **Members.** One statement of n units each, a shared-row public file every port of which is one of the verifier's
   own registered reads (`--registered`, which `Flock.Registered.checkComplete` holds to every port of the
-  circuit): the member's warden port at the warden's root (`warden_rows.port`), and its other port at the member's
-  committed value of it (`committed_value`: its units' rows under its own salts, committed before staging, the root
-  the registration names before any coin, `audit_member`):
+  circuit): the member's network certifier port at the network certifier's root (`warden_rows.port`), and its other
+  port at the member's committed value of it (`committed_value`: its units' rows under its own salts, committed before
+  staging, the root the registration names before any coin, `audit_member`):
   - ``sender``: ``o0`` registered, under the warden's salts and paths: the sender's unit opens its output as the rows;
   - ``receiver``: ``row`` registered: the receiver's check opens the same rows as its input;
   - ``unsigned``: ``o0`` under the prover's own tree over the window's rows, unit 0's cell one byte off: rows the
@@ -201,11 +201,11 @@ def refused(at: SimpleNamespace, mr: SimpleNamespace, reads_from: int = 0) -> st
 
 
 def committed_value(program: str, head: WR.CellsHead, port: str, rows: list[list[int]]) -> G.Registered:
-    """A member's own rows of a port no warden row registration holds (one a unit, its u16 words), committed before
-    staging as a value registered on `head`'s link-window: each row under a salt of the prover's own, in a tree whose
-    domain binds the statement's Program (its SHA-512, `program`) and the warden's root, so the root, which the
-    registration names before any coin, opens under no other link-window's. The statement commits the port's rows under
-    the same salts, so they open it."""
+    """A member's own rows of a port no network certifier row registration holds (one a unit, its u16 words), committed
+    before staging as a value registered on `head`'s link-window: each row under a salt of the prover's own, in a tree
+    whose domain binds the statement's Program (its SHA-512, `program`) and the network certifier's root, so the root,
+    which the registration names before any coin, opens under no other link-window's. The statement commits the port's
+    rows under the same salts, so they open it."""
     return G.Registered.commit(program, f"{head.value}/committed/{port}", rows, None, G.WORD_BITS, WR.SCHEMA,
                                window=head.root.hex())
 
@@ -276,10 +276,10 @@ def stager(M, B: int, n: int, out: Path) -> SimpleNamespace:
 
 
 def stage(M, sg: SimpleNamespace, at: SimpleNamespace, name: str) -> dict:
-    """Member `name`'s statement: its input rows, a shared-row file (each instance its own table row), its warden
-    port's rows under its salts and paths (`member_rows`) and its other port's under those of the member's committed
-    value of them (`committed_value`); and the verifier's own `--registered` file, which names both ports: the warden
-    port at the warden's root, the other at the committed value's."""
+    """Member `name`'s statement: its input rows, a shared-row file (each instance its own table row), its network
+    certifier port's rows under its salts and paths (`member_rows`) and its other port's under those of the member's
+    committed value of them (`committed_value`); and the verifier's own `--registered` file, which names both ports:
+    the network certifier's port at its root, the other at the committed value's."""
     t0 = time.time()
     st, n, out = sg.st, sg.n, sg.out / f"stage-{name}"
     port, _ = MEMBERS[name]
@@ -323,8 +323,8 @@ def firewall(M, m: dict) -> dict:
 
 def committed_roots(m: dict) -> tuple[dict, list]:
     """The registration's entries of a member's committed values (`committed_value`), each ``<member>/committed/<port>``:
-    the domain the verifier expects (its own, from the Program, the value's name and the warden's root) and the root the
-    prover registers, which the verifier's registered reads name."""
+    the domain the verifier expects (its own, from the Program, the value's name and the network certifier's root) and
+    the root the prover registers, which the verifier's registered reads name."""
     want, roots = {}, []
     for p, v in m["committed"].items():
         q, d = f"{m['name']}/committed/{p}", v.domain.domain_id.hex()

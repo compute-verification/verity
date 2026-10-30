@@ -156,8 +156,9 @@ def refused(at: SimpleNamespace, mr: SimpleNamespace, reads_from: int) -> str | 
 def known_o0(program: str, head: WR.CellsHead, words: list[int]) -> G.Registered:
     """Each unit's ``o0`` row, its one word, as the value the verifier registers at known content on `head`'s
     link-window: row t under its public salt (`registered.supplied_salts`), in a tree whose domain binds the statement's
-    Program (its SHA-512, `program`) and the warden's root. The verifier's own is every word 1 (`EG.ACCEPT`); the
-    prover commits its units' words the same way, so its rows open the verifier's root only where each is 1."""
+    Program (its SHA-512, `program`) and the network certifier's root. The verifier's own is every word 1
+    (`EG.ACCEPT`); the prover commits its units' words the same way, so its rows open the verifier's root only where
+    each is 1."""
     value = f"{head.value}/{VERIFIER}/o0"
     return G.Registered.commit(program, value, [[int(w)] for w in words], G.supplied_salts(program, value, len(words)),
                                G.WORD_BITS, WR.SCHEMA, window=head.root.hex())
@@ -172,7 +173,7 @@ def known_port(v: G.Registered, reads_from: int = 0) -> dict:
 
 def registered_file(program: str, at: SimpleNamespace, state: G.Registered, reads_from: int) -> dict:
     """The verifier's own `--registered` file, which names every port of the statement
-    (`Flock.Registered.checkComplete`): unit `reads_from + t`'s ``o1`` reads row t of the warden's root
+    (`Flock.Registered.checkComplete`): unit `reads_from + t`'s ``o1`` reads row t of the network certifier's root
     (`warden_rows.bucket_port`), its ``state`` row t of the member's committed states at the root the registration
     names (`warden_zk.value_port`), and its ``o0`` row t of the verifier's own value of words 1 (`known_o0`)."""
     o0 = known_o0(program, at.head, [EG.ACCEPT] * state.leaves)
@@ -227,8 +228,9 @@ def verdict_bcs(m: dict) -> list[bytes]:
 def stage(M, sg: SimpleNamespace, at: SimpleNamespace, name: str) -> dict:
     """Member `name`'s statement: its units' ``state`` rows in a shared-row file (each instance its own table row),
     every port under the salts and paths of its registered entry: ``state`` the member's committed states'
-    (`warden_zk.committed_value`), ``o0`` its words' under their public salts (`known_o0`) and ``o1`` the warden's; and
-    the verifier's own `--registered` file of every port (`registered_file`). The units' outputs are the reference's."""
+    (`warden_zk.committed_value`), ``o0`` its words' under their public salts (`known_o0`) and ``o1`` the network
+    certifier's; and the verifier's own `--registered` file of every port (`registered_file`). The units' outputs are
+    the reference's."""
     t0 = time.time()
     st, n, out = sg.st, sg.n, sg.out / f"stage-{name}"
     mr = member_rows(name, at)
