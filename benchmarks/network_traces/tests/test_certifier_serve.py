@@ -375,7 +375,7 @@ def test_four_in_flight_the_endpoints_shape_is_sent_and_the_shim_writes_request_
     two a bucket, and the
     endpoint interleaves the responses of each two released together chunk by chunk; the shim still writes each
     response whole, in the order their requests reached it, so the egress counts are the planned profile's and honest
-    traffic is accepted on every link-window."""
+    traffic is accepted on every execution phase."""
     endpoint = _SideBySide(2)
     args = argparse.Namespace(model=None, api_key_env=None, prompt_tokens=128, tokens=TOKENS, response_frames=None,
                               probes=4, in_flight=4, requests=REQUESTS, delta_buckets=None, profile="planned",
@@ -418,7 +418,7 @@ def test_four_in_flight_the_endpoints_shape_is_sent_and_the_shim_writes_request_
 
 
 def test_honest_served_traffic_is_accepted_on_every_link_window(served):
-    """N2's verdict of record accepts every link-window on the planned profile, `network_verdict` accepts the link,
+    """N2's verdict of record accepts every execution phase on the planned profile, `network_verdict` accepts the link,
     the certifier's audit accepts every record raw and committed, and the shim received every salt the certifier
     revealed to the challenger, which no egress frame holds."""
     *_, runs = served
@@ -568,9 +568,9 @@ def _out_shape(words: int, rows: int, program: str = "cd" * 64):
 def test_the_network_certifier_commits_and_signs_each_egress_windows_output_in_its_own_session(tmp_path):
     """`--out-shape`'s commitment (`certify_out`): the output an egress record's canonical events carry, as the hex
     of u16 little-endian words, cut into the shape's rows and committed under the running issuer, which signs its head
-    in the certifier's session for the link-window: the public record `check_out` pins under the certifier's key, and
-    the witness (each row and its salt) apart, for the prover. A record whose text isn't that commits nothing, one
-    that isn't the shape's rows is an ``out-shape`` line, and a refused signature is the link-window under
+    in the certifier's session for the execution phase: the public record `check_out` pins under the certifier's key,
+    and the witness (each row and its salt) apart, for the prover. A record whose text isn't that commits nothing, one
+    that isn't the shape's rows is an ``out-shape`` line, and a refused signature is the execution phase under
     ``refused``, with no witness."""
     from verity.core.protocols.certifier import out_commit as OC
 
@@ -883,8 +883,9 @@ def test_the_served_profile_plans_no_egress_occupancy_and_the_proxy_admits_by_th
 
 
 def test_honest_is_accepted_on_every_link_window_under_the_served_profile(served_profile):
-    """N2's verdict of record accepts every link-window on the served profile, each window's egress counts the ones its
-    ingress counts derive (`served_counts`), and `network_verdict` accepts the link; the audit and the salt accept."""
+    """N2's verdict of record accepts every execution phase on the served profile, each window's egress counts the ones
+    its ingress counts derive (`served_counts`), and `network_verdict` accepts the link; the audit and the salt
+    accept."""
     *_, runs = served_profile
     check = runs["honest"]["check"]
     assert check["verdict"] == "accepted", cs.table(check)
@@ -1307,9 +1308,9 @@ def compact(request, tmp_path_factory):
 
 
 def test_compact_varied_traffic_is_certified_its_io_the_endpoints_and_its_egress_b_bytes_a_frame(compact, varied):
-    """On compact records in B-byte cells the honest run is accepted as on id events: every link-window certified, its
-    salt revealed, the audit accepting raw and committed. The certified I/O read from the cells is the id-event run's,
-    request for request (the same fields, ordinals, releases and token ids, each stop's EOS id too, and the same
+    """On compact records in B-byte cells the honest run is accepted as on id events: every execution phase certified,
+    its salt revealed, the audit accepting raw and committed. The certified I/O read from the cells is the id-event
+    run's, request for request (the same fields, ordinals, releases and token ids, each stop's EOS id too, and the same
     finishes, the merged responses' `length` by their count), and its ingress records are the id-event run's. Its
     egress carries the same frames a window, each B bytes: the link's bytes a window are B/4096 of the id-event
     run's."""
@@ -1391,10 +1392,10 @@ def test_the_varied_plan_sends_poisson_arrivals_of_varied_prompts_and_plans_no_e
 
 
 def test_honest_varied_traffic_is_certified_on_every_window_and_its_io_read_from_the_frames(varied):
-    """Every link-window's records are certified under the certifier's key and session and its salt revealed; N2 gives
-    no verdict on the advice profile. The certified I/O, read from the records' frames alone, is each request's fields
-    as the plan sent them, under its ingress ordinal, and each response's token ids as the endpoint streamed them, EOS
-    included, one id event a token and no other egress frame."""
+    """Every execution phase's records are certified under the certifier's key and session and its salt revealed; N2
+    gives no verdict on the advice profile. The certified I/O, read from the records' frames alone, is each request's
+    fields as the plan sent them, under its ingress ordinal, and each response's token ids as the endpoint streamed
+    them, EOS included, one id event a token and no other egress frame."""
     tmp, _, _, plan, runs, _ = varied
     check = runs["honest"]["check"]
     assert check["verdict"] == "accepted", cs.table(check)
