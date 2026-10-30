@@ -147,7 +147,7 @@ def _root(s: Any) -> bytes:
         raise CoinError(f"a root is {ROOT_BYTES} bytes in lowercase hex") from None
 
 
-class Session:
+class ChallengePhase:
     """The challenger's one session on its host (`open_session`): its challenger, the key and host its record names, the
     signer of its key, its directory, the session id the auditor launched it under, and the release log's lines as it
     wrote them, which its close signs."""
@@ -160,7 +160,7 @@ class Session:
 
 
 def open_session(challenger: LiveChallenger, key: ChallengerKey, host: str, sign: Callable[[bytes], bytes],
-                 directory: str | os.PathLike, session: str, withhold: bool = False) -> Session:
+                 directory: str | os.PathLike, session: str, withhold: bool = False) -> ChallengePhase:
     """On the challenger's host `host`, before any coin opens, for session `session` (the id the auditor launched it
     under): sign its record with `sign` (LMS at `key`'s parameters, `LiveChallenger.sign_record`, which signs its close
     too, at its next leaf) and write the record, `key` and the release log's head to `directory`, each once.  With
@@ -173,7 +173,7 @@ def open_session(challenger: LiveChallenger, key: ChallengerKey, host: str, sign
     write_record(d / RECORD, record)
     head = {"event": "commitment", "root": challenger.commitment.root.hex()}
     _write_new(d / RELEASES, head)
-    return Session(challenger, key, host, sign, d, session, _line(head), withhold)
+    return ChallengePhase(challenger, key, host, sign, d, session, _line(head), withhold)
 
 
 def layout_json(c: LiveCommitment) -> dict:
@@ -186,7 +186,7 @@ def coin_json(o: LiveOpening) -> dict:
     return {"after": o.after.hex(), "coin": o.coin.hex(), "epoch": o.epoch, "index": o.index, "label": o.label}
 
 
-def close_session(session: Session, ended: str | None) -> ChallengerClose:
+def close_session(session: ChallengePhase, ended: str | None) -> ChallengerClose:
     """The session's close, once: sign the release log's lines as the challenger wrote them and how the session `ended`
     (None: its client closed it) at the key's next leaf, and write it to the directory (`CLOSE`)."""
     if session.close is not None:
@@ -235,7 +235,7 @@ def _hang_up(sock: socket.socket) -> None:
         pass
 
 
-def _closed(session: Session, ended: str | None) -> str | None:
+def _closed(session: ChallengePhase, ended: str | None) -> str | None:
     """`close_session`, and how the session ended: `ended`, or why its close went unsigned."""
     try:
         close_session(session, ended)
@@ -274,7 +274,7 @@ def greet(sock: socket.socket, secret: bytes | None = None) -> str | None:
     return why
 
 
-def serve(sock: socket.socket, session: Session, clock: Callable[[], int] = time.monotonic_ns,
+def serve(sock: socket.socket, session: ChallengePhase, clock: Callable[[], int] = time.monotonic_ns,
           secret: bytes | None = None, greeted: bool = False) -> str | None:
     """Serve one client's session on the connected stream `sock` (`open_session`), on the release log's clock `clock`
     (integers, the log being canonical JSON): None when the client closed it, else why it ended.  With `secret`, the
@@ -600,5 +600,5 @@ def trusted_session(directory: str | os.PathLike, heads: Sequence[str | os.PathL
 
 
 __all__ = ["CLOSE", "HEADER", "HELLOS", "KEY", "MAX_BATCH", "MAX_HEAD", "RECORD", "RELEASES", "ROOT_BYTES",
-           "RemoteChallenger", "Session", "close_session", "greet", "hello_lines", "ledger_lines", "log_lines",
+           "RemoteChallenger", "ChallengePhase", "close_session", "greet", "hello_lines", "ledger_lines", "log_lines",
            "main_lines", "open_session", "released_roots", "serve", "session_files", "trusted_session"]

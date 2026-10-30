@@ -423,7 +423,7 @@ class Host:
         self._thread.start()
         self.client = R.RemoteChallenger(theirs)
 
-    def _serve(self, sock: socket.socket, session: R.Session) -> None:
+    def _serve(self, sock: socket.socket, session: R.ChallengePhase) -> None:
         with sock:
             self.reason = R.serve(sock, session, itertools.count().__next__)
 
