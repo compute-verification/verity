@@ -18,6 +18,11 @@ Leaf, node and root are 64-byte digests, which the verifier's size checks (`root
 
 A whole tree, the committer's, is `Tree.root` with every message it hashes `Tree.msgs`: leaves, `pad` frames up to a
 power of two and nodes, or the `empty` frame at count 0.
+
+A range-indexed domain (`Domain.range`) is `CommitmentDomain(binding, owner, RangeIndexedDomain(0, count), "sha512")`:
+its id is `H(frame "domain" [binding, uint (owner + 2), positions, uint count])`, `positions` the range's SHA-512
+identity `tagged_sha512("veritor/indexed-domain/range/v1", {"start":0,"step":1,"stop":count})`, and rank `r`'s position
+is `r`.
 -/
 
 namespace Hash.Tree
@@ -109,5 +114,22 @@ def msgs (H : Msg → Digest) (D : Domain) (schema : String) (value : ℕ → Ms
   if D.count = 0 then [emptyMsg D]
   else leaves D schema value ++ (List.range' D.count (2 ^ depth D.count - D.count)).map (padMsg D) ++
     (build H D 0 (depth D.count) (base H D schema value)).1
+
+/-! ## A range-indexed domain -/
+
+/-- `identity.tagged_sha512`'s message: `verity/tagged-sha512/v1\0 ‖ u32be |tag| ‖ tag ‖ u64be |payload| ‖ payload`. -/
+def taggedMsg (tag : String) (payload : Msg) : Msg :=
+  cstr "verity/tagged-sha512/v1" ++ be 4 (utf8 tag).length ++ utf8 tag ++ be 8 payload.length ++ payload
+
+/-- `RangeIndexedDomain(0, count)`'s canonical manifest, `{"start":0,"step":1,"stop":count}`. -/
+def rangeManifest (count : ℕ) : Msg := utf8 ("{\"start\":0,\"step\":1,\"stop\":" ++ toString count ++ "}")
+
+/-- **A range-indexed domain** of `count` ranks under `binding` and `owner`, at the hash `H`: its id the verifier
+derives from them, and rank `r` at position `r`. -/
+def Domain.range (H : Msg → Digest) (binding : Digest) (owner : ℤ) (count : ℕ) : Domain where
+  id := H (frame "domain" [binding.bytes, uint (owner + 2).toNat,
+    (H (taggedMsg "veritor/indexed-domain/range/v1" (rangeManifest count))).bytes, uint count])
+  count := count
+  position r := r
 
 end Hash.Tree
