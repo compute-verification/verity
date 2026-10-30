@@ -64,6 +64,16 @@ status = "pending_review"
 reason = "The required manifest stops asking for the FlashAttention M1 stream (fa2_hidden_m1_stream, op paths fa2.m1/L<k>/<geometry>), which no proof block reads, and drops the `hidden = ...` clause from the query text, so manifest_digest moves. Solely that: the same rebuild at the change's base a65dcb3980 reproduces this row's contract, and at e09f3f818c program_digest 9ce48951... is unchanged and identities fall 109219 -> 101027, exactly the base manifest's 8192 fa2_hidden_m1_stream rows (5 geometry classes, 8192 distinct identity keys). Those 8192 keys are the whole move in the set difference against v1: v1's manifest had all 8192 of them, so removed_n grows by 8192 (removed_n 49152 -> 57344, added_n 49152 -> 49152)."
 expected = { identities = 101027, program_digest = "9ce48951f04eb440501c4e829e3a492a58ca963997ca707d47fb129fe73cf590", added_n = 49152, removed_n = 57344, complete = true, manifest_digest = "9a3dfe4976f037bced12dc4ad1681e20bdcd44692e4e304cd283945007cc2eb0", identity_rows_sha256 = "7433f6a3ee7d70b392ecec95e18cf29ab47eade7785803128c001ce63586c183" }
 
+# labelled decision (Draft 3 §7): the manifest digest is SHA-512
+[[rows."llama32-1b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager".decisions]]
+check = "manifest_digest"
+since = "16b47db267"
+since_commit = "16b47db267a8cf7c1b29df045bed38957b9b64b3"
+finding = "SHA-512 manifest digests (16b47db267)"
+status = "pending_review"
+reason = "manifest_format.manifest_digest is SHA-512, its whole output, over the sorted (family + IDENTITY_KEY) rows (the one-hash rule). Rebuilt on the head that brings it beside #5777, every value of #5777's decision reproduces but manifest_digest: identities 101027, program_digest 9ce48951..., identity_rows_sha256 7433f6a3... (the identity set) unchanged; manifest_digest 9a3dfe49... (SHA-256) becomes 88879cc2... (SHA-512)."
+expected = { identities = 101027, program_digest = "9ce48951f04eb440501c4e829e3a492a58ca963997ca707d47fb129fe73cf590", added_n = 49152, removed_n = 57344, complete = true, manifest_digest = "88879cc259fccb74cc8298f0e70bb657cb0eaa178f4c5a574b8891565e3363658341753c7870157ea1e9570f08569a8571a42f0d8e046529023868462ff1edd0", identity_rows_sha256 = "7433f6a3ee7d70b392ecec95e18cf29ab47eade7785803128c001ce63586c183" }
+
 [rows."llama32-1b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager".local]
 
 [rows."llama32-1b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager".artifacts]
