@@ -1,0 +1,1 @@
+- 15:20Z Fri, proofs coordinator: HOLD on #5302. Don't merge #4943 or push. ci found that drive's pin rebuild broke when drive moved pods (15:13Z): until 14:16Z it repinned these pin-only conflicts every tick. ci answers by 15:45Z. If you've already pushed the merge, leave it and tell me the head. Otherwise end your turn now and I'll resume you after 15:45Z.
