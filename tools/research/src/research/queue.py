@@ -912,17 +912,21 @@ class Queue:
         return r
 
     def _clone(self) -> None:
-        if not (self.workdir / ".git").exists():
+        if fresh := not (self.workdir / ".git").exists():
             self.workdir.parent.mkdir(parents=True, exist_ok=True)
             self._remote(self.workdir.parent, "clone", "-q", self.remote, str(self.workdir))
         # the caller's origin as it is now: a token embedded in the URL the clone was made from rotates
         _git(self.workdir, "remote", "set-url", "origin", self.remote)
-        # `.gitattributes` names this driver for every lean-audit.json; without it in the clone's config git merges the records
-        # as text, and any two PRs that each add a record conflict
-        from .clone import RECORD_DRIVER
+        # `.gitattributes` names these drivers; `git_env` gives them to the queue's own git, but without them in the clone's
+        # config any other git in it (one by hand) merges the records line by line
+        from .clone import Refused, set_drivers
 
-        for k, v in RECORD_DRIVER.items():
-            _git(self.workdir, "config", k, v)
+        try:
+            if (changed := set_drivers(self.workdir)) and not fresh:
+                self.log(f"research queue: set the record merge drivers in {self.workdir}'s config, which lacked or held "
+                         f"another value for {', '.join(changed)}")
+        except Refused as e:
+            raise QueueError(str(e)) from None
         _git(self.workdir, "merge", "--abort", check=False)
         _git(self.workdir, "reset", "-q", "--hard")
         _git(self.workdir, "clean", "-qfdx")
