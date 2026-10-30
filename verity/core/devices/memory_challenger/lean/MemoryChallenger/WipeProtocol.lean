@@ -199,18 +199,42 @@ def testProtocol : Core.Protocol := mkProtocol (TEST_PREFIX ++ ID) TEST_SCHEMES
 
 private def segment : StreamedWipe.Params := ⟨2 ^ 19, 2152, 1, 1000, #[("gpu", 2 ^ 25)]⟩
 
-/-- `StreamedWipeMeets141GB5`'s H200: its fill and its 2.3 GB of driver reserve, declared as one tier. -/
-private def h200 : StreamedWipe.Params := ⟨2203125000, 5231, 1, 1000, #[("gpu-hbm", 143300000000)]⟩
+/-- `StreamedWipeMeetsH200`'s H200 as registered: one card, whose 141 GiB of HBM the wipe fills whole. -/
+private def h200Site : Core.Site :=
+  ⟨[], [{ id := "site", kind := .site }, { id := "h200", kind := .host, parent := some "site" },
+    { id := "h200/gpu0", kind := .device, parent := some "h200" },
+    { id := "h200/gpu0/hbm", kind := .memory, parent := some "h200/gpu0", tier := some .hbm, bytes := 151397597184 }],
+   []⟩
 
-#guard (ratio 1, ratio 90, ratio 91, ratio 2152, ratio 5231, ratio 5321) == (1, 1, 1, 24, 59, 60)
+/-- The H200's wipe: its tiers are its registered memory, one HBM tier. -/
+private def h200 : StreamedWipe.Params :=
+  (StreamedWipe.Params.ofSite h200Site "h200".toUTF8 2365587456 2906 1 1000).toOption.getD default
+
+/-- The same host with its DRAM and a disk registered too. -/
+private def h200Host : Core.Site :=
+  { h200Site with locs := h200Site.locs ++ [
+    { id := "h200/dram", kind := .memory, parent := some "h200", tier := some .dram, bytes := 2 ^ 41 },
+    { id := "h200/nvme0", kind := .memory, parent := some "h200", tier := some .disk, bytes := 2 ^ 42 }] }
+
+#guard (ratio 1, ratio 90, ratio 91, ratio 2152, ratio 2905, ratio 2906, ratio 5231, ratio 5321) ==
+  (1, 1, 1, 24, 32, 33, 59, 60)
 #guard (certify segment 0).foreignBits == 11709069
 #guard (certify segment 2).foreignBits == 11709069 + 2 * 2 ^ 23
 #guard (certify segment 0).eps.toString == s!"1/{2 ^ 128}"
 #guard (certify segment StreamedWipe.EGRESS_MAX_UNITS).certified == false
 #guard (certify { segment with k := 5231 } 0).foreignBits == 5074062
-#guard outsideBits h200 == 18400000000
-#guard (certify h200 0).foreignBits == 39721768854
-#guard (certify h200 0).r == 59
+#guard h200.tiers == #[("gpu-hbm", 151397597184)] && (h200.checkSite h200Site "h200".toUTF8).toBool
+#guard (StreamedWipe.registeredTiers h200Host "h200".toUTF8).toOption ==
+  some #[("gpu-hbm", 151397597184), ("host-dram", 2 ^ 41), ("disk", 2 ^ 42)]
+#guard ({ h200 with tiers := #[("disk", 2 ^ 42), ("gpu-hbm", 151397597184), ("host-dram", 2 ^ 41)] }.checkSite h200Host
+  "h200".toUTF8).toBool
+#guard !(h200.checkSite h200Host "h200".toUTF8).toBool
+#guard ["h201", "h200/gpu0", "site", "outside"].all fun s =>
+  !(StreamedWipe.Params.ofSite h200Site s.toUTF8 2365587456 2906 1 1000).toBool
+#guard !(StreamedWipe.registeredTiers h200Site (ByteArray.mk #[0xff])).toBool
+#guard outsideBits h200 == 0
+#guard (certify h200 0).foreignBits == 39068035213
+#guard (certify h200 0).r == 33
 #guard gaps { segment with k := MAX_READS + 1 } 0 ==
   [s!"k = {MAX_READS + 1}: the certificate is computed for at most {MAX_READS} reads"]
 #guard (certify { segment with k := MAX_READS + 1 } 0).foreignBits == 2 ^ 28
