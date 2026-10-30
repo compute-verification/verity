@@ -24,6 +24,9 @@ Lean core only.
   words root closes it, its release's bits (`releaseBits`) counted, and refuses it if its count passes its calls' bits
   summed (`Cap.passed`); the window's close refuses the forward still open. Once the entropy fails the window flips
   nothing more, and the forward whose call it failed is refused.
+* **The record** (`Entry`): the close's answer, each forward's calls, words root and verdict, and never its count, which
+  is witness. It carries what the prover sent on the control channel and is the one answer that leaves for the auditor,
+  so it is answered only at the close, which ends every count.
 -/
 
 namespace NetworkCertifier.Calls
@@ -199,6 +202,17 @@ structure Forward where
 /-- A forward refused for `v`, unless it was refused already. -/
 def Forward.refuse (v : ForwardVerdict) (f : Forward) : Forward := { f with verdict := some (f.verdict.getD v) }
 
+/-- A forward in the record: its id, its calls in id order, its words root and its verdict. -/
+structure Entry where
+  id : Nat
+  calls : List Call
+  wordsRoot : Option (List Nat)
+  verdict : ForwardVerdict
+  deriving Repr
+
+/-- A closed window's forward as the record has it, without its count. -/
+def Forward.entry (f : Forward) : Entry := ⟨f.id, f.calls, f.wordsRoot, f.verdict.getD .unclosed⟩
+
 /-- What reaches the certifier: the prover's registrations on the control channel, each boundary link's bucket at its
 tick (its allocation and its real frames' content bits), and the window's close. -/
 inductive Event
@@ -207,13 +221,13 @@ inductive Event
   | wordsRoot (forward : Nat) (root : List Nat)
   | close
 
-/-- What the certifier answers: an A root's release, a counted bucket, a words root's verdict, every forward's verdict
-at the close, a refused event, or a call whose coins weren't flipped. -/
+/-- What the certifier answers: an A root's release, a counted bucket, a words root's verdict, the window's record at
+the close, a refused event, or a call whose coins weren't flipped. -/
 inductive CallAnswer
   | release (bytes : List Nat)
   | counted
   | verdict (v : ForwardVerdict)
-  | verdicts (vs : List (Nat × ForwardVerdict))
+  | record (es : List Entry)
   | refusal
   | noCoins
 
@@ -271,8 +285,7 @@ def step (cap : Cap) (releaseBits : Nat) (st : State) : Event → State × CallA
     let st := match st.isOpen with
       | some k => st.update k (Forward.refuse .unclosed)
       | none => st
-    ({ st with isOpen := none, closed := true },
-      .verdicts (st.forwards.map fun f => (f.id, f.verdict.getD .unclosed)))
+    ({ st with isOpen := none, closed := true }, .record (st.forwards.map Forward.entry))
 
 /-- The window's answers to `evs` in order, and its state after them. -/
 def run (cap : Cap) (releaseBits : Nat) (st : State) : List Event → List CallAnswer × State

@@ -269,9 +269,8 @@ def test_a_call_whose_coins_arent_flipped_refuses_its_forward_which_stays_open()
     short = Calls(LEAD, lambda k: bytes(k - 1))
     with pytest.raises(ValueError, match="entropy gave"):
         short.a_root(0, 0, ROOT_A, SMALL)
-    assert calls.close() == short.close() == {0: ForwardVerdict.NO_COINS}
+    assert verdicts(calls.close()) == verdicts(short.close()) == {0: ForwardVerdict.NO_COINS.value}
     assert [c["release"] for c in calls.summary()[0]["calls"]] == [None, None]
-    assert calls.summary()[0]["verdict"] == ForwardVerdict.NO_COINS.value
 
 
 def test_once_the_entropy_fails_the_window_flips_nothing_more():
@@ -284,7 +283,7 @@ def test_once_the_entropy_fails_the_window_flips_nothing_more():
     with pytest.raises(ValueError, match="failed earlier"):
         calls.a_root(1, 0, ROOT_A, SMALL)
     assert feed.read == read < SMALL_ENTROPY
-    assert calls.close() == {0: ForwardVerdict.NO_COINS, 1: ForwardVerdict.NO_COINS}
+    assert verdicts(calls.close()) == {0: ForwardVerdict.NO_COINS.value, 1: ForwardVerdict.NO_COINS.value}
 
 
 def test_timing_bits_are_ceil_log2_of_r_plus_1():
@@ -409,7 +408,8 @@ def test_a_forward_open_when_the_window_closes_is_refused_and_the_window_takes_n
     assert calls.words_root(0, ROOT_W) is ForwardVerdict.ACCEPTED
     calls.a_root(1, 0, ROOT_A, SMALL)
     calls.open(1, 1, ROOT_A, SMALL)
-    assert calls.close() == {0: ForwardVerdict.ACCEPTED, 1: ForwardVerdict.UNCLOSED}
+    record = calls.close()
+    assert verdicts(record) == {0: "accepted", 1: "open when the window closed"} and record == calls.summary()
     for late in (lambda: calls.a_root(2, 0, ROOT_A, SMALL), lambda: calls.open(1, 2, ROOT_A, SMALL),
                  lambda: calls.released(1, 1, b""), lambda: calls.words_root(1, ROOT_W), lambda: calls.bucket(0),
                  calls.close):
@@ -418,7 +418,7 @@ def test_a_forward_open_when_the_window_closes_is_refused_and_the_window_takes_n
     assert calls.summary()[1]["calls"][1]["release"] is None
 
 
-def test_the_record_carries_each_forwards_calls_words_root_and_verdict_and_no_count():
+def test_the_record_carries_each_forwards_calls_words_root_and_verdict_and_no_count_and_is_the_closes_answer():
     calls = Calls(EgressCap(32, TIGHT.macs))
     out1 = calls.a_root(3, 1, ROOT_A, TIGHT)
     out0 = calls.a_root(3, 0, ROOT_W, SMALL)
@@ -431,7 +431,7 @@ def test_the_record_carries_each_forwards_calls_words_root_and_verdict_and_no_co
             "words_root": None, "verdict": None}
     assert calls.summary() == [want]
     calls.words_root(3, ROOT_W)
-    assert calls.summary() == [{**want, "words_root": ROOT_W.hex(), "verdict": "accepted"}]
+    assert calls.close() == calls.summary() == [{**want, "words_root": ROOT_W.hex(), "verdict": "accepted"}]
 
 
 # --- the node: its PoUW windows, its links' ticks and its control channel ---------------------------------------------

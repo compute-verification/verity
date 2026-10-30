@@ -5,9 +5,10 @@
 
 Writes `DIR/calls/instances.jsonl`, one window per line as `NetworkCertifier.Calls.CallsDifftest.rawOfJson` reads it,
 and `DIR/calls/python.jsonl`, the same line's results from the checkout's `verity.core.protocols.certifier.calls`: each
-event's answer (an A root's release as hex, `"counted"` for a bucket, a words root's verdict, the close's verdicts,
+event's answer (an A root's release as hex, `"counted"` for a bucket, a words root's verdict, the close's record,
 `"refusal"` for a `CallRefusal` and `"no coins"` for an A root whose coins weren't flipped), and the window's forwards as
-`Calls.summary` gives them without the releases' digests, whose bytes the answers hold. The Lean audit runs
+`Calls.summary` gives them, in the record and after the last event, without the releases' digests, whose bytes the
+answers hold. The Lean audit runs
 `CallsDifftestMain.lean` on both files (`runs` in `lean-audit.json`, which pins their SHA-256), and
 `verity/core/protocols/certifier/tests/test_network_certifier_calls_lean_difftest.py` checks that this script still
 writes them.
@@ -217,22 +218,21 @@ def _answer(calls: Calls, event: list) -> dict | str:
             case ["w", forward, root]:
                 return {"verdict": calls.words_root(forward, bytes.fromhex(root)).value}
             case ["c"]:
-                return {"verdicts": [[forward, v.value] for forward, v in calls.close().items()]}
+                return {"record": undigested(calls.close())}
     except CallRefusal:
         return "refusal"
     raise ValueError(f"not an event: {event!r}")
 
 
-def summary(calls: Calls) -> list[dict]:
-    """`calls.summary()` without the releases' digests."""
-    return [{**f, "calls": [{k: v for k, v in c.items() if k != "release"} for c in f["calls"]]}
-            for f in calls.summary()]
+def undigested(record: list[dict]) -> list[dict]:
+    """A record's forwards (`Calls.summary`) without the releases' digests."""
+    return [{**f, "calls": [{k: v for k, v in c.items() if k != "release"} for c in f["calls"]]} for f in record]
 
 
 def python_results(inst: dict) -> dict:
     calls = Calls(inst["cap"], Entropy(inst["entropy"]), inst["release_bits"])
     answers = [_answer(calls, ev) for ev in inst["events"]]
-    return {"answers": answers, "summary": summary(calls)}
+    return {"answers": answers, "summary": undigested(calls.summary())}
 
 
 def line(obj: dict) -> str:
