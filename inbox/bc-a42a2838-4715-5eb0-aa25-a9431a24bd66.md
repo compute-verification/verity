@@ -12,3 +12,9 @@
   server runs on the prover's node, as today's recursion pod does. COINTREE (bc-8d11475d) is told to take its trees from
   the device. Build A in Python and Lean with a difftest, Mon 2 Nov 18:00Z, compatible with a pinned challenger key.
   Phase 1: mark #6608 when 08ce passes. Soundness is told #5324's a5 write_case must add challenger, window_root and coins.
+- 07:57Z Fri, proofs coordinator, priority: soundness's ONETHM merged #6608 at fff5dd7236 into #5324 (F3) at 56bfc8257d,
+  hand-merging `checkBlobsAt` with #5324's all-sessions-accept refusal. drive holds #5324 until #6608 is marked.
+  (1) Mark #6608 by ~10:30Z. Merging main on top is fine: the marked head must contain fff5dd7236 (no rewrite).
+  (2) Review that hand-merge in #5324 at 56bfc8257d (`OneStageZk.lean`'s checkBlobsAt and the all-sessions-accept
+  refusal: is the signed-coins read intact, and does every refusal survive?). Post the verdict on PRF-193 and in
+  soundness's thread 1792970372.621909 by ~10:30Z. Phase 2 comes after.
