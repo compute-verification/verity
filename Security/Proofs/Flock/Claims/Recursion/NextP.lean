@@ -59,12 +59,6 @@ def decisionAtP (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (x : Claims.Ms
     Claims.OCV Unit :=
   decisionAtJ s spec sts x link c₁ mids ⟨f.stmt, f.j, filesAt (tabsOf sts) (pointsOf spec c₁) f.ps⟩
 
-/-- The decision with the proofs decoded: the statement's setup over `OC`, then `decisionAtP`. -/
-def decisionPF (s : Ins) (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin)
-    (mids : List (Claims.Msg × Coin)) (f : FinalP) : Claims.OCV Unit := do
-  let (spec, sts) ← setupM Claims.Hashes.oc s.read
-  decisionAtP s spec sts x link c₁ mids f
-
 /-- **The decoded proofs' decision at a session is `decisionAtJ`'s** at proof files that decode to them, file by file,
 at `shapeAt`. -/
 theorem decisionAtP_eq (s : Ins) (spec : SessionSpec) (sts : Array Stmt) (x : Claims.Msg)

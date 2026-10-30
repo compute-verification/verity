@@ -55,14 +55,6 @@ theorem range_eqProd_cons {D : ℕ} (c₀ : A) (c : Fin D → A) :
     · exact ⟨Fin.cons false x, by rw [eqProd_cons]; simp⟩
     · exact ⟨Fin.cons true x, by rw [eqProd_cons]; simp⟩
 
-/-- With no coordinate the span is GF(2)·1. -/
-theorem span_zero (c : Fin 0 → A) : span c = AddSubgroup.closure {1} := by
-  have : Set.range (eqProd c) = {1} := by
-    ext y
-    simp only [Set.mem_range, Set.mem_singleton_iff, eqProd, Finset.univ_eq_empty, Finset.prod_empty]
-    exact ⟨fun ⟨_, h⟩ => h.symm, fun h => ⟨finZeroElim, h.symm⟩⟩
-  rw [span, this]
-
 /-- **The span recursion**: one more coordinate `c₀` takes the span `U` to `U + c₀·U`, since
 `(1 + c₀)·v + c₀·v = v` in characteristic 2. -/
 theorem span_cons (h2 : ∀ a : A, a + a = 0) {D : ℕ} (c₀ : A) (c : Fin D → A) :

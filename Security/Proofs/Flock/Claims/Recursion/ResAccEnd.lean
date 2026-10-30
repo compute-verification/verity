@@ -762,17 +762,6 @@ theorem accEndHeldW : AccEndHeldW := by
   rw [getElem!_pos ps j hj]
   exact List.mem_map.2 ⟨_, hacc, rfl⟩
 
-/-- **`StepsWG` at `XsW … AccV` at KS's brings**, with no hypothesis. -/
-theorem stepsWV_deployedA (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE w : Msg → ℝ) (b : Brings)
-    (aux : Msg → ℕ → _root_.Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ) (hd : Msg → _root_.Flock.RecRecord.Record)
-    (rest : Msg → List (Msg × Claims.Out) → List UInt8) (cmt : Msg → ℕ → Msg → Msg) :
-    StepsWG DeployedR.rdR key wE DeployedR.finalR w (DecompBR.bB (deployedB b) aux nOf hd rest) OpenRows.elemR
-      Claims.Recursion.Form.Dense recRead cmt
-      (XsW DeployedR.rdR wE DeployedR.finalR w (DecompBR.bB (deployedB b) aux nOf hd rest) OpenRows.elemR
-        (AccV DeployedR.rdR wE DeployedR.finalR w (DecompBR.bB (deployedB b) aux nOf hd rest) OpenRows.elemR
-          Claims.Recursion.Form.Dense recRead cmt)) :=
-  stepsWV_deployedE key wE w b aux nOf hd rest cmt accEndHeldW
-
 /-- **P3 at KS's brings**, with no hypothesis. -/
 theorem accPorts_deployed (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE w : Msg → ℝ) (b : Brings)
     (aux : Msg → ℕ → _root_.Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ) (hd : Msg → _root_.Flock.RecRecord.Record)
