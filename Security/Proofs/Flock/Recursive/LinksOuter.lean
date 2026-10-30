@@ -258,7 +258,8 @@ theorem RecIns.setup_linkShape {s : RecIns} {spec : SessionSpec} {sts : Array St
   all_goals
     obtain ⟨-, h2⟩ := Prod.mk.inj (Except.ok.inj h)
     subst h2
-    assumption
+    -- reducibly, as `RecIns.setup_coins`: every later check's hypothesis is tried first
+    with_reducible assumption
 
 /-- `checkShape` holds a statement's table of `N` rows to an inner shape naming one of `N` rows. -/
 theorem checkShape_rows {sh : RecVStar.Inner} {T : ByteArray} {N : ℕ}

@@ -631,7 +631,8 @@ theorem RecIns.setup_coins {s : RecIns} {spec : SessionSpec} {sts : Array Stmt} 
   all_goals
     obtain ⟨-, h2⟩ := Prod.mk.inj (Except.ok.inj h)
     subst h2
-    assumption
+    -- reducibly: at default transparency each later check's `forM` is unfolded against this one's first
+    with_reducible assumption
 
 /-- `RecCoins.check` refuses a rec-residuals, rec-sparse or rec-opening unit without the verifier's own reads. -/
 theorem registered_of_coins {st : Stmt} {own : Option (Array Registered.Port)} {f : Option RecCoins.Source}
