@@ -28,10 +28,9 @@ EDITS = (
     u32 mk[16];
     if (salts) ld_be(salts + 192 * i, Y, 24);
     else salt_prf(K, pos, Y);
-    mask_roll<true>(T8, Y, mk);
-    salt_digest(K, Y, c);
-#pragma unroll
-    for (int w = 0; w < 8; ++w) my[w] = mask_word(mk, w);
+    rc::mask<true>(rc::ByteTab<17 * 16, false>{reinterpret_cast<const uint8_t*>(T8)}, Y, mk);
+    rc::salt_digest(K, Y, c);
+    rc::mask_words(mk, my);
     u64* s = reinterpret_cast<u64*>(sf + 192 * i);
     st_raw(s, my, 8);
     st_raw(s + 8, c, 8);
@@ -52,19 +51,17 @@ EDITS = (
 #pragma unroll
   for (int w = 0; w < 8; ++w) B[w] ^= x[w];
   if (bc) st_be(bc + 128 * i, B, 16);
-  cpy8(h, K.mid_leaf);
-  sha::compress(h, B);
-  sha::compress_kw(h, K.kw_leafpad);
+  rc::hm96_value(K, B, h);
   if (hs) st_be(hs + 64 * i, h, 8);
   if constexpr (H_ONLY) return;
   ld_raw(s + 16, f, 8);
-  frame_second(K, first + i, h, f);
+  rc::frame_second<0>(K, first + i, h, f);
 """,
         """  const u64* s = reinterpret_cast<const u64*>(sf + 192 * i);
   (void)B; (void)h;
   if constexpr (H_ONLY) return;
   ld_raw(s + 16, f, 8);
-  frame_second(K, first + i, x, f);
+  rc::frame_second<0>(K, first + i, x, f);
 """,
     ),
 )
