@@ -69,7 +69,7 @@ def _advised(stages: dict, codes: str = "own") -> dict:
     n2 = {s: {"windows": [], "network": None} for s in runs}
     meta = {"profile": chain.ADVICE, "from": ["x"], "commit": "c", "model": "m", "upstream": "u",
             "where": "off the prover's node", "windows": 8}
-    return e2e.report(runs, n2, {"ran": False, "why": "N2's advised counts aren't run here"}, meta,
+    return e2e.report(runs, n2, {"ran": False, "why": "no N2 unit holds the advice profile's egress counts"}, meta,
                       {"tie": TIED} | stages)
 
 
