@@ -10,7 +10,7 @@ A hardened linear computes, per design:
 - ``frozen``: y = D₁ ⊙ (x̃·Rᵀ) (A with r = 0).
 - ``lsb``: y = s ⊙ (x̃·Cᵀ), C an int8 code matrix whose low b bits (``lsb_bits``) are public uniform random L and whose
   high 8 − b bits are trained: C = 2ᵇ·H + L, H = round((W/s − L)/2ᵇ) from a latent W (straight-through), s a per-row
-  scale. b = 0 is plain int8 weight training.
+  scale. b = 0 is plain int8 weight training, and ``lsb_lo`` zero the plain (8 − b)-bit grid.
 
 x̃ is x itself, or, with ``int8``, x quantized per token to the integers in ±(127 − k) (straight-through), plus live noise
 E uniform on the integers in [−k, k] (``noise_k``), so x̃ + E is an int8 operand; R is then uniform int8 times a scale.
@@ -58,6 +58,9 @@ class Cfg:
     diag: bool = False
     rho: float = 0.25
     lsb_bits: int = 4
+    lsb_lo: str = "random"  # random | zero (a plain (8 − b)-bit grid, the control)
+    init: str = ""  # a saved state dict to start from (the deployment case: an existing model, converted)
+    save: str = ""
     noise_k: int = 0
     int8: bool = False
     r_dist: str = "gauss"  # gauss | int8
@@ -102,6 +105,8 @@ class HLinear(nn.Module):
         if self.design == "lsb":
             self.step = 2 ** cfg.lsb_bits
             lo = torch.randint(0, self.step, (n_out, n_in), generator=torch.Generator().manual_seed(seed + 7919))
+            if cfg.lsb_lo == "zero":
+                lo.zero_()
             self.register_buffer("lo", lo.float())
             self.hi = None
         elif self.design == "B":
@@ -442,6 +447,14 @@ def train(cfg: Cfg, data: Path):
     tr = np.memmap(data / "train.bin", dtype=np.uint16, mode="r")
     val = np.memmap(data / "val.bin", dtype=np.uint16, mode="r")
     model = GPT(cfg, vocab)
+    if cfg.init:
+        src = torch.load(cfg.init, map_location="cpu")
+        own = model.state_dict()
+        take = {k: v for k, v in src.items() if k in own and not k.endswith(".lo") and v.shape == own[k].shape}
+        missing = [k for k, _ in model.named_parameters() if k not in take]
+        if missing:
+            raise ValueError(f"init {cfg.init} lacks parameters {missing[:5]}")
+        model.load_state_dict(take, strict=False)
     groups = param_groups(model, cfg)
     opt = torch.optim.AdamW(groups, lr=cfg.lr, betas=(0.9, 0.95), eps=1e-8)
     steps = max(1, cfg.tokens // (cfg.batch * cfg.ctx))
@@ -487,6 +500,9 @@ def train(cfg: Cfg, data: Path):
     diag = diagnostics(model)
     wall = time.time() - t0
     abl = ablations(model, val, cfg) if cfg.ablate else None
+    if cfg.save:
+        Path(cfg.save).parent.mkdir(parents=True, exist_ok=True)
+        torch.save(model.state_dict(), cfg.save)
     return {
         "cfg": dataclasses.asdict(cfg),
         "vocab": vocab,

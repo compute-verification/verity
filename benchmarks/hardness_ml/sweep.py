@@ -59,7 +59,28 @@ def redml2():
             for c in redml() if c["name"] in keep]
 
 
-PRESETS = {"bench": bench, "redml": redml, "redml2": redml2}
+def redml3a():
+    """The deployment case's base: a float model with no noise, standing for the lab's existing model, saved to
+    $REDML_BASE."""
+    return [{"name": "redml3-base-float", "size": "s256", "tokens": int(os.environ.get("REDML_TOKENS", 8_000_000)),
+             "harden": "all", "r_dist": "int8", "eval_every": 250, "final_eval_batches": 32,
+             "save": os.environ["REDML_BASE"]}]
+
+
+def redml3b():
+    """The base converted: with no training (``ptq``, lr 0, one step) and by a short QAT (``qat``), to plain int8, to
+    A-LSB, and to the plain 4-bit grid A-LSB's dither replaces. Every linear int8 with noise k = 1, as served."""
+    base = {"size": "s256", "harden": "all", "int8": True, "noise_k": 1, "r_dist": "int8", "design": "lsb",
+            "init": os.environ["REDML_BASE"], "warmup": 20, "lr": 5e-4, "eval_every": 50, "final_eval_batches": 32,
+            "ablate": True, "tokens": int(os.environ.get("REDML_QAT_TOKENS", 1_000_000))}
+    one = 32 * 256
+    kinds = {"int8w": {"lsb_bits": 0}, "lsb4": {"lsb_bits": 4}, "grid4": {"lsb_bits": 4, "lsb_lo": "zero"},
+             "lsb2": {"lsb_bits": 2}}
+    cfgs = [{**base, **kw, "name": f"redml3-ptq-{k}", "lr": 0.0, "tokens": one} for k, kw in kinds.items()]
+    return cfgs + [{**base, **kw, "name": f"redml3-qat-{k}"} for k, kw in kinds.items()]
+
+
+PRESETS = {"bench": bench, "redml": redml, "redml2": redml2, "redml3a": redml3a, "redml3b": redml3b}
 
 
 def run_one(cfg, data, out, threads):
