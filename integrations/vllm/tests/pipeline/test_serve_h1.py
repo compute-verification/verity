@@ -373,8 +373,8 @@ class Now(Later):
 def test_the_arm_is_ready_before_the_server_listens(tmp_path, monkeypatch):
     """`arm_of` reserves window 0's session off the loop, and `H1Windows.ready` computes the weights' roots, builds the
     call tables' hasher, compiles the z/y kernels, builds the Lean verifier and waits for that reserve, all before
-    serve-openai listens: window 0's open then reserves nothing for itself and computes no root, and its session is the
-    one reserved at startup."""
+    serve-openai listens: window 0's open then reserves nothing for itself and computes no root, and its session (with
+    its sampling session, reserved withheld beside it) is the one reserved at startup."""
     from verity.core.protocols.pouw import verifier
     from verity_vllm.protocols.pouw.h1 import hooks as PHK
     from verity_vllm.protocols.pouw.h1 import tables_device as TD
@@ -402,7 +402,8 @@ def test_the_arm_is_ready_before_the_server_listens(tmp_path, monkeypatch):
     (held,) = sessions.held
     assert arm.describe()["ready"] == {"tables": "off", "kernels": 3, "session": held["session"],
                                        "seconds": {"roots": 1, "tables": 1, "kernels": 1, "lean": 1, "reserve": 1}}
-    assert held["window"] == 0 and calls == ["reserve"] and roots == [0, 1] and warmed == [(2, ROWS)] and built == [1]
+    assert held["window"] == 0 and calls == ["reserve"] * 2 and held["draw"]["session"] != held["session"]
+    assert roots == [0, 1] and warmed == [(2, ROWS)] and built == [2]
     arm.open(0)
     srv.serve(PROMPTS[0], 0)
     out = arm.close(0)
@@ -410,7 +411,7 @@ def test_the_arm_is_ready_before_the_server_listens(tmp_path, monkeypatch):
     assert [h["window"] for h in sessions.held] == [0, 1], "window 1's reserved ahead at window 0's open, none for 0"
     assert roots == [0, 1], "window 0's install reuses the roots computed before the server listened"
     arm.drain()
-    assert arm.summary()["unused"] == [sessions.held[1]["session"]]
+    assert arm.summary()["unused"] == [sessions.held[1]["session"], sessions.held[1]["draw"]["session"]]
     srv.src.uninstall()
 
 
