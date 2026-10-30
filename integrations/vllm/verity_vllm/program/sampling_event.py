@@ -1,4 +1,4 @@
-"""[R15 stoch] The sampling-event families: the Program instances that END an engine step for one request (one sampled token per
+"""The sampling-event families: the Program instances that END an engine step for one request (one sampled token per
 step) — the step boundary `cb_a.compare` / `batch_decomp` / `global_match` segment at and the `sampled_token_ids` identity
 the required-value manifest derives.  Torch-free; the commit and match tooling import it.
 

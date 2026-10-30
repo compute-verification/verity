@@ -1,14 +1,14 @@
-"""The sampling plan for the end-to-end demo on one H200 (PRF-170, PRF-166): the frozen MQA shape (compute-accounting,
-CMP-92 23:00Z) on circuits' partition (CMP-92, DEMOWL's section 1b), every op a proof block, one unit a row for row ops.
+"""The sampling plan for the end-to-end demo on one H200: the frozen MQA shape on the demo's partition into
+Definitions, every op a proof block, one unit a row for row ops.
 
 A block is one lockstep window: `batch` requests of `context` bytes (`prompt` given, the rest generated greedily, the
 last never fed back), each from its first byte to its last, so a block runs `positions` = context - 1 decode steps and
-nothing carries across it. Its subcircuits are circuits' Definitions (`templates`): the W8A8 coordinates
+nothing carries across it. Its subcircuits are Definitions (`templates`): the W8A8 coordinates
 (`ScaledMmS8Coordinate_v1` on `GEMM_SM90_S8`), attention's BF16 coordinates (`GemmCoordinate_v2` on `GEMM_HOPPER`),
-and the row units circuits is writing (RMSNorm, the quantizer, softmax, the residual add, the gathers, the embedding and
-argmax), each id `stub:` until it lands, its ANDs composed from pinned pieces.
+and the row units (RMSNorm, the quantizer, softmax, the residual add, the gathers, the embedding and
+argmax), each id `stub:` until its Definition lands, its ANDs composed from pinned pieces.
 
-**The law is what Lean proves.** Each subcircuit is one sampling block of the block (`IntegrityPeriod`, #4358): one C-Flock `--zk`
+**The law is what Lean proves.** Each subcircuit is one sampling block of the block (`IntegrityPeriod`): one C-Flock `--zk`
 session drawing a uniform `subset:k` of its n units, split over `tables` tables of at most `_cap` drawn units each
 (m = k_log + nbl <= 35). Every subcircuit draws `k = ceil(ln(S/delta)/share)`, so by `IntegrityPeriodLog` each sampling block has
 fewer than `K0 = ln(S/delta) n/k` <= share n units wrong outside delta (the S sampling blocks of the block split delta), and by
@@ -46,21 +46,21 @@ from verity.ml.circuits.codec import descriptor_id  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
 from verity.ml.circuits.ops import fp32 as F, gemm as G  # noqa: E402
 
-DELTAS = (1e-2, 1e-6)
+DELTAS = X.DELTAS
 #: each subcircuit's sampling block certifies at most this share of its units wrong at delta = 1% (`transformer.TARGET_SHARE`)
 SHARE = X.TARGET_SHARE
 #: replaying the drawn requests, in blocks of the block's own run: stand-in, the drawn units touch nearly every request
-#: and a step's cost is its weights' decode, not its batch (CMP-95 item 5's bundle will price it)
+#: and a step's cost is its weights' decode, not its batch, which is not yet priced
 REPLAY_BLOCKS = 1.0
-#: output channels a static-matmul tile spans (`--tiles`, circuits' option of a 2,048-bit tile unit)
+#: output channels a static-matmul tile spans (`--tiles`, the option of a 2,048-bit tile unit)
 TILE = 128
 PERIODS = X.PERIODS
 
 
 @dataclass(frozen=True)
 class Shape:
-    """The frozen H200 shape (compute-accounting, CMP-92 23:00Z). `batch` and `step_s` are stand-ins until kernels times
-    P2's decode (Mon 26 Oct 08:00Z): about 20,480 sequences, and 7.5 s a step at 40 GB/s (3.7 s with KP2-DEC)."""
+    """The frozen H200 shape. `batch` and `step_s` are stand-ins until P2's decode is timed: about 20,480 sequences,
+    and 7.5 s a step at 40 GB/s (3.7 s with the decode-to-staging kernel)."""
 
     layers: int = 52
     width: int = 16_384
@@ -73,7 +73,7 @@ class Shape:
     prompt: int = 8
     batch: int = 20_480
     step_s: float = 7.5
-    #: the block's steps when they differ from its positions (a request's lifetime as compute-accounting counts it)
+    #: the block's steps when they differ from its positions (a request's lifetime as the demo's shape counts it)
     steps: int = 0
 
     @property
@@ -109,7 +109,7 @@ class Template:
 
 def templates(m: Shape, pins: dict[str, int] | None = None, *, tiles: bool = False,
               pad: bool = False) -> list[Template]:
-    """Circuits' partition of one block (CMP-92 section 1b), one subcircuit a Definition, its units a block. `pad`:
+    """The partition of one block, one subcircuit a Definition, its units a block. `pad`:
     softmax and PV padded to the context (one subcircuit each) instead of one per key count p + 1; `tiles`: the static matmuls as
     tiles of `TILE` output channels writing one row, which removes the gathers of their outputs."""
     p = pins if pins is not None else X.pieces()

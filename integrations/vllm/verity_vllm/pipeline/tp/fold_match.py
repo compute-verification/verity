@@ -235,8 +235,8 @@ class Options:
 
 def _rank_legs(a: Options, r: int, rd: Path, build: Path, derived: list[str], gprog: str | None, pr: dict[str, Any], problems: list[str],
                reuse_legs: bool = False) -> None:
-    """The legs of folded rank `r` after its fold, into its record `pr` and `problems`: the compare (X-09 at B>1) and GM-01.  `reuse_legs`
-    keeps their written documents (--reuse-legs), only for a rank whose fold was kept: a refolded rank's legs read the new fold."""
+    """The checks of folded rank `r` after its fold, into its record `pr` and `problems`: the compare (X-09 at B>1) and GM-01.  `reuse_legs`
+    keeps their written documents (--reuse-legs), only for a rank whose fold was kept: a refolded rank's checks read the new fold."""
     def gm01(x09: list[str] | None = None) -> dict:
         g = global_match_rank(a.python, rd, Path(gprog), Path(a.workload), a.within_step, a.timeout, reuse_legs, x09)
         print(f"[tp2foldmatch] rank {r} GM-01: {g['verdict']} failed={g['failed_checks']} concurrency={g['achieved_concurrency']} {g['seconds']}s", flush=True)

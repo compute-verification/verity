@@ -17,7 +17,7 @@ from verity_vllm.check.c2_rules import _replay_seed_of_record
 from verity_vllm.check.commit_pass import commit_verdict
 from verity_vllm.check.replay.sample import challenge_seed
 
-# the shape of a recomputed fact (qwen A100 int-3 pair 0: run_root 71f69377... -> sample.seed 8211913111514837969)
+# the shape of a recomputed fact (qwen A100 pair 0: run_root 71f69377... -> sample.seed 8211913111514837969)
 RUN_ROOT = "71f69377" + "ab" * 28
 SEED_ROOT = int.from_bytes(bytes.fromhex(RUN_ROOT)[:8], "big")
 ROOT_FORM = "run root (first 8 bytes, after commitment)"
@@ -103,7 +103,7 @@ def test_a_prover_chosen_seed_fails_the_commit_by_name_unless_form_b_is_complete
     assert (ok, why) == (True, "PASS")
     # --replay-seed on a Commit-only rerun (no --match-dir): the replay is a mechanism run, nothing else value-checks -> FAIL by name
     ok, why = commit_verdict({**BASE, "sampled_replay": _sr(7, "--replay-seed (targeted)")}, True, min_openings=64)
-    assert ok is False and why.startswith("C2 of record not established (F-r16-23): sampled replay seed prover-chosen (--replay-seed)")
+    assert ok is False and why.startswith("C2 of record not established: sampled replay seed prover-chosen (--replay-seed)")
     assert "form (B) absent" in why
     # with a complete form (B) C2 of record holds through (B) alone and the PASS says so
     ok, why = commit_verdict({**BASE, "sampled_replay": _sr(7, "--replay-seed (targeted)"), "oracle_compare": OC_COMPLETE}, True, min_openings=64)
@@ -129,18 +129,18 @@ def test_plane_fed_gaps_are_named_whatever_the_seed_and_a_replay_mismatch_still_
 def test_f_r16_26_the_f_r16_13_fault_rule_runs_before_the_mechanism_lift_whatever_seeded_the_replay():
     """A PARTIAL replay from a run-time FAULT (an unevaluated pick inside an evaluated stratum; no fully
     unevaluated stratum -> _partial_replay_named_gap names no gap) fails closed under the root form -- and must fail the SAME way
-    under a prover-chosen / non-post-commitment seed: form (B) stands in for a NAMED gap, never for a fault.  (The int-5 pod gate caught the
+    under a prover-chosen / non-post-commitment seed: form (B) stands in for a NAMED gap, never for a fault.  (A pod gate caught the
     lift passing it: test_sampled_replay line 1085 with seed_source 'caller'.)"""
     fault = {"result": None, "grade": "partial", "why": "1 pick(s) not evaluated inside evaluated strata (missing-input x 1) -- run-time fault, not a gap on the record: "
-                                                        "committed bytes not retained for (r0, step 0, x/out) [0, 16) (F-r16-13)",
+                                                        "committed bytes not retained for (r0, step 0, x/out) [0, 16)",
              "strata_unevaluated": [], "sample": {"seed": 7, "seed_source": "caller", "evaluated": 9, "equal": 9, "mismatch_n": 0, "not_evaluated_n": 1, "picked": 10}}
     for src in ("caller", "--replay-seed (targeted)"):
         ok, why = commit_verdict({**BASE, "sampled_replay": {**fault, "sample": {**fault["sample"], "seed_source": src}}, "oracle_compare": OC_COMPLETE}, True, min_openings=64)
-        assert not ok and why.startswith("C2 of record not established (DECISIONS-2 §4): sampled replay partial") and "run-time fault" in why, (src, why)
-        assert "F-r16-13" in why
+        assert not ok and why.startswith("C2 of record not established: sampled replay partial") and "run-time fault" in why, (src, why)
+        assert "committed bytes not retained for (r0, step 0, x/out)" in why
     # the root form fails it by the non-mechanism branch, byte-for-byte the named-gap rule's text (unchanged)
     ok, why = commit_verdict({**BASE, "sampled_replay": {**fault, "sample": {**fault["sample"], "seed": SEED_ROOT, "seed_source": ROOT_FORM}}, "oracle_compare": OC_COMPLETE}, True, min_openings=64)
-    assert not ok and why.startswith("C2 of record not established (DECISIONS-2 §4): sampled replay partial") and "run-time fault" in why
+    assert not ok and why.startswith("C2 of record not established: sampled replay partial") and "run-time fault" in why
     # a partial replay with a NAMED gap (a fully unevaluated stratum of a class form (B) covers) is the lift's case: the prover seed PASSES on (B) alone, named
     named = {"result": None, "grade": "partial", "why": "1 stratum unevaluated by name", "strata_unevaluated": ["s1"],
              "unevaluated_strata": [{"stratum": "s1", "spec": "Gemm_v2{...}", "op_path": "model.layers.0.mlp.gate_up_proj", "n": 4,

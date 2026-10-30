@@ -19,7 +19,7 @@ record before S0 (a trailing space in the record's text, `BindsDeployed`). This 
   (`Bound.readL_ne_of_repL`). Both accept, so their call sets or their columns differ, and `LastBindsEC` gives a
   collision among `IVStar`'s calls, which the witnesses record (`RecDeploy.forksBind_C`).
 
-The reading takes the calls as a set because `LastBindsEC` compares them so (ASK-76): the record's stream order and
+The reading takes the calls as a set because `LastBindsEC` compares them so: the record's stream order and
 its optional digest of a table's empty publics change the list of calls the deployed verifier makes, not the set
 (`note:proofs/20261020T0132Z-finding-rec2-calls-as-lists`).
 

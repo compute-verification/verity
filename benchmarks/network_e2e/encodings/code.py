@@ -1,16 +1,17 @@
-"""ENC-CODE: the advice coded as tightly as the leak accounting allows.
+"""The advice code: the advice coded as tightly as the leak accounting allows.
 
-The advice (I1 v0, `verity/core/protocols/certifier/advice.py` once ADV-SPEC lands it) is everything serving made
-unpredictable, and its length is the leak, charged as `A_c` in the certifier's accepted-runs bound
+The advice (I1 v0, `verity/core/protocols/certifier/advice.py`) is everything serving made unpredictable, and its
+length is the leak, charged as `A_c` in the certifier's accepted-runs bound
 (`SecurityProofs.EncardAccSeqsLeConstantRate`: at most `#Ac · #Σ_sync^W · D^n` observation sequences). This module codes
 three subjects, each with four codes, all prefix-free and all fixed before the run by a registered `Codebook`:
 
-- **v0**: I1 v0's fields as ADV-SPEC defines them (`requests`; `steps` with their rows, a cache hit with its sources;
-  `release`, one bucket per kept output), the request ids aside (they are the certified ingress's `user` fields);
+- **v0**: I1 v0's fields as the advice module defines them (`requests`; `steps` with their rows, a cache hit with its
+  sources; `release`, one bucket per kept output), the request ids aside (they are the certified ingress's `user`
+  fields);
 - **admit**: each request's admission step, the engine step before which it joined: the timing that replaying the
-  scheduler (ENC-REPLAY) leaves;
+  scheduler (`replay.py`) leaves;
 - **residual** (`Residual`): all that remains on a shaped egress once the fields the certified I/O determines are
-  dropped (ENC-DERIVED) and the scheduler is replayed: the admission steps, and the prompt and output lengths and
+  dropped (`derived.py`) and the scheduler is replayed: the admission steps, and the prompt and output lengths and
   cache hits the replay reads.
 
 The codes:
@@ -30,10 +31,10 @@ The codes:
   model online from the decoded past (a public, adaptive model).
 
 **What a window is charged.** Window w's segment codes the requests whose certified arrival bucket is in w and the steps
-charged to w (ADV-SPEC's charge: the earliest window of an output at that step or later) with their outputs' releases,
-conditioned only on earlier segments and public data. Each segment is prefix-free (the
-arithmetic coder's segments are terminated), so the concatenation of the first m segments is, and Kraft's inequality
-gives `#{advice prefixes whose first m segments total at most L bits} ≤ 2^L`. So either charge is an instance of the
+charged to w (the advice module's charge: the earliest window of an output at that step or later) with their outputs'
+releases, conditioned only on earlier segments and public data. Each segment is prefix-free (the arithmetic coder's
+segments are terminated), so the concatenation of the first m segments is, and Kraft's inequality gives
+`#{advice prefixes whose first m segments total at most L bits} ≤ 2^L`. So either charge is an instance of the
 existing bound, with `Ac` the set of codewords it admits:
 - the **worst case**: `Ac = {codewords with segment w at most L_w bits, every w}`, `log2 #Ac ≤ Σ L_w`, fixed before the run
   from the caps (`worst_bits`), the audit refusing a longer segment;
@@ -43,7 +44,7 @@ existing bound, with `Ac` the set of codewords it admits:
 
 **The decoder** (`decode_v0`, `decode_admit`, `decode_residual`) is a deterministic public function of the bits, the
 public data (`Public`) and the codebook, with exact integer arithmetic and no hash. For `admit` and `residual` it also
-reads the replayed schedule of the requests already decoded (`Replay`); `TraceReplay` stands in for ENC-REPLAY's replay
+reads the replayed schedule of the requests already decoded (`Replay`); `TraceReplay` stands in for the scheduler replay
 by reading a trace's own rows of those requests.
 """
 
@@ -506,8 +507,8 @@ class StepAdvice:
 
 @dataclass(frozen=True, slots=True)
 class Advice:
-    """I1 v0 (ADV-SPEC, `verity/core/protocols/certifier/advice.py`): `release` holds one egress bucket per kept output,
-    in step then row order. ADV-SPEC's classes, read by attribute name, work in its place (`as_advice`)."""
+    """I1 v0 (`verity/core/protocols/certifier/advice.py`): `release` holds one egress bucket per kept output,
+    in step then row order. The advice module's classes, read by attribute name, work in its place (`as_advice`)."""
 
     requests: tuple[RequestAdvice, ...]
     steps: tuple[StepAdvice, ...]
@@ -515,7 +516,7 @@ class Advice:
 
 
 def as_advice(a: Any) -> Advice:
-    """This module's `Advice` from any object with I1 v0's attribute names (ADV-SPEC's dataclasses, say)."""
+    """This module's `Advice` from any object with I1 v0's attribute names (the advice module's dataclasses, say)."""
     if isinstance(a, Advice):
         return a
     return Advice(
@@ -530,7 +531,7 @@ def as_advice(a: Any) -> Advice:
 
 def kept_outputs(adv: Any) -> list[tuple[int, int]]:
     """Each kept output's (step, request), in `release` order: a row keeps its sample exactly when it reaches its
-    request's known tokens (the prompt and the outputs kept so far) and the request has outputs left (ADV-SPEC)."""
+    request's known tokens (the prompt and the outputs kept so far) and the request has outputs left (`advice.py`)."""
     adv = as_advice(adv)
     kept = [0] * len(adv.requests)
     out = []
@@ -1029,8 +1030,8 @@ def _v0_window(st: Stream, family: str, cb: Codebook, pub: Public, w: int, adv: 
 
 
 def _steps_by_window(adv: Advice, pub: Public) -> list[range]:
-    """Each window's steps: a step is charged to the earliest window of an output at that step or later (ADV-SPEC's
-    charge), which never decreases from step to step."""
+    """Each window's steps: a step is charged to the earliest window of an output at that step or later (the advice
+    module's charge), which never decreases from step to step."""
     outs = kept_outputs(adv)
     if len(outs) != len(adv.release):
         raise ValueError(f"{len(adv.release)} releases for {len(outs)} kept outputs")
@@ -1116,7 +1117,7 @@ class Replay(Protocol):
 
 
 class TraceReplay:
-    """ENC-REPLAY's replay, stood in for by a trace's own rows of the requests before i. Exact while a later arrival
+    """The scheduler replay, stood in for by a trace's own rows of the requests before i. Exact while a later arrival
     doesn't change an earlier request's rows, which vLLM's scheduler gives (running requests first, waiting ones first
     come, first served) unless a preemption intervenes. `resumes_in` needs the trace's `Public`."""
 
@@ -1316,10 +1317,10 @@ class Hit(NamedTuple):
 @dataclass(frozen=True)
 class Residual:
     """What remains of the advice on a shaped egress (whose releases are derived from public data) once the fields the
-    certified I/O fixes are dropped (ENC-DERIVED) and the scheduler is replayed (ENC-REPLAY): each request's prompt and
-    output lengths, its first row's cache hit with its sources, and its admission step; and each resume's re-hit with
-    its sources, in step order. The output length stays: the replay needs where each request stopped, which only the
-    committed samples show, and the rows it would be derived from are the replay's output. The hits are whole blocks
+    certified I/O fixes are dropped (`derived.py`) and the scheduler is replayed (`replay.py`): each request's prompt
+    and output lengths, its first row's cache hit with its sources, and its admission step; and each resume's re-hit
+    with its sources, in step order. The output length stays: the replay needs where each request stopped, which only
+    the committed samples show, and the rows it would be derived from are the replay's output. The hits are whole blocks
     of `Caps.block_size` tokens, as vLLM's prefix cache makes them."""
 
     prompt_len: tuple[int, ...]

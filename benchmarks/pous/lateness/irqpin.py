@@ -1,5 +1,5 @@
-"""Does keeping the receiving CPU awake remove the VPC path's slow state? One CPU `research run` on vy-nebius-2 that
-drives vy-nebius-1 and vy-nebius-cpu-1 over ssh; node 2 itself carries no traffic.
+"""Does keeping the receiving CPU awake remove the VPC path's slow state? One CPU job on a GPU node that
+drives a second GPU node and a CPU node over ssh; the first node itself carries no traffic.
 
 The guests idle with HLT (no cpuidle driver, no MWAIT), so an idle vCPU's wake-up is the host's. cpu-1's virtio NIC
 steers a flow's receive queue to the CPU that sends it, which our busy-polling challenger keeps awake; node 1's mlx5 VF
