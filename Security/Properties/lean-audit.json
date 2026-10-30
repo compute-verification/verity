@@ -1635,21 +1635,6 @@
    "assumptions": [],
    "type_hash": "d0d8204ffb2e772003635028c5622784d1ec1a8d0cc8a45ea37e71b1e8fe8d70"
   },
-  "Properties.NetworkPeriod.rowsTiedDrawn": {
-   "owner": "@network-accounting",
-   "signature": ["Properties.NetworkPeriod.rowsTiedDrawn : Properties.NetworkPeriod.RowsTiedDrawn"],
-   "assumptions": [],
-   "type_hash": "b622058340cbc1d6926a00889f52de0c3ff4a76232c073294fa100675b759deb"
-  },
-  "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial": {
-   "owner": "@network-accounting",
-   "signature": [
-    "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial :",
-    "  Not (Properties.NetworkPeriod.RowsTiedDrawnOf Properties.NetworkPeriod.acceptAllRows)"
-   ],
-   "assumptions": [],
-   "type_hash": "aeb0e3753dce706751cb8042d5bf851959cd4ef89bd7357d993df497631c23fd"
-  },
   "Properties.NetworkRecords.acceptMeans": {
    "owner": "@network-accounting",
    "signature": ["Properties.NetworkRecords.acceptMeans : Properties.NetworkRecords.AcceptMeans"],
@@ -3579,10 +3564,6 @@
     "function": "NetworkCheck.Period.terms",
     "outcome": "none"
    },
-   "Properties.NetworkPeriod.rowsTiedDrawn": {
-    "function": "NetworkCheck.Period.check",
-    "outcome": "accept"
-   },
    "Properties.NetworkPeriod.rowsProgWired": {
     "function": "NetworkCheck.Period.check",
     "outcome": "accept"
@@ -3699,7 +3680,6 @@
   "frozen": {
    "Properties.NetworkPeriod.rowsProgWired_nontrivial": "lemma: RowsProgWired's nontrivial witness: a period check that accepts everything (acceptAllRows) fails RowsProgWiredOf at a rows-form period of one link-window whose scan's prog is no audit's slot entries",
    "Properties.NetworkPeriod.rowsStateTied_nontrivial": "lemma: RowsStateTied's nontrivial witness: a period check that accepts everything (acceptAllRows) fails RowsStateTiedOf at a rows-form period of one link-window whose scan's state is not its wired audit's SCAN_STATE",
-   "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial": "lemma: RowsTiedDrawn's nontrivial witness: a period check that accepts everything (acceptAllRows) fails RowsTiedDrawnOf at a rows-form period whose tied audit one-stage didn't answer",
    "Pous.EndToEnd.SecurityProofs.endToEndRing": "frozen: a bound on a game's probability in the ring model, not a property of one function: it speaks of the deployed system only through pous-ring-device, pous-ring-speed, pous-ring-instantiation and prf/sha-512, and of the deployed verifier through runCheckAccepts, the composed check's property (PousCheck.Run.check); G-1 (one session per audit) and G-2 (the composed check) are fixed in code",
    "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed": "frozen: endToEndRing at one root's depth, D = 16,446, Q = 2^20, L = 2^64; frozen as it is",
    "Pous.Period.SecurityProofs.periodHeld": "frozen (premise): Its event's acceptance is the deployed verifier's whole decision (Pous.EndToEnd.Accepted: SetupProtocol.protocol.check and PousCheck.Run.check), but it is stated over an abstract joint run of the device model (Accounting.Run, whose fits field is no premise module's) and takes CoinCommitHides and Pous.Period.RingDevice (pous-ring-device, pous-ring-instantiation and prf/sha-512 per run), and the certificate's fit in the ring game's state bound, none of them under shape.premises.",
@@ -4355,8 +4335,6 @@
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsStateTied",
-    "Properties.NetworkPeriod.rowsTiedDrawn",
-    "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -4455,8 +4433,6 @@
     "Properties.NetworkPeriod.rowsProgWired_nontrivial",
     "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkPeriod.rowsStateTied_nontrivial",
-    "Properties.NetworkPeriod.rowsTiedDrawn",
-    "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
     "Properties.Pouw.Check.acceptMeans",
@@ -4505,8 +4481,6 @@
     "Properties.NetworkPeriod.rowsProgWired_nontrivial",
     "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkPeriod.rowsStateTied_nontrivial",
-    "Properties.NetworkPeriod.rowsTiedDrawn",
-    "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -7707,8 +7681,6 @@
     "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsStateTied",
-    "Properties.NetworkPeriod.rowsTiedDrawn",
-    "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
     "Properties.NetworkRecords.noGridAcceptsMore",
@@ -7846,8 +7818,6 @@
     "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsStateTied",
-    "Properties.NetworkPeriod.rowsTiedDrawn",
-    "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
     "Properties.NetworkRecords.noGridAcceptsMore",
@@ -8025,7 +7995,6 @@
     "Properties.NetworkCertifier.linkWindowAcceptMeans",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsStateTied",
-    "Properties.NetworkPeriod.rowsTiedDrawn",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -8138,8 +8107,6 @@
     "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsStateTied",
-    "Properties.NetworkPeriod.rowsTiedDrawn",
-    "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
     "Properties.NetworkRecords.noGridAcceptsMore",
@@ -8872,8 +8839,6 @@
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsStateTied",
-    "Properties.NetworkPeriod.rowsTiedDrawn",
-    "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -8931,7 +8896,6 @@
     "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsStateTied",
-    "Properties.NetworkPeriod.rowsTiedDrawn",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
     "Properties.NetworkRecords.noGridAcceptsMore",
@@ -8982,7 +8946,6 @@
     "Properties.NetworkCertifier.undigestedParamsReject",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsStateTied",
-    "Properties.NetworkPeriod.rowsTiedDrawn",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
     "Properties.NetworkRecords.noGridAcceptsMore",
@@ -9092,8 +9055,6 @@
     "Properties.NetworkPeriod.rowsProgWired_nontrivial",
     "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkPeriod.rowsStateTied_nontrivial",
-    "Properties.NetworkPeriod.rowsTiedDrawn",
-    "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
     "Properties.NetworkRecords.noGridAcceptsMore",
@@ -9767,8 +9728,6 @@
     "Properties.NetworkPeriod.rowsProgWired_nontrivial",
     "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkPeriod.rowsStateTied_nontrivial",
-    "Properties.NetworkPeriod.rowsTiedDrawn",
-    "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
     "Properties.NetworkRecords.noGridAcceptsMore",
@@ -9874,8 +9833,6 @@
     "Properties.NetworkPeriod.rowsProgWired_nontrivial",
     "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkPeriod.rowsStateTied_nontrivial",
-    "Properties.NetworkPeriod.rowsTiedDrawn",
-    "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
     "Properties.NetworkRecords.noGridAcceptsMore",
@@ -9883,7 +9840,7 @@
    ]
   },
   "NetworkCheck.Check": {
-   "digest": "0da6307885a43c1af905438b5b81e7f640f2804275663b1b520aed2ad32b954e",
+   "digest": "78ee0ddb238e92bb4489f84dbf68c0871eb7f16caed82971f81d64f9f87af20a",
    "definitions": {
     "NetworkCheck.Check.Certificate": "82198d9fd58a4a1fa9d074b3c40acb8d268479408bb10f620408856f6b49c852",
     "NetworkCheck.Check.Certificate.digest": "e38f27c9440f66cb1a80971fa2dd244959d9b055021c727b42b1b10f1dc1e1ea",
@@ -9955,6 +9912,7 @@
     "NetworkCheck.Check.unitSync": "c02d2be7bf9c0d106325314893d2f71b634cacde63b3912a9ad898863bdb1c4d",
     "NetworkCheck.Check.verdicts": "ff9face133ffbc32f94fe5883118b2ce91025873ef6b73a999a06527b3e848dc",
     "NetworkCheck.Check.verifies": "e52ba54432a50877d56a0104ddbcdb3eec7131f284a0c1261b4986687911c23a",
+    "NetworkCheck.Check.verifies._sparseCasesOn_3": "577a19d449e24cc92d8ace7816139b845ee5491373bf648cdebf7e33f440c82c",
     "_private.NetworkCheck.Check.0.NetworkCheck.Check.be": "8fcc26fdff293243466d48145902159a9d005cdbf706a0ec0ca4917988011818",
     "_private.NetworkCheck.Check.0.NetworkCheck.Check.certificate": "3bf879efc64af31f372c099e2581f57c6fcc30bcd38db079d7c160b99bb25db3",
     "_private.NetworkCheck.Check.0.NetworkCheck.Check.direction": "d65ff6dfa5ab68dd857278d83527e3424af26f3a00ebc579222a8b89e4c7d059",
@@ -9982,8 +9940,6 @@
     "Properties.NetworkPeriod.rowsProgWired_nontrivial",
     "Properties.NetworkPeriod.rowsStateTied",
     "Properties.NetworkPeriod.rowsStateTied_nontrivial",
-    "Properties.NetworkPeriod.rowsTiedDrawn",
-    "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial",
     "Properties.NetworkRecords.acceptMeans",
     "Properties.NetworkRecords.answerAcceptMeans",
     "Properties.NetworkRecords.noGridAcceptsMore",
@@ -10088,9 +10044,9 @@
    "guarantees": ["Properties.NetworkCertifier.linkWindowAcceptMeans"]
   },
   "NetworkCheck.Period": {
-   "digest": "83c2f4de76934aab70f2ef9bead4268b948269db4f31c76d60034036b8d636ea",
+   "digest": "f84482078650bb000593941a70fb8d7613ce90e33c5ae0e08c23d6db612d8765",
    "definitions": {
-    "NetworkCheck.Period.Audit": "176150114803d5d1e50cab3294dd302aebc808af5d4ad9c3c9850a39d0435735",
+    "NetworkCheck.Period.Audit": "0d641bb152e911020e01f254af27bca6b76ff4e2cb57994e3121b4fcb8e976f4",
     "NetworkCheck.Period.Audit.bits": "e933e5e70e66fbf6d1a3f868d294c6a0cfc6be8b835a4d117602235327ee4af1",
     "NetworkCheck.Period.Audit.entries": "ad8f5845c57b943aecdca4666c2b7b86ab39b6f67f9727d4d8d9696d1590fced",
     "NetworkCheck.Period.Audit.free": "ba874f447150e7a86d297a563d338c2fbea36a26536182dee99b19a80f22587c",
@@ -10197,8 +10153,8 @@
     "NetworkCheck.Period.answered": "be02ad5a34f2d8888b226120e3c7d62a31e4d3a6222ff929a8a80654383e13ff",
     "NetworkCheck.Period.answered._sparseCasesOn_3": "4840b78b7839e8ca1def8772845bc90f9fb8393659f5f4c2387174f7c2538612",
     "NetworkCheck.Period.atMost": "3df31d5d5297b8a4f0576162646c9449346e9ceb4d2d2f5f49f6fc7693514a84",
-    "NetworkCheck.Period.auditCheck": "dea2ca45bedc4dc59073b09315d96e8e7ebc62b0a43c497467bcbec773dbcda6",
-    "NetworkCheck.Period.auditChecks": "8f690f4371846d8947fa3b530758f223705c6c191a8c89e74fa3b69999a74d44",
+    "NetworkCheck.Period.auditCheck": "34718142e05c498456e4e451900f3b9271ef3c95e4539195c14c176406345bb2",
+    "NetworkCheck.Period.auditChecks": "4cca6faa5be27d823ac65a4c0f10dc3a1e133172f0c77b178e1f9a6ef688e2f3",
     "NetworkCheck.Period.canonText": "f3f56595df2de44e1a87807d7066086208c80a22fdfffa9044b637fa3f43e82e",
     "NetworkCheck.Period.capsTerm": "b0344cf3feee99420207429449a56894f1be391186237460231820aa80faf275",
     "NetworkCheck.Period.cellsTag": "5c1846c4e213077be502c7cb56a4132a78981e389cc8a44d60555d954e5e6ea9",
@@ -10283,9 +10239,7 @@
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsProgWired_nontrivial",
     "Properties.NetworkPeriod.rowsStateTied",
-    "Properties.NetworkPeriod.rowsStateTied_nontrivial",
-    "Properties.NetworkPeriod.rowsTiedDrawn",
-    "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial"
+    "Properties.NetworkPeriod.rowsStateTied_nontrivial"
    ]
   },
   "NetworkCheck.Records": {
@@ -12469,7 +12423,7 @@
    "guarantees": ["Properties.NetworkCertifier.linkWindowAcceptMeans"]
   },
   "Properties.NetworkPeriod": {
-   "digest": "464e7422e28f0c58a8a6944f4a67591287ad6524b2139a14667b4ee5bdbfcbc8",
+   "digest": "123498425102960c19910aed8404835c8e107cf0f6496b55e7951b743be1f7f0",
    "definitions": {
     "Properties.NetworkPeriod.ClockKBoundsCount": "8cdb92caa40b67dd32763dd0bd4b5c1a316280f88dc25339058d7a54a38df555",
     "Properties.NetworkPeriod.RowsKBoundsCount": "61a3494840160823999dfc356fd013dad48ca366380e7809c37840c1160fc79c",
@@ -12479,10 +12433,6 @@
     "Properties.NetworkPeriod.RowsStateTied": "a04739b3f4efea724b0ccc0993a8a603aad7fb5862c2d9544e779b31ff88f9ac",
     "Properties.NetworkPeriod.RowsStateTiedAt": "ff582df8e2003fcfb754440ef36cc0eb6792c81f0298ed809b57414821dd7849",
     "Properties.NetworkPeriod.RowsStateTiedOf": "98b9a460c926cf487aa92458c82d71973b75ab72c3e394382aefa4499a5e909e",
-    "Properties.NetworkPeriod.RowsTiedDrawn": "8ebe6a464d2825209eef1b476324a3a8d5e7553b2904ef9ba59c86b111fd7f73",
-    "Properties.NetworkPeriod.RowsTiedDrawnAt": "9b5eceeec0679c86c6290c21173a6765c69aab206116274a8e14e06d4732683a",
-    "Properties.NetworkPeriod.RowsTiedDrawnOf": "00b96da8b4d1edef40db047bfd398044564e9a1ef39f249e200de88923cac7e2",
-    "Properties.NetworkPeriod.StrataDrawnWhole": "080997f238c141ec2d60695902b80fa561af0f92ce7c83d6eb1c0e6ba98f9111",
     "Properties.NetworkPeriod.acceptAllRows": "4e75123c9fca0239bd7ff473caf81f46d067e378f8d3f62e94f49d1122cb2530"
    },
    "guarantees": [
@@ -12491,9 +12441,7 @@
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsProgWired_nontrivial",
     "Properties.NetworkPeriod.rowsStateTied",
-    "Properties.NetworkPeriod.rowsStateTied_nontrivial",
-    "Properties.NetworkPeriod.rowsTiedDrawn",
-    "Properties.NetworkPeriod.rowsTiedDrawn_nontrivial"
+    "Properties.NetworkPeriod.rowsStateTied_nontrivial"
    ]
   },
   "Properties.NetworkRecords": {
