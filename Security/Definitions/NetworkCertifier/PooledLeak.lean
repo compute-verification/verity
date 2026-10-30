@@ -52,12 +52,12 @@ structure TiedAudit where
 /-- **What proof block `v` of a tied audit reaches**: the scan's input gates whose values are returned values of the
 audit's Program in the downstream cone of `v`'s gates (`inCone`), the registered inputs an incorrect `v` can set. -/
 def TiedAudit.reach (a : TiedAudit) (v : ℕ) : Finset ℕ :=
-  (((a.wire.zip a.prog.outs).filter fun p => inCone a.prog (RU.gates (a.part.rus.getD v [])) p.2).map (·.1)).toFinset
+  (((a.wire.zip a.prog.outs).filter fun p => inCone a.prog (a.part.blocks.getD v []) p.2).map (·.1)).toFinset
 
 /-- A window's tied audits' proof blocks, audit by audit, each as what it reaches: the `u`th is the window's tied proof
 block `u`. -/
 def tiedReaches (T : List TiedAudit) : List (Finset ℕ) :=
-  T.flatMap fun a => (List.range a.part.rus.length).map a.reach
+  T.flatMap fun a => (List.range a.part.blocks.length).map a.reach
 
 /-- What the window's tied proof blocks `F` reach together. -/
 def tiedReach (T : List TiedAudit) (F : Finset ℕ) : Finset ℕ := F.biUnion fun u => (tiedReaches T).getD u ∅

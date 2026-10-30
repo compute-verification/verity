@@ -316,12 +316,12 @@ theorem TiedAudit.valOver_eq_of_notMem_reach (a : TiedAudit) (inp : ℕ → Bool
     {F : Finset ℕ} (hfree : ∀ g b, free g = some b → FaultyGate a.prog a.part F g) {w o : ℕ}
     (hwo : (w, o) ∈ a.wire.zip a.prog.outs) (hw : w ∉ F.biUnion a.reach) :
     valOver a.prog inp free o = valOver a.prog inp (fun _ => none) o := by
-  refine valOver_congr_free a.prog inp F (fun v => RU.gates (a.part.rus.getD v [])) (fun g hg => ?_) o
+  refine valOver_congr_free a.prog inp F (fun v => a.part.blocks.getD v []) (fun g hg => ?_) o
     fun v hv => ?_
   · rcases hf : free g with _ | b
     · rfl
     · obtain ⟨v, hv, r, hr, hgr, -⟩ := hfree g b hf
-      have hgv : g ∈ RU.gates (a.part.rus.getD v []) := by
+      have hgv : g ∈ a.part.blocks.getD v [] := by
         rw [List.getD_eq_getElem?_getD, hr, Option.getD_some]
         exact hgr
       exact (hg v hv hgv).elim
