@@ -29,7 +29,7 @@ and its `window-drawn` entry draw the Python verifier's units on generated coins
   (`registeredBeforeSample`, by `coinAt_spliceAt`).
 * Every tile is live and paid with its words right, the openings are in `Unit` and the unit's relation is `True`, so
   binding holds at `δ_bind = 0` and the service's soundness at `δ_ks = 0`; the three lucks hold of the honest games
-  (`SharedNoiseLucks`), and the play fixes and folds `N` words a window (`UnitFixed`).
+  (`SharedNoiseLucks`), and the play fixes and folds `N` words a window (`BlockFixed`).
 
 The conclusion then speaks of the whole period: its accepted prefix is all `n` windows (`prefixLen_all`) and its live
 words are `N·n` (`creditLive_all`), so `j10r_credit` is the statement's bound at `N·n` live words, not at none.
@@ -319,7 +319,7 @@ theorem j10r_meets (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (regOf c) 
       (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) 0 ∧
     Properties.Pouw.Period.SaltIsLiveCoin (hr1 _) (saltOf (windows σ sT regOf evOf n)) enc ∧
     SharedNoiseLucks Honest.scheme (circuit (tileCount σ sT)) (period (Ω1 σ sT) (tileCount σ sT) n) ∧
-    UnitFixed (play Unit (tileCount σ sT) (k sT) n)
+    BlockFixed (play Unit (tileCount σ sT) (k sT) n)
       (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (windows σ sT regOf evOf n) opened
         (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile))
       (periodMode (circuit (tileCount σ sT)) (period (Ω1 σ sT) (tileCount σ sT) n)

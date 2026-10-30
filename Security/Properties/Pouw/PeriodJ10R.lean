@@ -92,7 +92,7 @@ and 65,536 (down); such a unit is past C-Flock's `2^27` until `h1zy` has J10-R l
 * `TileServiceSound`: a fact to prove, C-Flock's soundness at each drawn unit under live coins.
 * `SharedNoiseLucks`: a claim (above). The unit's place (`place`) is a parameter: no Lean function exports the verifier's derivation of a
 unit's call and blocks (`Credit.registeredFile`'s `j10r`).
-* `UnitFixed` (`Accounting.Assumptions.TS`), a named premise, not a code fact: it bounds the play's `fixed` and `folded`
+* `BlockFixed` (`Accounting.Assumptions.TS`), a named premise, not a code fact: it bounds the play's `fixed` and `folded`
   words, which `Play` leaves abstract (no definition from the committed values until the adaptive model), so no code
   can prove it. `Proofs.Pouw.PeriodJ10R.Honest`'s `j10r_meets` shows it, and every other premise, satisfiable.
 
@@ -416,7 +416,7 @@ def H1J10RCheckedCreditPeriod : Prop :=
     RegisteredBeforeSample ws → TileSampleIsCoin σ k hk sT unitOf ws →
     TileServiceSound σ sT unitOf ws opened (pinnedAt (saltOf ws) place tile) δks →
     Properties.Pouw.Period.SaltIsLiveCoin hr (saltOf ws) enc → SharedNoiseLucks Sc Cd Wp →
-    UnitFixed Pl (tileLayer Cd hr σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)
+    BlockFixed Pl (tileLayer Cd hr σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)
         (j10rAtCoin hr enc place tile))
       (periodMode Cd Wp (tileRun σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)
         (j10rAtCoin hr enc place tile)))

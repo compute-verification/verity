@@ -41,7 +41,7 @@ which adds SAK to H1.
 `TileServiceSound` (the proof service's soundness, open), `RegisteredBeforeSample`, `SaltIsLiveCoin` and
 `SharedNoiseLucks`, with the structure H1 reads (`Scope`, the live share `ρ`, the game and its prefix, the binding at
 `δ_bind`). `SharedNoiseLucks` is its one computational premise: the fold receipts' detection, which is to be
-proved in the slot's model or designed away by the no-fold receipt, not assumed. It drops H1's `UnitFixed` (and
+proved in the slot's model or designed away by the no-fold receipt, not assumed. It drops H1's `BlockFixed` (and
 the play's `folded` words): it reads the right blocks themselves, not the play's abstract `fixed` count.
 
 Its `δ_s` is δ_coin and its `n·(δ_bind + δ_ks)` is δ_crypto. `BlockMap` is a named map from words to gates of the
@@ -117,7 +117,7 @@ noncomputable def creditFloor {ι K : Type} (Sc : Scheme K) (Cd : RegisteredCirc
   max (1 - epsSkip Sc Cd Np j Nlive S sz a b Λ δs) 0 * S
 
 /-- **The served PoUW's values in AND gates.** Take `H1J10RCheckedCreditPeriod`'s period and premises without
-`UnitFixed` (and without the play's `folded` words): a declared circuit `Cd` and a scheme `Sc` run as a period of at
+`BlockFixed` (and without the play's `folded` words): a declared circuit `Cd` and a scheme `Sc` run as a period of at
 most `n ≥ 1` windows over the sampling block's tile stratum `s_T` of `σ`, with `Credit.window`'s inputs (`ws`) any
 function of the period's coins. Add the registered declaration `D`, the lowering `lower` pinned at registration,
 `lower D`'s proof blocks and words' bits (`M : BlockMap`), and the gates other protocols credit (`ledger`). Then,

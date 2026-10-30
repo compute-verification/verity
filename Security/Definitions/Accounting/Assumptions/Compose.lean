@@ -19,7 +19,7 @@ The logical layer (`CircuitWork`) rests on four claims, the headlines', sampled 
   headlines' definition, so the premise is one Lean statement, counted once;
 * `GuessLuckAt`: the whole-unit guess bound, per tile at its stage whole, a condition at whatever bound a kind's
   `Scheme.guess` names: the live line reads it at B′'s `½`, and `2^-64` isn't granted;
-* the fixed-words claim, `Accounting.Assumptions.TS.UnitFixed` (Lemma E1(c) per unit with its fold clause),
+* the fixed-words claim, `Accounting.Assumptions.TS.BlockFixed` (Lemma E1(c) per unit with its fold clause),
   at the run's modes (`Accounting.Compose.tileMode`; `jointMode` in the seeded statements, on the IR-cut layer
   `RegisteredCircuit.atIR`) and the tiles' words. Its good units are the ones the run paid for, so a receipt-lucky skipped tile
   isn't credited.

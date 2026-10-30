@@ -62,7 +62,7 @@ Every guarantee here is proved: the three rates, `ServiceBudget`, `ServiceCovers
    gives the share game's pass; `ServiceBudget` on `serviceGame` at `a`, `b` and `shareCone` (the same coins and pass)
    and `budget_tail` at `t = ln(1/δ_s)` bound `a·S_F + b·S_0 ≥ Λ·ln(1/δ_s)` by `δ_s`, `S_F`, `S_0` the folded and whole
    shares at `shareCone`. Off both,
-   `UnitFixed` (its `WriterReads` by `layer_writerReads`) at `tileMode` and step 5's `Covers` give the good tiles' words
+   `BlockFixed` (its `WriterReads` by `layer_writerReads`) at `tileMode` and step 5's `Covers` give the good tiles' words
    at least `(1 − (c_F + c₀))·N_w`, `c_F`, `c₀` the folded and whole shares at `tileCone`, and the words not skipped
    whole at least `(1 − S_0)·N_w`, since a tile's words are at most `N_w` times its `shareCone` (a tile's cone holds
    itself, `ReflTransGen.refl`); both read `Σ_t tileWords ≥ N_w` (each credited word is in its unit's tile, by
@@ -94,13 +94,13 @@ Every guarantee here is proved: the three rates, `ServiceBudget`, `ServiceCovers
    Given the rounds' coins, the service's live draw of a uniform `K_d`-subset misses the tiles whose checked values
    aren't honest with probability at most `(1 − ρ·U)^{K_d} ≤ e^{−ρ·K_d·U}`, so an accepted run with
    `ρ·K_d·U ≥ ln(1/δ_s)` has probability at most `δ_s` (`live_le`). Off these, `DrawnRightOff` on
-   `RegisteredCircuit.atDraw`'s layer (its `MovedIn`, `JointSound`, `Pins`) and `Of` give the share game's pass; `UnitFixed`
+   `RegisteredCircuit.atDraw`'s layer (its `MovedIn`, `JointSound`, `Pins`) and `Of` give the share game's pass; `BlockFixed`
    and step 5's `Covers` on `RegisteredCircuit.atIR`'s layer (`LayerCommitted` by `layerCommitted_atIR`) at `jointMode` give
    the good tiles' words as in step 6 (`WorkProof.work_of_bounds`). The two layers differ only in their cuts, and
-   `UnitFixed`, `Covers` and the game read none of a layer's committed values, so they combine: each mode's share is
+   `BlockFixed`, `Covers` and the game read none of a layer's committed values, so they combine: each mode's share is
    its `L − κ·U` plus `(1 + κ)·U` (`share_split`), so `a·S_F + b·S_0 ≤ max(5a, (1 + κ₀)·b)·U + a·Π_F + b·Π_0`,
    strictly below `rOfSeeded`'s first three terms (`a > 0`), with `D₀` as in step 6. `SeedNamed` (in `ScopeSeeded`)
-   is read by no step: it is the protocol fact under which the `UnitFixed` premise on `RegisteredCircuit.atIR`'s layer can
+   is read by no step: it is the protocol fact under which the `BlockFixed` premise on `RegisteredCircuit.atIR`'s layer can
    hold, as `LayerCommitted` is for the live pair.
 10. `CircuitCreditSeeded` (proved): step 9 at `a = aOf`, `b = bOf`, and step 7 on each run off its event at
    `r = rOfSeeded`; the certificate is issued at `.seeded`.

@@ -43,7 +43,7 @@ Proofs exist for drawn units only: round `w`'s proof `i` is drawn unit `drawnAt 
 `Good` reads the run's modes, not rightness: a unit's check can pin less than its words (`PouwWarpCheck_v2` compares
 its receipt's checkpoints), so a skipped unit whose receipt is lucky is right and its words still wrong.
 
-Two conditions are protocol structure, outside this vocabulary, and `UnitFixed` (E1(c) per unit) is claimed only where
+Two conditions are protocol structure, outside this vocabulary, and `BlockFixed` (E1(c) per unit) is claimed only where
 they hold: a layer's `cut` is no later than the protocol's real commitment of each position (a later cut binds less),
 and the modes are the run's (a unit is paid only if the run computed it, from the values it committed, under its
 noise).

@@ -28,7 +28,7 @@ prefix's live tiles:
   `prefixLen`, `credited_iff`); `DrawnRightOff` at `n` rounds (its event `n·(δ_bind + δ_ks)`), off which every drawn
   tile of a credited window is right at its committed values, so `PrefixOf` passes the play's first `j` rounds, and the
   budget game's, whose checks are the play's (`acceptsUpTo_periodGame`);
-* per credited window, the covers, `UnitFixed`'s sums (a good tile is live in a credited window, `periodMode`'s
+* per credited window, the covers, `BlockFixed`'s sums (a good tile is live in a credited window, `periodMode`'s
   not-whole tiles are its live tiles not skipped whole) and `liveCone = liveShare` plus the cones of tiles of no live
   words, at most `zeroCone` a window (`zeroS_le`: a dead tile with words reaches no live words); summed over the
   prefix (`deficiencyUpTo_periodGame`), the shares in the cheaper of the two (`liveWork_of`).
@@ -556,7 +556,7 @@ theorem liveWork_of {Nlive Nw a b Λl D0 fixed fd Gt NWt SF S0 Z j : ℝ} (ha : 
 /-! ## The period's work -/
 
 open Classical in
-/-- **One accepted run's work over the period**, off both events: per credited window, the covers, `UnitFixed`'s
+/-- **One accepted run's work over the period**, off both events: per credited window, the covers, `BlockFixed`'s
 sums and the zero-word cones, summed over the accepted prefix, whose budget game's shares are below `Λl`. -/
 theorem work_step {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) {n Np Kd : ℕ} (hn : 0 < n)
     (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
@@ -771,7 +771,7 @@ theorem creditPrefix_le {ι K : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι
     exact hF
 
 /-- **`CircuitCreditPeriod` from the period layer's covers**: `circuitWorkPeriod_of_covers` at `a, b > 0`; on an
-accepted run `UnitFixed`'s sums keep `fixed` nonnegative, so the credit is below the work (`creditPrefix_le`). -/
+accepted run `BlockFixed`'s sums keep `fixed` nonnegative, so the credit is below the work (`creditPrefix_le`). -/
 theorem circuitCreditPeriod_of_covers (hC : PeriodCoversStmt) :
     Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod := by
   intro ι K T L U C Ξ V _ _ _ _ _ _ _ Sc Cd n Np Kd hn hN hr hK Wp Pl pr folded ρ p p0 a b wmax Λ δs δbind δks hS

@@ -82,7 +82,7 @@ def WorkOfH1CheckedCreditPeriodAt (p : Accounting.Price) (macs : Accounting.Comp
     (∀ ξ, (Wp ξ).EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G))) →
     (∀ ξ, (Wp ξ).EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G))) →
     (∀ ξ, (Wp ξ).EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k _ G0 => GuessLuckAt (Sc.guess k) G0))) →
-    (∀ ξ, UnitFixed (Pl ξ)
+    (∀ ξ, BlockFixed (Pl ξ)
       (checkedLayer Cd hr hK prm (ws ξ) (opened ξ) (stagedAt (salt ξ) staged) (flatAtCoin hr enc flat))
       (periodMode Cd (Wp ξ) (checkedRun hK prm (ws ξ) (opened ξ) (stagedAt (salt ξ) staged) (flatAtCoin hr enc flat)))
       (fun _ t => (tileWords Sc Cd 144 t : ℝ)) (folded ξ)) →

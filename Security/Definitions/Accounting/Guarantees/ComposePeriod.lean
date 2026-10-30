@@ -40,7 +40,7 @@ at it (`PeriodTailMax`).
   can't be averaged into `ε/n`): `ServiceBudget` per window at the window's detected live weights, `PeriodBudget`,
   `PeriodTailMax` once at `t = ln(1/δ_s)`, `DrawnRightOff` at `n` rounds, the period layer's `Covers` on the credited
   windows' live tiles and `WriterReads` (`PeriodCoversStmt`, `ServiceCovers`' argument with a window index, proved as
-  `periodCovers` in `Proofs.Accounting.ComposePeriod.Covers`) and `UnitFixed`'s sums.
+  `periodCovers` in `Proofs.Accounting.ComposePeriod.Covers`) and `BlockFixed`'s sums.
 * `CircuitCreditPeriod`: (L)'s credit in live words, `(1 − ε(j))₊` of the accepted prefix's live words with `ε` at the
   realized prefix `j` (`creditPrefix`). Proved (`Proofs.Accounting.ComposePeriod`) from `CircuitWorkPeriod`'s
   assembly at `a, b > 0`. Not the time credit (`CircuitCredit`'s `(1 − ε)·T_cred`), which no statement here gives.
@@ -92,9 +92,9 @@ prefix, of `j = Outcomes.prefixLen` windows. Under:
   soundness jointly over each window's draws at `δ_ks` (`JointSound`) and `Pins`. Binding is per window, so the period
   composes the windows' binding;
 * the four claims: (H-μ), B′ and the guess bound per live credited tile of every window, whatever the past
-  (`Period.EveryWindow` of `PerLiveTile`), and `UnitFixed` on the period's proofs at the run's modes with each dead
-  tile and every window past the accepted prefix skipped whole (`periodMode`) and the tiles' words. `UnitFixed` at
-  `periodMode` follows from `UnitFixed` at the windows' own modes, since reading a tile as skipped whole only shrinks
+  (`Period.EveryWindow` of `PerLiveTile`), and `BlockFixed` on the period's proofs at the run's modes with each dead
+  tile and every window past the accepted prefix skipped whole (`periodMode`) and the tiles' words. `BlockFixed` at
+  `periodMode` follows from `BlockFixed` at the windows' own modes, since reading a tile as skipped whole only shrinks
   both its sums;
 
 an accepted period (`Pl.accepts`, which may hold on every path: the record credits whatever prefix was accepted, the
@@ -105,7 +105,7 @@ fixed right and all but `d₀·N_w` folded, `N_w` the declared circuit's words a
 `Λ·ln(1/δ_s)/j + min(a, b)·D₀`. At `n = 1` with every tile live, on a path whose window is accepted, it is
 `CircuitWork` with positions tagged by window `0`.
 
-*Which run, and what is credited.* `Pl.run` is the period's one run. `UnitFixed` bounds its `fixed` and `folded x`
+*Which run, and what is credited.* `Pl.run` is the period's one run. `BlockFixed` bounds its `fixed` and `folded x`
 below by the accepted prefix's good and unskipped words over `n`, so the conclusion is about the prefix's total
 (`n·fixed` against `creditedLive`), and divided by `j` about its mean credited window: not any one window. Windows past
 the prefix count as skipped whole, their words neither credited nor charged, so a failure costs the windows after it,
@@ -251,7 +251,7 @@ def CircuitWorkPeriod : Prop :=
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G)) →
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G)) →
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k _ G0 => GuessLuckAt (Sc.guess k) G0)) →
-    UnitFixed Pl (Cd.periodLayer hr hK pr) (periodMode Cd Wp pr) (fun _ t => (tileWords Sc Cd Np t : ℝ)) folded →
+    BlockFixed Pl (Cd.periodLayer hr hK pr) (periodMode Cd Wp pr) (fun _ t => (tileWords Sc Cd Np t : ℝ)) folded →
     prob (fun x => Pl.accepts x ∧
       ¬ LiveWorkAt (creditedLive Sc Cd Wp pr x) (wordsOf Sc Cd : ℝ) a b
         (rOfPrefix Sc Cd Np (pr.prefixLen x) a b Λ δs) (n * (Pl.run x).fixed) (n * folded x)) ≤
@@ -296,7 +296,7 @@ def CircuitCreditPeriod : Prop :=
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G)) →
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G)) →
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k _ G0 => GuessLuckAt (Sc.guess k) G0)) →
-    UnitFixed Pl (Cd.periodLayer hr hK pr) (periodMode Cd Wp pr) (fun _ t => (tileWords Sc Cd Np t : ℝ)) folded →
+    BlockFixed Pl (Cd.periodLayer hr hK pr) (periodMode Cd Wp pr) (fun _ t => (tileWords Sc Cd Np t : ℝ)) folded →
     prob (fun x => Pl.accepts x ∧ n * (Pl.run x).fixed <
       creditPrefix Sc Cd Np (pr.prefixLen x) (creditedLive Sc Cd Wp pr x) a b Λ δs) ≤ δs + n * (δbind + δks)
 

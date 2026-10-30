@@ -3,8 +3,8 @@ import Proofs.Accounting.TS.Fork
 /-!
 # (I8) for a sampled window
 
-A unit's `Good` reads the run's modes, and E1(c) is per unit (`UnitFixed`). `DrawnRightOff` and `DrawnBindingOfFork`
-don't read `UnitFixed`; `DrawnLayer.covers_of_cone` is the share's side of `Covers`: a share that charges each unit the
+A unit's `Good` reads the run's modes, and E1(c) is per unit (`BlockFixed`). `DrawnRightOff` and `DrawnBindingOfFork`
+don't read `BlockFixed`; `DrawnLayer.covers_of_cone` is the share's side of `Covers`: a share that charges each unit the
 run didn't pay for its late cone's weight covers every unit that isn't good.
 
 `DrawnRightOff`: the event is "in some round, binding fails (`MovedIn`) or some drawn unit's proof is unsound", which
@@ -12,7 +12,7 @@ the union bound puts at `S·(δ_bind + δ_ks)`. Off it, an accepted proof opens 
 `MovedIn`), which satisfy its relation (not `Unsound`), so they are right (`Pins`).
 
 `ProofsSoundOfDrawn`: `DrawnRightOff`'s event; off it, on an accepted path every drawn unit's proof is accepted (`Of`),
-so the ideal game accepts (`Of`), and the good units' words over `S` (`UnitFixed`) are at least
+so the ideal game accepts (`Of`), and the good units' words over `S` (`BlockFixed`) are at least
 `(S·N_w − d·N_w)/S` by `Covers` and `Σ wt = S·N_w`.
 
 `DrawnBindingOfFork`: a round's binding failure moves one of its positions (`Moved`). Per position, the moved mass

@@ -20,13 +20,13 @@ it (`G.ext = 0`), which is what "the inventory" means. The claim is about the wo
 * `FixedBeforeSalt`: a function of the period's coins and a window that reads only the windows before it, so it is fixed
   before that window's salt.
 * `FixedAreRight`: the bridge from the play's fixed words to the inventory's outputs. On every accepted path the period's
-  fixed words (`n · fixed`, `UnitFixed`'s scale: the good units' words summed over the windows) are at most the credited
+  fixed words (`n · fixed`, `BlockFixed`'s scale: the good units' words summed over the windows) are at most the credited
   words the inventory's programs get right, window by window (`rightWords` at the window's instance and salt).
 * `ServedWork`: the guarantee.
 
-**The type bridge.** H1's words are abstract in the play (`Anatomy.fixed`, which `UnitFixed` bounds below by the good
+**The type bridge.** H1's words are abstract in the play (`Anatomy.fixed`, which `BlockFixed` bounds below by the good
 units' words). `SakLb.SAKResidual` speaks of a program's output and the fraction of its words that are right. The bridge
-is `FixedAreRight`, at the tiles' credited words (`tileWords`, `UnitFixed`'s weights), and `SAKServed` is
+is `FixedAreRight`, at the tiles' credited words (`tileWords`, `BlockFixed`'s weights), and `SAKServed` is
 `SAKResidual`'s claim at the served types (a window's tiles, its salt as the dither, `p` a credited word): the right
 share by tiles is at most the right share by words.
 
@@ -66,7 +66,7 @@ def FixedBeforeSalt {C B X : Type} {m n : ℕ} (f : Paths (Paths C m × B) n →
 (`n · fixed`) are at most the credited words the inventory's outputs get right, summed over the windows (`right x w`).
 The bridge from the play's anatomy, which `Play` leaves abstract, to what the prover's machines output: the words the
 prover commits are its programs' outputs. A named premise until the play's fixed words are defined from the committed
-values (the adaptive model), as `UnitFixed` is. -/
+values (the adaptive model), as `BlockFixed` is. -/
 def FixedAreRight {Ω K T L U : Type} {n : ℕ} (Pl : Play Ω n K T L U) (right : Paths Ω n → Fin n → ℝ) : Prop :=
   ∀ x, Pl.accepts x → n * (Pl.run x).fixed ≤ ∑ w, right x w
 
@@ -110,7 +110,7 @@ def ServedWork : Prop :=
     RegisteredBeforeSample ws → TileSampleIsCoin σ k hk sT unitOf ws →
     TileServiceSound σ sT unitOf ws opened (pinnedAt (saltOf ws) place tile) δks →
     Properties.Pouw.Period.SaltIsLiveCoin hr (saltOf ws) enc → SharedNoiseLucks Sc Cd Wp →
-    UnitFixed Pl (tileLayer Cd hr σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)
+    BlockFixed Pl (tileLayer Cd hr σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)
         (j10rAtCoin hr enc place tile))
       (periodMode Cd Wp (tileRun σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)
         (j10rAtCoin hr enc place tile)))
