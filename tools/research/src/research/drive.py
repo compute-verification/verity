@@ -1,7 +1,7 @@
 """`research queue drive`: one tick of the landing automation (from an owner's ready mark to `main` moving, no agent acts
 unless the automation refuses).  A loop runs it every few minutes.
 
-What it refuses goes to `@ci` in the merge thread, once per commit or head, with the owner of the PR it concerns.  `--shadow`
+What it refuses goes to `CI` in the merge thread, once per commit or head, with the owner of the PR it concerns.  `--shadow`
 drives `queue-shadow`: it lands nothing, launches nothing and posts nothing, and logs what it would do.
 
 What only a PR's owner acts on goes to that owner alone (`tell`).  Each tick applies the stale rule (`research.stale`, drive.toml's
@@ -34,8 +34,13 @@ change after the first ceil(n / f) of the n it would hold, f the Lean checks sti
 holds only what's above it, and the lower ones land without waiting for the rest.  `next` is built non-Lean first (drive.toml's
 `nonlean_first`, `queue.Queue._nonlean_order`: what a sync adds), and while no Lean check of `next` runs or passed, the
 sync moves the members with a land verdict below those waiting for one (`reviewed_first`), those that change no Lean first
-(`_lift`; never past a held member), where they land that tick, so a reviewed member seldom waits above an unreviewed member,
-or above a Lean change for its check.  A Lean check lost or failed by its
+(`_lift`, which passes over a held member), where they land that tick, so a reviewed member seldom waits above an unreviewed member,
+or above a Lean change for its check.  And every sync moves each member held by a verdict at its head, with every PR that
+contains it, to the top of `next` (`_park`), so a hold holds only itself and what contains it, and the prefix that lands
+reaches past where it was; it stays at the top until a land verdict at that head (then it lands in its place) or a new head.
+A PR with a hold label, an ejected one or one the sync refuses leaves `next` instead (a refused one is tried again at its top).
+The park moves no member below the lowest held one, so no Lean check below it is cancelled; one that holds a held member is
+(its prefix can't land), and no check is stacked above a held member.  A Lean check lost or failed by its
 machine (killed, out of disk or memory: `_machine_fault`) runs again once on the other machines.  A failed Lean check is run
 again on the Lean change's own commit, and only a failure there is told to its owner; nothing at or above a failed commit lands until it leaves `next`, unless a passed Lean check
 of a reviewed commit above it checked the tree that lands (`_past_failed`).  And every .py file the
@@ -66,11 +71,11 @@ one): for ratchet-gate, the merge the gate's log says it fails; else the landing
 names (`suite_paths`: failing tests, its log's failures, the read guard's `outside`), else its declared inputs
 (`_input_rule`); several are bisected by landing, each step a run of one landing's commit judged by that suite alone, while
 landing goes on.  The ring (`_ring`) quotes the run, the first error line
-(`first_error`) and what a cancel stopped (`not_run`, "not run"), to @ci, the suite's owner and the culprit's; the culprit is
+(`first_error`) and what a cancel stopped (`not_run`, "not run"), to `CI`, the suite's owner and the culprit's; the culprit is
 reverted on `checked`, never on `main`, `FIX_WINDOW_S` after it (`_red_clock`) unless a fix is marked (`_fix`); a red
 circuit-check's culprit at once (`CIRCUIT_RED`), and while circuit-check is red on `checked` no PR whose own change touches
 its inputs lands (`_circuit_held`), every other one landing on.  A red run moves nothing on `main`.  While the oldest landing no run verified is
-`BEHIND_S` old, @ci and @top are rung every `BEHIND_EVERY_S` (`_behind`).  A run with no readable state `LOST_AFTER_S` after its
+`BEHIND_S` old, `CI` and `TOP` are rung every `BEHIND_EVERY_S` (`_behind`).  A run with no readable state `LOST_AFTER_S` after its
 launch is lost.
 
 The Lean checks and the post-landing runs (the after-landing run and its bisection's) are launched detached (`detach`), so no tick
@@ -165,12 +170,12 @@ LEAN_SETTLE_TICKS = 1
 #: how long a run may show no readable state (`unknown`) before drive takes it as lost (`Driver._lost`)
 LOST_AFTER_S = 3 * 3600
 #: how long the owners rung for a red suite or step have to mark a fix before drive reverts its culprit (`Driver._red_clock`;
-#: without it PRs keep landing on a `main` no after-landing run passed, and its failures reach only @ci)
+#: without it PRs keep landing on a `main` no after-landing run passed, and its failures reach only `CI`)
 FIX_WINDOW_S = 3600
 #: the red record reverted at once, with no `FIX_WINDOW_S`, and while it stands no PR touching what it reads lands
 #: (`Driver._circuit_held`): circuit-check runs only after landing, so every landing on its red would go unchecked
 CIRCUIT_RED = "step circuit-check"
-#: how far behind `main`'s tip its last verified commit may fall before drive rings @ci and @top, and how often it rings again
+#: how far behind `main`'s tip its last verified commit may fall before drive rings `CI` and `TOP`, and how often it rings again
 #: while it stays there (`Driver._behind`)
 BEHIND_S, BEHIND_EVERY_S = 3 * 3600, 3600
 #: how long an after-landing run may run before its running no longer explains that lag (a cold one takes about 4 h,
@@ -1225,7 +1230,7 @@ class Driver:
         touches a file the failure points at (its failing tests, the files its log names, what the read guard caught it reading
         and the test modules that read it), else the one that touches its declared inputs (`_input_rule`); for ratchet-gate,
         the oldest whose merge the gate's log says it fails (`ratchet_failures`) before either; several, a bisection
-        by landing decides (`_start_bisect`).  Ring @ci, the suite's owner and the culprit's (`_ring`): drive reverts the
+        by landing decides (`_start_bisect`).  Ring `CI`, the suite's owner and the culprit's (`_ring`): drive reverts the
         culprit `FIX_WINDOW_S` after unless a fix is marked (`_red_clock`).  A key already named for this tip, or whose culprit
         is still on `main` unreverted, is left as it is."""
         red, tip = pl.setdefault("red", {}), run["tip"]
@@ -1275,7 +1280,7 @@ class Driver:
                                       "machine failed. Reverted nothing")
 
     def _ring(self, drive: dict, r: dict, key: str, what: str, tag: str = "") -> None:
-        """Ring @ci, the owner of ``key``'s suite and its culprit's owner with what failed, the run, its first error line and
+        """Ring `CI`, the owner of ``key``'s suite and its culprit's owner with what failed, the run, its first error line and
         what drive does next."""
         c = r.get("culprit")
         owner = self._owner(Member(*c)) if c else None
@@ -1397,7 +1402,7 @@ class Driver:
                    if s not in run.get("skip", ()) and (s not in TAIL or (not held and s in gating)))
 
     def _behind(self, drive: dict) -> None:
-        """Ring @ci and @top, every `BEHIND_EVERY_S`, while the oldest landing no after-landing run has verified landed more
+        """Ring `CI` and `TOP`, every `BEHIND_EVERY_S`, while the oldest landing no after-landing run has verified landed more
         than `BEHIND_S` ago, unless a run that started under `POSTLAND_RUN_S` ago checks `main` with nothing red: then
         verification is only under way (a cold run is ~4 h).  Drive's tick, not top's hourly sweep, rings it: drive holds the
         last verified `main`, its landings since and what is red."""
@@ -1881,8 +1886,8 @@ class Driver:
 
     def _review(self, state: dict, drive: dict, dry_run: bool) -> str:
         """One tick of the review landing: move `main` to a fully checked `checked` (`_promote`) and bring a `main` pushed
-        outside drive into `checked` (`_absorb`), sync `next` (held on its base while a Lean check of it runs, drive's or a hand
-        one: `_running_lean`, kept in place up to a passed one that lands: `_landable`, and kept up to any passed one:
+        outside drive into `checked` (`_absorb`), sync `next` (its held members moved to its top: `_park`; held on its base
+        while a Lean check of it runs, drive's or a hand one: `_running_lean`, kept in place up to a passed one that lands: `_landable`, and kept up to any passed one:
         `lean_hold`), land its reviewed prefix (`land_reviewed`) once the landing branch has a baseline (`_unbaselined`),
         stacking a Lean check above a running one (`_stack_lean`), and launch the after-landing run, or the next run of a
         bisection (`_bisect_step`)."""
@@ -1914,6 +1919,9 @@ class Driver:
             # a member under it that is pushed or loses its mark still leaves, or it would wait at its old head for a verdict
             q.hold = max(frozen, lean_hold({"drive": drive}, chain))
             q.frozen = {m.pr for m in chain[:frozen]}
+            if q.prefetch is not None:
+                q.prefetch([(m.pr, m.head) for m in chain])     # one pull of every member's labels, not three per member
+            q.park = self._park(chain)
             q.lift = [] if q.hold or running else self._lift(drive, chain)
             entries = q.sync(dry_run)[1]
             state = {**q.load_state(), "drive": drive}
@@ -1934,21 +1942,42 @@ class Driver:
         q.log(f"research queue drive: {'; '.join(what)}")
         return "; ".join(what)
 
+    def _park(self, chain: list[Member]) -> list[int]:
+        """The members the sync moves to the top of `next` (`queue.Queue.park`, which takes with each the PRs that contain it):
+        each held by a verdict at the head `next` holds (`queue.unreviewed`; a hold by anyone counts, its owner's too), so it
+        holds only itself and what contains it, and the members that were above it land.  It stays at the top until a land
+        verdict at that head (then it lands by the normal order) or a new head.  A PR with a hold label, an ejected one or one a
+        sync refuses leaves `next` instead, and a refused one is tried again at its top.  Asked every sync, a Lean check of
+        `next` running or not: a check that holds one of them is of a prefix that can't land, and what a check covers below the
+        lowest of them keeps its place.  A member whose labels can't be read stays where it is."""
+        out: list[int] = []
+        unread: list[tuple[int, QueueError]] = []
+        for m in chain:
+            try:
+                why = unreviewed(self.reviews(m.pr, m.head), ())
+            except QueueError as e:
+                unread.append((m.pr, e))
+                continue
+            if why and why.startswith("held"):
+                out.append(m.pr)
+        if unread:
+            self.q.log(f"research queue drive: {len(unread)} member(s)' hold verdicts can't be read, so they stay where they are "
+                       f"(#{unread[0][0]}: {unread[0][1]})")
+        return out
+
     def _lift(self, drive: dict, chain: list[Member]) -> list[int]:
         """The members the sync moves to the bottom of `next`, in this order (`queue.Queue.lift`, which keeps each after the PRs
         it contains): those with their ready mark and a land verdict at their head (`_reviewed`'s rule), below the members
         waiting for one or for circuit-check to pass (`_circuit_held`) (drive.toml's `reviewed_first`: one waiting for its review would hold every reviewed member above it),
         and of those, the ones whose own change is no Lean change first (`nonlean_first`), so they land this tick instead of
-        waiting for a Lean change's check.  Nothing moves past a held member (a hold is a verdict, and keeps what is above it),
-        a member whose labels can't be read, nor a Lean change whose own check failed (it waits for its owner's fix or hold,
-        not a check again on every lift).  Only while no Lean check of `next` runs (`_review` asks only then) or passed, nor a
+        waiting for a Lean change's check.  A held member is passed over, as the sync moves it to the top (`_park`); nothing
+        moves past a member whose labels can't be read, nor a Lean change whose own check failed (it waits for its owner's fix
+        or hold, not a check again on every lift).  Only while no Lean check of `next` runs (`_review` asks only then) or passed, nor a
         recorded run passed lean-audit on a commit the lift would move (`_cover`): a rebuild takes those commits off `next`."""
         nonlean, reviewed = self.q.flag("nonlean_first"), self.q.flag("reviewed_first")
         on, lean = {m.commit for m in chain}, drive["lean"]
         if not (nonlean or reviewed) or any(rec.get("state") == "passed" for c, rec in lean.items() if c in on):
             return []
-        if self.q.prefetch is not None:
-            self.q.prefetch([(m.pr, m.head) for m in chain])   # one pull of every member's labels, not three per member
         landing: list[tuple[Member, bool]] = []                 # each member below the first one nothing moves past
         for m in chain:
             try:
@@ -1956,7 +1985,9 @@ class Driver:
             except QueueError as e:                             # its verdict unknown, nothing moves past it
                 self.q.log(f"research queue drive: the lift stops below #{m.pr}: {e}")
                 break
-            if why and why.startswith("held") or (lean.get(m.commit) or {}).get("state") == "failed" and self._lean_change(m):
+            if why and why.startswith("held"):
+                continue
+            if (lean.get(m.commit) or {}).get("state") == "failed" and self._lean_change(m):
                 break
             landing.append((m, why is None and not self._circuit_held(m)))
         if reviewed:
@@ -2435,13 +2466,17 @@ class Driver:
     def _stack_lean(self, drive: dict, dry_run: bool) -> None:
         """While a Lean check runs, stack one above it on `next`, reviewed or not, for the Lean changes it doesn't hold
         (`lean_stack`, at most `max_lean_checks` running), so they don't wait for it to pass and then for a check of their own.
-        The lower one runs on.  An ejection from a stacked check's prefix rebuilds `next` at once (`_review`), cancelling it."""
+        The lower one runs on.  An ejection from a stacked check's prefix rebuilds `next` at once (`_review`), cancelling it.
+        It stops below a held member (`_park`) as below churn: that one can't land, and each PR a sync adds goes below it,
+        taking the commits from it up off `next`."""
         base, chain = self._chain()
         if not chain or base != _out(self.repo, "rev-parse", self.q.base):
             return
         self._rekey_lean(drive, chain)
         self._note_marks(drive, chain)
-        t = lean_stack(chain, drive["lean"], self._lean_change, lambda m: self._churned(drive, m), self.max_lean_checks)
+        held = set(self.q.park)
+        t = lean_stack(chain, drive["lean"], self._lean_change, lambda m: m.pr in held or self._churned(drive, m),
+                       self.max_lean_checks)
         if t is not None:
             self._launch_lean(drive, chain, t, f"the Lean changes up to #{chain[t].pr}, above the running one", dry_run,
                               stacked=True)
