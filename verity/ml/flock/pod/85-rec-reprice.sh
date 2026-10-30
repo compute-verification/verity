@@ -9,7 +9,8 @@
 #                recursive session's) into data/$TAG/stage, and with hm96 leaves (today's --zk) into data/$TAG/stage-zk
 #                (STAGE_FROM=DIR: another job's data/$TAG, both stagings; STAGE=0: neither, the caller filled
 #                data/$TAG/stage: circuit.txt, inst-N.bin, pub-N.bin, partition.json, program.json and draw.json, and with
-#                an own-partition file there the later steps keep its partition, program and draw)
+#                an own-partition file there the later steps keep its partition, program and draw; REC_LINKS=1: the wired
+#                inner statement, rec_reprice.py stage-chain, with its links file links.json beside)
 #   STEP=inner   (GPU leases) the plain inner statement proved with ZK off (M0, FC_COINS=os) against the rec proxy
 #                (verity_flock.rec_live, the inner phase's ZK server: salted tree tops, the schedule of the statement's public
 #                shape, rec_live --schedule-for; Register answered with the verifier's full draw, rec_live.full_draw over the
@@ -25,7 +26,8 @@
 #                verifier's fold points (rec_vstage points), its extra claims and comb (InnerFold.lean as an executable,
 #                cached by its sources, on the plain statement: --plain-leaves), then each level's RecOpen, the algebra's
 #                InnerRepCheck and the forgeries (FORGE="message sum comb top top-salt coef dirs", each under forged-<kind>/),
-#                JOBS at once; the job fails if one does not stage
+#                and with REC_LINKS=1 the link table's part (links) and its forgery (forged-link), JOBS at once; the job
+#                fails if one does not stage
 #   STEP=vcap    (CPU) RecCap alone at every level over the inner's last proxied session (rec_vstage.stage_cap: each
 #                level's tops under the ZK server's salts, no running sums) into data/$TAG/v/cap (level 0) and v/cap/L<l>,
 #                beside the statements vstage staged, whose sessions stay valid (then oprove LEVELS=cap,cap-L1,..)
@@ -81,6 +83,13 @@
 #              empty: none)
 #      REC_COINS=0 (oprove, lean; 1: the inner statement set up once per inner session, flock-verify rec-coins, and each verify given
 #              that record, --rec-inner-coins, rather than the inner circuit it would parse again)
+#      REC_LINKS=0 (build, vstage; 1: the inner population wired, rec_reprice.py stage-chain: its N units in a chain, each
+#              cut wire a link the inner statement carries, META links, checked by serve, replay and statement against the
+#              verifier's links file stage/links.json; vstage then stages V*'s link part over it, rec_vstage stage-links:
+#              the table registered as rec-links and the part RecLink{UB,PB} under v/links, with its forgery
+#              forged-link, a table whose first row names a writer whose output is not its reader's row; oprove and lean
+#              give rec-inner, every verify, the run's staging and rec-compose the table's --rec-links ROOT:N, a part
+#              staged with a table of its own, the forgery's, its own)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 STEP=${STEP:?STEP=build|inner|icheck|vstage|vcap|oprove|oreplay|lean}
@@ -170,6 +179,9 @@ EOF
 ); fi
 
 free_port() { python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])'; }
+# links_at DIR: the verifier's links file of a wired statement staged in DIR (REC_LINKS=1), which serve, replay and statement
+# check its META links against; nothing for an unwired one
+links_at() { [ -f $1/links.json ] && echo "--links $1/links.json"; return 0; }
 # want NAME: NAME is in LEVELS (comma-separated names; empty: every one)
 want() { [ -z "${LEVELS:-}" ] || [[ ",$LEVELS," == *",$1,"* || ",$LEVELS," == *",${1%-p[0-9]*},"* ]]; }
 # stamp: each line of stdin with the time it arrived (a session's LIVE line is printed when its verdict is in)
@@ -242,7 +254,7 @@ loopback() {
   [ -n "$zk" ] && [ "${LOOPBACK_DRAW:-all}" = all ] \
     && DRAW=(--draw subset:$(python3 -c 'import json, sys; print(json.loads(open(sys.argv[1], "rb").readline())["instances"])' $pub))
   taskset -c $VCPU $B serve $zk --listen 127.0.0.1:$PORT --out $s/sessions --instances $pub --circuit $circ --pin $PIN \
-    "${DRAW[@]}" ${RRUN:+--rec-run $RRUN --rec-part $RPART} --operator loopback --concurrency $((NS + 1)) \
+    "${DRAW[@]}" $(links_at $(dirname $circ)) ${RRUN:+--rec-run $RRUN --rec-part $RPART} --operator loopback --concurrency $((NS + 1)) \
     > $O/$STEP/$name/serve.log 2>&1 &
   local SP=$!
   wait_serving $O/$STEP/$name/serve.log $SP || { tail -20 $O/$STEP/$name/serve.log; return 1; }
@@ -462,10 +474,20 @@ fold_build() {
 # PLAIN is 1; its records in $O/NAME. Never tiled (FLOCK_GEMM_TILE): a tile's circuit names its unit class as its template,
 # which no template query lists, and at K = 4096 a 4x4 tile does not fit a block anyway. Every instance's own rows
 # (FLOCK_OWN_ROWS): Lean covers a shared-row public file only in a registered --zk session (ProvedScope.sharedRowsOk), and
-# the population program's instances share no row, so the rows committed are the same
+# the population program's instances share no row, so the rows committed are the same. REC_LINKS=1: the wired chain
+# (rec_reprice.py stage-chain, every instance's own rows too), staged afresh into $DD/NAME with its links file
 stage_inner() {
   local o=$O/$1 c=$DD/$1-cache
   mkdir -p $o
+  if [ "${REC_LINKS:-0}" = 1 ]; then
+    rm -rf $DD/$1
+    K=$K N=$N REC_LINKS=1 FLOCK_PLAIN_LEAVES=$2 /usr/bin/time -v -o $o/time-stage.txt \
+      python3 $REPO/verity/ml/flock/pod/rec_reprice.py stage-chain $DD/$1 > $o/stage.json 2> $o/stage.log
+    echo "stage $1 exit $?"; tail -5 $o/stage.log
+    [ -f $DD/$1/inst-$N.bin ] && [ -f $DD/$1/links.json ] || { echo "no wired statement staged in $DD/$1"; return 1; }
+    du -sb $DD/$1/* | tee $o/sizes.txt
+    return 0
+  fi
   K=$K N=$N FLOCK_STAGE_CACHE=$c FLOCK_PLAIN_LEAVES=$2 FLOCK_GEMM_TILE= FLOCK_OWN_ROWS=1 /usr/bin/time -v -o $o/time-stage.txt \
     python3 -m verity_flock.class_statement --program-module $REPO/verity/ml/flock/pod/rec_reprice.py:program \
     --partition q-template-instance --out $o --stage-only --batch fixed --n $N \
@@ -513,7 +535,8 @@ build)
   else
     { for s in stage stage-zk; do
         [ -f $STAGE_FROM/$s/inst-$N.bin ] || { echo "no staged statement under $STAGE_FROM/$s"; exit 1; }
-        mkdir -p $DD/$s && for f in circuit.txt inst-$N.bin pub-$N.bin rec.json; do ln -f $STAGE_FROM/$s/$f $DD/$s/$f || cp $STAGE_FROM/$s/$f $DD/$s/$f; done
+        mkdir -p $DD/$s && for f in circuit.txt inst-$N.bin pub-$N.bin rec.json $(cd $STAGE_FROM/$s && ls links.json 2>/dev/null); do
+          ln -f $STAGE_FROM/$s/$f $DD/$s/$f || cp $STAGE_FROM/$s/$f $DD/$s/$f; done
       done; } > $O/stage-all.log 2>&1 &
   fi
   SPID=$!
@@ -531,7 +554,7 @@ build)
   sha256sum $B | tee $O/binary.sha256
   wait $SPID; rc=$?; cat $O/stage-all.log; [ $rc = 0 ] || exit 1
   sha256sum $DD/stage/* $(ls $DD/stage-zk/* 2>/dev/null) > $O/stage-sha256.txt
-  $B statement --instances $DD/stage/inst-$N.bin --circuit $DD/stage/circuit.txt > $O/statement.txt 2>&1; echo "statement exit $?"
+  $B statement --instances $DD/stage/inst-$N.bin --circuit $DD/stage/circuit.txt $(links_at $DD/stage) > $O/statement.txt 2>&1; echo "statement exit $?"
   wait $LP; echo "lean build exit $?"
   [ -x $LEAN_BIN ] && sha256sum $LEAN_BIN > $O/lean.sha
   tail -5 $O/build-lean.log
@@ -548,7 +571,7 @@ inner)
   if [ "${INNER_PROXY:-1}" = 1 ]; then
   # M0 against the rec proxy: WARM + RUNS sessions, each written to $DD/inner/s<k>, held to the schedule of the statement's
   # public shape (flock-circuit statement on the public file, then rec_live --schedule-for), derived before any session
-  taskset -c $VCPU $B statement --instances $D/pub-$N.bin --circuit $D/circuit.txt > $O/inner/statement.txt 2>&1 \
+  taskset -c $VCPU $B statement --instances $D/pub-$N.bin --circuit $D/circuit.txt $(links_at $D) > $O/inner/statement.txt 2>&1 \
     || { tail -5 $O/inner/statement.txt; exit 1; }
   python3 -m verity_flock.rec_live --schedule-for $O/inner/statement.txt > $O/inner/schedule.json || exit 1
   # the verifier's full draw, which verify requires of a session over the inner session (RecSetup.innerDrawn)
@@ -559,7 +582,7 @@ inner)
   [ -f $SESS/session/session.json ] || { tail -20 $O/inner/proxy/proxy.log $O/inner/proxy/prove.err; exit 1; }
   # CHECKS=0: the replay and V*'s hashing reference wait for STEP=icheck (CPU), outside the GPU lease
   if [ "${CHECKS:-1}" = 1 ]; then
-  taskset -c $VCPU /usr/bin/time -v -o $O/inner/time-replay-proxy.txt $B replay --instances $D/pub-$N.bin --circuit $D/circuit.txt \
+  taskset -c $VCPU /usr/bin/time -v -o $O/inner/time-replay-proxy.txt $B replay --instances $D/pub-$N.bin --circuit $D/circuit.txt $(links_at $D) \
     --sessions $SESS/session > $O/inner/replay-proxy.txt 2>&1
   taskset -c $VCPU /usr/bin/time -v -o $O/inner/time-vstar.txt python3 -m verity_flock.rec_vstar $SESS > $O/inner/vstar.json 2> $O/inner/vstar.err
   rc=$?; echo "vstar exit $rc"
@@ -590,7 +613,7 @@ EOF
   DZ=$DD/stage-zk; [ -f $DZ/inst-$N.bin ] || { echo "no $DZ (run STEP=build first)"; exit 1; }
   again loopback m0 $DZ/pub-$N.bin $DZ/inst-$N.bin $DZ/circuit.txt
   again loopback zk $DZ/pub-$N.bin $DZ/inst-$N.bin $DZ/circuit.txt --zk
-  [ -n "${LAST:-}" ] && taskset -c $VCPU /usr/bin/time -v -o $O/inner/time-replay-zk.txt $B replay --zk --instances $DZ/pub-$N.bin \
+  [ -n "${LAST:-}" ] && taskset -c $VCPU /usr/bin/time -v -o $O/inner/time-replay-zk.txt $B replay --zk --instances $DZ/pub-$N.bin $(links_at $DZ) \
     --circuit $DZ/circuit.txt --sessions $LAST > $O/inner/replay-zk.txt 2>&1
   fi
   ;;
@@ -601,14 +624,14 @@ icheck)
   D=$DD/stage; SESS=${INNER:-$DD/inner/s$((NS - 1))}
   [ -f $SESS/session/session.json ] || { echo "run STEP=inner first"; exit 1; }
   mkdir -p $O/icheck
-  /usr/bin/time -v -o $O/icheck/time-replay-proxy.txt $B replay --instances $D/pub-$N.bin --circuit $D/circuit.txt \
+  /usr/bin/time -v -o $O/icheck/time-replay-proxy.txt $B replay --instances $D/pub-$N.bin --circuit $D/circuit.txt $(links_at $D) \
     --sessions $SESS/session > $O/icheck/replay-proxy.txt 2>&1; echo "replay exit $?"
   /usr/bin/time -v -o $O/icheck/time-vstar.txt python3 -m verity_flock.rec_vstar $SESS > $O/icheck/vstar.json 2> $O/icheck/vstar.err
   echo "vstar exit $?"
   # the schedule the sessions were held to against the statement's (derived again from the public file), each session's own
   # schedule against it, how each ended, and each finished one's messages (the stop bound's: Hello, Commit, Link, every
   # Open, Round and Proof, Finish)
-  $B statement --instances $D/pub-$N.bin --circuit $D/circuit.txt > $O/icheck/statement.txt 2>&1; echo "statement exit $?"
+  $B statement --instances $D/pub-$N.bin --circuit $D/circuit.txt $(links_at $D) > $O/icheck/statement.txt 2>&1; echo "statement exit $?"
   python3 - $DD/inner $O/icheck/statement.txt > $O/icheck/schedule.json <<'EOF'
 import json, sys
 from pathlib import Path
@@ -688,6 +711,18 @@ pub, priv, proofs = V.load(Path(sys.argv[1])); print(' '.join(str(l['level']) fo
     for f in ${FORGE-message sum comb top top-salt coef dirs}; do echo forged-$f --forge $f; done
     for l in $ALL; do want L$l && echo L$l --levels $l --no-algebra; done; } | xargs -P ${JOBS:-4} -L 1 bash -c 'vjob "$@"' _
   [ ${PIPESTATUS[1]} = 0 ] || { echo "vstage: a statement did not stage (out/vstage/<name>.err)"; exit 1; }
+  # REC_LINKS=1: the link table's part over the inner statement's own rows (its prover's file, whose salts the inner
+  # session committed) and its links file, under $V/links with its --rec-links in rec-links.txt, and its forgery's
+  # under $V/forged-link/links: a table of its own, whose first row names a writer that is not its reader's
+  if [ "${REC_LINKS:-0}" = 1 ]; then
+    [ -f $DD/stage/links.json ] || { echo "REC_LINKS=1: no $DD/stage/links.json (run STEP=build with REC_LINKS=1)"; exit 1; }
+    for f in "" link; do n=${f:+forged-$f-}links
+      /usr/bin/time -v -o $O/vstage/time-$n.txt python3 -m verity_flock.rec_vstage stage-links $DD/stage/circuit.txt \
+        $DD/stage/inst-$N.bin $DD/stage/links.json $V ${f:+--forge $f} > $O/vstage/$n.json 2> $O/vstage/$n.err
+      rc=$?; echo "$n exit $rc"; [ $rc = 0 ] || { tail -20 $O/vstage/$n.err; exit 1; }
+    done
+    cp $V/links/rec-links.txt $O/vstage/
+  fi
   (cd $V && du -sb $(find . -name '*.bin' -o -name circuit.txt | LC_ALL=C sort)) > $O/vstage/sizes.txt
   ;;
 vcap)
@@ -740,14 +775,18 @@ oprove)
   # Definition of the unit's statement), the one shared rows file
   # every part is verified against (rows.json, rec_vstage.staged_shared_rows: the honest algebra's row ports but v and
   # out, R's levels' tops, and each level's tops rec-top-L<l> as L<l> and its cap read them; without the algebra, the
-  # first level's acc as acc0), whose digest rec-compose holds every part's verdict to, and the inner statement's files
-  # with the inner session vstage staged V* over (rec-inner-args.txt)
-  rm -f $VS/rec-run*.jsonl $VS/retried.txt $VS/own-*.txt $VS/bindings-*.json
+  # first level's acc as acc0), whose digest rec-compose holds every part's verdict to, the inner statement's files
+  # with the inner session vstage staged V* over (rec-inner-args.txt), and with REC_LINKS=1 the link table's --rec-links
+  # (rec-links.txt), in the inner shape and in every part's own flags
+  rm -f $VS/rec-run*.jsonl $VS/retried.txt $VS/own-*.txt $VS/bindings-*.json $VS/rec-links.txt
   INNER=${INNER:-$(cat $V/inner.txt 2>/dev/null)}
   [ -f "$INNER/public.json" ] || { echo "INNER=$INNER: no inner session (STEP=vstage names the one it staged V* over in $V/inner.txt)"; exit 1; }
   [ -x $LEAN_BIN ] || lean_build > $O/build-lean.log 2>&1 || { tail -20 $O/build-lean.log; exit 1; }
+  # the link table vstage registered (REC_LINKS=1), whose shape the inner shape names and whose --rec-links every part and
+  # the composition read
+  RL=; [ -s $V/links/rec-links.txt ] && cp $V/links/rec-links.txt $VS/rec-links.txt && RL="--rec-links $(cat $VS/rec-links.txt)"
   $LEAN_BIN rec-inner --circuit $DD/stage/circuit.txt --public $DD/stage/pub-$N.bin --partition $DD/stage/partition.json \
-    --program $DD/stage/program.json > $VS/rec-inner.json 2> $O/oprove/rec-inner.err || { tail -5 $O/oprove/rec-inner.err; exit 1; }
+    --program $DD/stage/program.json $RL > $VS/rec-inner.json 2> $O/oprove/rec-inner.err || { tail -5 $O/oprove/rec-inner.err; exit 1; }
   $LEAN_BIN rec-statements --rec-inner $VS/rec-inner.json > $VS/rec-statements.txt 2>&1 || { tail -5 $VS/rec-statements.txt; exit 1; }
   rm -f $INNER/rec-coins.json; rec_coins $INNER inner || exit 1
   rec_inner_at $INNER > $VS/rec-inner-args.txt
@@ -771,6 +810,10 @@ for c in sorted(p.parent for p in v.rglob("inst.bin")):
     flags = ["--rec-inner", str(vs / "rec-inner.json"), "--rec-rows", str(vs / "rows.json")]
     if unit in names:
         flags += ["--rec-part", str(names.index(unit))]
+    # the link table the part reads: its own, staged beside it (the forged table's), else the run's
+    links = next((f for f in (c / "rec-links.txt", vs / "rec-links.txt") if f.is_file()), None)
+    if links is not None:
+        flags += ["--rec-links", links.read_text().strip()]
     try:
         b = RB.bindings(json.loads((c / "partition.json").read_text()), json.loads((c / "program.json").read_text()),
                         RB.vstar_definition(unit, holo) if unit in names else None)
@@ -794,6 +837,8 @@ from pathlib import Path
 from verity_flock import rec_compose as RC
 vs = Path(sys.argv[1])
 args = ["--rec-inner", str(vs / "rec-inner.json"), *(vs / "rec-inner-args.txt").read_text().split()]
+if (vs / "rec-links.txt").is_file():
+    args += ["--rec-links", (vs / "rec-links.txt").read_text().strip()]
 print(json.dumps({"event": "stage", "rec_rows_sha512": RC.digest((vs / "rows.json").read_bytes()),
                   "rec_shared": RC.shared_of_args(args)}, sort_keys=True, separators=(",", ":")))
 EOF
@@ -915,6 +960,8 @@ lean)
   if [ -d $VS ]; then
     [ -s $VS/rec-inner-args.txt ] && [ -s $VS/rows.json ] || { echo "lean: no V* inputs in $VS (run STEP=oprove at this commit, which fixes them before any session)"; exit 1; }
     cp $VS/rec-inner.json $VS/rec-statements.txt $VS/rows.json $VS/own-*.txt $O/lean/ && cp $VS/bindings-*.json $O/lean/ 2>/dev/null
+    # REC_LINKS=1: the link table's --rec-links, the composition's own (lean_verdicts.py --compose)
+    rm -f $O/lean/rec-links.txt; [ -s $VS/rec-links.txt ] && cp $VS/rec-links.txt $O/lean/
     REC_INNER=$(cat $VS/rec-inner-args.txt)
   fi
   NEGS=
