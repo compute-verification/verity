@@ -339,6 +339,7 @@ theorem varSlices_linkPorts (UB PB : ℕ) : OfVStar.varSlices 0 (VStar.linkPorts
       vars (3584 + auxBits UB PB) 1536, vars (5120 + auxBits UB PB) (auxBits UB PB)] :=
   varSlices_link (VStar.auxWords (UB + PB))
 
+set_option maxHeartbeats 1000000 in -- the kernel's check of the builder's `run_input_bind` rewrite needs about 5x
 /-- **V*'s unit is `linkRun`**: its builder's state and outputs are `linkRun`'s from its input bits, its input ports
 `VStar.linkPorts` and its output ports `rin`, `rout`. -/
 theorem linkUnit_ok {UB PB : ℕ} {U : VStar.UnitC} (h : VStar.linkUnit UB PB = .ok U) :
