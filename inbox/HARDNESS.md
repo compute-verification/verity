@@ -1,188 +1,133 @@
 # HARDNESS: training hardness into the weights, and exactly what it would let us claim
 
 Daniel, 30 Oct 12:48 PM PDT: "start a swarm that comes up with exactly what the security claim could be here ... what
-properties would a trusted retraining process need ... what is the minimal set of assumptions ... be careful ... red team
-the ML side ... think like Jared Kaplan would: the core, core, core research questions and experiments. Some can be
-determined dynamically by the swarm." Background: Daniel's doc "Hardness training" (quoted in the coordinator's chat,
-12:40 PM PDT), the chat that followed, and the lead's state (HASH.md, SILICON.md, CORE.md §2a).
+properties would a trusted retraining process need ... the minimal set of assumptions ... be careful ... red team the ML
+side ... think like Jared Kaplan would." Then, at 1:39 PM PDT: "do you and the swarm understand how this whole research
+program fits together? ... show what the overall architecture is and how modular it is," as noising and denoising did for
+PoUW. This file is that architecture. Each lane owns a module and states its findings as that module's interface
+property. Background: Daniel's doc "Hardness training", the chat of 30 Oct 12:40–1:40 PM PDT, and CORE.md §2a.
 
-## The idea, as it stands
+## The goal and the one-line idea
 
-- **The goal, from Daniel's doc:** resource exhaustion. A datacenter shows that nearly all its compute, HBM and
-  network is used by correctly running a declared workload that is resource-transparent, i.e. it cannot be run
-  correctly with much less than a stated amount of resources.
-- **Today's lead gets that by committing and hashing every k32 word,** with h = 127.5 and 5–80× slowdowns. Hashing is
-  there because no standard premise credits the multiply on stock hardware with weights the prover may have chosen.
-  Degenerate weights (zero, low rank, sparse, structured) make the multiply cheap, and with private weights nobody can
-  tell.
-- **Proving a given matrix has no fast exact multiply is open** (matrix rigidity, circuit lower bounds), so checking
-  properties of trained weights can't certify hardness. But outputs are checked **bit-exactly**, so only *exact*
-  algebraic structure helps a cheater, and randomness nobody chose destroys exact structure.
-- **The coordinator's working design ("structural"):**
-  - Each large linear computes y = (x+E)·Rᵀ + ((x+E)·V)·Uᵀ (possibly with learned diagonal scalings, D₁RD₂).
-  - **R** is public, dense, full-entropy int8, frozen, drawn from a public beacon (or a PRG of one).
-  - **U, V** are trained, low rank, and may stay private.
-  - **E** is live per-element activation noise from the auditor's coins, kept in the training loop so the model learns
-    to be accurate under it, and served without denoising.
-  - Only outputs are committed. A sampled ZK proof checks the structure.
-  - Hypothesis to test: **security then needs no trust in the training at all.** The developer can train U and V
-    adversarially, and training only buys quality.
-- **Alternatives to map:**
-  - **(B)** free training, verified to stay within ‖W − R‖ ≤ ρ‖R‖ of a public random init;
-  - **(C)** fully free training from a public init, with trusted or verified training. That's heuristic: "SGD doesn't
-    plant exact structure".
+- **Resource exhaustion:** a datacenter shows that nearly all its compute, HBM and network is used by correctly running
+  a declared workload that is resource-transparent, i.e. it cannot be run correctly with much less than a stated
+  amount of resources.
+- **The lead does this today by hashing every k32 word:** h = 127.5, with 5–80× slowdowns. Hashing is needed because
+  weights the prover chose may hide a cheap exact multiply (zero, low rank, sparse, structured), and proving a given
+  matrix has none is open (rigidity, circuit lower bounds).
+- **The idea:** outputs are checked bit-exactly, so only *exact* structure helps a cheater, and randomness nobody chose
+  destroys exact structure. So make the served weights depend on public randomness drawn after the developer's
+  choices. Then committed outputs alone force the multiply, and the per-word hashing goes.
 
-## Core research questions (Kaplan-style: few, sharp, each with the experiment that could kill it)
+## The architecture: nine modules, each with one interface property
 
-1. **The claim.** What exactly can be proved?
-   - Statement shape: "if verification accepts, the prover spent ≥ (1 − ε)·M MAC-units on the R-products in the
-     window, except with probability δ".
-   - The minimal premise set, ranked. Candidates:
-     - P1, random-operand int8 matmul hardness *with preprocessing of R*;
-     - P2, no profitable generic fast matmul (Strassen and kin) on int8 tensor cores;
-     - P3, SHA-512 commitments and live coins;
-     - P4, sampled-proof soundness.
-   - Is anything about training needed? Which properties must a retraining process have under (A), (B) and (C)?
-   - What the claim does **not** cover: attention, nonlinearities, other devices on the node.
-2. **P1 itself.** Is "computing (x+E)Rᵀ exactly, for R uniformly random int8 known in advance and E live, costs ≥
-   (1 − δ) of the int8 MMA's work on this chip" true, minimal and standard enough?
-   - Attacks: preprocessing (Four Russians, lookup tables, matrix-vector-with-preprocessing results), bit-slicing, 2:4
-     sparse tensor cores, Strassen/Winograd at int8 via wider types, FP8/FP16 emulation, the host CPUs and other
-     devices, E's small alphabet.
-   - Price every attack in W1 and in time.
-3. **The one ML number.** What is the **effective-compute penalty** of training under the structural constraint at a
-   fixed hardness level, against unconstrained training, as a function of model scale, r/n, the noise scale σ_E and the
-   hardened fraction of FLOPs?
-   - Does it shrink, hold or grow with scale?
-   - Does distillation from a strong teacher close it?
-   - Kill condition: a penalty that grows with scale, or > 3× at the largest scale we can run.
-4. **How the ML side breaks.**
-   - Routing around R: forced but useless work is fine for exhaustion, so how does it bear on the claim?
-   - Collapse through nonlinearities, input selection, adapters absorbing everything, the share of attention, and the
-     interplay with quantization.
-   - Deployment realism: who draws R and when, the distillation pipeline, switching costs, serving speed.
-5. **The protocol.** What's committed, live-noise bandwidth, the ZK structure check on our stack (C-Flock sampled
-   proofs), h, T1/T2/T3, and how this compares with the lead, R80X, D-OUT and silicon.
+Notation:
+- the served layer computes Y = Z·Wᵀ, where Z = x + E;
+- the honest work is M MAC-units on chip X;
+- costs are W1 units (CORE.md §2a).
+
+| # | module | interface property it must provide | what exists | owner |
+|---|---|---|---|---|
+| M1 | **Beacon** | Draws are unpredictable before their time, unbiasable (no grinding or redraws), and public after. Each draw is scheduled after the commitments it must follow. | live coins (`verity.ml.randomness`), the certifier | (exists) |
+| M2 | **Hardening process** (the variants below) | *Hardness-preserving:* for every developer strategy the process allows, Pr over the beacon [W ∉ Hard_X(δ)] ≤ η. The process also states its choice C, in bits of selection after any draw, and whether any steering is left. | none | HT-CLAIM (statement), HT-ITER (D), HT-PUBLIC (E) |
+| M3 | **Hardness premise** | Defines Hard_X(δ): every exact algorithm for Z ↦ Z·Wᵀ, with any preprocessing of W, costs ≥ (1−δ)·M on chip X for Z from M4's distribution. Plus closure lemmas: R+low-rank, D₁RD₂ with nonzero entries, A+R for A fixed before R (smoothed). | SAK family (rank 4), SI-RED's harness | HT-PREMISE |
+| M4 | **Operand entropy** | Z can't be made cheap: x is committed *before* E is released (HT-PROTO: otherwise x = −E is free), and E is live, per element, with an alphabet of a bits. a is chosen so that no format route (b1, FP4, IDP4A, XNOR-popcount) beats the unit for M3's alphabet of W. | the lead's input commitment, the per-call coin release | HT-PROTO, HT-PREMISE (pricing) |
+| M5 | **Utility** | The model under M2's constraints and M4's noise is within Δ of the unconstrained model: an effective-compute multiplier κ(N), as a function of scale N. T3 is the perplexity gap. | none | HT-ML (A, B), HT-ITER (D) |
+| M6 | **Serving integrity** | If accepted, ≥ (1−ε) of the committed output entries are exactly Z·Wᵀ at confidence δ_s. It is per entry, because sampling certifies only part of the outputs. | sampled proofs, C-Flock, commitments | HT-PROTO |
+| M7 | **Provenance** | The W used in serving is the one M2's process produced. For A and D it is structural: a public R in the proven circuit, with U, V or A committed. For E it is a separate audit of the training, e.g. sampled re-execution of committed checkpoints on bit-exact kernels. | (A, D) the proof's public inputs; (E) none | HT-PROTO, HT-PUBLIC |
+| M8 | **Coverage and accounting** | The forced work, against what isn't credited: attention, the low-rank adapters (HT-PROTO: count them as coverage), nonlinearities, host CPUs, HBM and network. It gives T1 against stock, T2 and h. | CORE.md §2a, PoUS for HBM, network accounting | HT-PROTO, HT-REDML |
+| M9 | **Hardware cost model** | For each chip: the formats and their rates (int8, FP8, FP4, b1, IDP4A), the ALU and the host CPUs, and the per-register prices that M3's routes are priced in. | the cards, `verity.hardware`, the H200 sweep | HT-PREMISE |
+
+**The composition (HT-CLAIM states it precisely and checks every arrow).** Suppose:
+- M1 holds;
+- M2 is hardness-preserving at η under M3's premise for chip X;
+- M4 gives Z the distribution M3 covers;
+- M6 holds at (ε, δ_s);
+- M7 holds.
+
+Then, if verification accepts, the window's work is
+  ≥ (1 − ε)·(1 − δ)·M − (M8's uncredited coverage),
+except with probability η + δ_s + negl, plus the crypto terms. M5 is outside the security argument: it only decides
+whether anyone would serve the model.
+
+**What the modularity buys:**
+- **M2's variants are interchangeable behind one property.** A new variant needs only its own proof of
+  hardness-preservation and its η, C and M5 numbers.
+- **M3 is the only hardness premise,** and M5 is the only ML question.
+- **M1, M4, M6 and M7 mostly reuse the proof service.**
+
+**What decides the program:**
+- **(i) M3:** is the premise true on real chips, and at what δ?
+- **(ii) M5:** κ(N), and does it shrink with scale?
+- **(iii) M2-E's cheap test:** are natural trained weights already far from cheap?
+
+Everything else is engineering on parts we have.
+
+## M2's variants (each must state its proof of hardness-preservation, η, C and its M5 cost)
+
+- **A: structural.** W = R + UVᵀ, with R public, frozen and drawn after the architecture is registered, and U, V
+  trained at rank r.
+  - Preservation is a reduction: multiplying by R+UVᵀ costs ≥ cost(R) − 2nr a row, for *every* U, V, even adversarial
+    ones. η is M3's η for R, and C is unbounded but harmless.
+  - The circuit must keep the terms separate and exact; requantizing R+UVᵀ breaks the reduction.
+  - Every extra knob needs its own closure lemma. D₁RD₂ needs nonzero entries, enforced in ZK or else uncredited.
+- **A-iterated (Daniel 1:39 PM PDT):** high-dimensional noise each round, then a low-dimensional correction.
+  - The corrections compose to rank T·r, so the reduction costs 2nTr a row and goes vacuous as T·r → n.
+  - The noise sums to one random matrix: about ½·log₂T bits an entry for ±1 noise, capped by the format.
+- **B: a ball around a random init.** ‖W − R‖ ≤ ρ‖R‖, with free training inside it.
+  - It needs a rigidity-style M3: no matrix within ρ of a random R is cheap.
+  - Hardware-fast forms may sit close: 2:4 sparsity at a relative norm of about 0.35–0.45 (unchecked).
+- **D: iterated injection, with the final draw after the commitment.**
+  - **D0** commits A, then draws R, then serves A+R with no training after.
+    - It needs a smoothed M3 (for every A fixed before R, A+R is hard). C = 0 and there's no constraint on A.
+    - R can be small in magnitude, but the alphabets of E and R must defeat the format routes (M4, M9).
+  - **D1** allows a little training after the final draw, which is B's premise.
+  - **D2** allows constrained training after it, which is A's reduction.
+  - Earlier rounds buy robustness, plus whatever randomness survives constrained rounds.
+  - The measure is the min-entropy of the final W under the developer's best strategy, not the total injected entropy:
+    - it is capped by the format;
+    - independent noise adds like √T;
+    - the adversary's cancelling budget adds like T.
+- **E: public deterministic training (Daniel 1:38 PM PDT).**
+  - W = Train(public data, public code and hyperparameters; beacon seed): one fixed process with no adversary inside.
+  - M3 becomes nothing-up-my-sleeve: "W from this distribution is hard w.h.p.", falsifiable by anyone.
+  - Choice:
+    - selection costs C bits of the union bound, and committing everything before the seed makes C = 0;
+    - steering through private data is harder to bound, so the data must be public or committed before the seed, and
+      the premise must hold for every fixed dataset.
+  - Weight decay erases the init's randomness after int8 rounding.
+  - M7 must audit the training itself (see the proof-of-learning literature and its spoofing attacks).
+  - **The cheapest first experiment:** on int8 open weights (Llama- or Qwen-class), find the best "low-rank +
+    small-alphabet or sparse residual" split and price its exact multiply on the H200 and sm_120.
+- **C: free training from a public init.** It needs a trusted-training premise about an adversary's choices. It's the
+  weakest variant, kept only as the baseline.
+
+## Facts established so far (each with its source)
+
+- **HT-PROTO** (note:compute-research/20261030T2025Z-report-hardness-proto, estimates):
+  - x must be committed before E.
+  - R should be a public input: as circuit constants it breaks C-Flock's batching.
+  - A unit is about 2M ANDs at K 2,048.
+  - The audit is 2,773 draws at ε 1% and δ 2⁻⁴⁰: about 131 s of proving and 74 CPU-s of verifying.
+  - Coins: 28.7 KB × b a token, against the lead's 2.25 MB.
+  - h ≈ 0.88 (against 127.5); T1 ≈ 0.24%; T2 ≈ 1.2–2.5×.
+  - It recommends b = 2 for the noise, since 1-bit noise only ties bit-slicing.
 
 ## Lanes (notes: `lanes/compute-research/<ts>-report-hardness-<lane>.md`)
 
-| lane | question | first deliverable |
+| lane | modules | first deliverable |
 |---|---|---|
-| HT-CLAIM | Q1: the exact claim, threat model, minimal premises, what a retraining process must satisfy under (A)/(B)/(C) | a claim statement (Lean-like), a premise inventory with ranks, a "does training need trust?" verdict per design |
-| HT-PREMISE | Q2: P1 and P2, attacked | every known route priced; P1 stated minimally; literature with read/recalled marks |
-| HT-ML | Q3: the penalty, and its scaling | a literature map, then the smallest decisive experiment run, then a scaling plan with a GPU budget |
-| HT-REDML | Q4: how it breaks, and how it would actually be deployed | a ranked break list with a test for each; a deployment walkthrough |
-| HT-PROTO | Q5: the protocol on our stack | commitments, proofs, h, T1/T2/T3, a comparison table |
+| HT-CLAIM | the composition, M2's property, M1 | the composed claim with every arrow checked; the premise inventory, ranked; a verdict per M2 variant |
+| HT-PREMISE | M3, M9 | every route priced on the H200 and sm_120; M3 stated minimally, with its closure lemmas (low rank, diagonal, smoothed) |
+| HT-ML | M5 for A and B | the literature map; the smallest decisive run; a scaling plan with a GPU budget |
+| HT-ITER | M2-D, M5-D | D0's premise; the surviving min-entropy against T, ρ_t and the alphabet; a Pareto table |
+| HT-PUBLIC | M2-E, M7-E | E's claim and choice accounting; the natural-hardness experiment on open weights; verifying the training |
+| HT-REDML | attacks across M2, M4, M5 and M8 | a ranked break list with tests; a deployment walkthrough |
+| HT-PROTO | M4, M6, M7, M8 | done (interim): the protocol, the numbers, the comparison table |
 
 **Rules:**
-- Everything is marked checked, measured, argued or recalled.
-- Lanes adjust their own questions dynamically and say so in their notes.
-- Spend beyond existing budget lines goes to the coordinator, with a number, and from there to Daniel.
-- **Times:** preliminary notes by 00:00Z Sat (5 PM PDT), and the coordinator's synthesis to Daniel by 01:00Z
-  (6 PM PDT). ML experiments may report a first signal by then and continue.
-
-## Addendum: does the training process need an assumption? (Daniel, 1:02 PM PDT)
-
-Daniel: "there would have to be some assumption about the training process... it would have to preserve the hardness
-injected by the randomness." The coordinator's answer, for HT-CLAIM to confirm or break:
-
-- **Something must preserve the hardness.** Either it is assumed of the training process (design C, heuristic), or the
-  circuit enforces it for every value of the trainable parameters (designs A and B), in which case it is a reduction,
-  not an assumption about training.
-- **The reduction for A:**
-  - Any algorithm that multiplies by W = R + UVᵀ yields one for R that costs only 2nr more a row: compute
-    ((x+E)V)Uᵀ and subtract it.
-  - This holds for every U, V, even ones chosen adversarially after seeing R. So P1-with-preprocessing covers
-    adaptively trained adapters, and training can do anything to U and V.
-  - It needs the circuit to keep the two terms exact and separate: no requantizing R + UVᵀ into int8 (rounding and
-    clipping would break it).
-- **Every extra knob training gets needs its own reduction.**
-  - Diagonal scalings D₁RD₂ with zero entries sparsify R.
-  - Output-side D₁ reduces exactly if its entries are nonzero, since the division is exact.
-  - Input-side D₂ changes R's distribution (column k is uniform on d_k·[−128, 127]), so P1 must hold for that class.
-  - Masks, norms and anything that zeroes parts of R need the same treatment.
-  - The circuit enforces nonzero entries in ZK, or the credited M counts only the nonzero part.
-- **Design B (a ball of radius ρ) needs more than A:** an assumption that no matrix within ρ of a random R has a fast
-  exact multiply.
-  - That's a rigidity-style statement. Random matrices are rigid w.h.p. for rank reduction (Valiant), but not
-    necessarily for every hardware-fast form (e.g. 2:4 sparsity: zeroing the two smallest of every four costs a
-    relative norm of roughly 0.35–0.45, unchecked).
-  - It's still about the ball, not about the training.
-- **What A costs instead: quality,** since training only gets rank-r freedom. That's HT-ML's question.
-
-## Addendum: iterated injection (Daniel, 1:04 PM PDT), design D
-
-Daniel: "many rounds of injecting noise and then a little training; perhaps a better balance of security and usability,
-and easier to tune." The coordinator's reading, which lane HT-ITER tests:
-
-- **Only the last injection, and what happens after it, carries security.** Everything before the final public draw is
-  absorbed into the developer's matrix A, whatever it is.
-- **Earlier rounds buy usability:** robustness to the injection. They can even use the developer's own simulated draws
-  from the same distribution.
-- **Three regimes for the last round:**
-  - **D0: commit A, draw R publicly after, serve W = A + R with no training after.**
-    - Premise: *smoothed* hardness. For every A fixed before R is drawn, multiplying exactly by A + R costs about a full
-      unit. No assumption about training, and no structural constraint on A at all.
-    - A counting argument suggests most of any shifted cube is hard, but that's in a circuit model. Pricing it on real
-      MMA hardware is HT-PREMISE's work.
-    - R can be small in magnitude (e.g. a few bits on int8 weights, with headroom reserved), so a robustly trained A may
-      lose little quality.
-  - **D1: a little training after the last draw.** The ball premise of design B, with ρ the post-draw movement.
-  - **D2: constrained training after the last draw.** Design A's low-rank reduction.
-- **The catch: alphabets.**
-  - The cheater can make x and A cheap, so the forced work is about E·Rᵀ.
-  - E's and R's alphabets must not fit a cheaper exact route than the int8/FP8 unit: b1 bit-slicing at 8×, FP4 on
-    sm_120, IDP4A. ±1 × ±1 is cheap; ±1 × int8 costs about 1 unit with b1 at 8×.
-  - Pricing that is HT-PREMISE's work. Magnitude against quality is HT-ITER's and HT-ML's.
-- **Redraws:** drawing R again after a bad draw lets the developer pick the best of k. That costs log k bits, which is
-  negligible for counting, but it's a rule question. Prefer no redraw.
-
-**Correction to design D (Daniel, 1:31 PM PDT: "isn't the total entropy added what matters?").** "Only the last
-injection carries security" holds only when training between injections is unconstrained. The developer knows each
-R_t and can undo it. With constrained training between rounds, earlier randomness partly survives. The measure is not
-the total injected entropy:
-
-- **The right quantity:** the final W is F(R_1, …, R_T) for a developer-chosen F within the training constraints.
-  Hardness by counting needs the min-entropy of W, under the developer's best F, to exceed log |cheap matrices| plus
-  the security bits.
-- **That min-entropy is capped three ways:**
-  - **By the format:** at most 8 bits an entry for int8, however many rounds.
-  - **By how independent noise adds:** T rounds of ±1 sum to about ½·log₂T bits an entry in magnitude spread, not T
-    bits.
-  - **By the developer's adaptive training:** it acts after every round, so its total cancelling budget grows like T
-    while the accumulated noise grows like √T.
-- **So many small rounds can favour the adversary** unless the per-round budget shrinks like 1/√T. Low-rank rounds
-  compose to rank T·r, and the reduction goes vacuous as T·r → n.
-- **The strongest security per unit of quality is still one large final draw after the commitment,** with little or no
-  training after it. Iteration buys robustness, plus whatever survives constrained rounds.
-
-HT-ITER should model this: the surviving min-entropy against T, ρ_t and the alphabet.
-
-## Addendum: public training (Daniel, 1:38 PM PDT), design E
-
-Daniel: "the training process would be public, including public data ... what if the training doesn't provide any
-choice? Or a bounded amount of choice." This changes the question in a useful way:
-
-- **The served W is no longer chosen by the developer.** It is W = Train(public data, public code and hyperparameters;
-  beacon seed): one fixed, public process.
-- **The premise becomes nothing-up-my-sleeve:** "W from this distribution has no exact fast multiply w.h.p." It is a
-  statement about one public process, not about adversaries. Anyone can falsify it with an attack, as in cryptanalysis.
-- **Bounded choice, quantified in bits:**
-  - **Selection** (seeds, hyperparameters, orderings, retraining until lucky) costs exactly C bits of the counting
-    bound by the union bound, where C = log₂ of the number of outcomes the developer can pick between. Committing
-    everything before the beacon draws the seed removes it.
-  - **Steering** (a continuous influence, e.g. private distillation data) is harder to bound. Data poisoning shows that
-    steering exists.
-  - So: public data, or data committed before the seed. Even then, the premise must hold for every fixed dataset.
-- **Process knobs that matter:**
-  - Weight decay shrinks the init's randomness, which then rounds to 0 in int8.
-  - Without it, W = W₀ + Σ updates, and W₀ survives in the directions the data doesn't touch.
-- **Verification:** the served W must be shown to come from the process. Options are sampled re-execution of committed
-  checkpoints, which needs bit-exact deterministic training (we have the kernels), and the proof-of-learning
-  literature, including its spoofing attacks.
-- **The cheapest first experiment** (CPU): how hard are *existing* open trained weights?
-  - Take int8 Llama- or Qwen-class matrices and find their best "low-rank + small-alphabet or sparse residual" split.
-  - Price its exact multiply on the H200 and sm_120.
-  - If natural weights are already far from cheap, E is plausible from the start.
-
-Lane HT-PUBLIC takes E.
+- Mark everything checked, measured, argued or recalled.
+- Lanes re-plan their own questions dynamically and say so.
+- Spend beyond existing budget lines goes to the coordinator, and from there to Daniel.
+- **Times:** preliminary notes by 00:00Z Sat (5 PM PDT), and the coordinator's synthesis to Daniel by 01:00Z (6 PM PDT),
+  laid out on this architecture.
