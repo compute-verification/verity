@@ -10,7 +10,7 @@
 # env: BUNDLE=art:... PROVE_RUN= (the prover point's run id, recorded in the result)  BUILD_ONLY=1 (build the verifier, stop)
 #      JOBS=1 (sessions verified at once: more share the node's memory bandwidth, so the timings are one session's alone
 #      only at 1)
-#      PT_WORK=/workspace/cache/proof-throughput (the Lean build, keyed by verity/core/service/flock's files, and the venv;
+#      PT_WORK=/workspace/cache/proof-throughput (the Lean build, keyed by verity/core/proof_system/flock's files, and the venv;
 #      the CPU nodes' /workspace is root's, its cache/ the research user's)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
@@ -25,13 +25,13 @@ S=$(mktemp -d "$W/scratch.XXXXXX"); trap 'rm -rf "$S"' EXIT
 log() { echo "[$(date -u +%H:%M:%SZ)] $*" | tee -a "$O/job.log"; }
 command -v lake > /dev/null || export PATH="$HOME/.elan/bin:$PATH"
 
-# the Lean verifier, built once per tree of verity/core/service/flock (as benchmarks/pouw/hidden_zk/job.sh builds it)
-KEY=$(cd verity/core/service/flock && find . -path ./.lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
+# the Lean verifier, built once per tree of verity/core/proof_system/flock (as benchmarks/pouw/hidden_zk/job.sh builds it)
+KEY=$(cd verity/core/proof_system/flock && find . -path ./.lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
 L=$W/lean-$KEY
 (
   exec 8>"$W/lean.lock"; flock 8
   if [ ! -x "$L/.lake/build/bin/flock-verify" ]; then
-    rm -rf "$L.tmp" && mkdir -p "$L.tmp" && (cd verity/core/service/flock && tar --exclude=.lake -cf - .) | tar -xf - -C "$L.tmp" \
+    rm -rf "$L.tmp" && mkdir -p "$L.tmp" && (cd verity/core/proof_system/flock && tar --exclude=.lake -cf - .) | tar -xf - -C "$L.tmp" \
       && (cd "$L.tmp" && lake build flock-verify) > "$O/lake-build.log" 2>&1 && rm -rf "$L" && mv "$L.tmp" "$L"
   fi
 )

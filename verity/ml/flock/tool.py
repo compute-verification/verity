@@ -28,7 +28,7 @@ def parse(argv: list[str]) -> dict:
 FLOCK_PURE = Tool(
     name="flock_pure", version="1",
     command=["bash", "verity/ml/flock/pod/20-pure.sh"],
-    closure=["verity/ml/flock/**", "verity/core/service/flock/**", "benchmarks/numerical/**", *CORE],
+    closure=["verity/ml/flock/**", "verity/core/proof_system/flock/**", "benchmarks/numerical/**", *CORE],
     key_params=["REL", "MODE", "SELF_VUS", "START", "MAX", "RUNS", "VERIFIER", "SERVE_VUS"],
     key_conditions=["hw.family"],
     caches=[],
@@ -56,7 +56,7 @@ def parse_class_sweep(argv: list[str]) -> dict:
 FLOCK_CLASS_SWEEP = Tool(
     name="flock_class_sweep", version="1",
     command=["bash", "verity/ml/flock/pod/70-class-sweep.sh"],
-    closure=["verity/ml/flock/**", "verity/core/service/flock/**", "benchmarks/numerical/python/**", *CORE,
+    closure=["verity/ml/flock/**", "verity/core/proof_system/flock/**", "benchmarks/numerical/python/**", *CORE,
              "integrations/vllm/verity_vllm/**", "tools/verity/circuit_check/src/**"],
     key_params=list(CLASS_SWEEP_KEYS),
     param_artifacts=["GRAPH", "DEFS", "SHAPES"],

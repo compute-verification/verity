@@ -20,4 +20,4 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # reference, one_stage with the profile, and what they import of verity.ml (the circuits, the partition object, the
 # commitments' domains, and LMS for the challenger's signed record).
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml", "verity/core/__init__.py", "verity/core/protocols",
-          "verity/core", "verity/core/service/flock"]
+          "verity/core", "verity/core/proof_system/flock"]

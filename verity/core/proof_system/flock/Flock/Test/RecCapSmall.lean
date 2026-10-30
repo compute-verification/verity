@@ -7,10 +7,14 @@ the reps' schedule's tops; `RecVStar.checkShared` refuses a port reading `rec-to
 a level's tops other than node `i` in instance `i` of its `N` nodes of 64 words, and a table whose instances are not
 labelled `0` to `n - 1` in order; `RecCoins.check` refuses a `rec-cap/` unit whose name `VStar.capParams` does not
 read. The unit is the cap row's words past its node, then zeros, and lays out as V*'s file.
+
+These are Flock's audit root for RecCap, each under a few seconds. V*'s whole list (`RecVStar.statements`) is about
+20 minutes in the interpreter at the deployed shape and over 3 at the smallest, so here its list checks run on the list
+it assembles at m 22, and `Flock.Test.RecCap`, which builds it at the deployed shape, runs after landing.
 -/
 import Flock.RecCoins
 
-namespace Flock.Test.RecCap
+namespace Flock.Test.RecCapSmall
 
 open Lean Flock Flock.RecVStar
 
@@ -80,14 +84,55 @@ def topsListed (i : Inner) (caps : Array VStar.Stmt) : Option String :=
   | .error _ => false
 #guard topsListed inner #[.cap 1 128, .cap 2 128] ==
   some "V*'s list: the later levels' caps hold [128, 128] nodes, and the reps' schedule commits tops of [64, 64, 32] nodes a rep ([128, 128, 64] both reps')"
-#guard match statements inner with
-  | .ok ss => (ss.toList.drop (ss.size - 4)).map (·.name) ==
-      ["rec-cap/n128-l1", "rec-cap/n128-l2", "rec-cap/n64-l3", "rec-cap/n128"]
+-- V*'s list at the smallest inner shape `statements` takes: m 22 (fast100's fewest levels, 3), k_log 6, claims 2, no region.
+-- `statements small` lists the levels' RecOpen, one part, then the later levels' caps and level 0's, and takes 194 s in the
+-- interpreter, 55 of them cutting the algebra into that one part (`VStar.parts`) and 76 counting the verifier's groups. So
+-- the list is assembled here as `statements` assembles it, its part the algebra's spec uncut (whose message-round ports
+-- are the part's), and held to the checks `statements` runs on it. `Flock.Test.RecCap` builds `statements` itself.
+def small : Inner := { m := 22, kLog := 6, claims := 2, regions := 0 }
+def smallSh : VStar.Algebra.Shape := { m := 22, kLog := 6, claims := 2 }
+
+/-- The part at `small`, the spec uncut, without the row port named `drop`. -/
+def smallPart (drop : String := "") : Except String VStar.Stmt := do
+  let S ← VStar.Algebra.specOf smallSh false
+  let S := { S with ports := S.ports.filter (·.1 != drop) }
+  pure (.inner 0 "rec-residuals/m22-k6-c2-p0" { S, res := List.range S.gf.res.length, v := List.range S.gf.nv })
+
+/-- `statements small`'s list with `parts` for its parts: `VStar.statements`' levels, then `parts`, then the caps. -/
+def smallList (parts : Array VStar.Stmt) : Except String (Array VStar.Stmt) := do
+  let s ← smallSh.sched
+  let levels := (Array.range s.levels.size).map fun l =>
+    let lv := s.levels[l]!
+    VStar.Stmt.recOpen l (2 ^ lv.lanes) (lv.d - lv.cap) (2 * lv.q)
+  let caps ← VStar.levelCapStatements smallSh
+  checkTopsListed small caps
+  pure (levels ++ parts ++ (← candidate3Statements small) ++ caps ++ #[← VStar.capStatement smallSh])
+
+def listChecks (ss : Except String (Array VStar.Stmt)) : Option String :=
+  match (do let ss ← ss; checkCandidate3 small ss; checkCapListed small ss; checkRoundsListed small ss) with
+  | .error e => some e
+  | .ok () => none
+
+#guard match (do smallList #[← smallPart]) with
+  | .ok ss => ss.toList.map (·.name) == ["rec-open/l64-h3", "rec-open/l16-h2", "rec-open/l16-h2",
+      "rec-residuals/m22-k6-c2-p0", "rec-cap/n128-l1", "rec-cap/n64-l2", "rec-cap/n128"]
   | .error _ => false
+#guard listChecks (do smallList #[← smallPart]) == none
+#guard listChecks (do return (← smallList #[← smallPart]).filter (·.name != "rec-cap/n64-l2")) ==
+  some "V*'s list has no RecCap statement (rec-cap/n64-l2): level 2's tops are held by none of its statements"
+#guard listChecks (do return (← smallList #[← smallPart]).push (.cap 3 64)) ==
+  some "V*'s list: rec-cap/n64-l3 holds level 3's tops, and the schedule (m 22) has 3 levels"
+#guard topsListed small #[.cap 1 128] ==
+  some "V*'s list: the later levels' caps hold [128] nodes, and the reps' schedule commits tops of [64, 32] nodes a rep ([128, 64] both reps')"
 
 -- Every message round a rep absorbs is one of V*'s list's message-round ports at both reps' rows (`checkRoundsListed`):
--- the deployed dense list passes it (`statements inner` above runs it), and a list without the parts is refused at
--- round 0. Each `statements` is a whole V* list in the interpreter, about 20 minutes, so no other shape is built here.
+-- the list passes it (above), a part without its last round's port is refused at that round, and a list without the parts
+-- at round 0.
+#guard (repRounds 22 6 2).map (commitRounds · |>.length) == some 44
+#guard listChecks (do smallList #[← smallPart (drop := "m43")]) ==
+  some "V*'s list: a rep's message round 43 (rec-c43) is a message-round port of none of its statements"
+#guard listChecks (smallList #[]) ==
+  some "V*'s list: a rep's message round 0 (rec-c0) is a message-round port of none of its statements"
 #guard match checkRoundsListed inner (later ++ #[.cap 0 128]) with
   | .error e => e == "V*'s list: a rep's message round 0 (rec-c0) is a message-round port of none of its statements"
   | .ok () => false
@@ -204,4 +249,4 @@ def bindings : VStar.Bindings :=
 #guard (circuitFile (.cap 0 128) bindings).toBool
 #guard (circuitFile (.cap 2 128) bindings).toBool
 
-end Flock.Test.RecCap
+end Flock.Test.RecCapSmall

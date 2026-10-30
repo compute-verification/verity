@@ -45,7 +45,7 @@ from verity_flock import rec_outer as O
 from verity_flock import rec_vstage as S
 
 HERE = Path(__file__).resolve().parent
-LEAN = HERE.parents[3] / "verity/core/service/flock"
+LEAN = HERE.parents[3] / "verity/core/proof_system/flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 SET = HERE / "fixtures" / "rec-coins" / "16-16-8-n64"
 LEVEL = 3
@@ -497,7 +497,7 @@ def test_rec_cap_holds_every_node_of_level_0s_cap_at_the_level_0_registration(ca
 def test_rec_cap_is_refused_without_its_top_or_out_in_the_reads_file(cap, shape, undrawn, tmp_path):
     """`RecCoins.checkCap`'s reads: RecCap with `top` committed afresh (gone from its reads file and `pub.bin`'s registered
     rows) is refused, since its rows would then be the prover's alone; with its zero outputs `out` gone, likewise.
-    `Flock.Test.RecCap` guards the rest of `checkCap`'s refusals (a top at another value, size or reads)."""
+    `Flock.Test.RecCapSmall` guards the rest of `checkCap`'s refusals (a top at another value, size or reads)."""
     rows = tmp_path / "rows.json"
     rows.write_text(json.dumps(S.shared_rows([], (), [cap])))
     why = {}

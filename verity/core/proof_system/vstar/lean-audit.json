@@ -1,7 +1,7 @@
 {
  "roots": ["VStarDifftest", "VStarTraceCli"],
  "exempt": {
-  "VStarMain": "the vstar executable's entry point, one line; its command is VStar.Cli.cmd, audited under the verifier's package (verity/core/service/flock)",
+  "VStarMain": "the vstar executable's entry point, one line; its command is VStar.Cli.cmd, audited under the verifier's package (verity/core/proof_system/flock)",
   "VStarTrace": "the vstar-trace executable's entry point, one line; its command is VStar.TraceCli.cmd, audited under the root VStarTraceCli"
  },
  "layers": {

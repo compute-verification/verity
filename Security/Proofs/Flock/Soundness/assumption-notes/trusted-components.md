@@ -15,7 +15,7 @@ These are not assumptions of the theorem, but the verdict still depends on them.
   - **Mitigation:** the agreement tests of spec §17.1. The Rust implementation must reach the same verdict on the corpus
     and on fuzzed mutations, so a miscompilation that changes a tested verdict fails the agreement job. Untested inputs
     stay exposed.
-  - **Also trusted:** compiled code that no proof sees. The executable's `../../../../../verity/core/service/flock/lean-audit.json` would list it under
+  - **Also trusted:** compiled code that no proof sees. The executable's `../../../../../verity/core/proof_system/flock/lean-audit.json` would list it under
     `escapes`, each entry with the test that covers it, and that list is empty: no `partial def` or other escape is
     left. The audit fails on any `partial def`, `opaque`, `unsafe`, `@[extern]` or `@[implemented_by]` not listed there.
 - **The model against the executable verifier.** The one-stage `--zk` audit's guarantee, `Flock.Guarantees.EndToEnd`

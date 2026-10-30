@@ -62,7 +62,7 @@ owner = "proofs"
 part = "lean"
 group = 3
 needs = ["lean-build"]
-merge_requires = ["verity/ml/flock/", "verity/core/service/flock/", "!README.md", "!PROTOCOL.md"]
+merge_requires = ["verity/ml/flock/", "verity/core/proof_system/flock/", "!README.md", "!PROTOCOL.md"]
 
 # Group 4: every Lake package's audit. It builds only in scratch trees of its own, so nothing in group 3 waits on it.
 [[job]]
@@ -90,8 +90,8 @@ after = "lean-build"
 merge_requires = ["verity/ml/flock/python/verity_flock/rec_vstage.py", "verity/ml/flock/python/verity_flock/rec_outer.py",
                   "verity/ml/flock/python/verity_flock/rec_open.py", "verity/ml/flock/python/verity_flock/rec_residuals.py",
                   "verity/ml/flock/python/verity_flock/rec_cap.py", "verity/ml/flock/python/verity_flock/circuit.py",
-                  "verity/core/protocols/sampled_proofs/one_stage/registered.py", "verity/core/service/flock/VStar/In.lean",
-                  "verity/core/service/vstar/"]
+                  "verity/core/protocols/sampled_proofs/one_stage/registered.py", "verity/core/proof_system/flock/VStar/In.lean",
+                  "verity/core/proof_system/vstar/"]
 
 # Group 7: no merge above the check's base grows the vLLM integration's lint ratchets (`ratchet_gate.py`, as the base has it):
 # on a train, each `Queue: #N` merge against the one below, so a failure names its PR.

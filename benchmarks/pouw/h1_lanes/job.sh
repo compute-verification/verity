@@ -49,14 +49,14 @@ fi
 build_tmpl_unit() { # build_tmpl_unit DEST: DEST/.lake/build/bin/flock-tmpl-unit
   command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
   local D=$1
-  rm -rf "$D.tmp" && mkdir -p "$D.tmp" && (cd "$SRC/verity/core/service/flock" && tar --exclude=.lake -cf - .) | tar -xf - -C "$D.tmp" \
+  rm -rf "$D.tmp" && mkdir -p "$D.tmp" && (cd "$SRC/verity/core/proof_system/flock" && tar --exclude=.lake -cf - .) | tar -xf - -C "$D.tmp" \
     && cp "$SRC/verity/ml/flock/tests/lean/TmplUnit.lean" "$D.tmp/" \
     && printf '\n[[lean_exe]]\nname = "flock-tmpl-unit"\nroot = "TmplUnit"\n' >> "$D.tmp/lakefile.toml" \
     && (cd "$D.tmp" && lake build flock-tmpl-unit) && rm -rf "$D" && mv "$D.tmp" "$D"
 }
 TU= TUP=
 if [ "${H1_TMPL:-flat}" != flat ]; then
-  cached tmplunit "$(tree_key verity/core/service/flock verity/ml/flock/tests/lean/TmplUnit.lean)" build_tmpl_unit > "$W/tu.dir" &
+  cached tmplunit "$(tree_key verity/core/proof_system/flock verity/ml/flock/tests/lean/TmplUnit.lean)" build_tmpl_unit > "$W/tu.dir" &
   TUP=$!
 fi
 log "h1-lanes: $(basename "$RUN") K=$K tile=${H1_TILE:-v1} form ${H1_TMPL:-flat} sessions $PAR at a time, Lean $LPAR at a time"

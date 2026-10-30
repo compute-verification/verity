@@ -64,7 +64,7 @@ def test_a_package_the_plan_doesnt_name_goes_to_the_shard_with_the_rest():
     new = [*PACKAGES, "protocols/new/lean"]
     for n in D.plans():
         [holder] = [s for s in _resolved(n, new) if "lean-audit:protocols/new/lean" in s]
-        assert "lean-audit:verity/core/service/flock" in holder and not set(SECURITY) & set(holder)
+        assert "lean-audit:verity/core/proof_system/flock" in holder and not set(SECURITY) & set(holder)
 
 
 def test_a_plan_naming_a_package_the_tree_lacks_stops_the_shard():

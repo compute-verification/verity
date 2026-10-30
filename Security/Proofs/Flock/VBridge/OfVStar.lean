@@ -4,7 +4,7 @@ import VStar.Unit
 /-!
 # The bridge over V*'s circuits as core code
 
-`VStar` (`verity/core/service/vstar`) is the executable Lean that writes V*'s circuit files: each
+`VStar` (`verity/core/proof_system/vstar`) is the executable Lean that writes V*'s circuit files: each
 `RecOpen{LANES, H}` statement and each `InnerRepCheck{S}` part, byte for byte as `verity_flock`'s builders write them.
 This file proves that its builders are the ones this bridge reasons about, and restates the bridge's theorems over
 `VStar`'s definitions, so that they are about the code that writes the circuit files and not about a copy of it.

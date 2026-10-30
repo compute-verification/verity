@@ -69,7 +69,7 @@ CONCEPTS = ("Circuit", "Prog", "Program", "Gate", "Op", "Netlist", "Partition", 
 PROPOSITIONS = ("Collision",)
 SLOT_FIELDS = ("Params", "Commitment", "Evidence", "Public")
 
-D, CORE, FLOCK = "Security/Definitions/", "Security/Definitions/Core/", "verity/core/service/flock/Flock/"
+D, CORE, FLOCK = "Security/Definitions/", "Security/Definitions/Core/", "verity/core/proof_system/flock/Flock/"
 PROTOCOL = "verity/core/protocols/interface/CoreProtocol/Protocol.lean"
 REQ, REQ_PY = "verity/core/primitives/requirement/CircuitRequirement.lean", "verity/ml/circuits/requirement.py"
 #: Each concept's canonical declarations: at most one in Core or Hash, one in code Lean and one in Python, and when a concept
@@ -1049,39 +1049,39 @@ KNOWN: dict[str, str] = {
         "duplicate of the registration log (`Verity.Registration`, not yet in Core: LEAN-93): becomes a reading of it: the service's admitted log entry (proofs)",
     "verity/core/protocols/sampled_proofs/service.py::Session":
         "homonym, the old word for a run, kept as one protocol's run type: rename (proofs)",
-    "verity/core/service/flock/Flock/Firewall/Coins.lean::Flock.Firewall.Coins.Session":
+    "verity/core/proof_system/flock/Flock/Firewall/Coins.lean::Flock.Firewall.Coins.Session":
         "homonym, a firewall release: rename (proofs)",
-    "verity/core/service/flock/Flock/Firewall/Contract.lean::Flock.Firewall.Contract.Transcript":
+    "verity/core/proof_system/flock/Flock/Firewall/Contract.lean::Flock.Firewall.Contract.Transcript":
         "duplicate of `Flock.Transcript`: becomes a reading of it (proofs)",
-    "verity/core/service/flock/Flock/Firewall/Contract.lean::Flock.Firewall.Contract.Verdict":
+    "verity/core/proof_system/flock/Flock/Firewall/Contract.lean::Flock.Firewall.Contract.Verdict":
         "homonym, the firewall's release decision: rename (proofs)",
-    "verity/core/service/flock/Flock/Firewall/Frames.lean::Flock.Firewall.Frames.Registry":
+    "verity/core/proof_system/flock/Flock/Firewall/Frames.lean::Flock.Firewall.Frames.Registry":
         "homonym, the firewall loop's frames: rename (proofs)",
-    "verity/core/service/flock/Flock/Firewall/Frames.lean::Flock.Firewall.Frames.Session":
+    "verity/core/proof_system/flock/Flock/Firewall/Frames.lean::Flock.Firewall.Frames.Session":
         "homonym, a firewall release: rename (proofs)",
-    "verity/core/service/flock/Flock/Firewall/Level0.lean::Flock.Firewall.Level0.Registry":
+    "verity/core/proof_system/flock/Flock/Firewall/Level0.lean::Flock.Firewall.Level0.Registry":
         "homonym, the firewall loop's tables: rename (proofs)",
-    "verity/core/service/flock/Flock/Layout.lean::Flock.Layout": "homonym, C-Flock's block-type layout: rename (proofs)",
-    "verity/core/service/flock/Flock/Program.lean::Flock.Program.Node":
+    "verity/core/proof_system/flock/Flock/Layout.lean::Flock.Layout": "homonym, C-Flock's block-type layout: rename (proofs)",
+    "verity/core/proof_system/flock/Flock/Program.lean::Flock.Program.Node":
         "homonym, a circuit program's node: rename (proofs)",
-    "verity/core/service/flock/Flock/RecAlgebra.lean::Flock.RecAlgebra.Coins":
+    "verity/core/proof_system/flock/Flock/RecAlgebra.lean::Flock.RecAlgebra.Coins":
         "homonym, the recursion's coin sources: rename (proofs)",
-    "verity/core/service/flock/Flock/RecCoins.lean::Flock.RecCoins.Opening":
+    "verity/core/proof_system/flock/Flock/RecCoins.lean::Flock.RecCoins.Opening":
         "homonym, a polynomial-commitment opening: rename (proofs)",
-    "verity/core/service/flock/Flock/RecRecord.lean::Flock.RecRecord.Record":
+    "verity/core/proof_system/flock/Flock/RecRecord.lean::Flock.RecRecord.Record":
         "duplicate of the auditor's record chain (`SampledProofs.Challenger.LedgerEntry`): becomes the challenger's live-coin entries (proofs)",
-    "verity/core/service/flock/Flock/Record.lean::Flock.Session": "homonym, a proof's session record: rename (proofs)",
-    "verity/core/service/flock/VStar/In.lean::VStar.In.Opening": "homonym, a Ligerito opening: rename (proofs)",
-    "verity/core/service/flock/VStar/Stage.lean::VStar.Stmt": "homonym, one of V*'s statements: rename (proofs)",
-    "verity/core/service/sampled_proofs/SampledProofs/ChallengerSession.lean::SampledProofs.Challenger.Period":
+    "verity/core/proof_system/flock/Flock/Record.lean::Flock.Session": "homonym, a proof's session record: rename (proofs)",
+    "verity/core/proof_system/flock/VStar/In.lean::VStar.In.Opening": "homonym, a Ligerito opening: rename (proofs)",
+    "verity/core/proof_system/flock/VStar/Stage.lean::VStar.Stmt": "homonym, one of V*'s statements: rename (proofs)",
+    "verity/core/proof_system/sampled_proofs/SampledProofs/ChallengerSession.lean::SampledProofs.Challenger.Period":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it (proofs)",
-    "verity/core/service/sampled_proofs/SampledProofs/OneStageZk.lean::SampledProofs.OneStageZk.Session":
+    "verity/core/proof_system/sampled_proofs/SampledProofs/OneStageZk.lean::SampledProofs.OneStageZk.Session":
         "homonym, the old word for a run, kept as one protocol's run type: rename (proofs)",
-    "verity/core/service/sampled_proofs/SampledProofs/Program.lean::SampledProofs.Program":
+    "verity/core/proof_system/sampled_proofs/SampledProofs/Program.lean::SampledProofs.Program":
         "duplicate of `program.Program`, read from its descriptor's bytes: becomes its code-Lean side once a difftest holds the two (proofs)",
-    "verity/core/service/sampled_proofs/SampledProofs/Slots.lean::SampledProofs.Slots.Layout":
+    "verity/core/proof_system/sampled_proofs/SampledProofs/Slots.lean::SampledProofs.Slots.Layout":
         "homonym, the claims' partition: rename (proofs)",
-    "verity/core/service/sampled_proofs/SampledProofs/Wires.lean::SampledProofs.Wires.Circuit":
+    "verity/core/proof_system/sampled_proofs/SampledProofs/Wires.lean::SampledProofs.Wires.Circuit":
         "homonym, an execution block's wiring: rename (proofs)",
     "verity/core/wire/__init__.py::Registry": "homonym, message types by version: rename (proofs)",
     # verity/ml/

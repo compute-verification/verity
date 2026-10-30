@@ -33,7 +33,7 @@ export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/t
 # the prover's worker threads overflow the default stack on wide units
 export RUST_MIN_STACK=${RUST_MIN_STACK:-67108864}
 setup
-(cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+(cd verity/core/proof_system/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 FW=
 if [ "${LEG_FIREWALL:-1}" = 1 ]; then

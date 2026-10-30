@@ -73,7 +73,7 @@ CAPS = "lean-caps"
 #: a lakefile's `[[require]]` block line, and a line of a string array's items (`roots = ["A", "B",`, `"C"]`)
 REQUIRE_LINE = re.compile(r'\s*(\[\[require\]\]|(name|path|git|rev|scope|version|subDir)\s*=\s*\S.*)\s*$')
 ITEM_LINE = re.compile(r'\s*(\w+\s*=\s*\[)?\s*("[^"]*"\s*,?\s*)+\]?\s*$')
-#: a ratchet cap's line (`UNWITNESSED = {"Security": 355, "verity/core/service/flock": 7}`), and one of its entries
+#: a ratchet cap's line (`UNWITNESSED = {"Security": 355, "verity/core/proof_system/flock": 7}`), and one of its entries
 CAP_LINE = re.compile(r'(\s*(?:UNWITNESSED|INLINE) = )\{([^{}]*)\}\s*$')
 CAP_ENTRY = re.compile(r'\s*"([^"\\]*)"\s*:\s*(\d+)\s*')
 #: where a merged string array wraps

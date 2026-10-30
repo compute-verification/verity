@@ -34,7 +34,7 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[3]
 SET = HERE / "fixtures" / "hidden-outputs" / "flat" / "gemm-coordinate"
 INNER = json.loads((HERE / "fixtures" / "inner_claims.json").read_text())
-LEAN = HERE.parents[3] / "verity/core/service/flock"
+LEAN = HERE.parents[3] / "verity/core/proof_system/flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: the set was recorded under f5df3bbc's identity, which the unversioned name no longer is (test_lean_hidden_outputs.py)
 STATEMENT = "verity/flock-circuit@f5df3bbc+seed-injection"

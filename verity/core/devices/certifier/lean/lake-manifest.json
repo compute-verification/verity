@@ -34,7 +34,7 @@
    "name": "flock_verifier",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
-   "dir": "../../../primitives/lms/lean/../../../service/flock",
+   "dir": "../../../proof_system/flock",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",

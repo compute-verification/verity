@@ -186,7 +186,7 @@ elif [ -n "${CR_ENDPOINT:-}" ]; then
 fi
 BOUND=$("$PY" -c 'import json, sys; b = json.load(open(sys.argv[1]))["chain"]["bits"]; print(int(bool(b["bound"] and b["rebuilt"])))' \
   "$E2E/report.json" 2>/dev/null || echo 0)
-(cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+(cd verity/core/proof_system/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 (cd verity/core/protocols/network/lean && lake build network-records ${CR_PERIOD_ANSWER:+network-period}) \
   > "$OUT/build-network-records.log" 2>&1 || { tail -40 "$OUT/build-network-records.log"; exit 7; }
