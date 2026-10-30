@@ -159,14 +159,12 @@ def test_the_definition_computes_the_reference():
 @pytest.mark.parametrize("ub, pb", [(0, 0), (2, 1), (12, 3), (16, 16)])
 def test_the_unit_commits_its_ports_as_five_rows_of_whole_sha512_blocks(ub, pb):
     """`row_words` (`VStar.linkRows`) regroups `port_words` without moving a word: the digest and salt of each side are one
-    row, and every row is whole 128-byte blocks, as ``sha512/row/v1`` (`circuit.compose`, `VStar.checkRow`) requires."""
+    row, and every row is whole 128-byte blocks, as ``sha512/row/v1`` (`circuit.compose`, `VStar.checkRow`) requires. The
+    composed part's ports are these rows (the link part's test below)."""
     rows, ports = R.row_words(ub, pb), R.port_words(ub, pb)
     assert R.ROWS == ("trow", "xyr", "raux", "xyw", "waux")
     assert rows == (ports[0], ports[1] + ports[2], ports[3], ports[4] + ports[5], ports[6])
     assert all(2 * w % 128 == 0 for w in rows)
-    sub = R.subcircuit(ub, pb)
-    assert [p.name for p in sub.inputs] == list(R.ROWS) and [p.name for p in sub.outputs] == ["rin", "rout"]
-    assert sub.id == R.unit_name(ub, pb) and sub.template.id == R.TEMPLATE
 
 
 @pytest.mark.slow
