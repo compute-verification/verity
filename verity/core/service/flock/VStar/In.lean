@@ -1,4 +1,5 @@
 import Flock.RecCoins
+import Flock.RecLinkPart
 import VStar.Stage
 
 /-!
@@ -16,10 +17,13 @@ module computes those tables from what the stager reads of the inner session (`S
   prover's rows of round `i` under its salts (rep `r` row `r`), `acc0` and `acc1` the running sums before each rep's first
   opening and after its last, `v` the verifier's values under `verifierSalt`, `out` zero rows under `zeroSalt`;
 * `capIn`: a level's `RecCap`, `cap` or `cap/L<l>` (`rec_cap.stage`): `top` every node of the level's tops under the
-  firewall's salts, `out` zero rows under `zeroSalt`.
+  firewall's salts, `out` zero rows under `zeroSalt`;
+* `linkIn`: the link table's `RecLink{UB, PB}`, `links` (`rec_link`): `trow` the table's rows under their registered
+  salts, `xyr`, `raux`, `xyw` and `waux` the reader's and the writer's rows and openings under the prover's fresh salts,
+  `rin` and `rout` the two trees' roots under `verifierSalt`.
 
-`partIn` dispatches on the statement (`VStar.Stmt`). The difftest (`core_vstar`'s `vstar-difftest`, `part_in`) holds each to
-the stager's `inst.bin`.
+`partIn` dispatches on the statement (`VStar.Stmt`). The difftest (`core_vstar`'s `vstar-difftest`, `part_in`) holds each
+of the first three to the stager's `inst.bin`; `rec_vstage` stages no link part, so nothing holds `linkIn` to Python.
 -/
 
 namespace VStar.In
@@ -51,9 +55,22 @@ structure Query where
   sibs : Array ByteArray
   deriving Inhabited
 
+/-- One row of the link table (`rec_link`'s inputs): the table row under its registered salt (`rec_links.register`), and
+the reader's row and the writer's, each its unsalted digest (64 bytes), its hm96 salt (192 bytes) and its opening's
+siblings bottom up, the reader's in the input rows' tree and the writer's in the output rows'. -/
+structure LinkRow where
+  trow : Row
+  xr : ByteArray
+  yr : ByteArray
+  rsibs : Array ByteArray
+  xw : ByteArray
+  yw : ByteArray
+  wsibs : Array ByteArray
+  deriving Inhabited
+
 /-- What `rec_vstage.stage` reads of the inner session, decoded: the prover's side (the message rounds' rows and salts, the
-openings, the tops with the firewall's salts, the running sums' salts, the fresh salts of the openings' private rows) and
-the verifier's (each rep's κ and eq(α) by level, and its v). -/
+openings, the tops with the firewall's salts, the running sums' salts, the fresh salts of the openings' private rows, the
+link table's rows) and the verifier's (each rep's κ and eq(α) by level, its v, and the link trees' roots). -/
 structure Src where
   /-- round `i` (`rec_algebra.rounds`), rep `r`: the inner prover's row and the salt it committed it under (`rec-c<i>`) -/
   msgs : Array (Array Row)
@@ -69,8 +86,13 @@ structure Src where
   eqA : Array (Array (Array F128))
   /-- each rep's v (`verifier_rows`, the comb included) -/
   vs : Array (Array F128)
-  /-- the prover's fresh salt of statement directory `dir`, port `port`, table row `i` (a level's `row` and `aux`) -/
+  /-- the prover's fresh salt of statement directory `dir`, port `port`, table row `i` (a level's `row` and `aux`, the link
+  part's `xyr`, `raux`, `xyw` and `waux`) -/
   fresh : String → String → Nat → ByteArray
+  /-- the link table's rows in table order; none where the inner statement carries no table -/
+  links : Array LinkRow := #[]
+  /-- the input rows' tree's root and the output rows' (`RecLinkTree.rowsRoot`), 64 bytes each -/
+  linkRoots : ByteArray × ByteArray := (ByteArray.empty, ByteArray.empty)
 
 /-- `rec_open.elements`: whole 8-word groups as F elements, `lo` then `hi`. -/
 def elements (ws : Array Nat) : Array F128 :=
@@ -204,11 +226,35 @@ def capIn (src : Src) (level N : Nat) : Except String PartIn := do
   pure #[("top", ownRows tops.rows tops.salts),
     ("out", ownRows (RecCoins.zeroRows N VStar.CAP_OUT_WORDS) ((Array.range N).map (RecCoins.zeroSalt RecCoins.CAP_ZERO_VALUE)))]
 
-/-- Statement `st`'s port inputs, `prog` its program's SHA-512 hex: a level's, a part of the algebra's or a cap's. -/
+/-- The link table's `RecLink{UB, PB}` over its `N` rows (`rec_link`), instance `i` checking row `i`: `trow` the table row
+under its registered salt; `xyr` the reader's digest then salt and `raux` its siblings padded to `RecLinkRef.auxWords`, and
+`xyw` and `waux` the writer's, under the prover's fresh salts; `rin` and `rout` the input and output rows' trees' roots
+(`RecLinkRef.expected`) under `verifierSalt`, as `RecLinkPart.checkLinks` registers them. It refuses nothing: a row past
+the stager's table is the default row, and the part's session holds every row to the table, the trees and the unit. -/
+def linkIn (src : Src) (prog : String) (UB PB N : Nat) : PartIn :=
+  let dir := "links"
+  let ids := Array.range N
+  let ls := ids.map fun i => src.links[i]?.getD default
+  let own := fun (port : String) (rows : Array (Array Nat)) => (port, ownRows rows (ids.map (src.fresh dir port)))
+  let reg := fun (port value : String) (root : ByteArray) =>
+    (port, ownRows (Array.replicate N (Flock.RecLinkRef.expected root).toArray)
+      (ids.map (RecCoins.verifierSalt prog value)))
+  let aw := Flock.RecLinkRef.auxWords (UB + PB)
+  #[("trow", { rows := ls.map (·.trow), refs := ids }),
+    own "xyr" (ls.map fun l => wordsOf l.xr ++ wordsOf l.yr),
+    own "raux" (ls.map fun l => RecCoins.padTo (l.rsibs.flatMap wordsOf) aw),
+    own "xyw" (ls.map fun l => wordsOf l.xw ++ wordsOf l.yw),
+    own "waux" (ls.map fun l => RecCoins.padTo (l.wsibs.flatMap wordsOf) aw),
+    reg "rin" Flock.RecLinkPart.IN_VALUE src.linkRoots.1,
+    reg "rout" Flock.RecLinkPart.OUT_VALUE src.linkRoots.2]
+
+/-- Statement `st`'s port inputs, `prog` its program's SHA-512 hex: a level's, a part of the algebra's, a cap's or the
+link table's. -/
 def partIn (src : Src) (prog : String) : Stmt → Except String PartIn
   | .recOpen level LANES H n => levelIn src prog level LANES H n
   | .inner _ _ p => algebraIn src prog p.S.ports p.v
   | .cap level N => capIn src level N
+  | .link UB PB N => pure (linkIn src prog UB PB N)
   | st => throw s!"{st.dir}: no input builder for this statement"
 
 /-- A row's words as bits, each word's 16 least significant first. -/

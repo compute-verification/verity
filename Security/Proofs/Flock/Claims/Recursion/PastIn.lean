@@ -154,7 +154,7 @@ theorem pastIn_core {C : Circuit} {sub : VStar.Sub} {u : VStar.UnitC}
         (sub.inputs.zip u.inPorts).map (fun p => (p.1, p.2, 16 * p.2)) ++
           [(n₁, 64, 1024), (n₂, 64, 1024)] := by
       rw [hr', hp, ho]
-      try rfl
+      simp
     generalize (sub.inputs.zip u.inPorts).map (fun p => (p.1, p.2, 16 * p.2)) = A at hr2
     have hA := past_inputs hr2 hnd (by rw [ho] at hm; simpa using hm) hq
     have hlen := congrArg List.length hr2
