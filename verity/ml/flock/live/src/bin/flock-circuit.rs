@@ -5647,7 +5647,7 @@ fn release_args(st: &Stmt, sessions: usize) -> Option<ReleaseArgs> {
         refuse("--firewall-state takes --session ID (the recursive session: rec_live's firewall.json) and --part NAME".into());
     }
     let lean = std::env::var_os("FC_CORE_FIREWALL").map(Into::into)
-        .unwrap_or_else(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../core/service/firewall/.lake/build/bin/core-firewall"));
+        .unwrap_or_else(|| std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../..").join("verity/core/service/firewall/.lake/build/bin/core-firewall"));
     Some(ReleaseArgs { state: state.into(), session, part, lean })
 }
 
