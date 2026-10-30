@@ -10,7 +10,8 @@ the merge gate (`gate = false`: circuit-check, ratchet-gate), which run after la
     ... --deferred STEP,...                                 only those ci.toml jobs and what they need, after the preflight: the
                                                             post-landing run drive launches on `checked`'s tip (`train.sh
                                                             --deferred`), recorded as `DEFERRED_KIND`, which no gate takes;
-                                                            with --shard K/N, only those of shard K's parts (drive's
+                                                            with --shard K/N, only those of shard K's parts, the last
+                                                            shard's with those no shard holds (ratchet-gate) (drive's
                                                             `after_landing_shards`: one run per shard, at once)
     ... --no-regenerate                                     lean-audit fails on a lock record difference rather than passing on
                                                             a regenerated record (drive's after-landing run)
@@ -1357,18 +1358,22 @@ def deferred_parts(steps: str) -> list[str]:
 
 def shard(spec: str, gated: bool = True) -> dict:
     """`--shard K/N`: {"k", "n", "parts": shard K's parts under ci.toml's plan with N shards, but those of a job off the merge
-    gate unless ``gated`` is False (an after-landing `--deferred` shard runs them), "all": every part a recorded unsharded
-    check covers (`gated_parts`)}, on this tree's Lake packages (`declaration.resolve`).  DeclarationError when there is no
-    such plan or shard, or the tree can't be listed."""
+    gate unless ``gated`` is False (an after-landing `--deferred` shard runs them, and its last shard also the parts no shard
+    of the plan holds, ratchet-gate's, so the N shards together run every part drive's after-landing run passes), "all":
+    every part a recorded unsharded check covers (`gated_parts`)}, on this tree's Lake packages (`declaration.resolve`).
+    DeclarationError when there is no such plan or shard, or the tree can't be listed."""
     m = re.fullmatch(r"(\d+)/(\d+)", spec)
     plans = DECLARATION.plans()
     if not m or int(m.group(2)) not in plans or not 1 <= int(m.group(1)) <= int(m.group(2)):
         raise DECLARATION.DeclarationError(f"--shard {spec}: ci.toml's plans are {', '.join(f'K/{n}' for n in sorted(plans))}")
     k, n = int(m.group(1)), int(m.group(2))
     parts_of = _parts_of()
+    shards = DECLARATION.resolve(plans[n], JOBS, parts_of)
+    held = {p for s in shards for p in s}
+    mine = set(shards[k - 1]) | ({p for p in DECLARATION.all_parts(JOBS, parts_of) if p not in held} if k == n and not gated else set())
     return {"k": k, "n": n,
-            "parts": [p for p in DECLARATION.resolve(plans[n], JOBS, parts_of)[k - 1]
-                      if not gated or p.partition(":")[0] not in OFF_GATE],
+            "parts": [p for p in DECLARATION.all_parts(JOBS, parts_of)
+                      if p in mine and (not gated or p.partition(":")[0] not in OFF_GATE)],
             "all": DECLARATION.all_parts(DECLARATION.gated(JOBS), parts_of)}
 
 
