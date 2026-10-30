@@ -9,18 +9,19 @@ Onsite's bandwidth subprotocol at PoUB-P2 (`Verity.component .onsite .poub`) is 
 session (`RemoteAudit.P2Protocol.replay`: the prover's request read against the held registration,
 `P2Session.requestOf`, the session's first state, `P2Session.init`, and each logged request through `step`) and
 accepts once the session has every window verified, publishing `certify` of its record: the reads its windows credit
-under the pooled bound and their error. PoUB-P2's line of record (`Properties.RemoteAudit.P2Line.LineHeld`) is stated
-on the session the check replays (`P2Line.Verified`); the two properties join them:
+under the pooled bound and their error. PoUB-P2's line of record, v0's (`Properties.RemoteAudit.Line.LineHeld`) at the
+P2 credit (`Properties.RemoteAudit.P2Line`), reads the session the check replays (`P2Line.Verified`); the two
+properties join them:
 
 * **AcceptIsVerified**, the refinement: what the check accepts is a request that is the held registration's node's, at
   the session parameters it reads, and a log that replays from the session's first state to a state with no failure,
   which ended accepted with a record `sm`; and the public outputs are `certify`'s of `sm` on the held store.
-* **LineHeldAtSubprotocol**: `P2Line.LineHeld` with the subprotocol's acceptance in the event in place of `Verified`.
-  On the same node, trace, records and premises, and the bytes `a ω`, `b ω` and `e ω` the subprotocol is given at each
-  outcome (the parameters, the commitment and the evidence), the probability that the subprotocol accepts bytes that
-  play the record of `ω` on the node (`Plays`) while the network certifiers sign nothing but the verifier's messages
-  entering the node and the record's credit claims more bits read than the trace's passes read is at most `LineHeld`'s
-  bound, term for term.
+* **LineHeldAtSubprotocol**: the line with the subprotocol's acceptance in the event. On v0's premises at the record's
+  trace and pace, and the bytes `a ω`, `b ω` and `e ω` the subprotocol is given at each outcome (the parameters, the
+  commitment and the evidence), the probability that the subprotocol accepts bytes that play the record of `ω` on the
+  node (`Plays`) while the network certifiers sign nothing but the verifier's messages entering the node and the
+  record's credit claims more bits read than the trace's passes read is at most v0's bound at the credit's δ, term for
+  term.
 
 `Plays` is the subprotocol's acceptance (`Properties.Composition.DecodedAccepted` unfolded at
 `RemoteAudit.P2Protocol.protocol`, whose decoders are `decodeParams`, `decodeCommitment` and `decodeEvidence`) with what
@@ -141,15 +142,17 @@ def ReadBy (sum : Audited → Replay → Option RemoteAudit.Session.Summary) {Ω
     (8 * (RemoteAudit.P2Session.credit sm).qBytes : ℝ) ≤
       (8 * RemoteAudit.P2.UNIT_BYTES : ℝ) * T.reads ω (P2Line.passes sm)
 
-/-- **PoUB-P2's line of record, in bits read, at the subprotocol.** `P2Line.LineHeld`'s node, trace, records and
-premises verbatim, one coin for each of the session's windows (`Audited.draws`), and the bytes the subprotocol is given
-at each outcome (`a`, `b`, `e`: the parameters, the commitment and the evidence): the probability that the subprotocol
-accepts bytes that play the record of `ω` on the node while the network certifiers sign nothing but the verifier's
-messages entering the node over the credited passes and the record's credit claims more bits read than the passes read
-is at most `δs + δnet + (δ + Σ_c s / 2^64 + Σ_c adv_c + Σ_c hide_c + bind)`, `LineHeld`'s bound at the credit's δ
-(`P2Session.DELTA`, 2^-40). It is stated at a verifier: `acc` for the subprotocol's acceptance in the event, `ver` for
-the trace's verdict and `sum` for the record the credit and its paced session read. The guarantee is it at `Plays`,
-`P2Line.Verified` and `P2Line.Replay.summary`. -/
+/-- **PoUB-P2's line of record, in bits read, at the subprotocol.** On any node, on a trace over its session's coins,
+one for each window (`Audited.draws`), the prover's records read through the coin commitment (`recordCommitted`) and the
+record of each outcome the one played holding the deployed commitment (`played`), whose trace of record (`traceBy`)
+meets the premises of v0's line (`Properties.RemoteAudit.Line.LineHeld`) at the record's pace (`paceBy`), and the bytes
+the subprotocol is given at each outcome (`a`, `b`, `e`: the parameters, the commitment and the evidence): the
+probability that the subprotocol accepts bytes that play the record of `ω` on the node while the network certifiers sign
+nothing but the verifier's messages entering the node over the credited passes and the record's credit claims more bits
+read than the passes read is at most `δs + δnet + (δ + Σ_c s / 2^64 + Σ_c adv_c + Σ_c hide_c + bind)`, v0's bound at
+the credit's δ (`P2Session.DELTA`, 2^-40). It is stated at a verifier: `acc` for the subprotocol's acceptance in the
+event, `ver` for the trace's verdict and `sum` for the record the credit and its paced session read. The guarantee is it
+at `Plays`, `P2Line.Verified` and `P2Line.Replay.summary`. -/
 def LineHeldAtSubprotocol (acc : Audited → Replay → ByteArray → ByteArray → ByteArray → Prop)
     (ver : Audited → Replay → Prop) (sum : Audited → Replay → Option RemoteAudit.Session.Summary) : Prop :=
   ∀ (node : Audited) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.draws → Pous.Bits κ → Blocks Line.receiptMax)

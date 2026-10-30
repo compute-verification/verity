@@ -5,7 +5,8 @@ import Proofs.Accounting.RemoteHeld.P2Line
 
 Where the subprotocol accepts bytes that play the record (`Plays`), the verifier accepts the record's session
 (`plays_verified`: `acceptIsVerified` gives the check's replay, which is the record's run, `run_of_replay`), so the
-event is inside `P2Line.LineHeld`'s (`Pouw.pr_mono`), whose bound `P2Line.SecurityProofs.lineHeld` gives.
+event is inside `P2Line.SecurityProofs.LineHeld`'s (`Pouw.pr_mono`), whose bound `P2Line.SecurityProofs.lineHeld`
+gives.
 -/
 
 namespace Properties.RemoteAudit.P2Subprotocol.SecurityProofs
@@ -26,7 +27,7 @@ theorem plays_verified {node : Audited} {r : Replay} {a b e : ByteArray} (h : Pl
   exact ⟨hq, s, hrun, hout⟩
 
 /-- **PoUB-P2's line of record at the subprotocol** (`LineHeldAtSubprotocol` at the subprotocol's acceptance), proved:
-its event is inside `P2Line.LineHeld`'s (`plays_verified`), on the same premises and bound. -/
+its event is inside `P2Line.SecurityProofs.LineHeld`'s (`plays_verified`), on the same premises and bound. -/
 theorem lineHeldAtSubprotocol : LineHeldAtSubprotocol Plays Verified Replay.summary := by
   intro node κ X Cm _ prf rest recs correct com T R δs δnet a b e r F O I hP hCv hSk hCov hIc hLive hRef hCnt
   exact le_trans (Pouw.pr_mono fun ω h => ⟨plays_verified h.1, h.2⟩)

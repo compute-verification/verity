@@ -3,7 +3,7 @@ import Proofs.Properties.RemoteAudit.P2Line
 import Proofs.Properties.RemoteAudit.Pooled
 
 /-!
-# PoUB-P2's line of record, proved (`Properties.RemoteAudit.P2Line`: `LineHeld`)
+# PoUB-P2's line of record (`LineHeld`, over `Properties.RemoteAudit.P2Line`), proved
 
 v0's argument (`Properties.RemoteAudit.Line.SecurityProofs.lineHeld`) at the P2 subprotocol's credit. At each outcome
 where the verifier accepts the record's session (so the trace of record accepts, `ofRecord`) and the certifiers observed
@@ -196,6 +196,37 @@ theorem delta_nonneg : (0 : ℝ) ≤ (RemoteAudit.P2Session.DELTA : ℝ) := by
   unfold RemoteAudit.P2Session.DELTA
   push_cast
   positivity
+
+/-- **PoUB-P2's line of record, in bits read.** On any node, on a trace over its session's coins, one for each window
+(`Audited.draws`), the prover's records read through the coin commitment (`recordCommitted`, each record's opening draw
+at its `samples` s) and the record of each outcome the one played holding the deployed commitment (`played`), whose
+trace of record (`ofRecord`: over the store's units, its verdict the P2 subprotocol's on the record) meets the premises
+of v0's line (`Properties.RemoteAudit.Line.LineHeld`) at the record's pace: the probability that the verifier accepts
+the record's session, the certifiers sign nothing but the verifier's messages entering the node over the credited
+passes, and the record's credit claims more bits read than the passes read (`ReadAt`) is at most
+`δs + δnet + (δ + Σ_c s / 2^64 + Σ_c adv_c + Σ_c hide_c + bind)`, `δ` the P2 credit's (`P2Session.DELTA`, 2^-40),
+`adv_c` the advantage on `prf c` of draw `c`'s distinguisher at it with leaf `c` of the coin commitment committing
+zeros, `hide_c` draw `c`'s hiding term and `bind` the receipts' binding term at `R`. The guarantee states it at the
+subprotocol's acceptance (`Properties.RemoteAudit.P2Subprotocol.LineHeldAtSubprotocol`). -/
+def LineHeld : Prop :=
+  ∀ (node : Audited) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.draws → Pous.Bits κ → Blocks Line.receiptMax)
+    (rest : Coins node.draws κ X → Fin node.draws → ℕ → ℕ) (recs : Cm → Coins node.draws κ X → Replay)
+    (correct : Cm → Fin node.draws → Coins node.draws κ X → Finset ℕ) (com : Coins node.draws κ X → Cm)
+    (T : Trace (Coins node.draws κ X)) (R : Receipts node.draws κ X) (δs δnet : ℝ),
+    let r := played recs com
+    let F := recordCommitted node recs correct
+    ∀ (O : Outside (ofRecord T node r)) (I : Ingress (Coins node.draws κ X)),
+    Paced (ofRecord T node r) (recordPace node r) → Covers (ofRecord T node r) →
+    SketchBoundAt (ofRecord T node r) O δs → Covered (ofRecord T node r) O I →
+    IngressCounted (ofRecord T node r) I δnet → (∀ c, Live (F.view c)) →
+    Refused (F.play com) prf rest (ofRecord T node r) R → Counted (F.play com) (ofRecord T node r) →
+    Pouw.pr (fun ω => Verified node (r ω) ∧
+        ¬ (Accounting.Remote.Held.Quiet (ofRecord T node r) I.counted ω → ReadAt (ofRecord T node r) ω node (r ω))) ≤
+      δs + δnet + ((RemoteAudit.P2Session.DELTA : ℝ) +
+        ((∑ _t : Fin node.draws, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
+        (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
+          ((F.play (Committed.junk com t)).distinguisher prf (RemoteAudit.P2Session.DELTA : ℝ) t)).toReal +
+        (∑ t, F.hide com prf (RemoteAudit.P2Session.DELTA : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal)
 
 /-- **PoUB-P2's line of record, in bits read** (`LineHeld`), proved: v0's argument (`Properties.RemoteAudit.Line`'s
 `lineHeld`) with the credit's ceiling of the pooled bound in place of the line's W, the accepted request taking a pass a
