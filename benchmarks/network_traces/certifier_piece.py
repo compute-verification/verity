@@ -2,7 +2,8 @@
 the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
 
     python certifier_piece.py front PORT SERVE_DIR OUT [--gate USER@HOST | --gate local] [--key KEY] [--peer NAME]
-        [--prompts 4] [--prompt-ids 24] [--tokens 4] [--vocab 128000] [--height 10] [--minutes M] [--warmup N]
+        [--prompts 4] [--prompt-ids 24] [--tokens 4] [--vocab 128000] [--height 10] [--minutes M] [--bucket-ms MS]
+        [--warmup N]
     python certifier_piece.py piece SERVE_DIR WINDOW DIR [--eos-ids IDS] [--lean EXE] [--draw K] [--chain-cmd CMD]
         [CR_K=V ...]
     python certifier_piece.py relay --listen PORT --to PORT
@@ -14,15 +15,18 @@ the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
   its cells are link-window 0's alone (``--tokens`` at most 4 keeps the group in one link-window), so the engine admits
   the group together and closes it into one Commit window, the run's earliest: the window the run audits (with
   ``REQUESTS=1`` the requests after it make a smaller window, which `served_verdicts.py window` passes over). The
-  defaults are the window circuit's class 4,32,4 (4 slots, prompts of at most 32 ids, 4 outputs). ``--warmup N``
-  first sends N plain completions straight to PORT (`warmup`: no warden, no release header), one at a time, each of
-  the group's shape and awaited, so the endpoint's first window (H1's first reservation, the kernels' first compile)
-  is behind it; it then waits until serve-openai records each in `served_session.USERS`, which it does only once the
-  request's window has closed. So each warm-up is a window of one request, closed before the gate is asked, which the
-  pick passes over for the group's whenever the group's window holds two or more; one that fails or isn't recorded
-  within `WARMUP_CLOSE_S` refuses the front. A warm-up doesn't make a slow endpoint pass: the scan's schedule gives a
-  request D·τ = 2.7 s from its admission to its first egress cell, by which a short answer must be whole, and an
-  endpoint slower than that fails each request late. The gate's fetch,
+  defaults are the window circuit's class 4,32,4 (4 slots, prompts of at most 32 ids, 4 outputs). The scan's schedule
+  gives a request D·τ from its admission to its first egress cell, by which a short answer must be whole, and an
+  endpoint slower than that fails each request late: 2.7 s at the scan's tick τ of 100 ms. ``--bucket-ms MS`` runs
+  the scan at the tick MS instead (the gate's `auditor.SCAN_BUCKET_MS`, 100 to 4000: D·τ = 108 s at 4000), each
+  sampling block T·τ long, and the minutes are counted there. ``--warmup N`` (none by default: an endpoint that
+  readies its first window before it listens needs none) first sends N plain completions straight to PORT (`warmup`:
+  no warden, no release header), one at a time, each of the group's shape and awaited, so the endpoint's first window
+  (H1's first reservation, the kernels' first compile) is behind it; it then waits until serve-openai records each in
+  `served_session.USERS`, which it does only once the request's window has closed. So each warm-up is a window of one
+  request, closed before the gate is asked, which the pick passes over for the group's whenever the group's window
+  holds two or more; one that fails or isn't recorded within `WARMUP_CLOSE_S` refuses the front. A warm-up doesn't
+  make a slow endpoint pass; a tick whose D·τ covers its answer does. The gate's fetch,
   ``witness/`` with it, is kept under SERVE_DIR/`PRIVATE`/RUN/fetch.tar.gz (0700, the serve dir stays on the node);
   OUT gets ``session.json`` and ``bundle.tgz``, the public outcome. ``--gate local`` is the dry run's (this tree's gate in this process, a
   `relay` to PORT its tunnel): a warden on the prover's node is no auditor's device, so it never stands for the gate.
@@ -123,7 +127,8 @@ def front(a: argparse.Namespace) -> int:
     a.requests = a.prompts
     a.keep, a.out, a.at, a.window_per_group = keep, out, None, True
     if a.minutes is None:
-        a.minutes = SS.A.warden_group_minutes(1, a.tokens, a.height) + SS.MARGIN
+        tick = a.bucket_ms or SS.A.SCAN["--bucket-ms"]
+        a.minutes = SS.A.warden_group_minutes(1, a.tokens, a.height, tick) + SS.MARGIN
     if a.gate == "local":
         a.tunnel = lambda ssh, port: [sys.executable, str(Path(__file__).resolve()), "relay", "--listen", str(port),
                                       "--to", str(a.port)]
@@ -493,8 +498,11 @@ def parser() -> argparse.ArgumentParser:
     f.add_argument("--vocab", type=int, default=SS.VOCAB)
     f.add_argument("--height", type=int, default=HEIGHT)
     f.add_argument("--minutes", type=int)
+    f.add_argument("--bucket-ms", type=int, metavar="MS",
+                   help="the scan's tick, the gate's 100 to 4000 (the scan's 100 when not given)")
     f.add_argument("--warmup", type=int, default=0, metavar="N",
-                   help="plain requests of the group's shape straight to PORT first, each in a window of its own")
+                   help="plain requests of the group's shape straight to PORT first, each in a window of its own "
+                        "(none by default)")
     q = sub.add_parser("piece")
     q.add_argument("serve_dir", type=Path)
     q.add_argument("window", type=int)
