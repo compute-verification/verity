@@ -9,7 +9,7 @@
 // 65,536 cycles.
 // Arms:    wg_s8    wgmma m64n256k32 s8.s8 -> s32, one warpgroup with A and B resident in shared memory (KS k-slices,
 //                   cycled), as int8_class_rate's wgmma kernel;
-//          wg_e4m3  the same, e4m3.e4m3 -> f32;
+//          wg_e4m3  the same, e4m3.e4m3 -> f32, each batch drained;
 //          sync_s8  mma.sync m16n8k32 s8.s8 -> s32, SW warps with SA accumulators each, operands in registers (KS sets).
 // Classes: zero; const (every byte 0x7F, e4m3 0x38 = 1.0); uniform (bytes uniform: s8 on [-128, 127], or every finite
 //          e4m3 encoding); s2, u2, u4 (Verity.OperandClass: uniform on [-2, 1], [0, 3], [0, 15], as s8). Each byte is
@@ -134,6 +134,11 @@ __device__ __forceinline__ uint64_t desc(const void* p, u32 lbo, u32 sbo) {
 constexpr int KS = 4;
 constexpr int N = 256;
 constexpr double WG_MACS = 64.0 * N * 32;
+// e4m3 drains every batch (wait_group 0): under wait_group 1 ptxas serializes its f32-accumulator wgmmas (C7511), so
+// its batch is FP8_REP passes over the KS k-slices, which amortizes the drain
+constexpr int FP8_REP = 8;
+template <bool FP8>
+constexpr int WB = FP8 ? FP8_REP * KS : KS;
 
 template <typename T>
 __device__ __forceinline__ void pass(T* d) {
@@ -144,7 +149,7 @@ __device__ __forceinline__ void pass(T* d) {
   }
 }
 
-// nb batches of KS wgmmas a period (one warpgroup); cont: back to back, no drain or fill. Every batch is whole: a
+// nb batches of WB wgmmas a period (one warpgroup); cont: back to back, no drain or fill. Every batch is whole: a
 // wgmma issued under a condition gets its own warpgroup.arrive, which serializes the pipe.
 template <bool FP8, int FILL>
 __global__ void __launch_bounds__(128, 1) wg_k(int cls, u32 nb, int cont, u64 period, u64 ns, Stamp* out, u32* sink) {
@@ -178,15 +183,16 @@ __global__ void __launch_bounds__(128, 1) wg_k(int cls, u32 nb, int cont, u64 pe
       pass(d);
       asm volatile("wgmma.fence.sync.aligned;\n" ::: "memory");
 #pragma unroll
-      for (int q = 0; q < KS; ++q) {
-        if constexpr (FP8) wgmma_e4m3_m64n256k32(d, da[q], db[q]);
-        else wgmma_s8s8_m64n256k32(d, da[q], db[q]);
+      for (int q = 0; q < WB<FP8>; ++q) {
+        if constexpr (FP8) wgmma_e4m3_m64n256k32(d, da[q % KS], db[q % KS]);
+        else wgmma_s8s8_m64n256k32(d, da[q % KS], db[q % KS]);
       }
       asm volatile("wgmma.commit_group.sync.aligned;\n" ::: "memory");
-      asm volatile("wgmma.wait_group.sync.aligned 1;\n" ::: "memory");
+      if constexpr (FP8) asm volatile("wgmma.wait_group.sync.aligned 0;\n" ::: "memory");
+      else asm volatile("wgmma.wait_group.sync.aligned 1;\n" ::: "memory");
       pass(d);
     }
-    ops += nb * KS;
+    ops += nb * WB<FP8>;
     if (!cont) {
       asm volatile("wgmma.wait_group.sync.aligned 0;\n" ::: "memory");
       pass(d);
@@ -292,8 +298,8 @@ struct Arm {
 
 static Arm arm_for(const std::string& name, int fill) {
   const size_t wsmem = (size_t)KS * (64 * 32 + N * 32);
-  if (name == "wg_s8") return {fill ? wg_k<false, ALU> : wg_k<false, IDLE>, 128, 1, wsmem, WG_MACS, KS};
-  if (name == "wg_e4m3") return {fill ? wg_k<true, ALU> : wg_k<true, IDLE>, 128, 1, wsmem, WG_MACS, KS};
+  if (name == "wg_s8") return {fill ? wg_k<false, ALU> : wg_k<false, IDLE>, 128, 1, wsmem, WG_MACS, WB<false>};
+  if (name == "wg_e4m3") return {fill ? wg_k<true, ALU> : wg_k<true, IDLE>, 128, 1, wsmem, WG_MACS, WB<true>};
   if (name == "sync_s8") return {fill ? sync_k<ALU> : sync_k<IDLE>, SW * 32, SW, 0, SYNC_MACS, SA};
   fprintf(stderr, "ARM: wg_s8, wg_e4m3 or sync_s8\n");
   exit(2);
@@ -370,10 +376,12 @@ int main(int argc, char** argv) {
     return pt;
   };
 
-  // a CTA's batch, in MACs; continuous runs check for the end about every BURST cycles, at the full rate's guess
+  // a CTA's batch, in MACs; continuous runs (the calibration, and duty 100) check for the end about every
+  // max(BURST, CHECK_CYCLES) cycles, at the full rate's guess
   const double batch_macs = arm.units * arm.macs * arm.batch;
   const double guess = aname == "sync_s8" ? 2048.0 : 4096.0;
-  const u32 cont_nb = std::max<u32>(1, (u32)std::lround(guess * burst / batch_macs));
+  const u32 cont_nb =
+      std::max<u32>(1, (u32)std::lround(guess * (double)std::max<u64>(burst, CHECK_CYCLES) / batch_macs));
   run(cont_nb, 1, 0, 0.05);
   const Point cal = run(cont_nb, 1, 0, 0.3);
   const double r100 = cal.macs / cal.cyc;  // MACs a SM-cycle, continuous

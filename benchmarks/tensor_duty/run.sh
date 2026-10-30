@@ -11,7 +11,7 @@
 #
 # Env: CLOCKS ("1980 default"); ARMS ("wg_s8 wg_e4m3 sync_s8"); each arm's classes and bursts (SM-cycles of tensor work
 # a period): WG_S8_CLASSES ("zero const uniform s2 u2 u4"), WG_S8_BURSTS ("1024 65536 2097152"), WG_E4M3_CLASSES
-# ("zero const uniform"), WG_E4M3_BURSTS ("1024 65536"), SYNC_S8_CLASSES ("zero uniform"), SYNC_S8_BURSTS ("65536");
+# ("zero const uniform"), WG_E4M3_BURSTS ("4096 65536"), SYNC_S8_CLASSES ("zero uniform"), SYNC_S8_BURSTS ("65536");
 # FILLS ("idle alu"); DUTIES (50 to 90 by 5, then 91 to 100, in percent); SECS (1.2, each point's kernel); WARM_S (20:
 # continuous wg_s8 on uniform operands, at each clock first); LEASE_MIN (75); BUILD_ONLY (1: build and list the
 # binary's tensor instructions, no lease).
@@ -23,7 +23,7 @@ O=${OUT:?run under research run}
 export PATH=/usr/local/cuda/bin:$PATH CUDA_MODULE_LOADING=EAGER
 export ARMS=${ARMS:-wg_s8 wg_e4m3 sync_s8} FILLS=${FILLS:-idle alu} SECS=${SECS:-1.2} WARM_S=${WARM_S:-20}
 export WG_S8_CLASSES=${WG_S8_CLASSES:-zero const uniform s2 u2 u4} WG_S8_BURSTS=${WG_S8_BURSTS:-1024 65536 2097152}
-export WG_E4M3_CLASSES=${WG_E4M3_CLASSES:-zero const uniform} WG_E4M3_BURSTS=${WG_E4M3_BURSTS:-1024 65536}
+export WG_E4M3_CLASSES=${WG_E4M3_CLASSES:-zero const uniform} WG_E4M3_BURSTS=${WG_E4M3_BURSTS:-4096 65536}
 export SYNC_S8_CLASSES=${SYNC_S8_CLASSES:-zero uniform} SYNC_S8_BURSTS=${SYNC_S8_BURSTS:-65536}
 export DUTIES=${DUTIES:-50 55 60 65 70 75 80 85 90 91 92 93 94 95 96 97 98 99 100} CLOCKS=${CLOCKS:-1980 default} O
 
