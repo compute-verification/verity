@@ -97,6 +97,7 @@ open Accounting Properties.RemoteAudit.P2Line Properties.RemoteAudit.P2Subprotoc
 section
 
 variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circuit} {I : Type} {Ω : I → Type}
+  [DecidableEq I]
 
 /-- **PoUB-P2's refinement by its line**: at every value `ξ` of the other audits' coins and every value `x` of PoUB's
 own where PoUB's verdict `A .poub` holds (at the code, `Vocab.Coupling.verdict`: onsite's PoUB-P2 component,
@@ -110,7 +111,7 @@ def LineRefines {r : PeriodRun d α C Ω} {node : Audited} {κ : ℕ} {X : Type}
     Plays node ((L ξ).record (coin x)) ((L ξ).a (coin x)) ((L ξ).b (coin x)) ((L ξ).e (coin x)) ∧
       Accounting.Remote.Held.Quiet (L ξ).trace (L ξ).ingress.counted (coin x)
 
-variable [DecidableEq I] [∀ i, Fintype (Ω i)]
+variable [∀ i, Fintype (Ω i)]
 
 /-- **PoUB-P2 at the code, by its line of record**: at the verdicts `A` that `LineRefines` reads as the P2
 subprotocol's acceptance, where each accepted outcome's certificate claims no more than the record's credit
