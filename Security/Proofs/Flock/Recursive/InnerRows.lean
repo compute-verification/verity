@@ -28,7 +28,9 @@ file's (`bc_pinned'`).
 * `rowBytes`, `salt`: unit `i`'s row `q`, at template instance `i % g` of block `i / g` (`Circuit.instOf`);
 * `commitString_data`: `Binding.commitString` is the executable's `Hm96.Default512.commitString` of the row's SHA-512;
 * `pub_digest_size`: every unit's `b ‖ c` in a hidden-output statement's public file is 128 bytes, drawn or not;
-* `unit_commit`: the same at one accepted statement, for any satisfying witness of its block R1CS.
+* `unit_commit`: the same at one accepted statement, for any satisfying witness of its block R1CS;
+* `outRows_le`: where the statement check passes, each table's output rows are among its ports, so an output row's port
+  `nIn + o` is a port.
 -/
 
 namespace Flock.InnerRows
@@ -231,6 +233,24 @@ theorem rows_commit_check {p : Parsed} {w : Claims.Flock.Wit} (hP : Parses p) (h
   show FlockSoundness.bit (toZ (w.hid.getD ((i / st.c.g * 2 ^ st.c.kLog + y) * p.sts.size + j) false)) =
     w.hid.getD ((i / st.c.g * 2 ^ p.sts[j]!.c.kLog + y) * p.sts.size + j) false
   rw [bit_toZ, hk]
+
+/-- **Each table's output rows are among its ports** (`HmOut.checkRows`), at a statement the verifier parsed whose
+statement check passes, with hidden outputs. -/
+theorem outRows_le {p : Parsed} (hP : Parses p) (hc : p.check = .ok ()) (hh : p.tags.hiddenOutputs = true) {j : ℕ}
+    (hj : j < p.sts.size) : p.sts[j].c.outRowPorts.size ≤ p.sts[j].c.ports.size := by
+  obtain ⟨hRu, -⟩ := (check_ok_iff _ _ _ _ _ _ _ _).1 hc
+  have hpi : p.publicInputs = none := Option.not_isSome_iff_eq_none.1 (by simp [hRu.2.2.2.2.2])
+  have ht : p.tags.typed = false := hRu.2.1
+  obtain ⟨spec, hset⟩ := setup_of_tablesOf (tablesOf_of_parses hP)
+  unfold Read.setup at hset
+  rw [hpi] at hset
+  obtain ⟨-, hall⟩ := HiddenExec.setupTables_setupOne hset
+  obtain ⟨_, hd, -⟩ := hall j hj
+  have ht' : (tagsAt p.tags p.I.count j).typed = false := (tagsAt_typed _ _ _).trans ht
+  unfold HiddenExec.setupOne at hd
+  rw [tagsAt_hiddenOutputs, hh] at hd
+  simp only [↓reduceIte] at hd
+  exact HiddenExec.checkRows_le (Hidden.parse_untyped ht' (Hidden.setupHidden_spec' hd).parse).2
 
 /-- **A unit's rows, read off the inner witness**: at a statement the verifier parsed and kept in scope, with hidden
 outputs, every witness of the deployed relation commits row `q` of unit `i` of table `j` as the public file publishes it:
