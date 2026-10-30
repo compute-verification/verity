@@ -27,7 +27,7 @@ hypotheses. This file supplies the pieces and those two.
 * At one table: `rowDPiecesAt key i x` (table `i`'s pieces), `DecAt.rowDPiecesAt_cover`, and
   `DecAt.hholds_rowDPiecesAt` at `runs_assembled`'s own `hside` and `hpos`, where the rows run (`verifierRows_rep`) and
   every run's level checks pass (`hlev`; at the honest run, `DecAt.levels_of_merkleOk` from `MerkleOk` and the coin
-  tie). `DecAt.rowD_target`: row D's four hypotheses of `runs_assembled` at table `i` (RECINT's `TargetD` body), with
+  tie). `DecAt.rowD_target`: row D's four hypotheses of `runs_assembled` at table `i` (`TargetD` body), with
   the rows' run from row R's structure and sizes (`DecAt.rowsRun_of`). `DecAt.runs_openAt`: `runs_assembled` at them,
   with `hcover` and `hholds` discharged but for `hlev`.
 -/
@@ -308,7 +308,7 @@ theorem levels_of_merkleOk {i : ℕ} (r : Fin 2) {hs : Hashes Flock.V}
   levelPass_of_merkleOk hops (FlockSoundness.Refine.fast100_level _ _ hfast) h
     (pos := fun ℓ => (info.lg.conss[ℓ]!).pos) (htie v info kappa hv)
 
-/-- **Row D's four hypotheses of `runs_assembled`** at table `i` (RECINT's `TargetD` body): table `i`'s pieces, at
+/-- **Row D's four hypotheses of `runs_assembled`** at table `i` (`TargetD` body): table `i`'s pieces, at
 `sideAt` and `posAt` with their ties `hside` and `hpos`, hold where the rows run (`hrun`) and every run's level checks
 pass (`hlev`), and cover every query. -/
 theorem rowD_target (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) {i : ℕ} (hi : i < D.sts.size)

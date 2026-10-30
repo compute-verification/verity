@@ -4,7 +4,8 @@ import Proofs.Flock.Soundness.Discharge.Exec.Shape
 /-!
 # The static shape of a compiled `--zk` rep
 
-The coin half of R11b (`Exec.Spine`, and [wave2-plays-coin]'s `decodesOfRunsAt`) needs to know where a rep's coins fall
+The coin half of R11b (`Exec.Spine`, and `Discharge/PlaysCoin`'s `decodesOfRunsAt`) needs to know where a rep's coins
+fall
 among its messages. Without `--zk` every run of a rep follows one spine (`Exec.repC_spine`), because a rep returns at a
 reject. The compiled `--zk` rep (`ZkLink.repZCAt`) does not: at an opening reject (an extra claim's ring-switch sum
 fails, which is the prover's choice) `restZC` returns at once and `repZC` goes on to the inner proof, so that run's
@@ -338,7 +339,7 @@ theorem repZCAt_kinds (A : Arith F K) (Hs : ZkLink.Hashes F D Sl) (T : TabZK F m
 
 omit [Fintype K] in
 /-- **A spine of a compiled `--zk` rep at a result that can be accepted**: every run of rep `r` that ends in `p` takes
-steps whose kinds, in order, are a prefix of `repShapeZ` ([wave2-plays-coin]'s `SpineAt … p`, unfolded). -/
+steps whose kinds, in order, are a prefix of `repShapeZ` (`Discharge/PlaysCoin`'s `SpineAt … p`, unfolded). -/
 theorem repZCAt_spineAt (A : Arith F K) (Hs : ZkLink.Hashes F D Sl) (T : TabZK F mPts) (pts : Fin 2 → Fin mPts → F)
     (r : Fin 2) {p : ZkLink.PendZ F D Sl} (hp : p.lig ≠ PendL.reject) :
     ∀ ts, PlaysT (ZkLink.repZCAt A Hs T pts r) ts p →

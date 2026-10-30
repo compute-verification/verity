@@ -30,7 +30,7 @@ import Proofs.Pous.StreamedWipe.Witnesses
   `StreamedWipeMeetsServer8H200HBMRAM`, `StreamedWipeMeetsServer8H200`).
 * `StreamedWipe/Disk.lean`: `StreamedWipeMeetsDisk`, `StreamedWipeMeetsServer` on one session over a server's tiers
   and its disks, with the disks' bytes outside the fill in `R` (`PousStreamedWipe.streamed_wipe_meets_disk`), and its
-  honest and nontrivial lemmas at vy-dc-h200-2's card and disks.
+  honest and nontrivial lemmas at the deployed H200's card and disks.
 * `StreamedWipe/Honest.lean`: the honest server, which keeps every label, is accepted on every run
   (`PousStreamedWipe.honest_accepts`).
 * `StreamedWipe/Witnesses.lean`: the honest and nontrivial lemmas of `StreamedWipeMeetsReadsTight`,
