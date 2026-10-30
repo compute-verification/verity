@@ -218,8 +218,12 @@ import pkgutil
 
 def load_registries():
     import syn
+    from circuit_check import cache, sidecars
+    for mod in sidecars.discover():
+        importlib.import_module(mod)
     for m in pkgutil.iter_modules(syn.__path__):
         importlib.import_module(f"syn.{m.name}")
+    cache.registries(sidecars.discover())
 
 
 def _core_roots():
@@ -521,8 +525,8 @@ def test_a_sidecars_binding_and_pin_are_held_as_targets_pys_are(tmp_path):
 
 def test_an_unpinned_target_reruns_when_its_pin_is_added_where_it_goes_or_to_its_shared_file(tmp_path):
     """SynK has no pin: its check read the absence in the pins file a new pin of it goes to (its module's sidecar) and in its
-    file of ``pins/``, so adding it to either reruns SynK alone.  (A new file in `syn` would rerun every target, whose imports
-    listed the directory, so the sidecar is there from the start.)"""
+    file of ``pins/``, so adding it to either reruns SynK alone.  (The sidecar is there from the start: a new one reruns the
+    targets that reached what its module registers, SynK among them.)"""
     root = _tree(tmp_path)
     _bindings(root, '(("_sized_roots",), sized)', families=("SynK_v1",))
     _edit(root, "syn/catalog.py", '(("_model_roots:SynOther_v1",), model), ', "")
@@ -556,6 +560,158 @@ SC.write_pins({("pieces", "SynOther_v1"): {"and": 7}, ("pieces", "SynTop_v1"): {
     assert read("syn/other.circuit-check.json") == {"SynOther_v1": {"and": 7}}
     assert read("syn/kdef.circuit-check.json") == {"SynK_v1": {"and": 9}}
     assert read(_pin("SynTop_v1")) == {"SynTop_v1": {"and": 8}} and read(_pin("Nobody_v1")) == {"Nobody_v1": {"and": 1}}
+
+
+def test_a_new_sidecar_reruns_only_the_targets_that_reached_what_its_module_registers(tmp_path):
+    """A sidecar makes the registries import its module (`targets.load_registries`), so the task list's key holds the set of
+    them; a target's holds none of it, only whether a module whose import registered each Definition its check reached has one
+    (``registrars``).  A binding file beside `syn.extra` (no Definition, and it imports none) reuses every target, though the
+    task list is built again.  A pins file beside `syn.idle` registers SynIdle, which no target reaches, but the registries'
+    import of `syn.idle` is now their first of `syn.prims`, so SynAdd, which both targets reach, is registered for it: both
+    rerun.  One beside `syn.sub` then reruns SynTop, whose body calls SynSub, and not SynOther."""
+    root = _tree(tmp_path)
+    _run(root)
+    assert _run(root)["stats"].get("task_list")
+    (root / "syn/extra.circuit-check.py").write_text("def _model_roots():\n    return []\n")
+    out = _run(root)
+    assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and "task_list" not in out["stats"]
+    assert {"SynTop_v1", "SynSub_v1", "SynAdd_v1"} <= set(_entry(root, "SynTop_v1")["reads"]["registrars"])
+    (root / "syn/idle.circuit-check.json").write_text("{}")
+    out = _run(root)
+    assert out["hits"] == [] and out["stats"]["stored"] == 2
+    (root / "syn/sub.circuit-check.json").write_text("{}")
+    out = _run(root)
+    assert out["hits"] == ["SynOther_v1"] and out["stats"]["stored"] == 1
+
+
+def test_removing_a_sidecar_reruns_the_targets_it_bound_and_those_that_reached_what_its_module_registers(tmp_path):
+    """SynOther is bound by the catalog and in its module's sidecar (`SIDECAR`), whose pins file holds its pin, and `syn.sub` has
+    a pins file: removing `syn.other`'s sidecar (its pin back in ``pins/``) reruns SynOther, whose units, pin and registration
+    changed, and nothing else.  Removing `syn.sub`'s then reruns SynTop, which reached SynSub, and SynOther too: with
+    `syn.other`'s gone, the registries' import of `syn.sub` was their first of `syn.prims`, so SynAdd, which SynOther reached,
+    was registered for it.  (The first check a process runs holds every loaded module's source, `syn.check`'s `inspect`
+    lookup: SynOther's, checked before SynTop.)"""
+    root = _tree(tmp_path)
+    pin = _pins(root, "SynOther_v1")
+    (root / "syn/other.circuit-check.py").write_text(SIDECAR.lstrip("\n"))
+    (root / "syn/other.circuit-check.json").write_text(json.dumps({"pieces": {"SynOther_v1": pin}}))
+    _set_pin(root, "SynOther_v1", None)
+    (root / "syn/sub.circuit-check.json").write_text("{}")
+    _run(root)
+    assert "syn.other.circuit-check#_model_roots:SynOther_v1" in _entry(root, "SynOther_v1")["reads"]["units"]
+    for ext in (".py", ".json"):
+        (root / f"syn/other.circuit-check{ext}").unlink()
+    _set_pin(root, "SynOther_v1", pin)
+    out = _run(root)
+    assert out["hits"] == ["SynTop_v1"] and out["stats"]["stored"] == 1
+    (root / "syn/sub.circuit-check.json").unlink()
+    out = _run(root)
+    assert out["hits"] == [] and out["stats"]["stored"] == 2
+
+
+#: a check that looks SynLate up in the registry (absent until a sidecar makes the registries import `syn.late.mod`), finds the
+#: Boolean Definition of SynAdd's word as `verity_flock.ir_lower._boolean_build` does (`cache._WORD_ENUMERATORS`), and, for
+#: SynOther, counts every registered Definition
+LOOKUPS = {
+    "syn/lookup.py": """
+def boolean_of(key):
+    from verity.ml.circuits.defs import REGISTRY
+    for d in list(REGISTRY.defs.values()):
+        if callable(getattr(d, "build", None)) and getattr(getattr(d, "word", None), "id", None) == key:
+            return d.id
+    return None
+
+
+def check_definition(fn, opts, *, memo, pins, as_call=None, **kw):
+    from verity.ml.circuits.defs import REGISTRY
+    got = {"failures": [], "warnings": [], "gates": fn.gates, "late": "SynLate_v1" in REGISTRY, "bits": boolean_of("SynAdd_v1")}
+    if fn.id == "SynOther_v1":
+        got["n"] = len(REGISTRY.defs)
+    return got
+""",
+    "syn/late/__init__.py": "",
+    "syn/late/mod.py": """
+from verity.ml.circuits import composite
+
+from syn.prims import SynAdd, V
+
+
+@composite("SynLate", 1, [], lambda S: ((("a", V), ("b", V)), V))
+def SynLate(B, S, a, b):
+    return B.call(SynAdd, a, b)
+""",
+    "syn/late/bits.py": """
+from types import SimpleNamespace
+
+from verity.ml.circuits.defs import REGISTRY
+
+from syn.prims import SynAdd
+
+REGISTRY.add(SimpleNamespace(id="SynAddBits_v1", word=SynAdd, build=lambda *a: None))
+""",
+}
+LOOKUP = HARNESS.replace("from syn import catalog, check\n",
+                         "from syn import catalog\nfrom syn import lookup as check\n"
+                         'CC._WORD_ENUMERATORS[("syn.lookup", "boolean_of")] = "key"\n')
+
+
+def _reports(root: Path, target: str) -> list[dict]:
+    return [e["report"] for p in (root / "cache").glob("*/*/*.json")
+            if (e := json.loads(p.read_text()))["key"]["request"]["target"][1] == target]
+
+
+def test_a_sidecar_whose_module_registers_what_a_check_looked_up_absent_reruns_it(tmp_path):
+    """`syn.late`'s modules are imported by nothing until a sidecar makes the registries import them: SynLate, which each check
+    looks up, is absent (``absent:SynLate_v1``), and so is the Boolean Definition of SynAdd's word (``word:SynAdd_v1``); a
+    sidecar beside either module reruns both targets, whose verdict it changes.  SynOther's check enumerated the whole registry
+    (``*``), which holds every sidecar as the key did: the pins file beside `syn.extra` (no Definition, and it imports none)
+    reruns it, and not SynTop."""
+    assert LOOKUP != HARNESS
+    root = _tree(tmp_path)
+    for rel, text in LOOKUPS.items():
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(text.lstrip("\n"))
+    _run(root, LOOKUP)
+    top, other = _entry(root, "SynTop_v1")["reads"]["registrars"], _entry(root, "SynOther_v1")["reads"]["registrars"]
+    assert {"absent:SynLate_v1", "word:SynAdd_v1"} <= set(top) and "*" not in top and "*" in other
+    (root / "syn/extra.circuit-check.json").write_text("{}")
+    assert _run(root, LOOKUP)["hits"] == ["SynTop_v1"]
+    (root / "syn/late/mod.circuit-check.json").write_text("{}")
+    assert _run(root, LOOKUP)["hits"] == []
+    assert sorted(r["late"] for r in _reports(root, "SynTop_v1")) == [False, True]
+    (root / "syn/late/bits.circuit-check.json").write_text("{}")
+    assert _run(root, LOOKUP)["hits"] == []
+    assert sorted(str(r["bits"]) for r in _reports(root, "SynTop_v1")) == ["None", "None", "SynAddBits_v1"]
+
+
+#: a module whose import imports `syn.late.mod` (`LOOKUPS`): `syn.late.wrap` imports it, and `syn.late.deep.leaf`'s package does,
+#: before any code of `syn.late.deep.leaf` runs
+WRAPPERS = {
+    "syn.late.wrap": {"syn/late/wrap.py": "from syn.late import mod  # noqa: F401\n"},
+    "syn.late.deep.leaf": {"syn/late/deep/__init__.py": "from syn.late import mod  # noqa: F401\n", "syn/late/deep/leaf.py": ""},
+}
+
+
+@pytest.mark.parametrize("wrapper", sorted(WRAPPERS))
+def test_removing_the_sidecar_of_a_module_whose_import_registered_what_a_check_found_reruns_it(tmp_path, wrapper):
+    """The registries register SynLate only for a sidecar beside a module whose import imports `syn.late.mod` (`WRAPPERS`), not
+    beside `syn.late.mod` itself.  SynTop's check finds SynLate; removing the sidecar reruns SynTop, whose check now looks it up
+    absent, though no module SynTop holds changed.  (`syn.idle`'s pins file, there throughout, makes the registries import
+    `syn.prims` first for it, so SynAdd, which SynTop also reached, is registered for the same sidecar either way.)"""
+    root = _tree(tmp_path)
+    for rel, text in {**LOOKUPS, **WRAPPERS[wrapper]}.items():
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(text.lstrip("\n"))
+    (root / "syn/idle.circuit-check.json").write_text("{}")
+    side = root / f"{wrapper.replace('.', '/')}.circuit-check.json"
+    side.write_text("{}")
+    _run(root, LOOKUP)
+    assert _run(root, LOOKUP)["hits"] == ["SynOther_v1", "SynTop_v1"]
+    assert "SynLate_v1" in _entry(root, "SynTop_v1")["reads"]["registrars"]
+    side.unlink()
+    out = _run(root, LOOKUP)
+    assert out["hits"] == [] and out["stats"]["stored"] == 2
+    assert sorted(r["late"] for r in _reports(root, "SynTop_v1")) == [False, True]
 
 
 def test_a_sidecar_whose_module_is_gone_is_an_error(tmp_path, monkeypatch):
@@ -1090,7 +1246,8 @@ def test_each_enumerator_only_imports_what_it_lists():
 def test_the_task_list_is_reused_only_while_nothing_its_build_could_depend_on_changed(tmp_path):
     """A circuit-check that reuses every target would still spend most of its time building the catalog to find them: the
     task list is reused whole when every target is as recorded.  An edit no target read (a registry module none resolves, a new
-    binding entry) still rebuilds the list, which it may change, and every target is reused as before."""
+    binding entry, a new pin, which keeps its target: `targets.pinned`) still rebuilds the list, which it may change, and every
+    target is reused as before."""
     root = _tree(tmp_path)
     assert "task_list" not in _run(root)["stats"]
     again = _run(root)
@@ -1105,6 +1262,10 @@ def test_the_task_list_is_reused_only_while_nothing_its_build_could_depend_on_ch
     _edit(root, "syn/sub.py", "B.call(SynAdd, a, b)", "B.call(SynAdd, b, a)")
     out = _run(root)
     assert out["hits"] == ["SynOther_v1"] and "task_list" not in out["stats"] and out["stats"]["stored"] == 1
+    assert _run(root)["stats"]["task_list"]
+    _set_pin(root, "SynNew_v1", {"and": 1})
+    out = _run(root)
+    assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and "task_list" not in out["stats"]
     assert _run(root)["stats"]["task_list"]
 
 
@@ -1200,6 +1361,62 @@ def test_a_zygote_forked_once_the_task_list_is_built_records_what_a_check_here_d
     assert out["hits"] == ["SynOther_v1"] and out["stats"]["stored"] == 1
 
 
+#: three members of a constructed family (`cli.CONSTRUCTED`), made by one constructor whose evaluator calls a module of its own,
+#: and a binding that makes them; the synthetic check evaluates a constant on no operand and says which process
+#: checked it
+CONSTS = {
+    "syn/cfam.py": """
+from verity.ml.circuits import Value
+from verity.ml.circuits.defs import PrimitiveDefinition
+
+from syn.cbits import widen
+
+
+def const(bits):
+    p = PrimitiveDefinition(f"SynC[0x{bits:x}]", 1, (), Value(16), lambda _b=bits: widen(_b), conformance="exact-model-tested")
+    p.family = "Const"
+    return p
+""",
+    "syn/cbits.py": "def widen(b):\n    return b & 0xFFFF\n",
+}
+CONST_IDS = [f"SynC[0x{b}]_v1" for b in (1, 2, 3)]
+
+
+def _with_consts(root: Path) -> Path:
+    for rel, text in CONSTS.items():
+        (root / rel).write_text(text.lstrip("\n"))
+    _edit(root, "syn/catalog.py", "BINDINGS = [", "def consts():\n    from syn import cfam\n    return [cfam.const(b) for b in (1, 2, 3)]\n\n\n"
+          'BINDINGS = [(("_model_roots:Spare_v1",), consts), ')
+    _edit(root, "syn/catalog.py", "FAMILIES = [", f"FAMILIES = [{', '.join(map(repr, CONST_IDS))}, ")
+    _edit(root, "syn/check.py", "evaluate(fn, 3, 0x0105)", "evaluate(fn, *(() if getattr(fn, 'family', None) else (3, 0x0105)))")
+    _edit(root, "syn/check.py", '"kind": reg.KINDS.get(fn.id)}', '"kind": reg.KINDS.get(fn.id), "pid": __import__("os").getpid()}')
+    return root
+
+
+def test_a_constructed_family_s_members_share_a_process_and_each_holds_what_it_would_alone(tmp_path):
+    """A `cli.CONSTRUCTED` family's members are checked in one process forked from the zygote (`cli._batched`), one after
+    another, as every target is checked in one process without ``--jobs``: each member's entry holds what it holds checked that
+    way, the constructor's evaluator module among them though only the first member's check imported it, so an edit to that
+    module reruns every member and nothing else."""
+    here, forked = _with_consts(_tree(tmp_path / "here")), _with_consts(_tree(tmp_path / "forked"))
+    assert _run(here)["hits"] == [] and _run(forked, FORKED)["hits"] == []
+
+    def held(root: Path, target: str) -> dict:
+        reads = _entry(root, target)["reads"]
+        return {**reads, "probes": {p: v for p, v in reads["probes"].items() if not p.startswith("cache/")}}
+
+    for target in CONST_IDS:
+        assert held(forked, target) == held(here, target) and {"syn.cfam", "syn.cbits"} <= set(held(forked, target)["modules"])
+        assert _values(forked, target) == _values(here, target) == [[int(target[7], 16)]]
+    pids = {t: _entry(forked, t)["report"]["pid"] for t in [*CONST_IDS, "SynOther_v1", "SynTop_v1"]}
+    assert len({pids[t] for t in CONST_IDS}) == 1 and len(set(pids.values())) == 3
+    assert _run(forked, FORKED)["hits"] == sorted([*CONST_IDS, "SynOther_v1", "SynTop_v1"])
+    _edit(forked, "syn/cbits.py", "b & 0xFFFF", "b & 0xFFFE")
+    out = _run(forked, FORKED)
+    assert out["hits"] == ["SynOther_v1", "SynTop_v1"] and out["stats"]["stored"] == 3
+    assert _values(forked, "SynC[0x1]_v1") == [[0], [1]]
+
+
 #: the harness with the checker a copy inside the tree (``checker/circuit_check``), as `src/circuit_check/` is inside the
 #: repository, whose scheduler's peaks the process has read before the checks (`cli.heavy`, as a run of the parallel path does)
 CHECKER = (HARNESS.replace("sys.path.insert(0, str(root))", "sys.path.insert(0, str(root))\nsys.path.insert(0, str(root / 'checker'))")
@@ -1256,3 +1473,57 @@ def test_the_checker_s_version_is_its_code_not_its_prose(tmp_path, monkeypatch):
     assert CC.version() == here
     data.write_text('{"a": 1}')
     assert CC.version() != here
+
+
+def _walked(fn) -> str:
+    """`cache.descriptor` as a walk of every body node and static, with no memo: what its memo must give."""
+    import hashlib
+
+    from verity.ml.circuits import codec as C
+    from verity.ml.circuits.defs import FunctionDefinition, PrimitiveDefinition, SpecializedDefinition
+
+    def statics(v):
+        if isinstance(v, FunctionDefinition):
+            yield v
+        elif isinstance(v, (list, tuple, dict)):
+            for x in v.values() if isinstance(v, dict) else v:
+                yield from statics(x)
+
+    parts, seen, stack = [], set(), [fn]
+    while stack:
+        f = stack.pop()
+        if id(f) in seen:
+            continue
+        seen.add(id(f))
+        if isinstance(f, (PrimitiveDefinition, SpecializedDefinition)):
+            parts.append([C.descriptor_id(f), hashlib.sha512(C.canonical_json(C.definition_entry(f))).hexdigest()])
+        if isinstance(f, SpecializedDefinition):
+            stack.extend(n.fn for n in f.body.nodes)
+            stack.extend(statics(f.bindings))
+    return hashlib.sha512(json.dumps(sorted(parts)).encode()).hexdigest()
+
+
+def test_a_descriptor_is_its_walk_of_every_body_node_however_often_a_body_calls_one_definition():
+    """`cache.descriptor` takes each specialization's distinct callees and statics once (`cache._NEXT`): every digest, first
+    and again, is the one a walk of every node gives, for a body that calls one Definition from many nodes, a function
+    static, and two specializations that share a callee."""
+    from verity.ml.circuits import Array, bind
+    from verity.ml.circuits.defs import CompositeDefinition
+    from verity.ml.circuits.ops.scalar import BIT, F32, F32Eq
+    from verity.ml.circuits.refs import tuple_of
+    from verity.ml.circuits.types import Tuple
+
+    from circuit_check import cache as CC
+
+    same = CompositeDefinition("DescSame", 1, (), lambda S: ((("a", F32), ("b", F32)), BIT),
+                               lambda B, S, a, b: B.call(F32Eq, a, b), register=False)
+    many = CompositeDefinition("DescMany", 1, ("N",), lambda S: ((("x", Array(S.N, F32)), ("y", Array(S.N, F32))),
+                                                                  Tuple(*[BIT] * S.N)),
+                               lambda B, S, x, y: tuple_of(*(B.call(bind(same), x[i], y[i]) for i in range(S.N))),
+                               register=False)
+    via = CompositeDefinition("DescVia", 1, ("OP",), lambda S: ((("a", F32), ("b", F32)), BIT),
+                              lambda B, S, a, b: B.call(S.OP, a, b), register=False)
+    roots = [bind(many, N=5), bind(many, N=2), bind(via, OP=bind(same)), bind(same), F32Eq]
+    first = [CC.descriptor(fn) for fn in roots]
+    assert first == [_walked(fn) for fn in roots] == [CC.descriptor(fn) for fn in roots]
+    assert len(set(first)) == len(roots) and not any(d.startswith("error:") for d in first)

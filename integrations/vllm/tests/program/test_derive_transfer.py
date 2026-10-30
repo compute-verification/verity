@@ -188,7 +188,7 @@ class Case:
     importer_kw: dict | None = None  # e.g. {"mode": "profile", "profile": "b1-eager"}; default reference mode
 
 
-torch.manual_seed(1234)  # the case inputs below are drawn once at import; seeded so every run evaluates the same words
+torch.manual_seed(1234)  # the case inputs below are sampled once at import; seeded so every run evaluates the same words
 
 CASES = [
     Case("mlp_shared_f32", lambda: ResidualMLPShared(), (torch.randn(CFG["H"]),), "f32",
