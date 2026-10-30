@@ -67,7 +67,7 @@ and taps (the acquisition plan under ``acquisition/``): the manifest of the row'
 writes (``verity-vllm predict row``; `serve_row.row_refusal` refuses any other, a traced Build's among them;
 `serve_seal.scheme_refusal`). ``--seal`` seals each closed
 window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. ``--retain-exclude hidden_m1``
-commits the attention interiors without retaining them, and each seal's manifest names them (`serve_seal.RetentionOptions`). ``--retain device --release-after P,Q`` holds each window's values in a
+commits the attention interiors without retaining them, and each seal's manifest names them (`serve_release.RetentionOptions`). ``--retain device --release-after P,Q`` holds each window's values in a
 device pool until every subprotocol named has drawn the window, then keeps on host, and seals, only the leaves their drawn
 blocks open (`serve_release`; PoUW H1's, ``pouw``, from its arm in process once each window's draw coin is open,
 `serve_h1.H1Windows.drawn`, any other's through ``--draws-dir``). Each
@@ -221,7 +221,7 @@ class Options:
                                           help="--protocols' settings, {\"pouw\": {...}}: a JSON object, or a JSON file (serve_h1.config_of)")
     gate: SH.GateOptions = group(SH.GateOptions)
     remote: SR.RemoteOptions = group(SR.RemoteOptions)
-    retention: SS.RetentionOptions = group(SS.RetentionOptions)
+    retention: RL.RetentionOptions = group(RL.RetentionOptions)
     learning: SL.LearnOptions = group(SL.LearnOptions)
 
 
@@ -673,7 +673,7 @@ def main(opts: Options) -> int:
     trace = advice_trace(out, llm)
     mirror = records_mirror(out, opts.copy_records_to)
     windows = sealer = warmed = arm = None
-    draws, draws_dir = RL.release_of(opts, out)
+    draws, draws_dir = RL.release_of(opts, out, com)
     if com is not None:
         from verity_vllm.engine.step_trace import scheduler_config
 
@@ -738,7 +738,7 @@ def main(opts: Options) -> int:
               "window_requests": opts.window_requests or None, "protocols": arm.describe() if arm is not None else None,
               "remote_session": session.describe() if session is not None else None, "row_scheduling": row,
               "committer_options": {k: getattr(opts, k) for k in ("required_manifest", "hidden_so", "hidden_ns", "tap_cap_mb", "norm_tap_so")},
-              "required_manifest_path": getattr(com, "required_manifest_path", None), **SS.retention_record(opts, com),
+              "required_manifest_path": getattr(com, "required_manifest_path", None), **RL.retention_record(opts, com),
               "arena": getattr(com, "arena_sizing_record", None), "engine": llm.engine_record, "run_id": opts.run_id,
               "switch_interval_s": sys.getswitchinterval(), "watchdog": {"period_s": watchdog.period_s, "min_s": watchdog.min_s},
               "clocks": {"perf_counter": time.perf_counter(), "time": time.time()}, **SS.target_of(llm.model, opts.async_scheduling)}
@@ -764,6 +764,7 @@ def main(opts: Options) -> int:
                 mirror()
             return got
 
+        RL.fail(draws, loop.error)
         if sealer is not None:                           # a cancel's SIGKILL can land before the pending seals end
             stopped(False)
             print(f"SERVE-OPENAI stopping: {sealer.summary()['held'] / SS.GB:.1f} GB of windows still to seal", flush=True)
