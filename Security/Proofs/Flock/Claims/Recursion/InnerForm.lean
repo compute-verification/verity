@@ -125,7 +125,7 @@ theorem ins_plainLeaves {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (h : w.ins =
       s.read.I.tables = w.tables ∧ w.partition.mapM (FlockDeploy.jsonOf "partition") = .ok s.read.I.partition ∧
       (∃ dr, w.draw.mapM (FlockDeploy.jsonOf "draw") = .ok dr ∧ s.read.draw = dr.map Flock.norm) ∧
       s.read.publicInputs = w.publicInputs := by
-  have hf : Tags.find? w.statement = some Tags.circuitPlainLeaves := by rw [hs]; rfl
+  have hf : Tags.byName? w.statement = some Tags.circuitPlainLeaves := Tags.byName?_of_find? (by rw [hs]; rfl)
   unfold FlockDeploy.Raw.ins at h
   simp only [hf, hz, ho, Bool.false_and, Bool.false_eq_true, ↓reduceIte, bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
