@@ -10044,7 +10044,7 @@
    "guarantees": ["Properties.NetworkCertifier.linkWindowAcceptMeans"]
   },
   "NetworkCheck.Period": {
-   "digest": "f84482078650bb000593941a70fb8d7613ce90e33c5ae0e08c23d6db612d8765",
+   "digest": "a9d658d9452d3829882cc8dd1e3258aa878fad56f46497986589e0bf07d7b705",
    "definitions": {
     "NetworkCheck.Period.Audit": "0d641bb152e911020e01f254af27bca6b76ff4e2cb57994e3121b4fcb8e976f4",
     "NetworkCheck.Period.Audit.bits": "e933e5e70e66fbf6d1a3f868d294c6a0cfc6be8b835a4d117602235327ee4af1",
@@ -10160,7 +10160,7 @@
     "NetworkCheck.Period.cellsTag": "5c1846c4e213077be502c7cb56a4132a78981e389cc8a44d60555d954e5e6ea9",
     "NetworkCheck.Period.certifies": "2803235f6ec55f07888c0a09fa51eace653cb90b35adadd4d5693235a1ee7ff5",
     "NetworkCheck.Period.certifiesOn": "171f63a57032e389c2374de9f1d7e2990ea02fb0b34ba10c7c82090bd40ab411",
-    "NetworkCheck.Period.chargedOf": "0878bec919aef4a643ed3fb97c9cde6139cb3f3008c30490d217b39cc84b89e5",
+    "NetworkCheck.Period.chargedOf": "74e03c82cbbd0a4ebe2caa2a7548d12b2ce27a5c7440ef5275c885bbe9cf06c7",
     "NetworkCheck.Period.check": "cfbdc29e908574ec97b9a29025fccab9d22a23d041665e335a44568509aa5af0",
     "NetworkCheck.Period.check._sparseCasesOn_5": "8a373b924267f39d6372f8af75abfe97b148ff5eebedb4270e154b6ed0f9b8a7",
     "NetworkCheck.Period.check._sparseCasesOn_7": "0b6a4d69f54d9e5deeb2604279479ac4b40639ff20b4b740809bf8ca8eebf9a1",
