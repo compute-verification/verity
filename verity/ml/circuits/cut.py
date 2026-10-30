@@ -218,8 +218,7 @@ class CallGraph:
         ops: list[list[int]] = []
         inputs: dict[int, int] = {}                                  # the Call's parameter gates it reads (root id -> index)
         wide: set[int] = set()
-        for j in range(n):
-            g = c.gate(lo + j)
+        for j, g in enumerate(c.gates(lo, lo + n)):
             width[j] = g.prim.ret.w
             prim[j] = self.prims.setdefault(g.prim.id, len(self.prims))
             scope[j] = self.scopes.setdefault(g.scope.spec.id, len(self.scopes))
@@ -635,8 +634,7 @@ class CallGates:
         prim: list[str] = [""] * n
         last = [-1] * n
         ops: list[tuple[int, ...]] = [()] * n
-        for j in range(n):
-            g = c.gate(lo + j)
+        for j, g in enumerate(c.gates(lo, lo + n)):
             p = g.prim
             width[j], prim[j] = p.ret.w, p.id
             if not p.params:

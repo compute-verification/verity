@@ -174,8 +174,7 @@ class Graph:
             # an input's token is its operand (< 0), a gate's the first gate with its value (a structure gate: with its key)
             return (prim[j], *[o if o < 0 else tok[o] for o in mine])
 
-        for j in range(n):
-            g = c.gate(lo + j)
+        for j, g in enumerate(c.gates(lo, lo + n)):
             p = g.prim
             width[j] = p.ret.w
             prim[j] = self.prims.setdefault(p.id, len(self.prims))
