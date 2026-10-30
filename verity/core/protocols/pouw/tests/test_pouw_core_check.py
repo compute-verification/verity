@@ -318,7 +318,7 @@ def _certified_pass(p: int) -> tuple[bytes, str, bytes, bytes, bytes, bytes]:
 
 
 def test_a_salted_unit_opens_only_under_its_certified_windows_salt():
-    """RT4-INT-10, at the opening of record. A certified window's pass passes `pass_epoch` under the certifier's reveal,
+    """At the opening of record. A certified window's pass passes `pass_epoch` under the certifier's reveal,
     and `certified_salt` is the salt it checked, `salt.pouw_salt(reveal, p, stream, prover)`. A salted unit whose public
     row was formed under that salt opens under it (the honest twin: every rule of the opening met). The same unit with
     its public row formed under a salt the prover chose, which it can form before any certifier salt exists, is refused
@@ -349,6 +349,21 @@ def test_a_salted_unit_opens_only_under_its_certified_windows_salt():
         other = {**cases[salt]["params"], "context": "served-zk/salt-bind/uncertified"}
         assert opened({**cases[salt], "params": other}, salt).startswith("the window is not certified")
         assert opened({**cases[salt], "params": other}, None).startswith("the window's template's unit reads a salt")
+
+
+#: `ok_salt("ab" * 64, 3)`, its first 32 bytes
+OK_SALT_3 = "41da7caf12c48dda02c2fc5ca1aba62e7c7325eb26fdc32e56a3e50d5a8a322b"
+
+
+def test_the_ok_salt_is_sha512_in_counter_mode():
+    """`core_check.ok_salt` is `SALT_BYTES` bytes of SHA-512 in counter mode over `OK_SALT_TAG` ‖ context ‖ 0 ‖
+    u64be(position), each block's counter a u32 big-endian (one hash, SHA-512, whole outputs), pinned so the Lean
+    `Credit.okSalt` and every registered ok row move with it."""
+    salt = CC.ok_salt("ab" * 64, 3)
+    assert salt[:32].hex() == OK_SALT_3
+    head = b"verity/pouw/h1-prove/ok-row-salt/v1\0" + b"ab" * 64 + b"\0" + (3).to_bytes(8, "big")
+    assert salt == b"".join(hashlib.sha512(head + c.to_bytes(4, "big")).digest() for c in range(3))
+    assert len({CC.ok_salt("ab" * 64, 4), salt, CC.ok_salt("cd" * 64, 3), CC.public_row_salt("ab" * 64, 3)}) == 4
 
 
 def test_the_public_row_is_the_compiled_programs_salt_position_and_roots():
@@ -606,7 +621,7 @@ def _live_draw(sk: lms.PrivateKey, coins: str, reg: str, stream: str, receipt: d
 
 
 def test_a_draw_record_the_prover_signed_over_its_own_coins_is_refused():
-    """RT4-INT-5's witness, refused. A prover that runs a challenger on coins of its own and signs its record under a key
+    """A self-run challenger, refused. A prover that runs a challenger on coins of its own and signs its record under a key
     of its own sees each candidate registration's draw before it registers, and keeps one whose draw misses the unit it
     can't prove (unit 0). The draw's check of record now verifies the record under the challenger key the window's
     parameters pin, not the key its coins name: the prover's record naming its own key is refused (``coin-key``), and
@@ -777,7 +792,7 @@ def test_every_live_salt_mutation_hits_its_refusal():
     ended complete, read through the session's own files, and refuses each mutation with the refusal it aims at: the
     manifest's form and workload, a call index of 2^32 or more, a `pass_index` that isn't an integer in [0, 2^64), the
     session's (as `salt`'s, a session opened on another root among them: W itself, another epoch's root, or the root of
-    an epoch other than the one the manifest names), a layout other than the salt coin alone (#3868's
+    an epoch other than the one the manifest names), a layout other than the salt coin alone (an
     H1 layout, its salt alone released, among them), a session opened without a reserve or reserved for another layout,
     an end that isn't complete with the salt coin alone released, a log showing another root or none, coins other than
     the session's, a coin that isn't its salt coin opened after R, another salt, and a session the manifest misnames
@@ -803,7 +818,7 @@ def test_a_live_pearl_c_pass_is_credited_only_from_its_complete_salt_only_sessio
     """An honest live Pearl-C manifest is accepted: its salt coin came from the salt-only
     session the auditor's ledger reserved, opened on its salt epoch's root and ended complete, having released that coin
     alone, and the verifier's seeded coins play no part. Refused: a verifier that holds no ledger, the session opened on
-    another root (a random one, or H1's window-open root), #3868's session (H1's layout, ended incomplete), an end that
+    another root (a random one, or H1's window-open root), an H1 session (H1's layout, ended incomplete), an end that
     isn't complete, a forged opening, and an in-process coin (seeded coins the prover ran) presented in place of the
     session's."""
     for seed in range(4):
