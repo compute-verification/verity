@@ -532,3 +532,13 @@ def test_a_holder_held_unread_is_posted_and_rings_top(relay):
     assert post.startswith(f"{top} *Agent watch:* ") and "did nothing itself for 60 min since 2026-10-24T17:25:00Z" in post
     assert "(a doorbell rang at 2026-10-24T17:40:00Z); the watch cancelled and continued" in post
     assert [r["thread_ts"] for r in rings(relay)] == [TOP_INBOX["inbox_ts"]]
+
+
+def test_an_outage_leads_with_top_names_daniel_and_lists_the_coordinators_down(relay):
+    rec = {"t": "2026-10-30T00:52:00Z", "kind": "outage", "agent": "", "name": "", "run": "", "owner": "top", "count": 5,
+           "handles": ["kernels", "proofs"], "since": "2026-10-29T23:22:00Z", "every_min": 15}
+    daniel = relay.slack.human_entry(relay.REG, "daniel")
+    assert relay.rung(rec) == "top"
+    out = relay.text(rec)
+    assert out.startswith(relay.slack.tag(relay.slack.entry(relay.REG, "top"))) and f"<@{daniel['slack_user']}>" in out
+    assert "5 coordinators have been down" in out and "@kernels, @proofs" in out and "every 15 min" in out
