@@ -286,10 +286,6 @@
    "owner": "@compute-accounting",
    "digest": "13419da38b56a985a7e9d380082513956a1014123de6551f02858585df159139"
   },
-  "Accounting.Compose.Period.EveryWindow": {
-   "owner": "@compute-accounting",
-   "digest": "a00f71bbadbe548d58bba0efff580398689ade608d039a289391b1534b9f265c"
-  },
   "Accounting.Compose.PrefixOf": {
    "owner": "@compute-accounting",
    "digest": "5f6db3d832a87a822b240b84797299efacb6c607ff175b79678767e4593e846a"
@@ -309,6 +305,10 @@
   "Accounting.Compose.SplitStages.LuckAt": {
    "owner": "@compute-accounting",
    "digest": "a3015e37e566a0c7ee1e316f8de97fc5f69cba2ea45f38cada428f9dac1fd92f"
+  },
+  "Accounting.Compose.WindowPlay.EveryWindow": {
+   "owner": "@compute-accounting",
+   "digest": "c98626accb7df5b1c0074aa9db7c4b154b316997637babcf44034dc4aba884f9"
   },
   "Accounting.Compose.WorkAt": {
    "owner": "@compute-accounting",
@@ -2512,7 +2512,8 @@
   },
   "Pouw.SecurityProofs.OnsiteFreed": {
    "honest": ["Pouw.SecurityProofs.OnsiteFreed_honest"],
-   "nontrivial": "Pouw.SecurityProofs.OnsiteFreed_nontrivial"
+   "nontrivial": "Pouw.SecurityProofs.OnsiteFreed_nontrivial",
+   "kind": "exclusion"
   },
   "Pous.SecurityProofs.StreamedWipeMeetsDisk": {
    "honest": ["Pous.Claims.StreamedWipeMeetsDisk_meets"],
@@ -13066,9 +13067,9 @@
    "Accounting.SecurityProofs.Compose.SplitRateExp": "lemma: Accounting.Compose.SplitRateAt at the sharp Lambda = max(a w_max/-ln(p + (1 - p) e^(-K rho w_max)), b w_max/-ln(p0 + (1 - p0) e^(-K rho w_max))) with nu = (e^(a w_max/Lambda) - 1)/((1 - p) w_max) and nu0 the same at b, p0 (RT-COMPOSE r4's check 3), so a rate quoted at the sharp Lambda is proved with its witness as a term; real arithmetic, not a Lean function.",
    "Accounting.SecurityProofs.Compose.CircuitWorkSeeded": "frozen (no-function,world-unlisted): decision 113's logical layer under seeded coins (decision 122's one seed a call), stated in the random-oracle model, over every declared circuit with every round holding a credited tile seeded, one call site a round and every value a seeded round reads by its IR cut named by the round's seed preimage or registered (Accounting.Compose.ScopeSeeded: H1's attention uncredited by Scheme.SeedPriced, and Accounting.Compose.SeedNamed, a protocol fact of the declared circuit that today's code doesn't meet, so on today's code ScopeSeeded fails and nothing is credited), its rounds' coins the oracle's answers to T_q queries a round and its run any joint run of every round's answers (Accounting.Compose.JointRun, jointGame, jointMode: no stage order), its binding pieces (Of, MovedIn at delta_bind, JointSound, Pins) on the proofs' layer cut at the draw (Accounting.Compose.Declared.atDraw: a seeded coin is a hash the cheater can evaluate before it commits, so operands and receipts are bound only at the draw) and UnitFixed on the layer cut at the IR (Declared.atIR, which reads no committed value): an accepted run has its committed words fixed right but for a share at cost max(5a, (1 + kappa0) b) ln(1/delta_s)/(rho K_d) + a Pi_F + b Pi_0 + min(a, b) D0 (WorkAt at rOfSeeded, Pi_F and Pi_0 the seed groups' premiums ln(T_q/delta_g)/theta from the IR at the folded rate, seedTheta, and at the whole skips' own rate, wholeTheta, premiumOf), except with probability delta_s + delta_bind + delta_ks + eps_id(T, |J|) + 2 rounds (delta_g + delta_b), T the window's SHA-512 calls and |J| the seeds the proofs name, eps_id, delta_b and delta_bind per prover at one prover budget; not a Lean function, an Accounting.TS.prob event that shape.events does not list, and the random-oracle premise (Accounting.Assumptions.Compose.SeedExtractedAt, once a window, over the seed answers only, card 9cd57182), GRIND's premise per round (Accounting.Assumptions.Compose.SeedLuckAt, at kappa = 4 and the folded rate for folded tiles and at kappa0 and the whole rate for whole ones, each query's moment over its own answer with the window's other answers fixed, off a binding event at delta_b read through ecr/sha-512) and UnitFixed at the run's modes are not on the premises list. No ruling grants a whole-tile luck per seed query (ASK-9 decides 1/2 for the live line only), so its luck line at T_q = 2^128 and delta_g = 2^-40/(2 rounds), r = 1, Llama-3.1-8B decode at batch up to 32, is conditional on the premise wholeTheta reads: at 1/2 a query (kappa0 > 1, x0 < ln 2, about 177 tiles a seed group) 56.1%, so with only granted premises it is vacuous at small-batch decode; under GuessLuckAt at 2^-64 (not granted) 1.120% (0.168% at batch 256, 0.048% at prefill); under Accounting.Assumptions.Compose.WholeEntropyAt at K/8 nats a tile (not granted) 0.101%, below the live pair's 0.173% closed. The declared circuit is the served Program's only through Properties.Compose.UnitsOfLayout (unproved: its units, commit coins, seed preimages and draw) and an extractor that doesn't exist yet: until both exist, the guarantee speaks of the declared circuit, not of a served workload.",
    "Accounting.SecurityProofs.Compose.CircuitCreditSeeded": "frozen (no-function,world-unlisted): the composed credit CreditOfWork after CircuitWorkSeeded (decision 113) under seeded coins, in the random-oracle model, Accounting.Compose.CreditCertificate.Holds for every declared circuit's sampled window on a data sheet, in a device window the physical layer's ledger consumes, issued at coins = seeded with its grinding premiums (folded and whole, each at its own rate), the oracle's eps_id(T, |J|) once a window and 2 rounds (delta_g + delta_b), on a joint run with its binding at the draw (Declared.atDraw) and its cones at the IR (Declared.atIR), in ScopeSeeded with Accounting.Compose.SeedNamed (a protocol fact today's code doesn't meet), an Accounting.TS.prob event that shape.events does not list, not a Lean function; SeedExtractedAt (random-oracle), SeedLuckAt per round, UnitFixed at the run's modes, A1-A7, FoldOptFolded and FillOpt are not on the premises list. Its eps at r = 1, eps_flat = 0.571% and eps_mu = 0 is conditional on the whole-tile luck a query its wholeTheta reads, which no ruling grants: at 1/2 a query 56.6% for Llama-3.1-8B decode at batch up to 32 and 1.85% at prefill; under GuessLuckAt at 2^-64 1.691% (0.738% at batch 256, about 0.62% at prefill); under WholeEntropyAt at K/8 nats at most 0.672%; against EPS1's 1% and the live pair's 0.744%. The declared circuit is the served Program's only through Properties.Compose.UnitsOfLayout (unproved: its units, commit coins, seed preimages and draw) and an extractor that doesn't exist yet: until both exist, the guarantee speaks of the declared circuit, not of a served workload.",
-   "Accounting.SecurityProofs.ComposePeriod.PeriodBudget": "lemma: the composition of resource accounting's window budgets over an accounting period: if every window's Accounting.Compose.serviceGame has RoundGame.BudgetAt Lambda whatever the earlier windows did, so has the period's game (Accounting.Compose.periodGame, each window one round, its play any function of the earlier windows' coins, Accounting.Compose.Period); by induction on the period, not a Lean function.",
+   "Accounting.SecurityProofs.ComposePeriod.PeriodBudget": "lemma: the composition of resource accounting's window budgets over an accounting period: if every window's Accounting.Compose.serviceGame has RoundGame.BudgetAt Lambda whatever the earlier windows did, so has the period's game (Accounting.Compose.periodGame, each window one round, its play any function of the earlier windows' coins, Accounting.Compose.WindowPlay); by induction on the period, not a Lean function.",
    "Accounting.SecurityProofs.ComposePeriod.PeriodTailMax": "lemma: budget_tail at every prefix at once (Ville's inequality, finite form): when RoundGame.BudgetAt Lambda bounds a play, some prefix of its rounds passes (Accounting.Compose.RoundGame.acceptsUpTo) with share at least Lambda t (Accounting.Compose.RoundGame.deficiencyUpTo) with probability at most e^(-t), so a period credited up to its first failed window, a stopping time the cheater may steer, pays ln(1/delta_s) once; by induction on the play for every threshold, conditioning on the first round's coins, not a Lean function.",
-   "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod": "frozen (no-function,world-unlisted): INT-PERIOD's restatement of CircuitWork over an accounting period of at most n windows of one declared circuit (Accounting.Compose.Period, each window with its own live coins and draw), credited up to its first window with a refused proof (Accounting.Compose.Outcomes.Credited, RT3-INT-7) and its words counted on each credited window's live tiles only (RT-INT's fix (c) with RT2-INT-1's), which Daniel took (ASK-64 = A, 19 Oct): an accepted period has its accepted prefix's live words fixed right but for a share at cost Lambda ln(1/delta_s) + j min(a, b) D0 at the realized prefix j (LiveWorkAt at rOfPrefix), except with probability delta_s + n (delta_bind + delta_ks); not a Lean function, an Accounting.TS.prob event that shape.events does not list, and its claims (OperandHMu, ReceiptLuckAt and GuessLuckAt per live tile under PerLiveTile, UnitFixed at the period's modes) are not on the premises list. Proved from CircuitWork's lemmas at n rounds: ServiceBudget per window at the live weights, PeriodBudget, PeriodTailMax once at the accepted prefix, DrawnRightOff at n rounds with PrefixOf, the period layer's covers (Accounting.SecurityProofs.ComposePeriod.periodCovers: Declared.periodLayer's writers are in their own window by its definition) and UnitFixed's sums. Its Scope holds LayerCommitted (each value the prover writes committed by its IR cut, or a computed value only its own unit reads by the draw, on which a late edge's cone lying in the IR's rests), which today's code doesn't meet, so a live window it serves is out of scope; and the period's record (cap and circuit committed before window 0's first coin, each window's first coin after the previous window's draw, closed at the first refused window) is protocol structure today's code doesn't meet either: the served Credits registers a window when it is received. Its live tiles are the ones live in-circuit: under #2731's tile (#2639's PouwH1Tile_v2) the served gate's admit bits admit a scale_only row block whose tile is dead (RT4-LOGIC-4), and under #2902's PouwH1Tile_v4 a tile's live bit is its admit bits' OR (RT4-LOGIC-20). Its quoted numbers take D0 = 0, which nothing computes for the served circuit, and at D0 > 0 DeadConeDead can fail, so that the statement says nothing (RT4-LOGIC-18). Its numbers are for live windows, which no served path runs yet, and the declared circuit is the served Program's only through Properties.Compose.UnitsOfLayout and an extractor that doesn't exist yet.",
+   "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod": "frozen (no-function,world-unlisted): INT-PERIOD's restatement of CircuitWork over an accounting period of at most n windows of one declared circuit (Accounting.Compose.WindowPlay, each window with its own live coins and draw), credited up to its first window with a refused proof (Accounting.Compose.Outcomes.Credited, RT3-INT-7) and its words counted on each credited window's live tiles only (RT-INT's fix (c) with RT2-INT-1's), which Daniel took (ASK-64 = A, 19 Oct): an accepted period has its accepted prefix's live words fixed right but for a share at cost Lambda ln(1/delta_s) + j min(a, b) D0 at the realized prefix j (LiveWorkAt at rOfPrefix), except with probability delta_s + n (delta_bind + delta_ks); not a Lean function, an Accounting.TS.prob event that shape.events does not list, and its claims (OperandHMu, ReceiptLuckAt and GuessLuckAt per live tile under PerLiveTile, UnitFixed at the period's modes) are not on the premises list. Proved from CircuitWork's lemmas at n rounds: ServiceBudget per window at the live weights, PeriodBudget, PeriodTailMax once at the accepted prefix, DrawnRightOff at n rounds with PrefixOf, the period layer's covers (Accounting.SecurityProofs.ComposePeriod.periodCovers: Declared.periodLayer's writers are in their own window by its definition) and UnitFixed's sums. Its Scope holds LayerCommitted (each value the prover writes committed by its IR cut, or a computed value only its own unit reads by the draw, on which a late edge's cone lying in the IR's rests), which today's code doesn't meet, so a live window it serves is out of scope; and the period's record (cap and circuit committed before window 0's first coin, each window's first coin after the previous window's draw, closed at the first refused window) is protocol structure today's code doesn't meet either: the served Credits registers a window when it is received. Its live tiles are the ones live in-circuit: under #2731's tile (#2639's PouwH1Tile_v2) the served gate's admit bits admit a scale_only row block whose tile is dead (RT4-LOGIC-4), and under #2902's PouwH1Tile_v4 a tile's live bit is its admit bits' OR (RT4-LOGIC-20). Its quoted numbers take D0 = 0, which nothing computes for the served circuit, and at D0 > 0 DeadConeDead can fail, so that the statement says nothing (RT4-LOGIC-18). Its numbers are for live windows, which no served path runs yet, and the declared circuit is the served Program's only through Properties.Compose.UnitsOfLayout and an extractor that doesn't exist yet.",
    "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod": "frozen (no-function,world-unlisted): CircuitWorkPeriod's credit in live words (RT4-INT-8): under its premises at a, b > 0, an accepted period has at least (1 - eps(j))+ of its accepted prefix's live words fixed right (Accounting.Compose.creditPrefix), eps(j) = r(j) N_w/(min(a, b) N_live) at the realized prefix j = PeriodRun.prefixLen (Accounting.Compose.epsPrefix), never at the cap n, except with probability delta_s + n (delta_bind + delta_ks), so a prefix whose eps is at least 1 earns nothing; not a Lean function, an Accounting.TS.prob event that shape.events does not list, with CircuitWorkPeriod's claims off the premises list. Proved from CircuitWorkPeriod's assembly (creditPrefix_le, with UnitFixed keeping an accepted run's fixed words nonnegative). A credit of words, not of time: the headline's time credit needs CreditOfWork on each credited window's run and is not stated.",
    "Accounting.SecurityProofs.TS.SessionSoundAt": "frozen (no-function,world-unlisted): #2909's SoundAt bridge on #2855's proof layer through its C-Flock sessions, over every window of sessions, not a Lean function; it takes EndToEndRegisteredRows' collision bounds at every session (RowsSession.CR) as hypotheses, and its premises AcceptedLive, WindowLaw, ServedChecksHold and ServedRootsLinked (Proofs.Accounting.TS.Session.Assumptions) are not on the premises list.",
    "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline": "frozen (conjecture,no-function,world-unlisted): FP8-g1's headline on sm_120 at 5.860%, Accounting.SecurityProofs.TS.Sm120SheetHeadline (whose reason is this one's) at proof layers whose values are a round's operand leaves beside any other values (Leaves x W) with n_pi + 1 proofs a round, with binding at delta_bind (ProofLayer.BindingAt, #2855's form, which ProofsSoundOfPinned takes) in place of the record's fork form at delta_fork (BindingForkAt, read at sqrt(delta_fork) by BindingOfFork), so the budget reads delta_bind where the record's reads sqrt(delta_fork) and no number moves, and one hypothesis more over Definitions, every committed leaf FP8-g1's on H1's grids (Pouw.FpG1.Leaves.Fp8 at Pouw.FpG1.Grids.h1: E4M3's integers to 120 and to 104), which is not on the premises list; its conclusion reads no operand value, so the bound is the record's at g1's windows.",
@@ -16724,7 +16725,7 @@
    ]
   },
   "Definitions.Accounting.ComposePeriod": {
-   "digest": "97f3bd46606ef0bc2e4f8cda3576c68483b764238d20e703baa5cb08aa09b435",
+   "digest": "90116c11db3edc43c96137fc5b72d8db5e9e556d63a91e8a80b60d7cae0a95ad",
    "definitions": {
     "Accounting.Compose.DeadConeDead": "ca2183fb0f093df1f54d1a511bac3482a6808e51a6b37b292fc94e8fc2c96bc7",
     "Accounting.Compose.Declared.periodLayer": "a01db9d427c342555e77bd8d0c437c88963489e2c43b2dcf299f6a71c649a843",
@@ -16737,28 +16738,28 @@
     "Accounting.Compose.Outcomes.rel": "a8a4aeafd52b7b38bafb63224a5e0dad0e087b9086e62981f233dc4343138677",
     "Accounting.Compose.Outcomes.right": "c9e3052b13f635844940ec05ab1cbe759e565d22cf82e17e0acfaa31386cbf8e",
     "Accounting.Compose.PerLiveTile": "91895d8096bf1965ed5103916813e0624047592ef6933af8da4ed2cbc9c923a0",
-    "Accounting.Compose.Period": "13d14cade7896245c98de63e7b9b333a94bde2f918d0c4c727f58b320b0596bc",
-    "Accounting.Compose.Period.EveryWindow": "a00f71bbadbe548d58bba0efff580398689ade608d039a289391b1534b9f265c",
-    "Accounting.Compose.Period.below": "6a5df8cd5668063823056d9273443e04f47cbc0065be2aa3941cd36674d97a9a",
-    "Accounting.Compose.Period.brecOn": "a8477feee591807b5f8a3646a71d2585daa83333907ea7ee14a878358871011f",
-    "Accounting.Compose.Period.brecOn.go": "35474b4f43e61aa4770ba972ce972eb818beb51f83346d8ea416bb5c8612e9f3",
-    "Accounting.Compose.Period.casesOn": "131de49507ac32ec06839871b47ab28a589ce0eb776fb41e670c39f07825ff46",
-    "Accounting.Compose.Period.done": "7d16ae838104b949137991d7652c34c2cf15c04446846cd71d7787d99b2330d5",
-    "Accounting.Compose.Period.liveAt": "fd7d537da3c88aa8bb018e3abdc90f5fb86171dc9c19e4de3aea4e3f7555b120",
-    "Accounting.Compose.Period.rec": "0adacc7d014142c938755d3cae5f6bd5e3d72fb4ea3a9bd8aaf22de7600610a4",
-    "Accounting.Compose.Period.window": "f39dcb3af3972c3864f161ba68c3322dab3be434611c25337dd93763f73a8216",
-    "Accounting.Compose.Period.windowAt": "371c0de8887af6adb233d1aee7802dffa4dcf89290b3344fd57fe0829ecd9765",
     "Accounting.Compose.PrefixOf": "5f6db3d832a87a822b240b84797299efacb6c607ff175b79678767e4593e846a",
     "Accounting.Compose.RoundGame.acceptsUpTo": "7f24c520abbb1dae862a06cf3eeadacf1f0d8ffcbf0d8aa37c2c5ff9bfdc9db1",
     "Accounting.Compose.RoundGame.deficiencyUpTo": "ec618fe1e854b9e09bee48e05dd7fcbf16e09ff910f6a155de253f780864cf3a",
+    "Accounting.Compose.WindowPlay": "abbf6d86f51a72b82e21a67102782a1523ba6a906e592615cf03f7846894a525",
+    "Accounting.Compose.WindowPlay.EveryWindow": "c98626accb7df5b1c0074aa9db7c4b154b316997637babcf44034dc4aba884f9",
+    "Accounting.Compose.WindowPlay.below": "019ca0227d52e3c7f354e5c160a3b416faf36260ab9b34b066a879107e8e5cf8",
+    "Accounting.Compose.WindowPlay.brecOn": "6ec83024bf017ed233aa043c01fd8d6afddec085f6792591d37e11257df8ccf7",
+    "Accounting.Compose.WindowPlay.brecOn.go": "d2c4bdbe13601b8cad341406a76e2c33a58131dd72b8e13422873265e6f2aa61",
+    "Accounting.Compose.WindowPlay.casesOn": "13ca444a78925e3993ba11189f6073b2a5f1f62fb74f6489d81ad614e6e091c5",
+    "Accounting.Compose.WindowPlay.done": "486618ac95373dd92546e07b238cc362b8567d07d5e17c290cdb5ac9b0e7ac3c",
+    "Accounting.Compose.WindowPlay.liveAt": "1d0198968cb884fc443badb099323a6dececf8172fbc0ca06d175387a1f2ec5a",
+    "Accounting.Compose.WindowPlay.rec": "2b88578a46c99df649024dbe30257bda0d92a481ebb5fbec931779029d3ab83d",
+    "Accounting.Compose.WindowPlay.window": "d64cfa739e924c1366c2f7a4187695beec4b80e133ff0f83b4ee1780a0143d38",
+    "Accounting.Compose.WindowPlay.windowAt": "90c32b98a21b4db315ef0469ae19e021bddb2e3319b362e06178e23c981c0287",
     "Accounting.Compose.consGame": "c2028e515abf2a609322d707f397836d556d0ee509301d3ea18d80d0dadd2f26",
     "Accounting.Compose.creditPrefix": "0cf51a60ce843ddf1b28ec3ba0a5e1f1bfd1823877dbcf833f6074f4830be3e5",
-    "Accounting.Compose.creditedLive": "15e1aa9f0aecd5269b391c02e6249e973b30e9fef123cad871b869c13b93dc38",
+    "Accounting.Compose.creditedLive": "4f01df9749296e195bcb04e7181687eeabb8bee99a5962dd42587c10c63eacaa",
     "Accounting.Compose.epsPrefix": "326c39d4dd24cd93e1a7fa6d13d8784177b0a069dd48c7baa6a9ec56c68a5c62",
     "Accounting.Compose.liveCone": "fc1a07b9904b18a8d083652f260526228ad818a5cc1a1e314d3e7be4a07d7daf",
     "Accounting.Compose.liveWords": "0a60576d88cab5b6bc1024f19524c7b48d52b16e2c43faf43a10af4bb7379bdf",
-    "Accounting.Compose.periodGame": "76b742254a2efa587efbd4559c05ffb95b6365ab78ce00e53287b4ffda0ae169",
-    "Accounting.Compose.periodMode": "9ebef421f897aa7e70ee118ad58fc2b5318d376afd25525f92a220b7093abb3d",
+    "Accounting.Compose.periodGame": "fad519d2c5a96b8edf0ddd76acf4ccb6ccbb36f32bef10c9535ce44cbba59bcc",
+    "Accounting.Compose.periodMode": "f2a39135d388ff641734b2e8460acc941e987bb58eb8246777f536ab7e235d5e",
     "Accounting.Compose.rOfPrefix": "1166975ed785ba47325b1d4600a1cc953f9dcbbd8d561d612307cf64bb1afb83"
    },
    "guarantees": [
@@ -17506,11 +17507,11 @@
    ]
   },
   "Definitions.Accounting.Guarantees.ComposePeriod": {
-   "digest": "246d22df17f83e4428d6a4112b9f63351649ff10f79b1e40e4f64a69bd083ecf",
+   "digest": "82de97ea9a1b5b0fbea479cc72b962aada7433e52f6732dfc36995db9f5309cf",
    "definitions": {
-    "Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod": "744a4cc27725edd120cb3fdfa4dd4467b916d3cb1aecf9bd5e39444dfb644ca6",
-    "Accounting.Guarantees.ComposePeriod.CircuitWorkPeriod": "9a9c44a25d40e27e546d6271b4b6d09dbfa83baea7bda4acca50c1bafa6571bf",
-    "Accounting.Guarantees.ComposePeriod.PeriodBudget": "854184f4b0a891ea10efec5a1619e331e2f77fd82bea4c5e4c2c5f575afee155",
+    "Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod": "e1c18328e34245525bdb996c612db8dbbe16b63c51d7348122b8afd990e97dd7",
+    "Accounting.Guarantees.ComposePeriod.CircuitWorkPeriod": "960742127645d0bccd8daafe43f0580e341a9fc2783c9a8fc84984c2b4dbd04a",
+    "Accounting.Guarantees.ComposePeriod.PeriodBudget": "8e58a4788964033cc40fd5f4ed21bc1fe8cbcd38c2ad21464ceed098d46f70c3",
     "Accounting.Guarantees.ComposePeriod.PeriodTailMax": "9ab8417f568e72412d8aabc831652ed12f28fb7995c20b016baee7d88410743e"
    },
    "guarantees": [
