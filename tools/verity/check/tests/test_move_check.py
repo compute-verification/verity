@@ -749,6 +749,43 @@ def test_pins_sorted_anew_after_their_paths_moved_are_a_move(tmp_path):
     assert not _worded(tmp_path / "dropped", base_pins, **{"p/TRUSTED.sha256": dropped})["certified"]
 
 
+def _doc_paths(tmp_path: Path, lean: str, md: str) -> dict:
+    """`P/x` moved to `P/y`; a Lean doc comment names it from the root, a Markdown file relative to itself."""
+    repo, base = _repo(tmp_path, {"P/x/A.lean": "def a := 1\n", "S/B.lean": "/-! `P/x/A.lean` states `a`. -/\ndef b := 1\n",
+                                  "docs/README.md": "`../P/x/A.lean` states it ([A](../P/x/A.lean)).\n"})
+    _move(repo, "P/x", "P/y")
+    _write(repo, {"S/B.lean": lean, "docs/README.md": md})
+    return _check(repo, base)
+
+
+def test_moved_paths_in_a_lean_comment_and_markdown_relative_paths_are_a_move(tmp_path):
+    r = _doc_paths(tmp_path, "/-! `P/y/A.lean` states `a`. -/\ndef b := 1\n", "`../P/y/A.lean` states it ([A](../P/y/A.lean)).\n")
+    assert r["certified"], r["refusals"]
+
+
+def test_a_lean_comment_edit_that_is_not_path_only_is_refused(tmp_path):
+    """Only a moved path may change in a Lean comment: not its prose, not a path the move didn't make, nor the code."""
+    md = "`../P/y/A.lean` states it ([A](../P/y/A.lean)).\n"
+    for case, lean in {"prose": "/-! `P/y/A.lean` states `b`. -/\ndef b := 1\n",
+                       "unmade": "/-! `P/z/A.lean` states `a`. -/\ndef b := 1\n",
+                       "code": "/-! `P/y/A.lean` states `a`. -/\ndef b := 2\n"}.items():
+        (tmp_path / case).mkdir()
+        [f] = _doc_paths(tmp_path / case, lean, md)["refusals"]
+        assert f["path"] == "S/B.lean", case
+
+
+def test_a_markdown_relative_path_the_move_did_not_make_is_refused(tmp_path):
+    """A Markdown relative path may only follow the move: one naming a path the move didn't make, or another file, is
+    refused, in a link's target and in backticks."""
+    lean = "/-! `P/y/A.lean` states `a`. -/\ndef b := 1\n"
+    for case, md in {"link": "`../P/y/A.lean` states it ([A](../P/z/A.lean)).\n",
+                     "backticks": "`../P/z/A.lean` states it ([A](../P/y/A.lean)).\n",
+                     "outside": "`../P/y/A.lean` states it ([A](../../P/y/A.lean)).\n"}.items():
+        (tmp_path / case).mkdir()
+        [f] = _doc_paths(tmp_path / case, lean, md)["refusals"]
+        assert f["path"] == "docs/README.md", case
+
+
 def test_a_moves_record_of_a_path_that_did_not_move_whole_is_refused(tmp_path):
     moves = json.dumps({"about": "x", "moves": [{"paths": {"S/Specs/": "S/Models/"}}, {"paths": {"S/": "T/"}}]}, indent=2) + "\n"
     [f] = _worded(tmp_path, **{"tools/research/src/research/store/moves.json": moves})["refusals"]
