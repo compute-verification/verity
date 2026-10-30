@@ -30,11 +30,16 @@ theorem etaLead_nonneg (L : Pouw.Lead.Layout) : 0 ≤ etaLead L := by
 most `e` over the salt, the strategy being a function of the other units' coins. -/
 theorem pr_unit_le {L : Pouw.Lead.Layout} {N₀ : ℕ} {can : Strategy L → Prop} (p : Pouw.Lead.Game.LeadProg L N₀ can) (i : Fin N₀)
     (E : Strategy L → Coins L → Prop) {e : ℝ} (he : 0 ≤ e) (h : ∀ σ, can σ → Pouw.pr (E σ) ≤ e) :
-    Pouw.pr (fun s : Pouw.Lead.Game.Salt L N₀ => E (p.play s i) (s i)) ≤ e :=
-  le_of_eq_of_le
-    (Pouw.pr_equiv ((Equiv.piSplitAt i fun _ => Coins L).trans (Equiv.prodComm _ _))
-      (fun y : ({j : Fin N₀ // j ≠ i} → Coins L) × Coins L => E (p.σ i y.1) y.2))
-    (Pouw.pr_prod_le _ e he fun r => h _ (p.can_σ i r))
+    Pouw.pr (fun s : Pouw.Lead.Game.Salt L N₀ => E (p.play s i) (s i)) ≤ e := by
+  let f : Pouw.Lead.Game.Salt L N₀ ≃ ({j : Fin N₀ // j ≠ i} → Coins L) × Coins L :=
+    (Equiv.piSplitAt i fun _ => Coins L).trans (Equiv.prodComm _ _)
+  let P : ({j : Fin N₀ // j ≠ i} → Coins L) × Coins L → Prop := fun y => E (p.σ i y.1) y.2
+  have h1 : Pouw.pr (fun s : Pouw.Lead.Game.Salt L N₀ => P (f s)) = Pouw.pr P := Pouw.pr_equiv f P
+  have h2 : Pouw.pr P ≤ e := Pouw.pr_prod_le P e he fun r => h (p.σ i r) (p.can_σ i r)
+  have h3 : (fun s : Pouw.Lead.Game.Salt L N₀ => E (p.play s i) (s i)) = fun s => P (f s) := by
+    funext s; rfl
+  rw [h3, h1]
+  exact h2
 
 /-- Unit `u`'s event at the salt `s`: its call is accepted, its execution and honest commitment hash no collision, and
 its work is below `32 · (honestRegs − gapFixed)`. -/
@@ -53,19 +58,15 @@ theorem pr_unitEvent_le {Q R : Type} [Fintype Q] [DecidableEq Q] [Fintype R] {L 
         (σ.work prc ω : ℚ) < 32 * (honestRegs L C - gapFixed L C)) ≤ etaLead L) :
     Pouw.pr (fun x : (Q → R) × Pouw.Lead.Game.Salt L N₀ => unitEvent prc sha C κ p U u x.2) ≤ etaLead L := by
   have hη := etaLead_nonneg L
+  refine Pouw.pr_prod_le _ (etaLead L) hη fun _ => ?_
+  show Pouw.pr (fun s : Pouw.Lead.Game.Salt L N₀ => unitEvent prc sha C κ p U u s) ≤ etaLead L
   by_cases h : u < N₀
-  · calc Pouw.pr (fun x : (Q → R) × Pouw.Lead.Game.Salt L N₀ => unitEvent prc sha C κ p U u x.2)
-          = Pouw.pr (fun y : Pouw.Lead.Game.Salt L N₀ × (Q → R) => unitEvent prc sha C κ p U u y.1) :=
-            Pouw.pr_equiv (Equiv.prodComm _ _) (fun y : Pouw.Lead.Game.Salt L N₀ × (Q → R) => unitEvent prc sha C κ p U u y.1)
-      _ ≤ Pouw.pr (unitEvent prc sha C κ p U u) := Pouw.pr_fst_le _
-      _ ≤ Pouw.pr (fun s : Pouw.Lead.Game.Salt L N₀ =>
-            Accepted L sha C (κ U u) (p.play s ⟨u, h⟩) (s ⟨u, h⟩) ∧
-              ¬ Break L sha C (κ U u) (p.play s ⟨u, h⟩) (s ⟨u, h⟩) ∧
-              ((p.play s ⟨u, h⟩).work prc (s ⟨u, h⟩) : ℚ) < 32 * (honestRegs L C - gapFixed L C)) :=
-            Pouw.pr_mono fun _ ⟨_, hs⟩ => hs
-      _ ≤ etaLead L := pr_unit_le p ⟨u, h⟩
-            (fun σ ω => Accepted L sha C (κ U u) σ ω ∧ ¬ Break L sha C (κ U u) σ ω ∧
-              (σ.work prc ω : ℚ) < 32 * (honestRegs L C - gapFixed L C)) hη htail
+  · have h1 := pr_unit_le p ⟨u, h⟩
+      (fun σ ω => Accepted L sha C (κ U u) σ ω ∧ ¬ Break L sha C (κ U u) σ ω ∧
+        (σ.work prc ω : ℚ) < 32 * (honestRegs L C - gapFixed L C)) hη htail
+    refine le_trans (Pouw.pr_mono fun s hs => ?_) h1
+    obtain ⟨_, hs⟩ := hs
+    exact hs
   · exact (Pouw.pr_eq_zero fun _ ⟨hu, _⟩ => h hu).le.trans hη
 
 /-- **A winning run without a break has a unit's event**: some accepted call worked below
@@ -83,6 +84,7 @@ theorem exists_unit_of_wins {Q R : Type} {L : Pouw.Lead.Layout} {N₀ : ℕ} (pr
     exact_mod_cast this
   have hmem : ∀ u ∈ correctSet (Pouw.Lead.Game.protocol L N₀ Q R C) U H s (Pouw.Lead.Game.unitCommit sha C κ p U s),
       u ∈ range U.layout.N ∧ ∃ h : u < N₀, Accepted L sha C (κ U u) (p.play s ⟨u, h⟩) (s ⟨u, h⟩) := by
+    classical
     intro u hu
     unfold correctSet at hu
     rw [mem_filter] at hu
@@ -138,16 +140,27 @@ theorem gamma_of_tail (Q R : Type) [Fintype Q] [DecidableEq Q] [Fintype R] (L : 
     (hgap : gapFixed L C < honestRegs L C) :
     Gγ (Pouw.Lead.Game.costModel L N₀ Q R prc sha C κ can) (Pouw.Lead.Game.protocol L N₀ Q R C) (Pouw.Lead.Game.domain N₀) (Pouw.Lead.Game.gamma L C) (Pouw.Lead.Game.eta L) := by
   intro U _ B hB q _ A hA
-  calc _ ≤ Pouw.pr (fun x : (Q → R) × Pouw.Lead.Game.Salt L N₀ =>
-          ∃ u ∈ range U.layout.N, unitEvent prc sha C κ (N₀ := N₀) (can := can) A.online U u x.2) :=
-        Pouw.pr_mono fun x hx =>
-          exists_unit_of_wins prc sha C κ (N₀ := N₀) (can := can) A.online U B x.1 x.2 hgap (hA x.1 x.2).1 hx.1 hx.2
-    _ ≤ ∑ u ∈ range U.layout.N, Pouw.pr (fun x : (Q → R) × Pouw.Lead.Game.Salt L N₀ =>
-          unitEvent prc sha C κ (N₀ := N₀) (can := can) A.online U u x.2) :=
-        Pouw.Proofs.pr_exists_le_sum _ (fun u x => unitEvent prc sha C κ (N₀ := N₀) (can := can) A.online U u x.2)
-    _ ≤ ∑ _u ∈ range U.layout.N, etaLead L :=
-        sum_le_sum fun u _ => pr_unitEvent_le prc sha C κ (N₀ := N₀) (can := can) A.online U u (htail U u)
-    _ = Pouw.Lead.Game.eta L q U.layout.N := by rw [sum_const, card_range, nsmul_eq_mul]; rfl
+  have hev : ∀ x : (Q → R) × Pouw.Lead.Game.Salt L N₀,
+      Wins (Pouw.Lead.Game.protocol L N₀ Q R C) U (Pouw.Lead.Game.gamma L C) B (A.transcript U x.1 x.2) x.1 x.2 ∧
+        ¬ A.Breaks U x.1 x.2 →
+      ∃ u ∈ range U.layout.N, unitEvent prc sha C κ (N₀ := N₀) (can := can) A.online U u x.2 := by
+    intro x hx
+    have hcost : ∑ u ∈ range U.layout.N, (Pouw.Lead.Game.unitWork prc (can := can) A.online x.2 u : ℝ) ≤ B :=
+      (hA x.1 x.2).1
+    have hwin : Wins (Pouw.Lead.Game.protocol L N₀ Q R C) U (Pouw.Lead.Game.gamma L C) B
+        (Pouw.Lead.Game.unitCommit sha C κ (can := can) A.online U x.2) x.1 x.2 := hx.1
+    have hbr : ¬ Hash.CollisionIn sha
+        ((List.range U.layout.N).flatMap (Pouw.Lead.Game.unitHashed sha C κ (can := can) A.online U x.2)) := hx.2
+    exact exists_unit_of_wins prc sha C κ A.online U B x.1 x.2 hgap hcost hwin hbr
+  have h1 := Pouw.pr_mono hev
+  have h2 := Pouw.Proofs.pr_exists_le_sum (α := (Q → R) × Pouw.Lead.Game.Salt L N₀) (range U.layout.N)
+    fun u x => unitEvent prc sha C κ (N₀ := N₀) (can := can) A.online U u x.2
+  have h3 : ∑ u ∈ range U.layout.N, Pouw.pr (fun x : (Q → R) × Pouw.Lead.Game.Salt L N₀ =>
+      unitEvent prc sha C κ (N₀ := N₀) (can := can) A.online U u x.2) ≤ ∑ _u ∈ range U.layout.N, etaLead L :=
+    sum_le_sum fun u _ => pr_unitEvent_le prc sha C κ (N₀ := N₀) (can := can) A.online U u (htail U u)
+  have h4 : ∑ _u ∈ range U.layout.N, etaLead L = Pouw.Lead.Game.eta L q U.layout.N := by
+    rw [sum_const, card_range, nsmul_eq_mul]; rfl
+  exact h1.trans (h2.trans (h3.trans h4.le))
 
 /-- **The lead's game end to end from `G_γ`**: Theorem 1 with work-weighted sampling; a Pouw.Lead.Game.protocol whose `W_ref` is
 zero claims no work. -/
