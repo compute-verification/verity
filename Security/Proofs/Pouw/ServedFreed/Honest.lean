@@ -16,10 +16,10 @@ windows' inputs (`hacc`, `hsalt`, `hdraw`).
   `CertifiedExchange` at `K = δ = 0`.
 * `servedFreed_honest`: at `c = N_p`, `p = 1` and `H = N_p·n`, the honest inventory meets every premise
   `ServedFreed` adds to `ServedWork`'s, so the conclusion holds there.
-* `servedFreed_nontrivial`: the conclusion fails for a verifier that accepts everything. On the free machine (`fa 0`)
-  every accepted path leaves the whole period free for the other job: worth `2H` against an honest strategy's `H`,
-  past `H + ε(x) H` since its credit is positive (`creditPrefix_pos`) and so `ε(x) < 1`. The event has probability 1,
-  past the bound `e^{−1}`.
+* `servedFreed_nontrivial`: `ServedFreed` is false without `SAKServed`. On the free machine (`fa 0`) every other
+  premise holds and `SAKServed` fails (`not_sakServed_free`), and every accepted path leaves the whole period free for
+  the other job: worth `2H` against an honest strategy's `H`, past `H + ε(x) H` since its credit is positive
+  (`creditPrefix_pos`) and so `ε(x) < 1`. The event has probability 1, past the bound `e^{−1}`.
 -/
 
 namespace Properties.Pouw.Served.SecurityProofs.Honest
@@ -134,15 +134,70 @@ theorem servedFreed_honest (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (r
     (outsourceServed_of_perProgram _ (hr1 _) _ _ _ _ _ (outsource_fa _))
     (certified_fa _ (work (tileCount σ sT)) fun x w => ((), saltCoin (hr1 _) x w))
 
-include hk in
-/-- **Nontrivial: the conclusion fails for a verifier that accepts everything.** On the free machine (`fa 0`), at the
-honest J10-R period of `n ≥ 17` windows, every path accepted by the work check and the certifier, `δ_s = e^{−1}`,
-price 1 a word, no luck allowance, no exchange and no degenerate salts, every path is in the conclusion's event: its
-windows use nothing, so the other job fits the whole period (`z = H`), worth `2H` against an honest strategy's `H`,
-and `ε(x) < 1` since its credit is positive (`creditPrefix_pos`). So its probability is 1, past the bound
-`e^{−1}`. -/
-theorem servedFreed_nontrivial (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β)) (n : ℕ)
-    (hn : 17 ≤ n) :
+/-- **`ServedFreed` is false without `SAKServed`.** On the free machine (`fa 0`), at the honest J10-R period of
+`n ≥ 17` windows, `δ_s = e^{−1}`, price 1 a word, no luck allowance, no degenerate salts, the honest inventory, the
+period `pd 0 H` at `H = N_p·n`, `β = K = δ = 0` and a certifier that accepts every period, every other premise of
+`ServedFreed` holds, in its order (`j10r_meets`, `served_rest`, `pd_dualOpt`, `outsource_fa`, `certified_fa`), and
+`SAKServed` fails (`not_sakServed_free`). The conclusion fails with it: every accepted path's windows use nothing, so
+the other job fits the whole period (`z = H`), worth `2H` against an honest strategy's `H`, and `ε(x) < 1` since its
+credit is positive (`creditPrefix_pos`). So its event has probability 1, past the bound `e^{−1}`. -/
+theorem servedFreed_nontrivial (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β))
+    (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)
+    (hdraw : ∀ c β, ∃ d : Array ℕ, creditDrawn (regOf c) (evOf c β) = .ok d ∧
+      ∀ u : ℕ, u ∈ d.toList ↔ ∃ i : Fin (k sT), unitOf (tileAt σ sT (drawOf (hk sT) β i)) = u)
+    (n : ℕ) (hn : 17 ≤ n) :
+    (∀ s, k s ≤ (stratum σ s).card) ∧ 0 < n ∧ (circuit (tileCount σ sT)).units ≤ tileCount σ sT ∧
+    0 < (circuit (tileCount σ sT)).rounds ∧ (circuit (tileCount σ sT)).rounds = 1 ∧ 1 ≤ k sT ∧
+    Scope Honest.scheme (circuit (tileCount σ sT)) (Real.exp (-1)) ∧ (0 : ℝ) < 1 ∧ (1 : ℝ) ≤ 1 ∧
+    (∀ t : Fin (tileCount σ sT),
+      (1 : ℝ) * (tileCount σ sT) * shareCone Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT) t ≤ 1) ∧
+    (∀ j, stageShare (tileStage (circuit (tileCount σ sT)) (tileCount σ sT))
+      (shareCone Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT)) j ≤ 1) ∧
+    (∀ t : Fin (tileCount σ sT), 0 < shareCone Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT) t →
+      tileLuck Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT) t ≤ 7 / 8 ∧
+        tileLuck0 Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT) t ≤ 1 / 2) ∧
+    (play Unit (tileCount σ sT) (k sT) n).game =
+      periodGame (tileStage (circuit (tileCount σ sT)) (tileCount σ sT))
+        (liveCone Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT)) 1 1 (k sT)
+        (period (Ω1 σ sT) (tileCount σ sT) n) ∧
+    (period (Ω1 σ sT) (tileCount σ sT) n).EveryWindow
+      (fun live _ => DeadConeDead Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT) live) ∧
+    PrefixOf (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (windows σ sT regOf evOf n) opened
+      (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile))
+      (play Unit (tileCount σ sT) (k sT) n).game ∧
+    (∀ w, prob (fun x => (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (windows σ sT regOf evOf n)
+      opened (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile)
+      (j10rAtCoin (hr1 _) enc place tile)).MovedIn x w) ≤ 0) ∧
+    RegisteredBeforeDraw (windows σ sT regOf evOf n) ∧ TileDrawIsCoin σ k hk sT unitOf (windows σ sT regOf evOf n) ∧
+    TileServiceSound σ sT unitOf (windows σ sT regOf evOf n) opened
+      (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) 0 ∧
+    Properties.Pouw.Period.SaltIsLiveCoin (hr1 _) (saltOf (windows σ sT regOf evOf n)) enc ∧
+    SharedNoiseLucks Honest.scheme (circuit (tileCount σ sT)) (period (Ω1 σ sT) (tileCount σ sT) n) ∧
+    UnitFixed (play Unit (tileCount σ sT) (k sT) n)
+      (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (windows σ sT regOf evOf n) opened
+        (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile))
+      (periodMode (circuit (tileCount σ sT)) (period (Ω1 σ sT) (tileCount σ sT) n)
+        (tileRun σ k hk sT unitOf (windows σ sT regOf evOf n) opened
+          (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile)))
+      (fun _ t => (tileWords Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT) t : ℝ))
+      (fun _ => (tileCount σ sT : ℝ)) ∧
+    (fa 0).G1 ∧ (fa 0).G2 ∧ (fa 0).P1 ∧ (fa 0).P2 ∧
+    ¬ Pouw.Assumptions.SAKServed (fa 0) (fun _ => 1) Set.univ (hon (Np := tileCount σ sT))
+      (fun t => (tileWords Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT) t : ℝ)) 1 (fun _ => 0)
+      (fun _ => 0) ∧
+    (∃ e : Unit → Fin (2 ^ 0), Function.Injective e) ∧
+    (∀ (_x : Paths (Ω1 σ sT) n) (_w : Fin n), () ∈ (Set.univ : Set Unit)) ∧ (0 : ℝ) ≤ 1 ∧
+    FixedBeforeSalt (fun (x : Paths (Ω1 σ sT) n) w => ((), (), work 0 (Np := tileCount σ sT) x w)) ∧
+    FixedAreRight (play Unit (tileCount σ sT) (k sT) n) (fun x w => Pouw.Assumptions.rightWords hon
+      (fun t => (tileWords Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT) t : ℝ)) ()
+      (saltCoin (hr1 _) x w) ((fa 0).Mc.eval (work 0 x w) ((), saltCoin (hr1 _) x w))) ∧
+    (pd 0 (n * tileCount σ sT)).DualOpt (fun _ => 1) 1 ∧
+    0 < ∑ r, (fun _ => (1 : ℝ)) r * (1 * (pd 0 (n * tileCount σ sT)).hon r) ∧ (0 : ℝ) ≤ 0 ∧
+    OutsourceWithinEgressServed (Fin (tileCount σ sT) → Bool) (hr1 _) (fa 0) (fun _ => 1) 0
+      (fun (_ : Paths (Ω1 σ sT) n) _ => ()) (fun _ _ => ()) ∧
+    CertifiedExchange (fun _ => True)
+      (fun x : Paths (Ω1 σ sT) n => ∑ w, (fa 0).ext (work 0 (Np := tileCount σ sT) x w) ((), saltCoin (hr1 _) x w))
+      0 0 ∧
     ¬ prob (fun x => (play Unit (tileCount σ sT) (k sT) n).accepts x ∧ True ∧
       ∃ z, (pd 0 (n * tileCount σ sT)).Fits
           (fun r => ∑ w, (fa 0).use (work 0 (Np := tileCount σ sT) x w) ((), saltCoin (hr1 _) x w) r) z ∧
@@ -156,11 +211,19 @@ theorem servedFreed_nontrivial (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccept
             ∑ r, (fun _ => (1 : ℝ)) r * (1 * (pd 0 (n * tileCount σ sT)).hon r))
           (∑ r, (fun _ => (1 : ℝ)) r * (1 * (pd 0 (n * tileCount σ sT)).hon r))) ≤
       Real.exp (-1) + n * (0 + 0) + n * 0 + 0 := by
+  have hn0 : 0 < n := by omega
+  obtain ⟨hN, hM, hS, hρN, hwmax, hlk, hG, hDD, hPre, hMoved, hReg, hDraw, hServ, hSalt, hLucks, hUF, -, -, -⟩ :=
+    j10r_meets σ k hk sT unitOf regOf evOf enc hKd hacc hsalt hdraw n hn0 (Real.exp_pos (-1))
+  obtain ⟨g1, g2, p1, p2, hSt, -, hIn, hp, hFix, hRight⟩ := served_rest σ k sT (le_refl (0 : ℝ)) n
   have hne : Nonempty (Ω1 σ sT) := ⟨((true, ()), (Equiv.refl _, ()))⟩
   have := @paths_nonempty (Ω1 σ sT) hne n
   have hNp : (0 : ℝ) < tileCount σ sT := Nat.cast_pos.mpr (Nat.lt_of_lt_of_le hKd (hk sT))
-  have hH : (0 : ℝ) < n * tileCount σ sT := mul_pos (Nat.cast_pos.mpr (by omega)) hNp
-  intro hle
+  have hH : (0 : ℝ) < n * tileCount σ sT := mul_pos (Nat.cast_pos.mpr hn0) hNp
+  refine ⟨hk, hn0, hN, hr1 _, hM, hKd, hS, one_pos, le_rfl, hρN, hwmax, hlk, hG, hDD, hPre, hMoved, hReg, hDraw,
+    hServ, hSalt, hLucks, hUF, g1, g2, p1, p2, not_sakServed_free σ k hk sT hKd, hSt, hIn, hp, hFix, hRight,
+    pd_dualOpt _ _, hH.trans_eq (pd_cap _ _).symm, le_rfl,
+    outsourceServed_of_perProgram _ (hr1 _) _ _ _ _ _ (outsource_fa _),
+    certified_fa _ (work 0) fun x w => ((), saltCoin (hr1 _) x w), fun hle => ?_⟩
   rw [prob_true] at hle
   · have := Real.exp_lt_one_iff.mpr (show (-1 : ℝ) < 0 by norm_num)
     simp only [mul_zero, add_zero] at hle

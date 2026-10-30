@@ -1,27 +1,29 @@
 import Definitions.Pouw.Dither
-import Definitions.Core.Accel.Principles
+import Definitions.Core.Accel.Machine
+import Definitions.Core.Accel.H200
+import Definitions.Core.Accel.Sm120
 
 /-!
-# The headline's model on the cards: the H200 and the RTX PRO 6000 at θ (trusted)
+# The headline's model on the cards: the H200 and the RTX PRO 6000 (trusted)
 
 `Definitions.Pouw.Guarantees.Dither.WorkSound` is stated over an abstract accelerator `Accel`. This file ties that
-`Accel` to the card model (`Definitions.Core.Accel`) at a card's θ, so the headline can be read on
+`Accel` to the machine 𝓜 (`Definitions.Core.Accel`) at a card's numbers, so the headline can be read on
 `Verity.Accel.H200.card` and `Verity.Accel.Sm120.card` (`Definitions.Pouw.Guarantees.DitherInstance`):
 
 * **the period's devices** (`Devices`): `n` cards of one table pooled into one machine (`poolCard`, a coarsening:
-  the pooled cards share their stores and resources, so the links between them are free), at `f` ticks a second, and
-  the period's other devices (`Others`: the host CPUs and DPUs the cards reach without crossing a network
-  certifier), each resource at its θ rate;
+  the pooled cards share their stores and resources, so the links between them are free), and the period's other
+  devices (`Others`: the host CPUs and DPUs the cards reach without crossing a network certifier), each resource
+  at its θ rate;
 * **where a round's coin and words sit in the cards' memory** (`Layout`);
-* **`G` is the devices at the open parameters `x`** (`OnCard`): `G`'s resources are the pooled cards' and the others',
-  at θ's rates; its memory is theirs; its (P1) and (P2) are the card model's; and every words program the cards run is a
-  program of `G` with the run's units as its use, its ticks and backlog as its wall time and no import;
+* **`G` is the devices at the card's semantics `x`** (`OnCard`): `G`'s resources are the pooled cards' and the
+  others', at their rates; its memory is theirs; its (P1) and (P2) are the machine's at `x`; and every words program
+  the cards run is a program of `G` with the run's units as its use, its seconds as its wall time and no import;
 * **the public best methods** (`PubBest`), fixed per card and priced at the period's dual price (`pubCost`): the
   public-best menu's named programs (`pubBestH200`, `pubBestSm120`);
 * **the cards' hosts** (`HostRow`, `HostsCounted`): the AMX and SHA-512 rates of each card's share of its node's CPUs,
   which the period's devices count;
 * **an oracle call on the card** (`CallsAtPub`): one compression of a public SHA-512 schedule, the call step's use;
-* **the card's runs at `x`** (`CardRunsAt`): `Assumptions.CardWithinAccel`'s refinement at the open parameters it gives;
+* **the card's runs at `x`** (`CardRunsAt`): `Assumptions.CardWithinAccel`'s refinement at the semantics it gives;
 * **the network certifier's counts** (`Counted`): the verifier refuses a period whose signed counts into
   or out of the devices, read from the devices' readings (`Readings`), pass the caps `E_in`, `E_out`;
 * **the auditor's clocks** (`Timed`): the challenger issues each sampling block's dither coins only after the
@@ -32,10 +34,8 @@ import Definitions.Core.Accel.Principles
   what that buys: the sampling blocks' commit phases and work within the period's capacity, at any number of
   blocks, and each selected answer within the period.
 
-The open parameters `x` are not fixed here: the headline holds at every `x` meeting θ's floors (`Card.floors`: on the
-H200 `sync ≥ 1`, `b1 ≥ 1/8`, `madHi ≥ 2`, `slack ≥ 1`; on sm_120 `madHi ≥ 2` and no native `b1`) with the
-product form (`Assumptions.AccelProductForm`). Without the floors the model runs an `IMAD.HI`, a `b1` MAC or an
-`mma.sync` MAC for nothing, `SAKSha` at a card's rates is false in it, and the headline says nothing.
+The card's semantics `x` are not fixed here: the headline holds at every `x` meeting P1 (`Card.Exact`) and P2
+(`Open.ProductForm`, as `Assumptions.AccelProductForm`).
 -/
 
 open scoped NNRat
@@ -47,22 +47,19 @@ open Pouw.RelativeSecurity
 section Cards
 
 instance instFintypeAccelRes : Fintype Verity.Accel.Res where
-  elems := {.tensor, .tensorLong, .issue, .alu, .imad, .shfl, .f64, .smem, .dram, .l2}
+  elems := {.tensor, .issue, .alu, .imad, .shfl, .f64, .sfu, .smem, .l2, .dram}
   complete r := by cases r <;> simp
 
-/-- **`n` cards pooled into one**: every store and every resource `n` times the card's, the code space too, and the
-same formats, opcodes, dots and floors. A coarsening, as the card's own pools over its SMs are (`Accel.Card`): any
-thread names any card's locations, so the links between the cards (NVLink, PCIe peer-to-peer) cost nothing, and a
-lower bound in the pool holds on the cards. -/
+/-- **`n` cards pooled into one**: every store, every resource's rate and the code space `n` times the card's, the
+same weights and range. A coarsening, as the card's own pools over its SMs are: any thread names any card's
+locations, so the links between the cards (NVLink, PCIe peer-to-peer) cost nothing, and a lower bound in the pool
+holds on the cards. -/
 def poolCard (c : Verity.Accel.Card) (n : ℕ) (hn : 0 < n) : Verity.Accel.Card :=
   { c with
     size := fun s => n * c.size s
     size_pos := fun s => Nat.mul_pos hn (c.size_pos s)
     ρ := fun r => (n : ℚ≥0) * c.ρ r
-    text := n * c.text
-    tc := n * c.tc
-    cuda := n * c.cuda
-    bw := n * c.bw }
+    text := n * c.text }
 
 /-- **The period's other devices**: every processor the period's cards reach without
 crossing a network certifier other than the cards themselves (host CPUs over PCIe or NVLink-C2C, DPUs), each
@@ -78,75 +75,67 @@ structure Others where
 
 attribute [instance] Others.instRes
 
-/-- **The period's devices**: `n` cards of the table `c`, a tick `1/f` seconds (the clock the table's per-tick rates
-are at; the fleet's transfer reads θ's `clocks.fmax`: 1980 MHz on the H200, 2430 MHz on the RTX PRO
-6000), and the other devices. The headline holds at every clock. -/
+/-- **The period's devices**: `n` cards of the table `c`, at the table's rates a second (its clock's ceiling), and
+the other devices. -/
 structure Devices (c : Verity.Accel.Card) where
   n : ℕ
   n_pos : 0 < n
-  f : ℝ
   oth : Others
 
-/-- The period's cards as one machine at the open parameters `x` (no side channels: what enters from outside is the
-network certifier's count, `Accel.ext`). -/
-def Devices.machine {c : Verity.Accel.Card} (D : Devices c) (x : Verity.Accel.Open) : Verity.Accel.Machine Empty :=
-  (poolCard c D.n D.n_pos).machine x (fun e => e.elim) 0
+/-- The period's cards as one machine at the card's semantics `x`. -/
+def Devices.machine {c : Verity.Accel.Card} (D : Devices c) (x : Verity.Accel.Open) : Verity.Accel.Machine :=
+  ⟨poolCard c D.n D.n_pos, x⟩
 
 /-- **Where a round's coin and words sit in the cards' memory**: the dither coin written into the memory a words
 program starts from (`putDraw`), and the words read from the memory it ends with (`getTr`), as the deployed kernel lays
 them out. A layout moves words; it computes nothing. The headline holds at every layout. -/
-structure Layout (m : Verity.Accel.Machine Empty) (P : RoundProto) where
+structure Layout (m : Verity.Accel.Machine) (P : RoundProto) where
   putDraw : P.Draw → m.Mem → m.Mem
   getTr : m.Mem → P.Tr
 
-variable {ι : Type}
-
 /-- A run of `Prg` on the schedule `sched` from the memory `M`, every thread at its text's start. -/
-def cardRun (m : Verity.Accel.Machine ι) (Prg : m.Prog ℕ) (M : m.Mem) (sched : List (List ℕ)) :
-    m.State ℕ × List (List m.Instr) :=
+def cardRun (m : Verity.Accel.Machine) (Prg : m.Prog ℕ) (M : m.Mem) (sched : List ℕ) :
+    m.State ℕ × List m.Instr :=
   Verity.Accel.Machine.run Prg ⟨M, fun _ => 0⟩ sched
 
-/-- The units of resource `r` a run's instructions use over its ticks. -/
-def cardUnits (m : Verity.Accel.Machine ι) (iss : List (List m.Instr)) (r : m.Res) : ℚ≥0 :=
-  ∑ t ∈ Finset.range iss.length, Verity.Accel.Machine.usage iss t r
+/-- The units of resource `r` a run's instructions use. -/
+def cardUnits (m : Verity.Accel.Machine) (iss : List m.Instr) (r : Verity.Accel.Res) : ℚ≥0 :=
+  Verity.Accel.Machine.units iss r
 
-/-- **`G` is the period's devices at the open parameters `x`**: under the equivalence `e` of
-`G`'s resources with the pooled cards' and the other devices',
+/-- **`G` is the period's devices at the card's semantics `x`**: under the equivalence `e` of `G`'s resources with the
+pooled cards' and the other devices',
 
-* each card resource runs at `n ρ_r` units a tick, `n ρ_r f` a second, and each other device's at its θ rate;
-* `G`'s memory is the pooled cards' bits (on-chip and device memory) and the other devices';
-* `G`'s (P1) is the card model's integer path with the card's captured dots in product form, and its (P2) the card
-  model's four data-flow properties (`Definitions.Core.Accel.Principles`);
+* each card resource runs at `n ρ_r` units a second, and each other device's at its θ rate;
+* `G`'s memory is the pooled cards' bits and the other devices';
+* `G`'s (P1) and (P2) are the machine's at `x` (`Card.Exact`, `Open.ProductForm`);
 * every words program the cards run is one of `G`'s: for every memory `M₀` the round starts from (whatever the prover
-  carried into it) and every program and schedule of the pooled machine meeting (G1) and (G2) from `M₀` with the coin
-  written in, some words program of `G` computes the words the run leaves, uses exactly the run's units on each card
-  resource and nothing of the other devices, takes the run's ticks and its backlog as wall time, exchanges nothing and
-  makes no oracle call (the card has no oracle instruction).
+  carried into it) and every program and schedule of the pooled machine, fixed before the coin, meeting (G1) and (G2)
+  from `M₀` with the coin written in, some words program of `G` computes the words the run leaves, uses exactly the
+  run's units on each card resource and nothing of the other devices, takes the run's seconds as wall time, exchanges
+  nothing and makes no oracle call (the machine has no oracle instruction).
 
 So `SAKMatmul` at `G` speaks of every words program of the card at `x`, at the card's rates; the dual price, the honest
 cost `H` and the capacity `C` are in the card's units. `G.ext` is the bits a run exchanges, which the network certifier
-counts (`Assumptions.CertifierSeesImports`). The commitment and the round's other programs read the oracle
-`P.Orc`, which the card machine has no instruction for: they reach it through `G`'s priced calls (G3), each at a public
-SHA-512 schedule's units on the card (`CallsAtPub`); that the card can't query the oracle more cheaply is the
-realization premise `Assumptions.ShaRealize`, which is open. A program of `G` cheaper than any of the card's makes
-`SAKMatmul` or `SAKSha` false at `G`, and the headline then says nothing at that `G`; the `G` the headline is read at
-has the card's programs and no others. -/
+counts (`Assumptions.CertifierSeesImports`). The commitment and the round's other programs read the oracle `P.Orc`,
+which the machine has no instruction for: they reach it through `G`'s priced calls (G3), each at a public SHA-512
+schedule's units on the card (`CallsAtPub`); that the card can't query the oracle more cheaply is the realization
+premise `Assumptions.ShaRealize`, which is open. A program of `G` cheaper than any of the card's makes `SAKMatmul` or
+`SAKSha` false at `G`, and the headline then says nothing at that `G`; the `G` the headline is read at has the card's
+programs and no others. -/
 def OnCard (G : Accel) (c : Verity.Accel.Card) (x : Verity.Accel.Open) (D : Devices c) (P : RoundProto)
     (L : Layout (D.machine x) P) (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res) : Prop :=
-    (∀ r, G.rate (e.symm (.inl r)) = ((poolCard c D.n D.n_pos).ρ r : ℝ) * D.f) ∧
+    (∀ r, G.rate (e.symm (.inl r)) = ((poolCard c D.n D.n_pos).ρ r : ℝ)) ∧
     (∀ h, G.rate (e.symm (.inr h)) = D.oth.rate h) ∧
-    G.mem = (((D.machine x).chip + (D.machine x).mem : ℕ) : ℝ) + D.oth.mem ∧
-    (G.P1 ↔ Verity.Accel.P1Int ∧ Verity.Accel.CapturedProductForm c) ∧
-    (G.P2 ↔ Verity.Accel.P2Local ∧ Verity.Accel.P2Distinct ∧ Verity.Accel.P2Frame ∧ Verity.Accel.P2Priced) ∧
-    ∀ (M₀ : (D.machine x).Mem) (Prg : (D.machine x).Prog ℕ) (sched : P.Draw → List (List ℕ)),
-      (∀ d, Verity.Accel.Machine.Fits Prg ⟨L.putDraw d M₀, fun _ => 0⟩ (sched d)) →
+    G.mem = ((D.machine x).bits : ℝ) + D.oth.mem ∧
+    (G.P1 ↔ c.Exact x) ∧ (G.P2 ↔ x.ProductForm) ∧
+    ∀ (M₀ : (D.machine x).Mem) (Prg : (D.machine x).Prog ℕ) (sched : List ℕ) (T : P.Draw → ℚ≥0),
+      (∀ d, Verity.Accel.Machine.Fits Prg ⟨L.putDraw d M₀, fun _ => 0⟩ sched (T d)) →
       ∃ Mw : G.Mc.Alg ((D.machine x).Mem × P.Draw) P.Tr, ∀ d,
-        G.Mc.eval Mw (M₀, d) = L.getTr (cardRun (D.machine x) Prg (L.putDraw d M₀) (sched d)).1.mem ∧
+        G.Mc.eval Mw (M₀, d) = L.getTr (cardRun (D.machine x) Prg (L.putDraw d M₀) sched).1.mem ∧
         (∀ r, G.use Mw (M₀, d) (e.symm (.inl r)) =
-          (cardUnits (D.machine x) (cardRun (D.machine x) Prg (L.putDraw d M₀) (sched d)).2 r : ℝ)) ∧
+          (cardUnits (D.machine x) (cardRun (D.machine x) Prg (L.putDraw d M₀) sched).2 r : ℝ)) ∧
         (∀ h, G.use Mw (M₀, d) (e.symm (.inr h)) = 0) ∧
-        G.wall Mw (M₀, d) = (((sched d).length + x.slack : ℕ) : ℝ) / D.f ∧
-        G.ext Mw (M₀, d) = 0 ∧ G.calls Mw (M₀, d) = 0
+        G.wall Mw (M₀, d) = (T d : ℝ) ∧ G.ext Mw (M₀, d) = 0 ∧ G.calls Mw (M₀, d) = 0
 
 /-- A program's units on the card's resources: a naive MAC's for a matmul program, a compression's for a SHA-512
 schedule. -/
@@ -173,10 +162,10 @@ noncomputable def pubCost {G : Accel} {c : Verity.Accel.Card} {D : Devices c}
     (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res) (μ : G.Res → ℝ) (us : List ResUnits) (n : ℝ) : ℝ :=
   n * ((us.map (unitCost e μ)).min?.getD 0)
 
-/-- A matmul program's units a naive MAC: `t` on the tensor core (on `tensor` and `tensorLong` alike: every tensor-core
-instruction uses as many units of each), `i` issue slots, `a` ALU lanes, `m` IMAD lanes and `s` shared-memory words. -/
+/-- A matmul program's units a naive MAC: `t` on the tensor core, `i` issue slots, `a` ALU lanes, `m` IMAD lanes and
+`s` shared-memory words. -/
 def mmUnits (t i a m s : ℚ≥0) : Verity.Accel.Res → ℚ≥0
-  | .tensor | .tensorLong => t
+  | .tensor => t
   | .issue => i
   | .alu => a
   | .imad => m
@@ -214,20 +203,19 @@ def pubMmSm120 : List ResUnits :=
    mmUnits (67 / 64) (329 / 3145728) 0 0 (233 / 24576), mmUnits (17 / 16) (83 / 786432) 0 0 (59 / 6144)]
 
 /-- **The pinned public SHA-512 schedules on the H200, at the model's prices** (`SAKSha` is in model units, so
-`c_sha = 1` in the model): the default build of `commit_gpu` (measured 4.79 G/s; SHF 1,728, LOP3 912, IADD3 760,
-IMAD 152), A-wide + R-hi (the menu's `pub_sha.H200`; IMAD 546, IMAD.WIDE 546, IMAD.HI 394) and A-wide + R-shf
-(IMAD 850, IMAD.WIDE 850), the counts a compression. Priced as the model prices a lane (`opUse`): one ALU or `imad`
-lane, `IMAD.WIDE` two `imad` lanes, `IMAD.HI` at its floor `madHi = 2`, `1/32` of an issue slot. These are the
-menu's schedules too (`benchmarks/pouw/theory/public_best.py`'s `SHA_SCHEDULES` at `34866fd9f8`, the same ALU and
-issue counts). -/
+`c_sha = 1` in the model): the default build of `commit_gpu` (measured 4.79 G/s; SHF 1,728, LOP3 912, IADD3 760, IMAD
+152), A-wide + R-hi (the menu's `pub_sha.H200`; IMAD 546, IMAD.WIDE 546, IMAD.HI 394) and A-wide + R-shf (IMAD 850,
+IMAD.WIDE 850), each schedule's SASS counts a compression. Priced as the model prices a lane op (`Card.use`): one ALU
+or `imad` lane each, `IMAD.WIDE` and `IMAD.HI` included (a lane op takes up to four words to two), and `1/32` of an
+issue slot. These are the menu's schedules too, with the same ALU and issue counts. -/
 def pubShaH200 : List ResUnits :=
-  [shaUnits 3400 152 (3608 / 32), shaUnits 2460 2426 (4002 / 32), shaUnits 2550 2550 (4306 / 32)]
+  [shaUnits 3400 152 (3608 / 32), shaUnits 2460 1486 (4002 / 32), shaUnits 2550 1700 (4306 / 32)]
 
 /-- **The pinned public SHA-512 schedules on the RTX PRO 6000, at the model's prices** (as on the H200): the default
 build (measured 7.13 G/s; SHF 1,728, LOP3 927, IADD.64 760), R-shf (IMAD 852, IMAD.WIDE 852)
 and R-hi (the menu's `pub_sha.RTXPRO6000`; IMAD 487, IMAD.WIDE 487, IMAD.HI 487). -/
 def pubShaSm120 : List ResUnits :=
-  [shaUnits 3415 0 (3415 / 32), shaUnits 2563 2556 (4267 / 32), shaUnits 2441 2435 (3902 / 32)]
+  [shaUnits 3415 0 (3415 / 32), shaUnits 2563 1704 (4267 / 32), shaUnits 2441 1461 (3902 / 32)]
 
 /-- The H200's public best methods: the public-best menu's named programs. -/
 def pubBestH200 : PubBest Verity.Accel.H200.card := ⟨pubMmH200, pubShaH200⟩
@@ -245,16 +233,14 @@ def CallsAtPub (G : Accel) {c : Verity.Accel.Card} {D : Devices c} (e : G.Res �
     (pb : PubBest c) : Prop :=
   ∃ u ∈ pb.sha, (∀ r, G.callUse (e.symm (.inl r)) = (u r : ℝ)) ∧ ∀ h, G.callUse (e.symm (.inr h)) = 0
 
-/-- **The card's runs are its model's at `x`** (`Assumptions.CardWithinAccel`'s clause, at the open parameters it
-gives): every content-to-content map `f` the card computes within `t` ticks on the contents `D` (`can f t D`) is, under
-some encoding `e` of the register words fixed before the content, a program and schedule of `c.machine x` of at most `t`
-ticks that meet (G1) and (G2) and take `decode e M` to `decode e (f M)` on every content `M` in `D`. -/
-def CardRunsAt {ι : Type} (c : Verity.Accel.Card) (x : Verity.Accel.Open) (cap : ι → ℕ) (oracle : ℕ)
-    (can : (c.Mem → c.Mem) → ℕ → (c.Mem → Prop) → Prop) : Prop :=
-  ∀ f t D, can f t D → ∃ (e : ℕ → Verity.Accel.Enc) (P : (c.machine x cap oracle).Prog ℕ) (sched : List (List ℕ)),
-    sched.length ≤ t ∧ ∀ (M : c.Mem) (σ : (c.machine x cap oracle).State ℕ), D M → (∀ θ, σ.pc θ = 0) →
-      σ.mem = c.decode e M →
-        Verity.Accel.Machine.Fits P σ sched ∧ (Verity.Accel.Machine.run P σ sched).1.mem = c.decode e (f M)
+/-- **The card's runs are its model's at `x`** (`Assumptions.CardWithinAccel`'s clause, at the semantics it gives):
+every memory-to-memory map `f` the card computes within `T` seconds on the memories `D` (`can f T D`) is a program and
+schedule of the machine `⟨c, x⟩` that meet (G1) and (G2) in `T` seconds and take `M` to `f M` on every `M` in `D`. -/
+def CardRunsAt (c : Verity.Accel.Card) (x : Verity.Accel.Open)
+    (can : (c.Mem → c.Mem) → ℚ≥0 → (c.Mem → Prop) → Prop) : Prop :=
+  ∀ f T D, can f T D → ∃ (P : (Verity.Accel.Machine.mk c x).Prog ℕ) (sched : List ℕ),
+    ∀ σ : (Verity.Accel.Machine.mk c x).State ℕ, D σ.mem → (∀ θ, σ.pc θ = 0) →
+      Verity.Accel.Machine.Fits P σ sched T ∧ (Verity.Accel.Machine.run P σ sched).1.mem = f σ.mem
 
 /-- The host resources a card's node brings: the CPUs' AMX, in s8 MACs, and their SHA-512, in
 compressions. -/
@@ -280,9 +266,9 @@ noncomputable def HostRow.others (h : HostRow) (n : ℕ) (mem : ℝ) : Others wh
     | .sha => n * h.sha
   mem := mem
 
-/-- **The period's devices count the cards' hosts**: the other
-devices have an AMX and a SHA-512 resource for the `n` cards' hosts, at least `n` times the row's rates. So the honest
-optimum may use them, and the capacity `C` includes them. -/
+/-- **The period's devices count the cards' hosts**: the other devices have an AMX and a SHA-512 resource for the `n`
+cards' hosts, at least `n` times the row's rates. So the honest optimum may use them, and the capacity `C` includes
+them. -/
 def HostsCounted {c : Verity.Accel.Card} (D : Devices c) (h : HostRow) : Prop :=
   ∃ j : HostRes → D.oth.Res, Function.Injective j ∧
     D.n * h.amx ≤ D.oth.rate (j .amx) ∧ D.n * h.sha ≤ D.oth.rate (j .sha)
