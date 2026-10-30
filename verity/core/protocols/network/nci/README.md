@@ -1,16 +1,16 @@
 # The inference-only policy
 
-The inference-only policy asks that the declared circuit D have an inference-block partition 𝓘: blocks with gate
+The inference-only policy asks that the registered circuit D have an inference-block partition 𝓘: blocks with gate
 budget c (exactly c gates each) and fresh-input budget k (at most k bits of fresh input each), where fresh input is
 every value outside the registered information θ, the models, code and data fixed before the monitoring period. It is
-a protocol with no rounds: the developer registers R = (θ, D, 𝓘), and the verifier checks 𝓘 from the declared circuit
+a protocol with no rounds: the developer registers R = (θ, D, 𝓘), and the verifier checks 𝓘 from the registered circuit
 and the registered information alone. In Lean it is `Nci.Complies`, in an older form (below), and its check is
 `NciCheck`.
 
 The inference-only policy is a subprotocol of both composites, onsite and remote (`verity/core/protocols/composition`):
 `NciCheck.Protocol.protocol` (`verity/inference-only/v0`, the executable `inference-only`) is its check behind the core
-interface. Its params are the declared circuit, the budgets and the registration log before the run; its commitment is
-the run's own registration record, which must name the declared circuit and which each composite requires to be the
+interface. Its params are the registered circuit, the budgets and the registration log before the run; its commitment is
+the run's own registration record, which must name the registered circuit and which each composite requires to be the
 record sampled proofs commits to (`Core.Composition.same`); its evidence is the declared division with θ and θ's
 provenance. That evidence reaches the verifier in the clear: the check doesn't run inside a zero-knowledge
 proof yet.
@@ -21,9 +21,9 @@ An inference episode (a chat session) reads little fresh input, say 100 KB of pr
 divides into inference blocks with a small fresh-input budget (`Nci.Guarantees.Inference`). A training episode (an RL
 rollout) reads an enormous amount, say 1 TB of new parameters, so training that runs through inference blocks gets
 only their yields q(c, k): a pricing argument says how much of a block's fresh-input budget each counted object of a
-necessary subcomputation needs. The overhead lower bound sums those yields with free compute, at the hardware's rate,
+necessary subcomputation needs. The slowdown lower bound sums those yields with free compute, at the hardware's rate,
 and with the server-block yields that the memory wipe, proof of useful space (PoUS) and network certification bound (`GLOSSARY.md`, "Size, credit and
-the overhead lower bound"). Its numbers come from [`benchmarks/rho`](../../../../../benchmarks/rho/README.md), whose
+the slowdown lower bound"). Its numbers come from [`benchmarks/rho`](../../../../../benchmarks/rho/README.md), whose
 scenarios register a policy as if it were a subprotocol.
 
 ## The Lean

@@ -20,7 +20,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # verification (`one_stage/proofs.py`, its `verifier.py` and what that imports, with the integrity profile and the
 # proof system), and what they import: `verity.ml`'s circuits codec, commitments, crypto and randomness, and `verity.errors`) with the packages
 # above them; what `lake` reads through the path requires: the core protocol interface, the window's Lean and what it
-# requires (PoUW's commitments, the proof system's Lean with the LMS verifier, core's identity and randomness, C-Flock's
+# requires (PoUW's commitments, the proof system's Lean with the LMS verifier, core's identity and randomness, Flock's
 # verifier with its configuration). The leaf statements' files `pouw-leaf-own-window` checks are `leaf_lanes.py`'s, with
 # what it imports (PoUW's `circuit/` seeds, one-stage's `produced.py`, and the `verity.ml.kernels` `tc.py` they reach).
 inputs = ["verity/core/difftest", "verity/__init__.py", "verity/core/__init__.py",

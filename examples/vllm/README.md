@@ -11,13 +11,13 @@ The remote protocol composes three subprotocols, tied to one record, and accepts
 - **work**, by proof of useful work (PoUW, `verity/core/protocols/pouw/`), on the served model itself: the endpoint
   serves PoUW's H1, each sampling block's coins come from a session of its own on the challenger's gate, and PoUW's
   piece checks them against that session, the gate's ledger and its pins;
-- **the inference-only policy** (`verity/core/protocols/network/nci/`): the declared circuit divides into inference
+- **the inference-only policy** (`verity/core/protocols/network/nci/`): the registered circuit divides into inference
   blocks within their gate and fresh-input budgets. This demo doesn't run it: the served run doesn't produce the
   declared division yet.
 
 PoUW's verdict on the served run credits nothing. The challenger's gate holds a development key, so every served PoUW
 run is a development run. And an H1 commitment's served execution blocks aren't yet a `verity/pouw/v1` case, the form
-remote's PoUW component reads. So the remote verdict can't accept on this run yet, and the window's verdict stays
+remote's PoUW subprotocol reads. So the remote verdict can't accept on this run yet, and the window's verdict stays
 `undecided`.
 
 `example.toml` records what the demo establishes. Its run is `moved`: it has no passing run of record. Its proof level

@@ -1,7 +1,7 @@
 # The served window's onsite run
 
 `config.toml` is one deployment configuration (`verity/config/v0`, `verity.core.deploy.config`) of onsite's five
-components, sampled proofs, PoUW, PoUS, PoUB (`bandwidth`) and the network certifier (`verity/onsite/v0`), with the wipe
+subprotocols, sampled proofs, PoUW, PoUS, PoUB (`bandwidth`) and the network certifier (`verity/onsite/v0`), with the wipe
 beside them outside the product, on the `served-window` workload: one window of Llama-3.2-1B in int8 served through the
 vLLM integration's committing endpoint. `verity run` executes it, reading `served_table.py` (`verity_cli.run.REGISTRY`).
 The file is `served_table.configuration` rendered by `verity.core.deploy.config.render`, and
@@ -11,9 +11,9 @@ the deploy bindings' (below), so binding another host changes no hash.
 ## The phases
 
 - **Registration**: the site (the prover node the configuration places the developer's parties on), θ (the served
-  weights, registered before the first request) and the builder B (the committer's registered compiler).
+  weights, registered before the first request) and the registered compiler B (the committer's).
 - **Execution**: the served window: serve-openai under the node's GPU lease, the requests, every closed window sealed.
-- **Verification**: each component's commitment, challenge, proof or timed response (PoUS's and PoUB's sessions), and
+- **Verification**: each subprotocol's commitment, challenge, proof or timed response (PoUS's and PoUB's sessions), and
   validation: the pieces' answers, then the onsite check, `served_verdicts.py record`, whose composed verdict is the
   period's `VERDICT` line.
 
@@ -22,7 +22,7 @@ the deploy bindings' (below), so binding another host changes no hash.
 | party | principal | machine | its pieces (`served_table.PARTIES`) |
 | --- | --- | --- | --- |
 | `workers` | developer | `prover-node` | the served window, `benchmarks/one_stage/served_verdicts.sh`, run once with every piece's hooks; sampled proofs' commitment and proofs; PoUW's H1 on the engine |
-| `firewall` | developer | `prover-node` | the Lean firewall of the records audit, inside the served window |
+| `firewall` | developer | `prover-node` | the Lean ZK server of the records audit, inside the served window |
 | `prover` | developer | `prover-node` | PoUS's served piece, PoUB's served session and the wipe, inside the served window |
 | `challenger` | auditor | `gate-host` | the gate: sampled proofs' live challenger and PoUW's H1 coins |
 | `network-certifier` | auditor | `gate-host` | the warden in front of the endpoint and its piece, reached through the gate |
@@ -42,7 +42,7 @@ deploy bindings:
 | --- | --- | --- |
 | `REPO`, `REV`, `PRECISION`, `SLOTS`, `WINDOW_STEPS`, `LOAD` | the workload | `[workload.params]` |
 | `V3C_LAW` | sampled proofs | `[service] law` |
-| `PP_CHALLENGER`, `PP_PEER`, `PP_CHALLENGER_KEY`, `PP_GATE_KEY` | sampled proofs | `challenger.sampled-proofs`: `gate`, `peer`, `key`, `gate-key`, each optional; with no `gate` the records audit draws on its own live coins |
+| `PP_CHALLENGER`, `PP_PEER`, `PP_CHALLENGER_KEY`, `PP_GATE_KEY` | sampled proofs | `challenger.sampled-proofs`: `gate`, `peer`, `key`, `gate-key`, each optional; with no `gate` the records audit flips its own live coins |
 | `H1_GATE`, `H1_PEER`, `H1_KEY_SHA512` | PoUW | `challenger.pouw`: `gate` (the gate command), `peer`, `key-sha512`; `POUW_CMD` is the runner's default then |
 | `POUS_CMD`, `POUS_ARGS` | PoUS | `memory-challenger.pous`: `host`, `address`, `command`, `key-sha512`; `--rounds` is `[params."verity/pous/p2/v4/run"] challenges`, 320 (ε = 2^-20) |
 | `SERVE_ARGS` (`--remote-verifier`) | PoUB | `bandwidth-verifier.bandwidth`: `address` |

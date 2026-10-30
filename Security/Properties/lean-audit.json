@@ -55,7 +55,8 @@
   "Properties.RemoteAudit.Component",
   "Properties.Composition",
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
-  "Properties.Accounting.JointBridge.WorkOfCreditedWords"
+  "Properties.Accounting.JointBridge.WorkOfCreditedWords",
+  "Properties.Challenger"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -672,6 +673,11 @@
    "imports": ["Definitions.Pouw.Dither", "Properties.Pouw.ServedWork"],
    "except": [],
    "why": "the served protocol's onsite freed compute is stated over its remote work guarantee (`Properties.Pouw.ServedWork`) and the accelerator model's period and freed compute (`Definitions.Pouw.Dither`), never a proof"
+  },
+  "Properties.Challenger": {
+   "imports": ["CoreProtocol", "SampledProofs", "Flock", "Lms", "Lean"],
+   "except": [],
+   "why": "the challenger's binding is stated against the code's own functions (the interface's `Live`, the challenger's reader `drawCoins`, its record, close and ledger messages) and a model of the device's log on Lean core: nothing of Mathlib or of `security`, never a proof"
   }
  },
  "reads_exempt": {
@@ -4021,7 +4027,10 @@
    "Properties.Pouw.Served.SecurityProofs.servedWork": "frozen (no-function,world-unlisted): ServedWork, the served PoUW protocol's work in the remote form: H1J10RCheckedCreditPeriod's fixed words priced on the prover's inventory, one machine of the accelerator model (Pouw.Dither.Accel) at its device premises G1, G2, P1 and P2, wherever it ran (no network certifier, wipe or latency check), except with probability delta_s + n(delta_bind + delta_ks) + n kappa_deg(B); not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. Its new premises, each listed under assumptions: Pouw.Assumptions.SAKServed, SakLb.SAKResidual's claim at the served words, proposed, which is false of the accelerator model as Definitions.Core.Accel writes it (free register reductions run the four Russians' method below the public best's cost), so the guarantee is non-vacuous only on a model that prices register reductions; FixedAreRight, the bridge from the play's fixed words to the inventory's right words, to be made provable with UnitFixed's adaptive model; FixedBeforeSalt, a protocol-code fact (each window's instance, advice and program fixed before its salt, which SaltIsLiveCoin's discharge orders). The inventory's closure (ext = 0) and the advice bound are the statement's framing. Its honest and nontrivial lemmas are Proofs.Pouw.ServedWork.Honest's served_honest and served_nontrivial. Proved from h1J10RCheckedCreditPeriod (Proofs.Pouw.ServedWork).",
    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundHonest": "completeness: the honest lemma of wipeSurvivorBound: certify certifies a session of at most MAX_READS reads with no egress, at eps = 2^-128 and foreign_bits the StreamedWipeMeetsReads threshold at r = ratio k, and the honest strategy (the labels written into the store, each read answered from it, no egress) has its fill the labels' n * 512 bits, its egress in a set of 2^0 strings and meets the observed event on every run, so the theorem's event is not empty",
    "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundNontrivial": "completeness: the nontrivial lemma of wipeSurvivorBound: at one segment, a strategy that keeps the whole store and answers zeros fails the survivor bound at the published pair under a verdict that accepts every run, with every egress in A, for every PRF: it keeps the published 11,709,069 bits (2^19 labels, 2152 reads, r = 24) with probability 1, while eps is 2^-128 and the PRF advantage and delta_net are 0",
-   "Properties.Pouw.Served.SecurityProofs.servedFreed": "frozen (no-function,world-unlisted): ServedFreed, the served PoUW protocol's freed compute in the onsite form: an accepted period whose network certifier counted it in (cert) frees at most eps(x) C + beta K_c of the registered devices' capacity C = sum_r mu_r H_r at the period's dual price mu (Pouw.Dither.FreedWithin at W = 1, Period.DualOpt), with eps(x) = max 0 (C - ServedWork's credit at the period's accepted prefix + beta K_c) / C, except with probability ServedWork's delta_s + n(delta_bind + delta_ks) + n kappa_deg(B) plus the certifier's delta; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. It is ServedWork's premises less the inventory's closure (ext = 0), which OutsourceWithinEgressServed supplies, and adds two premises, each listed under assumptions: OutsourceWithinEgressServed, the price of an exchanged bit over the period's programs together, implied by the per-program Pouw.Assumptions.OutsourceWithinEgress (outsourceServed_of_perProgram); CertifiedExchange, the network certifier's guarantee at the period (its count in, K_c, exceeded with probability at most delta), the form network accounting's certifier is to instantiate, on a trusted-host device whose coins are witness (WitnessPathPrivate discharges CoinsConfidential). DualOpt and the capacity's positivity are the statement's framing. SAKServed makes it non-vacuous only on a model that charges free register reductions, as ServedWork. Its honest and nontrivial lemmas are Proofs.Pouw.ServedFreed.Honest's servedFreed_honest and servedFreed_nontrivial. Proved from servedWork and Pouw.SecurityProofs.Dither.FreedOfFloor (Proofs.Pouw.ServedFreed)."
+   "Properties.Pouw.Served.SecurityProofs.servedFreed": "frozen (no-function,world-unlisted): ServedFreed, the served PoUW protocol's freed compute in the onsite form: an accepted period whose network certifier counted it in (cert) frees at most eps(x) C + beta K_c of the registered devices' capacity C = sum_r mu_r H_r at the period's dual price mu (Pouw.Dither.FreedWithin at W = 1, Period.DualOpt), with eps(x) = max 0 (C - ServedWork's credit at the period's accepted prefix + beta K_c) / C, except with probability ServedWork's delta_s + n(delta_bind + delta_ks) + n kappa_deg(B) plus the certifier's delta; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. It is ServedWork's premises less the inventory's closure (ext = 0), which OutsourceWithinEgressServed supplies, and adds two premises, each listed under assumptions: OutsourceWithinEgressServed, the price of an exchanged bit over the period's programs together, implied by the per-program Pouw.Assumptions.OutsourceWithinEgress (outsourceServed_of_perProgram); CertifiedExchange, the network certifier's guarantee at the period (its count in, K_c, exceeded with probability at most delta), the form network accounting's certifier is to instantiate, on a trusted-host device whose coins are witness (WitnessPathPrivate discharges CoinsConfidential). DualOpt and the capacity's positivity are the statement's framing. SAKServed makes it non-vacuous only on a model that charges free register reductions, as ServedWork. Its honest and nontrivial lemmas are Proofs.Pouw.ServedFreed.Honest's servedFreed_honest and servedFreed_nontrivial. Proved from servedWork and Pouw.SecurityProofs.Dither.FreedOfFloor (Proofs.Pouw.ServedFreed).",
+   "Properties.Challenger.LiveAnswer": "unstated: a live check's answer at the coins its evidence reads is its answer, proved in security_proofs by Properties.Challenger.liveAnswer; a draft statement, which gets a guarantee entry once the one theorem reads it",
+   "Properties.Challenger.DrawnByDevice": "unstated: Challenger.drawCoins accepts only coins a withheld session of the key's device released for that window and label, or the fixed finder findBreak outputs a break from the run (an LMS forgery or a SHA-512 collision); an open statement, to be proved from euf-cma/lms-sha512-n64 and ecr/sha-512 asked of that finder",
+   "Properties.Challenger.CoinsFromLog": "unstated: an accepted answer is the live answer at the coins the challenger's device released, or a break, proved from DrawnByDevice in security_proofs by Properties.Challenger.coinsFromLog; a draft statement, which gets a guarantee entry once the one theorem reads it"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -9373,7 +9382,9 @@
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
-    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
+    "Properties.SampledProofs.acceptMeans",
+    "Properties.SampledProofs.bernoulliBounds"
    ]
   },
   "MemoryChallenger.Attest": {
@@ -14838,7 +14849,9 @@
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
     "Properties.Pouw.Served.SecurityProofs.servedFreed",
     "Properties.Pouw.Served.SecurityProofs.servedWork",
-    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
+    "Properties.SampledProofs.acceptMeans",
+    "Properties.SampledProofs.bernoulliBounds"
    ]
   },
   "SampledProofs.ChallengerSession": {
@@ -15136,12 +15149,12 @@
    ]
   },
   "SampledProofs.OneStage": {
-   "digest": "49121ed1a1a33fae91c6010ccc8a1a75a0ea3d84677c76a8128c70b468a64aaa",
+   "digest": "c57f109c39557ecf6c7cd4301ead44f8be5d56dbc3e24ec0a822711df1288029",
    "definitions": {
     "SampledProofs.OneStage.Commitment": "d744e6fb2fdff36157845bc9fb3224434ff1f62fc26396f87b4393a0af67c01b",
     "SampledProofs.OneStage.Commitment.digest": "8f1997edbf41ef170699331a03a0ea01ec0eeefb3a34a36d521c4eb1673c6f01",
     "SampledProofs.OneStage.Commitment.record": "6d1c7df56f375ecb5dbbc08f1650b8575d600d384bea8cd5c2415cc4574dc9e5",
-    "SampledProofs.OneStage.Evidence": "1650abb0f4e3f25e78fbb3e7f29f1fd22f2042cf2811effd8b77a4e4b781a527",
+    "SampledProofs.OneStage.Evidence": "52d0a3bcc8448597fa8b6dd7fd6cc820c22c737fd7f46afeef97bec0b8eb155d",
     "SampledProofs.OneStage.Evidence.draw": "c79ae947b22fb1fe093f74841a2a2b0f704408100f1ac412388db2e19d94ab19",
     "SampledProofs.OneStage.Evidence.instances": "aa63879e2456e9507bc1d49e34a16d5fb4b552c723f4f4027e0559d44aaf6d4c",
     "SampledProofs.OneStage.Evidence.provedUnits": "a224da91926bb06cf743781bfccbc6444942a6645c31fb556c9553f8f6d4797e",
@@ -15149,7 +15162,7 @@
     "SampledProofs.OneStage.Evidence.served": "ed5df203d5b3bbcd3eefb4afd4340753fbbdc8807d7e38a191795d64c0a163c4",
     "SampledProofs.OneStage.Evidence.sessionRoots": "510ae31a7d36ace8a0422cdfc2621ccba0b2d348af831bf47ba77ef1c99add30",
     "SampledProofs.OneStage.Evidence.verdicts": "015cd6bead98f4ab91582fd9ff07e43153df5b7536db1039a08fa226a08c725c",
-    "SampledProofs.OneStage.Params": "22825554339a4abd6e712ca108d556455eaafa1e7ab4ead36dcada022e32b453",
+    "SampledProofs.OneStage.Params": "a521d3ff07ff072d5dd988a3894ae53994ba99269e13ff810353ca0d4d9992b6",
     "SampledProofs.OneStage.Params.delta": "aec48d4bb81bf5c81c2309b92d9e805c095f778149cb1fa31fb91c55b80df8b6",
     "SampledProofs.OneStage.Params.verifier": "1774a7ae1000d869c7c34b71d7c55b661a6536f5b29e6f6cc6682ca12e56c9e9",
     "SampledProofs.OneStage.Public": "27240f20d02a2ba4a3fec008798a134ae627f74ae9c61a69d48d83a25a246b41",

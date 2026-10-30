@@ -3,8 +3,8 @@ reads and at which row, and the lane partials' layout, the after-draw value the 
 
 Serving keeps one CP-W receipt a 32 × 32 leaf. A drawn leaf's proof is its 32 lane statements and one combine statement
 (`circuit.h1zy`'s `PouwH1LaneZy_v1{TILE}`, lane l by its public index, and `PouwH1Combine_v1{TILE}`), each proved under the
-firewall on its own. The statements share the leaf's lane partials (``partials``), which the prover recomputes after the
-draw from what it committed before it and commits once under hiding leaves (`sampled_proofs.one_stage.produced`). A
+ZK server on its own. The statements share the leaf's lane partials (``partials``), which the prover recomputes after the
+sample from what it committed before it and commits once under hiding leaves (`sampled_proofs.one_stage.produced`). A
 partial is never an output: outputs are public and at most 16 bits, and a partial is 2 (KS + m) u32. Only the
 statements' ok bits leave.
 
@@ -18,7 +18,7 @@ set the lane absorbs in order (T_0 .. T_(KS-1) the prefix sets, O', then D_1 .. 
 the XOR of its 8 chains' y after that set and then of their z: word 2 s is set s's y, word 2 s + 1 its z. That is 260
 words at K = 4096. The combine checks that the rows' XOR, word by word, is the leaf's committed receipt.
 
-**The statements and their reads** (`statements`, `reads`): each a C-Flock statement of one unit, its ports these:
+**The statements and their reads** (`statements`, `reads`): each a Flock statement of one unit, its ports these:
 
 * lane l: ``a0`` .. ``a3`` the leaf's A rows at its row slots, ``b0`` .. ``b7`` its B rows at its column slots, ``zy``
   (its z/y record) and ``partials`` (row l); ``admit`` (the leaf's R admit bits) and a row ``pub`` of the leaf's salt,

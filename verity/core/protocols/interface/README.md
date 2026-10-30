@@ -1,6 +1,6 @@
 # core_protocol: the interface every core protocol implements
 
-This is a Lake package (`CoreProtocol`, namespace `Core`). It requires C-Flock's verifier by path for canonical JSON,
+This is a Lake package (`CoreProtocol`, namespace `Core`). It requires Flock's verifier by path for canonical JSON,
 bytes and hashes, and nothing else: no Mathlib. A protocol's port is its own package. It requires this one by path,
 defines one `Core.Protocol` value, and makes its executable `def main (args) := myProtocol.main args`.
 
@@ -39,7 +39,7 @@ accepts only what `toJson` writes (re-encoding must give the same canonical JSON
 an `accept` has no reason and both its public outputs and its profile, while a refusal has a reason and neither.
 
 `Protocol`, `Profile` and `Ratio` are the package's spec (`layers` in `lean-audit.json`): a property's statement may read
-them, and they import only Lean's JSON, C-Flock's bytes and canonical JSON, and one another. `Verdict`, `Ratio` and the
+them, and they import only Lean's JSON, Flock's bytes and canonical JSON, and one another. `Verdict`, `Ratio` and the
 profile's types derive `DecidableEq`.
 
 ## The command line (`CoreProtocol/Cli.lean`), the same for every protocol
@@ -79,7 +79,7 @@ signer and sessions) is its own check. The auditor's ledger (`SampledProofs.Chal
 ## The profile (`CoreProtocol/Profile.lean`)
 
 `Core.Integrity` is `verity.core.protocols.profile.IntegrityProfile.to_json`: `programs`, `prescribed`,
-`linked`, `covered`, the `levels` coarse to fine (name, query, size, and draw: `{"bernoulli":"p"}`, `{"subset":k}` or
+`linked`, `covered`, the `levels` coarse to fine (name, query, size, and sample: `{"bernoulli":"p"}`, `{"subset":k}` or
 `{"law":"stratified","strata":[...]}`), `delta` and `drawn`. The one change is that δ is an exact ratio, not a float. A
 protocol whose acceptance isn't a sampling design over proof blocks (a timed storage audit, a certificate check) declares its
 own profile type and JSON.
@@ -93,7 +93,7 @@ composite's genesis, so the head names the whole log. An entry is in one of two 
 | format | what it registers |
 | --- | --- |
 | `verity/registration/hardware/v1` | the site's cards (by SKU, under the auditor's data sheets), locations (site, hosts, devices, memory leaves by tier and bytes, the auditor's certifiers and challengers with their keys) and links (`β`, latency) |
-| `verity/registration/information/v1` | θ, each registered value by its committed root (`value`, `root`, `leaves`, `words`, `word_bits`, `domain`, a public checkpoint's pin), and the builder `B` (digest, advice format, public advice cap `ℓ`); each once in the log |
+| `verity/registration/information/v1` | θ, each registered value by its committed root (`value`, `root`, `leaves`, `words`, `word_bits`, `domain`, a public checkpoint's pin), and the registered compiler `B` (digest, advice format, public advice cap `ℓ`); each once in the log |
 
 Registration registers the site, θ and `B`, not the circuit `B` builds. A subprotocol's Program and parameters, and
 the proof system, are that protocol's public verifier parameters, not entries of the log.
@@ -102,7 +102,8 @@ An entry's digest is `SHA-512(format ‖ 0 ‖ canon(entry))`, a card's is under
 genesis is under `verity/registration/genesis/v1` over `{"composite": "onsite" | "remote"}`. `check` holds each entry to
 the log before it and refuses the first that fails by name (`previous`, `duplicate-id`, `unknown-ref`, `kind`,
 `card-digest`, `capacity`, `owner`, and onsite `uncertified` and `challenger-reach`, then `duplicate-information`). A
-component reads its view of an accepted log by projection (`View`: the site, θ's values and the builder, at the head).
+subprotocol reads its view of an accepted log by projection (`View`: the site, θ's values and the registered compiler,
+at the head).
 Registration is ASCII-only: a log or parameters holding any other character is refused as `ascii` before any digest is
 taken. As a core protocol, `protocol` (`verity/registration/log/v1`, the `core-registration` executable) takes the
 auditor's parameters (`{"composite", "keys", "sheets"}`), the log as commitment (`{"composite", "entries"}`, its head

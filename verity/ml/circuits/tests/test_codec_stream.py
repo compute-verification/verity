@@ -199,7 +199,7 @@ STEP = CompositeDefinition("CodecStreamStep", 1, (), lambda S: ((("c", V16), ("x
 
 
 class _Gen:
-    """A random root over two arrays of 16-bit words: sums of element lists drawn from what is in scope (runs, reversed runs,
+    """A random root over two arrays of 16-bit words: sums of element lists sampled from what is in scope (runs, reversed runs,
     one element repeated, scattered picks, or an earlier list extended, so a later argument's leading parts are an earlier
     one's whole sequence), batches of sums, scans, and a composite with int, string, float, function-bundle and tuple statics,
     returning picks from scope."""

@@ -208,7 +208,7 @@ def drew_json(out) -> dict:
 def summary_json(rec: audit.Record) -> dict:
     """An accepted session's record as the Lean writes it (`Difftest.recordJ`, `ra_cases.summary`): all of it but the
     coin commitment's root, the block size, the registration's fields its digest binds, and of each window's profile
-    more than its draws; `groups_per_coin` only above 1."""
+    more than its samples; `groups_per_coin` only above 1."""
     shared = {} if rec.groups_per_coin == 1 else {"groups_per_coin": rec.groups_per_coin}
     return shared | {"appended": rec.appended, "appends": None if rec.appends is None else rec.appends.hex(),
             "blocks": rec.blocks, "lifetime": rec.lifetime, "pace": None if rec.pace is None else rec.pace.to_json(),
@@ -223,7 +223,7 @@ def summary_json(rec: audit.Record) -> dict:
 def record_of(j: dict, registration: audit.Registration, coins: bytes, delta: float, samples: int) -> audit.Record:
     """The record the Lean gave an accepted session (`summary_json`'s form) as `audit.Record`: the rest from the
     registration its digest names, the coin commitment's root `coins`, each window's openings law at `delta` over
-    the Lean's lengths and draws (`audit.window_profile`), and the session's `samples`, which each window's draws
+    the Lean's lengths and draws (`audit.window_profile`), and the session's `samples`, which each window's samples
     must be min(samples, U_t) at (`audit.Record`)."""
     if j["registration"] != registration.digest.hex():
         raise ValueError(f"the Lean's record is of registration {j['registration'][:16]}…, not "
@@ -243,7 +243,7 @@ def record_of(j: dict, registration: audit.Registration, coins: bytes, delta: fl
 
 def released_coins(c: coins.Coins) -> tuple[list[bytes], list[bytes]]:
     """The session's coins as the Lean's session takes them: its W + ⌈W/g⌉ committed coins (window t's challenge at t,
-    draw d's openings coin at W + d, g windows a draw), each one the challenger never released 32 zero bytes, which no
+    draw d's openings coin at W + d, g windows a sample), each one the challenger never released 32 zero bytes, which no
     event reads, and the append coins in the order released."""
     zero, w, d = bytes(coins.COIN_BYTES), c.windows, coins.openings_coins(c.windows, c.per_coin)
     out = [coins.coin(o) for o in c.opened(coins.CHALLENGE)], [coins.coin(o) for o in c.opened(coins.OPENINGS)]

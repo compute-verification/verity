@@ -55,7 +55,7 @@ The commit itself (`relay`, which ``relay`` runs end to end with a key of its ow
   every hm96 salt is the operating system's (Daniel, 9 Oct, decisions 4(a) and 4(c); A3 in
   ``Security/Proofs/Flock/Soundness/Assumptions.lean``), so nothing rests on a stream generator. ``--witness`` is
   where they go, every value's in manifest order, its rows in order (each value's `Transfer.witness`): the prover's
-  alone, 4.85 GB at H200 (25,284,864 rows). `keyed_salts` is interface 1's prover-side derivation (C-Flock's
+  alone, 4.85 GB at H200 (25,284,864 rows). `keyed_salts` is interface 1's prover-side derivation (Flock's
   ``hm96_salt``), here only to hold this commit to interface 1's fixture roots.
 * **The domain** is a parameter, by default the one the verifier derives (`transfer_rows.domain`: the reading program's
   digest ``--program``, the value's leaf width, a value held across windows dropping only the window), interface 1's.
@@ -402,7 +402,7 @@ def os_salts(value: int, first: int, n: int) -> bytes:
 
 @dataclass(frozen=True)
 class keyed_salts:  # noqa: N801
-    """Interface 1's prover-side salts (C-Flock's ``hm96_salt``): row r of the value at manifest index i, ChaCha20 blocks
+    """Interface 1's prover-side salts (Flock's ``hm96_salt``): row r of the value at manifest index i, ChaCha20 blocks
     3r .. 3r + 2 under `key` with nonce i. Only to hold this commit to interface 1's fixture roots."""
 
     key: bytes
