@@ -303,6 +303,20 @@ def check(q, chip, depth, a, seed=0):
     return bool(np.array_equal(run(tree, E, C64), E @ C64)), depth_of(tree)
 
 
+def check_full(q, chip, reading, depth, a, seed=0):
+    """The served-K best and best non-plain trees on all of q, against E·Wᵀ for 2^depth noise rows."""
+    C = q.T
+    nat = Natural(chip, reading, a)
+    _cost, tree, _ac, _at = nat.node(forms(C, 0, depth), (0, a - 1), 0)
+    E = np.random.default_rng(seed).integers(0, a, (2**depth, C.shape[0]), dtype=np.int64)
+    C64 = C.astype(np.int64)
+    ref = E @ C64
+    out = {"best": bool(np.array_equal(run(tree, E, C64), ref)), "best_depth": depth_of(tree)}
+    if nat.root_alt[1] is not None:
+        out.update(alt=bool(np.array_equal(run(nat.root_alt[1], E, C64), ref)), alt_depth=depth_of(nat.root_alt[1]))
+    return out
+
+
 def to_execute(t):
     if "scheme" in t:
         return {"scheme": t["scheme"], "roles": "AB", "w": 16, "kids": [to_execute(k) for k in t["kids"]]}
@@ -378,7 +392,7 @@ def overflow_profile(q, depth):
     return out
 
 
-def work(task, chips, readings, depth, a, kcaps):
+def work(task, chips, readings, depth, a, kcaps, full=False):
     name, tensor, url, base, entry = task
     t0 = time.time()
     q = quantize(load_tensor(url, base, entry))
@@ -386,6 +400,9 @@ def work(task, chips, readings, depth, a, kcaps):
            "sigma_q": float(q.astype(np.float64).std()), "rows": []}
     for chip in chips:
         rec[f"exact_{chip}"] = check(q, chip, depth, a)
+        if full:
+            for reading in readings:
+                rec[f"exact_full_{chip}_{reading}"] = check_full(q, chip, reading, depth, a)
     rec["overflow"] = overflow_profile(q[:, : q.shape[1] // 2**depth * 2**depth], min(depth, 2))
     for kcap in kcaps:
         if kcap and kcap >= q.shape[1] and 0 in kcaps:
@@ -406,6 +423,7 @@ def main(argv=None) -> int:
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--self-check", action="store_true", help="only the bookkeeping check against execute.run")
+    ap.add_argument("--full-check", action="store_true", help="also execute the served-K trees on whole matrices")
     args = ap.parse_args(argv)
     chips, readings = args.chips.split(), args.readings.split()
     for chip in chips:
@@ -421,11 +439,13 @@ def main(argv=None) -> int:
     kcaps = [int(k) for k in args.kcaps.split()]
     ok = True
     with concurrent.futures.ProcessPoolExecutor(args.workers) as ex:
-        futs = [ex.submit(work, t, chips, readings, args.depth, args.a, kcaps) for t in tasks]
+        futs = [ex.submit(work, t, chips, readings, args.depth, args.a, kcaps, args.full_check) for t in tasks]
         with open(args.out / "matrices.jsonl", "w") as f:
             for fut in concurrent.futures.as_completed(futs):
                 rec = fut.result()
                 ok &= all(rec[f"exact_{c}"][0] for c in chips)
+                ok &= all(v for k, x in rec.items() if k.startswith("exact_full") for kk, v in x.items()
+                          if kk in ("best", "alt"))
                 f.write(json.dumps(rec) + "\n")
                 f.flush()
                 fast = [r for r in rec["rows"] if r["reading"] == "fast"]
