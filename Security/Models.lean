@@ -47,5 +47,7 @@ import Definitions.Accounting.Guarantees
 import Definitions.Hash.Guarantees
 import Definitions.NetworkCertifier.Guarantees.Period
 import Definitions.NetworkCertifier.Guarantees.HorizonLeak
+import Definitions.Core.Assumptions.Transport
+import Definitions.Core.Guarantees.Transport
 
 /-! Each component's named assumptions and guarantee statements. -/
