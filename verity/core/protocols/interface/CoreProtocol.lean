@@ -2,6 +2,7 @@ import CoreProtocol.Ratio
 import CoreProtocol.Profile
 import CoreProtocol.Protocol
 import CoreProtocol.Live
+import CoreProtocol.Protocol.Canonical
 import CoreProtocol.Record
 import CoreProtocol.Cli
 import CoreProtocol.Example

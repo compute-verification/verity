@@ -284,9 +284,9 @@ def test_certificates_at_their_points():
     assert schemes.Band(band.BandParams(512, 524_288, 5)).certificate.cliff == 5
     assert schemes.Band(band.BandParams(256, 524_288, 12)).certificate is None
     with pytest.raises(ValueError, match="cliff"):
-        protocol.Certificate(111, 6, 1 << 20, 483_000, "x", cliff=5)
+        protocol.CapacityBound(111, 6, 1 << 20, 483_000, "x", cliff=5)
     with pytest.raises(KeyError):
-        protocol.Certificate(111, 5, 1 << 20, 483_000, "x", claims=("no-such-claim",))
+        protocol.CapacityBound(111, 5, 1 << 20, 483_000, "x", claims=("no-such-claim",))
 
 
 def test_certificates_name_proved_guarantees():
@@ -575,7 +575,7 @@ def test_p2_wide_certificate_is_period_held_at():
 
     fam = family_certificate(P2Params(16448, 21065, 256, 1)).to_json()
     assert CERT_WIDE_BLOCKS == (1 << 19, 1 << 27)
-    assert WIDE_CLAIMS == (*P2_CLAIMS, "p2-ring-round-secure-wide", "pous-ring-device-at", "statistical-hiding")
+    assert WIDE_CLAIMS == (*P2_CLAIMS, "p2-ring-round-secure-wide", "pous-ring-device-at")
     for bps, segments in ((1 << 16, 8), (1 << 12, 128), (1 << 16, 129), (1 << 16, 1038), (1 << 16, 1 << 11)):
         cert = wide_certificate(P2Params(16448, 21065, bps, segments))
         assert cert.to_json() == fam | {"theorem": "Pous.Period.SecurityProofs.periodHeldAt",

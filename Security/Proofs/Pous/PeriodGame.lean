@@ -1,5 +1,6 @@
 import Properties.Pous.PeriodGame
 import Proofs.Pous.PeriodAt
+import Proofs.Pous.PeriodDeployed
 import Proofs.Accounting.Prob
 
 /-!
@@ -370,27 +371,77 @@ theorem prCoin_challenger_le (N : ℕ) (sid : ByteArray) (F : HmCoins → Stream
 /-! ## The four guarantees -/
 
 theorem periodHeldCoins : PeriodHeldCoins := by
-  intro hC D Q L hW ι α ΩW ΩQ _ _ d r P τ round S hdev hinst hS o hind ω
-  refine (prCoin_le_of_pr _ (periodHeld hC D Q L hW ι α ΩW ΩQ d r P τ round S hdev hinst hS o)
+  intro D Q L hW ι α ΩW ΩQ _ _ d r P τ round S hdev hinst hS o hs hd hsch ω
+  refine (prCoin_le_of_pr _ (periodHeld D Q L hW ι α ΩW ΩQ d r P τ round S hdev hinst hS o)
     (fun ω ω' y => ?_) ω).trans ofReal_bound
-  obtain ⟨hs, hd, hsch⟩ := hind ω ω' y
-  simp only [Audits.Accepts, Audits.Break, Accounting.Run.held, hs, hd, hsch]
+  simp only [Audits.Accepts, Audits.Break, Accounting.Run.held, hs ω ω' y, hd ω ω' y, hsch ω ω' y]
 
 theorem periodHeldSha512 : PeriodHeldSha512 := by
-  intro hC D Q L hW ι α ΩW ΩQ _ _ d r P τ round S hdev hinst hS o hind ω ε t h1 h2
+  intro D Q L hW ι α ΩW ΩQ _ _ d r P τ round S hdev hinst hS o hs hd hsch ω ε t h1 h2
   exact prCoin_challenger_le (2 ^ 19) P.sid (fun c s => AcceptedShort r P S (o.1, o.2, (ω, c, s)))
-    (periodHeldCoins hC D Q L hW ι α ΩW ΩQ d r P τ round S hdev hinst hS o hind ω) ε t h1 h2
+    (periodHeldCoins D Q L hW ι α ΩW ΩQ d r P τ round S hdev hinst hS o hs hd hsch ω) ε t h1 h2
+
+theorem rounds_105 {p ε₀ c : ℝ≥0∞} (h : Pous.Guarantees.RoundsBound p ε₀ 105 c) : (1 - p) ^ 105 + 105 * ε₀ ≤ c := by
+  unfold Pous.Guarantees.RoundsBound at h
+  rwa [Nat.cast_ofNat] at h
 
 theorem periodHeldCoinsAt : PeriodHeldCoinsAt := by
-  intro p ε₀ D Q L hnum hW pt N _ h1 h2 hH ι α ΩW ΩQ _ _ d r P round S hdev hS o hind ω
-  refine (prCoin_le_of_pr _ (periodHeldAt p ε₀ D Q L hnum hW pt N h1 h2 hH ι α ΩW ΩQ d r P round S hdev hS o)
-    (fun ω ω' y => ?_) ω).trans ofReal_bound
-  obtain ⟨hs, hd, hsch⟩ := hind ω ω' y
-  simp only [AuditsOf.Accepts, AuditsOf.Break, Accounting.Run.held, hs, hd, hsch]
+  intro p ε₀ D Q L hnum hW pt N _ h1 h2 ι α ΩW ΩQ _ _ d r P round S hdev hS o hs hd hsch ω
+  refine (prCoin_le_of_pr _ (periodHeldAt p ε₀ D Q L (rounds_105 hnum) hW pt N (le_trans (by norm_num) h1)
+    (h2.trans (by norm_num)) ι α ΩW ΩQ d r P round S hdev hS o) (fun ω ω' y => ?_) ω).trans ofReal_bound
+  simp only [AuditsOf.Accepts, AuditsOf.Break, Accounting.Run.held, hs ω ω' y, hd ω ω' y, hsch ω ω' y]
 
 theorem periodHeldSha512At : PeriodHeldSha512At := by
-  intro p ε₀ D Q L hnum hW pt N _ h1 h2 hH ι α ΩW ΩQ _ _ d r P round S hdev hS o hind ω ε t k1 k2
+  intro p ε₀ D Q L hnum hW pt N _ h1 h2 ι α ΩW ΩQ _ _ d r P round S hdev hS o hs hd hsch ω ε t k1 k2
   exact prCoin_challenger_le N P.sid (fun c s => AcceptedShortAt pt N r P S (o.1, o.2, (ω, c, s)))
-    (periodHeldCoinsAt p ε₀ D Q L hnum hW pt N h1 h2 hH ι α ΩW ΩQ d r P round S hdev hS o hind ω) ε t k1 k2
+    (periodHeldCoinsAt p ε₀ D Q L hnum hW pt N h1 h2 ι α ΩW ΩQ d r P round S hdev hS o hs hd hsch ω) ε t k1 k2
+
+/-! ## Their witnesses -/
+
+theorem prCoin_true {C : Type} [Fintype C] [Nonempty C] : prCoin (fun _ : C => True) = 1 := by
+  unfold prCoin avg
+  have h0 : (Fintype.card C : ℝ≥0∞) ≠ 0 := by exact_mod_cast Fintype.card_ne_zero
+  simp only [ite_true, mul_one, Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
+  exact ENNReal.mul_inv_cancel h0 (ENNReal.natCast_ne_top _)
+
+theorem bound_lt_one : ENNReal.ofReal Params.δ + Params.εMax < 1 := by
+  have hε : Params.εMax ≠ ⊤ := by simp [Params.εMax]
+  rw [← ENNReal.ofReal_toReal hε, ← ENNReal.ofReal_add (by norm_num [Params.δ]) ENNReal.toReal_nonneg, εMax_toReal,
+    ENNReal.ofReal_lt_one]
+  norm_num [Params.δ]
+
+/-- **The honest lemma of `PeriodHeldCoins`, `PeriodHeldSha512` and their forms at any point**: the premises they name
+beside `PeriodHeld`'s and `PeriodHeldAt`'s hold at the honest period (`honestRun` on `honestDevice`, one tick a round,
+the certificate `HONEST_S`). The certificate fits `S₀`, which is `SAt (2^19)`; the honest period's schedule reads no
+primitive; and P2's per-round floor `p = 0.043`, `ε₀ = 2^-137` meets the 105-round bound (`PousP2Rounds.floor_043_eps`).
+`PeriodHeldHonest` has the device model and the instantiation there. -/
+theorem periodHeldGame_honest :
+    Fits honestDevice (honestRun.win .capacity).len 1 HONEST_S Pous.EndToEnd.S ∧
+      Fits honestDevice (honestRun.win .capacity).len 1 HONEST_S (SAt (2 ^ 19)) ∧
+      ReadsNoPrimitive honestRun.schedule ((), ()) ∧
+      Pous.Guarantees.RoundsBound (43 / 1000) ((2⁻¹ : ℝ≥0∞) ^ 137) 105
+        (ENNReal.ofReal Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130)) := by
+  have hS : SAt (2 ^ 19) = Pous.EndToEnd.S := (PousP2Ring.stateBound_p2ring_b19 _ _).trans S_eq.symm
+  refine ⟨periodHeldHonest.2.2.1, ?_, fun _ _ _ => rfl, ?_⟩
+  · rw [hS]
+    exact periodHeldHonest.2.2.1
+  · unfold Pous.Guarantees.RoundsBound
+    rw [Nat.cast_ofNat]
+    exact PousP2Rounds.floor_043_eps
+
+/-- **`PeriodHeldCoins`' and `PeriodHeldCoinsAt`'s bound says something**: an event that always holds, as a verifier
+that accepts everything does on a period whose capacity account held nothing, has probability 1 over the memory
+challenger's hm96 coins and streams, above `δ + ε_max`. -/
+theorem periodHeldCoins_nontrivial :
+    ¬ prCoin (fun _ : HmCoins × Streams => True) ≤ ENNReal.ofReal Params.δ + Params.εMax := by
+  rw [prCoin_true]
+  exact not_le.2 bound_lt_one
+
+/-- **`PeriodHeldSha512`'s and `PeriodHeldSha512At`'s bound says something**: at a PRF with no advantage (`ε = 0`), an
+event that always holds has probability 1 over the challenger's source and its hm96 coins, above `δ + ε_max`. -/
+theorem periodHeldSha512_nontrivial :
+    ¬ prCoin (fun _ : Bytes 64 × HmCoins => True) ≤ ENNReal.ofReal Params.δ + Params.εMax := by
+  rw [prCoin_true]
+  exact not_le.2 bound_lt_one
 
 end Pous.Period.SecurityProofs

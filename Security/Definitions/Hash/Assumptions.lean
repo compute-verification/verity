@@ -17,9 +17,9 @@ is asked of that forger only, as `Claims.ExpectedCR` is asked of one finder. The
 reads it at the compiled one.
 
 `Sha512Prf` (`prf/sha-512`): SHA-512 keyed by secret bytes right after a public prefix, at inputs none of which is a
-prefix of another, passes a test as a random function does, up to `ε_prf(t, Q)`. An assumed advantage bound, allowed
-by Daniel's ruling on ASK-184 (B, 28 Oct): a statement that carries a bound from a model in which SHA-512's keyed
-outputs are uniform to the deployed SHA-512 takes it and adds its `ε_prf`.
+prefix of another, passes a test as a random function does, up to `ε_prf(t, Q)`. It is an assumed advantage bound: a
+statement that carries a bound from a model in which SHA-512's keyed outputs are uniform to the deployed SHA-512 takes
+it and adds its `ε_prf`.
 -/
 
 namespace Hash.Assumptions
