@@ -224,6 +224,20 @@ EOF
   return $rc
 }
 
+# accepted INDEX: the verifier recorded NS sessions in INDEX (serve's index.jsonl) and accepted each. The prover exits 0
+# after a stop or a session the verifier refused, so its status alone says nothing of the verdict.
+accepted() {
+  python3 - $1 $NS <<'EOF'
+import json, sys
+from pathlib import Path
+p, ns = Path(sys.argv[1]), int(sys.argv[2])
+rows = [json.loads(l) for l in p.read_text().splitlines() if l.strip()] if p.exists() else []
+bad = [f"{r.get('session')}: accepted {r.get('accepted')}, {r.get('why') or r.get('aborted')}" for r in rows if r.get("accepted") is not True]
+if bad or len(rows) != ns:
+    sys.exit(f"the verifier accepted {len(rows) - len(bad)} of {ns} sessions ({len(rows)} recorded): " + "; ".join(bad))
+EOF
+}
+
 # loopback NAME PUB INST CIRCUIT [--zk]: a verifier process (serve, on the verifier's cores, every session at once) and
 # prove_live against it; the sessions under $DD/$STEP-NAME/sessions; the prover's status
 loopback() {
@@ -239,7 +253,14 @@ loopback() {
   local SP=$!
   wait_serving $O/$STEP/$name/serve.log $SP || { tail -20 $O/$STEP/$name/serve.log; return 1; }
   prove_live $name 127.0.0.1:$PORT $inst $circ $zk; local rc=$?
+  # serve records a session just after its verdict leaves: stopped once it has recorded the NS sessions of a prover that
+  # ran them, or after RECORD_WAIT_S seconds
+  local i
+  [ $rc != 0 ] || for i in $(seq ${RECORD_WAIT_S:-300}); do
+    [ $(cat $s/sessions/index.jsonl 2>/dev/null | wc -l) -ge $NS ] && break; sleep 1; done
   kill $SP; wait $SP 2>/dev/null
+  # the prover's 0 is 3 unless the verifier accepted each of the NS sessions
+  [ $rc != 0 ] || accepted $s/sessions/index.jsonl || rc=3
   LAST=$(find $s/sessions -name session.json -printf '%T@ %h\n' | sort -n | tail -1 | cut -d' ' -f2)
   # OPENS (oprove under MODES=firewall): every session this coin server served, as statement OPENS_AS, one line each
   # with its coin key, appended in one write before a retry's loopback clears $s
@@ -714,8 +735,9 @@ oprove)
   # Outer proofs through the firewall are independent sessions (AGENTS.md): every
   # staged statement is fixed before any session draws coins (statements.sha512, checked again once all have ended), gets
   # exactly one session, with its own loopback verifier, live coins and firewall pass, never a second one (no lease retry,
-  # no preemption: a failed session is its statement's failure), and every statement's exit is recorded (exits.tsv), an
-  # honest one's failure failing the step.
+  # no preemption: a failed session is its statement's failure), and every statement's exit is recorded (exits.tsv: 0 only
+  # when the verifier accepted each of its sessions, `loopback`), an honest one's failure, or one with no exit recorded,
+  # failing the step.
   if [[ " $MODES " == *" firewall "* ]]; then
     [ "$MODES" = firewall ] || { echo "REFUSED: MODES=$MODES: a firewalled oprove gives each staged statement exactly one session; run MODES=dev or host in a job of its own"; exit 2; }
     [ $((WARM + RUNS)) = 1 ] || { echo "REFUSED: WARM=$WARM RUNS=$RUNS: a firewalled oprove gives each staged statement exactly one session (WARM=0 RUNS=1)"; exit 2; }
@@ -776,9 +798,10 @@ for gb, c in sorted(out, key=lambda x: (-x[0], x[1])):
 EOF
 )
   echo "oprove: ${#TODO[@]} statements, OPROVE_JOBS=${OPROVE_JOBS:-4} OPROVE_MEM_GB=${OPROVE_MEM_GB:-48}: ${TODO[*]}"
-  declare -A RUNNING=(); USED=0
+  declare -A RUNNING=(); USED=0; STARTED=()
   for t in "${TODO[@]}"; do
     gb=${t%% *} C=${t#* }; l=${C//\//-}; want $l || continue
+    STARTED+=($l)
     while [ ${#RUNNING[@]} -gt 0 ] && { [ ${#RUNNING[@]} -ge ${OPROVE_JOBS:-4} ] || [ $((USED + gb)) -gt ${OPROVE_MEM_GB:-48} ]; }; do
       wait -n -p FIN; [ -n "${RUNNING[$FIN]:-}" ] && USED=$((USED - ${RUNNING[$FIN]%% *})) && echo "oprove ${RUNNING[$FIN]#* } done" && unset "RUNNING[$FIN]"
     done
@@ -788,10 +811,10 @@ EOF
   wait
   WARM=$W0 RUNS=$R0 NS=$((W0 + R0))
   (cd $V && sha512sum --quiet -c $O/oprove/statements.sha512) || { echo "a staged statement changed while sessions ran"; exit 1; }
-  python3 - $O/oprove/exits.tsv "${TODO[@]#* }" <<'EOF' || exit 1
+  python3 - $O/oprove/exits.tsv "${STARTED[@]}" <<'EOF' || exit 1
 import sys
 got = dict(l.rstrip("\n").split("\t") for l in open(sys.argv[1]) if l.strip())
-bad = [f"{l}: exit {got[l]}" for l in (c.replace("/", "-") for c in sys.argv[2:]) if got.get(l, "0") != "0" and not l.startswith("forged-")]
+bad = [f"{l}: exit {got.get(l, 'not recorded')}" for l in sys.argv[2:] if got.get(l) != "0" and not l.startswith("forged-")]
 print(f"oprove: {len(got)} statements, one session each: exits {dict(sorted(got.items()))}")
 sys.exit(f"oprove: an honest statement's session failed, and none is drawn again: {', '.join(bad)}" if bad else 0)
 EOF
