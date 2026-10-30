@@ -115,6 +115,24 @@ def test_the_verifiers_window_is_the_circuit_record_under_verity_s_catalog(writt
         RA.verifier_window(written.dir, D.parse_law(LAW), None)
 
 
+def test_a_registry_template_resolves_in_a_fresh_audit_process():
+    """A window's io shell (`ScanSlots_v2`) is a registry Definition, which `interface.resolve`'s own walk doesn't import: in a
+    fresh process, which has loaded nothing else, `catalog_resolve` resolves its id to itself."""
+    from verity.ml.definitions.registry import boolean_io_shell as BX
+
+    occ, lp, mx, ids = (tuple(f + 36333 * j for j in range(2)) for f in (376, 168, 200, 474))
+    tid = descriptor_id(bind(BX.ScanSlotsV2, NS=4548, NP=4, IDB=17, K0=12, K=45, OCC=occ, LP=lp, MAX=mx, IDS=ids))
+    code = f"""
+import sys
+sys.path.insert(0, {str(HERE.parent)!r})
+import records_audit as RA
+from verity.ml.circuits.codec import descriptor_id
+assert descriptor_id(RA.catalog_resolve(sys.argv[1])) == sys.argv[1]
+"""
+    p = subprocess.run([sys.executable, "-c", code, tid], capture_output=True, text=True)
+    assert p.returncode == 0, p.stderr[-3000:]
+
+
 def test_the_compile_check_runs_the_registered_compiler_on_the_opened_advice(written, tmp_path):
     w, doc, op = written.rec["window"], written.doc, written.opening
     v, bound = RA.compile_check(doc, w, op, _compilers(tmp_path, doc), tmp_path / "c")
