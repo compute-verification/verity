@@ -24,9 +24,9 @@ and share it. Checked bit for bit on 64 chains of 160 positions:
   terms a side (the cross term is 4·r_0·c_0), at 32 bits and every k, and with one free term a side exactly where
   4k ≡ 0 mod 2^w. So a w-bit window sees a nibble-0x1 constant as c = 1 and its sweep certifies it only against one
   free term a side. At 32 bits every `xc` half has a nonzero minor that rules out N + IMAD(ρ, γ, δ) + ε and
-  N + x·IMAD(ρ, γ, δ) for any free terms; a LOP3 of free terms, then the add, is the shape left, for windows of width
-  5 to 7 (the lowest set bit of the half in 4..6, plus one) with four free terms a side, a two-instruction program's
-  most.
+  N + x·IMAD(ρ, γ, δ) for any free terms, but every minor vanishes below j + 4 bits (j the half's lowest set bit in
+  4..6), so only a window of 8 to 10 bits with four free terms a side (a two-instruction program's most) can certify a
+  half, and a LOP3 of free terms, then the add, is the shape left at 32 bits.
 
 What it doesn't see: a shared part combined with a per-chain part in some other way than the two skips above (the
 census counts only values equal across chains), and routes that change the write count of a round itself
@@ -167,6 +167,22 @@ def product_rank_witness(c: int, k: int, rng, rank: int, trials: int = 2000) -> 
     return False
 
 
+def witness_valuation(c: int, rng, trials: int = 600) -> int:
+    """The least 2-adic valuation among sampled nonzero 2x2 minors of the double difference: a w-bit window refutes the
+    IMAD shape on c only if some minor is nonzero mod 2^w. D = 4·P(a)·Q(b) + 2^(j+1)·X for j the lowest set bit of c
+    above its nibble 0x1, with P·Q rank 1, so every minor is ≡ 0 mod 2^(j+3)."""
+    f = lambda a, b: ((((a + b) & M32) ^ c) - a - b) & M32  # noqa: E731
+    a0, b0 = rng.getrandbits(32), rng.getrandbits(32)
+    D = lambda a, b: (f(a, b) - f(a, b0) - f(a0, b) + f(a0, b0)) & M32  # noqa: E731
+    best = 32
+    for _ in range(trials):
+        a, a2, b, b2 = (rng.getrandbits(32) for _ in range(4))
+        x = (D(a, b) * D(a2, b2) - D(a, b2) * D(a2, b)) & M32
+        if x:
+            best = min(best, (x & -x).bit_length() - 1)
+    return best
+
+
 def xc_routes(hr, checks: Checks) -> dict:
     """The two-instruction word entry N + ((R + C) ⊕ c) + k against `hash_rounds.xc`'s halves, at 32 bits."""
     rng = random.Random(81)
@@ -179,9 +195,12 @@ def xc_routes(hr, checks: Checks) -> dict:
                  "window's k ≡ 0 mod 4 fits at width 4 are this route, and at 32 bits it needs k ≡ 0 mod 2^30",
                  all(ks[w] == list(range(0, 1 << w, 1 << (w - 2))) for w in ks), ks)
     halves = [(t, s, hr.xc(t) >> s & M32, hr.K[t] >> s & M32) for t in range(80) for s in (0, 32)]
-    lowest = {w: sum(min(i for i in (4, 5, 6) if c >> i & 1) + 1 == w for *_, c, _ in halves) for w in (5, 6, 7)}
-    k0 = {w: sum(min(i for i in (4, 5, 6) if c >> i & 1) + 1 == w and k % 4 == 0 for *_, c, k in halves)
-          for w in (5, 6, 7)}
+    j = [min(i for i in range(1, 32) if c >> i & 1) for *_, c, _ in halves]
+    width = [witness_valuation(c, rng) + 1 for *_, c, _ in halves]
+    checks.check("every xc half: the least window that sees the IMAD shape fail is j + 4 bits (j the half's lowest set "
+                 "bit above its nibble, in 4..6), so a sweep at width ≤ j + 3 can't refute the IMAD shape on the half",
+                 all(x == y + 4 for x, y in zip(width, j)),
+                 {w: width.count(w) for w in sorted(set(width))})
     w1 = [product_rank_witness(c, k, rng, 1, 400) for *_, c, k in halves]
     w2 = [product_rank_witness(c, k, rng, 2, 400) for *_, c, k in halves]
     checks.check("every xc half: a nonzero minor rules out N + IMAD(ρ, γ, δ) + ε and N + x·IMAD(ρ, γ, δ) at 32 bits, "
@@ -191,8 +210,9 @@ def xc_routes(hr, checks: Checks) -> dict:
                  "the witness tests separate",
                  not product_rank_witness(1, 0, rng, 1, 2000) and not product_rank_witness(0, 5, rng, 2, 2000))
     return {"c1_two_free_terms_exact": exact, "c1_one_free_term_k": ks, "halves": len(halves),
-            "halves_k_0mod4": sum(k % 4 == 0 for *_, k in halves), "certificate_width": lowest,
-            "certificate_width_k_0mod4": k0, "rank1_witness": sum(w1), "rank2_witness": sum(w2)}
+            "halves_k_0mod4": sum(k % 4 == 0 for *_, k in halves),
+            "imad_certificate_width": {w: width.count(w) for w in sorted(set(width))},
+            "rank1_witness": sum(w1), "rank2_witness": sum(w2)}
 
 
 def main() -> int:
