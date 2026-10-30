@@ -20,6 +20,8 @@
 #      (forge_after.py), each put to Lean beside its honest control
 #      TAG=rb-<run id> (85's data/$TAG, removed at the end unless KEEP_DATA=1; a later job's STEPS=oprove,... takes it with
 #      TAG=... KEEP_DATA=1)  FLOCK_WORK=/workspace/jobs/rec-bench
+#      TREE_FROM= (the inner sessions' coin trees: the challenger's device, HOST:PORT, with TREE_SECRET_FILE; empty: this
+#      host's OS, rec_live --tree-test-os, a test's coins)
 #      and any of 85's own (LEVELS, GPU, PCPUS, GPU_PREEMPTIBLE, ...), passed through
 #      CUDA_TK, WARM_FROM: as 85 takes them (default: the rec-reprice unpack and cargo tree where present, read only)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -57,7 +59,7 @@ LSHA=$(cd verity/core/service/flock && find . -name .lake -prune -o -type f -pri
   echo "OPROVE_WARM=${OPROVE_WARM:-0} OPROVE_RUNS=${OPROVE_RUNS:-1} GPU_MAX_MIN=$GPU_MAX_MIN GPU=${GPU:-1} OPROVE_GPU=$OPROVE_GPU OPROVE_JOBS=$OPROVE_JOBS" \
     $(for v in $(compgen -v REPEAT_); do echo "$v=${!v}"; done)
   echo "steps=$STEPS modes=$MODES lean_jobs=${LEAN_JOBS:-4} lean_sources=$LSHA neg=${NEG// /+} forge=${FORGE//,/+}"
-  echo "cuda_tk=${CUDA_TK:-} warm_from=${WARM_FROM:-}"; nproc; nvidia-smi -L 2>/dev/null; } > "$O/params.txt"
+  echo "cuda_tk=${CUDA_TK:-} warm_from=${WARM_FROM:-} tree_from=${TREE_FROM:-test-os}"; nproc; nvidia-smi -L 2>/dev/null; } > "$O/params.txt"
 
 # timed NAME I CMD...: CMD under $O/steps/NAME/r<I> (its RESEARCH_RUN_DIR) and /usr/bin/time -v; its exit status
 timed() {

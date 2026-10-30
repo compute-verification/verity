@@ -13,7 +13,7 @@
 #   STEP=inner   (GPU leases) the plain inner statement proved with ZK off (M0) against the rec proxy
 #                (verity_flock.rec_live, the inner phase's ZK server: salted tree tops, the schedule of the statement's public
 #                shape, rec_live --schedule-for; every coin the challenger's coin tree, drawn at Hello and opened round by
-#                round, rec_live --coin-tree with the prover, its statement and its replay under INNER_COINS; Register
+#                round, rec_live --coin-tree (from TREE_FROM) with the prover, its statement and its replay under INNER_COINS; Register
 #                answered with the verifier's full draw, rec_live.full_draw over the
 #                inner statement's program and partition, data/$TAG/stage/draw.json; WARM + RUNS sessions), upstream's
 #                replay of the last one and V*'s hashing
@@ -75,6 +75,9 @@
 #              empty: none)
 #      REC_COINS=0 (lean; 1: the inner statement set up once per inner session, flock-verify rec-coins, and each verify given
 #              that record, --rec-inner-coins, rather than the inner circuit it would parse again)
+#      TREE_FROM= (inner: the challenger's device, HOST:PORT, each inner session's coin tree drawn and opened there, rec_live
+#              --tree-from; TREE_SECRET_FILE= its session secret, hex; empty: this host's OS draws them, rec_live --tree-test-os,
+#              a test's coins, never the challenger's, out/inner/tree-source.txt says which)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 STEP=${STEP:?STEP=build|inner|icheck|vstage|vcap|oprove|oreplay|lean}
@@ -282,8 +285,11 @@ hello_at() {
 # prover's status
 proxied() {
   rm -rf $DD/inner; mkdir -p $DD/inner
+  local src=(--tree-test-os)
+  [ -z "${TREE_FROM:-}" ] || src=(--tree-from $TREE_FROM ${TREE_SECRET_FILE:+--tree-secret-file $TREE_SECRET_FILE})
+  echo "${TREE_FROM:-test-os}" > $O/inner/tree-source.txt
   taskset -c $VCPU python3 -m verity_flock.rec_live --listen 127.0.0.1:0 --out $DD/inner --sessions $NS --schedule $O/inner/schedule.json \
-    --draw $DD/stage/draw.json --coin-tree > $O/inner/proxy/proxy.log 2>&1 &
+    --draw $DD/stage/draw.json --coin-tree "${src[@]}" > $O/inner/proxy/proxy.log 2>&1 &
   local PP=$!
   wait_serving $O/inner/proxy/proxy.log $PP || { cat $O/inner/proxy/proxy.log; return 1; }
   PENV="$INNER_COINS ${PENV:-}" prove_live proxy $(awk '/^SERVING/ {print $2}' $O/inner/proxy/proxy.log) $D/inst-$N.bin $D/circuit.txt
