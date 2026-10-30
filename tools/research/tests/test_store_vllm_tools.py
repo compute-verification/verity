@@ -1,4 +1,4 @@
-"""Phase 5a: the vLLM stage Tools (integrations/vllm/verity_vllm/pipeline/research_tools.py), typed outputs (`outputs.json`) and the
+"""Phase 5a: the vLLM stage Tools (research/store/vllm_tools.py), typed outputs (`outputs.json`) and the
 durability gate (`research data preserved`, store/preserved.py), against a LocalStore with the FsRemote."""
 from __future__ import annotations
 
@@ -41,7 +41,7 @@ def _drv(tool, argv: list[str], inputs: dict | None = None) -> str:
 def test_vllm_tools_are_registered_and_loadable_by_name():
     for stage in ("build", "plan", "match", "commit", "replay"):
         t = tools_registry.load(f"vllm.{stage}", REPO)
-        assert t.name == f"vllm.{stage}" and t.spec == f"integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_{stage.upper()}"
+        assert t.name == f"vllm.{stage}" and t.spec == f"tools.research.src.research.store.vllm_tools:VLLM_{stage.upper()}"
         assert t.command == [*CMD, stage]
         assert t.key_conditions == ["hw.family", f"tool.vllm.{stage}.torch", f"tool.vllm.{stage}.vllm"]
         assert t.closure == ["integrations/vllm/**", *(f"{d}/**" for d in package_dirs(REPO, "verity"))]
@@ -103,11 +103,8 @@ def test_stage_flags_that_change_outputs_are_key_with_explicit_defaults():
         _drv(r, _argv("replay"), inputs={"build": build_art, "commit": "art:" + "3" * 64}), "the replayed Commit is part of the derivation"
 
 
-def test_parse_accepts_the_module_form_row_run_and_the_earlier_runner_argvs(monkeypatch):
-    # Only for this test: left on sys.path, the repo root makes a later test's `--tool check` import the repo's own
-    # tools/verity/check/tool.py instead of its fixture's, outside the suite's inputs.
-    monkeypatch.syspath_prepend(str(REPO))
-    from integrations.vllm.verity_vllm.pipeline import research_tools as RT
+def test_parse_accepts_the_module_form_row_run_and_the_earlier_runner_argvs():
+    from research.store import vllm_tools as RT
 
     m = RT.parse(["/workspace/venv312/bin/python", "-m", "verity_vllm.pipeline.cli", "row", "stage", "commit", ROW, "R", "repo", "rev",
                   "--pairs", "4"], stage="commit")

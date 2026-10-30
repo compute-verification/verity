@@ -1,5 +1,5 @@
 """(T0) Attempt provenance: a re-run of a reference row, published as `research` Attempts (Phase 5a), cites the SAME row configuration
-the fixture row has -- the key params of `vllm.build` / `vllm.match` / `vllm.commit` (integrations/vllm/verity_vllm/pipeline/research_tools.py):
+the fixture row has -- the key params of `vllm.build` / `vllm.match` / `vllm.commit` (the stage Tools `research` declares):
 model id + revision, dtype, hw family, tp, batch, input / output lengths, arrival mix, sampling, execution mode, the verification query
 id -- and the stages chain: the Match Attempt names the Build artifact it consumed, the Commit names both, and those are the artifacts
 the earlier Attempts published.
@@ -26,7 +26,7 @@ STAGE_OUTPUT = {"vllm.build": "build", "vllm.match": "match", "vllm.commit": "ve
 
 
 def row_config(row: str) -> dict:
-    """The row id's fields (the same grammar research_tools.row_config parses; duplicated here so the harness stays importable without it)."""
+    """The row id's fields: the grammar the stage Tools' `row_config` parses, kept here so the harness imports no `research`."""
     parts = row.split("__")
     out: dict = {k: None for k in ROW_FIELDS}
     if len(parts) != len(ROW_FIELDS):
