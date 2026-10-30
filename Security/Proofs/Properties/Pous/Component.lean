@@ -80,21 +80,34 @@ private theorem canonicalJson_ok {b : ByteArray} {j : Lean.Json} (h : Core.canon
     simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
   simp only [ha] at h
   cases hs : String.fromUTF8? b with
-  | none => simp [hs, throw, throwThe, MonadExceptOf.throw] at h
+  | none =>
+    simp [hs, throw, throwThe, MonadExceptOf.throw] at h
+    split at h
+    · cases h
+    · simp [bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
   | some s =>
     refine ⟨s, rfl, ?_⟩
     cases hp : Lean.Json.parse s with
-    | error e => simp [hs, hp, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
+    | error e =>
+      simp [hs, hp, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
+      split at h <;> cases h
     | ok j0 =>
       cases hc : Flock.canon j0 with
-      | error e => simp [hs, hp, hc, bind, Except.bind, pure, Except.pure] at h
+      | error e =>
+        simp [hs, hp, hc, bind, Except.bind, pure, Except.pure] at h
+        split at h
+        · cases h
+        · simp [throw, throwThe, MonadExceptOf.throw] at h
       | ok s' =>
         by_cases hne : s' = s
         · subst hne
           simp [hs, hp, hc, bind, Except.bind, pure, Except.pure] at h
-          subst h
-          exact hc
+          split at h
+          · cases h
+            exact hc
+          · simp [throw, throwThe, MonadExceptOf.throw] at h
         · simp [hs, hp, hc, hne, bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+          split at h <;> cases h
 
 /-- What `exactly` accepts is in the form its encoder writes: the two have one canonical text. -/
 private theorem exactly_ok {α : Type} {f : Lean.Json → Flock.V α} {enc : α → Lean.Json} {j : Lean.Json} {a : α}
@@ -333,7 +346,8 @@ private def wtail (s : StreamedWipe.Signed) (c : StreamedWipe.Commitment) (r0 : 
     if !(0 ≤ r.elapsedNs && r.elapsedNs ≤ (p.limitNs : Int)) then
       reasons := reasons.push s!"batch {b} is past its deadline of {p.limitNs} ns"
     if b == 0 && r.sendNs < s.fillEndNs then reasons := reasons.push "the first batch was sent before the fill completed"
-  return ⟨reasons.isEmpty, reasons, StreamedWipe.egressUnits s.egressBits⟩
+  return (MemoryChallenger.StreamedWipe.Findings.mk reasons (StreamedWipe.egressUnits s.egressBits),
+    MemoryChallenger.acceptIf reasons.isEmpty)
 
 private theorem wverdict_eq (schemes : Schemes) (trusted : List ByteArray) (s : StreamedWipe.Signed)
     (c : StreamedWipe.Commitment) :
@@ -371,6 +385,10 @@ private def WGood (s : StreamedWipe.Signed) (c : StreamedWipe.Commitment) (b : N
         false ∧
       (b == 0 && decide (s.batches[b].sendNs < s.fillEndNs)) = false
 
+private theorem waccepted_acceptIf (f : MemoryChallenger.StreamedWipe.Findings) (b : Bool) :
+    MemoryChallenger.StreamedWipe.Verdict.accepted (f, MemoryChallenger.acceptIf b) = b := by
+  cases b <;> rfl
+
 private theorem wtail_accepted (s : StreamedWipe.Signed) (c : StreamedWipe.Commitment) (r0 : Array String)
     (h : (wtail s c r0).accepted = true) : r0 = #[] ∧ ∀ b < s.batches.size, WGood s c b := by
   unfold wtail at h
@@ -388,7 +406,8 @@ private theorem wtail_accepted (s : StreamedWipe.Signed) (c : StreamedWipe.Commi
   rw [show ∀ (x : Id (Array String)) (f : Array String → Id StreamedWipe.Verdict), (x >>= f) = f x.run from
     fun _ _ => rfl] at h
   simp only [Id.run] at m1 m2 h
-  have h0 : L.size = 0 := by simpa using (show Array.isEmpty L = true from h)
+  have h0 : L.size = 0 := by
+    simpa using (show Array.isEmpty L = true from (waccepted_acceptIf _ L.isEmpty).symm.trans h)
   exact ⟨Array.eq_empty_of_size_eq_zero (by omega), fun b hb => m2 (by omega) b (by simp; omega)⟩
 
 private theorem wpre_empty (schemes : Schemes) (trusted : List ByteArray) (s : StreamedWipe.Signed)
@@ -535,7 +554,8 @@ private theorem forIn'_keep {α σ : Type} (l : List α) (f : (a : α) → a ∈
 /-- `wtail` keeps its reasons when every batch passes. -/
 private theorem wtail_keep (s : StreamedWipe.Signed) (c : StreamedWipe.Commitment) (r0 : Array String)
     (hg : ∀ b < s.batches.size, WGood s c b) :
-    wtail s c r0 = ⟨r0.isEmpty, r0, StreamedWipe.egressUnits s.egressBits⟩ := by
+    wtail s c r0 = (MemoryChallenger.StreamedWipe.Findings.mk r0 (StreamedWipe.egressUnits s.egressBits),
+      MemoryChallenger.acceptIf r0.isEmpty) := by
   unfold wtail
   simp only [Id.run]
   rw [Std.Legacy.Range.forIn'_eq_forIn'_range', forIn'_keep]
@@ -586,7 +606,7 @@ theorem wipeAccepts_complete : ∀ (p : WipeProtocol.Params) (c : StreamedWipe.C
           (c.params, StreamedWipe.egressUnits s.egressBits) := by
   intro p c e s hsv hss hse ⟨hk, hcm, hcov, hend, hsize, hb⟩
   have hv : StreamedWipe.verdict SCHEMES p.trusted.toList s c =
-      ⟨true, #[], StreamedWipe.egressUnits s.egressBits⟩ := by
+      (MemoryChallenger.StreamedWipe.Findings.mk #[] (StreamedWipe.egressUnits s.egressBits), Core.Verdict.accept) := by
     rw [wverdict_eq, wpre_nil _ _ s c hk hcm hcov hend hsize,
       wtail_keep s c _ fun b _ => wgood_of s c b (hb b)] <;> rfl
   show WipeProtocol.check SCHEMES p c e = _
@@ -653,9 +673,9 @@ theorem wipeAccepts_meets : ∀ (I seed : ByteArray) (k : Lms.PrivateKey), Lms.k
 The run of `runAccepts_meets`: setup's own accepted store (`SetupProtocol.HONEST`: `w = 64`, `c0 = 189`, one segment of
 two 8-byte blocks, its `COMMITMENT` and `ROOT`) read once, under a one-coin tree with an all-zero key and salt, the round
 answered at once with block 0. The kernel evaluates every check on it (`decide +kernel`), SHA-512 trees and the coin's
-HM96 opening included, but `Flock.canon`'s `Array.qsort`, which it does not unfold (core's sort is well-founded and
-private): the manifest is a flat object whose keys `Json.mkObj` already keeps in order, which `qsort_sorted` leaves as
-they are. The session's signature is `Lms.signAt`'s, verified by `lmsCorrect`, as `wipeAccepts_meets`' is. -/
+HM96 opening included, but `Flock.canonUtf8`'s `Array.qsort`, which it does not unfold (core's sort is well-founded
+and private): the manifest is a flat object whose keys `Json.mkObj` already keeps in order, which `qsort_sorted` leaves
+as they are. The session's signature is `Lms.signAt`'s, verified by `lmsCorrect`, as `wipeAccepts_meets`' is. -/
 
 section QSort
 
@@ -933,7 +953,7 @@ private def rtail (expected : Nat → Option ByteArray) (rounds : Array MemoryCh
     if !(0 ≤ r.elapsedNs && r.elapsedNs ≤ c.limitNs) then late := late + 1
   if wrong > 0 then reasons := reasons.push s!"{wrong} answers are not their blocks of C"
   if late > 0 then reasons := reasons.push s!"{late} answers are past Δ + RTT = {c.limitNs} ns"
-  return ⟨reasons.isEmpty, reasons, late, wrong⟩
+  return (MemoryChallenger.Findings.mk reasons late wrong, MemoryChallenger.acceptIf reasons.isEmpty)
 
 private theorem rverdict_eq (schemes : Schemes) (trusted : List ByteArray) (expected : Nat → Option ByteArray)
     (s : SignedSession) (c : SessionCommitment) (openings : Array CoinOpening) :
