@@ -172,6 +172,9 @@ def _static(v: Any) -> Any:
     return v
 
 
+# A walk of its own, not the registry's `catalog.load(scope="ops")`: `ml.windows` may not import `ml.definitions`
+# (`ALLOWED` in tests/test_boundaries.py).
+
 @functools.cache
 def _load_catalog() -> None:
     """Import every module of `verity.ml.circuits.ops`, the catalog's, the embedding's registered read
