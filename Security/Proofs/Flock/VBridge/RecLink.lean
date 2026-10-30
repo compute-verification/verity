@@ -339,6 +339,7 @@ theorem varSlices_linkPorts (UB PB : ℕ) : OfVStar.varSlices 0 (VStar.linkPorts
       vars (3584 + auxBits UB PB) 1536, vars (5120 + auxBits UB PB) (auxBits UB PB)] :=
   varSlices_link (VStar.auxWords (UB + PB))
 
+set_option maxHeartbeats 1000000 in -- the kernel's check of the builder's `run_input_bind` rewrite needs about 5x
 /-- **V*'s unit is `linkRun`**: its builder's state and outputs are `linkRun`'s from its input bits, its input ports
 `VStar.linkPorts` and its output ports `rin`, `rout`. -/
 theorem linkUnit_ok {UB PB : ℕ} {U : VStar.UnitC} (h : VStar.linkUnit UB PB = .ok U) :
@@ -346,6 +347,9 @@ theorem linkUnit_ok {UB PB : ℕ} {U : VStar.UnitC} (h : VStar.linkUnit UB PB = 
       U.outs = (((linkRun UB PB).run ⟨linkIn UB PB, []⟩).1.1 ++ ((linkRun UB PB).run ⟨linkIn UB PB, []⟩).1.2).toArray ∧
       U.inPorts = VStar.linkPorts UB PB ∧ U.outPorts = [VStar.LINK_OUT_WORDS, VStar.LINK_OUT_WORDS] := by
   unfold VStar.linkUnit at h
+  unfold linkRun linkIn
+  -- Opaque, so that none of the kernel's checks below can evaluate the builder.
+  generalize VStar.linkSteps UB PB = S at h ⊢
   cases hc : RecLinkTree.checkShape UB PB with
   | error e => simp [hc, bind, Except.bind] at h
   | ok _ =>
@@ -356,7 +360,6 @@ theorem linkUnit_ok {UB PB : ℕ} {U : VStar.UnitC} (h : VStar.linkUnit UB PB = 
       omega
     simp only [OfVStar.run_input_bind]
     rw [hn, OfVStar.slices_vars, varSlices_linkPorts, Nat.add_zero]
-    simp only [linkRun, linkIn]
     refine ⟨?_, ?_, ?_, ?_⟩ <;> first | rfl | trivial
 
 theorem checkShape_ok {UB PB : ℕ} {x : Unit} (h : RecLinkTree.checkShape UB PB = .ok x) : UB ≤ 32 ∧ PB ≤ 32 := by
