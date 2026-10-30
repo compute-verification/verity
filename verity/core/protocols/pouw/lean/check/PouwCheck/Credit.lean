@@ -1,4 +1,5 @@
 import Std.Data.HashMap
+import Flock.FV3
 import Flock.Keccak
 import Flock.Program
 import Flock.RegKnown
@@ -101,7 +102,7 @@ round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the o
   one the open of the window's period signed (`committedWeights`), so every window of a period opens the same B rows.
   That open names the model the root is of, a role and checkpoint `models.json` pins (`PINNED_MODELS`, the file
   `credit.py` reads, embedded here), else the period counts nothing.
-* `Internal.length` is `credit._length` (Daniel, 19 Oct, ASK-39): the open of the window's period commits each
+* `Internal.length` is `credit._length`: the open of the window's period commits each
   request's public max_tokens with the public-cap done source (`committedLength`, `{max_tokens, stop}` with stop
   `STOP_FIXED`), and each step's served rows m_s the manifest fixed before the draw coin (`Internal.servedRows`) are
   that fixed length's schedule:
@@ -858,7 +859,7 @@ def isHeld : Json → Bool
   | _ => false
 
 /-- The node at (`level`, `index`) of `d`'s tree from the subtree roots `have_`, and its pads past its count. -/
-def treeAt (d : Domain) (have_ : Std.HashMap (Nat × Nat) ByteArray) : Nat → Nat → Option ByteArray
+def treeAt (d : Flock.FV3.Sha512.Domain) (have_ : Std.HashMap (Nat × Nat) ByteArray) : Nat → Nat → Option ByteArray
   | 0, index => match have_.get? (0, index) with
     | some h => some h
     | none => if index ≥ d.count then some (d.pad index) else none
@@ -871,7 +872,7 @@ def treeAt (d : Domain) (have_ : Std.HashMap (Nat × Nat) ByteArray) : Nat → N
 
 /-- `credit.tree_root`. -/
 def treeRoot (domain : ByteArray) (count : Nat) (have_ : Std.HashMap (Nat × Nat) ByteArray) : Option ByteArray :=
-  treeAt ⟨.sha512, count, domain⟩ have_ (PouwCommit.depth count) 0
+  treeAt { id := domain, count } have_ (Flock.log2ceil count) 0
 
 def aLinkRefuse {α : Type} (why : String) : R α := throw ("a-link", why)
 
@@ -1054,9 +1055,9 @@ def PUB_PORT : String := "pub"
 def OK_PORT : String := "o1"
 /-- `credit.OK_VALUE`: the window Program's output the ok rows are, after its prefix: row u unit u's. -/
 def OK_VALUE : String := "ok"
-/-- `core_check.OK_ROW`: the ok row the verifier accepts, a unit's one output bit, 1, in its one word (h1_prove's, #3124). -/
+/-- `core_check.OK_ROW`: the ok row the verifier accepts, a unit's one output bit, 1, in its one word (h1_prove's). -/
 def OK_ROW : Array Nat := #[1]
-/-- `core_check.OK_SALT_TAG`: the ok row's hm96 salt tag (h1_prove's, #3124). -/
+/-- `core_check.OK_SALT_TAG`: the ok row's hm96 salt tag (h1_prove's). -/
 def OK_SALT_TAG : ByteArray := "verity/pouw/h1-prove/ok-row-salt/v0".toUTF8.push 0
 
 /-- `core_check.ok_salt`: SHAKE-256 of `OK_SALT_TAG` ‖ context ‖ 0 ‖ u64be(position), `PouwCheck.saltBytes` bytes. -/

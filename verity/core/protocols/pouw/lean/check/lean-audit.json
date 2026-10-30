@@ -46,7 +46,7 @@
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },
   "PouwCheck.Opening": {
-   "imports": ["PouwCheck.Inputs", "PouwCheck.Pass", "PouwWindow.Record", "PouwWindow.Side"],
+   "imports": ["PouwCheck.Inputs", "PouwCheck.Pass", "PouwWindow.Record", "PouwWindow.Side", "Flock.FV3"],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },
@@ -88,7 +88,8 @@
     "PouwWindow.Rounds",
     "SampledProofs.ChallengerSession",
     "SampledProofs.PyJson",
-    "SampledProofs.Registered"
+    "SampledProofs.Registered",
+    "Flock.FV3"
    ],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
