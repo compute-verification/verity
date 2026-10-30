@@ -487,27 +487,27 @@ theorem acc_of_accepts (wE w : Msg → ℝ) (b : Brings) (aux : Msg → ℕ → 
      RefusalsOf.transcript_of_compiled hacc hshow.1,
      RefusalsOf.rows_of_compiled hacc hrows⟩
 
-/-- **Sampled proofs' one-stage form is v2** (the bridge's carry-over lemma): where the parameters name
-the one-stage form and `VStar.Recursive.Sampled` accepts, the evidence is one-stage too and v2
-(`SampledProofs.OneStageZk.checkBlobs`) accepts the same commitment, evidence and blobs with the same public output and
-profile. So what is proved of v2's acceptance (`acceptMeans`, the sampled proofs bound) holds of the
+/-- **Sampled proofs' one-stage form is v1**: where the parameters name the one-stage form and `VStar.Recursive.Sampled`
+accepts, the evidence is one-stage too and v1's live check (`SampledProofs.OneStage.protocol`'s, `checkLive`) accepts the
+same commitment and evidence with the same public output and profile, whatever the blobs. So what is proved of v1's
+acceptance (`Properties.Challenger.oneStage_check_of_accept`, `acceptMeans`, the sampled proofs bound) holds of the
 composed component's one-stage branch. -/
-theorem sampled_oneStage_accepts {p₀ : SampledProofs.OneStageZk.Params} {c : SampledProofs.OneStage.Commitment}
+theorem sampled_oneStage_accepts {p₀ : SampledProofs.OneStage.Params} {c : SampledProofs.OneStage.Commitment}
     {e : VStar.Recursive.Sampled.Evidence} {bs : Core.Blobs} {pub : SampledProofs.OneStage.Public}
     {prof : Core.Integrity}
     (h : VStar.Recursive.Sampled.checkBlobs (.inl p₀) c e bs = .accept pub prof) :
-    ∃ e₀, e = .inl e₀ ∧ SampledProofs.OneStageZk.checkBlobs p₀ c e₀ bs = .accept pub prof := by
+    ∃ e₀, e = .inl e₀ ∧ SampledProofs.OneStage.protocol.check p₀ c e₀ = .accept pub prof := by
   cases e with
   | inl e₀ => exact ⟨e₀, rfl, h⟩
   | inr e₁ => simp [VStar.Recursive.Sampled.checkBlobs] at h
 
 /-- `sampled_oneStage_accepts` at the component, `VStar.Recursive.Sampled.protocol`'s blob check. -/
-theorem sampled_protocol_oneStage_accepts {p₀ : SampledProofs.OneStageZk.Params}
+theorem sampled_protocol_oneStage_accepts {p₀ : SampledProofs.OneStage.Params}
     {c : SampledProofs.OneStage.Commitment} {e : VStar.Recursive.Sampled.Evidence} {bs : Core.Blobs}
     {pub : SampledProofs.OneStage.Public} {prof : Core.Integrity}
     (h : VStar.Recursive.Sampled.protocol.checkBlobs
       (show VStar.Recursive.Sampled.protocol.Params from Sum.inl p₀) c e bs = .accept pub prof) :
-    ∃ e₀, e = .inl e₀ ∧ SampledProofs.OneStageZk.checkBlobs p₀ c e₀ bs = .accept pub prof :=
+    ∃ e₀, e = .inl e₀ ∧ SampledProofs.OneStage.protocol.check p₀ c e₀ = .accept pub prof :=
   sampled_oneStage_accepts h
 
 /-! ## The target -/

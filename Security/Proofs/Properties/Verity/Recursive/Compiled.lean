@@ -1,3 +1,4 @@
+import Proofs.Properties.Challenger
 import Proofs.Properties.SampledProofs
 import VStarRecursive
 
@@ -11,7 +12,8 @@ import VStarRecursive
 * the shape dense (`dense`: public inner circuits, no RecSparse phase and no R);
 * the verifier's parts and the evidence's part sessions, one per statement;
 * every part's `flock-verify verify --zk` verdict (`partVerdict`) set up and accepted, `.ok (.ok ())`;
-* one-stage's check accepted the evidence with the one verdict of record `verdicts` computed.
+* one-stage v1's live check accepted the evidence with the one verdict of record `verdicts` computed, so its check at no
+  coins did (`Properties.Challenger.oneStage_check_of_accept`).
 
 The verdict of record says accepted exactly when every part's verdict does (`verdictJson_accepted`), and one-stage's check
 accepts only verdicts that say accepted (`Properties.SampledProofs.acceptMeans`, `VerdictsAccept`), so no part's verdict
@@ -123,7 +125,7 @@ open Compiled in
 /-- **The compiled component's acceptance, unfolded.** If `VStar.Recursive.checkBlobs` accepts, then the inner
 session is held off the blobs at a dense shape `h.shape` with V\*'s statements `ss`, the verifier's parts and the evidence's part
 sessions are one per statement, every part's verdict is set up and accepts (`.ok (.ok ())`), the statement the inputs
-name is under `FIELD_MAX` bytes (`statementFits`), and one-stage's check
+name is under `FIELD_MAX` bytes (`statementFits`), and one-stage's check (its live check's, at no coins)
 accepted the evidence with the verdict of record `verdicts` computed on the evidence's one session. -/
 theorem parts_of_accepts {p : VStar.Recursive.Params} {c : OneStage.Commitment} {e : VStar.Recursive.Evidence}
     {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
@@ -144,6 +146,8 @@ theorem parts_of_accepts {p : VStar.Recursive.Params} {c : OneStage.Commitment} 
     split at hacc
     · cases hacc
     · next vs hv =>
+      have hacc := _root_.Properties.Challenger.oneStage_check_of_accept (p := p.base) (c := c)
+        (e := { e.base with verdicts := vs }) hacc
       obtain ⟨law, d, n, -, -, -, hva, -⟩ := _root_.Properties.SampledProofs.acceptMeans _ _ _ _ _ hacc
       obtain ⟨hd, parts, hpv, why, units, programSha, hvs⟩ := verdicts_shape hv
       have hok : parts.all (·.2.toBool) = true := by

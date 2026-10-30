@@ -1,7 +1,7 @@
 /-
-Sampled proofs' recursive audit (`verity/sampled-proofs/recursive/v1`), a `Core.BlobProtocol`: one-stage v2's audit
-(`SampledProofs.OneStageZk`) with its one verdict of record computed by V*'s compiled check, the recursive verifier the
-auditor runs (`flock-verify verify --zk` once per V* part with that part's recursive inputs), on the blobs.
+Sampled proofs' recursive audit (`verity/sampled-proofs/recursive/v1`), a `Core.BlobProtocol`: one-stage v1's audit
+(`SampledProofs.OneStage.checkLive`) with its one verdict of record computed by V*'s compiled check, the recursive
+verifier the auditor runs (`flock-verify verify --zk` once per V* part with that part's recursive inputs), on the blobs.
 
 * **params**: v1's, plus `recursive`, exactly `{"circuit", "draw", "parts", "public", "registration"}`: the SHA-512s of
   the inner statement's circuit file, its draw (`--rec-inner-draw`), its public file and the circuit registration
@@ -25,8 +25,9 @@ auditor runs (`flock-verify verify --zk` once per V* part with that part's recur
   `--rec-inner-partition`, `--rec-inner-statement verity/flock-circuit+plain-leaves --rec-inner-statement-coins os
   --rec-inner-draw`), `--rec-inner-session`, `--rec-inner-transcript` and `--rec-inner-registration`, and one `--session`
   (`partVerdict`, the C-Flock library calls `verifyCmd` makes on that path, as `recursion_e2e`'s lean step runs it); then
-  v1's `check` on one verdict of record (`flock-verify/<session>`), accepted exactly when every part's is, whose units
-  are the inner public file's units at the inner record's draw.
+  v1's live check (`OneStage.checkLive`: at the coins `OneStage.coinsOf` reads, the challenger's when the params name
+  one) on one verdict of record (`flock-verify/<session>`), accepted exactly when every part's is, whose units are the
+  inner public file's units at the inner record's draw.
 
 **Form.** Only the dense form, the one `Flock.Guarantees.RecursiveKSAt`'s statements (`RecDeploy.DenseAt`) cover: the
 inner circuits are public (no `--hide`), there is no RecSparse phase (no `--sparse`), and an inner circuit whose META
@@ -547,7 +548,7 @@ def checkBlobs (p : Params) (c : OneStage.Commitment) (e : Evidence) (bs : Core.
   | some session =>
   match verdicts p.own session e.proofs (some e.base.provedUnits) bs with
   | .error err => .reject s!"proofs: {err}"
-  | .ok vs => OneStage.check p.base c { e.base with verdicts := vs }
+  | .ok vs => OneStage.checkLive p.base c { e.base with verdicts := vs }
 
 def protocol : Core.BlobProtocol where
   id := PROTOCOL
