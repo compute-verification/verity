@@ -12,7 +12,7 @@
 // mbarriers; consumer warps wait on a stage, ldmatrix their fragments one 64-deep step ahead, and each release it on a second
 // mbarrier after the MMAs that read its last fragments.  No block-wide barrier (CUTLASS v4.8.0's sm_120 block-scaled mainloop
 // syncs its 256 MMA threads on a named barrier every stage, before the stage's last step's MMAs).  (64-deep stages, 7 of
-// them with 32-byte SWIZZLE_32B boxes, measured 23% slower at 8,192^3: r20260930-111405-3bf7.)
+// them with 32-byte SWIZZLE_32B boxes, measured 23% slower at 8,192^3.)
 //
 // Consumer warp w (8 at TM = 256, 4 at 128) owns 64 rows and 64 columns, chosen so that one 16-byte load gives a lane its
 // scale words for four MMAs: rows 128 h + 16 q + 32 mi + [0, 16) (m16 block mi = 0..3; wm = w / 2 = 2 h + q) and columns
@@ -146,9 +146,9 @@ struct Maps { uint8_t a[128], b[128]; };
 // after its first group issues the step's other 24 MMAs before it waits, and then loads the next step's fragments in one go
 // (0: it waits there, the other groups' loads behind them).  (Starting the second 128 rows' warps up to 2,048 cycles
 // late, so that the two warps of an SMSP would reach their epilogues apart, gained nothing: the full barriers they share pull
-// them back within a few hundred cycles, r20260930-114329-edb6.  Folding each tile's BF16 store into the next tile's first
-// step, each group's 4 blocks stored just before the group overwrites them, measured 2.2% slower: fill job
-// nvf4-fold-3f7b3edf.)  WIDE: each warp's 64 columns contiguous (above).  FP8: E4M3 (above).
+// them back within a few hundred cycles.  Folding each tile's BF16 store into the next tile's first
+// step, each group's 4 blocks stored just before the group overwrites them, measured 2.2% slower.)
+// WIDE: each warp's 64 columns contiguous (above).  FP8: E4M3 (above).
 template <int TM, int STAGES = 3, int RP = 40, int BORDER = 0, int LATE = 0, int WIDE = 0, int FP8 = 0> struct Mainloop {
   static constexpr int BN = 128, BK = FP8 ? 64 : 128, ROW = 64, WARPS_M = TM / 64, NCW = 2 * WARPS_M, NCT = 32 * NCW, NT = NCT + 128;
   static constexpr int REGS_P = RP, REGS_LAUNCH = 65536 / NT / 8 * 8, REGS_FIT = (NT * REGS_LAUNCH - 128 * REGS_P) / NCT / 8 * 8,
