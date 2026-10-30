@@ -15,3 +15,6 @@ Your inbox branch is cursor/inbox-cckey-21f3 (my 08:00Z brief said -cc-key-). Fo
 
 # 10:52Z Fri: #6657 also conflicts with #6585
 drive (10:48Z): #6657 at d8a4f2ee9f conflicts with next in circuit_check/units.py and tests/test_units.py, touched by #6660 (merge it, as briefed) and by #6585 (ci's ruff config for tools/verity, head 1519de785f, on next). After merging #6660, check merge-tree onto next; if units.py or test_units.py still conflict, merge #6585's head too (it's only lint fixes), then rerun the suite and the ruff and ratchet lints before re-marking.
+
+# 19:40Z Fri: CHANGE, leave certifier/PROTOCOL.md untouched
+network-accounting: verity/core/protocols/certifier/PROTOCOL.md is being retired (#6678 deletes it). Don't edit it. If NetworkAdvisedCounts_v1's T = 600 roots now lower whole and that needs stating, put it in the advised module's docstring, and say in the PR body that network-accounting should look. The rest of the 19:45Z brief stands.
