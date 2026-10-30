@@ -84,7 +84,7 @@ vectors are under `schedules`.
 | egemm-xin13 | EGEMM's x13_l2o | 4; warp tile t goes to chain t % 4 | y = (tile·512 + ctid)·4 + c | the first two mix32(seed ^ (0x5A5A0000 + i)) that pass key_ok_r9 |
 | e2e-xin | E2E's PouwXinAbsorb | 8; warp tile t goes to chain t | duo's y | per chain, from mix32(0xC0000000 + i) \| 1 under lambda8 |
 
-E2E's xin keys are drawn under lambda8 alone, not key_ok_r9. Of its 16 keys, XA0[1] fails key_ok and XA1[0] fails KJ19
+E2E's xin keys are sampled under lambda8 alone, not key_ok_r9. Of its 16 keys, XA0[1] fails key_ok and XA1[0] fails KJ19
 (`tests/test_receipt_folds.py`).
 
 ## Conforming

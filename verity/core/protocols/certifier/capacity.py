@@ -56,6 +56,6 @@ def ingress_rate(allocation: int, bucket_ms: int = 100) -> float:
 
 
 def k_share(bits: float, k_bits: float) -> float:
-    """A charge in bits, as a share of K, the policy's budget per isolation unit in bits. K is the caller's: NCI's
+    """A charge in bits, as a share of K, the policy's budget per isolation unit in bits. K is the caller's: the
     inference-only policy sets α·Γ = 9.6e−11 × 9.5e17 bits, 9.12e7 (about 11 MB)."""
     return bits / k_bits
