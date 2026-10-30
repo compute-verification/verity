@@ -7,12 +7,12 @@ import Flock.RecLinkPart
 /-!
 # The link clause at the deployment: what the link table's rows say, and the table they are
 
-`RecursiveKSLinkAt` takes a link clause `Q`, the rows `rows` reads off the outer witnesses, and the link finder's inputs.
-This file defines the first two at the deployment.
+`RecursiveKSLinkAt` takes a link clause `Q`, the rows `rows` reads off the outer witnesses, and the link finder's
+inputs. This file defines the first two at the deployment.
 
 * `tableRows`: where the verifier's inner shape names the link table, row `n` is the link part's instance `n`'s `trow`,
-  read off that part's witness at its circuit's message columns (`trowAt`, as `InnerRows.rowBytes` reads a row, behind no
-  prefix). The link part is V\*'s statement last but one (`linkAt`), and its circuit is the one the statement's bytes
+  read off that part's witness at its circuit's message columns (`trowAt`, as `InnerRows.rowBytes` reads a row, behind
+  no prefix). The link part is V\*'s statement last but one (`linkAt`), and its circuit is the one the statement's bytes
   hold (`partCircuit`), so the rows are a function of the statement and the witnesses alone.
 * `LinksHold`, the link clause: at a statement carrying the table (its own root `T` and row count `N`, `--rec-links`),
   the rows are `N`, each opens its position of the registered table at `T` (`RowOpens`, under the domain the link part's
