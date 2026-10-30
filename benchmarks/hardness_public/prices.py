@@ -3,7 +3,7 @@
 Rates are the card files' (`verity/hardware/cards/{h200-sxm-141gb,rtx-pro-6000-server}.toml`, on
 `cursor/lean-h17-fc8d`; not on main yet), except where a line says *recalled*. Every price is generous to the cheater:
 the low-rank part is priced at one int8 MAC per factor MAC (its s32 intermediate really needs about 3 bytes), FP4 pieces
-are taken to accumulate exactly, and IDP4A is taken at the IMAD lane rate with no gather cost.
+are taken to accumulate exactly, and IDP4A is priced per register written with no gather cost.
 """
 
 import math
@@ -14,14 +14,16 @@ CHIPS = {
         "b1": 0.125,
         "fp4": None,  # weight.e2m1 = 1: no FP4 MMA on sm_90a
         "sparse24": 0.5,  # recalled: H200 data sheet, INT8 sparse 3,958 TOPS = 2x dense
-        "alu_mac": 4096 / 64 / 4,  # IDP4A at the IMAD lane rate: 16 units a MAC
+        # IDP4A writes one register for 4 MACs, an s8 MMA one for 32: 8 units a MAC (HT-PREMISE's price, per register
+        # written; at the lane rate in time it would be 16)
+        "alu_mac": 8.0,
     },
     "sm120": {
         # tensor 1024 s8 MAC/SM-clock; imad 64 lanes/SM-clock; no b1 MMA (weight.b1 = 1); nvf4/mxf4 0.5
         "b1": None,
         "fp4": 0.5,
         "sparse24": 0.5,  # recalled: Blackwell sparse MMA at 2x dense, so sparse FP4 is 0.25
-        "alu_mac": 1024 / 64 / 4,  # 4 units a MAC
+        "alu_mac": 8.0,  # per register written, as on the H200 (at the lane rate in time it would be 4)
     },
 }
 
