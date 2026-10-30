@@ -436,7 +436,7 @@ def padded_binding_map_of_committer(com: Any, run: Any, program_digest_hex: str,
                      "steps": sorted(pads), "mixed_steps": sorted(s for s, ps in pads.items() if ps.appended),
                      "S": len(run.steps), "consumer": "pod (native_host.finalize)", "executed_prefix": executed_prefix}
     canon = json.dumps(pm["entries"], sort_keys=True, separators=(",", ":"), default=str).encode()
-    pm["digest"] = hashlib.sha256(canon).hexdigest()
+    pm["digest"] = hashlib.sha512(canon).hexdigest()
     pm["entries_n"] = len(pm["entries"])
     return pm
 
@@ -549,7 +549,7 @@ def padded_map_of_record(record_dir: str | Path, *, run_id: str | None = None, g
                      "geo_digest": geo.hex(), "geo_digest_is_the_records": geo_digest is not None,
                      "step_roots_of_record_kept": [s for s in executed_steps]}
     canon = json.dumps(pm["entries"], sort_keys=True, separators=(",", ":"), default=str).encode()
-    pm["digest"] = hashlib.sha256(canon).hexdigest()
+    pm["digest"] = hashlib.sha512(canon).hexdigest()
     pm["entries_n"] = len(pm["entries"])
 
     # coverage over the record's manifest, request-aware (the weights family = registered input, checked against the weights root
