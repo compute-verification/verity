@@ -90,7 +90,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Device": (),
     "Digest": (f"{CORE}Digest.lean::Verity.Digest", f"{FLOCK}Hash.lean::Flock.Digest"),
     "Draw": (f"{CORE}Draw.lean::Verity.Draw", "verity/core/protocols/sampled_proofs/service.py::Draw"),
-    "Gate": (),
+    "Gate": (f"{FLOCK}Gate.lean::Flock.Program.Gate",),
     "Hardware": (),
     "Hash": (),
     "InteractiveDevice": (),
@@ -106,7 +106,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Op": (f"{CORE}Boolean.lean::FlockSoundness.Audit.Op",),
     "Opening": ("Security/Definitions/Hash/RowLeaf.lean::Hash.RowLeaf.Opening", "verity/ml/commitments/merkle.py::Opening"),
     "Outcome": (f"{PROTOCOL}::Core.Outcome",),
-    "Partition": (f"{CORE}Partition.lean::Verity.Partition",),
+    "Partition": (f"{CORE}Partition.lean::Verity.Partition", f"{FLOCK}Evaluated.lean::Flock.Extract.Partition"),
     "Period": (),
     "Placement": (f"{REQ}::CircuitRequirement.Placement", f"{REQ_PY}::Placement"),
     "Prog": (f"{CORE}Accel/Machine.lean::Verity.Accel.Machine.Prog", f"{FLOCK}Program.lean::Flock.Program.Prog"),
@@ -155,6 +155,10 @@ MIRRORS: dict[str, tuple[str, str, str]] = {
                                           "memory-challenger-difftest", "the memory challenger's port, for the streamed wipe"),
     f"{MC_PY}run.py::Session": ("verity/core/protocols/pous/check/PousCheck/Run.lean::PousCheck.Run.Session", "pous-run",
                                 "the PoUS run's protocol port reads the sessions the Python records"),
+    "verity/ml/circuits/layout.py::Gate": (f"{FLOCK}Gate.lean::Flock.Program.Gate", "verity-evaluate",
+                                           "the evaluator's `gate` answers each gate of the Python's layout"),
+    "verity/ml/circuits/partition_object.py::Partition": (f"{FLOCK}Evaluated.lean::Flock.Extract.Partition", "verity-evaluate",
+                                                          "the evaluator's `partition` answers the Python's Q_word evaluation"),
 }
 
 
