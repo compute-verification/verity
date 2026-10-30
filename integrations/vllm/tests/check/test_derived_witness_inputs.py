@@ -50,7 +50,7 @@ def _derived(tmp_path, links: dict) -> str:
     return str(tmp_path)
 
 
-def _adds(p: CMP.Prog) -> list[list[list[tuple]]]:
+def _adds(p: CMP.RootView) -> list[list[list[tuple]]]:
     return [p.canon(i) for i, r in enumerate(p.inst) if r["spec"].startswith("I32Add")]
 
 

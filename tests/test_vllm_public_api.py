@@ -182,8 +182,6 @@ KNOWN_PRIVATE = frozenset({
     ('verity_vllm.check.fold_compare', '_in_place'),
     ('verity_vllm.program.frontend.rules.family', '_field_intervals'),
     ('verity_vllm.protocols.remote_bandwidth.registry', '_page_blocks'),
-    ('verity_vllm.query.program_view', '_registry'),
-    ('verity_vllm.query.program_view', '_spec_id'),
 })
 
 
