@@ -1,7 +1,8 @@
 """served_cases.py: sampled proofs' one-stage v1 case and the inference-only case (`verity/inference-only/v0`) for a
 served window, from its records audit's v1 case (a5's ``window/case.json``), and with ``--v2`` its v2 case
-(``case-v2.json``), each in a 0700 directory beside its Lean answer, in the directory form a composition reads as its
-cases, and every answer naming the window's registration record's digest.
+(``case-v2.json``), each in a 0700 directory beside its Lean answer, in the directory form a composition reads as a
+case (no composite runs the inference-only case or v2's), and every answer naming the window's registration record's
+digest.
 
 On a toy window (two templates of four slots each, as a served window's population program holds its class's
 templates) v1's Lean (`sampled-proofs-one-stage check`) accepts an audit of it whose verdict of record accepted, rejects
@@ -248,10 +249,9 @@ def test_each_case_goes_private_beside_an_answer_naming_the_records_digest(tmp_p
         assert secret not in out
 
 
-def test_without_v2_only_the_cases_the_composites_name_are_written(tmp_path, capsys):
+def test_without_v2_no_v2_case_is_made(tmp_path, capsys):
     """Without ``--v2``, v1's and the inference-only case are the run's every case: a window whose a5 wrote no v2 case
-    (a plain audit's) is complete, v2's Lean never runs, and no ``sampled-proofs-v2/`` sits beside the others for a
-    composition's ``--cases`` to take."""
+    (a plain audit's) is complete, v2's Lean never runs, and no ``sampled-proofs-v2/`` is written."""
     program, query = toy()
     v1 = v1_case(program, query)
     private = tmp_path / "private"

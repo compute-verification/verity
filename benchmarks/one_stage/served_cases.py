@@ -1,6 +1,6 @@
 """Sampled proofs' one-stage v1 case and the inference-only case for a served window, from its records audit, each
-beside its own Lean answer, in the directory form a composition of the window's subprotocols reads as its cases (with
-``--v2``, one-stage v2's case too):
+beside its own Lean answer, in the directory form a composition of the window's subprotocols reads as a case (with
+``--v2``, one-stage v2's case too), though of the three only v1's is one a composite runs:
 
     served_cases.py (--audit DIR | --serve-dir D) --private DIR [--alpha N/D --gamma G | --from-division]
                     [--log FILE] [--v1-exe PATH] [--inference-only-exe PATH] [--v2 [--v2-exe PATH]]
@@ -33,17 +33,20 @@ nothing is written: that digest is what a composition's record tie compares.
     block a slot (k the most fresh-input bits in one) would give Γ = c and α = k/c, this one's gives Γ = m·c and α at
     most k/c. The Program registers no root input (its inputs are `Input<w>`), so ``theta`` and ``provenance`` are
     empty and every input bit counts as fresh against α.
+
+  No composite may run it: the inference-only policy is a subprotocol of neither (`Core.Remote.components`,
+  `Core.Onsite.components`), so its answer is the policy's own check's and its directory no composition's case.
 * **`verity/sampled-proofs/one-stage/v2`** (`v2_case`, only with ``--v2``): a5's ``window/case-v2.json``
   (`a5.case_v2`: v1's case with the verdicts replaced by the sampled member's proofs' files, and ``blobs``), refused
   when it commits to another record than v1's case or names a blob that isn't there, and when a5 wrote none (its
   ``case-v2-error.txt`` says why: v2 verifies one member's `--zk` sessions). Its answer is `sampled-proofs-one-stage-zk
-  check` on the case and its blobs. Neither composite names v2, so its directory is written only when asked: a
-  composition's ``--cases`` takes every case directory under the one it's given.
+  check` on the case and its blobs. Neither composite names v2, so its case is made only when asked.
 
 Each case goes to its own directory under ``--private`` (``sampled-proofs-v1/``, ``inference-only/``,
 ``sampled-proofs-v2/``; 0700, files 0600): ``case.json`` (``{"params", "commitment", "evidence"}``, hex commitment and
-evidence, and v2's ``blobs``) and ``answer.json``, its Lean answer line, the directory a composition's ``--cases``
-reads (and, given ``--from-division``, the inference-only case's ``policy.json``). The Lean runs on files in a 0700
+evidence, and v2's ``blobs``) and ``answer.json``, its Lean answer line (and, given ``--from-division``, the
+inference-only case's ``policy.json``). A composition is handed only the directories whose answer's protocol is one of
+its product's subprotocols, so v1's and never the inference-only case's or v2's. The Lean runs on files in a 0700
 scratch directory under ``--private``. This prints a ``CASE {"protocol", "verdict", "dir"}`` line per case written and
 a ``NOT_WRITTEN {"protocol", "reason"}`` line per case refused, and nothing of a case's params or evidence: not α and Γ
 either, which ``--from-division`` reads off the division, so on a one-block window they'd publish its block's gates
