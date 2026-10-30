@@ -150,14 +150,20 @@ theorem lamLin2_core_tight {nS : ℕ} {VI kI wI W kx NI cBe nSet nU : ℕ} {κI 
         (518448000001 + 8 * 5591040 + 4 * (2468800000 + 1)) * 880002 *
           (4 + 2 * (2 ^ 16 * (210 * 2468800000)) + 3 * 2 ^ 56) :=
       Nat.mul_le_mul (Nat.mul_le_mul (by gcongr) hVI) hcS
-    have hyR : ((NI : ℝ) + 8 * W + 4 * ((kI : ℝ) + 1)) * VI * ((cBe : ℝ) + nSet + 2 * nU) ≤
-        (518448000001 + 8 * 5591040 + 4 * (2468800000 + 1)) * 880002 *
-          (4 + 2 * (2 ^ 16 * (210 * 2468800000)) + 3 * 2 ^ 56) := by
-      exact_mod_cast hy
-    have hp : (((NI : ℝ) + 8 * W + 4 * ((kI : ℝ) + 1)) * VI * ((cBe : ℝ) + nSet + 2 * nU)) ^ 10 ≤ 2 ^ 1167 :=
-      (pow_le_pow_left₀ (by positivity) hyR 10).trans (by norm_num)
-    have := logb_le_div_of_pow_le (by positivity) (by norm_num) hp
+    have hy0 : (0 : ℝ) ≤ ((NI : ℝ) + 8 * W + 4 * ((kI : ℝ) + 1)) * VI * ((cBe : ℝ) + nSet + 2 * nU) := by
+      positivity
+    -- `2^1167` is past `exponentiation.threshold`, so the comparison is the kernel's, on `ℕ`, and no tactic that
+    -- reads the context (`positivity`, `linarith`) runs while it is there.
+    have hY : ((518448000001 + 8 * 5591040 + 4 * (2468800000 + 1)) * 880002 *
+        (4 + 2 * (2 ^ 16 * (210 * 2468800000)) + 3 * 2 ^ 56)) ^ 10 ≤ 2 ^ 1167 := by decide +kernel
+    have hp : ((NI + 8 * W + 4 * (kI + 1)) * VI * (cBe + nSet + 2 * nU)) ^ 10 ≤ 2 ^ 1167 :=
+      (Nat.pow_le_pow_left hy 10).trans hY
+    have hpR : (((NI : ℝ) + 8 * W + 4 * ((kI : ℝ) + 1)) * VI * ((cBe : ℝ) + nSet + 2 * nU)) ^ 10 ≤ 2 ^ 1167 := by
+      have := (Nat.cast_le (α := ℝ)).2 hp
+      simpa only [Nat.cast_pow, Nat.cast_mul, Nat.cast_add, Nat.cast_one, Nat.cast_ofNat] using this
+    have := logb_le_div_of_pow_le (q := 10) (N := 1167) hy0 (by norm_num) hpR
     have e : ((1167 : ℕ) : ℝ) / ((10 : ℕ) : ℝ) = 116.7 := by norm_num
+    clear hY hp hpR hy
     linarith
 
 /-- **`λ₂ ≥ 135.7` at a compiled record and an inner protocol**, from bounds on the numbers `lamLin2` reads. -/
