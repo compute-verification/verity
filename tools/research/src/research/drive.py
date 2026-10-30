@@ -49,7 +49,9 @@ again on the Lean change's own commit, and only a failure there is told to its o
 of a reviewed commit above it checked the tree that lands (`_past_failed`).  And every .py file the
 landing leaves must compile (`py_compile`): the PR that last changed one that doesn't is ejected.  While any Lean check of a
 commit of `next` runs, drive's or a hand one of its run registry (`_running_lean`), the members up to it keep their place
-(`--first` goes above them), and so do they under a passed one of drive's whose every
+and their merges (`--first` and each PR admitted meanwhile go above them, one a member contains too: `Queue.order`); only one
+of them ejected, unmarked at its head or held rebuilds `next` from it, logged with why, and its check runs again on the
+rebuilt prefix.  So do they keep it under a passed one of drive's whose every
 member up to it has its ready mark and a land verdict (`_landable`), until it lands.  Up to the highest commit of any of drive's
 Lean checks that runs or passed, `next` is kept (`queue.lean_hold`, `--first` above it too), though a member under a passed one
 alone that is pushed or loses its mark leaves, and `next` is rebuilt from it.  ci's hand Lean check goes through drive
