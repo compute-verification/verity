@@ -65,9 +65,8 @@ The code is `CoreRemote.lean`, `protocol = tiedSameB "verity/remote/v0" tied [wi
 audit commit to the run's record, which names the registered circuit; once the cases fit, two different records reject
 remote whatever the subprotocols answer (`Core.Composition.same`). The period's commitment is the auditor's ledger, not
 the record, so it joins through a tie (`Core.Remote.windows`): every window of the period must name the policy's record
-as its Commit record (`windowRecords`, the record the period's credit reads, `PouwCheck.Credit.commitOf?`), and a
-window on another record rejects remote unless it rejects already (`record: verity/inference-only/v0 committed D,
-verity/pouw/period/v1 committed D'`). Its executable is `remote id | check PARAMS COMMITMENT EVIDENCE | serve`
+as its Commit record (`windowRecords`, which `PouwCheck.Credit.commitOf?` reads), and a window on another record
+rejects remote unless it rejects already. Its executable is `remote id | check PARAMS COMMITMENT EVIDENCE | serve`
 (`RemoteMain.lean`). The Lake package `core_remote` is code: it has no Mathlib and nothing of `Security/`
 (`lean-audit.json`). The product's rule and its difftest are the composition's ([README](../composition/README.md),
 `verity/core/protocols/composition/tests/test_composition_difftest.py`).
