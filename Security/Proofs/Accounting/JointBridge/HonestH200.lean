@@ -49,7 +49,7 @@ theorem foldl_min_const (k : ℕ) : ∀ l : List ℕ, (l.map fun _ => k).foldl m
 
 /-- At `k` multiply-adds for every kind, the fewest a credited word stands for is `k`, on a circuit with a credited
 word. -/
-theorem minWordMacs_const {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (k : ℕ) (h : creditedWords Sc Cd ≠ []) :
+theorem minWordMacs_const {ι K : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) (k : ℕ) (h : creditedWords Sc Cd ≠ []) :
     minWordMacs Sc Cd (fun _ => k) = k := by
   unfold minWordMacs
   obtain ⟨i, l, hl⟩ := List.exists_cons_of_ne_nil h
@@ -143,7 +143,7 @@ theorem work_step (n : ℕ) (p : Accounting.Price) (r : Accounting.PeriodRun (de
     (fun _ : Unit => Paths HonestH1.Ω1 n)) (hs : ∀ ξ, r.schedule ξ = fun _ => step n) (hw : r.win = ⟨0, 1⟩)
     (ξ : (i : Unit) → Paths HonestH1.Ω1 n) : r.work p ξ = p .tc * (65536 * n) := by
   unfold Accounting.PeriodRun.work Accounting.Schedule.work Accounting.Schedule.ops
-  rw [hs, hw, Fintype.sum_eq_single Accounting.Op.tc]
+  rw [hs, hw, Fintype.sum_eq_single Accounting.OpClass.tc]
   · simp [step, device, Accounting.Window.ticks]
   · intro o ho
     simp [step, device, ho]
@@ -223,7 +223,7 @@ theorem meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) (sha fetch : �
     (HonestH1.period n).EveryWindow (fun live _ => DeadConeDead Honest.scheme HonestH1.circuit 144 live) ∧
     PrefixOf (HonestH1.layer n) (checkedPlay n).game ∧
     (∀ w, prob (fun x => (HonestH1.layer n).MovedIn x w) ≤ 0) ∧
-    RegisteredBeforeDraw (HonestH1.windows n) ∧ DrawIsCoin HonestH1.hK24 HonestH1.prm (HonestH1.windows n) ∧
+    RegisteredBeforeSample (HonestH1.windows n) ∧ SampleIsCoin HonestH1.hK24 HonestH1.prm (HonestH1.windows n) ∧
     ServiceSound HonestH1.prm (HonestH1.windows n) HonestH1.opened (stagedAt HonestH1.salt HonestH1.staged) 0 ∧
     SaltIsLiveCoin HonestH1.hr1 (HonestH1.salt (n := n)) HonestH1.enc ∧ StagedPins HonestH1.staged HonestH1.flat ∧
     (HonestH1.period n).EveryWindow
@@ -235,7 +235,7 @@ theorem meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) (sha fetch : �
     (HonestH1.period n).EveryWindow
       (fun live W => PerLiveTile Honest.scheme HonestH1.circuit live W
         (fun k _ G0 => GuessLuckAt (Honest.scheme.guess k) G0)) ∧
-    UnitFixed (checkedPlay n) (HonestH1.layer n) (periodMode HonestH1.circuit (HonestH1.period n) (HonestH1.run n))
+    BlockFixed (checkedPlay n) (HonestH1.layer n) (periodMode HonestH1.circuit (HonestH1.period n) (HonestH1.run n))
       (fun _ t => (tileWords Honest.scheme HonestH1.circuit 144 t : ℝ)) (fun _ => 128) ∧
     ∀ x, checkedAccepts n x := by
   obtain ⟨-, -, hS, hρN, hwmax, hlk, hG, hDD, hPre, hMoved, hReg, hDraw, hServ, hSalt, hStaged, hMu, hRB, hGs,
@@ -309,7 +309,7 @@ theorem WorkOfH1CheckedCreditPeriodH200_honest :
     (HonestH1.period 1).EveryWindow (fun live _ => DeadConeDead Honest.scheme HonestH1.circuit 144 live) ∧
     PrefixOf (HonestH1.layer 1) (checkedPlay 1).game ∧
     (∀ w, prob (fun x => (HonestH1.layer 1).MovedIn x w) ≤ 0) ∧
-    RegisteredBeforeDraw (HonestH1.windows 1) ∧ DrawIsCoin HonestH1.hK24 HonestH1.prm (HonestH1.windows 1) ∧
+    RegisteredBeforeSample (HonestH1.windows 1) ∧ SampleIsCoin HonestH1.hK24 HonestH1.prm (HonestH1.windows 1) ∧
     ServiceSound HonestH1.prm (HonestH1.windows 1) HonestH1.opened (stagedAt HonestH1.salt HonestH1.staged) 0 ∧
     SaltIsLiveCoin HonestH1.hr1 (HonestH1.salt (n := 1)) HonestH1.enc ∧ StagedPins HonestH1.staged HonestH1.flat ∧
     (HonestH1.period 1).EveryWindow
@@ -321,7 +321,7 @@ theorem WorkOfH1CheckedCreditPeriodH200_honest :
     (HonestH1.period 1).EveryWindow
       (fun live W => PerLiveTile Honest.scheme HonestH1.circuit live W
         (fun k _ G0 => GuessLuckAt (Honest.scheme.guess k) G0)) ∧
-    UnitFixed (checkedPlay 1) (HonestH1.layer 1) (periodMode HonestH1.circuit (HonestH1.period 1) (HonestH1.run 1))
+    BlockFixed (checkedPlay 1) (HonestH1.layer 1) (periodMode HonestH1.circuit (HonestH1.period 1) (HonestH1.run 1))
       (fun _ t => (tileWords Honest.scheme HonestH1.circuit 144 t : ℝ)) (fun _ => 128) ∧
     ∀ x, checkedAccepts 1 x :=
   meets 1 Nat.one_pos (by norm_num) 0 0

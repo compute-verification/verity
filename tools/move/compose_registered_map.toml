@@ -43,6 +43,8 @@ files = [
     "Security/Properties/Pouw/PeriodJ10R.lean",
     "Security/Properties/Pouw/Period.lean",
     "Security/Properties/Pouw/ServedValues.lean",
+    "Security/Properties/Pouw/ServedFreed.lean",
+    "Security/Properties/Pouw/ServedWork.lean",
 ]
 [words_in.words]
 "Declared" = "RegisteredCircuit"

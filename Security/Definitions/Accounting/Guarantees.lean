@@ -15,7 +15,7 @@ import Definitions.Accounting.Guarantees.Confidence
 import Definitions.Accounting.Guarantees.FillerLuck
 import Definitions.Accounting.Guarantees.FpG1
 import Definitions.Accounting.Guarantees.HMu
-import Definitions.Accounting.Guarantees.DeclaredCircuit
+import Definitions.Accounting.Guarantees.RegisteredCircuit
 import Definitions.Accounting.Guarantees.Gates
 import Definitions.Accounting.Guarantees.GatesBitwise
 import Definitions.Accounting.Guarantees.Headline
@@ -31,12 +31,14 @@ import Definitions.Accounting.Guarantees.Pouw
 import Definitions.Accounting.Guarantees.PouwWork
 import Definitions.Accounting.Guarantees.RateAudit
 import Definitions.Accounting.Guarantees.RateAuditDeployed
-import Definitions.Accounting.Guarantees.RateAuditHorizon
 import Definitions.Accounting.Guarantees.RateAuditNamed
 import Definitions.Accounting.Guarantees.RateAuditPartial
+import Definitions.Accounting.Guarantees.RateAuditPooled
 import Definitions.Accounting.Guarantees.RateAuditRemote
 import Definitions.Accounting.Guarantees.RateAuditSketch
 import Definitions.Accounting.Guarantees.Responder
+import Definitions.Accounting.Guarantees.ServingBlocks
+import Definitions.Accounting.Guarantees.ServingBlocks.Witnesses
 import Definitions.Accounting.Guarantees.RemoteHeld
 import Definitions.Accounting.Guarantees.RemoteDraw
 import Definitions.Accounting.Guarantees.RemoteBinding
@@ -66,7 +68,7 @@ audit's guarantees as a joint run's compute and bandwidth guarantees, each famil
 the filler's per-check luck, a state-bounded game's soundness as its capacity
 guarantee, derived state's share of the capacity residual, the rate audit's residency and bandwidth with the rebuild
 charged as compute, with partial completion and with a sketch-then-hash tag, the remote rate audit's conservation over
-tiers and chained passes, the causal horizon bound on its samples and its conservation with named words, the one
+tiers and chained passes, the causal pooled bound on its samples and its conservation with named words, the one
 composed guarantee for the remote bandwidth audit as deployed and its deployed instance, the remote
 bandwidth audit's conservation and node-level guarantees on the actual-circuit model, the actual circuit's capacity
 theorem, runtime corollary, memory cap over threads with its rate, dark gates and the compute dampener's windows,

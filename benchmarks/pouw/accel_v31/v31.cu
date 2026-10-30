@@ -1824,7 +1824,7 @@ DEV void salt_one_at(u64 pos, u64 off, const uint8_t* T, u64* __restrict__ S, co
   mask(std::integral_constant<int, 0>{}, Y);
   salt_prf_block(k, off + pos, 1, Y + 8);
   mask(std::integral_constant<int, 1>{}, Y + 8);
-  cpy8(c, C.mid_salt);
+  cpy8(c, C.hm.mid_salt);
   sha::compress(c, Y);
   salt_prf_block(k, off + pos, 2, Y);
   mask(std::integral_constant<int, 2>{}, Y);
@@ -1834,8 +1834,7 @@ DEV void salt_one_at(u64 pos, u64 off, const uint8_t* T, u64* __restrict__ S, co
   Y[15] = (128 + 192) * 8;
   sha::compress(c, Y);
   u64 my[8];
-#pragma unroll
-  for (int i = 0; i < 8; ++i) my[i] = (u64)bswap32(m[2 * i]) << 32 | bswap32(m[2 * i + 1]);
+  rc::mask_words(m, my);
   st8(S + 16 * pos, my);
   st8(S + 16 * pos + 8, c);
 }
@@ -3891,7 +3890,7 @@ static int foreign() { return g_live && std::this_thread::get_id() != g_thread ?
 extern "C" {
 const char* v31_error() { return g_err.c_str(); }
 
-// A context for calls of m x n x k at noise period lp (L'), segments of L and leaf rows of row bytes, served calls (O
+// A context for calls of m x n x k at noise tiles of lp (L'), segments of L and leaf rows of row bytes, served calls (O
 // committed, T_S implied) or a filler's, committed under the CGP1 params file's domain and salted under its Ks
 // (v31lib.Prover writes it), on CUDA device dev. Null on failure.
 void* v31_create(int m, int n, int k, int lp, int L, int row, int served, const char* params_path, int dev) {

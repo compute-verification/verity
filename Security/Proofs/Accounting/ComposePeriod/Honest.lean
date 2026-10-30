@@ -11,7 +11,7 @@ live round, every tile live in every window, every stage paid with its words rig
 every drawn tile's proof accepted (`honest_meets`). It meets every premise at live numbers: `K_d = 1`, `ρ = 1`,
 `w_max = 1`, lucks `p = p0 = ½` (the operand luck pinned, `r_B = ½`, the guess bound `½`), costs `a = b = 1` and
 `SplitRateClosed`'s rate there, `Λ = 4`; binding at `δ_bind = 0` and joint soundness at `δ_ks = 0` (its openings are in
-`Unit`, so each is its committed value, and every relation holds), and `UnitFixed` at one fixed and one folded word a
+`Unit`, so each is its committed value, and every relation holds), and `BlockFixed` at one fixed and one folded word a
 window. Its play is accepted on every path, its accepted prefix is the whole period, and its credited live words are
 `n`, so the conclusion speaks of `n` live words, not of none.
 
@@ -33,18 +33,18 @@ theorem prob_none {Ω : Type} [Fintype Ω] {p : Ω → Prop} (h : ∀ ω, ¬ p �
 /-! ## The circuit, its scheme and the honest period -/
 
 /-- The word: step `0` of an `S8Dot_v1` body of `K = L = 32` (its `T_1`, a served step), committed. -/
-def word : Accounting.Gates.Gate Unit where
+def word : Accounting.Gates.IntGate Unit where
   op := .const 0
   args := []
   lo := 0
   hi := 0
   step := 0
   prim := "S8Dot_v1"
-  site := .dot 32 32 [] 0
+  place := .dot 32 32 [] 0
   commit := true
 
 /-- One gate, one call site, one live round, one unit, every value committed before the round's coin. -/
-def circuit : Declared Unit where
+def circuit : RegisteredCircuit Unit where
   dag := [word]
   calls := 1
   call := fun _ => 0
@@ -79,13 +79,13 @@ def period : (n : ℕ) → Period Bool (Paths Bool 1 × (Equiv.Perm (Fin 1) × U
 
 /-- Its proofs' run: every drawn tile's proof accepted, opening values in `Unit`, every relation and rightness
 holding. -/
-def run (n : ℕ) : PeriodRun Bool (Equiv.Perm (Fin 1) × Unit) 1 1 1 n Unit where
+def run (n : ℕ) : Outcomes Bool (Equiv.Perm (Fin 1) × Unit) 1 1 1 n Unit where
   accepted := fun _ _ _ => True
   opened := fun _ _ _ _ => ()
   rel := fun _ _ _ _ => True
   right := fun _ _ _ _ => True
 
-/-- The period's proofs, `Declared.periodLayer` at the honest run. -/
+/-- The period's proofs, `RegisteredCircuit.periodLayer` at the honest run. -/
 def layer (n : ℕ) : DrawnLayer Bool (Equiv.Perm (Fin 1) × Unit) n 1 1 (Fin 1) ℕ (Fin n × ℕ) Unit :=
   circuit.periodLayer (Nat.one_pos : 0 < circuit.rounds) (le_rfl : 1 ≤ 1) (run n)
 
@@ -244,7 +244,7 @@ theorem honest_meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
       (fun live W => PerLiveTile scheme circuit live W (fun k G _ => ReceiptLuckAt (scheme.rB k) G)) ∧
     (period n).EveryWindow
       (fun live W => PerLiveTile scheme circuit live W (fun k _ G0 => GuessLuckAt (scheme.guess k) G0)) ∧
-    UnitFixed (play n) (layer n) (periodMode circuit (period n) (run n)) (fun _ t => (tileWords scheme circuit 1 t : ℝ))
+    BlockFixed (play n) (layer n) (periodMode circuit (period n) (run n)) (fun _ t => (tileWords scheme circuit 1 t : ℝ))
       (fun _ => 1) ∧
     (∀ x, (play n).accepts x) ∧ (∀ x, (run n).prefixLen x = n) ∧
     ∀ x, creditedLive scheme circuit (period n) (run n) x = n := by
@@ -280,7 +280,7 @@ theorem honest_meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
   · split_ifs <;> simp [tileWords_eq]
   · split_ifs <;> simp [tileWords_eq]
   · classical
-    unfold PeriodRun.prefixLen
+    unfold Outcomes.prefixLen
     rw [Finset.filter_true_of_mem fun w _ => hc x w, Finset.card_univ, Fintype.card_fin]
   · classical
     have hx : ∀ w, (run n).Credited x w := hc x
@@ -321,13 +321,13 @@ def periodR (n : ℕ) : Period Bool (Paths Bool 1 × (Equiv.Perm (Fin 1) × Unit
 
 /-- Its proofs' run: window `w`'s proof is accepted iff its round's coin is `true`, so the accepted prefix ends at the
 first window whose coin is `false`, a stopping time of the coins. -/
-def runR (n : ℕ) : PeriodRun Bool (Equiv.Perm (Fin 1) × Unit) 1 1 1 n Unit where
+def runR (n : ℕ) : Outcomes Bool (Equiv.Perm (Fin 1) × Unit) 1 1 1 n Unit where
   accepted := fun x w _ => (coinAt x w).1.1 = true
   opened := fun _ _ _ _ => ()
   rel := fun _ _ _ _ => True
   right := fun _ _ _ _ => True
 
-/-- Its proofs, `Declared.periodLayer` at `runR`. -/
+/-- Its proofs, `RegisteredCircuit.periodLayer` at `runR`. -/
 def layerR (n : ℕ) : DrawnLayer Bool (Equiv.Perm (Fin 1) × Unit) (n + 1) 1 1 (Fin 1) ℕ (Fin (n + 1) × ℕ) Unit :=
   circuit.periodLayer (Nat.one_pos : 0 < circuit.rounds) (le_rfl : 1 ≤ 1) (runR (n + 1))
 
@@ -381,7 +381,7 @@ theorem acceptsUpTo_periodR (wt : (Fin 1 → Bool) → Fin 1 → ℝ) (a b : ℝ
 /-- **No window is credited** when the first window's proof is refused. -/
 theorem prefixLen_false (n : ℕ) : (runR (n + 1)).prefixLen (constPath false (n + 1)) = 0 := by
   classical
-  unfold PeriodRun.prefixLen
+  unfold Outcomes.prefixLen
   rw [Finset.card_eq_zero, Finset.filter_eq_empty_iff]
   intro w _ hc
   exact Bool.false_ne_true (hc 0 (Fin.zero_le w) 0)
@@ -389,7 +389,7 @@ theorem prefixLen_false (n : ℕ) : (runR (n + 1)).prefixLen (constPath false (n
 /-- **One window is credited** when the first window's proof is accepted and the second's refused. -/
 theorem prefixLen_mid (n : ℕ) (hn : 0 < n) : (runR (n + 1)).prefixLen (midPath n) = 1 := by
   classical
-  unfold PeriodRun.prefixLen
+  unfold Outcomes.prefixLen
   rw [Finset.card_eq_one]
   refine ⟨0, Finset.ext fun w => ?_⟩
   rw [Finset.mem_filter, Finset.mem_singleton]
@@ -406,7 +406,7 @@ theorem prefixLen_mid (n : ℕ) (hn : 0 < n) : (runR (n + 1)).prefixLen (midPath
 /-- **Every window is credited** when no proof is refused. -/
 theorem prefixLen_true (n : ℕ) : (runR n).prefixLen (constPath true n) = n := by
   classical
-  unfold PeriodRun.prefixLen
+  unfold Outcomes.prefixLen
   rw [Finset.filter_true_of_mem fun w _ => credited_const_true n w, Finset.card_univ, Fintype.card_fin]
 
 /-- **Its credited live words**, on the coins that accept every window: the dead first window's are none. -/
@@ -443,7 +443,7 @@ theorem real_meets (n : ℕ) {δs : ℝ} (hδs : 0 < δs) :
       (fun live W => PerLiveTile scheme circuit live W (fun k G _ => ReceiptLuckAt (scheme.rB k) G)) ∧
     (periodR n).EveryWindow
       (fun live W => PerLiveTile scheme circuit live W (fun k _ G0 => GuessLuckAt (scheme.guess k) G0)) ∧
-    UnitFixed (playR n) (layerR n) (periodMode circuit (periodR n) (runR (n + 1)))
+    BlockFixed (playR n) (layerR n) (periodMode circuit (periodR n) (runR (n + 1)))
       (fun _ t => (tileWords scheme circuit 1 t : ℝ)) (fun _ => 1) ∧
     (∀ x, (playR n).accepts x) ∧ (∀ x, (periodR n).liveAt x 0 = fun _ => false) ∧
     (runR (n + 1)).prefixLen (constPath false (n + 1)) = 0 ∧

@@ -1,0 +1,23 @@
+# PoUW's period premises on the sample: what `tools/move/rename.py --map tools/move/sample_coin_map.toml` renames (a
+# draw is a sample; the coins stay coins). `DrawIsCoin` and `TileDrawIsCoin`, that the units a window samples are its
+# coin's, become `SampleIsCoin` and `TileSampleIsCoin`, and `RegisteredBeforeDraw`, that each registration is fixed
+# before its window samples, becomes `RegisteredBeforeSample`; their honest instances follow. move_check's own tests
+# spell `SampleIsCoin` as a name already taken, so they stand. Declarations keep their place in the locks' records:
+# `rename.py --moves` prints the renames that `check.py --update --moved` takes.
+[words]
+"DrawIsCoin" = "SampleIsCoin"
+"drawIsCoin" = "sampleIsCoin"
+"RegisteredBeforeDraw" = "RegisteredBeforeSample"
+"registeredBeforeDraw" = "registeredBeforeSample"
+
+[rewrite]
+# host_map.toml's: records of what was (the earlier moves and their maps, changelogs, the rulings), the frozen backends,
+# files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line itself) and lock files.
+exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**",
+           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "tools/verity/check/tests/test_move_check.py"]
+
+[keep]
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+']
+strings = []
+
+[keep_in]

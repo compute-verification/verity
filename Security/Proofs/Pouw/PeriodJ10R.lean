@@ -9,7 +9,7 @@ import Proofs.Pouw.RelativeSecurity
 `Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod` at `tileRun`, as `Proofs.Pouw.Period` proves
 `CheckedCreditPeriod`: a window is credited exactly when it and every earlier one are accepted by `Credit.window`
 (`credited_iff`, at `k s_T > 0`), so the run's accepted prefix and live words are `Credit.window`'s (`prefixLen_eq`,
-`creditedLive_eq`), and `JointSound` at `tileLayer` follows from `TileDrawIsCoin` and `TileServiceSound` by
+`creditedLive_eq`), and `JointSound` at `tileLayer` follows from `TileSampleIsCoin` and `TileServiceSound` by
 monotonicity (`jointSound_tile`). The rate is `SplitRateClosed`'s at H1's lucks (`rate_j10r`: its first term,
 `8(1 + Kρ)/(ρK)`), and `Pins` comes from the window's salt being its live coin (`pins_j10r`): the relation is
 `j10r_reference`'s at the unit's place, one description.
@@ -38,12 +38,12 @@ theorem prefixLen_eq {C Ξ V : Type} {m nB mB n : ℕ} (σ : Fin nB → Fin mB) 
     (x : Paths (Coin C Ξ m σ sT) n) :
     (tileRun σ k hk sT unitOf ws opened rel right).prefixLen x = ws.prefixLen x := by
   classical
-  unfold PeriodRun.prefixLen CreditWindows.prefixLen
+  unfold Outcomes.prefixLen CreditWindows.prefixLen
   congr 1
   exact Finset.filter_congr fun w _ => credited_iff σ k hk sT unitOf hKd ws opened rel right x w
 
 /-- **The run's credited live words are `Credit.window`'s accepted prefix's.** -/
-theorem creditedLive_eq {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) {nB mB n : ℕ} (σ : Fin nB → Fin mB)
+theorem creditedLive_eq {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) {nB mB n : ℕ} (σ : Fin nB → Fin mB)
     (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (unitOf : Fin nB → ℕ) (hKd : 0 < k sT)
     (ws : CreditWindows (Coin C Ξ Cd.rounds σ sT) n)
     (opened : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → ℕ → ℕ → V)
@@ -58,13 +58,13 @@ theorem creditedLive_eq {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) 
 
 /-- **Joint soundness at `Credit.window`'s run from the service's**: in each window, an accepted window with a drawn
 tile whose opening fails its relation is one `Credit.window` credits with that tile's window unit among the units its
-draw demanded (`TileDrawIsCoin`), whose opening fails its relation, which `TileServiceSound` bounds at `δ_ks`. -/
-theorem jointSound_tile {ι C Ξ V : Type} [Fintype C] [Fintype Ξ] (Cd : Declared ι) {nB mB n : ℕ}
+draw demanded (`TileSampleIsCoin`), whose opening fails its relation, which `TileServiceSound` bounds at `δ_ks`. -/
+theorem jointSound_tile {ι C Ξ V : Type} [Fintype C] [Fintype Ξ] (Cd : RegisteredCircuit ι) {nB mB n : ℕ}
     (hr : 0 < Cd.rounds) (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB)
     (unitOf : Fin nB → ℕ) (ws : CreditWindows (Coin C Ξ Cd.rounds σ sT) n)
     (opened : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → ℕ → ℕ → V)
     (rel right : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → Fin (tileCount σ sT) → (ℕ → V) → Prop) {δks : ℝ}
-    (hD : TileDrawIsCoin σ k hk sT unitOf ws) (hS : TileServiceSound σ sT unitOf ws opened rel δks) :
+    (hD : TileSampleIsCoin σ k hk sT unitOf ws) (hS : TileServiceSound σ sT unitOf ws opened rel δks) :
     (tileLayer Cd hr σ k hk sT unitOf ws opened rel right).JointSound δks := by
   intro w
   refine (Pouw.RelativeSecurity.prob_mono fun x hx => ?_).trans (hS w)

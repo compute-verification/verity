@@ -1516,6 +1516,33 @@
         "benchmarks/e2e_h200/": "examples/h200/",
         "benchmarks/e2e_demo/": "examples/h200/interfaces/"
       }
+    },
+    {
+      "paths": {
+        "Security/Definitions/Population/DrawPressure.lean": "Security/Definitions/Population/SamplePressure.lean",
+        "Security/Proofs/Population/DrawPressure.lean": "Security/Proofs/Population/SamplePressure.lean"
+      }
+    },
+    {
+      "paths": {
+        "Security/Proofs/Accounting/RemoteHeld/Component.lean": "Security/Proofs/Accounting/RemoteHeld/Subprotocol.lean",
+        "Security/Proofs/Properties/RemoteAudit/Component.lean": "Security/Proofs/Properties/RemoteAudit/Subprotocol.lean",
+        "Security/Proofs/Properties/RemoteAudit/ComponentWitnesses.lean": "Security/Proofs/Properties/RemoteAudit/SubprotocolWitnesses.lean",
+        "Security/Properties/RemoteAudit/Component.lean": "Security/Properties/RemoteAudit/Subprotocol.lean"
+      }
+    },
+    {
+      "paths": {
+        "Security/Definitions/Accounting/Remote/Draw.lean": "Security/Definitions/Accounting/Remote/Sample.lean"
+      }
+    },
+    {
+      "paths": {
+        "Security/Definitions/Accounting/Guarantees/DeclaredCircuit.lean": "Security/Definitions/Accounting/Guarantees/RegisteredCircuit.lean",
+        "Security/Proofs/Accounting/DeclaredCircuit.lean": "Security/Proofs/Accounting/RegisteredCircuit.lean",
+        "Security/Proofs/Accounting/DeclaredCircuit/": "Security/Proofs/Accounting/RegisteredCircuit/",
+        "Security/Properties/Accounting/DeclaredCircuit.lean": "Security/Properties/Accounting/RegisteredCircuit.lean"
+      }
     }
   ]
 }

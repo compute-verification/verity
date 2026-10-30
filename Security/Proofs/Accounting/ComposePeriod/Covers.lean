@@ -9,14 +9,14 @@ import Definitions.Accounting.ComposePeriod
 and proved here as `periodCovers`. The assembly reads it as a hypothesis (`ComposePeriod.circuitWorkPeriod_of_covers`).
 
 It is `CoversProof.serviceCovers`' argument with a window index. Every position, cut and writer of window `w` of the
-period layer (`Declared.periodLayer`) is window `w`'s, so a late edge (`DrawnLayer.Late`) stays in its window and
-lies in the IR's late cone (`Declared.Reaches`) under `Declared.Wf` and `LayerCommitted`, as `reaches_of_late` shows
+period layer (`RegisteredCircuit.periodLayer`) is window `w`'s, so a late edge (`DrawnLayer.Late`) stays in its window and
+lies in the IR's late cone (`RegisteredCircuit.Reaches`) under `RegisteredCircuit.Wf` and `LayerCommitted`, as `reaches_of_late` shows
 for one window. A credited window's live tiles have its own run's modes under `periodMode`, and its dead tiles are
 skipped whole. So a live tile of words that isn't good is reached by a tile its window's run didn't pay for: either a
 live one, whose `liveCone` the window's round charges and which holds the tile's live words, or a dead one, which
 `DeadConeDead` says reaches no live words.
 
-The proof reads the one-window layer (`Declared.layer`) at any run-dependent half (`CoversProof.anyRun`): window `w`'s
+The proof reads the one-window layer (`RegisteredCircuit.layer`) at any run-dependent half (`CoversProof.anyRun`): window `w`'s
 positions, cuts, coins and writers are that layer's tagged by `w`, so a late edge of the period layer is one of that
 layer's inside its window (`CoversProof.late_one`), and `Compose.CoversProof.reaches_of_rtg` and
 `Compose.WorkProof.writerReads`, which read only the static half, give the cone and the writers.
@@ -33,9 +33,9 @@ tiles' cones hold no live words (`DeadConeDead`), the live words of the tiles th
 (`periodMode`) are at most `N_w` times the `liveCone` of the tiles window `w`'s run didn't pay for, at its rounds'
 coins. The right side is window `w`'s round's deficiency in `periodGame` at weights `liveCone` and costs `1, 1`. -/
 def PeriodCoversStmt : Prop :=
-  ∀ {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) {n Np Kd : ℕ} (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
+  ∀ {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) {n Np Kd : ℕ} (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
     (Wp : Period C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
-    (pr : PeriodRun C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V),
+    (pr : Outcomes C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V),
     Cd.Wf → LayerCommitted Cd →
     (Cd.periodLayer hr hK pr).WriterReads ∧
       ∀ (x : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n) (w : Fin n), pr.Credited x w →
@@ -47,15 +47,15 @@ def PeriodCoversStmt : Prop :=
 
 namespace CoversProof
 
-/-- A run-dependent half of the one-window layer (`Declared.layer`), any one: the lemmas this file reuses read only
+/-- A run-dependent half of the one-window layer (`RegisteredCircuit.layer`), any one: the lemmas this file reuses read only
 the layer's static half. -/
 def anyRun (C B : Type) (m s Np : ℕ) : ProofRun C B m s Np Unit :=
   ⟨fun _ _ _ => True, fun _ _ _ _ => (), fun _ _ _ _ => True, fun _ _ _ _ => True⟩
 
 section Layer
 
-variable {ι C Ξ V : Type} (Cd : Declared ι) {n Np Kd : ℕ} (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
-  (pr : PeriodRun C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V)
+variable {ι C Ξ V : Type} (Cd : RegisteredCircuit ι) {n Np Kd : ℕ} (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
+  (pr : Outcomes C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V)
 
 theorem periodLayer_src (ℓ : Fin n × ℕ) : (Cd.periodLayer hr hK pr).src ℓ =
     if h : ℓ.2 < Cd.dag.length ∧ Cd.binding ℓ.2 ≠ some .coin ∧ Cd.unit ℓ.2 < Np then
@@ -85,7 +85,7 @@ theorem rtg_one {u v : Fin n × Fin Np} (h : Relation.ReflTransGen (Cd.periodLay
     obtain ⟨h1, h2⟩ := late_one Cd hr hK pr hbc
     exact ⟨ih.1.trans h1, ih.2.tail h2⟩
 
-/-- **The period layer's late cone lies in its window and in the IR's late cone**: under `Declared.Wf` and
+/-- **The period layer's late cone lies in its window and in the IR's late cone**: under `RegisteredCircuit.Wf` and
 `LayerCommitted`. -/
 theorem periodLayer_cone (hw : Cd.Wf) (hc : LayerCommitted Cd) {u v : Fin n × Fin Np}
     (h : Relation.ReflTransGen (Cd.periodLayer hr hK pr).Late u v) : u.1 = v.1 ∧ Cd.Reaches u.2.val v.2.val :=
@@ -107,7 +107,7 @@ theorem periodLayer_writerReads : (Cd.periodLayer hr hK pr).WriterReads := by
 end Layer
 
 /-- A tile's live words are among the circuit's. -/
-theorem liveWords_le_wordsOf {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np : ℕ) (live : Fin Np → Bool)
+theorem liveWords_le_wordsOf {ι K : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) (Np : ℕ) (live : Fin Np → Bool)
     (t : Fin Np) : liveWords Sc Cd Np live t ≤ wordsOf Sc Cd := by
   unfold liveWords
   split
@@ -116,7 +116,7 @@ theorem liveWords_le_wordsOf {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (N
 
 open Classical in
 /-- **The live words a tile's late cone reaches weigh at most `N_w` times its `liveCone`** (`0` when `N_w = 0`). -/
-theorem sum_reaches_le {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np : ℕ) (live : Fin Np → Bool)
+theorem sum_reaches_le {ι K : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) (Np : ℕ) (live : Fin Np → Bool)
     (u : Fin Np) :
     (∑ t : Fin Np, if Cd.Reaches u.val t.val then (liveWords Sc Cd Np live t : ℝ) else 0) ≤
       liveCone Sc Cd Np live u * (wordsOf Sc Cd : ℝ) := by
@@ -134,7 +134,7 @@ theorem sum_reaches_le {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np : �
 open Classical in
 /-- **A share that charges each tile the run didn't pay for its `liveCone` covers**: `covers_of_cone`'s count at live
 words, when each live tile of words that isn't good is reached by a tile whose mode isn't paid. -/
-theorem sum_not_good_le {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np : ℕ) (live : Fin Np → Bool)
+theorem sum_not_good_le {ι K : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) (Np : ℕ) (live : Fin Np → Bool)
     (md : Fin Np → Mode) (G : Fin Np → Prop)
     (h : ∀ t, ¬ G t → liveWords Sc Cd Np live t ≠ 0 → ∃ u, md u ≠ .paid ∧ Cd.Reaches u.val t.val) :
     (∑ t : Fin Np, if G t then (0 : ℝ) else (liveWords Sc Cd Np live t : ℝ)) ≤

@@ -184,7 +184,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     # only the digest's d bits per tile, from a table of |signs| * N * d bits, at any number of rows. What Lean proves is
     # the narrower verbatim class (Accounting.Guarantees.RateAuditSketch, RateAuditTensorSketchRank: on-chip state, device
     # memory, the side link and rebuilding each return whole sectors as they are); the restated form, where a device that
-    # computes from blocks it read has those reads counted, is the remote audit's composition, not yet proved for the sketch
+    # computes from blocks it read has those reads counted, is PoUB's composition, not yet proved for the sketch
     Entry("rate-sketch-verbatim", "model",
           "Rate sketch store-as-blocks model: in every tier the prover holds the store only as its blocks (any number of "
           "copies, anywhere), and any device may compute from the blocks it reads, every such read counted; a layout from "
@@ -218,6 +218,25 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "The auditor's device runs its stated code, timing included, on a host the prover doesn't control, with its CPU "
           "isolated from other tenants and a monotonic clock; the host never restores its earlier state", "Trusted host",
           "standard"),
+    # The four per-party assumptions of `Accounting.Assumptions.Parties` (Security/Definitions/Accounting/Assumptions/
+    # Parties.lean), each about one auditor party p; the reason to believe them is that p runs on a machine the auditor
+    # owns, which is not itself an assumption.  The device-attest statements (`Properties.Attest`) read them
+    Entry("faithful", "assumption",
+          "Faithful p: the auditor party p runs its stated code on its true inputs, its own clock's readings and its own "
+          "coin source's draws among them, and its state persists: each step starts from the state the last one left, "
+          "never an earlier copy (NIST SP 800-208's no snapshot restore of a stateful hash-based key)", "Faithful party",
+          "standard"),
+    Entry("secret", "assumption",
+          "Secret p: the prover can neither read nor set the auditor party p's signing keys, its LMS leaf states or its "
+          "coins not yet released; what it learns of them is what p's outputs carry", "Secret party", "standard"),
+    Entry("confined", "assumption",
+          "Confined p: the auditor party p's only outputs are the messages of its declared channels (toward the auditor, "
+          "its manifest's public messages, such as one liveness record per sampling block): no other channel, timing "
+          "included, carries its state out", "Confined party", "standard"),
+    Entry("witness-path-private", "assumption",
+          "Witness path private: the path between an auditor party and the prover carries no observer but its two "
+          "endpoints, so the party's private messages (its signed roots and records, the prover's witness) reach nobody "
+          "else; they travel unencrypted for now", "Witness path private", "standard"),
     # `Accounting.Covered` (Security/Definitions/Accounting/Physical.lean) is its Lean form: every boundary link of the
     # location is certified (uncertifiedCapacity = 0). The auditor's placement in the onsite protocol; nothing proves it
     Entry("certifier-coverage", "assumption",
@@ -479,7 +498,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "(not skipped and guessed), with every unit writing it a value after the coin its noise reads, so a unit "
           "whose check passes by luck isn't credited; and the folded words per round are at least the words of the "
           "units not skipped whole over the rounds", "TS unit fixed", "proven"),
-    # the two premises UnitFixed rests on under ASK-40's option A (Security/Definitions/Accounting/Assumptions/TS/Fixed.lean)
+    # the two premises BlockFixed rests on under ASK-40's option A (Security/Definitions/Accounting/Assumptions/TS/Fixed.lean)
     Entry("accounting-ts-modes-run", "assumption",
           "The modes are the run's: a unit the run paid for has its words and the values it writes honest, from the "
           "values the layer committed, under its noise, and a unit not skipped whole has its receipt commit the fold of "

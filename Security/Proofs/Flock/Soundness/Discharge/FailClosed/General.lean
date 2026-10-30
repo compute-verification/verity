@@ -134,33 +134,33 @@ theorem zk_session_soundHG
     {qF qS : ℝ}
     (hCR : ∀ hs : ScopeZ I,
         let σ := simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _
-          (runsZC_liveHI I hs.typed (hs.parseH hh) dj y₀ wr _ tablesAtZKH_liveI (hs.tagsOkH hh hn) hRec hDraw)) τ
+          (runsZC_liveHI I hs.typed (hs.parseHG hh hf) dj y₀ wr _ tablesAtZKH_liveI (hs.tagsOkH hh hn) hRec hDraw)) τ
         ∀ ω j, TableCRZ execArith hs512 (planAtZKH dj y₀
           ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ)) j
           (zcStrat execArith hs512 (planAtZKH dj y₀) (cont σ ω)) qF qS) :
     prob (fun o => LiveVerifiesZK I o ∧ ∀ hs : ScopeZ I,
         let σ := simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _
-          (runsZC_liveHI I hs.typed (hs.parseH hh) dj y₀ wr _ tablesAtZKH_liveI (hs.tagsOkH hh hn) hRec hDraw)) τ
+          (runsZC_liveHI I hs.typed (hs.parseHG hh hf) dj y₀ wr _ tablesAtZKH_liveI (hs.tagsOkH hh hn) hRec hDraw)) τ
         K₀ ≤ (((instProg (circZ I) n).partition (outsOfI (circZ I) n)).wrong
           (XplurZC execArith hs512 ((instProg (circZ I) n).partition (outsOfI (circZ I) n)) (planAtZKH dj y₀)
             (tabAtZKH dj y₀)
-            ((rsZG dj y₀ hs.typed (hs.parseH hh) (hs.scopeGen hh hf) (hs.loadH hh) hs.built).bindingZ
-              (rsZG_computes dj y₀ hs.typed (hs.parseH hh) (hs.scopeGen hh hf) (hs.loadH hh) hs.built))
+            ((rsZG dj y₀ hs.typed (hs.parseHG hh hf) (hs.scopeGen hh hf) (hs.loadH hh) hs.built).bindingZ
+              (rsZG_computes dj y₀ hs.typed (hs.parseHG hh hf) (hs.scopeGen hh hf) (hs.loadH hh) hs.built))
             (reg σ) (cont σ) k Rw)).card)
         (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
       ⨆ hs : ScopeZ I,
         (let σ := simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _
-          (runsZC_liveHI I hs.typed (hs.parseH hh) dj y₀ wr _ tablesAtZKH_liveI (hs.tagsOkH hh hn) hRec hDraw)) τ
+          (runsZC_liveHI I hs.typed (hs.parseHG hh hf) dj y₀ wr _ tablesAtZKH_liveI (hs.tagsOkH hh hn) hRec hDraw)) τ
         (Law.stratified σs ks hks).miss K₀ +
         ksAvgStrictZ (planAtZKH dj y₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg σ) +
         linkBoundZC execArith hs512 ((instProg (circZ I) n).partition (outsOfI (circZ I) n)) (planAtZKH dj y₀)
           (tabAtZKH dj y₀)
-          ((rsZG dj y₀ hs.typed (hs.parseH hh) (hs.scopeGen hh hf) (hs.loadH hh) hs.built).bindingZ
-            (rsZG_computes dj y₀ hs.typed (hs.parseH hh) (hs.scopeGen hh hf) (hs.loadH hh) hs.built))
+          ((rsZG dj y₀ hs.typed (hs.parseHG hh hf) (hs.scopeGen hh hf) (hs.loadH hh) hs.built).bindingZ
+            (rsZG_computes dj y₀ hs.typed (hs.parseHG hh hf) (hs.scopeGen hh hf) (hs.loadH hh) hs.built))
           k Rw M ρ t' (reg σ) (cont σ)) := by
   refine prob_scope (A := LiveAcceptsZK I) (fun _ h => h.1) (fun _ h => h.2) _ _ _ _ fun hs => ?_
-  exact FlockSoundness.Discharge.General.zk_session_soundH_gen I hs.typed dj y₀ wr dg N (hs.parseH hh) hs.built
+  exact FlockSoundness.Discharge.General.zk_session_soundH_gen I hs.typed dj y₀ wr dg N (hs.parseHG hh hf) hs.built
     (hs.loadH hh) (hs.scopeGen hh hf) σs ks hks St hS Kd pop Lb src hA3 hDraw (hs.tagsOkH hh hn) hRec hk hRw hM hρ
     hr ht' K₀ τ (hCR hs)
 
@@ -189,36 +189,36 @@ theorem zk_session_soundHJG
         let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
           (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
           (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
-          (runsZCJH_liveI I hs.typed (hs.parseH hh) dj y₀ wr _ (hs.tagsOkZHJ hh) hRec hDraw)) τ
+          (runsZCJH_liveI I hs.typed (hs.parseHG hh hf) dj y₀ wr _ (hs.tagsOkZHJ hh) hRec hDraw)) τ
         ∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
           (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) :
     prob (fun o => LiveVerifiesZK I o ∧ ∀ hs : ScopeZ I,
         let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
           (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
           (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
-          (runsZCJH_liveI I hs.typed (hs.parseH hh) dj y₀ wr _ (hs.tagsOkZHJ hh) hRec hDraw)) τ
+          (runsZCJH_liveI I hs.typed (hs.parseHG hh hf) dj y₀ wr _ (hs.tagsOkZHJ hh) hRec hDraw)) τ
         K₀ ≤ (((instProg (circZ I) n).partition (outsOfI (circZ I) n)).wrong
           (XplurZC execArith hs512 ((instProg (circZ I) n).partition (outsOfI (circZ I) n)) (planZHJ dj y₀)
             (tabZHJ dj y₀)
-            ((rsZHJG dj y₀ hs.typed (hs.parseH hh) (hs.scopeGen hh hf) (hs.loadH hh) hs.built).bindingZ
-              (rsZHJG_computes dj y₀ hs.typed (hs.parseH hh) (hs.scopeGen hh hf) (hs.loadH hh) hs.built))
+            ((rsZHJG dj y₀ hs.typed (hs.parseHG hh hf) (hs.scopeGen hh hf) (hs.loadH hh) hs.built).bindingZ
+              (rsZHJG_computes dj y₀ hs.typed (hs.parseHG hh hf) (hs.scopeGen hh hf) (hs.loadH hh) hs.built))
             (reg σ) (cont σ) k Rw)).card)
         (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
       ⨆ hs : ScopeZ I,
         (let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
           (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
           (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
-          (runsZCJH_liveI I hs.typed (hs.parseH hh) dj y₀ wr _ (hs.tagsOkZHJ hh) hRec hDraw)) τ
+          (runsZCJH_liveI I hs.typed (hs.parseHG hh hf) dj y₀ wr _ (hs.tagsOkZHJ hh) hRec hDraw)) τ
         (Law.subset n kd hkd).miss K₀ +
         ksAvgStrictZ (planZHJ dj y₀) (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         linkBoundZC execArith hs512 ((instProg (circZ I) n).partition (outsOfI (circZ I) n)) (planZHJ dj y₀)
           (tabZHJ dj y₀)
-          ((rsZHJG dj y₀ hs.typed (hs.parseH hh) (hs.scopeGen hh hf) (hs.loadH hh) hs.built).bindingZ
-            (rsZHJG_computes dj y₀ hs.typed (hs.parseH hh) (hs.scopeGen hh hf) (hs.loadH hh) hs.built))
+          ((rsZHJG dj y₀ hs.typed (hs.parseHG hh hf) (hs.scopeGen hh hf) (hs.loadH hh) hs.built).bindingZ
+            (rsZHJG_computes dj y₀ hs.typed (hs.parseHG hh hf) (hs.scopeGen hh hf) (hs.loadH hh) hs.built))
           k Rw M ρ t' (reg σ) (cont σ)) := by
   refine prob_scope (A := LiveAcceptsZK I) (fun _ h => h.1) (fun _ h => h.2) _ _ _ _ fun hs => ?_
-  exact FlockSoundness.Discharge.ZkHidden.zk_session_soundHJI I hs.typed dj y₀ wr dg N (hs.parseH hh) hs.built
-    (hs.loadH hh) (General.rowsFit_of_scopeGenH ((zkTags_typed I).trans hs.typed) (hs.parseH hh) (hs.scopeGen hh hf))
+  exact FlockSoundness.Discharge.ZkHidden.zk_session_soundHJI I hs.typed dj y₀ wr dg N (hs.parseHG hh hf) hs.built
+    (hs.loadH hh) (General.rowsFit_of_scopeGenH ((zkTags_typed I).trans hs.typed) (hs.parseHG hh hf) (hs.scopeGen hh hf))
     (Layout.scopeGenH_spec hs.built (hs.scopeGen hh hf)).1 (Layout.scopeGenH_spec hs.built (hs.scopeGen hh hf)).2
     kd hkd Lb src hA3 hDraw (hs.tagsOkZHJ hh) hRec hk hRw hM hρ hr ht' K₀ τ (hCR hs)
 

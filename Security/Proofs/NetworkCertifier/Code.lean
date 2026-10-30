@@ -27,12 +27,11 @@ and the program = the reference (proved):
 * `CodeSyncSet`: every sync set of the program has a reference sync set with the same values, and every reference sync
   set one of the program's, so the program's membership test (the audit's `advice` verdict) is the reference's;
 * `CodeChargesV1`: the program's advice v1 charges (`NetworkCertifier.AdviceV1.charges`, which the charge difftest runs
-  against `arith_encode.reference_charge`) are the reference's (`AdviceV1.charges`, which `BitsCount` for advice v1 is
-  proved of), for books with the same fields; the program's `bitlen` is Lean core's `Nat.log2` plus one, the
-  reference's `Nat.size`;
+  against `arith_encode.reference_charge`) are the reference's (`AdviceV1.charges`), for books with the same fields;
+  the program's `bitlen` is Lean core's `Nat.log2` plus one, the reference's `Nat.size`;
 * `CodeChargesWhole`: the program's whole-window charges (`NetworkCertifier.WindowCharge.charges`, which the window
-  difftest runs against `window_charge.reference_window`) are the reference's (`WindowCharge.charges`, which
-  `EncardChargedLeWhole` is proved of), for books with the same tables and priors and windows with the same fields.
+  difftest runs against `window_charge.reference_window`) are the reference's (`WindowCharge.charges`), for books with
+  the same tables and priors and windows with the same fields.
 
 Each statement relates the two sides by their fields rather than by a transport, so that it reads only the two sides'
 definitions. The transports (`frameRef`, `syncRef`, `syncSetRef`, `syncSetCode`, `tallyRef`, `carryRef`, `tableRef`,
@@ -157,8 +156,8 @@ theorem code_ingressUpTo {L K S : ℕ} {In : Type} (op : ℕ → List (NetworkCe
 
 /-- `Accepted` agrees on observations with the same rows and complete statuses when the two Programs predict the same
 rows from the same ingress. -/
-theorem code_accepted {L K S : ℕ} {In Adv Adv' : Type} (P : NetworkCertifier.Program L S In Adv) (P' : Program L S In Adv')
-    (a : Adv) (a' : Adv') (hP : ∀ t ins, P.rows t ins a = P'.rows t ins a')
+theorem code_accepted {L K S : ℕ} {In Adv Adv' : Type} (P : NetworkCertifier.EgressPrediction L S In Adv)
+    (P' : Program L S In Adv') (a : Adv) (a' : Adv') (hP : ∀ t ins, P.rows t ins a = P'.rows t ins a')
     (op : ℕ → List (NetworkCertifier.Obs L K S) → In) (op' : ℕ → List (Obs L K S) → In)
     (k : ℕ) (o : List (NetworkCertifier.Obs L K S)) (o' : List (Obs L K S))
     (hlen : o.length = o'.length)
@@ -359,8 +358,7 @@ theorem code_session (bk : NetworkCertifier.AdviceV1.Book) (bk' : AdviceV1.Book)
       rw [code_session bk bk' harr htot hz N p.2 ws]
 
 /-- **Advice v1's charge in the program is the reference's** (`CodeChargesV1`): for books with the same fields, the
-program's `charges` of the windows' decision streams, listed in order, is the reference's, which `BitsCount` for advice
-v1 is proved of. -/
+program's `charges` of the windows' decision streams, listed in order, is the reference's. -/
 theorem CodeChargesV1 (bk : NetworkCertifier.AdviceV1.Book) (bk' : AdviceV1.Book) (harr : bk.arrived = bk'.arrived)
     (htot : bk.total = bk'.total) (hz : bk.zeros = bk'.zeros) (hp : bk.priors = bk'.priors) (N : ℕ) {W : ℕ}
     (a : Fin W → List Bool) :
@@ -508,8 +506,7 @@ theorem code_wsession (bk : NetworkCertifier.WindowCharge.Book) (N H O : ℕ) :
 
 /-- **Advice v1's whole window charged in the program is the reference's** (`CodeChargesWhole`): for books with the
 same tables (each one's frequencies and total) and the same priors, and windows with the same decisions, hits and order
-entries, the program's `charges` of the windows, listed in order, is the reference's, which `EncardChargedLeWhole` is
-proved of. -/
+entries, the program's `charges` of the windows, listed in order, is the reference's. -/
 theorem CodeChargesWhole (bk : NetworkCertifier.WindowCharge.Book) (bk' : WindowCharge.Book)
     (ht : [bk.arrived, bk.nHits, bk.hit, bk.resumes, bk.nOrder, bk.gap, bk.index, bk.lag].map (fun t => (t.freqs, t.total)) =
       [bk'.arrived, bk'.nHits, bk'.hit, bk'.resumes, bk'.nOrder, bk'.gap, bk'.index, bk'.lag].map

@@ -6,16 +6,17 @@ import RemoteAudit
 The properties of `RemoteAudit` (`verity/core/protocols/remote_bandwidth/lean/`, the verifier's definition, which
 `audit.py` is held to by the difftest `remote-audit-difftest`), stated against its functions as they run, for every input of their types. They
 are the code's half of the bridge from the verifier to the stacked audit's game (`Rate.DeployedSession`, and the
-composed statement `Accounting.Guarantees.DeclaredCircuitRequirement` that reads it): each says what an acceptance
+composed statement `Accounting.Guarantees.RegisteredCircuitRequirement` that reads it): each says what an acceptance
 establishes about the bytes the verifier holds. They take no premise. What the code cannot see (the coins' uniformity,
 the receipts' and the store's meaning as the game's oracle and words, the window's wall time) is not here: it is a
 premise or a proofs unit of the bridge, named in each docstring.
 
 The memory line of record (`RemoteAudit.Line.line`, its W from `RemoteAudit.Pooled`) is one statement over what this
-verifier accepts: `Properties.RemoteAudit.Line.LineHeld` and `LineHeldIdentity` (`Properties/RemoteAudit/Line.lean`,
-proved in `Proofs/Accounting/RemoteHeld/Line.lean`), with no code-to-model premise (`Registered` holds of the trace of
-record, `Properties/RemoteAudit/Line/Premises.lean`, and the verifier refuses a record not of the registration given,
-`LineRegistered`) and the W's cover of the session's pooled bound in `Properties/RemoteAudit/Pooled.lean`.
+verifier accepts: `Properties.RemoteAudit.Line.LineHeld`, the bits its credited passes read
+(`Properties/RemoteAudit/Line.lean`, proved in `Proofs/Accounting/RemoteHeld/Line.lean`, where `heldAt_of_read` derives
+memory held from it under the device model), with no code-to-model premise (the trace of record is over the
+registration's blocks by definition, `Properties/RemoteAudit/Line/Premises.lean`, and the verifier refuses a record not
+of the registration given, `LineRegistered`) and the W's cover of the session's pooled bound in `Properties/RemoteAudit/Pooled.lean`.
 
 The window (`verifyWindow`):
 

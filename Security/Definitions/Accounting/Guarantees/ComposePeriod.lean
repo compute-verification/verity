@@ -23,7 +23,7 @@ tiles only (`PerLiveTile`), and a dead tile's words count for nothing (`liveCone
 
 An honest period of 82,403 windows completes with probability `(1 − f)^n`, 44% at a per-window failure rate
 `f = 10^-5`, and dropping failed windows instead hides about `0.26` of the live words per dropped share. So a period
-is credited up to its first window with a refused proof (`PeriodRun.Credited`), a stopping time, and the tail is taken
+is credited up to its first window with a refused proof (`Outcomes.Credited`), a stopping time, and the tail is taken
 at it (`PeriodTailMax`).
 
 * `PeriodBudget`: the composition lemma. If every window's `serviceGame` has its saving per unit of detection bounded by
@@ -40,7 +40,7 @@ at it (`PeriodTailMax`).
   can't be averaged into `ε/n`): `ServiceBudget` per window at the window's detected live weights, `PeriodBudget`,
   `PeriodTailMax` once at `t = ln(1/δ_s)`, `DrawnRightOff` at `n` rounds, the period layer's `Covers` on the credited
   windows' live tiles and `WriterReads` (`PeriodCoversStmt`, `ServiceCovers`' argument with a window index, proved as
-  `periodCovers` in `Proofs.Accounting.ComposePeriod.Covers`) and `UnitFixed`'s sums.
+  `periodCovers` in `Proofs.Accounting.ComposePeriod.Covers`) and `BlockFixed`'s sums.
 * `CircuitCreditPeriod`: (L)'s credit in live words, `(1 − ε(j))₊` of the accepted prefix's live words with `ε` at the
   realized prefix `j` (`creditPrefix`). Proved (`Proofs.Accounting.ComposePeriod`) from `CircuitWorkPeriod`'s
   assembly at `a, b > 0`. Not the time credit (`CircuitCredit`'s `(1 − ε)·T_cred`), which no statement here gives.
@@ -78,8 +78,8 @@ declared circuit `Cd` and scheme `Sc`, run as a period of at most `n ≥ 1` wind
 committed, then the service's draw of `K_d` of the `N_p ≥ Cd.units` tiles (`drawOf`, uniform over every tile, dead ones
 included) with the proofs' coins `Ξ`, all fresh; window `w + 1`'s first coin is released after window `w`'s draw. The
 cheater's play in each window, its live tiles included, may be any function of every earlier window's coins
-(`Period`). The period is credited up to its first window with a refused proof (`PeriodRun.Credited`): its accepted
-prefix, of `j = PeriodRun.prefixLen` windows. Under:
+(`Period`). The period is credited up to its first window with a refused proof (`Outcomes.Credited`): its accepted
+prefix, of `j = Outcomes.prefixLen` windows. Under:
 * `CircuitWork`'s premises on the circuit, unchanged: `Scope`, `ρ`, `w_max`, the lucks `p, p0`, `a, b ≥ 0`, `Λ > 0` and
   `SplitRate` at them. They read the static `shareCone`, which bounds every window's live weights, so none reads the
   load;
@@ -87,14 +87,14 @@ prefix, of `j = PeriodRun.prefixLen` windows. Under:
   (`periodGame` at `liveCone`);
 * in every window, no dead tile's late cone holds live words (`DeadConeDead`, which a Program COMPILE accepts has when
   its `zeroCone` is `0`: *Its line*), so a dead tile's `liveCone` is `0`;
-* sampled (I8)'s pieces on the period's proofs, `Declared.layer` in every window (`Declared.periodLayer` at the run's
+* sampled (I8)'s pieces on the period's proofs, `RegisteredCircuit.layer` in every window (`RegisteredCircuit.periodLayer` at the run's
   `pr`): `Of`'s game clause on every prefix (`PrefixOf`), binding at `δ_bind` in each window (`MovedIn`), proof
   soundness jointly over each window's draws at `δ_ks` (`JointSound`) and `Pins`. Binding is per window, so the period
   composes the windows' binding;
 * the four claims: (H-μ), B′ and the guess bound per live credited tile of every window, whatever the past
-  (`Period.EveryWindow` of `PerLiveTile`), and `UnitFixed` on the period's proofs at the run's modes with each dead
-  tile and every window past the accepted prefix skipped whole (`periodMode`) and the tiles' words. `UnitFixed` at
-  `periodMode` follows from `UnitFixed` at the windows' own modes, since reading a tile as skipped whole only shrinks
+  (`Period.EveryWindow` of `PerLiveTile`), and `BlockFixed` on the period's proofs at the run's modes with each dead
+  tile and every window past the accepted prefix skipped whole (`periodMode`) and the tiles' words. `BlockFixed` at
+  `periodMode` follows from `BlockFixed` at the windows' own modes, since reading a tile as skipped whole only shrinks
   both its sums;
 
 an accepted period (`Pl.accepts`, which may hold on every path: the record credits whatever prefix was accepted, the
@@ -105,7 +105,7 @@ fixed right and all but `d₀·N_w` folded, `N_w` the declared circuit's words a
 `Λ·ln(1/δ_s)/j + min(a, b)·D₀`. At `n = 1` with every tile live, on a path whose window is accepted, it is
 `CircuitWork` with positions tagged by window `0`.
 
-*Which run, and what is credited.* `Pl.run` is the period's one run. `UnitFixed` bounds its `fixed` and `folded x`
+*Which run, and what is credited.* `Pl.run` is the period's one run. `BlockFixed` bounds its `fixed` and `folded x`
 below by the accepted prefix's good and unskipped words over `n`, so the conclusion is about the prefix's total
 (`n·fixed` against `creditedLive`), and divided by `j` about its mean credited window: not any one window. Windows past
 the prefix count as skipped whole, their words neither credited nor charged, so a failure costs the windows after it,
@@ -167,9 +167,9 @@ period's check.
 run at once on several GPUs are not one period, so a period's windows are one serving stream's, and a fleet runs one
 period per stream: adding GPUs doesn't shorten a period.
 
-*Each window's writers.* `Declared.periodLayer` puts every position's writer in its own window by definition (its
+*Each window's writers.* `RegisteredCircuit.periodLayer` puts every position's writer in its own window by definition (its
 `src` at window `w` names a tile of window `w`, `periodLayer_src` by `rfl`, so a late edge stays in its window,
-`late_one`), and nothing is assumed for it. That a late edge's cone lies in the IR's rests on `Scope`'s `Declared.Wf`
+`late_one`), and nothing is assumed for it. That a late edge's cone lies in the IR's rests on `Scope`'s `RegisteredCircuit.Wf`
 and `LayerCommitted`, the service committing each value it writes by its IR cut, or a computed value only its own
 proof block reads by the draw. A window with one salt, opened before its activations are committed, doesn't meet
 `LayerCommitted`, so it is out of scope.
@@ -200,7 +200,7 @@ total draws `j·K_d` and its load set it, not how it is cut into windows.
 
 `D₀ = 0` is an assumption of these numbers, not a computed fact. `zeroCone` is `0` when no tile of no words reaches
 a tile of words, which COMPILE's `salt-flow` and `noise-in-z` checks are meant to give, and nothing computes
-`zeroCone` of a served circuit until a `Declared` is built from its Program. `DeadConeDead` rests on it too: at
+`zeroCone` of a served circuit until a `RegisteredCircuit` is built from its Program. `DeadConeDead` rests on it too: at
 `D₀ > 0` a tile of no words reaches a tile of words, and in a window where that tile is dead and the tile it reaches is
 live, `DeadConeDead` fails, the premise is false and the statement says nothing. Only where every such tile is live,
 in every window, does a positive `D₀` merely add `D₀/u` to `ε(j)`, a term that doesn't shrink with `j`.
@@ -228,15 +228,15 @@ attribution inside the period (one certificate for the prefix's device interval)
 first failure (no retry, and none dropped); no link between windows beyond each window's inputs, cut where its IR
 cuts them; no period over windows run at once (above); no check that the service's record ran the windows in order
 or kept its periods disjoint (above); nothing of seeded windows (*Live coins only*); and, as `CircuitWork`, nothing
-of a served workload until a `Declared` is built from a compiled Program and `Properties.Compose.UnitsOfLayout` is
+of a served workload until a `RegisteredCircuit` is built from a compiled Program and `Properties.Compose.UnitsOfLayout` is
 proved. -/
 def CircuitWorkPeriod : Prop :=
   ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
-    [Nonempty V] (Sc : Scheme K) (Cd : Declared ι) {n Np Kd : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ Np)
+    [Nonempty V] (Sc : Scheme K) (Cd : RegisteredCircuit ι) {n Np Kd : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ Np)
     (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
     (Wp : Period C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
     (Pl : Play (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n K T L U)
-    (pr : PeriodRun C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V)
+    (pr : Outcomes C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V)
     (folded : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → ℝ) (ρ p p0 a b wmax Λ δs δbind δks : ℝ),
     Scope Sc Cd δs →
     0 < ρ → (∀ t : Fin Np, ρ * Np * shareCone Sc Cd Np t ≤ 1) →
@@ -251,7 +251,7 @@ def CircuitWorkPeriod : Prop :=
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G)) →
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G)) →
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k _ G0 => GuessLuckAt (Sc.guess k) G0)) →
-    UnitFixed Pl (Cd.periodLayer hr hK pr) (periodMode Cd Wp pr) (fun _ t => (tileWords Sc Cd Np t : ℝ)) folded →
+    BlockFixed Pl (Cd.periodLayer hr hK pr) (periodMode Cd Wp pr) (fun _ t => (tileWords Sc Cd Np t : ℝ)) folded →
     prob (fun x => Pl.accepts x ∧
       ¬ LiveWorkAt (creditedLive Sc Cd Wp pr x) (wordsOf Sc Cd : ℝ) a b
         (rOfPrefix Sc Cd Np (pr.prefixLen x) a b Λ δs) (n * (Pl.run x).fixed) (n * folded x)) ≤
@@ -260,7 +260,7 @@ def CircuitWorkPeriod : Prop :=
 /-- **(L)'s credit in live words over a monitoring period's accepted prefix, live coins.** Under `CircuitWorkPeriod`'s
 premises with `a, b > 0`, an accepted period has at least its credit `(1 − ε(j))₊·N_live` (`creditPrefix`) of its
 prefix's live words fixed right (`n·fixed`), `N_live` the prefix's live words (`creditedLive`) and
-`ε(j) = r(j)·N_w/(min(a, b)·N_live)` at the realized prefix `j = PeriodRun.prefixLen` (`epsPrefix`), except with
+`ε(j) = r(j)·N_w/(min(a, b)·N_live)` at the realized prefix `j = Outcomes.prefixLen` (`epsPrefix`), except with
 probability `δ_s + n·(δ_bind + δ_ks)`. So a period may be credited `(1 − ε(j))₊` of its prefix's live words, and a
 prefix's deficit is at most what the discount takes. `ε` is read at the prefix the period realized, never at its cap
 `n`: a short prefix, whose `ε` is at least `1`, earns nothing, and where the prefix ends, which the cheater may steer,
@@ -277,11 +277,11 @@ words' `T_cred`, needs `CreditOfWork` on each credited window's run, which the p
 is not stated. Everything `CircuitWorkPeriod` doesn't say, this doesn't either. -/
 def CircuitCreditPeriod : Prop :=
   ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
-    [Nonempty V] (Sc : Scheme K) (Cd : Declared ι) {n Np Kd : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ Np)
+    [Nonempty V] (Sc : Scheme K) (Cd : RegisteredCircuit ι) {n Np Kd : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ Np)
     (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
     (Wp : Period C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
     (Pl : Play (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n K T L U)
-    (pr : PeriodRun C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V)
+    (pr : Outcomes C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V)
     (folded : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → ℝ) (ρ p p0 a b wmax Λ δs δbind δks : ℝ),
     Scope Sc Cd δs →
     0 < ρ → (∀ t : Fin Np, ρ * Np * shareCone Sc Cd Np t ≤ 1) →
@@ -296,7 +296,7 @@ def CircuitCreditPeriod : Prop :=
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G)) →
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G)) →
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k _ G0 => GuessLuckAt (Sc.guess k) G0)) →
-    UnitFixed Pl (Cd.periodLayer hr hK pr) (periodMode Cd Wp pr) (fun _ t => (tileWords Sc Cd Np t : ℝ)) folded →
+    BlockFixed Pl (Cd.periodLayer hr hK pr) (periodMode Cd Wp pr) (fun _ t => (tileWords Sc Cd Np t : ℝ)) folded →
     prob (fun x => Pl.accepts x ∧ n * (Pl.run x).fixed <
       creditPrefix Sc Cd Np (pr.prefixLen x) (creditedLive Sc Cd Wp pr x) a b Λ δs) ≤ δs + n * (δbind + δks)
 

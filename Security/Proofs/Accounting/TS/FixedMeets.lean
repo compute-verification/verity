@@ -4,7 +4,7 @@ import Definitions.Accounting.Guarantees.TS.Fixed
 /-!
 # An honest run meets option A's hypotheses (non-vacuity)
 
-The witness Rule I asks of `Accounting.Guarantees.TS.UnitFixedOfWords` and `Accounting.Guarantees.TS.AdditiveFixed`:
+The witness Rule I asks of `Accounting.Guarantees.TS.BlockFixedOfWords` and `Accounting.Guarantees.TS.AdditiveFixed`:
 an honest word layer, with a K-chunk running sum and a glue, that meets every hypothesis of both statements.
 
 One round (`S = 1`) with one coin bit (`m = 1`, `C = Bool`), a draw bit (`B = Bool`) and four units, four draws a round
@@ -383,11 +383,11 @@ theorem tot_pos : 0 < ftot := by
       (Finset.mem_univ 0)
   linarith
 
-/-- **`UnitFixedOfWords`'s hypotheses hold of an honest run** with a K-chunk running sum and a sampled glue: nonnegative
+/-- **`BlockFixedOfWords`'s hypotheses hold of an honest run** with a K-chunk running sum and a sampled glue: nonnegative
 weights, positive in total, every credited unit fixed, the modes the run's, the labelling counting fixed words, every
 writer reading what it writes, every path accepted and every unit good, `chunk0` steering `prod` through a late
 multiplicative operand, and `glue`, which writes it, sampled and priced, not always proved. -/
-theorem unitFixedOfWords_meets :
+theorem blockFixedOfWords_meets :
     (∀ w j, 0 ≤ fwt w j) ∧ 0 < ftot ∧ (∀ w j, fwt w j ≠ 0 → fpf.Fixed fwt (w, j)) ∧ ModesRun fpf fmode ∧
       CountsFixed fPlay fpf fwt ffolded ∧ fpf.WriterReads ∧ (∀ x, fPlay.accepts x) ∧
       (∀ x w j, fpf.Good fmode x w j) ∧ (∀ x u, fpf.FixedWords fwt x u) ∧ fpf.Steers (0, 0) (0, 3) ∧

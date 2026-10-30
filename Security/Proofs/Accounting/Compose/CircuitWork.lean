@@ -13,10 +13,10 @@ import Proofs.Accounting.Headline.Luck
   `a·S_F + b·S_0 ≥ Λ·ln(1/δ_s)` by `δ_s` (`S_F`, `S_0` the folded and whole shares at `shareCone`), and
   `DrawnRightOff` gives one event of probability `δ_bind + δ_ks` off which every accepted drawn tile is right, so `Of`
   gives the play's ideal game's pass, which is the share game's.
-* **The words** (`work_of_bounds`): off both, `UnitFixed` and `ServiceCovers` give the good tiles' words at least
+* **The words** (`work_of_bounds`): off both, `BlockFixed` and `ServiceCovers` give the good tiles' words at least
   `(1 − (c_F + c₀))·N_w`, `c_F`, `c₀` the folded and whole shares at `tileCone`, and the words not skipped whole at
   least `(1 − S_0)·N_w`, since a tile's words are at most `N_w` times its `shareCone`; `Σ_t tileWords ≥ N_w`
-  (`wordsOf_le_sum`: each credited word is in its unit's tile, under `Declared.Wf` and `units ≤ N_p`). `c_F + c₀` is
+  (`wordsOf_le_sum`: each credited word is in its unit's tile, under `RegisteredCircuit.Wf` and `units ≤ N_p`). `c_F + c₀` is
   `S_F + S_0` plus the cones `Z_F + Z_0 ≤ D₀` of tiles of no words, which `WorkAt` takes in the cheaper share
   (`workAt_of`).
 -/
@@ -48,7 +48,7 @@ theorem tileLuck_of {C V : Type} [Fintype C] (mode : C → V → Mode) (right sa
     _ = q * prob (fun c => mode c t = s) := congrArg (fun P : C → Prop => q * prob P) hf
 
 /-- **The four claims give the stages' luck** at `tileLuck` folded and `tileLuck0` whole. -/
-theorem luckAt_of_perTile {ι K C : Type} [Fintype C] (Sc : Scheme K) (Cd : Declared ι) {Np : ℕ}
+theorem luckAt_of_perTile {ι K C : Type} [Fintype C] (Sc : Scheme K) (Cd : RegisteredCircuit ι) {Np : ℕ}
     (hLP : Sc.LuckProved) : ∀ {M : ℕ} (W : SplitStages C (Fin Np) M),
     PerTile Sc Cd W (fun k G _ => OperandHMu (Sc.mu k) G) →
     PerTile Sc Cd W (fun k G _ => ReceiptLuckAt (Sc.rB k) G) →
@@ -115,7 +115,7 @@ theorem length_le_sum {Np : ℕ} (f : ℕ → ℕ) (q : ℕ → Bool) : ∀ M : 
         exact Nat.lt_add_one _
       omega
 
-theorem wordsOf_le_sum {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) {Np : ℕ} (hw : Cd.Wf)
+theorem wordsOf_le_sum {ι K : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) {Np : ℕ} (hw : Cd.Wf)
     (hN : Cd.units ≤ Np) : (wordsOf Sc Cd : ℝ) ≤ ∑ t : Fin Np, (tileWords Sc Cd Np t : ℝ) := by
   rw [← Nat.cast_sum]
   exact Nat.cast_le.mpr (length_le_sum Cd.unit (fun i => Sc.credited (kindAt Cd i)) (wordGates Cd)
@@ -123,7 +123,7 @@ theorem wordsOf_le_sum {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) {Np : �
 
 section Cones
 
-variable {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np : ℕ)
+variable {ι K : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) (Np : ℕ)
 
 theorem tileWeight_nonneg (t : Fin Np) : 0 ≤ tileWeight Sc Cd Np t :=
   div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)
@@ -256,9 +256,9 @@ theorem workAt_of {Nw a b Λl D0 fixed fd SF S0 ZF Z0 D : ℝ} (ha : 0 ≤ a) (h
     rw [min_eq_right hab]
     linarith
 
-/-- **One accepted run's work**, at its modes `md` and its good tiles `good`, from `Covers`, `UnitFixed` at the
+/-- **One accepted run's work**, at its modes `md` and its good tiles `good`, from `Covers`, `BlockFixed` at the
 tiles' words and the two games' deficiencies. -/
-theorem work_of_bounds {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) {Np : ℕ} (md : Fin Np → Mode)
+theorem work_of_bounds {ι K : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) {Np : ℕ} (md : Fin Np → Mode)
     (good : Fin Np → Prop) [DecidablePred good] {a b Λl D fixed fd : ℝ} (ha : 0 ≤ a) (hb : 0 ≤ b)
     (hN : (wordsOf Sc Cd : ℝ) ≤ ∑ j, (tileWords Sc Cd Np j : ℝ))
     (hD : D = 1 * (∑ u, if md u = .folded then tileCone Sc Cd Np u else 0) +
@@ -282,7 +282,7 @@ theorem work_of_bounds {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) {Np : �
 
 section Layer
 
-variable {ι C Ξ V : Type} (Cd : Declared ι) {Np Kd : ℕ} (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
+variable {ι C Ξ V : Type} (Cd : RegisteredCircuit ι) {Np Kd : ℕ} (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
   (pr : ProofRun C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np V)
 
 theorem pos_of_mem (w : Fin 1) (t : Fin Np) (ℓ : ℕ) (h : ℓ ∈ Cd.slots t.val) :

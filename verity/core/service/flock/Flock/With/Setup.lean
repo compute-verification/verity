@@ -70,10 +70,10 @@ def CircuitType.digestWith (hs : Hashes M) (t : CircuitType) : M String := do
   let s ← canon t.toJson
   return hexOf (← hs.sha512 (CircuitType.FORMAT.toUTF8 ++ ByteArray.mk #[0] ++ s.toUTF8))
 
-/-- `Layout.digest` through the oracle. -/
-def Layout.digestWith (hs : Hashes M) (l : Layout) : M String := do
+/-- `BlockLayout.digest` through the oracle. -/
+def BlockLayout.digestWith (hs : Hashes M) (l : BlockLayout) : M String := do
   let s ← canon l.record
-  return hexOf (← hs.sha512 (Layout.FORMAT.toUTF8 ++ ByteArray.mk #[0] ++ s.toUTF8))
+  return hexOf (← hs.sha512 (BlockLayout.FORMAT.toUTF8 ++ ByteArray.mk #[0] ++ s.toUTF8))
 
 namespace Typed
 
@@ -91,7 +91,7 @@ def holdWith (types : Array (String × CircuitType)) (tables : List (String × B
       if bytes.size != 4 * 2 ^ lt.indexBits || Pinned.tableSha bytes != sha then
         throw s!"table {lt.name}: its words are not the table its SHA-512 names"
       let words := (Array.range (bytes.size / 4)).map fun i => rd32 bytes (4 * i)
-      out := out.push ⟨sha, bytes, words, Layout.tableInfo words⟩
+      out := out.push ⟨sha, bytes, words, BlockLayout.tableInfo words⟩
   return out
 
 /-- `classOf` through the oracle. -/
@@ -108,11 +108,11 @@ def classOfWith (hs : Hashes M) (mj : Json) (tables : List (String × ByteArray)
     if let .error e := CircuitType.check (typeIn types) t then throw s!"META: type {d.take 16}… breaks the rule '{e}'"
   let held ← holdWith types tables
   let ls ← (← J.arr mj "layouts" ctx).mapM fun r => do
-    let l ← Layout.ofJson r
+    let l ← BlockLayout.ofJson r
     if (← J.str r "sha512" ctx) != (← l.digestWith hs) then throw s!"{ctx}: a layout's sha512 is not its record's digest"
     pure l
   let unit ← J.nat mj "unit_layout" ctx
-  if let .error e := Layout.check (typeIn types) ls unit (infoIn held) then throw s!"META: the layouts break the rule '{e}'"
+  if let .error e := BlockLayout.check (typeIn types) ls unit (infoIn held) then throw s!"META: the layouts break the rule '{e}'"
   let some ul := ls[unit]? | throw "META: unit_layout names no layout"
   let some ut := ul.type | throw "META: the unit's layout names no type"
   if (← J.str mj "unit_type" ctx) != ut then throw "META: unit_type is not the unit's layout's type"
@@ -126,7 +126,7 @@ def classOfWith (hs : Hashes M) (mj : Json) (tables : List (String × ByteArray)
   | .error e => throw s!"META: the unit's rows: {e}"
 
 /-- `templateOf` through the oracle. -/
-def templateOfWith (hs : Hashes M) (name : String) (done : Array DeriveAll.D) (ls : Array Layout) (unit : Nat)
+def templateOfWith (hs : Hashes M) (name : String) (done : Array DeriveAll.D) (ls : Array BlockLayout) (unit : Nat)
     (t : CircuitType) (held : Array Held) : M Template := do
   let u := done.getD unit default
   if u.reads.any (·.prod0 < u.size) then
@@ -282,14 +282,14 @@ def parseRest (tags : Tags) (tables : List (String × ByteArray)) (tmpl : Option
     if a.size != 2 then throw "META: an out port is not [name, words]"
     pure (← J.asStr a[0]! "out port name", ← J.asNat a[1]! "out port words")
   let outRowPorts ← match mj.getObjVal? "out_row_ports" with
-    | .error _ => pure (Array.replicate outPorts.size 1)
+    | .error _ => pure (Array.replicate (outPorts.size - HmRow.pinnedCount mj) 1)
     | .ok v => do
       let bad := "META: out_row_ports is not each output row's run of output ports, in order, covering every output port once"
       let r ← (← J.asArr v "out_row_ports").mapM fun x => do
         let k ← J.asNat x "out_row_ports"
         if k < 1 || k > outPorts.size then throw bad
         pure k
-      if r.foldl (· + ·) 0 != outPorts.size then throw bad
+      if r.foldl (· + ·) 0 != outPorts.size - HmRow.pinnedCount mj then throw bad
       pure r
   let mut perVu := (Array.replicate nets.size 0).set! unitNet upv
   match mj.getObjVal? "per_vu" with
@@ -697,7 +697,8 @@ open HmRow
 
 /-- `HmOut.parse` through the oracle. -/
 def parseWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) :
-    M Circuit := do
+    M Circuit :=
+  if tags.isTmpl then throw s!"{tags.name}: a templated statement's circuit is read from its template" else do
   let c ← if !tags.typed then HmRow.parseWith hs tags bytes tables else do
     let (k, r) ← Typed.readWith hs tags bytes tables
     match r with
@@ -707,6 +708,28 @@ def parseWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (
     | .inl unit => pure { (← HmRow.parseWith hs tags bytes tables (pre := #[("unit", unit)])) with cls := some k }
   checkRows c
   return c
+
+/-- `HmOut.parseTmpl` through the oracle. -/
+def parseTmplWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) :
+    M Circuit := do
+  let mj ← metaOf bytes
+  let ctx := "templated statement META"
+  let lines ← (← J.arr mj "template" ctx).mapM fun x => J.asStr x "template line"
+  let some mode := Tmpl.modeOf (← J.str mj "layout" ctx)
+    | throw "META: layout is not a layout mode (iv, iv/strict, iv/hybrid, iv/hybrid/T)"
+  let tu ← TmplUnit.read (← Tmpl.parse lines) mode
+  let c ← HmRow.parseWith hs tags bytes tables (pre := #[("unit", tu.net)])
+  if (c.nets.extract 1 c.nets.size).any (fun x => x.1 == "unit" || x.1 == "root") then
+    throw "circuit: a templated statement carries no unit rows; the verifier reads them from its template"
+  if HmOut.recUnit tu.net.name then
+    throw s!"circuit: a templated statement's unit {tu.net.name} is a recursion unit, which is read flat"
+  checkRows c
+  return { c with tmpl := some tu }
+
+/-- `HmOut.parseCommit` through the oracle. -/
+def parseCommitWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) :
+    M Circuit :=
+  if tags.isTmpl then parseTmplWith hs tags bytes tables else parseWith hs tags bytes tables
 
 /-- `HmOut.checkPublic` through the oracle. -/
 def checkPublicWith (hs : Hashes M) (c : Circuit) (pub : Public) : M Unit := do
@@ -815,7 +838,7 @@ end HmLinks
 def Stmt.setupHiddenWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins)
     (tables : List (String × ByteArray) := []) (draw : Option Json := none) (partition : Option Json := none)
     (program : Option ByteArray := none) (publicInputs : Option ByteArray := none) : M Stmt := do
-  let c ← HmOut.parseWith hs tags circuitFile tables
+  let c ← HmOut.parseCommitWith hs tags circuitFile tables
   let pi ← HmIn.parse c
   let finding0 ← if tags.bindings then (some <$> HmRow.checkPartitionWith hs c partition)
     else if partition.isSome then throw s!"{tags.name}: the statement binds no partition" else pure none
@@ -863,6 +886,7 @@ def Stmt.setupHiddenWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
     (c.ports.getD (c.ports.size - c.outRowPorts.size + j) default).segs.isNone && c.outRowPorts[j]! > 1
   let identity := if !J.has c.metaJ "out_row_ports" then identity
     else if v2Run then Tags.outRowsV2Identity identity else Tags.outRowsIdentity identity
+  let identity := if HmRow.pinnedCount c.metaJ > 0 then Tags.pinnedIdentity identity else identity
   let mut h := tags.statement.toUTF8 ++ c.sha ++ (← canon identity).toUTF8
   for x in [n, blocksReal, nbl, m, c.kLog, pin, regions.size, c.g] do h := pushLe64 h x
   for d in [da, db] do
@@ -911,7 +935,10 @@ def Stmt.setupTablesWith (hs : Hashes M) (tags : Tags) (circuitFile publicFile :
   if publicInputs.isSome && !tags.hiddenOutputs then
     throw s!"--public-inputs: a {tags.name} statement has no public input ports (only a statement with hidden outputs has them)"
   let setup := fun (t : Tags) (d : Option Json) => do
-    if tags.hiddenOutputs then Stmt.setupHiddenWith hs t circuitFile publicFile coins tables d partition program publicInputs
+    if tags.hiddenOutputs then
+      let st ← Stmt.setupHiddenWith hs t circuitFile publicFile coins tables d partition program publicInputs
+      if HmRow.pinnedCount st.c.metaJ != 0 then throw s!"{tags.name}: refused: {HmRow.pinnedWhy}"
+      pure st
     else
       let st ← Stmt.setupHWith hs t circuitFile publicFile coins tables d partition program
       if J.has st.c.metaJ "public_inputs" || J.has st.c.metaJ "shared_reads" then

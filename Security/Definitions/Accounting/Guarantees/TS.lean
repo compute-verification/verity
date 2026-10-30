@@ -18,7 +18,7 @@ each `def G : Prop`, proved (or a `sorry` stub) as
 * `DrawnRightOff`: a sampled window's drawn units are right at their committed values outside `S·(δ_bind + δ_ks)`, from
   binding at every position's cut, joint proof soundness and pinning; `ProofsSoundOfDrawn`: (I8) at `n_π = 1`,
   `δ_ZK = δ_ks`, from it, the share covering every unit that isn't good (a unit whose late cone the run computed, drawn
-  at each unit's coin), and E1(c) per unit with its fold clause (`UnitFixed`); `DrawnBindingOfFork`: a round's binding
+  at each unit's coin), and E1(c) per unit with its fold clause (`BlockFixed`); `DrawnBindingOfFork`: a round's binding
   failure squared is at most `|L|²` times the fork form at its positions' cuts, `L` the positions its units read, so
   `δ_bind = |L|·√δ_fork`.
 * `FloorCreditD3`: Corollary D3, the credit at the floor, with every term `≥ 0` and `T(H) = γ_♭·T_cred`.
@@ -236,7 +236,7 @@ every drawn unit's proof is, and accepted by the ideal game when every drawn uni
 unit weights `wt` summing to the window's words `S·N_w`, the run's modes `mode` and folded words `folded`, a share
 that counts every unit that isn't good (`Covers`: good is the run having computed the unit's late cone; a property of
 the share's definition, proved for each game; a share charging each unit the run didn't pay for its late cone's weight
-`coneWt` has it) and E1(c) per unit with its fold clause (`UnitFixed`): if binding, joint soundness and pinning hold as
+`coneWt` has it) and E1(c) per unit with its fold clause (`BlockFixed`): if binding, joint soundness and pinning hold as
 in `DrawnRightOff`, then (I8) `ProofsSound` holds at `n_π = 1`, `δ_ZK = δ_ks`, `S·(δ_bind + δ_ks)`. Its event is
 `DrawnRightOff`'s, so an undrawn unit's values enter only through the ideal game and the share. -/
 def ProofsSoundOfDrawn : Prop :=
@@ -245,7 +245,7 @@ def ProofsSoundOfDrawn : Prop :=
     (pf : DrawnLayer C B S m s J Q Pos V) (mode : Paths (Paths C m × B) S → Fin S × J → Mode)
     (wt : Fin S → J → ℝ) (folded : Paths (Paths C m × B) S → ℝ) (Nw δbind δks : ℝ),
     0 < S → ∑ w, ∑ j, wt w j = S * Nw → pf.WriterReads → pf.Of P → pf.BindingAt δbind →
-    pf.JointSound δks → pf.Pins → pf.Covers P mode wt Nw → UnitFixed P pf mode wt folded →
+    pf.JointSound δks → pf.Pins → pf.Covers P mode wt Nw → BlockFixed P pf mode wt folded →
       ProofsSound P Nw δbind δks 1
 
 /-- **Binding from the fork form, at every position's cut.** For a sampled window's proofs, a round `w` and a set `L` of

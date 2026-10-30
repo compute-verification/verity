@@ -13,7 +13,7 @@ gate `t + 2` and word `t` its one bit. No other protocol credits a gate (the led
 size is `1` (`Verity.SecurityProofs.ToCircuitAnd`: C-Flock's `and a b` of two distinct gates is an AND gate).
 
 * `right_values_honest`: the honest period meets every premise of `RightValues`, `j10r_meets`' without
-  `UnitFixed`, so the guarantee's bound holds there. The premises are conditional on `Credit.window`'s verdict on the
+  `BlockFixed`, so the guarantee's bound holds there. The premises are conditional on `Credit.window`'s verdict on the
   windows' inputs, as `j10r_meets` is (`hacc`, `hsalt`, `hdraw`).
 * `right_values_nontrivial`: the conclusion fails when the verifier accepts everything. With every window credited
   (`hacc`), every block live and the play accepted, a prover that skips every block whole has no right block, while
@@ -110,11 +110,11 @@ theorem size_blocks {N : ℕ} (t : Fin N) : (blocks N).size ∅ t = 1 := by
 section Witnesses
 
 variable {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB)
-  (unitOf : Fin nB → ℕ) (regOf : Bool → Registered)
+  (unitOf : Fin nB → ℕ) (regOf : Bool → PreDraw)
   (evOf : Bool → Equiv.Perm (Fin (tileCount σ sT)) × Unit → Answered) (enc : Bool → ByteArray)
 
 /-- **`RightValues`'s bound at the honest J10-R period**: `j10r_meets` gives every
-premise but `UnitFixed`, which the guarantee doesn't take, at `N_p` one-word blocks, one round, `ρ = 1`, any
+premise but `BlockFixed`, which the guarantee doesn't take, at `N_p` one-word blocks, one round, `ρ = 1`, any
 `δ_s > 0` and `δ_bind = δ_ks = 0`. -/
 theorem right_values_honest (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β))
     (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)
@@ -173,13 +173,13 @@ theorem stages_skipPeriod {Ω : Type} {N : ℕ} :
     · exact stages_skipPeriod n x.2 w'
 
 /-- **No block of the skipping period is paid.** -/
-theorem skip_not_paid {B V : Type} {s N n : ℕ} (pr : PeriodRun Bool B (circuit N).rounds s N n V)
+theorem skip_not_paid {B V : Type} {s N n : ℕ} (pr : Outcomes Bool B (circuit N).rounds s N n V)
     (x : Paths (Paths Bool (circuit N).rounds × B) n) (u : Fin n × Fin N) :
     periodMode (circuit N) (skipPeriod _ N n) pr x u ≠ .paid := by
   unfold periodMode
   split_ifs
   · rw [stages_skipPeriod]
-    simp [skipStages, SplitStages.joint, SplitStages.modeAt, tileStage, Declared.stageOf, circuit]
+    simp [skipStages, SplitStages.joint, SplitStages.modeAt, tileStage, RegisteredCircuit.stageOf, circuit]
   · decide
 
 theorem paths_nonempty {Ω : Type} [h : Nonempty Ω] : ∀ n, Nonempty (Paths Ω n)
@@ -196,7 +196,7 @@ theorem sizePerWord_blocks {N : ℕ} (hN : 0 < N) :
   simp only [tileWords_eq, size_blocks, one_ne_zero, if_false, Nat.cast_one, div_one, ciSup_const]
 
 /-- **No right block, no right size.** -/
-theorem rightSize_none {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ} (sz : Fin Np → ℕ)
+theorem rightSize_none {ι K : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) {Np n : ℕ} (sz : Fin Np → ℕ)
     (good : Fin n → Fin Np → Prop) (h : ∀ w t, ¬ good w t) : rightSize Sc Cd sz good = 0 :=
   Finset.sum_eq_zero fun w _ => Finset.sum_eq_zero fun t _ => if_neg fun h' => h w t h'.1
 
@@ -216,7 +216,7 @@ theorem credit_pos {σ ε S : ℝ} (hS : 0 < S) (hσ : σ = 1) (hε : ε < 1) : 
 section Witnesses
 
 variable {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB)
-  (unitOf : Fin nB → ℕ) (regOf : Bool → Registered)
+  (unitOf : Fin nB → ℕ) (regOf : Bool → PreDraw)
   (evOf : Bool → Equiv.Perm (Fin (tileCount σ sT)) × Unit → Answered) (enc : Bool → ByteArray)
 
 /-- **The skipping period's live words are `N·n`** when every window is credited. -/

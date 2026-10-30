@@ -28,13 +28,13 @@ import Proofs.Accounting.BandwidthAudit
 import Proofs.Accounting.RateAudit
 import Proofs.Accounting.BoundReceipt
 import Proofs.Accounting.Capacity
-import Proofs.Accounting.DeclaredCircuit
-import Proofs.Accounting.DeclaredCircuit.Tiles
-import Proofs.Accounting.DeclaredCircuit.Credit
-import Proofs.Accounting.DeclaredCircuit.Slack
-import Proofs.Accounting.DeclaredCircuit.Session
-import Proofs.Accounting.DeclaredCircuit.Requirement
-import Proofs.Accounting.DeclaredCircuit.Scheduled
+import Proofs.Accounting.RegisteredCircuit
+import Proofs.Accounting.RegisteredCircuit.Tiles
+import Proofs.Accounting.RegisteredCircuit.Credit
+import Proofs.Accounting.RegisteredCircuit.Slack
+import Proofs.Accounting.RegisteredCircuit.Session
+import Proofs.Accounting.RegisteredCircuit.Requirement
+import Proofs.Accounting.RegisteredCircuit.Scheduled
 import Proofs.Accounting.Remote
 import Proofs.Accounting.PerRunTruncation
 import Proofs.Accounting.PerRunPouw
@@ -46,18 +46,19 @@ import Proofs.Accounting.RemoteHeld
 import Proofs.Accounting.RemoteHeld.Meets
 import Proofs.Accounting.RemoteHeld.OverTime
 import Proofs.Accounting.RemoteHeld.Draw
+import Proofs.Accounting.RemoteHeld.DrawMeets
 import Proofs.Accounting.RemoteHeld.Binding
 import Proofs.Accounting.RemoteHeld.Sketch
 import Proofs.Accounting.RemoteHeld.SketchLine
 import Proofs.Accounting.RemoteHeld.SketchP2
 import Proofs.Accounting.RemoteHeld.Line
-import Proofs.Accounting.RemoteHeld.Component
+import Proofs.Accounting.RemoteHeld.Subprotocol
 import Proofs.Accounting.Requirement
 import Proofs.Accounting.RequirementPouw
 import Proofs.Accounting.Sanity
 import Proofs.Accounting.Stacking
-import Proofs.Accounting.DeclaredCircuit.Witness
-import Proofs.Accounting.DeclaredCircuit.WitnessPrefill
+import Proofs.Accounting.RegisteredCircuit.Witness
+import Proofs.Accounting.RegisteredCircuit.WitnessPrefill
 import Proofs.Accounting.Tag
 import Proofs.Accounting.TS
 import Proofs.Accounting.TS.Stages
@@ -85,6 +86,7 @@ import Proofs.Pouw.H1Zy.Stream
 import Proofs.Accounting.TS.HeldSound
 import Proofs.Accounting.TS.Session.Tile.Computes
 import Proofs.Accounting.TS.TileSound
+import Proofs.Accounting.TS.PeriodSound
 import Proofs.Accounting.Actual
 import Proofs.Accounting.Responder
 import Proofs.Accounting.Responder.Latency
@@ -94,5 +96,8 @@ import Proofs.Accounting.Compose
 import Proofs.Accounting.ComposePeriod
 import Proofs.Accounting.ComposePeriod.Honest
 import Proofs.Accounting.Served
+import Proofs.Accounting.ServingBlocks
+import Proofs.Accounting.ServingBlocks.Witnesses
+import Proofs.Accounting.Coverage
 
 /-! `Proofs.Accounting`: the proofs of resource accounting's guarantees. -/

@@ -1,5 +1,5 @@
 import Definitions.Population.ChiPool
-import Proofs.Population.DrawPressure
+import Proofs.Population.SamplePressure
 
 /-!
 # The cheating pool with the verdict lag: harm through the halt
@@ -11,10 +11,10 @@ commitment, so a cheater does harm in those `Δ` windows as well. `tail_cum` alo
   every window leaks at most `ℓ`. With `Δ = 0` it is `cum` (`cumLag_zero`).
 * `tail_cumLag`: under detection pressure `κ` the probability that what leaves through the halt reaches `x` is at most
   `exp (-κ (x - (1 + Δ) ℓ))`, for every adaptive strategy and every horizon.
-* `draw_tail_cumLag`, **the cheating pool under the deployed draw**: `k` of the `n` units drawn without replacement
-  (`drawPressure`, `κ = k/n`). With probability at least `1 - δ` the harm through the halt is below
+* `sample_tail_cumLag`, **the cheating pool under the deployed draw**: `k` of the `n` units drawn without replacement
+  (`samplePressure`, `κ = k/n`). With probability at least `1 - δ` the harm through the halt is below
   `(1 + Δ) ℓ + (n/k) ln (1/δ)`.
-* `ex_cumUpToLag`, `draw_ex_cumUpToLag`, **the rate form**: through the halt the `j`-th detection triggers, at most
+* `ex_cumUpToLag`, `sample_ex_cumUpToLag`, **the rate form**: through the halt the `j`-th detection triggers, at most
   `j (ℓ + 1/κ) + Δ ℓ` leaves on average, which is `j (ℓ + n/k) + Δ ℓ` under the deployed draw.
 -/
 
@@ -114,20 +114,20 @@ theorem ex_cumUpToLag [Fintype Ω] [DecidableEq Ω] {μ : Ω → ℝ} (hμ : IsD
     _ = Δ * ℓ + ex μ n (A.cumUpTo n j h) := ex_add_const hμ _ _
     _ ≤ j * (ℓ + 1 / κ) + Δ * ℓ := by linarith [ex_cumUpTo hμ hκ hP hL n j h]
 
-/-- **The cheating pool under the deployed draw**: `0 < k ≤ n`, each window as in `drawPressure` and leaking at most
+/-- **The cheating pool under the deployed draw**: `0 < k ≤ n`, each window as in `samplePressure` and leaking at most
 `ℓ`, and the halt `Δ` windows after the first caught window's commitment. With probability at least `1 - δ` the harm
 through the halt is below `(1 + Δ) ℓ + (n/k) ln (1/δ)`, for every adaptive strategy, every horizon `N` and every
 history `h`. -/
-theorem draw_tail_cumLag {n k : ℕ} (hk : 0 < k) (hkn : k ≤ n) {A : Strategy (Draw n k)}
+theorem sample_tail_cumLag {n k : ℕ} (hk : 0 < k) (hkn : k ≤ n) {A : Strategy (Draw n k)}
     (B : List (Draw n k) → Finset (Fin n)) (w : Fin n → ℝ) (hw : ∀ u, w u ≤ 1)
     (hesc : ∀ h, A.esc h ⊆ missing n k (B h)) (hleak : ∀ h, A.leak h ≤ ∑ u ∈ B h, w u) {ℓ : ℝ}
     (hL : LeakBounded ℓ A) {δ : ℝ} (hδ : 0 < δ) (Δ N : ℕ) (h : List (Draw n k)) :
-    1 - δ ≤ prob (uniformDraw n k) N (fun cs => A.cumLag Δ N h cs < (1 + Δ) * ℓ + n / k * Real.log (1 / δ)) := by
-  have hμ := uniformDraw_isDist hkn
+    1 - δ ≤ prob (uniformSample n k) N (fun cs => A.cumLag Δ N h cs < (1 + Δ) * ℓ + n / k * Real.log (1 / δ)) := by
+  have hμ := uniformSample_isDist hkn
   have hkR : (0 : ℝ) < k := by exact_mod_cast hk
   have hnR : (0 : ℝ) < n := by exact_mod_cast hk.trans_le hkn
   set x := (1 + (Δ : ℝ)) * ℓ + n / k * Real.log (1 / δ)
-  have ht := tail_cumLag hμ (by positivity) (drawPressure B w hw hesc hleak) hL Δ N h x
+  have ht := tail_cumLag hμ (by positivity) (samplePressure B w hw hesc hleak) hL Δ N h x
   have e : Real.exp (-((k : ℝ) / n * (x - (1 + Δ) * ℓ))) = δ := by
     rw [show (k : ℝ) / n * (x - (1 + Δ) * ℓ) = Real.log (1 / δ) by simp only [x]; field_simp; ring, one_div,
       Real.log_inv, neg_neg, Real.exp_log hδ]
@@ -136,14 +136,14 @@ theorem draw_tail_cumLag {n k : ℕ} (hk : 0 < k) (hkn : k ≤ n) {A : Strategy 
 
 /-- **The rate form under the deployed draw**: through the halt the `j`-th detection triggers, `Δ` windows after it, at
 most `j (ℓ + n/k) + Δ ℓ` leaves on average. -/
-theorem draw_ex_cumUpToLag {n k : ℕ} (hk : 0 < k) (hkn : k ≤ n) {A : Strategy (Draw n k)}
+theorem sample_ex_cumUpToLag {n k : ℕ} (hk : 0 < k) (hkn : k ≤ n) {A : Strategy (Draw n k)}
     (B : List (Draw n k) → Finset (Fin n)) (w : Fin n → ℝ) (hw : ∀ u, w u ≤ 1)
     (hesc : ∀ h, A.esc h ⊆ missing n k (B h)) (hleak : ∀ h, A.leak h ≤ ∑ u ∈ B h, w u) {ℓ : ℝ}
     (hL : LeakBounded ℓ A) (Δ N j : ℕ) (h : List (Draw n k)) :
-    ex (uniformDraw n k) N (A.cumUpToLag Δ N j h) ≤ j * (ℓ + n / k) + Δ * ℓ := by
+    ex (uniformSample n k) N (A.cumUpToLag Δ N j h) ≤ j * (ℓ + n / k) + Δ * ℓ := by
   have hkR : (0 : ℝ) < k := by exact_mod_cast hk
   have hnR : (0 : ℝ) < n := by exact_mod_cast hk.trans_le hkn
-  have := ex_cumUpToLag (uniformDraw_isDist hkn) (by positivity : (0 : ℝ) < k / n) (drawPressure B w hw hesc hleak)
+  have := ex_cumUpToLag (uniformSample_isDist hkn) (by positivity : (0 : ℝ) < k / n) (samplePressure B w hw hesc hleak)
     hL Δ N j h
   rwa [one_div_div] at this
 

@@ -1,5 +1,5 @@
 import Definitions.Accounting.Remote.Held
-import Definitions.Accounting.Remote.Draw
+import Definitions.Accounting.Remote.Sample
 import RemoteAudit.Session
 import RemoteAudit.Shared
 import RemoteAudit.Line
@@ -27,11 +27,11 @@ What a gate run's memory line (`RemoteAudit.Line.lineOfRecordAt`) reads of one s
   `Record.groups` and `Record.receipts` are its groups, one a window, and its draws' receipts.
 * `Record.reached`: the state the record's session reaches in the Lean verifier, its run's last or the one before the
   first event that throws; `Record.receiptsAt` its windows' receipts and `Record.drawReceiptsAt` its draws'.
-* `recordDraw`: the record's opening draw (`Accounting.Remote.Draw.Session`), one draw for each of the session's
+* `recordDraw`: the record's opening draw (`Accounting.Remote.Sample.Session`), one draw for each of the session's
   (`Node.draws`), draw `c`'s size at `ω` its receipts in the state the record reaches at `ω`, at most `receiptMax`
   (`2^64 − 1`, the verifier's `RECEIPT_LIMIT` less one). It reads the reached state rather than the record's summary so
   that `Live`, a draw's size fixed by the coins before it, can hold of a session whose acceptance turns on later coins.
-* `recordCommitted`: the prover's records read through the coin commitment (`Accounting.Remote.Draw.Committed`):
+* `recordCommitted`: the prover's records read through the coin commitment (`Accounting.Remote.Sample.Committed`):
   holding commitment `c` its record at `ω` is `recs c ω`, and the session it plays is that record's `recordDraw`;
   `played` is the record of outcome `ω`, the prover's holding the deployed commitment `com ω`.
 * `ofRecord`: a trace over the registration's blocks (`overBlocks`) with the Lean verifier's verdict on the record as
@@ -183,9 +183,9 @@ def receiptMax : ℕ := RemoteAudit.Session.RECEIPT_LIMIT - 1
 /-- **The record's opening draw**: the session's draws, draw `c` of outcome `ω` with the receipts its windows have in
 the state the record's session reaches at `ω` (at most `receiptMax`), drawing `min(s, U_c)` at the session's
 `samples`, with the correct receipts `correct`. -/
-def recordDraw {κ : ℕ} {X : Type} (node : Node) (rec : Accounting.Remote.Draw.Coins node.draws κ X → Record)
-    (correct : Fin node.draws → Accounting.Remote.Draw.Coins node.draws κ X → Finset ℕ) :
-    Accounting.Remote.Draw.Session node.draws receiptMax (fun _ => node.params.samples) κ X where
+def recordDraw {κ : ℕ} {X : Type} (node : Node) (rec : Accounting.Remote.Sample.DrawCoins node.draws κ X → Record)
+    (correct : Fin node.draws → Accounting.Remote.Sample.DrawCoins node.draws κ X → Finset ℕ) :
+    Accounting.Remote.Sample.Session node.draws receiptMax (fun _ => node.params.samples) κ X where
   size c ω := ⟨min ((rec ω).drawReceiptsAt node c) receiptMax, Nat.lt_succ_of_le (min_le_right _ _)⟩
   correct := correct
 
@@ -193,9 +193,9 @@ def recordDraw {κ : ℕ} {X : Type} (node : Node) (rec : Accounting.Remote.Draw
 `ω` is `recs c ω`, and the session it plays is that record's opening draw (`recordDraw`), with the correct receipts
 `correct c`. -/
 def recordCommitted {κ : ℕ} {X Cm : Type} (node : Node)
-    (recs : Cm → Accounting.Remote.Draw.Coins node.draws κ X → Record)
-    (correct : Cm → Fin node.draws → Accounting.Remote.Draw.Coins node.draws κ X → Finset ℕ) :
-    Accounting.Remote.Draw.Committed node.draws receiptMax (fun _ => node.params.samples) κ X Cm where
+    (recs : Cm → Accounting.Remote.Sample.DrawCoins node.draws κ X → Record)
+    (correct : Cm → Fin node.draws → Accounting.Remote.Sample.DrawCoins node.draws κ X → Finset ℕ) :
+    Accounting.Remote.Sample.Committed node.draws receiptMax (fun _ => node.params.samples) κ X Cm where
   view c := recordDraw node (recs c) (correct c)
 
 /-- The record of outcome `ω`: the prover's, holding the deployed commitment `com ω`. -/

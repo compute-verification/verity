@@ -51,12 +51,12 @@ Which form each takes:
   committed position before the coin that follows its commitment (at `|L|·√δ_fork`,
   `Accounting.Guarantees.TS.DrawnBindingOfFork`), the proofs' soundness jointly over a round's draws at `δ_ks`, each
   unit's pinning, the share covering every unit that isn't good (`DrawnLayer.Covers`, proved for each game), and
-  `UnitFixed`. Its crypto half, the drawn units right, is `Accounting.Guarantees.TS.DrawnRightOff`.
+  `BlockFixed`. Its crypto half, the drawn units right, is `Accounting.Guarantees.TS.DrawnRightOff`.
 * `RightFixed`: E1(c) with the rounds' equal shares, the part of (I8) that is the TS model's accounting rather than the
   proof service's.
 * `BindingForkAt`, `ProofSoundAt`, `ProofsPin`: `ProofsSoundOfPinned`'s proof-service pieces as named premises, binding
   in its fork form, so the headlines' binding is `√δ_fork` and no advantage bound.
-* `UnitFixed`: E1(c) per unit, which doesn't read the draw: the good units' words are fixed, a unit being good when
+* `BlockFixed`: E1(c) per unit, which doesn't read the draw: the good units' words are fixed, a unit being good when
   the run computed it and the units that write it values after its coin (not skipped and guessed), and the words of
   every unit not skipped whole are folded (its fold clause). A sampled window's proofs vouch for the drawn units only,
   so `RightFixed`, which asks for every committed value right, says nothing there; and a unit's check can pass by luck,
@@ -302,7 +302,7 @@ prover queried, and a unit's coin the query its noise's seed answers (it may sta
 committed value). With `Σ wt = S·N_w` and the share covering every unit that isn't good (`DrawnLayer.Covers`), it gives
 `(1 − Σ_w d_w / S)·N_w` fixed words. It stays an assumption until the play's fixed and folded words are defined from the
 committed values (the adaptive model). -/
-def UnitFixed {C B : Type} {S m s : ℕ} {J Q Pos V : Type} [Fintype J] (P : Play (Paths C m × B) S K T L U)
+def BlockFixed {C B : Type} {S m s : ℕ} {J Q Pos V : Type} [Fintype J] (P : Play (Paths C m × B) S K T L U)
     (pf : DrawnLayer C B S m s J Q Pos V) (mode : Paths (Paths C m × B) S → Fin S × J → Mode)
     (wt : Fin S → J → ℝ) (folded : Paths (Paths C m × B) S → ℝ) : Prop :=
   pf.WriterReads → ∀ x, P.accepts x →

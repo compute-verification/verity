@@ -14,7 +14,7 @@ function of the window's round coin (`regOf`) and the rest of whose inputs a fun
 * `Credit.window` credits every window (`hacc`);
 * the registered salt, hex-decoded, is the round coin's bytes (`hsalt`), so `SaltIsLiveCoin` holds with no round trip
   through `hex?`;
-* the units `Credit.descriptorDrawn` draws are the tile coordinate's at the draw coin (`hdraw`), `TileDrawIsCoin`'s
+* the units `Credit.descriptorDrawn` draws are the tile coordinate's at the draw coin (`hdraw`), `TileSampleIsCoin`'s
   body on every window.
 
 They are facts of the code on honest windows, which Lean doesn't evaluate here (`Credit.window` reads SHA-512 trees and
@@ -26,10 +26,10 @@ and its `window-drawn` entry draw the Python verifier's units on generated coins
   cone is its own word and its share `1/N` (`shareCone_eq`): `ρ = 1` meets `ρ·N_p·share ≤ 1` with equality.
 * The scheme is the ComposePeriod twin's (operand luck pinned, `r_B = ½`, guess `½`).
 * The registration reads the round coin and not the draw coin, so it is fixed before the draw
-  (`registeredBeforeDraw`, by `coinAt_spliceAt`).
+  (`registeredBeforeSample`, by `coinAt_spliceAt`).
 * Every tile is live and paid with its words right, the openings are in `Unit` and the unit's relation is `True`, so
   binding holds at `δ_bind = 0` and the service's soundness at `δ_ks = 0`; the three lucks hold of the honest games
-  (`SharedNoiseLucks`), and the play fixes and folds `N` words a window (`UnitFixed`).
+  (`SharedNoiseLucks`), and the play fixes and folds `N` words a window (`BlockFixed`).
 
 The conclusion then speaks of the whole period: its accepted prefix is all `n` windows (`prefixLen_all`) and its live
 words are `N·n` (`creditLive_all`), so `j10r_credit` is the statement's bound at `N·n` live words, not at none.
@@ -44,7 +44,7 @@ open Accounting.SecurityProofs.ComposePeriod
 /-! ## The circuit -/
 
 /-- `N` committed words of no operands, one a unit, one live round. -/
-def circuit (N : ℕ) : Declared Unit where
+def circuit (N : ℕ) : RegisteredCircuit Unit where
   dag := List.replicate N Honest.word
   calls := 1
   call := fun _ => 0
@@ -161,7 +161,7 @@ abbrev Ω1 : Type := Coin Bool Unit (circuit (tileCount σ sT)).rounds σ sT
 
 /-- The period's windows as `Credit.window` reads them: window `w` registers `regOf` of its round coin, and the rest of
 its inputs are `evOf` of its round coin and its draw coin. -/
-def windows (regOf : Bool → Registered) (evOf : Bool → Equiv.Perm (Fin (tileCount σ sT)) × Unit → Answered)
+def windows (regOf : Bool → PreDraw) (evOf : Bool → Equiv.Perm (Fin (tileCount σ sT)) × Unit → Answered)
     (n : ℕ) : CreditWindows (Ω1 σ sT) n where
   reg x w := regOf (coinAt (coinAt x w).1 ⟨0, hr1 _⟩)
   ev x w := evOf (coinAt (coinAt x w).1 ⟨0, hr1 _⟩) (coinAt x w).2
@@ -190,9 +190,9 @@ noncomputable def play (B : Type) (N Kd n : ℕ) : Play (WCoin N B) n Unit Unit 
 
 /-- **The registration is fixed before the draw coin**: it reads only the round coin, which the splice at window `w`
 after its one round keeps. -/
-theorem registeredBeforeDraw {nB mB : ℕ} (σ : Fin nB → Fin mB) (sT : Fin mB) (regOf : Bool → Registered)
+theorem registeredBeforeSample {nB mB : ℕ} (σ : Fin nB → Fin mB) (sT : Fin mB) (regOf : Bool → PreDraw)
     (evOf : Bool → Equiv.Perm (Fin (tileCount σ sT)) × Unit → Answered) (n : ℕ) :
-    RegisteredBeforeDraw (windows σ sT regOf evOf n) := by
+    RegisteredBeforeSample (windows σ sT regOf evOf n) := by
   intro x z w
   show regOf (coinAt (coinAt (spliceAt w.val (circuit (tileCount σ sT)).rounds x z) w).1 ⟨0, hr1 _⟩) =
     regOf (coinAt (coinAt x w).1 ⟨0, hr1 _⟩)
@@ -259,7 +259,7 @@ theorem sum_div_le {N n : ℕ} (hn : 0 < n) (f : Fin n → Fin N → ℝ)
 section Meets
 
 variable {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB)
-  (unitOf : Fin nB → ℕ) (regOf : Bool → Registered)
+  (unitOf : Fin nB → ℕ) (regOf : Bool → PreDraw)
   (evOf : Bool → Equiv.Perm (Fin (tileCount σ sT)) × Unit → Answered) (enc : Bool → ByteArray)
 
 /-- **Every window credited**, its prefix every window. -/
@@ -314,12 +314,12 @@ theorem j10r_meets (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (regOf c) 
     (∀ w, prob (fun x => (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (windows σ sT regOf evOf n)
       opened (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile)
       (j10rAtCoin (hr1 _) enc place tile)).MovedIn x w) ≤ 0) ∧
-    RegisteredBeforeDraw (windows σ sT regOf evOf n) ∧ TileDrawIsCoin σ k hk sT unitOf (windows σ sT regOf evOf n) ∧
+    RegisteredBeforeSample (windows σ sT regOf evOf n) ∧ TileSampleIsCoin σ k hk sT unitOf (windows σ sT regOf evOf n) ∧
     TileServiceSound σ sT unitOf (windows σ sT regOf evOf n) opened
       (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) 0 ∧
     Properties.Pouw.Period.SaltIsLiveCoin (hr1 _) (saltOf (windows σ sT regOf evOf n)) enc ∧
     SharedNoiseLucks Honest.scheme (circuit (tileCount σ sT)) (period (Ω1 σ sT) (tileCount σ sT) n) ∧
-    UnitFixed (play Unit (tileCount σ sT) (k sT) n)
+    BlockFixed (play Unit (tileCount σ sT) (k sT) n)
       (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (windows σ sT regOf evOf n) opened
         (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile))
       (periodMode (circuit (tileCount σ sT)) (period (Ω1 σ sT) (tileCount σ sT) n)
@@ -335,7 +335,7 @@ theorem j10r_meets (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (regOf c) 
   refine ⟨le_rfl, rfl, scope _ hδs, fun t => ?_, fun j => ?_, fun t _ => ?_, rfl,
     period_every (Ω := Ω1 σ sT) (N := tileCount σ sT)
       (P := fun live _ => DeadConeDead Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT) live) (fun _ _ ht _ => by simp at ht) n,
-    fun x j _ => acceptsUpTo_period _ _ _ _ n j x, fun w => ?_, registeredBeforeDraw σ sT regOf evOf n,
+    fun x j _ => acceptsUpTo_period _ _ _ _ n j x, fun w => ?_, registeredBeforeSample σ sT regOf evOf n,
     fun _ _ _ => hdraw _ _, fun w => ?_, fun _ _ => hsalt _,
     ⟨every_perLiveTile (P := fun k G _ => OperandHMu (Honest.scheme.mu k) G)
       (fun k t => Honest.operandHMu_of_zero _ _ _ _ _ (paid_share .folded (by decide) t)) n,

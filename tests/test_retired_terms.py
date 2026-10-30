@@ -1,16 +1,18 @@
 """No retired term in the tree's prose (AGENTS.md "Working principles": a decision rolls out in the change that records it).
 A semantically meaningful part of the registered or actual circuit is a block, always named with a prefix
-(`ARCHITECTURE.md`, Glossary, "Block"): a proof unit is a proof block, and a faulty unit a faulty
-proof block. The proof service is the proof system (`ARCHITECTURE.md`, Glossary, "Proof system").
+(`ARCHITECTURE.md`, Glossary, "Block"): a proof unit is a proof block, and a faulty or wrong unit an incorrect
+proof block (Glossary, "Incorrect proof block"). The proof service is the proof system (`ARCHITECTURE.md`, Glossary, "Proof system").
 
 Scanned: every tracked text file but the Lean (`.lean` files, their packages' `lakefile.toml` and their locks' reasons, `lean-audit.json`). A term matches case-insensitively as two words, hyphenated, or wrapped onto the next
-line (behind a comment marker or not). Identifiers (`proof_unit`) are code; the retired-terms table
+line (behind a comment marker or not). Every file under `benchmarks/rho/` retires more (``RHO_TERMS``): its proof
+blocks, their steps and their outputs are incorrect, never faulty, while a faulty node, link or device keeps the word. Identifiers (`proof_unit`) are code; the retired-terms table
 (`GLOSSARY.md`) names them. What may stay: the table's own rows (``RETIRED_ROWS``), a spelling baked into a
 record or a digest (``ALLOWED``, one reason each; an entry that matches nothing fails too), and a file whose lines a PR
 already queued on `next` rewrites (``PENDING``), until that PR lands and the rename follows it.
 
 The maintained docs (every tracked Markdown file but a CHANGELOG) retire more (``DOC_TERMS``:
-"block" is reserved for parts of circuits, the subprotocols go by their names, and "leg", the dampener and NCI are retired). Their code
+"block" is reserved for parts of circuits, a proof block is incorrect or correct, never faulty, the subprotocols go by
+their names, and "leg", the dampener and NCI are retired). Their code
 keeps the old words until its owners rename it, so this scan skips code spans and fences, where a path (`legs/`) or a
 record key stays, and a term written as a quoted mention ("leg"); the table's rows name them too.
 """
@@ -21,18 +23,25 @@ import re
 from test_repository import ROOT, _tracked
 
 #: Each retired term and what to write instead.
-TERMS = {"proof unit": "proof block", "faulty unit": "faulty proof block", "proof service": "proof system"}
+TERMS = {"proof unit": "proof block", "faulty unit": "incorrect proof block", "proof service": "proof system"}
 _SEP = r"(?:[ \t]+|-|[ \t]*\n[ \t]*(?:#+|//+|--|\*|;+)?[ \t]*)"
 _TERM = re.compile(rf"\b(?:(?:proof|faulty){_SEP}units?|proof{_SEP}services?)\b", re.I)
+
+#: Retired in every file under RHO too, and what to write instead.
+RHO = "benchmarks/rho/"
+RHO_TERMS = {"faulty outputs, faulty step, faulty ingress unit, faulty block, faulty set":
+             "incorrect outputs, incorrect step, incorrect ingress unit, incorrect proof block, the incorrect set"}
+_RHO_TERM = re.compile(rf"\bfaulty{_SEP}(?:outputs?|steps?|ingress{_SEP}units?|(?:proof{_SEP})?blocks?|sets?)\b", re.I)
 
 #: The retired-terms table, the Glossary's older names (`ARCHITECTURE.md` links it).
 GLOSSARY = "GLOSSARY.md"
 #: The table's rows that name the terms, in GLOSSARY.
-RETIRED_ROWS = ('| "proof unit"', '| "wrong unit"')
+RETIRED_ROWS = ('| "proof unit"', '| "wrong unit"', '| "proof service"', '| "declared advice"', '| "audit coin"')
 
 #: Retired in the maintained docs' prose, and what to write instead.
 DOC_TERMS = {
-    "wrong unit, incorrect unit": "faulty proof block",
+    "wrong unit, incorrect unit": "incorrect proof block",
+    "faulty proof block, faulty block, faulty set": "incorrect proof block; the incorrect set F",
     "isolation unit, IU": "isolation block",
     "replay unit": "replay block",
     "draw, drawn, redraw": "the sample, sampled proof block (verb: sample; coins are flipped)",
@@ -43,6 +52,10 @@ DOC_TERMS = {
     "builder, advice compiler, circuit builder": "registered compiler",
     "declared advice": "advice",
     "declared circuit": "registered circuit",
+    "declared work, declared workload, declares its advice": "registered work; the developer reports its advice, which the "
+                                                             "registered compiler turns into the execution block",
+    "sampled unit, unit class": "sampled proof block; a size class, or Flock's proof-block class",
+    "audit coin": "the challenger's coins (the step that reads them is the verification phase)",
     "declaration block, declaration period": "execution block, execution phase",
     "sampling period, sampling block, PoUW's commit period": "execution phase (work plus its audit: an execution phase and its "
                                                             "verification phase)",
@@ -60,7 +73,10 @@ DOC_TERMS = {
 _SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
 _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}units?|(?:physical|thread|KV){_SPACE}blocks?"
                        rf"|legs?|(?:re)?(?:draws?|drawn|drawing|drew)|components?|firewall(?:s|ed)?|flock-verify"
-                       rf"|remote{_SPACE}check|builders?|advice{_SPACE}compilers?|declared{_SPACE}(?:advice|circuits?)"
+                       rf"|remote{_SPACE}check|builders?|advice{_SPACE}compilers?|declared{_SPACE}(?:advice|circuits?|work(?:loads?)?)"
+                       rf"|declar(?:es|ed|ing){_SPACE}(?:its|their|the){_SPACE}advice|sampled{_SPACE}units?"
+                       rf"|units?{_SPACE}class(?:es)?|audit{_SPACE}coins?"
+                       rf"|faulty{_SPACE}(?:proof{_SPACE})?blocks?|faulty{_SPACE}sets?"
                        rf"|declaration{_SPACE}(?:blocks?|periods?)|sampling{_SPACE}(?:periods?|blocks?)|hm96{_SPACE}rows?"
                        rf"|period's{_SPACE}(?:audit{_SPACE})?coins|reject(?:ion)?{_SPACE}domina\w*|dampeners?"
                        rf"|novel{_SPACE}communication{_SPACE}intensity)\b)|\bIUs?\b|\bNCI\b"
@@ -83,13 +99,14 @@ ALLOWED: dict[str, str] = {
                              "which their digests hash",
     "report-proof-service-": "a cited note's id",
     "before any coin draws (the firewall's staged statements)": "a line of GLOSSARY.md that queued PRs on next rewrite; the protocol vocabulary's rename follows them",
+    "no wrong certificate, faulty block or detection": "a comment beside `Remote.CITES` in `benchmarks/rho/rho/envelopes.py`, "
+                                                       "which a queued PR on next rewrites; renamed after it lands",
 }
 
 PENDING: dict[str, str] = {
     "verity/core/protocols/pouw/credit.py": "its messages mirror the Lean's, which a difftest compares; renamed with the Lean after the check window",
     "verity/core/protocols/pouw/tests/test_pouw_credit.py": "its messages mirror the Lean's, which a difftest compares; renamed with the Lean after the check window",
     "integrations/vllm/tests/protocols/test_credit_gate.py": "its messages mirror the Lean's, which a difftest compares; renamed with the Lean after the check window",
-    "benchmarks/live_challenger/README.md": "queued PRs add the term here; the proof-service rename follows them",
     "integrations/vllm/verity_vllm/pipeline/serve_h1.py": "queued PRs add the term here; the proof-service rename follows them",
     "integrations/vllm/tests/pipeline/test_serve_h1.py": "queued PRs add the term here; the proof-service rename follows them",
     "integrations/vllm/verity_vllm/program/predict/weights_tie.py": "queued PRs add the term here; the proof-service rename follows them",
@@ -98,7 +115,6 @@ PENDING: dict[str, str] = {
     "benchmarks/pouw/served_h1/coins.py": "queued PRs rewrite its lines; the proof-service rename follows them",
     "verity/core/claims/tests/test_claims_registry.py": "queued PRs rewrite its lines; the proof-service rename follows them",
     "verity/core/protocols/pouw/PROTOCOL.md": "queued PRs rewrite its lines; the proof-service rename follows them",
-    "verity/core/protocols/pouw/README.md": "queued PRs rewrite its lines; the proof-service rename follows them",
     "verity/core/protocols/pouw/dither/PROTOCOL.md": "queued PRs rewrite its lines; the proof-service rename follows them",
     "verity/core/protocols/remote_bandwidth/README.md": "queued PRs rewrite its lines; the proof-service rename follows them",
     "Security/Proofs/NetworkCertifier/README.md": "#4690 adds lines",
@@ -173,6 +189,7 @@ PENDING: dict[str, str] = {
     "verity/ml/flock/live/PROTOCOL.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/ml/flock/verifier/PROTOCOL.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "verity/ml/flock/verifier/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
+    "verity/ml/flock/README.md": "a PR on next rewrites the lines beside its unit classes; the rename follows it",
 }
 
 
@@ -194,11 +211,13 @@ def offenders(files: list[str], read=_read) -> tuple[list[tuple[str, int, str]],
     out, used = [], set()
     for f in scanned(files):
         text = read(f)
-        if text is None or not ("unit" in text.lower() or "service" in text.lower()):
+        rho = f.startswith(RHO)
+        if text is None or not ("unit" in text.lower() or "service" in text.lower() or rho and "faulty" in text.lower()):
             continue
         allowed = [(m.start(), m.end(), s) for s in ALLOWED for m in re.finditer(re.escape(s), text)]
         lines = text.splitlines()
-        for m in _TERM.finditer(text):
+        terms = (_TERM, _RHO_TERM) if rho else (_TERM,)
+        for m in sorted((m for t in terms for m in t.finditer(text)), key=lambda m: m.start()):
             n = text.count("\n", 0, m.start()) + 1
             if f == GLOSSARY and lines[n - 1].startswith(RETIRED_ROWS):
                 continue
@@ -236,6 +255,7 @@ def test_no_retired_term_in_prose():
     bad, used = offenders(_tracked())
     assert not bad, (
         "a retired term: say " + " and ".join(f'"{new}" for "{old}"' for old, new in TERMS.items())
+        + f" (in {RHO}, also " + " and ".join(f'"{new}" for "{old}"' for old, new in RHO_TERMS.items()) + ")"
         + f' (ARCHITECTURE.md, Glossary, "Block"; {GLOSSARY}); a spelling baked into a record or a digest goes in ALLOWED'
         + " with its reason:\n" + "\n".join(f"  {f}:{n}: {term}" for f, n, term in bad))
     unused = set(ALLOWED) - used - doc_offenders(_tracked())[1]
@@ -253,7 +273,8 @@ def test_no_retired_term_in_the_maintained_docs():
 def test_the_glossary_records_the_retired_terms():
     rows = [line for line in (ROOT / GLOSSARY).read_text(encoding="utf-8").splitlines() if line.startswith(RETIRED_ROWS)]
     assert len(rows) == len(RETIRED_ROWS), f"{GLOSSARY}'s retired-terms table has no row starting {RETIRED_ROWS}"
-    assert all(_TERM.search(row) for row in rows), f"{GLOSSARY}'s rows {RETIRED_ROWS} no longer name the terms"
+    assert all(_TERM.search(row) or _DOC_TERM.search(row) for row in rows), (
+        f"{GLOSSARY}'s rows {RETIRED_ROWS} no longer name the terms")
 
 
 def test_the_scan_reads_each_form():
@@ -271,6 +292,23 @@ def test_the_scan_reads_each_form():
                      ("a.py", 1, "proof units"), ("a.py", 3, "faulty unit"), ("b.rs", 1, "proof /// unit"),
                      ("d.py", 1, "Proof-Service"), ("d.py", 1, "proof # services")]
     assert used == {"N, the round's proof units", "verity/proof-service/"}
+
+
+def test_the_scan_reads_rho_terms():
+    """`benchmarks/rho`'s incorrect outputs, steps and ingress units, on toy files: its keys and Lean-mirroring names,
+    a faulty node, link or device, and the same words outside it stay."""
+    docs = {
+        "benchmarks/rho/a.py": ('"""The faulty-outputs channel: each faulty\n    step; a faulty ingress unit and the faulty '
+                                'set."""\nx = s["exfil.faulty"], c.faulty_unit_bits  # faultyIngressBits; a faulty node, '
+                                "link or device\n"),
+        "benchmarks/rho/data/b.toml": "# Faulty outputs, a faulty proof block, two faulty blocks\n[incorrect]\n",
+        "c.py": "# faulty outputs and faulty blocks outside it\n",
+    }
+    assert offenders(list(docs), read=docs.__getitem__)[0] == [
+        ("benchmarks/rho/a.py", 1, "faulty-outputs"), ("benchmarks/rho/a.py", 1, "faulty step"),
+        ("benchmarks/rho/a.py", 2, "faulty ingress unit"), ("benchmarks/rho/a.py", 2, "faulty set"),
+        ("benchmarks/rho/data/b.toml", 1, "Faulty outputs"), ("benchmarks/rho/data/b.toml", 1, "faulty proof block"),
+        ("benchmarks/rho/data/b.toml", 1, "faulty blocks")]
 
 
 def test_the_doc_scan_reads_each_form():
@@ -306,6 +344,18 @@ def test_the_doc_scan_reads_the_protocol_terms():
         ("a.md", 4, "flock-verify"), ("verity/ml/commitments/x/PROTOCOL.md", 1, "draw")]
 
 
+def test_the_doc_scan_reads_the_reporting_terms():
+    """The advice, the blocks and the challenger's coins (`GLOSSARY.md`), on toy files: Python's declared types, a suite's
+    declared inputs, unit tests and units of measure stay."""
+    docs = {
+        "a.md": "The declared work and a declared\nworkload; it declares its advice. Two sampled units, a unit class, the audit coins.\n"
+                "A suite's declared inputs, a declared type, a unit test, SI units and the units of a sampled proof block stay.\n",
+    }
+    assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
+        ("a.md", 1, "declared work"), ("a.md", 1, "declared workload"), ("a.md", 2, "declares its advice"),
+        ("a.md", 2, "sampled units"), ("a.md", 2, "unit class"), ("a.md", 2, "audit coins")]
+
+
 def test_the_doc_scan_reads_the_training_terms():
     """Training's vocabulary, on toy files: the dampener and NCI in prose, never their Lean names in code spans or paths."""
     docs = {
@@ -314,3 +364,14 @@ def test_the_doc_scan_reads_the_training_terms():
     }
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
         ("a.md", 1, "dampener"), ("a.md", 1, "Dampeners"), ("a.md", 1, "NCI"), ("a.md", 1, "novel communication intensity")]
+
+
+def test_the_doc_scan_reads_the_incorrect_terms():
+    """Incorrect proof blocks and the incorrect set, on toy files: a faulty node, link, device or hardware stays."""
+    docs = {
+        "a.md": "Two faulty proof blocks, a faulty\nproof block, the faulty-block bound and the faulty set.\n"
+                "A faulty node, a faulty link, a faulty device, faulty hardware and an incorrect proof block stay.\n",
+    }
+    assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
+        ("a.md", 1, "faulty proof blocks"), ("a.md", 1, "faulty proof block"), ("a.md", 2, "faulty-block"),
+        ("a.md", 2, "faulty set")]

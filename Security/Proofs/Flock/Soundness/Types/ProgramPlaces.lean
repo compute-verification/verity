@@ -53,7 +53,7 @@ witness carries, at each slot input, what it carries at the input's copy positio
 forced-zero row (`zeros`, whose `A₀` and `B₀` rows are 0). -/
 structure TableClass (St : Statement) where
   types : String → Option CircuitType
-  ls : Array Layout
+  ls : Array BlockLayout
   info : String → Option TableInfo
   words : String → Option (Array ℕ)
   unit : ℕ
@@ -233,7 +233,7 @@ noncomputable def derivedPlaces (hk : one < k) {outs : List ℕ} (p : UProg k on
     (hal : ∀ S R u (h : u ∈ S), (at_ S R u h).Aliased (p.instOf hk u).wire) :
     (p.P hk).DerivedPlaces plan tab (p.rowsOf hk) where
   place S R u h :=
-    ⟨p.rowsOf hk u, p.instOf hk u, (at_ S R u h).o, (at_ S R u h).col, (at_ S R u h).placed, hal S R u h⟩
+    ⟨p.rowsOf hk u, p.instOf hk u, (at_ S R u h).o, (at_ S R u h).col, (at_ S R u h).placed.sat, hal S R u h⟩
   rows _ _ _ _ := rfl
 
 /-- **A slot's copies make its place aliased**: unit `u`, at slot `g` of block `o` of a class whose derivation inputs it

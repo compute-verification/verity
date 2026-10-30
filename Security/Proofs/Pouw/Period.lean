@@ -10,8 +10,8 @@ import Proofs.Pouw.RelativeSecurity
 with the check's verdict (`checkedRun`). There a window is credited exactly when it and every earlier window are
 accepted (`credited_iff`, at `K_d > 0`: the check's verdict is every drawn tile's), so the run's accepted prefix and its
 live words are the check's (`prefixLen_eq`, `creditedLive_eq`). `JointSound` holds at `δ_ks`: an unsound drawn tile of
-an accepted window is a unit the check publishes as drawn (`DrawIsCoin`) whose opening fails its relation, which
-`ServiceSound` bounds (`jointSound_checked`). `Pins` is the hypothesis itself, and `RegisteredBeforeDraw`, protocol
+an accepted window is a unit the check publishes as drawn (`SampleIsCoin`) whose opening fails its relation, which
+`ServiceSound` bounds (`jointSound_checked`). `Pins` is the hypothesis itself, and `RegisteredBeforeSample`, protocol
 structure, is not read.
 
 `H1CheckedCreditPeriod` is `CheckedCreditPeriod` at H1's numbers, with `SplitRateClosed`'s rate there
@@ -30,7 +30,7 @@ open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assum
 
 /-- **A window is credited under the check exactly when it and every earlier one are accepted**, at `K_d > 0`. -/
 theorem credited_iff {C Ξ V : Type} {m Kd Np n : ℕ} (hK : Kd ≤ Np) (hKd : 0 < Kd) (p : Params)
-    (ws : Windows (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n)
+    (ws : Executions (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n)
     (opened : Paths (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → ℕ → ℕ → V)
     (rel right : Paths (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → Fin Np → (ℕ → V) → Prop)
     (x : Paths (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n) (w : Fin n) :
@@ -39,19 +39,19 @@ theorem credited_iff {C Ξ V : Type} {m Kd Np n : ℕ} (hK : Kd ≤ Np) (hKd : 0
 
 /-- **The run's accepted prefix is the check's.** -/
 theorem prefixLen_eq {C Ξ V : Type} {m Kd Np n : ℕ} (hK : Kd ≤ Np) (hKd : 0 < Kd) (p : Params)
-    (ws : Windows (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n)
+    (ws : Executions (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n)
     (opened : Paths (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → ℕ → ℕ → V)
     (rel right : Paths (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → Fin Np → (ℕ → V) → Prop)
     (x : Paths (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n) :
     (checkedRun hK p ws opened rel right).prefixLen x = ws.prefixLen p x := by
   classical
-  unfold PeriodRun.prefixLen Windows.prefixLen
+  unfold Outcomes.prefixLen Executions.prefixLen
   congr 1
   exact Finset.filter_congr fun w _ => credited_iff hK hKd p ws opened rel right x w
 
 /-- **The run's credited live words are the check's accepted prefix's.** -/
-theorem creditedLive_eq {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) {Kd Np n : ℕ} (hK : Kd ≤ Np)
-    (hKd : 0 < Kd) (p : Params) (ws : Windows (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n)
+theorem creditedLive_eq {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : RegisteredCircuit ι) {Kd Np n : ℕ} (hK : Kd ≤ Np)
+    (hKd : 0 < Kd) (p : Params) (ws : Executions (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n)
     (opened : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → ℕ → ℕ → V)
     (rel right : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → Fin Np → (ℕ → V) → Prop)
     (Wp : Period C (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) (Fin Np) Cd.rounds n)
@@ -62,13 +62,13 @@ theorem creditedLive_eq {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) 
   exact Finset.sum_congr rfl fun w _ => if_congr (credited_iff hK hKd p ws opened rel right x w) rfl rfl
 
 /-- **Joint soundness at the check's run from the service's**: in each window, an accepted window with a drawn tile
-whose opening fails its relation is one the check accepts with a published unit (`DrawIsCoin`: the drawn tile's unit is
+whose opening fails its relation is one the check accepts with a published unit (`SampleIsCoin`: the drawn tile's unit is
 among `Public.drawn`) whose opening fails its relation, which `ServiceSound` bounds at `δ_ks`. -/
-theorem jointSound_checked {ι C Ξ V : Type} [Fintype C] [Fintype Ξ] (Cd : Declared ι) {Kd Np n : ℕ}
-    (hr : 0 < Cd.rounds) (hK : Kd ≤ Np) (p : Params) (ws : Windows (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n)
+theorem jointSound_checked {ι C Ξ V : Type} [Fintype C] [Fintype Ξ] (Cd : RegisteredCircuit ι) {Kd Np n : ℕ}
+    (hr : 0 < Cd.rounds) (hK : Kd ≤ Np) (p : Params) (ws : Executions (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n)
     (opened : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → ℕ → ℕ → V)
     (rel right : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → Fin Np → (ℕ → V) → Prop)
-    {δks : ℝ} (hD : DrawIsCoin hK p ws) (hS : ServiceSound p ws opened rel δks) :
+    {δks : ℝ} (hD : SampleIsCoin hK p ws) (hS : ServiceSound p ws opened rel δks) :
     (checkedLayer Cd hr hK p ws opened rel right).JointSound δks := by
   intro w
   refine (Pouw.RelativeSecurity.prob_mono fun x hx => ?_).trans (hS w)
