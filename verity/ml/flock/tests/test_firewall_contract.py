@@ -108,7 +108,7 @@ def test_the_contract_holds_on_every_session_of_the_agreement_test(lean, tmp_pat
     sessions = []
     for name, schedule, reqs in cases() + placements():
         salts = iter(SALTS)
-        s = FT.Session(schedule, _coins, lambda salts=salts: next(salts))
+        s = FT.InnerRun(schedule, _coins, lambda salts=salts: next(salts))
         for r in reqs:
             s.handle(r)
         sessions.append((name, s))
@@ -206,7 +206,7 @@ def test_a_recorded_session_replays_to_its_record(lean, tmp_path, commit):
 
 
 def test_the_inner_sessions_coins_are_live():
-    """The inner session's challenger commits to no coin (`rec_live.serve`'s, `firewall_transcript.Session`'s by default):
+    """The inner session's challenger commits to no coin (`rec_live.serve`'s, `firewall_transcript.InnerRun`'s by default):
     its public input holds no commitment, no coin item of the honest transcript carries an opening, and each coin item
     comes after every commitment the schedule owes before it, so each round's coins are flipped after its commitments."""
     s = FA.run_case("honest", FA.requests(), RL.Proxy, None)
@@ -290,7 +290,7 @@ def test_no_salt_repeats_across_a_thousand_sessions():
     from every other: the ZK server's tapes and the challenger's openings, within and across sessions."""
     salts: list[str] = []
     for _ in range(1000):
-        s = FT.Session(FA.SCHEDULE, commit=True)
+        s = FT.InnerRun(FA.SCHEDULE, commit=True)
         for r in FA.requests():
             s.handle(r)
         t = s.transcript()
