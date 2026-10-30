@@ -69,7 +69,7 @@ def inStmt : Flock.Stmt where
   form := { hm96Rows := true, typed := false, retainedRounds := true, leaf := "hm96-sha512/v1", tables := 1,
             publicInputs := false, sharedRows := false, registeredReads := false, hiddenOutputs := false,
             unitInputGroups := 1, tail := false, unitLog := 0, readsOnlyPortBits := true, rowsV1 := true,
-            rowsV2OrSeg := false, wiresAcyclic := false }
+            rowsV2OrSeg := false, wiresAcyclic := false, templated := false }
 
 theorem inScope_inStmt : Flock.InScope false inStmt := by
   unfold Flock.InScope
