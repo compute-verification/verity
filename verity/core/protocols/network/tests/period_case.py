@@ -53,7 +53,7 @@ from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 from verity.core.protocols.certifier.warden import WardenParams
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.sampled_proofs.one_stage.draw import stratum_k
-from verity.ml.circuits import annotations as AN, boolean as BL, codec, population
+from verity.ml.circuits import boolean as BL, codec, population
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import tuple_of
@@ -246,12 +246,12 @@ def _members(x: dict) -> int:
 
 def slot_entry_digest(j: dict, key: str) -> str:
     """The SHA-512, in hex, of the canonical JSON object that maps each Definition `key` reaches (itself, its nodes'
-    callees, theirs, …) to its `annotations.definition_digest`: the template's whole body."""
+    callees, theirs, …) to its `codec.definition_digest`: the template's whole body."""
     defs, callees, seen, todo = j["definitions"], j["callees"], {}, [key]
     while todo:
         k = todo.pop()
         if k not in seen:
-            seen[k] = AN.definition_digest(j, k)
+            seen[k] = codec.definition_digest(defs[k], j)
             if defs[k]["form"] == "composite":
                 todo += [callees[x["fn"]] for x in defs[k]["body"]["nodes"]]
     return hashlib.sha512(codec.canonical_json(seen)).hexdigest()

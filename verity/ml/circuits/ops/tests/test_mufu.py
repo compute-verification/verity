@@ -16,8 +16,7 @@ import random
 import numpy as np
 import pytest
 
-from verity.ml.circuits.annotations import definition_digest
-from verity.ml.circuits.codec import encode_program, program_digest
+from verity.ml.circuits.codec import definition_digest, encode_program, program_digest
 from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits import library as L
@@ -89,7 +88,7 @@ def test_registered_once_under_the_pinned_ids() -> None:
 @pytest.mark.parametrize("fid", sorted(PINNED))
 def test_descriptor_and_program_digests(fid: str) -> None:
     desc = encode_program(_one_call_program(_prim(fid)))
-    assert (definition_digest(desc, fid), program_digest(desc)) == PINNED[fid][:2]
+    assert (definition_digest(desc["definitions"][fid], desc), program_digest(desc)) == PINNED[fid][:2]
 
 
 @pytest.mark.parametrize("fid", sorted(PINNED))

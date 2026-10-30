@@ -451,10 +451,10 @@ def distinct_calls(graph_path: str | None, modules: str | None = None, definitio
     row's and the row's unit counts are the per-Call counts times the Call counts. ``definitions`` ({descriptor id: Call count})
     adds Definitions without a graph (bound from the registry, no digest to check); ``exclude`` drops the ids it matches."""
     from circuit_check import targets as TG
-    from verity.ml.circuits.codec import descriptor_id
+    from verity.ml.circuits.codec import definition_digest, descriptor_id
     from verity.ml.circuits.defs import CompositeDefinition
     from verity.ml.circuits.program import Program
-    from verity.ml.definitions.encoding import encode_specialization, definition_digest
+    from verity.ml.definitions.encoding import encode_specialization
 
     TG.load_registries()
     g = json.loads(open(graph_path).read()) if graph_path else {"groups": []}
@@ -473,7 +473,7 @@ def distinct_calls(graph_path: str | None, modules: str | None = None, definitio
         want = index.get(fid)
         got = definition_digest(encode_specialization(fn)[1][fid]) if want else None
         if want and got != want:
-            raise ValueError(f"{fid}: v0 digest {got} is not the row's {want}")
+            raise ValueError(f"{fid}: definition digest {got} is not the row's {want}")
         fns.append(fn)
         prov.append({"definition": fid, "calls": calls[fid], "digest_checked": bool(want)})
     params = [(f"c{i}_{n}", t) for i, fn in enumerate(fns) for n, t in fn.signature()[0]]

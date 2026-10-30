@@ -638,7 +638,7 @@ def test_an_entry_is_keyed_by_the_definitions_content_the_query_the_limits_and_t
         return W._rule_entry(fn, X, 32, 0, lim)[0]
     base = at(norm)
     assert len({base, at(_fn("RMSNormTriton_v1", N=1024, EPS=1e-05)), at(norm, X=8), at(norm, lim=W.gate_limits(1000))}) == 4
-    assert W.definition_digest(norm) != W.definition_digest(_fn("RMSNormTriton_v1", N=2048, EPS=1e-06))
+    assert W.closure_digest(norm) != W.closure_digest(_fn("RMSNormTriton_v1", N=2048, EPS=1e-06))
     monkeypatch.setattr(W, "_CODE", ["another cut"])
     assert at(norm) != base
 

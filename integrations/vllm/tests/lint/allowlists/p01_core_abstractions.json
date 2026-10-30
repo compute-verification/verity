@@ -10,7 +10,6 @@
     {"file": "verity_vllm/program/frontend/correspond.py", "kind": "core-private", "symbol": "_statics_diff", "detail": "verity.ml.circuits.defs._plain_static"},
     {"file": "verity_vllm/program/frontend/derive.py", "kind": "core-private", "symbol": "<module>", "detail": "verity.ml.circuits.codec._spec_id"},
     {"file": "verity_vllm/program/frontend/rules/family.py", "kind": "core-private", "symbol": "<module>", "detail": "verity.ml.circuits.codec._spec_id"},
-    {"file": "verity_vllm/program/frontend/torch_frontend.py", "kind": "core-private", "symbol": "<module>", "detail": "verity.ml.circuits.codec._encode_body"},
     {"file": "verity_vllm/program/frontend/torch_frontend.py", "kind": "core-private", "symbol": "<module>", "detail": "verity.ml.circuits.defs._static_key"},
     {"file": "verity/ml/definitions/registry/lifted.py", "kind": "core-patch", "symbol": "with_ordinary", "detail": "verity.ml.circuits.defs.REGISTRY.add()"},
     {"file": "verity/ml/definitions/registry/lifted.py", "kind": "core-private", "symbol": "address_map_modulo_guards", "detail": "verity.ml.circuits.codec._spec_id"},

@@ -179,9 +179,9 @@ def test_units_read_a_cached_rule_by_its_digest_and_log_each_cut(tmp_path):
     """A rule directory's entry is used as it stands (its count is deliberately wrong here), the rest are cut and logged, the
     log serves as a cache, and recutting a cached Definition names the disagreement."""
     from verity.ml.definitions.call_scope import specialization
-    from verity.ml.definitions.word import definition_digest
+    from verity.ml.definitions.word import closure_digest
     lin, router = (specialization(n, s) for n, s in SMALL[1:3])
-    rule = {"key": {"digest": definition_digest(lin), "query": [16, 32, 0]}, "rule": {"units_per_call": 999, "violations": []}}
+    rule = {"key": {"digest": closure_digest(lin), "query": [16, 32, 0]}, "rule": {"units_per_call": 999, "violations": []}}
     (tmp_path / "rules" / "ab").mkdir(parents=True)
     (tmp_path / "rules" / "ab" / "x.json").write_text(json.dumps(rule))
     log = tmp_path / "cuts.jsonl"
@@ -189,7 +189,7 @@ def test_units_read_a_cached_rule_by_its_digest_and_log_each_cut(tmp_path):
     assert u.of({"lin": lin, "router": router}) == {"lin": 999, "router": 41}
     s = u.summary()
     assert (s["cached"], s["cut"], s["verified_units"], s["verified_graphs"], s["mismatches"]) == (1, 1, 1, 1, [])
-    assert [json.loads(x)["digest"] for x in log.read_text().splitlines()] == [definition_digest(router)]
+    assert [json.loads(x)["digest"] for x in log.read_text().splitlines()] == [closure_digest(router)]
 
     again = PR.Units([log])
     assert again.of({"router": router}) == {"router": 41} and again.summary()["cut"] == 0

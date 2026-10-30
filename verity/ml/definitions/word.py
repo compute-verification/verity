@@ -46,7 +46,7 @@ from typing import Any, Callable, Iterable, Mapping
 
 import numpy as np
 
-from verity.ml.circuits.codec import canonical_json, definition_entry
+from verity.ml.circuits.codec import canonical_json, definition_digest, definition_entry
 from verity.ml.circuits.cut import WIDE_FAN_IN, WIRING, QueryInapplicable, call_scope, cut_word, fits, separable, wide_operands
 from verity.ml.circuits.defs import PrimitiveDefinition
 from verity.ml.circuits.layout import resolve
@@ -392,12 +392,14 @@ def _code_version() -> str:
     return _CODE[0]
 
 
-def definition_digest(fn: Any) -> str:
-    """SHA-256 of `fn`'s descriptor entry and, sorted, its callees' digests: its whole content, whatever program it is in."""
+def closure_digest(fn: Any) -> str:
+    """SHA-512 of `fn`'s definition digest (`codec.definition_digest`) and, sorted, its callees' closure digests: its whole
+    content, whatever program it is in."""
     d = _DIGESTS.get(fn.id)
     if d is None:
-        callees = [] if isinstance(fn, PrimitiveDefinition) else sorted({definition_digest(n.fn) for n in fn.body.nodes})
-        d = _DIGESTS[fn.id] = hashlib.sha256(canonical_json({"definition": definition_entry(fn), "callees": callees})).hexdigest()
+        callees = [] if isinstance(fn, PrimitiveDefinition) else sorted({closure_digest(n.fn) for n in fn.body.nodes})
+        own = definition_digest(definition_entry(fn))
+        d = _DIGESTS[fn.id] = hashlib.sha512(canonical_json({"definition": own, "callees": callees})).hexdigest()
     return d
 
 
@@ -405,7 +407,7 @@ def _rule_entry(fn: Any, X: int, W: int, extras: int, limits: dict[str, int]) ->
     root = _RULE_CACHE[0]
     if not root or isinstance(fn, PrimitiveDefinition):
         return None
-    key = {"schema": _RULE_CACHE_SCHEMA, "definition": fn.id, "digest": definition_digest(fn), "query": [X, W, extras],
+    key = {"schema": _RULE_CACHE_SCHEMA, "definition": fn.id, "digest": closure_digest(fn), "query": [X, W, extras],
            "limits": [[k, v] for k, v in sorted(limits.items())], "code": _code_version()}
     k = hashlib.sha256(canonical_json(key)).hexdigest()
     return Path(root) / k[:2] / f"{k}.json", key
@@ -796,5 +798,5 @@ def check_query(P: Any, Q: Any, X: int = 16, W: int = 32, extras: int = 0, *, st
 
 
 __all__ = ["QUERY_ID", "WIRING", "RULE", "MAX_GATES", "MAX_GATES_ENV", "RULE_CACHE_ENV", "committed_today", "tap_kernel", "QueryRuleViolation",
-           "query_id", "parse", "gate_limits", "gate_limit", "specialization", "Graph", "partition", "units", "definition_digest", "use_rule_cache", "unit_rule",
+           "query_id", "parse", "gate_limits", "gate_limit", "specialization", "Graph", "partition", "units", "closure_digest", "use_rule_cache", "unit_rule",
            "RULE_PEAK_PER_GATE", "RULE_PEAK_BASE", "prefetch", "check_calls", "call_groups", "check_query"]

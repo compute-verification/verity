@@ -4,7 +4,8 @@ This is the byte format of a Program and the rules that turn it into a circuit: 
 reader obtains every gate, its primitive and its operand gates, and nothing else is needed. It is written for a second
 implementation, such as the Lean port of `Q_word` (`verity/core/service/sampled_proofs/`). It describes the bytes the codec writes and moves no digest.
 
-- Reference: `verity.ml.circuits.codec` (`encode_program`, `decode_program`, `canonical_json`, `jcs_domain_error`, `program_digest`),
+- Reference: `verity.ml.circuits.codec` (`encode_program`, `decode_program`, `canonical_json`, `jcs_domain_error`, `program_digest`,
+  `definition_digest`),
   with `types`, `refs`, `defs` (`Node`, `Body`, `Builder`), `program` (the root, `INPUT_ID`), `layout` (`Circuit`, `resolve`),
   `parts.n_members`, for §8, §10 and §11 `cut` and `partition_object`, for §9 `boolean`, and for §12 `ports`.
 - Vectors: `verity/ml/circuits/tests/format_vectors.json`, written by
@@ -237,6 +238,25 @@ have):
   refuse (§12, `ports.PortError`, a `ValueError`).
 
 Vectors: `decoder_rejects` (label, the refusal), each a one-field mutation of the descriptor vector (`REJECT` in the test).
+
+### 4.7 The definition digest
+
+A definition's digest is the hex SHA-512 of the canonical bytes (§1) of its *canonical entry*, with no domain prefix. The
+canonical entry of a primitive is its entry (§4.2). That of a composite is its entry with, in each node of its body, `fn`
+replaced by `callees[fn]` and `out` and each argument's `type` by their `types` entries (a v0 entry holds them inline already),
+and every reference sequence of a node argument and of `ret` written flat: its parts, each concat spliced in and each
+`{"alias": [k, a]}` replaced by the flat parts of argument a of node k (§4.5), as `{"concat": [...]}`, or as its only part
+when it has one. Every other key (`id`, `bindings`, `ports`, the body's `params` and `ret_type`, a node's `form`, `axes`, `n`
+and `n_xs`) stays as written.
+
+So one definition has one digest in any program, from either schema's bytes, whichever aliases the writer chose and however
+its builder nested its concatenations, and a reader rebuilds it from the bytes of one entry and the tables. Callees enter by
+descriptor id, so the digest covers the definition's own body, not its callees' bodies. Parts compare by form and fields, as
+in §4.5, so two entries that write one reference sequence in different forms have different digests.
+
+Reference: `codec.definition_digest(entry, desc)` (`desc` supplies a v1 entry's tables) and `codec.canonical_entry`; a
+definition outside a descriptor has the entry `codec.definition_entry(fn)`. Vectors: `definition_digest` (descriptor id, digest),
+one per definition of the descriptor vector.
 
 ## 5. Programs and input nodes
 

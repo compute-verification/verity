@@ -32,12 +32,13 @@ from typing import Any, Iterable, Sequence
 
 import numpy as np
 
+from verity.ml.circuits.codec import definition_digest
 from verity.ml.circuits.defs import bind
 
 from verity_vllm.config import option
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.pipeline.vu_export import template_of
-from verity.ml.definitions.encoding import definition_digest, encode_specialization, word_values
+from verity.ml.definitions.encoding import encode_specialization, word_values
 from verity.ml.definitions import word as word_query
 from verity_vllm.query.program_view import ProgramView, _read_instance_header, from_instances, iter_instance_rows, spec_base, spec_statics
 
@@ -641,7 +642,7 @@ def catalog(graph_dir: str | Path) -> dict[str, Any]:
         defs, ids = definitions(roots)
         dig: dict[str, str] = {}
         for k, d in defs.items():
-            h = dig[k] = definition_digest(d)
+            h = dig[k] = definition_digest({f: v for f, v in d.items() if f != "fold"})  # the fold hints are the graph's, not the entry's
             shards.setdefault(h[:2], {})[h] = {"id": k, "definition": d}
             e = index.setdefault(k, {"digest": h, "form": d.get("form"), "rows": []})
             if row not in e["rows"]:
@@ -659,7 +660,7 @@ def catalog(graph_dir: str | Path) -> dict[str, Any]:
         with gzip.open(root / "definitions" / f"{p2}.json.gz", "wt") as fh:
             json.dump(m, fh, separators=(",", ":"))
     (root / "definitions" / "index.json").write_text(json.dumps({"schema": f"{SCHEMA}/definitions", "shard": "definitions/<digest[:2]>.json.gz",
-                                                                 "digest": "sha256 of the definition's canonical JSON (verity.ml.circuits.codec.canonical_json), fold hints excluded",
+                                                                 "digest": "the definition's digest (verity.ml.circuits.codec.definition_digest, PROTOCOL.md 4.7)",
                                                                  "definitions": index}, separators=(",", ":")) + "\n")
     return index
 

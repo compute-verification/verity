@@ -19,7 +19,7 @@ specialization) or its stem ``Name_vN`` (every specialization in the program).
 * ``group:<slug>``, a named set: ``members`` lists keys, each of which must resolve (a group member must be an entry).
 
 A stem key must resolve in every specialization the program has.  ``callee`` (on a node or wire key: the stem of node k's callee)
-and ``digest`` (on a ``def`` key with a full id: `definition_digest`) are staleness guards: the key still resolves, but the entry
+and ``digest`` (on a ``def`` key with a full id: `codec.definition_digest`) are staleness guards: the key still resolves, but the entry
 was written against another body.  Fields: ``name``, ``description``, ``format`` (strings), ``aliases`` (strings), each set at most
 once per key in one file; `merge` layers files, a later file's field replacing an earlier one's.
 
@@ -29,12 +29,11 @@ structure; it evaluates nothing.
 """
 from __future__ import annotations
 
-import hashlib
 import re
 from dataclasses import dataclass, field
 from typing import Any, Mapping
 
-from .codec import canonical_json
+from .codec import definition_digest
 from .program import input_id
 from .types import type_from_json
 
@@ -45,21 +44,6 @@ _KIND = re.compile(r"^(def|node|wire|port|call|group):(.+)$")
 _STEM = re.compile(r"^[A-Za-z0-9_\[\]]+_v[1-9][0-9]*$")
 _SHA512 = re.compile(r"^[0-9a-f]{128}$")
 _TARGET = {"node": r"(.+)/(\d+)", "wire": r"(.+)/(\d+/\d+|ret)", "port": r"(.+)/(in/[^/]+|out(?:/\d+:\d+)?)"}
-
-
-def _resolved(desc: Mapping[str, Any], entry: Mapping[str, Any]) -> dict:
-    """A definition's descriptor entry with the v1 interning tables resolved (callee ids and types inline)."""
-    if "callees" not in desc or entry.get("form") != "composite":
-        return dict(entry)
-    callees, types = desc["callees"], desc["types"]
-    nodes = [dict(n, fn=callees[n["fn"]], out=types[n["out"]], args=[dict(a, type=types[a["type"]]) for a in n["args"]])
-             for n in entry["body"]["nodes"]]
-    return dict(entry, body=dict(entry["body"], nodes=nodes))
-
-
-def definition_digest(desc: Mapping[str, Any], fid: str) -> str:
-    """SHA-512 of the definition's descriptor entry, interning resolved: the same for one definition in any program."""
-    return hashlib.sha512(canonical_json(_resolved(desc, desc["definitions"][fid]))).hexdigest()
 
 
 def _stem(fid: str) -> str:
@@ -212,7 +196,7 @@ def validate(annotations: Mapping[str, Any], desc: Mapping[str, Any], program_di
                 if got != e["callee"]:
                     v.stale.append({"key": key, "definition": fid, "callee": got, "written_for": e["callee"]})
         if "digest" in e and key.startswith("def:") and len(specs) == 1:
-            got = definition_digest(desc, specs[0])
+            got = definition_digest(desc["definitions"][specs[0]], desc)
             if got != e["digest"]:
                 v.stale.append({"key": key, "definition": specs[0], "digest": got})
     v.ok = not v.errors
@@ -235,4 +219,4 @@ def merge(*layers: Mapping[str, Any]) -> dict:
     return {"format": FORMAT, "entries": list(by_key.values())}
 
 
-__all__ = ["FORMAT", "Verdict", "definition_digest", "validate", "attach", "merge"]
+__all__ = ["FORMAT", "Verdict", "validate", "attach", "merge"]

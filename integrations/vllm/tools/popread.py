@@ -444,8 +444,8 @@ class Units:
 
     def of(self, fns: dict[str, Any]) -> dict[str, int]:
         """name -> units per activation of `fns[name]`."""
-        from verity.ml.definitions.word import definition_digest
-        digest = {fn.id: definition_digest(fn) for fn in fns.values()}
+        from verity.ml.definitions.word import closure_digest
+        digest = {fn.id: closure_digest(fn) for fn in fns.values()}
         by_id: dict[str, int] = {}
         todo: dict[str, Any] = {}
         for fn in fns.values():

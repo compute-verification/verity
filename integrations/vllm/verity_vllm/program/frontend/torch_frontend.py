@@ -26,7 +26,6 @@ translation into a body) and `program_identity` (§8.1 over a program).
 
 from __future__ import annotations
 
-import hashlib
 import inspect
 import warnings
 from dataclasses import dataclass
@@ -35,7 +34,7 @@ from typing import Any, Callable, Sequence
 import torch
 from torch.utils import _pytree as pytree
 
-from verity.ml.circuits.codec import _encode_body, canonical_json, descriptor_id, program_digest
+from verity.ml.circuits.codec import descriptor_id, program_digest
 from verity.ml.circuits.defs import (REGISTRY, Builder, CompositeDefinition, FunctionDefinition, PrimitiveDefinition,
                     SpecializedDefinition, _static_key)
 from verity.ml.circuits.defs import bind as ir_bind
@@ -530,11 +529,5 @@ def export_report(fn: Function | Bound | Callable | torch.nn.Module, example_inp
     return ExportReport(program, digest, descriptor_id(sd), program.gates, program.input_gates, dead, unreachable, prov, dead_gates)
 
 
-def definition_digest(sd: SpecializedDefinition) -> str:
-    """SHA-256 of one specialisation's canonical body encoding (id + bindings + body; no annotations)."""
-    d = {"id": sd.base_id, "bindings": {k: str(_static_key(sd.bindings[k])) for k in sd.defn.statics}, "body": _encode_body(sd.body)}
-    return hashlib.sha256(canonical_json(d)).hexdigest()
-
-
 __all__ = ["Function", "function", "bind", "batch", "scan", "export", "export_report", "ExportReport", "DEAD_GATE_POLICIES", "Ops",
-           "ops", "Prim", "Registered", "Bound", "definition_digest", "FRONTEND_VERSION"]
+           "ops", "Prim", "Registered", "Bound", "FRONTEND_VERSION"]

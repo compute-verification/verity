@@ -308,6 +308,55 @@ def test_concat_normalises_repeated_references_to_one_value_into_a_zero_stride_s
     assert isinstance(concat([Affine("n", 3, 0, 1), Affine("n", 3, 1, 1)]), Affine)
 
 
+# -- the definition digest: one gate list, one digest (PROTOCOL.md §4.7) --------------------------------------------
+
+A3, A4 = Array(3, V16), Array(4, V16)
+
+
+@composite("DigestSum3", 1, [], lambda S: ((("r", A3),), V16))
+def DigestSum3(B, S, r):
+    return B.call(Add16, B.call(Add16, r[0], r[1]), r[2])
+
+
+@composite("DigestSum4", 1, [], lambda S: ((("r", A4),), V16))
+def DigestSum4(B, S, r):
+    return B.call(Add16, B.call(DigestSum3, r[0:3]), r[3])
+
+
+def _rows(nested: bool):
+    """x_k = a_k + a_k; s = Sum3(x_0 ++ x_1 ++ x_2); Sum4(x_0 ++ x_1 ++ x_2 ++ s): the row built as (x_0 ++ x_1) ++ x_2 when
+    `nested`, else flat."""
+    from verity.ml.circuits.refs import coll_concat
+
+    def body(B, S, a):
+        x = [B.call(Add16, a[k], a[k]) for k in range(3)]
+        row = coll_concat(A3, [coll_concat(A2, x[:2]), x[2]] if nested else x)
+        return B.call(DigestSum4, coll_concat(A4, [row, B.call(DigestSum3, row)]))
+
+    return bind(CompositeDefinition("DigestRows", 1, (), lambda S: ((("a", A3),), V16), body, register=False))
+
+
+def test_two_builds_of_one_gate_list_digest_the_same():
+    """Two builds of one gate list, whose row is concatenated nested in one and flat in the other, write different v0 entries
+    and one definition digest; so do their v1 descriptors, which write the second row as an alias of the first, and the
+    definition decoded back from either."""
+    nested, flat = _rows(True), _rows(False)
+    entries = [codec.definition_entry(fn) for fn in (nested, flat)]
+    assert entries[0] != entries[1] and "concat" in json.dumps(entries[0]["body"]["nodes"][3]["args"][0]["refs"]["concat"])
+    digest = codec.definition_digest(entries[1])
+    for fn in (nested, flat):
+        P = Program(CompositeDefinition("CallsDigestRows", 1, (), lambda S: ((("a", A3),), V16),
+                                        lambda B, S, a, fn=fn: B.call(fn, a), register=False))
+        desc = json.loads(json.dumps(encode_program(P)))
+        e = desc["definitions"][fn.id]
+        assert e["body"]["nodes"][4]["args"][0]["refs"]["concat"][0] == {"alias": [3, 0]}
+        assert codec.definition_digest(entries[0]) == codec.definition_digest(e, desc) == digest
+        assert codec.definition_digest(codec.definition_entry(decode_program(desc, REGISTRY).defs[fn.id])) == digest
+        assert codec.canonical_entry(e, desc) == codec.canonical_entry(entries[1])
+    with pytest.raises(ValueError, match="an interned entry needs its descriptor's"):
+        codec.definition_digest(e)
+
+
 
 
 # -- the canonical JSON domain: a list of integers is checked whole ----------------------------------------------

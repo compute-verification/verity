@@ -19,17 +19,17 @@ nodes, each callee read by its signature alone):
                       smallest there).  A static-free callee is its own target, a catalog root.
 
 The entry says ``"mode": "by-calls"`` and has no gate count.  Its ``by_calls`` lists each callee with the target it relies on,
-and ``entry_sha512``, the digest of the root's own entry, which is not the whole Program's `codec.program_digest`: that needs
-every callee's body.  The report (`checks.report`, `joined`) adds each relied-on target's verdict to the root's: a target the
-report doesn't hold is ``by-calls/callee-unchecked``, one that failed ``by-calls/callee-failed``.  A named run checks those
-targets beside the root (`cli._tasks`); ``--all`` holds them when its suite does.
+and ``entry_sha512``, the root's definition digest (`codec.definition_digest`), which is not the whole Program's
+`codec.program_digest`: that needs every callee's body.  The report (`checks.report`, `joined`) adds each relied-on target's
+verdict to the root's: a target the report doesn't hold is ``by-calls/callee-unchecked``, one that failed
+``by-calls/callee-failed``.  A named run checks those targets beside the root (`cli._tasks`); ``--all`` holds them when its
+suite does.
 
 The rest of circuit-check never builds such a root's body: the catalog doesn't descend into it (`targets.reachable`),
 `targets.select` keeps it whatever its size, its key is its own entry (`cache.descriptor`, `entry`), and its catalog record
 says so (`units`)."""
 from __future__ import annotations
 
-import hashlib
 from typing import Any
 
 from verity.ml.circuits import codec as C
@@ -82,10 +82,6 @@ def entry(fn: SpecializedDefinition) -> dict:
         fn._circuit_check_built = fr
         got = _ENTRIES[id(fn)] = (fn, e)
     return got[1]
-
-
-def _digest(e: dict) -> str:
-    return hashlib.sha512(C.canonical_json(e)).hexdigest()
 
 
 def _decoded(fn: SpecializedDefinition, e: dict, callees: dict[str, Any]) -> tuple[Any, Any]:
@@ -247,8 +243,8 @@ def check(fn: SpecializedDefinition) -> dict:
             F.fail(CHECK, "ports", fn.id, f"{type(ex).__name__}: {str(ex)[:300]}")
             own = None
         if own is not None:
-            record["entry_sha512"] = _digest(own)
-            record["entry_of"] = ("the root's own descriptor entry, its callees by descriptor id: not the whole Program's "
+            record["entry_sha512"] = C.definition_digest(own)
+            record["entry_of"] = ("the root's definition digest, its callees by descriptor id: not the whole Program's "
                                   "program_digest, which needs every callee's body")
             try:
                 back, ports = _decoded(fn, own, {C.descriptor_id(c): c for c, _k in callees(body)})
@@ -259,7 +255,7 @@ def check(fn: SpecializedDefinition) -> dict:
                 again.set_port_types(ports)
                 if C.canonical_json(C.definition_entry(again)) != C.canonical_json(own):
                     F.fail(CHECK, "round-trip", fn.id, "its entry decodes to a body that encodes to another entry")
-            if _digest(C.definition_entry(_shell(fn, unlaid(fn)))) != record["entry_sha512"]:
+            if C.definition_digest(C.definition_entry(_shell(fn, unlaid(fn)))) != record["entry_sha512"]:
                 F.fail(CHECK, "unstable", fn.id, "two builds of it give two entries")
         rows = []
         for c, k in callees(body):

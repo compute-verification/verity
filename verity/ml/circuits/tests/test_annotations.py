@@ -94,7 +94,7 @@ def test_a_field_is_set_once(desc):
 
 def test_guards_report_staleness(desc):
     fid = codec.descriptor_id(M3)
-    good = A.definition_digest(desc, fid)
+    good = codec.definition_digest(desc["definitions"][fid], desc)
     v = A.validate(ann({"key": f"def:{fid}", "digest": good}, {"key": "node:AMaxAbs_v1/1", "callee": "F32Fmaxf_v1"}), desc)
     assert v.ok and v.stale == [{"key": "node:AMaxAbs_v1/1", "definition": codec.descriptor_id(M2), "callee": "F32Fabs_v1",
                                  "written_for": "F32Fmaxf_v1"}]
@@ -105,7 +105,7 @@ def test_guards_report_staleness(desc):
 def test_the_definition_digest_does_not_depend_on_the_program(desc):
     alone = codec.encode_program(Program(bind(_c("AOnly", (("b", Array(3, F32)),), F32, lambda B, S, b: B.call(M3, b)))))
     fid = codec.descriptor_id(M3)
-    assert A.definition_digest(alone, fid) == A.definition_digest(desc, fid)
+    assert codec.definition_digest(alone["definitions"][fid], alone) == codec.definition_digest(desc["definitions"][fid], desc)
 
 
 def test_attaching_moves_no_digest(desc):

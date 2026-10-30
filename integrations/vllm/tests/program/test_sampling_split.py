@@ -1,7 +1,7 @@
 """The sampling family's split into Definitions, twins and vocabulary changes no Definition.
 
-* Every Definition id and canonical descriptor digest (`query.word.definition_digest`: the descriptor entry and its callees'
-  digests) is the one `data/sampling_split_digests.json` pins, at every statics a circuit-check target or pin, a kept record or
+* Every Definition id and canonical descriptor digest (`word.closure_digest`: the definition digest and its callees'
+  closure digests) is the one `data/sampling_split_digests.json` pins, at every statics a circuit-check target or pin, a kept record or
   manifest, or a served vocabulary uses, and each of the family's Definitions is still constructed by the module that
   constructed it.  The pins were written on the unsplit tree; a change to a Definition of the
   family rewrites them (`python tests/program/test_sampling_split.py --write`, from `integrations/vllm`).
@@ -113,10 +113,10 @@ def resolve(key: str, defs: dict[str, object]):
 
 
 def pin(key: str, defs: dict[str, object]) -> dict:
-    from verity.ml.definitions.word import definition_digest
+    from verity.ml.definitions.word import closure_digest
 
     fn = resolve(key, defs)
-    return {"id": fn.id, "digest": definition_digest(fn)}
+    return {"id": fn.id, "digest": closure_digest(fn)}
 
 
 # --- the writer --------------------------------------------------------------------------------------------------------------
