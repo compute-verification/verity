@@ -58,8 +58,8 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
 - Drive stacks admitted PRs on `next`, non-Lean changes first. Reviewers ci staffs, never the owner, record a verdict at
   the head (`research queue review N --land|--hold REASON --by LANE`); no other per-head grant exists. Drive
   fast-forwards `checked` (`land_into`) to the longest reviewed prefix whose merges are clean and whose `.py` files compile; while no Lean
-  check runs, it moves reviewed members below those awaiting a verdict, so a PR waiting for review holds only itself (a
-  hold still keeps what is above it). A change to a
+  check runs, it moves reviewed members below those awaiting a verdict, so a PR waiting for review holds only itself; a
+  held PR, and any PR containing it, goes to the top of `next` at each sync, so a hold holds only itself too. A change to a
   `lean-audit.json` lock or to Lean that runs as code (a `.lean` outside `Security/`) also waits for a `lean-audit` that
   passed at or above it; Lean proofs alone land on the verdict.
 - One run checks `checked`'s tip after each landing; when it passes every step on the merge gate (not circuit-check), drive fast-forwards `main` there. A red
