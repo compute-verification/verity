@@ -267,10 +267,10 @@ def leak_count(members: Iterable[Any], external: Iterable[str], bits: int) -> di
     gates no step lists as ingress, less the inputs the registration fixes. The circuit's input gates are each of the
     verifier's ``members``' parameter rows' bits (16 a u16 word: `interface.layout` refuses a port of part words), once per
     unit, or once per table row for a shared-row port (``tables``), and none for a port wired from other units' outputs
-    (``wired``, which a5's wiring check holds). The records list no steps and register no input (a row table's registered
-    reads are refused, `verifier_window`), so none is ingress or registered yet: the ``external`` ports are reported, not
-    subtracted, until a layout lists the ingress at its steps. ``bound`` is ``vacuous`` while ``other_inputs`` exceeds the
-    charge."""
+    (``wired``, which a5's wiring check holds). A record that declares no input lists no steps and registers no input (a
+    row table's registered reads are refused, `verifier_window`), so none is ingress or registered: the ``external``
+    ports are reported, not subtracted. A record that declares its ingress at its steps (vLLM's served windows) is counted
+    by `declared_count`. ``bound`` is ``vacuous`` while ``other_inputs`` exceeds the charge."""
     inputs = wired = ext_bits = 0
     ext = set(external)
     for m in members:
@@ -288,9 +288,10 @@ def leak_count(members: Iterable[Any], external: Iterable[str], bits: int) -> di
 def declared_count(doc: Mapping[str, Any], bits: int, resolve: Callable[[str], Any] = IF.resolve,
                    pins: Mapping[str, str] | str | None = None, roots: Mapping[str, str] | None = None,
                    untied: Iterable[str] = ()) -> dict[str, Any]:
-    """The leak bound's count of a stated record that declares its inputs (`interface.input_count`, from its description
-    alone): its input rows less those its wires, registered reads of a parameter whose window root (``roots``, those the
-    registration records: `window_roots`) is the verifier's pin (``pins``, ``{param: root}``) and ingress fill
+    """The leak bound's count of a record that declares its inputs (`interface.input_count`: a stated record's from its
+    description alone, a listed one's from its members and the ingress it declares): its input rows less those its wires,
+    registered reads of a parameter whose window root (``roots``, those the registration records: `window_roots`) is the
+    verifier's pin (``pins``, ``{param: root}``) and ingress fill
     leave ``free``, and ``other_inputs`` is those plus the advice's ``bits``, the compile unit's one input, a statement of
     its own. So ``other_inputs`` equals the charge exactly when the circuit leaves no input free. An ``untied`` value
     (`window_pins`: a per-window value no output port of the circuit writes, whose rows the prover chose) is no pin here,

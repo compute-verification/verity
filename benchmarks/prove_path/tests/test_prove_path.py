@@ -20,7 +20,9 @@ TP stand-in (integrations/vllm's `tests.pipeline.served_tp`, deferred), without 
   (a compiler without the cap, a root that isn't rows-sha512) and its negatives, and the CLI's served run.
 * What no Program digest covers (a Build's row names, its parameters' names and types, its correspondence): the verifier's I2
   reads it only from its own Build of each Program, which its compile writes (`own_builds`, `naming.write_build`), whatever the
-  row dir holds under the same digests, and its compile command runs with no vLLM importable."""
+  row dir holds under the same digests, and its compile command runs with no vLLM importable.
+* A served window's circuit record states its ingress at each step, so the leak bound's count over it is the advice's charge
+  (`records_audit.declared_count`), where counted from its members alone it was vacuous."""
 from __future__ import annotations
 
 import argparse
@@ -40,11 +42,11 @@ from typing import Any
 import pytest
 
 from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound, location_bits
-from verity.core.protocols.sampled_proofs.one_stage import audit as AU, partition as P, registration as R
+from verity.core.protocols.sampled_proofs.one_stage import audit as AU, draw as DR, partition as P, registration as R
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.types import Array, Value as Bits
-from verity.ml.windows import rows as CS
+from verity.ml.windows import interface as IF, rows as CS
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import advice_windows as AW
 from verity_vllm.pipeline.tp import serving_rows as SRT
@@ -1380,6 +1382,38 @@ def test_the_compile_command_writes_its_own_builds_with_no_vllm(tmp_path, monkey
                     "--advice", str(tmp_path / "advice.bin"), "--out", str(out)]) == 0
     assert s.compiles == [True] and list(out.parent.iterdir()) == [out] and sys.modules["vllm"] is None
     assert json.loads(out.read_text())["templates"]
+
+
+def test_a_served_windows_record_states_its_ingress_and_its_leak_bound_is_within_the_advices_charge(tmp_path, monkeypatch):
+    """TINY's served window over layer 0's ``SiluMul_v2{I=128}`` (`LAYER0`), as the registered compiler's ``circuit`` command
+    writes its record from the advice alone: each unit reads the gate and up projection's output, a row outside the window, so
+    the record declares that port the ingress at its engine step (r0's four prompt tokens at step 0 and its decode at 1; r1,
+    arriving at 2, at 2, 3 and 4). Counted from its members alone (`records_audit.leak_count`) every input bit was other and
+    the bound vacuous; counted with the ingress it declares (`declared_count`, the audit's count for it) nothing is free and
+    its other inputs are the advice's bits, the charge. The verifier's window from the record is the one the prover's
+    Programs make (`_circuit`), and the prover's record is the compiler's."""
+    import records_audit as RA
+
+    s = _tiny_served(tmp_path, monkeypatch)
+    (tmp_path / "part.json").write_text(json.dumps(LAYER0))
+    (tmp_path / "advice.bin").write_bytes(s.data)
+    out = tmp_path / "circuit.json"
+    assert PP.main(["circuit", "--serve-run", str(s.run), "--window", "0", "--partition", str(tmp_path / "part.json"),
+                    "--advice", str(tmp_path / "advice.bin"), "--out", str(out)]) == 0
+    doc, bits = json.loads(out.read_text()), s.bound["advice"]["bits"]
+    assert [(g["port"], g["at"], g["units"], g["step"]) for g in doc["ingress"]] == [
+        ("in0", 0, 4, 0), ("in0", 4, 1, 1), ("in0", 5, 4, 2), ("in0", 9, 1, 3), ("in0", 10, 1, 4)]
+    mine = IF.window_of_record(doc, DR.parse_law(LAYER0["law"]), IF.resolve)
+    inputs = 11 * 16 * 2 * 128
+    assert doc["templates"] == [["SiluMul_v2{I=128}", 11]] and bits > 0
+    assert RA.leak_count(mine.members, (), bits) == {"inputs": inputs, "wired": 0, "ingress": 0, "registered": 0, "external": 0,
+                                                     "other_inputs": inputs, "advice_bits": bits, "bound": "vacuous"}
+    assert RA.declared_count(doc, bits) == {"units": 11, "inputs": inputs, "wired": 0, "registered": 0, "ingress": inputs,
+                                            "free": 0, "other_inputs": bits, "advice_bits": bits, "bound": "within the charge"}
+    _row_dir(Path(s.a.row_dir), s)
+    prover = PP.compiler_of_args(argparse.Namespace(**vars(s.a), transfer_gate=[]))
+    record, _rows = _circuit(prover, s.data, LAYER0)
+    assert IF.circuit_of(record) == IF.circuit_of(doc)
 
 
 def test_the_committers_key_is_made_once_private_and_read_back(tmp_path):
