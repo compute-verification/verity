@@ -18,6 +18,9 @@ syncs `next` (`Queue.sync`: admit and drop PRs, rebuild on a moved `checked`), t
 (`research queue review N --land|--hold`, a `reviewed` label on `pr:N@HEAD`; one by its owner, the owner's handle or its ready
 mark's author doesn't count: `queue.unreviewed`), a fast-forward of `checked` (`_land`); once `main` reaches it, `merge.caught_up`
 (the spec DM, node 1's mirror, the post-train regression, the Lean cache publish, the landing post) and the sweep (`_on_main`).
+While `next`'s lowest member waits at its head for a land verdict, unheld, holding every landing above it, `BOTTOM_WAIT_S`
+since it became the lowest or since its ready mark, whichever is later, @ci (who staffs the reviewers) and @top are rung,
+and again every `BOTTOM_WAIT_S` while it waits (`_bottom`).
 A `main` pushed outside drive (a pure move, on its own check) is merged into `checked` (`_absorb`).  Two gates cut the prefix
 first.  A Lean change (a member whose own change touches a lock, `lean-audit.json`, or a Lean source outside `Security/`
 of a package that has one, Lean that runs as code: `queue.lean_change`; Lean proofs alone land on the verdict, checked by the
@@ -65,9 +68,7 @@ landing goes on.  The ring (`_ring`) quotes the run, the first error line
 reverted on `checked`, never on `main`, `FIX_WINDOW_S` after it (`_red_clock`) unless a fix is marked (`_fix`); a red
 circuit-check's culprit at once (`CIRCUIT_RED`), and while circuit-check is red on `checked` no PR whose own change touches
 its inputs lands (`_circuit_held`), every other one landing on.  A red run moves nothing on `main`.  While the oldest landing no run verified is
-`BEHIND_S` old, @ci and @top are rung every `BEHIND_EVERY_S` (`_behind`).  While `next`'s lowest member waits at its head
-for a land verdict, unheld, `BOTTOM_WAIT_S` since it became the lowest or since its ready mark, whichever is later, @ci (who
-staffs the reviewers) and @top are rung every `BOTTOM_WAIT_S` (`_bottom`).  A run with no readable state `LOST_AFTER_S` after its
+`BEHIND_S` old, @ci and @top are rung every `BEHIND_EVERY_S` (`_behind`).  A run with no readable state `LOST_AFTER_S` after its
 launch is lost.
 
 The Lean checks and the post-landing runs (the after-landing run and its bisection's) are launched detached (`detach`), so no tick
@@ -160,6 +161,9 @@ AFTER_LANDING_OPTIONAL = ("lean-agreement", "lean-changed")
 #: ticks a member must keep its head on `next` before the review landing's Lean check reaches it (`Driver._lean_check`): one
 #: of a prefix capped below recent churn isn't taken off `next` by the next re-mark
 LEAN_SETTLE_TICKS = 1
+#: how long `next`'s lowest member may wait at its head with no land verdict and no hold, holding every landing above it,
+#: before drive rings the reviewers (`CI`, who staffs them) and `TOP`, and how often again while it waits (`Driver._bottom`)
+BOTTOM_WAIT_S = 1800
 #: how long a run may show no readable state (`unknown`) before drive takes it as lost (`Driver._lost`)
 LOST_AFTER_S = 3 * 3600
 #: how long the owners rung for a red suite or step have to mark a fix before drive reverts its culprit (`Driver._red_clock`;
@@ -179,9 +183,6 @@ POSTLAND_RUN_S = 5 * 3600
 TAIL = ("circuit-check", "flock-rust-tests")
 #: who the alarm on a `main` long unverified rings beside `CI` (`Driver._behind`)
 TOP = "@top"
-#: how long `next`'s lowest member may wait at its head with no land verdict and no hold, holding every landing above it,
-#: before drive rings the reviewers (`CI`, who staffs them) and `TOP`, and how often again while it waits (`Driver._bottom`)
-BOTTOM_WAIT_S = 1800
 #: the step a Lean change's Lean check before a review landing runs (`train.sh TOP MACHINES --deferred lean-audit`)
 LEAN_STEP = "lean-audit"
 #: a Lake package's lock, which a Lean check may regenerate (`merge.LOCK`)
