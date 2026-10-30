@@ -3,17 +3,21 @@
 # built into a library with the served committer's leaf kernels (as run.sh builds ssn), SASS-gated (sass_gate.json), its
 # mainloop checked (IGMMA in every ssn_k, no local memory) and the recorded gate held to the tree (gate.json, gate.py
 # --recorded). Under it: the library's exact check at each of MODES (check_m<M>.jsonl), then each arm served in turn on
-# served_util.sh's mix (N requests of exactly 1,024 prompt ids, max_tokens 1, greedy, all queued at once, at T tokens and
-# T/1024 requests a step and a window, one step a window, no prefix cache, the int8 Llama-3.2-1B under verity_int8,
-# VLLM_BATCH_INVARIANT=1, eager, synchronous scheduling), WARM requests first; the SM clock sampled beside it all. After
-# it: report.json and report.txt, each arm's steady step wall and its tokens against stock's. Measurement only: what it
-# serves credits nothing. cwd: the source tree's root; the node holds the venv and the model.
+# served_util.sh's mix (N requests of exactly PROMPT_IDS prompt ids, max_tokens 1, greedy, all queued at once, SLOTS
+# requests a step and a window at T tokens a step, one step a window, no prefix cache, the int8 Llama-3.2-1B under
+# verity_int8, VLLM_BATCH_INVARIANT=1, eager, synchronous scheduling), WARM requests first; the SM clock sampled beside it
+# all. The defaults are V3's class: T 512 with SLOTS 4 of PROMPT_IDS 16 (64 tokens a step) and MAX_MODEL_LEN 64;
+# served_util.sh's T 8,192 prefill mix is T=8192 PROMPT_IDS=1024 SLOTS=8 MAX_MODEL_LEN=1088. After it: report.json and
+# report.txt, each arm's steady step wall (its full steps of SLOTS·PROMPT_IDS tokens) and its tokens against the first
+# arm's. Measurement only: what it serves credits nothing. cwd: the source tree's root; the node holds the venv and the
+# model.
 #   ARMS (stock lead2 lead1 lead0: stock, then the lead at serve.cu's modes 2, 1 and 0; the first is the report's base),
-#   T (8192), N (96), WARM (16), SEQS (T/1024), AUDIT (128: lead2's first calls compared with the reference and stock),
-#   BUDGET_GB (8: the exported words a hash chunk holds), NBUF (4: mode 2's buffers), MODES (2 1 0: the checks; empty
-#   skips them), LEASE_MIN (90), CUDA_HOME (/usr/local/cuda-13.0), VENV (/workspace/cp/venv312), HF_HOME (/workspace/hf),
-#   CACHE (/workspace/research/cache/served-lead: vLLM's, Triton's and torch's), PORT (18191), BUILD_ONLY (0; 1 stops
-#   after the build, the SASS checks and the gate, on any machine with a CUDA toolkit and the venv).
+#   T (512), PROMPT_IDS (16), SLOTS (4), MAX_MODEL_LEN (64), N (96), WARM (2·SLOTS), AUDIT (128: lead2's first calls
+#   compared with the reference and stock, the warm load's), BUDGET_GB (8: the exported words a hash chunk holds), NBUF (4:
+#   mode 2's buffers), MODES (2 1 0: the checks; empty skips them), LEASE_MIN (90), CUDA_HOME (/usr/local/cuda-13.0),
+#   VENV (/workspace/cp/venv312), HF_HOME (/workspace/hf), CACHE (/workspace/research/cache/served-lead: vLLM's, Triton's
+#   and torch's), PORT (18191), BUILD_ONLY (0; 1 stops after the build, the SASS checks and the gate, on any machine with
+#   a CUDA toolkit and the venv).
 # Published ($OUT): steps.txt, the build's logs and checks, check_m<M>.jsonl, smi.csv, gpu.txt, and per arm <arm>/: its
 # serve.log's protocol and engine lines, serve.json, summary.json, advice_trace.jsonl, the loads' timings, main.jsonl (the
 # requests' output ids) and, for a lead arm, lead.json (serve_lead.py's --stats).
@@ -21,8 +25,9 @@ set -uo pipefail
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 say() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$OUT/steps.txt"; }
 export TREE=${TREE:-$PWD} HERE=benchmarks/pouw/np_kernel
-export T=${T:-8192} N=${N:-96} WARM=${WARM:-16} ARMS=${ARMS:-stock lead2 lead1 lead0} MODES=${MODES-2 1 0}
-export SEQS=${SEQS:-$(( T / 1024 ))} AUDIT=${AUDIT:-128} BUDGET_GB=${BUDGET_GB:-8} NBUF=${NBUF:-4} PORT=${PORT:-18191}
+export T=${T:-512} PROMPT_IDS=${PROMPT_IDS:-16} SLOTS=${SLOTS:-4} MAX_MODEL_LEN=${MAX_MODEL_LEN:-64} N=${N:-96}
+export WARM=${WARM:-$(( 2 * SLOTS ))} STEP_TOKENS=$(( SLOTS * PROMPT_IDS )) ARMS=${ARMS:-stock lead2 lead1 lead0} MODES=${MODES-2 1 0}
+export AUDIT=${AUDIT:-128} BUDGET_GB=${BUDGET_GB:-8} NBUF=${NBUF:-4} PORT=${PORT:-18191}
 export VENV=${VENV:-/workspace/cp/venv312} CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
 export PY=$VENV/bin/python REPO=verity-int8/Llama-3.2-1B-INT8 REV=15b0976d400d796ee589e7737d03a919526bf800
 export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src
@@ -31,10 +36,12 @@ if [ "${1:-}" != leased ]; then
   for arm in $ARMS; do
     case $arm in stock|lead0|lead1|lead2) ;; *) say "ARMS: $arm is not stock or lead0, lead1, lead2"; exit 2 ;; esac
   done
-  [ $(( T % 1024 )) = 0 ] || { say "T $T: not a multiple of 1,024"; exit 2; }
+  [ "$SLOTS" -ge 1 ] && [ "$STEP_TOKENS" -le "$T" ] && [ "$PROMPT_IDS" -lt "$MAX_MODEL_LEN" ] \
+    || { say "SLOTS $SLOTS of PROMPT_IDS $PROMPT_IDS: not 1 to T $T tokens a step, each prompt under MAX_MODEL_LEN $MAX_MODEL_LEN"; exit 2; }
   SCR=$(mktemp -d /tmp/served-lead-XXXXXX); export SCR
   trap 'rm -rf "$SCR"' EXIT
-  say "build $(git -C "$TREE" rev-parse --short=10 HEAD 2>/dev/null) into $SCR: ARMS $ARMS T $T N $N WARM $WARM SEQS $SEQS"
+  say "build $(git -C "$TREE" rev-parse --short=10 HEAD 2>/dev/null) into $SCR: ARMS $ARMS T $T SLOTS $SLOTS PROMPT_IDS" \
+    "$PROMPT_IDS MAX_MODEL_LEN $MAX_MODEL_LEN N $N WARM $WARM"
   COMMITTER=integrations/vllm/verity_vllm/commit/committer
   python3 "$HERE/plain_rows.py" "$COMMITTER/native_rows.cu" "$SCR/native_rows_p.cu" || { say "plain_rows.py failed"; exit 3; }
   "$CUDA_HOME/bin/nvcc" -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a -Xptxas -v --no-compress -Xcompiler -fPIC \
@@ -70,7 +77,7 @@ EOF
   rc=$?; say "LEASED PART rc $rc"
   arms=(); for arm in $ARMS; do [ -f "$OUT/$arm/advice_trace.jsonl" ] && arms+=(--arm "$arm=$OUT/$arm"); done
   if [ ${#arms[@]} -gt 0 ]; then
-    "$PY" "$TREE/$HERE/serve_lead.py" report "${arms[@]}" --T "$T" --out "$OUT/report.json" > "$OUT/report.txt" 2>&1
+    "$PY" "$TREE/$HERE/serve_lead.py" report "${arms[@]}" --T "$STEP_TOKENS" --out "$OUT/report.json" > "$OUT/report.txt" 2>&1
     say "REPORT rc $?"; cat "$OUT/report.txt"
   fi
   exit "$rc"
@@ -101,14 +108,14 @@ done
 
 alive() { case $(ps -o stat= -p "$1" 2>/dev/null) in ''|Z*) return 1 ;; esac; }
 load() {  # $1 requests, $2 seed, $3 the arm's scratch, $4 name
-  "$PY" "$TREE/examples/vllm/serve_load.py" --port "$PORT" --model "$REPO" --varied "$1" --prompt-range 1024:1024 \
+  "$PY" "$TREE/examples/vllm/serve_load.py" --port "$PORT" --model "$REPO" --varied "$1" --prompt-range "$PROMPT_IDS:$PROMPT_IDS" \
     --max-tokens 1 --rate 1000 --seed "$2" --out "$3/$4.jsonl" > "$3/$4.log" 2>&1
 }
 for arm in $ARMS; do
   D=$SCR/$arm; A=$OUT/$arm; mkdir -p "$D" "$A"
   args=(--model "$REPO" --revision "$REV" --out "$D/serve" --port "$PORT" --precision verity_int8
-        --run-id "${RESEARCH_RUN_ID:-local}-$arm" --admit arrival --window-requests "$SEQS" --max-num-seqs "$SEQS"
-        --max-num-batched-tokens "$T" --max-model-len 1088 --window-steps 1 --no-prefix-caching --no-commit)
+        --run-id "${RESEARCH_RUN_ID:-local}-$arm" --admit arrival --window-requests "$SLOTS" --max-num-seqs "$SLOTS"
+        --max-num-batched-tokens "$T" --max-model-len "$MAX_MODEL_LEN" --window-steps 1 --no-prefix-caching --no-commit)
   case $arm in
     stock) lead=(--stock) ;;
     lead*) m=${arm#lead}; lead=(--lib "$LIB" --mode "$m" --budget-gb "$BUDGET_GB" --nbuf "$NBUF" --max-m "$T" --stats "$A/lead.json")

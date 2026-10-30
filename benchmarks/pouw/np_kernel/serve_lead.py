@@ -523,7 +523,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--stats", default=None)
     r = sub.add_parser("report")
     r.add_argument("--arm", action="append", required=True, help="NAME=DIR, the first the base")
-    r.add_argument("--T", type=int, required=True)
+    r.add_argument("--T", type=int, required=True, help="a full step's tokens")
     r.add_argument("--out", required=True)
     a = ap.parse_args(argv)
     if a.cmd == "serve" and a.stock == bool(a.lib):
