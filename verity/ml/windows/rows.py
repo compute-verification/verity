@@ -1,5 +1,5 @@
-"""A window's rows: the ``frame-v3-sha512`` + ``hm96-sha512/v1`` commitment of a window's units in C-Flock's statement row leaf
-format (``verity_flock.circuit``'s statement rows), with the registration, C-Flock's public and prover files and the
+"""A window's rows: the ``frame-v3-sha512`` + ``hm96-sha512/v1`` commitment of a window's units in Flock's statement row leaf
+format (``verity_flock.circuit``'s statement rows), with the registration, Flock's public and prover files and the
 labels the one-stage audit binds (``verity.core.protocols.sampled_proofs.one_stage``).
 
 The population is the verifier's: its program is ``TemplateInstances`` / ``TemplatePopulations`` over the members' templates and
@@ -13,10 +13,10 @@ an instance).
 
 A population is a sequence of members (:class:`Member`), one per template in the partition's order, or a template's units in
 consecutive chunks, one member per statement (a circuit's spec shape caps its instances), each with its row ports and output
-ports in the order of C-Flock's circuit prover (``verity_flock.circuit``).  Each output port is a row too, after the member's
+ports in the order of Flock's circuit prover (``verity_flock.circuit``).  Each output port is a row too, after the member's
 input rows: its words zero-padded to whole SHA-512 blocks, committed under its own salt like an input row (an output is a
 value: no output word is ever public).  A bit-row member
-(C-Flock's ``row_schemas``) commits each row as the bits of its words under its port's schema (``hm96-sha512/row/v2`` or
+(Flock's ``row_schemas``) commits each row as the bits of its words under its port's schema (``hm96-sha512/row/v2`` or
 ``…/row-seg/v1``), each output row exactly its words.  Per row of ``hm96-sha512/row/v1``
 (``tests/commit/test_serving_rows.py`` pins it to core and to the circuit prover's vector):
 
@@ -281,7 +281,7 @@ class Member:
     """One statement's units of the population: its template's descriptor id, row and output ports ``(name, words)`` in the
     circuit prover's order, its instance count and the global index of its first unit.  A template is one member, or
     consecutive chunks of its units (``name`` ``<descriptor id>/c<j>``), one per statement of at most the circuit's chunk cap.  ``schemas``: a bit-row
-    member's row schema per port (``hm96-sha512/row/v2`` or ``…/row-seg/v1``, C-Flock's ``row_schemas``), each row the bits
+    member's row schema per port (``hm96-sha512/row/v2`` or ``…/row-seg/v1``, Flock's ``row_schemas``), each row the bits
     of its u16 words and each output row exactly its words; else every row is ``hm96-sha512/row/v1``."""
     template: str
     rows: tuple[tuple[str, int], ...]
@@ -334,7 +334,7 @@ class Member:
 
     @property
     def row_schemas(self) -> list[list[Any]] | None:
-        """C-Flock META's ``row_schemas`` for a bit-row member: ``[schema, bits]`` per row, in the circuit prover's order."""
+        """Flock META's ``row_schemas`` for a bit-row member: ``[schema, bits]`` per row, in the circuit prover's order."""
         return [[self.schema(p), 16 * w] for p, w in self.all_rows] if self.schemas else None
 
     def port(self, name: str) -> str:

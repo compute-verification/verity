@@ -14,7 +14,7 @@ A session has four steps:
 2. **Rounds.** Round `j` reveals index `j` (`challenge`), receives the whole answer block (`receive`), reads its clock
    for the receipt before it hashes anything, then hashes the received bytes itself (`block_digest`).  Its record is
    `(j, index, send time, receipt time, H(block))` (`Round`).  The first late round ends the session.  No round is
-   retried, and no index is redrawn.
+   retried, and no index is resampled.
 3. **Sign.** One signature per session (`close`) over `SHA-512(SESSION_TAG ‖ header ‖ records root)`: the header is
    the commitment's fields and how the session ended, and the records root is the frame-v3-sha512 root of the round
    records.  The records are witness: the prover proves things about them, and they never reach the auditor in the

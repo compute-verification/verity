@@ -53,7 +53,7 @@ def emit(event: str, **kw) -> None:
 
 
 def lines(r: dict) -> dict:
-    """A session's verdict, pass timeline and memory lines, without its draws: what sbench's report reads."""
+    """A session's verdict, pass timeline and memory lines, without its samples: what sbench's report reads."""
     seen = r.get("windows_seen", [])
     passes = []
     for w in seen:
