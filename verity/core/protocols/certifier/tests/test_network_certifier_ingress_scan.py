@@ -1,15 +1,15 @@
 """The scan (`ingress_scan.IngressScanBucket`, `IngressScanFirst`) and the egress buckets on the views it writes
-(`egress.EgressBucket`), on the warden's own records: the warden, driven tick by tick (`test_network_certifier_warden`'s
-harness), carries three warden-form id requests on two lanes, the third queued until a lane frees, and their responses
-of id events. The reference's scan of its ingress rows from the empty state, the Programs' rows its responses, holds
-each request's prompt ids at their positions, its head's fields, its admission bucket and its anchor until the anchor
-(two requests anchored at one boundary in their own slots) and its outputs from then until its last egress bucket,
-gives each slot's occupancy word 1 in the state its Program reads and 0 in every other (the token-id row, `token_row`:
-the occupancy word, the prompt's length and its prompt in order, each where `slot_row` puts it in the state row), and
-reuses a slot only past it; egress bucket t computes the
-warden's egress row t from the view ingress bucket t writes, every bucket, and another row (never a forged one) from a
-view of another bucket. The ingress circuit computes the reference's outputs on every bucket and on random flips (S_t
-and its view, bit for bit, where ok is 1), refuses each named negative (two blocks swapped, a data cell after a pad, an
+(`egress.EgressBucket`), on the network certifier's own records: the network certifier, driven tick by tick
+(`test_network_certifier_warden`'s harness), carries three network-certifier-form id requests on two lanes, the third
+queued until a lane frees, and their responses of id events. The reference's scan of its ingress rows from the empty
+state, the Programs' rows its responses, holds each request's prompt ids at their positions, its head's fields, its
+admission bucket and its anchor until the anchor (two requests anchored at one boundary in their own slots) and its
+outputs from then until its last egress bucket, gives each slot's occupancy word 1 in the state its Program reads and 0
+in every other (the token-id row, `token_row`: the occupancy word, the prompt's length and its prompt in order, each
+where `slot_row` puts it in the state row), and reuses a slot only past it; egress bucket t computes the
+network certifier's egress row t from the view ingress bucket t writes, every bucket, and another row (never a forged
+one) from a view of another bucket. The ingress circuit computes the reference's outputs on every bucket and on random
+flips (S_t and its view, bit for bit, where ok is 1), refuses each named negative (two blocks swapped, a data cell after a pad, an
 `END` that isn't the request's last cell, a new ordinal not above `last`, a slot reused before its last egress
 bucket, an ordinal or a pad byte changed, a phase of EVERY, a Programs' entry off its anchor, an entry for a slot whose
 occupancy word is 0, a Programs' count over KO, a prompt over KI ids), and computes another
@@ -17,8 +17,8 @@ S_t than the scan's, which the state row its o1 opens refuses, from a digit chan
 outputs; the same traffic at a KI one below request 3's prompt is refused at the cell that takes it past; a window
 circuit's state rows (`window_state`) are the scan's from t0 − 1, the empty state's first; the first bucket's circuit
 is the ingress circuit at the empty state, bit for bit; the egress circuit is its reference on the views;
-`scan_traffic.serve`, the zk run's driver, ticks the same rows as the warden; and the w63 class's state is the scan's
-sized layout, with the outputs N2's view reads."""
+`scan_traffic.serve`, the zk run's driver, ticks the same rows as the network certifier; and the w63 class's state is
+the scan's sized layout, with the outputs N2's view reads."""
 from __future__ import annotations
 
 import asyncio
@@ -164,7 +164,7 @@ def test_a_window_circuit_reads_the_scan_s_state_rows_from_t0_minus_one(run):
     for t0, n in ((4, 4), (8, 8), (2, T - 2)):
         rows = IS.window_state(CLS, registered, t0, n)
         assert rows == ch.states[t0:t0 + n]
-        # boundary a's Programs read row a: S_{t0 + a − 1}, the state bucket t0 + a's unit reads
+        # boundary a's Programs read row a: S_{t0 + a − 1}, the state bucket t0 + a's proof block reads
         assert [IS.token_row(CLS, IS.decode(CLS, x)) for x in rows] == \
             [IS.token_row(CLS, run.states[t0 + a]) for a in range(n)]
     for t0, n, fix in ((1, 4, "multiple of EVERY = 2, not t0 = 1"), (0, 3, "not t0 = 0, buckets = 3"),
@@ -352,7 +352,8 @@ def test_the_circuits_are_the_references_on_every_bucket_each_negative_and_rando
         == [(1, True)] * len(other)
     moved = [o1 != ch.outputs(t)[0] for t, (o0, o1, _) in zip(at, got[T + len(negs):]) if o0]
     assert sum(moved) >= 5, moved
-    # the first bucket's unit is the ingress unit at the empty state, its outputs bit for bit where a check fails too
+    # the first bucket's proof block is the ingress proof block at the empty state, its outputs bit for bit where a
+    # check fails too
     starts = [(c[0], c[2]) for c in cases if c[1] == ch.states[0]]
     for _ in range(20):
         row, prog = bytearray(ch.ingress[0]), list(ch.progs[0])
