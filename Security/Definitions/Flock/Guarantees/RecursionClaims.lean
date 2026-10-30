@@ -27,9 +27,9 @@ reference prover's public stop and the pieces it reads (`ZKStop`, `StopDeploy`, 
 inner protocol's KS and its KS against provers that may abort (`Inner.KS`, `Inner.KSAbort`), which the proof reads,
 the readable scope (`Scope`, `InScope`) and the decoders the claims quantify over (`decOK`); the KS at the
 representation V* binds (`KSBound`, `KSPrivBound`), the inner claim it rests on (`Bridge`, with its premises
-`Bound.PlainKSAbort`, `Bound.Binds` and `Bound.WeightCovers`), the last message's binding as first stated
-(`Bound.LastBinds`) and modulo what `E*` reads, with the last step reading no last coin (`Bound.LastBindsEC`,
-`Bound.LastCoinFree`), which the recursion's proof reads; the shared claims they instantiate (`Claims.KS`,
+`Bound.PlainKSAbort`, `Bound.Binds` and `Bound.WeightCovers`), the last message's binding modulo what `E*` reads,
+with the last step reading no last coin (`Bound.LastBindsEC`, `Bound.LastCoinFree`), which the recursion's proof
+reads; the shared claims they instantiate (`Claims.KS`,
 `ZKmalRx`, `Flock.ListWithin`, `Complete`, `ScopeMatches`, `ExtractRunsLe`, `ExtractRunsExpLe`, `Nontrivial`), the
 named assumptions
 (`StrictBirthday`, `ExpectedCR`, `Hm96Hiding`) and `trustedBase`, equal to itself. -/
@@ -43,8 +43,7 @@ def RecursionClaimsStated : Prop :=
     @Claims.Recursion.Inner.KS, @Claims.Recursion.Inner.KSAbort,
     @Claims.Recursion.Scope, Claims.Recursion.InScope, @Claims.Recursion.decOK,
     @Claims.Recursion.KSBound, @Claims.Recursion.KSPrivBound, @Claims.Recursion.Bridge,
-    @Claims.Recursion.Bound.PlainKSAbort, @Claims.Recursion.Bound.LastBinds, @Claims.Recursion.Bound.LastBindsEC,
-    @Claims.Recursion.Bound.LastCoinFree,
+    @Claims.Recursion.Bound.PlainKSAbort, @Claims.Recursion.Bound.LastBindsEC, @Claims.Recursion.Bound.LastCoinFree,
     @Claims.KS, @Claims.ZKmalRx, @Claims.Flock.ListWithin, @Claims.Complete, @Claims.ScopeMatches,
     @Claims.ExtractRunsLe, @Claims.ExtractRunsExpLe, @Claims.Nontrivial,
     @Claims.StrictBirthday, @Claims.ExpectedCR, @Claims.Hm96Hiding, Claims.trustedBase)

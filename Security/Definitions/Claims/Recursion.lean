@@ -64,10 +64,10 @@ eight items:
    commit strings and their openings), and `Bridge` states the inner claim they rest on, from Flock's at that
    representation. The bridge is proved at every bound record whose answers a decoder inverts
    (`Bound.bridge_of_dec`), the deployed one among them, so the deployment's ∀-form holds from its premises
-   (`RecDeploy.ksBoundRoute`). `Bound.WeightCovers`' constant is what the bridge's proof pays: `N_I · √(k_I/32)` over
+   (`RecDeploy.ksBoundRoute_of_bridge_cols`). `Bound.WeightCovers`' constant is what the bridge's proof pays: `N_I · √(k_I/32)` over
    `√C_DE`, for a loss of `N_I · k_I · √Pr[B]`. The deployed bound record takes `γ`'s weight at `IVStar` at that floor,
    `coverW` of the deployed plain record's weight (`RecDeploy.bdCover`, ASK-72), where (P3) holds
-   (`RecDeploy.ksBoundRoute_cover`). No theorem evaluates **the recursion's security level** there (`lam`).
+   (`RecDeploy.ksBoundRouteCols_cover`). No theorem evaluates **the recursion's security level** there (`lam`).
    `BitsLin2`'s level λ₂ (`lamLin2`) evaluates to at least 135.7 at the deployed records
    (`RecDeploy.lamLin2_deployed_ge_dep_tight`; at least 100, `RecDeploy.lamLin2_deployed_ge_dep`), and `KSLin2` at the
    deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`, at the deployed reader) is proved with no
@@ -1062,35 +1062,6 @@ def Bound.WeightCovers (Bd : Bound Coin Col T) : Prop :=
   ∀ x, Real.sqrt (Bd.DE.weight x) + (1 + (Bd.DE.waits x : ℝ) * Bd.DE.k x) * Real.sqrt (Bd.DE.V.k x / 32) ≤
     Real.sqrt (Bd.weight x)
 
-/-- **(P4) as first stated: the last message, as `final` reads it, is bound by the rounds before it.** Take two
-decisions `IVStar` accepts at one statement, on messages and coins that agree before the last round, whose last messages
-`final` reads differently. They show a SHA-512 collision among `IVStar`'s calls in the two decisions.
-
-It is stated modulo `final` because everything the extractor reads of the last message goes through `final`: `IVStar`'s
-decision and its calls, and the opened view whose columns `Bound.deploy` takes (`Bound.ivstar_congr_final`,
-`Bound.openView_congr_final`). Two last messages `final` reads alike are one view to `E*`, and asking a collision of
-them would make (P4) false at every record whose `final` tolerates a difference, such as trailing bytes.
-
-Where the two readings' openings differ, the collision is `Binds`': the commit strings are shared, so a different salt
-collides on the salt hashes and a different row, at one salt, on the row digests. Where the openings agree and only
-`DE`'s last message differs, it binds only where `DE`'s verifier binds its last message to the caps its earlier rounds
-committed (Flock's Merkle binding at plain leaves). At the deployment those steps are the code side's (`nextE`), so
-(P4) is a premise of the bound record, not a consequence of `Binds`.
-
-**Superseded** by `LastBindsEC` with `LastCoinFree` (card ef47c02e, 19 Oct): `LastBinds` was false at the deployed
-bound record before S0, as the deployed plain verifier read the record's text only through `Json.parse`, so the same
-last message with a trailing space in the record was decided alike, with the same calls, while `final` reads the two
-apart. S0 refuses that text (`RecDeploy.LastGap.check_space`). It stays stated because the route as first proved
-(`RecDeploy.KSBoundRoute`) reads it. -/
-def Bound.LastBinds (H : Msg → Msg) (Bd : Bound Coin Col T) : Prop :=
-  ∀ (x : Msg) (as as' : List Msg) (cs cs' : List Coin), as.length = Bd.DE.V.k x → as'.length = as.length →
-    cs.length = as.length → cs'.length = as.length → as.dropLast = as'.dropLast → cs.dropLast = cs'.dropLast →
-    Bd.final (as.getLastD []) ≠ Bd.final (as'.getLastD []) →
-    ((Bd.IVStar.next x as cs).eval H).1 = .acc → ((Bd.IVStar.next x as' cs').eval H).1 = .acc →
-    ∃ q ∈ (((Bd.IVStar.next x as cs).eval H).2 ++ ((Bd.IVStar.next x as' cs').eval H).2).map Prod.fst,
-      ∃ q' ∈ (((Bd.IVStar.next x as cs).eval H).2 ++ ((Bd.IVStar.next x as' cs').eval H).2).map Prod.fst,
-        Collision H q q'
-
 omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
 /-- **The view of `IVStar`'s decision** on the messages `as` at the coins `cs`: each message before the last answered
 by its coin (`ans`), the last by the decision. It is the view `IVStar`'s run shows, in list form. -/
@@ -1110,8 +1081,9 @@ columns differ. The calls are compared as well because the route's plurality pro
 last message, and the route charges every call of a kept run to the calls `E_O`'s witnesses record. That charge reads
 the calls only by membership, so they are compared as sets: the record's stream order and its optional digest
 of a table's empty publics change the list of calls the deployed verifier makes, not the set. Two last messages the
-deployed record reads alike, such as the trailing-space pair that refutes `LastBinds`, are one view to `E*` with the
-same calls, so they are no counterexample.
+deployed record reads alike, such as the trailing-space pair the deployed verifier decided alike before S0, are one view
+to `E*` with the same calls, so they are no counterexample. That pair refuted (P4) as first stated, a collision wherever
+`final` reads two accepted last messages apart, which is retired (card ef47c02e, 19 Oct).
 
 The recursion's KS reads this with `LastCoinFree` (`RecDeploy.ksBoundRoute_of_bridge_cols`), not the bridge. At the
 deployed bound record it follows from `Binds` and the deployed plain verifier's binding of its own last message
@@ -1191,9 +1163,9 @@ spec. `E*`'s inner views are what the compiled verifier reads off the outer witn
 round before the last, the inner session's commit strings, and at the last, their openings with `DE`'s last message.
 `IVStar` is the verifier that accepts them, and `KS` reads its acceptance there (`RecAt.runs`). At the deployment `D` is
 `deployRec · ivScope b` at V*'s bound layout and the guarantee is `RecDeploy.KSBoundDeployed`, in its ∀-form
-`RecDeploy.KSBoundRoute`, at the deployed bound record `RecDeploy.bdCover` (`γ`'s weight at `IVStar` at `coverW`,
-ASK-72), where (P3) holds (`RecDeploy.ksBoundRoute_cover`). No theorem evaluates its level (`lam`) at the deployment.
-`BitsLin2`'s level λ₂ (`lamLin2`) evaluates to at least 135.7 at the deployed records
+`RecDeploy.KSBoundRouteCols`, at the deployed bound record `RecDeploy.bdCover` (`γ`'s weight at `IVStar` at `coverW`,
+ASK-72), where (P3) holds (`RecDeploy.ksBoundRouteCols_cover`). No theorem evaluates its level (`lam`) at the
+deployment. `BitsLin2`'s level λ₂ (`lamLin2`) evaluates to at least 135.7 at the deployed records
 (`RecDeploy.lamLin2_deployed_ge_dep_tight`), and `KSLin2` at the deployment's dense statements (`KSLin2On` at
 `RecDeploy.DenseAt`) is proved (`Flock.SecurityProofs.RecursiveKS`), Holo statements having a model of their own, and
 `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). `KSFlock` at the

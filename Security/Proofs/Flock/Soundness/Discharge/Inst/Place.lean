@@ -380,7 +380,7 @@ theorem delta_wired {tags : Tags} (F : Aliased.UnitFacts tags st) {n g i o s : �
     have hi' : st.c.perVu.getD st.c.unitNet 0 = st.c.upv := hpv
     rw [hi'] at hi ⊢
     have hs₀ := L.slot_lt hg hi
-    have hd := L.delta_port P C F.delta F.sha F.hm (Aliased.portBits_nodup L.unit_built) hs₀ hp ht j
+    have hd := L.delta_port P C F.delta F.sha F.hm (by rw [← L.unit_at.groups]; exact Aliased.portBits_nodup L.unit_built) hs₀ hp ht j
     have hflat : Flat.flatSrc st.c (g * st.c.upv + i) p t = Flat.wireSrc st.c g w + t := by
       obtain ⟨h1, h2⟩ := (vu_split hi).1 rfl
       have hleaf : ¬ p < (st.c.unit.inGroups.getD 0 default).bits.size := by
