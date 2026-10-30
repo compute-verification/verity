@@ -1,5 +1,5 @@
 """tmpl_layouts.py TMPL [--flat CIRCUIT | --unroll] [--modes M,...]: the sizes of layouts of a `flock-ir-tmpl/v2` unit, mined
-(`verity_flock.tmpl`) or structural (`verity_flock.struct_lower`), as JSON lines (PRF-133).
+(`verity_flock.tmpl`) or structural (`verity_flock.struct_lower`), as JSON lines.
 
 * ``today``: the template's own layout, the flat unit as it is.
 * ``pow2``: each run of copies at a stride of its callee's size rounded up to a power of two.

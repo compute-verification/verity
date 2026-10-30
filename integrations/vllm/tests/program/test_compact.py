@@ -1,5 +1,5 @@
 import pytest
-"""[R17 mfast] cb_a.compact: run progressions are the record's maximal runs, run-length-encoded over (idx, lo, hi) -- built from the
+"""cb_a.compact: run progressions are the record's maximal runs, run-length-encoded over (idx, lo, hi) -- built from the
 descriptor's refs JSON without expanding a Strided or a gather over consecutive producers, equal iff the run lists are equal, expandable
 back to the record's bytes."""
 import json
@@ -47,7 +47,7 @@ def test_compact_is_the_rle_of_the_records_maximal_runs_and_expands_back():
 
 
 def test_from_refs_inlined_affine_stretches_hand_over_and_resume_exactly_like_the_accumulator():
-    """[R17 mfast, fold/persist; mprof M-1098 (i)] `from_refs` folds a Concat's stretch of Affine parts in one inlined loop and hands the
+    """`from_refs` folds a Concat's stretch of Affine parts in one inlined loop and hands the
     accumulator over to the generic path at every non-Affine part.  Every transition must be the greedy rule's: contiguous Affines
     merging into ONE open run (the record's push), an open run closing into out[-1] as run 2 (fixing the delta) / run k+1 of a
     progression / a new singleton, a Strided or Explicit in the middle taking the open run with it, an empty Affine skipped, a stretch
@@ -206,7 +206,7 @@ def test_bind_splits_counts_readers_per_progression_exactly_as_the_record_counts
 
 
 def test_tp_rank_compare_in_compact_form_is_the_records(tmp_path, monkeypatch):
-    """[R17 D90 x mfast] tp's two-rank D90 fixture (tests/check/test_tp2_d90_fixture.py) through compare with COMPACT operands:
+    """The two-rank D90 fixture (tests/check/test_tp2_d90_fixture.py) through compare with COMPACT operands:
     the PEER canonical source of every collective instance (a progression of reads of the request's peers node, field-relative) expands
     to the record's per-run list on both sides, the positive passes both ranks and every compare negative fails, exactly as in run form."""
     import pytest
@@ -247,9 +247,9 @@ def test_tp_rank_compare_in_compact_form_is_the_records(tmp_path, monkeypatch):
         assert not res_r["ok"] and not res_c["ok"], name
         assert res_r["canonical_sha256"] == res_c["canonical_sha256"], name
         assert res_r["totals"] == res_c["totals"], name
-    # [F2 STORE axis, rev M-0500 (1)] the two-rank fold persisted as runs and as progressions: tp's collective-row reader
+    # the two-rank fold persisted as runs and as progressions: the TP collective-row reader
     # (rank_match.own_producers_from_record, the one consumer of NODE-space refs from the file) reads the same producers from either store,
-    # and the cross-rank verdict over them is the same PASS; every negative above is a compare negative, this leg is the record reader's.
+    # and the cross-rank verdict over them is the same PASS; every negative above is a compare negative, this check is the record reader's.
     import os
     from verity_vllm.pipeline import match as RC
     from verity_vllm.check.match import rank_match as RM
@@ -280,8 +280,8 @@ def _prog_facts(P) -> dict:
 
 @pytest.mark.slow
 def test_nothing_beside_the_files_of_record_is_read_a_forged_compact_sidecar_changes_no_document(tmp_path, monkeypatch):
-    """[rev F-r17-12, M-0497] unit 7's fold-dir sidecars are withdrawn: the fold writes none, and the loader (record form and compact form)
-    reads program.json + instances.jsonl only.  Negative: the forgery rev demonstrated -- another fold's compact copy placed in this fold
+    """Unit 7's fold-dir sidecars are withdrawn: the fold writes none, and the loader (record form and compact form)
+    reads program.json + instances.jsonl only.  Negative: a forgery -- another fold's compact copy placed in this fold
     dir with this fold's true digest / byte sizes / sha256 pasted in -- and, harder, a sidecar carrying rows that would turn the verdict:
     both leave the fast document == the record document, and impl.config.fold_load names the record files and the stored form read."""
     import os
@@ -330,9 +330,9 @@ def test_nothing_beside_the_files_of_record_is_read_a_forged_compact_sidecar_cha
 
 @pytest.mark.slow
 def test_record_document_states_the_stored_form_it_loaded_like_the_fast_one(tmp_path, monkeypatch):
-    """[rev S-r17-30 n1 (M-0608), M-0500 (2)] the RECORD checker's document states fold_load (per fold dir: source = the record files,
+    """The RECORD checker's document states fold_load (per fold dir: source = the record files,
     instances_schema, operand_refs_form) exactly as the fast one does, so a record document of a v1 store and one of a v2 store of the
-    same capture are distinguishable BY CONTENT (before n1 both had impl.config absent -> indistinguishable).  Through main() (the CLI
+    same capture are distinguishable BY CONTENT.  Through main() (the CLI
     every row of record runs) on both stores, record and fast; the fast document keeps naming it under impl.config.fold_load too."""
     import os
     from verity_vllm.pipeline import match as RC
@@ -362,7 +362,7 @@ def test_record_document_states_the_stored_form_it_loaded_like_the_fast_one(tmp_
         # [n2] EVERY document (record and fast, both stores) ties itself to the two fold files by content: sha256 as read == the files'
         from verity_vllm.program.instances_form import sha256_file as _sf
         assert fl[o]["instances_sha256"] == _sf(os.path.join(o, "instances.jsonl"))[0] and fl[o]["program_sha256"] == _sf(os.path.join(o, "program.json"))[0], (impl, tag)
-        assert all(v["source"] == "record files" for v in fl.values())     # the component folds too: nothing beside the record files (F-r17-12)
+        assert all(v["source"] == "record files" for v in fl.values())     # the component folds too: nothing beside the record files
         if impl == "fast":
             assert d["impl"]["config"]["fold_load"] == fl                   # the fast documents of record keep naming it under config
         else:
@@ -381,7 +381,7 @@ def test_record_document_states_the_stored_form_it_loaded_like_the_fast_one(tmp_
 
 
 def test_stored_form_progressions_is_lossless_over_the_records_run_lists():
-    """[R17 mfast F2, COORD R17-34 (2) / M-0496; GLM-5.3 "P"] instances.jsonl v2: node- and parameter-space references stored as
+    """instances.jsonl v2: node- and parameter-space references stored as
     progressions ["N"|"P", idx, lo, hi, dI, dL, dH, count].  Over random Refs JSON (every fold shape incl. the attention gather,
     broadcasts and the scattered strideds): (1) runs_from_file_items(file_items_from_refs_json(j)) == refs.runs(j) -- the stored form
     expands to the record's runs exactly; (2) the same items from the run list (the converter's path) -- from_runs is the reference
@@ -406,7 +406,7 @@ def test_stored_form_progressions_is_lossless_over_the_records_run_lists():
 
 @pytest.mark.slow
 def test_persist_program_progressions_form_gives_the_same_prog_and_document_and_converts_losslessly(tmp_path, monkeypatch):
-    """[R17 mfast F2] VERITY_INSTANCES_FORM=progressions: persist_program writes instances.jsonl v2 straight from the fold's Refs (no runs()
+    """VERITY_INSTANCES_FORM=progressions: persist_program writes instances.jsonl v2 straight from the fold's Refs (no runs()
     expansion); (1) it converts to the v1 file BYTE FOR BYTE (rows) and v1 -> v2 gives the v2 bytes; (2) load_oracle (record form and
     compact form) and the GM-01 document are identical over both files; (3) no sidecar, same fold digest; (4) the header AND the loader
     name the form."""
@@ -459,14 +459,14 @@ def test_persist_program_progressions_form_gives_the_same_prog_and_document_and_
     monkeypatch.setenv(GMF.FLAG, "fast")
     f1, f2 = gm.check(gp1, o1), gm.check(gp2, o2)
     assert strip(f1) == strip(f2) == strip(d1)
-    # (3) nothing but the two record files was written for Match (F-r17-12: no sidecar), and the fold digest of record is the SAME under both
-    # stores (it is the Program descriptor's digest, program.json == fold_summary.digest; only F-r16-24's instances_sha256 tie differs)
+    # (3) nothing but the two record files was written for Match (no sidecar), and the fold digest of record is the SAME under both
+    # stores (it is the Program descriptor's digest, program.json == fold_summary.digest; only the instances_sha256 tie differs)
     assert not [f for f in os.listdir(o2) if ".compact." in f] and h1["digest"] == h2["digest"] == json.load(open(os.path.join(o2, "program.json")))["digest"]
     assert IF.sha256_file(i1)[0] != IF.sha256_file(i2)[0]
 
 
 def test_persist_program_writer_is_byte_identical_to_the_generic_conversion(tmp_path, monkeypatch):
-    """[R17 mfast, COORD R17-39 (a) fold/persist] persist_program converts instance rows and journal entries BY SHAPE (a ViewDesc's six
+    """persist_program converts instance rows and journal entries BY SHAPE (a ViewDesc's six
     fields, an operand_refs item's list) instead of walking every element through the generic converter.  The files of record must not
     change by a byte: every row of instances.jsonl (both stored forms) and every line of accesses.jsonl.gz equals what the generic path --
     dataclasses.asdict for the views, then _jsonable over the whole record, json.dumps -- writes for the same FoldResult."""
@@ -485,7 +485,7 @@ def test_persist_program_writer_is_byte_identical_to_the_generic_conversion(tmp_
     def generic_view(v):
         return dataclasses.asdict(v) if dataclasses.is_dataclass(v) else RC._jsonable(v)
 
-    def generic_rows(form):        # the pre-R17-39 writer, verbatim
+    def generic_rows(form):        # the generic writer, verbatim
         out = []
         for m in res.instances:
             node = res.body.nodes[m["node"]] if m.get("node") is not None else None
@@ -526,8 +526,34 @@ def test_persist_program_writer_is_byte_identical_to_the_generic_conversion(tmp_
         assert any('"operand_views":[{"alloc":' in r for r in rows) and any('"view":{"alloc":' in l for l in lines)   # the shape path ran
 
 
+def test_lean_root_reads_definitions_with_decode_programs_reader_and_refuses_what_it_refuses():
+    """`lean_root` reads every non-root definition through `codec.definition_decoder`, decode_program's own reader: on the token feed's
+    accepted record its root callees are decode_program's, and the lookalike record `TokenFeed_v1{NP=2,FIRST=1}`, which
+    `TokenFeed`'s `refuse` names a reason against, is refused by both with decode_program's exact message."""
+    from verity.ml.circuits import REGISTRY, Program, bind, decode_program, encode_program
+    from verity.ml.circuits.codec import descriptor_id
+    from verity.ml.circuits.defs import CompositeDefinition
+    from verity.ml.definitions.registry.io_shell import TokenFeed
+
+    feed = bind(TokenFeed, NP=2, FIRST=True)
+    sig = feed.signature()
+    calls = CompositeDefinition("CallsTokenFeed", 1, (), lambda S: sig, lambda B, S, slot: B.call(feed, slot), register=False)
+    text = json.dumps(encode_program(Program(calls)), separators=(",", ":"))
+    assert "TokenFeed_v1{NP=2,FIRST=true}" in text
+    root = decode_program(json.loads(text), REGISTRY).root
+    assert [fid for _, fid, *_ in K.lean_root(json.loads(text), REGISTRY)["nodes"]] == [descriptor_id(n.fn) for n in root.body.nodes]
+
+    lookalike = text.replace("FIRST=true", "FIRST=1").replace('"FIRST":true', '"FIRST":1')
+    with pytest.raises(ValueError) as refused:
+        decode_program(json.loads(lookalike), REGISTRY)
+    assert str(refused.value).startswith("definition 'TokenFeed_v1{NP=2,FIRST=1}': TokenFeed_v1 refuses this binding: ")
+    with pytest.raises(ValueError) as lean:
+        K.lean_root(json.loads(lookalike), REGISTRY)
+    assert str(lean.value) == str(refused.value)
+
+
 def test_the_within_step_dag_criterion_holds_on_equal_programs_and_fails_on_a_wrong_one(tmp_path):
-    """`program-dag`'s live-cone DAG multiset (the within-step criterion of record) over tp's D90 fixture, compact form: equal where
+    """`program-dag`'s live-cone DAG multiset (the within-step criterion of record) over the D90 fixture, compact form: equal where
     the sequence is, unequal on a compare negative."""
     import pytest
     from verity_vllm.check.match import global_match_fast as GMF

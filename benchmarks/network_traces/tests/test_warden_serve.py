@@ -9,6 +9,7 @@ moves no tick in `serve`'s publisher process."""
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import importlib.util
 import json
 import math
@@ -31,7 +32,7 @@ PARAMS = WardenParams(cell_bytes=64, slots=2, bucket_ms=100, delay=3, lanes=2, q
 SESSION = bytes(range(32))
 #: the clocks `slow_commit` moves: a run's while it ticks in this process; a spawned process's list stays empty
 PROCESS_CLOCK: list[VirtualClock] = []
-#: what a window's commit takes of its process's time: TRACE-CORPUS's small-KV run measured 378-392 ms
+#: what a window's commit takes of its process's time: the trace corpus's small-KV run measured 378-392 ms
 SLOW_COMMIT_S = 0.4
 
 
@@ -137,8 +138,8 @@ def test_the_gates_sampling_is_on_every_request_and_moves_nothing_else_of_the_tr
 def test_the_gates_scan_rehearsal_is_rehearse_ids_at_scan_zks_schedule_and_its_least_minutes_cover_its_traffic(
         tmp_path, capsys):
     """`warden-rehearse --scan` runs `rehearse --ids` at `scan_zk.PARAMS` (the schedule `scan_zk.py prove
-    --warden-run` refuses any other of), which the scan's class serves: ASK-122's EVERY 16 buckets, 4 Program slots a
-    boundary, 8 a link-window and D 2.7 s, the schedule of NET-83's sessions. Its id traffic's prompts and outputs are
+    --warden-run` refuses any other of), which the scan's class serves: EVERY 16 buckets, 4 Program slots a
+    boundary, 8 a link-window and D 2.7 s, the gate sessions' schedule. Its id traffic's prompts and outputs are
     within the scan's KI and KO, on the gate's arrivals at the gate's sampling; for every request count the gate takes,
     at its lowest height, `warden_minutes` covers the id traffic's last arrival, its tail, the rest of the window it
     ends in, the origin's delay and 30 s for the key and the check."""
@@ -243,6 +244,41 @@ def test_the_gates_prompts_rehearsal_sends_its_prompts_a_group_a_span_of_windows
     assert [x["ids"]["prompt"] for x in spread] == [x["ids"]["prompt"] for x in traffic]
     assert spread[0]["at"] == 0 and all(x["at"] < y["at"] for x, y in zip(spread, spread[1:]))
     assert "--prompts" not in A.warden_command({"requests": 7, "scan": True}, tmp_path, "u")
+
+
+def test_the_gates_scan_rehearsal_at_each_tick_it_takes_runs_the_scans_schedule_there_and_its_minutes_cover_it(tmp_path):
+    """`warden-rehearse --scan --bucket-ms MS` runs `rehearse` at `scan_zk.PARAMS` with the tick MS, which the scan's
+    class serves, and the gate counts its minutes and its key's sampling blocks at MS: for each tick it takes, in
+    100 ms steps up to its longest (a block of 128 s, past the minute `warden_minutes` counts for a shorter one), at
+    its lowest height, they cover every request count's id traffic (its last arrival, its tail, the rest of the block
+    it ends in, the origin's delay and 30 s for the key and the check) and every group count's `--window-per-group`
+    run."""
+    sys.path.insert(0, str(HERE))
+    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    import auditor as A
+    import scan_zk as sz
+    lo, hi = A.SCAN_BUCKET_MS
+    assert lo == sz.PARAMS.bucket_ms and hi * sz.PARAMS.window > 60_000
+    most = ws.id_traffic(A.WARDEN_REQUESTS[1], model="m", rate=A.WARDEN_RATE, seed=A.WARDEN_SEED,
+                         max_tokens=(1, sz.PARAMS.egress_cells - 1))
+    height = A.REHEARSAL_HEIGHT[0]
+    for tick in range(lo, hi + 1, 100):
+        req = {"device": "warden", "requests": 7, "scan": True, "bucket_ms": tick}
+        args = ws.parser().parse_args(A.warden_command(req, tmp_path, "http://127.0.0.1:40001")[2:])
+        params = ws._params(args)
+        assert params == dataclasses.replace(sz.PARAMS, bucket_ms=tick), tick
+        sz.CLASS.serves(params)
+        window_s = params.window * tick / 1000
+        assert A.warden_window_ms(req) == params.window * tick
+        for n in range(A.WARDEN_REQUESTS[0], A.WARDEN_REQUESTS[1] + 1):
+            blocks = math.ceil((most[n - 1]["at"] + A.WARDEN_TAIL_S) / window_s)
+            assert blocks * window_s + args.start_in + 30 <= A.warden_minutes(n, height, params.window * tick) * 60, \
+                (tick, n)
+            assert blocks <= A.warden_windows(n, bucket_ms=tick), (tick, n)
+        for groups in range(1, A.WARDEN_PROMPT_REQUESTS[1] + 1):
+            for tokens in (1, 4, A.WARDEN_PROMPT_TOKENS[1]):
+                took = groups * ws.group_windows(params, tokens) * window_s + args.start_in + 30
+                assert took <= A.warden_group_minutes(groups, tokens, height, tick) * 60, (tick, groups, tokens)
 
 
 def test_rehearse_reads_prompts_the_ingress_bound_holds_and_takes_them_and_groups_only_with_what_they_need(tmp_path):

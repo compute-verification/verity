@@ -267,7 +267,7 @@ def test_top_sizes_agree(server):
     """Lean's order of a rep's tops (`RecVStar.topSizes`, which `VStarBuild.topsOf` lists them in after level 0) is
     `rec_live`'s schedule's, across fast100's m, k_log and claims, holo or not; m outside 22 to 35 is refused by both. k_log is at least 6, a block's 64 elements: below it Lean's
     `SchedRound` (whether a round absorbs, not how much) can't tell z_partial's round from a 2-element one, which
-    `holo_rounds` refuses (m = 22, k_log = 0, r20261026-133212-4346)."""
+    `holo_rounds` refuses (m = 22, k_log = 0)."""
     D.run(TOP_SIZES, examples=200, server=server)
 
 
@@ -289,7 +289,7 @@ SET = FLOCK_TESTS / "fixtures" / "hidden-outputs" / "flat" / "gemm-coordinate"
 
 
 def _inner(tmp: Path) -> Path:
-    """rec-algebra's fixture session replayed through the firewall (`rec_live.Proxy`, seeded salts), as
+    """rec-algebra's fixture session replayed through the ZK server (`rec_live.Proxy`, seeded salts), as
     ``verity_flock``'s `test_rec_vstage` replays it."""
     rec = json.loads((SET / "records-cpu" / "honest.json").read_text())["record"]
     g, pending = random.Random(5), bytearray()
@@ -412,7 +412,7 @@ def test_the_recorded_plain_leaf_session_agrees(server, tmp_path):
 @DEPLOYED
 @_fetched(SET, "hidden-outputs")
 def test_the_deployed_algebra_shape_agrees(server, tmp_path):
-    """rec-algebra's fixture session (m = 25, k_log = 22, the deployed algebra shape) replayed through the firewall: every
+    """rec-algebra's fixture session (m = 25, k_log = 22, the deployed algebra shape) replayed through the ZK server: every
     part of the algebra and every level's cap is Lean's port inputs (its openings are hm96 leaves, so the stager stages no
     level of it)."""
     INNER = json.loads((FLOCK_TESTS / "fixtures" / "inner_claims.json").read_text())

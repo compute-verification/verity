@@ -1,4 +1,4 @@
-"""K and V read across steps (``kv_reads.py``, CMP-161) at the small shape: a drawn softmax and pv block of the last step
+"""K and V read across steps (``kv_reads.py``) at the small shape: a drawn softmax and pv block of the last step
 read their slot's key and value rows of every step, each opened against its own step's root and checked against a
 registration naming every step root, and refused under another step-0 root, a tampered path or a changed word; run in
 one process or as the GPU's replay and the CPU's open with the prover's state between them."""

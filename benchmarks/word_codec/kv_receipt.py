@@ -6,11 +6,11 @@ block      RT tiles of one (sequence, KV head) pair at tile offsets that are mul
            a decoder warp's lane l of warp i holds word l % HW of token (32 / HW) i + l // HW of the head's share (K
            words, then V words; HW = 8 at 64-byte words, 4 at 128), WB = 16 S raw (encoded) bytes, S the sketch's steps
 vector     warp i's A row r = g + 8e over a block: byte b of the lane's register 4s + 2h + e, lane 4g + tq, tile τ, at
-           position p = 32 S τ + 32s + 16h + 4tq + b, so n = 32 S RT (ra-sketch-tag's fragment order); index
+           position p = 32 S τ + 32s + 16h + 4tq + b, so n = 32 S RT (the sketch tag's fragment order); index
            ((pair · blocks + block) · MDW + i) · 16 + r, pair = sequence · KV_HEADS + head
 S          16 × n signs: derive(σ, SIGN_DOMAIN, {"tag": NAME, "k": 16, "n": n}), row c the first n/8 bytes of
-           stream(("row", c)), bit p (LSB first) 1 → −1 (ra-sketch-tag's `sketch.sign_bits`)
-B          unbound (ro-sketch-blake3/v0): S[c][p]. Bound (ro-bound-sketch-blake3/v0, ra-bound-receipt's §1, 64-byte words
+           stream(("row", c)), bit p (LSB first) 1 → −1 (the sketch tag's `sketch.sign_bits`)
+B          unbound (ro-sketch-blake3/v0): S[c][p]. Bound (ro-bound-sketch-blake3/v0, the bound receipt's §1, 64-byte words
            only): byte b of R ⊕ M as int8, register q = 2 blk + h of (warp i, step s, lane l = 4g + tq) for c = 8 blk + g,
            R = z word (512 i + 128 s + 4 l + q) mod ZW of the CTA's tile RLAG back (0 for its first RLAG tiles), M = 0xFF
            where S[c][p] = −1; z is the MMA warps' PV accumulators after that tile (`kv.cu`'s layout)

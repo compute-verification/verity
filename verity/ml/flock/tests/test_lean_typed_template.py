@@ -1,4 +1,4 @@
-"""Item 1e for a template: the Lean verifier reads a typed template statement (`verity/flock-circuit/types`, GEMM) as #273's
+"""Item 1e for a template: the Lean verifier reads a typed template statement (`verity/flock-circuit/types`, GEMM) as the
 Rust prover splits it: the instance type's root one slot per VU and each placed layout's slots its parts, with rows only
 through `deriveChecked`, the row wiring derived, and Δ in the prover's order (the flat entries, then per VU the inputs'
 copies, the parts' bound rows and the root's cross entries). A typed statement is a form the soundness proof does not
@@ -21,8 +21,8 @@ LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 STATEMENT = "verity/flock-circuit/types@210d32e1+seed-injection"
-#: the typed GEMM (gemm-coordinate/k64/sm80-mma-bf16, 4 instances) staged at #273, and every CPU selftest case of its
-#: flock-circuit (seed-injection build, #273 at 8505c540: the typed id's own tags), recorded
+#: the typed GEMM (gemm-coordinate/k64/sm80-mma-bf16, 4 instances) staged at 8505c540, and every CPU selftest case of its
+#: flock-circuit (seed-injection build at 8505c540: the typed id's own tags), recorded
 FIXTURE = "art:e9c0209d"
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -56,6 +56,7 @@ def test_the_verifier_reads_a_typed_template(gemm):
     assert st["circuit_sha512"] == hashlib.sha512(circuit.read_bytes()).hexdigest() and st["regions"] == 3
 
 
+@pytest.mark.slow
 def test_typed_expand_reads_the_public_output_form(gemm):
     """`typed-expand --statement` parses a `types@210d32e1` file as `verify` does; the default, `verity/flock-circuit/types`
     with hidden outputs (PROTOCOL.md §16.13), refuses it."""
@@ -71,6 +72,7 @@ def test_typed_expand_reads_the_public_output_form(gemm):
     assert not expand()["ok"]
 
 
+@pytest.mark.slow
 def test_it_refuses_the_rust_provers_sessions(gemm, tmp_path):
     root, _ = gemm
     subprocess.run([sys.executable, str(VERIFIER / "selftest_records.py"), str(root / "records"), str(tmp_path)], check=True,
@@ -109,6 +111,7 @@ def _rewrite(root: Path, out: Path, edit_meta=None, extra: str = "") -> Path:
     return out
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("key", ["wires", "units_per_vu", "leaves_in", "out_net"])
 def test_a_template_stating_its_derived_wiring_is_refused(gemm, tmp_path, key):
     root, _ = gemm

@@ -2,7 +2,7 @@
 adapter import; no GPU: the engine is a fake carrying a vllm_config-shaped object).
 
   * `compilation_facts` reads mode / cudagraph_mode / capture sizes / partition / enforce_eager back from the built engine's vllm_config in
-    the form GP-01/GM-01 compare (enum NAMES, not the IntEnum's str())
+    the form the global Program and the global match compare (enum NAMES, not the IntEnum's str())
   * `target_mismatches`: an eager profile against a compiled engine, and a `piecewise` profile against an eager engine or a
     FULL_AND_PIECEWISE engine, are refused by name; the matching pair is accepted
 """
@@ -46,7 +46,7 @@ def test_compilation_facts_are_read_back_in_the_declared_form():
     assert A.compilation_facts(_llm(False, emulate=True))["emulate_precision_casts"] is True
     e = A.compilation_facts(_llm(True, _CG.NONE))
     assert e["enforce_eager"] is True and e["mode"] == "NONE"
-    # the declared facts of the `piecewise` profile are a subset of the read-back (what GM-01 G1 compares key by key)
+    # the declared facts of the `piecewise` profile are a subset of the read-back (what the global match's G1 compares key by key)
     decl = TargetProfile(compilation="piecewise").modelled_engine()["compilation"]
     assert all(f[k] == decl[k] for k in ("mode", "cudagraph_mode", "use_inductor_graph_partition", "emulate_precision_casts"))
 

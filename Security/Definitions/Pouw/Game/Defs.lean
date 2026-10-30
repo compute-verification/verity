@@ -105,7 +105,7 @@ structure CostModel (Q R S : Type) where
   cost : Prog → (Q → R) → Workload → (ℕ → Mat) → State → S → ℝ
   calls : Prog → (Q → R) → Workload → (ℕ → Mat) → State → S → ℕ
 
-/-- The model's programs reach `H` only through counted queries (red-team B6): on fixed inputs, a run is the result
+/-- The model's programs reach `H` only through counted queries: on fixed inputs, a run is the result
 of an adaptive oracle program, and `calls` counts that program's queries. -/
 def CostModel.Queries {Q R S : Type} (CM : CostModel Q R S) : Prop :=
   ∀ (prog : CM.Prog) (U : Workload) (act : ℕ → Mat) (σ : State) (s : S), ∃ t : QTree Q R Transcript,

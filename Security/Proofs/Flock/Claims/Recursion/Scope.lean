@@ -12,7 +12,7 @@ the inner statement's files where it holds them (`RecCoins.Source`), its own inn
 refuses (`checkInnerRange`), and where it holds the inner statement's files one that is not the inner statement's, or an
 inner statement set up otherwise than its files set it up (`RecSetup.checkShape`, `RecSetup.checkForm`); every V*
 statement carries those files (`RecCoins.filesInput` refuses them in part). Its verdict refuses a V* session whose record holds no draw (`ProvedScope.drawLaw`) or
-whose draw is not every unit of its population (`RecSetup.fullDraw`, #2219), and a session over an inner session whose
+whose draw is not every unit of its population (`RecSetup.fullDraw`), and a session over an inner session whose
 record holds no draw (`RecSetup.innerDrawn`); the compiled statement's reader refuses an inner statement without a draw
 (`RecDeploy.innerOk`). There is no other recursion-level refusal.
 

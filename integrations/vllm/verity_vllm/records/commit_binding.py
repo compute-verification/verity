@@ -110,7 +110,7 @@ class MatchTokensLeg:
 
 @dataclass(frozen=True)
 class GlobalMatchLeg:
-    """GM-01's `global_match.json`, as the Match-account link read it: its verdict and G6's account of each request."""
+    """The global match's `global_match.json`, as the Match-account link read it: its verdict and G6's account of each request."""
     path: str
     sha256: str
     verdict: str
@@ -138,7 +138,7 @@ class MatchAccountLink:
     lag_attested: bool
     problems: tuple[str, ...]
     match_dir: str | None                             # no Match record beside the Commit (a config run)
-    tokens_json: MatchTokensLeg | None                # the leg isn't beside the Commit
+    tokens_json: MatchTokensLeg | None                # no Match `capture/tokens.json` beside the Commit
     global_match: GlobalMatchLeg | None               # likewise
 
     @classmethod

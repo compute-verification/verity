@@ -1,5 +1,6 @@
 import Mathlib.Basic.Countable.Basic
 import Mathlib.Data.Fintype.Pi
+import Mathlib.Data.List.OfFn
 import Definitions.Core.Advice
 
 /-!
@@ -31,14 +32,14 @@ theorem eq_or_collides {S T : Finset (List UInt8)} {x y : List UInt8} (hx : x �
   · exact Or.inl hxy
   · exact Or.inr ⟨x, hx, y, hy, hxy, h⟩
 
-theorem xor_inj {x x' m : Digest} (h : Vector.zipWith (· ^^^ ·) x m = Vector.zipWith (· ^^^ ·) x' m) : x = x' := by
-  refine Vector.ext fun i hi => ?_
-  have := congrArg (·[i]) h
-  simpa [Vector.getElem_zipWith, UInt8.xor_left_inj] using this
+theorem xor_inj {x x' m : Digest} (h : (fun i => x i ^^^ m i : Digest) = fun i => x' i ^^^ m i) : x = x' :=
+  funext fun i => (UInt8.xor_left_inj (m i)).1 (congrFun h i)
 
-theorem digests_inj {b c b' c' : Digest} (h : b.toList ++ c.toList = b'.toList ++ c'.toList) : b = b' ∧ c = c' := by
-  obtain ⟨hb, hc⟩ := List.append_inj h (by simp)
-  exact ⟨Vector.toList_inj.mp hb, Vector.toList_inj.mp hc⟩
+theorem bytes_inj {d e : Digest} (h : d.bytes = e.bytes) : d = e := List.ofFn_injective h
+
+theorem digests_inj {b c b' c' : Digest} (h : b.bytes ++ c.bytes = b'.bytes ++ c'.bytes) : b = b' ∧ c = c' := by
+  obtain ⟨hb, hc⟩ := List.append_inj h (by simp [Digest.bytes])
+  exact ⟨bytes_inj hb, bytes_inj hc⟩
 
 /-- Position `i` holds the same in both trees: a row in both or in neither, and then the same row. -/
 def Agree (rows₀ rows₁ : List (List UInt8)) (i : ℕ) : Prop :=
@@ -192,19 +193,20 @@ def Framing.unary : Framing where
   rowPrefix := []
   saltPrefix := []
   leafPrefix := []
-  mask _ := Vector.replicate 64 0
-  leaf i t := 0 :: (t.toList ++ List.replicate i 0)
+  mask _ := fun _ => 0
+  leaf i t := 0 :: (t.bytes ++ List.replicate i 0)
   pad i := 1 :: List.replicate i 0
-  node k _ a b := 2 :: (a.toList ++ (b.toList ++ List.replicate k 0))
+  node k _ a b := 2 :: (a.bytes ++ (b.bytes ++ List.replicate k 0))
 
 theorem Framing.unary_separated : Framing.unary.Separated where
-  leaf_inj i t t' h := (digests_inj (b := t) (b' := t') (c := Vector.replicate 64 0) (c' := Vector.replicate 64 0)
-    (by simpa [Framing.unary] using h)).1
+  leaf_inj i t t' h := by
+    simp only [Framing.unary, List.cons.injEq, true_and] at h
+    exact bytes_inj (List.append_inj h (by simp [Digest.bytes])).1
   node_inj {k j a b k' j' a' b'} h := by
     simp only [Framing.unary, List.cons.injEq, true_and] at h
-    obtain ⟨ha, h⟩ := List.append_inj h (by simp)
-    obtain ⟨hb, h⟩ := List.append_inj h (by simp)
-    exact ⟨by simpa using congrArg List.length h, Vector.toList_inj.mp ha, Vector.toList_inj.mp hb⟩
+    obtain ⟨ha, h⟩ := List.append_inj h (by simp [Digest.bytes])
+    obtain ⟨hb, h⟩ := List.append_inj h (by simp [Digest.bytes])
+    exact ⟨by simpa using congrArg List.length h, bytes_inj ha, bytes_inj hb⟩
   leaf_ne_pad _ _ _ := by simp [Framing.unary]
   leaf_ne_node _ _ _ _ _ _ := by simp [Framing.unary]
   pad_ne_node _ _ _ _ _ := by simp [Framing.unary]
