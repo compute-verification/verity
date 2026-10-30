@@ -17,7 +17,7 @@ what that record shows, for every input: the coins the challenger device drew, o
   own ledger opens withheld on the window (`OpensOn`), or the fixed finder outputs a break from the run (`Break`).
   `drawnByDevice_nontrivial` (security_proofs) shows it false for a reader that accepts every record.
 
-**The device's history** (`History`) is the proof service's challenger as `challenger.py` runs it. Under its key it runs
+**The device's history** (`History`) is the proof system's challenger as `challenger.py` runs it. Under its key it runs
 sessions, each a run (`Run`): it draws each coin and its salt by position, commits to the frame-v3 root over their live
 leaves (`Run.commitment`), writes its release log (its head the commitment, then each root it received and the coin it
 released after it), and signs its record before any coin opens and its close over the log once the run ends. A run its
