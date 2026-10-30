@@ -912,7 +912,7 @@ class Queue:
         return r
 
     def _clone(self) -> None:
-        if not (self.workdir / ".git").exists():
+        if fresh := not (self.workdir / ".git").exists():
             self.workdir.parent.mkdir(parents=True, exist_ok=True)
             self._remote(self.workdir.parent, "clone", "-q", self.remote, str(self.workdir))
         # the caller's origin as it is now: a token embedded in the URL the clone was made from rotates
@@ -922,7 +922,7 @@ class Queue:
         from .clone import Refused, set_drivers
 
         try:
-            if changed := set_drivers(self.workdir):
+            if (changed := set_drivers(self.workdir)) and not fresh:
                 self.log(f"research queue: set the record merge drivers in {self.workdir}'s config, which lacked or held "
                          f"another value for {', '.join(changed)}")
         except Refused as e:
