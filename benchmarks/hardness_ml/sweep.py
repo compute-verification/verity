@@ -35,7 +35,7 @@ def redml():
     which at d 256 is r = 2, and at HT-ML's r = d/8; every hardened linear int8 with noise k = 1."""
     tokens = int(os.environ.get("REDML_TOKENS", 4_000_000))
     base = {"size": "s256", "tokens": tokens, "harden": "all", "int8": True, "noise_k": 1, "r_dist": "int8",
-            "eval_every": 250, "final_eval_batches": 32}
+            "eval_every": 100, "final_eval_batches": 32}
     cap = 2 / 256
     return [
         {**base, "name": "redml-dense-float", "int8": False, "noise_k": 0},
