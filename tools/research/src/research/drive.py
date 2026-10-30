@@ -12,7 +12,14 @@ a landed PR's head hears once that its base landed and to merge `main` (`_stacke
 What a sync leaves out of `next` is told once per root cause instead of once per PR and head: the PR that didn't merge or isn't
 admitted, why, and every marked PR it takes out, their owners tagged once, and again only when that changes (`tell_out`).
 
-Review landing, the only landing.  `main` holds only fully checked commits: PRs land on a review onto the
+The low-risk lane (drive.toml's `lowrisk_lane`, `land_lowrisk`): after the reviewed prefix, a tick lands up to `lowrisk_per_tick`
+members of `next`, in its order, onto `checked` on their ready mark alone, with no land verdict, no Lean check and no wait in
+`next`, each whose merge onto `checked`'s tip changes no file `lowrisk_excludes` names (`queue.lowrisk`: no Lean, lock or
+soundness-path Python), merges with no conflict, contains no PR not landed, and passes the landing gates and the compile gate.
+The after-landing run checks them with the rest, and `main` follows only a checked commit; never with `land_into = "main"`.
+
+Review landing, of every change the low-risk lane (above) doesn't take.  `main` holds only fully checked commits: PRs land
+on a review onto the
 landing branch, drive.toml's `land_into` (`checked`: `Queue.into`), drive runs the full check on its tip, and `main` is
 fast-forwarded only to a commit of it whose after-landing run passed every step on the merge gate (`_promote`: not
 circuit-check, ci.toml's `gate = false`, whose red reverts its culprit on `checked`); with `land_into = "main"` they
@@ -80,12 +87,6 @@ its inputs lands (`_circuit_held`), every other one landing on.  A red run moves
 `BEHIND_S` old, `CI` and `TOP` are rung every `BEHIND_EVERY_S` (`_behind`).  A run with no readable state `LOST_AFTER_S` after its
 launch is lost.
 
-The low-risk lane (drive.toml's `lowrisk_lane`, `land_lowrisk`): after the reviewed prefix, a tick lands up to `lowrisk_per_tick`
-members of `next`, in its order, onto `checked` on their ready mark alone, with no land verdict, no Lean check and no wait in
-`next`, each whose merge onto `checked`'s tip changes no file `lowrisk_excludes` names (`queue.lowrisk`: no Lean, lock or
-soundness-path Python), merges with no conflict, contains no PR not landed, and passes the landing gates and the compile gate.
-The after-landing run checks them with the rest, and `main` follows only a checked commit; never with `land_into = "main"`.
-
 The Lean checks and the post-landing runs (the after-landing run and its bisection's) are launched detached (`detach`), so no tick
 waits on train.sh, which takes minutes to print a Lean check's run ids.  A later
 tick reads the ids from its log (`launched`, `_resolve`); until then the launch counts as running for every rule that counts
@@ -110,8 +111,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable
 
-from .queue import (IDENTITY, PR, Entry, Member, Queue, QueueError, StoreLabels, _git, _message, _out, built_on, changed,
-                    forces_cold, gate_refusal, gates_at, hold, lean_change, lean_hold, lowrisk, unreviewed)
+from .queue import (IDENTITY, PR, Entry, Member, Queue, QueueError, StoreLabels,
+                    _git, _out, built_on, changed, forces_cold, hold, lean_change, lean_hold, unreviewed)
 
 #: who hears what drive can't settle
 CI = "@ci"
@@ -1862,12 +1863,13 @@ class Driver:
     #    "bisect" (a failed after-landing run's implicated landings, being bisected: `_bisect_step`)
 
     def _review(self, state: dict, drive: dict, dry_run: bool) -> str:
-        """One tick of the review landing: move `main` to a fully checked `checked` (`_promote`) and bring a `main` pushed
+        """One tick of the review landing, its low-risk lane after it (`land_lowrisk`): move `main` to a fully checked `checked`
+        (`_promote`) and bring a `main` pushed
         outside drive into `checked` (`_absorb`), sync `next` (its held members moved to its top: `_park`, its reviewed ones
         above what a Lean check keeps to its bottom: `_lift`; held on its base
         while a Lean check of it runs, drive's or a hand one: `_running_lean`, kept in place up to a passed one that lands: `_landable`, and kept up to any passed one:
         `lean_hold`), land its reviewed prefix (`land_reviewed`) once the landing branch has a baseline (`_unbaselined`),
-        stacking a Lean check above a running one (`_stack_lean`), then its low-risk members (`land_lowrisk`), and launch the after-landing run, or the next run of a
+        stacking a Lean check above a running one (`_stack_lean`), and launch the after-landing run, or the next run of a
         bisection (`_bisect_step`)."""
         q = self.q
         what: list[str] = []
@@ -2183,9 +2185,10 @@ class Driver:
         its culprit (`_red`); the next sync rebuilds `next` without them.  A landing off `next` rebuilds all of `next`, so the
         lane waits while a Lean check of `next` runs or awaits its landing (`drive["lean"]`, `_running_lean`), and while no
         sync ran this tick (no ``entries``).  The landed members."""
-        q = self.q
         from .merge import CHECKED
+        from .queue import _message, gate_refusal, gates_at, lowrisk
 
+        q = self.q
         if not (self.lowrisk_lane and self.lowrisk_excludes) or q.into != CHECKED:
             return []
         if busy := sorted(running | {c for c, rec in drive.get("lean", {}).items() if rec.get("state") in (None, "passed")}):
