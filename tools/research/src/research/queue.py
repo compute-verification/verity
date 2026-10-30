@@ -118,7 +118,8 @@ sync would (on the head; the sync, on its merge onto `next`).  A Lean change can
 another PR on `next` owns (a changed signature, dropped premises, a dropped import), which drive's Lean check of the stack finds
 only an hour later; the preflight builds those modules (`LakeBuild`).  So `ready` runs `Preflight` before the mark and before any quick tier: a refusal names what it found and the fix, a
 failure `next` has too refuses nothing, and what keeps a check from running is said and refuses nothing (the after-landing run
-checks it).  `--no-preflight` skips it, for the lander.
+checks it).  `--no-preflight` skips it, for the lander.  `next` moves after the mark, so drive's sync runs the merged tree's
+checks again on each merge it makes (`Preflight.onto`, `Queue._preflighted`): see `next`.
 
 Records gate.  A head whose own records run printed `AUDIT: FAIL` fails a train's Lean check, about 50 minutes later.
 So `ready` (and `judge`) first refuse a head whose change against `main` touches a `lean-audit.json`
@@ -156,7 +157,12 @@ one hold holds only itself and what contains it and the members that were above 
 (then it lands in its place) or a new head.  The park moves no member that a running or passed check covers below the lowest
 member it moves, so it cancels no check below a held member.  A PR that doesn't merge cleanly is left out of that sync, and its owner is told
 which files conflict and which queued PRs touched them; while its head stays, later syncs try it, and the PRs that contain it,
-above everything else, whatever `--first` or non-Lean first would say, so a sync with nothing new keeps `next`.  So is a PR a landing gate refuses (drive.toml's `landing_gates` at
+above everything else, whatever `--first` or non-Lean first would say, so a sync with nothing new keeps `next`.  So is a PR whose preflight
+onto `next` refuses it: drive's sync (`Queue.preflight`, `Preflight.onto`) runs `ready`'s merged-tree checks and Lean build on
+each merge it makes, onto the member below the PR's place, never on the prefix it keeps (so never under a running Lean check),
+and one PR's failure stays that PR's.  Each verdict is kept per (head, base tree) (the state's `preflights`), so a merge onto
+an unchanged tree is never preflighted twice; a sync's preflights start only within `PREFLIGHT_BUDGET_S` together, and a PR
+whose preflight hasn't run waits off `next`, untold, for a later sync, with the PRs that contain it.  So is a PR a landing gate refuses (drive.toml's `landing_gates` at
 `main`, `gate_refusal`) on its merge onto `next` (`tools/verity/check/gates/markdown_caps.py`: one it puts over a cap),
 with the gate's fix: each PR the sync merges is judged, a new one or one merged again above a
 dropped or moved member, never one in the prefix it keeps, so a refusal never takes a running check's commit off `next`; a merge
@@ -983,6 +989,12 @@ class Queue:
         self.park: list[int] = []
         self._parked: list[int] = []
         self.now: Callable[[], float] = time.time
+        #: what a PR the sync merges onto `next` passes to enter it (`Preflight.onto`: its merge onto the member below its place,
+        #: with the members below), or None: no such check (a sync off drive's, a test); `_preflighted` keeps it within
+        #: `PREFLIGHT_BUDGET_S` a sync, measured by `clock`
+        self.preflight: Callable[[PR, str, str, list[Member]], str | None] | None = None
+        self.clock: Callable[[], float] = time.monotonic
+        self._preflight_s = 0.0
         #: releases the workdir's lock (`_lock`): a command that only reads calls it once its clone and fetches are done, so a
         #: listing that reads hundreds of members' labels doesn't refuse a verdict meanwhile
         self.unlock: Callable[[], None] = lambda: None
@@ -1395,6 +1407,34 @@ class Queue:
             verdicts[key] = refused
         return refused, unjudged
 
+    def _preflighted(self, pr: PR, tip: str, commit: str, members: list[Member], flights: dict) -> tuple[bool, str | None]:
+        """(whether ``pr``'s preflight onto ``tip`` is known, its refusal or None, or why it waits): `preflight` of ``commit``,
+        its merge onto ``tip`` above ``members``, recorded per (head, base) in ``flights`` (the state's `preflights`): a
+        pair whose verdict is recorded, for the same merged tree, isn't run again.  The base is taken by its tree: the
+        queue's merges carry the time they're made, so a rebuilt `next` names the same members' merges anew.  A preflight
+        starts only while this sync's have taken under `PREFLIGHT_BUDGET_S`; past it the PR waits off `next` for a later sync.
+        One that raises admits it, logged, and is run again only if its pair comes again."""
+        base_tree, tree = _out(self.workdir, "rev-parse", f"{tip}^{{tree}}", f"{commit}^{{tree}}").split()
+        key = f"{pr.head}:{base_tree}"
+        for got in (flights["now"].get(key), flights["before"].get(key)):
+            if got is not None and got.get("tree") == tree:
+                flights["now"][key] = got
+                return True, got.get("why")
+        if self._preflight_s >= PREFLIGHT_BUDGET_S:
+            return False, (f"its preflight onto `{self.branch}` hasn't run: this sync's preflights took their "
+                           f"{PREFLIGHT_BUDGET_S:g} s, so a later sync runs it")
+        start = self.clock()
+        try:
+            why = self.preflight(pr, tip, commit, members)
+        except Exception as e:  # noqa: BLE001  (the preflight saves a revert; the after-landing run still checks the head)
+            self.log(f"research queue: #{pr.number}'s preflight onto `{self.branch}` failed to run ({type(e).__name__}: {e}); "
+                     "it enters unpreflighted")
+            return True, None
+        finally:
+            self._preflight_s += self.clock() - start
+        flights["now"][key] = {"pr": pr.number, "head": pr.head, "tree": tree, "why": why}
+        return True, why
+
     def _merge_in_worktree(self, tip: str, pr: PR, members: list[Member]) -> tuple[str | None, str]:
         """`_merge` by `git merge --no-ff` in the clone's worktree, checked out at ``tip``."""
         _git(self.workdir, "checkout", "-q", "--detach", tip)
@@ -1508,12 +1548,19 @@ class Queue:
         cache = state.get("gate_verdicts") or {}
         before = (cache.get("of") or {}) if (cache.get("main"), cache.get("gates")) == (main, list(gates)) else {}
         verdicts: dict[str, list[str]] = {}
+        flights = {"before": state.get("preflights") or {}, "now": {}}
+        self._preflight_s = 0.0
+        unrun: set[int] = set()
         merged = False
         for n in order[k:]:
             e = entries[n]
             if blocked := [a for a in e.after if a in dropped]:
-                e.state, e.why = "waiting", f"contains {e.contains(blocked[0])}, which didn't merge"
+                e.state, e.why = "waiting", f"contains {e.contains(blocked[0])}, which " + (
+                    "waits for its preflight" if blocked[0] in unrun else "didn't merge")
                 dropped.add(n)
+                if blocked[0] in unrun:
+                    unrun.add(n)
+                    continue
                 waits[str(n)] = {"head": e.pr.head, "why": e.why, "handle": self.handle(e.pr)}
                 if state.get("waiting", {}).get(str(n), {}).get("head") != e.pr.head:
                     self.log(f"research queue: #{n} at {e.pr.head[:8]} waits off `{self.branch}`: {e.why}")
@@ -1523,6 +1570,15 @@ class Queue:
                 refused, unjudged = self._gated(main, gates, tip, commit, e.pr, before, verdicts)
                 if refused or unjudged:
                     commit, why = None, " | ".join(refused + unjudged)
+            if commit is not None and commit != tip and self.preflight is not None:
+                ran, why = self._preflighted(e.pr, tip, commit, members, flights)
+                if not ran:
+                    e.state, e.why = "waiting", why
+                    dropped.add(n)
+                    unrun.add(n)
+                    continue
+                if why:
+                    commit = None
             if commit is None:
                 e.state, e.why = "refused", why
                 dropped.add(n)
@@ -1541,9 +1597,14 @@ class Queue:
         self.log(f"research queue: `{self.branch}` at {tip[:12]}: {len(members)} PR(s) above `{self.into}`"
                  + (f", kept {k}, merged {len(members) - k}" if members else "")
                  + (f", gates' verdicts reused for {reused}" if (reused := len(verdicts.keys() & before.keys())) else "")
+                 + (f", {len(unrun)} waiting off it for their preflight ({' '.join(f'#{n}' for n in sorted(unrun))})" if unrun else "")
                  + (" (dry run: not pushed)" if dry_run else ""))
         if not dry_run:
             state["conflicts"], state["waiting"] = conflicts, waits
+            if self.preflight is not None:
+                heads = {p.head for p in prs}
+                kept = {key: rec for key, rec in {**flights["before"], **flights["now"]}.items() if rec.get("head") in heads}
+                state["preflights"] = dict(list(kept.items())[-GATE_VERDICTS:])
             if gates:
                 newest = {**{h: v for h, v in before.items() if h not in verdicts}, **verdicts}
                 state["gate_verdicts"] = {"main": main, "gates": list(gates), "of": dict(list(newest.items())[-GATE_VERDICTS:])}
@@ -2685,7 +2746,10 @@ class Preflight:
     broke) isn't the PR's: each failed check runs again at `next` in the same worktree, within the same budget, and only what
     fails on the merge alone refuses.  What keeps a check from running (no `next` to fetch, the budget spent, labels that can't
     be pulled, more than `lean_modules` Lean modules, no warm Lean tree) is said and refuses nothing: the preflight saves a
-    revert, and the after-landing run still checks the head."""
+    revert, and the after-landing run still checks the head.
+
+    Drive's sync runs (b) and (e) again (`onto`) on each merge it makes onto `next`, onto the member below the PR's place, and
+    a PR enters `next` only once they pass there (`Queue._preflighted`)."""
 
     def __init__(self, repo: Path, remote: str, store, *, sync: tuple[str, ...] | None = PREFLIGHT_SYNC, python: str | None = None,
                  budget_s: float = PREFLIGHT_BUDGET_S, jobs: int = PREFLIGHT_JOBS, clock: Callable[[], float] = time.monotonic,
@@ -2800,14 +2864,35 @@ class Preflight:
         notes += unjudged
         return refused
 
-    def _merged(self, pr: PR, base: str, onto: str, notes: list[str], members: list[Member] | None = None) -> list[str]:
-        """(b) and (e), in a temporary worktree at the merge of the head onto ``base``."""
-        r = _git(self.repo, "merge-tree", "--write-tree", "--no-messages", base, pr.head, check=False)
-        if r.returncode:
-            notes.append(f"the merged tree's checks not run: `git merge-tree` exited {r.returncode} ({(r.stderr or r.stdout).strip()[-200:]})")
-            return []
-        tree = r.stdout.split()[0]
-        commit = _out(self.repo, "commit-tree", tree, "-p", base, "-p", pr.head, "-m", f"preflight: #{pr.number} onto {base[:12]}")
+    def onto(self, pr: PR, base: str, commit: str, members: list[Member]) -> str | None:
+        """The sync's preflight (`Queue.sync`): (b) and (e) of ``commit``, the sync's merge of ``pr``'s head onto ``base``, the
+        member of `next` below its place (`next`'s base when none) with ``members`` up to it.  None when it may enter `next`;
+        else the refusal.  (a), (c) and (d) are the sync's own: a conflict, a PR it contains that isn't admitted, a landing gate."""
+        start, notes = self.clock(), []
+        try:
+            found = self._merged(pr, base, f"`{BRANCH}` at {base[:12]}", notes, members, commit=commit)
+        except QueueError as e:
+            found, notes = [], [*notes, f"the merged tree's checks not run ({e})"]
+        took = f"{self.clock() - start:.0f} s" + (f"; {'; '.join(notes)}" if notes else "")
+        if found:
+            return (f"the preflight of its merge onto `{BRANCH}` at {base[:12]} refused it ({took}):\n  - " + "\n  - ".join(found)
+                    + "\n  Push the fix: drive preflights the new head at its next sync")
+        self.log(f"research queue: preflight: #{pr.number} at {pr.head[:12]} merged onto `{BRANCH}` at {base[:12]}: nothing "
+                 f"refused ({took})")
+        return None
+
+    def _merged(self, pr: PR, base: str, onto: str, notes: list[str], members: list[Member] | None = None,
+                commit: str | None = None) -> list[str]:
+        """(b) and (e), in a temporary worktree at ``commit``, the merge of the head onto ``base`` (made here when None)."""
+        if commit is None:
+            r = _git(self.repo, "merge-tree", "--write-tree", "--no-messages", base, pr.head, check=False)
+            if r.returncode:
+                notes.append(f"the merged tree's checks not run: `git merge-tree` exited {r.returncode} "
+                             f"({(r.stderr or r.stdout).strip()[-200:]})")
+                return []
+            commit = _out(self.repo, "commit-tree", r.stdout.split()[0], "-p", base, "-p", pr.head, "-m",
+                          f"preflight: #{pr.number} onto {base[:12]}")
+        tree = _out(self.repo, "rev-parse", f"{commit}^{{tree}}")
         fixtures: dict[str, list[str]] = {}
         with merged_worktree(self.repo, commit, self.root) as wt:
             graph, lean_failed, lean_deadline = self._lean(wt, base, tree, notes)
@@ -4141,6 +4226,8 @@ def main(argv: list[str]) -> int:
             raise QueueError(off_drive(q.branch, "queue sync"))
         if a.command == "drive":
             q._drive_only("main", "once", a.dry_run)          # its landings push `main`, its syncs `next`
+        if a.command in ("sync", "drive"):
+            q.preflight = Preflight(q.workdir, remote, store, lean=LakeBuild(on=PREFLIGHT_LEAN_ON, by=a.by), log=q.log).onto
         if a.command == "sync":
             q.hand_sync(dry_run=a.dry_run)
             return 0
