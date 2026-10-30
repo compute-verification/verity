@@ -43,7 +43,7 @@ can't beat.
 `--grids=AxBxC,AxBxC` sets the zero target's two grids (rows × columns × entry states). Rows and columns are drawn with
 repeats, the free terms are per drawn row and column, and each cell draws its own entry states, so a sat at any grid
 is a fit to be rechecked and an unsat at any grid holds. `--escalate` solves the second grid only where the first is
-sat. `--cegis` gives the same answers from a growing subset of a grid's examples (`cegis`).
+sat, as soon as it is. `--cegis` gives the same answers from a growing subset of a grid's examples (`cegis`).
 
 `--pairs=PATH` makes the members `xoradd` steps at the listed constants (a JSON list of {"c", "k", "width", "carry",
 "covers"}, `r80x_batch.py --pairs-out`'s), keeping those of the run's width: a round's word-entry certificates. A
@@ -63,6 +63,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import multiprocessing as mp
+import queue
 import random
 import sys
 import time
@@ -320,21 +321,30 @@ def main():
     todo = specs(opt)
     todo.sort(key=lambda x: (x["s"], x["L"], x["grid"]))
     escalate = "--escalate" in opt
-    results = []
+    key = lambda x: (x["family"], x["s"], x["index"], x["target"])  # noqa: E731
+    later = {key(x): x for x in todo if escalate and x["phase"] == 1}
+    results, done = [], queue.Queue()
     ctx = mp.get_context("fork")
     with ctx.Pool(int(opt.get("--jobs", mp.cpu_count()))) as pool:
-        def run(batch):
-            for res in pool.imap_unordered(solve, batch):
-                results.append(res)
-                print(json.dumps({k: res[k] for k in ("name", "result", "seconds")}), flush=True)
-                with open(out_path, "w") as f:
-                    json.dump({"results": sorted(results, key=lambda x: x["name"]), "summary": summarize(results)}, f,
-                              indent=1)
-        key = lambda x: (x["family"], x["s"], x["index"], x["target"])  # noqa: E731
-        run([x for x in todo if not escalate or x["phase"] != 1])
-        if escalate:
-            fit = {key(x) for x in results if x["phase"] == 0 and x["result"] == "sat"}
-            run([x for x in todo if x["phase"] == 1 and key(x) in fit])
+        def submit(x):
+            pool.apply_async(solve, (x,), callback=done.put, error_callback=done.put)
+        first = [x for x in todo if not escalate or x["phase"] != 1]
+        for x in first:
+            submit(x)
+        pending = len(first)
+        while pending:
+            res = done.get()
+            if isinstance(res, BaseException):
+                raise res
+            pending -= 1
+            results.append(res)
+            print(json.dumps({k: res[k] for k in ("name", "result", "seconds")}), flush=True)
+            with open(out_path, "w") as f:
+                json.dump({"results": sorted(results, key=lambda x: x["name"]), "summary": summarize(results)}, f,
+                          indent=1)
+            if res["phase"] == 0 and res["result"] == "sat" and key(res) in later:
+                submit(later.pop(key(res)))
+                pending += 1
     sane = [x for x in results if x["L"] == x["honest"]]
     bad = [x["name"] for x in sane if x["result"] != "sat"]
     for row in summarize(results):
