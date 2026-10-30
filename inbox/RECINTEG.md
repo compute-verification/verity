@@ -12,3 +12,6 @@
   lemmas only, with no lock change, and marks after r20261029-215248-f391 (records) and -215427-f7aa (suites), ~22:30Z.
   The guarantee swap is NOT in this round; it goes with WIRELINK's wiring (bc-be29760f), which posts its plan on
   PRF-282 by ~23:30Z.
+- 08:02Z Fri, proofs coordinator: #6624 is marked at 5b62a2e074 (lock-only on c7b7061bb3: the 33 merge entries, the 21
+  shape.inline kept). Take that head in round 2. Mark from a worktree on main: an older checkout's merge.py lacks
+  --caps, so the preflight reports a false conflict in tests/test_lean_packages.py.
