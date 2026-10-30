@@ -1,11 +1,16 @@
 """`lean_audit.Audit`, `audit.Audit` with every verdict the Lean check's (`network-records verdicts`), against `audit.Audit`
 itself: the same verdicts, clock, `accepted` and `violations` on `test_network_records_protocol`'s generated units, raw,
 committed, certified and mixed, with each egress link checked over a prefix of the windows of its own, so the unit's clock
-comes from several links; on `service.py`'s calls; and a refusal, never a Python verdict, outside the Lean's domain."""
+comes from several links; on `service.py`'s calls; and a refusal, never a Python verdict, outside the Lean's domain. The
+client's certificate refusals (`certificate_refusals`) and a link's signed syncs read through its clock openings
+(`signed_clocks`) are their references' (`audit.certificate_refusals`, `advised.SignedClocks`) on crafted and generated
+inputs, a disagreement refusing, and outside the Lean's domain each raises."""
 
 from __future__ import annotations
 
 import dataclasses
+import functools
+import hashlib
 import os
 import shutil
 import subprocess
@@ -22,9 +27,9 @@ import test_network_records_protocol as R
 import verity_difftest as D
 from verity_difftest import protocol as P
 from verity.ml.crypto import lms
-from verity.core.protocols.certifier import audit, lean_audit, service
-from verity.core.protocols.certifier.certificate import (CertifiedRecord, Direction, Issuer, LmsKey, LmsSigner,
-                                                        parameters_digest)
+from verity.core.protocols.certifier import advised, audit, lean_audit, service
+from verity.core.protocols.certifier.certificate import (CertifiedClock, CertifiedRecord, Direction, Issuer, LmsKey,
+                                                        LmsSigner, clock_commitment, parameters_digest)
 from verity.core.protocols.certifier.commitment import commit
 from verity.core.protocols.certifier.grid import Certifier, GridParams, occupancy
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet, run_shaper
@@ -366,3 +371,238 @@ def test_a_forked_process_starts_its_own_executable(lean):
     assert os.waitpid(pid, 0)[1] == 0
     assert ok == 1 and child != parent
     assert lean_audit.Audit(server=lean).check_link("a", rec, [], s, ss, g) == honest and lean._proc.pid == parent
+
+
+def _digest(i: int) -> bytes:
+    return hashlib.sha512(b"served certificate %d" % i).digest()
+
+
+@functools.lru_cache(maxsize=None)
+def _served():
+    """A toy key's certificates as a reveal endpoint serves window 1 of link "n2" in `SESSION`, each named by the
+    refusal it gets as the first certificate of its kind: kept (``egress``, ``ingress``, the clock certificate
+    ``clock``), another key's, another link's and another window's, an ingress clock certificate, a forged signature,
+    one that doesn't decode, an altered digest, and a clock certificate signing ``seen``'s digest."""
+    key, other = V2._key(4), V2._key(4, seed=1)
+    i, o = Issuer(V2._Signer(key), SESSION), Issuer(V2._Signer(other), SESSION)
+    egress = i.sign("n2", Direction.EGRESS, 1, _digest(0))
+    certs = {"egress": egress, "ingress": i.sign("n2", Direction.INGRESS, 1, _digest(1)),
+             "key": o.sign("n2", Direction.EGRESS, 1, _digest(2)),
+             "link": i.sign("m", Direction.EGRESS, 1, _digest(3)), "window": i.sign("n2", Direction.EGRESS, 2, _digest(3)),
+             "forged": dataclasses.replace(egress, signature=bytes([egress.signature[0] ^ 1]) + egress.signature[1:]),
+             "undecoded": dataclasses.replace(egress, signature=egress.signature[:-1]),
+             "altered": dataclasses.replace(egress, digest=_digest(9)),
+             "clock": i.sign("n2", Direction.EGRESS, 1, _digest(5)),
+             "ingress clock": i.sign("n2", Direction.INGRESS, 1, _digest(6)),
+             "seen": i.sign("n2", Direction.EGRESS, 1, _digest(7))}
+    return LmsKey(key.params, lms.public_key(key)), certs
+
+
+def _refusals(lean, certificates, clocks, seen=(), session=SESSION):
+    """The Lean's refusals and the reference's of window 1 of "n2" under the toy key, which must be one."""
+    key, _ = _served()
+    got = lean_audit.certificate_refusals(key, session, "n2", 1, certificates, clocks, seen, server=lean)
+    assert got == audit.certificate_refusals(key, session, "n2", 1, certificates, clocks, seen)
+    return got
+
+
+def test_the_clients_certificate_refusals_are_the_references(lean):
+    """`lean_audit.certificate_refusals` (`network-records verdicts`' ``certificates``, `NetworkCheck.LinkWindow`) gives
+    `audit.certificate_refusals`'s refusal of each certificate and clock certificate of a served window: another key's,
+    another link's or window's, a forged signature, one that doesn't decode and an altered digest, a second of a
+    direction, an ingress clock certificate and one signing a digest that `seen` holds, and in another session every
+    signature; the honest ones are kept."""
+    _, c = _served()
+    certs = [c[k] for k in ("key", "link", "window", "forged", "undecoded", "altered", "egress", "clock", "ingress")]
+    clocks = [c[k] for k in ("ingress clock", "seen", "clock", "egress")]
+    assert _refusals(lean, certs, clocks, [_digest(7)]) == (
+        ["key", "link-window", "link-window", "signature", "signature", "signature", None, "second", None],
+        ["clock", "reused", None, "second"])
+    assert _refusals(lean, certs, clocks) == (
+        ["key", "link-window", "link-window", "signature", "signature", "signature", None, "second", None],
+        ["clock", None, "second", "second"])
+    assert _refusals(lean, certs, clocks, session=bytes(lms.SESSION_BYTES)) == (
+        ["key", "link-window", "link-window"] + ["signature"] * 6, ["clock"] + ["signature"] * 3)
+    assert _refusals(lean, [], []) == ([], [])
+
+
+def test_on_generated_answers_the_lean_is_the_reference(lean):
+    """On answers drawn from the served certificates in any order and number, with any of their digests seen: the Lean's
+    refusals are the reference's, every refusal among them."""
+    _, c = _served()
+    pool = sorted(c.values(), key=lambda x: (x.link, x.direction.code, x.window, x.digest, x.signature))
+    found = set()
+
+    @settings(derandomize=True, database=None, deadline=None, max_examples=200)
+    @given(st.lists(st.sampled_from(pool), max_size=6), st.lists(st.sampled_from(pool), max_size=6),
+           st.sets(st.sampled_from([_digest(k) for k in range(10)])))
+    def same(certificates, clocks, seen):
+        a, b = _refusals(lean, certificates, clocks, sorted(seen))
+        found.update(a + b)
+
+    same()
+    assert found == {None, "key", "link-window", "clock", "signature", "second", "reused"}, found
+
+
+def test_a_certificate_disagreement_refuses_the_window(lean, monkeypatch):
+    """With the reference made to keep everything, every certificate and clock certificate of the window is a
+    `disagreement`, those the Lean keeps among them; a reference that raises where the Lean answers raises."""
+    key, c = _served()
+    monkeypatch.setattr(audit, "certificate_refusals",
+                        lambda key, s, link, w, xs, ks, seen=(): ([None] * len(xs), [None] * len(ks)))
+    assert lean_audit.certificate_refusals(key, SESSION, "n2", 1, [c["egress"], c["forged"]], [c["clock"]],
+                                           server=lean) == (["disagreement"] * 2, ["disagreement"])
+    assert lean_audit.certificate_refusals(key, SESSION, "n2", 1, [c["egress"]], [], server=lean) == ([None], [])
+
+    def boom(*a, **k):
+        raise ArithmeticError("reference")
+
+    monkeypatch.setattr(audit, "certificate_refusals", boom)
+    with pytest.raises(RuntimeError, match="the reference raised where the Lean check answered"):
+        lean_audit.certificate_refusals(key, SESSION, "n2", 1, [c["egress"]], [], server=lean)
+
+
+def test_certificates_outside_the_domain_are_refused(lean):
+    """A key other than an `LmsKey`, a certificate of ill-typed fields (a negative window, a link that isn't a string)
+    and an LMS key of another length each raise `ValueError`, with no refusal computed in Python."""
+    key, c = _served()
+
+    class OtherKey:
+        key_id = key.key_id
+
+        def verify(self, message, signature):
+            return True
+
+    with pytest.raises(ValueError, match="not an LmsKey"):
+        lean_audit.certificate_refusals(OtherKey(), SESSION, "n2", 1, [c["egress"]], [], server=lean)
+    for bad in (dataclasses.replace(c["egress"], window=-1), dataclasses.replace(c["egress"], link=b"n2")):
+        with pytest.raises(ValueError, match="ill-typed fields"):
+            lean_audit.certificate_refusals(key, SESSION, "n2", 1, [bad], [], server=lean)
+    with pytest.raises(ValueError, match="outside the Lean audit's domain: .*an LMS public key is"):
+        lean_audit.certificate_refusals(LmsKey(key.params, key.public[:-1]), SESSION, "n2", 1, [c["egress"]], [],
+                                        server=lean)
+
+
+CLOCK_SYNCS = (ClockSync(0, 1), ClockSync(1, Fraction(1, 2)), ClockSync(2, 1), ClockSync(0, Fraction(3, 2)))
+
+
+@functools.lru_cache(maxsize=None)
+def _openings():
+    """A toy key's salted clock certificates with their openings in `SESSION` (`Issuer.salted_clock`, each salt its
+    own): ``honest``, windows 0 … 3 of "n2" under `CLOCK_SYNCS`, and window 0's in place of its own, named by what is
+    wrong with it: an ingress certificate's, another key's, an altered digest, a sync swapped after signing or past a u64, a
+    forged signature, a certificate relabelled to another window; and beside the honest ones, window 1 signed under
+    window 0's salt (``reused``), a second sync for window 1, window 0's sync again under a salt of its own, and another
+    link's."""
+    key, other = V2._key(4), V2._key(4, seed=1)
+    salts = (hashlib.sha512(b"clock salt %d" % k).digest() for k in range(64))
+    i, o = (Issuer(V2._Signer(k), SESSION, coins=lambda n: next(salts)) for k in (key, other))
+    honest = tuple(i.salted_clock("n2", w, s) for w, s in enumerate(CLOCK_SYNCS))
+    c = honest[0]
+    replace = dataclasses.replace
+    bad = {"egress": CertifiedClock(c.sync, c.salt, i.sign("n2", Direction.INGRESS, 0, c.certificate.digest)),
+           "key": o.salted_clock("n2", 0, CLOCK_SYNCS[0]),
+           "altered": replace(c, certificate=replace(c.certificate, digest=bytes(64))),
+           "swapped": replace(c, sync=CLOCK_SYNCS[1]), "wide": replace(c, sync=ClockSync(1 << 64, 1)),
+           "forged": replace(c, certificate=replace(c.certificate, signature=bytes(len(c.certificate.signature)))),
+           "relabelled": replace(c, certificate=replace(c.certificate, window=9))}
+    beside = {"reused": CertifiedClock(CLOCK_SYNCS[1], c.salt, i.sign("n2", Direction.EGRESS, 1,
+                                                                      clock_commitment(c.salt, CLOCK_SYNCS[1]))),
+              "second": i.salted_clock("n2", 1, CLOCK_SYNCS[2]), "again": i.salted_clock("n2", 0, CLOCK_SYNCS[0]),
+              "link": i.salted_clock("m", 0, CLOCK_SYNCS[0])}
+    return LmsKey(key.params, lms.public_key(key)), honest, bad, beside
+
+
+def _signed(lean, openings, session=SESSION, link="n2"):
+    """The Lean's signed syncs and refusals of `openings`, which must agree with `advised.SignedClocks`'s."""
+    key = _openings()[0]
+    syncs, refused = lean_audit.signed_clocks(key, session, link, openings, server=lean)
+    assert lean_audit.DISAGREEMENT not in refused
+    assert syncs == advised.SignedClocks(key, session, tuple(openings)).syncs(link)
+    return syncs, refused
+
+
+def test_the_signed_syncs_are_the_references(lean):
+    """`lean_audit.signed_clocks` (`network-records verdicts`' ``clocks``, `NetworkCheck.Period.signedSyncs`) gives
+    `advised.SignedClocks`'s syncs, window 0's on up to the first without exactly one signed sync, and refuses each
+    opening it does: not an egress certificate's, another key's, a sync and salt that don't open the signed digest,
+    a signature that doesn't verify (forged, relabelled, or another session's), and both openings sharing a salt. The
+    same opening twice is one, and so is one sync signed twice for a window; two syncs for a window give it none."""
+    _, honest, bad, beside = _openings()
+    h = list(honest)
+    assert _signed(lean, h) == (CLOCK_SYNCS, [None] * 4) and _signed(lean, h[::-1])[0] == CLOCK_SYNCS
+    assert _signed(lean, h + h) == (CLOCK_SYNCS, [None] * 8) and _signed(lean, [])[0] == ()
+    assert _signed(lean, h[1:])[0] == () and _signed(lean, [h[0], *h[2:]])[0] == CLOCK_SYNCS[:1]
+    assert _signed(lean, h, link="m")[0] == () and _signed(lean, h + [beside["link"]], link="m")[0] == CLOCK_SYNCS[:1]
+    assert _signed(lean, h + [beside["again"], beside["link"]]) == (CLOCK_SYNCS, [None] * 6)
+    assert _signed(lean, h + [beside["second"]]) == (CLOCK_SYNCS[:1], [None] * 5)
+    assert _signed(lean, h + [beside["reused"]]) == ((), ["salt", None, None, None, "salt"])
+    want = {"egress": "egress", "key": "key", "altered": "opening", "swapped": "opening", "wide": "opening",
+            "forged": "signature", "relabelled": "signature"}
+    for name, x in bad.items():
+        assert _signed(lean, [x, *h[1:]]) == ((), [want[name], None, None, None]), name
+    assert _signed(lean, h, session=bytes(lms.SESSION_BYTES)) == ((), ["signature"] * 4)
+
+
+def test_on_generated_openings_the_lean_is_the_reference(lean):
+    """On openings drawn from those of `_openings` in any order and number, in `SESSION` or another: the Lean's syncs
+    are `advised.SignedClocks`', and so are how many openings and link-windows they refuse, every refusal among them."""
+    _, honest, bad, beside = _openings()
+    pool = [*honest, *bad.values(), *beside.values()]
+    found = set()
+
+    @settings(derandomize=True, database=None, deadline=None, max_examples=200)
+    @given(st.lists(st.sampled_from(pool), max_size=8), st.booleans())
+    def same(openings, other):
+        found.update(_signed(lean, openings, bytes(lms.SESSION_BYTES) if other else SESSION)[1])
+
+    same()
+    assert found == {None, "egress", "key", "opening", "signature", "salt"}, found
+
+
+def test_a_clock_disagreement_gives_no_window_a_sync(lean, monkeypatch):
+    """With the reference made to sign every opening's sync, a forged opening leaves no window a sync and every opening
+    a `disagreement`; on the honest ones the two agree; a reference that raises where the Lean answers raises."""
+    key, honest, bad, _ = _openings()
+
+    class SigningAll:
+        def __init__(self, key, session, openings):
+            self.refused, self.openings = (), openings
+
+        def syncs(self, link):
+            return tuple(o.sync for o in sorted(self.openings, key=lambda o: o.window))
+
+    monkeypatch.setattr(lean_audit, "SignedClocks", SigningAll)
+    forged = [bad["forged"], *honest[1:]]
+    assert lean_audit.signed_clocks(key, SESSION, "n2", forged, server=lean) == ((), ["disagreement"] * 4)
+    assert lean_audit.signed_clocks(key, SESSION, "n2", honest, server=lean) == (CLOCK_SYNCS, [None] * 4)
+
+    def boom(*a, **k):
+        raise ArithmeticError("reference")
+
+    monkeypatch.setattr(lean_audit, "SignedClocks", boom)
+    with pytest.raises(RuntimeError, match="the reference raised where the Lean check answered"):
+        lean_audit.signed_clocks(key, SESSION, "n2", honest, server=lean)
+
+
+def test_clock_openings_outside_the_domain_are_refused(lean):
+    """A key other than an `LmsKey`, an opening that isn't a `CertifiedClock` (its bare certificate) or one of an
+    ill-typed certificate, and an LMS key of another length each raise `ValueError`, with no sync computed in
+    Python."""
+    key, honest, _, _ = _openings()
+
+    class OtherKey:
+        key_id = key.key_id
+
+        def verify(self, message, signature):
+            return True
+
+    with pytest.raises(ValueError, match="not an LmsKey"):
+        lean_audit.signed_clocks(OtherKey(), SESSION, "n2", honest, server=lean)
+    with pytest.raises(ValueError, match="a clock opening of a Certificate"):
+        lean_audit.signed_clocks(key, SESSION, "n2", [honest[0].certificate], server=lean)
+    ill = dataclasses.replace(honest[0], certificate=dataclasses.replace(honest[0].certificate, window=-1))
+    with pytest.raises(ValueError, match="ill-typed fields"):
+        lean_audit.signed_clocks(key, SESSION, "n2", [ill], server=lean)
+    with pytest.raises(ValueError, match="outside the Lean audit's domain: .*an LMS public key is"):
+        lean_audit.signed_clocks(LmsKey(key.params, key.public[:-1]), SESSION, "n2", honest, server=lean)
