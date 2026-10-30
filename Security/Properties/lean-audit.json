@@ -53,6 +53,7 @@
   "Properties.RemoteAudit.Live",
   "Properties.RemoteAudit.Component",
   "Properties.RemoteAudit.P2Subprotocol",
+  "Properties.RemoteAudit.P2Line",
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
   "Properties.Accounting.JointBridge.WorkOfCreditedWords",
   "Properties.Challenger",

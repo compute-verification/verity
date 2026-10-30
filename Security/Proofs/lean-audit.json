@@ -59,6 +59,7 @@
   "Proofs.Properties.RemoteAudit.Component",
   "Proofs.Properties.RemoteAudit.ComponentWitnesses",
   "Proofs.Properties.RemoteAudit.P2Subprotocol",
+  "Proofs.Properties.RemoteAudit.P2Line",
   "Proofs.Properties.Pouw.LiveSalt.Ledger",
   "Proofs.Properties.Pouw.LiveSalt.Canon",
   "Proofs.Properties.Pouw.LiveSalt.Coin",
