@@ -412,7 +412,7 @@ theorem inner_mem {i : RecVStar.Inner} {vs : Array _root_.VStar.Stmt} (h : RecVS
     {nm : String} {pt : _root_.VStar.Part} (hs : vs[s]? = some (.inner j nm pt)) :
     ∃ sp ps, _root_.VStar.Algebra.specOf (FlockC3.Reps.vshOf i) i.holo = .ok sp ∧ _root_.VStar.parts sp = .ok ps ∧
       pt ∈ ps := by
-  obtain ⟨-, -, -, -, -, -, A, C, -, -, -, -, -, hA, hC, K, n, hK, -, rfl⟩ := FlockC3.Reps.list_ok h
+  obtain ⟨-, -, -, -, -, -, A, C, -, -, -, -, -, hA, hC, K, L, n, hK, -, hL, rfl⟩ := FlockC3.Reps.list_ok h
   obtain ⟨sch, sp, ps, -, hsp, hps, rfl⟩ := FlockVBridge.Family.statementsOf_eq hA
   refine ⟨sp, ps, hsp, hps, ?_⟩
   have hm := Array.mem_of_getElem? hs
@@ -427,8 +427,7 @@ theorem inner_mem {i : RecVStar.Inner} {vs : Array _root_.VStar.Stmt} (h : RecVS
         exact Array.getElem_mem hj'
     · rcases FlockC3.Reps.candidate3_kinds hC _ hm with ⟨_, _, he⟩ | ⟨_, _, _, _, he⟩ |
         ⟨_, _, _, _, _, _, he⟩ <;> cases he
-  · obtain ⟨_, _, he⟩ := FlockC3.VStarList.caps_cap hK n _ hm
-    cases he
+  · rcases FlockC3.VStarList.tail_cases hK hL n _ hm with ⟨_, _, he⟩ | ⟨_, _, _, he⟩ <;> cases he
 
 /-! ## The names -/
 
