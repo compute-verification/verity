@@ -409,6 +409,8 @@ def wiring(unit_ge: dict[str, float], um2_per_ge: float = 0.798, pitch_um: float
             "rho_ge": unit_ge[p["rho"]], "rho_side_um_45nm": side,
             "tap_track_width_um": tracks_um, "track_share_of_side": tracks_um / side,
             "dedicated_channel_ge_equiv": tracks_um * side / um2_per_ge,
+            "dedicated_channel_ge_per_mac": tracks_um * side / um2_per_ge / p["macs_per_tc_clk"],
+            "rho_ge_per_mac": unit_ge[p["rho"]] / p["macs_per_tc_clk"],
         }
     return out
 
@@ -516,7 +518,9 @@ def main() -> None:
     if "noise_add9" in sy:
         res["noise_costs"] = noise_costs(sy["mac4_s8"]["ge"], sy["mac4_s9"]["ge"], sy["noise_add9"]["ge"])
     if "keccak400_rnd" in sy:
-        res["wiring"] = wiring({k: sy[k]["ge"] for k in ("keccak400_rnd", "keccak1600_rnd")})
+        dff = json.loads(Path(a.synth).read_text())["meta"]["ge_dff"]
+        res["wiring"] = wiring({k: sy[k]["ge"] + sy["keccak_rcrom"]["ge"] + bits * dff
+                                for k, bits in (("keccak400_rnd", 400), ("keccak1600_rnd", 1600))})
     ck = checks(res)
     if a.mutations:
         ck += [("mutation: " + n, ok) for n, ok in mutations(json.loads(Path(a.f1_build).read_text()),
