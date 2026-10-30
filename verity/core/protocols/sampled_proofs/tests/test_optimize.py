@@ -15,7 +15,7 @@ import pytest
 
 from verity.core.protocols.profile import Stratified, Stratum
 from verity.core.protocols.sampled_proofs.one_stage.draw import work_k, work_table
-from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective, ReplayDomain,
+from verity.core.protocols.sampled_proofs.optimize import (Candidate, TensorCommit, CostModel, Objective, ReplayDomain,
                                                            TemplateCost, _hit, _miss, certify, density_bound, density_exact,
                                                            for_budget, for_target, frontier, ln_bound, ln_upper, max_harm,
                                                            max_harm_check, needs_benchmark,
@@ -334,12 +334,12 @@ def test_commitment_is_paid_on_every_unit_and_moves_the_switch():
     assert {p.cost["commit"] for p in plans} == {0.0, 4.0 * R}
 
 
-SERVE = (Commitment("commit", "x", 1000.0, decode_bytes=100.0, chain=10.0),
-         Commitment("pouw-a", "x", 2000.0, decode_bytes=200.0, chain=30.0, gates=True),
-         Commitment("commit", "y", 500.0),
-         Commitment("commit", "kv", 400.0, chain=4.0),
-         Commitment("kv-append", "kv", 400.0, cost=1.0, chain=6.0),
-         Commitment("remote", "receipts", 0.0, cost=7.0))
+SERVE = (TensorCommit("commit", "x", 1000.0, decode_bytes=100.0, chain=10.0),
+         TensorCommit("pouw-a", "x", 2000.0, decode_bytes=200.0, chain=30.0, gates=True),
+         TensorCommit("commit", "y", 500.0),
+         TensorCommit("commit", "kv", 400.0, chain=4.0),
+         TensorCommit("kv-append", "kv", 400.0, cost=1.0, chain=6.0),
+         TensorCommit("remote", "receipts", 0.0, cost=7.0))
 
 
 def test_serve_time_commitments_are_in_every_plan_and_the_budget_is_the_total(batched):
@@ -361,7 +361,7 @@ def test_serve_time_commitments_are_in_every_plan_and_the_budget_is_the_total(ba
     assert for_budget(moved, fixed * 0.999, candidates=cands, costs=served, objective=objective) is None
     assert perturb(served, "commit", 2.0).serve_cost() == pytest.approx(2 * fixed)
     with pytest.raises(ValueError, match="non-negative"):
-        Commitment("commit", "x", -1.0)
+        TensorCommit("commit", "x", -1.0)
 
 
 def test_overlaps_count_each_scale_and_price_committing_once():
