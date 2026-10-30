@@ -66,7 +66,7 @@ theorem certifiesOn_spec {p : NetworkCheck.Period.Params} {link : String} {dr : 
     x.direction = dr ∧ x.link = link ∧ x.window = w ∧ ∃ m sig,
       NetworkCheck.certificateMessage x.keyId p.session x.link x.direction x.window x.digest = .ok m ∧
       Lms.Signature.decode p.lms x.signature = .ok sig ∧ Lms.verify p.lms p.key m sig = .ok true := by
-  unfold NetworkCheck.Period.certifiesOn NetworkCheck.Period.signs at h
+  unfold NetworkCheck.Period.certifiesOn NetworkCheck.Check.Certificate.signs at h
   simp only [Bool.and_eq_true, beq_iff_eq] at h
   obtain ⟨⟨⟨hd, hl⟩, hw⟩, -, hs⟩ := h
   refine ⟨hd, hl, hw, ?_⟩
@@ -74,8 +74,8 @@ theorem certifiesOn_spec {p : NetworkCheck.Period.Params} {link : String} {dr : 
   · rename_i m sig hm hsig
     refine ⟨m, sig, hm, hsig, ?_⟩
     cases hv : Lms.verify p.lms p.key m sig with
-    | error _ => simp [hv, Except.toOption] at hs
-    | ok b => cases b <;> simp_all [Except.toOption]
+    | error e => rw [hv] at hs; cases hs
+    | ok b => rw [hv] at hs; cases b <;> first | rfl | cases hs
   · cases hs
 
 /-! ## The certificates -/
@@ -129,7 +129,7 @@ window `i`'s boundary link `c` (the period's link, `c`'s end `dir c` and window 
 def LogIssued (s : ((i : I) → Ω i) → Sent) (dir : Fin Kₒ → NetworkCheck.Direction)
     (out : ((i : I) → Ω i) → DeviceOutput) (P : ((i : I) → Ω i) → Fin n → Fin Kₒ → Prop) : Prop :=
   ∀ ξ, ∀ cr ∈ (out ξ).certificates, ∃ (iss iss' : CertifierDevice.Issuer) (salt : ByteArray)
-      (leaf : Except String ℕ) (rec : CertifierDevice.Record) (dr : NetworkCheck.Direction) (g : NetworkCheck.Params)
+      (leaf : Except String ℕ) (rec : CertifierDevice.BlockGrid) (dr : NetworkCheck.Direction) (g : NetworkCheck.Params)
       (pd : ByteArray), iss.certify salt leaf rec dr g pd = .ok (iss', some cr) ∧
     ∀ (i : Fin n) c p cm e, NetworkPeriod .onsite (s ξ) p cm e → rec.link = p.link → dr = dir c →
       rec.window = p.first + i.val → rec.status = .complete → P ξ i c
