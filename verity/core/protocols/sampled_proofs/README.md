@@ -145,7 +145,8 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   `proved_units`. One member's output is another's input only through a registered read (`checkGroupAt`'s docstring
   has the premise). `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which
   `tests/test_proofs.py` holds to `verify`'s. It is not onsite's or remote's integrity component (`Core.Onsite`,
-  `Core.Remote`): v1 is, until v2's check reads the challenger's signed coins.
+  `Core.Remote`): v1 is, until onsite and remote move to v2, which takes reading the challenger's signed coins in each
+  and then switching the composite.
 - **The challenger** (`challenger`, Lean of record `SampledProofs/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor host its coins reach the prover's
   machine only through that machine's certifier coin link (`benchmarks/live_challenger/auditor.py`, the coins' path).

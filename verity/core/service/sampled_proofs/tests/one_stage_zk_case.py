@@ -8,13 +8,15 @@ It is v2's framing over v1's `one_stage` and decoders (this directory's `test_di
 (`checkBlobs` on evidence whose sessions' records are in no blob, where it needs no proof), `answer` the protocol on a
 case and its ``blobs``. Each takes the single form and the group form (``proofs.members``: one circuit digest, registered
 file, public file and sessions a member, the registration's ``leaf_layer`` the members' public files', `leaf_layer`).
-`CIRCUIT` and `PUBLIC` are the files the difftests hand v2 as blobs, and `undecided` an audit that sampled no proof
-block, v2's best verdict without a session's proof."""
+`CIRCUIT` and `PUBLIC` are the files the difftests hand v2 as blobs, `undecided` an audit that sampled no proof block,
+v2's best verdict without a session's proof, and `challenger` the auditor's challenger whose released coins each such
+audit's sample reads."""
 
 from __future__ import annotations
 
 import hashlib
 import importlib.util
+import random
 import re
 import sys
 from pathlib import Path
@@ -66,12 +68,13 @@ def _own(pr: dict) -> tuple:
 def params(j: Any) -> dict:
     """`OneStageZk.paramsOfJson`: v1's parameters with ``proofs``, exactly the auditor's circuit digest and the verifier's
     registered file, or, in the group form, exactly ``members``, a non-empty list of exactly ``{circuit, name,
-    registered}`` with distinct names; and the verifier's own partition object."""
+    registered}`` with distinct names; naming the auditor's challenger (`NO_CHALLENGER`), and the verifier's own
+    partition object."""
     pr = j.get("proofs") if isinstance(j, dict) else None
     group = isinstance(pr, dict) and "members" in pr
     if not isinstance(pr, dict) or sorted(pr) != (["members"] if group else ["circuit", "registered"]):
         raise Reject("the parameters name no proofs, or other keys under them")
-    base = ONE_STAGE.decode_params({k: v for k, v in j.items() if k != "proofs"})
+    base = ONE_STAGE.decode_params_v2(j)
     if base["partition"] is None:
         raise Reject("partition is null")
     if not group:
@@ -140,10 +143,11 @@ def leaf_layer(members: list[dict]) -> str:
 
 def check(blobs: list[bytes]):
     """`OneStageZk.checkBlobs` on `blobs`, for evidence whose sessions' records are in no blob, where it needs no proof:
-    the circuit and the public file are blobs, a session whose record is in none is refused, and with no session the
-    evidence proves no proof block and v1 decides on no verdict (undecided at best: v2 accepts only on a session's
-    proof). The group form (`checkGroupAt`) first holds the registration's ``leaf_layer`` to the members' public files'
-    and the evidence's members to the parameters', then runs each member so, in order."""
+    the sample's coins first (`coinsOf`, the challenger's release after the registration), then the circuit and the
+    public file are blobs, a session whose record is in none is refused, and with no session the evidence proves no
+    proof block and v1 decides on no verdict (undecided at best: v2 accepts only on a session's proof). The group form
+    (`checkGroupAt`) first holds the registration's ``leaf_layer`` to the members' public files' and the evidence's
+    members to the parameters', then runs each member so, in order."""
     held = {sha(b) for b in blobs}
 
     def own(program: Any, circuit: str, registered: Any, public: str, sessions: list) -> str | None:
@@ -166,6 +170,10 @@ def check(blobs: list[bytes]):
         return None
 
     def run(p: dict, c: tuple, e: dict) -> tuple:
+        try:
+            ONE_STAGE._coins_of(p["base"], c, e["base"])
+        except ONE_STAGE.CoinError as x:
+            return REJECT, f"coins: {x}"
         if not p["members"] and not e["members"]:
             why = own(p["program"], p["circuit"], p["registered"], e["public"], e["sessions"])
             if why is not None:
@@ -203,3 +211,31 @@ def undecided(setup, law: dict, record: dict, session_roots: dict | None = None)
         "draw": d, "instances": 0, "proofs": {"public": sha(PUBLIC), "sessions": []}, "proved_units": [],
         "receipt": ONE_STAGE.R.receipt(record, "v", received=ONE_STAGE.RECEIVED), "served": None,
         "session_roots": session_roots, "sessions": [], "statement": {}})
+
+
+def challenger(rng: random.Random, setup, law: dict, records: list[dict]) -> tuple[dict, list[dict]]:
+    """The auditor's challenger for `records` in turn, registrations of `setup`'s program under `law` (`undecided`'s, a
+    law that samples no proof block, so its sample reads the same bytes whatever they are): one withheld session of a
+    ledger window (`Drawn`'s), releasing after each record's digest the coins its sample reads (`draw_first`). Returns
+    the parameters that name it (``challenger`` and ``window_root``, which v2 requires) and each record's evidence
+    ``coins``."""
+    mine = ONE_STAGE.DR.derive(setup.program, setup.query, law, None)
+
+    def sample(source) -> None:
+        ONE_STAGE.draw_first(ONE_STAGE.OwnRandomness(source), mine, setup.population)
+    read: list[int] = []
+    sample(lambda k: read.append(k) or bytes(k))
+    per = -(-sum(read) // ONE_STAGE.COIN_BYTES)
+    digests = [bytes.fromhex(ONE_STAGE.R.digest(r)) for r in records]
+    later = []
+
+    def reads(coins) -> bytes:
+        sample(coins)
+        for after in digests[1:]:
+            later.append(coins.commit(after))
+            sample(coins)
+        return b"".join(o.coin for s in coins.segments for o in s.openings)
+    # the session opens up to two coins of the family before the first digest and two after the last
+    d = ONE_STAGE.Drawn(rng, after=digests[0], reads=reads, size=4 + per * len(records))
+    named = {"challenger": {"key": d.s.key.to_json(), "label": "draw"}, "window_root": d.ledger.window["root"]}
+    return named, [{k: v for k, v in d.evidence(s.to_json()).items() if k != "key"} for s in [d.segment, *later]]
