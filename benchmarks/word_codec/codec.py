@@ -180,18 +180,6 @@ def fragment_payloads(w: bytes, n: int, kdim: int, bits: int = PAYLOAD_BITS) -> 
     return out
 
 
-def block_indices(j: int, bits: int = PAYLOAD_BITS) -> list[int]:
-    """The store indices of the bandwidth audit's block j = 32·task + lane: that lane's words of that task, in order."""
-    task, lane = divmod(j, LANES)
-    lw = lane_words(bits)
-    return [task * lw * LANES + wi * LANES + lane for wi in range(lw)]
-
-
-def lane_block(store: list[int], j: int, bits: int = PAYLOAD_BITS) -> bytes:
-    """E_j, the bytes the fused GEMM tags with ro-blake3/v1 as BLAKE3-keyed(K, u64be j ‖ E_j): block j's words, u64le."""
-    return words_bytes([store[i] for i in block_indices(j, bits)])
-
-
 def plain_fragments(w: bytes, n: int, kdim: int) -> bytes:
     """The plain FP8 GEMM's layout: each task's 16 k-tiles, each tile's 32 lanes × 16 bytes, lane-contiguous."""
     lanes = fragment_stream(w, n, kdim)

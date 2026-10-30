@@ -9,7 +9,7 @@ from verity_flock import gf2
 from verity_flock import ir_lower as IL
 
 if not hasattr(gf2.Circuit, "lookup"):
-    pytest.skip("gf2 has no table reads here (#140's pieces)", allow_module_level=True)
+    pytest.skip("gf2 has no table reads here", allow_module_level=True)
 
 
 @pytest.fixture(params=[6, 8])
