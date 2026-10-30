@@ -19,9 +19,10 @@ builds by what it is built from, `built_from`, any other by its digest), what it
 resolves to in `uv.lock` (the lock's entry for each distribution it depends on, transitively, with the workspace's dependency
 groups, which bring pytest) and the installed version of each, and the environment (`environment`): Python, the platform, the
 base image (the os-release `ID` and `VERSION_ID` and the C library: `base_image`), whether `lake` and `cargo` are on the PATH and
-whether the tests may use a GPU, and the `VERITY_*` and `FLOCK_*` variables tests switch on, and the code that runs the suites
-(`RUNNER`: this runner and its guard, not the rest of check, so an edit to `check.py` reruns its own suite alone). Nothing in it
-names the machine, the checkout's path or the run, so the same inputs key alike on every node. The cache key hashes all
+whether the tests may use a GPU, and the `VERITY_*` and `FLOCK_*` variables tests switch on (all but the `where` ones
+`settings.py` declares), and the code that runs the suites (`RUNNER`: this runner, its settings and its guard, not the rest of
+check, so an edit to `check.py` reruns its own suite alone). Nothing in it names the machine, the checkout's path or the run, so
+the same inputs key alike on every node. The cache key hashes all
 of them, read from git's view of the working tree, so uncommitted edits count. The tree must be a git checkout: `research run
 --source` ships one, so a machine keys a commit as a laptop does. So a change to the lockfile or to another package's
 `pyproject.toml` re-runs only the suites whose resolved dependencies it changed. A pass is kept under its key in
@@ -161,19 +162,21 @@ HERE = Path(__file__).resolve().parent
 GUARD = HERE / "guard"
 #: on the tests' PYTHONPATH: its `sitecustomize` makes every Python a test starts trace what it reads
 CHILD = GUARD / "child"
-CACHE = Path(os.environ.get("VERITY_TEST_CACHE") or Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "verity" / "tests")
-#: Files every key includes: the code that decides a suite's verdict, the runner and its guard and tracer. Not
+_spec = importlib.util.spec_from_file_location("suites_settings", HERE / "settings.py")
+#: every environment variable the runner reads, declared once (`settings.py`)
+SETTINGS = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(SETTINGS)
+CACHE = Path(SETTINGS.VERITY_TEST_CACHE or Path(SETTINGS.XDG_CACHE_HOME or Path.home() / ".cache") / "verity" / "tests")
+#: Files every key includes: the code that decides a suite's verdict, the runner, its settings, its guard and tracer. Not
 #: check.py: what it hands the runner that can change a verdict is keyed as such (the pytest arguments, `environment()`'s
 #: variables, the tools on the PATH), and its own suite (verity-check) keys it as its own file.
-RUNNER = ("tools/verity/check/suites.py", "tools/verity/check/guard/verity_suite_guard.py",
+RUNNER = ("tools/verity/check/suites.py", "tools/verity/check/settings.py", "tools/verity/check/guard/verity_suite_guard.py",
           "tools/verity/check/guard/child/sitecustomize.py", "tools/verity/check/guard/child/verity_suite_reads.py")
 XDIST = importlib.util.find_spec("xdist") is not None
 TOOLS = ("lake", "cargo")
+#: the variables a pass is keyed on: those of these prefixes whose role isn't `where` (`settings.py`: not where results are kept,
+#: which are kept, or the runner's own `VERITY_SUITE_*` it sets for the tests)
 ENV_PREFIXES = ("VERITY_", "FLOCK_")
-#: variables of those prefixes that say where results are kept or which are kept, not what a test computes
-UNKEYED = frozenset({"VERITY_TEST_CACHE", "VERITY_TEST_CACHE_MIN_S"})
-#: and the runner's own, which it sets for the tests (`VERITY_SUITE_ROOT`, `..._MODULE`, `..._READS`, ...)
-UNKEYED_PREFIX = "VERITY_SUITE_"
 #: what a machine's runner gives a run's workload and check's steps never get (check.py's `ENV_PASS`): the run's `RESEARCH_*` and
 #: the machine's PYTHONPYCACHEPREFIX. Tests that start runs of their own would inherit them, so a suite run inside a `research
 #: run` would reach another verdict than inside check (test_remote_cwd, r20261008-010104-2b69)
@@ -324,7 +327,7 @@ def shipped(path: str) -> list[str]:
 def tests_pythonpath() -> str:
     """The tests' PYTHONPATH: the tracer's directory (`CHILD`), then the caller's entries inside this tree. An entry naming another
     checkout, such as an `export PYTHONPATH=...` left in a shell, would run this tree's tests against that checkout's code."""
-    return os.pathsep.join([str(CHILD), *(p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep)
+    return os.pathsep.join([str(CHILD), *(p for p in SETTINGS.PYTHONPATH.split(os.pathsep)
                                           if p and Path(p).resolve().is_relative_to(ROOT))])
 
 
@@ -659,7 +662,7 @@ def lean_on_path() -> None:
 
 
 def _on_path(d: Path) -> None:
-    os.environ["PATH"] = os.pathsep.join([str(d), os.environ.get("PATH", "")])
+    os.environ["PATH"] = os.pathsep.join([str(d), SETTINGS.PATH])
 
 
 def lean_build(log: Path) -> str | None:
@@ -692,7 +695,7 @@ def gpus(env) -> bool:
     """Whether a process with environment ``env`` may use a GPU: `nvidia-smi` is on the PATH and `CUDA_VISIBLE_DEVICES` doesn't
     hide every GPU, which is what a GPU test runs or skips on. A run on a node whose GPUs gpu-lease hands out sees none (`research
     run` sets the variable empty, and check passes it to its steps), so it keys its suites as a run on a node without GPUs does."""
-    return shutil.which("nvidia-smi") is not None and env.get("CUDA_VISIBLE_DEVICES") != ""
+    return shutil.which("nvidia-smi") is not None and SETTINGS.raw("CUDA_VISIBLE_DEVICES", env) != ""
 
 
 def cargo_on_path() -> None:
@@ -704,9 +707,8 @@ def cargo_on_path() -> None:
 
 
 def keyed_variables(env) -> dict[str, str]:
-    """The variables a key holds: those of `ENV_PREFIXES`, which tests switch on, less those that say where results are kept
-    (`UNKEYED`) and the runner's own (`UNKEYED_PREFIX`)."""
-    return {k: v for k, v in sorted(env.items()) if k.startswith(ENV_PREFIXES) and k not in UNKEYED and not k.startswith(UNKEYED_PREFIX)}
+    """The variables a key holds: those of `ENV_PREFIXES`, which tests switch on, less the `where` ones (`settings.py`)."""
+    return {k: v for k, v in sorted(env.items()) if k.startswith(ENV_PREFIXES) and SETTINGS.role_of(k) != SETTINGS.WHERE}
 
 
 def environment() -> dict:
@@ -714,8 +716,9 @@ def environment() -> dict:
     one for every machine), the platform (`platform_id`), whether `lake` and `cargo` are on the PATH (`cargo_on_path`) and whether
     this process may use a GPU (`gpus`), which tests skip on, and the variables they switch on (`keyed_variables`). Nothing that
     names the machine, the checkout's path or the run."""
+    env = SETTINGS.environ()
     return {"python": platform.python_version(), **platform_id(),
-            "tools": {**{t: shutil.which(t) is not None for t in TOOLS}, "gpus": gpus(os.environ)}, "variables": keyed_variables(os.environ)}
+            "tools": {**{t: shutil.which(t) is not None for t in TOOLS}, "gpus": gpus(env)}, "variables": keyed_variables(env)}
 
 
 def inputs_of(suite: Suite, pkgs: dict[str, str]) -> list[str]:
@@ -1674,8 +1677,8 @@ def store_custody() -> None:
     test that fetches a fixture skipped as "the evidence store is not reachable" under this runner and passed under a bare pytest
     (r20261024-030225-1ea6: 13 of test_lean_session.py's 39, the ZK server's wire-tamper negatives among them). Set here, before
     `environment()`, so the requirement keys the pass and a pass earned with those skips is never reused for one without."""
-    run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
-    if CUSTODY_ENV in os.environ or not run_dir or not run_id:
+    run_dir, run_id = SETTINGS.RESEARCH_RUN_DIR, SETTINGS.RESEARCH_RUN_ID
+    if SETTINGS.is_set(CUSTODY_ENV) or not run_dir or not run_id:
         return
     d = Path(run_dir).resolve().parent.parent / "requests" / run_id / "custody"
     if (d / "store.toml").is_file() and (d / "cred.json").is_file():
@@ -1880,7 +1883,7 @@ def slot_mem_gb() -> float | None:
     """The memory this run may use: its check slot's, else its `research run --mem-gb` reservation's, else its cgroup's cap: a
     suite sized to the whole node outgrows a slot or a reservation that nothing else caps."""
     for env in (SLOT_MEM_ENV, RUN_MEM_ENV):
-        v = os.environ.get(env, "")
+        v = SETTINGS.get(env) or ""
         if v.replace(".", "", 1).isdigit():
             return float(v)
     return cgroup_mem_gb()
@@ -2177,6 +2180,9 @@ def main(argv: list[str] | None = None) -> int:
                     "none was found) and run nothing; with --changed, a suite whose every failed test is on that list fails nothing")
     a = ap.parse_args(argv)
     sys.stdout.reconfigure(line_buffering=True)
+    if why := SETTINGS.refusals(of_record=False):
+        print("\n".join(f"suites: {w}" for w in why), file=sys.stderr)
+        return 2
     if not in_git():
         print(f"suites: {ROOT} is not a git checkout, and suites are keyed from git's view of the tree: run them in a checkout "
               f"(`research run --on` ships one; a tree the archive stream or an older launcher shipped isn't)", file=sys.stderr)
@@ -2296,7 +2302,7 @@ def main(argv: list[str] | None = None) -> int:
     memory = Slots(int(shared_gb)) if shared_gb is not None else None
     if wide and one:
         print(f"suites: {len(wide)} parallel suites one at a time on {jobs - r} processes, beside {len(one)} others on {r}")
-    min_s = a.per_test_min_s if a.per_test_min_s is not None else float(os.environ.get(MIN_S_ENV) or 0)
+    min_s = a.per_test_min_s if a.per_test_min_s is not None else float(SETTINGS.get(MIN_S_ENV) or 0)
     per = {s: pt for s, pt in per.items() if any(t[0] is s for t in todo)}
     reuse = {s: [] if a.fresh or not s.parallel else sorted(pt.reusable(lock, provided)) for s, pt in per.items()}
     hit_of = {s: hit for s, _paths, _keys, hit, _deps in plan}

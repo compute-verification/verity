@@ -199,8 +199,9 @@ The evidence store.  A recorded check runs the store-backed tests (integrations/
 skipped: its steps get VERITY_STORE_REQUIRED=1 (a missing remote fails those tests) and, as CHECK_STORE_CUSTODY, the run's custody
 dir (`research run --custody-r2`, the default with --on: a delete-free key with GetObject), which `store_io` hands to its store
 CLI only.  So `--record --on` must be launched where the parent R2 key is (the Cursor secrets, or `~/.config/verity/r2.env` when it
-holds no AWS_SESSION_TOKEN): a temporary credential cannot mint the custody key, and `research run` refuses.  VERITY_SKIP_STORE=1
-is refused inside a recorded run.  Outside one, the store-backed tests skip where no remote is configured.  Under
+holds no AWS_SESSION_TOKEN): a temporary credential cannot mint the custody key, and `research run` refuses.  VERITY_SKIP_STORE,
+a debug setting (`settings.py`), is refused inside a recorded run.  Outside one, the store-backed tests skip where no remote is
+configured.  Under
 VERITY_STORE_REQUIRED=1 the suites' guard fails any skip whose reason says "the evidence store is not reachable", whichever helper
 fetched (Flock's `verifier/ci.py` hands the custody key to its store CLI too).
 
@@ -245,7 +246,7 @@ RATCHET_GATE = "integrations/vllm/tools/ratchet_gate.py"
 
 def custody_dir() -> Path | None:
     """The recording run's custody dir (`<root>/requests/<run id>/custody/`, beside `<root>/runs/<run id>/`) when it holds a key."""
-    run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
+    run_dir, run_id = SETTINGS.RESEARCH_RUN_DIR, SETTINGS.RESEARCH_RUN_ID
     if not run_dir or not run_id:
         return None
     d = Path(run_dir).resolve().parent.parent / "requests" / run_id / "custody"
@@ -260,6 +261,8 @@ def _load(name: str, d: Path | None = None):
     return m
 
 
+#: every environment variable check reads, declared once (`settings.py`)
+SETTINGS = _load("settings")
 DECLARATION = _load("declaration")
 #: the jobs `tools/verity/check/ci.toml` declares: their groups, order within a group, and what halts the run (`groups`, `HALTS`)
 JOBS = DECLARATION.load()
@@ -293,7 +296,7 @@ def agreement_files(out: Path) -> dict[str, Path]:
     ``$FLOCK_AGREEMENT_INPUTS``, found by sha256: {"upstream": path, "inputs": path} for those present."""
     pin = json.loads(UPSTREAM_PIN.read_text())
     want = {pin[k]["sha256"]: k for k in ("upstream", "inputs")}
-    dirs = [out / "inputs", *([Path(os.environ[AGREEMENT_DIR_ENV])] if os.environ.get(AGREEMENT_DIR_ENV) else [])]
+    dirs = [out / "inputs", *([Path(d)] if (d := SETTINGS.get(AGREEMENT_DIR_ENV)) else [])]
     found = {}
     for p in (q for d in dirs if d.is_dir() for q in sorted(d.iterdir()) if q.is_file()):
         if p.stat().st_size and (k := want.get(_sha256(p))):
@@ -331,8 +334,8 @@ def slot_wrap(priority: bool = False, twin: str | None = None) -> list[str]:
     """SLOT_WRAP naming who asked (RESEARCH_LANE, else RESEARCH_AGENT_URL), which `slot.py --status` on the machine shows, and
     with --priority for the lander's train checks, --rank from CHECK_SLOT_RANK (drive's train position, so the train that lands
     next takes the next slot) and --twin for one of a check's twins."""
-    by = os.environ.get("RESEARCH_LANE") or os.environ.get("RESEARCH_AGENT_URL")
-    rank = os.environ.get("CHECK_SLOT_RANK", "")
+    by = SETTINGS.RESEARCH_LANE or SETTINGS.RESEARCH_AGENT_URL
+    rank = SETTINGS.CHECK_SLOT_RANK
     return [*SLOT_WRAP[:-1], *(["--priority"] if priority else []),
             *(["--rank", rank] if priority and re.fullmatch(r"\d{1,6}", rank) else []), *(["--by", by] if by else []),
             *(["--twin", twin] if twin else []), SLOT_WRAP[-1]]
@@ -630,7 +633,7 @@ def take_lean_deps_urls(out: Path) -> Path | None:
     (`research.store.custody.CREDENTIALS`)."""
     sent = out / "inputs" / LEAN_DEPS_URLS
     if not sent.is_file():
-        return Path(os.environ[LEAN_DEPS_URLS_ENV]) if os.environ.get(LEAN_DEPS_URLS_ENV) else None
+        return Path(u) if (u := SETTINGS.get(LEAN_DEPS_URLS_ENV)) else None
     fd, tmp = tempfile.mkstemp(prefix="lean-deps-urls-", suffix=".json")
     with os.fdopen(fd, "wb") as f:
         f.write(sent.read_bytes())
@@ -754,7 +757,7 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
                             sys.executable, str(LEAN_JOBS / "lean_audit.py"), "--out", str(out / "lean-audit"),
                             "--cache", str(cache_dir() / "lean-audit"), "--deps", str(cache_dir() / "lean-deps"),
                             *([] if cache else ["--fresh"]), *(["--urls", str(urls)] if urls else []),
-                            *(["--bundle"] if os.environ.get("RESEARCH_RUN_ID") else []),
+                            *(["--bundle"] if SETTINGS.RESEARCH_RUN_ID else []),
                             *(["--regenerate"] if regenerate and lean_regenerates() else [])], ROOT),
             ("lean-agreement", agreement, ROOT)]
 
@@ -1235,7 +1238,7 @@ def circuit_shards(only: list[str] | None) -> list[str] | None:
 
 
 def slot_mem_gb() -> int | None:
-    return int(m) if (m := os.environ.get(SLOT.SLOT_MEM_ENV, "")).isdigit() else None
+    return int(m) if (m := SETTINGS.get(SLOT.SLOT_MEM_ENV)).isdigit() else None
 
 
 def grant_when_alone(path: Path, beside: list[threading.Event], gb: int) -> None:
@@ -1287,7 +1290,7 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     # pytest and lean-suites run at once, each with this share: what circuit-check beside them both leaves, halved
     tests_gb = None if slot_gb is None else (slot_gb - cc_mem_gb(slot_gb, beside) if with_cc else slot_gb) // 2
     tail = ["--timeouts", "--jobs", str(a), *([] if cache else ["--fresh"]), *(["--mem-gb", str(tests_gb)] if tests_gb is not None else []),
-            *(["--run", os.environ["RESEARCH_RUN_ID"]] if os.environ.get("RESEARCH_RUN_ID") else [])]
+            *(["--run", rid] if (rid := SETTINGS.RESEARCH_RUN_ID) else [])]
     lean = lean_steps(out, cache, urls, regenerate)
     after_lean: list[str] = []
     if len(lean) > 1:
@@ -1417,8 +1420,8 @@ def combine(ids: list[str], run_dir: Path | None) -> int:
     if not why:
         why = circuit_join(store, done, run_dir or Path(tempfile.mkdtemp(prefix="check-combine-")))
     if run_dir is not None:
-        doc = {"schema": "research/result/v0.1", "kind": "check/v1", "run_id": os.environ["RESEARCH_RUN_ID"],
-               "workload_fingerprint": {"steps": [s["step"] for s in done or []], "shards": ids},
+        doc = {"schema": "research/result/v0.1", "kind": "check/v1", "run_id": SETTINGS.require("RESEARCH_RUN_ID"),
+               "settings": SETTINGS.record(), "workload_fingerprint": {"steps": [s["step"] for s in done or []], "shards": ids},
                "validation": {"status": "failed" if why else "passed", "checker": "tools/verity/check/check.py --combine",
                               "detail": why or f"{len(ids)} shards of {commit[:12]}"},
                "steps": done or [], "shards": ids,
@@ -1490,13 +1493,13 @@ def env() -> dict[str, str]:
     entries inside this tree only (a machine's runner puts its shipped `research` first); and a git identity.  Inside a recorded
     run, the store is required, the run's custody dir is passed on and the vLLM reference regression runs (the module docstring's
     "The evidence store")."""
-    out = {k: v for k, v in os.environ.items() if (k in ENV_PASS or k.startswith(ENV_PASS_PREFIXES)) and k not in ENV_OWN}
-    if os.environ.get("RESEARCH_RUN_ID"):
+    out = {k: v for k, v in SETTINGS.environ().items() if (k in ENV_PASS or k.startswith(ENV_PASS_PREFIXES)) and k not in ENV_OWN}
+    if SETTINGS.RESEARCH_RUN_ID:
         out[STORE_REQUIRED_ENV] = "1"
         out[REGRESSION_ENV] = "1"
         if custody := custody_dir():
             out[CUSTODY_ENV] = str(custody)
-    keep = [p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p and Path(p).resolve().is_relative_to(ROOT)]
+    keep = [p for p in SETTINGS.PYTHONPATH.split(os.pathsep) if p and Path(p).resolve().is_relative_to(ROOT)]
     if keep:
         out["PYTHONPATH"] = os.pathsep.join(keep)
     else:
@@ -1614,7 +1617,7 @@ STEPS_LOG = "steps.jsonl"
 def preflight() -> list[tuple[str, list[str] | str, Path]]:
     """The steps before the groups: `uv lock --check` (a current lock needs no index), then `LINTS` (without bytecode or
     pytest's cache, so they leave nothing in the tree), then `fetchable_fixtures`. Under `uv run`, `$UV` names uv."""
-    uv = os.environ.get("UV") or shutil.which("uv")
+    uv = SETTINGS.UV or shutil.which("uv")
     lock = [uv, "lock", "--check"] if uv else "failed: no `uv` here to check `uv.lock` (run check through `uv run`)"
     return [("preflight-lock", lock, ROOT),
             ("preflight-lints", [sys.executable, "-B", "-m", "pytest", "-q", "-p", "no:cacheprovider", *LINTS], ROOT),
@@ -2206,8 +2209,8 @@ def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | Non
         shard = {**shard, "commit": _rev("HEAD"), "config": _rev("HEAD:tools/verity/check")}
     deferred = bool(shard and shard.get("deferred"))
     kind = DEFERRED_KIND if deferred else SHARD_KIND if shard else "check/v1"
-    doc = {"schema": "research/result/v0.1", "kind": kind, "run_id": os.environ["RESEARCH_RUN_ID"],
-           "reuse": reuse(run_dir, done), "workload_fingerprint": {"steps": [s["step"] for s in done]},
+    doc = {"schema": "research/result/v0.1", "kind": kind, "run_id": SETTINGS.require("RESEARCH_RUN_ID"),
+           "reuse": reuse(run_dir, done), "settings": SETTINGS.record(), "workload_fingerprint": {"steps": [s["step"] for s in done]},
            "validation": {"status": "not_run" if stopped_by else "passed" if ok else "failed", "checker": "tools/verity/check/check.py",
                           "detail": (f"stopped by {stopped_by}: " if stopped_by else "")
                                     + "; ".join(f"{s['step']} {s['status']}" for s in done)},
@@ -2254,18 +2257,18 @@ def main(argv: list[str]) -> int:
     if argv[:1] == ["--plan"]:
         return _load("plan").main(argv[1:], sys.modules[__name__])
     if "--record" in argv:
-        if rid := os.environ.get("RESEARCH_RUN_ID"):
+        if rid := SETTINGS.RESEARCH_RUN_ID:
             print(f"check: --record inside a recorded run ({rid}): it launches its own `research run`, which places the check "
                   f"and records it as an Attempt of the clean commit, so launch it from your checkout instead, outside `research "
                   f"run` (the launch is light; an agent VM runs it): `{nested_record(argv)}`", file=sys.stderr)
             return 2
         return record([a for a in argv if a != "--record"])
-    if os.environ.get("RESEARCH_RUN_ID") and os.environ.get("VERITY_SKIP_STORE") == "1":
-        print("check: VERITY_SKIP_STORE=1 inside a recorded run: a recorded check runs the store-backed tests (the module docstring's "
-              "\"The evidence store\")", file=sys.stderr)
+    if why := SETTINGS.refusals():
+        print("\n".join(f"check: {w}" for w in why), file=sys.stderr)
         return 2
+    run_dir = Path(d) if (d := SETTINGS.RESEARCH_RUN_DIR) else None
     if argv[:1] == ["--combine"] and len(argv) > 1:
-        return combine(argv[1:], Path(os.environ["RESEARCH_RUN_DIR"]) if os.environ.get("RESEARCH_RUN_DIR") else None)
+        return combine(argv[1:], run_dir)
     cache = "--no-cache" not in argv
     circuit_cache = cache or "--circuit-cache" in argv
     keep_going = "--keep-going" in argv
@@ -2309,7 +2312,7 @@ def main(argv: list[str]) -> int:
         sharded = {**(sharded or {}), "parts": mine, "deferred": deferred.split(",")}
         print(f"check: deferred {deferred}: {', '.join(sorted({p.partition(':')[0] for p in sharded['parts']}))}", flush=True)
     if picked:
-        if sharded or os.environ.get("RESEARCH_RUN_ID"):
+        if sharded or SETTINGS.RESEARCH_RUN_ID:
             print("check: a check of parts runs outside a recorded run and without --shard: no gate takes part of a check",
                   file=sys.stderr)
             return 2
@@ -2330,7 +2333,6 @@ def main(argv: list[str]) -> int:
         print(f"check: {sys.executable} would run this tree's steps against another checkout's code ({away}); run check with "
               f"{ROOT}'s own environment: `uv run --extra torch-cpu python tools/verity/check/check.py` there", file=sys.stderr)
         return 2
-    run_dir = Path(os.environ["RESEARCH_RUN_DIR"]) if os.environ.get("RESEARCH_RUN_DIR") else None
     only = sharded["parts"] if sharded else None
     if only is None and OFF_GATE and cache and run_dir is not None:
         try:
