@@ -49,7 +49,17 @@ def redml():
     ]
 
 
-PRESETS = {"bench": bench, "redml": redml}
+def redml2():
+    """redml's decisive configs, trained 3× longer, with the eval-time ablations (train.py ``ablations``): does the
+    model read its public random part, and what share of each linear's input codes the eval noise leaves unchanged."""
+    tokens = int(os.environ.get("REDML_TOKENS", 12_000_000))
+    keep = {"redml-dense-float", "redml-int8w-k1", "redml-lsb2-k1", "redml-lsb4-k1", "redml-A-cap-k1",
+            "redml-lowrank-cap-k1", "redml-A-r32-k1"}
+    return [{**c, "name": "redml2" + c["name"][len("redml"):], "tokens": tokens, "eval_every": 250, "ablate": True}
+            for c in redml() if c["name"] in keep]
+
+
+PRESETS = {"bench": bench, "redml": redml, "redml2": redml2}
 
 
 def run_one(cfg, data, out, threads):

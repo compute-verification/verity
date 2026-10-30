@@ -68,10 +68,12 @@ class Cfg:
     final_eval_batches: int = 128
     threads: int = 4
     bf16: bool = True
+    ablate: bool = False
 
 
 class Noise:
     gen: torch.Generator | None = None
+    codes: list | None = None
 
 
 def hlinear_kind(cfg: Cfg, where: str) -> bool:
@@ -101,6 +103,7 @@ class HLinear(nn.Module):
             self.step = 2 ** cfg.lsb_bits
             lo = torch.randint(0, self.step, (n_out, n_in), generator=torch.Generator().manual_seed(seed + 7919))
             self.register_buffer("lo", lo.float())
+            self.hi = None
         elif self.design == "B":
             self.delta = nn.Parameter(torch.zeros_like(R))
             self.rho = cfg.rho
@@ -136,6 +139,8 @@ class HLinear(nn.Module):
             s = x.detach().abs().amax(-1, keepdim=True).clamp_min(1e-6) / (127 - self.k)
             q = torch.round(x / s).clamp(-(127 - self.k), 127 - self.k)
             x = x + (q * s - x).detach()
+            if Noise.codes is not None:
+                Noise.codes.append(q.detach().to(torch.int16))
         else:
             s = x.detach().abs().amax(-1, keepdim=True).clamp_min(1e-6) / 127
         if self.k:
@@ -167,7 +172,9 @@ class HLinear(nn.Module):
     def lsb_weight(self):
         w = self.weight.float()
         s = w.detach().abs().amax(1, keepdim=True).clamp_min(1e-8) / 127
-        hi = torch.round((w.detach() / s - self.lo) / self.step).clamp(-128 // self.step, 128 // self.step - 1)
+        hi = self.hi
+        if hi is None:
+            hi = torch.round((w.detach() / s - self.lo) / self.step).clamp(-128 // self.step, 128 // self.step - 1)
         return w + ((self.step * hi + self.lo) * s - w).detach()
 
     @torch.no_grad()
@@ -335,6 +342,67 @@ def diagnostics(model: GPT):
     return out
 
 
+@torch.no_grad()
+def ablations(model: GPT, val, cfg: Cfg):
+    """Eval-time checks of what the trained model reads, paired with ``base`` (same windows, same eval noise).
+
+    - ``permute_public``: each hardened linear's public random part (R for A and frozen, the low bits L for lsb, with
+      the trained high bits H held) replaced by a random permutation of its own entries, an independent draw with the
+      same values.
+    - ``lsb_mid``: lsb's low bits replaced by their mean, H held: the coarser model that needs no L.
+    - ``zero_r``: A's R-term removed.
+    - ``codes_unchanged``: per hardened linear in forward order, the share of int8 input codes that are equal in two
+      passes over the same tokens with independent noise. A cheater who knows the tokens can compute the unchanged
+      codes' products before the noise arrives.
+    """
+    out = {"base": evaluate(model, val, cfg, cfg.final_eval_batches)}
+    hl = model.hlinears()
+    lsb = [m for m in hl if m.design == "lsb"]
+    for m in lsb:
+        m.hi = (m.lsb_codes() - m.lo) / m.step
+    pub = [(m, "R" if m.design in ("A", "frozen") else "lo") for m in hl if m.design in ("A", "frozen", "lsb")]
+    if pub:
+        g = torch.Generator().manual_seed(4242)
+        saved = [getattr(m, name).clone() for m, name in pub]
+        for m, name in pub:
+            t = getattr(m, name)
+            t.copy_(t.flatten()[torch.randperm(t.numel(), generator=g)].view_as(t))
+        out["permute_public"] = evaluate(model, val, cfg, cfg.final_eval_batches)
+        for (m, name), s in zip(pub, saved):
+            getattr(m, name).copy_(s)
+    if lsb:
+        saved = [m.lo.clone() for m in lsb]
+        for m in lsb:
+            m.lo.fill_((m.step - 1) / 2)
+        out["lsb_mid"] = evaluate(model, val, cfg, cfg.final_eval_batches)
+        for m, s in zip(lsb, saved):
+            m.lo.copy_(s)
+    for m in lsb:
+        m.hi = None
+    a_lin = [m for m in hl if m.design in ("A", "frozen")]
+    if a_lin:
+        saved = [m.R.clone() for m in a_lin]
+        for m in a_lin:
+            m.R.zero_()
+        out["zero_r"] = evaluate(model, val, cfg, cfg.final_eval_batches)
+        for m, s in zip(a_lin, saved):
+            m.R.copy_(s)
+    if cfg.int8 and cfg.noise_k:
+        model.eval()
+        x = torch.from_numpy(np.stack([val[i * cfg.ctx:(i + 1) * cfg.ctx] for i in range(cfg.batch)]).astype(np.int64))
+        passes = []
+        for seed in (11, 12):
+            Noise.gen, Noise.codes = torch.Generator().manual_seed(seed), []
+            with torch.autocast("cpu", dtype=torch.bfloat16, enabled=cfg.bf16):
+                model(x)
+            passes.append(Noise.codes)
+        Noise.gen = Noise.codes = None
+        model.train()
+        names = [n for n, m in model.named_modules() if isinstance(m, HLinear) and m.int8]
+        out["codes_unchanged"] = {n: float((a == b).float().mean()) for n, a, b in zip(names, *passes)}
+    return out
+
+
 def summarize_diag(diag):
     keys = ["rel_move_fro", "rel_move_spec", "dw_stable_rank", "delta_over_r_fro", "uv_fro_over_r_fro", "d1_rms",
             "r_share_out", "lsb_low_bits_public", "lsb_codes_at_clamp"]
@@ -418,6 +486,7 @@ def train(cfg: Cfg, data: Path):
     final = evaluate(model, val, cfg, cfg.final_eval_batches, record=True)
     diag = diagnostics(model)
     wall = time.time() - t0
+    abl = ablations(model, val, cfg) if cfg.ablate else None
     return {
         "cfg": dataclasses.asdict(cfg),
         "vocab": vocab,
@@ -433,6 +502,7 @@ def train(cfg: Cfg, data: Path):
         "curve": curve,
         "diag_summary": summarize_diag(diag),
         "diag": diag,
+        "ablations": abl,
         "wall_s": wall,
         "tok_per_s": steps * cfg.batch * cfg.ctx / wall,
         "torch": torch.__version__,
