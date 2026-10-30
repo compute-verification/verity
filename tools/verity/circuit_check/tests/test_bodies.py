@@ -1,7 +1,7 @@
 """`circuit_check.bodies`: a composite run body by body is the reference (`verity.ml.circuits.evaluation.evaluate`) on every
 construct a body has (a call, a batch along no axis, axis 0 and a later one, a batch and a scan of composites, a scan with xs
 and shared arguments, a lazy and a wide-fan-in primitive, a parameter returned as is, And2, Xor2 and Not alone and batched on
-any operands), raises what the reference raises with
+any operands, a body of gates and constant bits on rows of bits `LANES` at once), raises what the reference raises with
 the same gate indices, with every activation run and with a repeated one taking an earlier one's values (`bodies._Memo`), and
 leaves to the reference what it doesn't compile; its non-constant gates are the ones `checks._pieces_used` counts gate by
 gate."""
@@ -203,13 +203,71 @@ CALLS_HALVES = _composite("CallsHalves", (Array(2, BIT), Array(2, BIT)), Array(4
 
 
 def test_a_body_with_a_primitive_past_the_gates_takes_the_type_checks(memo):
-    """A body is `Body.closed` only when every primitive it reaches is a gate, a constant bit or an Input: a batch of Xor2 on
-    a primitive's `float` values, in a body called from one of no primitives, raises what the reference raises."""
-    assert BD.compiled(GATES).closed and not BD.compiled(TOP).closed
-    assert not BD.compiled(CALLS_HALVES).closed
+    """A body has steps on lanes (`bodies._lanes`) only when every primitive it reaches is a gate or a constant bit: a batch of
+    Xor2 on a primitive's `float` values, in a body called from one of no primitives, raises what the reference raises."""
+    assert BD._lanes(BD.compiled(GATES)) is not None and BD._lanes(BD.compiled(TOP)) is None
+    assert BD._lanes(BD.compiled(CALLS_HALVES)) is None
     for args in ([[0, 1], [1, 1]], [[1, 0], [0, 0]], [[0, 0], [1, 0]]):
         got = _outcome(BD.evaluate, CALLS_HALVES, *args)
         assert got[0] == "raised" and got == _outcome(reference, CALLS_HALVES, *args), args
+
+
+BIT_STEP = _composite("BitStep", (BIT, BIT), Tuple(BIT, BIT), lambda B, S, c, x: tuple_of(
+    B.call(BL.XOR, BL.operands(c, x)), B.call(BL.NOT, B.call(BL.AND, BL.operands(c, x)))))
+LANE_PARAMS = (*GATES_PARAMS, Array(N_WIDE, BIT))
+
+
+def _lane(B, S, p, t, z, c, w):
+    g = B.call(GATES, p, t, z, c)
+    parts = [g, B.call(BL.and_gate(N_WIDE), w), B.call(BL.xor_gate(3), BL.operands(c, w[0], g[3])),
+             B.batch(BL.and_gate(3), _flat(Array(2, Array(3, BIT)), [w[1], w[2], c, g[0], c, w[3]]), axes=(0,)),
+             B.call(BL.constant(1)), B.call(BL.constant(0)), B.batch(BL.constant(1), axes=(), n=2),
+             B.batch(BL.constant(0), axes=(), n=2), B.scan(BIT_STEP, c, xs=[w[0:4]]), B.batch(BL.NOT, w[4:7], axes=(0,))]
+    return _flat(Array(sum(p.type.leaves for p in parts), BIT), parts)
+
+
+LANE = _composite("Lane", LANE_PARAMS, Array(39, BIT), _lane)
+
+
+def _row(got) -> tuple:
+    return ("raised", type(got).__name__, str(got)) if isinstance(got, Exception) else ("returned", tuple(got))
+
+
+def test_rows_of_bits_run_on_lanes_as_the_reference(memo, monkeypatch):
+    """`evaluate_rows` on rows whose leaves are all bits runs them `LANES` at once (a call of a body of gates, a wide gate, n-ary
+    gates alone and batched, constant bits alone and batched, a scan, a batch of Not), each row's outputs the reference's, of
+    the same types; rows with a leaf past one bit or a `bool`, or of a body with a primitive past the gates, run one by one,
+    raising what the reference raises; and what evaluating raises before it runs a row is each row's outcome."""
+    runs: list[int] = []
+    run = BD._lanes_run
+    monkeypatch.setattr(BD, "_lanes_run", lambda body, lo, Vs: runs.append(len(Vs)) or run(body, lo, Vs))
+    assert BD._lanes(BD.compiled(LANE)) is not None
+    rng = random.Random(13)
+    for n in (1, 3, BD.LANES, BD.LANES + 1, 2 * BD.LANES + 5):
+        rows = [_random_args(LANE_PARAMS, rng, 1) for _ in range(n)]
+        runs.clear()
+        got = BD.evaluate_rows(LANE, rows)
+        assert runs == [n], "the rows would run one by one"
+        assert [_typed(_row(g)) for g in got] == [_typed(_outcome(reference, LANE, *r)) for r in rows]
+    rows = [_random_args(LANE_PARAMS, rng, 1) for _ in range(5)]
+    for odd in (2, True):
+        mixed = [*rows[:2], [*rows[2][:3], odd, rows[2][4]], *rows[3:]]
+        runs.clear()
+        got = BD.evaluate_rows(LANE, mixed)
+        assert runs == [1] * 4 and got[2] == tuple(reference(LANE, *mixed[2]))
+        assert [_typed(_row(g)) for g in got] == [_typed(_outcome(reference, LANE, *r)) for r in mixed]
+    divides = _composite("RowsDivide", (V8, V8), V8, lambda B, S, a, b: B.call(DIV, a, b))
+    rows = [[1, 1], [1, 0], [0, 1]]
+    assert [_row(g) for g in BD.evaluate_rows(divides, rows)] == [_outcome(reference, divides, *r) for r in rows]
+
+    def no_call(t):
+        raise RuntimeError(f"no standalone call of {t.id}")
+
+    monkeypatch.setattr(BD, "standalone_call", no_call)
+    rows = rows[:2] + [_random_args(LANE_PARAMS, rng, 1)]
+    for fn, rs in ((LANE, rows[2:]), (LANE, rows[2:] * 3), (divides, rows[:2])):
+        assert [_row(g) for g in BD.evaluate_rows(fn, rs)] == [_outcome(BD.evaluate, fn, *r) for r in rs]
+        assert {_row(g)[0] for g in BD.evaluate_rows(fn, rs)} == {"raised"}
 
 
 CALLS: Counter = Counter()
@@ -354,5 +412,9 @@ def test_registered_definitions_evaluate_and_count_as_the_reference(fid, memo, m
     for i in (0, edges - 1, edges, edges + 1):
         args = VX.instance_args(params, arrays, i)
         assert _outcome(BD.evaluate, fn, *args) == _outcome(reference, fn, *args), (fid, i)
+    ref, raised = CK.reference_outputs(fn, params, arrays)
+    want = [_outcome(reference, fn, *VX.instance_args(params, arrays, i)) for i in range(edges + 2)]
+    assert [("returned", r) if r is not None else "raised" for r in ref] == [w if w[0] == "returned" else "raised" for w in want]
+    assert [r["instance"] for r in raised] == [i for i, w in enumerate(want) if w[0] == "raised"]
     fast, slow = _pieces(monkeypatch, fn)
     assert fast == slow and [list(c) for c in fast[:2]] == [list(c) for c in slow[:2]]

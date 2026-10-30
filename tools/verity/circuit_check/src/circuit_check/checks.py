@@ -177,17 +177,17 @@ def _n_vectors(t: Any, opts: Options, table: int | None = None) -> int:
 
 def reference_outputs(t: Any, params: Sequence, arrays: Sequence[np.ndarray]) -> tuple[list[tuple[int, ...] | None], list[dict]]:
     """The reference's output leaves per vector (None where it raises) and the vectors it raised on; a composite's
-    reference run body by body (`bodies.evaluate`)."""
+    reference run body by body (`bodies.evaluate_rows`)."""
     n = arrays[0].shape[0] if arrays else 1
+    rows = [instance_args(params, arrays, i) for i in range(n)]
     out: list[tuple[int, ...] | None] = []
     raised: list[dict] = []
-    for i in range(n):
-        args = instance_args(params, arrays, i)
-        try:
-            out.append(tuple(BD.evaluate(t, *args)))
-        except Exception as e:  # noqa: BLE001  (a partial reference: the finding)
+    for i, (args, got) in enumerate(zip(rows, BD.evaluate_rows(t, rows))):
+        if isinstance(got, Exception):
             out.append(None)
-            raised.append({"instance": i, "args": _short(args), "error": f"{type(e).__name__}: {str(e)[:160]}"})
+            raised.append({"instance": i, "args": _short(args), "error": f"{type(got).__name__}: {str(got)[:160]}"})
+        else:
+            out.append(tuple(got))
     return out, raised
 
 
