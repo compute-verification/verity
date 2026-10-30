@@ -16,7 +16,7 @@ take a cons cell per bit.
 
 **Commitment**: the unit's published records, each `u8 kind ‖ u64be len(body) ‖ body`, concatenated, decoded exactly:
 
-    kind 0, raw (`grid.Record`):       u16be len(link) ‖ link ‖ u64be window ‖ u8 status ‖ u32be T' ‖
+    kind 0, raw (`grid.BlockGrid`):       u16be len(link) ‖ link ‖ u64be window ‖ u8 status ‖ u32be T' ‖
                                        T' × (u32be r' ‖ r' × (u8 0 | u8 1 ‖ u32be len(frame) ‖ frame))
     kind 1, committed (`CommittedRecord`): u16be len(link) ‖ link ‖ u64be window ‖ u8 status ‖ u16be len(digest) ‖ digest
     kind 2, certified (`CertifiedRecord`): `service.encode`'s bytes, one record
@@ -45,7 +45,7 @@ holds. Its refusals are otherwise `evaluate`'s, and its ingress verdicts the sam
 namespace NetworkCheck.Records
 
 open Lean (Json toJson)
-open NetworkCheck.Check (Grid Certified Link Evidence LinkWindow Profile)
+open NetworkCheck.Check (Grid Certified LinkOpening Evidence LinkWindow Profile)
 open NetworkCertifier (ClockSync)
 
 def protocolId : String := "verity/network-records/v3"
@@ -53,7 +53,7 @@ def commitmentTag : String := "verity-network-certifier/records/v2"
 
 abbrev RawGrid := Array (Array (Option ByteArray))
 
-/-- `Published`: a raw record (`grid.Record`), a committed one (`commitment.CommittedRecord`) or a certified one. -/
+/-- `Published`: a raw record (`grid.BlockGrid`), a committed one (`commitment.CommittedRecord`) or a certified one. -/
 inductive Published where
   | raw (link : String) (window : Nat) (status : Option String) (grid : RawGrid)
   | committed (link : String) (window : Nat) (status : Option String) (digest : String)
@@ -75,12 +75,12 @@ def ByteFrame.toLogical (f : ByteFrame) : NetworkCertifier.LogicalFrame := ⟨Ch
 /-- The frame without its content: when the shaper hands it (`eligible`) reads only its anchor and its index. -/
 def ByteFrame.timing (f : ByteFrame) : NetworkCertifier.LogicalFrame := ⟨[], f.anchor, f.index⟩
 
-/-- `Check.Link` with each payload kept as bytes. -/
+/-- `Check.LinkOpening` with each payload kept as bytes. -/
 structure ByteLink where
   frames : List ByteFrame
   syncs : Array ClockSync
 
-def ByteLink.toLink (l : ByteLink) : Link := ⟨l.frames.map ByteFrame.toLogical, l.syncs⟩
+def ByteLink.toLink (l : ByteLink) : LinkOpening := ⟨l.frames.map ByteFrame.toLogical, l.syncs⟩
 
 /-- `Check.Evidence` with each payload kept as bytes; `toEvidence` is `Check.evidenceOf`'s reading of the same JSON
 (`RecordsBytes.evidenceOf_toEvidence`). -/
@@ -262,7 +262,7 @@ def rows (S : Nat) (pay : Nat → ByteArray) : Nat → List Nat → List (Array 
 /-- `expected_grids(frames, syncs, params)`: the link's grid in each of the `W` windows, as `schedule.py` computes it, in
 time linear in the frames and the buckets: the hand times, the enqueue counts, the release counts, and the frames filled
 in order. Window `w`'s is `Check.expectedGrid`'s (`RecordsGrid.expectedGrids_eq`). -/
-def expectedGrids (g : Grid) (W : Nat) (l : Link) : Array RawGrid :=
+def expectedGrids (g : Grid) (W : Nat) (l : LinkOpening) : Array RawGrid :=
   let T := g.buckets
   let syncs : Fin W → ClockSync := fun v => l.syncs.getD v.1 Check.noSync
   let enq := enqueueCounts (W * T) (handingRev T W syncs 0 l.frames []).reverse

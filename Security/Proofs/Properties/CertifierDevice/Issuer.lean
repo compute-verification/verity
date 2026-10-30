@@ -54,7 +54,7 @@ theorem except_ok_bind {ε α β : Type} (a : α) (f : α → Except ε β) : (E
 
 /-- What `prepare` returns: the record's head, the head's digest under the salt, which is 64 bytes, and the message
 under the issuer's identifier. -/
-theorem prepare_spec {i : Issuer} {salt : ByteArray} {record : Record} {direction : NetworkCheck.Direction}
+theorem prepare_spec {i : Issuer} {salt : ByteArray} {record : BlockGrid} {direction : NetworkCheck.Direction}
     {params : Params} {parameters : ByteArray} {deadline : Bool} {head : NetworkCheck.RecordHead}
     {digest message : ByteArray}
     (h : i.prepare salt record direction params parameters deadline = .ok (head, digest, message)) :
@@ -79,7 +79,7 @@ theorem prepare_spec {i : Issuer} {salt : ByteArray} {record : Record} {directio
     cases h
 
 /-- The head `prepare` returns is `recordHead` of the record. -/
-theorem prepare_head {i : Issuer} {salt : ByteArray} {record : Record} {direction : NetworkCheck.Direction}
+theorem prepare_head {i : Issuer} {salt : ByteArray} {record : BlockGrid} {direction : NetworkCheck.Direction}
     {params : Params} {parameters : ByteArray} {deadline : Bool} {head : NetworkCheck.RecordHead}
     {digest message : ByteArray}
     (h : i.prepare salt record direction params parameters deadline = .ok (head, digest, message)) :
@@ -101,7 +101,7 @@ theorem prepare_head {i : Issuer} {salt : ByteArray} {record : Record} {directio
     cases h
 
 /-- The certificate `finish` builds at a leaf below `2^H` from a prepared record verifies under the key's public key. -/
-theorem verify_cert {i : Issuer} (hk : ValidKey i.key) {salt : ByteArray} {record : Record}
+theorem verify_cert {i : Issuer} (hk : ValidKey i.key) {salt : ByteArray} {record : BlockGrid}
     {direction : NetworkCheck.Direction} {params : Params} {parameters : ByteArray} {deadline : Bool}
     {head : NetworkCheck.RecordHead} {digest message : ByteArray}
     (hprep : i.prepare salt record direction params parameters deadline = .ok (head, digest, message)) {q : Nat}
@@ -126,7 +126,7 @@ theorem verify_cert {i : Issuer} (hk : ValidKey i.key) {salt : ByteArray} {recor
   rw [hv, hpub, hl, hd, hw, ← hdg]
   simp [beq_self, Except.toOption]
 
-theorem issuerVerifies_valid {i i' : Issuer} {salt : ByteArray} {leaf : Except String Nat} {record : Record}
+theorem issuerVerifies_valid {i i' : Issuer} {salt : ByteArray} {leaf : Except String Nat} {record : BlockGrid}
     {direction : NetworkCheck.Direction} {params : Params} {parameters : ByteArray} {deadline : Bool}
     {cr : CertifiedRecord} (hk : ValidKey i.key)
     (h : i.certify salt leaf record direction params parameters deadline = .ok (i', some cr)) :
@@ -170,7 +170,7 @@ theorem issuerVerifies_proof : IssuerVerifies := by
 /-- **The issuer certifies only a complete record**: a record `Issuer.certify` returns a certificate of has status
 complete. Any other is listed in `refused` and signed nothing, so a certificate that verifies under the issuer's key
 is of a complete record unless it is a forgery. -/
-theorem certify_complete {i i' : Issuer} {salt : ByteArray} {leaf : Except String Nat} {record : Record}
+theorem certify_complete {i i' : Issuer} {salt : ByteArray} {leaf : Except String Nat} {record : BlockGrid}
     {direction : NetworkCheck.Direction} {params : Params} {parameters : ByteArray} {deadline : Bool}
     {cr : CertifiedRecord}
     (h : i.certify salt leaf record direction params parameters deadline = .ok (i', some cr)) :
@@ -188,8 +188,9 @@ theorem certify_complete {i i' : Issuer} {salt : ByteArray} {leaf : Except Strin
 `2^H` and a complete record with a head and a 64-byte salt (`Issuer.prepare` succeeds), `Issuer.certify` returns a
 certificate, which verifies. -/
 def IssuerSigns : Prop :=
-  ∀ (i : Issuer) (salt : ByteArray) (q : Nat) (record : Record) (direction : NetworkCheck.Direction) (params : Params)
-    (parameters : ByteArray) (deadline : Bool) (prepared : NetworkCheck.RecordHead × ByteArray × ByteArray),
+  ∀ (i : Issuer) (salt : ByteArray) (q : Nat) (record : BlockGrid) (direction : NetworkCheck.Direction)
+    (params : Params) (parameters : ByteArray) (deadline : Bool)
+    (prepared : NetworkCheck.RecordHead × ByteArray × ByteArray),
     ValidKey i.key → q < 2 ^ i.key.params.H → record.status = .complete →
     i.prepare salt record direction params parameters deadline = .ok prepared →
     ∃ cr, i.certify salt (.ok q) record direction params parameters deadline = .ok (i, some cr) ∧

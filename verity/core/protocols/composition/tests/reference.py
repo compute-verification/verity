@@ -3,7 +3,8 @@ of onsite and remote, over the harness's framing of the core interface (`verity_
 `Core.Protocol.case` and `answer` decode a case), and each subprotocol's own Python: PoUW's `core_check.case`
 (`verity/pouw/v1`, remote's work) and `period_check.case` (`verity/pouw/period/v1`, onsite's work), the network
 certifier's period check's difftest's `reference` (`verity/certifier/v0`, its Python mirror over the certifier's
-certificates and one-stage's answers, `verity/core/protocols/network/tests/test_network_period_protocol.py`), the
+certificates and one-stage v2 on each link-window's proof, on the product's blobs,
+`verity/core/protocols/network/tests/test_network_period_protocol.py`), the
 inference-only policy's difftest's `reference` (`verity/inference-only/v0`, the policy's Python check,
 `nci_reference.check_baseline`, behind the protocol's decoders,
 `verity/core/protocols/network/tests/test_inference_only_protocol.py`), for sampled proofs' one-stage audit
@@ -143,7 +144,7 @@ class Recorded:
         raise KeyError(f"{self.id}: no answer recorded for this case")
 
 
-CERTIFIER = Ported("verity/certifier/v0", PERIOD.reference)
+CERTIFIER = Ported("verity/certifier/v0", PERIOD.reference, blobs=True)
 INFERENCE_ONLY = Ported("verity/inference-only/v0", INFERENCE.reference)
 POUW = Ported("verity/pouw/v1", core_check.case)
 

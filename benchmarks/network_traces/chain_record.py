@@ -153,7 +153,8 @@ POOLED_CONDITION = ("NetTiming.Guarantees.PooledLeakAccepted is conditional: its
                      "(proofs' SampledKSLive) and hleak (the live SampledLeakAccepted) are not discharged")
 #: why a report without ``--period-answer`` writes no block entry
 NO_PERIOD_ANSWER = ("no --period-answer: certifier/v0's case needs the period's compute audit (its registration and "
-                    "answer) beside each link-window's N2 registration, and this report has neither")
+                    "answer) beside each link-window's N2 registration and one-stage v2 proof, and this report has "
+                    "neither")
 #: certifier/v0's commitment digest: tagged_sha512(PERIOD_TAG, the commitment's bytes) (`NetworkCheck.Period`'s)
 PERIOD_TAG = "verity-network-certifier/period/v0"
 
@@ -828,7 +829,8 @@ def stubbed(job: dict, custody_doc: dict, endpoint: dict | None = None) -> list[
 def decide_period(case: dict) -> dict:
     """``network-period check`` on ``case``: certifier/v0's answer by its verifier (`NetworkCheck.Period`, the
     executable ``VERITY_NETWORK_PERIOD_EXE`` names, which chain_record.sh builds), as `block_certifier.check` decides a
-    period."""
+    period: one-stage v2 run on each link-window's proof, the files it names the case's ``blobs`` (paths, read when this
+    runs)."""
     from block_certifier import check
 
     exe = os.environ.get("VERITY_NETWORK_PERIOD_EXE")
@@ -843,7 +845,8 @@ def period_binding(answer: dict, case: dict, *, cert: dict, n2: dict[int, str], 
     link-window's naming its index), so each link-window it registers must be one the chain certified (``cert``'s
     rows) and N2 registered, under N2's own registration (``n2``: the honest member's digest by link-window), and its
     audits must be this report's ``--audit`` registrations (``audits``). The case's parameters and evidence are outside
-    that digest: its link, certifier session and key must be ``cert``'s, and `block_entry` re-decides the case. The
+    that digest: its link, certifier session and key must be ``cert``'s, and `block_entry` re-decides the case, one-stage
+    v2 on each link-window's proof under its registration (whose served domain names the run and the link). The
     rows form's link-windows are the scan's registrations, which no step here holds, so that form is refused."""
     from verity.core.protocols.sampled_proofs.one_stage import registration as R
     from verity.ml.commitments.identity import tagged_sha512

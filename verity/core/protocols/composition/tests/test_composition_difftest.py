@@ -63,7 +63,8 @@ def pouw_periods() -> dict[str, list[dict]]:
             R.REJECT: [PPC.instance(random.Random(f"{n}/0"), n) for n in PPC.NAMES]}
 
 OS = R.ONE_STAGE
-#: The files every product case hands its components as blobs.
+#: The files every product case hands its components as blobs, the ones the network certifier's period cases' proofs
+#: name (`one_stage_zk_case.CIRCUIT`, `PUBLIC`).
 CIRCUIT, PUBLIC = b"not a circuit file", b"not a public file"
 BLOBS = [CIRCUIT, PUBLIC]
 
