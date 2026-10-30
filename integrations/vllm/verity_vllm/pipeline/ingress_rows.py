@@ -1,8 +1,9 @@
-"""A served window's ingress (`interface.Ingress`), which `serving_rows.circuit_record` declares beside its listed members so the
-leak bound's count subtracts it (`interface.input_count`): the input ports of its units that read only committed members of
-Program rows outside the window, at their engine steps.  It reads the Programs' rows alone, public structure, never a
-value, so the registered compiler's record of the advice (``prove_path.py circuit``) states the same ingress as the
-prover's."""
+"""A served window's window ingress (`interface.listed_ingress`), which `serving_rows.circuit_record` declares beside its listed
+members: the input ports of its units that read only committed members of Program rows before the window, at their engine
+steps.  It is not the run's ingress (Lean's ``Layout.ingress``): only the link checks bind those rows to their writers, so
+the leak count subtracts it only in the window figure, which names that premise (``records_audit.declared_count``).  It
+reads the Programs' rows alone, public structure, never a value, so the registered compiler's record of the advice
+(``prove_path.py circuit``) states the same window ingress as the prover's."""
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
@@ -35,12 +36,12 @@ def sources(t: str, r: Mapping[str, Any]) -> dict[str, list[int]]:
 
 def ingress(window: CS.Binding, rows: Sequence[list[Row]], units: Callable[[str, Mapping[str, Any]], int],
             arrivals: Mapping[str, int] | None = None) -> list[IF.Ingress]:
-    """The window's ingress over its templates' ``rows`` (`serving_rows.population`'s), ``units`` how many of a template's units
+    """The window's window ingress over its templates' ``rows`` (`serving_rows.population`'s), ``units`` how many of a template's units
     a row holds (`serving_rows.row_units`): each input port of a unit (`LAYOUTS`) whose every argument slice is a committed
     member of a Program row outside the window (``["n", j, lo, hi]``, row ``j`` of the same request and none of the window's
     rows), the activations entering it from the rows before it, at the unit's engine step (the request's arrival plus the
     row's step), in runs of one template's port at one step over consecutive units.  A port reading registered weights, a
-    row of the window or any other slice is not ingress: its rows stay free unless a wire fills them."""
+    row of the window or any other slice is not window ingress: its rows stay free unless a wire fills them."""
     layouts = tuple(x for x in LAYOUTS if not (x == "s8" and window.row_tables))
     inside = {(rid, int(r["i"])) for rs in rows for rid, _pi, r, _d in rs}
     out: list[IF.Ingress] = []

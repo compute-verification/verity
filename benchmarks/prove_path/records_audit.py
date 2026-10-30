@@ -24,7 +24,8 @@ advice was fixed before the sample (`fixed_before_draw`), and advice re-committe
 Units whose outputs are served out (``--outputs`` and the circuit's registered reads of output ports, `output_class`) are
 proved whole beside the sample, under a work law: every sample's closure (a5's `output_closure`).
 The summary reports the leak bound's count beside the advice's charge, ``vacuous`` while the circuit's other inputs exceed
-it (`leak_count`; a record that declares its inputs, `declared_count`). An integration's labels are never read.
+it (`leak_count`; a record that declares its inputs, `declared_count`): the run figure, and for a record that declares
+its window's ingress the window figure beside it, with the premise it rests on named. An integration's labels are never read.
 
 A circuit that reads registered values at public positions (`interface.Read`) is audited against the entries the verifier
 pinned before the run (``--registered FILE``: ``{"program", "values": {param: entry}}`` or a list of them, each entry core's
@@ -261,6 +262,11 @@ def source(w: Mapping[str, Any] | None, held: Mapping[str, Any]) -> dict[str, An
     return _verdict(ok, {"kind": w.get("kind"), "circuit": w.get("circuit"), "run": w.get("run")})
 
 
+#: what the window figure rests on and the run figure doesn't (`declared_count`), named beside it wherever it is printed
+WINDOW_PREMISE = ("the earlier rows' committed activations the window reads (its window ingress) are its writers' outputs: "
+                  "the link checks bind them (sampled proofs' wiring; the binding error ε_bind)")
+
+
 def leak_count(members: Iterable[Any], external: Iterable[str], bits: int) -> dict[str, Any]:
     """The leak bound's count against the advice's charge (``bits``, the registered length; 0 for a circuit with no compiler).
     ``other_inputs`` is #(otherInputs \\ registered): ``otherInputs`` (``SampledCharge.lean``), the circuit's input
@@ -269,8 +275,8 @@ def leak_count(members: Iterable[Any], external: Iterable[str], bits: int) -> di
     unit, or once per table row for a shared-row port (``tables``), and none for a port wired from other units' outputs
     (``wired``, which a5's wiring check holds). A record that declares no input lists no steps and registers no input (a
     row table's registered reads are refused, `verifier_window`), so none is ingress or registered: the ``external``
-    ports are reported, not subtracted. A record that declares its ingress at its steps (vLLM's served windows) is counted
-    by `declared_count`. ``bound`` is ``vacuous`` while ``other_inputs`` exceeds the charge."""
+    ports are reported, not subtracted. A record that declares its window's ingress (vLLM's served windows) is counted by
+    `declared_count`. ``bound`` is ``vacuous`` while ``other_inputs`` exceeds the charge."""
     inputs = wired = ext_bits = 0
     ext = set(external)
     for m in members:
@@ -289,11 +295,15 @@ def declared_count(doc: Mapping[str, Any], bits: int, resolve: Callable[[str], A
                    pins: Mapping[str, str] | str | None = None, roots: Mapping[str, str] | None = None,
                    untied: Iterable[str] = ()) -> dict[str, Any]:
     """The leak bound's count of a record that declares its inputs (`interface.input_count`: a stated record's from its
-    description alone, a listed one's from its members and the ingress it declares): its input rows less those its wires,
+    description alone, a listed one's from its members and its window's ingress): its input rows less those its wires,
     registered reads of a parameter whose window root (``roots``, those the registration records: `window_roots`) is the
-    verifier's pin (``pins``, ``{param: root}``) and ingress fill
+    verifier's pin (``pins``, ``{param: root}``) and the run's ingress fill
     leave ``free``, and ``other_inputs`` is those plus the advice's ``bits``, the compile unit's one input, a statement of
-    its own. So ``other_inputs`` equals the charge exactly when the circuit leaves no input free. An ``untied`` value
+    its own. So ``other_inputs`` equals the charge exactly when the circuit leaves no input free. That is the run figure,
+    the one to quote: only Lean's run ingress (``Layout.ingress``, read by ``freeInputs``) counts as ingress. A listed
+    record's window ingress (`interface.listed_ingress`: what its members read from rows before the window) adds the
+    window figure beside it (``window``, those rows subtracted too), which holds only under its ``premise``
+    (`WINDOW_PREMISE`). An ``untied`` value
     (`window_pins`: a per-window value no output port of the circuit writes, whose rows the prover chose) is no pin here,
     though the audit opens its reads against its committed root: its input rows are free, and the count names it."""
     untied = set(untied)
@@ -302,7 +312,12 @@ def declared_count(doc: Mapping[str, Any], bits: int, resolve: Callable[[str], A
     if untied:
         n = {**n, "untied": sorted(untied)}
     other = n["free"] + bits
-    return {**n, "other_inputs": other, "advice_bits": bits, "bound": "vacuous" if other > bits else "within the charge"}
+    out = {**n, "other_inputs": other, "advice_bits": bits, "bound": "vacuous" if other > bits else "within the charge"}
+    if n.get(IF.WINDOW_INGRESS):
+        free = n["free"] - n[IF.WINDOW_INGRESS]
+        out["window"] = {"ingress": n[IF.WINDOW_INGRESS], "free": free, "other_inputs": free + bits,
+                         "bound": "vacuous" if free > 0 else "within the charge", "premise": WINDOW_PREMISE}
+    return out
 
 
 def pin_arg(s: str) -> tuple[str, str]:
@@ -706,7 +721,7 @@ def audit(a: argparse.Namespace) -> int:
     bits = int((held["advice"] or {}).get("bits", 0))
     counted = pin_roots(pins)
     row["leak"] = (declared_count(doc, bits, resolve, counted, roots, untied)
-                   if set(IF.DECLARED) & set(doc) else leak_count(mine.members, doc.get("external") or (), bits))
+                   if {*IF.DECLARED, IF.WINDOW_INGRESS} & set(doc) else leak_count(mine.members, doc.get("external") or (), bits))
     if reads:
         row["registered"] = {"pins": counted, "roots": roots, "members": len(reads)}
     acts = committed_activations(w)
@@ -752,7 +767,7 @@ def audit(a: argparse.Namespace) -> int:
                                      "definitions": row["definitions"], "loaded": row["loaded"],
                                      "activations": None if acts is None else acts["ok"],
                                      "leak": {k: row["leak"][k] for k in ("other_inputs", "free", "registered", "advice_bits",
-                                                                          "bound", "untied") if k in row["leak"]},
+                                                                          "bound", "untied", "window") if k in row["leak"]},
                                      **({"forged": row["forged"]} if a.forged else {})}, sort_keys=True, default=str))
     return 0 if row["ok"] else 1
 
