@@ -388,7 +388,8 @@ class GateSessions:
                     break
                 self.wait(1.0)
         with self._lock:
-            held = next((d for h in self.held for d in (h, h.get("draw") or {}) if d.get("session") == session), {})
+            held = next((d for h in self.held for d in (h, h.get("draw")) if d is not None and d.get("session") == session),
+                        {})
         held.update(port=port, listen_polls=polls)
         print(f"[serve-h1] session {session} opened on {root[:16]}…: port {port} "
               + (f"listening after {polls} polls" if polls is not None else f"not listening after {POLLS} polls"),
@@ -675,7 +676,7 @@ class H1Windows:
         with self._lock:
             outs, releasing = list(self.outcomes), self.releasing
         unused = [] if self.sessions is None else [d["session"] for h in list(self.sessions.held)
-                                                   for d in (h, h.get("draw") or {}) if "unused" in d]
+                                                   for d in (h, h.get("draw")) if d is not None and "unused" in d]
         return {"windows": len(outs), "tied": sum(o["tied"] is True for o in outs),
                 "untied": [o["window"] for o in outs if o["tied"] is False][:20],
                 "gate_passed_rows": sum(int(o["gate"]["gate_passed"]["rows"]) for o in outs
