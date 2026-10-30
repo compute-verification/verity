@@ -55,8 +55,8 @@ BOUND_SPLITS = (1, 4)
 def bound_gate(lib: P.PagedLib, torch, ks: list[int], log, main_rc) -> dict:
     """The bound key on every path, in three parts.
 
-    - `pinned` (a library at the remote audit's codec, `codec.DEFAULT`): `vectors.json`'s `codec.bound` blocks
-      (the remote audit's payloads j = 0 and 20 under their bound keys) and its `codec.coin` blocks (the same payloads
+    - `pinned` (a library at PoUB's codec, `codec.DEFAULT`): `vectors.json`'s `codec.bound` blocks
+      (PoUB's payloads j = 0 and 20 under their bound keys) and its `codec.coin` blocks (the same payloads
       appended under the append coin's form b_j(c_a), PROTOCOL.md §3), each appended as one token's K and V at the
       slot and layer whose store-order block is j (store base 0) under b_j, and at another slot with the index
       difference folded into its offset (b_j + tau W (j − there)): the token-layer's words equal the pinned block (its
@@ -79,7 +79,7 @@ def bound_gate(lib: P.PagedLib, torch, ks: list[int], log, main_rc) -> dict:
         seed = bytes.fromhex(pinned["seed"])
         key, dev = RC.key(seed, rc), K.key(f.name, seed, rc.rounds, mask=rc.masked)
         if (dev.c, dev.tau, dev.mask) != (key.c, key.tau, key.mask):
-            raise RuntimeError("kv.py's key is not the remote audit's codec key")
+            raise RuntimeError("kv.py's key is not PoUB's codec key")
         KB.set_key(lib, dev)
         cache = torch.zeros(BLOCKS, G, BS, 2 * D, dtype=torch.bfloat16, device="cuda")
         lay = P.layout(cache, G, WB)
@@ -214,7 +214,7 @@ def bound_gate(lib: P.PagedLib, torch, ks: list[int], log, main_rc) -> dict:
     return out
 
 
-def deferred_gate(lib: P.PagedLib, torch, k: int, plain, enc, bjs, rows, lay: P.Layout, bt, btd, lens, q, rng,
+def deferred_gate(lib: P.PagedLib, torch, k: int, plain, enc, bjs, rows, lay: P.CacheShape, bt, btd, lens, q, rng,
                   main_rc, log) -> dict:
     """The plaintext flag (deferred residency, remote_bandwidth's PROTOCOL.md §4) on `bound_gate`'s random caches: each
     slot of both layers appended as it is (its flag set) or encoded under its offset (flag clear), at random, so every

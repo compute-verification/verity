@@ -1,9 +1,9 @@
-"""`lean_changed.py --records --update`: the regenerated record survives where the run keeps it (LEAN-10), and a node
+"""`lean_changed.py --records --update`: the regenerated record survives where the run keeps it, and a node
 whose Lean slots grant no `build` slot takes the `--dev-cache` path.
 
 In a recorded run the fast path never writes ROOT (the commit's shared source tree), and the slot tree's copy of the
 updated `lean-audit.json` is restored to the committed bytes by the next requirer iteration's `sync`, so without an
-explicit keep the record a lane must commit survives nowhere the run keeps. These tests stub the slot, the tree sync
+explicit keep the record its author must commit survives nowhere the run keeps. These tests stub the slot, the tree sync
 and check.py itself, and check the keep under `out/record/` (recorded and not), the ROOT write-back (unrecorded
 only), which path a refused `build` slot takes, and how a run finds and repairs a tree another run left mid-way."""
 from __future__ import annotations
@@ -184,7 +184,7 @@ def test_damaged_finds_each_module_an_interrupted_build_left_half_written(tmp_pa
 
 def torn(lib: Path, name: str) -> Path:
     """A module whose `.olean` was written after its `.hash`, the trace and the `.hash` still agreeing: what a build killed
-    after `lean` wrote its outputs leaves, and a `.ltar` restore from Lake's cache over a stale `.hash` (TOP-90 row 54)."""
+    after `lean` wrote its outputs leaves, and a `.ltar` restore from Lake's cache over a stale `.hash`."""
     t = module(lib, name)
     h = lib / f"{name}.olean.hash"
     os.utime(h, ns=(10**18, 10**18))
@@ -216,9 +216,9 @@ def test_an_output_newer_than_its_hash_is_half_written_and_loses_every_hash_with
 
 
 def test_a_module_without_a_trace_loses_the_hash_files_it_kept(tmp_path):
-    """compute-accounting, 26 Oct 09:49Z: cpu-5's `build-0` held `W1.olean` rewritten at 09:08, its `.hash` from 07:47 and
-    no `W1.trace`, as a `repair` that dropped only the trace left it; `damaged` reads only traces, so it went unflagged,
-    and the next `.ltar` restore would have kept the stale `.hash` beside a new trace."""
+    """A tree can hold an `.olean` newer than its `.hash` and no `.trace`, as a `repair` that drops only the trace leaves it;
+    `damaged` reads only traces, so it goes unflagged, and the next `.ltar` restore would keep the stale `.hash` beside a
+    new trace."""
     tree = tmp_path / "tree"
     lib = tree / "pkg" / ".lake" / "build" / "lib" / "lean"
     good = module(lib, "P/Good")
@@ -345,8 +345,8 @@ def test_try_builds_the_files_imports_then_runs_lean_on_it_in_its_owning_package
 
 
 def test_try_forgets_both_modules_an_import_clash_names_so_the_next_try_rebuilds_them(trying, tmp_path):
-    """cpu-5's `build-0`, 26 Oct: `Proofs.Pouw` failed there with `W1BudgetAbort` replayed beside a fresh
-    `TTOutW1RowSeed`, each built against another `W1`, while it elaborated from source everywhere else."""
+    """A module can fail on one tree with one import replayed beside a fresh other, each built against another version of a
+    shared dependency, while it elaborates from source everywhere else."""
     tree, calls = trying
     proofs = tree / "Sec" / "Proofs" / ".lake" / "build" / "lib" / "lean"
     sec = tree / "Sec" / ".lake" / "build" / "lib" / "lean"
