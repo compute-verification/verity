@@ -194,7 +194,8 @@ def _serve_dir(d: Path, ps: list[list[int]]) -> Path:
 
 
 def _certified(d: Path, ps: list[list[int]]) -> Path:
-    """io's file: the warden run's deployment.json and its certified I/O, each prompt answered with [1, 2]."""
+    """io's file: the network certifier run's deployment.json and its certified I/O, each prompt answered with [1,
+    2]."""
     d.mkdir(parents=True, exist_ok=True)
     (d / SS.CERTIFIED).write_text(json.dumps({
         "deployment": {"run_id": RUN, "origin_unix": 0.0, "windows": 4, "params": {"window": 10, "bucket_ms": 10000}},
