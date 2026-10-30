@@ -1,21 +1,33 @@
 """ShaWrites-R80's falsification test, and the round function's cap on what a fold inside it can absorb.
 
-    python3 hash_r80_premise.py [--trials N] [--blocks B] [--bound R] [--eps E] [--mutations] [--verdict PATH]
+    python3 hash_r80_premise.py [--trials N] [--mutations] [--verdict PATH]
 
-**The premise.** ShaWrites-R80(R, eps): no W1 program that writes fewer than R 32-bit registers a block computes R80
-(hash_rounds.py: SHA-512's 80 rounds over 80 free 64-bit words, K_t at round t, the feed-forward added) on B chained
-blocks correctly on more than 1 - eps of the protocol's inputs, for any data the prover chooses. Honest R80 writes 2,254
-a block. With SHA-512's schedule (64 steps of 20 writes) in front of it, an R80 program computes SHA-512's compression,
-so ShaWrites at R_SHA registers a compression gives R = R_SHA - 1,280 for programs correct on schedule-consistent
-words; on the protocol's words, which aren't, it is a premise of its own.
+**The premise** is `Pouw.Assumptions.ShaWritesR80.ShaWritesR80 x dv R eps n m inst`
+(`Security/Definitions/Pouw/Assumptions/ShaWritesR80.lean`): for every data the prover chooses, every W1 program run on
+a window's m chains of n blocks pays, in expectation over the coins, at least R registers a block for each chain whose
+sealed state it gets right, less eps a chain:
 
-**The test** (`falsify`): a candidate is a W1 program on `Machine`, a function of register handles that calls only the
-machine's instructions (IADD3 with its carries, LOP3, SHF, IMAD, IMAD.HI, PRMT, SEL; ISETP's predicates and immediates
-free), so its count is the machine's. It runs on N random instances of a distribution (uniform words, or each 32-bit
-half in a 2^20 span around 0, the zero-data words' range) and is compared bit for bit with `r80_np`. The premise is
-falsified when the candidate writes fewer than R a block and its correct fraction, less Hoeffding's margin at
-confidence 1 - 2^-20 (0.0073 at the default 2^17 instances), is at least 1 - eps. Controls: honest R80 on the machine writes 2,254 a block and is exact; a
-candidate one round short is cheap and wrong; with R one above honest's count, honest's program falsifies it.
+    E[writes] >= R * n * (E[chains right] - eps * m).
+
+R80 (hash_rounds.py) is SHA-512's 80 rounds over 80 free 64-bit words, K_t at round t, the feed-forward added; R80X
+(`x = xc`) XORs word t with xc(t) first. Honest R80 writes 2,254 a block and R80X 2,414 (one LOP3 a half a word more).
+With SHA-512's schedule (64 steps of 20 writes) in front of it, an R80 program computes SHA-512's compression, so
+ShaWrites at R_SHA registers a compression gives R = R_SHA - 1,280 for programs right on schedule-consistent words; on
+the protocol's words, which aren't, it is a premise of its own.
+
+**The test** (`falsify`, the Prop's parameters as its arguments: `design` is x, `bound` R, `eps`, `blocks` n,
+`chains` m, `dist` the instances): a candidate is a W1 program on `Machine`, a function of register handles that calls
+only the machine's instructions (IADD3 with its carries, LOP3, SHF, IMAD, IMAD.HI, PRMT, SEL; ISETP's predicates and
+immediates free), so its count is the machine's. It gets a whole window, m chains, so it may share work across them,
+and runs on N windows drawn from a distribution: uniform words; each 32-bit half in a 2^20 span around 0 (the zero-data
+words' range); or the batch's own structure at zero data, chain (r, c) of a rows x cols grid with half t equal to a row
+walk plus a column walk (`walks`). Its outputs are compared bit for bit with `r80_np`. The premise is falsified when
+writes < R * n * m * (lcb - eps), lcb a lower bound on the fraction right at confidence 1 - 2^-20: exact (2^-20 to the
+1/N) when every chain is right, which resolves 1.1e-4 at N = 2^17, below the 5.5e-4 that T1 needs; Hoeffding's
+otherwise. Controls: honest R80 and R80X on the machine write 2,254 and 2,414 a block and are exact; a candidate one
+round short is cheap and wrong; at R 1.39 writes a block above honest's, the precision T1 needs, honest's program
+falsifies it; a candidate that computes one chain of a pair and copies it falsifies the batch form exactly when the
+pair's chains are equal.
 
 **The cap** (part K): the round reads its word only through U = h + W + K_t, so a round with words in both W_t and the
 K_t slot is a round of their sum (checked), a fold that puts words there collides at (w + d, k - d) (checked), and a
@@ -35,13 +47,15 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "exact_kit"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from exact_kit.checks import Checks
-from hash_rounds import DESIGNS, K, fold_ref, round_ref
+from hash_rounds import DESIGNS, K, fold_ref, round_ref, xc
 
 M32 = (1 << 32) - 1
 M64 = (1 << 64) - 1
-HONEST = 2254
+HONEST = {"R80": 2254, "R80X": 2414}
 SCHED = 64 * 20
 DELTA = 2.0 ** -20
+R_WORDS = 1.153
+PRECISION = 0.01 / R_WORDS * 160
 
 
 class Reg:
@@ -138,7 +152,7 @@ class Machine:
 
 # ---------------------------------------------------------------- R80 on the machine (honest) and in numpy (reference)
 
-LUT_XOR3, LUT_CH, LUT_MAJ = 0x96, 0xCA, 0xE8
+LUT_XOR3, LUT_CH, LUT_MAJ, LUT_XOR2 = 0x96, 0xCA, 0xE8, 0x3C
 SIG = {"S0": (28, 34, 39), "S1": (14, 18, 41)}
 
 
@@ -162,14 +176,18 @@ def sig64(m: Machine, name: str, x):
     return m.lop3(p[0], q[0], r[0], LUT_XOR3), m.lop3(p[1], q[1], r[1], LUT_XOR3)
 
 
-def honest_r80(m: Machine, st0, ws, rounds: int = 80):
-    """Honest R80 on the machine: 28 writes a round, the feed-forward fused into round 79 (2,254 a block)."""
+def honest_r80(m: Machine, st0, ws, rounds: int = 80, xor: bool = False):
+    """Honest R80 on the machine: 28 writes a round, the feed-forward fused into round 79 (2,254 a block); with xor
+    (R80X), word t's halves XORed with xc(t)'s by one LOP3 each first (2,414 a block)."""
     st = list(st0)
     for b0 in range(0, len(ws), 80):
         cv = list(st)
         for t in range(rounds):
             a, b, c, d, e, f, g, h = st
-            u = add64(m, h, ws[b0 + t], K[t])
+            w = ws[b0 + t]
+            if xor:
+                w = (m.lop3(w[0], xc(t) & M32, 0, LUT_XOR2), m.lop3(w[1], xc(t) >> 32, 0, LUT_XOR2))
+            u = add64(m, h, w, K[t])
             ch = (m.lop3(e[0], f[0], g[0], LUT_CH), m.lop3(e[1], f[1], g[1], LUT_CH))
             t1 = add64(m, u, sig64(m, "S1", e), ch)
             mj = (m.lop3(a[0], b[0], c[0], LUT_MAJ), m.lop3(a[1], b[1], c[1], LUT_MAJ))
@@ -183,46 +201,86 @@ def honest_r80(m: Machine, st0, ws, rounds: int = 80):
     return st
 
 
+def per_chain(program, **kw):
+    """A single-chain program run on each chain of the window in turn: no work shared."""
+    return lambda m, chains: [program(m, s, w, **kw) for s, w in chains]
+
+
 def _rotr(x, n):
     return (x >> np.uint64(n)) | (x << np.uint64(64 - n))
 
 
-def r80_np(st0: np.ndarray, ws: np.ndarray) -> np.ndarray:
-    """R80 in numpy: st0 (8, n), ws (80 B, n), uint64."""
+def r80_np(st0: np.ndarray, ws: np.ndarray, xor: bool = False) -> np.ndarray:
+    """R80 (R80X with xor) in numpy: st0 (8, n), ws (80 B, n), uint64."""
     st = [x.copy() for x in st0]
     with np.errstate(over="ignore"):
         for b0 in range(0, len(ws), 80):
             cv = [x.copy() for x in st]
             for t in range(80):
                 a, b, c, d, e, f, g, h = st
-                t1 = h + ws[b0 + t] + np.uint64(K[t]) + (_rotr(e, 14) ^ _rotr(e, 18) ^ _rotr(e, 41)) + ((e & f) ^ (~e & g))
+                w = ws[b0 + t] ^ np.uint64(xc(t)) if xor else ws[b0 + t]
+                t1 = h + w + np.uint64(K[t]) + (_rotr(e, 14) ^ _rotr(e, 18) ^ _rotr(e, 41)) + ((e & f) ^ (~e & g))
                 t2 = (_rotr(a, 28) ^ _rotr(a, 34) ^ _rotr(a, 39)) + ((a & b) ^ (a & c) ^ (b & c))
                 st = [t1 + t2, a, b, c, d + t1, e, f, g]
             st = [x + y for x, y in zip(cv, st)]
     return np.stack(st)
 
 
-def draw(rng: np.random.Generator, dist: str, blocks: int, n: int) -> tuple[np.ndarray, np.ndarray]:
-    st0 = rng.integers(0, 2**64, (8, n), dtype=np.uint64)
+def _halves(lo: np.ndarray, hi: np.ndarray) -> np.ndarray:
+    return (hi & M32).astype(np.uint64) << np.uint64(32) | (lo & M32).astype(np.uint64)
+
+
+def draw(rng: np.random.Generator, dist: str, blocks: int, n: int, chains: int = 1) -> tuple[np.ndarray, np.ndarray]:
+    """n windows of `chains` chains: start states (chains, 8, n) and words (chains, 80 blocks, n). `walks` lays the chains
+    on a 2 x chains/2 grid and makes each half a row walk plus a column walk, each in a 2^19 span around 0; `pairs` makes
+    chains 2i and 2i + 1 equal (the batch control)."""
+    st0 = rng.integers(0, 2**64, (chains, 8, n), dtype=np.uint64)
+    shape = (chains, 80 * blocks, n)
     if dist == "uniform":
-        return st0, rng.integers(0, 2**64, (80 * blocks, n), dtype=np.uint64)
-    half = (rng.integers(-(1 << 19), 1 << 19, (2, 80 * blocks, n)) & M32).astype(np.uint64)
-    return st0, half[1] << np.uint64(32) | half[0]
+        return st0, rng.integers(0, 2**64, shape, dtype=np.uint64)
+    if dist == "zero-data":
+        half = rng.integers(-(1 << 19), 1 << 19, (2, *shape))
+        return st0, _halves(half[0], half[1])
+    if dist == "walks":
+        rows, cols = 2, chains // 2
+        rw = rng.integers(-(1 << 18), 1 << 18, (2, rows, 80 * blocks, n))
+        cw = rng.integers(-(1 << 18), 1 << 18, (2, cols, 80 * blocks, n))
+        half = np.stack([rw[:, i // cols] + cw[:, i % cols] for i in range(chains)], axis=1)
+        return st0, _halves(half[0], half[1])
+    if dist == "pairs":
+        st0[1::2], ws = st0[::2], rng.integers(0, 2**64, shape, dtype=np.uint64)
+        ws[1::2] = ws[::2]
+        return st0, ws
+    raise ValueError(dist)
 
 
-def falsify(candidate, rng: np.random.Generator, *, dist: str = "zero-data", blocks: int = 1, trials: int = 4096,
-            bound: int = HONEST, eps: float = 0.01) -> dict:
-    """Runs candidate(machine, st0, ws) -> 8 (lo, hi) handle pairs; the premise ShaWrites-R80(bound, eps) is falsified
-    when it writes fewer than bound a block and is right, at confidence 1 - DELTA, on at least 1 - eps of instances."""
-    st0, ws = draw(rng, dist, blocks, trials)
+def lower_bound(right: np.ndarray) -> float:
+    """A lower confidence bound at 1 - DELTA on the mean of per-window fractions right: DELTA^(1/N) when every chain of
+    every window is right (no window wrong has probability (1 - q)^N <= DELTA), else Hoeffding's."""
+    n = len(right)
+    if np.all(right == 1.0):
+        return DELTA ** (1 / n)
+    return float(np.mean(right)) - math.sqrt(math.log(1 / DELTA) / (2 * n))
+
+
+def falsify(candidate, rng: np.random.Generator, *, design: str = "R80X", dist: str = "zero-data", blocks: int = 1,
+            chains: int = 1, trials: int = 4096, bound: float | None = None, eps: float = 0.0) -> dict:
+    """Runs candidate(machine, [(st0, ws)] * chains) -> chains lists of 8 (lo, hi) handle pairs over `trials` windows.
+    ShaWritesR80 at (design, bound, eps, blocks, chains, dist) is falsified when the candidate's writes a window are below
+    bound * blocks * chains * (lcb - eps), lcb the lower bound on its fraction of chains right."""
+    bound = HONEST[design] if bound is None else bound
+    st0, ws = draw(rng, dist, blocks, trials, chains)
     m = Machine(trials)
     pair = lambda x: (m.load(x & np.uint64(M32)), m.load(x >> np.uint64(32)))  # noqa: E731
-    out = candidate(m, [pair(x) for x in st0], [pair(x) for x in ws])
-    got = np.stack([m.read(lo).astype(np.uint64) | m.read(hi).astype(np.uint64) << np.uint64(32) for lo, hi in out])
-    right = float(np.mean(np.all(got == r80_np(st0, ws), axis=0)))
-    lcb = right - math.sqrt(math.log(1 / DELTA) / (2 * trials))
-    return {"writes_a_block": m.writes / blocks, "right": right, "lcb": lcb,
-            "falsified": m.writes < bound * blocks and lcb >= 1 - eps}
+    out = candidate(m, [([pair(x) for x in st0[i]], [pair(x) for x in ws[i]]) for i in range(chains)])
+    right = np.zeros(trials)
+    for i, o in enumerate(out):
+        got = np.stack([m.read(lo).astype(np.uint64) | m.read(hi).astype(np.uint64) << np.uint64(32) for lo, hi in o])
+        right += np.all(got == r80_np(st0[i], ws[i], xor=DESIGNS[design].get("xor", False)), axis=0)
+    right /= chains
+    lcb = lower_bound(right)
+    return {"writes_a_block": m.writes / (blocks * chains), "right": float(np.mean(right)), "lcb": lcb,
+            "falsified": m.writes < bound * blocks * chains * (lcb - eps)}
 
 
 # ---------------------------------------------------------------- main
@@ -230,34 +288,51 @@ def falsify(candidate, rng: np.random.Generator, *, dist: str = "zero-data", blo
 def main() -> int:
     checks = Checks()
     a = checks.args
-
-    def opt(name: str, default):
-        return type(default)(a[a.index(name) + 1]) if name in a else default
-    trials, blocks, bound, eps = opt("--trials", 1 << 17), opt("--blocks", 2), opt("--bound", HONEST), opt("--eps", 0.01)
+    trials = int(a[a.index("--trials") + 1]) if "--trials" in a else 1 << 17
     rng = np.random.default_rng(20261029)
 
-    # the reference against hash_rounds' R80, instance by instance
     st0, ws = draw(rng, "uniform", 2, 4)
-    ref = r80_np(st0, ws)
-    same = all([int(x) for x in ref[:, j]] == fold_ref(DESIGNS["R80"], [int(x) for x in st0[:, j]],
-                                                        [int(x) for x in ws[:, j]]) for j in range(4))
-    checks.check("reference: r80_np equals hash_rounds' R80 bit for bit on two chained blocks", same)
+    same = all([int(x) for x in r80_np(st0[0], ws[0], xor=DESIGNS[d].get("xor", False))[:, j]]
+               == fold_ref(DESIGNS[d], [int(x) for x in st0[0][:, j]], [int(x) for x in ws[0][:, j]])
+               for d in HONEST for j in range(4))
+    checks.check("reference: r80_np equals hash_rounds' R80 and R80X bit for bit on two chained blocks", same)
 
-    res = {d: falsify(honest_r80, rng, dist=d, blocks=blocks, trials=trials, bound=bound, eps=eps)
-           for d in ("uniform", "zero-data")}
-    checks.check(f"S: honest R80 on the machine writes {HONEST:,} a block and is exact on both distributions, so it "
-                 f"doesn't falsify ShaWrites-R80({bound:,}, {eps:g})",
-                 all(r["writes_a_block"] == HONEST and r["right"] == 1.0 and not r["falsified"] for r in res.values()),
-                 str(res))
-    short = falsify(lambda m, s, w: honest_r80(m, s, w, rounds=79), rng, blocks=1, trials=trials, bound=bound, eps=eps)
-    checks.check("S controls: a candidate one round short writes less and is wrong, so it doesn't falsify",
-                 short["writes_a_block"] < HONEST and short["right"] == 0.0 and not short["falsified"], str(short))
-    above = falsify(honest_r80, rng, blocks=1, trials=4096, bound=HONEST + 1, eps=0.1)
-    checks.check("S controls: at a bound one above honest's count and eps 0.1, honest's own program falsifies the "
-                 "premise (the test fires when a program beats its bound)", above["falsified"], str(above))
+    small = max(trials // 8, 1024)
+    for d in HONEST:
+        res = {dist: falsify(per_chain(honest_r80, xor=d == "R80X"), rng, design=d, dist=dist, blocks=2, trials=small)
+               for dist in ("uniform", "zero-data")}
+        checks.check(f"S: honest {d} on the machine writes {HONEST[d]:,} a block and is exact on both distributions over "
+                     f"two chained blocks, so it doesn't falsify ShaWritesR80 at R {HONEST[d]:,}, eps 0",
+                     all(r["writes_a_block"] == HONEST[d] and r["right"] == 1.0 and not r["falsified"]
+                         for r in res.values()), str(res))
+    short = falsify(per_chain(honest_r80, rounds=79, xor=True), rng, trials=small)
+    checks.check("S controls: an R80X candidate one round short writes less and is wrong, so it doesn't falsify",
+                 short["writes_a_block"] < HONEST["R80X"] and short["right"] == 0.0 and not short["falsified"],
+                 str(short))
+    above = falsify(per_chain(honest_r80, xor=True), rng, dist="uniform", trials=trials,
+                    bound=HONEST["R80X"] + PRECISION)
+    checks.check(f"S controls: at R {PRECISION:.2f} writes a block above honest R80X's (1% of stock at r = {R_WORDS} words "
+                 f"a MAC, the premise's precision T1 needs), honest's own program falsifies it at {trials:,} instances: "
+                 "the test resolves the precision", above["falsified"], str(above))
+    batch = {dist: falsify(per_chain(honest_r80, xor=True), rng, dist=dist, chains=8, trials=max(trials // 16, 1024))
+             for dist in ("walks", "pairs")}
+    checks.check("B: the batch form, 8 chains a window: honest R80X run per chain is exact at 2,414 a chain-block on the "
+                 "zero-data batch (row walk plus column walk) and on equal pairs, so it doesn't falsify",
+                 all(r["writes_a_block"] == HONEST["R80X"] and r["right"] == 1.0 and not r["falsified"]
+                     for r in batch.values()), str(batch))
+
+    def copy_pairs(m, chains):
+        outs = [honest_r80(m, s, w, xor=True) for s, w in chains[::2]]
+        return [o for o in outs for _ in (0, 1)]
+    cp = {dist: falsify(copy_pairs, rng, dist=dist, chains=8, trials=max(trials // 16, 1024))
+          for dist in ("pairs", "walks")}
+    checks.check("B controls: a candidate that computes chain 2i and copies it to 2i + 1 (a free move) falsifies the "
+                 "batch form on equal pairs (half the writes, all right) and not on the zero-data batch (wrong on half): "
+                 "the harness credits work shared across chains when the words allow it",
+                 cp["pairs"]["falsified"] and not cp["walks"]["falsified"] and cp["walks"]["right"] == 0.5, str(cp))
     checks.check(f"S: ShaWrites at R_SHA registers a compression gives ShaWrites-R80 at R_SHA - {SCHED:,} for programs "
                  "right on schedule-consistent words (the schedule is 64 steps of 20 writes): 3,510 gives 2,230 a block, "
-                 f"{HONEST - (3510 - SCHED)} under honest R80's {HONEST:,}", 3510 - SCHED == 2230)
+                 f"{HONEST['R80'] - (3510 - SCHED)} under honest R80's {HONEST['R80']:,}", 3510 - SCHED == 2230)
 
     # part K: the round reads its word only through U = h + W + K.
     ok_wk, ok_col = True, True
@@ -292,9 +367,15 @@ def main() -> int:
                         kw["cin"] = ()
                     return orig(*args, **kw)
                 m.iadd3 = iadd3
-                return honest_r80(m, s, w)
-            r = falsify(drop, rng, blocks=1, trials=512)
+                return honest_r80(m, s, w, xor=True)
+            r = falsify(per_chain(drop), rng, trials=512)
             checks.check("honest is exact", r["right"] == 1.0)
+        with checks.mutant("R80X's reference skips the XOR"):
+            st0, ws = draw(rng, "zero-data", 1, 4)
+            r = r80_np(st0[0], ws[0], xor=False)
+            checks.check("reference equals hash_rounds' R80X", all(
+                [int(x) for x in r[:, j]] == fold_ref(DESIGNS["R80X"], [int(x) for x in st0[0][:, j]],
+                                                      [int(x) for x in ws[0][:, j]]) for j in range(4)))
     return checks.finish()
 
 
