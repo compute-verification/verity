@@ -642,7 +642,6 @@ open CallsProofs
 theorem refusesPastCallBits : RefusesPastCallBits := by
   intro cap rb e evs i k root h
   have hx := h
-  unfold answered at hx ⊢
   rw [List.getElem?_zip_eq_some] at hx
   obtain ⟨hev, hans⟩ := hx
   simp only at hev hans
@@ -699,7 +698,7 @@ theorem refusesPastCallBits : RefusesPastCallBits := by
 /-- `RefusesPastCallBits`' honest witness: the certifier accepts `honestEvents`' forward at its words root, at the cap,
 with the honest release's bits. -/
 theorem refusesPastCallBits_honest :
-    (answered witnessCap honestReleaseBits honestEntropy honestEvents)[2]? =
+    (honestEvents.zip (run witnessCap honestReleaseBits (State.init honestEntropy) honestEvents).1)[2]? =
       some (.wordsRoot 0 witnessRoot, .verdict .accepted) := by
   rfl
 

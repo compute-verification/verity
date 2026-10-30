@@ -10,9 +10,9 @@ the forward the certifier took to its words root, the bits of every bucket it co
 boundary, are at most `cap · Σ macs / fwdMacs` over the forward's calls, compared in integers. A forward past them is
 refused. `Proofs.Properties.NetworkCertifier.Calls` proves it.
 
-The predicates below read a window's events beside the certifier's answers (`answered`): the bits of a bucket it
-counted (`countedBits`, its timing bits and its real frames' content bits) and the MACs of a call it took (`callMacs`),
-in the program's own terms (`timingBits`, `Shape.macs`). None restates the count.
+The predicates below read a window's events beside the certifier's answers to them (`evs.zip (run …).1`): the bits of
+a bucket it counted (`countedBits`, its timing bits and its real frames' content bits) and the MACs of a call it took
+(`callMacs`), in the program's own terms (`timingBits`, `Shape.macs`). None restates the count.
 
 Its two lemmas read the instances at the end: the honest one, that the certifier accepts a forward of one call at its
 words root (`honestEvents`); the nontrivial one, that a certifier taking every event (`acceptsAll`) accepts a forward
@@ -22,10 +22,6 @@ past its bits (`pastEvents`).
 open NetworkCertifier.Calls
 
 namespace Properties.NetworkCertifier
-
-/-- The window's events from its start with entropy `e`, each beside the certifier's answer to it. -/
-def answered (cap : Cap) (releaseBits : Nat) (e : List Nat) (evs : List Event) : List (Event × CallAnswer) :=
-  evs.zip (run cap releaseBits (State.init e) evs).1
 
 /-- Whether an answer is a refusal. -/
 def refused : CallAnswer → Bool
@@ -60,12 +56,12 @@ def WithinBits (cap : Cap) (releaseBits : Nat) (xs : List (Event × CallAnswer))
       ((((xs.take i).drop (j + 1)).map countedBits).sum + releaseBits) * cap.fwdMacs ≤
         cap.cap * ((xs.take i).map (callMacs k)).sum
 
-/-- **A forward the certifier accepts at its words root stayed within its bits** (`WithinBits`): a forward past them is
-refused. -/
+/-- **A forward the certifier accepts at its words root stayed within its bits** (`WithinBits`): in a window from its
+start with entropy `e`, each event beside the certifier's answer to it, a forward past them is refused. -/
 def RefusesPastCallBits : Prop :=
   ∀ (cap : Cap) (releaseBits : Nat) (e : List Nat) (evs : List Event) (i k : Nat) (root : List Nat),
-    (answered cap releaseBits e evs)[i]? = some (.wordsRoot k root, .verdict .accepted) →
-      WithinBits cap releaseBits (answered cap releaseBits e evs) i k
+    (evs.zip (run cap releaseBits (State.init e) evs).1)[i]? = some (.wordsRoot k root, .verdict .accepted) →
+      WithinBits cap releaseBits (evs.zip (run cap releaseBits (State.init e) evs).1) i k
 
 /-! ## The witnesses' instances
 
