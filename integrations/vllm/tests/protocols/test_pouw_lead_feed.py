@@ -1,5 +1,6 @@
-"""`lead.feed`: a call's sizes, coins and feed against Lean's `Pouw.Lead` definitions (restated here from Layout.lean),
-and the in-process certifier's refusals."""
+"""`lead.feed`: a call's sizes, coins and feed against the layout's definitions, restated here independently of the module
+(the step count, the balanced base-13 column codes and row tags, and the coin lanes' weights), and the in-process
+certifier's refusals."""
 from __future__ import annotations
 
 import itertools
@@ -13,7 +14,7 @@ from verity_vllm.protocols.pouw.lead import feed as F
 LLAMA_1B = [(2048, 3072), (2048, 2048), (2048, 16384), (8192, 2048)]
 
 
-def lean_steps(k: int) -> int:
+def want_steps(k: int) -> int:
     return 1 + (max(k - 21, 0) + 27) // 28
 
 
@@ -56,9 +57,9 @@ def sampled(m: int, k: int, n: int, seed: int = 0) -> tuple[F.Call, F.CallCoins,
 
 @pytest.mark.parametrize("k, n", LLAMA_1B)
 @pytest.mark.parametrize("m", [1, 16, 17, 64, 65, 8192])
-def test_sizes_at_llama_shapes_are_leans(m, k, n):
+def test_sizes_at_llama_shapes(m, k, n):
     sh = F.Shape(m, k, n)
-    assert sh.S == lean_steps(k) == {2048: 74, 8192: 293}[k]
+    assert sh.S == want_steps(k) == {2048: 74, 8192: 293}[k]
     assert sh.H == {2048: 3, 8192: 10}[k]
     assert (sh.R, sh.C, sh.T) == (16 * -(-m // 16), n, -(-m // 64))
     assert sh.feed_words() == sh.R * sh.H + n
@@ -67,9 +68,9 @@ def test_sizes_at_llama_shapes_are_leans(m, k, n):
     assert sh.refusal() is None
 
 
-def test_steps_is_stepsFor():
+def test_steps_hold_21_lanes_then_28_a_step():
     assert [F.steps(k) for k in (1, 21, 22, 49, 50, 77, 78)] == [1, 1, 2, 2, 3, 3, 4]
-    assert all(F.steps(k) == lean_steps(k) for k in range(1, 20_000))
+    assert all(F.steps(k) == want_steps(k) for k in range(1, 20_000))
 
 
 def test_padding_is_whole_mma_tiles():
@@ -77,7 +78,7 @@ def test_padding_is_whole_mma_tiles():
     assert (sh.R, sh.C, sh.T, sh.computed(128)) == (80, 16, 2, 128)
 
 
-def test_codes_are_colCode_and_distinct_below_28560():
+def test_codes_are_balanced_digits_and_distinct_below_28560():
     c = F.codes(28_560)
     for j in [*range(0, 28_560, 97), 14_279, 14_280, 28_559]:
         assert list(c[:, j]) == col_code(j) == balanced(j + 1)
@@ -152,9 +153,9 @@ def test_lane_words_hold_the_coin_lanes_and_the_public_byte():
         assert int(np.int8(np.uint8(w >> 24))) == (c3[j] if t == 0 else 1)
 
 
-def test_sigma_is_the_lane_terms_and_the_rest_is_leans_coin_term():
-    """σ for a row's class is Σ_t Lean's `laneTerm`, so the word less σ keeps exactly step 0's T(i)·G + a₁·C and the later
-    steps' 1 + b_t of Lean's `coinTerm`: what FOLD=1 serves beside A·B − β."""
+def test_sigma_is_the_lane_terms_and_the_rest_is_the_coin_term():
+    """σ for a row's class is the sum over steps of its lane term Σ_ℓ ROT_W[i mod 2][ℓ]·s, so a row's coin terms less σ
+    keep exactly step 0's T(i)·G + a₁·C and the later steps' 1 + b_t: what the fold serves beside A·B − β."""
     call, coins, feed = sampled(100, 100, 12, seed=3)
     sh, s, G = call.shape, coins.s(), coins.G()
     for i, j in itertools.product(range(sh.R), range(sh.C)):
@@ -189,12 +190,12 @@ def test_head_is_row_words_then_g_words():
     assert (head[:feed.rows.size] == feed.rows.reshape(-1)).all() and (head[feed.rows.size:] == feed.g).all()
 
 
-def test_admits_is_leans():
+def test_admits_at_least_one_and_at_most_2_40_tiles():
     assert "K >= 1" in F.Shape(1, 0, 8).refusal()
     assert "no words" in F.Shape(0, 8, 8).refusal()
     assert F.Shape(16 * 2**20, 21, 8 * 2**20).refusal() is None  # exactly 2^40 tiles
     assert "2^40" in F.Shape(16 * 2**20, 22, 8 * 2**20).refusal()
-    assert F.Shape(2**15, 2**16, 2**20).refusal() is None  # Lean's `admits_of_caps` corner
+    assert F.Shape(2**15, 2**16, 2**20).refusal() is None  # m = 2^15, K = 2^16 and n = 2^20 together fit
 
 
 def test_coins_refuse_a_wrong_shape_dtype_or_range():
