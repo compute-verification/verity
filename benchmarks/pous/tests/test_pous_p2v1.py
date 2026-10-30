@@ -151,15 +151,17 @@ def test_params_refuse_a_modulus_below_the_payload():
 def test_the_tree_and_the_audit_derivation_are_the_specs():
     import hashlib
 
+    from verity.core.protocols.pous.verifier import MerkleTree
     from verity.ml.commitments.identity import tagged_sha512
     from verity.ml.commitments.rowleaf import sha512_row_v2_digest
     from verity.ml.randomness import frame
 
     R, _, _ = _p2()
     leaves = [bytes([i]) * 64 for i in range(3)]
+    tree = MerkleTree(leaves)
     node = lambda l, r: hashlib.sha512(b"\x01" + l + r).digest()  # noqa: E731
-    assert R.root(leaves) == node(node(leaves[0], leaves[1]), leaves[2])                    # RFC 6962: split at 2
-    assert R.path(leaves, 2) == [node(leaves[0], leaves[1])] and R.path(leaves, 0) == [leaves[1], leaves[2]]
+    assert tree.root == node(node(leaves[0], leaves[1]), leaves[2])                         # RFC 6962: split at 2
+    assert tree.path(2) == (node(leaves[0], leaves[1]),) and tree.path(0) == (leaves[1], leaves[2])
     block, salt = bytes(range(256)) * 8 + bytes(8), b"t" * 32
     leaf = R.leaf(salt, 3, 513, block)
     assert leaf == hashlib.sha512(b"\x00" + salt + (3).to_bytes(8, "big") + (513).to_bytes(2, "big")
