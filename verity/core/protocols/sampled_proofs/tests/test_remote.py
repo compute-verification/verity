@@ -30,6 +30,7 @@ from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bi
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import coll_concat
 from verity.ml.circuits.types import Array, Value
+from verity.ml.commitments import coin_tree as CT
 from verity.ml.crypto import lms
 
 from test_challenger import HOST, entropy, lms_key, lms_verify
@@ -555,6 +556,164 @@ def test_a_withheld_session_releases_only_raw_coins_until_its_signed_close(tmp_p
     assert coins.record.reason() is None
     _, got, _ = _served(tmp_path / "plain", signer, lambda c: c.commitment)
     assert got is not None
+
+
+TREE_SPEC = {"block": 3, "rounds_log": 2, "scheme": CT.SCHEME, "streams": [CT.SESSION, "t/rep0", "t/rep1"]}
+NONCE = bytes(range(32))
+ROOT_F, ROOT_B = root(20), {"t": root(21)}
+
+
+def f128(w: int) -> str:
+    return f"{w:032x}"
+
+
+def tree_record(nonce: bytes, tree_root: bytes, key: bytes, points: list[int], rounds: dict[str, list]) -> dict:
+    """A ``--zk`` session's record on the coin tree under `tree_root`: its link points one per point and each stream's
+    rounds as ``(msg_sha512, n, coins)``."""
+    return {"coin_tree": {"key": key.hex(), "nonce": nonce.hex(), "root": tree_root.hex(), "spec": TREE_SPEC},
+            "link": {"points": [[f128(c)] for c in points], "root_b": {t: r.hex() for t, r in ROOT_B.items()},
+                     "root_f": ROOT_F.hex()},
+            "streams": [{"stream": s, "rounds": [{"coins": [f128(c) for c in coins], "k": k, "msg_sha512": m.hex(), "n": n}
+                                                 for k, (m, n, coins) in enumerate(rs)]} for s, rs in rounds.items()]}
+
+
+def test_a_coin_tree_is_drawn_and_opened_in_the_windows_session_under_its_signed_close(tmp_path, signer):
+    """The challenger draws a ``--zk`` session's coin tree under the prover's nonce and opens each round itself, after
+    what it follows, between the session's own coins; each line is logged before its answer, the signed close covers
+    them, the verifier's read of the session's roots reads past them, and a record on those coins is held to them
+    (`session_tree_reason`), one whose round's coins differ refused."""
+    host = Host(tmp_path, signer, withhold=True)
+    client = R.RemoteChallenger.connect(host.address)
+    positions = C.LiveRecord(client, "positions", itertools.count().__next__)
+    positions.record(root(0))
+    nonce, tree_root, key = client.tree(TREE_SPEC, NONCE)
+    assert nonce == NONCE and CT.answer_of(CT.words(tree_root) + CT.words(key)) == (tree_root, key)
+    points, ws = client.tree_open(tree_root, CT.SESSION, 0, 2, C.link_after(ROOT_F, ROOT_B))
+    assert ws[:2] == points
+    rep = [client.tree_open(tree_root, "t/rep0", k, 3 - k, root(30 + k))[0] for k in range(2)]
+    positions.record(root(1))
+    client.close()
+    assert host.ended() is None
+    commitment, roots = host.trusted()
+    assert roots == {"positions": (root(0), root(1)), "replay": ()}
+    log = R.session_files(host.directory)["log"]
+    assert [json.loads(line)["event"] for line in log] == ["commitment", "root", "release", "coin-tree", "tree-open",
+                                                           "tree-open", "tree-open", "root", "release"]
+    assert json.loads((host.directory / R.CLOSE).read_text())["lines"] == len(log)
+    trees = C.coin_trees_of(log)
+    assert list(trees) == [tree_root.hex()] and trees[tree_root.hex()].record()["key"] == key.hex()
+    record = tree_record(nonce, tree_root, key, points, {"t/rep0": [(root(30), 3, rep[0]), (root(31), 2, rep[1])]})
+    assert C.session_tree_reason(trees, record) is None
+    record["streams"][0]["rounds"][1]["coins"][0] = f128(rep[1][0] ^ 1)
+    assert C.session_tree_reason(trees, record) == ("its t/rep0 round 1 is not coins the challenger opened under its tree "
+                                                    "after that round's message")
+
+
+def _tree_frames(tree_root: str) -> dict[str, list[dict]]:
+    tree_open = {"type": "tree-open", "after": root(5).hex(), "n": 1, "round": 0, "stream": "t/rep0", "tree": tree_root}
+    return {
+        "a round ahead of its stream's next": [{**tree_open, "round": 1}],
+        "a round opened twice": [tree_open, tree_open],
+        "a round past its block": [{**tree_open, "n": 4}],
+        "a stream the tree hasn't": [{**tree_open, "stream": "u/rep0"}],
+        "a tree no one drew": [{**tree_open, "tree": root(6).hex()}],
+        "a round after a short root": [{**tree_open, "after": root(5)[:32].hex()}],
+        "a round frame with an extra key": [{**tree_open, "retry": True}],
+        "a tree of another scheme": [{"type": "tree", "nonce": None, "spec": {**TREE_SPEC, "scheme": "coin-tree/v1"}}],
+        "a tree of a stream named twice": [{"type": "tree", "nonce": None,
+                                            "spec": {**TREE_SPEC, "streams": [CT.SESSION, CT.SESSION]}}],
+        "a tree past the coin cap": [{"type": "tree", "nonce": None, "spec": {**TREE_SPEC, "block": C.MAX_BLOCK,
+                                                                               "rounds_log": C.MAX_ROUNDS_LOG}}],
+        "a tree under a short nonce": [{"type": "tree", "nonce": NONCE[:16].hex(), "spec": TREE_SPEC}],
+    }
+
+
+@pytest.mark.parametrize("case", sorted(_tree_frames("")))
+def test_a_tree_frame_out_of_its_form_or_order_is_refused_and_ends_the_session(tmp_path, signer, case):
+    """A coin tree's frames are refused as the session's own coins are: each round of each stream once, in order, at
+    most its block, after 64 bytes, of a tree the challenger drew from a spec it takes; the refusal ends the session."""
+    host = Host(tmp_path, signer, closed=True)
+    with socket.create_connection(host.listener.getsockname()) as s:
+        s.sendall(frame({"type": "hello"}))
+        assert reply(s)["type"] == "commitment"
+        s.sendall(frame({"type": "tree", "nonce": NONCE.hex(), "spec": TREE_SPEC}))
+        drawn = reply(s)
+        assert drawn["type"] == "tree"
+        frames = _tree_frames(drawn["tree"]["root"])[case]
+        for f in frames[:-1]:
+            s.sendall(frame(f))
+            assert reply(s)["type"] == "tree-coins"
+        s.sendall(frame(frames[-1]))
+        answer = reply(s)
+        assert answer["type"] == "refused"
+    assert host.ended() == answer["reason"]
+    assert host.error is None
+    lines = R.log_lines(host.directory / R.RELEASES)
+    assert len(C.coin_trees_of(lines)[drawn["tree"]["root"]].opened) == len(frames) - 1
+
+
+def _tree_server(answer):
+    """A client over a socketpair to a server that answers its hello with a commitment, its tree frame with
+    ``answer("tree", frame)`` and its tree-open frame with ``answer("tree-open", frame)``."""
+    ch = C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("host"))
+    a, b = socket.socketpair()
+
+    def run() -> None:
+        wire = R._Wire(a)
+        with a:
+            wire.recv()
+            wire.send({"type": "commitment", "commitment": ch.commitment.to_json()})
+            for kind in ("tree", "tree-open"):
+                try:
+                    wire.send(answer(kind, wire.recv()))
+                except (OSError, C.CoinError):
+                    return
+
+    t = threading.Thread(target=run)
+    t.start()
+    return R.RemoteChallenger(b), t
+
+
+def _honest_tree(other: bool = False):
+    """The answers of a challenger that draws the asked tree (another tree when `other`, under the nonce asked for) and
+    opens its rounds."""
+    drawn: list[CT.CoinTree] = []
+
+    def answer(kind: str, head: dict) -> dict:
+        if kind == "tree":
+            ch = C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("tree"))
+            tree, _ = ch.draw_tree(head["spec"], bytes.fromhex(head["nonce"]))
+            drawn.append(ch.draw_tree(head["spec"], bytes.fromhex(head["nonce"]))[0] if other else tree)
+            return {"type": "tree", "tree": {"key": tree.key.hex(), "nonce": tree.nonce.hex(), "root": tree.root().hex()}}
+        stream = TREE_SPEC["streams"].index(head["stream"])
+        return {"type": "tree-coins", "tree-coins": [f128(w) for w in drawn[0].open(stream, head["round"], head["n"])[1]]}
+    return answer
+
+
+@pytest.mark.parametrize("answer, why", [
+    (_honest_tree(other=True), "do not open its coin tree"),
+    (lambda kind, head: {"type": "tree", "tree": {"key": "00" * CT.KEY_BYTES, "nonce": "00" * CT.NONCE_BYTES,
+                                                  "root": root(1).hex()}}, "not under the nonce asked for"),
+    (lambda kind, head: {"type": "tree", "tree": {"key": "ff" * CT.KEY_BYTES, "nonce": NONCE.hex(),
+                                                  "root": root(1).hex()}}, "bit 2047 clear"),
+])
+def test_the_client_refuses_a_tree_or_round_that_isnt_the_one_asked_for(answer, why):
+    client, t = _tree_server(answer)
+    with pytest.raises(C.CoinError, match=why):
+        tree_root = client.tree(TREE_SPEC, NONCE)[1]
+        client.tree_open(tree_root, "t/rep0", 0, 2, root(5))
+    t.join()
+    with pytest.raises(C.CoinError, match="session ended"):
+        client.open("positions", 0, root(0))
+
+
+def test_the_client_takes_an_honest_round_and_its_coins():
+    client, t = _tree_server(_honest_tree())
+    tree_root = client.tree(TREE_SPEC, NONCE)[1]
+    coins, ws = client.tree_open(tree_root, "t/rep0", 0, 2, root(5))
+    assert len(coins) == 2 and ws[:2] == coins
+    client._wire.sock.close()
+    t.join()
 
 
 def _scripted(n: int, answer):

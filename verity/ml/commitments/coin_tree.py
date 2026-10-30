@@ -1,7 +1,7 @@
 """The keyed coin tree, ``coin-tree/hm96-sha512/v2`` (``verity/ml/flock/live/src/coin_tree.rs``, which this mirrors byte
 for byte): the challenger's commitment, at ``Hello``, to every coin of a session, and the check of each round's opening
 against it. The challenger's device draws and opens it (`verity.core.protocols.sampled_proofs.challenger`,
-`LiveChallenger.tree`), and a prover's side checks each opening (`check`).
+`LiveChallenger.draw_tree` and `open_tree`), and a prover's side checks each opening (`check`).
 
 At ``Hello`` the challenger samples a fresh hm96 key ``K`` and every coin of the session, a block of ``block`` coins for
 each (stream, round), and commits to all of them under one SHA-512 Merkle root: one keyed hm96 leaf a (stream, round), each
