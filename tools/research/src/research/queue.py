@@ -1059,7 +1059,8 @@ class Queue:
         when one of P's own commits (those in ``base``.. its head less those below the heads of open PRs it contains) is
 
         - a head the queue saw Q at, and the first open PR it saw there (`seen`), that Q's head still contains, as when P
-          branched from Q and Q moved on unmarked (else P would land Q's unmarked commits under P's mark); or
+          branched from Q and Q moved on unmarked (else P would land Q's unmarked commits under P's mark); of several PRs
+          seen at that head, only those marked ready, when any is, since their marks cover it; or
         - one of Q's own commits on Q's first-parent line that P has only through a merge, as when P merged Q's branch and Q
           moved on (P waits for Q, and Q for nothing).
 
@@ -1106,7 +1107,9 @@ class Queue:
         for n, e in out.items():
             older: dict[int, str] = {}
             for c in (c for c in order[n] if c in own[n]):
-                for q in [*(q for q in seen.get(c, ()) if q in out and c in below[q]), *(branch.get(c, ()) if c not in line[n] else ())]:
+                # a head several PRs were seen at is carried by the marked ones among them, whose marks cover it
+                at = [q for q in seen.get(c, ()) if q in out and c in below[q]]
+                for q in [*([q for q in at if out[q].state == "ready"] or at), *(branch.get(c, ()) if c not in line[n] else ())]:
                     if q != n:
                         older.setdefault(q, c)
             e.older = tuple(sorted(older))
