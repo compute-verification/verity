@@ -75,7 +75,7 @@ name = "Agent watch"
 started_by = "/data/infra/agent_watch.sh"
 file = "/data/agent-watch/status.json"
 json = "t"                           # each sweep (60 s) rewrites it
-period_s = 300
+period_s = 480                       # twice this must exceed a sweep whose reads take agent_watch.SWEEP_READS_S (12 min)
 
 [[loop]]
 name = "Control disk relay"
