@@ -117,7 +117,7 @@ def one_step_windows(S: int = 3, reads: int = 64) -> list[P.Window]:
     return [P.Window(range(s, s + 1), reads, 1) for s in range(S)]
 
 
-def codes(v: P.Verdict) -> list[str]:
+def codes(v: P.Judgement) -> list[str]:
     return [r["code"] for r in v.reasons]
 
 
