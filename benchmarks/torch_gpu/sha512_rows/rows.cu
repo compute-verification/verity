@@ -1,8 +1,8 @@
 // The engine's kernels (rows.cuh), launched on the caller's stream; built by engine.device_lib with nvcc. Every launch
 // function returns 0, or the CUDA error of its launch. sxr_graph_* rekey the leaf launches of a graph captured from them.
 //
-// The row kernel comes in every compression variant the bench sweeps (VARIANTS: sha512x.cuh's V and ROLL, and "pouw",
-// commit_gpu's sha::compress, the one commit_slots runs); the other kernels use SX_V and SX_ROLL.
+// The row kernel comes in every compression variant the bench sweeps (VARIANTS: sx::compress's V and ROLL, and "pouw",
+// sha::compress, commit_gpu's, the one commit_slots runs); the other kernels use SX_V and SX_ROLL.
 #include <cuda_runtime.h>
 
 #include <algorithm>
@@ -11,7 +11,6 @@
 #include <vector>
 
 #include "rows.cuh"
-#include "../../pouw/commit_gpu/sha512.cuh"
 
 #ifndef SX_V
 #define SX_V 0
@@ -175,7 +174,7 @@ struct Variant {
   const char* name;
   RowKernel k;
 };
-// V's digits are the modes of S0, S1, s0 and s1 (sha512x.cuh); a trailing "s" is ROLL = 0
+// V's digits are the modes of S0, S1, s0 and s1 (verity/ml/kernels/sha512.cuh); a trailing "s" is ROLL = 0
 #define SXR_V(a, b, c, d) ((a) | (b) << 2 | (c) << 4 | (d) << 6)
 const Variant VARIANTS[] = {
     {"pouw", k_rows<Pouw>},

@@ -1,5 +1,5 @@
-// libvc (vc.h, README.md): the served path's SHA-512 commitments, one code base. SHA-512's compression is commit_gpu's
-// (benchmarks/pouw/commit_gpu/sha512.cuh, included by path); the rest is vendored from three seeds, each piece re-pointed
+// libvc (vc.h, README.md): the served path's SHA-512 commitments, one code base. SHA-512's compression is
+// verity/ml/kernels/sha512.cuh's (included by path); the rest is vendored from three seeds, each piece re-pointed
 // from __constant__ memory to kernel parameters (__grid_constant__) so that plans of many domains run back to back on one
 // stream with no symbol copy:
 //   * native_rows.cu (934d0bcbd): LeafK / NodeK, the frame leaf, pad and node templates,
