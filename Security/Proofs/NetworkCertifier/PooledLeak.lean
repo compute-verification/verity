@@ -12,7 +12,8 @@ The probability half: each window's audit, given the earlier windows' coins, acc
 `(1 - q)^|W_i| + e_i`, and the escapes multiply over the windows with the errors adding (`pr_adaptive_add_le`). That is
 the monitoring-period step (`FlockSoundness.Audit.Periods.prCoin_forall_prod_le`) at each window's bound capped at `1`,
 whose product is at most the product of the escapes plus the errors' sum (`prod_min_add_le`). The tied audits'
-incorrect proof blocks are sampled proofs' pooled bound, an input taken as it is, and a union bound adds it and the leak
+incorrect proof blocks are sampled proofs' pooled bound at the tied audits' samples (`TiedIncorrectBlocksLe`, which
+`tiedIncorrectBlocksLe_of_samples` derives from `horizonIncorrectBlocks` there), and a union bound adds it and the leak
 relations' errors `e' i`.
 
 What a tied proof block reaches: a gate outside the downstream cone of the gates holding free values computes the
@@ -246,6 +247,28 @@ theorem tiedIncorrectBlocksLe_none {m : ℕ} {Ω Z : Type} [Fintype Ω] (Zs : Se
     Pr_false).trans het
   simp only [Finset.card_empty, Finset.sum_const_zero] at h
   exact absurd h.2 (by omega)
+
+/-- **Sampled proofs' pooled bound at the tied audits' samples**: where window `i`'s tied audits draw a uniform
+`kt i`-subset of their `nt i` proof blocks at its coins, the incorrect ones (`W z i ω`, `Wt z ω i` as indices) are fixed
+before that window's draw, and the window's audits accept while the sample meets an incorrect one with probability at
+most `ε i`, `TiedIncorrectBlocksLe` holds at `et = (1 - qt)^Ft + Σ_i ε i`: `Guarantees.PooledIncorrectBlocksLe` at
+those samples, for each secret. -/
+theorem tiedIncorrectBlocksLe_of_samples {m : ℕ} {Ω Z : Type} [Fintype Ω] [Nonempty Ω] (Zs : Set Z)
+    (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop) (nt kt : Fin m → ℕ) (drawT : (i : Fin m) → Ω → Finset (Fin (nt i)))
+    (hcard : ∀ i x, (drawT i x).card = kt i)
+    (hunif : ∀ i (S : Finset (Fin (nt i))), S.card = kt i →
+      (univ.filter fun x => drawT i x = S).card * (nt i).choose (kt i) = Fintype.card Ω)
+    (W : Z → (i : Fin m) → (Fin m → Ω) → Finset (Fin (nt i)))
+    (hW : ∀ z i ω ω', (∀ j, j < i → ω j = ω' j) → W z i ω = W z i ω')
+    (Wt : Z → (Fin m → Ω) → Fin m → Finset ℕ) (hWt : ∀ z ω i, Wt z ω i = (W z i ω).map Fin.valEmbedding)
+    (ε : Fin m → ℝ) (hsound : ∀ z ∈ Zs, ∀ i, Pr (fun ω => acc z i ω (ω i) ∧ ¬Disjoint (drawT i (ω i)) (W z i ω)) ≤ ε i)
+    (qt : ℝ) (hq0 : 0 ≤ qt) (hq1 : qt ≤ 1) (hq : ∀ i, qt * nt i ≤ kt i) (Ft : ℕ) :
+    TiedIncorrectBlocksLe Zs acc Wt Ft ((1 - qt) ^ Ft + ∑ i, ε i) := by
+  intro z hz
+  have h := (horizonIncorrectBlocks nt kt drawT hcard hunif (W z) (hW z) (fun i ω => acc z i ω (ω i)) ε
+    (hsound z hz) qt hq0 hq1 hq Ft).1
+  simp only [hWt, Finset.card_map]
+  exact h
 
 theorem tiedWidth_nil : tiedWidth [] = 0 := by simp [tiedWidth, tiedReaches]
 

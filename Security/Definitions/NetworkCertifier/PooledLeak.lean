@@ -14,7 +14,8 @@ A window's scan registers the returned values of its tied audits, the compute au
 registered inputs (`TiedAudit`). An incorrect proof block of a tied audit can change only the returned values in its
 downstream cone (`inCone`): the scan inputs it reaches (`TiedAudit.reach`) are registered at values the tied audit's
 registration no longer fixes, so the window's leak relation holds with those inputs unpinned. `PooledGood` counts the
-tied audits' incorrect proof blocks over the monitoring period too, and unpins what they reach.
+tied audits' incorrect proof blocks over the monitoring period too, and unpins what they reach. How many there are is
+sampled proofs' pooled bound at the tied audits' samples (`TiedIncorrectBlocksLe`).
 -/
 
 namespace NetTiming
@@ -80,8 +81,10 @@ def PooledGood {L K S m : ℕ} (lay : AuditStatement → BoundaryGates L S) (k :
 /-- **The tied audits' incorrect proof blocks over a monitoring period, pooled**: for each secret `z ∈ Zs`, every
 window's audits accept at the period's coins (`acc z i ω (ω i)`) while the windows' tied audits hold `Ft` or more
 incorrect proof blocks in total (`Wt z ω i`) with probability at most `et`. It is sampled proofs' pooled bound at the
-tied audits' samples (`PooledIncorrectBlocksLe`'s conclusion, `et = (1 - q_t)^Ft + Σ ε`). With no incorrect tied proof
-block, an honest prover's, it holds at every `Ft ≥ 1` and `et ≥ 0`. -/
+tied audits' samples: `NetTiming.tiedIncorrectBlocksLe_of_samples` derives it, at `et = (1 - q_t)^Ft + Σ_i ε_i`, from
+`Guarantees.PooledIncorrectBlocksLe` wherever each window's tied audits sample a uniform subset of their proof blocks
+at its coins and accept while the sample meets an incorrect one with probability at most `ε_i`. With no incorrect tied
+proof block, an honest prover's, it holds at every `Ft ≥ 1` and `et ≥ 0`. -/
 def TiedIncorrectBlocksLe {m : ℕ} {Ω Z : Type} [Fintype Ω] (Zs : Set Z) (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop)
     (Wt : Z → (Fin m → Ω) → Fin m → Finset ℕ) (Ft : ℕ) (et : ℝ) : Prop :=
   ∀ z ∈ Zs, Pr (fun ω => (∀ i, acc z i ω (ω i)) ∧ Ft ≤ ∑ i, (Wt z ω i).card) ≤ et

@@ -101,7 +101,8 @@ PooledLeak.lean  the leak through the network certifier over a monitoring period
                                          each window's error added (pr_adaptive_add_le, the monitoring-period step
                                          Periods.prCoin_forall_prod_le at bounds capped at 1), the families of faulty sets
                                          under `Fmax` units (exists_famOf_eq), the tied audits' pooled bound added
-                                         once, a returned value outside every incorrect tied proof block's cone being
+                                         once (derived at their samples, tiedIncorrectBlocksLe_of_samples), a
+                                         returned value outside every incorrect tied proof block's cone being
                                          the value its Program computes (TiedAudit.valOver_eq_of_notMem_reach), and the
                                          secrets the client's cells decode to at each draw, read back from the
                                          certifier's record (encard_pooledGood_le, horizonLeak, horizonLeak_untied)
@@ -314,8 +315,10 @@ The other 22 are the rest of the Capacity table's bounds and the schedule's caus
   (no draw's form: a uniform `kd_i`-of-`n_i` draw meets it at `q = kd_i/n_i`), and the leak relation at that set
   `hleak`, `Pr[acc_i ∧ ¬LeakAt W_i] ≤ e'_i`, read on the network certifier's record with the scan inputs the tied
   audits' incorrect proof blocks `Wt_i` reach unpinned (`tiedReach`); and sampled proofs' pooled bound at the tied
-  audits' samples, as it is (`hpool`, `TiedIncorrectBlocksLe`): every audit accepts while the tied audits hold `F_t`
-  or more incorrect proof blocks with probability at most `ε_t`. From them every window accepts outside the monitoring
+  audits' samples (`hpool`, the listed premise `TiedIncorrectBlocksLe`): every audit accepts while the tied audits
+  hold `F_t` or more incorrect proof blocks with probability at most `ε_t`, which `tiedIncorrectBlocksLe_of_samples`
+  derives from `horizonIncorrectBlocks` at the tied audits' uniform samples, at `ε_t = (1 - q_t)^F_t + Σ_i ε_i` given
+  each window's tied soundness error `ε_i`. From them every window accepts outside the monitoring
   period's good event
   (`PooledGood`: the faulty sets hold under `Fmax ≥ ln(1/δ)/q` units, the tied ones under `F_t`, and every window
   meets its leak relation) with probability at most `δ + ε_t + Σ_i e_i + Σ_i e'_i`, and at each draw the secrets
@@ -328,8 +331,9 @@ The other 22 are the rest of the Capacity table's bounds and the schedule's caus
   certifier is one device, as in the period's bound: on every schedule its record format holds, the cells the client
   receives read back from its record (`tap_cells_read`), so its one named assumption is `trusted-host`. Over live
   audits the inputs are `Flock.Guarantees.SampledKSLive` at each window's history, sampled proofs' pooled bound at the
-  tied audits' samples and the live `SampledLeakAccepted` (P2), none discharged, so it is not the deployed system's
-  bound over a monitoring period until they are.
+  tied audits' samples (from `SampledKSLive` at those samples) and the live `SampledLeakAccepted` (P2), with
+  `SampledKSLive` and P2 not discharged, so it is not the deployed system's bound over a monitoring period until they
+  are.
 
 **The program's agreements, proved and audited, not guarantees.** Five theorems tie the difftests to these definitions
 (`NetTiming.SecurityProofs.Code`): the difftests hold the Python audit and advice v1's charge references

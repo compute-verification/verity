@@ -22,11 +22,11 @@ own sampling design. Their witness has a set `Wt i` of incorrect proof blocks, a
 the leak relation holds with the scan inputs those proof blocks reach unpinned (`tiedReach`: the returned values in each
 one's downstream cone in its audit's Program, `inCone`; a returned value outside every incorrect proof block's cone is
 the value the tied audit's Program computes, `NetTiming.TiedAudit.valOver_eq_of_notMem_reach`). How many there are over
-the period is sampled proofs' pooled bound, taken as it is (`hpool`, `TiedIncorrectBlocksLe`): every audit accepts
-while the tied audits hold `F_t` or more incorrect proof blocks with probability at most `ε_t`,
-`PooledIncorrectBlocksLe`'s conclusion at the tied audits' samples, `(1 - q_t)^F_t + Σ_i ε_i`. An empty list of tied
-audits is the statement without them: no tied proof block, nothing unpinned, and the tied factor and error `1` and `0`
-at `F_t = 1`, `ε_t = 0` (`horizonLeak_untied`).
+the period is sampled proofs' pooled bound (`hpool`, `TiedIncorrectBlocksLe`): every audit accepts while the tied
+audits hold `F_t` or more incorrect proof blocks with probability at most `ε_t`.
+`NetTiming.tiedIncorrectBlocksLe_of_samples` derives it from `PooledIncorrectBlocksLe` at the tied audits' samples, at
+`ε_t = (1 - q_t)^F_t + Σ_i ε_i`. An empty list of tied audits is the statement without them: no tied proof block,
+nothing unpinned, and the tied factor and error `1` and `0` at `F_t = 1`, `ε_t = 0` (`horizonLeak_untied`).
 
 From them, every audit accepts while the incorrect proof blocks number `Fmax ≥ ln(1/δ)/q` or more, or the tied audits'
 `F_t` or more, or some window's leak relation fails, with probability at most `δ + ε_t + Σ_i e_i + Σ_i e'_i` (the
@@ -47,9 +47,11 @@ active warden) and its record of them, the observations the audits read, so on e
 the client's cells read back from the record. Its one named assumption is `trusted-host`.
 
 The statement is conditional: it holds for any audits that satisfy the three inputs. Over a monitoring period of live
-audits they are `Flock.Guarantees.SampledKSLive` at each window's history (at `K₀ = |W_i|`), sampled proofs' pooled
-bound at the tied audits' samples, and the live `SampledLeakAccepted` (P2) at the unpinned inputs, none discharged yet,
-so nothing here bounds the deployed system over a monitoring period until that discharge lands.
+audits they are `Flock.Guarantees.SampledKSLive` at each window's history (at `K₀ = |W_i|`); sampled proofs' pooled
+bound at the tied audits' samples, which `tiedIncorrectBlocksLe_of_samples` derives from `PooledIncorrectBlocksLe` given
+`SampledKSLive` at the tied audits' samples; and the live `SampledLeakAccepted` (P2) at the unpinned inputs. Neither
+`SampledKSLive` nor P2 is discharged yet, so nothing here bounds the deployed system over a monitoring period until that
+discharge lands.
 -/
 
 namespace NetTiming.Guarantees
@@ -75,8 +77,7 @@ blocks (indices into `tiedReaches (T i)`; one past them reaches nothing). Given
   detection probability (`Flock.Guarantees.SampledKSLive` at the history, not yet discharged);
 * `hpool`, sampled proofs' pooled bound at the tied audits' samples (`TiedIncorrectBlocksLe`): every audit accepts
   while the tied audits hold `Ft` or more incorrect proof blocks over the period with probability at most `et`
-  (`PooledIncorrectBlocksLe`'s conclusion at their samples, `et = (1 - qt)^Ft + Σ ε`, or `SampledKSLive`'s; not yet
-  discharged);
+  (`tiedIncorrectBlocksLe_of_samples`, from `PooledIncorrectBlocksLe` at their samples, `et = (1 - qt)^Ft + Σ ε`);
 * `hleak`, the leak relation at that witness: `Pr[acc_i ∧ ¬LeakAt (W z ω i)] ≤ e' i` on the record's observations, with
   the registered inputs `tiedReach (T i) (Wt z ω i)` unpinned (the live `SampledLeakAccepted`, P2, not yet discharged);
 
