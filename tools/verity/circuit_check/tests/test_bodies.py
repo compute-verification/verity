@@ -1,11 +1,13 @@
 """`circuit_check.bodies`: a composite run body by body is the reference (`verity.ml.circuits.evaluation.evaluate`) on every
 construct a body has (a call, a batch along no axis, axis 0 and a later one, a batch and a scan of composites, a scan with xs
 and shared arguments, a lazy and a wide-fan-in primitive, a parameter returned as is), raises what the reference raises with
-the same gate indices, and leaves to the reference what it doesn't compile; its non-constant gates are the ones
-`checks._pieces_used` counts gate by gate."""
+the same gate indices, with every activation run and with a repeated one taking an earlier one's values (`bodies._Memo`), and
+leaves to the reference what it doesn't compile; its non-constant gates are the ones `checks._pieces_used` counts gate by
+gate."""
 from __future__ import annotations
 
 import random
+from collections import Counter
 
 import pytest
 
@@ -109,16 +111,82 @@ def _random_args(params, rng: random.Random, hi: int = 255) -> list:
     return [rng.randint(0, hi) if isinstance(t, Value) else [rng.randint(0, hi) for _ in range(t.leaves)] for t in params]
 
 
-def test_a_body_with_every_construct_evaluates_as_the_reference():
+def _alike(params, v: int) -> list:
+    """Every leaf ``v``, as an edge vector sets them."""
+    return [v if isinstance(t, Value) else [v] * t.leaves for t in params]
+
+
+@pytest.fixture(params=[False, True], ids=["every-activation-run", "repeats-looked-up"])
+def memo(request, monkeypatch):
+    """Bodies compiled anew, each activation looked up (any body) or none."""
+    monkeypatch.setattr(BD, "_BODIES", {})
+    monkeypatch.setattr(BD, "MEMO_GATES_PER_LEAF", 0 if request.param else 1 << 60)
+    return request.param
+
+
+def test_a_body_with_every_construct_evaluates_as_the_reference(memo):
     assert BD.compiled(TOP) is not None, "the test would compare the reference with itself"
+    assert BD.compiled(TOP).memo is memo
     rng = random.Random(7)
-    for _ in range(6):
-        args = _random_args(TOP_PARAMS, rng)
+    for args in [_random_args(TOP_PARAMS, rng) for _ in range(6)] + [_alike(TOP_PARAMS, v) for v in (0, 1, 3, 255)]:
         got = _outcome(BD.evaluate, TOP, *args)
         assert got[0] == "returned" and got == _outcome(reference, TOP, *args)
 
 
-def test_what_the_reference_raises_is_raised_with_the_same_gate_index():
+CALLS: Counter = Counter()
+
+
+def _mix(a, b):
+    CALLS["mix"] += 1
+    return (3 * a + b) & 255
+
+
+MIX = _prim("Mix", (V8, V8), _mix)
+TWICE = _composite("Twice", (V8, V8), V8, lambda B, S, a, b: B.call(MIX, B.call(MIX, a, b), b))
+TWICE_STEP = _composite("TwiceStep", (V8, V8), Tuple(V8, V8), lambda B, S, c, s: tuple_of(B.call(TWICE, c, s), c))
+
+
+def test_a_repeated_activation_takes_the_values_of_the_first(memo, monkeypatch):
+    """A batch's members, a scan's steps and calls on one body's parameter values run once each within one `evaluate` (none of
+    them again in the next), and return what the reference does; with no room left (`MEMO_LEAVES`) every one runs."""
+    def body(B, S, x, y):
+        b = B.batch(TWICE, x, y, axes=(0, None))
+        c = B.call(TWICE, x[0], y)
+        s = B.scan(TWICE_STEP, y, shared=[y], n=3)
+        return _flat(Array(9, V8), [b, c, s])
+
+    rep = _composite("Repeats", (Array(4, V8), V8), Array(9, V8), body)
+    for x, y, runs in (([5, 5, 5, 5], 1, 1 + 3), ([5, 6, 5, 6], 1, 2 + 3), ([4, 5, 6, 7], 0, 4 + 1)):
+        CALLS.clear()
+        got = _outcome(BD.evaluate, rep, x, y)
+        assert CALLS["mix"] == 2 * (runs if memo else 4 + 1 + 3), (x, y)
+        assert got[0] == "returned" and got == _outcome(reference, rep, x, y)
+    monkeypatch.setattr(BD, "MEMO_LEAVES", 0)
+    CALLS.clear()
+    got = _outcome(BD.evaluate, rep, [5, 5, 5, 5], 1)
+    assert CALLS["mix"] == 2 * (4 + 1 + 3)
+    assert got == _outcome(reference, rep, [5, 5, 5, 5], 1)
+
+
+def test_an_activation_that_raised_is_not_taken_again(memo):
+    """A member that raises after members it repeats raises with its own gate index, and the member it repeats after one that
+    raised is never reached: the first to raise is the reference's."""
+    divs = _composite("Divs", (V8, V8), V8, lambda B, S, a, b: B.call(ADD, B.call(DIV, a, b), a))
+    leaf = _composite("MissOnce", (V8,), V8, lambda B, S, v: B.call(ADD, B.call(MISS, v), v))
+    batch_divs = _composite("BatchDivs", (Array(4, V8), Array(4, V8)), Array(4, V8),
+                            lambda B, S, a, b: B.batch(divs, a, b, axes=(0, 0)))
+    batch_miss = _composite("BatchMiss", (Array(4, V8),), Array(4, V8), lambda B, S, a: B.batch(leaf, a, axes=(0,)))
+    cases = [(batch_divs, [[6, 6, 7, 7], [2, 2, 0, 0]]), (batch_divs, [[6, 6, 6, 6], [2, 2, 2, 2]]),
+             (batch_miss, [[1, 1, 3, 3]]), (batch_miss, [[1, 1, 4, 6]]), (batch_miss, [[2, 2, 2, 2]])]
+    raised = 0
+    for fn, args in cases:
+        got = _outcome(BD.evaluate, fn, *args)
+        assert got == _outcome(reference, fn, *args), (fn.id, args)
+        raised += got[0] == "raised"
+    assert raised == 3
+
+
+def test_what_the_reference_raises_is_raised_with_the_same_gate_index(memo):
     """A primitive's own exception from the first member that raises, a lazy primitive's KeyError as the reference's
     `MissingValue` naming its root-scoped gate (in a batch of a composite inside a call), a lazy read past its operands, an
     Input gate, and a wrong argument count."""
@@ -198,7 +266,7 @@ REGISTERED = ("TokenSelect_v1{V=16}", "RoPEHead_v1{D=8}", "RoPEHead_v2{D=8}", "R
 
 
 @pytest.mark.parametrize("fid", REGISTERED)
-def test_registered_definitions_evaluate_and_count_as_the_reference(fid, monkeypatch):
+def test_registered_definitions_evaluate_and_count_as_the_reference(fid, memo, monkeypatch):
     fn = TG.definition(fid)
     assert BD.compiled(fn) is not None
     params, _ = signature_of(fn)

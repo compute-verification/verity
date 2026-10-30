@@ -9,6 +9,11 @@ primitive evaluators. So it returns what the reference returns and raises the fi
 its `MissingValue` messages name the same gate indices. A Definition whose body it doesn't compile (`Unsupported`), or whose
 activations would copy far more leaves than it has gates (`MAX_TRAFFIC`), is evaluated by the reference.
 
+Within one `evaluate`, an activation of a body of at least `MEMO_GATES_PER_LEAF` gates a leaf it copies, on parameter values
+an earlier activation of that body returned on, takes that one's return values (`_Memo`): a primitive's value is a function of
+its operands' alone, so they are the values it would compute, and an activation that raised returned none, so the first one
+to raise is the reference's. An edge vector sets every leaf alike, so a batch's members mostly repeat one activation.
+
 `nonconstant` is the same traversal for `checks._pieces_used`: the primitives of a Definition's gates that aren't constant
 (a gate is constant when its family is ``Const``, its primitive takes no parameters, or every operand is constant), counted
 once per body and pattern of constant parameter leaves.
@@ -33,6 +38,11 @@ MAX_MEMBER_WIRES = 1 << 22
 #: gate, plus `TRAFFIC_SLACK`, is left to the reference, which resolves only the leaves a gate reads
 MAX_TRAFFIC = 4
 TRAFFIC_SLACK = 1 << 22
+#: an activation is looked up (`_Memo`) when its body has at least this many gates per parameter and return leaf, so a miss
+#: costs a small part of running it
+MEMO_GATES_PER_LEAF = 2
+#: the parameter and return leaves one `evaluate` holds for activations it may repeat, at most
+MEMO_LEAVES = 1 << 22
 
 
 class Unsupported(Exception):
@@ -48,11 +58,12 @@ class Body:
     evaluate its nodes in order, ``plans`` describe them for `nonconstant`, ``ret`` are its return's wires, ``traffic`` the
     leaves one activation copies."""
 
-    __slots__ = ("spec", "P", "size", "pad", "steps", "plans", "ret", "traffic", "consts")
+    __slots__ = ("spec", "P", "size", "pad", "steps", "plans", "ret", "traffic", "consts", "memo")
 
     def __init__(self, spec: SpecializedDefinition) -> None:
         self.spec = spec
         self.consts: dict[tuple, tuple[Counter, tuple]] = {}
+        self.memo = False
 
 
 _BODIES: dict[Any, Body | Unsupported] = {}
@@ -203,6 +214,7 @@ def _compile(spec: SpecializedDefinition) -> Body:
     body.ret = wires(b.ret, len(nodes))
     body.P, body.size, body.pad = P, size, [None] * (size - P)
     body.steps, body.plans, body.traffic = steps, plans, traffic
+    body.memo = spec.gates >= MEMO_GATES_PER_LEAF * (P + len(body.ret))
     return body
 
 
@@ -238,7 +250,38 @@ class _Wide:
         return all(self.V[w] for _start, cnt, seq, lo in self.segs for w in seq[lo:lo + cnt])
 
 
-def _run(body: Body, V: list, off: int) -> None:
+_INT = {int}
+
+
+class _Memo:
+    """One `evaluate`'s activations that returned, by body and parameter values (each an `int`), and the leaves it may still
+    hold (`MEMO_LEAVES`)."""
+
+    __slots__ = ("seen", "room")
+
+    def __init__(self) -> None:
+        self.seen: dict[Body, dict[tuple, list]] = {}
+        self.room = MEMO_LEAVES
+
+
+def _activated(sub: Body, cv: list, off: int, memo: _Memo) -> list:
+    """``sub``'s return values on its parameters' values ``cv``, which it extends with room for its nodes' outputs: an earlier
+    activation's on the same values where ``sub`` is looked up (`Body.memo`), else run."""
+    key = tuple(cv) if sub.memo and {*map(type, cv)} <= _INT else None
+    if key is not None:
+        seen = memo.seen.setdefault(sub, {})
+        if (hit := seen.get(key)) is not None:
+            return hit
+    cv.extend(sub.pad)
+    _run(sub, cv, off, memo)
+    ret = [cv[w] for w in sub.ret]
+    if key is not None and memo.room >= len(key) + len(ret) and {*map(type, ret)} <= _INT:
+        seen[key] = ret
+        memo.room -= len(key) + len(ret)
+    return ret
+
+
+def _run(body: Body, V: list, off: int, memo: _Memo) -> None:
     """``body``'s steps on ``V``, its parameters' values followed by room for every node's outputs; ``off`` is the
     activation's root-scoped gate offset, which names a gate in an error as the reference names it."""
     for st in body.steps:
@@ -255,10 +298,7 @@ def _run(body: Body, V: list, off: int) -> None:
             V[st[3]] = st[1](*[V[w] for w in st[2]])
         elif op == _CALL:
             _, sub, ws, out, goff = st
-            cv = [V[w] for w in ws]
-            cv.extend(sub.pad)
-            _run(sub, cv, off + goff)
-            V[out:out + len(sub.ret)] = [cv[w] for w in sub.ret]
+            V[out:out + len(sub.ret)] = _activated(sub, [V[w] for w in ws], off + goff, memo)
         elif op == _BATCH:
             _, sub, sa, n, out, goff, G = st
             R = len(sub.ret)
@@ -273,9 +313,7 @@ def _run(body: Body, V: list, off: int) -> None:
                         cv.extend([V[w] for w in s[1][m * L:(m + 1) * L]])
                     else:
                         cv.extend([V[w] for w in s[1][m]])
-                cv.extend(sub.pad)
-                _run(sub, cv, off + goff + m * G)
-                V[out + m * R:out + (m + 1) * R] = [cv[w] for w in sub.ret]
+                V[out + m * R:out + (m + 1) * R] = _activated(sub, cv, off + goff + m * G, memo)
         elif op == _SCAN:
             _, sub, init, xs, shared, n, c, y, out, goff, G = st
             carry = [V[w] for w in init]
@@ -285,9 +323,7 @@ def _run(body: Body, V: list, off: int) -> None:
                 for ws, L in xs:
                     cv.extend([V[w] for w in ws[m * L:(m + 1) * L]])
                 cv.extend(svals)
-                cv.extend(sub.pad)
-                _run(sub, cv, off + goff + m * G)
-                r = [cv[w] for w in sub.ret]
+                r = _activated(sub, cv, off + goff + m * G, memo)
                 carry = r[:c]
                 V[out + c + m * y:out + c + (m + 1) * y] = r[c:]
             V[out:out + c] = carry
@@ -347,7 +383,7 @@ def evaluate(target: Any, *args: Any) -> tuple[int, ...]:
     if len(V) != body.P:
         raise ValueError(f"{call!r}: expected {body.P} argument encodings, got {len(V)}")
     V.extend(body.pad)
-    _run(body, V, call.lo)
+    _run(body, V, call.lo, _Memo())
     return tuple(V[w] for w in body.ret)
 
 
