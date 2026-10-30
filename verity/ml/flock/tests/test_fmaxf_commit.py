@@ -120,7 +120,6 @@ def row_quant(K: int, R: int, monkeypatch=None):
     if monkeypatch is not None:
         for name, (_, is_max) in PIECES.items():
             monkeypatch.setitem(IL.PIECES, name, lambda C, a, b, m=is_max: fmaxmin(C, a, b, m))
-        monkeypatch.setattr(IL, "_PIECE_ANDS", {})
     d = bind(X.Int8RowQuantV3, K=K, R=R)
     ports, _out_words, _rows = CS.unit_ports(d, "row-quant", [("x", ["x"])])
     C = CS.unit_circuit(d, ports, CS._UnitCircuit)
