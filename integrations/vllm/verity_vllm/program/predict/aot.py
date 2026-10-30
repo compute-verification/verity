@@ -102,11 +102,14 @@ def emit(phi: Phi, wrapper: str, trace: str, out: str, *, M: int = 1, pos0: int 
         raise UsageError(f"{trace}: the trace's Program {str(traced.get('digest'))[:16]}… is not the predicted {r.digest[:16]}…: what it "
                          f"holds is about another Program (the row's comparison no longer holds: `verity-vllm predict compare` on a "
                          f"fresh trace, `verity-vllm neutrality --tier heavy`)")
-    desc = {**r.desc, "annotations": S.load_descriptor(os.path.join(trace, "descriptor.json.gz")).get("annotations") or {}}
+    with gzip.open(os.path.join(trace, "descriptor.json.gz"), "rb") as f:
+        traced_raw = f.read()
+    desc = {**r.desc, "annotations": json.loads(traced_raw).get("annotations") or {}}
     raw = json.dumps(desc, sort_keys=True).encode()
-    if (got := (hashlib.sha256(raw).hexdigest(), correspondence_digest(desc))) != (traced.get("descriptor_sha256"), traced.get("correspondence_digest")):
-        raise UsageError(f"{trace}: the predicted descriptor under the trace's annotations is {got[0][:16]}… (correspondence {got[1][:16]}…), "
-                         f"the trace's {str(traced.get('descriptor_sha256'))[:16]}… ({str(traced.get('correspondence_digest'))[:16]}…)")
+    if raw != traced_raw or correspondence_digest(desc) != traced.get("correspondence_digest"):
+        raise UsageError(f"{trace}: the predicted descriptor under the trace's annotations (SHA-512 {hashlib.sha512(raw).hexdigest()[:16]}…, "
+                         f"correspondence {str(correspondence_digest(desc))[:16]}…) is not the trace's descriptor.json.gz (SHA-512 "
+                         f"{hashlib.sha512(traced_raw).hexdigest()[:16]}…, correspondence {str(traced.get('correspondence_digest'))[:16]}…)")
     names, params = traced_names(r.program, desc, trace)
     os.makedirs(out, exist_ok=True)
     with gzip.open(os.path.join(out, "descriptor.json.gz"), "wb") as f:

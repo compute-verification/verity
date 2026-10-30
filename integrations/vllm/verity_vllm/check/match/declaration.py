@@ -223,11 +223,14 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
         if recomputed != art.get("workload_digest"):
             raise ValueError(f"{artifact_path}: workload_digest {str(art.get('workload_digest'))[:16]} != the digest of the descriptor beside it "
                              f"{recomputed[:16]} (descriptor.json.gz): the Build artifact is not the Program it names")
-        dsha = hashlib.sha256(canonical_json(desc)).hexdigest()
-        declared_sha = (art.get("descriptor") or {}).get("sha256")
-        if declared_sha and declared_sha != dsha:
-            raise ValueError(f"{artifact_path}: descriptor.sha256 {declared_sha[:16]} != the descriptor file's {dsha[:16]}")
-        digest_verification = {"verified": True, "recomputed_from": dpath, "descriptor_sha256": dsha}
+        dsha = hashlib.sha512(canonical_json(desc)).hexdigest()
+        declared = art.get("descriptor") or {}
+        if declared.get("sha256") and not declared.get("sha512"):
+            raise ValueError(f"{artifact_path}: descriptor.sha256 is from before descriptor digests became SHA-512: rebuild the workload "
+                             "Program (`verity-vllm global-program`)")
+        if declared.get("sha512") and declared["sha512"] != dsha:
+            raise ValueError(f"{artifact_path}: descriptor.sha512 {declared['sha512'][:16]} != the descriptor file's {dsha[:16]}")
+        digest_verification = {"verified": True, "recomputed_from": dpath, "descriptor_sha512": dsha}
         # the artifact's `lag` block is a CLAIM beside the Program: the Program's own `lag` static (inside the digest just verified)
         # must carry the same value -- an edited block cannot make G6 consume another lag than the Program's
         static_lag = workload_lag_static(desc)

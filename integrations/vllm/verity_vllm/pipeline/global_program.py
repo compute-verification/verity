@@ -726,7 +726,7 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
     desc = wl.descriptor
     with gzip.open(os.path.join(out, "descriptor.json.gz"), "wb") as f:
         f.write(cj := canonical_json(desc))
-    art["descriptor"] = {"bytes": len(cj) if "annotations" not in desc else descriptor_size(desc), "sha256": hashlib.sha256(cj).hexdigest(),
+    art["descriptor"] = {"bytes": len(cj) if "annotations" not in desc else descriptor_size(desc), "sha512": hashlib.sha512(cj).hexdigest(),
                          "n_definitions": len(desc["definitions"])}
     art["inputs"] = {"manifest": workload_path, "manifest_sha256": mdigest, "derived": {PP.shape_key(k): v for k, v in shapes.items() if k in comps},
                      # per component: the descriptor's recomputed digest == the derive's recorded program_digest (checked above), descriptor sha

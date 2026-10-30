@@ -906,13 +906,17 @@ def test_from_gprog_recomputes_the_build_digest_from_the_descriptor_and_refuses_
     with gzip.open(d / "descriptor.json.gz", "wb") as f:
         f.write(canonical_json(desc))
     art = {"schema": "verity/workload-program/v1", "ok": True, "workload_digest": program_digest(desc),
-           "descriptor": {"sha256": __import__("hashlib").sha256(canonical_json(desc)).hexdigest(), "bytes": 1}, "requests": [], "inputs": {"derived": {}},
+           "descriptor": {"sha512": __import__("hashlib").sha512(canonical_json(desc)).hexdigest(), "bytes": 1}, "requests": [], "inputs": {"derived": {}},
            "address_map": {"requests": [], "convention": "toy"}, "chronology": {"requests": []}}
     p = d / "workload_program.json"
     p.write_text(json.dumps(art))
     gp = gm.from_gprog(str(p))
     assert gp["workload_digest"] == program_digest(desc)
     assert gp["gprog_artifact"]["digest_verification"]["verified"] is True
+    # a descriptor digest from before descriptor digests became SHA-512 -> refused, named
+    p.write_text(json.dumps(dict(art, descriptor={"sha256": art["descriptor"]["sha512"][:64], "bytes": 1})))
+    with pytest.raises(ValueError, match="descriptor.sha256 is from before descriptor digests became SHA-512: rebuild"):
+        gm.from_gprog(str(p))
     # the digest field edited (zeroed) with the descriptor intact -> refused, named
     bad = dict(art, workload_digest="0" * 64)
     p.write_text(json.dumps(bad))
@@ -1027,7 +1031,7 @@ def test_from_gprog_reads_the_lag_static_where_the_codec_writes_it_and_refuses_a
         with gzip.open(d / "descriptor.json.gz", "wb") as f:
             f.write(canonical_json(desc))
         art = {"schema": "verity/workload-program/v1", "ok": True, "workload_digest": program_digest(desc),
-               "descriptor": {"sha256": __import__("hashlib").sha256(canonical_json(desc)).hexdigest(), "bytes": 1}, "requests": [], "inputs": {"derived": {}},
+               "descriptor": {"sha512": __import__("hashlib").sha512(canonical_json(desc)).hexdigest(), "bytes": 1}, "requests": [], "inputs": {"derived": {}},
                "address_map": {"requests": [], "convention": "toy"}, "chronology": {"requests": []},
                "lag": {"value": lag, "async_scheduling": bool(lag)}, "stop_rule": {"eos_token_ids": [3], "lag": lag, "eos_lag_rows": lag}}
         p = d / "workload_program.json"; p.write_text(json.dumps(art))

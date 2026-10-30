@@ -37,7 +37,7 @@ def _trace(d: Path) -> Path:
     d.mkdir(parents=True)
     (d / "descriptor.json.gz").write_bytes(gzip.compress(raw))
     (d / "result.json").write_text(json.dumps({"ok": True, "M": 1, "pos0": 8, "program": {
-        "digest": r.digest, "descriptor_sha256": hashlib.sha256(raw).hexdigest(), "correspondence_digest": correspondence_digest(desc)}}))
+        "digest": r.digest, "descriptor_sha512": hashlib.sha512(raw).hexdigest(), "correspondence_digest": correspondence_digest(desc)}}))
     for name in A.CARRIED[1:]:
         (d / name).write_text(json.dumps({"name": name}))
     leaves = [{"name": f"inner.{n}", "shape": [t.leaves], "field": i} for i, (n, t) in enumerate(_weights(r.program)[1].fields)]
@@ -72,12 +72,21 @@ def test_emit_refuses_weight_leaves_that_are_not_the_programs(tmp_path):
     assert not (tmp_path / "out").exists()
 
 
-@pytest.mark.parametrize("field,match", [("digest", "is not the predicted"), ("descriptor_sha256", "the predicted descriptor under the trace's")])
+@pytest.mark.parametrize("field,match", [("digest", "is not the predicted"), ("correspondence_digest", "is not the trace's descriptor.json.gz")])
 def test_emit_refuses_a_trace_of_another_program(tmp_path, field, match):
     trace = _trace(tmp_path / "trace")
     res = json.loads((trace / "result.json").read_text())
     (trace / "result.json").write_text(json.dumps({**res, "program": {**res["program"], field: "0" * 64}}))
     with pytest.raises(UsageError, match=match):
+        A.emit(_phi(TINY), "step", str(trace), str(tmp_path / "out"))
+    assert not (tmp_path / "out" / "descriptor.json.gz").exists()
+
+
+def test_emit_refuses_a_trace_whose_descriptor_is_not_the_predicted_one(tmp_path):
+    trace = _trace(tmp_path / "trace")
+    desc = json.loads(gzip.decompress((trace / "descriptor.json.gz").read_bytes()))
+    (trace / "descriptor.json.gz").write_bytes(gzip.compress(json.dumps({**desc, "root": "another"}, sort_keys=True).encode()))
+    with pytest.raises(UsageError, match="is not the trace's descriptor.json.gz"):
         A.emit(_phi(TINY), "step", str(trace), str(tmp_path / "out"))
     assert not (tmp_path / "out" / "descriptor.json.gz").exists()
 

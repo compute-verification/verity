@@ -571,7 +571,7 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
     corr_doc = (desc.get("annotations") or {}).get(CORR_NS) or {}
     res["program"] = {"function": program.fn.id, "digest": digest, "gates": program.gates, "input_gates": program.input_gates,
                       "n_root_nodes": len(program.fn.body.nodes), "descriptor_bytes": len(canon),
-                      "descriptor_sha256": hashlib.sha256(raw).hexdigest(), "dead_gates": rep.dead.total if rep.dead else None,
+                      "descriptor_sha512": hashlib.sha512(raw).hexdigest(), "dead_gates": rep.dead.total if rep.dead else None,
                       "correspondence_digest": corr_digest,
                       "correspondence": {"schema": corr_doc.get("schema"), "namespace": CORR_NS, "calls": len(corr_doc.get("calls") or ()),
                                          "occurrences": len(corr_doc.get("occurrences") or ()), "rank": corr_doc.get("rank")} if corr_doc else None, **supplied}
