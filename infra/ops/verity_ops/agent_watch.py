@@ -96,7 +96,8 @@ An agent that works but says nothing is **silent**: a worker ACTIVE for `SILENT_
 its (a note whose `origin:` names it, new or changed by its mtime; for a coordinator also any note of its lane, under
 `lanes/<handle>/` or with `lane: <handle>`, since it signs with its lane) and no push to its branches. Its branches are the API's
 (`git.branches` of its runs, or of a worker's GET), a worker's workers.d `branch`, those its notes' origins name, and every
-head ending in its id's last four characters (a coordinator's `cursor/...-1037`); pushes are read every `HEADS_EVERY_S` with
+head ending in its id's last four characters (a coordinator's `cursor/...-1037`), widened by `same_task` to the heads a task
+moved to (`cursor/lean-one18-v2-fc8d` beside `cursor/lean-one18-fc8d`); pushes are read every `HEADS_EVERY_S` with
 `git ls-remote --heads` of `--git-remote` (the deploy key fixtures_export.sh fetches with), a branch's push time being when the
 watch first saw its sha (`heads.json` beside `--log`). The 90 min count from the latest of its ACTIVE spell's start, its newest
 note, its newest push and the first heads read, so a fresh deploy judges nobody for 90 min. It is recorded once, and again
@@ -297,6 +298,15 @@ RUN_ENDS_SLACK_S = 10 * 60      # each node is read back this far past its last 
 RUN_ENDS_KEEP_S = 3 * 86400     # a run rung (or skipped) this long ago is forgotten
 SAY_EVERY_S = 3600              # a failing ls-remote or node read is printed at most this often
 BRANCH_RE = re.compile(r"\b(?:cursor|lane)/[A-Za-z0-9._/-]*[A-Za-z0-9]")
+
+
+def same_task(head: str, branch: str) -> bool:
+    """Whether ``head`` is ``branch``'s task on a new branch: it starts with ``branch`` less its last `-` part and ends with
+    that part (`cursor/lean-one18-v2-fc8d` for `cursor/lean-one18-fc8d`). An agent that moves to a new branch names it
+    nowhere the watch reads. A stem that is only a lane (`cursor/lean` of `cursor/lean-fc8d`) widens to nothing, since
+    every branch of that lane would match it."""
+    stem, dash, tail = branch.rpartition("-")
+    return bool(dash) and "-" in stem.partition("/")[2] and head.startswith(stem + "-") and head.endswith(dash + tail)
 
 
 def iso(t: float) -> str:
@@ -1393,8 +1403,9 @@ class Watch:
 
     def watch_silence(self, known: dict[str, dict], t: float) -> None:
         """Record `silent` for each agent in `known` (agent -> {name, handle, lane, run, since: ACTIVE since, branches}) with no
-        note of its (`note_times`) and no push to its branches (its own, the ones its notes name, and every head ending in its
-        id's last four characters, as a coordinator's `cursor/...-1037`) for `SILENT_S`, counted from the latest of those, its
+        note of its (`note_times`) and no push to its branches (its own, the ones its notes name, every head ending in its
+        id's last four characters, as a coordinator's `cursor/...-1037`, and the heads `same_task` finds for any of these) for
+        `SILENT_S`, counted from the latest of those, its
         ACTIVE spell's start and the first heads read; again after a second window, then not until one of those moves. Needs
         `--notes` and heads read in the last `HEADS_STALE_S`."""
         changed = False
@@ -1410,6 +1421,7 @@ class Watch:
         for agent, k in sorted(known.items()):
             coord = agent in self.coords
             mine = {*k["branches"], *named.get(agent, ()), *(b for b in heads if b.endswith("-" + agent[-4:]))}
+            mine |= {h for h in heads if any(same_task(h, b) for b in mine)}
             pushed = max((heads[b][1] for b in mine if b in heads), default=None)
             # a coordinator signs its notes with its lane, not its id (top, 27 Oct: four false silent rings in 70 min)
             lane_note = max((lanes[x] for x in (k["handle"], k["lane"]) if x and x in lanes), default=None) if coord else None
