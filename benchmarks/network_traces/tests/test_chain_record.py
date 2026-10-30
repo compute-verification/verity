@@ -171,7 +171,8 @@ class _SigningAll:
     """A reference clock source that takes every opening's sync, refusing none."""
 
     def __init__(self, key, session, openings):
-        self.refused, self.openings = (), openings
+        self.refused, self.split, self.openings = (), (), openings
+        self.codes = (None,) * len(openings)
 
     def syncs(self, link):
         return tuple(o.sync for o in sorted(self.openings, key=lambda o: o.window))
