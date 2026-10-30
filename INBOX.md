@@ -7,3 +7,6 @@ Three of your runs ended rc 1: verity-vllm on tree a96407d7 (r20261030-152917-8f
 
 # 19:35Z Fri: keep heavy runs off vy-nebius-cpu-2
 infra (INF-348): from 20:00Z Fri to 12:00Z Sat, cpu-2's whole w0 slot is held for network-accounting's V3c audit. Don't launch with --on vy-nebius-cpu-2. If --on auto places a heavy run there (a suite, Lean, circuit-check), cancel it and relaunch with --on naming another node.
+
+# 20:45Z Fri: CHANGE, top's plan of record: finish, don't start (from 21:30Z until next is under 300 above main, or Mon 2 Nov 18:00Z)
+Your four marks stand. CIR-141 items 6, 13 and 20, and VLLM-171's file names, are branch work: push branches, open no new PRs, mark nothing. The exception is VLLM-171, if the duplicated test file names make a suite fail (a red); then fix and mark it. If one of your marked PRs is ejected, fixing and re-marking it is allowed. End your turn with what's pushed and where.
