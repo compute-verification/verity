@@ -305,6 +305,7 @@
   "PouwCheck.Chunks",
   "PouwCheck.Opening",
   "PouwCheck.Period",
+  "VStarRecursive",
   "Definitions.Pouw.PearlC.Sha512",
   "CoreProtocol.Ratio",
   "CoreProtocol.Profile",
