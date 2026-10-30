@@ -30,7 +30,7 @@ DRAWLESS = "refused: a session without a draw: every soundness claim is about a 
 
 def _os_identity_rust() -> dict[str, str]:
     src = (FLOCK / "live" / "src" / "bin" / "flock-circuit.rs").read_text()
-    block = src[src.index("if !zk_mode() && !seed_coins() {"):]
+    block = src[src.index("if !zk_mode() && coin_mode() == CoinMode::Os {"):]
     block = block[:block.index("}")]
     return dict(re.findall(r'id(?:\["\w+"\])*\["(\w+)"\] = json!\("([^"]*)"\)', block))
 
