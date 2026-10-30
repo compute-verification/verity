@@ -93,7 +93,7 @@ from typing import Any, ClassVar, Protocol
 
 import numpy as np
 
-from verity.ml.circuits import annotations as AN, boolean as B, partition_object as PO, population
+from verity.ml.circuits import boolean as B, metadata as AN, partition_object as PO, population
 from verity.ml.circuits.codec import canonical_json, descriptor_id, encode_program
 from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
 from verity.ml.circuits.evaluation import evaluate_batch
@@ -964,7 +964,7 @@ class Blocks:
 
 
 def entry_digest(fn: Any) -> str:
-    """A template's closure digest (`annotations.closure_digest`, over a population of one instance): its whole body, the
+    """A template's closure digest (`metadata.closure_digest`, over a population of one instance): its whole body, the
     same in any program."""
     return AN.closure_digest(encode_program(population.population_program(fn, 1)), descriptor_id(fn))
 

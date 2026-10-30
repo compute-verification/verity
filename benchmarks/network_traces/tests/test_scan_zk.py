@@ -29,7 +29,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.ml.circuits import annotations as AN
+from verity.ml.circuits import metadata as AN
 from verity.ml.circuits.codec import canonical_json, encode_program
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.types import Array, Value as Bits

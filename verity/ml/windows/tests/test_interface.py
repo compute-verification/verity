@@ -25,7 +25,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from verity.ml.circuits import annotations as AN, codec, population
+from verity.ml.circuits import codec, metadata as AN, population
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation import evaluate_batch

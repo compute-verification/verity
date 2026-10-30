@@ -243,8 +243,8 @@ sampled-proofs component's own, which the composition's theorem is to bind.
 
 **The clock openings**, apart from the period's check: `clocksFn`, `network-records verdicts`' `clocks`, reads the
 syncs the certifier signed for a link through its salted clock certificates' openings, each sync and salt against the
-digest its certificate signs (`advised.SignedClocks`, `signedSyncs`). The certifier chain's record takes each window's
-sync from it, with `advised.SignedClocks` beside it as the reference (`lean_audit.signed_clocks`).
+digest its certificate signs (`certificate.SignedClocks`, `signedSyncs`). The certifier chain's record takes each
+window's sync from it, with `certificate.SignedClocks` beside it as the reference (`lean_audit.signed_clocks`).
 -/
 
 namespace NetworkCheck.Period
@@ -542,7 +542,7 @@ def ingressTemplates : List (Flock.Program.Node × Flock.Program.Defn) →
     bucket's"
 
 /-- A Definition's descriptor entry `e` with the descriptor's interning resolved (`callees`, `types`): each node's
-callee id (`fn`), output type (`out`) and argument types inline, as `annotations.definition_digest` hashes it, so one
+callee id (`fn`), output type (`out`) and argument types inline, as `metadata.definition_digest` hashes it, so one
 Definition has one entry in any Program. -/
 def resolvedEntry (callees types : Array Json) (e : Json) : Json :=
   let set := fun (j : Json) (k : String) (v : Json) => match j with
@@ -561,11 +561,11 @@ def resolvedEntry (callees types : Array Json) (e : Json) : Json :=
     | _ => e
   | _, _ => e
 
-/-- `annotations.definition_digest`: the SHA-512, in hex, of a Definition's canonical `resolvedEntry`. -/
+/-- `metadata.definition_digest`: the SHA-512, in hex, of a Definition's canonical `resolvedEntry`. -/
 def definitionDigest (callees types : Array Json) (e : Json) : V String := do
   pure (Flock.hexOf (Flock.Sha512.hash (← Flock.canon (resolvedEntry callees types e)).toUTF8))
 
-/-- The closure digest of Definition `key` of the Program whose descriptor is `j` (`annotations.closure_digest`): the
+/-- The closure digest of Definition `key` of the Program whose descriptor is `j` (`metadata.closure_digest`): the
 SHA-512, in hex, of the canonical JSON object that maps each Definition `key` reaches (itself, its nodes' callees,
 theirs, …), by descriptor id, to its `definitionDigest`. It digests the template's whole body, so another Definition
 under its id has another digest. -/
@@ -1663,8 +1663,8 @@ def ClockOpening.same (a b : ClockOpening) : Bool :=
     x.link == y.link && x.direction == y.direction && x.window == y.window && x.digest == y.digest &&
     x.signature == y.signature
 
-/-- One certifier session's clock openings (`advised.SignedClocks`): its LMS key and session, the openings, and the link
-whose syncs are read. -/
+/-- One certifier session's clock openings (`certificate.SignedClocks`): its LMS key and session, the openings, and the
+link whose syncs are read. -/
 structure Openings where
   lms : Lms.Params
   key : ByteArray
@@ -1751,8 +1751,8 @@ def split (signed : Signed) : Array (String × Nat) :=
 
 /-- `network-records verdicts`' `clocks`: on `openingsOf`'s object, each opening's refusal (`openingRefusals`, null
 where it holds), the link-windows with two or more signed syncs (`split`, each `[link, window]`), and the link's signed
-syncs (`signedSyncs`, each `[δ, num, den]`), which `lean_audit.signed_clocks` reads with `advised.SignedClocks` beside
-it as the reference, each refusal and each such link-window by identity. -/
+syncs (`signedSyncs`, each `[δ, num, den]`), which `lean_audit.signed_clocks` reads with `certificate.SignedClocks`
+beside it as the reference, each refusal and each such link-window by identity. -/
 def clocksFn (j : Json) : Except String Json := do
   let s ← openingsOf j
   let codes := openingRefusals s

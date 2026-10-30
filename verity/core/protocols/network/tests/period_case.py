@@ -71,7 +71,7 @@ from verity.core.protocols.certifier.warden import WardenParams
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity.core.protocols.sampled_proofs.one_stage.draw import stratum_k
-from verity.ml.circuits import annotations as AN, boolean as BL, codec, population
+from verity.ml.circuits import boolean as BL, codec, metadata as AN, population
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.defs import REGISTRY
 from verity.ml.circuits.program import Program
@@ -163,7 +163,7 @@ class Audit:
     """`Audit`: a compute audit's inputs (`inputs`, whose free bits `free` counts) and monitoring period, and what its
     Program gives: its SHA-512, its units (its root's template instances), the most bits one of them commits, and its
     slot entries' templates (`entries`: each root template node whose descriptor id its circuit record registers as an
-    entry template, by descriptor id, members and closure digest, `annotations.closure_digest`); then its circuit
+    entry template, by descriptor id, members and closure digest, `metadata.closure_digest`); then its circuit
     record's SHA-512 (`circuit`, empty with no record) and what the record registers (`registered`)."""
     inputs: Inputs
     steps: int
@@ -668,7 +668,7 @@ def _audit(a, ctx: str) -> Audit:
     units, each committing its template's return; a root with no template refused; with its window's circuit record,
     the record's SHA-512 (`circuit_digest`), what it registers (`_entries_of`) and its inputs counted from it
     (`_inputs`) under the verifier's pins (`_pins`), and its slot entries' templates, the root's template nodes the
-    record registers as entry templates, with their closure digests (`annotations.closure_digest`); without one all its
+    record registers as entry templates, with their closure digests (`metadata.closure_digest`); without one all its
     inputs count free. A `free` count, a natural, is read as nothing. It reads the descriptor's root nodes, signatures
     and the entry templates' Definitions; C-Flock's decoder, which Lean runs on it, refuses no descriptor this module
     writes."""
@@ -1643,7 +1643,7 @@ def audit_descriptor(units: tuple[tuple[int, int], ...], entries: tuple[int, ...
 
 @lru_cache(maxsize=None)
 def entry_digest(model: str) -> str:
-    """`model`'s entry template's closure digest (`annotations.closure_digest`, over its population of one member): its
+    """`model`'s entry template's closure digest (`metadata.closure_digest`, over its population of one member): its
     whole body, the same in any Program."""
     t = MODELS[model].entry()
     return AN.closure_digest(codec.encode_program(population.population_program(t, 1)), codec.descriptor_id(t))

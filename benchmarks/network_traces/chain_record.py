@@ -21,28 +21,28 @@
   records (``--run``'s ``certified.jsonl``, their heads and salts) are held by the Lean's audit (`certifier_serve._certified`: `NetworkCheck.Records`' ``verdicts-no-grid``, N2's
   audit without its head checks, `audit.Audit` beside it as the reference, each row's ``by`` and ``reference``) under
   the syncs the certifier signed, never the plan's: ``--run``'s salted ``clocks.jsonl``, each opening read by the Lean
-  (`lean_audit.signed_clocks`: `NetworkCheck.Period.signedSyncs`, ``clocks_by`` ``lean``, `advised.SignedClocks` beside
-  it as the reference, every window refused where the two differ). Their certificates, and the clocks', must be
+  (`lean_audit.signed_clocks`: `NetworkCheck.Period.signedSyncs`, ``clocks_by`` ``lean``, `certificate.SignedClocks`
+  beside it as the reference, every window refused where the two differ). Their certificates, and the clocks', must be
   exactly the client's. ``--deployed`` refuses a key that isn't LMS at
   `lms.DEPLOYED`.
 * **report**: one JSON and one Markdown report, per step its verdict, its run ids, its ε at δ and what it computed in
   the clear, and the period's terms for `NetTiming.Guarantees.PeriodLeakAccepted` summed by
   `periodLeak_le_sum`. ``--endpoint`` is network-e2e's ``--no-prove`` report on the run and the endpoint's
   records: the endpoint's advice bound to the run and the I/O tie, in the clear, required on the advice profile. N2's
-  summary is `n2_advised_zk.py prove --e2e`'s on the advice profile and `n2_zk.py prove`'s on the others (Selection
-  All: every link-window's one unit proved) or a sampled draw's (``CR_N2_CMD``), read by the same fields. Scan's is
-  `scan_zk.py prove`'s, a stand-in on its own synthetic warden run until its ``--warden-run`` takes the gate's warden
-  rows, accepted only when every round's verdict is the one scan_zk expects and no witness piece reached the
-  verifier (`scan_step`). A step on a stand-in (N2 on ``--job``'s ``stand_in``, scan without a warden run) never makes
-  the report accepted. Without ``--n2`` the report is the scan's part of the record alone (`SCAN_ONLY`, its
-  ``scope``), and its verdict is ``scan accepted`` or ``scan refused``: N2 isn't required, and the rest is held as
-  before. On the certifier-only path (``--job``'s ``path``, `CERTIFIER_ONLY`) there are no warden rows: the scan
-  isn't run or required, and the report's ``stubbed`` says what the path stands on (`STUBBED`, `stubbed`). Its
-  negatives are N2's members, the rehearsal's own check on each run it must refuse, and the I/O tie's verdict on each
-  tampered run that check lets through. d1's K (`horizon_k`) counts the served units' compute audits (``--audit``: each
-  window's draw and free inputs, `free_inputs`) and the network's own terms (`network_terms`), at each δ. With
-  ``--period-answer`` (certifier/v0's ``network-period check`` answer on the period, a ``certifier.answer.json``,
-  its case ``certifier.case.json`` beside it or ``--period-case``) and ``--server``, an accepted report also writes
+  summary is `n2_zk.py prove`'s (Selection All: every link-window's one unit proved) or a sampled draw's
+  (``CR_N2_CMD``), read by the same fields; on the advice profile, whose egress counts no N2 unit holds, N2 isn't
+  run. Scan's is `scan_zk.py prove`'s, a stand-in on its own synthetic warden run until its ``--warden-run`` takes
+  the gate's warden rows, accepted only when every round's verdict is the one scan_zk expects and no witness piece
+  reached the verifier (`scan_step`). A step on a stand-in (N2 on ``--job``'s ``stand_in``, scan without a warden
+  run) never makes the report accepted. Without ``--n2`` the report is the scan's part of the record alone (`SCAN_ONLY`,
+  its ``scope``), and its verdict is ``scan accepted`` or ``scan refused``: N2 isn't required, and the rest is held as
+  before. On the certifier-only path (``--job``'s ``path``, `CERTIFIER_ONLY`) there are no warden rows: the scan isn't
+  run or required, and the report's ``stubbed`` says what the path stands on (`STUBBED`, `stubbed`). Its negatives are
+  N2's members, the rehearsal's own check on each run it must refuse, and the I/O tie's verdict on each tampered run
+  that check lets through. d1's K (`pooled_k`) counts the served units' compute audits (``--audit``: each window's draw
+  and free inputs, `free_inputs`) and the network's own terms (`network_terms`), at each δ. With ``--period-answer``
+  (certifier/v0's ``network-period check`` answer on the period, a ``certifier.answer.json``, its case
+  ``certifier.case.json`` beside it or ``--period-case``) and ``--server``, an accepted report also writes
   ``block.json``: the block record's certifier entry (``legs.certifier`` of ``verity/block-record/v1``),
   `block_certifier.block_leg` of that answer, once the answer is held to this chain (`period_binding`) and is
   ``network-period check``'s own on its case (`decide_period`; `block_entry`).
@@ -78,7 +78,7 @@ sys.path.insert(0, str(HERE))
 
 SCHEMA = "verity-network-chain/record-report/v1"
 DELTAS = (0.5, 2.0 ** -20)
-ADVICE = "advice"  # certifier_serve.ADVICE: the profile whose counts N2's advised unit decides on the endpoint's advice
+ADVICE = "advice"  # certifier_serve.ADVICE: the profile whose egress counts derive from the endpoint's advice
 
 CLEAR = {
     "custody": "the SHA-512 of each fetched file against the gate's end.json (public files)",
@@ -90,8 +90,8 @@ CLEAR = {
                     "(NetworkCheck.LinkWindow.refusals, audit.certificate_refusals its reference); and the Lean's "
                     "audit (NetworkCheck.Records, audit.Audit its reference) of the rehearsal's certified heads "
                     "under its salted clock openings (witness a rehearsal publishes), each read by the Lean "
-                    "(NetworkCheck.Period.signedSyncs, advised.SignedClocks its reference), whose certificates must "
-                    "be exactly the client's",
+                    "(NetworkCheck.Period.signedSyncs, certificate.SignedClocks its reference), whose certificates "
+                    "must be exactly the client's",
     "n2": "at the verifier: the registration records, the draw, the certificates' public fields, the clock syncs, the "
           "proof's pub row opened to the verifier's own copy and the o0 output word; never a record, head, leaf "
           "salt, sibling or the certifier's salt (n2_zk's RECEIVED, scanned for every piece)",
@@ -141,14 +141,16 @@ WARDEN_SERVED_STUBBED = (
     "Commit's port isn't proved", WARDEN_STUBBED[1])
 #: the rehearsal's strategies its own check accepts (certifier_serve.ACCEPTED): token's changed bytes only the tie refuses
 REHEARSAL_ACCEPTS = ("honest", "token")
-#: a proof block's outputs, at most 16 bits: a faulty proof block's leak
+#: the scan's rounds whose window is accepted (scan_zk.ROUNDS): the toy block's is proved like the honest one's
+SCAN_ACCEPTS = ("honest", "block")
+#: a proof block's outputs, at most 16 bits: an incorrect proof block's leak
 OUT_BITS = 16
 #: K's jitter term, 0 at D_j = 1: J (`NetTiming.JitterBounded`) assumes it, not met there until a run shows the written
 #: buckets tell a receiver no more than an idle one. The warden hands each bucket to a pacer that releases it at a time
 #: fixed before the bucket is made (`warden.Warden(paced=…)`), as the served proxy does (`active.Proxy(paced=…)`)
 JITTER = "assumed (J)"
-#: what `horizon_k`'s K rests on until its two per-window inputs are discharged
-HORIZON_CONDITION = ("NetTiming.Guarantees.HorizonLeakAccepted is conditional: its per-window inputs hesc "
+#: what `pooled_k`'s K rests on until its two per-window inputs are discharged
+POOLED_CONDITION = ("NetTiming.Guarantees.PooledLeakAccepted is conditional: its per-window inputs hesc "
                      "(proofs' SampledKSLive) and hleak (the live SampledLeakAccepted) are not discharged")
 #: why a report without ``--period-answer`` writes no block entry
 NO_PERIOD_ANSWER = ("no --period-answer: certifier/v0's case needs the period's compute audit (its registration and "
@@ -163,9 +165,9 @@ def _json(path) -> dict | None:
 
 
 def subset_bound(n: int, k: int, delta: float) -> int | None:
-    """The most wrong units an accepted uniform sample of k of n units hides except with probability δ: the integrity
-    profile's count bound (`Stratified.count_bound`), the largest b with C(n − b, k) / C(n, k) ≥ δ. Selection All
-    (k = n) is 0."""
+    """The most incorrect proof blocks an accepted uniform sample of k of n proof blocks hides except with probability
+    δ: the integrity profile's count bound (`Stratified.count_bound`), the largest b with C(n − b, k) / C(n, k) ≥ δ.
+    Selection All (k = n) is 0."""
     if n <= 0 or not 0 < k <= n:
         return None
     from verity.core.protocols.profile import Stratified
@@ -175,7 +177,7 @@ def subset_bound(n: int, k: int, delta: float) -> int | None:
 
 def eps_at_delta(n: int, k: int, law: str) -> dict:
     return {"law": law, "units": n, "drawn": k,
-            "wrong_units_at_delta": {f"{d:.3g}": subset_bound(n, k, d) for d in DELTAS},
+            "incorrect_at_delta": {f"{d:.3g}": subset_bound(n, k, d) for d in DELTAS},
             "per_proof": "each proof's soundness error, ε_ks + ε_bind (KSLinOn's κ + √(γ·Pr B) + Pr[Bext]), "
                          "symbolic: Claims.Sampling.KS is a hypothesis until Flock.Guarantees.SampledKSLive"}
 
@@ -253,8 +255,8 @@ def certs(run: Path, client: Path, deployed: bool = False) -> dict:
             rows.append({"window": w, "certified": False, "why": "no certified record"})
         elif w >= len(signed):
             rows.append({"window": w, "certified": False, "why": (
-                "the Lean (NetworkCheck.Period.signedSyncs) and its reference (advised.SignedClocks) disagree on the "
-                "clock openings" if disagree else "no clock certificate verifies for the window")})
+                "the Lean (NetworkCheck.Period.signedSyncs) and its reference (certificate.SignedClocks) disagree on "
+                "the clock openings" if disagree else "no clock certificate verifies for the window")})
         else:
             v = cs._certified(lw, lw.commit(w, *pair), signed)
             rows.append({"window": w, "certified": v["accepted"], "by": v["by"], "reference": v["reference"]})
@@ -437,7 +439,7 @@ def on_warden(step: dict, doc: dict | None, run_id: str | None, what: str) -> di
 
 
 def escaped(name: str, m: dict, s: dict) -> dict | None:
-    """A negative member the sampled draw accepted because none of its faulty windows (those its reference expects
+    """A negative member the sampled draw accepted because none of its incorrect windows (those its reference expects
     refused) was among the windows drawn: the draw's sampling error, which its ``wrong_units`` at δ bounds, not a
     failure of the run. None for honest, a member refused, or a period not sampled."""
     net = m.get("network") or {}
@@ -446,11 +448,11 @@ def escaped(name: str, m: dict, s: dict) -> dict | None:
     bad = [r["window"] for r in m.get("reference") or [] if not r.get("expect")]
     if name == "honest" or not net.get("accepted") or units is None or set(bad) & set(units):
         return None
-    return {"faulty_windows": bad, "drawn": sorted(units)}
+    return {"incorrect_windows": bad, "drawn": sorted(units)}
 
 
 def unexpected(name: str, m: dict, escape: dict | None = None) -> list[str]:
-    """What keeps an N2 driver's member from its ``ok``: the conditions `n2_zk` and `n2_advised_zk` hold it to, but
+    """What keeps an N2 driver's member from its ``ok``: the conditions `n2_zk` holds it to, but
     a negative's acceptance when it escaped the draw (`escaped`). A witness piece counts when the scan reads it
     ``leaked`` (`leak_scan.classify`); a ``structured`` find is listed, not counted, as the drivers decide."""
     wins, net, rec = m.get("windows") or [], m.get("network") or {}, m.get("received") or {}
@@ -499,8 +501,8 @@ def n2_step(s: dict | None, certs_doc: dict, job: dict | None = None) -> dict:
         why = "; ".join(f"{k}: {', '.join(v['unexpected'])}" for k, v in members.items() if v.get("unexpected")) or why
     elif proved:
         gone = [k for k, v in members.items() if v["escaped_the_draw"]]
-        why = (f"the driver's ok is false only for {', '.join(gone)}: accepted with none of its faulty windows drawn, "
-               "within the draw's bound" if gone else None)
+        why = (f"the driver's ok is false only for {', '.join(gone)}: accepted with none of its incorrect windows "
+               "drawn, within the draw's bound" if gone else None)
     return {"verdict": ("accepted" if honest.get("network_accepted") else "refused") if proved else
             ("dry" if "members" in s and not honest.get("windows") else "failed"), "why": why, "stand_in": stand_in,
             "ok": s.get("ok"), "unit": (s.get("link") or {}).get("unit"), "members": members,
@@ -514,8 +516,9 @@ def n2_step(s: dict | None, certs_doc: dict, job: dict | None = None) -> dict:
 
 
 def scan_step(s: dict | None, warden_run: str | None, job: dict | None = None) -> dict:
-    """`scan_zk.py prove`'s summary: accepted when the honest round's window is accepted, every other round's (chain,
-    forged) refused, no witness piece was found at the verifier, and scan_zk's own ``ok`` holds."""
+    """`scan_zk.py prove`'s summary: accepted when the honest and block rounds' windows are accepted (`SCAN_ACCEPTS`),
+    every other round's (chain, forged) refused, no witness piece was found at the verifier, and scan_zk's own ``ok``
+    holds."""
     job = job or {}
     if s is None or (job.get("rc") or {}).get("scan") not in (None, "0"):
         return {"verdict": "not run" if s is None and not (job.get("rc") or {}).get("scan") else "failed",
@@ -529,7 +532,7 @@ def scan_step(s: dict | None, warden_run: str | None, job: dict | None = None) -
                         "leaked": (a.get("received") or {}).get("verifier_found") or []}
     honest = rounds.get("honest") or {}
     wrong = ([f"{n}: window {'accepted' if v.get('window_accepted') else 'refused'}" for n, v in rounds.items()
-              if bool(v.get("window_accepted")) != (n == "honest")]
+              if bool(v.get("window_accepted")) != (n in SCAN_ACCEPTS)]
              + [f"{n}: witness pieces found at the verifier: {v['leaked']}" for n, v in rounds.items() if v["leaked"]]
              + ["scan_zk's ok is not true"] * (s.get("ok") is not True))
     units = 2 * int(s.get("T") or 0)
@@ -537,7 +540,7 @@ def scan_step(s: dict | None, warden_run: str | None, job: dict | None = None) -
     return {"verdict": ("dry" if not rounds else "refused" if not honest.get("window_accepted")
                         else "failed" if wrong else "accepted"),
             "why": "; ".join(wrong) or (job.get("why") or {}).get("scan"), "ok": s.get("ok"), "rounds": rounds,
-            "negatives": {k: not v.get("window_accepted") for k, v in rounds.items() if k != "honest"},
+            "negatives": {k: not v.get("window_accepted") for k, v in rounds.items() if k not in SCAN_ACCEPTS},
             "stand_in": None if warden_run else "scan_zk's own synthetic warden run (scan_traffic), not the gate's "
                                                 "rows: its --warden-run takes those",
             "warden_run": warden_run, "eps_at_delta": eps_at_delta(units, int(k or s.get("drawn") or units),
@@ -611,12 +614,12 @@ def audit_of(d: Path) -> dict:
             "free": free_inputs(json.loads((d / "circuit.json").read_text())), "jitter": 0}
 
 
-def horizon_k(audits: list[dict], delta: Fraction, network: dict) -> dict:
-    """`NetTiming.Guarantees.HorizonLeakAccepted`'s K over one monitoring period: the faulty proof blocks paid once over
-    the period, ``Fmax = ⌈ln(1/δ)/q⌉`` with ``q`` the least ``k_i/n_i`` of its compute audits (a stratified audit's
+def pooled_k(audits: list[dict], delta: Fraction, network: dict) -> dict:
+    """`NetTiming.Guarantees.PooledLeakAccepted`'s K over one monitoring period: the incorrect proof blocks paid once
+    over the period, ``Fmax = ⌈ln(1/δ)/q⌉`` with ``q`` the least ``k_i/n_i`` of its compute audits (a stratified audit's
     least stratum's, `audit_of`'s ``q``), so K = the network's own terms (``network``: the advice's and the syncs' bits,
     and the cells') + ``Fmax·16 + ⌈log2 (N + 1)^Fmax⌉ + Σ_i (free_i + jitter_i)``, ``N = Σ_i n_i``, except with
-    probability ``δ + Σ_i (e_i + e'_i)``. `HorizonLeakAccepted` is conditional on its per-window inputs, so this K is
+    probability ``δ + Σ_i (e_i + e'_i)``. `PooledLeakAccepted` is conditional on its per-window inputs, so this K is
     cited as conditional, and its jitter term as `JITTER` (``jitter_term``)."""
     q = min(Fraction(a["q"]) if "q" in a else Fraction(a["drawn"], a["units"]) for a in audits)
     fmax = math.ceil(math.log(1 / float(delta)) / float(q) * (1 + 1e-12))
@@ -626,7 +629,7 @@ def horizon_k(audits: list[dict], delta: Fraction, network: dict) -> dict:
     k = sum(terms.values())
     return {"delta": str(delta), "q": str(q), "Fmax": fmax, "units": n, "terms": terms, "K": k,
             "share": k / (OUT_BITS * n), "eps": f"{delta} + Σ_i (e_i + e'_i) over {len(audits)} audits",
-            "conditional": HORIZON_CONDITION, "jitter_term": JITTER}
+            "conditional": POOLED_CONDITION, "jitter_term": JITTER}
 
 
 def network_terms(cert: dict, endpoint: dict) -> dict:
@@ -651,7 +654,7 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
         k = {"open": "no compute audit's window (--audit: the served units' registration and circuit), whose free "
                      "inputs and draw the K counts", "network": network}
     else:
-        k = {f"{d:.3g}": horizon_k(audits, Fraction(d), network) for d in DELTAS} | {"audits": audits}
+        k = {f"{d:.3g}": pooled_k(audits, Fraction(d), network) for d in DELTAS} | {"audits": audits}
     return {"theorem": "NetTiming.Guarantees.PeriodLeakAccepted, KS as hypothesis",
             "K": k,
             "sum": "NetTiming.periodLeak_le_sum: Pr[every window accepted ∧ total > a + Σ_w b_w] ≤ Σ_w ε_w",
@@ -685,7 +688,7 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     request rate (`leak_bounds.per_link`), and as many identical links summed as the census's reference datacenter has
     machines (`leak_bounds.datacenter_links`) and as the adversary resource model's compute fills
     (`leak_bounds.world`). Each count is in both forms, the per-period form (`PeriodLeakAccepted`'s count) and the
-    pooled one (`HorizonLeakAccepted`'s at q = 1), in both readings of the sampling block's free inputs
+    pooled one (`PooledLeakAccepted`'s at q = 1), in both readings of the sampling block's free inputs
     (`leak_bounds.READINGS`), and beside ε, its scans' δ summed, and its share of ``weights`` (`leak_bounds.WEIGHTS`)."""
     import leak_bounds as LB
     import scan_zk as SZ
@@ -700,8 +703,8 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     T, units = params.window, 2 * params.window
     drawn = (scan or {}).get("draw", {}).get("honest") if isinstance((scan or {}).get("draw"), dict) else units
     if drawn != units:
-        raise SystemExit(f"leak: the scan drew {drawn} of {units} proof blocks; K's faulty terms are 0 only with every "
-                         f"proof block drawn (scan_zk --draw {units})")
+        raise SystemExit(f"leak: the scan drew {drawn} of {units} proof blocks; K's terms for incorrect proof blocks "
+                         f"are 0 only with every proof block drawn (scan_zk --draw {units})")
     rate = v["requests"] / v["windows"]
     window_s = T * params.bucket_ms / 1000
     at = {"T": T, "tau": Fraction(params.bucket_ms, 1000), "egress_cells": params.egress_cells}
@@ -755,9 +758,10 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
                 "per-sampling-block and per-request terms at the run's request rate",
                 "the datacenter's rows sum as many identical links as the census's reference datacenter has machines, "
                 "and the world's as many as the adversary resource model's compute fills in machines of its GPUs "
-                f"(leak_bounds.datacenter, world), each link pooled at δ / links ({split}) and paying its own faulty "
-                "proof blocks: our composition, which no Lean statement covers. Each link certifies the run's rate; "
-                "the adversary model's requests past the links' rate are uncertified, and no row counts them",
+                f"(leak_bounds.datacenter, world), each link pooled at δ / links ({split}) and paying its own "
+                "incorrect proof blocks: our composition, which no Lean statement covers. Each link certifies the "
+                "run's rate; the adversary model's requests past the links' rate are uncertified, and no row counts "
+                "them",
                 "ε is the scans' δ summed over the period's sampling blocks and the links (NetworkCheck.Period's "
                 "eps, m·δ), each scan at the scan's δ",
                 "the loop's (an untied compute audit's) free inputs don't enter K: its δ goes into JointPeriodLive's "
@@ -995,7 +999,7 @@ def markdown(r: dict) -> str:
     shown = [k for k in ("custody", "certificates", "endpoint", "tie", "n2", "scan", "lean") if k in s]
     for k in shown:
         e = s[k].get("eps_at_delta") or {}
-        eps = (f"{e['law']}, {e['drawn']} of {e['units']}: wrong ≤ {e['wrong_units_at_delta']}" if e else "")
+        eps = (f"{e['law']}, {e['drawn']} of {e['units']}: incorrect ≤ {e['incorrect_at_delta']}" if e else "")
         lines.append(f"| {k} | {s[k].get('verdict')} | {eps} | {s[k].get('in_the_clear', '')} |")
     notes = [f"- {k}: {s[k][f]}" for k in ("endpoint", "tie", "n2", "scan") if k in s for f in ("why", "stand_in")
              if s[k].get(f)]

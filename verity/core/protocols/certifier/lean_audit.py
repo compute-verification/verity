@@ -27,7 +27,7 @@ after a request starts its own executable at its first; `SERVER`'s is closed at 
 `link-window` (`Server.call`), N2's verdict of record on one link-window's proof (`service.LinkWindows.verify`),
 `certificates`, the client's check of one window's served certificates (`certificate_refusals`, with
 `audit.certificate_refusals` beside it as the reference), and `clocks`, the syncs the certifier signed for a link read
-through its clock certificates' openings (`signed_clocks`, with `advised.SignedClocks` beside it as the reference).
+through its clock certificates' openings (`signed_clocks`, with `certificate.SignedClocks` beside it as the reference).
 
 `encode` is the commitment's encoding of one published record (`NetworkCheck/Records.lean`'s module docstring).
 """
@@ -49,10 +49,9 @@ from typing import Any
 
 from verity.ml.crypto import lms
 from verity.core.protocols.certifier import audit
-from verity.core.protocols.certifier.advised import SignedClocks
 from verity.core.protocols.certifier.audit import Published, Verdict
 from verity.core.protocols.certifier.certificate import (STATUS_CODES, Certificate, CertifiedClock, CertifiedRecord,
-                                                        Direction, LmsKey, PublicKey)
+                                                        Direction, LmsKey, PublicKey, SignedClocks)
 from verity.core.protocols.certifier.commitment import CommittedRecord
 from verity.core.protocols.certifier.grid import GridParams, Record, Status
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet
@@ -378,12 +377,12 @@ def _opening_json(o: CertifiedClock) -> dict:
 
 def signed_clocks(key: PublicKey, session: bytes, link: str, openings: Sequence[CertifiedClock],
                   server: Server | None = None) -> tuple[tuple[ClockSync, ...], list[str | None]]:
-    """`advised.SignedClocks(key, session, openings).syncs(link)`, the syncs the certifier signed for `link`'s windows
-    read through their openings, the Lean's (`NetworkCheck.Period.signedSyncs`, `network-records verdicts`'
+    """`certificate.SignedClocks(key, session, openings).syncs(link)`, the syncs the certifier signed for `link`'s
+    windows read through their openings, the Lean's (`NetworkCheck.Period.signedSyncs`, `network-records verdicts`'
     ``clocks``), with each opening's refusal (`NetworkCheck.Period.openingRefusals`, None where it holds) and
-    `advised.SignedClocks` run beside it as the reference. Where the two differ on the syncs, on any opening's refusal
-    code (`SignedClocks.codes`), or on which link-windows have two or more signed syncs (`SignedClocks.split`), no
-    window has a sync and every opening is refused as `disagreement`. A key other than an `LmsKey`, an opening that
+    `certificate.SignedClocks` run beside it as the reference. Where the two differ on the syncs, on any opening's
+    refusal code (`SignedClocks.codes`), or on which link-windows have two or more signed syncs (`SignedClocks.split`),
+    no window has a sync and every opening is refused as `disagreement`. A key other than an `LmsKey`, an opening that
     isn't a `CertifiedClock` or anything else the Lean refuses to read raises `ValueError`; a reference that raises
     where the Lean answers raises `RuntimeError`."""
     if not isinstance(key, LmsKey):

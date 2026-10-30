@@ -98,8 +98,8 @@ first `--probes` requests are probed straight to the endpoint at their arrival t
 after its release, with ρ0 = (cap − 1)/m at most the slowest probed response's rate over `--margin` (2) and every probed
 token's latency, times `margin` and plus `extra_s` (0.5 s), covered. Its calibration is that model's at cap frames a
 request, so the envelope it declares in every window meets every modelled frame. The run lasts until every modelled
-frame is handed before its last window. N2's profile is `advice`: no egress profile, N2's advised counts derive the
-counts from the ingress head and the advice, and this check gives no N2 verdict.
+frame is handed before its last window. N2's profile is `advice`: no egress profile, the egress counts derive from
+the ingress head and the advice, which no N2 unit holds, and this check gives no N2 verdict.
 
 **The certified I/O** (`certified_io`, the check on the advice profile), read from the records' frames alone: each
 request's ingress ordinal (its stream on the link), release bucket and id request's fields (`user`, prompt ids,
@@ -108,7 +108,7 @@ that name its ordinal, with each frame's canonical position and egress bucket. A
 request whose `user` (the request's id) no other request has, every egress frame is an id event of a request released
 by its bucket, and every response keeps the finish rule: at most `max_tokens` tokens, ending at its first EOS token
 (the plan's `eos_token_ids`) or at `max_tokens`. `extra`'s token after a response's last breaks it. The check writes
-the I/O to `io.json` for the I/O tie and N2's advised counts, and compares it with the ids the shim wrote and the
+the I/O to `io.json` for the I/O tie, and compares it with the ids the shim wrote and the
 requests the plan sent.
 On the advice profile each execution phase is registered by its one-stage registration record (its salted root, chained)
 with the check's own receipt, which no proof stream issues since N2 gives no outcome, and its certified records are
@@ -164,7 +164,7 @@ window's records are certified, the I/O, the audit and the salt accept.
 - `check` is the auditor's offline check of a served run (`check`): per execution phase, the certifier's audit of the
   raw and committed records, N2's in-the-clear verdict through `LinkWindows` (commit, register, select, deliver,
   `unproved_outcome`: the check proves nothing, so the verdict reads the opening; `n2_zk.py` proves it) on the certified
-  records, each window's salt asked of the certifier through a `RemoteCertifier` signed with the
+  records, each window's salt asked of the certifier through a `CertifierClient` signed with the
   challenger's key (window 0's asked twice: the second is refused), then `network_verdict` and the salt audit
   (`active_replay.audit_salt`: the salt frames, and that the shim received each revealed salt). It must run while
   `serve` serves reveals.
@@ -184,8 +184,8 @@ window's records are certified, the I/O, the audit and the salt accept.
 **Outputs** in a run's directory: `plan.json`, `calibration.json`, `deployment.json`, the proxy's records
 (`requests.records`, `responses.records`, `committed.jsonl`) and `certified.jsonl` (each record's head, the
 certifier's salt for it and certificate, or the link-window the signer refused), `clocks.jsonl` (the certifier's
-salted clock certificate of each egress window's sync with its opening, the sync and its salt, which an advised
-link's verifier of record reads: `read_clocks`), `proxy.json.gz`, the shim's `server.json` and `server.events.gz`, the
+salted clock certificate of each egress window's sync with its opening, the sync and its salt, which
+`certificate.SignedClocks` opens: `read_clocks`), `proxy.json.gz`, the shim's `server.json` and `server.events.gz`, the
 client's `peer.json`, `certificates.jsonl` and `clocks.jsonl` (in `client/` in a rehearsal), `serve.json` and
 `check.json`, and with `--out-shape` `out-records.jsonl` (public) and `out-witness.jsonl` (the out value's rows and
 salts, witness). Records, their heads, the syncs the certifier signed, the certifier's salts and the shim's events are
@@ -228,7 +228,7 @@ import active_replay as ar
 from verity.ml.crypto import lms
 from verity.core.protocols.certifier import calibration, out_commit
 from verity.core.protocols.certifier.active import COMPACT_RECORD, DATA, HEADER, ID_EVENT_BYTES, REVEAL_LINE_BYTES, \
-    Events, Proxy, RemoteCertifier, Requests, compact_record_data, decode_frame, event_body, event_data, fresh_salt, \
+    Events, Proxy, CertifierClient, Requests, compact_record_data, decode_frame, event_body, event_data, fresh_salt, \
     id_event_data, id_request, id_request_fields, request_frame_count, serve_reveals
 from verity.core.protocols.certifier.certificate import Certificate, CertifiedClock, CertifiedRecord, Direction, \
     Issuer, LmsKey, LmsSigner, RecordHead, SignerRefused, parameters_digest
@@ -264,7 +264,7 @@ TAMPERS = ("late", *ar.LIVE_TAMPERS)
 ACCEPTED = ("honest", "token", "byte")
 PROFILES = ("planned", "served")
 TRAFFIC = ("fixed", "varied")
-#: a varied plan's N2 profile: the egress counts derive from the ingress head and the advice (N2's advised counts)
+#: a varied plan's N2 profile: the egress counts derive from the ingress head and the advice, which no N2 unit holds
 ADVICE = "advice"
 #: a varied plan's first arrival is after this, in window 0's bucket 2 or later
 START_MS = 150.0
@@ -288,8 +288,8 @@ CHALLENGER = "certifier-serve-check"
 #: `--out-shape`'s files in a run: each egress execution phase's out record (public, what the auditor receives) and its
 #: witness, the rows and their salts (the prover's alone)
 OUT_RECORDS, OUT_WITNESS = "out-records.jsonl", "out-witness.jsonl"
-NO_N2 = ("no verdict on the advice profile: N2 derives the egress counts from the ingress head and the advice "
-         "(its advised counts), which this check doesn't read")
+NO_N2 = ("no verdict on the advice profile: the egress counts derive from the ingress head and the advice, which no "
+         "N2 unit holds")
 
 
 # Keys.
@@ -407,7 +407,7 @@ def clock_from_json(doc: dict) -> CertifiedClock:
 
 def read_clocks(path: Path) -> list[CertifiedClock]:
     """The certifier's `clocks.jsonl`: its salted clock certificates with their openings, one for each egress window it
-    signed the sync of, witness (a link's clock source of record, `LinkWindows(certified_clocks=…)`); none for a run
+    signed the sync of, witness (opened by `certificate.SignedClocks`); none for a run
     without the file. Raises `ValueError` on a line without its salt: an unsalted clock certificate, or a line of the
     client's `clocks.jsonl`, which holds the certificates alone (`keep_certificates`)."""
     return [clock_from_json(json.loads(line)) for line in path.read_text().splitlines()] if path.exists() else []
@@ -1400,7 +1400,7 @@ def check(run: Path, challenger: LmsSigner, *, clock=time.monotonic, timeout: fl
     lw = LinkWindows(deployment["links"]["n2"], setup.egress_params, setup.sync_set, key, deployment["run_id"],
                      bytes.fromhex(deployment["session"]), ingress=setup.ingress_params, proof_deadline=proof_deadline,
                      occupancy=(profile.get("egress"), profile.get("ingress")), served=served)
-    remote = RemoteCertifier(*deployment["reveal"], key, challenger, deployment["links"]["ingress"],
+    remote = CertifierClient(*deployment["reveal"], key, challenger, deployment["links"]["ingress"],
                              bytes.fromhex(deployment["run_id"]), timeout=timeout)
     stream = lw.stream(budget=windows, delta=DELTA, challenger=CHALLENGER, coins=_no_coins, clock=clock)
     certified, refused = read_certified(run / "certified.jsonl")
