@@ -1295,6 +1295,24 @@ def test_the_cache_key_is_the_same_on_hosts_that_differ_only_in_their_kernel(mon
     assert CC.key({"target": "F32Mul_v1"}) != here                  # a different CPU is a different machine
 
 
+def test_the_cache_key_is_the_same_under_two_builds_of_one_python_release(monkeypatch):
+    """Two machines' builds of one Python release differ in `sys.version` by their build's date; a report one stored must
+    count on the other, while another release is another key."""
+    import re
+    import sys
+
+    from circuit_check import cache as CC
+
+    here = CC.key({"target": "F32Mul_v1"})
+    built = re.sub(r"\(([^,]*), [^)]*\)", r"(\1, Jan  1 2000, 00:00:00)", sys.version, count=1)
+    assert built != sys.version
+    monkeypatch.setattr(sys, "version", built)
+    assert CC.key({"target": "F32Mul_v1"}) == here
+    v = sys.version_info
+    monkeypatch.setattr(sys, "version", built.replace(f"{v.major}.{v.minor}.{v.micro}", f"{v.major}.{v.minor}.{v.micro + 1}", 1))
+    assert CC.key({"target": "F32Mul_v1"}) != here
+
+
 def test_the_cache_key_is_the_same_in_every_check_slot(monkeypatch):
     """Each check slot keeps its tests' results apart (`VERITY_TEST_CACHE`, `tools/verity/check/slot.py`); a report one slot
     stored must count in another, while a variable that can change what a check computes still keys it."""
