@@ -280,11 +280,19 @@ def _end(grid, profile) -> dict:
             "profile": None if profile is None else [list(row) for row in profile]}
 
 
+#: the auditor's challenger as one-stage v2's parameters name it (`OneStage.paramsOfJson`'s `challenger` and
+#: `window_root`, which v2 requires): the opening reads no coins, so a key nothing signed under stands in for it
+CHALLENGER = {"challenger": {"key": {"H": 5, "W": 4, "public": random.Random("challenger").randbytes(80).hex()},
+                             "label": "draw"},
+              "window_root": random.Random("window root").randbytes(64).hex()}
+
+
 def period_case(lw, draw, body: dict, delivered, certificates) -> tuple[dict, bytes, bytes, list]:
     """certifier/v0's clock-form case of link-window 0 alone, as `certifier_case.case_of` makes it from N2's files
-    (`n2_zk.one_stage_params`, `one_stage_evidence`): the link's ends, run and one-stage v2 parameters, the
-    registration, the stream's audit record of the window's outcome (``body``) as v2's evidence with the delivered
-    proof's files (`proofs.evidence_v2`), the delivered salts and the certificates; and the files as blobs."""
+    (`n2_zk.one_stage_params`, `one_stage_evidence`), with v2's parameters naming a challenger (`CHALLENGER`): the
+    link's ends, run and one-stage v2 parameters, the registration, the stream's audit record of the window's outcome
+    (``body``) as v2's evidence with the delivered proof's files (`proofs.evidence_v2`), the delivered salts and the
+    certificates; and the files as blobs."""
     audit, reg, key = body["audit"], draw.registration, lw.key
     proofs, blobs = PF.evidence_v2(delivered.proof, body["sessions"])
     one_stage = {"draw": audit["draw"], "instances": len(audit["proved_units"]), "proofs": proofs,
@@ -297,7 +305,8 @@ def period_case(lw, draw, body: dict, delivered, certificates) -> tuple[dict, by
               "one_stage": {"anchors": [], "delta": str(Fraction(plain.DELTA)), "law": S.selection_law(lw.spec.selection, 1),
                             "leaf_layer": None, "log": [], "partition": lw.partition, "program": json.loads(lw.program),
                             "proofs": {"circuit": standin.circuit_sha512(delivered), "registered": None},
-                            "query": lw.query, "registered": None, "scheme": S.SCHEME, "work_table": None},
+                            "query": lw.query, "registered": None, "scheme": S.SCHEME, "work_table": None,
+                            **CHALLENGER},
               "run": lw.run, "session": lw.certifier_session.hex(),
               "sync_set": {"deltas": list(lw.sync_set.deltas),
                            "rhos": [[r.numerator, r.denominator] for r in lw.sync_set.rhos]},
