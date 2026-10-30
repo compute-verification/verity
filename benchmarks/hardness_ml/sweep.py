@@ -113,10 +113,22 @@ def replan2(lr=2e-3):
     return cfgs
 
 
+def replan3():
+    """Whether B's penalty growing with width at one lr is the lr's doing: the baseline and B ρ = 0.25 at lr ∝ 1/n
+    (2e-3 at w256; the μP rule for Adam on hidden matrices), where the baseline's weights move less as width grows."""
+    cfgs = []
+    for size, lr, threads in (("w512", 1e-3, 6), ("w128", 4e-3, 2)):
+        b = {"size": size, "tokens": 20_000_000, "lr": lr, "threads": threads}
+        cfgs += [{**b, "name": f"{size}-base-lr{lr:g}"},
+                 {**b, "name": f"{size}-B0.25-lr{lr:g}", "design": "B", "rho": 0.25}]
+    return cfgs
+
+
 PRESETS = {
     "bench": bench,
     "replan1": replan1,
     "replan2": replan2,
+    "replan3": replan3,
     "w256": lambda: grid("w256", 20_000_000),
     "scale1": lambda: lite("w512", 20_000_000, 6) + lite("w128", 20_000_000, 2),
 }
