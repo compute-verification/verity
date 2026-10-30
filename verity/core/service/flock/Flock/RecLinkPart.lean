@@ -16,7 +16,8 @@ to the table and to the inner statement:
   input rows' tree's root and its `rout` the output rows' (`RecLinkRef.expected` of `RecLinkTree.rowsRoot`), each tree
   over the inner statement's own commit strings (`innerRows`);
 * its unit is V\*'s `RecLink{UB, PB}` net, equal in every field (`checkUnit`), so a copy's outputs are the unit's at its
-  inputs (`FlockVBridge.RecLink.laid_linkUnit`).
+  inputs (`FlockVBridge.RecLink.laid_linkUnit`), and its outputs are V\*'s layout (`outsOk`), so its committed `rin`
+  and `rout` rows are those outputs.
 
 An instance's outputs equal to those roots name a reader row and a writer row of the inner statement that commit one
 digest, or a SHA-512 collision (`Flock.RecLinkBind.link_binding`). Every other unit passes. The trees are
@@ -96,6 +97,15 @@ the net. -/
     if c.unit = g then pure ()
     else throw s!"rec-links: {c.unit.name}: not the verifier's unit ({HmNets.firstDiff c.unit g})"
 
+/-- **The part's outputs are V\*'s layout**, as `RecOpen.outsOk` holds a level's: `rin` then `rout`, 64 words each, one
+output row each right past the input rows (`HmOut.nIn`), and every copy returning words `0..127` in order, so a
+committed `rin` or `rout` row is the unit's output. -/
+def outsOk (c : Circuit) : Bool :=
+  decide (c.outPorts = #[("rin", 64), ("rout", 64)]) &&
+  c.leavesOut.all (fun l => decide (l = Array.range 128)) &&
+  decide ((c.ports.extract (HmOut.nIn c) (HmOut.nIn c + 2)).map (fun q => (q.name, q.words)) =
+    #[("rin", 64), ("rout", 64)])
+
 theorem checkUnit_ok {c : Circuit} {UB PB : Nat} (h : checkUnit c UB PB = .ok ()) : unitNet UB PB = .ok c.unit := by
   unfold checkUnit at h
   split at h
@@ -130,8 +140,8 @@ def checkLinks (st : Stmt) (own : Option (Array Registered.Port)) (files : Optio
     fun i => s!"row {i}'s output rows' root"
 
 /-- **The link part against the table, the inner statement and V\*'s unit**: a `rec-link/u<UB>-p<PB>` unit
-(`VStar.linkParams`; another `rec-link/` name is refused) is refused unless it passes `checkLinks` and its unit is V\*'s
-(`checkUnit`). Any other unit passes. -/
+(`VStar.linkParams`; another `rec-link/` name is refused) is refused unless it passes `checkLinks`, its unit is V\*'s
+(`checkUnit`) and its outputs are V\*'s layout (`outsOk`). Any other unit passes. -/
 def check (st : Stmt) (own : Option (Array Registered.Port)) (files : Option RecCoins.Source)
     (links : Option (ByteArray × Nat)) : V Unit := do
   let unit := st.c.unit.name
@@ -140,19 +150,31 @@ def check (st : Stmt) (own : Option (Array Registered.Port)) (files : Option Rec
       else return
   checkLinks st own files links UB PB
   checkUnit st.c UB PB
+  unless outsOk st.c do
+    throw (s!"rec-links: {unit}: its outputs are not V*'s layout: rin then rout, 64 words each, one output row each " ++
+      "right past the input rows, every copy returning words 0..127 in order")
 
-/-- **What `check` accepted at a link part**: its table and inner statement (`checkLinks`) and V\*'s unit. -/
+/-- **What `check` accepted at a link part**: its table and inner statement (`checkLinks`), V\*'s unit and V\*'s output
+layout. -/
 theorem check_link {st : Stmt} {own : Option (Array Registered.Port)} {files : Option RecCoins.Source}
     {links : Option (ByteArray × Nat)} (h : check st own files links = .ok ()) {UB PB : Nat}
     (hp : VStar.linkParams st.c.unit.name = some (UB, PB)) :
-    checkLinks st own files links UB PB = .ok () ∧ unitNet UB PB = .ok st.c.unit := by
+    checkLinks st own files links UB PB = .ok () ∧ unitNet UB PB = .ok st.c.unit ∧ outsOk st.c = true := by
   unfold check at h
   simp only [hp, bind, Except.bind] at h
   cases hl : checkLinks st own files links UB PB with
   | error e => rw [hl] at h; cases h
   | ok u =>
     rw [hl] at h
-    exact ⟨rfl, checkUnit_ok h⟩
+    cases hu : checkUnit st.c UB PB with
+    | error e => rw [hu] at h; cases h
+    | ok u' =>
+      rw [hu] at h
+      refine ⟨rfl, checkUnit_ok hu, ?_⟩
+      cases ho : outsOk st.c
+      · rw [ho] at h
+        first | cases h | simp at h
+      · rfl
 
 end RecLinkPart
 end Flock

@@ -6,7 +6,8 @@ reads back from its JSON; an unlisted link part names the missing table; `RecLin
 table (`--rec-links`) to the inner shape's; and `RecLinkPart.check` passes every other unit, refuses a `rec-link/` name
 `linkParams` does not read, and refuses a link part without the table, the registered reads or the inner statement's
 files, or whose `trow` is not the table at its root, rows, domain and fixed rows. `RecLinkPart.checkUnit` passes the
-circuit `HmRow.parse` reads off V*'s own file and refuses a unit that is not V*'s net.
+circuit `HmRow.parse` reads off V*'s own file and refuses a unit that is not V*'s net, and `RecLinkPart.outsOk` passes
+that circuit's outputs and refuses them laid out any other way.
 -/
 import Flock.RecLinkPart
 
@@ -163,5 +164,13 @@ def honest : Except String Circuit := do HmRow.parse Tags.circuit (← circuitFi
   | .error _ => false)
 #guard ((unitChecked (circuitOf "rec-link/u0-p0")).map
   (·.startsWith "rec-links: rec-link/u0-p0: not the verifier's unit (")) == some true
+
+-- Its outputs are V*'s layout (`outsOk`): the circuit parsed from V*'s own file has it, and one whose output ports are
+-- swapped, whose output rows start a row early, or whose copy returns its words out of order does not.
+#guard (match honest with
+  | .ok c => RecLinkPart.outsOk c && !RecLinkPart.outsOk { c with outPorts := #[("rout", 64), ("rin", 64)] } &&
+      !RecLinkPart.outsOk { c with outRowPorts := c.outRowPorts.push 1 } &&
+      !RecLinkPart.outsOk { c with leavesOut := #[(Array.range 128).reverse] }
+  | .error _ => false)
 
 end Flock.Test.RecLinkPart
