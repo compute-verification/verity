@@ -150,9 +150,10 @@ on its diff against `main`, or against the PR it's stacked on) and contains none
 change, `--first`'s order and then admission's within each part, so it doesn't wait above a Lean change for its Lean check.
 Members on `next` never move for it, merged again or not: those above a moved or dropped member are merged again in their order,
 and only a `--first` PR placed again, or a `next` rebuilt on a `main` that moved off it, sorts what is above it.  Nor do they
-move but for drive's lift (`Queue.lift`, `Driver._lift`): the members with a land verdict go below those waiting for one
-(drive.toml's `reviewed_first`), those that change no Lean first, each after the PRs it contains, and land at once; while a
-Lean check of `next` runs or passed, only those above the `hold` members move, none of them (`reviewed_first_above_lean`); and for drive's park (`Queue.park`, `Driver._park`): each sync, a
+move but for drive's lift (`Queue.lift`, `Driver._lift`): each sync, the members with a land verdict go below those waiting
+for one (drive.toml's `verdict_first`), those that change no Lean first, each after the PRs it contains, and land at once;
+while a Lean check of `next` runs or passed, only those above the `hold` members move, none of them, so no check's prefix is
+rebuilt (with `verdict_first` off, `reviewed_first` moves them only while none runs or passed); and for drive's park (`Queue.park`, `Driver._park`): each sync, a
 member held by a verdict at its head goes to the top of `next` with every PR that contains it, above what the sync adds, so
 one hold holds only itself and what contains it and the members that were above it land; it stays there until a land verdict
 (then it lands in its place) or a new head.  The park moves no member that a running or passed check covers below the lowest
@@ -422,8 +423,9 @@ class DriveFlags:
     #: while no Lean check of `next` runs, members with a land verdict go below those waiting for one (`Driver._lift`), so a
     #: member waiting for its review holds only itself
     reviewed_first: bool = True
-    #: and while one runs or passed, the lift moves the members above the prefix those checks keep (`Queue.hold`), none in it
-    reviewed_first_above_lean: bool = True
+    #: every sync, members with a land verdict go below those waiting for one (`Driver._lift`), above the prefix a running or
+    #: passed Lean check of `next` keeps in place (`Queue.hold`) and none in it, `reviewed_first` on or off
+    verdict_first: bool = True
     #: days an open PR unmarked at its head stays idle before it is stale (`research.stale`: `status` says so, drive rings its
     #: owner once a day), and before drive closes it; 0 is off
     stale_days: int = 0
@@ -482,7 +484,7 @@ class DriveFlags:
             if not (isinstance(doc["marked_after"], str) and MARK_TIME_RE.fullmatch(doc["marked_after"])):
                 raise bad("marked_after", "a UTC time as YYYY-MM-DDTHH:MM:SSZ, as labels record it")
             got["marked_after"] = doc["marked_after"]
-        for k in ("regenerate_locks", "nonlean_first", "reviewed_first", "reviewed_first_above_lean"):
+        for k in ("regenerate_locks", "nonlean_first", "reviewed_first", "verdict_first"):
             if k in doc:
                 if not isinstance(doc[k], bool):
                     raise bad(k, "true or false")
@@ -967,7 +969,7 @@ class Queue:
                  marked_by: Callable[[int, str], str | None] | None = None,
                  marked_at: Callable[[int, str], str | None] | None = None,
                  prefetch: Callable[[list[tuple[int, str]]], None] | None = None, nonlean_first: bool | None = None,
-                 reviewed_first: bool | None = None, reviewed_first_above_lean: bool | None = None,
+                 reviewed_first: bool | None = None, verdict_first: bool | None = None,
                  land_into: str | None = None):
         self.workdir, self.remote, self.github, self.ready, self.store = Path(workdir), remote, github, ready, store
         #: the branch drive lands on and `next` is built on (`into`); None: drive.toml's `land_into` at `main`
@@ -982,9 +984,9 @@ class Queue:
         #: whether drive's lift puts members with a land verdict below those without (`Driver._lift`); None: drive.toml's
         #: `reviewed_first` at `main`
         self.reviewed_first = reviewed_first
-        #: whether that lift also runs while a Lean check of `next` runs or passed, above the `hold` members; None: drive.toml's
-        #: `reviewed_first_above_lean` at `main`
-        self.reviewed_first_above_lean = reviewed_first_above_lean
+        #: whether drive's lift runs every sync, above the `hold` members, `reviewed_first` on or off; None: drive.toml's
+        #: `verdict_first` at `main`
+        self.verdict_first = verdict_first
         #: each (head, base)'s `lean_change`
         self._lean_of: dict[tuple[str, str], bool] = {}
         #: members a running check (or a passed one drive lands this tick) covers that keep their place at the head it checks though their PR's head has moved
@@ -1327,7 +1329,7 @@ class Queue:
         return out
 
     def flag(self, name: str) -> bool:
-        """drive.toml's ``name`` (`nonlean_first`, `reviewed_first`, `reviewed_first_above_lean`) as this queue takes it: its own
+        """drive.toml's ``name`` (`nonlean_first`, `reviewed_first`, `verdict_first`) as this queue takes it: its own
         setting, else `main`'s."""
         own = getattr(self, name)
         return own if own is not None else getattr(flags_at(self.workdir, "refs/remotes/origin/main"), name)
@@ -4134,7 +4136,7 @@ def main(argv: list[str]) -> int:
                 raise QueueError(f"drive needs a machine for the checks it launches: set `on` in {DRIVE_FLAGS} at `main`, or pass "
                                  "--on MACHINE")
             q.first, q.nonlean_first, q.reviewed_first = flags.first, flags.nonlean_first, flags.reviewed_first
-            q.reviewed_first_above_lean = flags.reviewed_first_above_lean
+            q.verdict_first = flags.verdict_first
             q.land_into = flags.land_into
             a.marked_after = flags.marked_after
             labels.since = a.marked_after

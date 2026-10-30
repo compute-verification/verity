@@ -246,12 +246,13 @@ def _put(world: World, *prs: int) -> None:
         world.gh.put(n, world.change({f"{n}.txt": f"{n}\n"}))
 
 
-@pytest.mark.parametrize("above_lean", [True, False])
-def test_while_a_lean_check_runs_reviewed_members_go_below_an_unreviewed_one_above_its_prefix(world, monkeypatch, above_lean):
+@pytest.mark.parametrize("above_lean, reviewed_first", [(True, True), (True, False), (False, True)])
+def test_while_a_lean_check_runs_reviewed_members_go_below_an_unreviewed_one_above_its_prefix(world, monkeypatch, above_lean,
+                                                                                              reviewed_first):
     """An unreviewed member just above a running Lean check's prefix held every reviewed member above it until that check
-    ended.  They go below it, above the prefix, whose commits stay, and the check's pass lands them with it.  With
-    `reviewed_first_above_lean` off they wait above it."""
-    h, prefix = _lean_running(world, monkeypatch, reviewed_first_above_lean=above_lean)
+    ended.  Under `verdict_first`, `reviewed_first` on or off, they go below it, above the prefix, whose commits stay, and the
+    check's pass lands them with it.  With `verdict_first` off they wait above it."""
+    h, prefix = _lean_running(world, monkeypatch, verdict_first=above_lean, reviewed_first=reviewed_first)
     _put(world, 3, 4, 5)
     h.tick()
     assert [m.pr for m in h.q.chain()] == [1, 2, 3, 4, 5]

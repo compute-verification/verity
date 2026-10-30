@@ -850,8 +850,8 @@ def test_a_member_whose_labels_cant_be_read_stops_the_lift_not_the_tick(world, m
     assert any("the lift stops below #3: STALE" in x for x in world.logs), world.logs
 
 
-def test_reviewed_first_off_keeps_an_unreviewed_member_where_it_is(world, monkeypatch):
-    h = Review(world, monkeypatch, reviewed_first=False)
+def test_reviewed_first_and_verdict_first_off_keep_an_unreviewed_member_where_it_is(world, monkeypatch):
+    h = Review(world, monkeypatch, reviewed_first=False, verdict_first=False)
     for n, f in ((1, "a.txt"), (2, "b.txt")):
         world.gh.put(n, world.change({f: f"{n}\n"}))
     h.tick()

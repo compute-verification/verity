@@ -47,6 +47,10 @@ nonlean_first = false
 # review holds only itself (nor below a running Lean check's commit); a held member goes to `next`'s top every sync, this on or not
 reviewed_first = false
 # off, as nonlean_first: next lands as one checked commit, and a reorder rebuilds what its check covers
+# every sync, members with a land verdict go below those waiting for one, but only above the prefix a running or passed Lean
+# check keeps in place, so no check's prefix is rebuilt; one that gains its verdict goes after those already moved, so none
+# below it is merged again. On whatever reviewed_first says; false: only reviewed_first's rule
+verdict_first = true
 # days an open PR not marked ready at its head stays idle (its head commit, and its ready, eject and review labels there) before
 # it is stale: `research queue status` says so and drive rings its owner once a day (`research.stale`); 0 is off
 stale_days = 3
