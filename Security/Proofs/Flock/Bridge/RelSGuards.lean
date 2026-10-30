@@ -33,13 +33,13 @@ honest inputs `Xr` is in `RelS` at `δ = C(n − K₀, kd)/C(n, kd)`, when the c
 don't fix, the constants fix only inputs and agree with `Xr`'s evaluation, `1 ≤ K₀` and `1 ≤ kd ≤ n`. -/
 theorem card_wrong_lt_of_relS_honest {C : FlockSoundness.Audit.Circuit} {n : ℕ}
     (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool) (kd K₀ : ℕ) (desc : Claims.Msg) (q : Query)
-    (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool) (Xr : Fin C.N → Bool)
+    (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool) (Xr : Fin C.N → Bool)
     (hκin : ∀ g b, κ g = some b → (C.op g).isInput = true) (hκ : ∀ g b, κ g = some b → C.eval Xr g = b)
     (hcom : ∀ g, κ g = none → ∃ d : Claims.Msg, Cm.Opens H roots ⟨posOf C g, C.eval Xr g, d⟩ = true)
     (hK : 1 ≤ K₀) (hkd : 1 ≤ kd) (hkdn : kd ≤ n) :
-    RelS H Cm (((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)) (stmtOf P κ kd desc q roots) (partOf P)
+    RelS H Cm (((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)) (stmtOf P κ kd desc q roots) (partOf P κ)
       (witDep C Cm H roots Xr) := by
-  have hnf : (faulty H Cm (stmtOf P κ kd desc q roots) (partOf P) (witDep C Cm H roots Xr)).filter (· < n) = ∅ := by
+  have hnf : (faulty H Cm (stmtOf P κ kd desc q roots) (partOf P κ) (witDep C Cm H roots Xr)).filter (· < n) = ∅ := by
     ext v
     simp only [Finset.mem_filter, Finset.notMem_empty, iff_false, not_and]
     intro hv hlt
@@ -50,7 +50,7 @@ theorem card_wrong_lt_of_relS_honest {C : FlockSoundness.Audit.Circuit} {n : ℕ
     subst ho
     exact hcom g hk
   have hpa : ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ) <
-      (designOf kd).Pa (partOf P) (faulty H Cm (stmtOf P κ kd desc q roots) (partOf P) (witDep C Cm H roots Xr)) := by
+      (designOf kd).Pa (partOf P κ) (faulty H Cm (stmtOf P κ kd desc q roots) (partOf P κ) (witDep C Cm H roots Xr)) := by
     rw [pa_partOf_window, window_zero_filter, hnf, Finset.card_empty, Nat.sub_zero]
     have hpos : (0 : ℝ) < n.choose kd := by exact_mod_cast Nat.choose_pos hkdn
     rw [div_self hpos.ne', div_lt_one hpos]
@@ -72,11 +72,11 @@ def notPartition : FlockSoundness.Audit.Partition notCircuit 1 where
 /-- **`card_wrong_lt_of_relS`'s conclusion fails for an accept-everything verifier**: on `notCircuit`, the witness that
 opens nothing leaves its one unit wrong, so "fewer than `K₀ = 1` wrong units" fails, and `RelS` refuses that witness. -/
 theorem card_wrong_lt_of_relS_nontrivial (kd : ℕ) (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg)
-    (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool) :
+    (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool) :
     ¬ (notPartition.wrong (openedOf notCircuit (fun _ => none)
         ((⟨[]⟩ : Wit).val H Cm (stmtOf notPartition (fun _ => none) kd desc q roots)))).card < 1 ∧
       ¬ RelS H Cm (((1 - 1).choose kd : ℝ) / ((1 : ℕ).choose kd : ℝ)) (stmtOf notPartition (fun _ => none) kd desc q roots)
-        (partOf notPartition) ⟨[]⟩ := by
+        (partOf notPartition (fun _ => none)) ⟨[]⟩ := by
   have hX : openedOf notCircuit (fun _ => none)
       ((⟨[]⟩ : Wit).val H Cm (stmtOf notPartition (fun _ => none) kd desc q roots)) = fun _ => false := by
     funext g
