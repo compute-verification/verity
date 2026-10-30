@@ -867,6 +867,8 @@ from syn.prims import V
 def SynDie(B, S, a, b):
     os.kill(os.getpid(), signal.SIGKILL)
 """
+#: a Definition whose body build kills the process that forked the one building it, as a node's lockup ends a whole run
+ORPHAN = DIE.replace("SynDie", "SynOrphan").replace("os.kill(os.getpid()", "os.kill(os.getppid()")
 APART_BINDINGS = """def bad():
     from syn import bad
     return [bind(bad.SynBad)]
@@ -877,13 +879,18 @@ def die():
     return [bind(die.SynDie)]
 
 
+def orphan():
+    from syn import orphan
+    return [bind(orphan.SynOrphan)]
+
+
 """
 
 
-def _apart(root: Path, mode: str, ok: bool = True, **env: str) -> dict | str:
+def _apart(root: Path, mode: str, ok: bool = True, tmp: Path | None = None) -> dict | str:
     """``mode``'s output over ``root`` (`APART`, its manifest beside the tree), or its stderr when it fails (``ok`` false);
-    ``env`` added to its environment."""
-    env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1", **env}
+    with ``tmp`` as its TMPDIR."""
+    env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1", **({"TMPDIR": str(tmp)} if tmp is not None else {})}
     r = subprocess.run([sys.executable, "-c", APART, str(root), str(REPO), mode, str(root.parent / f"{root.name}-manifest.json")],
                        capture_output=True, text=True, cwd=REPO, env=env)
     if not ok:
@@ -895,7 +902,7 @@ def _apart(root: Path, mode: str, ok: bool = True, **env: str) -> dict | str:
 
 def _apart_tree(root: Path, *extra: str) -> Path:
     _tree(root)
-    for rel, text in (("syn/step.py", STEP), ("syn/bad.py", BAD), ("syn/die.py", DIE)):
+    for rel, text in (("syn/step.py", STEP), ("syn/bad.py", BAD), ("syn/die.py", DIE), ("syn/orphan.py", ORPHAN)):
         (root / rel).write_text(text.lstrip("\n"))
     _edit(root, "syn/catalog.py", "BINDINGS = [", STEP_BINDINGS + APART_BINDINGS + "BINDINGS = [")
     _bindings(root, *BINDINGS, '(("_unbound_roots",), unbound)', '(("_bound_roots",), bound)', *extra)
@@ -932,18 +939,55 @@ def test_a_binding_whose_process_dies_is_named_and_a_model_is_dropped(tmp_path):
     assert f"RuntimeError: _die_roots: {died}" in _apart(root, "build", ok=False)
 
 
-def test_a_build_apart_killed_with_its_binding_s_process_leaves_no_file_behind(tmp_path):
-    """The process building the catalog apart killed with a binding's (a node's lockup, the OOM killer's pick of each) leaves
-    nothing of theirs in the temporary directory: each binding's result is a file with no name, which the system frees with
-    the last process that holds it, where a named one would stay until someone removed it."""
-    root = _apart_tree(tmp_path / "t")
-    _edit(root, "syn/die.py", "    os.kill(os.getpid(), signal.SIGKILL)",
-          "    os.kill(os.getppid(), signal.SIGKILL)\n    os.kill(os.getpid(), signal.SIGKILL)")
-    _edit(root, "syn/catalog.py", "]\nFAMILIES", ', (("_model_roots:SynDie_v1",), die)]\nFAMILIES')
-    scratch = tmp_path / "scratch"
-    scratch.mkdir()
-    _apart(root, "build", ok=False, TMPDIR=str(scratch))
-    assert not list(scratch.glob("circuit-check-*"))
+def test_a_run_killed_while_its_bindings_build_leaves_no_file_behind(tmp_path):
+    """The process that builds the bindings apart killed while they build (a node's lockup, the OOM killer) leaves nothing in
+    its TMPDIR once the processes it forked end: each puts what it returns in a file of no name (`units._result`), which the
+    kernel frees with the last process holding it; a directory of named files would stay, whatever they hold."""
+    root = _apart_tree(tmp_path / "t", '(("_orphan_roots",), orphan)')
+    tmp = tmp_path / "tmp"
+    tmp.mkdir()
+    _apart(root, "build", ok=False, tmp=tmp)
+    assert sorted(p.name for p in tmp.iterdir()) == []
+
+
+#: a Definition whose body build runs a program, which the tracer cannot see (`cache.untraced`)
+SPAWN = """
+import os
+
+from verity.ml.circuits import composite
+
+from syn.prims import SynAdd, V
+
+
+@composite("SynSpawn", 1, [], lambda S: ((("a", V), ("b", V)), V))
+def SynSpawn(B, S, a, b):
+    os.system("true")
+    return B.call(SynAdd, a, b)
+"""
+SPAWN_BINDINGS = """def spawn():
+    from syn import spawn
+    return [bind(spawn.SynSpawn)]
+
+
+"""
+#: `HARNESS`'s tree with its bindings built apart one after another, traced; prints what the tracer could not see
+APART_TRACED = HARNESS[:HARNESS.index("rep = cli.run(")] + (
+    "from circuit_check import units as UN\nUN.built_apart(UN.made_entries(), 1, side=[])\nprint(json.dumps(CC.untraced()))\n")
+
+
+def test_what_a_binding_built_apart_did_untraced_is_this_process_once(tmp_path):
+    """Three bindings whose builds each run a program, built apart one after another: what each did that the tracer cannot see
+    is this process's once.  A binding's process inherits what those that ended before it passed back, which it doesn't pass
+    back again: passed again, the list doubles with each binding that ends."""
+    root = _tree(tmp_path / "t")
+    (root / "syn/spawn.py").write_text(SPAWN.lstrip("\n"))
+    _edit(root, "syn/catalog.py", "BINDINGS = [", SPAWN_BINDINGS + "BINDINGS = [")
+    _bindings(root, *BINDINGS, *(f'(("_spawn{k}_roots",), spawn)' for k in range(3)))
+    r = subprocess.run([sys.executable, "-c", APART_TRACED, str(root), str(REPO)], capture_output=True, text=True, cwd=REPO,
+                       env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"})
+    assert r.returncode == 0, r.stderr
+    untraced = json.loads(r.stdout.strip().splitlines()[-1])
+    assert len([u for u in untraced if u.startswith("os.system ")]) == 3, untraced
 
 
 def test_one_xdist_worker_builds_the_catalog_and_the_others_take_it(tmp_path, monkeypatch):
