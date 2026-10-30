@@ -53,6 +53,35 @@ def route_b1_planes_mod(e, R, w):
     return np.mod(out, 1 << w), used
 
 
+def b1_planes_mod2b(A, B, b, a_bits=None):
+    """A·B mod 2^b for unsigned A below 2^a_bits and B below 2^b: one AND-popcount product (b1 MMA) per bit pair
+    (i, j) with i < a_bits and i + j < b; higher pairs vanish mod 2^b. Returns (A·B mod 2^b, pairs)."""
+    a_bits = b if a_bits is None else a_bits
+    assert A.min() >= 0 and A.max() < 1 << a_bits and B.min() >= 0 and B.max() < 1 << b
+    out = np.zeros((A.shape[0], B.shape[1]), dtype=np.int64)
+    pairs = 0
+    for i in range(min(a_bits, b)):
+        for j in range(b - i):
+            out += (((A >> i) & 1) @ ((B >> j) & 1)) << (i + j)
+            pairs += 1
+    return np.mod(out, 1 << b), pairs
+
+
+def strassen_mod2b_b1(A, B, depth, b, ops):
+    """A·B mod 2^b by Strassen over Z/2^b with b1 leaves: every combination wraps back to b bits, so each leaf is
+    `b1_planes_mod2b` at b(b + 1)/2 plane pairs. Counts b1 MACs."""
+    m, K, n = A.shape[0], A.shape[1], B.shape[1]
+    if depth == 0:
+        Y, pairs = b1_planes_mod2b(np.mod(A, 1 << b), np.mod(B, 1 << b), b)
+        ops.b1 += pairs * m * K * n
+        return Y
+    Ab, Bb = _blocks(A), _blocks(B)
+    M = [strassen_mod2b_b1(sum(c * Ab[p] for p, c in enumerate(u) if c), sum(c * Bb[q] for q, c in enumerate(v) if c),
+                           depth - 1, b, ops) for u, v in zip(STRASSEN_U, STRASSEN_V)]
+    C = [sum(c * M[t] for t, c in enumerate(w) if c) for w in STRASSEN_W]
+    return np.mod(np.block([[C[0], C[1]], [C[2], C[3]]]), 1 << b)
+
+
 def route_sparse_halves(E, R):
     """R as the sum of two 2:4-sparse matrices (entries 0, 1 and 2, 3 of each group of four)."""
     K = R.shape[1]
@@ -365,6 +394,33 @@ def main(argv=None) -> int:
             ok &= eq
             peel[f"strassen_mod65536_d{depth}_i{inner}_tensor"] = ops.s8 / side**3
             peel[f"strassen_mod65536_d{depth}_i{inner}_out_writes_per_output"] = ops.c_writes / side**2
+    # Committed width b with a b-bit R (HT-REDML's A-LSB): 2-bit E, output mod 2^b. b1 planes at the top, Strassen
+    # over Z/2^b with b1 leaves, and Strassen over Z/256 on s8 reduced mod 2^b.
+    for b in (1, 2, 4):
+        for s in range(args.seeds):
+            rng = np.random.default_rng(500 + 10 * b + s)
+            E = rng.integers(0, 4, (16, 64), dtype=np.int64)
+            L = rng.integers(0, 1 << b, (24, 64), dtype=np.int64)
+            got, pairs = b1_planes_mod2b(E, L.T, b, a_bits=2)
+            eq = bool(np.array_equal(got, np.mod(ref(E, L), 1 << b)))
+            checks.setdefault(f"lsb_b1_planes_b{b}", []).append(eq)
+            ok &= eq
+        peel[f"lsb_b{b}_b1_planes_tensor"] = pairs * W1["b1"]
+        for depth in (1, 2, 3):
+            rng = np.random.default_rng(600 + 10 * b + depth)
+            side = 2**depth * 4
+            E = rng.integers(0, 4, (side, side), dtype=np.int64)
+            L = rng.integers(0, 1 << b, (side, side), dtype=np.int64)
+            ops = Ops()
+            Y = strassen_mod2b_b1(E, L.T, depth, b, ops)
+            eq = bool(np.array_equal(Y, np.mod(ref(E, L), 1 << b)))
+            ops8 = Ops()
+            eq8 = bool(np.array_equal(np.mod(strassen_mod256(E, L.T, depth, ops8), 1 << b), np.mod(ref(E, L), 1 << b)))
+            checks.setdefault(f"lsb_strassen_b1_leaves_b{b}_d{depth}", []).append(eq)
+            checks.setdefault(f"lsb_strassen_s8_b{b}_d{depth}", []).append(eq8)
+            ok &= eq and eq8
+            peel[f"lsb_b{b}_strassen_b1_leaves_d{depth}_tensor"] = ops.b1 * W1["b1"] / side**3
+            peel[f"lsb_b{b}_strassen_s8_d{depth}_tensor"] = ops8.s8 / side**3
     # the same mutation for the selective peel
     rng = np.random.default_rng(98)
     e = rng.integers(0, 2, (16, 32), dtype=np.int64)
