@@ -200,7 +200,7 @@ theorem sat_localEval (Xv : Fin C.N → Bool) : R.Sat fun c => P.localEval Xv u 
   rw [P.localEval_of_mem Xv (I.mem i), I.op i]
   simp only [Op.apply, xorSum_map, Function.comp_def]
 
-variable {types : String → Option CircuitType} {ls : Array Layout} {info : String → Option TableInfo}
+variable {types : String → Option CircuitType} {ls : Array BlockLayout} {info : String → Option TableInfo}
   {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
 
 /-- **The unit computes its type through its composed rows.** With its constant at 1, the local evaluation of an instance
@@ -233,7 +233,7 @@ output's copy, read off that output's row: a gate of the unit, committed in `C`.
 structure UnitPair {C CB : Audit.Circuit} {n : ℕ} (P : Partition C n) (PB : Partition CB n) (m : Fin CB.N → Fin C.N)
     (u : Fin n) where
   types : String → Option CircuitType
-  ls : Array Layout
+  ls : Array BlockLayout
   info : String → Option TableInfo
   words : String → Option (Array ℕ)
   idx : ℕ
