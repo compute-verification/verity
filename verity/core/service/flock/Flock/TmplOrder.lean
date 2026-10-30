@@ -1,5 +1,5 @@
 /-
-`Tmpl.ordered`, the order a templated unit's description is checked for (PRF-133), gives the order `Net.checkOrder`
+`Tmpl.ordered`, the order a templated unit's description is checked for, gives the order `Net.checkOrder`
 checks on the rows it unrolls to (`rows_ordered`): every row from the input rows to the constant reads, in A and in B,
 the constant or an earlier column that is not input padding (`FlockSoundness.RowOrder`, stated here as it reads), given
 the input port bits' self rows `Net.ofRows` checks (`Net.inputsOk`). So a reader that checks the description need not walk
