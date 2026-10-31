@@ -190,7 +190,7 @@ class Class:
                              f"not {self.KI}")
 
     @cached_property
-    def lay(self) -> Q.Layout:
+    def lay(self) -> Q.FirstCell:
         return Q.layout(self.B)
 
     @cached_property
@@ -447,7 +447,7 @@ def held(cls: Class, st: State) -> list[bool]:
     return [s.live == 1 and st.now <= s.admitted + cls.D + s.n // cls.r for s in st.slots]
 
 
-def _head_values(lay: Q.Layout, payload: bytes) -> dict[str, int]:
+def _head_values(lay: Q.FirstCell, payload: bytes) -> dict[str, int]:
     """A first frame's max_tokens, temperature, top_p and seed (`io_request.FIELDS`' first four spans)."""
     (o0, w0, _), (o1, w1, _), (o2, w2, _), (o3, w3, _) = lay.spans[1:5]
     ratio = lambda f: int(f[:1] + f[2:])  # noqa: E731

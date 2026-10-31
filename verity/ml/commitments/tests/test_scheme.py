@@ -15,7 +15,7 @@ from verity.ml.commitments.vllm_v1 import VllmV1
 
 
 def _domain(n: int) -> CommitmentDomain:
-    return CommitmentDomain(hashlib.sha256(b"scheme-test").digest(), 0, RangeIndexedDomain(n))
+    return CommitmentDomain(hashlib.sha256(b"scheme-test").digest(), 0, RangeIndexedDomain(n), hash="sha256")
 
 
 @pytest.mark.parametrize("n", [0, 1, 2, 3, 5, 8, 13])

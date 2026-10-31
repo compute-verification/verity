@@ -71,7 +71,7 @@ from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.refs import Coll
 from verity.ml.circuits.types import Array
 
-from ..merkle import _FRAME, _LEAF, _NODE, _hash, _uint
+from ..merkle import _FRAME, _LEAF, _NODE, frame_hash, _uint
 from .lms import LmsEqual
 from .sha512 import IV, compress_gadget, pad_tail, words_be
 
@@ -91,12 +91,12 @@ MAX_D = 64
 
 def leaf_ref(domain_id: bytes, schema: str, value: bytes, x: int) -> bytes:
     """The frame-v3-sha512 leaf of ``value`` at rank = position = ``x`` (`CommitmentDomain.leaf` over a domain id)."""
-    return _hash(_LEAF, domain_id, _uint(x), _uint(x), schema.encode("utf-8"), value, hash="sha512")
+    return frame_hash(_LEAF, domain_id, _uint(x), _uint(x), schema.encode("utf-8"), value, hash="sha512")
 
 
 def node_ref(domain_id: bytes, level: int, index: int, left: bytes, right: bytes) -> bytes:
     """The frame-v3-sha512 node at ``level`` and ``index`` (`CommitmentDomain.node` over a domain id)."""
-    return _hash(_NODE, domain_id, _uint(level), _uint(index), left, right, hash="sha512")
+    return frame_hash(_NODE, domain_id, _uint(level), _uint(index), left, right, hash="sha512")
 
 
 def root_ref(domain_id: bytes, schema: str, value: bytes, pos: int, path: Sequence[bytes]) -> bytes:
@@ -114,7 +114,7 @@ def opens(schema: str, root: bytes, domain_id: bytes, value: bytes, pos: int, pa
 
 def leaf_at_ref(domain_id: bytes, schema: str, value: bytes, rank: int, position: int) -> bytes:
     """The frame-v3-sha512 leaf of ``value`` at ``rank`` and ``position`` (`CommitmentDomain.leaf` over a domain id)."""
-    return _hash(_LEAF, domain_id, _uint(rank), _uint(position), schema.encode("utf-8"), value, hash="sha512")
+    return frame_hash(_LEAF, domain_id, _uint(rank), _uint(position), schema.encode("utf-8"), value, hash="sha512")
 
 
 def root_at_ref(domain_id: bytes, schema: str, value: bytes, rank: int, position: int, path: Sequence[bytes]) -> bytes:
