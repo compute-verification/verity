@@ -79,7 +79,7 @@ class Floor:
 
 
 CLAIMS = {"pi32": "(π₃₂): every root-writing kind at ≥ 32 MACs a word",
-          "loads16": "PRICES-32's load half: every load into registers at ≥ 16 MACs a word",
+          "loads16": "(π₃₂)'s load half: every load into registers at ≥ 16 MACs a word",
           "copy16": "π_c ≥ 16: every copy route (every kind that writes registers, a UR word at the 32 lanes it serves) "
                     "at ≥ 16 MACs a word"}
 COPIES = "copy16"   # the claim whose kinds `solve` lists with their prices: the copy routes
@@ -233,8 +233,8 @@ def measured_cost(c: Census) -> dict[str, float]:
 
 
 def floors(data: Path = DATA) -> list[Floor]:
-    """The per-word price floors the claims read (`data/floors.csv`): PRICES-32 is (π₃₂) and its load half together, and
-    π_c ≥ 16 (r12's copy price, per-row keys' premise) is every copy route's."""
+    """The per-word price floors the claims read (`data/floors.csv`): (π₃₂) for root-writing kinds, its load half
+    for loads into registers, and π_c ≥ 16 (per-row keys' premise) for every copy route."""
     with open(data / "floors.csv", newline="") as f:
         return [Floor(d["kind"], int(d["words"]), float(d["floor"]), d["claim"], d["what"]) for d in csv.DictReader(f)]
 
