@@ -19,7 +19,7 @@ STUB = WS.TREE / "benchmarks" / "live_challenger" / "tests" / "stub_serve.py"
 
 
 def group(program: str, seed: int, *names: str) -> dict:
-    """A group of committed values' entries, as the torch loop's registration names them (`loop.activations`)."""
+    """A group of the trace's entries, as the torch loop's registration names them (`loop.activations`)."""
     return {"program": program, "values": {n: {"value": n, "root": bytes([seed + i] * 64).hex(), "leaves": 8, "words": 2,
                                                "domain": bytes([seed + i + 100] * 64).hex()}
                                            for i, n in enumerate(names)}}
