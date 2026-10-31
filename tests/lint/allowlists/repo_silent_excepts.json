@@ -194,7 +194,6 @@
     {"file": "tools/agent-guard/task_hook.py", "count": 3},
     {"file": "tools/agent-guard/worktree_guard.py", "count": 4},
     {"file": "tools/move/layout.py", "count": 6},
-    {"file": "tools/move/lean.py", "count": 1},
     {"file": "tools/move/tests/toy_layout.py", "count": 1},
     {"file": "tools/research/console/verity_console.py", "count": 10},
     {"file": "tools/research/src/research/agents.py", "count": 2},
