@@ -1,69 +1,11 @@
-# The bandwidth audit's GPU tagger
+# Proof of useful bandwidth's device probes
 
-The honest prover's step of the bandwidth audit v0 (`verity/core/protocols/bandwidth/PROTOCOL.md`) on an RTX PRO 6000:
-every block's tag over the store `E` in device memory, the tags' leaves and their RFC 6962 root, for the three tag
-constructions: `ro-blake3/v1` and `ro-sha512/v1`, the certified ones, and `gf31-poly/v1`, the uncertified fast check.
+What the device model of proof of useful bandwidth (PoUB), `verity/core/protocols/remote_bandwidth/timing.py`, takes as
+measured on the card and the host: the on-chip stores S_chip has to cover, and the write ceilings that bound a fill.
+Each file below is a probe, gated before it is timed; none is on the served path.
 
-- `tagger.cu` holds the kernels and builds two ways: `bwtag`, which checks the device's roots against the reference and
-  then times, and `libbwtag.so`, a C ABI for a harness that holds `E` in its own device buffer. Its header comment
-  explains how each kernel is laid out.
-- `gpu.py` is the harness API over `libbwtag.so`. `Tagger.tag_pass(tag, store_ptr, blocks, seed, workspace)` returns a
-  commitment whose `root` the prover sends; `commitment.open(j, store_tree)` gives the `audit.Opening` the core
-  verifier (`audit.Window.verdict`) checks. `Prover(tagger, store, blocks, scrub)` is the honest prover of one store
-  for every tag, and `Prover.commit(window)` its window under the window's tag: it opens the window
-  (`window.open()`, whose record the verifier fsyncs), then always prepares (an untimed pass under a throwaway seed,
-  then a 512 MiB read of another buffer, so L2 starts clean) before it asks for the seed (`window.start()`).
-  `challenger_device(tagger, gpu)` is the id the challenger reads itself (`audit.read_device`: nvidia-smi's `GPU-…`
-  UUID for `gpu`, a MIG slice refused), for which the store's salt is drawn; it refuses a tagger whose CUDA device
-  (`Tagger.device()`, 16 bytes) has another UUID. `gpu.py windows --gpu` names the GPU (`run.sh`: the lease's).
-- A store has one challenger state and one prover, whatever the tag: `audit.ChallengerState.create(state_dir, vk)`
-  once, in the challenger's state directory under the name the store gives it (`audit.state_name`), then one
-  `audit.ChallengerState(state_dir, vk)` that every tag's
-  `audit.Verifier(vk, params, secret, state, device=, commitment=, salt_source=)` takes, and `verifier.window()`
-  takes no number. `gpu.py windows` runs every window through them: the timed windows, the skip controls, and one
-  window per tag at a deadline no certificate allows, which checks the openings of a tag whose timed windows are late.
-- `reference.py` computes the expected roots with the core reference on CPU processes, and the store's leaves as proof
-  of useful space (PoUS) commits them under a salt (`store_leaves`), which `gpu.py windows` calls under the lease, once
-  the GPU is known.
-- The harness runs the verifier and its state on the GPU's node too, to measure. In a deployment the verifier is the
-  auditor's hardware, on a machine the prover doesn't control, and what runs on the GPU's node (`challenger_device`,
-  `Prover`) is the prover's (`PROTOCOL.md` §2).
-- `run.sh` is one Attempt on vy-nebius-2. It builds and runs the reference outside the lease, then under
-  `gpu-lease 1 --wait` runs `bwtag`'s gates, its timing and `gpu.py windows`. A failed gate times nothing. Its header
-  lists the outputs.
-- `summarize.py` writes `summary.json`: the honest pass against the raw device read, the skip curve, the PCIe rates, the
-  windows, and `audit.bound` at the measured numbers for the certified tags.
+## The chip's stores
 
-The store is a generated test store (`reference.block`, the bandwidth vectors' blocks) under P2's geometry at its
-registered point: 2^19 blocks of 2,056 bytes. It is not a P2 encoding. The audit reads only the blocks and their tree
-under `vk`, so a generated store exercises the same work. Its salt is the device's, `audit.draw_salt(secret,
-reference.COMMITMENT, device)` for the device the challenger read, from a secret drawn fresh in each run and never
-written out, as the verifier requires (`audit.Verifier` refuses any other salt).
-
-## The certified PCIe stream and the chip's stores
-
-The side link and the chip are the two terms of `c` and `S` that the audit's bound charges a device for. These files
-measure what is left of each on the card.
-
-- `stream.py` is `stream/v1`, the challenger's stream: AES-128-CTR under a key the challenger derives from its own
-  randomness under the window's nonce, permuted so that every warp load on the device is 512 contiguous bytes, and
-  absorbed into `D`, a BLAKE3 tree keyed from σ, which the prover commits beside the root. The verifier opens sampled
-  chunks against `D` without hashing the stream. `fold` is the cheaper leaf `stream-fold/v1`, each 1 KiB chunk of the
-  stream to the XOR of its AES blocks, which the verifier checks whole. Its docstring is the format, and
-  `tests/stream_vectors.json` pins it (`python3 stream.py OUT` writes them).
-- `stream_host.cpp` generates the keystream on the host (AVX-512 VAES, with non-temporal stores for pinned memory;
-  AES-NI; OpenSSL for comparison). `stream.cu` (`bwstream`) is the device's absorb and the streamed window, built with
-  `tagger.cu`, and its modes measure the link's ceilings, HBM reads beside the link, the generators, the sustained
-  generate-and-copy pipe, the absorb, windows with and without the stream, and the fold read zero copy on a few SMs
-  beside the tag pass (`fold`), behind a frontier the host's generators advance after σ (`foldlive`), and from the
-  challenger's own process beside the prover's (`foldtwo`, under an MPS daemon that `run_stream.sh` starts with
-  `MPS=1`; `--challenger-first` makes the challenger's context and buffers before the prover's). Their transports:
-  zero copy from non-temporal or, with `--temporal`, cached generator stores (`--clwb`: written back and left clean),
-  or the copy engines into HBM (`--dma-piece-kib`, `--dma-streams`; `carry` times that path alone). `attack` is
-  `foldtwo`'s premise tried as an attack, the prover's process reading the challenger's mapped buffer through the CUDA
-  API, the OS and a kernel; `egress` is D2H against H2D and the timing a device can give its egress. `run_stream.sh` is one Attempt: the gates first (the generators against the
-  vectors, the absorb and both fold kernels against the reference, the tag pass's root), then the timings. Its header
-  lists the environment and outputs.
 - `chip.cu` (`bwchip`) measures the on-chip stores that S_chip has to cover: the instruction caches (code-footprint
   sweeps over PTX that it writes and ptxas assembles), whether code and constants share a cache, and where the evicted
   constants come back from; the constant cache, the TLBs, L1 and L2 retention; and how many uniform registers a warp
@@ -72,10 +14,9 @@ measure what is left of each on the card.
 
 ## Write ceilings
 
-The write ceilings of proof of useful bandwidth (PoUB), `timing.GPU_WRITE_BYTES_PER_S` and
-`timing.HOST_WRITE_BYTES_PER_S`, bound how fast a fill can write labels into a tier. These files measure what the node's
-writers reach, each arm gated before it is timed (the destination poisoned with 0xA5, sampled slots checked, and a
-control that writes nothing rejected).
+PoUB's write ceilings, `timing.GPU_WRITE_BYTES_PER_S` and `timing.HOST_WRITE_BYTES_PER_S`, bound how fast a fill can
+write labels into a tier. These files measure what the node's writers reach, each arm gated before it is timed (the
+destination poisoned with 0xA5, sampled slots checked, and a control that writes nothing rejected).
 
 - `write.cu` (`bwwrite`) on one card: labels derived on the device by 16-byte stores (plain and evict-first) and by
   bulk (TMA) stores from shared memory, the driver's memset, labels streamed in over PCIe by the copy engines (H2D)
@@ -85,8 +26,7 @@ control that writes nothing rejected).
   one thread a core over 1, 2, 4, ... cores and each NUMA node's. `run_write_host.sh` is one Attempt on the CPUs the job
   was given.
 
-`tests/` holds CPU twins of every kernel's arithmetic and message layout, with the SHA-512 and BLAKE3 constants read out
-of `tagger.cu`. It checks them against the core reference and checks that the bottom-up tree and its paths are RFC 6962's.
-`tests/test_prover.py` checks, with a fake tagger, that every window the harness runs is prepared before its seed and is
-in the store's one challenger state under a nonce of its own. Run it with
-`uv run tools/verity/check/suites.py benchmarks/bandwidth`.
+## Shared kernels
+
+`tagger.cu` holds device code that `word_codec/wc.cu`, `word_codec/wide.cu` and `kv_filler/topup.cu` include. Its
+header comment explains how each kernel is laid out.

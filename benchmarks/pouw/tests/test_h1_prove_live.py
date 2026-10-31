@@ -119,3 +119,33 @@ def test_a_tampered_opening_is_refused(prepared):
     assert LV.check_openings(pub, 1, bad, reg) == ["live@1: port slot_2's opened row is not row 2 of h1/slots@1's registered root"]
     other = json.loads((base / "dump" / "0" / "opening.json").read_text())
     assert len(LV.check_openings(pub, 1, other, reg)) == T
+
+
+def test_evidence_is_credits_live_statements_on_the_staged_program(prepared, tmp_path):
+    """``evidence``: the live descriptor whose SHA-512 is the program each round was staged under, which core's credit
+    reads T, S and the prefix back from (`credit.live_of`), and one statement a round in credit's form
+    (`credit.LIVE_STATEMENT_KEYS`): the circuit, the verifier's own public file and the honest statement's sessions. A round
+    not yet proved is refused, naming it."""
+    import hashlib
+    import shutil
+
+    from verity.core.protocols.pouw import credit as CR
+
+    base, _pub, _rc = prepared
+    work = tmp_path / "work"
+    shutil.copytree(base / "work", work)
+    with pytest.raises(ValueError, match="round 0's statement honest-0 has no session"):
+        LV.evidence(work)
+    for s in range(S):
+        (work / "st" / f"honest-{s}" / "sessions" / f"s{s}").mkdir(parents=True)
+    doc = LV.evidence(work)
+    raw = bytes.fromhex(doc["descriptor"])
+    record = json.loads((work / "record.json").read_text())
+    assert hashlib.sha512(raw).hexdigest() == record["program_sha512"]
+    got, why = CR.live_of(raw)
+    assert why is None and (got["T"], got["S"], got["prefix"]) == (T, S, PREFIX)
+    assert [sorted(st) for st in doc["statements"]] == [sorted(CR.LIVE_STATEMENT_KEYS)] * S
+    assert [(st["round"], st["public"], st["sessions"]) for st in doc["statements"]] == [
+        (s, str(work / "verifier" / f"honest-{s}.pub.bin"), [str(work / "st" / f"honest-{s}" / "sessions" / f"s{s}")])
+        for s in range(S)]
+    assert all(st["circuit"] == str(work / "circuit.txt") for st in doc["statements"])

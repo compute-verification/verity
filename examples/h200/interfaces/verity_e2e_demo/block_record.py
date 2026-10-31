@@ -1,7 +1,7 @@
-"""The block record: what each subprotocol writes for one server-time block and what the composed verdict reads,
-one document ``verity/block-record/v1``. It extends the all-protocols runner's per-period report
-(``verity/all-protocols-period/v1``, and its per-window ``verity/all-protocols-window/v1``) with the block's server and
-steps, every leg in one shape, the composed verdict with the JointHorizonLive error sum, and the monitoring period.
+"""The block record: what each subprotocol writes for one server-time block and the verdict on it, one document
+``verity/block-record/v2``. It extends the all-protocols runner's per-period report
+(``verity/all-protocols-period/v1``, and its per-window ``verity/all-protocols-window/v1`` and ``/v2``) with the block's
+server and steps, every leg in one shape, the Lean verdict with the JointHorizonLive error sum, and the monitoring period.
 
 **The record.**
 
@@ -14,17 +14,21 @@ steps, every leg in one shape, the composed verdict with the JointHorizonLive er
   and ratio ``r``, ``r`` null in a wipe from before ``verity/wipe/v0`` published it); ``error`` the probability over the leg's
   own coins that it accepts while its claim fails, as the run established it, read from ``error_from``; ``at`` the
   certificate at δ = 1/100 and 1/10^6 (core's `DELTAS`): the run's own wherever ``error`` ≤ δ (a claim holding except with
-  ``error`` holds except with δ), integrity's recomputed from its draw at δ (`integrity_bound`), else not established.
-  A leg whose ``server`` is not the block's is carried but not composed.
-* ``composed``: ``verdict`` (`compose`: reject when a composed leg rejects or errs, accept when every leg ran on the block's
-  server and accepted, else pending with what is ``missing``), the run's own composed answer (``onsite``) when it wrote
-  one, and ``joint_horizon``: `JOINT_HORIZON`'s error over this block, the composed legs' errors summed, and at each δ of
+  ``error`` holds except with δ), integrity's recomputed from its draw at δ (`integrity_bound`, the bound sampled
+  proofs' Lean ``countBound`` gives), else not established. A leg whose ``server`` is not the
+  block's is carried but not composed.
+* ``composed``: ``answer``, the Lean ``onsite check`` or ``remote check``'s answer on the block (`PRODUCTS`; protocol,
+  verdict, reason, commitment), None when neither ran; ``verdict``, that answer's (`Core.Verdict`: accept, reject or
+  undecided), undecided when there is none; nothing here combines the legs' verdicts into another. ``legs`` (each
+  composed leg's own verdict), what is ``missing`` on the block's server and what ran ``elsewhere`` are what the legs
+  say; ``joint_horizon`` is `JOINT_HORIZON`'s error over this block, the accepted legs' errors summed, and at each δ of
   `DELTAS` that δ times the legs established at it. The statement names five audits; the wipe is ``outside_statement``.
 * ``monitoring_period``: the census deployment (a parameter: ``{id, machines, window_s, ...}``) and, per period of
   core's `PERIODS`, its blocks over all compute (machines × blocks a machine) and JointHorizonLive's union bound over them at this
   block's errors (``error_sum`` × blocks), and the per-block error each δ of `DELTAS` needs over the period (δ / blocks).
 
-`check` recomputes every derived field from the legs. `from_period` builds a record from a runner report and extra legs.
+`check` recomputes every derived field from the legs and the answer. `from_period` builds a record from a runner report,
+the Lean answer and extra legs.
 """
 from __future__ import annotations
 
@@ -39,11 +43,16 @@ from typing import Any
 from verity.core.protocols.pous.wipe_monitoring import DELTAS, PERIODS
 from verity.core.protocols.profile import Stratified
 
-FORMAT = "verity/block-record/v1"
-EXTENDS = ("verity/all-protocols-period/v1", "verity/all-protocols-window/v1")
+FORMAT = "verity/block-record/v2"
+EXTENDS = ("verity/all-protocols-period/v1", "verity/all-protocols-window/v1", "verity/all-protocols-window/v2")
+#: the window report whose rows are all core answers and whose ``verdict`` is the Lean check's
+WINDOW_V2 = "verity/all-protocols-window/v2"
 LEGS = ("integrity", "pouw", "pous", "bandwidth", "certifier", "wipe")
 #: the runner's protocol keys, by leg
 RUNNER_KEYS = {"integrity": "integrity", "pouw": "work", "pous": "space", "bandwidth": "bandwidth", "certifier": "communication"}
+#: the products whose Lean check decides a block (`onsite check`, `remote check`), and `Core.Verdict`'s names
+PRODUCTS = ("verity/onsite/v0", "verity/remote/v0")
+VERDICTS = ("accept", "reject", "undecided")
 JOINT_HORIZON = {"name": "Accounting.Guarantees.JointHorizonLive", "proved": True,
                  "file": "Security/Definitions/Accounting/Guarantees/JointLive.lean",
                  "audits": ["integrity", "pouw", "pous", "bandwidth", "certifier"]}
@@ -108,8 +117,8 @@ def at_deltas(leg: str, quantity: Mapping[str, Any], error: Fraction) -> dict[st
 
 def leg(name: str, row: Mapping[str, Any], *, server: str, runs: Sequence[str], source: str = "real") -> dict[str, Any] | None:
     """One leg of the record from its runner row (or, for the wipe, its leg document); None for a row the runner marks
-    ``missing``."""
-    if row.get("verdict") == "missing":
+    ``missing``, and for a ``-window/v2`` row that is ``undecided`` (its piece didn't run, or it credits nothing)."""
+    if row.get("verdict") in ("missing", "undecided"):
         return None
     if source not in ("real", "fixture"):
         raise ValueError(f"source {source!r}: real or fixture")
@@ -121,18 +130,24 @@ def leg(name: str, row: Mapping[str, Any], *, server: str, runs: Sequence[str], 
             "runs": list(runs)}
 
 
-def compose(server: str, legs: Mapping[str, Any]) -> dict[str, Any]:
-    """The composed verdict and the JointHorizonLive error over the block (module docstring)."""
+def answer_of(answer: Mapping[str, Any] | None) -> dict[str, Any] | None:
+    """The record's form of the Lean product check's answer (`PRODUCTS`), as its ``check`` printed it; None for None.
+    Raises ValueError for anything else: another protocol's answer, or a verdict that is not `Core.Verdict`'s."""
+    if answer is None:
+        return None
+    if answer.get("protocol") not in PRODUCTS or answer.get("verdict") not in VERDICTS:
+        raise ValueError(f"not an answer of {PRODUCTS} with a verdict of {VERDICTS}: {dict(answer)}")
+    return {k: answer.get(k) for k in ("protocol", "verdict", "reason", "commitment")}
+
+
+def composed(server: str, legs: Mapping[str, Any], answer: Mapping[str, Any] | None) -> dict[str, Any]:
+    """The Lean answer's verdict on the block, what the legs say, and the JointHorizonLive error over it (module
+    docstring)."""
     here = {k: v for k, v in legs.items() if v is not None and v["server"] == server}
     elsewhere = sorted(k for k, v in legs.items() if v is not None and v["server"] != server)
     missing = sorted(k for k in LEGS if k not in here)
     verdicts = {k: v["answer"]["verdict"] for k, v in here.items()}
-    if any(v in ("reject", "error") for v in verdicts.values()):
-        verdict = "reject"
-    elif not missing and all(v == "accept" for v in verdicts.values()):
-        verdict = "accept"
-    else:
-        verdict = "pending"
+    a = answer_of(answer)
     accepted = sorted(k for k, v in verdicts.items() if v == "accept")
     terms = {k: here[k]["error"] for k in accepted}
     jh = {"statement": JOINT_HORIZON, "terms": terms, "error_sum": str(sum((frac(e) for e in terms.values()), Fraction(0))),
@@ -140,7 +155,8 @@ def compose(server: str, legs: Mapping[str, Any]) -> dict[str, Any]:
           "at": {str(d): {"error_sum": str(d * sum(1 for k in accepted if here[k]["at"][str(d)]["holds"])),
                           "not_established": sorted(k for k in accepted if not here[k]["at"][str(d)]["holds"])}
                  for d in DELTAS}}
-    return {"verdict": verdict, "legs": verdicts, "missing": missing, "elsewhere": elsewhere, "joint_horizon": jh}
+    return {"verdict": a["verdict"] if a else "undecided", "answer": a, "legs": verdicts, "missing": missing,
+            "elsewhere": elsewhere, "joint_horizon": jh}
 
 
 def monitoring_period(deployment: Mapping[str, Any], error_sum: Fraction) -> dict[str, Any]:
@@ -157,10 +173,13 @@ def monitoring_period(deployment: Mapping[str, Any], error_sum: Fraction) -> dic
 
 
 def from_period(report: Mapping[str, Any], *, steps: tuple[int, int], deployment: Mapping[str, Any],
-                extra: Mapping[str, Mapping[str, Any]] | None = None, source: str = "real") -> dict[str, Any]:
-    """The record of one runner report (``verity/all-protocols-period/v1`` or ``-window/v1``) whose loop served ``steps``
-    ``[lo, hi)`` on its node. ``extra``: legs the runner doesn't run, by leg name, each ``{row, server, runs, source}`` with
-    ``row`` the leg's document (``{answer, ...}``)."""
+                answer: Mapping[str, Any] | None = None, extra: Mapping[str, Mapping[str, Any]] | None = None,
+                source: str = "real") -> dict[str, Any]:
+    """The record of one runner report (``verity/all-protocols-period/v1``, ``-window/v1`` or ``-window/v2``) whose loop
+    served ``steps`` ``[lo, hi)`` on its node. ``answer``: the Lean ``onsite check`` or ``remote check``'s answer on the
+    block, by default a ``-window/v2`` report's ``verdict`` (`composite.py`'s), else None when neither ran. ``extra``: legs
+    the runner doesn't run, by leg name, each ``{row, server, runs, source}`` with ``row`` the leg's document
+    (``{answer, ...}``)."""
     if report.get("format") not in EXTENDS:
         raise ValueError(f"{report.get('format')}: not one of {EXTENDS}")
     lo, hi = steps
@@ -175,13 +194,12 @@ def from_period(report: Mapping[str, Any], *, steps: tuple[int, int], deployment
     legs["wipe"] = None
     for name, x in (extra or {}).items():
         legs[name] = leg(name, x["row"], server=x["server"], runs=x["runs"], source=x.get("source", "real"))
-    composed = compose(server, legs)
-    onsite = report.get("composed") or {}
-    composed["onsite"] = {k: onsite.get(k) for k in ("protocol", "verdict", "reason")} if onsite else None
+    if answer is None and report["format"] == WINDOW_V2:
+        answer = report["verdict"]
     which = {"period": report["period"]} if "period" in report else {"window": report["window"]}
     return {"format": FORMAT, "extends": report["format"], "run": report["run"], **which, "server": server,
-            "server_time": [{"server": server, "steps": [lo, hi]}], "legs": legs, "composed": composed,
-            "monitoring_period": monitoring_period(deployment, frac(composed["joint_horizon"]["error_sum"]))}
+            "server_time": [{"server": server, "steps": [lo, hi]}], "legs": legs, "composed": (c := composed(server, legs, answer)),
+            "monitoring_period": monitoring_period(deployment, frac(c["joint_horizon"]["error_sum"]))}
 
 
 def check(record: Mapping[str, Any]) -> dict[str, str]:
@@ -203,11 +221,15 @@ def check(record: Mapping[str, Any]) -> dict[str, str]:
             bad[f"leg:{name}"] = "its source is neither real nor fixture"
         if lg["at"] != at_deltas(name, lg["quantity"], frac(lg["error"])):
             bad[f"leg:{name}"] = "its certificates at the deltas are not its quantity's at its error"
-    want = compose(server, record["legs"])
-    got = {k: v for k, v in record["composed"].items() if k != "onsite"}
+    try:
+        want = composed(server, record["legs"], record["composed"].get("answer"))
+    except ValueError as e:
+        bad["composed:answer"] = str(e)
+        return bad
+    got = record["composed"]
     for k in want:
         if got.get(k) != want[k]:
-            bad[f"composed:{k}"] = "not what its legs compose to"
+            bad[f"composed:{k}"] = "not its answer's verdict" if k == "verdict" else "not what its legs and answer give"
     if record["monitoring_period"] != monitoring_period(record["monitoring_period"]["deployment"],
                                                         frac(want["joint_horizon"]["error_sum"])):
         bad["monitoring_period"] = "not the deployment's periods at the block's error sum"

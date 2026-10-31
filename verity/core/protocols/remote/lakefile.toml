@@ -1,6 +1,6 @@
-# Remote Verity as one `Core.Protocol` (`verity/remote/v0`): the composition of integrity (sampled proofs) and work
-# (PoUW). Its executable is the core CLI (`remote id | check | serve`),
-# which the difftest drives. Code: no Mathlib.
+# Remote Verity as one `Core.Protocol` (`verity/remote/v0`): the composition of integrity (sampled proofs), work (PoUW)
+# and the inference-only policy (`verity/inference-only/v0`). Its executable is the core CLI (`remote id | check |
+# serve`), which the difftest drives. Code: no Mathlib.
 name = "core_remote"
 defaultTargets = ["CoreRemote", "remote"]
 
@@ -28,6 +28,11 @@ path = "../../service/sampled_proofs"
 [[require]]
 name = "pouw_check"
 path = "../pouw/lean/check"
+
+# The inference-only policy: its check as a core protocol (`NciCheck.Protocol`).
+[[require]]
+name = "nci_check"
+path = "../network/nci/lean"
 
 [[lean_lib]]
 name = "CoreRemote"

@@ -10,11 +10,11 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
 - `verity/`: the distribution `verity` (the root `pyproject.toml`; its module list is `verity/README.md`). Import from the
   owning module (`from verity.ml.circuits import Program`); `verity` re-exports nothing.
   - `verity/core/`: the verifiers, trusted code. `verity/core/protocols/` holds the integrity profile (`profile`) and one
-    package per protocol: sampled proofs, PoUW, proof of useful space (PoUS), the bandwidth audit, proof of useful
-    bandwidth (PoUB) and network certification, each a Python verifier until its Lean verifier (its `lean/`) replaces
-    it; the inference-only policy (`network/nci/`) is Lean only. `claims` holds the security claims' ids,
-    `service/flock/` C-Flock's Lean verifier and the ZK server (`Flock.Firewall`), `service/firewall/` the ZK server's
-    release side, and `difftest` the Python held to each Lean.
+    package per protocol: sampled proofs, PoUW, proof of useful space (PoUS), proof of useful bandwidth (PoUB) and
+    network certification, each a Python verifier until its Lean verifier (its `lean/`) replaces it; the
+    inference-only policy (`network/nci/`) is Lean only. `claims` holds the security claims' ids, `service/flock/`
+    C-Flock's Lean verifier and the ZK server (`Flock.Firewall`), `service/firewall/` the ZK server's release side, and
+    `difftest` the Python held to each Lean.
   - `verity/ml/`: Python and CUDA: the provers, and Python that mirrors the Lean for speed. `circuits` (format in
     `circuits/PROTOCOL.md`; `ops`, the primitive circuits' Definitions; `silicon`, the GPUs' exact semantics),
     `kernels`, `commitments`, `crypto`, `randomness` (the one challenge derivation), `private_circuits`, `definitions`

@@ -4,7 +4,7 @@ size, unsigned, under one adversarial edit (`wipe_cases.MUTATIONS`), one JSON ed
 session; and `wipe-protocol serve` under S1's LMS on each named wipe (`wipe_protocol_case.EXPECT`): an honest one, a
 segment certified at `StreamedWipeMeetsReads`' threshold at `k = 2152` and one at `k = 5231` with memory past the fill, a
 prover keeping one label past the threshold of foreign content, a late read and a session never signed, each with the
-verdict it is aimed at."""
+verdict it is aimed at; and a commitment of no reads, refused by both as they decode it."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ import json
 import shutil
 
 import pytest
+from hypothesis import assume
 from hypothesis import strategies as st
 
 import mc_cases as M
@@ -61,13 +62,19 @@ CASE_EDITS = [
 ]
 
 
+def _in_a_case(s: str) -> bool:
+    """Whether a case's canonical JSON (`codec.canonical_json`) can hold the string: ASCII without DEL."""
+    return s.isascii() and "\x7f" not in s
+
+
 @st.composite
 def drawn(draw) -> dict:
-    s = draw(WC.sessions())
+    s = draw(WC.sessions(names=WC.CASE_TIER_NAMES))
     x = draw(st.integers(0, 2 ** 16))
     how = draw(st.sampled_from(["as-is", "as-is", "mutated", "mutated", "unsigned", "json", "case", "other"]))
     if how == "mutated":
         s = draw(st.sampled_from(WC.MUTATIONS))(s, x)
+        assume(_in_a_case(s.signed.scheme) and _in_a_case(s.signed.ended))
     signed = None if how == "unsigned" else s.signed
     if how == "other":
         server, session = draw(st.sampled_from([(s.commitment.server + b"x", None), (None, M._flip(s.commitment.session, x))]))
@@ -114,6 +121,18 @@ def test_the_named_wipes(deployed_server):
     assert seen["untrusted"]["reason"] == "the session is signed by a key that is not a trusted memory challenger's"
     assert seen["tampered"]["reason"] == "the signature does not verify"
     assert seen["commitment"]["commitment"] is None and seen["evidence"]["commitment"] is not None
+
+
+def test_a_wipe_of_no_reads_is_refused_as_it_decodes(deployed_server):
+    """A commitment of `k = 0` timed reads, which `gaps` would leave uncertified, never reaches the check: the Lean and
+    the Python refuse it as they decode it, before its digest."""
+    port = deployed_port(st.none())
+    c = C.build("honest")
+    c["commitment"] = D.canonical(json.loads(bytes.fromhex(c["commitment"])) | {"k": 0}).encode().hex()
+    lean = D.replay(port, c, deployed_server)
+    assert port.key(lean) == port.key(port.python(c)), lean
+    for a in (json.loads(lean[1]), C.answer(c)):
+        assert (a["verdict"], a["commitment"]) == ("reject", None) and "1 <= batch <= k" in a["reason"], a
 
 
 def test_each_kind_gets_its_verdict(deployed_server):

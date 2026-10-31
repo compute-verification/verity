@@ -40,30 +40,36 @@ SHA-512s. `check` recomputes every string, path and domain and replays each unit
 window itself, which `benchmarks/one_stage/prove_bundle.sh` proves the bundle against, is in the evidence store
 (its `BUNDLE_WINDOW`).
 
-## The block record (`verity/block-record/v1`)
+## The block record (`verity/block-record/v2`)
 
-`verity_e2e_demo/block_record.py`, schema `verity_e2e_demo/schemas/block-record.v1.schema.json`. What each subprotocol writes
-for one server-time block and what the composed verdict reads. It extends the all-protocols runner's report
-(`verity/all-protocols-period/v1` and `-window/v1`) with:
+`verity_e2e_demo/block_record.py`, schema `verity_e2e_demo/schemas/block-record.v2.schema.json`. What each subprotocol writes
+for one server-time block and the Lean check's answer for it. It extends the all-protocols runner's report
+(`verity/all-protocols-period/v1`, `-window/v1` and `-window/v2`, whose rows are all core answers and whose `verdict`,
+onsite's or remote's Lean answer (its public outcome: protocol, verdict and refusal's name) or `undecided` naming what
+each lacks, is the record's answer; an `undecided` row is no subprotocol entry) with:
 
 - the block's server and steps, `server_time: [{server, steps: [lo, hi)}]`;
 - the subprotocols, keyed `integrity` (sampled proofs), `pouw`, `pous`, `bandwidth`, `certifier` and `wipe`. Each is
-  `null` when the block ran no such audit, else its protocol, the core answer, its certificate (integrity bound, W_cert,
+  `null` when the block ran no such audit, else its protocol, the core answer, its certificate (integrity's count bound,
+  `profile.Stratified.count_bound` over its sample, W_cert,
   S_cert, Q_cert, K, the wipe's foreign_bits at its reads `k` and ratio `r`), its error and the certificate at δ = 1/100
   and 1/10^6, its run ids, and `source: real|fixture`;
-- the composed verdict and the error of `Accounting.Guarantees.JointHorizonLive` over the block: the accepted
-  subprotocols' errors summed;
+- the composed verdict, which is the answer's: the Lean check's (`verity/onsite/v0` or `verity/remote/v0`, as
+  the composite Lean check writes its `answer.json`), `accept`, `reject` or `undecided`, and `undecided` with no
+  answer. Nothing in Python combines the subprotocols' verdicts;
+- the error of `Accounting.Guarantees.JointHorizonLive` over the block: the accepted subprotocols' errors summed;
 - the monitoring period: week, month and year over a census deployment's machines (a parameter), with JointHorizonLive's
   union bound over that many blocks and the per-block error each δ needs.
 
-`check` recomputes every derived field from the subprotocols' entries.
+`check` recomputes every derived field from the subprotocols' entries and the answer.
 
     python -m verity_e2e_demo.block_record check tests/fixtures/block-record-r2-period0.json
     python -m verity_e2e_demo.block_record from-runs --r2 R2/reports.jsonl --r1 R1/reports.jsonl --wipe WIPE/results.json --out DIR
 
 The fixtures are records of real runs. `block-record-r2-period0` is one period of an all-protocols run: five
-subprotocols accept, and a wipe is carried but not composed, since it ran on another server. So the verdict is pending,
-and the error sum is at least sampled proofs' 1/2 from its 2-unit draw. `block-record-r1-window10` is one window with
+subprotocols accept, and a wipe is carried but not composed, since it ran on another server. It has no Lean answer, so the
+verdict is undecided, and the error sum is at least sampled proofs' 1/2 from its 2-unit sample. `block-record-b71a-w30`
+carries its window's Lean `onsite check` answer, which accepts. `block-record-r1-window10` is one window with
 sampled proofs at δ = 1/100 and the wipe on the same server, the other subprotocols absent.
 
 ## Demo A's report

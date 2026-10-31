@@ -2,7 +2,6 @@
   "rule": "ruff (ruff.toml)",
   "entries": [
     {"file": "benchmarks/all_protocols/verity_all_protocols/runner.py", "rule": "BLE001", "count": 2},
-    {"file": "benchmarks/bandwidth/tests/test_prover.py", "rule": "B008", "count": 1},
     {"file": "benchmarks/circuit_properties/run.py", "rule": "E402", "count": 2},
     {"file": "benchmarks/codec_tensor/bench.py", "rule": "F821", "count": 5},
     {"file": "benchmarks/codec_tensor/reader.py", "rule": "E402", "count": 6},
@@ -10,9 +9,7 @@
     {"file": "benchmarks/codec_tensor/step.py", "rule": "F821", "count": 2},
     {"file": "benchmarks/codec_tensor/tests/test_points.py", "rule": "RUF100", "count": 1},
     {"file": "benchmarks/codec_tensor/tests/test_sketch_receipt.py", "rule": "RUF100", "count": 1},
-    {"file": "benchmarks/codec_tensor/tests/test_sketching.py", "rule": "RUF100", "count": 1},
     {"file": "benchmarks/codec_tensor/tests/test_step_plan.py", "rule": "RUF100", "count": 2},
-    {"file": "benchmarks/codec_tensor/tests/test_tagging.py", "rule": "RUF100", "count": 1},
     {"file": "benchmarks/commitments/commit_cost.py", "rule": "F401", "count": 2},
     {"file": "benchmarks/commitments/step_root_gpu.py", "rule": "F401", "count": 1},
     {"file": "benchmarks/datacenter/datacenter/binding.py", "rule": "BLE001", "count": 1},
@@ -309,7 +306,6 @@
     {"file": "benchmarks/resource_accounting/certified.py", "rule": "E731", "count": 1},
     {"file": "benchmarks/resource_accounting/chain.py", "rule": "E402", "count": 1},
     {"file": "benchmarks/resource_accounting/chain.py", "rule": "E731", "count": 4},
-    {"file": "benchmarks/resource_accounting/joint.py", "rule": "E402", "count": 3},
     {"file": "benchmarks/resource_accounting/probe.py", "rule": "E731", "count": 2},
     {"file": "benchmarks/resource_accounting/render.py", "rule": "E402", "count": 3},
     {"file": "benchmarks/resource_accounting/render.py", "rule": "E731", "count": 2},
@@ -341,13 +337,10 @@
     {"file": "benchmarks/vllm_encoded/tests/test_kernels.py", "rule": "E402", "count": 1},
     {"file": "benchmarks/vllm_encoded/tests/test_layout.py", "rule": "E402", "count": 1},
     {"file": "benchmarks/vllm_encoded/window_gate.py", "rule": "F821", "count": 3},
-    {"file": "benchmarks/word_codec/bench.py", "rule": "F821", "count": 35},
     {"file": "benchmarks/word_codec/kv_bench.py", "rule": "F821", "count": 11},
     {"file": "benchmarks/word_codec/kv_exhaust.py", "rule": "F821", "count": 21},
     {"file": "benchmarks/word_codec/tests/test_frontier.py", "rule": "RUF100", "count": 1},
     {"file": "benchmarks/word_codec/wide.py", "rule": "RUF100", "count": 1},
-    {"file": "benchmarks/word_codec/wide_bench.py", "rule": "F821", "count": 27},
-    {"file": "benchmarks/word_codec/wide_sketch.py", "rule": "RUF100", "count": 1},
     {"file": "infra/cluster/src/cluster/agent.py", "rule": "BLE001", "count": 1},
     {"file": "infra/cluster/src/cluster/agent.py", "rule": "UP017", "count": 3},
     {"file": "infra/cluster/src/cluster/ledger.py", "rule": "UP017", "count": 1},
@@ -557,7 +550,6 @@
     {"file": "tools/verity/circuit_check/src/circuit_check/checks.py", "rule": "B008", "count": 3},
     {"file": "tools/verity/circuit_check/src/circuit_check/units.py", "rule": "RUF100", "count": 2},
     {"file": "tools/verity/circuit_check/tests/fixtures/ambient_builders.py", "rule": "RUF100", "count": 1},
-    {"file": "tools/verity/circuit_check/tests/test_annotation_files.py", "rule": "F401", "count": 1},
     {"file": "tools/verity/circuit_check/tests/test_declared_tables.py", "rule": "BLE001", "count": 1},
     {"file": "tools/verity/lean/cache.py", "rule": "S310", "count": 3},
     {"file": "tools/verity/lean/cache.py", "rule": "UP017", "count": 2},
@@ -741,6 +733,7 @@
     {"file": "examples/h200/e2e_h200/store.py", "rule": "F811", "count": 1},
     {"file": "examples/h200/run.py", "rule": "RUF100", "count": 11},
     {"file": "examples/h200/tests/test_rows.py", "rule": "E731", "count": 1},
-    {"file": "examples/h200/interfaces/verity_e2e_demo/report.py", "rule": "E731", "count": 1}
+    {"file": "examples/h200/interfaces/verity_e2e_demo/report.py", "rule": "E731", "count": 1},
+    {"file": "tools/verity/circuit_check/tests/test_metadata_files.py", "rule": "F401", "count": 1}
   ]
 }

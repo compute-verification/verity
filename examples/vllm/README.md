@@ -3,18 +3,22 @@
 The vLLM demo is the runnable form of the **remote protocol** (`verity/remote/v0`, in `verity/core/protocols/remote/`):
 what an auditor with no devices at the site establishes about a datacenter serving a model. One served run of
 Llama-3.2-1B INT8 on one H200 gives its verdict, and the same run carries the onsite protocol's subprotocols beside it.
-The remote protocol composes two subprotocols over one commitment and accepts only when both accept:
+The remote protocol composes three subprotocols, tied to one record, and accepts only when all three accept:
 
 - **integrity**, by sampled proofs' one-stage audit (`verity/core/protocols/sampled_proofs/`): every value the serving
   computes is committed under hiding commitments, live coins sample proof blocks from a sealed sampling block, the
   prover proves each sampled block with C-Flock `--zk` behind the Lean firewall, and the Lean verifier gives the verdict;
 - **work**, by proof of useful work (PoUW, `verity/core/protocols/pouw/`), on the served model itself: the endpoint
   serves PoUW's H1, each sampling block's coins come from a session of its own on the challenger's gate, and PoUW's
-  piece checks them against that session, the gate's ledger and its pins.
+  piece checks them against that session, the gate's ledger and its pins;
+- **the inference-only policy** (`verity/core/protocols/network/nci/`): the registered circuit divides into inference
+  blocks within their gate and fresh-input budgets. This demo doesn't run it: the served run doesn't produce the
+  declared division yet.
 
 PoUW's verdict on the served run credits nothing. The challenger's gate holds a development key, so every served PoUW
 run is a development run. And an H1 commitment's served execution blocks aren't yet a `verity/pouw/v1` case, the form
-remote's PoUW component reads. So the remote verdict can't accept on this run yet, and the run's record stays `pending`.
+remote's PoUW subprotocol reads. So the remote verdict can't accept on this run yet, and the window's verdict stays
+`undecided`.
 
 `example.toml` records what the demo establishes. Its run is `moved`: it has no passing run of record. Its proof level
 is none. Sampled proofs' guarantee, `Flock.Guarantees.SampledKSLiveV3`, is proved: when the verifier accepts a `--zk`
@@ -41,7 +45,9 @@ it serves (`--scheme rows-sha512`), and every closed sampling block is sealed. T
    at each class, and the records audit (C-Flock `--zk` on the sampled proof blocks behind the Lean firewall, and the
    Lean verifier's verdict);
 4. PoUW's piece, and each onsite subprotocol's piece where it has one;
-5. one record of every piece's verdict (`$OUT/record/verdicts.json`), `pending` while any subprotocol is missing.
+5. one record of every piece's verdict (`$OUT/record/verdicts.json`, every row a core answer), whose verdict is
+   onsite's or remote's Lean verdict (`composite.py`) when the pieces' cases make one up, else `undecided` naming what
+   each lacks.
 
 Each step's verdict line is in `$OUT/verdicts.txt`. What attaches Verity to vLLM is `integrations/vllm/`; this
 directory holds what is the demo's own: its placement and its commands.
@@ -49,10 +55,9 @@ directory holds what is the demo's own: its placement and its commands.
 ## The onsite protocol on the same run
 
 Onsite (`verity/onsite/v0`, in `verity/core/protocols/onsite/`) is remote's superset: it adds PoUS, PoUB
-(`verity/remote-bandwidth/v0`) and network certification. The memory wipe has its piece on the same run too, and
-isn't yet a subprotocol of either composite. Each runs on the served run as its piece where `served_verdicts.sh` names
-its command (`POUS_CMD`, `BANDWIDTH_CMD`, `CERTIFIER_CMD`, `WIPE_CMD`). A piece that doesn't run is named `MISSING` and
-gets no verdict.
+(`verity/remote-bandwidth/v0`), network certification and the memory wipe. Each runs on the served run as its piece
+where `served_verdicts.sh` names its command (`POUS_CMD`, `BANDWIDTH_CMD`, `CERTIFIER_CMD`, `WIPE_CMD`). A piece that
+doesn't run is `undecided`, `not run`, naming the command it lacks.
 
 ## The auditor's parties
 

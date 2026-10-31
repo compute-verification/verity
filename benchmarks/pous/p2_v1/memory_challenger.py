@@ -45,6 +45,7 @@ from band_gpu.memory_challenger import (  # noqa: E402
     quantiles,
 )
 from p2_v1 import reference  # noqa: E402
+from verity.core.protocols.pous.verifier import MerkleTree
 
 
 def params_of(manifest: dict[str, Any], payload_bytes: int) -> reference.Params:
@@ -59,7 +60,7 @@ def audit(host: str, port: int, params: reference.Params, salt: bytes, model: by
     blocks, bps = params.blocks, params.blocks_per_segment
     if len(leaves) != blocks:
         raise ValueError(f"{len(leaves)} leaves for a store of {blocks} blocks")
-    root = reference.root(leaves)
+    root = MerkleTree(leaves).root
     epoch = reference.epoch_id(params, model, salt, root)
     source = os.urandom(32)
     if cpu is not None:
@@ -97,7 +98,7 @@ def audit(host: str, port: int, params: reference.Params, salt: bytes, model: by
     return {"root": root.hex(), "epoch_id": epoch.hex(), "source": source.hex(), "limit_ns": limit, "limit_fixed_before_load": fixed,
             "deadline_ns": deadline_ns, "allowance": allowance, "allowance_kind": ALLOWANCE_KIND,
             "rtt_allowance_ns": limit - deadline_ns,
-            "rtt_allowance_within_spec": limit - deadline_ns <= reference.MAX_RTT_ALLOWANCE_NS, "calibration_here": cal,
+            "rtt_allowance_within_spec": limit - deadline_ns <= reference.RTT_ALLOWANCE_CAP_NS, "calibration_here": cal,
             "rtt_after_s": quantiles(after), "pings_raw_s": {"before": before, "after": after}, "k": k, "scheme": reference.PROTOCOL,
             "audit_of_record": {"accepted": accepted[0], "rounds": len(records[0]["answers"]),
                                 "elapsed_max_ns": max(x["elapsed_ns"] for x in records[0]["answers"])},

@@ -39,7 +39,7 @@
   window's draw and free inputs, `free_inputs`) and the network's own terms (`network_terms`), at each δ. With
   ``--period-answer`` (certifier/v0's ``network-period check`` answer on the period, a ``certifier.answer.json``,
   its case ``certifier.case.json`` beside it or ``--period-case``) and ``--server``, an accepted report also writes
-  ``block.json``: the block record's certifier entry (``legs.certifier`` of ``verity/block-record/v1``),
+  ``block.json``: the block record's certifier entry (``legs.certifier`` of ``verity/block-record/v2``),
   `block_certifier.block_leg` of that answer, once the answer is held to this chain (`period_binding`) and is
   ``network-period check``'s own on its case (`decide_period`; `block_entry`).
 * **The warden path** (``--job``'s ``path``, `WARDEN`): every step reads an active warden's own run (the gate's

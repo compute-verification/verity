@@ -1,30 +1,40 @@
-"""P2 v4 on the CPU, as `verity/core/protocols/pous/p2/PROTOCOL.md` (P2 specification v4) states it: the
+"""P2 v4 on the CPU, the scheme's reference (`verity/core/protocols/pous/README.md`, "P2", outlines it): the
 reference the harness's GPU kernels are gated against, and the one the wire verifier (`wire.py`) and the vectors
-(`vectors.py`) are built on.
+(`vectors.py`) are built on. Its maps and key streams are the registered scheme's
+(`verity.core.protocols.pous.schemes.p2`, held to `PousCheck.P2` by its difftest), under the reference's names and with
+its refusals of non-canonical inputs; its own are its setup framing, `Params` with its refusals (which `PousCheck.Wire`
+mirrors), v4's leaves and the audit's derivations.
 
 v4 is v1.1 with one hash, SHA-512 with its whole 64-byte output, everywhere: the
 W commitment, the verification tree, the epoch id and the keys, which are counter-mode SHA-512 where v1 read SHAKE256.
 `verity.ml.randomness` is the spec's derivation (`frame`, `derive`) and
-`verity.ml.commitments.identity.canonical_json_bytes` its manifest encoding. Big integers are Python's (gmpy2's
-`powmod` when it is installed). It is pinned by `vectors.json` beside it (`VECTORS_SHA512`, the hash in the spec's §7).
+`verity.ml.commitments.identity.canonical_json_bytes` its manifest encoding. It is pinned by `vectors.json` beside it
+(`VECTORS_SHA512`).
 
-- `Params`: `p = 2^w − c0 ≡ 3 mod 4`, the payload profile (`p2-2054B` at `DEPLOYMENT`: 2,054 bytes of each 2,056-byte block)
-  and the store's shape (blocks per segment, segments).
-- `setup_salt`, `expand_prefix`, `stream`, `keys`: §4's post-commitment salt and per-block `K` and `t` (counter-mode SHA-512
-  over a prefix of whole 128-byte blocks; `t` is rejection-sampled below `p`).
-- `d`, `rho`, `sigma`, `encode`, `decode`: §3's maps, `E_j(m) = ρ(σ_K(ρ(m + t)))` and `D_j(c) = d(σ_K(d(c))) − t`.
-- `manifest`, `w_commitment`, `row_digest`, `leaf`, `node`, `root`, `epoch_id`, `audit_key`, `round_key`: the setup
-  commitment, the RFC 6962 verification tree over 0x00-tagged leaves of each block's `sha512/row/v2` digest, and the
-  audit's challenge derivation (mode 0 and mode 1).
+- `Params`: `p = 2^w − c0 ≡ 3 mod 4`, the payload profile and the store's shape (blocks per segment, segments). A
+  registered store's are core's `P2Params` (`Params.of`), `DEPLOYMENT` the certificate's (`p2-2054B`: 2,054 bytes of each
+  2,056-byte block); the wire also takes the reduced-width conformance profiles no registered scheme produces, as
+  `PousCheck.Wire.Params` does. `vector_params` is the map vectors'.
+- `setup_salt`, `expand_prefix`: the post-commitment salt and the key prefix, which frames the model commitment and a
+  32-byte salt where the registered scheme's frames its 24-byte salt alone.
+- `stream`, `keys`, `keys_after`: the per-block `K` and `t` after a prefix (`schemes.p2.stream` and `sha512_keys_indexed`:
+  counter-mode SHA-512 over a prefix of whole 128-byte blocks; `t` is rejection-sampled below `p`).
+- `d`, `rho`, `sigma`, `encode`, `decode`: the maps on `schemes.p2`'s field, `E_j(m) = ρ(σ_K(ρ(m + t)))` and
+  `D_j(c) = d(σ_K(d(c))) − t`. They and the keys read only `w`, `c0` and `p`, so they take a `schemes.p2.P2Params` too.
+- `manifest`, `w_commitment`, `row_digest`, `leaf`, `epoch_id`, `audit_key`, `round_key`: the setup commitment, the
+  0x00-tagged leaf of each block's `sha512/row/v2` digest, and the audit's challenge derivation (mode 0 and mode 1). The
+  verification tree over the leaves is PoUS's (`verity.core.protocols.pous.verifier`: `MerkleTree`, `verify_path`).
 """
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
+from verity.core.protocols.pous.schemes import p2 as P2
 from verity.ml.commitments.identity import canonical_json_bytes
 from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
+from verity.ml.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
 from verity.ml.randomness import Key, derive, frame
 
 HERE = Path(__file__).resolve().parent
@@ -34,46 +44,45 @@ AUDIT_VECTORS = HERE / "audit-vectors.json"
 AUDIT_VECTORS_SHA512 = "5f8ed7f279ccd2f2d5bb60607fb5d7bec82bf982ac85da268f76cb8fbb16d36424e7b99eaa386508840aa2bd3c3b501512bde86b930871a769cd470a14ab176e"
 NEGATIVE_VECTORS = HERE / "audit-negative-vectors.json"
 NEGATIVE_VECTORS_SHA512 = "f57340a0965628051bd0c938c4c7e2db5a7133982ae1a523a1221a3fbb273bfbcb1ebc1d29680b61b47f86d45e7c98aa4a5ac6311545c19c78728d857596a687"
-"""The spec's §7 pins: `vectors.py` writes the three files and rewrites these."""
-PROTOCOL = "p2/v4"
+ENTRY_SHA512 = {
+    64: "c34350fa0e0b8ae7c521cd7df833c160df1498adc938a99feb6166c2f37b3e6a2ca07239b9ab71fdd979b02efc8c8951d68f32d108abbde5cc44bac3137241e1",
+    96: "df8941e52d73848baa7862cd3f20ea6f7adc1da79149db154b0be9e0d28be8905b95aac079cd98e14b56f8077ba6cfb173e0472df7e83b40138c6f16a871ff1f",
+    128: "adf7cd300e2d4ea93643e94d563b02c80e29d88d65a34a55269f9e37da6b71bde6dce1c9e4c04c561dd103a8dc4c3955ee83ecabef20ad717de4672e8014fcae",
+    16448: "2a227a512683d67624bca51ba087ec05a4dda85c5e93b67c50c03349a7823f50f84b98f4f2f9e92d9c87ddc41ab0e5fd8d2211472709a05093e7c0121a86811c",
+}
+"""The vectors' pins: each file's SHA-512, and by width the SHA-512 of `vectors.json`'s entry (the canonical JSON of
+the entry without its `sha512`), which `PousCheck.SetupDifftest.ENTRY_SHA512` holds too. `vectors.py` writes the three
+files and rewrites these."""
+PROTOCOL = P2.PROTOCOL_ID
 SETUP_DOMAIN = "verity/pous/p2-setup/v4"
 AUDIT_ID_DOMAIN = "verity/pous/p2-audit-id/v4"
 CHALLENGE_DOMAIN = "verity/pous/p2-audit-challenge/v4"
 ROUND_DOMAIN = "verity/pous/p2-audit-round/v4"
-KEYS_TAG = b"verity/pous/p2/keys/v4\0"
+KEYS_TAG = P2.KEYS_TAG
 EPOCH_TAG = b"verity/pous/p2/epoch/v4\0"
 TAGGED_SHA512 = b"verity/tagged-sha512/v1\0"
 W_COMMITMENT_LABEL = b"verity-pous/w-commitment/v2"
-DIGEST_BYTES = 64
+DIGEST_BYTES = _DIGEST_BYTES["sha512"]
 SALT_BYTES = 32
-K_AUDIT = 105
-"""The deployment audit's challenges (spec §5, F6)."""
-DELTA_NS = 500_000
-MAX_RTT_ALLOWANCE_NS = 354_000
-"""Δ and the most round-trip allowance the operating point permits (spec §6): v1.1's cap, so
+K_AUDIT = P2.CERT_K
+"""The deployment audit's challenges."""
+DELTA_NS = P2.DELTA_NS
+RTT_ALLOWANCE_CAP_NS = P2.RTT_ALLOWANCE_CAP_NS
+"""Δ and the most round-trip allowance the operating point permits: the cap, so
 that `Δ + RTT ≤ 854 µs` keeps SeqRoot's 2× margin with 8 cores of one chiplet cooperating
-(`verity.core.protocols.pous.schemes.p2.RTT_ALLOWANCE_CAP_NS`; v1 permitted 1 ms)."""
-
-try:
-    import gmpy2
-
-    def _powmod(x: int, e: int, m: int) -> int:
-        return int(gmpy2.powmod(x, e, m))
-except ImportError:
-    def _powmod(x: int, e: int, m: int) -> int:
-        return pow(x, e, m)
+(v1 permitted 1 ms)."""
 
 
 @dataclass(frozen=True)
 class Params:
-    """A width, its prime, the payload profile (whole bytes, the leading two bytes of every block zero) and the store."""
+    """A width, its prime, the payload profile (whole bytes, the leading bytes of every block zero) and the store."""
 
     w: int
     c0: int
     payload_bytes: int
-    blocks_per_segment: int = 1 << 16
-    segments: int = 8
-    profile: str = "p2-2054B"
+    blocks_per_segment: int
+    segments: int
+    profile: str
 
     def __post_init__(self) -> None:
         if self.w < 8 or self.w % 32 or self.c0 < 1 or self.c0 % 4 != 1 or self.p % 4 != 3:
@@ -82,6 +91,11 @@ class Params:
             raise ValueError("a payload is fewer bytes than a block")
         if self.p <= 1 << 8 * self.payload_bytes:
             raise ValueError("every payload is below p")
+
+    @classmethod
+    def of(cls, params: P2.P2Params) -> Params:
+        """A registered store's: core's width, prime, payload profile and shape."""
+        return cls(params.w, params.c0, params.payload_bytes, params.blocks_per_segment, params.segments, params.profile)
 
     @property
     def p(self) -> int:
@@ -107,7 +121,16 @@ class Params:
                 "blocks_per_segment": self.blocks_per_segment, "segments": self.segments}
 
 
-DEPLOYMENT = Params(16_448, 21_065, 2_054)
+DEPLOYMENT = Params.of(P2.P2Params(*P2.POINT, segments=P2.CERT_BLOCKS // P2.POINT[2]))
+"""The registered store the certificate is at: 2^19 blocks, in 8 segments."""
+
+
+def vector_params(w: int, c0: int) -> Params:
+    """A map vector's parameters at `(w, c0)`: `DEPLOYMENT`, or `DEPLOYMENT` at a reduced width with a payload of
+    `n − 1` bytes (the map vectors read no profile or store)."""
+    if (w, c0) == (DEPLOYMENT.w, DEPLOYMENT.c0):
+        return DEPLOYMENT
+    return replace(DEPLOYMENT, w=w, c0=c0, payload_bytes=w // 8 - 1)
 
 
 def setup_salt(source: bytes, params: Params, model: bytes) -> bytes:
@@ -124,15 +147,7 @@ def expand_prefix(salt: bytes, params: Params, model: bytes) -> bytes:
     return body + bytes(-len(body) % 128)
 
 
-def stream(base: bytes, purpose: bytes, nbytes: int) -> bytes:
-    """The first `nbytes` of `SHA512(base ‖ purpose ‖ u32be 0) ‖ SHA512(base ‖ purpose ‖ u32be 1) ‖ …`."""
-    head = hashlib.sha512(base + purpose)
-    out = bytearray()
-    for i in range(-(-nbytes // DIGEST_BYTES)):
-        h = head.copy()
-        h.update(i.to_bytes(4, "big"))
-        out += h.digest()
-    return bytes(out[:nbytes])
+stream = P2.stream
 
 
 def keys(salt: bytes, params: Params, model: bytes, segment: int, block: int) -> tuple[int, int, int]:
@@ -140,63 +155,45 @@ def keys(salt: bytes, params: Params, model: bytes, segment: int, block: int) ->
     return keys_after(expand_prefix(salt, params, model), params, segment, block)
 
 
-def keys_after(prefix: bytes, params: Params, segment: int, block: int) -> tuple[int, int, int]:
+def keys_after(prefix: bytes, params: Params | P2.P2Params, segment: int, block: int) -> tuple[int, int, int]:
     """`keys` after any framing's `prefix`: the spec's (`expand_prefix`), or the registered scheme's, whose prefix frames
     the protocol's 24-byte salt and no model commitment (`verity...schemes.p2.expand_prefix`)."""
-    n = params.width_bytes
-    base = prefix + segment.to_bytes(8, "big") + block.to_bytes(8, "big")
-    k = int.from_bytes(stream(base, b"K", n), "big")
-    attempt = 0
-    while True:
-        candidate = int.from_bytes(stream(base, b"t", (attempt + 1) * n)[attempt * n:], "big")
-        if candidate < params.p:
-            return k, candidate, attempt
-        attempt += 1
+    return P2.sha512_keys_indexed(params, prefix, segment, block)
 
 
-def d(params: Params, z: int) -> int:
+def d(params: Params | P2.P2Params, z: int) -> int:
     if not 0 <= z < params.p:
         raise ValueError("d's input is not canonical")
-    square = z * z % params.p
-    return square if z % 2 == 0 else (-square) % params.p
+    return P2._field(params).sq(z)
 
 
-def rho(params: Params, y: int) -> int:
-    """`d⁻¹`: one exponentiation by `(p + 1) / 4`, then the parity-canonical member."""
+def rho(params: Params | P2.P2Params, y: int) -> int:
+    """`d⁻¹`: the parity-canonical root of ±y."""
     if not 0 <= y < params.p:
         raise ValueError("ρ's input is not canonical")
-    if y == 0:
-        return 0
-    s = _powmod(y, (params.p + 1) // 4, params.p)
-    square = s * s % params.p
-    if square == y:
-        return s if s % 2 == 0 else params.p - s
-    if square == (-y) % params.p:
-        return s if s % 2 else params.p - s
-    raise ArithmeticError("p is not a prime congruent to 3 mod 4")
+    return P2._field(params).rho(y)
 
 
-def sigma(params: Params, r: int, k: int) -> int:
+def sigma(params: Params | P2.P2Params, r: int, k: int) -> int:
     if not 0 <= r < params.p or not 0 <= k < 1 << params.w:
         raise ValueError("σ's inputs are not canonical")
-    x = r ^ k
-    return x if x < params.p else r
+    return P2._field(params).sigma(r, k)
 
 
-def encode(params: Params, m: int, k: int, t: int) -> int:
+def encode(params: Params | P2.P2Params, m: int, k: int, t: int) -> int:
     if not 0 <= m < params.p or not 0 <= t < params.p:
         raise ValueError("the payload and the tweak are canonical")
     return rho(params, sigma(params, rho(params, (m + t) % params.p), k))
 
 
-def decode(params: Params, c: int, k: int, t: int) -> int:
+def decode(params: Params | P2.P2Params, c: int, k: int, t: int) -> int:
     if not 0 <= c < params.p:
         raise ValueError("the codeword is not canonical")
     return (d(params, sigma(params, d(params, c), k)) - t) % params.p
 
 
 def w_commitment(params: Params, w: bytes) -> bytes:
-    """The commitment to `W` (spec §4's `w_commitment`): tagged SHA-512 over the canonical manifest and `W`, 64 bytes
+    """The commitment to `W` (`w_commitment`): tagged SHA-512 over the canonical manifest and `W`, 64 bytes
     (`verity.ml.commitments.identity.tagged_sha512`'s frame, hashed here in pieces so that `W` is not copied)."""
     manifest = canonical_json_bytes(params.manifest())
     h = hashlib.sha512(TAGGED_SHA512 + len(W_COMMITMENT_LABEL).to_bytes(4, "big") + W_COMMITMENT_LABEL)
@@ -206,7 +203,7 @@ def w_commitment(params: Params, w: bytes) -> bytes:
 
 
 def pack_payloads(payloads: list[int], bits: int) -> bytes:
-    """`W` from its payloads (spec §4): packed continuously, the first payload and the most significant bit first,
+    """`W` from its payloads: packed continuously, the first payload and the most significant bit first,
     zero-padded; at a whole number of bytes per payload, their concatenation."""
     packed = 0
     for value in payloads:
@@ -225,34 +222,6 @@ def row_digest(data: bytes) -> bytes:
 def leaf(salt: bytes, segment: int, block: int, data: bytes) -> bytes:
     """`SHA512(0x00 ‖ setup salt ‖ u64be(segment) ‖ u16be(local block) ‖ row_digest(block))`: 107 bytes, one compression."""
     return hashlib.sha512(b"\x00" + salt + segment.to_bytes(8, "big") + block.to_bytes(2, "big") + row_digest(data)).digest()
-
-
-def node(left: bytes, right: bytes) -> bytes:
-    return hashlib.sha512(b"\x01" + left + right).digest()
-
-
-def root(leaves: list[bytes]) -> bytes:
-    """The RFC 6962 tree's root: split at the largest power of two below the count, nodes `SHA512(0x01 ‖ l ‖ r)`."""
-    if not leaves:
-        raise ValueError("a verification tree has at least one leaf")
-
-    def mth(lo: int, hi: int) -> bytes:
-        if hi - lo == 1:
-            return leaves[lo]
-        k = 1 << ((hi - lo - 1).bit_length() - 1)
-        return node(mth(lo, lo + k), mth(lo + k, hi))
-
-    return mth(0, len(leaves))
-
-
-def path(leaves: list[bytes], index: int) -> list[bytes]:
-    """Leaf `index`'s RFC 9162 inclusion path, siblings from the leaf toward the root."""
-    if len(leaves) == 1:
-        return []
-    k = 1 << ((len(leaves) - 1).bit_length() - 1)
-    if index < k:
-        return path(leaves[:k], index) + [root(leaves[k:])]
-    return path(leaves[k:], index - k) + [root(leaves[:k])]
 
 
 def epoch_id(params: Params, model: bytes, salt: bytes, verification_root: bytes) -> bytes:
@@ -286,8 +255,8 @@ def conformance(full_encode: bool = False) -> dict[str, object]:
     doc = json.loads(raw)
     checks = {"file_sha512": hashlib.sha512(raw).hexdigest() == VECTORS_SHA512}
     for v in doc["vectors"]:
-        w, c0 = int(v["w"]), int(v["c0"])
-        params = Params(w, c0, 2054 if (w, c0) == (DEPLOYMENT.w, DEPLOYMENT.c0) else w // 8 - 1)
+        w = int(v["w"])
+        params = vector_params(w, int(v["c0"]))
         model, n = bytes.fromhex(v["model_commitment"]), params.width_bytes
         salt = setup_salt(bytes.fromhex(v["source"]), params, model)
         k, t, attempt = keys(salt, params, model, int(v["segment"]), int(v["block"]))
@@ -298,7 +267,6 @@ def conformance(full_encode: bool = False) -> dict[str, object]:
             ok = ok and encode(params, m, k, t) == c
         checks[v["id"]] = ok
     for s in doc["sigma_rejection_vectors"]:
-        w, c0 = int(s["w"]), int(s["c0"])
-        params = Params(w, c0, 2054 if (w, c0) == (DEPLOYMENT.w, DEPLOYMENT.c0) else w // 8 - 1)
+        params = vector_params(int(s["w"]), int(s["c0"]))
         checks[s["id"]] = sigma(params, int(s["r"], 16), int(s["K"], 16)) == int(s["sigma"], 16)
     return {"passed": all(checks.values()), "vector": str(VECTORS.name), "checks": checks}

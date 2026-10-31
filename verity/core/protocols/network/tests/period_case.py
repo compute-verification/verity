@@ -61,7 +61,7 @@ from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 from verity.core.protocols.certifier.warden import WardenParams
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.sampled_proofs.one_stage.draw import stratum_k
-from verity.ml.circuits import annotations as AN, boolean as BL, codec, population
+from verity.ml.circuits import boolean as BL, codec, metadata as AN, population
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.defs import REGISTRY
 from verity.ml.circuits.program import Program
@@ -1335,7 +1335,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     key = _key(ki)
     N, W, H, toy = KEYS[ki]
     session = r.randbytes(lms.SESSION_BYTES)
-    link = r.choice(["eth0", "a", "dé"])
+    # the rows form binds the link in its domain's canonical JSON, whose strings are ASCII without DEL
+    link = r.choice(["eth0", "a", "d-e" if rows else "dé"])
     program = hashlib.sha512(b"link program %d" % r.randrange(3)).hexdigest()
     least_windows = 2 if m in ("undecided-and-reject", "clock-reused", "delta") else 1
     least_audits = 1 if m.startswith("audit") or m in ("undecided-and-reject", "count-audits") else 0

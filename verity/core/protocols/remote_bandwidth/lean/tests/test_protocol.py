@@ -109,30 +109,16 @@ PORT = D.ProtocolPort(EXE, protocol, st.nothing(), package=M.PACKAGE)
 server = D.server_fixture(PORT)
 
 
-class Clock:
-    """The verifier's clock: each reading a microsecond after the last, and waiting moves it on."""
-
-    def __init__(self) -> None:
-        self.now = 10 ** 9
-
-    def __call__(self) -> int:
-        self.now += 1_000
-        return self.now
-
-    def sleep_until(self, clock, t: int) -> None:
-        self.now = max(self.now, t)
-
-
 STORE = hashlib.shake_256(b"a tiny MLP's weights").digest(3 * 4032 - 17)
 COINS = hashlib.sha512(b"the period's live coins").digest()
 
 
-def periods() -> dict[str, period.Period]:
+def periods() -> dict[str, period.Run]:
     """The small period on node `n0`, honest, under a prover that dropped every other chunk, and one verified only up
     to its first window."""
     out = {}
     for name, kw in (("honest", {}), ("dropping", {"cheat": M.dropping(lambda j: j % 2 == 1)}), ("unverified", {"verify": 1})):
-        c = Clock()
+        c = M.Clock(10 ** 9, 1_000)
         out[name] = period.run("n0", STORE, COINS, clock=c, sleep_until=c.sleep_until, entropy=M.Entropy(b"salts"), **kw)
     return out
 
@@ -143,7 +129,9 @@ def _part(answer: dict) -> dict:
 
 def test_a_small_periods_answers_agree(server) -> None:
     """The hook's own answer (the live session's) is the Python verifier's of its case and the Lean's: accepted with the
-    reads its openings certify, rejected for the dropped chunks' paths, and undecided with a window unverified."""
+    reads its openings certify, rejected for the dropped chunks' paths, and undecided with a window unverified. The
+    accepted one's ε is its two openings coins' at `samples` each, `LineHeldAtComponent`'s term, though its windows of
+    3 receipts drew fewer."""
     got = {}
     for name, p in periods().items():
         assert _part(protocol(copy.deepcopy(p.case))) == _part(p.answer), name
@@ -152,8 +140,8 @@ def test_a_small_periods_answers_agree(server) -> None:
     assert {n: a["verdict"] for n, a in got.items()} == {"honest": "accept", "dropping": "reject", "unverified": "undecided"}
     honest = got["honest"]
     assert honest["public"]["q_bytes"] == honest["profile"]["receipts"] * 4096 > 0 and honest["profile"]["gaps"] == []
-    draws = sum(s for _, s in honest["profile"]["windows"])
-    assert Fraction(honest["public"]["eps"]) == Fraction(2 ** 24 + draws, 2 ** 64), honest
+    assert sum(s for _, s in honest["profile"]["windows"]) < 2 * audit.SAMPLES, honest
+    assert Fraction(honest["public"]["eps"]) == Fraction(2 ** 24 + 2 * audit.SAMPLES, 2 ** 64), honest
 
 
 def _covered(kw: dict) -> bool:

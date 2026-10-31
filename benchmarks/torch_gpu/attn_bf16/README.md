@@ -25,7 +25,7 @@ o = attn.pv(p, v, lens, path="ref")              # the same words through the re
   for all of its head groups. `attn.LAUNCH` picks the tiling and launch shape for each op, and `attn.serves` says where
   each applies. The `_ref` kernels are the reference path: a CTA takes 8 columns of one KV head and sequence, its warps
   take the (16 query heads, query) pairs in turn, and every operand word is gathered on its own.
-- `attn.py`: the kernels as torch functions (the skeleton's interface), `qk(q, k, lens=None, *, out, fill, warps,
+- `attn.py`: the kernels as torch functions (the H200 example's interface), `qk(q, k, lens=None, *, out, fill, warps,
   check_lens, path)` and `pv(p, v, lens=None, *, out, kpv, warps, check_lens, path)`: S past `lens` is `fill` (-inf),
   PV's K is `kpv` = 32 for every KV length 1..32 (the H200 circuit's `GemmCoordinatePad_v1{T, K=32}`), and `path` is
   `"fast"` or `"ref"`. Without `lens` each call is one launch on torch's current stream, from the shipped cubin.
@@ -55,7 +55,7 @@ OUT=DIR IN=IN bash benchmarks/torch_gpu/attn_bf16/run.sh
 uv run tools/verity/check/suites.py benchmarks/torch_gpu/attn_bf16      # the CPU suite
 ```
 
-`benchmarks/torch_gpu/attn_ref/` keeps `attn_ref.py` and `build.sh` for one release, as a shim over the reference path
-for its callers (`examples/h200` and `benchmarks/torch_gpu/commit_slots/overlap.sh`); new code imports `attn` here.
+`examples/h200`'s attention and `benchmarks/torch_gpu/commit_slots/overlap.sh` run the reference path (`path="ref"`) from
+`build.sh`'s sm_90a cubin, named by `$ATTN_BF16_CUBIN` (`attn.cubin_path`).
 
 Results go to the evidence store with the run, never here.

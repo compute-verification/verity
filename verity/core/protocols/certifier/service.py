@@ -422,7 +422,7 @@ PUBLIC = (
     S.Public(f"domain:{VALUE}", "structure", "the served domain, which binds the check, the link and the window"),
     S.Public(VALUE, "commitment", "the link-window's certified records under one salted root"),
     S.Public("parameters", "structure", "the parameters digests (W1) the certificates sign, fixed before the run"),
-    S.Public("charge", "structure", "log2 #Σ_sync bits per window, the clock-sync advice the accepted-runs bound charges"),
+    S.Public("charge", "structure", "log2 #sync_set bits per window, the clock-sync advice the accepted-runs bound charges"),
     S.Public("occupancy", "structure", "each end's frames per bucket in each window, the placement's occupancy profile, "
              "fixed before the run; none for an end the Program reads rather than predicts"),
     S.Public("verdict", "output", "the link-window's verdict, accept or reject; a violation's kind stays hidden"),
@@ -434,7 +434,7 @@ PUBLIC_SERVED = tuple(p for p in PUBLIC if p.item != "occupancy") + (
              "them, fixed before the run; none on egress, whose counts the unit derives"),
     S.Public("served", "structure", "frames a response (FIXLEN), frames a request, windows and the certifier's own "
              "frames a window (its salt's), fixed before the run"),
-    S.Public("sync", "output", "the window's declared clock sync, one of Σ_sync (fixed before the run): the advice "
+    S.Public("sync", "output", "the window's declared clock sync, one of sync_set (fixed before the run): the advice "
              "`charge` already counts, which the served counts read"),
 )
 #: an advised link's: no egress occupancy profile, its sizes, each window's declared sync, and the advice, whose window
@@ -443,8 +443,8 @@ PUBLIC_ADVISED = tuple(p for p in PUBLIC_SERVED if p.item not in ("served", "syn
     S.Public("advised", "structure",
              "windows, the link's framing (the ingress frames a request of each prompt length takes) and the "
              "certifier's own frames a window (its salt's), fixed before the run"),
-    S.Public("sync", "output", "each window's declared clock sync, one of Σ_sync (fixed before the run): the advice "
-             "`charge` already counts, whose δ and ρ the unit's ingress floor reads, refused outside Σ_sync"),
+    S.Public("sync", "output", "each window's declared clock sync, one of sync_set (fixed before the run): the advice "
+             "`charge` already counts, whose delta and rho the unit's ingress floor reads, refused outside sync_set"),
     S.Public("advice", "output", "the advice (`advised.LinkAdvice`, one per certifier session, after serving): I1's, "
              "charged by `advice.bits`, and its windows' received request frames, which the unit holds to the "
              "ingress heads. The unit reads its window view, `advised.view` of its kept outputs' release buckets, its "
@@ -1012,7 +1012,8 @@ class LinkWindows:
                 return None
             insts.append(HC.Instance(root, self.domain(window).domain_id, self.link.encode("utf-8"), d, window,
                                      self.grid(d), None if profile is None else tuple(profile[window]), c.digest,
-                                     bytes(HC.Shape(L, T).HL), bytes(_INST.salt_bytes), (bytes(64), bytes(64)),
+                                     bytes(HC.Shape(L, T).HL), bytes(_INST.salt_bytes),
+                                     (bytes(HC.DIGEST_BYTES), bytes(HC.DIGEST_BYTES)),
                                      bytes(64), T))
         args = self._arguments(insts, sync, view)
         return {n: args[n] for n in self.layout["pub"]}

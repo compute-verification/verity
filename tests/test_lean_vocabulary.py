@@ -125,6 +125,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Window": (),
     "Witness": (f"{CORE}TC/Relation.lean::Verity.TC.Relation.Witness",),
 }
+CANONICAL["Record"] = ("verity/core/protocols/interface/CoreProtocol/Record.lean::Core.Record",)
 
 RA, RA_PY = "verity/core/protocols/remote_bandwidth/lean/RemoteAudit/", "verity/core/protocols/remote_bandwidth/audit.py"
 MC, MC_PY = "verity/core/devices/memory_challenger/lean/MemoryChallenger/", "verity/core/protocols/pous/"
@@ -141,6 +142,10 @@ MIRRORS: dict[str, tuple[str, str, str]] = {
                                                              "the service's port parses the Python's laws"),
     "verity/ml/crypto/lms.py::Signature": ("verity/core/primitives/lms/lean/Lms/Verify.lean::Lms.Signature", "lms-difftest",
                                            "the LMS port verifies the Python's signatures"),
+    "verity/core/protocols/answer.py::Answer": (f"{PROTOCOL}::Core.Answer", "core-protocol-example",
+                                               "the core interface's example port writes the Python's answers byte for byte"),
+    "verity/core/protocols/answer.py::Verdict": (f"{PROTOCOL}::Core.Verdict", "core-protocol-example",
+                                                "the core interface's example port, on each verdict"),
     f"{REQ_PY}::Store": (f"{REQ}::CircuitRequirement.Store", "requirement-difftest", "the requirement's port"),
     f"{REQ_PY}::Placement": (f"{REQ}::CircuitRequirement.Placement", "requirement-difftest", "the requirement's port"),
     f"{RA_PY}::Opening": (f"{RA}Window.lean::RemoteAudit.Opening", "remote-audit-difftest", "the remote audit's port"),
@@ -1072,10 +1077,6 @@ KNOWN: dict[str, str] = {
     "verity/core/service/flock/Flock/Record.lean::Flock.Session": "homonym, a proof's session record: rename (proofs)",
     "verity/core/service/flock/VStar/In.lean::VStar.In.Opening": "homonym, a Ligerito opening: rename (proofs)",
     "verity/core/service/flock/VStar/Stage.lean::VStar.Stmt": "homonym, one of V*'s statements: rename (proofs)",
-    "verity/core/service/sampled_proofs/SampledProofs/ChallengerSession.lean::SampledProofs.Challenger.Period":
-        "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it (proofs)",
-    "verity/core/service/sampled_proofs/SampledProofs/OneStageZk.lean::SampledProofs.OneStageZk.Session":
-        "homonym, the old word for a run, kept as one protocol's run type: rename (proofs)",
     "verity/core/service/sampled_proofs/SampledProofs/Program.lean::SampledProofs.Program":
         "duplicate of `program.Program`, read from its descriptor's bytes: becomes its code-Lean side once a difftest holds the two (proofs)",
     "verity/core/service/sampled_proofs/SampledProofs/Slots.lean::SampledProofs.Slots.Layout":

@@ -1,7 +1,8 @@
-# Onsite Verity as one `Core.Protocol` (`verity/onsite/v0`): the composition of integrity (sampled proofs), work (PoUW),
-# space (PoUS's run check), bandwidth (the remote bandwidth session) and communication (the network certifier over the
-# period, `verity/certifier/v0`). Its executable is the core CLI (`onsite id | check | serve`), which the difftest
-# drives. Code: no Mathlib.
+# Onsite Verity as one `Core.Protocol` (`verity/onsite/v0`): the composition of integrity (sampled proofs), the
+# inference-only policy (`verity/inference-only/v0`), work (PoUW's period credit, `verity/pouw/period/v1`), space (PoUS's
+# run check), bandwidth (the remote bandwidth session), communication (the network certifier over the period,
+# `verity/certifier/v0`) and the wipe (`verity/wipe/v0`). Its executable is the core CLI (`onsite id | check | serve`),
+# which the difftest drives. Code: no Mathlib.
 name = "core_onsite"
 defaultTargets = ["CoreOnsite", "onsite", "CoreProduct", "product"]
 
@@ -21,7 +22,8 @@ path = "../interface"
 name = "core_composition"
 path = "../composition"
 
-# The ported components: sampled proofs' one-stage audit (integrity) and PoUW's window check (work).
+# The ported components: sampled proofs' one-stage audit (integrity) and PoUW's period credit (work,
+# `PouwCheck.Period`).
 [[require]]
 name = "core_sampled_proofs"
 path = "../../service/sampled_proofs"
@@ -29,6 +31,11 @@ path = "../../service/sampled_proofs"
 [[require]]
 name = "pouw_check"
 path = "../pouw/lean/check"
+
+# The inference-only policy: its check as a core protocol (`NciCheck.Protocol`).
+[[require]]
+name = "nci_check"
+path = "../network/nci/lean"
 
 # Communication: the network certifier's period check (`NetworkCheck.Period`), with the certifier program and the LMS
 # verifier it reads certificates with.
@@ -46,6 +53,11 @@ path = "../pous/check"
 name = "remote_audit"
 path = "../remote_bandwidth/lean"
 
+# The wipe: the memory challenger's streamed-label wipe verdict (`MemoryChallenger.WipeProtocol`, `verity/wipe/v0`).
+[[require]]
+name = "core_memory_challenger"
+path = "../../devices/memory_challenger/lean"
+
 [[lean_lib]]
 name = "CoreOnsite"
 
@@ -53,8 +65,8 @@ name = "CoreOnsite"
 name = "onsite"
 root = "OnsiteMain"
 
-# A configuration's product: `Core.Composition.product` over exactly the components its `protocols` lists (onsite for all
-# five), `product IDS id | check | serve` (CoreProduct.lean).
+# A configuration's product: `Core.Composition.productB` over exactly the components its `protocols` lists (onsite for all
+# seven), `product IDS id | check | serve` (CoreProduct.lean).
 [[lean_lib]]
 name = "CoreProduct"
 
