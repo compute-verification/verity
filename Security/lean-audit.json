@@ -44184,7 +44184,7 @@
    ]
   },
   "Flock.With.Setup": {
-   "digest": "0f019ec705e726df020ccc2f90435c504f4c387a35dcf2858aafe06372a0e2dd",
+   "digest": "08c5d7857847152b7efbde2224fc2edb197c61a18e5911916c9af4032f9c417a",
    "definitions": {
     "Flock.BlockLayout.digestWith": "5f80704a7d8a88e6bd47dcf69ae3af2e4bcbed5080a38819339a65e6d5483fba",
     "Flock.CircuitType.digestWith": "288247cf1a3e1910a2c77ce8b2a36aa7817c77bab4de46ab86ce14bcdde779f8",
@@ -44222,6 +44222,7 @@
     "Flock.HmRow.stratifiedLawWith": "e70b115d8bf92b298f163abf8a761ab3d79e7a44665411e4140857cdde77b152",
     "Flock.HmRow.templateStrataWith": "26b7ec33e81831fd608bd77792e9484afd73363607b6833fc529663cbbdf4da0",
     "Flock.HmRow.workLawWith": "634408482d1bb06a97f0550b516225aa727abc498193bd19d1beda0a4413d997",
+    "Flock.Layout.digestWith": "912a19d68583ef85840aaf36a5e08bba663849cf4090ee362ae34042bda89a0b",
     "Flock.Pinned.rowKey": "a4f5bcb7712087157b1d9d3a073f01f63cc015469660820075f9e4f7be523ae5",
     "Flock.Pinned.tableSha": "b0bed943a439e6bac73a9ad37ae760bd2bc6340f4a84e65558518e54c63b5803",
     "Flock.Stmt.setupHWith": "dbae83a46864ec191c34184a42f8f9ca5b273a4724d4a7d4e0c67ddda4428218",
