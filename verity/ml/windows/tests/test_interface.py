@@ -450,7 +450,7 @@ def declared(**edit) -> I.Circuit:
             (I.Read(G8ID, "w", "weights", at=0, radix=(3, 2), base=0, step=(0, 128)),
              I.Read(GID, "w", "weights", at=0, radix=(3,), base=256, step=(0,))),
             (I.TableRead(EID, "root", "embed", "root", 0, 3), I.TableRead(EID, "domain", "embed", "domain", 0, 3)),
-            (I.Opening(EID, "embed", "tok", ("row", "salt", "path"), "o1", 0, 3),)),
+            (I.TableOpening(EID, "embed", "tok", ("row", "salt", "path"), "o1", 0, 3),)),
         ingress=(I.Ingress(EID, "tok", 0, 2, 0),))
     return I.Circuit("declared", ((EMB, 3), (G8, 6), (GEMM, 3)), **{**parts, **edit})
 
@@ -1240,7 +1240,7 @@ def embedding(**edit) -> I.Circuit:
     """Three embedding reads of `Table`, their tokens free."""
     reg = I.Registered({"embed": 64}, (I.Table("embed", "embed", 0, 16, 4),), (),
                        (I.TableRead(EID, "root", "embed", "root", 0, 3), I.TableRead(EID, "domain", "embed", "domain", 0, 3)),
-                       (I.Opening(EID, "embed", "tok", ("row", "salt", "path"), "o1", 0, 3),))
+                       (I.TableOpening(EID, "embed", "tok", ("row", "salt", "path"), "o1", 0, 3),))
     return I.Circuit("embedding", ((EMB, 3),), **{"registered": reg, **edit})
 
 
