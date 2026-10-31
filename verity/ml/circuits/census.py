@@ -199,7 +199,7 @@ def family(fn: Any) -> str:
 
 def silicon_step(fn: Any, model: Any) -> Any:
     """Bind the tensor-core step `fn` (a word primitive, or the Boolean Definition computing one) to the silicon model it computes
-    (a `verity.ml.circuits.silicon` `GroupSum`, `Pipeline`, `BlockScaledAlignAdd` or `IntegerMma`): `fn.silicon` is `model`, and
+    (a `verity.ml.circuits.silicon` `GroupSum`, `BlockScaledAlignAdd` or `IntegerMma`): `fn.silicon` is `model`, and
     `SILICON` gives its family the precision `model`'s instruction multiplies in (`DTYPE_PRECISION` of its ``executes``, else of
     its operands).  Refused unless `PRODUCTS` counts the family and `PRECISION` gives it its operands' precision.  Returns `fn`."""
     fam = f"{fn.name}_v{fn.version}"
