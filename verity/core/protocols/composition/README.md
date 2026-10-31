@@ -15,6 +15,9 @@ The rule and the formats are written once, over any list of subprotocols, and th
 differ in their id and subprotocols. Each product's executable is the core CLI (`onsite id | check | serve`,
 `remote id | check | serve`), and its `serve` is what the difftest drives.
 
+Their security argument, layer by layer from one proof to the training slowdown, is the remote protocol's README
+(`../remote/README.md`, "The security argument, end to end"); onsite shares its layers and adds its own subprotocols'.
+
 ## The protocol
 
 The JSON key `components` below is the wire format's name for the list of subprotocols.
