@@ -296,7 +296,7 @@ def test_a_row_v1_port_is_refused_a_bit_row_registration(staged):
 
 
 def test_a_registered_output_row_is_accepted_and_reports_its_root(staged):
-    """An output row (`HmOut`) is a registered port too: each instance's output row, committed under the registered row's
+    """An output row (§16.13) is a registered port too: each instance's output row, committed under the registered row's
     salt, opens the registered root at the position the verifier's reads file names for its unit."""
     code, out = _statement(staged, _stage_out(staged, "out-honest"), staged.dir / "own-out.json")
     assert code == 0, out
@@ -518,10 +518,10 @@ def rope(tmp_path_factory):
 def test_a_session_verified_with_registered_reads_is_held_to_them(rope):
     """`verify` builds every table's statement through the same check on the public-output statement too: the fixture's
     honest session, proved by upstream over a registered statement, sets up under its own reads file, where it meets the
-    refusal of its form, a shared-row public file (`Flock.ProvedScope`), which only a statement that sets up meets, and is refused at setup
+    refusal of its form, a shared-row public file (§16.15), which only a statement that sets up meets, and is refused at setup
     under one that moves every position. Upstream's seed-injection build has no zk patch, so the session's plain files are
     upstream's form, without the `zk_level0 = None` tag the deployed prover writes, and are read under `--upstream-plain`
-    (`Flock.Proof`)."""
+    (§8.1)."""
     program, _ = _program()
     assert canonical_json(encode_program(program)) == (rope / "stage" / "program.json").read_bytes()
     bound = ["--partition", str(rope / "stage" / "partition.json"), "--program", str(rope / "stage" / "program.json")]

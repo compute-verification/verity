@@ -333,7 +333,7 @@ def completeOf (j : Json) : V Bool :=
 /-- Every port of the circuit, each input port and each output row, is a port of `own`. -/
 def complete (c : Circuit) (own : Array Port) : Bool := c.ports.all fun p => own.any (·.name == p.name)
 
-/-- **Every port a statement's outputs read is registered** (`Flock.HmRow`, a `--registered` file that sets
+/-- **Every port a statement's outputs read is registered** (PROTOCOL.md §16.10, a `--registered` file that sets
 `complete`): every port of the circuit is a port of the verifier's own registered reads (`checkComplete_ok`), so no
 output's cone reads a row the statement commits afresh and its public file states (a lane's index, say), and `check`
 opens each of them at its registered root. It reads the circuit's ports, not its gates: whatever an output's cone reads
