@@ -30,6 +30,7 @@ import Proofs.Core.Accel.Witness
 import Proofs.Core.NaiveStrassen
 import Proofs.Core.Bilinear
 import Proofs.Core.Blocks
+import Proofs.Core.ProofSystem
 import Proofs.Core.Fp32.Vectors
 import Proofs.Pouw.Prob
 import Proofs.Core.Prims.Vectors
