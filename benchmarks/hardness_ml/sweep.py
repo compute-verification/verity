@@ -233,6 +233,17 @@ def replan11():
     return cfgs
 
 
+def replan12():
+    """A's lr optimum sits at 2× the baseline's or more (w128 20M: 2.259, 2.241 and 2.224 at 4e-3, 8e-3 and 1.6e-2),
+    so the high side: w128 20M at 3.2e-2 and w384 180M at 6e-3; and A's first 12.7 pair, w128 10M and w256 40M, at
+    2× each baseline's best lr."""
+    a = {"design": "A", "rank_frac": 1 / 8, "diag": True}
+    return [{**a, "name": "w128-A8-diag-lr0.032", "size": "w128", "tokens": 20_000_000, "lr": 3.2e-2, "threads": 2},
+            {**a, "name": "w384-A8-diag-D180M-lr0.006", "size": "w384", "tokens": 180_000_000, "lr": 6e-3, "threads": 12},
+            {**a, "name": "w128-A8-diag-D10M-lr0.016", "size": "w128", "tokens": 10_000_000, "lr": 1.6e-2, "threads": 2},
+            {**a, "name": "w256-A8-diag-D40M-lr0.008", "size": "w256", "tokens": 40_000_000, "lr": 8e-3, "threads": 4}]
+
+
 PRESETS = {
     "bench": bench,
     "replan1": replan1,
@@ -246,6 +257,7 @@ PRESETS = {
     "replan9": replan9,
     "replan10": replan10,
     "replan11": replan11,
+    "replan12": replan12,
     "w256": lambda: grid("w256", 20_000_000),
     "scale1": lambda: lite("w512", 20_000_000, 6) + lite("w128", 20_000_000, 2),
 }
