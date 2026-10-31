@@ -4,7 +4,9 @@ Llama-3-8B's four linear layers (QKV 6144 x 4096, O 4096 x 4096, gate-and-up 286
 M = 16,384, s8 x s8 with int32 accumulation, called back to back on one RTX PRO 6000 (sm_120) or H200 (sm_90a). Each call goes through
 Dither's no-fold receipt (v31.py's `Fill`, its shapes and commit phase per `verity/core/protocols/pouw/dither/PROTOCOL.md` v3.2) on accel_v31's prover, with a live
 challenger session a period. The report is the certified share: credited MACs over θ's INT8 tensor peak times the wall
-time, and γ against plain cuBLASLt on the same calls, interleaved.
+time, and γ against plain cuBLASLt on the same calls, interleaved. The free compute at the GPU is ε_skip + ε_undecl, and
+the protocol's own work counts as verified at the public best's cost, so `breakdown.py` gives each period's time by
+resource for pricing it there; `summary.json` only bounds ε_undecl by 1 - the utilization.
 
 - `period.py`: the workload, the registration, the coins, the picks, the prover's answers and the verifier (its
   docstring has the protocol and the deviations from v3.2). `period.py run CFG ref OUT` runs it all on the CPU at the
@@ -21,18 +23,24 @@ time, and γ against plain cuBLASLt on the same calls, interleaved.
   against the protocol, through each of `--plain`'s baselines: cuBLASLt (`lt`, v31.cu's own autotuned `lt_setup`, the call
   a `V31_LTW` call makes; `v31lib.Lib.lt_create`), against which γ is reported, and `torch._int_mm` (`int_mm`, on the
   H200 CUTLASS's sm80 `mma.sync` kernel).
-- The host never waits on the device inside a block: `Prover.point_weights` points a call's weights at the block's
-  device tensor (no `set_weights` copy and wait), and `Prover.levels_async` copies each call's tree to page-locked memory
-  behind its commit (no `root` and `levels` wait), for the roots and the openings after the check coin.
+- The host never waits on the device, in a block or between blocks: `Prover.point_weights` points a call's weights at
+  the block's device tensor (no `set_weights` copy and wait), and `Prover.levels_async` copies each call's tree to
+  page-locked memory behind its commit (no `root` and `levels` wait), for the roots and the openings after the check
+  coin. The driving thread enqueues each block behind the last; a second thread waits on each block's end event
+  (`Prover.stream`'s streams), reads its roots and opens its check coin with the seeds of the block two on, so no coin's
+  round trip sits between blocks.
 - `run.sh`: the build, the config and the periods under a GPU lease (`research run`; its header has the command), and
   with `NSYS=1` each arm's kernel timeline (`timeline.py`: GEMM share, busy share, idle gaps), with `NCU=1` each kernel's
-  tensor-pipe active share and INT8 MACs from Nsight Compute (`pipes.py`), and `terms.py`: where θ x wall goes, at each
+  tensor-pipe active share and INT8 MACs from Nsight Compute (`pipes.py`), `terms.py`: where θ x wall goes, at each
   reading of the clock side by side (the H200's: the 1,830 MHz tensor clock and the 1,980 MHz boost clock), as the
   accounted share (the declared MACs alone: tensor-only accounting credits none of the protocol's work), the plain
   GEMM's floor, the protocol's share and the host's gaps, with the certified MACs (the declared plus the peels) apart and
-  each period's clock.
+  each period's clock, and `breakdown.py`: each period's GPU time split among the GEMM, the protocol's own kernels (leaf
+  hashing, salts, tree levels, coins, noise, form) and idle, the tensor pipe's idle time, the clocks, the
+  host's time, and each call's counted work a step. `period.py summary OUT` and `breakdown.py OUT` rebuild both from a
+  run's stored outputs, with no GPU.
 - The prover is `benchmarks/pouw/accel_v31`, with its sm_90a port and no-fold fast path: `period.py` imports its `v31`
   and `v31lib`, and `run.sh` builds its `v31.cu` (`-DV31_LIB`) and records their hashes. It builds for both cards:
   sm_120a, and sm_90a with `-DV31_WG=1` (run.sh's header), where `V31_SCHED 2`, `V31_LMINB 4` and `V31_SAHEAD 1` are
   the fast path's timed knobs that act on a filler call. Its RP 4, `V31_HCHUNK` and `V31_GEMM` (which
-  turns on the warpgroup GEMM for prefix sums, `V31_WGW`) are the served call's, which the period doesn't make.
+  turns on the warpgroup GEMM for prefix sums, `V31_WGW`) are the served call's, which the period makes under `SERVED=1`.
