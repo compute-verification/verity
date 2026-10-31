@@ -54,6 +54,13 @@ whose record holds no draw (`Flock.RecSetup.innerDrawn`), one at a holo or spars
 `RecursiveKS` covers the dense form only, and the compiled model refuses the same sessions, `RecDeploy.acc_dense`), and a
 recursive session without `--zk` (`Flock.RecSetup.zkOnly`).
 
+`verify` accepts a session only at `verity/flock-circuit` or `verity/flock-circuit+plain-leaves` (`ProvedScope.served`),
+on live coins (`--coins os`, or under `--zk` the keyed coin tree). Every other version it sets up and checks, so the
+agreement corpus and the recorded fixtures replay, and then refuses the session (`ProvedScope.servedForm`, last, once
+every check has passed): a `+seed-injection` one as a selftest build's statement, the rest as superseded; a plain session
+on seed coins (`--coins seed`, the default without `--zk`) is refused the same way. A typed version, or one before hm96
+rows, is refused earlier, for its form (`ProvedScope.check`).
+
 ## Guarantees and premises
 
 - The one soundness theorem over everything `verify` accepts: `FailClosed.flock_verify_sound`
@@ -94,8 +101,8 @@ flock-verify rec-compose --rec-inner F --rec-rows F --rec-run F [--archive DIR] 
   the registered reads. Without `--program` every session is refused: a verifier that can't read the Program can't know
   what it verifies.
 - `--tables DIR` holds the pinned MUFU tables (`<name>.u32`), for circuits with lookup slots.
-- `--coins` binds the coin scheme a plain session's `Hello` names: `seed`, the default, or `os` (per-round OS coins,
-  `FC_COINS=os`). A `--zk` session's coins are its coin tree.
+- `--coins` binds the coin scheme a plain session's `Hello` names: `seed`, the default, which `verify` refuses once every
+  check has passed, or `os` (per-round OS coins, `FC_COINS=os`). A `--zk` session's coins are its coin tree.
 - A plain proof file is taken in one form: by default the deployed prover's, with the `zk_level0 = None` byte after the
   pair; `--upstream-plain` takes upstream's builds' form.
 
@@ -131,7 +138,7 @@ compose the statement.
 leaves and whose outputs are all hidden rows; `verity/flock-circuit/types`, the typed statement;
 `verity/flock-circuit/tmpl`, the templated statement, parsed and refused; `verity/flock-circuit+plain-leaves`, a recursive
 session's inner statement, checked without `--zk`; `+seed-injection` on any of them, as the prover's selftest build pins
-it. The names pinned at older commits (`verity/flock-circuit@<commit>`, back to `verity/flock-netlist/v1`) are still
+it, which `verify` checks and then refuses. The names pinned at older commits (`verity/flock-circuit@<commit>`, back to `verity/flock-netlist/v1`) are still
 parsed, so recorded sessions keep their names, and each one before hm96-sha512 rows is refused for its form. Those with
 keyed-BLAKE3 row leaves and SHA-256 trees (`@19c7269a`, `@fd02e847`, `@631567f7` and `verity/flock-netlist/v1`) need
 `--comp`, the BLAKE3 compression circuit, and the verifier and `hash-test` carry BLAKE3 for them alone. The pure-block and
