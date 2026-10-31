@@ -1333,36 +1333,17 @@ theorem ratio_lt_iff (num den size novel : ℕ) (hden : 0 < den) :
 /-! ## `evaluate` -/
 
 theorem decodeProgram_ok (s : String) (P : Prog) :
-    decodeProgram s = .ok P ↔ Flock.Program.decode s.toUTF8 = .ok P ∧ ¬ Reinterprets P := by
-  unfold decodeProgram Reinterprets
-  rcases h : Flock.Program.decode s.toUTF8 with e | P' <;> dsimp only
-  · simp
-  · rcases hr : Widths.reinterpretation P' with _ | m <;> dsimp only
-    · constructor
-      · intro hh
-        cases hh
-        exact ⟨rfl, fun hn => hn hr⟩
-      · rintro ⟨hh, -⟩
-        cases hh
-        rfl
-    · constructor
-      · intro hh
-        cases hh
-      · rintro ⟨hh, hn⟩
-        cases hh
-        exact absurd (by rw [hr]; simp) hn
+    decodeProgram s = .ok P ↔ Flock.Program.decode s.toUTF8 = .ok P := by
+  unfold decodeProgram
+  rcases h : Flock.Program.decode s.toUTF8 with e | P' <;> simp
 
-/-- `decodeProgram`'s refusal or what follows on its Program, as the decoder and `Reinterprets` read it. -/
+/-- `decodeProgram`'s refusal or what follows on its Program, as the decoder reads it. -/
 theorem decodeProgram_cases (s k : String) (X Y : Prog → Prop) (hXY : ∀ P, X P ↔ Y P) :
     (decodeProgram s = .error k ∨ ∃ P, decodeProgram s = .ok P ∧ X P) ↔
       ((∃ e, Flock.Program.decode s.toUTF8 = .error e) ∧ k = "program") ∨
-        ∃ P, Flock.Program.decode s.toUTF8 = .ok P ∧ ((Reinterprets P ∧ k = "program") ∨ ¬ Reinterprets P ∧ Y P) := by
-  unfold decodeProgram Reinterprets
-  rcases h : Flock.Program.decode s.toUTF8 with e | P' <;> dsimp only
-  · simp [eq_comm]
-  · rcases hr : Widths.reinterpretation P' with _ | m <;> dsimp only
-    · simp [hr, hXY]
-    · simp [hr, eq_comm]
+        ∃ P, Flock.Program.decode s.toUTF8 = .ok P ∧ Y P := by
+  unfold decodeProgram
+  rcases h : Flock.Program.decode s.toUTF8 with e | P' <;> simp [eq_comm, hXY]
 
 theorem evaluate_ok (j out : Json) : evaluate j = .ok out ↔ ∃ i P c dv, parse j = .ok i ∧
     decodeProgram i.program = .ok P ∧ circuitOf P = .ok c ∧ divisionOf c i.theta i.owner = .ok dv ∧

@@ -626,7 +626,7 @@ def _template(k: int, r: int, c: int, unit: dict, receipt: object = None, j10r: 
     ``a_k<K>`` and ``b_k<K>`` (n·R and n·C chunk rows, `row_type` of K/n, n = `weights.chunks` (K): the zy unit's, or at
     n > 1 `h1zy.PouwH1TileZyChunks`'), then the unit's z/y record ``zy``, the salt, its position and the roots (and,
     `j10r`, a J10-R unit's call and blocks); returning ``{receipt, ok}`` with ``receipt`` the type `receipt` when one
-    is given, else a word. Its body computes nothing: every leaf it returns is its ``zy``'s first."""
+    is given, else a word. Its body computes nothing: its nodes and return are `_wired`'s."""
     word, n = ["Value", 16], _n(k)
     params = [[f"a_k{k}", ["Array", n * r, row_type(k // n)]], [f"b_k{k}", ["Array", n * c, row_type(k // n)]],
               ["zy", ["Array", 3 * r * c, word]], ["salt", ["Array", 4, word]], ["position", word],
@@ -635,15 +635,42 @@ def _template(k: int, r: int, c: int, unit: dict, receipt: object = None, j10r: 
         params += [["call", ["Array", 4, word]], ["blocks", ["Array", 2, ["Array", 4, word]]]]
     ret = word if receipt is None else ["Record", [["receipt", receipt], ["ok", ["Value", 1]]]]
     return {"form": "composite", "id": Cr.TILE_FN, "bindings": {"K": k, "UNIT": unit},
-            "body": {"params": params, "ret_type": ret, "nodes": [],
-                     "ret": {"strided": ["p", 2, 0, 1, 0, 0, Cr._leaves(ret)]}}}
+            "body": {"params": params, "ret_type": ret, "nodes": []}}
+
+
+def _widths(t: list) -> list[list[int]]:
+    """A descriptor type's leaves as runs ``[width, count]`` of one width, in order."""
+    kind = t[0]
+    if kind == "Value":
+        return [[t[1], 1]]
+    if kind == "Array":
+        inner = _widths(t[2])
+        runs = [[w, n * t[1]] for w, n in inner] if len(inner) == 1 else inner * t[1]
+    else:
+        runs = [x for f in t[1] for x in _widths(f if kind == "Tuple" else f[1])]
+    out: list[list[int]] = []
+    for w, n in runs:
+        if n and out and out[-1][0] == w:
+            out[-1][1] += n
+        elif n:
+            out.append([w, n])
+    return out
+
+
+def _stand_in(w: int) -> str:
+    """The primitive a template's body calls for a leaf of width `w` none of its parameters has: no parameters, a
+    `Value<w>`."""
+    return f"PouwH1StandIn{w}_v1"
 
 
 def _wired(desc: dict) -> dict:
-    """`desc` with each node's arguments, a batch's axes and each node's output as C-Flock's decoder checks them
-    (`Flock.Program.decode`), over its callees as they stand: each argument of its parameter's type, every leaf the
-    first of node 0's output (an input's), a batch's arguments shared by its members, and the types table theirs. What
-    `credit.layout_of` reads of a node (its form, callee and count) is unchanged."""
+    """`desc` with each node's arguments, a batch's axes, each node's output and each body's return as C-Flock's decoder
+    checks them (`Flock.Program.decode`), over its callees as they stand: each argument of its parameter's type, each
+    leaf naming the first leaf of its own width among the body's parameters and earlier nodes (in the root an input's;
+    a template's return of a width none of its parameters has, a `_stand_in` its body calls), so no word is read at
+    another width (`E_REINTERPRET`); a batch's arguments shared by its members, and the types table theirs. What
+    `credit.layout_of` reads of a node (its form, callee and count) and of a template (its parameters and return type)
+    is unchanged."""
     types: list = []
 
     def ty(t: list) -> int:
@@ -651,17 +678,43 @@ def _wired(desc: dict) -> dict:
             types.append(t)
         return types.index(t)
 
+    def sig(f: dict) -> tuple[list, list]:
+        return (f["params"], f["ret"]) if f["form"] == "primitive" else (f["body"]["params"], f["body"]["ret_type"])
+
+    def refs(t: list, first: dict) -> dict:
+        parts = [{"strided": [*first[w], 1, 0, 0, n]} for w, n in _widths(t)]
+        return parts[0] if len(parts) == 1 else {"concat": parts}
+
     defs = desc["definitions"]
-    for d in defs.values():
-        for x in d["body"]["nodes"] if d["form"] == "composite" else []:
-            f = defs[desc["callees"][x["fn"]]]
-            params, ret = (f["params"], f["ret"]) if f["form"] == "primitive" else (f["body"]["params"],
-                                                                                     f["body"]["ret_type"])
-            x["args"] = [{"type": ty(t), "refs": {"strided": ["n", 0, 0, 1, 0, 0, Cr._leaves(t)]}} for _p, t in params]
+    for key, d in list(defs.items()):
+        if d["form"] != "composite":
+            continue
+        body, first = d["body"], {}
+
+        def source(space: str, i: int, t: list) -> None:
+            at = 0
+            for w, n in _widths(t):
+                first.setdefault(w, [space, i, at])
+                at += n
+
+        for i, (_p, t) in enumerate(body["params"]):
+            source("p", i, t)
+        if key != desc["root"]:
+            for w, _n in _widths(body["ret_type"]):
+                if w not in first and _stand_in(w) not in (desc["callees"][x["fn"]] for x in body["nodes"]):
+                    if _stand_in(w) not in desc["callees"]:
+                        desc["callees"].append(_stand_in(w))
+                    defs[_stand_in(w)] = {"form": "primitive", "id": _stand_in(w), "params": [], "ret": ["Value", w]}
+                    body["nodes"].append({"form": "primitive", "fn": desc["callees"].index(_stand_in(w))})
+        for k, x in enumerate(body["nodes"]):
+            params, ret = sig(defs[desc["callees"][x["fn"]]])
+            x["args"] = [{"type": ty(t), "refs": refs(t, first)} for _p, t in params]
             if x["form"] == "batch":
                 x["axes"], x["out"] = [None] * len(params), ty(["Array", x["n"], ret])
             else:
                 x["out"] = ty(ret)
+            source("n", k, types[x["out"]])
+        body["ret"] = refs(body["ret_type"], first)
     desc["types"] = types
     return desc
 
@@ -701,15 +754,18 @@ def window_desc(rng: random.Random, lay: dict, prefix: str = "", receipt: object
     then each call's (m/R)·(n/C) tiles, each a call of K's template or, at random, a run of them one batch; each
     template returning a receipt of type `receipt` (`_template`) when one is given, and over J10-R units when `j10r`.
     At a chunked K (`weights.chunks` n > 1) the unit is `h1zy.PouwH1TileZyChunks_v1` {UNIT, CHUNKS = n} over the tile
-    (v2 over a J10-R one), as `h1window.program` wraps it."""
+    (v2 over a J10-R one), as `h1window.program` wraps it. The root's input batches are each K's A and B rows' bits,
+    then three of words."""
     (r, c), ks = lay["tile"], sorted({k for _name, k, _n in lay["linears"]})
     units = {k: {"fn": _unit_fn(k, r, c, j10r)} for k in ks}
     tids = {k: _template_id(k, units[k]) for k in ks}
-    callees = ["Input16_v1", *(u["fn"] for u in units.values()), *tids.values()]
+    callees = ["Input16_v1", *(u["fn"] for u in units.values()), *tids.values(), "Input1_v1"]
     defs = {u["fn"]: {"form": "primitive", "id": u["fn"], "params": [], "ret": ["Value", 16]} for u in units.values()}
     defs |= {tids[k]: _template(k, r, c, units[k], receipt, j10r) for k in ks}
     defs["Input16_v1"] = {"form": "primitive", "id": "Input16_v1", "params": [], "ret": ["Value", 16]}
-    nodes = [{"form": "batch", "fn": 0, "n": rng.randint(1, 64)} for _ in range(2 * len(ks) + 3)]
+    defs["Input1_v1"] = {"form": "primitive", "id": "Input1_v1", "params": [], "ret": ["Value", 1]}
+    nodes = [{"form": "batch", "fn": len(callees) - 1 if i < 2 * len(ks) else 0, "n": rng.randint(1, 64)}
+             for i in range(2 * len(ks) + 3)]
     n_of = {name: (k, n) for name, k, n in lay["linears"]}
     for lin, _blk in lay["calls"]:
         k, n = n_of[lin]
