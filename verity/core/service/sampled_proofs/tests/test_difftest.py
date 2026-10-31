@@ -888,6 +888,12 @@ def select(j):
     return {"draw": obj, "read": at}
 
 
+def design(j):
+    """`Pieces.design`: the sampling design of `select`'s draw (`audit.design`, Lean `Core.Draw.ofFlock`), C-Flock's law
+    held to core's `Core.Draw`, the work sampling design's among them."""
+    return {"design": _json(audit.design(select(j)["draw"]).to_json())}
+
+
 def slots(j):
     """`Slots.select`: the claims' partition over the select piece's program and query, two classes, and its sample's
     checked proof blocks. The population's strata are `partition.strata`'s, each unit a proof block, its gates
@@ -2507,6 +2513,8 @@ def changed_selections(draw, most: int = 2) -> dict:
 
 SELECT = D.Port(PIECES, "select", select, st.one_of(selections(), selections(), changed_selections(1),
                                                      changed_selections(2), JSON), package=PACKAGE)
+DESIGN = D.Port(PIECES, "design", design, st.one_of(selections(), selections(), changed_selections(1), JSON),
+                package=PACKAGE)
 SLOTS = D.Port(PIECES, "slots", slots, st.one_of(selections(), selections(), changed_selections(1), JSON), package=PACKAGE)
 POP_ORDER = D.Port(PIECES, "pop_order", pop_order, st.one_of(*[st.builds(
     lambda part, dn: {"population": max(0, part[2] + dn), "program": part[0], "query": part[1]}, partitions(),
@@ -3188,7 +3196,7 @@ pieces = D.server_fixture(DECODE)
 
 PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (PRODUCED, 500), (KNOWN_PORT, 300),
-              (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500),
+              (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (DESIGN, 300), (SLOTS, 400), (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
               (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (POP_ORDER, 300)]
@@ -3262,6 +3270,23 @@ def test_the_select_piece_draws_every_rule(pieces):
     assert service.RETIRED_TWO_STAGE in D.replay(SELECT, case, pieces)[1]
     with pytest.raises(D.Reject, match="two-stage sampling is retired"):
         select(case)
+
+
+def test_a_work_draws_design_is_cores(pieces):
+    """C-Flock's work law held to `Core.Draw`: a work draw's sampling design, Lean's (`Core.Draw.ofFlock`) the Python's
+    (`audit.design`), is the profile's `work` case with each stratum's works and floor, and its sample's design is the
+    stratified one at its k_s."""
+    desc = json.loads(_population(((0, 2), (1, 3), (0, 4), (2, 1))))
+    case = {"closure": None, "program": desc, "query": _json(P.template_instances_query([t.id for t in TEMPLATES])),
+            "rule": {"law": "work:4", "rule": "law"}, "source": hashlib.shake_256(b"design").hexdigest(1500),
+            "work_table": {PAIR.id: 2, TRIPLE.id: {"floor": 2, "work": 1}, QUAD.id: 0}}
+    out = design(copy.deepcopy(case))
+    assert D.replay(DESIGN, case, pieces) == ("output", D.canonical(out))
+    d = out["design"]
+    assert d["law"] == "work" and d["k"] == 4 and {s["name"] for s in d["strata"]} == {PAIR.id, TRIPLE.id, QUAD.id}
+    assert [s["floor"] for s in d["strata"] if s["name"] == TRIPLE.id] == [2]
+    work = audit.design(select(copy.deepcopy(case))["draw"])
+    assert work.stratified == Stratified(tuple(Stratum(s["name"], s["size"], s["k"]) for s in d["strata"]))
 
 
 def test_the_slots_follow_the_strata(pieces):
