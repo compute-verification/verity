@@ -10256,22 +10256,26 @@
   "Pouw.SecurityProofs.Lead.Tail.G_tail": {
    "owner": "@compute-research",
    "signature": ["Pouw.SecurityProofs.Lead.Tail.G_tail : Pouw.Guarantees.Lead.G_tail"],
-   "assumptions": []
+   "assumptions": [],
+   "type_hash": "b441abb619714c1ab7f7429e908acc63924d6cd6eb9c93b5ed00b666340af7bd"
   },
   "Pouw.SecurityProofs.Lead.Tail.gapFixedAt": {
    "owner": "@compute-research",
    "signature": ["Pouw.SecurityProofs.Lead.Tail.gapFixedAt : Pouw.Guarantees.Lead.GapFixedAt"],
-   "assumptions": []
+   "assumptions": [],
+   "type_hash": "2490498ac0a32b3fbaf9c201e901c78f147e31c7a79c795433cbe4779758716d"
   },
   "Pouw.SecurityProofs.Lead.Tail.nontrivialTail": {
    "owner": "@compute-research",
    "signature": ["Pouw.SecurityProofs.Lead.Tail.nontrivialTail : Pouw.Guarantees.Lead.NontrivialTail"],
-   "assumptions": []
+   "assumptions": [],
+   "type_hash": "c28fa29e7394acb1f9f80795a268f9671f2443a3bb0282ce93b246fdbdf0395a"
   },
   "Pouw.SecurityProofs.Lead.Tail.tailAt": {
    "owner": "@compute-research",
    "signature": ["Pouw.SecurityProofs.Lead.Tail.tailAt : Pouw.Guarantees.Lead.TailAt"],
-   "assumptions": []
+   "assumptions": [],
+   "type_hash": "51ed57ae366e0ea3430be448aad4630668f855ab33eaa1b1cc2c495c5638fa02"
   },
   "Pouw.SecurityProofs.NCP.BiasU8Iff": {
    "owner": "@compute-accounting",
@@ -19271,6 +19275,7 @@
     "NetTiming.SecurityProofs.WardenViewEqClientView",
     "Pouw.SecurityProofs.Lead.Compose.G",
     "Pouw.SecurityProofs.Lead.Compose.honest",
+    "Pouw.SecurityProofs.Lead.Tail.G_tail",
     "Verity.SecurityProofs.AmpereStepComplete",
     "Verity.SecurityProofs.AmpereStepHw",
     "Verity.SecurityProofs.AmpereStepIff",
@@ -19658,6 +19663,9 @@
     "Pouw.SecurityProofs.Lead.Statement.gapAt",
     "Pouw.SecurityProofs.Lead.Statement.gapAtDecode",
     "Pouw.SecurityProofs.Lead.Statement.nontrivial",
+    "Pouw.SecurityProofs.Lead.Tail.G_tail",
+    "Pouw.SecurityProofs.Lead.Tail.gapFixedAt",
+    "Pouw.SecurityProofs.Lead.Tail.nontrivialTail",
     "Verity.SecurityProofs.RegisteredMeets"
    ]
   },
@@ -22938,6 +22946,9 @@
     "Pouw.SecurityProofs.Lead.Statement.gapAt",
     "Pouw.SecurityProofs.Lead.Statement.gapAtDecode",
     "Pouw.SecurityProofs.Lead.Statement.nontrivial",
+    "Pouw.SecurityProofs.Lead.Tail.G_tail",
+    "Pouw.SecurityProofs.Lead.Tail.gapFixedAt",
+    "Pouw.SecurityProofs.Lead.Tail.nontrivialTail",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10RPerProver",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedPerProver",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKPerProver",
@@ -26598,6 +26609,7 @@
     "Pouw.SecurityProofs.Lead.Network.networkFwd",
     "Pouw.SecurityProofs.Lead.Network.networkLlama",
     "Pouw.SecurityProofs.Lead.Statement.nontrivial",
+    "Pouw.SecurityProofs.Lead.Tail.G_tail",
     "Pouw.SecurityProofs.Writes.DistinctWritesMH100Floor",
     "Pouw.SecurityProofs.Writes.SsnServedCharged"
    ]
@@ -26641,6 +26653,7 @@
     "Pouw.SecurityProofs.Lead.Network.networkFwd",
     "Pouw.SecurityProofs.Lead.Network.networkLlama",
     "Pouw.SecurityProofs.Lead.Statement.nontrivial",
+    "Pouw.SecurityProofs.Lead.Tail.G_tail",
     "Pouw.SecurityProofs.Writes.DistinctWritesMH100Floor",
     "Pouw.SecurityProofs.Writes.SsnServedCharged"
    ]
@@ -26672,6 +26685,7 @@
     "Pouw.Fp8Atom.H1T.Proofs.h1tGamma",
     "Pouw.SecurityProofs.Lead.Compose.G",
     "Pouw.SecurityProofs.Lead.Compose.honest",
+    "Pouw.SecurityProofs.Lead.Tail.G_tail",
     "Pouw.SecurityProofs.Writes.DistinctWritesMH100Floor",
     "Pouw.SecurityProofs.Writes.SsnServedCharged",
     "Pouw.SecurityProofs.Writes.SsnServedDistinct"
@@ -26804,7 +26818,8 @@
     "Pouw.SecurityProofs.Lead.Compose.G",
     "Pouw.SecurityProofs.Lead.Compose.honest",
     "Pouw.SecurityProofs.Lead.Network.networkFwd",
-    "Pouw.SecurityProofs.Lead.Network.networkLlama"
+    "Pouw.SecurityProofs.Lead.Network.networkLlama",
+    "Pouw.SecurityProofs.Lead.Tail.G_tail"
    ]
   },
   "Definitions.Pouw.Assumptions.NCP.Assumptions": {
@@ -27312,6 +27327,9 @@
     "Pouw.SecurityProofs.Barrier.Generic",
     "Pouw.SecurityProofs.EndToEnd",
     "Pouw.SecurityProofs.GammaFromTT",
+    "Pouw.SecurityProofs.Lead.Tail.G_tail",
+    "Pouw.SecurityProofs.Lead.Tail.nontrivialTail",
+    "Pouw.SecurityProofs.Lead.Tail.tailAt",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1",
@@ -27607,6 +27625,7 @@
     "Pouw.SecurityProofs.Lead.Network.networkFwd",
     "Pouw.SecurityProofs.Lead.Network.networkLlama",
     "Pouw.SecurityProofs.Lead.Statement.nontrivial",
+    "Pouw.SecurityProofs.Lead.Tail.G_tail",
     "Pouw.SecurityProofs.Writes.RunBall",
     "Pouw.SecurityProofs.Writes.RunPairs"
    ]
@@ -28620,17 +28639,21 @@
    ]
   },
   "Definitions.Pouw.Guarantees.Lead": {
-   "digest": "ea5a151ab5f9ccf31c53de41de476cb067deb5af6afef87d3ee017609cc7f735",
+   "digest": "0ee7b6b50ead6dc97af43e659310d70ff5a98c9fcf3264c200293c028c8f2a6f",
    "definitions": {
     "Pouw.Guarantees.Lead.ChunksOf": "f927170f60f4894145db559ac76704c0a71e7fe4c98458d639bcc6190e55dc07",
     "Pouw.Guarantees.Lead.G": "ad49ddc57ed5f168d156c874c87a9e5493840f560b8f92018d70b74f715d8eea",
+    "Pouw.Guarantees.Lead.G_tail": "7ac1ff00e6ea5d938f997c549119dc041c19ec3388435847cd2dbe247d8c31f2",
     "Pouw.Guarantees.Lead.GapAll": "c0266d1c617a576e51c504f99116b3eeb64f32e6c8c156a50f116eec1c8799e5",
     "Pouw.Guarantees.Lead.GapAt": "1d305422afee99f61dd314ba5f894667e368879d46fd0595bffc554555db413e",
     "Pouw.Guarantees.Lead.GapAtDecode": "7972a17a832b96d54d61aed8ba0a0ddc4ac9401cd1ed8e75054f9c94e3544a24",
+    "Pouw.Guarantees.Lead.GapFixedAt": "fdb8630257063bea8a32ededab9a50d9e561b6aa58defe605d99a8d6d3a81b4d",
     "Pouw.Guarantees.Lead.Honest": "02dac6f11aca7f8ef5eafa57ed600d0ebe7f342f5ec26783fc28e6f6e0d87116",
     "Pouw.Guarantees.Lead.NetworkFwd": "28351581c695741f71568ce405749fcdd0967ef35b64dd4e13087e51eb18448d",
     "Pouw.Guarantees.Lead.NetworkLlama": "3b36761be69d1e7f3f799803efe4042e49aa8f615b069eaf22443fe637020924",
-    "Pouw.Guarantees.Lead.Nontrivial": "9e20e3ff9057ab10ffb4bddd7d78462f79fdf721ef2f8aed67fd3af42f8188e9"
+    "Pouw.Guarantees.Lead.Nontrivial": "9e20e3ff9057ab10ffb4bddd7d78462f79fdf721ef2f8aed67fd3af42f8188e9",
+    "Pouw.Guarantees.Lead.NontrivialTail": "feea306f697912cbd25c87ede2472485318aabb32ad70073c77b972e811aae58",
+    "Pouw.Guarantees.Lead.TailAt": "b7150539b0f15a57ea9530759a665340867964056370924229df5a8df7309a96"
    },
    "guarantees": [
     "Pouw.SecurityProofs.Lead.Compose.G",
@@ -28640,7 +28663,11 @@
     "Pouw.SecurityProofs.Lead.Statement.gapAll",
     "Pouw.SecurityProofs.Lead.Statement.gapAt",
     "Pouw.SecurityProofs.Lead.Statement.gapAtDecode",
-    "Pouw.SecurityProofs.Lead.Statement.nontrivial"
+    "Pouw.SecurityProofs.Lead.Statement.nontrivial",
+    "Pouw.SecurityProofs.Lead.Tail.G_tail",
+    "Pouw.SecurityProofs.Lead.Tail.gapFixedAt",
+    "Pouw.SecurityProofs.Lead.Tail.nontrivialTail",
+    "Pouw.SecurityProofs.Lead.Tail.tailAt"
    ]
   },
   "Definitions.Pouw.Guarantees.NCP": {
@@ -29296,12 +29323,18 @@
    "guarantees": ["Pouw.SecurityProofs.Lead.Network.networkFwd", "Pouw.SecurityProofs.Lead.Network.networkLlama"]
   },
   "Definitions.Pouw.Lead.Gap": {
-   "digest": "7bda9d6bdc2be390461010ebd6fa0c76da32dd56bacc11e340b0a590136614bf",
+   "digest": "0162414ac3815375063c43088719acfea49b90bd07840c2fb30ac3e6ab08c307",
    "definitions": {
     "Pouw.Lead.aBlocks": "558ecb126600ad0370679b3b28f6e05e31b48522d88d6f6bcd4861ca5d5986bf",
     "Pouw.Lead.betaLead": "914fa2ad5896a67f86d3627bb52224cd5e9eed88afed9821a3d39be5a99bdbaa",
     "Pouw.Lead.coinBranchGap": "fd780d6444b7676b877fa3fb36eb4e5e76618f255e4cec7f40c225127f4acf98",
+    "Pouw.Lead.coinBranchMean": "38ffd8e98ceb00c6b2daf8429024121eeafbfa1e8b11f240d97526bfd41870ee",
+    "Pouw.Lead.coinSlack": "2579f6b5fb6c9fc4334466613e19812fd3be972d0df79534fae5038c14789a57",
+    "Pouw.Lead.coinTail": "1ba7f4b54b99be6d005dc96bd8162013f4ff14fd190130ea74c2e3ccb7904256",
+    "Pouw.Lead.etaLead": "6f99ffabe2d1ececd2a626cea13e2bfe2ea6c6f99076a56ca9140551ae69d6be",
     "Pouw.Lead.gapBound": "a234bc057a0087f61035ac30833d368a87a248af9b70754839e2c0a80f17ded6",
+    "Pouw.Lead.gapFixed": "2a0a29f5242176cd122d416aba43c0bd54fb47cee5eb371bab4b79f7f040f99b",
+    "Pouw.Lead.gapFixedServed": "c348cd6c83d8b60dedf10f6d2b6311e4b6b442ef50c2d56a162731ddd79c57b4",
     "Pouw.Lead.gapRegs": "494c02c7072932de6bea65473a589bad5be9f95635f654c4ec9d679e413396d8",
     "Pouw.Lead.gapServed": "6bbedbab39ebea62b498d669c99d992890014615a907aeb57dc840b5570bed85",
     "Pouw.Lead.headGap": "9049f30668f12d4ab2aedb5e90b7ceff412766a48d97977db9d3861e7ed968ad",
@@ -29314,6 +29347,7 @@
     "Pouw.Lead.shaWordsRegs": "7a0419d074e3514787b515cfc2421670b7711a89870e4fe7f639a4d749eb0e66",
     "Pouw.Lead.stockRegs": "4e9d0c8daa8c421fc01948ac4a031804d08cc9ec1d2712a796e2cfb0893033dc",
     "Pouw.Lead.tableGap": "cfdceb49a10e0f979f7d460ac180b31d9a6b0aa463385112b546f29f172bf638",
+    "Pouw.Lead.tableTail": "20edb580a968499e1002ae579e87e567741c4d8ca450784ecdb388750c794c55",
     "Pouw.Lead.wMac": "1e0dd41a8e730ad7f7d41957d3bb96959918ee500e6f4d56b55e1d0b40edb030",
     "Pouw.Lead.wordChunks": "0ede2e30b4f7011bf3113fddacf5eeff08d2ede2db806890b54e901268e6f44e",
     "Pouw.Lead.wordsBlocks": "e50100842dc2a13d2c6dfe913a7a23fd6f2b2b489fb74f47c0799e279eabe668",
@@ -29327,7 +29361,11 @@
     "Pouw.SecurityProofs.Lead.Statement.gapAll",
     "Pouw.SecurityProofs.Lead.Statement.gapAt",
     "Pouw.SecurityProofs.Lead.Statement.gapAtDecode",
-    "Pouw.SecurityProofs.Lead.Statement.nontrivial"
+    "Pouw.SecurityProofs.Lead.Statement.nontrivial",
+    "Pouw.SecurityProofs.Lead.Tail.G_tail",
+    "Pouw.SecurityProofs.Lead.Tail.gapFixedAt",
+    "Pouw.SecurityProofs.Lead.Tail.nontrivialTail",
+    "Pouw.SecurityProofs.Lead.Tail.tailAt"
    ]
   },
   "Definitions.Pouw.Lead.Layout": {
@@ -29378,11 +29416,15 @@
     "Pouw.SecurityProofs.Lead.Statement.gapAll",
     "Pouw.SecurityProofs.Lead.Statement.gapAt",
     "Pouw.SecurityProofs.Lead.Statement.gapAtDecode",
-    "Pouw.SecurityProofs.Lead.Statement.nontrivial"
+    "Pouw.SecurityProofs.Lead.Statement.nontrivial",
+    "Pouw.SecurityProofs.Lead.Tail.G_tail",
+    "Pouw.SecurityProofs.Lead.Tail.gapFixedAt",
+    "Pouw.SecurityProofs.Lead.Tail.nontrivialTail",
+    "Pouw.SecurityProofs.Lead.Tail.tailAt"
    ]
   },
   "Definitions.Pouw.Lead.Model": {
-   "digest": "e78466ee1c20657efc91d35a733f625397b9d7c01b3603cdc7a7fe2822f43add",
+   "digest": "979bbcb59a1b24f5e74d364928b076020de9de80d0e0683c5544e5e44775c8ff",
    "definitions": {
     "Pouw.Lead.Accepted": "de719d852ecc89522c5505d0c152e1bb8e7b4aa42485cb274507fe78d908f6af",
     "Pouw.Lead.Addr": "45d78774487edc84a060cb6d5abc36a908147dfbc79d3930b86b27b9432ef439",
@@ -29417,6 +29459,8 @@
     "Pouw.Lead.blocks": "9e4690069ce26fe1e33f03093012b0b8916654f15e9db9110e468f6e2a50e5d6",
     "Pouw.Lead.coinAt": "a40b7500bbee54a88ce4815ad014604ba64a15003396f705201f272635dadd37",
     "Pouw.Lead.regCount": "8679cf1b3bd0929340c5997189cf8a11e92ac48a33cb71855a65f22b168a9a10",
+    "Pouw.Lead.repeats": "3a2b0269124b28bf69a83ca419e8b9398675df6936741893df7ca21cc7856739",
+    "Pouw.Lead.tileIdx": "d123f5a580589da5620297c3732ffcb99a9a902109159d7d4a5d96dd1adc17d1",
     "Pouw.Lead.tileOf": "cbd126ae3dae50697a31d3fe49da94adee9589102f0a47f56726d40983b8826b",
     "Pouw.Lead.tileWords": "7c1b0efcb180dc9762949a9e06e617a1a70697e2779382f29e70064b8a4c8a94"
    },
@@ -29428,7 +29472,11 @@
     "Pouw.SecurityProofs.Lead.Statement.gapAll",
     "Pouw.SecurityProofs.Lead.Statement.gapAt",
     "Pouw.SecurityProofs.Lead.Statement.gapAtDecode",
-    "Pouw.SecurityProofs.Lead.Statement.nontrivial"
+    "Pouw.SecurityProofs.Lead.Statement.nontrivial",
+    "Pouw.SecurityProofs.Lead.Tail.G_tail",
+    "Pouw.SecurityProofs.Lead.Tail.gapFixedAt",
+    "Pouw.SecurityProofs.Lead.Tail.nontrivialTail",
+    "Pouw.SecurityProofs.Lead.Tail.tailAt"
    ]
   },
   "Definitions.Pouw.MerkleExtract": {
