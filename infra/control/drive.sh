@@ -26,10 +26,10 @@
 # which and shows the log's tail, and `drive.sh once [FLAGS]` runs one tick here in the foreground, after the one in progress,
 # with FLAGS added (`--dry-run`). `drive.sh queue ARGS` runs `research queue ARGS` the same way, between ticks, against drive's
 # state (the lander's `queue eject N --by ci --reason ...`, which edits verity.state.json; the next tick rebuilds next), and `drive.sh merge
-# ARGS` runs `research merge ARGS` (a pure move's `--push`) on branch main, reset to origin's. All of it runs with RESEARCH_DRIVE=1: GitHub's rulesets let only
+# ARGS` runs `research merge ARGS` (`--push`) on branch main, reset to origin's. All of it runs with RESEARCH_DRIVE=1: GitHub's rulesets let only
 # the verity-drive App move main and next (23 Oct), and `checked` once infra adds it there (drive lands the reviewed
 # prefix on checked, fast-forwards main only to a checked commit whose after-landing run passed every step on the merge
-# gate, and merges a pure move that landed on main into checked); `research` refuses those pushes anywhere else.
+# gate, and merges a main pushed outside it into checked); `research` refuses those pushes anywhere else.
 # Log: /data/drive/drive.log
 DIR=/data/drive
 LOG=$DIR/drive.log
