@@ -123,8 +123,8 @@ def sign(method: str, host: str, path: str, query: dict[str, str], headers: dict
             f"Signature={hmac.new(k, to_sign.encode(), hashlib.sha256).hexdigest()}")
 
 
-#: R2's transient answers, which a call retries after each of `RETRY_S` seconds in turn: an HTTP 500 on one package ended
-#: the first publish with a working key (21 Oct)
+#: R2's transient answers, which a call retries after each of `RETRY_S` seconds in turn: one HTTP 500 on one package
+#: would otherwise end a whole publish
 TRANSIENT = frozenset({500, 502, 503, 504})
 RETRY_S = (2, 8, 30)
 _sleep = time.sleep
@@ -726,7 +726,7 @@ def publish_one(tree: Path, rev: str, pkg: str, out: Path, s3: S3, log=print, pl
         old = s3.get(key)
         if old is not None:
             if old != rec:
-                # a rerun of one commit (vy-nebius-1, 21 Oct): its first build stays, every blob of it checked on `get`
+                # a rerun of one commit: its first build stays, every blob of it checked on `get`
                 log(f"lean-cache: {pkg}: {key} is already published, from a build whose artifacts differ from this one's; "
                     f"kept it")
                 return "kept"
