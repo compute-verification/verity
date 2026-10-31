@@ -2,7 +2,7 @@
 
 ACCEL is the physical model the accounting reads: a machine 𝓜 (`Accel.Machine`) made of a card's table of numbers
 (`Accel.Card`: `Accel.H200`, `Accel.Sm120`) and the card's semantics (`Accel.Open`), which no table states. Programs
-are lists of the ACCEL ops (`Accel.Op`) and branches. A run fits a time `T` when its code fits the text (G1) and each
+are lists of the ACCEL ops (`Accel.Opcode`) and branches. A run fits a time `T` when its code fits the text (G1) and each
 resource's units are at most its rate times `T` (G2), on a schedule fixed before the content (`Machine.Fits`). The
 headline holds at every semantics meeting (P1), integer MMAs exact within the table's range, and (P2), every MMA dot a
 function of its accumulator and its pairs' products. The card premise says the card's own semantics is one of them.
@@ -33,7 +33,7 @@ power limit it holds less. The table also gives the device model's limits (`Card
 run that fits the model stays within them summed over a window (`fits_toDevice`), and no per-tick
 `Accounting.Schedule` is built from a run.
 
-## The ACCEL ops (`Accel.Op`, `Card.use`)
+## The ACCEL ops (`Accel.Opcode`, `Card.use`)
 
 - `mma` and `mmaSp`: an `m × n × k` tile of one of the card's MMA opcodes, dense or 2:4 sparse. Each costs
   `m·n·max(k, 1)` (or `k/2` kept pairs) products at the format's weight in tensor units, one issue slot, and each
