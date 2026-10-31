@@ -53,7 +53,8 @@ theorem size_bytesOf (ws : List ℕ) : (RecLinkRef.bytesOf ws).size = 2 * ws.len
   | nil => rfl
   | cons a l ih =>
     rw [List.flatMap_cons, List.length_append, ih, List.length_cons]
-    simp only [List.length_cons, List.length_nil] <;> omega
+    simp only [List.length_cons, List.length_nil]
+    omega
 
 theorem flatMap_take (g : ℕ → List UInt8) (hg : ∀ x, (g x).length = 2) :
     ∀ (ws : List ℕ) (m : ℕ), (ws.take m).flatMap g = (ws.flatMap g).take (2 * m)
@@ -169,7 +170,8 @@ theorem linkOut_u16 (UB PB : ℕ) (trow xr yr raux xw yw waux : List ℕ) :
   · exact ⟨zeros_u16, zeros_u16⟩
 
 theorem size_expected {r : ByteArray} (hr : r.size = 64) : (RecLinkRef.expected r).toArray.size = 64 := by
-  rw [List.size_toArray, RecLinkRef.expected, List.length_append, length_wordsOf, List.length_replicate, hr] <;> rfl
+  rw [List.size_toArray, RecLinkRef.expected, List.length_append, length_wordsOf, List.length_replicate, hr]
+  rfl
 
 /-- **u16 words are their bytes**: two lists of u16s with one `bytesOf` are equal. -/
 theorem bytesOf_inj : ∀ {x y : List ℕ}, (∀ a ∈ x, a < 65536) → (∀ a ∈ y, a < 65536) →
@@ -241,16 +243,15 @@ theorem linkRef_of_shape {UB PB : ℕ} {trow xr yr raux xw yw waux : List ℕ}
   have ha : [trow, xr, yr, raux, xw, yw, waux].all (·.all (· < 65536)) = true :=
     List.all_eq_true.2 fun l hl => List.all_eq_true.2 fun x hx => decide_eq_true (hb l hl x hx)
   unfold RecLinkRef.linkRef
-  simp only [hs, hg, ha, beq_self_eq_true, bind, Except.bind, pure, Except.pure, ↓reduceIte, Bool.not_true]
+  simp only [hs, hg, ha, beq_self_eq_true, bind, Except.bind, pure, Except.pure, ↓reduceIte]
 
 theorem checkShape_of_unit {UB PB : ℕ} {u : VStar.UnitC} (hu : VStar.linkUnit UB PB = .ok u) :
     RecLinkTree.checkShape UB PB = .ok () := by
   unfold VStar.linkUnit at hu
   cases hc : RecLinkTree.checkShape UB PB with
   | error e =>
-    first
-      | (rw [hc] at hu; exact absurd hu (by intro h; cases h))
-      | simp [hc, bind, Except.bind] at hu
+    rw [hc] at hu
+    exact absurd hu (by intro h; cases h)
   | ok x => rfl
 
 theorem unitNet_laid {UB PB : ℕ} {u : VStar.UnitC} (hu : VStar.linkUnit UB PB = .ok u) {net : Flock.Net}
@@ -265,7 +266,8 @@ theorem inCol_laid {U : VStar.UnitC} {l : Flock.HmNets.Laid} (hl : U.laid = .ok 
     {net : Flock.Net} (hn : Flock.HmNets.netOf name l = .ok net) : (net.inGroups.getD 0 default).col = 0 := by
   unfold Flock.HmNets.netOf at hn
   rw [(Flock.Net.ofRows_ok hn).2.2.2.2.2.1, FlockVBridge.OfVStar.laid_ok hl,
-    FlockSoundness.Discharge.Hm.layout_inGroups] <;> rfl
+    FlockSoundness.Discharge.Hm.layout_inGroups]
+  rfl
 
 /-- **V\*'s link part's row ports**, by index: name, words and bits, the earlier rows' words. -/
 theorem port_facts {ps : Array Port} {L : List (String × ℕ × ℕ)}
@@ -303,7 +305,8 @@ theorem inPort {p : Flock.Readable.Parsed} (h1 : p.sts.size = 1) (h0 : 0 < p.sts
   obtain ⟨hcs, hlen⟩ := colsHold_inRow h1 h0 hc0 w n hl hq hqs (by rw [hbq, hwq]) (by rw [hx, hbq]; omega) hC
     (base := base) (by rw [hcol, hx, Nat.zero_mul, Nat.zero_add]; exact hbase)
   have e : (⟨(readSegs w (accSegs c (nm, n))).toArray⟩ : ByteArray) = inBytesAt c w nm n := by
-    rw [readSegs_accSegs] <;> rfl
+    rw [readSegs_accSegs]
+    rfl
   have hsz : (inBytesAt c w nm n).size = 2 * W := by
     rw [← e]
     show (readSegs w (accSegs c (nm, n))).toArray.size = _
@@ -615,5 +618,3 @@ theorem linkRef_staged : LinkRefStaged := by
   exact congrArg Except.ok (Prod.ext hlo1 hlo2)
 
 end RecDeploy.Links
-
-#print axioms RecDeploy.Links.linkRef_staged
