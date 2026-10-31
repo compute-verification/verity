@@ -421,13 +421,14 @@ theorem resPartAny_of_resPart {c : Flock.Circuit} {S : Flock.RecOpen.GfS} {ns : 
 
 /-- **The circuit's unit is one of V*'s, its copies' outputs at what their inputs read being `K`**: a level under
 either name (`LevelOuts`), a table of residuals (`ResOuts`), the RecSparse unit (`SparseReadOuts`), or RecCap
-(`rec-cap/n<N>` at level 0, `rec-cap/n<N>-l<l>` at a later level), of whose outputs nothing is stated (`K` true). -/
+(`rec-cap/n<N>` at level 0, `rec-cap/n<N>-l<l>` at a later level) or RecLink (`rec-link/u<UB>-p<PB>`), of whose outputs
+nothing is stated (`K` true). -/
 def UnitOuts (c : Flock.Circuit) (K : (ℕ → Bool) → Prop) : Prop :=
   (∃ LANES H : ℕ, (Flock.RecOpen.params c.unit.name = some (LANES, H) ∨
     Flock.RecOpen.stackedParams c.unit.name = some (LANES, H)) ∧ K = fun v => LevelOuts v LANES H) ∨
   (∃ (S : Flock.RecOpen.GfS) (ns : List ℕ) (nv : ℕ), ResPartAny c S ns nv ∧ K = ResOuts S ns nv) ∨
   (∃ sh : Flock.RecSparse.Shape, Flock.RecSparse.params c.unit.name = some sh ∧ K = SparseReadOuts sh) ∨
-  ∃ l N : ℕ, c.unit.name = VStar.capName l N ∧ K = fun _ => True
+  ∃ l N : ℕ, (c.unit.name = VStar.capName l N ∨ c.unit.name = VStar.linkName l N) ∧ K = fun _ => True
 
 /-- **The output tie from `Flock.check`**: at the deployed parser, wherever the outer relation holds at an untyped
 statement without public input words, every copy of a V* unit holds its outputs at the values its input columns read
@@ -640,7 +641,8 @@ theorem checkPart_inner {j : ℕ} {nm : String} {pt : VStar.Part} {c : Flock.Cir
 /-- **A table of V\*'s statement `sv`, its copies' outputs at what their inputs read being `K`** (`UnitOuts`), at
 `sv`'s own numbers: a level's climb at `sv`'s `LANES` and `H` (`.recOpen`, `.recOpenStacked`), the residuals of the
 algebra's part the unit's name, shape and META give (`.inner`), of R's opening's part at `sv`'s `m`, claims and `j`
-(`.opening`), the RecSparse unit's at `sv`'s shape (`.sparse`), or RecCap's, of which nothing is stated (`.cap`). -/
+(`.opening`), the RecSparse unit's at `sv`'s shape (`.sparse`), or RecCap's or RecLink's, of which nothing is stated
+(`.cap`, `.link`). -/
 def StmtUnit (sv : VStar.Stmt) (c : Flock.Circuit) (K : (ℕ → Bool) → Prop) : Prop :=
   UnitOuts c K ∧
     match sv with
@@ -654,6 +656,7 @@ def StmtUnit (sv : VStar.Stmt) (c : Flock.Circuit) (K : (ℕ → Bool) → Prop)
         RecOpening.shape? m cl = some sh ∧ RecOpening.part sh j = .ok (S, ns, nv) ∧ K = ResOuts S ns nv
     | .sparse sh _ => K = SparseReadOuts sh
     | .cap .. => K = fun _ => True
+    | .link .. => K = fun _ => True
 
 /-- **A table named as V\*'s statement `sv` that the parser and the part check accepted is a table of `sv`**: the
 unit's own check (`ParseFacts`) reads the name back at `sv`'s numbers (`params_of_check`, `stackedParams_of_check`,
@@ -675,7 +678,9 @@ theorem stmtUnit_of_check {tags : Flock.Tags} {pre : Array (String × Flock.Net)
   | sparse sh hRound =>
     exact ⟨_, Or.inr (Or.inr (Or.inl ⟨sh, sparseParams_of_check P.recSparse hn, rfl⟩)), rfl⟩
   | cap l N =>
-    exact ⟨_, Or.inr (Or.inr (Or.inr ⟨l, N, hn, rfl⟩)), rfl⟩
+    exact ⟨_, Or.inr (Or.inr (Or.inr ⟨l, N, Or.inl hn, rfl⟩)), rfl⟩
+  | link UB PB N =>
+    exact ⟨_, Or.inr (Or.inr (Or.inr ⟨UB, PB, Or.inr hn, rfl⟩)), rfl⟩
   | opening m cl j S ports nv =>
     have hq := openingParams_of_check P.recOpening hn
     obtain ⟨sh, hsh⟩ := openingShape_of_check P.recOpening hq
@@ -1630,7 +1635,7 @@ theorem agrees_layoutOf_of_ownPorts_nil {x : Msg} {r : XR} (hr : readX x = some 
 file. -/
 theorem rawIns_fields {w : FlockDeploy.Raw} {i : FlockDeploy.Ins} (h : w.ins = .ok i) :
     i.read.zk = w.zk ∧ i.read.I.circuitFile = w.circuit ∧ i.read.I.tables = w.tables ∧ i.read.I.count = w.count ∧
-      ∃ tags, Flock.Tags.find? w.statement = some tags ∧ i.read.I.tags = tags.withCoins
+      ∃ tags, Flock.Tags.byName? w.statement = some tags ∧ i.read.I.tags = tags.withCoins
         (if w.zk then .tree (Flock.Zk.coinSpec (tags.tableNames w.count)) else if w.osCoins then .os else .seed) := by
   unfold FlockDeploy.Raw.ins at h
   simp only [bind, Except.bind, pure, Except.pure] at h

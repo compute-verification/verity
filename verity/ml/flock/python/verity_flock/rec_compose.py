@@ -5,7 +5,8 @@ this is for writing part sets and their verdicts (``verdict``) in tests and stan
 A recursive statement's V* parts each ran ``flock-verify verify --zk --rec-part J`` once. Their logs compose when there
 is one log per V* statement with one ``VERDICT``; ``rec_part`` 0 to n - 1 each once; every ``VERDICT`` accepts, ran
 ``--zk``, names no identifier and the composition's own rows file's SHA-512; the first part's ``rec_shared`` holds every
-input the compiled verifier's parts read at the composition's own inner shape, and every part's is that one; and no two
+input the compiled verifier's parts read at the composition's own inner shape and link table (``--rec-links``), and
+every part's is that one; and no two
 sessions share a coin key. Then the challenger's interactive-run record (``verity/rec-run/v1``, `RecCompose.runOf`,
 written by `verity.core.protocols.sampled_proofs.challenger.RunRecord`) must be one run of them (`RecCompose.checkRun`,
 C10 ``OneRun``): the staging first, at the composition's rows and the shared set every part read; exactly one session
@@ -29,6 +30,8 @@ SHARED = (
     ("inner_statement_coins", "the inner statement's coins, --rec-inner-statement-coins"),
     ("inner_tables", "the inner statement's lookup tables, --rec-inner-tables"),
     ("inner_draw", "the inner statement's draw, --rec-inner-draw"),
+    ("rec_links", "the inner population's link table, --rec-links"),
+    ("inner_program", "the verifier's program of the inner statement, --rec-inner-program"),
 )
 
 
@@ -38,13 +41,15 @@ def digest(b: bytes) -> str:
 
 def shared(**files) -> dict:
     """``rec_shared`` as ``verify`` writes it (`Shared.toJson`): each key of ``SHARED`` given as bytes (its SHA-512), a
-    string (``inner_statement``), ``"os"``/``"seed"`` (``inner_statement_coins``) or ``[(name, bytes)]``
-    (``inner_tables``); ``None`` when absent."""
+    string (``inner_statement``), ``"os"``/``"seed"`` (``inner_statement_coins``), ``[(name, bytes)]``
+    (``inner_tables``) or ``(root, rows)`` (``rec_links``, as ``[ROOT hex, rows]``); ``None`` when absent."""
     out = {}
     for k, _ in SHARED:
         v = files.get(k)
         if k == "inner_tables" and v is not None:
             v = [[n, digest(b)] for n, b in v]
+        elif k == "rec_links" and v is not None:
+            v = [v[0].hex(), v[1]]
         elif isinstance(v, bytes):
             v = digest(v)
         out[k] = v
@@ -86,6 +91,11 @@ def _read_shared(j) -> tuple | None:
                                                      for t in v):
                     return None
                 v = tuple((t[0], t[1]) for t in v)
+        elif k == "rec_links":
+            if v is not None:
+                if not isinstance(v, list) or len(v) != 2 or not isinstance(v[0], str) or _nat(v[1]) is None:
+                    return None
+                v = (v[0], v[1])
         elif v is not None and not isinstance(v, str):
             return None
         out.append(v)
@@ -113,7 +123,14 @@ def _lean_str(k: str, v) -> str:
         return "true" if v else "false"
     if k == "inner_tables":
         return "[" + ", ".join(f"({n}, {d})" for n, d in v) + "]"
+    if k == "rec_links":
+        return _links_str(v)
     return v
+
+
+def _links_str(v) -> str:
+    """`RecCompose.linksShow`: ``ROOT:N``, or ``none``."""
+    return "none" if v is None else f"{v[0]}:{v[1]}"
 
 
 def _diff(s: tuple, t: tuple) -> str:
@@ -163,8 +180,8 @@ def _held(name: str, what: str) -> str:
     return f"{name}: its verify held no {what}, which every part of the compiled verifier reads"
 
 
-def _check_form(name: str, inner: str, s: tuple) -> None:
-    rec_inner, circuit, public, partition, coins, session, transcript, _, statement, statement_coins, tables, _ = s
+def _check_form(name: str, inner: str, links: tuple | None, s: tuple) -> None:
+    rec_inner, circuit, public, partition, coins, session, transcript, _, statement, statement_coins, tables, _, s_links, _ = s
     if rec_inner is None:
         raise Refused(f"{name}: its VERDICT names no rec_inner: it was not verified at V*'s inner shape (--rec-inner)")
     if rec_inner != inner:
@@ -184,9 +201,12 @@ def _check_form(name: str, inner: str, s: tuple) -> None:
                     (tables, "inner statement's lookup tables (--rec-inner-statement)")):
         if v is None:
             raise Refused(_held(name, what))
+    if s_links != links:
+        raise Refused(f"{name}: verified at the link table {_links_str(s_links)}, not the composition's own --rec-links "
+                      f"{_links_str(links)}")
 
 
-def _check_verdicts(n: int, rows: str, inner: str, vs: list[tuple[str, dict]]) -> None:
+def _check_verdicts(n: int, rows: str, inner: str, vs: list[tuple[str, dict]], links: tuple | None = None) -> None:
     if n == 0:
         raise Refused("no V* statement")
     for name, v in vs:
@@ -197,7 +217,7 @@ def _check_verdicts(n: int, rows: str, inner: str, vs: list[tuple[str, dict]]) -
     sh = v["shared"]
     if sh is None:
         raise Refused(f"{name}: its VERDICT names no rec_shared: the inputs it shares with the other parts are not named")
-    _check_form(name, inner, sh)
+    _check_form(name, inner, links, sh)
     for name, v in vs:
         if v["shared"] is None:
             raise Refused(f"{name}: its VERDICT names no rec_shared: the inputs it shares with the other parts are not named")
@@ -297,13 +317,14 @@ def _check_run(n: int, rows: str, vs: list[tuple[str, dict]], evs: list[tuple]) 
             raise Refused(f"{name}: its session is not one the run record opened for its part")
 
 
-def check(n: int, rows: str, inner: str, run: str, parts: list[tuple[str, str]]) -> tuple[bool, str]:
-    """`RecCompose.check` at V*'s ``n`` statements, the composition's own rows file's SHA-512 ``rows`` and inner
-    shape's ``inner``, over the challenger's interactive-run record ``run`` (its text) and ``parts``' logs (name, text):
-    (accepted, the refusal's reason or "")."""
+def check(n: int, rows: str, inner: str, run: str, parts: list[tuple[str, str]],
+          links: tuple[bytes, int] | None = None) -> tuple[bool, str]:
+    """`RecCompose.check` at V*'s ``n`` statements, the composition's own rows file's SHA-512 ``rows``, inner shape's
+    ``inner`` and link table ``links`` (``--rec-links``' root and rows), over the challenger's interactive-run record
+    ``run`` (its text) and ``parts``' logs (name, text): (accepted, the refusal's reason or "")."""
     try:
         vs = [_part_of(name, log) for name, log in parts]
-        _check_verdicts(n, rows, inner, vs)
+        _check_verdicts(n, rows, inner, vs, None if links is None else (links[0].hex(), links[1]))
         _check_run(n, rows, vs, _run_of(run))
     except Refused as e:
         return False, str(e)
