@@ -12,10 +12,10 @@ codec as derive_step's request wrappers, as in `tests/program/test_workload_prog
      instances and sensitive to an operand swap (a-b vs b-a), a repeated operand ([v,v] vs [v,w]) and a re-wiring.
   4. ARRIVAL CHRONOLOGY — engine-step membership follows `arrive_step` (not manifest order); every (request, step) is programmed
      exactly once; the horizon is max(arrive + cap); an early stop is never a builder input.
-  5. batch_decomp WITH MANY WEIGHTS INPUT NODES — a fold whose weights Record is not width-homogeneous
+  5. batch_decomp WITH MANY WEIGHTS INPUT NODES — a fold whose weights RecordType is not width-homogeneous
      lowers to one Input node per leaf field (FP8: e4m3 weights + f32 scales + bf16 norms = 435 nodes at Qwen3-4B-FP8); `decompose`
      must treat EVERY Input node that is not a request's prompt/seed parameter as weights (shared), never as another request's
-     parameter (XREQ), never refuse on the node count, and resolve each weights node's reads at its Record-global offset (the
+     parameter (XREQ), never refuse on the node count, and resolve each weights node's reads at its RecordType-global offset (the
      Projection must carry `input_base`).
   6. S READS NO ACTIVITY — GM-01 G6's `sampler_geometry_check` holds every launch to the registered
      S = SplitsFor_v1(1, num_SMs) the served engine pins, whatever the live batch; G6 alone pins the record's rows to the Program's
@@ -43,7 +43,7 @@ from verity.ml.circuits.codec import canonical_json, encode_program, program_dig
 from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import coll_concat, runs
-from verity.ml.circuits.types import Array, Record, Value
+from verity.ml.circuits.types import Array, RecordType, Value
 
 # ------------------------------------------------------------------------------------------------------------------ toy definitions
 # distinct ids from test_workload_program's toys (both may be imported into one process; REGISTRY refuses a second body under one id)
@@ -58,8 +58,8 @@ ADD16 = _reg("PrAdd16_v1") or PrimitiveDefinition("PrAdd16", 1, (("a", Value(16)
 SUB16 = _reg("PrSub16_v1") or PrimitiveDefinition("PrSub16", 1, (("a", Value(16)), ("b", Value(16))), Value(16), lambda a, b: (a - b) & 0xFFFF)
 MIX = _reg("PrMix_v1") or PrimitiveDefinition("PrMix", 1, (("x", Value(16)), ("y", Value(32))), Value(16), lambda x, y: (x + y) & 0xFFFF)
 
-# the weights Record is NOT width-homogeneous -> lowers to one Input batch per field (wa, wb, wc): three weights Input nodes
-WREC = Record(("wa", Array(2, Value(16))), ("wb", Array(1, Value(32))), ("wc", Array(2, Value(16))))
+# the weights RecordType is NOT width-homogeneous -> lowers to one Input batch per field (wa, wb, wc): three weights Input nodes
+WREC = RecordType(("wa", Array(2, Value(16))), ("wb", Array(1, Value(32))), ("wc", Array(2, Value(16))))
 WREC_REPR = "{wa: Array<2,Value<16>>, wb: Array<1,Value<32>>, wc: Array<2,Value<16>>}"
 
 
@@ -416,7 +416,7 @@ def test_declared_live_counts_are_a_function_of_the_declaration_only():
 
 def _oracle_dir(tmp_path, reqs):
     """A fold-shaped oracle dir (program.json + instances.jsonl + capture/log.jsonl.gz) for a B-request batched toy whose root
-    parameters are [prompt per request..., weights Record] (the fold contract: weights LAST) with the mixed-width WREC -> the
+    parameters are [prompt per request..., weights RecordType] (the fold contract: weights LAST) with the mixed-width WREC -> the
     descriptor has len(reqs) prompt Input nodes + 3 weights Input nodes.  Instances are emitted engine-step-major (all live
     requests' steps interleaved) with the fold's per-instance meta (`request`, `step`, `row`, `rows`, `hint`, `operand_refs`)."""
     B = len(reqs)
@@ -473,7 +473,7 @@ def _oracle_dir(tmp_path, reqs):
 
 
 def test_batch_decomp_treats_every_non_request_input_node_as_shared_weights(tmp_path):
-    """B=2 fold over a mixed-width weights Record (3 weights Input nodes after the 2 prompts).  Expected: no refusal,
+    """B=2 fold over a mixed-width weights RecordType (3 weights Input nodes after the 2 prompts).  Expected: no refusal,
     every instance attributed, ZERO cross-request reads (the wa/wb/wc reads are SHARED weights, not r1's parameter), every request
     canonical-equal to its own-shape component -> PASS.  One request finishes early (T=1 vs T=2) so the later engine step has one row."""
     reqs = [{"id": "r0", "LP": 3, "T": 2}, {"id": "r1", "LP": 2, "T": 1}]
@@ -509,9 +509,9 @@ def test_batch_decomp_refuses_a_header_that_disagrees_with_the_programs_input_la
 
 
 def test_single_weights_input_node_baseline_still_passes(tmp_path):
-    """Control for the mixed-width fixture machinery: the same toy with a width-HOMOGENEOUS weights Record (ONE Input node on both sides,
+    """Control for the mixed-width fixture machinery: the same toy with a width-HOMOGENEOUS weights RecordType (ONE Input node on both sides,
     one weight tensor `weights` named by every hint — the dense layout) goes through `decompose` as every dense workload does — attributed, no XREQ, canonical-equal, PASS — so the xfail above is about the weights node COUNT and nothing else."""
-    HREC = Record(("wa", Array(2, Value(16))), ("wc", Array(2, Value(16))))
+    HREC = RecordType(("wa", Array(2, Value(16))), ("wc", Array(2, Value(16))))
     HREC_REPR = "{wa: Array<2,Value<16>>, wc: Array<2,Value<16>>}"
 
     def step(Bd, prev16, weights, s):

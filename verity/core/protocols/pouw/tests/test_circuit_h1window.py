@@ -19,7 +19,7 @@ from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bi
 from verity.ml.circuits.ports import In, Out, Ports
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll, coll_concat
-from verity.ml.circuits.types import Array, Record, Value
+from verity.ml.circuits.types import Array, RecordType, Value
 
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as Cr
@@ -49,7 +49,7 @@ def _first(c: Coll) -> Coll:
 def _tile_sig(S, row=None, record=None, out=HW.OUTPUTS):
     row, record = (row or Z.ROW)(S.K), (record or Z.RECORD)(S.R, S.C)
     return ((("a", Array(S.R, row)), ("b", Array(S.C, row)), ("zy", record), ("salt", Array(4, BIT)), ("position", V16),
-             ("roots", Array(2, Array(4, V16)))), Record((out[0], Array(S.K // 2, BIT)), (out[1], BIT)))
+             ("roots", Array(2, Array(4, V16)))), RecordType((out[0], Array(S.K // 2, BIT)), (out[1], BIT)))
 
 
 def _tile_body(B, S, a, b, zy, salt, position, roots, *j10r, sig=_tile_sig):
@@ -450,7 +450,7 @@ def test_a_calls_receipt_table_is_its_statements_output_row_o0_when_registered()
     assert all(G.verify_read(reg.domain, reg.root, t, reg.bcs[t], reg.path(t), G.SCHEMA_V2) for t in range(n))
 
     odd_tile = _test_tile("H1WindowTestOddReceiptTile", sig=lambda S: _tile_sig(S)[:1] + (
-        Record((HW.OUTPUTS[0], Array(S.K // 2 + 1, BIT)), (HW.OUTPUTS[1], BIT)),))
+        RecordType((HW.OUTPUTS[0], Array(S.K // 2 + 1, BIT)), (HW.OUTPUTS[1], BIT)),))
     odd = HW.program(LINEARS, CALLS, m, TILE, unit=lambda k: bind(odd_tile, K=k, R=R, C=C))
     with pytest.raises(ValueError, match="no receipt of whole 16-bit words"):
         HW.table_reads_file(odd, P.evaluate(odd, HW.query(odd)), c, {**roots, rc: reg.root.hex()}, steps=2)
@@ -685,13 +685,13 @@ def test_a_unit_whose_shared_parameters_differ_by_k_is_refused():
         HW.program(LINEARS, CALLS, 8, TILE, unit=lambda k: unit(k) if k == 32 else bind(odd, K=k, R=R, C=C))
 
 
-def _z_alone(r: int, c: int) -> Record:
-    return Record(("z", Array(r * c, Z.S32)))
+def _z_alone(r: int, c: int) -> RecordType:
+    return RecordType(("z", Array(r * c, Z.S32)))
 
 
 @pytest.mark.parametrize("name,sig,why", [
     ("H1WindowTestZAlone", lambda S: _tile_sig(S, record=_z_alone), "a record of z alone leaves the served y unproved"),
-    ("H1WindowTestYAlone", lambda S: _tile_sig(S, record=lambda r, c: Record(("y", Array(r * c, Z.BF16)))), "512-bit record"),
+    ("H1WindowTestYAlone", lambda S: _tile_sig(S, record=lambda r, c: RecordType(("y", Array(r * c, Z.BF16)))), "512-bit record"),
     ("H1WindowTestCodesOnly", lambda S: _tile_sig(S, row=lambda k: Array(k, Z.S8)), "and the row's f32 scale"),
     ("H1WindowTestZOut", lambda S: _tile_sig(S, out=("z", "receipt")), "not \\('receipt', 'ok'\\)"),
 ])
@@ -843,7 +843,7 @@ def _chunk_sig(S, out=HW.OUTPUTS):
     n = W.chunks(S.K)
     row = Z.ROW(S.K // n)
     return ((("a", Array(n * S.R, row)), ("b", Array(n * S.C, row)), ("zy", Z.RECORD(S.R, S.C)), ("salt", Array(4, BIT)),
-             ("position", V16), ("roots", Array(2, Array(4, V16)))), Record((out[0], Array(16, BIT)), (out[1], BIT)))
+             ("position", V16), ("roots", Array(2, Array(4, V16)))), RecordType((out[0], Array(16, BIT)), (out[1], BIT)))
 
 
 ChunkTile = _test_tile("H1WindowTestChunkTile", sig=_chunk_sig)
