@@ -80,21 +80,34 @@ private theorem canonicalJson_ok {b : ByteArray} {j : Lean.Json} (h : Core.canon
     simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
   simp only [ha] at h
   cases hs : String.fromUTF8? b with
-  | none => simp [hs, throw, throwThe, MonadExceptOf.throw] at h
+  | none =>
+    simp [hs, throw, throwThe, MonadExceptOf.throw] at h
+    split at h
+    · cases h
+    · simp [bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
   | some s =>
     refine ⟨s, rfl, ?_⟩
     cases hp : Lean.Json.parse s with
-    | error e => simp [hs, hp, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
+    | error e =>
+      simp [hs, hp, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
+      split at h <;> cases h
     | ok j0 =>
       cases hc : Flock.canon j0 with
-      | error e => simp [hs, hp, hc, bind, Except.bind, pure, Except.pure] at h
+      | error e =>
+        simp [hs, hp, hc, bind, Except.bind, pure, Except.pure] at h
+        split at h
+        · cases h
+        · simp [throw, throwThe, MonadExceptOf.throw] at h
       | ok s' =>
         by_cases hne : s' = s
         · subst hne
           simp [hs, hp, hc, bind, Except.bind, pure, Except.pure] at h
-          subst h
-          exact hc
+          split at h
+          · cases h
+            exact hc
+          · simp [throw, throwThe, MonadExceptOf.throw] at h
         · simp [hs, hp, hc, hne, bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+          split at h <;> cases h
 
 /-- What `exactly` accepts is in the form its encoder writes: the two have one canonical text. -/
 private theorem exactly_ok {α : Type} {f : Lean.Json → Flock.V α} {enc : α → Lean.Json} {j : Lean.Json} {a : α}
@@ -660,9 +673,9 @@ theorem wipeAccepts_meets : ∀ (I seed : ByteArray) (k : Lms.PrivateKey), Lms.k
 The run of `runAccepts_meets`: setup's own accepted store (`SetupProtocol.HONEST`: `w = 64`, `c0 = 189`, one segment of
 two 8-byte blocks, its `COMMITMENT` and `ROOT`) read once, under a one-coin tree with an all-zero key and salt, the round
 answered at once with block 0. The kernel evaluates every check on it (`decide +kernel`), SHA-512 trees and the coin's
-HM96 opening included, but `Flock.canon`'s `Array.qsort`, which it does not unfold (core's sort is well-founded and
-private): the manifest is a flat object whose keys `Json.mkObj` already keeps in order, which `qsort_sorted` leaves as
-they are. The session's signature is `Lms.signAt`'s, verified by `lmsCorrect`, as `wipeAccepts_meets`' is. -/
+HM96 opening included, but `Flock.canonUtf8`'s `Array.qsort`, which it does not unfold (core's sort is well-founded
+and private): the manifest is a flat object whose keys `Json.mkObj` already keeps in order, which `qsort_sorted` leaves
+as they are. The session's signature is `Lms.signAt`'s, verified by `lmsCorrect`, as `wipeAccepts_meets`' is. -/
 
 section QSort
 
