@@ -5,7 +5,7 @@
 //
 //   y_p      SHA512(Z(D(receipt) ‖ frame(seed)) ‖ u64be j ‖ (E_j ⊕ spread(z_j))): a thread a block, 33 compressions
 //            from the first block's midstate (the seed's)
-//   salt_c   SHAKE256(D(store salt) ‖ key ‖ seed ‖ u64be c), 192 bytes: the store's PRF (`Store.salt`)
+//   salt_c   SHAKE256(D(store salt) ‖ key ‖ seed ‖ u64be c), 192 bytes: the store's PRF (`NodeMemory.salt`)
 //   leaf c   x = SHA512(P(512 m) ‖ y_(16c) ‖ … ‖ y_(16c+m−1)) (sha512/row/v2 of its m receipts), b = x ⊕ M_key·salt (the
 //            Hankel matrix of hm96-sha512's key), c' = SHA512(salt prefix ‖ salt), value = SHA512(leaf prefix ‖ b ‖ c'),
 //            digest = frame-v3-sha512 leaf(c, c, "hm96-sha512/row/v2", value): a thread a leaf
@@ -788,7 +788,7 @@ __global__ void __launch_bounds__(256) read_kernel(const uint4 *__restrict__ p, 
 
 // A pass's seed-dependent constants as rb_chain_set's templates, which chain_kernel completes from the pass's seed on
 // the device (wt.cu's g_pass.seed: s_j from root_(j−1)), so the receipt prefix, the tree's binding and domain and the
-// salts are s_j's, receipts.domain(s_j, plan) and Store.salt's: each message's 64 seed-derived bytes are zero in its
+// salts are s_j's, receipts.domain(s_j, plan) and NodeMemory.salt's: each message's 64 seed-derived bytes are zero in its
 // template, at its *_at.
 struct Chain {
   uint8_t receipt[128];   // prefix(seed)
