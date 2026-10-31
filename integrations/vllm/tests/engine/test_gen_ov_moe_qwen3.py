@@ -23,7 +23,7 @@ import numpy as np
 import pytest
 
 from verity.ml.circuits.defs import bind
-from verity.ml.circuits.evaluate import evaluate_region
+from verity.ml.circuits.evaluation.reference import evaluate_region
 from verity.ml.circuits.layout import resolve
 from verity.ml.circuits.program import Program
 from verity_vllm.program import model as analytic

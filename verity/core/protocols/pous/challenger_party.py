@@ -7,8 +7,9 @@ time); `u64be 2^64 − 1` ends the session, after its last round or a late one. 
 `WARMUPS` frames on `WARMUP_INDEX`, which no coin chose, and discards their answers: nothing times, records or signs them,
 so the first timed round doesn't pay for waking both processes and the prover's memory path after the session's setup.
 The challenger draws its coins on its own host, designates the session id from them, the node and the setup's root
-(`period.SESSION_DOMAIN`), signs under its own key and claims the id in its own session log. It reports `{"host",
-"public_key", "session", "session_id", "warmups"}`.
+(`period.SESSION_DOMAIN`), signs under its own key and claims the id in its own session log. Nothing but the indices, one
+a round, goes on the wire: the coin tree's root, the session id and the openings leave only in its report, `{"host",
+"public_key", "session", "session_id", "warmups"}`, after the session's last answer and its signature.
 
 That id is a request's that names no audit (`period.audit`'s), whose salt is drawn where setup ran. An audit's two coins
 are the challenger's, the setup's salt and the session's:
@@ -208,7 +209,7 @@ class Challenger:
         self.c: mc.MemoryChallenger | None = None
         self.sid: bytes | None = None
         self._drawn: list[bytes] = []
-        self.session: R.Session | None = None
+        self.session: R.ChallengerRecord | None = None
         self._reading: int | None = None
         self._block: bytes | None = None
         self._warm = 0
@@ -288,7 +289,7 @@ class Challenger:
         self.c.receive(block)
         if not self.c.done:
             return [_read_clock()]
-        self.session = R.Session(self.c.close(), self.c.commitment, self.c.openings())
+        self.session = R.ChallengerRecord(self.c.close(), self.c.commitment, self.c.openings())
         return [Send(PROVER, Message("End")),
                 Finish({"session": self.session.to_json(), "session_id": self.sid.hex()}, kind="private")]
 
@@ -330,7 +331,7 @@ PROTOCOL = ProtocolDef(MANIFEST, {CHALLENGER: _challenger, PROVER: Prover})
 
 def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc.SessionLog, coins: bytes,
           domain: str, salts: mc.SaltLog | None = None, clock: Callable[[], int] = time.perf_counter_ns,
-          warmups: int = WARMUPS, draw: Callable[[int], bytes] = os.urandom) -> tuple[bytes, R.Session]:
+          warmups: int = WARMUPS, draw: Callable[[int], bytes] = os.urandom) -> tuple[bytes, R.ChallengerRecord]:
     """The challenger's side of one session over the connection `f`: `Challenger` on `coins` and `clock`, under its
     audit's id from `salts` when `request` names one, else the id designated under `domain`, its coin tree's hiding key
     and salts from `draw`, `warmups` untimed exchanges first, the session signed by `signer`, with the collector paused
@@ -356,7 +357,7 @@ def answer(f: BinaryIO, block_bytes: int, respond: Callable[[int], bytes]) -> in
     return done.outcome
 
 
-def report(sid: bytes, session: R.Session, public_key: bytes, warmups: int = WARMUPS) -> dict[str, Any]:
+def report(sid: bytes, session: R.ChallengerRecord, public_key: bytes, warmups: int = WARMUPS) -> dict[str, Any]:
     return {"host": socket.gethostname(), "public_key": public_key.hex(), "session": session.to_json(),
             "session_id": sid.hex(), "warmups": warmups}
 

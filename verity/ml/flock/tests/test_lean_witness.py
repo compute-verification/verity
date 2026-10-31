@@ -47,7 +47,7 @@ import numpy as np
 import pytest
 from test_lean_rec_coins import built, forged  # noqa: F401
 from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluate import evaluate_call
+from verity.ml.circuits.evaluation.reference import evaluate_call
 from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.program import Program
 from verity_flock import circuit as C

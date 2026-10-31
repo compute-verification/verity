@@ -1082,7 +1082,7 @@ def test_the_write_ceilings_are_the_sheets_above_every_write_measured() -> None:
 
 
 def test_the_ledgers_count_bounds_auditros_binomial() -> None:
-    """`named_bits`, λ's count a pass (`PROTOCOL.md` §10), against `Bandwidth.Guarantees.AuditRO`'s last term
+    """`named_bits`, λ's count a pass (`PROTOCOL.md` §10), against `Accounting.Guarantees.Remote.AuditRO`'s last term
     C(q, k)/2^λ, λ a natural number: charged `named_bits(k) + SLACK_LOG2`, a pass's term is at most 2^-SLACK_LOG2,
     checked in exact integers against `math.comb`.  It is within 2 bits of log2(q^k/k!) (exact factorials up to 10^5),
     never above k·log2 q, and at q = 2^40 at most the 40·k AuditRO's docstring reads.  At 94 GB of 4 KiB receipts and

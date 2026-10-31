@@ -47,6 +47,8 @@ import Definitions.Accounting.Assumptions.CreditedWords
 import Definitions.Accounting.Assumptions.RemoteP2
 import Definitions.Accounting.Assumptions.Parties
 import Definitions.Accounting.Guarantees
+import Definitions.Hash.Assumptions
+import Definitions.Hash.Assumptions.Prf
 import Definitions.Hash.Guarantees
 import Definitions.NetworkCertifier.Guarantees.Period
 import Definitions.NetworkCertifier.Guarantees.PooledLeak
