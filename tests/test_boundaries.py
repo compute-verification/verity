@@ -144,7 +144,9 @@ ML_IMPORTS_CORE = {
                                              "over sampled proofs' `one_stage.partition` and `one_stage.registered`, which "
                                              "use only verity.ml; the follow-up to T2 moves them into ml "
                                              "(`verity/ml/circuits/population.py`, `verity/ml/commitments/registered.py`), "
-                                             "core imports them from there, and this entry goes",
+                                             "core imports them from there, and this entry then covers only rec_live's coin "
+                                             "server, which takes the inner session's coin tree from the challenger's device "
+                                             "through sampled proofs' `remote.RemoteChallenger` (`--tree-from`)",
     "ml/flock/pod/rec_inner.py": "stages the inner statement over sampled proofs' `one_stage.partition`, as V*'s builders "
                                   "do (the rec_* entry), and moves with them in the follow-up to T2",
     "ml/flock/pod/rec_reprice.py": "builds the inner statement's population program and partition with sampled proofs' "

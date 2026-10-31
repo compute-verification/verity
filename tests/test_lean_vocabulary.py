@@ -83,7 +83,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
                     "verity/core/protocols/certifier/certificate.py::Certificate"),
     "Challenger": ("verity/core/protocols/sampled_proofs/parties.py::Challenger",),
     "Circuit": (f"{CORE}Circuit.lean::Verity.Circuit", f"{FLOCK}Circuit.lean::Flock.Circuit"),
-    "CoinTree": (),
+    "CoinTree": ("verity/ml/commitments/coin_tree.py::CoinTree",),
     "Coins": (f"{CORE}Draw.lean::Verity.Coins", f"{FLOCK}Statement.lean::Flock.Coins"),
     "Collision": ("Security/Definitions/Core/Hash.lean::Hash.Collision",),
     "Commitment": ("verity/ml/commitments/merkle.py::Commitment",),
