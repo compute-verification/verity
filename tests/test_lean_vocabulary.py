@@ -529,6 +529,10 @@ KNOWN: dict[str, str] = {
         "homonym, a declared tensor layout: rename (compute-accounting)",
     "Security/Definitions/Pouw/Game/Defs.lean::Pouw.Transcript":
         "homonym, PoUW's committed transcript of unit commitments: rename (compute-accounting)",
+    "Security/Definitions/Pouw/Lead/Layout.lean::Pouw.Lead.Coins":
+        "duplicate of the live coins (`Verity.Coins`): becomes a reading of its public randomness, the certifier's draw for one call of the lead (compute-research)",
+    "Security/Definitions/Pouw/Lead/Layout.lean::Pouw.Lead.Layout":
+        "homonym, the lead's call shape and design constants: rename (compute-research)",
     "Security/Definitions/Pouw/PearlC/Game.lean::Pouw.PearlC.Layout":
         "duplicate of `Pouw.Layout`: becomes a reading of it (compute-accounting)",
     "Security/Definitions/Pouw/PearlC/Game.lean::Pouw.PearlC.Transcript":
