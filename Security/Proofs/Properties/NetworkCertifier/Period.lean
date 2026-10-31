@@ -1,4 +1,5 @@
 import Properties.NetworkCertifier.Period
+import Properties.NetworkCertifier.Period.Assumptions
 import Proofs.Properties.CertifierDevice.Lms
 
 /-!

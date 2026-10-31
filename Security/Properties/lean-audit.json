@@ -66,6 +66,7 @@
   "Properties.Verity.Game",
   "Properties.Verity.Idle",
   "Properties.NetworkCertifier.Period",
+  "Properties.NetworkCertifier.Period.Assumptions",
   "Properties.Verity.Network"
  ],
  "proved_in": ["../Proofs"],
@@ -549,10 +550,11 @@
     "NetworkCheck.LinkWindow",
     "Properties.Identity",
     "NetworkCheck.Period",
-    "Lms.Sign"
+    "Lms.Sign",
+    "Properties.NetworkCertifier.Period"
    ],
    "except": [],
-   "why": "the properties are stated against the code's own functions, the check's, N2's link-window verdict of record's and the period check's (NetworkCheck.Period), and the certificates the certifier's device signs against LMS's own signer (`CertifierSigned`), never a proof; the period's honest instance signs with LMS's own key derivation and signer (Lms.Sign)"
+   "why": "the properties are stated against the code's own functions, the check's, N2's link-window verdict of record's and the period check's (NetworkCheck.Period), and the certificates the certifier's device signs against LMS's own signer (`CertifierSigned`), never a proof; the period's honest instance signs with LMS's own key derivation and signer (Lms.Sign), and its named assumption (`Properties.NetworkCertifier.Period.Assumptions`) is stated on that instance (Properties.NetworkCertifier.Period)"
   },
   "Properties.Evaluate": {
    "imports": ["Evaluate", "Definitions.Core.Scalar", "Definitions.Core.Fp32", "Definitions.Core.Prims"],
