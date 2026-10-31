@@ -1,4 +1,4 @@
-"""A registered value's rows are committed as C-Flock's statement commits that port's rows (`one_stage.registered`,
+"""A registered value's rows are committed as Flock's statement commits that port's rows (`one_stage.registered`,
 PROTOCOL.md §16.10): under one salt, a registered row's `b || c` is the statement row's, so its `hm96-sha512/row/v1` leaf
 is the one the Lean verifier climbs from to the registered root, for a 16-bit port and for a 32-bit one."""
 from __future__ import annotations

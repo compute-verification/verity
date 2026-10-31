@@ -3,6 +3,7 @@
     python tools/verity/lean/merge.py BASE OURS THEIRS [PATH]   what git runs (`%O %A %B %P`): the merge is written to OURS
     python tools/verity/lean/merge.py --lean BASE OURS THEIRS [PATH]   the same for a `.lean` file (`lean-imports`)
     python tools/verity/lean/merge.py --lakefile BASE OURS THEIRS [PATH]   the same for a `lakefile.toml` (`lakefile-lists`)
+    python tools/verity/lean/merge.py --caps BASE OURS THEIRS [PATH]   the same for `tests/test_lean_packages.py` (`lean-caps`)
     python tools/verity/lean/merge.py --install [REPO]         register the drivers in the repository's git config, once per clone
     python tools/verity/lean/merge.py --normalize FILE...      recompute each `reads` digest from its definitions
 
@@ -41,7 +42,9 @@ that each add a guarantee's module to `Guarantees.lean` merge, and any other con
 of whose sides are a string array's items (`roots`) merges as a list, wrapped as ours wraps it: two branches that each require a
 package or add a root to `Security/Properties` merge. Any other conflict, and a result that is not TOML, stays git's. In
 both, an import, a require or a root that one side removed stays removed, judged on the whole files (`kept`), so a line the
-other side moved can't bring it back.
+other side moved can't bring it back. For `tests/test_lean_packages.py` (`--caps`, `lean-caps`), a conflict all of whose sides
+are its ratchet caps' lines (`UNWITNESSED = {...}`, `INLINE = {...}`) merges as counters, each key theirs' count plus ours'
+change from the base, so two branches that each witness or grandfather guarantees merge; any other conflict stays git's.
 """
 from __future__ import annotations
 
@@ -66,9 +69,14 @@ NAME = "lean-audit"
 LEAN = "lean-imports"
 #: the lakefiles' driver (`--lakefile`)
 LAKEFILE = "lakefile-lists"
+#: `tests/test_lean_packages.py`'s driver (`--caps`)
+CAPS = "lean-caps"
 #: a lakefile's `[[require]]` block line, and a line of a string array's items (`roots = ["A", "B",`, `"C"]`)
 REQUIRE_LINE = re.compile(r'\s*(\[\[require\]\]|(name|path|git|rev|scope|version|subDir)\s*=\s*\S.*)\s*$')
 ITEM_LINE = re.compile(r'\s*(\w+\s*=\s*\[)?\s*("[^"]*"\s*,?\s*)+\]?\s*$')
+#: a ratchet cap's line (`UNWITNESSED = {"Security": 355, "verity/core/service/flock": 7}`), and one of its entries
+CAP_LINE = re.compile(r'(\s*(?:UNWITNESSED|INLINE) = )\{([^{}]*)\}\s*$')
+CAP_ENTRY = re.compile(r'\s*"([^"\\]*)"\s*:\s*(\d+)\s*')
 #: where a merged string array wraps
 WIDTH = 120
 #: the sections `check.py --update` writes in sorted order; the others keep ours' order, with theirs' new entries after it
@@ -591,6 +599,54 @@ def lean(base: Path, ours: Path, theirs: Path, resolvers=None) -> tuple[str, int
     return "".join(out), left
 
 
+def _cap_lines(lines: list[str]) -> dict[str, dict[str, int]] | None:
+    """A conflict side's ratchet caps ({its line up to `{`: its counts by key}), blank lines aside, or None when it holds
+    anything else."""
+    out: dict[str, dict[str, int]] = {}
+    for s in lines:
+        if not s.strip():
+            continue
+        m = CAP_LINE.match(s)
+        if m is None or m.group(1) in out:
+            return None
+        found = [CAP_ENTRY.fullmatch(p) for p in m.group(2).split(",")] if m.group(2).strip() else []
+        if None in found:
+            return None
+        out[m.group(1)] = {e.group(1): int(e.group(2)) for e in found}
+    return out
+
+
+def _caps(o: list[str], a: list[str], b: list[str]) -> list[str] | None:
+    """A conflict all of whose sides are the same ratchet caps' lines, merged as counters: each key theirs' count plus ours'
+    change from the base (a key a side lacks counts as the base's, or 0), in ours' order with theirs' new keys after the key
+    theirs has before them.  None when a side holds anything else, the sides hold different caps, or a count would go below
+    0 (both sides dropped the same entries: the count is the merged lock's, which only `check.py` can say)."""
+    x, y, z = _cap_lines(o), _cap_lines(a), _cap_lines(b)
+    if x is None or y is None or z is None or not y or not set(x) == set(y) == set(z):
+        return None
+    out = []
+    for s in a:
+        m = CAP_LINE.match(s)
+        if m is None:
+            out.append(s)
+            continue
+        base, ours, theirs = x[m.group(1)], y[m.group(1)], z[m.group(1)]
+        counts = {k: theirs.get(k, base.get(k, 0)) + ours.get(k, base.get(k, 0)) - base.get(k, 0)
+                  for k in items([], list(ours), list(theirs))}
+        if any(n < 0 for n in counts.values()):
+            return None
+        body = ", ".join(f'"{k}": {n}' for k, n in counts.items())
+        out.append(m.group(1) + "{" + body + "}" + ("\n" if s.endswith("\n") else ""))
+    return out
+
+
+def caps(base: Path, ours: Path, theirs: Path) -> tuple[str, int]:
+    """(the merged text, the number of conflicts left) of `tests/test_lean_packages.py`: git's own merge, then each conflict
+    whose sides are only its ratchet caps' lines merged as counters (`_caps`), so two branches that each move a cap merge.
+    Any other conflict is left as git writes it."""
+    return lean(base, ours, theirs, (_caps,))
+
+
 def load(path: Path) -> dict:
     text = path.read_text()
     return A.as_guarantees(json.loads(text)) if text.strip() else {}
@@ -604,7 +660,9 @@ def install(repo: Path) -> None:
     driver = f"python3 {Path(os.path.relpath(HERE / 'merge.py', top)).as_posix()} %O %A %B %P"
     for name, what, argv in ((NAME, "lean-audit.json: each side's guarantees, reads and dependencies", driver),
                              (LEAN, ".lean: each side's imports", driver.replace(" %O", " --lean %O")),
-                             (LAKEFILE, "lakefile.toml: each side's requires and roots", driver.replace(" %O", " --lakefile %O"))):
+                             (LAKEFILE, "lakefile.toml: each side's requires and roots", driver.replace(" %O", " --lakefile %O")),
+                             (CAPS, "tests/test_lean_packages.py: each side's change to the ratchet caps",
+                              driver.replace(" %O", " --caps %O"))):
         for k, v in (("name", f"{what} (tools/verity/lean/merge.py)"), ("driver", argv)):
             subprocess.run(["git", "config", f"merge.{name}.{k}", v], cwd=repo, check=True)
         print(f"merge.py: merge.{name}.driver = {argv} (in {top})")
@@ -629,6 +687,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--lean", action="store_true", help="BASE OURS THEIRS [PATH] are a `.lean` file's: merge its import lists")
     ap.add_argument("--lakefile", action="store_true", help="BASE OURS THEIRS [PATH] are a `lakefile.toml`'s: merge its "
                     "`[[require]]` blocks and string arrays")
+    ap.add_argument("--caps", action="store_true", help="BASE OURS THEIRS [PATH] are `tests/test_lean_packages.py`'s: merge "
+                    "its ratchet caps (`UNWITNESSED`, `INLINE`) as counters")
     a = ap.parse_args(argv)
     if a.install is not None:
         install(a.install)
@@ -641,11 +701,11 @@ def main(argv: list[str]) -> int:
         ap.error("name BASE OURS THEIRS [PATH], or --install, or --normalize FILE...")
     base, ours, theirs = a.files[:3]
     path = a.files[3] if len(a.files) == 4 else ours
-    if a.lean or a.lakefile:
-        text, left = lakefile(base, ours, theirs) if a.lakefile else lean(base, ours, theirs)
+    if a.lean or a.lakefile or a.caps:
+        text, left = (lakefile if a.lakefile else caps if a.caps else lean)(base, ours, theirs)
         ours.write_text(text)
         if left:
-            what = "requires and string arrays" if a.lakefile else "import lists"
+            what = "requires and string arrays" if a.lakefile else "the ratchet caps" if a.caps else "import lists"
             print(f"merge.py: {path}: {left} conflict(s) beyond {what}", file=sys.stderr)
         return 1 if left else 0
     candidate: list[str] = []
