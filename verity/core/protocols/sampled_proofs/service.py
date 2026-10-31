@@ -379,7 +379,7 @@ class Outcome:
     (`reject`, `late`, or `halted`, whose detail is the halt's cause). `profile`: the integrity profile of an accepted
     sampled selection; `exhaustive`: the fact of an accepted `All`. `public`: the check's public outputs, as the verifier
     of record reported them. `record`: the SHA-512 of the outcome's record, which binds the registration, the sample, the
-    delivered sessions, the audit record and, for a sample a `Session` covers, the session's rounds."""
+    delivered sessions, the audit record and, for a sample a `ProofRun` covers, the session's rounds."""
 
     accepted: bool
     verdict: Verdict
@@ -429,7 +429,7 @@ class Draw:
 
 
 @dataclass(frozen=True)
-class Session:
+class ProofRun:
     """One proof session over the samples of consecutive registrations of the stream `stream` (its digest), in order: each
     covered round's registration is its own tables of the session's statement. The challenger opens it once
     (`Stream.session`), after the last covered draw; the first covered draw's proof deadline spans it."""
@@ -635,7 +635,7 @@ class _Entry:
     drawn_at: float | None = None
     sessions: list[str] | None = None
     outcome: Outcome | None = None
-    session: Session | None = None
+    session: ProofRun | None = None
 
 
 def _reading(x: Any) -> float | None:
@@ -1093,7 +1093,7 @@ class Stream:
     `register` is given, under one sample by the Spec's sampling design (`stratified:K`: a stratum per template, each sampled at least
     once; `work:K`: at least the work table's floor). It is one program and one query, as for one template, so the
     verifier of record's sample and run (`Select.select`, `Run.run`) read it in the same form. `budget` (b), `delta`
-    (the profile's) and `rounds` (R, the most registrations open at once, and so the most one `Session` covers) are
+    (the profile's) and `rounds` (R, the most registrations open at once, and so the most one `ProofRun` covers) are
     public parameters of the stream. `coins` is
     the challenger's randomness (n bytes a call, read in order by `OwnRandomness`): by default the operating system's
     bytes as the Lean verifier reads them (`verifier.coins`, `IO.getRandomBytes`, A3), never the Python's own
@@ -1505,7 +1505,7 @@ class Stream:
         e.draw, e.drawn_at, e.read, e.closure = got["draw"], got["drawn_at"], got["read"], closure
         return e.draw
 
-    def session(self, draws: Sequence[Draw]) -> Session:
+    def session(self, draws: Sequence[Draw]) -> ProofRun:
         """Open one proof session over `draws`, the samples of 1 to `rounds` consecutive registrations in order, each
         round's registration its own tables of the session's statement: once, after the last covered draw. Its proof
         deadline is the first covered draw's (`Check.proof_deadline` from that sample), for every round it covers. Raises
@@ -1514,12 +1514,12 @@ class Stream:
         another session covers: nothing reopens it) or `order` (not consecutive registrations in order)."""
         draws = tuple(draws)
         self._held(self._decide({"op": "session", "draws": [_covered(d) for d in draws]}))
-        s = Session(self.digest, draws)
+        s = ProofRun(self.digest, draws)
         for d in draws:
             self._entries[d.registration.order].session = s
         return s
 
-    def _deliver_session(self, session: Session, sessions: Sequence[str]) -> tuple[Outcome, ...] | None:
+    def _deliver_session(self, session: ProofRun, sessions: Sequence[str]) -> tuple[Outcome, ...] | None:
         draws = tuple(session.draws) if isinstance(session.draws, Sequence) else ()
         d = self._held(self._decide({"op": "deliver_session",
                                      "stream": session.stream if isinstance(session.stream, str) else "",
@@ -1532,14 +1532,14 @@ class Stream:
             return None
         return self._reported(tuple(self._finish(e, LATE, None, {}) for e in entries))
 
-    def deliver(self, draw: Draw | Session, sessions: Sequence[str]) -> Outcome | tuple[Outcome, ...] | None:
+    def deliver(self, draw: Draw | ProofRun, sessions: Sequence[str]) -> Outcome | tuple[Outcome, ...] | None:
         """The ZK server delivers the sample's proof, once: `sessions` are its session records' SHA-512, which the outcome
         binds. A proof after the proof deadline is a reject (`late`), returned at once; otherwise None, and the outcome waits
-        on the verifier (`outcome`). A `Session`'s proof is delivered as the session, once, for every sample it
+        on the verifier (`outcome`). A `ProofRun`'s proof is delivered as the session, once, for every sample it
         covers (`covered`, delivering one of them alone): each binds the same `sessions`, and past the first covered
         draw's deadline each is `late`, returned in order. Raises `Refused` (`not-session`) for a session the stream
         didn't open."""
-        if isinstance(draw, Session):
+        if isinstance(draw, ProofRun):
             return self._deliver_session(draw, sessions)
         d = self._held(self._decide({"op": "deliver", "order": _order(draw.registration),
                                      "registration": _registration_token(draw.registration), "draw": _draw_token(draw),
@@ -1556,7 +1556,7 @@ class Stream:
         record names the delivered `sessions` and reports the public outputs alike (`check_verdicts`, by the verifier,
         `verifier.check_verdicts`); then one-stage's audit record by the verifier
         (`verifier.audit_record`; `proved_units` and `instances` default to the draw's, `served` and `session_roots` are
-        its, and the registered roots it reads are the verdicts' own) decides accept or reject. A draw a `Session` covers is decided alone, on the session's delivered records and its own
+        its, and the registered roots it reads are the verdicts' own) decides accept or reject. A draw a `ProofRun` covers is decided alone, on the session's delivered records and its own
         audit record: its `proved_units`, `instances`, `served` and `session_roots` are its round's (its own tables'),
         never another round's. On a draw from the coins and an audit record its two verifiers agree on, the whole run is
         held to the verifier's (`verifier.run`, the Lean's `Run.run` from the
@@ -1684,5 +1684,5 @@ def _why(symbol: str, audit: Mapping[str, Any] | None,
 
 __all__ = ["ACCEPT", "All", "Check", "Draw", "Exhaustive", "Fleet", "HALTED", "HIDING", "KINDS", "LATE", "Law", "Outcome",
            "PHASES", "Pending", "Public", "REJECT", "ROOTS", "ROUNDS", "Refused", "SCHEME", "SOURCES", "Selection",
-           "Session", "Spec", "Stream", "Terms", "Value", "WindowCommitmentRecord", "check_public", "check_verdicts",
+           "ProofRun", "Spec", "Stream", "Terms", "Value", "WindowCommitmentRecord", "check_public", "check_verdicts",
            "select_draw", "selection_law"]
