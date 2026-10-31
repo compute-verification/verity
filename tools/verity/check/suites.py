@@ -125,8 +125,9 @@ still running then has its process group killed and fails as timed out (`timed_o
 an hour, not its slot until the run's own timeout.
 
 `--mem-gb GB` (`check` passes its slot's share) is the whole run's: the one-process suites hold `TEST_PROCESS_GB` each, at most
-half of it beside parallel suites (`serial_slots`), and the parallel suites share the rest, each with as many xdist workers as it holds at its `[tool.verity.tests] worker_gb`, what one of
-them may reach, else at `TEST_PROCESS_GB`; one that overlaps another waits for its workers' GB (`wide_gb`).
+half of it beside parallel suites (`serial_slots`), and the parallel suites share the rest, each with as many xdist workers as
+it holds at its `[tool.verity.tests] worker_gb`, what one of them may reach, else at `TEST_PROCESS_GB`; one that overlaps
+another waits for its workers' GB (`wide_gb`).
 """
 from __future__ import annotations
 
