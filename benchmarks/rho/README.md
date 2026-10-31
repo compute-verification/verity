@@ -13,8 +13,8 @@ Every number it reads is a parameter with a public source and a status, so a bou
 parameter, and the package shows how the bound moves with each one.
 
 A scenario is one choice from every part: a fleet (its location and dark share), a regime (the envelopes that run), the
-NCI registration policy, a monitoring period (the horizon), a run (the target and its model), the algorithm families the
-adversary may use, and the bounds and attacks applied. For each one the package reports:
+NCI registration policy, a monitoring period (its `horizon`, one of core's), a run (the target and its model), the
+algorithm families the adversary may use, and the bounds and attacks applied. For each one the package reports:
 
 - **the slowdown's lower bound** (`Result.lo`): every bound met at once, at the family the adversary picks. Under a
   bound it is `max(1, 1/(s + a x))` (`theorem.multiple_bound`), with the dark share `s` training like the reference and
@@ -66,7 +66,8 @@ step's design in place of the FLOP model, after a table of the step beside it (`
 A bound is argued in three parts, as the Notation states it, and each module's docstring says what it implements.
 
 - **The physical model** `𝒜_phys` (`hardware.py`, `data/hardware.toml`): the inventory's locations, each with its
-  capacity `Φ_X` in gates per second and its servers' memory `M_s`, the dark leaves `ε_dark`, and the horizon. `Units`
+  capacity `Φ_X` in gates per second and its servers' memory `M_s`, the dark leaves `ε_dark`, and the monitoring
+  period (core's `wipe_monitoring.PERIODS`, through `params.py`). `Units`
   is the one place a FLOP-model input becomes gates (`units.gates_per_flop`, with its `units.basis`).
 - **Protocol soundness**, the envelopes (`envelopes.py`, `data/envelopes.toml`): each subprotocol (PoUW, detection and
   sampled proofs, the wipe, the certifier) is one envelope `𝒜_a` with its parameters, its slack (the uncertified gates
@@ -117,9 +118,9 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 | `families.py` | `Family.profile(Model, Run) → Profile`, for each algorithm family and any `benchmarks/nci` algorithm by its traits |
 | `instances.py` | `Model`, `Run` (a target and its kind) |
 | `circuits.py` | `Circuit` (a measured training step), `compare → Comparison` with the FLOP model, `in_place` |
-| `hardware.py` | `Units`, `Location`, `Fleet`, `Horizon` |
+| `hardware.py` | `Units`, `Location`, `Fleet`, `MonitoringPeriod` |
 | `envelopes.py` | `Pouw`, `Detection`, `Wipe`, `Certifier`; `Regime.partition`, `Regime.delta`; `Policy` |
-| `params.py` | `Registry`: dotted keys over `data/*.toml`, `override`, `fields` |
+| `params.py` | `Registry`: dotted keys over `data/*.toml` and core's monitoring periods (`PERIODS`), `override`, `fields` |
 | `scenario.py` | `build`, `evaluate → Result`, `seconds` |
 | `analysis.py` | `sweep`, `tornado`, `threshold`, `dangers`, `rescues`, `corner`, `margins`, `phase`, `frontier`, `attribution`, `upto` |
 | `operating.py` | `work`, `exfil`, `points`, `faulty` |
