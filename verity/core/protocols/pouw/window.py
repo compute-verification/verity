@@ -82,6 +82,7 @@ from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
+from verity.ml.commitments.scheme import DIGEST_BYTES
 from verity.ml.randomness import Key, derive
 
 GRID_BITS = 3
@@ -344,7 +345,7 @@ _HEAD = struct.Struct("<6Q")
 #: tile0, cols, m and a zero u64, after root_h3
 _PASS = struct.Struct("<4Q")
 _PASS_AT = 240
-_DIGEST = 64
+_DIGEST = DIGEST_BYTES["sha512"]
 _ZERO = bytes(_DIGEST)
 _HM = hm96.SHA512
 #: the pass's tiles are 64 x 64 (`audit.tile_refs` over Pearl-C's tiles), and a short last tile row is whole 16-row
