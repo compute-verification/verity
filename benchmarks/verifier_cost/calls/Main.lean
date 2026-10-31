@@ -6,9 +6,10 @@ import SampledProofs
 `sampled-proofs-verifier` takes on it, timed apart: the line's `Json.parse`; the parameters' round trip through their
 canonical text (`Flock.canon`, then `Core.canonicalJson`: parse and canonical check); the program's canonical text and
 its two decodings (`Flock.TemplateQuery.Desc.parse`, `Flock.Program.decode`); `OneStage.paramsOfJson`, which decodes the
-program again; and `Registration.check`. Then the whole request (`Difftest.respond` on the verifier's pieces). One
-`PHASE {json}` line each on stdout. `calls.sh` builds it against the checkout's verifier and runs it; it is a
-measurement, not a verifier.
+program again; and `Registration.check`. Then the whole request (`Difftest.respond` on the verifier's pieces), the
+program loaded once (`Loaded.Store.load`), and the same request naming the loaded program by digest and annotations
+(`Verifier.respondAt`), whose answer must be the whole request's (exit 1 otherwise). One `PHASE {json}` line each on
+stdout. `calls.sh` builds it against the checkout's verifier and runs it; it is a measurement, not a verifier.
 -/
 
 open Lean SampledProofs
@@ -70,4 +71,15 @@ def main (args : List String) : IO UInt32 := do
   let table := Difftest.table Pieces.verifier
   let (out, ms) ← timed (fun t => if t == 0 then "" else Difftest.respond table line) (·.length)
   row "respond" ms [("answer", Json.str out)]
-  return 0
+  let pIn := getD (getD input "params") "program"
+  let (loaded, ms) ← timed (fun t => if t == 0 then .error "" else Loaded.Store.load #[] pIn) ok
+  let (S, h) ← IO.ofExcept loaded
+  row "load" ms [("sha512", Json.str h)]
+  let named := Json.mkObj [("annotations", getD pIn "annotations"), ("loaded", Json.str h)]
+  let refLine := (req.setObjVal! "input" (input.setObjVal! "params" ((getD input "params").setObjVal! "program" named))).compress
+  let t0 ← IO.monoNanosNow
+  let (refOut, _) ← Verifier.respondAt S refLine
+  let t1 ← IO.monoNanosNow
+  row "respond_ref" ((t1 - t0) / 1000000) [("bytes", toJson refLine.utf8ByteSize), ("answer", Json.str refOut),
+    ("same", toJson (refOut == out))]
+  return if refOut == out then 0 else 1

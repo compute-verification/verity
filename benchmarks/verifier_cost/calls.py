@@ -1,10 +1,12 @@
 """`calls.sh`'s Python half: one verifier call's cost on a large program, step by step. It builds `population.py`'s
 population of N units (`--pad K` sizes its descriptor), a valid v1 registration of it under `subset:3` (the difftest's
-ports, roots and window), and times the Python reference (`registration.check`), the program's encoding
-(`codec.encode_program`), the Lean's parameters (`verifier._params`), the request line (`verifier._dumps`), the Lean's
-answer through `sampled-proofs-verifier` (`verifier._server`, the line written again), and `verifier.check` whole,
-`--calls` times in one process. It writes the request line to DIR/registration.line for `calls/Main.lean`, and one
-JSON row per step on stdout (seconds, the Python's and the Lean server's peak RSS).
+ports, roots and window), and times the Python reference (`registration.check`), the program's digest
+(`codec.program_digest`) and encoding (`codec.encode_program`), the Lean's parameters (`verifier._params`), the request
+line carrying the descriptor (`verifier._dumps`), the Lean's answer through `sampled-proofs-verifier` (`verifier._server`)
+`--calls` times in one process (the first loads the program, the rest name it by digest), the same request carrying the
+whole descriptor once, and `verifier.check` whole, `--calls` times. It writes the request line to DIR/registration.line
+for `calls/Main.lean`, and one JSON row per step on stdout (seconds, the Python's peak RSS, the Lean server's peak and
+current RSS).
 
   python calls.py DIR N [--pad K] [--calls C] [--roots R] [--templates T] [--levels L] [--width W]
 """
@@ -28,12 +30,10 @@ from verity.core.protocols.sampled_proofs.one_stage import verifier as V  # noqa
 from verity.ml.circuits import codec, partition_object as PO  # noqa: E402
 
 
-def _hwm_mb(pid: int | None = None) -> int:
-    if pid is None:
-        return resource.getrusage(resource.RUSAGE_SELF).ru_maxrss // 1024
+def _status_mb(pid: int, field: str) -> int:
     try:
         for line in Path(f"/proc/{pid}/status").read_text().splitlines():
-            if line.startswith("VmHWM:"):
+            if line.startswith(field):
                 return int(line.split()[1]) // 1024
     except OSError:
         pass
@@ -42,8 +42,11 @@ def _hwm_mb(pid: int | None = None) -> int:
 
 def row(step: str, s: float, **extra) -> None:
     proc = V._server._proc
-    print(json.dumps({"step": step, "s": round(s, 3), "python_hwm_mb": _hwm_mb(),
-                      "lean_hwm_mb": _hwm_mb(proc.pid) if proc is not None else 0, **extra}), flush=True)
+    alive = proc is not None and proc.poll() is None
+    print(json.dumps({"step": step, "s": round(s, 3),
+                      "python_hwm_mb": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss // 1024,
+                      "lean_hwm_mb": _status_mb(proc.pid, "VmHWM:") if alive else 0,
+                      "lean_rss_mb": _status_mb(proc.pid, "VmRSS:") if alive else 0, **extra}), flush=True)
 
 
 def timed(f):
@@ -78,6 +81,8 @@ def main() -> None:
                    T.WINDOW, leaf_layer=T.LEAF)
     py, s = timed(lambda: R.check(rec, program, query, law, T.SCHEME, ports, T.LEAF))
     row("python_check", s, ok=py.ok, codes=list(py.codes))
+    digest, s = timed(lambda: codec.program_digest(program))
+    row("program_digest", s, same=digest == sha)
     desc, s = timed(lambda: codec.encode_program(program))
     row("encode_program", s, definitions=len(desc["definitions"]))
     params, s = timed(lambda: V._params(program, query, law, T.SCHEME, ports, T.LEAF, (), [], None, None, None))
@@ -88,7 +93,10 @@ def main() -> None:
     row("dumps", s, bytes=len(line))
     for k in range(a.calls):
         got, s = timed(lambda: V._server.call("registration", value))
-        row("lean_call", s, call=k, answer=got)
+        row("lean_call", s, call=k, answer=got, loaded=len(V._server._loaded))
+    whole = {"params": {**params, "program": desc}, "record": dict(rec)}
+    got, s = timed(lambda: V._server.call("registration", whole))
+    row("lean_call_whole", s, answer=got)
     for k in range(a.calls):
         v, s = timed(lambda: V.check(rec, program, query, law, T.SCHEME, ports, T.LEAF))
         row("check", s, call=k, ok=v.ok, codes=list(v.codes), verifiers=v.verifiers)
