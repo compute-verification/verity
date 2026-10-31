@@ -41,8 +41,7 @@ credits = [
     ["LDGSTS16", 4096], ["UBLKCP4K", 32768], ["DSMST4P", 4096],
 ]
 
-[published]  # as `machine-model solve VF3m-16` printed them: τ, τ at 600 W and U/F_low to 4 places, the margin to 3
+[published]  # as `machine-model solve VF3m-16` printed them: τ and U/F_low to 4 places, the margin to 3
 tau = 0.0591
-tau_600w = 0.0462
 uf_low = 1.1563
 margin = 2.0
