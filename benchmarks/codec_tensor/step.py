@@ -72,6 +72,7 @@ import kv_bench as KB  # noqa: E402
 import kv_exhaust as KE  # noqa: E402
 import kv_twin as KT  # noqa: E402
 
+STEP_KV = {"kv_append": [ctypes.c_void_p, ctypes.c_void_p] + [ctypes.c_int] * 7 + [ctypes.c_void_p]}   # step.cu's, beside its kv.cu
 LM_HEAD = {"8b": (128256, 4096), "70b": (128256, 8192), "tiny": (2048, 512)}
 TINY = (2, {"qkv": (384, 512), "o": (512, 512), "gate_up": (1024, 512), "down": (512, 1024)})
 ORDER = ("qkv", "o", "gate_up", "down")          # a layer's linears; attention runs after qkv
@@ -937,12 +938,7 @@ def main() -> int:
     if a.model == "tiny":   # the sanitizer's smoke run: gemm_case's L2-defeating ring would be thousands of copies
         BW.L2_DEFEAT_BYTES = 0
     wt = BW.Lib(a.wt_lib)
-    kv = KB.Lib(wt.field.name, a.kv_lib)
-    v, i, q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
-    kv.so.kv_append.argtypes = [v, v, i, i, i, i, i, i, i, v]
-    kv.so.kv_rc_buffers.argtypes, kv.so.kv_rc_pass.argtypes = [v, v, v], [v, v, v]
-    kv.so.kv_rc_receipts.argtypes = [v, q, i, i, q, v]
-    wt.so.wt_prim.argtypes = [i, v, v, v, i, v]
+    kv = KB.Lib(wt.field.name, a.kv_lib, STEP_KV)
     if not wt.field.full_slot or kv.field.n != wt.n or kv.mask != wt.mask or max(ks) > min(wt.kmax, kv.kmax):
         raise SystemExit(f"want full-slot builds of one field and mask with k up to {max(ks)}: wt {wt.name} kmax "
                          f"{wt.kmax}, kv {kv.field.n} bits mask {kv.mask} kmax {kv.kmax}")

@@ -27,32 +27,34 @@ import kv as K  # noqa: E402
 import kv_bench as KB  # noqa: E402
 
 QSCALE = math.log2(math.e) / math.sqrt(K.HEAD_DIM)
+_v, _i, _z, _u = ctypes.c_void_p, ctypes.c_int, ctypes.c_size_t, ctypes.c_ulonglong
+PAGED = {   # paged.cu's functions, beside the kv.cu it includes (`kv_bench.Lib`)
+    "pg_shape": [_v],
+    "pg_attn": [_v, _i, _v, _z, ctypes.c_float, _v, _z, _i, _v, _v, _v, _v, _i, _i, _i, _i, _i, _u, _i, _i, _i, _i, _i,
+                _v, _v, _z, _z, _v, _v, _v, _v, _v, _v],
+    "pg_append_multi": [_v, _i, _i, _i, _i, _i, _i, _i, _i, _v],
+    "pg_append": [_v, _v, _z, _z, _v, _i, _v, _i, _i, _i, _i, _u, _i, _i, _i, _i, _v, _v, _v],
+    "pg_encode": [_v, _i, _i, _i, _i, _i, _i, _i, _v],
+    "pg_rekey": [_v, _i, _i, _i, _i, _i, _i, _i, _i, _v],
+    "pg_rekey_ctas": [],
+    "pg_gather": [_v, _v, _i, _i, _i, _i, _i, _i, _v, _u, _i, _i, _i, _i, _v, _v, _v, _v, _v, _v],
+    "pg_window_offsets": [_v, _i, _v, _v],
+    "pg_window": [_v, _i, _i, _v, _v, _i, _i, _i, _i, _i, _u, _i, _i, _i, _v, _v, _v, _v, _z, _z, _v, _v, _i, _u, _v, _v,
+                  _u, _u, _i, _v],
+    "pg_window_ctas": [_i],
+    "pg_receipts_sparse": [_v, _v, _v, _v, _u, _i, _i, _u, _v],
+    "pg_rc_gate_pass": [_v, _v, _v],
+    "pg_reduce": [_v, _i, _i, _i, _v, _i, _v, _v, _v],
+    "pg_span": [_v, _i, _i, _i, _i, _v],
+}
 
 
 class PagedLib(KB.Lib):
     """kv.cu with paged.cu's launchers (`run.sh` builds it at the stack's field, mask, FOLD6 and query heads)."""
 
     def __init__(self, name: str, path: str) -> None:
-        super().__init__(name, path)
-        v, i, z, u = ctypes.c_void_p, ctypes.c_int, ctypes.c_size_t, ctypes.c_ulonglong
+        super().__init__(name, path, PAGED)
         so = self.so
-        so.pg_shape.argtypes = [v]
-        so.pg_attn.argtypes = [v, i, v, z, ctypes.c_float, v, z, i, v, v, v, v, i, i, i, i, i, u, i, i, i, i, i,
-                               v, v, z, z, v, v, v, v, v, v]
-        so.pg_append_multi.argtypes = [v, i, i, i, i, i, i, i, i, v]
-        so.pg_append.argtypes = [v, v, z, z, v, i, v, i, i, i, i, u, i, i, i, i, v, v, v]
-        so.pg_encode.argtypes = [v, i, i, i, i, i, i, i, v]
-        so.pg_rekey.argtypes = [v, i, i, i, i, i, i, i, i, v]
-        so.pg_rekey_ctas.argtypes = []
-        so.pg_gather.argtypes = [v, v, i, i, i, i, i, i, v, u, i, i, i, i, v, v, v, v, v, v]
-        so.pg_window_offsets.argtypes = [v, i, v, v]
-        so.pg_window.argtypes = [v, i, i, v, v, i, i, i, i, i, u, i, i, i, v, v, v, v, z, z, v, v, i, u, v, v, u, u, i, v]
-        so.pg_window_ctas.argtypes = [i]
-        so.pg_receipts_sparse.argtypes = [v, v, v, v, u, i, i, u, v]
-        so.pg_rc_gate_pass.argtypes = [v, v, v]
-        so.kv_rc_pass.argtypes = [v, v, v]
-        so.pg_reduce.argtypes = [v, i, i, i, v, i, v, v, v]
-        so.pg_span.argtypes = [v, i, i, i, i, v]
         a = (ctypes.c_int * 10)()
         so.pg_shape(ctypes.cast(a, ctypes.c_void_p))
         self.shape = dict(zip(("heads", "kv_heads", "head_dim", "hw", "wb", "mt", "part", "mw", "mma", "smem"), a))

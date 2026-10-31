@@ -66,6 +66,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "codec_tensor"))
 sys.path.insert(0, str(HERE.parents[1]))
 
+from benchmarks.word_codec import cuda_lib  # noqa: E402
 from verity.core.protocols.remote_bandwidth import audit, coins, receipts as rb  # noqa: E402
 from verity.core.protocols.remote_bandwidth import codec as rcodec  # noqa: E402
 from verity.core.protocols.remote_bandwidth.store import PAYLOAD_LABEL, SALT_DOMAIN, store_salt  # noqa: E402
@@ -192,36 +193,30 @@ def _faults() -> tuple:
     return r.ru_minflt, r.ru_majflt, r.ru_nvcsw, r.ru_nivcsw
 
 
+_v, _u64, _i, _b = ctypes.c_void_p, ctypes.c_uint64, ctypes.c_int, ctypes.c_char_p
+SESSION = {   # session.cu's own functions, beside the reader's it includes (`reader.ABI`)
+    "rs_payload_leaves": [_v, _u64, _u64, _v, _v],
+    "rs_gather64": [_v, _u64, _v, _v],
+    "rs_pass": [_v, _u64, _u64, _v, _v, _v, _v, _v, _v, _i, _u64, _i, _u64, _u64, _v, _v, _v, _v, _i],
+    "rs_top": [_v, _v, _i, _v, _i, _i, _v, _i, _v],
+    "rs_enable_peers": [],
+    "rs_subtrees": [_v, _u64, _v, _v, _u64, _i, _v, _v, _v],
+    "rs_signs16": [_b, _i, _v, _v],
+    "rs_chain_set": [_b, _v],
+    "rs_chain_prepare": [ctypes.c_uint, _v, _v, _v, _v],
+    "rs_pack16": [_v, _v, _v],
+    "rs_sketch16_receipts": [_v, _u64, _u64, _v, _v, _i, _v],
+    "rs_map": [_v, _u64, _v, _i, _u64, _v, _v, _v],
+    "rs_mapped_receipts": [_v, _v, _u64, _v, _v, _i, _v],
+    "rs_mapped_pass": [_v, _v, _u64, _v, _v, _u64, _v, _v, _i, _i, _v, _v],
+    "rs_mapped_read": [_v, _u64, _v, _i, _v],
+}
+KV = {"kv_set_key": [_v, _i, _v], "kv_set_mask": [_v], "kv_encode": [_v, _v, _u64, _u64, _i, _i, _v]}   # kv.cu's
+
+
 class Lib:
     def __init__(self, path: str, torch) -> None:
-        self.so, self.torch = ctypes.CDLL(path), torch
-        v, u64, i, b = ctypes.c_void_p, ctypes.c_uint64, ctypes.c_int, ctypes.c_char_p
-        self.so.rb_set.argtypes = [b, b, b, b, b, b, b, b, i, b, i, u64, v]
-        self.so.rb_leaves.argtypes = [v, u64, u64, v, v, v]
-        self.so.rb_tree.argtypes = [v, u64, u64, v, v]
-        self.so.rb_read.argtypes = [v, u64, v, i, v]
-        self.so.rb_sketch_set.argtypes = [b, v]
-        self.so.rb_sketch.argtypes = [v, v, u64, v, v, i, v]
-        self.so.rb_sketch_hash.argtypes = [v, u64, u64, v, v]
-        self.so.rs_payload_leaves.argtypes = [v, u64, u64, v, v]
-        self.so.rs_gather64.argtypes = [v, u64, v, v]
-        self.so.rs_pass.argtypes = [v, u64, u64, v, v, v, v, v, v, i, u64, i, u64, u64, v, v, v, v, i]
-        self.so.rs_top.argtypes = [v, v, i, v, i, i, v, i, v]
-        self.so.rs_enable_peers.argtypes = []
-        self.so.rs_subtrees.argtypes = [v, u64, v, v, u64, i, v, v, v]
-        self.so.rs_signs16.argtypes = [b, i, v, v]
-        self.so.rs_chain_set.argtypes = [b, v]
-        self.so.rs_chain_prepare.argtypes = [ctypes.c_uint, v, v, v, v]
-        self.so.rs_pack16.argtypes = [v, v, v]
-        self.so.rs_sketch16_receipts.argtypes = [v, u64, u64, v, v, i, v]
-        self.so.rs_map.argtypes = [v, u64, v, i, u64, v, v, v]
-        self.so.rs_mapped_receipts.argtypes = [v, v, u64, v, v, i, v]
-        self.so.rs_mapped_pass.argtypes = [v, v, u64, v, v, u64, v, v, i, i, v, v]
-        self.so.rs_mapped_read.argtypes = [v, u64, v, i, v]
-        self.so.rb_chain_set.argtypes = [b, i, b, b, b, b, b, b, i, i, b, i, i, b, i, b, i, i, u64, v]
-        self.so.rb_chain.argtypes = [v, v]
-        self.so.rb_pads.argtypes = [u64, u64, v, v]
-        self.so.rb_level.argtypes = [v, v, i, u64, u64, v]
+        self.so, self.torch = cuda_lib.load(path, {**rdr.ABI, **SESSION}), torch
 
     def call(self, fn: str, *args) -> None:
         rc = getattr(self.so, fn)(*args, self.torch.cuda.current_stream().cuda_stream)
@@ -249,11 +244,7 @@ class Kv:
     """kv.cu's encode at the library's width, masked or not."""
 
     def __init__(self, path: str, torch) -> None:
-        self.so, self.torch = ctypes.CDLL(path), torch
-        v, q, i = ctypes.c_void_p, ctypes.c_uint64, ctypes.c_int
-        self.so.kv_set_key.argtypes = [v, i, v]
-        self.so.kv_set_mask.argtypes = [v]
-        self.so.kv_encode.argtypes = [v, v, q, q, i, i, v]
+        self.so, self.torch = cuda_lib.load(path, KV), torch
         self.bits, self.masked = self.so.kv_bits(), bool(self.so.kv_mask())
 
     def call(self, fn: str, *args) -> None:
