@@ -107,6 +107,8 @@ research merge --canary [--tool check] [--json]                    # the gates' 
 research queue status|sync|land|eject|drive|ready|open [--dry-run]  # the merge queue on `next` (queue.py)
 research queue judge RUN [--by LANE]      # the mark `queue ready --on` writes, from its quick-tier run that ended after its caller died
 research queue stats --log FILE [--hours 24] [--until T] [--json]  # where landed PRs' time went (queue_stats.py)
+research lean-times [--hours 24] [--until T] [--over 15] [--json]  # each Lean task's wall time from the store's attempts: records
+                                          # runs and checks' Lean steps, p50/p95/max per kind and package (lean_times.py)
 research git old2new|remap|check|build ...                              # after a history rewrite (commitmap.py, below)
 research msg send|close|read|list|names|traffic|owners|handles|subscriptions|ask-daniel|groups sync [--dry-run]   # Slack (slack.py, below)
 ~~~
