@@ -70,12 +70,11 @@ def test_the_window_is_the_fullest_one_with_no_request_carried(tmp_path):
 
 
 def test_the_published_window_counts_none_of_its_requests(tmp_path):
-    """What the run says of its window: its engine steps and whether its requests filled the class's slots, and the
-    refused windows by number, with no count, list or user of any window's requests."""
+    """What the run says of its window: its number, the class's padded slots and the refused windows by number, with no
+    engine steps of it, no word of whether its requests filled the slots, and no count, list or user of them."""
     got = S.pick(_serve_dir(tmp_path), slots=4)
-    assert S.public_pick(got, 4) == {"window": 1, "steps": [5, 11], "engine_steps": 6, "slots": 4, "every_slot": False,
-                                     "refused": [2, 3]}
-    assert S.public_pick(got, 3)["every_slot"] is True
+    assert S.public_pick(got, 4) == {"window": 1, "slots": 4, "refused": [2, 3]}
+    assert S.public_pick(got, 3) == {"window": 1, "slots": 3, "refused": [2, 3]}
     out = io.StringIO()
     with contextlib.redirect_stdout(out):
         assert S.main(["window", str(tmp_path), "--slots", "4"]) == 0
@@ -102,14 +101,15 @@ def test_the_published_registration_pads_the_advices_length_to_the_cap(tmp_path,
     assert json.loads(capsys.readouterr().out) == got
 
 
-def test_the_sampled_proofs_line_names_the_partition_and_its_draw_and_no_advice_length_or_population(tmp_path, capsys):
+def test_the_sampled_proofs_line_names_the_partition_and_its_draw_and_no_advice_length_population_or_steps(tmp_path, capsys):
     row = {"ok": True, "accepted": True, "draw": [0, 2], "population": 37,
            "leak": {"advice_bits": 832, "bound": "vacuous", "other_inputs": 786432, "registered": 0}}
     part = {"templates": ["SiluMul_v2{I=8192}"], "law": "subset:2",
-            "scope": {"op_path_prefix": "model.layers.0.mlp.", "steps": [0, 1]}}
+            "scope": {"op_path_prefix": "model.layers.0.mlp.", "steps": [5, 11]}}
     line = S.sampled_line(row, part)
     head, _, rec = line.partition(": RECORDS ")
-    assert head == "over SiluMul_v2{I=8192} at model.layers.0.mlp. steps [0, 1] (law subset:2), drawn members [0, 2]"
+    assert head == "over SiluMul_v2{I=8192} at model.layers.0.mlp. (law subset:2), drawn members [0, 2]"
+    assert "steps" not in line and "11" not in line
     assert json.loads(rec)["leak"] == {"bound": "vacuous", "other_inputs": 786432, "registered": 0} and "832" not in line
     assert "population" not in line and "37" not in line and row["population"] == 37
     (tmp_path / "log").write_text("+ set -x\nRECORDS " + json.dumps(row) + "\n")

@@ -24,9 +24,8 @@ scope's members), and ``front-line`` the CERTIFIER-FRONT line from the front's s
 (`pick`): sealed without error, its Commit passed, each of its requests checked and in no other window (V3b's window
 circuit refuses a request carried across windows), at most ``--slots`` of them (its class's); the most requests, then the
 earliest. ``--window K`` holds K to the same rules. Prints what the run publishes of it (`public_pick`):
-``{window, steps, engine_steps, slots, every_slot, refused}``, ``steps`` the window's ``[lo, hi)`` in the run's committed
-engine steps, ``every_slot`` whether its requests filled the class's slots, ``refused`` the windows refused, by number. Its
-requests' count, list and users stay on the node.
+``{window, slots, refused}``, ``slots`` the class's padded count, ``refused`` the windows refused, by number. Its engine
+steps, whether its requests filled the slots, and their count, list and users stay on the node.
 
 ``pieces``: each subprotocol after sampled proofs (`PIECES`: PoUW, PoUS, the bandwidth audit, the network certifier) runs
 its piece where one is named (``POUW_CMD``, ``POUS_CMD``, ``BANDWIDTH_CMD``, ``CERTIFIER_CMD``: a command run in the tree as
@@ -226,11 +225,10 @@ def pick(serve_dir: Path, slots: int, want: int | None = None) -> dict[str, Any]
 
 
 def public_pick(got: Mapping[str, Any], slots: int) -> dict[str, Any]:
-    """What the run publishes of `pick`'s window: its engine steps and whether its requests filled the class's ``slots``,
-    with no count, list or user of them, and the windows refused by number alone."""
-    lo, hi = got["steps"]
-    return {"window": got["window"], "steps": [lo, hi], "engine_steps": hi - lo, "slots": slots,
-            "every_slot": got["requests"] == slots, "refused": sorted(int(j) for j in got["refused"])}
+    """What the run publishes of `pick`'s window: its number and the class's ``slots``, padded counts alone, and the windows
+    refused by number. Its engine steps and whether its requests filled the slots are counts of the window's own, unpadded,
+    so they stay on the node with its requests' count, list and users."""
+    return {"window": got["window"], "slots": slots, "refused": sorted(int(j) for j in got["refused"])}
 
 
 #: The advice registration's fields that state the advice's own length, which `public_registration` pads to the cap.
@@ -251,15 +249,16 @@ def public_registration(reg: Mapping[str, Any]) -> dict[str, Any]:
 
 def sampled_line(records: Mapping[str, Any], partition: Mapping[str, Any] | None) -> str:
     """The SAMPLED-PROOFS line's account of the records audit's ``RECORDS`` row: what the draw was over (the partition's
-    templates, scope and law), which members it drew, and the row with no length of the advice (``leak.advice_bits``)
-    and no ``population``, the scope's unpadded member count, which counts the window's tokens."""
+    templates, its scope's op path and law), which members it drew, and the row with no length of the advice
+    (``leak.advice_bits``) and no ``population``, the scope's unpadded member count, which counts the window's tokens. The
+    scope's ``steps``, the window's engine steps, stay on the node too."""
     row = {k: v for k, v in records.items() if k != "population"}
     if isinstance(row.get("leak"), Mapping):
         row["leak"] = {k: v for k, v in row["leak"].items() if k != "advice_bits"}
     part = partition or {}
     scope = part.get("scope") or {}
-    over = (f"over {', '.join(part.get('templates') or ['?'])} at {scope.get('op_path_prefix', '?')} steps "
-            f"{scope.get('steps', '?')} (law {part.get('law', '?')})")
+    over = (f"over {', '.join(part.get('templates') or ['?'])} at {scope.get('op_path_prefix', '?')} "
+            f"(law {part.get('law', '?')})")
     drawn = f"drawn members {row.get('draw')}" if row.get("draw") is not None else "no draw"
     return f"{over}, {drawn}: RECORDS {json.dumps(row, sort_keys=True)}"
 

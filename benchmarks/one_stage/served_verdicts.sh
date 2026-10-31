@@ -39,7 +39,7 @@
 #     registrations, sessions and audit log, which carry the advice's length) stay in the serve dir, where the record reads
 #     them.
 #  3. sampled proofs, on the window `served_verdicts.py window` picks (the most requests, none carried across windows; its
-#     WINDOW line gives its engine steps and whether its requests filled the SLOTS slots, and CLASSES the window circuit's
+#     WINDOW line gives its number and the SLOTS slots, none of its own counts, and CLASSES the window circuit's
 #     classes beside the certifier's scan class, CERTIFIER_SCAN, default W63, the one the gate serves): every
 #     closed window's advice under the prove path's registered compiler and the weights registration (`--weights-of-record`),
 #     then this window's request Programs (`tools/advice_compile.py`); V3b's window circuit (`prove_path.py window-circuit
