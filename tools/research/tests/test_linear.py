@@ -586,14 +586,16 @@ def test_the_audit_names_the_teams_it_cant_read_skips_them_and_never_fails_on_th
 
 def asked(ident: str, state: str = "In Progress", kind: str = "started", labels=(), comments=(), dates=(), **kw) -> dict:
     """A person's ask as `asks` reads it: filed a day before AUDIT_NOW, with nothing to find; `dates` are its due
-    dates in the order they were set (the first set on an undated issue)."""
+    dates in the order they were set (the first set on an undated issue), the n-th at 0n:00 on 19 Oct; a comment is its
+    body, or (body, createdAt)."""
     moves = [{"createdAt": f"2026-10-19T0{n}:00:00Z", "fromDueDate": f"{a}T00:00:00.000Z" if a else None,
               "toDueDate": f"{b}T00:00:00.000Z"} for n, (a, b) in enumerate(zip((None, *dates), dates))]
     return {"identifier": ident, "title": "One check for every PR", "url": f"https://linear.app/x/issue/{ident}",
             "dueDate": dates[-1] if dates else "2026-10-30", "createdAt": "2026-10-18T20:00:00Z", "completedAt": None,
             "canceledAt": None, "state": {"name": state, "type": kind}, "team": {"key": ident.split("-")[0]},
             "labels": {"nodes": [{"name": n} for n in ("asker:daniel", *labels)]},
-            "comments": {"nodes": [{"body": b} for b in comments]}, "history": {"nodes": moves[::-1]}, **kw}
+            "comments": {"nodes": [{"body": b} if isinstance(b, str) else {"body": b[0], "createdAt": b[1]} for b in comments]},
+            "history": {"nodes": moves[::-1]}, **kw}
 
 
 ASKED = [
@@ -642,6 +644,18 @@ def test_a_persons_ask_is_found_parked_unstaffed_slipped_or_restated_and_nothing
         "slips": 2, "again": 0, "postmortems": 0, "ok": False, "closed": None}
     assert rows["INF-32"]["ok"] and rows["INF-41"]["closed"] == AUDIT_NOW - 3600
 
+
+
+def test_a_slip_explained_by_a_comment_after_its_last_move_holds(tmp_path):
+    """A slipped ask rang its lane every hour until it closed, even after a comment said what missed each date and what
+    holds the next. A comment after its date last moved holds it; one before that move doesn't, and a further move re-flags."""
+    slipping = ("2026-10-20", "2026-10-22", "2026-10-21", "2026-10-25")
+    fake = FakeLinear()
+    fake.asked = [asked("INF-51", dates=slipping, comments=(("missed 22 Oct for the move; 25 Oct holds", "2026-10-19T05:00:00Z"),)),
+                  asked("INF-52", dates=slipping, comments=(("missed 20 Oct", "2026-10-19T02:30:00Z"),)),
+                  asked("INF-53", dates=slipping)]
+    found = linear.Linear(KEY, fake, cache=tmp_path / "t").audit({"INF": "infra"}, now=AUDIT_NOW)
+    assert [(f["issue"], f["kind"]) for f in found] == [("INF-52", "slipped"), ("INF-53", "slipped")]
 
 def test_the_asks_ledger_counts_delivered_against_not_by_lane(fake, registry, capsys, lin):
     lin.asked = ASKED

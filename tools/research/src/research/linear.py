@@ -214,7 +214,7 @@ def ask_findings(asks: list[dict], now: float) -> list[dict]:
     - parked: in Backlog, or canceled, without ASKER_OK: only its asker parks or cancels it.  A duplicate isn't parked: the
       ask goes on in the issue it duplicates.
     - unstaffed: in Triage or Todo ASK_START_H after it was filed: In Progress means its worker is on it.
-    - slipped: not closed, and its date moved later ASK_SLIPS times or more.
+    - slipped: not closed, its date moved later ASK_SLIPS times or more, and no comment since its date last moved says why.
     - repeated: not done, and restated (`asked again` comments) more often than answered (`postmortem` comments)."""
     out = []
     for a in asks:
@@ -228,7 +228,7 @@ def ask_findings(asks: list[dict], now: float) -> list[dict]:
             and f"{who}'s ask, filed {(now - a['created']) / 3600:.0f} h ago, has no worker: move it to In Progress (`research msg "
                 f"linear state {ident} In Progress`) with a comment naming its worker (a `bc-` id, or the lead) and the date its "
                 "outcome lands",
-            "slipped": t in (*OPEN_TYPES, "backlog") and a["slips"] >= ASK_SLIPS
+            "slipped": t in (*OPEN_TYPES, "backlog") and a["slips"] >= ASK_SLIPS and not a.get("explained")
             and f"its date moved later {a['slips']} times ({' -> '.join(a['dates'])}): comment what missed each date and what holds "
                 "the next; top hears of it",
             "repeated": t != "completed" and a["again"] > a["postmortems"]
@@ -578,7 +578,8 @@ class Linear:
              days: float = ASK_RECENT_D) -> list[dict]:
         """Every issue a person asked for (an `asker:` label) that is open, in Backlog, or closed within `days`, of `teams` or
         every team, oldest first: {issue, url, title, team, lane, asker, state, type (its state's), due, created, closed
-        (epochs), dates (each due date it was given, in order), slips (moves to a later date), again (`asked again`
+        (epochs), dates (each due date it was given, in order), slips (moves to a later date), explained (a comment came after
+        its date last moved), again (`asked again`
         comments), postmortems (`postmortem` comments), ok (it carries ASKER_OK)}.  Delivered is `type` completed; filing it,
         dating it or starting it is not."""
         now, owners = self.now() if now is None else now, owners or {}
@@ -590,12 +591,14 @@ class Linear:
             f["team"] = _team_filter(teams)
         out = []
         for i in self._paged("identifier title url dueDate createdAt completedAt canceledAt state { name type } team { key } "
-                             "labels { nodes { name } } comments(first: 100) { nodes { body } } "
+                             "labels { nodes { name } } comments(first: 100) { nodes { body createdAt } } "
                              "history(first: 100) { nodes { createdAt fromDueDate toDueDate } }", f):
             labels = [x["name"] for x in i["labels"]["nodes"]]
             moves = sorted((h for h in i["history"]["nodes"] if h.get("fromDueDate") or h.get("toDueDate")), key=lambda h: h["createdAt"])
             bodies = [c.get("body") or "" for c in i["comments"]["nodes"]]
             closed = i.get("completedAt") or i.get("canceledAt")
+            moved = _epoch(moves[-1]["createdAt"]) if moves else None
+            said = [t for t in (_epoch(c.get("createdAt")) for c in i["comments"]["nodes"]) if t]
             out.append({"issue": i["identifier"], "url": i["url"], "title": i["title"], "team": i["team"]["key"],
                         "lane": _lane(i, owners), "asker": next(x[len(ASKER_LABEL):] for x in labels if x.startswith(ASKER_LABEL)),
                         "state": i["state"]["name"], "type": i["state"]["type"], "due": i.get("dueDate"),
@@ -603,6 +606,7 @@ class Linear:
                         "dates": [h["toDueDate"][:10] for h in moves if h.get("toDueDate")],
                         "slips": sum(bool(h.get("fromDueDate") and h.get("toDueDate") and h["toDueDate"][:10] > h["fromDueDate"][:10])
                                      for h in moves),
+                        "explained": moved is not None and any(t > moved for t in said),
                         "again": sum(bool(ASKED_AGAIN_RE.match(b)) for b in bodies),
                         "postmortems": sum(bool(POSTMORTEM_RE.match(b)) for b in bodies), "ok": ASKER_OK in labels})
         return sorted(out, key=lambda a: (a["created"] or 0, a["issue"]))
