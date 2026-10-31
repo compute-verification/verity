@@ -281,14 +281,19 @@ template <int WM, int BN, int CO, int CL> DEV void body(const Params& p) {
       if (++s == STAGES) { s = 0; ph ^= 1; }
     }
 
-    // the tile's scales, every load issued under the last stage's MMAs and before any store of y (which the compiler
-    // can't tell from s_w): one load latency a tile rather than one a column group
+    // the tile's s_a and its first round's s_w, every load issued under the last stage's MMAs and each later round's under
+    // the stores of the round before (the compiler can't move a load of s_w past a store of y): one load latency a tile
+    // rather than one a column group, and a round's scales live only through it
     const int row0 = tm * WM + (CO ? wg * T::R : 0) + 16 * (x / 32) + (x % 32) / 4, col0 = tn * BN + 2 * (x % 4);
+    constexpr int QR = T::Y_BOXES * 8;  // the 8-column groups of a round
     float2 c[NA / 4];
     float r[NH][2];
+    auto col_scales = [&](int q0, int q1) {
 #pragma unroll
-    for (int q = 0; q < NA / 4; q++)
-      c[q] = col0 + 8 * q < N ? __ldg(reinterpret_cast<const float2*>(p.sw + col0 + 8 * q)) : make_float2(0.0f, 0.0f);
+      for (int q = q0; q < q1; q++)
+        c[q] = col0 + 8 * q < N ? __ldg(reinterpret_cast<const float2*>(p.sw + col0 + 8 * q)) : make_float2(0.0f, 0.0f);
+    };
+    col_scales(0, QR);
 #pragma unroll
     for (int h = 0; h < NH; h++) {
       r[h][0] = row0 + 64 * h < M ? __ldg(p.sa + row0 + 64 * h) : 0.0f;
@@ -307,18 +312,29 @@ template <int WM, int BN, int CO, int CL> DEV void body(const Params& p) {
       const int jm = lane / 8, rr = 16 * (x / 32) + 8 * (jm & 1) + lane % 8;
 #pragma unroll
       for (int rd = 0; rd < T::Y_ROUNDS; rd++) {
+        // the round's words before the wait, under the stores of the round before
+        uint32_t v[NH][QR / 2][4];
+#pragma unroll
+        for (int h = 0; h < NH; h++) {
+#pragma unroll
+          for (int u = 0; u < QR / 2; u++) {
+            const int q = rd * QR + 2 * u;
+            v[h][u][0] = words(d[h][4 * q], d[h][4 * q + 1], r[h][0], c[q].x, c[q].y);
+            v[h][u][1] = words(d[h][4 * q + 2], d[h][4 * q + 3], r[h][1], c[q].x, c[q].y);
+            v[h][u][2] = words(d[h][4 * q + 4], d[h][4 * q + 5], r[h][0], c[q + 1].x, c[q + 1].y);
+            v[h][u][3] = words(d[h][4 * q + 6], d[h][4 * q + 7], r[h][1], c[q + 1].x, c[q + 1].y);
+          }
+        }
+        if (rd + 1 < T::Y_ROUNDS) col_scales((rd + 1) * QR, (rd + 2) * QR);
         if (x == 0) bulk_wait_read();  // the stores before have read the buffer
         bar_named(1 + wg);
 #pragma unroll
         for (int h = 0; h < NH; h++) {
 #pragma unroll
-          for (int q = rd * T::Y_BOXES * 8; q < (rd + 1) * T::Y_BOXES * 8; q += 2) {
-            const int row = 64 * h + rr, chunk = q + (jm >> 1);
-            stsm4(buf + (chunk / 8 - rd * T::Y_BOXES) * T::Y_BOX + row * 128 + (((chunk % 8) ^ (row % 8)) << 4),
-                  words(d[h][4 * q], d[h][4 * q + 1], r[h][0], c[q].x, c[q].y),
-                  words(d[h][4 * q + 2], d[h][4 * q + 3], r[h][1], c[q].x, c[q].y),
-                  words(d[h][4 * q + 4], d[h][4 * q + 5], r[h][0], c[q + 1].x, c[q + 1].y),
-                  words(d[h][4 * q + 6], d[h][4 * q + 7], r[h][1], c[q + 1].x, c[q + 1].y));
+          for (int u = 0; u < QR / 2; u++) {
+            const int row = 64 * h + rr, chunk = rd * QR + 2 * u + (jm >> 1);
+            stsm4(buf + (chunk / 8 - rd * T::Y_BOXES) * T::Y_BOX + row * 128 + (((chunk % 8) ^ (row % 8)) << 4), v[h][u][0],
+                  v[h][u][1], v[h][u][2], v[h][u][3]);
           }
         }
         fence_async_smem();
@@ -333,6 +349,7 @@ template <int WM, int BN, int CO, int CL> DEV void body(const Params& p) {
       continue;
     }
 
+    col_scales(QR, NA / 4);
 #pragma unroll
     for (int h = 0; h < NH; h++) {
       const int row = row0 + 64 * h;
