@@ -428,7 +428,7 @@ def test_b2_unequal_requests_pass_globally(memory, tmp_path):
 
 @pytest.mark.slow
 def test_fast_path_releases_its_caches_when_the_outermost_check_returns(memory, tmp_path, monkeypatch):
-    """MATCH_IMPL=fast memoises per Prog / Projection for the duration of ONE check() -- including its
+    """MATCH_IMPL=fast memoises per RootView / Projection for the duration of ONE check() -- including its
     nested alternate-criterion run -- and holds nothing afterwards, so a process that checks several records does not grow by one
     record's caches per record.  The document is the checker of record's, field for field."""
     from verity_vllm.check.match import global_match_fast as GMF
@@ -480,21 +480,21 @@ def test_fast_path_passes_its_operations_and_rebinds_nothing(memory, tmp_path, m
     names = [(codec, "descriptor_id"), (refs, "runs"), (C, "compare_steps"), (C, "_canonical_hash"), (C, "_canon_step_relative"),
              (C, "load_oracle"), (C, "load_derived"), (BD, "dag_hashes"), (BD, "live_cone"), (BD, "Projection")]
     before = [getattr(m, n) for m, n in names]
-    canon = C.Prog.__dict__["canon"]
+    canon = C.RootView.__dict__["canon"]
     gp, oracle = assemble([R0, R1_LATE], tmp_path)
     ref = gm.check(gp, oracle)
     monkeypatch.setenv(GMF.FLAG, "fast")
     monkeypatch.delenv(GMF.COMPACT_ENV, raising=False)
     loaded_fast: dict = {}
     fast = gm.check(gp, oracle, _loaded=loaded_fast)
-    assert all(getattr(m, n) is b for (m, n), b in zip(names, before)) and C.Prog.__dict__["canon"] is canon
+    assert all(getattr(m, n) is b for (m, n), b in zip(names, before)) and C.RootView.__dict__["canon"] is canon
     assert type(loaded_fast["oracle"]) is GMF.MemoProg and loaded_fast["oracle"].compact
     assert all(type(A) is GMF.MemoProg for A in loaded_fast["components"].values())
     monkeypatch.delenv(GMF.FLAG)
     loaded_rec: dict = {}
     again = gm.check(gp, oracle, _loaded=loaded_rec)
-    assert type(loaded_rec["oracle"]) is C.Prog and not loaded_rec["oracle"].compact
-    assert all(type(A) is C.Prog for A in loaded_rec["components"].values())
+    assert type(loaded_rec["oracle"]) is C.RootView and not loaded_rec["oracle"].compact
+    assert all(type(A) is C.RootView for A in loaded_rec["components"].values())
 
     def strip(o):
         if isinstance(o, dict):
@@ -1879,8 +1879,8 @@ def test_sampler_geometry_check_holds_every_launch_to_the_registered_s_whatever_
 
 class _OperandFold:
     """Every select is `GumbelTopPTokenSelect_v1{V}` (no S static) and the fold carries ONE `Const32[S]` instance
-    right before it, read as the 6th operand by exactly one run ("n", kc, 0, 1) -- the shape compare.Prog._bind_splits binds; here UNBOUND
-    (no splits_values), the way a Prog-shaped reader without compare's binding sees it."""
+    right before it, read as the 6th operand by exactly one run ("n", kc, 0, 1) -- the shape compare.RootView._bind_splits binds; here UNBOUND
+    (no splits_values), the way a RootView-shaped reader without compare's binding sees it."""
 
     def __init__(self, selects):   # selects: list of (S value | None for a non-Const operand, 6th-operand override or None)
         self.inst, self.k2i, self.splits_values = [], {}, {}
@@ -2254,7 +2254,7 @@ def test_fast_dag_hash_interning_induces_exactly_the_records_merkle_partition(me
 
     def spy(P, only=None):
         mine = intern(P, only)
-        rec = BD.dag_hashes(P, only)                # the checker of record's function on the same Prog / cone
+        rec = BD.dag_hashes(P, only)                # the checker of record's function on the same RootView / cone
         assert set(mine) == set(rec)
         for i, hid in mine.items():
             assert rec_of_id.setdefault(hid, rec[i]) == rec[i], ("two digests share an id", i, P.label)
@@ -2291,7 +2291,7 @@ def test_fast_dag_hash_progression_memo_does_not_carry_a_forward_ref_marker_to_a
     from verity_vllm.check.match import batch_decomp as BD
     from verity_vllm.check.match import global_match_fast as GMF
     if "compact" not in inspect.getsource(BD.dag_hashes):
-        pytest.skip("the compact (progression-form) operand is mfast's tree; here no Prog is compact and the memo branch is not reached")
+        pytest.skip("the compact (progression-form) operand is mfast's tree; here no RootView is compact and the memo branch is not reached")
 
     class FakeProg:
         compact = True
