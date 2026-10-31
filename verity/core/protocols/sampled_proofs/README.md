@@ -296,6 +296,14 @@ only inside a proof (`one_stage.registered`).
   record's root (`held_roots`, keyed by value and domain): the log is the only place the verifier holds roots, so a
   value is committed once a domain whatever the caller passes. 16 is the default, so a 16-bit value's domain, entry and
   root are what they were before `word_bits`.
+- Circuit parameters (`check(..., circuit_params={value: leaves})`, Lean `Verifier.circuitParams`): a registered value
+  that is a parameter of the verifier's circuit and no parameter of its program (a window circuit's scan state, which
+  every member reads) has no Input gates for `shape` to count, so the verifier names its 16-bit leaves from its own
+  circuit, a row holds `words` of them in any row format (`registered.circuit_shape`, Lean `Registered.circuitShape`),
+  and its domain is the same derivation over the program's SHA-512. R7 refuses one that is also a parameter of the
+  program, and leaves that are not whole rows of `words` (`R7-registered`, for the same reason in Lean and Python);
+  a circuit parameter of a value the verifier doesn't expect registered, or fills, refuses its inputs (ValueError, Lean
+  `OneStage.paramsOfJson`).
 - Per-window values (`check(..., window_root=, held=)`, `register_served`'s too): a window-independent Program
   registers each window's values under the same names. The verifier takes the window's open root R from the
   challenger's signed open of that window (never from the record), and every registered value's domain binding adds
@@ -349,12 +357,17 @@ only inside a proof (`one_stage.registered`).
   no rows, a row format other than `row/v1` (`row/v2` and `row-seg/v1` are named in `served.SCHEMAS` and refused until
   R7 and `Flock.Registered.checkPort` read them), a root the log registered otherwise (R7-held) and a tree no proof block
   reads. `benchmarks/one_stage/a0.py`'s `hold_registered` is the template.
-- The audit record holds `session_registered`, the roots the verifier opened the reads against, to the
-  registered roots (check `registered`), and `integrity_profile.inputs.registered` lists them. `session_registered`
+- The audit record holds `session_registered`, what the verifier opened each read against (its root, domain and shape:
+  `audit.READ_KEYS`, Lean `Record.READ_KEYS`, `word_bits` 16 where an entry leaves it out), to the registration's
+  entries (check `registered`), and `integrity_profile.inputs.registered` lists them. `session_registered`
   (`audit.session_registered(verdicts, registration)`) reads them off the accepted verdicts of record (the Lean
-  verdict's `registered`), never off the registration, for the registration's own values (its roots' ports and
-  registered values);
-  `verifier.audit_record` reads them so on both sides.
+  verdict's `registered`, `Flock.Registered.finding`), never off the registration, for the registration's own values
+  (its roots' ports and registered values), so a verdict that names a value's root without its domain and shape is
+  refused; `verifier.audit_record` reads them so on both sides.
+- What R7 leaves open: the values a session reads that the record doesn't register (a window circuit's weights and its
+  embedding tables' supplied values) are no values R7 checks or the audit record holds, so the roots and domains such a
+  read is opened against are the verifier's `--registered` file's, which `verity.ml.windows.interface` builds off the
+  soundness path.
 
 Pinned by `tests/test_registered.py` and `tests/test_served.py` and, for the Lean verifier's check,
 `verity/ml/flock/tests/test_lean_registered_reads.py`.
