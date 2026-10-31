@@ -38,9 +38,8 @@ theorem readWith_std (tags : Tags) (bytes : ByteArray) (tables : List (String ×
   simp only [classOfWith_std, templateOfWith_std]
   try rfl
 
-set_option maxRecDepth 20000 in
 theorem descParseWith_std (bytes : ByteArray) :
-    TemplateQuery.Desc.parseWith std bytes = TemplateQuery.Desc.parse bytes := rfl
+    TemplateQuery.Desc.parseWith std.sha512 bytes = TemplateQuery.Desc.parse bytes := rfl
 
 set_option maxRecDepth 20000 in
 theorem programDecodeWith_std (bytes : ByteArray) : Program.decodeWith std.sha512 bytes = Program.decode bytes := rfl
@@ -198,8 +197,8 @@ theorem inDrawnWith_std (c : Circuit) (pi : HmIn.Ports) (pub : Public) (draw : J
   exact drawnWith_std _ _ _
 
 set_option maxRecDepth 20000 in
-theorem linksCheckWith_std (c : Circuit) (pop : Public) (program : ByteArray) :
-    HmLinks.checkWith std c pop program = HmLinks.check c pop program := by
+theorem linksCheckWith_std (c : Circuit) (pop : Public) (readers : Option (Array Nat)) (program : ByteArray) :
+    HmLinks.checkWith std c pop readers program = HmLinks.check c pop readers program := by
   unfold HmLinks.checkWith HmLinks.check
   simp -zeta only [programDecodeWith_std]
   try rfl

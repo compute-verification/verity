@@ -95,7 +95,7 @@ theorem readWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws 
 
 theorem descParseWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
     {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (bytes : ByteArray) :
-    S.R (TemplateQuery.Desc.parseWith hs bytes) (TemplateQuery.Desc.parseWith hs' bytes) := by
+    S.R (TemplateQuery.Desc.parseWith hs.sha512 bytes) (TemplateQuery.Desc.parseWith hs'.sha512 bytes) := by
   unfold TemplateQuery.Desc.parseWith
   simp -zeta only [tM.bind, tN.bind]
   sim_walk
@@ -300,10 +300,10 @@ theorem hmInDrawnWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Th
   drawnWith_sim S tM tN hh _ pub draw
 
 theorem hmLinksCheckWith_sim (S : Sim M N) [LawfulMonad M] [LawfulMonad N] (tM : Throws M) (tN : Throws N)
-    {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (c : Circuit) (pop : Public) (program : ByteArray) :
-    S.R (HmLinks.checkWith hs c pop program) (HmLinks.checkWith hs' c pop program) := by
+    {hs : Flock.Hashes M} {hs' : Flock.Hashes N} (hh : S.Hashes hs hs') (c : Circuit) (pop : Public)
+    (readers : Option (Array Nat)) (program : ByteArray) :
+    S.R (HmLinks.checkWith hs c pop readers program) (HmLinks.checkWith hs' c pop readers program) := by
   unfold HmLinks.checkWith
-  simp -zeta only [tM.bind, tN.bind]
   sim_walk [programDecodeWith_sim S tM tN hh]
   iterate 40 (all_goals (try (dsimp +zetaDelta -zeta only)); all_goals sim_walk [programDecodeWith_sim S tM tN hh])
 
