@@ -350,3 +350,24 @@ the resulting code distribution. It's named and falsifiable; it's not a reductio
   checking the tail. The assumption, stated.
 - **HT-PROTO, resumed:** the outputs-only PoUW mesh over hardened private weights (commitments, h, the gap, the
   premise).
+
+- **HT-PROTO-U** (note:compute-research/20261031T1820Z-report-hardness-proto-u; traced circuits and exact arithmetic;
+  T2 and the hardening targets are estimates):
+  - **Hashing:** h on the linears is **1.12 (1B) and 0.64 (8B), against the lead's 127.5**. Over the whole step at
+    T 8,192, with attention under the lead, it's 28.4 and 17.6.
+  - **Gap and slowdown:** T1's known terms are 0.25% and 0.11%. T2 on the H200 is **1.1–1.9× and 1.05–1.7×, against the
+    lead's 55–90×**.
+  - **Coins:** 64.5 KB and 240 KB a token. At U's speed that's 10–17 GB/s a GPU.
+  - **What's committed:** x before the noise (keyed leaves), then cumulative output words at w = 16, one per K-chunk.
+    K ≤ 4,096 is still needed.
+  - **Premises:** U drops TileGrain, CommitL1w and OneInstructionMinimal's tile part, and ShaWrites can be loose. It
+    adds P1-hardened (rank 4b), smoothed SGD (rank 5) and a hardening beacon. Its footing is weaker than the lead's,
+    whose multiply credit rests on no matmul premise.
+  - **Four things are needed before U can be claimed:**
+    1. per-segment keys on x ((b3) extended to x; otherwise outsourcing x's hashing is worth 25.8% and 12.7% of stock);
+    2. its own outsourcing price, since a gate_up noise bit unlocks 1.56–2.02× the lead's β;
+    3. 2-bit noise, with its quality measured: first-order +16% perplexity, +3% with down exact, so hardening must
+       train under the noise;
+    4. every matrix above 1 at the attacker's floor correction price.
+  - **Asks routed:** HT-USEFUL measures perplexity under 2-bit noise with QAT in the loop, and searches routes at the
+    floor prices. HT-PROV gives the erasure horizon.
