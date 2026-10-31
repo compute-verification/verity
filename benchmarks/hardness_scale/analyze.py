@@ -2,15 +2,16 @@
 
 For a run of size N (the dense model's non-embedding parameters) on D tokens reaching validation loss L:
 
-- ``gap``: L − L_base(N, D) at the size's baseline lr (lr*: the best final loss at D, seed 0), paired by seed.
+- ``gap``: L − L_base(N, D) at the size's baseline lr, paired by seed. lr* is the lr of the size's token ladder (the
+  most baseline token counts, then the best loss at D): the lr its arms run at. The envelope reads every lr.
 - ``P_env``: C / C_env(L). C is the run's dense-shape training FLOPs (6 a forward MAC, adapters included, no discount
   for frozen R), C_env(L) the least baseline compute reaching L, on the lower envelope of every seed-0 baseline run (all
   sizes, token counts and lrs), interpolated linearly in (log C, L). ``P_env_real`` uses the run's own FLOPs (4 a frozen
   R MAC). Past the envelope's ends it extrapolates from the end segment and marks it (*).
 - ``P_size``: D / D_eq · (FLOPs a token over the baseline's), with D_eq the tokens the same-size baseline at lr* needs to
   reach L, read off its token ladder in (log D, L). It leaves out how far N is from compute-optimal.
-- ``P_fit``: C / C*(L) on the frontier of L(N, D) = E + A/N^α + B/D^β fitted to the baselines, with C*(L) minimized over
-  the width of the 12-block shape at its own FLOPs a token.
+- ``P_fit``: C / C*(L) on the frontier of L(N, D) = E + A/N^α + B/D^β fitted to each size's seed-0 ladder at its lr*
+  with D ≥ 10N, with C*(L) minimized over the width of the 12-block shape at its own FLOPs a token.
 - ``best``: with --best, each arm's lr variants fold into the arm, keeping its lowest loss.
 """
 
@@ -123,8 +124,11 @@ def analyze(runs, best_lr=False):
     lr_star = {}
     for size in {size_of(r) for r in base}:
         cands = [r for r in base if size_of(r) == size and r["cfg"]["seed"] == 0]
-        top = [r for r in cands if r["tokens"] == max(x["tokens"] for x in cands if "-Dx" not in x["cfg"]["name"])]
-        lr_star[size] = min(top or cands, key=lambda r: r["final_val"])["cfg"]["lr"]
+        rungs = defaultdict(set)
+        for r in cands:
+            rungs[r["cfg"]["lr"]].add(r["tokens"])
+        d1 = {r["cfg"]["lr"]: r["final_val"] for r in cands if "-Dx" not in r["cfg"]["name"]}
+        lr_star[size] = max(rungs, key=lambda lr: (len(rungs[lr]), -d1.get(lr, math.inf)))
     ladder = defaultdict(list)
     base_at = {}
     for r in base:
@@ -134,7 +138,8 @@ def analyze(runs, best_lr=False):
             if r["cfg"]["seed"] == 0:
                 ladder[s].append((r["tokens"], r["final_val"]))
     env = envelope([(r["train_flops_dense"], r["final_val"]) for r in base if r["cfg"]["seed"] == 0])
-    f = fit([r for r in base if r["cfg"]["seed"] == 0])
+    f = fit([r for r in base if r["cfg"]["seed"] == 0 and r["cfg"]["lr"] == lr_star[size_of(r)]
+             and r["tokens"] >= 10 * r["nonemb_dense"]])
     rows = []
     for name, r in runs.items():
         c, s, L = r["cfg"], size_of(r), r["final_val"]
