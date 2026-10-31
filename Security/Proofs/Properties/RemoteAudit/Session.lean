@@ -579,10 +579,8 @@ theorem inv_run {params : Params} {reg : Registration} {coins appendCoins : Arra
 /-! ## The statements -/
 
 theorem verdict_beq {v : Option Verdict} (h : (v == some .accept) = true) : v = some .accept := by
-  rcases v with _ | _ | ⟨f, a⟩
-  · cases h
-  · rfl
-  · cases h
+  rcases v with _ | ⟨_ | r, _ | _ | _⟩
+  all_goals first | rfl | cases h
 
 theorem acceptedMinPasses : AcceptedMinPasses := by
   intro params reg coins appendCoins notBeforeNs events rs s hrun hout
