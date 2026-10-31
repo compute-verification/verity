@@ -12,20 +12,20 @@ import Mathlib.Data.Finset.Dedup
 /-!
 # The certifier program agrees with the reference definitions
 
-The program (`certifier_program`, `NetworkCertifier`) is Lean core only: it sums over `List.finRange` and keeps `Σ_sync` as
-two duplicate-free lists, as Python does. The reference (`Definitions.NetworkCertifier`, `NetTiming`) sums over `Finset`s and
-keeps `Σ_sync` as two `Finset`s; it is what the guarantees read. The difftest runs the program against the Python audit;
-the guarantees here say that what it evaluates is the reference's, so the chain is Python ≈ the program (the difftest)
-and the program = the reference (proved):
+The program (`certifier_program`, `NetworkCertifier`) is Lean core only: it sums over `List.finRange`, as Python does,
+and still hands each frame at a tick it computes from a declared clock sync per window. The reference
+(`Definitions.NetworkCertifier`, `NetTiming`) sums over `Finset`s and hands each frame at its send tick, one FIFO per
+execution block; it is what the guarantees read. The difftest runs the program against the Python audit; the guarantees
+here say that what it evaluates is the reference's, so the chain is Python ≈ the program (the difftest) and the program
+= the reference (proved):
 
-* `CodeExpectedRow`: the program's `expectedRow` is the reference's, for clock syncs and frames with the same fields;
-* `CodeAcceptedConstantRate`: `Accepted` of the program's constant-rate Program is the reference's, for observations
-  with the same rows and the same complete statuses, an operator giving the same ingress, frames with the same fields,
-  and advice naming the same values;
+* `CodeExpectedRow`: the program's `expectedRow` over its `W` windows is the reference's for one execution block of
+  those windows, for frames with the same payloads sent at the program's hand ticks;
+* `CodeAcceptedConstantRate`: `Accepted` of the program's constant-rate Program over its `W` windows is the reference's
+  for one execution block of them, for observations with the same rows and the same complete statuses, an operator
+  giving the same ingress, and frames with the same payloads sent at the program's hand ticks under the declared syncs;
 * `CodeStatusComplete`: the program's `StatusComplete` is the reference's, for observations with the same complete
   statuses;
-* `CodeSyncSet`: every sync set of the program has a reference sync set with the same values, and every reference sync
-  set one of the program's, so the program's membership test (the audit's `advice` verdict) is the reference's;
 * `CodeChargesV1`: the program's advice v1 charges (`NetworkCertifier.AdviceV1.charges`, which the charge difftest runs
   against `arith_encode.reference_charge`) are the reference's (`AdviceV1.charges`), for books with the same fields;
   the program's `bitlen` is Lean core's `Nat.log2` plus one, the reference's `Nat.size`;
@@ -34,42 +34,13 @@ and the program = the reference (proved):
   the same tables and priors and windows with the same fields.
 
 Each statement relates the two sides by their fields rather than by a transport, so that it reads only the two sides'
-definitions. The transports (`frameRef`, `syncRef`, `syncSetRef`, `syncSetCode`, `tallyRef`, `carryRef`, `tableRef`,
-`bookRef`, `wcarryRef`, `windowRef`) are the proofs' own.
+definitions. The transports (`tallyRef`, `carryRef`, `tableRef`, `bookRef`, `wcarryRef`, `windowRef`) are the proofs'
+own.
 -/
 
 namespace NetTiming.SecurityProofs
 
 open Finset
-
-/-- The reference form of the program's frame. -/
-def frameRef (f : NetworkCertifier.LogicalFrame) : LogicalFrame := ⟨f.payload, f.anchor, f.index⟩
-
-/-- The reference form of the program's clock sync. -/
-def syncRef (s : NetworkCertifier.ClockSync) : ClockSync := ⟨s.delta, s.rho, s.rho_pos⟩
-
-/-- The reference form of the program's sync set: its lists as `Finset`s. -/
-def syncSetRef (ss : NetworkCertifier.SyncSet) : SyncSet where
-  deltas := ss.deltas.toFinset
-  rhos := ss.rhos.toFinset
-  deltas_nonempty := List.toFinset_nonempty_iff _ |>.mpr ss.deltas_nonempty
-  rhos_nonempty := List.toFinset_nonempty_iff _ |>.mpr ss.rhos_nonempty
-  rhos_pos ρ h := ss.rhos_pos ρ (List.mem_toFinset.mp h)
-
-/-- A sync set of the program with a reference's values, its `Finset`s listed in some order. -/
-noncomputable def syncSetCode (ss : SyncSet) : NetworkCertifier.SyncSet where
-  deltas := ss.deltas.toList
-  rhos := ss.rhos.toList
-  deltas_nonempty := by simpa using ss.deltas_nonempty.ne_empty
-  rhos_nonempty := by simpa using ss.rhos_nonempty.ne_empty
-  rhos_pos ρ h := ss.rhos_pos ρ (Finset.mem_toList.mp h)
-  deltas_nodup := ss.deltas.nodup_toList
-  rhos_nodup := ss.rhos.nodup_toList
-
-/-- Every reference sync set is the reference form of one of the program's. -/
-theorem syncSetRef_syncSetCode (ss : SyncSet) : syncSetRef (syncSetCode ss) = ss := by
-  obtain ⟨d, r, _, _, _⟩ := ss
-  simp only [syncSetRef, syncSetCode, Finset.toList_toFinset]
 
 theorem code_offset {T S : ℕ} (n : Fin T → Fin (S + 1)) (t : Fin T) : NetworkCertifier.offset n t = offset n t := by
   rw [NetworkCertifier.offset, offset, ← List.sum_toFinset _ ((List.nodup_finRange T).filter _), List.toFinset_filter,
@@ -91,63 +62,39 @@ theorem code_fifoGrid (T S : ℕ) {F : Type} (f : ℕ → F) (enq : ℕ → ℕ)
     NetworkCertifier.fifoGrid T S f enq = fifoGrid T S f enq := by
   simp only [NetworkCertifier.fifoGrid, fifoGrid, code_fill, code_released]
 
-theorem code_handingFrom (T W : ℕ) (syncs : Fin W → NetworkCertifier.ClockSync) :
-    ∀ (last : ℕ) (frames : List NetworkCertifier.LogicalFrame),
-      NetworkCertifier.handingFrom T W syncs last frames =
-        handingFrom T W (fun w => syncRef (syncs w)) last (frames.map frameRef)
-  | _, [] => rfl
-  | last, f :: fs => by
-    simp only [NetworkCertifier.handingFrom, handingFrom, List.map_cons, NetworkCertifier.eligible, eligible, frameRef, syncRef]
-    congr 1
-    exact code_handingFrom T W syncs _ fs
+/-- Frames sent at the program's hand ticks are handed at them: the program's hand ticks never fall. -/
+theorem handingFrom_of_code (T W : ℕ) (syncs : Fin W → NetworkCertifier.ClockSync) :
+    ∀ (last : ℕ) (frames : List NetworkCertifier.LogicalFrame) (frames' : List LogicalFrame),
+      frames'.map LogicalFrame.send = NetworkCertifier.handingFrom T W syncs last frames →
+      handingFrom last frames' = NetworkCertifier.handingFrom T W syncs last frames
+  | _, [], [], _ => rfl
+  | _, [], _ :: _, h => by simp [NetworkCertifier.handingFrom] at h
+  | _, _ :: _, [], h => by simp [NetworkCertifier.handingFrom] at h
+  | last, f :: fs, f' :: fs', h => by
+    simp only [NetworkCertifier.handingFrom, List.map_cons, List.cons.injEq] at h
+    obtain ⟨h1, h2⟩ := h
+    have hle : last ≤ f'.send := by rw [h1]; split_ifs <;> omega
+    simp only [NetworkCertifier.handingFrom, handingFrom, max_eq_left hle]
+    rw [← h1, handingFrom_of_code T W syncs _ fs fs' (by rw [h1]; exact h2)]
 
-theorem code_enqueued (T W : ℕ) (syncs : Fin W → NetworkCertifier.ClockSync) (frames : List NetworkCertifier.LogicalFrame) (t : ℕ) :
-    NetworkCertifier.enqueued T W syncs frames t = enqueued T W (fun w => syncRef (syncs w)) (frames.map frameRef) t := by
-  simp only [NetworkCertifier.enqueued, enqueued, NetworkCertifier.handingBuckets, handingBuckets, code_handingFrom]
-
-theorem code_payloads (frames : List NetworkCertifier.LogicalFrame) (k : ℕ) :
-    NetworkCertifier.payloads frames k = payloads (frames.map frameRef) k := by
-  simp only [NetworkCertifier.payloads, payloads, List.getElem?_map, Option.map_map]
-  rfl
-
-theorem code_expectedRow (S T W : ℕ) (syncs : Fin W → NetworkCertifier.ClockSync) (frames : List NetworkCertifier.LogicalFrame) (t : ℕ) :
-    NetworkCertifier.expectedRow S T W syncs frames t =
-      expectedRow S T W (fun w => syncRef (syncs w)) (frames.map frameRef) t := by
-  have hp : NetworkCertifier.payloads frames = payloads (frames.map frameRef) := funext (code_payloads frames)
-  have he : NetworkCertifier.enqueued T W syncs frames = enqueued T W (fun w => syncRef (syncs w)) (frames.map frameRef) :=
-    funext (code_enqueued T W syncs frames)
-  simp only [NetworkCertifier.expectedRow, expectedRow, code_fifoGrid, hp, he]
-
-theorem frames_eq_map_frameRef {frames : List NetworkCertifier.LogicalFrame} {frames' : List LogicalFrame}
-    (hf : frames.map (fun f => (f.payload, f.anchor, f.index)) = frames'.map (fun f => (f.payload, f.anchor, f.index))) :
-    frames' = frames.map frameRef := by
-  have hinj : Function.Injective fun f : LogicalFrame => (f.payload, f.anchor, f.index) := by
-    rintro ⟨p, a, i⟩ ⟨p', a', i'⟩ h
-    simp only [Prod.mk.injEq] at h
-    obtain ⟨rfl, rfl, rfl⟩ := h
-    rfl
-  apply List.map_injective_iff.mpr hinj
-  rw [← hf, List.map_map]
-  rfl
-
-theorem syncs_eq_syncRef {W : ℕ} {syncs : Fin W → NetworkCertifier.ClockSync} {syncs' : Fin W → ClockSync}
-    (hs : ∀ w, (syncs w).delta = (syncs' w).delta ∧ (syncs w).rho = (syncs' w).rho) :
-    syncs' = fun w => syncRef (syncs w) := by
-  funext w
-  obtain ⟨hd, hr⟩ := hs w
-  rcases e : syncs' w with ⟨d, r, _⟩
-  rw [e] at hd hr
-  simp only [syncRef, hd, hr]
-
-/-- **The program's rows are the reference's.** For clock syncs with the same δ and ρ, and frames with the same
-payloads, anchors and logical indices in the same order, the program's `expectedRow` (`schedule.expected_grids`, which
-the difftest runs) is the reference's at every bucket. -/
-theorem CodeExpectedRow (S T W : ℕ) (syncs : Fin W → NetworkCertifier.ClockSync) (syncs' : Fin W → ClockSync)
-    (hs : ∀ w, (syncs w).delta = (syncs' w).delta ∧ (syncs w).rho = (syncs' w).rho)
+/-- **The program's rows are the reference's.** For frames with the same payloads in the same order, the reference's
+sent at the program's hand ticks under the clock syncs `syncs`, the program's `expectedRow` over its `W` windows
+(`schedule.expected_grids`, which the difftest runs) is the reference's for one execution block of those windows from
+bucket 0, at every bucket. -/
+theorem CodeExpectedRow (S T W : ℕ) (syncs : Fin W → NetworkCertifier.ClockSync)
     (frames : List NetworkCertifier.LogicalFrame) (frames' : List LogicalFrame)
-    (hf : frames.map (fun f => (f.payload, f.anchor, f.index)) = frames'.map (fun f => (f.payload, f.anchor, f.index)))
-    (t : ℕ) : NetworkCertifier.expectedRow S T W syncs frames t = expectedRow S T W syncs' frames' t := by
-  rw [syncs_eq_syncRef hs, frames_eq_map_frameRef hf, code_expectedRow]
+    (hp : frames'.map LogicalFrame.payload = frames.map NetworkCertifier.LogicalFrame.payload)
+    (hs : frames'.map LogicalFrame.send = NetworkCertifier.handingBuckets T W syncs frames) (t : ℕ) :
+    NetworkCertifier.expectedRow S T W syncs frames t = expectedRow S (W * T) 0 frames' t := by
+  have hpay : NetworkCertifier.payloads frames = payloads frames' := by
+    funext k
+    simp only [NetworkCertifier.payloads, payloads]
+    rw [← List.getElem?_map, ← List.getElem?_map, hp]
+  have henq : NetworkCertifier.enqueued T W syncs frames = enqueued (W * T) 0 frames' := by
+    funext u
+    simp only [NetworkCertifier.enqueued, enqueued, Nat.zero_add, NetworkCertifier.handingBuckets,
+      handingFrom_of_code T W syncs 0 frames frames' hs]
+  simp only [NetworkCertifier.expectedRow, expectedRow, code_fifoGrid, hpay, henq]
 
 theorem code_ingressUpTo {L K S : ℕ} {In : Type} (op : ℕ → List (NetworkCertifier.Obs L K S) → In)
     (op' : ℕ → List (Obs L K S) → In) (o : List (NetworkCertifier.Obs L K S)) (o' : List (Obs L K S))
@@ -157,9 +104,9 @@ theorem code_ingressUpTo {L K S : ℕ} {In : Type} (op : ℕ → List (NetworkCe
 /-- `Accepted` agrees on observations with the same rows and complete statuses when the two Programs predict the same
 rows from the same ingress. -/
 theorem code_accepted {L K S : ℕ} {In Adv Adv' : Type} (P : NetworkCertifier.EgressPrediction L S In Adv)
-    (P' : Program L S In Adv') (a : Adv) (a' : Adv') (hP : ∀ t ins, P.rows t ins a = P'.rows t ins a')
+    (P' : Program L S In Adv') (a : Adv) (a' : Adv') (k : ℕ) (hP : ∀ t < k, ∀ ins, P.rows t ins a = P'.rows t ins a')
     (op : ℕ → List (NetworkCertifier.Obs L K S) → In) (op' : ℕ → List (Obs L K S) → In)
-    (k : ℕ) (o : List (NetworkCertifier.Obs L K S)) (o' : List (Obs L K S))
+    (o : List (NetworkCertifier.Obs L K S)) (o' : List (Obs L K S))
     (hlen : o.length = o'.length)
     (hrows : ∀ t (h : t < o.length) (h' : t < o'.length), o[t].rows = o'[t].rows)
     (hstatus : ∀ t (h : t < o.length) (h' : t < o'.length) κ,
@@ -171,35 +118,47 @@ theorem code_accepted {L K S : ℕ} {In Adv Adv' : Type} (P : NetworkCertifier.E
   · intro H t ht
     obtain ⟨h, hr, hc⟩ := H t ht
     have h' : t < o'.length := hlen ▸ h
-    exact ⟨h', by rw [← hrows t h h', hr, hP, hin], fun κ => (hstatus t h h' κ).mp (hc κ)⟩
+    exact ⟨h', by rw [← hrows t h h', hr, hP t ht, hin], fun κ => (hstatus t h h' κ).mp (hc κ)⟩
   · intro H t ht
     obtain ⟨h', hr, hc⟩ := H t ht
     have h : t < o.length := hlen ▸ h'
-    exact ⟨h, by rw [hrows t h h', hr, ← hP, ← hin], fun κ => (hstatus t h h' κ).mpr (hc κ)⟩
+    exact ⟨h, by rw [hrows t h h', hr, ← hP t ht, ← hin], fun κ => (hstatus t h h' κ).mpr (hc κ)⟩
+
+/-- The constant-rate Program of one execution block of `W` windows predicts, at each step of the block, the block's
+`expectedRow`. -/
+theorem constantRate_one_rows {L S : ℕ} {In Adv : Type} (T W : ℕ)
+    (frames : List In → Fin 1 → Adv → Fin L → List LogicalFrame) (v : Adv) (ins : List In) (ℓ : Fin L) {t : ℕ}
+    (ht : t < W * T) :
+    (constantRate (S := S) T W 1 frames).rows t ins (fun _ => v) ℓ = expectedRow S (W * T) 0 (frames ins 0 v ℓ) t := by
+  simp only [constantRate, Nat.div_eq_of_lt ht, Nat.mod_eq_of_lt ht, Nat.zero_lt_one, ↓reduceDIte, Nat.zero_mul]
+  rfl
 
 /-- **The program's acceptance of the constant-rate Program is the reference's.** For observation sequences of one
 length whose steps have the same egress rows and the same complete statuses, operators that give the same ingress on
-them, frames with the same payloads, anchors and logical indices, the same content advice, and declared syncs naming
-the same δ and ρ in every window, the program's `Accepted` of its `constantRate` (which the difftest decides) holds
-exactly when the reference's does, whatever the two sync sets. -/
-theorem CodeAcceptedConstantRate {L K S : ℕ} {In Ac : Type} (T W : ℕ) (ss : NetworkCertifier.SyncSet) (ss' : SyncSet)
-    (frames : List In → Ac → Fin L → List NetworkCertifier.LogicalFrame) (frames' : List In → Ac → Fin L → List LogicalFrame)
-    (hf : ∀ ins c ℓ, (frames ins c ℓ).map (fun f => (f.payload, f.anchor, f.index)) =
-      (frames' ins c ℓ).map (fun f => (f.payload, f.anchor, f.index)))
+them, and frames with the same payloads, the reference's sent at the program's hand ticks under the declared syncs
+`σ`, the program's `Accepted` of its `constantRate` over its `W` windows (which the difftest decides) holds over the
+first `k ≤ W·T` steps exactly when the reference's does for one execution block of those windows, whatever the sync
+set. -/
+theorem CodeAcceptedConstantRate {L K S : ℕ} {In Ac Adv : Type} (T W : ℕ) (ss : NetworkCertifier.SyncSet)
+    (frames : List In → Ac → Fin L → List NetworkCertifier.LogicalFrame)
+    (frames' : List In → Fin 1 → Adv → Fin L → List LogicalFrame) (c : Ac) (σ : Fin W → ss.Elem) (v : Adv)
+    (hp : ∀ ins e ℓ, (frames' ins e v ℓ).map LogicalFrame.payload =
+      (frames ins c ℓ).map NetworkCertifier.LogicalFrame.payload)
+    (hs : ∀ ins e ℓ, (frames' ins e v ℓ).map LogicalFrame.send =
+      NetworkCertifier.handingBuckets T W (fun w => ss.sync (σ w)) (frames ins c ℓ))
     (op : ℕ → List (NetworkCertifier.Obs L K S) → In) (op' : ℕ → List (Obs L K S) → In)
-    (k : ℕ) (o : List (NetworkCertifier.Obs L K S)) (o' : List (Obs L K S))
+    (k : ℕ) (hk : k ≤ W * T) (o : List (NetworkCertifier.Obs L K S)) (o' : List (Obs L K S))
     (hlen : o.length = o'.length)
     (hrows : ∀ t (h : t < o.length) (h' : t < o'.length), o[t].rows = o'[t].rows)
     (hstatus : ∀ t (h : t < o.length) (h' : t < o'.length) κ,
       o[t].status κ = .complete ↔ o'[t].status κ = .complete)
-    (hop : ∀ i, op i (o.take i) = op' i (o'.take i))
-    (c : Ac) (σ : Fin W → ss.Elem) (σ' : Fin W → ss'.Elem)
-    (hσ : ∀ w, (σ w).1.1 = (σ' w).1.1 ∧ (σ w).2.1 = (σ' w).2.1) :
+    (hop : ∀ i, op i (o.take i) = op' i (o'.take i)) :
     NetworkCertifier.Accepted (NetworkCertifier.constantRate T W ss frames) op k o (c, σ) ↔
-      Accepted (constantRate (S := S) T W ss' frames') op' k o' (c, σ') := by
-  refine code_accepted _ _ _ _ (fun t ins => ?_) op op' k o o' hlen hrows hstatus hop
+      Accepted (constantRate (S := S) T W 1 frames') op' k o' (fun _ => v) := by
+  refine code_accepted _ _ _ _ k (fun t ht ins => ?_) op op' o o' hlen hrows hstatus hop
   funext ℓ
-  exact CodeExpectedRow S T W _ _ hσ _ _ (hf ins c ℓ) t
+  rw [constantRate_one_rows T W frames' v ins ℓ (lt_of_lt_of_le ht hk)]
+  exact CodeExpectedRow S T W _ _ _ (hp ins 0 ℓ) (hs ins 0 ℓ) t
 
 /-- **The program's ingress acceptance is the reference's.** For observation sequences of one length whose steps have
 the same complete statuses, the program's `StatusComplete` (which the difftest decides) holds exactly when the
@@ -216,15 +175,6 @@ theorem CodeStatusComplete {L K S : ℕ} (k : ℕ) (o : List (NetworkCertifier.O
   · intro H t ht
     obtain ⟨h', hc⟩ := H t ht
     exact ⟨hlen ▸ h', fun κ => (hstatus t _ h' κ).mpr (hc κ)⟩
-
-/-- **The program's sync sets are the reference's.** Every sync set of the program (two duplicate-free lists) has a
-reference sync set (two `Finset`s) with the same δ and the same ρ, and every reference sync set one of the program's. -/
-theorem CodeSyncSet :
-    (∀ ss : NetworkCertifier.SyncSet, ∃ ss' : SyncSet, (∀ d, d ∈ ss.deltas ↔ d ∈ ss'.deltas) ∧ ∀ ρ, ρ ∈ ss.rhos ↔ ρ ∈ ss'.rhos) ∧
-      ∀ ss' : SyncSet, ∃ ss : NetworkCertifier.SyncSet, (∀ d, d ∈ ss.deltas ↔ d ∈ ss'.deltas) ∧ ∀ ρ, ρ ∈ ss.rhos ↔ ρ ∈ ss'.rhos :=
-  ⟨fun ss => ⟨syncSetRef ss, fun _ => List.mem_toFinset.symm, fun _ => List.mem_toFinset.symm⟩,
-    fun ss' => ⟨syncSetCode ss', fun _ => Finset.mem_toList, fun _ => Finset.mem_toList⟩⟩
-
 
 /-- The reference form of the program's coder state. -/
 def tallyRef (t : NetworkCertifier.AdviceV1.Tally) : AdviceV1.Tally := ⟨t.low, t.high, t.used, t.bits⟩
