@@ -16,8 +16,8 @@ The test runs once on the unmutated source first, and a failure there exits 2: e
 mutant whose build fails is `unbuilt`, neither killed nor survived. Exit 0 when every mutant was killed, 1 when one survived
 or wasn't built, 2 on a usage error or a failing baseline.
 
-Started from rec-lean's merge that dropped both of `FlockVerify.lean`'s `Registered.checkFull` calls while `check` stayed
-green (F7, 10 Oct): a deletion like that is one of these mutants.
+A merge that drops both of `FlockVerify.lean`'s `Registered.checkFull` calls while `check` stays green is the kind of
+deletion these mutants are.
 """
 from __future__ import annotations
 
