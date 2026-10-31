@@ -1,7 +1,7 @@
-"""a5's checks by the verifier, each asked once per input (`memo`, which `a5.audit` runs under): a check the verifier
-answered is reused while every argument it reads is the same, so the negatives' fresh streams, which receive the honest
-registration and draw the honest sample on its bytes, don't send the window's whole registration to the Lean verifier of
-record again.
+"""a5's checks by the verifier, each asked once per input (`memo`, which `a5.main` runs under, each audit's summary.json
+counting the checks asked and reused as ``verifier_checks``): a check the verifier answered is reused while every argument
+it reads is the same, so the negatives' fresh streams, which register the honest registration and draw the honest sample
+on its bytes, don't send the window's whole registration to the Lean verifier of record again.
 
 Each of `PURE`'s checks is a function of its arguments on both sides (the Lean's piece and the Python beside it), so the
 same arguments are the same verdict. A check is keyed by the SHA-512 of its name, `verifier.RECORD_VERDICT` and every
@@ -9,10 +9,9 @@ argument bound to its signature with the defaults applied, pickled: the registra
 holds it to, a `Program` by its digest and annotations (computed once per object: a Program is never changed once
 built). A registration with anything changed, or any copy changed (R2's program, R3's ports, R4's leaf layer), is
 another key and is checked again; a check whose arguments pickle can't write is never kept (`Memo.unkeyed` says
-why). Not kept: `coins` (the operating
-system's randomness), `run` (each stream's whole run, on its own coins and evidence), and any verdict whose Lean side
-refused, which may be the Lean failing to run rather than its answer. A reused verdict is a copy. The cache is the
-harness's: the verifier is unchanged, and outside `memo` every check runs."""
+why). Not kept: `coins` (the operating system's randomness), `run` (each stream's whole run, on its own coins and
+evidence), and any verdict whose Lean side refused, which may be the Lean failing to run rather than its answer. A
+reused verdict is a copy. The cache is the harness's: the verifier is unchanged, and outside `memo` every check runs."""
 from __future__ import annotations
 
 import contextlib

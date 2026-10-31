@@ -510,7 +510,6 @@ def stage(served: Path, mm: dict, files: tuple[dict, dict]) -> None:
             raise RuntimeError(f"member {mm['k']}'s prover's file is not under the header its public file was held to")
 
 
-@AM.memoized
 def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served: Path, source: Callable[[dict], dict], port: int,
           summary: dict, more_negatives: dict | None = None, rank: int | None = None,
           step_roots: dict[int, bytes] | None = None, registered: dict[str, dict] | None = None,
@@ -527,8 +526,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     Definition, a member of bit rows too; a bit-row member's template with no composer is vLLM's (`vllm_template`). ``registered``: by member key, the verifier's own ``--registered`` file of a member reading an outside
     registered value, at the root its owner signed (a warden's cells), which the caller read before calling. ``ports``: how
     many ports from ``port`` the caller reserved, a sample whose sessions need more refused before any listens
-    (`port_refusal`); None for no reservation to hold them to. Each check by the verifier is asked once per input
-    (`a5_memo.memo`), the summary's ``verifier_checks`` counting those asked and those reused."""
+    (`port_refusal`); None for no reservation to hold them to."""
     out.mkdir(parents=True, exist_ok=True)
     program, query, part, pd, n_all, law = mine.program, mine.query, mine.partition, mine.partition_digest, mine.population, mine.law
     table = mine.work_table
@@ -1139,6 +1137,7 @@ def tp(a: argparse.Namespace, sets: dict, out: Path) -> bool:
     return summary["accepted"]
 
 
+@AM.memoized
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--bundle", help="a deferred Commit's sealed replay bundle (<commit out>/replay_bundle_p<pair>)")

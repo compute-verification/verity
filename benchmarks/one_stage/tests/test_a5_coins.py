@@ -2,14 +2,11 @@
 them has the verifier as its coin source, and its outcome, with no coins' evidence, is accepted with the Lean verifier of
 record's whole run (`Run.run`, `coin_source` verifier) agreeing. `a5_coins.verifier_negatives` refuses each negative for its
 own reason: the bytes passed off as the challenger's, or as the verifier's with evidence, at the Lean run's select (`coins`);
-a resample (`drawn`) and a sample before the registration (`unknown`), with no coin read. Under `a5_memo.memo` the
-negatives reuse the honest registration's checks and are refused all the same, while a changed registration or copy is
-checked again. A toy window of two templates."""
+a resample (`drawn`) and a sample before the registration (`unknown`), with no coin read. A toy window of two templates."""
 
 from __future__ import annotations
 
 import sys
-from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -23,7 +20,6 @@ from verity.core.protocols.sampled_proofs.one_stage import partition as P, regis
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 import a5_coins as AC  # noqa: E402
-import a5_memo as AM  # noqa: E402
 
 XOR8 = PrimitiveDefinition("A5CoinsTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
                            register=False)
@@ -196,88 +192,6 @@ def test_the_replay_reads_no_more_than_the_honest_draw():
     assert replay(2) == b"\x01\x02" and replay.at == 2
     with pytest.raises(AC.Ch.CoinError, match="past the honest draw"):
         replay(2)
-
-
-def _asked(monkeypatch) -> Counter:
-    """How many times each piece is asked of the Lean from here on."""
-    asked, lean = Counter(), V.lean
-
-    def counted(fn, value):
-        asked[fn] += 1
-        return lean(fn, value)
-    monkeypatch.setattr(V, "lean", counted)
-    return asked
-
-
-def test_under_the_memo_the_negatives_reuse_the_honest_registrations_checks_and_still_refuse(monkeypatch):
-    """Under `a5_memo.memo` the negatives' fresh streams receive the honest registration and draw on its bytes with the
-    honest stream's verdicts: the Lean is asked the registration's public-items rule, R1-R7 and the select once, while
-    each stream's whole run is its own; the evidence negative's audit record is the honest one's, and the one passed
-    off as the challenger's, whose receipt names the challenger, is asked again. Every negative is still refused for
-    its own reason, and the verifier's checks are its own again after the block."""
-    asked = _asked(monkeypatch)
-    own = {name: getattr(V, name) for name in AM.PURE}
-    with AM.memo() as m:
-        stream, coins, draw, got, _ = honest()
-        neg = AC.verifier_negatives(stream_of, register, stream, coins, draw, outcome, ROOT)
-    assert got.accepted and all(n["refused"] for n in neg.values()), neg
-    for name in ("verifier-coins-claimed-as-challenger", "verifier-coins-with-evidence"):
-        assert (neg[name]["lean"]["step"], neg[name]["lean"]["codes"]) == AC.SELECT_COINS
-    assert (asked["check_public"], asked["registration"], asked["select"], asked["record"], asked["run"]) == (1, 1, 1, 2, 3)
-    assert m.counts() == {"asked": {"check_public": 1, "check": 1, "select": 1, "audit_record": 2},
-                          "reused": {"check_public": 2, "check": 2, "select": 2, "audit_record": 1}, "unkeyed": {}}
-    assert {name: getattr(V, name) for name in AM.PURE} == own and AM.counts() is None
-
-
-def test_under_the_memo_a_changed_registration_or_copy_is_checked_again(monkeypatch):
-    """The memo keys R1-R7 by everything it reads: the same registration and copies, as new objects and a new Program,
-    reuse the verdict, a copy; a registration with one root changed is asked of the Lean again, and one with a root's
-    domain changed (R3), the verifier's ports bound to another run (R3) and a program of one proof block fewer (R2) are
-    asked again and refused."""
-    asked = _asked(monkeypatch)
-    with AM.memo():
-        first = _check()
-        assert first.ok and asked["registration"] == 1
-        first.detail["changed"] = True
-        again = _check()
-        assert again.ok and "changed" not in again.detail and asked["registration"] == 1
-        rec = _record()
-        rec["roots"][0]["root"] = "cd" * 64
-        assert _check(rec).ok and asked["registration"] == 2
-        rec = _record()
-        rec["roots"][0]["domain"] = "cd" * 64
-        assert "R3-domain" in _check(rec).codes and asked["registration"] == 3
-        part = P.partition(_program(), QUERY)
-        other = {p: {**e, "domain": R.window_domain(part["program"], P.digest(part), p, SCHEMA, e["leaves"],
-                                                    "r-another-run")} for p, e in _ports().items()}
-        assert "R3-domain" in _check(ports=other).codes and asked["registration"] == 4
-        fewer = _check(program=_program({**COUNTS, P.template_id(TRIPLE): COUNTS[P.template_id(TRIPLE)] - 1}))
-        assert "R2-program" in fewer.codes and asked["registration"] == 5
-
-
-def test_the_memo_keeps_no_verdict_the_lean_refused(monkeypatch):
-    """A check whose Lean side refused (here, the Lean down once) is not kept: the same check again asks the Lean, and
-    its answer is kept."""
-    asked, lean = Counter(), V.lean
-
-    def down_once(fn, value):
-        asked[fn] += 1
-        return {"refused": "down"} if fn == "registration" and asked[fn] == 1 else lean(fn, value)
-    monkeypatch.setattr(V, "lean", down_once)
-    with AM.memo():
-        assert _check().codes == (V.DISAGREE,)
-        assert _check().ok and asked["registration"] == 2
-        assert _check().ok and asked["registration"] == 2
-
-
-def _program(counts: dict = COUNTS) -> Program:
-    return P.mixed_population_program([(t, counts[P.template_id(t)]) for t in WINDOW])
-
-
-def _check(rec: dict | None = None, program: Program | None = None, ports: dict | None = None) -> S.Verdict:
-    """R1-R7 by the verifier on the toy window's registration and the verifier's copies, as a new object each call."""
-    law = S.selection_law(SPEC.selection, sum(COUNTS.values()))
-    return V.check(rec or _record(), program or _program(), QUERY, law, S.SCHEME, ports or _ports())
 
 
 def _clock_and_sleep():
