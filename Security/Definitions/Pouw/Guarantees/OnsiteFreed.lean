@@ -46,9 +46,9 @@ then for every prover, the probability over the oracle and the verifier's coins 
 period (`onsiteVerdict vw vn`: both checks) and some other work `z` fits on the registered devices beside its sampling
 blocks' timed work with `rv + W_other(z) > OPT_honest + ε C` is at most `κ + δ`, where `ε C = max(0, C − F + β K)`.
 
-**Non-vacuity rests on the fixed model.** On 𝓜 as `Definitions.Core.Accel` writes it, SAK for matrix products is
-false, and so is `RemoteWorkFloor` at any useful `F` for a check that credits matrix products. This statement says
-something only on a model that charges the free register reductions that falsify them.
+**Non-vacuity is open.** 𝓜 as `Definitions.Core.Accel` writes it prices register reductions, but SAK for matrix
+products as written (`SAKMatmul`) still fails there at a dual price that leaves the CUDA-core pipes cheap. Whether
+`RemoteWorkFloor` holds on 𝓜 at a useful `F`, for a check that credits matrix products, is open.
 
 Open (stated so the red team can aim at them):
 * `RemoteWorkFloor` is the remote form's conclusion taken as a premise. At the served check it isn't needed:
