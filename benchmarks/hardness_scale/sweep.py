@@ -156,7 +156,7 @@ def t1(res):
         out += [cfg("60m", a, hi) for a in ("res-f33", "m-mlph-r8")]
         s125, best125 = lr_sweep("125m", [lr125 * (384 / 896) ** p for p in (-0.5, 0, 0.5)], res)
         pending |= best125 is None
-        c125 = [cfg("125m", a, lr125) for a in MATCHED] + s125 + [cfg("125m", "base", lr125, 0.5)]
+        c125 = s125 + [cfg("125m", a, lr125) for a in MATCHED] + [cfg("125m", "base", lr125, 0.5)]
     out += [cfg("20m", "base", lr20, dx) for dx in (2, 0.5, 0.25, 0.125)]
     out += [cfg("9m", "base", lr20 * 1.5, dx) for dx in (1, 2)] + [cfg("9m", "base", lr20)]
     out += [cfg("20m", a, lr20) for a in MATCHED]
@@ -168,7 +168,37 @@ def t1(res):
     return out + c125, pending
 
 
-PRESETS = {"smoke": lambda res: (smoke(), False), "ddp-check": lambda res: (ddp_check(), False), "t1": t1}
+T2_ARMS = ("res-f33", "m-mlph-r8")  # the two best arrangements at matched κ_lin = 1/3 in Tier 1
+
+
+def kd(c):
+    return {**c, "teacher": TEACHER, "micro": 16, "name": c["name"] + "-kd"}
+
+
+def t2(res):
+    """Tier 2 at 350M, one GPU a run, longest first: the baseline at D, D/2, D/4, the two best arrangements at D (and the
+    first at D/4), and distillation from TEACHER of the baseline and the first arrangement at D/4. Its lr is lr20·(384/1536)^p
+    with p the exponent of 125M's best checked lr; nothing appears until that check is in."""
+    s20, lr20 = lr_sweep("20m", LR20, res)
+    if lr20 is None:
+        return [], True
+    s60 = [cfg("60m", "base", lr20 * (384 / 640) ** p) for p in (1, 0.5, 0)]
+    if any(c["name"] not in res for c in s60):
+        return [], True
+    lr60 = min(s60, key=lambda c: res[c["name"]])["lr"]
+    lr125 = lr20 * (384 / 896) ** (math.log(lr60 / lr20) / math.log(384 / 640))
+    _, best125 = lr_sweep("125m", [lr125 * (384 / 896) ** p for p in (-0.5, 0, 0.5)], res)
+    if best125 is None:
+        return [], True
+    lr = lr20 * (384 / 1536) ** (math.log(best125 / lr20) / math.log(384 / 896))
+    a, b = T2_ARMS
+    out = [cfg("350m", "base", lr), cfg("350m", a, lr), cfg("350m", b, lr)]
+    out += [kd(cfg("350m", "base", lr, 0.25)), kd(cfg("350m", a, lr, 0.25))]
+    out += [cfg("350m", "base", lr, 0.5), cfg("350m", "base", lr, 0.25), cfg("350m", a, lr, 0.25)]
+    return out, False
+
+
+PRESETS = {"smoke": lambda res: (smoke(), False), "ddp-check": lambda res: (ddp_check(), False), "t1": t1, "t2": t2}
 
 
 def finished(shared: Path) -> dict:
