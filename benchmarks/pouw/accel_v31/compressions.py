@@ -139,6 +139,11 @@ class _Count:
         _Count.counts[_Count.cat[-1]] += blocks(self.n)
         return self.h.digest()
 
+    def copy(self) -> _Count:
+        c = object.__new__(_Count)
+        c.h, c.n = self.h.copy(), self.n
+        return c
+
 
 def _tagged(cat: str, f):
     def g(*a, **kw):
@@ -156,14 +161,16 @@ class _Hashlib:
 
 def counted() -> dict:
     """Patch dither.py's hashing to count compressions by category; returns what to restore. A coin block is counted once
-    however often the reference recomputes it (the device computes it once)."""
+    however often the reference recomputes it (the device computes it once). merkle's cached domain prefixes (`_head`) are
+    dropped on the way in and out, so a frame hash continues from a counting state, never a real one or the reverse."""
     hm = type(dither.INST)
     saved = {"sha": scheme._SHA["sha512"], "hashlib": dither.hashlib, "row": dither.sha512_row_v2_digest,
              "prf": dither.prf_salt, "prg": dither.prg, "seeds": dither.seeds, "fill_seeds": dither.fill_seeds,
              "salt_c": hm.salt_digest, "leaf_h": hm.tree_leaf, "frame": merkle.CommitmentDomain.leaf,
-             "node": merkle.CommitmentDomain.node, "pad": merkle.CommitmentDomain.pad, "domain": dither.Shape.domain,
+             "node": merkle._node, "pad": merkle._pad, "domain": dither.Shape.domain,
              "operand_domain": dither.operand_domain}
     scheme._SHA["sha512"], dither.hashlib = _Count, _Hashlib
+    merkle._head.cache_clear()
     dither.Shape.domain = _tagged("domain", saved["domain"])
     dither.operand_domain = _tagged("domain", saved["operand_domain"])
     dither.sha512_row_v2_digest = _tagged("row", saved["row"])
@@ -171,8 +178,7 @@ def counted() -> dict:
     dither.seeds, dither.fill_seeds = _tagged("seeds", saved["seeds"]), _tagged("seeds", saved["fill_seeds"])
     hm.salt_digest, hm.tree_leaf = _tagged("salt_c", saved["salt_c"]), _tagged("leaf_h", saved["leaf_h"])
     merkle.CommitmentDomain.leaf = _tagged("frame", saved["frame"])
-    merkle.CommitmentDomain.node = _tagged("node", saved["node"])
-    merkle.CommitmentDomain.pad = _tagged("pad", saved["pad"])
+    merkle._node, merkle._pad = _tagged("node", saved["node"]), _tagged("pad", saved["pad"])
     memo: dict = {}
 
     def prg(seed: bytes, tag: str, idx: int) -> bytes:
@@ -186,11 +192,11 @@ def counted() -> dict:
 def restore(saved: dict) -> None:
     hm = type(dither.INST)
     scheme._SHA["sha512"], dither.hashlib = saved["sha"], saved["hashlib"]
+    merkle._head.cache_clear()
     dither.sha512_row_v2_digest, dither.prf_salt, dither.prg = saved["row"], saved["prf"], saved["prg"]
     dither.seeds, dither.fill_seeds = saved["seeds"], saved["fill_seeds"]
     hm.salt_digest, hm.tree_leaf = saved["salt_c"], saved["leaf_h"]
-    merkle.CommitmentDomain.leaf, merkle.CommitmentDomain.node = saved["frame"], saved["node"]
-    merkle.CommitmentDomain.pad = saved["pad"]
+    merkle.CommitmentDomain.leaf, merkle._node, merkle._pad = saved["frame"], saved["node"], saved["pad"]
     dither.Shape.domain, dither.operand_domain = saved["domain"], saved["operand_domain"]
 
 
