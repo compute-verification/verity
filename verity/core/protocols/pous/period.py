@@ -18,7 +18,8 @@ What an accepted run certifies is `certify`'s, as `PousCheck.RunProtocol.certify
 at `eps = δ + 2^eps_log2` = 1/100 + 2^-128 when a certificate covers the point (`certificate`: P2's registered one at
 `run.DEPLOYED`, a 1 GiB `C*`, else P2's proved family `p2.family_certificate`, any `2^8` to `2^23` blocks at the
 registered width and prime, else the per-period guarantee `p2.wide_certificate`, `periodHeldAt`, to `2^27` blocks, which
-holds Demo B's `C*` of 1038 segments, 1,060,008,348,186 bits), else 0 and 0 with the profile naming each gap.
+holds Demo B's `C*` of 1038 segments, 1,060,008,348,186 bits), else 0 and 0 with the profile naming each gap. At
+`k ≥ 320` challenges and `2^19` to `2^27` blocks it is `2^-20` (`p2.wide320_certificate`, `ObligationWide320`).
 `point_for` gives the smallest such point holding a store, 256 blocks (526 KB) at least; the small point
 (`point_for(size, W, C0)`, 1,024-bit blocks) certifies nothing.
 
@@ -87,10 +88,13 @@ def point_for(size: int, w: int = P2.POINT[0], c0: int = P2.POINT[1], k: int = K
     return R.Point(P2.P2Params(w, c0, -(-blocks // segments), segments), k, limit_ns)
 
 
-def certificate(q: P2.P2Params) -> Any:
-    """`PousCheck.RunProtocol.certificate`: P2's registered certificate when `q` is its point, segment count and all,
-    else P2's proved family's (`p2.family_certificate`, `2^8` to `2^23` blocks), else the per-period guarantee's
-    (`p2.wide_certificate`, to `2^27` blocks), else none."""
+def certificate(q: P2.P2Params, k: int = K) -> Any:
+    """`PousCheck.RunProtocol.certificate`: at `k` of at least `p2.CERT_K_WIDE320` challenges, the 320-read window's
+    (`p2.wide320_certificate`, `2^19` to `2^27` blocks) where it holds `q`; else P2's registered certificate when `q`
+    is its point, segment count and all, else P2's proved family's (`p2.family_certificate`, `2^8` to `2^23` blocks),
+    else the per-period guarantee's (`p2.wide_certificate`, to `2^27` blocks), else none."""
+    if k >= P2.CERT_K_WIDE320 and (wide := P2.wide320_certificate(q)) is not None:
+        return wide
     registered = P2.P2(P2.P2Params(q.w, q.c0, q.blocks_per_segment, q.segments)).certificate
     if registered is not None and registered.segments == q.segments:
         return registered
@@ -100,7 +104,7 @@ def certificate(q: P2.P2Params) -> Any:
 def gaps(point: R.Point) -> tuple[Any, list[str]]:
     """`PousCheck.RunProtocol.gaps`: the certificate at the point, and why it doesn't cover the run (none when it does)."""
     q = point.params
-    cert = certificate(q)
+    cert = certificate(q, point.k)
     if cert is None:
         return None, [f"P2 has no certificate at (w, c0, blocks) = ({q.w}, {q.c0}, {q.blocks})"]
     return cert, list(cert.refusals(point.k, point.limit_ns))
