@@ -7,7 +7,7 @@ import Definitions.Accounting.Compose
 `Accounting.PeriodRun.Sound` at `.pouw` is the joint period's PoUW guarantee: over PoUW's own coordinate of the coins,
 the audit accepts while the compute account did less than the work certificate `W` at price `p` (`PeriodRun.Holds`:
 `c.W ≤ r.work p ξ`) with probability at most its error. `r.work p ξ` is the device model's priced work: the compute
-account's ops of each class (`Accounting.Op`) over the period's window, each at its price, summed (`Schedule.work`). It
+account's ops of each class (`Accounting.OpClass`) over the period's window, each at its price, summed (`Schedule.work`). It
 counts ops, not time and not words.
 
 PoUW's per-period statements credit words. `Properties.Pouw.Period.H1CheckedCreditPeriod` bounds the probability that
