@@ -58,9 +58,9 @@ def tree_of_record(root: str | os.PathLike | None = None) -> dict:
     """The executing tree BY CONTENT beside git_head: `source_identity.code_identity` of the repository this module runs from (`root`
     overrides it) -- its import closure, the integration plus Verity core, the same identity the hot Commit worker keys on -- so a dirty
     tree cannot pass as the tagged commit by git_head alone."""
-    from verity_vllm.pipeline import research_tools, source_identity
+    from verity_vllm.pipeline import source_identity
     root = Path(root) if root is not None else source_identity.TREE
-    return {"source": "source_identity.code_identity", "root": str(root), "closure": list(research_tools.CLOSURE), **source_identity.code_identity(root)}
+    return {"source": "source_identity.code_identity", "root": str(root), "closure": source_identity.closure(), **source_identity.code_identity(root)}
 
 
 def weights_as_loaded(pin: dict | None) -> partial | None:
@@ -561,7 +561,7 @@ def main(args: Options) -> int:
                         # the per-rank binding maps themselves (not only their digests) into the evidence: binding_map_rank<r>.json
                         dumped = llm.collective_rpc("tp2_commit_binding_map_dump", timeout=args.rpc_timeout, kwargs={"out_dir": str(out)})
                         print(f"[tp2commit] binding maps: {[(d_.get('rank'), str(d_.get('digest') or d_.get('skipped'))[:16], d_.get('entries_n')) for d_ in dumped]}", flush=True)
-                    # population-drawn openings per rank (bind's challenge_identities from the COMBINED root + the rank's map digest)
+                    # population-sampled openings per rank (bind's challenge_identities from the COMBINED root + the rank's map digest)
                     pop_open = {}
                     if all((f.get("binding") or {}).get("map_digest") for f in fin):
                         po = []

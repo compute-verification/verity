@@ -290,7 +290,6 @@
     {"file": "tools/research/src/research/telemetry/pyspy.py", "count": 3},
     {"file": "tools/research/src/research/telemetry/run.py", "count": 7},
     {"file": "tools/research/src/research/telemetry/scope.py", "count": 6},
-    {"file": "tools/research/src/research/telemetry/source_identity.py", "count": 1},
     {"file": "tools/research/src/research/timefmt.py", "count": 1},
     {"file": "tools/research/src/research/withdraw.py", "count": 11},
     {"file": "tools/research/tests/conftest.py", "count": 1},

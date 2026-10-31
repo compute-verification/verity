@@ -38,7 +38,7 @@ With ``served`` (the compile slice's statics, `served_statics`) each close also 
 (`verity.core.protocols.certifier.served_rows.register`, under the window's run root): each request named by its arrival
 id, its index in the order the engine admitted the run's requests. The record's public part (the registration's
 binding, root, count and row width) goes into the window's ``windows.jsonl`` line, beside its run root, written at the
-close and so before any draw over it; the rows and their salts go to ``served_rows/w<k>.json``, the prover's.
+close and so before sampling over it; the rows and their salts go to ``served_rows/w<k>.json``, the prover's.
 """
 from __future__ import annotations
 
@@ -79,7 +79,7 @@ def advice_trace(out: Path, engine: Any) -> Any:
     (`step_trace.SERVED`, beside the committer's step_trace.jsonl), under the engine ids requests.jsonl records (vLLM's internal
     suffix dropped): what `verity-vllm advice OUT` reads, with each window's open and close (``CommitWindows(marks=trace.window)``).
     Its writer thread writes the file (`StepTrace.writer`): the engine thread never waits on the serve dir's disk, which the seals
-    keep busy; `Mirror(before=trace.drain)` copies it whole."""
+    keep busy. It holds request values, so it stays in the serve dir (`MIRRORED` leaves it out)."""
     from verity_vllm.engine.engine_driver import external_id
     from verity_vllm.engine.step_trace import SERVED, StepTrace
 
@@ -88,12 +88,13 @@ def advice_trace(out: Path, engine: Any) -> Any:
 
 #: requests.jsonl's engine id to ``user`` map alone, a line each as requests.jsonl's: ``{"engine_id", "user"}``.  It holds no
 #: request value (the network certifier's users are request indexes, ``user-<i>``), so it can leave the node with
-#: advice_trace.jsonl, windows.jsonl and serve.json while requests.jsonl, with the prompt and output ids, stays.
+#: windows.jsonl and serve.json while requests.jsonl, with the prompt and output ids, stays.
 REQUEST_USERS = "request_users.jsonl"
 
-#: the records the gates' tie-run reads by run id, mirrored into the run's $OUT (the served rows' salts stay in the serve dir)
-MIRRORED = ("serve.json", "requests.jsonl", REQUEST_USERS, "windows.jsonl", "seals.jsonl", "step_trace.jsonl",
-            "advice_trace.jsonl", "pauses.jsonl", "summary.json", "remote_session.json", "memory_map.jsonl")
+#: the records mirrored into the run's $OUT, none of them private (`research_outputs.private`): requests.jsonl and the step
+#: traces, which hold request values, stay in the serve dir with the served rows' salts, and what reads them runs there
+MIRRORED = ("serve.json", REQUEST_USERS, "windows.jsonl", "seals.jsonl", "pauses.jsonl", "summary.json", "remote_session.json",
+            "memory_map.jsonl")
 
 
 def gc_of(rc: Any) -> dict[str, Any] | None:
@@ -109,18 +110,14 @@ def gc_of(rc: Any) -> dict[str, Any] | None:
 
 class Mirror:
     """The serve dir's records (`MIRRORED`) copied into ``dst`` (the run's ``$OUT``, which custody uploads), so they outlive the serve
-    dir: a JSON-lines file up to its last whole line, appended from where its copy ends; any other file whole. Any thread.
-    ``before``: called first, each time (the step trace's `drain`, so its writer's lines are in the file)."""
+    dir: a JSON-lines file up to its last whole line, appended from where its copy ends; any other file whole. Any thread."""
 
-    def __init__(self, src: str | Path, dst: str | Path, names: Sequence[str] = MIRRORED, *,
-                 before: Callable[[], None] | None = None) -> None:
-        self.src, self.dst, self.names, self.before = Path(src), Path(dst), tuple(names), before
+    def __init__(self, src: str | Path, dst: str | Path, names: Sequence[str] = MIRRORED) -> None:
+        self.src, self.dst, self.names = Path(src), Path(dst), tuple(names)
         self.errors: list[str] = []
         self._lock = threading.Lock()
 
     def __call__(self) -> None:
-        if self.before is not None:
-            self.before()
         with self._lock:
             self.dst.mkdir(parents=True, exist_ok=True)
             for name in self.names:
@@ -150,11 +147,11 @@ class Mirror:
                 g.write(data)
 
 
-def records_mirror(out: Path, dst: str | None, before: Callable[[], None] | None = None) -> Mirror | None:
+def records_mirror(out: Path, dst: str | None) -> Mirror | None:
     """`Mirror` of ``out``'s records into ``--copy-records-to`` (None without one, or when it is ``out``)."""
     if not dst or Path(dst).resolve() == Path(out).resolve():
         return None
-    return Mirror(out, dst, before=before)
+    return Mirror(out, dst)
 
 
 def disk_record(windows: CommitWindows | None) -> dict[str, Any] | None:
@@ -195,7 +192,7 @@ def commit_served(statics: Mapping[str, int], by_step: Mapping[int, Sequence[tup
 
 
 @dataclass
-class Ledger:
+class LiveRequest:
     """One request as served: its ids, the HTTP id -> engine id map, its ingress record and its stream."""
 
     http_id: str
@@ -220,8 +217,8 @@ class _Closed:
     window: int
     com: Any
     step_t: dict[int, float]
-    ledgers: Mapping[str, Ledger]
-    finished: list[Ledger]
+    ledgers: Mapping[str, LiveRequest]
+    finished: list[LiveRequest]
     open_s: float
     off_loop: bool = False
     on_loop: dict[str, float] = field(default_factory=dict)    # off the loop: the close's phases on the loop
@@ -239,7 +236,7 @@ def _lap(laps: list[tuple[str, float]], clock: Callable[[], float], name: str) -
 
 
 class CommitWindows:
-    """The committer's windows over a serving engine, and every request's `Ledger`. ``committer`` is a
+    """The committer's windows over a serving engine, and every request's `LiveRequest`. ``committer`` is a
     `NativeHostCommitter` with a `served_record.SamplerInputsSource` attached (or its offline stand-in in the tests:
     ``reset``, ``install``, ``uninstall``, ``finalize``, ``_layouts``, ``_step_index``, ``sources``, and to close off the loop
     ``enable_window_views`` and ``detach``, whose view has ``wait_absorbed`` and ``finalize``); ``eos_ids`` and
@@ -275,7 +272,7 @@ class CommitWindows:
         self.record = Record(known=self.known)
         self.window, self.open_s, self.is_open = -1, 0.0, False
         self.step_t: dict[int, float] = {}               # the open window's committed steps -> when their engine step ended
-        self.ledgers: dict[str, Ledger] = {}
+        self.ledgers: dict[str, LiveRequest] = {}
         self.records: list[dict[str, Any]] = []
         self.seals: list[dict[str, Any]] = []            # seals.jsonl's lines, appended on the sealer's thread
         self.checked: list[dict[str, Any]] = []
@@ -291,7 +288,7 @@ class CommitWindows:
         """``adm`` a `verity_vllm.pipeline.serve_openai.Admission`."""
         self.known[adm.engine_id] = adm.http_id
         self.arrivals.setdefault(adm.engine_id, len(self.arrivals))
-        self.ledgers[adm.engine_id] = Ledger(adm.http_id, adm.engine_id, list(adm.prompt_ids), dict(adm.ingress),
+        self.ledgers[adm.engine_id] = LiveRequest(adm.http_id, adm.engine_id, list(adm.prompt_ids), dict(adm.ingress),
                                              getattr(adm, "user", None), getattr(adm, "release", None), len(self.known) - 1,
                                              times=dict(getattr(adm, "times", None) or {}))
         self.names[adm.engine_id] = self.ledgers[adm.engine_id].user or adm.http_id
@@ -660,7 +657,7 @@ class CommitWindows:
         else:
             self.sealer.submit(run, int(rec.get("committed_bytes") or 0))
 
-    def check(self, led: Ledger) -> dict[str, Any]:
+    def check(self, led: LiveRequest) -> dict[str, Any]:
         """``led``'s record against what was served: `Record.check` with the seed it carried and its finish."""
         params = led.ingress.get("params") or {}
         finish = None if led.finish is None else {**led.finish, "max_tokens": params.get("max_tokens"),
@@ -684,11 +681,11 @@ class CommitWindows:
                                      "step_root": root, "t_end": c.step_t.get(s), "rows": [list(r) for r in rows.get(s, [])],
                                      **own}) + "\n")
 
-    def _pop_finished(self) -> list[Ledger]:
+    def _pop_finished(self) -> list[LiveRequest]:
         """The loop's: the ledgers finished by the close, out of the open ones (their requests ran no step after it)."""
         return [self.ledgers.pop(e) for e in [e for e, led in self.ledgers.items() if led.finished]]
 
-    def _check_finished(self, finished: Sequence[Ledger]) -> None:
+    def _check_finished(self, finished: Sequence[LiveRequest]) -> None:
         """Each of ``finished`` checked against the record its window's readback completed, a line of requests.jsonl, and its
         engine id and ``user`` a line of `REQUEST_USERS`."""
         with open(self.out / "requests.jsonl", "a") as fh, open(self.out / REQUEST_USERS, "a") as fu:

@@ -226,7 +226,7 @@ class Template:
 
 
 @dataclass(frozen=True)
-class Verdict:
+class TemplateInvariance:
     """A template's verdicts: (a)'s crossings and (b)'s splits, each None where it isn't checked."""
 
     template: Template
@@ -250,18 +250,18 @@ class Verdict:
                 "splits": None if self.splits is None else [str(s) for s in self.splits], "shapes": self.shapes, "why": t.why}
 
 
-def check(templates: Iterable[Template], *, liveness: Liveness | None = None) -> list[Verdict]:
+def check(templates: Iterable[Template], *, liveness: Liveness | None = None) -> list[TemplateInvariance]:
     """Each template's verdicts."""
     lv = liveness or Liveness(transitive=True)
     out = []
     for t in templates:
         crossings = None if t.fn is None else tuple(separable(t.fn, t.params, t.ret, liveness=lv))
         splits = None if t.bind_at is None else tuple(invariant(t.bind_at, t.shapes))
-        out.append(Verdict(t, crossings, splits, len(t.shapes)))
+        out.append(TemplateInvariance(t, crossings, splits, len(t.shapes)))
     return out
 
 
-def report(verdicts: Sequence[Verdict]) -> str:
+def report(verdicts: Sequence[TemplateInvariance]) -> str:
     """The verdicts as a Markdown table: each template, (a) and (b) with their first witness, and whether each is the one declared."""
     def cell(got: bool | None, witness: tuple | None) -> str:
         if got is None:

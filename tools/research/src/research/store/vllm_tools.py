@@ -1,12 +1,12 @@
-"""`research` Tool declarations for the vLLM integration sweep stages.
+"""`research` Tool declarations for the vLLM integration's row stages.
 
 Five Tools — ``vllm.build``, ``vllm.plan`` (the Commit's plan, on CPU, before the GPU), ``vllm.match``,
-``vllm.commit``, ``vllm.replay`` (a deferred Commit's C2 replay, on CPU) — one per stage of a sweep row.  Each stage runs as one ``research run --tool vllm.<stage>
+``vllm.commit``, ``vllm.replay`` (a deferred Commit's C2 replay, on CPU) — one per stage of a row.  Each stage runs as one ``research run --tool vllm.<stage>
 -- verity-vllm row stage <stage> ...`` Attempt and publishes typed Artifacts
 (``verity_vllm.pipeline.research`` writes the ``outputs.json`` the publisher
 consumes).
 
-Rules encoded here (Phase 5a of the v2 plan):
+Rules encoded here:
 
 * ``key_params`` is the row configuration — model id, dtype, hw family, tp,
   batch, input/output lengths, arrival mix, sampling, execution mode, the
@@ -18,15 +18,10 @@ Rules encoded here (Phase 5a of the v2 plan):
   workload interpreter (``$PY``, default ``/workspace/venv312/bin/python``),
   probed via ``importlib.metadata`` so nothing heavy is imported.
 * ``closure`` is the integration's import closure: ``integrations/vllm/**``
-  plus every directory that ships Verity core (``research.pythonpath.package_dirs``:
-  ``verity``, or each member's part of the namespace).
-  ``source_identity.code_identity`` is the one code identity over it (the
-  hot Commit worker's key, the TP Commit's tree of record).
-
-This module imports nothing beyond the standard library, ``research.store.tool``
-and ``research.pythonpath``, so it is loadable from any interpreter that can see
-``tools/research/src`` (``research`` loads it by dotted path or, failing
-that, by file — see ``research.store.tools_registry``).
+  plus Verity core, the root package ``verity`` (``package_dirs(tree, "verity")``
+  of a source tree, which ``tests/test_store_vllm_tools.py`` holds it to).  It is
+  stated rather than derived because this module also loads from the runner's
+  tool snapshot, which is no workspace.
 """
 
 from __future__ import annotations
@@ -36,7 +31,7 @@ import subprocess
 from pathlib import PurePosixPath
 from typing import Any
 
-from research.pythonpath import package_dirs, workspace_root
+from research.store.settings import workload_python
 from research.store.tool import Tool
 
 DEFAULT_QUERY = "Q_word_v1{X=16,W=32,R=no-recompute}"
@@ -46,11 +41,7 @@ COMMAND = ["verity-vllm", "row", "stage"]
 _CLI_MODULE = "verity_vllm.pipeline.cli"
 _SCRIPTS = ("run_row_v2.sh", "row_pod.sh", "tp_stage.sh")   # the shell runners of earlier records (same grammar as `row stage` / `row run`)
 
-#: Each directory of this file's tree that ships Verity core, relative to the repository root.
-CORE_DIRS = package_dirs(workspace_root(__file__), "verity")
-#: The code the integration imports besides its own: `verity`, with the catalog, the kernels and the verifiers in it.
-CODE_DIRS = [*CORE_DIRS]
-CLOSURE = ["integrations/vllm/**", *(f"{d}/**" for d in CODE_DIRS)]
+CLOSURE = ["integrations/vllm/**", "verity/**"]
 
 # Row id grammar (see verity_vllm/ops/README):
 #   <model>__<dtype>__<hw>__tp<N>__b<N>__i<N>__o<N>__<arrivals>__<sampling>__<exec>
@@ -119,7 +110,7 @@ PRODUCES: dict[str, list[str]] = {
     "plan": ["vllm-commit-plan/v1", "execution-evidence/v1", "run-files/v1"],
     "match": ["vllm-match-record/v1", "execution-evidence/v1", "run-files/v1"],
     "commit": ["vllm-verdict/v1", "execution-evidence/v1", "run-files/v1"],
-    "replay": ["vllm-verdict/v1", "vllm-replay-slim/v1", "execution-evidence/v1", "run-files/v1"],
+    "replay": ["vllm-verdict/v1", "execution-evidence/v1", "run-files/v1"],
 }
 
 
@@ -253,9 +244,10 @@ def _probe_pins(env: dict[str, Any] | None = None) -> dict[str, Any]:
 
     Uses ``importlib.metadata`` so vLLM is never imported.  ``None`` when the
     interpreter is absent (e.g. on the control laptop) — such a derivation
-    legitimately differs from one probed on a pod.
+    legitimately differs from one probed on a pod — and, with ``error`` naming
+    why, when the probe fails.
     """
-    py = os.environ.get("PY") or DEFAULT_PY
+    py = workload_python(DEFAULT_PY)
     out: dict[str, Any] = {"torch": None, "vllm": None, "py": py}
     if not os.path.exists(py):
         return out
@@ -267,7 +259,8 @@ def _probe_pins(env: dict[str, Any] | None = None) -> dict[str, Any]:
     )
     try:
         r = subprocess.run([py, "-c", code], capture_output=True, text=True, timeout=30)
-    except (OSError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired) as e:
+        out["error"] = f"{type(e).__name__}: {e}"
         return out
     for line in r.stdout.splitlines():
         parts = line.split(None, 1)
@@ -303,7 +296,6 @@ TOOLS = {t.name: t for t in (VLLM_BUILD, VLLM_PLAN, VLLM_MATCH, VLLM_COMMIT, VLL
 __all__ = [
     "CLOSURE",
     "COMMAND",
-    "CORE_DIRS",
     "DEFAULT_QUERY",
     "ROW_KEY_PARAMS",
     "STAGE_KEY_FLAGS",
