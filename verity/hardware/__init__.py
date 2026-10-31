@@ -18,6 +18,7 @@ card = load("h200-sxm-141gb")
 card["clock"]["sm"]["value"]       # 1980 (MHz)
 card["memory"]["bandwidth"]        # {'value': 4916736000000.0, 'unit': 'B/s', 'mark': 'ceiling', 'source': ...}
 rate(card)                         # Fraction(989429760000000): s8 MACs a second, 132 SMs x 4096 x clock.tensor 1830 MHz
+rate(card, mhz=1980)               # Fraction(1070530560000000): the same at clock.sm's 1980 MHz, the second reading
 rate(card, fmt="f16", mhz=1700)    # the f16 MACs a second at a 1700 MHz clock
 ~~~
 """
