@@ -18,7 +18,8 @@
 // The hm96-sha512 leaf of a row digest x under the salt y: c = SHA-512(salt_prefix || y), b = x ^ M_key y and the value
 // h = SHA-512(leaf_prefix(key) || b || c) the frame leaf binds (Hm96K). M_key y comes from a table of T_v, the XOR of
 // (key >> s) over the set bits s of v: the nibble table (T_v = T_(v & 15) ^ T_(v & 0xF0), TN_BYTES) or the byte table (a
-// row of 256 bytes a byte value), read through L1 or from shared memory.
+// row of 256 bytes a byte value), read through L1 or from shared memory, or from the position table (an entry a salt byte
+// and byte value, PosTab).
 //
 // Every digest is 8 big-endian words, as SHA-512's state holds it. The compression is a policy C, by default `Sha`
 // (sha512.cuh's `sha::` forms; `Compact` is its one-body form), so a kernel passes its own form of the same function.
@@ -454,6 +455,20 @@ struct ByteTab {
     }
   }
 };
+// The position table: entry (p, v) at 64 (256 p + v) is hm96's byte_tables(key)[p][v] as 64 little-endian bytes, the XOR of
+// columns 8 p + s over the set bits s of v (3 MB), through L1 (LDG) or an ordinary load: a lookup a salt byte and no shift.
+template <bool LDG>
+struct PosTab {
+  const uint8_t* R;
+  RC_HD void xor64(u32* m, int p, u32 v) const {
+    const uint8_t* e = R + 64 * (256 * (size_t)p + v);
+    RC_UNROLL
+    for (int k = 0; k < 4; ++k) {
+      const q4 u = LDG ? ldg16(e + 16 * k) : ld16(e + 16 * k);
+      m[4 * k] ^= u.x; m[4 * k + 1] ^= u.y; m[4 * k + 2] ^= u.z; m[4 * k + 3] ^= u.w;
+    }
+  }
+};
 
 // M_key y as 16 little-endian u32 (mask byte 4 w + k is byte k of m[w]) from the table T (NibTab, ByteTab): for salt byte
 // p = 16 q + r, the bytes [16 q, 16 q + 80) of T_(y_p) are xored into A_r, and A_r shifted down r bytes into m. ROLL: the
@@ -523,6 +538,17 @@ RC_HD void mask_lanes(const Tab& T, const u32* y, u32 ys, const Col& col, u32* m
       RC_UNROLL
       for (int w = 0; w < 16; ++w) m[w] ^= sh ? (A[w + a] >> sh | A[w + a + 1] << (32 - sh)) : A[w + a];
     }
+  }
+}
+// mask from the position table (PosTab), the salt as its 48 little-endian u32 words
+template <class Tab>
+RC_HD void mask_positions(const Tab& T, const u32* y, u32* m) {
+  RC_UNROLL
+  for (int w = 0; w < 16; ++w) m[w] = 0;
+  RC_UNROLL
+  for (int q = 0; q < 48; ++q) {
+    RC_UNROLL
+    for (int r = 0; r < 4; ++r) T.xor64(m, 4 * q + r, (y[q] >> (8 * r)) & 0xFFu);
   }
 }
 // mask's words as M_key y's 8 big-endian words
