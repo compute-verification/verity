@@ -200,9 +200,9 @@ theorem bytesOf_inj : ∀ {x y : List ℕ}, (∀ a ∈ x, a < 65536) → (∀ a 
 
 theorem wordBytes_eq (l : List ℕ) : ResLower.wordBytes l.toArray = (RecLinkRef.bytesOf l).data.toList := rfl
 
-theorem eq_of_wordBytes {X Y : List ℕ} (h : (RecLinkRef.bytesOf X).data.toList = ResLower.wordBytes Y.toArray)
-    (hX : ∀ x ∈ X, x < 65536) (hY : ∀ x ∈ Y, x < 65536) : X = Y :=
-  bytesOf_inj hX hY (bytes_eq_of_toList (h.trans (wordBytes_eq Y)))
+theorem eq_of_wordBytes {xs ys : List ℕ} (h : (RecLinkRef.bytesOf xs).data.toList = ResLower.wordBytes ys.toArray)
+    (hxs : ∀ x ∈ xs, x < 65536) (hys : ∀ x ∈ ys, x < 65536) : xs = ys :=
+  bytesOf_inj hxs hys (bytes_eq_of_toList (h.trans (wordBytes_eq ys)))
 
 theorem ports_u16 (b0 b1 b2 b3 b4 : ByteArray) :
     ∀ l ∈ [RecLinkRef.wordsOf b0, (RecLinkRef.wordsOf b1).take 32, (RecLinkRef.wordsOf b1).drop 32,
@@ -442,7 +442,7 @@ columns (`unit_out`), which are the `rin` and `rout` rows (`colsHold_linkOut`); 
 and `expected W`, or two of the slots' messages collide (`out_or_coll`). -/
 theorem linkRef_staged : LinkRefStaged := by
   unfold LinkRefStaged
-  intro st s x xO w hS hck r hr ss hss UB PB N hsv c hpc i spec sts hsu h0 own hown hidx hNn hnn X Y R W hR hW
+  intro st s x xO w hS hck r hr ss hss UB PB N hsv c hpc i spec sts hsu h0 own hown hidx hNn hnn rowsR rowsW R W hR hW
     wi wo hrin hrout n hn
   -- the part's one table: circuit `c`, V*'s `RecLink{UB, PB}` laid out at `l`
   obtain ⟨p, _, _, hx, ht, hpi, _, -, h0p, -⟩ := stagedTables hS
