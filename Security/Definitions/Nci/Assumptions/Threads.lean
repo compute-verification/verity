@@ -2,10 +2,10 @@ import Definitions.Nci.Threads
 import Definitions.Nci.Fit
 
 /-!
-# NCI over threads: the named assumption
+# The inference-only policy over threads: the named assumption
 
 The thread draft's one assumption besides `(d, e)`-threading, which is a property of the reference circuit's wiring
-(`Threading.Threaded`), is that weights are incompressible. It is a statement about the reference training circuit `c`,
+(`Threading.Threaded`), is that weights are incompressible. It is a statement about the reference training circuit `r`,
 whose weights are computed after the commitment, not about the declared circuit: a declared circuit reaches it only
 through containment. `WeightsIncompressibleSlots` is the same assumption with weights charged per parameter slot
 (`Threading.Slots`), once per parameter however many of its optimizer steps a subcircuit spans.
@@ -16,24 +16,24 @@ namespace Nci.Assumptions
 open Verity
 
 /-- **Weights are incompressible** (the thread draft, "Lower-bounding training's NCI"): every small subcircuit of the
-reference circuit `c` (at most `Γ` computed gates, at most `S` bits of novel reads) that uses `p` distinct weights reads
-at least `b_w` bits for each of them in addition to `b_a` bits for each novel thread value it reads:
-`b_w · #(weights R uses) + b_a · Σ_t #(novel values of thread t that R reads) ≤ width(in(R) \ θ)`.
-`b_w` and `b_a` are rates, in bits of novel information per weight used and per activation read: at most the widths of
+reference circuit `r` (at most `c` computed gates, at most `S` fresh input bits read) that uses `p` distinct weights
+reads at least `b_w` bits for each of them in addition to `b_a` bits for each fresh input value of a thread it reads:
+`b_w · #(weights R uses) + b_a · Σ_t #(fresh input values of thread t that R reads) ≤ width(in(R) \ θ)`.
+`b_w` and `b_a` are rates, in fresh input bits per weight used and per activation read: at most the widths of
 a weight and an activation, and below them by whatever the updated weights and the activations compress to. The draft
 takes both equal to the width `b`.
 
 It fails when a small subcircuit can rebuild weights it uses from less than their width: at the first training step,
 where they are committed in `θ`; under a low-rank update (LoRA), whose factors are narrower than the weights they
 update; or when the subcircuit computes the weights' updates itself from fewer bits of activations and gradients. -/
-def WeightsIncompressible (c : RegisteredCircuit) (T : Threading c) (Γ : ℕ) (S b_w b_a : ℝ) : Prop :=
-  ∀ R, Small c Γ S R →
-    b_w * (T.weightsUsed R).card + b_a * ∑ t, (T.threadReads R t).card ≤ novelReads c R
+def WeightsIncompressible (r : RegisteredCircuit) (T : Threading r) (c : ℕ) (k b_w b_a : ℝ) : Prop :=
+  ∀ R, Small r c k R →
+    b_w * (T.weightsUsed R).card + b_a * ∑ t, (T.threadReads R t).card ≤ novelReads r R
 
-/-- **Weights are incompressible per parameter slot**: every small subcircuit of the reference circuit `c` (at most `Γ`
-computed gates, at most `S` bits of novel reads) that uses weights of `p` parameter slots of `σ` reads at least `b_w`
-bits for each of those slots in addition to `b_a` bits for each novel thread value it reads:
-`b_w · #(slots R uses) + b_a · Σ_t #(novel values of thread t that R reads) ≤ width(in(R) \ θ)`.
+/-- **Weights are incompressible per parameter slot**: every small subcircuit of the reference circuit `r` (at most `c`
+computed gates, at most `S` fresh input bits read) that uses weights of `p` parameter slots of `σ` reads at least `b_w`
+bits for each of those slots in addition to `b_a` bits for each fresh input value of a thread it reads:
+`b_w · #(slots R uses) + b_a · Σ_t #(fresh input values of thread t that R reads) ≤ width(in(R) \ θ)`.
 
 It charges each parameter once, however many of its versions `R` uses. Each optimizer step's updated weights are new
 gates, the slot map sending each to the parameter it is a version of, so a subcircuit that spans `k` steps on a
@@ -49,8 +49,8 @@ It fails when a small subcircuit rebuilds the first version it uses of a paramet
 first steps after a committed checkpoint, whose weights are in `θ` and read for free, until the updates since it depend
 on more than a small subcircuit computes; under a low-rank update (LoRA), whose factors are narrower than the weights
 they update; or when it computes that version itself from fewer bits of activations and gradients. -/
-def WeightsIncompressibleSlots (c : RegisteredCircuit) (T : Threading c) (σ : T.Slots) (Γ : ℕ) (S b_w b_a : ℝ) : Prop :=
-  ∀ R, Small c Γ S R →
-    b_w * (σ.slotsUsed R).card + b_a * ∑ t, (T.threadReads R t).card ≤ novelReads c R
+def WeightsIncompressibleSlots (r : RegisteredCircuit) (T : Threading r) (σ : T.Slots) (c : ℕ) (k b_w b_a : ℝ) : Prop :=
+  ∀ R, Small r c k R →
+    b_w * (σ.slotsUsed R).card + b_a * ∑ t, (T.threadReads R t).card ≤ novelReads r R
 
 end Nci.Assumptions

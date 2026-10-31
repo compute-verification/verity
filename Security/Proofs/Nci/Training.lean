@@ -154,14 +154,21 @@ theorem trainingIncompressible_of_support {θv : c.D.Transcript} (hw : 0 ≤ b_w
 end Training
 
 theorem IncompressibleThreadedThrottled : Guarantees.IncompressibleThreadedThrottled := by
-  intro Γ α b_w b_a c d ch T dd e M hα hbw hba hdd hP hB hT h
-  exact ThreadedThrottled Γ α b_w b_a c d T dd e M hα hbw hba hdd hP hB hT (weightsIncompressible_of_training h)
+  intro c k b_w b_a r d ch T dd e M hc hbw hba hdd hP hB hT h
+  exact ThreadedThrottled c k b_w b_a r d T dd e M hc hbw hba hdd hP hB hT (weightsIncompressible_of_training h)
 
 theorem IncompressibleThreadedThrottledOn : Guarantees.IncompressibleThreadedThrottledOn := by
-  intro Γ α b_w b_a c d ch T dd e M hα hbw hba hdd hP hB hT h
-  exact ThreadedThrottledOn Γ α b_w b_a c d T dd e M hα hbw hba hdd hP hB hT (weightsIncompressible_of_training h)
+  intro c k b_w b_a r d ch T dd e M hc hbw hba hdd hP hB hT h
+  exact ThreadedThrottledOn c k b_w b_a r d T dd e M hc hbw hba hdd hP hB hT (weightsIncompressible_of_training h)
 
-theorem IncompressibleContainedTraining : Guarantees.IncompressibleContainedTraining := by
+theorem IncompressibleContainedTraining_rate :
+    ∀ (Γ : ℕ) (α b_w b_a κ : ℝ) (c d : RegisteredCircuit) (ch : Chain c.D) (T : Threading c) (dd : ℕ)
+      (M : Containment c.D d.D),
+      0 < α → 0 < b_w → 0 < b_a → (∀ ℓ, dd ≤ ch.d ℓ) → CompliesRate Γ α d →
+      Assumptions.ThetaRegistered c d (PartialContainment.ofContainment M) →
+      Assumptions.TrainingIncompressible c ch T Γ (α * Γ) b_w b_a →
+      κ * c.D.size c.D.computed ≤ 2 * ch.G →
+        κ * F α (α * Γ) b_w b_a dd * c.D.size c.D.computed ≤ d.D.size d.D.computed := by
   intro Γ α b_w b_a κ c d ch T dd M hα hbw hba hd hP hB h hκ
   have hF := containedMatMul_of_reads Γ α b_w b_a c d ch dd M hα hbw hba hd hP hB
     (activationsIncompressible_of_training hba.le h) (partialSumsIncompressible_of_training hba.le h)
@@ -174,7 +181,18 @@ theorem IncompressibleContainedTraining : Guarantees.IncompressibleContainedTrai
 open Classical in
 /-- **The partial-sum law with dark gates, in reads**: each dark gate is a small IU of its own, whose partial sums are
 within its reads. -/
-theorem IncompressibleContainedMatMulOn : Guarantees.IncompressibleContainedMatMulOn := by
+theorem IncompressibleContainedMatMulOn_rate :
+    ∀ (Γ : ℕ) (α K b_w b_a μ : ℝ) (c d : RegisteredCircuit) (ch : Chain c.D) (T : Threading c) (dd emax : ℕ)
+      (M : PartialContainment c d),
+      0 ≤ α → 0 < K → 0 < b_w → 0 < b_a → 0 < dd → 1 ≤ Γ → α * Γ ≤ K → 0 ≤ μ → μ ≤ 1 →
+      (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → CompliesRate Γ α d → Assumptions.ThetaRegistered c d M →
+      (∀ v ∈ M.dark, (novelReads c {v} : ℝ) ≤ K) →
+      Assumptions.TrainingIncompressible c ch T Γ K b_w b_a →
+        max (min ((1 + √μ) ^ 2 * (b_w * b_a * dd / K)) (√2 * (1 + √μ) * √(1 - μ) * (b_a * √(b_w / K))))
+            (μ * b_a / max (emax : ℝ) (K / (4 * b_w * dd))) *
+          (Finset.univ.filter fun p : (ℓ : Fin ch.L) × Fin ch.N × Fin (ch.e ℓ) × Fin (ch.d ℓ) =>
+            ch.prod p.1 p.2.1 p.2.2.1 p.2.2.2 ∈ M.S).card ≤
+        α * d.D.size d.D.computed + (1 - μ) * ∑ v ∈ M.dark, (novelReads c {v} : ℝ) := by
   intro Γ α K b_w b_a μ c d ch T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he ⟨n, P, hP⟩ hB hX h
   obtain ⟨s, hsum, hs⟩ := partialSumsIncompressible_of_training ha.le h _ (withDark M P)
     (withDark_caps hα hαK hΓ hP hB hX)
@@ -199,11 +217,39 @@ theorem IncompressibleContainedMatMulOn : Guarantees.IncompressibleContainedMatM
     (activationsIncompressible_of_training ha.le h) (partialSums_count ha.le hsum hsP)
   exact h₀.trans (by linarith [mul_le_mul_of_nonneg_left hZ (by linarith : (0 : ℝ) ≤ 1 - μ)])
 
-theorem IncompressibleContainedTrainingOn : Guarantees.IncompressibleContainedTrainingOn := by
+theorem IncompressibleContainedTrainingOn_rate :
+    ∀ (Γ : ℕ) (α K b_w b_a μ κ : ℝ) (c d : RegisteredCircuit) (ch : Chain c.D) (T : Threading c) (dd emax : ℕ)
+      (M : PartialContainment c d),
+      0 ≤ α → 0 < K → 0 < b_w → 0 < b_a → 0 < dd → 1 ≤ Γ → α * Γ ≤ K → 0 ≤ μ → μ ≤ 1 →
+      (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → CompliesRate Γ α d → Assumptions.ThetaRegistered c d M →
+      (∀ v ∈ M.dark, (novelReads c {v} : ℝ) ≤ K) →
+      Assumptions.TrainingIncompressible c ch T Γ K b_w b_a →
+      κ * c.D.size c.D.computed ≤ 2 * ch.G →
+        max (min ((1 + √μ) ^ 2 * (b_w * b_a * dd / K)) (√2 * (1 + √μ) * √(1 - μ) * (b_a * √(b_w / K))))
+            (μ * b_a / max (emax : ℝ) (K / (4 * b_w * dd))) *
+          (κ * c.D.size c.D.computed - 2 * M.dark.card) ≤
+        2 * (α * d.D.size d.D.computed + (1 - μ) * ∑ v ∈ M.dark, (novelReads c {v} : ℝ)) := by
   intro Γ α K b_w b_a μ κ c d ch T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he hP hB hX h hκ
   exact training_of_counts (le_max_of_le_right (by positivity))
-    (IncompressibleContainedMatMulOn Γ α K b_w b_a μ c d ch T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he hP hB hX
-      h) hκ (by exact_mod_cast card_products_le_dark M ch)
+    (IncompressibleContainedMatMulOn_rate Γ α K b_w b_a μ c d ch T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he hP hB
+      hX h) hκ (by exact_mod_cast card_products_le_dark M ch)
+
+theorem IncompressibleContainedTraining : Guarantees.IncompressibleContainedTraining := by
+  intro c k b_w b_a κ r d ch T dd M hc hk hbw hba hd hP hB h hκ
+  have h' := IncompressibleContainedTraining_rate c (k / c) b_w b_a κ r d ch T dd M
+    (div_pos (Nat.cast_pos.2 hk) (Nat.cast_pos.2 hc)) hbw hba hd (compliesRate_of_complies hP) hB
+    (by rwa [rate_mul _ hc]) hκ
+  rwa [rate_mul _ hc] at h'
+
+theorem IncompressibleContainedMatMulOn : Guarantees.IncompressibleContainedMatMulOn := by
+  intro c k K b_w b_a μ r d ch T dd emax M hK hw ha hdd hc hkK hμ₀ hμ₁ hd he hP hB hX h
+  exact IncompressibleContainedMatMulOn_rate c (k / c) K b_w b_a μ r d ch T dd emax M (by positivity) hK hw ha hdd
+    (by omega) (by rwa [rate_mul _ hc]) hμ₀ hμ₁ hd he (compliesRate_of_complies hP) hB hX h
+
+theorem IncompressibleContainedTrainingOn : Guarantees.IncompressibleContainedTrainingOn := by
+  intro c k K b_w b_a μ κ r d ch T dd emax M hK hw ha hdd hc hkK hμ₀ hμ₁ hd he hP hB hX h hκ
+  exact IncompressibleContainedTrainingOn_rate c (k / c) K b_w b_a μ κ r d ch T dd emax M (by positivity) hK hw ha
+    hdd (by omega) (by rwa [rate_mul _ hc]) hμ₀ hμ₁ hd he (compliesRate_of_complies hP) hB hX h hκ
 
 /-- **Products done in the declaration are bounded by their fan-out**: the case `k = 1` of the packed bound, at `μ = 1`,
 where the dark gates' budget has weight `1 − μ = 0` and the partial sums are not needed. -/

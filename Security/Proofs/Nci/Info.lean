@@ -242,7 +242,9 @@ theorem novelInfo_le_of_containment {c d : RegisteredCircuit} (M : Containment c
   exact_mod_cast support_le_of_containment M hθ hv (emb_into_filter M hθ hW)
 
 theorem ThreadedContainedInfo : Guarantees.ThreadedContainedInfo := by
-  intro c d M θc θv T Γ K b_w b_a dd e hθ hv hbw hba hdd hT hW W hWc hΓ hK
+  intro c d M θc θv T Γ K b_w b_a dd e hθv hbw hba hdd hT hW W hS
+  obtain ⟨hθ, hv⟩ := hθv
+  obtain ⟨hWc, hΓ, hK⟩ := hS
   have hinfo := novelInfo_le_of_containment M hθ hv hWc
   have hPc : (univ.filter fun g => M.emb g ∈ W) ⊆ c.D.computed := fun g hg => by
     have := (mem_filter.1 (hWc (mem_filter.1 hg).2)).2
@@ -273,9 +275,9 @@ theorem InfoOfState : Guarantees.InfoOfState := by
   exact_mod_cast hs
 
 theorem ThreadedOfState : Guarantees.ThreadedOfState := by
-  intro c d M θc θv T Γ b_w b_a dd e W Sst Sin k f hθ hv hbw hba hdd hT hW hWc hΓ hin hf
-  have hK := (InfoOfState d θv W Sst Sin k f hWc hin hf).2
-  exact (ThreadedContainedInfo c d M θc θv T Γ _ b_w b_a dd e hθ hv hbw hba hdd hT hW W hWc hΓ hK).trans
+  intro c d M θc θv T Γ b_w b_a dd e W Sst Sin k f hθ hbw hba hdd hT hW hWΓ hin hf
+  have hK := (InfoOfState d θv W Sst Sin k f hWΓ.1 hin hf).2
+  exact (ThreadedContainedInfo c d M θc θv T Γ _ b_w b_a dd e hθ hbw hba hdd hT hW W ⟨hWΓ.1, hWΓ.2, hK⟩).trans
     (mul_le_mul_of_nonneg_right hK (le_max_of_le_left (Nat.cast_nonneg _)))
 
 section Feeds

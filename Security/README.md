@@ -393,7 +393,7 @@ None of these is assumed silently; each would restate the conclusion:
 | Protocol soundness | `Accounting.Slowdown.restricted`; `Verity.Soundness` not yet in Lean | Open |
 | Sampled proofs | `Flock.Guarantees.SampledKSLiveV3`, `Claims.Sampling.RelS` | Proved; the step from F ∈ M_δ to the credit-weighted φ is open |
 | PoUW | `Accounting.Guarantees.Compose.CircuitCredit` | Proved; nothing derives Φ_D from it, or shows each credited gate distinct |
-| The inference-only policy | `NciCheck.Properties.SecurityProofs.DescWitnesses`, `Nci.Complies` | Proved; k_F (what faulty blocks inject) and k_a (the advice's share) are unbounded |
+| The inference-only policy | `NciCheck.Properties.SecurityProofs.DescWitnesses`, `Nci.CompliesRate`, `Nci.Complies` | Proved at its rate, with each block within (c, k) on the unrolled check's verdict (the lemma `NciCheck.Properties.SecurityProofs.refines`); the step to a (c, k)-partition of the registered circuit itself is open, and k_F (what faulty blocks inject) and k_a (the advice's share) are unbounded |
 | Onsite's k_S | `Pous.Guarantees.StreamedWipe`, `NetTiming.Guarantees.PeriodLeakAccepted` | Proved per window; nothing composes them into k_S |
 | Accounting | the assignment of a run's counted multiplications not yet in Lean | Open |
 | Rate ceiling ζ̄ | the inline hypotheses of `Nci.Guarantees.DampenerRemote`; a named Prop not yet in Lean | Open |

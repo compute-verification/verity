@@ -2,7 +2,7 @@ import Proofs.Properties.Nci.Lemmas
 import Proofs.Properties.Nci.Desc
 
 /-!
-# The NCI check's properties, proved
+# The inference-only check's properties, proved
 
 Each statement of `Properties.Nci`, proved of `NciCheck.evaluate` from the lemmas about its steps
 (`Proofs.Properties.Nci.Lemmas`), and the description-sized check's summaries against it (`sizes_eq_tally`, with
@@ -107,7 +107,7 @@ theorem Decodes : Properties.Decodes := by
     rw [mem_iff_index, ← hmem]
     exact (Finset.mem_filter.1 hg).2
 
-/-- One step of `failure`: IU `u`'s verdict. -/
+/-- One step of `failure`: inference block `u`'s verdict. -/
 def failStep (gamma num den : ℕ) (r : Array (ℕ × ℕ)) (u : ℕ) : Option (ℕ × String) :=
   if r[u]!.1 > gamma then some (u, "size") else if r[u]!.2 * den > num * r[u]!.1 then some (u, "nci") else none
 
@@ -243,6 +243,26 @@ theorem Witnesses : Properties.Witnesses := by
   refine ⟨⟨dv.n, U, (Reports j out hev i' P (.ofPartition d.D d.θ d.θ_input dv.n U) hpar hdec hL hθ hU).2.2.1.1 hc⟩,
     fun hI => (Reports j out hev i' P d hpar hdec hL hθ hI).2.2.1.1 hc⟩
 
+/-- **The check's rate refines the policy's budgets**, a lemma of `Reports`: when the verdict `out` on `j` has
+`complies` `true`, the owners cover every registered circuit the Program lays out with the registered information `theta`
+names by inference blocks within the policy's budgets at `c = gamma` and `k = α c`, `α = num / den`. A block of at
+most `c` gates with at most `α` fresh input bits per gate has at most `k`, as `α ≥ 0`, and a partition's blocks hold
+every computed gate. -/
+theorem refines {j out : Json} (hev : evaluate j = .ok out) {i : Instance} {P : Prog} {d : Verity.RegisteredCircuit}
+    {n : ℕ} {U : Verity.Partition d.D n} (hpar : Parses j i) (hdec : Flock.Program.decode i.program.toUTF8 = .ok P)
+    (hL : LaysOut P d.D) (hθ : Names i.theta d.θ) (hU : Divides i.owner U)
+    (hc : out.getObjVal? "complies" = .ok (.bool true)) :
+    (∀ u, d.D.size (U.gates u) ≤ i.gamma ∧
+        (Nci.novelReads d (U.gates u) : ℝ) ≤ (i.num : ℝ) / i.den * i.gamma) ∧
+      ∀ g, d.D.isInput g = false → ∃ u, g ∈ U.gates u := by
+  refine ⟨fun u => ?_, fun g hg => ?_⟩
+  · obtain ⟨hs, hr⟩ := (Reports j out hev i P (.ofPartition d.D d.θ d.θ_input n U) hpar hdec hL hθ hU).2.2.1.1 hc u
+    exact ⟨hs, hr.trans (mul_le_mul_of_nonneg_left (by exact_mod_cast hs)
+      (div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)))⟩
+  · obtain ⟨u, hu⟩ : ∃ u, U.unit g = some u :=
+      Option.ne_none_iff_exists'.1 fun h => by simp [(U.input_iff g).1 h] at hg
+    exact ⟨u, by simp [Verity.Partition.gates, hu]⟩
+
 /-! ## Completeness
 
 The converses of the refusals and of the verdict: the check refuses only the malformed, and gives a verdict on every
@@ -276,7 +296,7 @@ theorem refused_instance : evaluate Json.null = .error "instance" := rfl
 theorem check_refused_instance : (check Json.null).getObjVal? "error" = .ok (.str "instance") :=
   (check_error _ _).2 refused_instance
 
-/-- The instance of program text `s` with θ and the owners empty, `Γ = 0` and `α = 0 / 1`. -/
+/-- The instance of program text `s` with θ and the owners empty, `gamma = 0` and `alpha = 0 / 1`. -/
 def noGates (s : String) : Json :=
   Json.mkObj [("program", .str s), ("theta", .arr #[]), ("owner", .arr #[]), ("gamma", toJson (0 : ℕ)),
     ("alpha", .arr #[toJson (0 : ℕ), toJson (1 : ℕ)])]

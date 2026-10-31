@@ -112,7 +112,15 @@ theorem activations_reads (c : RegisteredCircuit) (T : Threading c) (L : T.Links
 theorem ActivationsReads : Guarantees.ActivationsReads := activations_reads
 
 /-- **The activations bound over all of training, with dark gates** ([ACTIVATIONS-BOUND]). -/
-theorem ActivationsBoundOn : Guarantees.ActivationsBoundOn := by
+theorem ActivationsBoundOn_rate :
+    ∀ (Γ : ℕ) (α K b_w b_a : ℝ) (c d : RegisteredCircuit) (T : Threading c) (L : T.Links) (dd e : ℕ)
+      (M : PartialContainment c d),
+      0 ≤ α → α * Γ ≤ K → 0 < b_w → 0 < b_a → 0 < dd → CompliesRate Γ α d → Assumptions.ThetaRegistered c d M →
+      (∀ a, (T.M.filter fun g => T.act g = a).card ≤ e) →
+      (∀ a, (L.src a).Nonempty →
+        dd ≤ (((L.src a).filter fun g => T.thread (T.act g) = T.thread a).image T.act).card) →
+      Assumptions.ActivationsIncompressibleAll c T L Γ K b_w b_a →
+        b_a * (T.M ∩ M.S).card ≤ α * T.bound K b_w dd e * d.D.size d.D.computed := by
   intro Γ α K b_w b_a c d T L dd e M hα hαK hbw hba hdd ⟨n, P, hP⟩ hB he hd hA
   set Λ := T.bound K b_w dd e
   have hΛ : 0 ≤ Λ := le_max_of_le_left (Nat.cast_nonneg _)
@@ -136,9 +144,19 @@ theorem ActivationsBoundOn : Guarantees.ActivationsBoundOn := by
         ring
 
 /-- **Training is slowed, by the activations bound, with dark gates.** -/
-theorem ActivationsTrainingOn : Guarantees.ActivationsTrainingOn := by
+theorem ActivationsTrainingOn_rate :
+    ∀ (Γ : ℕ) (α K b_w b_a κ : ℝ) (c d : RegisteredCircuit) (T : Threading c) (L : T.Links) (dd e : ℕ)
+      (M : PartialContainment c d),
+      0 ≤ α → α * Γ ≤ K → 0 < b_w → 0 < b_a → 0 < dd → CompliesRate Γ α d → Assumptions.ThetaRegistered c d M →
+      (∀ a, (T.M.filter fun g => T.act g = a).card ≤ e) →
+      (∀ a, (L.src a).Nonempty →
+        dd ≤ (((L.src a).filter fun g => T.thread (T.act g) = T.thread a).image T.act).card) →
+      Assumptions.ActivationsIncompressibleAll c T L Γ K b_w b_a →
+      κ * c.D.size c.D.computed ≤ 2 * T.M.card →
+        κ * b_a * c.D.size c.D.computed ≤
+          2 * b_a * M.dark.card + 2 * α * T.bound K b_w dd e * d.D.size d.D.computed := by
   intro Γ α K b_w b_a κ c d T L dd e M hα hαK hbw hba hdd hP hB he hd hA hκ
-  have h := ActivationsBoundOn Γ α K b_w b_a c d T L dd e M hα hαK hbw hba hdd hP hB he hd hA
+  have h := ActivationsBoundOn_rate Γ α K b_w b_a c d T L dd e M hα hαK hbw hba hdd hP hB he hd hA
   have hs : (T.M.card : ℝ) ≤ M.dark.card + (T.M ∩ M.S).card := by
     exact_mod_cast card_le_dark_add_inter M T.M_computed
   have h1 := mul_le_mul_of_nonneg_left hκ hba.le
@@ -175,5 +193,15 @@ theorem activationsIncompressible_of_all {c : RegisteredCircuit} {ch : Chain c.D
 /-- **The premise over all counted multiplications gives the chain's.** -/
 theorem ActivationsChain : Guarantees.ActivationsChain :=
   fun _ _ _ _ _ _ _ _ h hw ha hA => activationsIncompressible_of_all h hw ha hA
+
+theorem ActivationsBoundOn : Guarantees.ActivationsBoundOn := by
+  intro c k K b_w b_a r d T L dd e M hc hkK hbw hba hdd hP hB he hd hA
+  exact ActivationsBoundOn_rate c (k / c) K b_w b_a r d T L dd e M (by positivity) (by rwa [rate_mul _ hc]) hbw hba
+    hdd (compliesRate_of_complies hP) hB he hd hA
+
+theorem ActivationsTrainingOn : Guarantees.ActivationsTrainingOn := by
+  intro c k K b_w b_a κ r d T L dd e M hc hkK hbw hba hdd hP hB he hd hA hκ
+  exact ActivationsTrainingOn_rate c (k / c) K b_w b_a κ r d T L dd e M (by positivity) (by rwa [rate_mul _ hc]) hbw
+    hba hdd (compliesRate_of_complies hP) hB he hd hA hκ
 
 end Nci.SecurityProofs

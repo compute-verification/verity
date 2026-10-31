@@ -191,13 +191,13 @@ theorem bound_eq_Lambda {c : RegisteredCircuit} (T : Threading c) (S b_w : ℝ) 
 /-- **The declared computation at NCI's thread bound, per parameter slot**: `ThreadedThrottledSlots`'s
 `b_a |M| ≤ α Λ size(d)`, with `size(d) ≤ C`, is the dampener's `M_d ≤ C/ρ_T`. -/
 theorem declared_le_slots {Γ : ℕ} {α b_w b_a C : ℝ} {c d : RegisteredCircuit} {T : Threading c} {σ : T.Slots} {dd e : ℕ}
-    {Mc : Containment c.D d.D} (hα : 0 ≤ α) (hbw : 0 < b_w) (hba : 0 < b_a) (hdd : 0 < dd) (hcomp : Complies Γ α d)
+    {Mc : Containment c.D d.D} (hα : 0 ≤ α) (hbw : 0 < b_w) (hba : 0 < b_a) (hdd : 0 < dd) (hcomp : CompliesRate Γ α d)
     (hB : Assumptions.ThetaRegistered c d (PartialContainment.ofContainment Mc))
     (hT : T.Threaded Γ (α * Γ) dd e) (hW : Assumptions.WeightsIncompressibleSlots c T σ Γ (α * Γ) b_w b_a)
     (hsize : (d.D.size d.D.computed : ℝ) ≤ C) :
     (T.M.card : ℝ) ≤ C / rhoT α b_a (T.bound (α * Γ) b_w dd e) := by
   have hΛ : 0 ≤ T.bound (α * Γ) b_w dd e := le_max_of_le_left (Nat.cast_nonneg _)
-  have hth := ThreadedThrottledSlots Γ α b_w b_a c d T σ dd e Mc hα hbw hba hdd hcomp hB hT hW
+  have hth := ThreadedThrottledSlots_rate Γ α b_w b_a c d T σ dd e Mc hα hbw hba hdd hcomp hB hT hW
   unfold rhoT
   rw [div_div_eq_mul_div, le_div_iff₀ hba]
   calc (T.M.card : ℝ) * b_a = b_a * T.M.card := mul_comm _ _
@@ -207,25 +207,46 @@ theorem declared_le_slots {Γ : ℕ} {α b_w b_a C : ℝ} {c d : RegisteredCircu
 
 /-- **The declared computation at NCI's thread bound**: `declared_le_slots` at one slot per weight gate. -/
 theorem declared_le {Γ : ℕ} {α b_w b_a C : ℝ} {c d : RegisteredCircuit} {T : Threading c} {dd e : ℕ}
-    {Mc : Containment c.D d.D} (hα : 0 ≤ α) (hbw : 0 < b_w) (hba : 0 < b_a) (hdd : 0 < dd) (hcomp : Complies Γ α d)
+    {Mc : Containment c.D d.D} (hα : 0 ≤ α) (hbw : 0 < b_w) (hba : 0 < b_a) (hdd : 0 < dd) (hcomp : CompliesRate Γ α d)
     (hB : Assumptions.ThetaRegistered c d (PartialContainment.ofContainment Mc)) (hT : T.Threaded Γ (α * Γ) dd e) (hW : Assumptions.WeightsIncompressible c T Γ (α * Γ) b_w b_a)
     (hsize : (d.D.size d.D.computed : ℝ) ≤ C) :
     (T.M.card : ℝ) ≤ C / rhoT α b_a (T.bound (α * Γ) b_w dd e) :=
   declared_le_slots hα hbw hba hdd hcomp hB hT (weightsIncompressibleSlots_of (Fit.idSlots T) hbw.le hW) hsize
 
-theorem DampenerThreadedSlots : Guarantees.DampenerThreadedSlots := by
+theorem DampenerThreadedSlots_rate :
+    ∀ (κ C U W χ : ℝ) (M Mu Mr Mx n Γ : ℕ) (F H L R α b_w b_a : ℝ) (c d : RegisteredCircuit) (T : Threading c)
+      (σ : T.Slots) (dd e : ℕ) (Mc : Containment c.D d.D),
+      0 < κ → 0 < C → 0 ≤ U → 0 < H → 0 < L → 0 ≤ R → 0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd →
+      CompliesRate Γ α d → Assumptions.ThetaRegistered c d (PartialContainment.ofContainment Mc) →
+      T.Threaded Γ (α * Γ) dd e →
+      Assumptions.WeightsIncompressibleSlots c T σ Γ (α * Γ) b_w b_a → (d.D.size d.D.computed : ℝ) ≤ C →
+      M ≤ Mu + Mr + T.M.card + Mx →
+      (Mu : ℝ) ≤ κ * U / 2 → (Mr : ℝ) ≤ κ * (C - W) / 2 → (Mx : ℝ) ≤ κ * χ * (C + U) / 2 →
+      n * F * H ≤ C → α * F * L = R → (e : ℝ) ≤ T.reuse * (2 * R) / (4 * dd * b_w) →
+      b_a * ((Mr : ℝ) + T.M.card) ≤ n * ⌈H / L⌉₊ * ((R + α * F * L) * T.bound (R + α * F * L) b_w dd e) →
+        efficiency κ M C U ≤
+          unmonitoredShare C U + min (residualShare W C) (memoryCap T.reuse κ R α dd b_w b_a * (1 + L / H)) +
+            declaredShare κ (rhoT α b_a (T.bound (α * Γ) b_w dd e)) C U + χ := by
   intro κ C U W χ M Mu Mr Mx n Γ F H L R α b_w b_a c d T σ dd e Mc hκ hC hU hH hL hR hα hbw hba hdd hcomp hB hT hW
     hsize hM hu hr hx hnC hRL he hcap
   exact DampenerWindows κ C U W (rhoT α b_a (T.bound (α * Γ) b_w dd e)) χ M Mu Mr T.M.card Mx n F H L R α T.reuse e dd
     b_w b_a hκ hC hU hH hL hR hα (Nat.cast_nonneg _) (Nat.cast_pos.2 hdd) hbw hba hM hu hr
     (declared_le_slots hα hbw hba hdd hcomp hB hT hW hsize) hx hnC hRL he hcap
 
+theorem DampenerThreadedSlots : Guarantees.DampenerThreadedSlots := by
+  intro κ C U W χ M Mu Mr Mx n c k F H L R b_w b_a r d T σ dd e Mc hκ hC hU hH hL hR hc hbw hba hdd hcomp hB hT hW
+    hsize hM hu hr hx hnC hRL he hcap
+  have h := DampenerThreadedSlots_rate κ C U W χ M Mu Mr Mx n c F H L R (k / c) b_w b_a r d T σ dd e Mc hκ hC hU hH hL
+    hR (by positivity) hbw hba hdd (compliesRate_of_complies hcomp) hB (by rwa [rate_mul _ hc])
+    (by rwa [rate_mul _ hc]) hsize hM hu hr hx hnC hRL he hcap
+  rwa [rate_mul _ hc] at h
+
 /-- `DampenerThreadedSlots` at one slot per weight gate. -/
 theorem DampenerThreaded : Guarantees.DampenerThreaded := by
-  intro κ C U W χ M Mu Mr Mx n Γ F H L R α b_w b_a c d T dd e Mc hκ hC hU hH hL hR hα hbw hba hdd hcomp hB hT hW
+  intro κ C U W χ M Mu Mr Mx n c k F H L R b_w b_a r d T dd e Mc hκ hC hU hH hL hR hc hbw hba hdd hcomp hB hT hW
     hsize hM hu hr hx hnC hRL he hcap
-  exact DampenerThreadedSlots κ C U W χ M Mu Mr Mx n Γ F H L R α b_w b_a c d T (Fit.idSlots T) dd e Mc hκ hC hU hH hL
-    hR hα hbw hba hdd hcomp hB hT (weightsIncompressibleSlots_of (Fit.idSlots T) hbw.le hW) hsize hM hu hr hx hnC hRL he
+  exact DampenerThreadedSlots κ C U W χ M Mu Mr Mx n c k F H L R b_w b_a r d T (Fit.idSlots T) dd e Mc hκ hC hU hH hL
+    hR hc hbw hba hdd hcomp hB hT (weightsIncompressibleSlots_of (Fit.idSlots T) hbw.le hW) hsize hM hu hr hx hnC hRL he
     hcap
 
 /-- **The bound is attained** (completeness, not a claim): at `κ = 2`, `C = 4`, `U = 0`, `W_cert = 3`, `ρ = 4`, `μ = 1`

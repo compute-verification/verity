@@ -2,25 +2,30 @@ import Definitions.Core
 import Mathlib.Analysis.Real.Sqrt
 
 /-!
-# Novel communication intensity: the policy
+# The inference-only policy
 
-The developer declares `(D, θ)` (`Verity.RegisteredCircuit`). The input gates in `θ` hold baseline information, committed
-beforehand; every other value is novel information. A division of `D` into isolation units (IUs) is a
-`Verity.Partition` of its computed gates. Input gates are in no IU, so an IU that uses an input reads it. The gates `R`
-of an IU read `width(in(R) \ θ)` bits of novel information (`novelReads`): baseline information is free, and so is
-anything `R` computes itself. `R`'s novel communication intensity is `NCI(R) = novelReads R / size R`, in bits per gate.
+The developer declares `(D, θ)` (`Verity.RegisteredCircuit`). The input gates in `θ` hold the registered information,
+committed beforehand; every other value is fresh input. A division of `D` into inference blocks is a `Verity.Partition`
+of its computed gates. Input gates are in no inference block, so an inference block that uses an input reads it. The
+gates `R` of an inference block read `width(in(R) \ θ)` fresh input bits (`novelReads`): registered information is free,
+and so is anything `R` computes itself.
 
-`Complies Γ α` is the NCI policy: `D` divides into IUs of at most `Γ` gates, each with NCI at most `α`. A policy is a
-condition on declarations that the verifier checks from `D` and `θ` alone (`Policy`), a protocol with no rounds of its
-own. `slowdown policy t` is the factor by which every declaration that complies with `policy` and implements `t` is
-larger than `t`. `Reads Γ c` is the least total novel information that the IUs of a division of `c` into IUs of at most
-`Γ` gates read.
+`Complies c k` is the inference-only policy: `D` has a `(c, k)`-partition (`Verity.Partition.IsCK`), every inference
+block exactly `c` gates, padding included, reading at most `k` fresh input bits. Its rate is `α = k / c`, the most fresh
+input an inference block reads per gate. `CompliesRate c α` is the policy as the verifier's check (`NciCheck`) reads it,
+on a circuit of any widths: inference blocks of at most `c` gates, each reading at most `α` fresh input bits per gate. A
+`(c, k)`-partition complies at rate `k / c`, and an inference block of at most `c` gates at rate `α` reads at most
+`k = α c` fresh input bits. A policy is a condition on declarations that the verifier checks from `D` and `θ` alone
+(`Policy`), a protocol with no rounds of its own. `slowdown policy t` is the factor by which every declaration that
+complies with `policy` and implements `t` is larger than `t`. `Reads c C` is the least total fresh input that the
+inference blocks of a division of `C` into blocks of at most `c` gates read.
 
 The draft's necessary subcomputation of frontier training is an updated matrix multiplication chain (`Chain`): the
 gates where a circuit computes the products, the complete output entries, and the links between consecutive
 multiplications. For a set `R` of gates it gives the draft's vocabulary: the weight entries `R` uses, the input entries
-it uses, the entries whole in `R`, `R`'s full positions, and in a division into IUs the entries that are split and the
-number of IUs that hold products of each. `F` is the slowdown factor the draft proves for such chains.
+it uses, the entries whole in `R`, `R`'s full positions, and in a division into inference blocks the entries that are
+split and the number of inference blocks that hold products of each. `F` is the slowdown factor the draft proves for
+such chains.
 -/
 
 namespace Nci
@@ -28,23 +33,28 @@ namespace Nci
 open Verity
 open scoped ENNReal
 
-/-- The novel information that the gates `R` of `d`'s circuit read, in bits: the width of `in(R) \ θ`. -/
+/-- The fresh input that the gates `R` of `d`'s circuit read, in bits: the width of `in(R) \ θ`. -/
 def novelReads (d : RegisteredCircuit) (R : Finset (Fin d.D.N)) : ℕ := d.D.width (d.D.into R \ d.θ)
 
 /-- A policy: a condition on declarations. -/
 abbrev Policy : Type := RegisteredCircuit → Prop
 
-/-- **The NCI policy** at maximum IU size `Γ` and NCI limit `α`: `d`'s circuit divides into IUs of at most `Γ` gates,
-each reading at most `α` bits of novel information per gate (`NCI(R) ≤ α`, multiplied out so that an IU with no gates
-needs no division). -/
-def Complies (Γ : ℕ) (α : ℝ) : Policy := fun d =>
-  ∃ (n : ℕ) (P : Partition d.D n),
-    ∀ u, d.D.size (P.gates u) ≤ Γ ∧ (novelReads d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u)
+/-- **The inference-only policy** at `(c, k)`: `d` has a `(c, k)`-partition, its circuit Boolean and divided into
+inference blocks of exactly `c` gates, padding included, each with at most `k` fresh input bits. -/
+def Complies (c k : ℕ) : Policy := fun d =>
+  ∃ (B : ℕ) (P : Partition d.D B), P.IsCK d c k
 
-/-- `Reads_Γ(c)`: the least total novel information that the IUs of a division of `c` into IUs of at most `Γ` gates
-read. -/
-noncomputable def Reads (Γ : ℕ) (c : RegisteredCircuit) : ℕ :=
-  sInf {r | ∃ (n : ℕ) (P : Partition c.D n), (∀ u, c.D.size (P.gates u) ≤ Γ) ∧ r = ∑ u, novelReads c (P.gates u)}
+/-- **The policy at a rate**, as the verifier's check reads it on a circuit of any widths: `d`'s circuit divides into
+inference blocks of at most `c` gates, each reading at most `α` fresh input bits per gate (`novelReads R ≤ α · size R`,
+multiplied out so that a block with no gates needs no division). -/
+def CompliesRate (c : ℕ) (α : ℝ) : Policy := fun d =>
+  ∃ (n : ℕ) (P : Partition d.D n),
+    ∀ u, d.D.size (P.gates u) ≤ c ∧ (novelReads d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u)
+
+/-- `Reads_c(C)`: the least total fresh input that the inference blocks of a division of `C` into blocks of at most `c`
+gates read. -/
+noncomputable def Reads (c : ℕ) (C : RegisteredCircuit) : ℕ :=
+  sInf {r | ∃ (n : ℕ) (P : Partition C.D n), (∀ u, C.D.size (P.gates u) ≤ c) ∧ r = ∑ u, novelReads C (P.gates u)}
 
 /-- **The slowdown factor** `ρ_policy(t)`: the least ratio of `size(d)` to `size(t)` over the declarations `d` that
 implement `t` and comply with `policy`, and `⊤` when none does. -/
@@ -105,11 +115,13 @@ def inputsUsed (R : Finset (Fin D.N)) : Finset ((ℓ : Fin c.L) × Fin c.N × Fi
   univ.filter fun x => ∃ i, c.prod x.1 x.2.1 i x.2.2 ∈ R
 
 /-- The entry `y_t^{(ℓ)}[i]` is **whole** in `R` when all of its products lie in `R`. (The draft, "Throttling updated
-matrix multiplications", calls an entry whole if all of its products lie in one IU, and split otherwise.) -/
+matrix multiplications", calls an entry whole if all of its products lie in one inference block, and split otherwise.)
+-/
 def Whole (R : Finset (Fin D.N)) (ℓ : Fin c.L) (t : Fin c.N) (i : Fin (c.e ℓ)) : Prop :=
   ∀ j, c.prod ℓ t i j ∈ R
 
-/-- The entry `y_t^{(ℓ)}[i]` is **split** in a division `P` into IUs: no IU holds all of its products. -/
+/-- The entry `y_t^{(ℓ)}[i]` is **split** in a division `P` into inference blocks: no inference block holds all of its
+products. -/
 def Split {n : ℕ} (P : Partition D n) (ℓ : Fin c.L) (t : Fin c.N) (i : Fin (c.e ℓ)) : Prop :=
   ¬ ∃ u, c.Whole (P.gates u) ℓ t i
 
@@ -124,20 +136,20 @@ def LinkedWhole (R : Finset (Fin D.N)) : (ℓ : Fin c.L) → Fin c.N → Fin (c.
   | ⟨ℓ + 1, h⟩, t, j => c.Whole R ⟨ℓ, by omega⟩ t (c.π ⟨ℓ, by omega⟩ h j)
 
 open Classical in
-/-- The number of IUs of a division `P` that hold products of the entry `y_t^{(ℓ)}[i]`. -/
+/-- The number of inference blocks of a division `P` that hold products of the entry `y_t^{(ℓ)}[i]`. -/
 noncomputable def spread {n : ℕ} (P : Partition D n) (ℓ : Fin c.L) (t : Fin c.N) (i : Fin (c.e ℓ)) : ℕ :=
   (univ.filter fun u => ∃ j, c.prod ℓ t i j ∈ P.gates u).card
 
 end Chain
 
 /-- **The slowdown factor for updated matrix multiplications** `F` (the draft's theorem, "Throttling updated matrix
-multiplications"), at NCI limit `α`, read cap `K`, widths `b_w` of a weight entry and `b_a` of an activation entry, and
-smallest inner dimension `d`:
-`F = 1/(2α) · max_{0<μ<1} min{(1 + √μ)² b_w b_a d / K, √2 (1 + √μ) √(1 − μ) b_a √(b_w / K)}`,
-the maximum written as a supremum. The first term covers IUs that complete entries themselves, the second IUs that split
-entries with other IUs. -/
-noncomputable def F (α K b_w b_a d : ℝ) : ℝ :=
+multiplications"), at rate `α` (under the policy `k / c`), read cap `k`, widths `b_w` of a weight entry and `b_a` of an
+activation entry, and smallest inner dimension `d`:
+`F = 1/(2α) · max_{0<μ<1} min{(1 + √μ)² b_w b_a d / k, √2 (1 + √μ) √(1 − μ) b_a √(b_w / k)}`,
+the maximum written as a supremum. The first term covers inference blocks that complete entries themselves, the second
+inference blocks that split entries with other inference blocks. -/
+noncomputable def F (α k b_w b_a d : ℝ) : ℝ :=
   1 / (2 * α) * ⨆ μ : Set.Ioo (0 : ℝ) 1,
-    min ((1 + √(μ : ℝ)) ^ 2 * b_w * b_a * d / K) (√2 * (1 + √(μ : ℝ)) * √(1 - μ) * b_a * √(b_w / K))
+    min ((1 + √(μ : ℝ)) ^ 2 * b_w * b_a * d / k) (√2 * (1 + √(μ : ℝ)) * √(1 - μ) * b_a * √(b_w / k))
 
 end Nci

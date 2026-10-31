@@ -37,4 +37,10 @@ containment: a partial one, or a total one `M : Containment c.D d.D` as the part
 def ThetaRegistered (c d : RegisteredCircuit) (M : PartialContainment c d) : Prop :=
   ∀ a ∈ c.D.into M.S, M.emb a ∈ d.θ → a ∈ c.θ
 
+/-- **Each dark gate reads at most `K` fresh input bits**: every gate of `r` that the partial containment `M` leaves
+dark, computed off the books, reads at most `K` bits outside `r`'s registered information, so that it is an inference
+block of its own at read cap `K`. -/
+def DarkReads {r d : RegisteredCircuit} (M : PartialContainment r d) (K : ℝ) : Prop :=
+  ∀ v ∈ M.dark, (novelReads r {v} : ℝ) ≤ K
+
 end Nci.Assumptions

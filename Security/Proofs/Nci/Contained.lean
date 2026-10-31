@@ -2,6 +2,7 @@ import Definitions.Nci.Guarantees.Contained
 import Proofs.Nci.Reads
 import Proofs.Nci.Pull
 import Proofs.Nci.Support
+import Proofs.Nci.Rate
 
 /-!
 # Proofs of the partial-sum law on a reference circuit
@@ -43,7 +44,8 @@ theorem partialSumsIncompressible_of_support {D : RegisteredCircuit} {θv : D.D.
 /-- The partial-sum law on a reference circuit, in reads: `UpdatedMatMul` with its assumptions on the contained
 circuit `c`. -/
 theorem containedMatMul_of_reads (Γ : ℕ) (α b_w b_a : ℝ) (c d : RegisteredCircuit) (ch : Chain c.D) (dd : ℕ)
-    (M : Containment c.D d.D) (hα : 0 < α) (hw : 0 < b_w) (ha : 0 < b_a) (hd : ∀ ℓ, dd ≤ ch.d ℓ) (hP : Complies Γ α d)
+    (M : Containment c.D d.D) (hα : 0 < α) (hw : 0 < b_w) (ha : 0 < b_a) (hd : ∀ ℓ, dd ≤ ch.d ℓ)
+    (hP : CompliesRate Γ α d)
     (hB : Assumptions.ThetaRegistered c d (PartialContainment.ofContainment M))
     (hA : Assumptions.ActivationsIncompressible c ch Γ (α * Γ) b_w b_a)
     (hPS : Assumptions.PartialSumsIncompressible c ch Γ (α * Γ) b_w b_a) :
@@ -69,14 +71,29 @@ theorem containedMatMul_of_reads (Γ : ℕ) (α b_w b_a : ℝ) (c d : Registered
     _ ≤ α * d.D.size d.D.computed / α := div_le_div_of_nonneg_right htotal hα.le
     _ = d.D.size d.D.computed := by field_simp
 
-theorem ContainedMatMul : Guarantees.ContainedMatMul := by
+theorem ContainedMatMul_rate :
+    ∀ (Γ : ℕ) (α b_w b_a : ℝ) (c d : RegisteredCircuit) (θv : c.D.Transcript) (ch : Chain c.D) (dd : ℕ)
+      (M : Containment c.D d.D),
+      0 < α → 0 < b_w → 0 < b_a → (∀ ℓ, dd ≤ ch.d ℓ) → CompliesRate Γ α d →
+      Assumptions.ThetaRegistered c d (PartialContainment.ofContainment M) →
+      Assumptions.ActivationsSupport c θv ch (α * Γ + b_w + b_a) b_w b_a →
+      Assumptions.PartialSumsSupport c θv ch Γ (α * Γ) b_w b_a →
+        F α (α * Γ) b_w b_a dd * (2 * ch.G) ≤ d.D.size d.D.computed := by
   intro Γ α b_w b_a c d θv ch dd M hα hw ha hd hP hB hA hPS
   exact containedMatMul_of_reads Γ α b_w b_a c d ch dd M hα hw ha hd hP hB
     (activationsIncompressible_of_support hw.le ha.le hA) (partialSumsIncompressible_of_support hPS)
 
-theorem ContainedTraining : Guarantees.ContainedTraining := by
+theorem ContainedTraining_rate :
+    ∀ (Γ : ℕ) (α b_w b_a κ : ℝ) (c d : RegisteredCircuit) (θv : c.D.Transcript) (ch : Chain c.D) (dd : ℕ)
+      (M : Containment c.D d.D),
+      0 < α → 0 < b_w → 0 < b_a → (∀ ℓ, dd ≤ ch.d ℓ) → CompliesRate Γ α d →
+      Assumptions.ThetaRegistered c d (PartialContainment.ofContainment M) →
+      Assumptions.ActivationsSupport c θv ch (α * Γ + b_w + b_a) b_w b_a →
+      Assumptions.PartialSumsSupport c θv ch Γ (α * Γ) b_w b_a →
+      κ * c.D.size c.D.computed ≤ 2 * ch.G →
+        κ * F α (α * Γ) b_w b_a dd * c.D.size c.D.computed ≤ d.D.size d.D.computed := by
   intro Γ α b_w b_a κ c d θv ch dd M hα hw ha hd hP hB hA hPS hκ
-  have hF := ContainedMatMul Γ α b_w b_a c d θv ch dd M hα hw ha hd hP hB hA hPS
+  have hF := ContainedMatMul_rate Γ α b_w b_a c d θv ch dd M hα hw ha hd hP hB hA hPS
   have hF0 : 0 ≤ F α (α * Γ) b_w b_a dd := F_nonneg hα.le (by positivity) hw.le ha.le (by positivity)
   calc κ * F α (α * Γ) b_w b_a dd * c.D.size c.D.computed
       = F α (α * Γ) b_w b_a dd * (κ * c.D.size c.D.computed) := by ring
@@ -293,7 +310,19 @@ theorem matMulOn_of_counts {Γ : ℕ} {α K b_w b_a μ B : ℝ} {c d : Registere
 
 open Classical in
 /-- **The partial-sum law with dark gates.** -/
-theorem ContainedMatMulOn : Guarantees.ContainedMatMulOn := by
+theorem ContainedMatMulOn_rate :
+    ∀ (Γ : ℕ) (α K b_w b_a μ : ℝ) (c d : RegisteredCircuit) (θv : c.D.Transcript) (ch : Chain c.D) (dd emax : ℕ)
+      (M : PartialContainment c d),
+      0 ≤ α → 0 < K → 0 < b_w → 0 < b_a → 0 < dd → 1 ≤ Γ → α * Γ ≤ K → 0 ≤ μ → μ ≤ 1 →
+      (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → CompliesRate Γ α d → Assumptions.ThetaRegistered c d M →
+      (∀ v ∈ M.dark, (novelReads c {v} : ℝ) ≤ K) →
+      Assumptions.ActivationsSupport c θv ch (K + b_w + b_a) b_w b_a →
+      Assumptions.PartialSumsSupport c θv ch Γ K b_w b_a →
+        max (min ((1 + √μ) ^ 2 * (b_w * b_a * dd / K)) (√2 * (1 + √μ) * √(1 - μ) * (b_a * √(b_w / K))))
+            (μ * b_a / max (emax : ℝ) (K / (4 * b_w * dd))) *
+          (Finset.univ.filter fun p : (ℓ : Fin ch.L) × Fin ch.N × Fin (ch.e ℓ) × Fin (ch.d ℓ) =>
+            ch.prod p.1 p.2.1 p.2.2.1 p.2.2.2 ∈ M.S).card ≤
+        α * d.D.size d.D.computed + (1 - μ) * c.D.width M.dark := by
   intro Γ α K b_w b_a μ c d θv ch dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he ⟨n, P, hP⟩ hB hX hA hPS
   obtain ⟨s, hsum, hs⟩ := hPS _ (withDark M P) (withDark_caps hα hαK hΓ hP hB hX)
   -- the charge of each piece, within its IU's reads, and of each dark gate, within its width
@@ -329,10 +358,44 @@ theorem training_of_counts {m G X G' S κ R : ℝ} (hm : 0 ≤ m) (h : m * G ≤
 
 /-- **Training is slowed, by the partial-sum law, with dark gates**: the chain's products off the books are dark gates
 (`card_products_le_dark`). -/
-theorem ContainedTrainingOn : Guarantees.ContainedTrainingOn := by
+theorem ContainedTrainingOn_rate :
+    ∀ (Γ : ℕ) (α K b_w b_a μ κ : ℝ) (c d : RegisteredCircuit) (θv : c.D.Transcript) (ch : Chain c.D) (dd emax : ℕ)
+      (M : PartialContainment c d),
+      0 ≤ α → 0 < K → 0 < b_w → 0 < b_a → 0 < dd → 1 ≤ Γ → α * Γ ≤ K → 0 ≤ μ → μ ≤ 1 →
+      (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → CompliesRate Γ α d → Assumptions.ThetaRegistered c d M →
+      (∀ v ∈ M.dark, (novelReads c {v} : ℝ) ≤ K) →
+      Assumptions.ActivationsSupport c θv ch (K + b_w + b_a) b_w b_a →
+      Assumptions.PartialSumsSupport c θv ch Γ K b_w b_a →
+      κ * c.D.size c.D.computed ≤ 2 * ch.G →
+        max (min ((1 + √μ) ^ 2 * (b_w * b_a * dd / K)) (√2 * (1 + √μ) * √(1 - μ) * (b_a * √(b_w / K))))
+            (μ * b_a / max (emax : ℝ) (K / (4 * b_w * dd))) *
+          (κ * c.D.size c.D.computed - 2 * M.dark.card) ≤
+        2 * (α * d.D.size d.D.computed + (1 - μ) * c.D.width M.dark) := by
   intro Γ α K b_w b_a μ κ c d θv ch dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he hP hB hX hA hPS hκ
   exact training_of_counts (le_max_of_le_right (by positivity))
-    (ContainedMatMulOn Γ α K b_w b_a μ c d θv ch dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he hP hB hX hA hPS) hκ
+    (ContainedMatMulOn_rate Γ α K b_w b_a μ c d θv ch dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he hP hB hX hA hPS) hκ
     (by exact_mod_cast card_products_le_dark M ch)
+
+theorem ContainedMatMul : Guarantees.ContainedMatMul := by
+  intro c k b_w b_a r d θv ch dd M hc hk hw ha hd hP hB hA hPS
+  have h := ContainedMatMul_rate c (k / c) b_w b_a r d θv ch dd M (div_pos (Nat.cast_pos.2 hk) (Nat.cast_pos.2 hc))
+    hw ha hd (compliesRate_of_complies hP) hB (by rwa [rate_mul _ hc]) (by rwa [rate_mul _ hc])
+  rwa [rate_mul _ hc] at h
+
+theorem ContainedTraining : Guarantees.ContainedTraining := by
+  intro c k b_w b_a κ r d θv ch dd M hc hk hw ha hd hP hB hA hPS hκ
+  have h := ContainedTraining_rate c (k / c) b_w b_a κ r d θv ch dd M (div_pos (Nat.cast_pos.2 hk) (Nat.cast_pos.2 hc))
+    hw ha hd (compliesRate_of_complies hP) hB (by rwa [rate_mul _ hc]) (by rwa [rate_mul _ hc]) hκ
+  rwa [rate_mul _ hc] at h
+
+theorem ContainedMatMulOn : Guarantees.ContainedMatMulOn := by
+  intro c k K b_w b_a μ r d θv ch dd emax M hK hw ha hdd hc hkK hμ₀ hμ₁ hd he hP hB hX hA hPS
+  exact ContainedMatMulOn_rate c (k / c) K b_w b_a μ r d θv ch dd emax M (by positivity) hK hw ha hdd (by omega)
+    (by rwa [rate_mul _ hc]) hμ₀ hμ₁ hd he (compliesRate_of_complies hP) hB hX hA hPS
+
+theorem ContainedTrainingOn : Guarantees.ContainedTrainingOn := by
+  intro c k K b_w b_a μ κ r d θv ch dd emax M hK hw ha hdd hc hkK hμ₀ hμ₁ hd he hP hB hX hA hPS hκ
+  exact ContainedTrainingOn_rate c (k / c) K b_w b_a μ κ r d θv ch dd emax M (by positivity) hK hw ha hdd (by omega)
+    (by rwa [rate_mul _ hc]) hμ₀ hμ₁ hd he (compliesRate_of_complies hP) hB hX hA hPS hκ
 
 end Nci.SecurityProofs

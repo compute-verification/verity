@@ -98,7 +98,9 @@ theorem smallInfo_piece {c d : RegisteredCircuit} (M : Containment c.D d.D)
   exact ⟨hPc, hPs, (novelInfo_le_of_containment M hθ hv hWc).trans hK⟩
 
 theorem ThreadedContainedInfoFmt : Guarantees.ThreadedContainedInfoFmt := by
-  intro c d M θc θv T Γ K b_w b_a dd e n μ hθ hv hbw hba hdd he hrate hW W hWc hΓ hK
+  intro c d M θc θv T Γ K b_w b_a dd e n μ hθv hbw hba hdd he hrate hW W hS
+  obtain ⟨hθ, hv⟩ := hθv
+  obtain ⟨hWc, hΓ, hK⟩ := hS
   have hinfo := novelInfo_le_of_containment M hθ hv hWc
   calc b_a * ((T.mults (univ.filter fun g => M.emb g ∈ W)).card : ℝ)
       ≤ novelInfo c θc (univ.filter fun g => M.emb g ∈ W) * T.bound K b_w dd e :=
@@ -108,9 +110,9 @@ theorem ThreadedContainedInfoFmt : Guarantees.ThreadedContainedInfoFmt := by
         mul_le_mul_of_nonneg_right hinfo (le_max_of_le_left (Nat.cast_nonneg _))
 
 theorem ThreadedOfStateFmt : Guarantees.ThreadedOfStateFmt := by
-  intro c d M θc θv T Γ b_w b_a dd e n μ W Sst Sin k f hθ hv hbw hba hdd he hrate hW hWc hΓ hin hf
-  have hK := (InfoOfState d θv W Sst Sin k f hWc hin hf).2
-  exact (ThreadedContainedInfoFmt c d M θc θv T Γ _ b_w b_a dd e n μ hθ hv hbw hba hdd he hrate hW W hWc hΓ
-    hK).trans (mul_le_mul_of_nonneg_right hK (le_max_of_le_left (Nat.cast_nonneg _)))
+  intro c d M θc θv T Γ b_w b_a dd e n μ W Sst Sin k f hθ hbw hba hdd he hrate hW hWΓ hin hf
+  have hK := (InfoOfState d θv W Sst Sin k f hWΓ.1 hin hf).2
+  exact (ThreadedContainedInfoFmt c d M θc θv T Γ _ b_w b_a dd e n μ hθ hbw hba hdd he hrate hW W
+    ⟨hWΓ.1, hWΓ.2, hK⟩).trans (mul_le_mul_of_nonneg_right hK (le_max_of_le_left (Nat.cast_nonneg _)))
 
 end Nci.SecurityProofs
