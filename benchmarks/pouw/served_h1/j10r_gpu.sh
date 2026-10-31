@@ -8,7 +8,7 @@
 #           (pouw_h1_gpu.py --workload fill --served --commit --negatives --receipts --j10r; DECLARE its --declare,
 #           RECEIPTS=cubin noise.cu's torch chain in the units kernel's place, NOISE=v1 the window over v1's unit)
 #
-#   research run --on vy-nebius-2 --pool research --mem-gb 96 --cwd source --source . --as LANE --env JOB=window \
+#   research run --on MACHINE --pool research --mem-gb 96 --cwd source --source . --as LANE --env JOB=window \
 #     -- bash benchmarks/pouw/served_h1/j10r_gpu.sh
 set -euo pipefail
 PY=${PY:-/workspace/jobs/venv312/bin/python}
@@ -22,7 +22,7 @@ if [ -z "${J10R_GPU_S:-}" ]; then
   nice -n 10 "$NVCC" -O3 -std=c++17 --expt-relaxed-constexpr -gencode "$GENCODE" -Xcompiler -fPIC \
     -shared -DH1U_KSPLIT=4 -DH1K_AUTO=1 -DH1K_RONLY=1 -o "$S/h1u_hbc.so" benchmarks/hash/dither/h1u.cu \
     > "$OUT/build-hbc.log" 2>&1 || { echo "j10r_gpu: NVCC_FAIL h1u.cu"; tail -30 "$OUT/build-hbc.log"; exit 11; }
-  nice -n 10 "$NVCC" -O3 -std=c++17 -gencode "$GENCODE" -I benchmarks/codec_tensor -cubin \
+  nice -n 10 "$NVCC" -O3 -std=c++17 -gencode "$GENCODE" -cubin \
     -o "$S/noise.cubin" benchmarks/pouw/served_h1/noise.cu > "$OUT/build-noise.log" 2>&1 \
     || { echo "j10r_gpu: NVCC_FAIL noise.cu"; tail -30 "$OUT/build-noise.log"; exit 11; }
   sha256sum "$S/h1u_hbc.so" "$S/noise.cubin" | tee "$OUT/builds.txt"

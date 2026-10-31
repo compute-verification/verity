@@ -103,7 +103,7 @@ The logical layer:
   and the service's commit order (`LayerCommitted`), the logical layer's bound `Λ·ln(1/δ_s) + min(a, b)·D₀` with `D₀`
   the cone weight on tiles of no words, and its conclusion on an accepted run: all but a share `d` of the committed
   words fixed right and all but `d₀ ≤ d` folded, with `a·(d − d₀) + b·d₀ < r`.
-* `Declared.Seeded`, `SeedNamed`, `ScopeSeeded`, `setAt`, `redraw`, `tileRound`, `roundGain`, `roundWords`,
+* `Declared.Seeded`, `SeedNamed`, `ScopeSeeded`, `setAt`, `resample`, `tileRound`, `roundGain`, `roundWords`,
   `roundRate`, `roundCone`, `seedTheta`, `wholeTheta`, `roundPremium`, `premiumOf`, `rOfSeeded`: the seeded
   statements' scope (every round holding a credited tile seeded, one call site a round, so a round is a seed group,
   and every value a seeded round reads named by its seed's preimage or registered before the salt,
@@ -824,7 +824,7 @@ def setAt {C : Type} : {n : ℕ} → Paths C n → Fin n → C → Paths C n
 /-- **One oracle answer of the window redrawn**: the window's oracle answers `a` (round `r`'s seed queries' answers
 its `r`-th coin, `Fin T_q → B`) with query `q` of round `r` answered `b`, every other answer of every round as `a`
 has it. GRIND's per-query moment (`Assumptions.Compose.SeedLuckAt`) is over this one answer. -/
-def redraw {B : Type} {M Tq : ℕ} (a : Paths (Fin Tq → B) M) (r : Fin M) (q : Fin Tq) (b : B) :
+def resample {B : Type} {M Tq : ℕ} (a : Paths (Fin Tq → B) M) (r : Fin M) (q : Fin Tq) (b : B) :
     Paths (Fin Tq → B) M :=
   setAt a r (Function.update (coinAt a r) q b)
 

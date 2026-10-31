@@ -1,5 +1,5 @@
 """`derive`: the rows of a statement's circuit types under their layouts, the prover's mirror of the verifier's Lean
-`Flock.Derive` (the soundness lane's #199 for flat types, S3 for the rest; Project doc `constant-api-public.md` §2.2).
+`Flock.Derive` (for flat types and the rest; Project doc `constant-api-public.md` §2.2).
 The verifier derives every row it folds from the types and layouts, so these rows are never trusted: `check` holds them
 to the Lean derivation byte for byte, and a mismatch can only make an honest proof fail.
 
@@ -10,7 +10,7 @@ to the Lean derivation byte for byte, and a mismatch can only make an honest pro
     `ir_lower.layout`'s v2 rule, so a flat type's rows are `ir_lower.netlist`'s byte for byte;
   - each placed callee's rows at its aligned offset. Its non-exported input rows become binding copies `form · 1`
     (A = the caller's form, B = the callee's constant), and its constant row copies the caller's (`[c] · [c]`).
-- **A read's rows** are `table/v2`'s: `Flock.Lookup.buildV2` (the verifier lane's #202) when placed; inline, the same
+- **A read's rows** are `table/v2`'s: `Flock.Lookup.buildV2` when placed; inline, the same
   decoders over the index forms, the product rows and copies for the low k bits, and the higher (constant) bits as
   constant wires. A product row's B side is the table's, folded table-direct, so it's listed empty and the read's
   `READ` record names it.
@@ -20,8 +20,7 @@ to the Lean derivation byte for byte, and a mismatch can only make an honest pro
   the same form in A and B, and every slot's constant to the pin, `one`. In the unit coordinates this module uses for
   the logical list, the own region comes first, then each part's range in item order, aligned, then `one`.
 
-**The logical order,** what `Rows.compose` reads, over the rows the block's matrices hold, Δ applied (store note
-`internal/lanes/coordinator/20260928T0250Z-note-to-flock-soundness-constant-first-logical-order.md`):
+**The logical order,** what `Rows.compose` reads, over the rows the block's matrices hold, Δ applied:
 - the unit's inputs, exported bits included;
 - then the unit's segment. A segment is its constant copy, its binding copies (one per non-exported input bit), its
   items' rows in item order (a placed call or read being that callee's segment, recursively), and its output copy rows;
@@ -165,7 +164,7 @@ def gen_read(words: Sequence[int], sha: str, n: int, lo: int, bits: int) -> Deri
 
 
 def rows_digest(d: Derived, n: int, lo: int, bits: int) -> str:
-    """``Flock.Lookup.rowsDigest`` of a generated read, the digest #202's vectors pin."""
+    """``Flock.Lookup.rowsDigest`` of a generated read, the digest `lookup_v2_vectors.json` pins."""
     r = d.reads[0]
     unit_log = max(7, (d.size - 1).bit_length())
     h = bytearray(b"flock-lookup-rows/v2\0")

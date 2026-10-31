@@ -7,6 +7,9 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
     python certifier_piece.py piece SERVE_DIR WINDOW DIR [--eos-ids IDS] [--lean EXE] [--draw K] [--chain-cmd CMD]
         [--challenger gate:USER@HOST --challenger-key RECORD [--coin-peer NAME] [--key KEY] | --challenger local]
         [--main FILE] [CR_K=V ...]
+    python certifier_piece.py chain SERVE_DIR WINDOW DIR V3C [--eos-ids IDS] [--draw K] [--class w63k4]
+        [--chain-cmd CMD] [--challenger ... as the piece's] [CR_K=V ...]
+    python certifier_piece.py period SERVE_DIR WINDOW DIR V3C [--lean EXE]
     python certifier_piece.py relay --listen PORT --to PORT
 
 * **front** runs before served_verdicts.sh's requests when ``CERTIFIER_FRONT`` names it: the gate's scan rehearsal
@@ -65,22 +68,35 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   evidence (its ``challenger/`` directory: the session's files, the ledger, the pins log and ``coins.json``,
   `CHALLENGER`), and the check's three input files in DIR/period. All of them and the answer are written to a fresh
   hold under SERVE_DIR/`PRIVATE`/held (0700) and reach DIR only through the record's leak guard (`leak_guard.py`),
-  which reads DIR and the hold against the warden run's witness, DIR declared to hold those files and the piece's log
-  alone (`PIECE_FILES`), moves what holds a piece of it or lies at another path to SERVE_DIR/`PRIVATE`/quarantine and
-  only then releases the rest. The period files it releases become DIR/`CASE` (`write_case`), the case as
-  `composite.py` reads a piece's: ``{"commitment", "evidence", "params"}``, the commitment and evidence hex and the
-  params ``params.json``'s canonical JSON, all inline, since certifier/v0 reads no blob (about 83 MB on a served
-  window, nearly all of it the params). DIR/period then goes, so the case has one copy; the guard reads the files
-  before they are hex, which it searches only for a binary witness file's pieces. Only the protocol rejects: a step
-  that can't run (no kept run, a rehearsal the gate's check didn't pass, no challenger for the chain's coins, a build,
-  a tool or the chain failing without a report, an input missing, the leak guard failing, or SIGTERM from the piece's
-  time limit) is `NotRun`, and the piece then refuses, releasing nothing from the hold: DIR keeps only its log and
-  gets DIR/`REFUSED` naming why, with no answer, which `served_verdicts.py` reads as the certifier missing. Each step
-  it runs (the build, the chain, the check and the leak guard) is a process group of its own, which the piece ends
-  however the step ends (`run_group`: SIGTERM, `GRACE_S`, SIGKILL), so nothing a step started outlives it; a SIGTERM
-  while a step runs is held until the step's group has ended, so a step never outlives the refusal either.
-  ``--draw K`` is the scan's K drawn units (every unit by default); a CR_K=V goes to the chain; ``--chain-cmd``
-  replaces the chain (a test's, which writes the report and the scan's answers under RESEARCH_RUN_DIR/out).
+  which reads DIR and the hold against the warden run's witness, DIR declared to hold those files, the split's
+  `CHAINED` and the logs alone (`PIECE_FILES`), moves what holds a piece of it or lies at another path to
+  SERVE_DIR/`PRIVATE`/quarantine and only then releases the rest. The period files it releases become DIR/`CASE`
+  (`write_case`), the case as `composite.py` reads a piece's: ``{"commitment", "evidence", "params"}``, the commitment
+  and evidence hex and the params ``params.json``'s canonical JSON, all inline, since certifier/v0 reads no blob (about
+  83 MB on a served window, nearly all of it the params). DIR/period then goes, so the case has one copy; the guard
+  reads the files before they are hex, which it searches only for a binary witness file's pieces. Only the protocol
+  rejects: a step that can't run (no kept run, a rehearsal the gate's check didn't pass, no challenger for the chain's
+  coins, a build, a tool or the chain failing without a report, an input missing, the leak guard failing, or SIGTERM
+  from the piece's time limit) is `NotRun`, and the piece then refuses, releasing nothing from the hold: DIR keeps
+  only its logs (`LOGS`) and gets DIR/`REFUSED` naming why, with no answer, which `served_verdicts.py` reads as the
+  certifier missing. Each step it runs (the build, the chain, the check and the leak guard) is a process group of its
+  own, which the piece ends however the step ends (`run_group`: SIGTERM, `GRACE_S`, SIGKILL), so nothing a step
+  started outlives it; a SIGTERM while a step runs is held until the step's group has ended, so a step never outlives
+  the refusal either. ``--draw K`` is the scan's sample, K proof blocks (every proof block by default); a CR_K=V goes
+  to the chain; ``--chain-cmd`` replaces the chain (a test's, which writes the report and the scan's answers under
+  RESEARCH_RUN_DIR/out).
+* **chain** and **period** are the piece split in two around V3c (`served_verdicts.sh`'s ``CERTIFIER_CHAIN_CMD`` and
+  ``CERTIFIER_PERIOD_CMD``, each run as ``bash -c CMD _ D K DIR V3C``, e.g. ``CERTIFIER_CHAIN_CMD='python
+  benchmarks/network_traces/certifier_piece.py chain "$@"'``), so the period's compute audit is V3c's audit of the
+  served window itself. **chain** runs steps 1 to 4 once V3c's window is committed, its scan on V3c's trees
+  (``scan_zk.py --class CLASS --v3c V3C/window`` in CR_SCAN_ARGS: the window's committed scan state and slot entries)
+  and its rounds' coins the piece's ``--challenger``'s: a reject is DIR/answer.json as the piece's, an accept
+  DIR/`CHAINED`, which names that challenger. **period** runs once V3c's audit wrote V3C/period.json: steps 1, 2 and 4
+  again on the chain's kept report (no chain runs, and its coins step must still be accepted), then step 5 on the rows
+  case whose one compute audit is V3C/period.json (`scan_period.rows_case`), whose answer is DIR/answer.json, its
+  placement naming `CHAINED`'s challenger; it answers nothing where the chain step refused (DIR/`REFUSED`) or rejected
+  (its answer stands), and refuses where it left no DIR/`CHAINED` or the chain's scan read no V3c window or another.
+  Each releases through its own hold and refuses as the piece does, keeping ``served_verdicts.sh``'s logs (`LOGS`).
 * **relay**: a TCP relay from 127.0.0.1:``--listen`` to 127.0.0.1:``--to``, the local gate's tunnel.
 """
 from __future__ import annotations
@@ -139,9 +155,13 @@ CASE = "case.json"
 CHALLENGER = ("scan/*/challenger/*", "n2/*/challenger/*", "n2/*/verifier/period-certificates.json")
 #: the scan class of V3c's default window class (`served_verdicts.sh`'s V3C_CLASS)
 V3C_SCAN_CLASS = "w63k4"
+#: the split piece's chain step's accept, which its period step reads
+CHAINED = "chain.json"
+#: the logs `served_verdicts.sh` and `served_verdicts.py` write in DIR, which a refusal keeps
+LOGS = ("piece.log", "chain.log", "period.log")
 #: every file DIR may hold when the leak guard reads it and the hold (its ``--public``, whose ``*`` takes a ``/``): the
-#: answer, the log `served_verdicts.py` writes, the period check's three input files, `PUBLIC`'s and `CHALLENGER`'s
-PIECE_FILES = ("answer.json", "piece.log", "period/commitment.bin", "period/evidence.json", "period/params.json",
+#: answer, the logs, the split's `CHAINED`, the period check's three input files, `PUBLIC`'s and `CHALLENGER`'s
+PIECE_FILES = ("answer.json", *LOGS, CHAINED, "period/commitment.bin", "period/evidence.json", "period/params.json",
                *(f"chain/{rel}" for rel in PUBLIC), *(f"chain/{rel}" for rel in CHALLENGER))
 LEAN_DIR = TREE / "verity" / "core" / "protocols" / "network" / "lean"
 #: the window circuit's class (4 slots, prompts of at most 32 ids, 4 outputs) and the scan's lanes
@@ -400,6 +420,12 @@ def sized(windows: int, sets: list[str]) -> list[str]:
             *([f"CR_TIE_WINDOWS={windows}"] if "CR_TIE_WINDOWS" not in given else []), *sets]
 
 
+def coin_flags(q: argparse.ArgumentParser) -> None:
+    """The piece's and the chain step's challenger flags, which `coin_argv` passes to the chain."""
+    SS.coin_flags(q, SERVED)
+    q.add_argument("--key", type=Path, default=SS.KEY, help="with --challenger gate:…: the lane's gate key")
+
+
 def coin_argv(a: argparse.Namespace) -> list[str]:
     """`served_session.py chain`'s challenger flags (`served_session.coin_env`), the piece's own."""
     return ["--challenger", a.challenger, "--coin-peer", a.coin_peer, "--key", str(a.key),
@@ -458,7 +484,7 @@ def run_group(argv: list[str], **kw) -> int:
         finally:
             came, _held = _held, None
     if came:
-        ended(came[0], None)
+        signal.getsignal(signal.SIGTERM)(came[0], None)
     return p.returncode
 
 
@@ -475,12 +501,12 @@ def captured(argv: list[str], **kw) -> subprocess.CompletedProcess:
 def run_chain(keep: Path, run: str, endpoint: Path, eos: str, draw: int | None, sets: list[str], coins: list[str],
               cmd: str | None = None) -> int:
     """`served_session.py chain` on the kept run, its rounds drawn on the challenger `coins` (`coin_argv`), or
-    ``cmd``, run as ``bash -c CMD _ KEEP RUN ENDPOINT``; its run dir (RESEARCH_RUN_DIR, whose out/ holds the report)
-    and quarantine private under KEEP/RUN."""
+    ``cmd``, run as ``bash -c CMD _ KEEP RUN ENDPOINT CR_K=V ...``; its run dir (RESEARCH_RUN_DIR, whose out/ holds the
+    report) and quarantine private under KEEP/RUN."""
     d = keep / run
     env = dict(os.environ, RESEARCH_RUN_DIR=str(d / "chain"), CR_QUARANTINE=str(d / "quarantine"))
     (d / "chain").mkdir(mode=0o700, exist_ok=True)
-    argv = ["bash", "-c", cmd, "_", str(keep), run, str(endpoint)] if cmd else [
+    argv = ["bash", "-c", cmd, "_", str(keep), run, str(endpoint), *sets] if cmd else [
         sys.executable, str(HERE / "served_session.py"), "chain", "--run", run, "--keep", str(keep),
         "--endpoint", str(endpoint), "--eos-ids", eos, *(["--draw", str(draw)] if draw else []), *coins, *sets]
     with open(d / "chain" / "stdout.log", "w") as log:
@@ -505,12 +531,27 @@ def period_check(exe: str, case: dict, d: Path) -> dict:
         raise NotRun(f"network-period check: {type(e).__name__}: {e}") from None
 
 
-def case_of(warden: Path, scan: Path) -> dict:
+def case_of(warden: Path, scan: Path, v3c: Path | None = None) -> dict:
     import scan_period as SP
     try:
-        return SP.rows_case(warden, scan)
+        return SP.rows_case(warden, scan, v3c=v3c)
     except (SystemExit, OSError, KeyError, ValueError) as e:
         raise NotRun(f"the period's rows case: {type(e).__name__}: {e}") from None
+
+
+def v3c_case(v3c: Path) -> Callable[[Path, Path], dict]:
+    """The period step's case: `case_of` with V3C/period.json as its one compute audit, once the chain's scan read
+    V3C/window's trees (its ``summary.json``'s ``v3c``); `NotRun` for a scan of no V3c window or another."""
+    def case(warden: Path, scan: Path) -> dict:
+        try:
+            read = (json.loads((scan / "summary.json").read_text()).get("v3c") or {}).get("window")
+        except (OSError, ValueError) as e:
+            raise NotRun(f"the chain's scan summary: {type(e).__name__}: {e}") from None
+        if read != str(v3c / "window"):
+            raise NotRun(f"the chain's scan read {read or 'no'} V3c window, not {v3c / 'window'}: run the chain step "
+                         "on this V3c")
+        return case_of(warden, scan, v3c / "period.json")
+    return case
 
 
 def public(doc: dict, keys: tuple[str, ...]) -> dict:
@@ -542,10 +583,13 @@ def publish(chain_out: Path, d: Path) -> None:
             shutil.copyfile(p, to)
 
 
-def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str, Path, int], int],
-           check: Callable[[dict, Path], dict], case: Callable[[Path, Path], dict] = case_of) -> tuple[dict, Path | None]:
+def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str, Path, int], int] | None,
+           check: Callable[[dict, Path], dict] | None,
+           case: Callable[[Path, Path], dict] = case_of) -> tuple[dict | None, Path | None]:
     """Window ``window``'s answer (module docstring) and the unpacked fetch (for the leak guard), its files in ``d``;
-    ``chain`` is given KEEP, the run, the endpoint's records and the run's link-windows. `NotRun` when a step can't run."""
+    ``chain`` is given KEEP, the run, the endpoint's records and the run's link-windows, or is None to read the report
+    of the chain the split's chain step ran; ``check`` None stops once the chain accepted, with no answer (the split's
+    chain step). `NotRun` when a step can't run."""
     import warden_chain as WC
     keep = serve_dir / PRIVATE
     run = kept_run(serve_dir)
@@ -561,12 +605,16 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
             raise Rejected(f"the kept warden run: {e}") from None
         T = params.window
         certified = bind(reqs, io)
-        rc = chain(keep, run, endpoint_copy(serve_dir, keep / run / "endpoint"), int(dep["windows"]))
         out = keep / run / "chain" / "out"
-        publish(out, d)
         report = out / "report" / "report.json"
-        if not report.is_file():
-            raise NotRun(f"the chain wrote no report (exit {rc}): see chain/ and the kept run's stdout.log")
+        if chain is None:
+            if not report.is_file():
+                raise NotRun(f"no chain report under {keep / run}: the chain step didn't run here")
+        else:
+            rc = chain(keep, run, endpoint_copy(serve_dir, keep / run / "endpoint"), int(dep["windows"]))
+            publish(out, d)
+            if not report.is_file():
+                raise NotRun(f"the chain wrote no report (exit {rc}): see chain/ and the kept run's stdout.log")
         doc = json.loads(report.read_text())
         coins = (doc.get("steps") or {}).get("coins") or {}
         if coins.get("verdict") != "accepted":
@@ -579,6 +627,8 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
         except (OSError, ValueError, KeyError) as e:
             raise NotRun(f"the scan's answers.json names no one link-window: {type(e).__name__}: {e}") from None
         in_link_window(certified, T, w)
+        if check is None:
+            return None, unpacked
         got = check(case(warden, out / "scan"), d / "period")
         if got.get("protocol") != PROTOCOL or got.get("verdict") not in ("accept", "reject", "undecided"):
             raise NotRun(f"network-period answered no {PROTOCOL} verdict: {json.dumps(got)[:400]}")
@@ -626,63 +676,169 @@ def rm(*paths: Path) -> None:
 
 
 def refuse(d: Path, why: str) -> int:
-    """DIR emptied but for its log, and DIR/`REFUSED` naming why: no answer, so the certifier reads missing."""
-    signal.signal(signal.SIGTERM, signal.SIG_IGN)
-    rm(*(p for p in d.iterdir() if p.name != "piece.log"))
-    (d / REFUSED).write_text(why + "\n")
-    print(f"CERTIFIER refused: {why}", flush=True)
+    """DIR emptied but for its logs, and DIR/`REFUSED` naming why: no answer, so the certifier reads missing. SIGTERM is
+    ignored while it writes and then handled as before, so the children of a process that refused don't inherit it
+    ignored."""
+    was = signal.signal(signal.SIGTERM, signal.SIG_IGN)
+    try:
+        rm(*(p for p in d.iterdir() if p.name not in LOGS))
+        (d / REFUSED).write_text(why + "\n")
+        print(f"CERTIFIER refused: {why}", flush=True)
+    finally:
+        signal.signal(signal.SIGTERM, was)
     return 3
 
 
-def ended(signum: int, _frame) -> None:
-    if _held is not None:
-        _held.append(signum)
-        return
-    raise NotRun(f"{signal.Signals(signum).name}: the piece's time limit (CERTIFIER_TIMEOUT) ended it before a verdict")
+def ended(limit: str) -> Callable[[int, object], None]:
+    """The piece's SIGTERM handler under its time limit ``limit``: held while a step's group runs (`run_group`), else
+    `NotRun` naming the limit."""
+    def on(signum: int, _frame) -> None:
+        if _held is not None:
+            _held.append(signum)
+            return
+        raise NotRun(f"{signal.Signals(signum).name}: the piece's time limit ({limit}) ended it before a verdict")
+    return on
 
 
-def piece(a: argparse.Namespace) -> int:
-    serve_dir, d = a.serve_dir.resolve(), a.dir.resolve()
-    d.mkdir(parents=True, exist_ok=True)
-    for kv in a.set:
-        if not kv.startswith("CR_") or "=" not in kv:
-            print(f"refused: {kv!r}: CR_K=V, a chain_record.sh variable", file=sys.stderr)
-            return 2
-    was, unpacked, hold = signal.signal(signal.SIGTERM, ended), None, None
+def said(got: dict) -> int:
+    print(f"CERTIFIER {json.dumps({k: got.get(k) for k in ('verdict', 'reason', 'public')}, sort_keys=True)}",
+          flush=True)
+    return 0 if got.get("verdict") == "accept" else 1
+
+
+def settle(serve_dir: Path, window: int, d: Path, limit: str,
+           step: Callable[[Path], tuple[dict | None, Path | None]], challenger: Callable[[], str]) -> dict | None:
+    """``step``'s answer: its files written to a fresh hold under SERVE_DIR/`PRIVATE`/held (``step`` is given it), an
+    accept's profile with its `placement`, the chain's coins ``challenger()``'s, all released to DIR by the leak guard
+    and the case written; None where the split's chain step accepted. `NotRun` (SIGTERM included, naming ``limit``) for
+    a step that can't run."""
+    was, unpacked, hold = signal.signal(signal.SIGTERM, ended(limit)), None, None
     try:
         if not any((serve_dir / PRIVATE).glob("*/fetch.tar.gz")):
             raise NotRun(f"no warden run kept under {serve_dir / PRIVATE}: the run's load didn't go through the "
                          "certifier's front (CERTIFIER_FRONT unset, or the gate, its tunnel or ssh failed)")
-        if why := SS.challenger_refusal(a):
-            raise NotRun(f"no challenger for the chain's coins: {why}")
         (serve_dir / PRIVATE / "held").mkdir(mode=0o700, exist_ok=True)
-        hold = Path(tempfile.mkdtemp(dir=serve_dir / PRIVATE / "held", prefix=f"window-{a.window}-"))
-        exe = period_exe(a.lean)
-        chain = lambda keep, run, ep, n: run_chain(keep, run, ep, a.eos_ids, a.draw, sized(n, a.set),  # noqa: E731
-                                                   coin_argv(a), a.chain_cmd)
-        got, unpacked = decide(serve_dir, a.window, hold, chain=chain, check=lambda c, p: period_check(exe, c, p))
-        if isinstance(got.get("profile"), dict):
-            got = got | {"profile": got["profile"] | {"placement": placement(serve_dir, kept_run(serve_dir),
-                                                                             a.challenger)}}
-        (hold / "answer.json").write_text(json.dumps(got, indent=1, sort_keys=True) + "\n")
+        hold = Path(tempfile.mkdtemp(dir=serve_dir / PRIVATE / "held", prefix=f"window-{window}-"))
+        got, unpacked = step(hold)
+        if got is not None:
+            if isinstance(got.get("profile"), dict):
+                got = got | {"profile": got["profile"] | {"placement": placement(serve_dir, kept_run(serve_dir),
+                                                                                 challenger())}}
+            (hold / "answer.json").write_text(json.dumps(got, indent=1, sort_keys=True) + "\n")
         g = guard(d, hold, unpacked, serve_dir / PRIVATE / "quarantine")
-        if g not in (0, 3) or not (d / "answer.json").is_file():
+        if g not in (0, 3) or got is not None and not (d / "answer.json").is_file():
             raise NotRun(f"the leak guard failed (exit {g}): DIR withheld, the piece's files left in {hold}")
         write_case(d)
-    except NotRun as e:
-        return refuse(d, str(e))
+        return got
     except (OSError, ValueError, tarfile.TarError) as e:
         traceback.print_exc()
-        return refuse(d, f"the piece failed on a file: {type(e).__name__}: {e}")
+        raise NotRun(f"the piece failed on a file: {type(e).__name__}: {e}") from None
     finally:
         if unpacked is not None:
             rm(unpacked)
         if hold is not None and hold.is_dir() and not any(p.is_file() for p in hold.rglob("*")):
             rm(hold)
         signal.signal(signal.SIGTERM, was)
-    print(f"CERTIFIER {json.dumps({k: got.get(k) for k in ('verdict', 'reason', 'public')}, sort_keys=True)}",
+
+
+def sets_ok(sets: list[str]) -> bool:
+    bad = [kv for kv in sets if not kv.startswith("CR_") or "=" not in kv]
+    for kv in bad:
+        print(f"refused: {kv!r}: CR_K=V, a chain_record.sh variable", file=sys.stderr)
+    return not bad
+
+
+def piece(a: argparse.Namespace) -> int:
+    serve_dir, d = a.serve_dir.resolve(), a.dir.resolve()
+    d.mkdir(parents=True, exist_ok=True)
+    if not sets_ok(a.set):
+        return 2
+
+    def step(hold: Path) -> tuple[dict | None, Path | None]:
+        challenger_ready(a)
+        exe = period_exe(a.lean)
+        chain = lambda keep, run, ep, n: run_chain(keep, run, ep, a.eos_ids, a.draw, sized(n, a.set),  # noqa: E731
+                                                   coin_argv(a), a.chain_cmd)
+        return decide(serve_dir, a.window, hold, chain=chain, check=lambda c, p: period_check(exe, c, p))
+    try:
+        got = settle(serve_dir, a.window, d, "CERTIFIER_TIMEOUT", step, lambda: a.challenger)
+    except NotRun as e:
+        return refuse(d, str(e))
+    return said(got)
+
+
+def challenger_ready(a: argparse.Namespace) -> None:
+    """`NotRun` when ``--challenger`` can't give the chain's coins (`served_session.challenger_refusal`)."""
+    if why := SS.challenger_refusal(a):
+        raise NotRun(f"no challenger for the chain's coins: {why}")
+
+
+def chained_challenger(d: Path) -> str:
+    """The challenger the split's chain step drew its rounds' coins from, as DIR/`CHAINED` names it."""
+    if not (got := json.loads((d / CHAINED).read_text()).get("challenger")):
+        raise NotRun(f"{d / CHAINED} names no challenger: run the chain step again")
+    return got
+
+
+def v3c_scan(v3c: Path, cls: str, sets: list[str]) -> list[str]:
+    """``sets`` with the scan's class and V3c's window first in CR_SCAN_ARGS (chain_record.sh splits it on whitespace)."""
+    window = v3c / "window"
+    if not (window / "registration.json").is_file():
+        raise NotRun(f"V3c committed no window at {window}: the chain's scan reads its scan state and slot entries")
+    if any(c.isspace() for c in f"{window}{cls}"):
+        raise NotRun(f"{window}: chain_record.sh splits CR_SCAN_ARGS on whitespace, so give V3c a path without it")
+    given = next((kv.partition("=")[2] for kv in sets if kv.startswith("CR_SCAN_ARGS=")), "")
+    return [*(kv for kv in sets if not kv.startswith("CR_SCAN_ARGS=")),
+            f"CR_SCAN_ARGS={f'--class {cls} --v3c {window} {given}'.strip()}"]
+
+
+def chain_step(a: argparse.Namespace) -> int:
+    serve_dir, d, v3c = a.serve_dir.resolve(), a.dir.resolve(), a.v3c.resolve()
+    d.mkdir(parents=True, exist_ok=True)
+    for f in ("answer.json", CHAINED, REFUSED, CASE):
+        (d / f).unlink(missing_ok=True)
+    if not sets_ok(a.set):
+        return 2
+    try:
+        sets = v3c_scan(v3c, a.scan_class, a.set)
+        chain = lambda keep, run, ep, n: run_chain(keep, run, ep, a.eos_ids, a.draw, sized(n, sets),  # noqa: E731
+                                                   coin_argv(a), a.chain_cmd)
+
+        def step(hold: Path) -> tuple[dict | None, Path | None]:
+            challenger_ready(a)
+            return decide(serve_dir, a.window, hold, chain=chain, check=None)
+        got = settle(serve_dir, a.window, d, "CERTIFIER_TIMEOUT", step, lambda: a.challenger)
+    except NotRun as e:
+        return refuse(d, str(e))
+    if got is not None:
+        return said(got)
+    (d / CHAINED).write_text(json.dumps({"chain": "accepted", "v3c": str(v3c), "challenger": a.challenger}, indent=1,
+                                        sort_keys=True) + "\n")
+    print(f"CERTIFIER-CHAIN accepted on V3c's window {v3c / 'window'}: the period step checks its period.json",
           flush=True)
-    return 0 if got.get("verdict") == "accept" else 1
+    return 0
+
+
+def period_step(a: argparse.Namespace) -> int:
+    serve_dir, d, v3c = a.serve_dir.resolve(), a.dir.resolve(), a.v3c.resolve()
+    d.mkdir(parents=True, exist_ok=True)
+    if (d / REFUSED).is_file():
+        print(f"CERTIFIER refused at the chain: {(d / REFUSED).read_text().strip()}", flush=True)
+        return 3
+    if (d / "answer.json").is_file():
+        return said(json.loads((d / "answer.json").read_text()))
+
+    def step(hold: Path) -> tuple[dict | None, Path | None]:
+        if not (d / CHAINED).is_file():
+            raise NotRun(f"no {CHAINED} in DIR: the chain step (CERTIFIER_CHAIN_CMD) didn't run, or didn't finish")
+        exe = period_exe(a.lean)
+        return decide(serve_dir, a.window, hold, chain=None, check=lambda c, p: period_check(exe, c, p),
+                      case=v3c_case(v3c))
+    try:
+        got = settle(serve_dir, a.window, d, "CERTIFIER_PERIOD_TIMEOUT", step, lambda: chained_challenger(d))
+    except NotRun as e:
+        return refuse(d, str(e))
+    return said(got)
 
 
 def parser() -> argparse.ArgumentParser:
@@ -714,11 +870,25 @@ def parser() -> argparse.ArgumentParser:
     q.add_argument("dir", type=Path)
     q.add_argument("--eos-ids", default="128001")
     q.add_argument("--lean", help="network-period, built (else built here)")
-    q.add_argument("--draw", type=int, help="the scan's K sampled proof blocks (every unit by default)")
-    q.add_argument("--chain-cmd", help="replaces served_session.py chain: bash -c CMD _ KEEP RUN ENDPOINT")
-    SS.coin_flags(q, SERVED)
-    q.add_argument("--key", type=Path, default=SS.KEY, help="with --challenger gate:…: the lane's gate key")
+    q.add_argument("--draw", type=int, help="the scan's sample, K proof blocks (every proof block by default)")
+    q.add_argument("--chain-cmd", help="replaces served_session.py chain: bash -c CMD _ KEEP RUN ENDPOINT CR_K=V ...")
+    coin_flags(q)
     q.add_argument("set", nargs="*", help="CR_K=V")
+    for name in ("chain", "period"):
+        q = sub.add_parser(name)
+        q.add_argument("serve_dir", type=Path)
+        q.add_argument("window", type=int)
+        q.add_argument("dir", type=Path)
+        q.add_argument("v3c", type=Path, help="V3c's directory: window/ (window-commit's) and period.json")
+    q = sub.choices["chain"]
+    q.add_argument("--eos-ids", default="128001")
+    q.add_argument("--draw", type=int, help="the scan's sample, K proof blocks (every proof block by default)")
+    q.add_argument("--class", dest="scan_class", default=V3C_SCAN_CLASS,
+                   help=f"the scan's class, V3c's window class's (default {V3C_SCAN_CLASS})")
+    q.add_argument("--chain-cmd", help="replaces served_session.py chain: bash -c CMD _ KEEP RUN ENDPOINT CR_K=V ...")
+    coin_flags(q)
+    q.add_argument("set", nargs="*", help="CR_K=V")
+    sub.choices["period"].add_argument("--lean", help="network-period, built (else built here)")
     r = sub.add_parser("relay")
     r.add_argument("--listen", type=int, required=True)
     r.add_argument("--to", type=int, required=True)
@@ -731,6 +901,10 @@ def main(argv: list[str] | None = None) -> int:
         return front(a)
     if a.cmd == "piece":
         return piece(a)
+    if a.cmd == "chain":
+        return chain_step(a)
+    if a.cmd == "period":
+        return period_step(a)
     relay(a.listen, a.to)
     return 0
 

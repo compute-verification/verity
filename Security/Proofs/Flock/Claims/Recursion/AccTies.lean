@@ -222,6 +222,11 @@ theorem slotAt_of_holding {r : XR} (hstk : r.shape.stacked = none) {sch : Schedu
       have hA : RecVStar.accReads r.shape (.cap l N) = .ok none := rfl
       unfold accRead at hR
       simp [hA, Except.toOption] at hR
+    | link UB PB N =>
+      exfalso
+      have hA : RecVStar.accReads r.shape (.link UB PB N) = .ok none := rfl
+      unfold accRead at hR
+      simp [hA, Except.toOption] at hR
 
 /-- **A level unit's `acc_out` is its next row's slot**: where it holds row `p` at `acc`, its `acc_out` reads `p + 1`. -/
 theorem slotAt_out {r : XR} (hstk : r.shape.stacked = none) {sch : Schedule} (hsch : fast100 r.shape.m = some sch)
@@ -288,6 +293,7 @@ theorem registered_inner {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st
   have h0 : 0 < sts.size := by subst hp; exact h0p
   have e0 : p.sts[0] = sts[0] := by subst hp; rfl
   obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi h0p
+    (FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0p).2.2)
   have hpar := FlockVBridge.Family.resParams_of_check P.recResiduals
     ((htab 0 h0p).1.trans (DecompBR.inner_named hss hsv'))
   rw [e0] at hpar

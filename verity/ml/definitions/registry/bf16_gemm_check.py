@@ -20,7 +20,7 @@ vLLM d9105ea80's choice of kernel for the MoE gate (`GateLinear.forward`, `LLBf1
   under the scan's conditions only (`ROUTE_CONDITIONS`): `route_departures` names how a serving process's facts differ, which a
   Commit's verdict, TP1's and each TP rank's, refuses for a Program that binds one of the `ROUTE_DEFINITIONS`
   (`check.cublas_route_pin`).  So a torch or cuBLAS upgrade in the serving venv refuses every such Program until the scan
-  reruns under it, on an H200 with the serving venv's python, as `CUBLAS_ROUTES["run"]` ran:
+  reruns under it, on an H200 with the serving venv's python, as the run of record (`CUBLAS_ROUTES["run_record"]`) ran:
   `tests/properties/glm53_bf16_gemm_capture_gpu.py --scan-run --served-default --models glm53,dsv4-pro --scratch DIR --out OUT` with
   `--only linear,bmm,f32out --scan-m 1:2048`, then `--only router --scan-m 17:2048`; its cases' `routes`, its `switch` facts and the
   device's are then copied into `cublas_routes.json` (no tool writes it);
@@ -59,7 +59,7 @@ SM90_SPLITK = {(4096, 256): {**{m: 8 for m in range(5, 8)}, 10: 8, 11: 8, 13: 8,
 LL_MAX_M = 16
 DEFAULT_LL_BF16_FMA = 1
 #: cuBLAS 12.9.1's default route on the H200 by "phase K N": [m0, m1, split] runs over M (split None: the non-split serial
-#: chain), as the capture's decode-batch scan (run `run`) mapped them
+#: chain), as the capture's decode-batch scan (its run record `run_record`) mapped them
 CUBLAS_ROUTES = json.loads(Path(__file__).with_name("cublas_routes.json").read_text())
 _ROUTES = {(p, int(k), int(n)): runs for (p, k, n), runs in ((key.split(), v) for key, v in CUBLAS_ROUTES["routes"].items())}
 #: what the scan's process ran on and under, as `glm53_bf16_gemm_capture_gpu.switch` read it (its device beside): the device, torch,

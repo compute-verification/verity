@@ -6,7 +6,7 @@ engine step, each `replay_step.ReplayStep_v1` (the replay's step): the committed
 arrivals and the next A decisions in, the step's rows and the next state out. A window is many steps, so the state
 passes between proof blocks as
 rows of produced values, each unit reading its rows at public positions. This module is that chain: the rows (`Shape`,
-`Row`, `Window`, `encode`, `decode`), their commitment and reads (`commit_window`, `reads`), the verifier's check of how
+`Row`, `QueueRow`, `encode`, `decode`), their commitment and reads (`commit_window`, `reads`), the verifier's check of how
 the windows join (`check_chain`), and the three Boolean parts it puts in the units, `ReplayAdvance` beside each step,
 `ReplayLoad` once a window and `ReplayClose` once a session, with `advance`, `load` and `close` their specifications.
 
@@ -40,7 +40,7 @@ row: the Lean verifier checks each read's path (`registered.verify_read`).
   width, 0 for none) each running slot's walk entry `run_pfx` follows `run_comp`. With AS (async scheduling) the
   state ends with each running slot's `fin` and `cap` and each waiting slot's `cap`, and an arrival carries its
   `cap` (O is its max_tokens): `q_cap` here, the step's `arr_cap` and the load's `a_cap`.
-- A `Row`'s and a `Window`'s entries are tuples of their fields in `replay_step.Req`'s order, those the shape has:
+- A `Row`'s and a `QueueRow`'s entries are tuples of their fields in `replay_step.Req`'s order, those the shape has:
   running (id, P, O, out, computed[, cap, fin][, pfx]), waiting (id, P, O, out[, cap]) and an arrival
   (id, P, O[, cap]) (`running_names`, `waiting_names`, `arrival_names`).
 - `qh` and `dh` are how many of the window row's arrivals and decisions the window's steps so far took and read;
@@ -193,7 +193,7 @@ def waiting_names(S) -> tuple[str, ...]:
 
 
 def arrival_names(S) -> tuple[str, ...]:
-    """An arrival's fields, in `Window.queue`'s tuples, the step's and the load's arrivals."""
+    """An arrival's fields, in `QueueRow.queue`'s tuples, the step's and the load's arrivals."""
     return ("id", "P", "O") + (("cap",) if S.AS else ())
 
 
@@ -263,7 +263,7 @@ class Row:
 
 
 @dataclass(frozen=True)
-class Window:
+class QueueRow:
     """A window row: the arrivals the window's steps may take, in certified order, and its decisions."""
 
     queue: tuple[Arrival, ...] = ()
@@ -302,7 +302,7 @@ def _values(row: Row, S) -> dict[str, list[int]]:
     return vals
 
 
-def _window_values(win: Window, S) -> dict[str, list[int]]:
+def _window_values(win: QueueRow, S) -> dict[str, list[int]]:
     if len(win.queue) > S.Q or len(win.decisions) > S.D or any(b not in (0, 1) for b in win.decisions):
         raise MalformedRow("the window exceeds the size class, or a decision isn't a bit")
     vals: dict[str, list[int]] = {}
@@ -329,7 +329,7 @@ def encode(row: Row, S) -> tuple[int, ...]:
     return _padded(_flatten(_values(row, S), row_fields(S)), width(S))
 
 
-def encode_window(win: Window, S) -> tuple[int, ...]:
+def encode_window(win: QueueRow, S) -> tuple[int, ...]:
     """The window row's `window_width(S)` bits."""
     return _padded(_flatten(_window_values(win, S), window_fields(S)), window_width(S))
 
@@ -339,7 +339,7 @@ def state_bits(row: Row, S) -> tuple[int, ...]:
     return tuple(_flatten(_values(row, S), state_fields(S)))
 
 
-def front(S, win: Window, row: Row) -> tuple[tuple[Arrival, ...], tuple[int, ...]]:
+def front(S, win: QueueRow, row: Row) -> tuple[tuple[Arrival, ...], tuple[int, ...]]:
     """The step's arrivals and its A decision bits: the window row's at the row's heads (zeros past `left`)."""
     bits = win.decisions[row.dh:row.dh + S.A]
     return win.queue[row.qh:row.qh + S.A], tuple(bits) + (0,) * (S.A - len(bits))
@@ -390,13 +390,13 @@ def decode(bits: Sequence[int], S) -> Row:
     return Row(_items(f, "run", running_names(S)), _items(f, "wait", waiting_names(S)), f["free"][0], qh, dh, steps)
 
 
-def decode_window(bits: Sequence[int], S) -> Window:
+def decode_window(bits: Sequence[int], S) -> QueueRow:
     """The window row `bits` encode; `MalformedRow` for any other bits."""
     f = _fields_of(bits, window_fields(S), window_width(S))
     left = f["left"][0]
     if left > S.D or any(f["dec"][left:]):
         raise MalformedRow(f"left {left} of {S.D} with no decision past it")
-    return Window(_items(f, "q", arrival_names(S)), tuple(f["dec"][:left]))
+    return QueueRow(_items(f, "q", arrival_names(S)), tuple(f["dec"][:left]))
 
 
 def row(bits: Sequence[int]) -> tuple[int, ...]:
@@ -412,7 +412,7 @@ def unrow(words: Sequence[int]) -> tuple[int, ...]:
 
 # --- the specification of the proof blocks ----------------------------------------------------------------------------
 
-def advance(S, win: Window, cur: Row, ok: bool, stepped: Row, arrivals: Sequence[Arrival], bits: Sequence[int], taken: int,
+def advance(S, win: QueueRow, cur: Row, ok: bool, stepped: Row, arrivals: Sequence[Arrival], bits: Sequence[int], taken: int,
             used: int) -> Row | None:
     """The state row after step proof block u: `cur` when the window's steps are done (idle), else the step's next state
     (`stepped`'s running, waiting and free) with the heads past what it took and read and one step fewer. None refuses:
@@ -429,8 +429,8 @@ def advance(S, win: Window, cur: Row, ok: bool, stepped: Row, arrivals: Sequence
     return Row(stepped.running, stepped.waiting, stepped.free, cur.qh + taken, dh, cur.steps - 1)
 
 
-def load(S, prev: Row, last: Window, arrivals: Sequence[Arrival], decisions: Sequence[int],
-         steps: int) -> tuple[Row, Window] | None:
+def load(S, prev: Row, last: QueueRow, arrivals: Sequence[Arrival], decisions: Sequence[int],
+         steps: int) -> tuple[Row, QueueRow] | None:
     """The window's state row 1 and window row: state row 0 (`prev`, the last window's last) with its heads reset and
     the window's executed step count, and the last window's arrivals and decisions past `prev`'s heads with the
     window's certified arrivals and its decisions appended. None refuses: the last window left steps, or read past its
@@ -443,10 +443,10 @@ def load(S, prev: Row, last: Window, arrivals: Sequence[Arrival], decisions: Seq
     if len(kept) + len(decisions) > S.D or steps > S.P:
         return None
     return (Row(prev.running, prev.waiting, prev.free, 0, 0, steps),
-            Window(rest + tuple(tuple(a) for a in arrivals), kept + tuple(decisions)))
+            QueueRow(rest + tuple(tuple(a) for a in arrivals), kept + tuple(decisions)))
 
 
-def close(S, row: Row, win: Window) -> bool:
+def close(S, row: Row, win: QueueRow) -> bool:
     """Whether a session may end in state row `row` and window row `win` (its last window's P + 1 and 1): the window's
     steps all run and its decisions, the carried ones among them, all read."""
     return not row.steps and row.dh == len(win.decisions)
@@ -467,7 +467,7 @@ def _opening(words: Sequence[int], salt: bytes) -> bytes:
 def empty_openings(program: str, S) -> tuple[bytes, bytes]:
     """b‖c of the empty state row and the empty window row under `empty_salts`, which the verifier computes."""
     s, w = empty_salts(program)
-    return _opening(row(encode(empty(S), S)), s), _opening(row(encode_window(Window(), S)), w)
+    return _opening(row(encode(empty(S), S)), s), _opening(row(encode_window(QueueRow(), S)), w)
 
 
 @dataclass(frozen=True)
@@ -478,7 +478,7 @@ class Committed:
     window: G.Registered
 
 
-def commit_window(program: str, rows: Sequence[Row], window: Window, S, registration: str, carry: Committed | None = None,
+def commit_window(program: str, rows: Sequence[Row], window: QueueRow, S, registration: str, carry: Committed | None = None,
                   salts: Sequence[bytes] | None = None) -> Committed:
     """A window's produced values: its P + 2 state rows, and the last window's window row with `window`. `carry`: the
     previous window's, whose last state row and window row are this window's first, under the same salts; for the
@@ -491,7 +491,7 @@ def commit_window(program: str, rows: Sequence[Row], window: Window, S, registra
         if rows[0] != empty(S):
             raise ValueError("the session's first row is the empty state")
         first, last_salt = empty_salts(program)
-        last = row(encode_window(Window(), S))
+        last = row(encode_window(QueueRow(), S))
     else:
         if carry.state.rows[-1] != words[0]:
             raise ValueError("a window starts in the state row the previous one ended in")
@@ -719,7 +719,7 @@ def _statics(S) -> dict[str, int]:
     return {k: getattr(S, k) for k in STATICS}
 
 
-def advance_arguments(S, win: Window, cur: Row, ok: bool, stepped: Row, arrivals: Sequence[Arrival], bits: Sequence[int],
+def advance_arguments(S, win: QueueRow, cur: Row, ok: bool, stepped: Row, arrivals: Sequence[Arrival], bits: Sequence[int],
                       taken: int, used: int, nxt: Sequence[int]) -> list[list[int]]:
     """`ReplayAdvance`'s arguments, each a flat bit list: `arrivals` and `bits` the step's (`front`), `nxt` the next
     state row's bits."""
@@ -733,7 +733,7 @@ def advance_arguments(S, win: Window, cur: Row, ok: bool, stepped: Row, arrivals
             list(front_bits(S, arrivals)), list(bits) + [0] * (S.A - len(bits)), tb, ub, list(nxt)]
 
 
-def load_arguments(S, prev: Row, last: Window, arrivals: Sequence[Arrival], decisions: Sequence[int], count: int, steps: int,
+def load_arguments(S, prev: Row, last: QueueRow, arrivals: Sequence[Arrival], decisions: Sequence[int], count: int, steps: int,
                    nxt: Sequence[int], window: Sequence[int]) -> list[list[int]]:
     """`ReplayLoad`'s arguments: `decisions` the D-bit field as given (bits past `count` included), `nxt` and `window`
     the next state row's and the window row's bits."""
@@ -749,7 +749,7 @@ def load_arguments(S, prev: Row, last: Window, arrivals: Sequence[Arrival], deci
             list(decisions) + [0] * (S.D - len(decisions)), cb, sb, list(nxt), list(window)]
 
 
-def close_arguments(S, row: Row, win: Window) -> list[list[int]]:
+def close_arguments(S, row: Row, win: QueueRow) -> list[list[int]]:
     """`ReplayClose`'s arguments: the session's last state row's bits and its window row's."""
     return [list(encode(row, S)), list(encode_window(win, S))]
 
@@ -802,7 +802,7 @@ def size(S) -> dict[str, int]:
 
 
 __all__ = ["Arrival", "Committed", "MalformedRow", "ReplayAdvance", "ReplayClose", "ReplayLoad", "Row", "Running", "STATICS",
-           "Shape", "VALUE", "WINDOW", "Waiting", "Window", "advance", "advance_arguments", "advance_unit", "arrival_fields",
+           "Shape", "VALUE", "WINDOW", "Waiting", "QueueRow", "advance", "advance_arguments", "advance_unit", "arrival_fields",
            "arrival_names", "check_chain", "close", "close_arguments", "close_reads", "close_unit", "commit_window",
            "decode", "decode_window", "empty", "empty_openings", "empty_salts", "encode", "encode_window",
            "evaluate_advance", "evaluate_close", "evaluate_load", "front", "front_bits", "front_fields", "load",

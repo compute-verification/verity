@@ -198,10 +198,10 @@ theorem msg_bytes {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z :
 end Msg
 
 theorem outputs_committed' : OutputsCommitted := by
-  intro tags cf pf coins tables d partition program st ht h pop hpop hpt D hD hlt ho hv1 L regs hregs z hz o g j hg hg2
+  intro tags cf pf coins tables d partition program st ht hi h pop hpop hpt D hD hlt ho hv1 L regs hregs z hz o g j hg hg2
     hj hr
   have s := setupHidden_spec' h
-  obtain ⟨hp, hcr⟩ := parse_untyped ht s.parse
+  obtain ⟨hp, hcr⟩ := parse_untyped ht (s.parseF hi)
   have P := parse_facts hp
   have L0 : FlockSoundness.Layout (flatTwin st) := layout_of (st := flatTwin st) P s.pin rfl rfl s.m s.kLog
   have F0 : Aliased.UnitFacts tags (flatTwin st) := unitFacts_of_parse (st := flatTwin st) hp rfl

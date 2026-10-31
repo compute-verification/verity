@@ -101,7 +101,7 @@ theorem partCols_of_check_at {decode : Claims.Msg → Option Read} {x : Claims.M
     (hin : InCols (partRep ns nv) W vv (copyOf p t htl w o g u)) :
     PartCols S W vv (copyOf p t htl w o g u) (partBase S ns nv) := by
   obtain ⟨L, regs, hz⟩ := layout_of_check h hx ht hpi htl
-  exact partCols_of_satisfies_at L (flat_of_check h hx ht hpi htl) regs hz ho hg hu hc hp hsh hh hpart W vv hw0 hv0 hin
+  exact partCols_of_satisfies_at L (flat_of_check h hx ht hpi htl (recUnit_residuals hp)) regs hz ho hg hu hc hp hsh hh hpart W vv hw0 hv0 hin
 
 /-! ## The levels, under either name -/
 
@@ -154,7 +154,7 @@ theorem openOuts_of_check_any {decode : Claims.Msg → Option Read} {x : Claims.
     OpenOuts (copyOf p t htl w o g u) ms LANES H r a cf rest idx ss := by
   obtain ⟨L, regs, hz⟩ := layout_of_check h hx ht hpi htl
   obtain ⟨_, hvalid, hl⟩ := recOpen_check_ok_any hrec hp
-  exact openOuts_of_net L (flat_of_check h hx ht hpi htl) regs hz ho hg hu hvalid hl ms hms hin
+  exact openOuts_of_net L (flat_of_check h hx ht hpi htl (recUnit_open hp)) regs hz ho hg hu hvalid hl ms hms hin
 
 /-! ## R's opening parts -/
 
@@ -176,7 +176,7 @@ theorem partCols_of_check_opening {decode : Claims.Msg → Option Read} {x : Cla
   obtain ⟨S', ns', nv', hpart', hn⟩ := check_opening hc hp hsh
   rw [hpart] at hpart'
   cases hpart'
-  have hL := laidRows_of_satisfies L (flat_of_check h hx ht hpi htl) regs hz ho hg hu hn
+  have hL := laidRows_of_satisfies L (flat_of_check h hx ht hpi htl (recUnit_opening hp)) regs hz ho hg hu hn
   rw [inWords_unitLaid hn] at hL
   exact laid_part S ns nv (opening_small hpart) _ hL W vv hw0 hv0 hin
 
@@ -217,7 +217,7 @@ theorem sparseCopyOuts_of_check {decode : Claims.Msg → Option Read} {x : Claim
     SparseCopyOuts sh (copyOf p t htl w o g u) wA vA τA := by
   obtain ⟨L, regs, hz⟩ := layout_of_check h hx ht hpi htl
   obtain ⟨hv, -, -, hn⟩ := FlockVBridge.Sparse.check_sparse hc hp
-  have hL := laidRows_of_satisfies L (flat_of_check h hx ht hpi htl) regs hz ho hg hu (l := Flock.RecSparse.unitLaid sh) hn
+  have hL := laidRows_of_satisfies L (flat_of_check h hx ht hpi htl (recUnit_sparse hp)) regs hz ho hg hu (l := Flock.RecSparse.unitLaid sh) hn
   rw [inWords_sparse hn] at hL
   have ht16 : sh.tLog ≤ 16 := by
     simp only [Flock.RecSparse.Shape.valid, Bool.and_eq_true, decide_eq_true_eq] at hv
