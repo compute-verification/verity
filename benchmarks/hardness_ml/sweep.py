@@ -150,6 +150,31 @@ def replan5():
     return cfgs
 
 
+def replan6():
+    """The width series at fixed tokens per non-embedding parameter, extended: w384 at 180M tokens (25.4 per parameter,
+    with w128 at 20M and w256 at 80M), and w512 at 160M (12.7, with w128 at 10M and w256 at 40M). Each with a lr-2e-3
+    baseline ladder around where B lands, B ρ = 0.25 at 2e-3, and the baseline at its width's best lr where that isn't
+    2e-3; A 1/8 at w384."""
+    cfgs = []
+    for size, tokens, threads in (("w384", (45_000_000, 90_000_000, 180_000_000), 8),
+                                  ("w512", (40_000_000, 80_000_000, 160_000_000), 12)):
+        b = {"size": size, "lr": 2e-3, "threads": threads}
+        cfgs += [{**b, "name": f"{size}-base-D{t}", "tokens": t} for t in tokens]
+        cfgs += [{**b, "name": f"{size}-B0.25-D{tokens[-1] // 1_000_000}M", "tokens": tokens[-1], "design": "B",
+                  "rho": 0.25}]
+    w = {"size": "w384", "tokens": 180_000_000, "lr": 3e-3, "threads": 8}
+    cfgs += [{**w, "name": "w384-base-D180M-lr0.003"},
+             {**w, "name": "w384-A8-diag-D180M-lr0.003", "design": "A", "rank_frac": 1 / 8, "diag": True}]
+    s = {"size": "w128", "tokens": 10_000_000, "threads": 2}
+    cfgs += [{**s, "name": "w128-B0.25-D10M", "lr": 2e-3, "design": "B", "rho": 0.25},
+             {**s, "name": "w128-base-D10M-lr0.008", "lr": 8e-3},
+             {**s, "name": "w128-B0.25-D10M-lr0.008", "lr": 8e-3, "design": "B", "rho": 0.25}]
+    m = {"size": "w256", "tokens": 40_000_000, "threads": 2}
+    cfgs += [{**m, "name": "w256-B0.25-D40M", "lr": 2e-3, "design": "B", "rho": 0.25},
+             {**m, "name": "w256-base-D40M-lr0.004", "lr": 4e-3}]
+    return cfgs
+
+
 PRESETS = {
     "bench": bench,
     "replan1": replan1,
@@ -157,6 +182,7 @@ PRESETS = {
     "replan3": replan3,
     "replan4": replan4,
     "replan5": replan5,
+    "replan6": replan6,
     "w256": lambda: grid("w256", 20_000_000),
     "scale1": lambda: lite("w512", 20_000_000, 6) + lite("w128", 20_000_000, 2),
 }
