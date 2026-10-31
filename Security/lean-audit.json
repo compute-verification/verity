@@ -40792,9 +40792,7 @@
   },
   "Flock.RecLinks": {
    "digest": "4b5499f1cb0fbe17f397ff3e5d8998730201be4af9f2936df2ef39d418ba3c54",
-   "definitions": {
-    "Flock.RecLinks.NO_LINKS": "37561eb4ed4260f8e69e8418a4b197ffeb03df97bbe6e8c305cf49300d6a8318"
-   },
+   "definitions": {},
    "guarantees": [
     "Claims.Witness.Recursion.Complete_meets_deployed",
     "Claims.Witness.Recursion.ZKStop_meets",
