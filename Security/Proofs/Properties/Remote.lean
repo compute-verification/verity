@@ -350,6 +350,7 @@ theorem windows_tied {kI kW kS : Case} {cI : NciCheck.Protocol.Commitment}
       some [NciCheck.Protocol.protocol.digest cI] := by
     have hid : (kI.id == NciCheck.Protocol.protocolId) = true := by rw [hI]; decide
     simp [Properties.Composition.named, List.find?, hid, Core.Remote.policyRecord, hcI, Except.toOption]
+    exact ⟨cI, rfl, rfl⟩
   have nW : Properties.Composition.named [kI, kW, kS] (PouwCheck.Period.protocolId, Core.Remote.windowRecords) =
       some ds := by
     have hI' : (kI.id == PouwCheck.Period.protocolId) = false := by rw [hI]; decide
