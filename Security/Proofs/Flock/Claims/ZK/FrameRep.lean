@@ -57,7 +57,7 @@ def coinsOf (p : _root_.Flock.Firewall.Frames.Rep) (st' : _root_.Flock.Firewall.
     | _, o => o
   { p with st := st', coins := p.coins.push cs, toOpening := false, opening }
 
-theorem coinsStep_ok (R : _root_.Flock.Firewall.Frames.Registry) (sid i r : ℕ) (cs : Array F128) {j : ℕ}
+theorem coinsStep_ok (R : _root_.Flock.Firewall.Frames.Sessions) (sid i r : ℕ) (cs : Array F128) {j : ℕ}
     {p : _root_.Flock.Firewall.Frames.Rep} {st' : _root_.Flock.Firewall.Frame.State} (hf : R.find sid i r = some (j, p))
     (hs : _root_.Flock.Firewall.Frame.step p.cfg p.st (.coins (.ok cs)) = (.ok, st')) :
     _root_.Flock.Firewall.Frames.coinsStep R sid i r cs = .ok (coinsOf p st' cs) := by
