@@ -13,7 +13,7 @@ the prover commits before the coins, which the verifier holds the schedule to, a
 the one schedule published after the coins are not such an `a`, since their length can follow the coins.
 
 The code's check is `RemoteAudit.Schedule.check`
-(`verity/core/protocols/remote_bandwidth/lean/RemoteAudit/Schedule.lean`): it refuses a session whose passes' plans
+(`verity/core/protocols/poub/lean/RemoteAudit/Schedule.lean`): it refuses a session whose passes' plans
 are not its published schedule's (`Schedule.plan`) or whose schedule is over the committed cap, and returns the
 schedule's bits.
 `Properties.RemoteAudit.scheduleDeterministic_of_checked` derives `ScheduleDeterministic` from its acceptance, and

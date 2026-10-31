@@ -1,7 +1,7 @@
 # The verifier's auditor host
 
 `host.py` is vy-auditor-1's verifier service: the verifier of proof of useful bandwidth (PoUB)
-(`benchmarks/remote_session/verifier.py`) run only as `auditor`, from a tree infra pinned, one run at a time, behind the
+(`benchmarks/poub_session/verifier.py`) run only as `auditor`, from a tree infra pinned, one run at a time, behind the
 gate `vy-verifier-gate` that every key of the host's `research` is forced to. Its docstring is the reference: who reaches
 the gate, what runs, a run, a bound run, a replay and the store. The host's deployed files are
 `tools/research/src/research/pods/nebius/verifier/`, and infra deploys `host.py` and owns their entries in
@@ -44,7 +44,7 @@ directory there, when the pinned tree has no `models.json`, or when `--model` co
 `<models>` is `verifier.json`'s `models`, default `/var/lib/vy-verifier/models`. Infra provisions one directory per role:
 every file the role's `models.json` entry pins, at the pinned revision, as a root-held regular file (0644, in a root-held
 0755 directory). Copy the files out of a download, never point at an HF cache's snapshot: its files are symlinks into
-the cache's blobs, which `remote_bandwidth.store.check` refuses. Qwen2.5-32B in BF16, role `QWEN25_32B_BF16`, about 66 GB:
+the cache's blobs, which `poub.store.check` refuses. Qwen2.5-32B in BF16, role `QWEN25_32B_BF16`, about 66 GB:
 
 ~~~sh
 hf download Qwen/Qwen2.5-32B --revision 1818d35814b8319459f4bd55ed1ac8709630f003 --local-dir /tmp/q

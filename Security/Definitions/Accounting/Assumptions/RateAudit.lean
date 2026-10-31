@@ -39,7 +39,7 @@ bits costs at least `(2x/b)·c_root`. A completion measured below that, by a fac
 term divided by `θ`.
 
 **The stated instance is the deployed codec's**, Sloth over `p = 2^1024 − 105`, masked, at `k = 3` (`codec.DEFAULT`
-of `verity/core/protocols/remote_bandwidth/codec.py`, as ruled; `k = 2` at the same width the
+of `verity/core/protocols/poub/codec.py`, as ruled; `k = 2` at the same width the
 fallback): `WorkHardness 1024 3 c_root cost`, `x` of a word's 1,024 bits at `(3x/b)·c_root`. The `Prop` reads the codec
 only through `b`, `rounds` and `c_root`, so the mask changes no statement, only what the price rests on. The
 guarantees hold at every `rounds`; `k = 3` is the one they are read at.

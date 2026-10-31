@@ -1,14 +1,14 @@
 """KeyBinding's ideal step against the codec's odd symmetry (KB-5).
 
 KB-1, a page appended after a pass's seed carrying that pass's receipts of other blocks, was once accepted by the
-audit. Its regression test is remote_bandwidth's `test_append_order.py`, where the seed chains every append
+audit. Its regression test is poub's `test_append_order.py`, where the seed chains every append
 received before the pass, so the page is rejected."""
 
 from __future__ import annotations
 
 import hashlib
 
-from verity.core.protocols.remote_bandwidth import codec
+from verity.core.protocols.poub import codec
 
 P512 = codec.Codec(codec.P512, 2, False)
 

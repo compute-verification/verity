@@ -3,7 +3,7 @@ import RemoteAudit
 /-!
 # The remote bandwidth audit's verifier: what its Lean verdicts mean (`RemoteAudit`)
 
-The properties of `RemoteAudit` (`verity/core/protocols/remote_bandwidth/lean/`, the verifier's definition, which
+The properties of `RemoteAudit` (`verity/core/protocols/poub/lean/`, the verifier's definition, which
 `audit.py` is held to by the difftest `remote-audit-difftest`), stated against its functions as they run, for every input of their types. They
 are the code's half of the bridge from the verifier to the stacked audit's game (`Rate.DeployedSession`, and the
 composed statement `Accounting.Guarantees.DeclaredCircuitRequirement` that reads it): each says what an acceptance

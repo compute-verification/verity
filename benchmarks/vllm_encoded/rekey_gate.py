@@ -1,6 +1,6 @@
 """`paged.cu`'s re-key (`pg_rekey`) on one GPU: its gate, then its rate alone and beside a GEMM.
 
-A token-layer kept past the lifetime cap L is re-keyed in its slot (remote_bandwidth's PROTOCOL.md §4): appended again
+A token-layer kept past the lifetime cap L is re-keyed in its slot (poub's PROTOCOL.md §4): appended again
 at a fresh index j' under a fresh coin, so its bound offset moves from b_j to b_j'(c_a'), and its words are decoded
 under the old and encoded under the new in place. For each k of `--ks`, on caches in vLLM's layout ([pages][KV heads]
 [slots][K ‖ V], two layers, store base 77 TLW, pg_wi's word order), every slot under a random offset of its own and
@@ -45,12 +45,12 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path[:0] = [str(HERE.parents[1]), str(HERE.parents[1] / "verity" / "core" / "protocols" / "remote_bandwidth" / "tests")]
+sys.path[:0] = [str(HERE.parents[1]), str(HERE.parents[1] / "verity" / "core" / "protocols" / "poub" / "tests")]
 
 import paged as P  # noqa: E402
 from paged import K, KB  # noqa: E402
-import remote_bandwidth_vectors as RV  # noqa: E402
-from verity.core.protocols.remote_bandwidth import codec as RC  # noqa: E402
+import poub_vectors as RV  # noqa: E402
+from verity.core.protocols.poub import codec as RC  # noqa: E402
 
 BLOCKS, BS, LAYERS = 96, 16, 2
 SB = 77
