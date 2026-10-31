@@ -19,6 +19,9 @@ record, a function of all the run's coins.
 * `PeriodCapacity`, the joint's reading: in a run whose capacity verdict is that acceptance outside a break, the capacity
   audit has its per-run guarantee (`Accounting.Run.CapacitySoundPerRun`), the input `Accounting.Guarantees.JointPerRun`
   takes, and its sure-bound form (`Accounting.Run.CapacitySound`), the one `Accounting.Guarantees.Joint` takes.
+* In the shared coin game (`Verity.Game.prCoin`), `PeriodHeldCoins` over the hm96 coins and uniform streams, and
+  `PeriodHeldSha512` over the memory challenger's SHA-512 derivation of its streams, at `δ + ε_max + ε_prf` under
+  `Hash.Assumptions.Sha512Prf` (`Properties.Pous.PeriodGame`); both are proved from `PeriodHeld`.
 
 **Every prover strategy, one fixed extractor.** Both are stated for every prover strategy `τ` in the ring model
 (`Strategy`): what survives setup is any function of the payload, `C` and the whole primitive, and each round's answer
@@ -34,7 +37,7 @@ server the prover picked:
   coins, `τ`'s state at each round boundary is within the capacity account's memory, the chip and every side channel's
   capacity over a round, and when the memory challenger's signed record has every answer on time (`Audits.OnTime`,
   `AnsweredOnTime`), each round's program stayed within `(D, Q, L)`. It says nothing of what `τ` answers.
-* `Instantiates`, the instantiation (`pous-ring-instantiation`, `prf/sha-512`) in reduction form: on a certified coin
+* `Instantiates`, the instantiation (`pous-ring-instantiation`) in reduction form: on a certified coin
   (`Certified`, which reads the challenger-signed `AnsweredOnTime`: every recorded answer the challenged block of `C*`),
   the challenger's draw is the ring game's and `τ`'s answers in the ring model are the challenged blocks of `C`. It is
   the step from the deployed device to the ring model, so no Lean theorem discharges it.
@@ -196,11 +199,12 @@ def DeviceModel {ι : Type} [Fintype ι] {d : Accounting.Device ι} {α ΩW ΩQ 
     ∀ B : ℕ, (∀ t ∈ (r.win .capacity).ticks, (r.schedule (o.1, o.2, x) t).mem (r.acct .capacity) ≤ B) →
       ∀ e ∈ P.trace τ o x I, e.1.length ≤ B + d.chip + ∑ i, d.cap i * round
 
-/-- `pous-ring-instantiation` and `prf/sha-512`, per run, in reduction form: **in the ring model, the period's strategy
-answers what its certified session recorded.** On every capacity coin where the period is certified (`Certified`, which
-reads the memory challenger's signed `AnsweredOnTime`: every recorded answer is the challenged block of `C*`), the
-challenger's draw is the ring game's (`Drawn`, its streams as good as uniform bytes) and `τ`'s answers in the ring model
-are the challenged blocks of `C`. It carries the challenger's record into the ring model and bounds no strategy's state
+/-- `pous-ring-instantiation`, per run, in reduction form: **in the ring model, the period's strategy answers what its
+certified session recorded.** On every capacity coin where the period is certified (`Certified`, which reads the memory
+challenger's signed `AnsweredOnTime`: every recorded answer is the challenged block of `C*`), the challenger's draw is
+the ring game's (`Drawn`, the code's sampler and coin tree on the coin's own streams, which says nothing of how they are
+distributed: `Hash.Assumptions.Sha512Prf` carries that, in `PeriodHeldSha512`) and `τ`'s answers in the ring model are
+the challenged blocks of `C`. It carries the challenger's record into the ring model and bounds no strategy's state
 or time; it is the step from the deployed device to the ring model, so no Lean theorem discharges it. -/
 def Instantiates {ΩW ΩQ : Type} (P : Audits ΩW ΩQ) (τ : Strategy ΩW ΩQ) : Prop :=
   ∀ (o : ΩW × ΩQ) (x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams),

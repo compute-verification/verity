@@ -1,4 +1,5 @@
 import Properties.Pous.PeriodDeployed
+import Properties.Pous.PeriodGame
 import Mathlib.Analysis.SpecialFunctions.Log.Basic
 
 /-!
@@ -15,8 +16,9 @@ any one under the device model, so `PeriodHeld` bounds each window whatever came
   coins.
 * `PooledShortLog`, **about the deployed check**: under `PeriodHeld`'s premises in every window, at least `M` of the `U`
   windows are accepted with no break while short with probability at most `δ'`, once
-  `M ≥ ((z − 1) · U · p + ln(1/δ')) / ln z` for some `z > 1`. Outside that event at most `M − 1` windows are accepted
-  short, so when every window is accepted with no break, at least `U − M + 1` of them held `S · len` bit-ticks.
+  `M ≥ ((z − 1) · U · p + ln(1/δ')) / ln z` for some `z > 1` (`CountMeets`). Outside that event at most `M − 1`
+  windows are accepted short, so when every window is accepted with no break, at least `U − M + 1` of them held
+  `S · len` bit-ticks.
 * `PooledShortLog_honest`: its premises hold at an honest pooled period, and its count condition at one `δ'`.
 * `PooledShortLog_nontrivial`: a verifier that accepts every window (`acceptAll`) fails its conclusion.
 
@@ -62,16 +64,22 @@ def ShortAccepted {U : ℕ} {ι α ΩW ΩQ : Type} [Fintype α] {d : Fin U → A
   (P u x).Accepts ((o u x).1, (o u x).2, x u) ∧ ¬ (P u x).Break ((o u x).1, (o u x).2, x u) ∧
     ((r u x).held ((o u x).1, (o u x).2, x u) : ℝ) < S * ((r u x).win .capacity).len
 
+/-- **`M` meets the count at `δ'`**: `((z − 1) · U · p + ln(1/δ')) / ln z ≤ M`, with `p = δ + ε_max` the per-window
+bound of `PeriodHeld`: past it, at least `M` of `U` windows accepted short has probability at most `δ'` (`z > 1`). -/
+def CountMeets (U M : ℕ) (δ' z : ℝ) : Prop :=
+  ((z - 1) * U * ((Params.δ : ℝ) + Params.εMax.toReal) + Real.log (1 / δ')) / Real.log z ≤ M
+
 open Classical in
 /-- **PoUS pooled over a monitoring period, about the deployed check.** Given P2's security in the ring model at
 `(D, Q, L)` (`P2RingAuditSecure`): for every monitoring period of `U` windows, each a joint run on a device whose
 capacity coins are the ring game's, with its audit and the other audits' coins, each fixed before its window's capacity
 coins (`FixedBefore`), and a prover strategy, every window's strategy under the device model (`DeviceModel`) and the
 instantiation (`Instantiates`), and every certificate `S` with `S · len + S_chip + ∑ cap_i · round ≤ S₀` in every
-window: at least `M` windows accepted by the verifier's whole decision with no break while short (`ShortAccepted`) has
-probability at most `δ'` over the period's capacity coins, once `M ≥ ((z − 1) · U · p + ln(1/δ')) / ln z` for some
-`z > 1`, `p = δ + ε_max` the per-window bound of `PeriodHeld`. So outside an event of probability `δ'`, when every
-window is accepted with no break, at least `U − M + 1` of the `U` windows certify `S`.
+window (`Fits`): at least `M` windows accepted by the verifier's whole decision with no break while short
+(`ShortAccepted`) has probability at most `δ'` over the period's capacity coins, once
+`M ≥ ((z − 1) · U · p + ln(1/δ')) / ln z` for some `z > 1` (`CountMeets`), `p = δ + ε_max` the per-window bound of
+`PeriodHeld`. So outside an event of probability `δ'`, when every window is accepted with no break, at least
+`U − M + 1` of the `U` windows certify `S`.
 
 `δ'` is `δ_PoUS`, the failure probability of PoUS over the monitoring period. It is a public deployment parameter and a
 free parameter of this statement, which holds at every `δ' > 0` (a smaller `δ'` asks a larger `M`): no component
@@ -87,10 +95,8 @@ def PooledShortLog : Prop :=
       (round : ℕ) (S : ℝ),
       FixedBefore r P o →
         (∀ u x, DeviceModel (r u x) (P u x) (τ u x) D Q L round) → (∀ u x, Instantiates (P u x) (τ u x)) →
-          (∀ u x, S * ((r u x).win .capacity).len + (d u).chip + ((∑ i, (d u).cap i * round : ℕ) : ℝ) ≤
-            Pous.EndToEnd.S) →
-            ∀ (δ' z : ℝ) (M : ℕ), 1 < z → 0 < δ' →
-              ((z - 1) * U * ((Params.δ : ℝ) + Params.εMax.toReal) + Real.log (1 / δ')) / Real.log z ≤ M →
+          (∀ u x, Fits (d u) ((r u x).win .capacity).len round S Pous.EndToEnd.S) →
+            ∀ (δ' z : ℝ) (M : ℕ), 1 < z → 0 < δ' → CountMeets U M δ' z →
                 Pouw.pr (fun x : Fin U → (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams =>
                     M ≤ (Finset.univ.filter fun u => ShortAccepted r P o S u x).card) ≤ δ'
 
@@ -118,17 +124,15 @@ the honest period (`honestRun` on `honestDevice`, one tick a round) run by the h
 keeps all of `C` and answers by lookup) against `sidAudit`, the other audits' coins fixed: no window reads any capacity
 coin, so each is fixed before its own (`FixedBefore`); the device model holds at the deployed budget and the
 instantiation holds (`DeviceModel`, `Instantiates`); the certificate `HONEST_S` fits the state bound beside the
-device's on-chip state and side channel; and the count `M = 210` meets the condition at `z = 2` and `δ' = 2^-64`, one
-value of the free parameter: `(10,080 · (1% + 2^-128) + 64 · ln 2) / ln 2 ≈ 209.4`. `P2RingAuditSecure` is an open
-conjecture, not a fact of the instance. -/
+device's on-chip state and side channel (`Fits`); and the count `M = 210` meets the condition at `z = 2` and
+`δ' = 2^-64` (`CountMeets`), one value of the free parameter: `(10,080 · (1% + 2^-128) + 64 · ln 2) / ln 2 ≈ 209.4`.
+`P2RingAuditSecure` is an open conjecture, not a fact of the instance. -/
 def PooledShortLog_honest : Prop :=
   FixedBefore (U := 10080) (d := fun _ => honestDevice) (fun _ _ => honestRun) (fun _ _ => sidAudit)
       (fun _ _ => ((), ())) ∧
     DeviceModel honestRun sidAudit honestStrategy RING_D RING_Q RING_L 1 ∧ Instantiates sidAudit honestStrategy ∧
-    (HONEST_S : ℝ) * (honestRun.win .capacity).len + honestDevice.chip +
-        ((∑ i, honestDevice.cap i * 1 : ℕ) : ℝ) ≤ Pous.EndToEnd.S ∧
-    ((2 - 1) * ((10080 : ℕ) : ℝ) * ((Params.δ : ℝ) + Params.εMax.toReal) + Real.log (1 / (2⁻¹ : ℝ) ^ 64)) /
-        Real.log 2 ≤ ((210 : ℕ) : ℝ)
+    Fits honestDevice (honestRun.win .capacity).len 1 HONEST_S Pous.EndToEnd.S ∧
+    CountMeets 10080 210 ((2⁻¹ : ℝ) ^ 64) 2
 
 open Classical in
 /-- **The nontrivial lemma of `PooledShortLog`.** At `10,080` empty periods (`emptyRun`: the capacity account holds

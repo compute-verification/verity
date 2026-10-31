@@ -3543,6 +3543,18 @@
    "imports": ["Mathlib", "Definitions.Hash.Tree", "Definitions.Hash.Hm96", "Definitions.Pouw.Lead.Gap"],
    "except": [],
    "why": "the lead's deployed commitment and coin stream, definitions only: range-indexed frame-v3 trees under hm96 leaves (Definitions.Hash.Tree, Definitions.Hash.Hm96) over the lead's layout, model and chunks (Definitions.Pouw.Lead.Gap)"
+  },
+  "Definitions.Hash.Assumptions.Prf": {
+   "imports": [
+    "Mathlib",
+    "Definitions.Core.Digest",
+    "Definitions.Core.Game",
+    "Definitions.Hash",
+    "Definitions.Hash.Assumptions.Prf"
+   ],
+   "except": [],
+   "why": "the hash area's named assumptions (Sha512Prf, prf/sha-512) are stated over its messages and digests and core's coin probability (Definitions.Core.Game's prCoin), never over a proof",
+   "sealed": true
   }
  },
  "reads_exempt": {

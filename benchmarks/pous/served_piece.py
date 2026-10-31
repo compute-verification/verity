@@ -33,8 +33,9 @@ DIR``).
    never the report's (a report of a session under any other id is a reject), and its answer on that case's bytes
    (`served_case.pous_answer`, `period.answer`): the tie, the run's
    check under the challenger key that ``--trusted-sha512`` pins (a session signed under any other is refused), and what
-   an accepted run certifies (`period.certify`): at `ROUNDS` challenges, ``⌊ρ·|C|⌋`` bits at ``2^-20``
-   (`p2.wide320_certificate`); at 105, at ``1% + 2^-128``. The check takes about 2.3 minutes at the registered point at
+   an accepted run certifies (`period.certify`): at `ROUNDS` challenges, ``⌊ρ·|C|⌋`` bits at ``2^-20 + 2^-127``
+   (`p2.wide320_certificate`: the window's ``2^-20`` and `Sha512Prf`'s ``ε_prf`` at the memory challenger's SHA-512
+   indices); at 105, at ``1% + 2^-128``. The check takes about 2.3 minutes at the registered point at
    105 challenges or 320: the tie is its cost, not the rounds.
 5. **Zero knowledge**: the answer's commitment is a hiding one, one ``hm96-sha512/row/v2`` row in a ``frame-v3-sha512``
    tree (`verity.ml.commitments.advice`) holding the run's commitment (the SHA-512 of what setup published) under
@@ -123,7 +124,7 @@ BW_PARTY = ("ssh -i ~/.ssh/vy-auditor2-bw -o IdentitiesOnly=yes -o BatchMode=yes
 BW_PARTY_HOST = "10.96.0.36"
 BW_MINUTES = 10
 BINDING_TAG = b"verity/pous/served-window/v1"
-#: the period's challenges: the 320-read window's, at which an accepted run certifies at `2^-20`
+#: the period's challenges: the 320-read window's, at which an accepted run certifies at `2^-20 + 2^-127`
 ROUNDS = P2.CERT_K_WIDE320
 DTYPES = {"I8": torch.int8, "F32": torch.float32, "BF16": torch.bfloat16, "F16": torch.float16}
 SIZES = {"I8": 1, "U8": 1, "F16": 2, "BF16": 2, "F32": 4, "I32": 4, "F64": 8, "I64": 8}

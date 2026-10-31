@@ -19,7 +19,8 @@ at `eps = δ + 2^eps_log2` = 1/100 + 2^-128 when a certificate covers the point 
 `run.DEPLOYED`, a 1 GiB `C*`, else P2's proved family `p2.family_certificate`, any `2^8` to `2^23` blocks at the
 registered width and prime, else the per-period guarantee `p2.wide_certificate`, `periodHeldAt`, to `2^27` blocks, which
 holds Demo B's `C*` of 1038 segments, 1,060,008,348,186 bits), else 0 and 0 with the profile naming each gap. At
-`k ≥ 320` challenges and `2^19` to `2^27` blocks it is `2^-20` (`p2.wide320_certificate`, `ObligationWide320`).
+`k ≥ 320` challenges and `2^19` to `2^27` blocks it is `2^-20 + 2^-127` (`p2.wide320_certificate`: `ObligationWide320`
+at uniform indices, and `ε_prf` at the memory challenger's SHA-512 indices, `Hash.Assumptions.Sha512Prf`).
 `point_for` gives the smallest such point holding a store, 256 blocks (526 KB) at least; the small point
 (`point_for(size, W, C0)`, 1,024-bit blocks) certifies nothing.
 

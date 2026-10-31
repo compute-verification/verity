@@ -165,6 +165,7 @@ theorem pooledShort_log_honest : PooledShortLog_honest := by
   obtain ⟨hdev, -, hS, -, -⟩ := periodHeldHonest
   refine ⟨⟨fun _ _ _ _ => rfl, fun _ _ _ _ => rfl, fun _ _ _ _ => rfl⟩, (hdev sidAudit sidAudit_sid).1,
     (hdev sidAudit sidAudit_sid).2, hS, ?_⟩
+  unfold CountMeets
   have hlog : Real.log (1 / (2⁻¹ : ℝ) ^ 64) = 64 * Real.log 2 := by
     rw [one_div, inv_pow, inv_inv, Real.log_pow]
     norm_num
