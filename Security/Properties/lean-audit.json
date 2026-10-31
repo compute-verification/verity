@@ -327,28 +327,36 @@
    "digest": "7a9fc4b287459b57492b22f04af9961b0fea507e9e20f7d07ece852e1050d80b"
   },
   "Verity.Vocab.BandwidthAuditSound": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "digest": "c95bfe02effacf053a9585f0acb0ab353f98eeb5651de3b9d85cf6ce7995aedc"
   },
   "Verity.Vocab.InferenceOnlySound": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "digest": "17ab737f5a566f68df77a0c6ef91e28ab70fe325e5aa76663f784535a99206b5"
   },
   "Verity.Vocab.NetworkCertifierSound": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "digest": "5f6f0e28c3d227e17c977a8e9470dcd3131f0719f67a8b665a92c402ecdeeb2e"
   },
   "Verity.Vocab.PousSound": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "digest": "2d0ee7043be3fa3a99503039cef1756e3c3558dd814faa5970bcbd738e037e69"
   },
   "Verity.Vocab.PouwSound": {
-   "owner": "@compute-accounting"
+   "owner": "@compute-accounting",
+   "digest": "11518fbb13cc95c1ccc10d6ab73a3ab8f341a919046c499e18f757de475d1670"
   },
   "Verity.Vocab.SampledProofsSound": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "digest": "c0c0fd13ed91538fbbb0bd8b231e1e0b28c9b1657924dc4272f4739c9c9a55f6"
   },
   "Verity.Vocab.Target": {
-   "owner": "@soundness"
+   "owner": "@soundness",
+   "digest": "548f5118cb15c0be50546298ea855af1004bbfd85138c2afe31efcaeb602b1cd"
   },
   "Verity.Vocab.WipeSound": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "digest": "8f521d01c94735a34b39b53e869845d8e29035ef05968ef7b0e56349a19d1937"
   }
  },
  "meaning": [
