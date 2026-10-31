@@ -124,11 +124,23 @@ def replan3():
     return cfgs
 
 
+def replan4():
+    """The baseline's lr one step past each width's best so far (4e-3 at w128 and w256, 2e-3 at w512), so the best-lr
+    penalty compares B with a baseline whose lr optimum is bracketed; and B ρ = 0.25 one step past its own highest."""
+    cfgs = []
+    for size, base_lr, b_lr, threads in (("w128", 8e-3, 8e-3, 2), ("w256", 8e-3, 4e-3, 2), ("w512", 4e-3, 4e-3, 4)):
+        b = {"size": size, "tokens": 20_000_000, "threads": threads}
+        cfgs += [{**b, "name": f"{size}-base-lr{base_lr:g}", "lr": base_lr},
+                 {**b, "name": f"{size}-B0.25-lr{b_lr:g}", "lr": b_lr, "design": "B", "rho": 0.25}]
+    return cfgs
+
+
 PRESETS = {
     "bench": bench,
     "replan1": replan1,
     "replan2": replan2,
     "replan3": replan3,
+    "replan4": replan4,
     "w256": lambda: grid("w256", 20_000_000),
     "scale1": lambda: lite("w512", 20_000_000, 6) + lite("w128", 20_000_000, 2),
 }
