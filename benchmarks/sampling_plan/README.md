@@ -75,7 +75,7 @@ uv run python benchmarks/sampling_plan/demo_a.py --out DIR [--spans NAME ...] [-
 ```
 
 - `cpu_budget.py`: the block's draw sized to a CPU proving budget. It reads `h200.py`'s `plan.json` (its
-  templates, their n, S and proved ANDs), prices each template's statements (up to 8 drawn units each) from measured
+  templates, their n, S, rows and ANDs), prices each template's statements (up to 8 drawn units each) from measured
   firewalled Flock `--zk` sessions on the Genoa proofs slots, and finds the least share whose statements fit
   `--slots` x `--hours`. It writes the per-template k and cost and the certified units per window and per period, pooled
   and each block, at δ = 1% and 1e-6 (`cpu-budget.json`, `cpu-budget.md`).
