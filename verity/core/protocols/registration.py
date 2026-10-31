@@ -34,8 +34,6 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any
 
-from verity.core.wire import canonical
-
 HARDWARE = "verity/registration/hardware/v1"
 INFORMATION = "verity/registration/information/v1"
 CARD = "verity/registration/card/v1"
@@ -83,11 +81,9 @@ def _strings(j: Any) -> Iterator[str]:
 
 
 def canon(obj: Any) -> bytes:
-    """`obj`'s canonical JSON as the Lean's `Flock.canon` writes it: `canonical`'s bytes, and past ASCII, where
-    `canonical` raises, its strings in UTF-8, so a log or parameters outside ASCII reach `ascii`'s refusal by name."""
-    if all(s.isascii() for s in _strings(obj)):
-        return canonical(obj)
-    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    """`obj`'s canonical JSON as the Lean's `Flock.canon` writes it: every character outside printable ASCII escaped, so
+    a log or parameters outside ASCII decode and reach `ascii`'s refusal by name."""
+    return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False).encode()
 
 
 def tagged(tag: str, obj: Any) -> str:
@@ -306,9 +302,9 @@ def item_of(j: Any) -> dict[str, Any]:
 
 
 def ascii(j: Any, what: str) -> None:
-    """Registration is ASCII-only: `j`'s canonical JSON holds no other character, so its digest is the same however a
-    canonical JSON escapes the rest. Its strings, keys included, are read before any canonical JSON is taken, since
-    `canonical` raises on what this refuses by name."""
+    """Registration is ASCII-only: `j`'s strings, keys included, hold no other character, so its digest is the same
+    however a canonical JSON escapes the rest. The strings are read themselves, since `canon` escapes what this
+    refuses."""
     if not all(s.isascii() for s in _strings(j)):
         raise Malformed(f"ascii: {what} holds a character outside ASCII")
 

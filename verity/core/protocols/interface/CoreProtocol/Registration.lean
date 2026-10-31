@@ -297,10 +297,10 @@ private def keysOf : Json → Option (List String)
 def exactly (j : Json) (ks : List String) (what : String) : V Unit :=
   if keysOf j == some ks then pure () else throw s!"{what}: the keys must be [{", ".intercalate ks}]"
 
-/-- Registration is ASCII-only: `j`'s canonical JSON holds no other character, so its digest is the same however a
-canonical JSON escapes the rest. -/
+/-- Registration is ASCII-only: `j`'s strings, keys included, hold no other character (read in `Flock.canonUtf8`,
+since `Flock.canon` escapes them), so its digest is the same however a canonical JSON escapes the rest. -/
 def ascii (j : Json) (what : String) : V Unit :=
-  if ((Flock.canon j).toOption.getD "").all (fun (c : Char) => c.toNat < 128) then pure ()
+  if ((Flock.canonUtf8 j).toOption.getD "").all (fun (c : Char) => c.toNat < 128) then pure ()
   else throw s!"ascii: {what} holds a character outside ASCII"
 
 def hex64 (j : Json) (what : String) : V String := do
