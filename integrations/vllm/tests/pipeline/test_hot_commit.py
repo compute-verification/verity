@@ -14,7 +14,7 @@ import pytest
 
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import hot as hc
-from verity_vllm.pipeline import research_tools, source_identity
+from verity_vllm.pipeline import source_identity
 from verity_vllm.pipeline import timeline as tlm
 
 CORE = Path("verity")
@@ -29,7 +29,7 @@ def _tree(tmp_path: Path) -> Path:
     (repo / ".gitignore").write_text("__pycache__/\n*.pyc\nout/\n")
     (repo / CORE / "__init__.py").write_text("")
     (repo / CORE / "ir" / "codec.py").write_text("def _spec_id(fn): return fn\n")
-    for d in research_tools.CODE_DIRS:
+    for d in source_identity.core_dirs(source_identity.TREE):
         (repo / d).mkdir(parents=True, exist_ok=True)
         (repo / d / "__init__.py").touch()
     (repo / "tools" / "research").mkdir(parents=True)

@@ -11,7 +11,6 @@ from pathlib import Path
 
 import pytest
 
-from research.store.local import LocalStore
 from verity.ml.circuits import encode_program, program_digest
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.evaluation.reference import evaluate
@@ -85,6 +84,35 @@ def _capped(doc: dict) -> dict:
     return {**doc, "sampling": {**doc["sampling"], "ignore_eos": True}}
 
 
+class Store:
+    """The test's view of the store: what `circuit_db` reads of it, through the same CLI (`research data`).  The one write the CLI
+    has no verb for, a capture run's hand-made attempt, goes where the store keeps attempts (`attempts/<run id>.json`)."""
+
+    def __init__(self, root: Path):
+        self.root = root
+
+    def put_artifact(self, kind: str, meta: dict, *, tree: Path) -> str:
+        return circuit_db.ART.findall(circuit_db.data("put", "--kind", kind, "--meta", json.dumps(meta), "--tree", str(tree)))[-1]
+
+    def put_attempt(self, doc: dict) -> None:
+        _w(self.root / "attempts" / f"{doc['id']}.json", doc)
+
+    def get_manifest(self, art: str) -> dict:
+        return json.loads(circuit_db.data("show", art, "--json"))["manifest"]
+
+    def get_attempt(self, run: str) -> dict:
+        return json.loads(circuit_db.data("show", run, "--json"))
+
+    def labels(self, art: str, key: str) -> list[str]:
+        return [lb["value"] for lb in json.loads(circuit_db.data("labels", art, "--key", key, "--json"))]
+
+    def where(self, art: str) -> list[dict]:
+        return json.loads(circuit_db.data("where", art, "--json"))
+
+    def artifact_ids(self) -> list[str]:
+        return sorted("art:" + p.stem for p in (self.root / "manifests").glob("*.json"))
+
+
 @pytest.fixture
 def store(tmp_path, monkeypatch):
     """The store the research CLI selects: a local root with a directory as its remote; no capture map but the test's; and ROW's
@@ -97,7 +125,7 @@ def store(tmp_path, monkeypatch):
     monkeypatch.setattr(CM, "MAPS", tmp_path / "maps")
     _w(tmp_path / "workloads" / f"{ROW}.json", _capped(json.loads((WORKLOADS / f"{ROW}.json").read_text())))
     monkeypatch.setattr(CR, "WORKLOADS", tmp_path / "workloads")
-    return LocalStore(tmp_path / "store", config_path=tmp_path / "store.toml")
+    return Store(tmp_path / "store")
 
 
 def _map(tmp_path: Path) -> None:
@@ -109,7 +137,7 @@ def _map(tmp_path: Path) -> None:
                                                             "captures": ["glm53_fa3_prefill_capture"]}}})
 
 
-def _build_art(st: LocalStore, d: Path, run: Path) -> str:
+def _build_art(st: Store, d: Path, run: Path) -> str:
     doc = ro.build_outputs(d, ROW, "build", run, {})
     build = next(e for e in doc["outputs"] if e["name"] == "build")
     return st.put_artifact(build["kind"], {"row": ROW}, tree=run / build["tree"])
@@ -118,7 +146,7 @@ def _build_art(st: LocalStore, d: Path, run: Path) -> str:
 _runs = iter(range(1 << 16))
 
 
-def _capture_run(st: LocalStore, tmp_path: Path, prop: str = PROP, ok: bool = True, tamper: bool = False) -> str:
+def _capture_run(st: Store, tmp_path: Path, prop: str = PROP, ok: bool = True, tamper: bool = False) -> str:
     """A capture run's attempt whose run record holds `prop`'s property record under out/properties/."""
     rid = f"r20261016-234133-{next(_runs):04x}"
     doc = seal({"schema": REGISTRY[prop].schema, "words": 7}, ok)
@@ -152,10 +180,10 @@ def test_a_published_row_loads_back_by_id(tmp_path, store):
                                      "manifest_digest": "mm", "programs": epoch.build_programs(d)}}
     assert sorted(circuit_db.index()[ROW]["programs"]) == ["0", "1"]
     m = store.get_manifest(art)
-    assert m.kind == "vllm-config-record/v1" and m.meta == {"row": ROW, "outcome": "PASS", "world": 2, "tree": "cursor/x@1b53f685a",
+    assert m["kind"] == "vllm-config-record/v1" and m["meta"] == {"row": ROW, "outcome": "PASS", "world": 2, "tree": "cursor/x@1b53f685a",
                                                             "tier": "fast"}
-    assert m.refs == {"build": build, "manifest": ev["manifest"], "match": ev["match"], "commit": ev["commit"], PROP: cap[PROP]}
-    assert [lb.value for lb in store.labels(art, "row")] == [ROW]
+    assert m["refs"] == {"build": build, "manifest": ev["manifest"], "match": ev["match"], "commit": ev["commit"], PROP: cap[PROP]}
+    assert store.labels(art, "row") == [ROW]
     assert any(w.get("location") == "remote" and w.get("present") for w in store.where(art))
 
     rec = circuit_db.record(ROW)
@@ -264,8 +292,8 @@ def test_a_capture_run_s_records_are_preserved_and_one_that_does_not_hold_or_rec
     cap = circuit_db.capture(run)
     m = store.get_manifest(cap[PROP])
     rr = store.get_attempt(run)["outputs"]["run_record"]
-    assert m.kind == circuit_db.PROPERTY_KIND and m.refs == {"run": rr}
-    assert m.meta == {"property": PROP, "schema": REGISTRY[PROP].schema, "digest": m.meta["digest"], "ok": True,
+    assert m["kind"] == circuit_db.PROPERTY_KIND and m["refs"] == {"run": rr}
+    assert m["meta"] == {"property": PROP, "schema": REGISTRY[PROP].schema, "digest": m["meta"]["digest"], "ok": True,
                       "path": f"out/properties/{PROP}.json", "run_id": run, "commit": "850fb2f6f" + "0" * 31}
     assert circuit_db.capture(run, [PROP]) == cap, "the same record preserved again is the same artifact"
     with pytest.raises(UsageError, match="does not hold"):
@@ -334,7 +362,7 @@ def test_publish_cites_each_needed_property_s_newest_holding_capture_when_asked(
     assert circuit_db.newest_capture(PROP) == new != old and circuit_db.newest_capture("glm53_dsa_capture") is None
     art = circuit_db.publish(d, ROW, evidence=circuit_db.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", tier="fast",
                           summary=_served(d), newest=True)
-    assert circuit_db.record(ROW)["evidence"]["conformance"] == {PROP: new} and store.get_manifest(art).refs[PROP] == new
+    assert circuit_db.record(ROW)["evidence"]["conformance"] == {PROP: new} and store.get_manifest(art)["refs"][PROP] == new
     circuit_db.publish(d, ROW, evidence=circuit_db.evidence_of(build, conformance={PROP: old}), tree="cursor/x@1b53f685a", by="circuits",
                     summary=_served(d), newest=True)
     assert circuit_db.record(ROW)["evidence"]["conformance"] == {PROP: old}
@@ -344,8 +372,7 @@ def test_newest_captures_with_no_store_index_refuse_a_property_the_catalog_lacks
     """A `research run` job's store has no index, so `research data select` there reads only its own catalog: a property missing from
     it is refused naming the missing index and --conformance, never read as no capture.  A gap leaves nothing to resolve, and with an
     index the miss is a property left silent."""
-    from research.store import bucket_index as BI
-    monkeypatch.delenv(BI.READER_ENV, raising=False)
+    monkeypatch.delenv("STORE_PRIVATE_READER_URL", raising=False)
     _map(tmp_path)
     d = _row_dir(tmp_path)
     build = _build_art(store, d, tmp_path / "run")
@@ -355,7 +382,7 @@ def test_newest_captures_with_no_store_index_refuse_a_property_the_catalog_lacks
         circuit_db.publish(d, ROW, evidence=circuit_db.evidence_of(build), **kw)
     assert circuit_db.index() == {}
     circuit_db.publish(d, ROW, evidence=circuit_db.evidence_of(build, gaps={PROP: "no capture of the tree's harness"}), **kw)
-    BI.SqliteIndex(BI.default_path(store.root)).close()
+    circuit_db.data("index")
     assert circuit_db.selected_from("--kind", circuit_db.PROPERTY_KIND) == "the index"
     with pytest.raises(UsageError, match="which the record neither cites nor names a gap"):
         circuit_db.publish(d, ROW, evidence=circuit_db.evidence_of(build), **kw)
