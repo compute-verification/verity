@@ -440,8 +440,8 @@ class InPlaceBackend(StoreBackend):
         return {"passes": len(at), "ms": (at[-1] - at[0]) / 1e6 if at else 0.0}
 
     def calibrate(self) -> dict:
-        """`device.Device.calibrate`'s report from this store read in place, before the session: the bare read of every
-        registered block where it is (`rs_mapped_read`, the best of 6 after the first), then ``calibration_passes``
+        """`device.GpuBackend.calibrate`'s report from this store read in place, before the session: the bare read of
+        every registered block where it is (`rs_mapped_read`, the best of 6 after the first), then ``calibration_passes``
         passes over the whole store chained as a session's (the first ``calibration_warm`` untimed): each root's
         interval from the one before (the allowance's pass) and each root's gap to its send, at the percentiles the
         verifier's allowance reads (`device.percentiles`).  An engine step in lockstep, the appends' round trips and
