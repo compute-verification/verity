@@ -96,7 +96,7 @@ def _in_definition(desc: Mapping[str, Any], fid: str, kind: str, rest: str) -> s
 
 
 @dataclass
-class Verdict:
+class Resolution:
     ok: bool
     errors: list[dict] = field(default_factory=list)     # malformed or unresolvable entries
     stale: list[dict] = field(default_factory=list)      # a guard (callee, digest) no longer matches
@@ -158,11 +158,11 @@ def _entry_errors(e: Mapping[str, Any], i: int) -> list[dict]:
     return out
 
 
-def validate(metadata: Mapping[str, Any], desc: Mapping[str, Any], program_digest: str | None = None) -> Verdict:
+def validate(metadata: Mapping[str, Any], desc: Mapping[str, Any], program_digest: str | None = None) -> Resolution:
     """The metadata against one program's descriptor: every entry well formed, every key resolved (or absent: a Definition the
     program does not have), groups closed, each (key, field) set once, the guards current.  ``program_digest`` enables the checks of
     ``call`` keys naming this program."""
-    v = Verdict(True)
+    v = Resolution(True)
     if not isinstance(metadata, Mapping) or set(metadata) != {"format", "entries"} or metadata.get("format") != FORMAT \
             or not isinstance(metadata.get("entries"), list):
         v.errors.append({"code": "format"})
@@ -235,4 +235,4 @@ def merge(*layers: Mapping[str, Any]) -> dict:
     return {"format": FORMAT, "entries": list(by_key.values())}
 
 
-__all__ = ["FORMAT", "Verdict", "definition_digest", "validate", "attach", "merge"]
+__all__ = ["FORMAT", "Resolution", "definition_digest", "validate", "attach", "merge"]
