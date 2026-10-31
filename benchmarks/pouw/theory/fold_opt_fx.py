@@ -1,9 +1,9 @@
-"""FOLD-OPT for the sm_120 design's fx chains, mechanically: no program computes the fx1 (resp. fx2) receipt update for a word in
+"""`FoldOpt` for the sm_120 design's fx chains: no program computes the fx1 (resp. fx2) receipt update for a word in
 fewer than 4 (resp. 5) issue slots, nor more cheaply on the design's binding row. Builds on `fold_opt.py`, which made the
 plain duo fold a mechanical fact (>= 3 instructions a word).
 
 The sm_120 design is H1 + fx1: one keyed IMAD a word chained in front
-of duo, so f = 4. The chain is egemm.cu's `fx_chain` (commit b2e177f63): a word w gets n ops, each `t = t * key_mul(1,c)`
+of duo, so f = 4. The chain is egemm.cu's `fx_chain`: a word w gets n ops, each `t = t * key_mul(1,c)`
 (IMAD, key_mul is odd) or `t = t ^ key_xor(1,c)` (LOP3), alternating and **ending on an IMAD** (op I fires a multiply iff
 (n - I) is odd, and the last op I = n - 1 has n - I = 1), after which duo folds the result d' = fx_chain(w):
 
@@ -13,9 +13,9 @@ of duo, so f = 4. The chain is egemm.cu's `fx_chain` (commit b2e177f63): a word 
     z' = rotl(u, r) + y'      # one LEA.HI
 
 so fx1 is 4 instructions a word, fx2 is 5. The keys and the a_i are per-call constants (the prover knows them before the
-run), so the search gives the cheater all of them. FOLD-OPT also has a
-price form: ε_mand = [mu_f*N_w*phi* + mu_x*chi*]/B(H) is 0 under FOLD-OPT, where phi* = min over the fold route menu of
-the per-word price at a certificate pi, and the assumption is mu_f = 0 (honest's fold phi_H is optimal). On a design that
+run), so the search gives the cheater all of them. `FoldOpt` also has a price form:
+ε_mand = [mu_f*N_w*phi* + mu_x*chi*]/B(H) is 0 under `FoldOpt`, where phi* = min over the fold route menu of the
+per-word price at a certificate pi, and the assumption is mu_f = 0 (honest's fold phi_H is optimal). On a design that
 binds a joint-issue row it must hold **per facet**: honest's fold has no cheaper IMAD / uniform / b1-MMA form on r*.
 
 The result (checks below):
@@ -48,11 +48,11 @@ The result (checks below):
   (# instructions) * b, honest binds at 4*b (fx1) / 5*b (fx2), and no route lowers it: fewer ops is excluded above, the
   IMAD-form of an ALU op saves nothing on a joint row (it would only help on a pipe-bound row, which the design avoids by
   binding a joint row), the uniform route is priced on the joint row and the work is per-lane, and the XOR/multiply/rotate
-  have no tensor form. So phi* = phi_H and **mu_f = 0**: FOLD-OPT(fx1), FOLD-OPT(fx2) hold in the price form.
+  have no tensor form. So phi* = phi_H and **mu_f = 0**: `FoldOpt` holds at fx1 and at fx2 in the price form.
 - **Bijection and X1:** key_mul is odd, so fx_chain is a bijection of the word (the fold binds it as duo does), and
   f = 4 (fx1), 5 (fx2) >= 2.53 (X1).
 
-Verdict: FOLD-OPT(fx1) and FOLD-OPT(fx2) are validated, in the count form (>= f issue slots a word) and the price form
+Verdict: `FoldOpt` at fx1 and at fx2 is validated, in the count form (>= f issue slots a word) and the price form
 (mu_f = 0 on the binding joint-issue row). No counterexample: fx1 is the cheapest keyed chain reaching f = 4 that provably
 does not collapse, because it ends on a multiply. What is mechanical: the one-instruction checks at 32 bits, and the
 multi-instruction searches at width 4. Reducing every word mod 2^4 commutes with LOP3, IADD3, IMAD and LEA, and y' uses
@@ -831,8 +831,8 @@ def main() -> int:
 
     # --- per facet (price form): on the binding joint-issue row every vector class prices alike, so phi* = phi_H ---
     # a joint-issue row prices MMA at a_r and every vector class at b_r; a pipe row (A) prices its own class high and the
-    # IMAD form of an ALU op low -- that is the route FOLD-OPT-per-facet must exclude, and the design avoids it by binding
-    # a joint row.
+    # IMAD form of an ALU op low -- that is the route `FoldOpt` per facet must exclude, and the design avoids it by
+    # binding a joint row.
     ji_row = {"MMA": 7.8, "ALU": 1.0, "IMAD": 1.0, "LOP3": 1.0, "SHF": 1.0, "LEA": 1.0, "UNI": 1.0, "TENSOR": 7.8}
     a_pipe = {"MMA": 0.0, "ALU": 2.0, "IMAD": 0.5, "LOP3": 2.0, "SHF": 2.0, "LEA": 2.0, "UNI": 1.0, "TENSOR": 0.0}
     fx1_fold = ["IMAD", "LOP3", "IMAD", "LEA"]   # d'=w*m1; u=y^d'^kx; y'=u*a+z; z'=rotl(u,r)+y'
