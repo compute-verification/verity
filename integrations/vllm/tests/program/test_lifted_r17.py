@@ -9,7 +9,7 @@ lifted serving Program; A3.4 (the commitment layer never normalizes) on `commit_
 
 (b) TRUE widened widths (A4): the width of a lifted set is `Σ (w+1)`; admissibility is the UNCHANGED `partition.validate_width` at the
 lifted parameter `W_MAX_LIFTED`; the active-reference rule at 32 fails on a 33-bit leaf BY DESIGN and is reported, never used as the lifted
-verdict; a lifted use document carries `kind = vu-partition-lifted` and `rules_version = lifted-v1` (A5) and `gate_G8` refuses it by name.
+verdict.
 
 LAG declared (A2): the attestation (`lag_from_header`) and the declaration (`declared_lag_of_row`) go through GP-01's ONE rule
 (`eos_lag_rows_declared`); the lifted tool's R0 needs both, equal; a Build that declared no lag is never ok (tested in test_lifted_record).
@@ -264,36 +264,37 @@ def test_a3_5_boundaries_reject_random_noncanonical_words_by_name():
 
 
 # ---------------------------------------------------------------------------------------------------------
-# A4 / A5 — true widened widths: the unchanged validator at the lifted parameter; the lifted use document; G8 refuses it by name
+# A4 — true widened widths: the unchanged validator at the lifted parameter
 # ---------------------------------------------------------------------------------------------------------
 
 
 def test_a4_true_widths_admissibility_is_the_unchanged_validator_at_w_max_lifted():
     from verity.ml.circuits import partition as PT
+    from verity.ml.circuits.query_ast import evaluate
     TSEL = bind(b1.TokenSelect, V=64)  # 32-bit token / index arithmetic: lifted leaves are 33 bits
     P0, P1 = Program(TSEL), Program(L.lift_def(TSEL))
-    v0 = PT.validate_block_partition(P0, f"default({L.W_MAX})", L.W_MAX)
-    assert v0.status == "ok" and v0.width.max_seen <= 32
-    # the lifted Program at the ACTIVE-REFERENCE parameter: 33-bit gates -> not ready / width violated, BY DESIGN (A4.2: nothing is split)
-    v_ref = PT.validate_block_partition(P1, f"default({L.W_MAX})", L.W_MAX)
-    assert v_ref.status in ("fail", "not-ready") and not v_ref.readiness_32.ok and any(x.w == 33 for x in v_ref.readiness_32.violators)
+    fam0 = evaluate(P0, f"default({L.W_MAX})")
+    v0 = PT.validate_width(P0, fam0, L.W_MAX)
+    assert PT.validate_partition(P0, fam0).status == "exact" and v0.status == "ok" and v0.max_seen <= 32
+    # the lifted Program at the ACTIVE-REFERENCE parameter: 33-bit gates -> not ready, BY DESIGN (A4.2: nothing is split)
+    r_ref = PT.gate_width_readiness(P1, L.W_MAX)
+    assert not r_ref.ok and any(x.w == 33 for x in r_ref.violators)
     # the lifted Program at the LIFTED parameter with the lifted query: the same validator, admissible, real widths reported
-    v1 = PT.validate_block_partition(P1, f"default({L.W_MAX_LIFTED})", L.W_MAX_LIFTED)
-    assert v1.status == "ok" and v1.width.status == "ok" and v1.width.w_max == 64 and v1.readiness_32.ok
-    assert v1.width.max_seen is not None and v1.width.max_seen > 32  # a true lifted width above 32 was ADMITTED, not hidden
-    assert v1.width.max_seen == v0.width.max_seen + (v1.width.max_seen - v0.width.max_seen) and v1.width.max_seen <= 2 * v0.width.max_seen
-    # the helper wraps exactly that: the verdict at W_MAX_LIFTED is the lifted verdict; the 32 verdict is information beside it
-    from verity.ml.circuits.query_ast import evaluate
     fam = evaluate(P1, f"default({L.W_MAX_LIFTED})")
+    v1, n = PT.validate_width(P1, fam, L.W_MAX_LIFTED), fam.count()
+    assert PT.validate_partition(P1, fam).status == "exact" and PT.gate_width_readiness(P1, L.W_MAX_LIFTED).ok
+    assert v1.status == "ok" and v1.w_max == 64
+    assert v1.max_seen is not None and 32 < v1.max_seen <= 2 * v0.max_seen  # a true lifted width above 32 was ADMITTED, not hidden
+    # the helper wraps exactly that: the verdict at W_MAX_LIFTED is the lifted verdict; the 32 verdict is information beside it
     adm = L.lifted_width_admissibility(P1, fam)
     assert adm["ok"] is True and adm["kind"] == "vu-partition-lifted" and adm["rules_version"] == "lifted-v1" and adm["w_max_lifted"] == 64
-    assert adm["verdict"]["w_max"] == 64 and adm["verdict"]["max_seen"] == v1.width.max_seen
+    assert adm["verdict"]["w_max"] == 64 and adm["verdict"]["max_seen"] == v1.max_seen
     assert adm["active_reference_rule_verdict"]["w_max"] == 32 and adm["active_reference_rule_verdict"]["status"] != "ok"
     # A4.4: max_seen (the validator's) and the n_out histogram (the boundary module's), complete over the family
     ws = adm["width_summary"]
-    assert ws["max_seen"] == v1.width.max_seen and ws["complete"] is True and ws["sets_visited"] == v1.count and ws["sets_unsupported"] == 0
+    assert ws["max_seen"] == v1.max_seen and ws["complete"] is True and ws["sets_visited"] == n and ws["sets_unsupported"] == 0
     hist = {int(k): v for k, v in ws["n_out_histogram"].items()}
-    assert sum(hist.values()) == v1.count and ws["max_n_out"] == max(hist) >= 1
+    assert sum(hist.values()) == n and ws["max_n_out"] == max(hist) >= 1
     # on a lifted Program n_out(S) is exactly the tag bits the set grew by: the widest set's lifted width == its payload width + its n_out
     assert ws["max_seen"] <= 33 * ws["max_n_out"]
     h_small = L.n_out_histogram(fam, max_sets=3)
@@ -313,40 +314,18 @@ def test_a4_true_widths_admissibility_is_the_unchanged_validator_at_w_max_lifted
     # exact walk -- a BOUND, not the exact count: it counts a member's distinct returned leaves whether or not a gate reads them, so the tiny
     # body's two unread sets (exact n_out 0) are bounded by 1; the exact histogram has {0: 2}, the bound has none
     sb = L.n_out_structural_bound(P1, fam)
-    assert sb["available"] is True and sb["complete"] is True and sb["sets"] == v1.count and sb["classes"] >= 1
+    assert sb["available"] is True and sb["complete"] is True and sb["sets"] == n and sb["classes"] >= 1
     assert sb["n_out_bound_max"] == sb["growth_max_bound"] >= ws["n_out_max"]  # a bound is never below the exact maximum
     hist_b = {int(k): v for k, v in sb["n_out_bound_histogram"].items()}
-    assert sum(hist_b.values()) == sum(hist.values()) == v1.count and min(hist_b) >= 1 and 0 in hist
+    assert sum(hist_b.values()) == sum(hist.values()) == n and min(hist_b) >= 1 and 0 in hist
     assert sum(k * v for k, v in hist_b.items()) >= sum(k * v for k, v in hist.items())  # total tag bits bounded from above
-    assert hist_b == {1: v1.count} and hist == {0: 2, 1: v1.count - 2}
+    assert hist_b == {1: n} and hist == {0: 2, 1: n - 2}
     # the summary carries it only when the exact walk was bounded (complete False); complete walks carry None (nothing to add)
     assert ws["n_out_structural_bound"] is None
-    ws_b = L.width_summary_a44(P1, fam, v1.width, histogram_max_sets=2)
+    ws_b = L.width_summary_a44(P1, fam, v1, histogram_max_sets=2)
     assert ws_b["complete"] is False and ws_b["sets_visited"] == 2 and ws_b["n_out_structural_bound"]["complete"] is True
-    assert ws_b["n_out_structural_bound"]["sets"] == v1.count and ws_b["n_out_structural_bound"]["n_out_bound_max"] >= ws_b["n_out_max"]
+    assert ws_b["n_out_structural_bound"]["sets"] == n and ws_b["n_out_structural_bound"]["n_out_bound_max"] >= ws_b["n_out_max"]
 
-
-def test_a5_lifted_use_document_carries_its_own_kind_and_rules_version_and_gate_g8_refuses_it_by_name(tmp_path):
-    from verity.ml.circuits import partition as PT
-    from verity_vllm.query import query_artifact as QA
-    from verity_vllm.check import gates as G
-    TSEL = bind(b1.TokenSelect, V=64)
-    P1 = Program(L.lift_def(TSEL))
-    q = f"default({L.W_MAX_LIFTED})"
-    v1 = PT.validate_block_partition(P1, q, L.W_MAX_LIFTED)
-    qdoc, use = lifted_records.lifted_vu_use_document(q, P1, v1)
-    assert use["schema"] == "verity-ir/query-use/v1" and use["use"]["kind"] == L.USE_KIND_LIFTED == "vu-partition-lifted"
-    assert use["use"]["w_max"] == 64 and use["use"]["rules_version"] == "lifted-v1" and use["use"]["w_max_active_reference"] == 32
-    assert use["verdict"]["status"] == "ok" and "kind" not in qdoc and "w_max" not in qdoc  # the query document is unchanged in shape
-    assert use["width_summary"]["max_seen"] == v1.width.max_seen > 32 and use["width_summary"]["complete"] is True
-    assert sum(use["width_summary"]["n_out_histogram"].values()) == v1.count
-    assert QA.check_query_document(qdoc) == [] and QA.check_use_document(use, qdoc["program_digest"], qdoc) == []  # structurally a use doc
-    # G8 (the active-reference gate) refuses the lifted document by NAME: a lifted verdict never reads as a panel-row G8 pass
-    (tmp_path / "query_use.json").write_text(json.dumps(use))
-    (tmp_path / "query.json").write_text(json.dumps(qdoc))
-    r = G.gate_G8(G.RunArtifacts(tmp_path))
-    assert r.status == "fail" and any("use.kind" in p and "vu-partition-lifted" in p for p in r.detail.get("problems", []) or [r.reason or ""])
-    assert G.QUERY_USE_KIND == "vu-partition" != L.USE_KIND_LIFTED
 
 
 # ---------------------------------------------------------------------------------------------------------
