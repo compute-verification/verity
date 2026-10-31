@@ -1,4 +1,4 @@
-"""The comparator's two loaders, each returning a `Prog`: a derive dir's Program (`load_derived`) and a fold's files of record
+"""The comparator's two loaders, each returning a `RootView`: a derive dir's Program (`load_derived`) and a fold's files of record
 (`load_oracle`, its form and digests stated in `LOAD_NOTES`)."""
 
 from __future__ import annotations
@@ -9,11 +9,11 @@ import os
 
 from verity_vllm.check.match import prefix_reads as PX
 from verity_vllm.check.match import supplied_inputs as SI
-from verity_vllm.check.match.instance_sequence import Prog
+from verity_vllm.check.match.instance_sequence import RootView
 from verity_vllm.program.compact import p_item_indices as _p_indices, p_item_weight_span as _p_w_span  # [GLM-5.3 "P"]
 
 
-def load_derived(d: str, label: str, cls: type[Prog] = Prog, compact: bool = False) -> Prog:
+def load_derived(d: str, label: str, cls: type[RootView] = RootView, compact: bool = False) -> RootView:
     """Derive dir ``d``'s Program as the Match reads it, in word units: a Boolean derive's word Program (`program.boolean.word_descriptor`)."""
     from verity.ml.definitions.boolean import word_descriptor
     desc = json.load(gzip.open(word_descriptor(d)))
@@ -53,7 +53,7 @@ def load_derived(d: str, label: str, cls: type[Prog] = Prog, compact: bool = Fal
     return P
 
 
-def load_oracle(d: str, label: str, cls: type[Prog] = Prog, compact: bool = False) -> Prog:
+def load_oracle(d: str, label: str, cls: type[RootView] = RootView, compact: bool = False) -> RootView:
     # the checker reads the FILES OF RECORD and nothing beside them: a compact copy written into the fold dir by
     # the record's producer (unit 7's sidecars, withdrawn) is prover input whose content nothing the checker owns authenticates -- a forged
     # sidecar with the sources' true digests/sizes/sha256 pasted in was accepted.  `instances.jsonl` itself may be stored in either
@@ -64,7 +64,7 @@ def load_oracle(d: str, label: str, cls: type[Prog] = Prog, compact: bool = Fals
     # goes through sha256 before it is decoded), and the digests are stated beside the form (LOAD_NOTES -> impl.fold_load[dir].program_sha256 /
     # instances_sha256): a Match document -- the record checker's as much as the fast one's -- is tied to the IMMUTABLE INPUT ARTIFACTS by
     # content, so the audit tool compares the two documents' digests with the row's files (and with each other) instead of trusting that
-    # two oracle_dir paths named the same bytes.  ~2-3 s per GB at load; nothing else changes (rows, form handling, the Prog).
+    # two oracle_dir paths named the same bytes.  ~2-3 s per GB at load; nothing else changes (rows, form handling, the RootView).
     import hashlib
     raw = open(os.path.join(d, "program.json"), "rb").read()
     program_sha = hashlib.sha256(raw).hexdigest()
@@ -87,7 +87,7 @@ def load_oracle(d: str, label: str, cls: type[Prog] = Prog, compact: bool = Fals
             if "node" in o:
                 # only the PARAMETER-space runs ("p": prompt / weights reads -- O(instances)) of each
                 # operand are kept from `operand_refs`; the node-space runs ("n": the attention K/V reads, O(LP^2) over a long prefill) are
-                # the same references `Prog.inst[*].args` holds and are never read from the rows.  Operand arity is preserved (one list per
+                # the same references `RootView.inst[*].args` holds and are never read from the rows.  Operand arity is preserved (one list per
                 # operand, possibly empty) so `operand_roots[k]` still names operand k below.
                 rows.append({"node": o["node"], "step": o.get("step"), "row": o.get("row"), "rows": o.get("rows"), "hint": o.get("hint"),
                              "spec": o.get("spec"), "operand_refs": [[r for r in a if r[0] in ("p", "P")] for a in (o.get("operand_refs") or [])],
@@ -104,7 +104,7 @@ def load_oracle(d: str, label: str, cls: type[Prog] = Prog, compact: bool = Fals
 LOAD_NOTES: dict[str, dict] = {}   # fold dir -> {"source": "record files", "instances_schema": <header schema>, "operand_refs_form": runs|progressions}
 
 
-def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], cls: type[Prog] = Prog, compact: bool = False) -> Prog:
+def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], cls: type[RootView] = RootView, compact: bool = False) -> RootView:
     """The rest of load_oracle over the retained rows."""
     # weight layout: the WEIGHTS parameter's offset ranges -> weight name from the hints ("module/param.name"). The fold lays
     # out one prompt parameter per request followed by the weights (`fold._header`): weights = param n_input_nodes-1 (== 1
