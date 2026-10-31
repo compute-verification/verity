@@ -5,12 +5,12 @@ release) while `verity_vllm` runs the release tree and versions.json names the r
 tree on sys.path ahead of the tree of record -- and require the precheck to fail BY NAME, plus the positive (one tree), the shipped-tree
 sha fallback (RESEARCH_SOURCE_SHA), and the runner-side refusals (row_pod.sh / canary.sh / hidden_gpu.py with a foreign $VERITY_TREE).
 
-Layout under test (Verity): the tree of record is the REPO ROOT; `verity` from the root, `verity_vllm` from integrations/vllm,
-`research` from tools/research/src.  REPO must be a git checkout: the positive precheck, the requested-sha mismatch and the
-`.git`-before-markers resolution read its commit.  A `research run --source` tree has no `.git`, so on a pod run the suite from a clone
-of the shipped commit (`git clone <root>/git/verity.git T && git -C T checkout $RESEARCH_SOURCE_SHA`), not from the shipped tree.
+Layout under test (Verity): the tree of record is the REPO ROOT; `verity` from the root, `verity_vllm` from integrations/vllm.
+REPO must be a git checkout: the positive precheck, the requested-sha mismatch and the `.git`-before-markers resolution read its
+commit.  A `research run --source` tree has no `.git`, so on a pod run the suite from a clone of the shipped commit
+(`git clone <root>/git/verity.git T && git -C T checkout $RESEARCH_SOURCE_SHA`), not from the shipped tree.
 
-    cd integrations/vllm && PYTHONPATH=.:../..:../../tools/research/src python -m pytest -q tests/pipeline/test_source_identity.py
+    cd integrations/vllm && PYTHONPATH=.:../.. python -m pytest -q tests/pipeline/test_source_identity.py
 """
 from __future__ import annotations
 
@@ -24,18 +24,15 @@ from pathlib import Path
 
 import pytest
 
-from research import pythonpath as rpp
-from research.telemetry import source_identity as gsid
 from verity_vllm import config as vconfig, settings as vsettings
 from verity_vllm.pipeline import cli as vcli
-from verity_vllm.pipeline import research_tools
 from verity_vllm.pipeline import source_identity as sid
 
 INTEGRATION = Path(__file__).resolve().parents[2]  # <repo>/integrations/vllm
 REPO = INTEGRATION.parents[1]  # <repo>
 PY = sys.executable
-CORE_ENTRIES = [os.path.dirname(d) for d in research_tools.CORE_DIRS]   # each sys.path entry that ships core, relative to the repo root
-PP = os.pathsep.join([str(INTEGRATION), *(str(REPO / e) for e in CORE_ENTRIES), str(REPO / "tools" / "research" / "src")])
+CORE_ENTRIES = [os.path.dirname(d) for d in sid.core_dirs(sid.TREE)]   # each sys.path entry that ships core, relative to the repo root
+PP = os.pathsep.join([str(INTEGRATION), *(str(REPO / e) for e in CORE_ENTRIES)])
 
 
 def _env(**extra: str) -> dict[str, str]:
@@ -62,8 +59,7 @@ def _other_tree(tmp_path: Path, name: str = "other", commit: str = "deadbeefdead
 
 def test_module_layout_is_verity():
     assert sid.TREE == REPO and sid.normalise_tree(None) == os.path.realpath(REPO)
-    assert set(sid.PACKAGES) == {"verity", "verity_vllm", "hidden_gpu", "research"}
-    assert "vllm-poc" not in sid.PACKAGES and "telemetry" not in sid.PACKAGES
+    assert set(sid.PACKAGES) == {"verity", "verity_vllm", "hidden_gpu"}
     assert all((REPO / m).exists() for m in sid.ROOT_MARKERS)
 
 
@@ -80,17 +76,16 @@ def test_precheck_passes_from_one_tree(tmp_path, tree_arg):
     assert r.returncode == 0, r.stderr
     assert r.stdout.startswith("SOURCE-IDENTITY-OK")
     doc = json.loads(out.read_text())
-    assert doc["ok"] is True and doc["fail_class"] is None and doc["schema"] == gsid.SCHEMA
+    assert doc["ok"] is True and doc["fail_class"] is None and doc["schema"] == sid.SCHEMA
     assert doc["requested_root"] == os.path.realpath(REPO)
     assert set(doc["packages"]) == set(sid.PACKAGES)
-    for name in ("verity", "verity_vllm", "research"):
+    for name in ("verity", "verity_vllm"):
         p = doc["packages"][name]
         assert p["repo_root"] == os.path.realpath(REPO), name
         assert p["resolved_path"].startswith(os.path.realpath(REPO)), name
         assert p["git_sha"] == doc["requested"]["git_sha"], name
         assert p["sys_path_entry"] == p["expected_sys_path_entry"], name
     assert doc["packages"]["verity"]["sys_path_entry"] == os.pathsep.join(os.path.realpath(REPO / e) for e in CORE_ENTRIES)
-    assert doc["packages"]["research"]["sys_path_entry"] == os.path.realpath(REPO / "tools" / "research" / "src")
     hg = doc["packages"]["hidden_gpu"]
     assert hg["resolved_path"].endswith("hidden_gpu.py") and hg["repo_root"] == os.path.realpath(REPO) and len(hg["file_sha256"]) == 64
     assert doc["sys_path0"] is not None
@@ -98,7 +93,7 @@ def test_precheck_passes_from_one_tree(tmp_path, tree_arg):
 
 @pytest.mark.parametrize("env_form", ["repo", "integration"])
 def test_precheck_passes_with_matching_verity_tree_and_sha(env_form):
-    sha = gsid.tree_identity(str(REPO))["git_sha"]
+    sha = sid.tree_identity(str(REPO))["git_sha"]
     assert sha
     r = _run("--sha", sha, VERITY_TREE=str(REPO if env_form == "repo" else INTEGRATION))
     assert r.returncode == 0, r.stderr
@@ -114,7 +109,7 @@ def test_negative_second_tree_on_sys_path_fails_by_name(tmp_path):
     out = tmp_path / "source_identity.json"
     r = _run("--tree", str(REPO), "--out", str(out), cwd=other)
     assert r.returncode == 3, (r.stdout, r.stderr)
-    assert r.stderr.startswith(gsid.FAIL_CLASS), r.stderr
+    assert r.stderr.startswith(sid.FAIL_CLASS), r.stderr
     assert "verity:" in r.stderr and str(other) in r.stderr and "deadbeef" in r.stderr
     doc = json.loads(out.read_text())     # the record is written even on failure
     assert doc["ok"] is False and doc["fail_class"] == "PRECHECK_FAIL_SOURCE_IDENTITY"
@@ -139,7 +134,7 @@ def test_negative_mixed_tree_copy_of_verity_vllm_elsewhere_is_refused_by_name(tm
     r = subprocess.run([PY, "-m", "verity_vllm.pipeline.cli", "source-identity", "--tree", str(INTEGRATION), "--out", str(out)], cwd=tmp_path,
                        env=_env(PYTHONPATH=f"{elsewhere}{os.pathsep}{PP}"), capture_output=True, text=True)
     assert r.returncode == 3, (r.stdout, r.stderr)
-    assert r.stderr.startswith(gsid.FAIL_CLASS) and "verity_vllm:" in r.stderr and str(elsewhere) in r.stderr, r.stderr
+    assert r.stderr.startswith(sid.FAIL_CLASS) and "verity_vllm:" in r.stderr and str(elsewhere) in r.stderr, r.stderr
     doc = json.loads(out.read_text())
     assert {m["package"] for m in doc["mismatches"]} == {"verity_vllm"}
     m = doc["mismatches"][0]
@@ -167,58 +162,33 @@ def test_negative_in_process_sys_path_insert_fails_by_name(tmp_path):
 
 def test_negative_requested_sha_mismatch_fails_by_name():
     r = _run("--sha", "0" * 40)
-    assert r.returncode == 3 and r.stderr.startswith(gsid.FAIL_CLASS) and "git_sha != requested" in r.stderr
+    assert r.returncode == 3 and r.stderr.startswith(sid.FAIL_CLASS) and "git_sha != requested" in r.stderr
 
 
 def test_negative_verity_tree_naming_another_tree_is_refused(tmp_path):
     other = _other_tree(tmp_path)
     r = _run(VERITY_TREE=str(other))
-    assert r.returncode == 3 and r.stderr.startswith(gsid.FAIL_CLASS) and "VERITY_TREE" in r.stderr, r.stderr
+    assert r.returncode == 3 and r.stderr.startswith(sid.FAIL_CLASS) and "VERITY_TREE" in r.stderr, r.stderr
 
 
-def test_research_must_import_as_research_telemetry_not_be_repaired(tmp_path):
-    """No sys.path hack for `research`: without tools/research/src on the path the import fails with a message naming the fix."""
-    r = subprocess.run([PY, "-c", "import verity_vllm.pipeline.source_identity"], cwd=INTEGRATION,
-                       env=_env(PYTHONPATH=os.pathsep.join([str(INTEGRATION), *(str(REPO / e) for e in CORE_ENTRIES)])), capture_output=True, text=True)
-    if r.returncode == 0:
-        pytest.skip("`research` is importable from site-packages in this interpreter; the missing-package path cannot be exercised here")
-    assert "tools/research/src" in r.stderr and "verity-vllm row" in r.stderr, r.stderr
-    assert "sys.path.append" not in Path(sid.__file__).read_text() and "sys.path.insert" not in Path(sid.__file__).read_text()
-
-
-def _from_harness_tool(rec: dict) -> bool:
-    """`research` resolved from the harness's own snapshot (`research run` puts `<root>/tool/<RESEARCH_TOOL_SNAPSHOT>` first on
-    PYTHONPATH), not from the tree under test."""
-    snap = os.environ.get("RESEARCH_TOOL_SNAPSHOT")
-    path = rec.get("resolved_path")
-    return bool(snap and path) and any(p.name == snap and p.parent.name == "tool" for p in Path(path).parents)
-
-
-def test_only_researchs_copy_in_the_harness_tool_snapshot_is_left_out(monkeypatch):
-    shipped = {"resolved_path": "/workspace/research/tool/ab12/research/__init__.py"}
-    monkeypatch.delenv("RESEARCH_TOOL_SNAPSHOT", raising=False)
-    assert not _from_harness_tool(shipped)
-    monkeypatch.setenv("RESEARCH_TOOL_SNAPSHOT", "ab12")
-    assert _from_harness_tool(shipped)
-    assert not _from_harness_tool({"resolved_path": "/elsewhere/ab12/research/__init__.py"})
-    assert not _from_harness_tool({"resolved_path": str(REPO / "tools" / "research" / "src" / "research" / "__init__.py")})
-    assert not _from_harness_tool({"resolved_path": None})
+def test_the_module_repairs_no_sys_path():
+    """A package that cannot be imported is a broken environment, reported as one: nothing here puts a tree on sys.path."""
+    text = Path(sid.__file__).read_text()
+    assert "sys.path.append" not in text and "sys.path.insert" not in text
 
 
 def test_in_process_check_and_loaded_module_guard(tmp_path):
     other = _other_tree(tmp_path)
     ids = sid.resolve(str(REPO))
-    ids = {k: v for k, v in ids.items() if not (k == "research" and _from_harness_tool(v))}
-    assert gsid.check(ids, str(REPO)) == []
+    assert sid.check(ids, str(REPO)) == []
     leaked = dict(ids["verity"], resolved_path=str(other / "verity" / "__init__.py"), repo_root=str(other), git_sha="deadbeef")
-    mm = gsid.check({**ids, "verity": leaked}, str(REPO))
+    mm = sid.check({**ids, "verity": leaked}, str(REPO))
     assert [m["package"] for m in mm] == ["verity"]
-    with pytest.raises(gsid.SourceIdentityError, match="PRECHECK_FAIL_SOURCE_IDENTITY"):
-        gsid.assert_identities({**ids, "verity": leaked}, str(REPO))
+    assert str(sid.SourceIdentityError(mm, str(REPO))).startswith("PRECHECK_FAIL_SOURCE_IDENTITY: 1 package(s)")
     # native_host's import-site guard: the hidden_gpu module that LOADED must be this tree's (native_host passes the integration root)
     fake = types.ModuleType("hidden_gpu")
     fake.__file__ = str(other / "hidden_gpu.py")
-    with pytest.raises(gsid.SourceIdentityError, match="hidden_gpu"):
+    with pytest.raises(sid.SourceIdentityError, match="hidden_gpu"):
         sid.assert_loaded_module_is_ours(fake, "hidden_gpu", str(INTEGRATION))
     ours = types.ModuleType("hidden_gpu")
     ours.__file__ = str(INTEGRATION / "verity_vllm" / "commit" / "committer" / "hidden_gpu_src" / "hidden_gpu.py")
@@ -230,40 +200,34 @@ def test_repo_root_resolution_prefers_export_json_then_git_then_markers(tmp_path
     shipped = tmp_path / "shipped"
     (shipped / "integrations" / "vllm" / "verity_vllm" / "ops").mkdir(parents=True)
     (shipped / "EXPORT.json").write_text(json.dumps({"commit": "a" * 40, "dirty_patch_sha256": "b" * 64, "branch": "x"}))
-    assert gsid.repo_root_of(shipped / "integrations" / "vllm" / "verity_vllm" / "ops" / "f.py") == str(shipped.resolve())
-    ident = gsid.tree_identity(str(shipped))
+    assert sid.repo_root_of(shipped / "integrations" / "vllm" / "verity_vllm" / "ops" / "f.py") == str(shipped.resolve())
+    ident = sid.tree_identity(str(shipped))
     assert ident == {"git_sha": "a" * 40, "git_sha_source": "EXPORT.json", "dirty_patch_sha256": "b" * 64, "branch": "x"}
-    assert gsid.repo_root_of(Path(sid.__file__)) == os.path.realpath(REPO)   # .git (worktree file or dir) at the REPO root, not integrations/vllm
-    assert gsid.tree_identity(str(REPO))["git_sha_source"] == "git"
+    assert sid.repo_root_of(Path(sid.__file__)) == os.path.realpath(REPO)   # .git (worktree file or dir) at the REPO root, not integrations/vllm
+    assert sid.tree_identity(str(REPO))["git_sha_source"] == "git"
     # a `git archive` export: no .git, no EXPORT.json -> Verity's markers find the repo root; the sha is not the tree's to give
     bare = tmp_path / "bare"
     for rel in sid.ROOT_MARKERS:
         (bare / rel).parent.mkdir(parents=True, exist_ok=True)
         (bare / rel).write_text("")
-    assert gsid.repo_root_of(bare / "integrations" / "vllm" / "verity_vllm" / "__init__.py", sid.ROOT_MARKERS) == str(bare.resolve())
-    assert gsid.tree_identity(str(bare))["git_sha"] is None and "neither" in gsid.tree_identity(str(bare))["git_sha_source"]
+    assert sid.repo_root_of(bare / "integrations" / "vllm" / "verity_vllm" / "__init__.py", sid.ROOT_MARKERS) == str(bare.resolve())
+    assert sid.tree_identity(str(bare))["git_sha"] is None and "neither" in sid.tree_identity(str(bare))["git_sha_source"]
     assert sid.normalise_tree(bare / "integrations" / "vllm") == str(bare.resolve()) and sid.normalise_tree(bare) == str(bare.resolve())
 
 
 # ---- a shipped tree (git archive: no .git): the sha comes from --sha or RESEARCH_SOURCE_SHA ------------------------------------------------------
 
 def _shipped_tree(tmp_path: Path) -> Path:
-    """<root>/src/<sha>/ as `research run --source` lays it out: the repo root markers and the workspace declaration (every member's
-    pyproject.toml), stub packages at Verity's locations, and the REAL source_identity modules (generic + project, with the verity_vllm.config
-    it locates the tree through and the typed records that reads, the research.pythonpath that names core's directories, and the CLI with the
-    settings it reads) so the precheck under test runs from the shipped tree itself."""
+    """<root>/src/<sha>/ as `research run --source` lays it out: the repo root markers (the root pyproject.toml, which names core's
+    directories), stub packages at Verity's locations, and the REAL source_identity module (with the verity_vllm.config it locates the
+    tree through and the typed records that reads, and the CLI with the settings it reads) so the precheck under test runs from the
+    shipped tree itself."""
     t = tmp_path / "src" / ("f" * 40)
-    for rel in (*research_tools.CORE_DIRS, "integrations/vllm/verity_vllm", "integrations/vllm/verity_vllm/pipeline", "integrations/vllm/tests/pipeline",
-                "tools/research/src/research/telemetry"):
+    for rel in (*sid.core_dirs(sid.TREE), "integrations/vllm/verity_vllm", "integrations/vllm/verity_vllm/pipeline", "integrations/vllm/tests/pipeline"):
         (t / rel).mkdir(parents=True)
         (t / rel / "__init__.py").write_text("")
-    (t / "tools" / "research" / "src" / "research" / "__init__.py").write_text("")
-    for member in ["", *rpp.import_roots_dir(REPO)["members"]]:
-        (t / member).mkdir(parents=True, exist_ok=True)
-        shutil.copy(REPO / member / "pyproject.toml", t / member / "pyproject.toml")
+    shutil.copy(REPO / "pyproject.toml", t / "pyproject.toml")
     (t / "uv.lock").write_text("")
-    shutil.copy(gsid.__file__, t / "tools" / "research" / "src" / "research" / "telemetry" / "source_identity.py")
-    shutil.copy(rpp.__file__, t / "tools" / "research" / "src" / "research" / "pythonpath.py")
     shutil.copy(sid.__file__, t / "integrations" / "vllm" / "verity_vllm" / "pipeline" / "source_identity.py")
     shutil.copy(vconfig.__file__, t / "integrations" / "vllm" / "verity_vllm" / "config.py")
     shutil.copy(vcli.__file__, t / "integrations" / "vllm" / "verity_vllm" / "pipeline" / "cli.py")
@@ -275,7 +239,7 @@ def _shipped_tree(tmp_path: Path) -> Path:
 
 
 def _shipped_pp(t: Path) -> str:
-    return os.pathsep.join([str(t / "integrations" / "vllm"), *(str(t / e) for e in CORE_ENTRIES), str(t / "tools" / "research" / "src")])
+    return os.pathsep.join([str(t / "integrations" / "vllm"), *(str(t / e) for e in CORE_ENTRIES)])
 
 
 def test_shipped_tree_takes_its_sha_from_research_source_sha(tmp_path):
@@ -290,7 +254,7 @@ def test_shipped_tree_takes_its_sha_from_research_source_sha(tmp_path):
     assert r.returncode == 0, (r.stdout, r.stderr)
     doc = json.loads(out.read_text())
     assert doc["requested_root"] == str(t.resolve()) and doc["requested"]["git_sha"] == "f" * 40 and doc["requested"]["git_sha_source"] == "RESEARCH_SOURCE_SHA"
-    for name in ("verity", "verity_vllm", "research"):
+    for name in ("verity", "verity_vllm"):
         assert doc["packages"][name]["repo_root"] == str(t.resolve()) and doc["packages"][name]["git_sha"] == "f" * 40, name
         assert doc["packages"][name]["git_sha_source"] == "RESEARCH_SOURCE_SHA", name
     assert doc["packages"]["hidden_gpu"]["resolved_path"] is None      # optional: not shipped in the stub, not a mismatch
@@ -317,35 +281,28 @@ def test_shipped_tree_still_refuses_a_foreign_package(tmp_path):
     pp = os.pathsep.join([*(str(REPO / e) for e in CORE_ENTRIES), _shipped_pp(t)])
     r = subprocess.run([PY, "-m", "verity_vllm.pipeline.cli", "source-identity", "--tree", str(integ)], cwd=integ,
                        env=_env(PYTHONPATH=pp, RESEARCH_SOURCE_SHA="f" * 40), capture_output=True, text=True)
-    assert r.returncode == 3 and r.stderr.startswith(gsid.FAIL_CLASS) and "verity:" in r.stderr and os.path.realpath(REPO) in r.stderr, r.stderr
+    assert r.returncode == 3 and r.stderr.startswith(sid.FAIL_CLASS) and "verity:" in r.stderr and os.path.realpath(REPO) in r.stderr, r.stderr
 
 
-def test_a_shipped_tree_with_core_split_across_members_passes_and_a_foreign_portion_is_refused(tmp_path):
-    """Core as a namespace (PEP 420) that two members ship: the record expects and finds both members' entries, and a third portion
-    from another tree is refused by name.  `-S` keeps this interpreter's own regular `verity` from shadowing the namespace."""
-    t = _shipped_tree(tmp_path)
-    for d in research_tools.CORE_DIRS:
-        shutil.rmtree(t / d)
-    (t / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["core/upper", "core/lower", "integrations/vllm", "tools/research"]\n')
-    for member, module in (("core/upper", "ml"), ("core/lower", "ir")):
-        (t / member / "src" / "verity" / module).mkdir(parents=True)
-        (t / member / "src" / "verity" / module / "__init__.py").write_text("")
-        (t / member / "pyproject.toml").write_text('[tool.hatch.build.targets.wheel]\npackages = ["src/verity"]\n')
-    integ = t / "integrations" / "vllm"
-    entries = [os.path.realpath(t / m / "src") for m in ("core/upper", "core/lower")]
-    pp = os.pathsep.join([str(integ), *entries, str(t / "tools" / "research" / "src")])
-    out = tmp_path / "sid.json"
-    argv = [PY, "-S", "-m", "verity_vllm.pipeline.cli", "source-identity", "--tree", str(integ), "--out", str(out)]
-    r = subprocess.run(argv, cwd=integ, env=_env(PYTHONPATH=pp, RESEARCH_SOURCE_SHA="f" * 40), capture_output=True, text=True)
-    assert r.returncode == 0, (r.stdout, r.stderr)
-    core = json.loads(out.read_text())["packages"]["verity"]
-    assert core["expected_sys_path_entry"] == core["sys_path_entry"] == os.pathsep.join(entries)
-    assert [p["repo_root"] for p in core["portions"]] == [str(t.resolve())] * 2
-    other = _other_tree(tmp_path)
-    (other / "verity" / "__init__.py").unlink()
-    r = subprocess.run(argv, cwd=integ, env=_env(PYTHONPATH=f"{pp}{os.pathsep}{other}", RESEARCH_SOURCE_SHA="f" * 40), capture_output=True, text=True)
-    assert r.returncode == 3 and r.stderr.startswith(gsid.FAIL_CLASS), (r.stdout, r.stderr)
-    assert "namespace portion(s) outside the requested tree" in r.stderr and os.path.realpath(other / "verity") in r.stderr, r.stderr
+def _portion(tree: Path, root: str, name: str, module: str) -> str:
+    (tree / root / name / module).mkdir(parents=True)
+    (tree / root / name / module / "__init__.py").write_text("")
+    (tree / "EXPORT.json").write_text(json.dumps({"commit": tree.name * 8}))
+    return str(tree / root)
+
+
+def test_a_namespace_with_a_portion_from_another_tree_is_a_mismatch(tmp_path):
+    """A namespace package (PEP 420) is every directory it spans: recording only the first portion passed a namespace whose second
+    portion came from another checkout."""
+    ours, other = tmp_path / "ours", tmp_path / "other"
+    src, lib, foreign = _portion(ours, "src", "nsprobe", "ir"), _portion(ours, "lib", "nsprobe", "ml"), _portion(other, "src", "nsprobe", "ml")
+    both = sid.resolve_module("nsprobe", path=[src, lib])
+    assert both["repo_root"] == str(ours.resolve()) and [p["repo_root"] for p in both["portions"]] == [str(ours.resolve())] * 2
+    assert sid.check({"nsprobe": both}, str(ours)) == []
+    mixed = sid.resolve_module("nsprobe", path=[src, foreign])
+    assert mixed["resolved_path"] == str((ours / "src" / "nsprobe").resolve()) and mixed["repo_root"] is None
+    [m] = sid.check({"nsprobe": mixed}, str(ours))
+    assert "namespace portion(s) outside the requested tree" in m["why"] and str((other / "src" / "nsprobe").resolve()) in m["why"]
 
 
 # ---- hidden_gpu.py: REPO from the importing tree, never from the environment ----------------------------------------------------------------------
