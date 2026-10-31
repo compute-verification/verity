@@ -30,7 +30,7 @@ def DecStreamK (x : Lean.Json) (y : StreamRec) : Prop :=
 
 /-- **What `Record.decodeWithK` reads**, whatever the hashes and `keep`: `decode_ok`'s fields, without S12's digests. -/
 theorem decodeWithK_ok (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
-    {sess : Session} (h : Record.decodeWithK keep hs spec text = .ok sess) :
+    {sess : RunRecord} (h : Record.decodeWithK keep hs spec text = .ok sess) :
     ∃ j l recs, Lean.Json.parse text = .ok j ∧ Record.fld j "link" = .ok l ∧ Record.arr j "streams" = .ok recs ∧
       List.Forall₂ (RootField l) spec.tables.toList sess.rootB.toList ∧
       (∃ ps, Record.arr l "points" = .ok ps ∧ List.Forall₂ PointField ps.toList sess.points.toList) ∧
@@ -99,7 +99,7 @@ theorem decodeWithK_ok (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : Sess
 link points, and at each rep stream the stream the decoder finds by its name, whose rounds are `liveOf`'s up to their
 recorded digests (`decode_live`'s, without S12's digests). -/
 theorem decodeWithK_live (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
-    {sess : Session} {lv : Live} (hd : Record.decodeWithK keep hs spec text = .ok sess)
+    {sess : RunRecord} {lv : Live} (hd : Record.decodeWithK keep hs spec text = .ok sess)
     (hl : liveOf spec text = .ok lv) :
     sess.rootB = lv.rootB ∧ sess.points = lv.points ∧ lv.streams.size = spec.repStreams.size ∧
       ∀ q (hq : q < spec.repStreams.size), ∃ y, sess.streams.find? (·.name == spec.repStreams[q].2.2) = some y ∧
@@ -225,7 +225,7 @@ with the rounds compared after `Round.erase`). -/
 theorem sess_rounds_eqK (keep keep' : Bool → Bool) (hs hs' : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt}
     {record record' : String} {proofs proofs' : Array ByteArray} {lv lv' : Live}
     {link link' : List ByteArray × List ByteArray} {c₁ c₁' : Coin} {mids : List (Claims.Msg × Coin)}
-    {sess sess' : Session}
+    {sess sess' : RunRecord}
     (hv : verifyWithMK keep hs spec (tabsOf sts) record proofs = .ok ()) (hl : liveOf spec record = .ok lv)
     (hv' : verifyWithMK keep' hs' spec (tabsOf sts) record' proofs' = .ok ()) (hl' : liveOf spec record' = .ok lv')
     (hc : custody spec lv link c₁ mids = .ok ()) (hc' : custody spec lv' link' c₁' mids = .ok ())
@@ -268,7 +268,7 @@ theorem verifyWithMK_proofs_size (keep : Bool → Bool) (hs : Hashes Flock.V) {s
 element-level decoder reads. -/
 theorem verifyWithMK_rep (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {tabs : Array Setup}
     {record : String} {proofs : Array ByteArray} (h : verifyWithMK keep hs spec tabs record proofs = .ok ()) :
-    ∃ (sess : Session) (schs : Array Schedule), Record.decodeWithK keep hs spec record = .ok sess ∧
+    ∃ (sess : RunRecord) (schs : Array Schedule), Record.decodeWithK keep hs spec record = .ok sess ∧
       tabs.size = spec.tables.size ∧
       ∀ (k : ℕ) (hk : k / 2 < tabs.size), fast100 tabs[k / 2].m = some schs[k / 2]! ∧
         ∃ c, verifyRepWith hs spec tabs[k / 2] schs[k / 2]! sess (k / 2) (k % 2) proofs[k]! = .ok c := by
@@ -410,7 +410,7 @@ theorem plainE_calls_tied {x : Claims.Msg} {ms : List Claims.Msg} {l l' : Claims
       .ok c' := by
     rw [With.verifyRepWith_erase With.Sim.liftMap_V _ spec st sch _ hy hy' hyy hP (by rw [hB])]
     exact hr₂
-  have hpure : ∀ {L : List Claims.Msg} {sess₀ : Session} {bs c₀ : ByteArray},
+  have hpure : ∀ {L : List Claims.Msg} {sess₀ : RunRecord} {bs c₀ : ByteArray},
       verifyRepWith (hashesIn L) spec st sch sess₀ (k / 2) (k % 2) bs = .ok c₀ →
         verifyRep spec st sch sess₀ (k / 2) (k % 2) bs = .ok c₀ := by
     intro L sess₀ bs c₀ h

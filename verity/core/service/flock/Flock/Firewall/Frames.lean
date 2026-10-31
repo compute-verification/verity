@@ -69,7 +69,7 @@ structure Rep where
   vals : Array F128 := #[]
 
 /-- A session the loop serves frames for: its statement, and the `Commit`'s coins once they were answered. -/
-structure Session where
+structure Release where
   sid : Nat
   spec : SessionSpec
   sts : Array Stmt
@@ -78,7 +78,7 @@ structure Session where
 /-- **The loop's frames**: the sessions, each rep's frame, and each rep's salts for levels ≥ 1 and its proof file by its
 table's level-0 root, the loop's finish's (`Finish.serve`'s `keep` and `file`). -/
 structure Sessions where
-  sessions : Array Session := #[]
+  sessions : Array Release := #[]
   reps : Array Rep := #[]
   salts : Array (ByteArray × Nat × Array ByteArray) := #[]
   files : Array (ByteArray × Nat × ByteArray) := #[]
@@ -141,7 +141,7 @@ def startRep (ch : Frame.Chan) (reg : IO.Ref Sessions) (l0s : IO.Ref Level0.Slot
 /-- What stands in rep `p`'s next round's place, the coins it squeezes, and `p` after, at the loop's salts `salts`: the
 algebraic phase's scheduled round, then the opening's (`Drive.openStep` begun at its first round, then at the round its
 last coins asked for), then none (and no coins). -/
-def placeOf (salts : Array (ByteArray × Nat × Array ByteArray)) (l0 : Level0.Level0) (s : Session) (p : Rep)
+def placeOf (salts : Array (ByteArray × Nat × Array ByteArray)) (l0 : Level0.Level0) (s : Release) (p : Rep)
     (dom : ByteArray) : Except String (Frame.Place × Nat × Rep) := do
   let k := p.coins.size
   if h : k < p.alg.size then return (.sched p.alg[k].1, p.alg[k].2, p)
@@ -169,7 +169,7 @@ def algOf (st : Stmt) (root dom : ByteArray) : V (Array (ByteArray × Nat)) := d
 
 /-- `p` with its algebraic phase's scheduled rounds (`algOf`) on the session's level 0 `l0`, the table being `name`,
 computed once. -/
-def withAlg (s : Session) (l0 : Level0.Level0) (name : String) (p : Rep) : V Rep := do
+def withAlg (s : Release) (l0 : Level0.Level0) (name : String) (p : Rep) : V Rep := do
   if !p.alg.isEmpty then return p
   let some st := s.sts[p.table]? | throw s!"table {p.table} of the session's {s.sts.size}"
   return { p with alg := ← algOf st l0.root (s.spec.domain name p.rep).toUTF8 }
