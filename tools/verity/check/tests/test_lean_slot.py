@@ -77,6 +77,23 @@ def test_n_requests_take_the_n_slots_and_the_next_waits_until_one_frees(slots):
         os.close(fd)
 
 
+def test_a_request_that_does_not_queue_takes_a_free_slot_or_is_refused_at_once_and_leaves_no_ticket(slots):
+    """The preflight's Lean step on a node it can fall back from (`lean_changed.py --no-wait --build`): a full pool, or a waiter
+    ahead, refuses it by name instead of keeping it in line past its deadline."""
+    first = LS.wait("audit", now=lambda: NOW, log=lambda s: None, queue=False)
+    second = LS.wait("audit", now=lambda: NOW, log=lambda s: None, queue=False)
+    assert [first[:2], second[:2]] == [("audit", 0), ("audit", 1)]
+
+    def sleep(_s):
+        raise AssertionError("a request that doesn't queue never polls")
+
+    with pytest.raises(LS.Refused, match=r"^all 2 Lean audit slot\(s\) of pool audit are taken, and this request doesn't wait"):
+        LS.wait("audit", now=lambda: NOW, sleep=sleep, log=lambda s: None, queue=False)
+    assert not list((slots / "lean-line-audit").iterdir())
+    for fd in (first[2], second[2]):
+        os.close(fd)
+
+
 def test_a_waiter_names_each_holder_and_repeats_the_list_every_few_minutes(slots, monkeypatch):
     """The holders' pid, run, who and since when, so a waiting audit's log says whom it waits behind."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r-me")
