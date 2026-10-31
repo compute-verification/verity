@@ -12,22 +12,22 @@ Each thread bound of `Properties.NciDesc.Verdict`, from `DescAgrees` (`SecurityP
 namespace NciCheck.Properties.SecurityProofs
 
 /-- **A verdict of compliance of the description-sized check throttles every threaded reference circuit the declaration
-contains, if its weights are incompressible and its θ registered** (`WeightsIncompressible`,
-`ThetaRegistered`). -/
+contains, if its weights are incompressible and its baseline registered** (`WeightsIncompressible`,
+`BaselineRegistered`). -/
 theorem DescThrottles : Properties.DescThrottles :=
   descThrottles_of DescAgrees Throttles
 
 /-- **A verdict of compliance of the description-sized check puts counted multiplications off the books in dark
 gates**, for every threaded reference circuit the declaration contains partly, if its weights are incompressible and its
-θ registered (`WeightsIncompressible`, `ThetaRegistered`). -/
+baseline registered (`WeightsIncompressible`, `BaselineRegistered`). -/
 theorem DescThrottlesDark : Properties.DescThrottlesDark :=
   descThrottlesDark_of DescAgrees ThrottlesDark
 
-/-- **`DescThrottles` per parameter slot** (`WeightsIncompressibleSlots`, `ThetaRegistered`). -/
+/-- **`DescThrottles` per parameter slot** (`WeightsIncompressibleSlots`, `BaselineRegistered`). -/
 theorem DescThrottlesSlots : Properties.DescThrottlesSlots :=
   descThrottlesSlots_of DescAgrees ThrottlesSlots
 
-/-- **`DescThrottlesDark` per parameter slot** (`WeightsIncompressibleSlots`, `ThetaRegistered`). -/
+/-- **`DescThrottlesDark` per parameter slot** (`WeightsIncompressibleSlots`, `BaselineRegistered`). -/
 theorem DescThrottlesDarkSlots : Properties.DescThrottlesDarkSlots :=
   descThrottlesDarkSlots_of DescAgrees ThrottlesDarkSlots
 

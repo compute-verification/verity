@@ -16,7 +16,6 @@ import Definitions.Core.Fp32
 import Definitions.Core.Formalism
 import Definitions.Core.Expand
 import Definitions.Core.NaiveStrassen
-import Definitions.Core.Site
 
 /-!
 # Core's protocol: the model every protocol states its guarantees in
