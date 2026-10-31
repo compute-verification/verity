@@ -238,7 +238,7 @@ def test_a_registration_from_before_layout_and_rows_replays_without_its_digest(s
 
 
 def test_a_session_from_before_the_stated_window_replays_under_its_shortest(server, tmp_path) -> None:
-    """A window shorter than the record's `window_ns` is a boundary today's `Session` refuses, so the next window's
+    """A window shorter than the record's `window_ns` is a boundary today's `AuditRun` refuses, so the next window's
     challenge never leaves and its first root fails `order`; the case states the session's shortest window instead."""
     v = verifier_json(run("honest"))
     s = v["sessions"][0]

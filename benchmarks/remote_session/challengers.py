@@ -14,13 +14,13 @@
   host serves it from its pinned tree and reaches this machine's 127.0.0.1 at the open's port through this machine's
   certifier coin link (the auditor's coins' path); the
   hello carries the open's secret, and a challenger whose coin commitment isn't the open's is refused before its first
-  coin. The read is the ledger's (`audit.Session.trusted_reason`): the one session it opens for R inside the period,
+  coin. The read is the ledger's (`audit.AuditRun.trusted_reason`): the one session it opens for R inside the period,
   ended and closed, its files the ones the end sealed, under the key whose public key's SHA-512 the run pins, and run
   from main's code (`challenger.pinned_session`): the host's pins log, fetched from the gate (`pins`) at the session's
   end beside the ledger, is the one its open sealed and records its pin, and that commit is on the auditor's own
   first-parent list of main (`--challenger-main FILE`). With no list, no gate verifier runs.
 
-`finish` reads back what the challenger signed and holds the session's coins to it (`audit.Session.released_reason`):
+`finish` reads back what the challenger signed and holds the session's coins to it (`audit.AuditRun.released_reason`):
 the same commitment, each coin opened after the root the session recorded and in order, σ_0 after the session's window
 root R, each window's openings coin after its last root. Its `reason` is None when they hold. A served or gate
 session's `complete` (the gate's end's, and `Serve`'s read of the same signed log) is whether the challenger released
@@ -79,7 +79,7 @@ class Local:
     def open(self, registration: bytes, k: int, windows: int, appends: int, per_coin: int = 1) -> Ch.LiveChallenger:
         return Ch.LiveChallenger(coins.SCHEME, k, coins.families(windows, appends, per_coin), secrets.token_bytes)
 
-    def finish(self, s: audit.Session) -> dict:
+    def finish(self, s: audit.AuditRun) -> dict:
         c = s.coins
         return {"challenger": self.kind, "commitment": c.commitment.root.hex(),
                 "reason": s.released_reason(c.commitment, {label: c.afters(label) for label, _ in c.commitment.families})}
@@ -121,7 +121,7 @@ class Serve:
         self._live[k] = (proc, out, sid, client)
         return client
 
-    def finish(self, s: audit.Session) -> dict:
+    def finish(self, s: audit.AuditRun) -> dict:
         proc, out, sid, client = self._live.pop(s.coins.session)
         try:
             client.close()
@@ -222,7 +222,7 @@ class ChallengerGate:
         self._live[k] = ({key: v for key, v in o.items() if key != "secret"}, client)
         return client
 
-    def finish(self, s: audit.Session) -> dict:
+    def finish(self, s: audit.AuditRun) -> dict:
         answer, client = self._live.pop(s.coins.session)
         sid = answer["session"]
         try:
