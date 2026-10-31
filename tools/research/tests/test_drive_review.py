@@ -645,7 +645,7 @@ def _stacked(world, monkeypatch) -> tuple[Review, str, str]:
 
 
 def test_a_proof_only_lean_change_lands_on_its_verdict_and_a_lock_or_code_lean_change_waits(world, monkeypatch):
-    """Lean in `Security/` that touches no lock is proofs and lands on its land verdict (the
+    """Lean in `Security/` that touches no lock and no spec is proofs and lands on its land verdict (the
     after-landing lean-audit reverts it on a failure); a lock, or Lean outside `Security/` (it runs as code), still waits."""
     h = Review(world, monkeypatch)
     world.gh.put(1, world.change({"Security/lean-audit.json": "{}\n", "Security/Proofs/A.lean": "theorem A : True := trivial\n"}))
@@ -658,17 +658,66 @@ def test_a_proof_only_lean_change_lands_on_its_verdict_and_a_lock_or_code_lean_c
     assert h.q.chain()[0].pr == 2                                         # proofs only: non-Lean first puts it below
 
 
-def test_a_two_demos_lean_change_lands_on_its_verdict_and_another_waits(world, monkeypatch):
-    """A PR whose title says "two demos" lands on its land verdict with no Lean check first (its records passed at its
-    ready mark, and the after-landing lean-audit checks it); any other lock change still waits for one."""
+#: a Lake package with a lock outside `Security/`, whose Lean runs as code
+FLOCK_LOCK = {"verity/core/service/flock/lean-audit.json": "{}\n"}
+
+
+def test_every_lean_change_but_proofs_waits_for_its_lean_check_whatever_its_title(world, monkeypatch):
+    """A "two demos" title exempts no Lean change.  The spec (Lean under `Security/Definitions/`, `Security/Models.lean` and
+    `Security/`'s Lake files: what the guarantees' statements read), every lock and Lean that runs as code (outside `Security/`,
+    in a package with a lock: Flock's verifier) wait for a Lean check in a two-demos PR too: landed unchecked, they leave a
+    record stale for the after-landing lean-audit (`--no-regenerate`), the spec's statements or a code package's
+    `verifier.allow`, with no regenerated lock commit after them.  `Security/` proofs alone wait in no PR."""
+    _move_main(world, FLOCK_LOCK)
     h = Review(world, monkeypatch)
-    world.gh.put(1, head := world.change({"pkg/lean-audit.json": "{}"}))
-    world.gh.prs[1] = PR(1, head, "Two demos: the lock", "Lane `lane-1`.")
-    world.gh.put(2, world.change({"pkg/lean-audit.json": "{\n}"}, base=head))
-    for n in (1, 2):
+    two_demos = {1: {"pkg/C.lean": "theorem C : True := trivial\n"},
+                 2: {"Security/Definitions/X.lean": "def x := 1\n"},
+                 3: {"pkg/lean-audit.json": "{}"},
+                 4: {"Security/Proofs/Y.lean": "theorem Y : True := trivial\n"},
+                 5: {"Security/Models.lean": "import Definitions.X\n"},
+                 6: {"Security/lakefile.toml": "name = \"security\"\n"},
+                 7: {"Security/lean-toolchain": "leanprover/lean4:v4.0.0\n"},
+                 8: {"verity/core/service/flock/Flock/X.lean": "def x := Nat.gcd 4 6\n"}}
+    for n, files in {**two_demos, 9: {"Security/Definitions/Z.lean": "def z := 1\n"}}.items():
+        world.gh.put(n, head := world.change(files))
+        if n in two_demos:
+            world.gh.prs[n] = PR(n, head, f"two demos: change {n}", f"Lane `lane-{n}`.")
         h.review(n)
+    h.q.sync()
+    chain = h.q.chain()
+    want = {n: n != 4 for n in range(1, 10)}
+    assert {m.pr: lean_change(h.d.repo, m.commit) for m in chain} == want
+    h.d._lean_of = {}                                                       # a tick's cache
+    assert {m.pr: h.d._lean_change(m) for m in chain} == want
+
+
+@pytest.mark.parametrize("path, text", [("Security/Definitions/Claims/Sampling.lean", "def AuditStatement := 1\n"),
+                                        ("verity/core/service/flock/Flock/X.lean", "def x := Nat.gcd 4 6\n")],
+                         ids=["spec", "code"])
+def test_a_two_demos_spec_or_code_lean_change_without_a_lock_waits_for_a_lean_check_before_it_lands(
+        world, monkeypatch, path, text):
+    """A two-demos PR that changes a guarantee's statement, or Flock's verifier Lean, without its lock doesn't land on its
+    verdict: drive launches a Lean check at its commit and lands it once that check passed, with its regenerated records."""
+    _move_main(world, FLOCK_LOCK)
+    h = Review(world, monkeypatch)
+    world.gh.put(1, head := world.change({path: text}))
+    world.gh.prs[1] = PR(1, head, "two demos: dedupe", "Lane `lane-1`.")
+    h.review(1)
+    assert not h.tick().startswith("landed"), world.logs
+    assert h.launched == [(_tip(world), "m1", False)], world.logs
+    (rid,) = h.lean_ids()
+    h.run_state[rid] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, rid, {"lean-build": "passed", LEAN_STEP: "passed"})]
     assert h.tick().startswith("landed #1"), world.logs
-    assert h.launched and h.launched[0][0] != head, world.logs              # #2's own check, never #1's
+
+
+def test_a_two_demos_proofs_only_change_lands_on_its_verdict_with_no_lean_check(world, monkeypatch):
+    h = Review(world, monkeypatch)
+    world.gh.put(1, head := world.change({"Security/Proofs/Y.lean": "theorem Y : True := trivial\n"}))
+    world.gh.prs[1] = PR(1, head, "two demos: a proof", "Lane `lane-1`.")
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    assert h.launched == [], world.logs
 
 
 def test_a_lean_check_is_stacked_at_nexts_top_for_a_lean_change_above_a_running_one(world, monkeypatch):
