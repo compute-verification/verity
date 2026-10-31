@@ -17,5 +17,7 @@ inputs = ["benchmarks/pouw/harness", "benchmarks/pouw/settings.py", "tools/confi
           "tools/research/src/research/store", "verity/__init__.py", "verity/core/__init__.py",
           "verity/core/protocols/__init__.py", "verity/core/protocols/pouw/__init__.py",
           "verity/core/protocols/pouw/serving.py",
+          # serving.py takes its tags from the table of domain separators, verity.ml.commitments.domains
+          "verity/errors.py", "verity/ml/__init__.py", "verity/ml/commitments", "verity/ml/crypto",
           # the tests' g++ builds of pfill.cuh include its SHA-512, pearl_c/sha512.cuh, which includes sha512_rows' sha512x.cuh
-          "benchmarks/pouw/pearl_c/sha512.cuh", "benchmarks/torch_gpu/sha512_rows/sha512x.cuh"]
+          "benchmarks/pouw/pearl_c/sha512.cuh", "verity/ml/kernels/sha512.cuh"]

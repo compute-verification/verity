@@ -283,7 +283,7 @@ def _input_map(out: Outcome, module: nn.Module, inputs: tuple) -> list[tuple[str
 
 def _flatten_like(t: Any, T) -> list[tuple[torch.Tensor, int]]:
     """Leaf tensors of a (possibly record) argument, paired with the width of the corresponding type leaves."""
-    from verity.ml.circuits.types import Array, Record, Tuple as TupleT, Value
+    from verity.ml.circuits.types import Array, RecordType, Tuple as TupleT, Value
     if isinstance(t, torch.Tensor):
         tt = T
         while isinstance(tt, Array):
@@ -291,7 +291,7 @@ def _flatten_like(t: Any, T) -> list[tuple[torch.Tensor, int]]:
         assert isinstance(tt, Value), (T, t.shape)
         return [(t, tt.w)]
     if isinstance(t, dict):
-        assert isinstance(T, Record), T
+        assert isinstance(T, RecordType), T
         return [leaf for (k, ft) in T.fields for leaf in _flatten_like(t[k], ft)]
     if isinstance(t, (tuple, list)):
         fields = T.fields if isinstance(T, TupleT) else [T.elem] * len(t)
