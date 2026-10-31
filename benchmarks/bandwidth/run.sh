@@ -67,7 +67,7 @@ B1=$!
 B2=$!
 wait $B1 && wait $B2 || { tail -30 "$O/build.txt"; exit 3; }
 if grep -E "[1-9][0-9]* bytes spill" "$O/build.txt"; then echo "REFUSED: a kernel spills"; exit 3; fi
-sha256sum tagger.cu "$S/bwtag" "$S/libbwtag.so" >> "$O/build.txt"
+sha256sum tagger.cu ../../verity/ml/kernels/sha512.cuh "$S/bwtag" "$S/libbwtag.so" >> "$O/build.txt"
 
 "$PY" reference.py --blocks "${BLOCKS:-524288}" --seed "${SEED:-000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f}" \
   --workers "${WORKERS:-32}" --out "$O/expect.json" > /dev/null

@@ -103,7 +103,7 @@ HOSTFLAGS=(-O3 -mavx512f -mavx512bw -mvaes -maes)
 g++ "${HOSTFLAGS[@]}" -c stream_host.cpp -o "$S/stream_host.o" >> "$O/build.txt" 2>&1 || { tail -30 "$O/build.txt"; exit 3; }
 "$NVCC" "${FLAGS[@]}" stream.cu "$S/stream_host.o" -o "$S/bwstream" -ldl >> "$O/build.txt" 2>&1 || { tail -30 "$O/build.txt"; exit 3; }
 if grep -E "[1-9][0-9]* bytes spill" "$O/build.txt"; then echo "REFUSED: a kernel spills"; exit 3; fi
-sha256sum stream.cu tagger.cu stream_host.cpp stream.py tests/stream_vectors.json "$S/bwstream" >> "$O/build.txt"
+sha256sum stream.cu tagger.cu ../../verity/ml/kernels/sha512.cuh stream_host.cpp stream.py tests/stream_vectors.json "$S/bwstream" >> "$O/build.txt"
 { lscpu; echo; numactl -H 2> /dev/null || true; echo "affinity: $(taskset -pc $$)";
   grep -o -w -E 'vaes|avx512f|avx512bw|aes|vpclmulqdq' /proc/cpuinfo | sort | uniq -c;
   ls /usr/lib/x86_64-linux-gnu/libcrypto.so.3 2> /dev/null || echo "no libcrypto.so.3"
