@@ -49,8 +49,8 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
                                as a window's (SameRegistration) and a window's good event (WindowGood)
 ../../Definitions/NetworkCertifier/Guarantees/Period.lean  trusted: the leak through the network certifier over a
                                monitoring period of sampled audits (PeriodLeakAccepted)
-../../Definitions/NetworkCertifier/Guarantees/Pooled.lean  trusted: the wrong units over a monitoring period of sampled
-                               audits on independent live coins (PooledWrongUnitsLe)
+../../Definitions/NetworkCertifier/Guarantees/Pooled.lean  trusted: the incorrect proof blocks over a monitoring period
+                               of sampled audits on independent live coins (PooledIncorrectBlocksLe)
 ../../Definitions/NetworkCertifier/PooledLeak.lean  trusted: a window's leak relation at one faulty set (LeakAt) and a
                                monitoring period's good event (PooledGood)
 ../../Definitions/NetworkCertifier/Guarantees/PooledLeak.lean  trusted: the leak through the network certifier over a
@@ -93,10 +93,10 @@ Period.lean     the leak through the network certifier over a monitoring period:
                                          windows (encard_periodGood_le, periodLeak)
 PeriodSum.lean  the period sum: per-window leak bounds `Pr[acc w ∧ b w < moved w] ≤ ε w` summed over a
                                          period's windows by a union bound (Pr_exists_mem_le_sum, periodLeak_le_sum)
-Pooled.lean     the wrong units over a monitoring period: a uniform draw misses `f` units with probability at most
-                                         `(1 - k/n)^f` (pr_disjoint_le), the escapes multiply over windows on
-                                         independent coins (pr_adaptive_le), and with each window's soundness error
-                                         added, the monitoring period's bound (horizonWrongUnits)
+Pooled.lean     the incorrect proof blocks over a monitoring period: a uniform draw misses `f` blocks with
+                                         probability at most `(1 - k/n)^f` (pr_disjoint_le), the escapes multiply over
+                                         windows on independent coins (pr_adaptive_le), and with each window's
+                                         soundness error added, the monitoring period's bound (horizonIncorrectBlocks)
 PooledLeak.lean  the leak through the network certifier over a monitoring period: the escapes multiply with
                                          each window's error added (pr_adaptive_add_le, the monitoring-period step
                                          Periods.prCoin_forall_prod_le at bounds capped at 1), the families of faulty sets
@@ -201,7 +201,7 @@ that bound exactly, below the 27 of `r = S` (`allocated_witness_tight`), so `All
 
 The lock (`lean-audit.json`'s `guarantees`) holds the 20 statements of `Guarantees.lean`, the sampled audit's charge
 (`../../Definitions/NetworkCertifier/Guarantees/SampledCharge.lean`), the monitoring period's leak through the network certifier
-(`Guarantees/Period.lean`), the monitoring period's wrong units
+(`Guarantees/Period.lean`), the monitoring period's incorrect proof blocks
 (`../../Definitions/NetworkCertifier/Guarantees/Pooled.lean`) and the leak over a monitoring period
 (`../../Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`), each listed as
 `NetTiming.SecurityProofs.G` and proved by the lemma of the same statement whose name it spells in UpperCamelCase (the
@@ -270,12 +270,13 @@ The other 23 are the rest of the Capacity table's bounds and the schedule's caus
   period's live coins and the registration's binding of the prover's values at `reg` are not yet stated.
   `Claims.Sampling.KS` stands in for proofs' live bound (`Flock.Guarantees.SampledKSLive`), which replaces it once
   locked, with live forms of `SampledAuditAccepted` and `SampledLeakAccepted`.
-- **The wrong units over a monitoring period** (`Pooled.lean`): `PooledWrongUnitsLe` is the bound over many periods,
-  cumulative rather than per window, and a fact of probability with no named assumption. Over `m` windows on independent
-  live coins (the period's coins are the product `Fin m → Ω`), window `i` drawing a uniform `k_i`-subset of its `n_i` units,
-  with the units wrong at its registration fixed by the earlier windows' coins and its audit accepting while its draw
-  meets one with probability at most `ε_i`: for `q ≤ k_i / n_i` in every window, every window accepts while the
-  monitoring period holds at least `F` wrong units with probability at most `(1 - q)^F + Σ_i ε_i`, whatever `m` is, and
+- **The incorrect proof blocks over a monitoring period** (`Pooled.lean`): `PooledIncorrectBlocksLe` is the bound over
+  many periods, cumulative rather than per window, and a fact of probability with no named assumption. Over `m` windows
+  on independent live coins (the period's coins are the product `Fin m → Ω`), window `i` drawing a uniform
+  `k_i`-subset of its `n_i` proof blocks, with the blocks incorrect at its registration fixed by the earlier windows'
+  coins and its audit accepting while its draw meets one with probability at most `ε_i`: for `q ≤ k_i / n_i` in every
+  window, every window accepts while the monitoring period holds at least `F` incorrect blocks with probability at most
+  `(1 - q)^F + Σ_i ε_i`, whatever `m` is, and
   `(1 - q)^F ≤ δ` once `F ≥ ln(1/δ)/q`. The draw's law and each window's error are hypotheses, which A3 and
   `Claims.Sampling.KS` discharge where the bound is applied to the sampled verifier.
 - **The leak through the network certifier over a monitoring period** (`PooledLeak.lean`): `PooledLeakAccepted` is
