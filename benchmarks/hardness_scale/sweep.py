@@ -40,7 +40,9 @@ SIZES = {  # d, sequences a step, sequences a forward
     "20m": {"d": 384, "batch": 128, "micro": 64},
     "60m": {"d": 640, "batch": 256, "micro": 64},
     "125m": {"d": 896, "batch": 256, "micro": 32},
+    "350m": {"d": 1536, "batch": 256, "micro": 32},
 }
+TEACHER = "HuggingFaceTB/SmolLM2-1.7B"
 
 ARMS = {
     "base": {},
@@ -87,6 +89,20 @@ def smoke():
             c.update({"name": f"smoke-{size}-{arm}-mb{micro}", "micro": micro, "batch": micro * 2, "max_steps": 40,
                       "evals": 2, "eval_seqs": micro, "final_eval_seqs": micro * 2})
             out.append(c)
+    return out
+
+
+def ddp_check():
+    """Two GPUs: 100 real steps of the 20M baseline (no noise), whose logged train losses (steps 32, 64, 96) should match
+    the one-GPU 20m-base-lr0.003's (same schedule and data order), and 350M's throughput and memory for the baseline, a
+    matrix arm and distillation."""
+    short = {"evals": 2, "eval_seqs": 64, "final_eval_seqs": 128, "ablate": False}
+    out = [{**cfg("20m", "base", 3e-3, gpus=2), **short, "max_steps": 100}]
+    for arm, extra in (("base", {}), ("m-mlp-r8", {}), ("base", {"teacher": TEACHER, "micro": 16})):
+        c = cfg("350m", arm, 2e-3, synthetic=True, gpus=2)
+        c.update({**short, **extra, "max_steps": 30, "eval_seqs": c["micro"] if not extra else 16,
+                  "final_eval_seqs": 128, "name": c["name"] + ("-kd" if extra else "")})
+        out.append(c)
     return out
 
 
@@ -146,7 +162,7 @@ def t1(res):
     return out + c125, pending
 
 
-PRESETS = {"smoke": lambda res: (smoke(), False), "t1": t1}
+PRESETS = {"smoke": lambda res: (smoke(), False), "ddp-check": lambda res: (ddp_check(), False), "t1": t1}
 
 
 def finished(shared: Path) -> dict:
