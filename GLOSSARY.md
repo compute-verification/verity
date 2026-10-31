@@ -138,7 +138,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "pin", "pinned theorem", "pinned statement"; `pins` in a `lean-audit.json` written before the rename (read as `guarantees`, rewritten by its next `--update`) and in `tools/verity/lean/Facts.lean`'s facts | guarantee |
 | "law", "draw law"; `law` identifiers and record keys (`parse_law`, `same_law`, `law_object`, a registration's `law`), the Lean's `Law` | sampling design |
 | "escape", "escape probability"; the Lean's `*_escape` theorems and `effEscape` | acceptance probability (P_a; `effEscape` is P̄_a) |
-| "proof unit", and "unit" alone meaning one; `unitClasses`, `verity.ml.circuits.parts`, the audit record's `wrong_units` and `proved_units`, `LinkWindows.proof_unit`, the `"proof-unit"` kind of Flock's Boolean export, a `Spec`'s public-item reasons (its digest hashes them), and the `vu_*` names (below) | proof block |
+| "proof unit", "unit class", and "unit" alone meaning one; `unitClasses`, `verity.ml.circuits.parts`, the audit record's `wrong_units` and `proved_units`, `LinkWindows.proof_unit`, the `"proof-unit"` kind of Flock's Boolean export, a `Spec`'s public-item reasons (its digest hashes them), and the `vu_*` names (below) | proof block; a unit class is a size class, or Flock's proof-block class |
 | "wrong unit", "incorrect unit", "faulty unit"; the Lean's `wrong`, the audit record's `wrong_units` | faulty proof block |
 | "transcript", "committed values" and "the circuit's values" for the values of a run's gates; `ExecutionTranscript` | trace |
 | "verifier of record" | the verifier, whose verdict counts and which the guarantees are proved about; other checking code is named for what it is: the Rust cross-check, a Python mirror, or a Python verifier until its Lean one replaces it |
@@ -150,7 +150,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "coin server"; the `round_digest` strings of statement identities in `Flock/Tags.lean` | the challenger's live-coin part |
 | "network transparency"; the `network-transparency/` paths in network accounting's project store that the `NetworkCertifier` Lean cites | network accounting |
 | "warden", "network warden", "tap", "the auditor's tap", "uplink tap", "warden/certifier"; the domain tags `verity-network-warden/row/v1` and `verity-network-warden/record/v1`, the store label value `replay_set=warden/re-verify` | the network certifier; "the warden's records" are network certificates |
-| "remote bandwidth audit" | proof of useful bandwidth (PoUB) |
+| "remote bandwidth audit", "remote bandwidth", "remote audit", "proof of useful bandwidth" | PoUB |
 | "timed verifier"; the recorded config key `verifier_cpu` (`--verifier-cpu`) | the memory challenger |
 | "prover gateway", "gateway"; one recorded statement string of recursive sessions | the ZK server |
 | "verifier gateway" | the challenger |
@@ -165,7 +165,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "block", "message block" for a hash's compression input; the Lean's `Hm96.block`, `HmRow.blockBit`, `ROW_BLOCK`, `shaBlock`, `NetworkCheck.block`, until renamed; BLAKE3's own terms | chunk (a compression's 1024 bits) |
 | "block" for a piece of a counter-mode stream (coins, noise); `Randomness.block`, `J10R.noiseBlock`, `verity.ml.randomness`'s `blocks()`, until renamed | chunk (of the stream) |
 | "block" for a unit of the encoded store of proof of useful space (PoUS); `blocks_per_segment`, `block_bytes`, until a format version | label (a segment's top label) |
-| "block" for a unit of a store, registered or appended, and of a fill; the receipt kind `block-sha512`, `BLOCK_BYTES`, the Lean's `Requirement.liveBlocks`/`readBlocks`/`OneBlockEach`, `Tag.Block`, `appendCoinBlocks`, until a format version or their owners rename them | chunk (of the store) |
+| "block" for a unit of a store, registered or appended, and of a fill; the receipt kind `block-sha512`, `BLOCK_BYTES`, the Lean's `Requirement.liveBlocks`/`readBlocks`/`OneBlockEach`, `appendCoinBlocks`, until a format version or their owners rename them | chunk (of the store) |
 | "block", "block-scaled" for entries under one FP8 or NVFP4 scale; the checkpoint id `verity-fp8-block128/v1`, the Definitions `ScaledMmFp8Block_v1`, `ScaledMmFp8BlockSharedScale_v1`, `MoeExpertFp8BlockCoordinate_v2`, `BlockScaledAlignAdd`, `SiluMulFp8BlockQuant_v1`, vLLM's `weight_block_size` | scale group |
 | "block" for a range of a GEMM's inner dimension; the Lean's `D1.nBlocks`, `ThreeBlock` | segment |
 | "block" for a page of vLLM's KV cache, and its block pool; vLLM's `block_size`, `block_table`, `num_gpu_blocks` | KV page, page pool |
@@ -175,7 +175,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "compile unit" | the compile slice's proof block |
 | "isolation unit" (IU), "isolation block", "certified block" | inference block |
 | "novel communication intensity" (NCI); "baseline" for θ; `Nci*`, `nci-*`, `ius` and the `nci` directories, until renamed | the inference-only policy; the registered information θ |
-| "replay unit" (RU) | replay block |
+| "replay unit" (RU) | proof block (optimizer: replay block) |
 | "leg"; "integrity", "work", "space" and "communication" naming subprotocols; the all-protocols runner's legs, the verdict keys `integrity` and `communication`, the Lean's `Core.Protocol` | subprotocol |
 | "stage", outside "one-stage"; names and record keys that keep it, such as `research run --stage` | phase, or run |
 | "row" for a server's window (s, w), "per-row bound" | server block, server-block yield |
@@ -217,23 +217,24 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "staging", "the staging decode" for copying a stored model's bytes into GPU memory and decoding them to the served weights; `benchmarks/torch_gpu/p2_stage`, until renamed | the store's load |
 | "post-landing run", "postland" | after-landing run |
 | "train" for a batch of PRs landed on one check | none: drive lands the reviewed prefix of `next` |
-| "draw" (noun, verb), "drawn proof block", "drawn unit"; `DrawIsCoin`, `Remote.Draw.Session`, `--draw`, until renamed | the sample, a sampled proof block; to sample (coins are flipped) |
+| "draw" (noun, verb), "drawn proof block", "drawn unit", "sampled unit"; `DrawIsCoin`, `Remote.Draw.Session`, `--draw`, until renamed | the sample, a sampled proof block; to sample (coins are flipped) |
 | "components", "product" for a composite's parts and their joining, and the Lean's and wire format's names | subprotocols; composition |
 | "firewall"; `flock-firewall`, `Flock.Firewall`, `FC_FIREWALL*`, until renamed | the ZK server |
 | `flock-verify`, `remote check` for the verifiers, until renamed | `verity verify proof`, `verity verify remote` |
 | "builder", "advice compiler", "circuit builder" for what compiles the advice; `Builder` | registered compiler |
-| "declared advice"; "declared circuit"; "declaration block", "declaration period" | advice; registered circuit; execution block, execution phase |
+| "declared advice", "declaring" or "a declaration" of advice; "declared circuit", "declared work"; "declaration block", "declaration period" | reported advice; registered circuit, registered work; execution block, execution phase |
 | a served span: "window", `IntegrityPeriod`, PoUW's "commit period" and `window`, "sampling block", until renamed | execution phase |
 | "sampling period" for work plus its audit | an execution phase and its verification phase |
 | "hm96 rows" in protocol prose (the commitments' docs keep it) | hiding commitments |
+| "proof service" | the proof system |
+| "audit coin"; "the audit" as a step | the challenger's coins; the verification phase |
 | "before that period's coins exist"; "rejection dominates", "reject dominance" | before any coins are flipped; any rejection rejects |
 | tick(g) | t(g) |
 | D for the chosen-state budget | Λ (D is the registered circuit) |
 | D_b^τ for the PRF distinguisher | 𝒟_b^τ |
 
-The `veritor.*` gate families of `verity/ml/circuits/targets/target.py` (`veritor.tc-ampere-bf16@1`, `veritor.tc-bf16.*@1`,
-`veritor.tensor-core.*@2`) keep the spelling that the `*_FAMILY_DIGEST` pins, fixtures and recorded runs bake in. A new
-family takes a fresh id, never `veritor.*` (`verity/ml/circuits/tests/test_targets_frozen_families.py`).
+The `veritor.*` gate families (`verity/ml/circuits/targets/target.py`) keep their spelling, which the `*_FAMILY_DIGEST`
+pins, fixtures and recorded runs bake in; a new family takes a fresh id (`test_targets_frozen_families.py`).
 
 ## The ACCEL model and Dither
 
@@ -274,9 +275,7 @@ family takes a fresh id, never `veritor.*` (`verity/ml/circuits/tests/test_targe
     limit** is k_log ≤ 27 (`MAX_K_LOG`; the range the soundness bound covers, `Stmt.InRange`, with at most 1024 regions
     and m_pts ≤ 64): a proof block whose unit circuit doesn't fit in one R1CS block can't be proved as one.
 
-  So "at least one unit per VU and a power of two of VUs per block" reads "at least one unit copy per VU and a power of
-  two of VUs per R1CS block". An R1CS block is never a proof block, and the identifiers (`units_per_vu`,
-  `vus_per_block`, `blocks_real`) keep their names.
+  An R1CS block is never a proof block, and `units_per_vu`, `vus_per_block` and `blocks_real` keep their names.
 - "Candidate C" and "Candidate V" in older notes are the QuickSilver VOLE research backend, since deleted, not Flock.
 - A **pipeline stage** is one buffered step of a CTA's software pipeline, the operands it loads ahead of the tensor cores
   (CUTLASS's `Stages`, Triton's `num_stages`).

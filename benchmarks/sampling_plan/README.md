@@ -9,8 +9,8 @@ source and status, measured or assumed (`inputs.py`).
 B is the budget model's unit, GPU-seconds of overhead per plain GPU-second over a window, and it is the serve-time
 total (everything is committed at serve time): every
 scale's serve-time commitments under the PoUW scheme (`--scheme`: `floor`, the measured s8 A-operand floor alone;
-`h1`, `h1-bf16`, `pearl-c`, each scheme's rows a token a layer) and the store-block receipts of proof of useful
-bandwidth (PoUB), which every plan pays; then proving and the verifier's CPU (at its price ratio) for the drawn units,
+`h1`, `h1-bf16`, `pearl-c`, each scheme's rows a token a layer) and the store-block receipts of
+PoUB, which every plan pays; then proving and the verifier's CPU (at its price ratio) for the drawn units,
 the commitment of every unit's outputs, replay of the layer-steps the draw meets (to build their witnesses), and the
 zero-work subcircuits at their floor.
 
@@ -82,4 +82,15 @@ uv run python benchmarks/sampling_plan/demo_a.py --out DIR [--spans NAME ...] [-
 
 ```text
 uv run python benchmarks/sampling_plan/cpu_budget.py --plan PLAN.json --slots 17 --hours 2.5 --out DIR
+```
+
+- `recursion.py`: one recursive session's cost per monitoring period. It reads a `benchmarks/recursion_e2e` result's
+  measured parts (the inner run, V*'s staging, V*'s firewalled releases and the Lean step), with the same units'
+  non-recursive `--zk` session beside them, and scales them to every machine-window of the census's datacenter
+  (`dc-12500-machines-600s`) and of the world (`benchmarks/rho`'s `world-h200` fleet, in the datacenter's windows,
+  assumed) over a week, a month and a year: sessions, node-hours and nodes kept busy, prover's and auditor's
+  (`recursion-periods.json`, `recursion-periods.md`).
+
+```text
+uv run python benchmarks/sampling_plan/recursion.py --result recursion_e2e.json [--sessions-per-window 1] --out DIR
 ```

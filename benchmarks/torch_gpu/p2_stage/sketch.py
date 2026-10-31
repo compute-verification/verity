@@ -1,4 +1,4 @@
-"""The remote bandwidth audit's receipts beside the staging decode: each pass's sketch of every unit of `C*` as the decode
+"""PoUB's receipts beside the staging decode: each pass's sketch of every unit of `C*` as the decode
 reads it, the units' receipts and the pass's root, bit for bit `poub.p2`'s (the interface is `PROTOCOL.md`
 §11 of `verity/core/protocols/poub`; the fixture is `benchmarks/pous/p2_v1/serve.py fixture`). ::
 
