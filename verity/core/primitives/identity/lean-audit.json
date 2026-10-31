@@ -7,7 +7,7 @@
   "Identity": {
    "imports": ["Identity", "Flock.Hash", "Flock.Bytes", "Flock.Canon"],
    "except": ["Identity.Difftest"],
-   "why": "the identity hash is code: Lean core and C-Flock's executable primitives only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+   "why": "the identity hash is code: Lean core and C-Flock's executable primitives only, no Mathlib and nothing of Security"
   },
   "Identity.Difftest": {
    "imports": ["Identity", "Difftest"],
