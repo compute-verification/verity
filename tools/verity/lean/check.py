@@ -110,7 +110,7 @@ allowed axioms replaces it.  `--update` writes the records and `reads` from the 
 whole `lean-audit.json`, changed or not, beside the package's reports too (`audit-TAG/` under `--out`, which a recorded run
 publishes), and prints what changed: each changed guarantee's signature before and after, and each changed definition a
 guarantee reads with its source now.  A weakened definition passes every axiom check and the replay, so a person has to see
-those changes: Daniel gets a DM with them when they land on `main` (`research merge`'s `spec_alert`).  An audit without
+those changes: the landing DM lists them when they land on `main` (`research merge`'s `spec_alert`).  An audit without
 `--update` whose every failure is a record difference (its code is in `RECORD_DIFFERENCE`: two records each right on its
 side of a merge whose definitions changed, an owned entry with no record yet, a premise the lock doesn't list) writes the
 same `lean-audit.json` and `review.txt` there, and its report's `regenerated` names the file, so a failed check of a train's
@@ -278,8 +278,8 @@ def cores() -> int:
 #: what auditing a package that pins ArkLib (Security/Proofs, and Security, which audits it beside itself) needs: its build
 #: of Flock's soundness peaks at 15–24 GB (the lean-proofs skill); `VERITY_LEAN_MEM_FLOOR_GIB` sets another floor, 0 none
 MEM_FLOOR_GIB = 24
-#: an audit of a spec whose guarantees an ArkLib package proves (Security): its whole replay peaked at 145 GiB at 48 threads
-#: (r20261018-175656-1c85) and was killed at a 128 GiB cap at 16 (r20261019-084601-01a0), so the replay's resident base is
+#: an audit of a spec whose guarantees an ArkLib package proves (Security): its whole replay peaks at about 145 GiB at
+#: 48 threads and is killed at a 128 GiB cap at 16, so the replay's resident base is
 #: about 120 GiB and a thread adds under 1: fewer threads don't make it fit, only the floor does
 SPEC_FLOOR_GIB = 160
 #: where a machine below the floor runs it instead
@@ -322,7 +322,7 @@ def memory_gib(proc: Path = Path("/proc"), cgroup: Path = Path("/sys/fs/cgroup")
 
 
 #: about what one `lean` of a Mathlib or ArkLib build peaks at: Lake runs as many at once as `LEAN_NUM_THREADS`, so a build
-#: of such a package runs no more than its memory holds (two queued Security builds were OOM-killed at 64 and 16 GB, 18 Oct)
+#: of such a package runs no more than its memory holds (a Security build with more jobs is OOM-killed, even at 64 GB)
 BUILD_GIB_PER_JOB = 8
 
 
@@ -369,7 +369,8 @@ def memory_refusal(pkgs: list[Path], have_gib: float, env=os.environ) -> str | N
         floor = need
     if not heavy or have_gib >= floor:
         return None
-    rel = lambda p: os.path.relpath(p, ROOT) if p.resolve().is_relative_to(ROOT) else str(p)
+    def rel(p):
+        return os.path.relpath(p, ROOT) if p.resolve().is_relative_to(ROOT) else str(p)
     what = (f"{rel(spec[0])}'s audit reads {rel(heavy[0])}'s facts for every guarantee it proves, about 40 GiB beside the "
             f"replay" if heavy and spec else f"{rel(heavy[0])} pins ArkLib, whose build peaks near {MEM_FLOOR_GIB} GiB")
     return (f"{what}, and this machine has {have_gib:.0f} GiB (memory and swap, within its cgroup), under the {floor:.0f} "
@@ -390,7 +391,7 @@ def plugin_targets(pkg: Path) -> list[str]:
     """The compiler plugins the package's fetched dependencies load (`plugins` of a `[[lean_lib]]` in their `lakefile.toml`),
     as targets `@dep/Lib:facet`.  Lake links one twice when two of a package's libraries load it, one under the module system
     and one not (ArkLib's `ArkLib` and `ArkLibTest` with `ArkLibLintPlugin:shared`), and the two links race on one file, so the
-    build links each alone first, after which both find it up to date (INF-62)."""
+    build links each alone first, after which both find it up to date."""
     out: list[str] = []
     for f in sorted((pkg / ".lake" / "packages").glob("*/lakefile.toml")):
         try:
@@ -748,7 +749,8 @@ def used(variables: list[str], text: str) -> list[str]:
     included group mentions one of its names, an instance group when every variable it mentions is included."""
     named = {g: g[1:-1].split(":")[0].split() for g in variables if g[0] != "["}
     names = {n for ns in named.values() for n in ns}
-    mentions = lambda s: {n for n in names if re.search(IDENT.format(re.escape(n)), s)}
+    def mentions(s):
+        return {n for n in names if re.search(IDENT.format(re.escape(n)), s)}
     inc, seen = set(), None
     while seen != inc:
         seen = set(inc)
@@ -822,7 +824,8 @@ def lift(pkg: Path, policy: dict, facts: dict, lifts: dict[str, dict]) -> dict[s
     the change."""
     files = {m: f for _, q in provers(pkg, policy) if q.is_dir() for m, f in module_files(q).items()} | module_files(pkg)
     proofs = {m for _, q in provers(pkg, policy) if q.is_dir() for m in lean_modules(q)}
-    declared = lambda mods: {n for mod in mods for n in re.findall(r"(?m)^namespace\s+(\S+)", strip_comments(files[mod].read_text()))}
+    def declared(mods):
+        return {n for mod in mods for n in re.findall(r"(?m)^namespace\s+(\S+)", strip_comments(files[mod].read_text()))}
     proof_ns = declared(proofs & files.keys()) - declared(files.keys() - proofs)
     moves, original, added, needs = {}, {}, {}, {}
     for old, spec in sorted(lifts.items()):
@@ -1398,7 +1401,7 @@ def verifier_failures(rule: dict | None, found: dict | None, update: bool = Fals
     """The verifier's path (`verifier` in the policy: its `entries`, the constants it may reach without being expanded,
     `stop`, and the `hash` namespace): every `@[implemented_by]` or `@[extern]` constant the entries reach is compiled code
     no proof sees, so one fails unless `allow` admits it (`allowed_by`), and the entries reach the `hash` namespace only
-    through `stop`, so the verifier hashes through its parameter (Daniel's checks (a) and (b), LEAN-18). `allow` is a
+    through `stop`, so the verifier hashes through its parameter. `allow` is a
     record: `--update` writes each such constant into it by name (`verifier_allow`), a `module:` entry aside, and a name
     that admits nothing on the path fails. The walk follows `@[csimp]` replacements, so the code compiled in place of a
     constant is on the path; the rewrite itself is a theorem the replay checks, listed and never refused."""
@@ -1439,14 +1442,14 @@ def claim_witnesses(policy: dict) -> set[str]:
 
 
 def claim_failures(policy: dict, facts: dict) -> list[str]:
-    """Each claim definition has its witnesses (`claims` in the policy; LEAN-26, proofs' claims-landing norms): every predicate
+    """Each claim definition has its witnesses (`claims` in the policy): every predicate
     the spec declares under `claims.modules` (a named assumption, and one `claims.not` lists with the reason, aside) names
     under `claims.witnesses` a theorem `fails`, whose statement past its `∀` and `∃` binders is `¬ C …` with the claim `C`
     itself at the head (the claim is not true of everything), and theorems `meets`, one per deployed record, that state
     the claim's checkable antecedents there and not `C` itself (it is not true at the deployment only because nothing
     meets its antecedents). Each witness is a guarantee, so its record, and a change to it, shows in the landing DM.
     An entry is stale only when it names no predicate under `claims.modules`, so a named assumption (a claim a guarantee
-    takes as a premise) may keep its entry, which is then checked like any other. A `meets` witness must say something about the deployment (LEAN-32, `vacuous_meets`): its conclusion, past its `∀`,
+    takes as a premise) may keep its entry, which is then checked like any other. A `meets` witness must say something about the deployment (`vacuous_meets`): its conclusion, past its `∀`,
     `→` and `∃` binders and split at `∧` (each conjunct again past its own binders), is conjuncts that are each headed by
     a constant other than `C`, apply a definition under `meaning` themselves (the deployed record, a predicate or a field
     of it; `True`, or a fact of Init or Mathlib alone, applies none), and are neither a reflexivity (`a = a`, `a ↔ a`,
@@ -1816,7 +1819,8 @@ def refusals(entry: dict | None, got: list[dict], premises: list[str], conjectur
     ``entry`` names, one line each: none when it is.  A conjunction is a property when each of its conjuncts is one, of
     the entry's function, or of its own when the entry lists `conjuncts` (one `{function, outcome}` each, in order) in
     place of one function and outcome for them all."""
-    named = lambda e: isinstance(e, dict) and e.get("function") and e.get("outcome") in OUTCOMES
+    def named(e):
+        return isinstance(e, dict) and e.get("function") and e.get("outcome") in OUTCOMES
     each = (entry or {}).get("conjuncts")
     if each is not None:
         if "function" in entry or "outcome" in entry:
@@ -2495,7 +2499,7 @@ def setup(pkg: Path, toolchain: str, log: Path) -> tuple[int, str]:
 def dev_restore(pkg: Path, rc: int, text: str, log: Path) -> tuple[int, str]:
     """With `--dev-cache`, main's verified build of each package ``pkg`` requires by path too (`setup.sh` restores only
     ``pkg``'s): a rebuild of one isn't byte-identical to the published build, so every module above it would compile again
-    (Security/Proofs at the published commit, 21 Oct: 1,607 of its modules). A failed restore leaves those to `lake build`."""
+    (most of Security/Proofs' modules). A failed restore leaves those to `lake build`."""
     if not DEV_CACHE or rc != 0 or not (deps := path_deps(pkg)):
         return rc, text
     # `cache.py get` unstages from inside each package, so Lake needs that package's dependencies where it looks: a path
@@ -2684,7 +2688,8 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
     found = work / "replay.json"
     found.unlink(missing_ok=True)
     keys = replay_keys(facts, toolchain) if replay_cache else {}
-    passed = lambda m: m in keys and (replay_cache / f"{keys[m]}.json").is_file()
+    def passed(m):
+        return m in keys and (replay_cache / f"{keys[m]}.json").is_file()
     n = replay_threads(pkg)
     _peak.bytes = 0
     # what passed is read once the replay may start, so a package audited beside one that shares its closure reuses it

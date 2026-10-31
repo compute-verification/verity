@@ -109,6 +109,8 @@ class Options:
     dead_ids: int = 1 << 17
     struct_max_gates: int = 0
 
+DEFAULTS = Options()
+
 
 @dataclass
 class Findings:
@@ -885,7 +887,7 @@ def q_call(fn: Any, opts: Options, F: Findings, memo: dict) -> dict:
 
 # --- one Definition ---------------------------------------------------------------------------------------------------------
 
-def check_definition(fn: Any, opts: Options = Options(), *, memo: dict | None = None, pins: dict | None = None,
+def check_definition(fn: Any, opts: Options = DEFAULTS, *, memo: dict | None = None, pins: dict | None = None,
                      lower_whole: bool = True, as_call: bool | None = None) -> dict:
     """Every check on one Definition (a primitive, a bound composite) or `ScalarReference`: its entry, with its failures and
     warnings.  ``memo`` shares the word query's `word.unit_rule` results and the entries across calls;
@@ -1121,7 +1123,7 @@ def template_lowering(sub: Any, st: dict, d: Any, opts: Options, F: Findings, pi
     return rec
 
 
-def check_subcircuit(sub: Any, opts: Options = Options(), *, instance_statics: Sequence[dict] = ({},), memo: dict | None = None,
+def check_subcircuit(sub: Any, opts: Options = DEFAULTS, *, instance_statics: Sequence[dict] = ({},), memo: dict | None = None,
                      pins: dict | None = None) -> dict:
     """Every check on a subcircuit: its Definition (and its evaluated target where that is another Definition) at each binding of
     its instance statics, and its C-Flock lowering."""
@@ -1147,7 +1149,7 @@ def check_subcircuit(sub: Any, opts: Options = Options(), *, instance_statics: S
 
 # --- one served workload ------------------------------------------------------------------------------------------------------
 
-def check_row(path: str | Path, opts: Options = Options(), *, memo: dict | None = None, pins: dict | None = None) -> dict:
+def check_row(path: str | Path, opts: Options = DEFAULTS, *, memo: dict | None = None, pins: dict | None = None) -> dict:
     """A served workload's request Program (a Build's ``instances.json.gz``, or its directory): `word.check_query` over its Calls (the
     cross-Call conditions: every Value a Call reads or returns is committed) and every check on each distinct Definition."""
     from types import SimpleNamespace
