@@ -690,10 +690,21 @@ def verdict_line(answer: dict, expect: str | None, record: dict | None = None) -
 def _party(a: argparse.Namespace, out: Path, prover: Prover, request: dict) -> tuple[dict, dict | None, int]:
     """A session with a party the auditor's gate starts (`--party CMD`, `p2_party --listen` on the gate's host): its
     `{"listening": port}` read from CMD's stdout, the session over TCP to `--party-host` at that port, and then its own
-    record of the answer from the rest of CMD's stdout."""
+    record of the answer from the rest of CMD's stdout. The gate kills a party once its session's minutes run out
+    (`bw_party --minutes M`) and says so on that stdout, `{"killed": why}`: a session cut off so fails naming it."""
     with open(out / "verifier.err", "ab") as err:
         proc = subprocess.Popen(a.party, shell=True, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=err)
-        record = None
+        record = killed = None
+
+        def rest() -> None:
+            nonlocal record, killed
+            for line in proc.stdout:
+                doc = json.loads(line)
+                if isinstance(doc, dict) and "answer" in doc:
+                    record = doc["answer"]
+                elif isinstance(doc, dict) and "killed" in doc:
+                    killed = doc["killed"]
+
         try:
             port = None
             for line in proc.stdout:
@@ -703,13 +714,16 @@ def _party(a: argparse.Namespace, out: Path, prover: Prover, request: dict) -> t
                     break
             if port is None:
                 raise ConnectionError("the party ended without listening")
-            with (socket.create_connection((a.party_host, port)) as conn, conn.makefile("rb") as r,
-                  conn.makefile("wb") as w):
-                answer = p2_party.prove(r, w, prover, request)
-            for line in proc.stdout:
-                doc = json.loads(line)
-                if isinstance(doc, dict) and "answer" in doc:
-                    record = doc["answer"]
+            try:
+                with (socket.create_connection((a.party_host, port)) as conn, conn.makefile("rb") as r,
+                      conn.makefile("wb") as w):
+                    answer = p2_party.prove(r, w, prover, request)
+            except (OSError, ValueError) as e:
+                rest()
+                if killed is not None:
+                    raise ConnectionError(f"the auditor's gate killed the party: {killed}") from e
+                raise
+            rest()
         finally:
             rc = proc.wait()
     return answer, record, rc
