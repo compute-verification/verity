@@ -940,27 +940,27 @@
   },
   "Flock.SoundAtBridge.OpenedPlurAt": {
    "owner": "@proofs",
-   "digest": "30e1d8c68e688ddb66fe3a94bcecd94b027436a9080cc6bd9d9bb3e64917e55a"
+   "digest": "feb05130cabdbc702dacb057e677e1459112efa4dcf0dd254e76a3435130bffe"
   },
   "Flock.SoundAtBridge.RelOfRows": {
    "owner": "@proofs",
-   "digest": "57a2e4b7fd213fb2b79ee918cda221cfed50b94ae9879cae2ce0f97b359c3f7a"
+   "digest": "7ffa0afa3734241445200bf8757d6765b025d74e77a3c84c2f5f292b7bd79c94"
   },
   "Flock.SoundAtBridge.RowsSession.CR": {
    "owner": "@proofs",
-   "digest": "1b75e60964c75324e99f7a8bc0a0ab710593c18af4b5830b1649e0cc0bf3c40a"
+   "digest": "7e6f6db177d6a1554b612a3968b291da48fa94fdb08154026c6405355c031bc5"
   },
   "Flock.SoundAtBridge.RowsSession.RowsAt": {
    "owner": "@proofs",
-   "digest": "6a07bd9bc2150cb4bfee88b7c991689984a88a4a19e69cfd7eee36d32a62cdac"
+   "digest": "e6cdadc23df5ef36e0833fb53802e23d5d861a183304924ed29c66666fc56892"
   },
   "Flock.SoundAtBridge.RowsSession.ServedRegistered": {
    "owner": "@proofs",
-   "digest": "03cb25e33de9cdabe11a3ece671bf2705dd1231bafb40a98d83d4ac3527c7155"
+   "digest": "66041eb470b1a8f6e2818ad8166f67facd5131e8ee9526923ea9017733769643"
   },
   "Flock.SoundAtBridge.WindowLaw": {
    "owner": "@proofs",
-   "digest": "e77ea646591fe71aadc6d4f77e966c437751c4aaae13ed4ae21dda0e56c827fb"
+   "digest": "1698aacd1656059f77afbddd74874f2049e494d5c208a38d013f39dfe8b1a5bd"
   },
   "FlockDeploy.PlainIn": {
    "owner": "@proofs",
@@ -40553,8 +40553,9 @@
    ]
   },
   "Flock.Registered": {
-   "digest": "89f1e81fee1f3a44ca837214e24505d10d06ac3583a1a162a62eef16526e196a",
+   "digest": "0c213a5ca9f1eb3e9382694470510f4cd3fc6bd89c6e65be44ebd8b8dde07ac1",
    "definitions": {
+    "Flock.Registered.COMPLETE_KEY": "1e8b83345448089f0b9bbbaadd6b8f707757fe7ad2be919ac116f2c367d70951",
     "Flock.Registered.FILE_KEYS": "f0c35dfcb8a6a4b2e574a62c121592a276b16512b53c37b2ff75025e63c2ae4e",
     "Flock.Registered.FORMAT": "fda4f60dfaea5d4458ee6f0696f8e183cfcd06e6f555178bf57f3c6e3ea83bd2",
     "Flock.Registered.FORMAT_V0": "a02a26231dce59059028ce6c558c2f565745e91e21315fc60525e82cb6c8aefc",
