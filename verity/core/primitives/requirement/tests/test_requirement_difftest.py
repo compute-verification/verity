@@ -5,7 +5,7 @@ each step, their bits, by value and by block, those in complete blocks (the cred
 blocks, and whether the store and the step's plan are W's (`StoreMatches`, `PlanMatches`), with `held` and `read` over
 its steps; and, the execution placed on devices, PoUW's windows over it: each window's region at its ticks and at its
 engine steps, its ingress and its credits. The reference is `requirement.py`'s: `Requirement.of` on the instance's
-`Execution`, its `live`, `reads` and bits, `Store.Placement.blocks` and `bits_in`, `credited`, `credited_reads`,
+`Execution`, its `live`, `reads` and bits, `Store.Packing.blocks` and `bits_in`, `credited`, `credited_reads`,
 `Store.resident`, `store_matches`, `plan_matches` and `Placement`'s `region`, `step_region`, `ingress` and `credits`.
 
 Drawn instances are small wirings with executions that follow them and some that don't, under `pack`'s store placement
@@ -121,7 +121,7 @@ def requirement(i) -> dict:
     except ValueError as e:
         raise D.Reject(str(e)) from None
     encoded = _nats(_get(i, "encoded"), "encoded")
-    layout = R.Store.Placement(dict(enumerate(block)), dict(enumerate(offset)), dict(enumerate(encoded)))
+    layout = R.Store.Packing(dict(enumerate(block)), dict(enumerate(offset)), dict(enumerate(encoded)))
 
     def by_block(values) -> list[list[int]]:
         return [[j, layout.bits_in(req, values, j)] for j in sorted(layout.blocks(values))]
@@ -155,7 +155,7 @@ Window = tuple[frozenset[int], frozenset[int], int, int, int, int]
 NO_PLACEMENT = R.Placement({}, {})
 
 
-def encode(ex: R.Execution, layout: R.Store.Placement, store: R.Store, plans, block_bits: int, steps: int,
+def encode(ex: R.Execution, layout: R.Store.Packing, store: R.Store, plans, block_bits: int, steps: int,
            placement: R.Placement = NO_PLACEMENT, price=None, windows: list[Window] = ()) -> dict:
     """The instance `requirement` takes: `ex`'s values `0 … n - 1` (a value it has no width for is 0 bits, one with no
     device on device 0, one with no price priced 0, and those `layout` doesn't place share a block past every one the
@@ -224,8 +224,8 @@ def _execution(rng: random.Random, n: int, T: int) -> R.Execution:
     return R.Execution(width, registered, step, ops, uses, values, inputs=inputs)
 
 
-def _random_layout(rng: random.Random, n: int, B: int) -> tuple[R.Store.Placement, R.Store]:
-    layout = R.Store.Placement({v: rng.randrange(4) for v in range(n)}, {v: rng.randrange(B + 2) for v in range(n)},
+def _random_layout(rng: random.Random, n: int, B: int) -> tuple[R.Store.Packing, R.Store]:
+    layout = R.Store.Packing({v: rng.randrange(4) for v in range(n)}, {v: rng.randrange(B + 2) for v in range(n)},
                       {j: rng.randrange(6) for j in range(4) if rng.random() < 0.4})
     T = rng.randrange(5)
     store = R.Store(rng.randrange(5), {t: frozenset(rng.sample(range(6), rng.randrange(3))) for t in range(T)},
@@ -234,7 +234,7 @@ def _random_layout(rng: random.Random, n: int, B: int) -> tuple[R.Store.Placemen
     return layout, store
 
 
-def paged(req: R.Requirement, B: int) -> tuple[R.Store.Placement, R.Store]:
+def paged(req: R.Requirement, B: int) -> tuple[R.Store.Packing, R.Store]:
     """A KV pool's honest store placement and store, one sequence's: the registered values as `pack` places them, then
     every other value that is ever live in order of birth, filling blocks of `B` bits in turn, so that a block later
     steps fill credits nothing until it is complete; each block written in the record of its last value's step, the one
@@ -258,12 +258,12 @@ def paged(req: R.Requirement, B: int) -> tuple[R.Store.Placement, R.Store]:
         vs = [v for v, i in block.items() if i == k]
         written.setdefault(max(req.born[v] for v in vs), set()).add(k)
         freed.setdefault(max(req.last[v] for v in vs), set()).add(k)
-    return (R.Store.Placement(block, offset),
+    return (R.Store.Packing(block, offset),
             R.Store(store.registered, {s: frozenset(js) for s, js in written.items()},
                     {s: frozenset(js) for s, js in freed.items()}, payload))
 
 
-def deferred(rng: random.Random, layout: R.Store.Placement, store: R.Store) -> tuple[R.Store.Placement, R.Store]:
+def deferred(rng: random.Random, layout: R.Store.Packing, store: R.Store) -> tuple[R.Store.Packing, R.Store]:
     """memory-map/v1's deferred residency on an honest store placement and store: each written block's coin back zero to
     two steps late, so its write is recorded that many steps after the record of the step that completes it and its
     first encoded read is the step after its write, and a block whose values' last structural reader (its free's step)
@@ -282,19 +282,19 @@ def deferred(rng: random.Random, layout: R.Store.Placement, store: R.Store) -> t
                 freed[free[j]].discard(j)
             else:
                 written.setdefault(r, set()).add(j)
-    return (R.Store.Placement(layout.block, layout.offset, encoded),
+    return (R.Store.Packing(layout.block, layout.offset, encoded),
             R.Store(store.registered, {s: frozenset(js) for s, js in written.items()},
                     {s: frozenset(js) for s, js in freed.items()}, store.payload))
 
 
-def _mutated(rng: random.Random, layout: R.Store.Placement, store: R.Store, B: int) -> tuple[R.Store.Placement, R.Store]:
+def _mutated(rng: random.Random, layout: R.Store.Packing, store: R.Store, B: int) -> tuple[R.Store.Packing, R.Store]:
     """One change a dishonest store or store placement makes: a payload bit, an extra resident block (filler, which keeps
     the link), a block freed or written early or late, a value moved, a block's first encoded read moved."""
     kind = rng.randrange(6)
     if kind == 5:
         j = rng.randrange(8)
         encoded = {**layout.encoded, j: max(0, layout.encoded.get(j, 0) + rng.choice([-2, -1, 1, 2]))}
-        return R.Store.Placement(layout.block, layout.offset, encoded), store
+        return R.Store.Packing(layout.block, layout.offset, encoded), store
     if kind == 0 and store.payload:
         j = rng.choice(sorted(store.payload))
         return layout, R.Store(store.registered, store.written, store.freed,
@@ -313,7 +313,7 @@ def _mutated(rng: random.Random, layout: R.Store.Placement, store: R.Store, B: i
         return layout, store
     v = rng.choice(sorted(layout.offset))
     moved = {**layout.offset, v: layout.offset[v] + rng.choice([1, B])}
-    return R.Store.Placement(layout.block, moved, layout.encoded), store
+    return R.Store.Packing(layout.block, moved, layout.encoded), store
 
 
 def _placement(rng: random.Random, ex: R.Execution, n: int, T: int) -> tuple[R.Placement, dict[int, int], list[Window]]:
