@@ -14,7 +14,7 @@ the monitoring-period step (`FlockSoundness.Audit.Periods.prCoin_forall_prod_le`
 whose product is at most the product of the escapes plus the errors' sum (`prod_min_add_le`); a union bound adds the
 leak relations' errors `e' i`.
 
-The count half: a family of faulty sets with fewer than `Fmax` units in total is the units listed by some
+The count half: a family of faulty sets with fewer than `Fmax` proof blocks in total is the proof blocks listed by some
 `Fin Fmax → Option (Σ i, Fin (n i))` (`exists_famOf_eq`), so there are at most `(N + 1)^Fmax` of them. At one family,
 each window's observations number at most `2^#(freeInputs \ reg) · 2^(faultyBits) · Dj^k` (`encard_leakAt_le`, from
 `encard_acceptedFaulty_le` at `AsReg`), and the faulty bits sum to at most `b · Fmax`. Under `trusted-host` the cells
@@ -97,7 +97,7 @@ theorem pr_adaptive_add_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {r : ℝ} (hr0
 
 /-! ### The families of faulty sets -/
 
-/-- The units that `g` lists in window `i`. -/
+/-- The proof blocks that `g` lists in window `i`. -/
 def famOf {m : ℕ} {n : Fin m → ℕ} {F : ℕ} (g : Fin F → Option (Σ i : Fin m, Fin (n i))) (i : Fin m) : Finset ℕ :=
   (univ.filter fun v : Fin (n i) => ∃ t, g t = some ⟨i, v⟩).image Fin.val
 
@@ -159,8 +159,8 @@ theorem faultyBits_le_card_mul (C : Prog) (P : Partition) {n b : ℕ} {F : Finse
 
 /-! ### The count -/
 
-theorem encard_leakAt_le {L K S : ℕ} (lay : Stmt → Layout L S) (k : Stmt → ℕ) (reg : Stmt → Finset ℕ) (Dj : ℕ)
-    (s : Stmt) (P : Partition) (ρ : ℕ → Bool) (op : ℕ → List (Obs L K S) → List Bool) (F : Finset ℕ) :
+theorem encard_leakAt_le {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (reg : AuditStatement → Finset ℕ) (Dj : ℕ)
+    (s : AuditStatement) (P : Partition) (ρ : ℕ → Bool) (op : ℕ → List (Obs L K S) → List Bool) (F : Finset ℕ) :
     {o | LeakAt lay k reg Dj s P ρ op F o}.encard ≤
       ((2 ^ (freeInputs s.prog (lay s) (k s) \ reg s).card * (2 ^ faultyBits s.prog P F * Dj ^ k s) : ℕ) : ℕ∞) := by
   by_cases hfits : (lay s).Fits s.prog (k s)
@@ -178,8 +178,8 @@ theorem encard_leakAt_le {L K S : ℕ} (lay : Stmt → Layout L S) (k : Stmt →
     rw [this, Set.encard_empty]
     exact zero_le
 
-theorem encard_horizonGood_le {L K S : ℕ} (lay : Stmt → Layout L S) (k : Stmt → ℕ) (reg : Stmt → Finset ℕ) (Dj : ℕ)
-    {m : ℕ} (sw : Fin m → Stmt) (Pw : Fin m → Partition) (ρ : Fin m → ℕ → Bool)
+theorem encard_horizonGood_le {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (reg : AuditStatement → Finset ℕ) (Dj : ℕ)
+    {m : ℕ} (sw : Fin m → AuditStatement) (Pw : Fin m → Partition) (ρ : Fin m → ℕ → Bool)
     (op : Fin m → ℕ → List (Obs L K S) → List Bool) (n : Fin m → ℕ) (b : ℕ)
     (hb : ∀ i, ∀ v < n i, faultyBits (sw i).prog (Pw i) {v} ≤ b)
     {Conn Cell Srv Dev Z : Type} [Fintype Conn] (arr : Srv → Conn → Arrivals Cell)

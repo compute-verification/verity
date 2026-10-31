@@ -22,9 +22,9 @@ block's bits as u16 words, as a proof commits a row, under `binding` of the run 
 one row, the slice's ``srv``; at G < P block j is the slice's ``srv{j}`` (`compile_slice.srv_rows`). `Served.record` is
 the public part: the root, the count, the row width and G. The rows and their salts stay the prover's.
 
-**The verifier's side.** `leaf_ok` holds a unit's row by its b‖c to its registered leaf (`leaf`: window w's block j), as
-the advice's ``adv`` row is held; `reads_port` is the same registration as the Lean verifier's registered reads take it
-(`flock-verify verify --registered`), each unit's leaf its own.
+**The verifier's side.** `leaf_ok` holds a proof block's row by its b‖c to its registered leaf (`leaf`: window w's block
+j), as the advice's ``adv`` row is held; `reads_port` is the same registration as the Lean verifier's registered reads
+take it (`flock-verify verify --registered`), each proof block's leaf its own.
 
 That the served rows are the rows the served compute ran is the tie's to bind (`served_tie`: each row's valid, start and
 n against its step's Program, and the ids IoTieRequest's); nothing here checks it.
@@ -116,7 +116,7 @@ def _row(bits: Sequence[int]) -> tuple[bytes, int]:
 class Served:
     """The prover's side: the registration, its rows and their salts, and the steps G a row holds."""
 
-    registration: ADV.Registration
+    registration: ADV.Committed
     G: int
 
     def record(self) -> dict:
@@ -136,7 +136,7 @@ def register(S, session: Sequence[Sequence[tuple[Row, ...] | None]], run_root: b
     fresh salts unless given."""
     G = _blocks(S, G)
     rows = [_row(block_bits(S, w, G, j)) for w in session for j in range(S.P // G)]
-    return Served(ADV.register([r for r, _n in rows], rows[0][1], binding(run_root), salts), G)
+    return Served(ADV.commit([r for r, _n in rows], rows[0][1], binding(run_root), salts), G)
 
 
 def leaf_ok(record: Mapping, run_root: bytes, i: int, bc: bytes, path: Sequence[bytes]) -> bool:
@@ -150,7 +150,7 @@ def leaf_ok(record: Mapping, run_root: bytes, i: int, bc: bytes, path: Sequence[
 
 def reads_port(record: Mapping, run_root: bytes, reads: Sequence[int | None], reads_from: int = 0) -> dict:
     """The Lean verifier's own ``--registered`` port (`verity/registered-reads/v1`) over the registration `record`
-    publishes under the run root: unit ``reads_from + i`` reads leaf ``reads[i]`` (None: none)."""
+    publishes under the run root: proof block ``reads_from + i`` reads leaf ``reads[i]`` (None: none)."""
     b, n, n_bits = binding(run_root), record["count"], record["n_bits"]
     if record["binding"] != b.hex() or n_bits % CS.WORD:
         raise ValueError("a registration under another run root, or rows of part words")

@@ -3,11 +3,14 @@ run after their parallel `verify` lines): a part passes on its exit and its log'
 refuses it, and a part that never ran, or no part at all, fails the step."""
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from pathlib import Path
 
 import pytest
+from verity.core.protocols.sampled_proofs import challenger as C
+from verity_flock import rec_compose as RC
 
 POD = Path(__file__).resolve().parents[1] / "pod"
 sys.path.insert(0, str(POD))
@@ -223,23 +226,17 @@ def test_cover_says_whether_a_part_run_reads_the_forged_coin(capsys, kind, parts
 
 
 # `flock-verify rec-compose`'s rule (`RecCompose.check`, whose #guards are `Flock/Test/RecCompose.lean`), for the wiring:
-# one log per V* statement, every VERDICT accepted at the SHA-512 of the one rows file and of the one inner shape file.
+# its mirror, `verity_flock.rec_compose`, which `test_lean_rec_compose.py` holds to the binary.
 COMPOSER = r'''
-import hashlib, json, sys
+import json, sys
+from verity_flock import rec_compose as RC
 a = sys.argv[1:]
 assert a[0] == "rec-compose", a
-flags = {a[i]: a[i + 1] for i in range(1, len(a) - 1) if a[i] in ("--rec-inner", "--rec-rows")}
+flags = {a[i]: a[i + 1] for i in range(1, len(a) - 1) if a[i] in ("--rec-inner", "--rec-rows", "--rec-run")}
 logs = [x for i, x in enumerate(a[1:], 1) if x not in flags and x not in flags.values()]
-digest = hashlib.sha512(open(flags["--rec-rows"], "rb").read()).hexdigest()
-inner = hashlib.sha512(open(flags["--rec-inner"], "rb").read()).hexdigest()
-n = json.load(open(flags["--rec-inner"]))["n"]
-parts, ok = [], True
-for f in logs:
-    vs = [json.loads(ln[8:]) for ln in open(f).read().splitlines() if ln.startswith("VERDICT ")]
-    ok = ok and bool(vs) and all(v.get("accepted") is True and v.get("rec_rows_sha512") == digest
-                                 and v.get("rec_inner_sha512") == inner for v in vs)
-    parts.append(vs[0].get("rec_part") if vs else None)
-ok = ok and sorted(parts, key=str) == list(range(n))
+inner = open(flags["--rec-inner"], "rb").read()
+ok, why = RC.check(json.loads(inner)["n"], RC.digest(open(flags["--rec-rows"], "rb").read()), RC.digest(inner),
+                   open(flags["--rec-run"]).read(), [(f, open(f).read()) for f in logs])
 print("REC-COMPOSE " + json.dumps({"accepted": ok, "parts": len(logs)}))
 sys.exit(0 if ok else 1)
 '''
@@ -261,18 +258,37 @@ def _composer(d: Path, n: int, rows: bytes = b'{"ports":{}}') -> tuple[str, str]
     return str(binary), hashlib.sha512(rows).hexdigest()
 
 
-def _inner(d: Path) -> str:
-    """The SHA-512 of the inner shape file ``rec-inner.json`` that `_composer` wrote in ``d``."""
-    import hashlib
-
-    return hashlib.sha512((d / "rec-inner.json").read_bytes()).hexdigest()
+def _key(name: str) -> str:
+    """A part's session's coin key, 256 bytes in lowercase hex."""
+    return hashlib.sha512(name.encode()).hexdigest() * 4
 
 
-def _vpart(d: Path, name: str, j: int, digest: str, rc: int = 0, accepted: bool = True, inner: str | None = None) -> None:
-    """A V* part 85 gave V*'s inputs (``own-PART.txt``): its log's VERDICT names its part, the rows it checked and the inner
-    shape it read (``d``'s ``rec-inner.json`` unless ``inner``)."""
-    v = {"session": f"/s/{name}", "accepted": accepted, "why": "" if accepted else "x", "rec_part": j, "rec_rows_sha512": digest,
-         "rec_inner_sha512": inner or _inner(d)}
+def _record(d: Path, digest: str, parts: list[tuple[str, int]], session: str = "s", transcript: str = "t") -> None:
+    """The challenger's interactive-run record ``rec-run.json`` (`challenger.RunRecord`): the staging of the rows file
+    ``digest`` and the shared set `_vpart` names, one session opened for each (name, part) of ``parts``, the close."""
+    r = C.RunRecord()
+    r.stage(digest, _shared(d, None, session, transcript))
+    for name, j in parts:
+        r.open(name, j, _key(name))
+    r.close()
+    r.write(d / "rec-run.json")
+
+
+def _shared(d: Path, inner: str | None, session: str, transcript: str) -> dict:
+    rec_inner = inner.encode() if inner is not None else (d / "rec-inner.json").read_bytes()
+    return RC.shared(rec_inner=rec_inner, inner_circuit=b"c", inner_public=b"p", inner_partition=b"{}",
+                     inner_session=session.encode(), inner_transcript=transcript.encode(), inner_statement="i",
+                     inner_statement_coins="os", inner_tables=[])
+
+
+def _vpart(d: Path, name: str, j: int, digest: str, rc: int = 0, accepted: bool = True, inner: str | None = None,
+           session: str = "s", transcript: str = "t") -> None:
+    """A V* part 85 gave V*'s inputs (``own-PART.txt``): its log's VERDICT names its part, the rows it checked, the
+    inputs every part shares (at DIR's ``rec-inner.json`` unless ``inner`` is another inner shape file's bytes, and at
+    the inner session record ``session`` and transcript ``transcript``), ``--zk`` and its coin key."""
+    v = {"session": f"/s/{name}", "accepted": accepted, "why": "" if accepted else "x", "rec_part": j,
+         "rec_rows_sha512": digest, "rec_shared": _shared(d, inner, session, transcript), "zk": True,
+         "coin_key": _key(name)}
     (d / f"{name}.log").write_text(f"VERDICT {json.dumps(v)}\n")
     (d / f"time-{name}.txt").write_text(f"\tExit status: {rc}\n")
     (d / f"own-{name}.txt").write_text("--rec-rows rows.json")
@@ -283,9 +299,33 @@ def test_honest_parts_compose(tmp_path, capsys):
     binary, h = _composer(tmp_path, 3)
     for j, p in enumerate(("L0", "alg-p0", "cap")):
         _vpart(tmp_path, p, j, h)
+    _record(tmp_path, h, [("L0", 0), ("alg-p0", 1), ("cap", 2)])
     rc = LV.main(["--compose", binary, str(tmp_path), "L0", "alg-p0", "cap"])
     out = capsys.readouterr().out.splitlines()
     assert rc == 0 and out[-2] == 'lean compose: REC-COMPOSE {"accepted": true, "parts": 3}'
+
+
+def test_a_retried_part_does_not_compose(tmp_path, capsys):
+    """Every part accepted, but the challenger's record opened two sessions for one of them (a retry, the accepted one
+    handed over): the composition refuses, so the step fails."""
+    binary, h = _composer(tmp_path, 3)
+    for j, p in enumerate(("L0", "alg-p0", "cap")):
+        _vpart(tmp_path, p, j, h)
+    _record(tmp_path, h, [("L0", 0), ("alg-p0-first", 1), ("alg-p0", 1), ("cap", 2)])
+    rc = LV.main(["--compose", binary, str(tmp_path), "L0", "alg-p0", "cap"])
+    out = capsys.readouterr().out.splitlines()
+    assert rc == 1 and out[-2].endswith("<- FAILS") and out[-2].startswith("lean compose: REC-COMPOSE")
+
+
+def test_a_run_without_its_record_is_not_composed(tmp_path, capsys):
+    """Without the challenger's interactive-run record the parts are not shown to be one run: no composition, and the
+    step says so."""
+    binary, h = _composer(tmp_path, 2)
+    for j, p in enumerate(("L0", "cap")):
+        _vpart(tmp_path, p, j, h)
+    rc = LV.main(["--compose", binary, str(tmp_path), "L0", "cap"])
+    out = capsys.readouterr().out.splitlines()
+    assert rc == 0 and out[-2].startswith("lean compose: no interactive-run record (rec-run.json)")
 
 
 def test_a_part_checked_against_other_rows_is_refused(tmp_path, capsys):
@@ -295,6 +335,7 @@ def test_a_part_checked_against_other_rows_is_refused(tmp_path, capsys):
     _vpart(tmp_path, "L0", 0, h)
     _vpart(tmp_path, "alg-p0", 1, h)
     _vpart(tmp_path, "cap", 2, "ab" * 64)
+    _record(tmp_path, h, [("L0", 0), ("alg-p0", 1), ("cap", 2)])
     rc = LV.main(["--compose", binary, str(tmp_path), "L0", "alg-p0", "cap"])
     out = capsys.readouterr().out.splitlines()
     assert rc == 1 and out[-2].endswith("<- FAILS") and out[-2].startswith("lean compose: REC-COMPOSE")
@@ -302,15 +343,31 @@ def test_a_part_checked_against_other_rows_is_refused(tmp_path, capsys):
 
 
 def test_a_part_under_another_inner_shape_is_refused(tmp_path, capsys):
-    """A part verified under another inner shape file (`--rec-inner`) names another `rec_inner_sha512`, and the
-    composition refuses, as `Flock/Test/RecCompose.lean`'s #guard does, so the step fails."""
+    """A part verified under another inner shape file (`--rec-inner`) names another in its `rec_shared`, and the
+    composition refuses, as `Flock/Test/RecCompose.lean`'s #guards do, so the step fails."""
     binary, h = _composer(tmp_path, 3)
     _vpart(tmp_path, "L0", 0, h)
     _vpart(tmp_path, "alg-p0", 1, h, inner="cd" * 64)
     _vpart(tmp_path, "cap", 2, h)
+    _record(tmp_path, h, [("L0", 0), ("alg-p0", 1), ("cap", 2)])
     rc = LV.main(["--compose", binary, str(tmp_path), "L0", "alg-p0", "cap"])
     out = capsys.readouterr().out.splitlines()
     assert rc == 1 and out[-2].endswith("<- FAILS") and out[-2].startswith("lean compose: REC-COMPOSE")
+
+
+@pytest.mark.parametrize("other", [{"session": "ff" * 64}, {"transcript": "22" * 64}])
+def test_parts_from_different_inner_sessions_are_refused(tmp_path, capsys, other):
+    """Two parts verified over different inner sessions (85's `$REC_INNER`, `--rec-inner-session`) or transcripts of one
+    (`--rec-inner-transcript`) name different ones in their `rec_shared`, each accepting alone, and the composition refuses, as `Flock/Test/RecCompose.lean`'s #guards do, so the step fails."""
+    binary, h = _composer(tmp_path, 3)
+    _vpart(tmp_path, "L0", 0, h)
+    _vpart(tmp_path, "alg-p0", 1, h)
+    _vpart(tmp_path, "cap", 2, h, **other)
+    _record(tmp_path, h, [("L0", 0), ("alg-p0", 1), ("cap", 2)])
+    rc = LV.main(["--compose", binary, str(tmp_path), "L0", "alg-p0", "cap"])
+    out = capsys.readouterr().out.splitlines()
+    assert rc == 1 and out[-2].endswith("<- FAILS") and out[-2].startswith("lean compose: REC-COMPOSE")
+    assert out[-1] == "lean: 3/3 accepted: the step fails"
 
 
 def test_a_staged_rows_file_with_other_rows_is_refused(tmp_path, capsys):
@@ -318,6 +375,7 @@ def test_a_staged_rows_file_with_other_rows_is_refused(tmp_path, capsys):
     binary, h = _composer(tmp_path, 2)
     for j, p in enumerate(("L0", "cap")):
         _vpart(tmp_path, p, j, h)
+    _record(tmp_path, h, [("L0", 0), ("cap", 1)])
     (tmp_path / "rows.json").write_bytes(b'{"ports":{"acc0":{}}}')
     assert LV.main(["--compose", binary, str(tmp_path), "L0", "cap"]) == 1
 
@@ -329,9 +387,54 @@ def test_a_forgery_in_its_parts_place_must_not_compose(tmp_path, capsys):
     _vpart(tmp_path, "L0", 0, h)
     _vpart(tmp_path, "cap", 1, h)
     _vpart(tmp_path, "forged-sum-L0", 0, h, rc=1, accepted=False)
+    _record(tmp_path, h, [("L0", 0), ("cap", 1)])
     rc = LV.main(["--compose", binary, str(tmp_path), "L0", "cap", "forged-sum-L0"])
     out = capsys.readouterr().out.splitlines()
     assert rc == 0 and any(ln.startswith("lean compose forged-sum-L0: REC-COMPOSE") and "FAILS" not in ln for ln in out)
+
+
+def test_a_forged_inner_composes_as_one_forgery(tmp_path, capsys):
+    """A forged inner coin (85's NEG_INNER) is every V* part verified against it: the parts that read the coin refuse it,
+    the others accept, as they should. Its parts are put in place together and that composition is refused, so the step
+    passes; putting in only a part that doesn't read the coin would compose and fail it."""
+    binary, h = _composer(tmp_path, 3)
+    for j, p in enumerate(("L0", "alg-p0", "cap")):
+        _vpart(tmp_path, p, j, h)
+    _vpart(tmp_path, "forged-inner-challenge-L0", 0, h)
+    _vpart(tmp_path, "forged-inner-challenge-alg-p0", 1, h, rc=1, accepted=False)
+    _vpart(tmp_path, "forged-inner-challenge-cap", 2, h)
+    parts = ["L0", "alg-p0", "cap", *(f"forged-inner-challenge-{p}" for p in ("L0", "alg-p0", "cap"))]
+    _run_of_logs(tmp_path, ["L0", "alg-p0", "cap"])
+    rc = LV.main(["--compose", binary, str(tmp_path), *parts])
+    out = capsys.readouterr().out.splitlines()
+    assert 'lean compose forged-inner-challenge (3 parts): REC-COMPOSE {"accepted": false, "parts": 3}' in out
+    assert rc == 0 and out[-1] == "lean: 3/3 accepted, 1/1 forgeries refused"
+
+
+def _run_of_logs(d: Path, names: list[str]) -> None:
+    """``rec-run.json`` (`challenger.RunRecord`'s form) opening the sessions the logs of ``names`` name: staged at the first
+    one's rows and shared set, each its VERDICT's part and coin key, closed. A composition reads it where the challenger's
+    record of the run is required; one that requires none never reads it."""
+    vs = [json.loads((d / f"{n}.log").read_text().splitlines()[0][8:]) for n in names]
+    events = [{"event": "stage", "rec_rows_sha512": vs[0]["rec_rows_sha512"], "rec_shared": vs[0].get("rec_shared")},
+              *({"event": "open", "session": n, "rec_part": v["rec_part"], "coin_key": v.get("coin_key")}
+                for n, v in zip(names, vs)), {"event": "close"}]
+    (d / "rec-run.json").write_text(json.dumps({"events": events, "kind": "verity/rec-run/v1"}))
+
+
+def test_a_forgery_the_composition_accepts_fails(tmp_path, capsys):
+    """A forgery whose every part Lean accepts composes, and the step fails on it."""
+    binary, h = _composer(tmp_path, 2)
+    for j, p in enumerate(("L0", "alg-p0")):
+        _vpart(tmp_path, p, j, h)
+        _vpart(tmp_path, f"forged-inner-challenge-{p}", j, h)
+    # the record opens the forgery's sessions, so only the forgery's composition can be one run
+    _run_of_logs(tmp_path, ["forged-inner-challenge-L0", "forged-inner-challenge-alg-p0"])
+    rc = LV.main(["--compose", binary, str(tmp_path), "L0", "alg-p0", "forged-inner-challenge-L0",
+                  "forged-inner-challenge-alg-p0"])
+    out = capsys.readouterr().out.splitlines()
+    assert rc == 1 and any(ln.startswith("lean compose forged-inner-challenge (2 parts)") and ln.endswith("<- FAILS")
+                           for ln in out)
 
 
 def test_a_run_of_some_parts_is_not_composed(tmp_path, capsys):

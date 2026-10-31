@@ -1,4 +1,4 @@
-"""Daniel's blocks (CMP-92) as network accounting reads them: which proof units each server runs, the server-time block a
+"""The blocks as network accounting reads them: which proof units each server runs, the server-time block a
 circuit is, and its transfer gates, every row that crosses a server block's boundary, each a row of a value the network
 certifier on that server's uplink committed and signed (`transfer_rows`). The verifier pins a transfer value's root from
 that certificate alone (`pins`), so with every other input row wired, the circuit's free inputs (the window interface's
@@ -31,7 +31,7 @@ a row, the size of the commitment the certifier makes of it row by row), never o
 
 - the servers each a new name on a new uplink (one network certifier an uplink), their units together a partition of
   every template's units ("all": the one server's);
-- each inference block on one server (NET-92; Daniel, 26 Oct: a server's ingress and egress carry only its inference
+- each inference block on one server (a server's ingress and egress carry only its inference
   blocks' declared inputs and outputs, and an inference block runs on a single server, so which server may read its
   input bits is unambiguous): the record's inference entries (``blocks.inference``, the window interface's
   `InferenceEntry`, each unit's (slot, step)) tile every template's units, and no (slot, step) has units on two servers;
@@ -341,7 +341,7 @@ def server_blocks(doc: Mapping[str, Any], server: Any, layouts: Mapping[str, Any
 
 
 def _disjoint(rects: Sequence[tuple[tuple[str, str], int, int, int, int]], what: str) -> None:
-    """Refuse two rectangles (units × rows) of one port that meet."""
+    """Refuse two rectangles (proof blocks × rows) of one port that meet."""
     by: dict[tuple[str, str], list[tuple[int, int, int, int]]] = {}
     for key, a, b, r0, r1 in rects:
         by.setdefault(key, []).append((a, b, r0, r1))

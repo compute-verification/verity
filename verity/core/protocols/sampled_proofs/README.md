@@ -2,9 +2,9 @@
 
 Sampled proofs spot-check a committed computation. While serving, the developer commits every value that crosses a
 proof-block boundary of a partition of the program and registers the commitment roots. The verifier then draws proof blocks
-from its own randomness, the developer proves the drawn proof blocks, and the verifier checks the proofs. It never runs any part
+on the auditor's challenger's coins, read from its log, the developer proves the drawn proof blocks, and the verifier checks the proofs. It never runs any part
 of the computation. An accepted audit yields an integrity profile (`verity.core.protocols.profile.IntegrityProfile`): except with
-probability δ, at most so many proof blocks are faulty, a proof block being faulty when its committed outputs differ from its gates
+probability δ, at most so many proof blocks are incorrect, a proof block being incorrect when its committed outputs differ from its gates
 applied to its committed inputs. The protocol is stated in Lean (see "Where things are"); this README outlines it,
 points to the code, and lists what the Lean does not state yet.
 
@@ -17,7 +17,7 @@ component accepts.
 ## Guarantee and assumptions
 
 The guarantee is knowledge soundness of the sampled audit: except with a bounded probability, when the verifier
-accepts, at most the profile's count of proof blocks are faulty. Its top statement is C-Flock's
+accepts, at most the profile's count of proof blocks are incorrect. Its top statement is C-Flock's
 `Flock.Guarantees.SampledKSLiveV3`, stated in `Security/Proofs/Flock/Bridge/Refused.lean` and proved in
 `Security/Proofs/Flock/Bridge/KSLive.lean`, and it bounds the probability
 that `flock-verify --zk` accepts the files and the run passes the registration's population while the claim fails. It
@@ -74,13 +74,13 @@ but sizes each stratum by the work its proof blocks are credited: with `W = Σ_s
 A work draw may add a closure, proof blocks proved with the drawn ones. Each verifier derives the strata from its own program and
 query, never from the prover.
 
-**What an accepted audit establishes.** Under a stratified draw, a set of faulty proof blocks has acceptance probability
+**What an accepted audit establishes.** Under a stratified draw, a set of incorrect proof blocks has acceptance probability
 `Π_s C(n_s − m_s, k_s) / C(n_s, k_s)` (the probability that the draw misses all of them), `m_s` being its proof blocks in
-stratum `s`, so a subcircuit that is faulty in every proof block is never missed. Under the work sampling design, faulty proof blocks
+stratum `s`, so a subcircuit that is incorrect in every proof block is never missed. Under the work sampling design, incorrect proof blocks
 doing a fraction `ε` of the credited work have acceptance probability at most `(1 − ε)^K`; at `K = 27,713`, a 0.1% share
 has at most `2^-40`. The proof system adds, per proof block, its knowledge-soundness and binding errors (ε_ks and ε_bind).
-Applications weight the profile's faulty proof blocks by what each one costs them: exfiltration security by their output bits,
-plus a term for which proof blocks are faulty, and compute security by their work.
+Applications weight the profile's incorrect proof blocks by what each one costs them: exfiltration security by their output bits,
+plus a term for which proof blocks are incorrect, and compute security by their work.
 
 Everything is committed at serve time: the proof system has no two-stage rule, and the Lean verifier refuses a
 registration that names one.
@@ -101,12 +101,12 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   whose `README.md` lists every theorem: the one-stage audit (`OneStage`), the sampling designs (`Law`, `Stratified`,
   `StratifiedMiss`, `Work`, `Closure`, `Window`), the registration-dependent draw (`RegDraw`), the retired two stages
   (`TwoStage`, with the tight and insecure cases in `Examples`), exfiltration (`Influence`, `Harm`), the compiled layer
-  (`Extraction`) and composition (`Circuit`); `Audit/Flock*.lean` instantiate them for C-Flock. The verifier's coins are
-  the named assumption `Assumptions.UniformRandomBytes`.
+  (`Extraction`) and composition (`Circuit`); `Audit/Flock*.lean` instantiate them for C-Flock. The draw's coins, the
+  challenger's, are the named assumption `Assumptions.UniformRandomBytes`.
 - **The executable draw** is the Lean verifier's `verity/core/service/flock/Flock/Draw.lean` (`flock-verify draw`): the
   samplers, the strata and sizes, the draw object and its checks U1 to U3, specified in
   `verity/ml/flock/verifier/PROTOCOL.md` §7.3. Soundness's `ExecDraw.lean`, `ExecStratified.lean` and `ExecDrawOS.lean`
-  prove that its draws accept faulty proof blocks no more often than the modelled sampling designs do, and
+  prove that its draws accept incorrect proof blocks no more often than the modelled sampling designs do, and
   `Audit/FlockWork.lean` that its sizes are the model's.
 - **The verifier.** `one_stage.verifier` runs the Lean port of the one-stage audit (the Lake package
   `verity/core/service/sampled_proofs`, its `sampled-proofs-verifier`) and the Python beside it on every check: R1-R7
@@ -235,7 +235,7 @@ from verity.core.protocols.sampled_proofs.costfit import fit
 - `parties`: `Challenger`, `Firewall`, `Workers` and `Verifier`, `MANIFEST`, `PROTOCOL` (`PROTOCOLS` by id),
   `params_of`, and `IDS`, the configuration's component names and their protocol ids.
 - `consumers`: `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
-- `coins`: `OwnRandomness`, the challenger's own randomness; `draw_first`, a one-stage sampling design's draw from it,
+- `coins`: `OwnRandomness`, exact samplers over a byte source (a challenger's coins); `draw_first`, a one-stage sampling design's draw from it,
   with `closure_of` for a work design's closure; `ChallengerCoins`, a draw's coins from one family of the auditor's
   challenger, and `challenger_stream`, `read_reason` and `coins_reason`, the verifier's replay of them from the record.
 - `plan`: `VerificationPlan` of `GateClass`es with its `UnconditionalObligation`s, `Obligation.of_call`, and
@@ -243,7 +243,7 @@ from verity.core.protocols.sampled_proofs.costfit import fit
 - `optimize`: the untrusted planner. From `Candidate`s, a `CostModel` (per statement, per proof block, commitment, serve-time
   `Commitment`s, replay) and an `Objective` (harm per proof block at δ), `frontier` is the certified Pareto frontier of total
   cost against harm. `for_budget` and `for_target` query it, `weigh` weights weight classes, `overlaps` prices repeated
-  commitments, `certify` recomputes a plan's `Certificate`, `sensitivity` and `needs_benchmark` name what moves it,
+  commitments, `certify` recomputes a plan's `PlanBounds`, `sensitivity` and `needs_benchmark` name what moves it,
   and `work_law` registers it as `work:1`.
 - `candidates`: `cuts` derives the `Candidate`s from a Definition DAG of `Shape`s by a DP, each proof block's outputs
   in a public size class (`one_stage.partition.unit_class`); `pressure` gives the developer hints.
@@ -423,7 +423,7 @@ credit is a rule of its own, documented with `draw.work_table`:
 
 The one-stage profile (`audit.profile`) is core's `IntegrityProfile` of one level `unit` (`Level("unit", <partition
 digest>)`) with `sizes =
-(population,)`, drawn by the sampling design (`Subset(k)`, `Bernoulli(p)`, or `Stratified` with one stratum per template), with `delta`, the program's digest and the count drawn. It bounds faulty proof blocks and weights nothing. The work
+(population,)`, drawn by the sampling design (`Subset(k)`, `Bernoulli(p)`, or `Stratified` with one stratum per template), with `delta`, the program's digest and the count drawn. It bounds incorrect proof blocks and weights nothing. The work
 sampling design's profile is `Stratified` over the same strata at the work sizes, counting the drawn proof blocks only: a
 closure proves more, which only helps.
 
@@ -499,13 +499,18 @@ Each rule, its formats and its refusal codes are in `service`'s module docstring
 log's history by `tests/test_service_history.py`, sessions by `tests/test_service_sessions.py`, the fleet's halt by
 `tests/test_service_fleet.py`, and the stream's and the fleet's rules by the difftest's `stream` and `fleet` pieces.
 
-### The verifier's randomness
+### The draw's coins
 
-The draw of record is `coins.OwnRandomness` on the Lean verifier's coins (`one_stage.verifier.coins`:
-`IO.getRandomBytes`, under `UniformRandomBytes`; `service.Stream`'s default), read with the Lean verifier's samplers (`Flock.Draw`), with no
-hash, no derivation and no beacon, after the registration it follows. `draw_first` reads the bytes as
-`Flock.Draw.drawWith` does. Nothing derives a draw, the proof system's included, except vLLM's legacy replay challenge
-until its re-baseline; `coins`' docstring has the byte layout. Pinned by `tests/test_coins.py`.
+The verifier draws no coins of its own. A draw's coins are the auditor's challenger's, read from its log: a stream whose
+selection reads coins takes only a `coins.ChallengerCoins` (`service.NO_OWN_COINS` otherwise; a stream of `All`, or one a
+`sampler` draws for, needs none and reads none it is given), and the Lean verifier's run (`Run.run`) refuses a draw that read coins without the
+challenger's evidence, and any `coin_source` but the challenger's. `coins.OwnRandomness` reads the challenger's bytes with
+the Lean verifier's samplers (`Flock.Draw`), with no hash, no derivation and no beacon, after the registration it follows.
+`draw_first` reads the bytes as `Flock.Draw.drawWith` does. Nothing derives a draw, the proof system's included, except
+vLLM's legacy replay challenge until its re-baseline; `coins`' docstring has the byte layout. Pinned by
+`tests/test_coins.py`. The Lean verifier's own `IO.getRandomBytes` (`one_stage.verifier.coins`) is a challenger's entropy
+(`challenger.LiveChallenger`'s), never a stream's coins. A test's stream draws from a challenger of its own
+(`tests/fake_challenger.py`).
 
 A draw from the auditor's challenger (`remote.RemoteChallenger`, or `challenger.LiveChallenger` in process) passes
 `coins.ChallengerCoins` as the stream's `coins`. `commit(after)` takes the prover's commitment (the registration's
@@ -514,16 +519,14 @@ ceil(missing / 64) more of the family's coins after it in one round trip, checks
 commitment, and concatenates them, with no stretch. A rerun's extension opens only new indices, and a commitment is
 drawn once. The record is each `Segment` (family, first index, `after` and the openings). The verifier replays it with
 `read_reason` against the roots the challenger's signed release log shows (`remote.trusted_session`): the draw's coins
-are exactly those released after the commitment, every one read. A stream over `ChallengerCoins` has `coin_source`
-`"challenger"` (its digest says so, and it takes no sampler); any other is `"verifier"`. Every outcome's run by the Lean
-verifier (`Run.run`, `SampledProofs.ChallengerCoins`) takes the `coin_source`. From the challenger, the check
-is mandatory: `Stream.outcome(coins=...)` hands the evidence (`coins_reason`'s `{key, ledger, main, pins, segment,
+are exactly those released after the commitment, every one read. A stream over `ChallengerCoins` says so in its digest
+(`"coins": "challenger"`) and takes no sampler. For a draw that read coins, the check is mandatory: `Stream.outcome(coins=...)` hands the evidence (`coins_reason`'s `{key, ledger, main, pins, segment,
 session}`), and the run takes the commitment and the roots from the session the auditor's ledger opens for the
 registration's window (`register`'s `window_root`, never a window the evidence names), run from a commit the host's
 pins log records on the verifier's copy of main's first-parent line (`pinned_session`), and refuses the select step (code `coins`) unless the
 session is a withheld one (`withheld_on`: the ledger's open says `withheld: true`, so its challenger released no root,
 salt or path before it closed) and the bytes the draw read are those coins, after the registration's digest. Missing evidence and a registration without its
-window root are refused the same way, as is evidence for a draw from the verifier's own coins: the outcome is a reject
+window root are refused the same way, and a draw that read no coins takes no evidence: the outcome is a reject
 failing `run`. Pinned by `tests/test_challenger_coins.py` and the difftest's `challenger_read`,
 `challenger_draw_coins` and `run`.
 

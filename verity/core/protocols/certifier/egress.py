@@ -1,19 +1,20 @@
-"""N2, the egress side of the step-indexed scan: each egress bucket's cells computed, as the unit's gates, from the
-scan's slot state, the generator form. Nothing here is in a Spec yet.
+"""N2, the egress side of the step-indexed scan: each egress bucket's cells computed, as the proof block's gates, from
+the scan's slot state, the generator form. Nothing here is in a Spec yet.
 
-**One unit a link ℓ and bucket t** (`EgressBucket`). It reads one row, ``state``, the egress view of the slot state
-S_t the scan's ingress step t wrote (a registered read of the scan's view leaf t), and computes the row of R B-byte
-cells the state renders. Its outputs are ``o0``, a u16 whose bit 0 is 1 (`ACCEPT`) exactly when the state renders a
-row and whose other 15 bits are 0, and ``o1``, the row, bit 8k + i bit i of byte k. The row is gates of the circuit,
-never an input: the unit's statement commits o1 under the salt of the warden's egress row t of link ℓ and registers it
-as a read of that row (`Flock.Registered.checkPort` accepts a hidden-output statement's output row, the verifier's
-PROTOCOL.md §16.13; `warden_rows.bucket_port`: unit `reads_from + t` reads row t), so the proof opens the warden's
-registered row only when the row the state renders is it, bit for bit. Only o0 is public: a unit proof's public output
+**One proof block a link ℓ and bucket t** (`EgressBucket`). It reads one row, ``state``, the egress view of the slot
+state S_t the scan's ingress step t wrote (a registered read of the scan's view leaf t), and computes the row of R
+B-byte cells the state renders. Its outputs are ``o0``, a u16 whose bit 0 is 1 (`ACCEPT`) exactly when the state renders
+a row and whose other 15 bits are 0, and ``o1``, the row, bit 8k + i bit i of byte k. The row is gates of the circuit,
+never an input: the proof block's statement commits o1 under the salt of the network certifier's egress row t of link ℓ
+and registers it as a read of that row (`Flock.Registered.checkPort` accepts a hidden-output statement's output row, the
+verifier's PROTOCOL.md §16.13; `warden_rows.bucket_port`: proof block `reads_from + t` reads row t), so the proof opens
+the network certifier's registered row only when the row the state renders is it, bit for bit. Only o0 is public: a
+proof block's public output
 is at most 16 bits, and o1 is committed. Every switch is computed from the state, none is witness, so the unit adds
-nothing to c, and bucket t's egress reads no ingress after bucket t: structural Fits (`NetTiming.Layout.Fits`: no
+nothing to c, and bucket t's egress reads no ingress after bucket t: structural Fits (`NetTiming.BoundaryGates.Fits`: no
 egress gate is an input, and none of step t depends on an ingress gate of a step t' > t) holds by construction. It
-reads S_t rather than S_{t−1} because the warden's egress row of a connection's admission bucket already holds its
-lane, a `PAD` on its q.
+reads S_t rather than S_{t−1} because the network certifier's egress row of a connection's admission bucket already
+holds its lane, a `PAD` on its q.
 
 **The state's egress view** (`Shape`'s offsets) is a row of u16 words, bit 16w + i bit i of word w, each field least
 significant bit first: b, the bucket the state is read at (the state step t writes holds b = t), then NR request
@@ -62,7 +63,7 @@ LIVE, Q, ADMITTED, N, IDS = 0, 16, 48, 80, 112
 @dataclass(frozen=True)
 class Shape:
     """An egress bucket: R slots of B-byte cells in lanes of r, the state's NR request slots of K output ids of IB
-    bits each, and the warden's delay D."""
+    bits each, and the network certifier's delay D."""
 
     B: int
     R: int
