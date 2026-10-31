@@ -622,7 +622,7 @@ def _instrument() -> None:
             path = getattr(module, "__file__", None)
             if isinstance(path, str) and _rel(path) is not None:
                 # compiled from the source the key digests, not its cached bytecode (`_stale_bytecode`)
-                exec(self.source_to_code(self.get_data(path), path), module.__dict__)
+                exec(self.source_to_code(self.get_data(path), path), module.__dict__)  # noqa: S102  (an import, as the loader runs it)
             else:
                 exec0(self, module)
         _MODULES[module.__name__] = fr

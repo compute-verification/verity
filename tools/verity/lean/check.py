@@ -369,7 +369,8 @@ def memory_refusal(pkgs: list[Path], have_gib: float, env=os.environ) -> str | N
         floor = need
     if not heavy or have_gib >= floor:
         return None
-    rel = lambda p: os.path.relpath(p, ROOT) if p.resolve().is_relative_to(ROOT) else str(p)
+    def rel(p):
+        return os.path.relpath(p, ROOT) if p.resolve().is_relative_to(ROOT) else str(p)
     what = (f"{rel(spec[0])}'s audit reads {rel(heavy[0])}'s facts for every guarantee it proves, about 40 GiB beside the "
             f"replay" if heavy and spec else f"{rel(heavy[0])} pins ArkLib, whose build peaks near {MEM_FLOOR_GIB} GiB")
     return (f"{what}, and this machine has {have_gib:.0f} GiB (memory and swap, within its cgroup), under the {floor:.0f} "
@@ -748,7 +749,8 @@ def used(variables: list[str], text: str) -> list[str]:
     included group mentions one of its names, an instance group when every variable it mentions is included."""
     named = {g: g[1:-1].split(":")[0].split() for g in variables if g[0] != "["}
     names = {n for ns in named.values() for n in ns}
-    mentions = lambda s: {n for n in names if re.search(IDENT.format(re.escape(n)), s)}
+    def mentions(s):
+        return {n for n in names if re.search(IDENT.format(re.escape(n)), s)}
     inc, seen = set(), None
     while seen != inc:
         seen = set(inc)
@@ -822,7 +824,8 @@ def lift(pkg: Path, policy: dict, facts: dict, lifts: dict[str, dict]) -> dict[s
     the change."""
     files = {m: f for _, q in provers(pkg, policy) if q.is_dir() for m, f in module_files(q).items()} | module_files(pkg)
     proofs = {m for _, q in provers(pkg, policy) if q.is_dir() for m in lean_modules(q)}
-    declared = lambda mods: {n for mod in mods for n in re.findall(r"(?m)^namespace\s+(\S+)", strip_comments(files[mod].read_text()))}
+    def declared(mods):
+        return {n for mod in mods for n in re.findall(r"(?m)^namespace\s+(\S+)", strip_comments(files[mod].read_text()))}
     proof_ns = declared(proofs & files.keys()) - declared(files.keys() - proofs)
     moves, original, added, needs = {}, {}, {}, {}
     for old, spec in sorted(lifts.items()):
@@ -1816,7 +1819,8 @@ def refusals(entry: dict | None, got: list[dict], premises: list[str], conjectur
     ``entry`` names, one line each: none when it is.  A conjunction is a property when each of its conjuncts is one, of
     the entry's function, or of its own when the entry lists `conjuncts` (one `{function, outcome}` each, in order) in
     place of one function and outcome for them all."""
-    named = lambda e: isinstance(e, dict) and e.get("function") and e.get("outcome") in OUTCOMES
+    def named(e):
+        return isinstance(e, dict) and e.get("function") and e.get("outcome") in OUTCOMES
     each = (entry or {}).get("conjuncts")
     if each is not None:
         if "function" in entry or "outcome" in entry:
@@ -2684,7 +2688,8 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
     found = work / "replay.json"
     found.unlink(missing_ok=True)
     keys = replay_keys(facts, toolchain) if replay_cache else {}
-    passed = lambda m: m in keys and (replay_cache / f"{keys[m]}.json").is_file()
+    def passed(m):
+        return m in keys and (replay_cache / f"{keys[m]}.json").is_file()
     n = replay_threads(pkg)
     _peak.bytes = 0
     # what passed is read once the replay may start, so a package audited beside one that shares its closure reuses it
