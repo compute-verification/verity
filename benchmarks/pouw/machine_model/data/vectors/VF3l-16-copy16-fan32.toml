@@ -39,8 +39,7 @@ credits = [
     ["UNI", 1024], ["UNI64", 2048],
 ]
 
-[published]  # as `machine-model solve VF3l-16-copy16-fan32` printed them: τ, τ at 600 W and U/F_low to 4 places, the margin to 3
+[published]  # as `machine-model solve VF3l-16-copy16-fan32` printed them: τ and U/F_low to 4 places, the margin to 3
 tau = 0.0460
-tau_600w = 0.0360
 uf_low = 1.1563
 margin = 2.0
