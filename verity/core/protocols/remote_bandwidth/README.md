@@ -119,7 +119,9 @@ A transcript written before it named its session's pace (20 Oct) replays only wi
 - `p2_party.py`: a P2 session's verifier and its challenger as a party of their own, on a host the prover doesn't
   control: started over ssh with the channel on its stdin and stdout (`--stdio`, as an auditor gate's verb starts it)
   or on a TCP port, it holds the auditor's registration and its plan (the units holding a tensor's block, not the
-  store's padding past them, which is PoUS's: MEM-72), drives the session on its own clock and coins, and answers
+  store's padding past them, which is PoUS's: MEM-72), holds each session to the auditor's parameters (`SESSION`,
+  the served bandwidth piece's: a request carrying other values is refused by name before any coin), drives the
+  session on its own clock and coins, and answers
   the verdict with the credited reads (`q_bytes`), the Lean's (`Twin`), with `p2.Session`'s books (`Books`) as its
   veto. `prove` is the prover's side of the channel.
 - `p2_lean.py`: the Lean verifier of a P2 session, the process `remote-audit-verifier`, as `p2_party.py` runs
