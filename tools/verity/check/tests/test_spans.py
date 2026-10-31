@@ -1,6 +1,6 @@
 """`tools/verity/check/spans.py`: the frozen trace/v1 span shape, the root-open/children/root-close protocol over a run's
-`spans.jsonl`, and `Steps` writing one span line per step record.  The shape is a contract the observability watcher
-builds against (frozen 14 Oct 2026 19:13Z), so these tests pin its exact keys and value domains."""
+`spans.jsonl`, and `Steps` writing one span line per step record.  The shape is a frozen contract the observability watcher
+builds against, so these tests pin its exact keys and value domains."""
 from __future__ import annotations
 
 import importlib.util

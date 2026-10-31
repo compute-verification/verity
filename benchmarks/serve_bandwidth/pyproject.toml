@@ -5,7 +5,11 @@ testpaths = ["tests"]
 
 [tool.verity.tests]
 # timeline.py takes kv_filler/step_profile.py's kernel classes, which imports serve.py and through it analyze.py (which
-# imports lag.py), bench.py (which imports word_codec/kv.py) and green.py
+# imports lag.py), bench.py (which imports word_codec/kv.py, and through it the remote bandwidth audit's codec on the
+# commitments) and green.py
 inputs = ["benchmarks/kv_filler/step_profile.py", "benchmarks/kv_filler/serve.py", "benchmarks/kv_filler/analyze.py",
           "benchmarks/kv_filler/bench.py", "benchmarks/kv_filler/lag.py", "benchmarks/kv_filler/green.py",
-          "benchmarks/word_codec/kv.py"]
+          "benchmarks/word_codec/kv.py", "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py",
+          "verity/core/protocols/__init__.py", "verity/core/protocols/remote_bandwidth/__init__.py",
+          "verity/core/protocols/remote_bandwidth/codec.py", "verity/ml/__init__.py", "verity/ml/commitments",
+          "verity/ml/crypto"]

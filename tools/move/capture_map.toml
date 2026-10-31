@@ -1,6 +1,5 @@
 # The capture and its pinned arena up from `engine/` to `observe/`: what
-# `tools/move/layout.py --map tools/move/capture_map.toml` moves and rewrites (the vision's M2 row for `engine/capture.py`
-# and `pinned.py`, note:20261024T0615Z-draft-verity-vllm-vision).
+# `tools/move/layout.py --map tools/move/capture_map.toml` moves and rewrites (`engine/capture.py` and `pinned.py`).
 #
 # `capture.Capture` runs the observer over an engine and writes its log: it imports `observe.events`, `observe.log`,
 # `observe.observer`, `observe.storage` and `observe.triton_adapter`, so in `engine/` those five imports point up. In

@@ -13,14 +13,14 @@ entries are the 336-byte entry rows:
 * **the root**: each entry's leaf (`entry_bc` of its row under its recorded salt, `entry_leaf` in the window's served
   domain, `core_check.window_domain`) hashes up its recorded path to the registered root (`core_check.verify_path`), and
   the served domain is the registered one;
-* **the draw**: `tile_at` of each drawn unit and of the filler unit is the recorded opening's entry and side rows;
+* **the sample**: `tile_at` of each sampled proof block and of the filler unit is the recorded opening's entry and side rows;
 * **the registered items**: `work_at` of the registered level gives, through `work_to_json` and `sampling`, the
   registration's ``work`` and ``sampling``, and `side_domain` of its window domain is defined for both sides;
 * **negative controls**: the window broken in each way `window_problem` names (`BREAKS`), each refused for that reason;
   the root with an entry's salt, a sibling or the index tampered, each failing its path; and a unit past the padded count,
   in no entry.
 
-A window of an older entry layout (the 6 Oct runs) gets the registered items only.  Every input goes to both sides, which
+A window of an older entry layout gets the registered items only.  Every input goes to both sides, which
 must give the same outcome, reason included; a check holds when the Python's outcome is the recorded value.
 """
 from __future__ import annotations

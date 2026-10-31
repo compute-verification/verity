@@ -91,7 +91,7 @@ Implementations:
     C*, negative blocks, and spot vectors at the real store's indices, with W and the staging buffers pinned by digest
     (`store.py toy --plain` writes them). `tests/test_pous_p2_store.py` regenerates both. `store.py commit` is
     `setup.commit` of the real W, regenerated in this layout from the seeded generator (`e2e_h200.served_weights`),
-    with each s8 tensor held to the generator's manifest by SHA-256 as the pass reads it. `store.py encode` draws the
+    with each s8 tensor held to the generator's manifest by SHA-256 as the pass reads it. `store.py encode` samples the
     salt from the auditor's coin and encodes C* on every GPU of a node (`pod.sh IMPL=p2-store ... -- encode ...`), as
     canonical segment files a rerun resumes; `--segments LO:HI --order down` encodes a part and `finish` joins the
     parts. `verify --decode` rereads a store and decodes it into the commitment, `spot` decodes random blocks against W
@@ -154,6 +154,19 @@ window is served on, before its engine loads, with the memory challenger on vy-a
 `WIPE_CMD='bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"'`. It refuses a card that isn't idle or a gate
 key that isn't on the node, and kills nothing. Its header lists the challenger's settings. `tests/test_pous_served_wipe.py`
 runs it on a CPU, with one segment in host memory.
+
+`served_case.py --window DIR` builds PoUS's or the wipe's piece for the one-stage composite (composite.py, beside
+served_verdicts.py) from what a served window kept: `case.json`, the component's case, and `answer.json`, its own answer
+on it, whose commitment is the digest the composite binds. Both go to the window's private directory (0700), never
+beside the public answer. `served_piece.py` and `streamed_wipe/served_wipe.sh` write that piece through it while they
+run; after a run, from the kept outputs alone, PoUS's `C*` is encoded again from the served snapshot at the kept salt, and
+each kept output is held to the others before anything is written. `served_case.sh PIECES` runs it on a served run's
+pieces, PoUS's under a lease of a card. `tests/test_pous_served_case.py` runs both on a CPU.
+
+`big_case.py SIZE OUT` writes a synthetic run case of about SIZE bytes, streamed: an honest period at width 64 under a
+test signer, so `pous-run-protocol --test serve` answers it. It times the Lean at a served case's size: a 5.0 GiB case is
+accepted in under 8 minutes on 4 cores, at a peak of 2 times the line, which `served_case.sh`'s `MEM_GB` default
+allows for.
 
 `wipe_resume/` runs the red team's resume attack (art:7617c8017e80) on both wipes, on CPU. `pi2_state_attack.py` rebuilds
 band and dense blocks from the five odd rounds' SHAKE256 states (1,000 B a 64 KiB block) and times an answer against the

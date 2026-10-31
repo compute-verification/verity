@@ -106,10 +106,10 @@ def test_a_refit_closes_the_old_line(tmp_path):
     shutil.copytree(DATA, data)
     first = data / "census" / "VF.csv"
     c = first.read_text()
-    old_line = "FFMA,F,3.885,,,,VF,,note:20261015T0608Z-draft-census-sm120\n"
+    old_line = "FFMA,F,3.885,,,,VF,,@census-sm120\n"
     assert c.count(old_line) == 1
     last = model(data).epochs[-1]
-    first.write_text(c.replace(old_line, old_line.replace(",,note:", f",{last},note:")))
+    first.write_text(c.replace(old_line, old_line.replace(",,@", f",{last},@")))
     _census(data, "TEST", f"FFMA,F,3.9,,,,TEST,,{RUN}")
     cur, _ = _epoch(data)
     new, old = resolve("TEST", data), resolve(cur, data)
@@ -147,7 +147,7 @@ def test_adopt_keeps_the_faster_line(tmp_path, capsys):
     assert "ROW_ATOMS32" in after["IMAD"] and "ROW_ATOMS32" not in before["IMAD"]
     assert [x.split(",")[:2] for x in (data / "census" / "TEST.csv").read_text().splitlines()[1:]] == [
         ["FFMA", "F"], ["IMAD", "ROW_ATOMS32"]]
-    assert f"FFMA,F,3.885,,,,VF,{last},note:" in (data / "census" / "VF.csv").read_text()
+    assert f"FFMA,F,3.885,,,,VF,{last},@census-sm120" in (data / "census" / "VF.csv").read_text()
     runs = {r: x for r, x in (line.split(",")[:3:2] for line in (data / "rows.csv").read_text().splitlines()[1:])}
     assert runs["F"].endswith(RUN) and runs["ROW_ATOMS32"].endswith(RUN) and RUN not in runs["issue"]
     with pytest.raises(SystemExit, match="already has a line from TEST"):

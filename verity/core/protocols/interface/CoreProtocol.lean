@@ -1,6 +1,8 @@
 import CoreProtocol.Ratio
 import CoreProtocol.Profile
 import CoreProtocol.Protocol
+import CoreProtocol.Protocol.Canonical
+import CoreProtocol.Live
 import CoreProtocol.Cli
 import CoreProtocol.Example
 import CoreProtocol.Blobs

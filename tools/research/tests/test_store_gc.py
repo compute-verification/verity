@@ -126,6 +126,16 @@ def test_untimed_kinds_stay_and_only_a_cited_artifact_meta_keeps_a_run(env):
     assert set(p.expired) == {rec_a}
 
 
+def test_a_published_slim_keep_expires_unless_its_replay_run_is_cited(env):
+    """A slim keep holds clear values: past its TTL it goes, unless a cited run's attempt names it."""
+    b, notes, cache, _ = env
+    gone = artifact(b, "vllm-replay-slim/v1", blob(b, b"keep a"), age_days=8)
+    kept = artifact(b, "vllm-replay-slim/v1", blob(b, b"keep b"), age_days=8)
+    attempt(b, "r20261001-000000-0003", {"replay_slim_p0": kept})
+    (notes / "n.md").write_text("replay r20261001-000000-0003\n")
+    assert set(gc.plan(FsRemote(b), cache, [notes], now=NOW).expired) == {gone}
+
+
 def test_refs_of_any_kept_artifact_are_kept(env):
     b, notes, cache, _ = env
     bundle = artifact(b, "vllm-replay-bundle/v1", blob(b, b"bundle"), age_days=40)
