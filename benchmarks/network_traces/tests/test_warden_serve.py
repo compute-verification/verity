@@ -1,10 +1,10 @@
 """warden-serve without the wall clock: its varied traffic, its HTTP bytes against the fake endpoint over loopback, and
-the offline check of a run whose warden is driven tick by tick on a `VirtualClock`, its records certified by an LMS
-key: the check accepts the run, whose server got each request with its release order under the run id `deployment.json`
-names, and refuses a record that isn't what was certified, a cell that reached its client in
-another bucket, and a response that isn't the record's; a window in which the warden refused a connection is certified
-and signed nowhere; and a window's slow commit, which faults the next window when it runs in the warden's process,
-moves no tick in `serve`'s publisher process."""
+the offline check of a run whose network certifier is driven tick by tick on a `VirtualClock`, its records certified by
+an LMS key: the check accepts the run, whose server got each request with its release order under the run id
+`deployment.json` names, and refuses a record that isn't what was certified, a cell that reached its client in
+another bucket, and a response that isn't the record's; a window in which the network certifier refused a connection is
+certified and signed nowhere; and a window's slow commit, which faults the next window when it runs in the network
+certifier's process, moves no tick in `serve`'s publisher process."""
 
 from __future__ import annotations
 
@@ -139,7 +139,7 @@ def test_the_gates_scan_rehearsal_is_rehearse_ids_at_scan_zks_schedule_and_its_l
         tmp_path, capsys):
     """`warden-rehearse --scan` runs `rehearse --ids` at `scan_zk.PARAMS` (the schedule `scan_zk.py prove
     --warden-run` refuses any other of), which the scan's class serves: EVERY 16 buckets, 4 Program slots a
-    boundary, 8 a link-window and D 2.7 s, the gate sessions' schedule. Its id traffic's prompts and outputs are
+    boundary, 8 an execution phase and D 2.7 s, the gate sessions' schedule. Its id traffic's prompts and outputs are
     within the scan's KI and KO, on the gate's arrivals at the gate's sampling; for every request count the gate takes,
     at its lowest height, `warden_minutes` covers the id traffic's last arrival, its tail, the rest of the window it
     ends in, the origin's delay and 30 s for the key and the check."""
@@ -175,11 +175,11 @@ def test_the_gates_scan_rehearsal_is_rehearse_ids_at_scan_zks_schedule_and_its_l
 
 
 def test_the_gates_warden_windows_are_at_least_every_request_counts_link_windows_which_its_key_signs(tmp_path):
-    """The gate sizes a warden rehearsal's key on `warden_windows` of its requests (`warden_height`), so for every
-    request count it takes, those are at least the link-windows `rehearse` runs (its traffic's last arrival and tail):
-    at the scan's schedule on the gate's id traffic and on `--prompts`' arrivals, and at `warden_serve.py`'s default
-    (`WARDEN_WINDOW_MS`) on its varied traffic; a request count's traffic is the first of the most's. The gate's most
-    requests are 1064 link-windows of `--prompts`, about 57 minutes, which height 13 signs and 12 doesn't."""
+    """The gate sizes a network certifier rehearsal's key on `warden_windows` of its requests (`warden_height`), so for
+    every request count it takes, those are at least the execution phases `rehearse` runs (its traffic's last arrival
+    and tail): at the scan's schedule on the gate's id traffic and on `--prompts`' arrivals, and at `warden_serve.py`'s
+    default (`WARDEN_WINDOW_MS`) on its varied traffic; a request count's traffic is the first of the most's. The gate's
+    most requests are 1064 execution phases of `--prompts`, about 57 minutes, which height 13 signs and 12 doesn't."""
     sys.path.insert(0, str(HERE))
     sys.path.insert(0, str(HERE.parent / "live_challenger"))
     import auditor as A
@@ -206,7 +206,7 @@ def test_the_gates_warden_windows_are_at_least_every_request_counts_link_windows
 def test_the_gates_prompts_rehearsal_sends_its_prompts_a_group_a_span_of_windows_and_its_minutes_cover_them(tmp_path):
     """`warden-rehearse --scan --prompts --window-per-group` runs `rehearse --ids --prompts FILE --window-per-group` at
     the scan's schedule, on the gate's witness file: request j is the (j mod n)-th prompt with exactly the request's
-    tokens, group g's n requests together half a bucket into link-window g·G, G the gate's `scan_group_windows`
+    tokens, group g's n requests together half a bucket into execution phase g·G, G the gate's `scan_group_windows`
     (`group_windows` at the scan's schedule, for every token count the gate takes), and the run exactly its groups'
     windows (`groups`), which `warden_group_minutes` covers with the origin's delay and 30 s for the key and the
     check. Without `--window-per-group` the prompts go at the gate's arrivals."""
@@ -248,7 +248,7 @@ def test_the_gates_prompts_rehearsal_sends_its_prompts_a_group_a_span_of_windows
 
 def test_the_gates_scan_rehearsal_at_each_tick_it_takes_runs_the_scans_schedule_there_and_its_minutes_cover_it(tmp_path):
     """`warden-rehearse --scan --bucket-ms MS` runs `rehearse` at `scan_zk.PARAMS` with the tick MS, which the scan's
-    class serves, and the gate counts its minutes and its key's sampling blocks at MS: for each tick it takes, in
+    class serves, and the gate counts its minutes and its key's execution phases at MS: for each tick it takes, in
     100 ms steps up to its longest (a block of 128 s, past the minute `warden_minutes` counts for a shorter one), at
     its lowest height, they cover every request count's id traffic (its last arrival, its tail, the rest of the block
     it ends in, the origin's delay and 30 s for the key and the check) and every group count's `--window-per-group`
@@ -312,9 +312,9 @@ def test_rehearse_reads_prompts_the_ingress_bound_holds_and_takes_them_and_group
 
 
 def test_a_group_of_id_requests_admitted_at_a_windows_start_ends_within_its_group_windows(tmp_path):
-    """The bound `group_windows` rests on, on the warden itself at the scan's schedule: a group of `lanes` id requests
-    admitted together at a window's first bucket, each answered with `tokens` id events and the trailer (the loop's
-    two, and the gate's most, 64), ends every connection with its last cell D + ⌊tokens/r⌋ buckets after its
+    """The bound `group_windows` rests on, on the network certifier itself at the scan's schedule: a group of `lanes` id
+    requests admitted together at a window's first bucket, each answered with `tokens` id events and the trailer (the
+    loop's two, and the gate's most, 64), ends every connection with its last cell D + ⌊tokens/r⌋ buckets after its
     admission, so that one admitted two buckets late (`prompt_traffic`'s half a bucket, and the client's lag) still
     ends within the group's G windows; the check accepts the run."""
     sys.path.insert(0, str(HERE))
@@ -340,10 +340,10 @@ def test_a_group_of_id_requests_admitted_at_a_windows_start_ends_within_its_grou
 def test_the_gates_demo_traffic_through_the_warden_is_the_demo_stand_ins_class_and_the_check_accepts_its_answers(
         tmp_path):
     """`warden-rehearse --scan --prompts --tokens 24` of the demo stand-in's prompts (`demo_stub.py prompts`) sends each
-    prompt as it is, with exactly 24 tokens and greedy; on the warden at the scan's schedule, the stand-in, given exactly
-    what the warden sent the server (its release headers on), serves every request and answers the bytes the warden
-    certified, every connection ends within the two link-windows 24 tokens take at D = 27, and the check accepts the
-    run."""
+    prompt as it is, with exactly 24 tokens and greedy; on the network certifier at the scan's schedule, the stand-in,
+    given exactly what the network certifier sent the server (its release headers on), serves every request and answers
+    the bytes the network certifier certified, every connection ends within the two execution phases 24 tokens take at D
+    = 27, and the check accepts the run."""
     sys.path.insert(0, str(HERE))
     sys.path.insert(0, str(HERE.parent / "live_challenger"))
     import auditor as A
@@ -416,8 +416,8 @@ def test_the_fake_endpoint_answers_a_request_as_vllm_streams_it():
 
 
 def test_the_fake_endpoint_answers_an_id_request_id_form_as_the_scans_egress_reads_it():
-    """`rehearse --ids`: an `id_traffic` request, sent warden-form (`active.id_request`), is answered with its
-    `fake_ids` as id events of P bytes and the trailer, every cell an id-form `DATA` cell, then `END`'s trailer;
+    """`rehearse --ids`: an `id_traffic` request, sent network-certifier-form (`active.id_request`), is answered with
+    its `fake_ids` as id events of P bytes and the trailer, every cell an id-form `DATA` cell, then `END`'s trailer;
     `parse_id_response` reads its count, and a cut or altered response isn't complete."""
     sys.path.insert(0, str(HERE))
     import scan_zk as sz
@@ -490,12 +490,12 @@ def refusing_commit(*args, **kwargs):
 def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *, windows: int = 1, commit=None,
          process: bool = False, servers: list | None = None, params: WardenParams = PARAMS,
          id_payload: int | None = None, load_heads: Path | None = None) -> Warden:
-    """A run of the warden at `params` for `windows` windows on a `VirtualClock`, published as `serve` and `client` publish one:
-    its records and certificates through `Publisher` inline (`serve`'s `PublisherProcess` when `process`, which first
-    signs the load's heads `load_heads` when given), each window committed by `commit`, `deployment.json`, and
-    `client.json` with every cell's arrival 1 ms into the bucket it was sent in, each response read id-form at P =
-    `id_payload` when given; `servers` gets the server's side of each connection, in connect order. Returns the
-    warden."""
+    """A run of the network certifier at `params` for `windows` windows on a `VirtualClock`, published as `serve` and
+    `client` publish one: its records and certificates through `Publisher` inline (`serve`'s `PublisherProcess` when
+    `process`, which first signs the load's heads `load_heads` when given), each window committed by `commit`,
+    `deployment.json`, and `client.json` with every cell's arrival 1 ms into the bucket it was sent in, each response
+    read id-form at P = `id_payload` when given; `servers` gets the server's side of each connection, in connect order.
+    Returns the network certifier."""
     tau = params.bucket_ms / 1000
     if process:
         import warden_serve  # by name, so that the spawned process finds its functions
@@ -663,7 +663,7 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
 def test_a_window_with_a_refused_connection_is_certified_nowhere(tmp_path, process):
     """Five connections at once on two lanes and a queue of four: the fifth is refused, traffic past the window's
     Program slots, so window 0's three records are kept and its two rows committed but none is certified or signed,
-    each line naming the link-window under `refused`, withheld, inline and in `serve`'s publisher process; window 1
+    each line naming the execution phase under `refused`, withheld, inline and in `serve`'s publisher process; window 1
     is certified whole, and the check refuses the run on window 0 alone."""
     out = tmp_path / "run"
     out.mkdir()
@@ -685,7 +685,7 @@ def test_a_window_with_a_refused_connection_is_certified_nowhere(tmp_path, proce
 
 
 def test_a_windows_commit_and_signatures_move_no_tick_past_its_slack_in_the_publisher_process(tmp_path):
-    """A window's commit that takes `SLOW_COMMIT_S` of its process's time (`slow_commit`), run in the warden's process
+    """A window's commit that takes `SLOW_COMMIT_S` of its process's time (`slow_commit`), run in the network certifier's process
     as the inline `Publisher` runs it, puts the ticks after the window's end past their slack: the next window faults
     (`monitor-unavailable`), the issuer certifies none of its records, and the check refuses it. In `serve`'s
     `PublisherProcess` the same commit runs in the spawned process, which signs and commits from the rows released to
@@ -720,8 +720,8 @@ def test_a_windows_commit_and_signatures_move_no_tick_past_its_slack_in_the_publ
 
 def test_the_load_is_signed_by_the_serving_publisher_in_the_runs_session_before_its_windows(tmp_path):
     """The gate's load end to end at the tiny shape: the store relayed over four streams to the prover's sink on
-    loopback (`load_relay.py sink`, a process), then a run whose `PublisherProcess`, the warden's one signer, signs
-    the relay's heads first: `load.json` is under the deployment's key and session, on the key's first leaves, and
+    loopback (`load_relay.py sink`, a process), then a run whose `PublisherProcess`, the network certifier's one signer,
+    signs the relay's heads first: `load.json` is under the deployment's key and session, on the key's first leaves, and
     `check` reads every value's registration at the relay's roots; another session's, values swapped, heads that
     aren't the relay's and an unsigned load are refused."""
     import hashlib

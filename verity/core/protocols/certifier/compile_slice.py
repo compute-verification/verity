@@ -1,6 +1,6 @@
-"""A slice of the in-proof compile unit as one Boolean Definition: the pieces of the compile unit's statement
-composed whole for one window of a few steps, so the composition is proved end to end before the chain splits it
-into one unit a step.
+"""Part of the compile slice's proof block as one Boolean Definition: the pieces of its statement composed whole for
+one window of a few steps, so the composition is proved end to end before the chain splits it into one proof block a
+step.
 
     CompileSlice_v1{R, W, A, M, T, L, B, H, CH, WM, FULL, PC, NB, IW, AS, EW, Q, D, P, K, CN, CTW, CU}
         (pub, adv, cert, srv, cin, cout, wit) -> verdict[16]
