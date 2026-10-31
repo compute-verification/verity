@@ -401,9 +401,9 @@ def Class.listed : Class → Class
   | c => c
 
 /-- **Every gate is its primitive's** (what the census checks, refusing the circuit otherwise): its primitive is
-listed, its operation is in the primitive's class (`Class.listed`), and a gate at a dot step (`Site.dot`) is an
+listed, its operation is in the primitive's class (`Class.listed`), and a gate at a dot step (`Place.dot`) is an
 s8-family step. Its role is then its primitive's and its statics' (`Gate.role`). -/
 def Classed {ι : Type} (C : Dag ι) : Prop :=
-  ∀ g ∈ C, classOf g.prim = some g.op.cls.listed ∧ ∀ K L tail s, g.site = .dot K L tail s → g.op.IsMma
+  ∀ g ∈ C, classOf g.prim = some g.op.cls.listed ∧ ∀ K L tail s, g.place = .dot K L tail s → g.op.IsMma
 
 end Accounting.Gates

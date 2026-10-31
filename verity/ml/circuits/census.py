@@ -190,7 +190,7 @@ RULED: dict[str, str] = {"S8Dot_v1": "verity.ml.circuits.ops.s8", "S8Matmul_v1":
 
 def serves_none(bindings: dict) -> dict[str, int]:
     """The rule of an s8-family Definition whose products are no served product's main chain (Lean's `roleOf` at
-    `Site.other`): it performs them, and serves none."""
+    `Place.other`): it performs them, and serves none."""
     return {"served_macs": 0}
 
 
