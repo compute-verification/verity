@@ -1,6 +1,7 @@
 """Run presets of train.py configs on this process's GPU, claiming each config from a queue several workers share.
 
-A worker is one `research run --gpus 1` through the GPU slots. It walks its presets' configs in order and runs every config
+A worker is one `research run --gpus N` through the GPU slots, and claims only configs of N GPUs (`gpus`, torchrun past
+one). It walks its presets' configs in order and runs every config
 whose claim it wins: the claim is `mkdir QUEUE/<name>` (atomic), so N workers on one node split a preset between them in its
 order. A preset is a function of the results already under --shared, so a config whose lr is picked from earlier runs appears
 once they finish; it re-resolves before every claim. With nothing left to claim, a worker waits while its presets say more
@@ -215,7 +216,9 @@ def run_one(c, out: Path, shared: Path, data: str | None):
     (shared / "runs").mkdir(parents=True, exist_ok=True)
     live = shared / "logs" / f"{name}.log"
     res = out / "runs" / f"{name}.json"
-    cmd = [sys.executable, str(HERE / "train.py"), "--config", json.dumps(c), "--out", str(res)]
+    n = c.get("gpus", 1)
+    launch = [sys.executable] + (["-m", "torch.distributed.run", "--standalone", f"--nproc_per_node={n}"] if n > 1 else [])
+    cmd = launch + [str(HERE / "train.py"), "--config", json.dumps(c), "--out", str(res)]
     if data:
         cmd += ["--data", data]
     print(f"start {name}", flush=True)
@@ -269,13 +272,14 @@ def main():
         print("more may come" if pending else "complete")
         return
     queue.mkdir(parents=True, exist_ok=True)
+    gpus = len(os.environ.get("CUDA_VISIBLE_DEVICES", "0").split(","))
     ran = failed = 0
     waited = False
     while True:
         cfgs, pending = resolve(presets, shared)
         c = None
         for x in cfgs:
-            if keep is not None and x["name"] not in keep:
+            if (keep is not None and x["name"] not in keep) or x.get("gpus", 1) != gpus:
                 continue
             if not x.get("synthetic") and not waited:
                 wait_for_data(a.data)

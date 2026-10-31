@@ -30,10 +30,16 @@ Arrangements of the credited work (``arr``):
 Accounting (per token, forward MACs): credited R-products, trained linears, adapters, attention (QKᵀ and AV at the causal
 average ctx/2 each) and the tied head. κ = credited / all. Training FLOPs are 6 a MAC, except 4 for a frozen R (no weight
 gradient); ``train_flops_dense`` counts 6 for every MAC, as if the arm were a dense model of its forward MACs.
+
+With ``teacher`` (a Hugging Face causal LM on the same tokenizer), training distils: the loss is (1 − kd_alpha)·CE +
+kd_alpha·KL(teacher ‖ student) at temperature 1, and the teacher's forward FLOPs are reported apart (``teacher_flops``).
+Logged, eval and final losses are always the student's cross-entropy under noise. ``gpus`` > 1 runs data-parallel under
+torchrun: each rank takes its share of every step's micro-batches, and rank 0 evaluates and writes the result.
 """
 
 import argparse
 import dataclasses
+import datetime
 import json
 import math
 import os
@@ -42,8 +48,10 @@ from pathlib import Path
 
 import numpy as np
 import torch
+import torch.distributed as dist
 import torch.nn as nn
 import torch.nn.functional as F
+from torch._utils import _flatten_dense_tensors, _unflatten_dense_tensors
 
 R_STD = math.sqrt((256 ** 2 - 1) / 12)  # uniform on the 256 integers in [-128, 127]
 EVAL_SEED = 777
@@ -84,6 +92,9 @@ class Cfg:
     compile: bool = True
     synthetic: bool = False  # random tokens, for throughput only
     max_steps: int = 0  # stop early (smoke tests)
+    gpus: int = 1  # data-parallel ranks (torchrun); each takes batch / gpus sequences a step
+    teacher: str = ""  # a Hugging Face causal LM sharing the tokenizer: distil from it
+    kd_alpha: float = 0.5  # with a teacher, the loss is (1 − kd_alpha)·CE + kd_alpha·KL(teacher ‖ student)
 
 
 def nonemb_params(d, n_layer=12, head_dim=64):
@@ -273,14 +284,34 @@ class GPT(nn.Module):
         self.register_buffer("cos", ang.cos(), persistent=False)
         self.register_buffer("sin", ang.sin(), persistent=False)
 
-    def forward(self, idx, targets):
+    def forward(self, idx, targets, teacher_logits=None, kd_alpha=0.0):
+        """The mean cross-entropy; with teacher logits, also the distillation loss (1 − kd_alpha)·CE + kd_alpha·KL."""
         T = idx.shape[1]
         x = F.embedding(idx, self.emb)
         cos, sin = self.cos[:T], self.sin[:T]
         for b in self.blocks:
             x = b(x, cos, sin)
-        logits = F.linear(F.rms_norm(x, (x.shape[-1],), self.lnf, 1e-6), self.emb)
-        return F.cross_entropy(logits.float().flatten(0, 1), targets.flatten())
+        logits = F.linear(F.rms_norm(x, (x.shape[-1],), self.lnf, 1e-6), self.emb).float().flatten(0, 1)
+        ce = F.cross_entropy(logits, targets.flatten())
+        if teacher_logits is None:
+            return ce
+        kl = F.kl_div(F.log_softmax(logits, -1), F.log_softmax(teacher_logits.float().flatten(0, 1), -1),
+                      log_target=True, reduction="batchmean")
+        return (1 - kd_alpha) * ce + kd_alpha * kl, ce
+
+
+def load_teacher(name: str):
+    """A frozen bf16 causal LM: from /workspace/hf/hub when cached there, else the default Hugging Face cache."""
+    from transformers import AutoModelForCausalLM
+    kw = {"torch_dtype": torch.bfloat16, "attn_implementation": "sdpa"}
+    try:
+        m = AutoModelForCausalLM.from_pretrained(name, cache_dir="/workspace/hf/hub", local_files_only=True, **kw)
+    except OSError:
+        m = AutoModelForCausalLM.from_pretrained(name, **kw)
+    m = m.cuda().eval()
+    for p in m.parameters():
+        p.requires_grad_(False)
+    return m
 
 
 def accounting(model: GPT, cfg: Cfg):
@@ -434,9 +465,24 @@ def diagnostics(model: GPT):
             "d1_frac_small": float((d1.abs() < 1e-3).float().mean())}
 
 
+def all_mean(tensors, world):
+    """Average tensors over the ranks in place, as one flat all-reduce."""
+    if world == 1 or not tensors:
+        return
+    flat = _flatten_dense_tensors(tensors)
+    dist.all_reduce(flat)
+    flat /= world
+    for t, f in zip(tensors, _unflatten_dense_tensors(flat, tensors)):
+        t.copy_(f)
+
+
 def train(cfg: Cfg, data_dir: Path | None):
+    world = dist.get_world_size() if dist.is_initialized() else 1
+    rank = dist.get_rank() if dist.is_initialized() else 0
+    if world != cfg.gpus:
+        raise ValueError(f"config asks for {cfg.gpus} ranks, {world} running")
     torch.manual_seed(cfg.seed)
-    torch.cuda.manual_seed(cfg.seed)
+    torch.cuda.manual_seed(cfg.seed + 1000 * rank)
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
     if not cfg.tokens:
@@ -446,13 +492,19 @@ def train(cfg: Cfg, data_dir: Path | None):
         raise ValueError(f"vocab {cfg.vocab} != the data's {data.meta['vocab']}")
     model = GPT(cfg).cuda()
     acct = accounting(model, cfg)
+    teacher = load_teacher(cfg.teacher) if cfg.teacher else None
+    if teacher is not None:
+        if teacher.config.vocab_size != cfg.vocab:
+            raise ValueError(f"teacher vocab {teacher.config.vocab_size} != {cfg.vocab}")
+        acct["teacher_params"] = sum(p.numel() for p in teacher.parameters())
+        acct["teacher_flops_per_token"] = 2 * acct["teacher_params"]
     n_train = sum(p.numel() for p in model.parameters())
     steps = max(1, cfg.tokens // (cfg.batch * cfg.ctx))
     if steps * cfg.batch > data.windows():
         raise RuntimeError(f"{steps * cfg.batch} windows needed, {data.windows()} in the corpus")
-    accum = cfg.batch // cfg.micro
-    if accum * cfg.micro != cfg.batch:
-        raise ValueError("batch must be a multiple of micro")
+    accum = cfg.batch // (cfg.micro * world)
+    if accum * cfg.micro * world != cfg.batch:
+        raise ValueError("batch must be a multiple of micro × gpus")
     opt = torch.optim.AdamW(param_groups(model, cfg), lr=cfg.lr, betas=(0.9, cfg.beta2), eps=1e-8, fused=True)
     fwd = torch.compile(model) if cfg.compile else model
     warm = max(1, round(cfg.warmup_frac * steps))
@@ -460,7 +512,9 @@ def train(cfg: Cfg, data_dir: Path | None):
             "nonemb_trainable": n_train - model.emb.numel(), "nonemb_dense": nonemb_params(cfg.d, cfg.n_layer),
             "plan": ["".join(p[n][0] if p[n] != "RA" else "A" for n in ("qkv", "o", "fc1", "fc2")) for p in model.plan],
             **acct}
-    print(json.dumps(head), flush=True)
+    if rank == 0:
+        print(json.dumps(head), flush=True)
+    params = [p for p in model.parameters() if p.requires_grad]
 
     def lr_at(s):
         if s < warm:
@@ -475,13 +529,20 @@ def train(cfg: Cfg, data_dir: Path | None):
     for s in range(run_steps):
         for g in opt.param_groups:
             g["lr"] = cfg.lr * g["lr_mult"] * lr_at(s)
-        tot = 0.0
+        tot = torch.zeros((), device="cuda")
         for a in range(accum):
-            xy = data.train_batch(s * cfg.batch + a * cfg.micro, cfg.micro).pin_memory().cuda(non_blocking=True)
+            start = s * cfg.batch + (rank * accum + a) * cfg.micro
+            xy = data.train_batch(start, cfg.micro).pin_memory().cuda(non_blocking=True)
             with torch.autocast("cuda", dtype=torch.bfloat16):
-                loss = fwd(xy[:, :-1], xy[:, 1:])
+                if teacher is None:
+                    loss = ce = fwd(xy[:, :-1], xy[:, 1:])
+                else:
+                    with torch.no_grad():
+                        tl = teacher(input_ids=xy[:, :-1]).logits
+                    loss, ce = fwd(xy[:, :-1], xy[:, 1:], tl, cfg.kd_alpha)
             (loss / accum).backward()
-            tot += loss.detach()
+            tot += ce.detach()
+        all_mean([p.grad for p in params if p.grad is not None] + [tot], world)
         gn = torch.nn.utils.clip_grad_norm_(model.parameters(), cfg.clip)
         opt.step()
         opt.zero_grad(set_to_none=True)
@@ -496,10 +557,17 @@ def train(cfg: Cfg, data_dir: Path | None):
                    "lr": cfg.lr * lr_at(s), "gnorm": round(float(gn), 3), "tok_s": round(tok / el),
                    "wall_s": round(el, 1), "mem_gb": round(torch.cuda.max_memory_allocated() / 2 ** 30, 1)}
             if s + 1 in eval_at:
-                rec["val"] = round(evaluate(fwd, data, cfg, cfg.eval_seqs), 4)
-                curve.append(rec)
-            print(json.dumps(rec), flush=True)
+                if rank == 0:
+                    rec["val"] = round(evaluate(fwd, data, cfg, cfg.eval_seqs), 4)
+                    curve.append(rec)
+                if world > 1:
+                    dist.barrier()
+            if rank == 0:
+                print(json.dumps(rec), flush=True)
     t_train = time.time() - t0
+    if rank:
+        dist.barrier()
+        return None
     final = evaluate(fwd, data, cfg, cfg.final_eval_seqs)
     curve.append({"step": run_steps, "tokens": run_steps * cfg.batch * cfg.ctx, "val": final})
     abl = ablations(model, data, cfg) if cfg.ablate else {}
@@ -517,12 +585,16 @@ def train(cfg: Cfg, data_dir: Path | None):
         "train_wall_s": t_train,
         "wall_s": time.time() - t0,
         "tok_per_s": tokens / t_train,
-        "mfu_dense_bf16": acct["train_flops_dense_per_token"] * tokens / t_train / 503.8e12,
+        "mfu_dense_bf16": acct["train_flops_dense_per_token"] * tokens / t_train / 503.8e12 / world,
         "peak_mem_gb": torch.cuda.max_memory_allocated() / 2 ** 30,
         "gpu": torch.cuda.get_device_name(),
         "torch": torch.__version__,
         "data": None if cfg.synthetic else {k: data.meta[k] for k in ("source", "tokenizer", "train_tokens", "val_tokens")},
     }
+    if teacher is not None:
+        res["teacher_flops"] = acct["teacher_flops_per_token"] * tokens
+        res["teacher_val"] = evaluate(lambda x, y: F.cross_entropy(teacher(input_ids=x).logits.float().flatten(0, 1),
+                                                                   y.flatten()), data, cfg, cfg.eval_seqs)
     return res
 
 
@@ -533,7 +605,16 @@ def main():
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
     cfg = Cfg(**json.loads(a.config))
+    if int(os.environ.get("WORLD_SIZE", "1")) > 1:
+        torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
+        dist.init_process_group("nccl", timeout=datetime.timedelta(hours=1))  # the other ranks wait out rank 0's evals
     res = train(cfg, Path(a.data) if a.data else None)
+    if res is None:
+        dist.destroy_process_group()
+        return
+    if dist.is_initialized():
+        dist.barrier()
+        dist.destroy_process_group()
     Path(a.out).parent.mkdir(parents=True, exist_ok=True)
     tmp = Path(a.out).with_suffix(".tmp")
     tmp.write_text(json.dumps(res, indent=1))

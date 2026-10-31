@@ -7,6 +7,9 @@ if [ ! -x "$HSC_BASE/venv/bin/python" ]; then
   uv pip install -q --python "$HSC_BASE/venv/bin/python" torch==2.14.1 --index-url https://download.pytorch.org/whl/cu130
   uv pip install -q --python "$HSC_BASE/venv/bin/python" numpy tokenizers huggingface_hub hf_xet pyarrow
 fi
+if [ ! -d "$HSC_BASE/venv/lib/python3.12/site-packages/transformers" ]; then  # the distillation teacher's loader
+  flock "$HSC_BASE/venv.lock" uv pip install -q --python "$HSC_BASE/venv/bin/python" transformers safetensors
+fi
 export PATH=$HSC_BASE/venv/bin:$PATH
 export TORCHINDUCTOR_CACHE_DIR=$HSC_BASE/inductor-cache TRITON_CACHE_DIR=$HSC_BASE/triton-cache
 export HSC_BASE HSC_DATA
