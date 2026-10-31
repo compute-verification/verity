@@ -115,12 +115,12 @@ structure Commitment where
   bytes : ByteArray
 
 /-- One egress link's opening: its logical frames, payloads as bits (most significant first), and its declared syncs. -/
-structure Link where
+structure LinkOpening where
   frames : List LogicalFrame
   syncs : Array ClockSync
 
 structure Evidence where
-  links : Array Link
+  links : Array LinkOpening
 
 structure LinkWindow where
   direction : Direction
@@ -286,7 +286,7 @@ def syncOf (j : Json) : V ClockSync := do
 def evidenceOf (j : Json) : V Evidence := do
   let links ← (← Flock.J.arr j "links" "the object").mapM fun l => do
     pure { frames := (← (← Flock.J.arr l "frames" "a link").mapM frameOf).toList,
-           syncs := ← (← Flock.J.arr l "syncs" "a link").mapM syncOf : Link }
+           syncs := ← (← Flock.J.arr l "syncs" "a link").mapM syncOf : LinkOpening }
   pure ⟨links⟩
 
 /-! ## The check -/
@@ -332,7 +332,7 @@ def noSync : ClockSync := ⟨0, 1, by decide⟩
 
 /-- `expected_grids(frames, syncs, params)[w]`: the Program's grid of the link in window `w`, each bucket's row
 `expectedRow` at its global bucket. -/
-def expectedGrid (g : Grid) (W : Nat) (l : Link) (w : Nat) : Array (Array (Option ByteArray)) :=
+def expectedGrid (g : Grid) (W : Nat) (l : LinkOpening) (w : Nat) : Array (Array (Option ByteArray)) :=
   let syncs : Fin W → ClockSync := fun v => l.syncs.getD v.1 noSync
   (List.range g.buckets).toArray.map fun i =>
     (List.ofFn (expectedRow g.allocation g.buckets W syncs l.frames (w * g.buckets + i))).toArray.map
@@ -346,7 +346,7 @@ def found (c : Commitment) (d : Direction) (l : String) (w : Nat) : Array Certif
 def unitSync (e : Evidence) (w : Nat) : ClockSync := ((e.links[0]?).map (·.syncs.getD w noSync)).getD noSync
 
 /-- An egress link-window's violation (`check_link`), none when it is accepted. -/
-def egressVerdict (p : Params) (c : Commitment) (e : Evidence) (egressDigest : ByteArray) (l : String) (link : Link)
+def egressVerdict (p : Params) (c : Commitment) (e : Evidence) (egressDigest : ByteArray) (l : String) (link : LinkOpening)
     (w : Nat) : Option String :=
   match screen p (found c .egress l w) with
   | .error v => some v
