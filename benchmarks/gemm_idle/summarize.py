@@ -6,7 +6,8 @@ asked for); `unif` is the uniform-operand peak measured at that label (the power
 utilization is its MACs over the pass's wall time against each. Beside a co-runner entry W:SLEEP, `co` is the co-runner's
 MACs over the same window against `clk` and `keep` the GEMM's rate there over the fastest candidate's alone (the mean of
 its runs before and after the co-runner passes; `drift` is after over before). `x`: no candidate of the four fastest could
-run beside it; `<`: the co-runner hit its deadline before the GEMM ended, so its co understates and its keep overstates.
+run beside it; `<`: the co-runner hit its deadline before the GEMM ended, so it has no count (it adds its MMAs when it
+sees the end marker) and its keep overstates.
 `co@99` and `co@96` are the most `co` of the entries (neither `x` nor `<`) whose keep is at least 0.99 and 0.96: what an
 undeclared kernel takes while the GEMM loses at most 1% or 4% of its rate. Prints the tables and writes OUT/summary.json.
 Stdlib only.
@@ -122,7 +123,10 @@ def main(out: str) -> int:
                                 "co_of_clock_bound": s["co_macs_per_s"] / b, "keep": s["macs_per_s"] / ref,
                                 "algo": s["algo"], "sum_of_clock_bound": (s["macs_per_s"] + s["co_macs_per_s"]) / b,
                                 "co_sms": s["co_sms"], "power_w": snv.get("energy_w"), "sm_mhz": snv.get("sm_mhz_mean")}
-            mark = "<" if not outlasted else "" if s["algo"] == r["algo"] else "*"
+            if not outlasted:
+                cells += f"{'<':>10}{row['beside'][e]['keep']:>6.3f}"
+                continue
+            mark = "" if s["algo"] == r["algo"] else "*"
             cells += f"{row['beside'][e]['co_of_clock_bound']:>9.3f}{mark or ' '}{row['beside'][e]['keep']:>6.3f}"
         for kp in KEEPS:
             got = [x for x in row["beside"].values()
