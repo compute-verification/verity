@@ -29,7 +29,7 @@ FIELDS = frozenset({
     "schema", "label", "workload", "workload_sha256", "case", "model", "pair", "order_in_pair", "arm", "committer", "committer_name",
     "wall_s", "iterations", "engine_steps", "generated_tokens", "prompt_tokens", "generated_tokens_per_s", "total_tokens_per_s",
     "step_wall_s", "step_wall_prefill_s", "step_wall_decode_mean_s", "tokens_equal_ref", "tokens_digest", "gpu_mem", "host_mem_kb",
-    "utc", "remote_session", "fault_retained_flip", "root_equal_expected", "commit",
+    "utc", "poub_session", "fault_retained_flip", "root_equal_expected", "commit",
     "tp", "commit_started", "step_tokens_out", "thread_cpu_s",                       # pipeline.tp.commit
     "served_window",                                                                 # pipeline.serve_seal
     "tokens_equal",                                                                  # older runs: tokens_equal_ref's old name

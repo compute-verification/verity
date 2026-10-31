@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.remote_bandwidth.codec import Field, rho, rho_inv
+from verity.core.protocols.poub.codec import Field, rho, rho_inv
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))

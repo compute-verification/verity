@@ -42,7 +42,7 @@ They rest on the remote audit's random oracle and named assumptions, and on more
 `Accounting.Assumptions.ChainSum` (a codec word's `k · S` chained squarings cost their sum, so a word costs
 `E ≤ k · S · e`), and `Accounting.Assumptions.KeyBinding` (under the append-coin rule, the blocks a pass reads are
 uniform but for `δ`). The
-game orders every append's choices before its coin, as remote_bandwidth's protocol does, so no choice the writers make
+game orders every append's choices before its coin, as poub's protocol does, so no choice the writers make
 reads the encoding it is keyed under, and the sessions pay for no advice.
 
 **Idioms.** The carrier lemma is the counting step of incompressible encodings (Moran–Wichs, CRYPTO 2020: an
@@ -87,7 +87,7 @@ def CarrierBits : Prop :=
 /-- **The remote audit at the deployed parameters with a store per pass, with stacking: carriers are rebuilds of
 bounded size in every pass, and every appended block is keyed after its writers chose it.**
 `RemoteSessionConservationSketchDeployed`'s game and bound, with each pass on its own store, made by the append-coin
-rule (`Accounting.appendCoinBlocks`; remote_bandwidth's PROTOCOL.md §3–§4). The store is `T` appends of `M` block
+rule (`Accounting.appendCoinBlocks`; poub's PROTOCOL.md §3–§4). The store is `T` appends of `M` block
 positions each, the registration first, whose coin is the seed. Append `a`'s choices `choose c ω a κ_<a` (its
 payloads, which may be a circuit's values over other blocks' encodings, their padding, the run inputs behind them, how
 many blocks, the schedule up to it) read the codec `ω`, the coins of the appends before it and the prefix `c`; its own
@@ -286,7 +286,7 @@ at most its bits of `W`'s reads (`RequirementMoved`). So an accepted session rea
 the audit credits and of the bits `W` reads from complete blocks, counted in bits; `RequirementUncredited` and
 `RequirementUnplanned` bound what a block still being written leaves out. Each pass reads its own store, the plan's
 blocks resident going into its step, made from the coins before it; that its tiles are the memory map's blocks, so
-that the bits read are `W`'s, is the binding's (`remote_bandwidth`'s Replay and each pass's bound step), and is not in this game.
+that the bits read are `W`'s, is the binding's (`poub`'s Replay and each pass's bound step), and is not in this game.
 
 **The memory map and the append coin.** With `mm`, the execution `e` and the layout `ℓ` fixed before the seed, as the
 statement takes them, which blocks are resident at each step, their indices and their order are fixed with `mm`: frees,

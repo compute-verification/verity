@@ -72,7 +72,7 @@ section. `benchmarks/network_sim/workload/accounting.py` accounts for the networ
 verity_vllm's serving Program the same way.
 
 The objects mirror the Lean physical model: `Datacenter` is `Accounting.Hardware`, a `DeviceEntry` is
-`Accounting.Device` (the node's constants are its one Python mirror's, `verity.core.protocols.remote_bandwidth.timing`),
+`Accounting.Device` (the node's constants are its one Python mirror's, `verity.core.protocols.poub.timing`),
 `Zone` is `Hardware.SpatialUnit` with `Covered`, `Placed` is `Accounting.Placed` (and
 `Accounting.Requirement.Placement`) at the census's grain, a `StoreEntry` is `Accounting.Requirement.Store`, and an
 `Interval` is `Accounting.Window`.
