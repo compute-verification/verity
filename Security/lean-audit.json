@@ -43127,7 +43127,7 @@
    ]
   },
   "Flock.With.Setup": {
-   "digest": "795568ea639040eef5cb5037b9e2a43f5cece986d8f1ac8a6e97ae1950838ab6",
+   "digest": "7782e45c67e1ee9600f21f12a9b047f9c9455c41ea606b7098ec1e52a4978a86",
    "definitions": {
     "Flock.CircuitType.digestWith": "288247cf1a3e1910a2c77ce8b2a36aa7817c77bab4de46ab86ce14bcdde779f8",
     "Flock.FV3.hashWith": "fcd717df278301814e392ba1471f0aa5d9fbd9eeccdb077b8b2919eda4692ed5",
@@ -43138,14 +43138,14 @@
     "Flock.HmIn.loadPublicWith": "58909c5504b822ba0cabd8f18fa0988f3b9b2380fbec6d85da5218c8268deb2a",
     "Flock.HmIn.loadPublicWith._sparseCasesOn_1": "17384e1ae4d24df6b7a51dc3ca448db6b747a136fb7bd8c89095b1ae2a3e3749",
     "Flock.HmIn.loadPublicWith._sparseCasesOn_2": "17696ed68d35a272c827ddf20bef1a11f0046391d4bc68cb3b0fcf27d4e1ce5c",
-    "Flock.HmLinks.checkWith": "6999d9543ec68852b07c070401a68c8a25e54c5e460ac8463c6d2c69f1ed8e66",
+    "Flock.HmLinks.checkWith": "3a035fdda4294e1c865d90d9cf6b917b619cf7d5fdcb49918f886588e0441682",
     "Flock.HmOut.checkPublicWith": "d7a9169b627a2dadec595bd1405ce1bb997a64eb03e9d25c20b4e7c51f22d6e2",
     "Flock.HmOut.parseCommitWith": "e66342575e2b88b9c872e3744e44c19f8b2c2cd330b0a18728163c8615a63a28",
     "Flock.HmOut.parseTmplWith": "2ca3df5a1d8f3285e428185569272c03792390dcaf4549e1128a134dacf3b3f3",
     "Flock.HmOut.parseWith": "75c862d596a69a6e7d52f3ff5ad1f002f745af6359646b0c91cc5d5ef21d12e3",
     "Flock.HmRow.checkPartitionWith": "84923413124abf3c10c2873e8314505f1f19f1e0ba833dd368a5e224d6409950",
     "Flock.HmRow.checkPublicWith": "b80a81ba0f61316faaab26e8e687c843e7ef70eb72c0cff5409649095cb4d73d",
-    "Flock.HmRow.classOfWith": "716452a744b48c1bfcd597daab1642453bf35be52523a0e2db072caedd05f811",
+    "Flock.HmRow.classOfWith": "edb341cfca9ac7da48c1b8a10f544066d13165f222a24c383c85825f14a64f43",
     "Flock.HmRow.deriveQcallUnitsWith": "4b5c30e303b2614e783f5de48c325aa7a3fbc8f09cacdb9febf576d3b4aece55",
     "Flock.HmRow.deriveQwordUnitsWith": "bcd1caee41b1b63efb78563350e91ac0e35b01e1b233c14410c9018b25e79a3d",
     "Flock.HmRow.deriveTemplateUnitsWith": "ea29486efdd9c7cbb55bcd56167e45933c365d180c5a9f9aee3562ce8ad77636",
