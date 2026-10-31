@@ -2,6 +2,7 @@ import NetworkCheck.Certificate
 import Lms.Verify
 import Flock.Hm96
 import Flock.Canon
+import Flock.FV3
 import Identity.Tagged
 
 /-!
@@ -34,7 +35,7 @@ of record stays the Python's (`service.OF_RECORD`).
 
 `linkWindowFn` is the `link-window` function of `network-records verdicts` (`Difftest.serve`), which `service.py` calls
 through `lean_audit.SERVER`. Code: it imports only Lean, C-Flock's verifier (`Flock.Hash`, `Flock.Bytes`, `Flock.Canon`,
-`Flock.Hm96`), the identity hash, the LMS port and the certificate's encodings.
+`Flock.Hm96`, `Flock.FV3`), the identity hash, the LMS port and the certificate's encodings.
 -/
 
 namespace NetworkCheck.LinkWindow
@@ -245,27 +246,15 @@ def le (width x : Nat) : ByteArray := ⟨(Array.range width).map fun i => (x >>>
 /-- `x` as `width` big-endian bytes, `x < 2^(8·width)`. -/
 def be (width x : Nat) : ByteArray := ⟨(Array.range width).map fun i => (x >>> (8 * (width - 1 - i))).toUInt8⟩
 
-/-- frame-v3's framed hash through SHA-512 (`verity.ml.commitments.merkle._message`): the frame tag, the tag, then each
-part length-prefixed. -/
-def frameHash (tag : String) (parts : List ByteArray) : ByteArray :=
-  let t := tag.toUTF8
-  Flock.Sha512.hash (parts.foldl (fun acc p => acc ++ Flock.be64 p.size.toUInt64 ++ p)
-    ("veritor/protocol/merkle/frame/v3".toUTF8.push 0 ++ Flock.be32 t.size.toUInt32 ++ t))
-
-/-- `merkle._uint`: the minimal big-endian bytes, one zero byte for 0. -/
-def uint (x : Nat) : ByteArray :=
-  if x = 0 then ⟨#[0]⟩ else be ((Nat.log2 x) / 8 + 1) x
-
 /-- The link-window's served domain id (`LinkWindows.domain(window).domain_id`): one-stage's window domain over four
 leaves, its binding the identity digest of the registered Program, the partition, the value, its schema and leaf count,
-and the run `<run>/<link>/<window>`; the boundary's owner, positions `RangeIndexedDomain(0, 4)`. -/
+and the run `<run>/<link>/<window>`; the boundary's owner, positions `RangeIndexedDomain(0, 4)`
+(`Flock.FV3.Sha512.Domain.make`). -/
 def domainId (c : Case) : V ByteArray := do
   let binding ← Identity.identityDigestSha512 windowDomainTag (Json.mkObj [
     ("program", .str c.program), ("partition", .str c.partition), ("port", .str value), ("schema", .str schema),
     ("leaves", toJson leaves), ("run", .str s!"{c.run}/{c.link}/{c.window}")])
-  let positions ← Identity.identityDigestSha512 "veritor/indexed-domain/range/v1"
-    (Json.mkObj [("start", toJson (0 : Nat)), ("step", toJson (1 : Nat)), ("stop", toJson leaves)])
-  return frameHash "domain" [binding, uint 1, positions, uint leaves]
+  return (Flock.FV3.Sha512.Domain.make binding (-1) 0 leaves).id
 
 /-- Σ_sync as `parameters_digest` reads it, each ρ in lowest terms. -/
 def manifestSet (c : Case) : NetworkCheck.SyncSet :=
