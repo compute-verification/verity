@@ -823,6 +823,16 @@ def test_a_cap_whose_comment_both_sides_reword_merges_as_counters_under_theirs_c
     assert _caps(tmp_path, base, alike, alike) == (alike, 0), "a line both sides changed alike is that line, not twice"
 
 
+def test_caps_both_sides_brought_over_a_base_without_them_merge_as_the_larger_count(tmp_path):
+    """A merge base from before the caps came (`main` while the PR bringing them is still on `next`) holds no cap line,
+    so both sides added each one: each key merges as the larger count, not the sum, under theirs' comment."""
+    base = "import json\n\n\ndef test_one_mathlib():\n    pass\n"
+    ours = base + "\n\n" + packages({SEC: 535, PROPS: 205}, {SEC: 1688}, above="ours")
+    theirs = base + "\n\n" + packages({SEC: 509, PROPS: 207}, {SEC: 1700}, above="theirs")
+    text, left = _caps(tmp_path, base, ours, theirs)
+    assert (text, left) == (base + "\n\n" + packages({SEC: 535, PROPS: 207}, {SEC: 1700}, above="theirs"), 0)
+
+
 def test_a_conflict_beyond_the_cap_lines_and_comments_stays_git_s(tmp_path, capsys):
     """Only the caps and the comments merge: a conflict in a docstring stays git's beside a cap that merges, and the caps
     stay git's where the sides hold different caps or a count would go below 0 (both sides dropped the same entries, which
