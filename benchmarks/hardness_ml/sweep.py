@@ -258,6 +258,13 @@ def replan13():
              "design": "A", "rank_frac": 1 / 4, "diag": True}]
 
 
+def replan14():
+    """A 1/8's lr at w384 180M from below: 2e-3 beat 3e-3 (1.559 against 1.566) and 6e-3 diverged, and A's optimum
+    relative to the baseline's falls with width (2× at w128, 1× at w256)."""
+    return [{"name": "w384-A8-diag-D180M-lr0.001", "size": "w384", "tokens": 180_000_000, "lr": 1e-3, "threads": 24,
+             "design": "A", "rank_frac": 1 / 8, "diag": True}]
+
+
 PRESETS = {
     "bench": bench,
     "replan1": replan1,
@@ -273,6 +280,7 @@ PRESETS = {
     "replan11": replan11,
     "replan12": replan12,
     "replan13": replan13,
+    "replan14": replan14,
     "w256": lambda: grid("w256", 20_000_000),
     "scale1": lambda: lite("w512", 20_000_000, 6) + lite("w128", 20_000_000, 2),
 }
