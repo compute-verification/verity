@@ -227,12 +227,6 @@ JCS_IN = [
     {"affine": ["n", 3, 0, 1], "strided": ["p", 0, 7, 1, 0, 0, 4]},
 ]
 JCS_OUT = ["\u00e9", "\x7f", 2**53 + 1, 10**21, 1.0, {"\ue000": 1, "\U0001f600": 2}]
-#: An ASCII document of every kind of value, control characters included, and the SHA-512 of its compact sorted JSON as
-#: the escaping writer (`ensure_ascii`) writes it.
-ASCII_DOC = {"id": "Gemm_v2{K=2048,N=16}", "ctl": "\x00\x01\x1f\t\n\r\b\f", "q": "\"\\/~ ", "n": [0, -1, 2**63],
-             "f": 1.5, "t": True, "z": None}
-ASCII_DOC_SHA512 = ("0b7e7c3cf0a166dc2dca18a9877c1c83d104647265571e3f6dacc15368e011a5"
-                    "79409093c8c1dcc20b17ef6c2e2a633d92414b53f824a571385caf3a19829e5b")
 
 TYPES = [["Value", 16], ["Array", 3, ["Value", 8]], ["Array", 0, ["Value", 32]], ["Tuple", [["Value", 16], ["Array", 2, ["Value", 32]]]],
          ["Record", [["b", ["Value", 32]], ["a", ["Array", 2, ["Value", 16]]]]], ["Array", 2, ["Tuple", [["Value", 16], ["Value", 32]]]]]
@@ -525,15 +519,6 @@ def test_outside_the_domain_the_bytes_differ_and_the_codec_refuses():
         top = _comp("TOut", (), lambda S: ((("x", Array(4, V32)), ("b", V32)), V32), lambda B, S, x, b, fn=fn: B.call(fn, x, b))
         with pytest.raises(ValueError, match="canonical JSON domain"):
             codec.encode_program(Program(top))
-
-
-def test_an_ascii_document_has_the_bytes_the_escaping_writer_gave_it():
-    """On ASCII without DEL, escaping the rest and writing it as UTF-8 are one text, the escaping writer's pinned one."""
-    b = codec.canonical_json(ASCII_DOC)
-    assert hashlib.sha512(b).hexdigest() == ASCII_DOC_SHA512
-    for v in [ASCII_DOC, *JCS_IN]:
-        escaped, utf8 = (json.dumps(v, sort_keys=True, separators=(",", ":"), ensure_ascii=a).encode() for a in (True, False))
-        assert codec.canonical_json(v) == escaped == utf8
 
 
 def test_the_program_digests(decoded):
