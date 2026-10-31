@@ -50,7 +50,7 @@ structure ReadE where
   lo : Nat
   deriving Inhabited, Repr
 
-structure Layout where
+structure BlockLayout where
   type : Option String
   rangeLog : Option Nat
   inSplit : Array Nat
@@ -66,7 +66,7 @@ structure TableInfo where
   diff : Nat
   deriving Inhabited, Repr
 
-namespace Layout
+namespace BlockLayout
 
 def FORMAT : String := "verity/layout/v1"
 
@@ -80,7 +80,7 @@ private def hasOnly (j : Json) (keys : List String) : Bool :=
   | Json.obj kvs => kvs.toArray.all fun (k, _) => keys.contains k
   | _ => false
 
-def ofJson (j : Json) : V Layout := do
+def ofJson (j : Json) : V BlockLayout := do
   if !hasOnly j ["sha512", "type", "range_log", "in_split", "out_split", "own", "calls", "reads"] then
     throw s!"{ctx}: unknown keys"
   let ownJ ← J.get j "own" ctx
@@ -113,7 +113,7 @@ def ofJson (j : Json) : V Layout := do
            outSplit := ← natArr (← J.get j "out_split" ctx) "out_split", own, calls, reads }
 
 /-- The record, as `verity_flock.layouts.BlockLayout.record` writes it (without `sha512`). -/
-def record (l : Layout) : Json :=
+def record (l : BlockLayout) : Json :=
   let own := match l.own with
     | .derive => Json.mkObj [("derive", Json.str "v2")]
     | .gen t n vb lo => Json.mkObj [("gen", Json.str "table/v2"), ("table", Json.str t), ("in_bits", Lean.toJson n),
@@ -130,7 +130,7 @@ def record (l : Layout) : Json :=
     (match l.rangeLog with | some s => [("range_log", Lean.toJson s)] | none => []))
 
 /-- `SHA-512("verity/layout/v1" ‖ 0 ‖ canon(record))`, as lowercase hex. -/
-def digest (l : Layout) : V String := do
+def digest (l : BlockLayout) : V String := do
   let s ← canon l.record
   return hexOf (Sha512.hash (FORMAT.toUTF8 ++ ByteArray.mk #[0] ++ s.toUTF8))
 
@@ -191,7 +191,7 @@ def uses (t : CircuitType) : Array Nat := Id.run do
   return u
 
 /-- The caller's input wires exported to a placed call: a whole single-wire argument that nothing else reads. -/
-def exported (t : CircuitType) (l : Layout) : Array Nat := Id.run do
+def exported (t : CircuitType) (l : BlockLayout) : Array Nat := Id.run do
   let u := uses t
   let mut out := #[]
   let mut c := 0
@@ -208,8 +208,8 @@ def exported (t : CircuitType) (l : Layout) : Array Nat := Id.run do
 
 /-- The own-region rows of a layout's items: ANDs, inlined callees' items (by their layouts) and inline reads. `fuel`
 bounds the inlining depth (layouts are listed callees first, so the number of layouts is enough). -/
-def itemsRows (types : String → Option CircuitType) (ls : Array Layout) (info : String → Option TableInfo) :
-    Nat → CircuitType → Layout → Nat
+def itemsRows (types : String → Option CircuitType) (ls : Array BlockLayout) (info : String → Option TableInfo) :
+    Nat → CircuitType → BlockLayout → Nat
   | 0, _, _ => 0
   | fuel + 1, t, l => Id.run do
     let mut n := 0
@@ -236,7 +236,7 @@ def itemsRows (types : String → Option CircuitType) (ls : Array Layout) (info 
     return n
 
 /-- Layout `j`'s own-region size under derive's v2 rule (a generated read: all its rows). -/
-def ownSize (types : String → Option CircuitType) (ls : Array Layout) (info : String → Option TableInfo) (j : Nat) : Nat :=
+def ownSize (types : String → Option CircuitType) (ls : Array BlockLayout) (info : String → Option TableInfo) (j : Nat) : Nat :=
   let l := ls.getD j default
   match l.own with
   | .gen sha n vb lo => readRowsPlaced n lo (kOf sha vb ((info sha).getD default))
@@ -257,7 +257,7 @@ def ownSize (types : String → Option CircuitType) (ls : Array Layout) (info : 
       return rows + 1
 
 /-- Layout `j` places nothing: derived own rows, every call inline (by layouts that place nothing) and every read inline. -/
-def placesNothing (ls : Array Layout) : Nat → Nat → Bool
+def placesNothing (ls : Array BlockLayout) : Nat → Nat → Bool
   | 0, _ => false
   | fuel + 1, j =>
     let l := ls.getD j default
@@ -270,25 +270,25 @@ def increasing (xs : Array Nat) (lo hi : Nat) : Bool :=
   xs.all (fun x => lo ≤ x && x < hi) && (List.range (xs.size - 1)).all fun i => xs[i]! < xs[i + 1]!
 
 /-- The layouts an entry names: every call's, and every placed read's. -/
-def named (l : Layout) : Array Nat := l.calls.map (·.layout) ++ l.reads.filterMap (·.placed.map (·.1))
+def named (l : BlockLayout) : Array Nat := l.calls.map (·.layout) ++ l.reads.filterMap (·.placed.map (·.1))
 
 /-- Every layout is reached from the unit's. Entries name layouts listed before them, so one downward sweep marks every
 reached layout: mark the unit's, then each marked layout's entries below it. -/
-def reachOk (ls : Array Layout) (unit : Nat) : Bool :=
+def reachOk (ls : Array BlockLayout) (unit : Nat) : Bool :=
   let marked := (List.range ls.size).reverse.foldl (fun (m : Array Bool) j =>
       if m.getD j false then (named ls[j]!).foldl (fun m jj => if jj < j then m.set! jj true else m) m else m)
     ((Array.replicate ls.size false).set! unit true)
   unit < ls.size && marked.all id
 
 /-- A range on every layout but the unit's, in 7..40. -/
-def rangeOk (ls : Array Layout) (unit j : Nat) : Bool :=
+def rangeOk (ls : Array BlockLayout) (unit j : Nat) : Bool :=
   match (ls.getD j default).rangeLog with
   | none => j == unit
   | some s => j != unit && 7 ≤ s && s ≤ 40
 
 /-- A generated read: no type, entries or port groups, not the unit's; widths in 1..32 and a split in range; a
 library table in the library's shape; a held table of exactly `2^in_bits` words; its rows inside its range. -/
-def genOk (ls : Array Layout) (info : String → Option TableInfo) (unit j : Nat) : Bool :=
+def genOk (ls : Array BlockLayout) (info : String → Option TableInfo) (unit j : Nat) : Bool :=
   let l := ls.getD j default
   match l.own with
   | .derive => true
@@ -312,7 +312,7 @@ def readItems (t : CircuitType) : Array Nat :=
 naming it; each call's layout listed before it and of the callee's type, and an inlined one placing nothing; each read's
 table held with exactly `2^index_bits` words for the type's entry, and either inline with its split in range, or placed
 at a generated read listed before it of that table, index width and value width. -/
-def entriesOk (types : String → Option CircuitType) (ls : Array Layout) (info : String → Option TableInfo) (j : Nat) : Bool :=
+def entriesOk (types : String → Option CircuitType) (ls : Array BlockLayout) (info : String → Option TableInfo) (j : Nat) : Bool :=
   let l := ls.getD j default
   match l.own with
   | .gen _ _ _ _ => true
@@ -341,7 +341,7 @@ def entriesOk (types : String → Option CircuitType) (ls : Array Layout) (info 
               | .derive => false)
 
 /-- The placed entries of a layout, as (layout, offset), calls then reads in item order. -/
-def placedOf (l : Layout) : Array (Nat × Nat) :=
+def placedOf (l : BlockLayout) : Array (Nat × Nat) :=
   l.calls.filterMap (fun e => e.offset.map (e.layout, ·)) ++ l.reads.filterMap (·.placed)
 
 /-- The unit's placed entries of one layout take slots `0, 1, …` in item order. -/
@@ -350,7 +350,7 @@ def slotsOk (p : Array (Nat × Nat)) : Bool :=
 
 /-- An inner derived layout: its own region inside its range; each placed range aligned, clear of the own region and inside
 the range; no two overlapping. The unit's: its slots. -/
-def geometryOk (types : String → Option CircuitType) (ls : Array Layout) (info : String → Option TableInfo) (unit j : Nat) :
+def geometryOk (types : String → Option CircuitType) (ls : Array BlockLayout) (info : String → Option TableInfo) (unit j : Nat) :
     Bool :=
   let l := ls.getD j default
   match l.own with
@@ -366,18 +366,18 @@ def geometryOk (types : String → Option CircuitType) (ls : Array Layout) (info
         !(spans[a]!.1 < spans[b]!.2 && spans[b]!.1 < spans[a]!.2)
 
 /-- **The layouts' rules**, over held types (already well formed) and held tables. -/
-def WellFormed (types : String → Option CircuitType) (ls : Array Layout) (unit : Nat) (info : String → Option TableInfo) :
+def WellFormed (types : String → Option CircuitType) (ls : Array BlockLayout) (unit : Nat) (info : String → Option TableInfo) :
     Prop :=
   reachOk ls unit = true ∧
     ∀ j, j < ls.size → rangeOk ls unit j = true ∧ genOk ls info unit j = true ∧ entriesOk types ls info j = true ∧
       geometryOk types ls info unit j = true
 
-instance instDecidableWellFormed (types : String → Option CircuitType) (ls : Array Layout) (unit : Nat) (info : String → Option TableInfo) :
+instance instDecidableWellFormed (types : String → Option CircuitType) (ls : Array BlockLayout) (unit : Nat) (info : String → Option TableInfo) :
     Decidable (WellFormed types ls unit info) := by
   unfold WellFormed; infer_instance
 
 /-- The first rule broken, by name. -/
-def failure (types : String → Option CircuitType) (ls : Array Layout) (unit : Nat) (info : String → Option TableInfo) :
+def failure (types : String → Option CircuitType) (ls : Array BlockLayout) (unit : Nat) (info : String → Option TableInfo) :
     String :=
   if !reachOk ls unit then "reach" else
   match (List.range ls.size).find? (fun j => !(rangeOk ls unit j && genOk ls info unit j && entriesOk types ls info j &&
@@ -387,12 +387,12 @@ def failure (types : String → Option CircuitType) (ls : Array Layout) (unit : 
   | none => "none"
 
 /-- Decide `WellFormed`: each layout's own-region size when it holds (`check_ok`), else the first rule broken. -/
-def check (types : String → Option CircuitType) (ls : Array Layout) (unit : Nat) (info : String → Option TableInfo) :
+def check (types : String → Option CircuitType) (ls : Array BlockLayout) (unit : Nat) (info : String → Option TableInfo) :
     Except String (Array Nat) :=
   if WellFormed types ls unit info then .ok ((Array.range ls.size).map (ownSize types ls info))
   else .error (failure types ls unit info)
 
-theorem check_ok {types : String → Option CircuitType} {ls : Array Layout} {unit : Nat} {info : String → Option TableInfo}
+theorem check_ok {types : String → Option CircuitType} {ls : Array BlockLayout} {unit : Nat} {info : String → Option TableInfo}
     {sizes : Array Nat} (h : check types ls unit info = .ok sizes) : WellFormed types ls unit info := by
   unfold check at h
   split at h
@@ -441,6 +441,6 @@ def cmd (paths : List String) : IO UInt32 := do
     IO.println s!"LAYOUT {line.compress}"
   return 0
 
-end Layout
+end BlockLayout
 
 end Flock
