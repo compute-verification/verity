@@ -1,5 +1,5 @@
 """`Binder`: the store's hooks into one in-process vLLM engine (``VLLM_ENABLE_V1_MULTIPROCESSING=0``, so the scheduler and
-the model runner share one `Store`), every patch through `verity_vllm.engine.hooks` and undone by its `Hooks`.
+the model runner share one `NodeMemory`), every patch through `verity_vllm.engine.hooks` and undone by its `Hooks`.
 
 ~~~text
 GPUModelRunner.load_model           after: each weight tensor a region (kind weights, tier hbm), registered once
@@ -38,7 +38,7 @@ import numpy as np
 
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.protocols.remote_bandwidth.interface import IDENTITY, Append, Codec, PageLayout, Receipt, Segment, WindowRecord
-from verity_vllm.protocols.remote_bandwidth.registry import KindReceipt, RemoteBandwidthReceipt, Store
+from verity_vllm.protocols.remote_bandwidth.registry import KindReceipt, NodeMemory, RemoteBandwidthReceipt
 
 if TYPE_CHECKING:
     from verity.core.protocols.remote_bandwidth.audit import Tiles
@@ -242,7 +242,7 @@ class Binder:
     the KV pool stays outside the registration (counted unregistered): its pages' hooks reach no store, and a step
     writes no registered block, so its `kv_append` only numbers the step; `register_filler` adds the store's filler."""
 
-    def __init__(self, store: Store, *, block_bytes: int = 4096, kv_codec: Codec = IDENTITY,
+    def __init__(self, store: NodeMemory, *, block_bytes: int = 4096, kv_codec: Codec = IDENTITY,
                  receipt: Receipt | None = None, weights: Callable[[Any], Sequence[WeightRegion]] = model_weights,
                  reader: Callable[[Sequence[Segment]], dict[int, bytes] | bytes | None] | None = None, fifo: bool = True,
                  messages: Callable[[], Sequence[bytes | None]] | None = None, registration: bytes | None = None,
