@@ -189,15 +189,15 @@ theorem unit_commit {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : 
       (Hm.bytesOf (Hm.blockBit (L.model (Refine.regionsOf st)) z ⟨i / st.c.g, hob⟩) 192
         (Hm.saltCol st.c (i % st.c.g) q)) =
       (Layout.bcChunk st.c st.pub (i / st.c.g) (i % st.c.g) q).data.toList :=
-    site_commit ⟨_, _, _, _, _, _, _, _, st, ht, Hidden.setupHidden_specCC hd, Hidden.unpin_layout ht hd,
-        HiddenExec.unitRowsFlat_unpin ht hd hrf.1.toP, Refine.regionsOf st, hT⟩
+    site_commit ⟨tags, cf, pf, coins, tables, draw, partition, program, st, ht, Hidden.setupHidden_specCC hd,
+        Hidden.unpin_layout ht hd, HiddenExec.unitRowsFlat_unpin ht hd hrf.1.toP, Refine.regionsOf st, hT⟩
       (fun r hr => List.mem_map_of_mem hr) hrf hz ⟨i / st.c.g, hob⟩ hg hq fun g' hg' => by
         show (Layout.bcChunk st.c st.pub (i / st.c.g) g' q).size = 128
         rw [hchunk g' hg']
         exact pub_digest_size hd (hin g' hg') hq
   have hR : Hm.RowRanges st.c := HiddenExec.AcceptedH.rowRanges
-    ⟨_, _, _, _, _, _, _, _, st, ht, Hidden.setupHidden_specCC hd, Hidden.unpin_layout ht hd,
-      HiddenExec.unitRowsFlat_unpin ht hd hrf.1.toP, Refine.regionsOf st, hT⟩
+    ⟨tags, cf, pf, coins, tables, draw, partition, program, st, ht, Hidden.setupHidden_specCC hd,
+      Hidden.unpin_layout ht hd, HiddenExec.unitRowsFlat_unpin ht hd hrf.1.toP, Refine.regionsOf st, hT⟩
   rw [hchunk _ le_rfl, hdm,
     bytesOf_congr (N := 2 * st.c.ports[q]!.words) (fun b _ t h8 => Hidden.Committed.msgCol_lt ht hC hg hq b t h8)
       (hf hob),
