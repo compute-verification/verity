@@ -14,6 +14,8 @@
 // length) or read at run time (`_rt`, one body for every length).
 // A kernel with no such plan takes the forms at the end: a leaf from its head (any rank, position and schema, the prefix
 // built once per row), a node from its chaining value alone and a pad from its domain id, for any value below 2^64.
+// Any message can also be built byte by byte into a sink of the kernel's own (put_tag, put_head, put_part, put_words,
+// put_uint), then padded (put_padding) or hashed from it (digest).
 //
 // The hm96-sha512 leaf of a row digest x under the salt y: c = SHA-512(salt_prefix || y), b = x ^ M_key y and the value
 // h = SHA-512(leaf_prefix(key) || b || c) the frame leaf binds (Hm96K). M_key y comes from a table of T_v, the XOR of
@@ -567,6 +569,82 @@ RC_HD u64 be64_at(const uint8_t* p) {
 RC_HD void be_put(uint8_t* p, u64 v, int n) {
   for (int i = n - 1; i >= 0; --i, v >>= 8) p[i] = (uint8_t)v;
 }
+
+// A message as a sink: s.put(b) appends the byte b and s.n counts them; s.word(i) reads bytes [8 i, 8 i + 8) back as a
+// big-endian word (digest). Bytes is a contiguous buffer; a kernel that keeps its messages elsewhere (a strided slice of
+// shared memory, say, so that no thread's message is a local array) passes its own.
+struct Bytes {
+  uint8_t* m;
+  int n;
+  RC_HD void put(u32 b) { m[n++] = (uint8_t)b; }
+  RC_HD u64 word(int i) const { return be64_at(m + 8 * i); }
+};
+// v's low k bytes, big-endian
+template <class S>
+RC_HD void put_be(S& s, u64 v, int k) {
+  for (int i = k - 1; i >= 0; --i) s.put((u32)(v >> (8 * i)) & 0xFFu);
+}
+// frame-v3's message (merkle._message) up to its parts: FRAME || u32be(len tag) || tag
+template <class S>
+RC_HD void put_tag(S& s, const char* tag) {
+  const char* frame = "veritor/protocol/merkle/frame/v3";
+  RC_UNROLL
+  for (int i = 0; i < 33; ++i) s.put((uint8_t)frame[i]);   // with its NUL
+  int tl = 0;
+  while (tag[tl]) ++tl;
+  put_be(s, (u64)tl, 4);
+  for (int i = 0; i < tl; ++i) s.put((uint8_t)tag[i]);
+}
+// a part: u64be(len) || b (len zero bytes when b is null)
+template <class S>
+RC_HD void put_part(S& s, const uint8_t* b, int len) {
+  put_be(s, (u64)len, 8);
+  for (int i = 0; i < len; ++i) s.put(b ? b[i] : 0);
+}
+// every frame message's head: the tag, then the domain id's part
+template <class S>
+RC_HD void put_head(S& s, const char* tag, const uint8_t* did) {
+  put_tag(s, tag);
+  put_part(s, did, 64);
+}
+// a part of the 4 nw bytes the little-endian u32 words q hold (a part in device memory, read a word at a time)
+template <class S>
+RC_HD void put_words(S& s, const u32* q, int nw) {
+  put_be(s, 4 * (u64)nw, 8);
+  for (int i = 0; i < nw; ++i) {
+    const u32 x = q[i];
+    RC_UNROLL
+    for (int j = 0; j < 4; ++j) s.put((x >> (8 * j)) & 0xFFu);
+  }
+}
+// the part uint(v): u64be(len(uint(v))) || uint(v), uint(v) big-endian in the fewest bytes (one for 0)
+template <class S>
+RC_HD void put_uint(S& s, u64 v) {
+  const int k = nbytes(v);
+  put_be(s, (u64)k, 8);
+  put_be(s, v, k);
+}
+// SHA-512's padding of the message in s, appended through s: its blocks
+template <class S>
+RC_HD int put_padding(S& s) {
+  const int n = s.n, total = (n + 17 + 127) / 128 * 128;
+  s.put(0x80);
+  while (s.n < total - 8) s.put(0);
+  put_be(s, (u64)n * 8, 8);
+  return total / 128;
+}
+// SHA-512 of the message in s, any number of blocks: its padding appended through s, then its blocks read back
+template <class C = Sha, class S>
+RC_HD void digest(S& s, u64* out) {
+  const int blocks = put_padding(s);
+  sha::iv(out);
+  for (int b = 0; b < blocks; ++b) {
+    u64 w[16];
+    RC_UNROLL
+    for (int i = 0; i < 16; ++i) w[i] = s.word(16 * b + i);
+    C::compress(out, w);
+  }
+}
 // the chaining value after one block
 template <class C = Sha>
 RC_HD void midstate(const uint8_t* block, u64* st) {
@@ -582,35 +660,21 @@ RC_HD void pad_schedule(u64 bytes, u64* kw) {
   sha::schedule_kw(blk, kw);
 }
 
-// frame-v3's message (merkle._message) into m, zero past it: FRAME || u32be(len tag) || tag || u64be(64) || did, then the
-// parts; each returns the length so far.
+// The same into the buffer m from byte n, zero past it (put_head at 0, put_part, put_uint); each returns the length so far.
 RC_HD int frame_head(uint8_t* m, const char* tag, const uint8_t* did) {
-  const char frame[] = "veritor/protocol/merkle/frame/v3";
-  int n = 0;
-  for (int i = 0; i < (int)sizeof frame; ++i) m[n++] = (uint8_t)frame[i];   // with its NUL: 33 bytes
-  int tl = 0;
-  while (tag[tl]) ++tl;
-  be_put(m + n, (u64)tl, 4);
-  n += 4;
-  for (int i = 0; i < tl; ++i) m[n++] = (uint8_t)tag[i];
-  be_put(m + n, 64, 8);
-  n += 8;
-  for (int i = 0; i < 64; ++i) m[n++] = did[i];
-  return n;
+  Bytes s{m, 0};
+  put_head(s, tag, did);
+  return s.n;
 }
-// u64be(len) || b (len zero bytes when b is null)
 RC_HD int frame_part(uint8_t* m, int n, const uint8_t* b, int len) {
-  be_put(m + n, (u64)len, 8);
-  n += 8;
-  for (int i = 0; i < len; ++i) m[n++] = b ? b[i] : 0;
-  return n;
+  Bytes s{m, n};
+  put_part(s, b, len);
+  return s.n;
 }
-// u64be(len(uint(v))) || uint(v), uint(v) big-endian in the fewest bytes (one for 0)
 RC_HD int frame_uint(uint8_t* m, int n, u64 v) {
-  const int k = nbytes(v);
-  be_put(m + n, (u64)k, 8);
-  be_put(m + n + 8, v, k);
-  return n + 8 + k;
+  Bytes s{m, n};
+  put_uint(s, v);
+  return s.n;
 }
 // the n-byte message in m (zero past n, with room for its padding) padded, as words into w; the words
 RC_HD int padded_words(uint8_t* m, int n, u64* w) {
