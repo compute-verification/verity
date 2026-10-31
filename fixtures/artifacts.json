@@ -174,7 +174,7 @@
   "art:98ccdf6cfe3a5a632e5babed1245d0600d6ef38d67672113d25a32ffa026ef4f": "integrations/vllm/tests/commit/serving_row_leaf_vector.json",
   "art:7a85c5c4238b971371cf46c2153b94548a11988891cc4018b196535c3cb92bbb": "verity/ml/flock/tests/fixtures/f1-gate",
   "art:8c365eeb9f120a3c3febf052ee7cfa2a88e4f1e87e7c4d0444552a77da5754ea": "verity/ml/circuits/silicon/hawkeye/PIN.json",
-  "art:92fc75530885f63076a7a5770ee5fc0e9d3259e7b8738ca82fd37c7047a8de58": "verity/ml/circuits/silicon/discrepancy_log.json",
+  "art:d0727338dc232e17efcb1fac07e0f938bf3db5cf23dc4e9d0a322978a5c54903": "verity/ml/circuits/silicon/discrepancy_log.json",
   "previous": {
     "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": [
       "art:d775cc59e5e058b21c9eac5d748fab785ecd6be184782427bead14eb3cc80811"
@@ -219,7 +219,7 @@
       "art:cd6a7a1b0c579c5b4ae3553689e9918cc459822bca72ec74144ba2e79a1410ee",
       "art:d0158e94e1964b37d698d880ee8c6944f7271b3dcc48bda55ea0741e3e557073"
     ],
-    "art:92fc75530885f63076a7a5770ee5fc0e9d3259e7b8738ca82fd37c7047a8de58": [
+    "art:d0727338dc232e17efcb1fac07e0f938bf3db5cf23dc4e9d0a322978a5c54903": [
       "art:aac898b703462ecb19c5d7460baf4690980d8e121a8b40e1745a4759a05d8fe6",
       "art:e960ec04a528595710d77cf274c57edc1a0b9be2d475b64a4a27ef0b93a68a8a",
       "art:5bf4b57b082bd187fe07849babf4db172843c5c71efd2ffbb0ee65b3bbd9105f",
@@ -227,7 +227,8 @@
       "art:9ea8114d17bfad729de762a292b304b781a6bc987608193804454a3fb2260238",
       "art:b238706278bd3f122ae084fbd6d9e01b9369779d4208b67eaab547e102e99364",
       "art:83365bfa752efa63cdab08b92d144890929cdbc36454945090f0b2979014f887",
-      "art:50e42f6254063c4f23662c0fc17ce43a5dae9fbafa489d0266874f6b03296941"
+      "art:50e42f6254063c4f23662c0fc17ce43a5dae9fbafa489d0266874f6b03296941",
+      "art:92fc75530885f63076a7a5770ee5fc0e9d3259e7b8738ca82fd37c7047a8de58"
     ]
   }
 }

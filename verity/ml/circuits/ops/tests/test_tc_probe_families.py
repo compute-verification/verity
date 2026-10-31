@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.ml.circuits.silicon import silicon as S
+from verity.ml.circuits.silicon import models as S
 from verity.ml.circuits.silicon.models import group_sum
 from verity.ml.circuits.silicon.term import Term, e4m3_product, fp32_term
 
