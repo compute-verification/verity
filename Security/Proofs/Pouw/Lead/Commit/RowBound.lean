@@ -118,13 +118,13 @@ theorem leaf_eq_hash {d : PouwCommit.Domain} (hh : d.hash = .sha512) (rank : Nat
       have hl : (Nat.log2 n + 8) / 8 = max 1 (((if n = 0 then 0 else Nat.log2 n + 1) + 7) / 8) := by
         by_cases h0 : n = 0
         · subst h0; simp
-        · rw [if_neg h0, Nat.max_eq_right (show 1 ≤ (Nat.log2 n + 1 + 7) / 8 by omega)] <;> omega
+        · simp only [h0, ↓reduceIte]; omega
       simp only [Flock.FV3.uint, natBytes]
       rw [hl]
     obtain ⟨h, c, i⟩ := d
     cases hh
     show Flock.Sha512.hash (Flock.FV3.input "leaf" [i, Flock.FV3.uint rank, Flock.FV3.uint rank, schema.toUTF8, v]) = _
-    rw [hu] <;> rfl
+    rw [hu]; rfl
 
 theorem rowBound : RowBound := by
   intro binding owner count binding' owner' count' d d' rank rank' schema schema' v v' x hd hd' hx hx' hr hr'
