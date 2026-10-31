@@ -17,14 +17,14 @@ import Lms.Verify
 The verifier of record is one compiled Lean function per composite (`Verity.Registration.Composite`), the `answer` of
 the composite `Core.Composites.composites` lists for it (`verifier`): onsite's `Core.Onsite.protocol`
 (`verity/onsite/v0`, `Core.Composition.tiedSameB`) and remote's `Core.Remote.protocol` (`verity/remote/v0`,
-`Core.Composition.sameB`), each composing its subprotocols over the blobs the prover sent. Onsite has seven
+`Core.Composition.tiedSameB`), each composing its subprotocols over the blobs the prover sent. Onsite has seven
 subprotocols and remote three of them, each subprotocol at the component its composite names for it (`component`);
 the five that decide a period are one per `Accounting.Audit` (`Subprotocol.ofAudit`):
 
 | subprotocol | `Audit` | onsite's component | remote's component |
 | --- | --- | --- | --- |
 | sampled proofs | `.sampled` | `VStar.Recursive.Sampled.protocol` (`verity/sampled-proofs/v1`: one-stage v1's audit or the recursive audit, as its params' `form` names it) | the same |
-| PoUW | `.pouw` | `PouwCheck.Period.protocol` (its period credit) | `PouwCheck.protocol` (its window) |
+| PoUW | `.pouw` | `PouwCheck.Period.protocol` (its period credit) | the same |
 | the inference-only policy | | `NciCheck.Protocol.protocol` (`verity/inference-only/v0`) | the same |
 | PoUS | `.pous` | `PousCheck.RunProtocol.protocol` | |
 | PoUB-P2 | `.poub` | `RemoteAudit.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | |
@@ -72,7 +72,8 @@ The statement's form is the causal game, the committed files, one fixed extracto
 * **Each component's acceptance in what the prover sent.** Subprotocol `a`'s verdict at composite `k` (`Verdict`) is the
   file check, the composite's own acceptance as a `same` composition (`SameAccepts`: an accepted composition of its
   components whose record subprotocols committed to one record, `Properties.Composition.AcceptSame`'s conclusion, and
-  at onsite PoUS and PoUB-P2 on one store, `AcceptTied`'s), and `a`'s compiled component's acceptance of its own case.
+  at onsite PoUS and PoUB-P2 on one store and at remote every window of PoUW's period on the record, `AcceptTied`'s),
+  and `a`'s compiled component's acceptance of its own case.
   The releases each component's check read (`coinsRead`) are the targets' to bound (`Logged`).
 * **PoUW counts gates** of the committed circuit the play computed after their window's coin, over the period's windows
   (`computed`), with no pricing.
@@ -137,12 +138,13 @@ def componentsOf : Verity.Registration.Composite → List BlobProtocol
 /-- The subprotocols of composite `k` that must commit to one record. -/
 def tied : Verity.Registration.Composite → List String
   | .onsite => Onsite.tied
-  | .remote => Remote.components.map (·.id)
+  | .remote => Remote.tied
 
-/-- The ties of composite `k`: at onsite, PoUS and PoUB-P2 on one store. -/
+/-- The ties of composite `k`: at onsite, PoUS and PoUB-P2 on one store; at remote, every window of PoUW's period on
+the policy's record. -/
 def ties : Verity.Registration.Composite → List Composition.Tie
   | .onsite => [Onsite.store]
-  | .remote => []
+  | .remote => [Remote.windows]
 
 /-- **The compiled component of composite `k` that decides subprotocol `a`**; `none` when `k` has no such
 subprotocol. -/
@@ -155,7 +157,7 @@ def component : Verity.Registration.Composite → Subprotocol → Option BlobPro
   | .onsite, .network => some NetworkCheck.Period.protocol
   | .onsite, .wipe => some MemoryChallenger.WipeProtocol.protocol
   | .remote, .sampled => some VStar.Recursive.Sampled.protocol
-  | .remote, .pouw => some PouwCheck.protocol
+  | .remote, .pouw => some PouwCheck.Period.protocol
   | .remote, .inferenceOnly => some NciCheck.Protocol.protocol
   | .remote, _ => none
 
@@ -199,8 +201,8 @@ def ComponentAccepts (k : Verity.Registration.Composite) (a : Subprotocol) (s : 
 
 /-- **Composite `k` accepted what the prover sent as a `same` composition**: the three byte strings decode to an
 accepted composition of `k`'s components on the blobs sent, whose record subprotocols (`tied k`) committed to one
-record (`Properties.Composition.SameAccepted`), and whose ties (`ties k`: at onsite, PoUS and PoUB-P2 on one store)
-each named one value (`Properties.Composition.Tied`). -/
+record (`Properties.Composition.SameAccepted`), and whose ties (`ties k`: at onsite, PoUS and PoUB-P2 on one store; at
+remote, every window of PoUW's period on the policy's record) each named one value (`Properties.Composition.Tied`). -/
 def SameAccepts (k : Verity.Registration.Composite) (s : Sent) : Prop :=
   ∃ ps c ev, Decoded s ps c ev ∧ ∃ pub prof,
     Properties.Composition.SameAccepted (verifier k).id (tied k) (s.components k) ps c ev pub prof ∧

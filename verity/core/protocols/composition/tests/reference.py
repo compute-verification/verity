@@ -1,7 +1,8 @@
 """The Python the composition's Lean (`CoreComposition`, `CoreOnsite`, `CoreRemote`) is held to: the composition rule
 of onsite and remote, over the harness's framing of the core interface (`verity_difftest.protocol.answer`, as
-`Core.Protocol.case` and `answer` decode a case), and each subprotocol's own Python: PoUW's `core_check.case`
-(`verity/pouw/v1`, remote's work) and `period_check.case` (`verity/pouw/period/v1`, onsite's work), the network
+`Core.Protocol.case` and `answer` decode a case), and each subprotocol's own Python: PoUW's `period_check.case`
+(`verity/pouw/period/v1`, onsite's and remote's work, with `credit.commit_of` reading the record each window of a period
+names), the network
 certifier's period check's difftest's `reference` (`verity/certifier/v0`, its Python mirror over the certifier's
 certificates and one-stage's answers, `verity/core/protocols/network/tests/test_network_period_protocol.py`), the
 inference-only policy's difftest's `reference` (`verity/inference-only/v0`, the policy's Python check,
@@ -48,7 +49,7 @@ from typing import Any, Callable
 from verity_difftest import Reject, canonical
 from verity_difftest import protocol as P
 
-from verity.core.protocols.pouw import core_check, period_check
+from verity.core.protocols.pouw import core_check, credit, period_check
 
 ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
 
@@ -71,8 +72,6 @@ def module(name: str, path: Path) -> ModuleType:
 #: Sampled proofs' one-stage difftest: `answer` is `one_stage` behind the decoders `OneStage` reads, and its strategies
 #: draw audits.
 ONE_STAGE = module("one_stage_difftest", CORE.parents[1] / "verity/core/service/sampled_proofs/tests/test_difftest.py")
-#: PoUW's check difftest's cases: honest windows and one mutation each.
-POUW_CASES = module("pouw_check_cases", CORE / "protocols/pouw/lean/check/tests/pouw_check_cases.py")
 #: PoUW's period difftest's cases: periods of the auditor's ledger and their windows, honest and with one mutation each.
 POUW_PERIOD_CASES = module("pouw_period_cases", CORE / "protocols/pouw/lean/check/tests/pouw_period_cases.py")
 #: The network certifier's period difftest: `reference` is the period check's Python mirror, and `build` makes a signed
@@ -192,7 +191,6 @@ def sampled_proofs(case: Any) -> dict:
 
 CERTIFIER = Ported("verity/certifier/v0", PERIOD.reference)
 INFERENCE_ONLY = Ported("verity/inference-only/v0", INFERENCE.reference)
-POUW = Ported("verity/pouw/v1", core_check.case)
 
 
 @functools.cache
@@ -368,30 +366,75 @@ class Same(Product):
 
 @dataclass(frozen=True)
 class Tie:
-    """`Core.Composition.Tie`: the value ``what`` that each component of ``names`` reads off its commitment's bytes
-    with its function must be one value."""
+    """`Core.Composition.Tie`: every value that each component of ``names`` names must be one value, ``what``; each
+    reads the values it names off its case's commitment and evidence bytes with its function (None: its case doesn't
+    decode)."""
 
     what: str
     names: tuple = ()
 
+    def values(self, ev: list) -> list[tuple[str, bytes]] | None:
+        """Each value the components of ``names`` name on the cases ``ev``, in their order; None when one of them has no
+        case or names no list of values (its case doesn't decode, where it rejects as a component)."""
+        cases: dict = {}
+        for k in ev:
+            cases.setdefault(k[0], k)
+        out: list[tuple[str, bytes]] = []
+        for s, f in self.names:
+            ds = f(cases[s][2], cases[s][3]) if s in cases else None
+            if not isinstance(ds, list):
+                return None
+            out += [(s, d) for d in ds]
+        return out
+
     def strays(self, ev: list) -> str | None:
-        """`Core.Composition.Tie.strays`, on cases whose commitments all decode (`holdTies` reads it only when the
-        composition doesn't reject, so that every component's does)."""
-        cases = {k[0]: k[2] for k in ev}
-        if any(s not in cases for s, _ in self.names):
+        """`Core.Composition.Tie.strays`: the first value that isn't the first one, with both; none when they all named
+        it, or when a component names none."""
+        got = self.values(ev)
+        if not got:
             return None
-        (s, d), *rest = [(s, f(cases[s])) for s, f in self.names]
+        (s, d), *rest = got
         return next((f"{self.what}: {s} committed {d.hex()}, {t} committed {e.hex()}" for t, e in rest if e != d), None)
 
 
-def _commitment_hex(key: str) -> Callable[[bytes], bytes]:
-    """A component's function reading the hex field ``key`` of its JSON commitment."""
-    return lambda b: bytes.fromhex(json.loads(b)[key])
+def _commitment_hex(key: str) -> Callable[[bytes, bytes], list[bytes]]:
+    """A component's function naming one value: the hex field ``key`` of its JSON commitment."""
+    return lambda c, e: [bytes.fromhex(json.loads(c)[key])]
+
+
+def policy_record(commitment: bytes, evidence: bytes) -> list[bytes] | Exception:
+    """`Core.Remote.policyRecord`: the digest of the registration record the policy's commitment is, as the policy
+    decodes it; else what refused the commitment, which reads as no value."""
+    try:
+        return [bytes.fromhex(INFERENCE.commitment(commitment)[1])]
+    except (Reject, ValueError, KeyError, TypeError) as e:
+        return e
+
+
+def window_records(commitment: bytes, evidence: bytes) -> list[bytes] | core_check.Refused | None:
+    """`Core.Remote.windowRecords`: the digests of each window's Commit record (`credit.commit_of`) in a period's
+    evidence, in the close's order; else the period's refusal of the evidence, or None when a window names no Commit
+    record (which the period refuses), either of which reads as no value."""
+    try:
+        j = period_check.evidence(evidence)
+    except core_check.Refused as e:
+        return e
+    if not isinstance(j["windows"], list):
+        return None
+    out = []
+    for w in j["windows"]:
+        got, _ = credit.commit_of(w.get("commit") if isinstance(w, dict) else None)
+        if got is None:
+            return None
+        out.append(got[0])
+    return out
 
 
 #: `Core.Onsite.store`: PoUS's setup's root of `C*` and the root PoUB-P2's registration names (`p2_case.store_root`).
 STORE = Tie("store", (("verity/pous/p2/v4/run", _commitment_hex("root")),
                       ("verity/remote-bandwidth/p2/v0", _commitment_hex("root"))))
+#: `Core.Remote.windows`: every window of PoUW's period on the policy's record.
+WINDOWS = Tie("record", ((INFERENCE_ONLY.id, policy_record), (POUW_PERIOD.id, window_records)))
 
 
 @dataclass(frozen=True)
@@ -421,14 +464,16 @@ class TiedSame(Same):
             c, blobs = self.split(case)
             ev[:] = self.evidence(P.unhex(c["evidence"]))
             return self.run(self.params(c["params"]), ev, blobs)
-        digests, cases = dict(fitted_answers(answers)), {k[0]: k[2] for k in ev}
-        return [(t.what, len({f(cases[s]) for s, f in t.names}) == 1) for t in self.ties
-                if all(digests.get(s, {}).get("commitment") is not None and s in cases for s, _ in t.names)]
+        digests = dict(fitted_answers(answers))
+        return [(t.what, len({d for _, d in got}) <= 1) for t in self.ties
+                if all(digests.get(s, {}).get("commitment") is not None for s, _ in t.names)
+                and (got := t.values(ev)) is not None]
 
 
-#: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their subprotocols in the order of their ids: remote's three
-#: committing to one window record, onsite's policy and sampled proofs to one registration record, and onsite's PoUS
-#: and PoUB-P2 on one store.
-REMOTE = Same("verity/remote/v0", (INFERENCE_ONLY, POUW, SAMPLED_PROOFS), (INFERENCE_ONLY.id, POUW.id, SAMPLED_PROOFS.id))
+#: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their subprotocols in the order of their ids: each one's
+#: policy and integrity committing to one registration record, every window of remote's PoUW period naming the policy's
+#: record, and onsite's PoUS and PoUB-P2 on one store.
+REMOTE = TiedSame("verity/remote/v0", (INFERENCE_ONLY, POUW_PERIOD, SAMPLED_PROOFS), (INFERENCE_ONLY.id, SAMPLED_PROOFS.id),
+                  (WINDOWS,))
 ONSITE = TiedSame("verity/onsite/v0", (CERTIFIER, INFERENCE_ONLY, POUS, POUW_PERIOD, BANDWIDTH, SAMPLED_PROOFS, WIPE),
                   (INFERENCE_ONLY.id, SAMPLED_PROOFS.id), (STORE,))

@@ -8,8 +8,9 @@
    "imports": [
     "CoreComposition.Blobs",
     "CoreComposition.Cases",
+    "CoreComposition.Tie",
     "NciCheck.Protocol",
-    "PouwCheck.Protocol",
+    "PouwCheck.Period",
     "SampledProofs.OneStage",
     "SampledProofs.OneStageZk",
     "VStarRecursive.Sampled"

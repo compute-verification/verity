@@ -891,8 +891,8 @@ def frame_commitment(data: bytes, salt: bytes) -> str:
 IDS = {**parties.IDS, "pouw-period": period_check.ID, "wipe": wipe_period.PROTOCOL,
        **{n: parties.SUBPROTOCOLS["verity/onsite/v0"][n] for n in ("bandwidth", "sampled-proofs")}}
 """Each subprotocol's id as the composites run it (`products`): integrity is sampled proofs (`VStar.Recursive.Sampled`,
-`verity/sampled-proofs/v1`, one-stage v1's audit or the recursive audit) in both, onsite's work is PoUW's period, its
-PoUB the one over PoUS's P2 store, and onsite's memory challenger also runs a wipe."""
+`verity/sampled-proofs/v1`, one-stage v1's audit or the recursive audit) in both, so is the work, PoUW's period,
+onsite's PoUB is the one over PoUS's P2 store, and onsite's memory challenger also runs a wipe."""
 
 
 def label(seed: str, i: int) -> str:
@@ -918,11 +918,10 @@ def sampled_proofs(d: Declaration, blk: Block, units: Sequence[int], checks: Map
                   {"law": law, "population": blk.n, "delta": str(DELTA)})
 
 
-def pouw_window(sp: Mapping[str, Any], blk: Block, protocol: str = IDS["pouw"]) -> dict[str, Any]:
+def pouw_window(sp: Mapping[str, Any], blk: Block, protocol: str = IDS["pouw-period"]) -> dict[str, Any]:
     """PoUW's window check over sampled proofs' answer: sampled proofs accepted the declaration's registration, at
-    subset:K' over the grid's n units; it publishes the credited work at ε and δ. Remote's work is the window's
-    (`verity/pouw/v1`); onsite's is PoUW's period (`verity/pouw/period/v1`), answered here a declaration at a time, over
-    its one window."""
+    subset:K' over the grid's n units; it publishes the credited work at ε and δ. Both composites' work is PoUW's period
+    (`verity/pouw/period/v1`), answered here a declaration at a time, over its one window."""
     work = pouw_window_rules.bucket(blk.real)
     if sp["verdict"] != "accept":
         return answer(protocol, sp["verdict"], sp["commitment"], "sampled proofs did not accept the window")
@@ -1282,8 +1281,8 @@ class Verifier:
     with the subprotocols the composite lists (onsite: network certification and the memory challenger's report); and
     accounts for the monitoring period. Its outcome is every phase's public output."""
 
-    work = IDS["pouw"]
-    """The composite's PoUW subprotocol, which answers the window check."""
+    work = IDS["pouw-period"]
+    """The composite's PoUW subprotocol, PoUW's period in both, which answers the window check."""
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
         self.protocol, self.total = params["protocol"], params["declarations"]

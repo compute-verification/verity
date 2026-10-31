@@ -9,11 +9,12 @@ applied to its committed inputs. The protocol is stated in Lean (see "Where thin
 points to the code, and lists what the Lean does not state yet.
 
 Sampled proofs is a subprotocol of both composite protocols. The remote protocol (`verity/remote/v0`,
-`verity/core/protocols/remote/`) composes it (`verity/sampled-proofs/v1`) with PoUW (`verity/pouw/v1`), and onsite
-(`verity/core/protocols/onsite/`) composes it with the other subprotocols. In each, the composite's verifier runs
-`VStar.Recursive.Sampled`'s Lean check as a component, in the form its params name: the one-stage audit
-(`verity/sampled-proofs/one-stage/v1`) or the recursive audit (`verity/sampled-proofs/recursive/v1`, V*'s compiled
-check, which ends in the one-stage audit's live check on its verdict of record). The composite accepts only when every
+`verity/core/protocols/remote/`) composes it (`verity/sampled-proofs/v1`) with PoUW's period (`verity/pouw/period/v1`)
+and the inference-only policy, and onsite (`verity/core/protocols/onsite/`) composes it with the other subprotocols.
+In each, the composite's verifier runs `VStar.Recursive.Sampled`'s Lean check as a component, in the form its params
+name: the one-stage audit (`verity/sampled-proofs/one-stage/v1`) or the recursive audit
+(`verity/sampled-proofs/recursive/v1`, V*'s compiled check, which ends in the one-stage audit's live check on its
+verdict of record). The composite accepts only when every
 component accepts.
 
 ## Guarantee and assumptions
