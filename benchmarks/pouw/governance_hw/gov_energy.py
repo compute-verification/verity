@@ -7,9 +7,12 @@ both mapped by yosys + ABC to the same generic gates and simulated bit for bit o
 DIR_OF_SILICON_FOLD is SI-FOLD's benchmarks/pouw/theory/silicon_fold (branch cursor/compute-research-silicon-fold-3c7a):
 its rtl.py emits both modules, its rho.py is the Keccak reference, and its synth.py holds the gate areas.
 
+The plane-limited unit (gov_ft.v's ft_plane4: four rounds a cycle, 8 words into plane 0 each) runs on the same words.
+
 The proxy is zero-delay: glitches aren't counted, which undercounts multipliers more than Keccak's two-level round, so
-the logging-to-MAC ratios here are upper bounds in that respect. Clock pins are counted as half a data toggle for every
-flop every cycle (an estimate, reported apart).
+FT's ratios here are upper bounds in that respect. ft_plane4 chains four rounds (depth 40), whose glitches are
+uncounted too, so its ratios are not bounds either way. Clock pins are counted as half a data toggle for every flop
+every cycle (an estimate, reported apart).
 """
 
 from __future__ import annotations
@@ -46,7 +49,7 @@ class Netlist:
         mod = json.loads(path.read_text())["modules"][top]
         self.ports = {p: v["bits"] for p, v in mod["ports"].items()}
         self.dirs = {p: v["direction"] for p, v in mod["ports"].items()}
-        cells = list(mod["cells"].values())
+        cells = [c for c in mod["cells"].values() if c["type"] != "$scopeinfo"]   # flatten's markers, no logic
         driver = {c["connections"]["Y"][0]: i for i, c in enumerate(cells)}
         order, state = [], {}
         for i in range(len(cells)):
@@ -97,10 +100,10 @@ def flop_toggles(m: np.ndarray) -> float:
     return float(np.count_nonzero(m[1:] != m[:-1])) / (m.shape[0] - 1)
 
 
-def build(synth, name: str, scratch: Path) -> Netlist:
+def build(synth, name: str, scratch: Path, extra: str = "") -> Netlist:
     d = scratch / name
     d.mkdir(parents=True, exist_ok=True)
-    (d / "m.v").write_text(synth.rtl.verilog(name))
+    (d / "m.v").write_text(extra + "\n" + synth.rtl.verilog("keccak1600_rnd") if extra else synth.rtl.verilog(name))
     synth._yosys(f"read_verilog -sv m.v; synth -flatten -top {name}; abc -g {synth.GATES}; opt_clean; "
                  f"write_json n.json", d)
     return Netlist(d / "n.json", name, synth.GE)
@@ -144,22 +147,27 @@ def mac_energy(synth, nl: Netlist, A: np.ndarray, B: np.ndarray) -> dict:
             "exact": exact, "cycles": len(prods), "acc_words": acc_out}
 
 
-def keccak_energy(synth, nl: Netlist, words: np.ndarray, rng: np.random.Generator) -> dict:
-    """FT's chain: tau <- round(tau ^ pad(32 words)), one round a cycle, the round constant cycling over 24."""
+def keccak_energy(synth, nl: Netlist, words: np.ndarray, rng: np.random.Generator, plane: bool = False) -> dict:
+    """FT's chain: tau <- round(tau ^ pad(32 words)), one round a cycle, the round constant cycling over 24. With
+    `plane`, ft_plane4's: four rounds a cycle, each absorbing 8 of the 32 words into plane 0."""
     rho = synth.rho
     T = len(words) // 32
     st = [int.from_bytes(rng.bytes(200), "little")]
     ms, rcs = [], []
     for t in range(T):
         m = sum((int(w) & M32) << (32 * i) for i, w in enumerate(words[32 * t:32 * t + 32]))
-        rc = rho.KECCAK_RC64[t % 24]
-        s = st[-1] ^ m
-        lanes = [(s >> (64 * i)) & ((1 << 64) - 1) for i in range(25)]
-        out = rho.keccak_round(lanes, rc, 64)
-        st.append(sum(v << (64 * i) for i, v in enumerate(out)))
+        lanes = [(st[-1] >> (64 * i)) & ((1 << 64) - 1) for i in range(25)]
+        rc_all = 0
+        for k, (blk, nl_) in enumerate([(m >> (256 * k), 4) for k in range(4)] if plane else [(m, 16)]):
+            for j in range(nl_):
+                lanes[j] ^= (blk >> (64 * j)) & ((1 << 64) - 1)
+            rc = rho.KECCAK_RC64[(4 * t + k if plane else t) % 24]
+            lanes = rho.keccak_round(lanes, rc, 64)
+            rc_all |= rc << (64 * k)
+        st.append(sum(v << (64 * i) for i, v in enumerate(lanes)))
         ms.append(m)
-        rcs.append(rc)
-    ins = {"st": bits_of(st[:-1], 1600), "m": bits_of(ms, 1024), "rc": bits_of(rcs, 64)}
+        rcs.append(rc_all)
+    ins = {"st": bits_of(st[:-1], 1600), "m": bits_of(ms, 1024), "rc": bits_of(rcs, 256 if plane else 64)}
     outs, tog = nl.run(ins)
     exact = bool(np.array_equal(outs["y"], bits_of(st[1:], 1600)))
     flops = synth.GE_DFF * (flop_toggles(ins["st"]) + flop_toggles(ins["m"]))
@@ -184,25 +192,32 @@ def main() -> int:
     scratch = out / "scratch"
     rng = np.random.default_rng(20261031)
     mac, kec = build(synth, "mac4_s8", scratch), build(synth, "keccak1600_rnd", scratch)
-    res: dict = {"ge": {"mac4_s8": mac.ge, "keccak1600_rnd": kec.ge}, "streams": {}, "clock_per_flop": CLOCK_PER_FLOP}
+    kp4 = build(synth, "ft_plane4", scratch, extra=(Path(__file__).resolve().parent / "gov_ft.v").read_text())
+    res: dict = {"ge": {"mac4_s8": mac.ge, "keccak1600_rnd": kec.ge, "ft_plane4": kp4.ge}, "streams": {},
+                 "clock_per_flop": CLOCK_PER_FLOP}
     ok = True
     for name, (A, B) in operand_streams(rng, a.m, a.n, a.K).items():
         me = mac_energy(synth, mac, A, B)
         words = me.pop("acc_words")
         words = words[: (len(words) // 32) * 32]
         ke = keccak_energy(synth, kec, words, rng)
-        ok &= me["exact"] and ke["exact"]
-        row = {"mac4": me, "keccak_round": ke}
+        k4 = keccak_energy(synth, kp4, words, rng, plane=True)
+        ok &= me["exact"] and ke["exact"] and k4["exact"]
+        row = {"mac4": me, "keccak_round": ke, "ft_plane4": k4}
         for basis in ("data_total", "total"):
             row[f"ft_over_mac_{basis}"] = ke[basis] / (256 * me[basis]) if me[basis] else None
             row[f"rt_over_idp4a_warp_{basis}"] = ke[basis] / (32 * me[basis]) if me[basis] else None
+            row[f"ft4_over_mac_{basis}"] = k4[basis] / (256 * me[basis]) if me[basis] else None
+            row[f"rt4_over_idp4a_warp_{basis}"] = k4[basis] / (32 * me[basis]) if me[basis] else None
         res["streams"][name] = row
         print(f"{name:9s} mac4 logic {me['logic']:7.1f} flops {me['flops']:6.1f} clock {me['clock']:6.1f} | "
               f"keccak logic {ke['logic']:8.1f} flops {ke['flops']:7.1f} clock {ke['clock']:7.1f} | "
               f"FT/MAC data {row['ft_over_mac_data_total'] if row['ft_over_mac_data_total'] is not None else float('nan'):.4f} "
               f"with clock {row['ft_over_mac_total']:.4f} | RT/IDP4A-warp data "
               f"{row['rt_over_idp4a_warp_data_total'] if row['rt_over_idp4a_warp_data_total'] is not None else float('nan'):.3f} "
-              f"with clock {row['rt_over_idp4a_warp_total']:.3f}  exact {me['exact'] and ke['exact']}", flush=True)
+              f"with clock {row['rt_over_idp4a_warp_total']:.3f} | plane4 logic {k4['logic']:8.1f} FT4/MAC with clock "
+              f"{row['ft4_over_mac_total']:.4f} RT4/IDP4A-warp {row['rt4_over_idp4a_warp_total']:.3f}  "
+              f"exact {me['exact'] and ke['exact'] and k4['exact']}", flush=True)
     res["netlists_exact"] = ok
     (out / "gov_energy.json").write_text(json.dumps(res, indent=1, default=float))
     return 0 if ok else 1

@@ -3,8 +3,8 @@ as a share of tensor capacity, what the logging blocks cost in area and power, a
 
     python3 gov_price.py --synth SYNTH_JSON --energy ENERGY_JSON --out OUT
 
-SYNTH_JSON is gov_synth.py's output (the counters and the GF(2^64) multiplier), ENERGY_JSON gov_energy.py's (Keccak
-round against the 4-wide s8 MAC). Every input below carries its tag: R read (source named), C recalled, not re-read,
+SYNTH_JSON is gov_synth.py --fold's output (counters, GF(2^64) multiplier, FT's round, the plane-limited unit),
+ENERGY_JSON gov_energy.py's (both Keccak units against the 4-wide s8 MAC). Every input below carries its tag: R read (source named), C recalled, not re-read,
 M measured or computed by a script, E estimated, A argued. Outputs are E unless every input is M or R.
 """
 
@@ -16,6 +16,8 @@ from pathlib import Path
 
 GE_DFF = 17 / 3          # GE a flop bit, SI-ALG/SI-FOLD's library [R]
 UM2_PER_GE = {"low": 0.035, "central": 0.05, "high": 0.06}   # N4-class NAND2-equivalent, placed [E]
+S8_MAC_GE, FP8_MAC_GE = 817.9, 2285.5   # SI-BASELINE's s8 and FP8/FP32 MAC a lane [R of M]
+POUW_FT_UNIT = 22722.0                  # SI-FOLD's Keccak-f[1600] unit, a round a clock [R of M]
 
 DEVICES = {
     "h200": {
@@ -107,7 +109,10 @@ def leakage(dev: str, ends: str) -> dict:
 def costs(dev: str, synth: dict) -> dict:
     """GE a block, lo/central/hi, from named components."""
     d = DEVICES[dev]
-    unit = 22722.0                        # SI-FOLD Keccak-f[1600] unit, a round a clock [M, SI-FOLD table]
+    rows = synth["rows"]
+    plane4 = rows["ft_plane4"]["ge"]      # four plane-limited rounds a clock, 32 words [M]
+    round1 = rows["keccak1600_rnd"]["ge"] # one round a clock [M]; plane-limited at 8 words a round on sm_120
+    unit = plane4 if d["words_per_core_clk"] == 32 else round1
     wiring_per_mac = (0.0, 11.8, 23.6)    # SI-FOLD Wiring [E]
     macs_per_core = d["s8_per_sm_clk"] // d["cores_per_sm"]
     state = 1600 * GE_DFF
@@ -122,16 +127,19 @@ def costs(dev: str, synth: dict) -> dict:
     # RT, a tap on every register-file write port of an SMSP: one round a clock, per-warp chains, an in-order buffer
     w = d["warps_per_smsp"]
     rt_smsp = {
-        k: unit + w * 1600 * gb + depth * 1024 * gb + counters + 3000
+        k: plane4 + w * 1600 * gb + depth * 1024 * gb + counters + 3000
         for k, gb, depth in [("low", 1.0, 8), ("central", 2.5, 16), ("high", GE_DFF, 32)]
     }
     rt_orderfree_smsp = 17 * gf + w * 64 * GE_DFF + counters      # GF(2^64) power-table variant [M parts, E count]
     per_sm = {k: d["cores_per_sm"] * ft_core[k] + d["smsp_per_sm"] * rt_smsp[k] for k in ft_core}
     ft_sm = {k: d["cores_per_sm"] * ft_core[k] for k in ft_core}
     counters_sm = d["smsp_per_sm"] * counters
-    return {"ft_core": ft_core, "ft_sm": ft_sm, "rt_smsp": rt_smsp, "rt_orderfree_smsp": rt_orderfree_smsp,
+    keyed_per_mac = unit / macs_per_core
+    return {"keyed_unit": unit, "keyed_ge_per_mac": keyed_per_mac, "keyed_share_s8": keyed_per_mac / S8_MAC_GE,
+            "keyed_share_fp8": keyed_per_mac / FP8_MAC_GE, "pouw_ft_share_s8": POUW_FT_UNIT / 1024 / S8_MAC_GE,
+            "ft_core": ft_core, "ft_sm": ft_sm, "rt_smsp": rt_smsp, "rt_orderfree_smsp": rt_orderfree_smsp,
             "counters_sm": counters_sm, "per_sm": per_sm,
-            "pouw_ft_sm": d["cores_per_sm"] * unit}
+            "pouw_ft_sm": d["cores_per_sm"] * POUW_FT_UNIT}
 
 
 def rates(dev: str, seg_absorbs: int = 1 << 14) -> dict:
@@ -155,8 +163,10 @@ def energy(dev: str, en: dict) -> dict:
     rand = en["streams"]["rand"]
     toggles_per_mac = rand["mac4"]["total"] / 4
     fj_per_toggle = 0.634e3 / toggles_per_mac
-    ft_pj_per_mac = rand["ft_over_mac_total"] * 0.634
-    rt_pj_per_warp = rand["keccak_round"]["total"] * fj_per_toggle / 1e3
+    # H200: ft_plane4 per 32 words; sm_120: one plane-limited round per 8 words, i.e. a round per 64 mac4-cycles
+    ft_ratio = rand["ft4_over_mac_total"] if d["words_per_core_clk"] == 32 else 4 * rand["ft_over_mac_total"]
+    ft_pj_per_mac = ft_ratio * 0.634
+    rt_pj_per_warp = rand["ft_plane4"]["total"] * fj_per_toggle / 1e3
     rate = d["s8_per_sm_clk"] * d["sms"] * d["tensor_hz"]
     words_ratio = d["words_per_core_clk"] * 32 * d["cores_per_sm"] / d["s8_per_sm_clk"]   # 1 on H200
     ft_w = ft_pj_per_mac * words_ratio * rate * 1e-12
@@ -164,8 +174,10 @@ def energy(dev: str, en: dict) -> dict:
     return {"fj_per_ge_toggle": fj_per_toggle, "ft_pj_per_mac": ft_pj_per_mac, "ft_w_full_tensor": ft_w,
             "ft_share_of_board": ft_w / d["board_w"], "rt_pj_per_warp_result": rt_pj_per_warp,
             "rt_w_full_issue": rt_w, "rt_share_of_board": rt_w / d["board_w"],
-            "ft_over_mac": [rand["ft_over_mac_data_total"], rand["ft_over_mac_total"]],
-            "rt_over_idp4a_warp": [rand["rt_over_idp4a_warp_data_total"], rand["rt_over_idp4a_warp_total"]]}
+            "keyed_ft_over_mac": ft_ratio, "pouw_ft_over_mac": rand["ft_over_mac_total"],
+            "rt_over_idp4a_warp": rand["rt4_over_idp4a_warp_total"],
+            "llm_like": {"ft4_over_mac": en["streams"]["llm_like"]["ft4_over_mac_total"],
+                         "rt4_over_idp4a_warp": en["streams"]["llm_like"]["rt4_over_idp4a_warp_total"]}}
 
 
 def main() -> None:
@@ -210,6 +222,9 @@ def main() -> None:
                   f"{die_mm2['low']:.2f} | {die_mm2['central']:.2f} | {die_mm2['high']:.2f} |")
         md.append(f"| share of {d['die_mm2']} mm² | {die_mm2['low']/d['die_mm2']:.2%} | "
                   f"{die_mm2['central']/d['die_mm2']:.2%} | {die_mm2['high']/d['die_mm2']:.2%} |\n")
+        md.append(f"keyed absorb unit {c['keyed_unit']:,.0f} GE = {c['keyed_ge_per_mac']:.1f} GE/MAC = "
+                  f"{c['keyed_share_s8']:.2%} of an s8 MAC ({c['keyed_share_fp8']:.2%} of FP8); PoUW's FT "
+                  f"{c['pouw_ft_share_s8']:.2%}\n")
         md.append(f"order-free RT a sub-partition: {c['rt_orderfree_smsp']:,.0f} GE; counters an SM "
                   f"{c['counters_sm']:,.0f} GE; PoUW's FT alone {out[dev]['pouw_ft_die_share']:.2%} of the die\n")
         md.append(f"rates: {json.dumps({k: float(f'{v:.3g}') for k, v in r.items()})}\n")
