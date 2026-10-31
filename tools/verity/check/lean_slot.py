@@ -25,7 +25,8 @@ JSON object (`status_doc`), which `check.py --slots` reads from every machine. S
 
 From Python (`tools/verity/lean/check.py --build`, `lean_changed.py --records`): `hold(pool)` takes a slot for the calling
 process and returns its descriptor, which the process keeps open until it exits (None: no cap here, or a slot is held
-already); `hold(pool, or_any=False)` never takes pool `any`'s.
+already); `hold(pool, or_any=False)` never takes pool `any`'s, and `hold(pool, queue=False)` (`lean_changed.py --no-wait
+--build`, the preflight's Lean step on a node it can fall back from) is `Refused` rather than wait in line.
 """
 from __future__ import annotations
 
@@ -150,10 +151,11 @@ def asker(by: str | None = None) -> dict:
 
 def wait(pool: str, by: str | None = None, now=lambda: datetime.now(timezone.utc), sleep=time.sleep,
          log=lambda s: print(s, file=sys.stderr, flush=True), or_any: bool = True,
-         mono=time.monotonic) -> tuple[str, int, int]:
+         mono=time.monotonic, queue: bool = True) -> tuple[str, int, int]:
     """Wait for a slot of ``pool`` (SLOTS exists; `resolve`); return the pool it came from, its index and the descriptor
     holding it. In a `research run`, the time it waited moves the run's timeout as much later (`slot.defer_run`): with every
-    slot busy a wait can outlast a run's whole --timeout, which then ended the run before its audit began."""
+    slot busy a wait can outlast a run's whole --timeout, which then ended the run before its audit began. Without ``queue``,
+    a request that would wait is `Refused` at once, naming why."""
     d = SLOTS.parent
     pools = parse(SLOTS.read_text())
     name, n = resolve(pools, pool, or_any)
@@ -172,6 +174,8 @@ def wait(pool: str, by: str | None = None, now=lambda: datetime.now(timezone.utc
             if got:
                 break
             why = f"{ahead} Lean audit(s) ahead in line" if ahead else f"all {n} Lean audit slot(s) of pool {name} are taken"
+            if not queue:
+                raise Refused(f"{why}, and this request doesn't wait in line")
             lines = status(pools, d, now(), only=name, before=ticket.name)
             seen = (why, [re.sub(r" \(\d+ min\)", "", ln) for ln in lines])       # the same holders, a minute older
             if seen != told or since >= REPORT_EVERY:

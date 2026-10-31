@@ -36,7 +36,8 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    --collect-only` in a suite
                                                    whose inputs its change touches, or breaks the build of a Lean module that
                                                    is or imports what it changes (on a warm Lean tree: here on a node, else
-                                                   on vy-nebius-cpu-3, whatever the tier; refused when it can't build them),
+                                                   on vy-nebius-cpu-3, else vy-nebius-cpu-8, whatever the tier; refused
+                                                   when neither can build them),
                                                    naming the PR on `next` that owns it, or
                                                    drops from a Lean lock it changes a shape.inline premise or shape.frozen
                                                    key `next`'s statements still need (naming each; the sync leaves such a
@@ -126,8 +127,8 @@ a row another queued PR refits away (an error at collection), one lane's unlande
 `tests/test_repository.py` (a Markdown cap, a report-genre name), which the preflight runs too, as it runs the landing gates the
 sync would (on the head; the sync, on its merge onto `next`).  A Lean change can pass its own Lean check and break a module
 another PR on `next` owns (a changed signature, dropped premises, a dropped import), which drive's Lean check of the stack finds
-only an hour later; the preflight builds those modules (`LakeBuild`), on `PREFLIGHT_LEAN_ON` from a machine without a warm Lean
-tree whatever the tier, and refuses a head whose modules it can't build.  A head whose lock, merged onto `next` by
+only an hour later; the preflight builds those modules (`LakeBuild`), from a machine without a warm Lean tree on the first node of
+`PREFLIGHT_LEAN_ON` that starts the build, whatever the tier, and refuses a head whose modules no node can build.  A head whose lock, merged onto `next` by
 `tools/verity/lean/merge.py`, drops a `shape.inline` premise or a `shape.frozen` key that `next`'s unchanged statements still need
 (a lock regenerated on an older tree) fails that Lean check too; the preflight names each such entry (`lock_drops`), and the sync
 leaves such a head off `next` with the same refusal.  So `ready` runs `Preflight` before the mark and before any quick tier: a refusal names what it found and the fix, a
@@ -2509,9 +2510,10 @@ PREFLIGHT_MIN_FREE = 0.25
 #: preflight stays within 5 minutes, and a warm tree rebuilds a few changed modules and their importers in a minute or two
 PREFLIGHT_LEAN_MODULES = 40
 PREFLIGHT_LEAN_S = 180.0
-#: where the Lean step builds, whatever the mark's tier, when this machine keeps no warm Lean tree (cpu-3's `build` Lean slots, its
-#: research pool the least loaded; cpu-1's pool is congested).  The one place to move it
-PREFLIGHT_LEAN_ON = "vy-nebius-cpu-3"
+#: where the Lean step builds, whatever the mark's tier, when this machine keeps no warm Lean tree: the first of these nodes that
+#: starts the build (each keeps `build` Lean slots; cpu-3's research pool is the least loaded, cpu-1's congested).  The one place
+#: to move it
+PREFLIGHT_LEAN_ON = ("vy-nebius-cpu-3", "vy-nebius-cpu-8")
 #: the `research run` pool it takes there: none, as `verity lean try --on vy-nebius-cpu-3` runs, since the node's `build` Lean slots
 #: are the gate; a node without them would take its `research` pool
 PREFLIGHT_LEAN_POOL: str | None = None
@@ -2834,9 +2836,12 @@ def lean_graph(wt: Path, files: list[str], changed: list[str]) -> LeanGraph:
 
 @dataclass
 class LeanBuilt:
-    """What the Lean step's build gave: {file: its first Lean error} for each file that failed, and what it said otherwise."""
+    """What the Lean step's build gave: {file: its first Lean error} for each file that failed, and what it said otherwise; where
+    it built, and why each node before that one didn't."""
     failed: dict[str, str] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
+    where: str = ""
+    passed: list[str] = field(default_factory=list)
 
 
 class LeanTimedOut(str):
@@ -2845,7 +2850,7 @@ class LeanTimedOut(str):
 
 
 #: the fix a Lean step that couldn't build names, with where it builds
-LEAN_UNBUILT_FIX = "mark again once {on} builds them (its `build` Lean slots are @infra's; `research status` there says why not)"
+LEAN_UNBUILT_FIX = "mark again once {on} builds them (`build` Lean slots are @infra's; `research status` there says why not)"
 
 
 def run_group(argv: list[str], cwd: Path, left: float) -> tuple[int | None, str]:
@@ -2873,16 +2878,19 @@ class LakeBuild:
     files' modules on the warm tree of a node's `build` Lean slot as `verity lean try` builds one, and ends with one
     `LEAN_BUILD_LINE`.  It runs here when this machine's Lean slot file (``slots``) lists a `build` pool, in a process group
     killed at the step's deadline; else, given ``on`` (`ready`, whatever its tier: `PREFLIGHT_LEAN_ON`), as a `research run` of the
-    tree there on its `build` Lean slot, or in ``pool`` (a slot named for ``by``) when one is given, bounded by the same deadline
-    (an agent VM builds nothing itself: the team skill, "Machines").  A build that didn't end by the deadline is `LeanTimedOut`;
-    one that couldn't run or built nothing (no warm tree and no ``on``, a run that didn't start or left no result line, every
-    package skipped) is a plain string naming the fix, which refuses the mark."""
-    on: str | None = None
+    tree on the first of those nodes that builds them, on its `build` Lean slot, or in ``pool`` (a slot named for ``by``) when one
+    is given, all within the same deadline (an agent VM builds nothing itself: the team skill, "Machines").  A node that can't
+    start the build (no free `build` slot: each node but the last takes one with `--no-wait`, rather than wait in line; a run
+    refused, drained or unreachable; no result line; every package skipped) passes it to the next.  A build that didn't end by
+    the deadline is `LeanTimedOut`; when no node built them (or there is no warm tree and no ``on``), a plain string naming each
+    node's reason and the fix, which refuses the mark."""
+    on: tuple[str, ...] = ()
     pool: str | None = PREFLIGHT_LEAN_POOL
     by: str | None = None
     slots: Path = LEAN_SLOTS
     run: Callable[[list[str], Path, float], tuple[int | None, str]] = run_group
     runs: Callable[[], Path] | None = None
+    clock: Callable[[], float] = time.monotonic
 
     def warm(self) -> bool:
         try:
@@ -2897,13 +2905,28 @@ class LakeBuild:
             return f"the merged tree has no {LEAN_BUILDER}, which builds them"
         if self.warm():
             rc, text = self.run([sys.executable, LEAN_BUILDER, "--build", *files], wt, left)
-            where, fix = "here", LEAN_UNBUILT_FIX.format(on="this node")
-        elif self.on:
-            rc, text, where = self._remote(wt, files, left)
-            fix = LEAN_UNBUILT_FIX.format(on=self.on)
-        else:
+            res = self._read(rc, text, "here", left)
+            return res if isinstance(res, (LeanBuilt, LeanTimedOut)) else f"{res}: {LEAN_UNBUILT_FIX.format(on='this node')}"
+        if not self.on:
             return (f"this machine keeps no warm Lean tree (no `build` pool in {self.slots}; an agent VM builds nothing) and was "
-                    f"given no node to build on: `ready --on MACHINE` builds them on {PREFLIGHT_LEAN_ON}")
+                    f"given no node to build on: `ready --on MACHINE` builds them on {' or '.join(PREFLIGHT_LEAN_ON)}")
+        end, tried = self.clock() + left, []
+        for i, node in enumerate(self.on):
+            if (rest := end - self.clock()) <= 0:
+                return LeanTimedOut("; ".join([*tried, f"no time was left to build on {node}"]))
+            rc, text, where = self._remote(node, wt, files, rest, wait=i == len(self.on) - 1)
+            res = self._read(rc, text, where, rest)
+            if isinstance(res, LeanTimedOut):
+                return LeanTimedOut("; ".join([*tried, res]))
+            if isinstance(res, LeanBuilt):
+                res.passed = tried
+                return res
+            tried.append(res)
+        return f"{'; '.join(tried)}: {LEAN_UNBUILT_FIX.format(on=' or '.join(self.on))}"
+
+    @staticmethod
+    def _read(rc: int | None, text: str, where: str, left: float) -> LeanBuilt | str:
+        """What one build gave: `LeanBuilt`, `LeanTimedOut` when it didn't end (``rc`` None), else why it built nothing."""
         if rc is None:
             return LeanTimedOut(f"its build {where} hadn't ended after {left:.0f} s (a wait in its pool's line counts)"
                                 f"{': ' + text if text else ''}" if where != "here" else
@@ -2914,35 +2937,37 @@ class LakeBuild:
         except ValueError:
             doc = None
         if not isinstance(doc, dict):
-            return f"its build {where} exited {rc} without a result line: {text.strip()[-300:]}: {fix}"
+            return f"its build {where} exited {rc} without a result line: {text.strip()[-300:]}"
         built, skipped = doc.get("built") or {}, doc.get("skipped") or {}
-        notes = [f"{p} not built: {why}" for p, why in skipped.items()]
+        notes = [f"{p} not built {where}: {why}" if where != "here" else f"{p} not built: {why}" for p, why in skipped.items()]
         failed = {f: str(e) for f, e in (doc.get("failed") or {}).items()}
         notes += [f"`lake build` in {p} exited {c} with no Lean error in a file" for p, c in built.items()
                   if c and not any(f.startswith(p + "/") for f in failed)]
         if not built and not failed:
-            return f"{'; '.join(notes) or f'its build {where} built nothing (exit {rc})'}: {fix}"
-        return LeanBuilt(failed, notes)
+            return "; ".join(notes) or f"its build {where} built nothing (exit {rc})"
+        return LeanBuilt(failed, notes, where)
 
-    def _remote(self, wt: Path, files: list[str], left: float) -> tuple[int | None, str, str]:
-        """`LEAN_BUILDER --build` as a `research run` of ``wt``'s HEAD on ``on``, waited for within ``left``; its exit status (None:
-        it didn't end), its stdout, and where it ran."""
+    def _remote(self, node: str, wt: Path, files: list[str], left: float, wait: bool = True) -> tuple[int | None, str, str]:
+        """`LEAN_BUILDER --build` as a `research run` of ``wt``'s HEAD on ``node``, waited for within ``left`` (without ``wait``,
+        `--no-wait`: no free `build` slot there builds nothing); its exit status (None: it didn't end), its stdout, and where it
+        ran."""
         from . import runs as R
 
         secs = f"{max(left - 10, 1):.0f}"
-        argv = [sys.executable, "-m", "research", "run", "--on", self.on, *(["--pool", self.pool, "--pool-wait", secs] if self.pool else []),
+        argv = [sys.executable, "-m", "research", "run", "--on", node, *(["--pool", self.pool, "--pool-wait", secs] if self.pool else []),
                 *(["--as", self.by] if self.by else []), "--project", "verity", "--source", str(wt), "--cwd", "clone",
                 "--timeout", secs, "--wait", "--wait-every", "5", "--wait-max", secs, "--",
-                "python3", LEAN_BUILDER, "--build", *files]
+                "python3", LEAN_BUILDER, *([] if wait else ["--no-wait"]), "--build", *files]
         rc, said = self.run(argv, wt, left)
-        where = f"on {self.on}"
+        where = f"on {node}"
         if not (m := RUN_STARTED_RE.search(said)):
             return rc, said.strip()[-300:] if rc is not None else "", where
-        rid, where = m.group(1), f"on {self.on} (run {m.group(1)})"
-        self.run([sys.executable, "-m", "research", "fetch", rid, "--on", self.on, "--all"], wt, 60)
+        rid, where = m.group(1), f"on {node} (run {m.group(1)})"
+        self.run([sys.executable, "-m", "research", "fetch", rid, "--on", node, "--all"], wt, 60)
         log = (self.runs or R.runs_root)() / rid / "stdout.log"
         text = log.read_text(errors="replace") if log.is_file() else ""
-        return (None if rc == waitcap.STILL_GOING else rc), text, where
+        rc = None if rc == waitcap.STILL_GOING else rc
+        return rc, text or (said.strip()[-300:] if rc is not None else ""), where
 
 
 #: the fix `lock_drop_refusal` names for each entry a lock merge drops
@@ -3263,7 +3288,8 @@ class Preflight:
             found.append(f"Lean: {len(graph.targets)} module(s) that are or import what it changes couldn't be built: {res}")
             return graph, {}, deadline
         notes += [f"Lean: {n}" for n in res.notes]
-        notes.append(Ran(f"Lean: built {len(graph.targets)} module(s), {len(res.failed)} failed"))
+        notes.append(Ran(f"Lean: built {len(graph.targets)} module(s) {res.where or 'here'}, {len(res.failed)} failed"
+                         + (f" (not built before that: {'; '.join(res.passed)})" if res.passed else "")))
         return graph, res.failed, deadline
 
     def _lean_at_base(self, wt: Path, failed: dict[str, str], deadline: float) -> dict[str, str] | str:
@@ -4448,7 +4474,8 @@ def main(argv: list[str]) -> int:
                          "doc paths, pythonpath) and `pytest --collect-only` of the suites its change touches, in a temporary "
                          f"worktree, in about {PREFLIGHT_BUDGET_S:g} s, and build the Lean modules that are or import what it "
                          f"changes (at most {PREFLIGHT_LEAN_MODULES}, in {PREFLIGHT_LEAN_S:g} s, on a warm Lean tree: here on a "
-                         f"node, else on {PREFLIGHT_LEAN_ON}, whatever the tier; one it can't build refuses the mark, one not "
+                         f"node, else on the first of {', '.join(PREFLIGHT_LEAN_ON)} that starts the build, whatever the tier; "
+                         "one no node can build refuses the mark, one not "
                          "built in time is a skipped check); the records gate (a changed Lean lock needs a records "
                          "run that passed it, of the head or of a commit whose files of its package and the packages it requires "
                          "(tests and docs aside), lean-toolchain and the Lean checker (tools/verity/lean) are the head's) still runs")
