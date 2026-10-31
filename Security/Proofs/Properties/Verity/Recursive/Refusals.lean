@@ -205,15 +205,15 @@ theorem ins_inner {ri : FlockDeploy.Raw} {o : VStar.Recursive.Own} {dB : ByteArr
     (hst : ri.stratified = some n) (hcl : ri.closure = none) (hreg : ri.registered = none)
     (hpi : ri.publicInputs = none) (ht : String.fromUTF8? dB = some t) (hj : Flock.JsonParse.parse t = .ok j) :
     ri.ins = .ok (innerIns ri.circuit ri.publicFile o j n) := by
-  have hf : Flock.Tags.find? ri.statement = some Flock.Tags.circuitPlainLeaves := by rw [hs]; rfl
+  have hf : Flock.Tags.byName? ri.statement = some Flock.Tags.circuitPlainLeaves :=
+    Flock.Tags.byName?_of_find? (by rw [hs]; rfl)
   have hdm : ri.draw.mapM (FlockDeploy.jsonOf "draw") = .ok (some j) := by
     rw [hd]
     simp [Option.mapM_some, FlockDeploy.jsonOf, ht, hj, Functor.map, Except.map, Except.mapError]
   have hpm : ri.partition.mapM (FlockDeploy.jsonOf "partition") = .ok (some o.partition) := mapM_of_map hpart
   unfold FlockDeploy.Raw.ins
-  simp only [Flock.Tags.byName?_of_find? hf, hz, ho, hc, htb, hprog, hst, hpi, hwk, hdm, hpm, hwt, hcl, hreg,
-    Option.mapM_none, Bool.false_and, Bool.false_eq_true, eq_self_iff_true, ↓reduceIte, bind, Except.bind, pure,
-    Except.pure]
+  simp only [hf, hz, ho, hc, htb, hprog, hst, hpi, hwk, hdm, hpm, hwt, hcl, hreg, Option.mapM_none, Bool.false_and,
+    Bool.false_eq_true, eq_self_iff_true, ↓reduceIte, bind, Except.bind, pure, Except.pure]
   rfl
 
 /-- **The model's setup of `innerIns` is the compiled `innerOk`'s**, from `innerOk_peel`'s steps: the hm96-sha512 rows
