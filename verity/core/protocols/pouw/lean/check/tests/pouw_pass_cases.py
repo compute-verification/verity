@@ -685,7 +685,7 @@ def signed(commitment: Ch.LiveCommitment, rng: random.Random, signer: int | None
     challenger key `signer` (0 or 1, at random), and the verifier's key for key `key` (the signer's by default)."""
     signer = rng.randrange(2) if signer is None else signer
     sk, vk = _challenger_key(signer), _challenger_key(signer if key is None else key)
-    host = rng.choice(["vy-nebius-cpu-1", "auditor.local", "h_1"])
+    host = rng.choice(["challenger-1.example", "auditor.local", "h_1"])
     message = Ch.record_message(lms.public_key(sk)[:16], host, commitment)
     record = Ch.ChallengerRecord(commitment, host, lms.sign_at(sk, rng.randrange(4), message).encode())
     return {"key": Ch.ChallengerKey(vk.params.W, vk.params.H, lms.public_key(vk)).to_json(), "record": record.to_json()}
