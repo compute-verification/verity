@@ -2066,6 +2066,14 @@
    "owner": "@compute-research",
    "digest": "9d73b1740229779284c240d9e487ea982e6a0a169e8413d50dc4edb5d69fa993"
   },
+  "Verity.Assumptions.ChannelAuthentic": {
+   "owner": "@memory-accounting",
+   "digest": "db83e0089c2f0823100c23b3cd00c7a5da8492e21de536c0020fba93f4ce2145"
+  },
+  "Verity.Assumptions.ChannelHides": {
+   "owner": "@memory-accounting",
+   "digest": "1f28a8621b44a3418a0cbf708dd233c1db3d0b545390f467be9b6078874e65f4"
+  },
   "Verity.Assumptions.GemmAmpereStep": {
    "owner": "@proofs",
    "digest": "02e4cb87864bcee487dafdb2047e70b7e521b0c0e9d0d8cb824ff3854abe00e1"
@@ -2074,6 +2082,10 @@
    "owner": "@proofs",
    "digest": "8c5e183ae15ce48fd0744893ce9708c38d0c9d88fd0d109ffb68ec4226ff323e"
   },
+  "Verity.Assumptions.ImprintPathPrivate": {
+   "owner": "@memory-accounting",
+   "digest": "cd95c37eb5559f97d913a4c8db32422b94451b4558be724a35879bfe8eb00722"
+  },
   "Verity.Assumptions.StepInputs": {
    "owner": "@proofs",
    "digest": "5fda9d81977beec15d1c065e80343e09939aaa17ea6a91b79ee8765188e9a36d"
@@ -2081,6 +2093,10 @@
   "Verity.Assumptions.TrustedHost": {
    "owner": "@network-accounting",
    "digest": "205602db201f6c4f8976260053ef011cade6a4e53347a14486e1c87075c91ca3"
+  },
+  "Verity.Assumptions.WitnessPathPrivate": {
+   "owner": "@memory-accounting",
+   "digest": "0cfea131c887329234ffebed9a754f10fa2325dafd61823e5a0ac5934d33d1be"
   },
   "Verity.Circuit.BitFaninPos": {
    "owner": "@lean",
@@ -11789,6 +11805,12 @@
    "assumptions": [],
    "type_hash": "099ec51d6318715f2ad10a572ec517c8b04942179a3218ff45042c279759f7a0"
   },
+  "Verity.SecurityProofs.ImprintRootHidden": {
+   "owner": "@memory-accounting",
+   "signature": ["Verity.SecurityProofs.ImprintRootHidden : Verity.Guarantees.ImprintRootHidden"],
+   "assumptions": [],
+   "type_hash": "daf89ed0fc0655a143f405f84607e1efa3e709bfe7bc1e6844022a04ee5454c2"
+  },
   "Verity.SecurityProofs.InferenceCap": {
    "owner": "@lean",
    "signature": ["Verity.SecurityProofs.InferenceCap : Verity.Guarantees.InferenceCap"],
@@ -11902,6 +11924,18 @@
    "signature": ["Verity.SecurityProofs.ToCircuitAnd : Verity.Guarantees.ToCircuitAnd"],
    "assumptions": [],
    "type_hash": "d7a46674efa40159e39bed4221c853818c160c91fe491f6e0746b33d2e6b02ab"
+  },
+  "Verity.SecurityProofs.TransportDelivers": {
+   "owner": "@memory-accounting",
+   "signature": ["Verity.SecurityProofs.TransportDelivers : Verity.Guarantees.TransportDelivers"],
+   "assumptions": [],
+   "type_hash": "bf1b8fdb1ce0b562c7e6d604fc2df5d29ddbba81cc340d67077f00c631abb901"
+  },
+  "Verity.SecurityProofs.TransportPassiveZk": {
+   "owner": "@memory-accounting",
+   "signature": ["Verity.SecurityProofs.TransportPassiveZk : Verity.Guarantees.TransportPassiveZk"],
+   "assumptions": [],
+   "type_hash": "1b0a0ef1bddcb8f90de1275827ce9eafd0faa27cfe6fe397cecfff2b02182e7b"
   }
  },
  "shape": {
@@ -13068,7 +13102,10 @@
    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial": "lemma: UncertifiedElementary's nontrivial lemma: at Counter the parent map away, sending the one inference block to a unit that holds no gate, is no refinement, and the operation's weight 1 is above the cap split = 0. A counterexample at an instance, not a property of a Lean function.",
    "Flock.SecurityProofs.SampledKSLiveHonest": "frozen (no-function): the honest witness of SampledKSLiveV2, SampledKSLiveV3 and SampledKSLivePub, not a run of a Lean function: from one named premise, ServedFilesParse (that the one-stage audit's --zk session files of art:31c671f6's honest case, pinned by SHA-512, parse to a descriptor in scopeOkH whose public file loads with no shared-row tables, as run r20261027-042157-5c54 evaluated beside verify --zk accepting that session), every hypothesis those statements take of the files holds there (Built, TagsOkZHJ, untyped tags, the parse, the public file, scopeOkH); it reads SampledKSLiveHonest (Security/Proofs/Flock/Bridge/Honest.lean), so the lock records its text.",
    "NetTiming.SecurityProofs.PooledWrongUnitsLe": "frozen (no-function): It is a fact of probability over an abstract monitoring period of windows on a product of live coins (Fin m → Ω), each with an abstract draw whose law (a uniform k-subset of its units) is a hypothesis, an abstract set of wrong units read only from earlier windows' coins, and an abstract acceptance event whose soundness error is a hypothesis, not a run of the sampled verifier or of the challenger's draw (Flock.Draw): it bounds Pr[every window accepts ∧ F ≤ Σ wrong units] by (1 − q)^F + Σ ε_i, and the leak those wrong units carry (the count over the monitoring period, with A3 and KS at the deployment) is not stated here.",
-   "NetTiming.SecurityProofs.PooledLeakAccepted": "frozen (obligation,no-function,world-unlisted): It is conditional on two per-window inputs taken as plain hypotheses over an abstract monitoring period of windows on a product of live coins (Fin m → Ω), each window's acceptance event and the faulty set W_i of its witness read only from earlier windows' coins: the conditional escape (hesc, Pr_x[acc_i] ≤ (1 − q)^|W_i| + e_i given the earlier coins, q the design's per-window detection probability, which Flock.Guarantees.SampledKSLive would give at each window's history) and the leak relation at that same faulty set (hleak, Pr[acc_i ∧ ¬LeakAt W_i] ≤ e'_i, which the live SampledLeakAccepted, P2, would give), neither discharged. With the network certifier's code (tapCode: wardenCode and the record of its cells, in any record format TapRecord whose cells read back on the schedules it holds, TapRecord.fits, which every schedule in Ss meets, hfit, tap_cells_read) run by an arbitrary device on arbitrary server behaviors with trusted-host (TrustedHost), it bounds Pr[every window accepts ∧ ¬PooledGood] by δ + Σ e_i + Σ e'_i at Fmax ≥ ln(1/δ)/q and counts the secrets meeting PooledGood at each draw of the coins by #Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b·Fmax) · ∏_i 2^#(freeInputs_i \\ reg_i) · Dj^k_i; it is not a run of the sampled verifier, the challenger's draw or the network check's code, and it is not the deployed system's bound over a monitoring period until both inputs are discharged."
+   "NetTiming.SecurityProofs.PooledLeakAccepted": "frozen (obligation,no-function,world-unlisted): It is conditional on two per-window inputs taken as plain hypotheses over an abstract monitoring period of windows on a product of live coins (Fin m → Ω), each window's acceptance event and the faulty set W_i of its witness read only from earlier windows' coins: the conditional escape (hesc, Pr_x[acc_i] ≤ (1 − q)^|W_i| + e_i given the earlier coins, q the design's per-window detection probability, which Flock.Guarantees.SampledKSLive would give at each window's history) and the leak relation at that same faulty set (hleak, Pr[acc_i ∧ ¬LeakAt W_i] ≤ e'_i, which the live SampledLeakAccepted, P2, would give), neither discharged. With the network certifier's code (tapCode: wardenCode and the record of its cells, in any record format TapRecord whose cells read back on the schedules it holds, TapRecord.fits, which every schedule in Ss meets, hfit, tap_cells_read) run by an arbitrary device on arbitrary server behaviors with trusted-host (TrustedHost), it bounds Pr[every window accepts ∧ ¬PooledGood] by δ + Σ e_i + Σ e'_i at Fmax ≥ ln(1/δ)/q and counts the secrets meeting PooledGood at each draw of the coins by #Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b·Fmax) · ∏_i 2^#(freeInputs_i \\ reg_i) · Dj^k_i; it is not a run of the sampled verifier, the challenger's draw or the network check's code, and it is not the deployed system's bound over a monitoring period until both inputs are discharged.",
+   "Verity.SecurityProofs.TransportPassiveZk": "frozen (no-function): It is stated over an arbitrary site, channel, coalition and wire (or exchange, or receiver), and says what the transport's premises establish of what a coalition sees or a receiver delivers, rather than a Lean function's acceptance; verity.ml.crypto.transport is Python, with no Lean model yet.",
+   "Verity.SecurityProofs.ImprintRootHidden": "frozen (no-function): It is stated over an arbitrary site, channel, coalition and wire (or exchange, or receiver), and says what the transport's premises establish of what a coalition sees or a receiver delivers, rather than a Lean function's acceptance; verity.ml.crypto.transport is Python, with no Lean model yet.",
+   "Verity.SecurityProofs.TransportDelivers": "frozen (no-function): It is stated over an arbitrary site, channel, coalition and wire (or exchange, or receiver), and says what the transport's premises establish of what a coalition sees or a receiver delivers, rather than a Lean function's acceptance; verity.ml.crypto.transport is Python, with no Lean model yet."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -19336,6 +19373,20 @@
     "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120"
    ]
   },
+  "Definitions.Core.Assumptions.Transport": {
+   "digest": "9545eb71509723cc596d09cb9b66e446f61917ef6088fe1c1869f22df632ed22",
+   "definitions": {
+    "Verity.Assumptions.ChannelAuthentic": "db83e0089c2f0823100c23b3cd00c7a5da8492e21de536c0020fba93f4ce2145",
+    "Verity.Assumptions.ChannelHides": "1f28a8621b44a3418a0cbf708dd233c1db3d0b545390f467be9b6078874e65f4",
+    "Verity.Assumptions.ImprintPathPrivate": "cd95c37eb5559f97d913a4c8db32422b94451b4558be724a35879bfe8eb00722",
+    "Verity.Assumptions.WitnessPathPrivate": "0cfea131c887329234ffebed9a754f10fa2325dafd61823e5a0ac5934d33d1be"
+   },
+   "guarantees": [
+    "Verity.SecurityProofs.ImprintRootHidden",
+    "Verity.SecurityProofs.TransportDelivers",
+    "Verity.SecurityProofs.TransportPassiveZk"
+   ]
+  },
   "Definitions.Core.Boolean": {
    "digest": "bdca6f202be5ce821c537817148d69f8f173b88caf12b8a5fcade6c8ea044d2f",
    "definitions": {
@@ -20021,7 +20072,7 @@
    "guarantees": ["Pouw.SecurityProofs.PearlC.TileCheck4WordsCore", "Pouw.SecurityProofs.PearlC.TileCheck8WordsCore"]
   },
   "Definitions.Core.Game": {
-   "digest": "e82e8f4fa9a7105389cdde778f6bd77d31f2eab08e8d402637171a892a7e3eae",
+   "digest": "e923f3cfdfc42f2410aaeae4664cb3fd44e7c96a2ebf55819aa96913b4f3746f",
    "definitions": {
     "Verity.Game": "dbf3d91129d029b645b41c73b9f2a122f0c318d56e8a77991cca09d48a3fe45b",
     "Verity.Game.InducedAt": "0c3e058da3fbda23c861e5e706c916599bc4b893d399efbe4535390b4d0c448f",
@@ -20039,6 +20090,7 @@
     "Verity.Game.brecOn.go": "b26b92002b61ca899c176b5358f3905100497203a1e6a329d813643c08759cd4",
     "Verity.Game.casesOn": "d1338feec6ad7d2d0c77fc3d6cc4842abdd9db79d5d8d8e624582571b2b793ff",
     "Verity.Game.coin": "4540142afd525a891bba84d91a6d1f5f4bc0b78456e7cb7e5220db9c18febdaa",
+    "Verity.Game.draw": "2c73f92b3862e836756fb55a8f32bff15bf37734e51c53db599f1fb6a7671628",
     "Verity.Game.interleave": "8cc579f2e14080866cf44bdf92a1ad8006e6594e7f085ec58b2d64b67e3c5164",
     "Verity.Game.interleaveWith": "397c914cdff84b1aea6f1f1d28a609d6dc69b580a3d1564ffc6a7e0202beefd9",
     "Verity.Game.map": "6cd5468a1f484fdc57f7e452b1201fa4960f461c800d5cf222c0ccf5b1b9580a",
@@ -20159,12 +20211,14 @@
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192",
     "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192",
+    "Verity.SecurityProofs.ImprintRootHidden",
     "Verity.SecurityProofs.ProbBatchInduced",
     "Verity.SecurityProofs.SoundAnd",
     "Verity.SecurityProofs.SoundBatch",
     "Verity.SecurityProofs.SoundBind",
     "Verity.SecurityProofs.SoundInterleave",
-    "Verity.SecurityProofs.SoundMono"
+    "Verity.SecurityProofs.SoundMono",
+    "Verity.SecurityProofs.TransportPassiveZk"
    ]
   },
   "Definitions.Core.Guarantees.Circuit": {
@@ -20309,6 +20363,19 @@
     "Verity.SecurityProofs.IsZeroGadget",
     "Verity.SecurityProofs.PackSoundComplete",
     "Verity.SecurityProofs.RangeGadget"
+   ]
+  },
+  "Definitions.Core.Guarantees.Transport": {
+   "digest": "291713e105948f3887c27654aac8c9488af72025f366bf74299d76c142811efe",
+   "definitions": {
+    "Verity.Guarantees.ImprintRootHidden": "d8c07b123007646d1fd164abafd0fd463840737e033b235b628f66978d9b2094",
+    "Verity.Guarantees.TransportDelivers": "8abd2ff063ff6f7b13cc8877aead2a6231f49d7d1b38773e5b3a7c4452ee37f0",
+    "Verity.Guarantees.TransportPassiveZk": "72bd2dd40de46d9c44b3c851a90df53acb1c6b5a1446bb5910580cafd81cd306"
+   },
+   "guarantees": [
+    "Verity.SecurityProofs.ImprintRootHidden",
+    "Verity.SecurityProofs.TransportDelivers",
+    "Verity.SecurityProofs.TransportPassiveZk"
    ]
   },
   "Definitions.Core.NaiveStrassen": {
@@ -20821,6 +20888,24 @@
     "Verity.SecurityProofs.HopperUnitSoundZero",
     "Verity.SecurityProofs.PackSoundComplete"
    ]
+  },
+  "Definitions.Core.Transport": {
+   "digest": "3ce35ace7de8df7a6e5770d35f902de3c260c3450946cf4adceec299797934ba",
+   "definitions": {
+    "Verity.Transport.Channel": "062f67d743fd13e80ae3a55ce9bebda653a5300c1189f668aafb3eea375eb74c",
+    "Verity.Transport.Channel.party": "e3ce45f3f4e1102fec91d3fc8e9244992cc22dbe1a657ac5bbb52d9ff420296c",
+    "Verity.Transport.Channel.readsImprint": "eac6cf208ecf29ac34d5082e59def5e8d2fc7ae0b3f29c3c31f482f5e32a98af",
+    "Verity.Transport.Channel.readsPrivate": "5313436fd134a1e976df015f19f6dc97afe9c0cc7986b599b066ef507372ffde",
+    "Verity.Transport.Close": "d7c93db41330cd42b0ce78786b7fa4c9b469f94a756906465db82594a765e715",
+    "Verity.Transport.PathPrivate": "1489315885aaf0e2d2a2fa6af7d578bc417932c2cec12d915a3d64ba79c1056e",
+    "Verity.Transport.Roles": "083fafc42ee912d241d0ae572678459cab3c8b7fcb6930bf10cfcb26bb138603",
+    "Verity.Transport.Roles.Confined": "6c2c5815652d73406e8d5e305f7145b28e131a253b51106b6c79c18bedfd5cee",
+    "Verity.Transport.Roles.developer": "87581b10ef6217fe4cde71fc3f304c0554c6c861983f32a3be3c03a20a63f4af",
+    "Verity.Transport.ViewIsRecord": "906b909f33f42b786b10c5c1b28fd1d0940bf70aea5147e255196c7c1f9befed",
+    "Verity.Transport.outside": "aab177488169610ddd6bd3ed932323068436b9fc4430914d99e003301530dc33",
+    "Verity.Transport.seen": "6365e76b633ed3a89da61e3befc26c66fd1a26435ed495ec6dc031643c88bda5"
+   },
+   "guarantees": ["Verity.SecurityProofs.ImprintRootHidden", "Verity.SecurityProofs.TransportPassiveZk"]
   },
   "Definitions.Flock.Accounting.Bound": {
    "digest": "40380563a6f220d81b45b9de171e5e25a85ce5d74ea1f18d5500831d646c11e1",
