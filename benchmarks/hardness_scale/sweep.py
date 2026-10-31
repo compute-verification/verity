@@ -173,7 +173,7 @@ def t1(res):
     return out + c125 + rest + checks60 + s125, pending
 
 
-T2_ARMS = ("res-f33", "m-mlph-r8")  # the two best arrangements at matched κ_lin = 1/3 in Tier 1
+T2_ARMS = ("m-mlph-r8", "res-f33")  # the two best arrangements at matched κ_lin = 1/3 at 125M, the better first
 
 
 def kd(c):
@@ -183,7 +183,8 @@ def kd(c):
 def t2(res):
     """Tier 2 at 350M, one GPU a run, longest first: the baseline at D, D/2, D/4, the two best arrangements at D (and the
     first at D/4), and distillation from TEACHER of the baseline and the first arrangement at D/4. Its lr is lr20·(384/1536)^p
-    with p the exponent of 125M's best checked lr; nothing appears until that check is in."""
+    with p the exponent of 60M's pick, as 125M's is: 125M's own lr check would hold the 350M runs, which take about 21 h
+    on a GPU, for its 3 h."""
     s20, lr20 = lr_sweep("20m", LR20, res)
     if lr20 is None:
         return [], True
@@ -191,11 +192,7 @@ def t2(res):
     if any(c["name"] not in res for c in s60):
         return [], True
     lr60 = min(s60, key=lambda c: res[c["name"]])["lr"]
-    lr125 = lr20 * (384 / 896) ** (math.log(lr60 / lr20) / math.log(384 / 640))
-    _, best125 = lr_sweep("125m", [lr125 * (384 / 896) ** p for p in (-0.5, 0, 0.5)], res)
-    if best125 is None:
-        return [], True
-    lr = lr20 * (384 / 1536) ** (math.log(best125 / lr20) / math.log(384 / 896))
+    lr = lr20 * (384 / 1536) ** (math.log(lr60 / lr20) / math.log(384 / 640))
     a, b = T2_ARMS
     out = [cfg("350m", "base", lr), cfg("350m", a, lr), cfg("350m", b, lr)]
     out += [kd(cfg("350m", "base", lr, 0.25)), kd(cfg("350m", a, lr, 0.25))]
