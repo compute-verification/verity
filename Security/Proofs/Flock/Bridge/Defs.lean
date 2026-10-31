@@ -87,7 +87,7 @@ def designOf (kd : ℕ) : Claims.Sampling.Design := ⟨[⟨.subset kd, none⟩]�
 /-- **The statement**: `progOf`'s program at constants `κ` under the query `q` and the descriptor bytes `desc`, the
 design `designOf kd`, and the roots. -/
 def stmtOf {C : Circuit} {n : ℕ} (_P : Partition C n) (κ : Fin C.N → Option Bool) (kd : ℕ) (desc : Claims.Msg)
-    (q : Claims.Sampling.Query) (roots : List Claims.Msg) : Claims.Sampling.Stmt :=
+    (q : Claims.Sampling.Query) (roots : List Claims.Msg) : Claims.Sampling.AuditStatement :=
   ⟨desc, progOf C κ, q, designOf kd, roots⟩
 
 open Classical in
