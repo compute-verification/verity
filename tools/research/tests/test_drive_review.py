@@ -16,6 +16,7 @@ from pathlib import Path
 
 import pytest
 
+import research.drive as D
 import research.queue as Q
 from research import merge
 from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, LEAN_STEP, SIGTERM_RC
@@ -56,6 +57,27 @@ def test_main_waits_for_the_steps_on_the_gate_of_the_commits_own_ci_toml(world, 
     _move_main(world, {"tools/verity/check/ci.toml": "not toml ["})
     h.q.fetch()
     assert h.d._gating(_main(world)) == every
+
+
+def test_a_git_without_merge_tree_attr_source_refuses_the_tick_and_rings_ci_and_infra_hourly(world, monkeypatch):
+    """A git before 2.40 has no `merge-tree --attr-source`, and a sync without it left out every PR whose only conflict is a pin,
+    ringing no one.  Drive refuses the tick on it (no sync, nothing pushed) and rings the lander's and the machines' handles
+    with the version and the fix, again an hour later while it stays; on a git that has it the same tick syncs and lands."""
+    h = Review(world, monkeypatch)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    refs = _git(world.origin, "for-each-ref")
+    monkeypatch.setattr(D, "git_version", lambda: "git version 2.34.1")
+    for _ in range(2):
+        assert h.tick().startswith("drive refuses its ticks: `git version 2.34.1` has no `merge-tree --attr-source`"), world.logs
+    assert _git(world.origin, "for-each-ref") == refs
+    (ring,) = h.posts
+    assert ring.startswith("@ci @infra queue: drive refuses its ticks") and "Fix: install git >= 2.40" in ring
+    h.clock += D.OLD_GIT_EVERY_S
+    h.tick()
+    assert h.posts == [ring, ring]
+    monkeypatch.setattr(D, "git_version", lambda: "git version 2.40.0")
+    assert h.tick().startswith("landed #1"), world.logs
 
 
 def _registry(world: World, *handles: str) -> None:
