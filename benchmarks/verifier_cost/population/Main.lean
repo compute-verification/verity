@@ -64,7 +64,7 @@ def main (args : List String) : IO UInt32 := do
     for m in [n, n - 1, n + 1] do
       let (lay, ms) ← timed (fun t => t != 0 && match Slots.layout p q with
         | .error _ => false
-        | .ok l => decide ((Slots.popOf l).map (·.unit) = (List.range m).map some)) fun b => if b then 1 else 0
+        | .ok l => decide ((Slots.popOf l).map (fun r : Slots.RU => r.unit) = (List.range m).map some)) fun b => if b then 1 else 0
       let ranges := Slots.popOk p q m
       row "popOkLayout" m ms [("ok", toJson lay), ("agree", toJson (lay == ranges))]
       if lay != ranges then

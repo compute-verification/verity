@@ -279,7 +279,7 @@ def popOrder (j : Json) : V Json := do
   let q := getD j "query"
   let layout := match Slots.layout p q with
     | .error _ => false
-    | .ok l => decide ((Slots.popOf l).map (·.unit) = (List.range n).map some)
+    | .ok l => decide ((Slots.popOf l).map (fun r : Slots.RU => r.unit) = (List.range n).map some)
   return Json.mkObj [("ranges", Lean.toJson (Slots.popOk p q n)), ("layout", Lean.toJson layout)]
 
 /-- `{"draw", "proved_units", "instances"}`, a draw whose units (and closure) are integers, to `check_proved`'s codes. -/
