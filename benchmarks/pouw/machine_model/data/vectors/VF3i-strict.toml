@@ -1,7 +1,7 @@
-# VF3i-strict: The strict VF3i on corrected LDSM/STSM rows (RS-W′ round 9).
+# VF3i-strict: The strict VF3i on corrected LDSM/STSM rows.
 name = "VF3i-strict"
 epoch = "VF3i-strict"
-summary = "The strict VF3i on corrected LDSM/STSM rows (RS-W′ round 9)."
+summary = "The strict VF3i on corrected LDSM/STSM rows."
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
     "F2FS", "XU", "R6r", "LDSi", "R6w", "LDG", "L2red", "UP",
