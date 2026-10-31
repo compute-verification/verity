@@ -25,6 +25,9 @@ JSON codec in `verity.ml.circuits.query_codec`):
     concat(F1, F2, ...)           ordered union of families (in one body); `rest()` inside = complement of the siblings
     rest(F)                       every node/member of the bodies F refines that F does not cover, one set per member
     default(w)                    a node is one set per member iff its declared distinct return width <= w, else descended
+    frontier(X)                   Q_call's rule in the activation, its returns read: a piece (the activation, a node, a
+                                  member) whose w_out (computing gates read after it) <= X is one set, else its children;
+                                  `each(F, frontier(X))` cuts each set of F so (a gate that computes nothing: no set)
     override(F, {path: G})        F, but nodes matching `path` (anywhere) are treated by G
     where(F, pred)                keep the sets whose node satisfies pred (spec pattern / form / width)
     table(path, name, of)         inside each matched activation: one set per label of the private table `name`, which
@@ -36,8 +39,9 @@ JSON codec in `verity.ml.circuits.query_codec`):
     label(F, table=name)          within the activation) to (a*i + b) mod n, or to the label a nodes table gives its node
     union(F, G) | minus | inter   GateSet algebra lifted elementwise (or broadcast from a one-set family); root()
 
-A table, group, label or rectangle set may span nodes or activations: `each` and `where` refuse it, `rest` complements only
-a nodes table and rectangles, and a family holding one has no `tiling()`.  `PlanFamily.label_of(i)` is the label a table,
+A table, group, label or rectangle set, or frontier's whole activation, may span nodes or activations: `each` and `where`
+refuse it, `rest` complements only a nodes table, a whole activation and rectangles, and a family holding one has no
+`tiling()`.  `PlanFamily.label_of(i)` is the label a table,
 group or label map gives set i.
 
 Paths: `/Name` (direct children), `//Name` (descendants; a match stops the descent), `Name` may be a definition name,
@@ -61,6 +65,9 @@ from .defs import PrimitiveDefinition, SpecializedDefinition, _fmt_static
 from .intervals import complement, norm, total
 from .layout import Scope
 from .parts import Item, Part, n_members
+from .intervals import Intervals, full, ref_intervals, restrict
+from .liveness import Liveness, _members
+from .refs import Refs
 
 if TYPE_CHECKING:  # pragma: no cover
     from .program import Program
@@ -296,8 +303,9 @@ class Family(Protocol):
     """An ordered, lazy sequence of GateSets.  `count()` and `by_index(i)` are structural (no gate expansion);
     `index_of(S)` is the inverse of `by_index` (None when S is not a set of the family); iteration yields the sets in
     index order; `tiling()` is the structural description for families built from structural constructors (`instances`,
-    `members`, `nodes`, `zip`, `each`, `concat`, `rest`, `default`, `override`, `where`) and None otherwise (GateSet
-    algebra results, families holding `table` or `group` sets, hand-made families)."""
+    `members`, `nodes`, `zip`, `each`, `concat`, `rest`, `default`, `frontier`, `override`, `where`) and None otherwise
+    (GateSet algebra results, families holding `table`, `group` or `label` sets, rectangles or frontier's whole activation,
+    hand-made families)."""
 
     def count(self) -> int: ...
     def by_index(self, i: int) -> GateSet: ...
@@ -584,6 +592,16 @@ class Default(Query):
 
 
 @dataclass(frozen=True)
+class Frontier(Query):
+    """Q_call's rule inside the enclosing activation, its every return read: a piece (the activation, then a body node,
+    a member or iteration of a batch or scan node, a call node's or composite member's body nodes) is one set when its
+    w_out is at most `w`, else its children are; a gate is one set, and a piece without computing gates none.  w_out is
+    the summed declared widths of the piece's computing gates (those whose primitive has parameters) read after it or
+    returned, through any pass-through."""
+    w: int
+
+
+@dataclass(frozen=True)
 class Override(Query):
     base: Query
     cases: tuple[tuple[Path, Query], ...]
@@ -709,6 +727,12 @@ def default(w: int) -> Default:
     return Default(int(w))
 
 
+def frontier(w: int) -> Frontier:
+    if isinstance(w, bool) or not isinstance(w, int) or w < 0:
+        raise QueryError(f"frontier(X) needs an integer X >= 0 (bits), got {w!r}")
+    return Frontier(w)
+
+
 def override(base, cases) -> Override:
     items = cases.items() if isinstance(cases, dict) else cases
     return Override(_as_query(base), tuple((_path(p), _as_query(g)) for p, g in items))
@@ -797,6 +821,7 @@ class Entry:
     `zip`: member m of every node in `nodes` as one set; `descend`: each covered member of j is refined by `sub`;
     `table`: set l is `sets[l]`, (chain, items) pairs relative to the activation, `nodes` the body nodes it reaches;
     `group` / `label`: one set, the union of every set of `sub` (one activation's sets with the key or label `value`);
+    `body`: one set, the whole activation (`sub` its nodes whole), what `frontier` gives an activation that fits;
     `affine`: `rule` = (a, b, n), set l the union of the sets i of `sub` with (a*i + b) mod n == l;
     `grid`: `k` = (r, c), set (u, v) = members [u*r, u*r + r) of j by members [v*c, v*c + c) of node `inner` = (j', n')
     of j's callee body, u-major."""
@@ -819,7 +844,7 @@ class Entry:
             self.count = total(members)
         elif kind == "table":
             self.count = len(sets)
-        elif kind in ("group", "label"):
+        elif kind in ("group", "label", "body"):
             self.count = 1
         elif kind == "affine":
             self.count = rule[2]  # type: ignore[index]
@@ -881,12 +906,12 @@ class Entry:
         raise TypeError(f"{self.kind} entries have no items of one activation")
 
     def all_nodes(self) -> tuple[int, ...]:
-        return self.nodes if self.kind in ("zip", "table", "group", "label", "affine") else (self.j,)
+        return self.nodes if self.kind in ("zip", "table", "group", "label", "affine", "body") else (self.j,)
 
     @property
     def multi(self) -> bool:
-        """A table, group, label or grid set: it may span several nodes or several activations."""
-        return self.kind in ("table", "group", "label", "affine", "grid")
+        """A table, group, label, grid or whole-activation set: it may span several nodes or several activations."""
+        return self.kind in ("table", "group", "label", "affine", "grid", "body")
 
 
 class Plan:
@@ -916,23 +941,39 @@ def _is_composite(node) -> bool:
     return not isinstance(node.fn, PrimitiveDefinition)
 
 
+def _member_arg(node, pi: int, m: int) -> Refs:
+    """Argument `pi` of member `m` of a batch node, as references in the enclosing body (an axis-None argument whole)."""
+    a, ax = node.args[pi], node.axes[pi]
+    if ax is None:
+        return a.refs
+    if ax == 0:
+        L = a.type.elem.leaves
+        return a.refs.slice(m * L, (m + 1) * L)
+    return a.take(ax, m).refs
+
+
 def _full(node) -> tuple[tuple[int, int], ...]:
     n = n_members(node)
     return ((0, n),) if n else ()
 
 
 class _Evaluator:
-    """Builds plans for one Program; memoised by (spec id, query) and by (plan key, transformation)."""
+    """Builds plans for one Program (or, without one, for the Definitions it is asked about: `frontier_pieces`); memoised
+    by (spec id, query) and by (plan key, transformation)."""
 
-    def __init__(self, program: "Program", tables: Mapping[str, Mapping[str, Sequence[int | None]]] | None = None) -> None:
-        self.root: SpecializedDefinition = program.root  # (no strong reference to the Program itself: see `evaluator`)
-        self.root_scope: Scope = program.circuit.root_scope
+    def __init__(self, program: "Program | None", tables: Mapping[str, Mapping[str, Sequence[int | None]]] | None = None) -> None:
+        # (no strong reference to the Program itself: see `evaluator`)
+        self.root: SpecializedDefinition = program.root if program is not None else None  # type: ignore[assignment]
+        self.root_scope: Scope = program.circuit.root_scope if program is not None else None  # type: ignore[assignment]
         self.tables = dict(tables or {})
         self._plans: dict[tuple, Plan] = {}
         self._widths: dict[int, int] = {}
         self._contains: dict[tuple, bool] = {}
         self._group_keys: dict[tuple, tuple] = {}
         self._keys = itertools.count()
+        self._live = Liveness(transitive=False, member_limit=None)
+        self._produced_of: dict[tuple, tuple] = {}
+        self._computes_of: dict[int, tuple] = {}
 
     def _new_plan(self, spec: SpecializedDefinition, entries: list[Entry]) -> Plan:
         return Plan(f"{spec.id}#{next(self._keys)}", spec, entries)
@@ -1014,6 +1055,8 @@ class _Evaluator:
             return self._complement(self.plan(spec, q.base))
         if isinstance(q, Default):
             return self._default(spec, q.w)
+        if isinstance(q, Frontier):
+            return self._frontier(spec, q.w, full(spec.body.ret.count))
         if isinstance(q, Override):
             pf = getattr(spec, "program_fn", None)
             if pf is not None:
@@ -1287,9 +1330,13 @@ class _Evaluator:
                 entries.append(Entry(e.j, "descend", e.members, sub=self._apply_each(e.sub, inner)))
             elif e.kind in ("atomic", "whole"):
                 if _is_composite(node):
-                    entries.append(Entry(e.j, "descend", e.members, sub=self.plan(node.fn, inner)))
-                else:
-                    entries.append(Entry(e.j, "atomic", e.members))  # a gate cannot be refined
+                    sub = self.plan(node.fn, inner)
+                    if len(sub.entries) == 1 and sub.entries[0].kind == "body":
+                        entries.append(Entry(e.j, "atomic", e.members))  # the whole activation: the member itself
+                    elif sub.total or not isinstance(inner, Frontier):
+                        entries.append(Entry(e.j, "descend", e.members, sub=sub))
+                elif not isinstance(inner, Frontier) or self._computes(node.fn):
+                    entries.append(Entry(e.j, "atomic", e.members))  # a gate cannot be refined; frontier drops one that computes nothing
             else:
                 raise QueryError(f"each(...) over {e.kind} sets (node {e.j} of {plan.spec.id}) is not a refinement of one activation")
         return self._new_plan(plan.spec, entries)
@@ -1316,7 +1363,7 @@ class _Evaluator:
         descends: dict[int, list[Entry]] = {}
         for p in plans:
             for e in p.entries:
-                if e.kind == "table" and e.of == "nodes":
+                if (e.kind == "table" and e.of == "nodes") or e.kind == "body":
                     for j in e.nodes:
                         covered.setdefault(j, []).extend(_full(body.nodes[j]))
                     continue
@@ -1360,6 +1407,136 @@ class _Evaluator:
                 entries.append(Entry(j, "atomic", _full(node)))
             else:
                 entries.append(Entry(j, "descend", _full(node), sub=self.plan(node.fn, Default(w))))
+        return self._new_plan(spec, entries)
+
+    # -- frontier ------------------------------------------------------------------------------------------------
+
+    def _computes(self, fn) -> bool:
+        """Does an activation of `fn` hold a computing gate (one whose primitive has parameters)?"""
+        if isinstance(fn, PrimitiveDefinition):
+            return bool(fn.params)
+        hit = self._computes_of.get(id(fn))
+        if hit is None or hit[0] is not fn:
+            hit = self._computes_of[id(fn)] = (fn, any(n_members(n) and self._computes(n.fn) for n in fn.body.nodes))
+        return hit[1]
+
+    def _produced(self, fn: SpecializedDefinition, lr: Intervals) -> tuple[int, tuple[Intervals, ...]]:
+        """The summed declared widths of the distinct computing gates of one activation of `fn` that its return leaves
+        `lr` resolve to, and per parameter the leaves `lr` passes through: a body walked backwards from its returns, each
+        node's leaves resolved inside it once (so a value returned twice, or passed through twice, counts once)."""
+        hit = self._produced_of.get((id(fn), lr))
+        if hit is not None and hit[0] is fn:
+            return hit[1]
+        body = fn.body
+        marks: list[list[tuple[int, int]]] = [[] for _ in body.nodes]
+        pmarks: list[list[tuple[int, int]]] = [[] for _ in body.params]
+
+        def mark(refs: Refs) -> None:
+            t: dict[tuple[str, int], list] = {}
+            ref_intervals(refs, t)
+            for (space, idx), ivs in t.items():
+                (marks if space == "n" else pmarks)[idx].extend(ivs)
+
+        for lo, hi in lr:
+            mark(body.ret.slice(lo, hi))
+        w = 0
+        for k in range(len(body.nodes) - 1, -1, -1):
+            lv = norm(marks[k])
+            if lv:
+                w += self._node_produced(body.nodes[k], lv, mark)
+        out = (w, tuple(norm(p) for p in pmarks))
+        self._produced_of[(id(fn), lr)] = (fn, out)
+        return out
+
+    def _node_produced(self, node, lv: Intervals, mark=None) -> int:
+        """`_produced` of a node's output leaves `lv`: the computing width they resolve to inside the node; `mark(refs)`,
+        when given, receives the argument leaves they pass through (a scan's carry passed on is the previous iteration's)."""
+        fn = node.fn
+        if isinstance(fn, PrimitiveDefinition):
+            return total(lv) * fn.ret.w if fn.params else 0
+        if node.form == "call":
+            w, reads = self._produced(fn, lv)
+            for a, rd in zip(node.args, reads) if mark else ():
+                for lo, hi in rd:
+                    mark(a.refs.slice(lo, hi))
+            return w
+        if node.form == "batch":
+            w = 0
+            for m_lo, m_hi, sub in _members(lv, node.n, fn.out_leaves)[0]:
+                sw, reads = self._produced(fn, sub)
+                w += (m_hi - m_lo) * sw
+                for pi, rd in enumerate(reads) if mark else ():
+                    for m in range(m_lo, m_hi) if rd else ():
+                        refs = _member_arg(node, pi, m)
+                        for lo, hi in rd:
+                            mark(refs.slice(lo, hi))
+            return w
+        c, y = node.out.fields[0].leaves, node.out.fields[1].elem.leaves
+        ys: dict[int, Intervals] = {}
+        for m_lo, m_hi, sub in (_members(restrict(lv, c, c + node.n * y), node.n, y)[0] if y else ()):
+            ys.update(dict.fromkeys(range(m_lo, m_hi), tuple((c + lo, c + hi) for lo, hi in sub)))
+        carry, w = restrict(lv, 0, c), 0
+        for i in range(node.n - 1, -1, -1):
+            lr = norm(list(carry) + list(ys.get(i, ())))
+            if not lr:
+                carry = ()
+                continue
+            sw, reads = self._produced(fn, lr)
+            w += sw
+            for pi in range(1, len(node.args)) if mark else ():
+                a = node.args[pi]
+                at = i * a.type.elem.leaves if pi <= node.n_xs else 0
+                for lo, hi in reads[pi]:
+                    mark(a.refs.slice(at + lo, at + hi))
+            carry = reads[0]
+        for lo, hi in carry if mark else ():
+            mark(node.args[0].refs.slice(lo, hi))
+        return w
+
+    def _frontier(self, spec: SpecializedDefinition, w: int, lr: Intervals) -> Plan:
+        """`frontier(w)` in one activation of `spec` whose return leaves `lr` are read after it."""
+        return self._memo((spec.id, "frontier", w, lr), lambda: self._build_frontier(spec, w, lr))
+
+    def _build_frontier(self, spec: SpecializedDefinition, w: int, lr: Intervals) -> Plan:
+        body = spec.body
+        if not self._computes(spec):
+            return self._new_plan(spec, [])
+        if self._produced(spec, lr)[0] <= w:
+            js = tuple(j for j, node in enumerate(body.nodes) if n_members(node))
+            whole = self._new_plan(spec, [Entry(j, "whole", _full(body.nodes[j])) for j in js])
+            return self._new_plan(spec, [Entry(js[0], "body", (), nodes=js, sub=whole)])
+        live = self._live.analyse(spec, lr)
+        entries: list[Entry] = []
+        for k, node in enumerate(body.nodes):
+            fn = node.fn
+            if not n_members(node) or not self._computes(fn):
+                continue
+            lv = live.node_live[k]
+            if node.form == "primitive" or self._node_produced(node, lv) <= w:
+                entries.append(Entry(k, "atomic" if node.form in ("primitive", "call") else "whole", _full(node)))
+            elif node.form == "call":
+                entries.append(Entry(k, "descend", _full(node), sub=self._frontier(fn, w, lv)))
+            elif isinstance(fn, PrimitiveDefinition):
+                entries.append(Entry(k, "atomic", _full(node)))
+            else:
+                if node.form == "batch":
+                    runs = _members(lv, node.n, fn.out_leaves, include_dead=True)[0]
+                else:
+                    runs, at = [], 0
+                    for sub, n in live.scan_runs[k]:
+                        runs.append((at, at + n, sub))
+                        at += n
+                for m_lo, m_hi, sub in runs:
+                    if self._produced(fn, sub)[0] <= w:
+                        e = Entry(k, "atomic", ((m_lo, m_hi),))
+                    else:
+                        e = Entry(k, "descend", ((m_lo, m_hi),), sub=self._frontier(fn, w, sub))
+                    last = entries[-1] if entries else None
+                    if (last is not None and last.j == k and last.kind == e.kind and last.sub is e.sub
+                            and last.members[-1][1] == m_lo):
+                        entries[-1] = Entry(k, e.kind, ((last.members[0][0], m_hi),), sub=e.sub)
+                    else:
+                        entries.append(e)
         return self._new_plan(spec, entries)
 
     # -- override ------------------------------------------------------------------------------------------------
@@ -1546,7 +1723,7 @@ def _grid_pos(scope: Scope, e: Entry, g: int) -> int | None:
 def _set_of(scope: Scope, e: Entry, pos: int) -> GateSet:
     if e.kind == "table":
         return GateSet(_merge_parts([Part(_down(scope, c), items) for c, items in e.sets[pos]]))
-    if e.kind in ("group", "label"):
+    if e.kind in ("group", "label", "body"):
         return GateSet(_merge_parts(_union_parts(scope, e.sub)))
     if e.kind == "affine":
         sub = e.sub
@@ -1861,6 +2038,46 @@ def evaluate(program: "Program", query, tables: Mapping[str, Mapping[str, Sequen
     return PlanFamily(ev, ev.root_scope, ev.plan(program.root, q))
 
 
+Piece = tuple[int, int, tuple[tuple[int, ...], ...]]
+
+
+def frontier_pieces(fn, w: int, memo: dict | None = None) -> list[Piece]:
+    """`frontier(w)`'s sets in one activation of `fn`, its every return read (what `each(instances("@*"), frontier(w))`
+    gives each root Call), as (lo, hi, path) over the activation's gates in family order: the path's steps are `(k,)`, body
+    node k (a call or primitive node, or a batch or scan node whole), and `(k, m)`, member or iteration m of node k.
+    `memo` (a dict) shares plans across calls."""
+    if isinstance(fn, PrimitiveDefinition):
+        return [(0, 1, ())] if fn.params else []
+    ev = None if memo is None else memo.get(("query_ast/frontier",))
+    if ev is None:
+        ev = _Evaluator(None)
+        if memo is not None:
+            memo[("query_ast/frontier",)] = ev
+    out: list[Piece] = []
+
+    def walk(plan: Plan, off: int, path: tuple) -> None:
+        body = plan.spec.body
+        for e in plan.entries:
+            if e.kind == "body":
+                out.append((off, off + plan.spec.gates, path))
+                continue
+            node, at = body.nodes[e.j], off + body.offsets[e.j]
+            if e.kind == "whole":
+                out.append((at, off + body.offsets[e.j + 1], path + ((e.j,),)))
+                continue
+            g, one = node.fn.gates, node.form in ("call", "primitive")
+            for lo, hi in e.members:
+                for m in range(lo, hi):
+                    step = (e.j,) if one else (e.j, m)
+                    if e.kind == "atomic":
+                        out.append((at + m * g, at + (m + 1) * g, path + (step,)))
+                    else:
+                        walk(e.sub, at + m * g, path + (step,))
+
+    walk(ev.plan(fn, Frontier(w)), 0, ())
+    return out
+
+
 def parse(text: str) -> Query:
     from .query import parse as _parse
     return _parse(text)
@@ -1883,9 +2100,9 @@ def query_id(query: Query) -> str:
 
 __all__ = ["GateSet", "Family", "Tiling", "BodyTiling", "NodeTiling", "SetClass", "QueryError", "Part", "Item",
            "NameSel", "NodeSel", "Step", "Path", "Pred",
-           "Query", "Instances", "Members", "Nodes", "Zip", "Each", "Concat", "Rest", "Default", "Override", "Where",
-           "Union", "Minus", "Inter", "Root", "Table", "Group", "Label", "TABLE_OF",
-           "instances", "members", "nodes", "zip_", "each", "concat", "rest", "default", "override", "where",
+           "Query", "Instances", "Members", "Nodes", "Zip", "Each", "Concat", "Rest", "Default", "Frontier", "Override",
+           "Where", "Union", "Minus", "Inter", "Root", "Table", "Group", "Label", "TABLE_OF",
+           "instances", "members", "nodes", "zip_", "each", "concat", "rest", "default", "frontier", "override", "where",
            "union", "minus", "inter", "root", "table", "group", "label",
-           "evaluate", "evaluator", "parse", "to_json", "from_json", "query_id", "gateset_of_scope",
+           "evaluate", "evaluator", "frontier_pieces", "parse", "to_json", "from_json", "query_id", "gateset_of_scope",
            "PlanFamily", "ConstFamily", "AlgebraFamily", "Plan", "Entry"]
