@@ -1,31 +1,34 @@
 """N2's link-window verdict of record in Lean (`NetworkCheck.LinkWindow`, `LinkWindows.lean_verdict`) held to the
 Python (`LinkWindows.python_verdict`), the reference that keeps running beside it: the same accept bit, public outputs
-and digest on plain, served, advised and warden link-windows, honest and tampered (the session refused, rejected, naming
-another Program or other units; the public file's bytes flipped, cut, missing, naming another unit or its unit twice, or
-in a shared-row layout; the salts and the output word forged; each certificate's fields edited, the certificates
-swapped, missing or not certificates; the declared syncs off Σ_sync or missing; an advised window without an advice;
-a warden link under another digest).
+and digest on plain, served and warden link-windows, honest and tampered (the session refused, rejected, naming another
+Program or other units; the public file's bytes flipped, cut, missing, naming another unit or its unit twice, or in a
+shared-row layout; the salts and the output word forged; each certificate's fields edited, the certificates swapped,
+missing or not certificates; the declared syncs off Σ_sync or missing; a warden link under another digest).
 And what `verify` does with the two: the switch (`OF_RECORD`) names the verdict of record, a disagreement or a case the
-Lean can't state (a key other than an `LmsKey`) rejects."""
+Lean can't state (a key other than an `LmsKey`) rejects. And certifier/v0's period check (`NetworkCheck.Period`) opens
+a plain link-window's stand-in proof as the verifier of record does (`network-period opening`)."""
 
 import itertools
 import json
 import random
+import subprocess
 from dataclasses import replace
 from fractions import Fraction
 
 import pytest
 
-from verity.core.protocols.certifier import service as SVC
-from verity.core.protocols.certifier.certificate import Direction, parameters_digest
+import verity_difftest as D
+from verity.ml.circuits.codec import canonical_json
+from verity.core.protocols.certifier import lean_audit as LA, service as SVC
+from verity.core.protocols.certifier.certificate import CertifiedRecord, Direction, RecordHead, parameters_digest
 from verity.core.protocols.certifier.schedule import ClockSync
+from verity.core.protocols.sampled_proofs import service as S
+from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 from verity.core.protocols.sampled_proofs.one_stage.proofs import Finding
 
 import standin
-import test_network_certifier_advised as advised
 import test_network_certifier_served as served
 import test_network_certifier_service as plain
-from advised_traffic import serve
 
 
 @pytest.fixture(autouse=True)
@@ -37,23 +40,22 @@ class Case:
     """One link-window's draw, certificates, syncs and delivered proof, with the findings of the stand-in Lean run on
     the honest proof."""
 
-    def __init__(self, lw, opening, draw, syncs, tmp, advice=None):
-        self.lw, self.draw, self.syncs, self.tmp, self.advice = lw, draw, syncs, tmp, advice
+    def __init__(self, lw, opening, draw, syncs, tmp):
+        self.lw, self.draw, self.syncs, self.tmp = lw, draw, syncs, tmp
         self.certificates = [r.certificate for r in opening.records]
-        self.delivered = standin.prove(lw, opening, draw, syncs, tmp / "honest", advice=advice)
+        self.delivered = standin.prove(lw, opening, draw, syncs, tmp / "honest")
         self.findings, refused = standin.lean(self.delivered.proof, circuit_sha512=standin.circuit_sha512(self.delivered),
                                               program=lw.program, partition=lw.partition)
         assert refused is None
         self._files = itertools.count()
 
-    def both(self, *, certificates=None, syncs=None, delivered=None, findings=(), advice=()):
+    def both(self, *, certificates=None, syncs=None, delivered=None, findings=()):
         """The Lean's and the Python's verdicts on the case with the given inputs replaced."""
         args = (self.draw, self.certificates if certificates is None else certificates,
                 self.syncs if syncs is None else syncs, delivered or self.delivered,
                 self.findings if findings == () else findings)
         sessions = args[3].sessions()
-        advice = self.advice if advice == () else advice
-        return (self.lw.lean_verdict(*args, sessions, advice), self.lw.python_verdict(*args, sessions, advice))
+        return self.lw.lean_verdict(*args, sessions), self.lw.python_verdict(*args, sessions)
 
     def public(self, data):
         """The honest delivery with the public file's bytes `data` (None: no file)."""
@@ -81,12 +83,6 @@ def _served(tmp):
     return Case(run.lw, opening, run.stream.select(reg), served.SYNCS, tmp)
 
 
-def _advised(tmp):
-    run, session = advised.Run(tmp), serve(advised.SEEDS[0])
-    opening, draw = run.draw(0, session.egress[0], session.ingress[0])
-    return Case(run.lw, opening, draw, advised.SYNCS, tmp, advice=session.link)
-
-
 def _warden(tmp):
     """The plain link as a warden's (`WardenProfile`): both records certified under the warden's parameters digest, no
     occupancy profile."""
@@ -100,7 +96,7 @@ def _warden(tmp):
     return Case(lw, opening, run.stream.select(run.register(opening)), plain.SYNCS, tmp)
 
 
-KINDS = {"plain": _plain, "served": _served, "advised": _advised, "warden": _warden}
+KINDS = {"plain": _plain, "served": _served, "warden": _warden}
 
 
 def _header(data):
@@ -195,8 +191,6 @@ def test_the_lean_verdict_is_the_pythons(tmp_path, kind):
     cases += [{"certificates": cs} for cs in _certificates(c)]
     if kind != "warden":
         cases += [{"syncs": s} for s in _syncs(c)]
-    if kind == "advised":
-        cases += [{"advice": None}, {"advice": "not an advice"}]
     rejected = 0
     for k, kw in enumerate(cases):
         lean, python = c.both(**kw)
@@ -274,3 +268,96 @@ def test_a_disagreement_or_a_case_the_lean_cant_state_rejects(tmp_path, monkeypa
     assert other.lean_case(c.draw, c.certificates, c.syncs, c.delivered, c.findings, c.delivered.sessions()) is None
     v = run(other)
     assert not v["accepted"] and v["public"] == {"verdict": 0, "deadline": 0} and v["reference"] == {"accepted": True}
+
+
+def _cert(c) -> dict:
+    return {"digest": c.digest.hex(), "direction": c.direction.value, "key_id": c.key_id.hex(), "link": c.link,
+            "signature": c.signature.hex(), "window": c.window}
+
+
+def _end(grid, profile) -> dict:
+    return {"grid": {k: getattr(grid, k) for k in ("allocation", "bucket_ms", "buckets", "frame_bytes", "queue_capacity")},
+            "profile": None if profile is None else [list(row) for row in profile]}
+
+
+#: the auditor's challenger as one-stage v2's parameters name it (`OneStage.paramsOfJson`'s `challenger` and
+#: `window_root`, which v2 requires): the opening reads no coins, so a key nothing signed under stands in for it
+CHALLENGER = {"challenger": {"key": {"H": 5, "W": 4, "public": random.Random("challenger").randbytes(80).hex()},
+                             "label": "draw"},
+              "window_root": random.Random("window root").randbytes(64).hex()}
+
+
+def period_case(lw, draw, body: dict, delivered, certificates) -> tuple[dict, bytes, bytes, list]:
+    """certifier/v0's clock-form case of link-window 0 alone, as `certifier_case.case_of` makes it from N2's files
+    (`n2_zk.one_stage_params`, `one_stage_evidence`), with v2's parameters naming a challenger (`CHALLENGER`): the
+    link's ends, run and one-stage v2 parameters, the registration, the stream's audit record of the window's outcome
+    (``body``) as v2's evidence with the delivered proof's files (`proofs.evidence_v2`), the delivered salts and the
+    certificates; and the files as blobs."""
+    audit, reg, key = body["audit"], draw.registration, lw.key
+    proofs, blobs = PF.evidence_v2(delivered.proof, body["sessions"])
+    one_stage = {"draw": audit["draw"], "instances": len(audit["proved_units"]), "proofs": proofs,
+                 "proved_units": audit["proved_units"], "receipt": audit["receipt"], "served": None,
+                 "session_roots": {SVC.VALUE: reg.record["roots"][0]["root"]}, "sessions": list(body["sessions"]),
+                 "statement": audit["statement"]}
+    params = {"audits": [], "cells": [], "egress": _end(lw.params, lw.occupancy[0]), "first": 0,
+              "ingress": _end(lw.ingress_params, lw.occupancy[1]), "jitter": 1, "key": key.public.hex(),
+              "link": lw.link, "lms": {"H": key.params.H, "N": key.params.N, "W": key.params.W, "toy": key.params.toy},
+              "one_stage": {"anchors": [], "delta": str(Fraction(plain.DELTA)), "law": S.selection_law(lw.spec.selection, 1),
+                            "leaf_layer": None, "log": [], "partition": lw.partition, "program": json.loads(lw.program),
+                            "proofs": {"circuit": standin.circuit_sha512(delivered), "registered": None},
+                            "query": lw.query, "registered": None, "scheme": S.SCHEME, "work_table": None,
+                            **CHALLENGER},
+              "run": lw.run, "session": lw.certifier_session.hex(),
+              "sync_set": {"deltas": list(lw.sync_set.deltas),
+                           "rhos": [[r.numerator, r.denominator] for r in lw.sync_set.rhos]},
+              "windows": 1}
+    evidence = {"audits": [], "windows": [{
+        "certificates": [_cert(c) for c in certificates], "clock": _cert(certificates[0]), "one_stage": one_stage,
+        "salts": {k: delivered.salts[k].hex() for k in ("o0", "pub")}}]}
+    return (params, canonical_json({"audits": [], "windows": [reg.record]}), canonical_json(evidence), blobs)
+
+
+def opened(tmp_path) -> tuple:
+    """A plain link's honest link-window 0 through its outcome on N2's stand-in proof: (run, opening, draw, delivered,
+    the stream's record of the outcome)."""
+    run = plain.Run(tmp_path)
+    opening = run.honest(0)
+    draw = run.stream.select(run.register(opening))
+    delivered = standin.prove(run.lw, opening, draw, plain.SYNCS, tmp_path / "honest")
+    assert run.stream.deliver(draw, delivered.sessions()) is None
+    out = run.lw.outcome(run.stream, draw, [r.certificate for r in opening.records], plain.SYNCS, delivered,
+                         circuit_sha512=standin.circuit_sha512(delivered))
+    assert out.accepted
+    return run, opening, draw, delivered, run.stream.records[-1]
+
+
+def test_the_period_check_opens_a_link_windows_proof_as_the_verifier_of_record_does(tmp_path):
+    """`network-period opening` (`NetworkCheck.Period.openings`: the period check's reading of a link-window once
+    one-stage v2 accepted its proof, which no stand-in proof gets from the real verifier) on certifier/v0's case of a
+    plain link's link-window, made from the stream's record as `certifier_case` makes it from N2's files: the
+    honest proof's public row opens to the verifier's own and its output row to the word 3; a proof on a head off the
+    profile (verdict bit 0), a forged pub or o0 salt, a recertified certificate and the certificates swapped are each
+    refused at the opening by name."""
+    exe = D.build(LA.PACKAGE, "network-period")
+    run, opening, draw, delivered, body = opened(tmp_path)
+    certs = [r.certificate for r in opening.records]
+    eg, ig = opening.records
+    zero = RecordHead(**{f: getattr(eg.head, f) for f in RecordHead.__slots__} | {"counts": (0,) * plain.PARAMS.buckets})
+    off = run.lw.commit(0, CertifiedRecord(zero, eg.salt, eg.certificate), ig, plain.SALTS[0])
+
+    def opens(d=delivered, cs=certs):
+        params, commitment, evidence, blobs = period_case(run.lw, draw, body, d, cs)
+        files = [tmp_path / f for f in ("params.json", "commitment.bin", "evidence.json")]
+        for f, data in zip(files, (canonical_json(params), commitment, evidence)):
+            f.write_bytes(data)
+        p = subprocess.run([str(exe), "opening", *map(str, files), *map(str, blobs)], capture_output=True, text=True)
+        out = json.loads(p.stdout.strip().splitlines()[-1])
+        assert p.returncode == 0 and "refused" not in out, out
+        return out["windows"]
+
+    assert opens() == [None]
+    refused = [opens(standin.prove(run.lw, off, draw, plain.SYNCS, tmp_path / "off")),
+               opens(replace(delivered, salts={**delivered.salts, "pub": bytes(192)})),
+               opens(replace(delivered, salts={**delivered.salts, "o0": bytes(192)})),
+               opens(cs=[run.honest(0).records[0].certificate, certs[1]]), opens(cs=certs[::-1])]
+    assert all(len(w) == 1 and w[0].startswith("window 0: opening: ") for w in refused), refused

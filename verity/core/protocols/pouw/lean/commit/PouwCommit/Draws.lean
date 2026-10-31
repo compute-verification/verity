@@ -1,5 +1,6 @@
 import Randomness
 import PouwCommit.Coins
+import Identity.Domains
 
 /-!
 # The salts and draws PoUW derives (`verity.core.protocols.pouw.audit`; the clear audit's draws, `benchmarks/pouw/clear`)
@@ -30,9 +31,9 @@ open FlockSoundness.Randomness (derive stream uniform)
 
 def SALT_DOMAIN : String := "verity/pouw/salt/v1"
 def EPOCH_SALT_DOMAIN : String := "verity/pouw/epoch-salt/v1"
-def AUDIT_DOMAIN : String := "verity/pouw/audit/v1"
-def DRAW_DOMAIN : String := "verity/pouw/pearl-c-draw/v1"
-def DRAW_AFTER_TAG : String := "verity/pouw/pearl-c/draw-after/v1"
+def AUDIT_DOMAIN : String := Domains.POUW_AUDIT_KEY
+def DRAW_DOMAIN : String := Domains.POUW_PEARL_C_SAMPLING
+def DRAW_AFTER_TAG : String := Domains.POUW_PEARL_C_SAMPLING_AFTER
 def SALT_BYTES : Nat := 32
 
 /-- `derive(source, domain, context)`, refusing an empty source as `derive` does. -/
@@ -109,5 +110,10 @@ def pearlDraw (key : ByteArray) (tickets : List Nat) (t : Nat) : Except String (
   if tk.isEmpty then return []
   let ids ← weightedDraw key (tk.map (·.1)) t
   pure (ids.map fun i => (tk.getD i (0, 0)).2)
+
+/-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
+written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+example : SALT_DOMAIN = Domains.POUW_UNVERIFIED_SALT := rfl
+example : EPOCH_SALT_DOMAIN = Domains.POUW_EPOCH_SALT := rfl
 
 end PouwCommit

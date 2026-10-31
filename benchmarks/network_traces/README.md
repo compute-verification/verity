@@ -31,17 +31,16 @@ driver's docstring says what it runs, what it publishes and what its verifier re
   is the chain's reads of a relay run, and `warden_zk.py` reads the relay's bucket rows in the proof system.
 - **Proofs in zero knowledge.** Each driver proves its proof blocks with C-Flock `prove --zk` behind the Lean firewall
   and holds them by the Lean `flock-verify verify --zk`: `n2_zk.py` (N2's registered proof block, N2's verdict of
-  record), `n2_advised_zk.py` (N2's advised proof block), `n2_tie_zk.py` (the ingress tie), `egress_zk.py` (N2's egress
-  bucket), `scan_zk.py` (the step-indexed scan), `scan_period.py` (the scan's answers held by `NetworkCheck.Period`),
-  `transfer_zk.py` (a server-time block's proof blocks read against the certifier's transfer rows) and
-  `compile_slice_zk.py` (the compile slice). `leak_scan.py` is the scan of what the verifier received that every one of
-  them runs.
+  record), `n2_tie_zk.py` (the ingress tie), `egress_zk.py` (N2's egress bucket), `scan_zk.py` (the step-indexed
+  scan), `scan_period.py` (the scan's answers held by `NetworkCheck.Period`) and `compile_slice_zk.py` (the compile
+  slice). `leak_scan.py` is the scan of what the verifier received that every one of them runs.
 - **The chain's run of record.** `chain_record.py` (`chain_record.sh`, below), with `window_chain.py` (a served
   endpoint's Commit windows as one I1 v0 advice), `negatives.py` (what network accounting must refuse, each by the
   check and code that refuse it) and `leak_guard.py` (the record's leak guard, below). `block_certifier.py` decides a
   period by `network-period check` and writes its accepted answer as the block record's certifier entry.
-  `demo_chain.sh` runs the one-H200 demo by the certifier-only path, and `served_session.py` is the served session's
-  runbook (below).
+  `certifier_case.py` makes a run's period case for ``verity/certifier/v0``, in the clock form or the rows form,
+  which `block_certifier.py` hands ``network-period check``. `demo_chain.sh` runs the one-H200 demo by the
+  certifier-only path, and `served_session.py` is the served session's runbook (below).
 - **The weights' load:** `load_relay.py` and `load_commit.py` (below).
 - **A memory wipe's egress:** `wipe_gate.sh` and `wipe_egress.py` (below).
 - `tool.py`: the harness's store declarations.
@@ -106,13 +105,21 @@ warden run's witness never go on the prover's machine. Without the gate's coins 
 (`CERTIFIER_FRONT`) runs before that run's requests: the gate's scan rehearsal sends one group of the window circuit's
 class (4 prompts of 24 ids, 4 ids out, `--window-per-group`) to serve-openai, all of it in link-window 0, so the engine
 closes it into the run's earliest window, the one the run audits, and the gate's fetch is kept in the serve dir's
-`private/certifier`. Its `piece` (`CERTIFIER_CMD`) runs the chain's warden path on that fetch with the serve dir's
-endpoint records, run dir and quarantine private beside the fetch, and answers with `network-period check` on the rows
-form of the scan's link-window (`scan_period.rows_case`). The answer is accept only when the chain accepted, every request
+`private/certifier`. A request's answer must be whole D·τ after its admission, 2.7 s at the scan's 100 ms tick; for a
+slower endpoint `--bucket-ms` runs the scan at a longer tick, up to 4000 ms (108 s). Its `piece` (`CERTIFIER_CMD`)
+runs the chain's warden path on that fetch with the serve dir's endpoint records, run dir and quarantine private
+beside the fetch, and answers with `network-period check` on the rows form of the scan's
+link-window (`scan_period.rows_case`). The answer is accept only when the chain accepted, every request
 of the audited window is a certified one inside that link-window, and the Lean check accepts; beside that answer goes
-its case, `case.json`, as `composite.py` reads a piece's (inline, about 83 MB on a served window). Only the protocol
+its case, `case.json`, as the one-stage composite reads a piece's (inline, about 83 MB on a served window). Only the protocol
 rejecting the served window is a reject: with no fetch kept, a rehearsal the gate's check didn't pass (each request
-late, say) or a step that can't run, the piece refuses (`refused.txt`), which leaves the certifier missing.
+late, say) or a step that can't run, the piece refuses (`refused.txt`), which leaves the certifier missing. An accept's
+profile names its placement: the certifier on the gate's host, and the chain, the period check and their proofs' coins
+on the prover's node, so `trusted-host` is assumed with the auditor's devices not placed. The chain's endpoint report,
+whose rows count each Commit window's requests, steps and outputs and its advice's bits, stays beside the fetch, and so
+does the rest of the chain's out/ but what `PUBLIC` names (the report's verdicts and ε at δ, and the scan's answers):
+report.md, the report's other keys and the steps' summaries count the window's requests and outputs and the advice's
+bits. The leak guard (`--public`) moves any file the piece doesn't declare out of its directory.
 
 ## The chain's run of record
 
@@ -141,29 +148,33 @@ directory, `CR_ENDPOINT`). The job runs `chain_record.py`'s steps, network-e2e's
 | step | what it checks | its ε at δ | computed in the clear |
 |---|---|---|---|
 | custody | each gate run's files against the SHA-512s in its `end.json` | none: a check of files | the files' digests |
-| certificates | each sampling block's two certified records and its clock certificate, at the client, under the certifier's key and attachment; with `CR_DEPLOYED=1`, a key that isn't LMS at H = 20 is refused | none: signatures | every LMS signature, and the host audit of the client's own heads |
+| certificates | each sampling block's two certified records and its clock certificate, at the client, under the certifier's key and attachment; with `CR_DEPLOYED=1`, a key that isn't LMS at H = 20 is refused | none: signatures | every LMS signature of the client's kept certificates by the Lean (`NetworkCheck.LinkWindow.refusals`, `audit.certificate_refusals` its reference), and the Lean's audit (`NetworkCheck.Records`, `audit.Audit` its reference) of the run's certified heads under the syncs the Lean reads from its clock openings (`NetworkCheck.Period.signedSyncs`, `certificate.SignedClocks` its reference) |
 | endpoint | the endpoint's own advice bound to the run (each Commit window opened to its registered root, rebuilt from the certified I/O) and the I/O tie on the honest run (`e2e.py --no-prove`); required on the advice profile | none: in the clear | all of it |
-| N2 | each sampling block's N2 proof block, proved `--zk` and decided by N2's verifier of record: the advised proof block on the bound advice and the certifier's clock certificates on the advice profile (`n2_advised_zk.py --e2e`), the plain one on the others (`n2_zk.py`) | Selection All: no sampling block undrawn; a sampled draw of k of n sampling blocks hides at most b faulty ones except with probability δ (the report's `wrong_units_at_delta`, the integrity profile's count bound) | the registration, the draw, the certificates' public fields, the syncs, the pub row opened to the verifier's copy, the output word |
+| N2 | each sampling block's N2 proof block, proved `--zk` and decided by N2's verifier of record (`n2_zk.py`); not run on the advice profile, whose egress counts no N2 proof block holds | Selection All: no sampling block undrawn; a sampled draw of k of n sampling blocks hides at most b incorrect ones except with probability δ (the report's `incorrect_at_delta`) | the registration, the draw, the certificates' public fields, the syncs, the pub row opened to the verifier's copy, the output word |
 | scan | the scan's ingress and egress proof blocks of a sampling block, one registration, `verify --zk --registered` | the audit's `wrong_units` at the draw's sampling design | each proof block's output bit; the I/O tie stays outside the proofs |
 | Lean | every proof of both steps is the verifier's own `flock-verify verify --zk` run | per proof, ε_ks + ε_bind | nothing |
 
-The job's environment picks what it runs: N2's sampled draw on the gate's coins is `CR_N2_CMD` (`n2_advised_zk.py prove
---e2e --draw K --challenger gate:…`), the scan of the gate's own rows is `CR_WARDEN_RUN` with `CR_SCAN_ARGS="--draw K
---challenger gate:…"` (`scan_zk.py prove --warden-run`), and the client's `certificates.jsonl` and `clocks.jsonl` are
-`CR_CLIENT`, by default the network certifier rehearsal's own `client/`. A step on a stand-in (the scan on its own
-synthetic run, or N2 on `CR_N2_STANDIN=simulated`) never makes the report accepted, and a step that fails or doesn't run
-says why.
+The job's environment picks what it runs: N2's sampled draw on the relay path is `CR_N2_DRAW` (`n2_zk.py prove
+--warden-run --draw K`, on the verifier's coins) and any other N2 command is `CR_N2_CMD`, the scan of the gate's own
+rows is `CR_WARDEN_RUN` with `CR_SCAN_ARGS="--draw K --challenger gate:…"` (`scan_zk.py prove --warden-run`), and the
+client's `certificates.jsonl` and `clocks.jsonl` are `CR_CLIENT`, by default the network certifier rehearsal's own
+`client/`. A step on a stand-in (the scan on its own synthetic run) never makes the report accepted, and a step that
+fails or doesn't run says why.
 
 **The record's leak guard** (`leak_guard.py`). Custody publishes the whole run dir, `inputs/` with it, so the job moves
-each gate sent under `inputs/` to the quarantine once it is unpacked, and on every exit runs the guard on the run dir.
-The guard moves to the quarantine (`CR_QUARANTINE`, by default `quarantine/RUN` beside the runs root, 0700) every file
-that holds a gate run's witness: one under a `witness/` directory or named as `leak_guard.json` declares, one holding an
-aligned witness piece raw or as hex at any offset, an archive member that does, or an archive it can't read through.
-The run then fails (exit 3), and `out/leak-guard.json` names each find by its path alone. A piece the gate's public
-files hold, as they are or with their JSON written again, is no find. The false positives are declared data,
-`leak_guard.json`'s `allow`, each entry written only after its find was read by counts and digests; the one there
-excuses the stall probe's cgroup counters in the runner's own `resources.jsonl`. A signal before the guard runs, or a
-guard that can't run, withholds `out/`, `inputs/` and the logs whole.
+each gate sent under `inputs/` to the quarantine once it is unpacked, writes every output (its own stdout and stderr
+too) to a hold outside the run dir (`$Q/held`), and on every exit runs the guard on the run dir and the hold. The guard
+moves to the quarantine (`CR_QUARANTINE`, by default `quarantine/RUN` beside the runs root, 0700) every file that holds
+a gate run's witness: one under a `witness/` directory or named as `leak_guard.json` declares, one holding an aligned
+witness piece raw or as hex at any offset, an archive member that does, or an archive it can't read through. Only then
+does it release the rest of the hold to `out/`. A find fails the run (exit 3), and `out/leak-guard.json` names each find
+by its path alone. A file equal to one of the gate's public files (by sha256, so a gate's published bundle and its
+members aren't scanned) is no find, nor is a piece those files hold, as they are or with their JSON written again. The
+false positives are declared data, `leak_guard.json`'s `allow`, each entry written only after its find was read by
+counts and digests; the one there excuses the stall probe's cgroup counters in the runner's own `resources.jsonl`. The
+guard's cost is linear in the bytes it reads, and past its budget (`--budget-s`) it stops. A signal (before or during
+the guard), a guard past its budget, or one that can't run releases nothing and withholds `out/`, `inputs/` and the logs
+whole; a SIGKILL leaves the hold where it is, out of the record.
 
 **The relay path** (`CR_PATH=warden`, `chain_record.WARDEN`). Every step reads the relay's own run (the gate's
 `warden-rehearse`, its witness under `witness/`; `warden_chain.py`), and a proxy rehearsal's run, whose records come
@@ -178,97 +189,100 @@ one relay run the certificates step read, and every one is required.
 
 A Commit window that carries a request across its open or close (`verity_vllm.pipeline.window_advice`, schema
 `verity-vllm/window-advice/v1`) is bound with the Commit window before it: `chain.served_advice` joins them into one I1
-v0 advice (`window_chain.join`), and `n2_advised_zk --e2e` joins the run's Commit windows the same way. A carried
-request's record and state are the earlier Commit window's, as its registered advice closed them
-(`window_advice.follows`), never the later one's own string's, so the advice's bits, and N2's K, charge the carry once.
-A Commit window that carries a request in from one the run doesn't hold, or that leaves a request with outputs still to
-keep and no next Commit window, is refused. N2 proves the joined advice at its link's size class, whose advised counts
-circuit-check pins (`advised.circuit-check.py`).
+v0 advice (`window_chain.join`). A carried request's record and state are the earlier Commit window's, as its
+registered advice closed them (`window_advice.follows`), never the later one's own string's, so the advice's bits, and
+N2's K, charge the carry once. A Commit window that carries a request in from one the run doesn't hold, or that leaves a
+request with outputs still to keep and no next Commit window, is refused.
 
 ## The leak bound
 
-`chain_record.py leak` computes K, the bits a covert sender's secrets can number over a monitoring period, from a run's
-files: its parameters (`deployment.json`), its traffic and the scan's class. The terms are those of
+`leak_bounds.py` is the one calculator of K, the bits a covert sender's secrets can number over a monitoring period.
+`per_link` gives K for one link: one network certifier on one uplink, certifying a request rate of one scan class (an
+`ingress_scan.Class`, or a window class's `scan`). `datacenter` sums K over a datacenter's links, and `world` over the
+world's. Each comes in two forms, beside its share of one copy of the weights and its ε. The terms are those of
 `NetTiming.Guarantees.PeriodLeakAccepted` (`Security/Definitions/NetworkCertifier/Guarantees/Period.lean`, proved in
-`Security/Proofs/NetworkCertifier.lean`), whose sampling blocks' failures `NetTiming.periodLeak_le_sum` sums by a union
-bound (`Security/Proofs/NetworkCertifier/PeriodSum.lean`); the pooled form is
-`NetTiming.Guarantees.HorizonLeakAccepted` (`Security/Definitions/NetworkCertifier/Guarantees/HorizonLeak.lean`). The
-report's `d1` lists, per sampling block, whether its certificates, N2 and the scan accepted.
+`Security/Proofs/NetworkCertifier.lean`) as `NetworkCheck.Period`'s rows form counts them, whose sampling blocks'
+failures `NetTiming.periodLeak_le_sum` sums by a union bound (`Security/Proofs/NetworkCertifier/PeriodSum.lean`); the
+pooled form is `NetTiming.Guarantees.PooledLeakAccepted`
+(`Security/Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`). Both are about one device on one uplink. The sum
+over links is our composition, which no Lean statement covers. It holds except where some link's statement fails, so a
+datacenter at δ takes each link at δ / links, and each link pays its own incorrect proof blocks (`datacenter`'s
+docstring says why pooling them by weight copy would be unsound).
 
-**K per monitoring period** (`chain_record.py leak`), on the full-traffic relay run of record with its scan, every
-unit drawn and accepted. K uses:
-- the run's parameters (`deployment.json`), the same on every active-warden run: B = 512, lanes = 4, r = 4, D = 21,
-  T = 32 buckets of 100 ms, and egress_cells = 65;
-- its traffic: 100 requests over 75 link-windows, 1.33 a link-window;
-- the scan's class: B = 512, r = 4, lanes = 4, C = 47, IDB = 17 and KO = 64;
-- every unit drawn.
+**K per monitoring period on a run**: `uv run benchmarks/network_traces/chain_record.py leak --warden-run RUN --scan
+SUMMARY --out FILE`, with RUN a fetched warden run and SUMMARY its scan's `summary.json` (its draw). It reads
+`leak_bounds` on the run's parameters (`deployment.json`), its traffic (`end.json`'s requests and sampling blocks) and
+the scan's class (`scan_zk.CLASS`), and refuses a scan that left a proof block undrawn. FILE holds the widths, each
+term, the links and a row for each monitoring period, scope and reading; `FILE.md`, which it prints, holds the tables.
+A run's figures are its published Attempt's. The report's `d1` lists, per sampling block, whether its certificates, N2
+and the scan accepted.
 
-The terms, in the generator reading of the scan's statement (each unit's registered rows its boundary values):
-- log2 #S_s = 0.
-- log2(cap_c + 1) = log2 66 = 6.04 bits a connection. Here cap_c bounds `WardenSchedule.cells c`, the egress cells of
-  connection c's lane, which is egress_cells. The endpoint's slot count isn't a term of the network certifier's
-  schedule: it enters the compute audit's terms, which go into JointPeriodLive.
-- The free inputs are the scan's `prog` rows: T·NP = 32 × 4,480 = 143,360 bits a sampling block as registered, or
-  32 + KO·IDB = 1,120 bits a request if `prog` is an input only at its anchored entries.
-- No faulty term with every unit drawn, and D_j = 1, so the jitter term is 0: assumed (J), `NetTiming.JitterBounded`,
+The terms, in the generator reading of the scan's statement (each proof block's registered rows its boundary values):
+- The schedules and the fail cells, ⌈log2(cap_c + 1)⌉ each a connection (`capsTerm`, charged twice, as
+  `#S_s ≤ ∏_c (cap_c + 1)`; the record's `terms.cap_per_request`). Here cap_c bounds `WardenSchedule.cells c`, the
+  egress cells of connection c's lane, which is egress_cells. The endpoint's slot count isn't a term of the network
+  certifier's schedule: it enters the compute audit's terms, which go into JointPeriodLive.
+- The free inputs (`terms.free`): as registered, the tied audit's slot entries, NR·T / EVERY entries of NE bits
+  (`ingress_scan.entry_bits`) a sampling block; or an entry's 33 + KO·IDB bits a request if `prog` is an input only at
+  its anchored entries.
+- No faulty term with every proof block drawn, and D_j = 1, so the jitter term is 0: assumed (J), `NetTiming.JitterBounded`,
   not met at D_j = 1 until a run shows the warden's written buckets tell a receiver no more than an idle one. The
   warden hands each bucket to a pacer that releases it at a time fixed before the bucket is made
   (`warden.Warden(paced=…)`, `warden_serve.py --paced-ms`).
 
+Each entry carries a read bit (`ingress_scan.entry_layout`: an occupied slot no Program reads is refused). Bucket t
+reads slot j's entry at row j·nb + ⌊t / EVERY⌋ of the entries (`NetworkCheck.Period`'s `readsEntries`) and ignores it
+outside due and occupied slots, so a sampling block's entries are its NR·nb boundaries'. Unless the scan's `prog` is a
+compute audit's `SlotEntry_v1` template's entries (`<descriptor id>/c0/o0`, one member a slot), the read bit is the
+prover's word (an entry of read 1 and no outputs passes the scan), so `NetworkCheck.Period` refuses the sampling block
+by name (`wired`). `wired` pins the template's whole body by its closure digest (`slotEntryPins`,
+`io_shell.SlotEntry_v1` at its circuit-check rows), so the block round's `prog`, the o0 of scan_zk's `SlotEntry_v1`
+stand-in, whose entries, read bit included, are the prover's, is refused there (scan_period.py). A slot's Program reads
+the requests from its own registered `SCAN_STATE`, and the check refuses, last, by name, a sampling block whose scan's
+state isn't a wired audit's `SCAN_STATE` by root and domain (`stateTied`). scan_zk's state tree is the window state
+(`ingress_scan.window_state`: leaf 0 the empty state, leaf t S_{t−1}), each leaf but the first the o1 of the proof block
+that computes it and the sin of the next, both registered reads, so a state tree that skips or alters a transition is
+refused at that proof block's o1; the block round's registration names it as `scan/state`.
+Tied (`NetworkCheck.Period`'s `progTied`, scan_zk's block round), the entries are a compute audit's outputs
+and the scan's own free term is 0: the bits are that audit's free inputs (the stand-in's `x`), which the rows form's
+K charges to the sampling block's term (`tiedAudits`). The egress tie moves the free term from the scan's `prog` to the
+tied audit's inputs; K is unchanged in what it bounds, and the registered reading's free term is those slot entries.
+
 The two forms:
-- The pooled form (`HorizonLeakAccepted`) adds Fmax = ⌈ln(1/δ)⌉ units of b = NS + NV = 154,480 bits, and
-  Fmax·log2(N + 1). Fmax is 5 at δ = 1% and 14 at δ = 10⁻⁶. The form is conditional: `hesc` and `hleak` await
+- The pooled form (`PooledLeakAccepted`) adds Fmax = ⌈ln(1/δ)⌉ incorrect proof blocks of b = NS + NV bits, and
+  Fmax·log2(N + 1) (the record's `terms.fmax` and `terms.b`). The form is conditional: `hesc` and `hleak` await
   `SampledKSLive` and P2.
-- The per-period form (`PeriodLeakAccepted`) has no δ term with every unit drawn.
-- Both are proved: `NetTiming.SecurityProofs.PeriodLeakAccepted` and `NetTiming.SecurityProofs.HorizonLeakAccepted`.
+- The per-period form (`PeriodLeakAccepted`) has no δ term with every proof block drawn.
+- Both are proved: `NetTiming.SecurityProofs.PeriodLeakAccepted` and `NetTiming.SecurityProofs.PooledLeakAccepted`.
+- Beside either, ε = m·δ_scan is the scans' δ summed over the period's m sampling blocks and the links
+  (`NetworkCheck.Period`'s `eps`), each scan at its δ (`leak_bounds.SCAN_DELTA`, `scan_zk --delta`'s default).
 
 The scale:
-- A week, a month and a year of one machine and of 1,000 machines: the census's convention, on the census's
-  `rtx-pro-6000-server`.
-- Each machine has one network certifier in front of all its compute, serving at the run's rate.
-- The weights are Llama-3.2-1B's 1,235,814,400 BF16 parameters: 1.98·10^10 bits, 2.47 GB.
+- A week, a month and a year of one link, of the census's reference datacenter (`benchmarks/census/deployments.json`,
+  one link a machine, `leak_bounds.datacenter_links`) and of the world: the adversary resource model's compute
+  (`benchmarks/census/adversary.json`) in machines of the reference datacenter's GPUs, one link each
+  (`leak_bounds.world_links`).
+- Every link has one network certifier in front of all its machine's compute, serving at the run's rate. A
+  datacenter's and the world's links are each pooled at δ / links. The world's requests past its links' rate are
+  uncertified, and no row counts them.
+- The weights are one copy of Llama-3.2-1B in BF16 (`leak_bounds.WEIGHTS`), whatever the links. The served checkpoint
+  is int8, so every share names the copy it is of.
 
-**`prog` as registered (the record's K)**, bits, and the share of the weights (the jitter term 0, assumed (J)):
-
-| period | machines | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | a link-window |
-|---|---|---|---|---|---|
-| week | 1 | 2.71·10^10 (1.37×) | 2.71·10^10 (1.37×) | 2.71·10^10 (1.37×) | 143,368 |
-| week | 1,000 | 2.71·10^13 (1,370×) | 2.71·10^13 (1,370×) | 2.71·10^13 (1,370×) | 143,368 |
-| month | 1 | 1.16·10^11 (5.87×) | 1.16·10^11 (5.87×) | 1.16·10^11 (5.87×) | 143,368 |
-| month | 1,000 | 1.16·10^14 (5,873×) | 1.16·10^14 (5,873×) | 1.16·10^14 (5,873×) | 143,368 |
-| year | 1 | 1.41·10^12 (71.5×) | 1.41·10^12 (71.5×) | 1.41·10^12 (71.5×) | 143,368 |
-| year | 1,000 | 1.41·10^15 (71,456×) | 1.41·10^15 (71,456×) | 1.41·10^15 (71,456×) | 143,368 |
-
-As registered, K passes the size of the weights within one machine-week, so the record's K is vacuous for every
-monitoring period.
-
-**`prog` only at its anchored entries (conditional on the generator-form lowering)**, bits, and the share of
-the weights (the jitter term 0, assumed (J)):
-
-| period | machines | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | a link-window |
-|---|---|---|---|---|---|
-| week | 1 | 2.85·10^8 (1.44%) | 2.86·10^8 (1.45%) | 2.84·10^8 (1.44%) | 1,501 |
-| week | 1,000 | 2.84·10^11 (14.4×) | 2.84·10^11 (14.4×) | 2.84·10^11 (14.4×) | 1,501 |
-| month | 1 | 1.22·10^9 (6.15%) | 1.22·10^9 (6.16%) | 1.22·10^9 (6.15%) | 1,501 |
-| month | 1,000 | 1.22·10^12 (61.5×) | 1.22·10^12 (61.5×) | 1.22·10^12 (61.5×) | 1,501 |
-| year | 1 | 1.48·10^10 (74.8%) | 1.48·10^10 (74.8%) | 1.48·10^10 (74.8%) | 1,501 |
-| year | 1,000 | 1.48·10^13 (748×) | 1.48·10^13 (748×) | 1.48·10^13 (748×) | 1,501 |
-
-This second table is what the generator-form lowering would give if it registers `prog` everywhere but its anchors.
-It is not the record's number.
+FILE has both readings of the free inputs. `prog` as registered is the record's K. `prog` only at its anchored entries
+is what the generator-form lowering would give if it registers `prog` everywhere but its anchors, and is not the
+record's number.
 
 K also rests on these conditions:
-- The generator reading of the scan's statement, in which each unit's registered rows are its boundary values. That
-  reading is a claim, with lean and Daniel.
-- log2 #S_s = 0 only once the schedule's digest binds each connection's admission bucket and lane, and the server
-  can't move an admission. Neither holds.
-- The scan proves link-window 0. A period's figures scale its per-link-window and per-request terms at the run's rate.
+- The generator reading of the scan's statement, in which each proof block's registered rows are its boundary values.
+  That reading is a claim, not yet a locked guarantee.
+- Each connection's cap is its lane's egress_cells, which the network certifier holds a lane to and
+  `NetworkCheck.Period` doesn't check.
+- The scan proves sampling block 0. A monitoring period's figures scale its per-sampling-block and per-request terms at
+  the run's rate.
 - The jitter term is 0 at D_j = 1, assumed (J), not met until a run shows the paced warden's written buckets tell a
   receiver no more than an idle one.
-- At light traffic (40 requests over 43 link-windows, 0.93 a link-window, its scan's every unit drawn) the
-  anchored table's machine-week is 1.01% of the weights and its machine-year 52.2%; as registered it is 1.37×
-  a machine-week either way.
-- The compute audit's free inputs don't enter K: its δ goes into JointPeriodLive's sum.
+- An untied compute audit's (the loop's) free inputs don't enter K: its δ goes into JointPeriodLive's sum. The tied
+  audit's (the `SlotEntry_v1` stand-in's) are the sampling block's free inputs above.
 
 The report names what it stands on beyond the theorem (`chain_record.STUBBED`, `WARDEN_STUBBED` and
-`HORIZON_CONDITION`) and what the theorem doesn't cover (its `uncovered`).
+`POOLED_CONDITION`) and what the theorem doesn't cover (its `uncovered`).

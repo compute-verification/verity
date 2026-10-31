@@ -47,18 +47,19 @@ def BlobProtocol.on (P : BlobProtocol) (blobs : Array ByteArray) : Protocol :=
 def BlobProtocol.answer (P : BlobProtocol) (params commitment evidence : ByteArray) (blobs : Array ByteArray) : Answer :=
   (P.on blobs).answer params commitment evidence
 
-/-- One `serve` case: `Protocol.case`'s, with the blobs as hex under `blobs` (absent: none). -/
+/-- One `serve` case: `Protocol.case`'s, with the blobs as hex under `blobs` (absent: none), read in place
+(`Canonical`) as `Protocol.case` reads the rest. -/
 def BlobProtocol.case (P : BlobProtocol) (line : String) : Answer :=
-  let split : V (Array ByteArray × String) := do
-    let j ← canonicalJson line.toUTF8
+  let split : V (Array ByteArray × Json) := do
+    let j ← Canonical.parse line
     let .obj kvs := j | throw "the case is not an object"
     let bs ← match j.getObjVal? "blobs" with
       | .error _ => pure #[]
-      | .ok (.arr bs) => bs.mapM fun b => do Flock.unhex (← Flock.J.asStr b "the case's blobs")
+      | .ok (.arr bs) => bs.mapM fun b => do Canonical.unhex (← Flock.J.asStr b "the case's blobs")
       | .ok _ => throw "the case's blobs are not a list of hex strings"
-    pure (bs, ← Flock.canon (Json.mkObj (kvs.toArray.filter (·.1 != "blobs")).toList))
+    pure (bs, Json.mkObj (kvs.toArray.filter (·.1 != "blobs")).toList)
   match split with
-  | .ok (bs, rest) => (P.on bs).case rest
+  | .ok (bs, rest) => (P.on bs).ofCase (caseInputs rest)
   | .error e =>
     { protocol := P.id, verdict := .reject, reason := some s!"case: {e}", digest := none, published := none,
       profile := none }

@@ -4,8 +4,8 @@ import Definitions.Pous.Game.Oracle
 /-!
 # One-way data-carrying labels and greedy pebbling (B5)
 
-The definitions of the B5 draft (`lean/submissions/pebbling/B5ExPostFactoDraft.lean`: Pietrzak 2018/194 §6.1, §7.1,
-§8), verbatim; its header lists the modelling choices. The labels are one-way: nothing here decodes a label.
+The definitions of B5 (Pietrzak 2018/194 §6.1, §7.1, §8), proved in `Security/Proofs/Pous/B5/ExPostFacto.lean`. The
+labels are one-way: nothing here decodes a label.
 -/
 
 namespace Pous.Labelling

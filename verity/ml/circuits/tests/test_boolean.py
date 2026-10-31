@@ -18,7 +18,7 @@ from verity.ml.circuits.evaluation import evaluate_call
 from verity.ml.circuits.ops import prims as P
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll, concat
-from verity.ml.circuits.types import Array, Record, Tuple, Value, type_from_json
+from verity.ml.circuits.types import Array, RecordType, Tuple, Value, type_from_json
 
 PATH = Path(__file__).parent / "boolean_vectors.json"
 BIT = BL.BIT
@@ -59,7 +59,7 @@ PROGRAM = CompositeDefinition("ExampleAdd2Program", 1, (), lambda S: ADD2.signat
                               doc="one call of ExampleAdd2 over Input gates", register=False)
 
 WORD_VIEW_TYPES = [BIT, Array(16, BIT), Array(4, Array(16, BIT)), Tuple(Array(32, BIT), BIT, Array(2, Array(8, BIT))),
-                   Record(("acc", Array(32, BIT)), ("mask", Array(3, BIT)))]
+                   RecordType(("acc", Array(32, BIT)), ("mask", Array(3, BIT)))]
 #: gate ids and near misses: a member's one spelling, matched in full
 GATE_IDS = ["And2_v1", "Xor3_v1", "And10_v1", "Not_v1", "And2_v1\n", "Not_v1\n", "And02_v1", "Xor010_v1", "And1_v1", "And0_v1",
             "and2_v1", "AND2_v1", "And2_v2", "And2", " And2_v1"]

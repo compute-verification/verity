@@ -29,7 +29,7 @@ is the record head of the Program's grid, or two distinct strings the two heads'
 -/
 
 open NetworkCheck hiding Params
-open NetworkCheck.Check (Params Certified Link Evidence Grid Profile LinkWindow)
+open NetworkCheck.Check (Params Certified LinkOpening Evidence Grid Profile LinkWindow)
 open NetworkCertifier (ClockSync)
 open Properties.NetworkCertifier (EvidenceFits ParamsDigests Declares SyncAdmitted programGrid LmsVerifies headStrings)
 
@@ -73,9 +73,10 @@ def rowInput (row : Array (Option ByteArray)) : ByteArray :=
   taggedInput "verity-network-warden/row/v1"
     ((row.filterMap id).foldl (· ++ ·) (Flock.be32 (row.filterMap id).size.toUInt32))
 
-/-- The canonical JSON header `record_digest` hashes for link-window `(l, w)` of a complete record under `g`. -/
+/-- The header `record_digest` hashes for link-window `(l, w)` of a complete record under `g`, in the identity form
+(`Flock.canonUtf8`). -/
 def header (l : String) (w : Nat) (g : Grid) : Flock.V String :=
-  Flock.canon (Lean.Json.mkObj [
+  Flock.canonUtf8 (Lean.Json.mkObj [
     ("link", .str l), ("window", Lean.toJson w), ("buckets", Lean.toJson g.buckets),
     ("allocation", Lean.toJson g.allocation), ("frame_bytes", Lean.toJson g.frameBytes),
     ("bucket_ms", Lean.toJson g.bucketMs), ("status", .str "complete")])
@@ -131,7 +132,7 @@ def ProgramRecord (p : Params) (eg : ByteArray) (l : String) (w : Nat) (P : Reco
 /-- Egress link-window `(l, w)`, opened by `link`: exactly one record names it, its status is complete, the sync
 `link` declares for `w` is in Σ_sync and is the unit's (the first egress link's), and the record is the Program's
 under the declared syncs. -/
-def EgressRecord (p : Params) (c : Records.Commitment) (e : Evidence) (eg : ByteArray) (l : String) (link : Link)
+def EgressRecord (p : Params) (c : Records.Commitment) (e : Evidence) (eg : ByteArray) (l : String) (link : LinkOpening)
     (w : Nat) : Prop :=
   ∃ r, recordsAt c .egress l w = [r] ∧ Complete r ∧ SyncAdmitted p e link w ∧
     ∀ syncs : Fin p.windows → ClockSync, Declares link syncs → ProgramRecord p eg l w (programGrid p syncs link.frames w) r
