@@ -67,12 +67,9 @@ def WindowSynced (c : Case) : Prop :=
   | .warden _ => True
   | _ => ∃ s, c.syncs[c.window]? = some s ∧ s.delta ∈ c.deltas ∧ ∃ r ∈ c.rhos, s.num * r.2 = r.1 * s.den
 
-/-- An accepted link-window's public outputs: `verdict` 1 and `deadline` 1, and on an advised link the advice it read. -/
-def acceptedOutputs (c : Case) : Json :=
-  Json.mkObj ([("verdict", toJson (1 : Nat)), ("deadline", toJson (1 : Nat))] ++
-    match c.kind with
-    | .advised _ advice => [("advice", match advice with | some a => .str a | none => .null)]
-    | _ => [])
+/-- An accepted link-window's public outputs: `verdict` 1 and `deadline` 1. -/
+def acceptedOutputs : Json :=
+  Json.mkObj [("verdict", toJson (1 : Nat)), ("deadline", toJson (1 : Nat))]
 
 /-- The link-window is proved, opened, certified and synced. -/
 def WindowAccepted (c : Case) : Prop :=
@@ -81,7 +78,7 @@ def WindowAccepted (c : Case) : Prop :=
 /-- The verdict's public outputs are `acceptedOutputs`, and its digest binds them, the registration, the sessions and
 the accept bit (`verdictDigest`). -/
 def WindowVerdict (c : Case) : Prop :=
-  ∃ v, verdict c = .ok v ∧ v.outputs = acceptedOutputs c ∧ verdictDigest c true v.outputs = .ok v.digest
+  ∃ v, verdict c = .ok v ∧ v.outputs = acceptedOutputs ∧ verdictDigest c true v.outputs = .ok v.digest
 
 /-- **An accepted link-window is proved, opened to the word 3, certified on both ends and synced within Σ_sync (on a
 warden link, no sync asked), and its public outputs are verdict 1 and deadline 1.** -/
@@ -92,7 +89,7 @@ def LinkWindowAcceptMeans : Prop :=
 
 /-- `WindowVerdict` with `v`'s result in place of the verdict's. -/
 def WindowVerdictBy (v : Case → Flock.V Verdict) (c : Case) : Prop :=
-  ∃ w, v c = .ok w ∧ w.outputs = acceptedOutputs c ∧ verdictDigest c true w.outputs = .ok w.digest
+  ∃ w, v c = .ok w ∧ w.outputs = acceptedOutputs ∧ verdictDigest c true w.outputs = .ok w.digest
 
 /-- `LinkWindowAcceptMeans` with `v` in place of the verdict of record: `v`'s acceptance of a link-window establishes
 what the property says the verdict's does. -/
