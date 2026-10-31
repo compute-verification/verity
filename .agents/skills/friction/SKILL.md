@@ -185,7 +185,6 @@ Protocols and claims:
 - PoUW's guarantees, and only PoUW's, may rest on named random-oracle premises for SHA-512
   (`StraightLineExtraction`, Compose's `SeedExtractedAt`), each a named `Prop` the lock lists. Flock's
   knowledge soundness keeps the collision form.
-- PoUW's guarantees may take `ShaWrites` as a named premise, milder than SAK.
 - The deployed recursion's bound record states its inner claim at IVStar at the weight
   `coverW`, the least at which the premise P3 (`Bound.WeightCovers`) holds. Its security level is below the 100-bit floor
   under every weight (`Claims.Recursion.lam`), and every table, README or claim that cites it gives its λ and says so.
