@@ -124,7 +124,8 @@
 # builds its circuit files (the live file, and only the strata H1_STRATA lists, default none; a file already there under
 # the same bind is reused), then `served_verdicts.py period open` opens period H1_PERIOD (default served-RUN_ID) on its
 # digest, its draw K H1_DRAW_K (default `pouw_h1_challenger.draw_k`'s), its weights H1_MODEL's registration (default
-# none, which credit refuses), and its fixed length SLOTS requests of MAX_TOKENS (`--cap 1`: one window); `period served`
+# none, which credit refuses), and its fixed length SLOTS requests of MAX_TOKENS (`--cap 2`: one window and its draw session);
+# `period served`
 # holds the Program serve-openai then declared to it, and `period close` closes it once the windows are sealed, or
 # when the endpoint never listens. The PERIOD lines say what it committed; $OUT/serve keeps period.json, the Program
 # (h1/window-program.json.gz and its meta) and H1_CIRCUITS' circuit-files.json. H1_STATEMENTS and
