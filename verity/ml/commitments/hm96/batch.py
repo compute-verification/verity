@@ -65,7 +65,7 @@ def tree_leaves(inst: Instance, key: bytes, digests: bytes, salts: bytes) -> lis
 
 def salts(key: bytes, nonce: int, rows: Sequence[int] | np.ndarray, first: int = 0) -> bytes:
     """The hm96-sha512 salt stream: each of ``rows``' salt in order, concatenated (``SALT_BLOCKS`` ChaCha20 blocks each), row
-    j's the blocks ``first + 3j`` .. ``first + 3j + 2`` under the 32-byte ``key`` at ``nonce`` (`chacha20.blocks`, C-Flock's
+    j's the blocks ``first + 3j`` .. ``first + 3j + 2`` under the 32-byte ``key`` at ``nonce`` (`chacha20.blocks`, Flock's
     ``hm96_salt`` at ``first = 0``); ValueError on another key size, a nonce or a row's block outside [0, 2^64)."""
     at = np.asarray(rows)
     if at.ndim != 1 or (at.size and at.dtype.kind not in "iu"):
