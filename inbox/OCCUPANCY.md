@@ -81,3 +81,19 @@ coordinator's synthesis to Daniel by 03:00Z.
   - **Smell for V1 (OCC-RATE):** "deadline at peak" rests on a synthetic kernel with operands in shared memory. A real
     GEMM may be L2-bound at about 52–75% of peak (estimated), which leaves tensor cycles idle. Measure a real-operand
     GEMM's rate before any deadline claim.
+- **OCC-RATE (V1)** (note:compute-research/20261031T1945Z-report-occupancy-rate; round counting plus a small LP, CPU;
+  art:da4b272d…):
+  - **A deadline bounds only the resource the declared work saturates.** On the H200 under T-op, undeclared tensor work
+    is at most 0.3% (clock-bound), 1.1% (power-bound with attested temperature) or 4.4% (power-bound with
+    operator-controlled cooling), each plus (deadline + Δ) / window. With the deployed challenger about 96 ms away, the
+    window term is 11% at 1 s.
+  - **Under T-vendor the time version fails:** lifting the clock cap alone gives +8.2%.
+  - **Peak precision:** "0.1%" holds only for low-toggle operands. Uniform random s8 is power-capped at 0.939–0.949
+    of the bound.
+  - **Concurrent work stays free:** beside saturated wgmma, FFMA (27 TFLOPS) and IDP4A (3.1% of the int8 rate), plus HBM,
+    the copy engines and NVLink.
+  - **Software-only today:** only as a useless exclusion filler (live-seed coins × a committed random matrix, about
+    692 W). For useful work, the real GEMM's gap to peak is the floor. It's being measured now (OCC-RATE round 2,
+    sm_120).
+  - **Silicon:** FT's coin-seeded transcript extends V1 to useful work. V3's lock covers an L2-bound GEMM's idle cycles.
+    An operand-independent clock or attested temperature narrows the 4.4%.
