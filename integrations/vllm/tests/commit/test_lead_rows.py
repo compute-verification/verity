@@ -2,7 +2,8 @@
 from the export's layout (``ssn.cu``'s ``word_at``) and ``layout.h``'s padding, on random words and ragged calls; each stream
 tile is Lean's ``tileOf``; the chunks and segments cut where the layout says, the last short; the leaves are core's inline
 frame-v3-sha512 leaves, distinct at every position for equal values; the hashing meets ``CommitL1w``'s credited blocks; and a
-words top keyed by ``WindowKeying.words_top`` is ``words_root``'s d, refused when given twice, out of order or unlike the CPU's."""
+words top keyed by ``WindowKeying.words_top`` is ``words_root``'s d, and an A top keyed by ``WindowKeying.a_top`` is ``a_root``'s,
+each refused when given twice, out of order or unlike the CPU's."""
 from __future__ import annotations
 
 import hashlib
@@ -339,7 +340,7 @@ def _opened(calls: int = 64) -> L.WindowKeying:
 
 @pytest.mark.parametrize("sizes", [(4096,), (4 * L.CHUNK_WORDS,), (655360, 4096), (8 * L.CHUNK_WORDS, 512, 4 * L.CHUNK_WORDS + 8),
                                    (1048576, 1048576, 512, 262144, 2048)])
-def test_a_top_keys_the_cpus_words_root(sizes):
+def test_words_top_keys_the_cpus_words_root(sizes):
     """A top keyed through `words_top` is `words_root`'s d, at one chunk, at whole and ragged last chunks, with and without
     pads, and in check mode."""
     rng = random.Random(sum(sizes))
@@ -363,7 +364,7 @@ def test_words_domain_is_the_instances_and_binds_its_count():
             w.words_domain(f, count)
 
 
-def test_a_top_given_twice_or_out_of_order_is_refused():
+def test_words_top_given_twice_or_out_of_order_is_refused():
     calls = [b"\x09" * 655360, b"\x0a" * 4096]
     count, top = _cpu_top(SALT_W, 0, calls)
     w = _window()
@@ -387,7 +388,7 @@ def test_a_top_given_twice_or_out_of_order_is_refused():
     assert w.a_root(1, 1, b"\x0b" * 2048) and d == _opened().words_root(0, calls)
 
 
-def test_a_top_the_cpu_disagrees_with_is_refused():
+def test_words_top_the_cpu_disagrees_with_is_refused():
     calls = [b"\x0c" * 655360, b"\x0d" * 4096]
     count, top = _cpu_top(SALT_W, 0, calls)
     flipped = bytes([top[0] ^ 1]) + top[1:]
@@ -399,3 +400,68 @@ def test_a_top_the_cpu_disagrees_with_is_refused():
         with pytest.raises(Refused):
             w.words_top(*args, check=check)
         assert w.words_top(0, count, top, check=calls) == _opened().words_root(0, calls)
+
+
+def _cpu_a_top(salt_w: bytes, forward: int, call: int, a: bytes) -> tuple[int, bytes]:
+    """A_j's segment count and its top as `device_a_top` hands it, from the CPU's subtree."""
+    values = L.a_segments(a)
+    sub = L.subtree(L.instance_domain(salt_w, L.a_position(forward, 64, call), len(values)), L.A_LEAF_TAG, values)
+    return len(values), values[0] if sub.depth == 0 else b"".join(sub.levels[sub.depth - 1])
+
+
+@pytest.mark.parametrize("size", [8, 1000, L.A_SEGMENT, L.A_SEGMENT + 1, 2 * L.A_SEGMENT, 3 * L.A_SEGMENT - 24, 5 * 104, 80 * 2048])
+def test_a_top_keys_the_cpus_a_root(size):
+    """An A top keyed through `a_top` is `a_root`'s d on random A: one segment up to the 1024-byte edge, a ragged second
+    segment, whole segments, pads and a decode's 80 rows of K 2048, with and without check mode."""
+    a = random.Random(size).randbytes(size)
+    count, top = _cpu_a_top(SALT_W, 3, 5, a)
+    assert count == -(-size // L.A_SEGMENT) and len(top) == (size if count == 1 else 128)
+    assert _opened().a_top(3, 5, count, top) == _opened().a_top(3, 5, count, top, check=a) == _opened().a_root(3, 5, a)
+
+
+def test_a_domain_is_the_instances_and_binds_its_count():
+    w = _opened()
+    assert w.a_domain(2, 9, 5) == L.instance_domain(SALT_W, L.a_position(2, 64, 9), 5) != w.a_domain(2, 9, 6)
+    for f, j, count in ((2, 9, 0), (2, 9, 1 << 32), (2, 9, 2.0), (2, 9, True), (-1, 9, 5), (2, 64, 5), (2, -1, 5)):
+        with pytest.raises(Refused):
+            w.a_domain(f, j, count)
+
+
+def test_a_top_given_twice_or_out_of_order_is_refused():
+    a = b"\x0b" * 3000
+    count, top = _cpu_a_top(SALT_W, 0, 1, a)
+    w = _window()
+    for early in (lambda: w.a_top(0, 1, count, top), lambda: w.a_domain(0, 1, count)):
+        with pytest.raises(Refused):
+            early()
+    w.register(WEIGHTS)
+    with pytest.raises(Refused):
+        w.a_top(0, 1, count, top)
+    w.open(SALT_W)
+    d = w.a_top(0, 1, count, top)
+    for late in (lambda: w.a_top(0, 1, count, top), lambda: w.a_root(0, 1, a), lambda: w.a_domain(0, 1, count)):
+        with pytest.raises(Refused):
+            late()
+    w.words_root(0, [b"\x09" * 4096])
+    for after_words in (lambda: w.a_top(0, 2, count, top), lambda: w.a_domain(0, 2, count)):
+        with pytest.raises(Refused):
+            after_words()
+    w2 = _opened()
+    w2.a_root(0, 1, a)
+    with pytest.raises(Refused):
+        w2.a_top(0, 1, count, top)
+    assert w.a_top(1, 1, *_cpu_a_top(SALT_W, 1, 1, a)) == _opened().a_root(1, 1, a) and d == _opened().a_root(0, 1, a)
+
+
+def test_a_top_the_cpu_disagrees_with_is_refused():
+    a = random.Random(7).randbytes(3 * L.A_SEGMENT + 40)
+    count, top = _cpu_a_top(SALT_W, 0, 1, a)
+    flipped = bytes([top[0] ^ 1]) + top[1:]
+    for args, check in (((0, 1, count, flipped), a), ((0, 1, count + 1, top), a), ((0, 1, count, top), a[:-48]),
+                        ((0, 1, count, top), a[:-1] + bytes([a[-1] ^ 1])), ((0, 1, count, top), b""),
+                        ((0, 1, count, top[:64]), None), ((0, 1, count, top + bytes(8)), None), ((0, 1, 1, b""), None),
+                        ((0, 1, 1, bytes(L.A_SEGMENT + 1)), None)):
+        w = _opened()
+        with pytest.raises(Refused):
+            w.a_top(*args, check=check)
+        assert w.a_top(0, 1, count, top, check=a) == _opened().a_root(0, 1, a)
