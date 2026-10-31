@@ -190,7 +190,7 @@
       "resolution": "Ada E4M3 mma.sync is GroupSum(groups=(16,16), width=14, floor=-139), Hopper wgmma E4M3 is GroupSum(groups=(32,), width=14, floor=-139): the same 14-bit truncating adder, a different grouping, and so different functions (36 of 48 K=1536 steps differ on shared operands, verity/ml/circuits/silicon/captures/vectors).  The 14-bit rescale of the incoming accumulator applies unconditionally -- through a group of zero products too -- and is a rule of the model (GroupSum.step) and a gadget of the checker (RescaleState), not a special case.  Hawkeye's Hopper FP8 simulator is the wrong model for sm_89 and is kept only as the source of the floor constant.  Recorded by lane silicon-p0 2026-09-22 from veritor's measurements; no new hardware.",
       "evidence_refs": [
         "verity/ml/circuits/ops/tests/fixtures/golden/ada_e4m3_m16n8k32.json",
-        "verity/ml/circuits/silicon/captures/veritor-tc-fp8-2026-09-08.json",
+        "verity/ml/circuits/silicon/captures/veritor-tc-fp8.json",
         "verity/ml/circuits/silicon/models.py",
         "benchmarks/numerical/tests/checker/test_fp8.py"
       ],
@@ -286,7 +286,7 @@
       "resolution": "(a) settled by r20260922-183435-fd5d: the id's shape m64n8k32 is what was measured.  (b) The floor is provably unobservable in the finite domain: a floor f only acts when the alignment maximum of a group (the largest exponent among its products and the incoming accumulator) lies below f.  Every nonzero E4M3 product has exponent >= -18, and an FP32 accumulator's exponent is >= -126 (subnormals included: their alignment exponent is -126), so with any nonzero term the maximum is >= -126 >= f for every f <= -126, and with no nonzero term the group sum is zero for every f.  Hence all floors <= -126 yield identical words for all finite E4M3 operands and FP32 accumulators (test_no_adder_floor_in_the_h100_fit_range_is_observable_under_the_hopper_fp8_model proves it for the model over the whole fit range [-152, -126]); the H100 hardware reproduces the common words (r20260922-232403-fbd0, 0 mismatches), and the fit's lower bound -126 is exactly the point below which nothing can be observed.  -139 stays as the documented convention (Hawkeye's constant); the model is unchanged.  A floor > -126 is excluded by the H100 fit (r20260922-183435-fd5d bounds it to [-152, -126]).",
       "to_resolve": "",
       "evidence_refs": [
-        "verity/ml/circuits/silicon/captures/veritor-tc-fp8-2026-09-08.json",
+        "verity/ml/circuits/silicon/captures/veritor-tc-fp8.json",
         "verity/ml/circuits/silicon/instructions.py",
         "r20260922-183435-fd5d",
         "r20260922-232403-fbd0",
