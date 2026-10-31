@@ -3028,7 +3028,7 @@ HIDDEN_LOCATE = D.Port(PIECES, "hidden_locate", hidden_locate, st.one_of(*[hidde
 HIDDEN_WITNESS = D.Port(PIECES, "hidden_witness", hidden_witness, st.one_of(*[hidden_cases("hidden_witness")] * 4, JSON),
                         package=PACKAGE)
 
-#: The verifier's pieces that read a program (`Pieces.verifierAt` at a store), with their ports.
+#: The verifier's pieces that read a program (`Pieces.At.verifier` at a store), with their ports.
 VERIFIER_AT = {"registration": (registration, REGISTRATION), "select": (select, SELECT), "run": (run, RUN)}
 
 

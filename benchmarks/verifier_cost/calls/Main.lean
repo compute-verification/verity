@@ -8,8 +8,9 @@ canonical text (`Flock.canon`, then `Core.canonicalJson`: parse and canonical ch
 its two decodings (`Flock.TemplateQuery.Desc.parse`, `Flock.Program.decode`); `OneStage.paramsOfJson`, which decodes the
 program again; and `Registration.check`. Then the whole request (`Difftest.respond` on the verifier's pieces), the
 program loaded once (`Loaded.Store.load`), and the same request naming the loaded program by digest and annotations
-(`Verifier.respondAt`), whose answer must be the whole request's (exit 1 otherwise). One `PHASE {json}` line each on
-stdout. `calls.sh` builds it against the checkout's verifier and runs it; it is a measurement, not a verifier.
+(`Difftest.respond` on `Pieces.At.verifier`), whose answer must be the whole request's (exit 1 otherwise). One
+`PHASE {json}` line each on stdout. `calls.sh` builds it against the checkout's verifier and runs it; it is a
+measurement, not a verifier.
 -/
 
 open Lean SampledProofs
@@ -77,9 +78,8 @@ def main (args : List String) : IO UInt32 := do
   row "load" ms [("sha512", Json.str h)]
   let named := Json.mkObj [("annotations", getD pIn "annotations"), ("loaded", Json.str h)]
   let refLine := (req.setObjVal! "input" (input.setObjVal! "params" ((getD input "params").setObjVal! "program" named))).compress
-  let t0 ← IO.monoNanosNow
-  let (refOut, _) ← Verifier.respondAt S refLine
-  let t1 ← IO.monoNanosNow
-  row "respond_ref" ((t1 - t0) / 1000000) [("bytes", toJson refLine.utf8ByteSize), ("answer", Json.str refOut),
+  let refTable := Difftest.table (Pieces.At.verifier S)
+  let (refOut, ms) ← timed (fun t => if t == 0 then "" else Difftest.respond refTable refLine) (·.length)
+  row "respond_ref" ms [("bytes", toJson refLine.utf8ByteSize), ("answer", Json.str refOut),
     ("same", toJson (refOut == out))]
   return if refOut == out then 0 else 1

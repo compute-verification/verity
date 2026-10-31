@@ -126,7 +126,7 @@ LOADED_MAX = 4
 
 
 class _Server:
-    """One `sampled-proofs-verifier serve` process per Python process (`Verifier.serve`: a request line, an answer line),
+    """One `sampled-proofs-verifier serve` process per Python process (`VerifierMain.main`: a request line, an answer line),
     started at the first call and again after it dies. A request's program (`_Program`) is loaded into the process once
     (`{"fn": "program"}`, the Lean's `Loaded.Store.load`) under its digest and annotations as this call writes them, and
     named by them from then on (`{"annotations", "loaded"}`), so the process parses each program once rather than on every
@@ -217,7 +217,7 @@ class _Server:
         raise LeanError(f"{EXE} on {fn}: {reply[:500]}")
 
     def close(self) -> None:
-        """End the server: `Verifier.serve` stops at the end of its input."""
+        """End the server: `VerifierMain.main` stops at the end of its input."""
         with self._lock:
             self._end()
 

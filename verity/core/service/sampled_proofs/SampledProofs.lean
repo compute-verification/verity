@@ -22,7 +22,6 @@ import SampledProofs.Run
 import SampledProofs.Stream
 import SampledProofs.Fleet
 import SampledProofs.Pieces
-import SampledProofs.Verifier
 import SampledProofs.Hello
 import SampledProofs.DomainAgrees
 import SampledProofs.Challenger

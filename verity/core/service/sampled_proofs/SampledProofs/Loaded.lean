@@ -12,7 +12,7 @@ so a call neither sends the program nor parses it again, and every piece reads t
 
 * `parse_empty`: with nothing loaded, `Store.parse` is the parse every piece made (`parseDescriptor`: `Program.parse` of
   the descriptor's canonical bytes), so each piece at the empty store is the piece as it was (`Pieces.verifier` is
-  `Pieces.verifierAt #[]`), and a reference to a program not loaded is refused as the descriptor it isn't;
+  `Pieces.At.verifier #[]`), and a reference to a program not loaded is refused as the descriptor it isn't;
 * `parse_ref`: in a store `Store.load` built (`valid_empty`, `load_valid`), the program a reference reads is
   `parseDescriptor` of a descriptor whose digest (`Program.sha512`, the SHA-512 of its canonical bytes without
   `annotations`) and canonical annotations are the reference's: under SHA-512's collision resistance, the descriptor
