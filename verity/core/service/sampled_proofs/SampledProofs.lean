@@ -1,5 +1,6 @@
 import SampledProofs.Json
 import SampledProofs.Program
+import SampledProofs.Loaded
 import SampledProofs.Partition
 import SampledProofs.PartitionRef
 import SampledProofs.Draw
@@ -21,6 +22,7 @@ import SampledProofs.Run
 import SampledProofs.Stream
 import SampledProofs.Fleet
 import SampledProofs.Pieces
+import SampledProofs.Verifier
 import SampledProofs.Hello
 import SampledProofs.DomainAgrees
 import SampledProofs.Challenger

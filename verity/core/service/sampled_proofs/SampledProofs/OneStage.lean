@@ -49,6 +49,7 @@ import CoreProtocol.Live
 import SampledProofs.Registration
 import SampledProofs.Record
 import SampledProofs.ChallengerDraw
+import SampledProofs.Loaded
 
 namespace SampledProofs.OneStage
 
@@ -124,7 +125,9 @@ private def logRecord (j : Json) : V Json := do
     throw "a record of the log registers values that are not objects with a string value, root and domain"
   return j
 
-def paramsOfJson (j : Json) : V Params := do
+/-- The parameters, their program the one `S` has loaded that `program` names, else its descriptor's
+(`Loaded.Store.parse`). -/
+def paramsOfJsonAt (S : Loaded.Store) (j : Json) : V Params := do
   let v2 := !(getD j "registered" matches .null)
   let keys := if v2 then PARAM_KEYS.push "parameters" else PARAM_KEYS
   let keys := if (field? j "supplied").isSome then keys.push "supplied" else keys
@@ -135,7 +138,7 @@ def paramsOfJson (j : Json) : V Params := do
   let keys := if (field? j "held").isSome then keys.push "held" else keys
   let keys := if (field? j "challenger").isSome then keys.push "challenger" else keys
   exactly j (if (field? j "binding").isSome then keys.push "binding" else keys) "the parameters"
-  let program ← Program.parse (← Flock.canon (← obj (getD j "program") "program")).toUTF8
+  let program ← S.parse (← obj (getD j "program") "program")
   let query ← obj (getD j "query") "query"
   let law ← rule (getD j "law")
   let workTable ← match getD j "work_table" with
@@ -244,6 +247,10 @@ def paramsOfJson (j : Json) : V Params := do
       "the window's open root (window_root, from the challenger's signed open of the window), and a value held across " ++
       "windows is named in held (or pinned)")
   pure p
+
+/-- The parameters, their program parsed from its descriptor (`paramsOfJsonAt` with nothing loaded:
+`Loaded.parse_empty`). -/
+def paramsOfJson (j : Json) : V Params := paramsOfJsonAt #[] j
 
 def commitmentOf (b : ByteArray) : V Commitment := do
   let j ← Core.canonicalJson b
