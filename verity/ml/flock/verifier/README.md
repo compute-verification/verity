@@ -69,8 +69,9 @@ as a retry. Under `MODES=dev` or `host`, with WARM + RUNS sessions a part, it do
 `verity/flock-netlist/v1`) are still parsed, so recorded sessions keep their names, and every one before `hm96-sha512`
 rows is refused for its form. Those with keyed-BLAKE3 row leaves and SHA-256 trees (`@19c7269a`, `@fd02e847`,
 `@631567f7`, `verity/flock-netlist/v1`, which need `--comp`, the BLAKE3 compression circuit) are archived: the Lean
-verifier and `hash-test` still carry BLAKE3 for them alone. The pure-block and IR-frame statements are not in the Lean
-verifier.
+verifier and `hash-test` still carry BLAKE3 for them alone. The pure-block, IR-frame, IR-sampling, IR-block and
+vllm-block statements are legacy (§16.9): the Lean verifier sets none of them up and refuses every session of one before
+it reads a file (`Flock.ProvedScope.legacyWhy`).
 
 ## Build and run
 

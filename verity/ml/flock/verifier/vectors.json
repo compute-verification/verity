@@ -3,6 +3,7 @@
  "spec": "backends/flock/verifier/PROTOCOL.md",
  "spec_transcript_check": "backends/flock/verifier/transcript_check.py reproduces every recorded round digest of the first vector of each honest set from the spec alone (50 of 50 sets, both reps)",
  "fetch": "research data fetch <record> --path <path> (the evidence store; records are run-record/v1 trees)",
+ "honest_upstream_only": "every honest cell is upstream's alone, replayed by no agreement job: upstream accepts each, and the Lean verifier refuses each: the pure-block, IR frame, IR sampling and vllm-block cells are legacy statements (PROTOCOL.md §16.9, ProvedScope.legacyStatements), and the netlist cell's statement is one before hm96-sha512 rows (ProvedScope.statementRules)",
  "honest": [
   {
    "cell": "art:6d1295ed",
