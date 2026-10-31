@@ -214,7 +214,7 @@ cost to the stage when the root isn't needed before the GEMM ends.
   10.3 us a level (0.106 ms at depth 11 to 0.164 at depth 16): two serial compressions on one warp, plus the launch. At
   R <= 64 the tree is half or more of the latency. The root on the host saves at most 8 us.
 
-### For a producer's epilogue (stage_cost)
+### For a producer's epilogue
 
 Include `commit_gpu.cuh`. Before the producer runs: `Committer::init(params, n, 32 R, keep_bc, seg, 256 R)` and
 `salts<true>(nullptr, stream)` (or `salts<false>` with given salts). In the epilogue, for each whole block a CTA holds
@@ -225,13 +225,12 @@ the outer hash, as `seg_kernel` and `RowBytes` do, `SX = 4`; on the small path p
 `nodes(stream)`. `check` holds the result to the reference: write `levels.bin` and `bc.bin` as `check()` does and run
 `reference.py check`.
 
-### The small path (beside the GEMMs: stage_ovl)
+### The small path (beside the GEMMs)
 
 `init(..., dom, small = true, slots)` puts a committer on kernels that can share an SM with cuBLASLt's GEMM CTAs: every
 CTA is 128 threads with no shared memory (a CTA's 7 levels pass through global memory between `__syncthreads`) and at
 most 102 registers a thread (`SMALL_MINB`, 5 CTAs an SM; the leaf kernel then takes 96
-without spilling, where it took 156 uncapped), and a consumer sets their preferred carveout to the GEMMs' (`ovl.cu`'s
-`CARVE=100`).
+without spilling, where it took 156 uncapped), and a consumer sets their preferred carveout to the GEMMs'.
 - `salts(given, stream, s0, ns)`: slots s0 .. s0 + ns - 1 of the domain's commitments, each slot's S (y, M_key y, c);
   with slot 0, the frame leaf's first block per position (`F`: it holds the position but not h, so it compresses ahead;
   r2's precomputed first blocks, applied to this format) and the pads with every 128-leaf subtree that holds only pads.
@@ -240,23 +239,22 @@ without spilling, where it took 156 uncapped), and a consumer sets their preferr
   compression-equivalents a leaf. `Tn` is chunk-major (low nibbles, then high: 16 chunks of 256 bytes, each the 16 rows'
   16 bytes of that chunk), so a warp's lookups of one chunk read two lines where row-major rows took up to 16.
   Node messages start from per-level midstates, as on the default path. A slot's salts can run any time before its
-  commitment: `ovl.cu`'s cg arms run layer l+1's behind layer l's commitment, beside the GEMMs; its cgpre arms make
-  every slot before the window, so the window only reads S (128 bytes a leaf); its cgh arms copy in S records that host
-  threads made with `host_salt` (the same S on the CPU, about 1.8 us a leaf a core).
+  commitment: layer l+1's behind layer l's commitment, beside the GEMMs; every slot before the window, so the window
+  only reads S (128 bytes a leaf); or S records copied in that host threads made with `host_salt` (the same S on the
+  CPU, about 1.8 us a leaf a core).
 - `tiles(..., slot)`: one launch: each thread its leaf (R/4 + 1 row blocks, h 2, the frame leaf's second block), then
   its CTA's 7 levels. When the tile's mr = ceil(M/R) row blocks divide 128, thread t takes the CTA's leaf
   (t % g) * mr + t / g (g = 128/mr): the leaves of one row block at g adjacent columns sit in adjacent lanes, so a warp's
   16-byte loads touch 32/g lines. `prefetch`: each leaf's next 128-byte block goes into L1 as its compression starts.
 - `nodes`: a launch a level while a level is wider than 256 nodes, then one CTA for the rest. With `fuse_top`, when the
   levels above the CTAs fit one CTA, the leaf kernel's last CTA (an atomic count) folds them and `nodes` launches
-  nothing. stage_cost's 2-warp split isn't used: it passes the message schedule between warps in shared memory, and
+  nothing. A 2-warp split isn't used: it passes the message schedule between warps in shared memory, and
   bought 1.17x on about 5 levels.
 - The domain id is a `Dom` in `CD[dom]` (`COMMIT_GPU_DOMS` slots), so committers of different leaf counts share one
   binary while their `Consts` agree (one Ks, key and row size).
 
 `COMMIT_GPU_SMALL=1` puts `check` on it (domain slot 1, salt slot 1 of 2), so `reference.py check` holds the small path
-to the reference on the same cases (`COMMIT_GPU_FUSE=1` and `COMMIT_GPU_PREFETCH=1` with `fuse_top` and `prefetch`). A consumer that runs it can dump
-chunk 0's commitments, and `reference.py verify` checks them.
+to the reference on the same cases (`COMMIT_GPU_FUSE=1` and `COMMIT_GPU_PREFETCH=1` with `fuse_top` and `prefetch`).
 
 What fusing buys, from the latency anatomy above: the leaf kernel's launch and its re-read of A (the same-run gap between
 contiguous and gathered leaves is at most 5 us, so the re-read is cheap). It doesn't shorten one leaf's chain (R/4 + 5
