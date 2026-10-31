@@ -315,7 +315,7 @@ def test_the_scan_is_read_off_its_program(server):
     another Program's, one
     in the checker form (its egress row an input), one whose templates have other parameters or other than 1, T − 1
     and T instances, or rows other than the schedule's, one with an input gate no template's, and each negative of a
-    check of what `NetTiming.Layout.Fits` asks."""
+    check of what `NetTiming.BoundaryGates.Fits` asks."""
     for n in range(3):
         case = build("rows-honest", n, small=n % 2 == 0)
         p, desc = PC.params(case["params"]), case["params"]["scan"]
@@ -330,7 +330,7 @@ def test_the_scan_is_read_off_its_program(server):
 
 
 def test_each_fits_check_refuses_its_negative(server):
-    """Each of the scan's checks of what `NetTiming.Layout.Fits` asks refuses, in Lean and in the mirror, a scan that
+    """Each of the scan's checks of what `NetTiming.BoundaryGates.Fits` asks refuses, in Lean and in the mirror, a scan that
     passes every check before it (`PC.scan_negatives`): one past the resolution's walk, one whose root doesn't return
     an egress leaf, one whose egress template passes a parameter's leaves through, one whose bucket 0 row is a constant
     gate's, one with an egress argument a later ingress output, one whose egress state is an ingress row's input, and
