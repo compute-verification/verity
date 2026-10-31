@@ -27,6 +27,7 @@
   "Properties.CertifierNetwork",
   "Properties.CertifierNetwork.Runs",
   "Properties.Identity",
+  "Properties.Annot",
   "Properties.Evaluate",
   "Properties.NetworkRecords",
   "Properties.NetworkPeriod",
@@ -954,6 +955,11 @@
    "imports": ["CoreProtocol.Protocol", "Definitions.Pouw.Lead"],
    "except": [],
    "why": "the lead's acceptance at PoUW's v2 case is stated against `Core.Protocol`'s acceptance and the lead's statement (`Definitions.Pouw.Lead`), never a proof"
+  },
+  "Properties.Annot": {
+   "imports": ["Flock.Annot", "Flock.AnnotExpand"],
+   "except": [],
+   "why": "the annotation check's property is stated against C-Flock's Flock.Annot and its per-gate reference, on Lean core: nothing of Mathlib or of `security`"
   }
  },
  "reads_exempt": {
