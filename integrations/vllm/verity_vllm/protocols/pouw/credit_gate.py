@@ -84,15 +84,23 @@ def key(t: Any) -> tuple[str, int] | None:
     return (str(t.device), p) if p else None
 
 
+@cache
+def _writes(func: Any) -> tuple[tuple[tuple[int, str], ...], tuple[bool, ...]]:
+    """An op's schema, read once: the arguments it marks written (position, name), and which results alias nothing."""
+    s = func._schema
+    return (tuple((i, a.name) for i, a in enumerate(s.arguments) if a.alias_info is not None and a.alias_info.is_write),
+            tuple(r.alias_info is None for r in s.returns))
+
+
 def _written(func: Any, args: Sequence[Any], kwargs: Mapping[str, Any], out: Any) -> list[Any]:
     """The tensors an op wrote: its results that alias nothing, and the arguments its schema marks written."""
-    s, w = func._schema, []
-    for i, a in enumerate(s.arguments):
-        if a.alias_info is not None and a.alias_info.is_write:
-            w += _tensors(kwargs.get(a.name) if a.name in kwargs else args[i] if i < len(args) else None)
+    written, fresh = _writes(func)
+    w = []
+    for i, name in written:
+        w += _tensors(kwargs.get(name) if name in kwargs else args[i] if i < len(args) else None)
     rets = out if isinstance(out, (tuple, list)) else (out,)
-    for r, t in zip(s.returns, rets):
-        if r.alias_info is None:
+    for f, t in zip(fresh, rets):
+        if f:
             w += _tensors(t)
     return w
 
