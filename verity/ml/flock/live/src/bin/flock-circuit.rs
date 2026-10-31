@@ -1,5 +1,5 @@
 //! flock-circuit: `verity/flock-circuit` (`flock_live::circuit`), proved by the CPU prover or by Flock-CUDA (`--gpu`,
-//! feature `gpu`) in a flock-128-r2 live session: one commitment root, bound by both reps (R1). Lane flock-circuit.
+//! feature `gpu`) in a flock-128-r2 live session: one commitment root, bound by both reps (R1).
 //!
 //!   flock-circuit serve    --listen ADDR --out DIR --instances PUB --circuit FILE --pin SHA256 [--sessions N] [--operator LANE] [--session-tables J]
 //!                          [--rec-run FILE --rec-part J]   (--zk: each Hello answered logged in a recursive run's record, `run_record`)

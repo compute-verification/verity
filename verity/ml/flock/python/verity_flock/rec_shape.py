@@ -1,4 +1,4 @@
-"""Outer proofs of one fixed shape (lane outer-shape): every inner statement of a deployment padded to a public cap, so that V*'s
+"""Outer proofs of one fixed shape: every inner statement of a deployment padded to a public cap, so that V*'s
 statements over any of its sessions are the cap's, whatever the inner statement's real instance count.
 
 V*'s statements over one inner session (`rec_vstage`) are a function of the inner table's shape alone: its m, k_log and claims
