@@ -23,6 +23,7 @@ import Proofs.NetworkCertifier.PerWindow
 import Proofs.NetworkCertifier.Sanity
 import Proofs.NetworkCertifier.Code
 import Proofs.NetworkCertifier.Accepted
+import Proofs.NetworkCertifier.Causal
 import Proofs.NetworkCertifier.Tap
 import Proofs.NetworkCertifier.RecordRows
 import Proofs.NetworkCertifier.Witnesses
@@ -47,7 +48,8 @@ nontrivial lemmas; `CountWitnesses` and `PeriodWitnesses` give the counts' and t
 (`certifier_program`, `NetworkCertifier`), which the difftest runs against the Python audit, equal to these definitions.
 `Accepted` proves `security_properties`' `AcceptedRunsAreProgramRuns` through `Code`: a run the network certificate
 check accepts is a run of the constant-rate Program under the declared advice, so the guarantees here count it.
-`SampledAuditAccepted` proves that an accepted sampled audit is `Accepted` except at `ε` at `δ` over the selection.
+`Causal` proves `ExpectedGridCausal` (a later window's sync never changes an earlier window's expected grid) and,
+from it, `EncardProgramRunsLeWindows`: the program's runs over their first `m` windows. `SampledAuditAccepted` proves that an accepted sampled audit is `Accepted` except at `ε` at `δ` over the selection.
 `SampledAuditInstance` takes its `KS` hypothesis from `Claims.Sampling.sampling_assembled_of`, at the assembled records.
 `TapRows` bounds the leak at the network certifier's rows (`TapProof.sampledLeak_tap`): an accepted audit's extracted
 trace carries the network certifier's registered rows outside the faulty units, unless its openings collide with the

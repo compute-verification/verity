@@ -131,6 +131,10 @@ Accepted.lean   an accepted run of the network certificate check is a run of the
                                (`security_properties`' `AcceptedRunsAreProgramRuns`, through Code.lean), and
                                Theorem 3's count of what accepted runs can carry (`EncardAcceptedObservationsLe`),
                                each unless the run yields a SHA-512 collision or an LMS forgery
+Causal.lean     a later window's sync never changes an earlier window's grid (`ExpectedGridCausal`, from
+                               the program's hand ticks), and the count over the first `m` windows of the
+                               Program's runs (`EncardProgramRunsLeWindows`, with its honest and nontrivial
+                               lemmas) and of the check's accepted runs (encard_acceptedObservations_take_le)
 ../../lean-audit.json          the guarantee records (`security`'s lock) for tools/verity/lean/check.py
 ~~~
 
@@ -238,9 +242,11 @@ theorems whose bounds the calibration reports (`verity.core.protocols.certifier.
   `EncardIngressObsDecodableLe` and `EncardIngressObsDecodableLePerWindow`.
 
 The calibration's egress bits per window (`clock_sync.bits_per_window`, held by `test_network_certifier_calibration.py`)
-and the check's bound over its first `m` windows have no Lean statement: the check is the reference Program as one
-execution block of its `W` windows, where the per-block forms give only the `W`-window total,
-`EncardAcceptedObservationsLe`'s.
+are the check's bound over its first `m` windows, `security_properties`' `EncardProgramRunsLeWindows` (`Causal.lean`),
+not one of these: the check is the reference Program as one execution block of its `W` windows, where the per-block
+forms give only the `W`-window total, `EncardAcceptedObservationsLe`'s, so the finer count comes from the program's
+hand ticks, which a window's sync moves only at or after the window's start (`ExpectedGridCausal`). A window's bits
+given the run before it have no Lean statement for the check: the queue and the hand ticks carry across windows.
 
 The other 22 are the rest of the Capacity table's bounds and the schedule's causality rule:
 
@@ -442,6 +448,6 @@ The constant-rate Program adds these:
 16. **The allocation is the slot count `S`** on every egress link, as in Python, where a row has `allocation` slots.
 17. **In-set advice.** The check's advice ranges over `SyncValue`, the values of Σ_sync: a run whose declared sync is
     outside the set is an `advice` violation and rejected, so its advice is never counted. That an earlier window's
-    verdict doesn't depend on a later window's sync, in the set or not, is the Python's (`expected_grids`, held by
-    `test_network_certifier_capacity.py`), not a Lean statement: `ExpectedRowCausal` says an execution block's rows read
-    only its own advice.
+    grid doesn't depend on a later window's sync, in the set or not, is `security_properties`' `ExpectedGridCausal`,
+    over the check's `expectedGrid` and any clock-sync values (`Causal.lean`); the rest of a window's verdict reads only
+    that window's records and syncs.
