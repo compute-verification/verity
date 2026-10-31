@@ -4,7 +4,7 @@
 ``independent_gemm(node, opened_inputs) -> bytes`` predicts the committed bytes of one GEMM
 output row (the default proof block: one node instance at one position) from the description node and
 the authenticated openings of its inputs, using nothing but the explicit numerical model
-measured in this lane:
+measured on the A100:
 
 * per instruction: Ampere ``mma.sync.m16n8k16`` BF16 x BF16 -> FP32 semantics
   (``veritor.core.silicon.AMPERE_BF16_M16N8K16`` == ``verity.ml.definitions.numerics.mma.AMPERE_BF16``;
@@ -28,18 +28,18 @@ or a plain node mapping) and ``opened_inputs`` keyed by argument name *or* canon
 How the epilogue is chosen (the model must be told, it must not guess by trying both):
 
 1. a ``const`` arg named ``epilogue`` on the node (``"none"``, ``"bias_fp32_in_kernel"``,
-   ``"bias_bf16_after"``), ``node.extra["consts"]["epilogue"]`` (W1's consts), or
+   ``"bias_bf16_after"``), ``node.extra["consts"]["epilogue"]`` (the capture's consts), or
    ``attrs.epilogue`` on a plain node mapping;
-2. else the node's ``runtime_op`` (W1: ``node.extra["runtime_op"]``): ``verity.bi_mm`` /
+2. else the node's ``runtime_op`` (the capture's ``node.extra["runtime_op"]``): ``verity.bi_mm`` /
    ``aten.mm`` / ``aten.matmul`` never carry a bias (``linear_batch_invariant`` adds it afterwards
    as a separate ``aten.add`` node) so ``epilogue = none``; ``aten.addmm`` -> ``bias_fp32_in_kernel``;
    ``aten.linear`` -> ``bias_bf16_after``; else the same by the ``runtime_impl`` string;
 3. else ``bias_bf16_after`` (what ``torch.nn.functional.linear(x, w, b)`` does under
-   ``enable_batch_invariant_mode()`` in eager mode -- the path this lane measured).
+   ``enable_batch_invariant_mode()`` in eager mode -- the path measured).
 
-W1's GEMM node (``verity.bi_mm``) opens ``x`` = the producer's row (with ``extra["arg_cols"]["x"]``
+The captured GEMM node (``verity.bi_mm``) opens ``x`` = the producer's row (with ``extra["arg_cols"]["x"]``
 = the column slice when the producer is wider) and ``w`` = the *parameter* leaf in its own
-``[N, K]`` layout (the runtime saw ``weight.t()``; W1's own checker transposes back).  The row proof block
+``[N, K]`` layout (the runtime saw ``weight.t()``; the capture's own checker transposes back).  The row proof block
 is ``M = 1``: one opened input row -> the ``N`` BF16 words of one output row.
 
 A slice/split-K cuBLAS kernel is described by a ``const`` arg ``split_k`` (or ``attrs.split_k``)
@@ -47,17 +47,17 @@ A slice/split-K cuBLAS kernel is described by a ``const`` arg ``split_k`` (or ``
 e.g. the ``sliced1x2`` 64x64 kernel = ``verity.ml.definitions.numerics.kernel_zoo.sliced_k_spec(K, 2, 2, ...)``.
 A node whose kernel is unresolved must not carry this relation (checker ``none``).
 
-Coverage (what the checker claims).  ``independent_gemm`` predicts only on the families this
-lane measured bit-exact on the A100 -- :func:`coverage` decides from the node alone:
+Coverage (what the checker claims).  ``independent_gemm`` predicts only on the families
+measured bit-exact on the A100 -- :func:`coverage` decides from the node alone:
 
-* batch-invariant ``matmul_kernel_persistent`` (W1's ``verity.bi_mm`` / ``runtime_impl``
+* batch-invariant ``matmul_kernel_persistent`` (the capture's ``verity.bi_mm`` / ``runtime_impl``
   naming ``matmul_persistent``): (K, N) in :data:`VALIDATED_BI_FAMILIES` (the five Qwen2.5-1.5B
   projections and the synthetic K=1040 N=256 bias case) with an epilogue measured on that family;
 * torch's default cuBLAS/cuBLASLt path: only the launch signatures in ``kernel_zoo.ENTRIES``,
   each at the K value(s) and M range where it was observed exact (the node must declare ``M``);
 * a node that declares ``split_k`` itself is taken at its word (the description is the claim).
 
-Everything else raises :class:`GemmUnresolved` (``unresolved: <why>``), which W2's runner records
+Everything else raises :class:`GemmUnresolved` (``unresolved: <why>``), which the runner records
 as ``error`` with that detail -- never ``exact``, never ``mismatch``.  Non-finite operands are
 outside the domain (``GemmRelationError``).  ``model_gemm_bytes`` is the ungated arithmetic for
 tests and diagnosis.
@@ -112,7 +112,7 @@ def _words(value: Any) -> np.ndarray:
         if value.dtype == np.int16:
             return value.view(np.uint16).reshape(-1)
         raise GemmRelationError(f"numpy opening must be uint16 words, got {value.dtype}")
-    if hasattr(value, "data") and hasattr(value, "dtype") and hasattr(value, "shape"):  # W2 Value
+    if hasattr(value, "data") and hasattr(value, "dtype") and hasattr(value, "shape"):  # a runner Value
         if str(value.dtype) not in ("bfloat16", "torch.bfloat16"):
             raise GemmRelationError(f"{getattr(value, 'canonical_id', '?')}: expected bfloat16, got {value.dtype}")
         return np.frombuffer(value.data, dtype="<u2")
@@ -148,7 +148,7 @@ def _arg_value(node: Any, inputs: Mapping[str, Any], role: str) -> Any:
 
 
 def _extra(node: Any) -> Mapping[str, Any]:
-    """W1's per-node extras on a W2 ``Node`` (``runtime_op``, ``consts``, ``arg_cols``) or on a mapping."""
+    """The capture's per-node extras on a runner ``Node`` (``runtime_op``, ``consts``, ``arg_cols``) or on a mapping."""
     ex = getattr(node, "extra", None)
     if isinstance(ex, Mapping):
         return ex
@@ -175,7 +175,7 @@ def _const(node: Any, inputs: Mapping[str, Any], name: str) -> Any:
 
 
 def _arg_cols(node: Any, name: str) -> tuple[int, int] | None:
-    """The producer's column slice W1 records for an input (``extra.arg_cols[name] = [c0, c1]``)."""
+    """The producer's column slice the capture records for an input (``extra.arg_cols[name] = [c0, c1]``)."""
     cols = (_extra(node).get("arg_cols") or {}).get(name)
     return (int(cols[0]), int(cols[1])) if cols else None
 
@@ -247,7 +247,7 @@ def operands(node_or_inst: Any, inputs: Mapping[str, Any]):
         raise GemmRelationError(f"gemm node must open its 'x' and 'w' arguments (got {sorted(k for k in inputs if not k.startswith('__'))})")
     x, w = _words(xv), _words(wv)
     cols = _arg_cols(node, "x")
-    if cols is not None:  # the producer's output row is wider than this input (W1: arg_cols)
+    if cols is not None:  # the producer's output row is wider than this input (the capture's arg_cols)
         x = x[cols[0] : cols[1]]
     K = _const(node, inputs, "K")
     wshape = getattr(wv, "shape", None)
@@ -256,7 +256,7 @@ def operands(node_or_inst: Any, inputs: Mapping[str, Any]):
         if cols is not None:
             K = cols[1] - cols[0]
         elif wshape is not None:
-            # The opened weight leaf is the parameter in its own [N, K] layout (W1 opens the
+            # The opened weight leaf is the parameter in its own [N, K] layout (the capture opens the
             # parameter even though the runtime sees weight.t(); its own checker transposes).
             # A leaf that can only be [K, N] (first dim = the row width, second dim != it) is
             # accepted transposed; a square weight is taken as [N, K].
@@ -294,7 +294,7 @@ def operands(node_or_inst: Any, inputs: Mapping[str, Any]):
 class GemmUnresolved(GemmRelationError):
     """The node is outside the validated coverage: the checker declines instead of predicting.
 
-    W2's runner records the raised ``RelationError`` as status ``error`` with this message
+    The runner records the raised ``RelationError`` as status ``error`` with this message
     (prefix ``unresolved:``); it never counts as exact or as a mismatch.
     """
 
@@ -302,7 +302,7 @@ class GemmUnresolved(GemmRelationError):
 # (K, N, bias?) shape families of Qwen2.5-1.5B (merged projections as vLLM runs them) plus the
 # synthetic masked-K-tail shape, each bit-exact under vLLM's batch-invariant
 # ``matmul_kernel_persistent`` on the A100 for every natural and stress case that was run
-# (results/numerics-a100-20260907T0615Z/table2.jsonl, profile a100-vllm-bi1; M in 1..2048).
+# (the A100 numerics campaign's table 2, profile a100-vllm-bi1; M in 1..2048).
 # ``epilogues`` lists the epilogues measured on that family (the GEMM inside the engine,
 # ``verity.bi_mm``, never carries a bias: the add is a separate node).
 VALIDATED_BI_FAMILIES: dict[tuple[int, int], dict[str, Any]] = {
@@ -316,7 +316,7 @@ VALIDATED_BI_FAMILIES: dict[tuple[int, int], dict[str, Any]] = {
 BI_KERNEL_MARKERS = ("matmul_kernel_persistent", "matmul_persistent", "batch_invariant", "verity.bi_mm")
 BI_RUNTIME_OPS = ("verity.bi_mm", "aten.mm", "aten.addmm", "aten.linear", "aten.matmul")
 VALIDATED_ARCHS = ("sm_80",)  # where the production GEMM itself was measured
-ASSUMED_ARCHS = ("sm_86", "sm_89")  # parameter-identical BF16 mma.sync (verity.ml.circuits.silicon.models.ADA_BF16_M16N8K16); production GEMM not measured by this lane
+ASSUMED_ARCHS = ("sm_86", "sm_89")  # parameter-identical BF16 mma.sync (verity.ml.circuits.silicon.models.ADA_BF16_M16N8K16); production GEMM not measured there
 
 
 def _runtime_impl_of(node: Any) -> str:
@@ -357,11 +357,11 @@ def coverage(node: Any, opened_inputs: Mapping[str, Any]) -> dict[str, Any]:
     impl = _runtime_impl_of(n)
     rop = runtime_op_of(n)
     arch = str(_const(n, opened_inputs, "arch") or "sm_80")
-    arch_note = "" if arch in VALIDATED_ARCHS else (f"; arch {arch} assumed parameter-identical to sm_80 (production GEMM not measured there by this lane)" if arch in ASSUMED_ARCHS else None)
+    arch_note = "" if arch in VALIDATED_ARCHS else (f"; arch {arch} assumed parameter-identical to sm_80 (production GEMM not measured there)" if arch in ASSUMED_ARCHS else None)
     if arch_note is None:
         return {"covered": False, "family": None, "kernel_path": impl, "spec": None, "reason": f"unresolved: no validated per-instruction model for arch {arch!r}"}
     explicit_split = _const(n, opened_inputs, "split_k")
-    # Capture format v2 (W3c): a coordinate proof block opens one *row block* of the parameter (a column
+    # Capture format v2: a coordinate proof block opens one *row block* of the parameter (a column
     # of W^T), so the opened N is the block height, not the launch's N.  The description declares
     # the launch's N (``consts.N`` or the node's output width) and the family is looked up there;
     # the arithmetic of one column of a single-chain kernel is the same chain.

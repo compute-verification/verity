@@ -65,11 +65,12 @@ import struct
 from dataclasses import dataclass
 
 from verity.ml.commitments.rowleaf import sha512_row_v2_digest
+from verity.ml.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
 
 DOMAIN = b"verity/word-codec/kv/v0\0"
 BLOCK_BYTES = 4096
 SEED_BYTES = 32
-DIGEST_BYTES = 64
+DIGEST_BYTES = _DIGEST_BYTES["sha512"]
 TWEAK_INDEX = (1 << 32) - 1
 MASK_INDEX = (1 << 32) - 2
 BIND_INDEX = (1 << 32) - 3
@@ -247,7 +248,8 @@ class P2Codec:
                 "segments": self.segments, "w": self.w}
 
 
-def _xof(message: bytes, length: int) -> bytes:
+def xof(message: bytes, length: int) -> bytes:
+    """`XOF(message)[0 : length]`: SHA-512 in counter mode, each output whole."""
     out = b""
     ctr = 0
     while len(out) < length:
@@ -262,7 +264,7 @@ def _message(f: Field, seed: bytes, r: int, domain: bytes = DOMAIN) -> bytes:
 
 
 def _element(f: Field, seed: bytes, r: int, domain: bytes = DOMAIN) -> int:
-    return int.from_bytes(_xof(_message(f, seed, r, domain), f.word_bytes + 8), "little") % f.p
+    return int.from_bytes(xof(_message(f, seed, r, domain), f.word_bytes + 8), "little") % f.p
 
 
 @dataclass(frozen=True, slots=True)
@@ -303,7 +305,7 @@ def derive(seed: bytes, sloth: Sloth, domain: bytes = DOMAIN) -> Key:
     f = sloth.field
     mask = None
     if sloth.masked:
-        mask = int.from_bytes(_xof(_message(f, seed, MASK_INDEX, domain), f.word_bytes), "little") % (1 << f.n)
+        mask = int.from_bytes(xof(_message(f, seed, MASK_INDEX, domain), f.word_bytes), "little") % (1 << f.n)
     c = tuple(_element(f, seed, r, domain) for r in range(sloth.rounds))
     return Key(sloth, c, _element(f, seed, TWEAK_INDEX, domain) or 1, mask, seed if domain == DOMAIN else None)
 
@@ -338,7 +340,7 @@ def binding(d: bytes, j: int, k: Key, coin: bytes | None = None) -> int:
         raise ValueError(f"an append's coin is {COIN_BYTES} bytes")
     else:
         message = _message(f, k.seed, COIN_INDEX) + at + d + coin
-    return int.from_bytes(_xof(message, DIGEST_BYTES), "little") % f.p
+    return int.from_bytes(xof(message, DIGEST_BYTES), "little") % f.p
 
 
 def rho(a: int, f: Field) -> int:

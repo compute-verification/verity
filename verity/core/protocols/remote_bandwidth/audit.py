@@ -1,4 +1,4 @@
-"""The remote bandwidth audit v0 (`verity/remote-bandwidth/v0`): a verifier with no hardware at the site certifies how
+"""PoUB v0 (`verity/remote-bandwidth/v0`): a verifier with no hardware at the site certifies how
 many reads of a node's registered blocks the node made in each window, from receipts chained pass to pass.
 
 1. Registration.  The prover commits to its payload blocks (`payload_tree`: the weights, KV pages and filler, each an
@@ -449,7 +449,7 @@ class NoiseTiles:
 
     def output(self, seed: bytes, j: int) -> bytes:
         m = TILE_DOMAIN + seed + j.to_bytes(8, "big")
-        out = b"".join(hashlib.sha512(m + c.to_bytes(4, "big")).digest() for c in range(-(-self.z_bytes // 64)))
+        out = b"".join(hashlib.sha512(m + c.to_bytes(4, "big")).digest() for c in range(-(-self.z_bytes // DIGEST_BYTES)))
         return out[:self.z_bytes]
 
     def evidence(self, seed: bytes, j: int) -> bytes:

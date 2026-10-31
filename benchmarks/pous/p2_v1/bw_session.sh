@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One remote bandwidth session over C* on the demo card (bandwidth.py session), served from the mem69-v2 encoded store through
+# One PoUB session over C* on the demo card (bandwidth.py session), served from the mem69-v2 encoded store through
 # kernels' staging decode, and the cheat that skips a layer's reads; cwd = the source tree's root:
 #
 #   OUT=DIR RESEARCH_RUN_DIR=RUN GPU_LEASE_WHO=bw-h200 [PARTY='ssh ... VERB' PARTY_HOST=ADDRESS] \

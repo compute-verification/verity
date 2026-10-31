@@ -1,4 +1,4 @@
-"""The remote bandwidth audit's declared outputs (`PROTOCOL.md` §7, "Declared outputs") from an accepted session's
+"""PoUB's declared outputs (`PROTOCOL.md` §7, "Declared outputs") from an accepted session's
 record: γ against both R, per window and over the session, and the memory line, a session total in three forms, each
 with its ε and δ.  They are computed here, the memory line's charges and paced forms by `line`'s arithmetic in floats,
 and nowhere else: the benchmark and every other consumer reads them from `declared`.
@@ -107,7 +107,7 @@ class Node:
                link_burst_bytes: float | None = None, sketch_outside: int = timing.SKETCH_OUTSIDE) -> Node:
         """`timing`'s node: R measured is the larger of `timing.READ_BYTES_PER_S` and the prover's reported read, R
         at spec the larger of `timing.SPEC_BYTES_PER_S` and that, so a prover reporting a slower read can't shrink
-        a term (MEM-24).  Its rebuild burst is S_chip, what a batch in flight holds on the chips; its disk burst one
+        a term.  Its rebuild burst is S_chip, what a batch in flight holds on the chips; its disk burst one
         second at the disks' ceiling, which is a one-second peak; its link burst `timing.LINK_WINDOW_BYTES` when the
         links are charged."""
         measured = max(timing.READ_BYTES_PER_S, _rate(reported_read_bytes_per_s, "a reported read"))
