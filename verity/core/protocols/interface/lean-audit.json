@@ -49,6 +49,11 @@
    "imports": ["Lean.Data.Json", "Flock.Canon", "Flock.Hash", "CoreProtocol.Ratio"],
    "except": [],
    "why": "the Site in code is spec: its properties (`Properties.Core.Site`) are stated over its fold, check and types, so it imports only Lean's JSON, C-Flock's canonical JSON and SHA-512, for its digests and decoders, and the interface's `Ratio`, which reads its figures"
+  },
+  "CoreProtocol.Blobs": {
+   "imports": ["CoreProtocol.Cli", "Flock.Hash"],
+   "except": [],
+   "why": "the interface is spec: a protocol that reads content-addressed files (`BlobProtocol`, `Blobs`) is stated over the same `Protocol`, `Outcome` and `Answer`, so this imports only them (through the protocol's command line) and C-Flock's hash"
   }
  },
  "dependencies": {

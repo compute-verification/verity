@@ -1,4 +1,4 @@
-# The served window's onsite run (README.md): one configuration of onsite's five components and the wipe that
+# The served window's onsite run (README.md): one configuration of onsite's seven subprotocols that
 # `verity run` executes, each party on its machine, every host and address in the deploy bindings. No run of record yet.
 protocol = "onsite"
 workload = "vllm"

@@ -841,7 +841,7 @@ def leaf_reads_file(program: Program, u: int, kind: str, ln: int | None, roots: 
     weights' ``b/<K>``), ``partials``' entry ``partials`` and a J10-R leaf's carries' and ok rows' theirs in
     ``produced`` (each `produced.entry` under the window's registration). A read of an A row, a B row, a partials row,
     a carry or an ok row is marked `READ_IN_FULL` (`leaf_lanes.read_in_full`), never an ``o0``. Then ``known_ports``
-    (`produced.known_port` of `leaf_known_rows`; a served window's `leaf_known_ports`), and ``complete``. ``served``: the
+    (`produced.known_port` of `leaf_known_rows`; a served window's `leaf_known_ports`). ``served``: the
     after-draw values are the leaf's own (`place`'s served names), ``roots`` keyed by those; ``partials`` and
     ``produced`` stay keyed by the bare value."""
     S = program.fn.S()
@@ -869,4 +869,4 @@ def leaf_reads_file(program: Program, u: int, kind: str, ln: int | None, roots: 
             out[port][READ_IN_FULL] = True
     if both := sorted(set(out) & set(known_ports)):
         raise ValueError(f"ports {both} are both reads and known")
-    return {"format": G.READS, "ports": {**out, **known_ports}, LL.COMPLETE: True}
+    return {"format": G.READS, "ports": {**out, **known_ports}}
