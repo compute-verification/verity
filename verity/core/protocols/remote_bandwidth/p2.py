@@ -30,11 +30,12 @@ byte 8j mod 32 of the store, so a receipt of one block would leave a sector half
 guessed receipt (`SketchBoundSession`, over sectors) would lose a factor 2^32 a receipt.
 
 An opening (`Opening`) is the unit's four blocks, each with its path to the registration's root, and the receipt
-leaf with its salt and path to the pass's root.  The verifier (`Session.verify`) checks the leaf on the pass's root,
-each block on the vk root under PoUS's leaf (`pous.verifier.leaf_hash`; `payload-path` if one fails), and the receipt
-recomputed from the four blocks.  It decodes nothing: vk's leaves are of the C* the verifier decoded to the committed W
-at PoUS's setup, so a block on its path is C*'s block j, by SHA-512's collision resistance.  A P2 store is fixed at
-setup: a session appends nothing to it (`append` rejects with `append`).  `audit.Rebuild` refuses a P2 codec, so
+leaf with its salt and path to the pass's root.  The verifier, the audit's session over a P2 codec
+(`audit.AuditRun.verify`, by `check`), checks the leaf on the pass's root, each block on the vk root under PoUS's leaf
+(`pous.verifier.leaf_hash`; `payload-path` if one fails), and the receipt recomputed from the four blocks.  It decodes
+nothing: vk's leaves are of the C* the verifier decoded to the committed W at PoUS's setup, so a block on its path is
+C*'s block j, by SHA-512's collision resistance.  A P2 store is fixed at setup: a session appends nothing to it
+(`audit.AuditRun.append` rejects with `append`).  `audit.Rebuild` refuses a P2 codec, so
 `audit.ledger` refuses a P2 record until μ_rebuild at P2's encode is stated (`codec.P2Codec`).
 
 The decode kernel's side of the receipts is `PROTOCOL.md` §11: per block it decodes, π from the pass's sign bits, and
@@ -46,7 +47,6 @@ from __future__ import annotations
 import hashlib
 import os
 import struct
-import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
@@ -56,7 +56,7 @@ from verity.core.protocols.pous.schemes.p2 import P2Params
 from verity.core.protocols.pous.verifier import MerkleTree, VerifierKey, leaf_hash
 from verity.ml.randomness import frame
 
-from . import audit, coins, receipts
+from . import audit, receipts
 from .codec import P2_LAYOUT, P2Codec
 from .receipts import DIGEST_BYTES, PER_LEAF, SALT_BYTES, Plan
 
@@ -271,29 +271,3 @@ def check(registration: Registration, seed: bytes, plan: Plan, root: bytes, i: i
     if (sketcher or Sketcher(seed, registration.rows))(g, b"".join(o.blocks)) != y:
         return "receipt"
     return None
-
-
-class Session(audit.AuditRun):
-    """The verifier's side of one session over a P2 store: the audit's session (`audit.AuditRun`) with units for blocks,
-    its openings checked on PoUS's vk (`_check`), and no appends."""
-
-    codecs = (P2Codec,)
-    block_bytes = UNIT_BYTES
-
-    def __init__(self, params: audit.Params, registration: Registration, coins_: coins.SessionCoins, *,
-                 not_before_ns: int, clock: Callable[[], int] = time.monotonic_ns) -> None:
-        if type(registration) is not Registration:
-            raise ValueError("a P2 session is over a P2 Registration")
-        super().__init__(params, registration, None, coins_, not_before_ns=not_before_ns, clock=clock)
-
-    def append(self, root: bytes, count: int) -> tuple[int, bytes] | audit.Verdict:
-        """Refused (`append`): a P2 store is fixed at PoUS's setup."""
-        self._live()
-        return self._fail(self.filling, "append")
-
-    def _check(self, t: int, i: int, p: int, o: Opening, key: VerifierKey, receipters: dict) -> str | None:
-        w = self.windows[t]
-        seed = receipts.seed(w.challenge, i, self._previous(t, i))
-        if i not in receipters:
-            receipters[i] = Sketcher(seed, self.registration.rows)
-        return check(self.registration, seed, w.plans[i], w.roots[i], i, p, o, receipters[i])
