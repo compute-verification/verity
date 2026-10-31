@@ -40,7 +40,7 @@ nothing of them. It does not model what refuses a session before it starts. The 
 under a key, each signed once, and the key signs PoUS's sessions too: `wipe_party.main` signs with
 `period.challenger`, the memory challenger's key, in PoUS's role (`memory-challenger-record`). So
 `SignedWipeParty.Signed`, all the model's key signs, holds both. A key also used for another role is outside the model, and the forgery disjunct
-is an EUF-CMA break only under that one-role reading, as for PoUS's sessions (`Device`).
+is an EUF-CMA break only under that one-role reading, as for PoUS's sessions (`Challengers`).
 -/
 
 namespace MemoryChallenger.Properties
@@ -113,9 +113,9 @@ of its commitment, how it ended, the fill's readings, its batch records and its 
 def WipeRun.message (r : WipeRun) (ended : String) : E ByteArray :=
   StreamedWipe.message r.commitment ended r.fillStartNs r.fillEndNs r.recorded.batches r.egressBits
 
-/-- The memory challengers: the sessions the holder of each key runs under it, PoUS's (`Device`) and its wipes. -/
+/-- The memory challengers: the sessions the holder of each key runs under it, PoUS's (`Challengers`) and its wipes. -/
 structure SignedWipeParty where
-  device : Device
+  device : Challengers
   wipes : ByteArray → List WipeRun
 
 /-- The messages the challenger signs under the key `pk`: its PoUS sessions' (`Signed`), and for each wipe it runs under
