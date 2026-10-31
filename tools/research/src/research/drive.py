@@ -35,10 +35,12 @@ own.  While one runs, a Lean change above it, reviewed or not, gets a check stac
 its own; the lower one runs on.  Each Lean check launched or stacked stops at a cut point, just below the Lean
 change after the first ceil(n / f) of the n it would hold, f the Lean checks still free (`lean_cut`), lowest first: a failure
 holds only what's above it, and the lower ones land without waiting for the rest.  `next` is built non-Lean first (drive.toml's
-`nonlean_first`, `queue.Queue._nonlean_order`: what a sync adds), and while no Lean check of `next` runs or passed, the
-sync moves the members with a land verdict below those waiting for one (`reviewed_first`), those that change no Lean first
-(`_lift`, which passes over a held member), where they land that tick, so a reviewed member seldom waits above an unreviewed member,
-or above a Lean change for its check.  And every sync moves each member held by a verdict at its head, with every PR that
+`nonlean_first`, `queue.Queue._nonlean_order`: what a sync adds), and each sync moves the members with a land verdict below
+those waiting for one (`verdict_first`), those that change no Lean first (`_lift`, which passes over a held member), where
+they land that tick, so a reviewed member seldom waits above an unreviewed member, or above a Lean change for its check.
+While a Lean check of `next` runs or passed, it moves only the members above the prefix those checks keep in place, and none
+in it, so it rebuilds nothing a check covers; one that gains its verdict goes after those already moved, so none below it is
+merged again.  With `verdict_first` off, `reviewed_first` does this only while no Lean check of `next` runs or passed.  And every sync moves each member held by a verdict at its head, with every PR that
 contains it, to the top of `next` (`_park`), so a hold holds only itself and what contains it, and the prefix that lands
 reaches past where it was; it stays at the top until a land verdict at that head (then it lands in its place) or a new head.
 A PR with a hold label, an ejected one or one the sync refuses leaves `next` instead (a refused one is tried again at its top).
@@ -1853,7 +1855,8 @@ class Driver:
 
     def _review(self, state: dict, drive: dict, dry_run: bool) -> str:
         """One tick of the review landing: move `main` to a fully checked `checked` (`_promote`) and bring a `main` pushed
-        outside drive into `checked` (`_absorb`), sync `next` (its held members moved to its top: `_park`; held on its base
+        outside drive into `checked` (`_absorb`), sync `next` (its held members moved to its top: `_park`, its reviewed ones
+        above what a Lean check keeps to its bottom: `_lift`; held on its base
         while a Lean check of it runs, drive's or a hand one: `_running_lean`, kept in place up to a passed one that lands: `_landable`, and kept up to any passed one:
         `lean_hold`), land its reviewed prefix (`land_reviewed`) once the landing branch has a baseline (`_unbaselined`),
         stacking a Lean check above a running one (`_stack_lean`), and launch the after-landing run, or the next run of a
@@ -1889,7 +1892,7 @@ class Driver:
             if q.prefetch is not None:
                 q.prefetch([(m.pr, m.head) for m in chain])     # one pull of every member's labels, not three per member
             q.park = self._park(chain)
-            q.lift = [] if q.hold or running else self._lift(drive, chain)
+            q.lift = self._lift(drive, chain, q.hold) if not (q.hold or running) or q.flag("verdict_first") else []
             entries = q.sync(dry_run)[1]
             state = {**q.load_state(), "drive": drive}
             self.tell_out(drive, entries, state)
@@ -1931,21 +1934,26 @@ class Driver:
                        f"(#{unread[0][0]}: {unread[0][1]})")
         return out
 
-    def _lift(self, drive: dict, chain: list[Member]) -> list[int]:
-        """The members the sync moves to the bottom of `next`, in this order (`queue.Queue.lift`, which keeps each after the PRs
-        it contains): those with their ready mark and a land verdict at their head (`_reviewed`'s rule), below the members
-        waiting for one or for circuit-check to pass (`_circuit_held`) (drive.toml's `reviewed_first`: one waiting for its review would hold every reviewed member above it),
+    def _lift(self, drive: dict, chain: list[Member], low: int = 0) -> list[int]:
+        """The members the sync moves to the bottom of `next` above ``chain[:low]`` (`queue.Queue.lift`, which keeps each after the
+        PRs it contains), in this order: those with their ready mark and a land verdict at their head (`_reviewed`'s rule), below the members
+        waiting for one or for circuit-check to pass (`_circuit_held`) (drive.toml's `verdict_first` or `reviewed_first`: one waiting for its review would hold every reviewed member above it),
         and of those, the ones whose own change is no Lean change first (`nonlean_first`), so they land this tick instead of
         waiting for a Lean change's check.  A held member is passed over, as the sync moves it to the top (`_park`); nothing
         moves past a member whose labels can't be read, nor a Lean change whose own check failed (it waits for its owner's fix
-        or hold, not a check again on every lift).  Only while no Lean check of `next` runs (`_review` asks only then) or passed, nor a
-        recorded run passed lean-audit on a commit the lift would move (`_cover`): a rebuild takes those commits off `next`."""
-        nonlean, reviewed = self.q.flag("nonlean_first"), self.q.flag("reviewed_first")
-        on, lean = {m.commit for m in chain}, drive["lean"]
+        or hold, not a check again on every lift).  Nothing moves in ``chain[:low]``, what a Lean check of `next` that runs or
+        passed keeps in place (`queue.Queue.hold`): `_review` asks every sync under `verdict_first`, else only while no Lean
+        check runs.  Nor does anything move while a Lean check passed on a commit above it, or a recorded run passed lean-audit on a
+        commit the lift would move (`_cover`): a rebuild takes those commits off `next`.  A member that gains its verdict goes
+        after those already moved (one that changes no Lean, after those that change none), so no member below it is merged
+        again."""
+        nonlean = self.q.flag("nonlean_first")
+        reviewed = self.q.flag("verdict_first") or self.q.flag("reviewed_first")
+        on, lean = {m.commit for m in chain[low:]}, drive["lean"]
         if not (nonlean or reviewed) or any(rec.get("state") == "passed" for c, rec in lean.items() if c in on):
             return []
         landing: list[tuple[Member, bool]] = []                 # each member below the first one nothing moves past
-        for m in chain:
+        for m in chain[low:]:
             try:
                 why = unreviewed(self.reviews(m.pr, m.head), self._owners(m)) if self.q.ready(m.pr, m.head) else "withdrawn"
             except QueueError as e:                             # its verdict unknown, nothing moves past it
@@ -1963,7 +1971,7 @@ class Driver:
             lift = [m for m, ok in landing[i + 1:] if ok]
         if nonlean:
             lift = [m for m in lift if not self._lean_change(m)] + [m for m in lift if self._lean_change(m)]
-        p = next((j for j, m in enumerate(lift) if chain[j] != m), None)
+        p = next((low + j for j, m in enumerate(lift) if chain[low + j] != m), None)
         if p is None or self._cover(drive, chain, p, len(chain)) is not None:
             return []
         return [m.pr for m in lift]

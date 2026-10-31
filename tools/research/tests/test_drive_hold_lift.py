@@ -1,6 +1,8 @@
 """One hold stops only itself: each sync moves a member of `next` held by a verdict at its head, with every PR that contains
 it, to the top of `next` (`Driver._park`, `Queue.park`), so the members that were above it land with those below it.  It stays
-at the top until a land verdict at that head, which lands it by the normal order.  A Lean check below it keeps running."""
+at the top until a land verdict at that head, which lands it by the normal order.  A Lean check below it keeps running.  And
+one member waiting for its verdict stops only itself: the lift (`Driver._lift`) moves the reviewed members below it, above
+the prefix a running Lean check keeps in place, whose order and commits stay."""
 from __future__ import annotations
 
 import json
@@ -225,3 +227,103 @@ def test_a_pr_with_a_hold_label_or_ejected_leaves_next_and_the_members_above_it_
         world.gh.ready.discard((2, head))                   # the store's `ready = false`, as drive's `ready` reads it
     assert h.tick().startswith("landed #3"), world.logs
     assert _landed(world, 2) == [3, 1] and h.q.chain() == []
+
+
+def _lean_running(world: World, monkeypatch, **kw) -> tuple[Review, list[str]]:
+    """`next` = #1 (a lock change), #2, both reviewed, with a Lean check of #2's commit running; (the drive, their commits)."""
+    h = Review(world, monkeypatch, nonlean_first=False, **kw)
+    world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
+    world.gh.put(2, world.change({"a.txt": "2\n"}))
+    h.review(1)
+    h.review(2)
+    assert not h.tick().startswith("landed"), world.logs
+    assert h.launched == [(_tip(world), "m1", False)]
+    return h, [m.commit for m in h.q.chain()]
+
+
+def _put(world: World, *prs: int) -> None:
+    for n in prs:
+        world.gh.put(n, world.change({f"{n}.txt": f"{n}\n"}))
+
+
+@pytest.mark.parametrize("above_lean, reviewed_first", [(True, True), (True, False), (False, True)])
+def test_while_a_lean_check_runs_reviewed_members_go_below_an_unreviewed_one_above_its_prefix(world, monkeypatch, above_lean,
+                                                                                              reviewed_first):
+    """An unreviewed member just above a running Lean check's prefix held every reviewed member above it until that check
+    ended.  Under `verdict_first`, `reviewed_first` on or off, they go below it, above the prefix, whose commits stay, and the
+    check's pass lands them with it.  With `verdict_first` off they wait above it."""
+    h, prefix = _lean_running(world, monkeypatch, verdict_first=above_lean, reviewed_first=reviewed_first)
+    _put(world, 3, 4, 5)
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [1, 2, 3, 4, 5]
+    h.review(4)
+    h.review(5)
+    assert not h.tick().startswith("landed"), world.logs
+    chain = h.q.chain()
+    assert [m.pr for m in chain] == ([1, 2, 4, 5, 3] if above_lean else [1, 2, 3, 4, 5])
+    assert [m.commit for m in chain[:2]] == prefix and h.cancelled == []
+    (rid,) = h.lean_ids()
+    h.run_state[rid] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+    assert h.tick().startswith("landed #5" if above_lean else "landed #2"), world.logs
+    assert [m.pr for m in h.q.chain()] == ([3] if above_lean else [3, 4, 5]) and len(h.launched) == 1
+
+
+def test_a_member_that_gains_its_verdict_under_a_running_lean_check_goes_after_those_already_moved(world, monkeypatch):
+    """The members already moved keep their commits: nothing below the one that joins them is merged again."""
+    h, prefix = _lean_running(world, monkeypatch)
+    _put(world, 3, 4, 5, 6)
+    h.tick()
+    h.review(5)
+    h.tick()
+    chain = h.q.chain()
+    assert [m.pr for m in chain] == [1, 2, 5, 3, 4, 6]
+    five = chain[2].commit
+    h.review(6)
+    h.tick()
+    chain = h.q.chain()
+    assert [m.pr for m in chain] == [1, 2, 5, 6, 3, 4]
+    assert [m.commit for m in chain[:3]] == [*prefix, five] and h.cancelled == []
+
+
+def test_under_a_running_lean_check_a_reviewed_pr_stays_above_an_unreviewed_one_it_contains(world, monkeypatch):
+    """#4, stacked on the unreviewed #3, stays above it; #5, stacked on #2 in the check's prefix, goes below #3."""
+    h, prefix = _lean_running(world, monkeypatch)
+    world.gh.put(3, world.change({"3.txt": "3\n"}))
+    world.gh.put(4, world.change({"4.txt": "4\n"}, base=world.gh.prs[3].head))
+    world.gh.put(5, world.change({"5.txt": "5\n"}, base=world.gh.prs[2].head))
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [1, 2, 3, 4, 5]
+    h.review(4)
+    h.review(5)
+    h.tick()
+    chain = h.q.chain()
+    assert [m.pr for m in chain] == [1, 2, 5, 3, 4] and [m.commit for m in chain[:2]] == prefix
+
+
+def test_under_a_running_lean_check_first_goes_below_the_reviewed_members_the_lift_moves(world, monkeypatch):
+    h, prefix = _lean_running(world, monkeypatch)
+    _put(world, 3, 4, 5)
+    h.tick()
+    h.review(4)
+    h.review(5)
+    h.q.first = (5,)
+    h.tick()
+    chain = h.q.chain()
+    assert [m.pr for m in chain] == [1, 2, 5, 4, 3] and [m.commit for m in chain[:2]] == prefix and h.cancelled == []
+
+
+def test_the_lift_moves_nothing_inside_a_running_lean_checks_prefix(world, monkeypatch):
+    """A hand Lean check of #2's commit covers the unreviewed #1: #1 and #2 keep their place and commits, though without
+    the check the lift would take #2 and #4 below #1; only #4, above the check, goes below the unreviewed #3."""
+    h = Review(world, monkeypatch)
+    _put(world, 1, 2, 3, 4)
+    assert not h.tick().startswith("landed")
+    prefix = [m.commit for m in h.q.chain()[:2]]
+    h.hand[prefix[1]] = ["r20261026-063429-f8e3"]
+    h.run_state["r20261026-063429-f8e3"] = ("running", None, None)
+    h.review(2)
+    h.review(4)
+    assert h.tick().startswith("nothing reviewed lands: #1"), world.logs
+    chain = h.q.chain()
+    assert [m.pr for m in chain] == [1, 2, 4, 3] and [m.commit for m in chain[:2]] == prefix

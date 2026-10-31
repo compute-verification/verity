@@ -154,9 +154,10 @@ on its diff against `main`, or against the PR it's stacked on) and contains none
 change, `--first`'s order and then admission's within each part, so it doesn't wait above a Lean change for its Lean check.
 Members on `next` never move for it, merged again or not: those above a moved or dropped member are merged again in their order,
 and only a `--first` PR placed again, or a `next` rebuilt on a `main` that moved off it, sorts what is above it.  Nor do they
-move but for drive's lift (`Queue.lift`, `Driver._lift`): while no Lean check of `next` runs
-or passed, the members with a land verdict go below those waiting for one (drive.toml's `reviewed_first`), those that change no
-Lean first, each after the PRs it contains, and land at once; and for drive's park (`Queue.park`, `Driver._park`): each sync, a
+move but for drive's lift (`Queue.lift`, `Driver._lift`): each sync, the members with a land verdict go below those waiting
+for one (drive.toml's `verdict_first`), those that change no Lean first, each after the PRs it contains, and land at once;
+while a Lean check of `next` runs or passed, only those above the `hold` members move, none of them, so no check's prefix is
+rebuilt (with `verdict_first` off, `reviewed_first` moves them only while none runs or passed); and for drive's park (`Queue.park`, `Driver._park`): each sync, a
 member held by a verdict at its head goes to the top of `next` with every PR that contains it, above what the sync adds, so
 one hold holds only itself and what contains it and the members that were above it land; it stays there until a land verdict
 (then it lands in its place) or a new head.  The park moves no member that a running or passed check covers below the lowest
@@ -426,6 +427,9 @@ class DriveFlags:
     #: while no Lean check of `next` runs, members with a land verdict go below those waiting for one (`Driver._lift`), so a
     #: member waiting for its review holds only itself
     reviewed_first: bool = True
+    #: every sync, members with a land verdict go below those waiting for one (`Driver._lift`), above the prefix a running or
+    #: passed Lean check of `next` keeps in place (`Queue.hold`) and none in it, `reviewed_first` on or off
+    verdict_first: bool = True
     #: days an open PR unmarked at its head stays idle before it is stale (`research.stale`: `status` says so, drive rings its
     #: owner once a day), and before drive closes it; 0 is off
     stale_days: int = 0
@@ -484,7 +488,7 @@ class DriveFlags:
             if not (isinstance(doc["marked_after"], str) and MARK_TIME_RE.fullmatch(doc["marked_after"])):
                 raise bad("marked_after", "a UTC time as YYYY-MM-DDTHH:MM:SSZ, as labels record it")
             got["marked_after"] = doc["marked_after"]
-        for k in ("regenerate_locks", "nonlean_first", "reviewed_first"):
+        for k in ("regenerate_locks", "nonlean_first", "reviewed_first", "verdict_first"):
             if k in doc:
                 if not isinstance(doc[k], bool):
                     raise bad(k, "true or false")
@@ -969,7 +973,8 @@ class Queue:
                  marked_by: Callable[[int, str], str | None] | None = None,
                  marked_at: Callable[[int, str], str | None] | None = None,
                  prefetch: Callable[[list[tuple[int, str]]], None] | None = None, nonlean_first: bool | None = None,
-                 reviewed_first: bool | None = None, land_into: str | None = None):
+                 reviewed_first: bool | None = None, verdict_first: bool | None = None,
+                 land_into: str | None = None):
         self.workdir, self.remote, self.github, self.ready, self.store = Path(workdir), remote, github, ready, store
         #: the branch drive lands on and `next` is built on (`into`); None: drive.toml's `land_into` at `main`
         self.land_into, self._into = land_into, None
@@ -983,13 +988,16 @@ class Queue:
         #: whether drive's lift puts members with a land verdict below those without (`Driver._lift`); None: drive.toml's
         #: `reviewed_first` at `main`
         self.reviewed_first = reviewed_first
+        #: whether drive's lift runs every sync, above the `hold` members, `reviewed_first` on or off; None: drive.toml's
+        #: `verdict_first` at `main`
+        self.verdict_first = verdict_first
         #: each (head, base)'s `lean_change`
         self._lean_of: dict[tuple[str, str], bool] = {}
         #: members a running check (or a passed one drive lands this tick) covers that keep their place at the head it checks though their PR's head has moved
         #: (`Driver`: a new head doesn't cancel a running check, and its PR rejoins above once that check ends)
         self.frozen: set[int] = set()
         #: members `next` keeps that this sync moves below the rest, in this order, at the heads it holds (`Driver._lift`: those
-        #: with a land verdict, non-Lean first, while no Lean check of `next` runs or passed); what `order` moved of them
+        #: with a land verdict, non-Lean first, above the `hold` members); what `order` moved of them
         self.lift: list[int] = []
         self._lifted: list[int] = []
         #: members `next` keeps that this sync moves to its top, each with the PRs that contain it (`Driver._park`: those held
@@ -1269,8 +1277,8 @@ class Queue:
         in `first` (`--first`) that are ready go below all of them, in the order given, so they land first; but
         above the bottom `hold` members, which a running or passed check covers: each keeps its place and its merge, and the PRs
         it contains that come new go above them too, until one of them stops standing (`_stands`) or is parked; then the rebuild
-        from it is logged with why.  With no `hold`, the members of ``lift`` at the heads
-        `next` holds go above `first` and below the rest, each only after the PRs it contains (`_lifted`).  The members of
+        from it is logged with why.  The members of ``lift`` at the heads `next` holds, none of those, go above `first` and below
+        the rest, each only after the PRs it contains (`_lifted`).  The members of
         ``park`` that stay at the head `next` holds (or at the old head a check keeps), and every PR that contains one, go above
         all of these, in `next`'s order (`_parked`), out of the `hold` members too: what a check covers below the lowest of
         them keeps its place."""
@@ -1309,9 +1317,10 @@ class Queue:
         new = sorted(ready - set(kept))
         cold = {n for n in new if self._forces_cold(n)}
         self._lifted = []
-        for n in () if held else lift:
-            if (n in kept and n not in parked and entries[n].pr.head == at.get(n)
-                    and all(a in self._lifted for a in entries[n].after)):
+        below = set(held).union(f for f in self.first if f in ready)
+        for n in lift:
+            if (n in kept and n not in parked and n not in below and entries[n].pr.head == at.get(n)
+                    and all(a in self._lifted or a in below for a in entries[n].after)):
                 self._lifted.append(n)
         self._parked = [n for n in kept if n in parked] + sorted(parked - set(kept))
         # a newly ready PR that makes circuit-check run cold goes above the warm ones; members already on `next` keep their place,
@@ -1324,7 +1333,8 @@ class Queue:
         return out
 
     def flag(self, name: str) -> bool:
-        """drive.toml's ``name`` (`nonlean_first`, `reviewed_first`) as this queue takes it: its own setting, else `main`'s."""
+        """drive.toml's ``name`` (`nonlean_first`, `reviewed_first`, `verdict_first`) as this queue takes it: its own
+        setting, else `main`'s."""
         own = getattr(self, name)
         return own if own is not None else getattr(flags_at(self.workdir, "refs/remotes/origin/main"), name)
 
@@ -1522,7 +1532,7 @@ class Queue:
             return next((i for i, (m, w) in enumerate(zip(chain, want)) if (m.pr, m.head) != w), min(len(chain), len(want)))
 
         k = kept(order)
-        if lifted := k < len(self._lifted):
+        if lifted := k < max((i + 1 for i, n in enumerate(order) if n in self._lifted), default=0):
             self.log(f"research queue: {' '.join(f'#{n}' for n in self._lifted)} (reviewed) go to the bottom of `{self.branch}`, "
                      "below what waits for a review or a Lean check")
         parked = set(self._parked)
@@ -4186,6 +4196,7 @@ def main(argv: list[str]) -> int:
                 raise QueueError(f"drive needs a machine for the checks it launches: set `on` in {DRIVE_FLAGS} at `main`, or pass "
                                  "--on MACHINE")
             q.first, q.nonlean_first, q.reviewed_first = flags.first, flags.nonlean_first, flags.reviewed_first
+            q.verdict_first = flags.verdict_first
             q.land_into = flags.land_into
             a.marked_after = flags.marked_after
             labels.since = a.marked_after
