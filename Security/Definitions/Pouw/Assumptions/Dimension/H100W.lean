@@ -1,9 +1,7 @@
 import Definitions.Pouw.Assumptions.Dimension.H100
 
 /-!
-# `MH100w`: W1's free operations only, and the distinct-writes bound (trusted statements; draft semantics)
-
-**Draft semantics, pending review**.
+# `MH100w`: W1's free operations only, and the distinct-writes bound (trusted statements)
 
 `MH100` has no free arithmetic instruction: its only free instructions are `move` (an oblivious whole-word move or
 copy) and `operand` (a free value). But its free values are a subspace `V`, so `operand` hands out every rational
@@ -20,8 +18,16 @@ instructions at `pr.tc` or more per register, FFMA, FADD and FMUL at `pr.ffma`, 
 * **Work, not time.** `MH100w`'s cost is additive W1: the sum of the prices of the instructions written. The hardware
   co-issues writers on separate pipes. In Round 8, 1:1 DADD + FADD wrote a
   register every 26.75 units with two register sources, and as often as every 21.45 loop-free with immediates, and
-  21.33 at full dispatch, below `H32`'s 32 per register. So every bound here is on work. A bound on time needs a
+  21.33 at full dispatch, below `H32`'s 32 per register. On the H200, 2:1:1 DADD + IMAD + FADD writes one every 21.54
+  units, and `wgmma` beside IMAD and FFMA lanes one every 23.02. So every bound here is on work. A bound on time needs a
   maximum over resources.
+* **One program, fixed before the coins.** A program is straight-line and its addresses are oblivious: it has no
+  branch on data and no store to a computed address, and a load from a computed address is `other`. Its registers are
+  functions on the grid, and its cost does not depend on the grid point.
+  - A prover that branches on the coins is reached cell by cell, because the bounds hold on every set `S`. On the grid
+    points where it chooses the same straight-line program, that program is an `MH100w` program (`adaptive_floor`).
+  - A store to an address computed from the coins is outside `MH100w`. A free `move` can't stand for it, since its
+    location differs from one grid point to the next.
 
 * **Every salt-independent function of the committed input is free** (the corrected §0 rule). The committed input is X_q
   (the model's own FP8 quantization of the activations: E4M3 codes and a per-row scale), s, and the offline weight codes
@@ -50,13 +56,83 @@ instructions at `pr.tc` or more per register, FFMA, FADD and FMUL at `pr.ffma`, 
   instruction can write costs a penalty of `(a − c)/a` of its `a`.
 * **Tightness** (`DistinctWritesAttained`), the C-2 corollary (`C2DistinctWords`, `C2FirstRunCopy`), and the scheme's
   side (`DistinctLiveAt`, `DistinctLiveMH100`).
+
+## Review against the H200's measurements
+
+Each definition below was checked against what was measured on one H200 SXM (`sm_90a`, CUDA 13.0), in `Prices100`'s
+unit per 32-bit register written. **Matches** means the model charges what the hardware does. **Stricter** means it
+charges a program no more than the hardware does, so a lower bound in the model holds on the hardware a fortiori. No
+definition here is looser. The measurements:
+
+* **Price table**: 232 probes, each through the SASS gate (the timed loop holds only the instructions it names), with
+  sparse `wgmma` in its own run and the table replicated in a third. Each class's cheapest writer is within 1% above
+  32: tc 32.003, ffma 32.255, int32 32.277, fp64 32.003 and other 32.279. So the H200's table is `h100Floor` entry
+  for entry, and `H32` holds there with no slack.
+* **Opcode census**: every one of 963 `sm_90` SASS forms, each timed alone. None costs under 32 a register; the
+  least is DMUL at 32.00. 26 forms are unpriced: 21 `LDGMC`, 4 `LDL` and `LEPC`.
+* **Lane forms**: each of 58 integer forms, warp forms included, captured on 65,536 inputs against its documented
+  function, with 0 mismatches. Every output was checked: its 32-bit words a lane (two for IMAD.WIDE) and its
+  predicates.
+* **Predicated writes, model W**: an IMAD under a guard costs 64.27 a register whether the guard is true or false,
+  against 64.01 unguarded. So a predicated-off instruction takes its whole issue slot.
+* **MMA tile widths**, from the price table and from `mma.sync` and `wgmma` probes at each shape:
+  - Dense `wgmma` m64nN costs 32.003 a register at N ≥ 64, and 48.0, 80.0 and 144 at N 32, 16 and 8.
+  - `mma.sync` m16n8 forms with a 32-bit accumulator write 128 words a warp, at 32.010 to 48.07 a register. m8n8
+    forms and FP16-accumulate m16n8 forms write 64, at 64.02 to 96.1.
+  - s4 and b1 XOR.POPC are emulated by a subroutine, at 88 to 1,504 a register.
+  - The `sm_90a` PoUW kernel's SASS issues IGMMA 64x256x32 and 64x128x32.
+
+The verdicts:
+
+* **`Op100`'s prices, as `MH100w` reads them** (`Op100.price`, `Pouw.Dimension.H100`, at the H200's table):
+  - **Matches** for `wgmma` at N ≥ 64, `mma`, `fp32` and `fp64`. Their least writers cost 32.003 (dense and b1
+    `wgmma`, sparse `wgmma` with A from registers), 32.010 (`mma.sync` b1 m16n8k128), 32.255 (FADD with an immediate)
+    and 32.003 (DADD with an immediate).
+  - **Stricter** for `wgmma` at N < 64, where the price is 48 to 144 against the model's 32.
+  - **Matches** for `int` and `other`. Their least writers cost 32.277 (IMAD beside LOP3) and 32.279 (HADD2 beside
+    PRMT). One PTX form each also reaches the floor, because ptxas splits it across two pipes: IADD with an immediate
+    at 32.35, and two-source HADD2 with an immediate at 32.28. Most of either class costs more, so the model
+    under-charges it: IMAD and LOP3 alone cost 64.0 and 64.13, shared atomics 64.56, REDG 1,123 a word and the uniform
+    datapath 2,048 a word.
+  - **Stricter** for `move`, which is free where the hardware's MOV takes an issue slot. A load from a computed
+    address is `other` at 32 a word. On the hardware, a lookup costs at least 128.07 a word, and a copy into shared
+    memory at least 156 (LDGSTS.128, timed alone).
+  - **Stricter** for predicate and carry outputs. They aren't words, and the model doesn't price them. On the hardware,
+    they cost their instruction's issue slot.
+  - Every priced instruction computes any function of the grid. So `MH100w` reads none of the 58 forms' functions,
+    only how many 32-bit words each writes, at no less than its class's price a word. That holds for all 58.
+* **`Op100.WFw`**:
+  - **Matches** at `pr.tc`, which is 32 against the least 32.003.
+  - **Stricter** in the widths. An `mma` or `wgmma` may write any number of registers, a single one included, where
+    the hardware writes at least 64 words a warp.
+  - The operand rule is by definition.
+* **`Op100.CheapIn`**: **matches**, vacuously. No H200 tensor form costs under 32 a register, so at `a = 32` no
+  instruction is cheap.
+* **`DistinctOn` and `OutputsOn`**: **match** the per-word credit for a program with oblivious addresses (above).
+  - A target is one 32-bit word, as every lane form writes them.
+  - An instruction guarded on the coins writes the guarded function at its full price, whatever the guard. That is
+    model W, as measured.
+  - A lane the warp's mask leaves off is neither charged nor written. So against the hardware, which charges the
+    whole slot, the model is **stricter**.
+* **`DistinctLiveAt`**: a property of the targets, which no measurement reads.
+* **`h100Legacy`**: a hypothetical part, as stated. It does not describe the H200, where no tensor form is under 32.
+  Legacy m16n8k8 f16 costs 32.014 on the H200, and 32.00 loop-free on the H100 SXM.
+* **The pinned statements** read only the definitions above, at a table meeting `H32` or `Floor c`, or at
+  `h100Nominal`. They are checked with them.
+  - `DistinctWritesAttained`'s hardware caveat (`wgmma` at N ≥ 64 only) holds on the H200 as on the H100.
+  - `C2FirstRunCopy` is an implication. Its hypothesis is stated precisely in its docstring.
+
+**Not checked here.**
+- `H32` on the 26 unpriced census forms. `LEPC` writes a public constant. `LDL` is estimated at 128 a word. `LDGMC`
+  computes a word in memory (`other`) at a price not yet measured.
+- `Embed.lean`'s `M4090`, a 4090 model. Of it `MH100w` reads only `fpVal`.
 -/
 
 namespace Pouw.Dimension.H100
 
 variable {G : Type}
 
-/-- **`MH100w`'s well-formedness** for the free values `F` (draft semantics): a tensor-core instruction outside
+/-- **`MH100w`'s well-formedness** for the free values `F`: a tensor-core instruction outside
 `Shape100` costs at least `pr.tc` per accumulator register it writes, and an operand word is a free value. -/
 def Op100.WFw (pr : Prices100) (F : Set (G → ℚ)) : Op100 G → Prop
   | .mma outs p => pr.tc * outs.length ≤ p
@@ -85,12 +161,13 @@ def DistinctLiveAt (ε : ℚ) (S : Set G) (F : Set (G → ℚ)) (ts : List (G �
   ∃ D : Finset (G → ℚ), (∀ t ∈ D, t ∈ ts) ∧ DistinctOn S F D ∧ (1 - ε) * ts.length ≤ D.card
 
 /-- The nominal table with the other tensor-core instructions at 31 per register, below `H32`. It is a hypothetical part:
-the H800 PCIe's figure for legacy k8 `mma.sync` (31.2–31.8), rounded down. The H100 SXM measured 34.0. -/
+the H800 PCIe's figure for legacy k8 `mma.sync` (31.2–31.8), rounded down. The H100 SXM measured 34.0 in a loop and
+32.00 loop-free, and the H200 32.014. -/
 def h100Legacy : Prices100 := { h100Nominal with tc := 31 }
 
-/-! ## Pinned statements (draft semantics, pending review) -/
+/-! ## Pinned statements -/
 
-/-- **The distinct-writes bound for `MH100w`** (draft semantics, pending review): under `H32`, for every grid, free
+/-- **The distinct-writes bound for `MH100w`**: under `H32`, for every grid, free
 values `F` containing the constants, and FP32 semantics, a well-formed `MH100w` program on free inputs whose
 registers include every target of a finite set `T`, none of them free, costs at least `32·|T|`.
 
@@ -103,7 +180,7 @@ def DistinctWritesMH100 : Prop :=
       (∀ f ∈ L, f ∈ F) → (∀ o ∈ P, o.WFw pr F) → (∀ t ∈ T, t ∉ F) → (∀ t ∈ T, t ∈ regs100 fpSem P L) →
       32 * T.card ≤ cost100 pr P
 
-/-- **The distinct-writes bound on a success set** (draft semantics, pending review): under `H32`, for every set `S`
+/-- **The distinct-writes bound on a success set**: under `H32`, for every set `S`
 of grid points, a well-formed `MH100w` program on free inputs that matches on `S` every target of a finite set `T`,
 pairwise distinct on `S` and none equal on `S` to a free value, costs at least `32·|T|`. -/
 def DistinctWritesMH100On : Prop :=
@@ -113,7 +190,7 @@ def DistinctWritesMH100On : Prop :=
       (∀ f ∈ L, f ∈ F) → (∀ o ∈ P, o.WFw pr F) → DistinctOn S F T → OutputsOn fpSem S P L T →
       32 * T.card ≤ cost100 pr P
 
-/-- **The distinct-writes bound at any floor** (draft semantics, pending review): under `Floor c`, the same with `c`
+/-- **The distinct-writes bound at any floor**: under `Floor c`, the same with `c`
 per target. -/
 def DistinctWritesMH100Floor : Prop :=
   ∀ (c : ℕ) (pr : Prices100), Floor c pr →
@@ -122,7 +199,7 @@ def DistinctWritesMH100Floor : Prop :=
       (∀ f ∈ L, f ∈ F) → (∀ o ∈ P, o.WFw pr F) → DistinctOn S F T → OutputsOn fpSem S P L T →
       c * T.card ≤ cost100 pr P
 
-/-- **The distinct-writes bound with a cheap legacy class** (draft semantics, pending review): under `FloorTc a c`
+/-- **The distinct-writes bound with a cheap legacy class**: under `FloorTc a c`
 with `c ≤ a`, if every tensor-core instruction below `a` per register writes only functions in `K`, then for targets
 `T₁` and `T₂`, pairwise distinct on `S` within and across, none equal on `S` to a free value, and no target of `T₁`
 equal on `S` to a function of `K`, a program matching them all on `S` costs at least `a·|T₁| + c·|T₂|`. -/
@@ -143,14 +220,15 @@ def FloorTcSat : Prop := FloorTc 32 31 h100Legacy ∧ ¬ H32 h100Legacy
 /-- **The distinct-writes bound is attained** at the nominal prices: for every finite set `T` of functions and every
 list `Fr` of free values, one FP8 `wgmma` register per target of `T` and one operand word per free value is a
 well-formed `MH100w` program whose registers include them all, at exactly `32·|T|`. This is a nominal-model
-statement. On hardware it holds only for `wgmma` at `N ≥ 64` (`Shape100`). -/
+statement. On hardware it holds only for `wgmma` at `N ≥ 64` (`Shape100`). On the H200, m64nN costs 32.003 a register
+at `N ≥ 64`, and 48 to 144 below that. -/
 def DistinctWritesAttained : Prop :=
   ∀ (G : Type) (F : Set (G → ℚ)) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (T : Finset (G → ℚ)) (Fr L : List (G → ℚ)),
     (∀ f ∈ Fr, f ∈ F) →
     ∃ P : List (Op100 G), (∀ o ∈ P, o.WFw h100Nominal F) ∧ (∀ t ∈ T, t ∈ regs100 fpSem P L) ∧
       (∀ f ∈ Fr, f ∈ regs100 fpSem P L) ∧ cost100 h100Nominal P = 32 * T.card
 
-/-- **The C-2 corollary** (draft semantics, pending review): for the split-K words (fresh-step words `I τ` and
+/-- **The C-2 corollary**: for the split-K words (fresh-step words `I τ` and
 running words `R (τ + 1)`, `τ < T`), the honest schedule `splitK` is a well-formed `MH100w` program. Under `H32`,
 every well-formed `MH100w` program on free inputs whose registers include all of them costs at least 32 per word of
 any set `D` of them that are not free. Distinct words count separately, whatever their rounding. -/
@@ -163,13 +241,17 @@ def C2DistinctWords : Prop :=
         ∀ D : Finset (G → ℚ), (∀ w ∈ D, (∃ τ < T, w = I τ ∨ w = runWords fpSem κ I (τ + 1)) ∧ w ∉ F) →
           32 * D.card ≤ cost100 pr P
 
-/-- **The first running word is a copy**: if `κ` adds `+0` exactly (`fpSem κ 0 x 0 = x`, as FADD does), then
-`R 1 = I 0`. -/
+/-- **The first running word is a copy**: if `κ` adds `+0` exactly (`fpSem κ 0 x 0 = x` for every `x`), then
+`R 1 = I 0`.
+
+FADD meets the hypothesis on most inputs but not all of them. `+0 + −0` rounds to `+0`, a NaN comes back as the
+canonical NaN, and FADD.FTZ flushes a subnormal to `+0`. Read on rationals, a value that FP32 can't represent comes
+back rounded. So for FADD, `R 1 = I 0` holds where `I 0` takes none of those values, and not on every grid. -/
 def C2FirstRunCopy : Prop :=
   ∀ (G : Type) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (κ : ℕ) (I : ℕ → G → ℚ),
     (∀ x : ℚ, fpSem κ 0 x 0 = x) → runWords fpSem κ I 1 = I 0
 
-/-- **`DistinctLive` gives the per-word cost** (draft semantics, pending review): under `H32`, if `DistinctLiveAt ε S F
+/-- **`DistinctLive` gives the per-word cost**: under `H32`, if `DistinctLiveAt ε S F
 ts`, every well-formed `MH100w` program on free inputs that matches every target word of `ts` on `S` costs at least
 `32·(1 − ε)·|ts|`.
 

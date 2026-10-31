@@ -1590,6 +1590,46 @@
    "owner": "@compute-accounting",
    "digest": "a65c12c575aa911fb0a9e4c6ecaa41448dbb400843f7936024ed8d7eccec92ac"
   },
+  "Pouw.Assumptions.Lead.CardWithinAccelW1": {
+   "owner": "@compute-research",
+   "digest": "490e140a3224a61bb688b4558277fb195a991b6867847a944e7dd9d56d180f2d"
+  },
+  "Pouw.Assumptions.Lead.CertifierCoins": {
+   "owner": "@compute-research",
+   "digest": "dac19ea8e9da14a56eb26effd7c85954ae2790fd4738c521622c237c1afc4e49"
+  },
+  "Pouw.Assumptions.Lead.CommitL1w": {
+   "owner": "@compute-research",
+   "digest": "432a64db140ea1e95fe60399e33d18f724ca468af63b9245890107f4058817d3"
+  },
+  "Pouw.Assumptions.Lead.HonestHashRuled": {
+   "owner": "@compute-research",
+   "digest": "9aa8c125fcc8ed2aae5d6ed602764229385051720470b48161175f626e6c04ed"
+  },
+  "Pouw.Assumptions.Lead.OneInstructionMinimal": {
+   "owner": "@compute-research",
+   "digest": "c6d521aab045d905d77c91be4b0c34272bc637fdf989c0c7e282f5bf678c609a"
+  },
+  "Pouw.Assumptions.Lead.OutsourceWithinEgressLead": {
+   "owner": "@compute-research",
+   "digest": "3cc045b249e430cd65f2b4dd4ed641064204a53cd7e7054c3baf9e34ca1ffc52"
+  },
+  "Pouw.Assumptions.Lead.SerialForwards": {
+   "owner": "@compute-research",
+   "digest": "5810fbb215691023b9ce279b7e9ce946e63e4ac1b51d4d42422d4d82440ba440"
+  },
+  "Pouw.Assumptions.Lead.ShaWrites": {
+   "owner": "@compute-research",
+   "digest": "947cae386e3f1a19f45b418ddb688ee007cbdf85b6b0167d381acba5488fbd8b"
+  },
+  "Pouw.Assumptions.Lead.TileGrain": {
+   "owner": "@compute-research",
+   "digest": "2281c6db94c147f00dadd9837c28b61f18ca9ab8d23bf710798ec0ea45372a84"
+  },
+  "Pouw.Assumptions.Lead.W1": {
+   "owner": "@compute-research",
+   "digest": "72feea8d4c66f35d51c1b5fd2e5766a7da2b9ce0e4844e9d85c4470c3be135bb"
+  },
   "Pouw.Assumptions.OutsourceWithinEgress": {
    "owner": "@compute-research",
    "digest": "b56a56840f42a8ccfc2418f4a8b4169d2e1025ce9933babced5498b9fff7fbc8"
@@ -1690,6 +1730,18 @@
    "owner": "@compute-accounting",
    "digest": "eb91440586d6aa9ea8e63cd68c85bd3a2b323e91e039bca6aa8ecaaa710e53fc"
   },
+  "Pouw.Dimension.H100.H32": {
+   "owner": "@compute-research",
+   "digest": "c2b063f5d0a4f801815e77964f44ec4871e50a6cf6ac5a43b5425829af301801"
+  },
+  "Pouw.Dimension.H100.Op100.WFw": {
+   "owner": "@compute-research",
+   "digest": "3c262f0cf43b42f5fa9eb7e65e712e23e623a61d9d81fb7a09ddd2ef0f3bf917"
+  },
+  "Pouw.Dimension.H100.OutputsOn": {
+   "owner": "@compute-research",
+   "digest": "1a0f317152cb533e338886bbe680b409335537eb42219f370fd865f31302a2f9"
+  },
   "Pouw.Dimension.MinRankGe": {
    "owner": "@compute-accounting",
    "digest": "933eb6b182a96758dd6a00b6a416628b77478886d52063e30857f9084fd7eaff"
@@ -1766,6 +1818,10 @@
    "owner": "@compute-accounting",
    "digest": "7cfd18e0250ce18f4e28679c438c71ac38537b955ef174309651294dde643402"
   },
+  "Pouw.Guarantees.Lead.ChunksOf": {
+   "owner": "@compute-research",
+   "digest": "f927170f60f4894145db559ac76704c0a71e7fe4c98458d639bcc6190e55dc07"
+  },
   "Pouw.Gγ": {
    "owner": "@compute-accounting",
    "digest": "09f42b57cb73d9645e95b4480fa95b4479fde6cd18c00a646b8aa0e3f1badc68"
@@ -1777,6 +1833,18 @@
   "Pouw.InInt7": {
    "owner": "@compute-accounting",
    "digest": "d7dc4723b128157ac4a867bc38bdcbb69e10521d919e03fa35f9469d6f7b4248"
+  },
+  "Pouw.Lead.Accepted": {
+   "owner": "@compute-research",
+   "digest": "de719d852ecc89522c5505d0c152e1bb8e7b4aa42485cb274507fe78d908f6af"
+  },
+  "Pouw.Lead.Forward.Accepted": {
+   "owner": "@compute-research",
+   "digest": "98407f08b716f4ad3cb2e88b349f6cfbedd91a922de31bfaf77e9f2e4eb0023b"
+  },
+  "Pouw.Lead.Layout.Admits": {
+   "owner": "@compute-research",
+   "digest": "074bba61278b3227b632d3c9401f39caa854e4f017308dd847c645a4ad2416ad"
   },
   "Pouw.MerkleExtract.Opens": {
    "owner": "@compute-research",
@@ -2541,9 +2609,17 @@
    "sealed": true
   },
   "Definitions.Pouw.Assumptions": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Claims", "Definitions.Pouw", "Definitions.Pouw.Assumptions"],
+   "imports": [
+    "Mathlib",
+    "Definitions.Core",
+    "Definitions.Claims",
+    "Definitions.Pouw",
+    "Definitions.Pouw.Assumptions",
+    "Definitions.Core.Assumptions",
+    "Definitions.Hash"
+   ],
    "except": [],
-   "why": "a named assumption, and a definition or statement over named assumptions, reads the protocol's definitions, never a guarantee or a proof; the service premises per prover read the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ExpectedCR), as C-Flock's guarantees do",
+   "why": "a named assumption, and a definition or statement over named assumptions, reads the protocol's definitions, never a guarantee or a proof; the service premises per prover read the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ExpectedCR), as C-Flock's guarantees do; the lead's premises read core's named assumptions (`Definitions.Core.Assumptions`, the certifier's `trusted-host`) and the hash area's formats (`Definitions.Hash`: frame-v3 trees and hm96-sha512 rows), never its guarantees",
    "sealed": true
   },
   "Definitions.Pouw.Guarantees": {
@@ -2561,7 +2637,7 @@
   },
   "Definitions.Pouw": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.Claims", "Definitions.Pouw"],
-   "except": ["Definitions.Pouw.PearlC.Defs"],
+   "except": ["Definitions.Pouw.PearlC.Defs", "Definitions.Pouw.Lead.Model", "Definitions.Pouw.Lead.Deployed"],
    "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof; relative security's per-prover break term reads the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ecrBound), the one break term the areas share"
   },
   "Definitions.Pouw.Basic": {
@@ -2579,6 +2655,22 @@
    ],
    "except": [],
    "why": "Pearl-C's Π, definitions only, over Fp8Atom's definitions: the game and the named assumption read it"
+  },
+  "Definitions.Pouw.Lead.Model": {
+   "imports": [
+    "Mathlib",
+    "Definitions.Hash.Basic",
+    "Definitions.Pouw.Lead.Layout",
+    "Definitions.Pouw.Dimension.Pointwise",
+    "Definitions.Pouw.Assumptions.Dimension.H100"
+   ],
+   "except": [],
+   "why": "the lead's strategy model, definitions only: a strategy's trace is MH100's instructions and its price MH100's tables (Op100, Prices100, regs100, cost100, from Definitions.Pouw.Assumptions.Dimension.H100, none of its named assumptions), its run the chunk model's (Definitions.Pouw.Dimension.Pointwise), and a commitment's messages and digests the hash area's (Definitions.Hash.Basic)"
+  },
+  "Definitions.Pouw.Lead.Deployed": {
+   "imports": ["Mathlib", "Definitions.Hash.Tree", "Definitions.Hash.Hm96", "Definitions.Pouw.Lead.Gap"],
+   "except": [],
+   "why": "the lead's deployed commitment and coin stream, definitions only: range-indexed frame-v3 trees under hm96 leaves (Definitions.Hash.Tree, Definitions.Hash.Hm96) over the lead's layout, model and chunks (Definitions.Pouw.Lead.Gap)"
   },
   "Definitions.Pous.Assumptions": {
    "imports": ["Mathlib", "Definitions.Pous", "Definitions.Pous.Assumptions"],
@@ -10113,6 +10205,78 @@
    "assumptions": [],
    "type_hash": "4b3596da16a1c3c644897e041329065e140b1884887a3ddf279b46ee703d6cc6"
   },
+  "Pouw.SecurityProofs.Lead.Compose.G": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Lead.Compose.G : Pouw.Guarantees.Lead.G"],
+   "assumptions": [],
+   "type_hash": "a25a0d349dece0eb803b7b1f243ff11c00028325aa1f36f6a57f0b74f23b79dd"
+  },
+  "Pouw.SecurityProofs.Lead.Compose.honest": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Lead.Compose.honest : Pouw.Guarantees.Lead.Honest"],
+   "assumptions": [],
+   "type_hash": "b44fbfc2a9544eeaf5e6e5105c97fc7b0255f1af6df1fe17234a09ec85514584"
+  },
+  "Pouw.SecurityProofs.Lead.Network.networkFwd": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Lead.Network.networkFwd : Pouw.Guarantees.Lead.NetworkFwd"],
+   "assumptions": [],
+   "type_hash": "b44f5c410d6c7c3851780884de99a2abb5582c6a61dd975c431dce77b645510d"
+  },
+  "Pouw.SecurityProofs.Lead.Network.networkLlama": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Lead.Network.networkLlama : Pouw.Guarantees.Lead.NetworkLlama"],
+   "assumptions": [],
+   "type_hash": "549e993d7817800a2b630297b96718db8a935373ab96f1a8de0c796fa1bb4088"
+  },
+  "Pouw.SecurityProofs.Lead.Statement.gapAll": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Lead.Statement.gapAll : Pouw.Guarantees.Lead.GapAll"],
+   "assumptions": [],
+   "type_hash": "139b68d5ad4fda139dc99340ca3386ba5452d9764ccdab41315362b7cc677316"
+  },
+  "Pouw.SecurityProofs.Lead.Statement.gapAt": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Lead.Statement.gapAt : Pouw.Guarantees.Lead.GapAt"],
+   "assumptions": [],
+   "type_hash": "7bf580a1fc992928e6a95c973ffeae967efaa6fd6c6b03861fe718ee093a9580"
+  },
+  "Pouw.SecurityProofs.Lead.Statement.gapAtDecode": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Lead.Statement.gapAtDecode : Pouw.Guarantees.Lead.GapAtDecode"],
+   "assumptions": [],
+   "type_hash": "232f3ffb5e5cf3a09ab3c37de3f814f668eb3bdb5113a69a50bab56b5dd6e5f2"
+  },
+  "Pouw.SecurityProofs.Lead.Statement.nontrivial": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Lead.Statement.nontrivial : Pouw.Guarantees.Lead.Nontrivial"],
+   "assumptions": [],
+   "type_hash": "dbc16b927c72148b229641b69ab46b88b73482f6c059778c4da6c1a469627519"
+  },
+  "Pouw.SecurityProofs.Lead.Tail.G_tail": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Lead.Tail.G_tail : Pouw.Guarantees.Lead.G_tail"],
+   "assumptions": [],
+   "type_hash": "b441abb619714c1ab7f7429e908acc63924d6cd6eb9c93b5ed00b666340af7bd"
+  },
+  "Pouw.SecurityProofs.Lead.Tail.gapFixedAt": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Lead.Tail.gapFixedAt : Pouw.Guarantees.Lead.GapFixedAt"],
+   "assumptions": [],
+   "type_hash": "2490498ac0a32b3fbaf9c201e901c78f147e31c7a79c795433cbe4779758716d"
+  },
+  "Pouw.SecurityProofs.Lead.Tail.nontrivialTail": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Lead.Tail.nontrivialTail : Pouw.Guarantees.Lead.NontrivialTail"],
+   "assumptions": [],
+   "type_hash": "c28fa29e7394acb1f9f80795a268f9671f2443a3bb0282ce93b246fdbdf0395a"
+  },
+  "Pouw.SecurityProofs.Lead.Tail.tailAt": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Lead.Tail.tailAt : Pouw.Guarantees.Lead.TailAt"],
+   "assumptions": [],
+   "type_hash": "51ed57ae366e0ea3430be448aad4630668f855ab33eaa1b1cc2c495c5638fa02"
+  },
   "Pouw.SecurityProofs.NCP.BiasU8Iff": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.NCP.BiasU8Iff : Pouw.Guarantees.NCP.BiasU8Iff"],
@@ -11384,6 +11548,42 @@
    "signature": ["Pouw.SecurityProofs.WorkWeightedSampling : Pouw.Guarantees.WorkWeightedSampling"],
    "assumptions": [],
    "type_hash": "2f6552a7668b089031af583e72b5e551727622dd8c12b1269790c9ad397ed88b"
+  },
+  "Pouw.SecurityProofs.Writes.DistinctWritesMH100Floor": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Writes.DistinctWritesMH100Floor : Pouw.Guarantees.Writes.DistinctWritesMH100Floor"],
+   "assumptions": [],
+   "type_hash": "ffbccb36ecf4e42c8d088293f27130db1b54ed6912cc0d37d0668a3beb9303d6"
+  },
+  "Pouw.SecurityProofs.Writes.RunBall": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Writes.RunBall : Pouw.Guarantees.Writes.RunBall"],
+   "assumptions": [],
+   "type_hash": "68097eca292ce4d1a0878699cbe7f975ced168d812d6f7faa99f66c6eab28e23"
+  },
+  "Pouw.SecurityProofs.Writes.RunPairs": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Writes.RunPairs : Pouw.Guarantees.Writes.RunPairs"],
+   "assumptions": [],
+   "type_hash": "296c1fb8da6eac62858c4e96d6069747b6b7b0f55598a0c0c8c3466c3c982caf"
+  },
+  "Pouw.SecurityProofs.Writes.SsnServedCharged": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Writes.SsnServedCharged : Pouw.Guarantees.Writes.SsnServedCharged"],
+   "assumptions": [],
+   "type_hash": "1c538768e14a10d6260904bf4e423be9985c41ddea6d3ab0fa2f065a9cd4e6eb"
+  },
+  "Pouw.SecurityProofs.Writes.SsnServedDistinct": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Writes.SsnServedDistinct : Pouw.Guarantees.Writes.SsnServedDistinct"],
+   "assumptions": [],
+   "type_hash": "fbc74786492cbda4c7a5830b2fda966e0d4375f41baf133a165f48d053696d93"
+  },
+  "Pouw.SecurityProofs.Writes.SsnServedShift": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.Writes.SsnServedShift : Pouw.Guarantees.Writes.SsnServedShift"],
+   "assumptions": [],
+   "type_hash": "868e3369af0857a64e550adc2ebc0bae92b4b4e9d59a7012f2fa750af37ba729"
   },
   "Pouw.SecurityProofs.outsourcePeriod_of_perProgram": {
    "owner": "@compute-research",
@@ -12928,6 +13128,24 @@
    "Verity.SecurityProofs.CreditSizeLe": "frozen (no-function): It is about an arbitrary lowering from declarations to circuits and an arbitrary declaration (Verity.creditSize, Security/Definitions/Core/Formalism.lean): the credit, the lowered circuit's AND count, is at most its size; not about a function's code.",
    "Verity.SecurityProofs.ExpandAndSize": "frozen (no-function): It is about an arbitrary declaration, a partition of it and their expansions (Verity.Circuit.andSize, Verity.Declaration.expand, Verity.Partition.expand): the expansion's AND count is at most the bits it expands; not about a function's code.",
    "Verity.SecurityProofs.ToCircuitAnd": "frozen (no-function): It is about an arbitrary C-Flock circuit of the Boolean profile and its toCircuit (FlockSoundness.Audit.Circuit, Security/Definitions/Core/Boolean.lean): which of its gates are AND gates (Verity.Circuit.IsAnd); not about a function's code.",
+   "Pouw.SecurityProofs.Writes.DistinctWritesMH100Floor": "frozen (no-function): A cost bound over the MH100w machine model, not over a Lean function of the code, so it has no acceptance to take. It is about one straight-line program fixed before the coins: a program that branches on the coins, loads a whole chunk from a computed address (priced at `other`, which a device's chunk copy doesn't pay) or stores to one (no MH100w instruction) is outside it. Its model's semantics are draft, pending review (Security/Definitions/Pouw/Assumptions/Dimension/H100W.lean), and the review must clear them before the statement says anything about a device.",
+   "Pouw.SecurityProofs.Writes.RunBall": "frozen (no-function): A bound in the chunk model (Security/Definitions/Pouw/Dimension/Pointwise.lean), whose semantics are draft, pending review, not over a Lean function of the code, so it has no acceptance to take. It holds for every run, so for a prover that branches on the coins or copies from and to computed addresses; it prices a word write at one and a whole-chunk copy at nothing, and that a device's writes cost at least that (a copy grain or a fresh-write floor) is a device premise not yet stated.",
+   "Pouw.SecurityProofs.Writes.RunPairs": "frozen (no-function): A bound in the chunk model (Security/Definitions/Pouw/Dimension/Pointwise.lean), whose semantics are draft, pending review, not over a Lean function of the code, so it has no acceptance to take. It holds for every run, so for a prover that branches on the coins or copies from and to computed addresses; it prices a word write at one and a whole-chunk copy at nothing, and that a device's writes cost at least that (a copy grain or a fresh-write floor) is a device premise not yet stated.",
+   "Pouw.SecurityProofs.Writes.SsnServedCharged": "frozen (no-function): A cost bound at MH100w's `h100Floor` table for served sparse noise's committed words on the full coin grid, not over a Lean function of the code, so it has no acceptance to take. It is about one program fixed before the coins and right on every coin value: a prover that branches on the coins, or is right only on a success set, is outside it. Its model's semantics are draft, pending review (Security/Definitions/Pouw/Assumptions/Dimension/H100W.lean), and the review must clear them before the statement says anything about a device.",
+   "Pouw.SecurityProofs.Writes.SsnServedDistinct": "frozen (no-function): A fact about served sparse noise's committed words in the bit model on the full coin grid (Security/Definitions/Pouw/Dimension/Ssn.lean), for the 4- and 5-lane layouts as the definitions state them; it reads no function of the code, so it has no acceptance to take. That the served kernel commits exactly these words is completeness. Its model's semantics are draft, pending review (Security/Definitions/Pouw/Assumptions/Dimension/H100W.lean), and the review must clear them before the statement says anything about a device.",
+   "Pouw.SecurityProofs.Writes.SsnServedShift": "frozen (no-function): A fact about served sparse noise's committed words in the bit model on the full coin grid (Security/Definitions/Pouw/Dimension/Ssn.lean): no two differ by a constant and none is a free value plus one, the hypotheses of carrier separation. It reads no function of the code, so it has no acceptance to take. Its model's semantics are draft, pending review (Security/Definitions/Pouw/Assumptions/Dimension/H100W.lean), and the review must clear them before the statement says anything about a device.",
+   "Pouw.SecurityProofs.Lead.Compose.G": "frozen (no-function,hash): The lead's work bound over every strategy the node can run on a call (the strategy model of Definitions.Pouw.Lead.Model, priced on MH100w), not over a Lean function of the code, so it has no acceptance to take; its other branch is a SHA-512 collision with the honest commitment's messages (Pouw.Lead.Break).",
+   "Pouw.SecurityProofs.Lead.Compose.honest": "completeness: G's honest lemma: at every admitted call of the lead (Layout.Admits), some certifier running certCode meets CertifierCoins, and at the deployed commitment (l1wCommit: a call's A instance in 1 KiB segments and its forward's words instance), its form classifier and the certifier's coin stream (certStream), the nominal W1 table and a set of strategies holding an honest one, accepted at every coin value, meet every premise of G, so G's hypotheses are not vacuous at the deployed instance; for every A of at most 2^64 bytes and every forward of at most 2^64 words leaves.",
+   "Pouw.SecurityProofs.Lead.Statement.nontrivial": "completeness: G's nontrivial lemma: at the three points the honest work exceeds the gap, and a strategy that does nothing does no priced work, exchanges nothing and hashes nothing, so G's conclusion fails for a verifier that accepts everything.",
+   "Pouw.SecurityProofs.Lead.Statement.gapAt": "lemma: the gap's share of served stock at T 512 x 64, T 512 x 512 and T 8,192 for every call of n >= 512 and K >= 2,048, an evaluation of the defined function Pouw.Lead.gapServed, not a property of a Lean function of the code.",
+   "Pouw.SecurityProofs.Lead.Statement.gapAll": "lemma: the gap's share of served stock at every call the verifier admits is at most the closed form Pouw.Lead.gapBound, an evaluation of the defined functions Pouw.Lead.gapServed and Pouw.Lead.gapBound, not a property of a Lean function of the code.",
+   "Pouw.SecurityProofs.Lead.Network.networkFwd": "lemma: a forward's network term from its bits, over the forward model of Definitions.Pouw.Lead.Forward under SerialForwards, not a property of a Lean function of the code.",
+   "Pouw.SecurityProofs.Lead.Network.networkLlama": "lemma: the network term of a forward of Llama-3.2-1B's linears as a share of its calls' served stock, an evaluation over the forward model of Definitions.Pouw.Lead.Forward, not a property of a Lean function of the code.",
+   "Pouw.SecurityProofs.Lead.Statement.gapAtDecode": "lemma: the gap at decode, the call committed padded to 16 rows, as a share of the one served row's stock, an evaluation of the defined function Pouw.Lead.gapServed, not a property of a Lean function of the code.",
+   "Pouw.SecurityProofs.Lead.Tail.G_tail": "frozen (no-function,hash): G's tail form under G's premises: the share of the certifier's entropy values at whose coins a strategy the node can run is accepted, hashes no SHA-512 collision with the honest commitment's messages and works below the honest work less the fixed gap is at most etaLead; over the strategy model of Definitions.Pouw.Lead.Model, not a Lean function of the code, so it has no acceptance to take.",
+   "Pouw.SecurityProofs.Lead.Tail.gapFixedAt": "lemma: the tail's fixed gap as a share of served stock at T 512 x 64, T 512 x 512, T 8,192 and decode for every call of n, K >= 4,096, an evaluation of the defined function Pouw.Lead.gapFixedServed, not a property of a Lean function of the code.",
+   "Pouw.SecurityProofs.Lead.Tail.tailAt": "lemma: etaLead at the three points and decode for calls of n, K >= 4,096 and at most 2^30 tiles, an evaluation of the defined functions Pouw.Lead.tableTail and Pouw.Lead.coinTail, not a property of a Lean function of the code.",
+   "Pouw.SecurityProofs.Lead.Tail.nontrivialTail": "completeness: G_tail's nontrivial lemma: at the three points the honest work exceeds the fixed gap and etaLead < 1, so a strategy that does nothing falls in G_tail's event at every entropy value and its conclusion fails for a verifier that accepts everything.",
    "Accounting.SecurityProofs.AccelRate": "frozen (no-function): It shows the instructions of runs of the machine model 𝓜 back to back (Verity.Accel.Machine.run) meet a rate at their seconds summed, not a Lean function's acceptance.",
    "Accounting.SecurityProofs.AccelAdditive": "frozen (no-function): It bounds the resource units of disjoint sets of the instructions a period issues on the machine model 𝓜 by the period's rate, not a Lean function's acceptance.",
    "Pouw.SecurityProofs.Dither.WorkMoment": "frozen (verdict): as WorkSound, before its Markov step: the per-replica moment over a quantified service verdict, which FleetSound pools (CMP-152, CMP-136).",
@@ -19055,6 +19273,9 @@
     "NetTiming.SecurityProofs.HorizonLeakAccepted",
     "NetTiming.SecurityProofs.PeriodLeakAccepted",
     "NetTiming.SecurityProofs.WardenViewEqClientView",
+    "Pouw.SecurityProofs.Lead.Compose.G",
+    "Pouw.SecurityProofs.Lead.Compose.honest",
+    "Pouw.SecurityProofs.Lead.Tail.G_tail",
     "Verity.SecurityProofs.AmpereStepComplete",
     "Verity.SecurityProofs.AmpereStepHw",
     "Verity.SecurityProofs.AmpereStepIff",
@@ -19434,6 +19655,17 @@
     "Hash.SecurityProofs.EmbeddingReadBinding",
     "Hash.SecurityProofs.RowBinding",
     "Hash.SecurityProofs.TreeBinding",
+    "Pouw.SecurityProofs.Lead.Compose.G",
+    "Pouw.SecurityProofs.Lead.Compose.honest",
+    "Pouw.SecurityProofs.Lead.Network.networkFwd",
+    "Pouw.SecurityProofs.Lead.Network.networkLlama",
+    "Pouw.SecurityProofs.Lead.Statement.gapAll",
+    "Pouw.SecurityProofs.Lead.Statement.gapAt",
+    "Pouw.SecurityProofs.Lead.Statement.gapAtDecode",
+    "Pouw.SecurityProofs.Lead.Statement.nontrivial",
+    "Pouw.SecurityProofs.Lead.Tail.G_tail",
+    "Pouw.SecurityProofs.Lead.Tail.gapFixedAt",
+    "Pouw.SecurityProofs.Lead.Tail.nontrivialTail",
     "Verity.SecurityProofs.RegisteredMeets"
    ]
   },
@@ -22706,6 +22938,17 @@
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "NetTiming.SecurityProofs.SampledLeakRegistered",
+    "Pouw.SecurityProofs.Lead.Compose.G",
+    "Pouw.SecurityProofs.Lead.Compose.honest",
+    "Pouw.SecurityProofs.Lead.Network.networkFwd",
+    "Pouw.SecurityProofs.Lead.Network.networkLlama",
+    "Pouw.SecurityProofs.Lead.Statement.gapAll",
+    "Pouw.SecurityProofs.Lead.Statement.gapAt",
+    "Pouw.SecurityProofs.Lead.Statement.gapAtDecode",
+    "Pouw.SecurityProofs.Lead.Statement.nontrivial",
+    "Pouw.SecurityProofs.Lead.Tail.G_tail",
+    "Pouw.SecurityProofs.Lead.Tail.gapFixedAt",
+    "Pouw.SecurityProofs.Lead.Tail.nontrivialTail",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10RPerProver",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedPerProver",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKPerProver",
@@ -22763,7 +23006,8 @@
     "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
     "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
     "Hash.SecurityProofs.EmbeddingReadBinding",
-    "Hash.SecurityProofs.RowBinding"
+    "Hash.SecurityProofs.RowBinding",
+    "Pouw.SecurityProofs.Lead.Compose.honest"
    ]
   },
   "Definitions.Hash.RowLeaf": {
@@ -22852,20 +23096,32 @@
    ]
   },
   "Definitions.Hash.Tree": {
-   "digest": "ed0d93fc3544cf3489b885499ef044e8c218f324ba4bb4896d3dbe2d2f305be3",
+   "digest": "bb0336d0051aa256f6cee326e36b72726ace2b245f04b5a3ff3cde0ad5b39cca",
    "definitions": {
     "Hash.Tree.Domain": "c2c79d8570596b033121c42768e11af8fd3ddb0e656b558424aac662adddff74",
     "Hash.Tree.Domain.count": "c7812871a6e03a1a9b88abf30238ba383cab05ec0dd67f385b4c35790c066f53",
     "Hash.Tree.Domain.id": "ab91f31820805475fdbbf07c9fad7fcb7babfbfcc47c1dd03807b80516043eec",
     "Hash.Tree.Domain.position": "c65f7b2d58c42f39e01b1d8180f87aa25c7590dfd996399acb4117dc9620c10c",
+    "Hash.Tree.Domain.range": "c8476041cd408832d05ae38ed5760967e10bff0e7898f257c5cbd7bb2f237452",
     "Hash.Tree.FRAME": "4130405b343d06fadfa665b8b20013788c7d9ec8200a9402f85bf571aac2ffd4",
     "Hash.Tree.accepts": "a13dfea1bb148c7fdd72df2454b771ddfb111a4adfad0977f6dcd03a34d6be72",
+    "Hash.Tree.base": "0c1d94205c6d7bed3f63c659befcdba3c7c8a79f720c2b2898e5d4357e0977fb",
+    "Hash.Tree.build": "1debcf905bfdf1590aaf1626f9d5284df71002f84b94b4dae0a9383ea2d775c2",
     "Hash.Tree.climb": "c3986ce54392951067f5b5816c855d6fadbc4d9659261e6c32a5e916c6c2a53b",
     "Hash.Tree.depth": "fae7624f67ea840b85336f50ef04f61fd932ef6b34c921874243d1950a7ede3f",
+    "Hash.Tree.emptyMsg": "c91c343c6662347ba7cc1fab51b8e7b179b8f884a407680cfc8bbca49775c5e6",
     "Hash.Tree.frame": "13959de8be69faa822b6eea50bee86deef490427851d98c9f0d68743a83d0ec1",
     "Hash.Tree.hashed": "371d639307471c887542c15ecfbd15ca5989fad57232980260e1da6c8543b971",
     "Hash.Tree.leafMsg": "6a99db444e670c04751199804ecb785dc5e3b5844936bb6f45be04ebc7d0afd5",
-    "Hash.Tree.nodeMsg": "eac379afe30c0f23fdb1cb331a144809e9367083bbbc7dc760d44938041bcee2"
+    "Hash.Tree.leaves": "2fb3f02842a494968381de73f06ebff9d18ce03833691bd3e76787f2380c0ddc",
+    "Hash.Tree.msgs": "4b8eef4af58f27e0967e45c26e14657d5b9578aae72d16d9337156451b6e294a",
+    "Hash.Tree.nodeMsg": "eac379afe30c0f23fdb1cb331a144809e9367083bbbc7dc760d44938041bcee2",
+    "Hash.Tree.padMsg": "16a6d232b363b890222610200a305938851b1c13cdfe53f5db79c2b5dda567e3",
+    "Hash.Tree.pairs": "0c8e4786204c605de3d748c51df222f1b4dd7e4d3cd1b70959be5189d85c173e",
+    "Hash.Tree.pairs._sparseCasesOn_1": "dc26bf7d8e1c6d37172fd64d16a09f5999c160ea7071c268d9d143629aabaa23",
+    "Hash.Tree.rangeManifest": "52206dc6b09ce8825e774839f44dbdd15a6babfebd2d2433483d72004690ea99",
+    "Hash.Tree.root": "f0b914116c358c3fdde0ecde8bfe6ef90ef9c44ed3782ee73322a6aa16448df9",
+    "Hash.Tree.taggedMsg": "cd264415211991aeba01f83a37b4177bcb5e729101692b25177afcec7e881508"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Remote.HeldDrawn",
@@ -22877,7 +23133,8 @@
     "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
     "Hash.SecurityProofs.EmbeddingReadBinding",
     "Hash.SecurityProofs.RowBinding",
-    "Hash.SecurityProofs.TreeBinding"
+    "Hash.SecurityProofs.TreeBinding",
+    "Pouw.SecurityProofs.Lead.Compose.honest"
    ]
   },
   "Definitions.Nci": {
@@ -26319,7 +26576,11 @@
    "definitions": {
     "Pouw.Dimension.Embed.fpVal": "a1d93fe6493e64fe90c44c321fc3634aa0805a5601e59db545abae090dcfa4d4"
    },
-   "guarantees": ["Pouw.Fp8Atom.H1T.Proofs.h1tGamma"]
+   "guarantees": [
+    "Pouw.Fp8Atom.H1T.Proofs.h1tGamma",
+    "Pouw.SecurityProofs.Writes.DistinctWritesMH100Floor",
+    "Pouw.SecurityProofs.Writes.SsnServedCharged"
+   ]
   },
   "Definitions.Pouw.Assumptions.Dimension.H100": {
    "digest": "7fb99c30623bc4c9fafb1e72a99287196f7cd11d6979e0ce623ec5e65f1aea81",
@@ -26341,10 +26602,20 @@
     "Pouw.Dimension.H100.cost100": "c6e667ff1a515b6b0306e2c417226b2abdd730d49d9401476ee5e1d3adb91cb5",
     "Pouw.Dimension.H100.regs100": "3c835bc7174e0368cd9c5fe7717a12d248cf4652368ba4f1c691a281f26fdf88"
    },
-   "guarantees": ["Pouw.Fp8Atom.H1T.Proofs.h1tGamma"]
+   "guarantees": [
+    "Pouw.Fp8Atom.H1T.Proofs.h1tGamma",
+    "Pouw.SecurityProofs.Lead.Compose.G",
+    "Pouw.SecurityProofs.Lead.Compose.honest",
+    "Pouw.SecurityProofs.Lead.Network.networkFwd",
+    "Pouw.SecurityProofs.Lead.Network.networkLlama",
+    "Pouw.SecurityProofs.Lead.Statement.nontrivial",
+    "Pouw.SecurityProofs.Lead.Tail.G_tail",
+    "Pouw.SecurityProofs.Writes.DistinctWritesMH100Floor",
+    "Pouw.SecurityProofs.Writes.SsnServedCharged"
+   ]
   },
   "Definitions.Pouw.Assumptions.Dimension.H100Assumptions": {
-   "digest": "661455d1fb61029d4e0a4c80e434e227f959ebdf5c0b4bdb5373e832147e76fd",
+   "digest": "1bd830faf2fa8ca576439f3c6b81e5ebb2d4511afd71e52a0387f3a93e8fc056",
    "definitions": {
     "Pouw.Dimension.H100.Floor": "779a343c115e76cc39a4b1831f5a2b17c3bb6ef6f059acd29ab10065873e414c",
     "Pouw.Dimension.H100.H32": "c2b063f5d0a4f801815e77964f44ec4871e50a6cf6ac5a43b5425829af301801",
@@ -26371,17 +26642,54 @@
     "Pouw.Dimension.H100.Shape100.rec": "1dbead74ef11d5de78bbd07a830a9c31f563ec2577a08a3b4ba2e0c80779dafe",
     "Pouw.Dimension.H100.Shape100.regPrice": "79bfca032692c212a4adfad8ae9ec9243b19969a43d8ea311aee47fdec672a18",
     "Pouw.Dimension.H100.Shape100.s8": "857c848cfcf3d79aa250471866372aac5b0e8faf039f728f055de7990a189e63",
-    "Pouw.Dimension.H100.Shape100.tf32": "9547cbb0091bc626bc7c9b32c7296888f5669a20e966f1eedf3e04b0a44599f2"
+    "Pouw.Dimension.H100.Shape100.tf32": "9547cbb0091bc626bc7c9b32c7296888f5669a20e966f1eedf3e04b0a44599f2",
+    "Pouw.Dimension.H100.h100Nominal": "3420f1eb7fb4aab404a23aa5b864dd31e17033ae285f43e18d61f1731ce83607",
+    "Pouw.Dimension.H100.nominalMac": "ff0014d94244d94d379487b71d43cce7fb17cc4f341402b2d2b8c32d1843eb46"
    },
-   "guarantees": ["Pouw.Fp8Atom.H1T.Proofs.h1tGamma"]
+   "guarantees": [
+    "Pouw.Fp8Atom.H1T.Proofs.h1tGamma",
+    "Pouw.SecurityProofs.Lead.Compose.G",
+    "Pouw.SecurityProofs.Lead.Compose.honest",
+    "Pouw.SecurityProofs.Lead.Network.networkFwd",
+    "Pouw.SecurityProofs.Lead.Network.networkLlama",
+    "Pouw.SecurityProofs.Lead.Statement.nontrivial",
+    "Pouw.SecurityProofs.Lead.Tail.G_tail",
+    "Pouw.SecurityProofs.Writes.DistinctWritesMH100Floor",
+    "Pouw.SecurityProofs.Writes.SsnServedCharged"
+   ]
+  },
+  "Definitions.Pouw.Assumptions.Dimension.H100Floor": {
+   "digest": "1e99ab59fc7d1ec661cc444143bd82cab3b8187349d6cee1fa03c52e51b17583",
+   "definitions": {
+    "Pouw.Dimension.H100.h100Floor": "fa43668902dc4c2a388723dcf95ff5ac9ea130a53bdf3301659837ea971a878c"
+   },
+   "guarantees": ["Pouw.SecurityProofs.Writes.SsnServedCharged"]
+  },
+  "Definitions.Pouw.Assumptions.Dimension.H100LoopFree": {
+   "digest": "1b806c9c966783d2bc842d3915f8f364e18f1cebaeaf2b42dc3e4aebfb89fd7b",
+   "definitions": {
+    "Pouw.Dimension.H100.h100LoopFree": "d41f33a1770c7666258b0e6a031cc207f1fc8419e589191e5092b457a790e82a"
+   },
+   "guarantees": ["Pouw.SecurityProofs.Writes.SsnServedCharged"]
   },
   "Definitions.Pouw.Assumptions.Dimension.H100W": {
-   "digest": "babd265d2e6d433d6768f995555fceab51aa3e899426a04373b22b75cc26ff49",
+   "digest": "c935e70527dc086ef76cd313d64d24165c588aa600dfeacac48f2a0c4503db18",
    "definitions": {
+    "Pouw.Dimension.H100.DistinctOn": "663f52479b4c9f8ec4ecf2268636b4f0cf9db200a1246212856631bae3c158d7",
+    "Pouw.Dimension.H100.DistinctWritesMH100Floor": "a201cdd0ed5a64f43a73049d479d41e868ff2f0edd6e18e981a26073e0aca6fb",
     "Pouw.Dimension.H100.Op100.WFw": "3c262f0cf43b42f5fa9eb7e65e712e23e623a61d9d81fb7a09ddd2ef0f3bf917",
-    "Pouw.Dimension.H100.Op100.WFw._sparseCasesOn_1": "91e62f22b455a528014c4c8216b4c4048d582e855ecda44e2a55733df55af5bd"
+    "Pouw.Dimension.H100.Op100.WFw._sparseCasesOn_1": "91e62f22b455a528014c4c8216b4c4048d582e855ecda44e2a55733df55af5bd",
+    "Pouw.Dimension.H100.OutputsOn": "1a0f317152cb533e338886bbe680b409335537eb42219f370fd865f31302a2f9"
    },
-   "guarantees": ["Pouw.Fp8Atom.H1T.Proofs.h1tGamma"]
+   "guarantees": [
+    "Pouw.Fp8Atom.H1T.Proofs.h1tGamma",
+    "Pouw.SecurityProofs.Lead.Compose.G",
+    "Pouw.SecurityProofs.Lead.Compose.honest",
+    "Pouw.SecurityProofs.Lead.Tail.G_tail",
+    "Pouw.SecurityProofs.Writes.DistinctWritesMH100Floor",
+    "Pouw.SecurityProofs.Writes.SsnServedCharged",
+    "Pouw.SecurityProofs.Writes.SsnServedDistinct"
+   ]
   },
   "Definitions.Pouw.Assumptions.Dimension.Mixing": {
    "digest": "f01e5fcb66acc1b3507c6ad7565d4953f3c4a2e693174c3c6f0c9f92d1aea3cf",
@@ -26487,6 +26795,31 @@
     "Pouw.SecurityProofs.GammaFromTT",
     "Pouw.SecurityProofs.SpareCapacityAtDeadline",
     "Pouw.SecurityProofs.WorkBetweenSaltAndDeadline"
+   ]
+  },
+  "Definitions.Pouw.Assumptions.Lead": {
+   "digest": "c830d53eb0cdd703b2554c35351b8826959bec8ecdac945f50dac36de4f52b8c",
+   "definitions": {
+    "Pouw.Assumptions.Lead.CardWithinAccelW1": "490e140a3224a61bb688b4558277fb195a991b6867847a944e7dd9d56d180f2d",
+    "Pouw.Assumptions.Lead.CertifierCoins": "dac19ea8e9da14a56eb26effd7c85954ae2790fd4738c521622c237c1afc4e49",
+    "Pouw.Assumptions.Lead.CommitL1w": "432a64db140ea1e95fe60399e33d18f724ca468af63b9245890107f4058817d3",
+    "Pouw.Assumptions.Lead.HonestHashRuled": "9aa8c125fcc8ed2aae5d6ed602764229385051720470b48161175f626e6c04ed",
+    "Pouw.Assumptions.Lead.OneInstructionMinimal": "c6d521aab045d905d77c91be4b0c34272bc637fdf989c0c7e282f5bf678c609a",
+    "Pouw.Assumptions.Lead.OutsourceWithinEgressLead": "3cc045b249e430cd65f2b4dd4ed641064204a53cd7e7054c3baf9e34ca1ffc52",
+    "Pouw.Assumptions.Lead.SerialForwards": "5810fbb215691023b9ce279b7e9ce946e63e4ac1b51d4d42422d4d82440ba440",
+    "Pouw.Assumptions.Lead.ShaWrites": "947cae386e3f1a19f45b418ddb688ee007cbdf85b6b0167d381acba5488fbd8b",
+    "Pouw.Assumptions.Lead.TileGrain": "2281c6db94c147f00dadd9837c28b61f18ca9ab8d23bf710798ec0ea45372a84",
+    "Pouw.Assumptions.Lead.W1": "72feea8d4c66f35d51c1b5fd2e5766a7da2b9ce0e4844e9d85c4470c3be135bb",
+    "Pouw.Assumptions.Lead.certCode": "8ad4e8c5cae877f9fa37193a8d99e317b96516cff2b11ec0b17fc64ba15200b0",
+    "Pouw.Assumptions.Lead.released": "6d19ee0f3dbd9004d1e4bdedf9a89f86b899f7596b59a2030413c40371c81780",
+    "Pouw.Assumptions.Lead.shaCredit": "84bcd8b001a3f3d10a35bdcde367f59bd4b37d7af363482c0a536432a3fc7bdd"
+   },
+   "guarantees": [
+    "Pouw.SecurityProofs.Lead.Compose.G",
+    "Pouw.SecurityProofs.Lead.Compose.honest",
+    "Pouw.SecurityProofs.Lead.Network.networkFwd",
+    "Pouw.SecurityProofs.Lead.Network.networkLlama",
+    "Pouw.SecurityProofs.Lead.Tail.G_tail"
    ]
   },
   "Definitions.Pouw.Assumptions.NCP.Assumptions": {
@@ -26994,6 +27327,9 @@
     "Pouw.SecurityProofs.Barrier.Generic",
     "Pouw.SecurityProofs.EndToEnd",
     "Pouw.SecurityProofs.GammaFromTT",
+    "Pouw.SecurityProofs.Lead.Tail.G_tail",
+    "Pouw.SecurityProofs.Lead.Tail.nontrivialTail",
+    "Pouw.SecurityProofs.Lead.Tail.tailAt",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_C2",
     "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1",
@@ -27268,6 +27604,64 @@
     "Pouw.Dimension.MinRankGe": "933eb6b182a96758dd6a00b6a416628b77478886d52063e30857f9084fd7eaff"
    },
    "guarantees": ["Pouw.SecurityProofs.Dimension.A2WordsIff"]
+  },
+  "Definitions.Pouw.Dimension.Pointwise": {
+   "digest": "b2a0b5765cbe0046394be625adc0d37bf2cbd842f8fe9437ca2089a7f3dc0bc2",
+   "definitions": {
+    "Pouw.Dimension.Pointwise.Step": "457a797f45b8c536735a705919447fdc20b94df29276bde7116dd4fc0aabdd2b",
+    "Pouw.Dimension.Pointwise.Step.apply": "225c1b966740cb345110c8004561cbf066229b453a273994b6baeb2580e74414",
+    "Pouw.Dimension.Pointwise.Step.casesOn": "633436503aec3c4157f0f36e12270570521218251603d5efdffe32afd705e56c",
+    "Pouw.Dimension.Pointwise.Step.copy": "a60470288ff0e6365da3d45b3e6763839a95248de86cbc2c74229d0c66838141",
+    "Pouw.Dimension.Pointwise.Step.cost": "f6872e5790e1439bfa8e3e3a9d951560a5ec7841f2e463aa6d4ff57cbf6a921c",
+    "Pouw.Dimension.Pointwise.Step.rec": "b61fc908c05c538e8956fdba11147b2dc0bdd37b01b845f68c88efb00e9d5119",
+    "Pouw.Dimension.Pointwise.Step.write": "3cd0eebde86c02af6382e7c2a234c24f38967aba6e786fe6a24fa666d78124e8",
+    "Pouw.Dimension.Pointwise.pairs": "f0ef434f47067be4decb67db62c345b190e5e253a68dbccd7c08c1ed095fecb2",
+    "Pouw.Dimension.Pointwise.run": "39f1a90cb3a6510c063ca61a3b9302f6189a88981f773bb64c8e259728510ad8",
+    "Pouw.Dimension.Pointwise.writes": "557f1c4cc9e520f721fec83531271eb949c2a35e01e2fd1fd2599e286a02a90a"
+   },
+   "guarantees": [
+    "Pouw.SecurityProofs.Lead.Compose.G",
+    "Pouw.SecurityProofs.Lead.Compose.honest",
+    "Pouw.SecurityProofs.Lead.Network.networkFwd",
+    "Pouw.SecurityProofs.Lead.Network.networkLlama",
+    "Pouw.SecurityProofs.Lead.Statement.nontrivial",
+    "Pouw.SecurityProofs.Lead.Tail.G_tail",
+    "Pouw.SecurityProofs.Writes.RunBall",
+    "Pouw.SecurityProofs.Writes.RunPairs"
+   ]
+  },
+  "Definitions.Pouw.Dimension.Ssn": {
+   "digest": "614aa0b2266386aaf81b034cf6f5df30e24eec009db8a7c950d9e2e9c07698c4",
+   "definitions": {
+    "Pouw.Dimension.Ssn.Bits": "361c76227363fba6d5b6efeb6c23a2a67d09ab72d28a62f5abfc2ab78a091e4c",
+    "Pouw.Dimension.Ssn.FreeB": "8fe3f27a9f5e37393e7bb51e211fa36a357d21294d546080290fc18fe2428f41",
+    "Pouw.Dimension.Ssn.ShiftSeparatedOn": "b92a45db2049205cb25ace93cfd3cc8f021a2969cb798111eb6182ef50571545",
+    "Pouw.Dimension.Ssn.aff": "9716b39f925cdc42dcb52cd8349c7ce3fe3c571384a6c8ea8c124c97d41f051b",
+    "Pouw.Dimension.Ssn.bitCoef": "6292b3a8c99a1fb8eaa0b79ee0cdf44098070b6b1e2ddeebb64213a982156127",
+    "Pouw.Dimension.Ssn.code5": "7849fbae5786fc47713fabf7f4f4a3af66e59b65920895a0e6610339b4c64646",
+    "Pouw.Dimension.Ssn.coinCoef": "a6403dcbbe9d2ef048e5a3a9ab8fee0435c61aebb822a8ea317b116f39e33f23",
+    "Pouw.Dimension.Ssn.l4Pos": "c5f0141a016ab619a167186e753f4bcbc80ba7d21f6533ee660e614df9822c63",
+    "Pouw.Dimension.Ssn.l4Src": "4e96965f94df77c81cc65fd6672b8c87fb17157bb8b7f0c9df49901ebb28d8a3",
+    "Pouw.Dimension.Ssn.l4Word": "2ded5a16f7f6bf63c8cc8a2d79daea49f02c1283e3ba60da246a8aec649e20d8",
+    "Pouw.Dimension.Ssn.l4Words": "53149b55af310f5b9930b8b839580a903203a9c8ef2c6c276c68231183055252",
+    "Pouw.Dimension.Ssn.l5Pos": "a803a5adfac0b904ddb21a683f2434d067700e684b1f5e535969f83ef2422734",
+    "Pouw.Dimension.Ssn.l5Src": "a2dd76821ef0e1597526847a0f9f072731b19a799a1ecdd4a92039ffb1eeda07",
+    "Pouw.Dimension.Ssn.l5Word": "fb4e091bf3072bd23aa12e6ac42a87e56d9c95b7223386816141d121f21016b9",
+    "Pouw.Dimension.Ssn.l5Words": "e0c8eaa9158e22b84efcaa327317ebd2f4150df0c6dae115423f10f5c9b071ec",
+    "Pouw.Dimension.Ssn.ssnC": "003060382a6afc466d13da176f5f1c5f2a6cfda97fc30ce34d07d4bdc9e57c0a",
+    "Pouw.Dimension.Ssn.ssnCode": "46623e39d3192d76540517c3b3c7f40fbbd6ab094ec450c72e8b17aa72d0e892",
+    "Pouw.Dimension.Ssn.ssnDigit": "efc9a7503021617bcb45cebab732061c310b67b0da7675790fe91cd5fad706fa",
+    "Pouw.Dimension.Ssn.ssnWordB": "6eaf99cf6dd1332e2d18ae08e613d5aa9bb8a4329980fa88cec2942733a6815f",
+    "Pouw.Dimension.Ssn.ssnWords": "1c24d349350e014d8e448eb99719a9ae8a18a01e31b8656060b07ada872db609",
+    "Pouw.Dimension.Ssn.w1l": "4da1a6bd768888f4b895680f9a8db57fd692c02d16217f848f79320278d2d2ec",
+    "Pouw.Dimension.Ssn.w5": "198974ef1763a910cc02d93368e9cbf65c550a0d60cdadc9c1ee15b1d14fc016",
+    "Pouw.Dimension.Ssn.z5": "f61ebaab2139ab8d738105957929b4804c40059b015a91952cd573f78626896a"
+   },
+   "guarantees": [
+    "Pouw.SecurityProofs.Writes.SsnServedCharged",
+    "Pouw.SecurityProofs.Writes.SsnServedDistinct",
+    "Pouw.SecurityProofs.Writes.SsnServedShift"
+   ]
   },
   "Definitions.Pouw.Dither": {
    "digest": "ef9cb41a341371d4fb61f7f4a99d701ae1358d261230384af7e3ba198b64b103",
@@ -28244,6 +28638,38 @@
     "Pouw.SecurityProofs.WorkWeightedSampling"
    ]
   },
+  "Definitions.Pouw.Guarantees.Lead": {
+   "digest": "0ee7b6b50ead6dc97af43e659310d70ff5a98c9fcf3264c200293c028c8f2a6f",
+   "definitions": {
+    "Pouw.Guarantees.Lead.ChunksOf": "f927170f60f4894145db559ac76704c0a71e7fe4c98458d639bcc6190e55dc07",
+    "Pouw.Guarantees.Lead.G": "ad49ddc57ed5f168d156c874c87a9e5493840f560b8f92018d70b74f715d8eea",
+    "Pouw.Guarantees.Lead.G_tail": "7ac1ff00e6ea5d938f997c549119dc041c19ec3388435847cd2dbe247d8c31f2",
+    "Pouw.Guarantees.Lead.GapAll": "c0266d1c617a576e51c504f99116b3eeb64f32e6c8c156a50f116eec1c8799e5",
+    "Pouw.Guarantees.Lead.GapAt": "1d305422afee99f61dd314ba5f894667e368879d46fd0595bffc554555db413e",
+    "Pouw.Guarantees.Lead.GapAtDecode": "7972a17a832b96d54d61aed8ba0a0ddc4ac9401cd1ed8e75054f9c94e3544a24",
+    "Pouw.Guarantees.Lead.GapFixedAt": "fdb8630257063bea8a32ededab9a50d9e561b6aa58defe605d99a8d6d3a81b4d",
+    "Pouw.Guarantees.Lead.Honest": "02dac6f11aca7f8ef5eafa57ed600d0ebe7f342f5ec26783fc28e6f6e0d87116",
+    "Pouw.Guarantees.Lead.NetworkFwd": "28351581c695741f71568ce405749fcdd0967ef35b64dd4e13087e51eb18448d",
+    "Pouw.Guarantees.Lead.NetworkLlama": "3b36761be69d1e7f3f799803efe4042e49aa8f615b069eaf22443fe637020924",
+    "Pouw.Guarantees.Lead.Nontrivial": "9e20e3ff9057ab10ffb4bddd7d78462f79fdf721ef2f8aed67fd3af42f8188e9",
+    "Pouw.Guarantees.Lead.NontrivialTail": "feea306f697912cbd25c87ede2472485318aabb32ad70073c77b972e811aae58",
+    "Pouw.Guarantees.Lead.TailAt": "b7150539b0f15a57ea9530759a665340867964056370924229df5a8df7309a96"
+   },
+   "guarantees": [
+    "Pouw.SecurityProofs.Lead.Compose.G",
+    "Pouw.SecurityProofs.Lead.Compose.honest",
+    "Pouw.SecurityProofs.Lead.Network.networkFwd",
+    "Pouw.SecurityProofs.Lead.Network.networkLlama",
+    "Pouw.SecurityProofs.Lead.Statement.gapAll",
+    "Pouw.SecurityProofs.Lead.Statement.gapAt",
+    "Pouw.SecurityProofs.Lead.Statement.gapAtDecode",
+    "Pouw.SecurityProofs.Lead.Statement.nontrivial",
+    "Pouw.SecurityProofs.Lead.Tail.G_tail",
+    "Pouw.SecurityProofs.Lead.Tail.gapFixedAt",
+    "Pouw.SecurityProofs.Lead.Tail.nontrivialTail",
+    "Pouw.SecurityProofs.Lead.Tail.tailAt"
+   ]
+  },
   "Definitions.Pouw.Guarantees.NCP": {
    "digest": "8f0b5867f75c2a8842ab1fafca36f61750f7ddf1a3aef907a5fde96da838a0c8",
    "definitions": {
@@ -28582,6 +29008,25 @@
    },
    "guarantees": ["Pouw.SecurityProofs.ShaRealize.ExtractOfRealize"]
   },
+  "Definitions.Pouw.Guarantees.Writes": {
+   "digest": "9c1e1a62dc0a63b28e465ac8a50f3c830ecb2f22ddd15324fb06fc9a07b0c4ce",
+   "definitions": {
+    "Pouw.Guarantees.Writes.DistinctWritesMH100Floor": "e0e1af11bc1fbf2fd5bb28968437145f64041b363aa21830905d76064094d33d",
+    "Pouw.Guarantees.Writes.RunBall": "2aa89369655045ee524da819c1566e1832bcb160649a9881152cdb4bcf0e1668",
+    "Pouw.Guarantees.Writes.RunPairs": "82832b893c3158656d5e6f49dd4eb79dbef63b8980bd6204f7b22f9869dc09f3",
+    "Pouw.Guarantees.Writes.SsnServedCharged": "414bb8fa8d8c56432eb10b2386ae017389e253b6ead8696b0d3bbe364eeb86ec",
+    "Pouw.Guarantees.Writes.SsnServedDistinct": "fbdcbbbe7d5a87903a41bc43ee656db6990eeaf3dcc9dc0f8a1a1fa659efd768",
+    "Pouw.Guarantees.Writes.SsnServedShift": "69d500eb4e8a4d159f61f106dbcf09c12115243483e7ec0f720c331a451cd7c7"
+   },
+   "guarantees": [
+    "Pouw.SecurityProofs.Writes.DistinctWritesMH100Floor",
+    "Pouw.SecurityProofs.Writes.RunBall",
+    "Pouw.SecurityProofs.Writes.RunPairs",
+    "Pouw.SecurityProofs.Writes.SsnServedCharged",
+    "Pouw.SecurityProofs.Writes.SsnServedDistinct",
+    "Pouw.SecurityProofs.Writes.SsnServedShift"
+   ]
+  },
   "Definitions.Pouw.H1Zy.Chain": {
    "digest": "a6901138796f7f750a365bd092388178e54641ae4dd0fab9a6074931117228f1",
    "definitions": {
@@ -28812,6 +29257,227 @@
     "Pouw.H1Zy.xWrap": "3e29d2d43392e51bad516f5a0e7218fff20c6bbb408530a9aba7b9d92e51188c"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.LeafLanesSound", "Accounting.SecurityProofs.TS.TileSessionSound"]
+  },
+  "Definitions.Pouw.Lead.Deployed": {
+   "digest": "61f633f3e6c3dfcaf8134ce6a3235c3812944acf4f8d3dcf8982f64be1a7c0fb",
+   "definitions": {
+    "Pouw.Lead.CallForward": "8bdc36ff006cce8c0d035eebe3db2c920c0706cf245c6322b1c521511bcbf4f4",
+    "Pouw.Lead.CallForward.before": "43e0bad20876aaf540828f1b628176a8d8fbb07384e33c651d58f18d3273189f",
+    "Pouw.Lead.CallForward.f": "5ac99f736f88a370753d384e485ce1c54398439ad2000c1f0e94145fb9094dc5",
+    "Pouw.Lead.CallForward.leaves": "5385529c4f18c27788a6e8f72a55562540c48445d46567c2682d21a834636ba9",
+    "Pouw.Lead.CallForward.post": "fc71fe5b35bc10d0c00a7360bd95bb036e62c68a8b75e4a0e850b227df44f8c3",
+    "Pouw.Lead.CallForward.pre": "578ae7e79935bc94b1c4c4d3bd7e3f290c1fa4784653913eee41002054ac87df",
+    "Pouw.Lead.CallForward.value": "4ede51e29a39c642d308446d03dc71e37c9f0cd0fd5b761f2dcef6b7bc2cdd75",
+    "Pouw.Lead.CallForward.values": "4451e67cc4cde6d21f0382a8c1493f6e9a1d646a5d12b275cab57c54e7b8d9ac",
+    "Pouw.Lead.CallWords": "140bc080a882017f4ece549a8250d77f0a9632683b1387c75b84153c0871fe7d",
+    "Pouw.Lead.L1w": "e9bd41452e694424c59ba62b987457fe815673f2ba2efbc65ae914b3ed3f6da3",
+    "Pouw.Lead.L1w.aDom": "948223723d5c3400d98d98507fbb2407a777cc9d9110fac84b908e4666b7fae2",
+    "Pouw.Lead.L1w.calls": "985e80acc9db07430525afc69e1d396b169847cd3bc776c307412ae4de1b91b7",
+    "Pouw.Lead.L1w.key": "7bc0ef36de68a5fc464465fe0937d703ba23fb0c7ef7d52d4f640aa82f06ffbe",
+    "Pouw.Lead.L1w.nb": "456e8e89637e407840a010f71a51143903fd66eccd3879b6a45739aa9fd06124",
+    "Pouw.Lead.L1w.salt": "dbde5835bb815ba78ed79909d960bf564682b430e718d8059ce958b1126aad7f",
+    "Pouw.Lead.L1w.wordsDom": "2e4187c39cca6affce03bd11ca1282f319365895b40f69ceaa17fed7b7e8a636",
+    "Pouw.Lead.L1w.y": "34c43065d88a23f187cc3c0f348d7c4bf7c7646bfac78f7cbc2ff12b8486ce0a",
+    "Pouw.Lead.Layout.feedRowWords": "589f736e6bd69ec7b8c96b44afde607d9d184facdcb57fb2fbde94a92cbf13c6",
+    "Pouw.Lead.aBytes": "90e3fc86340e9528cc55127175556cb03670323e6d4901c727a46efbb9899f4e",
+    "Pouw.Lead.aLeaves": "8d67cf81fecfe0dc428fa7647b3dee0d1cec27c2d7e1b017baf70ea30a14e206",
+    "Pouw.Lead.aPos": "9fba54db2f4a16eee486442717c1c46a63f9c2206a61a37f4944076bf4d16abc",
+    "Pouw.Lead.aSchema": "debfc1845629c9cf67529d88cbbbd26c3955f329f1ea23d386e0ec71ed2ee5d3",
+    "Pouw.Lead.aSeg": "d59baf34bbacdfcd85aa93e5d11b225b68c1c7470e3836c736501cd556d12953",
+    "Pouw.Lead.aSegment": "f02d84e8d15effe1a603f7f885e62fd813e0c4e4c5d4209afb05af8442bc62ef",
+    "Pouw.Lead.callChunks": "d1da5ad0799c2eea69851a96394b338df9ed1fbf940fcacaafe1997cf9d3f7cf",
+    "Pouw.Lead.certStream": "f88fcb1f514dd885fca97102de76752a75f4b11142293f82cf687fc61bdbbc40",
+    "Pouw.Lead.feedSlot": "e9441c50ff32c355c58f4ec9b843b7aba4d98c6c5a9d8eddd9b729014656f20d",
+    "Pouw.Lead.instanceDom": "6b1ec63e1f53ac8d3647bdf01934efd986f857b7156b11b1635086266e06804d",
+    "Pouw.Lead.l1wCommit": "570741163a2e932aecd21d8d2e76bf0e0be2ed99a7224db6f3a90e6724ac9109",
+    "Pouw.Lead.l1wIsA": "1c0185329ff878836f48bb218781b156a7a9c2d15ebe5ae83a3f7cc6175f4026",
+    "Pouw.Lead.tileFrag": "817c0a8f0bc52a832bb7e114e0c29d58d8d13e0282196c12357087a33c2b6452",
+    "Pouw.Lead.wordAt": "2ecbf6e8f15782fd6e53f74d8dadd2cd40d718fbe8b0d2b934a4a73fd01d168c",
+    "Pouw.Lead.wordBytes": "a196c34723a90e7abbcbba4d00daf1ba409618bbae75d1e5a6c9eacd2eb4e264",
+    "Pouw.Lead.wordsBytes": "e5292acc04044d92090f987cd1169ea9c9777daa00c6010ae6b98cc1d7a8dba3",
+    "Pouw.Lead.wordsChunk": "d69c5a7eb65fc0a84e97ab7f2ab4e38ac954d8dde0aff01d68aa4144a1c2d6ca",
+    "Pouw.Lead.wordsLeaves": "5cf0e91371922e847288fd988e0c726243f0290e5be306af0ed89f6194029a1a",
+    "Pouw.Lead.wordsPos": "3196c0168792003c1d05dc246929aa5eb50115f2500eab4fd1da3977e3ce7850",
+    "Pouw.Lead.wordsSchema": "d62732e38ebeaddbcffc45ed2d6a8edbcf9a6f0053e3c51357196028c551b096",
+    "Pouw.Lead.wordsTiles": "561857c7a0981614b616c24e3989ed931736e510d4497a4b8613f2209592e30b"
+   },
+   "guarantees": ["Pouw.SecurityProofs.Lead.Compose.honest"]
+  },
+  "Definitions.Pouw.Lead.Forward": {
+   "digest": "ea95c2f9908c39bb885dc7c6d445660603152b06d3579b2541f019074877b406",
+   "definitions": {
+    "Pouw.Lead.Forward": "962ebe056052b34d6e74054660fef224feec500146441beab4daf37d90ae544e",
+    "Pouw.Lead.Forward.Accepted": "98407f08b716f4ad3cb2e88b349f6cfbedd91a922de31bfaf77e9f2e4eb0023b",
+    "Pouw.Lead.Forward.bits": "1e3a31208686ea8f3253a060e54bf478c7fda5390e0fd68f24f737e050e70390",
+    "Pouw.Lead.Forward.calls": "0d2c37d478ff31025b4ed6e14f52486050bb9eaa0d1419c81eef8e4d920fbc7c",
+    "Pouw.Lead.Forward.count": "77abed78f55b5287a1b6ff927ca5efb98df63701c2cf5cf8fd15b57b5896f51a",
+    "Pouw.Lead.Forward.networkRegs": "60012b750395f824619a5400e0ce4ed512fe1b1ce87b059773845103bbb9af2c",
+    "Pouw.Lead.Forward.release": "9d7f61e6a7517cd78f95b0c7366193fa405d8fc80b0e5a104c11a6744195c525",
+    "Pouw.Lead.FwdCall": "2264ca1bce30b18d52b921c7ba05a87bb51923becf8b915355d9b830fdf3a87c",
+    "Pouw.Lead.FwdCall.C": "3a9d3ba1b2859dbe1b523dbc7a07943eecd6a866cd49030880911f91dfa2250f",
+    "Pouw.Lead.FwdCall.L": "a6476bd325d19284e42212f64b9587bc9f91dcdb201bcdcc904f4041e45a79a4",
+    "Pouw.Lead.FwdCall.egress": "3ce4183192bbdef751232d9bc2f3f763fa5c2788836b6eef2e32bdf06d358fe0",
+    "Pouw.Lead.FwdCall.σ": "ed86ea64dce903241d831c0e217ab9757911641e73faf16f3c58f453c7053fa7",
+    "Pouw.Lead.FwdCall.ω": "42c3a112cdf42bd09abf9627932826bac9793f42caeb1a4d2d3f13ae975201b1"
+   },
+   "guarantees": ["Pouw.SecurityProofs.Lead.Network.networkFwd", "Pouw.SecurityProofs.Lead.Network.networkLlama"]
+  },
+  "Definitions.Pouw.Lead.Gap": {
+   "digest": "0162414ac3815375063c43088719acfea49b90bd07840c2fb30ac3e6ab08c307",
+   "definitions": {
+    "Pouw.Lead.aBlocks": "558ecb126600ad0370679b3b28f6e05e31b48522d88d6f6bcd4861ca5d5986bf",
+    "Pouw.Lead.betaLead": "914fa2ad5896a67f86d3627bb52224cd5e9eed88afed9821a3d39be5a99bdbaa",
+    "Pouw.Lead.coinBranchGap": "fd780d6444b7676b877fa3fb36eb4e5e76618f255e4cec7f40c225127f4acf98",
+    "Pouw.Lead.coinBranchMean": "38ffd8e98ceb00c6b2daf8429024121eeafbfa1e8b11f240d97526bfd41870ee",
+    "Pouw.Lead.coinSlack": "2579f6b5fb6c9fc4334466613e19812fd3be972d0df79534fae5038c14789a57",
+    "Pouw.Lead.coinTail": "1ba7f4b54b99be6d005dc96bd8162013f4ff14fd190130ea74c2e3ccb7904256",
+    "Pouw.Lead.etaLead": "6f99ffabe2d1ececd2a626cea13e2bfe2ea6c6f99076a56ca9140551ae69d6be",
+    "Pouw.Lead.gapBound": "a234bc057a0087f61035ac30833d368a87a248af9b70754839e2c0a80f17ded6",
+    "Pouw.Lead.gapFixed": "2a0a29f5242176cd122d416aba43c0bd54fb47cee5eb371bab4b79f7f040f99b",
+    "Pouw.Lead.gapFixedServed": "c348cd6c83d8b60dedf10f6d2b6311e4b6b442ef50c2d56a162731ddd79c57b4",
+    "Pouw.Lead.gapRegs": "494c02c7072932de6bea65473a589bad5be9f95635f654c4ec9d679e413396d8",
+    "Pouw.Lead.gapServed": "6bbedbab39ebea62b498d669c99d992890014615a907aeb57dc840b5570bed85",
+    "Pouw.Lead.headGap": "9049f30668f12d4ab2aedb5e90b7ceff412766a48d97977db9d3861e7ed968ad",
+    "Pouw.Lead.hidingGap": "56297794d2b42b6394b3fa9cfa4b7d3595faeb88709d80153f1e808cb01ad6ce",
+    "Pouw.Lead.honestRegs": "694afdcdc8f60a66e9dc4751ff2095bb88a6e92f637386f6f638a293080775be",
+    "Pouw.Lead.nMax": "6b11e56f78020bbf39ab23abc6a0e6e3a295d59cefa13ff74848ab4b8b533d15",
+    "Pouw.Lead.pStarGap": "78133775d9bf60ee8bb6eb4872073376a6992a484ea1b3c7f36237ba9746cbd9",
+    "Pouw.Lead.servedRegs": "21440cbccdb49b3028669242974f9bbeb2dbc90d00cf7487abfc3fc3b0c6c093",
+    "Pouw.Lead.shaARegs": "582a8301075db6885329c7ab131f756c4c038a734b8067fb87a735983e51e193",
+    "Pouw.Lead.shaWordsRegs": "7a0419d074e3514787b515cfc2421670b7711a89870e4fe7f639a4d749eb0e66",
+    "Pouw.Lead.stockRegs": "4e9d0c8daa8c421fc01948ac4a031804d08cc9ec1d2712a796e2cfb0893033dc",
+    "Pouw.Lead.tableGap": "cfdceb49a10e0f979f7d460ac180b31d9a6b0aa463385112b546f29f172bf638",
+    "Pouw.Lead.tableTail": "20edb580a968499e1002ae579e87e567741c4d8ca450784ecdb388750c794c55",
+    "Pouw.Lead.wMac": "1e0dd41a8e730ad7f7d41957d3bb96959918ee500e6f4d56b55e1d0b40edb030",
+    "Pouw.Lead.wordChunks": "0ede2e30b4f7011bf3113fddacf5eeff08d2ede2db806890b54e901268e6f44e",
+    "Pouw.Lead.wordsBlocks": "e50100842dc2a13d2c6dfe913a7a23fd6f2b2b489fb74f47c0799e279eabe668",
+    "Pouw.Lead.wordsRegs": "06374d8a5f45b7c379acf9085f841ce0aafeaa1fd01f8b495a6432d4c1741245"
+   },
+   "guarantees": [
+    "Pouw.SecurityProofs.Lead.Compose.G",
+    "Pouw.SecurityProofs.Lead.Compose.honest",
+    "Pouw.SecurityProofs.Lead.Network.networkFwd",
+    "Pouw.SecurityProofs.Lead.Network.networkLlama",
+    "Pouw.SecurityProofs.Lead.Statement.gapAll",
+    "Pouw.SecurityProofs.Lead.Statement.gapAt",
+    "Pouw.SecurityProofs.Lead.Statement.gapAtDecode",
+    "Pouw.SecurityProofs.Lead.Statement.nontrivial",
+    "Pouw.SecurityProofs.Lead.Tail.G_tail",
+    "Pouw.SecurityProofs.Lead.Tail.gapFixedAt",
+    "Pouw.SecurityProofs.Lead.Tail.nontrivialTail",
+    "Pouw.SecurityProofs.Lead.Tail.tailAt"
+   ]
+  },
+  "Definitions.Pouw.Lead.Layout": {
+   "digest": "83cfbe578141d194885ef9ef001af416706c71423180f7b024c8ea0cdda4bdd2",
+   "definitions": {
+    "Pouw.Lead.Coins": "cbc5035dfbc812778c140ae05b86c3954683dc9827dff0b46e637289622562d9",
+    "Pouw.Lead.Coins.G": "2acfe6610bb0482c548af03d1b4cff3f0326cce9a890d0d4ac07f84cfa8568dd",
+    "Pouw.Lead.Coins.s": "b08f4d5d814f743d469a22bc91bd6de111d1f69b1a06b6c603897efec1061c50",
+    "Pouw.Lead.Layout": "5dc6faab0799ac480bc191b3082cb1003b0675987d8de16aa53f9aebcd4f3425",
+    "Pouw.Lead.Layout.K": "e3e9698fa38efbbc43e46ff5b8c3460786aea8479e722cb64cfd03db1de75b13",
+    "Pouw.Lead.Layout.S": "81a67eda6981188543c3d8a92fd036ded0e08eb5c0f3325ec298b82aeeece7dc",
+    "Pouw.Lead.Layout.T": "93571cc0b8cb27700ae1b0eaa7f7a7799e02f425a469d6a95b2d783ccff87a66",
+    "Pouw.Lead.Layout.callBits": "df54b366ca8997da3703085e87c9c7d4ebb8fa4bbe714fbdd3245fb3e6850d84",
+    "Pouw.Lead.Layout.cap": "33257a7862e03712262afaa21f4719a349bbe3bc5e3d0afa45c7b93b4abb9761",
+    "Pouw.Lead.Layout.chunkWords": "213af43cc914431d410d0dcd6c0aa889cb68ecd2e091039b8c8aff5fe2ca8493",
+    "Pouw.Lead.Layout.cols": "da2497356f4b51642e07299f948792b7034c52489a3b32378579734ecc41a474",
+    "Pouw.Lead.Layout.e": "0d42e4522a839e9153ec47c629fbba4d59e8693c9ef6d08fadd34911fd2cc0f8",
+    "Pouw.Lead.Layout.fwdMacs": "8705c115443c2f41b771c0c4d05b4dc0561515b24e3475a6f4d268114c644804",
+    "Pouw.Lead.Layout.m": "5a781ac1e842d1951155607b64f831a34bcca16173089dd178d1cfc66f2a4f7e",
+    "Pouw.Lead.Layout.mem": "783c41440af57921e30416b852dbc858d4d3a2f97c2195929f3bc71c9a87b06c",
+    "Pouw.Lead.Layout.n": "84a5de494b5f8cf83c2795a74a0583394e9dcc3ef28807929e4ab3281addc879",
+    "Pouw.Lead.Layout.rows": "3148382830e88626c0b2443ba751781a7be759c6b9e6205f03d68dd10af42b17",
+    "Pouw.Lead.Layout.tile": "cac8935abb9f26ef1c0cad07f31c8f3b9f627ce731c72a60e44afaee54c48c78",
+    "Pouw.Lead.Layout.tiles": "d1f0044c4e62ddcc4e94aba6fe628b3565396ad01ff4e53820f8c2ccd2e76867",
+    "Pouw.Lead.bal13": "85a934c4fc313cfb1d4dd04b4fade4bd72ce72f94fc88c138506a520b8a6fbcc",
+    "Pouw.Lead.bias": "6b6bff73d27000eeb9df214dd6b3e078f63ba10bfc9d5db31ebf8cc8c28a47c9",
+    "Pouw.Lead.coinTerm": "3f1433047c78a85e9a12b1ae1720fc84432292157a652ceb28a3021e3f54c177",
+    "Pouw.Lead.colCode": "49f41129e47e64eb7e9872b319e1ca2a83746cd63a6ae68290b26111c16aa6fb",
+    "Pouw.Lead.laneTerm": "0525ccc2bed9271bd227ed7a0efde80abb0874dfe4836e3082ecb940a5448ff6",
+    "Pouw.Lead.lead": "22951f34ef6193bf0575396149a5755c6bb9e6d4095c1a4e6643f121ad2abf95",
+    "Pouw.Lead.lead320": "3048d1533dc518a4eef1f33c8725489e8e7799f664463d491eacba428d085b9a",
+    "Pouw.Lead.llamaCalls": "21b31c090119027c8e268aa92d393af2dcecc13a98c78febc5f01b09bccebbcf",
+    "Pouw.Lead.padCols": "254471b5ccbae05d0247897bbb535b6f05d96361b41ab9932e4a3dfdcaf88776",
+    "Pouw.Lead.padRows": "8809b55f408ef0f0b95a8b86e4a5e7fa8b930ebe4ae3ced712e5c4c4a5d30b16",
+    "Pouw.Lead.pt512x512": "81dc8a68984d6f9758abf0139d97c45300351eccb3f7d61bf77440a4120067f4",
+    "Pouw.Lead.pt512x64": "3f93eec80882a90d3c014a7bca2933ca9d8666060749f73320b5072f332d08a8",
+    "Pouw.Lead.pt8192": "239c25d67044cf9661a209a9b2c5566e2afa361a125a1bb9ed778ac6ac3c6a87",
+    "Pouw.Lead.rotWeight": "ce9dae0f769dabe19bb844bf3d66a4f6ba0f28002fc1f90654c699414d36bb2b",
+    "Pouw.Lead.rowTag": "a498f78c5323baedacdb1a6e908d0c1517ecd26a085ccff90701e5d8d849bedc",
+    "Pouw.Lead.stepsFor": "3f256c96af4aba72efe5b1504ac815e3f95d8bbd3e6e4fbc4fdfd6f03404c075",
+    "Pouw.Lead.word": "700f74babe9b66a441049300e08538030031b6d6e880ddd1a0e3a99b5cfaaa4c"
+   },
+   "guarantees": [
+    "Pouw.SecurityProofs.Lead.Compose.G",
+    "Pouw.SecurityProofs.Lead.Compose.honest",
+    "Pouw.SecurityProofs.Lead.Network.networkFwd",
+    "Pouw.SecurityProofs.Lead.Network.networkLlama",
+    "Pouw.SecurityProofs.Lead.Statement.gapAll",
+    "Pouw.SecurityProofs.Lead.Statement.gapAt",
+    "Pouw.SecurityProofs.Lead.Statement.gapAtDecode",
+    "Pouw.SecurityProofs.Lead.Statement.nontrivial",
+    "Pouw.SecurityProofs.Lead.Tail.G_tail",
+    "Pouw.SecurityProofs.Lead.Tail.gapFixedAt",
+    "Pouw.SecurityProofs.Lead.Tail.nontrivialTail",
+    "Pouw.SecurityProofs.Lead.Tail.tailAt"
+   ]
+  },
+  "Definitions.Pouw.Lead.Model": {
+   "digest": "979bbcb59a1b24f5e74d364928b076020de9de80d0e0683c5544e5e44775c8ff",
+   "definitions": {
+    "Pouw.Lead.Accepted": "de719d852ecc89522c5505d0c152e1bb8e7b4aa42485cb274507fe78d908f6af",
+    "Pouw.Lead.Addr": "45d78774487edc84a060cb6d5abc36a908147dfbc79d3930b86b27b9432ef439",
+    "Pouw.Lead.Break": "249e3f23bf720bc42fa503c1ae12a93a9157e7f5cd3403478a9f428a93de6827",
+    "Pouw.Lead.CoinIdx": "ee782d186ef39ebdae8d535726cf5a118bd2c84db96304277f88d560aff15f0b",
+    "Pouw.Lead.CoinStream": "58a11c43125ca8f118bbd7206164eb369f53afd8c2a422394a271af242d8ced6",
+    "Pouw.Lead.CoinStream.val": "f8eae88ee41cfa6a89b8d6f4685a031bccd4d8c543c2a9be648e20c246907857",
+    "Pouw.Lead.CoinStream.ι": "1812fe152abbc0b9988a6ef9234b9182212035148cfed53309a8bc92095d045d",
+    "Pouw.Lead.Commit": "cda49b4a7e67febe0b7d1f64aadb83a771b298636d1df04639f18c2f7c77f7ec",
+    "Pouw.Lead.Commit.aMsgs": "0de94ac2fc0922ebab031be94cd62072e58ddfc428f460c689707fbd07fea05d",
+    "Pouw.Lead.Commit.aRoot": "71d6ef2759e3412b0d9f78e8b903bcb3bcc3c26181439c631935eb68d112e7f7",
+    "Pouw.Lead.Commit.chunks": "d27cb567493b0ad89028fa897a9738316fcede7d654d70a910a1958e8ef25467",
+    "Pouw.Lead.Commit.msgs": "ab66a11818d80246bce0c0a134a30d04c2317d79efdaa6dc45c098ee26467ed0",
+    "Pouw.Lead.Commit.root": "561537657c6967392f4f95e74a32e9c3584ac154868f908c6d06cc71e5153c87",
+    "Pouw.Lead.Exec": "ca0bff9b600787b912a2c8322033a9e0cfbdaea092c246581896f07a970eb783",
+    "Pouw.Lead.Exec.egress": "b0afc08193270de037132ae334f8056401ff44ea47c49d9fdd83fd7b4f69a280",
+    "Pouw.Lead.Exec.hashed": "2dcb05cdd45408c47f1f77193fce246866593aa6bf30f47fa2b7ec607528f0aa",
+    "Pouw.Lead.Exec.root": "dac5711d612f5684ea1657c577eefcd278691d7af8339647e20e71deaae50700",
+    "Pouw.Lead.Exec.shaRegs": "a933e8fb3859ca6532c665e78e2d1244e56cc23b96091259439d3981ff2a2073",
+    "Pouw.Lead.Exec.steps": "74c6d98369e838cfeffcf6713751b0342be06a80f75ccaea2b4e7c2574b37e06",
+    "Pouw.Lead.Exec.trace": "80da6b1cd28a0341baafc01bcc7604d684af5cb4dbe4abc4e4a0595d47b7db28",
+    "Pouw.Lead.Layout.Admits": "074bba61278b3227b632d3c9401f39caa854e4f017308dd847c645a4ad2416ad",
+    "Pouw.Lead.Layout.colBlocks": "916d1483af85f9c2f19eeb77e6ab9e242e048e2b57c2cfba1ee45c4f7f9e66da",
+    "Pouw.Lead.Layout.rowBlocks": "45ee56a3769911d750b1474c8626cd0cd60b385c974392e38f637523078b04cf",
+    "Pouw.Lead.Op100.regs": "6cba65a8fdde776351f97dced9c87a7493fb7a3cfd2f7906aa3cdd3b2d3fb360",
+    "Pouw.Lead.Strategy": "13c94fc178686995c5fd6fc1537cf22a87140d2a89aeca564959e13354904a3c",
+    "Pouw.Lead.Strategy.aRoot": "e385bd4d41b0aafabe7c1853ec094d6f2d54233ef5f8934189b6031794bc6d7c",
+    "Pouw.Lead.Strategy.exec": "e8905121c3c0c42db61e545abc8f0d9107dd3d9244a0cd19c852844697fe95fb",
+    "Pouw.Lead.Strategy.init": "60850f86e8bbd82f188154460e6988986745fcdbab3bc80c767879612a3aafee",
+    "Pouw.Lead.Strategy.pre": "ff2defa23bdded7284c661ebd56028a7150531b4285402779250852344a1e6bf",
+    "Pouw.Lead.Strategy.work": "0413b94300b914269086448862cbb2e14dd93429b51abcb5f9c12923bcc2e14c",
+    "Pouw.Lead.blocks": "9e4690069ce26fe1e33f03093012b0b8916654f15e9db9110e468f6e2a50e5d6",
+    "Pouw.Lead.coinAt": "a40b7500bbee54a88ce4815ad014604ba64a15003396f705201f272635dadd37",
+    "Pouw.Lead.regCount": "8679cf1b3bd0929340c5997189cf8a11e92ac48a33cb71855a65f22b168a9a10",
+    "Pouw.Lead.repeats": "3a2b0269124b28bf69a83ca419e8b9398675df6936741893df7ca21cc7856739",
+    "Pouw.Lead.tileIdx": "d123f5a580589da5620297c3732ffcb99a9a902109159d7d4a5d96dd1adc17d1",
+    "Pouw.Lead.tileOf": "cbd126ae3dae50697a31d3fe49da94adee9589102f0a47f56726d40983b8826b",
+    "Pouw.Lead.tileWords": "7c1b0efcb180dc9762949a9e06e617a1a70697e2779382f29e70064b8a4c8a94"
+   },
+   "guarantees": [
+    "Pouw.SecurityProofs.Lead.Compose.G",
+    "Pouw.SecurityProofs.Lead.Compose.honest",
+    "Pouw.SecurityProofs.Lead.Network.networkFwd",
+    "Pouw.SecurityProofs.Lead.Network.networkLlama",
+    "Pouw.SecurityProofs.Lead.Statement.gapAll",
+    "Pouw.SecurityProofs.Lead.Statement.gapAt",
+    "Pouw.SecurityProofs.Lead.Statement.gapAtDecode",
+    "Pouw.SecurityProofs.Lead.Statement.nontrivial",
+    "Pouw.SecurityProofs.Lead.Tail.G_tail",
+    "Pouw.SecurityProofs.Lead.Tail.gapFixedAt",
+    "Pouw.SecurityProofs.Lead.Tail.nontrivialTail",
+    "Pouw.SecurityProofs.Lead.Tail.tailAt"
+   ]
   },
   "Definitions.Pouw.MerkleExtract": {
    "digest": "355f097f63bb70c86f128edd1d4a4d8d9c6ea5eec9171777d3e70c643c517365",
