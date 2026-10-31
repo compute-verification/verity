@@ -7,8 +7,9 @@ import Definitions.Pouw.Dimension.Ssn
 
 **Draft semantics, pending review**, except `DistinctWritesMH100Floor`. Each other statement reads definitions still
 marked pending review: the served layouts (`Pouw.Dimension.Ssn`) or the chunk model (`Pouw.Dimension.Pointwise`).
-`MH100w` (`Pouw.Dimension.H100`) is reviewed against the H200's measurements in `H100W.lean`. Their proof is the theorem
-`Pouw.SecurityProofs.Writes.G : Pouw.Guarantees.Writes.G`.
+`MH100w` (`Pouw.Dimension.H100`) is reviewed against the H200's measurements in `H100W.lean`. Each is proved under its
+own name in `Pouw.SecurityProofs.Writes`, as `Pouw.SecurityProofs.Writes.DistinctWritesMH100Floor :
+Pouw.Guarantees.Writes.DistinctWritesMH100Floor`; there is no single `Writes.G`.
 
 * **What each model covers.** `MH100w` prices one straight-line program fixed before the coins, whose registers are
   functions of the coins and whose `move` is free. It charges a load from a computed address as `other`, which a device
