@@ -783,8 +783,8 @@ def main(argv=None) -> int:
     p.add_argument("--gate-key", help="with --challenger gate:USER@HOST: the lane's own gate key (default ssh's own)")
     p.add_argument("--main", help="with --challenger: the verifier's copy of main's first-parent history")
     p.add_argument("--delta", type=float, default=None,
-                   help="the stream's delta, at which a sampled verdict states its wrong units (default "
-                        "certifier_serve.DELTA, 2^-40)")
+                   help="the stream's delta, at which a sampled verdict states its incorrect proof blocks "
+                        "(default certifier_serve.DELTA, 2^-40)")
     p.add_argument("--members", help="comma-separated: the members proved (default every member of the link)")
     p.add_argument("--bin")
     p.add_argument("--lean")
