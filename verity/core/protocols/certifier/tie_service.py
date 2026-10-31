@@ -218,7 +218,7 @@ class IoTieVerdict:
     computed from the advice whose `digest` is `advice`. An accepted verdict on every window says the link's j-th
     certified request is advice request j and its prompt is v0's `prompt_len` ids long. Only `IngressTie.tie` builds
     one, from IoTieRequest proofs the verifier verified itself; at a size class with no pinned IoTieRequest digest
-    every window is refused (PROTOCOL.md, fail closed). Construction refuses (`advice.MalformedAdvice`) a `link` that
+    every window is refused (fail closed). Construction refuses (`advice.MalformedAdvice`) a `link` that
     isn't a non-empty string, `registrations` and an `advice` that aren't SHA-512 hex digests, and verdicts that aren't
     one bool a registration."""
 

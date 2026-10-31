@@ -25,7 +25,8 @@ certifier's FIFO makes non-decreasing in arrival order; its output k must be rel
 advice v0's release is held to the schedule. No prover value says where a cell goes. The advice is private; here the
 verifier computes the map in the clear from the opened advice and the admissions (which the network certifier's wiring
 gives, opened to the verifier for now), the named gap ("the advice is opened to the verifier until the compile slice's
-proof block exists"). The target reads the map inside the proof under the advice's hiding root.
+proof block exists"), and nothing may call the tie zero-knowledge until it closes. The target reads the map inside the
+proof under the advice's hiding root.
 
 **The port is the Commit's**: its sampled ids, one hiding row a step (`port_row`: the step's P ids, u32be in
 batch-row order, zero past its batch) in a dense frame-v3-sha512 tree of the session's steps, whose root the Commit

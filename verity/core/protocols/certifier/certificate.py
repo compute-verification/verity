@@ -551,7 +551,13 @@ class SignedClocks:
     window), a salt another link-window's opening has too, or a window with two signed syncs. Whoever delivers the
     openings, the prover included, can't forge one. `codes` is each opening's refusal by the Lean's code
     (`NetworkCheck.Period.openingRefusals`), None where it holds: `CertifiedClock.refusal`'s, ``opening`` for what
-    isn't an opening, and ``salt``; `split` the link-windows with two or more signed syncs, by link then window."""
+    isn't an opening, and ``salt``; `split` the link-windows with two or more signed syncs, by link then window.
+
+    **Named gap: the clock's opening.** No N2 unit reads it yet: it is opened here, on the host, as the in-the-clear
+    check opens a record (`CertifiedRecord.verify`). A unit whose floor reads a window's sync would take the window's
+    opening as witness, check it against the signed digest (the clock digest and its salted digest) and compute the
+    floor inside, so the verifier reads no sync. That is a circuit change, with its `circuit-check` report, not a Lean
+    one: the Lean issuer already signs the salted form (`CertifierDevice.Issuer.clock`)."""
 
     key: PublicKey
     session: bytes

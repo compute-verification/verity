@@ -154,7 +154,7 @@ A spec-level reference for network accounting's timing channel:
   each direction's bytes unchanged, in B-byte cells, r a bucket each way per connection, and egress cell i goes out in
   bucket s + D + ⌊i/r⌋ from its admission s. A miss fails the connection closed with a `FAIL` cell that carries no
   reason. It records and certifies exactly the cells it sends, and each failure's reason in a third record, `fails`.
-  `EncardWardenViewsLe` is its leak bound, and `benchmarks/network_traces/warden_serve.py` runs it;
+  `PeriodLeakAccepted` is its leak bound, and `benchmarks/network_traces/warden_serve.py` runs it;
 - the release order on the server's side (`release`): a certifier puts `x-verity-release: N` (N is the request's
   0-based place in its run's release order) and `x-verity-release-run: ID` on the server's copy of each request it
   releases, for `serve-openai --admit release-order`. The headers never appear in a cell or record, so nothing

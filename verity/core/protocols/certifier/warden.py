@@ -73,8 +73,9 @@ third, `fails`, has `lanes` slots a bucket and one frame a failed connection, it
 (`WardenParams.fails_grid`). `audit` is the read of the records in the clear: every connection's cells are the
 schedule's, every `FAIL` has its one reason, and no connection failed.
 
-`Security/Definitions/NetworkCertifier/Guarantees/Warden.lean` has the leak bound (`EncardWardenViewsLe`). The module
-imports only the standard library and `verity`.
+`Security/Definitions/NetworkCertifier/Warden.lean` models the schedule, and the leak bound over it, for a decoder of
+the client's view read back from the certifier's record, is `SecurityProofs.PeriodLeakAccepted`. The module imports
+only the standard library and `verity`.
 """
 
 from __future__ import annotations
