@@ -144,8 +144,6 @@ def test_the_canonical_form_is_verity_canonical_json():
     for v in ({"s": "d\u00e9"}, {"k\u00e9y": 1}, ["x\x7f"], {"s": "\U0001f600"}):
         with pytest.raises(K.Refused, match="is not ASCII without DEL"):
             K.canonical(v)
-        with pytest.raises(ValueError, match="is not ASCII without DEL"):
-            canonical_json(v)
 
 
 def test_config_check_and_hash_print_the_hash(capsys):

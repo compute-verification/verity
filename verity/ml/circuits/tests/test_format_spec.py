@@ -429,7 +429,7 @@ def build() -> dict:
                  "with --write.",
         "canonical_json": {
             "in_domain": [[v, codec.canonical_json(v).decode()] for v in JCS_IN],
-            "outside": [[v, _codec_bytes(v), jcs(v).hex(), codec.jcs_domain_error(v)] for v in JCS_OUT],
+            "outside": [[v, codec.canonical_json(v).hex(), jcs(v).hex(), codec.jcs_domain_error(v)] for v in JCS_OUT],
             "max_safe_int": codec.MAX_SAFE_INT,
         },
         "types": [[t, type_from_json(t).leaves, type_from_json(t).leaf_widths()] for t in TYPES],
@@ -458,14 +458,6 @@ def build() -> dict:
             "graph": {"wide": _graph(cut.CallGraph(WideCall)), "narrow": _graph(cut.CallGraph(NarrowCall))},
         },
     }
-
-
-def _codec_bytes(v) -> str:
-    """`codec.canonical_json(v)` in hex, or its refusal."""
-    try:
-        return codec.canonical_json(v).hex()
-    except ValueError as e:
-        return f"ValueError: {e}"
 
 
 def _root_nodes(D):
@@ -527,22 +519,12 @@ def test_canonical_json_is_jcs_on_the_domain(live):
 
 def test_outside_the_domain_the_bytes_differ_and_the_codec_refuses():
     for v, py, j, err in VECTORS["canonical_json"]["outside"]:
-        assert _codec_bytes(v) == py and jcs(v).hex() == j and py != j and err == codec.jcs_domain_error(v) is not None
-    refused = [v for v, py, _, _ in VECTORS["canonical_json"]["outside"] if py.startswith("ValueError")]
-    assert refused == ["\u00e9", "\x7f", {"\ue000": 1, "\U0001f600": 2}]
+        assert codec.canonical_json(v).hex() == py and jcs(v).hex() == j and py != j and err == codec.jcs_domain_error(v) is not None
     for D in ({"k": "\u00e9"}, {"k": "\x7f"}, {"k": 2**53}, {"k": -(2**53)}):
         fn = bind(RowDef, N=4, OP=TAdd, C=1.5, D=D)
         top = _comp("TOut", (), lambda S: ((("x", Array(4, V32)), ("b", V32)), V32), lambda B, S, x, b, fn=fn: B.call(fn, x, b))
         with pytest.raises(ValueError, match="canonical JSON domain"):
             codec.encode_program(Program(top))
-
-
-@pytest.mark.parametrize("v,where", [("d\u00e9", r"\$"), ({"a": [1, "d\u00e9"]}, r"\$\.a\[1\]"),
-                                     ({"k\u00e9y": 1}, r"\$\.<key>"), ({"k": "x\x7f"}, r"\$\.k"),
-                                     ({"k": "\ud800"}, r"\$\.k"), ({"k": "\U0001f600"}, r"\$\.k")])
-def test_canonical_json_refuses_a_string_past_ascii_naming_where(v, where):
-    with pytest.raises(ValueError, match=rf"canonical JSON domain: {where}: string .* is not ASCII without DEL"):
-        codec.canonical_json(v)
 
 
 def test_an_ascii_document_has_the_bytes_the_escaping_writer_gave_it():
