@@ -1,7 +1,7 @@
 #!/bin/bash
 # First boot of the Nebius server, as root, from cloud-init's runcmd (launch.sh embeds it); safe to run again.
 #
-#   - sshd: keys only, no root, only $VY_USER;
+#   - sshd: keys only, no root, only $VY_USER, and room for many concurrent connections (MaxStartups, MaxSessions);
 #   - the data disk (/dev/disk/by-id/virtio-data) is formatted ONLY when it holds no filesystem, and mounted at /workspace, where
 #     the tooling already looks: /workspace/hf (HF_HOME, the weight cache), /workspace/research (the research root),
 #     /workspace/ramlock (--mem-gb reservations), /workspace/cp (the vLLM integration's build root, as on a RunPod pod: its
@@ -24,7 +24,11 @@ PermitRootLogin no
 AllowUsers $U
 X11Forwarding no
 EOF
-systemctl reload ssh || systemctl reload sshd || true
+# sshd keeps the first value it reads; on the nodes a MaxStartups in a drop-in didn't take effect (the main file's own line won),
+# and at the default 10:30:100 ssh from runs and agents was refused at random. So both go first in the main file.
+sed -i -E '/^[[:space:]]*#?[[:space:]]*(MaxStartups|MaxSessions)[[:space:]]/d' /etc/ssh/sshd_config
+sed -i '1i MaxStartups 200:30:400\nMaxSessions 64' /etc/ssh/sshd_config
+sshd -t && { systemctl reload ssh || systemctl reload sshd || true; }
 
 for _ in $(seq 60); do [ -e "$DEV" ] && break; sleep 2; done
 [ -e "$DEV" ] || { log "no data disk at $DEV"; exit 1; }
