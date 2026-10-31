@@ -4,9 +4,9 @@ import Proofs.Flock.Claims.Complete.Json.Hex
 /-!
 # Remote's tie on an honest run: one record, one digest
 
-The honest lemma of `AcceptInferenceOnly`'s tie: a run commits its three subprotocols to its one registration record,
-and whenever the three subprotocols' commitment decoders all accept that record's bytes, they decode them to one digest
-(`one_digest`), so no record strays and the three digests are the policy's record's (`acceptInferenceOnly_honest`).
+The honest lemma of `AcceptInferenceOnly`'s tie: a run commits the policy and the one-stage audit to its one
+registration record, and whenever both commitment decoders accept that record's bytes, they decode them to one digest
+(`one_digest`), so no record strays and both digests are the policy's record's (`acceptInferenceOnly_honest`).
 The record may name any registered circuit, a tiny one among them: the commitment decoders read only its `format`.
 
 The lemma takes the decoders' acceptance of the bytes as its hypotheses rather than exhibiting concrete bytes: the
@@ -79,106 +79,59 @@ theorem stage_of {b : ByteArray} {c : SampledProofs.OneStage.Commitment}
   subst h
   exact ⟨rfl, hg⟩
 
-/-- PoUW's commitment: the record its bytes are, a format among PoUW's, and the bytes themselves. -/
-theorem pouw_of {b : ByteArray} {c : PouwCheck.Registration} (h : PouwCheck.registrationOf b = .ok c) :
-    ∃ j, canonicalJson b = .ok j ∧
-      (PouwCheck.str? (PouwCheck.get j "format")).filter (PouwCheck.formats.contains ·) = some c.format ∧
-      c.bytes = b := by
-  unfold PouwCheck.registrationOf at h
-  rcases hj : canonicalJson b with e | j
-  · simp [hj, Bind.bind, Except.bind] at h
-  simp only [hj, Bind.bind, Except.bind] at h
-  rcases hf : (PouwCheck.str? (PouwCheck.get j "format")).filter (PouwCheck.formats.contains ·) with _ | f
-  · rw [hf] at h
-    simp [throw, throwThe, MonadExceptOf.throw] at h
-  rw [hf] at h
-  simp only [pure, Except.pure] at h
-  repeat' (first | (split at h) | (cases h; exact ⟨j, rfl, hf, rfl⟩) | cases h)
-
-theorem pouw_get (j : Json) (k : String) : PouwCheck.get j k = NciCheck.Baseline.getD j k := by
-  cases j <;> rfl
+/-- A record's own tag (`Flock.WindowRecord.tagOf`) is the one the policy's digest takes: both read its `format` field
+as a string. -/
+theorem tagOf_eq (j : Json) : Flock.WindowRecord.tagOf j =
+    if NciCheck.Baseline.strAt j "format" == some Flock.WindowRecord.FORMAT_V2 then Flock.WindowRecord.FORMAT_V2
+    else Flock.WindowRecord.FORMAT := by
+  have hv : (j.getObjValAs? String "format").toOption = NciCheck.Baseline.strAt j "format" := by
+    show (Lean.fromJson? (j.getObjValD "format") : Except String String).toOption =
+      NciCheck.Baseline.strOf? (j.getObjValD "format")
+    cases j.getObjValD "format" <;> rfl
+  unfold Flock.WindowRecord.tagOf
+  rw [hv]
 
 theorem push_zero (x : ByteArray) : x.push 0 = x ++ ByteArray.mk #[0] := by
   apply ByteArray.ext
   simp [ByteArray.data_push, ByteArray.data_append]
 
-/-- **One record, one digest**: bytes that the three subprotocols' commitment decoders all accept decode to one digest
-under each of them. -/
-theorem one_digest {b : ByteArray} {cI : NciCheck.Protocol.Commitment} {cW : PouwCheck.Registration}
-    {cS : SampledProofs.OneStage.Commitment} (hI : NciCheck.Protocol.commitmentOf b = .ok cI)
-    (hW : PouwCheck.registrationOf b = .ok cW) (hS : SampledProofs.OneStage.commitmentOf b = .ok cS) :
-    cW.digest = cI.digest ∧ cS.digest = cI.digest := by
+/-- **One record, one digest**: bytes that the policy's and the one-stage audit's commitment decoders both accept decode
+to one digest under each. -/
+theorem one_digest {b : ByteArray} {cI : NciCheck.Protocol.Commitment} {cS : SampledProofs.OneStage.Commitment}
+    (hI : NciCheck.Protocol.commitmentOf b = .ok cI) (hS : SampledProofs.OneStage.commitmentOf b = .ok cS) :
+    cS.digest = cI.digest := by
   obtain ⟨hjI, s, hs, hdI⟩ := policy_of hI
-  obtain ⟨j, hjW, hf, hbytes⟩ := pouw_of hW
   obtain ⟨hjS, hdS⟩ := stage_of hS
-  have e1 : cI.record = j := by rw [hjI] at hjW; exact Except.ok.inj hjW
-  have e2 : cS.record = j := by rw [hjS] at hjW; exact Except.ok.inj hjW
-  rw [e1] at hs hdI
-  rw [e2] at hdS
-  have hsb : s.toUTF8 = b := by
-    obtain ⟨s', hs', hb'⟩ := canonical_text hjW
-    rw [hs] at hs'
-    cases hs'
-    exact hb'
-  simp only [Option.filter_eq_some_iff] at hf
-  obtain ⟨hstr, hmem⟩ := hf
-  have hget : NciCheck.Baseline.getD j "format" = .str cW.format := by
-    rw [← pouw_get]
-    revert hstr
-    cases PouwCheck.get j "format" <;> simp [PouwCheck.str?]
-  have hN : NciCheck.Baseline.strAt j "format" = some cW.format := by
-    simp [NciCheck.Baseline.strAt, hget, NciCheck.Baseline.strOf?]
+  have e : cS.record = cI.record := by rw [hjI] at hjS; exact (Except.ok.inj hjS).symm
+  rw [e] at hdS
   unfold SampledProofs.Registration.digest at hdS
   simp only [hs, Bind.bind, Except.bind, pure, Except.pure] at hdS
   have hdS' := (Except.ok.inj hdS).symm
-  have hT : Flock.WindowRecord.tagOf j =
-      if some cW.format == some Flock.WindowRecord.FORMAT_V2 then Flock.WindowRecord.FORMAT_V2
-      else Flock.WindowRecord.FORMAT := by
-    have hv : j.getObjValAs? String "format" = .ok cW.format := by
-      unfold Lean.Json.getObjValAs?
-      rw [show j.getObjValD "format" = .str cW.format from hget]
-      rfl
-    unfold Flock.WindowRecord.tagOf
-    rw [hv]
-    rfl
-  unfold PouwCheck.Registration.digest
-  rw [hdI, hdS', hN, hbytes, ← hsb, hT]
-  have hfm : cW.format = NciCheck.Baseline.FORMAT ∨ cW.format = NciCheck.Baseline.FORMAT_V2 := by
-    simpa [PouwCheck.formats, NciCheck.Baseline.FORMAT, NciCheck.Baseline.FORMAT_V2] using hmem
+  rw [hdI, hdS', tagOf_eq]
   have hS2 : Flock.WindowRecord.FORMAT_V2 = NciCheck.Baseline.FORMAT_V2 := rfl
   have hS1 : Flock.WindowRecord.FORMAT = NciCheck.Baseline.FORMAT := rfl
   rw [hS2, hS1]
-  rcases hfm with h1 | h2
-  · have hne : (some NciCheck.Baseline.FORMAT == some NciCheck.Baseline.FORMAT_V2) = false := by decide +kernel
-    rw [h1, hne]
-    simp [Flock.WindowRecord.digestOf, push_zero]
-  · rw [h2]
-    simp [Flock.WindowRecord.digestOf, push_zero]
+  by_cases hc : (NciCheck.Baseline.strAt cI.record "format" == some NciCheck.Baseline.FORMAT_V2) = true <;>
+    simp [hc, Flock.WindowRecord.digestOf, push_zero]
 
-/-- **Remote's tie holds on an honest run** (the honest lemma of `AcceptInferenceOnly`'s tie): three cases committing
-to one record's bytes, which the three subprotocols' commitment decoders accept, leave no stray among the components
-remote's check compares (`remote_check_ids`), and their three digests are the policy's record's. -/
+/-- **Remote's tie holds on an honest run** (the honest lemma of `AcceptInferenceOnly`'s tie): the policy's and the
+one-stage audit's cases committing to one record's bytes, which both commitment decoders accept, leave no stray among
+the components remote's check compares (`remote_check_ids`), and both digests are the policy's record's. -/
 theorem acceptInferenceOnly_honest {kI kW kS : Case} {cI : NciCheck.Protocol.Commitment}
-    {cW : PouwCheck.Registration} {cS : SampledProofs.OneStage.Commitment}
-    (hW' : kW.commitment = kI.commitment) (hS' : kS.commitment = kI.commitment)
+    {cS : SampledProofs.OneStage.Commitment} (hS' : kS.commitment = kI.commitment)
     (hI : NciCheck.Protocol.commitmentOf kI.commitment = .ok cI)
-    (hW : PouwCheck.registrationOf kI.commitment = .ok cW)
     (hS : SampledProofs.OneStage.commitmentOf kI.commitment = .ok cS) :
-    strays [NciCheck.Protocol.protocol.id, PouwCheck.protocol.id, SampledProofs.OneStage.protocol.id]
-        [NciCheck.Protocol.protocol, PouwCheck.protocol, SampledProofs.OneStage.protocol] [kI, kW, kS] = none ∧
+    strays [NciCheck.Protocol.protocol.id, SampledProofs.OneStage.protocol.id]
+        [NciCheck.Protocol.protocol, PouwCheck.Period.protocol, SampledProofs.OneStage.protocol] [kI, kW, kS] = none ∧
       Properties.Composition.digestOf NciCheck.Protocol.protocol kI.commitment =
-        some (NciCheck.Protocol.protocol.digest cI) ∧
-      Properties.Composition.digestOf PouwCheck.protocol kW.commitment =
         some (NciCheck.Protocol.protocol.digest cI) ∧
       Properties.Composition.digestOf SampledProofs.OneStage.protocol kS.commitment =
         some (NciCheck.Protocol.protocol.digest cI) := by
-  obtain ⟨dW, dS⟩ := one_digest hI hW hS
+  have dS := one_digest hI hS
   have hcI : NciCheck.Protocol.protocol.commitment kI.commitment = .ok cI := hI
-  have hcW : PouwCheck.protocol.commitment kW.commitment = .ok cW := by rw [hW']; exact hW
   have hcS : SampledProofs.OneStage.protocol.commitment kS.commitment = .ok cS := by rw [hS']; exact hS
-  have dW' : PouwCheck.protocol.digest cW = NciCheck.Protocol.protocol.digest cI := dW
   have dS' : SampledProofs.OneStage.protocol.digest cS = NciCheck.Protocol.protocol.digest cI := dS
-  exact ⟨strays_three_none ne_policy_pouw ne_policy_stage ne_pouw_stage hcI hcW hcS dW' dS',
-    digestOf_ok hcI, (digestOf_ok hcW).trans (congrArg some dW'), (digestOf_ok hcS).trans (congrArg some dS')⟩
+  exact ⟨strays_two_none ne_policy_stage ne_period_stage hcI hcS dS', digestOf_ok hcI,
+    (digestOf_ok hcS).trans (congrArg some dS')⟩
 
 end Properties.Remote.SecurityProofs
