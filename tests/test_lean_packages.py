@@ -53,7 +53,7 @@ def test_one_mathlib():
 #: had no `honest` and `nontrivial` witnesses when the witness rule came (`check.py`'s `witness_failures`), with those the
 #: PRs on `next` then brought, and the exclusion bounds that read a partition once a derived circuit's registration built
 #: its one-block partition (`RegisteredCircuit.ofCircuit`)
-UNWITNESSED = {"Security": 384, "Security/Properties": 188, "verity/core/service/flock": 7}
+UNWITNESSED = {"Security": 416, "Security/Properties": 192, "verity/core/service/flock": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():
@@ -68,7 +68,7 @@ def test_the_unwitnessed_list_only_shrinks():
 
 
 def test_the_randomness_assumption_cites_this_toolchain():
-    """A3 (Flock soundness's `ASSUMPTIONS.md`, `Assumptions.UniformRandomBytes`) cites what the toolchain's runtime reads
+    """A3 (C-Flock soundness's `ASSUMPTIONS.md`, `Assumptions.UniformRandomBytes`) cites what the toolchain's runtime reads
     for `IO.getRandomBytes` (`lean_io_get_random_bytes`), so a toolchain bump fails here until someone re-reads it and
     updates the citation."""
     proofs = ROOT / "Security/Proofs"
@@ -169,7 +169,7 @@ def test_proofs_require_the_security_package():
 
 
 def test_code_never_requires_the_security_analysis():
-    """Code (Flock's verifier, the PoUS grader, the certifier's program) stays with its component and never imports
+    """Code (C-Flock's verifier, the PoUS grader, the certifier's program) stays with its component and never imports
     `Security/`: the analysis reads the code, never the reverse."""
     code = [pkg for pkg in lake_packages() if not pkg.is_relative_to(SECURITY) and not pkg.is_relative_to(ROOT / "tools")]
     assert code, "no code packages outside Security"
@@ -209,7 +209,7 @@ def test_every_open_conjecture_names_a_test_that_exists():
 #: a named assumption, another listed guarantee's statement nor a plain range when the inline rule came (`check.py`'s
 #: `inline_failures`), with those the PRs on `next` then brought; a renamed or restated premise counts twice, under
 #: both texts, until `--update` drops the one no tree prints
-INLINE = {"Security": 1450, "Security/Properties": 200, "verity/core/service/flock": 6}
+INLINE = {"Security": 1537, "Security/Properties": 230, "verity/core/service/flock": 6}
 
 
 def test_the_inline_list_only_shrinks():
