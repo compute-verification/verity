@@ -61,6 +61,7 @@ verity/ml/flock/tests/fixtures/public-inputs
 verity/ml/flock/tests/fixtures/public-inputs-blocks
 verity/ml/flock/tests/fixtures/rec-c3-inner
 verity/ml/flock/tests/fixtures/rec-coins
+verity/ml/flock/tests/fixtures/rec-links
 verity/ml/flock/tests/fixtures/zk-sessions
 integrations/vllm/tests/protocols/fixtures/challenger_periods
 benchmarks/network_e2e/encodings/tests/fixtures

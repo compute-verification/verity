@@ -758,7 +758,11 @@ shape `--rec-inner F` (under which `--statement` must be `verity/flock-circuit`,
 prints from 0: the levels, then the algebra's parts, then candidate 3's, then the level-0 cap) and its own bindings `--rec-bindings F` (from
 `verity_flock.rec_bindings`, which META's must equal; `RecVStar.checkStmt`), and a V* statement (a `rec-open/…` or `rec-residuals/…` unit) the inner
 statement and session its coefficients are checked against (`RecCoins.check`; `--rec-inner-coins` is refused,
-`RecCoins.refuseCoins`, and so is `--rec-links`, the inner population's link table, `RecLinks.refuseLinks`), and a statement reading a `rec-c<k>` the
+`RecCoins.refuseCoins`), a statement carrying the inner population's link table (`--rec-links ROOT:N`, its registered root
+and row count, `RecLinkTree.linksArg`) only at an inner shape naming a table of `N` rows and the other way round
+(`RecLinkPart.checkShape`), the link part's statement then held to the table, to the roots of the inner statement's
+input and output rows' trees and to V*'s link unit (`RecLinkPart.check`; the links' binding,
+`Flock.Guarantees.LinksBindDeployed`, which `Flock.Guarantees.RecursiveKSLinkAt` reads), and a statement reading a `rec-c<k>` the
 coin server's record of the inner session whose `c_k` its rows must be (`--rec-inner-transcript`,
 `RecVStar.checkPubRows`), and one of V*'s parts the verifier's record of V*'s shared rows, which its row ports must be
 (`--rec-rows`, `RecVStar.checkRows`). A V* statement whose check 5 reads the link points (a `rec-open/…`,
@@ -819,7 +823,7 @@ verifier's own `--program` the one META's `program_sha512` names (`ProvedScope.p
 plain multi-table claims cover; the check is the one without `--registered F` (`FailClosed.ScopeP`), so a shared-row
 public file is refused. Without it a plain session has at most one table. Not with `--zk`. -/
 def verifyCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-program F] [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]]] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins seed|os | --zk [--ks-form]] [--session-tables J] [--plain-tables] [--upstream-plain] --session DIR..."
+  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F] [--rec-links ROOT:N]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-program F] [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]]] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins seed|os | --zk [--ks-form]] [--session-tables J] [--plain-tables] [--upstream-plain] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   let stmtName := (argOf args "--statement").getD Tags.circuit.name
   let templated := Tags.templated.any (·.name == stmtName)
@@ -878,7 +882,6 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let identifier : Option (Lean.Json × String) ← match ← identifierInput args with
     | .ok i => pure i
     | .error e => IO.eprintln e; return 2
-  if let .error e := RecLinks.refuseLinks args then IO.eprintln e; return 2
   let recLinks ← match RecLinkTree.linksArg args with
     | .ok l => pure l
     | .error e => IO.eprintln e; return 2
@@ -1069,17 +1072,20 @@ rows at what the inner transcript fixes are the `b ‖ c` the verifier holds (`R
 and its rows of the circuit table's tops the coin server's (`RecVStar.checkTopRows`, `RecVStar.innerLink`, which holds the
 record's link points to the coin server's).
 Its verifier-registered values are checked against the verifier's coins (`RecCoins.check`) when it holds what that check
-reads: the inner statement and session (`--rec-inner-public` and its three; `--rec-inner-coins` is refused, and so is
-`--rec-links`, `RecLinks.refuseLinks`), or for R's levels and
+reads: the inner statement and session (`--rec-inner-public` and its three; `--rec-inner-coins` is refused), or for R's levels and
 opening the inner transcript and the verifier's inner shape alone; with the inner statement and session, a statement
 whose check 5 reads the link points needs the inner transcript, and a circuit-table level's `out` reads the coin server's
 tops (`RecCoins.checkLink`). Each level's cap statement (`rec-cap/…`) is checked against its registered reads and
 the inner transcript alone (`RecCoins.checkCap`, `RecCoins.checkLink`). At candidate 3's inner shape (`--rec-inner` naming a
 RecSparse shape), every statement needs the inner statement's files, whose sparse range is checked first
-(`RecCoins.checkAtC3`), and the inner transcript and R's registration (`RecSetup.checks`, `RecSetup.commits`). -/
+(`RecCoins.checkAtC3`), and the inner transcript and R's registration (`RecSetup.checks`, `RecSetup.commits`). With
+`--rec-links ROOT:N`, the link table's registered root and row count, the statement is held as `verify` sets it up: at
+an inner shape naming a table of `N` rows and the other way round (`RecLinkPart.checkShape`), and the link part's
+statement to the table, to the roots of the inner statement's input and output rows' trees and to V*'s link unit
+(`RecLinkPart.check`, which needs the inner statement's files; `Flock.Guarantees.LinksBindDeployed`). -/
 def statementCmd (args : List String) : IO UInt32 := do
   let (some _, some _) := (argOf args "--circuit", argOf args "--public")
-    | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-transcript F --rec-inner-session DIR [--rec-inner-circuit F --rec-inner-registration F] [--rec-inner-public F --rec-inner-partition F [--rec-inner-program F] [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]]]] [--coins seed|os]"; return 2
+    | IO.eprintln "usage: flock-verify statement [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F] [--rec-links ROOT:N]] [--rec-inner-transcript F --rec-inner-session DIR [--rec-inner-circuit F --rec-inner-registration F] [--rec-inner-public F --rec-inner-partition F [--rec-inner-program F] [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]]]] [--coins seed|os]"; return 2
   let stmtName := (argOf args "--statement").getD Tags.circuit.name
   let templated := Tags.templated.any (·.name == stmtName)
   let some tags := Tags.find? stmtName <|> Tags.templated.find? (·.name == stmtName)
@@ -1106,7 +1112,6 @@ def statementCmd (args : List String) : IO UInt32 := do
   let identifier : Option (Lean.Json × String) ← match ← identifierInput args with
     | .ok i => pure i
     | .error e => IO.eprintln e; return 2
-  if let .error e := RecLinks.refuseLinks args then IO.eprintln e; return 2
   let recLinks ← match RecLinkTree.linksArg args with
     | .ok l => pure l
     | .error e => IO.eprintln e; return 2
@@ -1657,7 +1662,7 @@ def qwordProgramCmd (args : List String) : IO UInt32 := do
   IO.println s!"QWORDPROGRAM {line.compress}"
   return (if (line.getObjValAs? Bool "ok").toOption.getD false then 0 else 1)
 
-/-- `rec-compose --rec-inner F --rec-rows F --rec-run F [--archive DIR] LOG...`: a recursive statement's verdict from
+/-- `rec-compose --rec-inner F --rec-rows F --rec-run F [--rec-links ROOT:N] [--archive DIR] LOG...`: a recursive statement's verdict from
 its V* parts' `verify` logs and the challenger's interactive-run record (`RecCompose.check`). The verifier's own inner
 shape (`--rec-inner`) gives V*'s statements, `--rec-rows` is the one shared rows file the prover staged, and
 `--rec-run` the challenger's record of the run (`verity/rec-run/v1`), read from the challenger's host. It accepts
@@ -1666,16 +1671,16 @@ with one `VERDICT`, each accepted at its own part, under `--zk`, without an iden
 every part naming one set of the other shared inputs, the first at this inner shape's SHA-512 and in the compiled
 verifier's form; and no coin key twice; and `RecCompose.OneRun` holds of the record (`RecCompose.check_oneRun`): the
 staging first, exactly one session opened per part, every opened session a composed part's and every part's opened,
-the close last. A record that can't be read is refused. `--rec-links ROOT:N`, the link table's registered root and row
-count, is the composition's own table, which every part's `rec_shared` must name (`Shared.Complete`); it is read
-(`RecLinkTree.linksArg`) and refused (`RecLinks.NO_LINKS`): no guarantee covers a table yet. One `REC-COMPOSE` line;
-exit 0 when accepted, 1 when refused, 2 on its inputs. -/
+the close last. A record that can't be read is refused. `--rec-links ROOT:N` (`RecLinkTree.linksArg`), the link table's
+registered root and row count, is the composition's own table: every part's `rec_shared` must name it, and without it
+none may name one (`Shared.Complete`, `RecCompose.checkForm`), so each part was verified at that table, the link part
+holding its rows to the inner statement's (`RecLinkPart.check`; the links' binding,
+`Flock.Guarantees.LinksBindDeployed`). One `REC-COMPOSE` line; exit 0 when accepted, 1 when refused, 2 on its inputs. -/
 def recComposeCmd (args : List String) : IO UInt32 := do
   let usage := "usage: flock-verify rec-compose --rec-inner F --rec-rows F --rec-run F [--rec-links ROOT:N] [--archive DIR] LOG..."
   let links : Option (ByteArray × Nat) ← match RecLinkTree.linksArg args with
+    | .ok l => pure l
     | .error e => IO.eprintln e; return 2
-    | .ok (some (t, n)) => IO.eprintln s!"{RecLinks.NO_LINKS} (table root {hexOf t}, {n} rows)"; return 2
-    | .ok none => pure none
   let i ← match ← recInnerInput args with
     | .ok (some i) => pure i
     | .ok none => IO.eprintln usage; return 2

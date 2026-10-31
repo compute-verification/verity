@@ -26,8 +26,10 @@ unit's net once per part, of a size `UB` and `PB` bound (`RecLinkTree.checkShape
 `checkShape` holds the statement's table to the verifier's inner shape, so the list has the part exactly when the
 statement carries the table.
 
-`verify` and `statement` still refuse `--rec-links` before reading anything (`RecLinks.refuseLinks`) until the
-recursion's guarantee covers a statement carrying the table; these checks run behind that refusal.
+`verify` and `statement` run both on every session of a statement carrying the table, and `rec-compose` holds every part
+to the one table (`RecCompose.checkForm`). On an accepted run whose extracted witness fails a link, two of the inputs the
+link finder reads collide (`Flock.Guarantees.LinksBindDeployed`), which is the extra term of the recursion's knowledge
+soundness at the linked relation (`Flock.Guarantees.RecursiveKSLinkAt`).
 -/
 
 namespace Flock

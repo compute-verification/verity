@@ -13,8 +13,8 @@ output row `o` of unit `u` leaf `u · 2^PB + o` of the output rows' tree. A leaf
 `rowsRoot` is one tree's root, `rowsPath` an opening of it. Each is linear in the rows it is given (one hash a row a level,
 at most `D ≤ 32` levels): the public commitments the verifier already reads, not the circuit they commit.
 
-`linksArg` reads `--rec-links ROOT:N`, the table's registered root and row count, as `rec-compose` takes them. Every
-statement carrying them is still refused (`RecLinks.refuseLinks`): no guarantee yet covers a table.
+`linksArg` reads `--rec-links ROOT:N`, the table's registered root and row count, as `verify`, `statement` and
+`rec-compose` take them; a statement carrying them is held to the table by V*'s link part (`RecLinkPart`).
 -/
 
 namespace Flock.RecLinkTree
