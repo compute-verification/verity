@@ -1,5 +1,4 @@
-import NetworkCheck.Period
-import Definitions.NetworkCertifier.SampledAudit
+import Properties.NetworkScan.Assumptions
 
 /-!
 # The rows form's scan fits its layout: what `NetworkCheck.Period.scanOf`'s acceptance gives the sampled audit's scope
@@ -17,16 +16,17 @@ first-template member, bucket `t ≥ 1`'s later-template member `t − 1`, the t
 composite (`NetworkCheck.Period.templateNodes`, as `scanOf` reads them). Gates are `Flock.Program.resolve`'s (§6), the
 canonical layout's. A statement's layout is its descriptor's (`layOf`), at horizon `T`.
 
-**The flattening** (`Flattens`): the sampling statement's gates (`Claims.Sampling.AuditStatement.prog`, "the descriptor
-flattened") are its descriptor's canonical layout, gate for gate: as many, an input gate exactly where its primitive is
-an input node, reading exactly the gates its operands name, returning the gates its root's return resolves to.
-`StmtFlattens` says it of every statement a deployment parses; the deployed parser is the sampled verifier's
-(`SamplingDeploy.Code.parse`), so it is that code's premise.
+**The flattening** (`Flattens`, in `Properties.NetworkScan.Flattens`): the sampling statement's gates
+(`Claims.Sampling.AuditStatement.prog`, "the descriptor flattened") are its descriptor's canonical layout, gate for gate.
+The deployment's premises are named `Prop`s of `Properties.NetworkScan.Assumptions`: `StmtFlattens` says it of every
+statement the deployment parses, and `ScopeMatches` that its scope check is its sampling scope.
 
 * `ScanFits`: an accepted scan's layout fits every flattening of its Program over `T` steps.
-* `ScanScopeAcc`: at a deployment whose statements are their descriptors flattened and whose scope check is its scope,
-  a statement the scope check takes, whose descriptor is the accepted scan's canonical bytes, is in the sampled audit's
-  scope at `layOf` and `T` (`ScopeAcc`). `Proofs.Properties.NetworkScan` derives it from `ScanFits`.
+* `ScanScopeAcc`: given an accepted scan, at every deployment whose statements are their descriptors flattened and
+  whose scope check is its scope, a statement the scope check takes, whose descriptor is the scan's canonical bytes, is
+  in the sampled audit's scope at `layOf` and `T` (`ScopeAcc`).
+
+`Proofs.Properties.NetworkScan` proves both (`scanFits`, and `scanScopeAcc` from it).
 -/
 
 namespace Properties.NetworkScan
@@ -59,23 +59,6 @@ def layOf (s : Schedule) (x : Claims.Sampling.AuditStatement) : NetTiming.Bounda
   | .ok P => scanLayout P s
   | .error _ => { egress := fun _ _ _ => (0, []), ingress := fun _ => [] }
 
-/-- **`C` is the Program `P` flattened**, gate for gate in its canonical layout (`Flock.Program.Prog.gate`): `P`'s
-gates, gate `g` an input gate exactly where its primitive is an input node and reading exactly the gates its operands
-name, and `C` returning the gates the root's return resolves to. -/
-def Flattens (P : Flock.Program.Prog) (C : Claims.Sampling.Prog) : Prop :=
-  C.gates.length = (P.defs[P.root]!).gates ∧
-    (∀ g < C.gates.length, ∃ (p : ℕ) (ops : Array ℕ) (sc : Flock.Program.Scope), P.gate g = .ok (p, ops, sc) ∧
-      (C.gates[g]? = some .input ↔ Flock.Program.isInputId (P.defs[p]!).key = true) ∧
-      ∀ a, a ∈ (C.gates[g]?.map Claims.Sampling.BGate.reads).getD [] ↔ a ∈ ops) ∧
-    ∀ g, g ∈ C.outs ↔ ∃ j < (P.defs[P.root]!).body.ret.count,
-      Flock.Program.resolve P P.rootScope ((P.defs[P.root]!).body.ret.get j) = .ok g
-
-/-- **The deployment's statements are their descriptors flattened**: every statement `D` parses has a descriptor
-C-Flock decodes (`Flock.Program.decode`, as the sampled verifier's `SampledProofs.Program.parse` does), and its gates
-are that Program's (`Flattens`). -/
-def StmtFlattens {Coin Col T : Type} (D : Claims.Sampling.Deploy Coin Col T) : Prop :=
-  ∀ x s, D.parse x = some s → ∃ P, Flock.Program.decode ⟨s.desc.toArray⟩ = .ok P ∧ Flattens P s.prog
-
 /-- **An accepted scan's layout fits its Program flattened.** If `scanOf` accepts the scan `j` as the registered
 Program `program` at the schedule `s`, its canonical text is `c` and decodes to `P`, then `P`'s scan layout fits every
 flattening of `P` over the window's `T` steps: every egress gate is returned and not an input, every ingress gate is an
@@ -86,17 +69,18 @@ def ScanFits : Prop :=
     scanOf j program s = .ok sc → Flock.canon j = .ok c → Flock.Program.decode c.toUTF8 = .ok P → Flattens P C →
       (scanLayout P s).Fits C s.window
 
-/-- **An accepted scan's statements are in the sampled audit's scope.** At a deployment `D` whose statements are their
-descriptors flattened (`StmtFlattens`) and whose scope check is its sampling scope (`ScopeMatches`), a statement `x`
-the scope check takes, every parse of which has the accepted scan's canonical bytes as its descriptor, is in
-`ScopeAcc` at the layout `layOf s` and the horizon `T`. -/
+/-- **An accepted scan's statements are in the sampled audit's scope.** If `scanOf` accepts the scan `j` at the
+schedule `s` and its canonical text is `c`, then at every deployment `D` whose statements are their descriptors
+flattened (`StmtFlattens`) and whose scope check is its sampling scope (`ScopeMatches`), a statement `x` the scope check
+takes, every parse of which has `c`'s bytes as its descriptor, is in `ScopeAcc` at the layout `layOf s` and the horizon
+`T`. -/
 def ScanScopeAcc : Prop :=
-  ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
-    (D : Claims.Sampling.Deploy Coin Col T) (j : Lean.Json) (program : String) (s : Schedule) (sc : Scan) (c : String)
-    (x : Claims.Msg),
-    StmtFlattens D → Claims.Sampling.ScopeMatches D → D.scopeCheck x = true →
+  ∀ (j : Lean.Json) (program : String) (s : Schedule) (sc : Scan) (c : String),
     scanOf j program s = .ok sc → Flock.canon j = .ok c →
-    (∀ st, D.parse x = some st → (⟨st.desc.toArray⟩ : ByteArray) = c.toUTF8) →
+    ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
+      (D : Claims.Sampling.Deploy Coin Col T) (x : Claims.Msg),
+      StmtFlattens D → ScopeMatches D → D.scopeCheck x = true →
+      (∀ st, D.parse x = some st → (⟨st.desc.toArray⟩ : ByteArray) = c.toUTF8) →
       NetTiming.ScopeAcc D (layOf s) (fun _ => s.window) x
 
 end Properties.NetworkScan
