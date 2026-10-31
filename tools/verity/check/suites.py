@@ -1865,9 +1865,7 @@ def serial_slots(seconds: list[float | None], parallel: int, jobs: int, mem_gb: 
     the one-process suites, longest first, finish about when their longest does, plus a slot for each with no recorded duration
     up to a quarter of the jobs (a fresh test cache, as the lander's `--fresh` runs have, times none): the parallel suites keep
     every slot the others couldn't use.  With ``mem_gb``, no more than it holds at `TEST_PROCESS_GB` each (18 Oct: a 16 GiB
-    agent-test job on 48 CPUs ran 44 test processes and the OOM killer took the whole scope), and beside parallel suites no more
-    than half of it holds: their reservation lasts the whole run while a parallel suite's workers are fixed when it starts, so
-    taking all of it left flock one 16 GB worker on a 150 GB check, long after the one-process suites had finished."""
+    agent-test job on 48 CPUs ran 44 test processes and the OOM killer took the whole scope)."""
     if not parallel:
         r = jobs
     elif not seconds:
@@ -1876,6 +1874,8 @@ def serial_slots(seconds: list[float | None], parallel: int, jobs: int, mem_gb: 
         timed = [s for s in seconds if s is not None]
         need = (-(-sum(timed) // max(timed)) if timed and max(timed) > 0 else len(timed)) + min(len(seconds) - len(timed), jobs // 4)
         r = max(1, min(int(need), jobs - 1))
+    # Beside parallel suites, at most half of mem_gb: this reservation lasts the whole run, while a parallel suite's workers are
+    # fixed when it starts, before these finish (all of 150 GB left a worker_gb = 16 suite one worker).
     return r if mem_gb is None else max(1, min(r, int((mem_gb / 2 if parallel else mem_gb) // TEST_PROCESS_GB)))
 
 
