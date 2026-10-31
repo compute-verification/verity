@@ -335,7 +335,9 @@ def test_a_checked_below_a_moved_main_fast_forwards_to_it(world, monkeypatch):
 
 
 def test_land_into_takes_checked_or_main_and_only_drive_pushes_checked(world, monkeypatch):
-    assert DriveFlags.parse('land_into = "checked"\n').land_into == "checked" and DriveFlags().land_into == "main"
+    assert DriveFlags.parse('land_into = "checked"\n').land_into == "checked" and DriveFlags().land_into is None
+    # a config that doesn't set it leaves the queue to read drive.toml's at `main`, as with no config
+    assert DriveFlags.parse('on = ["m"]\n').land_into is None
     with pytest.raises(QueueError, match="land_into"):
         DriveFlags.parse('land_into = "staging"\n')
     monkeypatch.delenv("RESEARCH_DRIVE", raising=False)
