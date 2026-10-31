@@ -76,6 +76,11 @@ uv run tools/verity/check/suites.py --explain SUITE       # why a suite would ru
 `research run` returns once the job starts, and `research status RUN` checks back on it. To record a check of a clean
 commit as an Attempt, run `uv run python tools/verity/check/check.py --record --on auto` from the checkout.
 
+A recorded check publishes its live record (`live.py`) on the store's remote as each step ends and every few minutes, so
+it can be followed from any machine with the store's key, without its node: `verity ci ls` lists the recent checks, running
+and ended, and `verity ci inspect RUN` shows a check's steps with their state, elapsed time, an ETA from each step's median
+over recent recorded checks, and its reds so far. What isn't recorded shows as unknown, never as passed.
+
 ## Landing
 
 PRs land through the merge queue (`research queue drive`): its flags are `drive.toml` and its admission rules are
