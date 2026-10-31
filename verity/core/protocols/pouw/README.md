@@ -11,12 +11,14 @@ It carries no policy parameter: it surfaces the ε at δ its sample established.
 ## PoUW in the remote protocol
 
 The remote protocol, for an auditor with no devices at the datacenter, composes three subprotocols: sampled proofs'
-one-stage audit, PoUW's execution-phase check and the inference-only policy's check (`Core.Remote.components` in
-`verity/core/protocols/remote/CoreRemote.lean`, id `verity/remote/v0`). It accepts only when every subprotocol accepts
-its own case and its commitment binds the subprotocols' commitments; any one's rejection rejects it
-(`Core.Composition.product`, `verity/core/protocols/composition/README.md`). In the remote demo, the vLLM demo
+one-stage audit, PoUW's period check, `PouwCheck.Period.protocol` (`verity/pouw/period/v1`), as onsite does, and the
+inference-only policy's check (`Core.Remote.components` in `verity/core/protocols/remote/CoreRemote.lean`, id
+`verity/remote/v0`). It accepts only when every subprotocol accepts its own case, its commitment binds the
+subprotocols' commitments, the policy and the one-stage audit committed to one record, and every window of the period
+names that record as its Commit record (`Core.Remote.windows`); any one's rejection rejects it
+(`Core.Composition.tiedSameB`, `verity/core/protocols/composition/README.md`). In the remote demo, the vLLM demo
 (`verity example vllm`), PoUW runs on the served model as H1, under the challenger's development key, so its verdict
-credits nothing, and an H1 commitment's served execution blocks aren't yet a `verity/pouw/v1` case. The remote
+credits nothing, and an H1 commitment's served execution blocks aren't yet a `verity/pouw/period/v1` case. The remote
 protocol's front door is
 `verity/core/protocols/remote/`; PoUW is also a subprotocol of the onsite protocol (`verity/core/protocols/onsite`).
 
@@ -24,8 +26,9 @@ protocol's front door is
 
 The verifier is Lean, the source of truth for what PoUW checks: three Lake packages under `lean/`.
 
-- `lean/check` (`pouw_check`): `PouwCheck.protocol`, the `Core.Protocol` with id `verity/pouw/v1` that the remote
-  protocol composes. `PouwCheck.check` decides one execution phase from its registration (the commitment) and the proof
+- `lean/check` (`pouw_check`): `PouwCheck.Period.protocol` (`verity/pouw/period/v1`), the `Core.Protocol` both the
+  onsite and the remote protocol compose, and `PouwCheck.protocol` (`verity/pouw/v1`), one execution phase's check,
+  which neither composes. `PouwCheck.check` decides one execution phase from its registration (the commitment) and the proof
   system's answer to it (the evidence); `PouwCheck.Credit` decides what a served execution phase, and a credit period
   (below), credits. Its executable is `pouw-check` (`id | check | serve`, the core interface's commands).
 - `lean/window` (`pouw_window`): what an execution phase registers and makes public: its grid level, its sample size K′, its
