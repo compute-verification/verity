@@ -2209,6 +2209,7 @@ class Driver:
         q = self.q
         what: list[str] = []
         self._regen: dict[str, set[str] | None] = {}
+        self._rebuild: list | None = None
         self._lean_of: dict[str, bool] = {}
         drive["tick"] = drive.get("tick", 0) + 1
         self._follow_lean(drive)
@@ -2569,6 +2570,7 @@ class Driver:
         if top is None:
             return []
         if dry_run or q.shadow:
+            self._rebuilt("dropped: nothing is pushed" + (" [shadow]" if q.shadow else " (dry run)"))
             for m, commit in landed:
                 q.log(f"research queue drive: would land #{m.pr} on `{q.into}` (low-risk lane: no Lean, lock or soundness-path "
                       "change)" + (" [shadow]" if q.shadow else ""))
@@ -2577,6 +2579,7 @@ class Driver:
         if (r := q._remote(self.repo, "push", "-q", "--no-verify", "origin", f"{tip}:refs/heads/{q.into}", ok=None)).returncode:
             q.log(f"research queue drive: low-risk lane: pushing `{q.into}` was refused ({r.stderr.strip()[-200:]}); the next "
                   "tick tries again")
+            self._rebuilt(f"dropped: `{q.into}` wasn't pushed")
             return []
         _git(self.repo, "update-ref", q.base, tip)
         below = start
@@ -2615,6 +2618,8 @@ class Driver:
             why = (f"the passed Lean check {_ids(keep[regen])} of {regen[:12]} regenerated lock records (or they can't be read), "
                    "which land only at the commit it ran on")
         top, images, broke, moves = tip, {}, "", {}
+        if keep and not why:
+            self._rebuild = [tip, len(chain) - len(gone), self.now()]
         for m in chain if keep and not why else ():
             if m.pr in gone:
                 continue
@@ -2625,6 +2630,8 @@ class Driver:
             top = _git(self.repo, "commit-tree", tree, "-p", top, "-p", m.head, "-m",
                        _out(self.repo, "log", "-1", "--format=%B", m.commit), env=IDENTITY).stdout.strip()
             images[m.commit] = top
+        if self._rebuild:
+            self._rebuild[2:] = [len(images), self.now() - self._rebuild[2]]
         for c, rec in sorted(keep.items(), key=lambda x: (x[1].get("state") != "passed", -pos.get(x[0], 0))) if not why else ():
             members, left = [list(x) for x in rec.get("members") or ()], [m for m in chain[:pos[c] + 1] if m.pr not in gone]
             if members != [[m.pr, m.head] for m in chain[:pos[c] + 1]]:
@@ -2646,8 +2653,21 @@ class Driver:
                 break
         if why:
             q.log(f"research queue drive: low-risk lane waits: a landing off `{q.branch}` rebuilds it, and {why}")
+            self._rebuilt("dropped: the lane waits")
             return None, None
+        if not moves:
+            self._rebuilt("dropped: no Lean check moves to it, so the next sync rebuilds `next`")
         return (top, moves) if moves else ("", {})
+
+    def _rebuilt(self, outcome: str) -> None:
+        """The one log line of the low-risk lane's rebuild of `next` (`_keep_lean`), if one ran this tick: its members merged
+        again, its time, and ``outcome``, kept or dropped and why (a dropped one is merged again at every tick it recurs)."""
+        if not self._rebuild:
+            return
+        tip, n, merged, secs = self._rebuild
+        self._rebuild = None
+        self.q.log(f"research queue drive: low-risk rebuild of `{self.q.branch}` on `{self.q.into}` {tip[:12]}: {merged} of {n} "
+                   f"member(s) merged again in {secs:.1f} s, {outcome}")
 
     def _move_lean(self, drive: dict, gone: set[int], tip: str, top: str, moves: dict[str, tuple[str, list[list]]]) -> None:
         """Push `next` rebuilt on the low-risk lane's landing ``tip`` (`_keep_lean`), and move each Lean check in ``moves`` to its
@@ -2661,8 +2681,10 @@ class Driver:
             q.log(f"research queue drive: pushing `{q.branch}` rebuilt on `{q.into}` {tip[:12]} was refused "
                   f"({p.stderr.strip()[-200:]}); the next sync rebuilds it, without the Lean checks of "
                   f"{', '.join(c[:12] for c in moves)}")
+            self._rebuilt("dropped: its push was refused")
             return
         _git(self.repo, "update-ref", f"refs/remotes/origin/{q.branch}", top)
+        self._rebuilt(f"kept: {len(moves)} Lean check(s) move to it")
         prs = " ".join(f"#{n}" for n in sorted(gone))
         for c, (new, members) in moves.items():
             rec = lean.pop(c)
