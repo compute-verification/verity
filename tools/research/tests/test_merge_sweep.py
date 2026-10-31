@@ -215,7 +215,7 @@ def _checked_c(tmp_path, monkeypatch, gh, repo):
 
 
 def test_a_merge_push_of_main_off_drive_is_refused_and_pushes_nothing(tmp_path, monkeypatch, capsys):
-    """GitHub's rulesets let only drive's App move `main`; a pure move lands from the control pod (`drive.sh merge`)."""
+    """GitHub's rulesets let only drive's App move `main`; the lander's push runs on the control pod (`drive.sh merge`)."""
     repo, gh, _tips, _merge = _world(tmp_path)
     _checked_c(tmp_path, monkeypatch, gh, repo)
     monkeypatch.delenv("RESEARCH_DRIVE")
