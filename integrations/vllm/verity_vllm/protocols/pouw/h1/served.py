@@ -533,7 +533,7 @@ class Served:
             codes, scales = PH.numpy_of(a).reshape(call.m, call.k), PH.numpy_of(s_a).reshape(-1)
             zy_rows = zy_words(records, call.rows, call.n, self.m, self.tile)
         else:
-            zy_rows = record_words(np.zeros((0, call.n), "<i4"), np.zeros((0, call.n), np.int16), self.m, self.tile)
+            zy_rows = self._empty_zy(call.n)
         out, value, mine = {}, self.a_table(call.index), self.step_calls(call.index)
         rows = self._a.setdefault(value, {})
         rows[call.index] = self.a_words(call, codes, scales)
@@ -562,6 +562,19 @@ class Served:
                     rc = self.receipt_table(c.index)
                     out[rc] = self._register(run, rc, got, RECEIPT_NONCE + c.index, self.root)
         return out
+
+    def _empty_zy(self, n: int) -> Any:
+        """An empty call's z table, `record_words` of no rows: ``(units, 3 R C)`` u16, every word zero. Where H1 hashes on
+        the GPU it is made on the hash's stream, so nothing is built on the host or copied up."""
+        shape = ((self.m // self.tile[0]) * (n // self.tile[1]), 3 * self.tile[0] * self.tile[1])
+        if NR.path() != "gpu":
+            return np.zeros(shape, np.uint16)
+        import torch
+
+        from verity_vllm.protocols.pouw.h1 import registered_device as D
+
+        with D.hashing() as device:
+            return torch.zeros((shape[0], 2 * shape[1]), dtype=torch.uint8, device=device).view(torch.uint16)
 
     def _take_b(self, run: Any, call: Any, b: str, out: dict[str, str]) -> bool:
         """Put ``b/<K>`` in ``out`` once K's linears' weights are all held, the period's or the window's own; False when
