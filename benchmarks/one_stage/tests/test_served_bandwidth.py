@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from fractions import Fraction
 from pathlib import Path
@@ -42,7 +43,8 @@ def _serve_dir(path: Path) -> Path:
 def _env(tmp: Path, cheat: str = "") -> dict[str, str]:
     toy = tmp / "toy"
     party = (f"cd {ROOT} && exec {sys.executable} -S -E -m verity.core.protocols.remote_bandwidth.p2_party "
-             f"--device {tmp / 'party'} --listen 127.0.0.1:0 --registration {toy / 'registration.json'}")
+             f"--device {tmp / 'party'} --listen 127.0.0.1:0 --registration {toy / 'registration.json'} "
+             "--windows 1 --passes 2 --samples 64 --window-ns 1000000 --deadline-ns 1000000")
     return dict(os.environ) | {"BANDWIDTH_CMD": CMD, "PY": sys.executable, "BW_STORE": str(toy / "store"),
             "BW_LAYOUT": str(toy / "layout.json"), "BW_REGISTRATION": str(toy / "registration.json"),
             "BW_NODE": "p2-toy-node", "BW_DEVICE": "cpu", "BW_REF_DECODE": "1", "BW_LEASE_MIN": "0", "BW_WORKERS": "1",
@@ -90,3 +92,14 @@ def test_a_session_with_no_record_is_a_reject_that_says_its_window_was_not_serve
     assert row["verdict"] == "reject" and row["quantity"] is None and "no session record" in row["reason"]
     assert "with no served window: window 0 of " in row["reason"] and "beside the served window" not in row["reason"]
     assert json.loads((out / "served.json").read_text())["scope"].startswith("with no served window")
+
+
+def test_the_served_pieces_request_is_the_auditors_session() -> None:
+    """`served_bandwidth.sh` requests, by default, the session the auditor's party holds every session to
+    (`p2_party.SESSION`), as `bandwidth.py session` turns its flags into the request: one off it is refused before any
+    coin."""
+    text = (ROOT / "benchmarks" / "one_stage" / "served_bandwidth.sh").read_text()
+    got = dict(re.findall(r"\$\{BW_(WINDOWS|PASSES|SAMPLES|WINDOW_S|DEADLINE_S):-([0-9.]+)\}", text))
+    assert {"windows": int(got["WINDOWS"]), "passes": int(got["PASSES"]), "samples": int(got["SAMPLES"]),
+            "window_ns": int(float(got["WINDOW_S"]) * 1e9),
+            "deadline_ns": int(float(got["DEADLINE_S"]) * 1e9)} == p2_party.SESSION
