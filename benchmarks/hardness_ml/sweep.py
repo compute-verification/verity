@@ -135,12 +135,28 @@ def replan4():
     return cfgs
 
 
+def replan5():
+    """Width at fixed tokens per parameter: w256 at 80M tokens has w128-at-20M's 25.4 tokens per non-embedding
+    parameter, since the penalty grows with tokens per parameter (w128 at 60M) and 20M tokens puts w512 at 1.6. A lr-2e-3
+    ladder at 40M and 80M (with a 4e-3 bracket), B ρ = 0.25 and A 1/8 at their best 20M-token lrs; and w128's lr bracket."""
+    w = {"size": "w256", "tokens": 80_000_000, "lr": 2e-3, "threads": 4}
+    cfgs = [{**w, "name": "w256-base-D80000000"},
+            {**w, "name": "w256-base-D40000000", "tokens": 40_000_000},
+            {**w, "name": "w256-base-D80M-lr0.004", "lr": 4e-3},
+            {**w, "name": "w256-B0.25-D80M", "design": "B", "rho": 0.25},
+            {**w, "name": "w256-A8-diag-D80M-lr0.004", "lr": 4e-3, "design": "A", "rank_frac": 1 / 8, "diag": True}]
+    b = {"size": "w128", "tokens": 20_000_000, "lr": 1.6e-2, "threads": 2}
+    cfgs += [{**b, "name": "w128-base-lr0.016"}, {**b, "name": "w128-B0.25-lr0.016", "design": "B", "rho": 0.25}]
+    return cfgs
+
+
 PRESETS = {
     "bench": bench,
     "replan1": replan1,
     "replan2": replan2,
     "replan3": replan3,
     "replan4": replan4,
+    "replan5": replan5,
     "w256": lambda: grid("w256", 20_000_000),
     "scale1": lambda: lite("w512", 20_000_000, 6) + lite("w128", 20_000_000, 2),
 }
