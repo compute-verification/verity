@@ -13,10 +13,10 @@ transcript there (`censorSim`).
 * `ZKmalAt.post`: `ZKmalAt` at `γ = 0` carries over to a prover and a program whose transcripts are one function of
   the first ones' at each verifier and tape. So a first part that rewinds nothing is `ZKmalAt` with the stop at its
   simulator cut, at the same error (`ZKmalAt.censor`).
-* `Layout.stopped`: the parts with the stop. A session at a history where the stop has fired is at the empty
+* `RunParts.stopped`: the parts with the stop. A session at a history where the stop has fired is at the empty
   statement with no witness, and its prover is silent (`stopPS`), simulated exactly (`zkmalAt_silent`); elsewhere it
   is at its statement tagged `1 ::`, with its witness, where its zero knowledge is the untagged statement's
-  (`ZKmalAt.tag`). The layout's prover is the prover with the stop (`Layout.prover_stopped`).
+  (`ZKmalAt.tag`). The layout's prover is the prover with the stop (`RunParts.prover_stopped`).
 * **`zkmalAt_layout_stop`**: the parts in turn with the stop are `ZKmalAt` at the stopped composition, within the
   first part's error and the sessions', where the sessions are zero knowledge at the histories where the stop hasn't
   fired and their relation holds at the honest first parts the stop leaves live. The collision term is `Fork`'s of the
@@ -297,19 +297,19 @@ theorem histOf_runStar_getElem {Ω Θ : Type} (H : Msg → Msg) (P : Prover Ω) 
 
 /-! ## The parts with the stop -/
 
-namespace Layout
+namespace RunParts
 
 variable {W WS T TS : Type}
 
 /-- **The parts with the stop `s`**: session `j` at a history where the stop has fired within the first part is at
 the empty statement with no witness; elsewhere at its statement tagged `1 ::`, with its witness. -/
-def stopped (L : Layout W WS T) (s : Msg → List (Msg × Msg) → Bool) : Layout W (Option WS) T where
+def stopped (L : RunParts W WS T) (s : Msg → List (Msg × Msg) → Bool) : RunParts W (Option WS) T where
   k₀ := L.k₀
   n := L.n
   xs x j u := if fired (s x) (L.k₀ x) u then [] else 1 :: L.xs x j u
   ws j w t x u := if fired (s x) (L.k₀ x) u then none else some (L.ws j w t x u)
 
-theorem stopped_start (L : Layout W WS T) (s : Msg → List (Msg × Msg) → Bool) : (L.stopped s).start = L.start := by
+theorem stopped_start (L : RunParts W WS T) (s : Msg → List (Msg × Msg) → Bool) : (L.stopped s).start = L.start := by
   funext x j
   induction j with
   | zero => rfl
@@ -318,7 +318,7 @@ theorem stopped_start (L : Layout W WS T) (s : Msg → List (Msg × Msg) → Boo
     rw [ih]
 
 /-- **The parts with the stop run the prover with the stop.** -/
-theorem prover_stopped (L : Layout W WS T) (s : Msg → List (Msg × Msg) → Bool) (P₀ : W → Prover T)
+theorem prover_stopped (L : RunParts W WS T) (s : Msg → List (Msg × Msg) → Bool) (P₀ : W → Prover T)
     (PS : WS → Prover TS) :
     ∀ (m : ℕ) (w : W) (x : Msg) (hist : List (Msg × Msg)) (ω : T × (ℕ → TS)),
       ((L.stopped s).prover (fun w => stopP (P₀ w) s L.k₀) (stopPS PS) m w).next x hist ω =
@@ -359,7 +359,7 @@ theorem prover_stopped (L : Layout W WS T) (s : Msg → List (Msg × Msg) → Bo
         · rw [if_neg hfi, if_neg hfi, if_neg hfi]
           rfl
 
-end Layout
+end RunParts
 
 /-- The sessions' programs with the stop: silent where the stop has fired, else `progB`. -/
 def stopProgB (s : Msg → List (Msg × Msg) → Bool) (k : Msg → ℕ) (n : Msg → ℕ → ℕ) {CB : ℕ → Msg → Type}
@@ -374,7 +374,7 @@ and `m·g`, where the first part is `ZKmalAt` with `ε₀` and rewinds nothing; 
 and `g` at every history of its start where the stop hasn't fired; its relation holds there at every honest first
 part (its messages the first part's prover's on the tape `t₀`); and `go j` is `goesOn` at every run of its start. -/
 theorem zkmalAt_layout_stop {W WS NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
-    (T₀ : SeqTape) (L : Layout W WS (T₀.N × T₀.Ω)) (s : Msg → List (Msg × Msg) → Bool) (H : Msg → Msg) (x : Msg)
+    (T₀ : SeqTape) (L : RunParts W WS (T₀.N × T₀.Ω)) (s : Msg → List (Msg × Msg) → Bool) (H : Msg → Msg) (x : Msg)
     (m : ℕ) (P₀ : W → Prover (T₀.N × T₀.Ω)) (PS : WS → Prover (NB × ΩB)) (RA : Rel W) (RB : Rel WS)
     (S₀ : Simulator) (CB : ℕ → Msg → Type) [∀ n x, Fintype (CB n x)] [∀ n x, Nonempty (CB n x)]
     (progB : (n : ℕ) → (x : Msg) → List (Msg × Msg) → CB n x → SP (List (Msg × Out)))
@@ -388,11 +388,11 @@ theorem zkmalAt_layout_stop {W WS NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fin
     (hgo : ∀ j < m, ∀ (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg),
       go j x (interact ask pm (L.start x j) []) = goesOn (L.start x j) (interact ask pm (L.start x j) []))
     (he0 : ∀ j < m, 0 ≤ eB j) (hg : 0 ≤ g) :
-    ZKmalAt H (L.start x m) (fun w => (stopP (L.prover P₀ PS m w) s L.k₀).comap (Layout.flatten T₀ 0 NB ΩB m))
+    ZKmalAt H (L.start x m) (fun w => (stopP (L.prover P₀ PS m w) s L.k₀).comap (RunParts.flatten T₀ 0 NB ΩB m))
       (RA x) x
-      ((iterSimG T₀ 0 NB ΩB (Layout.seq T₀ 0 NB ΩB (L.stopped s)) (censorSim S₀ s L.k₀) CB
+      ((iterSimG T₀ 0 NB ΩB (RunParts.seq T₀ 0 NB ΩB (L.stopped s)) (censorSim S₀ s L.k₀) CB
         (stopProgB s L.k₀ L.n progB) go m).C x)
-      ((iterSimG T₀ 0 NB ΩB (Layout.seq T₀ 0 NB ΩB (L.stopped s)) (censorSim S₀ s L.k₀) CB
+      ((iterSimG T₀ 0 NB ΩB (RunParts.seq T₀ 0 NB ΩB (L.stopped s)) (censorSim S₀ s L.k₀) CB
         (stopProgB s L.k₀ L.n progB) go m).prog x)
       (ε₀ + ∑ j ∈ Finset.range m, eB j) (m * g) := by
   have hst := L.stopped_start s
@@ -401,7 +401,7 @@ theorem zkmalAt_layout_stop {W WS NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fin
   have h := zkmalAt_layout T₀ 0 (L.stopped s) H x m (fun w => stopP (P₀ w) s L.k₀) (stopPS PS) RA (stopRel RB)
     (censorSim S₀ s L.k₀) CB (stopProgB s L.k₀ L.n progB) go ε₀ 0 g eB h₀'
     (fun j hj u hu => by
-      have hl := Layout.reach_length T₀ 0 NB ΩB (L.stopped s) H _ RA x hu
+      have hl := RunParts.reach_length T₀ 0 NB ΩB (L.stopped s) H _ RA x hu
       rw [hst] at hl
       show ZKmalAt H (L.n x j) (stopPS PS) (stopRel RB (if fired (s x) (L.k₀ x) u then [] else 1 :: L.xs x j u))
         (if fired (s x) (L.k₀ x) u then [] else 1 :: L.xs x j u) (CB j x)
@@ -413,15 +413,15 @@ theorem zkmalAt_layout_stop {W WS NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fin
         simp only [hf, Bool.false_eq_true, ite_false]
         exact (hB j hj u hl hf).tag)
     (fun j hj w hw Θ Vs θ ωA hgo' => by
-      set P := iterProver T₀ 0 NB ΩB (Layout.seq T₀ 0 NB ΩB (L.stopped s)) (fun w => stopP (P₀ w) s L.k₀)
+      set P := iterProver T₀ 0 NB ΩB (RunParts.seq T₀ 0 NB ΩB (L.stopped s)) (fun w => stopP (P₀ w) s L.k₀)
         (fun _ => stopPS PS) j w with hP
-      set Vh := Vs.head (Layout.seq T₀ 0 NB ΩB (L.stopped s) j).kA
+      set Vh := Vs.head (RunParts.seq T₀ 0 NB ΩB (L.stopped s) j).kA
       set u := histOf (runStar H P Vh x ωA θ).msgs with hu
       have hl : u.length = L.start x j := by
         rw [hu, histOf_length]
         exact (goesOn_length hgo').trans (congrFun (congrFun hst x) j)
       show stopRel RB (if fired (s x) (L.k₀ x) u = true then [] else 1 :: L.xs x j u)
-        (if fired (s x) (L.k₀ x) u = true then none else some (L.ws j w (Layout.flatten T₀ 0 NB ΩB j ωA).1 x u))
+        (if fired (s x) (L.k₀ x) u = true then none else some (L.ws j w (RunParts.flatten T₀ 0 NB ΩB j ωA).1 x u))
       by_cases hf : fired (s x) (L.k₀ x) u = true
       · rw [if_pos hf, if_pos hf]
         rfl
@@ -430,8 +430,8 @@ theorem zkmalAt_layout_stop {W WS NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fin
         refine ⟨L.xs x j u, rfl, hR j hj w hw _ u hl (fun i hi hk => ?_) hf⟩
         refine (histOf_runStar_getElem H P Vh x ωA θ i hi).trans ?_
         have e1 : P.next x (u.take i) ωA =
-            (stopP (L.prover P₀ PS j w) s L.k₀).next x (u.take i) (Layout.flatten T₀ 0 NB ΩB j ωA) :=
-          (Layout.iterProver_flat T₀ 0 NB ΩB (L.stopped s) (fun w => stopP (P₀ w) s L.k₀) (stopPS PS) j w x _
+            (stopP (L.prover P₀ PS j w) s L.k₀).next x (u.take i) (RunParts.flatten T₀ 0 NB ΩB j ωA) :=
+          (RunParts.iterProver_flat T₀ 0 NB ΩB (L.stopped s) (fun w => stopP (P₀ w) s L.k₀) (stopPS PS) j w x _
             ωA).trans (L.prover_stopped s P₀ PS j w x _ _)
         have hnf : fired (s x) (L.k₀ x) (u.take i) = false := by
           by_contra hne
@@ -443,7 +443,7 @@ theorem zkmalAt_layout_stop {W WS NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fin
         show ((P.next x (u.take i) ωA).eval H).1 = _
         rw [e1]
         show ((if fired (s x) (L.k₀ x) (u.take i) = true then OC.ret []
-          else (L.prover P₀ PS j w).next x (u.take i) (Layout.flatten T₀ 0 NB ΩB j ωA)).eval H).1 = _
+          else (L.prover P₀ PS j w).next x (u.take i) (RunParts.flatten T₀ 0 NB ΩB j ωA)).eval H).1 = _
         rw [hnf, if_neg Bool.false_ne_true, L.prover_pre P₀ PS j w x _ _ hlt])
     (fun j hj w _ Θ Vs θ ωA => by
       rw [runStar_msgs]
@@ -456,6 +456,6 @@ theorem zkmalAt_layout_stop {W WS NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fin
   rw [hst] at h
   simp only [Nat.cast_zero, zero_add] at h
   exact h.of_equiv _ (Equiv.refl _) (Equiv.refl _) fun w hist ω =>
-    (L.prover_stopped s P₀ PS m w x hist (Layout.flatten T₀ 0 NB ΩB m ω)).symm
+    (L.prover_stopped s P₀ PS m w x hist (RunParts.flatten T₀ 0 NB ΩB m ω)).symm
 
 end Claims.ZKMal
