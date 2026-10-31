@@ -99,7 +99,7 @@ theorem tt_outputPriced [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P :
   exact absurd hx (not_lt.2 (h1.trans (h2.trans h3)))
 
 /-- **Satisfiability witness for TT and `AdmitsRef`** in `outputPriced`, for `D1.m1` with `W_ref ≥ W_mm`. -/
-theorem ttWitness : Pinned.TTWitness := by
+theorem ttWitness : GameStatements.TTWitness := by
   intro Wref hW
   refine ⟨tt_outputPriced _ _, fun U act _ s => honestProg (D1.m1 Wref) U act s, fun U hU act _ H s =>
     ⟨eval_honestProg _ H U act s, ?_, calls_honestProg _ H U act s (M1.queryBound Wref)⟩⟩
@@ -121,7 +121,7 @@ theorem honest_correctSet (P : Protocol Q R S) (D : Layout → Prop) (U : Worklo
   exact ⟨⟨act u, P.refChecked H s U u (act u), P.refOut H s U u (act u)⟩, by simp [hu], ⟨hact u hu, fun x hx => hc.1 x hx⟩, fun i hi j hj => hc.2 i hi j hj⟩
 
 /-- **The honest reference is complete and does not win.** -/
-theorem honestComplete : Pinned.HonestComplete := by
+theorem honestComplete : GameStatements.HonestComplete := by
   intro Q R S P D U H s act hP hU hact
   have hK := honest_correctSet P D U H s act hP hU hact
   refine ⟨hK, fun γ hγ0 hγ1 hwin => ?_⟩
@@ -228,7 +228,7 @@ theorem lost_priced {Q R : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Nonemp
   nlinarith
 
 /-- **The game can be lost.** -/
-theorem gameCanBeLost : Pinned.GameCanBeLost := by
+theorem gameCanBeLost : GameStatements.GameCanBeLost := by
   intro Q R _ _ _ _ P c Ω hN hc hc64 hΩ hW
   exact ⟨fun γ hγ η hG => lost_free P c Ω hN hc hc64 hΩ hW γ hγ η hG,
     fun γ hγ η hG => lost_priced P c Ω hN hc hc64 hΩ hW γ hγ η hG⟩
