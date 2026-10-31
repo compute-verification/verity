@@ -169,7 +169,7 @@ def main(argv=None) -> int:
     ap.add_argument("--zs-batch", type=int, default=64)
     ap.add_argument("--zs-limit", type=int, default=None)
     ap.add_argument("--no-zs-before", action="store_true", help="skip zero-shot before training")
-    ap.add_argument("--max-steps", type=int, default=None, help="stop after this many steps (smoke tests)")
+    ap.add_argument("--max-steps", type=int, default=None, help="stop after this many steps of the --tokens schedule (smoke tests)")
     ap.add_argument("--codes", type=Path, default=None, help="write the codes to this safetensors file")
     ap.add_argument("--price", action="store_true", help="price the exported codes with price.py on the CPU")
     ap.add_argument("--price-workers", type=int, default=6)
@@ -197,10 +197,9 @@ def main(argv=None) -> int:
     model = AutoModelForCausalLM.from_pretrained(args.model, torch_dtype=torch.float32, attn_implementation="sdpa").cuda()
     model.config.use_cache = False
     target = None if args.target in ("absmax", "bf16") else float(args.target)
-    steps = 0 if args.target == "bf16" else args.tokens // (args.batch * args.seq)
-    if args.max_steps is not None:
-        steps = min(steps, args.max_steps)
-    res["steps"] = steps
+    total = 0 if args.target == "bf16" else args.tokens // (args.batch * args.seq)
+    steps = total if args.max_steps is None else min(total, args.max_steps)
+    res["steps"], res["schedule_steps"] = steps, total
     assert steps * args.batch * args.seq <= len(train_ids), \
         f"{steps} steps need {steps * args.batch * args.seq} tokens, {args.data} has {len(train_ids)}: prep more shards"
     if args.target != "bf16":
@@ -217,14 +216,15 @@ def main(argv=None) -> int:
             p.requires_grad_(False)
         params = [p for p in model.parameters() if p.requires_grad]
         opt = torch.optim.AdamW(params, lr=args.lr, betas=(0.9, 0.95), weight_decay=0.0, eps=1e-8, fused=True)
-        warm = max(1, int(args.warmup * steps))
+        warm = max(1, int(args.warmup * total))
         accum = args.batch // args.micro
-        curve, recals = [], []
+        curve = [{"step": 0, "fineweb_val_64": perplexity(model, val_ids, args.seq, max_windows=64)["ppl"]}]
+        recals = []
         model.train()
         torch.cuda.reset_peak_memory_stats()
         t0 = time.time()
         for step in range(steps):
-            lr = args.lr * min(1.0, (step + 1) / warm) * 0.5 * (1 + math.cos(math.pi * step / steps))
+            lr = args.lr * min(1.0, (step + 1) / warm) * 0.5 * (1 + math.cos(math.pi * step / total))
             for g in opt.param_groups:
                 g["lr"] = lr
             tot = 0.0
