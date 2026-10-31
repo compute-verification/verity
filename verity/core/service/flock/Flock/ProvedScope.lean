@@ -238,6 +238,16 @@ def firstFailure (rules : List (Bool × String)) : Option String := (rules.find?
 
 def refusal (why : String) : String := s!"refused: {why}: a statement form the soundness proof does not cover"
 
+/-- The legacy statements (PROTOCOL.md §16.3, §16.4, §16.9): upstream's recorded cells whose checks evaluate part of the
+computation natively and make intermediate values public. None is a statement `verify` sets up (`Tags.all`,
+`Tags.templated`), and `verify` refuses every session of one (`legacyWhy`). -/
+def legacyStatements : List String :=
+  ["verity/flock-pure-block/v2", "verity/flock-ir-frame/v2", "verity/flock-ir-frame/v3", "verity/flock-ir-sampling/v1",
+   "verity/flock-ir-block/v1", "verity/flock-vllm-block/v1"]
+
+def legacyWhy (name : String) : Option String :=
+  if legacyStatements.contains name then some (refusal s!"{name}, a legacy statement (§16.9)") else none
+
 /-- The least `m` the proof covers: `25` under `--zk`, else `22`. -/
 def mMin (zk : Bool) : Nat := if zk then 25 else 22
 

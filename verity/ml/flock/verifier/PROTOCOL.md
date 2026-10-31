@@ -368,7 +368,11 @@ store by SHA-512, never from the prover's session directory.
 ### 16.9 Strict conformance
 
 The verifier checks proofs and never evaluates any part of the computation; circuits are total; the circuit is public
-and every value private. Only strict statements exist in the Lean verifier.
+and every value private. Only strict statements exist in the Lean verifier. It refuses every session of a legacy
+statement (pure-block, IR frame v2 and v3, IR sampling, IR block and vllm-block; their checks evaluate part of the
+computation and make intermediate values public) before it reads a file (`ProvedScope.legacyStatements`,
+`ProvedScope.legacyWhy`), and every statement before hm96-sha512 rows once every check has passed (§16.15's first
+rule). `Flock.Test.Legacy` pins both.
 
 ### 16.10 The hm96-sha512 row statement
 
@@ -514,6 +518,8 @@ accepted.
 `verifier/vectors.json` (`flock-verifier-vectors/v1`) lists the honest sessions, the record-level negatives, the
 forgeries and the replayable and live sets; the bytes stay in the evidence store. `transcript_check.py` rebuilds every
 round of a session from this outline's §6 and §8–§13 and compares each round's digest and coin count with the record.
+Its honest cells are upstream's alone (`honest_upstream_only`): their statements are legacy (§16.9) or before hm96-sha512
+rows, so Lean refuses each and no agreement job replays them.
 
 ## 19. Ambiguities resolved from upstream's behaviour
 
