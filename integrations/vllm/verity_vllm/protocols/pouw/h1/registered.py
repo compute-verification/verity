@@ -262,10 +262,14 @@ class Later:
     def result(self) -> G.Registered:
         return self.made(*self.hashing.result())
 
+    def also(self) -> bytes:
+        """With `commit`'s ``also``, that table's root, waited for."""
+        return self.hashing.also()
+
 
 def commit(program: str, value: str, words: Any, key: bytes, nonce: int, keep_rows: bool = False,
            row_salts: bytes | PublicSalts | None = None, schema: str = G.SCHEMA_V2, later: bool = False,
-           rows: Sequence | None = None, **binding: Any) -> G.Registered | Later:
+           rows: Sequence | None = None, also: tuple[bytes, int] | None = None, **binding: Any) -> G.Registered | Later:
     """`registered.Registered.commit(program, value, rows, salts, schema=schema, **binding)` of ``words`` ``(n, W)``
     u16, ``rows`` their rows and ``salts`` row j's `audit.hm96_salt(key, nonce, j)`, or with ``row_salts`` (n salts
     concatenated, each used once, or a public table's `PublicSalts`, which the GPU path derives where it hashes) those,
@@ -275,10 +279,15 @@ def commit(program: str, value: str, words: Any, key: bytes, nonce: int, keep_ro
     a sequence of the same n rows that builds them on read. Hashed where `path` says;
     ``words`` an array, or a u16 tensor, which the GPU path hashes where it is when that is a CUDA device and every
     other path reads on the host. ``later``: on the GPU path, a `Later` of it, the hash left running on the device's
-    stream; elsewhere the `Registered` itself."""
+    stream; elsewhere the `Registered` itself. ``also`` ``(domain id, nonce)``: the rows (a call's z/y records, on the
+    device) are its call z table's too, committed from the same read (`pouw_h1_registered_device.device_hash`'s), that
+    root `Later.also`; only with ``later`` on the GPU path."""
     if schema not in (G.SCHEMA_V2, G.SCHEMA_SEG):
         raise ValueError(f"rows of {schema!r}: {G.SCHEMA_V2} or {G.SCHEMA_SEG}")
     gpu = schema == G.SCHEMA_V2 and path() == "gpu"
+    if also is not None and not (gpu and later and getattr(words, "is_cuda", False)):
+        raise ValueError("also: a call's z table is committed beside its value only by a later hash of device rows on "
+                         "the GPU path")
     if not (gpu and getattr(words, "is_cuda", False)):
         words = _host(words)
     if len(words.shape) != 2 or not words.shape[0] or not words.shape[1] or str(words.dtype) not in ("uint16",
@@ -303,7 +312,7 @@ def commit(program: str, value: str, words: Any, key: bytes, nonce: int, keep_ro
         from verity_vllm.protocols.pouw.h1 import registered_device as D
 
         hashing = D.device_hash(words, key, nonce, given, dom.domain_id,
-                                None if public is None else (public.head, public.first))
+                                None if public is None else (public.head, public.first), also)
         return Later(hashing, made) if later else made(*hashing.result())
     if public is not None:
         given = public_salts(public.head, public.first, n)
