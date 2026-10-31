@@ -1,12 +1,15 @@
 import Proofs.Properties.CertifierDevice.Late
 
 /-!
-# The certifier device, proved: a complete record is the Program's
+# The certifier device, proved: a complete record is the FIFO's release of what was handed
 
-A complete record's window has only clean ticks up to its close (`clean_of_complete`), so every frame handed in it was
-handed at its handing bucket (`window_hands`), and the certifier was unfaulted at each of its ticks, where its `queued`
-count is the Program's queue of the handing buckets so far (`hinv`). Each row is then the FIFO's release
-(`release`), which is `NetworkCertifier.expectedRow` of the frames handed through the record's publication.
+A complete record's window has only clean ticks up to its close (`clean_of_complete`), so the certifier was unfaulted at
+each of them, and each row is the FIFO's release (`release`) of the frames handed through the record's publication, each
+enqueued at the bucket that handed it, where the shaper's `queued` count is the FIFO's queue of those buckets
+(`fifo_inv`). No sync is read.
+
+Under honest timing those buckets are the Program's handing buckets (`hands_honest`): a run whose windows are all
+complete reads its records as the Program's through `completeRows_honest`.
 -/
 
 namespace Properties.CertifierDevice.Proofs
@@ -17,7 +20,7 @@ open NetworkCertifier (Reason Status)
 theorem completeRows_proof : CompleteRows := by
   intro c tr n k backlog acts rec p hE hacts hmem
   dsimp only
-  intro hst hw j hj i hia
+  intro hst j hj i hia
   rw [egress_acts hE] at hacts
   obtain rfl := Option.some.inj hacts
   unfold egressActions at hmem
@@ -31,10 +34,7 @@ theorem completeRows_proof : CompleteRows := by
       · simp only [List.mem_singleton, Action.publish.injEq] at h
         exact ⟨‹_›, h.1⟩
       · simp at h
-  dsimp only at hst hw ⊢
-  change k / c.egress.buckets < (pre c tr (n + 1)).shaper.syncs.size at hw
-  change NetworkCertifier.expectedRow _ _ (pre c tr (n + 1)).shaper.syncs.size
-    (fun w => (pre c tr (n + 1)).shaper.syncs[w]) _ _ _ = _
+  dsimp only at hst ⊢
   obtain ⟨hT0, hkm, hkl⟩ := mod_last hc
   have hn := egressAt_lt hE
   have hgrid : (Array.ofFn fun j : Fin c.egress.buckets =>
@@ -45,14 +45,7 @@ theorem completeRows_proof : CompleteRows := by
   have htk : k / c.egress.buckets * c.egress.buckets + j ≤ k := by omega
   have hwin : (k / c.egress.buckets * c.egress.buckets + j) / c.egress.buckets = k / c.egress.buckets := by
     rw [Nat.add_comm, Nat.add_mul_div_right _ _ hT0, Nat.div_eq_of_lt hj, Nat.zero_add]
-  have hwh := window_hands hE hc hst (n + 1) le_rfl
-  have hWT : k / c.egress.buckets * c.egress.buckets + j <
-      (pre c tr (n + 1)).shaper.syncs.size * c.egress.buckets := by
-    have := Nat.mul_le_mul_right c.egress.buckets (show k / c.egress.buckets + 1 ≤ _ from hw)
-    rw [Nat.succ_mul] at this
-    omega
-  generalize htd : k / c.egress.buckets * c.egress.buckets + j = t at htk hwin hWT ⊢
-  have hwt : k / c.egress.buckets * c.egress.buckets ≤ t := by omega
+  generalize htd : k / c.egress.buckets * c.egress.buckets + j = t at htk hwin ⊢
   obtain ⟨m, b', hmn, hEm⟩ := egressAt_exists hE htk
   obtain ⟨now', he'⟩ := egressAt_get hEm
   have hm := egressAt_lt hEm
@@ -68,14 +61,6 @@ theorem completeRows_proof : CompleteRows := by
   have hfi := fifo_inv c tr m hm.le
   have hrel := release hgm hfi hth hcl i hia
   rw [getElem!_eq hrel]
-  have hf0 : (pre c tr m).shaper.certifier.fault = none := by
-    rw [← hr.2.1] at hcl
-    obtain ⟨-, -, f3, -⟩ := fifo_tick _ (hgm.shaper.rel hr)
-    have h1 := (f3 hcl).1
-    rw [← hr.1.of_none h1]
-    exact h1
-  have hi := hinv c tr (N := n + 1) (by omega) m (by omega)
-  have hqq := hi.queue hf0
   have e : (tr.take (n + 1)).take (m + 1) = tr.take (m + 1) := by
     rw [List.take_take]; congr 1; omega
   have hfull : handed (init c) (tr.take (n + 1)) = handed (init c) (tr.take m) ++
@@ -88,44 +73,22 @@ theorem completeRows_proof : CompleteRows := by
       rw [t_succ c tr m hm, he', htm]
       simp [run, tickView, htm ▸ hth]
     exact fun x hx => ht1 ▸ handed_ge (prefix_good c tr (m + 1)).1 _ x hx
-  have hpast : ∀ y ∈ hlist c.egress.buckets (pre c tr (n + 1)).shaper.syncs (handed (init c) (tr.take m)), y < t :=
-    forall₂_lt hi.le fun a ha => by
-      obtain ⟨z, hz, rfl⟩ := List.mem_map.1 ha
-      exact htm ▸ hfi.past z hz
-  rw [hfull] at hwh
-  rw [htm] at hqq ⊢
+  have hpast : ∀ x ∈ (handed (init c) (tr.take m)).map Prod.snd, x < t := by
+    intro x hx
+    obtain ⟨y, hy, rfl⟩ := List.mem_map.1 hx
+    exact htm ▸ hfi.past y hy
   have hle := hfi.le
-  rw [hfull]
-  set S := (pre c tr (n + 1)).shaper.syncs with hS
-  change NetworkCertifier.expectedRow _ _ S.size (fun w => S[w]) _ _ _ = _
-  generalize handed (init c) (tr.take m) = hp at hfull hpast hle hqq hwh ⊢
-  generalize handedAt (pre c tr m) (.tick .egress now' b') = L at hfull hwh ⊢
-  generalize handed (pre c tr (m + 1)) ((tr.take (n + 1)).drop (m + 1)) = R at hfull hrest hwh ⊢
+  have hqq : (pre c tr m).shaper.queued = NetworkCertifier.queue c.egress.allocation
+      (fun u => ((handed (init c) (tr.take m)).map Prod.snd).count u) t := htm ▸ hfi.queued
+  rw [htm, hfull]
+  generalize handed (init c) (tr.take m) = hp at hpast hle hqq ⊢
+  generalize handedAt (pre c tr m) (.tick .egress now' b') = L
+  generalize handed (pre c tr (m + 1)) ((tr.take (n + 1)).drop (m + 1)) = R at hrest ⊢
   generalize (pre c tr m).shaper.queued = q at hle hqq ⊢
-  generalize hT : c.egress.buckets = T at *
-  have hmap : (hp ++ (L.map (·, t) ++ R)).map (fun x => logical x.1) =
-      hp.map (fun x => logical x.1) ++ (L.map (·, t) ++ R).map (fun x => logical x.1) := List.map_append
-  have hsplit : hlist T S (hp ++ (L.map (·, t) ++ R)) =
-      hlist T S hp ++ hfrom T S (hlast T S 0 (hp.map fun x => logical x.1)) ((L.map (·, t) ++ R).map fun x => logical x.1) := by
-    rw [hlist, hmap, hfrom_append]
-  have hlen : (hlist T S hp).length = hp.length := by rw [hlist, hfrom_length, List.length_map]
-  have hrest' := List.forall₂_drop hp.length hwh
-  rw [hsplit, List.drop_left' hlen, show (hp ++ (L.map (·, t) ++ R)).map Prod.snd =
-    hp.map Prod.snd ++ (L.map (·, t) ++ R).map Prod.snd from List.map_append, List.drop_left' (by simp)] at hrest'
-  have hreq := forall₂_eq_of hrest' fun a b hab hb => hab (by
-    rw [List.map_append] at hb
-    rcases List.mem_append.1 hb with hb | hb
-    · rw [List.map_map] at hb
-      obtain ⟨x, -, rfl⟩ := List.mem_map.1 hb; exact hwt
-    · obtain ⟨x, hx, rfl⟩ := List.mem_map.1 hb; have := hrest x hx; omega)
-  have hcount : ∀ u ≤ t, NetworkCertifier.enqueued T S.size (fun w => S[w])
-      ((hp ++ (L.map (·, t) ++ R)).map fun x => ⟨bitsOf x.1.bytes, x.1.anchor, x.1.index⟩) u =
-      (hlist T S hp).count u + if t = u then L.length else 0 := by
+  have hcount : ∀ u ≤ t, handedCount (hp ++ (L.map (·, t) ++ R)) u =
+      (hp.map Prod.snd).count u + if t = u then L.length else 0 := by
     intro u hu
-    unfold NetworkCertifier.enqueued
-    simp only [show u < S.size * T by omega, ↓reduceIte]
-    change (hlist T S (hp ++ (L.map (·, t) ++ R))).count u = _
-    rw [hsplit, List.count_append, hreq]
+    unfold handedCount
     have hz : (R.map Prod.snd).count u = 0 :=
       List.count_eq_zero_of_not_mem fun hm => by
         obtain ⟨y, hy, e⟩ := List.mem_map.1 hm
@@ -133,15 +96,14 @@ theorem completeRows_proof : CompleteRows := by
         omega
     simp only [List.map_append, List.count_append, hz, List.map_map, Function.comp_def, List.map_const',
       List.count_replicate, beq_iff_eq, Nat.add_zero]
-  unfold NetworkCertifier.expectedRow NetworkCertifier.fifoGrid NetworkCertifier.fill
+  unfold NetworkCertifier.fifoGrid NetworkCertifier.fill
   simp only [Fin.val_last]
   rw [offset_last]
-  generalize NetworkCertifier.enqueued T S.size (fun w => S[w])
-    ((hp ++ (L.map (·, t) ++ R)).map fun x => ⟨bitsOf x.1.bytes, x.1.anchor, x.1.index⟩) = E at hcount ⊢
-  have hzero : (hlist T S hp).count t = 0 := List.count_eq_zero_of_not_mem fun h => by
+  generalize handedCount (hp ++ (L.map (·, t) ++ R)) = E at hcount ⊢
+  have hzero : (hp.map Prod.snd).count t = 0 := List.count_eq_zero_of_not_mem fun h => by
     have := hpast t h
     omega
-  have hlt : ∀ u < t, E u = (hlist T S hp).count u := fun u hu => by
+  have hlt : ∀ u < t, E u = (hp.map Prod.snd).count u := fun u hu => by
     rw [hcount u hu.le]
     simp [Nat.ne_of_gt hu]
   have hEt : E t = L.length := by rw [hcount t le_rfl, hzero]; simp
@@ -151,7 +113,7 @@ theorem completeRows_proof : CompleteRows := by
     rw [hqE, hEt]
   have hoff : rsum (fun u => (NetworkCertifier.released c.egress.allocation E u : Nat)) t = hp.length - q := by
     have h1 := released_conserve c.egress.allocation E t
-    rw [rsum_congr hlt, rsum_count _ t hpast, hqE, hlen] at h1
+    rw [rsum_congr hlt, rsum_count _ t hpast, hqE, List.length_map] at h1
     omega
   rw [hrelt, hoff]
   split_ifs with h1
@@ -159,8 +121,8 @@ theorem completeRows_proof : CompleteRows := by
     obtain ⟨v, hv⟩ : ∃ v, (hp ++ L.map (·, t))[hp.length - q + i]? = some v := ⟨_, List.getElem?_eq_getElem hk⟩
     rw [List.getElem?_map, hv]
     simp only [Option.map_some]
-    unfold NetworkCertifier.payloads
-    rw [List.getElem?_map, ← List.append_assoc, List.getElem?_append_left hk, hv]
+    unfold handedBits
+    rw [List.getD_eq_getElem?_getD, List.getElem?_map, ← List.append_assoc, List.getElem?_append_left hk, hv]
     rfl
   · rfl
 
