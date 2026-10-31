@@ -4,9 +4,10 @@ import Proofs.Flock.Claims.Complete.Json.Hex
 /-!
 # Remote's tie on an honest run: one record, one digest
 
-The honest lemma of `AcceptInferenceOnly`'s tie: a run commits the policy and the one-stage audit to its one
-registration record, and whenever both commitment decoders accept that record's bytes, they decode them to one digest
-(`one_digest`), so no record strays and both digests are the policy's record's (`acceptInferenceOnly_honest`).
+The honest lemma of `AcceptInferenceOnly`'s tie: a run commits the policy and sampled proofs to its one registration
+record, and whenever both commitment decoders accept that record's bytes (sampled proofs' is one-stage v1's), they
+decode them to one digest (`one_digest`), so no record strays and both digests are the policy's record's
+(`acceptInferenceOnly_honest`).
 The record may name any registered circuit, a tiny one among them: the commitment decoders read only its `format`.
 
 The lemma takes the decoders' acceptance of the bytes as its hypotheses rather than exhibiting concrete bytes: the
@@ -73,8 +74,8 @@ theorem stage_of {b : ByteArray} {c : SampledProofs.OneStage.Commitment}
   subst h
   exact ⟨rfl, hg⟩
 
-/-- **One record, one digest**: bytes that the policy's and the one-stage audit's commitment decoders both accept decode
-to one digest under each. -/
+/-- **One record, one digest**: bytes that the policy's and one-stage v1's commitment decoders both accept decode to
+one digest under each. -/
 theorem one_digest {b : ByteArray} {cI : NciCheck.Protocol.Commitment} {cS : SampledProofs.OneStage.Commitment}
     (hI : NciCheck.Protocol.commitmentOf b = .ok cI) (hS : SampledProofs.OneStage.commitmentOf b = .ok cS) :
     cS.digest = cI.digest := by
@@ -84,24 +85,27 @@ theorem one_digest {b : ByteArray} {cI : NciCheck.Protocol.Commitment} {cS : Sam
   rw [e] at hdS
   exact Except.ok.inj (hdS.symm.trans hdI)
 
-/-- **Remote's tie holds on an honest run** (the honest lemma of `AcceptInferenceOnly`'s tie): the policy's and the
-one-stage audit's cases committing to one record's bytes, which both commitment decoders accept, leave no stray among
-the components remote's check compares (`remote_check_ids`), and both digests are the policy's record's. -/
-theorem acceptInferenceOnly_honest {kI kW kS : Case} {cI : NciCheck.Protocol.Commitment}
+/-- **Remote's tie holds on an honest run** (the honest lemma of `AcceptInferenceOnly`'s tie): the policy's and
+sampled proofs' cases committing to one record's bytes, which both commitment decoders accept, leave no stray among
+the components remote's check compares on any blobs `bs` (`remote_check_ids`), and both digests are the policy's
+record's. -/
+theorem acceptInferenceOnly_honest (bs : Blobs) {kI kW kS : Case} {cI : NciCheck.Protocol.Commitment}
     {cS : SampledProofs.OneStage.Commitment} (hS' : kS.commitment = kI.commitment)
     (hI : NciCheck.Protocol.commitmentOf kI.commitment = .ok cI)
     (hS : SampledProofs.OneStage.commitmentOf kI.commitment = .ok cS) :
-    strays [NciCheck.Protocol.protocol.id, SampledProofs.OneStage.protocol.id]
-        [NciCheck.Protocol.protocol, PouwCheck.Period.protocol, SampledProofs.OneStage.protocol] [kI, kW, kS] = none ∧
+    strays [NciCheck.Protocol.protocol.id, (VStar.Recursive.Sampled.protocol.onBlobs bs).id]
+        [NciCheck.Protocol.protocol, PouwCheck.Period.protocol, VStar.Recursive.Sampled.protocol.onBlobs bs]
+        [kI, kW, kS] = none ∧
       Properties.Composition.digestOf NciCheck.Protocol.protocol kI.commitment =
         some (NciCheck.Protocol.protocol.digest cI) ∧
       Properties.Composition.digestOf SampledProofs.OneStage.protocol kS.commitment =
         some (NciCheck.Protocol.protocol.digest cI) := by
   have dS := one_digest hI hS
   have hcI : NciCheck.Protocol.protocol.commitment kI.commitment = .ok cI := hI
-  have hcS : SampledProofs.OneStage.protocol.commitment kS.commitment = .ok cS := by rw [hS']; exact hS
-  have dS' : SampledProofs.OneStage.protocol.digest cS = NciCheck.Protocol.protocol.digest cI := dS
-  exact ⟨strays_two_none ne_policy_stage ne_period_stage hcI hcS dS', digestOf_ok hcI,
-    (digestOf_ok hcS).trans (congrArg some dS')⟩
+  have hcS : (VStar.Recursive.Sampled.protocol.onBlobs bs).commitment kS.commitment = .ok cS := by
+    rw [hS']; exact hS
+  have dS' : (VStar.Recursive.Sampled.protocol.onBlobs bs).digest cS = NciCheck.Protocol.protocol.digest cI := dS
+  exact ⟨strays_two_none (ne_policy_stage bs) (ne_period_stage bs) hcI hcS dS', digestOf_ok hcI,
+    (digestOf_sampled bs _).symm.trans ((digestOf_ok hcS).trans (congrArg some dS'))⟩
 
 end Properties.Remote.SecurityProofs
