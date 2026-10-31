@@ -212,8 +212,6 @@ abbrev LMS_I : String := "verity/lms/v0/I"
 -- Not yet read from here: sampled proofs and the proof service's challenger
 abbrev CHALLENGER_KEY : String := "challenger-key/v1"
 abbrev COIN_TREE_HM96_SHA512 : String := "coin-tree/hm96-sha512/v2"
-abbrev IR_OBLIGATION : String := "verity-ir/obligation/v0"
-abbrev SAMPLED_PROOFS_VERIFICATION_PLAN : String := "verity-sampled-proofs/verification-plan/v3"
 abbrev CHALLENGER_AUDITOR_RECORD : String := "verity/challenger-auditor-record/v1"
 abbrev CHALLENGER_AUDITOR_ENTRY_V1 : String := "verity/challenger-auditor/entry/v1"
 abbrev CHALLENGER_AUDITOR_ENTRY_V2 : String := "verity/challenger-auditor/entry/v2"
