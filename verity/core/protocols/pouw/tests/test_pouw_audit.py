@@ -10,9 +10,11 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.pouw.audit import Epoch, Workload, tile_refs
+from verity.core.protocols.pouw.audit import (HM96_WEIGHTS, Epoch, Workload, activation_binding, commit_rows, tile_refs,
+                                              weight_binding)
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
 from verity.core.protocols.pouw.schemes import ncp
+from verity.errors import ProtocolError
 
 # the clear audit is a reference tool (benchmarks/pouw/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "benchmarks" / "pouw" / "clear"))
@@ -108,3 +110,31 @@ def test_lottery_selects_by_digest():
     assert Lottery(0).select(s, epoch, tr, SOURCE, v.refs, prover.digest) == ()
     audit = v.audit(prover, tr, Lottery(1 << 256), SOURCE)
     assert audit.accepted and audit.profile.delta_s(Fraction(1, 2)) is None
+
+
+def test_weight_and_activation_roots_are_matched_only_with_the_committers_key():
+    """Two weight sets committed under the committer's run key give roots no one matches without the key: not the plain
+    SHA-256 or SHA-512 tree of either candidate set, nor either set under another key; the key's holder reproduces its own.
+    `commit_rows` refuses a plain tree of values (only rows public by structure take ``public``) and an hm96 tree with no
+    key, so no PoUW weight or activation root is recomputable from candidate values."""
+    rng = random.Random(7)
+    sets = [int7(rng, 8, 64) for _ in range(2)]
+    key, others = rng.randbytes(32), [bytes(32), rng.randbytes(32)]
+    w, binding = 3, weight_binding(3)
+
+    def root(rows, salt_key):
+        return commit_rows(binding, -2, rows, salt_key=salt_key, nonce=HM96_WEIGHTS + w).commitment.root
+
+    roots = [root(rows, key) for rows in sets]
+    assert roots[0] != roots[1] and [root(rows, key) for rows in sets] == roots
+    guesses = {root(rows, k) for rows in sets for k in others}
+    guesses |= {commit_rows(binding, -2, rows, h, public=True).commitment.root for rows in sets for h in ("sha256", "sha512")}
+    assert not guesses & set(roots)
+    acts = [commit_rows(activation_binding(BEACON, 5), 5, rows, salt_key=k, nonce=5).commitment.root
+            for rows in sets for k in (key, *others)]
+    assert len(set(acts)) == len(acts)
+    for h in ("sha256", "sha512"):
+        with pytest.raises(ProtocolError, match="not hiding"):
+            commit_rows(binding, -2, sets[0], h)
+    with pytest.raises(ProtocolError, match="salt key"):
+        commit_rows(binding, -2, sets[0])
