@@ -6,7 +6,7 @@ The instruction is one accumulator coordinate of ``wgmma.mma_async.sync.aligned.
 Hawkeye's *finite* H100 FP8 pipeline (:data:`~verity.ml.circuits.silicon.silicon.HOPPER_E4M3_K32`: one group of 32 exact
 E4M3 products plus the accumulator, a 14-bit truncating adder, exponent floor ``-139``), validated by Hawkeye
 with a zero accumulator only.  This module gives the **total function on every encoding** of the gate's
-signature, by the same rules as :mod:`verity.ml.circuits.silicon.total` (L6's R1-R8 for BF16) restricted to what
+signature, by the same rules as :mod:`verity.ml.circuits.silicon.total` (R1-R8 for BF16) restricted to what
 E4M3 can encode:
 
 * an E4M3 byte is a NaN (``0x7F``, ``0xFF``: exponent and mantissa all ones -- OCP E4M3 has *no* infinities),
@@ -142,7 +142,7 @@ def tc_dot_total_e5m2(pipeline: Pipeline, acc_bits: int, a: Sequence[int], b: Se
 
 #: One accumulator coordinate of ``wgmma.mma_async.sync.aligned.m64n64k32.f32.e4m3.e4m3`` (SASS
 #: ``QGMMA.64x64x32.F32.E4M3.E4M3``), PINNED on an H100 80GB HBM3 (driver 580.126.09) by a hardware campaign:
-#: 16 case families (L6's, with E4M3 operand classes and FP32 accumulator classes incl. subnormal / huge / ±inf /
+#: 16 case families (the BF16 campaign's, with E4M3 operand classes and FP32 accumulator classes incl. subnormal / huge / ±inf /
 #: NaN accumulators), 35,289 tiles x 3 repetitions (every tile bit-identical across repetitions), 144,543,744 output
 #: words compared against this total function -- **0 mismatches**.  The fit grid over groups x width x floor
 #: (3,060 candidates, 6,000 records + the ``accid`` family) leaves ``groups = (32,)`` and ``width = 14`` unique;
