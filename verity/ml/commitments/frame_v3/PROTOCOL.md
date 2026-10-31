@@ -229,7 +229,7 @@ digest      = SHA-512( Q(ℓ) ‖ d_0 ‖ … ‖ d_(s−1) )
   v2, no role or word width enters the digest, so it is not the row's `sha512/row/v1` digest: a consumer reads the port's leaf
   schema, and a word row moved to row-seg has new digests, leaves and roots.
 - **Hiding.** `hm96-sha512/row-seg/v1` is the hiding leaf over this digest, under unchanged `hm96-sha512/v1`.
-- **Written by several ports (C-Flock).** A row one unit writes as several output ports and another reads as one input port
+- **Written by several ports (Flock).** A row one unit writes as several output ports and another reads as one input port
   (PoUW's A′ ‖ P_A) is one row on both sides. The writer's META `out_row_ports` lists each output row's run of consecutive
   output ports (absent: one row per port); a run's row is a row-seg or `sha512/row/v2` row of exactly their words in port
   order (ℓ = 16 · their words, its `row_schemas` entry), named after its first port, and its message bits are copies of those

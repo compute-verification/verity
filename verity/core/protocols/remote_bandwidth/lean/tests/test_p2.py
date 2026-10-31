@@ -213,7 +213,7 @@ class Entropy:
 
 @functools.cache
 def drawn_store(k: int, rows: int) -> p2.Store:
-    """A store of drawn blocks (P2's check never decodes, so they needn't be codewords) under geometry `k`, with
+    """A store of sampled proof blocks (P2's check never decodes, so they needn't be codewords) under geometry `k`, with
     every byte's extremes among them."""
     bps, segments = GEOMETRIES[k]
     blocks = [expand(b"block %d %d" % (k, j), p2.BLOCK_BYTES) for j in range(bps * segments)]

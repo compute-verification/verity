@@ -33,7 +33,7 @@ all-or-nothing: the period's MACs if every pick passes, else none. ε_skip = ln(
 **Deviations from v3.2**, each named in the report: the picks are a fixed Q W_b / W_reg a block, not ``poisson:Q``;
 the coins are 64-byte session coins expanded here, not the challenger's streamed seeds; no certifier signs the receipts
 (the challenger's release log records what each coin opened after); and the checks run in the clear, the stand-in for
-the Definition and C-Flock --zk.
+the Definition and Flock --zk.
 
     period.py prep CFG (--checkpoint DIR | --seeded) [--row 8192] [--lp 512] [--lp-max 1024] [--L 16384] [--nb 32]   the weights and shapes
     capture.py CFG --checkpoint DIR                                           the activations (on the GPU)

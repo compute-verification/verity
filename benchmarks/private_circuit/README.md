@@ -1,7 +1,7 @@
 # Private-circuit runs
 
 Protocol 2 (the private circuit) end to end: the private circuit's description is a value of the public universal unit
-`UniversalUnit_v1{G, N_IN, N_OUT}` (`verity.ml.private_circuits.universal`), proved by C-Flock's circuit prover under `--zk` and
+`UniversalUnit_v1{G, N_IN, N_OUT}` (`verity.ml.private_circuits.universal`), proved by Flock's circuit prover under `--zk` and
 verified by the Lean verifier. The universal unit is not the path to hiding a circuit: circuit hiding is recursion's
 (`--hide`, the recursive session's private-circuit form in `verity/ml/flock/verifier/PROTOCOL.md`). These runs measure the
 unit for comparison.

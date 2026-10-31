@@ -18,7 +18,6 @@ served step learns. ``serve.json``'s ``learn_warmup`` records the pass (the comm
 """
 from __future__ import annotations
 
-import random
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -70,15 +69,16 @@ def warm_up(engine: Any, com: Any, opts: Any, proto: Any, defaults: Mapping[str,
     if com is None or not getattr(com, "bounded", False) or not opts.learning.learn_warmup:
         return None
     from verity_vllm.acquire.sources import taps as TAPS
+    from verity_vllm.commit import challenge
 
-    shape, t0, rng = shape_of(opts), clock(), random.Random(WARMUP_SEED)
+    shape, t0, rng = shape_of(opts), clock(), challenge.generator(WARMUP_SEED)
     top = int(vocab if vocab is not None else engine.vllm_config.model_config.get_vocab_size())
     body = {"max_tokens": shape["steps"], "min_tokens": shape["steps"], "ignore_eos": True, "temperature": 0, "stream": True}
     TAPS.warmup(com, True)
     com.install()
     try:
         for i in range(shape["requests"]):
-            req = proto.parse({**body, "prompt": [rng.randrange(FIRST_ID, top) for _ in range(shape["prompt_ids"])]})
+            req = proto.parse({**body, "prompt": rng.integers(FIRST_ID, top, size=shape["prompt_ids"]).tolist()})
             engine.add_request(request_id=f"learn-warmup-{i}", prompt={"prompt_token_ids": list(req.prompt)},
                                params=proto.seeded(proto.sampling_params(req, shape["steps"], dict(defaults or {}))))
         steps = 0
@@ -106,8 +106,9 @@ def warm_up(engine: Any, com: Any, opts: Any, proto: Any, defaults: Mapping[str,
 def warmed(com: Any, llm: Any, opts: Any) -> Any:
     """The server's committer ``com`` over ``llm`` (a `verity_vllm.LLM`) once its plans are learned (`warm_up`, its requests
     parsed as ``--protocol`` parses a completion), what the pass learned in its ``learn_warmup``."""
+    from verity_vllm.engine.handle import engine_of
     from verity_vllm.pipeline.serve_protocol import PROTOCOLS
 
     proto = PROTOCOLS[opts.protocol](opts.force_include_usage)
-    com.learn_warmup = warm_up(llm.vllm.llm_engine, com, opts, getattr(proto, "base", proto))
+    com.learn_warmup = warm_up(engine_of(llm), com, opts, getattr(proto, "base", proto))
     return com
