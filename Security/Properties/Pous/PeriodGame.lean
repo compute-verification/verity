@@ -1,5 +1,5 @@
 import Properties.Pous.PeriodAt
-import Definitions.Hash.Assumptions
+import Definitions.Hash.Assumptions.Prf
 import Definitions.Pous.Guarantees.Obligation
 
 /-!
