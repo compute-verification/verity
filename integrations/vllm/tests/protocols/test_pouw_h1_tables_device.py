@@ -97,11 +97,13 @@ K, ROWS, N = 64, 32, 64
 SALT = hashlib.sha512(b"salt").digest()
 
 
-def _window(tmp_path, mode, monkeypatch, device="cpu", tag=""):
+def _window(tmp_path, mode, monkeypatch, device="cpu", tag="", writer=None):
     """A two-step window of one linear: step 0 serves 3 rows with their z/y records, step 1 is empty (`close`). Its record
-    and prover directory."""
+    and prover directory, its calls kept by ``writer`` (a `pouw_h1_prover.Writer`) when given."""
     monkeypatch.setattr(TD, "MODE", mode)
     out, prover = tmp_path / f"w-{mode}{tag}", tmp_path / f"p-{mode}{tag}"
+    if writer is not None:
+        writer.open(prover)
     g = torch.Generator().manual_seed(3)
     weight = torch.randint(-127, 128, (N, K), generator=g, dtype=torch.int8).to(device)
     scale = (torch.rand(N, 1, generator=g) * 0.01 + 1e-4).float().to(device)
@@ -111,7 +113,27 @@ def _window(tmp_path, mode, monkeypatch, device="cpu", tag=""):
     _y, zy = int8_ops.scaled_mm_zy(xq, s_a, weight, scale, ROWS)
     run.record(0, xq, s_a, weight, scale, zy)
     run.finish()
+    if writer is not None:
+        assert writer.wait(prover)["calls"] == 1
     return json.loads((out / PH.CALLS_FILE).read_text()), prover
+
+
+def _kept(prover):
+    return {p.name: p.read_bytes() for p in sorted((prover / PV.CALLS).iterdir())}
+
+
+@pytest.mark.parametrize("mode", ["python", pytest.param("host", marks=needs_cxx)])
+def test_a_window_kept_off_the_serving_thread_keeps_the_files_kept_in_the_call(tmp_path, monkeypatch, mode):
+    """With its prover directory open on a `pouw_h1_prover.Writer` (serve-openai's ``--h1-prover``), a window's served
+    calls are kept by the writer's thread, in the very bytes `keep_call` writes in the call, and
+    each call reopens under its manifest's roots."""
+    writer = PV.Writer(PV.kept_bytes(ROWS, K, ROWS // 32 * N // 32))
+    got, prover = _window(tmp_path, mode, monkeypatch, writer=writer)
+    writer.close()
+    want, inline = _window(tmp_path, mode, monkeypatch, tag="-inline")
+    assert got["calls"] == want["calls"] and _kept(prover) == _kept(inline) and list(_kept(prover)) == ["0.npz"]
+    for i in range(len(got["calls"])):
+        PV.open_call(prover, got, i, SALT)
 
 
 @needs_cxx
@@ -180,5 +202,17 @@ def test_a_window_on_the_gpu_commits_what_hiding_rows_commits(tmp_path, monkeypa
     got, prover = _window(tmp_path, "auto", monkeypatch, device="cuda")
     want, _ = _window(tmp_path, "python", monkeypatch, device="cuda", tag="-ref")
     assert got["calls"] == want["calls"] and got["commitment"]["draw"]["root"] == want["commitment"]["draw"]["root"]
+    for i in range(len(got["calls"])):
+        PV.open_call(prover, got, i, SALT)
+
+
+def test_a_window_on_the_gpu_kept_off_the_serving_thread_keeps_the_files_kept_in_the_call(tmp_path, monkeypatch):
+    """The writer's copy off the device (pinned, on the current stream) keeps the bytes the call's own readback keeps."""
+    _gpu()
+    writer = PV.Writer(PV.kept_bytes(ROWS, K, ROWS // 32 * N // 32))
+    got, prover = _window(tmp_path, "auto", monkeypatch, device="cuda", writer=writer)
+    writer.close()
+    want, inline = _window(tmp_path, "python", monkeypatch, device="cuda", tag="-ref")
+    assert got["calls"] == want["calls"] and _kept(prover) == _kept(inline)
     for i in range(len(got["calls"])):
         PV.open_call(prover, got, i, SALT)
