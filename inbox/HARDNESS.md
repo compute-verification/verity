@@ -310,3 +310,43 @@ Everything else is engineering on parts we have.
 waves (to 03:00Z).
 **Next for the swarm:** price the hybrid, i.e. total overhead as a function of κ, P(κ, N) and the lead's h on the
 uncredited remainder.
+
+## Re-aim (Daniel, 31 Oct 10:45 AM PDT): design U, harden the *useful* matrix and layer PoUW on it
+
+Daniel: "I do not want a smaller trained model plus a random matmul burner ... let the developer get useful work out of
+one matrix multiplication while also convincing an auditor that it used a bunch of work", with PoUW layered on, and
+"if it's a public training process that wasn't controlled by the adversary, is there no trust assumption that keeps the
+security?"
+
+**The coordinator's correction.** Restricting to designs with a *reduction* (A′) forced the credited operand to be
+untrainable, and so useless. Daniel's route takes a **named trust assumption about a process the adversary doesn't
+control** instead, and credits the useful matrix itself.
+
+**How it meshes with PoUW.**
+- The lead hashes every k32 word (h = 127.5) because the private weights may hide an exact shortcut.
+- If the useful weights come from a trusted hardening process that leaves them without exact shortcuts, PoUW can keep
+  its live activation noise and sampled exact checks but commit **outputs only**, as D-OUT does: h ≈ 3.4–43, a 3–35×
+  cut. Hardening supplies "private weights that are trustworthily hard". PoUW supplies the noise and the checks.
+
+**What our data already says about the useful matrix:**
+1. Natural int8 weights have no low-rank, sparse or small-alphabet shortcut (HT-PUBLIC: a 0.37% gap per channel).
+2. Their only measured hole is **Strassen in int8**, which works because natural codes sit near 0: Strassen's sums
+   overflow s8 in a median 0.4% of entries, against 17.7% for uniform codes, and the crossover is about 0.4%.
+   **Hardening can target exactly this:** spread the codes (QAT with wider effective use of the range) until the
+   overflow rate is a few percent. If that costs little quality, the useful matrix closes the hole itself.
+3. **Provenance:** a planned jump survives spot checks only because the adversary knew the training's randomness in
+   advance (HT-PUBLIC). With **live per-step coins** (each step's noise and batch released only at that step, after the
+   start is committed), a jump can't be planned. Unplanned exact structure is erased in about 30 steps (toy). So only the
+   tail would need checking, not a full replay.
+
+**The trust assumption (to state precisely):** "smoothed SGD". A short hardening pass from any committed start, whose
+randomness is drawn live after the commitment, leaves no exact shortcut on chip X beyond δ, plus a P1-type premise on
+the resulting code distribution. It's named and falsifiable; it's not a reduction.
+
+**Lanes:**
+- **HT-USEFUL** (GPU): Strassen-hostile QAT on a real model. Measure the quality cost against the overflow rate, and
+  re-price every route on the result.
+- **HT-PROV:** the erasure horizon under live coins, at scale and against planning adversaries. The ZK cost of
+  checking the tail. The assumption, stated.
+- **HT-PROTO, resumed:** the outputs-only PoUW mesh over hardened private weights (commitments, h, the gap, the
+  premise).
