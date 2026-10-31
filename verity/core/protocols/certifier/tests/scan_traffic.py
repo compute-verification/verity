@@ -12,7 +12,7 @@ from typing import Sequence
 
 from verity.core.protocols.certifier import egress as EG, ingress_scan as IS, io_tie as IT, warden as W
 from verity.core.protocols.certifier import warden_rows as WR
-from verity.core.protocols.certifier.grid import Certifier, Record
+from verity.core.protocols.certifier.grid import Certifier, BlockGrid
 
 
 @dataclass(frozen=True)
@@ -22,12 +22,12 @@ class Served:
     certifier's `fails` frames and the `fails` records its grid closed."""
 
     params: W.WardenParams
-    ingress: tuple[Record, ...]
-    egress: tuple[Record, ...]
+    ingress: tuple[BlockGrid, ...]
+    egress: tuple[BlockGrid, ...]
     admitted: tuple[int, ...]
     responses: tuple[tuple[int, ...], ...]
     fails: tuple[bytes, ...]
-    failed: tuple[Record, ...] = ()
+    failed: tuple[BlockGrid, ...] = ()
 
     @property
     def outputs(self) -> dict[int, tuple[int, ...]]:
@@ -65,7 +65,7 @@ def serve(params: W.WardenParams, requests: Sequence[bytes], arrivals: Sequence[
         conns.append(c)
     queue, active = deque(conns), []
     grids = (Certifier("requests", params.grid), Certifier("responses", params.grid), failed)
-    records: tuple[list[Record], list[Record], list[Record]] = ([], [], [])
+    records: tuple[list[BlockGrid], list[BlockGrid], list[BlockGrid]] = ([], [], [])
     for t in range(windows * params.window):
         while queue and queue[0].arrived <= t and len(active) < params.lanes:
             c = queue.popleft()
