@@ -192,8 +192,8 @@ def _unwrap(m: Any) -> Any:
 
 class Inbox:
     """The verifier's messages as they arrive: `put` (from any thread) each window's 32-byte challenge, `σ_0` first,
-    then at each window's end the next one's or None, the close after the last (the driver's `Session.start` and
-    `Session.boundary`).  Called, it hands over those not yet taken, in order."""
+    then at each window's end the next one's or None, the close after the last (the driver's `AuditRun.start` and
+    `AuditRun.boundary`).  Called, it hands over those not yet taken, in order."""
 
     def __init__(self) -> None:
         self._q: deque[bytes | None] = deque()
