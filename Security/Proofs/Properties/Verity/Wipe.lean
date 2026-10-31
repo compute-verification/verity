@@ -12,9 +12,9 @@ as the wipe's game (`Vocab.wipeRun`), keeps foreign content past the survivor th
 (`Vocab.ComponentBound k .wipe`, `Vocab.sound_of`), and that bound, at each `θ F c σ`, from four things
 (`Vocab.wipe_bound`):
 
-* **The survivor bound.** The wipe that opens the period (`Vocab.wipe θ F`) meets `Verity.Wipe.SurvivorBound` at the
-  published threshold and an `ε` of the adversary's moves. For `verity/wipe/v0` that is
-  `MemoryChallenger.Properties.WipeSurvivorBound` at the device's strategy (`eps` plus the labels' PRF advantage plus
+* **The survivor bound.** The wipe that opens the period (`Vocab.wipe θ (Vocab.circuitFile θ F)`) meets
+  `Verity.Wipe.SurvivorBound` at the published threshold and an `ε` of the adversary's moves. For `verity/wipe/v0` that
+  is `MemoryChallenger.Properties.WipeSurvivorBound` at the device's strategy (`eps` plus the labels' PRF advantage plus
   `δ_net`, on the event the auditor's devices observe), at the `foreign_bits` the accepted case publishes, and at any
   threshold above it (`Verity.Wipe.SurvivorBound.mono`, `wipeSurvivorBound_atLeast`).
 * **The run's coins at the boundary are the wipe's** (`Verity.Wipe.OfRun.Preserves`, a named assumption): on the run,
@@ -57,7 +57,8 @@ variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] (V : Vocab d α)
 in what the prover sent, every release its check read is the device's at the round `pos` assigns it (`Logged`), and the
 break `brk` is absent, the memory challenger's verdict on the run at the wipe's boundary holds
 (`Verity.Wipe.OfRun.accepts` at `wipeRun`). -/
-def WipeRefines (k : Verity.Registration.Composite) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c))
+def WipeRefines (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Game.Strategy (V.game θ F c))
     (pos : ℕ → ℕ) (brk : Exchange → Prop) : Prop :=
   ∀ o, ComponentAccepts k .wipe o.sent → V.Logged pos .wipe o → ¬ brk o → (V.wipeRun θ F c σ).accepts o
 
@@ -65,7 +66,8 @@ def WipeRefines (k : Verity.Registration.Composite) (θ F c : ByteArray) (σ : G
 wipe's component at composite `k` accepts while a release its check read is not the device's at its round (`pos`), or
 the break `brk` holds, is at most the probability that the wipe's forger forges under the compiled LMS verifier
 (`Vocab.forger`, `lmsVerify`) plus the wipe's collision term at the strategy (`Vocab.Coupling.BreakBound`'s form). -/
-def WipeBreakBound (k : Verity.Registration.Composite) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c))
+def WipeBreakBound (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Game.Strategy (V.game θ F c))
     (pos : ℕ → ℕ) (brk : Exchange → Prop) : Prop :=
   Game.prob (fun o => ComponentAccepts k .wipe o.sent ∧ (¬ V.Logged pos .wipe o ∨ brk o)) (V.game θ F c) σ ≤
     ENNReal.ofReal ((V.forger .wipe θ F c σ).Pr lmsVerify) +
@@ -78,11 +80,14 @@ published `δ` at the strategy's SHA-512 calls (`hε`), and the error beyond `δ
 the finder meets `FinderCR` (`hb`), the probability that the wipe's component at `k` accepts its own case while the
 run keeps foreign content past the threshold is at most the wipe's error at `σ`. -/
 theorem wipe_bound [Fintype V.Seed] [Nonempty V.Seed] [Fintype V.Spots] [Nonempty V.Spots]
-    (k : Verity.Registration.Composite) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (pos : ℕ → ℕ)
+    (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Game.Strategy (V.game θ F c)) (pos : ℕ → ℕ)
     (brk : Exchange → Prop)
     {ε : (S_φ : ℕ) → ((Fin S_φ → Bool) → Device.State d) →
-      (Device.State d → (Fin (V.wipe θ F).egress → Bool) → V.Spots → Fin S_φ → Bool) → ℝ≥0∞}
-    (hw : (V.wipe θ F).SurvivorBound (V.foreignBits θ) ε) (hR : (V.wipeRun θ F c σ).Preserves σ)
+      (Device.State d → (Fin (V.wipe θ (V.circuitFile θ F)).egress → Bool) → V.Spots → Fin S_φ → Bool) →
+      ℝ≥0∞}
+    (hw : (V.wipe θ (V.circuitFile θ F)).SurvivorBound (V.foreignBits θ) ε)
+    (hR : (V.wipeRun θ F c σ).Preserves σ)
     (hA : V.WipeRefines k θ F c σ pos brk)
     (hε : ε (V.wipeRun θ F c σ).S_φ (V.wipeRun θ F c σ).hold (V.wipeRun θ F c σ).keep ≤
       V.delta θ .wipe (V.cost θ F c σ))
@@ -122,11 +127,14 @@ the period meets its survivor bound at the published threshold (`hw`), the run's
 every strategy (`hR`), the component refines the run's wipe verdict (`hA`), `ε` at the run's moves is within the
 published `δ` (`hε`), and the error beyond `δ` answers for the rest of the event (`hb`). -/
 theorem componentBound_wipe [Fintype V.Seed] [Nonempty V.Seed] [Fintype V.Spots] [Nonempty V.Spots]
-    (pos : (θ F c : ByteArray) → Game.Strategy (V.game θ F c) → ℕ → ℕ)
-    (brk : (θ F c : ByteArray) → Game.Strategy (V.game θ F c) → Exchange → Prop)
-    (ε : (θ F : ByteArray) → (S_φ : ℕ) → ((Fin S_φ → Bool) → Device.State d) →
-      (Device.State d → (Fin (V.wipe θ F).egress → Bool) → V.Spots → Fin S_φ → Bool) → ℝ≥0∞)
-    (hw : ∀ θ F, (V.wipe θ F).SurvivorBound (V.foreignBits θ) (ε θ F))
+    (pos : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Game.Strategy (V.game θ F c) →
+      ℕ → ℕ)
+    (brk : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Game.Strategy (V.game θ F c) →
+      Exchange → Prop)
+    (ε : (θ : ByteArray) → (F : Array ByteArray) → (S_φ : ℕ) → ((Fin S_φ → Bool) → Device.State d) →
+      (Device.State d → (Fin (V.wipe θ (V.circuitFile θ F)).egress → Bool) → V.Spots → Fin S_φ → Bool) →
+      ℝ≥0∞)
+    (hw : ∀ θ F, (V.wipe θ (V.circuitFile θ F)).SurvivorBound (V.foreignBits θ) (ε θ F))
     (hR : ∀ θ F c σ, (V.wipeRun θ F c σ).Preserves σ)
     (hA : ∀ θ F c σ, V.WipeRefines k θ F c σ (pos θ F c σ) (brk θ F c σ))
     (hε : ∀ θ F c σ, ε θ F (V.wipeRun θ F c σ).S_φ (V.wipeRun θ F c σ).hold (V.wipeRun θ F c σ).keep ≤
@@ -137,11 +145,14 @@ theorem componentBound_wipe [Fintype V.Seed] [Nonempty V.Seed] [Fintype V.Spots]
 
 /-- **The wipe's target from its survivor bound** (`componentBound_wipe`, `sound_of`). -/
 theorem wipeSound_of_survivor [Fintype V.Seed] [Nonempty V.Seed] [Fintype V.Spots] [Nonempty V.Spots]
-    (pos : (θ F c : ByteArray) → Game.Strategy (V.game θ F c) → ℕ → ℕ)
-    (brk : (θ F c : ByteArray) → Game.Strategy (V.game θ F c) → Exchange → Prop)
-    (ε : (θ F : ByteArray) → (S_φ : ℕ) → ((Fin S_φ → Bool) → Device.State d) →
-      (Device.State d → (Fin (V.wipe θ F).egress → Bool) → V.Spots → Fin S_φ → Bool) → ℝ≥0∞)
-    (hw : ∀ θ F, (V.wipe θ F).SurvivorBound (V.foreignBits θ) (ε θ F))
+    (pos : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Game.Strategy (V.game θ F c) →
+      ℕ → ℕ)
+    (brk : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Game.Strategy (V.game θ F c) →
+      Exchange → Prop)
+    (ε : (θ : ByteArray) → (F : Array ByteArray) → (S_φ : ℕ) → ((Fin S_φ → Bool) → Device.State d) →
+      (Device.State d → (Fin (V.wipe θ (V.circuitFile θ F)).egress → Bool) → V.Spots → Fin S_φ → Bool) →
+      ℝ≥0∞)
+    (hw : ∀ θ F, (V.wipe θ (V.circuitFile θ F)).SurvivorBound (V.foreignBits θ) (ε θ F))
     (hR : ∀ θ F c σ, (V.wipeRun θ F c σ).Preserves σ)
     (hA : ∀ θ F c σ, V.WipeRefines k θ F c σ (pos θ F c σ) (brk θ F c σ))
     (hε : ∀ θ F c σ, ε θ F (V.wipeRun θ F c σ).S_φ (V.wipeRun θ F c σ).hold (V.wipeRun θ F c σ).keep ≤
@@ -154,7 +165,8 @@ theorem wipeSound_of_survivor [Fintype V.Seed] [Nonempty V.Seed] [Fintype V.Spot
 theorem wipeSound_of (h : V.ComponentBound k .wipe) : V.WipeSound k := V.sound_of k .wipe h
 
 /-- **At the honest deployment, the wipe**: `sound_of_honest` at `.wipe`. -/
-theorem wipeSound_of_honest (h : V.HonestHolds k .wipe) (θ F c : ByteArray) (hreg : V.Registered θ F) :
+theorem wipeSound_of_honest (h : V.HonestHolds k .wipe) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (hreg : V.Registered θ F) :
     Game.prob (fun o => ComponentAccepts k .wipe o.sent ∧ ¬ V.Holds k θ F c (V.honest θ F c) .wipe o)
         (V.game θ F c) (V.honest θ F c) ≤ V.error .wipe θ F c (V.honest θ F c) ∧
       Game.prob (fun o => V.Verdict k .wipe o ∧ ¬ V.Holds k θ F c (V.honest θ F c) .wipe o) (V.game θ F c)
@@ -162,7 +174,8 @@ theorem wipeSound_of_honest (h : V.HonestHolds k .wipe) (θ F c : ByteArray) (hr
   V.sound_of_honest k .wipe h θ F c hreg
 
 /-- **The wipe's target fails for a verifier that accepts everything**: `sound_of_nontrivial` at `.wipe`. -/
-theorem wipeSound_of_nontrivial (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c))
+theorem wipeSound_of_nontrivial (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
+    (σ : Game.Strategy (V.game θ F c))
     (hfail : ∀ o, ¬ V.Holds k θ F c σ .wipe o) (hlt : V.error .wipe θ F c σ < 1) :
     ¬ V.TargetFor (fun _ => True) k .wipe :=
   V.sound_of_nontrivial k .wipe θ F c σ hfail hlt
