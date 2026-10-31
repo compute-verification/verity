@@ -1,4 +1,4 @@
 order = 70
 tool = "The committer: hm96-sha512 row leaves in frame-v3-sha512 trees"
-files = "`commit_gpu/commit_gpu.cuh`, `sha512.cuh`, `commit_gpu.cu`, `reference.py`, `gpu.sh`"
-includes = ""
+files = "`commit_gpu/commit_gpu.cuh`, `commit_gpu.cu`, `reference.py`, `gpu.sh`"
+includes = "`../../verity/ml/kernels/sha512.cuh`"

@@ -1,10 +1,11 @@
-// libvc's device functions, header only: SHA-512's compression (commit_gpu's `sha::compress`, `compress_from`, `compress_kw`),
-// sha512/row/v2's digest (`hash_tail` over bytes, `hash_words` over big-endian words), the hm96-sha512 leaf's pieces (the salt
-// digest, M_key y by the nibble or byte table, the leaf value and its frame leaf: `finish_leaf`), and frame-v3-sha512's leaf,
-// pad and node, each from a plan's constants (LeafK, NodeK). The builders at the end make those constants, and the nibble
-// table, on the host or the device. vc.cu's kernels are built on these functions and its plans on these builders, so
-// conformance.py's cases cover both; a kernel of another library (a fused pass whose constants live in its own __constant__
-// memory) includes this header, fills a LeafK and a node template with the builders, and calls the same functions.
+// libvc's device functions, header only, on SHA-512's compression (`sha::compress`, `compress_from`, `compress_kw` and
+// `compress_compact`, verity/ml/kernels/sha512.cuh): sha512/row/v2's digest (`hash_tail` over bytes, `hash_words` over
+// big-endian words), the hm96-sha512 leaf's pieces (the salt digest, M_key y by the nibble or byte table, the leaf value and
+// its frame leaf: `finish_leaf`), and frame-v3-sha512's leaf, pad and node, each from a plan's constants (LeafK, NodeK). The
+// builders at the end make those constants, and the nibble table, on the host or the device. vc.cu's kernels are built on
+// these functions and its plans on these builders, so conformance.py's cases cover both; a kernel of another library (a
+// fused pass whose constants live in its own __constant__ memory) includes this header, fills a LeafK and a node template
+// with the builders, and calls the same functions.
 //
 // Positions and node indices are below 2^32 (MAX_NB bytes). Every digest is 8 big-endian words, as SHA-512's state holds it.
 #pragma once
@@ -13,7 +14,7 @@
 #include <cstdint>
 
 #include "vc.h"
-#include "../../pouw/commit_gpu/sha512.cuh"
+#include "../../../verity/ml/kernels/sha512.cuh"
 
 namespace vc {
 
@@ -262,33 +263,9 @@ VC_DEV void node(const NodeK& N, int level, u64 index, const u64* L, const u64* 
   VC_BY_LEN(index, node_ni, N, level, index, L, R, out)
 }
 
-// sharaw's compress_compact: one 16-round body for all 80 rounds (rounds 0..15 take the message word where later rounds take
-// the schedule's), so a fold whose CTA has mostly idle warps waits on instruction fetch less.
-VC_DEV void compress_compact(u64* st, const u64* m) {
-  u64 w[16];
-#pragma unroll
-  for (int i = 0; i < 16; ++i) w[i] = m[i];
-  u64 a = st[0], b = st[1], c = st[2], d = st[3], e = st[4], f = st[5], g = st[6], h = st[7];
-#pragma unroll 1
-  for (int j = 0; j < 80; j += 16) {
-#pragma unroll
-    for (int i = 0; i < 16; ++i) {
-      const u64 sch = sha::add3(sha::add(sha::s1(w[(i - 2) & 15]), w[(i - 7) & 15]), sha::s0(w[(i - 15) & 15]), w[i]);
-      const u64 wi = j ? sch : w[i];
-      w[i] = wi;
-      const u64 t1 = sha::add3(h, sha::S1(e), sha::ch(e, f, g));
-      const u64 t1b = sha::add3(t1, sha::SHA_K_TABLE[j + i], wi);
-      const u64 mj = sha::maj(a, b, c);
-      h = g; g = f; f = e; e = sha::add(d, t1b);
-      d = c; c = b; b = a; a = sha::add3(t1b, sha::S0(b), mj);
-    }
-  }
-  st[0] = sha::add(st[0], a); st[1] = sha::add(st[1], b); st[2] = sha::add(st[2], c); st[3] = sha::add(st[3], d);
-  st[4] = sha::add(st[4], e); st[5] = sha::add(st[5], f); st[6] = sha::add(st[6], g); st[7] = sha::add(st[7], h);
-}
 // node_ni_from with ni read at run time (sharaw's node_rt): for ni <= 4 the index and both children land in the same words as
 // or_be<2, ni> and or_digest<10 + ni>, <82 + ni> put them, and only the shifts depend on ni, so one compression body serves
-// every length and both blocks. COMPACT: through compress_compact, else sha::compress.
+// every length and both blocks. COMPACT: through sha::compress_compact, else sha::compress.
 template <bool COMPACT>
 VC_DEV void node_rt_from(const u64 (*tpl)[32], const u64* mid, u64 index, const u64* L, const u64* R, u64* out) {
   const int ni = min(nbytes(index), MAX_NB), S = 8 * (2 + ni);
@@ -309,7 +286,7 @@ VC_DEV void node_rt_from(const u64 (*tpl)[32], const u64* mid, u64 index, const 
     u64 w[16];
 #pragma unroll
     for (int i = 0; i < 16; ++i) w[i] = k ? W[16 + i] : W[i];
-    if constexpr (COMPACT) compress_compact(out, w);
+    if constexpr (COMPACT) sha::compress_compact(out, w);
     else sha::compress(out, w);
   }
 }
@@ -598,42 +575,20 @@ VC_DEV void finish_leaf(const LeafK& K, u64 pos, const u64* x, const u64* my, co
 
 // --- the constants, on the host or the device ---------------------------------------------------------------------------
 
-VC_HD u64 be64_at(const uint8_t* p) {
-  u64 v = 0;
-  for (int i = 0; i < 8; ++i) v = v << 8 | p[i];
-  return v;
-}
 VC_HD void be_put(uint8_t* p, u64 v, int n) {
   for (int i = n - 1; i >= 0; --i, v >>= 8) p[i] = (uint8_t)v;
 }
 VC_HD void midstate(const uint8_t* block, u64* st) {
   u64 w[16];
-  for (int i = 0; i < 16; ++i) w[i] = be64_at(block + 8 * i);
+  for (int i = 0; i < 16; ++i) w[i] = sha::be64(block + 8 * i);
   sha::iv(st);
   sha::compress(st, w);
-}
-// kw[i] = K[i] + W[i] over the fixed block's whole schedule (sha::schedule_kw), for compress_kw
-VC_HD void schedule_kw(const u64* block, u64* kw) {
-  u64 w[80];
-  for (int i = 0; i < 16; ++i) w[i] = block[i];
-  for (int i = 16; i < 80; ++i) w[i] = sha::s1(w[i - 2]) + w[i - 7] + sha::s0(w[i - 15]) + w[i - 16];
-  for (int i = 0; i < 80; ++i) kw[i] = sha::SHA_K_TABLE[i] + w[i];
 }
 // the all-padding last block of a message of `bytes` bytes (a multiple of 128), scheduled
 VC_HD void pad_schedule(u64 bytes, u64* kw) {
   u64 blk[16] = {0x8000000000000000ull};
   blk[15] = bytes * 8;
-  schedule_kw(blk, kw);
-}
-// the state after rounds 0..r-1 of block from chaining value cv (sha::rounds_prefix): what compress_from<r> starts from
-VC_HD void rounds_prefix(const u64* cv, const u64* block, int r, u64* m) {
-  u64 a = cv[0], b = cv[1], c = cv[2], d = cv[3], e = cv[4], f = cv[5], g = cv[6], h = cv[7];
-  for (int i = 0; i < r; ++i) {
-    const u64 t1 = h + sha::S1(e) + sha::ch(e, f, g) + sha::SHA_K_TABLE[i] + block[i];
-    const u64 t2 = sha::S0(a) + sha::maj(a, b, c);
-    h = g; g = f; f = e; e = d + t1; d = c; c = b; b = a; a = t1 + t2;
-  }
-  m[0] = a; m[1] = b; m[2] = c; m[3] = d; m[4] = e; m[5] = f; m[6] = g; m[7] = h;
+  sha::schedule_kw(blk, kw);
 }
 
 // frame-v3's message (merkle._message) into m, zero past it: FRAME || u32be(len tag) || tag || u64be(64) || did, then
@@ -664,7 +619,7 @@ VC_HD int padded_words(uint8_t* m, int n, u64* w) {
   const int total = (n + 17 + 127) / 128 * 128;
   m[n] = 0x80;
   be_put(m + total - 8, (u64)n * 8, 8);
-  for (int i = 0; i < total / 8; ++i) w[i] = be64_at(m + 8 * i);
+  for (int i = 0; i < total / 8; ++i) w[i] = sha::be64(m + 8 * i);
   return total / 8;
 }
 
@@ -686,7 +641,7 @@ VC_HD int leaf_frame_nb(const uint8_t* did, const uint8_t* schema, int sl, int n
 VC_HD void leaf_m15(LeafK& K) {
   u64 st[8];
   sha::iv(st);
-  rounds_prefix(st, K.fl_tpl[0], 15, K.fl_m15);
+  sha::rounds_prefix(st, K.fl_tpl[0], 15, K.fl_m15);
 }
 // fl_tpl for every nb, sx and fl_m15. 0, or -1.
 VC_HD int leaf_frame(const uint8_t* did, const uint8_t* schema, int sl, LeafK& K) {
