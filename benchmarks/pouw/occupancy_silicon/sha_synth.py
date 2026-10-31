@@ -130,7 +130,7 @@ def main() -> int:
     print("reference SHA-512 == hashlib on 9 lengths")
     sys.path.insert(0, a.alg)
     import synth
-    out = Path(a.out)
+    out = Path(a.out).resolve()        # yosys runs in a temporary directory, so the generated ROM's path must be absolute
     out.mkdir(parents=True, exist_ok=True)
     synth.RTL = [HERE / "sha.v", kv(out)]
     rows = {}
