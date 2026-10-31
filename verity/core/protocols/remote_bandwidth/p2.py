@@ -1,4 +1,4 @@
-"""The remote bandwidth audit over PoUS's P2 store (`p2-unit4/v0`): the node's registered store is PoUS's `C*`, the
+"""PoUB over PoUS's P2 store (`p2-unit4/v0`): the node's registered store is PoUS's `C*`, the
 weights `W` encoded under P2 (`pous.schemes.p2`, `p2-16448/v4`) at PoUS's setup, and each receipt is of a unit of four
 of its 2,056-byte blocks, which a GPU sketches as it decodes them while serving.
 
@@ -273,15 +273,15 @@ def check(registration: Registration, seed: bytes, plan: Plan, root: bytes, i: i
     return None
 
 
-class Session(audit.Session):
-    """The verifier's side of one session over a P2 store: the audit's session (`audit.Session`) with units for blocks,
+class Session(audit.AuditRun):
+    """The verifier's side of one session over a P2 store: the audit's session (`audit.AuditRun`) with units for blocks,
     its openings checked on PoUS's vk (`_check`), and no appends."""
 
     codecs = (P2Codec,)
     block_bytes = UNIT_BYTES
 
-    def __init__(self, params: audit.Params, registration: Registration, coins_: coins.Coins, *, not_before_ns: int,
-                 clock: Callable[[], int] = time.monotonic_ns) -> None:
+    def __init__(self, params: audit.Params, registration: Registration, coins_: coins.SessionCoins, *,
+                 not_before_ns: int, clock: Callable[[], int] = time.monotonic_ns) -> None:
         if type(registration) is not Registration:
             raise ValueError("a P2 session is over a P2 Registration")
         super().__init__(params, registration, None, coins_, not_before_ns=not_before_ns, clock=clock)

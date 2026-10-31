@@ -549,13 +549,13 @@ def public_blocks(group: tuple, li: list[list[int]], lp: list[list[int]]) -> lis
 
 
 def _type_bits(t) -> int:
-    from verity.ml.circuits.types import Array, Record, Value
+    from verity.ml.circuits.types import Array, RecordType, Value
 
     if isinstance(t, Value):
         return t.w
     if isinstance(t, Array):
         return t.n * _type_bits(t.elem)
-    return sum(_type_bits(f[1] if isinstance(t, Record) else f) for f in t.fields)
+    return sum(_type_bits(f[1] if isinstance(t, RecordType) else f) for f in t.fields)
 
 
 def unit_witness(definition) -> dict:

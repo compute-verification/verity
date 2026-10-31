@@ -54,8 +54,11 @@ PARENTS: dict[str, tuple[str | None, ...]] = {
 LINKS = (("host", "host"), ("host", "outside"), ("certifier", "host"), ("certifier", "outside"), ("challenger", "host"))
 """The pairs of kinds a link may join, in either order."""
 AUDITOR_KINDS = ("certifier", "challenger")
-REFUSALS = ("previous", "duplicate-id", "unknown-ref", "kind", "card-digest", "capacity", "owner", "uncertified",
-            "challenger-reach", "duplicate-information")
+REFUSALS = ("previous", "duplicate-id", "unknown-ref", "kind", "card-digest", "figures", "capacity", "owner",
+            "uncertified", "challenger-reach", "duplicate-information")
+OPERAND_CLASSES = ("uniform-s8", "uniform-s2", "uniform-u2", "uniform-u4", "zero")
+"""The operand classes of a tensor-core multiply-add, `DeviceFigures`' `OperandClass`: int8 operands drawn uniformly
+over `[-128, 127]`, `[-2, 1]`, `[0, 3]` or `[0, 15]`, or the one value 0."""
 
 
 class Malformed(ValueError):
@@ -77,17 +80,20 @@ def tagged(tag: str, obj: Any) -> str:
 
 @dataclass(frozen=True)
 class Card:
-    """An SKU's data-sheet card: tensor-core multiply-adds a tick, bits from device memory to the chip a tick, bits of
-    on-chip state and bytes of device memory."""
+    """A device's card, its registered figures: `DeviceFigures`' SKU, tensor clock in Hz and peak rate of tensor-core
+    multiply-adds a second for each of `OPERAND_CLASSES` (`peak_rate`, in that order), and its memory figures: bits from
+    device memory to the chip a tick, bits of on-chip state and bytes of device memory."""
 
     sku: str
-    tc: int
+    clock: int
+    peak_rate: tuple[int, int, int, int, int]
     bw: int
     chip: int
     mem: int
 
     def to_json(self) -> dict[str, Any]:
-        return {"bw": self.bw, "chip": self.chip, "mem": self.mem, "sku": self.sku, "tc": self.tc}
+        return {"bw": self.bw, "chip": self.chip, "clock": self.clock, "mem": self.mem,
+                "peakRate": dict(zip(OPERAND_CLASSES, self.peak_rate, strict=True)), "sku": self.sku}
 
     def digest(self) -> str:
         return tagged(CARD, self.to_json())
@@ -236,9 +242,11 @@ def _optional(f: Callable[[Any], Any], j: Any) -> Any:
 
 
 def card_of(j: Any) -> Card:
-    _exactly(j, ["bw", "chip", "mem", "sku", "tc"], "a card")
-    return Card(_str(j["sku"], "sku"), _nat(j["tc"], "tc"), _nat(j["bw"], "bw"), _nat(j["chip"], "chip"),
-                _nat(j["mem"], "mem"))
+    _exactly(j, ["bw", "chip", "clock", "mem", "peakRate", "sku"], "a card")
+    _exactly(j["peakRate"], sorted(OPERAND_CLASSES), "a card's peakRate")
+    return Card(_str(j["sku"], "sku"), _nat(j["clock"], "clock"),
+                tuple(_nat(j["peakRate"][c], c) for c in OPERAND_CLASSES),  # type: ignore[arg-type]
+                _nat(j["bw"], "bw"), _nat(j["chip"], "chip"), _nat(j["mem"], "mem"))
 
 
 def loc_of(j: Any) -> Loc:
@@ -380,15 +388,31 @@ class Site:
 
 # --- the check --------------------------------------------------------------------------------------------------------
 
+def within(tolerance: tuple[int, int], e: int, x: int) -> bool:
+    """`x` is within tolerance `num / den` of `e` in both directions, `(1 - τ)·e ≤ x ≤ (1 + τ)·e`, with `1 - τ`
+    truncated at 0, cleared of its denominator."""
+    num, den = tolerance
+    return max(den - num, 0) * e <= den * x <= (den + num) * e
+
+
 @dataclass(frozen=True)
 class Auditor:
-    """The auditor's data sheet for each SKU, and the key of each of its own devices."""
+    """The auditor's estimate of each SKU's card (its data sheet), the key of each of its own devices, and the
+    tolerance `(num, den)` it allows a card's clock and peak rates around its sheet's."""
 
     sheets: tuple[Card, ...] = ()
     keys: tuple[tuple[str, str], ...] = ()
+    tolerance: tuple[int, int] = (0, 1)
 
     def sheet(self, sku: str) -> Card | None:
         return next((k for k in self.sheets if k.sku == sku), None)
+
+    def accepts(self, e: Card, k: Card) -> bool:
+        """`k` is within its sheet `e`: the clock and every peak rate within the tolerance in both directions, every
+        peak rate positive (as `DeviceFigures.Accepted` requires), and its memory figures `e`'s."""
+        return (within(self.tolerance, e.clock, k.clock)
+                and all(within(self.tolerance, a, b) and b > 0 for a, b in zip(e.peak_rate, k.peak_rate, strict=True))
+                and (k.bw, k.chip, k.mem) == (e.bw, e.chip, e.mem))
 
     def key(self, i: str) -> str | None:
         return next((k for d, k in self.keys if d == i), None)
@@ -413,9 +437,11 @@ def hardware_refusal(auditor: Auditor, composite: str, site: Site, h: Hardware) 
             and all(x.kind != "certifier" or [t.kind(e) for e in t.far(x.id)] in (["host", "outside"], ["outside", "host"])
                     for x in t.locs)):
         return "kind"
-    if not (all(auditor.sheet(k.sku) == k for k in h.cards)
+    if not (all(auditor.sheet(k.sku) is not None for k in h.cards)
             and all(x.kind != "device" or x.card in digests for x in h.locs)):
         return "card-digest"
+    if not all(auditor.accepts(auditor.sheet(k.sku), k) for k in h.cards):  # type: ignore[arg-type]
+        return "figures"
     if not (all(x.kind != "memory" or x.bytes > 0 for x in h.locs)
             and all(x.kind != "device" or (k := t.card(x)) is None or t.held(x.id) <= k.mem for x in t.locs)):
         return "capacity"
@@ -487,10 +513,15 @@ class View:
 # --- the core protocol ------------------------------------------------------------------------------------------------
 
 def params_of(j: Any) -> tuple[str, Auditor]:
-    """The auditor's parameters: `{"composite", "keys": [{"id", "key"}], "sheets": [CARD]}`."""
+    """The auditor's parameters: `{"composite", "keys": [{"id", "key"}], "sheets": [CARD], "tolerance": {"den",
+    "num"}}`."""
     ascii(j, "the params")
-    _exactly(j, ["composite", "keys", "sheets"], "the params")
+    _exactly(j, ["composite", "keys", "sheets", "tolerance"], "the params")
     sheets = tuple(card_of(k) for k in _list(j["sheets"], "sheets"))
+    _exactly(j["tolerance"], ["den", "num"], "the params' tolerance")
+    tolerance = (_nat(j["tolerance"]["num"], "num"), _nat(j["tolerance"]["den"], "den"))
+    if tolerance[1] == 0:
+        raise Malformed("the params' tolerance: den is positive")
     keys = []
     for k in _list(j["keys"], "keys"):
         _exactly(k, ["id", "key"], "a key")
@@ -499,12 +530,13 @@ def params_of(j: Any) -> tuple[str, Auditor]:
         raise Malformed("the params: a data sheet's SKU is named twice")
     if not _nodup([d for d, _ in keys]):
         raise Malformed("the params: a device's key is named twice")
-    return _one_of(j["composite"], COMPOSITES, "the params' composite"), Auditor(sheets, tuple(keys))
+    return _one_of(j["composite"], COMPOSITES, "the params' composite"), Auditor(sheets, tuple(keys), tolerance)
 
 
 def params(composite: str, auditor: Auditor) -> dict[str, Any]:
     return {"composite": composite, "keys": [{"id": d, "key": k} for d, k in auditor.keys],
-            "sheets": [k.to_json() for k in auditor.sheets]}
+            "sheets": [k.to_json() for k in auditor.sheets],
+            "tolerance": {"den": auditor.tolerance[1], "num": auditor.tolerance[0]}}
 
 
 def check_log(p: tuple[str, Auditor], c: tuple[str, list[Entry]]) -> tuple:

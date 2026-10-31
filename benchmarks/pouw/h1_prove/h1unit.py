@@ -85,7 +85,7 @@ SALT_BYTES = 192
 M32 = (1 << 32) - 1
 #: the public row's parameters, in its bit order
 PUBLIC = HW.PUBLIC
-PUB_BITS = 512 + 64 + 1024
+PUB_BITS = CC.PUBLIC_ROW_BITS
 #: STAND-INS for what the network certifier and the window's registration give a certified window, which this harness
 #: runs without: the certifier's reveal(p) (`stand_in_reveal`), the registered stream, and the registered prover's id
 STAND_IN_REVEAL_TAG = b"verity/pouw/h1-prove/stand-in-reveal/v0\0"
@@ -112,8 +112,8 @@ def tile() -> str:
     return t
 
 
-#: the structural statement's layout mode under ``H1_TMPL=structural`` (#3226's struct_lower costs and #3249's structural
-#: verdicts are at it)
+#: the structural statement's layout mode under ``H1_TMPL=structural`` (struct_lower's costs and the structural verdicts
+#: are measured at it)
 LAYOUT = "iv/hybrid/4"
 #: ``H1_TMPL``'s values for the flat statement (also unset or empty) and for the structural one at `LAYOUT`
 FLAT, STRUCTURAL = "flat", "structural"
@@ -123,8 +123,9 @@ def layout() -> str | None:
     """The statement's form: ``H1_TMPL`` unset, empty or ``flat``, None: the flat statement (``flock-circuit``, the unit's
     netlist in the file), the one the Lean verifier accepts; ``structural``, the templated statement at `LAYOUT`
     (``flock-circuit/tmpl``, `circuit.compose`'s ``layout``), the unit as `struct_lower`'s template (`stager`); another
-    layout mode (`verity_flock.tmpl.mode_of`), the templated statement at it. The Lean verifier refuses a templated
-    statement, after every other check, until its proof lands (`Tags.templated`, PRF-133), so it stays opt-in."""
+    layout mode (`verity_flock.tmpl.mode_of`), the templated statement at it. The soundness proof covers a templated
+    statement only without the verifier's registered reads (`ProvedScope.scopeOkT`), so the Lean verifier refuses H1's,
+    which read ``--registered``, after every other check, and it stays opt-in."""
     import os
     from verity_flock import tmpl as TM
     m = os.environ.get("H1_TMPL") or FLAT

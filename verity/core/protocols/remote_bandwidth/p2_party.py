@@ -1,4 +1,4 @@
-"""The verifier and its challenger of a remote bandwidth session over PoUS's P2 store (`p2.py`) as a party of their own,
+"""The verifier and its challenger of a PoUB session over PoUS's P2 store (`p2.py`) as a party of their own,
 so they run on a host the prover doesn't control (`trusted-host`) while the prover serves on its node.
 
 The channel is a pair of byte streams carrying one JSON object of one key a line: the ssh session that starts this side
@@ -23,7 +23,7 @@ padding past the last tensor, which is PoUS's and which the decode never reads; 
   next window's first root, or its deadline for the last) it sends `{"open": {"draws", "t"}}`, answered `{"openings":
   [opening_json, ...]}`, and verifies them while the prover serves on.
 - Once the session has its outcome, `{"end": {"commitment", "openings"}}`: the session's coin commitment and every
-  released coin's opening (`audit.Session.disclose`), against which the prover checks each challenge it was sent
+  released coin's opening (`audit.AuditRun.disclose`), against which the prover checks each challenge it was sent
   (`audit.Prover.end`). The commitment is a function of every coin, so the prover gets it only after its last root.
 - `{"case": {...}}`: the session's core case (`p2_case`), the log of every request the Lean answered with the
   registration, the request and the verifier's clock floor, which `RemoteAudit.P2Protocol` replays; it is witness, which
@@ -348,7 +348,7 @@ class Books:
     `malformed` at the window filling (`fail`), and `why` says what was out of form. `released` is the coin the last
     event released: a start's or a boundary's challenge, or a close's openings coin."""
 
-    def __init__(self, params: audit.Params, registration: p2.Registration, coins_: C.Coins, plan: Plan,
+    def __init__(self, params: audit.Params, registration: p2.Registration, coins_: C.SessionCoins, plan: Plan,
                  not_before_ns: int) -> None:
         self.clock, self.plan = P._Held(), plan
         self.s = p2.Session(params, registration, coins_, not_before_ns=not_before_ns, clock=self.clock)

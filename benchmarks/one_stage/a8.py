@@ -1,4 +1,4 @@
-"""One-stage audit, run A8: one window of the remote bandwidth audit over a registered store of a few thousand chunks, its
+"""One-stage audit, run A8: one window of PoUB over a registered store of a few thousand chunks, its
 openings proved in zero knowledge through the proof system in place of opened (PROTOCOL.md §6's checks 1-3 and 5, as §8
 deploys them), so that the verifier receives no chunk bytes; and the prover's cost per opening.
 
@@ -8,7 +8,7 @@ deploys them), so that the verifier receives no chunk bytes; and the prover's co
 * **Store and window.** ``--blocks`` N seeded payloads (each 64-byte word's top byte zero, p512's words) registered under
   p512/k2 (`a7.P512`: the opening's proof block at the default p1024/k3/masked is past Flock's K_MAX), sketch-sha512
   receipts. One window of N / ``--plan`` passes, pass i a stripe of P chunks from P i, so the window's U is N receipts, of
-  which its openings coin draws ``--samples`` (`audit.Session.close`). Every salt of the prover's (the payloads', the
+  which its openings coin draws ``--samples`` (`audit.AuditRun.close`). Every salt of the prover's (the payloads', the
   receipt leaves', every row's) comes from its own secret, drawn per run from the OS.
 * **Each opening a proof block.** Draw (pass i, position p, chunk j) is one `BlockOpeningCheck_v1` (`block_check`) at P,
   DR (the pass's receipt tree), DP (the payload tree of N) and DV 1 (no appended chunk), its witness `opening.witness`:

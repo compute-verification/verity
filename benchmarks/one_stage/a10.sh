@@ -30,14 +30,16 @@ os.execvpe(sys.executable, [sys.executable, "-m", "research", *sys.argv[1:]], st
 R keep "$HZ_CACHE" --owner @circuits --expires 4d --priority low --root / \
   --why "A10's builds (flock-circuit, flock-verify, the venv), keyed by their inputs" >> "$OUT/job.log" 2>&1
 
-BUNDLE=art:6437727df08be44eba654589780a7d307a4e8038d70b373146eba4b83878034e    # rank 0's replay bundle, Commit r20261019-074856-7c3a
-ROWMETA=art:7d815b1d963c7e9cf42aaeff8793901b38a301d10ed8c814d2ffe292b757d9ea   # the row's records (commit/)
-BUILD=art:8be49d1e6f506b6a2105dfba80222db6aa6b9542613548c1c9012af1ebcca4f4     # the Build (build/rank0, manifest.json), without the Programs' instances
+# the record's store ids and the Build's row dir, in a10_inputs.json
+IN() { python3 -c 'import json, sys; v = json.load(open(sys.argv[1]))[sys.argv[2]]; print(" ".join(v) if isinstance(v, list) else v)' \
+  "$SRC/benchmarks/one_stage/a10_inputs.json" "$1"; }
+BUNDLE=$(IN bundle)     # rank 0's replay bundle, of the Commit of record
+ROWMETA=$(IN rowmeta)   # the row's records (commit/)
+BUILD=$(IN build)       # the Build (build/rank0, manifest.json), without the Programs' instances
 # the Build's row dir where it ran (vy-glm53-cpu-2), read in place: its rank 0 Program's instances aren't in the art
-ROWDIR=${A10_ROW:-/workspace/cp/circuits/glm-aot/r20261018-070557-2172/glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager}
-SLICES="art:2767c3a80137ce6cd7782373e1cba8b4231d4598f1b902caaa7bc1604edf09c8 art:22e7456dcc5018b85c511d507ff3c33ffa5be2b1946e3106de1ce5727f0d3106
-art:84ae2056669e502abb2751cd38d2125167728fd580193df7f7432338877551ff art:c1ec2634adc0f5b548bec6af41cca82995d11b977fdb67d716895695a0b38cf8"
-KINDS=art:9ec1d8b37286bdd5ec3cee7d39da27d97866eece6018d994c4921d068bc49abb     # A11's kinds table (kinds.json)
+ROWDIR=${A10_ROW:-$(IN row_dir)}
+SLICES=$(IN slices)
+KINDS=$(IN kinds)       # A11's kinds table (kinds.json)
 
 fetch() {   # fetch ART DEST [GLOB...]: ART's files (those matching the globs) under DEST, once per node; DEST.done marks it whole
   local art=$1 dest=$2; shift 2
