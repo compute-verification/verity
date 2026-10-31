@@ -25,9 +25,9 @@ decides nothing.
   certified it); with ``--late``, its ``late`` run. The prover's references (`head_check.reference_parts`, and the unit's
   output word by the gates' references, `LinkWindows.outputs`) say beforehand which windows each member's proofs refuse
   (`expected`).
-* **The period** (``--draw K``): each member's windows sampled rather than all proved, as `n2_advised_zk`'s: every
-  window's salted root committed, then K of them drawn on the verifier's own coins (`LinkWindows.period_draw`), and
-  only those registered, proved and decided; the network verdict is the sampled one, its ``wrong_units`` at the
+* **The period** (``--draw K``): each member's windows sampled rather than all proved: every window's salted root
+  committed, then K of them drawn on the verifier's own coins (`LinkWindows.period_draw`), and only those
+  registered, proved and decided; the network verdict is the sampled one, its ``wrong_units`` at the
   stream's δ, on the Lean verifier of record's sample. ``tampered`` then changes every window (`every_count`), which any
   draw refuses, and with K < n ``other_subset`` proves the honest records on another K-subset (`other_subset`), every
   window accepted, which the network verdict refuses by name (``period-draw``).
@@ -45,9 +45,12 @@ decides nothing.
 * **What the verifier receives**, per link-window, kept under ``<member>/verifier/`` (`RECEIVED`): the registration record
   (the salted root, nothing of the certificates) and the sample; the two certificates' public fields, from the certifier,
   the auditor's device; the declared clock syncs; from the prover, the statement's public file (its header and each row's
-  hiding commitment), its session files, and the salts of the ``pub`` and ``o0`` rows with the output word; and the
-  outcome record. Its own: the circuit file's SHA-512 (its lowering, which prover and verifier share here), the Program's
-  descriptor and the partition object. Never the opening (records, heads, leaf salts, siblings, the certifier's salt)
+  hiding commitment), its session files, and the salts of the ``pub`` and ``o0`` rows with the output word; the
+  outcome record, and one-stage v2's evidence (`one_stage_evidence`). Its own: the circuit file (its lowering, which
+  prover and verifier share here) and one-stage v2's parameters for the link (`one_stage_params`, ``one-stage.json``,
+  with the Program's descriptor and the partition object), which certifier/v0's period check runs v2 under on each
+  execution phase (`certifier_case.case_of`). Never the opening (records, heads, leaf salts, siblings, the certifier's
+  salt)
   nor the ``wit`` row's salt. Every file there is scanned for every piece of every head, leaf salt, sibling and
   certifier salt of the member (`a8.received`) but the pieces the public circuit or a window's ``pub`` row holds
   (`public_pieces`), which the verifier has whatever the witness, and a member fails on a ``leaked`` piece under the
@@ -80,7 +83,7 @@ sys.path.insert(0, str(HERE))
 
 import certifier_serve as cs  # noqa: E402
 import leak_scan as LS  # noqa: E402
-from verity.core.protocols.certifier import advised as AD, head_check as HC  # noqa: E402
+from verity.core.protocols.certifier import head_check as HC  # noqa: E402
 from verity.core.protocols.certifier import service as SVC  # noqa: E402
 from verity.core.protocols.certifier.certificate import CertifiedRecord, Direction, Issuer  # noqa: E402
 from verity.core.protocols.certifier.schedule import ClockSync  # noqa: E402
@@ -98,7 +101,8 @@ ONE_SESSION = "outer proofs go through the firewall one at a time (AGENTS.md, 'L
 RECEIVED = {"registration.json": "the registration record", "draw.json": "the stream's draw",
             "certificates.json": "the certificates' public fields (the certifier's)", "syncs.json": "the declared syncs",
             "pub-1.bin": "the statement's public file", "session-*": "the session's files",
-            "delivered.json": "the pub and o0 rows' salts and the output word", "outcome.json": "the outcome record"}
+            "delivered.json": "the pub and o0 rows' salts and the output word", "outcome.json": "the outcome record",
+            "one-stage.json": "one-stage v2's evidence (the audit record's inputs, the proof's files by SHA-512)"}
 
 
 def log(msg: str) -> None:
@@ -187,7 +191,7 @@ def link_windows(run: Path, edit=None, clock=None, warden: bool = False) -> Simp
             failed={e: None if i is None else [k for k, ok in HC.reference_parts(i).items() if not ok]
                     for e, i in zip(ENDS, insts)},
             expect=int(word == 0b11 and others), statement=None))
-    rd = SimpleNamespace(lw=lw, plan=plan, syncs=syncs, windows=out, issuer_refused=refused, advice=None)
+    rd = SimpleNamespace(lw=lw, plan=plan, syncs=syncs, windows=out, issuer_refused=refused)
     if clock is not None:
         st = lw.stream(budget=plan["windows"], delta=cs.DELTA, challenger="n2-zk", coins=cs._no_coins, clock=clock)
         previous = None
@@ -225,11 +229,14 @@ def expected(name: str, rd: SimpleNamespace) -> bool:
     """Whether the member's references are its round's: every unit takes an instance, and its verdict bit is 1 exactly
     where no part fails; honest and other_subset, none fails and every window accepts; tampered, window 0's egress head
     (every window's, ``rd.every``) fails its counts and its signed digest only (its signed digest alone on the advice
-    profile, whose counts the unit leaves to N2's advised unit, and on a warden link, whose counts are its schedule's);
-    extra, egress heads fail their counts alone, on one window or more; late, egress heads
-    fail their fields and counts, on one window or more. The ingress heads fail nothing, and every negative member
+    profile, whose egress counts no N2 unit holds, and on a warden link, whose counts are its schedule's);
+    extra, egress heads fail their counts alone, on one window or more; late, no link-window at all, since the certifier
+    faults window 0 and certifies no record whose status isn't complete (`certificate.Issuer` lists it in
+    `refused`), so the link stops before its first window. The ingress heads fail nothing, and every negative member
     refuses one window or more."""
     xs = rd.windows
+    if name == "late":
+        return not xs and any(w == 0 for *_, w in rd.issuer_refused)
     if not xs or any(x.word is None for x in xs) or any(bool(x.word & 1) != (not x.failed["egress"] and not
                                                                             x.failed["ingress"]) for x in xs):
         return False
@@ -242,7 +249,7 @@ def expected(name: str, rd: SimpleNamespace) -> bool:
         signed = (rd.plan.get("occupancy") or {}).get("kind") == cs.ADVICE or rd.lw.warden is not None
         want = ["signed"] if signed else ["counts", "signed"]
         return eg[0] == want and all(f == (want if getattr(rd, "every", False) else []) for f in eg[1:])
-    allowed = {"extra": ([], ["counts"]), "late": ([], ["fields", "counts"])}[name]
+    allowed = {"extra": ([], ["counts"])}[name]
     return all(f in allowed for f in eg) and allowed[1] in eg
 
 
@@ -266,7 +273,7 @@ def blobs_of(rd: SimpleNamespace) -> tuple[dict[str, bytes], set[str]]:
 
 #: The scan's one cutter (`leak_scan.public_pieces`: each row cut whole, less the pieces the staged circuit holds, such
 #: as a head's empty buckets, sixteen zero bytes), under the name the drivers that import this module call. The held
-#: blobs are fields of the ``wit`` row (``fields``): an advised head, 157 + L + 4T bytes, ends off a 16-byte boundary,
+#: blobs are fields of the ``wit`` row (``fields``): a head of 157 + L + 4T bytes ends off a 16-byte boundary,
 #: and the instance holds its salt after it, never its zero-padded last chunk.
 public_pieces = functools.partial(LS.public_pieces, fields=True)
 
@@ -416,7 +423,7 @@ def stage(M, sg: SimpleNamespace, members: dict[str, SimpleNamespace], secret: b
         (d / "tables").mkdir(exist_ok=True)
         os.link(sg.circuit, d / "circuit.txt")
         bcs = SVC._commitments(d / "pub-1.bin", 0)
-        mine = lw.public_arguments(x.window, x.root, x.certificates, members[name].syncs, members[name].advice)
+        mine = lw.public_arguments(x.window, x.root, x.certificates, members[name].syncs)
         if not (bcs and mine is not None and lw.row(mine, "pub") == lw.row(x.args, "pub")
                 and SVC._opens(lw.row(mine, "pub"), lw.bits("pub"), salts["pub"][0], bcs["pub"])
                 and SVC._opens(SVC.output_row(words[k]), SVC.OUT_BITS, salts["o0"][0], bcs["o0"])):
@@ -432,6 +439,30 @@ def firewall(M, sg: SimpleNamespace) -> dict:
         raise SystemExit("FC_FIREWALL_LEAN names no Lean firewall frame (flock-verify's flock-firewall)")
     return {"FC_FIREWALL": "1", **M.a0.firewall_env({"partition_file": sg.partition_file,
                                                      "program_file": sg.program_file})}
+
+
+def one_stage_params(lw: LinkWindows, circuit_sha512: str, delta: float) -> dict:
+    """The auditor's one-stage v2 parameters for the link's execution phases (`OneStageZk.paramsOfJson`'s) as its
+    stream registers and decides them, without ``ports``, which are each execution phase's (`LinkWindows.ports`), and
+    with ``log`` empty, the stream's before its first: the registered Program's descriptor and partition object, the
+    check's query, Selection All's law over an execution phase's one proof block, the stream's δ, and the proofs'
+    circuit file by its SHA-512."""
+    return {"anchors": [], "delta": str(Fraction(delta)), "law": SVC.S.selection_law(lw.spec.selection, 1),
+            "leaf_layer": None, "log": [], "partition": lw.partition, "program": json.loads(lw.program),
+            "proofs": {"circuit": circuit_sha512, "registered": None}, "query": lw.query, "registered": None,
+            "scheme": SVC.S.SCHEME, "work_table": None}
+
+
+def one_stage_evidence(PF, body: dict, proof, root: str) -> dict:
+    """One-stage v2's evidence for an execution phase (`OneStageZk.evidenceOf`) from its outcome record ``body``: what
+    its audit record was handed (the receipt, the sample, the proved proof blocks, their count and the statement), the
+    delivered sessions, the session's root of the execution phase's port (`LinkWindows.outcome`'s ``session_roots``),
+    and in place of the verdicts the proof's files by their SHA-512 (`proofs.evidence_v2`)."""
+    audit = body["audit"]
+    proofs, _ = PF.evidence_v2(proof, body["sessions"])
+    return {"draw": audit["draw"], "instances": len(audit["proved_units"]), "proofs": proofs,
+            "proved_units": audit["proved_units"], "receipt": audit["receipt"], "served": None,
+            "session_roots": {SVC.VALUE: root}, "sessions": list(body["sessions"]), "statement": audit["statement"]}
 
 
 def one_session(jobs: int) -> None:
@@ -468,8 +499,8 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
     verifier receives under ``out / "verifier"`` (`RECEIVED`), each file prefixed by its window. Window j's session
     listens on ``port + j``, or with ``port`` 0 on a port the OS picks free.
 
-    With ``a.draw`` K (> 0), the period is sampled (`LinkWindows.period_draw`): every window's salted root and the
-    advice's digest are committed first, then `coins` draw K of the windows, and only those are registered, proved and
+    With ``a.draw`` K (> 0), the period is sampled (`LinkWindows.period_draw`): every window's salted root is
+    committed first, then `coins` draw K of the windows, and only those are registered, proved and
     decided; the sample is ``period.json`` beside what the verifier receives, and the network verdict is the sampled one,
     with its ``wrong_units`` at the stream's δ (``a.delta``, by default `certifier_serve.DELTA`), on the sample of
     record: the Lean verifier of record's (``--lean``) draw on the coins the period flip read (`service.lean_draw`),
@@ -487,11 +518,14 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
     av = SimpleNamespace(bin=a.bin, lease=[], gpu=gpu)
     vdir = out / "verifier"
     vdir.mkdir(parents=True, exist_ok=True)
+    (vdir / "one-stage.json").write_text(json.dumps(one_stage_params(lw, sg.circuit_sha512, stream.delta), indent=1,
+                                                    sort_keys=True))
+    if not (vdir / "circuit.txt").exists():
+        os.link(sg.circuit, vdir / "circuit.txt")
     drawn, windows, segment = None, rd.windows, None
     if k is not None:
         try:
-            drawn = lw.period_draw(stream, [x.root.hex() for x in rd.windows], k, coins,
-                                   advice=None if rd.advice is None else AD.digest(rd.advice))
+            drawn = lw.period_draw(stream, [x.root.hex() for x in rd.windows], k, coins)
         finally:
             if callable(getattr(coins, "drawn", None)):
                 segment = coins.drawn()
@@ -521,13 +555,12 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
         late = stream.deliver(draw, delivered.sessions())
         t = time.time()
         outcome = late or lw.outcome(stream, draw, x.certificates, rd.syncs, delivered,
-                                     circuit_sha512=sg.circuit_sha512, opening=x.opening if a.debug_clear else None,
-                                     advice=rd.advice)
+                                     circuit_sha512=sg.circuit_sha512, opening=x.opening if a.debug_clear else None)
         verify_s = round(time.time() - t, 1)
         body = stream.records[-1]
         verdict = (body.get("audit") or {}).get("verdicts", {}).get(SVC.VERIFIER) or {}
         findings, refused = LEAN_RUNS.get(str(delivered.proof.public), (None, "no Lean run"))
-        args = lw.public_arguments(x.window, x.root, x.certificates, rd.syncs, rd.advice)
+        args = lw.public_arguments(x.window, x.root, x.certificates, rd.syncs)
         proof = {"lean_accepted": refused is None and bool(findings) and all(f.accepted for f in findings),
                  "refused": refused, "proved": refused is None and lw.proved(findings or [])
                  and all(list(f.units) == [0] for f in findings),
@@ -538,6 +571,9 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
                  "syncs.json": [[s.delta, str(s.rho)] for s in rd.syncs], "outcome.json": body,
                  "delivered.json": {"salts": {r: s.hex() for r, s in x.statement.salts.items()},
                                     "output": x.statement.output}}
+        if body.get("audit") is not None:
+            files["one-stage.json"] = one_stage_evidence(M.PF, body, delivered.proof,
+                                                         reg.record["roots"][0]["root"])
         for f, v in files.items():
             (vdir / f"{pre}{f}").write_text(json.dumps(v, indent=1, sort_keys=True, default=str))
         os.link(x.statement.dir / "pub-1.bin", vdir / f"{pre}pub-1.bin")
@@ -557,8 +593,7 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
                **({"clear": verdict["clear"]} if "clear" in verdict else {})}
         row["as_expected"] = (row["accepted"] == bool(x.expect) and not row["late"] and row["decided_by"] == "proof"
                               and proof["proved"] and proof["opened_word"] == x.word and proof["certified"]
-                              and row["public"] == {"verdict": x.expect, "deadline": x.word >> 1 & 1}
-                              | lw._advice_output(rd.advice))
+                              and row["public"] == {"verdict": x.expect, "deadline": x.word >> 1 & 1})
         rows.append(row)
         log(f"{name} window {x.window}: {'accept' if outcome.accepted else 'reject'} public {row['public']}"
             f"{' LATE' if late else ''}, Lean {'proved' if proof['proved'] else 'NOT proved'}, output word "

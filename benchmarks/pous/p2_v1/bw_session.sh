@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One remote bandwidth session over C* on the demo card (bandwidth.py session), served from the mem69-v2 encoded store through
+# One PoUB session over C* on the demo card (bandwidth.py session), served from the mem69-v2 encoded store through
 # kernels' staging decode, and the cheat that skips a layer's reads; cwd = the source tree's root:
 #
 #   OUT=DIR RESEARCH_RUN_DIR=RUN GPU_LEASE_WHO=bw-h200 [PARTY='ssh ... VERB' PARTY_HOST=ADDRESS] \
@@ -83,7 +83,8 @@ step registration $?
 "$PY" "$D/bandwidth.py" toy "$S/toy" > "$O/toy.log" 2>&1 \
   && "$PY" "$D/bandwidth.py" session --store "$S/toy/store" --layout "$S/toy/layout.json" --node p2-toy-node \
     --registration "$S/toy/registration.json" --device cpu --ref-decode --samples 16 --window-s 0.001 --deadline-s 0.001 \
-    --verifier "$PY -m verity.core.protocols.remote_bandwidth.p2_party --registration $S/toy/registration.json --stdio" \
+    --verifier "$PY -m verity.core.protocols.remote_bandwidth.p2_party --registration $S/toy/registration.json --stdio \
+      --windows 2 --passes 2 --samples 16 --window-ns 1000000 --deadline-ns 1000000" \
     --out "$O/toy" --expect accept >> "$O/toy.log" 2>&1
 step toy $?
 grep -qE "^(ship|registration|toy) rc [1-9]" "$O/rc.txt" && { cat "$O/rc.txt" "$O/registration.log" "$O/toy.log"; exit 2; }

@@ -23,7 +23,7 @@ Three parts, composed at the end:
 1. **Claim 13**, `PousFisch.claim13` (`Pous.SecurityProofs.Pebbling.FischClaims1314`). Here it is
    `PousBridge.fischClaim13`.
 2. **B5**, `PousB5` (`Pous.SecurityProofs.B5.ExPostFacto`).
-3. **The bridge**, `BridgeB2B5Draft.lean` (`PousBridge.B2ToB5`, `b2ToB5_of_claim13`), unchanged.
+3. **The bridge**, `PousBridge.B2ToB5` (`b2ToB5_of_claim13`), in this file.
 
 `b2ToB5` is the bridge with Claim 13 discharged. `b5_stacked` chains it with `Pous.Guarantees.B5ExPostFactoBounded` at
 `s = ⌊(1 − ε)n⌋`, `D = ⌊βn⌋ − 1`, `k = n − ⌈εn/2⌉ + 1`, with the `n` last-layer nodes as challenges.
@@ -169,7 +169,7 @@ theorem b5_stacked {ℓ n N : ℕ} {V : Type} [Fintype V] [DecidableEq V] (α β
     (t : Fin ℓ) (ht : (t : ℕ) + 1 = ℓ)
     (w m Q : ℕ) (d : Fin N → Bits w)
     (A₁ : (LabelQry N w → Bits w) → Bits m)
-    (A₂ : Bits m → Fin N → Prog (IdealModel.randomOracle (LabelQry N w) (Bits w)) (Bits w))
+    (A₂ : Bits m → Fin N → OracleAlgorithm (IdealModel.randomOracle (LabelQry N w) (Bits w)) (Bits w))
     (hA₂ : ∀ σ c, (A₂ σ c).Bounded (⌊β * n⌋₊ - 1) Q) :
     pr (fun H : LabelQry N w → Bits w =>
         n - ⌈ε / 2 * n⌉₊ + 1 ≤ ((Finset.univ.image fun b => e (node t b)).filter fun c =>

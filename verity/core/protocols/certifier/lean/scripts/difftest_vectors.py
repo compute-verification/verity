@@ -28,7 +28,7 @@ from pathlib import Path
 
 import verity.core.protocols.certifier
 from verity.core.protocols.certifier.audit import Audit
-from verity.core.protocols.certifier.grid import GridParams, Reason, Record, Status, Certifier
+from verity.core.protocols.certifier.grid import GridParams, Reason, BlockGrid, Status, Certifier
 from verity.core.protocols.certifier.schedule import (ClockSync, LogicalFrame, SyncSet, expected_grids, handing_buckets,
                                             run_shaper)
 
@@ -58,7 +58,7 @@ def _frames(rng: random.Random, horizon: int, buckets: int, allocation: int, siz
     return [LogicalFrame(rng.randbytes(size), a, i) for s in sessions for a, i in s]
 
 
-def _forge(rng: random.Random, record: Record, payloads: list[bytes], allocation: int) -> Record:
+def _forge(rng: random.Random, record: BlockGrid, payloads: list[bytes], allocation: int) -> BlockGrid:
     grid = [list(row) for row in record.grid]
     b, s = rng.randrange(len(grid)), rng.randrange(allocation)
     kind = rng.randrange(4)
@@ -72,7 +72,7 @@ def _forge(rng: random.Random, record: Record, payloads: list[bytes], allocation
     elif len(grid) > 1:  # two buckets swapped
         c = rng.randrange(len(grid))
         grid[b], grid[c] = grid[c], grid[b]
-    return Record(record.link, record.window, tuple(tuple(r) for r in grid), record.status)
+    return BlockGrid(record.link, record.window, tuple(tuple(r) for r in grid), record.status)
 
 
 def instance(seed: int) -> dict:
@@ -113,7 +113,7 @@ def instance(seed: int) -> dict:
         records += run_shaper(fs, [0] * len(fs), unit, Certifier(link, params))
     recorded = windows if rng.random() < 0.85 else rng.randrange(windows)
     statuses = [Status(rng.choice(list(Reason))) if rng.random() < 0.04 else None for _ in records]
-    records = [Record(r.link, r.window, r.grid, s or r.status) for r, s in zip(records, statuses, strict=True)
+    records = [BlockGrid(r.link, r.window, r.grid, s or r.status) for r, s in zip(records, statuses, strict=True)
                if r.window < recorded]
     return {"params": params, "sync_set": ss, "windows": windows, "egress": egress, "ingress": ingress,
             "frames": frames, "declared": declared, "records": records, "recorded": recorded}

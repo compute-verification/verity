@@ -1,8 +1,9 @@
 """Network certificates: the network certifier's signed record of each link-window, on SHA-512 (record v2).
 
 The network certifier is the auditor-trusted device on a node's uplink that shapes each link into the grid
-(`grid.Certifier`). Once per link-window it signs one **network certificate**: a signature over a hiding digest of the
-window's record, salted by the certifier. The record head and the salt are witness: they enter proofs and never reach
+(`grid.Certifier`). Once per link-window whose record is complete it signs one **network certificate**: a signature
+over a hiding digest of the window's record, salted by the certifier. A link-window whose record isn't complete gets
+none (`Issuer`), so it fails closed. The record head and the salt are witness: they enter proofs and never reach
 the auditor in the clear, so the record's own hashes are unsalted, and what the certificate signs is the salted digest.
 
 **The record (v2).** The record is still exactly the grid and one status (W5), encoded with padding elided:
@@ -60,9 +61,9 @@ is, under the same message, so it names the same key, session and link-window:
 `salt_c` is 64 fresh bytes of the certifier's own coins, as a record's, and never one an earlier clock certificate of
 the issuer has: under one salt two windows of one sync would sign one digest, which shows that their syncs are equal.
 What the certifier signs is witness: the sync and its salt never reach the auditor in the clear, and only the
-certificate, a signature over a hiding commitment, is public. N2's advised verifier reads each window's sync only
-through its opening against the salted digest its certificate signs (`CertifiedClock.refusal`,
-`advised.SignedClocks`). A record certificate signs a record digest salted and a clock certificate a clock digest,
+certificate, a signature over a hiding commitment, is public. A verifier reads each window's sync only through its
+opening against the salted digest its certificate signs (`CertifiedClock.refusal`, `SignedClocks`). A record
+certificate signs a record digest salted and a clock certificate a clock digest,
 each under its own tag, so one opens as the other only on a SHA-512 collision. The Lean device's issuer
 (`CertifierDevice.Issuer.clock`) signs the same, and its difftest holds it to `Issuer.salted_clock`.
 
@@ -87,8 +88,9 @@ from pathlib import Path
 from typing import Protocol
 
 from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha512
+from verity.ml.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
 from verity.ml.crypto import lms
-from verity.core.protocols.certifier.grid import Grid, GridParams, Reason, Record, Status, row_left_packed
+from verity.core.protocols.certifier.grid import Grid, GridParams, Reason, BlockGrid, Status, row_left_packed
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 
 RECORD_TAG = "verity-network-certifier/record/v2"
@@ -98,7 +100,7 @@ FRAME_TAG = b"verity-network-certifier/frame/v2\0"
 EMPTY_TAG = b"verity-network-certifier/empty/v2\0"
 NODE_TAG = b"verity-network-certifier/node/v2\0"
 CERTIFICATE_TAG = b"verity/net-cert/v1"
-DIGEST_BYTES = 64
+DIGEST_BYTES = _DIGEST_BYTES["sha512"]
 SALT_BYTES = 64
 
 STATUS_CODES: dict[Reason | None, int] = {
@@ -422,7 +424,7 @@ class Certificate:
     def verify(self, key: PublicKey, session: bytes) -> bool:
         """The host's signature check: the certificate is `key`'s and its signature verifies over its message in
         certifier session `session`. It reads the certificate's public fields and its signed digest, nothing of the
-        head."""
+        head. The Lean's is `NetworkCheck.Check.Certificate.signs`, which every Lean certificate check reads."""
         if self.key_id != key.key_id:
             return False
         try:
@@ -497,26 +499,105 @@ class CertifiedClock:
         return self.certificate.window
 
     def refusal(self, key: PublicKey, session: bytes) -> str | None:
-        """Why the opening fails under `key` in certifier session `session`, or None when it holds: the certificate is
-        an egress one of `key`'s, the sync and the salt open the digest it signs, and its signature verifies over its
-        message in the session (`Certificate.verify`), which binds the link and the window."""
+        """Why the opening fails under `key` in certifier session `session`, by the Lean's code
+        (`NetworkCheck.Period.openingRefusal`), or None when it holds: ``egress`` unless the certificate is an egress
+        one, ``key`` unless it is `key`'s, ``opening`` unless the sync and the salt open the digest it signs, and
+        ``signature`` unless its signature verifies over its message in the session (`Certificate.verify`), which
+        binds the link and the window."""
         c = self.certificate
         if type(c) is not Certificate or c.direction is not Direction.EGRESS:
-            return "it isn't an egress certificate, and a clock is an egress window's"
+            return "egress"
         if c.key_id != key.key_id:
-            return f"another key's, not {key.key_id.hex()[:16]}…"
+            return "key"
         try:
             opened = clock_commitment(self.salt, self.sync)
         except ValueError:
             opened = None
         if c.digest != opened:
-            return "its sync and salt don't open the salted digest it signs"
+            return "opening"
         if not c.verify(key, session):
-            return "its signature doesn't verify under the key in its session for the link-window it names"
+            return "signature"
         return None
 
     def verify(self, key: PublicKey, session: bytes) -> bool:
         return self.refusal(key, session) is None
+
+
+def _named(c: CertifiedClock) -> str:
+    x = c.certificate
+    if type(x) is not Certificate:
+        return f"a clock opening of a {type(x).__name__}"
+    return f"{x.link} window {x.window}'s {x.direction.value} clock (key {x.key_id.hex()[:16]}…)"
+
+
+def _why(code: str, key: PublicKey) -> str:
+    """What `CertifiedClock.refusal`'s code says of an opening under `key`."""
+    return {"egress": "it isn't an egress certificate, and a clock is an egress window's",
+            "key": f"another key's, not {key.key_id.hex()[:16]}…",
+            "opening": "its sync and salt don't open the salted digest it signs",
+            "signature": "its signature doesn't verify under the key in its session for the link-window it names"}[code]
+
+
+@dataclass(frozen=True)
+class SignedClocks:
+    """The syncs the network certifier signed, one salted clock certificate an egress window (`CertifiedClock`,
+    `Issuer.salted_clock`), each sync read through its opening (the sync and `salt_c`, witness) against the salted
+    digest its certificate signs, under the verifier's own certifier `key` and `session`. The openings are the
+    verifier's own read of the certifier's output, never a public answer, which carries the certificates alone.
+    `syncs(link)` is window 0's on, each the sync of the openings that name `link` and the window and hold
+    (`CertifiedClock.refusal`), up to the first window without exactly one such sync. `refused` says why each
+    opening it took no sync from was refused: not a salted clock's opening (a record's `CertifiedRecord` among them),
+    not an egress certificate, another key's, a sync and salt that don't open the digest signed (an altered
+    digest or sync), a signature that doesn't verify (forged, or another session's, or relabelled to another link or
+    window), a salt another link-window's opening has too, or a window with two signed syncs. Whoever delivers the
+    openings, the prover included, can't forge one. `codes` is each opening's refusal by the Lean's code
+    (`NetworkCheck.Period.openingRefusals`), None where it holds: `CertifiedClock.refusal`'s, ``opening`` for what
+    isn't an opening, and ``salt``; `split` the link-windows with two or more signed syncs, by link then window."""
+
+    key: PublicKey
+    session: bytes
+    openings: Sequence[CertifiedClock]
+    refused: tuple[str, ...] = field(default=(), init=False)
+    codes: tuple[str | None, ...] = field(default=(), init=False)
+    split: tuple[tuple[str, int], ...] = field(default=(), init=False)
+
+    def __post_init__(self) -> None:
+        codes: list[str | None] = []
+        refused: list[str] = []
+        for c in self.openings:
+            if type(c) is not CertifiedClock:
+                codes.append("opening")
+                refused.append(f"a {type(c).__name__}: not a salted clock certificate's opening "
+                               "(certificate.CertifiedClock), so it gives no sync")
+            elif (code := c.refusal(self.key, self.session)) is not None:
+                codes.append(code)
+                refused.append(f"{_named(c)}: {_why(code, self.key)}")
+            else:
+                codes.append(None)
+        held = [(i, c) for i, c in enumerate(self.openings) if codes[i] is None]
+        salts: dict[bytes, list[CertifiedClock]] = {}
+        for _, c in held:
+            salts.setdefault(c.salt, []).append(c)
+        signed: dict[str, dict[int, set[ClockSync]]] = {}
+        for i, c in held:
+            if (other := next((o for o in salts[c.salt] if o != c), None)) is not None:
+                codes[i] = "salt"
+                refused.append(f"{_named(c)}: its salt is also {other.link} window {other.window}'s, under which two "
+                               "windows of one sync sign one digest")
+            else:
+                signed.setdefault(c.link, {}).setdefault(c.window, set()).add(c.sync)
+        split = [(link, w) for link, windows in signed.items() for w, got in sorted(windows.items()) if len(got) > 1]
+        refused += [f"{link} window {w}: {len(signed[link][w])} signed syncs, so it has none" for link, w in split]
+        object.__setattr__(self, "_signed", signed)
+        object.__setattr__(self, "refused", tuple(refused))
+        object.__setattr__(self, "codes", tuple(codes))
+        object.__setattr__(self, "split", tuple(sorted(split)))
+
+    def syncs(self, link: str) -> tuple[ClockSync, ...]:
+        windows, out = self._signed.get(link, {}), []
+        while len(got := windows.get(len(out), ())) == 1:
+            out.extend(got)
+        return tuple(out)
 
 
 @dataclass
@@ -525,7 +606,10 @@ class Issuer:
     in certifier session `session`. Before its first signature it starts the session on its signer, which refuses a
     session its state has already started. A refusal, of the start or of a leaf, leaves the link-window without a
     certificate (fail-closed) and is listed in `refused`; a refused start is asked again at the next link-window, and
-    refused again. Each record's salt and each clock's is `SALT_BYTES` fresh bytes of `coins`, the certifier's own
+    refused again. **It certifies only a complete record**: a record whose status isn't complete is refused the same
+    way, before the session's start or a leaf, so a link-window that isn't covered has no certificate and fails closed
+    (`no-verdict`), and a certificate that verifies under the key is of a complete record unless it is a forgery. Each
+    record's salt and each clock's is `SALT_BYTES` fresh bytes of `coins`, the certifier's own
     randomness (the operating system's by default; a test injects its own), and `clock_salts` are those its signed
     clock certificates have taken, none of which it takes again."""
 
@@ -536,14 +620,20 @@ class Issuer:
     coins: Callable[[int], bytes] = field(default=secrets.token_bytes, repr=False)
     clock_salts: set[bytes] = field(default_factory=set, repr=False)
 
-    def certify(self, record: Record, direction: Direction, params: GridParams, parameters: bytes, *,
+    def certify(self, record: BlockGrid, direction: Direction, params: GridParams, parameters: bytes, *,
                 deadline: bool = True) -> CertifiedRecord | None:
         salt = self.coins(SALT_BYTES)
         if len(salt) != SALT_BYTES:
             raise ValueError(f"the certifier's coins gave {len(salt)} bytes for a {SALT_BYTES}-byte salt")
         head = record_head(record.link, direction, record.window, record.grid, record.status, params, parameters,
                            deadline=deadline)
-        certificate = self.sign(record.link, direction, record.window, certificate_digest(salt, head.digest()))
+        digest = certificate_digest(salt, head.digest())
+        if not record.status.complete:
+            # formed as `sign` forms it, so what `sign` raises on (a session id not 32 bytes) raises here too
+            certificate_message(self.signer.key_id, self.session, record.link, direction, record.window, digest)
+            self.refused.append((record.link, direction, record.window))
+            return None
+        certificate = self.sign(record.link, direction, record.window, digest)
         return None if certificate is None else CertifiedRecord(head, salt, certificate)
 
     def salted_clock(self, link: str, window: int, sync: ClockSync) -> CertifiedClock | None:

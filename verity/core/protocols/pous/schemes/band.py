@@ -29,7 +29,7 @@ from collections.abc import Sequence
 from .. import band as band_codec
 from .. import dense as dense_codec
 from ..primitives import Primitives, pi2_call_ns
-from ..protocol import Certificate, Scheme
+from ..protocol import CapacityBound, Scheme
 
 CHAIN_CLAIMS = ("ideal-permutation", "random-oracle", "feistel-indifferentiability", "sequential-step-floor",
                 "perfect-isolation", "cr/sha-256", "live-verifier", "designated-verifier")
@@ -59,11 +59,11 @@ segment count from 1 to `2^64`. An audit at `D` needs `Δ + RTT < (D + 1)·call_
 
 
 def chain_certificate(theorem: str, cliff: int | None, segments: int | None, rounds: int = 5,
-                      k: int = 111) -> Certificate:
+                      k: int = 111) -> CapacityBound:
     """The chain certificate at `POINT` (the band's `BandMultiMeetsFamily` and dense's `ChainDenseMeets64` share its
     terms at `D = 5`)."""
-    return Certificate(k=k, rounds=rounds, work=1 << 20, call_ns=pi2_call_ns(POINT[1]), theorem=theorem, cliff=cliff,
-                       segments=segments, claims=CHAIN_CLAIMS)
+    return CapacityBound(k=k, rounds=rounds, work=1 << 20, call_ns=pi2_call_ns(POINT[1]), theorem=theorem, cliff=cliff,
+                         segments=segments, claims=CHAIN_CLAIMS)
 
 
 class Band(Scheme):
@@ -81,12 +81,12 @@ class Band(Scheme):
         return band_codec.codec_for(self.params.d).name
 
     @property
-    def certificate(self) -> Certificate | None:
+    def certificate(self) -> CapacityBound | None:
         """The default certificate, at `D = 5` (`d ≥ 5`)."""
         return next((c for c in self.certificates if c.rounds == 5), None)
 
     @property
-    def certificates(self) -> tuple[Certificate, ...]:
+    def certificates(self) -> tuple[CapacityBound, ...]:
         """`FAMILY_ROUNDS` at every `D ≤ d`, most rounds (the default, when `d ≥ 5`) first."""
         p = self.params
         if (p.blocks_per_segment, p.m) != POINT:
