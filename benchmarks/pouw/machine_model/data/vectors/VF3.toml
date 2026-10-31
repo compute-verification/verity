@@ -1,7 +1,7 @@
-# VF3: VF2 with the uniform datapath off the issue row, priced by a uniform-pipe row of its own (§14).
+# VF3: VF2 with the uniform datapath off the issue row, priced by a uniform-pipe row of its own.
 name = "VF3"
 epoch = "VF3"
-summary = "VF2 with the uniform datapath off the issue row, priced by a uniform-pipe row of its own (§14)."
+summary = "VF2 with the uniform datapath off the issue row, priced by a uniform-pipe row of its own."
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
     "F2FS", "XU", "R6r", "LDSi", "R6w", "LDG", "L2red", "UP",

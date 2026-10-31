@@ -1,4 +1,4 @@
-# Dither-2S with verified lane filler: the filler dilutes what the cheater saves on operand delivery, which SPEC's
+# Dither-2S with verified lane filler: the filler dilutes what the cheater saves on operand delivery, which the
 # conservative contract prices at 0, at the cost of γ.
 base = "dither-2s"
 name = "dither-2s-fill"
