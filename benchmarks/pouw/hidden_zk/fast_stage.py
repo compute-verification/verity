@@ -6,7 +6,8 @@ the circuit back.
       and its collections were about 30% of the time at K=256, more at K=4096
     - the unit circuit's ANDs keep their operand forms as tuples, not frozensets, and drop them once the unit is laid out:
       nothing reads them after `ir_lower.layout`
-    - the unit's netlist (`ir_lower.netlist`'s text) is written once, to a file under ``scratch``, hashed as it is written:
+    - a stager without ``circuit`` (`stage_unit`'s; one with it has `circuit.compose_to` stream the netlist into its file):
+      the unit's netlist (`ir_lower.netlist`'s text) is written once, to a file under ``scratch``, hashed as it is written:
       `compose` builds it as one string, which `Lowering.sha256_of` hashes with the LEAVES and CUT lines. `compose` gets
       in its place a string of as many newlines (and `sha256_of` the file's hash), and the circuit text it returns stands
       for that text with the file in the newlines' place: its digests (`circuit.digest`, `circuit.class_digest`) and
@@ -319,6 +320,8 @@ def install(scratch: Path) -> None:
         return expanded(lay, name)
 
     def compose_(low, *a, **k):
+        if k.get("out") is not None:
+            return compose(low, *a, **k)
         text = compose(low, *a, **k)
         e = _units.get((id(low.layout), low.name))
         if e is not None and text.startswith(f"{FC.FORMAT} "):
