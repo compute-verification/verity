@@ -1,4 +1,4 @@
-"""Sampled proofs: the verifier samples proof blocks from its own randomness after the prover registers its
+"""Sampled proofs: the verifier samples proof blocks on the auditor's challenger's coins after the prover registers its
 commitments, the sampled proof blocks are proved and checked, and an accepted audit emits an `IntegrityProfile`.
 
 Import from the owning module: `one_stage` (the one-stage audit: registration, the draw's checks, the audit record and the

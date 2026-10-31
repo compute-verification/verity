@@ -7,7 +7,7 @@ the check each sampled proof block passes, as a public Program (`Spec.check`), a
 compute and prove with zero knowledge off, trusted by neither party; the ZK server, trusted by the developer, is their only
 path to the auditor, and commits, registers and releases the proofs; the challenger, trusted by the auditor, receives
 registrations, draws from its own randomness and keeps the record (this module); the verifier, the auditor's Lean
-verifier, verifies offline.
+verifier, verifies offline, and reads coins only from the challenger's log.
 
 **The public-items rule.** Everything the auditor observes is a function of the Spec's public items. A registration is
 one-stage's record (`one_stage.registration`, v1 or v2), and `check_public` holds each of its observable items to the
@@ -36,11 +36,12 @@ verifier reads one program and one query either way, so a window's registration,
 `check`, `Select.select` and `Run.run` as they are for one template's.
 
 **The sample.** `register` logs the record and its receipt, whose `received` is the record's position in the stream's log.
-The challenger then draws once (`select`) from its coins as the Lean verifier's `Flock.Draw.drawWith` does
-(`coins.draw_first` over `coins.OwnRandomness`), with no hash and no derivation, or by the stream's `sampler`;
-either draw is held to `draw.check_draw`. The coins are the operating system's bytes as the Lean verifier
-reads them (`verifier.coins`: `IO.getRandomBytes`, assumption A3, `uniform/io-getrandombytes`); the Python never reads
-them from the OS itself. A work sample carries the challenger's closure map's closure (`select(closure=)`, a map over
+The challenger then draws once (`select`) from its coins (`coins.ChallengerCoins`, opened after the registration's
+digest) as the Lean verifier's `Flock.Draw.drawWith` does (`coins.draw_first` over `coins.OwnRandomness`), with no hash
+and no derivation, or by the stream's `sampler`; either draw is held to `draw.check_draw`. Neither the stream nor the
+verifier has coins of its own: a stream whose selection reads coins refuses any source but the challenger's
+(`NO_OWN_COINS`), and the verifier's run refuses a sample that read coins without the challenger's log to show they are
+its (`outcome`'s `coins`). A work sample carries the challenger's closure map's closure (`select(closure=)`, a map over
 `[0, N)`, refused under another sampling design or out of range before any coin is read; `coins.closure_of`), which the proof
 proves with the sampled proof blocks.
 From the selection rule to the sample object it is `selection_law`, `draw.derive` and `select_draw`, which the Lean
@@ -145,6 +146,8 @@ OUTCOME = "verity/proof-service/outcome/v0"
 ACCEPT, REJECT, LATE, HALTED = "accept", "reject", "late", "halted"
 #: The most rounds (registrations) one proof session covers.
 ROUNDS = 4
+NO_OWN_COINS = ("the verifier draws no coins of its own: a stream whose selection reads coins takes the auditor's "
+                "challenger's, a coins.ChallengerCoins over its live record (a test's over a challenger of its own)")
 
 _RECORD_KEYS = {"format", "protocol", "program", "query", "partition", "population", "law", "scheme", "roots", "leaf_layer",
                 "anchors", "window", "previous", "registered"}
@@ -1095,14 +1098,14 @@ class Stream:
     verifier of record's sample and run (`Select.select`, `Run.run`) read it in the same form. `budget` (b), `delta`
     (the profile's) and `rounds` (R, the most registrations open at once, and so the most one `ProofRun` covers) are
     public parameters of the stream. `coins` is
-    the challenger's randomness (n bytes a call, read in order by `OwnRandomness`): by default the operating system's
-    bytes as the Lean verifier reads them (`verifier.coins`, `IO.getRandomBytes`, A3), never the Python's own
-    read of the OS. `clock` is its clock in seconds; tests inject both. Coins from the auditor's challenger are a
-    `coins.ChallengerCoins`: the stream's `coin_source` is then `"challenger"` (else `"verifier"`, the verifier's own
-    coins or a test's stand-in for them), its digest names it, and every outcome's run by the verifier needs
-    the coins' evidence (`outcome`'s `coins`), refusing a draw without it. `sampler`, when given, draws instead of the
-    coins (`flock-verify draw` in a process of its own, say), never beside the challenger's: it takes the challenger's
-    sampling design and N, and its sample is held to them like any other. `prover`, when given, is the identity the challenger registered the stream's prover under
+    the auditor's challenger's coins, a `coins.ChallengerCoins` (n bytes a call, read in order by `OwnRandomness`), which
+    the stream's digest names: the verifier has no coins of its own, so there is no default, and a stream whose
+    selection reads coins refuses any other source (`NO_OWN_COINS`). Every outcome's run by the verifier needs the
+    coins' evidence (`outcome`'s `coins`), refusing a sample without it. A stream that reads no coins (`All`, or one a
+    `sampler` draws for) needs none and reads none it is given. `clock` is its clock in seconds; tests inject both, the coins from a challenger of
+    their own. `sampler`, when given, draws instead of the coins (`flock-verify draw` in a process of its own, say), never
+    beside the challenger's: it takes the challenger's sampling design and N, and its sample is held to them like any
+    other. `prover`, when given, is the identity the challenger registered the stream's prover under
     (lowercase hex): the stream's digest names it, and every registration is bound to the stream and the prover
     (`binding`, `registration.check`'s): its window names both, and a window salt is bound to them, so a tile seeded for
     one prover's stream is refused in any other.
@@ -1126,7 +1129,7 @@ class Stream:
     """
 
     def __init__(self, spec: Spec, unit: SpecializedDefinition | Sequence[SpecializedDefinition], *, budget: int, delta: float, challenger: str,
-                 coins: Callable[[int], bytes] = V.coins, clock: Callable[[], float] = time.monotonic,
+                 coins: ChallengerCoins | None = None, clock: Callable[[], float] = time.monotonic,
                  sampler: Sampler | None = None, rounds: int = 1, prover: str | None = None) -> None:
         if spec.check.window is not None or spec.check.deadline is not None:
             raise ValueError("the service doesn't prove a window statement or run a timed session yet")
@@ -1151,9 +1154,10 @@ class Stream:
             raise ValueError(f"delta is a float in (0, 1), not {delta!r}")
         if not (type(rounds) is int and 1 <= rounds <= ROUNDS):
             raise ValueError(f"a session covers 1 to {ROUNDS} rounds, not {rounds!r}")
-        self.coin_source = "challenger" if isinstance(coins, ChallengerCoins) else "verifier"
-        if self.coin_source == "challenger" and sampler is not None:
+        if isinstance(coins, ChallengerCoins) and sampler is not None:
             raise ValueError("a stream drawing from the challenger's coins takes no sampler, which would draw instead")
+        if not (isinstance(coins, ChallengerCoins) or sampler is not None or isinstance(spec.selection, All)):
+            raise ValueError(NO_OWN_COINS)
         self.spec, self.unit, self.budget, self.delta, self.challenger = spec, unit, budget, delta, challenger
         self.templates = None if isinstance(unit, SpecializedDefinition) else units
         self.rounds = rounds
@@ -1161,7 +1165,7 @@ class Stream:
         self.digest = _sha512({"format": STREAM, "spec": spec.digest(), "budget": budget, "delta": delta,
                                "challenger": challenger, **({"rounds": rounds} if rounds > 1 else {}),
                                **({"prover": prover} if prover is not None else {}),
-                               **({"coins": "challenger"} if self.coin_source == "challenger" else {})})
+                               **({"coins": "challenger"} if isinstance(coins, ChallengerCoins) else {})})
         self.binding = None if prover is None else R._binding({"stream": self.digest, "prover": prover})
         self._params = {"budget": budget, "rounds": rounds,
                         "registration_deadline": _reading(spec.check.registration_deadline),
@@ -1293,11 +1297,14 @@ class Stream:
 
     def salt(self, n: int = 64) -> bytes:
         """The epoch's salt coin: `n` bytes of the challenger's own coins (`OwnRandomness`, in order with the samples'
-        reads), issued once. Its release is read on the challenger's clock (`salted_at`) and logged (`epoch_log`);
+        reads), issued once, and only from a `coins.ChallengerCoins` (`ValueError`, `NO_OWN_COINS`, before any byte is
+        read). Its release is read on the challenger's clock (`salted_at`) and logged (`epoch_log`);
         `Check.registration_deadline` counts from it. Raises `Refused`: `salted` (the epoch has a salt, from `salt` or
         `salt_released`: nothing resamples it) or `epoch-ended` (the epoch ended before any salt)."""
         if not (type(n) is int and n >= 1):
             raise ValueError(f"a salt is a positive number of bytes, not {n!r}")
+        if not isinstance(self._coins, ChallengerCoins):
+            raise ValueError(NO_OWN_COINS)
         got: dict[str, Any] = {}
 
         def at() -> float:
@@ -1560,10 +1567,10 @@ class Stream:
         audit record: its `proved_units`, `instances`, `served` and `session_roots` are its round's (its own tables'),
         never another round's. On a draw from the coins and an audit record its two verifiers agree on, the whole run is
         held to the verifier's (`verifier.run`, the Lean's `Run.run` from the
-        registration on): where they differ the outcome is a reject, its audit record failing `run`. The run takes the
-        stream's `coin_source`, so on a stream sampling from the auditor's challenger (`coins.ChallengerCoins`) the
-        Lean's run refuses every sample unless `coins` is its evidence (`coins.coins_reason`'s `{key, ledger, main, pins,
-        segment, session}`) and the bytes it read are exactly the coins the session the ledger opens for the
+        registration on): where they differ the outcome is a reject, its audit record failing `run`. The verifier has
+        no coins of its own, so the Lean's run refuses every sample that read coins unless `coins` is their evidence
+        (`coins.coins_reason`'s `{key, ledger, main, pins, segment, session}`) and the bytes it read are exactly the
+        coins the session the ledger opens for the
         registration's window (`register`'s `window_root`), from main's code (`challenger.pinned_session`), released
         after the registration's digest, each checked against its
         commitment and every one read; missing evidence, or a registration without its window root, is a reject failing
@@ -1637,8 +1644,7 @@ class Stream:
                       [(x.name, x.registered) for x in self.spec.values], [p.item for p in self.spec.public],
                       self.challenger, reg.receipt["received"], e.read, e.closure, e.sessions, verdicts, outputs,
                       statement, self.delta, *asked, served, session_roots, supplied=supplied, pinned=pinned,
-                      binding=self.binding, schemas=schemas, window_root=window_root, held=held,
-                      coin_source=self.coin_source, coins=coins)
+                      binding=self.binding, schemas=schemas, window_root=window_root, held=held, coins=coins)
             if not v.ok:
                 rec = {**rec, "accepted": False, "profile": None, "integrity_profile": None, "wrong_units": None,
                        "checks": {**rec["checks"], "run": {"ok": False, "codes": list(v.codes), "detail": v.detail}}}

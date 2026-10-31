@@ -476,7 +476,7 @@ def test_registered_reads_are_audited_against_the_pinned_entries_and_leave_the_f
     with pytest.raises(ValueError, match="a pin is"):
         RA.pinned({"values": {}})
     base = ["audit", "--window", str(got.dir), "--law", LAW, "--circuit", "00" * 64, "--run", RUN, "--m0-pythonpath", ".",
-            "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "o")]
+            "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "o"), "--challenger", "local", "--main", "m.txt"]
     assert RA.main(base) == 1
     assert "didn't pin" in json.loads((tmp_path / "o" / "summary.json").read_text())["refused"]["records"]
     (tmp_path / "circuit.json").write_bytes((got.dir / "circuit.json").read_bytes())
@@ -727,10 +727,10 @@ def test_the_advice_is_fixed_before_the_draw_and_refused_re_committed_after_it(w
 
     rec, held = written.rec, {**written.bound, "opening": written.opening, "run": RUN, "circuit": written.rec["window"]["circuit"],
                               "compiled": True}
-    receipt = {"registration": R.digest(rec), "verifier": A5.VERIFIER, "received": 1}
+    receipt = {"registration": R.digest(rec), "verifier": A5.CHALLENGER, "received": 1}
     assert RA.fixed_before_draw(receipt, rec, written.bound)["ok"]
     assert RA.fixed_before_draw({**receipt, "registration": "00" * 64}, rec, written.bound)["codes"] == ["after-the-draw"]
-    assert RA.fixed_before_draw(receipt, rec, written.bound, "challenger")["codes"] == ["after-the-draw"]
+    assert RA.fixed_before_draw({**receipt, "verifier": "another stream"}, rec, written.bound)["codes"] == ["after-the-draw"]
     assert RA.fixed_before_draw(receipt, rec, None)["codes"] == ["compiler", "advice"]
     late = RA.after_draw(receipt, rec, held)
     assert late == {"refused": True, "codes": ["after-the-draw"], "before_draw_checks_pass": True}
@@ -749,6 +749,8 @@ def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session
             RA.main([*args, "--challenger", "gate:research@gate", *bad])
     with pytest.raises(SystemExit, match="2"):
         RA.main([*args, "--challenger", "remote"])
+    with pytest.raises(SystemExit, match="2"):
+        RA.main(args)
 
     class Opened(Exception):
         pass
@@ -772,6 +774,7 @@ def test_the_audit_reserves_a_port_for_every_session_its_draw_can_open(tmp_path,
     the audit reserves one a member, not a rank's 16 (`a5.RANK_PORTS`), and a sample needing more than ``--ports`` is
     refused before any session listens, since the next one could reach another audit's verifier."""
     import a5 as A5
+    import a5_coins as AC
 
     got = _write(tmp_path / "w", n=20, cap=1)
     mine, _doc, _sets = RA.verifier_window(got.dir, D.parse_law(LAW), None)
@@ -795,10 +798,13 @@ def test_the_audit_reserves_a_port_for_every_session_its_draw_can_open(tmp_path,
         seen.update(port=port, ports=kw["ports"])
         raise Opened
 
+    session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
     monkeypatch.setattr(RA, "free_ports", free_ports)
     monkeypatch.setattr(A5, "audit", audit)
+    monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
     args = ["audit", "--window", str(got.dir), "--law", LAW, "--circuit", got.rec["window"]["circuit"], "--run", RUN,
-            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out")]
+            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "out"),
+            "--challenger", "local", "--main", "m.txt"]
     for extra, want in (([], {"span": 20, "port": 20000, "ports": 20}), (["--port", "10000", "--ports", "16"],
                                                                          {"port": 10000, "ports": 16})):
         seen.clear()
@@ -903,7 +909,7 @@ held = {{"run": mine.run, "circuit": rec["window"]["circuit"], "compiled": v["ok
         "opening": opening, "output": json.loads((t / "c" / "compiled.json").read_text())}}
 assert v["ok"] and RA.source(rec["window"], held)["ok"]
 assert all(x["refused"] for x in RA.negatives(rec["window"], held, doc, t / "n").values())
-receipt = {{"registration": R.digest(rec), "verifier": A5.VERIFIER}}
+receipt = {{"registration": R.digest(rec), "verifier": A5.CHALLENGER}}
 assert RA.fixed_before_draw(receipt, rec, bound)["ok"] and RA.after_draw(receipt, rec, held)["refused"]
 print(json.dumps(sorted(m for m in sys.modules if m.split(".")[0] == "verity_vllm")))
 """
