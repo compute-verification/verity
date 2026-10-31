@@ -1,13 +1,14 @@
-import Proofs.Flock.Recursive.LinksRef
+import Proofs.Flock.Recursive.LinksRefProof
 import Proofs.Flock.Claims.Recursion.InnerAtCoins
 import Proofs.Flock.Recursive.KSLinked
 
 /-!
-# The links bind at the deployment, from the link part's reference step
+# The links bind at the deployment
 
 `LinksBindDeployed` asks, on an accepted run whose extracted witness is in `R` and fails the link clause (`LinksHold`
 at the rows `tableRows` reads off `E_O`'s witnesses at the judged draw), for two colliding inputs of the link finder.
-This file names those inputs and proves the binding from `LinkRefStaged`, the link part's reference step:
+This file names those inputs and proves the binding, with the link part's reference step `LinkRefStaged`
+(`linkRef_staged`):
 
 * `linkMsgs`: at the link part's circuit and witness, at each instance `n < N`, the reference step's strings
   (`refMsgs`) and the inner half's (`innerMsgs`) at the instance's port words; `linkIns` reads them off the judged
@@ -16,8 +17,8 @@ This file names those inputs and proves the binding from `LinkRefStaged`, the li
   inner relation satisfies the link clause at `tableRows`, or two of `linkMsgs` collide. Row `n` opens the table
   (`rowOpens_staged`); the setup's `rin` and `rout` are check 5's rows of the roots of the inner statement's rows
   (`linkSetup_staged`, the files the session sets up from being the statement's, `InnerAt.src_staged`); the reference
-  step gives the instance's unit those roots (`LinkRefStaged`), and the inner half the row (`inner_link`).
-* `linkBinds_rec`, `linksBindDeployed_of`: the accepted run's V\* statements are the staged ones (`runVstar_staged`,
+  step gives the instance's unit those roots (`linkRef_staged`), and the inner half the row (`inner_link`).
+* `linkBinds_rec`, `linksBindDeployed`: the accepted run's V\* statements are the staged ones (`runVstar_staged`,
   `stagedAll_run`) and `E_O`'s witnesses check against them (`eoGives_outerHolds`), at every compiled record
   `deployRec` whose inner relation is the deployed one's; `recursiveKSLink_links` is `RecursiveKSLinkAt` there.
 -/
@@ -113,7 +114,7 @@ theorem trow_words {c : Circuit} {q : ℕ} (hq : c.ports.findIdx? (·.name == "t
 statement's parts is staged and its witness among `ws` checks against its V\* statement, a witness `w` of the inner
 relation at the statement's inner statement satisfies `LinksHold` at the rows `tableRows` reads off `ws`, or two of
 `linkMsgs x ws w` are distinct with one SHA-512. -/
-theorem linksHold_or_coll (hA : LinkRefStaged) {st : Stage} {x : Msg} {ws : List Claims.Flock.Wit}
+theorem linksHold_or_coll {st : Stage} {x : Msg} {ws : List Claims.Flock.Wit}
     (hS : ∀ s < nS x, ∃ xO, StagedPart st s x xO ∧
       Claims.Flock.check (deployZkRec Readable.relation).parse xO (ws.getD s ⟨[]⟩) = true)
     {cs : Claims.Recursion.CompiledStatement} (hx : parse x = some cs) {w : Claims.Flock.Wit}
@@ -180,7 +181,8 @@ theorem linksHold_or_coll (hA : LinkRefStaged) {st : Stage} {x : Msg} {ws : List
     intro n hn
     have hmem : ∀ m ∈ instMsgs p w UB PB st' c (ws.getD (ss.size - 2) ⟨[]⟩) R W n, m ∈ linkMsgs x ws w :=
       fun m hm => by rw [hlm]; exact List.mem_flatMap.2 ⟨n, List.mem_range.2 hn, hm⟩
-    rcases hA hSl hck hr hss hat hcc hsu h0 hown hidx hNn hnn hRr hWr hrin hrout hn with hok | ⟨a, ha, b, hb, hab⟩
+    rcases linkRef_staged hSl hck hr hss hat hcc hsu h0 hown hidx hNn hnn hRr hWr hrin hrout hn with
+      hok | ⟨a, ha, b, hb, hab⟩
     swap
     · exact (hcol ⟨a, hmem a (List.mem_append_left _ ha), b, hmem b (List.mem_append_left _ hb), hab⟩).elim
     have hok' : RecLinkRef.linkRef UB PB (inWordsAt c (ws.getD (ss.size - 2) ⟨[]⟩) "trow" n)
@@ -219,7 +221,7 @@ theorem linksHold_or_coll (hA : LinkRefStaged) {st : Stage} {x : Msg} {ws : List
 run where the linked extractor recovers a witness in `R` whose link clause fails, `E_O` gave witnesses at the judged
 draw (`EO_judged_of_E`), each checking against the V\* statement staged there (`eoGives_outerHolds`,
 `runVstar_staged`, `stagedAll_run`), so two of the link finder's inputs collide (`linksHold_or_coll`). -/
-theorem linkBinds_rec (hA : LinkRefStaged) {I : Claims.Recursion.Inner FlockDeploy.Coin Claims.Flock.Wit}
+theorem linkBinds_rec {I : Claims.Recursion.Inner FlockDeploy.Coin Claims.Flock.Wit}
     (hIR : ∀ y w, I.R y w → Claims.Flock.R (FlockDeploy.parse false Readable.relation) y w) (ivScope : Msg → Bool)
     (b : Brings) (decO : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.ZkTrace) (x : Msg) :
     Claims.Recursion.LinkBindsAt FlockDeploy.sha512 (deployRec I.V ivScope b) I (deployZkRec Readable.relation) decO
@@ -246,30 +248,29 @@ theorem linkBinds_rec (hA : LinkRefStaged) {I : Claims.Recursion.Inner FlockDepl
     exact hchk s hs'
   obtain ⟨cs, hcs, -, hRi⟩ := hRx
   rw [hws, Option.getD_some] at hQ
-  rcases linksHold_or_coll hA hS hcs (hIR _ _ hRi) with hL | ⟨a, ha, a', ha', hc⟩
+  rcases linksHold_or_coll hS hcs (hIR _ _ hRi) with hL | ⟨a, ha, a', ha', hc⟩
   · exact (hQ hL).elim
   · refine ⟨a, ?_, a', ?_, hc⟩ <;>
       simp only [Claims.Recursion.linkInputs, Claims.Recursion.drawsOf, List.map_cons, Claims.Recursion.drawView,
         hws, Option.getD_some, linkIns] <;>
       assumption
 
-/-- **`LinksBindDeployed` from the link part's reference step**: `linkBinds_rec` at the deployed compiled record
+/-- **The links bind at the deployment** (`LinksBindDeployed`): `linkBinds_rec` at the deployed compiled record
 (`recBound`, `deployRec` at `IVStar`) and bound record, whose inner relation is the deployed plain one's. -/
-theorem linksBindDeployed_of (hA : LinkRefStaged) :
-    _root_.Flock.Guarantees.LinksBindDeployed LinksHold tableRows linkIns := by
+theorem linksBindDeployed : _root_.Flock.Guarantees.LinksBindDeployed LinksHold tableRows linkIns := by
   intro b aux nOf hd recRest decI _ decO _ x _
-  exact linkBinds_rec hA (I := Claims.Recursion.Inner.ofFlock (bdDeployed Readable.relation
+  exact linkBinds_rec (I := Claims.Recursion.Inner.ofFlock (bdDeployed Readable.relation
     (FlockDeploy.nextR DeployedR.rdR) (FlockDeploy.deployPlainTrimR Readable.relation DeployedR.rdR).cols
     DeployedR.wER FlockDeploy.joinR rowInDeployed DeployedR.finalR DeployedR.wR).deploy decI)
     (fun _ _ h => h) _ _ decO x
 
-/-- **Knowledge soundness at the linked relation at the deployment, from the link part's reference step**:
-`recursiveKSLink_of` at the link clause `LinksHold`, the rows `tableRows` and the finder's inputs `linkIns`. -/
-theorem recursiveKSLink_links (hA : LinkRefStaged) (b : Brings) (aux : Msg → ℕ → _root_.Flock.RecRecord.Round)
+/-- **Knowledge soundness at the linked relation at the deployment** (`RecursiveKSLinkAt`): `recursiveKSLink_of` at the
+link clause `LinksHold`, the rows `tableRows` and the finder's inputs `linkIns`. -/
+theorem recursiveKSLink_links (b : Brings) (aux : Msg → ℕ → _root_.Flock.RecRecord.Round)
     (nOf : Msg → ℕ → ℕ) (hd : Msg → _root_.Flock.RecRecord.Record)
     (recRest : Msg → List (Msg × Claims.Out) → List UInt8) :
     _root_.Flock.Guarantees.RecursiveKSLinkAt DeployedR.rdR DeployedR.finalR OpenRows.elemR DeployedR.wER DeployedR.wR
       (deployedB b) aux nOf hd recRest LinksHold tableRows linkIns :=
-  _root_.Flock.Guarantees.recursiveKSLink_of (linksBindDeployed_of hA) b aux nOf hd recRest
+  _root_.Flock.Guarantees.recursiveKSLink_of linksBindDeployed b aux nOf hd recRest
 
 end RecDeploy.Links
