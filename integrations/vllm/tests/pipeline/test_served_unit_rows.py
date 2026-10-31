@@ -8,7 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from verity.ml.windows import interface as IF
-from verity_vllm.pipeline import serving_rows as SRW
+from verity_vllm.pipeline import serving_rows as SRW, weight_rows as WT
 
 SERVED = [Path(__file__).resolve().parents[4] / "benchmarks/one_stage" / f"glm53_{p}.json"
           for p in ("all_families_tp8_step16", "sparse_mla_tp8_step16", "prefill_tp8_step0")]
@@ -19,6 +19,7 @@ STATEMENTS = ("dbda90083c381ad2053d9bd617ab8ac3f92a90dd4a2fe872014603060828ee21"
 def test_the_served_templates_statements_are_the_bytes_vllm_s_own_rows_gave(monkeypatch):
     tmpls = sorted({t for f in SERVED for t in json.loads(f.read_text())["chunk_cap"]})
     monkeypatch.setattr(IF, "templates_of", lambda _w: [])
+    monkeypatch.setattr(WT, "reads", lambda _ms, _rows, _units: None)
     monkeypatch.setattr(IF, "circuit_record", lambda _w, _name, _templates, sts, **_kw: sts)
     members = [SimpleNamespace(template=t, schemas=True) for t in tmpls]
     sts = SRW.circuit_record(SimpleNamespace(members=members, row_tables=()), [])
