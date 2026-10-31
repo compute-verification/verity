@@ -79,7 +79,7 @@ PV_KEY_LIMIT = 132_096
 
 _CONF = ("exact-model-tested; tests/program/test_int8_exact_defs.py: every Definition here against verity_vllm.engine.int8_exact / "
          "int8_attention (the torch the profile serves) on random inputs on the CPU, all words equal; that torch is bit-equal on the "
-         f"RTX PRO 6000 to its CPU run and to fattn_ref.py (run {EVIDENCE['int8_fattn_ref_check']['run']}: 5,087,232 linear words, "
+         f"RTX PRO 6000 to its CPU run and to fattn_ref.py ({EVIDENCE['int8_fattn_ref_check']['run_record']}: 5,087,232 linear words, "
          "884,736 attention words)")
 
 

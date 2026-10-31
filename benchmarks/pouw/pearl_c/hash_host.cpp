@@ -26,7 +26,6 @@ static void __syncthreads() { g_barrier->arrive_and_wait(); }
 static uint32_t __funnelshift_l(uint32_t lo, uint32_t hi, uint32_t s) {
   return (uint32_t)(((((uint64_t)hi << 32) | lo) << (s & 31)) >> 32);
 }
-static int __clzll(long long x) { return x ? __builtin_clzll((unsigned long long)x) : 64; }
 struct uint4 { uint32_t x, y, z, w; };
 static uint4 make_uint4(uint32_t x, uint32_t y, uint32_t z, uint32_t w) { return {x, y, z, w}; }
 

@@ -70,6 +70,9 @@ import Proofs.Flock.Recursive.KSV
 import Proofs.Flock.Recursive.KSDeployed
 import Proofs.Flock.Recursive.KSProved
 import Proofs.Flock.Claims.Recursion.DeployedCounts
+import Proofs.Flock.Claims.Recursion.LamDeployedTight
+import Proofs.Flock.Claims.Recursion.KappaEpsDeployed
+import Proofs.Flock.Recursive.BitsK
 import Proofs.Flock.Claims.Recursion.AcceptedScope
 import Proofs.Flock.Claims.Recursion.InnerSetupCount
 import Proofs.Flock.Claims.Recursion.IVStarCalls

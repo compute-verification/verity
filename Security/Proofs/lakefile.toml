@@ -34,6 +34,12 @@ path = "../../verity/core/primitives/randomness"
 name = "core_vstar"
 path = "../../verity/core/service/vstar"
 
+# Sampled proofs' recursive configuration (`VStar.Recursive`), whose acceptance `Proofs.Properties.Verity.Recursive` relates to
+# `RecursiveKSAt`'s event
+[[require]]
+name = "core_vstar_recursive"
+path = "../../verity/core/service/vstar/recursive"
+
 # The properties a proof here proves (`Properties`), stated against the code where that proof needs this package.
 [[require]]
 name = "security_properties"
@@ -64,4 +70,7 @@ roots = ["Proofs.Core", "Proofs.Nci", "Proofs.Pous", "Proofs.Pouw", "Proofs.Netw
   "Proofs.Properties.RemoteAudit.Component",
   "Proofs.Properties.Pouw.LiveSalt.Ledger", "Proofs.Properties.Nci.ReadsExact",
   "Proofs.Properties.Nci.BodiesOk.ReadsDecoded", "Proofs.Properties.Composition", "Proofs.Properties.Pous.WipeSigned",
-  "Proofs.Properties.Challenger"]
+  "Proofs.Properties.Challenger", "Proofs.Properties.Core.Site", "Proofs.Properties.Nci.Protocol",
+  "Proofs.Properties.Verity.Soundness", "Proofs.Properties.Remote", "Proofs.Properties.Remote.Honest",
+  "Proofs.Properties.Verity.Recursive", "Proofs.Properties.Verity.Recursive.Target",
+  "Proofs.Properties.Verity.Recursive.Refusals"]

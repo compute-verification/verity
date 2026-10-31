@@ -16,24 +16,25 @@ A party does no I/O: what its machine does is a capability it is given (`Identit
   whose coins are its own, never the verifier's or the prover's, answering a session's open and finish at ``address``
   and pinned on main's first-parent commit ``pin``;
 - the verifier's ``audit(block, registration, challenger, firewall) -> (answer, case)``: the block's one-stage audit
-  drawn on that challenger's coins, its answer (``verdict``, and its ``commitment``) and its case for the product, or
-  None; ``component(block, name) -> (answer, case) | None``, another listed component's; and ``product(ids, cases,
-  digests) -> {"product", "verdict", "reason"}``, `Core.Composition.product` over exactly those components.
+  drawn on that challenger's coins, its answer (``verdict``, and its ``commitment``) and its case for the product
+  (`COMPOSED`'s, in its one-stage form), or None; ``component(block, name) -> (answer, case) | None``, another listed subprotocol's; and ``product(ids, cases,
+  digests) -> {"product", "verdict", "reason"}``, the composite of exactly those subprotocols (`Core.Composites.ofIds`:
+  remote or onsite).
 
 A capability that can't do its step raises `Unavailable` with its reason, and the party finishes refused by its step's
 name with that reason recorded (an audit's or a product's is that block's ``error``). Anything else a capability raises
 is a fault of the machine: it leaves the party, and the run fails by name (the runtime's ``party-died``).
 
-The run's parameters (`params_of`) are its execution phases (``blocks``), the configuration's listed components
-(``components``, `IDS`' names, sampled proofs among them) and what its coins are (``coins``: ``simulated`` when the
-challenger's host is a machine the prover's parties share, else ``development``, a key made for the session).
+The run's parameters (`params_of`) are its execution phases (``blocks``), the configuration's listed subprotocols
+(``components``: exactly one composite's, by name, `SUBPROTOCOLS`, `verity.core.deploy.config.COMPOSITES`) and what
+its coins are (``coins``: ``simulated`` when the challenger's host is a machine the prover's parties share, else
+``development``, a key made for the session).
 
 The verifier audits block ``i`` once its registration, the ZK server's pin and the challenger's address are all in, in
 order of the blocks, so no coin is flipped for a block before its registration (live coins, after the commitment). It
 holds the audit's commitment to the registration the workers sent: an accepting audit of another record rejects, its
-case withheld from the product. A
-listed component with no answer is ``absent``, its case `NO_CASE`, which its own decoders refuse, so the product never
-accepts over it. Each block's line is an output entry of the record and the verifier's outcome:
+case withheld from the composite. A listed subprotocol with no answer is ``absent``, its case `NO_CASE`, which its own
+decoders refuse, so the composite never accepts over it. Each block's line is an output entry of the record and the verifier's outcome:
 
     {"block": I, "coins": C, "components": {NAME: accept|reject|undecided|error|absent}, "product": ID,
      "registration": DIGEST, "verdict": V, "reason": R}
@@ -56,23 +57,39 @@ import json
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from verity.core.deploy.config import COMPOSITES
 from verity.core.deploy.manifest import Channel, Manifest, Role
-from verity.core.deploy.party import Finish, Identity, Received, Record, Send
+from verity.core.deploy.party import Finish, Identity, Received, LogEntry, Send
 from verity.core.deploy.runtime import ProtocolDef
 from verity.core.wire import Body, Hex, Int, Message, Schema, Str
 
 from .one_stage import registration as R
 
 ID = R.PROTOCOL
+#: sampled proofs as both composites compose it (`VStar.Recursive.Sampled`): `ID`'s audit or the recursive audit, as its
+#: params' and evidence's ``form`` names it
+COMPOSED = "verity/sampled-proofs/v1"
 VERSION = 1
 CHALLENGER, FIREWALL, WORKERS, VERIFIER = "challenger", "firewall", "workers", "verifier"
-#: a configuration's component names and their protocol ids, the ones `Core.Onsite.components` holds
-IDS = {"bandwidth": "verity/remote-bandwidth/v0", "certifier": "verity/certifier/v0", "pous": "verity/pous/p2/v4/run",
-       "pouw": "verity/pouw/v1", "sampled-proofs": ID}
+#: each composite's subprotocols, by a configuration's names, and their protocol ids (`Core.Onsite.components`,
+#: `Core.Remote.components`): each one's PoUW is its period check, onsite's bandwidth the P2 session on PoUS's store,
+#: and both compose sampled proofs as `COMPOSED`
+SUBPROTOCOLS = {
+    "verity/onsite/v0": {"bandwidth": "verity/remote-bandwidth/p2/v0", "certifier": "verity/certifier/v0",
+                         "inference-only": "verity/inference-only/v0", "pous": "verity/pous/p2/v4/run",
+                         "pouw": "verity/pouw/period/v1", "sampled-proofs": COMPOSED,
+                         "wipe": "verity/wipe/v0"},
+    "verity/remote/v0": {"inference-only": "verity/inference-only/v0", "pouw": "verity/pouw/period/v1",
+                         "sampled-proofs": COMPOSED},
+}
+#: a configuration's subprotocol names and the protocol id each has outside a composite
+IDS = {"bandwidth": "verity/remote-bandwidth/v0", "certifier": "verity/certifier/v0",
+       "inference-only": "verity/inference-only/v0", "pous": "verity/pous/p2/v4/run", "pouw": "verity/pouw/v1",
+       "sampled-proofs": ID}
 COMPONENT = "sampled-proofs"
 #: what a run's coins are (module docstring)
 COINS = ("simulated", "development")
-#: a listed component whose party gave no case: its own decoders refuse it
+#: a listed subprotocol whose party gave no case: its own decoders refuse it
 NO_CASE = {"commitment": "", "evidence": "", "params": {}}
 ABSENT = "absent"
 MAX_BLOCKS = 1 << 16
@@ -92,13 +109,20 @@ MANIFEST = Manifest(
               Schema("Registration", 1, "commitment", {"block": Int(0, MAX_BLOCKS - 1)}, Body(max=MAX_REGISTRATION))))
 
 
+def ids_of(names: Sequence[str]) -> dict[str, str]:
+    """The protocol id of each of ``names`` in the composite they make (`SUBPROTOCOLS`), or a ValueError."""
+    for subs in SUBPROTOCOLS.values():
+        if sorted(names) == sorted(subs) and len(set(names)) == len(names):
+            return {n: subs[n] for n in names}
+    raise ValueError(f"components lists one composite's subprotocols, each once ({COMPOSITES}), not {list(names)}")
+
+
 def params_of(blocks: int, components: Sequence[str], coins: str) -> dict[str, Any]:
     """The run's parameters (module docstring), or a ValueError saying which is wrong."""
     if type(blocks) is not int or not 1 <= blocks <= MAX_BLOCKS:
         raise ValueError(f"blocks is an integer in [1, {MAX_BLOCKS}], not {blocks!r}")
     listed = list(components)
-    if COMPONENT not in listed or len(set(listed)) != len(listed) or not set(listed) <= set(IDS):
-        raise ValueError(f"components lists {COMPONENT} and others of {sorted(IDS)}, each once, not {listed}")
+    ids_of(listed)
     if coins not in COINS:
         raise ValueError(f"coins is one of {COINS}, not {coins!r}")
     return {"blocks": blocks, "components": listed, "coins": coins}
@@ -175,7 +199,7 @@ class Workers:
 
 
 class Verifier:
-    """The verifier: each block audited on the challenger's coins, then the product over the listed components (module
+    """The verifier: each block audited on the challenger's coins, then the composite of the listed subprotocols (module
     docstring)."""
 
     def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
@@ -237,7 +261,7 @@ class Verifier:
             out += self._finish(None)
         return out
 
-    def _decide(self, i: int) -> list[Record]:
+    def _decide(self, i: int) -> list[LogEntry]:
         """Block ``i``'s line as an output entry, after a private one saying why its audit was unavailable."""
         raw, record = self.registrations[i]
         digest = R.digest(record)
@@ -246,26 +270,27 @@ class Verifier:
             answer, case = self.audit(i, raw, dict(self.challenger), dict(self.firewall))
         except Unavailable as e:
             answer, case = {"verdict": "error"}, None
-            out.append(Record({"block": i, "audit": "unavailable", "error": _why(e)}, "private"))
+            out.append(LogEntry({"block": i, "audit": "unavailable", "error": _why(e)}, "private"))
         if answer.get("verdict") == "accept" and answer.get("commitment") != digest:
             answer, case = {"verdict": "reject", "commitment": answer.get("commitment"),
                             "reason": "the audit's commitment is not the registration the workers sent"}, None
         status, cases, digests = {}, {}, {}
+        ids = ids_of(self.params["components"])
         for c in self.params["components"]:
             got = (answer, case) if c == COMPONENT else self.component(i, c)
             ans, cs = got if got is not None else (None, None)
             status[c] = ABSENT if ans is None else str(ans.get("verdict", "error"))
-            cases[IDS[c]] = cs or NO_CASE
-            digests[IDS[c]] = (ans or {}).get("commitment") or ""
+            cases[ids[c]] = cs or NO_CASE
+            digests[ids[c]] = (ans or {}).get("commitment") or ""
         try:
-            got = self.product([IDS[c] for c in self.params["components"]], cases, digests)
+            got = self.product([ids[c] for c in self.params["components"]], cases, digests)
             verdict = {"product": str(got["product"]), "verdict": str(got["verdict"]),
                        "reason": None if got.get("reason") is None else str(got["reason"])}
         except Unavailable as e:
             verdict = {"product": None, "verdict": "error", "reason": _why(e)}
         line = {"block": i, "coins": self.params["coins"], "components": status, "registration": digest, **verdict}
         self.lines.append(line)
-        return [*out, Record(line, "output")]
+        return [*out, LogEntry(line, "output")]
 
     def _finish(self, refused: str | None) -> list[Any]:
         out: list[Any] = [] if self.done else [Send(CHALLENGER, Message("Done"))]
@@ -277,6 +302,6 @@ PROTOCOL = ProtocolDef(MANIFEST, {CHALLENGER: Challenger, FIREWALL: Firewall, WO
 PROTOCOLS = {ID: PROTOCOL}
 
 
-__all__ = ["ABSENT", "CHALLENGER", "COINS", "COMPONENT", "FIREWALL", "ID", "IDS", "MANIFEST", "NO_CASE", "PROTOCOL",
-           "PROTOCOLS", "VERIFIER", "VERSION", "WORKERS", "Challenger", "Firewall", "Unavailable", "Verifier", "Workers",
-           "params_of"]
+__all__ = ["ABSENT", "CHALLENGER", "COINS", "COMPONENT", "COMPOSED", "FIREWALL", "ID", "IDS", "MANIFEST", "NO_CASE",
+           "PROTOCOL", "PROTOCOLS", "SUBPROTOCOLS", "VERIFIER", "VERSION", "WORKERS", "Challenger", "Firewall",
+           "Unavailable", "Verifier", "Workers", "ids_of", "params_of"]

@@ -2,7 +2,7 @@
 rules a Program is held to when it is built (`program.Program`) and when its descriptor is decoded (`codec.decode_program`).
 
 A Definition declares `Ports(params={name: tree}, ret=tree)`. A tree is an `In` (on a parameter) or an `Out` (on the return),
-which types every leaf below it; a tuple of trees, one per field of a `Tuple` or `Record`; a dict of trees by `Record` field
+which types every leaf below it; a tuple of trees, one per field of a `Tuple` or `RecordType`; a dict of trees by `RecordType` field
 name; `Leaves`, ports by leaf range; or None. A composite may declare its ports as a function of its statics. Undeclared is the
 default (no interval, not a sink, kind value, no word type), and a descriptor carries a `ports` key only for a Definition that
 declares one, so an undeclared Definition's entry, id and digests are what they were.
@@ -76,7 +76,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Iterator, Mapping, Sequence
 
 from .refs import Affine, Coll, Concat, Explicit, Refs, runs as ref_runs
-from .types import Record, Tuple as TupleT, Type, range_widths, remove_axis
+from .types import RecordType, Tuple as TupleT, Type, range_widths, remove_axis
 
 KINDS = ("value", "coin", "static", "position")
 WORD = re.compile(r"[a-z][a-z0-9_]*")
@@ -382,8 +382,8 @@ def _flatten(owner: str, where: str, t: Type, tree: Any, cls: type, base: int, o
             out.append((base + r[0], base + r[1], r[2]))
         return
     if isinstance(tree, dict):
-        if not isinstance(t, Record):
-            raise _decl(f"{owner}: {where}: ports by field name type a Record, not {t!r}")
+        if not isinstance(t, RecordType):
+            raise _decl(f"{owner}: {where}: ports by field name type a RecordType, not {t!r}")
         names = [k for k, _ in t.fields]
         for name, sub in tree.items():
             if name not in names:
@@ -392,10 +392,10 @@ def _flatten(owner: str, where: str, t: Type, tree: Any, cls: type, base: int, o
             _flatten(owner, f"{where}.{name}", t.fields[i][1], sub, cls, base + t.field_offset(i), out)
         return
     if isinstance(tree, (tuple, list)):
-        if not isinstance(t, (TupleT, Record)) or len(tree) != len(t.fields):
+        if not isinstance(t, (TupleT, RecordType)) or len(tree) != len(t.fields):
             raise _decl(f"{owner}: {where}: {len(tree)} field ports for {t!r}")
         for i, sub in enumerate(tree):
-            ft = t.fields[i][1] if isinstance(t, Record) else t.fields[i]
+            ft = t.fields[i][1] if isinstance(t, RecordType) else t.fields[i]
             _flatten(owner, f"{where}[{i}]", ft, sub, cls, base + t.field_offset(i), out)
         return
     raise _decl(f"{owner}: {where}: a port tree is an In or Out, a tuple, a dict, Leaves or None, not {tree!r}")

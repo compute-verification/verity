@@ -43,8 +43,8 @@
   "Proofs.Properties.Pous.Run",
   "Proofs.Properties.Pous.Setup",
   "Proofs.Properties.Pous.RunAt",
-  "Proofs.Properties.Pous.Wipe",
   "Proofs.Properties.Pous.Component",
+  "Proofs.Properties.Pous.Wipe",
   "Proofs.Properties.Accounting.Requirement",
   "Proofs.Properties.RemoteAudit",
   "Proofs.Properties.RemoteAudit.Coins",
@@ -65,7 +65,16 @@
   "Proofs.Properties.Nci.BodiesOk.ReadsDecoded",
   "Proofs.Properties.Composition",
   "Proofs.Properties.Pous.WipeSigned",
-  "Proofs.Properties.Challenger"
+  "Proofs.Properties.Challenger",
+  "Proofs.Properties.Core.Site",
+  "Proofs.Properties.Nci.Protocol",
+  "Proofs.Properties.Verity.Soundness",
+  "Proofs.Properties.Remote",
+  "Proofs.Properties.Remote.Honest",
+  "Proofs.Properties.Verity.Recursive",
+  "Proofs.Properties.Verity.Recursive.Target",
+  "Proofs.Properties.Verity.Recursive.Refusals",
+  "Proofs.Properties.Verity.Recursive.Audit"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
