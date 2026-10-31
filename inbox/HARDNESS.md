@@ -371,3 +371,14 @@ the resulting code distribution. It's named and falsifiable; it's not a reductio
     4. every matrix above 1 at the attacker's floor correction price.
   - **Asks routed:** HT-USEFUL measures perplexity under 2-bit noise with QAT in the loop, and searches routes at the
     floor prices. HT-PROV gives the erasure horizon.
+
+- **HT-SCALE's 350M call** (note:compute-research/20261031T2251Z-report-hardness-scale; GPU, measured;
+  art:6600add6…): **kill on everything finished.**
+  - P_env at κ_lin = 1/3: res-f33 goes 1.19 → 1.40 → 1.39 → **1.60** (bound 1.49), and m-mlph-r8 goes 1.21 → 1.38 →
+    1.32 → **1.44** (bound 1.41).
+  - **One baseline is pending:** 350M at D/2, about 01:20Z. If it ends above 2.8538 nats the call flips to flat. It
+    can't make shrinking.
+  - **Distillation:** halfway, the gap is the same with a teacher (0.041 against 0.040).
+  - **Scope of the kill:** designs whose credited compute is a frozen random matrix (A′ and its arrangements). It does
+    not reach design U, which credits the useful matrix itself.
+  - vy-nebius-1 stops about 04:30Z Sun, at about $400 of its $800 line.
