@@ -65,7 +65,7 @@ from verity.ml.circuits.codec import descriptor_id, program_digest
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
 from verity.ml.circuits.program import REGISTRATION, Program, is_input
 from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, Refs, Strided, concat, runs
-from verity.ml.circuits.types import Array, Record, Tuple as TupleT, Type
+from verity.ml.circuits.types import Array, RecordType, Tuple as TupleT, Type
 
 from .. import grind as GR
 from ..protocol import DomainError
@@ -245,7 +245,7 @@ class Scheme:
     dots are in the floor where its form (`form`) puts noise on both its rows at its k.
 
     A unit, ``units[kind](dot, tile)``, is ``(a: Array(tile.r, dot.a), b: Array(tile.c, dot.b), salt, position, roots:
-    Array(2, digest)) -> Record(z: Array(len(tile.pairs), dot.z), receipt: R)``, the digest and position types
+    Array(2, digest)) -> RecordType(z: Array(len(tile.pairs), dot.z), receipt: R)``, the digest and position types
     `seeds.types(dot.boolean)`'s. It calls one seed once on its salt, position and roots: `seeds.PouwSeed`
     (`seeds.seed_call`), or `seeds.PouwUnitSeeds` (`seeds.unit_seeds_call`) where its receipt folds take keys, which come
     from σ_R, never from seed_j. It derives its noise from seed_j (`seeds.noise_blocks`), holds the noised
@@ -705,7 +705,7 @@ def _unit_receipt(scheme: Scheme, dot: Dot, tile: Tile, unit: Any) -> Type:
     if tuple(params) != want:
         raise CompileError("scheme", f"{scheme.name}'s unit {unit.id} takes {params}, not {want}")
     z = Array(len(tile.pairs), dot.z)
-    if not (isinstance(ret, Record) and [n for n, _t in ret.fields] == ["z", "receipt"] and ret.fields[0][1] == z
+    if not (isinstance(ret, RecordType) and [n for n, _t in ret.fields] == ["z", "receipt"] and ret.fields[0][1] == z
             and ret.fields[1][1].leaves):
         raise CompileError("scheme", f"{scheme.name}'s unit {unit.id} returns {ret!r}, not {{z: {z!r}, receipt}}")
     return ret.fields[1][1]
@@ -819,7 +819,7 @@ def _compiled_signature(S: Any) -> tuple:
     params, ret = S.SERVED.signature()
     D, P = SD.types(plan.boolean)
     return (tuple(params) + ((SALT, D), (POSITIONS, Array(plan.units, P)), (ROOTS, Array(max(S.GROUPS) + 1, Array(2, D)))),
-            Record(("served", ret), ("receipts", TupleT(*[Array(len(g.members), g.receipt) for g in plan.groups]))))
+            RecordType(("served", ret), ("receipts", TupleT(*[Array(len(g.members), g.receipt) for g in plan.groups]))))
 
 
 def _compiled_body(B: Any, S: Any, *args: Coll) -> Coll:
