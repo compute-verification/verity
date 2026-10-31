@@ -1813,7 +1813,7 @@ def leaf_registered_file(program: str, layout: dict, shape: dict, u: int, statem
         name = LL.served(prefix, value, u)
         known[port], op = PR.known_port(program, name, words, LL.known_salt(registration, name), registration)
         openings[name] = [op]
-    return ({"format": G.READS, "ports": {**ports, **known}, LL.COMPLETE: True}, openings), None
+    return ({"format": G.READS, "ports": {**ports, **known}}, openings), None
 
 
 def _lanes_record(lanes: dict, layout: dict, shape: dict, program: str, registration: str, draw: str,
