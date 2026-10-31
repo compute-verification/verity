@@ -48,6 +48,9 @@ def test_digest_determinism():
         r.pop("geometry", None)
         r.pop("rows", None)
     assert manifest_digest(ids) == man["manifest_digest"]
+    rows = b"".join(json.dumps([r["family"]] + canonical_identity(r), separators=(",", ":"), sort_keys=True).encode() + b"\n"
+                    for r in sorted(ids, key=MF.row_key))
+    assert man["manifest_digest"] == hashlib.sha512(rows).hexdigest() and len(man["manifest_digest"]) == 128
     assert v2_manifest(inst, digest="q" * 64)["manifest_digest"] != man["manifest_digest"]   # the Program digest does
     assert len(canonical_identity(man["identities"][0])) == 8
 
