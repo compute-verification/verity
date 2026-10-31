@@ -164,7 +164,7 @@ window's records are certified, the I/O, the audit and the salt accept.
 - `check` is the auditor's offline check of a served run (`check`): per link-window, the certifier's audit of the raw
   and committed records, N2's in-the-clear verdict through `LinkWindows` (commit, register, select, deliver,
   `unproved_outcome`: the check proves nothing, so the verdict reads the opening; `n2_zk.py` proves it) on the certified
-  records, each window's salt asked of the certifier through a `RemoteCertifier` signed with the
+  records, each window's salt asked of the certifier through a `CertifierClient` signed with the
   challenger's key (window 0's asked twice: the second is refused), then `network_verdict` and the salt audit
   (`active_replay.audit_salt`: the salt frames, and that the shim received each revealed salt). It must run while
   `serve` serves reveals.
@@ -228,7 +228,7 @@ import active_replay as ar
 from verity.ml.crypto import lms
 from verity.core.protocols.certifier import calibration, out_commit
 from verity.core.protocols.certifier.active import COMPACT_RECORD, DATA, HEADER, ID_EVENT_BYTES, REVEAL_LINE_BYTES, \
-    Events, Proxy, RemoteCertifier, Requests, compact_record_data, decode_frame, event_body, event_data, fresh_salt, \
+    Events, Proxy, CertifierClient, Requests, compact_record_data, decode_frame, event_body, event_data, fresh_salt, \
     id_event_data, id_request, id_request_fields, request_frame_count, serve_reveals
 from verity.core.protocols.certifier.certificate import Certificate, CertifiedClock, CertifiedRecord, Direction, \
     Issuer, LmsKey, LmsSigner, RecordHead, SignerRefused, parameters_digest
@@ -1400,7 +1400,7 @@ def check(run: Path, challenger: LmsSigner, *, clock=time.monotonic, timeout: fl
     lw = LinkWindows(deployment["links"]["n2"], setup.egress_params, setup.sync_set, key, deployment["run_id"],
                      bytes.fromhex(deployment["session"]), ingress=setup.ingress_params, proof_deadline=proof_deadline,
                      occupancy=(profile.get("egress"), profile.get("ingress")), served=served)
-    remote = RemoteCertifier(*deployment["reveal"], key, challenger, deployment["links"]["ingress"],
+    remote = CertifierClient(*deployment["reveal"], key, challenger, deployment["links"]["ingress"],
                              bytes.fromhex(deployment["run_id"]), timeout=timeout)
     stream = lw.stream(budget=windows, delta=DELTA, challenger=CHALLENGER, coins=_no_coins, clock=clock)
     certified, refused = read_certified(run / "certified.jsonl")

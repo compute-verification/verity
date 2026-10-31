@@ -242,7 +242,7 @@ A spec-level reference for network accounting's timing channel:
   from the auditor's deployment record, the two calls take only a request the auditor's challenger signed under LMS
   for the certifier's key id and run (`Proxy.run_id`, 32 bytes sampled at construction) and answer an `active.Revealed`
   the certifier signed, which names both; `active.serve_reveals` serves them over the network, one JSON line each way,
-  to the challenger's `active.RemoteCertifier`, given the run id by the deployment record, which returns the value
+  to the challenger's `active.CertifierClient`, given the run id by the deployment record, which returns the value
   once it verifies for that run. Without the keys they are the in-process calls, for the auditor's side only. A proxy
   back from maintenance (`Proxy(start=k, position=p)`, off by default) serves from window k on, its first egress frame
   the Program's at position p, and carries nothing from before: a window it was down for has no record. On a served
