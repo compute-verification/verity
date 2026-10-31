@@ -21,9 +21,9 @@ the prose spec and this code differ.
 
 ~~~python
 from verity.core.protocols.pous import audit, band, codec, setup
-from verity.core.protocols.pous.layout import Layout, decode_tensor
+from verity.core.protocols.pous.layout import TensorLayout, decode_tensor
 
-layout = Layout.of(band.SECURE_FIRST, [("w1", n1), ("w2", n2)])       # tensors -> segments of W
+layout = TensorLayout.of(band.SECURE_FIRST, [("w1", n1), ("w2", n2)])       # tensors -> segments of W
 params, prims = layout.params, band.reference(layout.params)
 w = layout.pack({"w1": b1, "w2": b2})
 commitment = setup.commit(params, w)                                   # server, before any salt exists
@@ -121,7 +121,7 @@ streamed-label wipe") has the messages, the bound, the measured fill and round t
 from verity.core.protocols.pous import streamed_wipe as sw
 
 p = sw.WipeParams(labels=n, k=sw.DEPLOYED_K, batch=1, limit_ns=limit, tiers=(("hbm", a), ("dram", b), ("nvme", c)))
-c = sw.Challenger(secret, server_id, session_id, p, signer, log=log)          # the id claimed; the commitment published
+c = sw.WipeMemoryChallenger(secret, server_id, session_id, p, signer, log=log)  # the id claimed; the commitment published
 for start, data in c.fill(chunk=1 << 20):                                     # the labels, streamed to the server
     send(start, data)
 c.run(lambda indices: ask(indices))                                           # one batch at a time; no retry
