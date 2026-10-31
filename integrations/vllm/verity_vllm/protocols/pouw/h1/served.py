@@ -109,6 +109,7 @@ from verity_vllm.protocols.pouw.h1 import live as LV
 from verity_vllm.protocols.pouw.h1.public_rows import PublicRows
 from verity_vllm.protocols.pouw.h1 import registered as NR
 from verity_vllm.protocols.pouw.h1 import requests as RQ
+from verity_vllm.protocols.pouw.h1 import tables_device as TD
 from verity_vllm.protocols.pouw.h1.model_key import ModelKey, model_key
 from verity_vllm.protocols.pouw.h1.served_files import FILE, WindowCommitmentEntries, file_name, reads_file, register, trees
 from verity_vllm.protocols.pouw.h1.served_program import (PREFIX, card_arch, declared, declared_layout, descriptor, layout,
@@ -298,7 +299,9 @@ class Served:
     _weights: dict[int, tuple[Any, np.ndarray]] = field(default_factory=dict)
     _scales: dict[int, np.ndarray] = field(default_factory=dict)
     #: the z tables still hashing on the GPU (`_register_later`), in registration order, each with the ``out`` its root goes in
-    _later: collections.deque[tuple[str, dict[str, str | None]]] = field(default_factory=collections.deque)
+    #: and the call's table roots its call z table's root goes in, when it commits that too (``also``)
+    _later: collections.deque[tuple[str, dict[str, str | None], dict[str, Any] | None]] = field(
+        default_factory=collections.deque)
 
     def key(self, commits: Mapping[str, Any]) -> bytes:
         if self.window is not None:
@@ -358,9 +361,9 @@ class Served:
 
     def _tree(self, run: Any, value: str, words: np.ndarray, first: int, window: str | None,
               session: str | None = None, row_salts: bytes | NR.PublicSalts | None = None, later: bool = False,
-              rows: Sequence | None = None) -> G.Registered | NR.Later:
+              rows: Sequence | None = None, also: tuple[bytes, int] | None = None) -> G.Registered | NR.Later:
         return NR.commit(self.program_digest, value, words, run._key, first, row_salts is not None, row_salts,
-                         later=later, rows=rows, window=window, session=session)
+                         later=later, rows=rows, also=also, window=window, session=session)
 
     def _register(self, run: Any, value: str, words: np.ndarray, first: int, window: str | None,
                   row_salts: bytes | None = None) -> str:
@@ -368,15 +371,17 @@ class Served:
         return reg.root.hex()
 
     def _register_later(self, run: Any, value: str, words: Any, first: int, out: dict[str, str | None],
-                        row_salts: NR.PublicSalts | None = None, rows: Sequence | None = None) -> None:
+                        row_salts: NR.PublicSalts | None = None, rows: Sequence | None = None,
+                        also: tuple[bytes, int] | None = None, into: dict[str, Any] | None = None) -> None:
         """`_register` of a call's z or public table into ``out``, its hash left running on the GPU where it hashes there
         (`pouw_h1_registered.commit`'s ``later``): it takes its place in `registered` now, and `settle` puts its tree there
-        and its root in ``out``."""
+        and its root in ``out``. ``also``: a call's z table over the same records (`pouw_h1_tables_device.take_z`),
+        committed from the same read, its root put in ``into["z"]`` (the call's table roots) by `settle`."""
         got = self.registered[value] = self._tree(run, value, words, first, self.root, row_salts=row_salts, later=True,
-                                                  rows=rows)
+                                                  rows=rows, also=also)
         if isinstance(got, NR.Later):
             out[value] = None
-            self._later.append((value, out))
+            self._later.append((value, out, into if also is not None else None))
         else:
             out[value] = got.root.hex()
 
@@ -384,9 +389,12 @@ class Served:
         """Record the z tables the GPU has hashed (`_register_later`), in registration order: all of them with ``wait``,
         else the leading ones already done."""
         while self._later and (wait or self.registered[self._later[0][0]].ready()):
-            value, out = self._later.popleft()
-            reg = self.registered[value] = self.registered[value].result()
+            value, out, into = self._later.popleft()
+            later = self.registered[value]
+            reg = self.registered[value] = later.result()
             out[value] = reg.root.hex()
+            if into is not None:
+                into["z"] = later.also().hex()
 
     def a_words(self, call: Any, codes: np.ndarray, scales: np.ndarray, out: np.ndarray | None = None) -> np.ndarray:
         """Call ``call``'s A table's words over the Program's M slots: its rows' int8 ``codes`` [m, K] and f32 ``scales``
@@ -553,7 +561,9 @@ class Served:
         whole = self._a_rows(call, value, mine, codes, scales)
         if whole is not None:
             out[value] = self._register(run, value, whole, nonce(mine[0], "a"), self.root)
-        self._register_later(run, HW.table(self.program, "zy", call.index), zy_rows, nonce(call.index, "zy"), out)
+        also = TD.take_z(run, call, zy_rows)
+        self._register_later(run, HW.table(self.program, "zy", call.index), zy_rows, nonce(call.index, "zy"), out,
+                             also=also, into=run._roots[call.index] if also is not None else None)
         if self.tap is not None:
             self.tap.arow(run, self, call, value, whole)
         b = self.program.fn.bindings["PREFIX"] + f"b/{call.k}"
