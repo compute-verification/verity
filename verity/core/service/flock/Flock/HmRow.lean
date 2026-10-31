@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §16.10: `verity/flock-circuit` from PR #83 `eb90718f`. Serving rows are `hm96-sha512/row/v1` leaves proved in
+The hm96 rows: `verity/flock-circuit` from the circuit prover's `eb90718f`. Serving rows are `hm96-sha512/row/v1` leaves proved in
 the circuit: per VU, each input port's row is hashed by SHA-512 compressions in `sha512x3` slots (three per slot, chained from
 the prefix's midstate) and closed by an `hm96` slot (the padding compression, then `b ‖ c` from the row's private salt). Both
 slot circuits are sections of the circuit file, which must be the nets the verifier generates (`Flock.HmNets`). Every identity and binding digest is SHA-512: the circuit pin, the public
@@ -309,7 +309,7 @@ theorem lookup_index_test (n size : Nat) : (n != Nat.log2 size || 2 ^ n != size)
   · subst h; simp [Nat.log2_two_pow]
   · simp [h]
 
-/-- #273's `check_typed`: the instance's root one slot per VU, its ports the rows' words and the output words (16 bits each,
+/-- The typed statement's `check_typed`: the instance's root one slot per VU, its ports the rows' words and the output words (16 bits each,
 one output group); each placed layout's circuit one slot of its range per part; a forced-zero row in the root's slot; the
 pinned dummy values and leaf scheme. -/
 def checkTyped (c : Circuit) (t : TypedBlock) (tags : Tags) (leafScheme : Json) : V Unit := do
@@ -383,7 +383,7 @@ def check (c : Circuit) (tags : Tags) (leafScheme : Json) : V Unit := do
   let ur := c.ranges.filter (·.kind == Kind.net c.unitNet)
   if ur.size != 1 || ur[0]!.count != c.g * c.upv || (c.outNet == c.unitNet && !isPow2 ur[0]!.count) then
     throw "not one unit range of vus_per_block x units_per_vu (a power of two) units"
-  -- a tail that returns the outputs (PR #83 from 15260468): its last stage's only output group is the output words; a
+  -- a tail that returns the outputs (the circuit prover from 15260468): its last stage's only output group is the output words; a
   -- repeated last stage's (`out_net_ports` of `[slot, port]` pairs), under hidden outputs only, one port of a slot each
   let tailOut := c.outNet != c.unitNet
   let g0in := unit.inGroups.getD 0 default
@@ -469,7 +469,7 @@ def check (c : Circuit) (tags : Tags) (leafScheme : Json) : V Unit := do
 def slotOf (ps : Array (Nat × Nat)) (i : Nat) : Nat :=
   ((ps.toList.take i).filter (·.1 == (ps.getD i default).1)).length
 
-/-- A template's block with its parts placed (#273's `TypedBlock`), by position: `parse` puts the root's circuit first and
+/-- A template's block with its parts placed (the typed statement's `TypedBlock`), by position: `parse` puts the root's circuit first and
 then the placed layouts' in order, so placed layout `k`'s circuit is `1 + k`. Part `i` is its layout's circuit, its slot
 (`slotOf`, in item order) and its base. -/
 def blockOf (t : Typed.Template) : TypedBlock :=
@@ -523,7 +523,7 @@ theorem slotOf_lt_of_lt {ps : Array (Nat × Nat)} {i j : Nat} (hij : i < j) (hj 
   simp only [List.filter_append, List.filter_cons, he, beq_self_eq_true, ↓reduceIte, List.length_append, List.length_cons]
   omega
 
-/-- A typed template's META keys that its block derives instead (#273): stating one is refused. -/
+/-- A typed template's META keys that its block derives instead: stating one is refused. -/
 def TEMPLATE_DERIVED : List String :=
   ["unit_log", "units_per_vu", "leaves_in", "leaves_out", "wires", "leaf_cuts", "out_net", "out_net_ports", "lookups"]
 
@@ -948,7 +948,7 @@ theorem parse_eq_fast : @parse = @parseFast := by
 /-- A typed statement (item 1e), its rows derived once through `deriveChecked` (`Typed.read`), every net built from them.
 A flat class is the typed file parsed with its unit's net first (`parse`'s `pre`), where the old statement's `CIRCUIT
 unit` section was. A template is parsed with its block (`parse`'s `tmpl`): the root and placed layouts' circuits, the
-derived wiring, and Δ in #273's order. The circuit carries its class (`Circuit.cls`). -/
+derived wiring, and Δ in the typed statement's order. The circuit carries its class (`Circuit.cls`). -/
 def parseTyped (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit := do
   let (k, r) ← Typed.read tags bytes tables
   let c ← match r with
@@ -1067,7 +1067,7 @@ def delta (c : Circuit) (pin : Nat) : Array (Nat × Nat) × Array (Nat × Nat) :
       let dst := c.slotCol w.dst.1 g w.dst.2.1 + dc.1
       let src := c.slotCol w.src.1 g w.src.2.1 + sc.1
       for t in [0:dc.2] do d := d.push (dst + t, dst + t) |>.push (dst + t, src + t)
-  -- a typed template (#273), per VU: each input of the instance a copy of its message bit (input w: bit w % 16 of row word
+  -- a typed template, per VU: each input of the instance a copy of its message bit (input w: bit w % 16 of row word
   -- w / 16); each part's bound input rows their forms over the unit's columns, in A and B; the root's rows' entries at
   -- its parts' columns, A's in A and B's in B
   let some tb := c.typed | return (d, d)
@@ -1112,7 +1112,7 @@ def EVALUABLE : List (String × Nat) := [("Q_word", 1), ("Q_word", 2)]
 /-- `Q_call` v1, which the verifier evaluates itself (`Flock.Qcall`). -/
 def Q_CALL : String × Nat := ("Q_call", 1)
 
-/-- A `verity/partition/v1` object's form (#111's canonical form, open query names): exactly `format`, `program`, `query`; a
+/-- A `verity/partition/v1` object's form (`verity.ir.cut`'s canonical form, open query names): exactly `format`, `program`, `query`; a
 SHA-512 program; a query of exactly `name` (a non-empty string), `version` (a natural number) and `params` (an object). For a
 query the verifier evaluates, its parameters too (`Q_word` v1 and v2: exactly `X`, `W`, positive integers; `Q_call` v1: exactly
 `X`, an integer in 1..2^16). The query's name and version. -/
@@ -1280,8 +1280,8 @@ def qwordFinding (c : Circuit) (pub : Public) (obj : Json) (program : ByteArray)
 
 /-- The circuit's partition binding against the verifier's own copy of the partition object: a `verity/partition/v1` binding
 must be the tagged digest of that object (any query name), over META's `program_sha512`; the provisional unit cover takes
-none. Units are derived only for a query the verifier evaluates, from the program's Call graphs, which it does not decode yet:
-today every finding says the units were taken as stated, and why. -/
+none. Units are derived only for a query the verifier evaluates, from the program's Call graphs, which it does not decode yet,
+so every finding says the units were taken as stated, and why. -/
 def checkPartition (c : Circuit) (obj : Option Json) : V PartitionFinding := do
   let part := (c.metaJ.getObjVal? "partition").toOption.getD Json.null
   let rule := (part.getObjValAs? String "rule").toOption.getD ""
@@ -1306,7 +1306,7 @@ def checkPartition (c : Circuit) (obj : Option Json) : V PartitionFinding := do
 def publicDigest (header : Json) (pubs : ByteArray) : V ByteArray := do
   return Sha512.hash ((← canon header).toUTF8 ++ pubs)
 
-/-- Header `shared_rows` (from PR #83 `967b8d06`): exactly the circuit's input ports, each a table of at least one row (a count
+/-- Header `shared_rows` (from the circuit prover's `967b8d06`): exactly the circuit's input ports, each a table of at least one row (a count
 that is not a non-negative integer counts as none, as upstream reads it); none for a per-instance file. -/
 def sharedRows (tags : Tags) (c : Circuit) (header : Json) : V (Option (Array Nat)) := do
   let .ok s := header.getObjVal? "shared_rows" | return none
@@ -1427,9 +1427,9 @@ def workLaw (obj : Json) (program : ByteArray) (k : Nat) (table : Array (String 
 
 /-- The frame-v3-sha512 roots recomputed from the population's `b ‖ c` (a shared-row file: each input port's over its table)
 and output words against the header's; the pinned dummy `b ‖ c` against the zero row's (upstream's `check_public`). A
-statement with public outputs has no output row to link, so META `links` (§16.13) is refused. -/
+statement with public outputs has no output row to link, so META `links` (`HmOut`) is refused. -/
 def checkPublic (c : Circuit) (pub : Public) : V Unit := do
-  if J.has c.metaJ "links" then throw "META links: a statement with public outputs has no output row to link (links are §16.13's)"
+  if J.has c.metaJ "links" then throw "META links: a statement with public outputs has no output row to link (links are a hidden-output statement's: `HmOut`)"
   let fv ← pub.frameV3
   if (← J.str fv "frame" "public file") != "frame-v3-sha512"
       || (← J.str fv "row_key_sha512" "public file") != hexOf (Sha512.hash Hm96.Default512.key) then
@@ -1600,7 +1600,7 @@ def Stmt.setupH (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coin
            hello, coinTree := coins.tree?, merkle, partition := (finding.map (·.toJson)).getD Json.null }
 
 /-!
-PROTOCOL.md §16.13: hidden outputs (`Tags.hiddenOutputs`, the default `verity/flock-circuit` and `verity/flock-circuit/types`).
+`HmOut`: hidden outputs (`Tags.hiddenOutputs`, the default `verity/flock-circuit` and `verity/flock-circuit/types`).
 The rows are the input rows (META `input_ports` of them), then one output row per output port: its name, its words
 zero-padded to whole SHA-512 blocks, an `hm96-sha512/row/v1` row (in a statement of bit rows, a `v2` row of all their bits)
 hashed in the circuit like an input row; or, per run of output ports in META `out_row_ports`, one `hm96-sha512/row-seg/v1`
@@ -1737,7 +1737,7 @@ def metaOf (bytes : ByteArray) : V Json := do
   | .ok j => pure j
   | .error e => throw s!"META: {e}"
 
-/-- A templated file (PRF-133, `Tags.templated`): META's `template`, a `flock-ir-tmpl/v2` template's lines, and `layout`,
+/-- A templated file (`Tags.templated`): META's `template`, a `flock-ir-tmpl/v2` template's lines, and `layout`,
 its mode (`Tmpl.modeOf`). The unit is read from them (`TmplUnit.read`: well-formed, laid out, passing `Tmpl.unrollOk`; its
 net `Tmpl.unitNet`, whose rows are built only when read), parsed as the file's `unit` circuit where a flat file's
 `CIRCUIT unit` section is (`HmRow.parse`'s `pre`), and carried on the circuit (`Circuit.tmpl`). META is read off its own
@@ -1892,7 +1892,7 @@ def checkPublic (c : Circuit) (pub : Public) : V Unit := do
 end HmOut
 
 /-!
-### Public input ports (§16.10)
+### Public input ports
 
 A statement with hidden outputs may name public input ports (META `public_inputs`): unit inputs that are no row but public
 words the verifier recomputes from public data, each port naming its recomputation (its `seed` and `derivation`). The units
@@ -2117,9 +2117,33 @@ def checkOwn (pi : Ports) (pop : Public) (own : Option ByteArray) : V Unit := do
       let s := fun f => (pj.getObjValAs? String f).toOption.getD ""
       throw s!"public input {pi.ports[k]!.1}: word {w - starts[k]!} of instance {i} is not the verifier's own recomputation (seed {s "seed"}, derivation {s "derivation"})"
 
+/-- Public input `k`'s group `G` when the verifier derives its words itself: seed `instance`, derivation `mod:G` (`G` as
+`toString` writes it, `0 < G ≤ 2^16`), one word, instance `i`'s word `i mod G` (a shared read's position, `checkReads`). -/
+def derivedGroup (pi : Ports) (k : Nat) : Option Nat :=
+  let pj := (pi.json.getArrVal? k).toOption.getD Json.null
+  let s := fun f => (pj.getObjValAs? String f).toOption.getD ""
+  let d := s "derivation"
+  if s "seed" != "instance" || (pi.ports.getD k default).2 != 1 || !d.startsWith "mod:" then none
+  else ((d.drop 4).toString.toNat?).filter fun g => d == s!"mod:{g}" && 0 < g && g ≤ 2 ^ 16
+
+/-- The groups of a circuit with public inputs whose every port the verifier derives (`derivedGroup`), port `k`'s at `k`;
+none when a port's words are a recomputation the verifier is handed (`--public-inputs F`, `checkOwn`). -/
+def derivedGroups (pi : Ports) : Option (Array Nat) :=
+  if !pi.ports.isEmpty && (List.range pi.ports.size).all (derivedGroup pi · |>.isSome) then
+    some ((Array.range pi.ports.size).map fun k => (derivedGroup pi k).getD 0)
+  else none
+
+/-- The verifier's own derivation (`derivedGroups`, groups `gs`): every instance `i` of the population, its word of port `k`
+`i mod gs[k]`, one word a port. The public file's words must be these. -/
+def checkDerived (pi : Ports) (pop : Public) (gs : Array Nat) : V Unit := do
+  let (n, pw) := ((pop.population.map (·.1)).getD pop.n, pi.ports.size)
+  let words := (pop.population.map (·.2.2)).getD pop.outputs
+  if let some x := (List.range (n * pw)).find? (fun x => words.getD x 0 != x / pw % gs.getD (x % pw) 1) then
+    throw s!"public input {(pi.ports.getD (x % pw) default).1}: instance {x / pw}'s word is not its index mod {gs.getD (x % pw) 1} (the verifier's own derivation)"
+
 end HmIn
 
-/-! PROTOCOL.md §16.13 Linking: under a template query, with the verifier's own program, every cut wire between two units of
+/-! `HmOut` Linking: under a template query, with the verifier's own program, every cut wire between two units of
 the statement is a check on the public file. A reader whose parameter leaves are another unit's outputs commits them in a link
 row (META `links`): an input row encoded as the one output row is, under the writer's salt, so that its `b ‖ c` is the
 writer's output row's. This binds a public topology; it does not hide the topology: the wiring is read from the verifier's own
@@ -2303,7 +2327,7 @@ def Stmt.setupHidden (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
   return { tags, leaf := default, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma,
            hello, coinTree := coins.tree?, merkle, partition := (finding.map (·.toJson)).getD Json.null }
 
-/-- A session's statement in `count` tables (§16.12, upstream's `session_tables`): one table is `setupH`'s statement. For
+/-- A session's statement in `count` tables (`Stmt.setupTables`, upstream's `session_tables`): one table is `setupH`'s statement. For
 several, the session's units (the draw's, without one the population's) split into `count` equal consecutive parts, and
 table `j` is `setupH`'s statement of part `j` as a subset draw of the population, under `Tags.tableIdentity`: every check
 `setupH` makes, it makes on each table. Several tables take one draw of fixed count (`Draw.tablesWhy`): a subset draw, or a

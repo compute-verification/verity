@@ -2,7 +2,7 @@ import Proofs.Flock.Soundness.Discharge.Exec.Emit
 import Proofs.Flock.Soundness.Refine.Final
 
 /-!
-# Ligerito's rounds, as frames (R11b; PROTOCOL.md §13.3)
+# Ligerito's rounds, as frames (R11b; `Flock.Ligerito`)
 
 `ligerito_frames`: a Ligerito run that succeeds on retained rounds emits `ligFrames`, in order: the label, `T` and the
 cap; level 0's out-of-domain sample, first message, folding challenges, the level-1 cap, two intros, queries, query
@@ -202,7 +202,7 @@ theorem lforIn_emitted {σ : Type} (body : ℕ → σ → LM (ForInStep σ)) (F 
       rw [List.range'_succ, List.flatMap_cons]
       exact he₁.trans he₂
 
-/-- The level loop's iteration `i` (§13.3): four folding challenges; then, below the last level, the next level's cap,
+/-- The level loop's iteration `i` (`Flock.Ligerito`): four folding challenges; then, below the last level, the next level's cap,
 two intros, the level's queries, the query message, its claim nonce and batching coin; at the last, the clear residual
 `yr`, the queries, the claim nonce and the batching coin. -/
 def levelFr (sch : Flock.Schedule) (p : LigeritoProof) (i : ℕ) : List Frame :=
@@ -217,7 +217,7 @@ def levelFr (sch : Flock.Schedule) (p : LigeritoProof) (i : ℕ) : List Frame :=
       p.finalProof.yr.toList.map .one ++ queryFr p (sch.levels.getD (sch.levels.size - 1) default) (1 + i) (1 + i) ++
         [.bytes (le64 p.claimNonces[4 + 3 * i]!), .sq 1 1]
 
-/-- **A Ligerito run's frames** (§13.3): the label, `T` and the cap; level 0's out-of-domain sample, first message,
+/-- **A Ligerito run's frames** (`Flock.Ligerito`): the label, `T` and the cap; level 0's out-of-domain sample, first message,
 folding challenges, the level-1 cap, two intros, queries, query message and batching coin; then the level loop's. -/
 def ligFrames (sch : Flock.Schedule) (T : F128) (cap : Array ByteArray) (p : LigeritoProof) : List Frame :=
   [.label "flock-ligerito-basis-f256-split-v0".toUTF8, .one T, capFr cap] ++

@@ -94,7 +94,7 @@ theorem ok_of_refuse {x : V Stmt} {p : Stmt → Bool} {e : String} {s : Stmt}
     (h : (do let st ← x; if p st = true then throw e else pure st) = .ok s) : x = .ok s :=
   (refuse_ok h).1
 
-/-- **`setupTables` sets up each table with `setupH`** (§16.12) under a tag without hidden outputs (`hh`; with them
+/-- **`setupTables` sets up each table with `setupH`** (`Stmt.setupTables`) under a tag without hidden outputs (`hh`; with them
 it calls `setupHidden`). For one table, its statement is `setupH`'s at the session's draw, and the session's spec is
 the table's. For `count > 1`, there are `count` tables, and table `j` is `setupH`'s statement under
 `Tags.tableIdentity count j` at a subset draw of its part. -/
@@ -199,7 +199,7 @@ theorem accepts_one {I : Inputs} {t : Transcript} (hh : I.tags.hiddenOutputs = f
   · omega
 
 set_option maxHeartbeats 4000000 in
-/-- **`setupH`'s checks on the public file** (§16.2, §16.4): the population's (or the draw's) public file passed
+/-- **`setupH`'s checks on the public file** (`Flock.Statement`, `Flock.Tags`): the population's (or the draw's) public file passed
 `HmRow.checkPublic`, and the statement's regions are `HmRow.regions` of it. -/
 theorem setupH_public {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Json} {program : Option ByteArray} {st : Stmt}

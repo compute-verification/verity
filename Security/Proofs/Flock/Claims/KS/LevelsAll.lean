@@ -70,7 +70,7 @@ theorem find?_later {sch : Flock.Schedule} {rounds : Array Flock.Round} {k : ℕ
   omega
 
 set_option maxHeartbeats 4000000 in
-/-- **Ligerito's rounds refine the model's, every level's request fixed** (§13.3): `ligerito_refines_req0`, and the
+/-- **Ligerito's rounds refine the model's, every level's request fixed** (`Flock.Ligerito`): `ligerito_refines_req0`, and the
 requests after level 0's are levels `1, …, R` in order, each at the positions of the coins of its query round,
 `k + levRound k0 R ℓ` (`LaterAt`). -/
 theorem ligerito_refines_reqs {D : Type} (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128)
@@ -610,7 +610,7 @@ theorem ligerito_refines_reqs {D : Type} (ms : MerkleScheme) (sch : Flock.Schedu
   simp only [List.append_assoc, List.cons_append, List.nil_append] at hmain ⊢
   exact hmain
 
-/-- **Ligerito refines the model's, every level's request fixed** (§13.3–§13.6): `ligerito_accepts_req0`, and
+/-- **Ligerito refines the model's, every level's request fixed** (`Flock.Ligerito`): `ligerito_accepts_req0`, and
 the requests after level 0's are `LaterAt`. -/
 theorem ligerito_accepts_reqs {D : Type} (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128)
     (cap : Array ByteArray) (p : LigeritoProof) (basisAt : Array F256 → ℕ → Array F256) (r : ℕ) (b : ℕ → 𝔽)
@@ -640,7 +640,7 @@ theorem ligerito_accepts_reqs {D : Type} (ms : MerkleScheme) (sch : Flock.Schedu
   rw [hver, ← hn7]
   exact hfc
 
-/-- **Ligerito on the opening's output refines the model's, every level's request fixed** (§12.4, §13):
+/-- **Ligerito on the opening's output refines the model's, every level's request fixed** (`Flock.Opening`, `Flock.Ligerito`):
 `ligerito_accepts_opening_req0`, and the requests after level 0's are `LaterAt`. -/
 theorem ligerito_accepts_opening_reqs {D : Type} (ms : MerkleScheme) (sch : Flock.Schedule) (T : F128)
     (sws : Array Switched) (n : ℕ) (op : Model.OpenOut 𝔽) (hop : OpenRel sch.m n T sws op) (cap : Array ByteArray)

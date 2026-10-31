@@ -7,7 +7,7 @@ is one template, ``RecOpen{LANES, H}``, and one statement over that level's open
 (M0 proves one template per statement). Its program is `population_program` of the template over the level's openings, its
 partition that program's ``Q_template_instance`` v0. Every instance reads two fresh private rows, the opened row and its
 ``aux`` (its siblings: `rec_open.pack`), and five registered rows: its coefficients ``coef`` and the position's low bits
-``dirs``, which the verifier registers itself, ``out``, ``acc`` in and ``acc_out`` out (§16.13). The statement has no public
+``dirs``, which the verifier registers itself, ``out``, ``acc`` in and ``acc_out`` out (`HmOut`). The statement has no public
 input.
 
 **The verifier's values** (`COEF_VALUE`, `DIRS_VALUE`). The verifier computes each opening's ``coef`` (`coefficients`) and
@@ -21,7 +21,7 @@ inner session's public record, and the prover's rows and salts are the same regi
 one tree, else rep 0's top then rep 1's) as the value ``rec-top-L<level>`` under the V* session's program and those very salts;
 the verifier builds its own entry of that value from the recorded ``b || c`` alone (`rec_residuals.commits_entry`), and its
 reads file puts instance ``i``'s output at the row of the top node its position names (rep ``r``'s first row plus
-``pos >> H``; PROTOCOL.md §16.13 "Registered reads", `verity.core.protocols.sampled_proofs.one_stage.registered`). An
+``pos >> H``; `HmOut` "Registered reads", `verity.core.protocols.sampled_proofs.one_stage.registered`). An
 instance is satisfiable only if its private rows climb, by the verifier's ``dirs``, to that registered row, whose ``b || c``
 the ZK server committed: the statement holds only if every opening climbs to the committed top node its coin names.
 
@@ -34,7 +34,7 @@ consistency terms, and V*'s algebra (`verity_flock.rec_residuals`) reads a rep's
 the verifier's (`coefficients`: the final check's κ at the rep's coins times the level's eq(α)[j],
 `verity_flock.rec_algebra.verifier_rows`).
 
-**The claims** (`note:proofs/20261010T1820Z-draft-c3-claim-layout`). Beside ``rec-acc``, under the same program string and its
+**The claims.** Beside ``rec-acc``, under the same program string and its
 own salts, the prover registers each rep's `rec_sparse.RecSparse` claim as the value ``rec-claim`` (`CLAIM_VALUE`), row r rep
 r's (one element, 64 words): RecSparse's instance r reads row r, and the registered opening (`rec_residuals.stage_opening`)
 reads row 0 as ``claim0`` and row 1 as ``claim1``, so the two statements open one root's cells.

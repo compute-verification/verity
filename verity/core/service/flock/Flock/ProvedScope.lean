@@ -1,5 +1,5 @@
 /-
-The statement forms the soundness proof covers (PROTOCOL.md §16.15). `verify` refuses every other: soundness is one theorem
+The statement forms the soundness proof covers. `verify` refuses every other: soundness is one theorem
 over every session the verifier accepts, so a form no theorem covers is refused, never accepted. Widening the proof to
 another form is a change to one rule here, with the proof that the headlines cover it. With hidden outputs that is the
 general instance form (`scopeOkI`, once `wiresAcyclic` passed); with public outputs, the unit's form (`scopeOk`).
@@ -190,7 +190,7 @@ def publicOf (tags : Tags) (c : Circuit) (file : ByteArray) : V Public :=
 def zkTableCap : Nat := 65536
 
 /-- **The proof's Merkle leaves the headlines cover**: `hm96-sha512/v1` in every form, and plain SHA-512 leaves
-(`flock-leaf/sha512-unsalted`, a recursive session's inner statement, §16.16) on a statement with hidden outputs without
+(`flock-leaf/sha512-unsalted`, a recursive session's inner statement, `Tags.withPlainLeaves`) on a statement with hidden outputs without
 `--zk`. Without `--zk` a leaf only binds its column, which either leaf does (a second column under one leaf is a SHA-512
 collision); `--zk`'s hiding needs `hm96`'s salts. -/
 def leafOk (tags : Tags) (zk : Bool) : Bool :=
@@ -215,6 +215,16 @@ def statementRules (tags : Tags) (zk : Bool) (count : Nat) (publicInputs : Bool)
 def firstFailure (rules : List (Bool × String)) : Option String := (rules.find? fun r => !r.1).map (·.2)
 
 def refusal (why : String) : String := s!"refused: {why}: a statement form the soundness proof does not cover"
+
+/-- The legacy statements: upstream's recorded cells whose checks evaluate part of the
+computation natively and make intermediate values public. None is a statement `verify` sets up (`Tags.all`,
+`Tags.templated`), and `verify` refuses every session of one (`legacyWhy`). -/
+def legacyStatements : List String :=
+  ["verity/flock-pure-block/v2", "verity/flock-ir-frame/v2", "verity/flock-ir-frame/v3", "verity/flock-ir-sampling/v1",
+   "verity/flock-ir-block/v1", "verity/flock-vllm-block/v1"]
+
+def legacyWhy (name : String) : Option String :=
+  if legacyStatements.contains name then some (refusal s!"{name}, a legacy statement (§16.9)") else none
 
 /-- The least `m` the proof covers: `25` under `--zk`, else `22`. -/
 def mMin (zk : Bool) : Nat := if zk then 25 else 22
@@ -332,7 +342,7 @@ def programP (parsed : V Circuit) (program : Option ByteArray) : Except String U
     | some why => .error why
     | none => .ok ()
 
-/-- **`verify --plain-tables`'s statement is one the soundness proof covers** (PROTOCOL.md §16.15): a plain (no `--zk`)
+/-- **`verify --plain-tables`'s statement is one the soundness proof covers**: a plain (no `--zk`)
 session of public or hidden outputs at any number of tables up to `Tags.MAX_TABLES`, at hidden outputs with
 `hm96-sha512/v1` leaves, every condition `check` puts on a one-table plain session, and the verifier's own program is
 the one META binds (`programP`). The one-table plain form keeps `check` without the flag. -/
@@ -410,7 +420,7 @@ theorem programP_ok {parsed : V Circuit} {program : Option ByteArray} (h : progr
     | none => rfl
     | some w => simp [hw] at h
 
-/-- What a draw's law is, when no soundness claim draws by it at the session's form (PROTOCOL.md §16.15): the one rule
+/-- What a draw's law is, when no soundness claim draws by it at the session's form: the one rule
 for which law each form draws by. Without `--plain-tables`: the stratified law at every form `check` passes, each claim at
 one table (`SoundExec`, `SoundExecH`, `SoundZ`, `SoundZH`); the subset law under `--zk` (`SoundZJ`, `SoundZHJ`, `SoundZHJR`)
 and, without it, exactly where a plain claim draws by it: at hidden outputs, at the one table `check` admits there
@@ -424,7 +434,7 @@ def lawWhy (zk : Bool) (tags : Tags) (plainTables : Bool) (d : Draw.UnitDraw) : 
   | .bernoulli .. => some "a bernoulli draw"
   | .work .. => some (if d.closure.isEmpty then "a work draw" else "a work draw with a closure")
 
-/-- **The session's draw is by a law a soundness claim draws by at its form** (`lawWhy`, PROTOCOL.md §16.15): `draw` is
+/-- **The session's draw is by a law a soundness claim draws by at its form** (`lawWhy`): `draw` is
 the record's (`recordDraw`), none for a session without one. Every claim is about a drawn session, so a session without
 a draw is refused (D12); so is a draw that does not parse. -/
 def drawLaw (zk : Bool) (tags : Tags) (plainTables : Bool) : Option Lean.Json → Except String Unit
@@ -445,5 +455,35 @@ theorem programHeld_ok {program : Option ByteArray} (h : programHeld program = .
   split at h
   · assumption
   · cases h
+
+/-- **The statement versions `verify` takes**: the current statement and a recursive session's inner one. Every other
+version `Tags.all` names is superseded: a `+seed-injection` one is a selftest build's, whose coins the prover injected, and
+the older ones' coins derive through SHA-256 or, under `--zk`, their pads are ChaCha20 streams of the prover's seed. They
+stay in `Tags.all` so the agreement corpus and the recorded fixtures replay: `verify` runs every check on them, then
+refuses the session (`servedForm`). -/
+def served : List String := [Tags.circuit.name, Tags.circuitPlainLeaves.name]
+
+def versionWhy (tags : Tags) : Option String :=
+  if served.contains tags.name then none
+  else
+    let what := if tags.name.endsWith "+seed-injection" then "a selftest build's statement, whose coins the prover injected"
+      else "a superseded statement version"
+    some s!"refused: {tags.name}, {what}: verify takes only {" and ".intercalate served}"
+
+/-- A session on seed coins (`--coins seed`, the default without `--zk`): every coin derives from the prover's seed, so
+none is live and no plain claim's record premise (`RecordCustodyExec`) can hold. -/
+def SEED_COINS : String :=
+  "refused: a session on seed coins (--coins seed, the default without --zk): every coin derives from the prover's seed, so none is live; verify a plain session with --coins os"
+
+def coinsWhy : Coins → Option String
+  | .seed => some SEED_COINS
+  | _ => none
+
+/-- **The session is in a form `verify` takes**: a statement version of `served`, on live coins (`--coins os`, or under
+`--zk` the keyed coin tree). `verify` runs it last, once every check has passed. -/
+def servedForm (tags : Tags) (coins : Coins) : Except String Unit :=
+  match versionWhy tags <|> coinsWhy coins with
+  | some why => .error why
+  | none => .ok ()
 
 end Flock.ProvedScope

@@ -81,7 +81,7 @@ before its own draw, and so before every later round's. The first covered round'
 session. `deliver` delivers the session once, and every covered draw's outcome binds the same session records. Each
 draw's `outcome` runs its own audit record, on its own proof blocks and its own table's roots, and its record names the
 session's rounds (`session`). A late session is `late` for every round it covers. C-Flock's verifier refuses
-such a session (`verity/ml/flock/verifier/PROTOCOL.md` §16.12); `Stream.session` has its refusals.
+such a session (`Flock.ProvedScope`, `Draw.tablesWhy`); `Stream.session` has its refusals.
 
 **The failure budget.** A stream counts its failures, and at the `budget`-th it stops and refuses further registrations.
 It holds at most `budget` minus its failures open registrations (and at most `rounds`), so it never ends with more than
@@ -273,7 +273,7 @@ class Sequential:
 
 Selection = All | Law | Sequential
 
-RETIRED_TWO_STAGE = ("two-stage sampling is retired (ASK-25: everything is committed at serve time); a selection rule is "
+RETIRED_TWO_STAGE = ("two-stage sampling is retired (everything is committed at serve time); a selection rule is "
                      "all or a law")
 """The refusal of a selection rule that names two-stage sampling, here and in the Lean verifier (`Select.retiredTwoStage`)."""
 

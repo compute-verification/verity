@@ -1,4 +1,4 @@
-"""Shared reads (META `shared_reads`, PROTOCOL.md §16.10): the Lean verifier (`Flock.HmIn.checkReads`) and its Python mirror
+"""Shared reads (META `shared_reads`, `Flock.HmRow`): the Lean verifier (`Flock.HmIn.checkReads`) and its Python mirror
 (`circuit.check_shared_reads`, which `circuit.write` runs) refuse the same files with the same refusal, and pass the same
 ones. A shared read is form (B)'s one writer a window: input row `port` is one table row per group of `group` instances,
 instance i reading table row ⌊i/G⌋, and its public input `position` is i mod G (seed `instance`, derivation `mod:G`).

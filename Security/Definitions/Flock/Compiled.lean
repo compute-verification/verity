@@ -2,9 +2,9 @@ import Definitions.Flock.Session
 import Definitions.Flock.Merkle
 
 /-!
-# The compiled protocol: Merkle caps, openings after the last coin (PROTOCOL.md §13–§14)
+# The compiled protocol: Merkle caps, openings after the last coin (`Flock.Ligerito`, `Flock.Merkle`)
 
-The protocol as run commits each table by a Merkle cap (§14) and opens the queried rows with
+The protocol as run commits each table by a Merkle cap (`Flock.Merkle`) and opens the queried rows with
 their sibling paths in the proof file, which the server receives after every round (S17). The
 openings enter no round, so the prover chooses them after all coins of both reps: the table's
 last message here (`Opens`, per rep, level and query). The verifier then checks every path
@@ -27,18 +27,18 @@ variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K
 variable {D : Type}
 
 /-- The openings, sent after the last coin: per rep, level and query, the opened row (its lanes'
-elements) and its sibling path (§13.3 steps 9 and the recursive rounds, §14). -/
+elements) and its sibling path (`Flock.Ligerito` steps 9 and the recursive rounds, `Flock.Merkle`). -/
 abbrev Opens (F D : Type) := ℕ → ℕ → ℕ → List F × List D
 
-/-- A Merkle cap, entry by index (§14). -/
+/-- A Merkle cap, entry by index (`Flock.Merkle`). -/
 abbrev Cap (D : Type) := ℕ → D
 
-/-- A level's cap depth `c = min(⌊log2 Q⌋, d)`, and the path length `d − c` (§14). -/
+/-- A level's cap depth `c = min(⌊log2 Q⌋, d)`, and the path length `d − c` (`Flock.Merkle`). -/
 def capDepth (lv : Level) : ℕ := min (Nat.log 2 lv.queries) lv.logLen
 
 def pathLen (lv : Level) : ℕ := lv.logLen - capDepth lv
 
-/-- The consistency value from opened rows, query `j` reading row `j` (§13.3 step 10). -/
+/-- The consistency value from opened rows, query `j` reading row `j` (`Flock.Ligerito` step 10). -/
 def consValueO (A : Arith F K) (α : List F) (ch : List K) (rows : ℕ → List F) (pos : List ℕ) :
     K :=
   ((pos.zipIdx).map fun pj => A.embed (eqList α pj.2) *
@@ -171,7 +171,7 @@ def ligeritoC (A : Arith F K) (r : ℕ) (sch : Schedule) (T : F) (b : ℕ → F)
           recursiveRoundsC A r n b initial sch.ext rest
             { st with level := 1, caps := [C₁], prevLevel := lv₁ }
 
-/-- One compiled rep (§9–§13): the PIOP as in `rep`, then compiled Ligerito. -/
+/-- One compiled rep (`Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`): the PIOP as in `rep`, then compiled Ligerito. -/
 def repC (A : Arith F K) (r : ℕ) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m)
     (extra : List (Claim F S.m)) : Game (PendL F D) := do
   match ← zerocheck A S.m with
@@ -190,7 +190,7 @@ def capOf (cap₀ : Cap D) (caps : List (Cap D)) (level : ℕ) : Option (Cap D) 
 
 open Classical in
 /-- Every requested opening of a rep is a row of the level's lane count whose path verifies
-against the level's cap (§14). -/
+against the level's cap (`Flock.Merkle`). -/
 def OpensOK (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (cap₀ : Cap D) (r : ℕ)
     (p : PendL F D) (o : Opens F D) : Prop :=
   ∀ req ∈ p.reqs, ∃ cap, capOf cap₀ p.caps req.level = some cap ∧
@@ -207,7 +207,7 @@ structure OutC (F D : Type) where
   opens : Opens F D
 
 open Classical in
-/-- **One table's compiled session** (§5, §13–§14): the level-0 cap, the link points, both
+/-- **One table's compiled session** (`Flock.Record`, `Flock.Ligerito`, `Flock.Merkle`): the level-0 cap, the link points, both
 reps, then the openings; accepted iff both reps accept on the openings and every path verifies. -/
 noncomputable def tableC (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) : Game (OutC F D) := do
@@ -221,7 +221,7 @@ noncomputable def tableC (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc 
 
 /-! ## Salted leaves (hm96) -/
 
-/-- The salts sent with the openings: per rep, level and query, the opened row's salt (§14). -/
+/-- The salts sent with the openings: per rep, level and query, the opened row's salt (`Flock.Merkle`). -/
 abbrev Salts (Sl : Type) := ℕ → ℕ → ℕ → Sl
 
 open Classical in

@@ -163,7 +163,7 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
     """One live session: `serve --draw` (the verifier's side: registration, the sample, coins, the verdict) and `prove`.
     `draw_file`: the server serves the verifier's own draw from that file (`--draw-file`) instead of sampling one. `zk`: both
     sides run the masked protocol (`--zk`); without it the Lean verifier accepts a subset sample at hidden outputs and one table
-    (verifier PROTOCOL §16.15). `env`: added to
+    (`Flock.ProvedScope`). `env`: added to
     both sides' environment (a firewalled prover's, `firewall_env`). `prove_timeout`: the prover's limit in seconds."""
     out.mkdir(parents=True, exist_ok=True)
     d = st["dir"]
@@ -288,10 +288,10 @@ def audit_session(rec: dict, receipt: dict, st: dict, header: dict, law: dict, r
                  "roots_are_registered": (live or {}).get("roots") == {r["port"]: r["root"] for r in rec["roots"]}}
     verdicts = {
         "m0-verifier": {"accepted": verifier.get("accepted") is True, "why": verifier.get("why"),
-                        "tool": "flock-circuit serve (M0, PR #83)"},
+                        "tool": "flock-circuit serve (M0)"},
         "lean-draw-u1-u3": {"accepted": bool(lean_u) and all(c["ok"] for c in lean_u), "detail": lean_u,
-                            "tool": "flock-verify draw-test (PR #113 9d0d53df)"},
-        "lean-verify": {**lean_verify(lean118, st, header["instances"], out), "tool": "flock-verify verify --archive (PR #118)"},
+                            "tool": "flock-verify draw-test (9d0d53df)"},
+        "lean-verify": {**lean_verify(lean118, st, header["instances"], out), "tool": "flock-verify verify --archive"},
     }
     if draw is None:
         return {"accepted": False, "why": "no draw recorded", "verdicts": verdicts, "statement": statement}
@@ -362,15 +362,17 @@ def main() -> int:
     ap.add_argument("--set", required=True)
     ap.add_argument("--m0-pythonpath", required=True)
     ap.add_argument("--bin", required=True)
-    ap.add_argument("--lean", required=True, help="flock-verify for the draw checks (PR #113)")
-    ap.add_argument("--lean-verify", default=None, help="flock-verify for the full verify (PR #118); default --lean")
+    ap.add_argument("--lean", required=True, help="flock-verify for the draw checks")
+    ap.add_argument("--lean-verify", default=None, help="flock-verify for the full verify; default --lean")
     ap.add_argument("--out", required=True)
     ap.add_argument("--k", type=int, default=16)
     ap.add_argument("--delta", type=float, default=0.01)
     ap.add_argument("--port", type=int, default=7511)
     ap.add_argument("--bind", action="store_true", help="run A1's M0 half: the statement binds the partition, program and unit indices")
     ap.add_argument("--statement", default=STATEMENT_ID,
-                    help="the Lean verifier's statement name (verity/flock-circuit@967b8d06 for files staged at M0 68ae79f2 or later)")
+                    help="the Lean verifier's statement name; verify takes only verity/flock-circuit and "
+                         "verity/flock-circuit+plain-leaves, and refuses a superseded one (verity/flock-circuit@967b8d06, "
+                         "for files staged at M0 68ae79f2 or later) once every check has passed")
     ap.add_argument("--binding", default=STAND_IN_BINDING, choices=sorted(STAND_IN_BINDINGS),
                     help="M0's frame-domain binding tag (verity/flock-ir-frame/binding/v1 for an M0 tree before 64-byte bindings)")
     a = ap.parse_args()

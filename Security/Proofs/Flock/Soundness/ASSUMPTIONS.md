@@ -27,7 +27,7 @@ hypothesis carries what the statement doesn't say yet: that the acceptance is th
 Soundness rests on five. Three are `Prop`s in `Assumptions.lean`, taken as hypotheses: SHA-512's
 collision resistance in two forms, and the Lean verifier's randomness for the unit sample. The fourth, A6,
 is the coin server's randomness for the round coins, which the model embodies (A6, below). The fifth, `live-verifier`, is
-the record's custody (`PROTOCOL.md` §17.2): `--zk`'s soundness (`zk_session_sound_custody`) takes it as
+the record's custody (nothing in the record authenticates its writer): `--zk`'s soundness (`zk_session_sound_custody`) takes it as
 `Assumptions.Zk.RecordCustodyZK`, in `Assumptions/Zk.lean`. The table's last row is zero
 knowledge's, not soundness's: a model claim about the honest prover. The development declares no
 `axiom`. So a mis-stated assumption can make a theorem vacuous, but it can never make Lean prove something false.
@@ -198,7 +198,7 @@ the executable's openings to the model's (R11), still open, so `tr` is a named h
 executable accept is the model's) gives one with no positions, at `δ_tree = 0` (`TreeRewind.ofNever`, `ofNever_bound`).
 
 `flock_e2e_drawn_hm96_reads` and `flock_e2e_count_hm96_reads` (`Registered/E2E.lean`) are the sampled-proof-block
-and count forms with registered reads (PROTOCOL.md §16.10): they add `δ_reg`, the event that a registered read's leaf
+and count forms with registered reads (`Flock.HmRow`): they add `δ_reg`, the event that a registered read's leaf
 under the prover's registration is not the registrant's, so that off it the binding's commitment at every registered read
 is the registrant's leaf. They take the layout's registered reads (`rd : Reads`: the held roots, the positions the
 verifier's program reads, and the registrant's openings, intended to prove), `hchk` (on every outcome the executable
@@ -240,7 +240,7 @@ to prove: the derived column placements) in place of `pp`, and without `hA3`: th
 design, and the `_exec` forms at uniform byte tapes (`Binding/E2E.lean`). `flock_e2e_count_exec_hm96` takes `hks`
 and `hS`; the other three don't.
 
-**What it bounds.** The headline bounds faulty proof blocks of the pinned rows circuit; "computes the Definition" also
+**What it bounds.** The headline bounds incorrect proof blocks of the pinned rows circuit; "computes the Definition" also
 needs `RowsCert` per template and the Definition's Boolean semantics in Lean (The circuit and the certificate, below).
 Once every Definition lowers to a Boolean circuit over AND, XOR and NOT, a generic
 Boolean-semantics lemma replaces the per-template `RowsCert`.
@@ -249,13 +249,13 @@ Boolean-semantics lemma replaces the per-template `RowsCert`.
 sampled after the prover's message, as the coin server's `os` coins are under A6. M0's non-ZK session samples them under
 `FC_COINS=os` on both sides (`live/src/bin/flock-circuit.rs`, `seed_coins()`), with no seed and no PRF. Its identity
 then names the mode, and `flock-verify verify --coins os` binds that identity (`Tags.withCoins`; the verifier's
-`PROTOCOL.md` §7.1). The benches run M0 so by default (`verity/ml/flock/pod/70-class-sweep.sh`, `60-circuit.sh`,
+`Tags.coinScheme`). The benches run M0 so by default (`verity/ml/flock/pod/70-class-sweep.sh`, `60-circuit.sh`,
 `61-circuit-cell.sh`), and their records name the coins (`coins: live-os`). The binary's default still derives every coin
 from one OS seed through a SHA-512 PRF (`config_with` sets `cfg.coin_seed` from `seed_coins()`; `live/src/coin_seed.rs`).
 That rests on `prf/sha-512` and the seed commitment's hiding, and the headline takes neither. So the headline is cited
 only for runs on per-round OS coins: a session whose identity names `live-os`, or a bench point with `coins: live-os`.
 The identity and a bench point's `coins` say which mode ran. The Lean verifier replays the recorded coins, so that they were
-the verifier's own OS samples, each sampled after the prover's message, is the record's custody (`PROTOCOL.md` §17.2) and
+the verifier's own OS samples, each sampled after the prover's message, is the record's custody and
 A6, which no check of the record establishes. The custody is `live-verifier`, named in every mode (the table above).
 
 ## Premises the lock lists by name
@@ -374,26 +374,26 @@ ArkLib (`README.md` §1.6; watch entries `A1-johnson-mca` and `udr-mca`).
 ## Named hypotheses of the proof
 
 - **The circuit and the certificate** (no hypothesis). The end-to-end theorems are about `C = Prog.circuit`, the circuit
-  the statement's rows make, each unit its template's rows; "faulty" is measured there. The headline bounds faulty proof blocks
+  the statement's rows make, each unit its template's rows; "incorrect" is measured there. The headline bounds incorrect proof blocks
   of the pinned rows circuit; "computes the Definition" additionally needs `RowsCert` per template and the Definition's
   Boolean semantics in Lean. That is a separate theorem, `IsRowsUnit.computes_of_cert`
   (`Certificate.lean`): when the unit's rows are the rows `GateRows.rows G L` derives from a gate circuit
   `G` (`RowsCert`) and `G` computes a definition `D` (`∀ x, G.eval x = D x`, `G` being `D`'s lowering, which is in
-  Python, not Lean), a unit that is not faulty, with its constant 1, carries on each committed output wire `D`'s output
+  Python, not Lean), a unit that is correct, with its constant 1, carries on each committed output wire `D`'s output
   on its input wires. `RowsCert` is a fact about finite data; `∀ x, G.eval x = D x` is not, and nothing in Lean ties `D`
   to a Definition until its Boolean semantics is stated there. `Types.Dag.layout_sound` (its type's outputs, for every
   checked typed layout) and `GateRows.rows_sound` (for rows derived from any gate circuit and layout) prove
   that rows satisfied with the constant 1 carry the gate circuit's outputs, checked in the kernel. Once every Definition
   lowers to a Boolean circuit over AND, XOR and NOT, a generic Boolean-semantics lemma replaces the
   per-template `RowsCert`.
-- **The statement's form** is no hypothesis: `verify` refuses forms the proof omits (PROTOCOL.md §16.15).
+- **The statement's form** is no hypothesis: `verify` refuses forms the proof omits (`Flock.ProvedScope`).
 - **The link points' layout** is a hypothesis (`Statement.LinkLayout`). Each region's free bits must be distinct and
   read link coordinates below `PT_LOCAL`, and the block coordinates `PT_LOCAL …` must fit inside the point. The
-  statements of PROTOCOL.md §16 satisfy it.
+  statements of `Flock.Statement` satisfy it.
 - **The placement** (`Placement`; `lowering_sound`, `README.md` §1.5):
   - Placed (`Placement`) means two things:
     - the block matrices' rows at the unit's computed columns read exactly its rows' columns;
-    - the rows at its constant read the pin, as every slot's constant is wired to it (spec §16.1).
+    - the rows at its constant read the pin, as every slot's constant is wired to it (`Flock.Statement`).
   - A unit's input columns on one gate also carry one value in every satisfying witness (`UnitPlace.aliased`): they
     copy one source's position, or forced-zero rows.
   - **Proved from the executable's accept step** for `hm96-sha512/row/v1` and `/row/v2` statements
@@ -412,9 +412,9 @@ ArkLib (`README.md` §1.6; watch entries `A1-johnson-mca` and `udr-mca`).
 | `Partition.AnchorsSound₂` | `δ_in` | two-stage audits: for every strategy, the session accepts while the committed coarse trace's inputs differ from the anchors' values | as `AnchorsSound`, for the two-stage game |
 | `Partition.InputsSound` | `δ_in` | oracle layer: the session accepts inputs other than the anchors' with probability at most `δ_in` | **proved for Flock** (`flock_inputs_sound`, `2^-205`), given `InputsLoweringSound` |
 | `Partition.InputsLoweringSound` | — | inputs other than the anchors' leave some session table (the always-proved input statement) unsatisfied | the input unit's lowering (level 3) |
-| `Partition.SessionSound` | `ε` | oracle layer only: a session with a sampled faulty proof block accepts with probability at most `ε` | **proved for Flock** (`flock_session_sound`, `2^-205`), from `table_value_sound`, `execArith_correct` and the lowering |
-| `Partition.LoweringSound` | — | a sampled faulty proof block lies in a session table whose statement no committed table satisfies | the lowering theorem (level 3, another lane) |
-| `IsHarmBound` | `H` | every set of faulty proof blocks with acceptance probability at least `δ` has harm (a consumer's weight per faulty proof block) at most `H` | the value core's `Stratified.harm_bound` returns; that implementation is not proved |
+| `Partition.SessionSound` | `ε` | oracle layer only: a session with a sampled incorrect proof block accepts with probability at most `ε` | **proved for Flock** (`flock_session_sound`, `2^-205`), from `table_value_sound`, `execArith_correct` and the lowering |
+| `Partition.LoweringSound` | — | a sampled incorrect proof block lies in a session table whose statement no committed table satisfies | the lowering theorem (level 3, another lane) |
+| `IsHarmBound` | `H` | every set of incorrect proof blocks with acceptance probability at least `δ` has harm (a consumer's weight per incorrect proof block) at most `H` | the value core's `Stratified.harm_bound` returns; that implementation is not proved |
 
 Both per-unit hypotheses are averages over the whole audit, for every prover and every rule that picks a sampled proof block
 before the session's first coin, not bounds state by state.
@@ -426,7 +426,7 @@ before the session's first coin, not bounds state by state.
 
 ## Cryptographic assumptions and coins
 
-- **SHA-512 for the Merkle openings** (spec §14, with SHA-512 leaves and nodes), under the two forms above: the
+- **SHA-512 for the Merkle openings** (`Flock.Merkle`, with SHA-512 leaves and nodes), under the two forms above: the
   compiled theorem needs only `SHA512CRStrict`, for every classical prover, and the audit's value layer adds
   `SHA512CRExpected`. DESIGN.md §1 explains why SHA-512 rather than SHA-256, and how the bound depends on the hash's
   width.
@@ -437,7 +437,7 @@ before the session's first coin, not bounds state by state.
   coin. Their own collision resistance matters to what the statement refers to (registered data, linked proofs), not to
   this theorem.
 - **`os` coins** (the default). Each round's coins are uniform and unknown to the prover before it sent the round. They
-  come from the verifier's `/dev/urandom` (spec §7.1). The randomness is trusted, not proved. For the unit sample it is
+  come from the verifier's `/dev/urandom` (`Tags.coinScheme`). The randomness is trusted, not proved. For the unit sample it is
   A3. The theorems, the headline among them, are for these coins.
 - **`seed` coins** (`coin-commit/sha256/v1`; M0's non-ZK session's default, `cfg.coin_seed`, `coin-commit/sha512`)
   add two assumptions: the seed commitment hides the seed, and SHA-256 in counter mode is a PRF. No theorem takes them,

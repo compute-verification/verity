@@ -1,4 +1,4 @@
-"""A plain hidden-output session, end to end (PROTOCOL.md §16.15, `plain_hidden.py`): a RoPE d64 statement with hidden
+"""A plain hidden-output session, end to end (`Flock.ProvedScope`, `plain_hidden.py`): a RoPE d64 statement with hidden
 outputs whose 32 units read their own rows (no shared rows, no registered value), proved by Flock in one loopback
 session without `--zk` under a subset sample of 16 on OS coins (`pod/91-plain-hidden.sh`, `FIXTURE`). `flock-verify verify
 --coins os` accepts it with the verifier's own program and partition, the form `flock_verify_sound`'s plain hidden-output
@@ -21,7 +21,7 @@ from verity.ml.circuits.codec import canonical_json, encode_program
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
-#: `pod/91-plain-hidden.sh`'s fixture (run r20261025-033320-4832): stage/ (circuit.txt, pub-32.bin, program.json,
+#: `pod/91-plain-hidden.sh`'s fixture: stage/ (circuit.txt, pub-32.bin, program.json,
 #: partition.json), session/ (the drawn plain session's record and proofs), live.json (the prover's LIVE record)
 FIXTURE = "art:06435437"
 STATEMENT = "verity/flock-circuit"

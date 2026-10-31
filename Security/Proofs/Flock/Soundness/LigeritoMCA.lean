@@ -3,7 +3,7 @@ import Proofs.Flock.Soundness.JohnsonMCA
 import VCVio.OracleComp.Constructions.SampleableType.NativeMeasure
 
 /-!
-# Mutual correlated agreement at Ligerito's folds (PROTOCOL.md §13.3)
+# Mutual correlated agreement at Ligerito's folds (`Flock.Ligerito`)
 
 From mutual correlated agreement up to the Johnson bound (`mcaError_le_bchks25`, proved from DKT26)
 to Ligerito's coins:

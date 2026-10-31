@@ -5,7 +5,7 @@ import Proofs.Flock.Soundness.Game.Interleave
 import Mathlib.LinearAlgebra.Lagrange
 
 /-!
-# The lincheck phase (PROTOCOL.md §10)
+# The lincheck phase (`Flock.Piop`)
 
 For one codeword near the committed table, whose witness `z` makes the `c` claim and the region
 claims true: the doomed zerocheck says the `a` claim, the `b` claim or the pin fails. Then the

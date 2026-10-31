@@ -4,7 +4,7 @@ import Proofs.Flock.Soundness.Refine.OpeningConverse
 import Proofs.Flock.VBridge.Algebra.ZerocheckConverse
 
 /-!
-# One rep accepts when its stages' checks hold (PROTOCOL.md §9–§14)
+# One rep accepts when its stages' checks hold (`Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`, `Flock.Merkle`)
 
 `verifyRep_of_checks` is `rep_refines`' converse on the executable's side: the verifier's per-rep check `verifyRep`
 (Verify.lean:37–55) returns the proof's cap when the record carries the rep's stream, the statement's extra claims and

@@ -1,4 +1,4 @@
-"""`IntegrityProfile`: the audit's output, bounds on the faulty proof blocks of a partition, per stratum, at `delta`.
+"""`IntegrityProfile`: the audit's output, bounds on the incorrect proof blocks of a partition, per stratum, at `delta`.
 
 An audit protocol (one-stage, sampled proofs) produces it: the facts checked exhaustively, and the verifier's sampling
 law (decision 43) with its failure probability, from which the bounds on wrong units follow (`bound`, `stratum_bounds`).

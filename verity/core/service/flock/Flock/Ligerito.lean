@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §13–§14: the dense Ligerito opening and its Merkle caps.
+The dense Ligerito opening and its Merkle caps (`Flock.Merkle`).
 -/
 import Flock.Opening
 import Flock.Schedule
@@ -9,7 +9,7 @@ namespace Flock
 
 open Transcript
 
-/-- §13.5: stratified positions from query coins; reads only the low `d − c_j` bits of `coin.lo`. -/
+/-- Stratified positions from query coins; reads only the low `d − c_j` bits of `coin.lo`. -/
 def positions (lv : Level) (coins : Array F128) : Array Nat := Id.run do
   let mut out := #[]
   let mut j := 0
@@ -20,12 +20,12 @@ def positions (lv : Level) (coins : Array F128) : Array Nat := Id.run do
       j := j + 1
   return out
 
-/-- The first `k` subspace-polynomial steps from `x`: `s ← s² + sv[j]·s` for `j < k` (§13.4). -/
+/-- The first `k` subspace-polynomial steps from `x`: `s ← s² + sv[j]·s` for `j < k`. -/
 def sIter (sv : Array F128) : Nat → F128 → F128
   | 0, x => x
   | k + 1, x => let y := sIter sv k x; y * y + sv[k]! * y
 
-/-- `s_i(v_i)` for `i < n`: the subspace polynomials' normalisers (§13.4). -/
+/-- `s_i(v_i)` for `i < n`: the subspace polynomials' normalisers. -/
 def svTable : Nat → Array F128
   | 0 => #[]
   | n + 1 => let sv := svTable n; sv.push (sIter sv n (F128.monomial n))
@@ -158,10 +158,10 @@ def queryLevel (ms : MerkleScheme) (p : LigeritoProof) (lv : Level) (cap : Array
     e := e + acc.smul (ea[j]!)
   return (pos, alpha, e)
 
-/-- `1 + c·(1 + u)` (§13.6). -/
+/-- `1 + c·(1 + u)`. -/
 def cff (c : F256) : F256 := 1 + c * (1 + F256.u)
 
-/-- §13.3–§13.6. `basisAt orig ext` is `b̂(orig ‖ bits(y))` for `y < 2^ext`. -/
+/-- The opening. `basisAt orig ext` is `b̂(orig ‖ bits(y))` for `y < 2^ext`. -/
 def ligerito (ms : MerkleScheme) (sch : Schedule) (T : F128) (cap : Array ByteArray) (p : LigeritoProof)
     (basisAt : Array F256 → Nat → Array F256) : TM Unit := do
   let n := sch.n
@@ -230,7 +230,7 @@ def ligerito (ms : MerkleScheme) (sch : Schedule) (T : F128) (cap : Array ByteAr
         claimPow p
         let bb ← lift sample
         modify fun st => { st with s := st.s + e.smul bb, conss := st.conss.push ⟨ext, pos, al, bb, R⟩ }
-    -- §13.6 final check
+    -- final check
     let st ← get
     let orig := levels.foldl (fun acc l => acc ++ l.extract 1 l.size) initCh
     if orig.size + ext != n then throw "ligerito: |orig| + ext ≠ n"

@@ -51,6 +51,7 @@ import Flock.Desc
 import Flock.RecVStar
 import Flock.ProvedScope
 import Flock.PortRoots
+import Flock.KsScope
 import Flock.Registered
 import Flock.RegKnown
 import Flock.KnownRead
@@ -61,6 +62,9 @@ import Flock.RecCoins
 import Flock.RecSetup
 import Flock.RecBudget
 import Flock.RecCompose
+import Flock.RecLinks
+import Flock.RecLinkTree
+import Flock.RecLinkRef
 import Flock.TemplateQuery
 import Flock.Derive
 import Flock.DeriveAll
@@ -95,4 +99,5 @@ import Flock.With.Setup
 import Flock.With.SetupEq
 import Flock.With.SimSetup
 import Flock.RecOpeningCmd
+import Flock.RecLinksCmd
 import Flock.RecRecord

@@ -63,9 +63,9 @@ def test_the_served_class_is_one_window_of_60_buckets_of_one_4096_byte_cell_hone
 
 
 def test_a_warden_runs_release_is_its_cells_and_its_forged_row_is_the_registered_reads_to_refuse():
-    """`warden_link`'s reading of a warden's cells (`_released`) gives the release and prompt lengths the warden's own
-    ingress served, and `forge`'s row, an id request of the same prompt length, keeps every output word 1 while the
-    registered read refuses it, in its window alone."""
+    """`warden_link`'s reading of a network certifier's cells (`_released`) gives the release and prompt lengths the
+    network certifier's own ingress served, and `forge`'s row, an id request of the same prompt length, keeps every
+    output word 1 while the registered read refuses it, in its window alone."""
     tie = _tie()
     link = tz.served(tz.SPAN, tz.ARRIVALS, tz.RATES)
     cells = [tz.WR.Cells.of(tz.LINK, tz.Direction.INGRESS, rec, tz.PARAMS, tz.SESSION) for rec in link.records]

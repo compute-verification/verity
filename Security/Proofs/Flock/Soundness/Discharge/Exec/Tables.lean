@@ -2,7 +2,7 @@ import Proofs.Flock.Soundness.Discharge.Exec.Setup
 import Proofs.Flock.Soundness.Discharge.Exec.SessionL
 
 /-!
-# flock-verify refines each table of a session, under `hm96-sha512/v1` (PROTOCOL.md §5, §9–§14, §16.12)
+# flock-verify refines each table of a session, under `hm96-sha512/v1` (`Flock.Record`, `Flock.Piop`, `Flock.Opening`, `Flock.Ligerito`, `Flock.Merkle`, `Stmt.setupTables`)
 
 `verify_refines_hm96` peels a one-table `Flock.verify`. A session of `J` tables runs the same checks on each:
 
@@ -214,8 +214,9 @@ theorem table_tableAfterL (spec : SessionSpec) (st : Setup) (S : Model.Statement
   · simp only [hv₀, hv₁, Bool.true_and, decide_eq_true_eq]
     exact ⟨hok₀, hok₁⟩
 
-/-- **flock-verify refines each table of the session it accepts, under `hm96-sha512/v1`** (§5, §9–§14, §16.12). When
-`Accepts I t`, the record decodes against the session's spec, and each table `j` is `setupH`'s statement. For a table
+/-- **flock-verify refines each table of the session it accepts, under `hm96-sha512/v1`** (`Flock.Record`, `Flock.Piop` to
+`Flock.Merkle`, `Stmt.setupTables`). When `Accepts I t`, the record decodes against the session's spec, and each table
+`j` is `setupH`'s statement. For a table
 whose leaves are `hm96-sha512/v1`, its schedule is `fast100`'s and, at the statement `stmtOf sts[j]` read off its
 layout and the record's link points, one run of the salted table game `tableAfterL` on the table's two streams' coins,
 with the proof files' openings and salts, accepts. -/

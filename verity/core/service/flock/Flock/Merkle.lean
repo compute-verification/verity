@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §14: the proof's own Merkle trees, as a parameter. A scheme fixes the digest size (the width of every cap entry
+The proof's own Merkle trees, as a parameter. A scheme fixes the digest size (the width of every cap entry
 and sibling in the proof), the node hash, the leaf of an opened row, and the `merkle_hash` index the proof's `PcsParams`
 must carry. The recorded statements use unsalted SHA-256; the target statement uses SHA-512 on every commitment path.
 -/
@@ -31,11 +31,11 @@ def rowBytes (row : Array F128) : ByteArray := row.foldl F128.pushBytes ByteArra
 def sha256 (id : String) : MerkleScheme :=
   { id, digestLen := 32, pcsIndex := 0, node := fun l r => Sha256.hash (l ++ r), leaf := fun row _ => Sha256.hash (rowBytes row) }
 
-/-- Unsalted SHA-512 with 64-byte digests (PR #83 at `631567f7`, `HashKind::Sha512 = 2`). -/
+/-- Unsalted SHA-512 with 64-byte digests (the circuit prover at `631567f7`, `HashKind::Sha512 = 2`). -/
 def sha512 (id : String) : MerkleScheme :=
   { id, digestLen := 64, pcsIndex := 2, node := fun l r => Sha512.hash (l ++ r), leaf := fun row _ => Sha512.hash (rowBytes row) }
 
-/-- `hm96-sha512/v1` (PR #83 from `2908d078`, `HashKind::Hm96Sha512 = 3`): the leaf hides its row, `SHA-512(leaf_prefix ‖ b ‖ c)`
+/-- `hm96-sha512/v1` (the circuit prover from `2908d078`, `HashKind::Hm96Sha512 = 3`): the leaf hides its row, `SHA-512(leaf_prefix ‖ b ‖ c)`
 for `x = SHA-512(row)` and the opening's 192-byte salt; nodes `SHA-512(l ‖ r)`. -/
 def hm96Sha512 : MerkleScheme :=
   { id := "hm96-sha512/v1", digestLen := 64, pcsIndex := 3, saltBytes := 192, node := fun l r => Sha512.hash (l ++ r),
@@ -67,7 +67,7 @@ def sibsOf (siblings : Array ByteArray) (w j : Nat) : List ByteArray := (sibling
 /-- The salts `n` openings carry. -/
 def saltCount (ms : MerkleScheme) (n : Nat) : Nat := if ms.saltBytes = 0 then 0 else n
 
-/-- §14: `rows` open to `cap` (depth `c`) at `positions` of a codeword of `2^d` rows, each of `lanes` elements, with
+/-- `rows` open to `cap` (depth `c`) at `positions` of a codeword of `2^d` rows, each of `lanes` elements, with
 `d − c` siblings per query and, for a salted scheme, one salt per query. -/
 def merkleCheck (ms : MerkleScheme) (cap : Array ByteArray) (c d : Nat) (positions : Array Nat) (rows : Array (Array F128))
     (siblings : Array ByteArray) (salts : Array ByteArray) (lanes : Nat) : V Unit :=

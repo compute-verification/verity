@@ -4,14 +4,14 @@ import Definitions.Flock.Game
 /-!
 # One rep before Ligerito: zerocheck, lincheck, the claims and the opening
 
-PROTOCOL.md §9.2 (Z1–Z7), §10 (L1–L5), §11 and §12 (O1–O6), as `Game` programs: a `recv` is a
+`Flock.Piop` (Z1–Z7), `Flock.Piop` (L1–L5), `Flock.Piop`, `Flock.Opening` (O1–O6), as `Game` programs: a `recv` is a
 prover message the spec absorbs, a `draw` is a round's live coins. Messages that the spec reads
 from the proof but that are forced (`final_c_eval` must equal `Pc(z)`, A4; `matrix_evals` is
 empty, A7) are not messages here. A program returns `none` where the spec rejects.
 
-The Merkle cap, the statement digest and the labels that round 0 absorbs (§9.1) fix no
+The Merkle cap, the statement digest and the labels that round 0 absorbs (`Flock.Piop`) fix no
 prover choice in this model: the level-0 table is committed before the rep (the session's
-`Commit`, §16), and a rep's transcript binds it.
+`Commit`, `Flock.Statement`), and a rep's transcript binds it.
 -/
 
 namespace FlockSoundness.Model
@@ -20,9 +20,9 @@ open FlockSoundness.Game
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K]
 
-/-! ## Zerocheck (§9.2) -/
+/-! ## Zerocheck (`Flock.Piop`) -/
 
-/-- The zerocheck's outputs (§9.2): the skip point `z`, the residual challenges `ρ` (one per
+/-- The zerocheck's outputs (`Flock.Piop`): the skip point `z`, the residual challenges `ρ` (one per
 address bit 6 … m−1), the zerocheck vector `r` over the same bits, and the claimed values. -/
 structure ZcOut (F : Type) (m : ℕ) where
   z : F
@@ -51,7 +51,7 @@ def residualRounds : (n : ℕ) → (Fin n → F) → F → Game ((Fin n → F) �
 def zcVector (A : Arith F K) {m : ℕ} (rs : Fin (m - 13) → F) : Fin (m - 6) → F :=
   fun i => if h : i.val < 7 then A.pinned ⟨i.val, h⟩ else rs ⟨i.val - 7, by omega⟩
 
-/-- **Zerocheck** (§9.2, Z1–Z7), for `m ≥ 13`. -/
+/-- **Zerocheck** (`Flock.Piop`, Z1–Z7), for `m ≥ 13`. -/
 def zerocheck (A : Arith F K) (m : ℕ) : Game (Option (ZcOut F m)) := do
   let _rSkip ← draw (Fin 6 → F)                          -- Z2: squeezed, never read (A1)
   let rs ← draw (Fin (m - 13) → F)                       -- Z3
@@ -64,7 +64,7 @@ def zerocheck (A : Arith F K) (m : ℕ) : Game (Option (ZcOut F m)) := do
   let v ← recv (F × F)                                   -- Z7: final_a_eval, final_b_eval
   pure (if claim = v.1 * v.2 then some ⟨z, ρ, r, v.1, v.2, pc⟩ else none)
 
-/-! ## Lincheck (§10) -/
+/-! ## Lincheck (`Flock.Piop`) -/
 
 /-- The folded column vector: fold the top bit of a vector of length `2h` at `t`. -/
 def foldTop (t : F) (h : ℕ) (v : ℕ → F) : ℕ → F := fun i => v i + t * (v (i + h) + v i)
@@ -82,7 +82,7 @@ def lincheckRounds : (n : ℕ) → F → Game ((Fin n → F) × F)
       pure (Fin.cons t ts, c)
 
 /-- `comb[c] = Σ_i e[i]·(α·A₀[i,c] + B₀[i,c])` with `e[s + 64u] = L_s(z)·eq(ρ_in, u)`, and
-`comb[pin] += β` (§10). -/
+`comb[pin] += β` (`Flock.Piop`). -/
 def comb (A : Arith F K) (S : Statement) (z α β : F) (ρIn : Fin (S.kLog - 6) → F) : ℕ → F :=
   fun c =>
     if hc : c < 2 ^ S.kLog then
@@ -98,7 +98,7 @@ def foldAll (t : List F) (len : ℕ) (v : ℕ → F) : ℕ → F :=
   | [] => v
   | tj :: rest => foldAll rest (len / 2) (foldTop tj (len / 2) v)
 
-/-- **Lincheck** (§10, L1–L5): reduces `v_a`, `v_b` to the `ab` claim on the witness. -/
+/-- **Lincheck** (`Flock.Piop`, L1–L5): reduces `v_a`, `v_b` to the `ab` claim on the witness. -/
 def lincheck (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) : Game (Option (Claim F S.m)) := do
   let α ← draw F                                         -- L1
   let β ← draw F                                         -- L2
@@ -115,32 +115,32 @@ def lincheck (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) : Game (Option (
   pure (if (∑ s : Fin 64, folded s * zPartial s) = claim
     then some ⟨w, A.lagS r', x⟩ else none)
 
-/-- The `c` claim (§11): value `Pc(z)`, skip `L_s(z)`, x = `r[6 … m−1]`. -/
+/-- The `c` claim (`Flock.Piop`): value `Pc(z)`, skip `L_s(z)`, x = `r[6 … m−1]`. -/
 def cClaim (A : Arith F K) {m : ℕ} (zc : ZcOut F m) : Claim F m := ⟨zc.vc, A.lagS zc.z, zc.r⟩
 
-/-! ## Opening: per-claim ring switching and batching (§12) -/
+/-! ## Opening: per-claim ring switching and batching (`Flock.Opening`) -/
 
 /-- The weight of a claim on the 128 packed positions: `w[v] = skip[v mod 64]·eq(x[0], ⌊v/64⌋)`
-(§12.1, paper B.3). -/
+(`Flock.Opening`, paper B.3). -/
 def packedWeight {m : ℕ} (c : Claim F m) (hm : 7 ≤ m) (v : Fin 128) : F :=
   c.skip ⟨v.val % 64, Nat.mod_lt _ (by norm_num)⟩ *
     (if v.val / 64 = 1 then c.x ⟨0, by omega⟩ else 1 + c.x ⟨0, by omega⟩)
 
-/-- The recombined value `β_k = Σ_u eq(r'', u)·t[u]`, `t[u] = Σ_v bit_u(s[v])·x^v` (§12.3). -/
+/-- The recombined value `β_k = Σ_u eq(r'', u)·t[u]`, `t[u] = Σ_v bit_u(s[v])·x^v` (`Flock.Opening`). -/
 def recombine (A : Arith F K) (s : Fin 128 → F) (r'' : Fin 7 → F) : F :=
   ∑ u : Fin 128, eqAt r'' u.val * A.pack fun v => A.unpack (s v) u
 
-/-- `Φ(a) = Σ_u bit_u(a)·eq(r'', u)`: the F₂-linear map with `Φ(x^u) = eq(r'', u)` (§12.4). -/
+/-- `Φ(a) = Σ_u bit_u(a)·eq(r'', u)`: the F₂-linear map with `Φ(x^u) = eq(r'', u)` (`Flock.Opening`). -/
 def phi (A : Arith F K) (r'' : Fin 7 → F) (a : F) : F :=
   ∑ u : Fin 128, ((A.unpack a u).val : F) * eqAt r'' u.val
 
 /-- The opening's output: the batched value `T` and the batched basis `b` on the packed
-hypercube (`y < 2^(m−7)`), which Ligerito must match: `Σ_y f(y)·b(y) = T` (§12.5). -/
+hypercube (`y < 2^(m−7)`), which Ligerito must match: `Σ_y f(y)·b(y) = T` (`Flock.Opening`). -/
 structure OpenOut (F : Type) where
   T : F
   b : ℕ → F
 
-/-- **Opening** (§12, O1–O6): each claim is ring-switched with its own seven coins, then all are
+/-- **Opening** (`Flock.Opening`, O1–O6): each claim is ring-switched with its own seven coins, then all are
 batched with one vector of independent coins. -/
 def opening (A : Arith F K) {m : ℕ} (hm : 7 ≤ m) (claims : List (Claim F m)) :
     Game (Option (OpenOut F)) := do

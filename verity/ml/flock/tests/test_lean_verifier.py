@@ -6,6 +6,7 @@ import fcntl
 import hashlib
 import importlib.util
 import json
+import random
 import re
 import shutil
 import subprocess
@@ -162,13 +163,23 @@ def _ref_bernoulli(a, b, n, stream):
     return out
 
 
+#: the challenger's coins for a draw that names none: the verifier has no coins of its own
+_COINS = random.Random(20261029)
+
+
+def _with_coins(args):
+    return args if "--stream" in args or "--stream-file" in args else [*args, "--stream", _COINS.randbytes(1 << 14).hex()]
+
+
 def _lean_draw_obj(args):
-    p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", *args], capture_output=True, text=True)
+    p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", *_with_coins(args)], capture_output=True,
+                       text=True)
     return json.loads(p.stdout[5:]) if p.stdout.startswith("DRAW ") else None
 
 
 def _lean_draw(args):
-    p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", *args], capture_output=True, text=True)
+    p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", *_with_coins(args)], capture_output=True,
+                       text=True)
     return json.loads(p.stdout[5:])["units"] if p.stdout.startswith("DRAW ") else None
 
 
@@ -189,8 +200,24 @@ def test_unit_draw_samplers_are_the_exact_reduction():
         b = max(b, 1)
         want = _ref_bernoulli(a, b, n % 50 + 1, bytes(stream))
         assert _lean_draw(["--population", str(n % 50 + 1), "--p", f"{a}/{b}", "--stream", stream.hex()]) == want, (a, b, case)
-    units = _lean_draw(["--population", "1000", "--k", "10"])
-    assert len(set(units)) == 10 and units == sorted(units) and all(0 <= u < 1000 for u in units)
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_draw_given_no_coins_is_refused_unless_it_samples_every_unit():
+    """`draw` without `--stream` or `--stream-file`: the verifier has no coins of its own, so a draw that reads coins is
+    refused before any is read, whatever its law, and only a draw of every unit, which reads none, is drawn."""
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+
+    def draw(*args):
+        return subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", *args], capture_output=True, text=True)
+
+    for args in (["--population", "1000", "--k", "10"], ["--population", "8", "--p", "1/2"],
+                 ["--population", "8", "--k", "7"]):
+        p = draw(*args)
+        assert p.returncode == 2 and not p.stdout and "draws no coins of its own" in p.stderr, (args, p)
+    for args, n in ((["--population", "8", "--k", "8"], 8), (["--population", "5", "--p", "3/3"], 5)):
+        p = draw(*args)
+        assert p.returncode == 0 and json.loads(p.stdout[5:])["units"] == list(range(n)), (args, p)
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -235,7 +262,7 @@ def test_a_draw_is_held_to_its_registered_law(tmp_path):
 
     def draw(k, reg, population=512):
         p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", "--population", str(population), "--k", str(k),
-                            "--registration", str(reg)], capture_output=True, text=True)
+                            "--registration", str(reg), "--stream", "a5" * 512], capture_output=True, text=True)
         return p.returncode, p.stdout, p.stderr
 
     for k, other in ((2, 8), (8, 2)):
@@ -267,8 +294,8 @@ def test_a_draw_over_several_tables_has_a_count_they_split():
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
 
     def draw(*args):
-        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", "--population", "8", *args],
-                           capture_output=True, text=True)
+        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", "--population", "8", *args,
+                            "--stream", "a5" * 512], capture_output=True, text=True)
         return p.returncode, p.stdout, p.stderr
 
     rc, out, err = draw("--p", "1/2", "--tables", "2")
@@ -639,14 +666,14 @@ def _one_stage_draw():
 
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None or _one_stage_draw() is None,
-                    reason="no Lean toolchain or no stratified law in core (PRs #161, #164)")
+                    reason="no Lean toolchain or no stratified law in core")
 def test_stratified_draw_agrees_with_core(tmp_path):
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     p = subprocess.run(["python3", str(Path(__file__).resolve().parent / "stratified_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
-                        "--out", str(tmp_path), "--random", "20", "--os-draws", "100"], capture_output=True, text=True)
+                        "--out", str(tmp_path), "--random", "20", "--draws", "100"], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
 
-@pytest.mark.skipif(shutil.which("lake") is None or _template_vectors() is None, reason="no Lean toolchain or no template vectors (PR #131)")
+@pytest.mark.skipif(shutil.which("lake") is None or _template_vectors() is None, reason="no Lean toolchain or no template vectors")
 def test_template_queries_agree_with_the_vectors(tmp_path):
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     p = subprocess.run(["python3", str(VERIFIER / "template_query_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
@@ -662,7 +689,7 @@ def _has_check_cut():
     return True
 
 
-@pytest.mark.skipif(shutil.which("lake") is None or not _has_check_cut(), reason="no Lean toolchain or no verity.ml.circuits.cut (PR #111)")
+@pytest.mark.skipif(shutil.which("lake") is None or not _has_check_cut(), reason="no Lean toolchain or no verity.ml.circuits.cut")
 def test_check_cut_agrees_with_the_reference(tmp_path):
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     p = subprocess.run(["python3", str(VERIFIER / "cut_check_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
@@ -680,7 +707,7 @@ def _qword_vector_file():
 
 
 @pytest.mark.skipif(shutil.which("lake") is None or _qword_vector_file() is None,
-                    reason="no Lean toolchain or no qword_vectors.json in core (PR #111)")
+                    reason="no Lean toolchain or no qword_vectors.json in core")
 def test_qword_cuts_agree_with_core_verify(tmp_path):
     """Every Call's cut on its whole graph (`qword-program --cuts`: the partition invariant and the width rule), against core's
     `partition_object.verify`: its pinned cut refusals, and each of its programs at several (X, W), under `Q_word` v1 and v2
@@ -703,7 +730,7 @@ def _qword_vectors():
     return _ir_tests() / "partition_vectors.json"
 
 
-@pytest.mark.skipif(shutil.which("lake") is None or _qword_vectors() is None, reason="no Lean toolchain or no Q_word evaluator (PR #111)")
+@pytest.mark.skipif(shutil.which("lake") is None or _qword_vectors() is None, reason="no Lean toolchain or no Q_word evaluator")
 def test_qword_evaluator_agrees_with_the_reference(tmp_path):
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     p = subprocess.run(["python3", str(VERIFIER / "qword_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
@@ -730,7 +757,7 @@ def test_the_reference_vectors_exist():
 
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None or _format_vectors() is None,
-                    reason="no Lean toolchain or no program format vectors (PR #120)")
+                    reason="no Lean toolchain or no program format vectors")
 def test_qword_over_programs_agrees_with_the_reference(tmp_path):
     ir = _format_vectors()
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
@@ -740,6 +767,57 @@ def test_qword_over_programs_agrees_with_the_reference(tmp_path):
                        + (["--qword-vectors", str(ir / "qword_vectors.json")] if (ir / "qword_vectors.json").exists() else []),
                        capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
+
+
+NCI_SCRIPTS = Path(__file__).resolve().parents[3] / "core" / "protocols" / "network" / "nci" / "lean" / "scripts"
+
+
+def _tile_window(bits: bool) -> str:
+    """A PoUW window's shape (`pouw_credit_cases.window_desc`): the root's 16-bit input batch, then 8 bits, and one call
+    of a template over a row of 8 bits and a word, returning the word; the row's argument names the 8 bits (`bits`) or
+    node 0's first word 8 times, reading a word as bits."""
+    word, row = ["Value", 16], ["Array", 8, ["Value", 1]]
+    root = {"params": [], "ret_type": word, "ret": {"strided": ["n", 2, 0, 1, 0, 0, 1]}, "nodes": [
+        {"form": "batch", "fn": 0, "n": 2, "args": [], "axes": [], "out": 2},
+        {"form": "batch", "fn": 2, "n": 8, "args": [], "axes": [], "out": 1},
+        {"form": "call", "fn": 1, "out": 0, "args": [{"type": 1, "refs": {"strided": ["n", int(bits), 0, 1, 0, 0, 8]}},
+                                                     {"type": 0, "refs": {"strided": ["n", 0, 0, 1, 0, 0, 1]}}]}]}
+    tile = {"params": [["a", row], ["zy", word]], "ret_type": word, "ret": {"strided": ["p", 1, 0, 1, 0, 0, 1]},
+            "nodes": []}
+    return json.dumps({"annotations": {}, "callees": ["Input16_v1", "Tile_v1", "Input1_v1"], "definitions": {
+        "Input16_v1": {"form": "primitive", "id": "Input16_v1", "params": [], "ret": word},
+        "Input1_v1": {"form": "primitive", "id": "Input1_v1", "params": [], "ret": ["Value", 1]},
+        "R_v1": {"form": "composite", "id": "R_v1", "bindings": {}, "body": root},
+        "Tile_v1": {"form": "composite", "id": "Tile_v1", "bindings": {}, "body": tile}},
+        "program_fn": "R_v1", "root": "R_v1", "schema": "verity-ir/descriptor/v1",
+        "types": [word, row, ["Array", 2, word]]}, sort_keys=True, separators=(",", ":"))
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_width_refusals_agree_with_the_codec(tmp_path):
+    """The NCI difftest's 335 descriptors whose references name leaves of other widths than their types give them, and
+    their well-typed neighbours (`desc_difftest_vectors.mistyped`), and a PoUW window's shape reading a word as a
+    template's bits and its bits as them (`_tile_window`): the Lean decoder, which C-Flock's verifier, `NciCheck` and
+    PoUW's `Credit.programOf` share, refuses as `E_REINTERPRET` exactly those the codec does, with the codec's message
+    (`verity/ml/flock/verifier/README.md`'s D22; `qword_program_agree.py --widths`)."""
+    spec = importlib.util.spec_from_file_location("desc_difftest_vectors", NCI_SCRIPTS / "desc_difftest_vectors.py")
+    V = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(V)
+    with open(tmp_path / "widths.jsonl", "w") as f:
+        for inst in [*V.mistyped(), {"program": _tile_window(False)}, {"program": _tile_window(True)}]:
+            desc = json.loads(inst["program"])
+            try:
+                V.reference.codec.decode_program(desc, V.reference.declared(desc))
+                why = None
+            except ValueError as e:
+                why = str(e)
+            f.write(json.dumps({"program": inst["program"], "codec": why}) + "\n")
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    p = subprocess.run(["python3", str(VERIFIER / "qword_program_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+                        "--out", str(tmp_path / "out"), "--widths", str(tmp_path / "widths.jsonl")],
+                       capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert json.loads(p.stdout.strip().splitlines()[-1])["widths"] == {"both_refuse": 211, "neither": 126}
 
 
 @pytest.mark.skipif(shutil.which("lake") is None or _format_vectors() is None, reason="no Lean toolchain or no Q_call vectors")
@@ -757,7 +835,7 @@ def test_qcall_and_input_bindings_agree_with_the_reference(tmp_path):
 def test_merkle_collision_is_not_met_by_a_split_string(tmp_path):
     """`MerkleScheme.Collision` is a collision of the hash, not of how its input is split: one byte string split two ways
     (`[0] ‖ []` against `[] ‖ [0]`) gives one node, and must not count, since the children are not of the digest's width
-    (PR #146's red-team review). The same witness for `Sha256.Collision` needs two different inputs, which it does not have."""
+    (a red-team review's case). The same witness for `Sha256.Collision` needs two different inputs, which it does not have."""
     build_proofs_verifier()
     for goal, witness in [
         ('(MerkleScheme.sha256 "flock-leaf/sha256-unsalted").Collision',
@@ -776,7 +854,7 @@ def test_merkle_collision_is_not_met_by_a_split_string(tmp_path):
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_region_refuses_a_repeated_free_bit(tmp_path):
     """`mkRegion` refuses a region whose free bits repeat, since the pinned table-soundness theorems assume them distinct
-    (`Statement.LinkLayout`); a repeat would pass the other checks and be covered by none (PR #278's red-team review).
+    (`Statement.LinkLayout`); a repeat would pass the other checks and be covered by none (a red-team review's case).
     Two ranges of free bits that overlap in one bit, as `bits 0 w ++ bits slotLog c` do when `slotLog < w`, are refused."""
     subprocess.run(["lake", "build", "Flock"], cwd=LEAN, check=True, capture_output=True)
     f = tmp_path / "Region.lean"
@@ -935,7 +1013,7 @@ def bcOf (l : Nat) (row salt : String) : String := Id.run do
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_row_nets_are_the_verifiers(tmp_path):
     """The `sha512x3` and `hm96` sections come from the prover, so setup refuses either unless it is the net the verifier
-    generates (`Flock.HmNets`, PROTOCOL.md §16.10). A composed RoPE circuit is accepted; one AND row changed in either
+    generates (`Flock.HmNets`, `Flock.HmRow`). A composed RoPE circuit is accepted; one AND row changed in either
     section is refused, naming the row."""
     pytest.importorskip("verity_numerical")
     from verity_flock import circuit as FC
@@ -970,7 +1048,7 @@ def test_row_nets_are_the_verifiers(tmp_path):
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_rec_open_unit_of_other_bits_is_refused_before_its_net_is_built(tmp_path):
     """A unit named `rec-open/l<LANES>-h<H>` must be the verifier's opening net at those parameters (`Flock.RecOpen`,
-    PROTOCOL.md §16.10), about 4,374 rows a lane, so setup compares the unit's input and output bits with the opening's
+    `Flock.HmRow`), about 4,374 rows a lane, so setup compares the unit's input and output bits with the opening's
     before it builds that net. A toy statement is accepted; with its unit renamed `rec-open/l1000000000-h16` it is refused
     for its bits, in an address space of 8 GiB, far below the net's size. Renamed at the heights `RecOpen_v4` builds, 0
     to 32 (`aux` one row at 0), it is refused for its bits against `max(1, ⌈H/2⌉)` rows of `aux`; at 33, for its height."""
@@ -1157,7 +1235,7 @@ def test_bit_row_statements_are_the_rust_verifier_s_and_a_meta_that_differs_is_r
     """Two statements whose bit-row ports have every residue between them (length 0; length mod 8 of 0, 1 and 7; bytes mod
     128 of 0, 1, 111, 112 and 127) have the statement digests `flock-circuit statement` gives them under its build's identity
     `verity/flock-circuit` (its `row_leaf_in_circuit` naming `hm96-sha512/row/v2`; the output row a bit row of all its words'
-    bits, §16.13), seeded and under `FC_COINS=os` (`--coins os`: the live-OS identity, `Tags.withCoins`, composed with the
+    bits, `HmOut`), seeded and under `FC_COINS=os` (`--coins os`: the live-OS identity, `Tags.withCoins`, composed with the
     bit-row and hidden-output text), so the two verifiers' Δ constants, forced-zero leaf bits, row wires and identities
     agree. A META that differs from what the verifier derives is refused, with the Rust verifier's message: a wrong length
     (its prefix, or its words and compressions), a length of 2^64 or one past `MAX_COMPS`, a v1 prefix and midstate under v2,
@@ -1517,7 +1595,7 @@ def collides : MerklePair → Bool
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_merkle_extractor_computes_a_collision(tmp_path):
     """`merkle_binding` is stated over `merklePair`, a computable extractor, since a collision of a fixed hash exists by
-    counting (PR #146's red-team delta check). On a toy scheme with 1-byte digests, two accepted checks with different rows
+    counting (a red-team delta check). On a toy scheme with 1-byte digests, two accepted checks with different rows
     give its pair: two children pairs under one node, or two rows with one leaf, and each collides."""
     build_proofs_verifier()
     f = tmp_path / "Toy.lean"
@@ -1535,8 +1613,8 @@ def _net(rows, ins="1 0 1 1 2", outs="1 1 1 1 1"):
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_net_parser_refuses_rows_out_of_order(tmp_path):
-    """`Net.parse` holds every computed row to the order the soundness package's `Rows.topo` names (#144's
-    `test_pinned_rows_read_earlier_columns`): it reads only earlier columns that are not input padding, or the constant. Port
+    """`Net.parse` holds every computed row to the order the soundness package's `Rows.topo` names (as
+    `test_pinned_rows_read_earlier_columns` holds the pinned rows to it): it reads only earlier columns that are not input padding, or the constant. Port
     groups must fit their words, and input groups the input rows."""
     base = ["1 0 1 0", "1 1 1 1"] + ["0 0"] * 126 + ["1 0 1 1", "2 128 1 1 130", "1 130 1 130"]
 
@@ -1560,3 +1638,33 @@ def test_net_parser_refuses_rows_out_of_order(tmp_path):
     got = {Path(j["file"]).stem: j for j in (json.loads(l.split(" ", 1)[1]) for l in out.splitlines() if l.startswith("NETCHECK "))}
     for name, (_, why) in cases.items():
         assert got[name]["ok"] == (why is None) and (why is None or why in got[name]["error"]), (name, got[name])
+
+
+#: the legacy statements (`ProvedScope.legacyStatements`), by the family `vectors.json`'s honest cells name
+LEGACY = {"flock-pure-block": ["verity/flock-pure-block/v2"],
+          "flock-ir-frame": ["verity/flock-ir-frame/v2", "verity/flock-ir-frame/v3"],
+          "flock-ir-sampling": ["verity/flock-ir-sampling/v1"], "flock-ir-block": ["verity/flock-ir-block/v1"],
+          "flock-vllm-block": ["verity/flock-vllm-block/v1"]}
+
+
+def test_every_honest_cell_is_a_statement_the_lean_verifier_refuses():
+    """`vectors.json`'s honest cells are upstream's: each is a legacy statement, or the netlist one before hm96-sha512 rows,
+    and none is a vector the Lean verifier accepts (`honest_upstream_only`)."""
+    v = json.loads((VERIFIER / "vectors.json").read_text())
+    assert "the Lean verifier refuses each" in v["honest_upstream_only"]
+    for c in v["honest"]:
+        assert c["statement"] in LEGACY or "verity/flock-netlist/v1" in c["detail"], c["cell"]
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_legacy_statement_is_refused_at_every_session(tmp_path):
+    """`verify` refuses every session of a legacy statement before it reads a file, with or without `--zk`."""
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    for name in (n for ns in LEGACY.values() for n in ns):
+        for zk in ((), ("--zk",)):
+            p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "verify", "--statement", name, *zk, "--circuit",
+                                str(tmp_path / "c.txt"), "--public", str(tmp_path / "pub.bin"), "--session",
+                                str(tmp_path / "a"), str(tmp_path / "b")], capture_output=True, text=True)
+            vs = [json.loads(ln.split(" ", 1)[1]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT ")]
+            why = f"refused: {name}, a legacy statement (§16.9): a statement form the soundness proof does not cover"
+            assert p.returncode == 1 and [(x["accepted"], x["why"]) for x in vs] == [(False, why)] * 2, p.stdout + p.stderr

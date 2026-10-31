@@ -7,7 +7,7 @@ import Proofs.Flock.Verifier.Registered
 The recursive audit's hidden statement, read from the inner statement `st` itself rather than from V*'s sessions: the
 registered private circuit's statement at `st`'s description rows `rowsOf st.c st.pub rt` (the `b ‖ c` of the table of
 `st`'s circuit's port named `rt`'s name), which Lean's verifier opens against the developer's registered root `rt`
-(`Flock.Registered.checkDescription`, PROTOCOL.md §16.16). No session's reads are on this path.
+(`Flock.Registered.checkDescription`, `Tags.withPlainLeaves`). No session's reads are on this path.
 
 * `AcceptsDescription rt st`: the description check accepts `st` against registered reads holding `rt`.
 * `description_rows`: then each of `st`'s registered rows `r < rt.leaves` opens `rt` at `r`, through the path `st`'s

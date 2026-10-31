@@ -4,7 +4,7 @@ import Proofs.Flock.Soundness.Discharge.Exec.Event
 /-!
 # flock-verify's `--zk` acceptance, as an event of the audit
 
-`flock-verify verify --zk` (`Main.verifyCmd` with `--zk`, live/PROTOCOL.md, PROTOCOL.md §16.14) checks a
+`flock-verify verify --zk` (`Main.verifyCmd` with `--zk`, live/PROTOCOL.md, `Flock.Zk`) checks a
 `flock-circuit --zk` session directory. It reads the same flags as a plain `verify` (`Exec.Inputs`) and differs in four
 places, all of which this file restates:
 
