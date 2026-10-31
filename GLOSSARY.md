@@ -356,6 +356,8 @@ family takes a fresh id, never `veritor.*` (`verity/ml/circuits/tests/test_targe
   - **`next`**: drive's branch of admitted PRs, one merge each, above `main`, which fast-forwards to its reviewed prefix.
   - **Preflight**: `research queue ready`'s checks of a head merged onto `next`, before the mark.
   - **Landing gate**: a script at `main` that every PR's merge onto `next` must pass.
+  - **Low-risk lane**: drive landing a PR on `checked` on its ready mark alone, when its merge changes nothing drive.toml's
+    `lowrisk_excludes` names (no Lean, lock or soundness-path change).
   - **Lean check**: a run of every Lake package's audit (`lean-audit`) on a commit of `next`. A PR that changes a lock, or
     Lean that runs as code, lands only on a passed Lean check at or above it.
   - **After-landing run**: the full check of `checked`'s tip after each landing; `main` moves only to tips that passed every step on the merge gate.
