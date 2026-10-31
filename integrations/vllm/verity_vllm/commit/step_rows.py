@@ -33,7 +33,8 @@ u64be t)`` under the registration's fresh key ``Kw``, in a tree under ``Commitme
 "sha512")`` with ``binding_t = identity_digest_sha512(WEIGHTS_TAG, {geo, tensor: t, entry, row_bits})`` over its names entry
 ``[name, dtype, shape, bytes]``; the weights root is ``vllm_v1.weights_root`` over the tensor roots under SHA-512 (:func:`weights_root`).
 The tree (:func:`weights_tree`) keeps ``Kw`` beside the roots, so a replay of the registration reproduces them.  ``Kw`` stays in the
-private bundle: a published slim keep carries ``Ks_t`` of the tensors its replay opened instead (`pipeline.cpu_replay.slim_tree`).
+private bundle: a slim keep, which stays on the node too, carries ``Ks_t`` of the tensors its replay opened instead
+(`pipeline.cpu_replay.slim_tree`).
 """
 from __future__ import annotations
 
