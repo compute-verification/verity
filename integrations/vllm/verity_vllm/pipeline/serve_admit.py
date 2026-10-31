@@ -5,7 +5,7 @@ permutation between the two (3,669 bits on TRACE-CORPUS's heavy trace).
 
 `ReleaseOrder` is a reorder buffer in front of the engine loop's ``submit``: it forwards request n of the release order
 once the frontend holds every earlier-released request, each forwarded, refused or dropped, and holds it until then. There
-is no hold to a bucket boundary (settled 11:23Z: the boundary saves no step bits).
+is no hold to a bucket boundary (the boundary saves no step bits).
 
 **What the network certifier sends.** Each request it releases carries ``x-verity-release: N``, N its 0-based index in the release
 order of its run (the certifier's ``Proxy.requests_released`` before the release counts it): dense, each N once, every

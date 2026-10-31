@@ -13,7 +13,7 @@ with M_dyn the bits of the writes. The cut D = {the writes} gives β ≤ 1 up to
 The graph (`Graph`):
 
 - **Nodes.** A node is a root Call of a Program (`from_program`), or a group of Calls (`coarsen`). Its work is its nonlinear
-  units, the gate model's `nonlinear` (`Security/Definitions/Accounting/Gates/Model.lean`, #4622): property/v1's budgeted
+  units, the gate model's `nonlinear` (`Security/Definitions/Accounting/Gates/Model.lean`): property/v1's budgeted
   units (`verity.ml.circuits.stacking`; only gates with an operand that depends on a run input count) plus its data
   products, each lane of an s8-family step whose two multiplicands both depend on a run input (attention's QKᵀ and PV;
   a MAC by a weight is a linear map, free), as `benchmarks/property_redteam/products_pass.py` counts them. E is in the

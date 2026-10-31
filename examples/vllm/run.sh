@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # `verity example vllm [window|commit|serve] [--dry-run] [FLAG...]`: one of the vLLM example's runs, started by `research run` on the
 # node placement.toml places it on, with that node's paths and the run's own variables as its environment, and the model the
-# example's row names (the one file workloads/SHA256SUMS lists, fetched by its art id and checked: `model`, `case` and
+# example's workload names (the one file workloads/SHA256SUMS lists, fetched by its art id and checked: `model`, `case` and
 # `engine.revision`; bf16, served as pinned, `--precision pin`):
 #   window   the default: one served window through every subprotocol, benchmarks/one_stage/served_verdicts.sh: the endpoint
-#            committing under the row's Commit of record, its requests (serve_load.py --varied), every closed window sealed, the
+#            committing under the workload's Commit of record, its requests (serve_load.py --varied), every closed window sealed, the
 #            window's sampled proofs (C-Flock --zk behind the Lean firewall, and the Lean verifier's verdict), PoUW, the bandwidth
 #            audit, PoUS and the network certifier where each has its piece, and one record of every verdict
-#   commit   once per row: the row's Commit of record with its sealed replay bundle (commit.sh), the row dir the endpoint commits
+#   commit   once per workload: its Commit of record with its sealed replay bundle (commit.sh), the workload dir the endpoint commits
 #            under (placement.toml's COMMIT_RUN names the one `window` and `serve` use)
 #   serve    the endpoint alone, serving until UNTIL (serve.sh)
 # Further FLAGs go to `research run` (`--env WC_RECORD_TIMEOUT=3h`, `--env PP_CHALLENGER=...`); --dry-run prints the command and

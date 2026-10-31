@@ -18,8 +18,8 @@ unit trees over rows, only each unit's outputs committed. An output row opens in
 row opens where its producer committed it, and names the producer's coordinates (the fixture's `x` and `sx` open at
 their layer's input quantizer). The bundle adds a block tree over each server-time block's step roots.
 The bundle builds its step commitments with kernels' CPU reference, `benchmarks/torch_gpu/commit_slots/slots.py`,
-imported from the tree. The suite pins the SHA-512 of their fixture, `commit-slots-v1.json` at the commit `REFERENCE`
-pins, which the reference must reproduce.
+imported from the tree. The suite pins the SHA-512 of their fixture, `commit-slots-v1.json`, which the reference must
+reproduce; its roots and digests are those of the commit `REFERENCE` pins.
 
 `target` names the card's binding of the templates' dot: `GEMM_SM90_S8` for the H200's INT8, `GEMM_HOPPER` for its BF16,
 `GEMM_SM120_S8` for the RTX PRO 6000. `check` refuses a template that binds another dot. On `main`, `GEMM_SM90_S8`
@@ -59,7 +59,7 @@ for one server-time block and what the composed verdict reads. It extends the al
 `check` recomputes every derived field from the subprotocols' entries.
 
     python -m verity_e2e_demo.block_record check tests/fixtures/block-record-r2-period0.json
-    python -m verity_e2e_demo.block_record tonight --r2 R2/reports.jsonl --r1 R1/reports.jsonl --wipe WIPE/results.json --out DIR
+    python -m verity_e2e_demo.block_record from-runs --r2 R2/reports.jsonl --r1 R1/reports.jsonl --wipe WIPE/results.json --out DIR
 
 The fixtures are records of real runs. `block-record-r2-period0` is one period of an all-protocols run: five
 subprotocols accept, and a wipe is carried but not composed, since it ran on another server. So the verdict is pending,
@@ -78,6 +78,6 @@ drawn-block proving run's VERDICT and PROVEBUNDLE lines verbatim: the first line
 H200 proof block is proved in C-Flock and accepted by Lean. Per-call noise's serving overhead is one line,
 `serve_noise_line`: the seconds it adds a step with both ratios, never γ_step alone, ending the section marked
 `"serve_noise": true`; a row stating it on its own is refused. The rendered report goes to the
-evidence store (`research data put --kind demo-a-report/v1 --file F --preserve`), never Git.
+evidence store (kind `demo-a-report/v1`), never Git.
 
     python -m verity_e2e_demo.report [RECORD.json ...] --measurements M.json --out FILE

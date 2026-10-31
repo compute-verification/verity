@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# This directory's scripts on one leased GPU of vy-dc-h200 (or another sm_90 node), each STEP under its own lease of at most
-# S8_MAX_MIN (30) minutes, from build.sh's ship sent with the run (nothing is compiled here):
-#   tar -C BUILD_RUN/out/ship -cf /tmp/s8-ship.tar .
-#   research run --on vy-dc-h200 --project verity --campaign e2e-demo --source . --cwd source --timeout 90m \
-#     --env GPU_LEASE_WHO=LANE --send /tmp/s8-ship.tar -- bash benchmarks/torch_gpu/s8_linear/run.sh STEP...
+# This directory's scripts on one leased GPU of an H200 (or another sm_90 GPU), each STEP under its own lease of at most
+# S8_MAX_MIN (30) minutes, from build.sh's ship (nothing is compiled here; cwd = the source tree's root):
+#   tar -C SHIP -cf /tmp/s8-ship.tar .
+#   OUT=DIR S8_SHIP=/tmp/s8-ship.tar bash benchmarks/torch_gpu/s8_linear/run.sh STEP...
+# Needs CUDA torch with vLLM and `gpu-lease` on PATH; OUT and S8_SHIP default to a run directory's out/ and
+# inputs/s8-ship.tar (RESEARCH_RUN_DIR).
 # A STEP is a script and its arguments in one word, e.g. "run.py --ms 1,7,257 --no-swap" (the canary) then "run.py" (the
 # gate); each writes into $OUT/<i>-<script>. @OUT@ in a step is $OUT ("bench.py --configs @OUT@/1-tune/best.json"), @S@
 # the run's scratch directory (deleted at exit, never uploaded), and a step "cpu:SCRIPT ..." runs with no lease ("cpu:realw.py
@@ -12,8 +13,8 @@
 # Outside any lease: the ship unpacked and held to its MANIFEST.sha256 (s8_wgmma.cubin, its sass.json; row_table/ seeds
 # ~/.cache/verity/row_table), the card and Python recorded. VERITY_BENCH_VENV names the Python with torch and vLLM.
 set -uo pipefail
-D=${RESEARCH_RUN_DIR:?}; OUT=$D/out; mkdir -p "$OUT"
-SHIP=${S8_SHIP:-$D/inputs/s8-ship.tar}
+OUT=${OUT:-${RESEARCH_RUN_DIR:?set OUT}/out}; mkdir -p "$OUT"
+SHIP=${S8_SHIP:-${RESEARCH_RUN_DIR:?set S8_SHIP}/inputs/s8-ship.tar}
 S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
 ROOT=$PWD
 git rev-parse HEAD > "$OUT/commit.txt" 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:-unknown}" > "$OUT/commit.txt"

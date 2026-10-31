@@ -167,9 +167,9 @@ def attribute(timing: dict, collector: Collector, prompt_len: dict[str, int], *,
     `resolved_lag` = the engine's RESOLVED async_scheduling as LAG (1 / 0; None = unattested), the record's lag of
     record (tokens.json `lag.value`).  The scheduler-state inference below derives a lag from schedule deltas (finish iteration - last
     advancing iteration); under async_scheduling=False the finishing request is freed inside step() BEFORE the post-step snapshot, so its
-    last forward is invisible, last_adv one early, and the derived lag reads 1 for a true 0 -- the first sync record (exec r17_2216) had
-    its finish_step / engine_steps / output_lag_steps REWRITTEN one early and then failed GM-01 G6 against its own tokens.  The loop's
-    step fields now STAND (a) when the derived lag contradicts `resolved_lag`, and (b) when the corrected model fails this function's own
+    last forward is invisible, last_adv one early, and the derived lag reads 1 for a true 0: applied, it would rewrite a sync record's
+    finish_step / engine_steps / output_lag_steps one early, and the global match's G6 would fail the record against its own tokens.  The
+    loop's step fields STAND (a) when the derived lag contradicts `resolved_lag`, and (b) when the corrected model fails this function's own
     consistency check; the contradiction is a named problem and `corrections.applied` is False -- never a silent rewrite, never a lag
     inferred from the trace as the record's lag."""
     recs: dict[str, dict] = timing.get("requests") or {}
@@ -195,7 +195,7 @@ def attribute(timing: dict, collector: Collector, prompt_len: dict[str, int], *,
     if use_sched:
         # the forwards are known exactly: an iteration whose schedule advanced some request ran one.  The lag is NOT
         # `iterations - forwards` (an idle gap -- a finished batch drained before the next arrival is due -- adds a no-forward
-        # iteration that is not a lag; integ's note 22:12Z): it is, per request, finish iteration - last iteration that advanced
+        # iteration that is not a lag): it is, per request, finish iteration - last iteration that advanced
         # it (the forward that sampled its last token), the same value for every request on one engine.
         ran_s = [bool(d) for d in deltas]
         n_fwd = sum(ran_s)
@@ -241,9 +241,9 @@ def attribute(timing: dict, collector: Collector, prompt_len: dict[str, int], *,
                 # the derived lag contradicts the RESOLVED profile: the snapshots missed a forward (sync frees the
                 # finishing request inside step()); the loop's fields stand, the outputs inference is the forward map, the contradiction is named
                 problems.append(f"scheduler-state inference: derived output lag {lag_s} contradicts the resolved async_scheduling LAG "
-                                f"{int(resolved_lag)} (R17-1: the record's lag is the resolved profile, never a schedule-delta inference) -- "
-                                f"the loop's engine_steps {loop_steps} / output_lag_steps {lag} / finish_step values stand (F-r17-16)")
-                corrections["reason"] += "; NOT APPLIED: the derived lag contradicts the resolved async_scheduling (F-r17-16)"
+                                f"{int(resolved_lag)} (the record's lag is the resolved profile, never a schedule-delta inference) -- "
+                                f"the loop's engine_steps {loop_steps} / output_lag_steps {lag} / finish_step values stand")
+                corrections["reason"] += "; NOT APPLIED: the derived lag contradicts the resolved async_scheduling"
                 use_sched_map = False
             else:
                 timing["engine_steps"] = n_fwd
@@ -340,10 +340,10 @@ def attribute(timing: dict, collector: Collector, prompt_len: dict[str, int], *,
                 else:
                     rec[k] = v
         corrections["applied"] = False
-        corrections["reason"] += "; REVERTED: the corrected model failed the attribution's own consistency check (F-r17-16)"
+        corrections["reason"] += "; REVERTED: the corrected model failed the attribution's own consistency check"
         problems.insert(0, f"scheduler-state correction reverted: the corrected model (engine_steps {corrections['corrected']['engine_steps']}, "
                            f"output_lag_steps {corrections['corrected']['output_lag_steps']}) failed {len(problems)} consistency check(s); the loop's "
-                           f"step fields stand (F-r17-16)")
+                           f"step fields stand")
     n_chunks = [int(r.get("n_prefill_chunks") or 0) for r in recs.values()]
     out = {"source": "scheduler-state" if use_sched else ("outputs" if collector.scheduler is None else "outputs (scheduler snapshots incomplete)"),
            "steps_scheduled_tokens": sched_steps if use_sched else None,

@@ -31,14 +31,18 @@ sticky infinity).  BlockScaledAlignAdd started as a port of autoproof ``fp4-ref/
 ``native_dot_f32``) and ``spec/src/dyadic.rs`` (``trunc_rz``, ``to_f32``) as adopted in
 ``spec/SEMANTICS.lock.v1.json`` (replica: ``verity/ml/circuits/silicon/captures/autoproof-SEMANTICS.lock.v1.json``); its alignment rule was
 re-fitted on the RTX 5090 captures (log entries D16, D17, D18) and confirmed by the runs cited in each instance's
-``validated`` string.
+``validated`` string.  The store ids those strings cite are :data:`EVIDENCE_IDS` (``models_evidence.json``), keyed by
+model name and then by role: a ``validated`` string names each role it cites in backticks (``run``, or a dotted path
+into a nested role such as ``chain.device``).  The integer models' are :data:`verity.ml.circuits.silicon.integer.EVIDENCE_IDS`.
 
 ``silicon.py`` re-exports every name, so ``silicon.tc_dot`` is still the executable definition the frozen target names.
 """
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal, Protocol, runtime_checkable
 
 from .errors import InvalidArtifact
@@ -75,6 +79,7 @@ __all__ = [
     "BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED",
     "BLACKWELL_SM120_NVF4",
     "BlockScaledAlignAdd",
+    "EVIDENCE_IDS",
     "GroupSum",
     "HAWKEYE_AMPERE_GROUPSUM_E4M3_V0",
     "HOPPER_BF16_M16N8K16",
@@ -90,6 +95,9 @@ __all__ = [
     "tc_dot",
     "tc_dot_chain",
 ]
+
+#: Model name -> role -> the store id (run) or GPU UUID its ``validated`` string names by that role.
+EVIDENCE_IDS: dict[str, dict] = json.loads(Path(__file__).with_name("models_evidence.json").read_text())
 
 
 @runtime_checkable
@@ -271,7 +279,7 @@ HOPPER_BF16_M16N8K16 = GroupSum(
     groups=(16,),
     width=26,
     zero_exponent=-133,
-    validated="Hawkeye (H100); re-measured on the mma.sync path by lane tc-probe-fp8 run r20260922-185339-e337 (25,698,304 elements, 0 mismatches) and on the RTX 5090 by lane fp4-5090 run r20260922-182911-1f10 (204,800/204,800)",
+    validated="Hawkeye (H100); re-measured on the mma.sync path by run `h100` (25,698,304 elements, 0 mismatches) and on the RTX 5090 by run `rtx5090` (204,800/204,800)",
 )
 
 #: One accumulator coordinate of Hopper's ``wgmma.mma_async.sync.aligned.m64n{N}k16.f32.bf16.bf16`` (SASS ``HGMMA.64xNx16.F32.BF16``):
@@ -287,9 +295,9 @@ HOPPER_BF16_WGMMA_K16 = GroupSum(
     width=26,
     zero_exponent=-133,
     validated=(
-        "lane HP campaign, H100 80GB HBM3 (sm_90), 2026-09-07: 37,510 tiles x 8,192 outputs x 3 reps (wgmma m64n128k16 via Triton); "
-        "lane wgmma-bf16, H100 80GB HBM3, 2026-09-26: wgmma m64n8k16 with A from shared memory (run r20260926-020157-242a) and from "
-        "registers (r20260926-020210-aee8), 26,361,344 + 2,876,928 chained elements each and the lane HP records replayed, 0 mismatches"
+        "a campaign on an H100 80GB HBM3 (sm_90): 37,510 tiles x 8,192 outputs x 3 reps (wgmma m64n128k16 via Triton); "
+        "H100 80GB HBM3: wgmma m64n8k16 with A from shared memory (run `ss`) and from registers (`rs`), "
+        "26,361,344 + 2,876,928 chained elements each and that campaign's records replayed, 0 mismatches"
     ),
 )
 
@@ -366,7 +374,7 @@ ADA_E5M2_M16N8K32 = GroupSum(
     groups=(16, 16),
     width=14,
     zero_exponent=-139,
-    validated="RTX 4090 (sm_89), lane tc-probe-fp8 runs r20260922-175732-172a / r20260922-182641-e27d: 25,040,128 + 141,824 elements, 0 mismatches (ADA_E4M3_M16N8K32's pipeline with e5m2 products)",
+    validated="RTX 4090 (sm_89), the `runs`: 25,040,128 + 141,824 elements, 0 mismatches (ADA_E4M3_M16N8K32's pipeline with e5m2 products)",
 )
 
 HOPPER_E5M2_K32 = GroupSum(
@@ -377,7 +385,7 @@ HOPPER_E5M2_K32 = GroupSum(
     groups=(32,),
     width=14,
     zero_exponent=-139,
-    validated="H100 (sm_90a), lane tc-probe-fp8 run r20260922-183837-940b: wgmma m64n8k32 e5m2, 25,554,432 elements, 0 mismatches (HOPPER_E4M3_K32's pipeline with e5m2 products)",
+    validated="H100 (sm_90a), the `run`: wgmma m64n8k32 e5m2, 25,554,432 elements, 0 mismatches (HOPPER_E4M3_K32's pipeline with e5m2 products)",
 )
 
 # Blackwell consumer (sm_120) FP8 mma.sync (SASS QMMA.16832): one group of all 32 products plus the accumulator in the 26-bit adder of
@@ -392,11 +400,11 @@ BLACKWELL_SM120_E4M3_M16N8K32 = GroupSum(
     width=26,
     zero_exponent=-133,
     validated=(
-        "RTX PRO 6000 Blackwell Server Edition (sm_120, driver 595.91.07, nvcc 12.8), lane vllm-sm120-tc-gemm: tc_probe run "
-        "r20260930-030915-23f3 fitted by r20260930-031244-ecbc, 6,434,816 finite elements in 13 families, 0 mismatches; Ada's (16,16)/14, "
-        "Hopper wgmma's (32,)/14 and the sm_90 two-HMMA lowering are refuted (4.91M / 4.81M / 0.76M mismatches); the fresh-seed capture "
-        "r20260930-041757-0bde (25,040,128 elements, 14 families) evaluated under total semantics by r20260930-052000-e32d: 0 mismatches, "
-        "the specials family included; the fresh-seed sweep r20260930-063457-5410 (driver 580.173.02, CUDA 13.0, SM clock locked at "
+        "RTX PRO 6000 Blackwell Server Edition (sm_120, driver 595.91.07, nvcc 12.8): tc_probe run `probe` fitted by `fit`, "
+        "6,434,816 finite elements in 13 families, 0 mismatches; Ada's (16,16)/14, Hopper wgmma's (32,)/14 and the sm_90 "
+        "two-HMMA lowering are refuted (4.91M / 4.81M / 0.76M mismatches); the fresh-seed capture `specials.capture` "
+        "(25,040,128 elements, 14 families) evaluated under total semantics by `specials.eval`: 0 mismatches, the specials "
+        "family included; the fresh-seed sweep `sweep` (driver 580.173.02, CUDA 13.0, SM clock locked at "
         "2,100 MHz, seed 20260931): 25,041,024 elements in 14 families, 0 mismatches (Ada's pipeline: 19,033,876)"
     ),
 )
@@ -410,9 +418,9 @@ BLACKWELL_SM120_E5M2_M16N8K32 = GroupSum(
     width=26,
     zero_exponent=-133,
     validated=(
-        "RTX PRO 6000 Blackwell Server Edition (sm_120), lane vllm-sm120-tc-gemm: tc_probe and fit run r20260930-031447-a5ad, "
+        "RTX PRO 6000 Blackwell Server Edition (sm_120): tc_probe and fit run `probe`, "
         "6,434,816 finite elements in 13 families, 0 mismatches (BLACKWELL_SM120_E4M3_M16N8K32's pipeline with e5m2 products); the "
-        "fresh-seed sweep r20260930-063527-4d6b (driver 580.173.02, CUDA 13.0, SM clock locked at 2,100 MHz, seed 20260931): "
+        "fresh-seed sweep `sweep` (driver 580.173.02, CUDA 13.0, SM clock locked at 2,100 MHz, seed 20260931): "
         "25,041,024 elements in 14 families, 0 mismatches (Ada's pipeline with e5m2 products: 15,747,373)"
     ),
 )
@@ -427,11 +435,11 @@ BLACKWELL_SM120_E5M2_M16N8K32 = GroupSum(
 # the FP32 range is the sticky infinity of its sign, as here.  The executable reference for those kinds is
 # benchmarks/tc_probe_fp4/f8_model.py (held to this class word for word by its tests).
 _B200_F8_PIN = (
-    "lane B200-FP8 2026-10-19, NVIDIA B200 (sm_100, cc 10.0, driver 580.173.02, nvcc 13.0.88 -gencode compute_100a/sm_100a, "
-    "GPU-2e39ef52), probe kernel benchmarks/tc_probe_fp4/tcgen05_f8.cu: one tcgen05.mma.cta_group::1 (M128 N32 K32, K-major "
+    "NVIDIA B200 (sm_100, cc 10.0, driver 580.173.02, nvcc 13.0.88 -gencode compute_100a/sm_100a, GPU `device`), "
+    "probe kernel benchmarks/tc_probe_fp4/tcgen05_f8.cu: one tcgen05.mma.cta_group::1 (M128 N32 K32, K-major "
     "no-swizzle smem descriptors, one SASS UTCQMMA a kernel) per K step, issued by one thread, arbitrary FP32 accumulators "
     "preloaded into tensor memory with tcgen05.st (and enable_input_d = 0 tiles), 1, 2, 4 or 8 steps on one TMEM accumulator; "
-    "an exact-integer layout gate passed on every kind before the capture. Run r20261019-081000-ad35 (f8_sm100.sh, seeds "
+    "an exact-integer layout gate passed on every kind before the capture. Run `run` (f8_sm100.sh, seeds "
     "20261019 / 20261020): 110,853,632 / 110,853,632 in-domain words over seven kinds (kind::f8f6f4 e4m3, e5m2, e4m3 x e5m2, "
     "e5m2 x e4m3; kind::mxf8f6f4 e4m3, e5m2, e4m3 x e5m2), 10,853,888 of them in 15 adversarial families a kind (largest-"
     "exponent spread, cancellation, accumulator walks, subnormal operands and accumulators, signed zero, enable_input_d = 0, "
@@ -767,7 +775,7 @@ class BlockScaledAlignAdd:
 
 _AUTOPROOF_PIN = (
     "autoproof SEMANTICS.lock.v1 (ADOPTED 2026-07-11, oracle-v3): RTX 5090 (sm_120, driver 570.195.03, GPU "
-    "GPU-297048d1), kernel SASS 166a24a0..., mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::4X.m16n8k64"
+    "`autoproof.device`), kernel SASS 166a24a0..., mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::4X.m16n8k64"
     ".row.col.f32.e2m1.e2m1.f32.ue4m3, ascending-K chain from a zero accumulator: the lockfile records 1,574,998 / "
     "1,574,998 dot statements bit-exact under model5 (K in {64, 128, 256}; random, extreme-scale-span, "
     "directed-cancellation, curated) and the v0 single-window W=26 hypothesis REFUTED (142,270 mismatches); the "
@@ -776,31 +784,30 @@ _AUTOPROOF_PIN = (
 )
 
 _FP4_RE_PIN = (
-    "lane fp4-re 2026-09-22, RTX 5090 (sm_120, cc 12.0, driver 580.178.04, nvcc 12.8.93 -arch=sm_120a, GPU-506928f9), "
+    "RTX 5090 (sm_120, cc 12.0, driver 580.178.04, nvcc 12.8.93 -arch=sm_120a, GPU `device`), "
     "one mma.sync per output element, arbitrary finite FP32 accumulators (families: random operands and scales, uniform "
     "encodings, scale sweeps, hot-clip regime, large cancellation, accumulator window walks, tiny / subnormal / -0 "
     "accumulators, signed-zero matrix, accumulator-offset walk 24..56 binades, wide-mantissa top scales, anchor "
     "participation)"
 )
 _FP4_RE_NVF4 = (
-    "SASS OMMA.SF.16864.F32.E2M1.E2M1.UE4M3.4X; 0 mismatches over 8,339,456 elements: lane fp4-5090's captures "
-    "r20260922-182011-88f8 (1,736,704; model5 29,118), fit run r20260922-215616-3c10 (2,252,800; model5 88,697) and the "
-    "fresh-seed confirmation run r20260922-221716-65b9 (4,349,952; model5 114,148); autoproof probe3 vectors replayed "
+    "SASS OMMA.SF.16864.F32.E2M1.E2M1.UE4M3.4X; 0 mismatches over 8,339,456 elements: the `captures` (1,736,704; model5 "
+    "29,118), fit run `fit` (2,252,800; model5 88,697) and the fresh-seed confirmation run `confirmation` (4,349,952; "
+    "model5 114,148); autoproof probe3 vectors replayed "
     "1,601 / 1,601 in each run"
 )
 _FP4_RE_MXF4 = (
     "SASS OMMA.SF.16864.F32.E2M1.E2M1.E8, PTX mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::2X.m16n8k64"
-    ".row.col.f32.e2m1.e2m1.f32.ue8m0; 0 mismatches over 7,389,184 elements: lane fp4-5090's captures "
-    "r20260922-182548-e654 (622,592; model5+ue8m0-shift 19,709), fit run r20260922-215831-c3d8 (2,039,808; the "
-    "true-msb accumulator anchor without a floor left 528, log entry D19), fresh-seed confirmation runs "
-    "r20260922-221824-8d99 (3,940,352) and r20260922-222148-6342 (786,432; ue8m0 scale extremes 2^-127..2^127, "
+    ".row.col.f32.e2m1.e2m1.f32.ue8m0; 0 mismatches over 7,389,184 elements: the `captures` (622,592; model5+ue8m0-shift "
+    "19,709), fit run `fit` (2,039,808; the true-msb accumulator anchor without a floor left 528, log entry D19), "
+    "fresh-seed confirmation runs `confirmation`, in order (3,940,352) and (786,432; ue8m0 scale extremes 2^-127..2^127, "
     "sums below the subnormal grid, subnormal accumulators); the signed-underflow alternative misses 14,734 + 14,472 "
     "of the confirmation elements (D13)"
 )
 _FP4_RE_EDGES = (
     "outside the model (record-only family `specials`): a NaN accumulator of either sign and any payload returns "
     "0x7FFFFFFF, +-inf returns itself, a sum leaving binary32 returns +-inf of its sign (ue8m0 only; nvf4 cannot "
-    "overflow); the same words observed on the B200 (sm_100 tcgen05, lane tcgen05: record-only family `specials` of every run)"
+    "overflow); the same words observed on the B200 (sm_100 tcgen05: record-only family `specials` of every run)"
 )
 
 BLACKWELL_SM120_NVF4 = BlockScaledAlignAdd(
@@ -853,9 +860,9 @@ BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED = BlockScaledAlignAdd(
     grid_floor=-174,
     underflow_zero="signed",
     validated=(
-        "REFUTED on the RTX 5090 (lane fp4-re): as BLACKWELL_SM120_MXF4 but a nonzero sum below the subnormal grid keeps "
-        "its sign, as autoproof dyadic.rs::to_f32 does; 17,470 / 2,039,808 (run r20260922-215831-c3d8), 14,734 / "
-        "3,940,352 (r20260922-221824-8d99) and 14,472 / 786,432 (r20260922-222148-6342) mismatches, all of them -0 where "
+        "REFUTED on the RTX 5090: as BLACKWELL_SM120_MXF4 but a nonzero sum below the subnormal grid keeps its sign, as "
+        "autoproof dyadic.rs::to_f32 does; 17,470 / 2,039,808 (run `fit`), 14,734 / 3,940,352 and 14,472 / 786,432 (the "
+        "`confirmation` runs, in order) mismatches, all of them -0 where "
         "the hardware gives +0 (log entry D13). Kept as the named alternative the probe scores alongside the pin."
     ),
 )
@@ -866,8 +873,8 @@ BLACKWELL_SM120_MXF4_UNDERFLOW_SIGNED = BlockScaledAlignAdd(
 # the B200, the sm_120 constants, unchanged, reproduce every word.  These are separate model objects so the registry
 # names the architecture it was measured on; their parameters are BLACKWELL_SM120_*'s to the bit.
 _TCGEN05_PIN = (
-    "lane tcgen05 2026-09-23, NVIDIA B200 (sm_100, cc 10.0, driver 580.126.09, nvcc 12.9.86 -gencode compute_100a/sm_100a, "
-    "GPU-d1d0c3f4), CUTLASS-free probe kernel benchmarks/tc_probe_fp4/tcgen05_fp4.cu: ONE tcgen05.mma.cta_group::1 (M128 N8 K64, "
+    "NVIDIA B200 (sm_100, cc 10.0, driver 580.126.09, nvcc 12.9.86 -gencode compute_100a/sm_100a, GPU `device`), "
+    "CUTLASS-free probe kernel benchmarks/tc_probe_fp4/tcgen05_fp4.cu: ONE tcgen05.mma.cta_group::1 (M128 N8 K64, "
     "SASS UTCOMMA) per tile with the 16 harness rows replicated into all 8 groups of 16 TMEM lanes (every replica agreed), "
     "arbitrary FP32 accumulators preloaded into TMEM with tcgen05.st and enable_input_d = 1 (all-+0 accumulators also run with "
     "enable_input_d = 0 and through the TMEM path: identical), K-major no-swizzle smem descriptors, scale factors in TMEM; the "
@@ -887,9 +894,9 @@ BLACKWELL_SM100_NVF4 = BlockScaledAlignAdd(
     underflow_zero="positive",
     validated=(
         "B200 (sm_100) tcgen05.mma.cta_group::1.kind::mxf4nvf4.block_scale.scale_vec::4X, SASS UTCOMMA.4X: " + _TCGEN05_PIN
-        + "; 0 mismatches over 16,461,824 elements: r20260923-001528-f5c5 (303,104), r20260923-001759-d869 (6,463,488; autoproof "
-        "probe3 vectors replayed 1,601 / 1,601 through the TMEM accumulator, K=128/256 cases as dependent MMAs), "
-        "r20260923-001856-7d63 (1,134,592; K=128 chain), r20260923-002315-b793 (8,560,640); model5 (autoproof's control) "
+        + "; 0 mismatches over 16,461,824 elements: the `runs`, in order (303,104), (6,463,488; autoproof probe3 vectors "
+        "replayed 1,601 / 1,601 through the TMEM accumulator, K=128/256 cases as dependent MMAs), (1,134,592; K=128 chain) "
+        "and (8,560,640); model5 (autoproof's control) "
         "misses 140,102 / 165,355 of the two big runs exactly as on the RTX 5090. The parameters are BLACKWELL_SM120_NVF4's."
     ),
 )
@@ -908,11 +915,11 @@ BLACKWELL_SM100_MXF4 = BlockScaledAlignAdd(
     validated=(
         "B200 (sm_100) tcgen05.mma.cta_group::1.kind::mxf4.block_scale.scale_vec::2X (the mnemonic CUTLASS 3.9.2's "
         "SM100_MMA_MXF4_SS emits for UE8M0) and kind::mxf4nvf4.block_scale.scale_vec::2X, both SASS UTCOMMA: " + _TCGEN05_PIN
-        + "; 0 mismatches over 12,898,304 elements: kind::mxf4 r20260923-001838-42a4 (3,956,736) and r20260923-002320-6fbf "
-        "(3,956,736); kind::mxf4nvf4 2X r20260923-001832-17dc (3,956,736) and r20260923-001903-c420 (1,028,096; K=128 chain); "
+        + "; 0 mismatches over 12,898,304 elements: kind::mxf4 `mxf4`, in order (3,956,736) and (3,956,736); "
+        "kind::mxf4nvf4 2X `mxf4nvf4_2x`, in order (3,956,736) and (1,028,096; K=128 chain); "
         "the signed-underflow alternative misses 14,710 / 14,384 / 14,734 / 5,535 (D13 holds on sm_100 too). The parameters "
-        "are BLACKWELL_SM120_MXF4's. The floor is sharp on the B200 too (lane B200-FP8, r20261019-080611-3d1d, driver "
-        "580.173.02, GPU-2e39ef52: kind::mxf4nvf4 2X, the subnormal and UE8M0 extreme / underflow families and random scales, "
+        "are BLACKWELL_SM120_MXF4's. The floor is sharp on the B200 too (`floor.run`, driver "
+        "580.173.02, GPU `floor.device`: kind::mxf4nvf4 2X, the subnormal and UE8M0 extreme / underflow families and random scales, "
         "0 / 3,670,016, while grid_floor -173 / -175 miss 85 / 67 and -170 / -178 365 / 257)."
     ),
 )
@@ -934,12 +941,12 @@ BLACKWELL_SM120_E2M1_M16N8K32 = GroupSum(
     validated=(
         "NVIDIA RTX PRO 6000 Blackwell Server Edition (sm_120a, cc 12.0, driver 580.173.02, nvcc 13.0.88) "
         "mma.sync.aligned.m16n8k32.row.col.kind::f8f6f4.f32.e2m1.e2m1.f32, one SASS QMMA.16832.F32.E2M1.E2M1 per tile, "
-        "benchmarks/tc_probe_fp4 (k32.py) sweeps with arbitrary finite FP32 accumulators: run r20260930-071201-d356 "
-        "(GPU-5f1149a4, seed 20260930) 1,671,168 gated elements, 0 mismatches, while two groups of 16 miss 88,660, the "
+        "benchmarks/tc_probe_fp4 (k32.py) sweeps with arbitrary finite FP32 accumulators: run `run` "
+        "(GPU `device`, seed 20260930) 1,671,168 gated elements, 0 mismatches, while two groups of 16 miss 88,660, the "
         "unscaled block-scaled adder (group 16 / 32) 193,027 / 192,566 and autoproof's model5 268,267; fresh-seed "
-        "confirmation r20260930-073334-fdac (seed 20261003, gated on this model) 3,309,568 gated elements, 0 mismatches "
-        "(the alternatives miss 176,662 / 385,736 / 384,745), both on GPU-5f1149a4; a 1024-step register chain (K = 32,768) "
-        "on a second die, r20260930-073445-e2b6 (GPU-2b59d5fe, seed 20261004, gated on this model), 1,408 end words, "
+        "confirmation `confirmation` (seed 20261003, gated on this model) 3,309,568 gated elements, 0 mismatches "
+        "(the alternatives miss 176,662 / 385,736 / 384,745), both on GPU `device`; a 1024-step register chain (K = 32,768) "
+        "on a second die, `chain.run` (GPU `chain.device`, seed 20261004, gated on this model), 1,408 end words, "
         "0 mismatches. "
         "NaN/inf accumulators are outside the model (record-only). Capture sample: verity/ml/circuits/ops/tests/fixtures/tc-sm120-k32-e2m1-2026-09-30"
     ),

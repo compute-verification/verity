@@ -2,7 +2,7 @@
 batch × context of `--shapes`, its kernels timed by torch's profiler, and the step's own fraction of R split by kernel
 class: the GEMMs (the four linears in FP8 and the LM head) against the weights' bytes, attention against the KV it
 reads (each request's context, 128 KiB a token), and the rest (norms, rotary, activation quantization, sampling,
-copies) against nothing registered. `native` re-times the step with the GEMMs at `--native-R` of R (ra-tag-fast's
+copies) against nothing registered. `native` re-times the step with the GEMMs at `--native-R` of R (the fast tagger's
 native linears: 6.98 GB in 4.71 ms at M = 1, 0.96 R) and the rest as measured; `native_all` puts attention at that
 rate too. Writes `step_profile.json` and `step_profile.log` under `--out`. `--stack stack|pstack` profiles the encoded
 stack's step instead (`stack_hook.py`): its fused decode + GEMM + receipts and its lm_head's decode are GEMMs against its

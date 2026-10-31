@@ -3,7 +3,7 @@
 # the BF16 base pin (LLAMA31_8B, unsloth/Llama-3.1-8B) downloaded if missing, then `verity-vllm int8-checkpoint make`, which
 # checks every base shard and every made file against the manifests' sha256s. CPU only; cwd = the source tree.
 #
-#   research run --on vy-dc-h200 --project verity --campaign dither-loop --source . --cwd source -- bash benchmarks/hash/dither/pin.sh
+#   bash benchmarks/hash/dither/pin.sh      (on the host that serves it, e.g. an H200; HF_HOME, default /workspace/hf)
 set -euo pipefail
 PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
 export HF_HOME=${HF_HOME:-/workspace/hf} PYTHONPATH=$PWD/integrations/vllm:$PWD${PYTHONPATH:+:$PYTHONPATH}

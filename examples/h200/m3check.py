@@ -1,4 +1,4 @@
-"""M3's drawn H200 units checked on CPU from their bytes alone (PRF-172): `m3draw.py open`'s ``drawn.json`` and ``drawn.bin``,
+"""M3's drawn H200 units checked on CPU from their bytes alone: `m3draw.py open`'s ``drawn.json`` and ``drawn.bin``,
 held to the registration (`m3reg.py`) and the live coin (`m3coin.py`).
 
     python examples/h200/m3check.py --drawn DIR --registration REG.json --coin coin.json [--payload BIN] [--out FILE]

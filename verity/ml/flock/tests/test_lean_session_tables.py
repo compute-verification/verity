@@ -146,6 +146,7 @@ def test_the_parts_come_from_the_sessions_draw(verdicts, name):
     assert not v["accepted"] and v["why"].startswith(DRAWS[name][1]), v["why"]
 
 
+@pytest.mark.slow
 def test_statements_without_several_tables_refuse_them(rope):
     [v] = _verify(rope, 2, _session(rope, "j2"), statement="verity/flock-circuit@e51e2b86+seed-injection")
     assert not v["accepted"] and v["why"].startswith("setup: verity/flock-circuit@e51e2b86+seed-injection: one table per session"), v["why"]
