@@ -23,7 +23,7 @@ logged; a leaf's salt ``y`` is derived from it by SHA-512 alone, as COMMIT-GPU d
 ctx, geo, row_bits})`` over the step's vllm-v1 identity digests, so the domain is known when the step's length is (a hit plan's, or
 the step's end); the tree is core's ``tree_levels`` (padded to a power of two with frame pads).  The step root is ``vllm_v1.step_root``
 over the tree root and the run root ``vllm_v1.run_root``, both under SHA-512: 64-byte roots.  An opening carries the row, its salt
-and the frame path; :func:`fold_path` recomputes ``h`` and folds the path as core's ``verify_opening`` does.  A range opening of
+and the frame path, from which ``h`` is recomputed and opened under the tree root by core's ``verify_opening``.  A range opening of
 leaves ``[lo, hi)`` carries their rows and salts and, per level, the run's boundary siblings (:func:`range_shape`); :func:`fold_range`
 folds them as core's ``verify_multiproof`` folds those leaves' multiproof, which is the path's siblings in order.
 
@@ -49,7 +49,7 @@ from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth, tree_le
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest, sha512_row_v2_prefix
 
 __all__ = ["DOMAIN_TAG", "INST", "KEY", "KEY_BYTES", "NAME", "OWNER", "ROOT_BYTES", "ROW_BYTES", "SALT_BYTES", "SCHEMA", "WEIGHTS_TAG", "binding",
-           "domain", "fold_path", "fold_range", "hiding_leaf", "keyed_tensor_root", "leaf", "levels", "path", "range_shape", "row_prefix", "run_root", "salt",
+           "domain", "fold_range", "hiding_leaf", "keyed_tensor_root", "leaf", "levels", "path", "range_shape", "row_prefix", "run_root", "salt",
            "step_root", "t_nibbles", "t_table", "tensor_hs", "tensor_key", "tensor_root", "weights_domain", "weights_root", "weights_tree"]
 
 NAME = "rows-sha512"
@@ -109,17 +109,6 @@ def levels(dom: CommitmentDomain, rows: Sequence[bytes], ks: bytes, n_bits: int,
 def path(lv: Sequence[Sequence[bytes]], pos: int) -> tuple[bytes, ...]:
     """Leaf ``pos``'s siblings, leaves first (``MerkleTree.open``'s path)."""
     return tuple(lv[d][(pos >> d) ^ 1] for d in range(len(lv) - 1))
-
-
-def fold_path(dom: CommitmentDomain, pos: int, h: bytes, sibs: Sequence[bytes]) -> bytes | None:
-    """The tree root that leaf ``pos`` with hiding digest ``h`` and path ``sibs`` stands for; None for a path of the wrong shape."""
-    if not 0 <= pos < dom.count or len(sibs) != merkle_depth(dom.count) or any(len(s) != dom.digest_bytes for s in sibs):
-        return None
-    digest, cursor = leaf(dom, pos, h), pos
-    for d, sib in enumerate(sibs):
-        digest = dom.node(d, cursor >> 1, *((digest, sib) if cursor % 2 == 0 else (sib, digest)))
-        cursor >>= 1
-    return digest
 
 
 def range_shape(n: int, lo: int, hi: int) -> tuple[tuple[bool, bool], ...]:
