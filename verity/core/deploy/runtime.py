@@ -43,7 +43,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity.core.wire import Int, Message, Refused, Registry, Schema, Str, canonical, parse, split
+from verity.core.wire import Int, Message, MessageTypes, Refused, Schema, Str, canonical, parse, split
 from verity.core.wire.handshake import NONCE_BYTES, Handshake, Key, Verify
 
 from . import sources as S
@@ -53,11 +53,11 @@ from .party import Action, Finish, Identity, Party, Received, Record, Send, Time
 from .transcript import Entry, PartyLog, record
 
 MODES = ("live", "simulated", "mixed", "replay")
-RUNTIME = Registry([Schema("Closed", 1, "structure", {"how": Str(1024)}),
+RUNTIME = MessageTypes([Schema("Closed", 1, "structure", {"how": Str(1024)}),
                     Schema("Refused", 1, "structure", {"name": Str(64), "detail": Str(1024)})])
 """What the runtime tells a party: its channel closed (`how`: `end` when the peer ended it, else what failed on it, the
 channel's `ended`), or a frame on it was refused by name."""
-ARRIVED = Registry([Schema("Arrived", 1, "private", {"ns": Int()})])
+ARRIVED = MessageTypes([Schema("Arrived", 1, "private", {"ns": Int()})])
 """A transcript's `arrived` entry: when the next frame, its `in`, arrived on the party's clock."""
 FAILED = ("party-died", "stalled")
 RUNS = "runs.jsonl"
@@ -79,8 +79,8 @@ class ProtocolDef:
 class Endpoint:
     channel: str
     pipe: Pipe | None
-    accepts: Registry
-    sends: Registry
+    accepts: MessageTypes
+    sends: MessageTypes
     handshake: Handshake | None = None
     closed: bool = False
 
