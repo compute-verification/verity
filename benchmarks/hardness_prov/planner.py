@@ -9,6 +9,11 @@ of the last L steps are drawn after it is committed.
 The control is HT-PUBLIC's known-coin plan (the same iteration with M = 1 and the live beacon itself), which lands
 exactly when the step is a contraction in reach.
 
+The adaptive cheater (`steer`) starts at W* and controls the planted matrices' gradients, not their update rule: each
+step, having seen its coins, he moves every entry by at most the honest step's bound (lr, or η LSBs) toward W* minus
+the step's weight noise. This is what a tail audit that checks every update but samples the forward and backward
+leaves him.
+
 For each target family, L and pass setting, on `--evals` fresh beacons: the served codes' cheapest route (`routes`),
 the fraction of codes equal to W*'s, and the miss rms(W_L − W*) in served LSBs. Writes `planner.json` to `--out`.
 """
@@ -32,13 +37,20 @@ import starts
 import toy
 
 
-def run(args, pre, cfg, w0, b, L):
-    """The planted matrices after L honest steps from w0 under beacon b."""
+def run(args, pre, cfg, w0, b, L, steer=False):
+    """The planted matrices after L steps from w0 under beacon b: honest, or with `steer` the adaptive cheater's
+    (`toy.Hardening`'s steer) toward w0, at the honest step's size bound (lr, or η LSBs)."""
     model = erasure.build(args, pre)
     with torch.no_grad():
         for n, w in w0.items():
             model.linear(n).copy_(torch.from_numpy(w.astype(np.float32)))
-    hard = toy.Hardening(model, toy.Pool(args.data), cfg, b)
+    targets = {}
+    if steer:
+        for n, w in w0.items():
+            t = torch.from_numpy(w.astype(np.float32))
+            size = cfg.eta * torch.from_numpy(toy.scale(w, cfg.quant)).float()[:, None] if cfg.rel else cfg.lr
+            targets[n] = (t, size)
+    hard = toy.Hardening(model, toy.Pool(args.data), cfg, b, targets)
     for t in range(L):
         hard.step(t)
     return model, {n: model.linear(n).detach().numpy().astype(np.float64) for n in w0}
@@ -53,8 +65,8 @@ def plan(args, pre, cfg, target, L, beacons):
     return w0
 
 
-def evaluate(args, pre, cfg, w0, target, tplant, L, b):
-    model, wl = run(args, pre, cfg, w0, b, L)
+def evaluate(args, pre, cfg, w0, target, tplant, L, b, steer=False):
+    model, wl = run(args, pre, cfg, w0, b, L, steer)
     per = {}
     for n, w in wl.items():
         q, s = toy.codes(w, cfg.quant)
@@ -81,18 +93,23 @@ def job(args, pre, family, cfg, L):
             tplant[n] = t
     own = [toy.beacon(f"hardness-prov planner own {m}") for m in range(args.m)]
     live = [toy.beacon(f"hardness-prov planner live {e}") for e in range(args.evals)]
-    out = {"family": family, "cfg": cfg.__dict__, "tag": cfg.tag(), "L": L}
-    out["unplanned"] = [evaluate(args, pre, cfg, target, target, tplant, L, b) for b in live]
-    w0 = plan(args, pre, cfg, target, L, own)
-    out["planned"] = [evaluate(args, pre, cfg, w0, target, tplant, L, b) for b in live]
-    out["w0_shift_rms"] = float(np.mean([np.sqrt((((w0[n] - target[n]) / toy.scale(target[n], cfg.quant)[:, None]) ** 2)
-                                                 .mean()) for n in target]))
-    out["known"] = [evaluate(args, pre, cfg, plan(args, pre, cfg, target, L, [b]), target, tplant, L, b)
-                    for b in live[:1]]
-    sm = {k: np.mean([e["sm120"] for e in out[k]]) for k in ("unplanned", "planned", "known")}
-    print(f"{family} {cfg.tag()} L {L}: sm120 unplanned {sm['unplanned']:.3f} planned {sm['planned']:.3f} "
-          f"known {sm['known']:.3f} exact {np.mean([e['exact'] for e in out['planned']]):.3f} "
-          f"miss {np.mean([e['miss_rms'] for e in out['planned']]):.2f} {time.time() - t0:.0f}s", flush=True)
+    out = {"family": family, "cfg": cfg.__dict__, "tag": cfg.tag(), "L": L, "w0_shift_rms": float("nan")}
+    modes = args.modes.split(",")
+    if "unplanned" in modes:
+        out["unplanned"] = [evaluate(args, pre, cfg, target, target, tplant, L, b) for b in live]
+    if "planned" in modes:
+        w0 = plan(args, pre, cfg, target, L, own)
+        out["planned"] = [evaluate(args, pre, cfg, w0, target, tplant, L, b) for b in live]
+        out["w0_shift_rms"] = float(np.mean([np.sqrt((((w0[n] - target[n]) / toy.scale(target[n], cfg.quant)[:, None])
+                                                      ** 2).mean()) for n in target]))
+    if "known" in modes:
+        out["known"] = [evaluate(args, pre, cfg, plan(args, pre, cfg, target, L, [b]), target, tplant, L, b)
+                        for b in live[:1]]
+    if "steer" in modes:
+        out["steer"] = [evaluate(args, pre, cfg, target, target, tplant, L, b, steer=True) for b in live]
+    print(f"{family} {cfg.tag()} L {L}: sm120 " + " ".join(
+        f"{k} {np.mean([e['sm120'] for e in out[k]]):.3f} exact {np.mean([e['exact'] for e in out[k]]):.3f}"
+        for k in modes) + f" {time.time() - t0:.0f}s", flush=True)
     return out
 
 
@@ -113,6 +130,7 @@ def main():
     ap.add_argument("--quants", default="absmax")
     ap.add_argument("--etas", default="", help="LSB-relative passes (erasure.py's --etas)")
     ap.add_argument("--lr-other", type=float, default=1e-5)
+    ap.add_argument("--modes", default="unplanned,planned,known,steer")
     ap.add_argument("--m", type=int, default=4, help="the planner's own beacons")
     ap.add_argument("--iters", type=int, default=3)
     ap.add_argument("--evals", type=int, default=2)

@@ -231,12 +231,21 @@ class Adam:
 
 
 class Hardening:
-    """The live-coin pass from a committed start: `step(t)` is Step(W_t; coins_t, batch_t)."""
+    """The live-coin pass from a committed start: `step(t)` is Step(W_t; coins_t, batch_t).
 
-    def __init__(self, model, pool, cfg, beacon_bytes):
+    `steer` (name → (target, step size)) is the adaptive cheater who controls those matrices' gradients but not their
+    update rule: having seen step t's coins, he moves each entry by at most the step size toward the target, aiming at
+    where the step's weight noise will put it, in place of the honest update."""
+
+    def __init__(self, model, pool, cfg, beacon_bytes, steer=None):
         self.model, self.pool, self.cfg, self.beacon = model, pool, cfg, beacon_bytes
         self.opt = Adam(model, cfg)
-        self.lin = [model.linear(n) for n in names(model)]
+        self.names = names(model)
+        self.lin = [model.linear(n) for n in self.names]
+        self.steer = steer or {}
+
+    def lsb(self, w):
+        return torch.from_numpy(scale(w.detach().numpy(), self.cfg.quant)).float()[:, None]
 
     def step(self, t):
         rng, g = coins(self.beacon, t)
@@ -245,12 +254,18 @@ class Hardening:
                                y.reshape(-1))
         self.model.zero_grad(set_to_none=True)
         loss.backward()
+        z = [torch.randn(w.shape, generator=g) for w in self.lin] if self.cfg.sigma_w else None
+        before = {n: self.model.linear(n).detach().clone() for n in self.steer}
         self.opt.step()
-        if self.cfg.sigma_w:
-            with torch.no_grad():
-                for w in self.lin:
-                    s = torch.from_numpy(scale(w.detach().numpy(), self.cfg.quant)).float()[:, None]
-                    w.add_(self.cfg.sigma_w * s * torch.randn(w.shape, generator=g))
+        with torch.no_grad():
+            for n, (target, size) in self.steer.items():
+                w0 = before[n]
+                aim = w0 + (self.cfg.sigma_w * self.lsb(w0) * z[self.names.index(n)] if z else 0)
+                size = torch.as_tensor(size, dtype=w0.dtype)
+                self.model.linear(n).copy_(w0 - torch.maximum(torch.minimum(aim - target, size), -size))
+            if z:
+                for w, zi in zip(self.lin, z):
+                    w.add_(self.cfg.sigma_w * self.lsb(w) * zi)
         return loss.item()
 
 

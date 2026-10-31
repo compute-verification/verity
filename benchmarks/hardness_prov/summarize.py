@@ -53,16 +53,18 @@ def erasure(doc, erased, split, chips=("h200", "sm120")):
 
 def planner(doc):
     print(f"### Planner, d = {doc['d']}, M = {doc['m']} own beacons, {doc['iters']} iterations ({doc['pre']})\n")
-    print("| target | setting | L | unplanned h200/sm120 | planned h200/sm120 | known-coin h200/sm120 | planned exact | "
-          "planned miss (LSB) | plan shift (LSB) | val served |")
-    print("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|")
+    print("| target | setting | L | unplanned h200/sm120 | planned h200/sm120 | known-coin h200/sm120 | "
+          "adaptive h200/sm120 | exact: planned, adaptive | miss (LSB): planned, adaptive | plan shift (LSB) | "
+          "val served: planned, adaptive |")
+    print("|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
     for r in sorted(doc["runs"], key=lambda r: (r["family"], r["tag"], r["L"])):
         def m(k, f):
-            return float(np.mean([e[f] for e in r[k]]))
+            return float(np.mean([e[f] for e in r[k]])) if k in r else float("nan")
         print(f"| {r['family']} | {r['tag']} | {r['L']} | {m('unplanned', 'h200'):.3f}/{m('unplanned', 'sm120'):.3f} | "
               f"{m('planned', 'h200'):.3f}/{m('planned', 'sm120'):.3f} | {m('known', 'h200'):.3f}/{m('known', 'sm120'):.3f} | "
-              f"{m('planned', 'exact'):.3f} | {m('planned', 'miss_rms'):.2f} | {r['w0_shift_rms']:.2f} | "
-              f"{m('planned', 'val_served'):.3f} |")
+              f"{m('steer', 'h200'):.3f}/{m('steer', 'sm120'):.3f} | {m('planned', 'exact'):.3f}, {m('steer', 'exact'):.3f} | "
+              f"{m('planned', 'miss_rms'):.2f}, {m('steer', 'miss_rms'):.2f} | {r['w0_shift_rms']:.2f} | "
+              f"{m('planned', 'val_served'):.3f}, {m('steer', 'val_served'):.3f} |")
     print()
 
 
