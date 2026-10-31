@@ -249,7 +249,7 @@ theorem part_setup_of_verdict {o : VStar.Recursive.Own} {pr : VStar.Recursive.Pr
   rw [if_pos hhm', hrd] at hdraw
   have hins := Part.ins_partRaw (r := xrOf o h w ri) (st := st) (x := x) (ms := ms) (s := j) hh hT hplain
     hregC hbind hI.circuit hI.pub hI.statement hI.os hI.tables hI.partition hI.draw (hI.shape h hh)
-    hI.registration hP.form rfl hP.partition hP.program hP.registered hP.bindings hdraw rfl hSr hSt hSrows
+    hI.registration hI.links hP.form rfl hP.partition hP.program hP.registered hP.bindings hdraw rfl hSr hSt hSrows
   obtain ⟨-, hbset, hregs, -, hfull⟩ := baseSetup_of_build (tags0 := tags0) (circuitB := q.base.circuit)
     (pubB := st.pub x ms j) (draw := some d) (partition := some po.partition) (program := some po.program)
     (registered := registered) hbuild
@@ -409,7 +409,7 @@ theorem sessions_of_accepts (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) (
   obtain ⟨hpubS, ⟨m, link, hhd, hlk⟩, f, hfin, hstmt, hrecf, hrep⟩ :=
     hshow.2.2 s _ (Array.getElem?_eq_getElem (hlt s _ hq).2)
   have hP := hPN' s _ hq
-  have hfit := Part.partRaw_fits hrx hq hP.form (hrf.pub s hs) hrf.record hrf.transcript hrf.rows
+  have hfit := Part.partRaw_fits hrx hq hP.form hI.links (hrf.pub s hs) hrf.record hrf.transcript hrf.rows
   obtain ⟨hinsO, hsetO⟩ := setupO_staged_of_setup hrx hq (Part.decodeRec_encode_fits hfit) hins rfl hsu
   have hvs := vstarAt_staged hsetO
   rw [hvs] at hstmt hrep

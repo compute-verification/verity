@@ -20,7 +20,7 @@ The compiled component (`VStar.Recursive.checkBlobs`) reads parameters, evidence
   Flock's os coins at one table with no lookup table, `--stratified` at the population the verifier's partition and
   program give (`HmRow.stratifiedLaw` at `K = 1`, as the compiled `innerOk` sets it up) and none of `verify`'s other
   inputs; `w`'s inner shape is
-  `innerHeld`'s; and `w`'s registration the registration blob `Own` names;
+  `innerHeld`'s; `w`'s registration the registration blob `Own` names; and `w` carries no link table;
 * `PartNames`: one part per part of the verifier's, part `j`'s raw statement the one `partVerdict` runs: its circuit
   the part's circuit blob, its form `PartForm` (statement `STATEMENT` under `--zk` at one table), the part's partition,
   program and registered reads, the part's own bindings (`PartX.bindings`) the verifier's bindings of that part, and
@@ -72,6 +72,7 @@ structure InnerNames (o : VStar.Recursive.Own) (pr : VStar.Recursive.Proofs) (bs
   shape : ∀ h, VStar.Recursive.innerHeld o pr bs = .ok h →
     (do RecVStar.Inner.ofJson (← jsonOf "rec-inner" w.recInner)) = .ok h.shape
   registration : (o.registration.mapM fun d => (bs.get d "rec inner registration").toOption) = some w.registration
+  links : w.links = none
   partitionB : (VStar.Recursive.canonBytes o.partition).map some = .ok ri.partition
   recInnerB : ∀ h, VStar.Recursive.innerHeld o pr bs = .ok h →
     VStar.Recursive.canonBytes h.shape.toJson = .ok w.recInner

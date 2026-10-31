@@ -72,7 +72,7 @@ def RecRawFits (w : RecRaw) : Prop :=
     (∀ b ∈ w.innerSession, b.size < 2 ^ 64) ∧ (∀ b ∈ w.transcript, b.size < 2 ^ 64) ∧
     (∀ b ∈ w.registration, b.size < 2 ^ 64) ∧ (∀ t ∈ w.innerStatement, t.toUTF8.size < 2 ^ 64) ∧
     (∀ ts ∈ w.innerTables, ts.length < 2 ^ 64 ∧ ∀ p ∈ ts, p.1.toUTF8.size < 2 ^ 64 ∧ p.2.size < 2 ^ 64) ∧
-    (∀ b ∈ w.innerDraw, b.size < 2 ^ 64)
+    (∀ b ∈ w.innerDraw, b.size < 2 ^ 64) ∧ (∀ l ∈ w.recLinks, l.1.size < 2 ^ 64 ∧ l.2 < 2 ^ 64)
 
 theorem rdOptBytes {a : Option ByteArray} (h : ∀ b ∈ a, b.size < 2 ^ 64) (rest : List UInt8) :
     (rdOpt rdBytes).run (encOpt encBytes a ++ rest) = some (a, rest) :=
@@ -133,7 +133,7 @@ theorem rdTables {ts : List (String × ByteArray)} (h : ts.length < 2 ^ 64 ∧ �
 
 theorem recRaw_read_encode {w : RecRaw} (h : RecRawFits w) (rest : List UInt8) :
     RecRaw.read.run (w.encode ++ rest) = some (w, rest) := by
-  obtain ⟨h0, hb, h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14⟩ := h
+  obtain ⟨h0, hb, h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13, h14, h15⟩ := h
   have hbs : (⟨w.base.encode.toArray⟩ : ByteArray).size < 2 ^ 64 := by
     show w.base.encode.toArray.size < 2 ^ 64
     simpa using hb
@@ -154,7 +154,11 @@ theorem recRaw_read_encode {w : RecRaw} (h : RecRawFits w) (rest : List UInt8) :
     run_bind_of (rdOptBytes h10 _), run_bind_of (rdOptBytes h11 _),
     run_bind_of (rdOpt_encOpt (fun t ht rest => FlockComplete.rdStr_encStr (h12 t ht) rest) _),
     run_bind_of (rdOpt_encOpt (fun b _ rest => rdBool_encBool b rest) _),
-    run_bind_of (rdOpt_encOpt (fun ts hts rest => rdTables (h13 ts hts) rest) _), run_bind_of (rdOptBytes h14 _)]
+    run_bind_of (rdOpt_encOpt (fun ts hts rest => rdTables (h13 ts hts) rest) _), run_bind_of (rdOptBytes h14 _),
+    run_bind_of (rdOpt_encOpt (fun l hl rest => by
+      rw [List.append_assoc, run_bind_of (FlockComplete.rdBytes_encBytes (h15 l hl).1 _),
+        run_bind_of (FlockComplete.rdNat_encNat (h15 l hl).2 _)]
+      rfl) _)]
   rfl
 
 /-- **A V\* statement reads back as itself** where it fits. -/
@@ -255,9 +259,11 @@ theorem partx_len (p : PartX) : p.base.encode.length + p.bindings.size ≤ p.enc
   omega
 
 /-- **Part `s`'s statement fits** where the files the run stages for it do: every field it takes from `x` fits, since
-`x` decodes, and Flock's statement with the staged public file is no longer than `x` and that file together. -/
+`x` decodes, Flock's statement with the staged public file is no longer than `x` and that file together, and `x`
+carries no link table. -/
 theorem partRaw_fits {x : Claims.Msg} {r : XR} (hr : readX x = some r) {st : Stage}
     {ms : List (Claims.Msg × Claims.Out)} {s : ℕ} {q : PartX} (hq : r.w.parts[s]? = some q) (hP : PartForm q.base)
+    (hlinks : r.w.links = none)
     (hpub : x.length + (st.pub x ms s).size < 2 ^ 64)
     (hrec : (st.record x ms).size < 2 ^ 64) (htr : (st.transcript x ms).size < 2 ^ 64)
     (hrows : (st.rows x ms).size < 2 ^ 64) :
@@ -283,7 +289,7 @@ theorem partRaw_fits {x : Claims.Msg} {r : XR} (hr : readX x = some r) {st : Sta
   rw [hi] at h6
   have hxl : x.length < 2 ^ 64 := by omega
   refine ⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_,
-    ?_, ?_, ?_⟩
+    ?_, ?_, ?_, ?_⟩
   · show q.base.statement.toUTF8.size < 2 ^ 64; omega
   · show q.base.circuit.size < 2 ^ 64; omega
   · show (st.pub x ms s).size < 2 ^ 64; omega
@@ -323,6 +329,7 @@ theorem partRaw_fits {x : Claims.Msg} {r : XR} (hr : readX x = some r) {st : Sta
     simp only [List.length_append, len_encStr, len_encBytes] at h9
     constructor <;> omega
   · intro b hb; have := encOpt_le (o := r.innerRaw.draw) b hb; omega
+  · show ∀ l ∈ r.w.links, _; rw [hlinks]; intro l hl; cases hl
 
 /-- **Part `s`'s staged statement is `partRaw`'s encoding** where it fits. -/
 theorem staged_eq {x : Claims.Msg} {r : XR} (hr : readX x = some r) {st : Stage} {ms : List (Claims.Msg × Claims.Out)}
@@ -748,10 +755,10 @@ theorem mapM_some_ok {ε α β : Type} {f : α → Except ε β} {a : α} {b : �
   simp only [Option.mapM, h]
   rfl
 
-/-- **`RecRaw.ins` from its readers' results.** -/
+/-- **`RecRaw.ins` from its readers' results**, on a statement with no link table (`linksOf`). -/
 theorem recIns_of {w : RecRaw} {b : FlockDeploy.Ins} {i : Option RecVStar.Inner} {f : Option VStar.Bindings}
     {src : Option RecCoins.Source} {c : Option RecVStar.InnerCommits} {l : Option RecVStar.InnerLink}
-    {rw : Option (Array Registered.Port)} (h1 : w.base.ins = .ok b)
+    {rw : Option (Array Registered.Port)} (h1 : w.base.ins = .ok b) (hL : w.recLinks = none)
     (h2 : w.recInner.mapM (fun b => do RecVStar.Inner.ofJson (← jsonOf "rec-inner" b)) = .ok i)
     (h3 : w.recBindings.mapM (fun b => do RecVStar.ownBindingsOfJson (← jsonOf "rec-bindings" b)) = .ok f)
     (h4 : sourceOf w = .ok src) (h5 : commitsOf w src (boundOf w.innerCircuit) i = .ok c)
@@ -763,6 +770,7 @@ theorem recIns_of {w : RecRaw} {b : FlockDeploy.Ins} {i : Option RecVStar.Inner}
         commits := c, link := l, rows := rw } := by
   unfold RecRaw.ins
   rw [h1]; simp only [ok_bind]
+  rw [show linksOf w = .ok () by simp [linksOf, hL]]; simp only [ok_bind]
   rw [h2]; simp only [ok_bind]
   rw [h3]; simp only [ok_bind]
   rw [h4]; simp only [ok_bind]
@@ -817,6 +825,7 @@ theorem ins_partRaw {r : XR} {st : Stage} {x : Claims.Msg} {ms : List (Claims.Ms
     (hIdraw : r.innerRaw.draw = (bs.get o.draw "the inner statement's draw").toOption)
     (hIshape : (do RecVStar.Inner.ofJson (← jsonOf "rec-inner" r.w.recInner)) = .ok h.shape)
     (hIreg : (o.registration.mapM fun d => (bs.get d "rec inner registration").toOption) = some r.w.registration)
+    (hIlinks : r.w.links = none)
     (hPform : PartForm q.base) (hPc : q.base.circuit = circuitB)
     (hPpart : q.base.partition.map (jsonOf "partition") = some (.ok pj.partition))
     (hPprog : q.base.program = some pj.program)
@@ -932,7 +941,7 @@ theorem ins_partRaw {r : XR} {st : Stage} {x : Claims.Msg} {ms : List (Claims.Ms
     show (some (st.rows x ms)).mapM _ = _
     rw [Except.ok.inj (hSrows.symm.trans hrowsB)]
     exact hrows
-  rw [recIns_of hbase h2 h3 h4 h5 h6 h7]
+  rw [recIns_of hbase hIlinks h2 h3 h4 h5 h6 h7]
   rw [hb]
   rfl
 
@@ -942,7 +951,7 @@ the compiled `partVerdict` reads of them (`registered`, `bindings`, the statemen
 public file; its rows are `innerHeld`'s). Suppose:
 * `Names`' clauses: the inner statement's circuit, public file, partition and draw are the blobs' and `p.own`'s, its
   statement and form those `innerHeld` sets up (`INNER_STATEMENT`, the coin server's coins, no tables), its own inner
-  shape `innerHeld`'s, the registration the blobs'; part `s`'s circuit, partition, program and registered reads
+  shape `innerHeld`'s, the registration the blobs', no link table; part `s`'s circuit, partition, program and registered reads
   `pj`'s, its own bindings `pj`'s, its form `PartForm`, and its draw, read as the verifier reads one, `draw`;
 * `Shows`' clauses: part `s`'s staged public file is `pubB`, the inner session's record and the coin server's
   transcript the blobs', and V*'s staged shared rows the evidence's `rows` blob (`hSrows`, `RowsShow`), which
@@ -973,6 +982,7 @@ theorem insO_staged_partIns {x : Claims.Msg} {r : XR} (hr : readX x = some r) {s
     (hIdraw : r.innerRaw.draw = (bs.get o.draw "the inner statement's draw").toOption)
     (hIshape : (do RecVStar.Inner.ofJson (← jsonOf "rec-inner" r.w.recInner)) = .ok h.shape)
     (hIreg : (o.registration.mapM fun d => (bs.get d "rec inner registration").toOption) = some r.w.registration)
+    (hIlinks : r.w.links = none)
     (hPform : PartForm q.base) (hPc : q.base.circuit = circuitB)
     (hPpart : q.base.partition.map (jsonOf "partition") = some (.ok pj.partition))
     (hPprog : q.base.program = some pj.program)
@@ -986,10 +996,10 @@ theorem insO_staged_partIns {x : Claims.Msg} {r : XR} (hr : readX x = some r) {s
     (hpub : x.length + pubB.size < 2 ^ 64) (hrec : (st.record x ms).size < 2 ^ 64)
     (htr : (st.transcript x ms).size < 2 ^ 64) (hrows : (st.rows x ms).size < 2 ^ 64) :
     insO (staged st x ms s) = some (partIns tags0 circuitB pubB pj registered draw h s bindings (some h.rows)) := by
-  have hfit := partRaw_fits hr hq hPform (by rw [hSp]; exact hpub) hrec htr hrows
+  have hfit := partRaw_fits hr hq hPform hIlinks (by rw [hSp]; exact hpub) hrec htr hrows
   rw [insO_staged hr hq hfit hPform.2.1,
-    ins_partRaw hh htags hplain hregC hbindC hIc hIp hIstmt hIos hItab hIpart hIdraw hIshape hIreg hPform hPc
-      hPpart hPprog hPreg hPbind hPdraw hSp hSr hSt hSrows]
+    ins_partRaw hh htags hplain hregC hbindC hIc hIp hIstmt hIos hItab hIpart hIdraw hIshape hIreg hIlinks hPform
+      hPc hPpart hPprog hPreg hPbind hPdraw hSp hSr hSt hSrows]
   rfl
 
 end Verity.Recursive.Part
