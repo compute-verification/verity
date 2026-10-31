@@ -26,7 +26,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "hardness_public"))
-from prices import CHIPS, dense_part  # noqa: E402  (HT-PUBLIC's prices)
+from prices import CHIPS, dense_part
 
 B = 2
 ALPHA = (0, 1, 2, 3, 4, 7, 15, 31, 63, 127)

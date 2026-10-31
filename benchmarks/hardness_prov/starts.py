@@ -24,8 +24,8 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "hardness_public"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import toy  # noqa: E402
-from plant import ternary  # noqa: E402  (HT-PUBLIC's plant)
+import toy
+from plant import ternary
 
 PLANTED = ("fc", "out")
 

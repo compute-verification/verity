@@ -27,9 +27,9 @@ import numpy as np
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import routes  # noqa: E402
-import starts  # noqa: E402
-import toy  # noqa: E402
+import routes
+import starts
+import toy
 
 DATA = os.path.expanduser("~/hardness-ml/tinystories-bpe4096")
 
