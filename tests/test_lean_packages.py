@@ -53,7 +53,7 @@ def test_one_mathlib():
 #: had no `honest` and `nontrivial` witnesses when the witness rule came (`check.py`'s `witness_failures`), with those the
 #: PRs on `next` then brought, and the exclusion bounds that read a partition once a derived circuit's registration built
 #: its one-block partition (`RegisteredCircuit.ofCircuit`)
-UNWITNESSED = {"Security": 378, "Security/Properties": 188, "verity/core/service/flock": 7}
+UNWITNESSED = {"Security": 381, "Security/Properties": 188, "verity/core/service/flock": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():
