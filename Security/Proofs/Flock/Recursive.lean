@@ -73,6 +73,7 @@ import Proofs.Flock.Recursive.KSLinked
 import Proofs.Flock.Claims.Recursion.DeployedCounts
 import Proofs.Flock.Recursive.InnerRows
 import Proofs.Flock.Recursive.LinksOuter
+import Proofs.Flock.Recursive.LinksDeployed
 /-! The recursive audit: its model and soundness (`Defs` to `Stage`, with `ZkReg/`), hidden unit circuits' class,
 registered table and registered schedule, with the holographic table at them (`Holo`), the proofs of its guarantees
 (`Guarantees`; circuit privacy and the registered private circuit's in `Private`), its zero knowledge at the operating
