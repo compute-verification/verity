@@ -2713,10 +2713,6 @@
    "nontrivial": "Nci.SecurityProofs.WeightedProductCapNontrivial",
    "kind": "exclusion"
   },
-  "Accounting.SecurityProofs.TS.LeafGroupSound": {
-   "honest": ["Accounting.TS.Lanes.groupRealizes_lanes32", "Accounting.TS.Lanes.knownOf_okKnown"],
-   "nontrivial": "Accounting.TS.Group.groupLayer_not_soundAt"
-  },
   "Pous.SecurityProofs.StreamedWipeMeetsDisk": {
    "honest": ["Pous.Claims.StreamedWipeMeetsDisk_meets"],
    "nontrivial": "Pous.Claims.StreamedWipeMeetsDisk_fails"
@@ -3101,7 +3097,14 @@
   "Nci.SecurityProofs.ThreadedReadsInfoFmt": "b0e528356d0260e4829a1626341ad77a934fb408d696687032705be38beb7643",
   "Nci.SecurityProofs.ThreadedReadsInfoFmt2": "29c58e0f89f3a259fa223ae3cba558d3829f38a5cc2fd1fa78d08e6b7c10df0b",
   "Nci.SecurityProofs.ThreadedReadsSlots": "43deeb35d80d7cf5ccf1ac1d3146368ec5775d06dbb0f5769b2bef1c092e7112",
-  "Verity.SecurityProofs.CreditSizeLe": "1d82216e931154c5b736226230471bd9983409d8bd95d9d21ef3b787124dcb6c"
+  "Verity.SecurityProofs.CreditSizeLe": "1d82216e931154c5b736226230471bd9983409d8bd95d9d21ef3b787124dcb6c",
+  "Accounting.SecurityProofs.TS.LeafGroupSound": "c5838adef54e7043e01608e725162fec80d4fa1d31294cfd50cf33fa2061efc2",
+  "Flock.SecurityProofs.JointServed": "7336cb84d9ce7d76a08b717e7b412bbe3b5fbbf7f79068bb0af0d60ef45c9a79",
+  "Flock.SecurityProofs.JointServed_honest": "b322a5ee756839ec18d249d2c4868b17f088400afc0a3556da10d5f9ff4073b7",
+  "Flock.SecurityProofs.JointServed_nontrivial": "3dfd9d37c2f1a836bc2f967261d6545049dcbfde0a0c1fff234dd9fe63a0a947",
+  "NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits": "7ccec3c51a3940931ea87fc0b3800d793566789cdc927ea9d9c011bcd1ef9e72",
+  "Pous.SecurityProofs.StreamedWipeMeetsH200": "49f1879512445eac6ccc2bc32c426083fbb60df54d2005bdff69ca69d154ec51",
+  "Verity.SecurityProofs.CapacityWithinEstimate": "33f7bf73bd890217a96e1f811c4fa5862df92ccec1ba47b063fff95e97ba8370"
  },
  "layers": {
   "Definitions.Core": {
@@ -16694,6 +16697,9 @@
    },
    "Nci.SecurityProofs.RecoveredBudget": {
     "instLENat.le e.length aBlk": "brought by PRs on `next` beside the rule (#5805, #5125, #6636), inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Accounting.SecurityProofs.TS.LeafGroupSound": {
+    "∀ (x : Pouw.RelativeSecurity.Paths Ω S) (w : Fin S) (i : Fin nπ) (k : Accounting.TS.Group.Ix T.lanes n), ENNReal.instLE.le (instHMul.hMul ((sess₀ x w i k).canon (op x w i k)).n.cast ((sess₀ x w i k).canon (op x w i k)).bound) (ENNReal.ofReal δ)": "the per-session bound LeafLanesSound takes inline too, which #6460 brought before the inline rule reached it: name it or state it as a guarantee's conclusion"
    }
   }
  },
