@@ -418,8 +418,8 @@ noncomputable def partsOf (θ : ByteArray) (F : Array ByteArray) : Verity.Partit
   (V.read (V.circuitFile θ F)).parts
 
 /-- **The declaration the inference-only policy judges**: the committed circuit, with its registered inputs. -/
-noncomputable def declaration (θ : ByteArray) (F : Array ByteArray) : Declaration :=
-  ⟨V.circuitOf θ F, V.theta θ (V.circuitFile θ F), V.theta_input θ (V.circuitFile θ F)⟩
+noncomputable def declaration (θ : ByteArray) (F : Array ByteArray) : RegisteredCircuit :=
+  .ofCircuit (V.circuitOf θ F) (V.theta θ (V.circuitFile θ F)) (V.theta_input θ (V.circuitFile θ F))
 
 /-- **The commit phase's file check**: one of the committed files has the SHA-512 the parameters hold. -/
 def Registered (θ : ByteArray) (F : Array ByteArray) : Prop :=
