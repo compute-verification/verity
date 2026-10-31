@@ -1,4 +1,4 @@
-"""N2's link-window verdict of record in Lean (`NetworkCheck.LinkWindow`, `LinkWindows.lean_verdict`) held to the
+"""N2's execution phase verdict of record in Lean (`NetworkCheck.LinkWindow`, `LinkWindows.lean_verdict`) held to the
 Python (`LinkWindows.python_verdict`), the reference that keeps running beside it: the same accept bit, public outputs
 and digest on plain, served and warden link-windows, honest and tampered (the session refused, rejected, naming another
 Program or other units; the public file's bytes flipped, cut, missing, naming another unit or its unit twice, or in a
@@ -31,8 +31,8 @@ def lean(monkeypatch):
 
 
 class Case:
-    """One link-window's draw, certificates, syncs and delivered proof, with the findings of the stand-in Lean run on
-    the honest proof."""
+    """One execution phase's sample, certificates, syncs and delivered proof, with the findings of the stand-in Lean run
+    on the honest proof."""
 
     def __init__(self, lw, opening, draw, syncs, tmp):
         self.lw, self.draw, self.syncs, self.tmp = lw, draw, syncs, tmp
@@ -78,8 +78,8 @@ def _served(tmp):
 
 
 def _warden(tmp):
-    """The plain link as a warden's (`WardenProfile`): both records certified under the warden's parameters digest, no
-    occupancy profile."""
+    """The plain link as a network certifier's (`WardenProfile`): both records certified under the network certifier's
+    parameters digest, no occupancy profile."""
     run = plain.Run(tmp)
     run.lw = lw = replace(run.lw, occupancy=(None, None), warden=SVC.WardenProfile(3, plain.WARDEN_DIGEST))
     run.stream = lw.stream(budget=8, delta=plain.DELTA, challenger="challenger-test", coins=lambda n: b"\x07" * n,
@@ -103,8 +103,8 @@ def _file(head, body):
 
 
 def _shared(data, extra=0, first=False):
-    """The public file as a shared-row file: each port's table, `extra` instances of unit 1 beside the sampled proof block (the
-    drawn one first or last), then the refs."""
+    """The public file as a shared-row file: each port's table, `extra` instances of proof block 1 beside the sampled
+    proof block (the sampled one first or last), then the refs."""
     head, body = _header(data)
     unit, k = head["units"]["indices"][0], len(SVC.PORTS)
     bcs = [body[j * SVC.BC_BYTES:(j + 1) * SVC.BC_BYTES] for j in range(k)]
@@ -194,10 +194,11 @@ def test_the_lean_verdict_is_the_pythons(tmp_path, kind):
 
 
 def test_a_warden_link_window_reads_the_wardens_digest_and_no_sync(tmp_path):
-    """On a warden link the Lean holds both ends' grids to the warden's parameters digest and reads no sync, as the
-    Python does: syncs missing or off Σ_sync change neither verdict; the link under another warden's digest, or as the
-    plain link whose grids carry the certifier's digests, is a reject by both; and a warden case the Python never makes
-    (a digest of another length or none, an end with a profile, two grids) is refused, which `verify` rejects."""
+    """On a network certifier link the Lean holds both ends' grids to the network certifier's parameters digest and
+    reads no sync, as the Python does: syncs missing or off Σ_sync change neither verdict; the link under another
+    network certifier's digest, or as the plain link whose grids carry the certifier's digests, is a reject by both; and
+    a network certifier case the Python never makes (a digest of another length or none, an end with a profile, two
+    grids) is refused, which `verify` rejects."""
     c = _warden(tmp_path)
     honest = c.both()
     assert honest[0] == honest[1] and honest[1]["accepted"] and honest[1]["public"] == {"verdict": 1, "deadline": 1}
@@ -227,7 +228,7 @@ def test_a_warden_link_window_reads_the_wardens_digest_and_no_sync(tmp_path):
 
 def test_a_disagreement_or_a_case_the_lean_cant_state_rejects(tmp_path, monkeypatch):
     """The switch names whose verdict is the record's (`by`), the other's accept bit is `reference`'s; where the two
-    differ, or the Lean has no case (a key other than an `LmsKey`), the link-window is rejected with deadline 0."""
+    differ, or the Lean has no case (a key other than an `LmsKey`), the execution phase is rejected with deadline 0."""
     c = _plain(tmp_path)
     run = lambda lw=c.lw: lw.verify(c.draw, c.certificates, c.syncs, c.delivered,
                                     circuit_sha512=standin.circuit_sha512(c.delivered))
