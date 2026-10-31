@@ -112,6 +112,10 @@ The finders and their costs, path by path:
   calls one unit of `Mc`'s time can buy, and `dz` counts the extractor's own calls. Where both the link finder and `Claims.KS`'s
   `B` are needed, `fz` runs both and outputs the first collision either finds, at their costs summed.
 
+The floors per prover read this premise at the fork finders built from `M` (`forkFinders`: `1` continuation for
+binding, `kz` for zero knowledge), never at finders of the analysis's choosing, and conclude at those finders' collision
+probabilities (`breakPr`), so collision resistance is applied to them outside the floors.
+
 It assumes nothing of SHA-512. `ecr/sha-512` enters only the floors' bound, adversary by adversary (`breakBound`), at a
 budget computed from the adversary: a finder that meets `Claims.ExpectedCR` within `cb · time M + db` SHA-512 calls in
 expectation (binding) or `cz · time M + dz` (zero knowledge) gives the budget over `2^256`, any other `⊤`
