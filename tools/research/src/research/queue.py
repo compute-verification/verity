@@ -1586,10 +1586,7 @@ class Queue:
         line, as text in any case: a superset of what `rename.py` rewrites in it."""
         if mv.map not in self._words_of:
             r = _git(self.workdir, "show", f"{mv.commit}^1:{mv.map}", check=False)
-            try:
-                data = tomllib.loads(r.stdout) if not r.returncode else {}
-            except tomllib.TOMLDecodeError:
-                data = {}
+            data = tomllib.loads(r.stdout) if not r.returncode else {}      # it parsed: its rename.py made the move from it
             words = {*data.get("words", {}), *(w for s in data.get("words_in", []) for w in s.get("words", {}))}
             self._words_of[mv.map] = {w.lower() for w in words if w}
         r = _git(self.workdir, "diff", "-U0", "--no-color", "--no-ext-diff", f"{mv.commit}^1...{head}", check=False)
