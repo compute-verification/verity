@@ -139,7 +139,7 @@ def test_a_report_with_an_unfilled_number_is_refused() -> None:
     doc["sections"][0]["serve_noise"] = True
     out = D.render([], doc)
     assert out.splitlines()[0] == D.M3_STATUS and not re.search(r"⟨[A-Z][A-Z0-9_]*⟩", out.split("## Sources")[0])
-    assert "a one-week sampling block of one H200\nhas at most H = 3,126,434 faulty AND gates and B = 177,688" in out
+    assert "a one-week sampling block of one H200\nhas at most H = 3,126,434 incorrect AND gates and B = 177,688" in out
     for name in ("H_POOLED", "SERVE_NOISE_S"):
         partial = copy.deepcopy(doc)
         del partial["values"][name]
@@ -178,7 +178,7 @@ def test_part_3_is_circuit_size_in_gates_with_no_flop_or_price() -> None:
     assert "counted in AND gates" in part3 and not re.search(r"FLOP|\$|price|pricing|cost of", part3, re.I)
     assert not [n for n in (*D.MEASURED, *D.DERIVED) if "FLOP" in n]
     out = _draft([_load("block-record-r2-period0")], _costed()).split("## 3.")[1].split("## What")[0]
-    assert "FLOP" not in out and "| H faulty AND gates | share of the world's AND gates |" in out
+    assert "FLOP" not in out and "| H incorrect AND gates | share of the world's AND gates |" in out
 
 
 #: a phrase from each of three stub caveats (`report.STUBS`)
