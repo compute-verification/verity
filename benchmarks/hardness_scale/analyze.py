@@ -8,6 +8,10 @@ For a run of size N (the dense model's non-embedding parameters) on D tokens rea
   for frozen R), C_env(L) the least baseline compute reaching L, on the lower envelope of every seed-0 baseline run (all
   sizes, token counts and lrs), interpolated linearly in (log C, L). ``P_env_real`` uses the run's own FLOPs (4 a frozen
   R MAC). Past the envelope's ends it extrapolates from the end segment and marks it (*).
+- ``P_front``: C / C_front(L) on a smooth frontier L = E + A·(C/10¹⁷)^−γ fitted to the envelope of the seed-0
+  baselines with D ≥ 10N at the sizes that have arms. The envelope's local slope is jagged, so P_env moves with where an
+  arm's loss falls between its points; this reads the same compute without that. Its fit's rmse is printed: a frontier
+  that doesn't fit its own points reads nothing.
 - ``P_size``: D / D_eq · (FLOPs a token over the baseline's), with D_eq the tokens the same-size baseline at lr* needs to
   reach L, read off its token ladder in (log D, L). It leaves out how far N is from compute-optimal.
 - ``P_fit``: C / C*(L) on the frontier of L(N, D) = E + A/N^α + B/D^β fitted to each size's seed-0 ladder at its lr*
@@ -55,6 +59,11 @@ def is_base(r):
     """A dense int8-QAT baseline trained on the data alone (a distilled one's compute leaves out its teacher's)."""
     c = r["cfg"]
     return c["arr"] == "none" and c["qat"] and not c.get("teacher")
+
+
+def d_ge_10n(r):
+    """D ≥ 10N as configured: a run's tokens round down to whole batches."""
+    return r["tokens"] + r["cfg"]["batch"] * CTX > 10 * r["nonemb_dense"]
 
 
 def interp(xs, ys, y):
@@ -111,6 +120,27 @@ def fit(base):
     return {"E": E, "A": A, "B": B, "alpha": a, "beta": b, "rmse": math.sqrt(err)}
 
 
+def frontier(env):
+    """L = E + A·(C/1e17)^−γ by a grid over γ with least squares for (E, A), E and A nonnegative."""
+    if len(env) < 4:
+        return None
+    x = np.array([c / 1e17 for c, _ in env])
+    L = np.array([l for _, l in env])
+    best = None
+    for g in np.arange(0.01, 1.001, 0.001):
+        X = np.stack([np.ones_like(x), x ** -g], 1)
+        coef, *_ = np.linalg.lstsq(X, L, rcond=None)
+        if (coef < 0).any():
+            continue
+        err = float(((X @ coef - L) ** 2).mean())
+        if best is None or err < best[0]:
+            best = (err, g, *coef)
+    if best is None:
+        return None
+    err, g, E, A = best
+    return {"E": E, "A": A, "gamma": g, "rmse": math.sqrt(err), "range": [min(L), max(L)]}
+
+
 def c_star(f, L):
     best = math.inf
     for d in np.exp(np.linspace(math.log(64), math.log(8192), 400)):
@@ -141,8 +171,10 @@ def analyze(runs, best_lr=False):
             if r["cfg"]["seed"] == 0:
                 ladder[s].append((r["tokens"], r["final_val"]))
     env = envelope([(r["train_flops_dense"], r["final_val"]) for r in base if r["cfg"]["seed"] == 0])
-    f = fit([r for r in base if r["cfg"]["seed"] == 0 and r["cfg"]["lr"] == lr_star[size_of(r)]
-             and r["tokens"] >= 10 * r["nonemb_dense"]])
+    armed = {size_of(r) for r in runs.values() if not is_base(r)}
+    fr = frontier(envelope([(r["train_flops_dense"], r["final_val"]) for r in base if r["cfg"]["seed"] == 0
+                            and size_of(r) in armed and d_ge_10n(r)]))
+    f = fit([r for r in base if r["cfg"]["seed"] == 0 and r["cfg"]["lr"] == lr_star[size_of(r)] and d_ge_10n(r)])
     rows = []
     for name, r in runs.items():
         c, s, L = r["cfg"], size_of(r), r["final_val"]
@@ -164,6 +196,9 @@ def analyze(runs, best_lr=False):
                 row["P_env"] = r["train_flops_dense"] / math.exp(x)
                 row["P_env_real"] = r["train_flops"] / math.exp(x)
                 row["P_env_ext"] = ext
+        if fr and L0 > fr["E"]:
+            row["P_front"] = r["train_flops_dense"] / (1e17 * ((L0 - fr["E"]) / fr["A"]) ** (-1 / fr["gamma"]))
+            row["P_front_ext"] = not fr["range"][0] <= L0 <= fr["range"][1]
         if r["kappa"] > 0:
             row["P_dead"] = 1 / (1 - r["kappa"])
             if "P_env" in row:
@@ -185,7 +220,7 @@ def analyze(runs, best_lr=False):
             if k not in keep or row["val"] < keep[k]["val"]:
                 keep[k] = row
         rows = list(keep.values())
-    return {"lr_star": lr_star, "envelope": env, "fit": f, "rows": rows}
+    return {"lr_star": lr_star, "envelope": env, "frontier": fr, "fit": f, "rows": rows}
 
 
 def fmt(v, nd=3):
@@ -197,14 +232,14 @@ def fmt(v, nd=3):
 
 
 def table(res):
-    cols = ["name", "kappa", "kappa_lin", "val", "gap", "P_size", "P_env", "P_env_real", "P_fit", "P_dead", "u", "d_perm",
-            "d_removed"]
+    cols = ["name", "kappa", "kappa_lin", "val", "gap", "P_size", "P_env", "P_env_real", "P_front", "P_fit", "P_dead", "u",
+            "d_perm", "d_removed"]
     out = ["| " + " | ".join(cols) + " |", "|" + "---|" * len(cols)]
     for r in sorted(res["rows"], key=lambda r: (int(r["size"][:-1]), not r["base"], r["arm"], r["name"])):
         cells = []
         for k in cols:
             v = r.get(k)
-            if k in ("P_size", "P_env", "P_env_real") and v is not None:
+            if k in ("P_size", "P_env", "P_env_real", "P_front") and v is not None:
                 v = f"{v:.2f}" + ("*" if r.get(k.replace("_real", "") + "_ext") else "")
             elif k in ("P_fit", "P_dead", "u") and v is not None:
                 v = f"{v:.2f}"
@@ -216,7 +251,7 @@ def table(res):
 def pivot(res, key="P_env"):
     sizes = sorted({r["size"] for r in res["rows"]}, key=lambda s: int(s[:-1]))
     cells = defaultdict(dict)
-    for r in res["rows"]:
+    for r in sorted(res["rows"], key=lambda r: r["lr"] == res["lr_star"].get(r["size"])):  # an arm's cell is its lr* run
         if r["base"] or r["seed"] or "-Dx" in r["name"]:
             continue
         v = r.get(key)
@@ -234,7 +269,7 @@ def main():
     ap.add_argument("paths", nargs="+", help="run dirs, out dirs or result files")
     ap.add_argument("--best", action="store_true", help="each arm at its best lr")
     ap.add_argument("--pivot", action="store_true", help="arm × size: κ, gap and --key")
-    ap.add_argument("--key", default="P_env", choices=("P_env", "P_env_real", "P_size", "P_fit"))
+    ap.add_argument("--key", default="P_env", choices=("P_env", "P_env_real", "P_front", "P_size", "P_fit"))
     ap.add_argument("--json", default=None)
     a = ap.parse_args()
     res = analyze(load(a.paths), a.best)
@@ -242,6 +277,7 @@ def main():
         Path(a.json).write_text(json.dumps(res, indent=1))
     print("lr*:", res["lr_star"])
     print("envelope (C, L):", [(f"{c:.2e}", round(l, 4)) for c, l in res["envelope"]])
+    print("frontier:", res["frontier"])
     print("fit:", res["fit"])
     print(pivot(res, a.key) if a.pivot else table(res))
     print("\n* extrapolated past the baseline ladder or envelope")
