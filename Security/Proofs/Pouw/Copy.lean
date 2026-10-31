@@ -1,4 +1,4 @@
-import Definitions.Pouw.Assumptions.Pinned
+import Definitions.Pouw.Assumptions.GameStatements
 import Proofs.Pouw.Prob
 
 /-!
@@ -74,7 +74,7 @@ theorem half_pow_le_rpow (k : ℕ) (x : ℝ) (h : x ≤ k) : (1 / 2 : ℝ) ^ k �
 end RCopy
 
 /-- **R_copy's bound.** -/
-theorem copyBound : Pinned.CopyBound := by
+theorem copyBound : GameStatements.CopyBound := by
   intro Ω V _ n X N A γ₀ hγ0 hγ1 hNz
   classical
   have h1γ : 0 < 1 - γ₀ := by linarith
@@ -182,6 +182,6 @@ theorem bits_nz (M : ℕ) (P : Finset ℕ) :
 end RCopy
 
 /-- **Nz is satisfiable.** -/
-theorem copyNzWitness : Pinned.CopyNzWitness := fun M _ P hP g hg => RCopy.bits_nz M P hP g hg
+theorem copyNzWitness : GameStatements.CopyNzWitness := fun M _ P hP g hg => RCopy.bits_nz M P hP g hg
 
 end Pouw.Proofs
