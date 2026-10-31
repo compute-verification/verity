@@ -410,7 +410,7 @@ def root4(shape, side: str) -> SpecializedDefinition:
 ROLES = {"weight": ("row_b_head", "row_b_first", "row_b_form", "row_b_tail"),
          "call": ("row_a_head", "row_a_first", "row_a_form", "row_a_tail", "tile")}
 ROLES["check"] = ROLES["weight"] + ROLES["call"]
-#: the roles whose units are one segment of a row, `pc4.Unit.where` (row, segment)
+#: the roles whose units are one segment of a row, `pc4.ProofBlock.where` (row, segment)
 FORMS = ("row_a_first", "row_a_form", "row_b_first", "row_b_form")
 ROLE_OF = {id(d): f"row_{side.lower()}_{piece}"
            for scheme in (
