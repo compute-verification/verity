@@ -315,7 +315,7 @@ def importorskip(modname: str, minversion: str | None = None, reason: str | None
             pytest.fail(f"pytest.importorskip({modname!r}): {e.name} is not importable, and {e.name.partition('.')[0]} is this "
                         "checkout's, so it moved or is gone. Import it from where it is now, plainly: importorskip is for a "
                         "third-party package an install may lack", pytrace=False)
-    except Exception:
+    except Exception:  # noqa: BLE001  (any other failure is pytest's importorskip's to report, below)
         pass
     return _pytest_importorskip(modname, minversion, reason, exc_type=exc_type)
 
