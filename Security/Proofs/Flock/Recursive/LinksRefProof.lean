@@ -448,7 +448,7 @@ theorem linkRef_staged : LinkRefStaged := by
   intro st s x xO w hS hck r hr ss hss UB PB N hsv c hpc i spec sts hsu h0 own hown hidx hNn hnn rowsR rowsW R W hR hW
     wi wo hrin hrout n hn
   -- the part's one table: circuit `c`, V*'s `RecLink{UB, PB}` laid out at `l`
-  obtain ⟨p, _, _, hx, ht, hpi, _, -, h0p, -⟩ := stagedTables hS
+  obtain ⟨p, _, _, hx, ht, hpi, _, -, h0p, htab⟩ := stagedTables hS
   have hp : p = { i.base.read with sts } := Option.some.inj (hx.symm.trans (parse_of_setupO hsu))
   have e0 : p.sts[0] = sts[0] := by subst hp; rfl
   obtain ⟨h1, hc0, ⟨tags, P⟩, hname, ho, ⟨u, hu, hupv1, hl, hrowsV⟩, hv2, -, -, -⟩ :=
@@ -460,7 +460,7 @@ theorem linkRef_staged : LinkRefStaged := by
   obtain ⟨l, hlaid, hnl⟩ := RefStep.unitNet_laid hu hnet
   -- copy `n` holds the unit's laid-out rows
   obtain ⟨L, hz⟩ := layout_of_check_regs hck hx ht hpi h0p
-  have hfl := Flock.Readable.flat_of_check hck hx ht hpi h0p
+  have hfl : p.sts[0].c.tmpl = none := FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0p).2.2
   obtain ⟨-, hts⟩ := tablesOf_of_parse hx
   obtain ⟨_, hset0⟩ := Flock.Readable.setup_of_tablesOf hts
   unfold Flock.Readable.Read.setup at hset0
