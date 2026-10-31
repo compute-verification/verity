@@ -223,11 +223,11 @@ class _InOrderAuditor(_GateAuditor):
 
 
 def test_reserves_and_releases_run_off_the_loop_while_the_next_window_serves(tmp_path, monkeypatch):
-    """With ``ahead`` and ``closer``: window 0's session is reserved at its open (after any period the run opened) and
-    window k+1's while window k serves, and window k's release (its manifest, draw coin, session close and the wait for
-    its end entry) runs after window k+1 has opened and served on a session of its own. The loop's gate calls are window
-    0's reserve and each window's open; each window keeps its own session, coins and transcript, and the outcomes are
-    recorded in window order."""
+    """With ``ahead`` and ``closer``: window 0's session is reserved at its open when none was made ahead (`arm_of` makes
+    one) and window k+1's while window k serves, and window k's release (its manifest, draw coin, session close and the
+    wait for its end entry) runs after window k+1 has opened and served on a session of its own. The loop's gate calls
+    are window 0's reserve and each window's open; each window keeps its own session, coins and transcript, and the
+    outcomes are recorded in window order."""
     srv, auditor = _Server(monkeypatch), _InOrderAuditor(tmp_path, monkeypatch)
     ahead, closer = Later(), Later()
     calls: list[tuple[str, bool]] = []
@@ -290,6 +290,75 @@ def test_a_reserve_ahead_that_expires_before_its_window_is_replaced_and_none_is_
     got = sessions.take(0)
     assert got["period"] == "p1" and sessions.held[0]["unused"].startswith("its reserve expires at 2026-10-27T20:04:00Z")
     assert seen == ["reserve", "reserve"] and not ahead.jobs, "none ahead inside a period"
+
+
+class Now(Later):
+    """`serve_h1.worker` running what it is handed at once."""
+
+    def submit(self, fn: Any, *args: Any) -> Future:
+        fut = super().submit(fn, *args)
+        self.run()
+        return fut
+
+
+def test_the_arm_is_ready_before_the_server_listens(tmp_path, monkeypatch):
+    """`arm_of` reserves window 0's session off the loop, and `H1Windows.ready` computes the weights' roots, builds the
+    call tables' hasher, compiles the z/y kernels, builds the Lean verifier and waits for that reserve, all before
+    serve-openai listens: window 0's open then reserves nothing for itself and computes no root, and its session is the
+    one reserved at startup."""
+    from verity.core.protocols.pouw import verifier
+    from verity_vllm.protocols.pouw.h1 import hooks as PHK
+    from verity_vllm.protocols.pouw.h1 import tables_device as TD
+
+    srv, auditor = _Server(monkeypatch), _GateAuditor(tmp_path, monkeypatch)
+    calls, roots, warmed, built = [], [], [], []
+
+    def gate(argv: list[str]) -> tuple[int, str]:
+        calls.append(shlex.split(argv[-1])[0])
+        return auditor.run(argv)
+    sessions = SH.GateSessions(CC.Gate(GATE, gate), PEER, STEPS, wait=auditor.settle, listens=lambda port: True,
+                               ahead=Now(), now=lambda: datetime(2026, 10, 20, 11, 8, tzinfo=UTC))
+    weight_root, ticks = PH.weight_root, iter(range(1000))
+    monkeypatch.setattr(SH, "sessions_of", lambda opts: sessions)
+    monkeypatch.setattr(SH, "worker", lambda name: None)
+    monkeypatch.setattr(SH, "H1Windows", functools.partial(SH.H1Windows, unit=_unit(), clock=lambda: next(ticks)))
+    monkeypatch.setattr(PHK, "_ROOTS", {})
+    monkeypatch.setattr(PH, "weight_root", lambda w, rows, *key: roots.append(w) or weight_root(w, rows, *key))
+    monkeypatch.setattr(PHK, "warm_zy", lambda layers, rows: warmed.append((len(layers), rows)) or 3)
+    monkeypatch.setattr(TD, "available", lambda: False)
+    monkeypatch.setattr(verifier, "executable", lambda: built.append(len(calls)))
+    opts = SimpleNamespace(protocols=SH.ENTRY, max_num_batched_tokens=ROWS, window_steps=STEPS, protocols_config=None)
+    arm = SH.arm_of(opts, SimpleNamespace(model=srv.model, vllm=object()), srv.com, tmp_path)
+    (held,) = sessions.held
+    assert arm.describe()["ready"] == {"tables": "off", "kernels": 3, "session": held["session"],
+                                       "seconds": {"roots": 1, "tables": 1, "kernels": 1, "lean": 1, "reserve": 1}}
+    assert held["window"] == 0 and calls == ["reserve"] and roots == [0, 1] and warmed == [(2, ROWS)] and built == [1]
+    arm.open(0)
+    srv.serve(PROMPTS[0], 0)
+    out = arm.close(0)
+    assert out["tied"] and out["session"]["session"] == held["session"], out
+    assert [h["window"] for h in sessions.held] == [0, 1], "window 1's reserved ahead at window 0's open, none for 0"
+    assert roots == [0, 1], "window 0's install reuses the roots computed before the server listened"
+    arm.drain()
+    assert arm.summary()["unused"] == [sessions.held[1]["session"]]
+    srv.src.uninstall()
+
+
+def test_a_reserve_at_startup_that_fails_leaves_window_0_s_to_its_open():
+    """`GateSessions.settled` is None for a window with no reserve made ahead and for one whose reserve failed, and that
+    window's `take` reserves at its open."""
+    refusals = []
+
+    def gate(argv: list[str]) -> tuple[int, str]:
+        refusals.append(shlex.split(argv[-1])[0])
+        return 3, json.dumps({"refused": "--peer 'x': one of []"})
+    sessions = SH.GateSessions(CC.Gate(GATE, gate), PEER, STEPS, ahead=Now())
+    assert sessions.settled(0) is None and not refusals
+    sessions.ahead_of(0)
+    assert sessions.settled(0) is None and refusals == ["reserve"]
+    with pytest.raises(CoinError, match="the challenger gate refused reserve"):
+        sessions.take(0)
+    assert refusals == ["reserve", "reserve"] and sessions.held == []
 
 
 def test_a_release_that_fails_off_the_loop_is_its_windows_outcome_in_order(tmp_path, monkeypatch):
