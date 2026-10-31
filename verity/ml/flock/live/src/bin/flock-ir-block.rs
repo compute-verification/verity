@@ -1,6 +1,6 @@
 //! flock-ir-block: an IR subcircuit template's identical units (`flock_live::ir_block`, `verity/flock-ir-block/v1`) as ONE
 //! block R1CS, proved by the CPU prover or by Flock-CUDA's host-witness mode (`--gpu`, feature `gpu`) in a flock-128-r2
-//! live session. Lane flock-ir-lowering; the session protocol is flock-gpu-link's flock-pure-gpu, minus the frame-v3
+//! live session. The session protocol is flock-pure-gpu's, minus the frame-v3
 //! commitments (the unit inputs and outputs are public, read by the verifier from its own instance file).
 //!
 //!   flock-ir-block serve    --listen ADDR --out DIR --instances FILE --netlist FILE --pin SHA256 [--tables DIR] [--sessions N] [--operator LANE]
