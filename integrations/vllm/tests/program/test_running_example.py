@@ -7,9 +7,8 @@ import random
 
 import pytest
 
-from verity.ml.circuits import (Array, FunctionCall, Program, Region, Tuple, Value, bind, composite, decode_program, descriptor_size,
-                       encode_program, primitive, program_digest, query, GapError, QueryError, REGISTRY)
-from verity.ml.circuits.defs import CompositeDefinition
+from verity.ml.circuits import (Array, FunctionCall, Program, Tuple, Value, bind, composite, decode_program, descriptor_size,
+                       encode_program, primitive, program_digest, query, query_ast, QueryError, REGISTRY)
 from verity.ml.circuits.evaluation import evaluate_call, evaluate_region
 from verity.ml.circuits.query_ast import oracle_gateset, oracle_in, oracle_out
 
@@ -68,6 +67,13 @@ def make_program(act=Relu16, annotations=None) -> Program:
     return Program(bind(Inference, B=2, M=5, act=act), annotations=annotations)
 
 
+def blocks(P: Program, q: str) -> list[tuple[int, int]]:
+    """The gate interval of each set the block query `q` selects (`query_ast.evaluate`); every set here is one interval."""
+    sets = [s.intervals() for s in query_ast.evaluate(P, q)]
+    assert all(len(ivs) == 1 for ivs in sets)
+    return [ivs[0] for ivs in sets]
+
+
 def test_counts_and_layout():
     P = make_program()
     C = P.circuit
@@ -95,20 +101,19 @@ def test_counts_and_layout():
 
 
 def test_groups_query_matches_spec():
-    C = make_program().circuit
-    gs = query(C, "//Linear ! groups(Row, 2)")
-    assert [g.interval for g in gs] == [(14, 22), (22, 30), (30, 34), (34, 42), (42, 50), (50, 54)]
-    assert all(isinstance(g, Region) for g in gs)
+    P = make_program()
+    assert blocks(P, "//Linear ! groups(Row, 2)") == [(14, 22), (22, 30), (30, 34), (34, 42), (42, 50), (50, 54)]
     # groups of 5: one per Linear; groups of 7 (nondivisible): still one block of 5 each
-    assert [g.interval for g in query(C, "//Linear ! groups(Row, 5)")] == [(14, 34), (34, 54)]
-    assert [g.interval for g in query(C, "//Linear ! groups(Row, 7)")] == [(14, 34), (34, 54)]
-    assert [g.interval for g in query(C, "//Linear ! groups(Row, 3)")] == [(14, 26), (26, 34), (34, 46), (46, 54)]
+    assert blocks(P, "//Linear ! groups(Row, 5)") == [(14, 34), (34, 54)]
+    assert blocks(P, "//Linear ! groups(Row, 7)") == [(14, 34), (34, 54)]
+    assert blocks(P, "//Linear ! groups(Row, 3)") == [(14, 26), (26, 34), (34, 46), (46, 54)]
     with pytest.raises(QueryError):
-        query(C, "//Linear ! groups(Row, 0)")
+        blocks(P, "//Linear ! groups(Row, 0)")
 
 
 def test_query_paths_and_scoping():
-    C = make_program().circuit
+    P = make_program()
+    C = P.circuit
     # /Linear : direct children of the root (batch members are direct children)
     assert [c.interval for c in query(C, "/Linear")] == [(14, 34), (34, 54)]
     assert query(C, "/Row") == []  # Rows are not direct children of the root
@@ -118,8 +123,8 @@ def test_query_paths_and_scoping():
     assert len(query(C, "//Row/Dot")) == 10
     assert len(query(C, "//Row//Add16")) == 10
     assert query(C, "//Nothing") == []
-    assert query(C, "//Nothing ! groups(Row, 2)") == []
-    assert query(C, "//Linear ! groups(Nothing, 2)") == []  # empty selection -> no groups
+    assert blocks(P, "//Nothing ! groups(Row, 2)") == []
+    assert blocks(P, "//Linear ! groups(Nothing, 2)") == []  # empty selection -> no groups
     root = query(C, "/")
     assert len(root) == 1 and root[0].interval == (0, 54)
     with pytest.raises(QueryError):
@@ -128,8 +133,9 @@ def test_query_paths_and_scoping():
         query(C, "//Linear ! union(Row)")
 
 
-def test_gap_rejected():
-    # A body where two Row calls are separated by an unrelated gate: groups(Row, 2) must reject.
+def test_a_block_never_spans_a_gap():
+    # A body where two Row calls are separated by an unrelated gate: each Row is a node of its own, and a block is
+    # members of one node, so groups(Row, 2) selects each Row alone and never the gate between them.
     @composite("Gappy", 1, [], lambda S: ((("x", A2), ("w", A2)), Array(2, V16)))
     def Gappy(B, S, x, w):
         r0 = B.call(bind(Row, act=Relu16), x, w)
@@ -138,11 +144,8 @@ def test_gap_rejected():
         from verity.ml.circuits import array_of
         return array_of([t, r1])
 
-    C = Program(bind(Gappy)).circuit
-    with pytest.raises(GapError):
-        query(C, "/ ! groups(Row, 2)")
-    # k=1 never spans a gap
-    assert [g.interval for g in query(C, "/ ! groups(Row, 1)")] == [(4, 8), (9, 13)]
+    P = Program(bind(Gappy))
+    assert blocks(P, "/ ! groups(Row, 2)") == blocks(P, "/ ! groups(Row, 1)") == [(4, 8), (9, 13)]
 
 
 def test_call_interface_vs_boundary():
@@ -229,7 +232,7 @@ def test_static_binding_change_keeps_identities_and_changes_digest():
     P2 = make_program(act=Id16)
     assert P1.gates == P2.gates == 54
     q = "//Linear ! groups(Row, 2)"
-    assert [g.interval for g in query(P1.circuit, q)] == [g.interval for g in query(P2.circuit, q)]
+    assert blocks(P1, q) == blocks(P2, q)
     assert [g.operands for g in P1.circuit[0:54]] == [g.operands for g in P2.circuit[0:54]]
     assert P1.circuit[17].prim.id == "Relu16_v1" and P2.circuit[17].prim.id == "Id16_v1"
     assert program_digest(P1) != program_digest(P2)
@@ -244,8 +247,7 @@ def test_annotations_do_not_change_digest_and_codec_round_trips():
     assert descriptor_size(P) > 0
     D = decode_program(json.loads(s), REGISTRY)
     assert D.gates == 54
-    assert [g.interval for g in query(D.circuit, "//Linear ! groups(Row, 2)")] == \
-        [(14, 22), (22, 30), (30, 34), (34, 42), (42, 50), (50, 54)]
+    assert blocks(D, "//Linear ! groups(Row, 2)") == [(14, 22), (22, 30), (30, 34), (34, 42), (42, 50), (50, 54)]
     assert [g.operands for g in D.circuit[0:54]] == [g.operands for g in P.circuit[0:54]]
     assert [g.prim.id for g in D.circuit[0:54]] == [g.prim.id for g in P.circuit[0:54]]
     # re-encoding the decoded program yields the same digest
