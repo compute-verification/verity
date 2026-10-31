@@ -63,6 +63,8 @@ def record(model, pool, cfg, t, q0, tplant, loss):
     rec["drift_rms"] = float(np.mean([p["drift_rms"] for p in v]))
     rec["drift_p99"] = float(np.mean([p["drift_p99"] for p in v]))
     rec["sigma_q"] = float(np.mean([p["stats"]["sigma_q"] for p in v]))
+    rec["stats"] = {k: float(np.mean([p["stats"][k] for p in v])) for k in v[0]["stats"]}
+    rec["energy_top"] = {r: float(np.mean([p["routes"]["energy_top"][r] for p in v])) for r in v[0]["routes"]["energy_top"]}
     rec["cost"] = {}
     for chip in routes.CHIPS:
         fams = v[0]["routes"][chip]["families"].keys()
