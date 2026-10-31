@@ -92,8 +92,9 @@ structure PartX where
 
 /-- **What the compiled verifier holds before the run**: the inner statement's bytes, the verifier's own inner shape
 (`--rec-inner`), the circuit registration (`--rec-inner-registration`), the V* parts, each with its own bindings, and
-the inner population's link table as its root and row count (`--rec-links`), which every part's session refuses
-(`linksOf`). -/
+the inner population's link table as its root and row count (`--rec-links`), which every part's session reads
+(`linksOf`) and holds to the inner shape (`RecLinkPart.checkShape`), and the link table's part checks
+(`RecLinkPart.check`). -/
 structure RecX where
   inner : Claims.Msg
   recInner : ByteArray
@@ -307,10 +308,12 @@ verifier (`--rec-inner-statement`, `--rec-inner-statement-coins`, `--rec-inner-t
 def innerFormOf (w : Raw) : RecCoins.InnerForm := ⟨w.statement, w.osCoins, w.tables, w.draw⟩
 
 /-- The inner statement's files as each staged V* statement hands them to check 5 (`--rec-inner-circuit`,
-`--rec-inner-public`, `--rec-inner-partition`), with how the inner statement is set up (`innerFormOf`) and no record
-(`RecCoins.Files.stmt` reads none); none without a partition, where no staged statement sets up. -/
+`--rec-inner-public`, `--rec-inner-partition`), with how the inner statement is set up (`innerFormOf`), its program
+(`--rec-inner-program`) and no record (`RecCoins.Files.stmt` reads none); none without a partition, where no staged
+statement sets up. -/
 def filesOf (r : XR) : Option RecCoins.Source :=
-  r.partition.map fun p => .files ⟨r.innerRaw.circuit, r.innerRaw.publicFile, p, "", none, some (innerFormOf r.innerRaw)⟩
+  r.partition.map fun p => .files ⟨r.innerRaw.circuit, r.innerRaw.publicFile, p, "", none, some (innerFormOf r.innerRaw),
+    r.innerRaw.program⟩
 
 /-- **What the compiled verifier reads of the statement**, as `RecScope` reads it: the inner statement's bytes and
 files, its own inner shape, no V* session's record, each being a run message, and the link table's root and row
@@ -385,7 +388,8 @@ def Stage.ofMsg (tr : Claims.Msg → List (Claims.Msg × Claims.Out) → ByteArr
 
 /-- Part `s`'s recursive statement: its Flock statement at the staged public file, the verifier's own inner shape,
 `--rec-part s`, the part's bindings, the staged shared rows, the inner statement's files, the staged record and
-transcript, the registration, how the inner statement is set up (`innerFormOf`), and the link table. -/
+transcript, the registration, how the inner statement is set up (`innerFormOf`), the link table, and the inner
+statement's program. -/
 def partRaw (r : XR) (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Claims.Out)) (s : ℕ) (p : PartX) :
     RecRaw where
   base := { p.base with publicFile := st.pub x ms s }
@@ -405,6 +409,7 @@ def partRaw (r : XR) (st : Stage) (x : Claims.Msg) (ms : List (Claims.Msg × Cla
   innerTables := some r.innerRaw.tables
   innerDraw := r.innerRaw.draw
   recLinks := r.w.links
+  innerProgram := r.innerRaw.program
 
 open Classical in
 /-- **Part `s`'s statement as staged** at the rounds `ms` before the sessions: its encoding, where that reads back as

@@ -5,15 +5,16 @@ recursion's guarantee reads (`RecDeploy.V`, `Proofs.Flock.Claims.Recursion.Deplo
 `RecDeploy.partRaw … s p`: of what `verify` reads, only the part's Flock statement (its circuit, partition, program and
 registered reads, with its staged public file), its index and the verifier's own bindings of it vary by part, and every
 other input is one value for every part (`Shared`, with the shared rows `--rec-rows`): the verifier's inner shape, the
-inner statement's files and how it is set up, the inner session's record, the coin server's transcript and the circuit
-registration. No part sees another, so only the composition can hold every part to one set. Each part's `VERDICT` names
+inner statement's files and how it is set up, the inner session's record, the coin server's transcript, the circuit
+registration and the inner population's link table (`--rec-links`). No part sees another, so only the composition can
+hold every part to one set. Each part's `VERDICT` names
 the SHA-512 of each (`rec_shared`, `rec_rows_sha512`), whether it ran `--zk` (`zk`), and its session's coin key
 (`coin_key`).
 
 It accepts exactly when there is one log per V* statement, each with one `VERDICT`; `rec_part` `0` to `n − 1` each once;
 every `VERDICT` accepts, ran `--zk`, names no identifier and names the composition's own rows file's digest; the first
-part's `rec_shared` holds every input the compiled verifier's parts read, at the composition's own inner shape
-(`Shared.Complete`), and every part's is that one; and no two sessions share a coin key (`verify` refuses a key reused
+part's `rec_shared` holds every input the compiled verifier's parts read, at the composition's own inner shape and link
+table (`Shared.Complete`), and every part's is that one; and no two sessions share a coin key (`verify` refuses a key reused
 within one run, `CoinTree.checkFresh`, and this across runs). `Accepts` states it, and `check_accepts` proves it of
 `check`; `Proofs.Flock.Claims.Recursion.ComposeParts` carries it to the parts' statements.
 
@@ -48,7 +49,9 @@ the verifier's own inner shape (`--rec-inner`), of the inner statement's files (
 refuses), of the inner session's record (`--rec-inner-session`'s `session.json`), of the coin server's transcript
 (`--rec-inner-transcript`) and of the circuit registration (`--rec-inner-registration`); how the inner statement is set
 up (`--rec-inner-statement`, its coins `os` as `true`, each lookup table's name and SHA-512, and the SHA-512 of
-`--rec-inner-draw`). `none` where `verify` held no such input. -/
+`--rec-inner-draw`); the inner population's link table (`--rec-links ROOT:N`: its root in hex and its row count); and
+the SHA-512 of the verifier's own program of the inner statement (`--rec-inner-program`), under which its Linking is
+checked. `none` where `verify` held no such input. -/
 structure Shared where
   recInner : Option String
   innerCircuit : Option String
@@ -62,20 +65,37 @@ structure Shared where
   innerStatementCoins : Option Bool
   innerTables : Option (List (String × String))
   innerDraw : Option String
+  links : Option (String × Nat)
+  innerProgram : Option String
   deriving DecidableEq, Repr, Inhabited
+
+/-- The link table (`--rec-links ROOT:N`) as `rec_shared` names it: its root in hex and its row count. -/
+def linksOf (links : Option (ByteArray × Nat)) : Option (String × Nat) := links.map fun l => (hexOf l.1, l.2)
 
 /-- **The shared inputs' digests**, from the bytes `verify` read. -/
 def Shared.ofFiles (recInner innerCircuit innerPublic innerPartition innerCoins innerSession transcript registration :
     Option ByteArray) (innerStatement : Option String) (innerStatementCoins : Option Bool)
-    (innerTables : Option (List (String × ByteArray))) (innerDraw : Option ByteArray) : Shared :=
+    (innerTables : Option (List (String × ByteArray))) (innerDraw : Option ByteArray)
+    (links : Option (ByteArray × Nat)) (innerProgram : Option ByteArray) : Shared :=
   ⟨recInner.map digest, innerCircuit.map digest, innerPublic.map digest, innerPartition.map digest,
     innerCoins.map digest, innerSession.map digest, transcript.map digest, registration.map digest, innerStatement,
-    innerStatementCoins, innerTables.map (·.map fun t => (t.1, digest t.2)), innerDraw.map digest⟩
+    innerStatementCoins, innerTables.map (·.map fun t => (t.1, digest t.2)), innerDraw.map digest, linksOf links,
+    innerProgram.map digest⟩
 
 /-- A string or `null`. -/
 def optJson : Option String → Json
   | none => .null
   | some s => .str s
+
+/-- The link table as `rec_shared`'s `rec_links`: `[ROOT, N]`, or `null`. -/
+def linksJson : Option (String × Nat) → Json
+  | none => .null
+  | some (r, n) => .arr #[.str r, .num n]
+
+/-- The link table's `ROOT:N`, or `none`, as a refusal names it. -/
+def linksShow : Option (String × Nat) → String
+  | none => "none"
+  | some (r, n) => s!"{r}:{n}"
 
 def Shared.toJson (s : Shared) : Json :=
   Json.mkObj [("rec_inner", optJson s.recInner), ("inner_circuit", optJson s.innerCircuit),
@@ -87,7 +107,8 @@ def Shared.toJson (s : Shared) : Json :=
     ("inner_tables", match s.innerTables with
       | none => .null
       | some ts => .arr (ts.map fun t => Json.arr #[.str t.1, .str t.2]).toArray),
-    ("inner_draw", optJson s.innerDraw)]
+    ("inner_draw", optJson s.innerDraw), ("rec_links", linksJson s.links),
+    ("inner_program", optJson s.innerProgram)]
 
 /-- Field `k` of `j`: a string, or `null` as `none`; nothing when absent or another value. -/
 def readOpt (j : Json) (k : String) : Option (Option String) :=
@@ -114,9 +135,14 @@ def Shared.ofJson? (j : Json) : Option Shared := do
     | .ok .null => some none
     | .ok (.arr ts) => some <$> ts.toList.mapM readTable
     | _ => none
+  let links ← match j.getObjVal? "rec_links" with
+    | .ok .null => some none
+    | .ok (.arr #[.str r, n]) => (n.getNat?).toOption.map fun n => some (r, n)
+    | _ => none
   pure ⟨← readOpt j "rec_inner", ← readOpt j "inner_circuit", ← readOpt j "inner_public", ← readOpt j "inner_partition",
     ← readOpt j "inner_coins", ← readOpt j "inner_session", ← readOpt j "inner_transcript",
-    ← readOpt j "inner_registration", ← readOpt j "inner_statement", coins, tables, ← readOpt j "inner_draw"⟩
+    ← readOpt j "inner_registration", ← readOpt j "inner_statement", coins, tables, ← readOpt j "inner_draw", links,
+    ← readOpt j "inner_program"⟩
 
 /-- The first field in which `s` differs from `t`, the first part's, as a refusal's reason. -/
 def Shared.diff (s t : Shared) : String :=
@@ -136,7 +162,11 @@ def Shared.diff (s t : Shared) : String :=
       (s.innerStatementCoins.map toString) (t.innerStatementCoins.map toString) <|>
     one "inner_tables" "the inner statement's lookup tables, --rec-inner-tables"
       (s.innerTables.map toString) (t.innerTables.map toString) <|>
-    one "inner_draw" "the inner statement's draw, --rec-inner-draw" s.innerDraw t.innerDraw).getD
+    one "inner_draw" "the inner statement's draw, --rec-inner-draw" s.innerDraw t.innerDraw <|>
+    one "rec_links" "the inner population's link table, --rec-links" (s.links.map (linksShow ∘ some))
+      (t.links.map (linksShow ∘ some)) <|>
+    one "inner_program" "the verifier's program of the inner statement, --rec-inner-program" s.innerProgram
+      t.innerProgram).getD
     "its rec_shared is not the first part's"
 
 /-- **A part's verdict as `rec-compose` reads it** off its `VERDICT` line. -/
@@ -163,22 +193,22 @@ def PartVerdict.ofJson (j : Json) : PartVerdict where
 
 /-- **The shared inputs in the compiled verifier's form**: every part of `RecDeploy.V` reads the verifier's own inner
 shape, here the composition's (`inner`, its SHA-512), the inner statement's three files, the inner session's record,
-the coin server's transcript and how the inner statement is proved, and no record of check 5's coins. -/
-def Shared.Complete (inner : String) (s : Shared) : Prop :=
+the coin server's transcript and how the inner statement is proved, and no record of check 5's coins; and the link
+table it reads is the composition's own (`links`, `--rec-links`). -/
+def Shared.Complete (inner : String) (links : Option (String × Nat)) (s : Shared) : Prop :=
   s.recInner = some inner ∧ s.innerCircuit.isSome ∧ s.innerPublic.isSome ∧ s.innerPartition.isSome ∧
     s.innerCoins = none ∧ s.innerSession.isSome ∧ s.transcript.isSome ∧ s.innerStatement.isSome ∧
-    s.innerStatementCoins.isSome ∧ s.innerTables.isSome
+    s.innerStatementCoins.isSome ∧ s.innerTables.isSome ∧ s.links = links
 
 /-- **`rec-compose`'s acceptance** over the parts' verdicts, at V*'s `n` statements, the composition's own rows file's
-SHA-512 `rows` and inner shape's `inner`: one verdict per statement, `rec_part` `j` once for each `j < n`; each accepted
-at one of them,
-`--zk`, with no identifier, at `rows`; one `Shared` in the compiled verifier's form at `inner` that every part names; and
-every session's coin key named, no two alike. -/
-def Accepts (n : Nat) (rows inner : String) (vs : List PartVerdict) : Prop :=
+SHA-512 `rows`, inner shape's `inner` and link table `links`: one verdict per statement, `rec_part` `j` once for each
+`j < n`; each accepted at one of them, `--zk`, with no identifier, at `rows`; one `Shared` in the compiled verifier's
+form at `inner` and `links` that every part names; and every session's coin key named, no two alike. -/
+def Accepts (n : Nat) (rows inner : String) (links : Option (String × Nat)) (vs : List PartVerdict) : Prop :=
   0 < n ∧ vs.length = n ∧ (∀ j, j < n → (vs.map (·.part)).count (some j) = 1) ∧
     (∀ v ∈ vs, v.accepted = true ∧ v.zk = some true ∧ v.identifier = false ∧ v.rows = some rows ∧
       ∃ j, v.part = some j ∧ j < n) ∧
-    (∃ sh, sh.Complete inner ∧ ∀ v ∈ vs, v.shared = some sh) ∧
+    (∃ sh, sh.Complete inner links ∧ ∀ v ∈ vs, v.shared = some sh) ∧
     (∀ v ∈ vs, v.coinKey.isSome) ∧ (vs.map (·.coinKey)).Nodup
 
 /-- A log's `VERDICT` lines, each a JSON object, in order. -/
@@ -220,8 +250,8 @@ def held (name what : String) : String :=
   s!"{name}: its verify held no {what}, which every part of the compiled verifier reads"
 
 /-- **The first part's shared inputs are the compiled verifier's** at the composition's inner shape of SHA-512 `inner`
-(`Shared.Complete`), each refusal naming its input. -/
-def checkForm (name inner : String) (s : Shared) : Except String Unit :=
+and link table `links` (`Shared.Complete`), each refusal naming its input. -/
+def checkForm (name inner : String) (links : Option (String × Nat)) (s : Shared) : Except String Unit :=
   match s.recInner with
   | none => .error s!"{name}: its VERDICT names no rec_inner: it was not verified at V*'s inner shape (--rec-inner)"
   | some h =>
@@ -236,6 +266,8 @@ def checkForm (name inner : String) (s : Shared) : Except String Unit :=
     else if s.innerStatement.isNone then .error (held name "word on how the inner statement is proved (--rec-inner-statement)")
     else if s.innerStatementCoins.isNone then .error (held name "inner statement's coins (--rec-inner-statement)")
     else if s.innerTables.isNone then .error (held name "inner statement's lookup tables (--rec-inner-statement)")
+    else if s.links ≠ links then
+      .error s!"{name}: verified at the link table {linksShow s.links}, not the composition's own --rec-links {linksShow links}"
     else .ok ()
 
 /-- **Every part names the one shared set** `sh`. -/
@@ -261,9 +293,10 @@ def checkIndex (vs : List (String × PartVerdict)) (j : Nat) : Except String Uni
   else .error s!"rec_part {j}: {(vs.map (·.2.part)).count (some j)} logs, not one"
 
 /-- **The composition on the parts' verdicts** (name, verdict): `checkOne` on each, the first part's shared inputs in
-the compiled verifier's form at `inner` (`checkForm`) and every part's the same (`checkShared`), one part per statement
-(`checkIndex`, and as many parts as statements) and fresh coin keys (`checkKeys`). -/
-def checkVerdicts (n : Nat) (rows inner : String) (vs : List (String × PartVerdict)) : Except String Unit :=
+the compiled verifier's form at `inner` and `links` (`checkForm`) and every part's the same (`checkShared`), one part
+per statement (`checkIndex`, and as many parts as statements) and fresh coin keys (`checkKeys`). -/
+def checkVerdicts (n : Nat) (rows inner : String) (links : Option (String × Nat)) (vs : List (String × PartVerdict)) :
+    Except String Unit :=
   if n = 0 then .error "no V* statement" else
   (vs.forM fun p => checkOne n rows p.1 p.2) >>= fun _ =>
   match vs with
@@ -272,7 +305,7 @@ def checkVerdicts (n : Nat) (rows inner : String) (vs : List (String × PartVerd
     match v.shared with
     | none => .error s!"{name}: its VERDICT names no rec_shared: the inputs it shares with the other parts are not named"
     | some sh =>
-      checkForm name inner sh >>= fun _ =>
+      checkForm name inner links sh >>= fun _ =>
       (vs.forM fun p => checkShared sh p.1 p.2) >>= fun _ =>
       ((List.range n).forM (checkIndex vs)) >>= fun _ =>
       (if vs.length = n then .ok () else .error s!"{vs.length} parts, not V*'s {n} statements") >>= fun _ =>
@@ -385,11 +418,12 @@ def checkRun (n : Nat) (rows : String) (vs : List (String × PartVerdict)) (evs 
   | _ => .error "run record: its first event is not the staging: V*'s statements are staged before the first part's Hello"
 
 /-- **The composition**: `parts`' logs (name, text), one `VERDICT` each (`partOf`), composed at V*'s `n` statements,
-the composition's own rows file's SHA-512 `rows` and inner shape's `inner` (`checkVerdicts`), and one run of the
-challenger's interactive-run record `run` (`runOf`, `checkRun`). -/
-def check (n : Nat) (rows inner : String) (run : String) (parts : List (String × String)) : Except String Unit :=
+the composition's own rows file's SHA-512 `rows`, inner shape's `inner` and link table `links` (`checkVerdicts`), and
+one run of the challenger's interactive-run record `run` (`runOf`, `checkRun`). -/
+def check (n : Nat) (rows inner : String) (links : Option (String × Nat)) (run : String) (parts : List (String × String)) :
+    Except String Unit :=
   (parts.mapM fun p => partOf p.1 p.2) >>= fun vs =>
-  checkVerdicts n rows inner vs >>= fun _ =>
+  checkVerdicts n rows inner links vs >>= fun _ =>
   runOf run >>= checkRun n rows vs
 
 /-! ## `check` accepts only what `Accepts` states -/
@@ -437,13 +471,41 @@ theorem checkOne_ok {n : Nat} {rows name : String} {v : PartVerdict} (h : checkO
     exact ⟨by simpa using ha, by simpa using hz, by simpa using hi, by rw [hr, hh], j, hj, by omega⟩
   · cases h
 
-theorem checkForm_ok {name inner : String} {s : Shared} (h : checkForm name inner s = .ok ()) : s.Complete inner := by
+theorem ite_error_ok {c : Prop} [inst : Decidable c] {e : String} {k : Except String Unit}
+    (h : (if c then Except.error e else k) = .ok ()) : ¬ c ∧ k = .ok () := by
+  cases inst with
+  | isTrue _ => cases h
+  | isFalse hc => exact ⟨hc, h⟩
+
+theorem checkForm_ok {name inner : String} {links : Option (String × Nat)} {s : Shared}
+    (h : checkForm name inner links s = .ok ()) : s.Complete inner links := by
+  have some_of {α : Type} {o : Option α} (h : ¬ o.isNone = true) : o.isSome = true := by
+    cases o
+    · exact absurd rfl h
+    · rfl
   unfold checkForm at h
-  repeat' split at h
-  all_goals first | (cases h; done) | skip
-  rename_i hr hi h1 h2 h3 h4 h5 h6 h7 h8 h9
-  refine ⟨by rw [hr]; simpa using hi, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;>
-    simp_all [Option.isNone_iff_eq_none, Option.isSome_iff_ne_none]
+  cases hr : s.recInner with
+  | none => rw [hr] at h; cases h
+  | some r =>
+    rw [hr] at h
+    dsimp only at h
+    obtain ⟨hi, h⟩ := ite_error_ok h
+    obtain ⟨h1, h⟩ := ite_error_ok h
+    obtain ⟨h2, h⟩ := ite_error_ok h
+    obtain ⟨h3, h⟩ := ite_error_ok h
+    obtain ⟨h4, h⟩ := ite_error_ok h
+    obtain ⟨h5, h⟩ := ite_error_ok h
+    obtain ⟨h6, h⟩ := ite_error_ok h
+    obtain ⟨h7, h⟩ := ite_error_ok h
+    obtain ⟨h8, h⟩ := ite_error_ok h
+    obtain ⟨h9, h⟩ := ite_error_ok h
+    obtain ⟨h10, -⟩ := ite_error_ok h
+    unfold Shared.Complete
+    refine ⟨by rw [hr, Decidable.byContradiction hi], some_of h1, some_of h2, some_of h3, ?_, some_of h5, some_of h6,
+      some_of h7, some_of h8, some_of h9, Decidable.byContradiction h10⟩
+    cases e : s.innerCoins with
+    | none => rfl
+    | some _ => rw [e] at h4; exact absurd rfl h4
 
 theorem checkShared_ok {sh : Shared} {name : String} {v : PartVerdict} (h : checkShared sh name v = .ok ()) :
     v.shared = some sh := by
@@ -486,8 +548,9 @@ theorem checkIndex_ok {vs : List (String × PartVerdict)} {j : Nat} (h : checkIn
   · cases h
 
 /-- **`checkVerdicts` accepts only what `Accepts` states.** -/
-theorem checkVerdicts_accepts {n : Nat} {rows inner : String} {vs : List (String × PartVerdict)}
-    (h : checkVerdicts n rows inner vs = .ok ()) : Accepts n rows inner (vs.map (·.2)) := by
+theorem checkVerdicts_accepts {n : Nat} {rows inner : String} {links : Option (String × Nat)}
+    {vs : List (String × PartVerdict)} (h : checkVerdicts n rows inner links vs = .ok ()) :
+    Accepts n rows inner links (vs.map (·.2)) := by
   unfold checkVerdicts at h
   split at h
   · cases h
@@ -616,9 +679,9 @@ theorem checkRun_oneRun {n : Nat} {rows : String} {vs : List (String × PartVerd
 
 /-- **`check` accepts only what `Accepts` states**: where it accepts the logs, each holds one `VERDICT`, and their
 verdicts meet `Accepts`. -/
-theorem check_accepts {n : Nat} {rows inner run : String} {parts : List (String × String)}
-    (h : check n rows inner run parts = .ok ()) :
-    ∃ vs, parts.mapM (fun p => partOf p.1 p.2) = .ok vs ∧ Accepts n rows inner (vs.map (·.2)) := by
+theorem check_accepts {n : Nat} {rows inner run : String} {links : Option (String × Nat)}
+    {parts : List (String × String)} (h : check n rows inner links run parts = .ok ()) :
+    ∃ vs, parts.mapM (fun p => partOf p.1 p.2) = .ok vs ∧ Accepts n rows inner links (vs.map (·.2)) := by
   obtain ⟨vs, hvs, h⟩ := bind_ok h
   obtain ⟨_, hv, _⟩ := bind_ok h
   exact ⟨vs, hvs, checkVerdicts_accepts hv⟩
@@ -628,10 +691,10 @@ record reads as events, and they are one run of the parts' verdicts: the staging
 the shared set every part read, exactly one session opened for each of V*'s statements and none for another, each the
 composed part's session, and the close last. A part retried, a session opened and not composed, a part composed whose
 session the record doesn't hold, a staging after a Hello or a second one, and a record not closed are refused. -/
-theorem check_oneRun {n : Nat} {rows inner run : String} {parts : List (String × String)}
-    (h : check n rows inner run parts = .ok ()) :
+theorem check_oneRun {n : Nat} {rows inner run : String} {links : Option (String × Nat)}
+    {parts : List (String × String)} (h : check n rows inner links run parts = .ok ()) :
     ∃ vs evs, parts.mapM (fun p => partOf p.1 p.2) = .ok vs ∧ runOf run = .ok evs ∧
-      Accepts n rows inner (vs.map (·.2)) ∧ OneRun n rows (vs.map (·.2)) evs := by
+      Accepts n rows inner links (vs.map (·.2)) ∧ OneRun n rows (vs.map (·.2)) evs := by
   obtain ⟨vs, hvs, h⟩ := bind_ok h
   obtain ⟨_, hv, h⟩ := bind_ok h
   obtain ⟨evs, hevs, h⟩ := bind_ok h
