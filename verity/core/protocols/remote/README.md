@@ -20,7 +20,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `window
 **Which "remote".** Six things in the tree are called "remote", and this page means the first:
 
 - the remote protocol, this one: `Core.Remote` (`CoreRemote.lean`, id `verity/remote/v0`);
-- PoUB, proof of useful bandwidth, an onsite subprotocol whose code still says "remote bandwidth": its package
+- PoUB, an onsite subprotocol whose code names still say "remote" until they are renamed: its package
   `verity/core/protocols/remote_bandwidth/`, its Lean verifier `RemoteAudit`, its Lean vocabulary `Accounting.Remote`
   (`Security/Definitions/Accounting/Remote.lean`) and `Accounting.Guarantees.Remote*`, its id `verity/remote-bandwidth/v0`,
   its whole-node benchmark `benchmarks/remote_session/`, and serve-openai's `--remote-verifier`, the address of PoUB's
