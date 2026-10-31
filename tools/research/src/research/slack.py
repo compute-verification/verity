@@ -18,6 +18,7 @@ Notes are records, never messages.
   research msg linear relate ISSUE blocks|blocked-by|related|duplicate OTHER | unrelate ISSUE OTHER
   research msg linear update PROJECT --health onTrack|atRisk|offTrack --body-file F   # a project update
   research msg linear project create NAME --team KEY... [--lead USER] [--target D] [--description-file F]
+  research msg linear project edit PROJECT --team KEY...       # add teams, so their issues can be placed in it
   research msg linear milestone create|edit PROJECT NAME [--date D] [--description-file F] [--rename NEW]
   research msg read --thread TS [--since TS] | --since TS | --as NAME [--peek] [--urgent] [--json]  # --as: NAME's unread doorbells
   research msg names open|read|close|list [--as NAME] [--forward-to @NAME] [--succeeds] [--poster BC_ID]  # the names you answer to
@@ -1868,7 +1869,8 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
     [--milestone M]` (`--asks [--asker NAME]`: the ledger of people's asks), `edit ISSUE [--title T] [--due D|none]
     [--file BRIEF.md] [--parent ID] [--label L [--remove]]`, `relate ISSUE
     blocks|blocked-by|related|duplicate OTHER`, `unrelate ISSUE OTHER`, `update PROJECT --health H --body-file F`,
-    `project create NAME --team KEY... [--lead USER] [--target D] [--description-file F]` and `milestone create|edit
+    `project create NAME --team KEY... [--lead USER] [--target D] [--description-file F]`, `project edit PROJECT --team
+    KEY...` (adds teams) and `milestone create|edit
     PROJECT NAME [--date D] [--description-file F] [--rename NEW]`. Each prints one line; a refusal exits 2."""
     from . import linear
 
@@ -1927,10 +1929,12 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
                              ns.health, brief))
             return 0
         if ns.verb in ("project", "milestone"):
-            if ns.target not in ("create",) + (("edit",) if ns.verb == "milestone" else ()):
-                raise SlackError("linear project: give `create NAME`" if ns.verb == "project"
+            if ns.target not in ("create", "edit"):
+                raise SlackError("linear project: give `create NAME` or `edit PROJECT --team KEY`" if ns.verb == "project"
                                  else "linear milestone: give `create` or `edit`, then PROJECT NAME")
-            if ns.verb == "project":
+            if ns.verb == "project" and ns.target == "edit":
+                print(lin.project_teams(need(value, "the PROJECT (a prefix of its name)"), ns.team))
+            elif ns.verb == "project":
                 print(lin.create_project(need(value, "the project's NAME"), ns.team, ns.lead, ns.date, brief))
             elif len(ns.value) < 2:
                 raise SlackError(f"linear milestone {ns.target}: give PROJECT (a prefix of its name, one word or quoted) and NAME")
@@ -4029,7 +4033,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                       "[--remove]]`, `relate ISSUE blocks|blocked-by|related|"
                       "duplicate OTHER` (Linear moves a duplicate to its Duplicate status), `unrelate ISSUE OTHER`, `update "
                       "PROJECT --health onTrack|atRisk|offTrack --body-file F` (a project update), `project create NAME --team "
-                      "KEY... [--lead USER] [--target YYYY-MM-DD] [--description-file F]`, `milestone create|edit PROJECT NAME "
+                      "KEY... [--lead USER] [--target YYYY-MM-DD] [--description-file F]`, `project edit PROJECT --team KEY...` (adds teams), `milestone create|edit PROJECT NAME "
                       "[--date YYYY-MM-DD] [--description-file F] [--rename NEW]`, `create --as HANDLE --title T --file BRIEF.md [--team KEY] "
                       "[--due YYYY-MM-DD] [--parent ID]` (an issue in your own team, or KEY's); none sends a state")
     p.add_argument("verb", choices=("check", "state", "comment", "list", "audit", "place", "edit", "relate", "unrelate", "update",
@@ -4038,7 +4042,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                                              "team (a handle or its key); update: the project; project, milestone: create or edit")
     p.add_argument("value", nargs="*", help="state: the state's name; comment: the text; place: the project; audit: more teams; "
                                             "relate: the kind and the other issue; unrelate: the other issue; project create: "
-                                            "its name; milestone: the project (one word or quoted) and the milestone's name")
+                                            "its name; project edit: the project; milestone: the project (one word or quoted) and the milestone's name")
     p.add_argument("--state", default=None, metavar="NAME", help="list: only issues in this state (default: every open one)")
     p.add_argument("--write", default=None, metavar="TEAM", help="check: also file, comment on and cancel a test issue in TEAM")
     p.add_argument("--as", dest="handle", default=None, metavar="HANDLE",
@@ -4053,7 +4057,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                         "update's body; project create, milestone: the description")
     p.add_argument("--parent", default=None, metavar="ID", help="edit: make it a sub-issue of this issue (CMP-92)")
     p.add_argument("--health", default=None, metavar="H", help="update: onTrack, atRisk or offTrack")
-    p.add_argument("--team", action="append", default=[], metavar="KEY", help="project create: a team it is in (repeat for more)")
+    p.add_argument("--team", action="append", default=[], metavar="KEY", help="project create: a team it is in; project edit: a team to add (repeat for more)")
     p.add_argument("--lead", default=None, metavar="USER",
                    help="project create: its lead, a prefix of a Linear user's name (a person: a lane is its --team)")
     p.add_argument("--date", "--target", dest="date", default=None, metavar="YYYY-MM-DD",
