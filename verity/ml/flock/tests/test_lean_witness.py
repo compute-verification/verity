@@ -366,7 +366,7 @@ def test_f1_vstars_statements_are_outer_statements_at(f1_gate, f1_inner):
     units of the gate's ten staged statements, the last four RecCaps over levels 1 to 3's tops and level 0's 128 nodes,
     which `outerParts` counts (levels + groups + levels)."""
     c = f1_inner["accepts_stmt"]
-    assert c["shape"] == {"format": "verity/rec-inner/v1", "m": 27, "k_log": 24, "claims": 8, "regions": 3}
+    assert c["shape"] == {"format": "verity/rec-inner/v2", "m": 27, "k_log": 24, "claims": 8, "regions": 3}
     assert c["outer_parts"] == len(c["statements"]) == len(F1_PARTS)
     assert c["statements"] == [nm for nm, _ in F1_STATEMENTS] == [_unit(f1_gate, p) for p in F1_PARTS]
 

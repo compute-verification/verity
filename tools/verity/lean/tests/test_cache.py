@@ -834,7 +834,7 @@ mkdir -p "$d" && printf olean > "$d/M.olean" && chmod 600 "$d/M.olean" && printf
 
 
 def node(tmp: Path, url: str, run_rc: int = 0, clean_rc: int = 0, extra: dict[str, str] | None = None
-         ) -> tuple["D.Node", Path, str]:
+         ) -> tuple["D.DailyPaths", Path, str]:
     """Node 1's bare repository with main (`pkg`, ``extra``'s files, and a `setup.sh` that fetches a dependency), a sandbox
     that runs the build as this user, and the key file; returns the node, the sandbox's log and main's commit."""
     src, _ = repo(tmp, "src")
@@ -858,7 +858,7 @@ def node(tmp: Path, url: str, run_rc: int = 0, clean_rc: int = 0, extra: dict[st
     key = tmp / "lean-cache.env"
     key.write_text(f"AWS_ACCESS_KEY_ID={WRITE[0]}\nAWS_SECRET_ACCESS_KEY={WRITE[1]}\nR2_ENDPOINT={url}\n"
                    f"R2_BUCKET=verity-lean-cache\n")
-    n = D.Node(bare=tmp / "bare.git", tree=tmp / "build" / "verity", out=tmp / "build" / "out", prep=tmp / "prep",
+    n = D.DailyPaths(bare=tmp / "bare.git", tree=tmp / "build" / "verity", out=tmp / "build" / "out", prep=tmp / "prep",
                deps=tmp / "var" / "deps", trusted=tmp, lock=tmp / "lock", sandbox=[sys.executable, str(box)],
                research=["env", f"PATH={path}"], builder=D.pwd.getpwuid(os.getuid()).pw_name, key_file=str(key),
                python=sys.executable)
