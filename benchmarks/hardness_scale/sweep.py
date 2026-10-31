@@ -1,24 +1,37 @@
 """Run presets of train.py configs on this process's GPU, claiming each config from a queue several workers share.
 
-A worker is one `research run --gpus 1`. It walks its presets' configs in order and runs every config whose claim it wins:
-the claim is `mkdir QUEUE/<name>` (atomic), so N workers on one node split a preset between them in its order (a preset
-lists its longest configs first).
+A worker is one `research run --gpus 1` through the GPU slots. It walks its presets' configs in order and runs every config
+whose claim it wins: the claim is `mkdir QUEUE/<name>` (atomic), so N workers on one node split a preset between them in its
+order. A preset is a function of the results already under --shared, so a config whose lr is picked from earlier runs appears
+once they finish; it re-resolves before every claim. With nothing left to claim, a worker waits while its presets say more
+may come, and exits otherwise.
 Each config runs as a child process. Results: $OUT/runs/<name>.json and $OUT/logs/<name>.log, a copy of both under
---shared (outside the run dir, for node-side reads), and a failure record $OUT/failed/<name>.json. The worker's stdout
-carries one line per eval and per finished config. A claim stays when its config fails: rerun it under a new name.
+--shared (outside the run dir, for node-side reads), and a failure record $OUT/failed/<name>.json (and under --shared, where
+a preset reads it as an infinite loss). The worker's stdout carries one line per eval and per finished config. A claim stays
+when its config fails: rerun it under a new name.
+
+A worker hands its GPU over: after each config, and while it waits, it exits when anyone waits in the GPU slots' line
+(another lane's job, or newer workers of this sweep, which take over the unclaimed configs).
 """
 
 import argparse
 import json
+import math
 import os
 import shutil
 import subprocess
 import sys
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE.parents[1] / "tools" / "verity" / "check"))
+import slot  # noqa: E402
 from train import nonemb_params  # noqa: E402
+
+POLL_S = 60
 
 SIZES = {  # d, sequences a step, sequences a forward
     "9m": {"d": 256, "batch": 128, "micro": 64},
@@ -36,6 +49,7 @@ ARMS = {
     "m-all-r8": {"arr": "matrix", "where": "all", "rank_frac": 1 / 8},
     "m-all-r4": {"arr": "matrix", "where": "all", "rank_frac": 1 / 4},
     "m-mlph-r8": {"arr": "matrix", "where": "mlp", "rank_frac": 1 / 8, "block_frac": 0.5},
+    "m-mlpq-r8": {"arr": "matrix", "where": "mlp", "rank_frac": 1 / 8, "block_frac": 0.25},
     "res-f17": {"arr": "reservoir", "frozen_frac": 1 / 6},
     "res-f25": {"arr": "reservoir", "frozen_frac": 1 / 4},
     "res-f33": {"arr": "reservoir", "frozen_frac": 1 / 3},
@@ -54,6 +68,7 @@ def tokens_d(size):
 
 def cfg(size, arm, lr, dx=1.0, seed=0, **extra):
     s = SIZES[size]
+    lr = float(f"{lr:.3g}")
     name = f"{size}-{arm}-lr{lr:g}" + (f"-Dx{dx:g}" if dx != 1 else "") + (f"-s{seed}" if seed else "")
     for k, v in extra.items():
         name += f"-{k}{v:g}" if isinstance(v, (int, float)) else f"-{k}{v}"
@@ -73,22 +88,110 @@ def smoke():
     return out
 
 
-def t1_20m():
-    """Tier 1 at 20M: the baseline's lr and token ladder, every arrangement at several κ, lr and seed checks."""
-    lr = 3e-3
-    out = [cfg("20m", "base", x) for x in (1.5e-3, 3e-3, 6e-3, 1.2e-2)]
-    out += [cfg("20m", "base", lr, dx) for dx in (2, 0.5, 0.25, 0.125)]
-    out += [cfg("9m", "base", lr * 1.5, dx) for dx in (1, 2)]
-    out += [cfg("20m", a, lr) for a in ("m-mlp-r8", "m-all-r8", "res-f33", "res-f50", "feat-s50", "feat-s100")]
-    out += [cfg("20m", a, lr) for a in ("m-mlp-r4", "m-all-r4", "m-mlph-r8", "res-f17", "res-f25", "res-f67",
-                                        "feat-s25", "feat-s75", "noise", "bf16")]
-    out += [cfg("20m", "m-mlp-r8", lr * 2), cfg("20m", "res-f33", lr * 2), cfg("20m", "res-f33", lr / 2),
-            cfg("20m", "feat-s50", lr * 2)]
-    out += [cfg("20m", a, lr, seed=1) for a in ("base", "m-mlp-r8", "res-f33")]
-    return out
+LR20 = (7.5e-4, 1.5e-3, 3e-3, 6e-3, 1.2e-2, 2.4e-2)
+#: two κ per arrangement, matched across them: κ_lin ≈ 1/6 (m-mlpq-r8, res-f17, feat-s50), ≈ 1/3 (m-mlph-r8, res-f33,
+#: feat-s100), and the higher m-mlp-r8 (≈ 0.6) and res-f50
+MATCHED = ("m-mlp-r8", "m-mlph-r8", "m-mlpq-r8", "res-f17", "res-f33", "res-f50", "feat-s50", "feat-s100")
 
 
-PRESETS = {"smoke": smoke, "t1-20m": t1_20m}
+def lr_sweep(size, lrs, res):
+    """A size's Dx1 seed-0 baselines over the geometric grid lrs, extended a step past whichever end wins, and the best lr
+    (None until each has finished)."""
+    lrs = sorted(lrs)
+    q = lrs[1] / lrs[0]
+    while True:
+        cs = [cfg(size, "base", x) for x in lrs]
+        names = [c["name"] for c in cs]
+        if any(n not in res for n in names):
+            return cs, None
+        i = min(range(len(cs)), key=lambda k: res[names[k]])
+        if len(lrs) >= 9 or 0 < i < len(lrs) - 1:
+            return cs, cs[i]["lr"]
+        lrs = [lrs[0] / q] + lrs if i == 0 else lrs + [lrs[-1] * q]
+
+
+def t1(res):
+    """Tier 1 in claim order, and whether configs may still appear. 20M sweeps the baseline's lr (LR20) and picks lr20; 60M
+    sweeps lr20·(384/640)^p for p ∈ {1, ½, 0} and picks lr60, whose exponent p60 sets 125M's lr20·(384/896)^p60, checked a
+    half-step of p either side. Every other config of a size runs at its picked lr; 125M's 2D baseline goes first (the
+    longest), then 60M, the rest of 20M, and 125M."""
+    out, pending = [], False
+    s20, lr20 = lr_sweep("20m", LR20, res)
+    out += s20
+    if lr20 is None:
+        return out, True
+    s60, lr60 = lr_sweep("60m", [lr20 * (384 / 640) ** p for p in (1, 0.5, 0)], res)
+    out += s60
+    c125 = []
+    if lr60 is None:
+        pending = True
+    else:
+        lr125 = lr20 * (384 / 896) ** (math.log(lr60 / lr20) / math.log(384 / 640))
+        out.append(cfg("125m", "base", lr125, 2))
+        out += [cfg("60m", "base", lr60, 2)] + [cfg("60m", a, lr60) for a in ("m-all-r8",) + MATCHED]
+        out += [cfg("60m", "base", lr60, 0.5), cfg("60m", "noise", lr60), cfg("60m", "base", lr60, seed=1)]
+        s125, best125 = lr_sweep("125m", [lr125 * (384 / 896) ** p for p in (-0.5, 0, 0.5)], res)
+        pending |= best125 is None
+        c125 = [cfg("125m", a, lr125) for a in MATCHED] + s125 + [cfg("125m", "base", lr125, 0.5)]
+    out += [cfg("20m", "base", lr20, dx) for dx in (2, 0.5, 0.25, 0.125)]
+    out += [cfg("9m", "base", lr20 * 1.5, dx) for dx in (1, 2)] + [cfg("9m", "base", lr20)]
+    out += [cfg("20m", a, lr20) for a in MATCHED]
+    out += [cfg("20m", a, lr20) for a in ("m-mlp-r4", "m-all-r8", "m-all-r4", "res-f25", "res-f67", "feat-s25",
+                                          "feat-s75", "noise", "bf16")]
+    out += [cfg("20m", a, lr20 * k) for a, k in (("m-mlp-r8", 2), ("m-mlph-r8", 2), ("res-f33", 2), ("res-f33", 0.5),
+                                                 ("feat-s50", 2))]
+    out += [cfg("20m", a, lr20, seed=1) for a in ("base", "m-mlp-r8", "res-f33")]
+    return out + c125, pending
+
+
+PRESETS = {"smoke": lambda res: (smoke(), False), "t1": t1}
+
+
+def finished(shared: Path) -> dict:
+    """Each finished config's final loss under shared; a failed or diverged one's is infinite."""
+    res = {p.stem: math.inf for p in (shared / "failed").glob("*.json")}
+    for p in (shared / "runs").glob("*.json"):
+        try:
+            v = json.loads(p.read_text())["final_val"]
+        except (OSError, ValueError, KeyError):
+            continue
+        res[p.stem] = v if math.isfinite(v) else math.inf
+    return res
+
+
+def resolve(presets, shared: Path):
+    """The presets' configs in order (first of each name), and whether more may appear."""
+    res = finished(shared)
+    out, seen, pending = [], set(), False
+    for p in presets:
+        cs, more = PRESETS[p](res)
+        pending |= more
+        for c in cs:
+            if c["name"] not in seen:
+                seen.add(c["name"])
+                out.append(c)
+    return out, pending
+
+
+def someone_waits() -> bool:
+    """Whether a live waiter is in the GPU slots' line."""
+    slots = Path(os.environ.get("CHECK_SLOTS", "/workspace/research/locks/gpu/slots"))
+    return bool(slot.waiting(slots.parent / slot.LINE, datetime.now(timezone.utc)))
+
+
+def wait_for_data(data):
+    meta = Path(data) / "meta.json"
+    told = False
+    while True:
+        try:
+            if json.loads(meta.read_text()).get("complete"):
+                return
+        except (OSError, ValueError):
+            pass
+        if not told:
+            print(f"waiting for {meta} to be complete", flush=True)
+            told = True
+        time.sleep(POLL_S)
 
 
 def run_one(c, out: Path, shared: Path, data: str | None):
@@ -113,11 +216,17 @@ def run_one(c, out: Path, shared: Path, data: str | None):
         rc = p.wait()
     shutil.copy(live, out / "logs" / f"{name}.log")
     if rc == 0 and res.exists():
-        shutil.copy(res, shared / "runs" / f"{name}.json")
+        shutil.copy(res, shared / "runs" / f".{name}.tmp")
+        (shared / "runs" / f".{name}.tmp").rename(shared / "runs" / f"{name}.json")
         print(f"done {name}", flush=True)
         return True
     tail = live.read_text().splitlines()[-40:]
-    (out / "failed" / f"{name}.json").write_text(json.dumps({"name": name, "rc": rc, "cfg": c, "tail": tail}, indent=1))
+    rec = json.dumps({"name": name, "rc": rc, "cfg": c, "tail": tail}, indent=1)
+    (out / "failed" / f"{name}.json").write_text(rec)
+    (shared / "failed").mkdir(parents=True, exist_ok=True)
+    tmp = shared / "failed" / f".{name}.tmp"
+    tmp.write_text(rec)
+    tmp.rename(shared / "failed" / f"{name}.json")
     print(f"FAILED {name} rc={rc}", flush=True)
     return False
 
@@ -132,28 +241,49 @@ def main():
     ap.add_argument("--only", default=None, help="comma-separated config names")
     ap.add_argument("--list", action="store_true")
     a = ap.parse_args()
-    cfgs = [c for p in a.preset.split(",") for c in PRESETS[p]()]
-    if a.only:
-        keep = set(a.only.split(","))
-        cfgs = [c for c in cfgs if c["name"] in keep]
-    names = [c["name"] for c in cfgs]
-    if len(set(names)) != len(names):
-        raise SystemExit("duplicate config names")
+    presets = a.preset.split(",")
+    unknown = [p for p in presets if p not in PRESETS]
+    if unknown:
+        raise SystemExit(f"unknown presets {unknown}; known: {sorted(PRESETS)}")
+    keep = set(a.only.split(",")) if a.only else None
+    out, shared, queue = Path(a.out or "."), Path(a.shared), Path(a.queue)
     if a.list:
+        cfgs, pending = resolve(presets, shared)
+        res = finished(shared)
         for c in cfgs:
-            print(c["name"], c["tokens"])
+            if keep is None or c["name"] in keep:
+                print(c["name"], c["tokens"], "done" if c["name"] in res else "claimed" if (queue / c["name"]).exists() else "")
+        print("more may come" if pending else "complete")
         return
-    out, shared, queue = Path(a.out), Path(a.shared), Path(a.queue)
     queue.mkdir(parents=True, exist_ok=True)
     ran = failed = 0
-    for c in cfgs:
-        try:
-            (queue / c["name"]).mkdir()
-        except FileExistsError:
-            continue
-        ok = run_one(c, out, shared, None if c.get("synthetic") else a.data)
-        ran += 1
-        failed += not ok
+    waited = False
+    while True:
+        cfgs, pending = resolve(presets, shared)
+        c = None
+        for x in cfgs:
+            if keep is not None and x["name"] not in keep:
+                continue
+            if not x.get("synthetic") and not waited:
+                wait_for_data(a.data)
+                waited = True
+            try:
+                (queue / x["name"]).mkdir()
+            except FileExistsError:
+                continue
+            c = x
+            break
+        if c is not None:
+            ok = run_one(c, out, shared, None if c.get("synthetic") else a.data)
+            ran += 1
+            failed += not ok
+        elif not pending:
+            break
+        if someone_waits():
+            print("yielding: someone waits for a GPU slot", flush=True)
+            break
+        if c is None:
+            time.sleep(POLL_S)
     print(f"worker done: {ran} run, {failed} failed", flush=True)
     sys.exit(1 if failed else 0)
 
