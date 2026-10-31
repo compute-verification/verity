@@ -43,6 +43,8 @@ import secrets
 from dataclasses import dataclass
 from typing import Any, Callable, Sequence
 
+from verity.ml.commitments import domains
+
 from ..protocol import DomainError
 from .ncp2 import Shape
 
@@ -158,7 +160,7 @@ def region_bytes(words: Sequence[int]) -> bytes:
 
 
 #: C-Flock's format of the verifier's own `--public-inputs` file (its PROTOCOL.md §16.10, ``HmIn.checkOwn``)
-PUBLIC_INPUTS_FORMAT = "verity/flock-public-inputs/v1"
+PUBLIC_INPUTS_FORMAT = domains.FLOCK_PUBLIC_INPUTS
 
 
 def public_ports(shape, role: str) -> dict[str, dict[str, str]]:
@@ -294,7 +296,7 @@ def _check(fn, args, want: dict[str, list[int]]) -> None:
             raise DomainError(f"{fn.id}: the anchored input {name!r} is not the verifier's")
 
 
-RECEIPT_TAG = b"verity/pouw/window-receipt/v1\0"
+RECEIPT_TAG = domains.POUW_PERIOD_RECEIPT.encode() + b"\0"
 SOURCE_BYTES = 32
 
 

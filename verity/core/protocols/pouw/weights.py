@@ -37,14 +37,14 @@ from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from verity.core.protocols.pouw.protocol import tagged
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
-from verity.ml.commitments import hm96
+from verity.ml.commitments import domains, hm96
 from verity.ml.commitments.hm96 import batch as hm96_batch
 from verity.ml.commitments.merkle import merkle_depth
 from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
 from verity.ml.crypto import chacha20
 
 #: an H1 window's weights' root: each K's registered ``…/b/<K>`` root
-WEIGHTS_TAG = "verity/pouw/h1/weights/v1"
+WEIGHTS_TAG = domains.POUW_H1_WEIGHTS
 #: ``b/<K>``'s first salt nonce, past every round's and call's tables in the prover's salt stream (vllm's
 #: ``REQUESTS_NONCE + 2^42 + 2^40``), so a key that salts both never repeats a (nonce, leaf)
 B_NONCE = (1 << 61) + (1 << 42) + (1 << 40)

@@ -80,6 +80,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from functools import lru_cache
 
+from verity.ml.commitments import domains
 from verity.ml.commitments.rowleaf import sha512_row_seg_digest
 from verity.ml.crypto.blake3 import blake3, keyed
 from verity.ml.crypto.turboshake import turboshake128
@@ -100,7 +101,7 @@ PEEL_K = 2 * R                     # the peel's BF16 depth, four k16 slices
 TILE = 64
 CHUNK = 32                         # columns per ticket message
 D_MESSAGE, D_LEAF = 0x21, 0x22     # TurboSHAKE128 domain bytes
-LABELS = {r: f"pearl-c/v0/{r}".encode() for r in ("seed-A", "seed-B")}
+LABELS = {"seed-A": domains.PEARL_C_SEED_A.encode(), "seed-B": domains.PEARL_C_SEED_B.encode()}
 #: The hashing formats this scheme implements, of the one table (`verity.core.protocols.pouw.serving.HASH_FORMATS`): h0 (TurboSHAKE128
 #: messages and leaf, SHA-256 trees) and h3 (SHA-512 throughout: `s512` seeds, lines and tickets, a `sha512/row-seg/v1` tile
 #: leaf and `audit.HM96` trees, each row of A seeding its own E_A line from its row digest).  The BLAKE3 formats h1, h2 and
