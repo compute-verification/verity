@@ -1819,6 +1819,34 @@ def test_the_preflight_refuses_a_head_that_conflicts_with_next_naming_the_paths_
     assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=None) == 0         # --no-preflight: the lander's
 
 
+#: the lock's merge driver (`clone.RECORD_DRIVER`) as `main` has it, refusing every merge both sides changed, and as a PR on
+#: `next` fixes it, taking each side's guarantees
+REFUSING_DRIVER = "import sys\nsys.exit(1)\n"
+UNION_DRIVER = ("import json, sys\nours, theirs = (json.load(open(p)) for p in sys.argv[2:4])\n"
+                "ours['guarantees'].update(theirs['guarantees'])\njson.dump(ours, open(sys.argv[2], 'w'))\n")
+
+
+def test_the_preflight_merges_onto_next_with_nexts_merge_drivers_not_the_callers_checkouts(world, capsys):
+    """Drive merges onto `next` from `next`'s tip, with the merge drivers `next` holds; the caller's checkout has `main`'s.  A
+    lean-audit.json conflict that only `next`'s driver resolves is no conflict to the preflight, so the PR is marked rather than
+    refused for what drive merges."""
+    from research.queue import MarkOnly, StoreLabels, ready
+
+    driver = "tools/verity/lean/merge.py"
+    _preflight_main(world, {".gitattributes": "lean-audit.json merge=lean-audit\n", driver: REFUSING_DRIVER})
+    rec = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
+    lock = lambda g: json.dumps({**rec, "guarantees": {**rec["guarantees"], g: "1"}})   # noqa: E731
+    world.gh.put(3, world.change({driver: UNION_DRIVER, "pkg/lean-audit.json": lock("A")}))
+    assert [m.pr for m in world.queue().sync()[0]] == [1, 3]
+    world.gh.put(2, h2 := world.change({"pkg/lean-audit.json": lock("B")}), ready=False)
+    assert (world.dev / driver).read_text() == REFUSING_DRIVER                              # the caller's checkout: `main`'s
+    assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world)) == 0, capsys.readouterr().err
+    said = next(s for s in world.logs if "preflight: #2" in s)
+    assert "merged onto `next` at" in said and "nothing refused" in said, said
+    assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is True and _no_worktree_left(world)
+    assert conflicting_files(world.dev, "refs/queue/preflight/next", h2) == ["pkg/lean-audit.json"]   # merged with `main`'s
+
+
 #: what the head writes -> what the refusal says: each a way a train breaks that the merged tree shows at mark time
 PREFLIGHT_REFUSALS = {
     "stale pin": ({"STALE.txt": "x\n"}, "`pins.py --stale` on the merged tree: pkg/pins.json is stale (pkg/Main.lean)"),

@@ -2576,7 +2576,7 @@ class LakeBuild:
 
 class Preflight:
     """`ready`'s preflight, before the mark (and before the quick tier): refused, each refusal naming its fix, when the head
-    (a) conflicts with `next` (`conflicting_files`, no worktree), naming the paths and the PRs on `next` that touched them;
+    (a) conflicts with `next` (`conflicting_files`), naming the paths and the PRs on `next` that touched them;
     (b) merged onto `next`, fails `pins.py --stale`, a test of `PREFLIGHT_TEST_PATHS`, a lint of `PREFLIGHT_LINTS` the change
     reaches, or `pytest --collect-only` in a suite whose inputs
     the change touches (`touched_suites` with `LocalSuites`, from `next` to the merged tree), or the merged tree's `uv sync --locked`
@@ -2588,8 +2588,9 @@ class Preflight:
     imports.  A train most often breaks on one of (a) to (c), and a Lean break is most often one of (e).
 
     `next` is fetched fresh; a PR already on it is merged onto the commit below its old head, as drive's next sync would rebuild
-    it.  The checks of (b) and (e) run in a temporary worktree of the caller's repository at the merge (`merged_worktree`), (e)
-    first, within `lean_s`, while the tree is clean (a `research run` ships it), then (b) with its own environment (`sync`;
+    it.  The head is merged in a temporary worktree of the caller's repository at that commit (`merged_worktree`): git runs a merge
+    driver (`clone.RECORD_DRIVER`) by its path from the worktree's top, so (a) and the merge run `next`'s merge drivers, as drive's
+    sync does, not the caller's checkout's.  The checks of (b) and (e) run there at the merge, (e) first, within `lean_s`, while the tree is clean (a `research run` ships it), then (b) with its own environment (`sync`;
     ``python`` stands in for its interpreter), under `budget_s` together, and the worktree is removed whatever happens.  Before
     (b), the fetched fixtures under the collected suites' inputs come into it (``fetch``, by default `_fetch_fixtures`: through
     ``store``, within `PREFLIGHT_FETCH_S` of the budget); a suite whose fixtures can't be fetched (no credentials, no source) is
@@ -2622,16 +2623,17 @@ class Preflight:
             return None
         notes: list[str] = []
         found = self._contained(pr, prs) + self._gates(pr, notes)
-        if files := conflicting_files(self.repo, base, pr.head):
-            by = touched_by(self.repo, members, files)
-            found.insert(0, f"it conflicts with {onto} in {', '.join(files)}" + (f" (touched by {', '.join(by)})" if by else "")
-                         + ": merge `main` once those land, or settle it with their owners; never merge `next` into the branch "
-                           "(it carries unlanded PRs)")
-        else:
-            try:
-                found += self._merged(pr, base, onto, notes, members)
-            except QueueError as e:
-                notes.append(f"the merged tree's checks not run ({e})")
+        try:
+            with merged_worktree(self.repo, base, self.root) as wt:
+                if files := conflicting_files(wt, base, pr.head):
+                    by = touched_by(self.repo, members, files)
+                    found.insert(0, f"it conflicts with {onto} in {', '.join(files)}" + (f" (touched by {', '.join(by)})" if by else "")
+                                 + ": merge `main` once those land, or settle it with their owners; never merge `next` into the "
+                                   "branch (it carries unlanded PRs)")
+                else:
+                    found += self._merged(wt, pr, base, onto, notes, members)
+        except QueueError as e:
+            notes.append(f"the merged tree's checks not run ({e})")
         took = f"{self.clock() - start:.0f} s" + (f"; {'; '.join(notes)}" if notes else "")
         if found:
             return (f"the preflight of its head merged onto {onto} refused it ({took}):\n  - " + "\n  - ".join(found)
@@ -2712,26 +2714,27 @@ class Preflight:
         notes += unjudged
         return refused
 
-    def _merged(self, pr: PR, base: str, onto: str, notes: list[str], members: list[Member] | None = None) -> list[str]:
-        """(b) and (e), in a temporary worktree at the merge of the head onto ``base``."""
-        r = _git(self.repo, "merge-tree", "--write-tree", "--no-messages", base, pr.head, check=False)
+    def _merged(self, wt: Path, pr: PR, base: str, onto: str, notes: list[str], members: list[Member] | None = None) -> list[str]:
+        """(b) and (e), in ``wt``, a temporary worktree at ``base``: the head is merged there, with its merge drivers, and the
+        merge checked out."""
+        r = _git(wt, "merge-tree", "--write-tree", "--no-messages", base, pr.head, check=False)
         if r.returncode:
             notes.append(f"the merged tree's checks not run: `git merge-tree` exited {r.returncode} ({(r.stderr or r.stdout).strip()[-200:]})")
             return []
         tree = r.stdout.split()[0]
         commit = _out(self.repo, "commit-tree", tree, "-p", base, "-p", pr.head, "-m", f"preflight: #{pr.number} onto {base[:12]}")
+        _git(wt, "checkout", "-q", "--detach", commit)
         fixtures: dict[str, list[str]] = {}
-        with merged_worktree(self.repo, commit, self.root) as wt:
-            graph, lean_failed, lean_deadline = self._lean(wt, base, tree, notes)
-            deadline = self.clock() + self.budget_s
-            failed = self._checks(wt, base, tree, None, notes, deadline, fixtures)
-            if not any(failed.values()) and not lean_failed:
-                return []
-            _git(wt, "checkout", "-q", "--detach", "--force", base)
-            _git(wt, "clean", "-qffdx", "-e", "/.venv")
-            again = (self._checks(wt, base, tree, {k for k, v in failed.items() if v}, [], deadline, fixtures)
-                     if any(failed.values()) else {})
-            lean_again = self._lean_at_base(wt, lean_failed, lean_deadline) if lean_failed else {}
+        graph, lean_failed, lean_deadline = self._lean(wt, base, tree, notes)
+        deadline = self.clock() + self.budget_s
+        failed = self._checks(wt, base, tree, None, notes, deadline, fixtures)
+        if not any(failed.values()) and not lean_failed:
+            return []
+        _git(wt, "checkout", "-q", "--detach", "--force", base)
+        _git(wt, "clean", "-qffdx", "-e", "/.venv")
+        again = (self._checks(wt, base, tree, {k for k, v in failed.items() if v}, [], deadline, fixtures)
+                 if any(failed.values()) else {})
+        lean_again = self._lean_at_base(wt, lean_failed, lean_deadline) if lean_failed else {}
         out = []
         for name, fails in failed.items():
             if fails and name not in again:
