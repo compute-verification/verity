@@ -211,8 +211,8 @@ which the composition's theorem is to bind.
 
 **The clock openings**, apart from the period's check: `clocksFn`, `network-records verdicts`' `clocks`, reads the
 syncs the certifier signed for a link through its salted clock certificates' openings, each sync and salt against the
-digest its certificate signs (`advised.SignedClocks`, `signedSyncs`). The certifier chain's record takes each window's
-sync from it, with `advised.SignedClocks` beside it as the reference (`lean_audit.signed_clocks`).
+digest its certificate signs (`certificate.SignedClocks`, `signedSyncs`). The certifier chain's record takes each
+window's sync from it, with `certificate.SignedClocks` beside it as the reference (`lean_audit.signed_clocks`).
 -/
 
 namespace NetworkCheck.Period
@@ -1256,8 +1256,8 @@ def ClockOpening.same (a b : ClockOpening) : Bool :=
     x.link == y.link && x.direction == y.direction && x.window == y.window && x.digest == y.digest &&
     x.signature == y.signature
 
-/-- One certifier session's clock openings (`advised.SignedClocks`): its LMS key and session, the openings, and the link
-whose syncs are read. -/
+/-- One certifier session's clock openings (`certificate.SignedClocks`): its LMS key and session, the openings, and the
+link whose syncs are read. -/
 structure Openings where
   lms : Lms.Params
   key : ByteArray
@@ -1344,8 +1344,8 @@ def split (signed : Signed) : Array (String × Nat) :=
 
 /-- `network-records verdicts`' `clocks`: on `openingsOf`'s object, each opening's refusal (`openingRefusals`, null
 where it holds), the link-windows with two or more signed syncs (`split`, each `[link, window]`), and the link's signed
-syncs (`signedSyncs`, each `[δ, num, den]`), which `lean_audit.signed_clocks` reads with `advised.SignedClocks` beside
-it as the reference, each refusal and each such link-window by identity. -/
+syncs (`signedSyncs`, each `[δ, num, den]`), which `lean_audit.signed_clocks` reads with `certificate.SignedClocks`
+beside it as the reference, each refusal and each such link-window by identity. -/
 def clocksFn (j : Json) : Except String Json := do
   let s ← openingsOf j
   let codes := openingRefusals s
