@@ -191,6 +191,7 @@ theorem stagedLink {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x x
     rw [e]
     exact (oneFull_staged hS hsu).1
   obtain ⟨tags, P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi h0
+    (FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0).2.2)
   rw [hc0] at P
   have hn : c.unit.name = VStar.linkName UB PB := by rw [← hc0]; exact (htab 0 h0).1
   obtain ⟨hsc, r2, ss2, sv2, hr2, hss2, hsv2, hpop⟩ := staged_scope hS hx h0
