@@ -10,7 +10,7 @@ codec       a region's encoding: payload words in, stored words out, `encode(pay
 receipt     a keyed hash of one block read in a pass, `keyed(seed)(j, block, z)`; `z` is the input a receipt bound to the
             prior tile's output reads (None for receipts that bind only the block)
 registration  putting a block into the store: its bytes are the codec's encoding of a payload a `Source` names; every
-            registration is a record in the log, and `Registration.root` commits the log
+            registration is a record in the store's chain, and `ChainHead.root` commits the chain
 window      the interval of one challenge σ: `begin_window(σ)` ... `end_window()`, which the verifier's boundary
             message ends (the next window's challenge, or the close after the last)
 pass        one read of the live store: weights, the batch's written KV, and filler to top up, no block twice; its seed
@@ -149,9 +149,9 @@ class Layout:
 
 
 @dataclass(frozen=True)
-class Registration:
-    """The registration log so far: ``count`` records and ``root``, the hash chain over them (one link per registration
-    event: a region, a page's written blocks, a page's return to filler)."""
+class ChainHead:
+    """The head of the store's chain: ``count`` records and ``root``, the hash chain over them (one link per event: a
+    region, a page's written blocks, a page's return to filler)."""
 
     count: int
     root: bytes
@@ -238,7 +238,7 @@ class StoreView(Protocol):
 
     def layout(self) -> Layout: ...
 
-    def registration(self) -> Registration: ...
+    def registration(self) -> ChainHead: ...
 
     def begin_window(self, challenge: bytes, registration: bytes | None = None) -> None: ...
 
