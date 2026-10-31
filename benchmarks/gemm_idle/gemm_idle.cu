@@ -8,9 +8,10 @@
 //                                                     the GEMM D[M x N] = X[M x K] . W[N x K]^T (M tokens, N out features,
 //                                                     K in features) by LIB (lt: cuBLASLt's fastest of its heuristic's
 //                                                     candidates; c2x: CUTLASS 2.x int8; c3x: CUTLASS 3.x sm_120 FP8, both
-//                                                     the fastest of the PoUW harness's table), alone and then beside the
+//                                                     the fastest of the PoUW harness's table), alone, then beside the
 //                                                     co-runner (uniform operands, 8 accumulators) at W warps an SM and
-//                                                     SLEEP ns a batch, with the fastest candidate it can sit beside
+//                                                     SLEEP ns a batch, with the fastest candidate it can sit beside, then
+//                                                     alone again (alone_after: the drift a keep is read against)
 //
 // KIND is s8 (int8 in, int32 out) or e4m3 (FP8 E4M3 in, f32 accumulate, bf16 out). X is uniform random bytes (e4m3: NaN codes
 // moved to the largest finite), W is WCLASS (uniform, or gauss: about N(0, 32) in int8, N(0, 100) in e4m3, as a
@@ -730,8 +731,10 @@ static int run_gemm(const std::string& lib, bool e4m3, int M, int N, int K, doub
   std::vector<std::pair<int, u32>> passes = {{0, 0u}};
   for (auto& e : co)
     if (e.first > 0) passes.push_back(e);
+  if (passes.size() > 1) passes.push_back({0, 0u});
   double alone = 0;
   for (auto [w, sl] : passes) {
+    const bool after = !w && alone > 0;
     int c = best, tried = 0;
     if (w) {
       // the fastest candidate the co-runner can sit beside (a kernel whose CTA takes all of an SM's shared memory or
@@ -740,7 +743,7 @@ static int run_gemm(const std::string& lib, bool e4m3, int M, int N, int K, doub
       for (int i : order) {
         if (tried == 4) break;
         ++tried;
-        if (window(i, 1, w, 0, 0.15 + 4 * cands[i].t * calls).beside_all) {
+        if (window(i, 1, w, 0, 0.15 + 8 * cands[i].t * calls).beside_all) {
           c = i;
           break;
         }
@@ -754,25 +757,27 @@ static int run_gemm(const std::string& lib, bool e4m3, int M, int N, int K, doub
     }
     const int reps = std::max(1, int(std::ceil(secs / (cands[c].t * calls))));
     g_nv.begin();
-    const Win r = window(c, reps, w, sl, w ? 2.5 * reps * calls * cands[c].t + 0.3 : 0);
+    // the co-runner quits at the GEMM's end marker, so a long deadline costs time only when the GEMM slows past it
+    const Win r = window(c, reps, w, sl, w ? 6.0 * reps * calls * cands[c].t + 0.3 : 0);
     const std::string nv = g_nv.end();
-    if (!w) alone = r.rate;
+    if (!w && !after) alone = r.rate;
     std::string cos = "\"co_warps\": 0";
     if (w) {
       const Co& h = r.co;
       const double mhz = h.ns ? double(h.clk) / double(h.ns) * 1e3 : 0;
-      char b[512];
+      char b[1024];
       snprintf(b, sizeof b,
-               "\"co_warps\": %d, \"co_sleep_ns\": %u, \"co_resident\": %s, \"tried\": %d, \"co_macs_per_s\": %.6e, "
-               "\"co_warps_ran\": %llu, \"co_saw_start\": %llu, \"co_saw_end\": %llu, \"co_sms\": %d, "
-               "\"co_sm_mhz_clock64\": %.1f, \"co_secs\": %.3f, \"tuned_macs_per_s\": %.6e, \"gemm_vs_alone\": %.4f",
+               "\"co_warps\": %d, \"co_sleep_ns\": %u, \"co_resident\": true, \"co_outlasted_gemm\": %s, \"tried\": %d, "
+               "\"co_macs_per_s\": %.6e, \"co_warps_ran\": %llu, \"co_saw_start\": %llu, \"co_saw_end\": %llu, "
+               "\"co_sms\": %d, \"co_sm_mhz_clock64\": %.1f, \"co_secs\": %.3f, \"tuned_macs_per_s\": %.6e, "
+               "\"gemm_vs_alone\": %.4f",
                w, sl, r.beside_all ? "true" : "false", tried, h.mma_in * MMA_MACS / r.secs, h.warps, h.saw_s, h.saw_e,
                popcount_sm(h), mhz, (h.t1_max - h.t0_min) * 1e-9, mnk / cands[c].t, alone > 0 ? r.rate / alone : 0.0);
       cos = b;
     }
     printf("{\"pass\": \"%s\", %s, \"algo\": \"%s\", \"calls\": %lld, \"secs\": %.4f, \"macs_per_s\": %.6e, %s, %s, %s}\n",
-           w ? "beside" : "alone", head, cands[c].name.c_str(), (long long)reps * calls, r.secs, r.rate, cos.c_str(),
-           chk.c_str(), nv.c_str());
+           w ? "beside" : after ? "alone_after" : "alone", head, cands[c].name.c_str(), (long long)reps * calls, r.secs,
+           r.rate, cos.c_str(), chk.c_str(), nv.c_str());
     fflush(stdout);
   }
   return 0;

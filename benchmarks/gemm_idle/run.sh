@@ -5,9 +5,9 @@
 #   bash benchmarks/gemm_idle/run.sh build      # no GPU: gemm_idle into $GEMM_IDLE_CACHE/<key>/, with the PoUW harness's
 #                                               # CUTLASS 2.x int8 and 3.x sm_120 FP8 tables (CUTLASS v4.8.0); a unit
 #                                               # that fails to build is left out and said so in build.txt
-#   research run --on vy-nebius-2 --project verity --source . --cwd source --gpus 1 -- env \
+#   research run --on vy-nebius-2 --project verity --source . --cwd source -- env \
 #     CHECK_SLOTS=/workspace/research/locks/gpu/slots python3 tools/verity/check/slot.py --by LANE -- \
-#     bash benchmarks/gemm_idle/run.sh measure  # builds first if the cache lacks the key
+#     gpu-lease 1 --wait --max-min 30 -- bash benchmarks/gemm_idle/run.sh measure  # builds first if the cache lacks the key
 #
 # measure, on the leased GPU at the node's clock lock (vy-clocks: -lgc 2100,2100): the register-resident mma.sync peak
 # (zero and uniform operands, s8 and e4m3), the co-runner alone, then every LIBS GEMM at Llama-3.2-1B's and Llama-3.1-8B's
@@ -15,7 +15,7 @@
 # warps an SM, SLEEP ns after each batch), each also timed alone. Then, if HI_MHZ, the same GPU locked at HI_MHZ for the
 # peaks and the 8B linears at T 8192 (uniform and gauss weights, beside HI_CO), and the node's lock put back
 # (-lgc NODE_MHZ,NODE_MHZ; never -rgc, which would leave the GPU unlocked).
-# Env: KINDS (s8 e4m3), TS (1 32 512 2048 8192), SECS (1), PEAK_SECS (6), CO (4:0 8:0 8:4000 8:16000), HI_CO (8:0),
+# Env: KINDS (s8 e4m3), TS (1 32 512 2048 8192), SECS (1), PEAK_SECS (6), CO (1:0 2:0 4:0 8:0), HI_CO (4:0),
 # WCLASS (uniform), HI_MHZ (2430; 0 skips), NODE_MHZ (2100), MODELS (1b 8b).
 # Writes passes.jsonl (gemm_idle's lines, each with its clock label), info.json, gpu.txt, smi.csv, rc.txt, build.txt,
 # wgmma_sm120.txt (whether a wgmma compiles for sm_120a: the #6630 lead kernel's mainloop is wgmma) and summary.txt.
@@ -159,7 +159,7 @@ measure() {
 }
 
 export KINDS=${KINDS:-s8 e4m3} TS=${TS:-1 32 512 2048 8192} SECS=${SECS:-1} PEAK_SECS=${PEAK_SECS:-6}
-export CO=${CO:-4:0 8:0 8:4000 8:16000} HI_CO=${HI_CO:-8:0}
+export CO=${CO:-1:0 2:0 4:0 8:0} HI_CO=${HI_CO:-4:0}
 export WCLASS=${WCLASS:-uniform} HI_MHZ=${HI_MHZ:-2430} NODE_MHZ=${NODE_MHZ:-2100} MODELS=${MODELS:-1b 8b}
 case "${1:-measure}" in
   build) build && wgmma_probe ;;

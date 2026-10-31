@@ -4,10 +4,12 @@ Each clock label's bound `clk` is SMs x 1,024 MACs a clock (dense int8 and e4m3 
 `macs_per_sm_clk` checks it) x the label's nominal clock (node-<MHz>: the node's lock as it reads idle; lock-<MHz>: the lock
 asked for); `unif` is the uniform-operand peak measured at that label (the power-capped bound where the cap binds). A GEMM's
 utilization is its MACs over the pass's wall time against each. Beside a co-runner entry W:SLEEP, `co` is the co-runner's
-MACs over the same window against `clk` and `keep` the GEMM's rate there over the fastest candidate's alone (`x`: no
-candidate of the four fastest could run beside it). `co@99` and `co@96` are the most `co` of the entries whose keep is at
-least 0.99 and 0.96: what an undeclared kernel takes while the GEMM loses at most 1% or 4% of its rate. Prints the tables
-and writes OUT/summary.json. Stdlib only.
+MACs over the same window against `clk` and `keep` the GEMM's rate there over the fastest candidate's alone (the mean of
+its runs before and after the co-runner passes; `drift` is after over before). `x`: no candidate of the four fastest could
+run beside it; `<`: the co-runner hit its deadline before the GEMM ended, so its co understates and its keep overstates.
+`co@99` and `co@96` are the most `co` of the entries (neither `x` nor `<`) whose keep is at least 0.99 and 0.96: what an
+undeclared kernel takes while the GEMM loses at most 1% or 4% of its rate. Prints the tables and writes OUT/summary.json.
+Stdlib only.
 """
 from __future__ import annotations
 
@@ -69,12 +71,14 @@ def main(out: str) -> int:
     print("\nco-runner alone (uniform, 8 accumulators), of clk: " + ", ".join(
         f"{x['clock']} {x['kind']} {x['warps']}:{x['sleep_ns']} {x['of_clock_bound']:.3f}" for x in summary["co_alone"]))
 
-    alone, beside = {}, defaultdict(dict)
+    alone, after, beside = {}, {}, defaultdict(dict)
     tune = {}
     for r in rows:
         key = (r.get("clock"), r.get("kind"), r.get("lib"), r.get("m"), r.get("n"), r.get("k"), r.get("wclass"))
         if r["pass"] == "alone":
             alone[key] = r
+        elif r["pass"] == "alone_after":
+            after[key] = r
         elif r["pass"] == "beside":
             beside[key][f"{r['co_warps']}:{r.get('co_sleep_ns', 0)}"] = r
         elif r["pass"] == "tune":
@@ -82,10 +86,11 @@ def main(out: str) -> int:
     entries = sorted({e for b in beside.values() for e in b}, key=lambda e: tuple(map(int, e.split(":"))))
     hdr = "".join(f"{'co' + e:>10}{'keep':>6}" for e in entries) + "".join(f"{'co@' + str(round(k * 100)):>7}" for k in KEEPS)
     print("\nGEMMs: MACs over wall time; clk = against SMs x 1024 x the label's clock, unif = against the uniform peak there;"
-          "\nco<W:SLEEP> = the co-runner's rate beside it against clk, keep = the GEMM's rate beside it / the fastest alone"
-          " (x: nothing fit beside it); co@99, co@96 = the most co at keep >= 0.99, 0.96")
-    print(f"{'clock':<11}{'kind':<5}{'lib':<4}{'w':<8}{'linear':<11}{'T':>5}{'MAC/s':>11}{'clk':>7}{'unif':>7}{hdr}"
-          f"{'MHz':>6}{'W':>5}  algo, check")
+          "\ndrift = the fastest alone after the co-runner passes / before; co<W:SLEEP> = the co-runner's rate beside it"
+          " against clk, keep = the GEMM's rate beside it / the fastest alone (x: nothing fit beside it; <: the co-runner"
+          " ended first); co@99, co@96 = the most co at keep >= 0.99, 0.96")
+    print(f"{'clock':<11}{'kind':<5}{'lib':<4}{'w':<8}{'linear':<11}{'T':>5}{'MAC/s':>11}{'clk':>7}{'unif':>7}"
+          f"{'drift':>7}{hdr}{'MHz':>6}{'W':>5}  algo, check")
     for key in sorted(alone, key=lambda x: (x[0], x[1], x[2], x[6], linear(x[4], x[5]), x[3])):
         c, k, lib, m, n, kk, wc = key
         r = alone[key]
@@ -94,10 +99,13 @@ def main(out: str) -> int:
         b = bound[(c, k)]
         u = peak[(c, k)].get("uniform", {}).get("macs_per_s")
         nv = r.get("nvml") or {}
+        ra = after.get(key)
+        ref = (r["macs_per_s"] + ra["macs_per_s"]) / 2 if ra else r["macs_per_s"]
         row = {"clock": c, "kind": k, "lib": lib, "wclass": wc, "linear": linear(n, kk), "m": m, "n": n, "k": kk,
                "macs_per_s": r["macs_per_s"], "of_clock_bound": r["macs_per_s"] / b,
-               "of_uniform_peak": r["macs_per_s"] / u if u else None, "algo": r["algo"], "check_bad": r["check"]["bad"],
-               "sm_mhz": nv.get("sm_mhz_mean"), "power_w": nv.get("energy_w"), "beside": {}}
+               "of_uniform_peak": r["macs_per_s"] / u if u else None,
+               "drift": ra["macs_per_s"] / r["macs_per_s"] if ra else None, "algo": r["algo"],
+               "check_bad": r["check"]["bad"], "sm_mhz": nv.get("sm_mhz_mean"), "power_w": nv.get("energy_w"), "beside": {}}
         cells = ""
         for e in entries:
             s = beside[key].get(e)
@@ -109,19 +117,25 @@ def main(out: str) -> int:
                 cells += f"{'x':>10}{'x':>6}"
                 continue
             snv = s.get("nvml") or {}
-            row["beside"][e] = {"co_resident": True, "co_of_clock_bound": s["co_macs_per_s"] / b, "keep": s["gemm_vs_alone"],
+            outlasted = s.get("co_outlasted_gemm", True)
+            row["beside"][e] = {"co_resident": True, "co_outlasted_gemm": outlasted,
+                                "co_of_clock_bound": s["co_macs_per_s"] / b, "keep": s["macs_per_s"] / ref,
                                 "algo": s["algo"], "sum_of_clock_bound": (s["macs_per_s"] + s["co_macs_per_s"]) / b,
                                 "co_sms": s["co_sms"], "power_w": snv.get("energy_w"), "sm_mhz": snv.get("sm_mhz_mean")}
-            mark = "" if s["algo"] == r["algo"] else "*"
-            cells += f"{row['beside'][e]['co_of_clock_bound']:>9.3f}{mark or ' '}{s['gemm_vs_alone']:>6.3f}"
+            mark = "<" if not outlasted else "" if s["algo"] == r["algo"] else "*"
+            cells += f"{row['beside'][e]['co_of_clock_bound']:>9.3f}{mark or ' '}{row['beside'][e]['keep']:>6.3f}"
         for kp in KEEPS:
-            got = [x["co_of_clock_bound"] for x in row["beside"].values() if x.get("co_resident") and x["keep"] >= kp]
-            row[f"co_at_keep_{round(kp * 100)}"] = max(got) if got else 0.0
+            got = [x for x in row["beside"].values()
+                   if x.get("co_resident") and x.get("co_outlasted_gemm") and x["keep"] >= kp]
+            best = max(got, key=lambda x: x["co_of_clock_bound"]) if got else None
+            row[f"co_at_keep_{round(kp * 100)}"] = best["co_of_clock_bound"] if best else 0.0
+            row[f"sum_at_keep_{round(kp * 100)}"] = best["sum_of_clock_bound"] if best else row["of_clock_bound"]
             cells += f"{row[f'co_at_keep_{round(kp * 100)}']:>7.3f}"
         summary["gemms"].append(row)
+        dr = f"{row['drift']:>7.3f}" if ra else f"{'-':>7}"
         print(f"{c:<11}{k:<5}{lib:<4}{wc:<8}{linear(n, kk):<11}{m:>5}{r['macs_per_s']:>11.4e}{row['of_clock_bound']:>7.3f}"
-              f"{(row['of_uniform_peak'] or 0):>7.3f}{cells}{nv.get('sm_mhz_mean', 0):>6.0f}{nv.get('energy_w', 0):>5.0f}"
-              f"  {r['algo']}, bad {r['check']['bad']}")
+              f"{(row['of_uniform_peak'] or 0):>7.3f}{dr}{cells}{nv.get('sm_mhz_mean', 0):>6.0f}"
+              f"{nv.get('energy_w', 0):>5.0f}  {r['algo']}, bad {r['check']['bad']}")
     print("(* beside: a slower candidate than the fastest alone, the fastest that fit beside the co-runner)")
     for k in tune:
         if k not in alone:
