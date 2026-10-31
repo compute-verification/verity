@@ -432,7 +432,7 @@ def test_a_run_whose_pin_moved_before_its_unit_started_does_not_run(svc):
 
 
 def test_each_pin_is_a_line_of_the_sealed_log_and_a_run_starts_only_from_its_last(svc, tmp_path):
-    """RT4-INT-40: pin.sh takes any commit it is handed, so the host keeps the record. Each pin is a line of a log that is
+    """pin.sh takes any commit it is handed, so the host keeps the record. Each pin is a line of a log that is
     sealed append-only before its first line, and a run starts only from the log's last pin and names that line."""
     log, sealed = tmp_path / "log" / "pins.jsonl", []
     log.parent.mkdir()
@@ -466,7 +466,7 @@ def test_each_pin_is_a_line_of_the_sealed_log_and_a_run_starts_only_from_its_las
 
 
 def test_pin_sh_runs_no_unpinned_code_and_logs_each_pin_before_current_names_it():
-    """Infra's review of #3062: elan is a release, its archive checked against a pinned sha256 before it runs (never a
+    """Infra's review: elan is a release, its archive checked against a pinned sha256 before it runs (never a
     script fetched from a branch), and the pin is logged (`host.py pinned`) before `current` moves to it."""
     code = "\n".join(ln for ln in (PACKAGING / "pin.sh").read_text().splitlines() if not ln.lstrip().startswith("#"))
     assert "raw.githubusercontent.com" not in code and not re.search(r"\|\s*(ba)?sh\b", code)
@@ -680,7 +680,7 @@ def test_the_wipe_party_and_its_key_import_on_a_python_with_no_site_packages():
 
 def test_a_party_is_killed_when_its_minutes_run_out_and_its_log_says_so(tmp_path, monkeypatch):
     """`exec_party` with a party that never exits (no prover joined): its timer kills it and its parent, and the log records
-    why. Killing the parent alone (runuser, 26 Oct on vy-auditor-2) left the party listening and holding the pipe."""
+    why. Killing the parent alone (runuser, on vy-auditor-2) left the party listening and holding the pipe."""
     armed: list[float] = []
 
     class Timer:

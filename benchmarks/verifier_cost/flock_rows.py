@@ -1,6 +1,5 @@
-"""`flock-rows`, C-Flock's Lean rows, against a unit's size: TBL1's flat MoE classes (no calls, no table reads; 41k to 2M
-ANDs, note:proofs/20261019T0329Z-report-tbl1-moe-select) and the derive vectors' fan-out unit at M placed calls and M placed
-reads (`test_derive.fanout_case`).
+"""`flock-rows`, C-Flock's Lean rows, against a unit's size: the flat MoE classes (no calls, no table reads; 41k to 2M
+ANDs) and the derive vectors' fan-out unit at M placed calls and M placed reads (`test_derive.fanout_case`).
 
     python benchmarks/verifier_cost/flock_rows.py --out DIR --bin LABEL=PATH [--bin LABEL=PATH ...] [--target NAME ...]
         [--fanout M,..] [--modes rows,unit,delta,logical,check] [--cap SECONDS]
@@ -71,7 +70,7 @@ def _gather(v: int):
     return X.gather_e4m3(v)
 
 
-#: TBL1's targets: Qwen3-30B-A3B (E = 128, w13's K 2048, w2's K 768) and GLM-5.3 at TP8 rank 0 (E = 256, the rank's w2 K
+#: the MoE targets: Qwen3-30B-A3B (E = 128, w13's K 2048, w2's K 768) and GLM-5.3 at TP8 rank 0 (E = 256, the rank's w2 K
 #: 256), their small-K classes, and the selects. Each lowers to one flat class but `glm-fp8-gemm` (two).
 TARGETS = {
     "select-x3": lambda: _select(3),

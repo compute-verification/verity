@@ -245,7 +245,7 @@ def main(args) -> int:
     instr, op = args.instruction, OPS[args.instruction]
     arch = args.arch or "sm_120a"
     if args.fake_silicon and SHARED.RESEARCH_RUN_ID:
-        raise SystemExit("--fake-silicon is a dry run and never publishes: not under a research run")
+        raise SystemExit("--fake-silicon is a dry run and never publishes: unset RESEARCH_RUN_ID")
     so, nvcc = (None, "not built") if (args.fake_silicon and not P.shutil.which(P.nvcc_bin())) else P.build(arch, out, "cvt_fp4.cu")
     dev = FakeCast() if args.fake_silicon else (None if args.sass_only else CastDevice(so))
     identity = dev.identity() if dev is not None else {"device": None, "gpu_uuid": None, "driver": None, "compute_capability": None,

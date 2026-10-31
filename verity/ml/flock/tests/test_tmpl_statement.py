@@ -191,6 +191,7 @@ CS.UnitStager(d, "unit/tmpl-no-torch", [("ab", V2, 32, ["a", "b"]), ("w", V2, 20
 """
 
 
+@pytest.mark.slow
 def test_the_templated_statement_is_written_without_torch(tmp_path):
     """`UnitStager`'s templated statement, the file the auditor's lowering writes on a host with numpy and no torch, is
     written with torch (and the numerical benchmarks) unimportable, byte for byte the file it writes with them."""

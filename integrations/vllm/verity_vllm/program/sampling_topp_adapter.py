@@ -11,7 +11,7 @@ pos, temp)` — temperature + top-p (split pipeline) + seeded Gumbel select — 
 
 The production side ALSO emits the masked fp32 row (output 1) so the intermediate `TopPMask_v1{V,S}` value is checked lane by lane,
 not only the sampled token (`spec`: `registry.sampling_topp_difftest`'s Definition).  S is a static of the specialization = the split count the production launch used (recorded per case).
-Cases: real rows when `VERITY_REAL_LOGITS` names a `[N, V]` bf16-word .npy (Llama-3.2-1B lm_head outputs, the B1 stoch manifest
+Cases: real rows when `VERITY_REAL_LOGITS` names a `[N, V]` bf16-word .npy (Llama-3.2-1B lm_head outputs, the B1 stochastic-sampling manifest
 prompt), interleaved with edge rows (zeros / max / subnormal / alternating / few-finite / many-duplicates); temperatures = the panel's
 0.8 and a spread (never 0: top-p at temperature 0 is greedy — a different family); top_p = the panel's 0.95, 1.0 (the p >= 1 early
 return), 0.5, 0.99 and a spread; seeds over the int64 range; positions over the prompt / decode range."""

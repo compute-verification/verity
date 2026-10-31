@@ -20,7 +20,7 @@ class Info:
 
 
 class FakeStore:
-    """`layout().regions` and `idle_blocks`, as ra-vllm-hooks' `Store` gives them."""
+    """`layout().regions` and `idle_blocks`, as the vLLM integration's `Store` gives them."""
 
     def __init__(self, regions: list[Info], idle: dict[str, np.ndarray]) -> None:
         self.regions, self.idle = regions, idle

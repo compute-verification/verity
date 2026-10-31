@@ -1,8 +1,5 @@
 import Definitions.Accounting.Guarantees.Actual
 import Definitions.Accounting.Guarantees.Actual.Threaded
-import Definitions.Accounting.Guarantees.Actual.WipeBridge
-import Definitions.Accounting.Guarantees.Actual.WipeDraw
-import Definitions.Accounting.Guarantees.Actual.WipePrf
 import Definitions.Accounting.Guarantees.Actual.Dampener
 import Definitions.Accounting.Guarantees.Bandwidth
 import Definitions.Accounting.Guarantees.Bandwidth.Causal
@@ -24,12 +21,9 @@ import Definitions.Accounting.Guarantees.GatesBitwise
 import Definitions.Accounting.Guarantees.Headline
 import Definitions.Accounting.Guarantees.HeadlineDc
 import Definitions.Accounting.Guarantees.Joint
-import Definitions.Accounting.Guarantees.JointBlocks
-import Definitions.Accounting.Guarantees.JointPeriod
 import Definitions.Accounting.Guarantees.JointLive
 import Definitions.Accounting.Guarantees.JointBridge.BandwidthOfAuditPerRunPeriod
 import Definitions.Accounting.Guarantees.JointBridge.CommOfPeriodLeakAccepted
-import Definitions.Accounting.Guarantees.JointBlocksAbstract
 import Definitions.Accounting.Guarantees.Localization
 import Definitions.Accounting.Guarantees.Memory
 import Definitions.Accounting.Guarantees.PerRun

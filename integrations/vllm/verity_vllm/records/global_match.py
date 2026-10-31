@@ -1,8 +1,8 @@
-"""The Match result (`cb-a/global-match/v1`): GM-01's `global_match.json`, its verdict over the named checks G1..G8, the requests it
+"""The Match result (`cb-a/global-match/v1`): the global match's `global_match.json`, its verdict over the named checks G1..G8, the requests it
 matched and the lag it read, as the Commit's account link (`check.executed_prefix.link_to_match_account`) reads it.
 
 Its writer is `check.match.global_match` (`check`, and its CLI's `impl`; the per-check modules append to `checks` and set
-`execution`, `achieved_concurrency`, `sampler_geometry`, `scheduled_live` and `lag`), also as a TP row's per-rank Match
+`execution`, `achieved_concurrency`, `sampler_geometry`, `scheduled_live` and `lag`), also as a TP workload's per-rank Match
 (`pipeline.tp.fold_match`).  A document refused before the checks ran (a Program of another schema) holds no `failed_checks`.
 A check's evidence and a request's entry are each check's own (`check.match.match_run.NamedCheck.info`): each is kept as written
 (`entry`, which `dump` writes back), with the fields a reader reads typed from it.
@@ -21,7 +21,7 @@ from typing import Any
 from verity_vllm.records.fields import RecordError, objects, only, optional, required
 
 SCHEMA = "cb-a/global-match/v1"
-#: what the account link doesn't interpret: the checker's provenance, the Program it read, X-09's evidence and the other criterion's
+#: what the account link doesn't interpret: the checker's provenance, the Program it read, the batch-decomposition evidence (`x09`) and the other criterion's
 INFO = frozenset({"comparator", "rules_version", "utc", "oracle_dir", "log", "global_program", "chronology_unit", "request_id_convention",
                   "within_step_criterion", "within_step_note", "x09", "request_ids", "execution", "achieved_concurrency",
                   "sampler_geometry", "scheduled_live", "moe_construction", "eos_truncated_requests", "eos_verified", "seconds",
@@ -91,7 +91,7 @@ class GlobalMatch:
     checks: tuple[MatchCheck, ...]                    # empty when the document was refused before the checks ran
     requests: tuple[MatchRequest, ...]
     failed_checks: tuple[str, ...] | None             # a document refused before the checks ran has none
-    lag: Mapping[str, Any] | None                     # G6's lag block (`check.match.chronology`); as above, and before R17-1
+    lag: Mapping[str, Any] | None                     # G6's lag block (`check.match.chronology`); as above, and in older documents
     info: Mapping[str, Any]                           # the `INFO` fields it carries
 
     def check(self, check_id: str) -> MatchCheck | None:

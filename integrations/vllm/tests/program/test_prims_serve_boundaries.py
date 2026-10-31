@@ -1,5 +1,5 @@
-"""The primitives, composites and serving family's Definition modules import only `verity`, Definition modules, the standard
-library and numpy: every import in the module, a function's lazy one included.  Twins (numpy/torch/CUDA references,
+"""The primitives, composites and serving family's Definition modules import only `verity`, Definition modules, the evidence their
+conformance texts cite (`EVIDENCE`), the standard library and numpy: every import in the module, a function's lazy one included.  Twins (numpy/torch/CUDA references,
 difftests, capture helpers) and vocabulary (which Definition a serving role binds) live outside the registry, so a
 catalog can take these modules without the integration."""
 
@@ -22,6 +22,8 @@ OTHER_FAMILIES = {"dense", "dsa_topk", "fa2_softcap", "fa3_check_inf", "fp8_moe_
 THIRD_PARTY = {"numpy"}
 #: the catalog, where the layout move put core's Definitions and silicon models
 CATALOG = "verity.ml.circuits"
+#: `evidence.json`'s ids, read with the standard library only
+EVIDENCE = "verity.ml.definitions.evidence"
 #: (module, what it imports outside the rule) -> why it stays
 EXCEPTIONS: dict[tuple[str, str], str] = {}
 
@@ -63,7 +65,7 @@ def _allowed(mod: str) -> bool:
     top = mod.split(".")[0]
     if _core(mod) or top in sys.stdlib_module_names or top == "__future__" or top in THIRD_PARTY:
         return True
-    if mod == REG or mod == CATALOG or mod.startswith(CATALOG + "."):
+    if mod in (REG, CATALOG, EVIDENCE) or mod.startswith(CATALOG + "."):
         return True
     if mod.startswith(REG + "."):
         return mod[len(REG) + 1:].split(".")[0] in set(FAMILY) | OTHER_FAMILIES

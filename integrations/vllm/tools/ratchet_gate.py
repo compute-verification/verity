@@ -28,15 +28,19 @@ when:
   at least as much, so a move from one package to another passes.  A repository list
   (``repo_ruff``'s and each counted lint's, ``CATCH_UP``) may also raise a key, in any file, up to what its lint, as the
   change's base has it, finds there in the base's tree: a list that records what its base already holds adds no finding,
-  so a list behind its tree catches up, while growth past the base's own findings is held as before;
+  so a list behind its tree catches up, while growth past the base's own findings is held as before.  A change that edits
+  a counted lint's module may raise that lint's list, as far as it records, at each file it leaves untouched: it adds no
+  text there, so the rise records what the edited lint finds in a tree the change didn't write (the base's, or a file of
+  a change queued on `next`), which the gate can't count without running the change's code, and a list ahead of its tree
+  admits no site, since the source check holds each file a later change touches.  So a lint that comes to count more
+  records its list in the same change;
 * among the other entries, the per-site ones and P10's, whose count is a size in lines, no ratchet its base has holds
   more after it than before, and no entry's recorded ``count`` grows (an entry is its fields less ``count``);
 * a command the ``public`` table of P16's list (``allowlists/p16_cli_callers.json``) gains, one run from outside the
   integration, where P16's suite doesn't look, or one given another caller, names a file that, in the change's tree, runs it
   as the base's P16 lint finds a call (its ``runs``).  Like the environment-read list's registry marks, the table is a
-  declaration and no ratchet counts it, but this one is checked, so a change may add one (the vLLM coordinator, 27 Oct
-  16:12Z: while the table was P16's code, which the gate runs as the base has it, no change could add a command run from
-  ``benchmarks/``); and
+  declaration and no ratchet counts it, but this one is checked, so a change may add one (were the table P16's code, which
+  the gate runs as the base has it, no change could add a command run from ``benchmarks/``); and
 * if it changes a lint's code or allowlist, its base's lint code finds nothing on its tree that its allowlists don't cover.
   In a temporary worktree of the change's top, each lint directory to run and both ``ruff.toml`` files are replaced by the
   base's, each allowlist there holding the top's entries for its slug (none for a deleted one), P16's the top's public
@@ -399,11 +403,13 @@ def counted_kinds(s: str, entries: list) -> set:
 
 
 def growth(before: dict[str, list], after: dict[str, list], paths: dict[str, str],
-           held: dict[str, Counter] | None = None) -> tuple[list[str], list[str], list[str]]:
+           held: dict[str, Counter] | None = None, widened: dict[str, set[str]] | None = None
+           ) -> tuple[list[str], list[str], list[str]]:
     """(each grown ratchet, count and pooled kind; the entries that grew it, or the keys that moved in a grown kind; each
     kind a key rose in whose total didn't grow, and each list that caught up): what the change adds, against its base.  A
-    key of a list in ``held`` may rise up to what ``held`` says its base holds there, which adds no finding."""
-    held = held or {}
+    key of a list in ``held`` may rise up to what ``held`` says its base holds there, which adds no finding, and a key
+    ``widened`` names for its list as far as the change records."""
+    held, widened = held or {}, widened or {}
     grown, fix, pooled = [], [], []
     for s in sorted(before):
         was_all, now = [e for e in before[s] if not is_mark(e)], [e for e in after.get(s, []) if not is_mark(e)]
@@ -427,7 +433,8 @@ def growth(before: dict[str, list], after: dict[str, list], paths: dict[str, str
                 for e in entries:
                     if in_pool(e) and kind(e) == pool:
                         side[key(e)] += count(e)
-            caught = {k: n for k in hi if (n := min(hi[k], base[k]) - lo[k]) > 0}
+            wide = widened.get(s, set())
+            caught = {k: n for k in hi if (n := min(hi[k], hi[k] if k in wide else base[k]) - lo[k]) > 0}
             moved = sorted((k for k in lo.keys() | hi.keys() if lo[k] + caught.get(k, 0) != hi[k]),
                            key=lambda k: (lo[k] - hi[k], k))
             total = f"{paths[s]}{'' if pool is None else f' {pool}'} {sum(lo.values())} -> {sum(hi.values())} in total"
@@ -435,9 +442,13 @@ def growth(before: dict[str, list], after: dict[str, list], paths: dict[str, str
                 grown.append(total)
                 fix += [f"{paths[s]}: {k} {lo[k]} -> {hi[k]}" for k in moved]
                 continue
-            if caught:
-                pooled.append(f"{total}, {sum(caught.values())} of it in {len(caught)} key(s) catching up to what its lint "
+            up = {k: n for k, n in caught.items() if k not in wide or lo[k] + n <= base[k]}
+            if up:
+                pooled.append(f"{total}, {sum(up.values())} of it in {len(up)} key(s) catching up to what its lint "
                               f"finds in the base's tree (a list that records its base's findings adds none)")
+            if wide := {k: n for k, n in caught.items() if k not in up}:
+                pooled.append(f"{total}, {sum(wide.values())} of it in {len(wide)} key(s) at files the change leaves "
+                              f"untouched, recorded as the lint it edits counts them")
             if any(hi[k] > lo[k] + caught.get(k, 0) for k in moved):
                 pooled.append(f"{total} over {len(moved)} moved key(s)")
     return grown, fix, pooled
@@ -796,10 +807,15 @@ def findings_at(rev: str, s: str, files: set[str]) -> Counter:
     return Counter({key({"file": f}): len(count(b.decode("utf-8", errors="replace"), f)) for f, b in data.items()})
 
 
-def held(c: Change, before: dict[str, list], after: dict[str, list]) -> dict[str, Counter]:
+def held(c: Change, before: dict[str, list], after: dict[str, list]) -> tuple[dict[str, Counter], dict[str, set[str]]]:
     """For each repository list (``CATCH_UP``) whose keys the change raises, what its lint, as the change's base has it, finds
-    in the base's tree at those keys: the most each may rise to, since a list that records its base's findings adds none."""
-    out = {}
+    in the base's tree at those keys: the most each may rise to, since a list that records its base's findings adds none.
+    And, for a counted lint whose module the change edits, the keys it raises at files the change leaves untouched, which may
+    rise as far as the change records: it adds no text there, so the rise records what the change's lint finds in text the
+    change didn't write, which the gate can't count without running the change's code.  A list ahead of its tree admits no
+    site, since the source check holds each file a later change touches to its own count."""
+    out, widened = {}, {}
+    edited: set[str] | None = None
     for s in CATCH_UP:
         lo, hi = Counter(), Counter()
         for side, entries in ((lo, before.get(s, [])), (hi, after.get(s, []))):
@@ -808,7 +824,12 @@ def held(c: Change, before: dict[str, list], after: dict[str, list]) -> dict[str
                     side[key(e)] += count(e)
         if files := {json.loads(k)["file"] for k in hi if hi[k] > lo[k]}:
             out[s] = findings_at(c.lo, s, files)
-    return out
+            if s in (slug for slug, *_ in COUNTED):
+                if edited is None:
+                    edited = set(git("diff", "--no-renames", "--name-only", "-z", c.lo, c.hi).split("\0"))
+                if counted_paths(s)[0] in edited:
+                    widened[s] = {key({"file": f}) for f in files - edited}
+    return out, widened
 
 
 def public_commands(rev: str) -> dict[str, str]:
@@ -956,7 +977,7 @@ def judge(c: Change, base: str) -> None:
         after, now_at, bad = ratchets(c.hi)
         c.before = sum(len(v) for v in before.values())
         c.after = sum(len(after.get(s, [])) for s in before)
-        grown, added, c.pooled = growth(before, after, {**was_at, **now_at}, held(c, before, after))
+        grown, added, c.pooled = growth(before, after, {**was_at, **now_at}, *held(c, before, after))
         uncalled, public = public_callers(c)
     noqa_grows = c.noqa_added > c.noqa_removed
     if c.touched and not (grown or bad or uncalled or noqa_grows):

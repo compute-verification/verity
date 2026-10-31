@@ -246,10 +246,10 @@ def test_with_out_its_records_are_the_endpoints_that_the_endpoint_step_binds_and
 def test_on_vllms_records_art_the_endpoint_step_binds_a_requests_jsonl_rebuilt_from_its_users_map(tmp_path,
                                                                                                   monkeypatch,
                                                                                                   window_steps):
-    """vllm's records art: advice_trace.jsonl, windows.jsonl, serve.json and request_users.jsonl, requests.jsonl left on
-    the served node. served_session's chain rebuilds requests.jsonl from the map and the certified I/O, and the endpoint
-    step's advice on it is bound to the certified requests and rebuilt from them, across a carry too; a map naming a
-    user the I/O doesn't certify is refused."""
+    """The served run's records artifact: advice_trace.jsonl, windows.jsonl, serve.json and request_users.jsonl,
+    requests.jsonl left on the served node. served_session's chain rebuilds requests.jsonl from the map and the
+    certified I/O, and the endpoint step's advice on it is bound to the certified requests and rebuilt from them, across
+    a carry too; a map naming a user the I/O doesn't certify is refused."""
     sys.path.insert(0, str(HERE.parent / "network_e2e"))
     import chain
     import served_session as SS

@@ -4,7 +4,7 @@ import Definitions.Pouw.Assumptions.Dimension.Embed
 /-!
 # `MH100`, the H100 analogue of `M4090`, and its per-word bound (trusted statements; draft semantics)
 
-**Draft semantics, pending review** (`internal/pouw-fp8/genuine-fp8-interface.md` §1.1).
+**Draft semantics, pending review**.
 
 `MH100 pr` is `M4090` (`Pouw.Dimension.Embed`) with the H100's classes, at the prices `pr : Prices100`
 (`Pouw.Dimension.H100Assumptions`). Its registers are SSA and hold functions on a finite noise grid `G`. Every
@@ -32,19 +32,19 @@ as any other register writer.
   No A1 and no A2. `PerWordMH100Words` instantiates it on NCP's non-final checked words under checkpoint
   independence. `PerWordMH100Floor` is the same bound at any floor: under `Floor c pr`, `c` per target word, so a
   measured price table gives its own least price per register.
-* **Which words (red team F18-3).** `PerWordMH100Words` and `MH100WordsConsistent` cover NCP's exact words at 16-step
+* **Which words.** `PerWordMH100Words` and `MH100WordsConsistent` cover NCP's exact words at 16-step
   checkpoints (`CheckpointIndependent k 16`, linear independence over ℚ modulo `V₀`). They do not cover the truncated
   k32 `HOPPER_E4M3_K32` words of C-2, A-1 or D-2, which are not linear. For those the applicable pin is `MH100w`'s
   `DistinctLiveMH100` (`Pouw.Dimension.H100W`), whose hypothesis `DistinctLiveAt ε` each scheme must certify.
 * **Tightness and consistency.** `MH100Attains`: at the nominal prices every family is output at exactly 32 per word
   (one FP8 `wgmma` register each). `MH100WordsConsistent`: independent families exist (NCP's checked words).
   `MH100Attains` and `HonestSplitK100` are nominal-model statements. On hardware they hold only at `N ≥ 64`: Round 7
-  measured m64n8k32 at 144 per register (red team F18-4; `Shape100`).
+  measured m64n8k32 at 144 per register (`Shape100`).
 * **FP8 targets.** For the split-K FP8 target of `docs/pouw-fp8/design.md` §6.1 (fresh-step words
   `I_τ = HOPPER_E4M3_K32.step(+0, Ã[S_τ], B̃[S_τ])` and running words `R_τ = RN_f32(R_(τ−1) + I_τ)`), the honest
   schedule `splitK` costs 32 per word at the nominal prices: a k32 `wgmma` register per `I_τ` and an FADD per `R_τ`
   (`HonestSplitK100`). If the scheme makes those words independent modulo its free values, `PerWordMH100` gives 32
-  per word, so the bound is tight. That independence is the scheme lane's statement, not proved here. The truncated
+  per word, so the bound is tight. That independence is the scheme's statement, not proved here. The truncated
   atom words are not linear, so for them the W1-faithful route is `MH100w` (`Pouw.Dimension.H100W`).
 -/
 
@@ -119,7 +119,7 @@ def Hc (c : ℕ) (P : List (Instr G)) : Prop := ∀ ins ∈ P, ins.isPriced = tr
 def IndepMod (V : Submodule ℚ (G → ℚ)) {ι : Type} [Fintype ι] (t : ι → G → ℚ) : Prop :=
   ∀ c : ι → ℚ, ∑ i, c i • t i ∈ V → ∀ i, c i = 0
 
-/-- The split-K running words (`design.md` §6.1) over the fresh-step words `I`: `R 0 = +0` and
+/-- The split-K running words over the fresh-step words `I`: `R 0 = +0` and
 `R (τ + 1) = fpSem κ (R τ) (I τ) (R τ)`, which is `RN_f32(R_τ + I_τ)` when `κ` is FADD (the third operand unused). -/
 def runWords (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (κ : ℕ) (I : ℕ → G → ℚ) : ℕ → G → ℚ
   | 0 => 0
@@ -173,7 +173,7 @@ review): under `H32` and checkpoint independence, a well-formed program on input
 non-final checked words at `S ⊆ U × [0, nonFinal)` costs at least `32·|S|`.
 
 It covers NCP's exact words at 16-step checkpoints only. The truncated k32 atom words of C-2, A-1 and D-2 are not
-linear, so they need `DistinctLiveMH100` instead (red team F18-3). -/
+linear, so they need `DistinctLiveMH100` instead. -/
 def PerWordMH100Words : Prop :=
   ∀ pr : Prices100, H32 pr →
     ∀ (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ)
@@ -184,8 +184,7 @@ def PerWordMH100Words : Prop :=
 
 /-- **The bound is attained** at the nominal prices: for every grid, free values, FP32 semantics, inputs and family
 of target words, one FP8 `wgmma` register per word is a well-formed program that outputs them all at exactly
-`32·|ι|`. This is a nominal-model statement. On hardware it holds only for `wgmma` at `N ≥ 64` (red team F18-4;
-`Shape100`). -/
+`32·|ι|`. This is a nominal-model statement. On hardware it holds only for `wgmma` at `N ≥ 64` (`Shape100`). -/
 def MH100Attains : Prop :=
   ∀ (G : Type) (V : Submodule ℚ (G → ℚ)) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (ι : Type) [Fintype ι] (t : ι → G → ℚ)
     (L : List (G → ℚ)),
@@ -197,7 +196,7 @@ semantics, opcode `κ`, fresh-step words `I`, `T` and inputs, the program `split
 `I τ` and `R (τ + 1)` for every `τ < T`, and it costs `32·2T`: one FP8 `wgmma` register (32) per `I τ` and one FP32
 instruction (32) per `R (τ + 1)`.
 
-This is a nominal-model statement (red team F18-4). On hardware the `wgmma` price holds only at `N ≥ 64`, since Round 7
+This is a nominal-model statement. On hardware the `wgmma` price holds only at `N ≥ 64`, since Round 7
 measured m64n8k32, C-2's atom shape, at 144 per register. The FADD per `R (τ + 1)` measured 33.5, not 32. -/
 def HonestSplitK100 : Prop :=
   ∀ (G : Type) (V : Submodule ℚ (G → ℚ)) (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) (κ : ℕ) (I : ℕ → G → ℚ) (T : ℕ)

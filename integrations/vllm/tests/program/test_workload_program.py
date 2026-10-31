@@ -1,4 +1,4 @@
-"""GP-01: the workload Program composes request Programs (as descriptors) hierarchically, with weights once, a deterministic
+"""The workload Program composes request Programs (as descriptors) hierarchically, with weights once, a deterministic
 global address space and a declared chronology. Toy request Programs stand in for derive_step's request wrappers: the same
 lowering (`Program(fn)` -> Input batches + body), the same descriptor codec."""
 
@@ -274,7 +274,7 @@ def test_theta_registered_keeps_a_tp_rank_programs_peers_bound_per_run():
 
 
 def _toy_rank_request(LP: int, T: int):
-    """A TP rank Program's shape (tp M-0314): `(prompt, peers_0..peers_T, weights)` -- one received collective value per step, so
+    """A TP rank Program's shape: `(prompt, peers_0..peers_T, weights)` -- one received collective value per step, so
     the number of request-local inputs BEFORE the shared group depends on T and the weights group shifts per component."""
     def sig(S):
         peers = tuple((f"peers_{k}", Array(1, Value(16))) for k in range(S.T + 1))
@@ -298,7 +298,7 @@ def _WP_rank(LP, T):
 
 
 def test_tp_rank_components_share_weights_at_shifting_positions_and_tp1_digests_are_unchanged():
-    """tp M-0314 option (B): request-local `peers_*` inputs before the shared group shift its positions per component; the shared
+    """Request-local `peers_*` inputs before the shared group shift its positions per component; the shared
     group is still the same Input batches once, each request's peers are its own inputs; a non-request-local group at a shifting
     position is still refused. The uniform (TP1) static form is untouched, so every existing workload digest stands."""
     ca = W.request_component(encode_program(Program(_toy_rank_request(3, 2))), REGISTRY, _WP_rank(3, 2))   # weights at 4
@@ -439,7 +439,7 @@ def _stepped_request(LP: int, T: int, step_name: str = "GpTestStep"):
 
 
 def test_canon_is_per_compose_conflicts_refused_inside_one_never_across_composes():
-    """[R15 global, rev-pm M-0123 F(1)] the shared-definition canon belongs to ONE compose: two request Programs of one workload that
+    """The shared-definition canon belongs to ONE compose: two request Programs of one workload that
     disagree on a definition under the same id are refused (E_IDENTITY, fail closed); a LATER compose in the same process with its own
     canon is compared against its own components only, never against an earlier compose's definitions."""
     import copy
@@ -520,9 +520,9 @@ def _derived_like(LP: int, T: int, src: dict):
 
 
 def test_two_requests_with_one_root_id_over_different_bodies_compose_by_digest():
-    """[R16 global, llama B64 1024/128 Build FAIL 07:09Z] a manifest with two requests of the same prompt length and different caps
-    (LP11: T24 and T36) derives two request Programs whose roots share derive's id `Root[Derived[vLLMRequest[..]]_v1{SRC=..}]` (SRC does
-    not name T) with different bodies and different digests; the compose compared the ROOTS under that id and refused the workload
+    """A manifest with two requests of the same prompt length and different caps (LP11: T24 and T36, as in the llama B64 1024/128
+    workload) derives two request Programs whose roots share derive's id `Root[Derived[vLLMRequest[..]]_v1{SRC=..}]` (SRC does not
+    name T) with different bodies and different digests; comparing the ROOTS under that id would refuse the workload
     (E_IDENTITY). The root is never shared -- the component's identity is its program digest -- so it is exempt from the shared-definition
     canon; every callee stays under the fail-closed rule (the test above)."""
     src = {"class": "LlamaForCausalLM", "mode": "profile", "inputs": [[3]], "config_sha256": "c" * 16}

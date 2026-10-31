@@ -335,8 +335,8 @@ def resolved_async_scheduling(llm: Any) -> bool | None:
 def compilation_facts(llm: Any) -> dict[str, Any]:
     """What the built engine actually compiles / graphs, read back from its vllm_config (never from the kwargs): CompilationMode
     (name; the pinned vLLM's IntEnum str() is the number, recorded too), CUDAGraphMode, capture sizes, inductor graph partition, enforce_eager,
-    compile-cache switch.  Written into the run header's `compilation` block beside the profile's `effective_compilation` (GM-01 G1 compares a
-    compiled Program's declared facts against it) and into commit_delta's versions.json (control and treatment must agree)."""
+    compile-cache switch.  Written into the run header's `compilation` block beside the profile's `effective_compilation` (the global match's G1
+    compares a compiled Program's declared facts against it) and into commit_delta's versions.json (control and treatment must agree)."""
     out: dict[str, Any] = {}
     try:
         vc = llm.llm_engine.vllm_config

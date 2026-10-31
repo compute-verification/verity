@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# The native baseline on one dc node: native.py's arms, each in its own process under its own gpu-lease (an engine build
+# The native baseline on one H200 or B200: native.py's arms, each in its own process under its own gpu-lease (an engine build
 # plus its measures fit well inside one).
 #
-#   research run --on vy-dc-b200 --project verity --campaign dither-loop --source . --cwd source --timeout 90m \
-#     -- bash benchmarks/hash/dither/native.sh [ARM ...]
+#   bash benchmarks/hash/dither/native.sh [ARM ...]      (on a B200 or an H200, up to 90 minutes)
 #
 # Default arms: vllm-int8, and vllm-int8-triton on a B200 (served-row only when named: served_h1's eager engine, whose
 # receipts are a side computation, not a served number). Every arm samples without FlashInfer's JIT sampler, as

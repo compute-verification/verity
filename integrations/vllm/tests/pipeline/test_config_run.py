@@ -1,5 +1,5 @@
 """The config run (docs/vllm-config-sweep-plan.md §2-§4): the row mode (`--config-run 1`), the config record, the derived-Program cache,
-the family-stratified k-unit replay sample and the sweep driver's packing.  CPU only: row dirs, workloads and processes are stand-ins."""
+the family-stratified k-unit replay sample.  CPU only: row dirs, workloads and processes are stand-ins."""
 from __future__ import annotations
 
 import json
@@ -15,7 +15,6 @@ from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import program_cache as PC
 from verity_vllm.pipeline import row_config as RC
 from verity_vllm.pipeline import row_records as R_
-from verity_vllm.pipeline import sweep as SW
 from verity_vllm.pipeline.row_driver import Stop
 
 ROW = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager"
@@ -650,64 +649,3 @@ def test_a_record_that_names_no_draw_keeps_the_family_draw_and_an_unknown_draw_i
     assert family_strata(vus, 4, draw=draw_of(SimpleNamespace())) == family_strata(vus, 4)
     with pytest.raises(ValueError, match=r"replay draw 'stratified' is not one of \('family', 'uniform'\)"):
         family_strata(vus, 4, draw="stratified")
-
-
-# ---------------------------------------------------------------------------------------------------------------- the sweep driver
-
-def test_estimates_follow_the_plan_s_classes():
-    assert SW.estimate(ROW) == SW.Need(gpus=1, ram_gb=150, cpus=16, minutes=60)
-    assert SW.estimate("llama32-1b__bf16__l40s__tp1__b64__i1024__o128__mixed__greedy__bi-eager").ram_gb == 500
-    assert SW.estimate("qwen25-15b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager").ram_gb == 500
-    assert SW.estimate("olmoe-1b-7b__bf16__l40s__tp2__b8__i1024__o128__mixed__greedy__bi-eager").gpus == 2, "the TP world's GPUs"
-
-
-def _cfg(row: str, ram: int, cpus: int = 16, minutes: int = 60, gpus: int = 1) -> SW.Config:
-    return SW.Config(row=row, need=SW.Need(gpus=gpus, ram_gb=ram, cpus=cpus, minutes=minutes))
-
-
-def test_the_plan_starts_the_large_builds_first_and_packs_the_small_ones_around_them():
-    host = SW.Host(gpus=[0, 1, 2, 3], ram_gb=1000, cpus=list(range(64)))
-    cfgs = [_cfg("s1", 150), _cfg("s2", 150), _cfg("big1", 500, 32, 150), _cfg("big2", 500, 32, 150), _cfg("s3", 150), _cfg("huge", 2000)]
-    p = SW.plan(cfgs, host)
-    assert p["refused"] == [{"row": "huge", "why": "needs 2000 GB of RAM, the host has 1000"}]
-    by = {c["row"]: c for c in p["configs"]}
-    assert by["big1"]["start_min"] == 0 and by["big2"]["start_min"] == 0, "the large Builds start first"
-    assert all(by[s]["start_min"] == 150 for s in ("s1", "s2", "s3")), "RAM, not GPUs, holds the small ones until a Build ends"
-    assert p["makespan_min"] == 210
-
-
-def test_the_driver_frees_each_share_as_its_run_ends_and_records_it(tmp_path):
-    host = SW.Host(gpus=[0, 1], ram_gb=400, cpus=list(range(32)))
-    cfgs = [_cfg("a", 300, 16), _cfg("b", 100, 16), _cfg("c", 100, 16)]
-    started, order = [], iter(["a", "b", "c"])
-    clock = iter(float(t) for t in range(100))
-
-    def start(c, gpus, cpus):
-        started.append((c.row, gpus, (cpus[0], cpus[-1])))
-        (tmp_path / "rows" / c.row).mkdir(parents=True, exist_ok=True)
-        (tmp_path / "rows" / c.row / "config_record.json").write_text(json.dumps({"outcome": "PASS" if c.row != "c" else "FAIL", "why": None}))
-        return c.row
-
-    doc = SW.run(cfgs, host, tmp_path, start=start, wait=lambda: (next(order), 0), now=lambda: next(clock))
-    assert started == [("a", [0], (0, 15)), ("b", [1], (16, 31)), ("c", [0], (0, 15))]
-    assert [(d["row"], d["outcome"]) for d in doc["done"]] == [("a", "PASS"), ("b", "PASS"), ("c", "FAIL")]
-    assert json.loads((tmp_path / "sweep.json").read_text())["done"] == doc["done"] and doc["pending"] == [] and doc["running"] == []
-
-
-def test_a_tp2_cell_takes_two_gpus_of_one_host_and_its_ram_share(tmp_path):
-    host = SW.Host(gpus=[0, 1, 2, 3], ram_gb=1000, cpus=list(range(64)))
-    tp2 = SW.Config(row=ROW_TP2, need=SW.estimate(ROW_TP2))
-    assert tp2.need == SW.Need(gpus=2, ram_gb=150, cpus=16, minutes=60)
-    p = SW.plan([tp2, _cfg("a", 150), _cfg("b", 150), _cfg("c", 150)], host)
-    by = {c["row"]: c for c in p["configs"]}
-    assert [by[r]["start_min"] for r in ("a", "b", "c")] == [0, 0, 0] and by[ROW_TP2]["start_min"] == 60, "it waits for two free GPUs"
-    assert len(by[ROW_TP2]["gpus"]) == 2 and SW.plan([tp2], host)["configs"][0]["gpus"] == [0, 1]
-    e = SW.child_env({}, tp2, [0, 1], list(range(16)), tmp_path, None)
-    assert (e["CUDA_VISIBLE_DEVICES"], e["BUILD_RAM_BUDGET_GB"]) == ("0,1", "150")
-
-
-def test_each_run_gets_its_share_as_the_build_budget_and_the_host_s_caches(tmp_path):
-    e = SW.child_env({"PATH": "/bin"}, _cfg("a", 300, 16), [1], list(range(16, 32)), tmp_path, "/cache/rules")
-    assert (e["CUDA_VISIBLE_DEVICES"], e["OMP_NUM_THREADS"], e["BUILD_RAM_BUDGET_GB"], e["VERITY_UNIT_RULE_CACHE"]) == ("1", "16", "300", "/cache/rules")
-    assert e["SWEEP_DIR"] == str(tmp_path / "rows") and e["PATH"] == "/bin"
-    assert "VERITY_UNIT_RULE_CACHE" not in SW.child_env({}, _cfg("a", 300), [0], [0], tmp_path, None)

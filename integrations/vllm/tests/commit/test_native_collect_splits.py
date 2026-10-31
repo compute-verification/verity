@@ -1,4 +1,4 @@
-"""[R16 stoch REQ-03 / reqval M-0305] the collector binding of `runner.sampler/splits` (manifest family `sampler_splits`): the top-p split
+"""The collector binding of `runner.sampler/splits` (manifest family `sampler_splits`): the top-p split
 count S is a HOST constant of vLLM `_apply_topp_split` (constexpr kwarg `S` of the three `_topp_sb_*_kernel` launches, grid = rows * S),
 never on the device.  The collector installs launch proxies on the module's kernel globals, records (kernel, grid, S) per launch and binds
 the step's S once per sampled row -- it never recomputes S from the batch.  Disagreeing launches bind nothing (-> coverage fails closed)."""
@@ -81,7 +81,7 @@ def _step(B: int, S: int, *, mask: bool = True, s_mask: int | None = None, grid_
 def test_split_count_of_one_step_is_the_agreed_kernel_s_or_nothing():
     for B, S in ((1, 16), (8, 8), (2, 32), (64, 1), (5, 4)):
         assert NC.split_count_of_launches(_step(B, S), B) == (S, None)
-    # F-stoch-01's shape: a kernel S that is not the rows' expected geometry is still THE value of record (the collector does not judge it)
+    # a kernel S that is not the rows' expected geometry is still THE value of record (the collector does not judge it)
     assert NC.split_count_of_launches(_step(8, 16), 8) == (16, None)
     # nothing launched (a greedy / dense-path step): bind nothing, say so
     S, why = NC.split_count_of_launches([], 1)

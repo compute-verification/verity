@@ -1,4 +1,4 @@
-"""The served Program's weights registered at H200 scale (CMP-160): every tensor of `e2e_h200.served_weights` committed as
+"""The served Program's weights registered at H200 scale: every tensor of `e2e_h200.served_weights` committed as
 the registered value the Program reads (core's ``one_stage.registered``), in bounded memory, under the operating system's
 salts, and every row opened later against its root.
 
@@ -62,7 +62,7 @@ SEEDS = {"test": SW.TEST_SEED, "demo": SW.DEMO_SEED}
 
 
 def seed_of(text: str) -> bytes:
-    """``test`` (ALLP-IFACE's TEST_SEED), ``demo`` (DEMO_SEED) or a text seed, as `run.py` reads ``--seed``."""
+    """``test`` (TEST_SEED), ``demo`` (DEMO_SEED) or a text seed, as `run.py` reads ``--seed``."""
     return SEEDS.get(text, text.encode())
 
 

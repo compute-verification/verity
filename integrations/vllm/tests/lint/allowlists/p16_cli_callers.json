@@ -11,7 +11,6 @@
     "served-match": "benchmarks/hash/maxtput/build_job.sh",
     "served-pin": "benchmarks/served_commit/served_arm.sh",
     "serving-rows": "benchmarks/one_stage/a5.sh",
-    "sweep": "an operator's night (`verity-vllm sweep plan`, tools/research/src/research/pods/nebius/sky/submit.sh)",
     "tp-serving-rows": "benchmarks/one_stage/a5_tp.sh",
     "workload": "benchmarks/stacked_share/job.sh"
   },

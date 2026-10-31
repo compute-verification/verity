@@ -2,7 +2,7 @@ import Proofs.Pouw.PearlC.TileUOnlyGamma
 import Definitions.Pouw.PearlC.DevicePricesLoop
 
 /-!
-# U-only binding at sm_120's in-loop prices (the price-twins lane's file; staged)
+# U-only binding at sm_120's in-loop prices (staged)
 
 The twins of `UOnlyGamma`'s and `TileUOnlyGamma`'s instances at `Prices.sm120Loop` in place of `Prices.sm120`, with the
 same hypotheses otherwise and the same general theorems, at 8192³, per unit and per audit tile: v1 under rev1 (`G = 4`,
