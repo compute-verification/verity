@@ -1,139 +1,121 @@
-"""The first campaign subcircuit, frozen: exactly which function the proof systems are asked to prove.  A :class:`Target` is
-the code's name for a subcircuit (``gemm_coordinate(K, semantics)`` with every parameter bound; README Glossary).
+"""Targets: the tensor-core subcircuits a proof system is asked to prove, each stated exactly.  A :class:`Target` is the
+code's name for a subcircuit (``gemm_coordinate(K, semantics)`` with every parameter bound; Glossary): its gate family
+and that family's manifest digest, the silicon pipeline its steps compute on, its program, domain and epilogue, the
+conformance device its overhead is measured against, and its ``status``.  :data:`TARGETS` holds them by name.
 
-Every proof-system experiment in the campaign proves *this* relation until the target is deliberately re-versioned.
-Another engineer must be able to read this module and state the function without asking anyone; the test
-``archive/sp1/tests/proofs/test_target.py`` pins every identity below against the recorded conformance vectors, so a
-silent change to the semantics, the family manifest or the program shape fails the suite.
+FIRST: ``GemmCoordinate<K>`` on the A100's BF16 pipeline
+========================================================
 
-The function
-============
-
-``GemmCoordinate<K>`` in the gate family ``veritor.tc-ampere-bf16@1`` (:func:`verity_sp1.proofs.programs.gemm_coordinate`):
-one output coordinate ``y[j]`` of a BF16 GEMM, ``K`` a positive multiple of 16.
+``GemmCoordinate<K>`` in the gate family :data:`FAMILY`: one output coordinate ``y[j]`` of a BF16 GEMM, ``K`` a positive
+multiple of 16.
 
 * **Sources.** ``2K`` incoming 16-bit BF16 words: ``x[0..K]`` (the activation row) then ``W[j, 0..K]`` (one weight
-  row), each in ascending ``k`` order.  Weights are incoming values of the subcircuit; the plan decides which of
-  them are sampled/authenticated.
+  row), each in ascending ``k`` order.  Weights are incoming values of the subcircuit.
 * **Instruction semantics.** Each step is one accumulator coordinate of Ampere
-  ``mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32`` as modelled by :data:`verity.ml.circuits.silicon.silicon.AMPERE_BF16_M16N8K16`:
-  the sixteen exact BF16 x BF16 products are summed in **two groups of eight** (``k = 0..7``, then ``8..15``); the
-  incoming FP32 accumulator joins the first group and the first group's result joins the second; each grouped sum is
-  a **25-bit truncating** fixed-point adder aligned at the group's maximum exponent, with the exponent **floor**
-  ``-132`` (terms below it flush); the result is repacked as an FP32 word (round-toward-zero through the 25-bit
-  window).  :func:`verity.ml.circuits.silicon.silicon.tc_dot` is the executable definition; the Rust ``tc.rs`` and the Lean
-  ``TCB.lean`` are its other columns.
+  ``mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32`` as modelled by
+  :data:`verity.ml.circuits.silicon.models.AMPERE_BF16_M16N8K16`: the sixteen exact BF16 x BF16 products are summed in
+  **two groups of eight** (``k = 0..7``, then ``8..15``); the incoming FP32 accumulator joins the first group and the
+  first group's result joins the second; each grouped sum is a **25-bit truncating** fixed-point adder aligned at the
+  group's maximum exponent, with the exponent **floor** ``-132`` (terms below it flush); the result is repacked as an
+  FP32 word (round-toward-zero through the 25-bit window).  :func:`verity.ml.circuits.silicon.models.tc_dot` is the
+  executable definition.
 * **Chaining and order.** Step ``0`` is ``tc_dot16_0(x[0:16], W[0:16])`` -- no incoming accumulator (``acc = +0``);
   step ``s`` for ``1 <= s < K/16`` is ``tc_dot16(acc_{s-1}, x[16s:16s+16], W[16s:16s+16])``.  The steps are chained
   **sequentially in ascending k**, one accumulator, no split-K, no re-association.
 * **Epilogue.** The one outgoing value is ``f32_to_bf16(acc_{K/16-1})``: round to nearest, ties to even; finite
   words beyond BF16's range become ``+-inf``; NaN becomes the canonical ``0x7FC0`` (version ``@1``).
 * **Supported domain -- finite only.** A NaN or infinite operand, or a NaN/infinite accumulator at any step, is
-  *outside* the relation: the checker rejects the obligation (``E_...`` verdict ``0``), it does not compute a
-  hardware answer.  This is the finite-domain relation of ``silicon``; the total semantics are a separate,
-  unbound family (below).
+  *outside* the relation: the checker rejects the obligation, it does not compute a hardware answer.  This is the
+  finite-domain relation of ``silicon``; the total semantics are a separate, unbound family (below).
 * **Saturation is inside the relation (log entry D8).** A finite input whose grouped sum leaves the FP32 range
   yields ``+-inf`` at once, sticky through the remaining group -- the hardware's word on every measured case.  That
   word is a valid output of a transition and, through the epilogue, of the proof block; it is not a finite accumulator, so a
   chain whose intermediate transition saturates is rejected at the next step.  The pinned simulator masks the
   exponent instead and is not the reference there.
-* **Statement and binding.** An obligation is a ``typed-obligation/v0`` object (``statement_format = 2``) whose
-  family digest is :data:`FAMILY_DIGEST`; boundary words are authenticated as packed words against the object's
-  Merkle roots (``verity_sp1.proofs.packed``, ``verity.ml.commitments.leaves``).  The guest's public values are
-  ``h_O || h_L || verdict`` and are accepted only under the approved verifying key (``verity_sp1.host.APPROVED``).
+* **Statement.** An obligation is a ``typed-obligation/v0`` object (``statement_format = 2``, ``fixtures/typed-obligation-v0``)
+  whose family digest is :data:`FAMILY_DIGEST`.
 
 Transition unit versus proof block
 ==================================
 
-Two objects, deliberately distinct:
+* The **transition unit** is one 16-product update with an *arbitrary* finite incoming accumulator ``c``:
+  ``tc_dot16(c, x[16s:16s+16], W[16s:16s+16])`` -- two grouped sums, ``c`` joining the first.  A proof system may take,
+  expose and check these transitions and their intermediate accumulators internally in any layout; those states are
+  proof-internal auxiliary witness, never new runtime boundaries.
+* The **proof block** (what the sampler selects and what a proof must establish in full) is ``GemmCoordinate<K>``: the
+  chain of ``K/16`` transitions from ``c_0 = +0`` followed by the epilogue cast.
 
-* The **proof system's transition unit** is one 16-product update with an *arbitrary* finite incoming accumulator ``c``:
-  ``tc_dot16(c, x[16s:16s+16], W[16s:16s+16])`` -- two grouped sums, ``c`` joining the first.  A numerical proof
-  system may take, expose and check these transitions and their intermediate accumulators internally in any
-  layout it likes; those states are proof-internal auxiliary witness, never new runtime boundaries.
-* The **proof block** (what the outer sampler selects and what a proof must establish in full) is
-  ``GemmCoordinate<K>``: the chain of ``K/16`` transitions from ``c_0 = +0`` followed by the epilogue cast.
-
-Proof systems must agree on the profile, the input/output bitstrings, the supported domain, the exact
-function and the proof block's endpoints; they need not agree on auxiliary witness layouts.
+Proof systems agree on the profile, the input/output bitstrings, the supported domain, the exact function and the proof
+block's endpoints; they need not agree on auxiliary witness layouts.
 
 References and the log of disagreements
 =======================================
 
-* :data:`HAWKEYE_PIN` pins the source-close reference (Hawkeye's simulator, commit ``30703fcb``); the
-  parameters above are the ones it recovers on the A100, re-measured bit-exactly on both the RTX 4090 (sm_89) and
-  the A100 (sm_80) over 25,698,304 finite elements each (12,065,535 with a nonzero accumulator; log entries
-  D2 and D9) and on the 7,713 all-finite
-  structured A100 cases.
+* :data:`HAWKEYE_PIN` pins the source-close reference (Hawkeye's simulator, commit ``30703fcb``); the parameters above
+  are the ones it recovers on the A100, re-measured bit-exactly on both the RTX 4090 (sm_89) and the A100 (sm_80) over
+  25,698,304 finite elements each (12,065,535 with a nonzero accumulator; log entries D2 and D9) and on the 7,713
+  all-finite structured A100 cases.
 * :data:`DISCREPANCY_LOG` records every place where the paper, the simulator, Verity's reference and the hardware
   disagree or are silent, with an owner and what would resolve it.  Nothing in it is resolved by editing a
   reference implementation.
 
-Explicitly unresolved (not part of the target)
-==============================================
+Outside FIRST
+=============
 
 * **Hardware NaN word.** The production epilogue's ``cvt.rn.bf16.f32`` produces ``0x7FFF`` for NaN, not ``0x7FC0``;
-  that is family ``veritor.tc-ampere-bf16@2`` (vector ``accept--tc-store-cast-nan-hw``).  The two agree on every
-  non-NaN word, and NaN is outside the finite domain anyway, so the choice is immaterial for this target.
-* **Total semantics.** :mod:`verity.ml.circuits.silicon.total` (and the guest's ``tc_total.rs``) define the step on every
-  encoding -- NaN, infinities, saturation -- as measured on A100/RTX 4090; no registered gate family binds them
-  (no name is reserved: the ``veritor.*`` prefix is frozen, so the total relation takes a fresh id when it is
-  declared).  Declaring the total relation is a
-  protocol decision, not a proof-system optimisation.
+  that is version ``@2`` of :data:`TC_AMPERE_BF16_NAME` (vector ``accept--tc-store-cast-nan-hw``).  The two agree on
+  every non-NaN word, and NaN is outside the finite domain, so the choice is immaterial for this target.
+* **Total semantics.** :mod:`verity.ml.circuits.silicon.total` defines the step on every encoding -- NaN, infinities,
+  saturation -- as measured on A100/RTX 4090; no registered gate family binds it, and declaring it, under a fresh id,
+  is a protocol decision, not a proof-system optimisation.
 * **Hopper.** ``wgmma`` on the H100 is one group of sixteen, a 26-bit adder, floor ``-133``
-  (:data:`verity.ml.circuits.silicon.silicon.HOPPER_BF16_M16N8K16`); a different pipeline, a different target.
+  (:data:`verity.ml.circuits.silicon.models.HOPPER_BF16_M16N8K16`); a different pipeline, a different target.
 * **Kernel-level accumulation order.** The target fixes the chain the *relation* checks (ascending ``k``, one
   accumulator).  Whether a given GEMM kernel launch (split-K, stream-K, different tile orders) realises exactly this
-  chain is a frontend/integration binding question; ``fixtures/typed-obligation-v0``'s K = 1536 input is one captured
-  case where it did.
-* **Other dtypes.** FP8 (E4M3) pipelines exist in ``silicon`` and now have *draft* targets below
-  (:data:`FP8_HOPPER_WGMMA`, :data:`FP8_ADA_MMA`); nothing about them is frozen.
+  chain is a frontend binding question; ``fixtures/typed-obligation-v0``'s K = 1536 input is one captured case where
+  it did.
 
 Draft targets
 =============
 
-A :class:`Target` carries a ``status``: ``"frozen"`` (:data:`FIRST`: every proof system proves it, it changes only by
-re-versioning) or ``"draft"`` (a relation stated precisely enough to generate vectors against, owned by the silicon
-campaign, not yet bound to a guest or a registered family digest).  Each target names its ``instruction`` in
-:data:`verity.ml.circuits.silicon.instructions.INSTRUCTIONS`; the instruction's status (pinned / hypothesis / unprobed) says how
-much hardware stands behind the model the target computes with.
+A :class:`Target`'s ``status`` is ``"frozen"`` (:data:`FIRST`: it changes only by re-versioning) or ``"draft"`` (a
+relation stated precisely enough to generate vectors against, bound to no registered family digest a verifier checks).
+Each target names its ``instruction`` in :data:`verity.ml.circuits.silicon.instructions.INSTRUCTIONS`; the instruction's
+status (pinned / hypothesis / unprobed) says how much hardware stands behind the model the target computes with.
 
-* :data:`FP8_HOPPER_WGMMA` -- ``sm90.wgmma.m64n8k32.e4m3`` (pinned: veritor H100, 144,543,744 words), model
-  :data:`verity.ml.circuits.silicon.models.HOPPER_E4M3_K32` (one group of 32, 14-bit truncating adder, floor -139).  Program
-  ``GemmAccumulator<K>`` (:func:`verity_sp1.proofs.programs.gemm_accumulator_fp8`), ``K`` a multiple of 32:
-  ``tc_dot32_0`` then ``K/32 - 1`` chained ``tc_dot32`` in ascending ``k``, the FP32 accumulator word **public**
-  (the bare dot).  Domain: finite E4M3 operands (every byte but ``0x7F``/``0xFF``; 448 is finite) and finite FP32
-  accumulators at every step.  The scale-and-``cvt.rn.satfinite.e4m3x2`` epilogue of a production FP8 GEMM is a
-  **separate, later relation** -- it composes with this one but is not part of it.  Note the lossy step: the
-  incoming accumulator keeps only its top 14 significand bits, even through a group of zero products (D10).
-* :data:`FP8_ADA_MMA` -- ``sm89.mma.m16n8k32.e4m3`` (pinned: veritor RTX 4090, 24,898,304 elements), model
-  :data:`verity.ml.circuits.silicon.models.ADA_E4M3_M16N8K32` (two groups of 16, the same 14-bit adder and floor).  Same program,
-  same domain, same absent epilogue; a different grouping and so a different function.
-* :data:`FP8_SM120_MMA` -- ``sm120.mma.m16n8k32.e4m3`` (pinned: RTX PRO 6000, its
-  conformance device, 25,041,024 elements / 0 mismatches; one QMMA.16832 per tile), model
-  :data:`verity.ml.circuits.silicon.models.BLACKWELL_SM120_E4M3_M16N8K32`: one group of 32 in
-  the 26-bit adder of the sm_120 BF16 pipeline, so the accumulator is not truncated.  Same program, domain and absent
-  epilogue as the other two; the registry's ``sm120.mma.m16n8k32.e4m3`` is this pipeline, and trust anchors it here.
-* The families are the cast-free ``veritor.tensor-core.<pipeline>@2`` sets of :func:`verity_sp1.proofs.families.make_tensor_core_gate_set`
-  (``tc_dot32`` / ``tc_dot32_0`` with 8-bit operand arguments); their digests are recorded here but **no guest is
-  bound to them** and no ``typed-obligation/v0`` lowering has been produced.
-* :data:`BF16_HOPPER` -- ``sm90.mma.m16n8k16.bf16`` (pinned: Hawkeye H100, re-measured
-  25.7M elements / 0 mismatches; the ``wgmma`` BF16 path runs the same pipeline), model
-  :data:`verity.ml.circuits.silicon.models.HOPPER_BF16_M16N8K16` (one group of 16, the 26-bit adder, floor -133; exact BF16
-  products).  FIRST's program and epilogue -- ``GemmCoordinate<K>`` with ``f32_to_bf16`` -- so the Hopper row of the
-  table is the same function as the Ampere row up to the step; the family is
-  ``veritor.tc-bf16.hopper_bf16_m16n8k16@1`` (:func:`verity_sp1.proofs.families.make_tc_bf16_gate_set`), FIRST's
-  vocabulary with the steps on the Hopper pipeline.  Native peak: the H100 SXM5 dense BF16 rate (989.4 TFLOPS).
+* :data:`FP8_HOPPER_WGMMA` -- ``sm90.wgmma.m64n8k32.e4m3`` (pinned: H100, 144,543,744 words), model
+  :data:`verity.ml.circuits.silicon.models.HOPPER_E4M3_K32` (one group of 32, 14-bit truncating adder, floor -139).
+  Program ``GemmAccumulator<K>``, ``K`` a multiple of 32: ``tc_dot32_0`` then ``K/32 - 1`` chained ``tc_dot32`` in
+  ascending ``k``, the FP32 accumulator word **public** (the bare dot).  Domain: finite E4M3 operands (every byte but
+  ``0x7F``/``0xFF``; 448 is finite) and finite FP32 accumulators at every step.  The scale-and-``cvt.rn.satfinite.e4m3x2``
+  epilogue of a production FP8 GEMM is a **separate relation** -- it composes with this one but is not part of it.
+  Note the lossy step: the incoming accumulator keeps only its top 14 significand bits, even through a group of zero
+  products (D10).
+* :data:`FP8_ADA_MMA` -- ``sm89.mma.m16n8k32.e4m3`` (pinned: RTX 4090, 24,898,304 elements), model
+  :data:`verity.ml.circuits.silicon.models.ADA_E4M3_M16N8K32` (two groups of 16, the same 14-bit adder and floor).  Same
+  program, same domain, same absent epilogue; a different grouping and so a different function.
+* :data:`FP8_SM120_MMA` -- ``sm120.mma.m16n8k32.e4m3`` (pinned: RTX PRO 6000, its conformance device, 25,041,024
+  elements / 0 mismatches; one QMMA.16832 per tile), model
+  :data:`verity.ml.circuits.silicon.models.BLACKWELL_SM120_E4M3_M16N8K32`: one group of 32 in the 26-bit adder of the
+  sm_120 BF16 pipeline, so the accumulator is not truncated.  Same program, domain and absent epilogue as the other two.
+* The FP8 families are cast-free (``tc_dot32`` / ``tc_dot32_0`` with 8-bit operand arguments); their digests are
+  recorded here, and no ``typed-obligation/v0`` lowering of them exists.
+* :data:`BF16_HOPPER` -- ``sm90.mma.m16n8k16.bf16`` (pinned: Hawkeye H100, re-measured 25.7M elements / 0 mismatches;
+  the ``wgmma`` BF16 path runs the same pipeline), model :data:`verity.ml.circuits.silicon.models.HOPPER_BF16_M16N8K16`
+  (one group of 16, the 26-bit adder, floor -133; exact BF16 products).  FIRST's program and epilogue --
+  ``GemmCoordinate<K>`` with ``f32_to_bf16`` -- so the Hopper row of the table is the same function as the Ampere row up
+  to the step; its family is FIRST's vocabulary with the steps on the Hopper pipeline.  Native peak: the H100 SXM5
+  dense BF16 rate (989.4 TFLOPS).
 * :data:`NVFP4_SM120` -- ``sm120.mma.m16n8k64.e2m1.nvf4`` (pinned: RTX 5090), model
-  :data:`verity.ml.circuits.silicon.models.BLACKWELL_SM120_NVF4` (``BlockScaledAlignAdd``: exact E2M1 x E2M1 group dots over four
-  groups of 16, one UE4M3 scale byte per 16-element block on A and on B, the five-way align-add anchored on the leading
-  participating group's scale exponent (27 fraction bits), the accumulator's 36-bit window, truncation toward zero,
-  every zero result +0).  Program ``GemmAccumulator<K>`` (:func:`verity_sp1.proofs.programs.gemm_accumulator_nvfp4`),
-  ``K`` a multiple of 64 (K = 1536 is 24 steps = 96 blocks): ``tc_dot64_0`` then chained ``tc_dot64`` in ascending
-  ``k``, the FP32 accumulator word public.  Domain: every E2M1 nibble, UE4M3 scale bytes with the padding bit clear
-  and not the NaN code ``0x7F``, finite FP32 accumulators at every step (D20: NaN / inf accumulators and sums leaving
-  binary32 are outside; an NVFP4 chain from ``c_0 = 0`` cannot leave binary32).  Consumer die: the evidence is
-  ``mma.sync kind::mxf4nvf4`` on the RTX 5090; B200 ``tcgen05.mma`` cannot be assumed.
+  :data:`verity.ml.circuits.silicon.models.BLACKWELL_SM120_NVF4` (``BlockScaledAlignAdd``: exact E2M1 x E2M1 group dots
+  over four groups of 16, one UE4M3 scale byte per 16-element block on A and on B, the five-way align-add anchored on
+  the leading participating group's scale exponent (27 fraction bits), the accumulator's 36-bit window, truncation
+  toward zero, every zero result +0).  Program ``GemmAccumulator<K>``, ``K`` a multiple of 64 (K = 1536 is 24 steps =
+  96 blocks): ``tc_dot64_0`` then chained ``tc_dot64`` in ascending ``k``, the FP32 accumulator word public.  Domain:
+  every E2M1 nibble, UE4M3 scale bytes with the padding bit clear and not the NaN code ``0x7F``, finite FP32
+  accumulators at every step (D20: NaN / inf accumulators and sums leaving binary32 are outside; an NVFP4 chain from
+  ``c_0 = 0`` cannot leave binary32).  Consumer die: the evidence is ``mma.sync kind::mxf4nvf4`` on the RTX 5090; B200
+  ``tcgen05.mma`` cannot be assumed.
 * Not covered by any draft: ``sm90.mma.m16n8k32.e4m3`` (the Hopper legacy path -- unprobed; whether it is Hopper's
   one group of 32 or Ada's two of 16 is the first thing a probe must settle), E5M2 (hypotheses only), and the MXFP4
   instruction ``sm120.mma.m16n8k64.e2m1.mxf4`` (pinned; the same adder with UE8M0 scales over blocks of 32, no target).
@@ -183,12 +165,11 @@ __all__ = [
     "Target",
 ]
 
-#: The tensor-core gate families' names and versions (the archived D-SP1's ``verity_sp1.proofs.families`` builds them).
-#: The ``veritor.*`` ids below are grandfathered and the prefix is FROZEN: each spelling is
-#: baked into a ``*_FAMILY_DIGEST`` pin, fixtures and recorded runs, so it stays; no new family is created under
-#: ``veritor.*`` — a new family takes a fresh id, and ``tests/test_targets_frozen_families.py`` fails on any other.
+#: The tensor-core gate families' names and versions.  Each ``veritor.*`` spelling is baked into a ``*_FAMILY_DIGEST``
+#: pin, fixtures and recorded runs, so it stays; a new family takes a fresh id outside ``veritor.*``
+#: (``verity/ml/circuits/tests/test_targets_frozen_families.py``).
 TC_AMPERE_BF16_NAME = "veritor.tc-ampere-bf16"
-#: ``veritor.tc-bf16.<pipeline>@1``: the same vocabulary on another BF16 pipeline.
+#: The family-name prefix of FIRST's vocabulary on another BF16 pipeline.
 TC_BF16_NAME_PREFIX = "veritor.tc-bf16."
 TC_BF16_VERSION = "1"
 #: The version whose ``f32_to_bf16`` canonicalises NaN to ``0x7FC0``.
@@ -198,23 +179,22 @@ TC_AMPERE_BF16_VERSION = "1"
 HAWKEYE_PIN = "verity/ml/circuits/silicon/hawkeye/PIN.json"
 DISCREPANCY_LOG = "verity/ml/circuits/silicon/discrepancy_log.json"
 
-#: The gate family every campaign obligation is lowered in.
+#: FIRST's gate family.
 FAMILY = f"{TC_AMPERE_BF16_NAME}@{TC_AMPERE_BF16_VERSION}"
 #: Its manifest digest (``GateSet.digest``); the guest refuses a statement whose family digest differs.
 FAMILY_DIGEST = "cfe960f86e786bbbea42af6dc382342ad26ff280590a071db743e21bda01d307"
-#: ``veritor.tensor-core.<pipeline>@2`` manifest digests of the FP8 draft families (``make_tensor_core_gate_set``).
+#: Manifest digests of the FP8 draft families.
 FP8_HOPPER_FAMILY = "veritor.tensor-core.hopper_e4m3_wgmma_k32@2"
 FP8_HOPPER_FAMILY_DIGEST = "6d90478ba12f63f1171355f343f65bce6665541f1f7d4cca711ed9ea2ae9f777"
 FP8_ADA_FAMILY = "veritor.tensor-core.ada_e4m3_m16n8k32@2"
 FP8_ADA_FAMILY_DIGEST = "2bcdad67108dd15195372308784247d6792a3335f1dc19345d91d8ad68a17d16"
-#: ``veritor.tc-bf16.hopper_bf16_m16n8k16@1`` (``make_tc_bf16_gate_set(HOPPER_BF16_M16N8K16)``): FIRST's vocabulary
-#: with the steps on the Hopper BF16 pipeline; the family of the Hopper BF16 draft target.
+#: FIRST's vocabulary with the steps on the Hopper BF16 pipeline: the family of the Hopper BF16 draft target.
 BF16_HOPPER_FAMILY = f"{TC_BF16_NAME_PREFIX}{HOPPER_BF16_M16N8K16.name}@{TC_BF16_VERSION}"
 BF16_HOPPER_FAMILY_DIGEST = "1dba640b0e83ba6dc0d8f692ac0089032cc98bfd39b1a210dbaf14b76a4d5a46"
 #: The NVFP4 draft family: ``tc_dot64`` / ``tc_dot64_0`` over one operand = 64 E2M1 codes + 4 UE4M3 scale bytes.
 NVFP4_FAMILY = "veritor.tensor-core.blackwell_sm120_nvf4_m16n8k64@2"
 NVFP4_FAMILY_DIGEST = "3a928dc85d5c6515b49cf53472844e34412708ebc9404efe086de253e7cbc271"
-#: ``veritor.tensor-core.blackwell_sm120_e4m3_m16n8k32@2``: the sm_120 FP8 draft family (``make_tensor_core_gate_set``).
+#: The sm_120 FP8 draft family.
 FP8_SM120_FAMILY = "veritor.tensor-core.blackwell_sm120_e4m3_m16n8k32@2"
 FP8_SM120_FAMILY_DIGEST = "1b1554efe28ae26cc1fd2177d4ab2f8aa8f0185afc31d43885e5caf23560a93c"
 
