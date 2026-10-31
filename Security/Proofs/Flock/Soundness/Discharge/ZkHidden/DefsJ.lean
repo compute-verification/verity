@@ -398,8 +398,9 @@ noncomputable def sitesShHJ : SitesH (planShHJ (Reg := Reg) dj y₀) (tabShHJ dj
   B S R u _ := HiddenExec.castM (congrArg TabSpec.S (tabOfShHJ_eq dj y₀ S R u)).symm
     (tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.twinB
   sat S R u _ := HiddenExec.twin_sat_cast (congrArg TabSpec.S (tabOfShHJ_eq dj y₀ S R u)).symm
-    ((tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.sat (tableShHJ_typed dj y₀ ht S _) (tableShHJ_parse dj y₀ ht hc S _)
-      (rowsFit_of_scopeH (zkTyped ht) hc hscope))
+    ((tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.sat (tableShHJ_typed dj y₀ ht S _) (tableShHJ_parse dj y₀ ht hc S _))
+  pin S R u _ := HiddenExec.pin_cast (congrArg TabSpec.S (tabOfShHJ_eq dj y₀ S R u)).symm
+    ((tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.pin (tableShHJ_typed dj y₀ ht S _) (tableShHJ_parse dj y₀ ht hc S _))
   acc S R u _ := recastAccH ((tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.acc
     (tableShHJ_typed dj y₀ ht S _) (tableShHJ_parse dj y₀ ht hc S _)
       (rowsFit_of_scopeH (zkTyped ht) hc hscope))
