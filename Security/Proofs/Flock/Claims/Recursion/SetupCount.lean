@@ -970,8 +970,8 @@ theorem qwordFinding_cost (c : Circuit) (pub : Public) (obj : Json) (program : B
   · omega
 
 set_option maxHeartbeats 4000000 in
-theorem linksCheck_cost (c : Circuit) (pop : Public) (program : ByteArray) :
-    countC.P (HmLinks.checkWith (Hashes.counted h) c pop program) 1 := by
+theorem linksCheck_cost (c : Circuit) (pop : Public) (readers : Option (Array Nat)) (program : ByteArray) :
+    countC.P (HmLinks.checkWith (Hashes.counted h) c pop readers program) 1 := by
   apply countC.mono
   · unfold HmLinks.checkWith
     repeat (first
@@ -1412,7 +1412,7 @@ theorem root_cost (dom : ByteArray) (leaves : Array ByteArray) :
     countC.P (FV3.rootWith (Hashes.counted h) dom leaves)
       ((nextPow2 leaves.size - leaves.size)
         + log2ceil (nextPow2 leaves.size) * (leaves.size + (nextPow2 leaves.size - leaves.size))) := by
-  unfold FV3.rootWith
+  unfold FV3.rootWith FV3.rootM
   dsimp only
   refine bindQ (mapM_array_cost _ (c := 1) fun _ => hash_cost h _ _) (mapM_array_ok _ _) (fun pads hp => ?_)
     (m := log2ceil (nextPow2 leaves.size) * (leaves.size + (nextPow2 leaves.size - leaves.size)) + 0) ?_
