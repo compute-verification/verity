@@ -815,20 +815,35 @@ LEAN_LOCK = "lean-audit.json"
 LEAN_SOURCES = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "lake-manifest.json")
 
 
-#: the analysis tree: a Lean change only here that touches no lock is proofs, which lands on its land verdict and is checked by
-#: the after-landing run, a failure reverting it; Lean anywhere else runs as code (Flock's verifier and the ZK
-#: server, the PoUS grader, the certifier program, the inference-only check, the remote audit's verifier) and keeps its Lean check first
+#: the analysis tree: a Lean change only here that touches no lock and no spec (`LEAN_SPEC`) is proofs, which lands on its land
+#: verdict and is checked by the after-landing run, a failure reverting it; Lean anywhere else runs as code (Flock's verifier and
+#: the ZK server, the PoUS grader, the certifier program, the inference-only check, the remote audit's verifier) and keeps its Lean
+#: check first
 LEAN_PROOFS_TREE = "Security/"
+#: the spec: the Lean the guarantees' statements read, `Security/`'s Definitions and Models libraries.  A change to it, like a
+#: lock's, waits for its Lean check whatever its PR's title says (`lean_spec`)
+LEAN_SPEC = ("Security/Definitions/", "Security/Definitions.lean", "Security/Models/", "Security/Models.lean")
+
+
+def _spec(files: Iterable[str]) -> bool:
+    return any(Path(f).name == LEAN_LOCK or f.endswith(LEAN_SOURCES) and f.startswith(LEAN_SPEC) for f in files)
+
+
+def lean_spec(repo: Path, commit: str, base: str | None = None) -> bool:
+    """Whether ``commit``'s own change (against its first parent, or ``base``) touches a lock or a Lean source of the spec
+    (`LEAN_SPEC`): a guarantee's statement, a definition it reads or its record, which never lands before its Lean check, so
+    the after-landing lean-audit (`--no-regenerate`) never meets a stale record."""
+    return _spec(changed(repo, base or f"{commit}^1", commit))
 
 
 def lean_change(repo: Path, commit: str, base: str | None = None) -> bool:
     """Whether ``commit``'s own change (against its first parent, or ``base``) waits for a Lean check before a review landing: it
-    touches a lock, so neither a guarantee's statement nor a definition it reads reaches `main` without its record (the
-    after-landing lean-audit, `--no-regenerate`, fails on a record difference), or a Lean source outside `LEAN_PROOFS_TREE` of a
-    Lake package that has a lock, Lean that runs as code.  A change to `Security/`'s Lean alone is proofs: it lands on its
-    verdict, and the after-landing lean-audit reverts it on a failure."""
+    touches a lock or the spec (`lean_spec`), so neither a guarantee's statement nor a definition it reads reaches `main`
+    without its record (the after-landing lean-audit, `--no-regenerate`, fails on a record difference), or a Lean source
+    outside `LEAN_PROOFS_TREE` of a Lake package that has a lock, Lean that runs as code.  A change to `Security/`'s other Lean
+    alone is proofs: it lands on its verdict, and the after-landing lean-audit reverts it on a failure."""
     files = changed(repo, base or f"{commit}^1", commit)
-    if any(Path(f).name == LEAN_LOCK for f in files):
+    if _spec(files):
         return True
     if not (lean := [f for f in files if f.endswith(LEAN_SOURCES) and not f.startswith(LEAN_PROOFS_TREE)]):
         return False
