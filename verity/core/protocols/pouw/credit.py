@@ -194,6 +194,7 @@ from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.circuit import live_reads as LR
 from verity.core.protocols.pouw.protocol import CALL_RANGE, tagged
 from verity.core.protocols.pouw.weights import CHUNK_ALIGN, CHUNK_MAX, chunks, leaf_words, weights_root
+from verity.core.protocols.profile import WINDOW_DELTA
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
@@ -246,7 +247,7 @@ MAX_K = 1 << 24
 #: slot tables' leaves), committed before any draw; a window's A slot M is `h1window.slot` of it
 ROWS_FIELD = "rows"
 #: the δ the period's ε is reported at
-DELTA = Fraction(1, 1 << 40)
+DELTA = WINDOW_DELTA
 #: the period-open's field holding the weights' root (`weights_root` of each K's registered ``b/<K>``, the gate's
 #: ``--model``), signed before any window's salt
 WEIGHTS_FIELD = "weights_root"
