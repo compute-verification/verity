@@ -152,10 +152,15 @@ honest commitment's messages, at priced W1 work at most its own plus `β` a bit 
 Rationale: what an outside machine computes for the node, the node can compute itself, the honest commitment's
 hashing included; a coin bit carries at most `n_max` MACs of the coins' work (every step carries the three coin
 lanes), each worth at most the call's honest W1 work a MAC (`betaLead`). The bits are the protocol's: the network
-certifier bounds a forward's (`SerialForwards`, `Pouw.Lead.Forward.Accepted`). `A` is fixed before the coins, so its
-root carries no coin bit: an outside machine that holds `A` can return its 512-bit root, and the twin then hashes
-`A`'s messages on the node at `3,449.05` registers a compression, more than `β · 512` once `rows · K` passes about
-210,000. On such a call the premise is false for a node that some outside machine holding `A` serves. -/
+certifier bounds a forward's (`SerialForwards`, `Pouw.Lead.Forward.Accepted`).
+
+Where it fails: `A` is fixed before the coins, so its root carries no coin bit, and an outside machine that holds `A`
+can return its 512-bit root. The twin then hashes `A`'s messages on the node, `rows · K / 128` compressions of
+`3,449.05` registers at `H32`'s floor of 32 W1 a register: at least `862.3 · rows · K` W1, more than the `β · 512` the
+root's bits allow once `rows · K` passes about 6,500 (`betaLead` is 10,880 to 11,030 at Llama-3.2-1B's shapes). Nor
+does the certifier count those bits: a forward opens at its first call's `A` root, and the outside machine can send
+every call's root before then, so `SerialForwards` doesn't bound them at any size. On such a call the premise is false
+for a node that some outside machine holding `A` serves. -/
 def OutsourceWithinEgressLead (pr : Prices100) (β : ℚ) (H : Hash.Msg → Hash.Digest) (C : Pouw.Lead.Commit L)
     (κ : Fin L.m → Fin L.S → Fin L.n → ℤ) (Real : Strategy L → Prop) : Prop :=
   ∀ σ, Real σ → ∃ σ', Real σ' ∧ σ'.pre = σ.pre ∧ σ'.aRoot = σ.aRoot ∧
@@ -201,7 +206,9 @@ forward's span and the bits its release carries.
 
 Rationale: `trusted-host`; the certifier is the auditor's hardware on the node's links, and counts what crosses them.
 The hold isn't built yet: a certifier that releases each frame at the window's rate as it is handed lets a frame
-inside a forward's span carry its bytes, far past a decode forward's bits, and the premise is false for it. -/
+inside a forward's span carry its bytes, far past a decode forward's bits, and the premise is false for it. Nor does a
+span reach back before its first call's `A` root: an outside machine that holds `A` can send each call's root before
+the forward opens, and the premise is false for those bits (`OutsourceWithinEgressLead`). -/
 def SerialForwards (F : Forward) : Prop :=
   (F.calls.map FwdCall.egress).sum ≤ F.count + F.release
 
