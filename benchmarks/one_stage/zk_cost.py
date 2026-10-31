@@ -13,7 +13,8 @@ sessions.
   Boolean circuit's cost doesn't depend on them). Its stage seconds exclude building the circuit, which a template pays
   once.
 * **Draws.** k in {1, 8, 64, c} (`--draws`), at most c, each by Lean `flock-verify draw --stratified k` over the statement's
-  program and partition, served from that file (`serve --zk --draw-file`). `--draws c` proves every unit: the cost of c
+  program and partition, on a development challenger's coins opened after the statement's partition digest and pin
+  (`a0.challenger_draw`), served from that file (`serve --zk --draw-file`). `--draws c` proves every unit: the cost of c
   sampled proof blocks in one statement.
 * **Sessions.** Per point and arm, `--cold` processes proving one session each (`--runs 1 --warm 0`: one touched
   statement's prover) and one proving `--warm` + `--runs` sessions (the in-process session cost). Arm `fw` is the
@@ -34,6 +35,7 @@ sessions.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import socket
@@ -51,7 +53,7 @@ sys.path.insert(0, str(HERE))
 import a0  # noqa: E402
 import a6  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
+from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P  # noqa: E402
 from verity.core.protocols.sampled_proofs.optimize import SHA512_ANDS  # noqa: E402
 
 #: ANDs of the pieces of a unit with its rows' openings (benchmarks/sampling_plan's inputs: its pins, hm96 PROTOCOL §5)
@@ -172,9 +174,11 @@ def stage(a) -> int:
                    "build_s": st["seconds"]["build"], "stage_s": st["seconds"]["stage"],
                    "stage_cpu_s": round(ru1.user + ru1.system - ru0.user - ru0.system, 2)}
             jsonl(out / "records" / "stage.jsonl", rec)
+            statement = hashlib.sha512(canonical_json({"partition": P.digest(part), "pin": st["pin"]})).hexdigest()
             for k in draws(c, a.draws):
-                p = a0.run([a.lean, "draw", "--program", str(sd / "program.json"), "--partition", str(sd / "partition.json"),
-                            "--stratified", str(k)], sd / f"draw-k{k}.log")
+                p = a0.challenger_draw(a.lean, ["--program", str(sd / "program.json"), "--partition", str(sd / "partition.json"),
+                                                "--stratified", str(k)], D.derive(program, query, D.parse_law(f"stratified:{k}")),
+                                       c, statement, sd / f"draw-k{k}.log")
                 line = next((x for x in p.stdout.splitlines() if x.startswith("DRAW ")), None)
                 if line is None:
                     raise SystemExit(f"Lean draw k={k} on k{K}-c{c}: no DRAW line (rc {p.returncode}): {p.stderr[-400:]}")
