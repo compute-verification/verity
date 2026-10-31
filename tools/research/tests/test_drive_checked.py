@@ -243,6 +243,7 @@ def test_a_sharded_run_that_passes_moves_main_and_the_verified_record_together_a
         f'[[job]]\nname = "{s}"\nowner = "ci"\ngroup = 1\n' + ('gate = false\n' if s in off else "") for s in AFTER_LANDING)})
     h = Review(world, monkeypatch, land_into="checked")
     h.d.after_landing_shards, h.d.after_landing_no_cache = 3, True
+    h.d.records_artifact = lambda rid: f"art:{'a' * 64}@{'b' * 64}" if rid == "r-post-0" else None
     before = h.postland()["verified"]
     state = h.q.load_state()
     state["drive"]["postland"]["red"] = {"step lean-suites": {"tip": before, "ids": ["r-old"], "first": "x", "culprit": None}}
@@ -251,17 +252,20 @@ def test_a_sharded_run_that_passes_moves_main_and_the_verified_record_together_a
     shards = (("lean-audit", "pytest"), ("lean-build", "lean-unit-cut", "lean-audit", "lean-suites"),
               ("flock-circuit-build", "circuit-check", "flock-rust-tests", "ratchet-gate"))
     assert {s for x in shards for s in x} == set(AFTER_LANDING) - set(AFTER_LANDING_OPTIONAL)
-    assert [kw["shard"] for _, _, kw in h.posted] == ["1/3", "2/3", "3/3"]
-    h.run_state.update({f"r-post-{k}": ("done", 0, None) for k in range(3)})
-    h.evidence = [_steps_run(world.tmp, f"r-post-{k}", {s: "passed" for s in x}) for k, x in enumerate(shards)]
+    assert [kw for _, _, kw in h.posted] == [{"cc_records": True}], "circuit-check's records step first"
+    h.run_state["r-post-0"] = ("done", 0, None)
+    h.tick()
+    assert [kw["shard"] for _, _, kw in h.posted[1:]] == ["1/3", "2/3", "3/3"]
+    h.run_state.update({f"r-post-{k + 1}": ("done", 0, None) for k in range(3)})
+    h.evidence = [_steps_run(world.tmp, f"r-post-{k + 1}", {s: "passed" for s in x}) for k, x in enumerate(shards)]
     h.tick()
     pl = h.postland()
     assert _main(world) == tip == pl["verified"] and pl["run"] is None and not pl["red"] and not pl["pending"], world.logs
-    assert "failed" not in pl and pl["verified_run"] == "r-post-0 r-post-1 r-post-2"
+    assert "failed" not in pl and pl["verified_run"] == "r-post-1 r-post-2 r-post-3"
     for _ in range(2):
         h.clock += BEHIND_S + BEHIND_EVERY_S
         h.tick()
-    assert len(h.posted) == 3 and not any("last verified commit" in p for p in h.posts), h.posts
+    assert len(h.posted) == 4 and not any("last verified commit" in p for p in h.posts), h.posts
     assert not any("passed without passing" in p for p in h.posts), h.posts
 
 
