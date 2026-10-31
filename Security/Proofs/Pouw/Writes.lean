@@ -4,10 +4,11 @@ import Proofs.Pouw.Lead.CoinBranch.PointwiseProofs
 import Proofs.Pouw.Lead.Tags.SsnProofs
 
 /-!
-# Proofs of what writing distinct words costs (draft semantics, pending review)
+# Proofs of what writing distinct words costs (draft semantics, pending review, except `DistinctWritesMH100Floor`)
 
-One theorem `Pouw.SecurityProofs.Writes.G : Pouw.Guarantees.Writes.G` per guarantee, each the theorem of
-`H100WProofs`, `SsnProofs` or `PointwiseProofs` that proves it under its own name.
+One theorem per guarantee, named as the guarantee (`Pouw.SecurityProofs.Writes.DistinctWritesMH100Floor :
+Pouw.Guarantees.Writes.DistinctWritesMH100Floor`, and so on), each the theorem of `H100WProofs`, `SsnProofs` or
+`PointwiseProofs` that proves it.
 -/
 
 namespace Pouw.SecurityProofs.Writes
