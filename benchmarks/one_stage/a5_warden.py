@@ -1,6 +1,6 @@
 """One-stage audit, run A5, on a transfer-gate stand-in: a window whose transfer-gate units open the warden's signed cells,
 audited by `a5.audit` as rank 0 of a one-rank step through its `service.Stream`, on a local challenger's coins
-(``--challenger local``) or the verifier's own (``--coins verifier``). No served window has transfer gates yet (the I/O
+(``--challenger local``). No served window has transfer gates yet (the I/O
 shell's ingress parse and egress render units have no Flock lowering, and no Commit was served behind the warden), so
 this window stands in for one, its cells a warden run's (`warden_serve.py rehearse`, ``--run``).
 
@@ -55,7 +55,7 @@ a5's records (``rank0/``, ``challenger/``, ``summary.json``); the warden's rows 
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm \\
       python benchmarks/one_stage/a5_warden.py --run WARDEN_RUN --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
-        --firewall flock-firewall (--challenger local --main FILE | --coins verifier) [--altered | --made-for KIND] --out DIR
+        --firewall flock-firewall --challenger local --main FILE [--altered | --made-for KIND] --out DIR
 """
 from __future__ import annotations
 
@@ -430,9 +430,8 @@ def main(argv=None) -> int:
     ap.add_argument("--bin", required=True)
     ap.add_argument("--lean", required=True)
     ap.add_argument("--firewall", required=True)
-    ap.add_argument("--challenger", choices=["local"], help="draw on a local challenger session's coins")
-    ap.add_argument("--coins", choices=["verifier"], help="draw on the verifier's own live coins")
-    ap.add_argument("--main", help="the verifier's own `git rev-list --first-parent origin/main` (--challenger)")
+    ap.add_argument("--challenger", choices=["local"], required=True, help="draw on a local challenger session's coins")
+    ap.add_argument("--main", required=True, help="the verifier's own `git rev-list --first-parent origin/main`")
     ap.add_argument("--altered", action="store_true", help="unit 0 of the ingress chunk reads its row one bit off, in its cell")
     ap.add_argument("--made-for", choices=sorted(MADE_FOR),
                     help="the egress chunk's statement made for another units' wiring than the Program's (made_for)")
@@ -441,10 +440,6 @@ def main(argv=None) -> int:
     ap.add_argument("--port", type=int, default=0, help="the sessions' first port (0: a free block)")
     ap.add_argument("--session-timeout", type=float, default=3600)
     a = ap.parse_args(argv)
-    if bool(a.challenger) == bool(a.coins):
-        ap.error("draw on a local challenger's coins (--challenger local --main FILE) or on the verifier's own (--coins verifier)")
-    if a.challenger and not a.main:
-        ap.error("--challenger local needs --main")
     if a.altered and a.made_for:
         ap.error("one refused statement a run: --altered or --made-for")
     import a5
@@ -461,24 +456,19 @@ def main(argv=None) -> int:
     tg, rid = mine.members[0].template, mine.members[-1].template
     sets = {t: (composer(d, bits), d) for t, d, bits in zip((tg, rid), templates(params), (8 * row, 16 * B))}
     a.rule, a.window_root, a.compose_cache, a.transfer_gate = RULE, ROOT, None, [tg]
-    a.verifier_coins = a.coins == "verifier"
     port = a.port or free_ports(a5.RANK_PORTS)
     summary0 = {"rank": 0, "standin": provenance(at), "altered": a.altered, "made_for": a.made_for}
-    if a.challenger:
-        manager, a.coins, finisher = AC.start("local", ROOT, [0], out / "challenger", a.main)
-    else:
-        a.coins = None
+    manager, a.coins, finisher = AC.start("local", ROOT, [0], out / "challenger", a.main)
     published: dict = {}
     try:
         s, ok = a5.audit(a, sets, out / "rank0", mine, out / "window", source, port, summary0,
                          more_negatives=negatives(at, source, rec), rank=0, registered=reads(mine, at))
     finally:
-        if a.coins is not None:
-            a.coins.skip(0)
-            finisher.join()
-            published = a.coins.evidence()
-            manager.shutdown()
-    summary = {"root": ROOT, "coins": "challenger" if a.challenger else "verifier", "altered": a.altered,
+        a.coins.skip(0)
+        finisher.join()
+        published = a.coins.evidence()
+        manager.shutdown()
+    summary = {"root": ROOT, "coins": "challenger", "altered": a.altered,
                "made_for": a.made_for, "session": (published.get("plan") or {}).get("session"),
                "window": {"population": mine.population, "transfer_gates": [tg], "work_table": mine.work_table,
                           "members": [{"key": m.key, "template": m.template, "n": m.n, "base": m.base} for m in mine.members]},
