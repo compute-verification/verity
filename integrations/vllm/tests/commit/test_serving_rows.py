@@ -1,6 +1,6 @@
-"""The opt-in serving rows (`ml.windows.rows`): C-Flock's circuit prover's serving row leaf vector byte for byte, core's frame-v3-sha512 / hm96-sha512
+"""The opt-in serving rows (`ml.windows.rows`): Flock's circuit prover's serving row leaf vector byte for byte, core's frame-v3-sha512 / hm96-sha512
 reference on the batch and parallel paths for a two-member population, ChaCha20 salts, core's served-domain rule, the registration
-(core's v1 record, accepted by `registration.check` against the verifier's own copies) and C-Flock's circuit prover's per-member file layout, every output
+(core's v1 record, accepted by `registration.check` against the verifier's own copies) and Flock's circuit prover's per-member file layout, every output
 a hidden row (no output word in a public body).  `serving_row_leaf_vector.json` is flock-netlist's vector (notes-asset
 flock-netlist/serving-row-leaf-vector.json, sha256 92aa7f77...)."""
 
@@ -121,7 +121,8 @@ def test_the_registration_is_cores_v1_record_over_served_domains(tmp_path):
     rec = json.loads((tmp_path / "registration.json").read_text())
     assert (rec["format"], rec["population"], rec["partition"], rec["window"]["kind"], rec["window"]["run"]) == (
         R.FORMAT, 13, w.partition_digest, "served", RUN)
-    assert rec["window"]["index"] == hashlib.sha512((tmp_path / "index.json").read_bytes()).hexdigest() == win["index_sha512"]
+    ib, salt = (tmp_path / "index.json").read_bytes(), (tmp_path / SR.INDEX_SALT).read_bytes()
+    assert rec["window"]["index_leaf"] == SR.index_leaf(ib, salt).hex() == win["index_leaf"] and "index" not in rec["window"]
     assert win["registration_digest"] == R.digest(rec) and rec["program"] == P.program_digest(w.program)
     leaves = {r["port"]: r["leaves"] for r in rec["roots"]}
     assert leaves == {f"{TEMPLATES[0]}/{p}": 9 for p in ("x", "cs", "out")} | {f"{TEMPLATES[1]}/{p}": 4 for p in ("in0", "in1", "out.0", "out.1")}
@@ -148,6 +149,35 @@ def test_the_registration_is_cores_v1_record_over_served_domains(tmp_path):
     assert (stand["window"]["kind"], stand["window"]["run"], stand["roots"]) == ("stand-in", RUN, rec["roots"])
     with pytest.raises(ValueError, match="window kind 'replayed'"):
         SR.registration(c, {}, kind="replayed", registrar=R)
+
+
+def test_the_index_is_the_provers_and_the_registration_binds_its_hiding_leaf(tmp_path):
+    """``index.json`` names what was served (a request, its engine step, its token row), so the registration binds its
+    salted leaf and never a digest of it: the leaf opens under ``index-salt.bin``, a given salt fixes it, a fresh one or
+    another index moves it, no public file holds the index's SHA-512, and the index and its salt are the owner's alone,
+    a rewrite over a world-readable index included."""
+    w = window(9, 4)
+    c = SR.commit(w, data(w), salt_key=bytes(32))
+    idx = IX.index_doc(w.members, [[[0, 9, "r0", 3, 0, "model.layers.0.self_attn.rotary_emb", "0", 0, 768]], []], RUN)
+    ib, salt = SR.index_bytes(idx), bytes(range(SR.SALT_BYTES))
+    (tmp_path / "d").mkdir()
+    (tmp_path / "d" / "index.json").write_text("{}")
+    (tmp_path / "d" / "index.json").chmod(0o644)
+    wins = {d: SR.write(c, tmp_path / d, {"row": 101}, idx, registrar=R, index_salt=salt if d < "c" else None) for d in "abcd"}
+    leaves = {d: win["index_leaf"] for d, win in wins.items()}
+    assert leaves["a"] == leaves["b"] == SR.index_leaf(ib, salt).hex() and len(set(leaves.values())) == 3
+    other = IX.index_doc(w.members, [[[0, 9, "r1", 3, 0, "model.layers.0.self_attn.rotary_emb", "0", 0, 768]], []], RUN)
+    assert SR.index_leaf(SR.index_bytes(other), salt) != SR.index_leaf(ib, salt)
+    for d, leaf in leaves.items():
+        out = tmp_path / d
+        assert (out / "index.json").read_bytes() == ib
+        assert SR.index_leaf(ib, (out / SR.INDEX_SALT).read_bytes()).hex() == leaf
+        assert json.loads((out / "registration.json").read_text())["window"]["index_leaf"] == leaf
+        assert {f: (out / f).stat().st_mode & 0o777 for f in ("index.json", SR.INDEX_SALT)} == {"index.json": 0o600, SR.INDEX_SALT: 0o600}
+        public = "".join((out / f).read_text() for f in ("registration.json", "window.json"))
+        assert hashlib.sha512(ib).hexdigest() not in public and hashlib.sha512(SR.INDEX_TAG + ib).hexdigest() not in public
+    with pytest.raises(ValueError, match="an index's salt is 192 bytes"):
+        SR.write(c, tmp_path / "e", {"row": 101}, idx, registrar=R, index_salt=salt[:-1])
 
 
 def test_flock_input_files_wrap_each_members_bodies(tmp_path):
@@ -186,7 +216,7 @@ def test_flock_input_files_wrap_each_members_bodies(tmp_path):
 
 
 def test_a_members_public_file_alone_then_its_provers_file_are_the_files_its_circuits_text_gives(tmp_path):
-    """The audit stages every member's public file before the draw and a drawn member's prover's file after it, from the
+    """The audit stages every member's public file before the sample and a drawn member's prover's file after it, from the
     circuit read and hashed once (`flock_circuit`) and the window's files read once: byte for byte what the circuit's text gives."""
     w = window(4, 3)
     c = SR.commit(w, data(w), salt_key=bytes(32))

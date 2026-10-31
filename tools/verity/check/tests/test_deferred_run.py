@@ -42,20 +42,73 @@ def test_a_deferred_run_runs_only_its_steps_and_what_they_need_inside_a_recorded
     assert doc["deferred"]["deferred"] == ["pytest", "flock-rust-tests"]
 
 
+def test_a_recorded_check_runs_every_job_on_the_gate_and_passes_without_circuit_check(monkeypatch, tmp_path):
+    """circuit-check and ratchet-gate are off the gate (ci.toml's `gate = false`): a recorded check (`--record`, the declared
+    command in a run) leaves them out, and its `check/v1` passes on the jobs on the gate alone."""
+    monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "cache" / "check"))
+    monkeypatch.setenv("VERITY_TEST_CACHE", str(tmp_path / "cache" / "tests"))
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    rc, only = _main(monkeypatch, run_dir, ["--keep-going"])
+    off = {"circuit-check", "ratchet-gate"}
+    assert rc == 0 and only == [p for p in CHECK.shard_parts() if p.partition(":")[0] not in off] == CHECK.gated_parts()
+    assert {p.partition(":")[0] for p in only} == {j.name for j in CHECK.JOBS} - off
+    doc = json.loads((run_dir / "result.json").read_text())
+    assert doc["kind"] == "check/v1" and doc["validation"]["status"] == "passed" and "shard" not in doc
+
+
+def test_circuit_check_runs_in_the_after_landing_run_and_the_nightly_cold_check(monkeypatch, tmp_path):
+    """Off the gate is not unrun: drive's after-landing run passes every job (`--deferred`, drive's `AFTER_LANDING`), and the
+    nightly `audit-main` (`--no-cache`) checks every part cold.  Outside a recorded run, `verity check` runs the whole check
+    (test_declaration's `test_check_of_parts_runs_only_their_jobs_and_lean_audit_on_every_package`)."""
+    every = ",".join(j.name for j in CHECK.JOBS)
+    rc, only = _main(monkeypatch, tmp_path, ["--deferred", every, "--keep-going", "--no-cache"])
+    assert rc == 0 and only == CHECK.shard_parts() and {"circuit-check", "ratchet-gate"} <= {p.partition(":")[0] for p in only}
+    assert json.loads((tmp_path / "result.json").read_text())["kind"] == CHECK.DEFERRED_KIND
+    assert _main(monkeypatch, tmp_path, ["--no-cache"]) == (0, None)
+
+
 def test_a_deferred_run_is_refused_with_a_part_or_a_step_ci_toml_doesnt_declare(monkeypatch, tmp_path, capsys):
     assert _main(monkeypatch, tmp_path, ["--deferred", "pytest", "tests"]) == (2, None)
-    assert _main(monkeypatch, tmp_path, ["--deferred", "pytest", "--shard", "1/3"]) == (2, None)
     assert _main(monkeypatch, tmp_path, ["--deferred", "pytest,nope"]) == (2, None)
     assert "no job nope" in capsys.readouterr().err
+    assert _main(monkeypatch, tmp_path, ["--deferred", "pytest", "--shard", "3/3"]) == (2, None)
+    assert "--shard 3/3: that shard holds none of those steps" in capsys.readouterr().err
+
+
+def test_a_sharded_deferred_run_runs_those_steps_parts_in_its_shard_alone(monkeypatch, tmp_path):
+    """Drive's after-landing run as N runs at once (`after_landing_shards`): shard K runs the deferred steps' parts that ci.toml's
+    plan with N shards puts in shard K, and is recorded as a deferred run naming its shard, so the N together cover each step."""
+    steps = "pytest,circuit-check,flock-rust-tests"
+    rc, only = _main(monkeypatch, tmp_path, ["--deferred", steps, "--shard", "3/3", "--keep-going"])
+    whole = CHECK.deferred_parts(steps)
+    assert rc == 0 and only == [p for p in CHECK.shard("3/3", gated=False)["parts"] if p in whole]
+    assert {p.partition(":")[0] for p in only} == {"circuit-check", "flock-rust-tests", "flock-circuit-build"}
+    doc = json.loads((tmp_path / "result.json").read_text())
+    assert doc["kind"] == CHECK.DEFERRED_KIND and (doc["deferred"]["k"], doc["deferred"]["n"]) == (3, 3)
+    assert doc["deferred"]["deferred"] == steps.split(",")
+    rc, only = _main(monkeypatch, tmp_path, ["--deferred", steps, "--shard", "1/3", "--keep-going"])
+    assert rc == 0 and {p.partition(":")[0] for p in only} == {"pytest"}
+
+
+def test_the_shards_of_a_deferred_run_together_run_every_part_ratchet_gate_in_the_last():
+    """ratchet-gate is in no shard of ci.toml's plans: drive's sharded after-landing run never ran it, so drive took each passing
+    run as one that passed without ratchet-gate, verified nothing and ended no red record, while `main` moved on its gate."""
+    for n in CHECK.DECLARATION.plans():
+        got = [CHECK.shard(f"{k}/{n}", gated=False)["parts"] for k in range(1, n + 1)]
+        assert sorted(p for s in got for p in s) == sorted(CHECK.shard_parts()), n
+        assert "ratchet-gate" in got[-1] and all("ratchet-gate" not in CHECK.shard(f"{k}/{n}")["parts"] for k in range(1, n + 1))
 
 
 def test_record_of_a_deferred_run_launches_it_without_the_check_tool_and_without_lean(monkeypatch):
-    """A post-landing run recorded as `--tool check` would be a check of `main`'s tip that `research merge` reads."""
-    real, launched = subprocess.run, []
+    """A post-landing run recorded as `--tool check` would be a check of `main`'s tip that `research merge` reads.  It carries
+    its base's commit, above which ratchet-gate judges every merge."""
+    real, launched, sent = subprocess.run, [], {}
 
     def run(cmd, *a, **k):
         if cmd[:4] == [sys.executable, "-m", "research", "run"]:
             launched.append(cmd)
+            sent.update({Path(cmd[i + 1]).name: Path(cmd[i + 1]).read_text() for i, x in enumerate(cmd) if x == "--send"})
             return subprocess.CompletedProcess(cmd, 0)
         return real(cmd, *a, **k)
 
@@ -69,6 +122,7 @@ def test_record_of_a_deferred_run_launches_it_without_the_check_tool_and_without
     head, tail = cmd[:cmd.index("--")], cmd[cmd.index("--") + 1:]
     assert "--tool" not in head and head[head.index("--send") + 1].endswith(CHECK.SHARD_PARTS)
     assert tail[:2] == ["slot", "--priority"] and tail[-3:] == ["--keep-going", "--deferred", "pytest,circuit-check"]
+    assert sent[CHECK.BASE_FILE] == f"{CHECK._rev('HEAD')}\n"
 
 
 def _pack(tmp_path: Path, monkeypatch) -> Path:
