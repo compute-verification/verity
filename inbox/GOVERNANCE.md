@@ -78,3 +78,18 @@ Daniel by 05:00Z Sun (10 PM PDT).
   decode, and a co-resident kernel can use it while every deadline holds. Always-on logging sidesteps this: undeclared
   work in idle cycles is in the transcript, so it must be explained. The GOV lanes should state that advantage over
   the lock and deadline designs, and its premise: every tensor issue is logged.
+- **GOV-HW** (note:compute-research/20261031T2151Z-report-governance-hw; SILICON's flow, netlists matched to their
+  references; art:bb827600…):
+  - **Always-on logging is buildable at under 1% of an H200-class die** (central 0.88%, range 0.39–2.06%), with no clock
+    cost.
+  - **It must hash every register-file write, not only the MMA words.** Counting the non-tensor pipes leaks 7.6–10.6%
+    of s8 tensor capacity on the H200 (3.1% beside saturated declared work) and 37–49% on sm_120. Counts suffice only
+    for add-only memory-side units and the copy engines.
+  - **The keyed absorb binding fix** measures 63,047 GE, 7.53% of an s8 MAC (FT is 2.71%). It fits one clock and adds
+    about 9% MAC toggle energy.
+  - **Power:** at most about 56 W (tensor tap) and 60 W (vector tap) on the H200, as upper bounds.
+  - **Placement:** in-line on each tensor core's write-back, and beside each sub-partition's register file with paired
+    counters. There's no enable or mode bit, the coin register is write-only, and it's eight blocks an SM.
+  - **Binding without keys:** a hidden live coin, the keyed absorb, and dedicated pins on a sealed link, with seals
+    covering both directions. Swapping in another chip's transcript reduces to inventory.
+  - **Decision for Daniel:** the keyed-Keccak premise.
