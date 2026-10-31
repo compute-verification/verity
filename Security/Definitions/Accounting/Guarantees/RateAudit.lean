@@ -167,7 +167,7 @@ def RateOfAudit : Prop :=
           (((d.rate .oracle * (r.win .bandwidth).len).choose k : ℕ) : ℝ≥0∞) / 2 ^ lam
 
 /-- **The rate audit with interactive side sources that ignore the oracle.** `RateAudit`'s bound, at its floor and its
-error, for an `InteractiveDevice` (`Security/Definitions/Accounting/RateAuditInteractive.lean`): its chip may send any
+error, for an `InteractiveProver` (`Security/Definitions/Accounting/RateAuditInteractive.lean`): its chip may send any
 number of bits, however they depend on the seed, to side sources that answer each read as any function of the store,
 the certified stream and every bit sent so far, but not of the oracle. `L` bounds what came in over the side link (side
 bits and stream bits together); sends are free. The rebuild charge `(F − k·c_tag)·b` and the stream's `ρ` are
@@ -188,14 +188,14 @@ a device.
 
 Frozen (no-function, hash): as `RateAudit`, a bound in the random-oracle model over an abstract chip program. -/
 def RateAuditInteractiveRO : Prop :=
-  ∀ (N b h ρ S L q s k F cTag cEnc lam : ℕ) (A : Rate.InteractiveDevice N b h ρ S L q),
+  ∀ (N b h ρ S L q s k F cTag cEnc lam : ℕ) (A : Rate.InteractiveProver N b h ρ S L q),
     (∀ E R O O', A.side E R O = A.side E R O') →
     pr (fun x : Store N b × Coins N b h ρ s =>
         A.Accepts x.1 x.2.1.1 x.2.1.2 x.2.2 ∧ A.compute cTag cEnc x.1 x.2.1.1 x.2.1.2 ≤ F ∧
           A.footprint x.1 x.2.1.1 x.2.1.2 * cEnc < floor b ρ S L F cTag cEnc k lam)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam
 
-/-- **The rate audit with interactive side sources, in the random-oracle model.** For every `InteractiveDevice` of
+/-- **The rate audit with interactive side sources, in the random-oracle model.** For every `InteractiveProver` of
 `RateAudit`'s class, whose side sources may answer as any function of the store, the certified stream, the oracle and
 every bit sent so far, and for every `m`: the probability that the verifier accepts, the run's compute is within `F`,
 and its footprint falls short of the floor at `k − m` words,
@@ -221,7 +221,7 @@ oracle from at most `L` bits read.
 
 Frozen (no-function, hash): as `RateAudit`, a bound in the random-oracle model over an abstract chip program. -/
 def RateAuditInteractive : Prop :=
-  ∀ (N b h ρ S L q s k m F cTag cEnc lam : ℕ) (A : Rate.InteractiveDevice N b h ρ S L q),
+  ∀ (N b h ρ S L q s k m F cTag cEnc lam : ℕ) (A : Rate.InteractiveProver N b h ρ S L q),
     pr (fun x : Store N b × Coins N b h ρ s =>
         A.Accepts x.1 x.2.1.1 x.2.1.2 x.2.2 ∧ A.compute cTag cEnc x.1 x.2.1.1 x.2.1.2 ≤ F ∧
           A.footprint x.1 x.2.1.1 x.2.1.2 * cEnc < floor b ρ S L F cTag cEnc (k - m) lam)
