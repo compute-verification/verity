@@ -124,8 +124,8 @@ every failure counts. `--known-red REV` prints the list.
 still running then has its process group killed and fails as timed out (`timed_out` in --json), so a hung test costs the check
 an hour, not its slot until the run's own timeout.
 
-`--mem-gb GB` (`check` passes its slot's share) is the whole run's: the one-process suites hold `TEST_PROCESS_GB` each, and the
-parallel suites share the rest, each with as many xdist workers as it holds at its `[tool.verity.tests] worker_gb`, what one of
+`--mem-gb GB` (`check` passes its slot's share) is the whole run's: the one-process suites hold `TEST_PROCESS_GB` each, at most
+half of it beside parallel suites (`serial_slots`), and the parallel suites share the rest, each with as many xdist workers as it holds at its `[tool.verity.tests] worker_gb`, what one of
 them may reach, else at `TEST_PROCESS_GB`; one that overlaps another waits for its workers' GB (`wide_gb`).
 """
 from __future__ import annotations
@@ -1865,7 +1865,9 @@ def serial_slots(seconds: list[float | None], parallel: int, jobs: int, mem_gb: 
     the one-process suites, longest first, finish about when their longest does, plus a slot for each with no recorded duration
     up to a quarter of the jobs (a fresh test cache, as the lander's `--fresh` runs have, times none): the parallel suites keep
     every slot the others couldn't use.  With ``mem_gb``, no more than it holds at `TEST_PROCESS_GB` each (18 Oct: a 16 GiB
-    agent-test job on 48 CPUs ran 44 test processes and the OOM killer took the whole scope)."""
+    agent-test job on 48 CPUs ran 44 test processes and the OOM killer took the whole scope), and beside parallel suites no more
+    than half of it holds: their reservation lasts the whole run while a parallel suite's workers are fixed when it starts, so
+    taking all of it left flock one 16 GB worker on a 150 GB check, long after the one-process suites had finished."""
     if not parallel:
         r = jobs
     elif not seconds:
@@ -1874,7 +1876,7 @@ def serial_slots(seconds: list[float | None], parallel: int, jobs: int, mem_gb: 
         timed = [s for s in seconds if s is not None]
         need = (-(-sum(timed) // max(timed)) if timed and max(timed) > 0 else len(timed)) + min(len(seconds) - len(timed), jobs // 4)
         r = max(1, min(int(need), jobs - 1))
-    return r if mem_gb is None else max(1, min(r, int(mem_gb // TEST_PROCESS_GB)))
+    return r if mem_gb is None else max(1, min(r, int((mem_gb / 2 if parallel else mem_gb) // TEST_PROCESS_GB)))
 
 
 def select(suites: list[Suite], names: list[str]) -> list[Suite]:
