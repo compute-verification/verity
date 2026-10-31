@@ -832,51 +832,51 @@
   },
   "Claims.ZKMal.RefSession.Causal": {
    "owner": "@proofs",
-   "digest": "4d5b00bbc362a59f78d73b1d70c6e68345624a9433c2638b715731fe599948d2"
+   "digest": "bebce958da4bb1d7fbd47079f1b6f1c377a05730456fea42aa636c31afe4d83d"
   },
   "Claims.ZKMal.RefSession.Complete": {
    "owner": "@proofs",
-   "digest": "05220813827c770170fe8bee966d825be6b3870858ceda2310be66ef530db406"
+   "digest": "c01e7ba4677e3d8e40cae7ae9f730aac01c3350f63f3212c11c7714f21c778b3"
   },
   "Claims.ZKMal.RefSession.DummyReg": {
    "owner": "@proofs",
-   "digest": "c4ad63fbbcb5e8dbcf3cd604bfe822bb778b79f71f1cc54b39ce58f3918899a9"
+   "digest": "94d3b09b12b0e4bab8aa812c05b2c8f542b3b9195cc0632f4fce16a3e9de63f8"
   },
   "Claims.ZKMal.RefSession.SwCausal": {
    "owner": "@proofs",
-   "digest": "854b1c34c192f92cf825e18fc83860967b9d812e8b9b33991f8b4ce33055523c"
+   "digest": "b5b9145f9ce834b99e39f026566d7f599252acaacfeb89050f9cb838bd17a67d"
   },
   "Claims.ZKMal.RefSession.Tables": {
    "owner": "@proofs",
-   "digest": "70e7738fcaeeb148bbd7d290f36a2d3e81b45bcd3c0d12e5f6527107c41ccfd4"
+   "digest": "0f4944feafd3949fe963944097474412c90d2150e0d41787061354554e1f8ecb"
   },
   "Claims.ZKMal.RefSession.TapeOK": {
    "owner": "@proofs",
-   "digest": "653d795d52fc65a6ef6614e4ebbc15140d2a7231f6d9b11a0fec37dacb330299"
+   "digest": "2774eae1e010c30509d3b8796757a4e7a98b8ee5e35e057e60c41f8c58f6bf75"
   },
   "Claims.ZKServer.LeanRelease.FillRoundEq": {
    "owner": "@proofs",
-   "digest": "29f998ddc64b8213eb3e6d7176e0fba1cffe2b6e7aa2ce5019b3c30bd1fafeda"
+   "digest": "2915bc298d93eefb226c9683d7120be144ec028fc6d3ca65d17e712d4593c477"
   },
   "Claims.ZKServer.LeanRelease.FinishIs": {
    "owner": "@proofs",
-   "digest": "0f2f528480c2ed1a60fbd6f52b44a7b12c9b29578749055d2a5b636d38c8010b"
+   "digest": "528d1e2aace7bd792446fb7ac93683d22a06c46102057e563ced7971ecafb0ec"
   },
   "Claims.ZKServer.LeanRelease.LinkRoundEq": {
    "owner": "@proofs",
-   "digest": "dbaa67b052d69537b7679c0c8fe387954558349a2d4e3badc3387e593c0b3588"
+   "digest": "d7f3e3852442ad16090acf7950f3f070fcc95c4019dd0db17d4026e55bd896c0"
   },
   "Claims.ZKServer.LeanRelease.LiveRoundEq": {
    "owner": "@proofs",
-   "digest": "fe3016b61b7a8a62574a6f31c21cdf6f3558e24057b88fdd9a5d0e4c1d6f4567"
+   "digest": "760544ca3c984adc642361b6399324e22c95c39ea75c1f7c433512d17c2e0e3d"
   },
   "Claims.ZKServer.Loop.Serves": {
    "owner": "@proofs",
-   "digest": "86b16368f469555c0fdaea40b3afdc706b3558d6c1be1e887da1809ab7027f41"
+   "digest": "7287985c5e4fdcf6cc42ec8c5d702dd177be3fd2c67816204da2d07e43b08d58"
   },
   "Claims.ZKServer.Loop.Src": {
    "owner": "@proofs",
-   "digest": "6ebc8d6b1fa052c60ce9f09b8d1a1701922844c9ebae9c4f178d46747384f96c"
+   "digest": "1d5de816dc18b18bfb4e6a59aefc3df5f00810a3973c01892cfbfdd6f1194880"
   },
   "Flock.Assumptions.RegistrantCovers": {
    "owner": "@proofs",
@@ -908,7 +908,7 @@
   },
   "Flock.Guarantees.LoopInnerRound0": {
    "owner": "@proofs",
-   "digest": "7fee93cc478bdd912780c6422dddf8911dbfaaa29e75a99f74d9ccf82b8b211d"
+   "digest": "38edd3df3517db891b2b825689d09f75b822b9252fd9e8a2128492688928157e"
   },
   "Flock.Guarantees.OuterSessionsZK": {
    "owner": "@proofs",
@@ -932,7 +932,7 @@
   },
   "Flock.Guarantees.TablesAdmitUnrefused": {
    "owner": "@proofs",
-   "digest": "c131d362c0dd2a4de6b11d382896bc7d411b5b9978f3bbedf61e0278e4ed4be2"
+   "digest": "0d9406a9a0aba68245ee377cd229095792471fb17569adc2b6482200872d1d1f"
   },
   "Flock.SoundAtBridge.AcceptedLive": {
    "owner": "@proofs",
@@ -2502,28 +2502,6 @@
    "Claims.Recursion.accAtI": "`F0I`'s loop condition (does a draw's opened inner view accept), a finder's internal test that `KSLin2` and `BitsLin2` read through `F0I`, no claim",
    "Claims.Recursion.opensAtI": "`FCI`'s loop condition (does a draw's opened inner view accept and open an inner cap position), a finder's internal test that `KSLin2` and `BitsLin2` read through `FCI`, no claim",
    "Claims.Sampling.PrivateCircuit.Fits": "a helper the claims read: a private circuit of a size class"
-  }
- },
- "witnesses": {
-  "Flock.SecurityProofs.RecursiveKS": {
-   "honest": ["RecDeploy.HonestHalfFixture.honest_half_fixture"],
-   "nontrivial": "Flock.Guarantees.recursiveKS_nontrivial"
-  },
-  "Pouw.SecurityProofs.Dither.FleetSound": {
-   "honest": ["Pouw.SecurityProofs.Dither.FleetSound_honest"],
-   "nontrivial": "Pouw.SecurityProofs.Dither.FleetSound_nontrivial"
-  },
-  "Pouw.SecurityProofs.Dither.WorkMoment": {
-   "honest": ["Pouw.SecurityProofs.Dither.WorkMoment_honest"],
-   "nontrivial": "Pouw.SecurityProofs.Dither.WorkMoment_nontrivial"
-  },
-  "Pouw.SecurityProofs.Dither.WorkSound": {
-   "honest": ["Pouw.SecurityProofs.Dither.WorkSound_honest"],
-   "nontrivial": "Pouw.SecurityProofs.Dither.WorkSound_nontrivial"
-  },
-  "Pouw.SecurityProofs.OnsiteFreed": {
-   "honest": ["Pouw.SecurityProofs.OnsiteFreed_honest"],
-   "nontrivial": "Pouw.SecurityProofs.OnsiteFreed_nontrivial"
   }
  },
  "layers": {
@@ -61187,5 +61165,27 @@
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
   "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
+ },
+ "witnesses": {
+  "Flock.SecurityProofs.RecursiveKS": {
+   "honest": ["RecDeploy.HonestHalfFixture.honest_half_fixture"],
+   "nontrivial": "Flock.Guarantees.recursiveKS_nontrivial"
+  },
+  "Pouw.SecurityProofs.Dither.FleetSound": {
+   "honest": ["Pouw.SecurityProofs.Dither.FleetSound_honest"],
+   "nontrivial": "Pouw.SecurityProofs.Dither.FleetSound_nontrivial"
+  },
+  "Pouw.SecurityProofs.Dither.WorkMoment": {
+   "honest": ["Pouw.SecurityProofs.Dither.WorkMoment_honest"],
+   "nontrivial": "Pouw.SecurityProofs.Dither.WorkMoment_nontrivial"
+  },
+  "Pouw.SecurityProofs.Dither.WorkSound": {
+   "honest": ["Pouw.SecurityProofs.Dither.WorkSound_honest"],
+   "nontrivial": "Pouw.SecurityProofs.Dither.WorkSound_nontrivial"
+  },
+  "Pouw.SecurityProofs.OnsiteFreed": {
+   "honest": ["Pouw.SecurityProofs.OnsiteFreed_honest"],
+   "nontrivial": "Pouw.SecurityProofs.OnsiteFreed_nontrivial"
+  }
  }
 }
