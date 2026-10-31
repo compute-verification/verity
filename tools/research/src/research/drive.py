@@ -30,6 +30,9 @@ syncs `next` (`Queue.sync`: admit and drop PRs, rebuild on a moved `checked`), t
 (`research queue review N --land|--hold`, a `reviewed` label on `pr:N@HEAD`; one by its owner, the owner's handle or its ready
 mark's author doesn't count: `queue.unreviewed`), a fast-forward of `checked` (`_land`); once `main` reaches it, `merge.caught_up`
 (the spec DM, node 1's mirror, the post-train regression, the Lean cache publish, the landing post) and the sweep (`_on_main`).
+While `next`'s lowest member waits at its head for a land verdict, unheld, holding every landing above it, `BOTTOM_WAIT_S`
+since it became the lowest or since its ready mark, whichever is later, @ci (who staffs the reviewers) and @top are rung,
+and again every `BOTTOM_WAIT_S` while it waits (`_bottom`).
 A `main` pushed outside drive (a pure move, on its own check) is merged into `checked` (`_absorb`).  Two gates cut the prefix
 first.  A Lean change (a member whose own change touches a lock, `lean-audit.json`, or a Lean source outside `Security/`
 of a package that has one, Lean that runs as code: `queue.lean_change`; Lean proofs alone land on the verdict, checked by the
@@ -130,6 +133,7 @@ from typing import Callable, Iterable
 
 from .queue import (IDENTITY, PR, Entry, Member, Queue, QueueError, StoreLabels,
                     _git, _out, built_on, changed, forces_cold, hold, lean_change, lean_hold, unreviewed)
+from .queue_stats import ts
 
 #: who hears what drive can't settle
 CI = "@ci"
@@ -193,6 +197,9 @@ AFTER_LANDING_OPTIONAL = ("lean-agreement", "lean-changed")
 #: ticks a member must keep its head on `next` before the review landing's Lean check reaches it (`Driver._lean_check`): one
 #: of a prefix capped below recent churn isn't taken off `next` by the next re-mark
 LEAN_SETTLE_TICKS = 1
+#: how long `next`'s lowest member may wait at its head with no land verdict and no hold, holding every landing above it,
+#: before drive rings the reviewers (`CI`, who staffs them) and `TOP`, and how often again while it waits (`Driver._bottom`)
+BOTTOM_WAIT_S = 1800
 #: how long a run may show no readable state (`unknown`) before drive takes it as lost (`Driver._lost`)
 LOST_AFTER_S = 3 * 3600
 #: how long the owners rung for a red suite or step have to mark a fix before drive reverts its culprit (`Driver._red_clock`;
@@ -2463,6 +2470,7 @@ class Driver:
         self._note_marks(drive, chain)
         k, why = self._reviewed(chain)
         stop = f"#{chain[k].pr} at {chain[k].head[:8]}: {why}" if k < len(chain) else ""
+        self._bottom(drive, chain[0], None if k else why)
         if not k:
             return None, f"nothing reviewed lands: {stop}"
         g, ok = k, -1
@@ -2704,6 +2712,33 @@ class Driver:
             if why := self._circuit_held(m):
                 return k, why
         return len(chain), None
+
+    def _bottom(self, drive: dict, m: Member, why: str | None) -> None:
+        """Ring `CI`, who staffs the reviewers, and `TOP` while ``m``, `next`'s lowest member, has waited at its head with no land
+        verdict and no hold (``why``, `_reviewed`'s, says no land verdict) `BOTTOM_WAIT_S` since it became the lowest
+        (`drive["bottom"]`: {"pr", "head", "since", "rang"}, restarted by a new member or head) or since its ready mark
+        (`Queue.marked_at`), whichever is later, and again every `BOTTOM_WAIT_S` while it waits: it holds every landing above it."""
+        rec = drive.get("bottom") or {}
+        if (rec.get("pr"), rec.get("head")) != (m.pr, m.head):
+            rec = drive["bottom"] = {"pr": m.pr, "head": m.head, "since": self.now()}
+        if not (why or "").startswith("no land verdict"):
+            return
+        start, now = rec["since"], self.now()
+        if self.q.marked_at is not None and (at := self.q.marked_at(m.pr, m.head)):
+            with contextlib.suppress(ValueError):
+                start = max(start, ts(at).timestamp())
+        if now - start < BOTTOM_WAIT_S or now - rec.get("rang", 0) < BOTTOM_WAIT_S:
+            return
+        text = (f"#{m.pr} (owner {m.owner}) at {m.head[:8]}, `{self.q.branch}`'s lowest member above `{self.q.into}`, has waited "
+                f"{(now - start) / 60:.0f} min with no land verdict, and nothing above it lands until it has one: review it "
+                f"(`research queue review {m.pr} --land|--hold REASON --by LANE`)")
+        if self.q.shadow or self.dry_run:
+            self.q.log(f"research queue drive: would ring {CI} {TOP}: {text} [{'shadow' if self.q.shadow else 'dry run'}]")
+        elif self.post(f"{CI} {TOP} queue: {text}", (CI, TOP)):
+            rec["rang"] = now
+            self.q.log(f"research queue drive: rang {CI} {TOP}: {text}")
+        else:
+            self.q.log(f"research queue drive: could not post to the merge thread (the next tick retries): {CI} {TOP}: {text}")
 
     def _circuit_held(self, m: Member) -> str | None:
         """Why ``m`` waits while circuit-check is red on `checked` (`CIRCUIT_RED`): its own change touches circuit-check's inputs
