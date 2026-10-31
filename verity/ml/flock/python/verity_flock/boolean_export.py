@@ -237,9 +237,9 @@ class CircuitTypeTable:
         #: per root: the flat circuit's ANDs and its types' (their difference: the sharing a type boundary stops)
         self.shared: list[tuple[str, int, int]] = []
 
-    def type_of(self, build, name: str, kind: str, label: str | None = None) -> str:
+    def type_of(self, build, name: str, kind: str, label: str | None = None, circuit: Circuit | None = None) -> str:
         """The type of the circuit ``build()`` makes, and every type below it: validated, the root evaluated against the flat
-        circuit. Returns the root's digest."""
+        circuit (``circuit``, one ``build()`` made already, else built here). Returns the root's digest."""
         from verity.ml.circuits import library
 
         _patch()
@@ -247,7 +247,7 @@ class CircuitTypeTable:
         for d, t in types.items():
             if d not in self.types:
                 CT.validate(t, lambda x: types.get(x) or self.types[x])
-        C = build()
+        C = build() if circuit is None else circuit
         if not _evaluate_type(types, root, C):
             raise AssertionError(f"the types of {name} disagree with its circuit")
         self.evaluated += 1

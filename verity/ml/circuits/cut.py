@@ -61,8 +61,9 @@ specified in `verity/ml/circuits/PROTOCOL.md` (pinned by `verity/ml/circuits/tes
 gate, certified by one unit from that unit's gates and committed values, so v2's proof blocks may compute a common value: a count of
 them bounds the incorrect ones' size but counts a shared value more than once.  `check_cut`'s default, and so `validate_unit_cut`'s, stays v1's refusal.
 
-**Cost.**  `owners` runs one backward pass per round of promotions, so O(n · (n + E)) for n computing gates and E edges in the worst
-case.  `evaluate` shortcuts separable bodies, but `verify` builds the flat `CallGraph` of every distinct Definition, separable ones
+**Cost.**  `owners` runs one backward pass, then per round of promotions only the gates upstream of the promoted ones whose unit
+changes (`_repass`), and the dead-unit pass in a round that promotes nothing: O(n · (n + E)) for n computing gates and E edges in
+the worst case, but a round costs what it changes.  `evaluate` shortcuts separable bodies, but `verify` builds the flat `CallGraph` of every distinct Definition, separable ones
 included, to check the cut on it.
 
 **Q_call v1** (`evaluate_call`, `PROTOCOL.md` §11), a query of its own, with one parameter X (bits; 32 is the agreed value):
@@ -105,6 +106,8 @@ given set of returns read resolved once, its pieces' w_out from the description,
 """
 from __future__ import annotations
 
+import heapq
+import operator
 from array import array
 from collections import Counter
 from typing import Any, Iterable, Iterator, Sequence
@@ -217,8 +220,7 @@ class CallGraph:
         ops: list[list[int]] = []
         inputs: dict[int, int] = {}                                  # the Call's parameter gates it reads (root id -> index)
         wide: set[int] = set()
-        for j in range(n):
-            g = c.gate(lo + j)
+        for j, g in enumerate(c.gates(lo, lo + n)):
             width[j] = g.prim.ret.w
             prim[j] = self.prims.setdefault(g.prim.id, len(self.prims))
             scope[j] = self.scopes.setdefault(g.scope.spec.id, len(self.scopes))
@@ -422,51 +424,113 @@ def targets(graph: CallGraph, X: int) -> list[list[int]]:
     return out
 
 
+def _agreed(own: list[int], consumers: list[int]) -> int:
+    """A headless gate's unit in the backward pass (step 4 (ii)): its consumers' one unit, -1 when none has one, -2 when two
+    differ."""
+    o = -1
+    for c in consumers:
+        oc = own[c]
+        if oc == -1 or oc == o:
+            continue
+        if o == -1 and oc >= 0:
+            o = oc
+        else:
+            return -2
+    return o
+
+
+def _repass(own: list[int], head: list[int], consumers: list[list[int]], producers: list[list[int]],
+            moved: list[int]) -> list[int]:
+    """The backward pass after the gates ``moved`` became heads, from ``own``, the pass before they did, in place: only what
+    lies upstream of them, highest gate first, and only while a gate's unit changes; the gates whose unit changed.  The pass's
+    own answer when every edge reads an earlier gate: each gate is recomputed after every consumer that changed."""
+    heap: list[int] = []
+    queued: set[int] = set()
+    changed = []
+    for g in moved:
+        own[g] = head[g]
+        changed.append(g)
+        for p in producers[g]:
+            if head[p] < 0 and p not in queued:
+                queued.add(p)
+                heapq.heappush(heap, -p)
+    while heap:
+        g = -heapq.heappop(heap)
+        o = _agreed(own, consumers[g])
+        if o == own[g]:
+            continue
+        own[g] = o
+        changed.append(g)
+        for p in producers[g]:
+            if head[p] < 0 and p not in queued:
+                queued.add(p)
+                heapq.heappush(heap, -p)
+    return changed
+
+
 def owners(graph: CallGraph, head: list[int], kinds: list[str]) -> tuple[list[int], list[int]]:
-    """Steps 2-3 (see the module docstring): owner per computing gate, and the heads, extended by the committed values."""
+    """Steps 2-3 (see the module docstring): owner per computing gate, and the heads, extended by the committed values.  Each
+    round's backward pass is the last round's redone upstream of the gates it promoted (`_repass`), and its promotions those of
+    the gates whose unit or whose consumers' changed: the whole pass's answers, since a Call's every edge reads an earlier gate
+    (`CallGraph`; a graph with one that doesn't is passed whole each round)."""
     n = graph.n
     consumers: list[list[int]] = [[] for _ in range(n)]
     producers: list[list[int]] = [[] for _ in range(n)]
-    edges = list(zip(graph.src.tolist(), graph.dst.tolist()))
+    src, dst = graph.src.tolist(), graph.dst.tolist()
+    edges = list(zip(src, dst))
     for p, q in edges:
         consumers[p].append(q)
         producers[q].append(p)
+    forward = all(map(operator.lt, src, dst))
+    own: list[int] = []
+    moved: list[int] = []
     while True:
-        own = list(head)
-        for g in range(n - 1, -1, -1):
-            if own[g] >= 0:
-                continue
-            o = -1
-            for c in consumers[g]:
-                oc = own[c]
-                if oc == -1 or oc == o:
+        if not own or not forward:
+            own = list(head)
+            for g in range(n - 1, -1, -1):                        # `_agreed` inlined: a call per gate costs a tenth of the pass
+                if own[g] >= 0:
                     continue
-                if o == -1 and oc >= 0:
-                    o = oc
-                else:
-                    o = -2
-                    break
-            own[g] = o
-        promote = sorted({p for p, q in edges if own[p] == -2 and own[q] >= 0})
+                o = -1
+                for c in consumers[g]:
+                    oc = own[c]
+                    if oc == -1 or oc == o:
+                        continue
+                    if o == -1 and oc >= 0:
+                        o = oc
+                    else:
+                        o = -2
+                        break
+                own[g] = o
+            ready = {p for p, q in edges if own[p] == -2 and own[q] >= 0}
+        else:
+            for g in _repass(own, head, consumers, producers, moved):
+                for p in (g, *producers[g]):
+                    if own[p] == -2 and any(own[q] >= 0 for q in consumers[p]):
+                        ready.add(p)
+                    else:
+                        ready.discard(p)
+        promote = sorted(ready)
         if not promote:
             live = len(kinds)
+            final = list(own)
             for g in range(n):
-                if own[g] != -1:
+                if final[g] != -1:
                     continue
-                us = {own[p] for p in producers[g] if head[p] < 0}
+                us = {final[p] for p in producers[g] if head[p] < 0}
                 alive = {u for u in us if 0 <= u < live}
-                own[g] = alive.pop() if len(alive) == 1 and len(us) == 1 else -1
+                final[g] = alive.pop() if len(alive) == 1 and len(us) == 1 else -1
             for g in range(n):
-                if own[g] == -1:
-                    own[g] = len(kinds)
+                if final[g] == -1:
+                    final[g] = len(kinds)
                     kinds.append("dead")
-            promote = sorted({p for p, q in edges if own[p] != own[q] and head[p] < 0})
+            promote = sorted({p for p, q in edges if final[p] != final[q] and head[p] < 0})
             if not promote:
-                return own, head
+                return final, head
             del kinds[live:]
         for i, g in enumerate(promote):
             head[g] = len(kinds) + i
         kinds += ["committed"] * len(promote)
+        moved = promote
 
 
 def cut_word(graph: CallGraph, X: int) -> tuple[list[int], list[str], list[int]]:
@@ -572,8 +636,7 @@ class CallGates:
         prim: list[str] = [""] * n
         last = [-1] * n
         ops: list[tuple[int, ...]] = [()] * n
-        for j in range(n):
-            g = c.gate(lo + j)
+        for j, g in enumerate(c.gates(lo, lo + n)):
             p = g.prim
             width[j], prim[j] = p.ret.w, p.id
             if not p.params:

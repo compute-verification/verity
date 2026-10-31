@@ -28,10 +28,12 @@ cached by definition.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterator, Sequence
+from functools import partial
+from typing import Callable, Iterator, Sequence
 
 from .defs import BodyNode, PrimitiveDefinition, SpecializedDefinition
 from .refs import Ref
+from .types import axis_runs
 
 
 class Scope:
@@ -70,6 +72,29 @@ def param_leaf(scope: Scope, pi: int, leaf: int) -> int:
     return resolve_gate(scope, ("p", pi, leaf))[0]
 
 
+def _arg_ref(scope: Scope, idx: int, leaf: int) -> Ref | None:
+    """The parent's reference that leaf `leaf` of parameter `idx` of the activation `scope` is bound to (through the parent's node
+    that activates it); None for a scan's carry past its first iteration, the previous iteration's returned carry."""
+    node = scope.parent.spec.body.nodes[scope.node_idx]
+    if node.form == "call":
+        return node.args[idx].refs[leaf]
+    if node.form == "batch":
+        ax, a = node.axes[idx], node.args[idx]
+        if ax is None:
+            return a.refs[leaf]
+        if ax == 0:
+            return a.refs[scope.member * a.type.elem.leaves + leaf]
+        _outer, n, L = axis_runs(a.type, ax)
+        return a.refs[(leaf // L) * n * L + scope.member * L + leaf % L]
+    # scan: params are (carry, xs..., shared...)
+    if idx == 0:
+        return node.args[0].refs[leaf] if scope.member == 0 else None
+    if idx <= node.n_xs:
+        a = node.args[idx]
+        return a.refs[scope.member * a.type.elem.leaves + leaf]
+    return node.args[idx].refs[leaf]
+
+
 def resolve_gate(scope: Scope, ref: Ref) -> tuple[int, PrimitiveDefinition]:
     """Root-scoped gate index and producing primitive of the value denoted by body-scoped `ref` in `scope`: one walk
     up through parameters (to the argument the parent passed) and down through returns (to the producing node)."""
@@ -79,30 +104,12 @@ def resolve_gate(scope: Scope, ref: Ref) -> tuple[int, PrimitiveDefinition]:
             parent = scope.parent
             if parent is None:
                 raise ValueError("the root has no parameters (prescribed inputs are Input gates)")
-            node = parent.spec.body.nodes[scope.node_idx]
-            if node.form == "call":
-                space, idx, leaf = node.args[idx].refs[leaf]
-            elif node.form == "batch":
-                ax, a = node.axes[idx], node.args[idx]
-                if ax is None:
-                    space, idx, leaf = a.refs[leaf]
-                elif ax == 0:
-                    space, idx, leaf = a.refs[scope.member * a.type.elem.leaves + leaf]
-                else:
-                    space, idx, leaf = a.take(ax, scope.member).refs[leaf]
-            else:  # scan: params are (carry, xs..., shared...)
-                if idx == 0:
-                    if scope.member == 0:
-                        space, idx, leaf = node.args[0].refs[leaf]
-                    else:  # the previous iteration's returned carry
-                        scope = Scope(scope.spec, scope.offset - scope.spec.gates, parent, scope.node_idx, scope.member - 1)
-                        space, idx, leaf = scope.spec.body.ret[leaf]
-                        continue
-                elif idx <= node.n_xs:
-                    a = node.args[idx]
-                    space, idx, leaf = a.refs[scope.member * a.type.elem.leaves + leaf]
-                else:
-                    space, idx, leaf = node.args[idx].refs[leaf]
+            r = _arg_ref(scope, idx, leaf)
+            if r is None:  # the previous iteration's returned carry
+                scope = Scope(scope.spec, scope.offset - scope.spec.gates, parent, scope.node_idx, scope.member - 1)
+                space, idx, leaf = scope.spec.body.ret[leaf]
+                continue
+            space, idx, leaf = r
             scope = parent
             continue
         body = scope.spec.body
@@ -192,20 +199,83 @@ WIDE_FAN_IN = 4096
 
 def _prim_member_args(scope: Scope, node: BodyNode, m: int):
     """Operand gate indices of member `m` of a primitive node (`prim`, or a `batch` of a primitive)."""
+    return _member_operands(scope, node, m)
+
+
+def _member_operands(scope: Scope, node, m: int, res: Callable[[Ref], int] | None = None):
+    """`_prim_member_args` of ``node`` in ``scope``, each reference resolved by ``res`` (`resolve` in ``scope`` when None; a wide
+    gate's, lazily, always by `resolve`)."""
     if sum(p.leaves for _, p in node.fn.params) > WIDE_FAN_IN:
         return LazyOperands(scope, node, m)
+    if res is None:
+        res = partial(resolve, scope)
     if node.form == "primitive":
-        return tuple(resolve(scope, r) for a in node.args for r in a.refs)
+        return tuple(res(r) for a in node.args for r in a.refs)
     out: list[int] = []
     for a, ax in zip(node.args, node.axes):
         if ax is None:
-            out.extend(resolve(scope, r) for r in a.refs)
+            out.extend(res(r) for r in a.refs)
         elif ax == 0:
             L = a.type.elem.leaves
-            out.extend(resolve(scope, a.refs[m * L + j]) for j in range(L))
+            out.extend(res(a.refs[m * L + j]) for j in range(L))
         else:
-            out.extend(resolve(scope, r) for r in a.take(ax, m).refs)
+            outer, n, L = axis_runs(a.type, ax)
+            if not 0 <= m < n:
+                raise IndexError(m)
+            refs = a.refs
+            out.extend(res(refs[k * n * L + m * L + j]) for k in range(outer) for j in range(L))
     return tuple(out)
+
+
+#: the parameter leaves' gates one activation `Circuit.gates` has entered keeps, at most (`_Bound`), so what it holds is bounded
+#: by the depth of the hierarchy, not by the leaves a gate reads (an expert GEMM's gather reads every expert's weights)
+BOUND_LEAVES = 1 << 9
+
+
+class _Bound:
+    """An activation `Circuit.gates` has entered, with the gates its parameter leaves are bound to as `resolve` finds them, the
+    first `BOUND_LEAVES` of them kept: a leaf through its parent's (`_arg_ref`), a reference into the body by `resolve`."""
+
+    __slots__ = ("scope", "up", "params")
+
+    def __init__(self, scope: Scope, up: "_Bound | None") -> None:
+        self.scope, self.up, self.params = scope, up, {}
+
+    def ref(self, r: Ref) -> int:
+        if r[0] != "p":
+            return resolve(self.scope, r)
+        key = (r[1], r[2])
+        g = self.params.get(key)
+        if g is None:
+            a = None if self.up is None else _arg_ref(self.scope, r[1], r[2])
+            g = resolve(self.scope, r) if a is None else self.up.ref(a)
+            if len(self.params) < BOUND_LEAVES:
+                self.params[key] = g
+        return g
+
+
+def _walk(b: _Bound, lo: int, hi: int) -> Iterator["Gate"]:
+    """`Circuit.gate` of each gate of the activation ``b`` in [lo, hi), in order."""
+    s = b.scope
+    body = s.spec.body
+    offs = body.offsets
+    for k in range(body.node_at(lo - s.offset) if lo > s.offset else 0, len(body.nodes)):
+        start, end = s.offset + offs[k], s.offset + offs[k + 1]
+        if start >= hi:
+            return
+        if end <= max(lo, start):
+            continue
+        node = body.nodes[k]
+        fn = node.fn
+        if isinstance(fn, PrimitiveDefinition):
+            one = node.form in ("primitive", "call")
+            for i in range(max(lo, start), min(hi, end)):
+                yield Gate(i, fn, _member_operands(s, node, 0 if one else i - start, b.ref), s)
+            continue
+        G = fn.gates
+        first, last = ((0, 0) if node.form == "call" else ((max(lo, start) - start) // G, (min(hi, end) - 1 - start) // G))
+        for m in range(first, last + 1):
+            yield from _walk(_Bound(Scope(fn, start + m * G, s, k, m), b), lo, hi)
 
 
 @dataclass(frozen=True)
@@ -265,8 +335,7 @@ class Region:
         return self.circuit.gate(self.lo + i)
 
     def __iter__(self) -> Iterator[Gate]:
-        for g in range(self.lo, self.hi):
-            yield self.circuit.gate(g)
+        return self.circuit.gates(self.lo, self.hi)
 
     @property
     def interval(self) -> tuple[int, int]:
@@ -466,6 +535,17 @@ class Circuit:
             if isinstance(node.fn, PrimitiveDefinition):
                 return Gate(i, node.fn, _prim_member_args(scope, node, m), scope)
             scope = Scope(node.fn, node_off + m * node.fn.gates, scope, k, m)
+
+    def gates(self, lo: int = 0, hi: int | None = None) -> Iterator[Gate]:
+        """`gate(i)` for each i in [lo, hi), in order, in one walk down the hierarchy: each activation entered once, not once a
+        gate, and each of its parameter leaves resolved once (`_Bound`)."""
+        hi = self.size if hi is None else hi
+        if lo < 0 and lo < hi:
+            raise IndexError(lo)
+        if lo < min(hi, self.size):
+            yield from _walk(_Bound(self.root_scope, None), lo, min(hi, self.size))
+        if hi > max(lo, self.size):
+            raise IndexError(max(lo, self.size))
 
     def __getitem__(self, i):
         if isinstance(i, slice):
