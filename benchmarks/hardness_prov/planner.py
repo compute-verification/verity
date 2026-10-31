@@ -111,6 +111,8 @@ def main():
     ap.add_argument("--sigma-a", type=float, default=0.05)
     ap.add_argument("--p-drop", type=float, default=0.1)
     ap.add_argument("--quants", default="absmax")
+    ap.add_argument("--etas", default="", help="LSB-relative passes (erasure.py's --etas)")
+    ap.add_argument("--lr-other", type=float, default=1e-5)
     ap.add_argument("--m", type=int, default=4, help="the planner's own beacons")
     ap.add_argument("--iters", type=int, default=3)
     ap.add_argument("--evals", type=int, default=2)
@@ -120,8 +122,11 @@ def main():
     args.heads = args.heads or max(1, args.d // 48)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
+    grid = list(itertools.product(args.sigma_w.split(","), args.quants.split(",")))
     cfgs = [toy.Config(lr=float(lr), sigma_w=float(sw), sigma_a=args.sigma_a, p_drop=args.p_drop, quant=qu)
-            for lr, sw, qu in itertools.product(args.lrs.split(","), args.sigma_w.split(","), args.quants.split(","))]
+            for lr in filter(None, args.lrs.split(",")) for sw, qu in grid]
+    cfgs += [toy.Config(lr=args.lr_other, sigma_w=float(sw), sigma_a=args.sigma_a, p_drop=args.p_drop, quant=qu,
+                        rel=True, eta=float(eta)) for eta in filter(None, args.etas.split(",")) for sw, qu in grid]
     specs = [(f, c, int(L)) for f in args.families.split(",") for c in cfgs for L in args.Ls.split(",")]
     specs.sort(key=lambda s: -s[2])
     print(f"{len(specs)} plans on {args.workers} workers x {args.threads} threads", flush=True)

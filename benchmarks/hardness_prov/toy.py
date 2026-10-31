@@ -12,7 +12,8 @@ simulating the future draws its own beacons.
 
 - forward with dropout on both residual branches and Gaussian noise on every linear's input (σ_a times the input's rms);
 - AdamW written out (`Adam`), its state reset at the pass's start, so a committed start can't carry moments that freeze
-  the pass; the step is absolute (lr per entry) or relative to each row's served LSB (`rel`);
+  the pass; the step is absolute (lr per entry) or, with `rel`, η of each row's served LSBs per entry on the block
+  linears (lr on the rest), which a function-preserving rescaling of the start can't slow;
 - weight noise: every block linear gets σ_w served LSBs of fresh Gaussian noise a row, after the update.
 
 The served matrix is `quant`'s int8 codes of the final weights: `absmax` (per row max|w|/127, the stock format) or `mad`
@@ -189,16 +190,17 @@ class Config:
     batch: int = 16
     quant: str = "absmax"
     rel: bool = False
+    eta: float = 0.0
     wd: float = 0.0
 
     def tag(self):
         return (f"lr{self.lr:g}_sw{self.sigma_w:g}_sa{self.sigma_a:g}_pd{self.p_drop:g}_b{self.batch}_{self.quant}"
-                + ("_rel" if self.rel else "") + (f"_wd{self.wd:g}" if self.wd else ""))
+                + (f"_eta{self.eta:g}" if self.rel else "") + (f"_wd{self.wd:g}" if self.wd else ""))
 
 
 class Adam:
-    """AdamW (β 0.9, 0.95, ε 1e-8) with state from zero. `rel` scales a block linear's step by each row's served LSB
-    over the pass's start LSB, so the step is the same number of LSBs whatever scale the committed start has."""
+    """AdamW (β 0.9, 0.95, ε 1e-8) with state from zero. With `rel` a block linear's step is η times its row's served
+    LSB, so the step is the same number of LSBs whatever scale the committed start has."""
 
     def __init__(self, model, cfg):
         self.cfg = cfg
@@ -206,8 +208,7 @@ class Adam:
         self.m = {n: torch.zeros_like(p) for n, p in self.params}
         self.v = {n: torch.zeros_like(p) for n, p in self.params}
         self.t = 0
-        self.lsb0 = {n: torch.from_numpy(scale(p.detach().numpy(), cfg.quant)).float()[:, None]
-                     for n, p in self.params if p.dim() == 2 and "blocks" in n} if cfg.rel else {}
+        self.rel = {n for n, p in self.params if p.dim() == 2 and "blocks" in n} if cfg.rel else set()
 
     @torch.no_grad()
     def step(self):
@@ -221,11 +222,11 @@ class Adam:
             self.v[n].mul_(b2).addcmul_(g, g, value=1 - b2)
             d = (self.m[n] / (1 - b1 ** self.t)) / ((self.v[n] / (1 - b2 ** self.t)).sqrt() + 1e-8)
             lr = self.cfg.lr
-            if n in self.lsb0:
-                lsb = torch.from_numpy(scale(p.detach().numpy(), self.cfg.quant)).float()[:, None]
-                d = d * (lsb / self.lsb0[n])
+            if n in self.rel:
+                d = d * torch.from_numpy(scale(p.detach().numpy(), self.cfg.quant)).float()[:, None]
+                lr = self.cfg.eta
             if self.cfg.wd and p.dim() == 2 and "blocks" in n:
-                p.mul_(1 - lr * self.cfg.wd)
+                p.mul_(1 - self.cfg.lr * self.cfg.wd)
             p.add_(d, alpha=-lr)
 
 

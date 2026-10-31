@@ -10,6 +10,10 @@ equal to the start's (s0), their drift |q_τ − q_0| in LSBs, and the float and
 The coin spread: from each start, the planted matrices' float weights after τ steps under two beacons differ only by the
 coins, so rms(W_β1 − W_β2)/√2 in served LSBs is the per-entry spread a planner who doesn't know the coins faces.
 
+The scale game: a start named `{start}x{c}` is `start` with every fc multiplied by c and ln2's gain and bias divided by
+c, the same function, whose fc rows have c times the LSB. An absolute step (lr per entry) is then c times fewer LSBs; a
+relative one (`--etas`, η LSBs per entry) is not.
+
 Writes `erasure.json` to `--out`, and the pretrained checkpoint (`pre_d{d}.pt`) to `--out` unless `--pre` gave one.
 """
 
@@ -18,6 +22,7 @@ import itertools
 import json
 import multiprocessing
 import os
+import re
 import sys
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -73,15 +78,23 @@ def job(args, pre, start, cfg, seed, scratch):
     torch.set_num_threads(args.threads)
     pool = toy.Pool(args.data)
     model = build(args, pre)
+    m = re.fullmatch(r"(.+)x(\d+)", start)
+    base, c = (m.group(1), float(m.group(2))) if m else (start, 1.0)
     q0, tplant = {}, {}
     with torch.no_grad():
         for n in planted_names(model):
             w = model.linear(n)
-            w0, t = starts.plant(w.detach().numpy(), start, cfg.quant)
+            w0, t = starts.plant(w.detach().numpy(), base, cfg.quant)
             w.copy_(torch.from_numpy(w0.astype(np.float32)))
-            q0[n], _ = toy.codes(w0, cfg.quant)
             if t is not None:
                 tplant[n] = t
+        if c != 1.0:
+            for blk in model.blocks:
+                blk.fc.weight.mul_(c)
+                blk.ln2.weight.div_(c)
+                blk.ln2.bias.div_(c)
+        for n in planted_names(model):
+            q0[n], _ = toy.codes(model.linear(n).detach().numpy(), cfg.quant)
     hard = toy.Hardening(model, pool, cfg, toy.beacon(f"hardness-prov live {seed}"))
     taus = sorted(args.taus)
     recs, loss, keep = [], None, {}
@@ -135,7 +148,8 @@ def main():
     ap.add_argument("--sigma-a", type=float, default=0.05)
     ap.add_argument("--p-drop", type=float, default=0.1)
     ap.add_argument("--quants", default="absmax,mad")
-    ap.add_argument("--rel", default="0", help="0, 1 or 0,1: absolute or LSB-relative steps")
+    ap.add_argument("--etas", default="", help="LSB-relative passes: η served LSBs a step on the block linears")
+    ap.add_argument("--lr-other", type=float, default=1e-5, help="the relative passes' lr on everything else")
     ap.add_argument("--seeds", type=int, default=2)
     ap.add_argument("--taus", default="0,1,3,10,30,100,300")
     ap.add_argument("--workers", type=int, default=30)
@@ -153,9 +167,11 @@ def main():
         pre = str(out / f"pre_d{args.d}.pt")
         torch.save(model.state_dict(), pre)
         print(f"pretrained d={args.d}: val {pool.val_loss(model):.4f}", flush=True)
-    cfgs = [toy.Config(lr=float(lr), sigma_w=float(sw), sigma_a=args.sigma_a, p_drop=args.p_drop, quant=qu, rel=bool(int(rl)))
-            for lr, sw, qu, rl in itertools.product(args.lrs.split(","), args.sigma_w.split(","), args.quants.split(","),
-                                                     args.rel.split(","))]
+    grid = list(itertools.product(args.sigma_w.split(","), args.quants.split(",")))
+    cfgs = [toy.Config(lr=float(lr), sigma_w=float(sw), sigma_a=args.sigma_a, p_drop=args.p_drop, quant=qu)
+            for lr in filter(None, args.lrs.split(",")) for sw, qu in grid]
+    cfgs += [toy.Config(lr=args.lr_other, sigma_w=float(sw), sigma_a=args.sigma_a, p_drop=args.p_drop, quant=qu,
+                        rel=True, eta=float(eta)) for eta in filter(None, args.etas.split(",")) for sw, qu in grid]
     specs = [(st, c, s) for st in args.starts.split(",") for c in cfgs for s in range(args.seeds)]
     print(f"{len(specs)} passes on {args.workers} workers x {args.threads} threads", flush=True)
     res = []
