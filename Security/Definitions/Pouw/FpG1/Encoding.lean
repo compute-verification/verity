@@ -3,10 +3,10 @@ import Mathlib
 /-!
 # FP8-g1 and W4A8-g1: the operand encodings (trusted)
 
-The g1 designs (`benchmarks/ppl/steps.py`'s `native_linear` with `act`
-or `weight` = `g1`). Each GEMM operand is an integer level `R` that the honest prover picks on a format's
-integer grid, plus a live fair coin `b`, served centred as `R + b − ½`; the int8 MMA multiplies the integers `R + b`,
-and the epilogue takes the coin's two rank-one terms off (`Definitions.Pouw.FpG1.Gemm`).
+The g1 designs (`benchmarks/ppl/steps.py`'s `native_linear` with `act` or `weight` = `g1`). Each GEMM operand is an
+integer level `R` that the honest prover picks on a format's integer grid, plus a live fair coin `b`, served centred as
+`R + b − ½`; the int8 MMA multiplies the integers `R + b`, and the epilogue takes the coin's two rank-one terms off
+(`Definitions.Pouw.FpG1.Gemm`).
 
 * `E4M3Nat`, `E2M1x2Nat`: E4M3's non-negative integers (at most four significant bits, at most 448, its largest finite
   value) and twice E2M1's non-negative values (at most two significant bits, at most 12: `{0, 1, 2, 3, 4, 6, 8, 12}`).
@@ -20,10 +20,11 @@ and the epilogue takes the coin's two rank-one terms off (`Definitions.Pouw.FpG1
   integer UE4M3 block scale `m`, a doubled E2M1 level `q` and a coin), or the record's Dither int8 activation (`⌊v⌋`
   and its coin, served uncentred). `Entry.int` is what the int8 MMA reads, `Entry.offset` the centring (`½`, `½`,
   `0`) and `Entry.served = Entry.int − Entry.offset` the value the served model multiplies.
-* `Grids`, `Grids.On`: a device's g1 grids (sm_120: activations to 120, weights to 60, block scales to 5; B200 and
-  H200 on Dither-2S: 120, 120 and 10) and an entry on them at its side: a level of its format's grid plus a coin.
-  sm_120's 60 and 5 are derived for Dither-C's co32c (7-bit weights), not for sm_120's record H1
-  (co32c-u16, weights to ±110), so on H1 they are conservative; g1's values fit both. No Program checks `Grids.On`: it describes what an honest g1 prover commits.
+* `Grids`, `Grids.On`: a device's g1 grids (sm_120: activations to 120, weights to 60, block scales to 5; B200 and H200
+  on Dither-2S: 120, 120 and 10) and an entry on them at its side: a level of its format's grid plus a coin. sm_120's 60
+  and 5 were derived for Dither-C's co32c (7-bit weights), not for sm_120's record H1 (co32c-u16, weights to ±110), so
+  on H1 they are conservative; g1's values fit both. No Program checks `Grids.On`: it describes what an honest g1 prover
+  commits.
 -/
 
 namespace Pouw.FpG1
@@ -110,7 +111,7 @@ structure Grids where
 namespace Grids
 
 /-- **sm_120 (RTX PRO 6000)**: activations on E4M3's integers to 120, weights to 60 and W4A8-g1's block scales to 5
-(`steps.py`'s `e4m3i60` and `nvi5`), so that a weight moved by its coin stays in co32c's 7-bit weights. They are
+(`steps.py`'s `e4m3i60` and `nvi5`), so that a weight moved by its coin stays in co32c's 7-bit weights. They were
 derived for Dither-C's co32c; on H1 (co32c-u16, weights to ±110) they are conservative. -/
 def sm120 : Grids := ⟨120, 60, 5⟩
 
