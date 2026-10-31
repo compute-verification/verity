@@ -28,7 +28,7 @@ def _digest(fn) -> str | None:
     """The descriptor digest of a circuit-check target: a specialization's Program digest; a primitive's descriptor entry inside
     a one-Call wrapper (which is not registered)."""
     from verity.ml.circuits import codec
-    from verity.ml.circuits.annotations import definition_digest
+    from verity.ml.circuits.metadata import definition_digest
     from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, SpecializedDefinition, bind
     from verity.ml.circuits.program import Program
 

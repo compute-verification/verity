@@ -589,9 +589,10 @@ def test_the_report_carries_every_stage_on_the_planned_profile(virtual, tmp_path
     assert c["bits"]["bound"] is None and c["prove_path"]["dir"] == str(tmp_path / "pp.tgz") and c["prove_path"]["ok"]
     rows = c["negatives"]["rows"]
     assert c["negatives"]["ok"] and all(rows[k]["ok"] is True for k in ("late", "extra", "head"))
-    # the stand-in releases its first output in its request's own bucket: the advised counts' floor accepts it at δ = 0
+    # the ingress tie refuses a request the certified ingress doesn't hold, and accepts length's honest requests
     assert all(rows[k]["ran"] and rows[k]["ok"] for k in ("advice-length", "advice-missing", "advice-release"))
-    assert rows["advice-length"]["codes"] == ["NetworkAdvisedCounts_v1"] and rows["wrong-token"]["ran"] is False
+    assert rows["advice-length"]["codes"] == [] and rows["advice-missing"]["codes"] == ["IoTieRequest"]
+    assert rows["wrong-token"]["ran"] is False
     md = (out / "report.md").read_text()
     for section in ("## Advice", "## Advice bits per link-window", "## Prove path",
                     "## Negatives (the negatives registry)", "## What's still stubbed"):
@@ -682,7 +683,7 @@ def test_on_the_advice_profile_the_rehearsals_check_is_the_verdict_and_the_advic
     assert r["chain"]["tie"]["ran"] is False and r["pending"] == {}
     assert r["negatives"]["token"]["refused"] is False and r["negatives"]["token"]["by"] == []
     assert r["runs"]["honest"]["network"]["accepted"] is None and r["proofs"]["ran"] is False
-    assert "N2's advised counts" in r["proofs"]["why"] and r["chain"]["negatives"]["ran"] is False
+    assert "no N2 unit holds" in r["proofs"]["why"] and r["chain"]["negatives"]["ran"] is False
     assert sorted(r["negatives"]) == ["drop", "extra", "late", "token"]
     assert r["negatives"]["late"]["by"] == ["the rehearsal's own check (audit.status:coverage-never-established)"]
     assert r["negatives"]["drop"]["by"] == ["the rehearsal's own check (io:short of max_tokens without EOS)"]

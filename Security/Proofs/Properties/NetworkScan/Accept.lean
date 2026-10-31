@@ -5,10 +5,10 @@ import Proofs.Properties.Nci.BodiesOk
 # What `NetworkCheck.Period.scanOf`'s acceptance gives of the scan's Program
 
 `scanOf_accepted` reads `scanOf`'s steps one by one (each check a `need`, so each step a bind) and keeps what
-`NetTiming.Layout.Fits`'s first two parts rest on (`Accepted`): the description's layout and walk checks, the egress
-template's node (a batch of `T`, returning a u16 and the row, every leaf its own, all `T` instances' leaves returned by
-the root in one run), each step's ingress bucket (`Ingress`: a batch member, its first parameter the row, its first
-argument one input node's leaves), and the Program topological (`Prog.orderViolation`), which part (3) reads.
+`NetTiming.BoundaryGates.Fits`'s first two parts rest on (`Accepted`): the description's layout and walk checks, the
+egress template's node (a batch of `T`, returning a u16 and the row, every leaf its own, all `T` instances' leaves
+returned by the root in one run), each step's ingress bucket (`Ingress`: a batch member, its first parameter the row,
+its first argument one input node's leaves), and the Program topological (`Prog.orderViolation`), which part (3) reads.
 -/
 
 namespace Properties.NetworkScan.Fits
@@ -40,7 +40,7 @@ def Ingress (P : Prog) (s : Schedule) (km : ℕ × ℕ) : Prop :=
     0 < (callee P km.1).params.size ∧ ((callee P km.1).params[0]!).2 = rowTy s ∧
     ∃ kr, ((node P km.1).args[0]?).bind (inputArg P) = some kr
 
-/-- **What an accepted scan's Program is**, as `NetTiming.Layout.Fits`'s first two parts read it. -/
+/-- **What an accepted scan's Program is**, as `NetTiming.BoundaryGates.Fits`'s first two parts read it. -/
 structure Accepted (P : Prog) (s : Schedule) : Prop where
   laid : NciCheck.Desc.rootLaidOut P = true ∧ NciCheck.Desc.inputsAtRoot P = true ∧ NciCheck.Desc.walkable P = true
   egress_mem : egressNode P ∈ templateNodes P

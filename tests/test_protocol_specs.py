@@ -23,7 +23,6 @@ KEPT = {
 #: only goes, in the PR that deletes its file.
 RETIRING = {
     "verity/core/protocols/pous/PROTOCOL.md": "verity/core/protocols/pous/lean",
-    "verity/core/protocols/pous/p2/PROTOCOL.md": "verity/core/protocols/pous/lean",
     "verity/core/protocols/pouw/PROTOCOL.md": "verity/core/protocols/pouw/lean",
     "verity/core/protocols/remote_bandwidth/PROTOCOL.md": "verity/core/protocols/remote_bandwidth/lean",
     "verity/ml/flock/verifier/PROTOCOL.md": "verity/core/service/flock",
