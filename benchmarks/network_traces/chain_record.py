@@ -143,7 +143,7 @@ WARDEN_SERVED_STUBBED = (
 REHEARSAL_ACCEPTS = ("honest", "token")
 #: the scan's rounds whose window is accepted (scan_zk.ROUNDS): the toy block's is proved like the honest one's
 SCAN_ACCEPTS = ("honest", "block")
-#: a proof block's outputs, at most 16 bits: a faulty proof block's leak
+#: a proof block's outputs, at most 16 bits: an incorrect proof block's leak
 OUT_BITS = 16
 #: K's jitter term, 0 at D_j = 1: J (`NetTiming.JitterBounded`) assumes it, not met there until a run shows the written
 #: buckets tell a receiver no more than an idle one. The warden hands each bucket to a pacer that releases it at a time
@@ -165,9 +165,9 @@ def _json(path) -> dict | None:
 
 
 def subset_bound(n: int, k: int, delta: float) -> int | None:
-    """The most wrong units an accepted uniform sample of k of n units hides except with probability δ: the integrity
-    profile's count bound (`Stratified.count_bound`), the largest b with C(n − b, k) / C(n, k) ≥ δ. Selection All
-    (k = n) is 0."""
+    """The most incorrect proof blocks an accepted uniform sample of k of n proof blocks hides except with probability
+    δ: the integrity profile's count bound (`Stratified.count_bound`), the largest b with C(n − b, k) / C(n, k) ≥ δ.
+    Selection All (k = n) is 0."""
     if n <= 0 or not 0 < k <= n:
         return None
     from verity.core.protocols.profile import Stratified
@@ -177,7 +177,7 @@ def subset_bound(n: int, k: int, delta: float) -> int | None:
 
 def eps_at_delta(n: int, k: int, law: str) -> dict:
     return {"law": law, "units": n, "drawn": k,
-            "wrong_units_at_delta": {f"{d:.3g}": subset_bound(n, k, d) for d in DELTAS},
+            "incorrect_at_delta": {f"{d:.3g}": subset_bound(n, k, d) for d in DELTAS},
             "per_proof": "each proof's soundness error, ε_ks + ε_bind (KSLinOn's κ + √(γ·Pr B) + Pr[Bext]), "
                          "symbolic: Claims.Sampling.KS is a hypothesis until Flock.Guarantees.SampledKSLive"}
 
@@ -439,7 +439,7 @@ def on_warden(step: dict, doc: dict | None, run_id: str | None, what: str) -> di
 
 
 def escaped(name: str, m: dict, s: dict) -> dict | None:
-    """A negative member the sampled draw accepted because none of its faulty windows (those its reference expects
+    """A negative member the sampled draw accepted because none of its incorrect windows (those its reference expects
     refused) was among the windows drawn: the draw's sampling error, which its ``wrong_units`` at δ bounds, not a
     failure of the run. None for honest, a member refused, or a period not sampled."""
     net = m.get("network") or {}
@@ -448,7 +448,7 @@ def escaped(name: str, m: dict, s: dict) -> dict | None:
     bad = [r["window"] for r in m.get("reference") or [] if not r.get("expect")]
     if name == "honest" or not net.get("accepted") or units is None or set(bad) & set(units):
         return None
-    return {"faulty_windows": bad, "drawn": sorted(units)}
+    return {"incorrect_windows": bad, "drawn": sorted(units)}
 
 
 def unexpected(name: str, m: dict, escape: dict | None = None) -> list[str]:
@@ -501,8 +501,8 @@ def n2_step(s: dict | None, certs_doc: dict, job: dict | None = None) -> dict:
         why = "; ".join(f"{k}: {', '.join(v['unexpected'])}" for k, v in members.items() if v.get("unexpected")) or why
     elif proved:
         gone = [k for k, v in members.items() if v["escaped_the_draw"]]
-        why = (f"the driver's ok is false only for {', '.join(gone)}: accepted with none of its faulty windows drawn, "
-               "within the draw's bound" if gone else None)
+        why = (f"the driver's ok is false only for {', '.join(gone)}: accepted with none of its incorrect windows "
+               "drawn, within the draw's bound" if gone else None)
     return {"verdict": ("accepted" if honest.get("network_accepted") else "refused") if proved else
             ("dry" if "members" in s and not honest.get("windows") else "failed"), "why": why, "stand_in": stand_in,
             "ok": s.get("ok"), "unit": (s.get("link") or {}).get("unit"), "members": members,
@@ -615,8 +615,8 @@ def audit_of(d: Path) -> dict:
 
 
 def pooled_k(audits: list[dict], delta: Fraction, network: dict) -> dict:
-    """`NetTiming.Guarantees.PooledLeakAccepted`'s K over one monitoring period: the faulty proof blocks paid once over
-    the period, ``Fmax = ⌈ln(1/δ)/q⌉`` with ``q`` the least ``k_i/n_i`` of its compute audits (a stratified audit's
+    """`NetTiming.Guarantees.PooledLeakAccepted`'s K over one monitoring period: the incorrect proof blocks paid once
+    over the period, ``Fmax = ⌈ln(1/δ)/q⌉`` with ``q`` the least ``k_i/n_i`` of its compute audits (a stratified audit's
     least stratum's, `audit_of`'s ``q``), so K = the network's own terms (``network``: the advice's and the syncs' bits,
     and the cells') + ``Fmax·16 + ⌈log2 (N + 1)^Fmax⌉ + Σ_i (free_i + jitter_i)``, ``N = Σ_i n_i``, except with
     probability ``δ + Σ_i (e_i + e'_i)``. `PooledLeakAccepted` is conditional on its per-window inputs, so this K is
@@ -703,8 +703,8 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     T, units = params.window, 2 * params.window
     drawn = (scan or {}).get("draw", {}).get("honest") if isinstance((scan or {}).get("draw"), dict) else units
     if drawn != units:
-        raise SystemExit(f"leak: the scan drew {drawn} of {units} proof blocks; K's faulty terms are 0 only with every "
-                         f"proof block drawn (scan_zk --draw {units})")
+        raise SystemExit(f"leak: the scan drew {drawn} of {units} proof blocks; K's terms for incorrect proof blocks "
+                         f"are 0 only with every proof block drawn (scan_zk --draw {units})")
     rate = v["requests"] / v["windows"]
     window_s = T * params.bucket_ms / 1000
     at = {"T": T, "tau": Fraction(params.bucket_ms, 1000), "egress_cells": params.egress_cells}
@@ -758,9 +758,10 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
                 "per-sampling-block and per-request terms at the run's request rate",
                 "the datacenter's rows sum as many identical links as the census's reference datacenter has machines, "
                 "and the world's as many as the adversary resource model's compute fills in machines of its GPUs "
-                f"(leak_bounds.datacenter, world), each link pooled at δ / links ({split}) and paying its own faulty "
-                "proof blocks: our composition, which no Lean statement covers. Each link certifies the run's rate; "
-                "the adversary model's requests past the links' rate are uncertified, and no row counts them",
+                f"(leak_bounds.datacenter, world), each link pooled at δ / links ({split}) and paying its own "
+                "incorrect proof blocks: our composition, which no Lean statement covers. Each link certifies the "
+                "run's rate; the adversary model's requests past the links' rate are uncertified, and no row counts "
+                "them",
                 "ε is the scans' δ summed over the period's sampling blocks and the links (NetworkCheck.Period's "
                 "eps, m·δ), each scan at the scan's δ",
                 "the loop's (an untied compute audit's) free inputs don't enter K: its δ goes into JointPeriodLive's "
@@ -998,7 +999,7 @@ def markdown(r: dict) -> str:
     shown = [k for k in ("custody", "certificates", "endpoint", "tie", "n2", "scan", "lean") if k in s]
     for k in shown:
         e = s[k].get("eps_at_delta") or {}
-        eps = (f"{e['law']}, {e['drawn']} of {e['units']}: wrong ≤ {e['wrong_units_at_delta']}" if e else "")
+        eps = (f"{e['law']}, {e['drawn']} of {e['units']}: incorrect ≤ {e['incorrect_at_delta']}" if e else "")
         lines.append(f"| {k} | {s[k].get('verdict')} | {eps} | {s[k].get('in_the_clear', '')} |")
     notes = [f"- {k}: {s[k][f]}" for k in ("endpoint", "tie", "n2", "scan") if k in s for f in ("why", "stand_in")
              if s[k].get(f)]
