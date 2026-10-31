@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from verity.errors import InvalidArtifact
-from verity.ml.circuits.silicon import silicon as S
+from verity.ml.circuits.silicon import models as S, term as T
 
 __all__ = [
     "AMPERE_BF16",
@@ -28,7 +28,7 @@ __all__ = [
 ]
 
 
-def f16_product(a: int, b: int) -> S.Term:
+def f16_product(a: int, b: int) -> T.Term:
     """Exact product of two IEEE binary16 words as a 25-bit-scaled :class:`~veritor.core.silicon.Term`."""
 
     ea, eb = (a >> 10) & 0x1F, (b >> 10) & 0x1F
@@ -38,8 +38,8 @@ def f16_product(a: int, b: int) -> S.Term:
     sb = (b & 0x3FF) | (0x400 if eb else 0)
     magnitude = (sa * sb) << 3
     if magnitude == 0:
-        return S.ZERO
-    return S.Term(((a ^ b) >> 15) & 1 == 1, (ea or 1) + (eb or 1) - 30, magnitude)
+        return T.ZERO
+    return T.Term(((a ^ b) >> 15) & 1 == 1, (ea or 1) + (eb or 1) - 30, magnitude)
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,11 +59,11 @@ class TCModel:
     def k(self) -> int:
         return sum(self.groups)
 
-    def product(self, a: int, b: int) -> S.Term:
-        return S.bf16_product(a, b) if self.dtype == "bf16" else f16_product(a, b)
+    def product(self, a: int, b: int) -> T.Term:
+        return T.bf16_product(a, b) if self.dtype == "bf16" else f16_product(a, b)
 
     @property
-    def silicon_pipeline(self) -> S.Pipeline | None:
+    def silicon_pipeline(self) -> S.GroupSum | None:
         """The ``veritor.core.silicon`` pipeline this model *is*, when it is one."""
 
         if self.dtype != "bf16":
@@ -88,17 +88,17 @@ def tc_dot(model: TCModel, acc_bits: int, a: Sequence[int], b: Sequence[int]) ->
         return S.tc_dot(pipe, acc_bits, a, b)
     if len(a) != model.k or len(b) != model.k:
         raise InvalidArtifact(f"{model.name} takes {model.k} operand pairs")
-    acc = S.fp32_term(acc_bits)
+    acc = T.fp32_term(acc_bits)
     start = 0
     for size in model.groups:
         products = [model.product(a[i], b[i]) for i in range(start, start + size)]
         acc = S.group_sum(
             [acc, *products], width=model.width, zero_exponent=model.zero_exponent
         )
-        if acc.magnitude and acc.exponent > S.FP32_MAX_EXPONENT:
-            return S.pack_fp32(acc)
+        if acc.magnitude and acc.exponent > T.FP32_MAX_EXPONENT:
+            return T.pack_fp32(acc)
         start += size
-    return S.pack_fp32(acc)
+    return T.pack_fp32(acc)
 
 
 def tc_dot_chain(
