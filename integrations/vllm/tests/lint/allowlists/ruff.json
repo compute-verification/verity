@@ -397,8 +397,6 @@
     {"file": "verity_vllm/protocols/pouw/device.py", "kind": "E731", "symbol": "gate_call", "detail": "Do not assign a `lambda` expression, use a `def`"},
     {"file": "verity_vllm/protocols/remote_bandwidth/in_place.py", "kind": "E731", "symbol": "InPlaceBackend.session_stats", "detail": "Do not assign a `lambda` expression, use a `def`"},
     {"file": "verity_vllm/query/query_artifact.py", "kind": "UP017", "symbol": "utc_now", "detail": "Use `datetime.UTC` alias"},
-    {"file": "verity_vllm/query/required.py", "kind": "F401", "symbol": "<module>", "detail": "`typing.Iterable` imported but unused"},
-    {"file": "verity_vllm/query/required.py", "kind": "F401", "symbol": "<module>", "detail": "`verity_vllm.query.units.required_values` imported but unused"},
     {"file": "verity_vllm/query/required.py", "kind": "F541", "symbol": "query_header", "detail": "f-string without any placeholders"},
     {"file": "tests/program/crosscheck.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.ml.definitions.registry.b1.B1_CONFIG` imported but unused"},
     {"file": "tests/program/fixtures_query.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.ml.definitions.registry.prims.BF16` imported but unused"},
