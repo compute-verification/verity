@@ -36,14 +36,6 @@ def ProgramScope (D : Deploy Coin Col T) : Prop :=
 def ChecksScope [Inhabited Coin] (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
   ∀ x (Ω : Type) (P : Prover Ω) ω r, (run H P D.V x ω r).out = .acc → D.scopeCheck x = true
 
-/-- **`ChecksScope` from the verifier's decision**: where the verifier answers `acc` only at statements its scope check
-takes, every run it accepts is of one (`run_acc_next`). -/
-theorem checksScope_of_next [Inhabited Coin] (H : Msg → Msg) (D : Deploy Coin Col T)
-    (h : ∀ x as cs, ((D.V.next x as cs).eval H).1 = .acc → D.scopeCheck x = true) : ChecksScope H D := by
-  intro x Ω P ω r hacc
-  obtain ⟨as, cs, has⟩ := run_acc_next H P D.V x ω r hacc
-  exact h x as cs has
-
 /-- **The readable scope is the verifier's**: where its statements are its own layout and design (`DrawSlots`) and its
 scope check is the program part (`ProgramScope`), the design is well formed on the partition (`designWellFormed`), so
 the scope check is the whole readable scope. -/

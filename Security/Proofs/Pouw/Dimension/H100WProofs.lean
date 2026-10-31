@@ -216,12 +216,6 @@ theorem distinctWritesLegacy : DistinctWritesLegacy := by
   have e2 := Nat.mul_le_mul_left d hc2
   nlinarith [e1, e2, hcost]
 
-/-- **`FloorTc` below `H32` is satisfiable.** -/
-theorem floorTcSat : FloorTcSat := by
-  refine ⟨⟨fun s => by cases s <;> decide, by decide, by decide, by decide, by decide, by decide⟩, fun h => ?_⟩
-  have : 32 ≤ h100Legacy.tc := h.2.1
-  exact absurd this (by decide)
-
 theorem cheapIn_empty {c : ℕ} {pr : Prices100} (hpr : Floor c pr) {F : Set (G → ℚ)} :
     ∀ o : Op100 G, o.WFw pr F → o.CheapIn c ∅ := by
   intro o hwo
@@ -240,90 +234,6 @@ theorem distinctWritesMH100Floor : DistinctWritesMH100Floor := by
 
 /-- **The distinct-writes bound on a success set.** -/
 theorem distinctWritesMH100On : DistinctWritesMH100On := fun pr hpr => distinctWritesMH100Floor 32 pr hpr
-
-/-- **The distinct-writes bound for `MH100w`.** -/
-theorem distinctWritesMH100 : DistinctWritesMH100 := by
-  intro pr hpr G F hconst fpSem L P T hL hwf hT ho
-  refine distinctWritesMH100On pr hpr G F hconst Set.univ fpSem L P T hL hwf ⟨fun t _ t' _ h => ?_, ?_⟩ ?_
-  · exact funext fun g => h g (Set.mem_univ g)
-  · intro t ht f hf h
-    exact hT t ht (by rwa [show t = f from funext fun g => h g (Set.mem_univ g)])
-  · exact fun t ht => ⟨t, ho t ht, fun _ _ => rfl⟩
-
-theorem mem_regs100_of_operand (fpSem : ℕ → ℚ → ℚ → ℚ → ℚ) :
-    ∀ (P : List (Op100 G)) (L : List (G → ℚ)) (f : G → ℚ), Op100.operand f ∈ P → f ∈ regs100 fpSem P L := by
-  intro P
-  induction P with
-  | nil => intro L f h; simp at h
-  | cons o P ih =>
-    intro L f h
-    rcases List.mem_cons.1 h with rfl | h
-    · exact mem_regs100_of_mem fpSem P _ f (List.mem_append_right _ (by simp [Op100.outs]))
-    · exact ih _ f h
-
-/-- **The distinct-writes bound is attained.** -/
-theorem distinctWritesAttained : DistinctWritesAttained := by
-  intro G F fpSem T Fr L hFr
-  let P₁ : List (Op100 G) := T.toList.map fun t => Op100.wgmma Shape100.e4m3F32 [t]
-  let P₂ : List (Op100 G) := Fr.map Op100.operand
-  have hcost₁ : ∀ l : List (G → ℚ),
-      cost100 h100Nominal (l.map fun t => Op100.wgmma Shape100.e4m3F32 [t]) = 32 * l.length := by
-    intro l
-    induction l with
-    | nil => rfl
-    | cons t l ih =>
-      simp only [cost100, List.map_cons, List.sum_cons, List.length_cons] at ih ⊢
-      rw [ih]
-      simp only [Op100.price, Shape100.regPrice, h100Nominal, nominalMac, Shape100.k, Shape100.elems,
-        List.length_singleton]
-      ring
-  have hcost₂ : ∀ l : List (G → ℚ), cost100 h100Nominal (l.map Op100.operand) = 0 := by
-    intro l
-    induction l with
-    | nil => rfl
-    | cons t l ih =>
-      simp only [cost100, List.map_cons, List.sum_cons] at ih ⊢
-      rw [ih]
-      rfl
-  refine ⟨P₁ ++ P₂, fun o ho => ?_, fun t ht => ?_, fun f hf => ?_, ?_⟩
-  · rcases List.mem_append.1 ho with ho | ho
-    · obtain ⟨t, -, rfl⟩ := List.mem_map.1 ho
-      trivial
-    · obtain ⟨f, hf, rfl⟩ := List.mem_map.1 ho
-      exact hFr f hf
-  · exact mem_regs100_of_wgmma fpSem (P₁ ++ P₂) _ _ _ _
-      (List.mem_append_left _ (List.mem_map.2 ⟨t, mem_toList.2 ht, rfl⟩)) (List.mem_singleton_self _)
-  · exact mem_regs100_of_operand fpSem (P₁ ++ P₂) L f (List.mem_append_right _ (List.mem_map.2 ⟨f, hf, rfl⟩))
-  · rw [cost100_append, hcost₁, hcost₂, length_toList, Nat.add_zero]
-
-theorem wfw_splitK (F : Set (G → ℚ)) (h0 : (0 : G → ℚ) ∈ F) (κ : ℕ) (I : ℕ → G → ℚ) (b : ℕ) :
-    ∀ τ, ∀ o ∈ splitK κ I b τ, o.WFw h100Nominal F
-  | 0 => fun o ho => by
-    rw [splitK, List.mem_singleton] at ho
-    subst ho
-    exact h0
-  | τ + 1 => fun o ho => by
-    rw [splitK] at ho
-    rcases List.mem_append.1 ho with h | h
-    · exact wfw_splitK F h0 κ I b τ o h
-    · simp only [List.mem_cons, List.not_mem_nil, or_false] at h
-      rcases h with rfl | rfl <;> trivial
-
-/-- **The C-2 corollary.** -/
-theorem c2DistinctWords : C2DistinctWords := by
-  intro G F hconst fpSem κ I T L
-  refine ⟨wfw_splitK F (const_zero hconst) κ I L.length T, ?_⟩
-  intro pr P hpr hL hwf hout D hD
-  refine distinctWritesMH100 pr hpr G F hconst fpSem L P D hL hwf (fun w hw => (hD w hw).2) fun w hw => ?_
-  obtain ⟨τ, hτ, h | h⟩ := (hD w hw).1
-  · exact h ▸ (hout τ hτ).1
-  · exact h ▸ (hout τ hτ).2
-
-/-- **The first running word is a copy.** -/
-theorem c2FirstRunCopy : C2FirstRunCopy := by
-  intro G fpSem κ I h
-  funext g
-  simp only [runWords, Pi.zero_apply, h]
 
 /-- **`DistinctLive` gives the per-word cost.** -/
 theorem distinctLiveMH100 : DistinctLiveMH100 := by

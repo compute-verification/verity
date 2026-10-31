@@ -26,8 +26,6 @@ def waits : ℕ := 210
 /-- `E^rep`'s truncation `K`: each wait gives up after `2^256` reruns. -/
 def cap : ℕ := 2 ^ 256
 
-theorem waits_ge : 210 ≤ waits := le_rfl
-
 /-! ## `k = ⌈4N₀/e⌉` -/
 
 /-- `E^rep`'s accepted reruns per wait at a level-0 codeword of `2^d` symbols: `⌈4·2^d/e⌉`. -/
