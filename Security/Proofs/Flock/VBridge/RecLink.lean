@@ -340,12 +340,12 @@ theorem varSlices_linkPorts (UB PB : ℕ) : OfVStar.varSlices 0 (VStar.linkPorts
   varSlices_link (VStar.auxWords (UB + PB))
 
 set_option maxHeartbeats 1000000 in -- the kernel's check of the builder's `run_input_bind` rewrite needs about 5x
-/-- **V*'s unit is `linkRun`**: its builder's state and outputs are `linkRun`'s from its input bits, its input ports
-`VStar.linkPorts` and its output ports `rin`, `rout`. -/
+/-- **V*'s unit is `linkRun`**: its builder's state and outputs are `linkRun`'s from its input bits, its input rows
+`VStar.linkRows` (over `VStar.linkPorts`' words) and its output ports `rin`, `rout`. -/
 theorem linkUnit_ok {UB PB : ℕ} {U : VStar.UnitC} (h : VStar.linkUnit UB PB = .ok U) :
     U.st = ((linkRun UB PB).run ⟨linkIn UB PB, []⟩).2 ∧
       U.outs = (((linkRun UB PB).run ⟨linkIn UB PB, []⟩).1.1 ++ ((linkRun UB PB).run ⟨linkIn UB PB, []⟩).1.2).toArray ∧
-      U.inPorts = VStar.linkPorts UB PB ∧ U.outPorts = [VStar.LINK_OUT_WORDS, VStar.LINK_OUT_WORDS] := by
+      U.inPorts = VStar.linkRows UB PB ∧ U.outPorts = [VStar.LINK_OUT_WORDS, VStar.LINK_OUT_WORDS] := by
   unfold VStar.linkUnit at h
   unfold linkRun linkIn
   -- Opaque, so that none of the kernel's checks below can evaluate the builder.
@@ -402,7 +402,7 @@ theorem laid_linkUnit {UB PB : ℕ} {U : VStar.UnitC} (hU : VStar.linkUnit UB PB
   obtain ⟨hUB, hPB⟩ := linkUnit_shape hU
   have hN : (Array.replicate U.inWords 16).foldl (· + ·) 0 = 5120 + 2 * auxBits UB PB := by
     rw [OfVStar.foldl_replicate, VStar.UnitC.inWords, hin]
-    simp only [VStar.linkPorts, List.foldl_cons, List.foldl_nil, VStar.LINK_ROW_WORDS, VStar.LINK_X_WORDS,
+    simp only [VStar.linkRows, List.foldl_cons, List.foldl_nil, VStar.LINK_ROW_WORDS, VStar.LINK_X_WORDS,
       VStar.LINK_Y_WORDS, auxBits]
     omega
   have hA := aux_ge (UB + PB)
