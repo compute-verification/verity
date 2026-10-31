@@ -144,8 +144,9 @@ class GateOptions:
                                         "owner-only, for proving its drawn units and rounds after the close; never a "
                                         "published path")
     h1_model: str | None = option("--h1-model", default=None, metavar="ROLE",
-                                  help="with --challenger-gate: the auditor's registration role of the served model (e.g. "
-                                       "LLAMA32_1B_INT8_K2048); its b/<K> are committed under the salt key the gate's "
+                                  help="with --challenger-gate: the auditor's registration role of the served model (a role "
+                                       "of the pinned tree's manifests/checkpoints-int8.json, the gate's models.MANIFESTS); "
+                                       "its b/<K> are committed under the salt key the gate's "
                                        "model-key hands for the window Program's circuit, so the windows' weights root is the "
                                        "registry's, the root the period signs; without it the key is local and credits nothing")
     h1_weights_root: str | None = option("--h1-weights-root", default=None, metavar="HEX",
