@@ -209,7 +209,7 @@ def serve(engine: Engine, store: p2.Store, *, prompt: int, windows: int, per_win
                           layout=reg.layout, rows=reg.rows)
     entropy = entropy or Entropy(b"verity-pous/p2-serve/entropy/v0")
     session = p2.Session(params, reg, coins.local(reg.digest, 0, windows, entropy), not_before_ns=0, clock=clock)
-    prover = p2.Prover(store, session.commitment, entropy=entropy)
+    prover = p2.Prover(store, entropy=entropy)
     opener = (open_ or (lambda pr: pr.open))(prover)
     out, token, previous = Served(), prompt, reg.digest
     challenge, t, i, closed, passes = session.start(), 0, 0, 0, {}

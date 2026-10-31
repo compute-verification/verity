@@ -14,8 +14,9 @@ T = machines·⌊period/window_s⌋ sessions in a period, each on its own live c
 - **Per window** (`per_window`): the session's openings bound at δ/T instead of δ₀ (`pooled.bound` of its windows),
   so that every one of the T sessions certifies that much at once, except with δ + T·S/2^64.
 
-Both leave out each session's coin PRF advantage and coin commitment's hiding, which are named assumptions, not
-numbers. What the session proves is its verdict and outputs, by the Lean verifier; what is scaled is the
+Both leave out each session's coin PRF advantage, a named assumption, not a number; a session's sample has no hiding
+term, since its prover is sent the coin commitment only at the session's end. What the session proves is its verdict
+and outputs, by the Lean verifier; what is scaled is the
 number of sessions and that each is audited as this one was."""
 
 from __future__ import annotations
@@ -36,7 +37,7 @@ from . import codec, pooled
 FORMAT = "verity/remote-bandwidth-monitoring-period/v1"
 STATEMENT = {"name": "FlockSoundness.Audit.Periods.prCoin_count_le_choose", "pr": 4413,
              "file": "Security/Proofs/Flock/Soundness/Audit/Periods.lean"}
-EXCEPT = "each session's coin PRF advantage and coin commitment hiding (named assumptions) over the period's sessions"
+EXCEPT = "each session's coin PRF advantage (a named assumption) over the period's sessions"
 
 
 def _share(x: int, of: int) -> str:
