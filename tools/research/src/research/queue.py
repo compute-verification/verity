@@ -3729,6 +3729,16 @@ class RecordsGate:
         differs, or one of a package that a records run reads (`RECORDS_UNREAD_DIRS`, Markdown and READMEs aside, never Lean)."""
         if not commits:
             return set()
+        # `diff-tree --stdin` reads a line whose second field isn't a full sha as one commit and prints no paths for it, so a
+        # short head would vouch for every candidate: resolve every name first
+        names = [head, *commits]
+        r = subprocess.run(["git", "rev-parse", *(f"{c}^{{commit}}" for c in names)], cwd=self.repo, capture_output=True, text=True,
+                           env=git_env(), check=False)
+        full = r.stdout.split()
+        if r.returncode or len(full) != len(names):
+            raise QueueError(f"git rev-parse: can't resolve every one of {len(names)} commits to a full sha (head {head})")
+        head, resolved = full[0], dict(zip(commits, full[1:]))
+        commits = [resolved[c] for c in commits]
         r = subprocess.run(["git", "diff-tree", "--stdin", "--always", "-r", "-z", "--name-only", "--no-renames", "--", *inputs],
                            cwd=self.repo, capture_output=True, input="".join(f"{c} {head}\n" for c in commits).encode(),
                            env=git_env(), check=False)
@@ -3758,7 +3768,8 @@ class RecordsGate:
                 out.add(at)
         if n != len(commits):                                    # a pair it skipped (an object it couldn't read) is no match
             raise QueueError(f"git diff-tree --stdin compared {n} of {len(commits)} commits")
-        return out
+        back = {v: k for k, v in resolved.items()}
+        return {back.get(c, c) for c in out}
 
     def _same_inputs(self, head: str, pkg: str, inputs: list[str]) -> str | None:
         """Why a pass of ``pkg`` at another commit whose ``inputs`` are the head's (`_differs`) vouches for it, or None."""
