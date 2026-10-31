@@ -103,7 +103,7 @@ def test_egress_links_with_the_same_syncs_are_accepted():
 
 def test_a_link_with_another_sync_is_advice_in_that_window_only():
     """A second egress link declares δ = 2 in window 1, in the set but not the unit's: one sync per window for all links
-    is the advice `EncardAccSeqsLeSync` counts, `#Σ_sync^W`. Window 1 of the link checked second is an advice
+    is the advice `EncardAcceptedObservationsLe` counts, `#Σ_sync^W`. Window 1 of the link checked second is an advice
     violation, its other windows are accepted, and the first link checked sets the clock. The same holds committed."""
     other = [SYNCS[0], ClockSync(2, 1), SYNCS[2]]
     assert other[1] in SYNC_SET and other[1] != SYNCS[1]
