@@ -242,6 +242,8 @@ theorem partVerdict_ok {h : InnerHeld} {j : Nat} {p : PartOwn} {s : PartProof} {
     rename_i spec' sts' hsu
     obtain ⟨_, -, hsu⟩ := bind_ok hsu
     obtain ⟨_, -, hsu⟩ := bind_ok hsu
+    obtain ⟨_, -, hsu⟩ := bind_ok hsu
+    obtain ⟨_, -, hsu⟩ := bind_ok hsu
     obtain ⟨r, hbs, hsu⟩ := bind_ok hsu
     have hr' : r = (spec', sts') := by
       try dsimp only at hsu
@@ -344,7 +346,9 @@ theorem decide_of_partVerdict {h : InnerHeld} {j : Nat} {p : PartOwn} {q : PartP
     rw [hinner, hsrcEq, fullDraw_some, hfd, innerDrawn_record hrecEq, hid]
     all_goals first
       | rfl
-      | simp [Flock.RecSetup.denseOnly, hho.1, hho.2, bind, Except.bind, Except.isOk, Except.toBool]
+      | (simp [Flock.RecSetup.denseOnly, hho.1, hho.2, bind, Except.bind, pure, Except.pure, Except.isOk,
+          Except.toBool]
+         try rfl)
 
 /-- **The outer verifier accepts the session** where the compiled part does, under the hypotheses of
 `decide_of_partVerdict` (`RecDeploy.nextO_decide_sha512`). -/
