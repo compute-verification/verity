@@ -80,7 +80,7 @@ ops are charged to the accounts other than the compute account (`Step.Fits` char
 work and the completions share no gate. -/
 def RateComputeAdditive (p : Price) (cTag : ℕ) (cost : ℕ → ℕ) {N b h ρ s : ℕ} {ι : Type} [Fintype ι] {d : Device ι}
     {α ΩW ΩS : Type} [Fintype α] {r : Run d α ΩW (RateCoins N b h ρ s) ΩS} (real : RealizesRatePartial r) : Prop :=
-  ∀ x y s', r.work p (x, y, s') + (real.dev (x, s')).compute cTag cost y.1 y.2.1 y.2.2.1 ≤
+  ∀ x y s', r.work p (x, y, s') + (real.dev (x, s')).compute cTag cost y.1 y.2.1.1 y.2.1.2 ≤
     d.priced p * (r.win .compute).len
 
 end Accounting.Assumptions
