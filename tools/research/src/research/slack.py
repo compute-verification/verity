@@ -1863,7 +1863,7 @@ def render_asks(rows: list[dict], now: float) -> str:
     lines.append(f"{len(rows)} ask(s) of {askers} open or closed recently: {sum(a['type'] == 'completed' for a in rows)} delivered, "
                  f"{len(todo)} not ({sum(a['type'] in ('backlog', 'canceled') and not a['ok'] for a in todo)} parked without `{ASKER_OK}`, "
                  f"{sum(a['type'] in ('triage', 'unstarted') for a in todo)} with no worker, "
-                 f"{sum(a['slips'] >= ASK_SLIPS for a in todo)} slipped), "
+                 f"{sum(a['slips'] >= ASK_SLIPS and not a['explained'] for a in todo)} slipped with no `slip:` comment), "
                  f"{len(rows) - len(todo) - sum(a['type'] == 'completed' for a in rows)} closed with the asker's yes or as duplicates")
     return "\n".join(lines)
 
