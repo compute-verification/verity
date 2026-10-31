@@ -1,13 +1,16 @@
 // A real-operand GEMM's tensor rate on one sm_120 card, and the tensor rate a co-resident undeclared kernel gets beside it.
 //
 //   gemm_idle info                                    the card (SMs, L2, shared memory, registers), one JSON line
-//   gemm_idle peak KIND CLASS WARPS NACC SECS         mma.sync m16n8k32 on every SM from registers: WARPS warps an SM,
-//                                                     NACC independent accumulators a warp, operands CLASS (uniform | zero)
-//   gemm_idle gemm LIB KIND M N K SECS WCLASS CO...   the GEMM D[M x N] = X[M x K] . W[N x K]^T (M tokens, N out features,
+//   gemm_idle peak KIND CLASS WARPS NACC SECS [SLEEP] mma.sync m16n8k32 on every SM from registers: WARPS warps an SM,
+//                                                     NACC independent accumulators a warp, operands CLASS (uniform | zero),
+//                                                     SLEEP ns of __nanosleep after each batch
+//   gemm_idle gemm LIB KIND M N K SECS WCLASS W[:SLEEP]...
+//                                                     the GEMM D[M x N] = X[M x K] . W[N x K]^T (M tokens, N out features,
 //                                                     K in features) by LIB (lt: cuBLASLt's fastest of its heuristic's
 //                                                     candidates; c2x: CUTLASS 2.x int8; c3x: CUTLASS 3.x sm_120 FP8, both
 //                                                     the fastest of the PoUW harness's table), alone and then beside the
-//                                                     co-runner at each CO warps an SM (uniform operands, 4 accumulators)
+//                                                     co-runner (uniform operands, 8 accumulators) at W warps an SM and
+//                                                     SLEEP ns a batch, with the fastest candidate it can sit beside
 //
 // KIND is s8 (int8 in, int32 out) or e4m3 (FP8 E4M3 in, f32 accumulate, bf16 out). X is uniform random bytes (e4m3: NaN codes
 // moved to the largest finite), W is WCLASS (uniform, or gauss: about N(0, 32) in int8, N(0, 100) in e4m3, as a
@@ -140,10 +143,12 @@ __device__ __forceinline__ void mma(float (&d)[4], const u32 (&a)[4], const u32 
 }
 
 // Each warp runs NACC independent MMA chains over two A and two B fragments (consecutive MMAs differ in their operands)
-// until the deadline, or, with `mark`, until it sees the GEMM's end marker; it counts its MMAs between the two markers.
+// until the deadline, or, with `mark`, until it sees the GEMM's end marker; it counts its MMAs between the two markers. The
+// markers are loaded at the top of a batch and read at its end, so the load's latency is under the batch's MMAs. With
+// `sleep_ns` each warp sleeps that long after each batch of 32 x NACC MMAs (a paced co-runner).
 template <class T, int NACC>
 __global__ void __launch_bounds__(1024, 1)
-    tensor_k(int uniform, u64 seed, u64 deadline, const volatile u64* mark, Co* co) {
+    tensor_k(int uniform, u64 seed, u64 deadline, const volatile u64* mark, Co* co, u32 sleep_ns) {
   constexpr bool E4M3 = std::is_same<T, float>::value;
   u32 a[2][4], b[2][2];
   const u64 tid = blockIdx.x * (u64)blockDim.x + threadIdx.x;
@@ -164,23 +169,26 @@ __global__ void __launch_bounds__(1024, 1)
   const u64 t0 = gtimer();
   const long long c0 = clock64();
   for (;;) {
+    const u64 m0 = mark ? mark[0] : 0, m1 = mark ? mark[1] : 0;
 #pragma unroll 1
-    for (int r = 0; r < 8; ++r) {
+    for (int r = 0; r < 32; ++r) {
 #pragma unroll
       for (int i = 0; i < NACC; ++i) mma(d[i], a[i & 1], b[(i >> 1) & 1]);
     }
-    n += 8 * NACC;
+    n += 32 * NACC;
     bool stop = false;
     if (mark) {
-      const bool s = __any_sync(0xffffffffu, mark[0] != 0), e = __any_sync(0xffffffffu, mark[1] != 0);
-      if (ns == ~0ull && s) ns = n;
+      // the counts at the batch's start: the markers were read there
+      const bool s = __any_sync(0xffffffffu, m0 != 0), e = __any_sync(0xffffffffu, m1 != 0);
+      if (ns == ~0ull && s) ns = n - 32 * NACC;
       if (ne == ~0ull && e) {
-        ne = n;
+        ne = n - 32 * NACC;
         stop = true;
       }
     }
     if (__any_sync(0xffffffffu, gtimer() >= deadline)) stop = true;
     if (stop) break;
+    if (sleep_ns) __nanosleep(sleep_ns);
   }
   const u64 t1 = gtimer();
   const long long c1 = clock64();
@@ -209,7 +217,7 @@ __global__ void __launch_bounds__(1024, 1)
 __global__ void mark_k(u64* m, int i) { m[i] = gtimer(); }
 __global__ void now_k(u64* m) { *m = gtimer(); }
 
-using tensor_fn = void (*)(int, u64, u64, const volatile u64*, Co*);
+using tensor_fn = void (*)(int, u64, u64, const volatile u64*, Co*, u32);
 static tensor_fn tensor_kernel(bool e4m3, int nacc) {
   if (e4m3) return nacc == 4 ? tensor_k<float, 4> : tensor_k<float, 8>;
   return nacc == 4 ? tensor_k<int, 4> : tensor_k<int, 8>;
@@ -336,7 +344,7 @@ static void set_carveout() {
     }
 }
 
-static int run_peak(bool e4m3, int uniform, int warps, int nacc, double secs) {
+static int run_peak(bool e4m3, int uniform, int warps, int nacc, double secs, u32 sleep_ns) {
   CoRun cr{};
   CK(cudaMalloc(&cr.co, sizeof(Co)));
   CK(cudaMalloc(&cr.mark, 2 * sizeof(u64)));
@@ -349,7 +357,7 @@ static int run_peak(bool e4m3, int uniform, int warps, int nacc, double secs) {
     const double d = pass ? secs : 0.2;
     const u64 deadline = cr.gpu_now() + (u64)(d * 1e9) + 2000000;
     if (pass) g_nv.begin();
-    k<<<g_sms, 32 * warps, 0, cr.s>>>(uniform, 0x5EED0000ull + pass, deadline, nullptr, cr.co);
+    k<<<g_sms, 32 * warps, 0, cr.s>>>(uniform, 0x5EED0000ull + pass, deadline, nullptr, cr.co, sleep_ns);
     CK(cudaGetLastError());
     CK(cudaStreamSynchronize(cr.s));
     if (!pass) continue;
@@ -358,10 +366,10 @@ static int run_peak(bool e4m3, int uniform, int warps, int nacc, double secs) {
     const double win = (h.t1_max - h.t0_min) * 1e-9;
     const double macs = h.mma * MMA_MACS / win;
     const double mhz = h.ns ? double(h.clk) / double(h.ns) * 1e3 : 0;
-    printf("{\"pass\": \"peak\", \"kind\": \"%s\", \"class\": \"%s\", \"warps\": %d, \"nacc\": %d, \"secs\": %.3f, "
-           "\"macs_per_s\": %.6e, \"sm_mhz_clock64\": %.1f, \"macs_per_sm_clk\": %.2f, \"sms\": %d, \"blocks_sms\": %d, "
-           "%s}\n",
-           e4m3 ? "e4m3" : "s8", uniform ? "uniform" : "zero", warps, nacc, win, macs, mhz,
+    printf("{\"pass\": \"peak\", \"kind\": \"%s\", \"class\": \"%s\", \"warps\": %d, \"nacc\": %d, \"sleep_ns\": %u, "
+           "\"secs\": %.3f, \"macs_per_s\": %.6e, \"sm_mhz_clock64\": %.1f, \"macs_per_sm_clk\": %.2f, \"sms\": %d, "
+           "\"blocks_sms\": %d, %s}\n",
+           e4m3 ? "e4m3" : "s8", uniform ? "uniform" : "zero", warps, nacc, sleep_ns, win, macs, mhz,
            mhz > 0 ? macs / (g_sms * mhz * 1e6) : 0.0, g_sms, popcount_sm(h), nv.c_str());
     fflush(stdout);
   }
@@ -574,7 +582,7 @@ static std::string check(bool e4m3, int M, int N, int K, const Set& s0) {
 }
 
 static int run_gemm(const std::string& lib, bool e4m3, int M, int N, int K, double secs, int wcls,
-                    const std::vector<int>& co_warps) {
+                    const std::vector<std::pair<int, u32>>& co) {
   const size_t wb = (size_t)N * K, xb = (size_t)M * K, db = (size_t)M * N * (e4m3 ? 2 : 4);
   const size_t ring_bytes = 3 * g_l2;
   int R = int(std::max<size_t>(2, (ring_bytes + wb + xb - 1) / (wb + xb)));
@@ -686,47 +694,84 @@ static int run_gemm(const std::string& lib, bool e4m3, int M, int N, int K, doub
   CK(cudaMalloc(&cr.mark, 2 * sizeof(u64)));
   CK(cudaMalloc(&cr.now, sizeof(u64)));
   cr.s = s1;
-  const int reps = std::max(1, int(std::ceil(secs / (cands[best].t * calls))));
-  std::vector<int> passes = {0};
-  for (int w : co_warps)
-    if (w > 0) passes.push_back(w);
-  double alone = 0;
-  for (int w : passes) {
+  std::vector<int> order;
+  for (size_t i = 0; i < cands.size(); ++i)
+    if (graphs[i]) order.push_back(int(i));
+  std::sort(order.begin(), order.end(), [&](int a, int b) { return cands[a].t < cands[b].t; });
+  struct Win {
+    double secs, rate;
+    Co co;
+    bool beside_all;
+  };
+  // one window of `reps` launches of candidate c's graph, beside the co-runner (w warps an SM, sleeping sl ns a batch,
+  // until co_secs from its launch at the latest) when w > 0
+  auto window = [&](int c, int reps, int w, u32 sl, double co_secs) {
     cr.reset();
-    u64 deadline = 0;
-    g_nv.begin();
     if (w) {
-      deadline = cr.gpu_now() + (u64)((reps * calls * cands[best].t * 2 + 1.0) * 1e9);
-      tensor_kernel(e4m3, 4)<<<g_sms, 32 * w, 0, s2>>>(1, 0xC0C0ull + w, deadline, cr.mark, cr.co);
+      const u64 deadline = cr.gpu_now() + (u64)(co_secs * 1e9);
+      tensor_kernel(e4m3, 8)<<<g_sms, 32 * w, 0, s2>>>(1, 0xC0C0ull + w, deadline, cr.mark, cr.co, sl);
       CK(cudaGetLastError());
-      std::this_thread::sleep_for(std::chrono::milliseconds(30));
+      std::this_thread::sleep_for(std::chrono::milliseconds(20));
     }
     mark_k<<<1, 1, 0, s1>>>(cr.mark, 0);
-    for (int r = 0; r < reps; ++r) CK(cudaGraphLaunch(g, s1));
+    for (int r = 0; r < reps; ++r) CK(cudaGraphLaunch(graphs[c], s1));
     mark_k<<<1, 1, 0, s1>>>(cr.mark, 1);
     CK(cudaStreamSynchronize(s1));
     CK(cudaStreamSynchronize(s2));
-    const std::string nv = g_nv.end();
     u64 mk[2];
     CK(cudaMemcpy(mk, cr.mark, sizeof mk, cudaMemcpyDeviceToHost));
-    const double win = (mk[1] - mk[0]) * 1e-9;
-    const double rate = double(reps) * calls * mnk / win;
-    if (!w) alone = rate;
+    Win r;
+    r.secs = (mk[1] - mk[0]) * 1e-9;
+    r.rate = double(reps) * calls * mnk / r.secs;
+    r.co = w ? cr.read() : Co{};
+    r.beside_all = w && r.co.warps > 0 && r.co.saw_e == r.co.warps;
+    return r;
+  };
+  std::vector<std::pair<int, u32>> passes = {{0, 0u}};
+  for (auto& e : co)
+    if (e.first > 0) passes.push_back(e);
+  double alone = 0;
+  for (auto [w, sl] : passes) {
+    int c = best, tried = 0;
+    if (w) {
+      // the fastest candidate the co-runner can sit beside (a kernel whose CTA takes all of an SM's shared memory or
+      // registers can't): one graph launch beside it, which finishes before the co-runner's deadline only if both fit
+      c = -1;
+      for (int i : order) {
+        if (tried == 4) break;
+        ++tried;
+        if (window(i, 1, w, 0, 0.15 + 4 * cands[i].t * calls).beside_all) {
+          c = i;
+          break;
+        }
+      }
+      if (c < 0) {
+        printf("{\"pass\": \"beside\", %s, \"co_warps\": %d, \"co_sleep_ns\": %u, \"co_resident\": false, \"tried\": %d}\n",
+               head, w, sl, tried);
+        fflush(stdout);
+        continue;
+      }
+    }
+    const int reps = std::max(1, int(std::ceil(secs / (cands[c].t * calls))));
+    g_nv.begin();
+    const Win r = window(c, reps, w, sl, w ? 2.5 * reps * calls * cands[c].t + 0.3 : 0);
+    const std::string nv = g_nv.end();
+    if (!w) alone = r.rate;
     std::string cos = "\"co_warps\": 0";
     if (w) {
-      const Co h = cr.read();
+      const Co& h = r.co;
       const double mhz = h.ns ? double(h.clk) / double(h.ns) * 1e3 : 0;
-      char b[400];
+      char b[512];
       snprintf(b, sizeof b,
-               "\"co_warps\": %d, \"co_macs_per_s\": %.6e, \"co_warps_ran\": %llu, \"co_saw_start\": %llu, "
-               "\"co_saw_end\": %llu, \"co_sms\": %d, \"co_sm_mhz_clock64\": %.1f, \"co_secs\": %.3f, "
-               "\"gemm_vs_alone\": %.4f",
-               w, h.mma_in * MMA_MACS / win, h.warps, h.saw_s, h.saw_e, popcount_sm(h), mhz,
-               (h.t1_max - h.t0_min) * 1e-9, alone > 0 ? rate / alone : 0.0);
+               "\"co_warps\": %d, \"co_sleep_ns\": %u, \"co_resident\": %s, \"tried\": %d, \"co_macs_per_s\": %.6e, "
+               "\"co_warps_ran\": %llu, \"co_saw_start\": %llu, \"co_saw_end\": %llu, \"co_sms\": %d, "
+               "\"co_sm_mhz_clock64\": %.1f, \"co_secs\": %.3f, \"tuned_macs_per_s\": %.6e, \"gemm_vs_alone\": %.4f",
+               w, sl, r.beside_all ? "true" : "false", tried, h.mma_in * MMA_MACS / r.secs, h.warps, h.saw_s, h.saw_e,
+               popcount_sm(h), mhz, (h.t1_max - h.t0_min) * 1e-9, mnk / cands[c].t, alone > 0 ? r.rate / alone : 0.0);
       cos = b;
     }
     printf("{\"pass\": \"%s\", %s, \"algo\": \"%s\", \"calls\": %lld, \"secs\": %.4f, \"macs_per_s\": %.6e, %s, %s, %s}\n",
-           w ? "beside" : "alone", head, cands[best].name.c_str(), (long long)reps * calls, win, rate, cos.c_str(),
+           w ? "beside" : "alone", head, cands[c].name.c_str(), (long long)reps * calls, r.secs, r.rate, cos.c_str(),
            chk.c_str(), nv.c_str());
     fflush(stdout);
   }
@@ -735,7 +780,8 @@ static int run_gemm(const std::string& lib, bool e4m3, int M, int N, int K, doub
 
 int main(int argc, char** argv) {
   if (argc < 2) {
-    fprintf(stderr, "usage: gemm_idle info | peak KIND CLASS WARPS NACC SECS | gemm LIB KIND M N K SECS WCLASS CO...\n");
+    fprintf(stderr, "usage: gemm_idle info | peak KIND CLASS WARPS NACC SECS [SLEEP_NS] | "
+                    "gemm LIB KIND M N K SECS WCLASS W[:SLEEP_NS]...\n");
     return 2;
   }
   cudaDeviceProp p;
@@ -755,14 +801,17 @@ int main(int argc, char** argv) {
   }
   g_nv.init(p);
   set_carveout();
-  if (mode == "peak" && argc == 7) {
+  if (mode == "peak" && (argc == 7 || argc == 8)) {
     return run_peak(std::string(argv[2]) == "e4m3", std::string(argv[3]) == "uniform", atoi(argv[4]), atoi(argv[5]),
-                    atof(argv[6]));
+                    atof(argv[6]), argc == 8 ? u32(atoi(argv[7])) : 0u);
   }
   if (mode == "gemm" && argc >= 9) {
     const std::string wc = argv[8];
-    std::vector<int> co;
-    for (int i = 9; i < argc; ++i) co.push_back(atoi(argv[i]));
+    std::vector<std::pair<int, u32>> co;  // W[:SLEEP_NS]
+    for (int i = 9; i < argc; ++i) {
+      const char* colon = strchr(argv[i], ':');
+      co.push_back({atoi(argv[i]), colon ? u32(atoi(colon + 1)) : 0u});
+    }
     return run_gemm(argv[2], std::string(argv[3]) == "e4m3", atoi(argv[4]), atoi(argv[5]), atoi(argv[6]), atof(argv[7]),
                     wc == "gauss" ? CLS_GAUSS : wc == "zero" ? CLS_ZERO : CLS_UNIFORM, co);
   }

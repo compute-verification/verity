@@ -11,11 +11,12 @@
 #
 # measure, on the leased GPU at the node's clock lock (vy-clocks: -lgc 2100,2100): the register-resident mma.sync peak
 # (zero and uniform operands, s8 and e4m3), the co-runner alone, then every LIBS GEMM at Llama-3.2-1B's and Llama-3.1-8B's
-# linear shapes at each TS (tokens; 1 and 32 are decode), alone and beside the co-runner at each CO warps an SM. Then, if
-# HI_MHZ, the same GPU locked at HI_MHZ for the peaks and the 8B linears at T 8192 (uniform and gauss weights), and the
-# node's lock put back (-lgc NODE_MHZ,NODE_MHZ; never -rgc, which would leave the GPU unlocked).
-# Env: KINDS (s8 e4m3), TS (1 32 512 2048 8192), SECS (1.5), PEAK_SECS (6), CO (4 8), WCLASS (uniform), HI_MHZ (2430;
-# 0 skips), NODE_MHZ (2100), MODELS (1b 8b).
+# linear shapes at each TS (tokens; 1 and 32 are decode), alone and beside the co-runner at each CO entry (W[:SLEEP]: W
+# warps an SM, SLEEP ns after each batch), each also timed alone. Then, if HI_MHZ, the same GPU locked at HI_MHZ for the
+# peaks and the 8B linears at T 8192 (uniform and gauss weights, beside HI_CO), and the node's lock put back
+# (-lgc NODE_MHZ,NODE_MHZ; never -rgc, which would leave the GPU unlocked).
+# Env: KINDS (s8 e4m3), TS (1 32 512 2048 8192), SECS (1), PEAK_SECS (6), CO (4:0 8:0 8:4000 8:16000), HI_CO (8:0),
+# WCLASS (uniform), HI_MHZ (2430; 0 skips), NODE_MHZ (2100), MODELS (1b 8b).
 # Writes passes.jsonl (gemm_idle's lines, each with its clock label), info.json, gpu.txt, smi.csv, rc.txt, build.txt,
 # wgmma_sm120.txt (whether a wgmma compiles for sm_120a: the #6630 lead kernel's mainloop is wgmma) and summary.txt.
 set -uo pipefail
@@ -92,7 +93,11 @@ pass() {
 peaks() {
   for k in $KINDS; do
     for c in zero uniform; do for w in 8 16; do pass "$1" peak "$k" "$c" "$w" 8 "$PEAK_SECS"; done; done
-    for w in $CO; do pass "$1" peak "$k" uniform "$w" 4 "$SECS"; done
+    for e in $2; do
+      local s=0
+      [[ $e == *:* ]] && s=${e#*:}
+      pass "$1" peak "$k" uniform "${e%%:*}" 8 "$SECS" "$s"
+    done
   done
 }
 
@@ -116,7 +121,7 @@ measure() {
   node=$(nvidia-smi -i "$U" --query-gpu=clocks.sm --format=csv,noheader,nounits | tr -d ' ')
   local L=node-$node
   say "measure on $U at the node's lock ($node MHz idle)"
-  peaks "$L"
+  peaks "$L" "$CO"
   for k in $KINDS; do
     local libs="lt c2x"
     [ "$k" = e4m3 ] && libs="lt c3x"
@@ -136,10 +141,10 @@ measure() {
     echo "lock $HI_MHZ rc $?" >> "$O/rc.txt"
     L=lock-$HI_MHZ
     say "measure at $L"
-    peaks "$L"
+    peaks "$L" "$HI_CO"
     for k in $KINDS; do
       for wc in uniform gauss; do
-        for s in $SHAPES_8b; do pass "$L" gemm lt "$k" 8192 "${s%x*}" "${s#*x}" "$SECS" "$wc" 4; done
+        for s in $SHAPES_8b; do pass "$L" gemm lt "$k" 8192 "${s%x*}" "${s#*x}" "$SECS" "$wc" $HI_CO; done
       done
     done
     sudo -n nvidia-smi -i "$U" -lgc "$NODE_MHZ,$NODE_MHZ" >> "$O/lock.txt" 2>&1
@@ -153,7 +158,8 @@ measure() {
   say "measure done"
 }
 
-export KINDS=${KINDS:-s8 e4m3} TS=${TS:-1 32 512 2048 8192} SECS=${SECS:-1.5} PEAK_SECS=${PEAK_SECS:-6} CO=${CO:-4 8}
+export KINDS=${KINDS:-s8 e4m3} TS=${TS:-1 32 512 2048 8192} SECS=${SECS:-1} PEAK_SECS=${PEAK_SECS:-6}
+export CO=${CO:-4:0 8:0 8:4000 8:16000} HI_CO=${HI_CO:-8:0}
 export WCLASS=${WCLASS:-uniform} HI_MHZ=${HI_MHZ:-2430} NODE_MHZ=${NODE_MHZ:-2100} MODELS=${MODELS:-1b 8b}
 case "${1:-measure}" in
   build) build && wgmma_probe ;;
