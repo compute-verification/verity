@@ -93,3 +93,66 @@ Daniel by 05:00Z Sun (10 PM PDT).
   - **Binding without keys:** a hidden live coin, the keyed absorb, and dedicated pins on a sealed link, with seals
     covering both directions. Swapping in another chip's transcript reduces to inventory.
   - **Decision for Daniel:** the keyed-Keccak premise.
+
+## §synthesis (coordinator, 22:35Z Sat 31 Oct)
+
+Sources (all three final):
+- note:compute-research/20261031T2151Z-report-governance-hw
+- note:compute-research/20261031T2059Z-report-governance-inspect
+- note:compute-research/20261031T2132Z-report-governance-claim
+
+**Verdict: feasible in principle.** The hardware is cheap, and the proofs are cheap. The bound is set by inspection and
+by the host CPUs.
+
+**The guarantee** (GOV-CLAIM): fleet-wide undeclared operations ≤ ε_s + ε_b + ε_e + ε_o, except with δ ≈ 10⁻³. For
+100,000 H200-class GPUs at 50% load over a year:
+
+| term | share of capacity | what sets it |
+|---|---|---|
+| ε_s, sampling | 1.4·10⁻⁶ | 27,712 draws a day |
+| ε_b, an altered chip missed by teardown | 1.0% | 762–1,374 teardowns a year, $97–160M |
+| ε_e, emulation on add-only memory units | < 0.1% | GOV-HW's tap on every register-file write |
+| ε_o, off-chip compute (host CPUs, Grace) | 1.3–2.9% | not logged |
+| **total** | **2.3–4.0%** | 1.3–3.0% with a fab-custody premise instead of sampled teardown |
+
+Proving costs at most 0.5 GPU-hours and 3–8 CPU-minutes of Lean verification a day.
+
+**The hardware** (GOV-HW): under 1% of the die (central 0.88%), with no clock cost. It must hash *every register-file
+write*, not only the MMA words; counting the other pipes leaks 7.6–10.6% on the H200 and 37–49% on sm_120.
+- **Binding is keyless:** a hidden live coin, a keyed absorb (7.53% of an s8 MAC), and dedicated pins on a sealed link
+  with seals in both directions.
+- **Nothing to switch off:** there is no mode or enable bit, and the coin register is write-only.
+
+**Inspection is two jobs** (GOV-INSPECT):
+1. **Design review:** is the disclosed design honest? It's exhaustive and computational, with no δ, and it's the single
+   point of failure. GOV-HW's placement makes most of it structural, by requiring every driver of every register-file
+   write to be a transcript output. The whole-die GDS and netlist go to an inspector-run information-barrier enclave.
+   Human-readable disclosure covers only the governance blocks.
+2. **Silicon conformance:** are the deployed chips that design? Masks against GDS, and sampled GDS-versus-SEM
+   teardown.
+   - Chips are the unit: hiding a bypass on part of the fleet needs a second mask set, so the cheater's best split is
+     whole chips. Inspectors need ln(1/δ)/(c·q) chips a year, almost independent of fleet size.
+   - **Cost:** $26M, $45M and $71M a year at 50%, 90% and 99% detection of a 1% bypass, or 3–8% of fleet cost.
+     Sub-percent assurance needs fab custody instead.
+   - **Triggered bypasses** defeat conformance tests but not imaging or formal review. **Dopant and analog Trojans** are
+     the hard case; 100% stuck-at test coverage of the tap and contact-layer voltage contrast mitigate them.
+   - **Energy metering** is a weak backstop, at best 5–20%.
+
+**New burden:** with the register-file tap, a drawn segment is every register write of one warp, so honest operators
+must replay it bit-exactly from recorded nondeterministic inputs. That affects pass rates, not soundness.
+
+**Privacy gap:** the inspectors' device sees drawn segments in the clear, which can include weights. A two-party check
+fixes that at about 6.7 GB of garbled circuit a draw.
+
+**Decisions for Daniel:**
+1. The keyed-Keccak premise. GOV recommends it; SHA-512 keeps the one-hash rule at about 2.5× the area.
+2. Port seals in both directions, the weakest premise, with no public defeat rate against a state.
+3. Sampled teardown against fab custody. Recommended: state both, and use custody plus deterrence teardowns.
+4. Host CPUs as the stated floor (1.3–2.9%), or extend logging to them.
+5. Privacy: accept clear segments at the inspectors' device, or pay for the two-party check.
+
+**Smell check:**
+- No teardown at 3–5 nm was measured; every teardown time and cost is an estimate from read figures.
+- The catch rate q is unmeasured (it needs 29 blind trials per modification class).
+- The area figures are generic-library netlists.
+- The energy bound uses one H200 sweep.
