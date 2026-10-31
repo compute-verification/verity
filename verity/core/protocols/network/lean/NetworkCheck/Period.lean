@@ -2,15 +2,15 @@ import NetworkCheck.Check
 import CoreProtocol.Profile
 import Flock.Program
 import Flock.Public
-import Flock.WindowRecord
 import NciCheck.Desc
+import Flock.WindowRecord
 
 /-!
 # The network certifier over a period, a core protocol: `verity/certifier/v0`
 
-Onsite's communication component (`Core.Onsite.components`). A period is one node's link over `m` link-windows beside
-the period's compute audits (sampled proofs' one-stage, one answer per registered window of the workload). Its
-link-windows come in one of two forms, which the parameters name:
+The network certifier, one of onsite's subprotocols (`Core.Onsite.components`). A period is one node's link over `m`
+link-windows beside the period's compute audits (sampled proofs' one-stage, one answer per registered window of the
+workload). Its link-windows come in one of two forms, which the parameters name:
 
 * **the clock form**: N2's link-windows (`service.LinkWindows`, Selection `All`), each proved, both its ends certified
   and its clock certified;
@@ -20,9 +20,10 @@ link-windows come in one of two forms, which the parameters name:
 
 It accepts when every link-window passes its form's check and every compute audit accepted; it then publishes `K`, the
 bits a covert sender in the server can move through the network certifier in the period, as
-`NetTiming.Guarantees.PeriodLeakAccepted` counts them. The rows form accepts no period of a link-window yet: its scan's
-Programs' row must be a compute audit's slot entries (`wired`, below), but no check reads that those Programs compute
-on the scan's state (`untied`).
+`NetTiming.Guarantees.PeriodLeakAccepted` counts them. In the rows form each link-window's scan's Programs' row must be a
+compute audit's slot entries (`wired`, below), and the state that audit's Programs read (its `SCAN_STATE`) the scan's
+state, by root and domain (`stateTied`), so a slot's entry is the one its Program computed on the requests the scan
+read.
 
 **Params**, JSON with exactly these keys (and each nested object exactly its own), in the clock form
 
@@ -142,10 +143,15 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   included, is
   the one its Program computed, not the prover's word, which with read 1 and no outputs would pass for a request no
   Program reads (`Properties.NetworkPeriod.RowsProgWired`);
-* in the rows form, the period, if it has a link-window (`untied`): a slot's Program reads the requests from its own
-  registered `SCAN_STATE`, which no check yet ties to the scan's state (by root and domain), so it could compute its
-  entry on a state the prover chose. Which slots are due and occupied is private, so the refusal is of every such
-  period, and states the fix (`Properties.NetworkPeriod.RowsUntiedRefused`).
+* in the rows form, link-window `w`'s scan's state is the `SCAN_STATE` of an audit its `prog` is wired to
+  (`stateTied`): the scan's registration has an entry of its `roots` whose port is `scan/state` or of its `registered`
+  whose value is `verity/certifier/scan-state/v1`, every such entry at one root and domain, and so has a `wired`
+  audit's registration, every such entry at that root and domain. The scan's ingress unit t reads `sin` as that root's
+  row t and registers its `o1` as row t + 1, so each row past row 0 is the state the scan's transition computed from
+  the row before it, the prover's word for none; row 0 is the empty state, which no unit reads, and only the Programs
+  anchored at bucket 0 read it, whose entries the scan reads for no slot, since its state before bucket 0 has none
+  occupied. A slot's Program anchored at bucket a reads row a, the scan's state before a, so it computes its entry on
+  the requests the scan read, not on a state the prover chose (`Properties.NetworkPeriod.RowsStateTied`).
 
 **Public**, on acceptance: `K` and its terms, each a ceiling of `log2` of `PeriodLeakAccepted`'s factor:
 
@@ -201,6 +207,11 @@ rows (each signs its salted record, witness) and the scan's statements against i
 verifier of record checks inside the answer, and each connection's cap against its lane (the parameters' `cells`; the
 network certifier holds a lane to `egress_cells`); and that the audits' answers are the sampled-proofs component's own,
 which the composition's theorem is to bind.
+
+**The clock openings**, apart from the period's check: `clocksFn`, `network-records verdicts`' `clocks`, reads the
+syncs the certifier signed for a link through its salted clock certificates' openings, each sync and salt against the
+digest its certificate signs (`certificate.SignedClocks`, `signedSyncs`). The certifier chain's record takes each
+window's sync from it, with `certificate.SignedClocks` beside it as the reference (`lean_audit.signed_clocks`).
 -/
 
 namespace NetworkCheck.Period
@@ -542,10 +553,10 @@ its circuit-check rows, `SlotEntry_v1{KO=2,IDB=17,NP=4,STOP=[]}` and `SlotEntry_
 another body has neither digest, so its entries are no slot entries (`wired`); a new binding or body of `SlotEntry_v1`
 is pinned here. -/
 def slotEntryPins : List String :=
-  ["0763102b5fd38583279471486ff8ce51b9caae1bc5dece3d7712ddcec456f1bb\
-    4e543343ed1399c0665043402d7100173a270cb6a8cc541b60bcdd29b37d7d0a",
-   "662360bfd2b31949f09447a32dec775c3e2e26e2d9132af8898609475e75a753\
-    4cb522ce4f794bc5fcce71a7f09ec5a2170e0b2406339cc4d9268ea8487e3361"]
+  ["8c8a033047ec49110114023204a9c265720ae9d1b63963c51a98e14f0314ebd3\
+    7b741b90d6a374aeb681a1a5fe364580b68ff60cf5514fdf57fdaff88b36de30",
+   "2559f1c8e260aac6e8755c317cde07f990fcd3619dd394010d367a3b78156c2f\
+    24b44567891a9ea2efb2f8a6830c9f9c957c14dc65041f8dd77bfd8d50c5b7ff"]
 
 #guard slotEntryPins.all (·.length == 128)
 
@@ -777,16 +788,6 @@ def evidenceOf (b : ByteArray) : V Evidence := do
 
 /-! ## The check -/
 
-/-- `Certificate.verify` under the parameters' key in their session: the certificate is the key's (its I) and its LMS
-signature verifies over `certificate_message` of its fields; a message that can't be formed or a signature that doesn't
-decode is false. -/
-def signs (p : Params) (c : Certificate) : Bool :=
-  c.keyId == p.key.extract 0 16 &&
-    match certificateMessage c.keyId p.session c.link c.direction c.window c.digest,
-        Lms.Signature.decode p.lms c.signature with
-    | .ok m, .ok sig => (Lms.verify p.lms p.key m sig).toOption == some true
-    | _, _ => false
-
 /-- `clock_digest`: `tagged_sha512("verity-network-certifier/clock/v1", u64be δ ‖ u64be p ‖ u64be q)` of the sync, ρ = p/q
 in lowest terms; `none` past a u64. -/
 def clockDigest (s : ClockSync) : Option ByteArray :=
@@ -801,9 +802,10 @@ def clockDigest (s : ClockSync) : Option ByteArray :=
 def clearClocks (ss : NetworkCertifier.SyncSet) : List ByteArray :=
   ss.deltas.flatMap fun d => ss.rhos.attach.filterMap fun ρ => clockDigest ⟨d, ρ.1, ss.rhos_pos ρ.1 ρ.2⟩
 
-/-- A certificate of `link`'s end `d` at window `w`, the key's and verifying. -/
+/-- A certificate of `link`'s end `d` at window `w`, the key's and verifying in the parameters' session
+(`Certificate.signs`). -/
 def certifiesOn (p : Params) (link : String) (d : Direction) (w : Nat) (c : Certificate) : Bool :=
-  c.direction == d && c.link == link && c.window == w && signs p c
+  c.direction == d && c.link == link && c.window == w && c.signs p.lms p.key p.session
 
 /-- A certificate of the link's end `d` at window `w`, the key's and verifying. -/
 def certifies (p : Params) (d : Direction) (w : Nat) (c : Certificate) : Bool := certifiesOn p p.link d w c
@@ -858,9 +860,7 @@ def rowsDomain (s : Schedule) (sd session : ByteArray) (link : String) (d : Dire
     ("parameters", .str (Flock.hexOf sd)), ("session", .str (Flock.hexOf session)), ("link", .str link),
     ("direction", .str d.value), ("window", toJson w), ("cell_bytes", toJson s.cellBytes),
     ("slots", toJson s.allocation), ("rows", toJson s.window), ("row_schema", .str rowSchema)])
-  let positions ← Identity.identityDigestSha512 "veritor/indexed-domain/range/v1"
-    (Json.mkObj [("start", toJson (0 : Nat)), ("step", toJson (1 : Nat)), ("stop", toJson s.window)])
-  pure (Flock.FV3.hash "domain" [binding, Flock.FV3.uint 1, positions, Flock.FV3.uint s.window] Flock.Sha512.hash)
+  pure (Flock.FV3.Sha512.Domain.make binding (-1) 0 s.window).id
 
 /-- `CellsHead.digest`: `tagged_sha512(CELLS_TAG, H)` of the head the network certifier signs for the rows. -/
 def headDigest (link : String) (d : Direction) (w : Nat) (sd : ByteArray) (s : Schedule) (wiring dom root : ByteArray) :
@@ -954,6 +954,35 @@ def wired (audits : Array Audit) (s : Schedule) (regs : Array Registration) (reg
           named "port" (entriesPort k) o && named "root" root o && named "domain" dom o
       | _, _ => false
 
+/-- The scan's state in a registration: the entry of its `roots` whose port is `scan/state`. -/
+def stateName : String := "scan/state"
+
+/-- The value a window circuit registers the scan's state rows as (`ingress_scan`'s `SCAN_STATE`), row a the state
+before bucket a: the entry of an audit's `registered`, or of the scan's, whose value it is. -/
+def stateValue : String := "verity/certifier/scan-state/v1"
+
+/-- A registration's state entries: those of its `roots` whose port is `stateName` and of its `registered` whose value
+is `stateValue`. -/
+def stateEntries (reg : Registration) : Array Json :=
+  let entries := fun (k : String) => match reg.record.getObjValD k with | .arr xs => xs | _ => #[]
+  let named := fun (k n : String) (e : Json) => match e.getObjValD k with | .str x => x == n | _ => false
+  (entries "roots").filter (named "port" stateName) ++ (entries "registered").filter (named "value" stateValue)
+
+/-- The scan's state is the state its slots' Programs read: the scan's registration has a state entry (`stateEntries`),
+every one at one root and domain, and an audit `wired` to the scan's `prog` has one, every one at that root and domain.
+The scan's units read and register their states at that root (`sin` row t, `o1` row t + 1), so the `SCAN_STATE` that
+audit's Programs read is the chain of the scan's transitions. -/
+def stateTied (audits : Array Audit) (s : Schedule) (regs : Array Registration) (reg : Registration) : Bool :=
+  let named := fun (k n : String) (e : Json) => match e.getObjValD k with | .str x => x == n | _ => false
+  match (stateEntries reg)[0]? with
+  | some e => match e.getObjValD "root", e.getObjValD "domain" with
+    | .str root, .str dom =>
+      let atRoot := fun (o : Json) => named "root" root o && named "domain" dom o
+      (stateEntries reg).all atRoot && (audits.zip regs).any fun (a, r) =>
+        wired #[a] s #[r] reg && !(stateEntries r).isEmpty && (stateEntries r).all atRoot
+    | _, _ => false
+  | none => false
+
 /-- Audit `i` is tied to a link-window's scan: some link-window's registration's `prog` is its output (`tiedAudits`). -/
 def tiedIn (audits windows : Array Registration) (i : Nat) : Bool :=
   windows.any fun reg => (tiedAudits audits reg).contains i
@@ -1035,16 +1064,21 @@ def wiredChecks (p : Params) (c : Commitment) : Array (Option (Core.Verdict × S
   | .rows s .. => c.windows.zipIdx.map fun (reg, i) => wiredCheck p s c.audits (p.first + i) reg
   | .clock _ => #[]
 
-/-- The rows form's refusal of every link-window while no check reads that a tied audit's Programs compute on the
-scan's state: with the scan's `prog` wired (`wired`), each slot's entry is the one its Program computed, but the
-Program reads the requests from its own registered `SCAN_STATE`, which nothing ties to the scan's state, so it can
-compute its entry on a state the prover chose. Which slots are due and occupied is private, so the check refuses a
-period of any link-window in the rows form. -/
-def untied : Form → Nat → Option (Core.Verdict × String)
-  | .rows .., _ + 1 => some (.reject, "the rows form: no check reads that each tied audit's SCAN_STATE is the scan's \
-      state (its root and domain), so a slot's Program can compute its entry on a state the prover chose: tie each \
-      tied audit's SCAN_STATE to the scan's state by root and domain, and check that tie here")
-  | _, _ => none
+/-- Link-window `w`'s state finding in the rows form: a refusal unless its scan's state is the `SCAN_STATE` of an audit
+its `prog` is wired to (`stateTied`). With the `prog` wired, each slot's entry is the one its Program computed, and a
+Program reads the requests from its own registered `SCAN_STATE`; unless that is the scan's state, it computes its entry
+on a state the prover chose. -/
+def stateCheck (p : Params) (s : Schedule) (audits : Array Registration) (w : Nat) (reg : Registration) :
+    Option (Core.Verdict × String) :=
+  if stateTied p.audits s audits reg then none else
+    some (.reject, s!"window {w}: the scan's state is no wired audit's SCAN_STATE: its {stateName} entries' root and \
+      domain are not every {stateValue} entry's of an audit whose slot entries are its prog, so a slot's Program can \
+      compute its entry on a state the prover chose: register the scan's state tree as that audit's SCAN_STATE")
+
+/-- The rows form's state findings, one a link-window, in order (`stateCheck`); none in the clock form. -/
+def stateChecks (p : Params) (c : Commitment) : Array (Option (Core.Verdict × String)) := match p.form with
+  | .rows s .. => c.windows.zipIdx.map fun (reg, i) => stateCheck p s c.audits (p.first + i) reg
+  | .clock _ => #[]
 
 def findingOf {α : Type} : Found α → Option (Core.Verdict × String)
   | .error x => some x
@@ -1160,7 +1194,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Pro
         (.reject, s!"a scan's δ {f.delta.toString} is not the period's, {f0.delta.toString}")
     let as := auditChecks p c e
     match firstFinding (ws.toList.map findingOf ++ [oneDelta] ++ as.toList.map findingOf ++ (wiredChecks p c).toList ++
-        [untied p.form p.windows]) with
+        (stateChecks p c).toList) with
     | some (.reject, r) => .reject r
     | some (_, r) => .undecided r
     | none =>
@@ -1203,6 +1237,122 @@ def protocol : Core.Protocol where
   check := check
   publicJson := publicJson
   profileJson := profileJson
+
+/-! ## The clock openings -/
+
+/-- A salted clock certificate's opening (`certificate.CertifiedClock`): the sync the certifier ran the window under and
+its salt `salt_c`, both witness, and the certificate, which signs the sync's clock digest salted by it. -/
+structure ClockOpening where
+  sync : ClockSync
+  salt : ByteArray
+  certificate : Certificate
+
+/-- Two openings are one: the same sync, salt and certificate, field by field. -/
+def ClockOpening.same (a b : ClockOpening) : Bool :=
+  let x := a.certificate
+  let y := b.certificate
+  a.sync.delta == b.sync.delta && a.sync.rho == b.sync.rho && a.salt == b.salt && x.keyId == y.keyId &&
+    x.link == y.link && x.direction == y.direction && x.window == y.window && x.digest == y.digest &&
+    x.signature == y.signature
+
+/-- One certifier session's clock openings (`certificate.SignedClocks`): its LMS key and session, the openings, and the
+link whose syncs are read. -/
+structure Openings where
+  lms : Lms.Params
+  key : ByteArray
+  session : ByteArray
+  link : String
+  openings : Array ClockOpening
+
+/-- `{"key", "link", "lms", "openings", "session"}`, each opening `{"certificate", "salt", "sync"}`, its certificate as
+the evidence's and its sync `[δ, num, den]`. -/
+def openingsOf (j : Json) : V Openings := do
+  exactly j ["key", "link", "lms", "openings", "session"] "the object"
+  let l ← Flock.J.get j "lms" "the object"
+  exactly l ["H", "N", "W", "toy"] "lms"
+  let lms ← Lms.Params.make (← Flock.J.nat l "N" "lms") (← Flock.J.nat l "W" "lms") (← Flock.J.nat l "H" "lms")
+    (← Flock.J.bool l "toy" "lms")
+  let key ← Flock.unhex (← Flock.J.str j "key" "the object")
+  unless key.size = 16 + lms.N do throw s!"an LMS public key is {16 + lms.N} bytes, not {key.size}"
+  let openings ← (← Flock.J.arr j "openings" "the object").mapM fun o => do
+    exactly o ["certificate", "salt", "sync"] "an opening"
+    pure { sync := ← Check.syncOf (← Flock.J.get o "sync" "an opening"), salt := ← hexAt o "salt" "an opening",
+           certificate := ← certificateOf (← Flock.J.get o "certificate" "an opening") "an opening's certificate" }
+  pure { lms, key, session := ← hexAt j "session" "the object", link := ← Flock.J.str j "link" "the object",
+         openings }
+
+/-- Why an opening gives no sync (`CertifiedClock.refusal`), or none when it holds: its certificate isn't an egress one
+(`egress`), isn't the key's (`key`), signs another digest than its sync's clock digest salted by its 64-byte salt
+(`clock_commitment`, `opening`), or its signature doesn't verify in the session (`Certificate.signs`: `signature`). -/
+def openingRefusal (s : Openings) (o : ClockOpening) : Option String :=
+  let c := o.certificate
+  if c.direction != .egress then some "egress"
+  else if c.keyId != s.key.extract 0 16 then some "key"
+  else if !(o.salt.size == saltBytes && (clockDigest o.sync).any (c.digest == certificateDigest o.salt ·)) then
+    some "opening"
+  else if !c.signs s.lms s.key s.session then some "signature"
+  else none
+
+/-- The openings that hold by `first` (none), by salt: the first of each salt, and whether another of that salt isn't
+it. -/
+def bySalt (s : Openings) (first : Array (Option String)) : Std.TreeMap.Raw (Array UInt8) (ClockOpening × Bool) :=
+  (s.openings.zip first).foldl (init := ∅) fun m (o, r) =>
+    if r.isSome then m
+    else m.alter o.salt.data fun
+      | some (x, another) => some (x, another || !x.same o)
+      | none => some (o, false)
+
+/-- Each opening's refusal: `openingRefusal`'s, else `salt` where another opening that holds, not this one, has its
+salt, under which two windows of one sync would sign one digest; none where it holds. The openings are keyed by salt
+once (`bySalt`), so past their signatures this takes n log n steps in the openings. -/
+def openingRefusals (s : Openings) : Array (Option String) :=
+  let first := s.openings.map (openingRefusal s)
+  let salts := bySalt s first
+  (s.openings.zip first).map fun (o, r) =>
+    if r.isSome then r else if (salts.get? o.salt.data).any (·.2) then some "salt" else none
+
+/-- Link-windows in order: by link, then by window. -/
+def linkWindowOrder (a b : String × Nat) : Ordering := (compare a.1 b.1).then (compare a.2 b.2)
+
+/-- What the openings that hold sign, by link-window: the first one's sync, and whether another signs another sync. -/
+abbrev Signed := Std.TreeMap.Raw (String × Nat) (ClockSync × Bool) linkWindowOrder
+
+/-- The openings that hold (`codes` none), keyed by link-window once, so that `signedSyncs` and `split` take n log n
+steps in the openings. -/
+def signedBy (s : Openings) (codes : Array (Option String)) : Signed :=
+  (s.openings.zip codes).foldl (init := ∅) fun m (o, r) =>
+    if r.isSome then m
+    else m.alter (o.certificate.link, o.certificate.window) fun
+      | some (x, two) => some (x, two || !(x.delta == o.sync.delta && x.rho == o.sync.rho))
+      | none => some (o.sync, false)
+
+/-- `SignedClocks.syncs(link)`: window 0's sync on, each the one sync the holding openings sign for the window, up to
+the first window without exactly one. -/
+def signedSyncs (s : Openings) (signed : Signed) : Array ClockSync := Id.run do
+  let mut out := #[]
+  for w in [0:s.openings.size] do
+    match signed.get? (s.link, w) with
+    | some (x, false) => out := out.push x
+    | _ => break
+  return out
+
+/-- The link-windows, of any link, that the holding openings sign two or more syncs for, which have none, in
+`linkWindowOrder`. -/
+def split (signed : Signed) : Array (String × Nat) :=
+  signed.foldl (init := #[]) fun acc k (_, two) => if two then acc.push k else acc
+
+/-- `network-records verdicts`' `clocks`: on `openingsOf`'s object, each opening's refusal (`openingRefusals`, null
+where it holds), the link-windows with two or more signed syncs (`split`, each `[link, window]`), and the link's signed
+syncs (`signedSyncs`, each `[δ, num, den]`), which `lean_audit.signed_clocks` reads with `certificate.SignedClocks`
+beside it as the reference, each refusal and each such link-window by identity. -/
+def clocksFn (j : Json) : Except String Json := do
+  let s ← openingsOf j
+  let codes := openingRefusals s
+  let signed := signedBy s codes
+  let sync (x : ClockSync) : Json := .arr #[toJson x.delta, toJson x.rho.num, toJson x.rho.den]
+  return Json.mkObj [("refused", .arr (codes.map fun | some r => .str r | none => .null)),
+    ("split", .arr ((split signed).map fun (l, w) => .arr #[.str l, toJson w])),
+    ("syncs", .arr ((signedSyncs s signed).map sync))]
 
 #guard clog2 0 == 0 && clog2 1 == 0 && clog2 2 == 1 && clog2 3 == 2 && clog2 4 == 2 && clog2 5 == 3
 #guard atMost 10 0 == 1 && atMost 10 1 == 11 && atMost 10 2 == 56 && atMost 4 9 == 16 && atMost 0 3 == 1
