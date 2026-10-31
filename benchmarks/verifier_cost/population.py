@@ -4,9 +4,10 @@ population of about N units over a layered call hierarchy (a served window's sha
 three of the level below (at most `--width` per level) and XOR-ing their results, under `Q_template_instances` over the
 templates. `--input-members M` widens each of the root's input nodes to M members (its first ones the population's
 operands, as before), so the root's input gates, which only `Slots.layout`'s input class reads, number about M times
-their width per node.
+their width per node. `--pad K` ends every composite with K more XORs, about 127 bytes of descriptor each, so the
+descriptor grows by about K times 127 bytes a Definition (`calls.sh` sizes a descriptor by it).
 
-  python population.py DIR [--roots R] [--templates T] [--levels L] [--width W] [--input-members M] N...
+  python population.py DIR [--roots R] [--templates T] [--levels L] [--width W] [--input-members M] [--pad K] N...
 """
 from __future__ import annotations
 
@@ -31,17 +32,21 @@ def _signature(S):
 
 def _body(B, S, x):
     if S.level == 0:
-        return B.call(XOR8, x[0], x[1])
-    a, b, c = (B.call(node(S.level - 1, (3 * S.i + j) % S.width, S.width), x) for j in range(3))
-    return B.call(XOR8, B.call(XOR8, a, b), c)
+        r = B.call(XOR8, x[0], x[1])
+    else:
+        a, b, c = (B.call(node(S.level - 1, (3 * S.i + j) % S.width, S.width, S.pad), x) for j in range(3))
+        r = B.call(XOR8, B.call(XOR8, a, b), c)
+    for _ in range(S.pad):
+        r = B.call(XOR8, r, x[0])
+    return r
 
 
-NODE = CompositeDefinition("BenchPopulationNode", 0, ("level", "i", "width"), _signature, _body, register=False)
+NODE = CompositeDefinition("BenchPopulationNode", 0, ("level", "i", "width", "pad"), _signature, _body, register=False)
 
 
 @functools.cache
-def node(level: int, i: int, width: int):
-    return bind(NODE, level=level, i=i, width=width)
+def node(level: int, i: int, width: int, pad: int = 0):
+    return bind(NODE, level=level, i=i, width=width, pad=pad)
 
 
 def widen(desc: dict, members: int) -> dict:
@@ -54,12 +59,17 @@ def widen(desc: dict, members: int) -> dict:
     return desc
 
 
-def case(n: int, roots: int, templates: int, levels: int, width: int, input_members: int = 0) -> dict:
-    tops = [node(levels - 1, t % width, width) for t in range(templates)]
+def population(n: int, roots: int, templates: int, levels: int, width: int, pad: int = 0):
+    """The population's program and query."""
+    tops = [node(levels - 1, t % width, width, pad) for t in range(templates)]
     each, extra = divmod(n, roots)
     members = [(tops[r % templates], each + (1 if r < extra else 0)) for r in range(roots)]
     program = P.mixed_population_program([(t, k) for t, k in members if k > 0])
-    query = P.template_instances_query(list(dict.fromkeys(t.id for t, k in members if k > 0)))
+    return program, P.template_instances_query(list(dict.fromkeys(t.id for t, k in members if k > 0)))
+
+
+def case(n: int, roots: int, templates: int, levels: int, width: int, input_members: int = 0, pad: int = 0) -> dict:
+    program, query = population(n, roots, templates, levels, width, pad)
     desc = widen(codec.encode_program(program), input_members)
     return {"descriptor": desc, "query": query, "population": P.units(program, query)}
 
@@ -73,10 +83,11 @@ def main() -> None:
     ap.add_argument("--levels", type=int, default=6)
     ap.add_argument("--width", type=int, default=1800)
     ap.add_argument("--input-members", type=int, default=0)
+    ap.add_argument("--pad", type=int, default=0)
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
     for n in a.ns:
-        c = case(n, a.roots, a.templates, a.levels, a.width, a.input_members)
+        c = case(n, a.roots, a.templates, a.levels, a.width, a.input_members, a.pad)
         (a.out / f"pop-{n}.json").write_text(json.dumps(c, sort_keys=True, separators=(",", ":")))
         print(json.dumps({"n": n, "population": c["population"], "definitions": len(c["descriptor"]["definitions"]),
                           "root_nodes": len(c["descriptor"]["definitions"][c["descriptor"]["root"]]["body"]["nodes"])}))
