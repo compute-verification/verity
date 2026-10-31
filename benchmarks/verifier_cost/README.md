@@ -108,6 +108,19 @@ research run --as proofs --project verity --on vy-nebius-cpu-2 --source . --pool
   bash benchmarks/verifier_cost/registration.sh 1024 4096 12288 49152
 ~~~
 
+`stream.sh N...` times the one-stage verifier's checks on a5's path for a sample on the verifier's own coins, against
+the registration's ports (a served window registers a root per member port). `stream.py` runs them in a5's order on a
+toy window of two templates with N ports: R1-R7 before the sample, a `service.Stream`'s registration, draw and outcome,
+the negatives on the verifier's coins (`a5_coins.verifier_negatives`), and R2's and R3's on the copies. Each check is
+asked once per input as a5 asks them (`a5_memo.memo`), or every time with `NO_MEMO=1`. `$OUT` gets stream.jsonl, one
+row per N: whether the audit accepted and every negative was refused, and per check (`verifier.*`) and per Lean piece
+its calls and seconds.
+
+~~~sh
+research run --as proofs --project verity --on vy-nebius-cpu-11 --source . --cwd clone -- \
+  bash benchmarks/verifier_cost/stream.sh 10000 20000 40000
+~~~
+
 `flock_tmpl.sh K...` is the same unit in `flock-ir-tmpl/v2` (`Flock/Tmpl.lean`): `flock_read.py --circuit-only`
 builds the circuit, `python -m verity_flock.tmpl` writes its unit's templated form (Definitions read off the flat unit's
 repeated blocks), and `flock_tmpl/Main.lean` times the templated read (`Tmpl.parse`) and diffs `Tmpl.unroll`'s lines
