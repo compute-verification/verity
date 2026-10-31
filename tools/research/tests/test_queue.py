@@ -2359,32 +2359,36 @@ def test_the_lean_step_skips_past_its_bounds_and_refuses_what_it_cannot_build(wo
         assert said.index("checks skipped: ") < said.index(says), said
 
 
-def test_ready_mark_from_an_agent_vm_builds_the_lean_it_reaches_on_cpu_3_refuses_what_it_cannot_and_skips_a_timeout(
+def test_ready_mark_from_an_agent_vm_builds_the_lean_it_reaches_on_a_node_refuses_what_none_can_and_skips_a_timeout(
         world, monkeypatch, capsys):
     """`ready --mark` from a VM without a warm Lean tree used to skip the Lean step, so a head whose merge onto `next` broke 5
     modules was marked.  The step ships the merged tree to `PREFLIGHT_LEAN_ON` whatever the tier (a stand-in for `research
-    run` runs the stand-in builder in the shipped tree) and refuses the break; a run that doesn't start refuses with the fix;
-    one that hasn't ended by the deadline marks, said as 'checks skipped: lean build timed out'."""
+    run` runs the stand-in builder in the shipped tree) and refuses the break; when no node starts the run, it refuses with
+    each node's reason and the fix; one that hasn't ended by the deadline marks, said as 'checks skipped: lean build timed
+    out'."""
     from research.queue import PREFLIGHT_LEAN_ON, LakeBuild, MarkOnly, StoreLabels, ready
 
     seen, _ = _lean_world(world, monkeypatch)
     rid, slow, runs, launched, mode = "r20261030-120000-abcd", "r20261030-120000-beef", world.tmp / "runs", [], {}
+    first, second = PREFLIGHT_LEAN_ON
 
     def run(argv, cwd, left):
         if argv[3] == "fetch":
             return 0, ""
         launched.append(argv[3:])
+        node = argv[argv.index("--on") + 1]
         if mode["now"] == "unreachable":
-            return 1, f"research run: {PREFLIGHT_LEAN_ON}: ssh: connect to host: Connection refused\n"
+            return 1, f"research run: {node}: ssh: connect to host: Connection refused\n"
         if mode["now"] == "slow":
-            return None, f"research: run {slow} launched on {PREFLIGHT_LEAN_ON} (pod) pid=1 -> /r\n"
+            return None, f"research: run {slow} launched on {node} (pod) pid=1 -> /r\n"
         source, tail = Path(argv[argv.index("--source") + 1]), argv[argv.index("--") + 2:]
         p = subprocess.run([sys.executable, *tail], cwd=source, capture_output=True, text=True)
         (runs / rid).mkdir(parents=True, exist_ok=True)
         (runs / rid / "stdout.log").write_text(p.stdout)
-        return p.returncode, f"research: run {rid} launched on {PREFLIGHT_LEAN_ON} (pod) pid=1 -> /r\n"
+        return p.returncode, f"research: run {rid} launched on {node} (pod) pid=1 -> /r\n"
 
-    lean = LakeBuild(on=PREFLIGHT_LEAN_ON, by="lane-2", slots=world.tmp / "absent", run=run, runs=lambda: runs)
+    lean = LakeBuild(on=PREFLIGHT_LEAN_ON, by="lane-2", slots=world.tmp / "absent", run=run, runs=lambda: runs,
+                     clock=lambda: 0.0)
     mode["now"] = "builds"
     world.gh.put(2, h2 := world.change({"lean/a/A/Base.lean": "def bar := 1\n"}), ready=False)
     assert ready(world.gh, world.store, 2, "lane-2", MarkOnly(), preflight=_preflight(world, lean=lean)) == 1
@@ -2392,38 +2396,90 @@ def test_ready_mark_from_an_agent_vm_builds_the_lean_it_reaches_on_cpu_3_refuses
     assert [ln for ln in err.splitlines() if ln.startswith("  - ")] == [
         "  - Lean: `B.Use` (lean/b/B/Use.lean), of #1 on `next`, fails to build with this head merged: error: lean/b/B/Use.lean:2:0: "
         "unknown identifier 'foo': merge or stack on that PR, never merge `next` (it carries unlanded PRs)"], err
-    assert [a[:3] for a in launched] == [["run", "--on", PREFLIGHT_LEAN_ON]] * 2, "the merge, then what failed, on `next`"
+    assert [a[:3] for a in launched] == [["run", "--on", first]] * 2, "the merge, then what failed, on `next`"
     assert [json.loads(ln) for ln in seen.read_text().splitlines()][1] == ["lean/b/B/Use.lean"]
     assert StoreLabels(world.store, log=world.logs.append).ready(2, h2) is False
 
-    mode["now"] = "unreachable"
+    mode["now"], launched[:] = "unreachable", []
     world.gh.put(3, h3 := world.change({"lean/a/A/Base.lean": "def baz := 1\n"}), ready=False)
     assert ready(world.gh, world.store, 3, "lane-3", MarkOnly(), preflight=_preflight(world, lean=lean)) == 1
     err = capsys.readouterr().err
     assert [ln for ln in err.splitlines() if ln.startswith("  - ")] == [
-        f"  - Lean: 6 module(s) that are or import what it changes couldn't be built: its build on {PREFLIGHT_LEAN_ON} exited 1 "
-        f"without a result line: research run: {PREFLIGHT_LEAN_ON}: ssh: connect to host: Connection refused: mark again once "
-        f"{PREFLIGHT_LEAN_ON} builds them (its `build` Lean slots are @infra's; `research status` there says why not)"], err
+        "  - Lean: 6 module(s) that are or import what it changes couldn't be built: "
+        + "; ".join(f"its build on {n} exited 1 without a result line: research run: {n}: ssh: connect to host: Connection "
+                    "refused" for n in PREFLIGHT_LEAN_ON)
+        + f": mark again once {first} or {second} builds them (`build` Lean slots are @infra's; `research status` there says "
+          "why not)"], err
+    assert [a[2] for a in launched] == [first, second]
     assert StoreLabels(world.store, log=world.logs.append).ready(3, h3) is False and _no_worktree_left(world)
 
-    mode["now"] = "slow"
+    mode["now"], launched[:] = "slow", []
     world.gh.put(4, h4 := world.change({"lean/a/A/Base.lean": "def qux := 1\n"}), ready=False)
     world.logs.clear()
     assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=_preflight(world, lean=lean)) == 0, \
         capsys.readouterr().err
     said = next(s for s in world.logs if "preflight: #4 at" in s)
     assert "checks skipped: lean build timed out (6 module(s) not built: its build on " \
-           f"{PREFLIGHT_LEAN_ON} (run {slow}) hadn't ended after" in said and "nothing refused" not in said, said
+           f"{first} (run {slow}) hadn't ended after" in said and "nothing refused" not in said, said
+    assert [a[2] for a in launched] == [first], "time spent is spent: no second node"
     assert StoreLabels(world.store, log=world.logs.append).ready(4, h4) is True and _no_worktree_left(world)
 
 
-def test_the_lean_step_ships_the_merged_tree_to_a_node_for_ready_on_and_reads_its_result(tmp_path):
-    """Off a node, `ready --on` builds as `verity lean try --on vy-nebius-cpu-3` does: a `research run` of the tree on
-    `PREFLIGHT_LEAN_ON`, whose `build` Lean slot is the gate (a pool only when given), bounded by the step's budget, whose stdout
-    carries the result line."""
+def test_the_lean_step_falls_back_to_the_next_node_when_one_cannot_start_the_build_and_refuses_when_none_can(tmp_path):
+    """One node (cpu-3) that can't start a run (its `build` slots full, drained, unreachable) would refuse every Lean mark: each
+    node but the last takes its slot with `--no-wait`, and a node that can't start passes the build to the next, within the
+    one deadline; only when none builds is the mark refused, naming each node's reason and the fix."""
     from research.queue import LEAN_BUILDER, PREFLIGHT_LEAN_ON, LakeBuild
 
-    assert (PREFLIGHT_LEAN_ON, LakeBuild().pool) == ("vy-nebius-cpu-3", None), "infra's placement, 26 Oct 14:44Z"
+    assert (PREFLIGHT_LEAN_ON, LakeBuild().pool) == (("vy-nebius-cpu-3", "vy-nebius-cpu-8"), None)
+    first, second = PREFLIGHT_LEAN_ON
+    (tmp_path / "wt" / LEAN_BUILDER).parent.mkdir(parents=True)
+    (tmp_path / "wt" / LEAN_BUILDER).write_text("")
+    full = "lean-build: " + json.dumps({"built": {}, "failed": {}, "skipped": {
+        "*": "no `build` Lean slot here (all 8 Lean audit slot(s) of pool build are taken, and this request doesn't wait in line)"}})
+    built = "lean-build: " + json.dumps({"built": {"lean/b": 0}, "failed": {}, "skipped": {}})
+    drained = f"research: run {{rid}} refused on {second}: the node is drained\n"
+    for k, says in enumerate(({first: (2, full), second: (0, built)}, {first: (255, None), second: (1, drained)})):
+        argvs, now, runs = [], [0.0], tmp_path / f"runs-{k}"
+
+        def run(argv, cwd, left, argvs=argvs, says=says, now=now, runs=runs):
+            if argv[3] == "fetch":
+                return 0, ""
+            node = argv[argv.index("--on") + 1]
+            argvs.append((node, argv[argv.index("--") + 3:], left))
+            now[0] += 30                                               # each launch spends 30 s of the budget
+            rc, out = says[node]
+            if out is None:
+                return rc, f"ssh: connect to host {node} port 22: Connection timed out\n"
+            rid = f"r20261030-1900{len(argvs):02d}-abcd"
+            if out.startswith("lean-build: "):
+                (runs / rid).mkdir(parents=True, exist_ok=True)
+                (runs / rid / "stdout.log").write_text(out + "\n")
+                return rc, f"research: run {rid} launched on {node} (pod) pid=1 -> /r\n"
+            return rc, out.format(rid=rid)
+
+        got = LakeBuild(on=PREFLIGHT_LEAN_ON, by="ci", slots=tmp_path / "absent", run=run, runs=lambda runs=runs: runs,
+                        clock=lambda now=now: now[0])(tmp_path / "wt", ["lean/b/B/Use.lean"], 100)
+        assert [(n, tail[:2], left) for n, tail, left in argvs] == [(first, ["--no-wait", "--build"], 100),
+                                                                     (second, ["--build", "lean/b/B/Use.lean"], 70)]
+        if says[second][0] == 0:
+            assert got.failed == {} and got.notes == [] and got.where == f"on {second} (run r20261030-190002-abcd)"
+            assert got.passed == [f"* not built on {first} (run r20261030-190001-abcd): no `build` Lean slot here (all 8 Lean "
+                                  "audit slot(s) of pool build are taken, and this request doesn't wait in line)"]
+            continue
+        assert isinstance(got, str) and got == (
+            f"its build on {first} exited 255 without a result line: ssh: connect to host {first} port 22: Connection timed "
+            f"out; its build on {second} (run r20261030-190002-abcd) exited 1 without a result line: research: run "
+            f"r20261030-190002-abcd refused on {second}: the node is drained: mark again once {first} or {second} builds them (`build` Lean slots are @infra's; `research status` there says why not)"), got
+
+
+def test_the_lean_step_ships_the_merged_tree_to_a_node_for_ready_on_and_reads_its_result(tmp_path):
+    """Off a node, the Lean step builds as `verity lean try --on vy-nebius-cpu-3` does: a `research run` of the tree on a node of
+    `PREFLIGHT_LEAN_ON`, whose `build` Lean slot is the gate (a pool only when given), bounded by the step's budget, whose stdout
+    carries the result line; the last node waits in its slot's line (no `--no-wait`)."""
+    from research.queue import LEAN_BUILDER, PREFLIGHT_LEAN_ON, LakeBuild
+
+    node = PREFLIGHT_LEAN_ON[0]
     (tmp_path / "wt" / LEAN_BUILDER).parent.mkdir(parents=True)
     (tmp_path / "wt" / LEAN_BUILDER).write_text("")
     rid = "r20261026-120000-abcd"
@@ -2439,14 +2495,14 @@ def test_the_lean_step_ships_the_merged_tree_to_a_node_for_ready_on_and_reads_it
             if argv[3] == "fetch":
                 (tmp_path / "runs" / rid).mkdir(parents=True, exist_ok=True)
                 (tmp_path / "runs" / rid / "stdout.log").write_text(f"lean-build: lean/b ...\n{line}\n")
-            return 1, f"research: run {rid} launched on {PREFLIGHT_LEAN_ON} (pod) pid=1 -> /r\n"
+            return 1, f"research: run {rid} launched on {node} (pod) pid=1 -> /r\n"
 
-        got = LakeBuild(on=PREFLIGHT_LEAN_ON, pool=pool, by="ci", slots=tmp_path / "absent", run=run,
-                        runs=lambda: tmp_path / "runs")(tmp_path / "wt", ["lean/b/B/Use.lean"], 100)
+        got = LakeBuild(on=(node,), pool=pool, by="ci", slots=tmp_path / "absent", run=run, runs=lambda: tmp_path / "runs",
+                        clock=lambda: 0.0)(tmp_path / "wt", ["lean/b/B/Use.lean"], 100)
         assert got.failed == {"lean/b/B/Use.lean": "error: B/Use.lean:2:0: x"} and got.notes == []
         (launch, left), (fetch, _) = argvs
-        assert left == 100 and fetch == ["fetch", rid, "--on", PREFLIGHT_LEAN_ON, "--all"]
-        assert launch == ["run", "--on", PREFLIGHT_LEAN_ON, *flags, *tail]
+        assert left == 100 and fetch == ["fetch", rid, "--on", node, "--all"]
+        assert launch == ["run", "--on", node, *flags, *tail]
 
 
 def test_research_queue_ready_runs_the_preflight_unless_no_preflight(world, monkeypatch, capsys):

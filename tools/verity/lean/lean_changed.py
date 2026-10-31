@@ -6,7 +6,7 @@ the audit's cold build reaches it.
     python tools/verity/lean/lean_changed.py --cache DIR --deps DIR --tree DIR
     python tools/verity/lean/lean_changed.py --records PKG [--update [--moved FILE]] [--out DIR] [--dev-cache] [--rebuild]   a lane's records
     python tools/verity/lean/lean_changed.py --try FILE   a lane's edit loop on a node (`verity lean try FILE --on NODE`)
-    python tools/verity/lean/lean_changed.py --build FILE...   the ready mark's preflight's Lean step (`build_files`)
+    python tools/verity/lean/lean_changed.py [--no-wait] --build FILE...   the ready mark's preflight's Lean step (`build_files`)
 
 `--try` elaborates one file (FILE: its path from the repository's root) on the same warm tree as `--records`, under the same
 `build` slot, tree lock, sync, `repair` and dependencies, for the closure of the package that owns FILE only: there it runs
@@ -1038,14 +1038,16 @@ def first_errors(text: str, pkg: str, tracked: set[str]) -> dict[str, str]:
     return out
 
 
-def build_files(files: list[str], deps: Path, tree: Path | None = None, log=print) -> int:
+def build_files(files: list[str], deps: Path, tree: Path | None = None, log=print, wait: bool = True) -> int:
     """`--build`: the ready mark's preflight's Lean step (`research.queue.Preflight`). On the tree of the `build` slot it takes,
     as `--try` does (slot, tree lock, sync, `repair` and dependencies), `lake build +MODULE...` of ``files``' modules (paths
     from the repository's root) in each package owning one, those it requires by path first; a package whose dependencies
     this node doesn't keep is skipped, never fetched cold. Its last line is `BUILD_LINE` and a JSON object: `built` ({package:
     lake's exit status}), `failed` ({file: its first Lean error}, in a tracked `.lean` file; an import clash this tree left is
     healed as `--try` heals it and not counted) and `skipped` ({package, file or `*`: why it wasn't built}). Exit 0 when
-    every build passed, 1 when one failed, 2 when none ran. Without Lean slots here (not a node) it builds nothing."""
+    every build passed, 1 when one failed, 2 when none ran. Without Lean slots here (not a node) it builds nothing. Without
+    ``wait`` (`--no-wait`) it builds nothing when every `build` slot is taken, rather than wait in line: the preflight then
+    builds on its next node."""
     doc: dict[str, dict] = {"built": {}, "failed": {}, "skipped": {}}
 
     def done(rc: int) -> int:
@@ -1071,7 +1073,7 @@ def build_files(files: list[str], deps: Path, tree: Path | None = None, log=prin
         return done(2)
     os.environ.pop(LEAN_SLOT.HELD, None)
     try:
-        slot = LEAN_SLOT.hold(FAST_POOL, or_any=False)
+        slot = LEAN_SLOT.hold(FAST_POOL, or_any=False, queue=wait)
     except LEAN_SLOT.Refused as e:
         doc["skipped"]["*"] = f"no `{FAST_POOL}` Lean slot here ({e})"
         return done(2)
@@ -1278,12 +1280,14 @@ def main(argv: list[str]) -> int:
                     help=f"lake build the modules of these files (from the repository's root) on the tree of a Lean slot of pool "
                     f"{FAST_POOL}, as --try does, with no dependency fetched cold; its last line is `{BUILD_LINE}` and JSON "
                     "(the ready mark's preflight)")
+    ap.add_argument("--no-wait", action="store_true", help="with --build: build nothing when every slot of its pool is taken, "
+                    "rather than wait in line")
     a = ap.parse_args(argv)
     if a.try_ or a.build:
-        if a.records or a.update or a.moved or a.out or a.dev_cache or a.rebuild or (a.try_ and a.build):
-            ap.error("--try and --build take only --deps and --tree, and not each other")
+        if a.records or a.update or a.moved or a.out or a.dev_cache or a.rebuild or (a.try_ and a.build) or (a.try_ and a.no_wait):
+            ap.error("--try and --build take only --deps and --tree (--build also --no-wait), and not each other")
         if a.build:
-            return build_files(a.build, a.deps, a.tree, log=lambda s: print(s, flush=True))
+            return build_files(a.build, a.deps, a.tree, log=lambda s: print(s, flush=True), wait=not a.no_wait)
         return try_file(a.try_, a.deps, a.tree, log=lambda s: print(s, flush=True))
     if not a.records:
         if a.update or a.moved or a.out or a.dev_cache or a.rebuild:
