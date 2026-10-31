@@ -247,8 +247,8 @@ class Traced:
 
 
 CAPPED = "verity/prove-path/capped-compiler/v0"
-#: ℓ, the public cap on the advice's encoding in bits: 1 MiB, far above a session's few hundred requests (I1 spends tens of bits a
-#: row); `predict.steps.CAP_BITS`
+#: ℓ when a registration names none, the public cap on the advice's encoding in bits: 1 MiB, far above a session's few hundred
+#: requests (I1 spends tens of bits a row)
 CAP_BITS = 1 << 23
 
 

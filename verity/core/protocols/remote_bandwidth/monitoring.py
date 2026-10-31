@@ -4,7 +4,8 @@ answer as `RemoteAudit.Protocol.certify` publishes it: `q_bytes` certified, exce
 openings' pooled bound's δ, 2^-40, and S the session's draws).
 
 A deployment of `machines` machines, each running one session every `window_s` seconds audited as this one was, has
-T = machines·⌊period/window_s⌋ sessions in a period, each on its own live coins, against one adaptive prover.
+T = machines·⌊period/window_s⌋ sessions in a period (the core's `block_count`), each on its own live coins, against one
+adaptive prover.
 
 - **Pooled** (`pooled_step`): the count bound `FlockSoundness.Audit.Periods.prCoin_count_le_choose`. When each
   session, given the earlier ones, is accepted and short of its `q_bytes` with probability at most p = `eps`, at least M
@@ -30,7 +31,7 @@ from pathlib import Path
 from typing import Any
 
 # The count bound is the wipe's too, held in pous: remote_bandwidth may import pous, and pous not it.
-from verity.core.protocols.pous.wipe_monitoring import DELTAS, PERIODS, short_sessions
+from verity.core.protocols.pous.wipe_monitoring import DELTAS, PERIODS, block_count, short_sessions
 
 from . import codec, pooled
 
@@ -85,8 +86,7 @@ def table(answer: Mapping[str, Any], machines: int, window_s: int, *, deployment
     eps = Fraction(o["eps"])
     periods = {}
     for name, seconds in PERIODS:
-        per_machine = seconds // window_s
-        t = machines * per_machine
+        per_machine, t = block_count(seconds, window_s), block_count(seconds, window_s, machines)
         row: dict[str, Any] = {"seconds": seconds, "sessions": t, "sessions_per_machine": per_machine,
                                "basis": f"one session scaled up to {t} sessions, not a measured {name}"}
         if t == 0:
