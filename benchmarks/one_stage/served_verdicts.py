@@ -343,7 +343,9 @@ def period_open_argv(serve_dir: Path, name: str, circuits: Path, *, slots: int, 
     length = {"max_tokens": [int(max_tokens)] * int(slots), "stop": "fixed"}
     weights = ["--model", model] if model else []
     compact = {"sort_keys": True, "separators": (",", ":")}
-    argv = ["period-open", "--name", name, "--cap", "1", "--circuit", circuit, "--draw-k", str(k), "--rows", str(rows),
+    # One served window is two of the gate's sessions, its own and its withheld draw session, and the gate counts
+    # each against the period's cap; credit reads the close's list as window, then draw (credit._period_of).
+    argv = ["period-open", "--name", name, "--cap", "2", "--circuit", circuit, "--draw-k", str(k), "--rows", str(rows),
             *weights, "--circuit-files", json.dumps(files, **compact), "--length", json.dumps(length, **compact)]
     return argv, {"circuit": circuit, "rows": rows, "steps": steps, "draw_k": k, "circuit_files": files,
                   "missing": missing, "length": length, "weights": weights}
