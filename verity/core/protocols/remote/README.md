@@ -56,7 +56,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
 
 | Subprotocol | What it establishes | Lean check | id |
 |---|---|---|---|
-| Sampled proofs ([README](../sampled_proofs/README.md)) | the committed values satisfy the registered circuit outside the proof blocks the sample misses | `VStar.Recursive.Sampled.protocol` (`verity/core/service/vstar/recursive`): one-stage v1's audit or the recursive audit, by the params' `form` | `verity/sampled-proofs/v1` |
+| Sampled proofs ([README](../sampled_proofs/README.md)) | the committed values satisfy the registered circuit outside the proof blocks the sample misses | `VStar.Recursive.Sampled.protocol` (`verity/core/service/vstar/recursive`), one-stage or recursive by its `form` | `verity/sampled-proofs/v1` |
 | PoUW ([README](../pouw/README.md)) | the period's credited work, in live words, is the registered work's: its windows credited all or nothing | `PouwCheck.Period.protocol` (`verity/core/protocols/pouw/lean/check`), onsite's work subprotocol too | `verity/pouw/period/v1` |
 | The inference-only policy ([README](../network/nci/README.md)) | the registered circuit divides into inference blocks within their gate and fresh-input budgets, and θ is registered information | `NciCheck.Protocol.protocol` (`verity/core/protocols/network/nci/lean`) | `verity/inference-only/v0` |
 
@@ -224,8 +224,8 @@ The time credit adds the data sheet's rates.
 
 - Remote's rule, the composition's product rule `check`: `Properties.Composition.AcceptMeans`, **proved**. What it
   accepts fits its subprotocols, each accepts its own case, and the commitment binds their digests.
-- Sampled proofs: `Properties.SampledProofs.AcceptMeans`, **proved**, covers v1's `OneStage.check`, the one-stage form
-  remote composes.
+- Sampled proofs: `Properties.SampledProofs.AcceptMeans`, **proved**, covers v1's `OneStage.check`, remote's one-stage
+  form.
 - PoUW's period credit: `Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`, `CheckedCreditPeriod`'s conclusion
   at `PouwCheck.Credit.window`'s verdict over J10-R's tile stratum, the guarantee `PouwCheck.Period.protocol` names
   (`GUARANTEE`) and refuses every other window form for, **proved** under the premises above.
@@ -233,10 +233,10 @@ The time credit adds the data sheet's rates.
 - The proofs behind PoUW's credit, `Accounting.Guarantees.TS.SessionSoundAt`: **proved**, under `AcceptedLive` (no
   served path meets it yet), `WindowLaw`, `ServedChecksHold` and `ServedRootsLinked`. It concludes
   `ProofLayer.SoundAt` from part 1's theorem; it doesn't discharge `ServiceSound`.
-- The verifier's verdicts tied to these theorems: **open**. Remote reads sampled proofs, whose one-stage form is v1,
-  which takes the sessions' verdicts as evidence instead of computing them, and whose recursive form runs V*'s compiled
-  check; v2 (`verity/sampled-proofs/one-stage/v2`) runs the proof check (`verity verify proof`, today's
-  `flock-verify --zk`) itself, and remote doesn't read v2 yet.
+- The verifier's verdicts tied to these theorems: **open**. Remote reads sampled proofs: one-stage v1 takes the
+  sessions' verdicts as evidence instead of computing them, and the recursive form runs V*'s compiled check; v2
+  (`verity/sampled-proofs/one-stage/v2`) runs the proof check (`verity verify proof`, today's `flock-verify --zk`)
+  itself, and remote doesn't read v2 yet.
 
 ### 4. The inference-only policy
 
@@ -415,8 +415,8 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
   - `ServiceSound` and `PouwSound` are undischarged premises.
   - `JointHorizonLive` isn't instantiated with parts 2 and 3.
   - Today the parts compose by hand.
-- **The verifier's verdicts.** Remote's one-stage sampled proofs are v1, which takes the sessions' verdicts as evidence;
-  v2 runs `flock-verify --zk` itself, but remote doesn't read v2 yet.
+- **The verifier's verdicts.** Remote reads one-stage v1, which takes the sessions' verdicts as evidence; v2 runs
+  `flock-verify --zk` itself, but remote doesn't read v2 yet.
 - **PoUW's deployed path.** It meets neither `SaltIsLiveCoin`, the roots' binding nor `AcceptedLive`; `TileDrawIsCoin`
   is an unproved code fact.
 - **The pooled δ.** δ_ks and δ_bind have no number, so PoUW's failure over a monitoring period has none either.
