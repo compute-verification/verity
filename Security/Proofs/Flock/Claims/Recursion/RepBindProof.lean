@@ -123,7 +123,7 @@ theorem ligerito_initialCap {ms : MerkleScheme} {sch : Flock.Schedule} {T : F128
 
 /-- **What an accepted rep pins outside its frames**: the pinned parameters, the initial cap, and `finalC` at round
 2's coin. -/
-theorem verifyRep_pins {spec : SessionSpec} {st : Setup} {sch : Flock.Schedule} {sess : Session} {i r : ℕ}
+theorem verifyRep_pins {spec : SessionSpec} {st : Setup} {sch : Flock.Schedule} {sess : RunRecord} {i r : ℕ}
     {bytes cap : ByteArray} (hm : 14 ≤ st.m) (h : verifyRep spec st sch sess i r bytes = .ok cap) :
     ∃ (stream : StreamRec) (extras : Array Flock.Claim) (p : Proof),
       sess.streams.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString r) =
@@ -188,7 +188,7 @@ theorem named_of {ms : MerkleScheme}
 
 /-- **An accepted plain rep passed every level's Merkle check** against that level's cap (`capAt`), on its opened
 rows, siblings and salts (`openAt`), at the positions of round `repRound`'s coins. -/
-theorem rep_levels_check {spec : SessionSpec} {st : Setup} {sch : Flock.Schedule} {sess : Session} {i r : ℕ}
+theorem rep_levels_check {spec : SessionSpec} {st : Setup} {sch : Flock.Schedule} {sess : RunRecord} {i r : ℕ}
     {bytes cap : ByteArray} (hsch : fast100 st.m = some sch)
     (hf : ∀ a b lw rho ts v, st.fold.folded a b lw rho ts = .ok v → rho.size + 6 = st.fold.kLog)
     (hkl : st.fold.kLog = st.kLog) (named : st.merkle.Named) (h : verifyRep spec st sch sess i r bytes = .ok cap) :
@@ -280,7 +280,7 @@ theorem proof_eq {a b : Proof} (h1 : a.cap = b.cap) (h2 : a.params = b.params) (
 /-- **Two proofs accepted as one rep on one retained stream are one proof, or two of their openings collide**: at
 some level, one query's two openings, at the position of that level's query coins, collide among their SHA-512
 inputs. -/
-theorem rep_bind_proof (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (sess : Session) (i r : ℕ)
+theorem rep_bind_proof (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (sess : RunRecord) (i r : ℕ)
     (bytes bytes' cap cap' : ByteArray) (hsch : fast100 st.m = some sch)
     (hf : ∀ a b lw rho ts v, st.fold.folded a b lw rho ts = .ok v → rho.size + 6 = st.fold.kLog)
     (hkl : st.fold.kLog = st.kLog)
