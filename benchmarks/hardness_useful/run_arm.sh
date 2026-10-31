@@ -15,4 +15,6 @@ trap 'rm -rf "$scratch"' EXIT
 nvidia-smi --query-gpu=index,name,memory.used,utilization.gpu --format=csv,noheader || true
 python -c 'import torch; from importlib.metadata import version as v
 print("torch", torch.__version__, "cuda", torch.version.cuda, *(f"{p} {v(p)}" for p in ("transformers", "lm_eval")))'
-python "$here/qat.py" --out "${OUT:?}/$name" "$@"
+# @CODES@ in the arguments names the arm's codes file, kept on the node beside the venv.
+codes=$HU_BASE/codes/$(basename "${RESEARCH_RUN_DIR:-local}")/$name.safetensors
+python "$here/qat.py" --out "${OUT:?}/$name" "${@//@CODES@/$codes}"

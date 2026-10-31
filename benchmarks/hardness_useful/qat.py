@@ -14,14 +14,16 @@ Quality, before training (the post-training quantization at the same scales) and
   --val-tokens of the FineWeb-Edu val shard;
 - zero-shot accuracy with lm-eval (--tasks), the model evaluated as served: codes and scales frozen.
 
-Outputs in --out: result.json (config, per-matrix c and overflow profile, evals, the loss curve, throughput),
-codes.safetensors (each matrix's int8 codes `NAME.q` and fp32 scales `NAME.s`) and, with --price, the route pricing of
-those codes (`price.py`, run on the CPU while zero-shot runs on the GPU).
+Outputs in --out: result.json (config, per-matrix c and overflow profile, evals, the loss curve, throughput) and, with
+--price, the route pricing of the codes (`price.py`, run on the CPU while zero-shot runs on the GPU). With --codes FILE
+the codes are written there (each matrix's int8 codes `NAME.q` and fp32 scales `NAME.s`, about 1 GB for a 1B model, so
+outside the run dir) and result.json records the file's sha256.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -141,8 +143,11 @@ def export(model, path: Path) -> dict:
         q, s = getattr(parent, attr).frozen()
         tensors[name[: -len(".weight")] + ".q"] = q.to(torch.int8).cpu().contiguous()
         tensors[name[: -len(".weight")] + ".s"] = s.float().cpu().contiguous()
+    path.parent.mkdir(parents=True, exist_ok=True)
     save_file(tensors, str(path))
-    return {"file": path.name, "bytes": path.stat().st_size, "matrices": len(tensors) // 2}
+    with open(path, "rb") as f:
+        digest = hashlib.file_digest(f, "sha256").hexdigest()
+    return {"file": str(path), "sha256": digest, "bytes": path.stat().st_size, "matrices": len(tensors) // 2}
 
 
 def main(argv=None) -> int:
@@ -165,11 +170,13 @@ def main(argv=None) -> int:
     ap.add_argument("--zs-limit", type=int, default=None)
     ap.add_argument("--no-zs-before", action="store_true", help="skip zero-shot before training")
     ap.add_argument("--max-steps", type=int, default=None, help="stop after this many steps (smoke tests)")
+    ap.add_argument("--codes", type=Path, default=None, help="write the codes to this safetensors file")
     ap.add_argument("--price", action="store_true", help="price the exported codes with price.py on the CPU")
     ap.add_argument("--price-workers", type=int, default=6)
     ap.add_argument("--price-args", default="", help="more arguments for price.py")
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args(argv)
+    assert args.codes or not args.price, "--price prices the --codes file"
     args.out.mkdir(parents=True, exist_ok=True)
     torch.manual_seed(0)
     torch.backends.cuda.matmul.allow_tf32 = False
@@ -258,9 +265,10 @@ def main(argv=None) -> int:
     pricer = None
     if args.target != "bf16":
         res["matrices_after"] = quant.stats(model)
-        res["codes"] = export(model, args.out / "codes.safetensors")
+        if args.codes:
+            res["codes"] = export(model, args.codes)
         if args.price:
-            cmd = [sys.executable, str(HERE / "price.py"), "--codes", str(args.out / "codes.safetensors"),
+            cmd = [sys.executable, str(HERE / "price.py"), "--codes", str(args.codes),
                    "--out", str(args.out / "price"), "--workers", str(args.price_workers), "--full-check",
                    *args.price_args.split()]
             log("price:", " ".join(cmd))
