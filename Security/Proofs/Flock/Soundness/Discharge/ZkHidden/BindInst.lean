@@ -42,6 +42,9 @@ variable {n : ℕ} {I : Inputs} {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json)
 
 /-- **The public plan's sites** (`sitesShH`'s, each acceptance at the rows' fit `hrf`). -/
 noncomputable def sitesShHI : SitesH (planShH (Reg := Reg) dj y₀) (tabShH dj y₀) where
+  A S _ _ _ := (tableShH dj y₀ S).twinA
+  B S _ _ _ := (tableShH dj y₀ S).twinB
+  sat S _ _ _ := (tableShH dj y₀ S).sat (zkTyped ht) hc hrf
   acc S _ _ _ := (tableShH dj y₀ S).acc (zkTyped ht) hc hrf
   vu S _ u h := (tableShH dj y₀ S).vu u h
   hvu S _ u h := (tableShH dj y₀ S).hvu u h
@@ -49,9 +52,9 @@ noncomputable def sitesShHI : SitesH (planShH (Reg := Reg) dj y₀) (tabShH dj y
 
 theorem sitesShHI_parse :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
-      HmRow.parse ((sitesShHI dj y₀ ht hc hrf).acc S R u h).tags ((sitesShHI dj y₀ ht hc hrf).acc S R u h).cf
-        ((sitesShHI dj y₀ ht hc hrf).acc S R u h).tables = .ok c :=
-  fun _ _ _ _ => (parse_untyped (zkTyped ht) hc).1
+      ((sitesShHI dj y₀ ht hc hrf).acc S R u h).st.c = c :=
+  fun S R u h => ((sitesShHI dj y₀ ht hc hrf).acc S R u h).c_eq (HmOut.parse_isTmpl hc)
+    (parse_untyped (zkTyped ht) hc).1
 
 variable {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
 
@@ -185,6 +188,12 @@ variable {n mPts : ℕ} {Reg : Type} {I : Inputs} (dj : Finset (Fin n) → Lean.
 
 /-- **The public plan's sites at `J` tables** (`sitesShHJ`'s, each acceptance at the rows' fit `hrf`). -/
 noncomputable def sitesShHJI : SitesH (planShHJ (Reg := Reg) dj y₀) (tabShHJ dj y₀) where
+  A S R u _ := castM (congrArg TabSpec.S (tabOfShHJ_eq dj y₀ S R u)).symm
+    (tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.twinA
+  B S R u _ := castM (congrArg TabSpec.S (tabOfShHJ_eq dj y₀ S R u)).symm
+    (tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.twinB
+  sat S R u _ := twin_sat_cast (congrArg TabSpec.S (tabOfShHJ_eq dj y₀ S R u)).symm
+    ((tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.sat (tableShHJ_typed dj y₀ ht S _) (tableShHJ_parse dj y₀ ht hc S _) hrf)
   acc S R u _ := recastAccH ((tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.acc
     (tableShHJ_typed dj y₀ ht S _) (tableShHJ_parse dj y₀ ht hc S _) hrf)
     (congrArg TabSpec.S (tabOfShHJ_eq dj y₀ S R u)).symm
@@ -195,9 +204,10 @@ noncomputable def sitesShHJI : SitesH (planShHJ (Reg := Reg) dj y₀) (tabShHJ d
 
 theorem sitesShHJI_parse :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
-      HmRow.parse ((sitesShHJI dj y₀ ht hc hrf).acc S R u h).tags ((sitesShHJI dj y₀ ht hc hrf).acc S R u h).cf
-        ((sitesShHJI dj y₀ ht hc hrf).acc S R u h).tables = .ok c :=
-  fun S _ _ _ => (parse_untyped (tableShHJ_typed dj y₀ ht S _) (tableShHJ_parse dj y₀ ht hc S _)).1
+      ((sitesShHJI dj y₀ ht hc hrf).acc S R u h).st.c = c :=
+  fun S R u h => ((sitesShHJI dj y₀ ht hc hrf).acc S R u h).c_eq
+    (HmOut.parse_isTmpl (tableShHJ_parse dj y₀ ht hc S (partOf I (dj S) u.val)))
+    (parse_untyped (tableShHJ_typed dj y₀ ht S _) (tableShHJ_parse dj y₀ ht hc S _)).1
 
 variable {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
 

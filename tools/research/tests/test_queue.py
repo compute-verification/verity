@@ -785,6 +785,76 @@ def test_a_pr_holding_an_older_head_of_a_pr_not_admitted_at_its_current_head_wai
     assert [m.pr for m in q.sync()[0]] == [5, 7]
 
 
+def test_an_older_head_two_prs_were_seen_at_is_carried_by_the_marked_one(world):
+    """#6 was opened on #5's branch at its head `old`; both move on, #5 marked and #6 not.  #7, branched at `old`, holds
+    commits #5's marked head covers, so it goes after #5 and waits for nothing of #6's."""
+    old = world.change({"x.txt": "x = 1\n"})
+    world.gh.put(5, old, ready=False)
+    world.gh.put(6, old, ready=False)
+    world.gh.put(7, world.change({"k.txt": "kernels\n"}, base=old))
+    q = world.queue()
+    q.sync()                                                                    # the queue sees #5 and #6 at `old`
+    world.gh.put(5, world.change({"x.txt": "x = 2\n"}, base=old))               # #5 moves on from `old`, marked
+    world.gh.put(6, world.change({"s.txt": "soundness\n"}, base=old), ready=False)
+    members, entries = q.sync()
+    assert entries[7].after == entries[7].older == (5,), entries[7].why
+    assert [m.pr for m in members] == [5, 7]
+
+
+def _carried_on_next(world: World) -> tuple[Queue, str]:
+    """#5 at `old`, unmarked; #6, #5's own lane's rebuild on `old` (so it carries #5's commits), marked and merged onto `next`;
+    then #5 moves on, still unmarked.  `old` is an older head of #5's that only #6 brings to `next`."""
+    old = world.change({"x.txt": "x = 1\n"})
+    world.gh.put(5, old, ready=False)
+    world.gh.put(6, world.change({"r.txt": "rebuilt\n"}, base=old), body="Lane `lane-5`.")
+    q = world.queue()
+    assert [m.pr for m in q.sync()[0]] == [6]                                  # the queue sees #5 at `old`
+    world.gh.put(5, world.change({"x.txt": "x = 2\n"}, base=old), ready=False)
+    return q, old
+
+
+def test_a_pr_holding_an_older_head_that_admitted_members_already_bring_waits_for_nothing(world):
+    """#7 holds `old`, once #5's head, but not #6's head, which brings `old` to `next`: #7 lands nothing of #5's that `next`
+    doesn't already land, so it doesn't wait for unmarked #5.  Once #6 isn't admitted, #6 carries nothing and #7 waits again."""
+    q, old = _carried_on_next(world)
+    world.gh.put(7, world.change({"k.txt": "kernels\n"}, base=old))             # #7 branched from #5 at `old`, beside #6
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [6, 7] and entries[7].after == entries[7].older == (), entries[7].why
+    world.gh.ready.discard((6, world.gh.prs[6].head))                           # #6's mark withdrawn: it leaves `next`
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [] and entries[7].older == (5,)
+    assert entries[7].why == "contains #5's commits (at an older head), which isn't admitted"
+
+
+def test_a_pr_holding_an_older_head_no_member_brings_still_waits(world):
+    """As above, but #7 branched from #5 at `mid`, a later head the queue saw #5 at that #6 doesn't bring: #7 waits for #5 at
+    `mid`, though `next` brings the older `old`."""
+    q, old = _carried_on_next(world)
+    world.gh.put(5, mid := world.change({"x.txt": "x = 2\n"}, base=old), ready=False)
+    q.sync()                                                                    # the queue sees #5 at `mid`
+    world.gh.put(5, world.change({"x.txt": "x = 3\n"}, base=mid), ready=False)
+    world.gh.put(7, world.change({"k.txt": "kernels\n"}, base=mid))
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [6] and entries[7].older == (5,) and entries[7].held == {5: mid}
+    assert entries[7].why == "contains #5's commits (at an older head), which isn't admitted"
+
+
+def test_a_member_of_next_doesnt_excuse_its_own_commits(world):
+    """#7 went onto `next` while #5's head `old`, which #7 holds, was marked; #5 moves on unmarked and its mark at `old` goes
+    (so it doesn't stay at `old`, `Queue._pending`).  `next` holds `old` only through #7's own merge (and #5's merge at the head
+    it left), so #7 waits for #5."""
+    old = world.change({"x.txt": "x = 1\n"})
+    world.gh.put(5, old)
+    world.gh.put(7, world.change({"k.txt": "kernels\n"}, base=old))
+    q = world.queue()
+    assert [m.pr for m in q.sync()[0]] == [5, 7]
+    world.gh.put(5, world.change({"x.txt": "x = 2\n"}, base=old), ready=False)
+    world.gh.ready.discard((5, old))
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [] and entries[7].after == entries[7].older == (5,)
+    assert entries[7].why == "contains #5's commits (at an older head), which isn't admitted"
+
+
 def _merge(world: World, into: str, other: str) -> str:
     """A merge commit of ``other`` into ``into`` (first parent ``into``)."""
     _git(world.dev, "checkout", "-q", "--detach", into)
@@ -1254,6 +1324,48 @@ def test_admission_prefetches_the_marks_of_every_pr_it_will_ask_of(world):
     world.gh.put(3, h3 := world.change({"c.txt": "3\n"}))
     world.queue(prefetch=asked.append).sync()
     assert asked == [[(1, h1), (3, h3)]]
+
+
+def test_above_is_each_heads_rev_list_and_first_parent_line(world):
+    """`entries` reads what each head has above the base from one walk, not two `rev-list`s a PR."""
+    from research.queue import above
+
+    a = world.change({"a.txt": "1\n"})
+    b = world.change({"b.txt": "2\n"}, a)
+    c = world.change({"c.txt": "3\n"})
+    c2 = world.change({"e.txt": "5\n"}, c)
+    _git(world.dev, "checkout", "-q", "--detach", b)
+    _git(world.dev, "merge", "-q", "--no-edit", c2)
+    m = _git(world.dev, "rev-parse", "HEAD")
+    d = world.change({"d.txt": "4\n"}, m)
+    main = _git(world.dev, "rev-parse", "origin/main")
+    heads = [a, b, c, c2, m, d, main]
+    got = above(world.dev, "origin/main", heads)
+    for h in heads:
+        assert got[h] == (_git(world.dev, "rev-list", "--topo-order", f"origin/main..{h}").split(),
+                          set(_git(world.dev, "rev-list", "--first-parent", f"origin/main..{h}").split())), h
+    assert got[d][1] == {d, m, b, a} and got[main] == ([], set())
+
+
+def test_status_merges_each_head_onto_main_once_until_main_or_the_clones_head_moves(world, monkeypatch):
+    """A merge of an old head onto `main` takes about a second, and `status` merged every admitted PR not on `next` each call."""
+    import research.queue as Qm
+
+    world.gh.put(1, h1 := world.change({"a.txt": "1\n"}))
+    world.gh.put(2, h2 := world.change({"b.txt": "2\n"}))
+    merged: list[str] = []
+    real = Qm.conflicting_files
+    monkeypatch.setattr(Qm, "conflicting_files", lambda repo, base, head: merged.append(head) or real(repo, base, head))
+    q = world.queue()
+    assert {n: e.state for n, e in q.status().items()} == {1: "ready", 2: "ready"} and sorted(merged) == sorted([h1, h2])
+    merged.clear()
+    assert {n: e.state for n, e in q.status().items()} == {1: "ready", 2: "ready"} and merged == []
+    _git(world.dev, "push", "-q", "origin", f"{world.change({'a.txt': 'main\n'})}:refs/heads/main")
+    for again in (False, True):
+        merged.clear()
+        st = q.status()
+        assert st[1].state == "refused" and st[1].why.startswith("conflicts with `main` in a.txt") and st[2].state == "ready"
+        assert sorted(merged) == ([] if again else sorted([h1, h2]))
 
 
 def test_status_on_any_vm_applies_the_rules_cutoff_as_drive_does(world, monkeypatch, capsys):
@@ -1944,6 +2056,25 @@ def test_the_preflight_runs_on_a_head_its_pull_ref_doesnt_have_yet_from_the_bran
                     log=world.logs.append)
     assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 1
     assert f"it contains #5's head {five[:12]}, and #5 isn't admitted" in capsys.readouterr().err
+
+
+def test_the_preflight_never_holds_a_head_behind_a_contained_head_on_the_landing_branch(world, capsys):
+    """Under `land_into = "checked"` the preflight judges on `main`, which a PR landed on `checked` hasn't reached: that PR, still
+    open and here held, holds no head containing it.  A contained PR that hasn't landed and isn't admitted still does."""
+    from research.queue import MarkOnly, ready
+
+    world.with_store_remote()
+    _move_main(world, {"tools/verity/check/drive.toml": 'land_into = "checked"\n'})
+    world.gh.put(5, five := world.change({"x.txt": "x\n"}), labels=("hold",), ready=False)
+    _git(world.dev, "push", "-q", "origin", f"{five}:refs/heads/checked")
+    world.gh.put(4, world.change({"y.txt": "y\n"}, base=five), ready=False)
+    pre = _preflight(world)
+    assert ready(world.gh, world.store, 4, "lane-4", MarkOnly(), preflight=pre) == 0, capsys.readouterr().err
+    world.gh.put(6, six := world.change({"z.txt": "z\n"}, base=five), labels=("hold",), ready=False)
+    world.gh.put(3, world.change({"w.txt": "w\n"}, base=six), ready=False)
+    assert ready(world.gh, world.store, 3, "lane-3", MarkOnly(), preflight=pre) == 1
+    err = capsys.readouterr().err
+    assert f"it contains #6's head {six[:12]}, and #6 isn't admitted (held (`hold` label))" in err and "#5's" not in err, err
 
 
 def test_the_preflight_refuses_a_head_containing_an_open_pr_that_isnt_admitted_and_names_it(world, capsys):
@@ -3112,8 +3243,7 @@ def test_research_queue_ready_takes_one_of_on_and_local(world, monkeypatch, caps
     for argv, why in ((["queue", "judge"], "judge needs the quick tier's run id"),
                       (["queue", "eject", "r20261004-160000-abcd", "--reason", "x"], "eject: 'r20261004-160000-abcd' is not a PR number"),
                       (["queue", "eject", "1", "--reason", "x", "--dry-run"], "--dry-run is for sync and drive only"),
-                      (["queue", "ready", "1", "--local", "--dry-run"], "--dry-run is for sync and drive only"),
-                      (["queue", "drive"], "drive needs --on MACHINE")):
+                      (["queue", "ready", "1", "--local", "--dry-run"], "--dry-run is for sync and drive only")):
         with pytest.raises(SystemExit) as e:
             research_main(argv)
         assert e.value.code == 2 and why in capsys.readouterr().err
@@ -3186,7 +3316,27 @@ def test_a_gh_call_that_never_answers_fails_the_tick_instead_of_holding_it(monke
         Q.GitHub("o/r").open_prs()
     with pytest.raises(M.Refused, match=f"no answer in {M.GH_TIMEOUT_S} s"):
         M._gh_cli(Path("."), "pr", "view", "1")
-    assert asked == [Q.GH_TIMEOUT_S, M.GH_TIMEOUT_S]
+    assert set(asked[:-1]) == {Q.GH_TIMEOUT_S} and asked[-1] == M.GH_TIMEOUT_S       # the pages not yet asked for are cancelled
+
+
+def test_the_open_prs_are_read_a_wave_of_pages_at_a_time_until_one_isnt_full(monkeypatch):
+    """`gh api --paginate` read the ~10 pages one after another, seconds of every `research queue status`."""
+    import research.queue as Q
+
+    numbers = [*range(250, 150, -1), *range(151, 51, -1), *range(51, 0, -1)]       # 151 again: the listing shifted a page
+    asked: list[int] = []
+
+    def gh(argv, **kw):
+        page = int(re.search(r"&page=(\d+)$", argv[-1]).group(1))
+        asked.append(page)
+        rows = [{"number": n, "head": {"sha": f"{n:040x}", "ref": f"b{n}"}, "body": "Lane `ci`."}
+                for n in numbers[(page - 1) * Q.GH_PER_PAGE:page * Q.GH_PER_PAGE]]
+        return subprocess.CompletedProcess(argv, 0, json.dumps(rows), "")
+
+    monkeypatch.setattr(subprocess, "run", gh)
+    monkeypatch.setattr(Q, "GH_PAGES", 2)
+    assert [p.number for p in Q.GitHub("o/r").open_prs()] == list(range(250, 0, -1))
+    assert sorted(asked) == [1, 2, 3, 4]
 
 
 def test_handle_reads_mains_registry_once_per_fetch(world, monkeypatch):

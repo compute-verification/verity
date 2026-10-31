@@ -14,7 +14,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 inputs = ["benchmarks/pouw/harness", "benchmarks/pouw/settings.py", "tools/config/verity_config",
           "benchmarks/pouw/receipts", "benchmarks/pouw/machine_model/verity_machine_model",
           "benchmarks/pouw/machine_model/data", "tools/research/src/research/__init__.py",
-          "tools/research/src/research/store", "verity/__init__.py", "verity/core/__init__.py",
+          "tools/research/src/research/store", "verity/__init__.py", "verity/settings.py", "verity/core/__init__.py",
           "verity/core/protocols/__init__.py", "verity/core/protocols/pouw/__init__.py",
           "verity/core/protocols/pouw/serving.py",
           # the tests' g++ builds of pfill.cuh include its SHA-512, pearl_c/sha512.cuh, which includes sha512_rows' sha512x.cuh
