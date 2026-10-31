@@ -15,7 +15,9 @@ inputs = ["verity/ml/flock/python", "verity/ml/circuits", "verity/ml/commitments
           "verity/core/protocols/sampled_proofs/__init__.py",
           "verity/core/protocols/sampled_proofs/one_stage/__init__.py",
           "verity/core/protocols/sampled_proofs/one_stage/partition.py",
-          "verity/core/protocols/sampled_proofs/one_stage/registered.py"]
+          "verity/core/protocols/sampled_proofs/one_stage/registered.py",
+          # `recursive/` (`vstar-recursive`, test_vstar_recursive) also requires the interface, the one-stage audit and LMS
+          "verity/core/protocols/interface", "verity/core/service/sampled_proofs", "verity/core/primitives/lms/lean"]
 # Each test builds what it runs (`verity_difftest.build`, one at a time across processes) and opens its own server, so the
 # 2100 s of tests (the longest 440 s) spread over workers.
 parallel = true
