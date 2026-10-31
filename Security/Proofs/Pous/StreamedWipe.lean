@@ -20,8 +20,8 @@ import Proofs.Pous.StreamedWipe.Witnesses
   `2^-128` for every `k` reads with `(1 − 1/r)^k ≤ 2^-129` and every fill
   (`PousStreamedWipe.streamed_wipe_meets_reads`); its instances `StreamedWipeMeetsFamily`, `⌈M/19⌉ + E` bits with 2152 reads for every fill of a segment or more
   (`PousStreamedWipe.streamed_wipe_meets_family`, with its own instances at 96 GiB and 141 GB,
-  `StreamedWipeMeets96GiB` and `StreamedWipeMeets141GB`), and `StreamedWipeMeets141GB5`, an H200 at 5 GB with
-  5231 reads (`PousStreamedWipe.streamed_wipe_meets_141GB5`).
+  `StreamedWipeMeets96GiB` and `StreamedWipeMeets141GB`), and `StreamedWipeMeetsH200`, an H200's whole memory at
+  5 GB with 2906 reads (`PousStreamedWipe.streamed_wipe_meets_H200`).
 * `StreamedWipe/Server.lean`: `StreamedWipeMeetsReadsTight`, `StreamedWipeMeetsReads` with the count of the missing
   labels, `m·(⌊log₂⌊3n/m⌋⌋ + 1)` for `m = ⌈n/r⌉ − 1`, in place of `n` (`PousStreamedWipe.streamed_wipe_meets_reads_tight`);
   its form per server against the assumed memory capacity `M_s = 512·n + R`, `StreamedWipeMeetsServer`, and at the
