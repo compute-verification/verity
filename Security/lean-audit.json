@@ -231,7 +231,8 @@
    "digest": "f25002293156695a436d17dbd4ddccf594544b7187a569385947d7dc90dcecf7"
   },
   "Accounting.Assumptions.WipeLabelsPrf": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "digest": "9685399d6c33ec2eb75a1c225396903993b50e1cd877cac1e4c253eb9d5bb8f4"
   },
   "Accounting.Assumptions.WorkHardness": {
    "owner": "@memory-accounting",
@@ -5549,7 +5550,10 @@
    "type_hash": "ab3137950546f75ee0e1162e5c57e3e27769cfbdd1b95cbf27d8c29b140450b7"
   },
   "Accounting.SecurityProofs.WipeLabelsAdvantage": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.WipeLabelsAdvantage : Accounting.Guarantees.WipeLabelsAdvantage"],
+   "assumptions": [],
+   "type_hash": "9bea80fd144da067e09a72b895575576b485de9fa7c8672901f46f3e54675c93"
   },
   "Accounting.SecurityProofs.pouwRow": {
    "owner": "@compute-accounting",
@@ -16713,6 +16717,13 @@
    },
    "guarantees": ["Accounting.SecurityProofs.TS.UnitFixedOfWords"]
   },
+  "Definitions.Accounting.Assumptions.WipeLabels": {
+   "digest": "6734afe0a9d1f6b62b50ef91be657af3bccbf42ef079e7066db42ea348ae0bb0",
+   "definitions": {
+    "Accounting.Assumptions.WipeLabelsPrf": "9685399d6c33ec2eb75a1c225396903993b50e1cd877cac1e4c253eb9d5bb8f4"
+   },
+   "guarantees": ["Accounting.SecurityProofs.WipeLabelsAdvantage"]
+  },
   "Definitions.Accounting.Bandwidth.Causal": {
    "digest": "77c0e7236051b937516370d1b66cdabfd998ca6d239df4ace8f07b4195a4d0bc",
    "definitions": {
@@ -18911,6 +18922,13 @@
     "Accounting.SecurityProofs.Tag.PolyNonCollisionKeyed",
     "Accounting.SecurityProofs.Tag.PolyUnpredictable"
    ]
+  },
+  "Definitions.Accounting.Guarantees.WipeLabels": {
+   "digest": "23ee3e39c10804caa5fe2eecea765ab1e6231a13066fe3c94a22279aa0e6b077",
+   "definitions": {
+    "Accounting.Guarantees.WipeLabelsAdvantage": "1b1362aa6b64654bc17fb1679d1c7aa9ba16e80ff6f1aafd806feee27b2d4a5b"
+   },
+   "guarantees": ["Accounting.SecurityProofs.WipeLabelsAdvantage"]
   },
   "Definitions.Accounting.HMu": {
    "digest": "b769a47b858342f26e4405da532dd500ff345516e706a63a4405a726057fd98b",
@@ -21247,6 +21265,23 @@
     "Accounting.SecurityProofs.B2WindowAudit",
     "Accounting.SecurityProofs.B2WindowP2Ring"
    ]
+  },
+  "Definitions.Accounting.Wipe": {
+   "digest": "ada71b1be780a05a0efff4f29797ff6854a8abdbb60e5247ab52f58d09da44d3",
+   "definitions": {
+    "Accounting.Wipe.Labels": "475499605b58191e662e6c3e75a8bb34c3aa264a2e87f3214571ac6841b921e9"
+   },
+   "guarantees": ["Accounting.SecurityProofs.WipeLabelsAdvantage"]
+  },
+  "Definitions.Accounting.WipeLabels": {
+   "digest": "7cf03df193a7277c6a7a69bdf5a2cd856d5d4d756e9254f47735f1edd3978422",
+   "definitions": {
+    "Accounting.Wipe.deployedLabels": "e77d6d7668ce8ecb1d1e23f7267f6063965858d2aff5d06f820eae80ad6cf559",
+    "Accounting.Wipe.digestBits": "8c044f4f3a00b3e2004eb40003ab7eb0fefde6607a7b7ae12f82ff611a3021f0",
+    "Accounting.Wipe.keyBytes": "39344192fad2c355242082d1dcb704e54fae27965a52d17640dc987b64beefea",
+    "Accounting.Wipe.labelTag": "1b922d10f9e5545a689b799f83782df663301c3fe8efbfe6d86f5d03b9b6adcc"
+   },
+   "guarantees": ["Accounting.SecurityProofs.WipeLabelsAdvantage"]
   },
   "Definitions.Claims": {
    "digest": "d1e18f3b5e0ee4afcf98d81615fb5c8e6c0d29a1100c583d9b4444050f9b675d",
@@ -26368,6 +26403,7 @@
     "Accounting.SecurityProofs.Remote.PooledDraw",
     "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
     "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
+    "Accounting.SecurityProofs.WipeLabelsAdvantage",
     "Claims.Bits_fails",
     "Claims.Complete_fails",
     "Claims.Flock.Bits_fails",
@@ -28954,6 +28990,7 @@
     "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
     "Accounting.SecurityProofs.StackedSessionConservationRelay",
     "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed",
+    "Accounting.SecurityProofs.WipeLabelsAdvantage",
     "Bandwidth.SecurityProofs.AuditInteractive",
     "Bandwidth.SecurityProofs.AuditInteractiveRO",
     "Bandwidth.SecurityProofs.AuditJoint",
@@ -29855,6 +29892,7 @@
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
     "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
     "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.WipeLabelsAdvantage",
     "Pous.Claims.StreamedWipeMeetsDisk_fails",
     "Pous.Claims.StreamedWipeMeetsReadsTight_fails",
     "Pous.Claims.StreamedWipeMeetsServer5GB_fails",
