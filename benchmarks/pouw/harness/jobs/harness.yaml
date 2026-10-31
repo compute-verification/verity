@@ -1,9 +1,10 @@
-# A harness run on node 2 that isn't timed for the panel (gates, characterization, a smoke run), on one GPU: queue
-# pouw, priority pouw. A timed run preempts it and SkyPilot requeues it; it restarts from the beginning (each run is minutes).
+# A harness run on the RTX PRO 6000 node that isn't timed for the panel (gates, characterization, a smoke run), on one
+# GPU: queue pouw, priority pouw. A timed run preempts it and SkyPilot requeues it; it restarts from the beginning (each
+# run is minutes).
 # research's sky jobs/prover-dev.yaml with the pouw labels and the harness's command.
 #
 #   sky jobs launch -n pouw-harness-<what> benchmarks/pouw/harness/jobs/harness.yaml \
-#     --env BUILD=art:<id> --env NODE_UUIDS=<node 2's UUIDs, comma-separated, from server.md> \
+#     --env BUILD=art:<id> --env NODE_UUIDS=<the node's UUIDs, comma-separated, from server.md> \
 #     --env CMD='characterize.py --sections identity mma dram l2' \
 #     --secret R2_ENDPOINT --secret R2_BUCKET --secret AWS_ACCESS_KEY_ID --secret AWS_SECRET_ACCESS_KEY
 #
