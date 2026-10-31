@@ -7,7 +7,10 @@ For a constrained run of size N trained on D tokens to validation loss L:
   ladder by linear interpolation in (log D, L); past the ladder's ends it extrapolates from the two nearest points and
   says so (``token_mult_extrapolated``).
 - ``compute_penalty``: C / C*(L), where C is the run's training FLOPs and C*(L) the least baseline training compute
-  that reaches L, read off the lower envelope of every baseline run (all sizes, all token counts) in (log C, L).
+  that reaches L, read off the lower convex hull of every baseline run (all sizes, all token counts) in (log C, L).
+  The compute-optimal frontier is convex there and lies below every run, so it lies below the hull too, and the
+  penalty read off the hull is a lower bound on the penalty against it. ``--frontier pareto`` reads it instead off the
+  piecewise-linear line through the Pareto points, which can sit above the hull and gives smaller penalties.
   ``compute_penalty_dense`` uses the dense-shape FLOPs 6·(dense MACs)·D instead of the run's own.
 - ``size_penalty``: C / C_base(N, L), the same-size baseline's compute to reach L: ``token_mult`` times the run's training
   FLOPs per token over the baseline's. It leaves out how far size N itself is from compute-optimal at D, which
@@ -70,18 +73,29 @@ def interp(xs, ys, y):
     return x0 + (y - y0) * (x1 - x0) / (y1 - y0), True
 
 
-def envelope(points):
-    """Lower envelope of (C, L): keep points no cheaper point beats."""
+def envelope(points, hull=True):
+    """Lower envelope of (C, L): the points no cheaper point beats, and with ``hull`` only those on the lower convex
+    hull in (log C, L), up to its lowest loss."""
     pts = sorted(points)
     out, best = [], math.inf
     for c, l in pts:
         if l < best:
             out.append((c, l))
             best = l
-    return out
+    if not hull:
+        return out
+    h = []
+    for c, l in out:
+        while len(h) >= 2:
+            (x0, y0), (x1, y1) = (math.log(h[-2][0]), h[-2][1]), (math.log(h[-1][0]), h[-1][1])
+            if (x1 - x0) * (l - y0) - (y1 - y0) * (math.log(c) - x0) > 0:
+                break
+            h.pop()
+        h.append((c, l))
+    return h
 
 
-def analyze(runs, baseline_lr=None, best=False):
+def analyze(runs, baseline_lr=None, best=False, hull=True):
     base = [r for r in runs.values() if is_baseline(r)]
     by_size = defaultdict(list)
     for r in base:
@@ -101,7 +115,7 @@ def analyze(runs, baseline_lr=None, best=False):
         if seed == 0:
             best0[(s, t)] = min(best0.get((s, t), math.inf), v)
     base_fpt = {s: rs[0]["train_flops_per_token"] for s, rs in by_size.items()}
-    frontier = envelope([(r["train_flops"], r["final_val"]) for r in base if r["cfg"]["seed"] == 0])
+    frontier = envelope([(r["train_flops"], r["final_val"]) for r in base if r["cfg"]["seed"] == 0], hull)
     rows = []
     for name, r in sorted(runs.items()):
         c = r["cfg"]
@@ -218,12 +232,14 @@ def main():
     ap.add_argument("--best", action="store_true",
                     help="against each size's best baseline over the lrs run (the ladder shifted by its offset), "
                          "and with --pivot each arm at its best lr")
+    ap.add_argument("--frontier", choices=("hull", "pareto"), default="hull",
+                    help="read compute_penalty off the baselines' lower convex hull (default) or their Pareto line")
     a = ap.parse_args()
     if a.curves:
         for name, pts in sorted(curves(load(a.dirs, partial=True)).items()):
             print(name, " ".join(f"{t / 1e6:.0f}M:{g:+.3f}" for t, g in pts[::2] + pts[-1:]))
         return
-    res = analyze(load(a.dirs), a.baseline_lr, a.best)
+    res = analyze(load(a.dirs), a.baseline_lr, a.best, a.frontier == "hull")
     if a.pivot:
         print(pivot(res, a.best))
         return
