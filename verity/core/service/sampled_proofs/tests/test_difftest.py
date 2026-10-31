@@ -3044,9 +3044,9 @@ def _named(desc: dict, annotations=None) -> dict:
 
 
 def _resolved(x, store: dict):
-    """`Loaded.Store.parse`'s argument as the program it reads: a reference to a program `store` holds (under the same
-    canonical annotations) is that program's descriptor under the reference's annotations; a reference to none of them is
-    read as the descriptor it isn't, and refused; anything else is itself."""
+    """`Loaded.Programs.parse`'s argument as the program it reads: a reference to a program `store` holds (under the
+    same canonical annotations) is that program's descriptor under the reference's annotations; a reference to none of
+    them is read as the descriptor it isn't, and refused; anything else is itself."""
     if not (isinstance(x, dict) and sorted(x) == ["annotations", "loaded"]):
         return x
     bare = store.get((x["loaded"], D.canonical(x["annotations"]))) if isinstance(x["loaded"], str) else None
@@ -3095,14 +3095,14 @@ def loaded_cases(draw) -> dict:
     own = isinstance(desc, dict) and bool(desc) and PO.program_sha512(desc) in PROGRAMS
     other = draw(st.sampled_from(SETUPS)).desc
     programs = draw(st.sampled_from([[desc], [desc], [desc, other], [other, desc], [other], []] if own else [[other], []]))
-    if own and draw(st.integers(0, 3)):
-        holder["program"] = _named(desc, None if draw(st.integers(0, 4)) else {"other": 1})
+    if own and draw(st.integers(0, 3)) < 3:
+        holder["program"] = _named(desc, {"other": 1} if draw(st.integers(0, 4)) == 4 else None)
     roll = draw(st.integers(0, 19))
-    if roll == 0:
+    if roll == 17:
         programs = [*programs, draw(st.sampled_from([5, {}, "program", [other]]))]
-    elif roll == 1:
+    elif roll == 18:
         fn = draw(st.sampled_from(["nope", 5, "decode", "loaded"]))
-    elif roll == 2:
+    elif roll == 19:
         programs = draw(st.sampled_from([None, {}, "programs"]))
     return {"fn": fn, "input": case, "programs": programs}
 
@@ -3137,10 +3137,7 @@ def test_a_reference_reads_the_program_its_descriptor_does(pieces):
     for change in PARAMS + RECORD:
         for x in range(3):
             a = copy.deepcopy(base)
-            try:
-                change(a, x)
-            except (KeyError, TypeError, IndexError, ValueError, AttributeError):
-                continue
+            change(a, x)
             audits.append(_json(a))
     other = SETUPS[1].desc
     codes, outputs = set(), 0

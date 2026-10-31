@@ -31,12 +31,10 @@ from verity.ml.circuits import codec, partition_object as PO  # noqa: E402
 
 
 def _status_mb(pid: int, field: str) -> int:
-    try:
-        for line in Path(f"/proc/{pid}/status").read_text().splitlines():
-            if line.startswith(field):
-                return int(line.split()[1]) // 1024
-    except OSError:
-        pass
+    status = Path(f"/proc/{pid}/status")
+    for line in (status.read_text().splitlines() if status.exists() else ()):
+        if line.startswith(field):
+            return int(line.split()[1]) // 1024
     return 0
 
 

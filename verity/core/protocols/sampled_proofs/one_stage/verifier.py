@@ -128,7 +128,7 @@ LOADED_MAX = 4
 class _Server:
     """One `sampled-proofs-verifier serve` process per Python process (`VerifierMain.main`: a request line, an answer line),
     started at the first call and again after it dies. A request's program (`_Program`) is loaded into the process once
-    (`{"fn": "program"}`, the Lean's `Loaded.Store.load`) under its digest and annotations as this call writes them, and
+    (`{"fn": "program"}`, `Loaded.Programs.load`) under its digest and annotations as this call writes them, and
     named by them from then on (`{"annotations", "loaded"}`), so the process parses each program once rather than on every
     call. The digest is the program's as it is at each call (`codec.program_digest`), so a reference names the program the
     call passes; where the Lean refuses the program or answers another digest, the request carries the descriptor, as it
@@ -189,11 +189,7 @@ class _Server:
                 self._start()
             desc = codec.encode_program(program)
             reply = self._exchange("program", _dumps({"fn": "program", "input": desc}))
-            try:
-                loaded = json.loads(reply) == {"output": digest}
-            except ValueError:
-                loaded = False
-            if not loaded:
+            if reply != json.dumps({"output": digest}, separators=(",", ":")) + "\n":
                 return desc
             self._loaded.add(key)
         self._named = True
