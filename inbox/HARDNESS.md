@@ -190,6 +190,13 @@ Everything else is engineering on parts we have.
     sm_120.
   - The GPU timing is running on vy-nebius-1 (sm_120).
 
+- **HT-PREMISE v4, timed** (sm_120, vy-nebius-1): an overflow correction costs 0.84 writes (2-bit forms) and 2.36 (int8
+  forms).
+  - **D-OUT is exposed on sm_120** (a 2.18% gap); the H200 is ambiguous, with the timing command in HASH.md.
+  - **E (natural weights) on sm_120** sits on the 5% line: Qwen2.5-7B 1.048, Llama-3.1-8B 1.060. But 10 of 105 matrices
+    are below 1, so a per-matrix cheater runs the 7B at 0.987. That's a gap above 1%, so **E fails**.
+  - The lead's verdict is unchanged.
+
 ## Lanes (notes: `lanes/compute-research/<ts>-report-hardness-<lane>.md`)
 
 | lane | modules | first deliverable |

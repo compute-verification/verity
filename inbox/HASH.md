@@ -301,3 +301,11 @@ over public natural weights at full K, has a Strassen-in-s8 hole:
 
 D-OUT's "99.2–99.45% capacity" is therefore **conditional** until the correction is timed on a GPU (running, sm_120).
 The lead itself is not exposed (1.93–3.12× stock under its per-word commitments).
+- **Update, 01:55Z (timed on sm_120, vy-nebius-1):** the overflow correction measures 0.84 writes for 2-bit forms and
+  2.36 for int8 forms, under the 1.70 crossover. **D-OUT is exposed on sm_120:** a gap of 2.18% (4.2× SAK-UF), and
+  capacity of 99.08–99.16%, at or under the lead's 99.16%. So its "99.2–99.45%" does not survive there.
+  - **On the H200 it's ambiguous.** The kernel scaled to the H200 is about 3.3 writes (gap 0.000%), but the issue floor of
+    the same instructions is 1.48 (gap 0.75%), against a crossover of about 1.68.
+  - **To settle it:** about 2 minutes of one H200, in the next window that doesn't take the demo's node: `leaf_corr.cu` at
+    c09e05e8c6 on `cursor/compute-research-hardness-premise-7f3a`, with `ARCH=sm_90a PEAK=4096 CORRS=34578`
+    (note:compute-research/20261031T0022Z-report-hardness-premise-v4 §3).
