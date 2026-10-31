@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import sys
 from collections import defaultdict
+from statistics import median
 
 PER_SM_CLK = 1024
 MODELS = {"1b": {(3072, 2048): "qkv", (2048, 2048): "o", (16384, 2048): "gate_up", (2048, 8192): "down"},
@@ -29,6 +30,47 @@ def linear(n: int, k: int) -> str:
         if (n, k) in shapes:
             return f"{m}.{shapes[(n, k)]}"
     return f"{n}x{k}"
+
+
+def regimes(summary: dict) -> None:
+    """Per clock, kind, weight class and regime (decode: T <= 32; prefill: each T), the ranges over the linears of each
+    library and of the faster library per linear (`best`): clk, the idle share 1 - clk, co@99, co@96, and `fill96`, co@96
+    over the idle share. Rows where nothing fit beside the GEMM count in `fit` as misses."""
+    groups: dict = defaultdict(list)
+    per_linear: dict = defaultdict(list)
+    for g in summary["gemms"]:
+        reg = "decode" if g["m"] <= 32 else f"T{g['m']}"
+        groups[(g["clock"], g["kind"], g["wclass"], reg, g["lib"])].append(g)
+        per_linear[(g["clock"], g["kind"], g["wclass"], reg, g["linear"], g["m"])].append(g)
+    for (c, k, wc, reg, _, _), gs in per_linear.items():
+        groups[(c, k, wc, reg, "best")].append(max(gs, key=lambda g: g["of_clock_bound"]))
+
+    def span(xs: list) -> str:
+        return f"{min(xs):.3f}-{max(xs):.3f} ({median(xs):.3f})" if xs else "-"
+
+    def rank(key: tuple) -> tuple:
+        c, k, wc, reg, lib = key
+        return c, k, wc, 0 if reg == "decode" else int(reg[1:]), lib == "best", lib
+
+    print("\nby regime (ranges over the linears, median in parentheses; best = the faster library per linear;"
+          " fill96 = co@96 / (1 - clk); fit = linears some co-runner fit beside)")
+    print(f"{'clock':<11}{'kind':<5}{'w':<8}{'regime':<8}{'lib':<5}{'n':>3}{'clk':>21}{'idle':>21}{'co@99':>21}"
+          f"{'co@96':>21}{'fill96':>21}{'fit':>6}")
+    summary["regimes"] = []
+    for key in sorted(groups, key=rank):
+        gs = groups[key]
+        c, k, wc, reg, lib = key
+        clk = [g["of_clock_bound"] for g in gs]
+        fill = [g["co_at_keep_96"] / (1 - g["of_clock_bound"]) for g in gs if g["of_clock_bound"] < 1]
+        fit = sum(any(b.get("co_resident") for b in g["beside"].values()) for g in gs)
+        rec = {"clock": c, "kind": k, "wclass": wc, "regime": reg, "lib": lib, "n": len(gs), "clk": [min(clk), max(clk)],
+               "co99": [min(g["co_at_keep_99"] for g in gs), max(g["co_at_keep_99"] for g in gs)],
+               "co96": [min(g["co_at_keep_96"] for g in gs), max(g["co_at_keep_96"] for g in gs)],
+               "fill96": [min(fill), max(fill)] if fill else None, "fit": fit}
+        summary["regimes"].append(rec)
+        print(f"{c:<11}{k:<5}{wc:<8}{reg:<8}{lib:<5}{len(gs):>3}{span(clk):>21}{span([1 - x for x in clk]):>21}"
+              f"{span([g['co_at_keep_99'] for g in gs]):>21}{span([g['co_at_keep_96'] for g in gs]):>21}"
+              f"{span(fill):>21}{fit:>4}/{len(gs)}")
 
 
 def main(out: str) -> int:
@@ -141,6 +183,7 @@ def main(out: str) -> int:
               f"{(row['of_uniform_peak'] or 0):>7.3f}{dr}{cells}{nv.get('sm_mhz_mean', 0):>6.0f}"
               f"{nv.get('energy_w', 0):>5.0f}  {r['algo']}, bad {r['check']['bad']}")
     print("(* beside: a slower candidate than the fastest alone, the fastest that fit beside the co-runner)")
+    regimes(summary)
     for k in tune:
         if k not in alone:
             print(f"no timing: {k}: {tune[k].get('error')}")
