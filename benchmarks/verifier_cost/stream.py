@@ -1,7 +1,8 @@
 """`stream.sh`'s workload: the one-stage verifier's checks (`one_stage.verifier`: the Lean of record,
 `sampled-proofs-verifier`, beside the Python) on a5's path for a sample on the verifier's own coins (`a5.audit` with
 ``--coins verifier``) against the registration's ports, as a served window registers a root per member port. In a5's
-order: R1-R7 before the sample, a `service.Stream`'s registration, draw and outcome (`a5.verifier_outcome`), the
+order: R1-R7 before the sample, a `service.Stream`'s registration, draw and outcome (`a5.verifier_outcome`, with the
+sessions' roots of `SESSION_PORTS` ports and the drawn units served), the
 negatives on the verifier's coins (`a5_coins.verifier_negatives`), then R2's and R3's on the copies (a program of one
 proof block fewer, the ports bound to another run). A toy window of two templates with N ports; per N, a row with
 the checks asked once per input as a5 asks them (`a5_memo.memo`), or with ``--no-memo`` each asked every time: whether
@@ -48,6 +49,8 @@ WINDOW_ROOT = "ab" * 64
 SESSION = "5e" * 64
 VERDICTS = {"lean": {"of_record": True, "accepted": True, "digest": "dd" * 64, "sessions": [SESSION]}}
 CHECKS = ("check", "check_public", "select", "check_draw", "check_verdicts", "audit_record", "run", "stream")
+#: the ports the sample's sessions report roots for, as a5 gives the outcome its sessions' roots
+SESSION_PORTS = 8
 
 
 def program(counts: dict = COUNTS) -> Program:
@@ -104,6 +107,7 @@ def row(n: int, memo: bool) -> dict:
     roots = [{"port": p, "root": f"{i:0128x}", **e} for i, (p, e) in enumerate(mine.items())]
     rec = R.record(program(), QUERY, {"law": "stratified", "k": 3}, S.SCHEME, roots, {"kind": "served", "run": RUN, "row": 0})
     sp, other = spec(sorted(mine)), ports(n, "r-another-run")
+    sessions = {r["port"]: r["root"] for r in roots[-SESSION_PORTS:]}
     law = S.selection_law(sp.selection, sum(COUNTS.values()))
     checks, pieces = Timed(), Timed()
     own = {name: getattr(V, name) for name in (*CHECKS, "lean")}
@@ -120,7 +124,8 @@ def row(n: int, memo: bool) -> dict:
 
     def outcome(s: S.Stream, d: S.Draw, evidence: dict | None):
         assert s.deliver(d, [SESSION]) is None
-        return s.outcome(d, VERDICTS, {"statement": "stub"}, coins=evidence), s.records[-1]["audit"]
+        return s.outcome(d, VERDICTS, {"statement": "stub"}, served=sorted(d.units), session_roots=sessions,
+                         coins=evidence), s.records[-1]["audit"]
 
     t = time.perf_counter()
     try:
