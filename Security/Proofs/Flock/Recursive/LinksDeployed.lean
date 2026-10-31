@@ -274,3 +274,7 @@ theorem recursiveKSLink_links (b : Brings) (aux : Msg → ℕ → _root_.Flock.R
   _root_.Flock.Guarantees.recursiveKSLink_of linksBindDeployed b aux nOf hd recRest
 
 end RecDeploy.Links
+
+#print axioms RecDeploy.Links.linksBindDeployed
+#print axioms RecDeploy.Links.recursiveKSLink_links
+#print axioms RecDeploy.Links.linkRef_staged
