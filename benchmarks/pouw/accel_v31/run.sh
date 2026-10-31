@@ -28,7 +28,7 @@
 # on the GPU's own openings, honest and cheating, filler and served, a filler's and a served Prover interleaved;
 # verdicts.txt), once with the protocol GEMM and once (the filler's gates) with V31_LTW=1 (cuBLASLt's GEMM at S = 1;
 # variants take it as ltw=1); then, a lease each variant and L of FILL_LS (default "768 2048", t 3 and 8 at LP 256; 0: L =
-# K; each with min(L, K) at most 8 LP, dither/PROTOCOL.md's "The segment and the noise period"),
+# K; each with min(L, K) at most 8 LP, dither/PROTOCOL.md's "The segment and the noise tile"),
 # `v31 fill-bench` over FILL_SHAPES (default Llama 3 8B's QKV, O, gate-up and down at m 16384) beside cuBLASLt and
 # CUTLASS; fill-sample on each shape's sampled tiles; fill-table. VARIANTS here default to "row=1024,cprio=hi,sched=1
 # row=8192,cprio=hi,sched=1" (row: the leaf row, dither.Shape.row); served=1 benches the served call (O committed, T_S

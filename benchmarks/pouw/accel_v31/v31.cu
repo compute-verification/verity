@@ -3890,7 +3890,7 @@ static int foreign() { return g_live && std::this_thread::get_id() != g_thread ?
 extern "C" {
 const char* v31_error() { return g_err.c_str(); }
 
-// A context for calls of m x n x k at noise period lp (L'), segments of L and leaf rows of row bytes, served calls (O
+// A context for calls of m x n x k at noise tiles of lp (L'), segments of L and leaf rows of row bytes, served calls (O
 // committed, T_S implied) or a filler's, committed under the CGP1 params file's domain and salted under its Ks
 // (v31lib.Prover writes it), on CUDA device dev. Null on failure.
 void* v31_create(int m, int n, int k, int lp, int L, int row, int served, const char* params_path, int dev) {
