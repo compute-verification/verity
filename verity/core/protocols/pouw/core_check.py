@@ -761,9 +761,10 @@ OK_SALT_TAG = domains.POUW_H1_OK_ROW_SALT.encode() + b"\0"
 
 def ok_salt(context: str, position: int) -> bytes:
     """The ok row's hm96 salt, which anyone derives from the window's context and the unit's position: its content is
-    the one the verifier accepts (`OK_ROW`), so the salt hides nothing. SHAKE-256 of `OK_SALT_TAG` ‖ context ‖ 0 ‖
-    u64be(position), `SALT_BYTES` bytes."""
-    return hashlib.shake_256(OK_SALT_TAG + context.encode() + b"\0" + int(position).to_bytes(8, "big")).digest(SALT_BYTES)
+    the one the verifier accepts (`OK_ROW`), so the salt hides nothing. `SALT_BYTES` bytes of SHA-512 in counter mode
+    (`SHA-512(m ‖ u32be c)` for c < 3, each output whole) over m = `OK_SALT_TAG` ‖ context ‖ 0 ‖ u64be(position)."""
+    head = OK_SALT_TAG + context.encode() + b"\0" + int(position).to_bytes(8, "big")
+    return b"".join(hashlib.sha512(head + c.to_bytes(4, "big")).digest() for c in range(SALT_BYTES // 64))
 
 
 def call_reads(u0: int, rows: list[int | None]) -> dict[str, Any]:
