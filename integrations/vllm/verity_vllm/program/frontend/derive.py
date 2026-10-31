@@ -46,7 +46,7 @@ from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll
 from verity.ml.circuits.refs import runs as _refs_runs
 from verity.ml.circuits.liveness import DeadGateReport, dead_gates as _dead_gates
-from verity.ml.circuits.types import Array, Record, Tuple as TupleT, Type, Value
+from verity.ml.circuits.types import Array, RecordType, Tuple as TupleT, Type, Value
 from verity_vllm.program.frontend.outcomes import _CODE_TO_REASON, REASONS, Refuse, Unsupported, _jsonable, refuse
 from verity_vllm.program.frontend.provenance import registry_version
 from verity_vllm.program.frontend.registration import RegisteredInputs, RunInputs
@@ -463,7 +463,7 @@ class Ctx:
         self.storage.pop(node, None)  # fresh storage
 
     def bind_weight_role(self, a, rule: Rule, role: str, **statics) -> None:
-        """Record which semantic role (`ln1`, `qkv_w`, ...) a parameter played when a rule consumed it."""
+        """RecordType which semantic role (`ln1`, `qkv_w`, ...) a parameter played when a rule consumed it."""
         w = self.weight_of(a)
         if w is not None and w.name not in self.weight_roles:
             self.weight_roles[w.name] = {"rule": rule.rule_id, "role": role, **_jsonable(statics)}
@@ -726,7 +726,7 @@ def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims,
     run_inputs = (RunInputs.declare(params) if any(r.run_inputs(ep, mode) for r in ruleset.rules if r.modes is None or mode in r.modes)
                   else None)
     registered_inputs = RegisteredInputs.declare(params, ruleset, ep, mode) if registered_values else None
-    wrec_t = Record(*[(w.name, w.type) for w in leaves]) if leaves else None
+    wrec_t = RecordType(*[(w.name, w.type) for w in leaves]) if leaves else None
     if wrec_t is not None:
         params.append(("weights", wrec_t))
 
