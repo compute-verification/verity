@@ -1,6 +1,6 @@
 """The ingress tie in zero knowledge: each ingress link-window's T bucket rows of the warden's cells, each proved as
 IoTieRequest (`tie_service.IngressTie`, its unit `NetworkIngressTieBucket_v1{B=512,L=2,R=2}`), registered on the link's
-own stream, proved by C-Flock `prove --zk` behind the Lean firewall with each unit's witness row read off the warden's
+own stream, proved by Flock `prove --zk` behind the Lean firewall with each unit's witness row read off the warden's
 root (`warden_rows.bucket_port`), delivered, decided by the tie's verifier of record on its own lanes from the advice
 and the warden's release (`IngressTie.outcome(advice=…, releases=…, head=…)`), and `advised.IoTieVerdict` on the link
 and the stream's registrations built from the stream's outcomes of record alone (`IngressTie.tie`, read through
@@ -154,12 +154,12 @@ def advice(prompt_lens, got) -> AD.LinkAdvice:
     return AD.LinkAdvice(ADV.Advice(reqs, steps, tuple(range(len(prompt_lens)))), tuple(got))
 
 
-def served(prompt_lens, arrivals, rates) -> Q.Link:
+def served(prompt_lens, arrivals, rates) -> Q.ServedIngress:
     """The requests through the warden's own ingress over the class's windows."""
     return Q.serve(PARAMS, requests(prompt_lens), arrivals, rates, buckets=WINDOWS * T)
 
 
-def received(link: Q.Link) -> tuple[int, ...]:
+def received(link: Q.ServedIngress) -> tuple[int, ...]:
     cells = TS.window_cells(link.releases, T)
     return tuple(cells.get(w, 0) for w in range(len(link.records)))
 
@@ -309,7 +309,7 @@ def members() -> dict[str, tuple]:
     return {name: plan[name] for name in MEMBERS}
 
 
-def link_windows(tie: TS.IngressTie, link: Q.Link, adv: AD.LinkAdvice, edit=None) -> SimpleNamespace:
+def link_windows(tie: TS.IngressTie, link: Q.ServedIngress, adv: AD.LinkAdvice, edit=None) -> SimpleNamespace:
     """Every link-window of the member as the warden and the prover hold it before it registers: the warden's cells
     (`warden_rows.Cells`: a warden run's own, else fresh salts) and its head, the verifier's lanes of `adv` (``own``,
     None where the release isn't its schedule) and the prover's (``lanes``: `edit` of the verifier's, or, a tuple, the

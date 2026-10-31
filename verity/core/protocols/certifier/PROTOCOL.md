@@ -174,7 +174,7 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   leaves 2 and 3, each over the head alone (`RecordHead.encode`). Every leaf has its own fresh salt, in one
   `frame-v3-sha512` tree under one-stage's served domain for the run, the link and the window. A proof that reads only a
   head opens its head leaf in two or three SHA-512 compressions, where the record leaf would cost the certificate's 272
-  more. The firewall keeps the records and salts (`Opening`). The challenger receives one salted root and never a
+  more. The firewall keeps the records and salts (`Hidden`). The challenger receives one salted root and never a
   certificate, a certifier's salt or a head.
 - **Selection:** `All`. A registration is one sampling block, one proof block, so an accepted outcome is the exhaustive fact.
   The record's `window` provenance is exactly `{"kind": "served", "window": w}`, and the challenger holds w to the
@@ -216,7 +216,7 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   signs the head the check opened. In the unit's Program each head check is one gate that names the Definition and
   its circuit digest, `Gate[NetworkHeadCheck_v2{L,T,COUNTS}@<digest>]_v2` (`head_check.gate`): the commitment gadgets'
   Boolean bodies encode to about 140 MB, and the service encodes the Program on every registration. The digest is
-  core's `program_digest` of the Definition's Program (`head_check.circuit_digest`), the one a C-Flock statement names
+  core's `program_digest` of the Definition's Program (`head_check.circuit_digest`), the one a Flock statement names
   a template by, read from `head_check.circuit-check.json`'s ``digests``, which circuit-check holds to the Definition
   (a lowering pin). The Program's digest is the check's, so the spec, the stream and each registration bind to it, and
   through the gates to the circuits: a proof of another circuit with the same interface names another Program. A size
@@ -235,7 +235,7 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   Spec, is retired, superseded by the network certifier's step-indexed scan (`ingress_scan`, `egress`), which
   `benchmarks/network_traces/scan_zk.py` proves in zero knowledge, outside this protocol.
 - **Its verifier of record** is `LinkWindows.verify`, which decides on the delivered proof (`service.Delivered`) and
-  public inputs alone. It accepts when its own run of C-Flock's Lean verifier (`proofs.verify`, `verify --zk`, on the
+  public inputs alone. It accepts when its own run of Flock's Lean verifier (`proofs.verify`, `verify --zk`, on the
   circuit file the auditor committed) accepts every session, the sessions prove the link's registered unit (every gate
   names a pinned digest and every session names the registered Program, the partition object's `program`,
   `LinkWindows.proved`) and the drawn unit; the proof's ``pub`` row opens, under the salt delivered, to the verifier's
@@ -643,7 +643,7 @@ unit outputs 1 exactly when, in each lane of ordinal q:
     value), each opened entry (class, 1, its id) and the sink past them, and `IoTieIdsChain` checks the classes
     non-decreasing, one value a class but the sink, and each class starting with a slot (`IoTieIdsFirst` on the first
     member and one batch of `IoTieIdsLink` over each member and its successor, so a binding traces one link; its
-    C-Flock lowering is the flat trace's, AND for AND). A Beneš network is a
+    Flock lowering is the flat trace's, AND for AND). A Beneš network is a
     permutation under any switches, so every member is in the order and the switches can only sort. On a link whose
     every bucket row is accepted, every computation of request i's prompt position p, and every KV read in place of
     one, is the id the user sent. Public: IoTieRequest's lanes, the Commit's root and domain id, the steps (the
@@ -1100,7 +1100,7 @@ committed bits plus log2 of the number of possible faulty sets, except with prob
 
 The inference-only policy charges an isolation block the ingress covert capacity from the last wipe before it starts,
 plus what survived that wipe. `capacity.k_share` expresses bits as a share of K, which the caller passes in bits
-(`calibrate(k_bits=…)`, `--k-bits`): 9.12e7 under NCI's inference-only policy (α·Γ = 9.6e−11 × 9.5e17). The
+(`calibrate(k_bits=…)`, `--k-bits`): 9.12e7 under the inference-only policy (α·Γ = 9.6e−11 × 9.5e17). The
 calibration report records the K it used.
 
 Every statement in the table's Lean column is a guarantee in `Security/lean-audit.json`, frozen as no-function: each is
@@ -1881,14 +1881,14 @@ them.
     `Issuer` signs with) over `reveal_response_message`, the request's fields then u32be len(value) ‖ value under
     `verity-network-certifier/reveal-response/v1`. `Revealed.verify(key, run_id, link, digest, what)` holds only if it
     names that key's id and that run and the signature verifies, so a consumer can key p on the certifier run, (key
-    id, run id, link), which `Proxy.certifier_run` and `RemoteCertifier.certifier_run` give alike (link is the ingress
+    id, run id, link), which `Proxy.certifier_run` and `CertifierClient.certifier_run` give alike (link is the ingress
     link the messages bind): two proxies with one link name, whose p's collide, or two runs of one certifier, never
     answer for each other. A signer that refuses leaves p's reveal spent and gives nothing. The salt needs
     authenticity, not confidentiality: after t_d the block's server already holds it, and the verifier fills
     `pouw.salt` as a public input, so nothing is encrypted. A refusal (`{"refused": reason}`) isn't signed: forged on
     the path, it costs the window as dropping the answer would; so does a request copied off the path and sent
     first, which spends the reveal on a salt that is no longer secret. `serve_reveals(proxy, host, port)` serves both
-    calls beside `run`, one JSON line per request and per answer, each call off the loop; `RemoteCertifier(host, port, certifier_key, challenger_signer, link, run_id)` is
+    calls beside `run`, one JSON line per request and per answer, each call off the loop; `CertifierClient(host, port, certifier_key, challenger_signer, link, run_id)` is
     the challenger's client, given the certifier's key and run id by the deployment record, whose `reveal` and
     `committed` return the value they verified, as a keyless proxy's do in process, and raise `RuntimeError` on a
     refusal, an answer of another run, one that doesn't verify, or no answer. t_d, the deadline and the once rule are
@@ -2207,7 +2207,7 @@ grid whatever the load (the I/O tie's layout, "The I/O tie"):
   its padding cells among them; a slot no connection holds is B zero bytes, so T and the row's size are the
   schedule's;
 - a row is `hm96-sha512/row/v2` of its 8·S·B bits, bit 8k + i being bit i of byte k: S·B/2 little-endian u16 words
-  at 16 bits, which is how a C-Flock port of 8·S·B bits lays out the row.
+  at 16 bits, which is how a Flock port of 8·S·B bits lays out the row.
 
 **The wiring** says which connection holds which slots: connection q, live in `cells`/r rows from row `first`, holds
 slots ρ·r … ρ·r + r − 1 of each, ρ its rank by ordinal among the row's live connections, so its cell k of the
@@ -2265,7 +2265,7 @@ verifier: the network certifier's named gap "The cells' wiring is open to the ve
 
 **Demonstration** (`benchmarks/network_traces/warden_zk.py`). A toy unit, `WardenRowIdentity{B}` at B a row's S·B
 bytes, takes one row's bits through two NOTs. Each unit reads one of a connection's cells, so its row is that cell's
-bucket. Its port is registered against the network certifier's egress root of a `warden_serve` run, proved by C-Flock `prove --zk`
+bucket. Its port is registered against the network certifier's egress root of a `warden_serve` run, proved by Flock `prove --zk`
 behind the firewall, and held by Lean `verify --zk --registered`. The members:
 - the sender's output and the receiver's input are accepted;
 - rows under the prover's own root are refused, and so is the prover's registration of it under the network certifier's

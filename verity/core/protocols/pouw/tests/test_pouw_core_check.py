@@ -318,7 +318,7 @@ def _certified_pass(p: int) -> tuple[bytes, str, bytes, bytes, bytes, bytes]:
 
 
 def test_a_salted_unit_opens_only_under_its_certified_windows_salt():
-    """RT4-INT-10, at the opening of record. A certified window's pass passes `pass_epoch` under the certifier's reveal,
+    """At the opening of record. A certified window's pass passes `pass_epoch` under the certifier's reveal,
     and `certified_salt` is the salt it checked, `salt.pouw_salt(reveal, p, stream, prover)`. A salted unit whose public
     row was formed under that salt opens under it (the honest twin: every rule of the opening met). The same unit with
     its public row formed under a salt the prover chose, which it can form before any certifier salt exists, is refused
@@ -410,7 +410,7 @@ def test_the_opening_reads_what_served_zk_writes():
 
 
 def test_every_pinned_tiles_side_ports_sort_in_port_order():
-    """C-Flock reads port k's b ‖ c at the body's k-th place, in its circuit's port order, so the opening reads each side
+    """Flock reads port k's b ‖ c at the body's k-th place, in its circuit's port order, so the opening reads each side
     row's schema by port name and refuses a header whose keys, in key order, don't list the opened side rows first and in
     port order, rather than read the rows in key order (`schemas-between`, `salted-header-order`). It refuses no honest
     header of a pinned template: each one's side ports (Pc8's a0 and b0, the H1 unit's a0..a3 and b0..b7) sort in port
@@ -523,7 +523,7 @@ DRAW_EXPECT = {
     "units": ("draw", "the units are not the draw coin's subset:"), "other-key": ("draw", "the units are not the draw coin's"),
     "early-coins-live": ("coin", "the draw's coin does not open"),
     "live-coins": ("coin", "the challenger record is malformed: "),
-    "live-not-epoch": ("coin", "the coin commitment's coins are not a live epoch's"),
+    "live-not-epoch": ("coin", "the coin commitment's coins are not a live window's draw session's"),
     "live-bare": ("coin", CC.SIGNED_LIVE),
     "live-key": ("coin", "the verifier's challenger key is malformed: a challenger key is {H, W, public}"),
     "live-no-record": ("coin", "no challenger record: the verifier holds no coin commitment"),
@@ -574,7 +574,7 @@ def test_every_draw_mutation_hits_its_refusal():
     refuses each mutation with the refusal it aims at: a bare live commitment, a malformed key, no record, a record
     signed under another key than the one its coins name, a tampered signature or a record whose commitment was
     swapped (``coin``); a record under a key of the prover's own, a pin of another key, no pin or a malformed one, and
-    seeded coins under a pin (``coin-key``). A live draw's coin is ``pouw/draw`` 0, so a seeded opening under live
+    seeded coins under a pin (``coin-key``). A live sample's coin is ``pouw/draw`` 0, so a seeded opening under live
     coins is refused, and so is a live opening under seeded coins."""
     assert set(DRAW_EXPECT) == set(passes.DRAW_NAMES) | {"honest"}
     for name, want in DRAW_EXPECT.items():
@@ -592,9 +592,9 @@ def test_every_draw_mutation_hits_its_refusal():
 
 
 def _live_draw(sk: lms.PrivateKey, coins: str, reg: str, stream: str, receipt: dict, n: int, k: int, pinned: dict) -> dict:
-    """The draw's check of record's input (`pouw_pass_cases.honest_live_draw`'s layout) for a challenger run on coins
+    """The sample's check of record's input (`pouw_pass_cases.honest_live_draw`'s layout) for a challenger run on coins
     `coins`, its record signed under `sk` and naming that key, in a window whose parameters pin challenger key `pinned`."""
-    ch = Wd.live_challenger(0, 1, random.Random(coins).randbytes)
+    ch = Wd.draw_challenger(0, random.Random(coins).randbytes)
     message = Ch.record_message(lms.public_key(sk)[:16], "provers-node", ch.commitment)
     record = Ch.ChallengerRecord(ch.commitment, "provers-node", lms.sign_at(sk, 0, message).encode())
     o = ch.open(Wd.DRAW, 0, bytes.fromhex(reg))
@@ -606,7 +606,7 @@ def _live_draw(sk: lms.PrivateKey, coins: str, reg: str, stream: str, receipt: d
 
 
 def test_a_draw_record_the_prover_signed_over_its_own_coins_is_refused():
-    """RT4-INT-5's witness, refused. A prover that runs a challenger on coins of its own and signs its record under a key
+    """A self-run challenger, refused. A prover that runs a challenger on coins of its own and signs its record under a key
     of its own sees each candidate registration's draw before it registers, and keeps one whose draw misses the unit it
     can't prove (unit 0). The draw's check of record now verifies the record under the challenger key the window's
     parameters pin, not the key its coins name: the prover's record naming its own key is refused (``coin-key``), and
@@ -777,7 +777,7 @@ def test_every_live_salt_mutation_hits_its_refusal():
     ended complete, read through the session's own files, and refuses each mutation with the refusal it aims at: the
     manifest's form and workload, a call index of 2^32 or more, a `pass_index` that isn't an integer in [0, 2^64), the
     session's (as `salt`'s, a session opened on another root among them: W itself, another epoch's root, or the root of
-    an epoch other than the one the manifest names), a layout other than the salt coin alone (#3868's
+    an epoch other than the one the manifest names), a layout other than the salt coin alone (an
     H1 layout, its salt alone released, among them), a session opened without a reserve or reserved for another layout,
     an end that isn't complete with the salt coin alone released, a log showing another root or none, coins other than
     the session's, a coin that isn't its salt coin opened after R, another salt, and a session the manifest misnames
@@ -803,7 +803,7 @@ def test_a_live_pearl_c_pass_is_credited_only_from_its_complete_salt_only_sessio
     """An honest live Pearl-C manifest is accepted: its salt coin came from the salt-only
     session the auditor's ledger reserved, opened on its salt epoch's root and ended complete, having released that coin
     alone, and the verifier's seeded coins play no part. Refused: a verifier that holds no ledger, the session opened on
-    another root (a random one, or H1's window-open root), #3868's session (H1's layout, ended incomplete), an end that
+    another root (a random one, or H1's window-open root), an H1 session (H1's layout, ended incomplete), an end that
     isn't complete, a forged opening, and an in-process coin (seeded coins the prover ran) presented in place of the
     session's."""
     for seed in range(4):

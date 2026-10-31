@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # served_zk's served side on node 2, untimed: GPU 1's ship built from this tree (CPU, build.sh), then window.sh's smoke (its
 # identity, ship and device checks, both engines resident, the arm's gates) with RETAIN=1, under -h2: the arm serves e2e.py's
-# SERVED requests, "request" and "other", each a retained pass under $WORK/passes/<run id>, salted by epoch coins drawn
+# SERVED requests, "request" and "other", each a retained pass under $WORK/passes/<run id>, salted by epoch coins flipped
 # from the challenger whose entropy is $WORK/coin-state/<run id>.  The passes stay on the node for
 # commit.py and job.sh under window.sh's retention record (priority keep): only `research retention rm`, with the owner's
 # yes, deletes them.
 #   research run --on vy-nebius-2 --project verity --campaign pouw --source <tree> --cwd source --declared-output 'out/*' \
-#     --env GPU_LEASE_WHO=<id> -- bash benchmarks/pouw/served_zk/serve.sh
+#     --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/served_zk/serve.sh
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; ID=${RESEARCH_RUN_ID:?}; OUT=$D/out; mkdir -p "$OUT"
 WORK=/workspace/pouw/mvp-e2e

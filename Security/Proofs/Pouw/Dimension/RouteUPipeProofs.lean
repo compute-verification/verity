@@ -8,10 +8,10 @@ import Proofs.Pouw.Dimension.RouteUProofs
 
 * `pipe_coreU` (`pipe_core` on route-U words): the words are outside `V₀` and distinct (`pipe_wordU_nmem`,
   `pipe_wordU_injOn`, from `indep_subU`); the count is `pipe_core`'s, with `A1_cost_U` on the FP32 outputs.
-* `algBoundPipeU`, `algBoundQuadU`, `ttNCPOfA1costA2U`, `ttNCPOfQuadA2U` (`pipe_ttncp`).
+* `algBoundPipeU`, `algBoundQuadU`.
 * `a1CostQuadUHolds` (Theorem 1 on route U: `Forest.a1CostQuadNear` at `w = wordU β`, near `word` by `wordUSubV0`),
-  and with it `algBoundQuad8U` and `ttNCPQuadOfA2U`.
-* `a1CostWitnessU`, `pipeWitnessU`, `pipeChainConsistentU`.
+  and with it `algBoundQuad8U`.
+* `a1CostWitnessU`, `pipeWitnessU`.
 -/
 
 namespace Pouw.Dimension.RouteUProofs
@@ -94,20 +94,6 @@ theorem algBoundQuadU : AlgBoundQuadU := by
   intro β k m n N R A B U L P cs c γ hind hMR hU hL hP hout hA1 hc
   exact pipe_coreU β IsQuadPipe hind hU hL hP.1.1 hP.1.2.1 hP.2 hout (hA1 hind hMR) hc
 
-/-- **`TT_NCP_of_A1cost_A2` on route U.** -/
-theorem ttNCPOfA1costA2U : TTNCPOfA1costA2U := by
-  intro β k m n N R A B U M q γ₀ γ₁ γ₂ h16 hk hind hMR hU hA2 hA1 hout hγ₂ hγ₀ hγ
-  obtain ⟨L, P, hL, hP, hPout, hcost⟩ := hA2 q
-  exact pipe_ttncp h16 hk (algBoundPipeU β k m n N R A B U L P 8 2 γ₁ hind hMR hU hL hP
-    (fun u hu p hp => hPout _ (hout u hu p hp) ⟨u, hu, p, hp, rfl⟩) hA1 (by norm_num)) hcost hγ₂ hγ₀ hγ
-
-/-- **`TT_NCP_of_A1quad_A2` on route U.** -/
-theorem ttNCPOfQuadA2U : TTNCPOfQuadA2U := by
-  intro β k m n N R A B U M q γ₀ γ₁ γ₂ h16 hk hind hMR hU hA2 hA1 hout hγ₂ hγ₀ hγ
-  obtain ⟨L, P, hL, hP, hPout, hcost⟩ := hA2 q
-  exact pipe_ttncp h16 hk (algBoundQuadU β k m n N R A B U L P 8 2 γ₁ hind hMR hU hL hP
-    (fun u hu p hp => hPout _ (hout u hu p hp) ⟨u, hu, p, hp, rfl⟩) hA1 (by norm_num)) hcost hγ₂ hγ₀ hγ
-
 /-- **Theorem 1 on route U**: `A1_cost_quad_U β 2 0` holds for every `β`, `k` and `R`, the instance `w = wordU β` of
 `Forest.a1CostQuadNear`. -/
 theorem a1CostQuadUHolds : A1CostQuadUHolds := by
@@ -122,11 +108,6 @@ theorem algBoundQuad8U : AlgBoundQuad8U := by
   have h := algBoundQuadU β k m n N R A B U L P 8 2 0 hind hMR hU hL hP hout (a1CostQuadUHolds β k R) (by norm_num)
   rw [sub_zero, mul_one] at h
   exact_mod_cast h
-
-theorem ttNCPQuadOfA2U : TTNCPQuadOfA2U := by
-  intro β k m n N R A B U M q γ₀ γ₂ h16 hk hind hMR hU hA2 hout hγ₂ hγ₀ hγ
-  exact ttNCPOfQuadA2U β k m n N R A B U M q γ₀ 0 γ₂ h16 hk hind hMR hU hA2 (a1CostQuadUHolds β k R) hout hγ₂ hγ₀
-    (by rw [sub_zero, mul_one]; exact hγ)
 
 /-- One step per output word: `|S| ≤ #steps` and `|S| ≤ D`, so `2·|S| − D ≤ #steps`. -/
 theorem pipe_a1_halfU (β : ℤ) (C : ∀ {N m n k : ℕ}, List (Noise N m n k → ℚ) → Prop) {k : ℕ} {R : Mat}
@@ -185,18 +166,5 @@ theorem pipeWitnessU : PipeWitnessU := by
     rfl
   · rw [cost_append, honestU_cost]
     simp [cost, Instr.price]
-
-/-- **The two route-U pipe chains' hypotheses hold together.** -/
-theorem pipeChainConsistentU : PipeChainConsistentU := by
-  intro β k hk h16 m n N A B U hU
-  obtain ⟨R, P, -, hind, hMR, hQ, hout, -, -⟩ := pipeWitnessU β k hk h16 m n N A B U hU
-  obtain ⟨hA1, hA1q⟩ := a1CostWitnessU β k R
-  refine ⟨R, hind, minRankGe_mono (by norm_num) hMR, a2WitnessPipe N m n k 8 _, a2WitnessQuad N m n k 8 _, hA1, hA1q,
-    ⟨⟨P, hQ.1⟩, fun u hu p hp => hout u hu p hp⟩, ⟨⟨P, hQ⟩, fun u hu p hp => hout u hu p hp⟩, ?_⟩
-  have hk' : (1024 : ℝ) ≤ k := by exact_mod_cast hk
-  have h1 : 16 / (3 * (k : ℝ)) ≤ 1 / 2 := by
-    rw [div_le_iff₀ (by positivity)]
-    linarith
-  linarith
 
 end Pouw.Dimension.RouteUProofs

@@ -10,12 +10,14 @@ import PouwCheck.Pass
 import PouwCheck.Rounds
 import PouwWindow.Draw
 import PouwWindow.Rounds
+import SampledProofs.ChallengerCoins
 import SampledProofs.ChallengerSession
 import SampledProofs.PyJson
 import SampledProofs.Registered
+import Identity.Domains
 
 /-!
-# A served window's credited set, its drawn units and their outcome, its A rows and its period (`credit.py`; RT4-INT-32, -34 and -42)
+# A served window's credited set, its drawn units and their outcome, its A rows and its period (`credit.py`)
 
 The verifier of record of `verity/core/protocols/pouw/credit.py`, which the difftest (`tests/test_difftest.py`) holds to
 it, string for string:
@@ -30,9 +32,10 @@ round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the o
   `credit`, a credited row its z table's root, and the draw root over the manifest (`callsRoot`, rows written as Python's
   `json.dumps(row, sort_keys=True)`, and the window's Commit record's digest, `commitOf?`), the last round's receipts and
   every round's root and coin (`drawRoot`) must be the one root the challenger's log shows its draw coin followed, read
-  through the session the auditor's signed ledger opens for the window, run from a commit the host's pins log records on
-  main's first-parent line (`trustedSessionOf`, over `pinnedSession`). So a credit bit changed after the draw coin is
-  refused.
+  through the draw's own session (`draw`'s `session`), the one the auditor's signed ledger opens on that root, run from
+  a commit the host's pins log records on main's first-parent line (`trustedSessionOf`, over `pinnedSession`), and
+  opened withheld (`SampledProofs.Challenger.withheldOn`), so its challenger released no coin root before the prover's
+  draw root. So a credit bit changed after the draw coin is refused.
 * `drawn` is `credit.drawn`: the units the draw coin draws from the window's own layout, `drawCheck`'s rule under the
   law `work:k` (`workUnits`), one stratum per K (`strata`, over `h1window.program`'s unit order) at the K the period's
   open committed (`law`; `committedK`). Never a list the prover hands in. `established` is the ε that draw established
@@ -70,7 +73,7 @@ round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the o
   (the stream its root, the registration its draw root, the receipt `{"receipts": …}`), `Internal.registration` and
   `Internal.live`.
 * `period` is `credit.period`: the windows presented are exactly those the auditor's ledger lists in the period's
-  close, in its order, and the close is complete; `periodCredit` is `credit.period_credit`, every window's session run
+  close, in its order, each window's session and then its draw's, and the close is complete; `periodCredit` is `credit.period_credit`, every window's session run
   from main's code and the window proving the period's committed circuit (`creditedSession`, the pin first, then the
   circuit) and credited. Every path here that credits reads its session through `pinnedSession`, against the host's
   pins log (`pins`) and the verifier's own copy of main's first-parent history (`main`).
@@ -89,7 +92,7 @@ round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the o
   session's registered finding, each registered port's value and the root its reads were opened against). The entries
   are the window's registration's: each A value's domain, and each other value's a proof opened, is `domainOf` the
   committed descriptor's SHA-512 and, for every value but the weights' `…/b/<K>` (`isHeld`) and round 0's `…/ids@0`,
-  the window's open root (`SampledProofs.Registered.domainAt`, PRF-127), for `…/ids@0` the window's session; each
+  the window's open root (`SampledProofs.Registered.domainAt`), for `…/ids@0` the window's session; each
   proof was verified against that descriptor, opened only values
   the window registers once, each at its registered root, and opened its unit's K's A value, the window's `…/a/<K>` or
   its call's round's `…/a/<K>@<s>`, and its K's weights `<PREFIX>b/<K>`. So the A rows `Internal.aLink` ties to the round roots are the ones each drawn unit's
@@ -101,7 +104,7 @@ round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the o
   one the open of the window's period signed (`committedWeights`), so every window of a period opens the same B rows.
   That open names the model the root is of, a role and checkpoint `models.json` pins (`PINNED_MODELS`, the file
   `credit.py` reads, embedded here), else the period counts nothing.
-* `Internal.length` is `credit._length` (Daniel, 19 Oct, ASK-39): the open of the window's period commits each
+* `Internal.length` is `credit._length`: the open of the window's period commits each
   request's public max_tokens with the public-cap done source (`committedLength`, `{max_tokens, stop}` with stop
   `STOP_FIXED`), and each step's served rows m_s the manifest fixed before the draw coin (`Internal.servedRows`) are
   that fixed length's schedule:
@@ -310,13 +313,21 @@ def commitOf? (commit : Json) : Option (ByteArray × Array Json) :=
     else none
   else none
 
-/-- `credit._credited`: the credited calls' indices, else the refusal. A step of `window`: its indices are no credit
-until every other step accepts. -/
-def Internal.credited (key ledger pins main window session salt calls served commit rounds draw : Json) :
-    R (List Nat) := do
+/-- `credit._credited`'s draw session: the coin commitment and roots of the session the auditor's ledger opens on the
+draw root `root` (its hex) under `k`, from the session's files `session` (`trustedSessionOf`), when the ledger opens it
+withheld (`withheldOn`); else the refusal (`coin`). -/
+def drawSession (ledger : Json) (k : ChallengerKey) (pins main session : Json) (root : String) :
+    R (SampledProofs.Challenger.LiveCommitment × SampledProofs.Challenger.Roots) := do
+  let got ← (trustedSessionOf ledger (Json.mkObj [("root", Json.str root)]) k pins main session).mapError
+    fun e => ("coin", s!"the draw's session is not trusted: {e}")
+  unless SampledProofs.Challenger.withheldOn ledger root do throw ("coin", SampledProofs.Challenger.WITHHELD)
+  pure got
+
+/-- `credit._credited` up to the draw root: the verifier's challenger key, the credited calls' indices and the root
+`draw_root` gives over the window's manifest, Commit record, receipts and round log; else the refusal. -/
+def Internal.creditedRoot (key salt calls served commit rounds draw : Json) :
+    R (ChallengerKey × List Nat × ByteArray) := do
   let k ← (ChallengerKey.ofJson key).mapError fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
-  let (c, received) ← (trustedSessionOf ledger window k pins main session).mapError fun e =>
-    ("coin", s!"the challenger's session is not trusted: {e}")
   let some s := digest? salt | throw ("manifest", SALT_FORM)
   let .arr rows := calls | throw ("manifest", CALLS_FORM)
   let rows := rows.toList
@@ -344,8 +355,13 @@ def Internal.credited (key ledger pins main window session salt calls served com
     let o ← (LiveOpening.ofJson (get x "coin")).mapError fun e => ("rounds", s!"round {r}'s coin: {e}")
     parts := parts ++ [.bytes root, .bytes o.coin]
   let some receipts := (if isObj draw then digest? (get draw "receipts") else none) | throw ("draw", DRAW_FORM)
-  let root := tagged DRAW_TAG ([.bytes (callsRoot s rows servedB (some cd.1)), .bytes receipts] ++ parts)
+  pure (k, out, tagged DRAW_TAG ([.bytes (callsRoot s rows servedB (some cd.1)), .bytes receipts] ++ parts))
+
+/-- `credit._credited` from the draw root `root` on: none when `draw`'s `root` is it and its draw coin is the one the
+withheld session the ledger opens on it released after it (`drawSession`); else the refusal. -/
+def Internal.creditedDraw (ledger : Json) (k : ChallengerKey) (pins main draw : Json) (root : ByteArray) : R Unit := do
   unless (str? (get draw "root")) == some (Flock.hexOf root) do throw ("draw", DRAW_ROOT)
+  let (c, received) ← drawSession ledger k pins main (get draw "session") (Flock.hexOf root)
   let got := (received.lookup PouwWindow.DRAW).getD []
   if got.isEmpty then throw ("draw", NO_DRAW)
   unless got == [root] do throw ("draw", CHANGED)
@@ -355,6 +371,12 @@ def Internal.credited (key ledger pins main window session salt calls served com
       | .error e => some e
       | .ok w => w
   if let some w := why then throw ("coin", s!"the draw coin: {w}")
+
+/-- `credit._credited`: the credited calls' indices, else the refusal. A step of `window`: its indices are no credit
+until every other step accepts. -/
+def Internal.credited (key ledger pins main salt calls served commit rounds draw : Json) : R (List Nat) := do
+  let (k, out, root) ← Internal.creditedRoot key salt calls served commit rounds draw
+  Internal.creditedDraw ledger k pins main draw root
   pure out
 
 def layoutRefuse {α : Type} (why : String) : R α := throw ("layout", why)
@@ -996,7 +1018,7 @@ round 0's input-ids table (`…/ids@0`, `idsStep?` 0) and request table (`…/re
 window's open root contains (`requestsRoot`, `Internal.arow`), bind the window's session `session` in that root's place
 (`domainBound` at `"session"`); every
 other value's rows are the window's own, its A rows and its calls' A and z tables among them, and its domain binds the
-window's open root (PRF-127). -/
+window's open root. -/
 def domainOf (program window session : String) (e : Json) : R String := do
   let v := (str? (get e "value")).getD ""
   let (words, leaves, bits) := ((nat? (get e "words")).getD 0, (nat? (get e "leaves")).getD 0,
@@ -1054,9 +1076,9 @@ def PUB_PORT : String := "pub"
 def OK_PORT : String := "o1"
 /-- `credit.OK_VALUE`: the window Program's output the ok rows are, after its prefix: row u unit u's. -/
 def OK_VALUE : String := "ok"
-/-- `core_check.OK_ROW`: the ok row the verifier accepts, a unit's one output bit, 1, in its one word (h1_prove's, #3124). -/
+/-- `core_check.OK_ROW`: the ok row the verifier accepts, a unit's one output bit, 1, in its one word (h1_prove's). -/
 def OK_ROW : Array Nat := #[1]
-/-- `core_check.OK_SALT_TAG`: the ok row's hm96 salt tag (h1_prove's, #3124). -/
+/-- `core_check.OK_SALT_TAG`: the ok row's hm96 salt tag (h1_prove's). -/
 def OK_SALT_TAG : ByteArray := "verity/pouw/h1-prove/ok-row-salt/v0".toUTF8.push 0
 
 /-- `core_check.ok_salt`: SHAKE-256 of `OK_SALT_TAG` ‖ context ‖ 0 ‖ u64be(position), `PouwCheck.saltBytes` bytes. -/
@@ -1138,7 +1160,7 @@ def shapeOf (descriptor : ByteArray) : Shape := Id.run do
     | _ => []
   return ⟨pre, tiles⟩
 
-def PARTITION_FORMAT : String := "verity/partition/v1"
+def PARTITION_FORMAT : String := Domains.PARTITION
 def QUERY_NAME : String := "Q_template_instances"
 def QUERY_VERSION : Nat := 0
 
@@ -2036,7 +2058,7 @@ def windowLayout
     (key ledger pins main window session salt calls served commit rounds draw descriptor entries proofs live k rows :
       Json) :
     R (List Nat × Json × List Nat) := do
-  let got ← Internal.credited key ledger pins main window session salt calls served commit rounds draw
+  let got ← Internal.credited key ledger pins main salt calls served commit rounds draw
   let log := match rounds with
     | .arr xs => xs
     | _ => #[]
@@ -2096,9 +2118,9 @@ def window
   (·.1) <$> windowLayout key ledger pins main window session salt calls served commit rounds draw descriptor entries
     proofs live k rows
 
-/-- `credit.period`: none when `roots` are exactly the windows the auditor's ledger lists in period `name`'s close, in
-its order, and that close is complete (`checked`, under the pinned key `key`); else the refusal (`coin`, `period`,
-`missing` or `order`). -/
+/-- `credit.period`: none when `roots` are exactly the sessions the auditor's ledger lists in period `name`'s close, by
+their open roots in its order (each window's, then its draw's: `periodCredit`), and that close is complete (`checked`,
+under the pinned key `key`); else the refusal (`coin`, `period`, `missing` or `order`). -/
 def period (key ledger name roots : Json) : R Unit := do
   let k ← (ChallengerKey.ofJson key).mapError fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
   discard <| (SampledProofs.Challenger.checked ledger k).mapError fun e =>
@@ -2124,25 +2146,25 @@ def period (key ledger name roots : Json) : R Unit := do
         "period earns nothing")
   let some rs := (match roots with
       | .arr a => a.toList.mapM fun r => if (digest? r).isSome then str? r else none
-      | _ => none) | throw ("period", "the period's windows are not a list of window roots (SHA-512 digests)")
+      | _ => none) | throw ("period", "the period's sessions are not a list of open roots (SHA-512 digests)")
   let want := ws.toList.map fun w => (str? (get w "root")).getD ""
   let wanted : Std.HashMap String Unit := want.foldl (fun m r => m.insert r ()) {}
   let presented : Std.HashMap String Unit := rs.foldl (fun m r => m.insert r ()) {}
   for i in [0:max want.length rs.length] do
     if i ≥ want.length then
-      throw ("period", s!"the windows presented run past the {want.length} that period {name}'s close lists: only " ++
-        "its close's windows count, each once")
+      throw ("period", s!"the sessions presented run past the {want.length} that period {name}'s close lists: only " ++
+        "its close's sessions count, each once")
     let w := want[i]!
     if i ≥ rs.length || (rs[i]! != w && !presented.contains w) then
-      throw ("missing", s!"window {i} of period {name} ({w.take 16}...) is missing: every window between the " ++
+      throw ("missing", s!"session {i} of period {name} ({w.take 16}...) is missing: every session between the " ++
         "period's open and its close counts, so present them all, in the close's order")
     let r := rs[i]!
     if r != w then
       if !wanted.contains r then
-        throw ("period", s!"window {r.take 16}... is not one of period {name}'s windows: only the windows its close " ++
-          "lists count")
-      throw ("order", s!"window {i} of period {name} is {r.take 16}..., not {w.take 16}..., the close's window {i}: " ++
-        "present the period's windows in the order its close lists them")
+        throw ("period", s!"session {r.take 16}... is not one of period {name}'s sessions: only the sessions its " ++
+          "close lists count")
+      throw ("order", s!"session {i} of period {name} is {r.take 16}..., not {w.take 16}..., the close's session {i}: " ++
+        "present the period's sessions in the order its close lists them")
 
 /-- `credit.committed_k`: the K period `name`'s open committed (`K_FIELD`, a positive integer at most `MAX_K`) in the
 auditor's ledger, one `period` has trusted; else the refusal (`budget`). -/
@@ -2185,14 +2207,17 @@ def mainIndex? (main : Json) (commit : String) : Option Nat :=
   | .arr cs => cs.findIdx? (· == Json.str commit)
   | _ => none
 
+/-- `credit.DRAW_UNIT`: what `pinHygiene` names a window's draw session by. -/
+def DRAW_UNIT : String := "the draw session of window"
+
 /-- `credit._pin_hygiene`: why window `i` of period `name`, whose session ran commit `pinned` on main's first-parent line
 `main`, is too old for the period: its pin more than the period's freshness floor of first-parent commits behind the
 commit the period's open recorded (`periodPin`, `committedPin`; `floor`, `committedFloor`, default 0 when the open pins
 but records no floor), measured from that pin and never from main's head; `none` when it is recent enough or the open
-records no pin. The per-window pin and circuit are `creditedSession`'s; this is the period-level hygiene on top
-(CMP74-FOLLOW). -/
+records no pin. The per-window pin and circuit are `creditedSession`'s; this is the period-level hygiene on top.
+`unit` names what `i` counts (`DRAW_UNIT` for a window's draw session). -/
 def pinHygiene (name : String) (i : Nat) (main : Json) (pinned : String) (periodPin : Option String)
-    (floor : Option Nat) : Option (String × String) :=
+    (floor : Option Nat) (unit : String := "window") : Option (String × String) :=
   match periodPin with
   | none => none
   | some pp =>
@@ -2206,7 +2231,7 @@ def pinHygiene (name : String) (i : Nat) (main : Json) (pinned : String) (period
       | some base =>
         let f := floor.getD 0
         if pos > base + f then
-          some ("pin", s!"window {i} of period {name} is pinned {pos - base} first-parent commit(s) before the commit " ++
+          some ("pin", s!"{unit} {i} of period {name} is pinned {pos - base} first-parent commit(s) before the commit " ++
             s!"its period opened under, past its freshness floor of {f} ({STALE_FIELD}): {pinned.take 16}... is " ++
             s!"that far behind {pp.take 16}... on main's first-parent line, so the period earns nothing; " ++
             "open every window within the floor of its period's open pin")
@@ -2229,7 +2254,8 @@ def PeriodCredit.toJson (c : PeriodCredit) : Json :=
 committed K (`committedK`) and the table rows T (`committedRows`) and signed the weights' root every window's registered B rows fold to (`committedWeights`),
 each window's session ran a commit the host's pins log `pins` records on the verifier's copy of main's first-parent
 history `main` and the window proves the circuit the period's open committed (`circuit`: the pin first, then its
-descriptor hashing to it, `SampledProofs.Challenger.creditedSession`), each window's session pinned within the period's
+descriptor hashing to it, `SampledProofs.Challenger.creditedSession`, and likewise its draw session), each window's
+session and its draw session pinned within the period's
 freshness floor (`committedFloor`, first-parent commits, default 0) of the commit the period's open recorded
 (`committedPin`), counted from that pin and never from main's head, both optional and refused with `pin` (`pinHygiene`),
 and each window is credited (`window`) drawn at K, a refused window refusing the period; each window's work is its
@@ -2238,9 +2264,10 @@ def periodCredit (key ledger pins main name windows : Json) : R PeriodCredit := 
   let some ws := (match windows with
       | .arr a => if a.all (fun w => keys w == some PERIOD_KEYS) then some a.toList else none
       | _ => none) | throw ("period", WINDOWS_FORM)
-  let roots := Json.arr (ws.toArray.map fun w => match get w "window" with
-    | j@(.obj _) => get j "root"
-    | _ => .null)
+  let rootOf := fun (j : Json) => match j with
+    | .obj _ => get j "root"
+    | _ => .null
+  let roots := Json.arr (ws.toArray.flatMap fun w => #[rootOf (get w "window"), rootOf (get w "draw")])
   period key ledger name roots
   let nm := (str? name).getD ""
   let bigK ← committedK ledger nm
@@ -2260,6 +2287,10 @@ def periodCredit (key ledger pins main name windows : Json) : R PeriodCredit := 
     let a ← (SampledProofs.Challenger.creditedSession ledger (f "window") k pins main d).mapError fun e =>
       ("circuit", s!"window {i} of period {nm} doesn't count toward it, so the period earns nothing: {e}")
     if let some why := pinHygiene nm i main a.pinned periodPin floor then throw why
+    let dr ← (SampledProofs.Challenger.creditedSession ledger (Json.mkObj [("root", rootOf (f "draw"))]) k pins main
+      d).mapError fun e =>
+      ("circuit", s!"window {i}'s draw session of period {nm} doesn't count toward it, so the period earns nothing: {e}")
+    if let some why := pinHygiene nm i main dr.pinned periodPin floor DRAW_UNIT then throw why
     let (got, layout, rows) ← (windowLayout key ledger pins main (f "window") (f "session") (f "salt") (f "calls") (f "served")
       (f "commit") (f "rounds") (f "draw") (f "descriptor") (f "entries") (f "proofs") (f "live") (Lean.toJson bigK)
       (Lean.toJson t)).mapError
@@ -2268,5 +2299,17 @@ def periodCredit (key ledger pins main name windows : Json) : R PeriodCredit := 
     work := work ++ [creditedWork layout got rows]
     eps := eps ++ [established layout got rows bigK]
   pure ⟨out, work, bigK, DELTA, eps⟩
+
+/-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
+written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+example : CALLS_TAG = Domains.POUW_H1_CALLS.toUTF8.push 0 := rfl
+example : DRAW_TAG = Domains.POUW_H1_SAMPLING := rfl
+example : ROUND_TAG = Domains.POUW_H1_ROUND_A := rfl
+example : COMMIT_TAG = Domains.POUW_H1_COMMIT.toUTF8.push 0 := rfl
+example : COMMIT_FORMAT = Domains.REGISTRATION := rfl
+example : SCHEMA = Domains.IR_DESCRIPTOR := rfl
+example : OK_SALT_TAG = Domains.POUW_H1_OK_ROW_SALT.toUTF8.push 0 := rfl
+example : REQUESTS_IDS_TAG = Domains.POUW_H1_REQUEST_IDS := rfl
+example : WEIGHTS_TAG = Domains.POUW_H1_WEIGHTS := rfl
 
 end PouwCheck.Credit

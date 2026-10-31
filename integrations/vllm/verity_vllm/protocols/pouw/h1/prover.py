@@ -3,7 +3,7 @@ window's close, kept in a directory of the prover's own (`pouw_h1.H1Run`'s ``pro
 never under a run's ``$OUT`` or any published path. The serving node keeps it (`research keep`), and its holder alone reads it.
 
 * **What it keeps.** `keep_key`: the run's hm96 salt key (`KEY`, 32 bytes), from which the salt of every hiding leaf of
-  the window is drawn: its request, slot, A and z tables' (`pouw_h1_requests.hiding_rows`) and its served trees' rows
+  the window is sampled: its request, slot, A and z tables' (`pouw_h1_requests.hiding_rows`) and its served trees' rows
   (`audit.hm96_salt` at `pouw_h1_served.nonce`). `keep_call`: each served call's m s8 rows, their f32 scales and its z/y
   records (`pouw_h1_records`, one a proof block), as ``calls/<index>.npz``. An empty call keeps nothing: its A table is T zero
   rows and its z table zero records. A handed-off window (`pouw_h1_handoff`) also keeps its saved state in `STATE`: its

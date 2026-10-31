@@ -77,9 +77,8 @@ from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
-from verity.core.protocols.pouw.audit import commit_rows, weight_binding
-from verity.core.protocols.pouw.circuit import compile as C
-from verity.core.protocols.pouw.circuit import h1tile as H
+from verity.core.protocols.pouw.audit import HM96_WEIGHTS, weight_binding
+from verity.core.protocols.pouw.circuit import compile as C, h1tile as H
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw.credit import CREDIT
 from verity.core.protocols.sampled_proofs.challenger import CoinError
@@ -91,12 +90,9 @@ from verity.ml.circuits.refs import Affine, Coll, Refs, Strided, concat
 from verity.ml.circuits.types import Array
 
 from verity_vllm.protocols.pouw import credit_gate as CG
-from verity_vllm.protocols.pouw.h1 import commit as CT
+from verity_vllm.protocols.pouw.h1 import (commit as CT, prover as PV, records as ZR, requests as RQ,
+                                             tables_device as TD)
 from verity_vllm.protocols.pouw.h1.commit import calls_root
-from verity_vllm.protocols.pouw.h1 import prover as PV
-from verity_vllm.protocols.pouw.h1 import records as ZR
-from verity_vllm.protocols.pouw.h1 import requests as RQ
-from verity_vllm.protocols.pouw.h1 import tables_device as TD
 from verity_vllm.protocols.pouw.h1.requests import TABLE_NONCES, TABLE_TAGS, table_leaves
 from verity_vllm.protocols.pouw.h1.static import FILL, Static, bind_all, graph_pad, utilization
 
@@ -106,6 +102,9 @@ TILE = (32, 32)
 I8_BITS, BF16_BITS = 8, 16
 RECORD = "verity-vllm/pouw-h1-calls/v2"
 CALLS_FILE = "pouw-h1-calls.json"
+#: the declared window Program a server writes under its ``h1/`` (`served.write_program`): its descriptor, gzipped, and
+#: what a period-open of it reads, so ``pouw_h1_circuits --program OUT/h1`` builds its circuit files
+PROGRAM, PROGRAM_META = "window-program.json.gz", "window-program.meta.json"
 SALT_TAG = b"verity/pouw/h1/program-salt/v1\0"
 #: the one coin source a credited window's coins come from (`pouw_h1_challenger`)
 CHALLENGER = "challenger"
@@ -201,11 +200,20 @@ def units(k: int, n: int, m: int) -> int:
     return (mp // TILE[0]) * (np_ // TILE[1])
 
 
-def weight_root(w: int, rows: np.ndarray) -> bytes:
-    """The epoch's commitment to weight `w` (its int8 rows [n, k] in a SHA-512 row tree), which the salt coin is opened after
-    (`audit.weights_root`); not root(B), which is compute accounting's."""
+#: this process's 32-byte key for its weight trees' leaf salts (`weight_root`): from the OS's CSPRNG when the module is first
+#: imported (a forked child keeps its parent's) and held only in memory, never written to a record, a manifest or the store;
+#: a tensor-parallel rank draws its own, since each commits only the weights it holds
+WEIGHT_KEY = os.urandom(32)
+
+
+def weight_root(w: int, rows: np.ndarray, key: bytes | None = None) -> bytes:
+    """The epoch's commitment to weight `w`, which the salt coin is opened after (`audit.weights_root`): its int8 rows [n, k]
+    in a hiding tree, ``audit.commit_rows(weight_binding(w), -2, rows, HM96, key, HM96_WEIGHTS + w)`` (`requests.hiding_rows`,
+    the same tree), so the root says nothing of the rows to anyone without ``key`` (`WEIGHT_KEY` when None). Not root(B),
+    which is compute accounting's."""
+    key = WEIGHT_KEY if key is None else key
     rows = np.ascontiguousarray(rows, dtype=np.int8)
-    return commit_rows(weight_binding(w), -2, [r.tobytes() for r in rows], hash="sha512").commitment.root
+    return RQ.hiding_rows(weight_binding(w), -2, [r.tobytes() for r in rows], key, HM96_WEIGHTS + w).commitment.root
 
 
 def layout(shapes: Sequence[tuple[int, int]], rows: int) -> tuple[list[int], int]:
@@ -280,8 +288,8 @@ class Call:
 #: and s_a [m], m = 0 for an empty step; `slots` makes the call's T-slot table); it returns None or what it bound for the
 #: call, as JSON (its roots and receipt root, hex)
 Listener = Callable[[Call, Any, Any, Any, Any], Mapping[str, Any] | None]
-#: ``opener(requests_root)``: given round 0's request table's root, the window's Program salt, its round coins and sampling coin
-#: coins (`LiveRecord`s) and what its commitment records of the opening (`H1Run.open_window`)
+#: ``opener(requests_root)``: given round 0's request table's root, the window's Program salt, its round coins (a
+#: `LiveRecord`), its draw coin (`pouw_h1_window.DrawSession`) and what its commitment records (`H1Run.open_window`)
 Opener = Callable[[bytes], tuple[bytes, Any, Any, Mapping[str, Any]]]
 
 
@@ -303,7 +311,7 @@ class H1Run:
     over the step's calls, its request table and its slot table, and with ``served`` the step's A table of each K
     ``a/<K>@<s>`` whole (`pouw_h1_served.Served.segments`), is recorded with
     ``rounds`` (a `LiveRecord` over a live challenger's round family), which opens round s's coin only after it, and
-    `finish` opens ``draw``'s coin (a `LiveRecord` of the same challenger's ``draw`` family) after the window's `draw_root`.
+    `finish` opens ``draw``'s coin (its own withheld session, `pouw_h1_window.DrawSession`) after the window's `draw_root`.
     ``key`` is the prover's hm96 salt key for the request, slot and call tables, drawn for the run (`os.urandom`) unless
     given. ``prover`` (else ``served``'s) is the prover's private directory (`pouw_h1_prover`): it keeps the key and each
     served call's A rows, scales and z/y records, so a sampled proof block opens after the close (DRAWN1); without it their leaves
@@ -749,8 +757,7 @@ class H1Run:
     def calls_root(self) -> bytes:
         """SHA-512 over the manifest, in order: what the install commits to (its positions and what was bound), and with
         ``served`` its registered trees' entries and the Commit's record (`calls_root`)."""
-        return calls_root(self.salt, self.manifest(), None if self.served is None else self.served.digest(),
-                          CT.record_of(self))
+        return calls_root(self.salt, self.manifest(), None if self.served is None else self.served.digest(), CT.record_of(self))
 
     def finish(self) -> None:
         """Close the window, commit its manifest, then open ``draw``'s coin after `pouw_h1_requests.draw_root` over the
@@ -775,6 +782,7 @@ class H1Run:
                 self.commits["draw"]["refused"] = str(e)
             else:
                 self.commits["draw"]["coin"] = coin.to_json() if coin else None
+            self.commits.update({"draw_session": s} if (s := getattr(self.draw, "session", None)) is not None else {})
         if self.transcript_dir:
             d = Path(self.transcript_dir)
             d.mkdir(parents=True, exist_ok=True)
@@ -785,7 +793,7 @@ class H1Run:
                                                     "refused": self.refused, "calls": self.manifest()}) + "\n")
 
 
-__all__ = ["CALLS_FILE", "CHALLENGER", "Call", "FILL", "H1Run", "IN_PROCESS", "Listener", "Opener", "RECORD", "SALT_TAG",
+__all__ = ["CALLS_FILE", "CHALLENGER", "Call", "FILL", "H1Run", "IN_PROCESS", "Listener", "Opener", "PROGRAM", "PROGRAM_META", "RECORD", "SALT_TAG",
            "SCHEME", "Static", "TABLE_TAGS", "TILE", "VllmInt8LinearH1", "bind_all", "calls_root", "check_tiles", "compiled",
            "coordinate", "layout", "numpy_of", "padded", "program", "program_salt", "slots",
-           "table_leaves", "units", "utilization", "weight_root", "TABLE_NONCES"]
+           "table_leaves", "units", "utilization", "weight_root", "TABLE_NONCES", "WEIGHT_KEY"]

@@ -12,7 +12,7 @@
 #   own `git rev-list --first-parent origin/main`, one commit a line (never read from the run); relative: the run dir's
 # H1_DESCRIPTOR: the window Program's descriptor (window-program.json.gz), whose SHA-512 the period-open signed; core
 #   draws at the K that period-open committed
-# Then three negatives, each refused: another key's pin, a draw root the coin didn't follow, and a main that doesn't
+# Then three negatives, each refused: another key's pin, a sample root the coin didn't follow, and a main that doesn't
 # hold the session's pin.
 set -uo pipefail
 export HZ_CONFIGS=served HZ_MEM_GB=16
@@ -27,9 +27,11 @@ case $MAIN in /*) ;; *) MAIN=$RESEARCH_RUN_DIR/$MAIN ;; esac
 PY=$(cached venv numpy2.5.3-blake3-1.0.9 build_python)/bin/python
 [ -x "$PY" ] || { log "build FAILED"; tail -20 "$OUT"/build-*.log; exit 1; }
 export PYTHONPATH=$SRC:$SRC/integrations/vllm
-S=$(ls -d "$D"/gate/fetch/*/out | head -1)
-log "served draw: window run $D, session $S"
-"$PY" "$SRC/benchmarks/pouw/h1_prove/served.py" --calls "$D/serve/pouw-h1-calls.json" --session "$S" \
+read -r SID DSID < <("$PY" -c 'import json, sys; c = json.load(open(sys.argv[1]))["commitment"]
+print(c["session"]["session"], (c.get("draw_session") or {}).get("session", "none"))' "$D/serve/pouw-h1-calls.json")
+S=$D/gate/fetch/$SID/out DS=$D/gate/fetch/$DSID/out
+log "served draw: window run $D, session $S, draw session $DS"
+"$PY" "$SRC/benchmarks/pouw/h1_prove/served.py" --calls "$D/serve/pouw-h1-calls.json" --session "$S" --draw-session "$DS" \
   --ledger "$D/gate/windows.jsonl" --pin "$PIN" --pins "$PINS" --main "$MAIN" --descriptor "$DESC" --out "$OUT/drawn.json" \
   2>&1 | tee -a "$OUT/job.log"
 rc=${PIPESTATUS[0]}
@@ -43,7 +45,7 @@ json.dump(d, open(sys.argv[2], "w"))
 EOF
 neg() {
   local name=$1; shift
-  if "$PY" "$SRC/benchmarks/pouw/h1_prove/served.py" --session "$S" --ledger "$D/gate/windows.jsonl" --pins "$PINS" \
+  if "$PY" "$SRC/benchmarks/pouw/h1_prove/served.py" --session "$S" --draw-session "$DS" --ledger "$D/gate/windows.jsonl" --pins "$PINS" \
       --main "$MAIN" --descriptor "$DESC" "$@" > "$OUT/neg-$name.log" 2>&1; then log "FAIL: $name drew units"; return 1; fi
   grep -q '^REFUSED' "$OUT/neg-$name.log" || { log "FAIL: $name did not end in a refusal"; tail -3 "$OUT/neg-$name.log"; return 1; }
   log "negative $name: $(grep '^REFUSED' "$OUT/neg-$name.log" | head -1)"

@@ -3,7 +3,7 @@ held to the registration (`m3reg.py`) and the live coin (`m3coin.py`).
 
     python examples/h200/m3check.py --drawn DIR --registration REG.json --coin coin.json [--payload BIN] [--out FILE]
 
-* **The draw.** The registration's digest is its record's. The coin's units are
+* **The sample.** The registration's digest is its record's. The coin's units are
   ``derive(coin, DOMAIN, {"registration": digest}).subset(k, population)`` again. They are the opened units, in order.
 * **The openings.** Each unit's rows and salts are its committed strings (``hm96-sha512/row/v2``). The unit's tree reaches
   its slot root, and the slot root reaches the registered step root (`slots.verify_unit`, under the registered context
@@ -92,8 +92,10 @@ def lms_verify(key, message: bytes, signature: bytes) -> bool:
 
 def session_audit(coin: dict, digest: str, d: Path, key_record: Path, main: Path) -> dict:
     """The coin's session as core's verifier takes it: the one session the auditor's ledger opens on the registration's
-    digest under the pinned challenger key, run from a commit on main, whose signed log shows that digest as the only root
-    it received and whose commitment opens the recorded coin after it."""
+    digest under the pinned challenger key, withheld (`challenger.withheld_on`: its challenger released its root only at
+    its close, after the registration was in the ledger, so no hiding premise on the root is needed), run from a commit
+    on main, whose signed log shows that digest as the only root it received and whose commitment opens the recorded
+    coin after it."""
     from verity.core.protocols.sampled_proofs import challenger as Ch
     from verity.core.protocols.sampled_proofs import remote as R
     sid, window = coin["reserve"]["session"], {"root": digest}
@@ -108,12 +110,13 @@ def session_audit(coin: dict, digest: str, d: Path, key_record: Path, main: Path
                                     R.main_lines(main), lms_verify)
         after = bytes.fromhex(digest)
         out.update(trusted=True, pinned=audited.session == sid,
+                   withheld=Ch.withheld_on(R.ledger_lines(ledger), digest),
                    roots_ok=roots == {COIN.LABEL: (after,)},
                    commitment_ok=commitment.root.hex() == coin["commitment"],
                    coin_ok=Ch.live_reason(commitment, Ch.LiveOpening.from_json(coin["opening"]), COIN.LABEL, 0, after) is None)
     except (Ch.CoinError, OSError, ValueError, KeyError) as e:
         out.update(trusted=False, why=str(e))
-    out["ok"] = all(out.get(k) for k in ("trusted", "pinned", "roots_ok", "commitment_ok", "coin_ok"))
+    out["ok"] = all(out.get(k) for k in ("trusted", "pinned", "withheld", "roots_ok", "commitment_ok", "coin_ok"))
     return out
 
 
