@@ -1,7 +1,7 @@
 """The settings machinery every registry in the tree is built on, and ``verity``'s own registry (`REGISTRY`): every
 environment variable ``verity`` reads, declared once.
 
-Each distribution declares every environment variable it reads once, in a `Registry` of its own, and reads them only through
+Each distribution declares every environment variable it reads once, in an `EnvSettings` of its own, and reads them only through
 it: ``verity``'s is `REGISTRY` here, the vLLM integration's ``integrations/vllm/verity_vllm/settings.py``, and every other
 distribution's the ``settings.py`` beside its ``pyproject.toml`` (``tools/config/verity_config/settings.py``, which adds the
 variables the tools around a run set, `SHARED` there, and finds a distribution's registry by path).  The machinery is here
@@ -11,24 +11,24 @@ process runs without ``verity`` on its path (``integrations/vllm/tests/pipeline/
 A `Setting` has a name, a type (the parser of the variable's string), a default, a role and a doc.  The role says what the
 setting can change:
 
-* ``value`` (`VALUE`): what is computed, committed or decided.  `Registry.record` carries every value setting that is set,
+* ``value`` (`VALUE`): what is computed, committed or decided.  `EnvSettings.record` carries every value setting that is set,
   and every variable of a value family (``families``), with a digest, so a run's record says what it ran with.  A credential
   (declared ``secret``, or a name holding one of `SECRET_WORDS`) is recorded by its name alone, `REDACTED` in place of its
-  value (`Registry.redact`).
+  value (`EnvSettings.redact`).
 * ``where`` (`WHERE`): only where and how long things run: paths, devices, hosts, run ids, liveness bounds, which tests run.
   Telemetry: its doc says why it changes nothing a run computes.
 * ``debug`` (`DEBUG`): diagnostics (dumps, traces, profiles, injected delays), refused on a run of record
-  (`Registry.of_record`).
+  (`EnvSettings.of_record`).
 
 Read a setting as an attribute (``REGISTRY.NAME``, or ``settings.NAME`` where a module forwards to its registry) or by name
-(`Registry.get`): its value parsed from the environment at that read, never cached, or its default when the variable is unset
+(`EnvSettings.get`): its value parsed from the environment at that read, never cached, or its default when the variable is unset
 or empty (`Setting.empty` keeps an empty string).  An undeclared name is an AttributeError, and a string that doesn't parse
 is a ValueError naming the variable.  A flag (`flag`) reads ``1``/``true``/``yes``/``on`` and ``0``/``false``/``no``/``off``,
-in any case, and refuses anything else.  `Registry.put`, `setdefault` and `unset` write a declared variable, for the
-processes this one starts and the libraries it loads; `Registry.environ` copies the whole environment, for code that passes
+in any case, and refuses anything else.  `EnvSettings.put`, `setdefault` and `unset` write a declared variable, for the
+processes this one starts and the libraries it loads; `EnvSettings.environ` copies the whole environment, for code that passes
 it on.
 
-A registry's prefixes are its own: `Registry.validate_environ` refuses a variable under one that it neither declares nor
+A registry's prefixes are its own: `EnvSettings.validate_environ` refuses a variable under one that it neither declares nor
 names as read elsewhere, naming it, so a misspelt or retired setting fails the run that carries it instead of being ignored.
 ``verity``'s registry owns ``VERITY_ML_``, and since a library has no startup to check at, every read of it here (`get`,
 ``settings.NAME``) and its `record` refuse such a variable.  An area adds its prefix once every variable under it is declared.
@@ -148,7 +148,7 @@ class Setting:
     doc: str
     #: an empty string is a value (``CUDA_VISIBLE_DEVICES=""`` hides every device), not unset
     empty: bool = False
-    #: a credential, whatever its name says: `Registry.record` names it and never holds its value
+    #: a credential, whatever its name says: `EnvSettings.record` names it and never holds its value
     secret: bool = False
 
 
@@ -166,12 +166,12 @@ class DebugOnRecord(ValueError):
     """A ``debug`` setting set on a run of record."""
 
 
-class Registry:
+class EnvSettings:
     """One distribution's settings, read from the process environment (or a mapping given in its place)."""
 
     def __init__(self, path: str | os.PathLike, prefixes: Iterable[str], *settings: Setting, schema: str,
                  families: Mapping[str, str] | None = None, elsewhere: Iterable[str] = (), standalone: Iterable[str] = (),
-                 shared: Registry | None = None) -> None:
+                 shared: EnvSettings | None = None) -> None:
         """``path`` is the registry's file, for messages, and ``schema`` names its records (`record`).  ``prefixes`` are the
         ones it owns (`validate_environ`), ``families`` the role of each prefix of other libraries' variables it reads or
         passes on as a whole (``{"VLLM_": VALUE}``), and ``elsewhere`` the owned-prefix names another part of the tree reads (a
@@ -203,7 +203,7 @@ class Registry:
         self.settings = {**common, **own}
 
     def __repr__(self) -> str:
-        return f"Registry({self.path!r}, {len(self.own)} settings)"
+        return f"EnvSettings({self.path!r}, {len(self.own)} settings)"
 
     def setting(self, name: str) -> Setting:
         s = self.settings.get(name)
@@ -375,7 +375,7 @@ def direct_reads(source: str) -> list[tuple[int, str, str | None]]:
 
 RECORD_SCHEMA = "verity/settings/v1"
 
-REGISTRY = Registry(
+REGISTRY = EnvSettings(
     __file__, ("VERITY_ML_",),
     # ---- verity.ml.circuits, its suites included
     Setting("VERITY_ML_BOOLEAN_EXHAUSTIVE", flag, False, WHERE, "the Boolean lowerings' exhaustive tests run, on every f32 word "
@@ -390,7 +390,7 @@ def get(name: str, environ: Mapping[str, str] | None = None) -> Any:
 
 
 def record(environ: Mapping[str, str] | None = None) -> dict[str, Any]:
-    """`Registry.record` of ``verity``'s value settings, in an environment that holds no unknown ``VERITY_ML_*``."""
+    """`EnvSettings.record` of ``verity``'s value settings, in an environment that holds no unknown ``VERITY_ML_*``."""
     REGISTRY.validate_environ(environ)
     return REGISTRY.record(environ)
 
