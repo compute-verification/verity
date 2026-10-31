@@ -243,7 +243,7 @@ fresh bits per gate, anything outside the registered information θ (`Nci.Compli
 information. A partition meeting that is, once padded, a (c, k)-partition with c = Γ and k = ⌊α_f·Γ⌋, or
 k = ⌊α_f·Γ·W⌋ for the bit-level expansion at Γ·W gates,
 (`Verity.Partition.IsCK`), the hypothesis part 6's local bounds take. With gates up to W bits wide, the bit-level
-expansion meets it at Γ·W gates. The slowdown bound `DampenerRemote` instead takes `Nci.Complies c k` of d itself.
+expansion meets it at Γ·W gates. `DampenerRemote` instead takes `Nci.Complies c k` of d.
 
 **How it is checked.**
 
@@ -421,7 +421,7 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
 - **The inference-only policy's link to the bound** (part 4, links 1, 2, 5 and 6): the policy composed into remote,
   with a rule tying its registration to the one sampled proofs and PoUW bind; the policy's check accepting as a
   property (`baseline_desc` is a proof lemma); bounds on k_F and k_a per inference block; and the bound reading a
-  verdict's rate, not assuming `Complies c k` of d itself.
+  verdict's rate, not assuming `Complies c k` of d.
 - **The inference-only policy in zero knowledge.** Its check reads the partition into inference blocks in the clear;
   its check inside the ZK server is open.
 - **The utilization policy.** Nothing bounds the free share f over every accepted run.
@@ -515,7 +515,7 @@ The slowdown, `DampenerRemote`:
 - `Nci.Assumptions.WeightsIncompressible` (`Security/Definitions/Nci/Assumptions/Threads.lean`): no small subcircuit
   rebuilds the weights it uses from fewer bits than their width. It is the older form, which the local bounds below
   replace (`Security/README.md`, part 2).
-- `Nci.Complies c k` (`Security/Definitions/Nci.lean`): the registration has a (c, k)-partition, the inference-only policy.
+- `Nci.Complies c k` (`Security/Definitions/Nci.lean`): the registration has a (c, k)-partition.
   `DampenerRemote` takes it as a hypothesis; part 4 is what discharges it once its open links close.
 
 The local bounds (part 6):
