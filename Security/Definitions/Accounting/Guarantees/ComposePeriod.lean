@@ -137,7 +137,7 @@ round, each round's set fixed before its coin.
 
 *The period's order and its record.* `Period` makes the order the model's. The statement needs a period record from
 which the credit is read: two signed entries in the auditor's ledger, a `period-open` and a `period-close`, cited by
-their `seq` within a published ledger head (the record is the proof service's). A period is never a label a requester
+their `seq` within a published ledger head (the record is the proof system's). A period is never a label a requester
 names (one Commit could then open sessions under two labels and keep the one whose coins it likes), nor a range
 written afterwards, whose writer could choose its boundaries and leave a failed window off the edge. Its windows are
 exactly its lane's reserves between the two entries, in ledger order, at most `n`, and every one counts: no window
