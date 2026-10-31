@@ -4574,9 +4574,7 @@
     "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Accounting.Requirement.PlanMatches W (p x).toExecution (ℓ x) (plan x w j) 32768 (bind x w j)": "Accounting.Requirement.PlanMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Accounting.Requirement.OneBlockEach (ℓ x) (grp x) (Finset.instSDiff.sdiff (Accounting.Requirement.reads W (p x).toExecution (bind x w j)) (Accounting.Requirement.creditedReads W (p x).toExecution (ℓ x) (bind x w j)))": "Accounting.Requirement.OneBlockEach taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P), Set.InjOn (addr x) (Finset.instSetLike.coe (plan x w j))": "Set.InjOn taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (b : Nat), SetLike.instMembership.mem (plan x w j) b → Set.instMembership.mem (Set.range (Function.instFunLikeEmbedding.coe (layout (Accounting.RateSketch.SketchPrefix.of x.snd w j) x.fst))) (addr x b)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Accounting.RateSketch.LifetimeCapped (Properties.RemoteAudit.sessionLayout blocks dflt appended sent) joined L": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (b : Nat), SetLike.instMembership.mem (plan x w j) b → Set.instMembership.mem (Set.range (Function.instFunLikeEmbedding.coe (Properties.RemoteAudit.sessionLayout blocks dflt appended sent (Accounting.RateSketch.SketchPrefix.of x.snd w j) x.fst))) (addr x b)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (x : Accounting.RateSketch.StackedCoins Ω Ca T n P N ρ G) (w : Fin n) (j : Fin P) (b : Nat), SetLike.instMembership.mem (plan x w j) b → Set.instMembership.mem (Set.range (Function.instFunLikeEmbedding.coe (layout (Accounting.RateSketch.SketchPrefix.of x.snd w j) x.fst))) (addr x b)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Properties.Pouw.LiveSalt.epochRootBinding": {
     "Eq w.size 64": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -7690,10 +7688,9 @@
    ]
   },
   "Definitions.Nci": {
-   "digest": "caada2da25035d9dbf4cad61318f8c14e2d65f78831458d9bd39498ba08b8292",
+   "digest": "0cfe18d86cb0b7ffdf6704723dc3310f492f8167521b6c27f117622154ee61c4",
    "definitions": {
-    "Nci.Complies": "8cd14c0097c0fc8ce72bf65837b2a62ada167034409a74b8fe4e0b9d6b8ae1e3",
-    "Nci.CompliesRate": "04d1bc0c7741d7ddbf12e07e6ea3399f89935a6db83da39818c19e72cd0946ad",
+    "Nci.CompliesRate": "10446223528278047c50b7f61094dcb5bb4f13eb5fb1355a1ff091250905b45e",
     "Nci.Policy": "ed3e770bd525d577791003742b4b43a22beeb7c9fc9a8b2a0a3144673cc633cc",
     "Nci.novelReads": "ab99cda0826210809f95a18af3fd247e05e7158427a6aaa6db81d19c3f45629e"
    },
@@ -14085,7 +14082,7 @@
    ]
   },
   "Properties.Nci": {
-   "digest": "88be20c22d726f3b4b20ab4c57bd514b6a6e3dd2ae6e451af390af7c99db7f70",
+   "digest": "b58351ef3e9e3d4726664b85321e5229e6f5e6301735dbae36b1e94beb7bc77c",
    "definitions": {
     "NciCheck.Properties.AcceptsExactly": "ad49a4fc7bdc27c51834a5eb3b326501fd251b58a230767e43146a882d9fe4ac",
     "NciCheck.Properties.CheckAccepts": "0ab73f824c3fc0ef171fb8614da23aeac2c585fab78df539a8e0e3666a1b559b",
@@ -14113,7 +14110,7 @@
     "NciCheck.Properties.ThetaFault": "3eec63867622fd244865c678cf1de095584b79307ec1f1d16b60b91994a63618",
     "NciCheck.Properties.ThetaOk": "7688f08847afe11c7f69343d219f7930ce2f4f52e2ee30990fc82338e44ba091",
     "NciCheck.Properties.WellFormed": "ae8eeb1f39caaffaf86b43625aa95a66c93f07f678991a4ff7e9baa9a5c1ad12",
-    "NciCheck.Properties.Witnessed": "f7b69681e38d740de1dd2ee2544df74a15cc2650a2269e0fca388a6abb3c93af",
+    "NciCheck.Properties.Witnessed": "2ff80e270217f5e1aef812d9b10a88840190797b28299a1dfd9e596dbb52ef7e",
     "NciCheck.Properties.Witnesses": "e5656ba79b198fcf216d820deadc82ed40c693a0b3cf5fd701a95fa512cf6d89",
     "NciCheck.Properties.gates": "d22de7ef77236de69a3945a590442b1313af6dbff593dfb425cc2f436521c303"
    },
@@ -14152,12 +14149,12 @@
    "guarantees": ["NciCheck.Properties.SecurityProofs.BaselineProvenance"]
   },
   "Properties.Nci.Threads": {
-   "digest": "946507e8e2082b2c8627dac263d102f99c2955bf3da08865f8772d7d1fb17484",
+   "digest": "5943c82a452acf43724c8b8378b34660157c5247f15324c05f85354939e80c58",
    "definitions": {
-    "NciCheck.Properties.Throttled": "db3a8cbb5d184f16ed1803b73a3fba27da93ec7143f4abdb9d7942e6eee0c151",
-    "NciCheck.Properties.ThrottledDark": "c11e46b5143cbd717d93a8cd286d4db212a032a28a333086477d15c669493343",
-    "NciCheck.Properties.ThrottledDarkSlots": "2936dc47615b30593158a2e47d86211b81ee66c1c2db8a1e358b63264ff95aee",
-    "NciCheck.Properties.ThrottledSlots": "e0db14c767caaaac3f438fdd2647cbcc53d5349fa168604f7cb8b327e871e400",
+    "NciCheck.Properties.Throttled": "a8c8842fa29fd19c8b670a71299d2cbdbb8f6c5cad6e676029c5c1566943d46f",
+    "NciCheck.Properties.ThrottledDark": "a3e0552492e08baef862af4c47a6abe500a61d209863c87fbe09319002cfaa62",
+    "NciCheck.Properties.ThrottledDarkSlots": "325d213495e24291788a79f5315792d0f69e00d2782e831a1cb1a1996eced3a0",
+    "NciCheck.Properties.ThrottledSlots": "e5f7cdc817fe6d6876f65ffc2a46dc4f9e8f8443a3cb97dfbe3936ca545becbf",
     "NciCheck.Properties.Throttles": "941527d6f138cd24061409566b5de4f4f5369e1e379679af1c155144166626e9",
     "NciCheck.Properties.ThrottlesDark": "84c35cdd2aee2d620a8702599f07d6985ad4d29fc7cb600f8ef973a0bccecbde",
     "NciCheck.Properties.ThrottlesDarkSlots": "590e5e8a3d803ba6b9e368fe5d000aa606cec5e1dbd5db59177edf19b2483fef",
@@ -14196,10 +14193,10 @@
    ]
   },
   "Properties.NciDesc.Cover": {
-   "digest": "4237ea220ea65d7a7dbb1b66e6641603fb53a94e82a60e9a8342dc9dcf264f2c",
+   "digest": "9f1b86f09b01ee36968f4a306ecb775f13e8ae1ca108462d3206c706d9931a53",
    "definitions": {
     "NciCheck.Properties.CheckedCoverTraining": "330c64e1a9f61389517cfc395571ba7cf250d7d9a74c792912835f89c168d7bd",
-    "NciCheck.Properties.CoverTrained": "6cc7a8680334966c5dae88fbfbe79b53e11a89d564d76c5f76ba51ee3147704d"
+    "NciCheck.Properties.CoverTrained": "e4c38ac4ec62cff8c5355092dcbcc7aed1ded32573cfaddae5d32edb195e7749"
    },
    "guarantees": ["NciCheck.Properties.SecurityProofs.CheckedCoverTraining"]
   },
