@@ -1,7 +1,7 @@
 import Definitions.NetworkCertifier.Guarantees
-import Definitions.NetworkCertifier.Guarantees.Horizon
+import Definitions.NetworkCertifier.Guarantees.Pooled
 import Definitions.NetworkCertifier.Guarantees.Period
-import Definitions.NetworkCertifier.Guarantees.HorizonLeak
+import Definitions.NetworkCertifier.Guarantees.PooledLeak
 import Proofs.NetworkCertifier.Lemmas
 import Proofs.NetworkCertifier.Occupancy
 import Proofs.NetworkCertifier.Counting
@@ -14,10 +14,10 @@ import Proofs.NetworkCertifier.SampledLeak
 import Proofs.NetworkCertifier.SampledLeakReg
 import Proofs.NetworkCertifier.SampledLeakRegPlain
 import Proofs.NetworkCertifier.PeriodSum
-import Proofs.NetworkCertifier.Horizon
+import Proofs.NetworkCertifier.Pooled
 import Proofs.NetworkCertifier.TapRows
 import Proofs.NetworkCertifier.Period
-import Proofs.NetworkCertifier.HorizonLeak
+import Proofs.NetworkCertifier.PooledLeak
 import Proofs.NetworkCertifier.Schedule
 import Proofs.NetworkCertifier.PerWindow
 import Proofs.NetworkCertifier.Sanity
@@ -117,7 +117,7 @@ theorem SampledLeakRegistered : NetTiming.Guarantees.SampledLeakRegistered := by
       (NetTiming.sampledLeak_reg hSA H D hks L K S lay k δ decode hδ hdec reg β Dj hβ).2 x hx s P hs hP op _⟩
 
 theorem PeriodLeakAccepted : NetTiming.Guarantees.PeriodLeakAccepted := NetTiming.periodLeak
-theorem HorizonWrongUnitsLe : NetTiming.Guarantees.HorizonWrongUnitsLe := NetTiming.horizonWrongUnits
-theorem HorizonLeakAccepted : NetTiming.Guarantees.HorizonLeakAccepted := NetTiming.horizonLeak
+theorem PooledWrongUnitsLe : NetTiming.Guarantees.PooledWrongUnitsLe := NetTiming.horizonWrongUnits
+theorem PooledLeakAccepted : NetTiming.Guarantees.PooledLeakAccepted := NetTiming.horizonLeak
 
 end NetTiming.SecurityProofs
