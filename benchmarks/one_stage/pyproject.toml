@@ -15,6 +15,9 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # `verity`: the stream and its verifiers of record, and the Lean packages `sampled-proofs-verifier` builds from; its lakefile,
 # named on its own, is the package its tests build (`one_stage.verifier.executable`), so check runs them after lean-build.
+# `verity/core/protocols/network/nci/lean/lakefile.toml`, named on its own too: served_cases' inference-only case goes through
+# that package's `inference-only` check, which its tests `lake build` there, beside v2's case through
+# `sampled-proofs-one-stage-zk`; its slow test builds the 4,32,4 class's window circuit (`integrations/vllm/verity_vllm`).
 # `benchmarks/live_challenger`: the challenger reserve's tests open a session on its local auditor host (auditor.py), whose
 # serve.py runs under its tests' stub of the Lean verifier's coins (stub_serve.py). `verity_numerical.bench`'s input sets
 # and templates: a8's scan tests import a8, which imports a0.
@@ -37,6 +40,7 @@ inputs = ["verity", "verity/core/service/sampled_proofs/lakefile.toml", "benchma
           "examples/h200/interfaces/tests/fixtures/drawn-unit-registration.json",
           "benchmarks/numerical/python/verity_numerical/__init__.py",
           "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
+          "verity/core/protocols/network/nci/lean/lakefile.toml",
           "benchmarks/numerical/python/verity_numerical/bench/input_sets.py",
           "benchmarks/numerical/python/verity_numerical/bench/templates.py",
           "integrations/vllm/verity_vllm", "benchmarks/network_traces",
