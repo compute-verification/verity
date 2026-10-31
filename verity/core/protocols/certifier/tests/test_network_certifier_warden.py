@@ -16,6 +16,7 @@ import pytest
 
 from verity.core.protocols.certifier.active import DATA, HEADER, PAD, VirtualClock, encode_frame
 from verity.core.protocols.certifier.grid import Reason
+from verity.core.protocols.certifier.pacer import Report
 from verity.core.protocols.certifier.release import release_of, with_release
 from verity.core.protocols.certifier.warden import (END, FAIL, KIND_NAMES, REASONS, REFUSED, Shim, Warden,
                                                     WardenParams, audit, cell, cells, read_cell, read_reason,
@@ -415,6 +416,23 @@ def test_a_paced_wardens_pacer_writes_each_client_its_cells_and_a_bucket_it_got_
     assert [r.t for r in paced.releases] == live and all(r.written for r in paced.releases)
     with pytest.raises(ValueError, match="past the slack"):
         Warden(PARAMS, Server([]).connect, origin=0.0, windows=1, paced=TAU)
+
+
+def test_a_warden_on_the_hosts_clock_is_paced_and_a_release_unwritten_faults_every_grid():
+    """Only a warden on an injected clock writes each bucket on its loop: on the host's clock it must have `paced`.
+    A release the pacer reports on time and written faults nothing; one it reports unwritten, a connection's socket
+    not yet the pacer's so that its cells are on no wire, faults the three grids' window `monitor-unavailable`, as a
+    bucket it got late does."""
+    with pytest.raises(ValueError, match="host's clock is paced"):
+        Warden(PARAMS, Server([]).connect, origin=0.0, windows=1)
+    clock = VirtualClock(0.0)
+    warden = Warden(PARAMS, Server([]).connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep)
+    grids = (warden.ingress, warden.egress, warden.fails)
+    warden._unreleased[0] = 2
+    warden._report(Report(0, -0.04, 0.001, None, True))
+    assert [g.faulted for g in grids] == [None] * 3
+    warden._report(Report(1, -0.04, 0.001, None, False))
+    assert [g.faulted for g in grids] == [Reason.MONITOR_UNAVAILABLE] * 3 and not warden._unreleased[0]
 
 
 def test_the_audit_refuses_a_record_whose_cells_are_not_the_schedules():
