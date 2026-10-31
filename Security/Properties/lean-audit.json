@@ -66,6 +66,7 @@
   "Properties.Nci.Protocol",
   "Properties.Verity.Soundness",
   "Properties.Verity.Game",
+  "Properties.Verity.Subprotocols",
   "Properties.Verity.Idle",
   "Properties.Remote",
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
@@ -7396,7 +7397,7 @@
    ]
   },
   "CoreProtocol.Protocol.Canonical": {
-   "digest": "a1f765ca067d3c9d3bf6352baa5fa92ad3fa7266d8caf9f4f160306631fccf0b",
+   "digest": "8ad5a977c937ce09e2a8adcbac95226f8d7696d8c2c27d6fceb0c9c559b39506",
    "definitions": {
     "Core.Canonical.NOT_ASCII": "0085b92a3e5a2bf10691f29e3182886f861845fea0f820c21c358790dc881751",
     "Core.Canonical.arr._f": "61b78719c4ba86943dab9e54383b6c89ee45ac0f308b33d6058993e032fec5e5",
@@ -7408,8 +7409,6 @@
     "Core.Canonical.digits": "dff71ee9fbebcaf4b5d38cc2d5acf6b6992d0b054f0c5a66bb5da33cf3c25567",
     "Core.Canonical.hex4At": "20f7ac8169fc4e9e5a48ff4c7702424be06be6a1a2b114673885605eee681253",
     "Core.Canonical.int": "487b0bcb53deabeb7e491efe78fd12fd2454c91dd7a9fbfe7ec86c6e0133540d",
-    "Core.Canonical.integers": "1c0a1ca31035ec47cc97b1fbd91b4c1883282e1d0f8de0a484ff781bd606faf7",
-    "Core.Canonical.integers._sparseCasesOn_1": "43cf80e3f0c4b300c9e9251ac7239cbccf4ddc103aee151a4ac0761744e73daf",
     "Core.Canonical.lit": "680a86194bf71dc7b44e3494fd0a80cd02e3855a4125aacfe8aefa7ed53a2cff",
     "Core.Canonical.nibble": "131cb1bc30e7c4833b920348009b0edbfcbb566f60bd7b982c1fee03fd79f80d",
     "Core.Canonical.obj._f": "b561d4443ab78aeabd6d1197b2d074f3d8d43bd2c8baf9e6bf402daa2b05c380",
@@ -7417,8 +7416,6 @@
     "Core.Canonical.obj.match_3": "9a08c79db7b941ccc4c80e857e91b8beae66a17ffa954e938fef7013f5b56e81",
     "Core.Canonical.obj.match_5": "e601da0ba52062a4256bfccd92c9a0d1fa0a866350f46537473e04546a62a42e",
     "Core.Canonical.obj.match_7": "22b321659cf153d842648df34dd2e2ad8ff3e6d30cdb8f73b4f3778ebeec38a3",
-    "Core.Canonical.parse": "fe71ced371ff4abfd3176d61cae09f6cd0275a81496d8d8dbe64e812747d736e",
-    "Core.Canonical.parseUpTo": "6169d3e22c8a613d635c1929774662403e82cf2ac6c6ef9a7bff6baaf1d52413",
     "Core.Canonical.read": "0ac52cc3d0d79d6e12dc363a21a38932eaf93a26c179b9e489faf2522cb89d47",
     "Core.Canonical.read._sparseCasesOn_1": "29569cde9b5573c016b15eda2d9056b81acc7133810e5a993b680d6dfa7a1f95",
     "Core.Canonical.refusal": "3571e7882fc826a928f9a88d6196b46ee0b407632b2dc4f41187072b49a49c63",
@@ -12797,10 +12794,16 @@
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
     "Pous.Period.SecurityProofs.periodHeldAt",
+    "Pous.Period.SecurityProofs.periodHeldCoins",
+    "Pous.Period.SecurityProofs.periodHeldCoinsAt",
     "Pous.Period.SecurityProofs.periodHeldDemo",
     "Pous.Period.SecurityProofs.periodHeldDeployed",
     "Pous.Period.SecurityProofs.periodHeldHonest",
     "Pous.Period.SecurityProofs.periodHeldNontrivial",
+    "Pous.Period.SecurityProofs.periodHeldSha512",
+    "Pous.Period.SecurityProofs.periodHeldSha512At",
+    "Pous.Period.SecurityProofs.pooledShort_log",
+    "Pous.Period.SecurityProofs.pooledShort_log_honest",
     "Properties.NetworkCertifier.linkWindowAcceptMeans",
     "Properties.NetworkPeriod.rowsProgWired",
     "Properties.NetworkPeriod.rowsStateTied",
@@ -14517,10 +14520,6 @@
     "Flock.Tables.refs": "0601241d9226aa8eead0d12246fc77a58b46f0cb35e82b9efbdf3979b40bc8ee"
    },
    "guarantees": [
-    "Pous.Period.SecurityProofs.periodHeldCoins",
-    "Pous.Period.SecurityProofs.periodHeldCoinsAt",
-    "Pous.Period.SecurityProofs.periodHeldSha512",
-    "Pous.Period.SecurityProofs.periodHeldSha512At",
     "Verity.remote_soundness_of_subprotocols",
     "Verity.remote_soundness_of_subprotocols_honest",
     "Verity.remote_soundness_of_subprotocols_nontrivial",
@@ -18240,7 +18239,7 @@
    ]
   },
   "PousCheck.RunProtocol": {
-   "digest": "1ee7961997a35fa9507bf48e454d881f88192c1f10e71f6442e0fc659da75b14",
+   "digest": "9007e63ea86ac0229b3c29a040ec4adbd26dcb68c7f535b5c11ab453a867c9de",
    "definitions": {
     "PousCheck.RunProtocol.CERT_K_WIDE320": "02c15c700981b838b3e77b897d91ff41f4234fdb4df9d24f96f31cb4246263bc",
     "PousCheck.RunProtocol.CapacityBound.eps": "053ee7539de68fc211992b6c64d3e59fbb46ddc50ec300b0a568a5523a0d34b6",
@@ -18274,7 +18273,7 @@
     "PousCheck.RunProtocol.certify._sparseCasesOn_2": "1b7fb1d162dd299c0d6b16b11b12c85f93462c8cfac278d00cea10194b06c7e6",
     "PousCheck.RunProtocol.check": "659c96bde1b3444792a4f289ee68b925cfb1c0a4bcf003c26a231add29163717",
     "PousCheck.RunProtocol.decodeCommitment": "497ceb1860d63ede971c736006b2fdf02eb712dc1112a4400f751e2efbacbd18",
-    "PousCheck.RunProtocol.decodeEvidence": "7567a2e26d9decf49f97d9192b99408a6279b34affbbb220b9a71ab7915e8451",
+    "PousCheck.RunProtocol.decodeEvidence": "1eeeae0d574eb75f8750375c6fbcefd5fb86699a49095fec9b909402dbc9e8f9",
     "PousCheck.RunProtocol.decodeParams": "67a09488acd8a7d9ce1bc4d30767138f20434860019d0f2e069fac0bd717e17b",
     "PousCheck.RunProtocol.digest": "95f62661ae98733ac3c79825402d06160d2d590edd54be0337e55b06970bbd86",
     "PousCheck.RunProtocol.familyCertificate": "2862ff7fd7ea914643a98ff787e3785db3499547b6e7bdee77410254e96af0ab",

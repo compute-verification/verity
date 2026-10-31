@@ -476,10 +476,13 @@ def Holds (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteAr
   | .inferenceOnly, _ => Nci.Complies (V.gates θ) (V.fresh θ) (V.declaration θ F)
   | .wipe, o => ¬ (V.wipeRun θ F c σ).Kept (V.foreignBits θ) o
 
-/-- Every release `a`'s check read is in the device's log; outside it, the release is a forgery of the device's LMS
-signature, which `a`'s error bounds where its forger meets `Hash.Assumptions.LmsUnforgeable` (`Vocab.Unforgeable`,
-`Vocab.epsForge`). -/
-def Logged (a : Subprotocol) (o : Exchange) : Prop := ∀ r ∈ V.coinsRead a o.sent, r ∈ o.log
+/-- **Each release `a`'s check read is the device's at its round**: the `k`-th release `a`'s check read is the log's
+release at round `pos k`, the round the parameters assign it, since membership in the log alone would let a prover keep
+the better of two rounds' coins. Out of place, it is a forgery of the device's LMS signature over its ledger or a
+session's close, which `a`'s error bounds where its forger meets `Hash.Assumptions.LmsUnforgeable`
+(`Vocab.Unforgeable`, `Vocab.epsForge`). -/
+def Logged (pos : ℕ → ℕ) (a : Subprotocol) (o : Exchange) : Prop :=
+  ∀ k r, (V.coinsRead a o.sent)[k]? = some r → o.log[pos k]? = some r
 
 /-- **The finder for a second file with the registered digest**: on its one coin it hashes the circuit file and the
 registered one, and outputs them when they differ, a SHA-512 collision when the files passed the file check. -/
