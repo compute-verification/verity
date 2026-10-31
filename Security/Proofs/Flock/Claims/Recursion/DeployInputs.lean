@@ -157,7 +157,7 @@ def metaLine : ℕ → List (List UInt8) → Except String String
 /-- **The inner circuit's META** (`innerMeta`): its header's first nine lines, up to its `META` line. -/
 def metaOf (c : ByteArray) : Except String Json := do
   let t ← metaLine 9 (linesAux c.data.toList [])
-  match Json.parse (t.drop 5).toString with
+  match Flock.JsonParse.parse (t.drop 5).toString with
   | .error e => throw s!"rec inner circuit: META is not JSON: {e}"
   | .ok m => pure m
 
@@ -221,7 +221,7 @@ points to the coin server's; none without either. -/
 def linkInputOf (w : RecRaw) (src : Option RecCoins.Source) : Except String (Option RecVStar.InnerLink) :=
   match w.transcript, src.map (·.record) with
   | some t, some record => do
-    match Json.parse (← textOf "rec inner transcript" t) with
+    match Flock.JsonParse.parse (← textOf "rec inner transcript" t) with
     | .ok j => some <$> RecVStar.innerLink j record
     | .error e => .error s!"rec inner transcript: not JSON: {e}"
   | _, _ => .ok none

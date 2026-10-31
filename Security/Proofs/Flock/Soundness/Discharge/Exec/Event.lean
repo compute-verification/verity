@@ -56,7 +56,7 @@ structure Transcript where
 /-- A record's `unit_draw`, when it is a draw (not absent, not null), rebuilt (`Flock.norm`): `Main.recordDraw`, which
 the executable's root module defines and no library exports. -/
 def recordDraw (record : String) : Option Json :=
-  match Json.parse record with
+  match Flock.JsonParse.parse record with
   | .ok j => match j.getObjVal? "unit_draw" with
     | .ok Json.null => none
     | .ok d => some (Flock.norm d)
