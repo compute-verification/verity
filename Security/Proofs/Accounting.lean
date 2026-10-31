@@ -46,12 +46,15 @@ import Proofs.Accounting.RemoteHeld
 import Proofs.Accounting.RemoteHeld.Meets
 import Proofs.Accounting.RemoteHeld.OverTime
 import Proofs.Accounting.RemoteHeld.Draw
+import Proofs.Accounting.RemoteHeld.DrawMeets
 import Proofs.Accounting.RemoteHeld.Binding
 import Proofs.Accounting.RemoteHeld.Sketch
 import Proofs.Accounting.RemoteHeld.SketchLine
 import Proofs.Accounting.RemoteHeld.SketchP2
 import Proofs.Accounting.RemoteHeld.Line
 import Proofs.Accounting.RemoteHeld.Component
+import Proofs.Accounting.RemoteHeld.P2Line
+import Proofs.Accounting.RemoteHeld.P2Subprotocol
 import Proofs.Accounting.Requirement
 import Proofs.Accounting.RequirementPouw
 import Proofs.Accounting.Sanity
@@ -95,5 +98,9 @@ import Proofs.Accounting.ComposePeriod
 import Proofs.Accounting.ComposePeriod.Honest
 import Proofs.Accounting.Served
 import Proofs.Accounting.Additive
+import Proofs.Accounting.ServingBlocks
+import Proofs.Accounting.ServingBlocks.Witnesses
+import Proofs.Accounting.Coverage
+import Proofs.Accounting.WipeLabels
 
 /-! `Proofs.Accounting`: the proofs of resource accounting's guarantees. -/

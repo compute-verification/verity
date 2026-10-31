@@ -14,7 +14,7 @@ rounded for display. `--line-by python` computes it in `line.py` alone, a readin
 
 Group g's coin σ_g left the challenger at its release log's `released_at` for challenge coin g, and window g's last
 root reached it at the first `received_at` of a request naming it by place (`auditor_seen`). Openings coin g's request
-names it (`audit.Session.close` asks for the coin after the window's last root), and a paced window is drawn at its
+names it (`audit.AuditRun.close` asks for the coin after the window's last root), and a paced window is drawn at its
 k-th root (its boundary leaves before it), so that request leaves as the root arrives; for k = 1, σ_(g+2)'s request names the same root too. At
 one window in flight (`audit.Pace.in_flight` 1) σ_(g+1)'s request names it and openings coin g's leaves once σ_(g+1)
 is back, so this reading, which doesn't take f, ends L_g about a round trip to the challenger past s_(g+1). Drawn
@@ -32,7 +32,7 @@ is its wrong receipts, and its registered blocks, the registration's; and the ve
 held bytes by kind (`ledger.memory`), which the record doesn't hold (they need each pass's plan and the store's
 regions). The verifier runs on the audit's machine, not
 the auditor's host, so these rest on its verdict, which the session's transcript (`verifier.py --transcript`) lets the
-auditor replay offline (the remote audit's `lean/tests/replay.py transcript`). The verifier's stamps are read only to
+auditor replay offline (PoUB's `lean/tests/replay.py transcript`). The verifier's stamps are read only to
 cross-check the challenger's: each coin interval on both clocks, their rates, and each group's L on both.
 
 The ledger check: its longest head verified under the pinned key (`ledger_head`, `verify_ledger`, `verify_periods`);
@@ -91,9 +91,10 @@ prf/sha-512), which have no number and are in no total. The line at each T, and 
 (`credit`'s `error`), fail with at most the sum of their credited sessions' totals: the least share is read off
 whichever session the run made least, so the union bound holds where a maximum wouldn't.
 
-**Conditional on** (`conditional_on`, `CONDITIONAL_ON`). The line's statement (`LineHeld`) takes `NoOutsideCompute`,
-statement C in full, as a premise that no record of the run discharges, so a line says it is conditional on it, until
-certifiers cover the gate node's boundary. A relay prover, a thin node forwarding each coin to a helper that holds
+**Conditional on** (`conditional_on`, `CONDITIONAL_ON`). The line's statement (`LineHeld`) reads statement C in full
+from the network certifiers' record of the node's ingress (`Covered`, `IngressCounted`), which this line doesn't
+check, so a line says it is conditional on C (`NoOutsideCompute`, the label's name for it), until certifiers cover
+the gate node's boundary. A relay prover, a thin node forwarding each coin to a helper that holds
 the store and computes the receipts, breaks that premise alone. The error's binding term takes the gap `binding-split`
 as closed (split_t = 0), which the deployed protocol doesn't yet ensure, so every line is conditional on that too,
 grounded or not. The `memory-line-of-record` label names what the file names (`line_label`: `lean conditional on
@@ -185,16 +186,17 @@ NAMED_TERMS = {"prf_advantage": {"claim": ledger.PRF_CLAIM, "term": "Σ_t Adv(pr
 """`LineHeld`'s error beyond δ: each window's PRF advantage, one oracle-access distinguisher a window, which its claim
 prices and no number here does. Every error records it by name, outside its total."""
 CONDITIONAL_ON = {"NoOutsideCompute": (
-    "statement C in full (Accounting.Remote.Held.Assumptions.NoOutsideCompute, a premise of LineHeld): no device "
-    "outside the node computes on a registered block or a receipt during the session; assumed until certifiers cover "
-    "the gate node's boundary (certifier-coverage) and certify that nothing but the verifier's messages entered it over "
-    "the credited span"),
+    "statement C in full: no device outside the node computes for it during the session. LineHeld reads it from the "
+    "network certifiers' record (no counted ingress over the credited passes, Accounting.Remote.Held.Assumptions."
+    "Covered under certifier-coverage and IngressCounted at δ_net under trusted-host), which this line didn't check; "
+    "assumed until certifiers cover the gate node's boundary and certify that nothing but the verifier's messages "
+    "entered it over the credited span"),
     "binding-split": (
     "the receipts' binding term (ledger.binding, Accounting.Guarantees.Remote.ReceiptsBindingOfCR) is charged with "
     "split_t, the chance that two runs of the prover from window t's cut on independent openings coins root the window "
-    "differently, taken as 0; the deployed prover holds the coin commitment and may compute a window's roots from it, "
-    "so that holds only once the verifier sends it no commitment to a window's openings coin before its roots "
-    "(PROTOCOL.md §8)")}
+    "differently, taken as 0; the prover is sent no coin commitment before the session's end (coins.Released, "
+    "audit.AuditRun.disclose), so its roots can't depend on an openings coin before it is released, and what remains "
+    "is the statement that the play fixes each window's receipts by its cut (PROTOCOL.md §8)")}
 """What the line's error rests on that no record of the run discharges, each with what it says: the premises of its
 statement and the gaps in its charge (`GAPS`). A line (`auditor_line.json`'s `conditional_on`, `credit.md`) is
 conditional on them, `NoOutsideCompute` unless a lockdown grounds it (`GROUNDED`), and the `memory-line-of-record`
@@ -203,12 +205,12 @@ GAPS = ("binding-split",)
 """The gaps in the line's charge (`CONDITIONAL_ON`'s), which every line is conditional on, grounded or not."""
 LOCKDOWN = "ProviderLockdown"
 GROUNDED = {LOCKDOWN: (
-    "the provider's lockdown of the gate node (Accounting.Remote.Held.Assumptions.ProviderLockdown, under "
-    "trusted-host): while infra's records show it applied, no device outside the node computes on a registered "
-    "block or a receipt, which gives NoOutsideCompute for a session whose signed span lies inside an applied interval "
-    "(noOutsideCompute_of_lockdown); it assumes what the security group doesn't close: the provider's resolver, flows "
-    "opened before it was applied, and the provider's own paths (metadata, management plane, a cluster's fabric, a "
-    "shared filesystem)")}
+    "the provider's lockdown of the gate node, under trusted-host: while infra's records show it applied, no device "
+    "outside the node computes for it, which gives statement C for a session whose signed span lies inside an applied "
+    "interval; it assumes what the security group doesn't close: the provider's resolver, flows opened before it was "
+    "applied, and the provider's own paths (metadata, management plane, a cluster's fabric, a shared filesystem). "
+    "LineHeld no longer takes it: its Accounting.Remote.Held.Assumptions.Covered (certifier-coverage) is what it "
+    "became, with the certifiers in its place")}
 """What grounds `NoOutsideCompute` for a session (`lockdown_check`), each with what it says: a line whose sessions are
 all grounded is conditional on it in its place."""
 BOUNDARY = "boundary"
@@ -248,8 +250,8 @@ def requested_pin(out: Path) -> str | None:
 
 def peer_of(out: Path, v: dict) -> str:
     """The challenger peer the verifier ran as (`verifier.py --challenger-peer`), from the run's record: each gate
-    session's in `v` (verifier.json's `challenger.peer`, `challengers.Gate.finish`), and a host run's `request.json`
-    beside `out` (its `argv`; its `peer` is the audited node). Refused unless the record names exactly one."""
+    session's in `v` (verifier.json's `challenger.peer`, `challengers.ChallengerGate.finish`), and a host run's
+    `request.json` beside `out` (its `argv`; its `peer` is the audited node). Refused unless the record names exactly one."""
     named = {(s.get("challenger") or {}).get("peer") for s in v["sessions"]
              if (s.get("challenger") or {}).get("challenger") == "gate"}
     req = out.parent / "request.json"
@@ -414,7 +416,7 @@ def shares(session: dict, registration: dict, host_bytes: int, rates: dict, lean
 
 
 def transcript_of(out: Path, s: dict) -> dict | None:
-    """Session `s`'s transcript (`lean_verifier.Transcript`'s file) where the run's out/ keeps it: its name under
+    """Session `s`'s transcript (`lean_verifier.DifftestCase`'s file) where the run's out/ keeps it: its name under
     `out/transcripts/`, gzipped (`host.gzip_transcripts`) or not, held to the sha256 verifier.json gives it; None where
     there is none (a host run fetched without `--transcripts`)."""
     t = s.get("transcript") or {}
@@ -737,8 +739,8 @@ def with_check(credit: dict, name: str, check: dict) -> dict:
 def clock_rate_ppm(Rv: list[int], Ra: list[int]) -> float | None:
     """The auditor's clock's rate over the verifier's, less 1, in ppm, from each coin's release on both (`Rv`, `Ra`):
     the median of the rates between each coin and the one half the session after it. The verifier stamps a coin it
-    fetches alone (σ_0 and σ_1 at k = 1) before asking for it, and one asked ahead (`coins.Coins.ahead`) after it came
-    back (`audit.Session._release`), so those first coins sit a round trip off the rest. A rate taken end to end reads
+    fetches alone (σ_0 and σ_1 at k = 1) before asking for it, and one asked ahead (`coins.SessionCoins.ahead`) after it came
+    back (`audit.AuditRun._release`), so those first coins sit a round trip off the rest. A rate taken end to end reads
     that round trip over the session's span (−441 ppm at 60 s and −8989 ppm at 1 s on gate run 7); here it moves two
     of the pairs. None for a session of fewer than four coins."""
     h = len(Rv) // 2
@@ -1153,7 +1155,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="compute each line in the Lean verifier, held exactly to line.py's (the line of record), or in "
                          "line.py alone (a reading, not of record)")
     ap.add_argument("--lean-exe", type=Path, metavar="PATH",
-                    help="the remote-audit-verifier executable (default: `lake build` it in the remote audit's package)")
+                    help="the remote-audit-verifier executable (default: `lake build` it in PoUB's package)")
     ap.add_argument("--boundary", type=Path, metavar="FILE",
                     help="the network certifiers' records of the gate node's boundary links (`read_boundary`): refuse "
                          "a session's credit when they show ingress other than the verifier's messages over its span "

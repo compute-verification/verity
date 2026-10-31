@@ -7,7 +7,7 @@ import NciCheck.Check
 `NciCheck.evaluate` (`verity/core/protocols/network/nci/lean/NciCheck/Check.lean`, package `nci_check`) is
 the verifier's check of a declared division against the NCI policy, `Nci.Complies Γ α` (`Definitions/Nci.lean`), and
 `NciCheck.check` is `evaluate` with a refusal written `{"error": code}` (with a `message` giving the fix for some codes).
-θ, the baseline, holds only input gates bound at registration (`IsRegistered`): one bound per run is refused. The difftest holds it to the Python reference on
+θ holds only input gates bound at registration (`IsRegistered`): one bound per run is refused. The difftest holds it to the Python reference on
 random instances; the statements here say what it computes on every instance. Each is a named `Prop`, proved as
 `NciCheck.Properties.SecurityProofs.X : NciCheck.Properties.X` in `Proofs.Properties.Nci`, and a guarantee of this
 package (`lean-audit.json`).
@@ -92,7 +92,9 @@ def IsInput (P : Prog) (g : ℕ) : Prop :=
   ∃ p ops sc, P.gate g = .ok (p, ops, sc) ∧ Flock.Program.isInputId (P.defs[p]!).key = true
 
 /-- Gate `g` is bound at registration: its primitive's binding is `registration` (`RegisteredInput<w>_v1`,
-`Flock.Program.inputId?`), not `run` (`Input<w>_v1`). -/
+`Flock.Program.inputId?`), not `run` (`Input<w>_v1`). This reads the circuit file's public layout, which marks the
+gates whose values are θ, the registered information; which entry of the registration log holds each value is θ's
+provenance (`Properties.Nci.Baseline`). -/
 def IsRegistered (P : Prog) (g : ℕ) : Prop :=
   ∃ p ops sc, P.gate g = .ok (p, ops, sc) ∧
     (Flock.Program.inputId? (P.defs[p]!).key).map (·.1) = some Flock.Program.REGISTRATION

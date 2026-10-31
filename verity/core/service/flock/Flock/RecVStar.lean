@@ -22,6 +22,7 @@ import Flock.HmRow
 import Flock.ProvedScope
 import Flock.RecOpening
 import Flock.Registered
+import Flock.WindowRecord
 import VStar.Cli
 import VStar.Compose
 import VStar.Stage
@@ -75,12 +76,17 @@ def innerOf (circuitB pubB : ByteArray) (partition : Option Json) (program : Opt
   let some st := sts[0]? | throw "rec-inner: the inner statement has no table"
   pure { m := st.m, kLog := st.c.kLog, claims := 2 + spec.points * st.regions.size, regions := st.regions.size, holo }
 
-def FORMAT : String := "verity/rec-inner/v1"
+/-- The recursion's statement version: V*'s statements whose verifier-registered values are under SHA-512 salts
+(`RecCoins.saltOf`). -/
+def FORMAT : String := "verity/rec-inner/v2"
 
-/-- `verity/rec-inner/v1`'s key for `Inner.holo`, written only when true; absent means false. -/
+/-- The version before `FORMAT`, whose V* statements registered those values under SHAKE256 salts: refused. -/
+def FORMAT_V1 : String := "verity/rec-inner/v1"
+
+/-- `verity/rec-inner/v2`'s key for `Inner.holo`, written only when true; absent means false. -/
 def HOLO_KEY : String := "holo"
 
-/-- `verity/rec-inner/v1`'s key for `Inner.sparse`, `[NU, ELL, S_LOG, T_LOG]`, written only when present; `Inner.stacked`
+/-- `verity/rec-inner/v2`'s key for `Inner.sparse`, `[NU, ELL, S_LOG, T_LOG]`, written only when present; `Inner.stacked`
 is under META's own key (`STACKED_SHAPE_KEY`), `{"m", "claims"}`, written only when present. -/
 def SPARSE_KEY : String := "sparse"
 
@@ -91,7 +97,10 @@ def Inner.toJson (i : Inner) : Json :=
     (i.stacked.map fun r => (STACKED_SHAPE_KEY, Json.mkObj [("m", Lean.toJson r.m), ("claims", Lean.toJson r.claims)])).toList)
 
 def Inner.ofJson (j : Json) : Except String Inner := do
-  if (j.getObjValAs? String "format").toOption != some FORMAT then throw s!"rec-inner: not a {FORMAT} object"
+  let fmt := (j.getObjValAs? String "format").toOption
+  if fmt == some FORMAT_V1 then
+    throw s!"rec-inner: {FORMAT_V1} is refused: its V* statements' verifier-registered values are under SHAKE256 salts, {FORMAT}'s under SHA-512"
+  if fmt != some FORMAT then throw s!"rec-inner: not a {FORMAT} object"
   let holo ← match j.getObjVal? HOLO_KEY with
     | .error _ => pure false
     | .ok (.bool b) => pure b
@@ -499,10 +508,12 @@ def vstarRows (sub : VStar.Sub) (u : VStar.UnitC) : List (String × Nat × Nat) 
 
 /-- **The circuit parsed from V*'s file carries V*'s META** (`VStar.metaHead`): one unit per VU, no leaf cuts, the
 unit's input leaves its input words in order, V*'s row ports (`vstarRows`), each a `sha512/row/v1` row as V*'s META writes
-them (`row_schema`, no `row_schemas`), and the unit's output leaves its output words in order (`UnitC.leaves`' `out`).
-`checkFile` holds the bytes to V*'s;
+them (`row_schema`, no `row_schemas`), and the unit's output leaves its output words in order (`UnitC.leaves`' `out`),
+with no template (V*'s circuits are flat). `checkFile` holds the bytes to V*'s;
 this holds what the verifier parsed from them, which no proof reads through `Lean.Json.parse`, to what V* wrote. -/
 def checkParsed (s : VStar.Stmt) (c : Circuit) : V Unit := do
+  if c.tmpl.isSome then
+    throw s!"{s.name}: the parsed circuit is templated, and V*'s circuits are flat"
   let u ← match s.unit with
     | .ok u => pure u
     | .error e => throw s!"{s.name}: V*'s unit: {e}"
@@ -938,18 +949,10 @@ def repCoins (s : String) (rs : Array Json) (srec : Json) : V (Array (Option (Ar
     return (Array.range n).map fun k => if k == j then none else rr[if k < j then k else k - 1]?.map coinsOf
   | js => throw s!"rec inner transcript: {s} has rounds of no coins at {js}, and only z_partial's round is split"
 
-def REGISTRATION_FORMAT : String := "verity/registration/v2"
 /-- A registered top's row: a 64-byte node as 32 u16 words, zero-padded to one SHA-512 block (`rec_live.ROW_WORDS`). -/
 def TOP_ROW_WORDS : Nat := 64
 
 def refused (what : String) : String := s!"FIREWALL-REFUSED: {what}"
-
-/-- One-stage `registration.digest` (`SampledProofs.Registration.digest`): `SHA-512(format ‖ 0 ‖ canon(record))`, the
-record's own format (v1 or v2) as the tag; hex, as META's `registration` names it. -/
-def registrationDigest (rec : Json) : V String := do
-  let tag := if (rec.getObjValAs? String "format").toOption == some REGISTRATION_FORMAT then REGISTRATION_FORMAT
-    else "verity/registration/v1"
-  return hexOf (Sha512.hash (tag.toUTF8.push 0 ++ (← canon rec).toUTF8))
 
 /-- The registered entry of R whose rows' `b ‖ c` are `bcs` (`rec_live.top_entry`, `rec_residuals.commits_entry`): one row
 of `TOP_ROW_WORDS` 16-bit words a node, its domain `Registered.domain` under the registration's `program`, and the
@@ -985,10 +988,10 @@ def registration (reg : Option Json) (bound : Option String) : V (Option (String
     throw (refused s!"registration: META binds the circuit registration {d}, and the verifier holds none (--rec-inner-registration)")
   | some _, none => throw (refused "registration: the record is not the circuit registration META binds (META binds none)")
   | some j, some d =>
-    if (← registrationDigest j) != d then throw (refused s!"registration: the record is not the circuit registration META binds ({d})")
+    if (← WindowRecord.digestHex j) != d then throw (refused s!"registration: the record is not the circuit registration META binds ({d})")
     let none_ := refused s!"registration: {STACKED} has no root at Commit and no registered top"
     let (.ok program, .ok es) := (j.getObjValAs? String "program", j.getObjValAs? (Array Json) "registered") | throw none_
-    if (j.getObjValAs? String "format").toOption != some REGISTRATION_FORMAT then throw none_
+    if (j.getObjValAs? String "format").toOption != some WindowRecord.FORMAT_V2 then throw none_
     match es.filter fun e => (e.getObjValAs? String "value").toOption == some STACKED with
     | #[] => return some (program, none)
     | #[e] => return some (program, some e)
