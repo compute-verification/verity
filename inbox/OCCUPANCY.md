@@ -64,3 +64,20 @@ run a software version. The coordinator then writes **the minimal property set**
 
 Notes go to `lanes/compute-research/<ts>-report-occupancy-<lane>.md`. First notes by 02:00Z Sun (7 PM PDT), and the
 coordinator's synthesis to Daniel by 03:00Z.
+
+## Facts so far
+
+- **OCC-STATE (V2)** (note:compute-research/20261031T1941Z-report-occupancy-state; CPU models, estimates, no GPU):
+  - **On a stock H200 the X collapses to about 0–5%.** The cheapest cheat saves the chain state (about 3.2 µs an SM
+    for 164 KB, estimated) plus a 0.5 µs pipe drain (measured), runs undeclared work, and restores. Against a 72 µs
+    p99 jitter (loopback TCP, measured), that's X ≈ 1–5% with per-step deadlines and under 0.4% with window deadlines.
+    50% would need slack under about 10 µs a step.
+  - **Daniel's 50% is the expected redo when state is lost at a random point.** A cheater never pays it: it saves
+    instead, or waits for the window boundary (1.500 against 1.000).
+  - **A lean GEMM at the same speed leaves about 100 KB of registers free** for co-resident integer or FP32 work.
+  - **With silicon**, a per-SM state that software can't save, poisoned by any non-credited issue, makes the memory size
+    irrelevant. **V2 reduces to V3's issue accounting** (under 0.1% of an SM).
+  - Under T-vendor, nothing in V2 holds. Recommendation: V3 plus V1, and drop V2 as a property.
+  - **Smell for V1 (OCC-RATE):** "deadline at peak" rests on a synthetic kernel with operands in shared memory. A real
+    GEMM may be L2-bound at about 52–75% of peak (estimated), which leaves tensor cycles idle. Measure a real-operand
+    GEMM's rate before any deadline claim.
