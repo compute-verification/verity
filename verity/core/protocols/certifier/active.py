@@ -1365,12 +1365,14 @@ class Proxy:
 
     def _report(self, report: Report) -> None:
         """A bucket's release or its writes as the pacer reports them. A bucket that reached the pacer after its time,
-        or whose release started more than `slack` after it, faults its window `monitor-unavailable`, and one the link
-        refused, `delivery-refused`: the open window's certifier, or the record held for a closed one. A window's record
-        is published once the writes of every bucket of it that was handed are reported."""
+        whose release started more than `slack` after it, or released unwritten (its link isn't the pacer's), faults
+        its window `monitor-unavailable`, and one the link refused, `delivery-refused`: the open window's certifier, or
+        the record held for a closed one. A window's record is published once the writes of every bucket of it that
+        was handed are reported."""
         w = report.t // self.egress.buckets
         if report.end is None:
-            reason = Reason.MONITOR_UNAVAILABLE if report.arrived > 0 or report.start > self.slack else None
+            faulted = report.arrived > 0 or report.start > self.slack or not report.written
+            reason = Reason.MONITOR_UNAVAILABLE if faulted else None
         else:
             self.releases.append(report)
             reason = None if report.written else Reason.DELIVERY_REFUSED
