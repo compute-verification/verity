@@ -72,9 +72,9 @@ It holds direct environment reads the same way, so that configuration is read in
 rule), against `tests/lint/allowlists/repo_env_reads.json` (`{"file", "count"}`, each file's largest count
 over `main`, `next` and the admitted PRs), and fails only when a file reads more than its entry allows. A settings registry
 is exempt: a module named `settings.py`, or one the list marks `{"file", "registry": true}`. The gate refuses a PR that adds
-a read to a file it changes, naming each, with the fix: read it through the area's settings registry (a `Registry` of
-`verity/settings.py`'s machinery; a distribution's, as `tools/config/verity_config/settings.py` says), or create one. A mark
-counts from the PR's base, so it lands before the reads it exempts, and a rename moves the file's entry (`python3 tests/lint/test_repo_env_reads.py --move OLD NEW`), as for ruff.
+a read to a file it changes, naming each, with the fix: read it through the area's settings registry (the template is
+`integrations/vllm/verity_vllm/settings.py`), or create one. A mark counts from the PR's base, so it lands before the reads
+it exempts, and a rename moves the file's entry (`python3 tests/lint/test_repo_env_reads.py --move OLD NEW`), as for ruff.
 It holds except handlers that swallow what they catch the same way, so that every outcome is recorded.
 `tests/lint/test_repo_silent_excepts.py` counts, in the same files, each handler, typed or broad, whose every statement is
 `pass`, `continue`, `break`, a bare constant, or a `return` or assignment of a default (nothing, `None`, a constant other than

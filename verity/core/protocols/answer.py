@@ -8,7 +8,7 @@ builds its answer here, and whatever reads another protocol's answer decodes it 
   has no reason and both its public outputs and its profile, which are never ``None``; a reject or undecided has a
   reason and neither. `Answer.to_json` is `Answer.toJson`, `Answer.canonical` is `Answer.canonical`.
 * `outcome`: `Answer.toJson` of the fields, the dict most callers write.
-* `canonical_json`: `Core.canonicalJson`, UTF-8 that `canon` (`Flock.canon`) writes back byte for byte.
+* `canonical_json`: `Core.canonicalJson`, ASCII without DEL that `canon` (`Flock.canon`) writes back byte for byte.
 * `of_json`: `Answer.ofJson`, which accepts only what `to_json` writes, in those shapes; its refusals carry `Flock.J`'s
   messages.
 
@@ -40,18 +40,21 @@ class Refused(ValueError):
 
 
 def canon(x: Any) -> str:
-    """`Flock.canon`: compact, keys sorted, serde's escaping (non-ASCII as itself), integers only."""
+    """`Flock.canon`: compact, keys sorted, every character outside printable ASCII escaped, integers only."""
     if isinstance(x, float):
         raise Refused("canonical JSON: a non-integer number")
     if isinstance(x, dict):
-        return "{" + ",".join(json.dumps(k, ensure_ascii=False) + ":" + canon(v) for k, v in sorted(x.items())) + "}"
+        return "{" + ",".join(json.dumps(k) + ":" + canon(v) for k, v in sorted(x.items())) + "}"
     if isinstance(x, list):
         return "[" + ",".join(canon(v) for v in x) + "]"
-    return json.dumps(x, ensure_ascii=False)
+    return json.dumps(x)
 
 
 def canonical_json(b: bytes) -> Any:
-    """`Core.canonicalJson`: the JSON value of `b`, which must be UTF-8 that `canon` writes back byte for byte."""
+    """`Core.canonicalJson`: the JSON value of `b`, which must be ASCII without DEL that `canon` writes back byte for
+    byte."""
+    if any(c >= 0x7f for c in b):
+        raise Refused("not ASCII without DEL (a byte at or above 0x7f)")
     try:
         s = b.decode()
     except UnicodeDecodeError:

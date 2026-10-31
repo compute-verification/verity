@@ -1,6 +1,6 @@
 import CoreProtocol.Protocol
 import CoreProtocol.Profile
-import Flock.Hash
+import Flock.WindowRecord
 import PouwCheck.Json
 import PouwCheck.Tile
 import PouwWindow.Length
@@ -193,9 +193,9 @@ def registrationOf (b : ByteArray) : V Registration := do
         "and registered")
   pure { bytes := b, format, program, query, partition, scheme, population, law, roots, window }
 
-/-- `registration.digest`: SHA-512(format ‖ 0 ‖ the canonical record). -/
-def Registration.digest (c : Registration) : ByteArray :=
-  Flock.Sha512.hash (c.format.toUTF8 ++ ByteArray.mk #[0] ++ c.bytes)
+/-- `registration.digest`: the window record's digest (`Flock.WindowRecord.digestOf`) of its format and the canonical
+bytes it was read from. -/
+def Registration.digest (c : Registration) : ByteArray := Flock.WindowRecord.digestOf c.format c.bytes
 
 /-! The service's draw, as one-stage's `draw.py` writes it. -/
 

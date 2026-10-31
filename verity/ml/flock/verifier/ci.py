@@ -4,7 +4,7 @@
         [--seed S] [--fuzz N] [--sets I,J] [--out DIR]
     python ci.py --live --lean BIN --work DIR [--sets I,J] ...    `vectors.json`'s `live.sets`, against the live verdicts
 
-For each set (in `vectors.json` `replayable.sets`) whose PR #83 commit has an upstream binary, the job:
+For each set (in `vectors.json` `replayable.sets`) whose M0 commit has an upstream binary, the job:
 - fetches its inputs from the evidence store (`research data fetch`), among them the verifier's own registered reads
   (`statement.registered`, `agree.py --registered`) for a statement that reads registered values, and passes the verifier's
   own K (`statement.stratified`, `agree.py --stratified`) for sessions sampled by the stratified law, and a plain session's
@@ -117,7 +117,7 @@ def py(*args):
 def run_set(i, s, a, ups, store):
     up = agree.LIVE if a.live else ups.get(s["pr83"])
     if up is None:
-        return {"set": i, "pr83": s["pr83"], "skipped": "no upstream binary for this PR #83 commit"}, False
+        return {"set": i, "pr83": s["pr83"], "skipped": "no upstream binary for this circuit prover commit"}, False
     w = a.work / f"set{i}"
     st = s["statement"]
     circuit, public = fetch(st["circuit"], store), fetch(st["public"], store)

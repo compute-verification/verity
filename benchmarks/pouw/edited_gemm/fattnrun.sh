@@ -9,7 +9,7 @@
 # GQA) at FLASH_SHAPES,
 # and ncu's sections on FA_NCU at FA_NCU_SHAPES (out/ncu/, read by eps_profile.py, whose TOML ends the run); with
 # FA_GATES_ONLY set, the run ends after the gates. Clocks are read, never set.
-#   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=LANE \
+#   research run --on vy-nebius-2 --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
 #     -- bash benchmarks/pouw/edited_gemm/fattnrun.sh
 set -uo pipefail
 export O=${OUT:?}

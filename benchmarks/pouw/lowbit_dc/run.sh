@@ -10,12 +10,12 @@
 #   run.sh pgemm pgemm (B200 only): build pgemm.cu with cuBLASLt and dump its SASS and registers; pgemm selftest; under
 #                one gpu-lease: pgemm gate on three shapes x three distributions (pgemm/gate.jsonl), then, only if every
 #                gate is exact, pgemm bench (pgemm/bench.jsonl) and, when the run was sent DC's pipelined int8 kernel
-#                (dc/pgemm.cu and its dc.cuh from cursor/eps1-dc-pipe-ea24, sent as dc-pgemm.cu and dc.cuh), its
+#                (dc/pgemm.cu and its dc.cuh, sent as dc-pgemm.cu and dc.cuh), its
 #                `rate 7 2048`
 #                (pgemm/dc-rate.jsonl); analyze.py pgemm's γ, time split and issue cost (pgemm/summary.json,
 #                pgemm/summary.md).
 #
-#   research run --on vy-dc-b200 --project verity --campaign cmp-13 --source <tree> --cwd source \
+#   research run --on MACHINE --project verity --source <tree> --cwd source \
 #     --env GPU_LEASE_WHO=lowbit-dc [--env DC_PGEMM_COMMIT=SHA --send dc-pgemm.cu --send dc.cuh] \
 #     -- bash benchmarks/pouw/lowbit_dc/run.sh [gemm|pgemm]
 # Exit: 0 every verdict as stated, 4 not, 1 build failed, 2 no device or no nvcc.

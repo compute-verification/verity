@@ -1,4 +1,4 @@
-"""ε_skip's per-instruction counts from SASS, on any architecture the kernels build for (INT-HB row 20).
+"""ε_skip's per-instruction counts from SASS, on any architecture the kernels build for.
 
     python eps_counts.py OUT --src TAG=APV_CU [--src ...] [--json FILE]
 

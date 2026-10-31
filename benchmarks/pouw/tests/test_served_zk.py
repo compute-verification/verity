@@ -324,7 +324,7 @@ def test_the_challenger_on_the_serving_controllers_state_holds_its_coins(served,
 
 def test_a_served_challenger_refuses_coins_no_claim_instance_names(tmp_path, monkeypatch):
     """The serving controller's coins (e2e.py's `Coins`) and `served_commit.py challenger`'s are named by a claim
-    instance, the Lean verifier of record's (`pouw.verifier.CLAIM`) or its state file's, which an earlier start drew from
+    instance, the Lean verifier's (`pouw.verifier.CLAIM`) or its state file's, which an earlier start drew from
     it; a source no claim instance names, `os.urandom` among them, is refused before any coin is drawn or published."""
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c_vllm"))
     import e2e
@@ -859,7 +859,7 @@ def test_past_the_salt_rule_a_certified_window_is_recorded_revealed_drawn_under_
 
 def test_a_deployments_challenger_key_is_infras_published_pin(tmp_path):
     """`Deployment.pinned` takes the challenger key from infra's published pin (`CHALLENGER_KEY_PIN`; the fixture is its
-    payload's bytes): vy-challenger-1's LMS key at W = 1, H = 20, whose SHA-512 is `CHALLENGER_KEY_SHA512`, stated whole.
+    payload's bytes): the challenger's LMS key at W = 1, H = 20, whose SHA-512 is `CHALLENGER_KEY_SHA512`, stated whole.
     A record of any other key is refused even when it names its own key's SHA-512: the key infra retired, a
     tampered public key, or the pinned key under another named SHA-512; so is a record of another schema or form."""
     pin = Path(__file__).parent / "fixtures" / "challenger-key.json"
