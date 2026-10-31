@@ -139,8 +139,11 @@ theorem rLeakTap_reg_of_r (H : Msg → Msg) (D : Deploy Coin Col T) {L K S : ℕ
       TapProof.fill (w.val H D.commit s) (tapVal (tops s)) g = some b :=
     TapProof.fill_ext
   have hcar := TapProof.carries_fill hfit htap (hagree s hs htap.1)
+  -- correctness per replay unit (`ruRef_mono`) or, where replay units are proof blocks, per proof block (`refIn_mono`)
   have hacc := SampledAuditProof.accepted_of hsc.1 hsc.2.1 hfit ι
-    (fun v r hr hv u hu => TapProof.correct_mono (TapProof.ruRef_mono hext) (hι v r hr hv u hu)) hcar hcov
+    (by first
+      | exact fun v r hr hv u hu => TapProof.correct_mono (TapProof.ruRef_mono hext) (hι v r hr hv u hu)
+      | exact fun v u hu hv => TapProof.correct_mono (TapProof.refIn_mono hext) (hι v u hu hv)) hcar hcov
   set tv := traceVal s.prog (w.val H D.commit s) with htv
   set G := freeInputs s.prog (lay s) (k s) with hG
   let a' : ℕ → Bool := fun g => if g ∈ G then (if g ∈ reg s then ρ s g else tv g) else false
