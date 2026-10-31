@@ -5,13 +5,13 @@ verifier and its challenger (`Verifier`), on a machine the prover doesn't contro
 prover   -> verifier   Register {blocks} + payload root; per pass Root {t, i} + root; per window Openings {t} + openings
 verifier -> prover     Hold {registration}; per pass Run {t, i, challenge} + the root before (the challenge a
                        `coins.Released`); per window Open {t} + draws (u32be pass ‖ u64be position each); End + the
-                       session's coins disclosed once it has its outcome ({commitment, openings}, `audit.Session.disclose`)
+                       session's coins disclosed once it has its outcome ({commitment, openings}, `audit.AuditRun.disclose`)
 ~~~
 
 The verifier's session is `period.session`'s, so its case is one `RemoteAudit.Protocol` replays. Its coins source gives
 the period's live secret and the registration's nonce, drawn once. Its clock times each event of the log:
 
-- a root's receive at the root's arrival (`Received.at`), which `audit.Session.receive` holds to its window's deadline,
+- a root's receive at the root's arrival (`Received.at`), which `audit.AuditRun.receive` holds to its window's deadline,
   and the registration's `not_before_ns` at the payload root's;
 - the start at a reading of its clock;
 - each boundary at the reading its timer fires at, `next_boundary_ns`, whether or not the window's roots are in: the
@@ -35,7 +35,7 @@ from collections.abc import Callable
 from typing import Any
 
 from verity.core.deploy.manifest import Channel, Manifest, Role
-from verity.core.deploy.party import Finish, Identity, Received, Record, Send, Timer
+from verity.core.deploy.party import Finish, Identity, Received, LogEntry, Send, Timer
 from verity.core.deploy.runtime import ProtocolDef
 from verity.core.wire import Body, Int, Json, Message, Phase, Refused, Schema
 from verity.ml.commitments.identity import canonical_json_bytes
@@ -86,7 +86,7 @@ class Verifier:
 
     def start(self, params: dict[str, Any], identity: Identity) -> list[Any]:
         self.request = dict(params)
-        self.s: audit.Session | None = None
+        self.s: audit.AuditRun | None = None
         self.held, self.events = P._Held(), []
         self._reading: Callable[[int], list[Any]] | None = None
         self._timer: tuple[int, Callable[[int], list[Any]]] | None = None
@@ -212,13 +212,13 @@ class Verifier:
         if self.s is None:
             return [Finish({"answer": None, "case": None}, refused or "closed", kind="private")]
         answer = P.answer(self.s)
-        out = [Record(answer, "output"), Finish({"answer": answer, "case": P.case_of(self.s, self.events)}, refused,
+        out = [LogEntry(answer, "output"), Finish({"answer": answer, "case": P.case_of(self.s, self.events)}, refused,
                                                 kind="private")]
         return out if refused is not None else [Send(PROVER, Message("End", body=self.disclosed())), *out]
 
     def disclosed(self) -> bytes:
         """`End`'s body: the session's coin commitment and every released coin's opening once it has its outcome
-        (`audit.Session.disclose`), as canonical JSON; empty for a session left undecided."""
+        (`audit.AuditRun.disclose`), as canonical JSON; empty for a session left undecided."""
         if self.s.outcome is None:
             return b""
         commitment, openings = self.s.disclose()

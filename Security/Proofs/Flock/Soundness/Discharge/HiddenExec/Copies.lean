@@ -35,7 +35,7 @@ variable {tags : Tags} {st : Stmt} (L : Layout st) (Lf : Layout (Hidden.flatTwin
 theorem zeroPos_blockH {s₀ : ℕ} (hs₀ : s₀ < st.c.unitRange.count) {z : Model.Witness (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
     (L.model regs).block z o (Aliased.zeroPos Lf regs F hs₀) = 0 := by
-  have huse := (built_spec (L.built_flat F.parse.tmpl)).2.1
+  have huse := F.useful
   have hra : st.c.unit.a.rows ≤ st.c.unit.useful := F.rowsA
   have hrb : st.c.unit.b.rows ≤ st.c.unit.useful := F.rowsB
   have hA : ∀ j', sparseEntry st.c.unit.a st.c.unit.useful j' = 0 := fun j' => by
@@ -63,16 +63,16 @@ theorem copyAt_blockR {s₀ off : ℕ} (hs₀ : s₀ < st.c.unitRange.count) (ho
   unfold Aliased.copyAt
   by_cases hm : off ∈ portBits st.c.unit.inGroups
   · rw [ite_eq_left hm]
-    have hnd := portBits_nodup (L.built_flat F.parse.tmpl)
+    have hnd := Aliased.unit_nodup L
     obtain ⟨p, t, hp, ht, hpt⟩ := mem_portBits hm
     have hsrc : flatSrcAt st.c s₀ off = Flat.flatSrc st.c s₀ p t := by
       unfold flatSrcAt
       rw [hpt, portOf_eq hnd hp ht]
       congr 1
       omega
-    have hself := port_self (L.built_flat F.parse.tmpl) (L.unitLog_le hs₀) hm
+    have hself := Aliased.unit_self L (L.unitLog_le hs₀) hm
     rw [hpt] at hself
-    have hrow := fun j => Lf.placed_port F.parse F.check F.delta F.sha F.hm hnd hs₀ hp ht (fun j' => (hself j').1)
+    have hrow := fun j => Lf.placed_portT F.parse (fun n => (F.nets n).1) F.check F.delta F.sha F.hm hnd hs₀ hp ht (fun j' => (hself j').1)
       (fun j' => by rw [Lf.unit_lookup]; exact (add_zero _).trans (hself j').2) r j (by rw [hr, hpt])
     have hrow' : ∀ j, placedA st r j = (if j.val = Flat.flatSrc st.c s₀ p t then 1 else 0) ∧
         placedB st r j = if j.val = Flat.flatSrc st.c s₀ p t then 1 else 0 := fun j => by

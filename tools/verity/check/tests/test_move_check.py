@@ -700,6 +700,41 @@ def test_a_pin_whose_digest_is_not_its_file_is_refused(tmp_path):
     assert f["path"] == "p/TRUSTED.sha256"
 
 
+MANIFEST_PIN = "verity/ml/flock/tests/fixtures/randomness_lean.json"
+MANIFEST = '{"packages": [{"type": "path", "dir": "../pkg/old/lean"}]}\n'
+
+
+def _manifest_pin(tmp_path: Path, pinned) -> dict:
+    """`pkg/old/` moved to `pkg/new/`, so `Sec/lake-manifest.json`'s `dir` follows it, and the flock Lean vectors' pin
+    (a JSON pin of `pins.py`) records the manifest and a Lean file as ``pinned(manifest, lean)`` gives them at HEAD."""
+    lean = "theorem a : 1 = 1 := rfl\n"
+
+    def pin(manifest: str, lean_digest: str) -> str:
+        return json.dumps({"inputs": {"Sec/A.lean": lean_digest, "Sec/lake-manifest.json": _sha(manifest)}, "kat": [1]},
+                          indent=2) + "\n"
+    repo, base = _repo(tmp_path, {"Sec/lake-manifest.json": MANIFEST, "Sec/A.lean": lean, "pkg/old/lean/B.lean": "def b := 1\n",
+                                  MANIFEST_PIN: pin(MANIFEST, _sha(lean))})
+    _move(repo, "pkg/old/lean/B.lean", "pkg/new/lean/B.lean")
+    moved = MANIFEST.replace("pkg/old", "pkg/new")
+    _write(repo, {"Sec/lake-manifest.json": moved, MANIFEST_PIN: pin(*pinned(moved, _sha(lean)))})
+    return _check(repo, base)
+
+
+def test_a_json_pins_manifest_digest_follows_the_manifest(tmp_path):
+    """A move rewrites a Lake manifest's `dir`, and a JSON pin that records the manifest takes its new digest: no pinned
+    output reads where a path package sits."""
+    r = _manifest_pin(tmp_path, lambda manifest, lean: (manifest, lean))
+    assert r["certified"], r["refusals"]
+
+
+def test_a_json_pins_other_digests_and_wrong_ones_are_refused(tmp_path):
+    for case, pinned in {"wrong": lambda manifest, lean: (manifest + " ", lean),
+                         "lean": lambda manifest, lean: (manifest, "0" * 64)}.items():
+        (tmp_path / case).mkdir()
+        [f] = _manifest_pin(tmp_path / case, pinned)["refusals"]
+        assert f["path"] == MANIFEST_PIN, case
+
+
 def test_pins_sorted_anew_after_their_paths_moved_are_a_move(tmp_path):
     """The command that writes a pin file sorts its paths, so a regeneration after the move may order them anew."""
     a, b = "import Definitions.Core.B\n\n/-! Trusted: `Definitions/Core/B.lean` states `Definitions.Core.B`. -/\n", "def x := 1\n"
