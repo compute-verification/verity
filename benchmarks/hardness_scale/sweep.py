@@ -10,11 +10,12 @@ Each config runs as a child process. Results: $OUT/runs/<name>.json and $OUT/log
 a preset reads it as an infinite loss). The worker's stdout carries one line per eval and per finished config. A claim stays
 when its config fails: rerun it under a new name.
 
-A worker hands its GPU over: after each config, and while it waits, it exits when anyone waits in the GPU slots' line
-(another lane's job, or newer workers of this sweep, which take over the unclaimed configs).
+A worker hands its GPU over: after each config, and while it waits, it exits when anyone waits for a GPU (another lane's
+job, or newer workers of this sweep, which take over the unclaimed configs).
 """
 
 import argparse
+import fcntl
 import json
 import math
 import os
@@ -174,7 +175,19 @@ def resolve(presets, shared: Path):
 
 
 def someone_waits() -> bool:
-    """Whether a live waiter is in the GPU slots' line."""
+    """Whether anyone waits for a GPU: a queued gpu-lease request (a wait file its waiter holds locked) or a waiter in the
+    GPU slots' line."""
+    for f in Path(os.environ.get("GPU_LEASE_DIR", "/run/gpu-lease")).glob("wait.*"):
+        try:
+            fd = os.open(f, os.O_RDONLY)
+        except OSError:
+            continue
+        try:
+            fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return True
+        finally:
+            os.close(fd)
     slots = Path(os.environ.get("CHECK_SLOTS", "/workspace/research/locks/gpu/slots"))
     return bool(slot.waiting(slots.parent / slot.LINE, datetime.now(timezone.utc)))
 
