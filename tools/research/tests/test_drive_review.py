@@ -179,7 +179,7 @@ def test_an_after_landing_run_sends_a_base_below_its_tip_so_ratchet_gate_judges_
     assert [m.pr for m in h.d.landed_since(kw["base"], tip)] == [1, 2]                    # the landings it judges
 
 
-def test_an_unreviewed_member_new_to_next_or_a_held_one_stops_the_prefix_below_it(world, monkeypatch):
+def test_an_unreviewed_member_new_to_next_stops_the_prefix_below_it_and_a_held_one_goes_to_the_top(world, monkeypatch):
     h = Review(world, monkeypatch)
     for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
         world.gh.put(n, world.change({f: f"{n}\n"}))
@@ -189,11 +189,13 @@ def test_an_unreviewed_member_new_to_next_or_a_held_one_stops_the_prefix_below_i
     assert _subject(world, "main").startswith("Queue: #1")
     h.review(2)
     h.review(2, "hold", by="other", ref="reads a stale fixture")
+    assert h.tick().startswith("landed #3"), world.logs
+    assert [m.pr for m in h.q.chain()] == [2]
     out = h.tick()
     assert out.startswith("nothing reviewed lands: #2") and "held by other (reads a stale fixture)" in out, out
-    assert _subject(world, "main").startswith("Queue: #1")
+    assert _subject(world, "main").startswith("Queue: #3")
     h.review(2, by="other")                                     # each reviewer's newest verdict counts
-    assert h.tick().startswith("landed #3")
+    assert h.tick().startswith("landed #2")
     assert _main(world) == _tip(world)
     assert h.launched == []
 
@@ -792,8 +794,9 @@ def test_an_unreviewed_member_below_reviewed_ones_no_longer_stops_them_landing(w
     assert h.tick().startswith("landed #1") and _main(world) == _tip(world)
 
 
-def test_a_held_member_still_stops_the_members_above_it_a_hold_is_a_verdict(world, monkeypatch):
-    """Nothing moves past a held member: what is below it lands, past an unreviewed one, and what is above it waits."""
+def test_a_held_member_goes_to_the_top_and_the_lift_passes_over_it(world, monkeypatch):
+    """A held member held every member above it, deep in `next`.  It goes to the top, and the reviewed members on both sides
+    of it go below the unreviewed one and land; the unreviewed one and the held one hold only themselves."""
     h = Review(world, monkeypatch)
     for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt"), (4, "d.txt")):
         world.gh.put(n, world.change({f: f"{n}\n"}))
@@ -801,11 +804,12 @@ def test_a_held_member_still_stops_the_members_above_it_a_hold_is_a_verdict(worl
     h.review(2)
     h.review(3, "hold", by="other", ref="reads a stale fixture")
     h.review(4)
-    assert h.tick().startswith("landed #2"), world.logs
-    assert [m.pr for m in h.q.chain()] == [1, 3, 4]
+    assert h.tick().startswith("landed #4"), world.logs
+    assert _subject(world, "main^1").startswith("Queue: #2")
+    assert [m.pr for m in h.q.chain()] == [1, 3]
     out = h.tick()
     assert out.startswith("nothing reviewed lands: #1"), out
-    assert [m.pr for m in h.q.chain()] == [1, 3, 4] and _subject(world, "main").startswith("Queue: #2")
+    assert [m.pr for m in h.q.chain()] == [1, 3] and _subject(world, "main").startswith("Queue: #4")
 
 
 def test_reviewed_first_keeps_a_stacked_pr_after_the_pr_it_contains(world, monkeypatch):
