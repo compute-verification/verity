@@ -76,6 +76,7 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   vocabulary);
 - the trees hold (`trees`, below): no guarantee's statement reads a definition of the proofs tree, and no module of the
   definitions or properties tree imports one;
+- every `Prop` a guarantee takes is named or a plain range (`inline_failures`; `shape.inline` excepts some);
 - every instance has a name in its source. Lean names an anonymous one from its type, and adds the project's root
   (`_proofs`) when nothing in the type is the project's own, so a move into another root or a split renames it, and every
   record whose definitions use it changes. `--name-instances` writes each current name into its declaration;
@@ -95,15 +96,16 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   conclusion is headed by a constant other than `C`, applies a definition under `meaning` itself (the deployed record, a
   predicate or a field of it, so `True` or a fact of Init or Mathlib alone fails), and is neither a reflexivity
   (`a = a`, `a ↔ a`) nor one of its hypotheses, and no hypothesis is `False` (`vacuous_meets`);
+- a guarantee of an acceptance or an exclusion has `honest` and `nontrivial` witnesses, or an `unwitnessed` entry, which
+  only shrinks (`witness_failures`);
 - every definition a guarantee's statement reads is in the spec (below), or a pinned dependency's;
 - no dependency the `upstream` section scans proves, at the revision `lake-manifest.json` pins, a theorem about a watched
   statement that nobody has acknowledged (below);
 - the kernel accepts every declaration again (`Replay.lean`, on one import of the package's dependencies, each
-  declaration in a task of its own on Lean's threads, `LEAN_NUM_THREADS` (by default the CPUs the audit may use: its
-  affinity, bounded by the cgroup quota, where Lean's own default is the whole machine), checked against the import and the
-  declarations it comes after): a declaration that skipped the kernel shows no axiom, and only the replay catches it.
+  declaration in a task of its own on Lean's threads, `LEAN_NUM_THREADS` (by default its affinity, bounded by the cgroup
+  quota, not Lean's whole machine), checked against the import and the declarations it comes after): a declaration that skipped the kernel shows no axiom, and only the replay catches it.
   The replay also walks the environment it checked for the axioms the package uses, and the audit fails if they differ
-  from the sets the `.olean` files recorded. No `#print axioms` output is parsed anywhere. A replay killed by a signal
+  from the sets the `.olean` files recorded. A replay killed by a signal
   (out of memory) is reported as a kill, not as a verdict. With `--closure` it checks the whole import closure the
   same way (below);
 - each test under `runs` passes on the data whose SHA-256 the record holds (below);
@@ -119,10 +121,9 @@ A package that pins ArkLib (`Security/Proofs`, and `Security`, which audits it b
 machine with less than `MEM_FLOOR_GIB` (24 GiB, memory and swap within the cgroup), by `check.py` and the fast path
 alike; the refusal prints the fast path's `research run --on vy-nebius-1 …` line. `VERITY_LEAN_MEM_FLOOR_GIB` sets
 another floor (0: none). Lake runs as many `lean` at once as `LEAN_NUM_THREADS`, so the build of a package that pins Mathlib
-or ArkLib runs at most one per `BUILD_GIB_PER_JOB` (8 GiB) of the memory its cgroup allows (`build_threads`, read where
-`/proc/self/cgroup` puts the process, so a queued run's scope counts); a `LEAN_NUM_THREADS` already set wins. Its kernel
-replay runs at most one thread per `REPLAY_GIB_PER_THREAD` (4 GiB), one such replay at a time (`replay_threads`): 48 threads
-of Security's replay peaked at 145 GiB. An audit of a spec beside the ArkLib package that proves its guarantees (`Security`)
+or ArkLib runs at most one per `BUILD_GIB_PER_JOB` (8 GiB) of the memory its cgroup allows (`build_threads`, from the
+process's own cgroup, so a queued run's scope counts); a `LEAN_NUM_THREADS` already set wins. Its kernel
+replay runs at most one thread per `REPLAY_GIB_PER_THREAD` (4 GiB), one such replay at a time (`replay_threads`). An audit of a spec beside the ArkLib package that proves its guarantees (`Security`)
 is refused below `SPEC_FLOOR_GIB` (160 GiB): the replay's resident base is about 120 GiB whatever its threads (it died
 at 128 GiB with 16), and the refusal names `--kind lean-audit`, a 280 GiB shape.
 
