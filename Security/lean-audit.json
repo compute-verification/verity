@@ -880,7 +880,7 @@
   },
   "Claims.ZKServer.Loop.Src": {
    "owner": "@proofs",
-   "digest": "94338601ffc7eae32af9ae1da22cf39f2d7ad8abdefe64691046aa82c9117b3d"
+   "digest": "0abe7dfb4ca351fb30aa04a1ef9d76fd22ea241df2ad4092b09678658c815d1e"
   },
   "Flock.Assumptions.RegistrantCovers": {
    "owner": "@proofs",
@@ -940,7 +940,7 @@
   },
   "Flock.Guarantees.TablesAdmitUnrefused": {
    "owner": "@proofs",
-   "digest": "707cb619d22d8a98d6fe00bc4fbc60f7b86f3c6dd860d22c1172e67f482624b6"
+   "digest": "a3e8d1d9c8f18bbb4cedb1fbf720b1fd7eefdd8f9ca69df1ff3fe8f385356b6e"
   },
   "Flock.SoundAtBridge.AcceptedLive": {
    "owner": "@proofs",
