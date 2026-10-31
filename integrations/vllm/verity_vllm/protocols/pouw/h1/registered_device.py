@@ -17,8 +17,8 @@ holds them (64-byte nodes, 128-byte strings, as bytes). `device_hash` launches t
 hashes from, and rows written there (under `hashing`) it reads with no wait. `host_commit` runs
 the same functions on the CPU (`registered_rows_host.cpp`, built with the system C++ compiler): the twin the CPU tests
 hold to `pouw_h1_registered.commit`'s NumPy path on machines without a GPU. Builds share the Commit's row-table builder
-(`row_tables_device._build`, keyed by sources, flags and compiler) and its per-device state (`row_tables_device.DeviceLibrary`);
-nvcc is `pouw_device`'s (its `TOOLCHAIN`'s, or the one on the path).
+(`row_tables_device._build`, keyed by sources, the shared headers, flags and compiler) and its per-device state
+(`row_tables_device.DeviceLibrary`); nvcc is `pouw_device`'s (its `TOOLCHAIN`'s, or the one on the path).
 """
 from __future__ import annotations
 
