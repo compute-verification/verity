@@ -45,6 +45,16 @@ install -d -o "$U" -g "$U" /workspace/hf /workspace/hf/hub /workspace/hf/prefetc
 
 # TMPDIR: the root disk is 247 GB, and one Lean audit's scratch tree is ~22 GB; four at once filled it on vy-nebius-1 (6 Oct)
 install -d -m 1777 -o root -g root /workspace/tmp
+# the check cache (~/.cache/verity-check, a busy node's Lean build trees: 150 GB and more) lives on /workspace as well; on the
+# root disk a Security build filled it mid-run. A real directory there is the node's live cache: it is moved with its slots
+# drained, never here.
+CC=$(getent passwd "$U" | cut -d: -f6)/.cache/verity-check
+install -d -o "$U" -g "$U" /workspace/research/cache /workspace/research/cache/verity-check "$(dirname "$CC")"
+if [ ! -e "$CC" ] && [ ! -L "$CC" ]; then
+  ln -sT /workspace/research/cache/verity-check "$CC" && chown -h "$U:$U" "$CC"
+elif [ ! -L "$CC" ]; then
+  log "$CC is a directory on the root disk: move it onto /workspace/research/cache with the node's check slots drained"
+fi
 if [ -n "${VY_FS_TAG:-}" ]; then   # a shared filesystem launch.sh attached (NEBIUS_FILESYSTEM_ID), shared by every VM it is attached to
   mkdir -p /workspace/fs
   grep -q ' /workspace/fs ' /etc/fstab || echo "$VY_FS_TAG /workspace/fs virtiofs defaults,nofail 0 0" >> /etc/fstab
