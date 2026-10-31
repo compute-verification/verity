@@ -21,12 +21,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO
 
-from verity.core.wire import KINDS, NAME, PUBLIC, Body, Bool, Int, Message, Refused, Registry, Schema, Str, frames
+from verity.core.wire import KINDS, NAME, PUBLIC, Body, Bool, Int, Message, MessageTypes, Refused, Schema, Str, frames
 
 DIRS = ("start", "in", "out", "arrived", "event", "record", "finish", "handshake-in", "handshake-out", "party")
 ENTRY = Schema("Entry", 1, "structure", {"n": Int(), "dir": Str(16, "|".join(DIRS)), "channel": Str(64),
                                          "kind": Str(16, "|".join(KINDS)), "elided": Bool()}, Body(max=(1 << 32) - 1))
-REGISTRY = Registry([ENTRY])
+REGISTRY = MessageTypes([ENTRY])
 KEEP = 1 << 16
 """The largest frame a transcript keeps whole by default; past it, its SHA-512."""
 
