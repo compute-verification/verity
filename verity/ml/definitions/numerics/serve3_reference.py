@@ -16,7 +16,7 @@ circuit evaluation — `tests/program/test_serve3.py::test_reference_evaluator_m
 * `interpret(out, live)` — the interpretation map (spec §8): `n = Σ live[0..D_MAX-1]`, `transcript =
   out[0..n-1]` (EOS-exclusive; slot `n` is stop evidence when `n < D_MAX`, never a semantic output; the
   suffix equals the pad constant and is not an output).
-* `inactive_boundary(C)` — the step-boundary relation of spec §6 (INACT-BASE's trivial statement): for
+* `inactive_boundary(C)` — the step-boundary relation of spec §6, in its trivial form: for
   `live_in = 0` the `PadDecodeStep_v1` boundary outputs are the constants `(tok_out, live_out, k_new,
   v_new) = (0, 0, 0…0, 0…0)`, checkable without touching an interior gate.
 
