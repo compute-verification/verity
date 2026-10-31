@@ -187,6 +187,16 @@ def replan7():
     return cfgs
 
 
+def replan8():
+    """B ρ = 0.25's lr bracket from below: at w256 its best tested lr (2e-3, over 4e-3) was the lowest tried, so 1e-3
+    at 20M, 40M and 80M, and 4e-3 at 80M; and w384 at 180M (25.4 tokens per parameter) at 1e-3."""
+    b = {"size": "w256", "lr": 1e-3, "threads": 4, "design": "B", "rho": 0.25}
+    cfgs = [{**b, "name": f"w256-B0.25-D{t // 1_000_000}M-lr0.001", "tokens": t} for t in (20_000_000, 40_000_000, 80_000_000)]
+    cfgs += [{**b, "name": "w256-B0.25-D80M-lr0.004", "tokens": 80_000_000, "lr": 4e-3},
+             {**b, "name": "w384-B0.25-D180M-lr0.001", "size": "w384", "tokens": 180_000_000, "threads": 16}]
+    return cfgs
+
+
 PRESETS = {
     "bench": bench,
     "replan1": replan1,
@@ -196,6 +206,7 @@ PRESETS = {
     "replan5": replan5,
     "replan6": replan6,
     "replan7": replan7,
+    "replan8": replan8,
     "w256": lambda: grid("w256", 20_000_000),
     "scale1": lambda: lite("w512", 20_000_000, 6) + lite("w128", 20_000_000, 2),
 }
