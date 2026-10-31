@@ -13669,12 +13669,10 @@
     "instLTNat.lt m (instHPow.hPow 2 448)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR": {
-    "∀ (t : Fin n) (ω : Accounting.Remote.Draw.Coins n κ X), Finset.instPartialOrder.le (D.opened prf rest t ω) (L t)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin n) (ω : Accounting.Remote.Draw.DrawCoins n κ X), Finset.instPartialOrder.le (D.opened prf rest t ω) (L t)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (t : Fin n) (ω : Accounting.Remote.Draw.Coins n κ X), Finset.instPartialOrder.le (D.opened prf rest t ω) (L t)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork": {
-    "∀ (t : Fin n) (ω : Accounting.Remote.Draw.Coins n κ X), Finset.instPartialOrder.le (D.opened prf rest t ω) (L t)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin n) (ω : Accounting.Remote.Draw.DrawCoins n κ X), Finset.instPartialOrder.le (D.opened prf rest t ω) (L t)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (t : Fin n) (ω : Accounting.Remote.Draw.Coins n κ X), Finset.instPartialOrder.le (D.opened prf rest t ω) (L t)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Remote.SketchBoundDeployed": {
     "instLENat.le T.passes P": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -15036,11 +15034,9 @@
     "∀ (z : Z), Set.instMembership.mem Zs z → Eq (dec (run tap { fst := schedOf z, snd := srvOf z }).fst) z": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.SampledLeakAccepted": {
-    "∀ (s : Claims.Sampling.Stmt) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : Claims.Sampling.AuditStatement) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "NetTiming.SecurityProofs.SampledLeakRegistered": {
-    "∀ (s : Claims.Sampling.Stmt) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (s : Claims.Sampling.AuditStatement) (P : Claims.Sampling.Partition), Eq (D.partition s) (Option.some P) → ∀ (F : Finset Nat), SetLike.instMembership.mem (NetTiming.faultySets s.design P δ) F → instLENat.le (NetTiming.faultyBits s.prog P F) (β s)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pous.SecurityProofs.BackgroundRebuildExcluded": {
@@ -15233,7 +15229,6 @@
     "Finset.instPartialOrder.le U (Finset.range N)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.Dither.FleetSound": {
-    "∀ (u : Fin N) (y : (Subtype fun v => Ne v u) → Fin k → Prod P.Draw P.Chk), Real.instLE.le (κ u (A u y)) (κmax u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (u : Fin N) (ω : Ω), Real.instLE.le (κ u (A u ω)) (κmax u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.Dither.FreedOfFloor": {
@@ -15243,27 +15238,21 @@
     "Real.instLE.le (instHMul.hMul (instHSub.hSub 1 ε) (Finset.univ.sum fun r => instHMul.hMul (μ r) (instHMul.hMul W (Pd.hon r)))) (Finset.univ.sum fun r => instHMul.hMul (μ r) (X r))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.Dither.WorkSound": {
-    "∀ (w : Fin k), Set.instMembership.mem Reg (reg w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (a : P.Inst), Set.instMembership.mem Reg a → And (Real.instLT.lt 0 (Hmm a)) (And (Real.instLT.lt 0 (Hsha a)) (And (Real.instLE.le 0 (Ho a)) (And (Real.instLE.le (pubmm a) (Hmm a)) (Real.instLE.le (pubsha a) (Hsha a)))))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Finset.univ.sum fun w => instHAdd.hAdd (instHAdd.hAdd (Hmm (reg w)) (Hsha (reg w))) (Ho (reg w))) (Finset.univ.sum fun r => instHMul.hMul (μ r) (Pd.hon r))": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Exists fun r => And (Real.instLT.lt 0 (G.callUse r)) (Real.instLE.le (Pd.cap r) (instHMul.hMul Q (G.callUse r)))": "an existential, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "G.P1": "G.P1 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "G.P2": "G.P2 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (w : Fin k), Real.instLE.le (pubmm w) (Hmm w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (w : Fin k), Real.instLE.le (pubsha w) (Hsha w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Finset.univ.sum fun w => instHAdd.hAdd (instHAdd.hAdd (Hmm w) (Hsha w)) (Ho w)) (Finset.univ.sum fun r => instHMul.hMul (μ r) (Pd.hon r))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Eq (Finset.univ.sum fun w => instHAdd.hAdd (instHAdd.hAdd (Hmm w) (Hsha w)) (Ho w)) (Finset.univ.sum fun r => instHMul.hMul (μ r) (Pd.hon r))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Exists fun r => And (Real.instLT.lt 0 (G.callUse r)) (Real.instLE.le (Pd.cap r) (instHMul.hMul Q (G.callUse r)))": "an existential, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "G.P1": "G.P1 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "G.P2": "G.P2 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.Dither.WorkSoundNoFold": {
-    "∀ (w : Fin k), Set.instMembership.mem Reg (reg w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (a : (Pouw.Dither.noFoldRound nf).Inst), Set.instMembership.mem Reg a → And (Real.instLT.lt 0 (Hmm a)) (And (Real.instLT.lt 0 (Hsha a)) (And (Real.instLE.le 0 (Ho a)) (And (Real.instLE.le (pubmm a) (Hmm a)) (Real.instLE.le (pubsha a) (Hsha a)))))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Finset.univ.sum fun w => instHAdd.hAdd (instHAdd.hAdd (Hmm (reg w)) (Hsha (reg w))) (Ho (reg w))) (Finset.univ.sum fun r => instHMul.hMul (μ r) (Pd.hon r))": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (w : Fin k), Real.instLE.le (pubmm w) (Hmm w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (w : Fin k), Real.instLE.le (pubsha w) (Hsha w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Finset.univ.sum fun w => instHAdd.hAdd (instHAdd.hAdd (Hmm w) (Hsha w)) (Ho w)) (Finset.univ.sum fun r => instHMul.hMul (μ r) (Pd.hon r))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Exists fun r => And (Real.instLT.lt 0 (G.callUse r)) (Real.instLE.le (Pd.cap r) (instHMul.hMul Q (G.callUse r)))": "an existential, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (o : nf.Orc) (r : nf.Root) (c : Prod (Fin nf.n) (Prod (Fin nf.n') (Fin nf.nb))) (v : Pouw.Dither.Word) (p : nf.Path), nf.opens o r c v p → And (Pouw.MerkleExtract.Opens (EquivLike.toFunLike.coe eo o) E (rD r) (pl p) v) (Eq (List.map Prod.fst (pl p)) (dirs c))": "nf.opens taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "G.P1": "G.P1 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "G.P2": "G.P2 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (w : Fin k), Real.instLE.le (pubmm w) (Hmm w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (w : Fin k), Real.instLE.le (pubsha w) (Hsha w)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Finset.univ.sum fun w => instHAdd.hAdd (instHAdd.hAdd (Hmm w) (Hsha w)) (Ho w)) (Finset.univ.sum fun r => instHMul.hMul (μ r) (Pd.hon r))": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "G.P2": "G.P2 taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.EndToEnd": {
     "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → Real.instLE.le (P.Wref U.layout u).cast (instHMul.hMul Ωmax (U.layout.shape u).Wmm.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -15545,7 +15534,6 @@
    "Flock.SecurityProofs.DeltaPubDeployed": {
     "instLENat.le n (instHMul.hMul K₀ kd)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "instLENat.le W (instHPow.hPow 2 40)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le p (instHDiv.hDiv 1 (instHPow.hPow 2 200))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le t' (instHPow.hPow 2 80)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Real.instLE.le v (instHPow.hPow 2 80)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
@@ -15580,6 +15568,9 @@
    },
    "Flock.SecurityProofs.IntegrityBlockCarried": {
     "∀ (t : Nat), SetLike.instMembership.mem (S.sessions b) t → Real.instLE.le q (instHDiv.hDiv (S.W t).kd.cast (S.W t).n.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Accounting.SecurityProofs.TS.LeafGroupSound": {
+    "∀ (x : Pouw.RelativeSecurity.Paths Ω S) (w : Fin S) (i : Fin nπ) (k : Accounting.TS.Group.Ix T.lanes n), ENNReal.instLE.le (instHMul.hMul ((sess₀ x w i k).canon (op x w i k)).n.cast ((sess₀ x w i k).canon (op x w i k)).bound) (ENNReal.ofReal δ)": "the per-session bound LeafLanesSound takes inline too, which #6460 brought before the inline rule reached it: name it or state it as a guarantee's conclusion"
    }
   }
  },
@@ -64021,10 +64012,6 @@
   "Pous.SecurityProofs.StreamedWipeMeetsDisk": {
    "honest": ["Pous.Claims.StreamedWipeMeetsDisk_meets"],
    "nontrivial": "Pous.Claims.StreamedWipeMeetsDisk_fails"
-  },
-  "Accounting.SecurityProofs.TS.LeafGroupSound": {
-   "honest": ["Accounting.TS.Lanes.groupRealizes_lanes32", "Accounting.TS.Lanes.knownOf_okKnown"],
-   "nontrivial": "Accounting.TS.Group.groupLayer_not_soundAt"
   }
  },
  "unwitnessed": {
@@ -64335,7 +64322,6 @@
   "Pous.SecurityProofs.StreamedWipeMeetsServer8H200HBM": "cb7104e2380aaad0826c74ad18b6c0628359e6b986e04126b81b5132f23762f9",
   "Pous.SecurityProofs.StreamedWipeMeetsServer8H200HBMRAM": "2fcec4ab1ff8fdfc1e629f28e55e09fa2306a8512d6b86a0b3b84c6e35814b0b",
   "Pous.SecurityProofs.StreamedWipeMeetsServerH200": "6d52bba05419a102487e5c42fdb09b253307186f9ac6328693929fe349dae5d8",
-  "Pouw.SecurityProofs.Dither.WorkSound": "d6773d52a6c5d776bb73acfb2282f6e4087777d1cce85e4aa4ae1c7d9d2a1d6b",
   "Pouw.SecurityProofs.Dither.WorkSoundNoFold": "67f3658934c74720d65f6dee7ae0d77df683c3dadfdce0ae498b9bbc899090b2",
   "Pouw.SecurityProofs.DitherInstance.WorkSoundH200": "24b90356174c20edf30dd824c9bd4905d24528aee5c2368d18361a3cd8d08eaa",
   "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardH200": "976778649c1a045eb4165c8b72e71a82af245ea1fd099800ca29e3fed945ce2c",
@@ -64382,6 +64368,13 @@
   "Verity.SecurityProofs.RefineWrong": "52a2253ccd78c6339acebc6fe4e9ea3afaaff0120bb36457ff76a2a605ce5ad6",
   "Verity.SecurityProofs.ServingBlockSum": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8",
   "Flock.SecurityProofs.IntegrityBlockCarried": "9bfec7bb00d7b2f13e68fcb0efa8c72cbcbeb570f6b2395e2749070aa96cf2a1",
-  "Flock.SecurityProofs.SampledKSLiveV5": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35"
+  "Flock.SecurityProofs.SampledKSLiveV5": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
+  "Accounting.SecurityProofs.TS.LeafGroupSound": "c5838adef54e7043e01608e725162fec80d4fa1d31294cfd50cf33fa2061efc2",
+  "Flock.SecurityProofs.JointServed": "7336cb84d9ce7d76a08b717e7b412bbe3b5fbbf7f79068bb0af0d60ef45c9a79",
+  "Flock.SecurityProofs.JointServed_honest": "b322a5ee756839ec18d249d2c4868b17f088400afc0a3556da10d5f9ff4073b7",
+  "Flock.SecurityProofs.JointServed_nontrivial": "3dfd9d37c2f1a836bc2f967261d6545049dcbfde0a0c1fff234dd9fe63a0a947",
+  "NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits": "7ccec3c51a3940931ea87fc0b3800d793566789cdc927ea9d9c011bcd1ef9e72",
+  "Pous.SecurityProofs.StreamedWipeMeetsH200": "49f1879512445eac6ccc2bc32c426083fbb60df54d2005bdff69ca69d154ec51",
+  "Verity.SecurityProofs.CapacityWithinEstimate": "33f7bf73bd890217a96e1f811c4fa5862df92ccec1ba47b063fff95e97ba8370"
  }
 }
