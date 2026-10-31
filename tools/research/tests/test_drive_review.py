@@ -18,7 +18,7 @@ import pytest
 import research.queue as Q
 from research import merge
 from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, LEAN_STEP, SIGTERM_RC
-from research.queue import PR, QueueError, StoreLabels, label_target, lean_change, lean_spec
+from research.queue import PR, QueueError, StoreLabels, label_target, lean_change
 from research.store import vocab
 from test_queue import World, _git
 from test_queue_drive import Harness, _failed_run, _killed_run, _live_run, _steps_run, _tip
@@ -689,7 +689,7 @@ def test_a_spec_or_lock_change_waits_for_its_lean_check_whatever_its_title_and_t
     h.q.sync()
     chain = h.q.chain()
     assert {m.pr: lean_change(h.d.repo, m.commit) for m in chain} == {1: True, 2: True, 3: True, 4: False, 5: True, 6: True}
-    assert {m.pr: lean_spec(h.d.repo, m.commit) for m in chain} == {1: False, 2: True, 3: True, 4: False, 5: True, 6: True}
+    assert {m.pr: lean_change(h.d.repo, m.commit, code=False) for m in chain} == {1: False, 2: True, 3: True, 4: False, 5: True, 6: True}
     h.d._lean_of = {}                                                       # a tick's cache
     assert {m.pr: h.d._lean_change(m) for m in chain} == {1: False, 2: True, 3: True, 4: False, 5: True, 6: True}
 

@@ -118,7 +118,7 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 from .queue import (IDENTITY, PR, Entry, Member, Queue, QueueError, StoreLabels,
-                    _git, _out, built_on, changed, forces_cold, hold, lean_change, lean_hold, lean_spec, unreviewed)
+                    _git, _out, built_on, changed, forces_cold, hold, lean_change, lean_hold, unreviewed)
 
 #: who hears what drive can't settle
 CI = "@ci"
@@ -160,7 +160,7 @@ ACTIVE = ("submitted", "waiting", "running", "unknown")
 #: check.py's exit for a twin that never took a slot
 NOT_STARTED = 75
 #: a PR whose title holds this lands on its land verdict without a Lean check first when its Lean is code that touches no lock
-#: and no spec (`Driver._lean_change`, `queue.lean_spec`)
+#: and no spec (`Driver._lean_change`, `queue.LEAN_SPEC`)
 TWO_DEMOS = "two demos"
 #: the steps of a check (`tools/verity/check/check.py`)
 CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "lean-changed", "flock-circuit-build", "lean-build",
@@ -2455,12 +2455,13 @@ class Driver:
 
     def _lean_change(self, m: Member) -> bool:
         """Whether ``m`` waits for a Lean check before it lands: its own change is a Lean change (`queue.lean_change`), and
-        its title doesn't say ``two demos`` (`TWO_DEMOS`) or it touches a lock or the spec (`queue.lean_spec`), whose records
-        the after-landing lean-audit (`--no-regenerate`) would find stale.  A two-demos PR's other Lean, code, is checked by the
-        after-landing run's lean-audit instead, which reverts it if it fails; its ready mark already passed the records gate."""
+        its title doesn't say ``two demos`` (`TWO_DEMOS`) or it touches a lock or the spec (`queue.lean_change` with ``code``
+        off), whose records the after-landing lean-audit (`--no-regenerate`) would find stale.  A two-demos PR's other Lean,
+        code, is checked by the after-landing run's lean-audit instead, which reverts it if it fails; its ready mark already
+        passed the records gate."""
         if m.commit not in self._lean_of:
             self._lean_of[m.commit] = lean_change(self.repo, m.commit) and (not self._two_demos(m)
-                                                                             or lean_spec(self.repo, m.commit))
+                                                                             or lean_change(self.repo, m.commit, code=False))
         return self._lean_of[m.commit]
 
     def _two_demos(self, m: Member) -> bool:
