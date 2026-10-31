@@ -297,7 +297,7 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
             pinned: Mapping[str, str] | None = None, binding: Mapping[str, str] | None = None,
             schemas: Mapping[str, str] | None = None, window_root: str | None = None,
             held: Sequence[str] | None = None, outputs: Mapping[str, Mapping[str, str]] | None = None) -> dict[str, Any]:
-    """`registration.check`'s copies as the Lean's parameters (`OneStage.paramsOfJsonAt`), the program as the server writes
+    """`registration.check`'s copies as the Lean's parameters (`OneStage.paramsOfJson`), the program as the server writes
     it (`_Program`)."""
     p = {"anchors": list(anchors), "delta": REGISTRATION_DELTA, "law": dict(law), "leaf_layer": leaf_layer,
          "log": [dict(r) for r in log], "partition": None if partition is None else dict(partition),

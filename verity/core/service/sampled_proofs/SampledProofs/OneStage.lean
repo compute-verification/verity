@@ -126,8 +126,8 @@ private def logRecord (j : Json) : V Json := do
   return j
 
 /-- The parameters, their program the one `S` has loaded that `program` names, else its descriptor's
-(`Loaded.Store.parse`). -/
-def paramsOfJsonAt (S : Loaded.Store) (j : Json) : V Params := do
+(`Loaded.Store.parse`); with nothing loaded, always the descriptor's (`Loaded.parse_empty`). -/
+def paramsOfJson (j : Json) (S : Loaded.Store := #[]) : V Params := do
   let v2 := !(getD j "registered" matches .null)
   let keys := if v2 then PARAM_KEYS.push "parameters" else PARAM_KEYS
   let keys := if (field? j "supplied").isSome then keys.push "supplied" else keys
@@ -247,10 +247,6 @@ def paramsOfJsonAt (S : Loaded.Store) (j : Json) : V Params := do
       "the window's open root (window_root, from the challenger's signed open of the window), and a value held across " ++
       "windows is named in held (or pinned)")
   pure p
-
-/-- The parameters, their program parsed from its descriptor (`paramsOfJsonAt` with nothing loaded:
-`Loaded.parse_empty`). -/
-def paramsOfJson (j : Json) : V Params := paramsOfJsonAt #[] j
 
 def commitmentOf (b : ByteArray) : V Commitment := do
   let j ← Core.canonicalJson b

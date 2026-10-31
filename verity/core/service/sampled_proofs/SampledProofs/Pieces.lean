@@ -88,7 +88,7 @@ open Lean (Json)
 open Flock (V)
 
 private def paramsAt (S : Loaded.Store) (j : Json) : V OneStage.Params := do
-  OneStage.paramsOfJsonAt S (← Core.canonicalJson (← Flock.canon j).toUTF8)
+  OneStage.paramsOfJson (← Core.canonicalJson (← Flock.canon j).toUTF8) S
 
 private def params (j : Json) : V OneStage.Params := paramsAt #[] j
 
