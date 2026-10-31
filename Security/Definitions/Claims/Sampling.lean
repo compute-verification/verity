@@ -4,7 +4,7 @@ import Definitions.Claims.IndexedTapes
 # Claims: the sampling compiler (frozen before any proof work)
 
 The claims block of sampled proofs (`verity/core/protocols/sampled_proofs/`), one-stage and two-stage sampling, on the
-shared definitions of `Definitions.Claims`, in the template's eight items and the README glossary's terms. Parametric in
+shared definitions of `Definitions.Core.Interaction`, in the template's eight items and the README glossary's terms. Parametric in
 the deployed sampled verifier (`Deploy`), as Flock's block is in `Flock.Deploy`: binding it to the compiled verifier is
 the code side's.
 
@@ -46,7 +46,7 @@ the code side's.
    `Proofs.Flock.SamplingScope` shows the scope is the one `KS` needs: an out-of-scope `subset K` with `K > N` has
    `P_a = 0` at every set, and an in-scope design has a deployment at which `KS`'s bound is below `1`.
 
-Generic pieces this block adds, which move to `Definitions.Claims` in a later change: `LogColl`, `ofOC`, `ownLog`,
+Generic pieces this block adds, which move to `Definitions.Core.Interaction` in a later change: `LogColl`, `ofOC`, `ownLog`,
 `flatMapRP`, `waitAccC`, `forkOn`, `Bext`, `KSLinOn`, `lamLin`, `BitsLin`, `ExtractOwnLe` and `SimLeak`. Zero knowledge
 is the spec's `ZKmalRx` and the decoder spec Flock's radius form, `Flock.ListWithin` at `Flock.Deploy`'s `len` and `θ`;
 nothing here reads Flock's former decoding threshold or count (`agree`, `nMin`).

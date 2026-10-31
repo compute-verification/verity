@@ -1233,9 +1233,9 @@ theorem locate_ge : ∀ (rs : List ℕ) (k i : ℕ), rs.sum ≤ i →
     simp only [List.length_cons, List.sum_cons, Prod.mk.injEq]
     exact ⟨by omega, by omega⟩
 
-theorem open_ok {S S' : _root_.Flock.Firewall.Coins.Session} {st : String} {n : ℕ} {m c : List UInt8}
+theorem open_ok {S S' : _root_.Flock.Firewall.Coins.Release} {st : String} {n : ℕ} {m c : List UInt8}
     (h : S.open st n m = .ok (S', c)) : st ∈ S.hello.spec.streams.toList ∧ S'.hello = S.hello := by
-  unfold _root_.Flock.Firewall.Coins.Session.open at h
+  unfold _root_.Flock.Firewall.Coins.Release.open at h
   dsimp only at h
   refine ⟨?_, ?_⟩
   · by_contra hn
@@ -1246,11 +1246,11 @@ theorem open_ok {S S' : _root_.Flock.Firewall.Coins.Session} {st : String} {n : 
   · repeat' split at h
     all_goals (cases h <;> rfl)
 
-theorem openAll_mem : ∀ (S S' : _root_.Flock.Firewall.Coins.Session) (os : List (String × ℕ × List UInt8)),
+theorem openAll_mem : ∀ (S S' : _root_.Flock.Firewall.Coins.Release) (os : List (String × ℕ × List UInt8)),
     S.openAll os = .ok S' → ∀ o ∈ os, o.1 ∈ S.hello.spec.streams.toList
   | _, _, [], _, _, ho => by cases ho
   | S, S', (st, n, m) :: os, h, o, ho => by
-    unfold _root_.Flock.Firewall.Coins.Session.openAll at h
+    unfold _root_.Flock.Firewall.Coins.Release.openAll at h
     cases hop : S.open st n m with
     | error e => simp [hop] at h
     | ok p =>
@@ -1261,18 +1261,18 @@ theorem openAll_mem : ∀ (S S' : _root_.Flock.Firewall.Coins.Session) (os : Lis
       · exact hmem
       · rw [← hhe]; exact openAll_mem S'' S' os h o ho
 
-theorem start_hello {hl : _root_.Flock.Firewall.Coins.Hello} {a : List UInt8} {S : _root_.Flock.Firewall.Coins.Session}
-    (h : _root_.Flock.Firewall.Coins.Session.start hl a = .ok S) : S.hello = hl := by
-  unfold _root_.Flock.Firewall.Coins.Session.start at h
+theorem start_hello {hl : _root_.Flock.Firewall.Coins.Hello} {a : List UInt8} {S : _root_.Flock.Firewall.Coins.Release}
+    (h : _root_.Flock.Firewall.Coins.Release.start hl a = .ok S) : S.hello = hl := by
+  unfold _root_.Flock.Firewall.Coins.Release.start at h
   split at h
   · cases h; rfl
   · cases h
 
 theorem coinVerdict_ok {hl : _root_.Flock.Firewall.Coins.Hello} {a : List UInt8} {os : List (String × ℕ × List UInt8)}
     (h : (coinVerdict (.ok hl) a os).isOk = true) :
-    ∃ S S', _root_.Flock.Firewall.Coins.Session.start hl a = .ok S ∧ S.openAll os = .ok S' ∧ S.hello = hl := by
+    ∃ S S', _root_.Flock.Firewall.Coins.Release.start hl a = .ok S ∧ S.openAll os = .ok S' ∧ S.hello = hl := by
   unfold coinVerdict at h
-  cases hS : _root_.Flock.Firewall.Coins.Session.start hl a with
+  cases hS : _root_.Flock.Firewall.Coins.Release.start hl a with
   | error e => simp [Except.bind, hS, Except.isOk, Except.toBool] at h
   | ok S =>
     cases hO : S.openAll os with

@@ -193,7 +193,7 @@ theorem tiedColl_of_verifyInner {L : List (Claims.Msg × Claims.Msg)} {lay : Zk.
 `Zk.verifyInnerWith hs` at the pads layout `layZ`, from a transcript on the stream's rounds four rounds before their
 end. -/
 theorem zkVerifyRepWith_inner (hs : Hashes Flock.V) {spec : SessionSpec} {st : Setup} {sch : Schedule} {tPad : ℕ}
-    {sess : Session} {i r : ℕ} {bytes c : ByteArray} (hsch : Zk.schedule st.m = .ok (sch, tPad))
+    {sess : RunRecord} {i r : ℕ} {bytes c : ByteArray} (hsch : Zk.schedule st.m = .ok (sch, tPad))
     (h : Zk.verifyRepWith hs spec st sch tPad sess i r bytes = .ok c) :
     ∃ (stream : StreamRec) (extras : Array Claim) (zp : Zk.ZkProof) (finalC : F128)
       (cons : Array (String × Zk.Lin)) (t t' : Transcript),
