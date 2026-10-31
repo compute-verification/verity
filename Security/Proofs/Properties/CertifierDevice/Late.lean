@@ -175,8 +175,8 @@ theorem finishStage_h (T : Nat) (s : Shaper) :
     · rw [(checkAdvice_rel _).2]; exact ⟨rfl, rfl⟩
 
 /-- A tick is clean when it leaves the certifier unfaulted, or at a window's close publishes a complete record. -/
-def Clean (T : Nat) (s : Shaper) (x : Shaper × Slots × Option Record) : Prop :=
-  if (s.t + 1) % T = 0 then x.2.2.map Record.status = some .complete else x.1.certifier.fault = none
+def Clean (T : Nat) (s : Shaper) (x : Shaper × Slots × Option BlockGrid) : Prop :=
+  if (s.t + 1) % T = 0 then x.2.2.map BlockGrid.status = some .complete else x.1.certifier.fault = none
 
 /-- **One tick, for the handing buckets.** Under syncs `S` extending the ones it leaves, a tick runs the handing rule from
 `h` over the frames it hands, each bucket at most the tick; a frame handed after its bucket makes the tick unclean and
@@ -543,9 +543,9 @@ theorem clean_of_complete {c : Config} {tr : List Event} {n k backlog : Nat} (hE
       simp only [hc, ↓reduceIte] at this
       split at this
       · simp only [List.cons_append, List.nil_append, List.cons.injEq, Action.publish.injEq,
-          Record.mk.injEq] at this
+          BlockGrid.mk.injEq] at this
         simp [hso] at this
-      · simp only [List.nil_append, List.cons.injEq, Action.publish.injEq, Record.mk.injEq] at this
+      · simp only [List.nil_append, List.cons.injEq, Action.publish.injEq, BlockGrid.mk.injEq] at this
         simp [hso] at this
 
 end Properties.CertifierDevice.Proofs

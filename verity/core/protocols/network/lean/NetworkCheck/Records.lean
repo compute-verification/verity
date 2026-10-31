@@ -16,7 +16,7 @@ take a cons cell per bit.
 
 **Commitment**: the unit's published records, each `u8 kind ‖ u64be len(body) ‖ body`, concatenated, decoded exactly:
 
-    kind 0, raw (`grid.Record`):       u16be len(link) ‖ link ‖ u64be window ‖ u8 status ‖ u32be T' ‖
+    kind 0, raw (`grid.BlockGrid`):       u16be len(link) ‖ link ‖ u64be window ‖ u8 status ‖ u32be T' ‖
                                        T' × (u32be r' ‖ r' × (u8 0 | u8 1 ‖ u32be len(frame) ‖ frame))
     kind 1, committed (`CommittedRecord`): u16be len(link) ‖ link ‖ u64be window ‖ u8 status ‖ u16be len(digest) ‖ digest
     kind 2, certified (`CertifiedRecord`): `service.encode`'s bytes, one record
@@ -53,7 +53,7 @@ def commitmentTag : String := "verity-network-certifier/records/v2"
 
 abbrev RawGrid := Array (Array (Option ByteArray))
 
-/-- `Published`: a raw record (`grid.Record`), a committed one (`commitment.CommittedRecord`) or a certified one. -/
+/-- `Published`: a raw record (`grid.BlockGrid`), a committed one (`commitment.CommittedRecord`) or a certified one. -/
 inductive Published where
   | raw (link : String) (window : Nat) (status : Option String) (grid : RawGrid)
   | committed (link : String) (window : Nat) (status : Option String) (digest : String)

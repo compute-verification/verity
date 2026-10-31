@@ -17,7 +17,7 @@ from verity.core.protocols.certifier.certificate import (
     certificate_message, depth, empty, frames_root, open_frame, parameters_digest, real_frames, record_head,
     verify_frame)
 from verity.core.protocols.certifier.commitment import commit
-from verity.core.protocols.certifier.grid import COMPLETE, GridParams, Reason, Record, Status, Certifier, fill
+from verity.core.protocols.certifier.grid import COMPLETE, GridParams, Reason, BlockGrid, Status, Certifier, fill
 from verity.core.protocols.certifier.schedule import ClockSync, run_shaper
 
 from test_network_certifier_audit import FRAMES, P, SYNC_SET, SYNCS, honest_ready, ingress_run
@@ -159,7 +159,7 @@ def scenarios():
     late = run_shaper(FRAMES, late_ready, SYNCS, Certifier("responses", P))
     rows = [list(row) for row in honest[0].grid]
     rows[0][0] = b"\xff"
-    tampered = [Record("responses", 0, tuple(tuple(r) for r in rows), COMPLETE)] + honest[1:]
+    tampered = [BlockGrid("responses", 0, tuple(tuple(r) for r in rows), COMPLETE)] + honest[1:]
     w = Certifier("responses", P)
     faulted = run_shaper(FRAMES, honest_ready(), SYNCS[:1], w)
     w.fault(Reason.MONITOR_UNAVAILABLE)
@@ -171,7 +171,7 @@ def scenarios():
     advised = run_shaper(FRAMES, honest_ready(), declared, Certifier("responses", P))
     rows = [list(row) for row in advised[2].grid]
     rows[2][0] = b"\xff"
-    advised_tampered = advised[:2] + [Record("responses", 2, tuple(tuple(r) for r in rows), advised[2].status)]
+    advised_tampered = advised[:2] + [BlockGrid("responses", 2, tuple(tuple(r) for r in rows), advised[2].status)]
     return {"honest": (honest, SYNCS), "late": (late, SYNCS), "tampered": (tampered, SYNCS),
             "faulted": (faulted, SYNCS), "duplicated": (duplicated, SYNCS), "missing": (honest[:2], SYNCS),
             "advice": (advised, declared), "advice-tampered": (advised_tampered, declared)}

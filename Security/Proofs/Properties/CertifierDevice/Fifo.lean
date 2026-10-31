@@ -189,7 +189,7 @@ theorem fifo_tick {link : String} {p : Params} (s : Shaper) (hs : ShGood link p 
     let m := min Q.size p.allocation
     x.1.next = s.next + L.length ∧
       x.1.queued = s.queued + L.length - min (s.queued + L.length) p.allocation ∧
-      ((if (s.t + 1) % p.buckets = 0 then x.2.2.map Record.status = some .complete else x.1.certifier.fault = none) →
+      ((if (s.t + 1) % p.buckets = 0 then x.2.2.map BlockGrid.status = some .complete else x.1.certifier.fault = none) →
         s.certifier.fault = none ∧ x.2.1 = (Q.extract 0 m).map some ++ Array.replicate (p.allocation - m) none) ∧
       (x.1.certifier.fault = none → (s.certifier.fault = none ∧ x.1.certifier.queue = Q.extract m Q.size) ∨
         (x.1.certifier.queue = #[] ∧ x.1.queued = 0)) := by
@@ -542,7 +542,7 @@ handed through this tick, if fewer than `min(queued, r)` precede it in the row, 
 theorem release {c : Config} {st : State} {hp : List (Frame × Nat)} (hg : Good c st)
     (hi : FifoInv c.egress.allocation hp st.shaper) {now backlog : Nat} (ht : st.shaper.t < horizon c)
     (hc : if (st.shaper.t + 1) % c.egress.buckets = 0 then
-        (egressMid st now backlog).tick.2.2.map Record.status = some .complete
+        (egressMid st now backlog).tick.2.2.map BlockGrid.status = some .complete
       else (egressMid st now backlog).tick.1.certifier.fault = none) :
     ∀ i < c.egress.allocation, (egressMid st now backlog).tick.2.1[i]? =
       some (if i < min (st.shaper.queued + (handedAt st (.tick .egress now backlog)).length) c.egress.allocation then
@@ -672,7 +672,7 @@ theorem completeRows_honest : CompleteRowsHonest := by
   rw [rowOf_eq hEm, he']
   simp only [evRow]
   have hclean : if ((pre c tr m).shaper.t + 1) % c.egress.buckets = 0 then
-      (egressMid (pre c tr m) now' b').tick.2.2.map Record.status = some .complete
+      (egressMid (pre c tr m) now' b').tick.2.2.map BlockGrid.status = some .complete
     else (egressMid (pre c tr m) now' b').tick.1.certifier.fault = none := by
     rw [htm, hT]
     by_cases hj1 : j = T - 1
@@ -714,9 +714,9 @@ theorem completeRows_honest : CompleteRowsHonest := by
         simp only [hc, ↓reduceIte] at this
         split at this
         · simp only [List.cons_append, List.nil_append, List.cons.injEq, Action.publish.injEq,
-            Record.mk.injEq] at this
+            BlockGrid.mk.injEq] at this
           simp [hwd, hst] at this
-        · simp only [List.nil_append, List.cons.injEq, Action.publish.injEq, Record.mk.injEq] at this
+        · simp only [List.nil_append, List.cons.injEq, Action.publish.injEq, BlockGrid.mk.injEq] at this
           simp [hwd, hst] at this
   have hfi := fifo_inv c tr m hm.le
   have hrel := release hgm hfi hth hclean i hia

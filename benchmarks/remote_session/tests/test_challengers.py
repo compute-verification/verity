@@ -40,7 +40,7 @@ import wire  # noqa: E402
 from test_remote_bandwidth import SCHEDULE, drive, finish, params, store  # noqa: E402,F401
 from test_session import run as run_sessions  # noqa: E402
 from verity.core.protocols.certifier import certificate as cert  # noqa: E402
-from verity.core.protocols.certifier.grid import COMPLETE, GridParams, Record, fill  # noqa: E402
+from verity.core.protocols.certifier.grid import COMPLETE, GridParams, BlockGrid, fill  # noqa: E402
 from verity.core.protocols.remote_bandwidth import coins  # noqa: E402
 from verity.core.protocols.sampled_proofs.challenger import NO_MAIN, NO_PINS, CoinError, pin_line, pins_seal  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
@@ -669,8 +669,9 @@ def boundary(d: Path, let_in: dict[str, list[bytes]], *, links: tuple[str, ...] 
     key = certifier_key()
     issuer = cert.Issuer(cert.LmsSigner.create(key, d / "signer.json"), CERTIFIER_SESSION, coins=lambda n: b"\x07" * n)
     T, r = BOUNDARY_GRID.buckets, BOUNDARY_GRID.allocation
-    records = [issuer.certify(Record(link, 0, fill(frames, [max(0, min(r, len(frames) - r * t)) for t in range(T)], r),
-                                     COMPLETE), cert.Direction.INGRESS, BOUNDARY_GRID,
+    records = [issuer.certify(BlockGrid(link, 0,
+                                        fill(frames, [max(0, min(r, len(frames) - r * t)) for t in range(T)], r),
+                                        COMPLETE), cert.Direction.INGRESS, BOUNDARY_GRID,
                               cert.parameters_digest(BOUNDARY_GRID)) for link, frames in let_in.items()]
     public = lms.public_key(key)
     (d / "boundary.json").write_text(json.dumps({

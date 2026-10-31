@@ -33,7 +33,7 @@ from verity.core.protocols.certifier.active import (
 from verity.core.protocols.certifier.audit import Audit, Verdict
 from verity.core.protocols.certifier.calibration import choose_syncs
 from verity.core.protocols.certifier.commitment import commit
-from verity.core.protocols.certifier.grid import GridParams, Reason, Record, Status, Certifier, occupancy, row_count
+from verity.core.protocols.certifier.grid import GridParams, Reason, BlockGrid, Status, Certifier, occupancy, row_count
 from verity.core.protocols.certifier.pacer import Report
 from verity.core.protocols.certifier.schedule import (
     ClockSync,
@@ -970,7 +970,7 @@ def test_a_pacers_report_faults_the_open_window_or_the_record_held_for_a_closed_
     assert proxy.shaper.certifier._fault is None
     proxy._report(Report(1, 0.001, 0.001, None, True))
     assert proxy.shaper.certifier._fault is Reason.MONITOR_UNAVAILABLE
-    record = Record("responses", 1, ((None,) * EGRESS.allocation,) * T, Status())
+    record = BlockGrid("responses", 1, ((None,) * EGRESS.allocation,) * T, Status())
     held = {1: record, 2: dataclasses.replace(record, window=2, status=Status(Reason.OVERFLOW)),
             3: dataclasses.replace(record, window=3)}
     proxy._held |= held
