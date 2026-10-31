@@ -801,6 +801,60 @@ def test_an_older_head_two_prs_were_seen_at_is_carried_by_the_marked_one(world):
     assert [m.pr for m in members] == [5, 7]
 
 
+def _carried_on_next(world: World) -> tuple[Queue, str]:
+    """#5 at `old`, unmarked; #6, #5's own lane's rebuild on `old` (so it carries #5's commits), marked and merged onto `next`;
+    then #5 moves on, still unmarked.  `old` is an older head of #5's that only #6 brings to `next`."""
+    old = world.change({"x.txt": "x = 1\n"})
+    world.gh.put(5, old, ready=False)
+    world.gh.put(6, world.change({"r.txt": "rebuilt\n"}, base=old), body="Lane `lane-5`.")
+    q = world.queue()
+    assert [m.pr for m in q.sync()[0]] == [6]                                  # the queue sees #5 at `old`
+    world.gh.put(5, world.change({"x.txt": "x = 2\n"}, base=old), ready=False)
+    return q, old
+
+
+def test_a_pr_holding_an_older_head_that_admitted_members_already_bring_waits_for_nothing(world):
+    """#7 holds `old`, once #5's head, but not #6's head, which brings `old` to `next`: #7 lands nothing of #5's that `next`
+    doesn't already land, so it doesn't wait for unmarked #5.  Once #6 isn't admitted, #6 carries nothing and #7 waits again."""
+    q, old = _carried_on_next(world)
+    world.gh.put(7, world.change({"k.txt": "kernels\n"}, base=old))             # #7 branched from #5 at `old`, beside #6
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [6, 7] and entries[7].after == entries[7].older == (), entries[7].why
+    world.gh.ready.discard((6, world.gh.prs[6].head))                           # #6's mark withdrawn: it leaves `next`
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [] and entries[7].older == (5,)
+    assert entries[7].why == "contains #5's commits (at an older head), which isn't admitted"
+
+
+def test_a_pr_holding_an_older_head_no_member_brings_still_waits(world):
+    """As above, but #7 branched from #5 at `mid`, a later head the queue saw #5 at that #6 doesn't bring: #7 waits for #5 at
+    `mid`, though `next` brings the older `old`."""
+    q, old = _carried_on_next(world)
+    world.gh.put(5, mid := world.change({"x.txt": "x = 2\n"}, base=old), ready=False)
+    q.sync()                                                                    # the queue sees #5 at `mid`
+    world.gh.put(5, world.change({"x.txt": "x = 3\n"}, base=mid), ready=False)
+    world.gh.put(7, world.change({"k.txt": "kernels\n"}, base=mid))
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [6] and entries[7].older == (5,) and entries[7].held == {5: mid}
+    assert entries[7].why == "contains #5's commits (at an older head), which isn't admitted"
+
+
+def test_a_member_of_next_doesnt_excuse_its_own_commits(world):
+    """#7 went onto `next` while #5's head `old`, which #7 holds, was marked; #5 moves on unmarked and its mark at `old` goes
+    (so it doesn't stay at `old`, `Queue._pending`).  `next` holds `old` only through #7's own merge (and #5's merge at the head
+    it left), so #7 waits for #5."""
+    old = world.change({"x.txt": "x = 1\n"})
+    world.gh.put(5, old)
+    world.gh.put(7, world.change({"k.txt": "kernels\n"}, base=old))
+    q = world.queue()
+    assert [m.pr for m in q.sync()[0]] == [5, 7]
+    world.gh.put(5, world.change({"x.txt": "x = 2\n"}, base=old), ready=False)
+    world.gh.ready.discard((5, old))
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [] and entries[7].after == entries[7].older == (5,)
+    assert entries[7].why == "contains #5's commits (at an older head), which isn't admitted"
+
+
 def _merge(world: World, into: str, other: str) -> str:
     """A merge commit of ``other`` into ``into`` (first parent ``into``)."""
     _git(world.dev, "checkout", "-q", "--detach", into)
