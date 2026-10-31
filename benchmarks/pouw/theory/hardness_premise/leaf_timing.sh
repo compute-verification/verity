@@ -6,7 +6,7 @@
 #     python3 tools/verity/check/slot.py --by LANE -- bash benchmarks/pouw/theory/hardness_premise/leaf_timing.sh
 #
 # ARCH (sm_120a; sm_90a on an H200), PEAK (the W1 rate, s8 MAC an SM-clock; unset: the card's mma.sync rate, measured)
-# and CORRS (the corrections to gate and time, leaf_corr's --corrs; unset: all six) come from the environment
+# and CORRS (the corrections to gate and time, leaf_corr's --corrs; unset: all eight) come from the environment
 # (`research run --env`).
 set -uo pipefail
 OUT=${OUT:?run under research run}

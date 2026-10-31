@@ -283,14 +283,53 @@ __device__ __forceinline__ void correct16b(int4* t, int j, int m0, int lane, con
   }
 }
 
+// the warp's own 8 columns of a 64-column half, 4 at a time, corrected in T (a lane 16 rows): EC 3 and 4 by correct16,
+// 5 and 6 by correct16b
+template <int EC>
+__device__ __forceinline__ void correct_half(int* T, int half, int warp, int lane, int n0, int m0, const HiB& hb) {
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ < 1000
+  constexpr int NB2 = 12;  // sm_90a spills at 16 under the 128-register bound
+#else
+  constexpr int NB2 = 16;
+#endif
+#pragma unroll 1
+  for (int round = 0; round < 2; round++) {
+    const int c = warp * 8 + round * 4 + (lane >> 3), j = n0 + half * 64 + c;
+    int4* t = reinterpret_cast<int4*>(&T[c * TP + 16 * (lane & 7)]);
+    if constexpr (EC >= 5) {
+      correct16b<EC == 5 ? 8 : 2, EC == 5 ? 8 : NB2>(t, j, m0, lane, hb);
+    } else {
+      int4 v[4];
+#pragma unroll
+      for (int w = 0; w < 4; w++) v[w] = t[w];
+      correct16<EC == 3 ? 8 : 2>(v, j, m0, lane, hb);
+#pragma unroll
+      for (int w = 0; w < 4; w++) t[w] = v[w];
+    }
+  }
+  __syncwarp();
+}
+
+__device__ __forceinline__ unsigned sm_id() {
+  unsigned r;
+  asm volatile("mov.u32 %0, %%smid;" : "=r"(r));
+  return r;
+}
+
+// CORR 7 and 8 are 4 and 3 with the two CTAs an SM holds taking turns, by their order of arrival on it (ctr, a count an
+// SM): one corrects before its main loop, into T and from T into its accumulators, and the other after it, so each
+// one's correction runs beside the other's MMAs instead of both stopping the tensor pipe at once
 template <int CORR>
 __global__ void __launch_bounds__(THREADS, 2) leaf_kernel(const int8_t* __restrict__ E, const int8_t* __restrict__ L, int m,
-                                                          int K, int* __restrict__ Mt, Hi h, HiB hb) {
+                                                          int K, int* __restrict__ Mt, Hi h, HiB hb, int* ctr) {
   extern __shared__ __align__(128) unsigned char smem[];
+  constexpr int EC = CORR == 7 ? 4 : CORR == 8 ? 3 : CORR;
   const int tid = threadIdx.x, lane = tid & 31, warp = tid >> 5;
   const int wm = warp >> 2, wn = warp & 3;
   const int m0 = blockIdx.y * BM, n0 = blockIdx.x * BN;
   const u32 base = smem_u32(smem);
+  int* T = reinterpret_cast<int*>(smem);
+  const int g = lane >> 2, q = lane & 3;
   int acc[4][4][4];
 #pragma unroll
   for (int a = 0; a < 4; a++)
@@ -298,6 +337,35 @@ __global__ void __launch_bounds__(THREADS, 2) leaf_kernel(const int8_t* __restri
     for (int b = 0; b < 4; b++)
 #pragma unroll
       for (int c = 0; c < 4; c++) acc[a][b][c] = 0;
+  bool early = false;
+  if constexpr (CORR >= 7) {
+    __shared__ int s_early;
+    if (tid == 0) s_early = (int)(atomicAdd(reinterpret_cast<unsigned*>(ctr) + sm_id(), 1u) & 1u);
+    __syncthreads();
+    early = s_early != 0;
+    if (early) {
+#pragma unroll 1
+      for (int half = 0; half < 2; half++) {
+        for (int i = tid; i < 64 * TP / 4; i += THREADS) reinterpret_cast<int4*>(T)[i] = make_int4(0, 0, 0, 0);
+        __syncthreads();
+        correct_half<EC>(T, half, warp, lane, n0, m0, hb);
+        __syncthreads();
+        if ((wn >> 1) == half) {
+#pragma unroll
+          for (int mt = 0; mt < 4; mt++)
+#pragma unroll
+            for (int nt = 0; nt < 4; nt++) {
+              const int r = wm * 64 + mt * 16 + g, c = (wn & 1) * 32 + nt * 8 + 2 * q;
+              acc[mt][nt][0] = T[c * TP + r];
+              acc[mt][nt][1] = T[(c + 1) * TP + r];
+              acc[mt][nt][2] = T[c * TP + r + 8];
+              acc[mt][nt][3] = T[(c + 1) * TP + r + 8];
+            }
+        }
+        __syncthreads();
+      }
+    }
+  }
   const int KT = K / BK;
 #pragma unroll
   for (int s = 0; s < STAGES - 1; s++) {
@@ -333,8 +401,6 @@ __global__ void __launch_bounds__(THREADS, 2) leaf_kernel(const int8_t* __restri
   }
   cp_wait<0>();
   __syncthreads();
-  int* T = reinterpret_cast<int*>(smem);
-  const int g = lane >> 2, q = lane & 3;
 #pragma unroll
   for (int half = 0; half < 2; half++) {
     if ((wn >> 1) == half) {
@@ -350,33 +416,8 @@ __global__ void __launch_bounds__(THREADS, 2) leaf_kernel(const int8_t* __restri
         }
     }
     __syncthreads();
-    if constexpr (CORR >= 5) {
-#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ < 1000
-      constexpr int NB2 = 12;  // sm_90a spills at 16 under the 128-register bound
-#else
-      constexpr int NB2 = 16;
-#endif
-#pragma unroll 1
-      for (int round = 0; round < 2; round++) {
-        const int c = warp * 8 + round * 4 + (lane >> 3), j = n0 + half * 64 + c;
-        correct16b<CORR == 5 ? 8 : 2, CORR == 5 ? 8 : NB2>(reinterpret_cast<int4*>(&T[c * TP + 16 * (lane & 7)]), j,
-                                                           m0, lane, hb);
-      }
-      __syncwarp();
-    } else if constexpr (CORR >= 3) {
-      // the warp's own 8 columns, 4 at a time, corrected in T (a lane 16 rows) before they are stored
-#pragma unroll 1
-      for (int round = 0; round < 2; round++) {
-        const int c = warp * 8 + round * 4 + (lane >> 3), j = n0 + half * 64 + c;
-        int4 v[4];
-        int4* t = reinterpret_cast<int4*>(&T[c * TP + 16 * (lane & 7)]);
-#pragma unroll
-        for (int w = 0; w < 4; w++) v[w] = t[w];
-        correct16<CORR == 3 ? 8 : 2>(v, j, m0, lane, hb);
-#pragma unroll
-        for (int w = 0; w < 4; w++) t[w] = v[w];
-      }
-      __syncwarp();
+    if constexpr (EC >= 3) {
+      if (!early) correct_half<EC>(T, half, warp, lane, n0, m0, hb);
     }
 #pragma unroll 1
     for (int cc = 0; cc < 8; cc++) {
@@ -484,7 +525,7 @@ static double median_of(const gk::Timing& t, int arm, bool mhz) {
 
 int main(int argc, char** argv) {
   if (argc < 3) {
-    fprintf(stderr, "usage: leaf_corr FIXTURE_DIR OUT_DIR [--m M] [--reps R] [--peak MAC_PER_SM_CLK] [--corrs 1,..,6]\n");
+    fprintf(stderr, "usage: leaf_corr FIXTURE_DIR OUT_DIR [--m M] [--reps R] [--peak MAC_PER_SM_CLK] [--corrs 1,..,8]\n");
     return 2;
   }
   const std::string fx = argv[1], out = argv[2];
@@ -498,7 +539,7 @@ int main(int argc, char** argv) {
     else if (!strcmp(argv[i], "--corrs")) {
       CS.clear();
       for (const char* p = argv[i + 1]; *p; p++)
-        if (*p >= '1' && *p <= '6') CS.push_back(*p - '0');
+        if (*p >= '1' && *p <= '8') CS.push_back(*p - '0');
     } else { fprintf(stderr, "unknown option %s\n", argv[i]); return 2; }
   }
   if (CS.empty()) {
@@ -538,8 +579,19 @@ int main(int argc, char** argv) {
   GK_CK(cudaFuncSetAttribute(leaf_kernel<4>, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM));
   GK_CK(cudaFuncSetAttribute(leaf_kernel<5>, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM));
   GK_CK(cudaFuncSetAttribute(leaf_kernel<6>, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM));
+  GK_CK(cudaFuncSetAttribute(leaf_kernel<7>, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM));
+  GK_CK(cudaFuncSetAttribute(leaf_kernel<8>, cudaFuncAttributeMaxDynamicSharedMemorySize, SMEM));
   int occ = 0;
   GK_CK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ, leaf_kernel<1>, THREADS, SMEM));
+  for (int o : {0, 7, 8}) {
+    int occ_o = 0;
+    GK_CK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&occ_o, o == 0 ? leaf_kernel<0> : o == 7 ? leaf_kernel<7> : leaf_kernel<8>,
+                                                        THREADS, SMEM));
+    if (occ_o != occ) {
+      fprintf(stderr, "leaf_kernel<%d> holds %d blocks an SM, not %d\n", o, occ_o, occ);
+      return 2;
+    }
+  }
   // m: two full waves of 128 × 128 tiles over the n / 128 column tiles
   const int m = m_arg ? m_arg : BM * std::max(1, (2 * sms * occ + n / BN - 1) / (n / BN));
   if (m % BM) {
@@ -599,7 +651,9 @@ int main(int argc, char** argv) {
   int *dcolptr = dput(colptr), *dcols = dput(cols);
   longlong2* dent = dput(ent2);
   int2* dcolc = dput(colc);
-  int *dM = nullptr, *dS = nullptr, *dpeak = nullptr;
+  int *dM = nullptr, *dS = nullptr, *dpeak = nullptr, *dctr = nullptr;
+  GK_CK(cudaMalloc(&dctr, 4096 * sizeof(int)));
+  GK_CK(cudaMemset(dctr, 0, 4096 * sizeof(int)));
   const size_t mbytes = (size_t)n * m * 4;
   GK_CK(cudaMalloc(&dM, mbytes));
   GK_CK(cudaMalloc(&dS, mbytes));
@@ -640,13 +694,15 @@ int main(int argc, char** argv) {
     };
   };
   auto leaf = [&](int corr, int* M, cudaStream_t st_) {
-    if (corr == 0) leaf_kernel<0><<<lgrid, THREADS, SMEM, st_>>>(dE, dL, m, K, M, h1, hb8);
-    if (corr == 1) leaf_kernel<1><<<lgrid, THREADS, SMEM, st_>>>(dE, dL, m, K, M, h1, hb8);
-    if (corr == 2) leaf_kernel<2><<<lgrid, THREADS, SMEM, st_>>>(dE, dL, m, K, M, h2, hb8);
-    if (corr == 3) leaf_kernel<3><<<lgrid, THREADS, SMEM, st_>>>(dE, dL, m, K, M, h2, hb8);
-    if (corr == 4) leaf_kernel<4><<<lgrid, THREADS, SMEM, st_>>>(dE, dL, m, K, M, h2, hb2);
-    if (corr == 5) leaf_kernel<5><<<lgrid, THREADS, SMEM, st_>>>(dE, dL, m, K, M, h2, hb8);
-    if (corr == 6) leaf_kernel<6><<<lgrid, THREADS, SMEM, st_>>>(dE, dL, m, K, M, h2, hb2);
+    if (corr == 0) leaf_kernel<0><<<lgrid, THREADS, SMEM, st_>>>(dE, dL, m, K, M, h1, hb8, dctr);
+    if (corr == 1) leaf_kernel<1><<<lgrid, THREADS, SMEM, st_>>>(dE, dL, m, K, M, h1, hb8, dctr);
+    if (corr == 2) leaf_kernel<2><<<lgrid, THREADS, SMEM, st_>>>(dE, dL, m, K, M, h2, hb8, dctr);
+    if (corr == 3) leaf_kernel<3><<<lgrid, THREADS, SMEM, st_>>>(dE, dL, m, K, M, h2, hb8, dctr);
+    if (corr == 4) leaf_kernel<4><<<lgrid, THREADS, SMEM, st_>>>(dE, dL, m, K, M, h2, hb2, dctr);
+    if (corr == 5) leaf_kernel<5><<<lgrid, THREADS, SMEM, st_>>>(dE, dL, m, K, M, h2, hb8, dctr);
+    if (corr == 6) leaf_kernel<6><<<lgrid, THREADS, SMEM, st_>>>(dE, dL, m, K, M, h2, hb2, dctr);
+    if (corr == 7) leaf_kernel<7><<<lgrid, THREADS, SMEM, st_>>>(dE, dL, m, K, M, h2, hb2, dctr);
+    if (corr == 8) leaf_kernel<8><<<lgrid, THREADS, SMEM, st_>>>(dE, dL, m, K, M, h2, hb8, dctr);
   };
   auto corr = [&](int c, int* M, cudaStream_t st_) {
     if (c == 1) corr_kernel<1><<<cgrid, THREADS, 0, st_>>>(M, m, dcols, (int)cols.size(), h1);
@@ -656,7 +712,8 @@ int main(int argc, char** argv) {
     if (c == 5) corr16b_kernel<8, 8><<<cgrid16, THREADS, 0, st_>>>(M, m, dcols, (int)cols.size(), hb8);
     if (c == 6) corr16b_kernel<2, 16><<<cgrid16, THREADS, 0, st_>>>(M, m, dcols, (int)cols.size(), hb2);
   };
-  const char* names[7] = {"", "imad", "pack", "pack16", "bits2", "pack16x8", "bits2x16"};
+  // 7 and 8 differ from 4 and 3 only in the leaf, so they have no corr+ arm
+  const char* names[9] = {"", "imad", "pack", "pack16", "bits2", "pack16x8", "bits2x16", "bits2/turns", "pack16/turns"};
 
   bool ok = true;
   struct GateRow { std::string name; gk::PoisonGate g; };
@@ -666,6 +723,7 @@ int main(int argc, char** argv) {
     gates.push_back({std::string("leaf+") + names[c],
                      gk::poison_gate(dM, mbytes, s, [&, c](cudaStream_t st_) { leaf(c, dM, st_); }, matches(ref_full))});
     // the correction applied to the uncorrected leaf's output; the control writes the leaf's output only
+    if (c >= 7) continue;
     auto arm = [&, c](cudaStream_t st_) { leaf(0, dM, st_); corr(c, dM, st_); };
     auto ctl = [&](cudaStream_t st_) { leaf(0, dM, st_); };
     gates.push_back({std::string("corr+") + names[c], gk::poison_gate(dM, mbytes, s, arm, matches(ref_full), ctl)});
@@ -688,6 +746,7 @@ int main(int argc, char** argv) {
     arms.push_back({std::string("leaf+") + names[c],
                     [&, c](cudaStream_t st_, int k) { for (int i = 0; i < k; i++) leaf(c, dM, st_); }});
   for (int c : CS)
+    if (c < 7)
     arms.push_back({std::string("corr+") + names[c],
                     [&, c](cudaStream_t st_, int k) { for (int i = 0; i < k; i++) corr(c, dS, st_); }});
   arms.push_back({"empty", [&](cudaStream_t st_, int k) {
@@ -747,10 +806,11 @@ int main(int argc, char** argv) {
     };
     printf(", \"%s\": {", by_time ? "writes_by_time" : "writes");
     for (int c : CS) {
-      const int lc = arm_index(std::string("leaf+") + names[c]), cc = arm_index(std::string("corr+") + names[c]);
-      const int e = arm_index(c <= 2 ? "empty" : "empty16");
-      printf("%s\"leaf+%s_marginal\": %.4f, \"corr+%s\": %.4f, \"corr+%s_less_launch\": %.4f", c != CS[0] ? ", " : "",
-             names[c], price(lc, L0), names[c], price(cc, -1), names[c], price(cc, e));
+      const int lc = arm_index(std::string("leaf+") + names[c]);
+      printf("%s\"leaf+%s_marginal\": %.4f", c != CS[0] ? ", " : "", names[c], price(lc, L0));
+      if (c >= 7) continue;
+      const int cc = arm_index(std::string("corr+") + names[c]), e = arm_index(c <= 2 ? "empty" : "empty16");
+      printf(", \"corr+%s\": %.4f, \"corr+%s_less_launch\": %.4f", names[c], price(cc, -1), names[c], price(cc, e));
     }
     printf("}");
   }
