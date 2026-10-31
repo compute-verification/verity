@@ -29,10 +29,10 @@ theorem gapFixed_eq {L : Pouw.Lead.Layout} (C : Pouw.Lead.Commit L) (q p : ℕ) 
   ring
 
 /-- **A call of the lead in its variables**, for the fixed gap: `Statement.leadVars`'s variables with
-`gapFixedExpr`, over `n, K ≥ 4,096`. -/
+`gapFixedExpr`, over `n ≥ 4,096`. -/
 theorem fixedVars {L : Pouw.Lead.Layout} (C : Pouw.Lead.Commit L) (n q : ℕ) (hm : L.m = 16 * q)
     (hn : L.n = 8 * ((n + 7) / 8)) (hS : L.S = stepsFor L.K) (hcw : L.chunkWords = 65536) (hn4 : 4096 ≤ n)
-    (hK : 4096 ≤ L.K) (hC : ChunksOf L C) :
+    (hC : ChunksOf L C) :
     ∃ p S ch : ℚ, 512 ≤ p ∧ 8 * p ≤ n + 7 ∧ 28 * S ≤ L.K + 34 ∧
       65536 * ch ≤ 16 * q * (8 * p) * S + 65535 ∧ gapFixed L C = gapFixedExpr q p L.K S ch := by
   have hp : 512 ≤ (n + 7) / 8 := by omega
@@ -60,7 +60,7 @@ theorem fixedServed_le {L : Pouw.Lead.Layout} (C : Pouw.Lead.Commit L) (n q R : 
     (h : ∀ p K S ch u : ℚ, 512 ≤ p → 4096 ≤ K → 28 * S ≤ K + 34 → 65536 * ch ≤ 16 * q * (8 * p) * S + 65535 →
       8 * p ≤ u + 7 → gapFixedExpr q p K S ch ≤ X * (R * u * K / 32)) :
     gapFixedServed L C ≤ X := by
-  obtain ⟨p, S, ch, hp, hpn, hS', hch, hg⟩ := fixedVars C n q hm hn hS hcw hn4 hK hC
+  obtain ⟨p, S, ch, hp, hpn, hS', hch, hg⟩ := fixedVars C n q hm hn hS hcw hn4 hC
   have hsv : servedRegs L = R * n * L.K / 32 := by simp only [servedRegs, hr, hcols]
   have hpos : 0 < servedRegs L := by
     rw [hsv]
