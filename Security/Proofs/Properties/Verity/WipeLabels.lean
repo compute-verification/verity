@@ -23,6 +23,10 @@ import Definitions.Accounting.Assumptions.WipeLabels
 
 The run's coins at the boundary (`Verity.Wipe.OfRun.Preserves`), the refinement (`Vocab.WipeRefines`) and the error
 beyond `δ` (`Vocab.WipeBreakBound`) are `wipeSound_of_survivor`'s.
+
+**One device strategy per `θ F`.** `Vocab.wipe θ f` takes no prover strategy `σ`, so the session at `θ F` fixes one
+device strategy `τ` for every `σ` the adversary plays there: the target this file derives is for that fixed strategy,
+not for one per `σ`. It follows `Vocab.wipe` when that takes `σ` (lean's parameter in `Security/Properties/Verity/Game.lean`).
 -/
 
 namespace Verity
@@ -78,7 +82,10 @@ strategy `τ`'s for `c`'s labels and reads (`Accounting.Wipe.Strategy.wipe`), it
 verdict the event the auditor's devices observe at the certifiers' count `count` of the egress and the published
 egress, and its labels the deployed ones under the compiled SHA-512 (`Accounting.Wipe.deployedLabels` at `sha512Msg`),
 read through the bijection `seed` of its seeds with the challenger's 256-bit key and `spots` of its spot reads with
-`c`'s (`Verity.Wipe.comap`). `A`, a set of at most `2^(egress_mib MiB)` egress strings, is where `δ_net` is read. -/
+`c`'s (`Verity.Wipe.comap`). `A`, a set of at most `2^(egress_mib MiB)` egress strings, is where `δ_net` is read.
+
+`τ` is one device strategy for `θ F`, whatever prover strategy `σ` runs there: `Vocab.wipe` takes no `σ`. A session per
+`σ` follows when `Vocab.wipe` takes `σ` (lean's parameter). -/
 structure WipeSession (θ : ByteArray) (F : Array ByteArray) where
   p : MemoryChallenger.WipeProtocol.Params
   bytes : ByteArray
@@ -180,7 +187,11 @@ variable {k : Verity.Registration.Composite}
 every `θ F c σ`: the run's coins at the boundary are the wipe's (`hR`), the component refines the run's wipe verdict
 (`hA`), the labels' premise holds at the distinguisher the run's moves make, at `ε` and the strategy's SHA-512 calls
 (`hprf`), `eps`, `ε` there and `δ_net` at the run's moves add up to at most the published `δ` (`hδ`), and the error
-beyond `δ` answers for the rest of the event where the finder meets `FinderCR` (`hb`). -/
+beyond `δ` answers for the rest of the event where the finder meets `FinderCR` (`hb`).
+
+The wipe target is for one device strategy per `θ F` (`W θ F`'s `τ`), not one per prover strategy `σ`: `Vocab.wipe`
+takes no `σ`, so every `σ` at `θ F` meets the same wipe. It follows lean's `σ` parameter of `Vocab.wipe` when that
+lands. -/
 theorem wipeSound_of_session [Fintype V.Seed] [Nonempty V.Seed] [Fintype V.Spots] [Nonempty V.Spots]
     (W : ∀ θ F, V.WipeSession θ F) (ε : ℕ → ℕ → ℝ≥0∞)
     (pos : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Game.Strategy (V.game θ F c) →
