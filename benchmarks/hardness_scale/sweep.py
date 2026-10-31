@@ -130,16 +130,18 @@ def lr_sweep(size, lrs, res):
 
 def t1(res):
     """Tier 1 in claim order, and whether configs may still appear. 20M sweeps the baseline's lr (LR20) and picks lr20; 60M
-    sweeps lr20·(384/640)^p for p ∈ {1, ½, 0, −½} and picks lr60, whose exponent p60 sets 125M's lr20·(384/896)^p60, checked a
-    half-step of p either side. Every other config of a size runs at its picked lr; 125M's 2D baseline goes first (the
-    longest), then 60M, the rest of 20M, and 125M."""
+    runs lr20·(384/640)^p for p ∈ {1, ½, 0} and picks lr60 among them, whose exponent p60 sets 125M's lr20·(384/896)^p60,
+    checked a half-step of p either side. p = −½ and −1 at 60M are baseline checks only: 60M's optimum is flat from p = ½ to
+    −½ (3.2402, 3.2403, 3.2358), and an lr rising with width is not followed on a 0.004 edge. Every other config of a size
+    runs at its picked lr; 125M's 2D baseline goes first (the longest), then 60M, the rest of 20M, and 125M."""
     out, pending = [], False
     s20, lr20 = lr_sweep("20m", LR20, res)
     out += s20
     if lr20 is None:
         return out, True
-    s60, lr60 = lr_sweep("60m", [lr20 * (384 / 640) ** p for p in (1, 0.5, 0, -0.5)], res)
+    s60 = [cfg("60m", "base", lr20 * (384 / 640) ** p) for p in (1, 0.5, 0)]
     out += s60
+    lr60 = None if any(c["name"] not in res for c in s60) else min(s60, key=lambda c: res[c["name"]])["lr"]
     c125 = []
     if lr60 is None:
         pending = True
@@ -148,6 +150,10 @@ def t1(res):
         out.append(cfg("125m", "base", lr125, 2))
         out += [cfg("60m", "base", lr60, 2)] + [cfg("60m", a, lr60) for a in ("m-all-r8",) + MATCHED]
         out += [cfg("60m", "base", lr60, 0.5), cfg("60m", "noise", lr60), cfg("60m", "base", lr60, seed=1)]
+        hi = lr20 * (384 / 640) ** -0.5
+        top = cfg("60m", "base", lr20 * 640 / 384)
+        out += [cfg("60m", "base", hi), {**top, "name": top["name"] + "-r2"}]  # the first 5e-3 run was cancelled
+        out += [cfg("60m", a, hi) for a in ("res-f33", "m-mlph-r8")]
         s125, best125 = lr_sweep("125m", [lr125 * (384 / 896) ** p for p in (-0.5, 0, 0.5)], res)
         pending |= best125 is None
         c125 = [cfg("125m", a, lr125) for a in MATCHED] + s125 + [cfg("125m", "base", lr125, 0.5)]
